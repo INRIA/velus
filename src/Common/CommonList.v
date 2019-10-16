@@ -387,16 +387,15 @@ Section Map.
   Remark map_inj: forall xs ys,
       (forall x y, f x = f y -> x = y) ->
       map f xs = map f ys -> xs = ys.
-  (* XXX: Is that not defined already?! *)
   Proof.
-  intros ? ? Hinj ?.
-  generalize dependent ys; generalize dependent xs.
-  induction xs as [| x xs IHxs];
-    intro ys; destruct ys as [ | y ys ]; try discriminate; simpl; auto.
-  intro Heq; inv Heq.
-  assert (x = y) by now apply Hinj.
-  assert (xs = ys) by now apply IHxs.
-  now congruence.
+    intros ? ? Hinj ?.
+    generalize dependent ys; generalize dependent xs.
+    induction xs as [| x xs IHxs];
+      intro ys; destruct ys as [ | y ys ]; try discriminate; simpl; auto.
+    intro Heq; inv Heq.
+    assert (x = y) by now apply Hinj.
+    assert (xs = ys) by now apply IHxs.
+    now congruence.
   Qed.
 
   Lemma map_nth':

@@ -50,7 +50,6 @@ Module Type LSEMANTICS
         fby1 y xs ys rs ->
         fby (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
-  (* TODO: Use everywhere, esp. in LustreElab.v *)
   Definition idents xs := List.map (@fst ident (type * clock)) xs.
 
   Inductive sem_var: history -> ident -> Stream value -> Prop :=
@@ -157,8 +156,6 @@ Module Type LSEMANTICS
 
   Definition sem_nodes (G: global) : Prop :=
     Forall (fun n => exists xs ys, sem_node G n.(n_name) xs ys) G.
-
-  (* TODO: tidy up file *)
 
   (** Custom induction schemes *)
 

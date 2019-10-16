@@ -279,7 +279,6 @@ Proof.
   match goal with H:exists _, _ |- _ => destruct H end; discriminate.
 Qed.
 
-(* TODO: Why the hell can't I use <> ?!? *)
 Corollary not_None_is_Some_Forall:
   forall {A} (xs: list (option A)),
     Forall (fun (v: option A) => ~ v = None) xs ->
@@ -1177,8 +1176,6 @@ Proof.
 Qed.
 
 Local Open Scope option_monad_scope.
-
-(* TODO: rename to ommap ? *)
 
 Remark omap_inversion:
   forall (A B: Type) (f: A -> option B) (l: list A) (l': list B),

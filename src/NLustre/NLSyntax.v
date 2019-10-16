@@ -28,8 +28,6 @@ Module Type NLSYNTAX
 
   (** ** Node *)
 
-  (* XXX: [var_defined] is redundant with [defined_eq], except that it
-  works on lists rather than finite sets. *)
   Definition var_defined (eq: equation) : list ident :=
     match eq with
     | EqDef x _ _ => [x]
@@ -222,9 +220,6 @@ Module Type NLSYNTAX
     destruct (n_eqs n); simpl in *; omega.
   Qed.
 
-  (* XXX: computationally, the following [gather_*] are useless: they
-     are only used to simplify the proofs. See [gather_eqs_fst_spec]
-     and [gather_eqs_snd_spec]. *)
   Definition gather_mem_eq (eq: equation): list ident :=
     match eq with
     | EqDef _ _ _

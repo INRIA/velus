@@ -284,7 +284,6 @@ Module Type NLCOINDSEMANTICS
 
   (** ** Properties of the [global] environment *)
 
-  (* TODO: move to NLSyntax? *)
   Lemma find_node_In:
     forall f G n,
       find_node f G = Some n ->

@@ -23,7 +23,6 @@ Open Scope Z.
 Notation "m -*> m'" := (massert_imp m m') (at level 70, no associativity) : sep_scope.
 Notation "m <-*-> m'" := (massert_eqv m m') (at level 70, no associativity) : sep_scope.
 
-(* TODO: export to CompCert *)
 Lemma sepconj_eqv:
   forall P P' Q Q',
     P <-*-> P' ->

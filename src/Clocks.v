@@ -346,7 +346,6 @@ Proof.
   destruct IHck; subst; auto.
 Qed.
 
-(* TODO: move elsewhere *)
 Lemma instck_subclock_not_clock_eq:
   forall ck isub xck c x b,
     instck ck isub xck = Some c ->
@@ -359,4 +358,3 @@ Proof.
   now subst c; apply clock_not_in_clock in Heq.
   now subst ck; apply Con_not_clock_parent in Hck.
 Qed.
-

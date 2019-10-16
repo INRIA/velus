@@ -56,7 +56,6 @@ Module Type OBCTYPING
         In (x, ty) vars ->
         wt_exp (Valid x ty).
 
-    (* TODO: eliminate the result types in Call (and EqApp). *)
     Inductive wt_stmt : stmt -> Prop :=
     | wt_Assign: forall x e,
         In (x, typeof e) vars ->
@@ -200,13 +199,6 @@ Module Type OBCTYPING
 
   Definition wt_state (p: program) (me: menv) (ve: venv) (c: class) (vars: list (ident * type)) : Prop :=
     wt_mem me p c /\ wt_env ve vars.
-
-  (* XXX: why does this fail? *)
-  (*
-  Scheme wt_mem_ind_2 := Minimality for wt_mem Sort Prop
-  with wt_mem_inst_ind_2 := Minimality for wt_mem_inst Sort Prop.
-  Combined Scheme wt_mem_inst_ind' from wt_mem_ind_2, wt_mem_inst_ind_2.
-  *)
 
   Section wt_mem_mult.
 

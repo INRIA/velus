@@ -246,8 +246,6 @@ Module Type STCWELLDEFINED
 
     Variable mems : PS.t.
 
-    (* TODO: rewrite using a strong specification?  *)
-
     Open Scope bool_scope.
 
     Definition check_var (defined: PS.t) (variables: PS.t) (x: ident) : bool :=
@@ -290,7 +288,6 @@ Module Type STCWELLDEFINED
         (PS.In x mems -> ~PS.In x defined)
         /\ (~PS.In x mems -> PS.In x variables).
     Proof.
-      (*  TODO: how to automate all of this? *)
       intros defined variables x.
       unfold check_var.
       split.

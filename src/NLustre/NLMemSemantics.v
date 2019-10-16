@@ -29,10 +29,9 @@ From Velus Require Import CoreExpr.CEClockingSemantics.
 From Velus Require Import NLustre.NLClockingSemantics.
 
 (* for Theorem sem_msem_reset *)
-(* TODO: Are these really necessary? *)
-From Coq Require Import Logic.ClassicalChoice.
-From Coq Require Import Logic.ConstructiveEpsilon.
-From Coq Require Import Logic.Epsilon.
+(* From Coq Require Import Logic.ClassicalChoice. *)
+(* From Coq Require Import Logic.ConstructiveEpsilon. *)
+(* From Coq Require Import Logic.Epsilon. *)
 From Coq Require Import Logic.IndefiniteDescription.
 
 Set Implicit Arguments.
@@ -48,25 +47,6 @@ Set Implicit Arguments.
 
  *)
 
-
-(* XXX: Is this comment still relevant?
-
-   NB: The history H is not really necessary here. We could just as well
-       replay all the semantic definitions using a valueEnv N ('N' for now),
-       since all the historical information is in ms. This approach would
-       have two advantages:
-
-       1. Conceptually cleanliness: N corresponds more or less to the
-          temporary variables in the Obc implementation (except that it
-          would also contain values for variables defined by EqFby).
-
-       2. No index needed to access values in when reasoning about
-          translation correctness.
-
-       But this approach requires more uninteresting definitions and
-       and associated proofs of properties, and a longer proof of equivalence
-       with sem_node: too much work for too little gain.
- *)
 
 Module Type NLMEMSEMANTICS
        (Import Ids      : IDS)
@@ -277,13 +257,6 @@ enough: it does not support the internal fixpoint introduced by
   (** ** Properties *)
 
   (** *** Environment cons-ing lemmas *)
-
-  (* Instead of repeating all these cons lemmas (i.e., copying and pasting them),
-   and dealing with similar obligations multiple times in translation_correct,
-   maybe it would be better to bake Ordered_nodes into msem_node and to make
-   it like Miniimp, i.e.,
-      find_node f G = Some (nd, G') and msem_node G' nd xs ys ?
-   TODO: try this when the other elements are stabilised. *)
 
   Lemma msem_node_cons:
     forall n G f xs M ys,
@@ -501,39 +474,6 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
 
-  (* XXX: I believe that this comment is outdated ([no_dup_defs] is long gone)
-
-   - The no_dup_defs hypothesis is essential for the EqApp case.
-
-     If the set of equations contains two EqApp's to the same variable:
-        eq::eqs = [ EqApp x f lae; ...; EqApp x g lae' ]
-
-     Then it is possible to have a coherent H, namely if
-        f(lae) = g(lae')
-
-     But nothing forces the 'memory streams' (internal memories) of
-     f(lae) and g(lae') to be the same. This is problematic since they are
-     both 'stored' at M x...
-
-   - The no_dup_defs hypothesis is not essential for the EqFby case.
-
-     If the set of equations contains two EqFby's to for the same variable:
-        eq::eqs = [ EqFby x v0 lae; ...; EqFby x v0' lae'; ... ]
-
-     then the 'memory streams' associated with each, ms and ms', must be
-     identical since if (Forall (sem_equation G H) (eq::eqs)) exists then
-     then the H forces the coherence between 'both' x's, and necessarily also
-     between v0 and v0', and lae and lae'.
-
-     That said, proving this result is harder than just assuming something
-     that should be true anyway: that there are no duplicate definitions in
-     eqs.
-
-   Note that the no_dup_defs hypothesis requires a stronger definition of
-   either Is_well_sch or Welldef_global.
-   *)
-
-
   (** ** Fundamental theorem *)
 
   (**
@@ -734,8 +674,6 @@ dataflow memory for which the non-standard semantics holds true.
     - setoid_rewrite find_val_gempty; congruence.
   Qed.
 
-  (* XXX: for this lemma, and the ones before/after it, factorize 'G',
-'bk' and possibly other variables in a Section *)
   Corollary sem_msem_eqs:
     forall G bk H eqs,
       (forall f xs ys,

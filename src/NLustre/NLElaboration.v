@@ -100,8 +100,7 @@ Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
 (* CompCert: lib/Camlcoq.ml: camlstring_of_coqstring and coqstring_of_camlstring
    using Require ExtrOCamlString in the extraction file to extract Coq
    strings as an OCaml "char list". Then use the Ident.pos_of_string
-   function.
-   TODO: In the long run, we should try to use OCaml strings everywhere. *)
+   function. *)
 Parameter string_of_astloc : astloc -> String.string.
 Parameter cabsloc_of_astloc : astloc -> Cabs.cabsloc.
 Parameter cabs_floatinfo : LustreAst.floatInfo -> Cabs.floatInfo.
@@ -2662,4 +2661,3 @@ Definition elab_declarations (decls: list LustreAst.declaration)
                                     * list (ident * (type * clock))))
                      (conj wtg_nil (conj wc_global_nil I))
                      Is_interface_map_empty decls.
-

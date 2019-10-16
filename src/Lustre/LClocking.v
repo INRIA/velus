@@ -28,7 +28,6 @@ Module Type LCLOCKING
        (Import Op   : OPERATORS)
        (Import Syn  : LSYNTAX Ids Op).
 
-  (* TODO: Update this comment after recent changes *)
   (** Substitutions and conversion between clock types.
 
       The clocking of function applications is complicated by the possibility
@@ -188,7 +187,6 @@ Module Type LCLOCKING
         Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
         wc_exp r ->
         clockof r = [ckr] ->
-        (* TODO: clock of r *)
         wc_exp (Eapp f es (Some r) anns).
 
     Inductive Is_fresh_in : ident -> exp -> Prop :=
@@ -286,7 +284,6 @@ Module Type LCLOCKING
         (forall x, Ino x (map stream_name anns) -> ~Exists (Is_fresh_in x) es) ->
         DisjointFresh (Eapp f es None anns)
 
-    (* TODO: check *)
     | DFEreset: forall f es e anns,
         DisjointFreshList (e :: es) ->
         Forall DisjointFresh (e :: es) ->

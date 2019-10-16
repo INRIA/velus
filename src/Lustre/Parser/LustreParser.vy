@@ -14,11 +14,6 @@
    project (CompCert/cparser/Parser.vy), and of Erwan Jahier, Pascal Raymond,
    and Nicolas Halbwachs in the Lustre v6 reference manual (2016). */
 
-/* TODO: tweak the priority of type casting, (1 + 2 : uint8)
-         should give ((1 + 2) : uint8) ? */
-/* TODO: tweak the priority of land? (x land y = 0) should give
- 	  ((x land y) = 0) and not (x land (y = 0)) */
-
 %{
 From Velus Require Lustre.Parser.LustreAst.
 
@@ -159,11 +154,6 @@ unary_expression:
     { [LustreAst.UNARY (fst op) expr (snd op)] }
 | loc=HASH LPAREN args=expression_list RPAREN
     {
-      (* Macro expand the Lustre # operator (mutual exclusion: at most
-         one of the variable number of arguments may be true). Compare
-	 with "true" to ensure that non-bool arguments are properly
-	 treated. Is there a prettier way to do this?
-	 TODO: This should be done during elaboration. *)
       [LustreAst.BINARY
         LustreAst.LE
         [fold_right (fun es e => LustreAst.BINARY LustreAst.ADD [e] [es] loc)

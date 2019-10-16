@@ -174,9 +174,7 @@ Section Staterep.
 
 End Staterep.
 
-(** The struct_in_bounds predicate.
-
-    TODO: add explanatory text. *)
+(** The struct_in_bounds predicate. *)
 
 Section StructInBounds.
   Variable env : composite_env.

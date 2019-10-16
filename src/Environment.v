@@ -882,8 +882,6 @@ Module Env.
 
   (** Refinement of Environments *)
 
-  (* TODO: shift to Environment and update Obc/Equiv.v.
-           note: argument order changed. *)
   Section EnvRefines.
 
     Import Relation_Definitions Basics.
@@ -1028,7 +1026,6 @@ Module Env.
           rewrite F2 in M2. now inv M2.
     Qed.
 
-    (* TODO: Use to simplify Env.Equal lemmas... *)
     Global Add Parametric Morphism `{Equivalence _ R} : refines
         with signature (Equiv R ==> Equiv R ==> iff)
           as refines_Equiv.
