@@ -4,7 +4,8 @@ returns (x, y : bool);
 var v : bool when a;
     w : bool when b;
 let
-  (v, w) = (c when a, c when b);
+  v = c when a;
+  w = c when b;
   x = merge a (true -> v) (false -> false);
   y = merge b (true -> w) (false -> false);
 tel

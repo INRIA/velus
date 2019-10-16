@@ -1,0 +1,8 @@
+
+node noargs() returns (a: bool);
+var t : bool;
+let
+  a = t;
+  t = false fby (not a);
+tel
+

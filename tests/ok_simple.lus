@@ -1,7 +1,9 @@
 
 node f(x: bool)
 returns (y: bool);
+var t : bool;
 let
-    y = false fby (x and y or x);
+  y = t;
+  t = false fby (x and y or x);
 tel
 

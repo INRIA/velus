@@ -1,7 +1,11 @@
 
 node swapdelay (a, b : bool)
 returns (x, y : bool);
+var tx, ty : bool;
 let
-  (x, y) = (true, false) fby (a, b);
+  x = tx;
+  y = ty;
+  tx = true fby a;
+  ty = false fby b;
 tel
 

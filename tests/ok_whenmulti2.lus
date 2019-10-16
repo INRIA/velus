@@ -1,14 +1,17 @@
 
 node f (a : bool)
 returns (x, y : bool)
+var t : bool;
 let
     x = a;
-    y = false fby not a;
+    t = false fby not a;
+    y = t;
 tel
 
 node multimerge (a, b : bool)
 returns (y : bool)
 var w1, w2, w3, w4 : bool when a;
+    t1, t2, t3, t4 : bool;
     x : bool when not a;
 let
     (* Works in Lustre v6.
@@ -19,7 +22,12 @@ let
         Type Clash: this expression has type ((bool * bool) * (bool * bool)),
         but is expected to have type (bool * bool * bool * bool).
     *)
-    (w1, w2, w3, w4) = (f(b), f(not b)) when a;
+    (t1, t2) = f(b);
+    (t3, t4) = f(not b);
+    w1 = t1 when a;
+    w2 = t2 when a;
+    w3 = t3 when a;
+    w4 = t4 when a;
     x = b when not a;
     y = merge a (true -> w1) (false -> x);
 tel

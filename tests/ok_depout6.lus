@@ -1,21 +1,34 @@
 
 node f(a: bool)
 returns (y: bool; z: bool when y);
+var t : bool;
 let
-    y = false fby a;
-    z = true when y;
+  y = t;
+  t = false fby a;
+  z = true when y;
 tel
 
 node g(a: bool; b: bool when a)
 returns (x: bool; y: bool when x);
+var t : bool;
 let
   x = merge a (true -> true) (false -> false);
-  y = (merge a (true -> b) (false -> false)) when x;
+  t = merge a (true -> b) (false -> false);
+  y = t when x;
 tel
 
 node main(b: bool)
 returns (w: bool; x: bool when w)
+var t1, t2, t3, t4 : bool;
+    s1 : bool when t1;
+    s2 : bool when t2;
+    s3 : bool when t3;
+    s4 : bool when t4;
 let
-    (w, x) = g(g(g(g(f(b)))));
+  (t1, s1) = f(b);
+  (t2, s2) = g(t1, s1);
+  (t3, s3) = g(t2, s2);
+  (t4, s4) = g(t3, s3);
+    (w, x) = g(t4, s4);
 tel
 

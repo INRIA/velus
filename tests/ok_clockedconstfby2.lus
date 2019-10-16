@@ -1,13 +1,17 @@
 
 node g (x: bool; y: bool when x)
 returns (z: bool);
+var t : bool;
 let
-  z = false fby (not z);
+  z = t;
+  t = false fby (not z);
 tel
 
 node f (x: bool; y: bool when x)
 returns (w: bool);
+var pny : bool when x;
 let
-  w = g(x, false fby (not y));
+  pny = false fby (not y);
+  w = g(x, pny);
 tel
 

@@ -1,7 +1,9 @@
 
 node wrong(w: bool) returns (x: bool; y: bool; z: bool);
 let
-    x, y = (false, false);      (* OK *)
-    z, z = (false, false);      (* KO *)
+    z = false;      (* OK *)
+    x = false;      (* OK *)
+    z = false;      (* KO *)
+    y = false;      (* OK *)
 tel
 

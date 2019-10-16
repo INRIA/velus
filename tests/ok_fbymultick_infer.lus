@@ -1,13 +1,23 @@
 
 node fbyfby1 (a, b : bool)
 returns (x : bool when a; y : bool when b);
+var xt : bool when a;
+    yt : bool when b;
 let
-  (x, y) = (true, false) fby (false when a, true when b);
+  x = xt;
+  y = yt;
+  xt = true fby (false when a);
+  yt = false fby (true when b);
 tel
 
 node fbyfby2 (a, b : bool)
 returns (x : bool when a; y : bool when b);
+var xt : bool when a;
+    yt : bool when b;
 let
-  (x, y) = (true, false) fby (false, true);
+  xt = true fby false;
+  x = xt;
+  yt = false fby true;
+  y = yt;
 tel
 

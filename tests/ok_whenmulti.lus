@@ -1,17 +1,22 @@
 
 node f (a : bool)
 returns (x, y : bool)
+var t : bool;
 let
     x = a;
-    y = false fby not a;
+    y = t;
+    t = false fby not a;
 tel
 
 node multimerge (a, b : bool)
 returns (y : bool)
 var w1, w2 : bool when a;
+    t1, t2 : bool;
     x : bool when not a;
 let
-    (w1, w2) = f(b) when a;
+    (t1, t2) = f(b);
+    w1 = t1 when a;
+    w2 = t2 when a;
     x = b when not a;
     y = merge a (true -> w1) (false -> x);
 tel

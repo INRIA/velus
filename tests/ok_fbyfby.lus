@@ -1,8 +1,11 @@
 
 node fbyfby (i : bool)
 returns (x, y : bool);
+var tx, ty : bool;
 let
-  x = true fby y;
-  y = true fby (not x);
+  tx = true fby y;
+  x = tx;
+  ty = true fby (not x);
+  y = ty;
 tel
 

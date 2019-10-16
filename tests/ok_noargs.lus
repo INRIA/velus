@@ -1,6 +1,0 @@
-
-node noargs() returns (a: bool);
-let
-    a = false fby (not a);
-tel
-

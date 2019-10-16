@@ -1,8 +1,10 @@
 
 node swap (a, b : bool)
 returns (x, y : bool);
+var t : bool;
 let
-  x = true fby b;
+  t = true fby b;
+  x = t;
   y = a;
 tel
 

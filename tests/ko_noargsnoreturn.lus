@@ -2,6 +2,7 @@
 node noargsnoreturns() returns ();
 var w : bool;
 let
-    w = false fby (not w);
+  w = t;
+  t = false fby (not t);
 tel
 

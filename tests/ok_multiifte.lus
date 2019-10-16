@@ -1,8 +1,10 @@
 
 node swap (a, b : bool)
 returns (x, y : bool);
+var tx : bool;
 let
-  x = false fby b;
+  tx = false fby b;
+  x = tx;
   y = a;
 tel
 
@@ -15,9 +17,17 @@ tel
 
 node main (a, b, c, d : bool)
 returns (w, x, y, z : bool);
+var t1, s1, t2, s2 : bool;
+    z1, z2, z3, z4 : bool;
+    u1, u2, u3, u4 : bool;
 let
-  (w, x, y, z) = shuffle(if a
-                         then shuffle(swap(a, b), swap(c, d))
-                         else (a, b, c, d));
+  (t1, s1) = swap(a, b);
+  (t2, s2) = swap(c, d);
+  (z1, z2, z3, z4) = shuffle(t1, s1, t2, s2);
+  u1 = if a then z1 else a;
+  u2 = if a then z2 else b;
+  u3 = if a then z3 else c;
+  u4 = if a then z4 else d;
+  (w, x, y, z) = shuffle(u1, u2, u3, u4);
 tel
 

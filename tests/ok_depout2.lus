@@ -1,20 +1,27 @@
 
 node f(a: bool)
 returns (y: bool; z: bool when y)
+var t: bool;
 let
-    y = false fby a;
+    y = t;
+    t = false fby a;
     z = true when y;
 tel
 
 node g(a: bool; b: bool when a)
 returns (y: bool)
+var t : bool;
 let
-  y = true fby false;
+  t = true fby false;
+  y = t;
 tel
 
 node main(b: bool)
 returns (x: bool)
+var t1 : bool;
+    t2 : bool when t1;
 let
-    x = g(f(b));
+  (t1, t2) = f(b);
+  x = g(t1, t2);
 tel
 
