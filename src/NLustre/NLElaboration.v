@@ -91,6 +91,8 @@ Local Open Scope error_monad_scope.
 
  *)
 
+Parameter do_add_when_to_constants : unit -> bool.
+
 Parameter elab_const_int : Cabs.cabsloc -> string -> constant.
 Parameter elab_const_float : Cabs.floatInfo -> constant.
 Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
@@ -321,34 +323,45 @@ Section ElabExpressions.
     | Tbool    => Tint Ctypes.IBool Ctypes.Signed
     end.
 
-  (* TODO: add when inference *)
+  (* Add [when]s around [e], assumed to be on the base clock, so that it
+     has the given clock [ck]. *)
+  Fixpoint build_whens (loc: astloc) (e: exp) (ck: clock) : exp :=
+    match ck with
+    | Cbase => e
+    | Con ck' x b => Ewhen (build_whens loc e ck') x b
+    end.
 
-  Fixpoint elab_exp (ae: LustreAst.expression) : res (exp * clock) :=
+  Definition add_whens (loc: astloc) (ck: clock) (c: const) : (exp * clock) :=
+    if do_add_when_to_constants tt
+    then (build_whens loc (Econst c) ck, ck)
+    else (Econst c, Cbase).
+
+  Fixpoint elab_exp (eck : clock) (ae: LustreAst.expression) {struct ae}
+                                                        : res (exp * clock) :=
     match ae with
-    | CONSTANT c loc => OK (Econst (elab_constant loc c), Cbase)
+    | CONSTANT c loc => OK (add_whens loc eck (elab_constant loc c))
     | VARIABLE x loc =>
       do (ty, ck) <- find_var loc x;
       OK (Evar x ty, ck)
     | WHEN [ae'] x b loc =>
       do (xty, xck) <- find_var loc x;
       do ok <- assert_type loc x xty bool_type;
-      do (e', eck) <- elab_exp ae';
+      do (e', eck) <- elab_exp xck ae';
       if eck ==b xck then OK (Ewhen e' x b, Con xck x b)
-      else Error (err_loc loc (MSG "badly clocked when: "
-                                   :: msg_of_clocks eck xck))
+      else Error (err_loc loc (MSG "badly clocked when: " :: msg_of_clocks eck xck))
     | UNARY aop [ae'] loc =>
       let op := elab_unop aop in
-      do (e', ck) <- elab_exp ae';
+      do (e', ck) <- elab_exp eck ae';
       do ty' <- find_type_unop loc op (typeof e');
       OK (Eunop op e' ty', ck)
     | CAST aty' [ae'] loc =>
       let ty' := elab_type aty' in
-      do (e', ck) <- elab_exp ae';
+      do (e', ck) <- elab_exp eck ae';
       OK (Eunop (CastOp ty') e' ty', ck)
     | BINARY aop [ae1] [ae2] loc =>
       let op := elab_binop aop in
-      do (e1, ck1) <- elab_exp ae1;
-      do (e2, ck2) <- elab_exp ae2;
+      do (e1, ck1) <- elab_exp eck ae1;
+      do (e2, ck2) <- elab_exp eck ae2;
       do ty' <- find_type_binop loc op (typeof e1) (typeof e2);
       if ck1 ==b ck2 then OK (Ebinop op e1 e2 ty', ck1)
       else Error (err_loc loc (MSG "badly clocked operator: "
@@ -356,13 +369,14 @@ Section ElabExpressions.
     | _ => Error (err_loc (expression_loc ae) (msg "expression not normalized"))
     end.
 
-  Fixpoint elab_cexp (ae: LustreAst.expression) : res (cexp * clock) :=
+  Fixpoint elab_cexp (eck : clock) (ae: LustreAst.expression) {struct ae}
+                                                        : res (cexp * clock) :=
     match ae with
     | MERGE x [aet] [aef] loc =>
       do (xty, xck) <- find_var loc x;
       do ok <- assert_type loc x xty bool_type;
-      do (et, ckt) <- elab_cexp aet;
-      do (ef, ckf) <- elab_cexp aef;
+      do (et, ckt) <- elab_cexp (Con xck x true) aet;
+      do (ef, ckf) <- elab_cexp (Con xck x false) aef;
       if typeofc et ==b typeofc ef
       then if (ckt ==b (Con xck x true))
            then if (ckf ==b (Con xck x false))
@@ -373,9 +387,9 @@ Section ElabExpressions.
                                         :: msg_of_clocks (Con xck x true) ckt))
       else Error (err_loc loc (msg "badly typed merge"))
     | IFTE [ae] [aet] [aef] loc =>
-      do (e, ck) <- elab_exp ae;
-      do (et, ckt) <- elab_cexp aet;
-      do (ef, ckf) <- elab_cexp aef;
+      do (e, ck) <- elab_exp eck ae;
+      do (et, ckt) <- elab_cexp eck aet;
+      do (ef, ckf) <- elab_cexp eck aef;
       if (typeof e ==b bool_type) && (typeofc et ==b typeofc ef)
       then if (ckt ==b ck)
            then if (ckf ==b ck)
@@ -386,7 +400,7 @@ Section ElabExpressions.
                                         :: msg_of_clocks ck ckt))
       else Error (err_loc loc (msg "badly typed if/then/else"))
     | _ =>
-      do (e, ck) <- elab_exp ae;
+      do (e, ck) <- elab_exp eck ae;
       OK (Eexp e, ck)
     end.
 
@@ -427,7 +441,13 @@ Section ElabExpressions.
       match Env.find x sub with
       | None => Error (err_loc loc (MSG "The " :: CTX x
                         :: msg " argument must be instantiated with a variable."))
-      | Some y => OK (Con sck' y b)
+      | Some y =>
+        (* Check for [wt_clock] and [wc_clock], though it should be possible to
+           guarantee these by proof. *)
+        do (xty, xck) <- find_var loc y;
+        do ok <- assert_type loc x xty bool_type;
+        do ok <- assert_clock loc x xck sck';
+        OK (Con sck' y b)
       end
     end.
 
@@ -448,7 +468,7 @@ Section ElabExpressions.
     | nil, nil => OK nil
     | (i, (ity, ick))::iface, ae::aes =>
       do ck' <- instck (expression_loc ae) ick;
-      do (e, ck) <- elab_exp ae;
+      do (e, ck) <- elab_exp ck' ae;
       do _ <- check_noops loc ick e;
       if ck ==b ck'
       then do ok <- assert_exp_type (expression_loc ae) e ity;
@@ -522,7 +542,7 @@ Section ElabExpressions.
     | FBY [ae0] [ae] loc =>
       do v0 <- elab_constant_with_cast loc ae0;
       let v0ty := type_const v0 in
-      do (e, eck) <- elab_exp ae;
+      do (e, eck) <- elab_exp xck ae;
       do ok <- assert_type loc x xty v0ty;
       if typeof e ==b v0ty
       then if eck ==b xck
@@ -536,7 +556,7 @@ Section ElabExpressions.
       Error (err_loc (expression_loc ae) (msg "fby not normalized"))
 
     | _ =>
-      do (e, eck) <- elab_cexp ae;
+      do (e, eck) <- elab_cexp xck ae;
       do ok <- assert_type loc x xty (typeofc e);
       if eck ==b xck
       then OK (EqDef x xck e)
@@ -571,64 +591,115 @@ Section ElabExpressions.
 
   Local Ltac MonadInvLExprWithLists :=
     match goal with
-    | H:elab_exp (UNARY _ [_] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (UNARY _ [] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (UNARY _ (_::_::_) _) = OK _ |- _ => monadInv H
-    | H:elab_exp (UNARY _ (_::?es) _) = OK _ |- _ =>
+    | H:elab_exp _ (UNARY _ [_] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (UNARY _ [] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (UNARY _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (UNARY _ (_::?es) _) = OK _ |- _ =>
       destruct es; MonadInvLExprWithLists
-    | H:elab_exp (UNARY _ ?es _) = OK _ |- _ =>
+    | H:elab_exp _ (UNARY _ ?es _) = OK _ |- _ =>
       destruct es; MonadInvLExprWithLists
 
-    | H:elab_exp (BINARY _ [_] [_] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (BINARY _ [] _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (BINARY _ (_::_) [] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (BINARY _ (_::?es1) [] _) = OK _ |- _ =>
+    | H:elab_exp _ (BINARY _ [_] [_] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (BINARY _ [] _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (BINARY _ (_::_) [] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (BINARY _ (_::?es1) [] _) = OK _ |- _ =>
       destruct es1; MonadInvLExprWithLists
-    | H:elab_exp (BINARY _ (_::_::_) _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (BINARY _ _ (_::_::_) _) = OK _ |- _ => monadInv H
-    | H:elab_exp (BINARY _ (_::?es1) (_::?es2) _) = OK _ |- _ =>
+    | H:elab_exp _ (BINARY _ (_::_::_) _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (BINARY _ _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (BINARY _ (_::?es1) (_::?es2) _) = OK _ |- _ =>
       destruct es1; destruct es2; MonadInvLExprWithLists
-    | H:elab_exp (BINARY _ ?es1 ?es2 _) = OK _ |- _ =>
+    | H:elab_exp _ (BINARY _ ?es1 ?es2 _) = OK _ |- _ =>
       destruct es1; destruct es2; MonadInvLExprWithLists
 
-    | H:elab_exp (CAST _ [_] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (CAST _ [] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (CAST _ (_::_::_) _) = OK _ |- _ => monadInv H
-    | H:elab_exp (CAST _ (_::?es) _) = OK _ |- _ =>
+    | H:elab_exp _ (CAST _ [_] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (CAST _ [] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (CAST _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (CAST _ (_::?es) _) = OK _ |- _ =>
       destruct es; MonadInvLExprWithLists
-    | H:elab_exp (CAST _ ?es _) = OK _ |- _ =>
+    | H:elab_exp _ (CAST _ ?es _) = OK _ |- _ =>
       destruct es; MonadInvLExprWithLists
 
-    | H:elab_exp (FBY [_] [_] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (FBY [] _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (FBY (_::_) [] _) = OK _ |- _ => monadInv H
-    | H:elab_exp (FBY (_::?es1) [] _) = OK _ |- _ =>
+    | H:elab_exp _ (FBY [_] [_] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (FBY [] _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (FBY (_::_) [] _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (FBY (_::?es1) [] _) = OK _ |- _ =>
       destruct es1; MonadInvLExprWithLists
-    | H:elab_exp (FBY (_::_::_) _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (FBY _ (_::_::_) _) = OK _ |- _ => monadInv H
-    | H:elab_exp (FBY (_::?es1) (_::?es2) _) = OK _ |- _ =>
+    | H:elab_exp _ (FBY (_::_::_) _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (FBY _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (FBY (_::?es1) (_::?es2) _) = OK _ |- _ =>
       destruct es1; destruct es2; MonadInvLExprWithLists
-    | H:elab_exp (FBY ?es1 ?es2 _) = OK _ |- _ =>
+    | H:elab_exp _ (FBY ?es1 ?es2 _) = OK _ |- _ =>
       destruct es1; destruct es2; MonadInvLExprWithLists
 
-    | H:elab_exp (WHEN [_] _ _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (WHEN [] _ _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (WHEN (_::_::_) _ _ _) = OK _ |- _ => monadInv H
-    | H:elab_exp (WHEN (_::?es) _ _ _) = OK _ |- _ =>
+    | H:elab_exp _ (WHEN [_] _ _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (WHEN [] _ _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (WHEN (_::_::_) _ _ _) = OK _ |- _ => monadInv H
+    | H:elab_exp _ (WHEN (_::?es) _ _ _) = OK _ |- _ =>
       destruct es; MonadInvLExprWithLists
-    | H:elab_exp (WHEN ?es _ _ _) = OK _ |- _ =>
+    | H:elab_exp _ (WHEN ?es _ _ _) = OK _ |- _ =>
       destruct es; MonadInvLExprWithLists
 
-    | H:elab_exp _ = OK _ |- _ => monadInv H
+    | H:elab_exp _ _ = OK _ |- _ => monadInv H
     end.
 
+  Lemma wt_inst_clock:
+    forall bck sub loc ck ck',
+      wt_clock (idty (Env.elements env)) bck ->
+      inst_clock bck sub loc ck = OK ck' ->
+      wt_clock (idty (Env.elements env)) ck'.
+  Proof.
+    induction ck; intros ck' WT IC; inv IC; auto.
+    monadInv1 H0. NamedDestructCases. monadInv1 EQ0.
+    apply find_var_type in EQ1.
+    apply assert_type_eq in EQ0; subst; auto.
+  Qed.
+
+  Lemma wc_inst_clock:
+    forall bck sub loc ck ck',
+      wc_clock (idck (Env.elements env)) bck ->
+      inst_clock bck sub loc ck = OK ck' ->
+      wc_clock (idck (Env.elements env)) ck'.
+  Proof.
+    induction ck; intros ck' WT IC; inv IC; auto.
+    monadInv1 H0. NamedDestructCases. monadInv1 EQ0.
+    apply find_var_clock in EQ1.
+    apply assert_clock_eq in EQ2; subst; auto.
+  Qed.
+
+  Lemma wt_add_whens:
+    forall vars loc eck c e ck,
+      wt_clock vars eck ->
+      add_whens loc eck (elab_constant loc c) = (e, ck) ->
+      wt_exp vars e.
+  Proof.
+    unfold add_whens. destruct (do_add_when_to_constants tt).
+    2:now inversion_clear 2; auto.
+    induction eck; intros c e ck WTC AW. now inv AW; auto.
+    inv AW. inv WTC. constructor; auto.
+    eapply IHeck; eauto.
+  Qed.
+
+  Lemma wc_add_whens:
+    forall vars loc eck c e ck,
+      wc_clock vars eck ->
+      add_whens loc eck (elab_constant loc c) = (e, ck) ->
+      wc_exp vars e ck.
+  Proof.
+    unfold add_whens. destruct (do_add_when_to_constants tt).
+    2:now inversion_clear 2; auto.
+    induction eck; intros c e ck WTC AW. now inv AW; auto.
+    inv AW. inv WTC. constructor; auto.
+    eapply IHeck; eauto.
+  Qed.
+
   Lemma wt_elab_exp:
-    forall ae e ck,
-      elab_exp ae = OK (e, ck) ->
+    forall ae eck e ck,
+      wt_clock (idty (Env.elements env)) eck ->
+      elab_exp eck ae = OK (e, ck) ->
       wt_exp (idty (Env.elements env)) e.
   Proof.
     induction ae using expression_ind2;
-      intros e ck Helab; MonadInvLExprWithLists;
+      intros eck e ck WTC Helab; MonadInvLExprWithLists;
       NamedDestructCases; try constructor; intros; subst;
       repeat progress match goal with H:Forall _ [_] |- _ => inv H end;
       eauto using wt_exp, find_var_type, assert_type_eq.
@@ -640,19 +711,30 @@ Section ElabExpressions.
                       destruct e eqn:He; try discriminate; injection H end.
       intro; subst.
       rewrite type_binop'_correct in He.
-      eauto using wt_exp.
+      constructor; eauto.
     - now rewrite type_castop.
-    - constructor; eauto.
-      apply assert_type_eq in EQ1. subst.
-      eauto using find_var_type.
+    - eapply wt_add_whens; eauto.
+    - apply assert_type_eq in EQ1; subst.
+      constructor; eauto using find_var_type, wt_clock_find_var.
+  Qed.
+
+  Lemma In_env_elements_wc_clock:
+    forall x ck,
+      In (x, ck) (idck (Env.elements env)) ->
+      wc_clock (idck (Env.elements env)) ck.
+  Proof.
+    intros x ck Ix.
+    apply In_idck_exists in Ix as (ty & WC).
+    now apply Env.elements_complete, wc_cenv in WC.
   Qed.
 
   Lemma wc_elab_exp:
-    forall ae e ck,
-      elab_exp ae = OK (e, ck) ->
+    forall ae eck e ck,
+      wc_clock (idck (Env.elements env)) eck ->
+      elab_exp eck ae = OK (e, ck) ->
       wc_exp (idck (Env.elements env)) e ck.
   Proof.
-    induction ae using expression_ind2; intros e ck Helab;
+    induction ae using expression_ind2; intros eck e ck WC Helab;
       MonadInvLExprWithLists; NamedDestructCases;
         try constructor; intros; subst;
           repeat match goal with
@@ -662,26 +744,13 @@ Section ElabExpressions.
              | H:find_var _ _ = OK _ |- _ =>
                apply find_var_clock in H
              end;
-      eauto using wc_exp.
+          eauto using wc_exp, wc_add_whens.
+    take (forall eck e ck, wc_clock _ _ -> elab_exp _ _ = OK _ -> wc_exp _ _ _)
+         and apply it in EQ0; auto.
+    eauto using In_env_elements_wc_clock.
   Qed.
 
-  Lemma wt_elab_exps:
-    forall loc ck iface aes es,
-      elab_exps loc ck iface aes = OK es ->
-      (Forall (wt_exp (idty (Env.elements env))) es
-       /\ Forall2 (fun xtc e=> typeof e = fst (snd xtc)) iface es).
-  Proof.
-    induction iface; simpl; intros * Helab; DestructCases; auto.
-    monadInv Helab.
-    NamedDestructCases.
-    monadInv EQ3.
-    apply wt_elab_exp in EQ1.
-    specialize (IHiface _ _ EQ3) as (? & ?).
-    unfold assert_exp_type in EQ2.
-    NamedDestructCases. rewrite equiv_decb_equiv in Heq0; auto.
-  Qed.
-
-  Lemma wt_inst_clock:
+  Lemma wt_inst_clock_env:
     forall loc env1 env2 bck s ck sck,
       wt_clock env2 bck ->
       wt_clock env1 ck ->
@@ -699,21 +768,38 @@ Section ElabExpressions.
     monadInv Hm. NamedDestructCases.
     inversion_clear Hck as [|? ? ? ? Hwtck].
     specialize (IHck _ EQ Hwtck).
+    monadInv EQ0.
     eapply Hf in Heq; eauto with nltyping.
+  Qed.
+
+  Lemma wt_elab_exps:
+    forall loc instck iface aes es,
+      (forall loc ck ck', instck loc ck = OK ck' -> wt_clock (idty (Env.elements env)) ck') ->
+      elab_exps loc instck iface aes = OK es ->
+      (Forall (wt_exp (idty (Env.elements env))) es
+       /\ Forall2 (fun xtc e=> typeof e = fst (snd xtc)) iface es).
+  Proof.
+    intros loc instck iface aes es Hinst; revert aes es.
+    induction iface; simpl; intros * Helab; DestructCases; auto.
+    monadInv Helab.
+    NamedDestructCases.
+    monadInv EQ3.
+    apply wt_elab_exp in EQ1.
+    - specialize (IHiface _ _ EQ3) as (? & ?).
+      unfold assert_exp_type in EQ2.
+      NamedDestructCases. rewrite equiv_decb_equiv in Heq0; auto.
+    - now apply Hinst in EQ.
   Qed.
 
   Lemma inst_clock_instck:
     forall bck sub loc ck ck',
-      inst_clock bck sub loc ck = OK ck'
-      <-> instck bck (fun x => Env.find x sub) ck = Some ck'.
+      inst_clock bck sub loc ck = OK ck' ->
+      instck bck (fun x => Env.find x sub) ck = Some ck'.
   Proof.
-    induction ck; simpl.
-    now split; inversion 1; auto.
-    split; intro HH.
-    - monadInv HH. DestructCases.
-      now apply IHck in EQ as ->.
-    - DestructCases. destruct (IHck c) as (HH1 & HH2).
-      now rewrite HH2.
+    induction ck; simpl. now inversion 1; auto.
+    intros ck' HH.
+    monadInv HH. DestructCases.
+    monadInv EQ0. now apply IHck in EQ as ->.
   Qed.
 
   Lemma make_imap_InMembers:
@@ -792,12 +878,12 @@ Section ElabExpressions.
   Qed.
 
   Lemma elab_exps_In_combine:
-    forall loc sub iface aes es x xt xc e,
-      elab_exps loc sub iface aes = OK es ->
+    forall loc instck iface aes es x xt xc e,
+      elab_exps loc instck iface aes = OK es ->
       In (x, (xt, xc), e) (combine iface es) ->
-      exists ae ck, In (x, (xt, xc), ae) (combine iface aes)
-               /\ elab_exp ae = OK (e, ck)
-               /\ sub (expression_loc ae) xc = OK ck.
+      exists ae ck eck, In (x, (xt, xc), ae) (combine iface aes)
+                   /\ elab_exp eck ae = OK (e, ck)
+                   /\ instck (expression_loc ae) xc = OK ck.
   Proof.
     induction iface as [|(x, (xt, xc)) iface IH].
     now destruct aes; inversion 1; simpl; contradiction.
@@ -808,9 +894,9 @@ Section ElabExpressions.
       rewrite equiv_decb_equiv in Heq0; rewrite Heq0 in *; clear Heq0.
       destruct x3, x4.
       rename x5 into es, x0 into ck.
-      exists e0, ck. repeat split; auto. now constructor.
-    - eapply IH in EQ3 as (ae & ck & HH1 & HH2 & HH3); eauto.
-      exists ae, ck. repeat split; auto. now constructor 2.
+      exists e0, ck, ck. repeat split; auto. now constructor.
+    - eapply IH in EQ3 as (ae & ck & eck & HH1 & HH2 & HH3); eauto.
+      exists ae, ck, eck. repeat split; auto. now constructor 2.
   Qed.
 
   Lemma find_make_imap_gso:
@@ -879,7 +965,7 @@ Section ElabExpressions.
     intros * ND EE.
     apply all_In_Forall2. now apply elab_exps_length with (1:=EE).
     intros (x, (xt, xc)) e Ix.
-    eapply elab_exps_In_combine with (2:=Ix) in EE as (ae & ck & EE1 & EE2 & EE3).
+    eapply elab_exps_In_combine with (2:=Ix) in EE as (ae & ck & eck & EE1 & EE2 & EE3).
     apply find_make_imap_gss with (s:=Env.empty ident) in EE1 as ->; auto.
     rewrite Env.gempty. destruct ae; auto using SameVar.
     simpl in EE2. monadInv EE2. constructor.
@@ -887,20 +973,23 @@ Section ElabExpressions.
 
   Lemma elab_exps_wc:
     forall loc bck sub iface aes es,
+      wc_clock (idck (Env.elements env)) bck ->
       elab_exps loc (inst_clock bck sub) iface aes = OK es ->
       Forall2 (fun '(x, (_, xck)) e =>
                  exists lck, wc_exp (idck (Env.elements env)) e lck
-                           /\ instck bck (fun x => Env.find x sub) xck = Some lck)
+                        /\ instck bck (fun x => Env.find x sub) xck = Some lck)
               iface es.
   Proof.
+    intros loc bck sub iface aes es WC; revert aes es.
     induction iface as [|(y, (yt, yc)) iface IH].
     now destruct aes; inversion 1; auto.
     destruct aes as [|ae aes]; simpl. now inversion 1.
     intros * Helab; DestructCases; auto.
     monadInv Helab. NamedDestructCases. monadInv EQ3.
+    assert (WCI:=EQ); apply wc_inst_clock in WCI; auto.
     apply inst_clock_instck in EQ.
-    apply wc_elab_exp in EQ1.
-    rewrite equiv_decb_equiv in Heq; rewrite Heq in *; eauto.
+    apply wc_elab_exp in EQ1; auto.
+    now rewrite equiv_decb_equiv in Heq; rewrite Heq in *; eauto.
   Qed.
 
   Lemma check_result_list_wc:
@@ -964,11 +1053,12 @@ Section ElabExpressions.
   Qed.
 
   Lemma wt_elab_cexp:
-    forall ae e ck,
-      elab_cexp ae = OK (e, ck) ->
+    forall ae e eck ck,
+      wt_clock (idty (Env.elements env)) eck ->
+      elab_cexp eck ae = OK (e, ck) ->
       wt_cexp (idty (Env.elements env)) e.
   Proof.
-    induction ae using expression_ind2; intros e ck Helab;
+    induction ae using expression_ind2; intros e eck ck WTC Helab;
       try apply bind_inversion in Helab;
       try (destruct Helab as ((le & ck') & Helab & Hexp);
            monadInv Hexp);
@@ -986,36 +1076,43 @@ Section ElabExpressions.
       eauto using wt_elab_exp with nltyping.
     - destruct ets; [inv Helab|]; destruct ets; [|inv Helab].
       destruct efs; [inv Helab|]; destruct efs; [|inv Helab].
-      apply bind_inversion in Helab.
-      repeat match goal with H:Forall _ [_] |- _ => inv H end.
-      destruct Helab as ((le & ck') & Helab & Hexp); monadInv Hexp.
-      apply find_var_type in Helab.
-      NamedDestructCases.
+      repeat match goal with H:Forall _ [_] |- _ => apply Forall_inv in H end.
+      simpl in Helab. monadInv Helab. NamedDestructCases.
+      intro; subst e.
+      take (find_var _ _ = OK _) and pose proof (find_var_clock _ _ _ _ it) as WC.
+      apply In_idck_exists in WC as (? & WC).
+      apply Env.elements_complete, wt_cenv in WC.
+      take (find_var _ _ = OK _) and apply find_var_type in it.
       rewrite equiv_decb_equiv in Heq.
-      apply assert_type_eq in EQ.
-      intro; subst.
-      eauto using assert_type_eq with nltyping.
+      apply assert_type_eq in EQ1; subst.
+      apply H in EQ0; auto.
+      apply H0 in EQ2; auto.
   Qed.
 
   Lemma wc_elab_cexp:
-    forall ae e ck,
-      elab_cexp ae = OK (e, ck) ->
+    forall ae e eck ck,
+      wc_clock (idck (Env.elements env)) eck ->
+      elab_cexp eck ae = OK (e, ck) ->
       wc_cexp (idck (Env.elements env)) e ck.
   Proof.
-    induction ae using expression_ind2; simpl; intros e ck HH;
+    induction ae using expression_ind2; simpl; intros e eck ck EE HH;
       try apply bind_inversion in HH;
       try (destruct HH as ((le & ck') & Helab & Hexp);
            monadInv Hexp);
       repeat match goal with
-             | H:Forall _ [_] |- _ => inv H
+             | H:Forall _ [_] |- _ => apply Forall_inv in H
              | H:_ = OK _ |- _ => monadInv H
              | H:(_ ==b _) = true |- _ =>
                rewrite equiv_decb_equiv in H; rewrite H in *; clear H
              | H:find_var _ _ = OK _ |- _ =>
                apply find_var_clock in H
+             | H:add_whens _ _ _ = _ |- _ => apply wc_add_whens with (1:=EE) in Heq
              | _ => NamedDestructCases; intros; subst
              end;
       eauto using wc_cexp, wc_exp, wc_elab_exp.
+    - repeat constructor; auto.
+      apply wc_elab_exp in EQ0; eauto using In_env_elements_wc_clock.
+    - constructor; eauto using wc_clock, In_env_elements_wc_clock.
   Qed.
 
   Lemma check_result_list_Forall2:
@@ -1052,6 +1149,16 @@ Section ElabExpressions.
     inversion_clear 1; simpl; auto.
   Qed.
 
+  Lemma wc_find_base:
+    forall vars ick ck,
+      wc_clock vars ck ->
+      wc_clock vars (find_base ick ck).
+  Proof.
+    induction ick; auto.
+    destruct ck; auto.
+    inversion_clear 1; simpl; auto.
+  Qed.
+
   Lemma wt_elab_equation:
     forall aeq eq,
       elab_equation aeq = OK eq ->
@@ -1059,24 +1166,29 @@ Section ElabExpressions.
   Proof.
     intros aeq eq Helab.
     destruct aeq as ((xs & ae) & loc).
-    destruct ae; simpl in Helab;
-      repeat progress
+    destruct ae; simpl in Helab.
+    now monadInv Helab.
+    repeat progress
              match goal with
              | H:bind _ _ = _ |- _ => monadInv H
              | H:bind2 _ _ = _ |- _ => monadInv H
-             | H:elab_exp _ = OK _ |- _ => apply wt_elab_exp in H
-             | H:elab_exps _ _ _ _ = OK _ |- _ => apply wt_elab_exps in H as (? & ?)
+             | H:elab_exp _ _ = OK _ |- _ => apply wt_elab_exp in H; auto
+             | H:elab_cexp _ _ = OK _ |- _ => apply wt_elab_cexp in H; auto
              | H:find_var _ _ = OK _ |- _ =>
                pose proof (wt_clock_find_var _ _ _ _ H);
                apply find_var_type in H
              | H:assert_type _ _ _ _ = OK _ |- _ => apply assert_type_eq in H
-             | H:elab_cexp _ = OK _ |- _ => apply wt_elab_cexp in H
              | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
              | H:check_result_list _ _ _ _ = OK ?x |- _ =>
                apply check_result_list_Forall2 in H;
                  destruct H as (Hele & Hins & Hnodup)
              | _ => NamedDestructCases
-             end; intros; subst; auto with nltyping.
+             end; intros; subst; auto with nltyping;
+      match goal with
+      | H:elab_exps _ _ _ _ = OK _ |- _ =>
+        apply wt_elab_exps in H as (? & ?);
+          eauto using wt_inst_clock, wt_find_base
+      end.
     - rename x0 into xin, l2 into xout, i into f, x5 into ein, l1 into xs,
       x2 into ck, a into loc'.
       unfold find_node_interface in EQ. NamedDestructCases.
@@ -1088,7 +1200,8 @@ Section ElabExpressions.
         apply Forall2_swap_args.
         apply Forall2_impl_In with (2:=Hele).
         intros (z, (zt, zc)) y Iz Iy Izy; auto.
-      + apply Forall2_swap_args. rewrite Hin in H1.
+      + apply Forall2_swap_args.
+        rewrite Hin in H1.
         apply Forall2_impl_In with (2:=H1).
         intros (z, (zt, zc)) y Iz Iy Izy; auto.
     - rename x0 into xin, l3 into xout, i into f, x5 into ein, l1 into xs,
@@ -1100,8 +1213,8 @@ Section ElabExpressions.
       + apply Forall2_swap_args. rewrite <-Hout.
         apply Forall2_impl_In with (2:=Hele).
         intros (z, (zt, zc)) y Iz Iy Izy; auto.
-      + apply Forall2_swap_args. rewrite Hin in H1.
-        apply Forall2_impl_In with (2:=H1).
+      + apply Forall2_swap_args. rewrite Hin in H2.
+        apply Forall2_impl_In with (2:=H2).
         intros (z, (zt, zc)) y Iz Iy Izy; auto.
   Qed.
 
@@ -1162,10 +1275,12 @@ Section ElabExpressions.
            | H:bind _ _ = _ |- _ => monadInv H
            | H:bind2 _ _ = _ |- _ => monadInv H
            | H:find_var _ _ = OK _ |- _ => apply find_var_clock in H
-           | H:elab_cexp _ = OK _ |- _ => apply wc_elab_cexp in H
+           | H:elab_cexp _ _ = OK _ |- _ =>
+             apply wc_elab_cexp in H; eauto using In_env_elements_wc_clock
            | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
            | H:equiv _ _ |- _ => rewrite H in *; clear H
-           | H:elab_exp _ = OK _ |- _ => apply wc_elab_exp in H
+           | H:elab_exp _ _ = OK _ |- _ =>
+             apply wc_elab_exp in H; eauto using In_env_elements_wc_clock
            | H:find_node_interface _ _ = OK _ |- _ =>
              apply find_node_interface_map in H as (n & Fn & Hin & Hout)
            | _ => NamedDestructCases
@@ -1200,6 +1315,7 @@ Section ElabExpressions.
           apply Forall2_impl_In with (2:=H); clear H end.
         intros (y, (yt, yc)) z Iy Iz' (Fy & (yck & Iz & IC)); eauto.
       + intros; discriminate.
+      + eauto using wc_find_base, In_env_elements_wc_clock.
     - (* EqApp - reset (copied from above and adjusted) *)
       match goal with H:check_result_list _ (inst_clock _ ?sub') _ _ = OK _ |- _ =>
                       pose (sub := (fun x => Env.find x sub')) end.
@@ -1229,6 +1345,7 @@ Section ElabExpressions.
           apply Forall2_impl_In with (2:=H); clear H end.
         intros (y, (yt, yc)) z Iy Iz' (Fy & (yck & Iz & IC)); eauto.
       + now inversion_clear 1.
+      + eauto using wc_find_base, In_env_elements_wc_clock.
   Qed.
 
   Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
@@ -1383,6 +1500,14 @@ Section ElabDeclaration.
     discriminate Hfind.
   Qed.
 
+  Lemma all_wc_clock_empty:
+    all_wc_clock (Env.empty (type * clock)).
+  Proof.
+    intros x ty ck Hfind.
+    rewrite Env.gempty in Hfind.
+    discriminate Hfind.
+  Qed.
+
   Lemma all_wt_clock_add:
     forall env x ty ck,
       all_wt_clock env ->
@@ -1443,6 +1568,68 @@ Section ElabDeclaration.
       2:now apply Hawc in Heq.
       apply Env.elements_correct in Heq.
       apply In_idty_exists; eauto.
+  Qed.
+
+  Lemma all_wc_clock_add:
+    forall env x ty ck,
+      all_wc_clock env ->
+      ~Env.In x env ->
+      wc_clock (idck (Env.elements env)) ck ->
+      all_wc_clock (Env.add x (ty, ck) env).
+  Proof.
+    intros env x ty ck Hawc Hnin Hwtc y yt yc Hfind.
+    rewrite Env.elements_add; auto; simpl.
+    rewrite Env.In_Members, <-InMembers_idck in Hnin.
+    destruct (ident_eq_dec y x).
+    - subst. rewrite Env.gss in Hfind.
+      injection Hfind; intros; subst.
+      apply wc_clock_add; auto.
+    - rewrite Env.gso in Hfind; auto.
+      apply Hawc in Hfind.
+      apply wc_clock_add; auto.
+  Qed.
+
+  Lemma elab_var_decls_pass_all_wc_clock:
+    forall vds env ovds env' vds',
+      all_wc_clock env ->
+      elab_var_decls_pass (env, ovds) vds = OK (env', vds') ->
+      all_wc_clock env'.
+  Proof.
+    induction vds as [|vd vds IH].
+    now simpl; intros vd' vds' vd vds Hawc Helab; monadInv Helab.
+    intros env ovds env' vds' Hawc Helab.
+    destruct vd as (x & ((ty & pck) & loc)).
+    destruct pck as [ck|y yb]; [destruct ck as [|ck y yb]|]; simpl in Helab.
+    - (* (x, (ty, FULLCK BASE, loc)) *)
+      NamedDestructCases.
+      apply Env.Props.P.F.not_mem_in_iff in Heq.
+      apply IH in Helab; auto.
+      apply all_wc_clock_add; auto with nltyping.
+    - (* (x, (ty, FULLCK (ON ck y yb))) *)
+      NamedDestructCases.
+      2:now apply IH in Helab; auto.
+      monadInv Helab.
+      apply Env.Props.P.F.not_mem_in_iff in Heq1.
+      apply IH in EQ2; auto.
+      apply all_wc_clock_add; auto.
+      apply assert_type_eq in EQ; subst.
+      constructor.
+      eauto using In_env_elements_wc_clock.
+      apply Env.elements_correct in Heq.
+      apply In_idck_exists; eauto.
+    - (* (x, (ty, WHENCK y yb, loc)) *)
+      NamedDestructCases.
+      2:now apply IH in Helab; auto.
+      monadInv Helab.
+      NamedDestructCases.
+      apply Env.Props.P.F.not_mem_in_iff in Heq1.
+      apply IH in EQ0; auto.
+      apply all_wc_clock_add; auto.
+      apply assert_type_eq in EQ; subst.
+      constructor.
+      eauto using In_env_elements_wc_clock.
+      apply Env.elements_correct in Heq.
+      apply In_idck_exists; eauto.
   Qed.
 
   Lemma elab_var_decls_pass_spec:
@@ -1676,6 +1863,27 @@ Section ElabDeclaration.
     simpl in Helab. monadInv Helab.
     rename x into env'', x0 into vds'.
     pose proof (elab_var_decls_pass_all_wt_clock _ _ _ _ _ Hawt EQ) as Hawt''.
+    apply elab_var_decls_pass_spec in EQ; auto.
+    apply IH in EQ0; auto.
+  Qed.
+
+  Lemma elab_var_decls_all_wc_clock:
+    forall loc vds env env',
+      all_wc_clock env ->
+      elab_var_decls loc env vds = OK env' ->
+      all_wc_clock env'.
+  Proof.
+    unfold elab_var_decls.
+    intros loc vds. generalize vds at 1.
+    intro fuel. revert vds.
+    induction fuel as [|cd fuel IH].
+    now simpl; intros; NamedDestructCases.
+    intros vds env env' Hawt Helab.
+    destruct vds as [|vd vds].
+    now simpl in Helab; monadInv Helab.
+    simpl in Helab. monadInv Helab.
+    rename x into env'', x0 into vds'.
+    pose proof (elab_var_decls_pass_all_wc_clock _ _ _ _ _ Hawt EQ) as Hawt''.
     apply elab_var_decls_pass_spec in EQ; auto.
     apply IH in EQ0; auto.
   Qed.
@@ -2101,8 +2309,11 @@ Section ElabDeclaration.
     let Hwc_out := fresh "Hwc_out" in
     let Hwc_var := fresh "Hwc_var" in
     let Hwt_in := fresh "Hwt_in" in
+    let Hwc'_in := fresh "Hwc'_in" in
     let Hwt_out := fresh "Hwt_out" in
+    let Hwc'_out := fresh "Hwc'_out" in
     let Hwt_var := fresh "Hwt_var" in
+    let Hwc'_var := fresh "Hwc'_var" in
     let Hr_out := fresh "Hr_out" in
     let Hr_var := fresh "Hr_var" in
     let env_in := fresh "env_in" in
@@ -2143,6 +2354,9 @@ Section ElabDeclaration.
                     (assert (Hwt_in := H);
                      apply elab_var_decls_all_wt_clock in Hwt_in;
                      simpl; auto using all_wt_clock_empty with nlclocking);
+                    (assert (Hwc'_in := H);
+                     apply elab_var_decls_all_wc_clock in Hwc'_in;
+                     auto using all_wc_clock_empty);
                     apply elab_var_decls_permutation in H;
                     simpl in H; rewrite app_nil_r in H;
                     rename H into Helab_in, x into env_in end;
@@ -2155,6 +2369,8 @@ Section ElabDeclaration.
                     (assert (Hwt_out := H);
                      apply elab_var_decls_all_wt_clock in Hwt_out;
                      simpl; auto with nlclocking);
+                    (assert (Hwc'_out := H);
+                     apply elab_var_decls_all_wc_clock in Hwc'_out; auto);
                     apply elab_var_decls_permutation in H;
                     rewrite <-Helab_in in H;
                     rename H into Helab_out, x into env_out end;
@@ -2167,6 +2383,8 @@ Section ElabDeclaration.
                     (assert (Hwt_var := H);
                      apply elab_var_decls_all_wt_clock in Hwt_var;
                      simpl; auto with nlclocking);
+                    (assert (Hwc'_var := H);
+                     apply elab_var_decls_all_wc_clock in Hwc'_var; auto);
                     apply elab_var_decls_permutation in H;
                     rewrite <-Helab_out in H;
                     rename H into Helab_var, x into env end;
@@ -2320,7 +2538,7 @@ Section ElabDeclaration.
         repeat match goal with H:OK _ = _ |- _ =>
           symmetry in H; monadInv1 H end;
         NamedDestructCases; intros; subst;
-        MassageElabs outputs locals inputs.
+          MassageElabs outputs locals inputs.
       + (* wc_env (idck xin) *)
         rewrite Hin in Helab_in.
         apply permutation_forall_elements in Hf_in; auto.
@@ -2444,3 +2662,4 @@ Definition elab_declarations (decls: list LustreAst.declaration)
                                     * list (ident * (type * clock))))
                      (conj wtg_nil (conj wc_global_nil I))
                      Is_interface_map_empty decls.
+
