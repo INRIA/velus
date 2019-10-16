@@ -4,7 +4,7 @@
 
 include variables.mk
 
-.PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR)
+.PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR) tests
 
 all: $(VELUS)
 
@@ -67,6 +67,9 @@ $(TOOLSDIR)/$(AUTOMAKE).ml: $(TOOLSDIR)/$(AUTOMAKE).mll
 # EXAMPLES
 $(EXAMPLESDIR): $(VELUS)
 	$(MAKE) $(EXAMPLESFLAGS)
+
+tests: $(VELUS)
+	VELUS=$(MKFILE_DIR)/$(VELUS) $(RUNEXAMPLES)
 
 # CLEAN
 clean:

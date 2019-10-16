@@ -40,6 +40,7 @@ $(shell mkdir -p $(EXTRACTED) >/dev/null)
 
 EXAMPLESDIR=examples
 EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
+RUNEXAMPLES=$(EXAMPLESDIR)/runexamples.sh
 
 # Menhir includes from CompCert
 ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)

@@ -1,7 +1,7 @@
-node counter(ini, inc: int; restart: bool) returns (n: int)
+node counter(ini, inc: int; reset: bool) returns (n: int)
   var c: int; f: bool;
 let
-  n = if f or restart then ini else c + inc;
+  n = if f or reset then ini else c + inc;
   f = true fby false;
   c = 1 fby n;
 tel
@@ -29,4 +29,3 @@ let
   pt = 0 fby t;
   t = merge x (true -> c) (false -> pt when not x);
 tel
-
