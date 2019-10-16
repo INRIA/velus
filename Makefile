@@ -23,11 +23,12 @@ parser:
 # VELUS COQ
 proof: compcert parser $(MAKEFILEAUTO) $(MAKEFILECONFIG)
 	@echo "${bold}Building Velus proof...${normal}"
+	$(MAKE) -s -f $(MAKEFILEAUTO) check-admitted
 	test -f .depend || $(MAKE) -s -f $(MAKEFILEAUTO) depend
 	$(MAKE) -s -f $(MAKEFILEAUTO) all
 	@echo "${bold}OK.${normal}"
 
-$(MAKEFILEAUTO): automake $(COQPROJECT)
+$(MAKEFILEAUTO): $(AUTOMAKE) $(COQPROJECT)
 	./$< -e ./$(EXTRACTION)/Extraction.v -f $(EXTRACTED) -o $@ $(COQPROJECT)
 
 # EXTRACTION
@@ -39,7 +40,6 @@ extraction: proof
 		$(PARSERDIR)/LustreParser2.ml\
 		$(PARSERDIR)/LustreParser2.mli\
 		$(SRC_DIR)/CoreExpr/coreexprlib.ml\
-		$(SRC_DIR)/Lustre/lustrelib.ml\
 		$(SRC_DIR)/NLustre/nlustrelib.ml\
 		$(SRC_DIR)/Stc/stclib.ml\
 		$(SRC_DIR)/Obc/obclib.ml\
@@ -58,10 +58,10 @@ $(VELUS): extraction $(SRC_DIR)/$(VELUSMAIN).ml $(SRC_DIR)/veluslib.ml
 
 # TOOLS
 $(AUTOMAKE): $(TOOLSDIR)/$(AUTOMAKE).ml
-	ocamlopt -o $@ $<
+	ocamlopt -o $@ str.cmxa $<
 
 $(TOOLSDIR)/$(AUTOMAKE).ml: $(TOOLSDIR)/$(AUTOMAKE).mll
-	@echo "${bold}Building automake tool...${normal}"
+	@echo "${bold}Building $(AUTOMAKE) tool...${normal}"
 	ocamllex $<
 
 # EXAMPLES
