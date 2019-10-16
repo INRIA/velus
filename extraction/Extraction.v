@@ -145,6 +145,9 @@ Extract Constant Cabs.char_code => "int64".
 (* Extract Constant LustreElab.do_add_when_to_constants => *)
 (*     "Veluslib.do_add_when_to_constants". *)
 
+Extract Constant NLElaboration.do_add_when_to_constants =>
+    "Veluslib.do_add_when_to_constants".
+
 (* Extract Constant VelusCorrectness.print_lustre => *)
 (*   "Veluslib.print_lustre_if". *)
 Extract Constant VelusCorrectness.print_nlustre =>
