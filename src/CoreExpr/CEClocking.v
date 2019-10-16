@@ -15,14 +15,6 @@ Module Type CECLOCKING
        (Import Op   : OPERATORS)
        (Import Syn  : CESYNTAX Op).
 
-  (* TODO: move to Common, or update NLClockingSemantics and remove it *)
-  Definition orelse {A B: Type}
-             (f: A -> option B) (g: A -> option B) (x: A) : option B :=
-    match f x with
-    | None => g x
-    | r => r
-    end.
-
   Inductive SameVar : option ident -> exp -> Prop :=
   | SVNone: forall e,
       SameVar None e
