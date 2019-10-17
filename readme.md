@@ -44,7 +44,7 @@ core Intel Core i7-6600U.
 
 ### Docker
 
-The script `rundocker.sh` retrieves a container from the [Docker Hub] (~800Mb),
+The script `rundocker.sh` retrieves a container from the [Docker Hub] (~1Gb),
 starts the container, compiles the development (thus checking the proofs) and
 gives you access to a Bash shell from which you will be able to run the
 compiler.
