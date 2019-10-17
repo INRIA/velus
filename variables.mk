@@ -42,6 +42,9 @@ EXAMPLESDIR=examples
 EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
 RUNEXAMPLES=$(EXAMPLESDIR)/runexamples.sh
 
+TESTSDIR=tests
+RUNTESTS=$(TESTSDIR)/runtests.sh
+
 # Menhir includes from CompCert
 ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
 include $(COMPCERTDIR)/Makefile.menhir
@@ -64,9 +67,9 @@ BUILDDIR=_build
 export OTHERFLAGS=-exclude-dir CompCert -w -extraction
 
 bold=$(shell tput bold)
+red=$(shell tput setaf 1)
 blue=$(shell tput setaf 4)
-red=$(shell tput setaf 9)
-green=$(shell tput setaf 10)
+green=$(shell tput setaf 2)
 normal=$(shell tput sgr0)
 
 ifndef VERBOSE

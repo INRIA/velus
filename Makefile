@@ -4,7 +4,7 @@
 
 include variables.mk
 
-.PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR) tests
+.PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR) runtests runexamples
 
 all: $(VELUS)
 
@@ -65,11 +65,14 @@ $(TOOLSDIR)/$(AUTOMAKE).ml: $(TOOLSDIR)/$(AUTOMAKE).mll
 	ocamllex $<
 
 # EXAMPLES
-$(EXAMPLESDIR): $(VELUS)
-	$(MAKE) $(EXAMPLESFLAGS)
+# $(EXAMPLESDIR): $(VELUS)
+# 	$(MAKE) $(EXAMPLESFLAGS)
 
-tests: $(VELUS)
+runexamples: $(VELUS)
 	VELUS=$(MKFILE_DIR)/$(VELUS) $(RUNEXAMPLES)
+
+runtests: $(VELUS)
+	VELUS=$(MKFILE_DIR)/$(VELUS) $(RUNTESTS)
 
 # CLEAN
 clean:
@@ -77,10 +80,10 @@ clean:
 	rm -f $(MAKEFILEAUTO)
 	rm -f $(AUTOMAKE) $(TOOLSDIR)/$(AUTOMAKE).ml $(TOOLSDIR)/$(AUTOMAKE).cm* $(TOOLSDIR)/$(AUTOMAKE).o
 	$(MAKE) $(PARSERFLAGS) $@
-	$(MAKE) $(EXAMPLESFLAGS) $@
+	# $(MAKE) $(EXAMPLESFLAGS) $@
 	ocamlbuild -clean
 
 realclean: clean
 	rm -f $(MAKEFILECONFIG) $(COQPROJECT)
 	$(MAKE) $(COMPCERTFLAGS) $<
-	$(MAKE) $(EXAMPLESFLAGS) $@
+	# $(MAKE) $(EXAMPLESFLAGS) $@

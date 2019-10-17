@@ -1,18 +1,14 @@
-# A Formally Verified Compiler for Lustre
+# Mechanized Semantics and Verified Compilation for a Dataflow Synchronous Language with Reset
 
 These source files contain the implementation, models, and proof of
 correctness of a formally verified Lustre compiler backend.
 
 This file contains instructions for (i) using the compiler, (ii) running
-from docker, a virtual machine, or a local opam installation, and (iii)
-cross-references from material presented in the paper to the source files.
+from local opam installation or from docker, and (iii) cross-references from
+material presented in the paper to the source files.
 
 The `examples/` subdirectory contains another readme file presenting several
 example programs that can be used to test the compiler.
-
-Since submitting the paper, we have implemented the scheduling pass (the
-relevant dashed line in Figure 1 becomes solid and elaboration produces
-N-Lustre).
 
 We are still working on the normalization pass, which means that Lustre
 source programs must currently be manually normalized (each `fby` and
@@ -20,13 +16,11 @@ source programs must currently be manually normalized (each `fby` and
 may only appear at the top level of an expression; output variables cannot
 be defined directly by `fby` equations). Also, the `->` and `pre` operators
 used in many Lustre programs are not yet treated. An equation like
-
-    x = e1 -> e2
-
-must instead be "manually compiled" into
-
-    x = if init then e1 else e2
-    init = true fby false
+`x = e1 -> e2` must instead be "manually compiled" into
+```
+x = if init then e1 else e2
+init = true fby false
+```
 
 and an uninitialized delay `pre e` must be replaced by an initialized one
 `0 fby e`.
@@ -36,172 +30,118 @@ reports syntax errors with a line number and character offset. We will
 implement more helpful messages when we have finalized one or two remaining
 details of the final (unnormalized) language.
 
-## Using the compiler
 
-To run the compiler:
+## Building the compiler
 
-    ./velus -h
+We describe two ways of building Vélus:
+* using a [Docker] container environment, which is easier and still allows
+  read/write access to the source files, or
+* using a manual local installation, which is better if one wants to
+  interactively run the Coq proofs.
 
-In particular, typing
+In both cases be aware that the building process can take almost 25min on a dual
+core Intel Core i7-6600U.
 
-    ./velus examples/count.lus
+### Docker
 
-will compile the Lustre program in examples/count.lus into an assembler
-program examples/count.s.
-
-The compiler also accepts the options
-
-* -snlustre
-  Output the scheduled code into <file>.sn.lustre. Use `-fullclocks` to show
-  the full abstract clock paths in the output code (rather than the standard
-  `when` declarations).
-
-* -dobc
-  Output the Obc intermediate code into <file>.obc
-
-* -dclight
-  Output the generated Clight code into <file>.light.c
-
-* -nofusion
-  Disable the if/then/else fusion optimization.
-
-* -sync
-  Generate an optional `main_sync` entry point and a <file>.sync.c
-  containing a simulation that prints the outputs at each cycle and requests
-  inputs. In contrast to `main`, this entry point is not formally verified
-  but it is useful for testing the dynamic behaviour of compiled programs.
-  The alternative entry point can be selected by compiling using CompCert
-  with `-Wl,-emain_sync` (or with by passing `-emain_sync -m32` to `gcc`).
-  See `examples/Makefile` for examples.
-
-## Execution from Docker
-
-Note: this is the easiest method for compiling and running the
-compiler, not for interactively editing the compiler. To step through
-the proofs, we recommend using a virtual machine or a local
-installation (see below).
-
-We provide a pre-configured compilation environment in a Docker
-container:
-
-    $ cd $VELUS_DIR
-    $ sh run.sh
-
-This will retrieve a container from the dockerhub (~800Mb), start a
-container, compile the development (thus checking the proofs) and give
-you access to a Bash shell from which you will be able to run the
+The script `rundocker.sh` retrieves a container from the [Docker Hub] (~800Mb),
+starts the container, compiles the development (thus checking the proofs) and
+gives you access to a Bash shell from which you will be able to run the
 compiler.
 
-The docker accesses the present files: you can transparently edit them
+The container accesses the present files: you can transparently edit them
 from the host and compile them in the guest.
 
-## Execution from the Virtualbox image
+### Local installation
 
-We provide a Virtualbox image including our development as well as the
-Emacs/proofgeneral editor.
+#### Prerequisites
 
-## Local installation
+Vélus builds on the following dependencies:
 
-Note: this is the most efficient method for editing, compiling, and
-running the compiler.
+* 4.03 <= [OCaml] <= 4.07.1
+* [Coq] = 8.9.0
+* 20161201 <= [Menhir] <= 20181113
+* [OCamlbuild] >= 0.14.0
 
-It also possible to build Vélus locally, without resorting to a Docker or
-Virtualbox image. Vélus has been implemented in Coq.8.4.6. It includes a
-modified version of CompCert and depends on menhir.20170101.
+We recommend installing the [opam] OCaml package manager to install the
+dependencies as follows.
+In the case where the version of OCaml available in your system package manager
+is too old, you should still be able to install a newer version by using an opam
+switch.
+```
+opam init                                  # if running opam for the first time
+opam switch create 4.07.1                  # create a global switch
+eval $(opam env)                           # update PATH
+opam update                                # sync opam database
+opam install coq.8.9.0 menhir ocamlbuild   # install dependencies
+```
 
-To build a self-contained installation for compiling and running
-Vélus, we recommend installing an ad-hoc
-[opam](https://opam.ocaml.org/) directory:
+#### Build
 
-    $ cd $VELUS_DIR
-    $ mkdir opam
-    $ opam init --root=opam --compiler=4.02.3
-    $ eval `opam config env --root=$VELUS_DIR/opam`
-    $ opam repo add coq-released https://coq.inria.fr/opam/released
-    $ opam install -j4 coq.8.4.6 menhir.20170101
-
-To check the proofs and build Vélus:
-
-    $ cd $VELUS
-    $ ./configure [options] target
-    $ make
-
+Type `./configure [options] <target>` where `<target>` is one of the list given
+in the [CompCert manual](http://compcert.inria.fr/man/manual002.html#sec21),
+e.g., `x86_64-linux`.
 The configuration script uses the same options as CompCert's, except one
-additional `-compcertdir` option to specify the CompCert directory.
+optional `-compcertdir` to specify the CompCert directory.
+This will set up the configuration for both the Vélus development and the
+CompCert development (in the subdirectory `CompCert/` by default).
 
-## Cross-references
+Then, typing `make` will launch the building process of CompCert and Vélus.
 
-In the following, we relate the definitions presented in the paper (on
-the left, in italics) to their incarnation in the formal development
-(on the right, in typewriter font).
 
- - [Figure 2 "SN-Lustre: abstract syntax"](./NLustre/NLSyntax.v)
-   * expression (_e_):  `lexp`
-   * control expression (_ce_): `cexp`
-   * equation (_eqn_): `equation`
-   * declaration (_d_): `node`
+## Invocation
 
- - [Figure 3 "SN-Lustre: example program"](./examples/tracker.lus)
+The compiler can be called with:
 
- - [Figure 4 "Obc: abstract syntax"](./Obc/ObcSyntax.v)
-   * expression (_e_): `exp`
-   * statement (_s_): `stmt`
-   * class declaration (_cls_): `class`
+`./velus <options> <sourcefile.ext>`
 
- - [Figure 5 "Core of the SN-Lustre to Obc Translation"](./NLustreToObc/Translation.v)
-   * _var_: `tovar`
-   * _trexp_: `translate_lexp`
-   * _trcexp_: `translate_cexp`
-   * _ctrl_: `Control`
-   * _treqs_: `translate_eqn`
-   * _treqss_: `translate_eqns`
-   * _treqr_: `translate_reset_eqn`
-   * _treqsr_: `translate_reset_eqns`
-   * _translate_: `translate_node`
+Options are described in the output of `./velus -h`.
+On success, the compiler will output an assembly file `<sourcefile.s>`.
+The compiler can be tested against two test suites:
+```
+make runexamples   # run the compiler on programs in ./examples/
+make runtests      # run the compiler on programs in ./tests/
+```
+The programs in `./examples/` are describe in a dedicated `readme.md`.
 
- - Section 3.1 "Semantics Models"
-   * ["Representation of streams"](./NLustre/Stream.v)
-   * [Dataflow semantics](./NLustre/NLSemantics.v)
-     - semantics of variable: `sem_var`
-     - semantics of clocks: `sem_clock`
-     - semantics of expressions: `sem_lexp`
-     - semantics of clocked expressions: `sem_laexp`
-     - semantics of control expressions: `sem_cexp`
-     - semantics of clocked control expressions: `sem_caexp`
-     - semantics of an equation: `sem_equation`
-     - semantics of a node: `sem_node`
-   * [Figure 6 "Definition of the `fby#` operator"](./NLustre/Stream.v)
-     - _hold#_: `hold`
-     - _fby#_: `fby`
-   * [Imperative semantics](./Obc/ObcSemantics.v)
-     - local memory (_env_): `stack`
-     - global memory (_mem_): `heap`
-     - semantics of expressions: `exp_eval`
-     - semantics of statements: `stmt_eval`
-   * [Memory](./RMemory.v)
+If generated with the `-sync` option, the generated assembly file can be further
+compiled to executable code with user IO loop by calling:
 
- - Section 3.2 "Correctness"
-   * [Memory semantics of equations](./NLustre/MemSemantics.v): `msem_equation`
-   * [Figure 7 "SN-Lustre/Obc memory correspondence](./NLustreToObc/Correctness/MemoryCorres.v): `Memory_Corres` and `Memory_Corres_eq`
-   * [Lemma 1 "Correctness of the translation"](./NLustreToObc/Correctness.v): `dostep'_correct`
+`CompCert/ccomp -stdlib CompCert/runtime <sourcefile>.sync.c <sourcefile>.s`
 
- - [Section 3.3 "Fusion Optimization"](./Obc/Fusion.v)
-   * _fuse_: `fuse`
-   * Figure 8 "Obc optimization: loop fusion" (_zip_): `zip`
-   * _Fusible_: `Fusible`
-   * _MayWrite_: `Can_write_in`
-   * equivalence relation *s1 \equiv_{fuse} s2*: `fuse_eval_eq`
+Thus the example of the paper can be executed with the following:
+```
+./velus -sync examples/nav.lus
+CompCert/ccomp -stdlib CompCert/runtime examples/nav.sync.c examples/nav.s
+./a.out
+```
 
- - [Section 4 "Generation of Clight"](./ObcToClight/Generation.v)
-   * [Big-step judgement for Clight](./CompCert/cfrontend/ClightBigstep.v)
+## Lemmas references
 
- - [Figure 10 "Operator interface: values](./Operators.v)
+The following table gives the names of the Coq results corresponding to the
+numbered lemmas in the paper, and the files where the are stated and proved.
+Note that the lemma 3.4 does not correspond to a particular Coq result: it is
+given in the paper for clarity but only appear _inside_ another proof in the
+development.
 
- - [Section 4.2 "Relating Memories"](./ObcToClight/SepInvariant.v)
-   * [Separation assertions](./CompCert/common/Separation.v)
-     - _p * q_: `sepconj`
-     - _m |= p_: `m_pred`
-   * [State representation](./ObcToClight/MoreSeparation.v)
-     - _sepall_: `sepall`
-   * *match_states*: `staterep`
- - [Section 4.3 "Proof of generation"](VelusCorrectness.v): `Theorem behavior_asm`
+| Lemma   | Name                    | Link                                                         |
+| :------ | :-----------------------| :----------------------------------------------------------- |
+| 2.1     | sem_msem_node           | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
+| 2.2     | msem_sem_node           | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
+| 2.3     | msem_node_absent_until  | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
+| 3.1     | msem_node_initial_state | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
+| 3.2     | correctness             | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
+| 3.3     | correctness_loop        | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
+| 3.5     | exp_correct             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.6     | reset_spec              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.7     | correctness             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.8     | correctness_loop_call   | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+
+
+[Ocaml]: http://ocaml.org/
+[Coq]: https://coq.inria.fr/
+[opam]: https://opam.ocaml.org/
+[Menhir]: http://gallium.inria.fr/~fpottier/menhir/
+[OCamlbuild]: https://github.com/ocaml/ocamlbuild/
+[Docker]: https://www.docker.com/
+[Docker Hub]: https://hub.docker.com/
