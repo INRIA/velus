@@ -102,7 +102,9 @@ The compiler can be tested against two test suites:
 make runexamples   # run the compiler on programs in ./examples/
 make runtests      # run the compiler on programs in ./tests/
 ```
-The programs in `./examples/` are describe in a dedicated `readme.md`.
+The programs in `./examples/` are described in a dedicated `readme.md`.
+In particular, the examples `nav.lus`, `ppdp00.lus` and `stopwatch_reset.lus`
+use the modular reset construct, as well as the test `ok_resetsoup.lus`.
 
 If generated with the `-sync` option, the generated assembly file can be further
 compiled to executable code with user IO loop by calling:

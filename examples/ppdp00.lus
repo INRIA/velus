@@ -1,0 +1,30 @@
+(* example from the paper
+   "modular resetting of synchronous data-flow programs",
+   hamon and pouzet, ppdp 2000 *)
+
+node integr(x0, dx: float64) returns (x: float64)
+var px, pxi: float64; i: bool;
+let
+  x = px + dx * 0.1;
+  i = true fby false;
+  pxi = if i then x0 else px;
+  px = .0 fby x;
+tel
+
+node movement(x0, dx0, d2x: float64) returns (x: float64)
+var dx: float64;
+let
+  x = integr(x0, dx);
+  dx = integr(dx0, d2x);
+tel
+
+node ball(x0, y0, dx0, dy0: float64) returns (x, y: float64)
+let
+  x = movement(x0, dx0, .0);
+  y = movement(y0, dy0, -9.81);
+tel
+
+node throw(dx0, dy0: float64; click: bool) returns (x, y: float64)
+let
+  x, y = (restart ball every click) (.0, .0, dx0, dy0);
+tel

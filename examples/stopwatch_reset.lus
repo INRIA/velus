@@ -1,0 +1,51 @@
+(* a stopwatch without hard-coded reset *)
+
+node counter(init, incr: int) returns (n: int)
+var pn: int; i: bool;
+let
+  n = if i then init else pn + incr;
+  i = true fby false;
+  pn = 0 fby n;
+tel
+
+node time(ms: bool) returns (hour, min, sec, msec: int when ms)
+var s      : bool :: . on ms;
+    m      : bool :: . on ms on s;
+    h      : bool :: . on ms on s on m;
+    d      : bool :: . on ms on s on m on h;
+    sec_ms : int  :: . on ms on s;
+    min_ms : int  :: . on ms on s on m;
+    hour_ms: int  :: . on ms on s on m on h;
+    psec   : int  :: . on ms;
+    pmin   : int  :: . on ms;
+    phour  : int  :: . on ms;
+let
+  msec = (restart counter every s) (0 when ms, 1 when ms);
+  s = true fby (msec = 999);
+  sec_ms = (restart counter every m) (0 when ms when s,
+                                      1 when ms when s);
+  m = true fby (sec_ms = 59);
+  sec = merge s sec_ms (psec whenot s);
+  psec = 0 fby sec;
+  min_ms = (restart counter every h) (0 when ms when s when m,
+                                      1 when ms when s when m);
+  h = true fby (min_ms = 59);
+  min = merge s
+         (merge m min_ms (pmin when s whenot m))
+         (pmin whenot s);
+  pmin = 0 fby min;
+  hour_ms = (restart counter every d) (0 when ms when s when m when h,
+                                       1 when ms when s when m when h);
+  d = true fby (hour_ms = 23);
+  hour = merge s
+           (merge m
+             (merge h hour_ms (phour when s when m whenot h))
+             (phour when s whenot m))
+           (phour whenot s);
+  phour = 0 fby hour;
+tel
+
+node stopwatch(ms, reset: bool) returns (hour, min, sec, msec: int when ms)
+let
+  hour, min, sec, msec = (restart time every reset) (ms);
+tel

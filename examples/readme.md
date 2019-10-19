@@ -57,6 +57,19 @@ large source files.
 
 Note that the `assert` construct is parsed, but not implemented.
 
+## Modular reset
+
+* nav.lus
+  The example of the paper.
+
+* ppdp00.lus
+  The motivating example from "Modular resetting of synchronous data-flow
+  programs", Hamon and Pouzet, PPDP 2000
+
+* stopwatch_reset.lus
+  A classical simple stopwatch that uses the modular reset rather than wired
+  reset signals.
+
 ## Miscellaneous
 
 * new_watch.lus

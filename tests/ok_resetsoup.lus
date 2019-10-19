@@ -1,0 +1,20 @@
+node f(x: int) returns (y: int)
+var y1: int;
+let
+  y = y1;
+  y1 = 0 fby (2 * x);
+tel
+
+node g(x: int; ck1: bool; ck2: bool when ck1; r: bool) returns (a: int)
+var y: bool :: . on ck1 on ck2; y1: bool :: . on ck1;
+    b: int :: . on ck1; c: int :: . on ck1 on ck2;
+    d: int; e: int;
+let
+  e = (restart f every r) (d);
+  y = r when ck1 when ck2;
+  d = (restart f every y1) (a);
+  y1 = r when ck1;
+  a = (restart f every y) (x);
+  b = (restart f every y) (x when ck1);
+  c = (restart f every y1) (x when ck1 when ck2);
+tel
