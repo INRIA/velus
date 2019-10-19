@@ -122,7 +122,7 @@ CompCert/ccomp -stdlib CompCert/runtime examples/nav.sync.c examples/nav.s
 
 The following table gives the names of the Coq results corresponding to the
 numbered lemmas in the paper, and the files where the are stated and proved.
-Note that the lemma 3.4 does not correspond to a particular Coq result: it is
+Note that the lemma 3.5 does not correspond to a particular Coq result: it is
 given in the paper for clarity but only appear _inside_ another proof in the
 development.
 
@@ -131,13 +131,14 @@ development.
 | 2.1     | sem_msem_node           | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
 | 2.2     | msem_sem_node           | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
 | 2.3     | msem_node_absent_until  | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
-| 3.1     | msem_node_initial_state | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
-| 3.2     | correctness             | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
-| 3.3     | correctness_loop        | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
-| 3.5     | exp_correct             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
-| 3.6     | reset_spec              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
-| 3.7     | correctness             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
-| 3.8     | correctness_loop_call   | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.1     | sem_system_absent       | [Stc/StcSemantics.v](src/Stc/StcSemantics.v)             |
+| 3.2     | msem_node_initial_state | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
+| 3.3     | correctness             | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
+| 3.4     | correctness_loop        | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
+| 3.6     | exp_correct             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.7     | reset_spec              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.8     | correctness             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+| 3.9     | correctness_loop_call   | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
 
 
 [Ocaml]: http://ocaml.org/
