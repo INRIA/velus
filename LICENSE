@@ -1,5 +1,5 @@
-All files in this distribution are part of the Vélus verified Lustre
-compiler.
+All files in this distribution except those in the top-level "examples"
+subdirectory are part of the Vélus verified Lustre compiler.
 
 The Vélus verified Lustre compiler is Copyright by Institut National de
 Recherche en Informatique et en Automatique (Inria).
