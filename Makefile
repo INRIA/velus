@@ -1,3 +1,16 @@
+# ********************************************************************#
+#                                                                     #
+#                 The Vélus verified Lustre compiler                  #
+#                                                                     #
+#             (c) 2019 Inria Paris (see the AUTHORS file)             #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique. All rights reserved. This file is distributed under   #
+#  the terms of the INRIA Non-Commercial License Agreement (see the   #
+#  LICENSE file).                                                     #
+#                                                                     #
+# ********************************************************************#
+
 #
 # invoke make with 'VERBOSE=1' to verbose the output
 #
