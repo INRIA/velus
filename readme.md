@@ -61,10 +61,10 @@ from the host and compile them in the guest.
 
 Vélus builds on the following dependencies:
 
-* 4.03 <= [OCaml] <= 4.07.1
+* 4.03 ≤ [OCaml] ≤ 4.07.1
 * [Coq] = 8.9.0
-* 20161201 <= [Menhir] <= 20181113
-* [OCamlbuild] >= 0.14.0
+* 20161201 ≤ [Menhir] ≤ 20181113
+* [OCamlbuild] ≥ 0.14.0
 
 We recommend installing the [opam] OCaml package manager to install the
 dependencies as follows.
