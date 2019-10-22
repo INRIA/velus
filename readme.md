@@ -39,6 +39,9 @@ We describe two ways of building Vélus:
 * using a manual local installation, which is better if one wants to
   interactively run the Coq proofs.
 
+If you cloned the repository, do not forget to run `git submodule update --init`
+to update the sub-module [CompCert].
+
 In both cases be aware that the building process can take almost 25min on a dual
 core Intel Core i7-6600U.
 
@@ -152,3 +155,4 @@ development.
 [OCamlbuild]: https://github.com/ocaml/ocamlbuild/
 [Docker]: https://www.docker.com/
 [Docker Hub]: https://hub.docker.com/
+[CompCert]: http://compcert.inria.fr/
