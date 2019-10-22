@@ -133,19 +133,19 @@ Note that the lemma 3.5 does not correspond to a particular Coq result: it is
 given in the paper for clarity but only appear _inside_ another proof in the
 development.
 
-| Lemma   | Name                    | Link                                                         |
-| :------ | :-----------------------| :----------------------------------------------------------- |
-| 2.1     | sem_msem_node           | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
-| 2.2     | msem_sem_node           | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
-| 2.3     | msem_node_absent_until  | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v)     |
-| 3.1     | sem_system_absent       | [Stc/StcSemantics.v](src/Stc/StcSemantics.v)             |
-| 3.2     | msem_node_initial_state | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
-| 3.3     | correctness             | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
-| 3.4     | correctness_loop        | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v) |
-| 3.6     | exp_correct             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
-| 3.7     | reset_spec              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
-| 3.8     | correctness             | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
-| 3.9     | correctness_loop_call   | [StcToObc/Correctness.v](src/StcToObc/Correctness.v)         |
+|   Lemma | Name                     | Link                                                              |
+| :------ | :----------------------- | :-----------------------------------------------------------      |
+|     2.1 | sem_msem_node            | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v#L710)     |
+|     2.2 | msem_sem_node            | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v#L1087)    |
+|     2.3 | msem_node_absent_until   | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v#L1014)    |
+|     3.1 | sem_system_absent        | [Stc/StcSemantics.v](src/Stc/StcSemantics.v#L768)                 |
+|     3.2 | msem_node_initial_state  | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v#L135) |
+|     3.3 | correctness              | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v#L628) |
+|     3.4 | correctness_loop         | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v#L678) |
+|     3.6 | exp_correct              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L201)         |
+|     3.7 | reset_spec               | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L700)         |
+|     3.8 | correctness              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L1427)        |
+|     3.9 | correctness_loop_call    | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L1564)        |
 
 
 [Ocaml]: http://ocaml.org/
