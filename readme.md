@@ -96,6 +96,10 @@ The compiler can be called with:
 `./velus <options> <sourcefile.ext>`
 
 Options are described in the output of `./velus -h`.
+In particular, the flags `-dstc`, `-dobc` and `-dclight` enable the generation
+of Stc, Obc and Clight intermediate files.
+The flag `-nofusion` is used to disable the fusion optimization.
+
 On success, the compiler will output an assembly file `<sourcefile.s>`.
 The compiler can be tested against two test suites:
 ```

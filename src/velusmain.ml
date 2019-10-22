@@ -144,8 +144,8 @@ let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
   "-sync", Arg.Set write_sync, " Generate sync() in <source>.sync.c";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
-  "-dlustre", Arg.Set write_lustre,
-                               " Save the parsed Lustre in <source>.parsed.lus";
+  (* "-dlustre", Arg.Set write_lustre,
+   *                              " Save the parsed Lustre in <source>.parsed.lus"; *)
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <source>.n.lus";
   "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";
