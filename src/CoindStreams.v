@@ -32,12 +32,51 @@ Module Type COINDSTREAMS
   Delimit Scope stream_scope with Stream.
   Open Scope stream_scope.
 
-  Lemma const_nth:
+  Fact const_nth:
     forall {A} n (c: A),
       (Streams.const c) # n = c.
   Proof.
     induction n; simpl; auto.
   Qed.
+
+  Fact Str_nth_0:
+    forall {A} (xs: Stream A) x,
+      (x ⋅ xs) # 0 = x.
+  Proof. reflexivity. Qed.
+
+  Fact Str_nth_S:
+    forall {A} (xs: Stream A) x n,
+      (x ⋅ xs) # (S n) = xs # n.
+  Proof. reflexivity. Qed.
+
+  Section ForallStr.
+    Context {A: Type}.
+    Variable P: A -> Prop.
+    CoInductive Forall_Str: Stream A -> Prop :=
+      Always:
+        forall x xs,
+          P x ->
+          Forall_Str xs ->
+          Forall_Str (x ⋅ xs).
+
+    Lemma Forall_Str_nth:
+      forall s,
+        Forall_Str s <-> (forall n, P (s # n)).
+    Proof.
+      split.
+      - intros H n.
+        revert dependent s; induction n; intros.
+        + inv H; rewrite Str_nth_0; auto.
+        + destruct s; rewrite Str_nth_S.
+          inv H; auto.
+      - revert s; cofix CoFix; intros * H.
+      destruct s.
+      constructor.
+        + specialize (H 0); rewrite Str_nth_0 in H; auto.
+        + apply CoFix.
+          intro n; specialize (H (S n)); rewrite Str_nth_S in H; auto.
+    Qed.
+  End ForallStr.
 
   Ltac unfold_Stv xs :=
     rewrite (unfold_Stream xs);
@@ -414,16 +453,6 @@ Module Type COINDSTREAMS
         of the coinductive hypothesis for the direct direction, and by coinduction
         on the converse.
    *)
-
-  Fact Str_nth_0:
-    forall {A} (xs: Stream A) x,
-      (x ⋅ xs) # 0 = x.
-  Proof. reflexivity. Qed.
-
-  Fact Str_nth_S:
-    forall {A} (xs: Stream A) x n,
-      (x ⋅ xs) # (S n) = xs # n.
-  Proof. reflexivity. Qed.
 
   Lemma const_spec:
     forall xs c b,

@@ -291,7 +291,7 @@ Module Type STCWELLDEFINED
       | acc => acc
       end.
 
-    Definition well_sch (args: list ident) (tcs: list trconstr) : bool :=
+    Definition is_well_sch_tcs (args: list ident) (tcs: list trconstr) : bool :=
       fst (fst (fst (fold_right check_tc
                                 (true, PS.empty, ps_from_list args, PNS.empty)
                                 tcs))).
@@ -585,13 +585,13 @@ Module Type STCWELLDEFINED
 
     Theorem well_sch_spec:
       forall args tcs,
-        if well_sch args tcs
+        if is_well_sch_tcs args tcs
         then Is_well_sch args mems tcs
         else ~ Is_well_sch args mems tcs.
     Proof.
       intros.
       pose proof (well_sch_pre_spec args tcs) as Spec.
-      unfold well_sch.
+      unfold is_well_sch_tcs.
       destruct (fold_right check_tc
                   (true, PS.empty, ps_from_list args, PNS.empty) tcs)
         as [[[ok defs] vars] subs]; simpl.
@@ -599,25 +599,25 @@ Module Type STCWELLDEFINED
       destruct ok; intuition.
     Qed.
 
-    Lemma Is_well_sch_by_refl:
+    Corollary Is_well_sch_by_refl:
       forall args tcs,
-        well_sch args tcs = true <-> Is_well_sch args mems tcs.
+        is_well_sch_tcs args tcs = true <-> Is_well_sch args mems tcs.
     Proof.
       intros.
       pose proof (well_sch_spec args tcs) as Hwss.
       split; intro H.
       rewrite H in Hwss; assumption.
-      destruct (well_sch args tcs); [reflexivity|].
+      destruct (is_well_sch_tcs args tcs); [reflexivity|].
       exfalso; apply Hwss; apply H.
     Qed.
 
-    Lemma well_sch_dec:
+    Corollary well_sch_dec:
       forall args tcs,
         {Is_well_sch args mems tcs} + {~ Is_well_sch args mems tcs}.
     Proof.
       intros.
       pose proof (well_sch_spec args tcs) as Hwss.
-      destruct (well_sch args tcs); [left|right]; assumption.
+      destruct (is_well_sch_tcs args tcs); [left|right]; assumption.
     Qed.
 
   End Decide.

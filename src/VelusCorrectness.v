@@ -71,7 +71,7 @@ Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
   do _ <- r;
     let args := map fst s.(s_in) in
     let mems := ps_from_list (map fst s.(s_lasts)) in
-    if Stc.Wdef.well_sch mems args s.(s_tcs)
+    if Stc.Wdef.is_well_sch_tcs mems args s.(s_tcs)
     then OK tt
     else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).
 
@@ -80,10 +80,10 @@ Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
     OK P.
 
 Lemma is_well_sch_error:
-  forall G e,
-    fold_left is_well_sch_system G (Error e) = Error e.
+  forall P e,
+    fold_left is_well_sch_system P (Error e) = Error e.
 Proof.
-  induction G as [|n G]; simpl; auto.
+  induction P; simpl; auto.
 Qed.
 
 Lemma is_well_sch_program:
@@ -95,22 +95,19 @@ Proof.
   induction P as [|s]; simpl.
   - constructor.
   - intro Fold.
-    destruct (Stc.Wdef.well_sch (ps_from_list (map fst (Stc.Syn.s_lasts s)))
-                               (map fst (Stc.Syn.s_in s)) (Stc.Syn.s_tcs s)) eqn: E.
+    cases_eqn E.
     + apply Stc.Wdef.Is_well_sch_by_refl in E.
       constructor; auto.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
-
-Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
-  is_well_sch (Scheduler.schedule P).
 
 Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
   OK g
      @@ print print_nlustre
      @@ NL2Stc.translate
      @@ print print_stc
-     @@@ schedule_program
+     @@ Scheduler.schedule
+     @@@ is_well_sch
      @@ print print_sch
      @@ Stc2Obc.translate
      @@ total_if do_fusion (map fuse_class)
@@ -133,35 +130,6 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
 
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
   elab_declarations D @@@ fun G => nl_to_asm main_node (proj1_sig G).
-
-Section ForallStr.
-  Context {A: Type}.
-  Variable P: A -> Prop.
-  CoInductive Forall_Str: Stream A -> Prop :=
-  Always:
-    forall x xs,
-      P x ->
-      Forall_Str xs ->
-      Forall_Str (x ⋅ xs).
-
-  Lemma Forall_Str_nth:
-    forall s,
-      Forall_Str s <-> (forall n, P (s # n)).
-  Proof.
-    split.
-    - intros H n.
-      revert dependent s; induction n; intros.
-      + inv H; rewrite Str_nth_0; auto.
-      + destruct s; rewrite Str_nth_S.
-        inv H; auto.
-    - revert s; cofix CoFix; intros * H.
-      destruct s.
-      constructor.
-      + specialize (H 0); rewrite Str_nth_0 in H; auto.
-      + apply CoFix.
-        intro n; specialize (H (S n)); rewrite Str_nth_S in H; auto.
-  Qed.
-End ForallStr.
 
 Definition wt_streams: list (Stream val) -> list (ident * type) -> Prop :=
   Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s).
@@ -216,9 +184,6 @@ Hint Resolve
      fuse_call
      fuse_wt_mem
      fuse_loop_call
-(*      NL2StcTyping.translate_wt *)
-(*      Scheduler.scheduler_wt_program *)
-     (*      Stc2ObcTyping.translate_wt *)
      wt_add_defaults_class
      wt_mem_add_defaults
      stmt_call_eval_add_defaults
@@ -338,9 +303,9 @@ Proof.
   simpl in COMP; repeat rewrite print_identity in COMP.
 
   (* well-scheduled Stc program *)
-  destruct (schedule_program (NL2Stc.translate G)) eqn: Sch;
+  destruct (is_well_sch (Scheduler.schedule (NL2Stc.translate G))) eqn: Sch;
     simpl in COMP; try discriminate.
-  unfold schedule_program, is_well_sch in Sch; simpl in Sch.
+  unfold is_well_sch in Sch; simpl in Sch.
   destruct (fold_left is_well_sch_system (Scheduler.schedule (NL2Stc.translate G))
                       (OK tt)) eqn: Wsch; simpl in *; try discriminate; destruct u.
   inv Sch.

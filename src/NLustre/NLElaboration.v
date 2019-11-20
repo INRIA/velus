@@ -2671,8 +2671,8 @@ Qed.
 
 Definition elab_declarations (decls: list LustreAst.declaration)
   : res {G | wt_global G /\ wc_global G /\ normal_args G} :=
-  elab_declarations' [] (Env.empty (list (ident * (type * clock))
-                                    * list (ident * (type * clock))))
+  elab_declarations' []
+                     (Env.empty _)
                      (conj wtg_nil (conj wc_global_nil I))
-                     Is_interface_map_empty decls.
-
+                     Is_interface_map_empty
+                     decls.
