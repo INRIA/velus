@@ -35,7 +35,7 @@ Import Obc.Sem.
 Import Obc.Typ.
 Import Obc.Equ.
 Import Obc.Def.
-Import Fusion.
+Import Obc.Fus.
 Import Stc2ObcInvariants.
 Import IStr.
 Import CStr.
@@ -113,7 +113,7 @@ Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
      @@@ schedule_program
      @@ print print_sch
      @@ Stc2Obc.translate
-     @@ total_if do_fusion (map Obc.Fus.fuse_class)
+     @@ total_if do_fusion (map fuse_class)
      @@ add_defaults
      @@ print print_obc
      @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
@@ -132,9 +132,7 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
      @@@ transf_clight2_program.
 
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
-  elab_declarations D
-                    (* @@@ (fun G => L2NL.to_global (proj1_sig G)) *)
-                    @@@ (fun G => nl_to_asm main_node (proj1_sig G)).
+  elab_declarations D @@@ fun G => nl_to_asm main_node (proj1_sig G).
 
 Section ForallStr.
   Context {A: Type}.
@@ -214,10 +212,10 @@ Section WtStream.
 End WtStream.
 
 Hint Resolve
-     Obc.Fus.fuse_wt_program
-     Obc.Fus.fuse_call
-     Obc.Fus.fuse_wt_mem
-     Obc.Fus.fuse_loop_call
+     fuse_wt_program
+     fuse_call
+     fuse_wt_mem
+     fuse_loop_call
 (*      NL2StcTyping.translate_wt *)
 (*      Scheduler.scheduler_wt_program *)
      (*      Stc2ObcTyping.translate_wt *)
@@ -229,9 +227,9 @@ Hint Resolve
      Scheduler.scheduler_wc_program
      NL2StcClocking.translate_wc
      No_Naked_Vars_add_defaults_class
-     Obc.Fus.fuse_No_Overwrites
+     fuse_No_Overwrites
      translate_No_Overwrites
-     Obc.Fus.fuse_cannot_write_inputs
+     fuse_cannot_write_inputs
      translate_cannot_write_inputs
 .
 
@@ -274,8 +272,11 @@ Section NLTrace.
     rewrite unfold_mk_trace.
     rewrite unfold_mk_trace with (xs := idty (n_in node)).
     simpl.
-    replace (load_events (tr_Streams ins n) (idty (n_in node)) ** store_events (tr_Streams outs n) (idty (n_out node)))
-      with (load_events (tr_Streams ins n) (m_in m) ** store_events (tr_Streams outs n) (m_out m)); try congruence.
+    replace (load_events (tr_Streams ins n) (idty (n_in node))
+                         ** store_events (tr_Streams outs n) (idty (n_out node)))
+      with (load_events (tr_Streams ins n) (m_in m)
+                        ** store_events (tr_Streams outs n) (m_out m));
+      try congruence.
     constructor.
     - intro E; eapply Eapp_E0_inv in E.
       pose proof (load_store_events_not_E0 _ _ _ _ Spec_in_out_m Len_ins_m Len_outs_m n).
@@ -468,28 +469,28 @@ Proof.
 
   (* activated Fusion optimization *)
   - (* assert some equalities between classes and methods *)
-    Opaque add_defaults_class Obc.Fus.fuse_class Obc.Fus.fuse_method.
+    Opaque add_defaults_class fuse_class fuse_method.
     pose proof (GenerationProperties.find_main_class _ _ _ _ _ COMP') as Find'.
-    apply Obc.Fus.fuse_find_class, find_class_add_defaults_class in Find.
+    apply fuse_find_class, find_class_add_defaults_class in Find.
     rewrite Find in Find'; injection Find'; intros Eq_prog Eq_main.
 
     pose proof (GenerationProperties.find_main_step _ _ _ _ _ COMP') as Find_step'.
     rewrite <-Eq_main in Find_step'; rewrite add_defaults_class_find_method in Find_step'.
-    apply Obc.Fus.fuse_find_method' in Find_step.
+    apply fuse_find_method' in Find_step.
     rewrite Find_step in Find_step'; simpl option_map in Find_step'; injection Find_step'; intros Eq_step.
     clear Find Find' Find_step Find_step'.
 
-    rewrite <-Obc.Fus.fuse_method_in, <-add_defaults_method_m_in, Eq_step in Step_in_out_spec, Hwt_in, Ein;
-      rewrite <-Obc.Fus.fuse_method_out, <-add_defaults_method_m_out, Eq_step in Step_in_out_spec, Hwt_out, Eout.
+    rewrite <-fuse_method_in, <-add_defaults_method_m_in, Eq_step in Step_in_out_spec, Hwt_in, Ein;
+      rewrite <-fuse_method_out, <-add_defaults_method_m_out, Eq_step in Step_in_out_spec, Hwt_out, Eout.
 
-    assert (Forall_methods (fun m => Obc.Inv.No_Overwrites (m_body m)) (map Obc.Fus.fuse_class tr_sch_tr_G))
-           by (apply Obc.Fus.fuse_No_Overwrites, translate_No_Overwrites; auto).
+    assert (Forall_methods (fun m => Obc.Inv.No_Overwrites (m_body m)) (map fuse_class tr_sch_tr_G))
+           by (apply fuse_No_Overwrites, translate_No_Overwrites; auto).
     assert (Forall_methods
               (fun m => Forall (fun x => ~ Obc.Inv.Can_write_in x (m_body m)) (map fst (m_in m)))
-              (map Obc.Fus.fuse_class tr_sch_tr_G))
-      by (apply Obc.Fus.fuse_cannot_write_inputs, translate_cannot_write_inputs).
+              (map fuse_class tr_sch_tr_G))
+      by (apply fuse_cannot_write_inputs, translate_cannot_write_inputs).
     econstructor; split.
-    + assert (Forall Obc.Fus.ClassFusible tr_sch_tr_G)
+    + assert (Forall ClassFusible tr_sch_tr_G)
         by (apply ClassFusible_translate; auto;
             apply Scheduler.scheduler_wc_program; eauto;
             apply NL2StcClocking.translate_wc; auto).

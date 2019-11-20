@@ -1170,6 +1170,16 @@ dataflow memory for which the non-standard semantics holds true.
     induction 1; constructor; eauto using msem_sem_equation.
   Qed.
 
+  Theorem equivalence:
+    forall G f xss yss,
+      Ordered_nodes G ->
+      sem_node G f xss yss <-> exists M, msem_node G f xss M yss.
+  Proof.
+    split.
+    - apply sem_msem_node; auto.
+    - intros (?&?); eapply msem_sem_node; eauto.
+  Qed.
+
 End NLMEMSEMANTICS.
 
 Module NLMemSemanticsFun
