@@ -1,8 +1,10 @@
 
 node f(a: bool)
 returns (y: bool; z: bool when y);
+var t : bool;
 let
-    y = false fby a;
+    y = t;
+    t = false fby a;
     z = true when y;
 tel
 

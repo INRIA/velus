@@ -1,3 +1,16 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*                 The Vélus verified Lustre compiler                  *)
+(*                                                                     *)
+(*             (c) 2019 Inria Paris (see the AUTHORS file)             *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique. All rights reserved. This file is distributed under   *)
+(*  the terms of the INRIA Non-Commercial License Agreement (see the   *)
+(*  LICENSE file).                                                     *)
+(*                                                                     *)
+(* *********************************************************************)
+
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
 From Velus Require Import Operators.
@@ -14,14 +27,6 @@ Module Type CECLOCKING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import Syn  : CESYNTAX Op).
-
-  (* TODO: move to Common, or update NLClockingSemantics and remove it *)
-  Definition orelse {A B: Type}
-             (f: A -> option B) (g: A -> option B) (x: A) : option B :=
-    match f x with
-    | None => g x
-    | r => r
-    end.
 
   Inductive SameVar : option ident -> exp -> Prop :=
   | SVNone: forall e,

@@ -10,9 +10,14 @@ node multimerge (a, b : bool)
 returns (y, z : bool)
 var w : bool when a;
     x : bool when not a;
+    y1, z1 : bool when a;
+    y2, z2 : bool when not a;
 let
     w = (not b) when a;
     x = b when not a;
-    (y, z) = merge a (true -> f(w)) (false -> f(x));
+    (y1, z1) = f(w);
+    (y2, z2) = f(x);
+    y = merge a (true -> y1) (false -> y2);
+    z = merge a (true -> z1) (false -> z2);
 tel
 

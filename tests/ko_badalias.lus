@@ -3,8 +3,10 @@ node f(a : bool when c;
        b : bool when d;
        c, d : bool)
 returns (y: bool);
+var t : bool;
 let
-    y = true fby false;
+    t = true fby false;
+    y = t;
 tel
 
 node wrong(w : bool when z;

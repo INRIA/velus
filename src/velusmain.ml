@@ -1,3 +1,16 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*                 The Vélus verified Lustre compiler                  *)
+(*                                                                     *)
+(*             (c) 2019 Inria Paris (see the AUTHORS file)             *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique. All rights reserved. This file is distributed under   *)
+(*  the terms of the INRIA Non-Commercial License Agreement (see the   *)
+(*  LICENSE file).                                                     *)
+(*                                                                     *)
+(* *********************************************************************)
+
 open Errors
 open Camlcoq
 open Printf
@@ -140,8 +153,8 @@ let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
   "-sync", Arg.Set write_sync, " Generate sync() in <source>.sync.c";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
-  "-dlustre", Arg.Set write_lustre,
-                               " Save the parsed Lustre in <source>.parsed.lus";
+  (* "-dlustre", Arg.Set write_lustre,
+   *                              " Save the parsed Lustre in <source>.parsed.lus"; *)
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <source>.n.lus";
   "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";

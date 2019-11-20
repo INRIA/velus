@@ -1,0 +1,8 @@
+
+node noreturns(a: bool) returns ();
+var w, t : bool;
+let
+  w = t;
+  t = false fby (not a);
+tel
+

@@ -1,9 +1,11 @@
 
 node f(a: bool)
 returns (y: bool; z: bool when y);
+var t : bool;
 let
-    y = false fby a;
-    z = true when y;
+    t = false fby a;
+    z = true when t;
+    y = t;
 tel
 
 node g(a: bool; b: bool when a)
@@ -15,7 +17,10 @@ tel
 
 node main(b: bool)
 returns (w: bool; x: bool when w);
+var s : bool;
+    t : bool when s;
 let
-    (w, x) = g(f(b));
+  (s, t) = f(b);
+  (w, x) = g(s, t);
 tel
 

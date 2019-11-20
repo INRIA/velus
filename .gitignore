@@ -38,5 +38,7 @@ Makefile.config
 tools/automake.ml
 _CoqProject
 
+compcert.ini
+
 *.exe
 *.out

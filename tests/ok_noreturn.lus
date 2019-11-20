@@ -1,7 +1,0 @@
-
-node noreturns(a: bool) returns ();
-var w : bool;
-let
-    w = false fby (not a);
-tel
-

@@ -1,7 +1,7 @@
 
 node f(a: bool; b: bool when a) returns (y: bool);
 let
-    y = true fby false;
+    y = true;
 tel
 
 node wrong(x: bool) returns (y: bool; z: bool);

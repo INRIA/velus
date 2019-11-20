@@ -1,3 +1,15 @@
+# ********************************************************************#
+#                                                                     #
+#                 The Vélus verified Lustre compiler                  #
+#                                                                     #
+#             (c) 2019 Inria Paris (see the AUTHORS file)             #
+#                                                                     #
+#  Copyright Institut National de Recherche en Informatique et en     #
+#  Automatique. All rights reserved. This file is distributed under   #
+#  the terms of the INRIA Non-Commercial License Agreement (see the   #
+#  LICENSE file).                                                     #
+#                                                                     #
+# ********************************************************************#
 
 # Path and directory of this Makefile
 # (which may be included from subdirectories)
@@ -40,6 +52,10 @@ $(shell mkdir -p $(EXTRACTED) >/dev/null)
 
 EXAMPLESDIR=examples
 EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
+RUNEXAMPLES=$(EXAMPLESDIR)/runexamples.sh
+
+TESTSDIR=tests
+RUNTESTS=$(TESTSDIR)/runtests.sh
 
 # Menhir includes from CompCert
 ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
@@ -60,12 +76,12 @@ TARGET=native
 BUILDDIR=_build
 
 # flag to prevent coqc from taking CompCert directories into account (see Makefile.auto)
-export OTHERFLAGS=-exclude-dir CompCert
+export OTHERFLAGS=-exclude-dir CompCert -w -extraction
 
 bold=$(shell tput bold)
+red=$(shell tput setaf 1)
 blue=$(shell tput setaf 4)
-red=$(shell tput setaf 9)
-green=$(shell tput setaf 10)
+green=$(shell tput setaf 2)
 normal=$(shell tput sgr0)
 
 ifndef VERBOSE

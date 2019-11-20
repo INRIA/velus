@@ -1,15 +1,19 @@
 
 node g(w: bool; x : int; y : int when w; z : int when w)
 returns (v: bool);
+var t : bool;
 let
-  v = false fby w;
+  v = t;
+  t = false fby w;
 tel
 
 node f(a: int)
 returns (b: bool)
 var ck : bool;
+    t : int32 when ck;
 let
   ck = a > 0;
-  b = g(ck, 1 / (a * a + 1) , (1 when ck) / (a when ck), 3 when ck);
+  t = (1 when ck) / (a when ck);
+  b = g(ck, 1 / (a * a + 1) , t, 3 when ck);
 tel
 

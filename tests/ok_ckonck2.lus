@@ -4,10 +4,12 @@ returns (z: bool);
 var w : bool when b;
     x : bool when c;
     y : bool when d;
+    zt : bool;
 let
     w = a when b;
     x = w when c;
     y = x when d;
-    z = false fby true;
+    zt = false fby true;
+    z = zt;
 tel
 

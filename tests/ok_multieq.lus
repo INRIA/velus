@@ -2,6 +2,8 @@
 node f(a, b, c: bool)
 returns (x: bool; y: bool when x; z: bool when a);
 let
-  x, y, z = (a, b when x, c when a);
+  x = a;
+  y = b when x;
+  z = c when a;
 tel
 

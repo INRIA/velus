@@ -1,8 +1,11 @@
 
 node mok (a, b, c : bool)
 returns (x: bool when a; y : bool when b);
+var pc : bool;
 let
-  (x, y) = ((false fby c) when a, c when b);
+  pc = false fby c;
+  x = pc when a;
+  y = c when b;
 tel
 
 node kom (a, b : bool; y : bool when a; z : bool when b)
@@ -14,7 +17,10 @@ tel
 
 node main (a, b, c : bool)
 returns (w, x : bool);
+var t1 : bool when a;
+    t2 : bool when b;
 let
-  (w, x) = kom(a, b, mok(a, b, c));
+  (t1, t2) = mok(a, b, c);
+  (w, x) = kom(a, b, t1, t2);
 tel
 

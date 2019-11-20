@@ -9,7 +9,10 @@ tel
 
 node binop (x : bool)
 returns (y : bool);
+var t1, t2 : bool;
 let
-    y = notnot(x) or notnot(not x);
+  t1 = notnot(x);
+  t2 = notnot(not x);
+  y = t1 or t2;
 tel
 

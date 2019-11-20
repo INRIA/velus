@@ -1,3 +1,16 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*                 The Vélus verified Lustre compiler                  *)
+(*                                                                     *)
+(*             (c) 2019 Inria Paris (see the AUTHORS file)             *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique. All rights reserved. This file is distributed under   *)
+(*  the terms of the INRIA Non-Commercial License Agreement (see the   *)
+(*  LICENSE file).                                                     *)
+(*                                                                     *)
+(* *********************************************************************)
+
 {
   open List
   let libs: string list ref = ref []
@@ -65,12 +78,16 @@ rule scan = parse
     let ic = open_in file in
     scan (Lexing.from_channel ic);
     close_in ic;
+    files := rev !files;
+    libs := rev !libs;
 
     let oc = if !makefile = "" then stdout else open_out !makefile in
 
     print_section oc "FILES";
-    print_var oc "COQLIBS" (rev !libs);
-    print_var oc "VFILES" (rev !files);
+    print_var oc "COQLIBS" !libs;
+    print_var oc "VFILES" !files;
+    let r = Str.regexp "/\\([^\\./]+\\.\\)v" in
+    print_var oc "AUXFILES" (List.map (Str.global_replace r "/.\\1aux") !files);
     output_endline oc "VOFILES:=$(VFILES:.v=.vo)";
 
     print_section oc "VARIABLES";
@@ -89,6 +106,8 @@ rule scan = parse
                        [rm_mls; "rm -f " ^ stamp] else [];
       ["depend"], ["$(VFILES)"], ["@echo \"Analyzing Coq dependencies\"";
                                   "$(COQDEP) $(COQLIBS) $^ > .depend"];
+      ["check-admitted"], ["$(VFILES)"], ["@grep -w 'admit\\|Admitted\\|ADMITTED' $^ ||\
+                                           echo \"Nothing admitted.\""];
       ["%.vo"; "%.glob"], ["%.v"], ["@echo \"COQC $*.v\"";
                                     "$(COQC) -dump-glob $(DOCDIR)/$(*F).glob $(COQFLAGS) $*"]
     ]

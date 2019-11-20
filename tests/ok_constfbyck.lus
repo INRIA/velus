@@ -1,9 +1,12 @@
 
-
 node test(ck: bool) returns (y: bool);
 var x : bool when ck;
+    t1 : bool when ck;
+    t2 : bool when ck;
 let
-    x = (false fby true) and (true fby (false when ck));
+    t1 = false fby true;
+    t2 = true fby (false when ck);
+    x = t1 and t2;
     y = merge ck (true -> x) (false -> true);
 tel
 
