@@ -69,15 +69,15 @@ Module Scheduler := Stc.Scheduler ExternalSchedule.
 
 Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
   do _ <- r;
-    let args := map fst s.(s_in) in
-    let mems := ps_from_list (map fst s.(s_lasts)) in
-    if Stc.Wdef.is_well_sch_tcs mems args s.(s_tcs)
-    then OK tt
-    else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).
+  let args := map fst s.(s_in) in
+  let mems := ps_from_list (map fst s.(s_lasts)) in
+  if Stc.Wdef.is_well_sch_tcs mems args s.(s_tcs)
+  then OK tt
+  else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).
 
 Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
   do _ <- fold_left is_well_sch_system P (OK tt);
-    OK P.
+  OK P.
 
 Lemma is_well_sch_error:
   forall P e,
@@ -101,19 +101,19 @@ Proof.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
-Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
-  OK g
-     @@ print print_nlustre
-     @@ NL2Stc.translate
-     @@ print print_stc
-     @@ Scheduler.schedule
-     @@@ is_well_sch
-     @@ print print_sch
-     @@ Stc2Obc.translate
-     @@ total_if do_fusion (map fuse_class)
-     @@ add_defaults
-     @@ print print_obc
-     @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
+Definition nl_to_cl (main_node: ident) (G: global) : res Clight.program :=
+  OK G
+  @@  print print_nlustre
+  @@  NL2Stc.translate
+  @@  print print_stc
+  @@  Scheduler.schedule
+  @@@ is_well_sch
+  @@  print print_sch
+  @@  Stc2Obc.translate
+  @@  total_if do_fusion (map fuse_class)
+  @@  add_defaults
+  @@  print print_obc
+  @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
@@ -121,15 +121,17 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
-Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
-  OK g
-     @@@ nl_to_cl main_node
-     @@ print print_Clight
-     @@ add_builtins
-     @@@ transf_clight2_program.
+Definition nl_to_asm (main_node: ident) (G: global) : res Asm.program :=
+  nl_to_cl main_node G
+  @@  print print_Clight
+  @@  add_builtins
+  @@@ transf_clight2_program.
 
-Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
-  elab_declarations D @@@ fun G => nl_to_asm main_node (proj1_sig G).
+Definition compile (D: list LustreAst.declaration) (main_node: ident)
+  : res (global * Asm.program) :=
+  do G <- elab_declarations D @@ @proj1_sig _ _;
+  do P <- nl_to_asm main_node G;
+  OK (G, P).
 
 Definition wt_streams: list (Stream val) -> list (ident * type) -> Prop :=
   Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s).
@@ -468,7 +470,7 @@ Proof.
     + apply IOStep with (Spec_in_out := Step_in_out_spec') (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
       apply trace_inf_sim_step_node; auto.
 
-  (* activated Fusion optimization *)
+  (* non-activated Fusion optimization *)
   - (* assert some equalities between classes and methods *)
     pose proof (GenerationProperties.find_main_class _ _ _ _ _ COMP') as Find'.
     apply find_class_add_defaults_class in Find.
@@ -521,29 +523,27 @@ Proof.
 Qed.
 
 (** The ultimate lemma states that, if
-    - the parsed declarations [D] elaborate to a dataflow program [G] and
-      a proof [Gp] that it satisfies [wt_global G] and [wc_global G],
+    - compilation of the parsed declarations [D] succeeds in generating a
+      pair of an NLustre program [G] and an assembler program [P],
     - the values on input streams [ins] are well-typed according to the
-      interface of the [main] node,
-    - similarly for output streams [outs],
+      interface of the [main] node, and
     - the input and output streams are related by the dataflow semantics
-      of the node [main] in [G], and
-    - compilation succeeds in generating an assembler program [P],
+      of the node [main] in [G],
     then the assembler program generates an infinite sequence of volatile
     reads and writes that correspond to the successive values on the
     input and output streams. *)
 
 Theorem correctness:
-  forall D G Gp P main ins outs,
-    elab_declarations D = OK (exist _ G Gp) ->
+  forall D G P main ins outs,
+    compile D main = OK (G, P) ->
     wt_ins G main ins ->
     CoindSem.sem_node G main (pStr ins) (pStr outs) ->
-    compile D main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
-  intros D G (WT & WC & NormalArgs) P main ins outs Elab ?? Comp.
+  intros D G P main ins outs Comp ??.
   unfold compile in Comp.
-  rewrite Elab in Comp; simpl in Comp.
-  apply behavior_nl_to_asm; eauto.
+  monadInv Comp.
+  destruct (elab_declarations D) as [(?&?&?&?)|]; try discriminate; simpl in *.
+  inv EQ; apply behavior_nl_to_asm; eauto.
 Qed.
