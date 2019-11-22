@@ -92,4 +92,5 @@ src/Traces.v
 src/ClightToAsm.v
 
 src/Instantiator.v
-src/VelusCorrectness.v
+src/Velus.v
+src/Correctness.v

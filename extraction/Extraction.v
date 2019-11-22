@@ -3,7 +3,7 @@ From Coq Require Import ExtrOcamlString.
 From Coq Require Import ZArith.BinInt.
 From Coq Require ZArith.BinIntDef.
 
-From Velus Require Import VelusCorrectness.
+From Velus Require Import Velus.
 From Velus Require Import ObcToClight.Generation.
 (* From Velus Require Import Lustre.LustreElab. *)
 From Velus Require Import NLustre.NLElaboration.
@@ -148,20 +148,20 @@ Extract Constant Cabs.char_code => "int64".
 Extract Constant NLElaboration.do_add_when_to_constants =>
     "Veluslib.do_add_when_to_constants".
 
-(* Extract Constant VelusCorrectness.print_lustre => *)
+(* Extract Constant Velus.print_lustre => *)
 (*   "Veluslib.print_lustre_if". *)
-Extract Constant VelusCorrectness.print_nlustre =>
+Extract Constant Velus.print_nlustre =>
   "Veluslib.print_nlustre_if".
-Extract Constant VelusCorrectness.print_stc => "Veluslib.print_stc_if".
-Extract Constant VelusCorrectness.print_sch => "Veluslib.print_sch_if".
-Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
-Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
-Extract Constant VelusCorrectness.do_sync   => "Veluslib.do_sync".
-Extract Constant VelusCorrectness.do_expose => "Veluslib.do_expose".
-Extract Constant VelusCorrectness.schedule  => "Interfacelib.Scheduler.schedule".
+Extract Constant Velus.print_stc => "Veluslib.print_stc_if".
+Extract Constant Velus.print_sch => "Veluslib.print_sch_if".
+Extract Constant Velus.print_obc => "Veluslib.print_obc_if".
+Extract Constant Velus.do_fusion => "Veluslib.do_fusion".
+Extract Constant Velus.do_sync   => "Veluslib.do_sync".
+Extract Constant Velus.do_expose => "Veluslib.do_expose".
+Extract Constant Velus.schedule  => "Interfacelib.Scheduler.schedule".
 
 (* builtins *)
-Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".
+Extract Constant Velus.add_builtins => "Veluslib.add_builtins".
 
 Separate Extraction
          ZArith.BinIntDef
@@ -172,7 +172,7 @@ Separate Extraction
 	 FMapPositive.PositiveMap.find
          Compiler.transf_clight_program Cabs
          AST.signature_main
-         VelusCorrectness.compile elab_declarations translation_unit_file
+         Velus.compile elab_declarations translation_unit_file
          (* Instantiator.L2NL.to_global (* XXX *) *)
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr

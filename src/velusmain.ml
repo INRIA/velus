@@ -127,8 +127,8 @@ let compile source_name filename =
    * in *)
   (* Format.printf "%a@." Interfacelib.PrintLustre.print_global p; *)
   match Compiler.apply_partial
-          (VelusCorrectness.compile ast main_node)
-          Asmexpand.expand_program with
+          (Velus.compile ast main_node)
+          (fun (_, p) -> Asmexpand.expand_program p) with
   | Error errmsg ->
     Format.eprintf "%a@." Driveraux.print_error errmsg; exit 1
   | OK asm ->

@@ -14,70 +14,29 @@
 From Velus Require Import Common.
 From Velus Require Import Ident.
 From Velus Require Import CoindStreams.
-From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
+From Velus Require Import NLustre.NLElaboration.
+From Velus Require Import Interface.
+From Velus Require Import Instantiator.
+From Velus Require Import ObcToClight.Correctness.
+From Velus Require Import Velus.
+Import NL.
+Import Obc.
+Import Stc2ObcInvariants.
+Import IStr.
+Import CStr.
+Import OpAux.
 
 From compcert Require Import common.Errors.
 From compcert Require Import common.Events.
 From compcert Require Import common.Behaviors.
 From compcert Require Import cfrontend.Clight.
-From compcert Require Import cfrontend.ClightBigstep.
-From compcert Require Import lib.Integers.
 From compcert Require Import driver.Compiler.
 
-From Velus Require Import Interface.
-From Velus Require Import Instantiator.
-Import Stc.Syn.
-Import NL.
-Import Obc.Syn.
-Import Obc.Sem.
-Import Obc.Typ.
-Import Obc.Equ.
-Import Obc.Def.
-Import Obc.Fus.
-Import Stc2ObcInvariants.
-Import IStr.
-Import CStr.
-Import OpAux.
-Import Op.
-From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import NLustre.NLElaboration.
-
-From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
 From Coq Require Import Omega.
-
-Open Scope error_monad_scope.
-Open Scope stream_scope.
-
-Parameter schedule      : ident -> list trconstr -> list positive.
-Parameter print_nlustre : global -> unit.
-Parameter print_stc     : Stc.Syn.program -> unit.
-Parameter print_sch     : Stc.Syn.program -> unit.
-Parameter print_obc     : Obc.Syn.program -> unit.
-Parameter do_fusion     : unit -> bool.
-Parameter do_sync       : unit -> bool.
-Parameter do_expose     : unit -> bool.
-
-Module ExternalSchedule.
-  Definition schedule := schedule.
-End ExternalSchedule.
-
-Module Scheduler := Stc.Scheduler ExternalSchedule.
-
-Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
-  do _ <- r;
-  let args := map fst s.(s_in) in
-  let mems := ps_from_list (map fst s.(s_lasts)) in
-  if Stc.Wdef.is_well_sch_tcs mems args s.(s_tcs)
-  then OK tt
-  else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).
-
-Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
-  do _ <- fold_left is_well_sch_system P (OK tt);
-  OK P.
 
 Lemma is_well_sch_error:
   forall P e,
@@ -101,37 +60,10 @@ Proof.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
-Definition nl_to_cl (main_node: ident) (G: global) : res Clight.program :=
-  OK G
-  @@  print print_nlustre
-  @@  NL2Stc.translate
-  @@  print print_stc
-  @@  Scheduler.schedule
-  @@@ is_well_sch
-  @@  print print_sch
-  @@  Stc2Obc.translate
-  @@  total_if do_fusion (map fuse_class)
-  @@  add_defaults
-  @@  print print_obc
-  @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
-
-Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
   forall B p,
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
-
-Definition nl_to_asm (main_node: ident) (G: global) : res Asm.program :=
-  nl_to_cl main_node G
-  @@  print print_Clight
-  @@  add_builtins
-  @@@ transf_clight2_program.
-
-Definition compile (D: list LustreAst.declaration) (main_node: ident)
-  : res (global * Asm.program) :=
-  do G <- elab_declarations D @@ @proj1_sig _ _;
-  do P <- nl_to_asm main_node G;
-  OK (G, P).
 
 Definition wt_streams: list (Stream val) -> list (ident * type) -> Prop :=
   Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s).
@@ -181,24 +113,6 @@ Section WtStream.
 
 End WtStream.
 
-Hint Resolve
-     fuse_wt_program
-     fuse_call
-     fuse_wt_mem
-     fuse_loop_call
-     wt_add_defaults_class
-     wt_mem_add_defaults
-     stmt_call_eval_add_defaults
-     loop_call_add_defaults
-     ClassFusible_translate
-     Scheduler.scheduler_wc_program
-     NL2StcClocking.translate_wc
-     No_Naked_Vars_add_defaults_class
-     fuse_No_Overwrites
-     translate_No_Overwrites
-     fuse_cannot_write_inputs
-     translate_cannot_write_inputs
-.
 
 (** The trace of a NLustre node *)
 Section NLTrace.
@@ -287,6 +201,24 @@ Proof.
   intros; unfold Stc2ObcCorr.value_to_option, pstr; intro.
   rewrite map_map; auto.
 Qed.
+
+Hint Resolve
+     fuse_wt_program
+     fuse_call
+     fuse_wt_mem
+     fuse_loop_call
+     wt_add_defaults_class
+     wt_mem_add_defaults
+     stmt_call_eval_add_defaults
+     loop_call_add_defaults
+     ClassFusible_translate
+     Scheduler.scheduler_wc_program
+     NL2StcClocking.translate_wc
+     No_Naked_Vars_add_defaults_class
+     fuse_No_Overwrites
+     translate_No_Overwrites
+     fuse_cannot_write_inputs
+     translate_cannot_write_inputs.
 
 (** Correctness from NLustre to Clight *)
 Lemma behavior_nl_to_cl:
