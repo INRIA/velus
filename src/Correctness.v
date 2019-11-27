@@ -55,7 +55,7 @@ Proof.
   - constructor.
   - intro Fold.
     cases_eqn E.
-    + apply Stc.Wdef.Is_well_sch_by_refl in E.
+    + apply Stc.SchV.Is_well_sch_by_refl in E.
       constructor; auto.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.

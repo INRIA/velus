@@ -58,6 +58,7 @@ src/Stc/StcClocking.v
 src/Stc/StcIsFree.v
 src/Stc/StcSyntax.v
 src/Stc/StcWellDefined.v
+src/Stc/StcSchedulingValidator.v
 src/Stc/Stc.v
 
 src/Obc/ObcSyntax.v

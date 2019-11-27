@@ -21,6 +21,7 @@ From Velus Require Export Stc.StcIsVariable.
 From Velus Require Export Stc.StcIsDefined.
 From Velus Require Export Stc.StcIsFree.
 From Velus Require Export Stc.StcWellDefined.
+From Velus Require Export Stc.StcSchedulingValidator.
 From Velus Require Export Stc.StcSchedule.
 From Velus Require Export Stc.StcTyping.
 From Velus Require Export Stc.StcClocking.
@@ -44,6 +45,8 @@ Module Type STC
   Declare Module Export Def  : STCISDEFINED   Ids Op       CE.Syn Syn Var Last.
   Declare Module Export Free : STCISFREE      Ids Op       CE.Syn Syn CE.IsF.
   Declare Module Export Wdef : STCWELLDEFINED Ids Op       CE.Syn Syn Syst Ord Var Last Def CE.IsF Free.
+  Declare Module Export SchV : STCSCHEDULINGVALIDATOR
+                                              Ids Op       CE.Syn Syn Syst Ord Var Last Def CE.IsF Free Wdef.
   Declare Module Export Typ  : STCTYPING      Ids Op       CE.Syn Syn CE.Typ.
   Declare Module Export Clo  : STCCLOCKING    Ids Op       CE.Syn Syn Last Var Def Syst Ord CE.Clo.
   Declare Module Export CloSem : STCCLOCKINGSEMANTICS Ids Op OpAux CE.Syn Syn Str Last Var Def Syst Ord
@@ -70,6 +73,8 @@ Module StcFun
   Module Export Def   := StcIsDefinedFun   Ids Op       CE.Syn Syn Var Last.
   Module Export Free  := StcIsFreeFun      Ids Op       CE.Syn Syn CE.IsF.
   Module Export Wdef  := StcWellDefinedFun Ids Op       CE.Syn Syn Syst Ord Var Last Def CE.IsF Free.
+  Module Export SchV  := StcSchedulingValidatorFun
+                                           Ids Op       CE.Syn Syn Syst Ord Var Last Def CE.IsF Free Wdef.
   Module Export Typ   := StcTypingFun      Ids Op       CE.Syn Syn CE.Typ.
   Module Export Clo   := StcClockingFun    Ids Op       CE.Syn Syn Last Var Def Syst Ord CE.Clo.
   Module Export CloSem := StcClockingSemanticsFun Ids Op OpAux CE.Syn Syn Str Last Var Def Syst Ord
