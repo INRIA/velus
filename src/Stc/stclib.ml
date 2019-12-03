@@ -85,23 +85,24 @@ module PrintFun
     let rec print_trconstr p tc =
       match tc with
       | Stc.TcDef (x, ck, e) ->
-        fprintf p "@[<hov 2>%a =@ %a@]"
+        fprintf p "@[<hov 2>%a =@ %a;@]"
           print_ident x
           print_cexp e
       | Stc.TcNext (x, ck, e) ->
-        fprintf p "@[<hov 2>next@ %a =@ %a@]"
+        fprintf p "@[<hov 2>next@ %a =@ %a;@]"
           print_ident x
           print_exp e
       | Stc.TcReset (s, ck, f) ->
-        fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
+        fprintf p "@[<hov 2>reset@ %a<%a>@ every@ (%a);@]"
             print_ident f
             print_ident s
             print_clock ck
-      | Stc.TcCall (i, xs, ck, _, f, es) ->
-        fprintf p "@[<hov 2>%a =@ %a<%a>(@[<hv 0>%a@])@]"
+      | Stc.TcCall (i, xs, ck, k, f, es) ->
+        fprintf p "@[<hov 2>%a =@ %a<%a,%d>(@[<hv 0>%a@]);@]"
           print_pattern xs
           print_ident f
           print_ident i
+          (if k then 1 else 0)
           (print_comma_list print_exp) es
 
     let print_trconstrs p =
