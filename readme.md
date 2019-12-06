@@ -2,6 +2,7 @@
 
 These source files contain the implementation, models, and proof of
 correctness of a formally verified Lustre compiler backend.
+This version of the project is the one referred by the PhD thesis of Lélio Brun.
 
 This file contains instructions for (i) using the compiler, (ii) running
 from local opam installation or from docker, and (iii) cross-references from
@@ -118,34 +119,19 @@ compiled to executable code with user IO loop by calling:
 
 `CompCert/ccomp -stdlib CompCert/runtime <sourcefile>.sync.c <sourcefile>.s`
 
-Thus the example of the paper can be executed with the following:
+Thus the running example of the dissertation can be executed with the following:
 ```
-./velus -sync examples/nav.lus
-CompCert/ccomp -stdlib CompCert/runtime examples/nav.sync.c examples/nav.s
+./velus -sync examples/nav_forward.lus
+CompCert/ccomp -stdlib CompCert/runtime examples/nav_forward.sync.c examples/nav_forward.s
 ./a.out
 ```
-
-## Lemmas references
-
-The following table gives the names of the Coq results corresponding to the
-numbered lemmas in the paper, and the files where the are stated and proved.
-Note that the lemma 3.5 does not correspond to a particular Coq result: it is
-given in the paper for clarity but only appear _inside_ another proof in the
-development.
-
-|   Lemma | Name                     | Link                                                              |
-| :------ | :----------------------- | :-----------------------------------------------------------      |
-|     2.1 | sem_msem_node            | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v#L710)     |
-|     2.2 | msem_sem_node            | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v#L1087)    |
-|     2.3 | msem_node_absent_until   | [NLustre/NLMemSemantics.v](src/NLustre/NLMemSemantics.v#L1014)    |
-|     3.1 | sem_system_absent        | [Stc/StcSemantics.v](src/Stc/StcSemantics.v#L768)                 |
-|     3.2 | msem_node_initial_state  | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v#L135) |
-|     3.3 | correctness              | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v#L628) |
-|     3.4 | correctness_loop         | [NLustreToStc/Correctness.v](src/NLustreToStc/Correctness.v#L678) |
-|     3.6 | exp_correct              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L201)         |
-|     3.7 | reset_spec               | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L700)         |
-|     3.8 | correctness              | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L1427)        |
-|     3.9 | correctness_loop_call    | [StcToObc/Correctness.v](src/StcToObc/Correctness.v#L1564)        |
+The script `compile` can also be used.
+It takes the source file, the main node name and generates an executable program
+along with intermediate code for all passes.
+```
+./compile examples/nav_forward nav
+examples/nav_forward.exe
+```
 
 
 [Ocaml]: http://ocaml.org/
