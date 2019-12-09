@@ -113,22 +113,27 @@ Section WtStream.
 
 End WtStream.
 
+Lemma node_in_out_not_nil:
+  forall n,
+    n.(n_in) <> [] \/ n.(n_out) <> [].
+Proof.
+  intro; left; apply node_in_not_nil.
+Qed.
 
 (** The trace of a NLustre node *)
 Section NLTrace.
 
   Variable (node: node) (ins outs: list (Stream val)).
 
-  Hypothesis Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [].
-  Hypothesis Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in).
-  Hypothesis Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out).
+  Hypothesis Len_ins  : Datatypes.length ins = Datatypes.length node.(n_in).
+  Hypothesis Len_outs : Datatypes.length outs = Datatypes.length node.(n_out).
 
   Program Definition trace_node (n: nat): traceinf :=
     traceinf_of_traceinf' (mk_trace (tr_Streams ins) (tr_Streams outs)
                                     (idty node.(n_in)) (idty node.(n_out))
                                     _ _ _ n).
   Next Obligation.
-    destruct Spec_in_out.
+    destruct (node_in_out_not_nil node).
     - left; intro E; apply map_eq_nil in E; auto.
     - right; intro E; apply map_eq_nil in E; auto.
   Qed.
@@ -171,11 +176,10 @@ End NLTrace.
 Inductive bisim_IO (G: global) (f: ident) (ins outs: list (Stream val)): traceinf -> Prop :=
   IOStep:
     forall T node
-      (Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [])
-      (Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in))
-      (Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out)),
+      (Len_ins  : Datatypes.length ins = Datatypes.length node.(n_in))
+      (Len_outs : Datatypes.length outs = Datatypes.length node.(n_out)),
       find_node f G = Some node ->
-      traceinf_sim T (trace_node node ins outs Spec_in_out Len_ins Len_outs 0) ->
+      traceinf_sim T (trace_node node ins outs Len_ins Len_outs 0) ->
       bisim_IO G f ins outs T.
 
 (** streams of present values *)
@@ -330,13 +334,9 @@ Proof.
   }
 
   (* IO specs *)
-  assert (n_in main_node <> [] \/ n_out main_node <> []) as Step_in_out_spec'.
-  { left. pose proof (n_ingt0 main_node) as Hin.
-    intro E; rewrite E in Hin; simpl in Hin; omega.
-  }
   assert (m_in m_step <> nil \/ m_out m_step <> nil) as Step_in_out_spec.
   { erewrite Stc2Obc.find_method_stepm_in, Stc2Obc.find_method_stepm_out; eauto.
-    simpl; destruct Step_in_out_spec'.
+    simpl; destruct (node_in_out_not_nil main_node).
     - left; intro E; apply map_eq_nil in E; intuition.
     - right; intro E; apply map_eq_nil in E; intuition.
   }
@@ -399,7 +399,7 @@ Proof.
       * intros ??????? Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
       * change [] with (map Some (@nil val)); eauto.
       * rewrite <-Eq_prog, <-Eq_main; eauto.
-    + apply IOStep with (Spec_in_out := Step_in_out_spec') (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
+    + apply IOStep with (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
       apply trace_inf_sim_step_node; auto.
 
   (* non-activated Fusion optimization *)
@@ -429,7 +429,7 @@ Proof.
       * intros ??????? Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
       * change [] with (map Some (@nil val)); eauto.
       * rewrite <-Eq_prog, <-Eq_main; eauto.
-    + apply IOStep with (Spec_in_out := Step_in_out_spec') (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
+    + apply IOStep with (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
       apply trace_inf_sim_step_node; auto.
 Qed.
 

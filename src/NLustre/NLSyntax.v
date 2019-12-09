@@ -318,6 +318,22 @@ Module Type NLSYNTAX
     split; auto. inversion 1; auto.
   Qed.
 
+  Lemma node_in_not_nil:
+    forall n,
+      n.(n_in) <> [].
+  Proof.
+    intros n E; pose proof (n_ingt0 n) as H.
+    rewrite E in H; simpl in H; omega.
+  Qed.
+
+  Lemma node_out_not_nil:
+    forall n,
+      n.(n_out) <> [].
+  Proof.
+    intros n E; pose proof (n_outgt0 n) as H.
+    rewrite E in H; simpl in H; omega.
+  Qed.
+
 End NLSYNTAX.
 
 Module NLSyntaxFun
