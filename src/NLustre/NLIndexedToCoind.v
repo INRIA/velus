@@ -397,21 +397,21 @@ Module Type NLINDEXEDTOCOIND
     (** This tactic automatically uses the interpretor to give a witness stream. *)
     Ltac interp_str b H x Sem :=
       let Sem_x := fresh "Sem_" x in
-      let sol sem interp sound :=
+      let sol sem interp complete :=
           assert (sem b H x (interp b H x)) as Sem_x
               by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                  unfold interp, lift; inv Sem; erewrite <-sound; eauto)
+                  unfold interp, lift; inv Sem; erewrite <-complete; eauto)
       in
-      let sol' sem interp sound :=
+      let sol' sem interp complete :=
           assert (sem H x (interp H x)) as Sem_x
               by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                  unfold interp, lift'; inv Sem; erewrite <-sound; eauto)
+                  unfold interp, lift'; inv Sem; erewrite <-complete; eauto)
       in
       match type of x with
-      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_sound
-      | cexp => sol CESem.sem_cexp interp_cexp interp_cexp_instant_sound
-      | ident => sol' CESem.sem_var interp_var interp_var_instant_sound
-      | clock => sol CESem.sem_clock interp_clock interp_clock_instant_sound
+      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_complete
+      | cexp => sol CESem.sem_cexp interp_cexp interp_cexp_instant_complete
+      | ident => sol' CESem.sem_var interp_var interp_var_instant_complete
+      | clock => sol CESem.sem_clock interp_clock interp_clock_instant_complete
       end.
 
     Lemma when_inv:
@@ -644,10 +644,10 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       exists (interp_exps' b H es); split.
-      - eapply interp_exps'_sound; eauto.
+      - eapply interp_exps'_complete; eauto.
       - intro n; specialize (Sem n); induction Sem; simpl; auto.
         f_equal; auto.
-        unfold interp_exp; now apply interp_exp_instant_sound.
+        unfold interp_exp; now apply interp_exp_instant_complete.
     Qed.
 
     (** Generalization for lists of [exp]. *)
@@ -1040,8 +1040,8 @@ Module Type NLINDEXEDTOCOIND
       { intro n; specialize (Sem n); specialize (Var n); destruct Sem as (Sem & Sem').
         unfold interp_clock, lift.
         destruct (xs n).
-        - erewrite <-interp_clock_instant_sound; eauto; apply Sem'; auto.
-        - erewrite <-interp_clock_instant_sound; eauto; apply Sem; eauto.
+        - erewrite <-interp_clock_instant_complete; eauto; apply Sem'; auto.
+        - erewrite <-interp_clock_instant_complete; eauto; apply Sem; eauto.
       }
       exists (interp_clock b H ck); split; auto.
       intro n; specialize (Var n); specialize (SemCk n); specialize (Sem n);

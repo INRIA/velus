@@ -132,7 +132,7 @@ Module Type CEINTERPRETER
         interp_exp_instant e
       end.
 
-    Lemma interp_var_instant_sound:
+    Lemma interp_var_instant_complete:
       forall x v,
         sem_var_instant R x v ->
         v = interp_var_instant x.
@@ -143,7 +143,7 @@ Module Type CEINTERPRETER
     Ltac rw_exp_helper :=
       repeat match goal with
              | _: sem_var_instant R ?x ?v |- context[interp_var_instant ?x] =>
-               erewrite <-(interp_var_instant_sound x v); eauto; simpl
+               erewrite <-(interp_var_instant_complete x v); eauto; simpl
              | H: val_to_bool ?x = _ |- context[val_to_bool ?x] =>
                rewrite H
              | H: sem_unop ?op ?c ?t = _ |- context[sem_unop ?op ?c ?t] =>
@@ -152,7 +152,7 @@ Module Type CEINTERPRETER
                rewrite H
           end.
 
-    Lemma interp_vars_instant_sound:
+    Lemma interp_vars_instant_complete:
       forall xs vs,
         sem_vars_instant R xs vs ->
         vs = interp_vars_instant xs.
@@ -161,7 +161,7 @@ Module Type CEINTERPRETER
       induction 1; auto; simpl; rw_exp_helper; f_equal; auto.
     Qed.
 
-    Lemma interp_clock_instant_sound:
+    Lemma interp_clock_instant_complete:
       forall c b,
         sem_clock_instant base R c b ->
         b = interp_clock_instant c.
@@ -170,7 +170,7 @@ Module Type CEINTERPRETER
         rewrite <-IHsem_clock_instant; destruct b; auto.
     Qed.
 
-    Lemma interp_exp_instant_sound:
+    Lemma interp_exp_instant_complete:
       forall e v,
         sem_exp_instant base R e v ->
         v = interp_exp_instant e.
@@ -183,24 +183,24 @@ Module Type CEINTERPRETER
           destruct b; auto.
     Qed.
 
-    Lemma interp_exps_instant_sound:
+    Lemma interp_exps_instant_complete:
       forall es vs,
         sem_exps_instant base R es vs ->
         vs = interp_exps_instant es.
     Proof.
       induction 1; simpl; auto.
       f_equal; auto.
-      now apply interp_exp_instant_sound.
+      now apply interp_exp_instant_complete.
     Qed.
 
     Ltac rw_cexp_helper :=
       repeat (rw_exp_helper;
               repeat match goal with
                      | _: sem_exp_instant base R ?e ?v |- context[interp_exp_instant ?e] =>
-                       erewrite <-(interp_exp_instant_sound e v); eauto; simpl
+                       erewrite <-(interp_exp_instant_complete e v); eauto; simpl
                      end).
 
-    Lemma interp_cexp_instant_sound:
+    Lemma interp_cexp_instant_complete:
       forall e v,
         sem_cexp_instant base R e v ->
         v = interp_cexp_instant e.
@@ -223,27 +223,27 @@ Module Type CEINTERPRETER
     Definition interp_caexp_instant (ck: clock) (ce: cexp) : value :=
       interp_annotated_instant (interp_cexp_instant) ck ce.
 
-    Lemma interp_caexp_instant_sound:
+    Lemma interp_caexp_instant_complete:
       forall ck e v,
         sem_caexp_instant base R ck e v ->
         v = interp_caexp_instant ck e.
     Proof.
       unfold interp_caexp_instant, interp_annotated_instant.
-      induction 1; erewrite <-interp_clock_instant_sound; eauto; simpl; auto.
-      apply interp_cexp_instant_sound; auto.
+      induction 1; erewrite <-interp_clock_instant_complete; eauto; simpl; auto.
+      apply interp_cexp_instant_complete; auto.
     Qed.
 
     Definition interp_aexp_instant (ck: clock) (e: exp) : value :=
       interp_annotated_instant (interp_exp_instant) ck e.
 
-    Lemma interp_aexp_instant_sound:
+    Lemma interp_aexp_instant_complete:
       forall ck e v,
         sem_aexp_instant base R ck e v ->
         v = interp_aexp_instant ck e.
     Proof.
       unfold interp_aexp_instant, interp_annotated_instant.
-      induction 1; erewrite <-interp_clock_instant_sound; eauto; simpl; auto.
-      apply interp_exp_instant_sound; auto.
+      induction 1; erewrite <-interp_clock_instant_complete; eauto; simpl; auto.
+      apply interp_exp_instant_complete; auto.
     Qed.
 
   End InstantInterpreter.
@@ -279,7 +279,7 @@ Module Type CEINTERPRETER
     Definition interp_exps' (e: list exp): list (stream value) :=
       map interp_exp e.
 
-    Lemma interp_exps'_sound:
+    Lemma interp_exps'_complete:
       forall es ess,
         sem_exps bk H es ess ->
         Forall2 (sem_exp bk H) es (interp_exps' es).
@@ -288,7 +288,7 @@ Module Type CEINTERPRETER
       constructor.
       - intro n; specialize (Sem n); inv Sem.
         unfold interp_exp, lift.
-        erewrite <-interp_exp_instant_sound; eauto.
+        erewrite <-interp_exp_instant_complete; eauto.
       - eapply IHes.
         intro n; specialize (Sem n); inv Sem.
         instantiate (1 := fun n => tl (ess n)).
@@ -305,7 +305,7 @@ Module Type CEINTERPRETER
     Definition interp_aexp (ck: clock) (e: exp): stream value :=
       lift (fun base R => interp_aexp_instant base R ck) e.
 
-    Lemma lift_sound:
+    Lemma lift_complete:
       forall {A B} (sem: bool -> env -> A -> B -> Prop) interp x xs,
         (forall b R x v, sem b R x v -> v = interp b R x) ->
         CESem.lift bk H sem x xs ->
@@ -315,7 +315,7 @@ Module Type CEINTERPRETER
       specialize (Sem n); unfold lift; auto.
     Qed.
 
-    Lemma lift'_sound:
+    Lemma lift'_complete:
       forall {A B} (sem: env -> A -> B -> Prop) interp x xs,
         (forall R x v, sem R x v -> v = interp R x) ->
         CESem.lift' H sem x xs ->
@@ -325,76 +325,76 @@ Module Type CEINTERPRETER
       specialize (Sem n); unfold lift'; auto.
     Qed.
 
-    Corollary interp_clock_sound:
+    Corollary interp_clock_complete:
       forall ck bs,
         sem_clock bk H ck bs ->
         bs ≈ interp_clock ck.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_clock_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_clock_instant_complete.
     Qed.
 
-    Corollary interp_var_sound:
+    Corollary interp_var_complete:
       forall x vs,
         sem_var H x vs ->
         vs ≈ interp_var x.
     Proof.
-      intros; eapply lift'_sound; eauto;
-        apply interp_var_instant_sound.
+      intros; eapply lift'_complete; eauto;
+        apply interp_var_instant_complete.
     Qed.
 
-    Corollary interp_vars_sound:
+    Corollary interp_vars_complete:
       forall xs vss,
         sem_vars H xs vss ->
         vss ≈ interp_vars xs.
     Proof.
-      intros; eapply lift'_sound; eauto;
-        apply interp_vars_instant_sound.
+      intros; eapply lift'_complete; eauto;
+        apply interp_vars_instant_complete.
     Qed.
 
-    Corollary interp_exp_sound:
+    Corollary interp_exp_complete:
       forall e vs,
         sem_exp bk H e vs ->
         vs ≈ interp_exp e.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_exp_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_exp_instant_complete.
     Qed.
 
-    Corollary interp_exps_sound:
+    Corollary interp_exps_complete:
       forall es vss,
         sem_exps bk H es vss ->
         vss ≈ interp_exps es.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_exps_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_exps_instant_complete.
     Qed.
 
-    Corollary interp_cexp_sound:
+    Corollary interp_cexp_complete:
       forall e vs,
         sem_cexp bk H e vs ->
         vs ≈ interp_cexp e.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_cexp_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_cexp_instant_complete.
     Qed.
 
-    Corollary interp_aexp_sound:
+    Corollary interp_aexp_complete:
       forall e ck vs,
         sem_aexp bk H ck e vs ->
         vs ≈ interp_aexp ck e.
     Proof.
-      intros; eapply lift_sound; eauto.
-      intros; apply interp_aexp_instant_sound; auto.
+      intros; eapply lift_complete; eauto.
+      intros; apply interp_aexp_instant_complete; auto.
     Qed.
 
-    Corollary interp_caexp_sound:
+    Corollary interp_caexp_complete:
       forall e ck vs,
         sem_caexp bk H ck e vs ->
         vs ≈ interp_caexp ck e.
     Proof.
-      intros; eapply lift_sound; eauto.
-      intros; apply interp_caexp_instant_sound; auto.
+      intros; eapply lift_complete; eauto.
+      intros; apply interp_caexp_instant_complete; auto.
     Qed.
     (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value := *)
     (*   lift (fun base R => interp_annotated_instant base R interp_instant ck) a. *)
