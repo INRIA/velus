@@ -31,7 +31,7 @@ From Velus Require Import IndexedStreams.
 From Velus Require Import Stc.StcSemantics.
 From Velus Require Import Stc.StcTyping.
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsInit.
 From Velus Require Import Stc.StcIsDefined.
 From Velus Require Import Stc.StcClocking.
 From Velus Require Import Stc.StcIsFree.
@@ -79,11 +79,11 @@ Module Type STCSCHEDULE
        (Import StcSem : STCSEMANTICS     Ids Op OpAux CE.Syn StcSyn Syst Ord Str CE.Sem)
        (Import StcTyp : STCTYPING        Ids Op       CE.Syn StcSyn CE.Typ)
        (Import Var    : STCISVARIABLE    Ids Op       CE.Syn StcSyn)
-       (Import Last   : STCISLAST        Ids Op       CE.Syn StcSyn)
-       (Import Def    : STCISDEFINED     Ids Op       CE.Syn StcSyn Var Last)
-       (Import StcClo : STCCLOCKING      Ids Op       CE.Syn StcSyn Last Var Def Syst Ord CE.Clo)
+       (Import Init   : STCISINIT        Ids Op       CE.Syn StcSyn)
+       (Import Def    : STCISDEFINED     Ids Op       CE.Syn StcSyn Var Init)
+       (Import StcClo : STCCLOCKING      Ids Op       CE.Syn StcSyn Init Var Def Syst Ord CE.Clo)
        (Import Free   : STCISFREE        Ids Op       CE.Syn StcSyn                        CE.IsF)
-       (Import Wdef   : STCWELLDEFINED   Ids Op       CE.Syn StcSyn Syst Ord Var Last Def CE.IsF Free)
+       (Import Wdef   : STCWELLDEFINED   Ids Op       CE.Syn StcSyn Syst Ord Var Init Def CE.IsF Free)
        (Import Sch    : EXT_STCSCHEDULER Ids Op       CE.Syn StcSyn).
 
   Section OCombine.
@@ -190,9 +190,9 @@ Module Type STCSCHEDULE
     - etransitivity; eauto.
   Qed.
 
-  Add Parametric Morphism : (lasts_of)
+  Add Parametric Morphism : (inits_of)
       with signature @Permutation trconstr ==> @Permutation ident
-        as lasts_of_permutation.
+        as inits_of_permutation.
   Proof.
     induction 1; simpl; auto.
     - cases; rewrite IHPermutation.
@@ -239,20 +239,20 @@ Module Type STCSCHEDULE
        s_subs  := b.(s_subs);
        s_in    := b.(s_in);
        s_vars  := b.(s_vars);
-       s_lasts := b.(s_lasts);
+       s_inits := b.(s_inits);
        s_out   := b.(s_out);
        s_tcs   := schedule_tcs b.(s_name) b.(s_tcs);
 
        s_ingt0            := b.(s_ingt0);
        s_nodup            := b.(s_nodup);
-       s_nodup_lasts_subs := b.(s_nodup_lasts_subs);
+       s_nodup_inits_subs := b.(s_nodup_inits_subs);
        s_good             := b.(s_good)
     |}.
   Next Obligation.
     rewrite schedule_tcs_permutation; apply s_subs_calls_of.
   Qed.
   Next Obligation.
-    rewrite schedule_tcs_permutation; apply s_lasts_in_tcs.
+    rewrite schedule_tcs_permutation; apply s_inits_in_tcs.
   Qed.
   Next Obligation.
     rewrite schedule_tcs_permutation; apply s_vars_out_in_tcs.
@@ -310,9 +310,9 @@ Module Type STCSCHEDULE
   Qed.
 
   Lemma scheduler_wt_trconstr:
-    forall P vars lasts tc,
-      wt_trconstr P vars lasts tc ->
-      wt_trconstr (schedule P) vars lasts tc.
+    forall P vars inits tc,
+      wt_trconstr P vars inits tc ->
+      wt_trconstr (schedule P) vars inits tc.
   Proof.
     induction P as [|b].
     - destruct tc; inversion_clear 1; eauto.
@@ -500,12 +500,12 @@ Module StcScheduleFun
        (Sem   : STCSEMANTICS     Ids Op OpAux CE.Syn Syn Syst Ord Str CE.Sem)
        (Typ   : STCTYPING        Ids Op       CE.Syn Syn CE.Typ)
        (Var   : STCISVARIABLE    Ids Op       CE.Syn Syn)
-       (Last  : STCISLAST        Ids Op       CE.Syn Syn)
-       (Def   : STCISDEFINED     Ids Op       CE.Syn Syn Var Last)
-       (Clo   : STCCLOCKING      Ids Op       CE.Syn Syn Last Var Def Syst Ord CE.Clo)
+       (Init  : STCISINIT        Ids Op       CE.Syn Syn)
+       (Def   : STCISDEFINED     Ids Op       CE.Syn Syn Var Init)
+       (Clo   : STCCLOCKING      Ids Op       CE.Syn Syn Init Var Def Syst Ord CE.Clo)
        (Free  : STCISFREE        Ids Op       CE.Syn Syn                        CE.IsF)
-       (Wdef  : STCWELLDEFINED   Ids Op       CE.Syn Syn Syst Ord Var Last Def CE.IsF Free)
+       (Wdef  : STCWELLDEFINED   Ids Op       CE.Syn Syn Syst Ord Var Init Def CE.IsF Free)
        (Sch   : EXT_STCSCHEDULER Ids Op       CE.Syn Syn)
-<: STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Last Def Clo Free Wdef Sch.
-  Include STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Last Def Clo Free Wdef Sch.
+<: STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Init Def Clo Free Wdef Sch.
+  Include STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Init Def Clo Free Wdef Sch.
 End StcScheduleFun.

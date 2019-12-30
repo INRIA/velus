@@ -41,7 +41,7 @@ module type SYNTAX =
       s_name : ident;
       s_in   : (ident * (typ * clock)) list;
       s_vars : (ident * (typ * clock)) list;
-      s_lasts: (ident * (const * clock)) list;
+      s_inits: (ident * (const * clock)) list;
       s_subs : (ident * ident) list;
       s_out  : (ident * (typ * clock)) list;
       s_tcs  : trconstr list }
@@ -71,7 +71,7 @@ module PrintFun
 
     include Coreexprlib.PrintFun (CE) (PrintOps)
 
-    let print_last p (id, (c0, ck)) =
+    let print_init p (id, (c0, ck)) =
       fprintf p "%a@ = %a%a"
         print_ident id
         PrintOps.print_const c0
@@ -112,7 +112,7 @@ module PrintFun
                          Stc.s_in     = inputs;
                          Stc.s_out    = outputs;
                          Stc.s_vars   = locals;
-                         Stc.s_lasts  = lasts;
+                         Stc.s_inits  = inits;
                          Stc.s_subs   = subs;
                          Stc.s_tcs    = tcs } =
       fprintf p "@[<v>\
@@ -127,7 +127,7 @@ module PrintFun
                  @[<v 2>{@;%a@;<0 -2>@]\
                  }@]@]@]@;}"
         print_ident name
-        (print_comma_list_as "init" print_last) lasts
+        (print_comma_list_as "init" print_init) inits
         (print_comma_list_as "sub" print_subsystem) subs
         print_decl_list inputs
         print_decl_list outputs

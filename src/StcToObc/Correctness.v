@@ -37,7 +37,7 @@ Module Type CORRECTNESS
        (Import Stc    : STC             Ids Op OpAux Str CE)
        (Import Obc    : OBC             Ids Op OpAux)
        (Import Trans  : TRANSLATION     Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
-       (Import Corres : STCMEMORYCORRES Ids Op       CE.Syn Stc.Syn Stc.Last).
+       (Import Corres : STCMEMORYCORRES Ids Op       CE.Syn Stc.Syn Stc.Init).
 
   Inductive eq_if_present: value -> option val -> Prop :=
   | EqP:
@@ -397,69 +397,69 @@ Module Type CORRECTNESS
   Lemma translate_reset_comp:
     forall prog me ve s me' ve',
       stmt_eval prog me ve (translate_reset s) (me', ve')
-      <-> stmt_eval prog me ve (reset_mems s.(s_lasts)) (add_mems s.(s_lasts) me, ve)
-        /\ stmt_eval prog (add_mems s.(s_lasts) me) ve (reset_insts s.(s_subs)) (me', ve').
+      <-> stmt_eval prog me ve (reset_mems s.(s_inits)) (add_mems s.(s_inits) me, ve)
+        /\ stmt_eval prog (add_mems s.(s_inits) me) ve (reset_insts s.(s_subs)) (me', ve').
   Proof.
     unfold translate_reset; split.
     - inversion_clear 1 as [| | |????????? StEval| |].
-      pose proof (reset_mems_spec (s_lasts s) prog me ve) as StEval'.
+      pose proof (reset_mems_spec (s_inits s) prog me ve) as StEval'.
       eapply stmt_eval_det with (2 := StEval') in StEval as (? & ?); subst.
       split; auto.
     - intros (? & ?); eauto using stmt_eval.
   Qed.
 
-  Lemma add_mems_reset_lasts:
+  Lemma add_mems_reset_inits:
     forall s me,
-      reset_lasts s (add_mems s.(s_lasts) me).
+      reset_inits s (add_mems s.(s_inits) me).
   Proof.
-    unfold reset_lasts; intros.
+    unfold reset_inits; intros.
     eapply find_val_add_mems_in; eauto.
-    apply s_nodup_lasts.
+    apply s_nodup_inits.
   Qed.
 
-  Lemma add_mems_state_closed_lasts:
-    forall lasts me,
-      state_closed_lasts (map fst lasts) me ->
-      state_closed_lasts (map fst lasts) (add_mems lasts me).
+  Lemma add_mems_state_closed_inits:
+    forall inits me,
+      state_closed_inits (map fst inits) me ->
+      state_closed_inits (map fst inits) (add_mems inits me).
   Proof.
     intros * Closed ? Find.
     apply not_None_is_Some in Find as (?& Find).
     apply find_val_add_mems_inv in Find.
-    destruct (in_dec ident_eq_dec x (map fst lasts)) as [|Hin]; auto.
+    destruct (in_dec ident_eq_dec x (map fst inits)) as [|Hin]; auto.
     rewrite <-fst_InMembers in Hin; apply Find in Hin.
     apply Closed, not_None_is_Some; eauto.
   Qed.
 
-  Lemma reset_insts_reset_lasts:
+  Lemma reset_insts_reset_inits:
     forall subs prog me ve me' ve' s,
       stmt_eval prog me ve (reset_insts subs) (me', ve') ->
-      reset_lasts s me ->
-      reset_lasts s me'.
+      reset_inits s me ->
+      reset_inits s me'.
   Proof.
     unfold reset_insts.
     induction subs; simpl.
     - inversion_clear 1; auto.
-    - intros * StEval Lasts ??? Hin.
+    - intros * StEval Inits ??? Hin.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHsubs in StEvals; eauto.
       rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
-      now apply reset_lasts_add_inst.
+      now apply reset_inits_add_inst.
   Qed.
 
-  Lemma reset_insts_state_closed_lasts:
-    forall subs lasts prog me ve me' ve',
+  Lemma reset_insts_state_closed_inits:
+    forall subs inits prog me ve me' ve',
       stmt_eval prog me ve (reset_insts subs) (me', ve') ->
-      state_closed_lasts lasts me ->
-      state_closed_lasts lasts me'.
+      state_closed_inits inits me ->
+      state_closed_inits inits me'.
   Proof.
     unfold reset_insts.
     induction subs; simpl.
     - inversion_clear 1; auto.
-    - intros * StEval Lasts ? Hin.
+    - intros * StEval Inits ? Hin.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHsubs in StEvals; eauto.
       rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
-      now apply state_closed_lasts_add_inst.
+      now apply state_closed_inits_add_inst.
   Qed.
 
   Lemma reset_insts_same_venv:
@@ -497,31 +497,31 @@ Module Type CORRECTNESS
     rewrite HH in Insts; auto.
   Qed.
 
-  Lemma call_reset_reset_lasts:
+  Lemma call_reset_reset_inits:
     forall me' P me f s P',
       find_system f P = Some (s, P') ->
       stmt_call_eval (translate P) me f reset [] me' [] ->
-      reset_lasts s me'.
+      reset_inits s me'.
   Proof.
     intros ?????? Find Rst ??? Hin.
     eapply call_reset_inv in Rst as (Rst & ?); eauto;
       apply translate_reset_comp in Rst as (? & ?).
-    eapply reset_insts_reset_lasts; eauto.
-    apply add_mems_reset_lasts; auto.
+    eapply reset_insts_reset_inits; eauto.
+    apply add_mems_reset_inits; auto.
   Qed.
 
-  Lemma call_reset_state_closed_lasts:
+  Lemma call_reset_state_closed_inits:
     forall me' P me f s P',
       find_system f P = Some (s, P') ->
       stmt_call_eval (translate P) me f reset [] me' [] ->
-      state_closed_lasts (map fst s.(s_lasts)) me ->
-      state_closed_lasts (map fst s.(s_lasts)) me'.
+      state_closed_inits (map fst s.(s_inits)) me ->
+      state_closed_inits (map fst s.(s_inits)) me'.
   Proof.
     intros ?????? Find Rst ?? Hin.
     eapply call_reset_inv in Rst as (Rst & ?); eauto;
       apply translate_reset_comp in Rst as (?& Rst).
-    eapply reset_insts_state_closed_lasts in Rst; eauto.
-    apply add_mems_state_closed_lasts; auto.
+    eapply reset_insts_state_closed_inits in Rst; eauto.
+    apply add_mems_state_closed_inits; auto.
   Qed.
 
   Lemma reset_insts_not_InMembers:
@@ -607,7 +607,7 @@ Module Type CORRECTNESS
     eapply Ordered_systems_find_system in Ord'; eauto.
     split.
     - econstructor; eauto.
-      + eapply call_reset_reset_lasts; eauto.
+      + eapply call_reset_reset_inits; eauto.
       + intros * Hin.
         eapply call_reset_inv in Rst as (Rst & ?); eauto;
           apply  translate_reset_comp in Rst as (? & ?).
@@ -619,7 +619,7 @@ Module Type CORRECTNESS
         * apply not_None_is_Some; eauto.
     - inversion_clear 1 as [????? Find' ? Insts]; rewrite Find' in Find; inv Find.
       econstructor; eauto.
-      + eapply call_reset_state_closed_lasts; eauto.
+      + eapply call_reset_state_closed_inits; eauto.
       + intros * Sub.
         eapply call_reset_inv in Rst as (Rst & ?); eauto;
           apply  translate_reset_comp in Rst as (?& Rst).
@@ -1157,8 +1157,8 @@ Module Type CORRECTNESS
       Memory_Corres [] S I S' me.
   Proof.
     split.
-    - split; intros Last.
-      + inv Last.
+    - split; intros Init.
+      + inv Init.
       + now apply value_corres_equal_memory.
     - split; [|split]; intros StpRst.
       + now apply state_corres_equal_memory.
@@ -1166,16 +1166,16 @@ Module Type CORRECTNESS
       + inv StpRst.
   Qed.
 
-  Lemma sem_trconstrs_is_last_in:
+  Lemma sem_trconstrs_is_init_in:
     forall tcs P base R S I S' x v,
       Forall (sem_trconstr P base R S I S') tcs ->
-      Is_last_in x tcs ->
+      Is_init_in x tcs ->
       sem_var_instant R x (present v) ->
       find_val x S = Some v.
   Proof.
     induction tcs; inversion_clear 1 as [|?? Sem];
-      inversion_clear 1 as [?? Last|]; eauto; intros.
-    inv Last; inv Sem.
+      inversion_clear 1 as [?? Init|]; eauto; intros.
+    inv Init; inv Sem.
     cases; congruence.
   Qed.
 
@@ -1218,7 +1218,7 @@ Module Type CORRECTNESS
       reset_consistency alltcs ->
       (forall i f Si, In (i, f) (resets_of alltcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
       (forall i f Ii, In (i, f) (resets_of alltcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
-      (forall x, PS.In x mems -> Is_last_in x alltcs) ->
+      (forall x, PS.In x mems -> Is_init_in x alltcs) ->
       (forall x, In x inputs -> ~ Is_defined_in x alltcs) ->
       (forall x c,
           In x inputs ->
@@ -1237,7 +1237,7 @@ Module Type CORRECTNESS
     induction tcs' as [|tc]; simpl;
       intros ? ? ? ? ? ? ? ? ? ? ? ? ?
              Htcs Hwc Hnormal Hcm Hcvars Hmems Ord Wsch Vars Defs StepReset
-             Closed TransClosed SpecLast SpecInput EquivInput EquivInput' Corres.
+             Closed TransClosed SpecInit SpecInput EquivInput EquivInput' Corres.
     - exists me, ve. split; eauto using stmt_eval; split; auto.
       + now apply Memory_Corres_empty_equal_memory.
       + inversion 1.
@@ -1252,7 +1252,7 @@ Module Type CORRECTNESS
       pose proof Htcs as Htcs'; apply Forall_app_weaken in Htcs'; inv Htcs'.
       pose proof Hwc as Hwc'; apply Forall_app_weaken in Hwc'; inv Hwc'.
       pose proof Hnormal as Hnormal'; apply Forall_app_weaken in Hnormal'; inv Hnormal'.
-      rewrite List_shift_first in Wsch, Vars, Defs, StepReset, Htcs, SpecLast, SpecInput,
+      rewrite List_shift_first in Wsch, Vars, Defs, StepReset, Htcs, SpecInit, SpecInput,
                                   Closed, TransClosed, Hwc, Hnormal.
       edestruct IHtcs' with (ve := ve) (me := me) as (me' & ve' &?&?& Env); eauto.
       edestruct trconstr_cons_correct with (ve := ve') (me := me') as (me'' & ve'' &?&?&?);
@@ -1268,7 +1268,7 @@ Module Type CORRECTNESS
         * erewrite not_Is_defined_in_stmt_eval_menv_inv; eauto.
           rewrite Corres.
           destruct v; simpl; auto.
-          eapply sem_trconstrs_is_last_in in Htcs; eauto; rewrite Htcs; auto.
+          eapply sem_trconstrs_is_init_in in Htcs; eauto; rewrite Htcs; auto.
         * destruct Free as [IsVar|].
           -- eapply Env in IsVar; eauto.
              destruct v; simpl; auto.
@@ -1308,7 +1308,7 @@ Module Type CORRECTNESS
       NoDup (inputs ++ variables tcs) ->
       NoDup (defined tcs) ->
       reset_consistency tcs ->
-      (forall x, PS.In x mems -> Is_last_in x tcs) ->
+      (forall x, PS.In x mems -> Is_init_in x tcs) ->
       (forall x, In x inputs -> ~ Is_defined_in x tcs) ->
       (forall x c,
           In x inputs ->
@@ -1338,35 +1338,35 @@ Module Type CORRECTNESS
   Qed.
 
  Lemma Memory_Corres_equal_memory:
-    forall P tcs S I S' me lasts subs,
+    forall P tcs S I S' me inits subs,
       Memory_Corres tcs S I S' me ->
-      state_closed_lasts lasts S ->
+      state_closed_inits inits S ->
       state_closed_insts P subs S ->
-      state_closed_lasts lasts S' ->
+      state_closed_inits inits S' ->
       state_closed_insts P subs S' ->
-      (forall x, In x lasts <-> Is_last_in x tcs) ->
+      (forall x, In x inits <-> Is_init_in x tcs) ->
       (forall i, InMembers i subs -> exists k, Is_sub_in i k tcs) ->
       (forall i, Reset_in i tcs -> Step_in i tcs) ->
       me ≋ S'.
   Proof.
-    intros * (Lasts & Insts) LastClosed InstsClosed LastClosed' InstsClosed'
-           SpecLast SpecInst WSCH.
+    intros * (Inits & Insts) InitClosed InstsClosed InitClosed' InstsClosed'
+           SpecInit SpecInst WSCH.
     split.
-    - intro x; destruct (Is_last_in_dec x tcs) as [Last|Nlast].
-      + apply Lasts in Last; auto.
+    - intro x; destruct (Is_init_in_dec x tcs) as [Init|Ninit].
+      + apply Inits in Init; auto.
       + assert (find_val x S = None).
         { apply not_Some_is_None; intros * Find;
-            apply Nlast, SpecLast, LastClosed.
+            apply Ninit, SpecInit, InitClosed.
           apply not_None_is_Some; eauto.
         }
         assert (find_val x S' = None) as E'.
         { apply not_Some_is_None; intros * Find;
-            apply Nlast, SpecLast, LastClosed'.
+            apply Ninit, SpecInit, InitClosed'.
           apply not_None_is_Some; eauto.
         }
         unfold value_corres, find_val in *.
-        apply Lasts in Nlast.
-        rewrite E'; rewrite <-Nlast; auto.
+        apply Inits in Ninit.
+        rewrite E'; rewrite <-Ninit; auto.
     - split.
       + setoid_rewrite Env.In_find; intro i.
         destruct (Step_in_dec i tcs) as [Step|Nstep].
@@ -1464,7 +1464,7 @@ Module Type CORRECTNESS
         *{ eapply sem_clocked_var_instant_tcs with (P := P') (tcs := s_tcs s); eauto.
            - apply fst_NoDupMembers; rewrite 3 map_app, 4 map_fst_idck.
              apply s_nodup.
-           - rewrite s_defined, <-s_vars_out_in_tcs, <-s_lasts_in_tcs,
+           - rewrite s_defined, <-s_vars_out_in_tcs, <-s_inits_in_tcs,
              <-app_assoc, 2 map_app, 3 map_fst_idck; auto.
          }
       + intros * Hin Hnin.
@@ -1514,8 +1514,8 @@ Module Type CORRECTNESS
         apply s_nodup_vars.
       + apply s_nodup_defined.
       + apply s_reset_consistency.
-      + intros; apply lasts_of_In, ps_from_list_In; auto.
-        rewrite <-s_lasts_in_tcs; auto.
+      + intros; apply inits_of_In, ps_from_list_In; auto.
+        rewrite <-s_inits_in_tcs; auto.
       + intros; apply s_ins_not_def, fst_InMembers; auto.
       + simpl; intros; eapply eq_if_present_adds_opt; eauto; rewrite map_fst_idty; auto.
       + simpl; rewrite map_fst_idty; intros * Find.
@@ -1546,7 +1546,7 @@ Module Type CORRECTNESS
                      rewrite H in H'; inv H'
                    end.
             eapply Memory_Corres_equal_memory; eauto.
-            - intro; now rewrite s_lasts_in_tcs, lasts_of_In.
+            - intro; now rewrite s_inits_in_tcs, inits_of_In.
             - setoid_rewrite s_subs_calls_of; apply calls_of_Is_sub_in.
             - intros * Rst; apply s_no_single_reset, Step_with_reset_in_Step_in in Rst; auto.
           }
@@ -1603,7 +1603,7 @@ Module CorrectnessFun
        (Stc    : STC             Ids Op OpAux Str CE)
        (Obc    : OBC             Ids Op OpAux)
        (Trans  : TRANSLATION     Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
-       (Corres : STCMEMORYCORRES Ids Op       CE.Syn Stc.Syn Stc.Last)
+       (Corres : STCMEMORYCORRES Ids Op       CE.Syn Stc.Syn Stc.Init)
 <: CORRECTNESS Ids Op OpAux Str CE Stc Obc Trans Corres.
   Include CORRECTNESS Ids Op OpAux Str CE Stc Obc Trans Corres.
 End CorrectnessFun.

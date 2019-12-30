@@ -150,7 +150,7 @@ Module Type STC2OBCTYPING
     forall P s,
       wt_system P s ->
       wt_method (translate P) (s_subs s)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s))
+                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_inits s))
                 (step_method s).
   Proof.
     unfold wt_system, wt_method; intros * WT; simpl.
@@ -179,19 +179,19 @@ Module Type STC2OBCTYPING
           apply incl_cons' in Subs' as (? & ?); auto).
 
     rewrite 2 idty_app in WTtc.
-    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s)) in *;
+    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_inits s)) in *;
       set (vars := idty (s_in s) ++ idty (s_vars s) ++ idty (s_out s)) in *;
       set (nvars := vars ++ mems) in *.
     apply wt_stmt_fold_left_shift; intuition.
     constructor; eauto using wt_stmt.
     assert (forall x ty,
                In (x, ty) nvars ->
-               if PS.mem x (ps_from_list (map fst (s_lasts s)))
+               if PS.mem x (ps_from_list (map fst (s_inits s)))
                then In (x, ty) mems
                else In (x, ty) vars)
     as NvarsSpec.
     { clear.
-      assert (map fst (s_lasts s) = map fst mems) as ->
+      assert (map fst (s_inits s) = map fst mems) as ->
           by (subst mems; rewrite map_map; simpl; auto).
       subst nvars.
       assert (NoDupMembers (vars ++ mems)) as Nodup.
@@ -238,14 +238,14 @@ Module Type STC2OBCTYPING
   Hint Resolve step_wt.
 
   Lemma reset_mems_wt:
-    forall P insts mems lasts,
-      (forall x c ck, In (x, (c, ck)) lasts -> In (x, type_const c) mems) ->
-      wt_stmt (translate P) insts mems [] (reset_mems lasts).
+    forall P insts mems inits,
+      (forall x c ck, In (x, (c, ck)) inits -> In (x, type_const c) mems) ->
+      wt_stmt (translate P) insts mems [] (reset_mems inits).
   Proof.
     unfold reset_mems; intros * Spec.
-    induction lasts as [|(x, (c, ck))]; simpl; eauto using wt_stmt.
+    induction inits as [|(x, (c, ck))]; simpl; eauto using wt_stmt.
     rewrite wt_stmt_fold_left_lift; split; auto.
-    - apply IHlasts.
+    - apply IHinits.
       intros; eapply Spec; right; eauto.
     - constructor; eauto using wt_stmt.
       constructor; eauto using wt_exp; simpl; auto.
@@ -295,7 +295,7 @@ Module Type STC2OBCTYPING
     forall P s,
       wt_system P s ->
       wt_method (translate P) (s_subs s)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s))
+                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_inits s))
                 (reset_method s).
   Proof.
     unfold wt_system, wt_method; intros * WT; simpl.
@@ -303,7 +303,7 @@ Module Type STC2OBCTYPING
     constructor.
     - clear WT.
       apply reset_mems_wt.
-      intros * Hin; induction (s_lasts s) as [|(x', (c', ck'))];
+      intros * Hin; induction (s_inits s) as [|(x', (c', ck'))];
         simpl; inv Hin; auto.
       left; congruence.
     - apply reset_insts_wt; auto.

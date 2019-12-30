@@ -18,7 +18,7 @@ From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Clocks.
 
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsInit.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -30,7 +30,7 @@ Module Type STCISDEFINED
        (Import CESyn : CESYNTAX          Op)
        (Import Syn   : STCSYNTAX     Ids Op CESyn)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn).
+       (Import Init  : STCISINIT     Ids Op CESyn Syn).
 
   Inductive Is_defined_in_tc: ident -> trconstr -> Prop :=
   | DefTcDef:
@@ -47,10 +47,10 @@ Module Type STCISDEFINED
   Definition Is_defined_in (x: ident) (tcs: list trconstr) : Prop :=
     Exists (Is_defined_in_tc x) tcs.
 
-  Lemma Is_defined_Is_variable_Is_last_in:
+  Lemma Is_defined_Is_variable_Is_init_in:
     forall tcs x,
       Is_defined_in x tcs <->
-      Is_variable_in x tcs \/ Is_last_in x tcs.
+      Is_variable_in x tcs \/ Is_init_in x tcs.
   Proof.
     induction tcs; split.
     - inversion 1.
@@ -98,11 +98,11 @@ Module Type STCISDEFINED
     intros * Hin Hdef.
     pose proof (s_nodup s) as Nodup.
     eapply (NoDup_app_In x) in Nodup.
-    - apply Is_defined_Is_variable_Is_last_in in Hdef as [Var|Last];
+    - apply Is_defined_Is_variable_Is_init_in in Hdef as [Var|Init];
         apply Nodup; rewrite app_assoc, in_app.
       + apply Is_variable_in_variables in Var; rewrite <-s_vars_out_in_tcs in Var;
           auto.
-      + apply lasts_of_In in Last; rewrite <-s_lasts_in_tcs in Last; auto.
+      + apply inits_of_In in Init; rewrite <-s_inits_in_tcs in Init; auto.
     - apply fst_InMembers; auto.
   Qed.
 
@@ -192,7 +192,7 @@ Module Type STCISDEFINED
 
   Lemma s_defined:
     forall s,
-      Permutation.Permutation (defined (s_tcs s)) (variables (s_tcs s) ++ lasts_of (s_tcs s)).
+      Permutation.Permutation (defined (s_tcs s)) (variables (s_tcs s) ++ inits_of (s_tcs s)).
   Proof.
     unfold defined, variables; intro;
       induction (s_tcs s) as [|[]]; simpl; auto.
@@ -205,29 +205,29 @@ Module Type STCISDEFINED
   Proof.
     intros; eapply Permutation.Permutation_NoDup.
     - apply Permutation.Permutation_sym, s_defined.
-    - rewrite <-s_lasts_in_tcs, <-s_vars_out_in_tcs.
+    - rewrite <-s_inits_in_tcs, <-s_vars_out_in_tcs.
       rewrite <-app_assoc.
       eapply NoDup_app_weaken.
       rewrite Permutation.Permutation_app_comm.
       apply s_nodup.
   Qed.
 
-  Lemma Is_last_in_not_Is_variable_in:
+  Lemma Is_init_in_not_Is_variable_in:
     forall tcs x,
       NoDup (defined tcs) ->
-      Is_last_in x tcs ->
+      Is_init_in x tcs ->
       ~ Is_variable_in x tcs.
   Proof.
-    induction tcs; intros * Nodup Last Var;
-      inversion_clear Last as [?? IsLast|];
+    induction tcs; intros * Nodup Init Var;
+      inversion_clear Init as [?? IsInit|];
       inversion_clear Var as [?? IsVar|?? IsVar_in].
-    - inv IsLast; inv IsVar.
+    - inv IsInit; inv IsVar.
     - apply Is_variable_in_Is_defined_in in IsVar_in.
-      inv IsLast.
+      inv IsInit.
       simpl in Nodup; inv Nodup.
       now apply Is_defined_in_defined in IsVar_in.
     - apply Is_variable_in_tc_Is_defined_in_tc in IsVar.
-      assert (Is_defined_in x tcs) as Hins by (apply Is_defined_Is_variable_Is_last_in; auto).
+      assert (Is_defined_in x tcs) as Hins by (apply Is_defined_Is_variable_Is_init_in; auto).
       apply Is_defined_in_defined in Hins; apply Is_defined_in_defined_tc in IsVar.
       simpl in Nodup; eapply NoDup_app_In in Nodup; eauto.
     - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
@@ -254,7 +254,7 @@ Module StcIsDefinedFun
        (CESyn : CESYNTAX          Op)
        (Syn   : STCSYNTAX     Ids Op CESyn)
        (Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Last  : STCISLAST     Ids Op CESyn Syn)
-<: STCISDEFINED Ids Op CESyn Syn Var Last.
-  Include STCISDEFINED Ids Op CESyn Syn Var Last.
+       (Init  : STCISINIT     Ids Op CESyn Syn)
+<: STCISDEFINED Ids Op CESyn Syn Var Init.
+  Include STCISDEFINED Ids Op CESyn Syn Var Init.
 End StcIsDefinedFun.

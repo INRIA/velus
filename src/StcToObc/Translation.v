@@ -119,7 +119,7 @@ Module Type TRANSLATION
   Qed.
 
   Program Definition step_method (s: system) : method :=
-    let memids := map fst s.(s_lasts) in
+    let memids := map fst s.(s_inits) in
     let mems := ps_from_list memids in
     let clkvars := Env.adds_with snd s.(s_out)
                     (Env.adds_with snd s.(s_vars)
@@ -147,7 +147,7 @@ Module Type TRANSLATION
     fold_left (fun s xf => Comp s (Call [] (snd xf) (fst xf) reset [])) insts Skip.
 
   Definition translate_reset (b: system) : stmt :=
-    Comp (reset_mems b.(s_lasts)) (reset_insts b.(s_subs)).
+    Comp (reset_mems b.(s_inits)) (reset_insts b.(s_subs)).
 
   Hint Constructors NoDupMembers.
 
@@ -161,12 +161,12 @@ Module Type TRANSLATION
 
   Program Definition translate_system (b: system) : class :=
     {| c_name    := b.(s_name);
-       c_mems    := map (fun xc => (fst xc, type_const (fst (snd xc)))) b.(s_lasts);
+       c_mems    := map (fun xc => (fst xc, type_const (fst (snd xc)))) b.(s_inits);
        c_objs    := b.(s_subs);
        c_methods := [ step_method b; reset_method b ]
     |}.
   Next Obligation.
-    rewrite map_map; simpl; apply s_nodup_lasts_subs.
+    rewrite map_map; simpl; apply s_nodup_inits_subs.
   Qed.
   Next Obligation.
     constructor; auto using NoDup.

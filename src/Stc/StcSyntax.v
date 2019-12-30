@@ -71,11 +71,11 @@ Module Type STCSYNTAX
       Step_with_reset_in s rst tcs ->
       if rst then Reset_in s tcs else ~ Reset_in s tcs.
 
-  Fixpoint lasts_of (tcs: list trconstr) : list ident :=
+  Fixpoint inits_of (tcs: list trconstr) : list ident :=
     match tcs with
     | [] => []
-    | TcNext x _ _ :: tcs => x :: (lasts_of tcs)
-    | _ :: tcs => lasts_of tcs
+    | TcNext x _ _ :: tcs => x :: (inits_of tcs)
+    | _ :: tcs => inits_of tcs
     end.
 
   Fixpoint calls_of (tcs: list trconstr) : list (ident * ident) :=
@@ -94,30 +94,30 @@ Module Type STCSYNTAX
 
   Record system :=
     System {
-        s_name : ident;
-        s_in   : list (ident * (type * clock));
-        s_vars : list (ident * (type * clock));
-        s_lasts: list (ident * (const * clock));
-        s_subs : list (ident * ident);
-        s_out  : list (ident * (type * clock));
-        s_tcs  : list trconstr;
+        s_name : ident;                           (* name *)
+        s_in   : list (ident * (type * clock));   (* inputs *)
+        s_vars : list (ident * (type * clock));   (* local variables *)
+        s_inits: list (ident * (const * clock));  (* state variables *)
+        s_subs : list (ident * ident);            (* sub-instances *)
+        s_out  : list (ident * (type * clock));   (* outputs *)
+        s_tcs  : list trconstr;                   (* transition constraints *)
 
         s_ingt0            : 0 < length s_in;
 
         s_nodup            : NoDup (map fst s_in ++ map fst s_vars ++
-                                        map fst s_out ++ map fst s_lasts);
-        s_nodup_lasts_subs : NoDup (map fst s_lasts ++ map fst s_subs);
+                                        map fst s_out ++ map fst s_inits);
+        s_nodup_inits_subs : NoDup (map fst s_inits ++ map fst s_subs);
 
         s_subs_calls_of    : Permutation s_subs (calls_of s_tcs);
 
-        s_lasts_in_tcs     : Permutation (map fst s_lasts) (lasts_of s_tcs);
+        s_inits_in_tcs     : Permutation (map fst s_inits) (inits_of s_tcs);
         s_vars_out_in_tcs  : Permutation (map fst s_vars ++ map fst s_out) (variables s_tcs);
 
         s_reset_incl       : incl (resets_of s_tcs) (calls_of s_tcs);
         s_reset_consistency: reset_consistency s_tcs;
 
         s_good             : Forall ValidId (s_in ++ s_vars ++ s_out)
-                             /\ Forall ValidId s_lasts
+                             /\ Forall ValidId s_inits
                              /\ Forall ValidId s_subs
                              /\ valid s_name
       }.
@@ -189,8 +189,8 @@ Module Type STCSYNTAX
     change f with (snd (i, f)); apply in_map; auto.
   Qed.
 
-  Lemma s_nodup_lasts:
-    forall b, NoDupMembers b.(s_lasts).
+  Lemma s_nodup_inits:
+    forall b, NoDupMembers b.(s_inits).
   Proof.
     intro; pose proof (s_nodup b) as Nodup.
     apply fst_NoDupMembers.
@@ -202,7 +202,7 @@ Module Type STCSYNTAX
   Lemma s_nodup_subs:
     forall b, NoDupMembers b.(s_subs).
   Proof.
-    intro; pose proof (s_nodup_lasts_subs b) as Nodup.
+    intro; pose proof (s_nodup_inits_subs b) as Nodup.
     rewrite Permutation_app_comm in Nodup.
     apply NoDup_app_weaken in Nodup.
     apply fst_NoDupMembers; auto.

@@ -219,8 +219,8 @@ Module Type STC2OBCINVARIANTS
     - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
       rewrite 2 map_app, <-2 app_assoc.
       apply s_nodup.
-    - intros; eapply Is_last_in_not_Is_variable_in; eauto.
-      rewrite lasts_of_In, <-ps_from_list_In, <-s_lasts_in_tcs; auto.
+    - intros; eapply Is_init_in_not_Is_variable_in; eauto.
+      rewrite inits_of_In, <-ps_from_list_In, <-s_inits_in_tcs; auto.
     - intros; apply s_ins_not_def, fst_InMembers; auto.
   Qed.
 
@@ -390,16 +390,16 @@ Module Type STC2OBCINVARIANTS
   Qed.
 
   Lemma No_Overwrites_reset_mems:
-    forall lasts,
-      NoDupMembers lasts ->
-      No_Overwrites (reset_mems lasts).
+    forall inits,
+      NoDupMembers inits ->
+      No_Overwrites (reset_mems inits).
   Proof.
     unfold reset_mems; intros * Nodup.
     assert (No_Overwrites Skip) as NOS by constructor.
-    assert (forall x, InMembers x lasts -> ~ Can_write_in x Skip) as CWIS by inversion 2.
+    assert (forall x, InMembers x inits -> ~ Can_write_in x Skip) as CWIS by inversion 2.
     revert NOS CWIS; generalize Skip.
-    induction lasts as [|(x, (c0, ck))]; simpl; auto; inv Nodup.
-    intros; apply IHlasts; auto.
+    induction inits as [|(x, (c0, ck))]; simpl; auto; inv Nodup.
+    intros; apply IHinits; auto.
     - constructor; auto.
       + inversion 2; subst; eapply CWIS; eauto.
       + inversion_clear 1; auto.
@@ -416,13 +416,13 @@ Module Type STC2OBCINVARIANTS
     constructor.
     - intros; apply not_Can_write_in_reset_insts.
     - intros * CWI ?; eapply not_Can_write_in_reset_insts; eauto.
-    - apply No_Overwrites_reset_mems, s_nodup_lasts.
+    - apply No_Overwrites_reset_mems, s_nodup_inits.
     - apply No_Overwrites_reset_inst.
   Qed.
 
   Lemma translate_system_No_Overwrites:
     forall b m,
-      Is_well_sch (map fst (s_in b)) (ps_from_list (map fst (s_lasts b))) (s_tcs b) ->
+      Is_well_sch (map fst (s_in b)) (ps_from_list (map fst (s_inits b))) (s_tcs b) ->
       In m (translate_system b).(c_methods) ->
       No_Overwrites m.(m_body).
   Proof.

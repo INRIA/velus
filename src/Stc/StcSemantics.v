@@ -44,14 +44,14 @@ Module Type STCSEMANTICS
 
   Definition state := memory val.
 
-  Definition state_closed_lasts (lasts: list ident) (S: state) : Prop :=
-    forall x, find_val x S <> None -> In x lasts.
+  Definition state_closed_inits (inits: list ident) (S: state) : Prop :=
+    forall x, find_val x S <> None -> In x inits.
 
   Inductive state_closed: program -> ident -> state -> Prop :=
     state_closed_intro:
       forall P f S s P',
         find_system f P = Some (s, P') ->
-        state_closed_lasts (map fst s.(s_lasts)) S ->
+        state_closed_inits (map fst s.(s_inits)) S ->
         (forall i S',
             find_inst i S = Some S' ->
             exists g,
@@ -65,16 +65,16 @@ Module Type STCSEMANTICS
       exists g, In (i, g) subs
            /\ state_closed P g Si.
 
-  Definition reset_lasts (s: system) (S0: state) : Prop :=
+  Definition reset_inits (s: system) (S0: state) : Prop :=
     forall x c ck,
-      In (x, (c, ck)) s.(s_lasts) ->
+      In (x, (c, ck)) s.(s_inits) ->
       find_val x S0 = Some (sem_const c).
 
   Inductive initial_state: program -> ident -> state -> Prop :=
     initial_state_intro:
       forall P f S0 s P',
         find_system f P = Some (s, P') ->
-        reset_lasts s S0 ->
+        reset_inits s S0 ->
         (forall i g,
             In (i, g) s.(s_subs) ->
             exists Si0,
@@ -236,9 +236,9 @@ Module Type STCSEMANTICS
 
   End LoopCoind.
 
-  Add Parametric Morphism system : (reset_lasts system)
+  Add Parametric Morphism system : (reset_inits system)
       with signature equal_memory ==> Basics.impl
-        as reset_lasts_equal_memory.
+        as reset_inits_equal_memory.
   Proof.
     intros * E Rst ??? Hin.
     rewrite <-E; apply Rst in Hin; auto.
@@ -264,11 +264,11 @@ Module Type STCSEMANTICS
       symmetry in Hv'. eauto.
   Qed.
 
-  Add Parametric Morphism lasts : (state_closed_lasts lasts)
+  Add Parametric Morphism inits : (state_closed_inits inits)
       with signature equal_memory ==> Basics.impl
-        as state_closed_lasts_equal_memory.
+        as state_closed_inits_equal_memory.
   Proof.
-    unfold state_closed_lasts.
+    unfold state_closed_inits.
     intros * E Closed ? Find.
     apply Closed; rewrite E; auto.
   Qed.
@@ -353,11 +353,11 @@ Module Type STCSEMANTICS
       + now rewrite <-E.
   Qed.
 
-  Add Parametric Morphism : (state_closed_lasts)
+  Add Parametric Morphism : (state_closed_inits)
       with signature (@Permutation ident) ==> eq ==> Basics.impl
-        as state_closed_lasts_permutation.
+        as state_closed_inits_permutation.
   Proof.
-    unfold state_closed_lasts.
+    unfold state_closed_inits.
     intros * E ? Closed ? Find.
     rewrite <-E; auto.
   Qed.
@@ -384,21 +384,21 @@ Module Type STCSEMANTICS
     - rewrite find_system_other in Find; eauto.
   Qed.
 
-  Fact reset_lasts_add_inst:
+  Fact reset_inits_add_inst:
     forall s S0 i Si0,
-      reset_lasts s S0 ->
-      reset_lasts s (add_inst i Si0 S0).
+      reset_inits s S0 ->
+      reset_inits s (add_inst i Si0 S0).
   Proof.
-    unfold reset_lasts;
+    unfold reset_inits;
       setoid_rewrite find_val_add_inst; auto.
   Qed.
 
-  Fact state_closed_lasts_add_inst:
-    forall lasts S i Si,
-      state_closed_lasts lasts S ->
-      state_closed_lasts lasts (add_inst i Si S).
+  Fact state_closed_inits_add_inst:
+    forall inits S i Si,
+      state_closed_inits inits S ->
+      state_closed_inits inits (add_inst i Si S).
   Proof.
-    unfold state_closed_lasts;
+    unfold state_closed_inits;
       setoid_rewrite find_val_add_inst; auto.
   Qed.
 
@@ -563,13 +563,13 @@ Module Type STCSEMANTICS
         intro E; apply Hnini; rewrite E; constructor.
   Qed.
 
-  Lemma reset_lasts_det:
+  Lemma reset_inits_det:
     forall P f S S' s P',
       state_closed P f S ->
       state_closed P f S' ->
       find_system f P = Some (s, P') ->
-      reset_lasts s S ->
-      reset_lasts s S' ->
+      reset_inits s S ->
+      reset_inits s S' ->
       Env.Equal (values S) (values S').
   Proof.
     intros * Closed Closed' Find Rst Rst' x.
@@ -577,7 +577,7 @@ Module Type STCSEMANTICS
       rewrite Find' in Find; inv Find.
     inversion_clear Closed' as [????? Find Spec'];
       rewrite Find' in Find; inv Find.
-    unfold state_closed_lasts, reset_lasts, find_val in *.
+    unfold state_closed_inits, reset_inits, find_val in *.
     destruct (Env.find x (values S)) eqn: E, (Env.find x (values S')) eqn: E'; auto.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
       apply Spec, fst_InMembers, InMembers_In in E1 as ((? & ?) & Hin).
@@ -612,7 +612,7 @@ Module Type STCSEMANTICS
              rewrite H in H'; inv H'
            end.
     constructor.
-    - eapply reset_lasts_det; eauto using state_closed.
+    - eapply reset_inits_det; eauto using state_closed.
     - unfold find_inst in *.
       split.
       + setoid_rewrite Env.In_find.
@@ -639,8 +639,8 @@ Module Type STCSEMANTICS
         sem_system P f S xs ys S' ->
         absent_list xs ->
         S' ≋ S) ->
-    state_closed_lasts (lasts_of tcs) S ->
-    state_closed_lasts (lasts_of tcs) S' ->
+    state_closed_inits (inits_of tcs) S ->
+    state_closed_inits (inits_of tcs) S' ->
     state_closed_insts P (calls_of tcs) S ->
     state_closed_insts P (calls_of tcs) S' ->
     (forall s rst, Step_with_reset_in s rst tcs ->
@@ -648,17 +648,17 @@ Module Type STCSEMANTICS
     Forall (sem_trconstr P false R S I S') tcs ->
     S' ≋ S.
   Proof.
-    intros * IH Lasts Lasts' Insts Insts' Spec Htcs.
+    intros * IH Inits Inits' Insts Insts' Spec Htcs.
     constructor.
 
     - clear Insts Insts' Spec.
       intros x.
-      unfold state_closed_lasts, find_val in *.
-      specialize (Lasts x); specialize (Lasts' x).
+      unfold state_closed_inits, find_val in *.
+      specialize (Inits x); specialize (Inits' x).
       destruct (Env.find x (values S)) eqn: Find;
         destruct (Env.find x (values S')) eqn: Find'; auto.
-      + assert (In x (lasts_of tcs)) as Hin by (apply Lasts; congruence).
-        clear Lasts Lasts'.
+      + assert (In x (inits_of tcs)) as Hin by (apply Inits; congruence).
+        clear Inits Inits'.
         induction tcs as [|[]]; simpl in Hin; try contradiction;
           inversion_clear Htcs as [|?? Htc]; auto.
         destruct Hin; auto; subst.
@@ -667,8 +667,8 @@ Module Type STCSEMANTICS
         inversion Exp as [???? Clock|];
           [contradict Clock; apply not_subrate_clock|]; subst.
         congruence.
-      + assert (In x (lasts_of tcs)) as Hin by (apply Lasts; congruence).
-        clear Lasts Lasts'.
+      + assert (In x (inits_of tcs)) as Hin by (apply Inits; congruence).
+        clear Inits Inits'.
         induction tcs as [|[]]; simpl in Hin; try contradiction;
           inversion_clear Htcs as [|?? Htc]; auto.
         destruct Hin; auto; subst.
@@ -677,15 +677,15 @@ Module Type STCSEMANTICS
         inversion Exp as [???? Clock|];
           [contradict Clock; apply not_subrate_clock|]; subst.
         congruence.
-      + assert (In x (lasts_of tcs)) as Hin by (apply Lasts'; congruence).
-        clear Lasts Lasts'.
+      + assert (In x (inits_of tcs)) as Hin by (apply Inits'; congruence).
+        clear Inits Inits'.
         induction tcs as [|[]]; simpl in Hin; try contradiction;
           inversion_clear Htcs as [|?? Htc]; auto.
         destruct Hin; auto; subst.
         inversion_clear Htc as [|?????????? Find1 ? Exp Find1'| |]; unfold find_val in *.
         congruence.
 
-    - clear Lasts Lasts'.
+    - clear Inits Inits'.
       constructor.
       + setoid_rewrite Env.In_find.
         unfold state_closed_insts, find_inst in *.
@@ -794,13 +794,13 @@ Module Type STCSEMANTICS
         * intros; eapply IHP; eauto.
         * rewrite <-s_vars_out_in_tcs.
           apply in_app; auto.
-      + inversion_clear Closed as [?????? Lasts Insts];
-          inversion_clear Closed' as [?????? Lasts' Insts'].
+      + inversion_clear Closed as [?????? Inits Insts];
+          inversion_clear Closed' as [?????? Inits' Insts'].
         repeat match goal with
                  H: find_system ?b ?P = _, H': find_system ?b ?P = _ |- _ =>
                  rewrite H in H'; inv H'
                end.
-        rewrite s_lasts_in_tcs in Lasts, Lasts'.
+        rewrite s_inits_in_tcs in Inits, Inits'.
         setoid_rewrite s_subs_calls_of in Insts;
           setoid_rewrite s_subs_calls_of in Insts'.
         eapply sem_trconstrs_absent_states; eauto.
@@ -814,11 +814,11 @@ Module Type STCSEMANTICS
       eapply find_system_later_not_Is_system_in; eauto using Ordered_systems.
   Qed.
 
-  Lemma state_closed_lasts_empty:
-    forall lasts,
-      state_closed_lasts lasts (empty_memory _).
+  Lemma state_closed_inits_empty:
+    forall inits,
+      state_closed_inits inits (empty_memory _).
   Proof.
-    unfold state_closed_lasts; setoid_rewrite find_val_gempty; intuition.
+    unfold state_closed_inits; setoid_rewrite find_val_gempty; intuition.
   Qed.
 
   Lemma state_closed_empty:
@@ -828,7 +828,7 @@ Module Type STCSEMANTICS
   Proof.
     intros * Find.
     econstructor; eauto.
-    - apply state_closed_lasts_empty.
+    - apply state_closed_inits_empty.
     - setoid_rewrite find_inst_gempty; congruence.
   Qed.
 
@@ -836,12 +836,12 @@ Module Type STCSEMANTICS
     forall P f S xs ys S' x s P',
       sem_system P f S xs ys S' ->
       find_system f P = Some (s, P') ->
-      In x (map fst (s_lasts s)) ->
+      In x (map fst (s_inits s)) ->
       find_val x S <> None.
   Proof.
     inversion_clear 1 as [????????? Find ??? Htcs]; intros Find' Hin.
     rewrite Find in Find'; inv Find'.
-    rewrite s_lasts_in_tcs in Hin.
+    rewrite s_inits_in_tcs in Hin.
     induction Htcs as [|[] ? Htc]; simpl in *; try contradiction; auto.
     destruct Hin; subst; auto.
     inv Htc; congruence.

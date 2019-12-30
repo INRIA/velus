@@ -20,7 +20,7 @@ From Velus Require Import Clocks.
 
 From Velus Require Import VelusMemory.
 
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsInit.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -31,7 +31,7 @@ Module Type STCMEMORYCORRES
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX      Op)
        (Import Syn   : STCSYNTAX Ids Op CESyn)
-       (Import Last  : STCISLAST Ids Op CESyn Syn).
+       (Import Init  : STCISINIT Ids Op CESyn Syn).
 
   Definition state := memory val.
   Definition menv := memory val.
@@ -47,9 +47,9 @@ Module Type STCMEMORYCORRES
              (S I S': state)
              (me: menv) : Prop :=
     (forall x,
-        (Is_last_in x tcs -> value_corres x S' me)
+        (Is_init_in x tcs -> value_corres x S' me)
         /\
-        (~ Is_last_in x tcs -> value_corres x S me))
+        (~ Is_init_in x tcs -> value_corres x S me))
     /\
     (forall s,
         (~ Step_in s tcs /\ ~ Reset_in s tcs ->
@@ -70,12 +70,12 @@ Module Type STCMEMORYCORRES
       forall x ck ce,
         Memory_Corres (TcDef x ck ce :: tcs) S I S' me.
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros; split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|]; eauto.
-        + inv Last.
-        + apply Lasts; auto.
-      - intro NLast; apply Lasts.
-        intro; apply NLast; right; auto.
+      destruct MemCorres as (Inits & Insts); intros; split; [split|split; [|split]].
+      - inversion_clear 1 as [?? Init|]; eauto.
+        + inv Init.
+        + apply Inits; auto.
+      - intro NInit; apply Inits.
+        intro; apply NInit; right; auto.
       - intros (Nstep & Nrst).
         apply Insts; split.
         + intro; apply Nstep; right; auto.
@@ -95,21 +95,21 @@ Module Type STCMEMORYCORRES
         find_val x S' = Some c ->
         Memory_Corres (TcNext x ck e :: tcs) S I S' (add_val x c me).
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros; split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|?? Last]; eauto; unfold value_corres.
-        + inv Last; rewrite find_val_gss; auto.
+      destruct MemCorres as (Inits & Insts); intros; split; [split|split; [|split]].
+      - inversion_clear 1 as [?? Init|?? Init]; eauto; unfold value_corres.
+        + inv Init; rewrite find_val_gss; auto.
         + intros.
           destruct (ident_eq_dec x0 x).
           * subst; rewrite find_val_gss; auto.
           * rewrite find_val_gso; auto;
-              apply Lasts with (1 := Last); auto.
-      - intros NLast **; unfold value_corres.
+              apply Inits with (1 := Init); auto.
+      - intros NInit **; unfold value_corres.
         assert (x0 <> x)
-          by (intro; subst; apply NLast; left; constructor).
-        assert ( ~ Is_last_in x0 tcs)
-          by (intro; apply NLast; right; auto).
+          by (intro; subst; apply NInit; left; constructor).
+        assert ( ~ Is_init_in x0 tcs)
+          by (intro; apply NInit; right; auto).
         rewrite find_val_gso; auto;
-          apply Lasts; auto.
+          apply Inits; auto.
       - intros (Nstep & Nrst).
         assert (~ Step_in s tcs) by (intro; apply Nstep; right; auto).
         assert (~ Reset_in s tcs) by (intro; apply Nrst; right; auto).
@@ -132,15 +132,15 @@ Module Type STCMEMORYCORRES
         find_val x S' = find_val x S ->
         Memory_Corres (TcNext x ck e :: tcs) S I S' me.
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros * Eq; split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|?? Last]; eauto; unfold value_corres.
-        + inv Last.
-          destruct (Is_last_in_dec x tcs).
-          * apply Lasts; auto.
-          * setoid_rewrite Eq; apply Lasts; auto.
-        + apply Lasts; auto.
-      - intros NLast.
-        apply Lasts; intro; apply NLast; right; auto.
+      destruct MemCorres as (Inits & Insts); intros * Eq; split; [split|split; [|split]].
+      - inversion_clear 1 as [?? Init|?? Init]; eauto; unfold value_corres.
+        + inv Init.
+          destruct (Is_init_in_dec x tcs).
+          * apply Inits; auto.
+          * setoid_rewrite Eq; apply Inits; auto.
+        + apply Inits; auto.
+      - intros NInit.
+        apply Inits; intro; apply NInit; right; auto.
       - intros (Nstep & Nrst).
         apply Insts; split.
         + intro; apply Nstep; right; auto.
@@ -162,12 +162,12 @@ Module Type STCMEMORYCORRES
         ~ Step_in s tcs ->
         Memory_Corres (TcReset s ck b :: tcs) S I S' (add_inst s me' me).
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros ?????? E; split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|]; eauto.
-        + inv Last.
-        + apply Lasts; auto.
-      - intro NLast; apply Lasts.
-        intro; apply NLast; right; auto.
+      destruct MemCorres as (Inits & Insts); intros ?????? E; split; [split|split; [|split]].
+      - inversion_clear 1 as [?? Init|]; eauto.
+        + inv Init.
+        + apply Inits; auto.
+      - intro NInit; apply Inits.
+        intro; apply NInit; right; auto.
       - intros (Nstep & Nrst).
         assert (s0 <> s)
           by (intro; subst; apply Nrst; left; constructor).
@@ -204,12 +204,12 @@ Module Type STCMEMORYCORRES
         ~ Reset_in s tcs ->
         Memory_Corres (TcReset s ck b :: tcs) S I S' me.
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros ????? Find_I Find_S E; split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|]; eauto.
-        + inv Last.
-        + apply Lasts; auto.
-      - intro NLast; apply Lasts.
-        intro; apply NLast; right; auto.
+      destruct MemCorres as (Inits & Insts); intros ????? Find_I Find_S E; split; [split|split; [|split]].
+      - inversion_clear 1 as [?? Init|]; eauto.
+        + inv Init.
+        + apply Inits; auto.
+      - intro NInit; apply Inits.
+        intro; apply NInit; right; auto.
       - intros (Nstep & Nrst).
         apply Insts; split.
         + intro; apply Nstep; right; auto.
@@ -235,13 +235,13 @@ Module Type STCMEMORYCORRES
         me' ≋ Ss' ->
         Memory_Corres (TcCall s ys ck rst b es :: tcs) S I S' (add_inst s me' me).
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros ???????? Find_S' E;
+      destruct MemCorres as (Inits & Insts); intros ???????? Find_S' E;
         split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|]; eauto.
-        + inv Last.
-        + apply Lasts; auto.
-      - intro NLast; apply Lasts.
-        intro; apply NLast; right; auto.
+      - inversion_clear 1 as [?? Init|]; eauto.
+        + inv Init.
+        + apply Inits; auto.
+      - intro NInit; apply Inits.
+        intro; apply NInit; right; auto.
       - intros (Nstep & Nrst).
         assert (s0 <> s) as Neq
             by (intro; subst; apply Nstep; left; constructor).
@@ -277,13 +277,13 @@ Module Type STCMEMORYCORRES
         ~ Step_in s tcs /\ (if rst then Reset_in s tcs else ~ Reset_in s tcs) ->
         Memory_Corres (TcCall s ys ck rst b es :: tcs) S I S' me.
     Proof.
-      destruct MemCorres as (Lasts & Insts); intros ???????? Find_I Find_S Find_S' E NstepRst;
+      destruct MemCorres as (Inits & Insts); intros ???????? Find_I Find_S Find_S' E NstepRst;
         split; [split|split; [|split]].
-      - inversion_clear 1 as [?? Last|]; eauto.
-        + inv Last.
-        + apply Lasts; auto.
-      - intro NLast; apply Lasts.
-        intro; apply NLast; right; auto.
+      - inversion_clear 1 as [?? Init|]; eauto.
+        + inv Init.
+        + apply Inits; auto.
+      - intro NInit; apply Inits.
+        intro; apply NInit; right; auto.
       - intros (Nstep & Nrst).
         apply Insts; split.
         + intro; apply Nstep; right; auto.
@@ -313,7 +313,7 @@ Module StcMemoryCorresFun
        (Op    : OPERATORS)
        (CESyn : CESYNTAX      Op)
        (Syn   : STCSYNTAX Ids Op CESyn)
-       (Last  : STCISLAST Ids Op CESyn Syn)
-<: STCMEMORYCORRES Ids Op CESyn Syn Last.
-  Include STCMEMORYCORRES Ids Op CESyn Syn Last.
+       (Init  : STCISINIT Ids Op CESyn Syn)
+<: STCMEMORYCORRES Ids Op CESyn Syn Init.
+  Include STCMEMORYCORRES Ids Op CESyn Syn Init.
 End StcMemoryCorresFun.

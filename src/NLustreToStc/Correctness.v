@@ -83,11 +83,11 @@ Module Type CORRECTNESS
       induction Nodup; simpl; auto.
   Qed.
 
-  Lemma msem_eqs_reset_lasts:
+  Lemma msem_eqs_reset_inits:
     forall G bk H M n,
       memory_closed_n M (n_eqs n) ->
       Forall (msem_equation G bk H M) (n_eqs n) ->
-      reset_lasts (translate_node n) (M 0).
+      reset_inits (translate_node n) (M 0).
   Proof.
     intros * Closed Heqs ??? Hin.
     destruct n; simpl in *.
@@ -155,7 +155,7 @@ Module Type CORRECTNESS
         simpl in Hfind'; rewrite Hnf in Hfind'; inv Hfind'.
       eapply msem_equations_cons in Heqs; eauto.
       econstructor; eauto.
-      + eapply msem_eqs_reset_lasts; eauto.
+      + eapply msem_eqs_reset_inits; eauto.
       + intros * Hin.
         destruct node; simpl in *.
         edestruct msem_eqs_In_snd_gather_eqs_spec
@@ -404,7 +404,7 @@ Module Type CORRECTNESS
         /\ (forall n, state_closed_insts (translate G) (gather_inst_eq eq ++ insts) (Is' n))
         /\ forall n x, find_val x (Is' n) = None.
   Proof.
-    intros * IHnode Hord WC ClkM TrNodup Closed SpecLasts Heq Htcs.
+    intros * IHnode Hord WC ClkM TrNodup Closed SpecInits Heq Htcs.
     destruct Heq as [|???????????????? Node|
                      ???????????????????? Var Hr Reset|
                      ????????? Arg Var Mfby];

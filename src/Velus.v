@@ -46,7 +46,7 @@ Module Scheduler := Stc.Scheduler ExternalSchedule.
 Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
   do _ <- r;
   let args := map fst s.(s_in) in
-  let mems := ps_from_list (map fst s.(s_lasts)) in
+  let mems := ps_from_list (map fst s.(s_inits)) in
   if Stc.SchV.is_well_sch_tcs mems args s.(s_tcs)
   then OK tt
   else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).

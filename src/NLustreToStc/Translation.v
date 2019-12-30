@@ -231,16 +231,16 @@ Module Type TRANSLATION
      (i.e., do ps_from_list directly) *)
   Program Definition translate_node (n: node) : SynStc.system :=
     let gathered := gather_eqs n.(n_eqs) in
-    let lasts := fst gathered in
-    let lasts_ids := ps_from_list (map fst (fst gathered)) in
+    let inits := fst gathered in
+    let inits_ids := ps_from_list (map fst (fst gathered)) in
     let subs := snd gathered in
-    let partitioned := partition (fun x => PS.mem (fst x) lasts_ids) n.(n_vars) in
+    let partitioned := partition (fun x => PS.mem (fst x) inits_ids) n.(n_vars) in
     let vars := snd partitioned in
     {| SynStc.s_name  := n.(n_name);
        SynStc.s_subs  := subs;
        SynStc.s_in    := n.(n_in);
        SynStc.s_vars  := vars;
-       SynStc.s_lasts := lasts;
+       SynStc.s_inits := inits;
        SynStc.s_out   := n.(n_out);
        SynStc.s_tcs   := translate_eqns n.(n_eqs)
     |}.

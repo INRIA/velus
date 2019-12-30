@@ -18,7 +18,7 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import CoreExpr.CEClocking.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsInit.
 From Velus Require Import Stc.StcIsVariable.
 From Velus Require Import Stc.StcIsDefined.
 From Velus Require Import Stc.StcIsSystem.
@@ -42,9 +42,9 @@ Module Type STCCLOCKING
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX          Op)
        (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Init  : STCISINIT     Ids Op CESyn Syn)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Init)
        (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import CEClo : CECLOCKING    Ids Op CESyn).
@@ -82,8 +82,8 @@ Module Type STCCLOCKING
   Definition wc_system (P: program) (s: system) : Prop :=
     wc_env (idck (s.(s_in))) /\
     wc_env (idck (s.(s_in) ++ s.(s_out))) /\
-    wc_env (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_lasts)) /\
-    Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_lasts)))
+    wc_env (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_inits)) /\
+    Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_inits)))
            s.(s_tcs).
 
   Inductive wc_program : program -> Prop :=
@@ -321,12 +321,12 @@ Module StcClockingFun
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX         Op)
        (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Init  : STCISINIT     Ids Op CESyn Syn)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Init)
        (Import Syst : STCISSYSTEM    Ids Op CESyn Syn)
        (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import CEClo : CECLOCKING   Ids Op CESyn)
-  <: STCCLOCKING Ids Op CESyn Syn Last Var Def Syst Ord CEClo.
-  Include STCCLOCKING Ids Op CESyn Syn Last Var Def Syst Ord CEClo.
+  <: STCCLOCKING Ids Op CESyn Syn Init Var Def Syst Ord CEClo.
+  Include STCCLOCKING Ids Op CESyn Syn Init Var Def Syst Ord CEClo.
 End StcClockingFun.

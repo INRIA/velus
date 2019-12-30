@@ -73,11 +73,11 @@ Module Type NLSYNTAX
 
   Record node : Type :=
     mk_node {
-        n_name   : ident;
-        n_in     : list (ident * (type * clock));
-        n_out    : list (ident * (type * clock));
-        n_vars   : list (ident * (type * clock));
-        n_eqs    : list equation;
+        n_name   : ident;                          (* name *)
+        n_in     : list (ident * (type * clock));  (* inputs *)
+        n_out    : list (ident * (type * clock));  (* outputs *)
+        n_vars   : list (ident * (type * clock));  (* local variables *)
+        n_eqs    : list equation;                  (* equations *)
 
         n_ingt0  : 0 < length n_in;
         n_outgt0 : 0 < length n_out;

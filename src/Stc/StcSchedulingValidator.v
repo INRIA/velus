@@ -21,7 +21,7 @@ From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
 
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsInit.
 From Velus Require Import Stc.StcIsDefined.
 
 From Velus Require Import CoreExpr.CEIsFree.
@@ -43,11 +43,11 @@ Module Type STCSCHEDULINGVALIDATOR
        (Import Syst  : STCISSYSTEM    Ids Op CESyn Syn)
        (Import Ord   : STCORDERED     Ids Op CESyn Syn Syst)
        (Import Var   : STCISVARIABLE  Ids Op CESyn Syn)
-       (Import Last  : STCISLAST      Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED   Ids Op CESyn Syn Var Last)
+       (Import Init  : STCISINIT      Ids Op CESyn Syn)
+       (Import Def   : STCISDEFINED   Ids Op CESyn Syn Var Init)
        (Import CEIsF : CEISFREE       Ids Op CESyn)
        (Import Free  : STCISFREE      Ids Op CESyn Syn CEIsF)
-       (Import Wdef  : STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free).
+       (Import Wdef  : STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Init Def CEIsF Free).
 
 
   Module PN_as_OT := OrdersEx.PairOrderedType OrdersEx.Positive_as_OT OrdersEx.Nat_as_OT.
@@ -430,11 +430,11 @@ Module StcSchedulingValidatorFun
        (Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Last  : STCISLAST     Ids Op CESyn Syn)
-       (Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Init  : STCISINIT     Ids Op CESyn Syn)
+       (Def   : STCISDEFINED  Ids Op CESyn Syn Var Init)
        (CEIsF : CEISFREE      Ids Op CESyn)
        (Free  : STCISFREE     Ids Op CESyn Syn CEIsF)
-       (Wdef  : STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free)
-<: STCSCHEDULINGVALIDATOR Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free Wdef.
-  Include STCSCHEDULINGVALIDATOR Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free Wdef.
+       (Wdef  : STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Init Def CEIsF Free)
+<: STCSCHEDULINGVALIDATOR Ids Op CESyn Syn Syst Ord Var Init Def CEIsF Free Wdef.
+  Include STCSCHEDULINGVALIDATOR Ids Op CESyn Syn Syst Ord Var Init Def CEIsF Free Wdef.
 End StcSchedulingValidatorFun.

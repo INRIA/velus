@@ -21,7 +21,7 @@ From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
 
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsInit.
 From Velus Require Import Stc.StcIsDefined.
 
 From Velus Require Import CoreExpr.CEIsFree.
@@ -41,8 +41,8 @@ Module Type STCWELLDEFINED
        (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import Init  : STCISINIT     Ids Op CESyn Syn)
+       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Init)
        (Import CEIsF : CEISFREE      Ids Op CESyn)
        (Import Free  : STCISFREE     Ids Op CESyn Syn CEIsF).
 
@@ -63,7 +63,7 @@ Module Type STCWELLDEFINED
         Is_well_sch inputs mems (tc :: tcs).
 
   Definition Well_scheduled: program -> Prop :=
-    Forall (fun s => Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_lasts s))) (s_tcs s)).
+    Forall (fun s => Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_inits s))) (s_tcs s)).
 
   Lemma Is_well_sch_app:
     forall inputs mems tcs tcs',
@@ -262,10 +262,10 @@ Module StcWellDefinedFun
        (Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Last  : STCISLAST     Ids Op CESyn Syn)
-       (Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Init  : STCISINIT     Ids Op CESyn Syn)
+       (Def   : STCISDEFINED  Ids Op CESyn Syn Var Init)
        (CEIsF : CEISFREE      Ids Op CESyn)
        (Free  : STCISFREE     Ids Op CESyn Syn CEIsF)
-<: STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free.
-  Include STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free.
+<: STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Init Def CEIsF Free.
+  Include STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Init Def CEIsF Free.
 End StcWellDefinedFun.

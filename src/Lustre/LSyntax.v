@@ -45,17 +45,17 @@ Module Type LSYNTAX
   Definition lann : Type := (list type * nclock)%type.
 
   Inductive exp : Type :=
-  | Econst : const -> exp
-  | Evar   : ident -> ann -> exp
-  | Eunop  : unop -> exp -> ann -> exp
-  | Ebinop : binop -> exp -> exp -> ann -> exp
+  | Econst : const -> exp                                         (* constant *)
+  | Evar   : ident -> ann -> exp                                  (* variable *)
+  | Eunop  : unop -> exp -> ann -> exp                            (* unary operator *)
+  | Ebinop : binop -> exp -> exp -> ann -> exp                    (* binary operator *)
 
-  | Efby   : list exp -> list exp -> list ann -> exp
-  | Ewhen  : list exp -> ident -> bool -> lann -> exp
-  | Emerge : ident -> list exp -> list exp -> lann -> exp
-  | Eite   : exp -> list exp -> list exp -> lann -> exp
+  | Efby   : list exp -> list exp -> list ann -> exp              (* unit delay *)
+  | Ewhen  : list exp -> ident -> bool -> lann -> exp             (* sampling *)
+  | Emerge : ident -> list exp -> list exp -> lann -> exp         (* merging *)
+  | Eite   : exp -> list exp -> list exp -> lann -> exp           (* conditional *)
 
-  | Eapp   : ident -> list exp -> option exp -> list ann -> exp.
+  | Eapp   : ident -> list exp -> option exp -> list ann -> exp.  (* application / reset *)
 
   Implicit Type e: exp.
 
@@ -156,12 +156,12 @@ Module Type LSYNTAX
 
   Record node : Type :=
     mk_node {
-        n_name     : ident;
-        n_hasstate : bool;
-        n_in       : list (ident * (type * clock));
-        n_out      : list (ident * (type * clock));
-        n_vars     : list (ident * (type * clock));
-        n_eqs      : list equation;
+        n_name     : ident;                          (* name *)
+        n_hasstate : bool;                           (* statefulness *)
+        n_in       : list (ident * (type * clock));  (* inputs *)
+        n_out      : list (ident * (type * clock));  (* outputs *)
+        n_vars     : list (ident * (type * clock));  (* local variables *)
+        n_eqs      : list equation;                  (* equations *)
 
         n_ingt0    : 0 < length n_in;
         n_outgt0   : 0 < length n_out;
