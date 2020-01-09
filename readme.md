@@ -2,7 +2,8 @@
 
 These source files contain the implementation, models, and proof of
 correctness of a formally verified Lustre compiler backend.
-This version of the project is the one referred by the PhD thesis of Lélio Brun.
+This version of the project is the one referred by the
+[PhD thesis]( https://www.leliobrun.net/files/thesis.pdf) of Lélio Brun.
 
 This file contains instructions for (i) using the compiler, (ii) running
 from local opam installation or from docker, and (iii) cross-references from
