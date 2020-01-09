@@ -78,7 +78,7 @@ module PrintFun
         print_clock_decl ck
 
     let print_subsystem p (id, f) =
-      fprintf p "<%a>@ : %a"
+      fprintf p "%a@ : %a"
         print_ident id
         print_ident f
 
