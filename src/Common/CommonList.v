@@ -1535,6 +1535,17 @@ Section Forall2.
     | _, _ => false
     end.
 
+  Lemma forall2b_Forall2:
+    forall (p : A -> B -> bool) (xs : list A) (ys : list B),
+      forall2b p xs ys = true <-> Forall2 (fun x y => p x y = true) xs ys.
+  Proof.
+    split; intros * FA.
+    - revert xs ys FA. induction xs, ys; simpl in *; auto; try discriminate.
+      rewrite Bool.andb_true_iff. intros (FA1 & FA2).
+      apply IHxs in FA2. auto.
+    - induction FA; auto. simpl; apply Bool.andb_true_iff; auto.
+  Qed.
+
   Lemma Forall2_forall2_eq:
     forall (eq_A: A -> A -> Prop) (eq_B: B -> B -> Prop)
       (eq_A_refl: reflexive A eq_A)
@@ -1592,6 +1603,14 @@ Section Forall2.
       apply (H a b 0); trivial; simpl; try omega.
       rewrite IHl1. split; try omega.
       intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
+  Qed.
+
+  Lemma Forall2_ignore2:
+    forall (P : A -> B -> Prop) xs ys,
+      Forall2 P xs ys ->
+      Forall (fun x => exists y, P x y) xs.
+  Proof.
+    induction 1; eauto.
   Qed.
 
   Lemma Forall2_cons':
@@ -1732,6 +1751,15 @@ Section Forall2.
     induction HfaP; auto.
     apply Forall2_cons;
       auto using in_eq, in_cons.
+  Qed.
+
+  Global Instance Forall2_Proper:
+    Proper (pointwise_relation A (pointwise_relation B iff)
+                               ==> eq ==> eq ==> iff) (@Forall2 A B).
+  Proof.
+    intros P Q HPQ ? xs Pxs ? ys Pys; subst.
+    split; intro FA; apply Forall2_impl_In with (2:=FA);
+      intros * Ixs Iys HH; now apply HPQ in HH.
   Qed.
 
   Lemma Forall2_swap_args:
@@ -1954,7 +1982,44 @@ Section Forall3.
     intros * HF. inv HF. auto.
   Qed.
 
+  Fixpoint forall3b (f : A -> B -> C -> bool) l1 l2 l3 :=
+    match l1, l2, l3 with
+    | nil, nil, nil => true
+    | e1 :: l1, e2 :: l2, e3 :: l3 => andb (f e1 e2 e3) (forall3b f l1 l2 l3)
+    | _, _, _ => false
+    end.
+
 End Forall3.
+
+Lemma forall3b_Forall3:
+  forall {A B C} (p : A -> B -> C -> bool) xs ys zs,
+    (forall3b p xs ys zs = true) <-> (Forall3 (fun x y z => p x y z = true) xs ys zs).
+Proof.
+  split.
+  - revert xs ys zs.
+    induction xs, ys, zs; simpl; try discriminate; eauto using Forall3_nil.
+    rewrite Bool.andb_true_iff.
+    intros (? & ?); eauto using Forall3_cons.
+  - induction 1; auto. simpl.
+    apply Bool.andb_true_iff; split; auto.
+Qed.
+
+Lemma Forall3_impl_In:
+  forall {A B C} (P Q : A -> B -> C -> Prop) xs ys zs,
+    (forall x y z, In x xs -> In y ys -> In z zs -> P x y z -> Q x y z) ->
+    Forall3 P xs ys zs -> Forall3 Q xs ys zs.
+Proof.
+  intros * PQ FA. induction FA; constructor; auto with datatypes.
+Qed.
+
+Global Instance Forall3_Proper {A B C}:
+  Proper (pointwise_relation A (pointwise_relation B (pointwise_relation C iff))
+                             ==> eq ==> eq ==> eq ==> iff) (@Forall3 A B C).
+Proof.
+  intros P Q HPQ ? xs Pxs ? ys Pys ? zs Pzs; subst.
+  split; intro FA; apply Forall3_impl_In with (2:=FA);
+    intros * Ixs Iys Izs HH; now apply HPQ in HH.
+Qed.
 
 Section InMembers.
   Context {A B: Type}.
@@ -2569,6 +2634,21 @@ Section OptionLists.
     NoDupo_nil : NoDupo []
   | NoDupo_conss : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l)
   | NoDupo_consn : forall l, NoDupo l -> NoDupo (None :: l).
+
+  Definition assert_singleton (xs : option (list A)) : option A :=
+    match xs with Some [x] => Some x | _ => None end.
+
+  Lemma assert_singleton_spec:
+    forall e (v : A),
+      assert_singleton e = Some v ->
+      e = Some [v].
+  Proof.
+    intros * AS. destruct e; inv AS.
+    repeat match goal with
+           | H: (match ?l with _ => _ end) = Some _ |- _ => destruct l
+           | H: Some _ = Some _ |- _ => inv H
+           end; try discriminate; auto.
+  Qed.
 
 End OptionLists.
 

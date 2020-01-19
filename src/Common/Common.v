@@ -242,6 +242,39 @@ Proof.
   now apply IH in Ny2 as ->.
 Qed.
 
+Lemma forall2b_Forall2_equiv_decb:
+  forall {A R} `{EqDec A R} (xs ys : list A),
+    forall2b equiv_decb xs ys = true ->
+    Forall2 R xs ys.
+Proof.
+  intros * FA. apply forall2b_Forall2 in FA.
+  now setoid_rewrite equiv_decb_equiv in FA.
+Qed.
+
+Definition equiv_decb3 {A R} `{EqDec A R} (x y z : A) : bool :=
+  (x ==b y) && (y ==b z).
+
+Lemma equiv_decb3_equiv:
+  forall {A R} `{EqDec A R} x y z,
+    (equiv_decb3 x y z = true) <-> (x === y /\ y === z).
+Proof.
+  unfold equiv_decb3. setoid_rewrite Bool.andb_true_iff.
+  split; intros (Exy & Eyz).
+  - rewrite equiv_decb_equiv in Exy;
+      rewrite equiv_decb_equiv in Eyz; auto.
+  - setoid_rewrite equiv_decb_equiv; auto.
+Qed.
+
+Lemma forall3b_equiv_decb3:
+  forall {A R} `{EqDec A R} xs ys zs,
+    forall3b equiv_decb3 xs ys zs = true ->
+    Forall2 R xs ys /\ Forall2 R ys zs.
+Proof.
+  setoid_rewrite forall3b_Forall3.
+  setoid_rewrite equiv_decb3_equiv.
+  induction 2; intuition.
+Qed.
+
 (** *** About Coq stdlib *)
 
 Lemma pos_le_plus1:
@@ -1474,6 +1507,15 @@ Section OptionReasoning.
   Proof.
     intros Eff g h Pg. setoid_rewrite Eff. reflexivity.
   Qed.
+
+  Fixpoint oconcat (xs : list (option (list A))) : option (list A) :=
+    match xs with
+    | [] => Some ([])
+    | None::_ => None
+    | Some x :: xs =>
+      do xs' <- oconcat xs;
+        Some (x ++ xs')
+    end.
 
 End OptionReasoning.
 
