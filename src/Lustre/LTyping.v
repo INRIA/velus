@@ -9,6 +9,9 @@ Open Scope list_scope.
 
 From Coq Require Import Morphisms.
 
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+
 (** * Lustre typing *)
 
 (**
@@ -462,6 +465,329 @@ Module Type LTYPING
       destruct nck; unfold clock_of_nclock in *; simpl in *;
         subst; match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
   Qed.
+
+  (** Validation *)
+
+  Module OpAux := OperatorsAux Op.
+
+  Section ValidateExpression.
+
+    Variable G : global.
+    Variable venv : Env.t (type * clock).
+
+    Open Scope option_monad_scope.
+
+    Fixpoint check_clock (ck : clock) : bool :=
+      match ck with
+      | Cbase => true
+      | Con ck' x b =>
+        match Env.find x venv with
+        | None => false
+        | Some (xt, _) => (xt ==b bool_type) && check_clock ck'
+        end
+      end.
+
+    Definition check_nclock (nck : nclock) : bool :=
+      check_clock (fst nck).
+
+    Definition check_paired_types (t1 t2 : type) (tc : ann) : bool :=
+      let '(t, c) := tc in
+      (t1 ==b t) && (t2 ==b t) && (check_nclock c).
+
+    Definition check_reset (rt : option (option (list type))) : bool :=
+      match rt with
+      | None => true
+      | Some (Some [ty]) => ty ==b bool_type
+      | _ => false
+      end.
+
+    Function check_var (x : ident) (ty : type) : bool :=
+      match Env.find x venv with
+      | None => false
+      | Some (xt, _) => ty ==b xt
+      end.
+
+    Fixpoint check_exp (e : exp) : option (list type) :=
+      match e with
+      | Econst c => Some ([type_const c])
+
+      | Evar x (xt, nck) =>
+        if check_var x xt && check_nclock nck then Some [xt] else None
+
+      | Eunop op e (xt, nck) =>
+        do te <- assert_singleton (check_exp e);
+        do t <- type_unop op te;
+        if (xt ==b t) && check_nclock nck then Some [xt] else None
+
+      | Ebinop op e1 e2 (xt, nck) =>
+        do te1 <- assert_singleton (check_exp e1);
+        do te2 <- assert_singleton (check_exp e2);
+        do t <- type_binop op te1 te2;
+        if (xt ==b t) && check_nclock nck then Some [xt] else None
+
+      | Efby e0s es anns =>
+        do t0s <- oconcat (map check_exp e0s);
+        do ts <- oconcat (map check_exp es);
+        if forall3b check_paired_types t0s ts anns
+        then Some (map fst anns) else None
+
+      | Ewhen es x b (tys, nck) =>
+        do ts <- oconcat (map check_exp es);
+        if check_var x bool_type && (forall2b equiv_decb ts tys) && (check_nclock nck)
+        then Some tys else None
+
+      | Emerge x e1s e2s (tys, nck) =>
+        do t1s <- oconcat (map check_exp e1s);
+        do t2s <- oconcat (map check_exp e2s);
+        if check_var x bool_type
+             && (forall3b equiv_decb3 t1s t2s tys)
+             && (check_nclock nck)
+        then Some tys else None
+
+      | Eite e e1s e2s (tys, nck) =>
+        do t1s <- oconcat (map check_exp e1s);
+        do t2s <- oconcat (map check_exp e2s);
+        do xt <- assert_singleton (check_exp e);
+        if (xt ==b bool_type)
+             && (forall3b equiv_decb3 t1s t2s tys)
+             && (check_nclock nck)
+        then Some tys else None
+
+      | Eapp f es ro anns =>
+        do n <- find_node f G;
+        do ts <- oconcat (map check_exp es);
+        if (forall2b (fun et '(_, (t, _)) => et ==b t) ts n.(n_in))
+             && (forall2b (fun '(ot, oc) '(_, (t, _)) =>
+                             check_nclock oc && (ot ==b t)) anns n.(n_out))
+             && check_reset (option_map check_exp ro)
+        then Some (map fst anns)
+        else None
+      end.
+
+    Definition check_equation (eq : equation) : bool :=
+      let '(xs, es) := eq in
+      match oconcat (map check_exp es) with
+      | None => false
+      | Some tys => forall2b check_var xs tys
+      end.
+
+    (* TODO: Move elsewhere? *)
+    Local Ltac DestructMatch :=
+      repeat progress
+             match goal with
+             | H:match ?e with _ => _ end = _ |- _ =>
+               let Heq := fresh "Heq" in
+               destruct e eqn:Heq; try discriminate
+             end.
+
+    Lemma check_clock_correct:
+      forall ck,
+        check_clock ck = true ->
+        wt_clock (idty (Env.elements venv)) ck.
+    Proof.
+      induction ck; intro CC. now constructor.
+      simpl in CC. DestructMatch.
+      rewrite Bool.andb_true_iff in CC; destruct CC as (CC1 & CC2).
+      apply IHck in CC2. rewrite equiv_decb_equiv in CC1; inv CC1.
+      apply Env.elements_correct in Heq.
+      constructor; auto. apply In_idty_exists; eauto.
+    Qed.
+
+    Lemma check_nclock_correct:
+      forall nck,
+        check_nclock nck = true ->
+        wt_nclock (idty (Env.elements venv)) nck.
+    Proof.
+      destruct nck as (n, ck).
+      intro CC; now apply check_clock_correct in CC.
+    Qed.
+
+    (* TODO: add to a database *)
+    Hint Extern 2 (In _ (idty _)) => apply In_idty_exists.
+
+    Lemma check_var_correct:
+      forall x ty,
+        check_var x ty = true <-> In (x, ty) (idty (Env.elements venv)).
+    Proof.
+      unfold check_var. split; intros HH.
+      - DestructMatch; simpl.
+        rewrite equiv_decb_equiv in HH. inv HH.
+        take (Env.find _ _ = Some _) and apply Env.elements_correct in it; eauto.
+      - apply In_idty_exists in HH as (ck & HH).
+        apply Env.elements_complete in HH as ->.
+        apply equiv_decb_refl.
+    Qed.
+
+    Lemma check_paired_types_correct:
+      forall tys1 tys2 anns,
+        forall3b check_paired_types tys1 tys2 anns = true ->
+        tys1 = map fst anns
+        /\ tys2 = map fst anns
+        /\ Forall (wt_nclock (idty (Env.elements venv))) (map snd anns).
+    Proof.
+      setoid_rewrite forall3b_Forall3.
+      induction 1 as [|ty1 ty2 (ty, nck) tys1 tys2 anns IH1 IH2 (? & ? & IH3)];
+        subst; simpl; eauto.
+      simpl in IH1.
+      repeat rewrite Bool.andb_true_iff in IH1.
+      setoid_rewrite equiv_decb_equiv in IH1.
+      destruct IH1 as ((-> & ->) & IH1).
+      apply check_nclock_correct in IH1. auto.
+    Qed.
+
+    Lemma oconcat_map_check_exp':
+      forall {f} es tys,
+        (forall e tys,
+            In e es ->
+            f e = Some tys ->
+            wt_exp G (idty (Env.elements venv)) e /\ typeof e = tys) ->
+        oconcat (map f es) = Some tys ->
+        Forall (wt_exp G (idty (Env.elements venv))) es
+        /\ typesof es = tys.
+    Proof.
+      induction es as [|e es IH]; intros tys WTf CE. now inv CE; auto.
+      simpl in CE. destruct (f e) eqn:Ce; [|now omonadInv CE].
+      destruct (oconcat (map f es)) as [tes|]; [|now omonadInv CE].
+      omonadInv CE. simpl.
+      apply WTf in Ce as (Ce1 & ->); auto with datatypes.
+      destruct (IH tes) as (? & ->); auto.
+      intros * Ies Fe. apply WTf in Fe; auto with datatypes.
+    Qed.
+
+    Lemma check_exp_correct:
+      forall e tys,
+        check_exp e = Some tys ->
+        wt_exp G (idty (Env.elements venv)) e
+        /\ typeof e = tys.
+    Proof.
+      induction e using exp_ind2; simpl; intros tys CE;
+      repeat progress
+               match goal with
+               | a:ann |- _ => destruct a
+               | a:lann |- _ => destruct a
+               | p:type * clock |- _ => destruct p
+               | H:obind _ _ = Some _ |- _ => omonadInv H
+               | H:obind2 _ _ = Some _ |- _ => omonadInv H
+               | H:obind ?v _ = Some _ |- _ =>
+                 let OE:=fresh "OE0" in destruct v eqn:OE; [simpl in H|now omonadInv H]
+               | H: _ && _ = true |- _ => apply Bool.andb_true_iff in H as (? & ?)
+               | H: ((_ ==b _) = true) |- _ => rewrite equiv_decb_equiv in H; inv H
+               | H: check_nclock _ = true |- _ => apply check_nclock_correct in H
+               | H: Env.find _ _ = Some _ |- _ => apply Env.elements_correct in H
+               | H:(obind2 (Env.find ?x ?env) _) = Some _ |- _ =>
+                 let EF := fresh "EF0" in
+                 destruct (Env.find x env) eqn:EF
+               | H:(if ?c then Some _ else None) = Some _ |- _ =>
+                 let C := fresh "C0" in
+                 destruct c eqn:C
+               | H:None = Some _ |- _ => discriminate
+               | H:Some _ = Some _ |- _ => inv H
+               | H:assert_singleton _ = Some _ |- _ => apply assert_singleton_spec in H
+               | H:check_var _ _ = true |- _ => apply check_var_correct in H
+               | H:forall3b check_paired_types ?tys1 ?tys2 ?anns = true |- _ =>
+                 apply check_paired_types_correct in H as (? & ? & ?)
+               | H:forall2b equiv_decb ?xs ?ys = true |- _ =>
+                 apply forall2b_Forall2_equiv_decb in H
+               | H:forall3b equiv_decb3 _ _ _ = true |- _ =>
+                 apply forall3b_equiv_decb3 in H as (? & ?)
+               | H:Forall2 eq _ _ |- _ => apply Forall2_eq in H
+               | H:forall2b _ _ _ = true |- _ => apply forall2b_Forall2 in H
+               end.
+      - (* Econst *)
+        eauto using wt_exp.
+      - (* Evar *)
+        eauto using wt_exp.
+      - (* Eunop *)
+        apply IHe in OE0 as (? & ?). eauto using wt_exp.
+      - (* Ebinop *)
+        apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?).
+        eauto using wt_exp.
+      - (* Efby *)
+        take (Forall _ e0s) and rewrite Forall_forall in it.
+        take (Forall _ es) and rewrite Forall_forall in it.
+        apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
+        apply oconcat_map_check_exp' in OE1 as (? & ?); auto.
+        subst; eauto using wt_exp.
+      - (* Ewhen *)
+        subst. take (Forall _ es) and rewrite Forall_forall in it.
+        take (oconcat (map check_exp _) = Some _) and
+             apply oconcat_map_check_exp' in it as (? & ?); eauto using wt_exp.
+      - (* Emerge *)
+        take (Forall _ ets) and rewrite Forall_forall in it.
+        take (Forall _ efs) and rewrite Forall_forall in it.
+        repeat take (oconcat (map check_exp _) = Some _) and
+               apply oconcat_map_check_exp' in it as (? & ?); auto.
+        subst. eauto using wt_exp.
+      - (* Eite *)
+        take (check_exp _ = Some _) and apply IHe in it as (? & ?).
+        take (Forall _ ets) and rewrite Forall_forall in it.
+        take (Forall _ efs) and rewrite Forall_forall in it.
+        repeat take (oconcat (map check_exp _) = Some _) and
+               apply oconcat_map_check_exp' in it as (? & ?); auto.
+        subst. eauto using wt_exp.
+      - (* Eapp (no reset) *)
+        take (Forall _ es) and rewrite Forall_forall in it.
+        take (oconcat (map check_exp _) = Some _) and
+             apply oconcat_map_check_exp' in it as (? & ?); auto.
+        split; auto.
+        subst; econstructor; eauto.
+        + take (Forall2 _ (typesof es) n.(n_in))
+               and apply Forall2_impl_In with (2:=it).
+          intros ? (? & (? & ?)) ? ? EQ.
+          now rewrite equiv_decb_equiv in EQ.
+        + take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
+          intros (? & ?) (? & (? & ?)) ? ? EQ.
+          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
+          now rewrite equiv_decb_equiv in EQ2.
+        + take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
+          apply Forall_impl_In with (2:=it).
+          intros (? & ?) ? ((? & (? & ?)) & EQ).
+          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
+          apply check_nclock_correct with (1:=EQ1).
+      - (* Eapp (with reset) *)
+        take (Forall _ es) and rewrite Forall_forall in it.
+        take (oconcat (map check_exp _) = Some _) and
+             apply oconcat_map_check_exp' in it as (? & ?); auto.
+        split; auto.
+        destruct (check_exp e) eqn:CE; try discriminate.
+        specialize (IHe _ eq_refl) as (? & ?).
+        subst; econstructor; eauto.
+        + take (Forall2 _ (typesof es) n.(n_in))
+               and apply Forall2_impl_In with (2:=it).
+          intros ? (? & (? & ?)) ? ? EQ.
+          now rewrite equiv_decb_equiv in EQ.
+        + take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
+          intros (? & ?) (? & (? & ?)) ? ? EQ.
+          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
+          now rewrite equiv_decb_equiv in EQ2.
+        + take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
+          apply Forall_impl_In with (2:=it).
+          intros (? & ?) ? ((? & (? & ?)) & EQ).
+          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
+          apply check_nclock_correct with (1:=EQ1).
+        + destruct (typeof e) as [|ty' tys']; try discriminate.
+          destruct tys'; try discriminate.
+          take ((ty' ==b bool_type) = true) and rewrite equiv_decb_equiv in it.
+          now rewrite it.
+    Qed.
+
+    Lemma check_equation_correct:
+      forall eq,
+        check_equation eq = true ->
+        wt_equation G (idty (Env.elements venv)) eq.
+    Proof.
+      intros eq CE. destruct eq as (xs, es); simpl in CE.
+      DestructMatch.
+      take (oconcat (map check_exp _) = Some _)
+           and apply oconcat_map_check_exp' in it as (? & ?).
+      2:now intros; apply check_exp_correct.
+      take (forall2b check_var _ _ = true)
+           and apply forall2b_Forall2 in it.
+      setoid_rewrite check_var_correct in it.
+      subst; constructor; auto.
+    Qed.
+
+  End ValidateExpression.
 
 End LTYPING.
 
