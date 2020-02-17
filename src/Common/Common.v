@@ -221,14 +221,17 @@ Proof.
     exfalso; now apply Hne.
 Qed.
 
-Lemma value_neqb_neq:
-  forall x y, x <> y <-> (x <>b y) = true.
+Lemma nequiv_decb_true:
+  forall {A R} `{EqDec A R} (x y : A),
+    (x <>b y) = true <-> (x =/= y).
 Proof.
-  intros x y. unfold nequiv_decb. split; intro HH.
-  - now apply Bool.negb_true_iff, not_equiv_decb_equiv.
-  - intro; subst.
-    apply Bool.negb_true_iff in HH.
-    now rewrite equiv_decb_refl in HH.
+  unfold nequiv_decb.
+  intros; split; intro HH.
+  - destruct (equiv_dec x y) as [E|E]; auto.
+    apply equiv_decb_equiv in E.
+    now rewrite E in HH.
+  - apply Bool.eq_true_not_negb. intro E.
+    now rewrite equiv_decb_equiv in E.
 Qed.
 
 Lemma not_in_filter_nequiv_decb:
@@ -238,7 +241,7 @@ Lemma not_in_filter_nequiv_decb:
 Proof.
   induction xs as [|x xs IH]; auto.
   intro Ny. apply not_in_cons in Ny as (Ny1 & Ny2). simpl.
-  apply value_neqb_neq in Ny1 as ->.
+  apply nequiv_decb_true in Ny1 as ->.
   now apply IH in Ny2 as ->.
 Qed.
 
@@ -334,8 +337,33 @@ Proof.
   - discriminate.
 Qed.
 
+Section IsNoneSome.
+
+  Context {A : Type}.
+
+  Fixpoint isNone (o : option A) : bool :=
+    match o with None => true | Some _ => false end.
+
+  Fixpoint isSome (o : option A) : bool :=
+    match o with None => false | Some _ => true end.
+
+  Lemma isSome_true:
+    forall (v : option A), isSome v = true <-> exists v', v = Some v'.
+  Proof.
+    destruct v; simpl; split; intro; eauto; try discriminate.
+    now take (exists v', _) and destruct it.
+  Qed.
+
+  Lemma isSome_false:
+    forall (v : option A), isSome v = false <-> v = None.
+  Proof.
+    destruct v; simpl; split; intro; eauto; try discriminate.
+  Qed.
+
+End IsNoneSome.
 
 (** Lemmas on PositiveSets *)
+(* TODO: Shift to a new file: CommonPS.v *)
 
 Definition not_In_empty: forall x : ident, ~(PS.In x PS.empty) := PS.empty_spec.
 
@@ -771,6 +799,170 @@ Proof.
   - intro Hin. apply SetoidList.InA_alt in Hin as (y & Hy & Hin); subst; auto.
 Qed.
 
+Inductive DisjointSetList : list PS.t -> Prop :=
+| DJSnil: DisjointSetList []
+| DJScons: forall s ss,
+    DisjointSetList ss ->
+    Forall (fun t => PS.Empty (PS.inter s t)) ss ->
+    DisjointSetList (s :: ss).
+
+Instance DisjointSetList_Proper:
+  Proper (@Permutation.Permutation PS.t ==> iff) DisjointSetList.
+Proof.
+  intros s' s Es.
+  induction Es; split; intro DJ; auto using DisjointSetList;
+    repeat match goal with
+           | H:DisjointSetList (_ :: _) |- _ => inversion_clear DJ
+           | H:_ <-> _ |- _ => destruct H
+           | FA:Forall _ ?xs, H:Permutation ?xs ?ys |- DisjointSetList (_ :: ?ys) =>
+             rewrite H in FA
+           | FA:Forall _ ?ys, H:Permutation ?xs ?ys |- DisjointSetList (_ :: ?xs) =>
+             rewrite <-H in FA
+           | H:Forall _ (_ :: _) |- _ => apply Forall_cons2 in H as (? & ?)
+           | |- DisjointSetList _ => constructor
+           | |- Forall _ (_ :: _) => constructor
+           | H:DisjointSetList (_ :: _) |- _ => inv H
+           | H:PS.Empty (PS.inter ?x ?y) |- PS.Empty (PS.inter ?y ?x) =>
+             now rewrite PSP.inter_sym
+           end; auto using DisjointSetList.
+Qed.
+
+Definition PSUnion (xs : list PS.t) : PS.t :=
+  List.fold_left PS.union xs PS.empty.
+
+Instance fold_left_PS_Proper:
+  Proper ((PS.Equal ==> PS.Equal ==> PS.Equal) ==> eq ==> PS.Equal ==> PS.Equal)
+         (@fold_left PS.t PS.t).
+Proof.
+  intros f g Efg xs' xs Exs S' S ES; subst.
+  revert S S' ES. induction xs; auto.
+  simpl. intros S S' ES. apply IHxs.
+  apply Efg in ES. now apply ES.
+Qed.
+
+Instance PSUnion_Proper:
+  Proper (@Permutation.Permutation PS.t ==> PS.Equal) PSUnion.
+Proof.
+  unfold PSUnion. intros xs ys EE. generalize (PS.empty).
+  induction EE; simpl.
+  - reflexivity.
+  - now setoid_rewrite IHEE.
+  - setoid_rewrite PSP.union_assoc.
+    now setoid_rewrite (PSP.union_sym x).
+  - now setoid_rewrite IHEE1; setoid_rewrite IHEE2.
+Qed.
+
+Instance PSUnion_eqlistA_Proper:
+  Proper (SetoidList.eqlistA PS.Equal ==> PS.Equal) PSUnion.
+Proof.
+  unfold PSUnion. intros xs ys EE. generalize (PS.empty).
+  induction EE; simpl.
+  - reflexivity.
+  - setoid_rewrite IHEE.
+    now take (PS.Equal _ _) and setoid_rewrite it.
+Qed.
+
+Lemma PSUnion_cons:
+  forall T TS, (PSUnion (T :: TS)) === (PS.union T (PSUnion TS)).
+Proof.
+  unfold PSUnion. intros T TS. generalize PS.empty.
+  induction TS; simpl in *. now setoid_rewrite (PSP.union_sym T).
+  intros S.
+  now rewrite <-IHTS, PSP.union_assoc, PSP.union_assoc, (PSP.union_sym T).
+Qed.
+
+Lemma Subset_PSUnion_cons:
+  forall T TS, PS.Subset T (PSUnion (T :: TS)).
+Proof.
+  intros T TS. unfold PSUnion; simpl. revert T.
+  induction TS; simpl; intros T S IST; auto.
+  rewrite <-IHTS. now apply PSF.union_2.
+Qed.
+
+Lemma In_PSUnion:
+  forall T TS,
+    In T TS ->
+    PS.Subset T (PSUnion TS).
+Proof.
+  induction TS. now inversion 1.
+  intro IT. apply in_inv in IT as [IT|IT].
+  - subst. apply Subset_PSUnion_cons.
+  - apply IHTS in IT. rewrite IT, PSUnion_cons.
+    apply PSP.union_subset_2.
+Qed.
+
+Lemma PS_union_empty1:
+  forall s, PS.union PS.empty s === s.
+Proof.
+  intros s x. rewrite PS.union_spec.
+  split; intro HH; auto. destruct HH as [HH|]; auto.
+  inversion HH.
+Qed.
+
+Lemma PS_union_empty2:
+  forall s, PS.union s PS.empty === s.
+Proof.
+  intros s x. rewrite PS.union_spec.
+  split; intro HH; auto. destruct HH as [|HH]; auto.
+  inversion HH.
+Qed.
+
+Lemma PSUnion_cons_empty:
+  forall xs, PSUnion (PS.empty :: xs) === PSUnion xs.
+Proof.
+  setoid_rewrite PSUnion_cons at 1.
+  now setoid_rewrite PS_union_empty1 at 1.
+Qed.
+
+Lemma PSUnion_nil:
+  PSUnion nil = PS.empty.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma PSUnion_app:
+  forall xs ys,
+    PSUnion (PSUnion xs :: ys) === PSUnion (xs ++ ys).
+Proof.
+  induction xs; intro ys; simpl.
+  now rewrite PSUnion_nil, PSUnion_cons_empty.
+  now rewrite PSUnion_cons, PSUnion_cons, PSUnion_cons,
+  <-IHxs, PSUnion_cons, PSP.union_assoc.
+Qed.
+
+Lemma PSUnion_In_app:
+  forall x xs ys,
+    PS.In x (PSUnion (xs ++ ys)) <-> PS.In x (PSUnion xs) \/ PS.In x (PSUnion ys).
+Proof.
+  induction xs; simpl; intro ys.
+  - rewrite PSUnion_nil; split; [intros HH|intros [HH|HH]]; auto.
+    now inv HH.
+  - repeat rewrite PSUnion_cons.
+    now rewrite PS.union_spec, PS.union_spec, IHxs, or_assoc.
+Qed.
+
+Lemma In_In_PSUnion:
+  forall x s ss,
+    PS.In x s ->
+    In s ss ->
+    PS.In x (PSUnion ss).
+Proof.
+  intros x s ss Ix Is.
+  apply in_split in Is as (bl & al & ?); subst.
+  rewrite <-Permutation_middle, PSUnion_cons, PS.union_spec; auto.
+Qed.
+
+Lemma PSUnion_In_In:
+  forall x ss,
+    PS.In x (PSUnion ss) ->
+    exists s, In s ss /\ PS.In x s.
+Proof.
+  induction ss as [|s' ss IH]; intro Ix.
+  now rewrite PSUnion_nil in Ix; inv Ix.
+  rewrite PSUnion_cons, PS.union_spec in Ix; destruct Ix as [Ix|Ix];
+    eauto with datatypes. now firstorder.
+Qed.
+
 (** Miscellaneous *)
 
 Lemma relation_equivalence_subrelation:
@@ -1027,6 +1219,12 @@ Section OptionLists.
                           | None => None
                           end) acc xs.
 
+  Lemma ofold_right_none_none:
+    forall (f : A -> B -> option B) xs, ofold_right f None xs = None.
+  Proof.
+    induction xs; simpl; auto. now rewrite IHxs.
+  Qed.
+
 End OptionLists.
 
 (** Lift relations into the option type *)
@@ -1160,6 +1358,25 @@ Proof.
   intros R2 R1 HR ox2 ox1 ORx oy2 oy1 ORy; subst.
   apply relation_equivalence_subrelation in HR as (HR1 & HR2).
   split; intro HH. now setoid_rewrite <-HR1. now setoid_rewrite <-HR2.
+Qed.
+
+Instance orel_EqDec {A R} `{EqDec A R} : EqDec (option A) (orel R) :=
+  { equiv_dec := fun xo yo =>
+                   match xo, yo with
+                   | None, None => left _
+                   | Some x, Some y => match x == y with
+                                      | left _ => left _
+                                      | right _ => right _
+                                      end
+                   | _, _ => right _
+                   end }.
+Proof.
+  - now take (x === y) and rewrite it.
+  - intro HH. take (x =/= y) and apply it. unfold equiv in HH.
+    now rewrite orel_inversion in HH.
+  - inversion 1.
+  - inversion 1.
+  - reflexivity.
 Qed.
 
 (** The option monad *)

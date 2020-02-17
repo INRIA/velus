@@ -756,6 +756,21 @@ Section ConcatMap.
 
 End ConcatMap.
 
+Section FoldLeft2.
+
+  Context {A B C : Type}.
+
+  Variable (f : A -> B -> C -> A).
+
+  Fixpoint fold_left2 (xs : list B) (ys : list C) (a : A) : A :=
+    match xs, ys with
+    | x::xs', y::ys' => fold_left2 xs' ys' (f a x y)
+    | _, _ => a
+    end.
+
+
+End FoldLeft2.
+
 Section Permutation.
 
   Context {A: Type}.
@@ -1221,6 +1236,16 @@ Section ForallExists.
 
 End ForallExists.
 
+Lemma Forall_iff_insideout:
+  forall {A} (P Q : A -> Prop) xs,
+    (Forall (fun x => P x <-> Q x) xs) ->
+    (Forall P xs <-> Forall Q xs).
+Proof.
+  induction xs. now intuition.
+  intro FA. apply Forall_hd_tl in FA as (FA1 & FA2).
+  split; inversion 1; subst; intuition.
+Qed.
+
 Section ForallExistsB.
 
   Context {A: Type}.
@@ -1606,11 +1631,25 @@ Section Forall2.
   Qed.
 
   Lemma Forall2_ignore2:
-    forall (P : A -> B -> Prop) xs ys,
+    forall {A B} (P : A -> B -> Prop) xs ys,
       Forall2 P xs ys ->
-      Forall (fun x => exists y, P x y) xs.
+      Forall (fun x => exists y, In y ys /\ P x y) xs.
   Proof.
-    induction 1; eauto.
+    induction 1; auto.
+    constructor; eauto with datatypes.
+    apply Forall_impl_In with (2:=IHForall2).
+    intros a Ia (b & Ib & Pb). eauto with datatypes.
+  Qed.
+
+  Lemma Forall2_ignore1:
+    forall {A B} (P : A -> B -> Prop) xs ys,
+      Forall2 P xs ys ->
+      Forall (fun y => exists x, In x xs /\ P x y) ys.
+  Proof.
+    induction 1; auto.
+    constructor; eauto with datatypes.
+    apply Forall_impl_In with (2:=IHForall2).
+    intros a Ia (b & Ib & Pb). eauto with datatypes.
   Qed.
 
   Lemma Forall2_cons':
@@ -1899,6 +1938,8 @@ Section Forall2.
 
 End Forall2.
 
+Hint Resolve (proj2 (Forall2_eq _ _)).
+
 Lemma Forall2_trans_ex:
   forall {A B C} (P: A -> B -> Prop) Q xs ys (zs: list C),
     Forall2 P xs ys ->
@@ -1989,6 +2030,30 @@ Section Forall3.
     | _, _, _ => false
     end.
 
+  Lemma Forall3_ignore23:
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      Forall (fun x => exists y z, R x y z) xs.
+  Proof.
+    induction 1; eauto.
+  Qed.
+
+  Lemma Forall3_ignore13:
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      Forall (fun y => exists x z, R x y z) ys.
+  Proof.
+    induction 1; eauto.
+  Qed.
+
+  Lemma Forall3_ignore12:
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      Forall (fun z => exists x y, R x y z) zs.
+  Proof.
+    induction 1; eauto.
+  Qed.
+
 End Forall3.
 
 Lemma forall3b_Forall3:
@@ -2012,13 +2077,21 @@ Proof.
   intros * PQ FA. induction FA; constructor; auto with datatypes.
 Qed.
 
+Global Instance Forall3_Proper' {A B C}:
+  Proper (pointwise_relation A (pointwise_relation B (pointwise_relation C Basics.impl))
+                             ==> eq ==> eq ==> eq ==> Basics.impl) (@Forall3 A B C).
+Proof.
+  intros P Q HPQ ? xs Pxs ? ys Pys ? zs Pzs; subst.
+  intro FA; apply Forall3_impl_In with (2:=FA);
+    intros * Ixs Iys Izs HH; now apply HPQ in HH.
+Qed.
+
 Global Instance Forall3_Proper {A B C}:
   Proper (pointwise_relation A (pointwise_relation B (pointwise_relation C iff))
                              ==> eq ==> eq ==> eq ==> iff) (@Forall3 A B C).
 Proof.
   intros P Q HPQ ? xs Pxs ? ys Pys ? zs Pzs; subst.
-  split; intro FA; apply Forall3_impl_In with (2:=FA);
-    intros * Ixs Iys Izs HH; now apply HPQ in HH.
+  split. now rewrite HPQ. now rewrite <-HPQ.
 Qed.
 
 Section InMembers.
@@ -2614,7 +2687,7 @@ Section OptionLists.
 
   Context {A : Type}.
 
-  Definition LiftO (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
+  Fixpoint LiftO (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
     match x with None => d | Some x => P x end.
 
   Fixpoint Ino (a : A) (l : list (option A)) : Prop :=

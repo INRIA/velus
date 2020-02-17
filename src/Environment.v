@@ -1387,7 +1387,7 @@ Module Env.
       now rewrite nequiv_decb_refl in HH.
     - rewrite Props.P.F.remove_in_iff, D, filter_In.
       split; intros (H1 & H2); split; auto.
-      now apply value_neqb_neq.
+      now apply nequiv_decb_true.
   Qed.
 
   (** Notations *)
