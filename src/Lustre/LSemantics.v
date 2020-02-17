@@ -471,7 +471,7 @@ Module Type LSEMANTICS
         eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
         intro Ini. apply Hnin. inv Ini. constructor. constructor. right.
         apply Exists_exists; eauto. now constructor 2.
-      + apply IHx; auto. SolveNin Hnin.
+      + apply H0; auto. SolveNin Hnin.
       + intro k. eapply sem_node_cons; eauto. intro. subst.
         apply Hnin. constructor. constructor.
     - apply IHForall2. intro. destruct Hnin. unfold Is_node_in_eq. simpl.

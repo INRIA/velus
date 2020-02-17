@@ -725,50 +725,32 @@ Module Type LTYPING
         repeat take (oconcat (map check_exp _) = Some _) and
                apply oconcat_map_check_exp' in it as (? & ?); auto.
         subst. eauto using wt_exp.
-      - (* Eapp (no reset) *)
+      - (* Eapp *)
         take (Forall _ es) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
              apply oconcat_map_check_exp' in it as (? & ?); auto.
-        split; auto.
-        subst; econstructor; eauto.
-        + take (Forall2 _ (typesof es) n.(n_in))
+        split; auto. subst.
+        assert (Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in)).
+        { take (Forall2 _ (typesof es) n.(n_in))
                and apply Forall2_impl_In with (2:=it).
           intros ? (? & (? & ?)) ? ? EQ.
-          now rewrite equiv_decb_equiv in EQ.
-        + take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
+          now rewrite equiv_decb_equiv in EQ. }
+        assert (Forall2 (fun ann '(_, (t, _)) => fst ann = t) a n.(n_out)).
+        { take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
           intros (? & ?) (? & (? & ?)) ? ? EQ.
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
-          now rewrite equiv_decb_equiv in EQ2.
-        + take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
+          now rewrite equiv_decb_equiv in EQ2. }
+        assert (Forall (fun ann => wt_nclock (idty (Env.elements venv)) (snd ann)) a).
+        { repeat take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
           apply Forall_impl_In with (2:=it).
-          intros (? & ?) ? ((? & (? & ?)) & EQ).
+          intros (? & ?) ? ((? & (? & ?)) & (? & EQ)).
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
-          apply check_nclock_correct with (1:=EQ1).
-      - (* Eapp (with reset) *)
-        take (Forall _ es) and rewrite Forall_forall in it.
-        take (oconcat (map check_exp _) = Some _) and
-             apply oconcat_map_check_exp' in it as (? & ?); auto.
-        split; auto.
-        destruct (check_exp e) eqn:CE; try discriminate.
-        specialize (IHe _ eq_refl) as (? & ?).
-        subst; econstructor; eauto.
-        + take (Forall2 _ (typesof es) n.(n_in))
-               and apply Forall2_impl_In with (2:=it).
-          intros ? (? & (? & ?)) ? ? EQ.
-          now rewrite equiv_decb_equiv in EQ.
-        + take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
-          intros (? & ?) (? & (? & ?)) ? ? EQ.
-          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
-          now rewrite equiv_decb_equiv in EQ2.
-        + take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
-          apply Forall_impl_In with (2:=it).
-          intros (? & ?) ? ((? & (? & ?)) & EQ).
-          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
-          apply check_nclock_correct with (1:=EQ1).
-        + destruct (typeof e) as [|ty' tys']; try discriminate.
-          destruct tys'; try discriminate.
-          take ((ty' ==b bool_type) = true) and rewrite equiv_decb_equiv in it.
-          now rewrite it.
+          apply check_nclock_correct with (1:=EQ1). }
+        destruct ro; econstructor; eauto; simpl in *;
+          take (forall tys, check_exp _ = Some tys -> _ /\ _) and rename it into CE;
+          DestructMatch; subst; specialize (CE _ eq_refl) as (CE1 & CE2); auto.
+        rewrite CE2.
+        now take ((_ ==b _) = true) and rewrite equiv_decb_equiv in it; inv it.
     Qed.
 
     Lemma check_equation_correct:
