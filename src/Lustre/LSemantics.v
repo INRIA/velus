@@ -143,6 +143,12 @@ Module Type LSEMANTICS
                Forall2 (sem_var H) xs (concat ss) ->
                sem_equation H b (xs, es)
 
+    with sem_equations: history -> Stream bool -> list equation -> Prop :=
+      Seqs:
+        forall H b eqs,
+          Forall (sem_equation H b) eqs ->
+          sem_equations H b eqs
+
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
       Snode:
         forall f ss os n H b,
