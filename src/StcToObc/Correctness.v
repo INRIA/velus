@@ -1562,16 +1562,16 @@ Module Type CORRECTNESS
   Qed.
 
   Corollary correctness_loop_call:
-    forall P f xss yss ins S0,
+    forall n P f xss yss ins S0,
       Well_defined P ->
       wc_program P ->
       initial_state P f S0 ->
-      loop P f xss yss S0 0 ->
+      loop P f xss yss S0 n ->
       (forall n, Forall2 eq_if_present (xss n) (ins n)) ->
       (forall n, Exists (fun v => v <> absent) (xss n)) ->
       exists me0,
         stmt_call_eval (translate P) mempty f reset [] me0 []
-        /\ loop_call (translate P) f step ins (fun n => map value_to_option (yss n)) 0 me0
+        /\ loop_call (translate P) f step ins (fun n => map value_to_option (yss n)) n me0
         /\ me0 ≋ S0.
   Proof.
     intros * Wdef WC Init Loop Spec Clock.
@@ -1584,8 +1584,7 @@ Module Type CORRECTNESS
             eapply Closed, state_closed_empty; eauto).
     exists me'; split; [|split]; auto.
     clear - Loop Wdef WC Eq Spec Clock.
-    revert Loop Eq; revert me' S0.
-    generalize 0.
+    revert Loop Eq; revert me' S0 n.
     cofix COFIX; intros.
     inversion_clear Loop as [??????? Sem].
     eapply correctness in Sem as (?&?&?); eauto.
