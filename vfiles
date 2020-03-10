@@ -23,6 +23,10 @@ src/Lustre/LOrdered.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
+src/Normalization/Fresh.v
+src/Normalization/Norm.v
+src/Normalization/Normalization.v
+
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
 src/CoreExpr/CEClocking.v

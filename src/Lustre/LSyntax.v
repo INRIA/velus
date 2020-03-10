@@ -246,6 +246,19 @@ Module Type LSYNTAX
 
   End exp_ind2.
 
+  (** typeof *)
+
+  Fact numstreams_length_typeof : forall e,
+      length (typeof e) = numstreams e.
+  Proof.
+    induction e using exp_ind2; simpl; auto.
+    - rewrite map_length; auto.
+    - destruct a; auto.
+    - destruct a; auto.
+    - destruct a; auto.
+    - rewrite map_length; auto.
+  Qed.
+
   (** clocksof *)
 
   Lemma In_clocksof:

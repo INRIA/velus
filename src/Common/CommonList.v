@@ -2056,6 +2056,32 @@ Section Forall3.
 
 End Forall3.
 
+Lemma Forall3_forall3 {A B C}:
+  forall P l1 l2 l3,
+    Forall3 P l1 l2 l3
+    <-> length l1 = length l2
+      /\ length l1 = length l3
+      /\ forall (a : A) (b : B) (c : C) n x1 x2 x3,
+          n < length l1 ->
+          nth n l1 a = x1 ->
+          nth n l2 b = x2 ->
+          nth n l3 c = x3 ->
+          P x1 x2 x3.
+Proof.
+  intros P l1. induction l1; intros l2 l3.
+  - split; intro H.
+    + inv H. repeat split; simpl; auto. intros. omega.
+    + destruct H as [H1 [H2 _]]. destruct l2; destruct l3; try discriminate. constructor.
+  - split; intro H.
+    + inv H. rewrite IHl1 in H5. destruct H5 as [? [? ?]]. repeat split; simpl; auto.
+      intros. destruct n; subst; trivial. eapply H1; eauto. omega.
+    + destruct H as [Hlen2 [Hlen3 H]].
+      destruct l2; destruct l3; simpl in Hlen2; simpl in Hlen3; try discriminate. constructor.
+      apply (H a b c 0); trivial; simpl; try omega.
+      rewrite IHl1. repeat split; try omega.
+      intros. eapply (H a0 b0 c0 (S n)); simpl; eauto. omega.
+Qed.
+
 Lemma forall3b_Forall3:
   forall {A B C} (p : A -> B -> C -> bool) xs ys zs,
     (forall3b p xs ys zs = true) <-> (Forall3 (fun x y z => p x y z = true) xs ys zs).

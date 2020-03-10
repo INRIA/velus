@@ -2,6 +2,7 @@ B _build/src
 B _build/extraction/extracted
 S src
 S src/Lustre
+S src/Normalization
 S src/CoreExpr
 S src/NLustre
 S src/SyBloc
