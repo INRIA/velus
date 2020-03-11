@@ -92,9 +92,9 @@ TODO: it is required by typing and clocking.
 
 Parameter do_add_when_to_constants : unit -> bool.
 
-Parameter elab_const_int : Cabs.cabsloc -> string -> constant.
+Parameter elab_const_int : Cabs.loc -> string -> constant.
 Parameter elab_const_float : Cabs.floatInfo -> constant.
-Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
+Parameter elab_const_char : Cabs.loc -> bool -> list char_code -> constant.
 
 (* CompCert: lib/Camlcoq.ml: camlstring_of_coqstring and coqstring_of_camlstring
    using Require ExtrOCamlString in the extraction file to extract Coq
@@ -102,7 +102,7 @@ Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
    function.
    TODO: In the long run, we should try to use OCaml strings everywhere. *)
 Parameter string_of_astloc : astloc -> String.string.
-Parameter cabsloc_of_astloc : astloc -> Cabs.cabsloc.
+Parameter cabsloc_of_astloc : astloc -> Cabs.loc.
 Parameter cabs_floatinfo : floatInfo -> Cabs.floatInfo.
 
 Definition err_loc {A} (loc: astloc) (m: errmsg) : res A :=

@@ -41,13 +41,13 @@ let rec tr_clock = function
   | F.Con (ck, b, x) -> C.Con (tr_clock ck, x, b)
 
 let tr_ckid = function
-  | F.Vidx i -> C.Vidx (Camlcoq.P.of_int i)
-  | F.Vnm x  -> C.Vnm x
+  | F.Vidx i -> (Camlcoq.P.of_int i)
+  | F.Vnm x  -> x
 
 let rec tr_sclock ck =
   match F.find_clock ck with
-  | F.Sbase -> C.Sbase
-  | F.Son (ck', b, id) -> C.Son (tr_sclock ck', tr_ckid id, b)
+  | F.Sbase -> C.Cbase
+  | F.Son (ck', b, id) -> C.Con (tr_sclock ck', tr_ckid id, b)
   | F.Svar _ -> assert false
 
 let rec tr_sclock_to_clock ck =
@@ -57,15 +57,15 @@ let rec tr_sclock_to_clock ck =
   | _ -> assert false
 
 let tr_nclock = function
-  | F.Cstream ck      -> C.Cstream (tr_sclock ck)
-  | F.Cnamed (id, ck) -> C.Cnamed (tr_ckid id, tr_sclock ck)
+  | F.Cstream ck      -> (tr_sclock ck, None)
+  | F.Cnamed (id, ck) -> (tr_sclock ck, Some (tr_ckid id))
 
 let tr_float f =
-  match Fappli_IEEE.coq_B2FF BinInt.Z.zero BinInt.Z.zero f with
-  | Fappli_IEEE.F754_zero s           -> FS.F754_zero s
-  | Fappli_IEEE.F754_infinity s       -> FS.F754_infinity s
-  | Fappli_IEEE.F754_nan (b, pl)      -> FS.F754_nan (b, pl)
-  | Fappli_IEEE.F754_finite (s, m, e) -> FS.F754_finite (s, m, e)
+  match Binary.coq_B2FF BinInt.Z.zero BinInt.Z.zero f with
+  | Binary.F754_zero s           -> FS.F754_zero s
+  | Binary.F754_infinity s       -> FS.F754_infinity s
+  | Binary.F754_nan (b, pl)      -> FS.F754_nan (b, pl)
+  | Binary.F754_finite (s, m, e) -> FS.F754_finite (s, m, e)
 
 let tr_const = function
   | F.Cint (v, sz, sg) -> FS.Cint (v, tr_intsize sz, tr_signedness sg)

@@ -1,4 +1,4 @@
-include ../../variables.mk
+include ../../../variables.mk
 
 .PHONY: all clean
 

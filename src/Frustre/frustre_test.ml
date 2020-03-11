@@ -11,13 +11,15 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-let rec infinity = Datatypes.S (infinity)
+let rec nat_of_int i = match i with
+  | 0 -> Datatypes.O
+  | n -> Datatypes.S (nat_of_int (n-1))
 
 let compile source_name filename =
   let toks = FrustreLexer.tokens_stream source_name in
   let ast =
-    match FrustreParser.translation_unit_file infinity toks with
-    | FrustreParser.Parser.Inter.Parsed_pr (r, s) ->
+    match FrustreParser.translation_unit_file (nat_of_int 10000) toks with
+    | FrustreParser.MenhirLibParser.Inter.Parsed_pr (r, s) ->
         (Obj.magic r : FrustreAst.declaration list)
     | _ ->
         Printf.eprintf "!error parsing '%s'.\n" source_name; exit 0
@@ -70,6 +72,7 @@ let _ =
       | "ia32"    -> if Configuration.abi = "macosx"
         then Machine.x86_32_macosx
         else Machine.x86_32
+      | "x86" -> Machine.x86_64
       | _         -> assert false
     end
 

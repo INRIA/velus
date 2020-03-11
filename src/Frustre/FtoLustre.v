@@ -1,11 +1,9 @@
-From Velus Require Import Ident.
+From Velus Require Import Common.
 
 From Velus Require Import ClockDefs.
 From Velus Require Frustre.FSyntax.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import ObcToClight.Interface.
-
-Definition ident := Common.ident.
 
 Module F := FSyntax.
 Module L := LSyntaxFun Ids Op.

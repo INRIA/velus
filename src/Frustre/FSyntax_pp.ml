@@ -54,10 +54,10 @@ let sep p () = Format.(pp_print_string p ";"; pp_print_cut p ())
 let typs = Format.pp_print_list ~pp_sep:sep typ
 
 let to_binaryfloat = function
-  | FS.F754_zero s           -> Fappli_IEEE.B754_zero s
-  | FS.F754_infinity s       -> Fappli_IEEE.B754_infinity s
-  | FS.F754_nan (b, pl)      -> Fappli_IEEE.B754_nan (b, pl)
-  | FS.F754_finite (s, m, e) -> Fappli_IEEE.B754_finite (s, m, e)
+  | FS.F754_zero s           -> Binary.B754_zero s
+  | FS.F754_infinity s       -> Binary.B754_infinity s
+  | FS.F754_nan (b, pl)      -> Binary.B754_nan (b, pl)
+  | FS.F754_finite (s, m, e) -> Binary.B754_finite (s, m, e)
 
 let const p c =
   let open FS in
@@ -148,13 +148,11 @@ let clocks p cks =
   Format.(fprintf p "(@[<hv 0>%a@])"
     (pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") clock) cks)
 
-let ckid p = function
-  | C.Vidx i -> clock_index p i
-  | C.Vnm x  -> ident p x
+let ckid p i = clock_index p i
 
 let rec sclock p = function
-  | C.Sbase -> Format.pp_print_char p '.'
-  | C.Son (ck', x, b) ->
+  | C.Cbase -> Format.pp_print_char p '.'
+  | C.Con (ck', x, b) ->
       Format.fprintf p "%a %s %a" sclock ck' (if b then "on" else "onot") ckid x
 
 let sclocks p cks =
@@ -162,8 +160,8 @@ let sclocks p cks =
     (pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") sclock) cks)
 
 let nclock p = function
-  | C.Cstream sck -> sclock p sck
-  | C.Cnamed (i, sck) -> Format.printf "(%a : %a)" ckid i sclock sck
+  | (sck, None) -> sclock p sck
+  | (sck, Some i) -> Format.printf "(%a : %a)" ckid i sclock sck
 
 let nclocks p cks =
   match cks with
@@ -192,7 +190,7 @@ let annot_typs p = function
   | FS.Eapp (_, _, tycks)          -> typs p (List.map fst tycks)
 
 let annot_cks p = function
-  | FS.Econst c                    -> sclock p C.Sbase
+  | FS.Econst c                    -> sclock p C.Cbase
   | FS.Evar (_, (ty, ck))          -> nclock p ck
   | FS.Eunop (_, _, (ty, ck))      -> nclock p ck
   | FS.Ebinop (_, _, _, (ty, ck))  -> nclock p ck

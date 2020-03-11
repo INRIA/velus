@@ -129,12 +129,12 @@ let z_of_str hex str fst =
 (* Taken from CompCert cfrontend/C2C.ml *)
 let checkFloatOverflow loc f =
   match f with
-  | Fappli_IEEE.B754_finite _ -> ()
-  | Fappli_IEEE.B754_zero _ ->
+  | Binary.B754_finite _ -> ()
+  | Binary.B754_zero _ ->
       warning loc "Floating-point literal is so small that it converts to 0"
-  | Fappli_IEEE.B754_infinity _ ->
+  | Binary.B754_infinity _ ->
       warning loc "Floating-point literal is so large that it converts to infinity"
-  | Fappli_IEEE.B754_nan _ ->
+  | Binary.B754_nan _ ->
       warning loc "Floating-point literal converts to Not-a-Number"
 
 (* Taken from CompCert cfrontend/C2C.ml *)
@@ -206,9 +206,8 @@ let tr_const loc = function
       end
 
   | A.CONST_CHAR (wide, chars) ->
-      let v, k = Elab.elab_char_constant (cabsloc_of_astloc loc) wide chars in
-      let sg, sz = convertIkind k in
-      F.Cint (convertInt v, sz, sg)
+      let (v, _) = Elab.elab_char_constant (cabsloc_of_astloc loc) wide chars in
+      F.Cint (convertInt v, I8, Unsigned)
 
 let mke desc loc = F.({ e_desc = desc; e_loc = loc; e_typ = []; e_clk = []})
 

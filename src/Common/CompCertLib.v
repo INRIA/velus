@@ -347,8 +347,8 @@ Proof.
   rewrite <-Z.pow_le_mono_r_iff in HH; intuition.
   apply Z.le_exists_sub in HH.
   destruct HH as [p [HH1 HH2]].
-  rewrite <-(nat_of_Z_eq p) in HH1; [|now apply Z.le_ge].
-  apply Zdivide_intro with (q:=two_power_nat (nat_of_Z p)).
+  rewrite <- (Z2Nat.id p) in HH1; eauto.
+  apply Zdivide_intro with (q:=two_power_nat (Z.to_nat p)).
   repeat rewrite two_power_nat_equiv.
   rewrite <-Z.pow_add_r; intuition.
   rewrite HH1.

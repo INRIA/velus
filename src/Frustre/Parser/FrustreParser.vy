@@ -35,7 +35,7 @@ Import ListNotations.
 %token<FrustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
 %token<FrustreAst.astloc> RARROW
 %token<FrustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
-%token<FrustreAst.astloc> IF THEN ELSE
+%token<FrustreAst.astloc> IFTE THEN ELSE
 
 %token<FrustreAst.astloc> LPAREN RPAREN COMMA SEMICOLON
 %token<FrustreAst.astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
@@ -278,7 +278,7 @@ logical_OR_expression:
 expression:
 | expr=logical_OR_expression
     { expr }
-| loc=IF expr1=expression THEN expr2=expression ELSE expr3=expression
+| loc=IFTE expr1=expression THEN expr2=expression ELSE expr3=expression
     { [FrustreAst.IFTE expr1 expr2 expr3 loc] }
 | loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
     { [FrustreAst.MERGE (fst id) expr1 expr2 loc] }
