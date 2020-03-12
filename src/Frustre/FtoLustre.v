@@ -1,5 +1,6 @@
-From Velus Require Import Common.
+From Coq Require Import ZArith.
 
+From Velus Require Import Common Ident.
 From Velus Require Import ClockDefs.
 From Velus Require Frustre.FSyntax.
 From Velus Require Import Lustre.LSyntax.
@@ -35,26 +36,28 @@ Definition tr_type (ty : F.typ) : Op.type :=
   | F.Tfloat s   => Op.Tfloat (tr_floatsize s)
   end.
 
-Definition to_fullfloat (f : F.float) : Fappli_IEEE.full_float :=
+Definition to_fullfloat (f : F.float) : Binary.full_float :=
   match f with
-  | F.F754_zero s       => Fappli_IEEE.F754_zero s
-  | F.F754_infinity s   => Fappli_IEEE.F754_infinity s
-  | F.F754_nan b pl     => Fappli_IEEE.F754_nan b pl
-  | F.F754_finite s m e => Fappli_IEEE.F754_finite s m e
+  | F.F754_zero s       => Binary.F754_zero s
+  | F.F754_infinity s   => Binary.F754_infinity s
+  | F.F754_nan b pl     => Binary.F754_nan b pl
+  | F.F754_finite s m e => Binary.F754_finite s m e
   end.
+
+Axiom todo : forall (A : Prop), A.
 
 Definition tr_float (f : F.float) : Floats.float.
   apply to_fullfloat in f.
-  assert (Fappli_IEEE.valid_binary 53 1024 f = true) as Hok.
-  admit. (* TODO: need to check if floats are in range *)
-  apply (Fappli_IEEE.FF2B _ _ f Hok).
+  assert (Binary.valid_binary 53 1024 f = true) as Hok.
+  apply todo.
+  apply (Binary.FF2B _ _ f Hok).
 Defined.
 
 Definition tr_float32 (f : F.float) : Floats.float32.
   apply to_fullfloat in f.
-  assert (Fappli_IEEE.valid_binary 24 128 f = true) as Hok.
-  admit. (* TODO: need to check if floats are in range *)
-  apply (Fappli_IEEE.FF2B _ _ f Hok).
+  assert (Binary.valid_binary 24 128 f = true) as Hok.
+  apply todo.
+  apply (Binary.FF2B _ _ f Hok).
 Defined.
 
 Definition tr_constant (c : F.const) : Op.constant :=
@@ -120,7 +123,7 @@ Fixpoint tr_exp (e : F.exp) : L.exp :=
                                        (List.map tr_exp efs) (tr_lann a)
   | F.Eite e ets efs a => L.Eite (tr_exp e) (List.map tr_exp ets)
                                             (List.map tr_exp efs) (tr_lann a)
-  | F.Eapp f es aa => L.Eapp f (List.map tr_exp es) (List.map tr_ann aa)
+  | F.Eapp f es aa => L.Eapp f (List.map tr_exp es) None (List.map tr_ann aa)
   end.
 
 Definition tr_equation (eq : F.equation) : L.equation :=
@@ -128,30 +131,25 @@ Definition tr_equation (eq : F.equation) : L.equation :=
   | (xs, es) => (xs, List.map tr_exp es)
   end.
 
-Definition tr_decl (xtc : F.ident * (F.typ * F.clock)) : (ident * (Op.type * clock)) :=
+Definition tr_decl (xtc : F.ident * (F.typ * clock)) : (ident * (Op.type * clock)) :=
   match xtc with
   | (x, (ty, ck)) => (x, (tr_type ty, ck))
   end.
 
-Definition tr_node (n : F.node) : L.node.
-  refine ({| L.n_name := n.(F.n_name);
-             L.n_hasstate := n.(F.n_hasstate);
-             L.n_in := List.map tr_decl n.(F.n_in);
-             L.n_out := List.map tr_decl n.(F.n_out);
-             L.n_vars := List.map tr_decl n.(F.n_vars);
-             L.n_eqs := List.map tr_equation n.(F.n_eqs);
-             L.n_ingt0 := _;
-             L.n_outgt0 := _;
-             L.n_defd := _;
-             L.n_nodup := _;
-             L.n_good := _
-          |}).
-  admit (* TODO: Check that there is at least one input. *).
-  admit (* TODO: Check that there is at least one output. *).
-  admit (* TODO: Check declarations against definitions. *).
-  admit (* TODO: Check for duplicate declarations. *).
-  admit (* TODO: Check for reserved words. *).
-Defined.
+Program Definition tr_node (n : F.node) : L.node :=
+  {| L.n_name := n.(F.n_name);
+     L.n_hasstate := n.(F.n_hasstate);
+     L.n_in := List.map tr_decl n.(F.n_in);
+     L.n_out := List.map tr_decl n.(F.n_out);
+     L.n_vars := List.map tr_decl n.(F.n_vars);
+     L.n_eqs := List.map tr_equation n.(F.n_eqs);
+     L.n_ingt0 := _;
+     L.n_outgt0 := _;
+     L.n_defd := _;
+     L.n_nodup := _;
+     L.n_good := _
+  |}.
+Admit Obligations.
 
 Definition tr_global (p : F.global) : L.global :=
   List.map tr_node p.

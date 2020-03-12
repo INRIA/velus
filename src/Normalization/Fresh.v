@@ -1,6 +1,6 @@
 (** * Fresh name generation *)
 
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Lustre.LSyntax.
 
 (** The fresh monad (with memory) : generates new names and keeps

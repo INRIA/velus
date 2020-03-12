@@ -11,9 +11,15 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+let do_normalize = ref false
+
 let rec nat_of_int i = match i with
   | 0 -> Datatypes.O
   | n -> Datatypes.S (nat_of_int (n-1))
+
+module LSyn = FtoLustre.L
+module LTyp = LTyping.LTypingFun(Ident.Ids)(Interface.Op)(LSyn)
+module Norm = Norm.NormFun(Ident.Ids)(Interface.Op)(LSyn)(LTyp)
 
 let compile source_name filename =
   let toks = FrustreLexer.tokens_stream source_name in
@@ -30,7 +36,13 @@ let compile source_name filename =
   (* Frustre_pp.global Format.std_formatter p; *)
   let p = FSyntax_of_frustre.tr_program p in
   let p = FTransform.transform p in
-  FSyntax_pp.global Format.std_formatter p
+  if not !do_normalize then
+    FSyntax_pp.global Format.std_formatter p
+  else (
+    let p = FtoLustre.tr_global p in
+    let p = Norm.normalize_global p in
+    Lustre_pp.print_global (Format.std_formatter) p
+  )
 
 let process file =
   if Filename.check_suffix file ".ept"
@@ -60,6 +72,10 @@ let speclist = [
       Frustre_pp.show_annot_types := true;
       FSyntax_pp.show_annot_types := true),
   " Annotate subexpressions with their types";
+
+  "-normalize", Arg.Unit (fun () ->
+     do_normalize := true),
+  " Normalize the program"
 ]
 
 let _ =

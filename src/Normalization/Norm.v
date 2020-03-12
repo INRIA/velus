@@ -217,6 +217,8 @@ Module Type NORM
     |}.
   Admit Obligations.
 
+  Definition normalize_global (G : global) : global :=
+    List.map normalize_node G.
 End NORM.
 
 Module NormFun

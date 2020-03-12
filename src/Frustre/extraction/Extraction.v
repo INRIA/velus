@@ -1,7 +1,9 @@
 From Velus Require Frustre.FSyntax.
 From Velus Require Frustre.FTransform.
+From Velus Require Frustre.FtoLustre.
 From Velus Require Frustre.Parser.FrustreAst.
 From Velus Require Frustre.Parser.FrustreParser.
+From Velus Require Instantiator.
 
 From Coq Require ZArith.BinIntDef.
 From Coq Require Lists.Streams.
@@ -40,21 +42,35 @@ Extract Constant Cabs.loc =>
 Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
+Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
+
 Recursive Extraction Library FSyntax.
 Recursive Extraction Library FrustreAst.
 Recursive Extraction Library FTransform.
+Recursive Extraction Library FtoLustre.
 Recursive Extraction Library Cabs.
 
+(* Extraction is not easy... *)
 Separate Extraction
-  BinInt.Z BinPos.Pos.pred
-  Coq.Init.Datatypes
-  Binary.B2FF
-  Integers.Int64 Integers.Ptrofs.signed
-  Floats.Float Floats.Float32
-  Ctypes.type Ctypes.noattr Ctypes.mk_attr
-  Ctypes.intsize Ctypes.signedness Ctypes.floatsize
-  Ctyping.check_cast Ctyping.type_unop Ctyping.type_binop
-  Ctyping.econst_single Ctyping.econst_float
-  SelectOp.builtin_arg
-  Errors.res
-  FrustreParser.translation_unit_file.
+         (* Coq *)
+         PeanoNat.Nat Bool
+         BinInt.Z BinPos.Pos
+         Coq.Init.Datatypes
+         Binary.B2FF
+         Integers.Int64 Integers.Ptrofs.signed
+         Floats.Float Floats.Float32
+         MSetProperties
+         OrdersEx
+         DecidableType
+         (* CompCert *)
+         Ctypes.type Ctypes.noattr Ctypes.mk_attr
+         Ctypes.intsize Ctypes.signedness Ctypes.floatsize
+         Ctyping.check_cast Ctyping.type_unop Ctyping.type_binop
+         Ctyping.econst_single Ctyping.econst_float
+         SelectOp.builtin_arg
+         Errors.res
+         FrustreParser.translation_unit_file
+         (* Velus *)
+         Common LSyntax LTyping Environment Memory Ident CoindStreams Interface Normalization
+.
