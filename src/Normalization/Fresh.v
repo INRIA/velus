@@ -77,16 +77,16 @@ Section Fb2.
 
   Open Scope list.
   Open Scope fresh_monad_scope.
-  Fixpoint fold_bind2 a :=
+  Fixpoint map_bind2 a :=
     match a with
     | nil => ret (nil, nil)
     | hd::tl => do (a1, a2) <- k hd;
-                do (a1s, a2s) <- fold_bind2 tl;
+                do (a1s, a2s) <- map_bind2 tl;
                 ret (a1::a1s, a2::a2s)
     end.
 
-  Fact fold_bind2_values : forall a st a1s a2s st',
-      fold_bind2 a st = (a1s, a2s, st') ->
+  Fact map_bind2_values : forall a st a1s a2s st',
+      map_bind2 a st = (a1s, a2s, st') ->
       Forall3 (fun a a1 a2 => exists st'', exists st''', k a st'' = (a1, a2, st''')) a a1s a2s.
   Proof.
     induction a; intros st a1s a2s st' Hfold; simpl in *.

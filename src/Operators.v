@@ -8,6 +8,12 @@ Module Type OPERATORS.
   Parameter type : Type.
   Parameter const : Type.
 
+  (* Constants *)
+
+  Parameter type_const : const -> type.
+  Parameter sem_const  : const -> val.
+  Parameter init_type  : type -> const.
+
   (* Booleans *)
 
   Parameter true_val  : val.
@@ -16,11 +22,10 @@ Module Type OPERATORS.
 
   Parameter bool_type : type.
 
-  (* Constants *)
-
-  Parameter type_const : const -> type.
-  Parameter sem_const  : const -> val.
-  Parameter init_type  : type -> const.
+  Parameter true_const : const.
+  Parameter false_const : const.
+  Parameter sem_true_const : sem_const true_const = true_val.
+  Parameter sem_false_const : sem_const false_const = false_val.
 
   (* Operations *)
 

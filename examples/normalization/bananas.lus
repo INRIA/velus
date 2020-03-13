@@ -4,8 +4,6 @@ let
 tel
 
 node count_bananas (banana : bool) returns (n : int)
-var count : int when banana;
 let
-  count = cumulative_sum(1 when banana);
-  n = merge banana count (n when not banana);
+  n = merge banana (cumulative_sum(1 when banana)) (n when not banana);
 tel

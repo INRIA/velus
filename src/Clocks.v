@@ -62,6 +62,18 @@ Proof.
   discriminate.
 Qed.
 
+Instance nclock_EqDec : EqDec nclock eq.
+Proof.
+  eapply prod_eqdec.
+  - eapply clock_EqDec.
+  - unfold EqDec.
+    intros x y; destruct x; destruct y; try (right; congruence).
+    + specialize (EqDec_instance_0 i i0) as [?|?].
+      * left. rewrite e. reflexivity.
+      * right. intro contra. inv contra. congruence.
+    + left. reflexivity.
+Qed.
+
 Lemma clock_not_in_clock:
   forall ck x b,
     ~(ck = Con ck x b).

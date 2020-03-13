@@ -59,8 +59,9 @@ Module Type NORM
     apply max_fold_in; auto.
   Qed.
 
-  (** Fresh ident generation keeping type annotations, with possible errors *)
-  Definition FreshAnn A := Fresh A ann.
+  (** Fresh ident generation keeping type annotations;
+      also retaining if the var is an init var or not *)
+  Definition FreshAnn A := Fresh A (ann * bool).
 
   Local Open Scope fresh_monad_scope.
 
@@ -70,7 +71,7 @@ Module Type NORM
   Fixpoint idents_for_anns (anns : list ann) : FreshAnn (list (ident * ann)) :=
     match anns with
     | [] => ret []
-    | hd::tl => do x <- fresh_ident hd;
+    | hd::tl => do x <- fresh_ident (hd, false);
               do xs <- idents_for_anns tl;
               ret ((x, hd)::xs)
     end.
@@ -86,8 +87,41 @@ Module Type NORM
       constructor; eauto.
   Qed.
 
+  (** Add some whens on top of an expression *)
+  Fixpoint add_whens (e : exp) (ty : type) (cl : clock) :=
+    match cl with
+    | Cbase => e
+    | Con cl' clid b => Ewhen [(add_whens e ty cl')] clid b ([ty], (cl, None))
+    end.
+
+  (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
+      just return the variable *)
+  Definition init_var_for_clock (cl : nclock) : FreshAnn (ident * list equation) :=
+    fun '(n, l) => match (find (fun '(_, ((_, cl'), isinit)) => isinit && (cl ==b cl'))) l with
+                | Some (x, _) => ((x, []), (n, l))
+                | None => ((n, [([n], [Efby [add_whens (Econst true_const) bool_type (fst cl)]
+                                           [add_whens (Econst false_const) bool_type (fst cl)] [(bool_type, cl)]])]),
+                          (Pos.succ n, (n, ((bool_type, cl), true))::l))
+                end.
+
+  (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
+  Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
+    let '(ty, cl) := ann in
+    match e0 with
+    | Econst c => ret (Efby [e0] [e] [ann], [])
+    | _ => do (initid, eqs) <- init_var_for_clock cl;
+          do px <- fresh_ident (ann, false);
+          ret (Eite (Evar initid (bool_type, cl)) [e0] [Evar px ann] ([ty], cl),
+               ([px], [Efby [Econst (init_type ty)] [e] [ann]])::eqs)
+    end.
+
+  (** Normalize a `fby inits es anns` expression, with inits and es already normalized *)
+  Definition normalize_fby (inits : list exp) (es : list exp) (anns : list ann) : FreshAnn (list exp * list equation) :=
+    do (es, eqs) <- map_bind2 (fun '((init, e), ann) => fby_iteexp init e ann) (combine (combine inits es) anns);
+    ret (es, concat eqs).
+
   Fixpoint normalize_exp (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
-    let normalize_exps := fun es => do (es, eqs) <- fold_bind2 normalize_exp es; ret (concat es, concat eqs) in
+    let normalize_exps := fun es => do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs) in
     match e with
     | Econst c => ret ([Econst c], [])
     | Evar v ann => ret ([Evar v ann], [])
@@ -119,9 +153,10 @@ Module Type NORM
     | Efby inits es anns =>
       do (inits', eqs1) <- normalize_exps inits;
       do (es', eqs2) <- normalize_exps es;
+      do (fbys, eqs3) <- normalize_fby inits' es' anns;
       do xs <- idents_for_anns anns;
       ret (List.map (fun '(x, ann) => Evar x ann) xs,
-           List.map (fun '((x, ann), (init, e)) => ([x], [Efby [init] [e] [ann]])) (combine xs (combine inits' es')))
+           (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
                      | Some er => do (er, eqs1) <- normalize_exp er;
@@ -134,7 +169,7 @@ Module Type NORM
            (List.map fst xs, [Eapp f es' r' anns])::eqs1++eqs2)
     end.
   Definition normalize_exps (es : list exp) :=
-    do (es, eqs) <- fold_bind2 normalize_exp es; ret (concat es, concat eqs).
+    do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs).
 
   Fact normalize_exp_length : forall G vars e st es' eqs' st',
       wt_exp G vars e ->
@@ -147,11 +182,11 @@ Module Type NORM
       simpl in *; inv Hwt; inv Hnorm; repeat inv_bind; simpl; auto.
     - (* fby *)
       repeat rewrite map_length.
-      apply idents_for_anns_values in H3.
-      rewrite Forall2_forall2 in H3; destruct H3; auto.
+      apply idents_for_anns_values in H9.
+      rewrite Forall2_forall2 in H9; destruct H9; auto.
     - (* when *)
       rewrite map_length.
-      apply fold_bind2_values in H0.
+      apply map_bind2_values in H0.
       assert (Forall2 (fun e x => length x = length (typeof e)) es x1) as Hlen.
       { rewrite Forall_forall in *.
         rewrite Forall3_forall3 in H0; destruct H0 as [Hlen1 [Hlen2 H0]].
@@ -185,7 +220,7 @@ Module Type NORM
   Qed.
 
   Fixpoint normalize_control (e : exp) : FreshAnn (list exp * list equation) :=
-    let normalize_controls := fun es => do (es, eqs) <- fold_bind2 normalize_control es; ret (concat es, concat eqs) in
+    let normalize_controls := fun es => do (es, eqs) <- map_bind2 normalize_control es; ret (concat es, concat eqs) in
     match e with
     | Emerge clid es1 es2 (tys, cl) =>
       do (es1', eqs1) <- normalize_controls es1;
@@ -201,14 +236,15 @@ Module Type NORM
     | _ => normalize_exp e
     end.
   Definition normalize_controls (es : list exp) :=
-    do (es, eqs) <- fold_bind2 normalize_control es; ret (concat es, concat eqs).
+    do (es, eqs) <- map_bind2 normalize_control es; ret (concat es, concat eqs).
 
   Fixpoint normalize_top (e : exp) : FreshAnn (list exp * list equation) :=
     match e with
     | Efby inits es anns =>
       do (inits', eqs1) <- normalize_exps inits;
       do (es', eqs2) <- normalize_exps es;
-      ret (List.map (fun '((init, e), ann) => Efby [init] [e] [ann]) (combine (combine inits' es') anns), eqs1++eqs2)
+      do (fbys, eqs3) <- normalize_fby inits' es' anns;
+      ret (fbys, eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
                      | Some er => do (er, eqs1) <- normalize_exp er;
@@ -220,7 +256,7 @@ Module Type NORM
     | _ => normalize_control e
     end.
   Definition normalize_tops (es : list exp) :=
-    do (es, eqs) <- fold_bind2 normalize_top es; ret (concat es, concat eqs).
+    do (es, eqs) <- map_bind2 normalize_top es; ret (concat es, concat eqs).
 
   Definition split_equation (eq : equation) : list equation :=
     let (xs, es) := eq in
@@ -243,7 +279,9 @@ Module Type NORM
   Program Definition normalize_node (n : node) : node :=
     let id0 := first_unused_ident n in
     let '(eqs, (_, nvars)) := (normalize_equations (n_eqs n)) (id0, nil) in
-    let nvars := (List.map (fun '(id, ann) => let '(ty, cl) := ann in let '(cl, _) := cl in (id, (ty, cl))) nvars) in
+    let nvars := (List.map (fun '(id, ann) => let '(ann, _) := ann in
+                                           let '(ty, cl) := ann in
+                                           let '(cl, _) := cl in (id, (ty, cl))) nvars) in
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
        n_in := (n_in n);
@@ -266,56 +304,3 @@ Module NormFun
        (Typ : LTYPING Ids Op Syn) <: NORM Ids Op Syn Typ.
   Include NORM Ids Op Syn Typ.
 End NormFun.
-
-(* From Coq Require String. *)
-(* From Velus Require Interface. *)
-
-(* Module Tests. *)
-(*   Module Ids := Ident.Ids. *)
-(*   Module Import Op := Interface.Op. *)
-(*   Module Import Syn := LSyntaxFun Ids Op. *)
-(*   Module Typ := LTypingFun Ids Op Syn. *)
-(*   Module Import Norm := NormFun Ids Op Syn Typ. *)
-
-(*   Import String. *)
-(*   Local Open Scope string_scope. *)
-(*   Coercion pos_of_str : string >-> ident. *)
-
-(*   Import BinInt. *)
-(*   Definition int_type : type := Tint Ctypes.I32 Ctypes.Signed. *)
-(*   Definition const_int (z : Z) : const := Cint (Integers.Int.repr z) Ctypes.I32 Ctypes.Signed. *)
-(*   Coercion const_int : Z >-> const. *)
-(*   Local Open Scope Z_scope. *)
-
-(*   Program Definition cumulative_sum : node := *)
-(*     {| n_name := "cumulative_sum"; *)
-(*        n_hasstate := true; *)
-(*        n_in := [("x", (int_type, Cbase))]; *)
-(*        n_out := [("y", (int_type, Cbase))]; *)
-(*        n_vars := []; *)
-(*        n_eqs := [(["y"], [Ebinop Cop.Oadd *)
-(*                                  (Evar "x" (int_type, (Cbase, None))) *)
-(*                                  (Efby [Econst 0] [Evar "y" (int_type, (Cbase, None))] [(int_type, (Cbase, None))]) *)
-(*                                  (int_type, (Cbase, None))])]; *)
-(*     |}. *)
-(*   Admit Obligations. *)
-
-(*   Program Definition count_bananas : node := *)
-(*     {| n_name := "count_bananas"; *)
-(*        n_hasstate := true; *)
-(*        n_in := [("banana", (bool_type, Cbase))]; *)
-(*        n_out := [("n", (bool_type, Cbase))]; *)
-(*        n_vars := [("count", (int_type, Con Cbase "banana" true))]; *)
-(*        n_eqs := [(["count"], [Eapp "cumulative_sum" [Ewhen [Econst 1] "banana" true ([int_type], (Con Cbase "banana" true, None))] None *)
-(*                                    [(int_type, (Con Cbase "banana" true, None))]]); *)
-
-(*                 (["n"], [Emerge "banana" *)
-(*                                 [Evar "count" (int_type, (Con Cbase "banana" true, None))] *)
-(*                                 [Ewhen [Efby [Econst 0] [Evar "n" (int_type, (Cbase, None))] [(int_type, (Cbase, None))]] "banana" false ([int_type], (Con Cbase "banana" false, None))] *)
-(*                                 ([int_type], (Cbase, None))])]; *)
-(*     |}. *)
-(*   Admit Obligations. *)
-
-(*   Eval cbn in (normalize_node cumulative_sum). *)
-(*   Eval cbn in (normalize_node count_bananas). *)
-(* End Tests. *)

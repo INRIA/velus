@@ -122,6 +122,12 @@ Module Export Op <: OPERATORS.
     | Tfloat Ctypes.F32 => Csingle Floats.Float32.zero
     end.
 
+  (* Booleans *)
+  Definition true_const : const := Cint Int.one Ctypes.IBool Ctypes.Unsigned.
+  Definition false_const : const := Cint Int.zero Ctypes.IBool Ctypes.Unsigned.
+  Definition sem_true_const : sem_const true_const = true_val := eq_refl.
+  Definition sem_false_const : sem_const false_const = false_val := eq_refl.
+
   Inductive unop' : Type :=
   | UnaryOp: Cop.unary_operation -> unop'
   | CastOp:  type -> unop'.
