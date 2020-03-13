@@ -184,6 +184,44 @@ Module Type NORM
       repeat rewrite map_length in *; auto.
   Qed.
 
+  Fixpoint normalize_control (e : exp) : FreshAnn (list exp * list equation) :=
+    let normalize_controls := fun es => do (es, eqs) <- fold_bind2 normalize_control es; ret (concat es, concat eqs) in
+    match e with
+    | Emerge clid es1 es2 (tys, cl) =>
+      do (es1', eqs1) <- normalize_controls es1;
+      do (es2', eqs2) <- normalize_controls es2;
+      let merges := map (fun '((e1, e2), ty) => Emerge clid [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
+      ret (merges, eqs1++eqs2)
+    | Eite e es1 es2 (tys, cl) =>
+      do (e', eqs0) <- normalize_exp e;
+      do (es1', eqs1) <- normalize_controls es1;
+      do (es2', eqs2) <- normalize_controls es2;
+      let ites := map (fun '((e1, e2), ty) => Eite (hd_default e') [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
+      ret (ites, eqs0++eqs1++eqs2)
+    | _ => normalize_exp e
+    end.
+  Definition normalize_controls (es : list exp) :=
+    do (es, eqs) <- fold_bind2 normalize_control es; ret (concat es, concat eqs).
+
+  Fixpoint normalize_top (e : exp) : FreshAnn (list exp * list equation) :=
+    match e with
+    | Efby inits es anns =>
+      do (inits', eqs1) <- normalize_exps inits;
+      do (es', eqs2) <- normalize_exps es;
+      ret (List.map (fun '((init, e), ann) => Efby [init] [e] [ann]) (combine (combine inits' es') anns), eqs1++eqs2)
+    | Eapp f es r anns =>
+      do (r', eqs1) <- match r with
+                     | Some er => do (er, eqs1) <- normalize_exp er;
+                                 ret (Some (hd_default er), eqs1)
+                     | None => ret (None, [])
+                     end;
+      do (es', eqs2) <- normalize_exps es;
+      ret ([Eapp f es' r' anns], eqs1++eqs2)
+    | _ => normalize_control e
+    end.
+  Definition normalize_tops (es : list exp) :=
+    do (es, eqs) <- fold_bind2 normalize_top es; ret (concat es, concat eqs).
+
   Definition split_equation (eq : equation) : list equation :=
     let (xs, es) := eq in
     match es with
@@ -193,7 +231,7 @@ Module Type NORM
 
   Definition normalize_equation (e : equation) : FreshAnn (list equation) :=
     let '(xs, es) := e in
-    do (es', eqs) <- normalize_exps es;
+    do (es', eqs) <- normalize_tops es;
     ret (flat_map split_equation ((xs, es')::eqs)).
 
   Definition normalize_equations (eqs : list equation) : FreshAnn (list equation) :=
