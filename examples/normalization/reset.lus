@@ -1,0 +1,14 @@
+node sum (x : int) returns (y : int)
+let
+  y = x + (0 fby y);
+tel
+
+node reset1 (x : int; r : bool) returns (y : int)
+let
+  y = sum(x) every r;
+tel
+
+node reset2 (x : int) returns (y : int)
+let
+  y = sum(x) every (y > 42);
+tel

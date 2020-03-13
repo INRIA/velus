@@ -159,15 +159,21 @@ Module Type NORM
            (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
-                     | Some er => do (er, eqs1) <- normalize_exp er;
-                                 ret (Some (hd_default er), eqs1)
-                     | None => ret (None, [])
-                     end;
+                      | Some er => do (er, eqs1) <- normalize_exp er;
+                                  match (hd_default er) with
+                                  | Evar v ann => ret (Some (Evar v ann), eqs1)
+                                  | e => let ann := hd (bool_type, (Cbase, None)) (annot e) in
+                                        do x <- fresh_ident (ann, false);
+                                        ret (Some (Evar x ann), ([x], [e])::eqs1)
+                                  end
+                      | None => ret (None, [])
+                      end;
       do (es', eqs2) <- normalize_exps es;
       do xs <- idents_for_anns anns;
       ret (List.map (fun '(id, ann) => Evar id ann) xs,
            (List.map fst xs, [Eapp f es' r' anns])::eqs1++eqs2)
     end.
+
   Definition normalize_exps (es : list exp) :=
     do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs).
 
@@ -247,10 +253,15 @@ Module Type NORM
       ret (fbys, eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
-                     | Some er => do (er, eqs1) <- normalize_exp er;
-                                 ret (Some (hd_default er), eqs1)
-                     | None => ret (None, [])
-                     end;
+                      | Some er => do (er, eqs1) <- normalize_exp er;
+                                  match (hd_default er) with
+                                  | Evar v ann => ret (Some (Evar v ann), eqs1)
+                                  | e => let ann := hd (bool_type, (Cbase, None)) (annot e) in
+                                        do x <- fresh_ident (ann, false);
+                                        ret (Some (Evar x ann), ([x], [e])::eqs1)
+                                  end
+                      | None => ret (None, [])
+                      end;
       do (es', eqs2) <- normalize_exps es;
       ret ([Eapp f es' r' anns], eqs1++eqs2)
     | _ => normalize_control e

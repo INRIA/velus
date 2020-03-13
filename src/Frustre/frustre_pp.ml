@@ -194,8 +194,10 @@ let rec exp prec p { F.e_desc; F.e_typ; F.e_clk } =
   | F.Eite (e, e1s, e2s) ->
       fprintf p "if %a@ then %a@ else %a"
         (exp 16) e (exp_list 16) e1s (exp_list 16) e2s
-  | F.Eapp (f, es) ->
+  | F.Eapp (f, es, None) ->
       fprintf p "%a%a" ident f exp_arg_list es
+  | F.Eapp (f, es, Some er) ->
+     fprintf p "%a%a every %a" ident f exp_arg_list es (exp prec') er
   end;
   if !show_annot_types then fprintf p " : @[%a@]" typs e_typ;
   if !show_annot_clocks then fprintf p " :: @[%a@]" nclocks e_clk;

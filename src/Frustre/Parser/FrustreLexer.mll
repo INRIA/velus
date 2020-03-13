@@ -36,6 +36,7 @@ let () =
       ("bool",     fun loc -> BOOL     loc);
       ("double",   fun loc -> FLOAT64  loc); (* LEGACY *)
       ("else",     fun loc -> ELSE     loc);
+      ("every",    fun loc -> EVERY    loc);
       ("false",    fun loc -> FALSE    loc);
       ("fby",      fun loc -> FBY      loc);
       ("float",    fun loc -> FLOAT32  loc); (* LEGACY *)

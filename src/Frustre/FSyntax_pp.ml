@@ -179,15 +179,15 @@ let clock_decl p ck =
         Format.fprintf p " when%s %a" (if b then "" else " not") ident x
 
 let annot_typs p = function
-  | FS.Econst c                    -> typ p (FS.ty_const c)
-  | FS.Evar (_, (ty, ck))          -> typ p ty
-  | FS.Eunop (_, _, (ty, ck))      -> typ p ty
-  | FS.Ebinop (_, _, _, (ty, ck))  -> typ p ty
-  | FS.Efby (_, _, tycks)          -> typs p (List.map fst tycks)
-  | FS.Ewhen (_, _, _, (tys, ck))  -> typs p tys
-  | FS.Emerge (_, _, _, (tys, ck)) -> typs p tys
-  | FS.Eite (_, _, _, (tys, ck))   -> typs p tys
-  | FS.Eapp (_, _, tycks)          -> typs p (List.map fst tycks)
+  | FS.Econst c                     -> typ p (FS.ty_const c)
+  | FS.Evar (_, (ty, ck))           -> typ p ty
+  | FS.Eunop (_, _, (ty, ck))       -> typ p ty
+  | FS.Ebinop (_, _, _, (ty, ck))   -> typ p ty
+  | FS.Efby (_, _, tycks)           -> typs p (List.map fst tycks)
+  | FS.Ewhen (_, _, _, (tys, ck))   -> typs p tys
+  | FS.Emerge (_, _, _, (tys, ck))  -> typs p tys
+  | FS.Eite (_, _, _, (tys, ck))    -> typs p tys
+  | FS.Eapp (_, _, _, tycks)     -> typs p (List.map fst tycks)
 
 let annot_cks p = function
   | FS.Econst c                    -> sclock p C.Cbase
@@ -198,7 +198,7 @@ let annot_cks p = function
   | FS.Ewhen (_, _, _, (tys, ck))  -> nclock p ck
   | FS.Emerge (_, _, _, (tys, ck)) -> nclock p ck
   | FS.Eite (_, _, _, (tys, ck))   -> nclock p ck
-  | FS.Eapp (_, _, tycks)          -> nclocks p (List.map snd tycks)
+  | FS.Eapp (_, _, _, tycks)          -> nclocks p (List.map snd tycks)
 
 let rec exp prec p e =
   let (prec', assoc) = precedence e in
@@ -230,11 +230,19 @@ let rec exp prec p e =
   | FS.Eite (e, e1s, e2s, _) ->
       fprintf p "if %a@ then %a@ else %a"
         (exp 16) e (exp_list 16) e1s (exp_list 16) e2s
-  | FS.Eapp (f, es, anns) ->
+  | FS.Eapp (f, es, None, anns) ->
       if !print_appclocks
       then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
              ident f exp_arg_list es nclocks (List.map snd anns)
       else fprintf p "%a%a" ident f exp_arg_list es
+  | FS.Eapp (f, es, (Some er), anns) ->
+    if !print_appclocks
+    then fprintf p "%a@[<v 1>%a@ every@ %a@ (* @[<hov>%a@] *)@]"
+        ident f
+        exp_arg_list es
+        (exp prec') er
+        nclocks (List.map snd anns)
+    else fprintf p "%a%a@ every@ %a" ident f exp_arg_list es (exp prec') er
   end;
   if !show_annot_types then fprintf p " : @[%a@]" annot_typs e;
   if !show_annot_clocks then fprintf p " :: @[%a@]" annot_cks e;

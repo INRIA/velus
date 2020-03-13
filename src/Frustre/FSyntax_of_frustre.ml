@@ -127,8 +127,10 @@ let rec tr_exp { F.e_desc = e; F.e_typ = tys; F.e_clk = cks } =
                                          (tr_types tys, tr_first_nclock cks))
   | F.Eite (e, ets, efs)  -> FS.Eite (tr_exp e, tr_exps ets, tr_exps efs,
                                       (tr_types tys, tr_first_nclock cks))
-  | F.Eapp (f, es)        -> FS.Eapp (f, tr_exps es,
-                                List.combine (tr_types tys) (tr_nclocks cks))
+  | F.Eapp (f, es, None)        -> FS.Eapp (f, tr_exps es, None,
+                                            List.combine (tr_types tys) (tr_nclocks cks))
+  | F.Eapp (f, es, Some er)        -> FS.Eapp (f, tr_exps es, Some (tr_exp er),
+                                               List.combine (tr_types tys) (tr_nclocks cks))
 
 and tr_exps es = List.map tr_exp es
 

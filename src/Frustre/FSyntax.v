@@ -93,7 +93,7 @@ Inductive exp : Type :=
 | Emerge : ident -> list exp -> list exp -> lann -> exp
 | Eite   : exp -> list exp -> list exp -> lann -> exp
 
-| Eapp   : ident -> list exp -> list ann -> exp.
+| Eapp   : ident -> list exp -> option exp -> list ann -> exp.
 
 Definition equation : Type := (list ident * list exp)%type.
 

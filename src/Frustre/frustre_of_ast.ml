@@ -221,7 +221,9 @@ let rec tr_exp = function
   | A.CAST (ty, [e], loc) ->
       mke F.(Eunop (Ecast (tr_type ty), tr_exp e)) loc
   | A.APP (f, es, loc) ->
-      mke F.(Eapp (f, tr_exps es)) loc
+      mke F.(Eapp (f, tr_exps es, None)) loc
+  | A.APPRESET (f, es, er, loc) ->
+      mke F.(Eapp (f, tr_exps es, Some (tr_exp (List.hd er)))) loc
   | A.CONSTANT (c, loc) ->
       mke F.(Econst (tr_const loc c)) loc
   | A.VARIABLE (x, loc) ->

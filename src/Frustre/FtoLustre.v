@@ -123,7 +123,10 @@ Fixpoint tr_exp (e : F.exp) : L.exp :=
                                        (List.map tr_exp efs) (tr_lann a)
   | F.Eite e ets efs a => L.Eite (tr_exp e) (List.map tr_exp ets)
                                             (List.map tr_exp efs) (tr_lann a)
-  | F.Eapp f es aa => L.Eapp f (List.map tr_exp es) None (List.map tr_ann aa)
+  | F.Eapp f es er aa => L.Eapp f (List.map tr_exp es) (match er with
+                                                        | None => None
+                                                        | Some er => Some (tr_exp er)
+                                                        end) (List.map tr_ann aa)
   end.
 
 Definition tr_equation (eq : F.equation) : L.equation :=

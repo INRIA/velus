@@ -80,6 +80,7 @@ Inductive expression :=
              -> expression
 | CAST     : type_name -> list expression -> astloc -> expression
 | APP      : ident -> list expression -> astloc -> expression
+| APPRESET : ident -> list expression -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
 | FBY      : list expression -> list expression -> astloc -> expression
@@ -93,6 +94,7 @@ Definition expression_loc (e: expression) : astloc :=
   | IFTE _ _ _ l => l
   | CAST _ _ l => l
   | APP _ _ l => l
+  | APPRESET _ _ _ l => l
   | CONSTANT _ l => l
   | VARIABLE _ l => l
   | FBY _ _ l => l
@@ -149,6 +151,12 @@ Section expression_ind2.
       Forall P es ->
       P (APP f es a).
 
+  Hypothesis APPRESETCase:
+    forall f es er a,
+      Forall P es ->
+      Forall P er ->
+      P (APPRESET f es er a).
+
   Hypothesis CONSTANTCase:
     forall c a,
       P (CONSTANT c a).
@@ -188,6 +196,7 @@ Section expression_ind2.
     - apply IFTECase; SolveForall.
     - apply CASTCase; SolveForall.
     - apply APPCase; SolveForall.
+    - apply APPRESETCase; SolveForall.
     - apply CONSTANTCase; SolveForall.
     - apply VARIABLECase; SolveForall.
     - apply FBYCase; SolveForall.

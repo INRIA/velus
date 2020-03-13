@@ -147,7 +147,7 @@ let exp genv env =
              end
           | _ -> assert false (* guaranteed by typing *))
 
-      | Eapp (n, es) ->
+      | Eapp (n, es, er) ->
           let cks = List.(concat (map f es)) in
           let (icks, ocks) = try Env.find n genv
             with Not_found -> error e.e_loc
@@ -156,11 +156,21 @@ let exp genv env =
           let isub = List.fold_left2 mk_isub Env.empty icks cks in
           let osub = List.fold_left mk_osub isub ocks in
           let bck = fresh_clock () in
-          (try
-            List.iter2 (check_input bck isub) icks cks;
-            List.map (fun (y, yck) ->
-                        Cnamed (Env.find y osub, inst_clock bck osub yck)) ocks
-           with Failure s -> error e.e_loc s)
+          let clks =
+            (try
+               List.iter2 (check_input bck isub) icks cks;
+               List.map (fun (y, yck) ->
+                   Cnamed (Env.find y osub, inst_clock bck osub yck)) ocks
+             with Failure s -> error e.e_loc s) in
+          (match er with
+           | None -> ()
+           | Some er -> (match (f er) with
+               | [erck] -> (try unify_clocks bck (stripname erck)
+                            with _ -> error e.e_loc
+                                        (sprintf "mismatched reset clock: %a versus %a"
+                                           PP.sclock (stripname erck) PP.sclock bck))
+               | _ -> error e.e_loc "bad reset clock"));
+          clks
     in
     e.e_clk <- clks;
     clks
@@ -253,8 +263,10 @@ let rec infer_whens e =
   | Eite (e', ets, efs) ->
       { e with e_desc = Eite (infer_whens e', List.map infer_whens ets,
                                               List.map infer_whens efs) }
-  | Eapp (n, es) ->
-      { e with e_desc = Eapp (n, List.map infer_whens es) }
+  | Eapp (n, es, None) ->
+    { e with e_desc = Eapp (n, List.map infer_whens es, None) }
+  | Eapp (n, es, Some er) ->
+    { e with e_desc = Eapp (n, List.map infer_whens es, Some (infer_whens er)) }
 
 let infer_whens_in_equation ({ eq_desc = (xs, es) } as eq) =
   { eq with eq_desc = (xs, List.map infer_whens es) }

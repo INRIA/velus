@@ -161,7 +161,7 @@ and desc =
   | Ewhen  of exp list * ident * bool
   | Emerge of ident * exp list * exp list
   | Eite   of exp * exp list * exp list
-  | Eapp   of ident * exp list
+  | Eapp   of ident * exp list * exp option
 
 type equation = {
     eq_desc : eqdesc;

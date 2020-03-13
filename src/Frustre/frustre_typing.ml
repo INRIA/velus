@@ -178,12 +178,17 @@ let exp genv env =
                else error e.e_loc (sprintf "mismatched types: %a versus %a"
                                      PP.typs ttys PP.typs ftys)
 
-      | Eapp (n, es) ->
+      | Eapp (n, es, er) ->
           let tys = List.(concat (map f es)) in
           let (itys, otys) = try Env.find n genv
             with Not_found -> error e.e_loc
               (sprintf "use of undeclared node '%a'" PP.ident n)
           in
+          (* Check the reset expr *)
+          (match er with
+           | None -> ()
+           | Some er -> let tyr = f er in
+             if tyr <> [typ_bool] then expected_got er.e_loc [typ_bool] tyr);
           if tys = itys then otys
           else expected_got e.e_loc itys tys
     in
