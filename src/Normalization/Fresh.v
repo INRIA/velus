@@ -1,6 +1,9 @@
 (** * Fresh name generation *)
 
-From Velus Require Import Common.
+From Coq Require Import List.
+From Coq Require Import Classes.RelationClasses.
+
+From Velus Require Import Common Ident.
 From Velus Require Import Lustre.LSyntax.
 
 (** The fresh monad (with memory) : generates new names and keeps
@@ -11,9 +14,94 @@ Definition Fresh (A B : Type) : Type := fresh_st B -> A * fresh_st B.
 (** Pure value *)
 Definition ret {A B} (a : A) : Fresh A B := fun st => (a, st).
 
-(** The counter is incremented with each call to `fresh_name` *)
-Definition fresh_ident {B} (b : B) : Fresh ident B :=
-  fun '(n, l) => (n, (Pos.succ n, (cons (n, b) l))).
+Section validity.
+  Context {B : Type}.
+
+  (** The state is valid if the next ident is greater than all generated idents,
+    and if there is no duplicates in generated idents *)
+  Definition fresh_st_valid (st : fresh_st B) : Prop :=
+    let '(n, l) := st in
+    Forall (fun '(x, _) => Pos.lt x n) l /\ NoDupMembers l.
+End validity.
+
+Section follows.
+  Context {B : Type}.
+
+  (** Smallest identifier defined in the state *)
+  Definition smallest_ident (st : fresh_st B) : positive :=
+    let (n, l) := st in
+    fold_right Pos.min n (List.map fst l).
+
+  (** The smallest ident of `st` is less or equal to the smallest
+      ident of `st'` *)
+  Definition fresh_st_follows (st st' : fresh_st B) :=
+    Pos.le (smallest_ident st) (smallest_ident st').
+
+  Global Instance st_follows_refl : Reflexive fresh_st_follows.
+  Proof.
+    intros st. unfold fresh_st_follows. reflexivity.
+  Qed.
+
+  Global Instance st_follows_trans : Transitive fresh_st_follows.
+  Proof.
+    intros st1 st2 st3 H12 H23.
+    unfold fresh_st_follows in *.
+    etransitivity; eauto.
+  Qed.
+End follows.
+
+Section fresh_ident.
+  Context {B : Type}.
+
+  (** The counter is incremented with each call to `fresh_name` *)
+  Definition fresh_ident (b : B) : Fresh ident B :=
+    fun '(n, l) => (n, (Pos.succ n, (cons (n, b) l))).
+
+  Fact fresh_ident_st_valid :
+    forall (b : B) res st st',
+      fresh_ident b st = (res, st') ->
+      fresh_st_valid st ->
+      fresh_st_valid st'.
+  Proof.
+    intros b res st st' Hfresh Hvalid.
+    destruct st as [n l]; destruct st' as [n' l'].
+    simpl in Hfresh; inv Hfresh.
+    destruct Hvalid.
+    repeat constructor; auto.
+    + apply Positive_as_DT.lt_succ_diag_r.
+    + eapply Forall_impl; eauto.
+      intros [x _] Hlt'.
+      apply Positive_as_OT.lt_lt_succ; auto.
+    + intro contra.
+      induction l; inv H; simpl in *; auto.
+      destruct a as [x ann].
+      destruct contra; subst; inv H0; auto.
+      apply Pos.lt_irrefl in H3; auto.
+  Qed.
+
+  Fact fresh_ident_st_follows :
+    forall (b : B) res st st',
+      fresh_ident b st = (res, st') ->
+      fresh_st_follows st st'.
+  Proof.
+    intros b res st st' Hfresh.
+    destruct st as [n l]; destruct st' as [n' l'].
+    simpl in *; inv Hfresh; simpl.
+    unfold fresh_st_follows, smallest_ident in *; simpl in *.
+    induction l as [|[a ?]]; simpl in *.
+    - rewrite Pos.min_glb_iff.
+      split.
+      + reflexivity.
+      + apply Pos.lt_le_incl.
+        apply Pos.lt_succ_diag_r.
+    - rewrite Pos.min_glb_iff in *.
+      destruct IHl as [IHl1 IHl2].
+      split.
+      + etransitivity; eauto.
+        eapply Pos.le_min_r.
+      + eapply Pos.min_le_compat_l; eauto.
+  Qed.
+End fresh_ident.
 
 Section bind.
   Context {A A' B : Type}.
@@ -21,7 +109,7 @@ Section bind.
   Definition bind (x : Fresh A B) (k : A -> Fresh A' B) : Fresh A' B :=
     fun st => let '(a, st') := x st in k a st'.
 
-  Fact bind_inv : forall (x : Fresh A B) (k : A -> Fresh A' B) st a' st'',
+  Lemma bind_inv : forall (x : Fresh A B) (k : A -> Fresh A' B) st a' st'',
       (bind x k) st = (a', st'') ->
       exists a, exists st', (x st = (a, st') /\ k a st' = (a', st'')).
   Proof.
@@ -29,6 +117,18 @@ Section bind.
     unfold bind in Hbind.
     destruct (x st) as [a st']. exists a. exists st'.
     split; auto.
+  Qed.
+
+  Fact bind_st_valid : forall (x : Fresh A B) (k : A -> Fresh A' B) a' st st',
+      (forall a st st', x st = (a, st') -> fresh_st_valid st -> fresh_st_valid st') ->
+      (forall a a' st st', k a st = (a', st') -> fresh_st_valid st -> fresh_st_valid st') ->
+      (bind x k) st = (a', st') ->
+      fresh_st_valid st ->
+      fresh_st_valid st'.
+  Proof.
+    intros x k a' st st' H1 H2 Hbind Hfresh.
+    apply bind_inv in Hbind. destruct Hbind as [a1 [st1 [Hx Hk]]].
+    eauto.
   Qed.
 End bind.
 
@@ -38,7 +138,7 @@ Section bind2.
   Definition bind2 (x: Fresh (A1 * A2) B) (k: A1 -> A2 -> Fresh A' B) : Fresh A' B :=
     fun n => let '((a1, a2), n') := x n in k a1 a2 n'.
 
-  Fact bind2_inv : forall (x : Fresh (A1 * A2) B) (k : A1 -> A2 -> Fresh A' B) st a' st'',
+  Lemma bind2_inv : forall (x : Fresh (A1 * A2) B) (k : A1 -> A2 -> Fresh A' B) st a' st'',
       (bind2 x k) st = (a', st'') ->
       exists a1, exists a2, exists st', (x st = ((a1, a2), st') /\ k a1 a2 st' = (a', st'')).
   Proof.
@@ -46,6 +146,18 @@ Section bind2.
     unfold bind2 in Hbind.
     destruct (x st) as [[a1 a2] st']. exists a1. exists a2. exists st'.
     split; auto.
+  Qed.
+
+  Fact bind2_st_valid : forall (x : Fresh (A1 * A2) B) (k : A1 -> A2 -> Fresh A' B) a' st st',
+      (forall a st st', x st = (a, st') -> fresh_st_valid st -> fresh_st_valid st') ->
+      (forall a1 a2 a' st st', k a1 a2 st = (a', st') -> fresh_st_valid st -> fresh_st_valid st') ->
+      (bind2 x k) st = (a', st') ->
+      fresh_st_valid st ->
+      fresh_st_valid st'.
+  Proof.
+    intros x k a' st st' H1 H2 Hbind Hfresh.
+    apply bind_inv in Hbind. destruct Hbind as [[a1 a2] [st1 [Hx Hk]]].
+    eauto.
   Qed.
 End bind2.
 
@@ -94,5 +206,28 @@ Section Fb2.
     - repeat inv_bind.
       specialize (IHa _ _ _ _ H0).
       constructor; eauto.
+  Qed.
+
+  Fact map_bind2_st_valid : forall a a1s a2s st st',
+      map_bind2 a st = (a1s, a2s, st') ->
+      Forall (fun a => forall a1 a2 st st', k a st = (a1, a2, st') -> fresh_st_valid st -> fresh_st_valid st') a ->
+      fresh_st_valid st ->
+      fresh_st_valid st'.
+  Proof.
+    induction a; intros a1s a2s st st' Hmap Hforall Hvalid;
+      simpl in *; repeat inv_bind; auto.
+    inv Hforall. eapply IHa; eauto.
+  Qed.
+
+  Fact map_bind2_st_follows : forall a a1s a2s st st',
+      map_bind2 a st = (a1s, a2s, st') ->
+      Forall (fun a => forall a1 a2 st st', k a st = (a1, a2, st') -> fresh_st_follows st st') a ->
+      fresh_st_follows st st'.
+  Proof.
+    induction a; intros a1s a2s st st' Hmap Hforall;
+      simpl in *; repeat inv_bind; auto.
+    - reflexivity.
+    - inv Hforall.
+      etransitivity; eauto.
   Qed.
 End Fb2.

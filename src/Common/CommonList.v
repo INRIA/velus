@@ -3010,3 +3010,50 @@ Tactic Notation "induction_list" constr(E) "with" ident(l) :=
 Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
   let H := fresh "H" l in
   induction_list_tac E I l H.
+
+(* Pos.min and Pos.max with fold *)
+Section minmax.
+  Fact min_fold_le : forall l x0,
+    ((fold_right Pos.min x0 l) <= x0)%positive.
+  Proof.
+    induction l; intros x0; simpl in *.
+    - apply Pos.le_refl.
+    - etransitivity. apply Pos.le_min_r. auto.
+  Qed.
+
+  Fact min_fold_in : forall x l x0,
+      List.In x l ->
+      ((fold_right Pos.min x0 l) <= x)%positive.
+  Proof.
+    intros x l.
+    induction l; intros x0 Hin; simpl in Hin.
+    - inversion Hin.
+    - destruct Hin as [?|Hin]; subst; simpl.
+      + apply Pos.le_min_l.
+      + etransitivity. apply Pos.le_min_r. auto.
+  Qed.
+
+  Fact max_fold_ge : forall l x0,
+      (x0 <= (fold_left Pos.max l x0))%positive.
+  Proof.
+    induction l; intros x0; simpl in *.
+    - apply Pos.le_refl.
+    - eapply Pos.le_trans.
+      2: apply IHl.
+      apply Pos.le_max_l.
+  Qed.
+
+  Fact max_fold_in : forall x l x0,
+      List.In x l ->
+      (x <= (fold_left Pos.max l x0))%positive.
+  Proof.
+    intros x l.
+    induction l; intros x0 Hin; simpl in Hin.
+    - inversion Hin.
+    - destruct Hin as [?|Hin]; subst; simpl.
+      + eapply Pos.le_trans.
+        2: eapply max_fold_ge.
+        apply Pos.le_max_r.
+      + apply IHl; eauto.
+  Qed.
+End minmax.
