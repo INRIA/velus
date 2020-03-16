@@ -13,6 +13,11 @@ let
   t = if b1 then (if b2 then (0 fby x) else (0 fby y)) else z;
 tel
 
+node control_ite_inside (b1 : bool) returns (t : int)
+let
+  t = 1 + (if b1 then (if b1 then 2 else 3) else 4);
+tel
+
 node control_merge (b : bool; x : int when b; y : int when not b) returns (z : int)
 let
   z = merge b x y;
