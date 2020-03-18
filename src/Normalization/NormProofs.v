@@ -65,30 +65,18 @@ Module Type NORMPROOFS
       rewrite Forall3_forall3; repeat split; auto; intros; subst
     end.
 
-  Fact normalize_length : forall G vars e es' eqs' st st',
+  Fact normalize_exp_length : forall G vars e is_control es' eqs' st st',
       wt_exp G vars e ->
-      (normalize_exp e st = (es', eqs', st') \/ normalize_control e st = (es', eqs', st')) ->
+      normalize_exp is_control e st = (es', eqs', st') ->
       length es' = numstreams e.
   Proof.
     intros G vars e.
     rewrite <- numstreams_length_typeof.
-    induction e using exp_ind2; intros es' eqs' st st' Hwt Hnorm;
+    induction e using exp_ind2; intros is_control es' eqs' st st' Hwt Hnorm;
+      [| | | | | | destruct is_control | destruct is_control | ];
       simpl in *; inv Hwt; inv Hnorm; repeat inv_bind;
         repeat rewrite map_length in *; auto;
           try idents_for_anns_length.
-    - (* when *)
-      apply map_bind2_values in H0.
-      assert (Forall2 (fun e x => length x = length (typeof e)) es x1) as Hlen.
-      { repeat rewrite_Forall_forall.
-        specialize (H2 a b0 [] _ _ _ _ H3 eq_refl eq_refl eq_refl); destruct H2 as [st'' [st''' ?]].
-        eapply nth_In in H3. eapply H; eauto.
-      } clear H H0.
-      assert (length (concat x1) = length (typesof es)) as Hlen'.
-      { unfold typesof. rewrite flat_map_concat_map.
-        induction Hlen; simpl; auto.
-        inv H4. repeat rewrite app_length; auto. }
-      rewrite combine_length. rewrite Hlen'.
-      apply OrdersEx.Nat_as_DT.min_id.
     - (* when *)
       apply map_bind2_values in H0.
       assert (Forall2 (fun e x => length x = length (typeof e)) es x1) as Hlen.
@@ -165,63 +153,53 @@ Module Type NORMPROOFS
     { repeat rewrite_Forall_forall.
       replace (length x) in *.
       specialize (H1 b a [] _ _ _ _ H2 eq_refl eq_refl eq_refl); destruct H1 as [? [? H1]].
-      specialize (normalize_length _ _ _ _ _ _ _ (Hwt _ (nth_In _ _ H2)) (or_introl H1)) as Hlength.
-      rewrite numstreams_length_typeof. assumption.
+      eapply normalize_exp_length in H1; eauto.
+      + rewrite numstreams_length_typeof. assumption.
+      + eapply Hwt. apply nth_In; auto.
     } clear H Hwt.
     induction Hf; simpl; auto.
     repeat rewrite app_length; auto.
   Qed.
 
-  Fact normalize_typeof : forall G vars e es' eqs' st st',
+  Fact normalize_exp_typeof : forall G vars e is_control es' eqs' st st',
       wt_exp G vars e ->
-      (normalize_exp e st = (es', eqs', st') \/ normalize_control e st = (es', eqs', st')) ->
+      normalize_exp is_control e st = (es', eqs', st')  ->
       typesof es' = typeof e.
   Proof.
-    induction e; intros es' eqs' st st' Hwt Hnorm;
-      specialize (normalize_length _ _ _ es' eqs' st st' Hwt Hnorm) as Hlength;
+    induction e; intros is_control es' eqs' st st' Hwt Hnorm;
+      specialize (normalize_exp_length _ _ _ _ es' eqs' st st' Hwt Hnorm) as Hlength;
       simpl in *.
     - (* const *)
-      destruct Hnorm; repeat inv_bind; reflexivity.
+      repeat inv_bind; reflexivity.
     - (* var *)
-      destruct Hnorm; repeat inv_bind; reflexivity.
+      repeat inv_bind; reflexivity.
     - (* unop *)
-      destruct Hnorm; repeat inv_bind; reflexivity.
+      repeat inv_bind; reflexivity.
     - (* binop *)
-      destruct Hnorm; repeat inv_bind; reflexivity.
+      repeat inv_bind; reflexivity.
     - (* fby *)
-      destruct Hnorm; repeat inv_bind;
-        apply idents_for_anns_values in H2;
-        clear H1 Hwt; (induction H2; [ auto | destruct y; subst; simpl; f_equal; auto ]).
+      repeat inv_bind.
+      apply idents_for_anns_values in H2.
+      clear H1 Hwt; (induction H2; [ auto | destruct y; subst; simpl; f_equal; auto ]).
     - (* when *)
-      destruct l0; destruct Hnorm; repeat inv_bind;
-        rewrite map_length in Hlength;
-        assert (Forall2 (fun '(e, ty) ty' => typeof (Ewhen [e] i b ([ty], n)) = [ty']) (combine (concat x0) l0) l0) as Hf;
-        try (clear Hwt; induction Hf; simpl; auto;
-             destruct x; simpl in *; inv H0; f_equal; auto);
-        rewrite_Forall_forall;
-        destruct nth eqn:Hnth; simpl; f_equal;
-          destruct a;
-          specialize (combine_length_r _ _ Hlength) as Hlen';
-          specialize (combine_nth_r _ _ n0 e0 t1 Hlen') as [d Hnth'];
-          rewrite Hnth' in Hnth; inv Hnth;
-            apply nth_indep; rewrite <- Hlength; auto.
+      destruct l0. repeat inv_bind.
+      rewrite map_length in Hlength.
+      assert (Forall2 (fun '(e, ty) ty' => typeof (Ewhen [e] i b ([ty], n)) = [ty']) (combine (concat x0) l0) l0) as Hf.
+      { rewrite_Forall_forall.
+        destruct nth eqn:Hnth; simpl; f_equal.
+        destruct a.
+        specialize (combine_length_r _ _ Hlength) as Hlen'.
+        specialize (combine_nth_r _ _ n0 e0 t1 Hlen') as [d Hnth'].
+        rewrite Hnth' in Hnth; inv Hnth.
+        apply nth_indep; rewrite <- Hlength; auto.
+      } clear Hwt.
+      induction Hf; simpl; auto.
+      destruct x; simpl in *. inv H0. f_equal; auto.
     - (* merge *)
       clear Hwt.
-      destruct l1; destruct Hnorm; repeat inv_bind;
-        rewrite map_length in *.
-      + (* normalize_exp *)
-        apply idents_for_anns_values in H1.
-        assert (Forall2 (fun ty '(id, a) => (typeof (Evar id a)) = [ty]) l1 x5) as Hf.
-        { repeat rewrite_Forall_forall.
-          destruct (nth _ _ b) eqn:Hnth; simpl. f_equal.
-          rewrite map_length in *.
-          specialize (H2 a0 b n0 _ _ H3 eq_refl eq_refl); rewrite Hnth in H2.
-          symmetry in H2. erewrite map_nth' in H2; eauto.
-          destruct a0; inv H2; simpl; eauto.
-        }
-        clear H1. induction Hf; simpl; auto.
-        destruct y; simpl in *. inv Hlength. inv H1. f_equal; auto.
-      + (* normalize_control *)
+      destruct l1.
+      destruct is_control; repeat inv_bind; rewrite map_length in *.
+      + (* control *)
         assert (Forall2 (fun '(e1, e2, ty) ty' => typeof (Emerge i [e1] [e2] ([ty], n)) = [ty'])
                         (combine (combine (concat x2) (concat x4)) l1) l1) as Hf.
         { rewrite_Forall_forall.
@@ -233,24 +211,25 @@ Module Type NORMPROOFS
           apply nth_indep; rewrite <- Hlength; auto.
         }
         induction Hf; simpl; auto.
-        destruct x as [[e1 e2] a]. inv Hlength. simpl in *. inv H1. f_equal; auto.
-    - (* ite *)
-      clear Hwt.
-      destruct l1; destruct Hnorm; repeat inv_bind;
-        rewrite map_length in *.
-      + (* norm_exp *)
-        apply idents_for_anns_values in H2.
-        assert (Forall2 (fun ty '(id, a) => (typeof (Evar id a)) = [ty]) l1 x8) as Hf.
+        destruct x as [[e1 e2] a]. inv Hlength. simpl in *.
+        inv H1. f_equal; auto.
+      + (* exp *)
+        apply idents_for_anns_values in H1.
+        assert (Forall2 (fun ty '(id, a) => (typeof (Evar id a)) = [ty]) l1 x5) as Hf.
         { repeat rewrite_Forall_forall.
           destruct (nth _ _ b) eqn:Hnth; simpl. f_equal.
           rewrite map_length in *.
-          specialize (H3 a0 b n0 _ _ H4 eq_refl eq_refl); rewrite Hnth in H3.
-          symmetry in H3. erewrite map_nth' in H3; eauto.
-          destruct a0; inv H3; simpl; eauto.
+          specialize (H2 a0 b n0 _ _ H3 eq_refl eq_refl); rewrite Hnth in H2.
+          symmetry in H2. erewrite map_nth' in H2; eauto.
+          destruct a0; inv H2; simpl; eauto.
         }
-        clear H2. induction Hf; simpl; auto.
-        destruct y; simpl in *. inv Hlength. inv H2. f_equal; auto.
-      + (* norm_control *)
+        clear H1. induction Hf; simpl; auto.
+        destruct y; simpl in *. inv Hlength. inv H1. f_equal; auto.
+    - (* ite *)
+      clear Hwt.
+      destruct l1.
+      destruct is_control; repeat inv_bind; rewrite map_length in *.
+      + (* control *)
         assert (Forall2 (fun '(e1, e2, ty) ty' => typeof (Eite (hd_default x) [e1] [e2] ([ty], n)) = [ty'])
                         (combine (combine (concat x5) (concat x7)) l1) l1) as Hf.
         { rewrite_Forall_forall.
@@ -262,12 +241,26 @@ Module Type NORMPROOFS
           apply nth_indep; rewrite <- Hlength; auto.
         }
         induction Hf; simpl; auto.
-        destruct x2 as [[e1 e2] a]. inv Hlength. simpl in *. inv H2. f_equal; auto.
+        destruct x2 as [[e1 e2] a]. inv Hlength. simpl in *.
+        inv H2. f_equal; auto.
+      + (* exp *)
+        apply idents_for_anns_values in H2.
+        assert (Forall2 (fun ty '(id, a) => (typeof (Evar id a)) = [ty]) l1 x8) as Hf.
+        { repeat rewrite_Forall_forall.
+          destruct (nth _ _ b) eqn:Hnth; simpl. f_equal.
+          rewrite map_length in *.
+          specialize (H3 a0 b n0 _ _ H4 eq_refl eq_refl); rewrite Hnth in H3.
+          symmetry in H3. erewrite map_nth' in H3; eauto.
+          destruct a0; inv H3; simpl; eauto.
+        }
+        clear H2. induction Hf; simpl; auto.
+        destruct y; simpl in *. inv Hlength. inv H2. f_equal; auto.
     - (* app *)
       clear Hwt.
-      destruct Hnorm; repeat inv_bind;
-        apply idents_for_anns_values in H1;
-        induction H1; simpl in *; auto; destruct y; subst; simpl; inv Hlength; f_equal; auto.
+      repeat inv_bind.
+      apply idents_for_anns_values in H1.
+      induction H1; simpl in *; auto.
+      destruct y; subst; simpl. inv Hlength. f_equal; auto.
   Qed.
 
   Fact fby_iteexp_typeof : forall e0 e ann es' eqs' st st',
@@ -333,8 +326,8 @@ Module Type NORMPROOFS
       typesof es' = typeof e.
   Proof.
     intros G vars e es' eqs' st st' Hwt Hnorm.
-    destruct e; simpl in Hnorm;
-      try (solve [eapply normalize_typeof; eauto]).
+    destruct e; unfold normalize_top in Hnorm;
+      try (solve [eapply normalize_exp_typeof in Hnorm; eauto]).
     - (* fby *)
       repeat inv_bind. inv Hwt.
       eapply normalize_fby_typeof; eauto.
@@ -357,43 +350,50 @@ Module Type NORMPROOFS
 
   (* TODO is this necessary ? *)
   Hint Constructors wt_exp.
-  Fact normalize_wt : forall G vars e st es' eqs' st',
+  Fact normalize_wt : forall G vars e is_control es' eqs' st st',
       wt_exp G vars e ->
-      (normalize_exp e st = (es', eqs', st') \/ normalize_control e st = (es', eqs', st')) ->
+      normalize_exp is_control e st = (es', eqs', st') ->
       (Forall (wt_exp G vars) es' /\ Forall (wt_equation G vars) eqs'). (* vars ? surement pas *)
   Proof.
-    intros G vars e st es' eqs' st' Hwt; revert eqs' es' st st'.
-    induction Hwt using wt_exp_ind2; intros eqs' es' st st' Hnorm; simpl in *.
+    intros G vars e is_control es' eqs' st st' Hwt;
+      revert is_control eqs' es' st st'.
+    induction Hwt using wt_exp_ind2;
+      intros is_control eqs' es' st st' Hnorm; simpl in *.
     - (* const *)
-      destruct Hnorm; repeat inv_bind; eauto.
+      repeat inv_bind; eauto.
     - (* var *)
-      destruct Hnorm; repeat inv_bind; eauto.
+      repeat inv_bind; eauto.
     - (* unop *)
-      destruct Hnorm; repeat inv_bind;
-        specialize (IHHwt _ _ _ _ (or_introl H2)) as [? ?]; split; auto;
-          repeat constructor;
-          specialize (normalize_length _ _ _ _ _ _ _ Hwt (or_introl H2)) as Hlen;
-          rewrite <- numstreams_length_typeof in Hlen;
-          replace (typeof e) in *;
-          singleton_length;
-          inv H3; econstructor; eauto;
-            eapply normalize_typeof in Hwt; eauto;
-            simpl in *; rewrite app_nil_r in Hwt; rewrite Hwt; auto.
+      repeat inv_bind.
+      specialize (IHHwt _ _ _ _ _ H2) as [? ?].
+      split; auto.
+      repeat constructor.
+      specialize (normalize_exp_length _ _ _ _ _ _ _ _ Hwt H2) as Hlen.
+      rewrite <- numstreams_length_typeof in Hlen.
+      replace (typeof e) in *.
+      singleton_length.
+      inv H3. econstructor; eauto.
+      eapply normalize_exp_typeof in Hwt; eauto.
+      simpl in *; rewrite app_nil_r in Hwt; rewrite Hwt; auto.
     - (* binop *)
-      destruct Hnorm; repeat inv_bind;
-        specialize (IHHwt1 _ _ _ _ (or_introl H3)) as [? ?]; specialize (IHHwt2 _ _ _ _ (or_introl H4)) as [? ?];
-          (split; [ | rewrite Forall_app; auto ]);
-          repeat constructor;
-          specialize (normalize_length _ _ _ _ _ _ _ Hwt1 (or_introl H3)) as Hlen1;
-          specialize (normalize_length _ _ _ _ _ _ _ Hwt2 (or_introl H4)) as Hlen2;
-          rewrite <- numstreams_length_typeof in Hlen1;
-          rewrite <- numstreams_length_typeof in Hlen2;
-          replace (typeof e1) in *;
-          replace (typeof e2) in *;
-          repeat singleton_length;
-          inv H5; inv H7; econstructor; eauto;
-            eapply normalize_typeof in Hwt1; eauto; eapply normalize_typeof in Hwt2; eauto;
-              simpl in *; rewrite app_nil_r in *; try rewrite Hwt1; try rewrite Hwt2; auto.
+      repeat inv_bind.
+      specialize (IHHwt1 _ _ _ _ _ H3) as [? ?].
+      specialize (IHHwt2 _ _ _ _ _ H4) as [? ?].
+      split; [ | rewrite Forall_app; auto ].
+      repeat constructor.
+      specialize (normalize_exp_length _ _ _ _ _ _ _ _ Hwt1 H3) as Hlen1.
+      specialize (normalize_exp_length _ _ _ _ _ _ _ _ Hwt2 H4) as Hlen2.
+      rewrite <- numstreams_length_typeof in Hlen1.
+      rewrite <- numstreams_length_typeof in Hlen2.
+      replace (typeof e1) in *.
+      replace (typeof e2) in *.
+      repeat singleton_length.
+      eapply normalize_exp_typeof in Hwt1; eauto.
+      eapply normalize_exp_typeof in Hwt2; eauto.
+      inv H5. inv H7.
+      econstructor; eauto;
+        simpl in *; rewrite app_nil_r in *;
+          try rewrite Hwt1; try rewrite Hwt2; auto.
   Admitted.
 
   (* Fact refines_sem_var: forall H H' id v, *)

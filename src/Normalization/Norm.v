@@ -240,18 +240,18 @@ Module Type NORM
       repeat inv_bind. eapply fresh_ident_st_follows; eauto.
   Qed.
 
-  Fixpoint normalize_exp (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
-    let normalize_exps := fun es => do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs) in
-    let normalize_controls := fun es => do (es, eqs) <- map_bind2 normalize_control es; ret (concat es, concat eqs) in
+  Fixpoint normalize_exp (is_control : bool) (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
+    let normalize_exps := fun es => do (es, eqs) <- map_bind2 (normalize_exp false) es; ret (concat es, concat eqs) in
+    let normalize_controls := fun es => do (es, eqs) <- map_bind2 (normalize_exp true) es; ret (concat es, concat eqs) in
     match e with
     | Econst c => ret ([Econst c], [])
     | Evar v ann => ret ([Evar v ann], [])
     | Eunop op e1 ann =>
-      do (e1', eqs) <- normalize_exp e1;
+      do (e1', eqs) <- normalize_exp false e1;
       ret ([Eunop op (hd_default e1') ann], eqs)
     | Ebinop op e1 e2 ann =>
-      do (e1', eqs1) <- normalize_exp e1;
-      do (e2', eqs2) <- normalize_exp e2;
+      do (e1', eqs1) <- normalize_exp false e1;
+      do (e2', eqs2) <- normalize_exp false e2;
       ret ([Ebinop op (hd_default e1') (hd_default e2') ann], eqs1++eqs2)
     | Ewhen es clid b (tys, cl) =>
       do (es', eqs) <- normalize_exps es;
@@ -260,17 +260,23 @@ Module Type NORM
       do (es1', eqs1) <- normalize_controls es1;
       do (es2', eqs2) <- normalize_controls es2;
       let merges := map (fun '((e1, e2), ty) => Emerge clid [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
-      do xs <- idents_for_anns (List.map (fun ty => (ty, cl)) tys);
-      ret (List.map (fun '(id, ann) => Evar id ann) xs,
-           (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) merges))++eqs1++eqs2)
+      if is_control then
+        ret (merges, eqs1++eqs2)
+      else
+        do xs <- idents_for_anns (List.map (fun ty => (ty, cl)) tys);
+        ret (List.map (fun '(id, ann) => Evar id ann) xs,
+             (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) merges))++eqs1++eqs2)
     | Eite e es1 es2 (tys, cl) =>
-      do (e', eqs0) <- normalize_exp e;
+      do (e', eqs0) <- normalize_exp false e;
       do (es1', eqs1) <- normalize_controls es1;
       do (es2', eqs2) <- normalize_controls es2;
       let ites := map (fun '((e1, e2), ty) => Eite (hd_default e') [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
-      do xs <- idents_for_anns (List.map (fun ty => (ty, cl)) tys);
-      ret (List.map (fun '(id, ann) => Evar id ann) xs,
-           (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) ites))++eqs0++eqs1++eqs2)
+      if is_control then
+        ret (ites, eqs0++eqs1++eqs2)
+      else
+        do xs <- idents_for_anns (List.map (fun ty => (ty, cl)) tys);
+        ret (List.map (fun '(id, ann) => Evar id ann) xs,
+             (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) ites))++eqs0++eqs1++eqs2)
     | Efby inits es anns =>
       do (inits', eqs1) <- normalize_exps inits;
       do (es', eqs2) <- normalize_exps es;
@@ -280,54 +286,7 @@ Module Type NORM
            (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
-                      | Some er => do (er, eqs1) <- normalize_exp er;
-                                  do (er', eqs2) <- normalize_reset (hd_default er);
-                                  ret (Some er', eqs1++eqs2)
-                      | None => ret (None, [])
-                      end;
-      do (es', eqs2) <- normalize_exps es;
-      do xs <- idents_for_anns anns;
-      ret (List.map (fun '(id, ann) => Evar id ann) xs,
-           (List.map fst xs, [Eapp f es' r' anns])::eqs1++eqs2)
-    end
-
-  with normalize_control (e : exp) : FreshAnn (list exp * list equation) :=
-    let normalize_exps := fun es => do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs) in
-    let normalize_controls := fun es => do (es, eqs) <- map_bind2 normalize_control es; ret (concat es, concat eqs) in
-    match e with
-    | Econst c => ret ([Econst c], [])
-    | Evar v ann => ret ([Evar v ann], [])
-    | Eunop op e1 ann =>
-      do (e1', eqs) <- normalize_exp e1;
-      ret ([Eunop op (hd_default e1') ann], eqs)
-    | Ebinop op e1 e2 ann =>
-      do (e1', eqs1) <- normalize_exp e1;
-      do (e2', eqs2) <- normalize_exp e2;
-      ret ([Ebinop op (hd_default e1') (hd_default e2') ann], eqs1++eqs2)
-    | Ewhen es clid b (tys, cl) =>
-      do (es', eqs) <- normalize_exps es;
-      ret (map (fun '(e, ty) => Ewhen [e] clid b ([ty], cl)) (combine es' tys), eqs)
-    | Emerge clid es1 es2 (tys, cl) =>
-      do (es1', eqs1) <- normalize_controls es1;
-      do (es2', eqs2) <- normalize_controls es2;
-      let merges := map (fun '((e1, e2), ty) => Emerge clid [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
-      ret (merges, eqs1++eqs2)
-    | Eite e es1 es2 (tys, cl) =>
-      do (e', eqs0) <- normalize_exp e;
-      do (es1', eqs1) <- normalize_controls es1;
-      do (es2', eqs2) <- normalize_controls es2;
-      let ites := map (fun '((e1, e2), ty) => Eite (hd_default e') [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
-      ret (ites, eqs0++eqs1++eqs2)
-    | Efby inits es anns =>
-      do (inits', eqs1) <- normalize_exps inits;
-      do (es', eqs2) <- normalize_exps es;
-      do (fbys, eqs3) <- normalize_fby inits' es' anns;
-      do xs <- idents_for_anns anns;
-      ret (List.map (fun '(x, ann) => Evar x ann) xs,
-           (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2++eqs3)
-    | Eapp f es r anns =>
-      do (r', eqs1) <- match r with
-                      | Some er => do (er, eqs1) <- normalize_exp er;
+                      | Some er => do (er, eqs1) <- normalize_exp false er;
                                   do (er', eqs2) <- normalize_reset (hd_default er);
                                   ret (Some er', eqs1++eqs2)
                       | None => ret (None, [])
@@ -339,9 +298,8 @@ Module Type NORM
     end.
 
   Definition normalize_exps (es : list exp) :=
-    do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs).
-  Definition normalize_controls (es : list exp) :=
-    do (es, eqs) <- map_bind2 normalize_control es; ret (concat es, concat eqs).
+    do (es, eqs) <- map_bind2 (normalize_exp false) es;
+      ret (concat es, concat eqs).
 
   Local Ltac solve_forall :=
     match goal with
@@ -360,34 +318,34 @@ Module Type NORM
       eapply idents_for_anns_st_valid; eauto
     end.
 
-  Fact normalize_st_valid : forall e res st st',
-      (normalize_exp e st = (res, st') \/ normalize_control e st = (res, st')) ->
+  Fact normalize_st_valid : forall e is_control res st st',
+      normalize_exp is_control e st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
   Proof.
-    induction e using exp_ind2; intros res st st' Hnorm Hvalid; simpl in Hnorm.
+    induction e using exp_ind2; intros is_control res st st' Hnorm Hvalid;
+      simpl in Hnorm.
     - (* const *)
-      destruct Hnorm; inv_bind; auto.
+      inv_bind; auto.
     - (* var *)
-      destruct Hnorm; inv_bind; auto.
+      inv_bind; auto.
     - (* unop *)
-      destruct Hnorm; repeat inv_bind; eauto.
+      repeat inv_bind; eauto.
     - (* binop *)
-      destruct Hnorm; repeat inv_bind;
-        destruct x1; eauto.
+      repeat inv_bind; destruct x1; eauto.
     - (* fby *)
-      destruct Hnorm; repeat inv_bind; repeat solve_st_valid.
+      repeat inv_bind; repeat solve_st_valid.
     - (* when *)
       destruct a.
-      destruct Hnorm; repeat inv_bind; repeat solve_st_valid.
+      repeat inv_bind; repeat solve_st_valid.
     - (* merge *)
       destruct a.
-      destruct Hnorm; repeat inv_bind; repeat solve_st_valid.
+      destruct is_control; repeat inv_bind; repeat solve_st_valid.
     - (* ite *)
       destruct a.
-      destruct Hnorm; repeat inv_bind; repeat solve_st_valid.
+      destruct is_control; repeat inv_bind; repeat solve_st_valid.
     - (* app *)
-      destruct Hnorm; repeat inv_bind; repeat solve_st_valid;
+      repeat inv_bind; repeat solve_st_valid;
         destruct ro; repeat inv_bind; eauto;
           eapply normalize_reset_st_valid; eauto.
   Qed.
@@ -406,37 +364,36 @@ Module Type NORM
       reflexivity
     end.
 
-  Fact normalize_st_follows: forall e res st st',
-      (normalize_exp e st = (res, st') \/ normalize_control e st = (res, st')) ->
+  Fact normalize_st_follows: forall e is_control res st st',
+      normalize_exp is_control e st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
     intros e.
-    induction e using exp_ind2; intros res st st' Hnorm; simpl in Hnorm.
+    induction e using exp_ind2; intros is_control res st st' Hnorm;
+      simpl in Hnorm.
     - (* const *)
-      destruct Hnorm; inv_bind; reflexivity.
+      inv_bind; reflexivity.
     - (* var *)
-      destruct Hnorm; inv_bind; reflexivity.
+      inv_bind; reflexivity.
     - (* unop *)
-      destruct Hnorm; repeat inv_bind; eauto.
+      repeat inv_bind; eauto.
     - (* binop *)
-      destruct Hnorm; repeat inv_bind; etransitivity; eauto.
+      repeat inv_bind; etransitivity; eauto.
     - (* fby *)
-      destruct Hnorm; repeat inv_bind; repeat solve_st_follows.
+      repeat inv_bind; repeat solve_st_follows.
     - (* when *)
       destruct a.
-      destruct Hnorm; repeat inv_bind; repeat solve_st_follows.
+      repeat inv_bind; repeat solve_st_follows.
     - (* merge *)
       destruct a.
-      destruct Hnorm; repeat inv_bind; repeat solve_st_follows.
+      destruct is_control; repeat inv_bind; repeat solve_st_follows.
     - (* ite *)
       destruct a.
-      destruct Hnorm; repeat inv_bind.
-      etransitivity; [ eapply IHe; eauto | repeat solve_st_follows ].
-      etransitivity; [ eapply IHe; eauto | repeat solve_st_follows ].
+      destruct is_control; repeat inv_bind;
+        (etransitivity; [ eapply IHe; eauto | repeat solve_st_follows ]).
     - (* app *)
-      destruct Hnorm; destruct ro; repeat inv_bind; repeat solve_st_follows.
-      etransitivity; [ eapply H; eauto | repeat solve_st_follows ].
-      etransitivity; [ eapply H; eauto | repeat solve_st_follows ].
+      destruct ro; repeat inv_bind; repeat solve_st_follows;
+        (etransitivity; [ eapply H; eauto | repeat solve_st_follows ]).
   Qed.
 
   Definition normalize_top (e : exp) : FreshAnn (list exp * list equation) :=
@@ -448,14 +405,14 @@ Module Type NORM
       ret (fbys, eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
-                      | Some er => do (er, eqs1) <- normalize_exp er;
+                      | Some er => do (er, eqs1) <- normalize_exp false er;
                                   do (er', eqs2) <- normalize_reset (hd_default er);
                                   ret (Some er', eqs1++eqs2)
                       | None => ret (None, [])
                       end;
       do (es', eqs2) <- normalize_exps es;
       ret ([Eapp f es' r' anns], eqs1++eqs2)
-    | _ => normalize_control e
+    | _ => normalize_exp true e
     end.
   Definition normalize_tops (es : list exp) :=
     do (es, eqs) <- map_bind2 normalize_top es; ret (concat es, concat eqs).
