@@ -11,8 +11,7 @@ From Velus Require Import Normalization.Fresh.
 Module Type NORM
        (Import Ids : IDS)
        (Import Op : OPERATORS)
-       (Import Syn : LSYNTAX Ids Op)
-       (Import Typ : LTYPING Ids Op Syn).
+       (Import Syn : LSYNTAX Ids Op).
 
   (** All the indents currently used in the node *)
   Definition used_idents (n : node) : list ident :=
@@ -50,17 +49,6 @@ Module Type NORM
               do xs <- idents_for_anns tl;
               ret ((x, hd)::xs)
     end.
-
-  Fact idents_for_anns_values : forall anns idents st st',
-      idents_for_anns anns st = (idents, st') ->
-      Forall2 (fun a '(id, a') => a = a') anns idents.
-  Proof.
-    induction anns; intros idents st st' Hanns; simpl in *.
-    - inv Hanns. constructor.
-    - repeat inv_bind.
-      specialize (IHanns _ _ _ H0).
-      constructor; eauto.
-  Qed.
 
   Fact idents_for_anns_st_valid : forall anns res st st',
       idents_for_anns anns st = (res, st') ->
@@ -354,54 +342,6 @@ Module Type NORM
     do (es, eqs) <- map_bind2 normalize_exp es; ret (concat es, concat eqs).
   Definition normalize_controls (es : list exp) :=
     do (es, eqs) <- map_bind2 normalize_control es; ret (concat es, concat eqs).
-
-  Fact normalize_exp_length : forall G vars e st es' eqs' st',
-      wt_exp G vars e ->
-      normalize_exp e st = ((es', eqs'), st') ->
-      length es' = numstreams e.
-  Proof.
-    intros G vars e.
-    rewrite <- numstreams_length_typeof.
-    induction e using exp_ind2; intros st es' eqs' st' Hwt Hnorm;
-      simpl in *; inv Hwt; inv Hnorm; repeat inv_bind; simpl; auto.
-    - (* fby *)
-      repeat rewrite map_length.
-      apply idents_for_anns_values in H9.
-      rewrite Forall2_forall2 in H9; destruct H9; auto.
-    - (* when *)
-      rewrite map_length.
-      apply map_bind2_values in H0.
-      assert (Forall2 (fun e x => length x = length (typeof e)) es x1) as Hlen.
-      { rewrite Forall_forall in *.
-        rewrite Forall3_forall3 in H0; destruct H0 as [Hlen1 [Hlen2 H0]].
-        rewrite Forall2_forall2; split; auto.
-        intros ? ? ? ? ? Hlen Hnth1 Hnth2; subst.
-        specialize (H0 a b0 [] _ _ _ _ Hlen eq_refl eq_refl eq_refl); destruct H0 as [st'' [st''' H0]].
-        eapply nth_In in Hlen. eapply H; eauto.
-      } clear H H0.
-      assert (length (concat x1) = length (typesof es)) as Hlen'.
-      { unfold typesof. rewrite flat_map_concat_map.
-        induction Hlen; simpl; auto.
-        inv H4. repeat rewrite app_length; auto. }
-      rewrite combine_length. rewrite Hlen'.
-      apply OrdersEx.Nat_as_DT.min_id.
-    - (* ite *)
-      apply idents_for_anns_values in H3.
-      rewrite Forall2_forall2 in H3; destruct H3.
-      rewrite map_length in *; auto.
-    - (* merge *)
-      apply idents_for_anns_values in H4.
-      rewrite Forall2_forall2 in H4; destruct H4.
-      rewrite map_length in *; auto.
-    - (* app *)
-      apply idents_for_anns_values in H2.
-      rewrite Forall2_forall2 in H2; destruct H2.
-      repeat rewrite map_length in *; auto.
-    - (* app (reset) *)
-      apply idents_for_anns_values in H3.
-      rewrite Forall2_forall2 in H3; destruct H3.
-      repeat rewrite map_length in *; auto.
-  Qed.
 
   Local Ltac solve_forall :=
     match goal with
@@ -713,7 +653,6 @@ End NORM.
 Module NormFun
        (Ids : IDS)
        (Op : OPERATORS)
-       (Syn : LSYNTAX Ids Op)
-       (Typ : LTYPING Ids Op Syn) <: NORM Ids Op Syn Typ.
-  Include NORM Ids Op Syn Typ.
+       (Syn : LSYNTAX Ids Op) <: NORM Ids Op Syn.
+  Include NORM Ids Op Syn.
 End NormFun.

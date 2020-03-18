@@ -1410,6 +1410,54 @@ Section Combine.
     simpl. now rewrite (IHl _ H1).
   Qed.
 
+  Lemma combine_length_l:
+    forall (l : list A) (l' : list B),
+      length (combine l l') = length l ->
+      length l <= length l'.
+  Proof.
+    intros l l' Hlen.
+    rewrite combine_length in Hlen.
+    rewrite Nat.min_l_iff in Hlen. omega.
+  Qed.
+
+  Lemma combine_length_r:
+    forall (l : list A) (l' : list B),
+      length (combine l l') = length l' ->
+      length l >= length l'.
+  Proof.
+    intros l l' Hlen.
+    rewrite combine_length in Hlen.
+    rewrite Nat.min_r_iff in Hlen. omega.
+  Qed.
+
+  Lemma combine_nth_l:
+    forall (l : list A) (l': list B) n d1 d2,
+      length l <= length l' ->
+      exists d, nth n (combine l l') (d1, d2) = (nth n l d1, d).
+  Proof.
+    induction l, l'; intros n d1 d2 Hlen; simpl in *.
+    + exists d2. destruct n; auto.
+    + exists d2. destruct n; auto.
+    + omega.
+    + destruct n.
+      * exists b; auto.
+      * apply IHl. omega.
+  Qed.
+
+  Lemma combine_nth_r:
+    forall (l : list A) (l': list B) n d1 d2,
+      length l >= length l' ->
+      exists d, nth n (combine l l') (d1, d2) = (d, nth n l' d2).
+  Proof.
+    induction l, l'; intros n d1 d2 Hlen; simpl in *.
+    + exists d1. destruct n; auto.
+    + omega.
+    + exists d1. destruct n; auto.
+    + destruct n.
+      * exists a; auto.
+      * apply IHl. omega.
+  Qed.
+
 End Combine.
 
 Lemma In_combine_f_left:

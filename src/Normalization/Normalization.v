@@ -11,7 +11,7 @@ Module Type NORMALIZATION
        (OpAux : OPERATORS_AUX Op)
        (Str : COINDSTREAMS Op OpAux)
        (Lus : LUSTRE Ids Op OpAux Str).
-  Declare Module Export Norm : NORM Ids Op Lus.Syn Lus.Typ.
+  Declare Module Export Norm : NORM Ids Op Lus.Syn.
 End NORMALIZATION.
 
 Module NormalizationFun
@@ -20,5 +20,5 @@ Module NormalizationFun
        (OpAux : OPERATORS_AUX Op)
        (Str : COINDSTREAMS Op OpAux)
        (Lus : LUSTRE Ids Op OpAux Str).
-  Module Export Norm := NormFun Ids Op Lus.Syn Lus.Typ.
+  Module Export Norm := NormFun Ids Op Lus.Syn.
 End NormalizationFun.

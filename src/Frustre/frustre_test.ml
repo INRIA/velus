@@ -18,8 +18,7 @@ let rec nat_of_int i = match i with
   | n -> Datatypes.S (nat_of_int (n-1))
 
 module LSyn = FtoLustre.L
-module LTyp = LTyping.LTypingFun(Ident.Ids)(Interface.Op)(LSyn)
-module Norm = Norm.NormFun(Ident.Ids)(Interface.Op)(LSyn)(LTyp)
+module Norm = Norm.NormFun(Ident.Ids)(Interface.Op)(LSyn)
 
 let compile source_name filename =
   let toks = FrustreLexer.tokens_stream source_name in
