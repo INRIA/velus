@@ -754,6 +754,18 @@ Section ConcatMap.
     apply in_concat. eauto.
   Qed.
 
+  Lemma Forall_concat : forall (l : list (list A)) P,
+      Forall (fun l => Forall P l) l -> Forall P (concat l).
+  Proof.
+    intros l P Hf.
+    rewrite Forall_forall in *.
+    intros x Hin.
+    apply in_concat in Hin.
+    destruct Hin as [l' [Hin1 Hin2]].
+    specialize (Hf _ Hin2).
+    rewrite Forall_forall in Hf. auto.
+  Qed.
+
 End ConcatMap.
 
 Section FoldLeft2.
@@ -2026,6 +2038,70 @@ Lemma forall2_right:
 Proof.
   intros A B P Pnil HH.
   induction xs, ys; auto; discriminate.
+Qed.
+
+Fact nth_concat2 {A B} : forall (x1 : A) (x2 : B) l1 l2 a b n,
+    length l1 = length l2 ->
+    Forall2 (fun l1 l2 => length l1 = length l2) l1 l2 ->
+    n < length (concat l1) ->
+    x1 = nth n (concat l1) a ->
+    x2 = nth n (concat l2) b ->
+    exists n', exists n'', (n' < length l1 /\
+                  n'' < length (nth n' l1 [a]) /\
+                  x1 = nth n'' (nth n' l1 [a]) a /\
+                  x2 = nth n'' (nth n' l2 [b]) b).
+Proof.
+  intros x1 x2 l1 l2 a b n Hlen1 Hlen2.
+  generalize dependent n.
+  induction Hlen2; intros n Hlen3 Hnth1 Hnth2; simpl in *.
+  - inversion Hlen3.
+  - inv Hlen1. specialize (IHHlen2 H1).
+    destruct (n <? length x) eqn:Hnx.
+    + (* the element is in the first sublist *)
+      rewrite Nat.ltb_lt in Hnx.
+      exists 0. exists n.
+      repeat split; auto.
+      * apply Nat.lt_0_succ.
+      * apply app_nth1; auto.
+      * apply app_nth1; rewrite <- H; auto.
+    + (* the element is in the rest of the sublist *)
+      rewrite Nat.ltb_ge in Hnx.
+      rewrite app_length in Hlen3.
+      assert (n - length x < length (concat l)) as Hlen3' by omega.
+      specialize (IHHlen2 (n - length x) Hlen3' (* (app_nth2 _ _ _ Hnx') (app_nth2 _ _ _ Hny') *)).
+      assert (n >= length x) as Hnx' by omega; assert (n >= length y) as Hny' by omega.
+      rewrite H in IHHlen2 at 2.
+      specialize (IHHlen2 (app_nth2 _ _ _ Hnx') (app_nth2 _ _ _ Hny')) as [n' [n'' [Hlen' [Hlen'' [Hnth1 Hnth2]]]]].
+      exists (S n'). exists n''. repeat split; auto. omega.
+Qed.
+
+Lemma Forall2_concat {A B} : forall (P : A -> B -> Prop) l1 l2,
+    Forall2 (fun l1 l2 => Forall2 P l1 l2) l1 l2 ->
+    Forall2 P (concat l1) (concat l2).
+Proof.
+  intros P l1 l2 Hforall.
+  rewrite Forall2_forall2 in Hforall; destruct Hforall as [Hlen Hforall].
+  rewrite Forall2_forall2.
+  assert (Forall2 (fun l1 l2 => length l1 = length l2) l1 l2) as Hlen'.
+  { rewrite Forall2_forall2.
+      split; auto.
+      intros a b n x1 x2 Hlen2 Hnth1 Hnth2.
+      specialize (Hforall a b n x1 x2 Hlen2 Hnth1 Hnth2).
+      rewrite Forall2_forall2 in Hforall; destruct Hforall as [Hlen3 _]; auto. }
+  assert (length (concat l1) = length (concat l2)) as Hlenconcat.
+  { clear Hlen Hforall.
+    induction Hlen'; simpl; auto.
+    repeat rewrite app_length. rewrite H. rewrite IHHlen'. reflexivity. }
+  split; auto.
+  intros a b n x1 x2 Hlen2 Hnth1 Hnth2; subst.
+  specialize (nth_In _ a Hlen2) as Hin1.
+  specialize (nth_concat2 _ _ _ _ a b n Hlen Hlen' Hlen2 eq_refl eq_refl)
+    as [n' [n'' [Hlenn1 [Hlenn2 [Hnth1 Hnth2]]]]].
+  specialize (Hforall [a] [b] n' _ _ Hlenn1 eq_refl eq_refl).
+  rewrite Forall2_forall2 in Hforall; destruct Hforall as [Hlen3 Hforall].
+  specialize (Hforall a b n'' _ _ Hlenn2 eq_refl eq_refl).
+  rewrite <- Hnth1 in Hforall. rewrite <- Hnth2 in Hforall.
+  assumption.
 Qed.
 
 Section Forall3.

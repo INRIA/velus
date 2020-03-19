@@ -59,8 +59,8 @@ Module Type NORM
       simpl in *; repeat inv_bind.
     - assumption.
     - eapply IHanns; eauto.
-      eapply fresh_ident_st_valid; eauto.
   Qed.
+  Hint Resolve idents_for_anns_st_valid.
 
   Fact idents_for_anns_st_follows : forall anns res st st',
       idents_for_anns anns st = (res, st') ->
@@ -69,10 +69,9 @@ Module Type NORM
     induction anns; intros res st st' Hidforanns;
       simpl in *; repeat inv_bind.
     - reflexivity.
-    - etransitivity.
-      + eapply fresh_ident_st_follows; eauto.
-      + eauto.
+    - etransitivity; eauto.
   Qed.
+  Hint Resolve idents_for_anns_st_follows.
 
   (** Add some whens on top of an expression *)
   Fixpoint add_whens (e : exp) (ty : type) (cl : clock) :=
@@ -112,6 +111,7 @@ Module Type NORM
         destruct contra; subst; auto.
         apply Pos.lt_irrefl in H1; auto.
   Qed.
+  Hint Resolve init_var_for_clock_st_valid.
 
   Fact init_var_for_clock_st_follows : forall cl res st st',
       init_var_for_clock cl st = (res, st') ->
@@ -136,6 +136,7 @@ Module Type NORM
           eapply Pos.le_min_r.
         * eapply Pos.min_le_compat_l; eauto.
   Qed.
+  Hint Resolve init_var_for_clock_st_follows.
 
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
   Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
@@ -165,7 +166,7 @@ Module Type NORM
       normalize_fby inits es anns st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
-  Proof.
+  Proof with eauto.
     intros inits es anns res st st' Hnorm Hfresh.
     unfold normalize_fby in Hnorm.
     repeat inv_bind.
@@ -175,11 +176,10 @@ Module Type NORM
     destruct (fby_iteexp_spec i e ty cl) as [[c [Hite1 Hite2]]|Hite]; subst.
     - rewrite Hite2 in Hfby; clear Hite2.
       inv Hfby. auto.
-    - rewrite Hite in Hfby; clear Hite.
-      repeat inv_bind.
-      apply init_var_for_clock_st_valid in H0; auto.
-      apply fresh_ident_st_valid in H1; auto.
+    - rewrite Hite in Hfby.
+      repeat inv_bind...
   Qed.
+  Hint Resolve normalize_fby_st_valid.
 
   Fact normalize_fby_st_follows : forall inits es anns res st st',
       normalize_fby inits es anns st = (res, st') ->
@@ -191,14 +191,13 @@ Module Type NORM
     apply Forall_forall.
     intros [[i e] [ty cl]] HIn e' eq' st1 st1' Hfby.
     destruct (fby_iteexp_spec i e ty cl) as [[c [Hite1 Hite2]]|Hite]; subst.
-    - rewrite Hite2 in Hfby; clear Hite2.
+    - rewrite Hite2 in Hfby.
       inv Hfby. reflexivity.
-    - rewrite Hite in Hfby; clear Hite.
+    - rewrite Hite in Hfby.
       repeat inv_bind.
-      apply init_var_for_clock_st_follows in H0; auto.
-      apply fresh_ident_st_follows in H1; auto.
       etransitivity; eauto.
   Qed.
+  Hint Resolve normalize_fby_st_follows.
 
   Definition normalize_reset (e : exp) : FreshAnn (exp * list equation) :=
     match e with
@@ -223,10 +222,9 @@ Module Type NORM
     intros e res st st' Hnorm Hvalid.
     destruct (normalize_reset_spec e) as [[v [ann [He Hnorm']]]|Hnorm']; subst;
       rewrite Hnorm' in Hnorm; clear Hnorm';
-        simpl in *; repeat inv_bind.
-    - assumption.
-    - eapply fresh_ident_st_valid; eauto.
+        simpl in *; repeat inv_bind; eauto.
   Qed.
+  Hint Resolve normalize_reset_st_valid.
 
   Fact normalize_reset_st_follows : forall e res st st',
       normalize_reset e st = (res, st') ->
@@ -237,8 +235,9 @@ Module Type NORM
       simpl in *; repeat inv_bind.
     - reflexivity.
     - rewrite Hnorm' in Hnorm; clear Hnorm'.
-      repeat inv_bind. eapply fresh_ident_st_follows; eauto.
+      repeat inv_bind. eauto.
   Qed.
+  Hint Resolve normalize_reset_st_follows.
 
   Fixpoint normalize_exp (is_control : bool) (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
     let normalize_exps := fun es => do (es, eqs) <- map_bind2 (normalize_exp false) es; ret (concat es, concat eqs) in
@@ -318,7 +317,7 @@ Module Type NORM
       eapply idents_for_anns_st_valid; eauto
     end.
 
-  Fact normalize_st_valid : forall e is_control res st st',
+  Fact normalize_exp_st_valid : forall e is_control res st st',
       normalize_exp is_control e st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
@@ -346,9 +345,9 @@ Module Type NORM
       destruct is_control; repeat inv_bind; repeat solve_st_valid.
     - (* app *)
       repeat inv_bind; repeat solve_st_valid;
-        destruct ro; repeat inv_bind; eauto;
-          eapply normalize_reset_st_valid; eauto.
+        destruct ro; repeat inv_bind; eauto.
   Qed.
+  Hint Resolve normalize_exp_st_valid.
 
   Local Ltac solve_st_follows :=
     match goal with
@@ -364,7 +363,7 @@ Module Type NORM
       reflexivity
     end.
 
-  Fact normalize_st_follows: forall e is_control res st st',
+  Fact normalize_exp_st_follows: forall e is_control res st st',
       normalize_exp is_control e st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
@@ -395,8 +394,9 @@ Module Type NORM
       destruct ro; repeat inv_bind; repeat solve_st_follows;
         (etransitivity; [ eapply H; eauto | repeat solve_st_follows ]).
   Qed.
+  Hint Resolve normalize_exp_st_follows.
 
-  Definition normalize_top (e : exp) : FreshAnn (list exp * list equation) :=
+  Definition normalize_rhs (e : exp) : FreshAnn (list exp * list equation) :=
     match e with
     | Efby inits es anns =>
       do (inits', eqs1) <- normalize_exps inits;
@@ -414,45 +414,45 @@ Module Type NORM
       ret ([Eapp f es' r' anns], eqs1++eqs2)
     | _ => normalize_exp true e
     end.
-  Definition normalize_tops (es : list exp) :=
-    do (es, eqs) <- map_bind2 normalize_top es; ret (concat es, concat eqs).
+  Definition normalize_rhss (es : list exp) :=
+    do (es, eqs) <- map_bind2 normalize_rhs es; ret (concat es, concat eqs).
 
-  Fact normalize_top_st_valid : forall e res st st',
-      normalize_top e st = (res, st') ->
+  Fact normalize_rhs_st_valid : forall e res st st',
+      normalize_rhs e st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
   Proof.
     intros e res st st' Hnorm Hfresh.
-    destruct e; try (solve [eapply normalize_st_valid; eauto]);
+    destruct e; try (solve [eapply normalize_exp_st_valid; eauto]);
       simpl in Hnorm; unfold normalize_exps in *; repeat inv_bind.
     - (* fby *)
       repeat solve_st_valid;
-        eapply Forall_forall; intros; eapply normalize_st_valid; eauto.
+        eapply Forall_forall; intros; eauto.
     - (* app *)
       repeat solve_st_valid.
-      + eapply Forall_forall; intros; eapply normalize_st_valid; eauto.
+      + eapply Forall_forall; intros; eauto.
       + destruct o; repeat inv_bind; eauto.
-        eapply normalize_reset_st_valid; eauto.
-        eapply normalize_st_valid; eauto.
   Qed.
+  Hint Resolve normalize_rhs_st_valid.
 
-  Fact normalize_top_st_follows : forall e res st st',
-      normalize_top e st = (res, st') ->
+  Fact normalize_rhs_st_follows : forall e res st st',
+      normalize_rhs e st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
     intros e res st st' Hnorm.
-    destruct e; try (solve [eapply normalize_st_follows; eauto]);
+    destruct e; try (solve [eapply normalize_exp_st_follows; eauto]);
       simpl in Hnorm; unfold normalize_exps in *; repeat inv_bind.
     - (* fby *)
       repeat solve_st_follows;
-        eapply Forall_forall; intros; eapply normalize_st_follows; eauto.
+        eapply Forall_forall; intros; eauto.
     - (* app *)
       destruct o; repeat inv_bind.
-      + etransitivity. eapply normalize_st_follows; eauto. repeat solve_st_follows.
-        eapply Forall_forall; intros; eapply normalize_st_follows; eauto.
+      + etransitivity. eapply normalize_exp_st_follows; eauto. repeat solve_st_follows.
+        eapply Forall_forall; intros; eauto.
       + repeat solve_st_follows.
-        eapply Forall_forall; intros; eapply normalize_st_follows; eauto.
+        eapply Forall_forall; intros; eauto.
   Qed.
+  Hint Resolve normalize_rhs_st_follows.
 
   Definition split_equation (eq : equation) : list equation :=
     let (xs, es) := eq in
@@ -463,7 +463,7 @@ Module Type NORM
 
   Definition normalize_equation (e : equation) : FreshAnn (list equation) :=
     let '(xs, es) := e in
-    do (es', eqs) <- normalize_tops es;
+    do (es', eqs) <- normalize_rhss es;
     ret (flat_map split_equation ((xs, es')::eqs)).
 
   Fact normalize_equation_st_valid : forall e res st st',
@@ -472,29 +472,29 @@ Module Type NORM
       fresh_st_valid st'.
   Proof.
     intros [xs es] res st st' Hnorm Hvalid.
-    simpl in *; unfold normalize_tops in *; repeat inv_bind.
+    simpl in *; unfold normalize_rhss in *; repeat inv_bind.
     eapply map_bind2_st_valid; eauto.
-    apply Forall_forall. intros.
-    eapply normalize_top_st_valid; eauto.
+    apply Forall_forall. intros; eauto.
   Qed.
+  Hint Resolve normalize_equation_st_valid.
 
   Fact normalize_equation_st_follows : forall e res st st',
       normalize_equation e st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
     intros [xs es] res st st' Hnorm.
-    simpl in *; unfold normalize_tops in *; repeat inv_bind.
+    simpl in *; unfold normalize_rhss in *; repeat inv_bind.
     eapply map_bind2_st_follows; eauto.
-    apply Forall_forall. intros.
-    eapply normalize_top_st_follows; eauto.
+    apply Forall_forall. intros; eauto.
   Qed.
+  Hint Resolve normalize_equation_st_follows.
 
   Fixpoint normalize_equations (eqs : list equation) : FreshAnn (list equation) :=
     match eqs with
     | [] => ret []
     | hd::tl => do eqs1 <- normalize_equation hd;
-              do eqs2 <- normalize_equations tl;
-              ret (eqs1++eqs2)
+                do eqs2 <- normalize_equations tl;
+                ret (eqs1++eqs2)
     end.
 
   Fact normalize_equations_st_valid : forall eqs res st st',
@@ -506,7 +506,6 @@ Module Type NORM
       simpl in *; repeat inv_bind.
     - assumption.
     - eapply IHeqs; eauto.
-      eapply normalize_equation_st_valid; eauto.
   Qed.
 
   Fact normalize_equations_st_follows : forall eqs res st st',
@@ -516,9 +515,7 @@ Module Type NORM
     induction eqs; intros res st st' Hnorm;
       simpl in *; repeat inv_bind.
     - reflexivity.
-    - etransitivity.
-      + eapply normalize_equation_st_follows; eauto.
-      + eauto.
+    - etransitivity; eauto.
   Qed.
 
   (** Normalization of a full node *)
@@ -548,57 +545,23 @@ Module Type NORM
     specialize (n_nodup n) as Hndup.
     specialize (first_unused_ident_gt n _ eq_refl) as Hfirst; unfold used_idents in *.
     rewrite Forall_forall in Hfirst. repeat rewrite map_app in Hfirst.
-    repeat apply NoDupMembers_app.
-    - eapply NoDupMembers_app_l. eapply NoDupMembers_app_l.
-      rewrite <- app_assoc. eassumption.
-    - eapply NoDupMembers_app_l. eapply NoDupMembers_app_r.
-      eassumption.
-    - clear Hfollows Hvalid1.
-      rewrite fst_NoDupMembers in *. rewrite map_map.
-      induction Hvalid2; simpl in *; constructor; auto.
-      rewrite fst_InMembers in H. assumption.
-    - clear Hvalid1 Hvalid2 Hndup.
-      intros x Hin. specialize (Hfirst x); repeat rewrite in_app_iff in Hfirst.
-      rewrite fst_InMembers in *; rewrite map_map; simpl in *.
-      assert (Pos.lt x (first_unused_ident n)) as Hfirst' by auto; clear Hfirst.
+    rewrite fst_NoDupMembers in *.
+    repeat rewrite map_app in *; rewrite map_map; simpl.
+    rewrite NoDup_swap. rewrite <- app_assoc. rewrite NoDup_swap.
+    apply NoDup_app'; auto.
+    - rewrite <- fst_NoDupMembers. assumption.
+    - rewrite NoDup_swap. assumption.
+    - rewrite Forall_forall. intros x Hin.
       intro contra.
-      apply (min_fold_in _ _ wildcard') in contra.
-      refine (Pos.lt_irrefl x _).
-      eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
-    - eapply NoDupMembers_app_r. eapply NoDupMembers_app_r.
-      eassumption.
-    - clear Hvalid1 Hvalid2.
-      intros x Hin. specialize (Hfirst x).
-      rewrite fst_InMembers in *; rewrite map_app in *; repeat rewrite in_app_iff in *.
-      rewrite map_map in *; simpl in *.
-      intro contra.
-      assert (Pos.lt x (first_unused_ident n)) as Hfirst' by auto; clear Hfirst.
-      destruct Hin.
-      + rewrite fst_NoDupMembers in Hndup.
-        repeat rewrite map_app in Hndup; rewrite app_assoc in Hndup.
-        refine (NoDup_app_In _ _ _ _ _ contra); eauto.
-        apply in_or_app; auto.
-      + apply (min_fold_in _ _ wildcard') in H.
-        refine (Pos.lt_irrefl x _).
-        eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
-    - clear Hvalid1 Hvalid2.
-      intros x Hin. specialize (Hfirst x).
-      rewrite fst_InMembers in *; repeat rewrite map_app in *. repeat rewrite in_app_iff in *.
-      rewrite map_map in *; simpl in *.
-      intro contra.
-      assert (Pos.lt x (first_unused_ident n)) as Hfirst' by auto; clear Hfirst.
-      repeat destruct contra as [contra|contra].
-      + rewrite fst_NoDupMembers in Hndup.
-        repeat rewrite map_app in Hndup.
-        refine (NoDup_app_In _ _ _ _ _ _); eauto.
-        apply in_or_app; auto.
-      + apply (min_fold_in _ _ wildcard') in contra.
-        refine (Pos.lt_irrefl x _).
-        eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
-      + rewrite fst_NoDupMembers in Hndup.
-        repeat rewrite map_app in Hndup.
-        refine (NoDup_app_In _ _ _ _ _ _); eauto.
-        apply in_or_app; auto.
+      assert (Pos.lt x (first_unused_ident n)).
+      + eapply Hfirst.
+        repeat (apply in_app_or in contra; destruct contra as [?|contra]);
+          repeat (apply in_or_app; auto; try (left; assumption); right).
+      + clear Hfirst.
+        apply min_fold_in with (x0 := wildcard') in Hin.
+        apply (Pos.lt_irrefl x).
+        eapply Pos.lt_le_trans; eauto.
+        eapply Pos.le_trans; eauto.
   Qed.
   Next Obligation.
   Admitted.

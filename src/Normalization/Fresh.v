@@ -118,18 +118,6 @@ Section bind.
     destruct (x st) as [a st']. exists a. exists st'.
     split; auto.
   Qed.
-
-  Fact bind_st_valid : forall (x : Fresh A B) (k : A -> Fresh A' B) a' st st',
-      (forall a st st', x st = (a, st') -> fresh_st_valid st -> fresh_st_valid st') ->
-      (forall a a' st st', k a st = (a', st') -> fresh_st_valid st -> fresh_st_valid st') ->
-      (bind x k) st = (a', st') ->
-      fresh_st_valid st ->
-      fresh_st_valid st'.
-  Proof.
-    intros x k a' st st' H1 H2 Hbind Hfresh.
-    apply bind_inv in Hbind. destruct Hbind as [a1 [st1 [Hx Hk]]].
-    eauto.
-  Qed.
 End bind.
 
 Section bind2.
@@ -147,29 +135,22 @@ Section bind2.
     destruct (x st) as [[a1 a2] st']. exists a1. exists a2. exists st'.
     split; auto.
   Qed.
-
-  Fact bind2_st_valid : forall (x : Fresh (A1 * A2) B) (k : A1 -> A2 -> Fresh A' B) a' st st',
-      (forall a st st', x st = (a, st') -> fresh_st_valid st -> fresh_st_valid st') ->
-      (forall a1 a2 a' st st', k a1 a2 st = (a', st') -> fresh_st_valid st -> fresh_st_valid st') ->
-      (bind2 x k) st = (a', st') ->
-      fresh_st_valid st ->
-      fresh_st_valid st'.
-  Proof.
-    intros x k a' st st' H1 H2 Hbind Hfresh.
-    apply bind_inv in Hbind. destruct Hbind as [[a1 a2] [st1 [Hx Hk]]].
-    eauto.
-  Qed.
 End bind2.
 
 Ltac inv_bind :=
   match goal with
-  | H : ret ?x ?st = ?v |- ?G =>
+  | H : ret _ _ = _ |- ?G =>
     unfold ret in H; inv H; simpl
-  | H : (bind ?x ?k) ?st = (?a, ?st') |- ?G =>
+  | H : bind _ _ _ = (_, _) |- _ =>
     apply bind_inv in H; destruct H as [? [? [? ?]]]; simpl
-  | H : (bind2 ?x ?k) ?st = (?a, ?st') |- ?G =>
+  | H : bind2 _ _ _ = (_, _) |- _ =>
     apply bind2_inv in H; destruct H as [? [? [? [? ?]]]]; simpl
-  | _ => fail
+  | |- ret _ _ = _ =>
+    unfold ret; simpl
+  | |- bind _ _ _ = (_, _) =>
+    unfold bind; simpl
+  | |- bind2 _ _ _ = (_, _, _) =>
+    unfold bind2; simpl
   end.
 
 (** [do] notation, inspired by CompCert's error monad *)
@@ -183,7 +164,7 @@ Notation "'do' ( X , Y ) <- A ; B" :=
 
 From Coq Require Import List.
 
-Section Fb2.
+Section map_bind2.
   Context {A A1 A2 B : Type}.
   Variable k : A -> Fresh (A1 * A2) B.
 
@@ -230,4 +211,9 @@ Section Fb2.
     - inv Hforall.
       etransitivity; eauto.
   Qed.
-End Fb2.
+End map_bind2.
+
+Hint Resolve fresh_ident_st_follows.
+Hint Resolve fresh_ident_st_valid.
+Hint Resolve map_bind2_st_valid.
+Hint Resolve map_bind2_st_follows.
