@@ -6,6 +6,7 @@ From Velus Require Export Lustre.LClocking.
 From Velus Require Export Lustre.LTyping.
 From Velus Require Export Lustre.LSemantics.
 From Velus Require Export Lustre.LOrdered.
+From Velus Require Export Lustre.LNormalization.
 
 From Velus Require Import Common.
 
@@ -19,6 +20,7 @@ Module Type LUSTRE
   Declare Module Export Clo: LCLOCKING  Ids Op       Syn.
   Declare Module Export Lord: LORDERED  Ids Op       Syn.
   Declare Module Export Sem: LSEMANTICS Ids Op OpAux Syn Lord Str.
+  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Str Syn Typ Lord Sem.
 End LUSTRE.
 
 Module LustreFun
@@ -32,4 +34,5 @@ Module LustreFun
   Module Export Clo := LClockingFun   Ids Op       Syn.
   Module Export Lord:= LOrderedFun    Ids Op       Syn.
   Module Export Sem := LSemanticsFun  Ids Op OpAux Syn Lord Str.
+  Module Export Norm := LNormalizationFun Ids Op OpAux Str Syn Typ Lord Sem.
 End LustreFun.

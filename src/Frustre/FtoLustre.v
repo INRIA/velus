@@ -1,13 +1,15 @@
 From Coq Require Import ZArith.
 
-From Velus Require Import Common Ident.
+From Velus Require Import Common Ident CoindStreams.
 From Velus Require Import ClockDefs.
 From Velus Require Frustre.FSyntax.
-From Velus Require Import Lustre.LSyntax.
+From Velus Require Import Lustre.
 From Velus Require Import ObcToClight.Interface.
 
 Module F := FSyntax.
-Module L := LSyntaxFun Ids Op.
+Module Str := CoindStreamsFun Op OpAux.
+Module Lus := LustreFun Ids Op OpAux Str.
+Module L := Lus.Syn.
 
 Definition tr_signedness (sg : F.signedness) : Ctypes.signedness :=
   match sg with

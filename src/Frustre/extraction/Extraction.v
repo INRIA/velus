@@ -72,5 +72,6 @@ Separate Extraction
          Errors.res
          FrustreParser.translation_unit_file
          (* Velus *)
-         Common LSyntax LTyping Environment Memory Ident CoindStreams Interface Normalization
+         Common Environment Memory Ident CoindStreams Interface
+         LSyntax LTyping LClocking LNormalization
 .

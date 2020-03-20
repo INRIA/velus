@@ -11,10 +11,6 @@ From Velus Require Import Lustre.
 
 Module L := LustreFun Ids Op OpAux CStr.
 
-From Velus Require Import Normalization.
-
-Module N := NormalizationFun Ids Op OpAux CStr L.
-
 From Velus Require Import NLustre.
 
 Module NL := NLustreFun Ids Op OpAux CStr IStr CE.
