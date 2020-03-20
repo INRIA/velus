@@ -766,6 +766,16 @@ Section ConcatMap.
     rewrite Forall_forall in Hf. auto.
   Qed.
 
+  Lemma concat_length_eq : forall (l1 : list (list A)) (l2 : list (list B)),
+      Forall2 (fun l1 l2 => length l1 = length l2) l1 l2 ->
+      length (concat l1) = length (concat l2).
+  Proof.
+    intros l1 l2 Hf.
+    induction Hf; simpl.
+    - reflexivity.
+    - repeat rewrite app_length. f_equal; auto.
+  Qed.
+
 End ConcatMap.
 
 Section FoldLeft2.
@@ -1324,6 +1334,23 @@ Section ForallExistsB.
 
 End ForallExistsB.
 
+(* Induction on a pair of lists of the same length *)
+Section list_ind2.
+  Context {A B : Type}.
+  Variable P : list A -> list B -> Prop.
+
+  Hypothesis Hnil : P nil nil.
+  Hypothesis Hcons : forall a l1 b l2,
+      P l1 l2 -> P (a::l1) (b::l2).
+
+  Fixpoint list_ind2 l1 l2 : length l1 = length l2 -> P l1 l2.
+  Proof.
+    destruct l1; destruct l2; intro Hlen; simpl in Hlen; try congruence.
+    - apply Hcons. apply list_ind2.
+      inv Hlen. reflexivity.
+  Qed.
+End list_ind2.
+
 Section Combine.
 
   Context {A B C: Type}.
@@ -1337,6 +1364,16 @@ Section Combine.
     simpl. now rewrite IHxs.
   Qed.
 
+  Lemma combine_map_fst':
+    forall (xs : list A) (ys : list B),
+      length xs = length ys -> map fst (combine xs ys) = xs.
+  Proof.
+    intros xs ys Hlen.
+    refine (list_ind2 (fun xs ys => _) _ _ xs ys Hlen); simpl.
+    - reflexivity.
+    - intros a l1 b l2 IHl. f_equal; auto.
+  Qed.
+
   Lemma combine_map_snd:
     forall (f: C -> B) (xs: list A) ys,
       combine xs (map f ys) = map (fun x=>(fst x, f (snd x))) (combine xs ys).
@@ -1344,6 +1381,16 @@ Section Combine.
     induction xs; try constructor.
     destruct ys; try constructor.
     simpl. now rewrite IHxs.
+  Qed.
+
+  Lemma combine_map_snd':
+    forall (xs : list A) (ys : list B),
+      length xs = length ys -> map snd (combine xs ys) = ys.
+  Proof.
+    intros xs ys Hlen.
+    refine (list_ind2 (fun xs ys => _) _ _ xs ys Hlen); simpl.
+    - reflexivity.
+    - intros a l1 b l2 IHl. f_equal; auto.
   Qed.
 
   Lemma combine_nil_l:
@@ -3181,3 +3228,24 @@ Section minmax.
       + apply IHl; eauto.
   Qed.
 End minmax.
+
+(* (* Induction on a triplet of lists of the same length *) *)
+(* Section list_ind3. *)
+(*   Context {A B C : Type}. *)
+(*   Variable P : list A -> list B -> list C -> Prop. *)
+
+(*   Hypothesis Hnil : P nil nil nil. *)
+(*   Hypothesis Hcons : forall a l1 b l2 c l3, *)
+(*       P l1 l2 l3 -> P (a::l1) (b::l2) (c::l3). *)
+
+(*   Fixpoint list_ind3 l1 l2 l3 : *)
+(*     length l1 = length l2 -> *)
+(*     length l1 = length l3 -> *)
+(*     P l1 l2 l3. *)
+(*   Proof. *)
+(*     destruct l1; destruct l2; destruct l3; intros Hlen1 Hlen2; simpl in *; try congruence. *)
+(*     - apply Hcons. apply list_ind3. *)
+(*       + inv Hlen1. reflexivity. *)
+(*       + inv Hlen2. reflexivity. *)
+(*   Qed. *)
+(* End list_ind3. *)

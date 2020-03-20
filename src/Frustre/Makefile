@@ -104,7 +104,7 @@ clean:
 	rm -f $(FRUSTRE_VOFILES) $(DOCDIR)/*.glob .depend .depend.extr
 	rm -rf extraction/extracted
 	rm -f extraction/STAMP
-	rm -f *.cmi *.cmx *.o *.vo
+	rm -f *.cmi *.cmx *.o *.vo *.native
 
 .depend: $(VFILES)
 	@echo "Analyzing Coq dependencies"
