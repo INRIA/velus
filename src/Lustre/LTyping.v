@@ -771,6 +771,40 @@ Module Type LTYPING
 
   End ValidateExpression.
 
+  (** Adding variables to the environment preserves typing *)
+
+  Fact wt_nclock_incl : forall vars vars' cl,
+      incl vars vars' ->
+      wt_nclock vars cl ->
+      wt_nclock vars' cl.
+  Proof.
+    intros vars vars' cl Hincl Hwt.
+    destruct Hwt; constructor.
+    induction H.
+    - constructor.
+    - constructor; auto.
+  Qed.
+  Local Hint Resolve wt_nclock_incl.
+
+  Lemma wt_exp_incl : forall G vars vars' e,
+      incl vars vars' ->
+      wt_exp G vars e ->
+      wt_exp G vars' e.
+  Proof.
+    intros G vars vars' e Hincl Hwt.
+    induction Hwt using wt_exp_ind2;
+      econstructor; eauto.
+    - (* fby *)
+      eapply Forall_impl; [| eauto].
+      intros; eauto.
+    - (* app *)
+      eapply Forall_impl; [| eauto].
+      intros; eauto.
+    - (* app (reset) *)
+      eapply Forall_impl; [| eauto].
+      intros; eauto.
+  Qed.
+
 End LTYPING.
 
 Module LTypingFun

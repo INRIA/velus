@@ -444,6 +444,12 @@ Section Incl.
     eapply Forall_forall in H; eauto.
   Qed.
 
+  Global Instance incl_refl : Reflexive (@incl A).
+  Proof. unfold Reflexive. intros. apply incl_refl. Qed.
+
+  Global Instance incl_trans : Transitive (@incl A).
+  Proof. unfold Transitive. intros. eapply incl_tran; eauto. Qed.
+
 End Incl.
 
 Section Nodup.
