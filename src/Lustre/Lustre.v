@@ -6,7 +6,7 @@ From Velus Require Export Lustre.LClocking.
 From Velus Require Export Lustre.LTyping.
 From Velus Require Export Lustre.LSemantics.
 From Velus Require Export Lustre.LOrdered.
-From Velus Require Export Lustre.LNormalization.
+From Velus Require Export Lustre.Normalization.LNormalization.
 
 From Velus Require Import Common.
 

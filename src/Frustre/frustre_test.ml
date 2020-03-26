@@ -39,7 +39,7 @@ let compile source_name filename =
     FSyntax_pp.global Format.std_formatter p
   else (
     let p = FtoLustre.tr_global p in
-    let p = Norm.normalize_global p in
+    let p = Norm.Norm.normalize_global p in
     Lustre_pp.print_global (Format.std_formatter) p
   )
 

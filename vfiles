@@ -22,7 +22,12 @@ src/Lustre/LClocking.v
 src/Lustre/LOrdered.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
-src/Lustre/LNormalization.v
+
+src/Lustre/Normalization/Fresh.v
+src/Lustre/Normalization/Normalization.v
+src/Lustre/Normalization/Correctness.v
+src/Lustre/Normalization/Completeness.v
+src/Lustre/Normalization/LNormalization.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
@@ -79,6 +84,7 @@ src/Obc/Obc.v
 
 src/Transcription/Transcription.v
 src/Transcription/Correctness.v
+src/Transcription/Completeness.v
 src/Transcription/TrTyping.v
 src/Transcription/TrClocking.v
 

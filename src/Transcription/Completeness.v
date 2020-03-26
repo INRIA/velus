@@ -12,7 +12,7 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics.
-From Velus Require Import Lustre.LNormalization.
+From Velus Require Import Lustre.Normalization.LNormalization.
 
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
