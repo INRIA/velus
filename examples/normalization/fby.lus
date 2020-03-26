@@ -33,15 +33,11 @@ let
 tel
 
 node fby_tuple1 (x : int) returns (y : int; z : int)
-var t1 : int; t2 : int;
 let
-  (t1, t2) = (0, 0) fby (z, y);
-  (y, z) = (t1, t2);
+  (y, z) = (0, 0) fby (z, y);
 tel
 
 node fby_tuple2 (x : int) returns (y : int; z : int)
-var t1 : int; t2 : int;
 let
-  (t1, t2) = (0 fby z, 0 fby y);
-  (y, z) = (t1, t2);
+  (y, z) = (0 fby z, 0 fby y);
 tel

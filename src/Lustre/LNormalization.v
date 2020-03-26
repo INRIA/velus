@@ -5,6 +5,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Classes.RelationClasses.
 Require Import Omega.
+From Coq Require Import Program.Equality.
 
 From Velus Require Import Common Ident.
 
@@ -259,7 +260,7 @@ Module Type LNORMALIZATION
     reserved ++ map fst (n_in n ++ n_vars n ++ n_out n).
 
   Definition first_unused_ident (n : node) : ident :=
-    Pos.succ (fold_left Pos.max (used_idents n) xH).
+    ((fold_left Pos.max (used_idents n) xH) + 100)%positive.
 
   (** Some facts about getting the first unused ident *)
 
@@ -270,7 +271,7 @@ Module Type LNORMALIZATION
     intros n id Hfirst.
     subst. unfold first_unused_ident.
     rewrite Forall_forall; intros x Hin.
-    rewrite Pos.lt_succ_r.
+    eapply Pos.le_lt_trans. 2: apply Pos.lt_add_r.
     apply max_fold_in; auto.
   Qed.
 
@@ -419,20 +420,8 @@ Module Type LNORMALIZATION
     do (es, eqs) <- map_bind2 (normalize_exp false) es;
       ret (concat es, concat eqs).
 
-  Local Ltac solve_forall :=
-    match goal with
-    | H: Forall _ ?l |- Forall _ ?l =>
-      eapply Forall_impl; [ | eapply H]; intros; simpl in *; eauto
-    | _ => idtac
-    end.
-
-  Definition normalize_rhs (e : exp) : FreshAnn (list exp * list equation) :=
+  Definition normalize_rhs (keep_fby : bool) (e : exp) : FreshAnn (list exp * list equation) :=
     match e with
-    | Efby inits es anns =>
-      do (inits', eqs1) <- normalize_exps inits;
-      do (es', eqs2) <- normalize_exps es;
-      do (fbys, eqs3) <- normalize_fby inits' es' anns;
-      ret (fbys, eqs1++eqs2++eqs3)
     | Eapp f es r anns =>
       do (r', eqs1) <- match r with
                       | Some er => do (er, eqs1) <- normalize_exp false er;
@@ -442,31 +431,45 @@ Module Type LNORMALIZATION
                       end;
       do (es', eqs2) <- normalize_exps es;
       ret ([Eapp f es' r' anns], eqs1++eqs2)
+    | Efby inits es anns =>
+      if keep_fby then
+        do (inits', eqs1) <- normalize_exps inits;
+        do (es', eqs2) <- normalize_exps es;
+        do (fbys, eqs3) <- normalize_fby inits' es' anns;
+        ret (fbys, eqs1++eqs2++eqs3)
+      else normalize_exp true e
     | _ => normalize_exp true e
     end.
-  Definition normalize_rhss (es : list exp) :=
-    do (es, eqs) <- map_bind2 normalize_rhs es; ret (concat es, concat eqs).
+  Definition normalize_rhss (keep_fby : bool) (es : list exp) :=
+    do (es, eqs) <- map_bind2 (normalize_rhs keep_fby) es; ret (concat es, concat eqs).
 
   Definition split_equation (eq : equation) : list equation :=
     let (xs, es) := eq in
-    (fix aux (xs : list ident) (es : list exp) := 
+    (fix aux (xs : list ident) (es : list exp) :=
        match es with
        | [] => []
        | hd::tl => let n := numstreams hd in
                   ((firstn n xs), [hd])::(aux (skipn n xs) tl)
        end) xs es.
 
-  Definition normalize_equation (e : equation) : FreshAnn (list equation) :=
+  Definition normalize_equation (to_cut : list ident) (e : equation) : FreshAnn (list equation) :=
     let '(xs, es) := e in
-    do (es', eqs) <- normalize_rhss es;
+    do (es', eqs) <- normalize_rhss (negb (existsb (fun x => existsb (fun c => Pos.eqb x c) to_cut) xs)) es;
     ret ((split_equation (xs, es'))++eqs).
 
-  Fixpoint normalize_equations (eqs : list equation) : FreshAnn (list equation) :=
+  Fixpoint normalize_equations (to_cut : list ident) (eqs : list equation) : FreshAnn (list equation) :=
     match eqs with
     | [] => ret []
-    | hd::tl => do eqs1 <- normalize_equation hd;
-                do eqs2 <- normalize_equations tl;
-                ret (eqs1++eqs2)
+    | hd::tl => do eqs1 <- normalize_equation to_cut hd;
+              do eqs2 <- normalize_equations to_cut tl;
+              ret (eqs1++eqs2)
+    end.
+
+  Local Ltac solve_forall :=
+    match goal with
+    | H: Forall _ ?l |- Forall _ ?l =>
+      eapply Forall_impl; [ | eapply H]; intros; simpl in *; eauto
+    | _ => idtac
     end.
 
   (** ** Propagation of the st_valid property *)
@@ -579,42 +582,44 @@ Module Type LNORMALIZATION
   Qed.
   Hint Resolve normalize_exp_st_valid.
 
-  Fact normalize_rhs_st_valid : forall e res st st',
-      normalize_rhs e st = (res, st') ->
+  Fact normalize_rhs_st_valid : forall e keep_fby res st st',
+      normalize_rhs keep_fby e st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
   Proof.
-    intros e res st st' Hnorm Hfresh.
+    intros e keep_fby res st st' Hnorm Hfresh.
     destruct e; try (solve [eapply normalize_exp_st_valid; eauto]);
-      simpl in Hnorm; unfold normalize_exps in *; repeat inv_bind.
+      simpl in Hnorm; unfold normalize_exps in *.
     - (* fby *)
-      repeat solve_st_valid;
+      destruct keep_fby; repeat inv_bind;
+        repeat solve_st_valid;
         eapply Forall_forall; intros; eauto.
     - (* app *)
+      repeat inv_bind.
       repeat solve_st_valid.
       + eapply Forall_forall; intros; eauto.
       + destruct o; repeat inv_bind; eauto.
   Qed.
   Hint Resolve normalize_rhs_st_valid.
 
-  Fact normalize_equation_st_valid : forall e res st st',
-      normalize_equation e st = (res, st') ->
+  Fact normalize_equation_st_valid : forall e to_cut res st st',
+      normalize_equation to_cut e st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
   Proof.
-    intros [xs es] res st st' Hnorm Hvalid.
+    intros [xs es] to_cut res st st' Hnorm Hvalid.
     simpl in *; unfold normalize_rhss in *; repeat inv_bind.
     eapply map_bind2_st_valid; eauto.
     apply Forall_forall. intros; eauto.
   Qed.
   Hint Resolve normalize_equation_st_valid.
 
-  Fact normalize_equations_st_valid : forall eqs res st st',
-      normalize_equations eqs st = (res, st') ->
+  Fact normalize_equations_st_valid : forall eqs to_cut res st st',
+      normalize_equations to_cut eqs st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
   Proof.
-    induction eqs; intros res st st' Hnorm Hvalid;
+    induction eqs; intros to_cut res st st' Hnorm Hvalid;
       simpl in *; repeat inv_bind.
     - assumption.
     - eapply IHeqs; eauto.
@@ -660,6 +665,18 @@ Module Type LNORMALIZATION
   Qed.
   Hint Resolve init_var_for_clock_st_follows.
 
+  Fact fby_iteexp_st_follows : forall e0 e ann res st st',
+      fby_iteexp e0 e ann st = (res, st') ->
+      fresh_st_follows st st'.
+  Proof.
+    intros e0 e [ty cl] res st st' Hfby.
+    destruct (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
+      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind.
+    - reflexivity.
+    - etransitivity; eauto.
+  Qed.
+  Hint Resolve fby_iteexp_st_follows.
+
   Fact normalize_fby_st_follows : forall inits es anns res st st',
       normalize_fby inits es anns st = (res, st') ->
       fresh_st_follows st st'.
@@ -667,14 +684,8 @@ Module Type LNORMALIZATION
     intros inits es anns res st st' Hnorm.
     unfold normalize_fby in Hnorm; repeat inv_bind.
     eapply map_bind2_st_follows; eauto.
-    apply Forall_forall.
-    intros [[i e] [ty cl]] HIn e' eq' st1 st1' Hfby.
-    destruct (fby_iteexp_spec i e ty cl) as [[c [Hite1 Hite2]]|Hite]; subst.
-    - rewrite Hite2 in Hfby.
-      inv Hfby. reflexivity.
-    - rewrite Hite in Hfby.
-      repeat inv_bind.
-      etransitivity; eauto.
+    rewrite Forall_forall.
+    intros [[i e] [ty cl]] HIn e' eq' st1 st1' Hfby. eauto.
   Qed.
   Hint Resolve normalize_fby_st_follows.
 
@@ -705,7 +716,7 @@ Module Type LNORMALIZATION
       reflexivity
     end.
 
-  Fact normalize_exp_st_follows: forall e is_control res st st',
+  Fact normalize_exp_st_follows : forall e is_control res st st',
       normalize_exp is_control e st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
@@ -738,15 +749,26 @@ Module Type LNORMALIZATION
   Qed.
   Hint Resolve normalize_exp_st_follows.
 
-  Fact normalize_rhs_st_follows : forall e res st st',
-      normalize_rhs e st = (res, st') ->
+  Corollary normalize_exps_st_follows : forall es res st st',
+      normalize_exps es st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
-    intros e res st st' Hnorm.
+    intros es res st st' Hnorm.
+    unfold normalize_exps in Hnorm. repeat inv_bind.
+    eapply map_bind2_st_follows; eauto.
+    rewrite Forall_forall; intros; eauto.
+  Qed.
+
+  Fact normalize_rhs_st_follows : forall e keep_fby res st st',
+      normalize_rhs keep_fby e st = (res, st') ->
+      fresh_st_follows st st'.
+  Proof.
+    intros e keep_fby res st st' Hnorm.
     destruct e; try (solve [eapply normalize_exp_st_follows; eauto]);
-      simpl in Hnorm; unfold normalize_exps in *; repeat inv_bind.
+      simpl in Hnorm; unfold normalize_exps in *.
     - (* fby *)
-      repeat solve_st_follows;
+      destruct keep_fby; repeat inv_bind;
+        repeat solve_st_follows;
         eapply Forall_forall; intros; eauto.
     - (* app *)
       destruct o; repeat inv_bind.
@@ -757,22 +779,22 @@ Module Type LNORMALIZATION
   Qed.
   Hint Resolve normalize_rhs_st_follows.
 
-  Fact normalize_equation_st_follows : forall e res st st',
-      normalize_equation e st = (res, st') ->
+  Fact normalize_equation_st_follows : forall e to_cut res st st',
+      normalize_equation to_cut e st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
-    intros [xs es] res st st' Hnorm.
+    intros [xs es] to_cut res st st' Hnorm.
     simpl in *; unfold normalize_rhss in *; repeat inv_bind.
     eapply map_bind2_st_follows; eauto.
     apply Forall_forall. intros; eauto.
   Qed.
   Hint Resolve normalize_equation_st_follows.
 
-  Fact normalize_equations_st_follows : forall eqs res st st',
-      normalize_equations eqs st = (res, st') ->
+  Fact normalize_equations_st_follows : forall eqs to_cut res st st',
+      normalize_equations to_cut eqs st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
-    induction eqs; intros res st st' Hnorm;
+    induction eqs; intros to_cut res st st' Hnorm;
       simpl in *; repeat inv_bind.
     - reflexivity.
     - etransitivity; eauto.
@@ -929,16 +951,16 @@ Module Type LNORMALIZATION
     auto.
   Qed.
 
-  Fact normalize_rhs_length : forall G vars e es' eqs' st st',
+  Fact normalize_rhs_length : forall G vars e keep_fby es' eqs' st st',
       wt_exp G vars e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      normalize_rhs keep_fby e st = (es', eqs', st') ->
       (length es' = 1 \/ length es' = numstreams e).
   Proof.
-    intros G vars e es' eqs' st st' Hwt Hnorm;
+    intros G vars e keep_fby es' eqs' st st' Hwt Hnorm;
       destruct e; unfold normalize_rhs in Hnorm;
         try (solve [right; eapply normalize_exp_length; eauto]);
-        try (destruct o); repeat inv_bind; auto.
-    - (* fby *)
+        try (destruct o); destruct keep_fby; repeat inv_bind; auto.
+    - (* keep_fby = true *)
       right. inv Hwt.
       eapply normalize_fby_length; eauto.
       + eapply normalize_exps_length in H; eauto.
@@ -949,6 +971,8 @@ Module Type LNORMALIZATION
         replace (typesof l0) in H0.
         rewrite map_length in H0.
         assumption.
+    - (* keep_fby = false *)
+      eapply normalize_exp_length in Hnorm; eauto.
   Qed.
 
   (** ** Preservation of typeof *)
@@ -1113,31 +1137,33 @@ Module Type LNORMALIZATION
     rewrite H. simpl. f_equal; auto.
   Qed.
 
-  Fact normalize_rhs_typeof : forall G vars e es' eqs' st st',
+  Fact normalize_rhs_typeof : forall G vars e keep_fby es' eqs' st st',
       wt_exp G vars e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      normalize_rhs keep_fby e st = (es', eqs', st') ->
       typesof es' = typeof e.
   Proof.
-    intros G vars e es' eqs' st st' Hwt Hnorm.
+    intros G vars e keep_fby es' eqs' st st' Hwt Hnorm.
     destruct e; unfold normalize_rhs in Hnorm;
       try (solve [eapply normalize_exp_typeof in Hnorm; eauto]).
     - (* fby *)
-      repeat inv_bind. inv Hwt.
-      eapply normalize_fby_typeof; eauto.
-      + replace (length l1) with (length (typesof l)) by (rewrite H8; apply map_length).
-        eapply normalize_exps_length; eauto.
-      + replace (length l1) with (length (typesof l0)) by (rewrite H7; apply map_length).
-        eapply normalize_exps_length; eauto.
+      destruct keep_fby.
+      + repeat inv_bind. inv Hwt.
+        eapply normalize_fby_typeof; eauto.
+        * replace (length l1) with (length (typesof l)) by (rewrite H8; apply map_length).
+          eapply normalize_exps_length; eauto.
+        * replace (length l1) with (length (typesof l0)) by (rewrite H7; apply map_length).
+          eapply normalize_exps_length; eauto.
+      + eapply normalize_exp_typeof in Hnorm; eauto.
     - (* app *)
       destruct o; repeat inv_bind; apply app_nil_r.
   Qed.
 
-  Corollary normalize_rhss_typeof : forall G vars es es' eqs' st st',
+  Corollary normalize_rhss_typeof : forall G vars es keep_fby es' eqs' st st',
       Forall (wt_exp G vars) es ->
-      normalize_rhss es st = (es', eqs', st') ->
+      normalize_rhss keep_fby es st = (es', eqs', st') ->
       typesof es' = typesof es.
   Proof.
-    intros G vars es es' eqs' st st' Hf Hnorm.
+    intros G vars es keep_fby es' eqs' st st' Hf Hnorm.
     unfold normalize_rhss in Hnorm. repeat inv_bind.
     apply map_bind2_values in H.
     induction H; simpl in *.
@@ -1386,26 +1412,30 @@ Module Type LNORMALIZATION
     eapply normalize_exp_vars_perm...
   Qed.
 
-  Fact normalize_rhs_vars_perm : forall G vars e es' eqs' st st',
+  Fact normalize_rhs_vars_perm : forall G vars e keep_fby es' eqs' st st',
       wt_exp G vars e ->
-      normalize_rhs e st = ((es', eqs'), st') ->
+      normalize_rhs keep_fby e st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
   Proof with eauto.
-    intros G vars e es' eqs' st st' Hwt Hnorm.
+    intros G vars e keep_fby es' eqs' st st' Hwt Hnorm.
     destruct e; unfold normalize_rhs in Hnorm;
       try (solve [eapply normalize_exp_vars_perm; eauto]); inv Hwt; repeat inv_bind.
     - (* fby *)
-      eapply normalize_exps_vars_perm in H...
-      eapply normalize_exps_vars_perm in H0...
-      eapply normalize_fby_vars_perm in H1.
-      etransitivity. 2: eauto.
-      unfold vars_defined in *. repeat rewrite flat_map_concat_map in *.
-      repeat rewrite map_app. repeat rewrite concat_app.
-      repeat (rewrite <- app_assoc; rewrite Permutation_swap).
-      apply Permutation_app_head.
-      etransitivity. 2: eauto.
-      apply Permutation_app_head.
-      assumption.
+      destruct keep_fby.
+      + repeat inv_bind.
+        eapply normalize_exps_vars_perm in H...
+        eapply normalize_exps_vars_perm in H0...
+        eapply normalize_fby_vars_perm in H1.
+        etransitivity. 2: eauto.
+        unfold vars_defined in *. repeat rewrite flat_map_concat_map in *.
+        repeat rewrite map_app. repeat rewrite concat_app.
+        repeat (rewrite <- app_assoc; rewrite Permutation_swap).
+        apply Permutation_app_head.
+        etransitivity. 2: eauto.
+        apply Permutation_app_head.
+        assumption.
+      + eapply normalize_exp_vars_perm; eauto.
+        econstructor; eauto.
     - (* app *)
       eapply normalize_exps_vars_perm in H; eauto.
     - (* app (reset) *)
@@ -1422,12 +1452,12 @@ Module Type LNORMALIZATION
       assumption.
   Qed.
 
-  Corollary normalize_rhss_vars_perm : forall G vars es es' eqs' st st',
+  Corollary normalize_rhss_vars_perm : forall G vars es keep_fby es' eqs' st st',
       Forall (wt_exp G vars) es ->
-      normalize_rhss es st = ((es', eqs'), st') ->
+      normalize_rhss keep_fby es st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
   Proof.
-    intros G vars es es' eqs' st st' Hf Hnorm.
+    intros G vars es keep_fby es' eqs' st st' Hf Hnorm.
     unfold normalize_rhss in Hnorm.
     repeat inv_bind.
     eapply map_bind2_vars_perm in H; eauto.
@@ -1467,15 +1497,15 @@ Module Type LNORMALIZATION
       rewrite app_nil_r in Heq. assumption.
   Qed.
 
-  Fact normalize_equation_vars_perm : forall G vars eq eqs' st st',
+  Fact normalize_equation_vars_perm : forall G vars eq to_cut eqs' st st',
       wt_equation G vars eq ->
-      normalize_equation eq st = (eqs', st') ->
+      normalize_equation to_cut eq st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(map fst (snd st))) ((vars_defined [eq])++(map fst (snd st'))).
   Proof.
-    intros G vars eq eqs' st st' Hwt Hnorm.
+    intros G vars eq to_cut eqs' st st' Hwt Hnorm.
     destruct eq; simpl in *.
     repeat inv_bind. destruct Hwt as [Hwt Hl].
-    specialize (normalize_rhss_vars_perm _ _ _ _ _ _ _ Hwt H) as Hperm1.
+    specialize (normalize_rhss_vars_perm _ _ _ _ _ _ _ _ Hwt H) as Hperm1.
     rewrite app_nil_r.
     assert (vars_defined (flat_map split_equation [(l, x)]) = vars_defined [(l, x)]) as Hxl.
     { apply split_equations_vars_defined.
@@ -1492,12 +1522,12 @@ Module Type LNORMALIZATION
     rewrite <- Hxl at 2. reflexivity.
   Qed.
 
-  Corollary normalize_equations_vars_perm : forall G vars eqs eqs' st st',
+  Corollary normalize_equations_vars_perm : forall G vars eqs to_cut eqs' st st',
       Forall (wt_equation G vars) eqs ->
-      normalize_equations eqs st = (eqs', st') ->
+      normalize_equations to_cut eqs st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(map fst (snd st))) ((vars_defined eqs)++(map fst (snd st'))).
   Proof.
-    induction eqs; intros eqs' st st' Hf Hnorm ;simpl in *; repeat inv_bind.
+    induction eqs; intros to_cut eqs' st st' Hf Hnorm ;simpl in *; repeat inv_bind.
     - reflexivity.
     - inv Hf. eapply IHeqs in H0; eauto.
       eapply normalize_equation_vars_perm in H; eauto; simpl in *.
@@ -1511,17 +1541,17 @@ Module Type LNORMALIZATION
         rewrite Permutation_app_comm. assumption.
   Qed.
 
-  Definition normalize_equations' (eq : list equation) (st : fresh_st (ann * bool)) :
-    { res | normalize_equations eq st = res }.
+  Definition normalize_equations' (to_cut : list ident) (eq : list equation) (st : fresh_st (ann * bool)) :
+    { res | normalize_equations to_cut eq st = res }.
   Proof.
-    remember (normalize_equations eq st) as eqs'.
+    remember (normalize_equations to_cut eq st) as eqs'.
     econstructor; eauto.
   Defined.
 
   (** Normalization of a full node *)
   Program Definition normalize_node (n : node) (Hwt : exists G, wt_node G n) : node :=
     let id0 := first_unused_ident n in
-    let eqs := normalize_equations' (n_eqs n) (id0, nil) in
+    let eqs := normalize_equations' (map fst (n_out n)) (n_eqs n) (id0, nil) in
     let nvars := (List.map (fun var => (fst var, (fst (fst (snd var)), (fst (snd (fst (snd var))))))) (snd (snd (proj1_sig eqs)))) in
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
@@ -1545,7 +1575,7 @@ Module Type LNORMALIZATION
     eapply Permutation_app_head. symmetry. assumption.
   Qed.
   Next Obligation.
-    remember (normalize_equations (n_eqs n) (first_unused_ident n, [])) as res.
+    remember (normalize_equations (map fst (n_out n)) (n_eqs n) (first_unused_ident n, [])) as res.
     assert (fresh_st_follows (first_unused_ident n, []) (snd res)) as Hfollows.
     { subst. eapply normalize_equations_st_follows. eapply surjective_pairing. }
     assert (fresh_st_valid (snd res)) as Hvalid.
@@ -1823,28 +1853,26 @@ Module Type LNORMALIZATION
       is_constant e ->
       is_constant (Ewhen [e] x b ([ty], cl)).
 
-  Inductive normalized_equation : equation -> Prop :=
-  | normalized_eq_Eapp : forall xs f es lann,
+  Inductive normalized_equation : list ident -> equation -> Prop :=
+  | normalized_eq_Eapp : forall out xs f es lann,
       Forall normalized_lexp es ->
-      normalized_equation (xs, [Eapp f es None lann])
-  | normalized_eq_Eapp_reset : forall xs f es x ty cl lann,
+      normalized_equation out (xs, [Eapp f es None lann])
+  | normalized_eq_Eapp_reset : forall out xs f es x ty cl lann,
       Forall normalized_lexp es ->
-      normalized_equation (xs, [Eapp f es (Some (Evar x (ty, cl))) lann])
-  | normalized_eq_Efby : forall x e0 e ann,
+      normalized_equation out (xs, [Eapp f es (Some (Evar x (ty, cl))) lann])
+  | normalized_eq_Efby : forall out x e0 e ann,
+      ~In x out ->
       is_constant e0 ->
       normalized_lexp e ->
-      normalized_equation ([x], [Efby [e0] [e] [ann]])
-  | normalized_eq_cexp : forall x e,
+      normalized_equation out ([x], [Efby [e0] [e] [ann]])
+  | normalized_eq_cexp : forall out x e,
       normalized_cexp e ->
-      normalized_equation ([x], [e]).
+      normalized_equation out ([x], [e]).
 
   Definition normalized_node (n : node) :=
-    Forall normalized_equation (n_eqs n).
+    Forall (normalized_equation (List.map fst (n_out n))) (n_eqs n).
 
-  Hint Constructors is_constant.
-  Hint Constructors normalized_lexp.
-  Hint Constructors normalized_cexp.
-  Hint Constructors normalized_equation.
+  Hint Constructors is_constant normalized_lexp normalized_cexp normalized_equation.
 
   Fact normalized_lexp_numstreams : forall e,
       normalized_lexp e ->
@@ -1906,43 +1934,28 @@ Module Type LNORMALIZATION
   Qed.
 
   Fact map_bind2_normalized_eq {A A1} :
-    forall (k : A -> FreshAnn (A1 * (list equation))) a a1s eqs' st st',
+    forall (k : A -> FreshAnn (A1 * (list equation))) a out a1s eqs' st st',
       map_bind2 k a st = (a1s, eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      (forall a a1s eqs' st st', k a st = (a1s, eqs', st') -> fresh_st_follows st st') ->
       Forall (fun a => forall a1s eqs' st st',
                   k a st = (a1s, eqs', st') ->
-                  Forall normalized_equation eqs') a ->
-      Forall normalized_equation (concat eqs').
+                  Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+                  Forall (normalized_equation out) eqs') a ->
+      Forall (normalized_equation out) (concat eqs').
   Proof.
-    intros k a a1s eqs' st st' Hmap Hf.
-    apply map_bind2_values in Hmap.
-    induction Hmap; simpl in *.
+    induction a; intros out a1s eqs' st st' Hmap Hlt Hfollows Hf;
+      simpl in *; repeat inv_bind.
     - constructor.
-    - destruct H as [? [? H]]. inv Hf.
+    - inv Hf.
       rewrite Forall_app.
       split; eauto.
+      eapply IHa; eauto.
+      clear IHa H3 H4.
+      specialize (Hfollows _ _ _ _ _ H) as [_ Hfollows].
+      repeat rewrite_Forall_forall.
+      eapply Pos.lt_le_trans; eauto.
   Qed.
-
-  Local Ltac solve_normalized :=
-    match goal with
-    | H1 : forall (is_control : bool) (es' : list exp) (eqs' : list equation) (st st' : fresh_st (ann * bool)),
-        (normalize_exp false ?e st = _ -> Forall normalized_lexp es') /\
-        (normalize_exp true ?e st = _ -> Forall normalized_cexp es') /\
-        (normalize_exp is_control ?e st = _ -> Forall normalized_equation eqs'),
-    H2 : normalize_exp ?is_control ?e ?st = (?es', ?eqs', ?st')
-    |- Forall normalized_lexp ?es' => specialize (H1 is_control es' eqs' st st'); destruct H1 as [? [? ?]]; auto
-    | H1 : forall (is_control : bool) (es' : list exp) (eqs' : list equation) (st st' : fresh_st (ann * bool)),
-        (normalize_exp false ?e st = _ -> Forall normalized_lexp es') /\
-        (normalize_exp true ?e st = _ -> Forall normalized_cexp es') /\
-        (normalize_exp is_control ?e st = _ -> Forall normalized_equation eqs'),
-    H2 : normalize_exp ?is_control ?e ?st = (?es', ?eqs', ?st')
-    |- Forall normalized_cexp ?es' => specialize (H1 is_control es' eqs' st st'); destruct H1 as [? [? ?]]; auto
-    | H1 : forall (is_control : bool) (es' : list exp) (eqs' : list equation) (st st' : fresh_st (ann * bool)),
-        (normalize_exp false ?e st = _ -> Forall normalized_lexp es') /\
-        (normalize_exp true ?e st = _ -> Forall normalized_cexp es') /\
-        (normalize_exp is_control ?e st = _ -> Forall normalized_equation eqs'),
-    H2 : normalize_exp ?is_control ?e ?st = (?es', ?eqs', ?st')
-    |- Forall normalized_equation ?eqs' => specialize (H1 is_control es' eqs' st st'); destruct H1 as [? [? ?]]; auto
-  end.
 
   Fact add_whens_is_constant : forall ty cl e,
     is_constant e ->
@@ -1962,46 +1975,192 @@ Module Type LNORMALIZATION
     - constructor. eauto.
   Qed.
 
-  Lemma normalize_exp_normalized : forall e is_control es' eqs' st st',
-      (normalize_exp false e st = (es', eqs', st') -> Forall normalized_lexp es') /\
-      (normalize_exp true e st = (es', eqs', st') -> Forall normalized_cexp es') /\
-      (normalize_exp is_control e st = (es', eqs', st') -> Forall normalized_equation eqs').
+  Hint Resolve in_combine_l in_combine_r.
+  Hint Resolve normalized_lexp_hd_default.
+
+  Lemma normalize_exp_normalized_lexp : forall e es' eqs' st st',
+      normalize_exp false e st = (es', eqs', st') ->
+      Forall normalized_lexp es'.
   Proof with eauto.
-    induction e using exp_ind2; intros is_control es' eqs' st st'.
-    - (* const *)
-      repeat split; intros Hnorm; simpl in Hnorm;
-        repeat inv_bind...
+    induction e using exp_ind2; intros es' eqs' st st' Hnorm;
+      simpl in Hnorm; repeat inv_bind; repeat constructor.
     - (* var *)
-      repeat split; intros Hnorm; simpl in Hnorm;
-        destruct a; repeat inv_bind...
+      destruct a...
     - (* unop *)
-      repeat split; intros Hnorm; simpl in Hnorm;
-        destruct a; repeat inv_bind; repeat constructor;
-          try apply normalized_lexp_hd_default;
-          eapply IHe...
+      destruct a...
     - (* binop *)
-      repeat split; intros Hnorm; simpl in Hnorm;
-        destruct a; repeat inv_bind; repeat constructor;
-          try apply normalized_lexp_hd_default;
-          try (solve [eapply IHe1; eauto]);
-          try (solve [eapply IHe2; eauto]).
-      rewrite Forall_app.
-      split.
-      + eapply IHe1...
-      + eapply IHe2...
+      destruct a. constructor...
     - (* fby *)
-      repeat split; intros Hnorm; simpl in Hnorm;
-        repeat inv_bind.
-      1,2: (rewrite Forall_forall; intros x Hin;
-            rewrite in_map_iff in Hin; destruct Hin as [[? [? ?]] [? ?]]; subst; auto).
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H5. destruct H5 as [[? [? ?]] [? Hin]]; subst...
+    - (* when *)
+      destruct a. repeat inv_bind.
+      apply map_bind2_normalized_lexp in H0...
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H1. destruct H1 as [[? ?] [? ?]]; subst...
+    - (* merge *)
+      destruct a. repeat inv_bind.
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H4. destruct H4 as [[? ?] [? ?]]; subst.
+      destruct a...
+    - (* ite *)
+      destruct a. repeat inv_bind.
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H5. destruct H5 as [[? ?] [? ?]]; subst.
+      destruct a...
+    - (* app *)
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H4. destruct H4 as [[? ?] [? ?]]; subst.
+      destruct a0...
+  Qed.
+  Hint Resolve normalize_exp_normalized_lexp.
+
+  Lemma normalize_exp_normalized_cexp : forall e es' eqs' st st',
+      normalize_exp true e st = (es', eqs', st') ->
+      Forall normalized_cexp es'.
+  Proof with eauto.
+    induction e using exp_ind2; intros es' eqs' st st' Hnorm;
+      simpl in Hnorm; repeat inv_bind; repeat constructor.
+    - (* var *)
+      destruct a...
+    - (* unop *)
+      destruct a...
+    - (* binop *)
+      destruct a. constructor...
+    - (* fby *)
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H5. destruct H5 as [[? [? ?]] [? Hin]]; subst...
+    - (* when *)
+      destruct a. repeat inv_bind.
+      apply map_bind2_normalized_lexp in H0; solve_forall.
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H1. destruct H1 as [[? ?] [? Hin]]; subst...
+    - (* merge *)
+      destruct a. repeat inv_bind.
+      apply map_bind2_normalized_cexp in H1; solve_forall.
+      apply map_bind2_normalized_cexp in H2; solve_forall.
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H3. destruct H3 as [[[? ?] ?] [? Hin]]; subst.
+      constructor...
+    - (* ite *)
+      destruct a. repeat inv_bind.
+      apply normalize_exp_normalized_lexp in H1.
+      apply map_bind2_normalized_cexp in H2; solve_forall.
+      apply map_bind2_normalized_cexp in H3; solve_forall.
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H4. destruct H4 as [[[? ?] ?] [? Hin]]; subst.
+      constructor...
+      apply normalized_lexp_hd_default. repeat rewrite_Forall_forall...
+    - (* app *)
+      repeat rewrite_Forall_forall.
+      rewrite in_map_iff in H4. destruct H4 as [[? ?] [? ?]]; subst.
+      destruct a0...
+  Qed.
+
+  Fact init_var_for_clock_normalized_eq : forall cl id eqs' out st st',
+      init_var_for_clock cl st = (id, eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
+  Proof.
+    intros cl id eqs' out [n l] st' Hinit Hlt.
+    simpl in Hinit.
+    destruct (find _ _).
+    - destruct p. inv Hinit. constructor.
+    - inv Hinit. repeat constructor.
+      + simpl in Hlt.
+        intros contra.
+        rewrite_Forall_forall. apply Hlt in contra.
+        specialize (min_fold_le (map fst l) id) as contra'.
+        apply (Pos.lt_irrefl id).
+        eapply Pos.lt_le_trans; eauto.
+      + apply add_whens_is_constant. auto.
+      + apply add_whens_normalized_lexp. auto.
+  Qed.
+
+  Fact fby_iteexp_normalized_eq : forall e0 e a e' eqs' out st st',
+      fby_iteexp e0 e a st = (e', eqs', st') ->
+      normalized_lexp e ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
+  Proof.
+    intros e0 e [ty cl] e' eqs' out st st' Hfby He Hlt.
+    specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
+      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind.
+    - constructor.
+    - constructor.
+      + constructor; auto.
+        intro contra. rewrite_Forall_forall.
+        apply Hlt in contra; clear Hlt.
+        assert (fresh_st_follows st st') as Hfollows by (etransitivity; eauto).
+        destruct Hfollows as [_ Hfollows].
+        unfold fresh_ident in H0; destruct x1. inv H0.
+        simpl in Hfollows.
+        apply Pos.min_glb_l in Hfollows.
+        apply (Pos.lt_irrefl x2).
+        eapply Pos.lt_le_trans; eauto.
+      + eapply init_var_for_clock_normalized_eq in H; eauto.
+  Qed.
+
+  Fact normalize_fby_normalized_eq : forall e0s es anns es' eqs' out st st',
+      normalize_fby e0s es anns st = (es', eqs', st') ->
+      Forall normalized_lexp es ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
+  Proof with eauto.
+    intros e0s es anns es' eqs' out st st' Hnorm Hf Hlt.
+    unfold normalize_fby in Hnorm.
+    repeat inv_bind.
+    - eapply map_bind2_normalized_eq...
+      + intros. destruct a as [[e0 e] [ty cl]].
+        eapply fby_iteexp_st_follows...
+      + rewrite Forall_forall; intros.
+        destruct x as [[e0 e] [ty cl]].
+        eapply fby_iteexp_normalized_eq in H1...
+        rewrite Forall_forall in Hf...
+  Qed.
+
+  Fact idents_for_anns_smallest_ident : forall anns ids st st',
+      idents_for_anns anns st = (ids, st') ->
+      Forall (fun id => Pos.le (smallest_ident st) id) (map fst ids).
+  Proof.
+    induction anns; intros ids st st' Hids;
+      simpl in Hids; repeat inv_bind.
+    - constructor.
+    - destruct st as [n l]; simpl in H; inv H.
+      constructor; eauto.
+      + simpl. apply min_fold_le.
+      + eapply IHanns in H0. solve_forall.
+        clear H0.
+        apply Pos.min_le in H. destruct H as [H|H].
+        * etransitivity. eapply min_fold_le. eauto.
+        * etransitivity; eauto. apply min_fold_eq.
+          apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
+  Qed.
+
+  Lemma normalize_exp_normalized_eq : forall e is_control es' eqs' out st st',
+      normalize_exp is_control e st = (es', eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
+  Proof with eauto.
+    induction e using exp_ind2; intros is_control es' eqs' out st st' Hnorm Hlt;
+      simpl in Hnorm; repeat inv_bind; repeat constructor.
+    - (* unop *) eauto.
+    - (* binop *)
+      apply Forall_app. split...
+      apply normalize_exp_st_follows in H; destruct H.
+      assert (Forall (fun o : positive => (o < smallest_ident x1)%positive) out) by (solve_forall; eapply Pos.lt_le_trans; eauto)...
+    - (* fby *)
       repeat rewrite Forall_app. repeat split.
-      2,3: (eapply map_bind2_normalized_eq; eauto; solve_forall; solve_normalized).
-      + apply map_bind2_normalized_lexp in H1; [| solve_forall; solve_normalized].
-        apply map_bind2_normalized_lexp in H2; [| solve_forall; solve_normalized].
+      + assert (fresh_st_follows st x1) as Hfollows1 by (eapply map_bind2_st_follows; eauto; solve_forall).
+        assert (fresh_st_follows x1 x4) as Hfollows2 by (eapply map_bind2_st_follows; eauto; solve_forall).
+        assert (fresh_st_follows x4 x7) as Hfollows3 by eauto.
+        apply map_bind2_normalized_lexp in H1; [| solve_forall].
+        apply map_bind2_normalized_lexp in H2; [| solve_forall].
         clear H H0.
         unfold normalize_fby in H3; repeat inv_bind. apply map_bind2_values in H.
         repeat rewrite_Forall_forall.
         rewrite in_map_iff in H5; destruct H5 as [[[? ?] ?] [? Hin]]; subst.
+        specialize (in_combine_l _ _ _ _ Hin) as Hin2.
         apply in_combine_r in Hin.
         apply In_nth with (d:=(hd_default [])) in Hin; destruct Hin as [n [? ?]].
         replace (length x5) in H5.
@@ -2010,158 +2169,98 @@ Module Type LNORMALIZATION
         specialize (fby_iteexp_spec e0 e' ty cl) as [[? [? Hspec]]|Hspec]; subst;
           rewrite Hspec in H3; clear Hspec; repeat inv_bind.
         * rewrite <- H7. repeat constructor.
-          eapply nth_In in H5; rewrite Hnth in H5.
-          apply in_combine_l in H5. apply in_combine_r in H5...
+          -- intro contra. apply Hlt in contra.
+             eapply idents_for_anns_smallest_ident in H4. rewrite Forall_forall in H4.
+             assert (In i (map fst x8)) as Hin.
+             { rewrite in_map_iff. exists (i, a0); auto. }
+             apply H4 in Hin.
+             destruct Hfollows1. destruct Hfollows2. destruct Hfollows3.
+             apply (Pos.lt_irrefl i).
+             eapply Pos.lt_le_trans; eauto.
+             etransitivity; eauto.
+             etransitivity; eauto.
+             etransitivity; eauto.
+          -- eapply nth_In in H5; rewrite Hnth in H5...
         * repeat constructor.
-          eapply nth_In in H5; rewrite Hnth in H5.
-          apply in_combine_l in H5. apply in_combine_l in H5...
-      + unfold normalize_fby in H3. repeat inv_bind.
-        eapply map_bind2_normalized_eq; eauto.
-        apply map_bind2_normalized_lexp in H1; [| solve_forall; solve_normalized].
-        apply map_bind2_normalized_lexp in H2; [| solve_forall; solve_normalized].
-        clear H H0 H3.
-        repeat rewrite_Forall_forall. destruct x as [[e0 e] [ty cl]].
-        specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-          rewrite Hspec in H0; clear Hspec; repeat inv_bind; inv H3.
-        * repeat constructor.
-          apply in_combine_l in H. apply in_combine_r in H...
-        * unfold init_var_for_clock in H0. destruct st0 as [n l].
-          destruct (find _ _).
-          -- destruct p. inv H0. inv H6.
-          -- inv H0. inv H6; [| inv H0].
-             constructor.
-             ++ eapply add_whens_is_constant. constructor.
-             ++ eapply add_whens_normalized_lexp. auto.
+          eapply nth_In in H5; rewrite Hnth in H5...
+      + eapply map_bind2_normalized_eq in H1... solve_forall.
+      + eapply map_bind2_normalized_eq in H2...
+        * eapply map_bind2_st_follows in H1; solve_forall.
+          destruct H1 as [_ Hfollows].
+          eapply Pos.lt_le_trans...
+        * solve_forall.
+      + eapply normalize_fby_normalized_eq in H3; eauto.
+        * eapply map_bind2_normalized_lexp; eauto. solve_forall.
+        * eapply map_bind2_st_follows in H1; solve_forall. destruct H1 as [_ H1].
+          eapply map_bind2_st_follows in H2; solve_forall. destruct H2 as [_ H2].
+          eapply Pos.lt_le_trans; eauto.
+          etransitivity; eauto.
     - (* when *)
-      repeat split; intros Hnorm; simpl in Hnorm;
-        destruct a; repeat inv_bind.
-          1,2: (apply map_bind2_values in H0;
-                assert (Forall normalized_lexp (concat x1)) as Hf;
-                [ apply Forall_concat;
-                  repeat rewrite_Forall_forall;
-                  apply In_nth with (d:=[]) in H3; destruct H3 as [n' [Hn' H3]];
-                  replace (length x1) in *;
-                  assert (Forall normalized_lexp x0); [
-                    specialize (H2 (hd_default []) [] [] _ _ _ _ Hn' eq_refl H3 eq_refl); destruct H2 as [? [? ?]]; eauto;
-                    eapply H; eauto;
-                    eapply nth_In; eauto
-                  | rewrite_Forall_forall; eauto ]
-                | repeat rewrite_Forall_forall; eauto;
-                  rewrite in_map_iff in H3; destruct H3 as [? [? H3]]; subst;
-                  destruct x3; constructor;
-                  apply in_combine_l in H3; eauto ]).
-      + eapply map_bind2_normalized_eq; eauto.
-        rewrite Forall_forall in *; intros.
-        specialize (H x0 H1). solve_normalized.
+      destruct a. repeat inv_bind.
+      eapply map_bind2_normalized_eq in H0; eauto. solve_forall.
     - (* merge *)
-      repeat split; intro Hnorm; simpl in *; destruct a; repeat inv_bind.
-      + rewrite Forall_forall. intros x' Hin.
-        rewrite in_map_iff in Hin; destruct Hin as [[? [? ?]] [? Hin]]; subst...
-      + rewrite Forall_forall. intros x' Hin.
-        rewrite in_map_iff in Hin; destruct Hin as [[[? ?] ?] [? Hin]]; subst.
-        assert (In e (concat x3)) as Hin1 by (apply in_combine_l in Hin; apply in_combine_l in Hin; auto).
-        assert (In e0 (concat x5)) as Hin2 by (apply in_combine_l in Hin; apply in_combine_r in Hin; auto).
-        constructor.
-        * apply map_bind2_normalized_cexp in H1.
-          rewrite Forall_forall in H1... solve_forall; solve_normalized.
-        * apply map_bind2_normalized_cexp in H2.
-          rewrite Forall_forall in H2... solve_forall; solve_normalized.
-      + destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split.
-        1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall; solve_normalized).
-        rewrite Forall_forall. intros [xs es] Hin.
-        specialize (in_combine_l _ _ _ _ Hin) as Hin1.
-        rewrite in_map_iff in Hin1. destruct Hin1 as [[id ann] [? Hin1]]; subst.
-        apply in_combine_r in Hin.
-        rewrite in_map_iff in Hin; destruct Hin as [e [? Hin2]]; subst.
-        constructor.
-        rewrite in_map_iff in Hin2; destruct Hin2 as [[[e1 e2] ty] [? Hin2]]; subst.
-        assert (In e1 (concat x3)) as Hin1' by (apply in_combine_l in Hin2; apply in_combine_l in Hin2; auto).
-        assert (In e2 (concat x6)) as Hin2' by (apply in_combine_l in Hin2; apply in_combine_r in Hin2; auto).
-        constructor.
-        * apply map_bind2_normalized_cexp in H1.
-          rewrite Forall_forall in H1... solve_forall; solve_normalized.
-        * apply map_bind2_normalized_cexp in H2.
-          rewrite Forall_forall in H2... solve_forall; solve_normalized.
-    - (* ite *)
-      repeat split; intro Hnorm; simpl in *; destruct a; repeat inv_bind.
-      + rewrite Forall_forall. intros x' Hin.
-        rewrite in_map_iff in Hin; destruct Hin as [[? [? ?]] [? Hin]]; subst...
-      + rewrite Forall_forall. intros x' Hin.
-        rewrite in_map_iff in Hin; destruct Hin as [[[? ?] ?] [? Hin]]; subst.
-        assert (In e0 (concat x5)) as Hin1 by (apply in_combine_l in Hin; apply in_combine_l in Hin; auto).
-        assert (In e1 (concat x7)) as Hin2 by (apply in_combine_l in Hin; apply in_combine_r in Hin; auto).
-        constructor.
-        * apply normalized_lexp_hd_default. solve_normalized.
-        * apply map_bind2_normalized_cexp in H2.
-          rewrite Forall_forall in H2... solve_forall; solve_normalized.
-        * apply map_bind2_normalized_cexp in H3.
-          rewrite Forall_forall in H3... solve_forall; solve_normalized.
-      + destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split.
-        1,5: (specialize (IHe false x x0 st x1); destruct IHe as [_ [_ ?]]; eauto).
-        1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall; solve_normalized).
-        rewrite Forall_forall. intros [xs es] Hin.
-        specialize (in_combine_l _ _ _ _ Hin) as Hin1.
-        rewrite in_map_iff in Hin1. destruct Hin1 as [[id ann] [? Hin1]]; subst.
-        apply in_combine_r in Hin.
-        rewrite in_map_iff in Hin; destruct Hin as [? [? Hin2]]; subst.
-        constructor.
-        rewrite in_map_iff in Hin2; destruct Hin2 as [[[e1 e2] ty] [? Hin2]]; subst.
-        assert (In e1 (concat x5)) as Hin1' by (apply in_combine_l in Hin2; apply in_combine_l in Hin2; auto).
-        assert (In e2 (concat x8)) as Hin2' by (apply in_combine_l in Hin2; apply in_combine_r in Hin2; auto).
-        constructor.
-        * apply normalized_lexp_hd_default. solve_normalized.
-        * apply map_bind2_normalized_cexp in H2.
-          rewrite Forall_forall in H2... solve_forall; solve_normalized.
-        * apply map_bind2_normalized_cexp in H3.
-          rewrite Forall_forall in H3... solve_forall; solve_normalized.
+      destruct a; destruct is_control; repeat inv_bind;
+        repeat rewrite Forall_app; repeat split.
+      1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
+      1,2: (eapply map_bind2_st_follows in H1; eauto; solve_forall; destruct H1 as [_ Hfollows];
+            eapply Pos.lt_le_trans; eauto).
+      rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
+      specialize (in_combine_l _ _ _ _ Hin) as Hin1.
+      apply in_combine_r in Hin. rewrite in_map_iff in Hin; destruct Hin as [[[? ?] ?] [? Hin2]]; subst.
+      rewrite in_map_iff in Hin1; destruct Hin1 as [[? ?] [? Hin1]]; subst.
+      constructor. constructor.
+      + eapply map_bind2_normalized_cexp in H1; eauto; solve_forall.
+        rewrite Forall_forall in H1...
+        eapply normalize_exp_normalized_cexp...
+      + eapply map_bind2_normalized_cexp in H2; eauto; solve_forall.
+        rewrite Forall_forall in H2...
+        eapply normalize_exp_normalized_cexp...
+    - destruct a; destruct is_control; repeat inv_bind;
+        repeat rewrite Forall_app; repeat split.
+      1,5: (eapply IHe; eauto).
+      1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
+      1,2,3,4: (eapply normalize_exp_st_follows in H1; eauto; destruct H1 as [_ Hfollows1];
+                eapply Pos.lt_le_trans; eauto).
+      1,2: (eapply map_bind2_st_follows in H2; eauto; solve_forall; destruct H2 as [_ Hfollows2];
+            etransitivity; eauto).
+      rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
+      specialize (in_combine_l _ _ _ _ Hin) as Hin1.
+      apply in_combine_r in Hin. rewrite in_map_iff in Hin; destruct Hin as [[[? ?] ?] [? Hin2]]; subst.
+      rewrite in_map_iff in Hin1; destruct Hin1 as [[? ?] [? Hin1]]; subst.
+      constructor. constructor.
+      + eapply normalized_lexp_hd_default.
+        eapply normalize_exp_normalized_lexp...
+      + eapply map_bind2_normalized_cexp in H2; eauto; solve_forall.
+        rewrite Forall_forall in H2...
+        eapply normalize_exp_normalized_cexp...
+      + eapply map_bind2_normalized_cexp in H3; eauto; solve_forall.
+        rewrite Forall_forall in H3...
+        eapply normalize_exp_normalized_cexp...
     - (* app *)
-      repeat split; intro Hnorm; simpl in *; repeat inv_bind.
-      1,2: (rewrite Forall_forall; intros x' Hin;
-            rewrite in_map_iff in Hin; destruct Hin as [[? [? ?]] [? Hin]]; subst; eauto).
-      destruct ro; repeat inv_bind; try constructor; repeat rewrite Forall_app; repeat split.
-      1,3: specialize (normalize_reset_spec (hd_default x2)) as [[? [? [? Hreset]]]|Hreset]; rewrite Hreset in *;
-        simpl in *; repeat inv_bind.
-      6,8: (eapply map_bind2_normalized_eq; eauto; solve_forall; solve_normalized).
-      + destruct x0. constructor.
-        eapply map_bind2_normalized_lexp; eauto; solve_forall. solve_normalized.
-      + destruct (hd (bool_type, (Cbase, None)) (annot (hd_default x2))). constructor.
-        eapply map_bind2_normalized_lexp; eauto; solve_forall.
-        solve_normalized.
-      + constructor.
-      + repeat constructor. apply normalized_lexp_hd_default. solve_normalized.
-      + solve_normalized.
-      + constructor.
-        eapply map_bind2_normalized_lexp; eauto; solve_forall. solve_normalized.
-  Qed.
-
-  Corollary normalize_exp_normalized_lexp : forall e es' eqs' st st',
-      normalize_exp false e st = (es', eqs', st') ->
-      Forall normalized_lexp es'.
-  Proof.
-    intros e es' eqs' st st'.
-    specialize (normalize_exp_normalized e false es' eqs' st st') as [? [_ _]]; auto.
-  Qed.
-  Hint Resolve normalize_exp_normalized_lexp.
-
-  Corollary normalize_exp_normalized_cexp : forall e es' eqs' st st',
-      normalize_exp true e st = (es', eqs', st') ->
-      Forall normalized_cexp es'.
-  Proof.
-    intros e es' eqs' st st'.
-    specialize (normalize_exp_normalized e false es' eqs' st st') as [_ [? _]]; auto.
-  Qed.
-  Hint Resolve normalize_exp_normalized_cexp.
-
-  Corollary normalize_exp_normalized_eq : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
-      Forall normalized_equation eqs'.
-  Proof.
-    intros e is_control es' eqs' st st'.
-    specialize (normalize_exp_normalized e is_control es' eqs' st st') as [_ [_ ?]]; auto.
+      eapply map_bind2_normalized_lexp in H2; eauto; solve_forall.
+      destruct ro; repeat inv_bind.
+      + specialize (normalize_reset_spec (hd_default x2)) as [[? [? [? Hspec]]]|Hspec]; subst;
+          rewrite Hspec in H4; clear Hspec; repeat inv_bind.
+        * destruct x0...
+        * destruct (hd _); simpl in *; repeat inv_bind...
+      + constructor...
+    - (* app (auxiliary equations) *)
+      rewrite Forall_app. split.
+      + destruct ro; repeat inv_bind; try constructor.
+        eapply Forall_app. split...
+        specialize (normalize_reset_spec (hd_default x2)) as [[? [? [? Hspec]]]|Hspec]; subst;
+          rewrite Hspec in H4; clear Hspec; repeat inv_bind...
+        destruct (hd _); simpl in *; repeat inv_bind.
+        repeat constructor. apply normalized_lexp_hd_default...
+      + destruct ro; repeat inv_bind;
+          eapply map_bind2_normalized_eq; eauto; solve_forall.
+        eapply normalize_exp_st_follows in H1; destruct H1.
+        eapply normalize_reset_st_follows in H4; destruct H4.
+        eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
   Qed.
   Hint Resolve normalize_exp_normalized_eq.
 
-  Corollary normalize_exps_normalized_exp: forall es es' eqs' st st',
+  Corollary normalize_exps_normalized_lexp: forall es es' eqs' st st',
       normalize_exps es st = (es', eqs', st') ->
       Forall normalized_lexp es'.
   Proof.
@@ -2170,63 +2269,49 @@ Module Type LNORMALIZATION
     apply map_bind2_normalized_lexp in H; auto.
     rewrite Forall_forall; intros; eauto.
   Qed.
-  Hint Resolve normalize_exps_normalized_exp.
+  Hint Resolve normalize_exps_normalized_lexp.
 
-  Corollary normalize_exps_normalized_eq : forall es es' eqs' st st',
+  Corollary normalize_exps_normalized_eq : forall es es' eqs' out st st',
       normalize_exps es st = (es', eqs', st') ->
-      Forall normalized_equation eqs'.
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
   Proof.
-    intros es es' eqs' st st' Hnorm.
+    intros es es' eqs' out st st' Hnorm Hlt.
     unfold normalize_exps in Hnorm. repeat inv_bind.
-    apply map_bind2_normalized_eq in H; auto.
+    eapply map_bind2_normalized_eq in H; eauto.
     rewrite Forall_forall; intros; eauto.
   Qed.
   Hint Resolve normalize_exps_normalized_eq.
 
   (* Intermediary predicate for normalized rhs *)
-  Inductive normalized_rhs : exp -> Prop :=
-  | normalized_rhs_Eapp : forall f es lann,
+  Inductive normalized_rhs : bool -> exp -> Prop :=
+  | normalized_rhs_Eapp : forall f es lann keep_fby,
       Forall normalized_lexp es ->
-      normalized_rhs (Eapp f es None lann)
-  | normalized_rhs_Eapp_reset : forall f es x ty cl lann,
+      normalized_rhs keep_fby (Eapp f es None lann)
+  | normalized_rhs_Eapp_reset : forall f es x ty cl lann keep_fby,
       Forall normalized_lexp es ->
-      normalized_rhs (Eapp f es (Some (Evar x (ty, cl))) lann)
+      normalized_rhs keep_fby (Eapp f es (Some (Evar x (ty, cl))) lann)
   | normalized_rhs_Efby : forall e0 e ann,
       is_constant e0 ->
       normalized_lexp e ->
-      normalized_rhs (Efby [e0] [e] [ann])
-  | normalized_rhs_cexp : forall e,
+      normalized_rhs true (Efby [e0] [e] [ann])
+  | normalized_rhs_cexp : forall e keep_fby,
       normalized_cexp e ->
-      normalized_rhs e.
+      normalized_rhs keep_fby e.
+  Hint Constructors normalized_rhs.
 
-  Fact normalized_rhs_normalized_eq : forall xs e,
-      normalized_rhs e ->
-      length xs = numstreams e ->
-      normalized_equation (xs, [e]).
-  Proof.
-    intros xs e Hnorm Hlen.
-    inv Hnorm; auto.
-    - destruct xs; simpl in Hlen; try congruence.
-      destruct xs; simpl in Hlen; try congruence.
-      auto.
-    - specialize (normalized_cexp_numstreams _ H) as Hlen'.
-      rewrite Hlen' in Hlen.
-      destruct xs; simpl in Hlen; try congruence.
-      destruct xs; simpl in Hlen; try congruence.
-      auto.
-  Qed.
-
-  Fact normalize_rhs_normalized_rhs : forall e es' eqs' st st',
-      normalize_rhs e st = (es', eqs', st') ->
-      Forall normalized_rhs es'.
-  Proof.
-    intros e es' eqs' st st' Hnorm.
+  Fact normalize_rhs_normalized_rhs : forall e keep_fby es' eqs' st st',
+      normalize_rhs keep_fby e st = (es', eqs', st') ->
+      Forall (normalized_rhs keep_fby) es'.
+  Proof with eauto.
+    intros e keep_fby es' eqs' st st' Hnorm.
     destruct e; unfold normalize_rhs in Hnorm;
-      try (apply normalize_exp_normalized_cexp in Hnorm; solve_forall; constructor; auto).
+      try (apply normalize_exp_normalized_cexp in Hnorm; solve_forall; auto).
     - (* fby *)
+      destruct keep_fby; try (apply normalize_exp_normalized_cexp in Hnorm; solve_forall; auto).
       repeat inv_bind.
-      apply normalize_exps_normalized_exp in H.
-      apply normalize_exps_normalized_exp in H0.
+      apply normalize_exps_normalized_lexp in H.
+      apply normalize_exps_normalized_lexp in H0.
       unfold normalize_fby in H1. repeat inv_bind.
       apply map_bind2_values in H1.
       repeat rewrite_Forall_forall.
@@ -2237,43 +2322,64 @@ Module Type LNORMALIZATION
       specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
         rewrite Hspec in H3; clear Hspec; repeat inv_bind.
       + rewrite <- H5. repeat constructor.
-        eapply nth_In in Hn. rewrite Hnth' in Hn.
-        apply in_combine_l in Hn. apply in_combine_r in Hn. auto.
+        eapply nth_In in Hn. rewrite Hnth' in Hn...
       + repeat constructor.
-        eapply nth_In in Hn. rewrite Hnth' in Hn.
-        apply in_combine_l in Hn. apply in_combine_l in Hn. auto.
+        eapply nth_In in Hn. rewrite Hnth' in Hn...
     - (* app *)
-      destruct o; repeat inv_bind; (constructor; [| constructor]).
-      + specialize (normalize_reset_spec (hd_default x4)) as [[? [[? ?] [? Hspec]]]|Hspec]; subst;
-          rewrite Hspec in H1; clear Hspec; repeat inv_bind.
-        * constructor; eauto.
-        * destruct (hd _) as [? [ty cl]]; simpl in H1. repeat inv_bind.
-          constructor; eauto.
-      + constructor; eauto.
+      destruct o; repeat inv_bind...
+      specialize (normalize_reset_spec (hd_default x4)) as [[? [[? ?] [? Hspec]]]|Hspec]; subst;
+        rewrite Hspec in H1; clear Hspec; repeat inv_bind...
+      destruct (hd _) as [? [ty cl]]; simpl in H1. repeat inv_bind...
   Qed.
 
-  Fact normalize_rhs_normalized_eq : forall e es' eqs' st st',
-      normalize_rhs e st = (es', eqs', st') ->
-      Forall normalized_equation eqs'.
+  Corollary normalize_rhss_normalized_rhs : forall es keep_fby es' eqs' st st',
+      normalize_rhss keep_fby es st = (es', eqs', st') ->
+      Forall (normalized_rhs keep_fby) es'.
   Proof with eauto.
-    intros e es' eqs' st st' Hnorm.
-    specialize (normalize_exp_normalized e true es' eqs' st st') as [_ [_ Heq]].
-    destruct e; try specialize (Heq Hnorm); auto; clear Heq.
+    intros es keep_fby es' eqs' st st' Hnorm.
+    unfold normalize_rhss in Hnorm. repeat inv_bind.
+    eapply map_bind2_values in H.
+    induction H; simpl; try constructor.
+    apply Forall_app. split; auto.
+    destruct H as [? [? H]].
+    eapply normalize_rhs_normalized_rhs; eauto.
+  Qed.
+
+  Fact normalize_rhs_normalized_eq : forall e keep_fby es' eqs' out st st',
+      normalize_rhs keep_fby e st = (es', eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
+  Proof with eauto.
+    intros e keep_fby es' eqs' out st st' Hnorm Hlt.
+    destruct e; unfold normalize_rhs in Hnorm;
+    try (eapply normalize_exp_normalized_eq in Hnorm; eauto).
     - (* fby *)
+      destruct keep_fby; try (eapply normalize_exp_normalized_eq in Hnorm; eauto).
       simpl in Hnorm. repeat inv_bind.
       repeat rewrite Forall_app. repeat split...
-      unfold normalize_fby in H1. repeat inv_bind.
-      apply map_bind2_normalized_eq in H1; auto.
-      rewrite_Forall_forall. destruct x5 as [[e0 e] [ty cl]].
-      specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-          rewrite Hspec in H3; clear Hspec; repeat inv_bind; repeat constructor.
-      + apply normalize_exps_normalized_exp in H0; rewrite Forall_forall in H0.
-        apply in_combine_l in H2. apply in_combine_r in H2. auto.
-      + unfold init_var_for_clock in H3; destruct st0; destruct (find _ _).
-        * destruct p; inv H3. constructor.
-        * inv H3. repeat constructor.
-          eapply add_whens_is_constant...
-          eapply add_whens_normalized_lexp...
+      + eapply normalize_exps_normalized_eq; eauto; solve_forall.
+        eapply normalize_exps_st_follows in H; destruct H as [_ Hfollows].
+        eapply Pos.lt_le_trans...
+      + unfold normalize_fby in H1. repeat inv_bind.
+        eapply map_bind2_normalized_eq in H1; eauto; solve_forall.
+        * eapply normalize_exps_st_follows in H; destruct H as [_ Hfollows1].
+          eapply normalize_exps_st_follows in H0; destruct H0 as [_ Hfollows2].
+          eapply Pos.lt_le_trans... etransitivity...
+        * intros. destruct a as [[e0 e] ann]. apply fby_iteexp_st_follows in H2...
+        * repeat rewrite_Forall_forall. destruct x5 as [[e0 e] [ty cl]].
+          specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
+            rewrite Hspec in H3; clear Hspec; repeat inv_bind; inv H5.
+          -- econstructor...
+             ++ intro contra. apply H4 in contra.
+                unfold fresh_ident in H6; destruct x9 as [n' l']. inv H6.
+                eapply init_var_for_clock_st_follows in H3; destruct H3 as [_ Hfollows].
+                simpl in Hfollows.
+                eapply (Pos.lt_irrefl x10).
+                eapply Pos.lt_le_trans...
+                etransitivity...
+                eapply min_fold_le.
+             ++ eapply normalize_exps_normalized_lexp in H0. rewrite Forall_forall in H0...
+          -- eapply init_var_for_clock_normalized_eq in H3; rewrite Forall_forall in *...
     - (* app *)
       simpl in Hnorm. destruct o; repeat inv_bind...
       rewrite <- app_assoc.
@@ -2284,67 +2390,90 @@ Module Type LNORMALIZATION
       + destruct (hd _ _); simpl in H1.
         repeat inv_bind. repeat constructor.
         apply normalized_lexp_hd_default...
+      + eapply normalize_exps_normalized_eq in H0; eauto.
+        apply normalize_exp_st_follows in H; destruct H as [_ Hfollows1].
+        apply normalize_reset_st_follows in H1; destruct H1 as [_ Hfollows2].
+        solve_forall.
+        eapply Pos.lt_le_trans... etransitivity...
   Qed.
   Hint Resolve normalize_rhs_normalized_eq.
 
-  Corollary normalize_rhss_normalized_eq : forall es es' eqs' st st',
-      normalize_rhss es st = (es', eqs', st') ->
-      Forall normalized_equation eqs'.
+  Corollary normalize_rhss_normalized_eq : forall es keep_fby es' eqs' out st st',
+      normalize_rhss keep_fby es st = (es', eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      Forall (normalized_equation out) eqs'.
   Proof.
-    intros es es' eqs' st st' Hnorm.
+    intros es keep_fby es' eqs' out st st' Hnorm Hlt.
     unfold normalize_rhss in Hnorm; repeat inv_bind.
-    eapply map_bind2_normalized_eq in H; auto.
+    eapply map_bind2_normalized_eq in H; eauto.
     rewrite Forall_forall; intros; eauto.
   Qed.
   Hint Resolve normalize_rhss_normalized_eq.
 
-  Lemma normalize_equation_normalized_eq : forall G vars eq eqs' st st',
+  Lemma normalize_equation_normalized_eq : forall G vars eq to_cut eqs' out st st',
       wt_equation G vars eq ->
-      normalize_equation eq st = (eqs', st') ->
-      Forall normalized_equation eqs'.
-  Proof.
-    intros G vars [xs es] eqs' st st' Hwt Hnorm.
+      normalize_equation to_cut eq st = (eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      incl out to_cut ->
+      Forall (normalized_equation out) eqs'.
+  Proof with eauto.
+    intros G vars [xs es] to_cut eqs' out st st' Hwt Hnorm Hlt Hincl.
     unfold normalize_equation in Hnorm.
     repeat inv_bind.
-    assert (length xs = length (typesof x)) as Hlen.
-    { destruct Hwt as [Hwt1 Hwt2].
-      eapply normalize_rhss_typeof in H; eauto.
-      rewrite H.
-      repeat rewrite_Forall_forall. auto.
+    remember (negb (existsb (fun x : positive => existsb (fun c : positive => (x =? c)%positive) to_cut) xs)) as keep_fby.
+    assert (keep_fby = true -> Forall (fun x => ~In x out) xs) as Hin.
+    { intro Hkeep; subst.
+      rewrite Bool.negb_true_iff in Hkeep. rewrite existsb_Forall in Hkeep.
+      rewrite forallb_Forall in Hkeep. solve_forall.
+      rewrite Bool.negb_true_iff in H0. rewrite existsb_Forall in H0.
+      rewrite forallb_Forall in H0. rewrite Forall_forall in H0.
+      intro contra. apply Hincl in contra.
+      apply H0 in contra.
+      rewrite Pos.eqb_refl in contra; simpl in contra. congruence.
     }
-    clear Hwt.
-    rewrite Forall_app. split; eauto.
-    unfold normalize_rhss in H; repeat inv_bind.
-    apply map_bind2_values in H.
-    revert xs Hlen. induction H; intros xs Hlen; simpl; try constructor.
-    destruct H as [? [? H]].
-    apply normalize_rhs_normalized_rhs in H.
-    revert xs Hlen. induction y; intros xs Hlen; simpl; auto.
-    inv H. constructor; auto.
-    + apply normalized_rhs_normalized_eq; auto.
-      rewrite firstn_length.
-      unfold typesof in Hlen. rewrite flat_map_concat_map in Hlen. simpl in Hlen.
-      rewrite map_app in Hlen. rewrite concat_app in Hlen.
-      repeat rewrite app_length in Hlen.
-      rewrite Hlen. rewrite numstreams_length_typeof.
-      apply min_l. omega.
-    + apply IHy; auto.
-      rewrite skipn_length.
-      rewrite Hlen.
-      rewrite <- numstreams_length_typeof.
-      simpl. rewrite app_length. omega.
+    clear Heqkeep_fby.
+    rewrite Forall_app. split.
+    - assert (length xs = length (typesof x)) as Hlen.
+      { destruct Hwt as [Hwt1 Hwt2].
+        eapply normalize_rhss_typeof in H; eauto.
+        rewrite H.
+        repeat rewrite_Forall_forall. auto. } clear Hwt.
+      eapply normalize_rhss_normalized_rhs in H; eauto.
+      revert xs Hin Hlen.
+      induction H; intros xs Hin Hlen; constructor.
+      + inv H...
+        * destruct xs; simpl in *; try omega.
+          constructor...
+          specialize (Hin eq_refl). inv Hin. auto.
+        * simpl in Hlen. rewrite app_length in Hlen.
+          rewrite numstreams_length_typeof in Hlen.
+          specialize (normalized_cexp_numstreams _ H1) as Hlen'.
+          rewrite Hlen' in *. simpl.
+          destruct xs... simpl in Hlen. omega.
+      + eapply IHForall.
+        * intro Hkeep. apply Hin in Hkeep.
+          apply Forall_skipn...
+        * rewrite skipn_length.
+          rewrite Hlen. simpl. rewrite app_length.
+          rewrite numstreams_length_typeof. omega.
+    - eapply normalize_rhss_normalized_eq in H; eauto.
   Qed.
 
-  Corollary normalize_equations_normalized_eq : forall G vars eqs eqs' st st',
+  Corollary normalize_equations_normalized_eq : forall G vars eqs to_cut eqs' out st st',
       Forall (wt_equation G vars) eqs ->
-      normalize_equations eqs st = (eqs', st') ->
-      Forall normalized_equation eqs'.
+      normalize_equations to_cut eqs st = (eqs', st') ->
+      Forall (fun o => Pos.lt o (smallest_ident st)) out ->
+      incl out to_cut ->
+      Forall (normalized_equation out) eqs'.
   Proof.
-    induction eqs; intros eqs' st st' Hf Hnorm;
+    induction eqs; intros to_cut eqs' out st st' Hf Hnorm Hlt Hincl;
       simpl in Hnorm; repeat inv_bind.
     - constructor.
-    - inv Hf. apply Forall_app; split; eauto.
-      eapply normalize_equation_normalized_eq; eauto.
+    - inv Hf. apply Forall_app; split.
+      + eapply normalize_equation_normalized_eq; eauto.
+      + eapply normalize_equation_st_follows in H; destruct H as [_ Hfollows].
+        eapply IHeqs; eauto. solve_forall.
+        eapply Pos.lt_le_trans; eauto.
   Qed.
 
   Lemma normalize_node_normalized_node : forall n Hwt,
@@ -2355,7 +2484,13 @@ Module Type LNORMALIZATION
     unfold normalized_node; simpl.
     destruct Hwt as [_ [_ [_ Hwt]]].
     eapply normalize_equations_normalized_eq; eauto.
-    apply surjective_pairing.
+    - apply surjective_pairing.
+    - simpl.
+      specialize (first_unused_ident_gt n _ eq_refl) as Hgt.
+      unfold used_idents in Hgt. repeat rewrite map_app in Hgt.
+      repeat rewrite Forall_app in Hgt.
+      destruct Hgt as [_ [_ [_ Hgt]]]. assumption.
+    - reflexivity.
   Qed.
 End LNORMALIZATION.
 

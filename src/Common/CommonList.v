@@ -3210,6 +3210,15 @@ Section minmax.
       + etransitivity. apply Pos.le_min_r. auto.
   Qed.
 
+  Fact min_fold_eq : forall x1 x2 l,
+      Pos.le x1 x2 ->
+      Pos.le (fold_right Pos.min x1 l) (fold_right Pos.min x2 l).
+  Proof.
+    induction l; intro Hle; simpl in *.
+    - assumption.
+    - apply Pos.min_le_compat_l; auto.
+  Qed.
+
   Fact max_fold_ge : forall l x0,
       (x0 <= (fold_left Pos.max l x0))%positive.
   Proof.
