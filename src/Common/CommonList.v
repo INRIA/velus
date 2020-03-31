@@ -444,6 +444,16 @@ Section Incl.
     eapply Forall_forall in H; eauto.
   Qed.
 
+  Lemma incl_map {B} : forall (l l' : list A) (f : A -> B),
+      incl l l' -> incl (map f l) (map f l').
+  Proof.
+    intros l l' f Hincl.
+    unfold incl in *.
+    intros a Hin. rewrite in_map_iff in *.
+    destruct Hin as [? [? Hin]]; subst.
+    exists x. split; auto.
+  Qed.
+
   Global Instance incl_refl : Reflexive (@incl A).
   Proof. unfold Reflexive. intros. apply incl_refl. Qed.
 
@@ -780,6 +790,22 @@ Section ConcatMap.
     induction Hf; simpl.
     - reflexivity.
     - repeat rewrite app_length. f_equal; auto.
+  Qed.
+
+  Lemma concat_length_map_nth : forall (f : A -> list B) (l : list A) n da db,
+      n < length l ->
+      Forall (fun x => length (f x) = 1) l ->
+      f (nth n l da) = [nth n (concat (map f l)) db].
+  Proof.
+    intros f l.
+    induction l; intros n da db Hlen Hf; inv Hf; simpl.
+    - simpl in Hlen. omega.
+    - destruct n; auto.
+      + destruct (f a); simpl in *; try congruence.
+        destruct l0; simpl in *; try congruence.
+      + destruct (f a); simpl in *; try congruence.
+        destruct l0; simpl in *; try congruence.
+        eapply IHl; eauto. omega.
   Qed.
 
 End ConcatMap.

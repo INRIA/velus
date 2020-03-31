@@ -773,16 +773,25 @@ Module Type LTYPING
 
   (** Adding variables to the environment preserves typing *)
 
+  Fact wt_clock_incl : forall vars vars' cl,
+      incl vars vars' ->
+      wt_clock vars cl ->
+      wt_clock vars' cl.
+  Proof.
+    intros vars vars' cl Hincl Hwt.
+    induction Hwt.
+    - constructor.
+    - constructor; auto.
+  Qed.
+  Local Hint Resolve wt_clock_incl.
+
   Fact wt_nclock_incl : forall vars vars' cl,
       incl vars vars' ->
       wt_nclock vars cl ->
       wt_nclock vars' cl.
   Proof.
     intros vars vars' cl Hincl Hwt.
-    destruct Hwt; constructor.
-    induction H.
-    - constructor.
-    - constructor; auto.
+    destruct Hwt; constructor; eauto.
   Qed.
   Local Hint Resolve wt_nclock_incl.
 
@@ -803,6 +812,20 @@ Module Type LTYPING
     - (* app (reset) *)
       eapply Forall_impl; [| eauto].
       intros; eauto.
+  Qed.
+
+  Lemma wt_equation_incl : forall G vars vars' eq,
+      incl vars vars' ->
+      wt_equation G vars eq ->
+      wt_equation G vars' eq.
+  Proof.
+    intros G vars vars' eq Hincl Hwt.
+    destruct eq; simpl in *. destruct Hwt as [Hwt1 Hwt2].
+    split.
+    - eapply Forall_impl; [| eauto].
+      intros. eapply wt_exp_incl; eauto.
+    - eapply Forall2_impl_In; [| eauto].
+      intros; simpl in H1. eauto.
   Qed.
 
 End LTYPING.

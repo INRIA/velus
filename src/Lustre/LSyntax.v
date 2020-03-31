@@ -259,6 +259,17 @@ Module Type LSYNTAX
     - rewrite map_length; auto.
   Qed.
 
+  Fact typeof_concat_typesof : forall l,
+      concat (map typeof (concat l)) = concat (map typesof l).
+  Proof.
+    intros l.
+    unfold typesof.
+    induction l; simpl.
+    - reflexivity.
+    - rewrite map_app. rewrite concat_app.
+      rewrite flat_map_concat_map. f_equal; eauto.
+  Qed.
+
   (** clocksof *)
 
   Lemma In_clocksof:

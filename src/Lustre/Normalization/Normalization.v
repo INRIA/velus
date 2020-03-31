@@ -76,7 +76,7 @@ Module Type NORMALIZATION
   (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
       just return the variable *)
   Definition init_var_for_clock (cl : nclock) : FreshAnn (ident * list equation) :=
-    fun '(n, l) => match (find (fun '(_, ((_, cl'), isinit)) => isinit && (cl ==b cl'))) l with
+    fun '(n, l) => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (ty ==b Op.bool_type) && (cl ==b cl'))) l with
                 | Some (x, _) => ((x, []), (n, l))
                 | None => ((n, [([n], [Efby [add_whens (Econst true_const) bool_type (fst cl)]
                                            [add_whens (Econst false_const) bool_type (fst cl)] [(bool_type, cl)]])]),
@@ -232,7 +232,21 @@ Module Type NORMALIZATION
     match goal with
     | H: Forall _ ?l |- Forall _ ?l =>
       eapply Forall_impl; [ | eapply H]; intros; simpl in *; eauto
+    | |- Forall _ _ =>
+      rewrite Forall_forall; intros; eauto
     | _ => idtac
+    end.
+
+  Ltac simpl_In :=
+    match goal with
+    | x : ?t1 * ?t2 |- _ =>
+      destruct x
+    | H : In (?x1, ?x2) (combine ?l1 ?l2) |- _ =>
+      specialize (in_combine_l _ _ _ _ H) as ?; apply in_combine_r in H
+    | H : In ?x (map ?f ?l) |- _ =>
+      rewrite in_map_iff in H; destruct H as [? [? ?]]; subst
+    | |- In ?x (map ?f ?l) =>
+      rewrite in_map_iff
     end.
 
   (** ** Propagation of the st_valid property *)
@@ -256,7 +270,7 @@ Module Type NORMALIZATION
   Proof.
     intros cl res [n l] st' Hinit Hvalid.
     unfold init_var_for_clock in Hinit.
-    destruct (find (fun '(_, (_, cl', isinit)) => isinit && (cl ==b cl')) l).
+    destruct (find _ _).
     - destruct p. inv Hinit. assumption.
     - inv Hinit. destruct Hvalid as [Hlt Hndup].
       constructor.
@@ -360,8 +374,7 @@ Module Type NORMALIZATION
     - (* app *)
       repeat inv_bind.
       repeat solve_st_valid.
-      + eapply Forall_forall; intros; eauto.
-      + destruct o; repeat inv_bind; eauto.
+      destruct o; repeat inv_bind; eauto.
   Qed.
   Hint Resolve normalize_rhs_st_valid.
 
@@ -407,7 +420,7 @@ Module Type NORMALIZATION
   Proof.
     intros cl res [n l] [n' l'] Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct (find (fun '(_, (_, cl', isinit)) => isinit && (cl ==b cl')) l).
+    destruct (find _ _).
     - destruct p. inv Hinit. reflexivity.
     - inv Hinit.
       unfold fresh_st_follows, smallest_ident in *; simpl in *.
@@ -465,18 +478,26 @@ Module Type NORMALIZATION
   Qed.
   Hint Resolve normalize_reset_st_follows.
 
-  Local Ltac solve_st_follows :=
+  Local Ltac solve_st_follows' :=
     match goal with
-    | H : map_bind2 _ _ ?st = _ |- fresh_st_follows ?st _ =>
-      etransitivity; [ eapply map_bind2_st_follows; eauto; solve_forall | ]
-    | H : normalize_fby _ _ _ ?st = _ |- fresh_st_follows ?st _ =>
-      etransitivity; [ eapply normalize_fby_st_follows; eauto | ]
-    | H : normalize_reset _ ?st = _ |- fresh_st_follows ?st _ =>
-      etransitivity; [ eapply normalize_reset_st_follows; eauto | ]
-    | H : idents_for_anns _ ?st = _ |- fresh_st_follows ?st _ =>
-      etransitivity; [ eapply idents_for_anns_st_follows; eauto | ]
     | |- fresh_st_follows ?st ?st =>
       reflexivity
+    | H : fresh_st_follows ?st1 ?st2 |- fresh_st_follows ?st1 _ =>
+      etransitivity; [eapply H |]
+    | H : fresh_ident _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply fresh_ident_st_follows in H; eauto | ]
+    | H : idents_for_anns _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply idents_for_anns_st_follows in H; eauto | ]
+    | H : init_var_for_clock _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply init_var_for_clock_st_follows in H; eauto | ]
+    | H : fby_iteexp _ _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply fby_iteexp_st_follows in H; eauto | ]
+    | H : normalize_fby _ _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_fby_st_follows in H; eauto | ]
+    | H : normalize_reset _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_reset_st_follows in H; eauto | ]
+    | H : map_bind2 _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply map_bind2_st_follows in H; eauto; solve_forall | ]
     end.
 
   Fact normalize_exp_st_follows : forall e is_control res st st',
@@ -495,20 +516,20 @@ Module Type NORMALIZATION
     - (* binop *)
       repeat inv_bind; etransitivity; eauto.
     - (* fby *)
-      repeat inv_bind; repeat solve_st_follows.
+      repeat inv_bind; repeat solve_st_follows'.
     - (* when *)
       destruct a.
-      repeat inv_bind; repeat solve_st_follows.
+      repeat inv_bind; repeat solve_st_follows'.
     - (* merge *)
       destruct a.
-      destruct is_control; repeat inv_bind; repeat solve_st_follows.
+      destruct is_control; repeat inv_bind; repeat solve_st_follows'.
     - (* ite *)
       destruct a.
       destruct is_control; repeat inv_bind;
-        (etransitivity; [ eapply IHe; eauto | repeat solve_st_follows ]).
+        (etransitivity; [ eapply IHe; eauto | repeat solve_st_follows' ]).
     - (* app *)
-      destruct ro; repeat inv_bind; repeat solve_st_follows;
-        (etransitivity; [ eapply H; eauto | repeat solve_st_follows ]).
+      destruct ro; repeat inv_bind; repeat solve_st_follows';
+        (etransitivity; [ eapply H; eauto | repeat solve_st_follows' ]).
   Qed.
   Hint Resolve normalize_exp_st_follows.
 
@@ -531,14 +552,12 @@ Module Type NORMALIZATION
       simpl in Hnorm; unfold normalize_exps in *.
     - (* fby *)
       destruct keep_fby; repeat inv_bind;
-        repeat solve_st_follows;
+        repeat solve_st_follows';
         eapply Forall_forall; intros; eauto.
     - (* app *)
       destruct o; repeat inv_bind.
-      + etransitivity. eapply normalize_exp_st_follows; eauto. repeat solve_st_follows.
-        eapply Forall_forall; intros; eauto.
-      + repeat solve_st_follows.
-        eapply Forall_forall; intros; eauto.
+      + etransitivity. eapply normalize_exp_st_follows; eauto. repeat solve_st_follows'.
+      + repeat solve_st_follows'.
   Qed.
   Hint Resolve normalize_rhs_st_follows.
 
@@ -562,6 +581,21 @@ Module Type NORMALIZATION
     - reflexivity.
     - etransitivity; eauto.
   Qed.
+
+  Ltac solve_st_follows :=
+    match goal with
+    | H : normalize_exp _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_exp_st_follows in H; eauto |]
+    | H : normalize_exps _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_exps_st_follows in H; eauto |]
+    | H : normalize_rhs _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_rhs_st_follows in H; eauto |]
+    | H : normalize_equation _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_equation_st_follows in H; eauto |]
+    | H : normalize_equations _ _ ?st = _ |- fresh_st_follows ?st _ =>
+      etransitivity; [ eapply normalize_equations_st_follows in H; eauto |]
+    | _ => solve_st_follows'
+    end.
 
   (** ** Length of normalized expression *)
 
@@ -842,6 +876,21 @@ Module Type NORMALIZATION
       destruct y; subst; simpl. inv Hlength. f_equal; auto.
   Qed.
 
+  Corollary map_bind2_normalize_exp_typeof' :
+    forall G vars is_control es es' eqs' st st',
+      Forall (wt_exp G vars) es ->
+      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      Forall2 (fun es' e => typesof es' = typeof e) es' es.
+  Proof.
+    intros G vars is_control es es' eqs' st st' Hf Hmap.
+    apply map_bind2_values in Hmap.
+    induction Hmap.
+    - constructor.
+    - destruct H as [? [? Hnorm]]. inv Hf.
+      constructor; eauto.
+      eapply normalize_exp_typeof; eauto.
+  Qed.
+
   Corollary map_bind2_normalize_exp_typeof :
     forall G vars is_control es es' eqs' st st',
       Forall (wt_exp G vars) es ->
@@ -849,16 +898,23 @@ Module Type NORMALIZATION
       typesof (concat es') = typesof es.
   Proof.
     intros G vars is_control es es' a2s st st' Hwt Hmap.
-    apply map_bind2_values in Hmap.
-    induction Hmap.
-    - constructor.
-    - inv Hwt. simpl.
-      destruct H as [? [? H]].
-      specialize (normalize_exp_typeof _ _ _ _ _ _ _ _ H2 H) as Htypeof.
-      unfold typesof in *.
-      repeat rewrite flat_map_concat_map in *.
+    eapply map_bind2_normalize_exp_typeof' in Hmap; eauto.
+    induction Hmap; simpl.
+    - reflexivity.
+    - inv Hwt.
+      unfold typesof in *; rewrite flat_map_concat_map in *.
       rewrite map_app; rewrite concat_app.
-      f_equal; eauto.
+      f_equal; auto.
+  Qed.
+
+  Corollary normalize_exps_typesof : forall G vars es es' eqs' st st',
+      Forall (wt_exp G vars) es ->
+      normalize_exps es st = (es', eqs', st') ->
+      typesof es' = typesof es.
+  Proof.
+    intros G vars es es' eqs' st st' Hwt Hnorm.
+    unfold normalize_exps in Hnorm; repeat inv_bind.
+    eapply map_bind2_normalize_exp_typeof in H; eauto.
   Qed.
 
   Fact fby_iteexp_typeof : forall e0 e ann es' eqs' st st',
@@ -959,7 +1015,7 @@ Module Type NORMALIZATION
   Proof.
     intros cl id eqs st st' Hinit.
     destruct st; destruct st'; simpl in *.
-    destruct (find (fun '(_, (_, cl', isinit)) => isinit && (cl ==b cl')) l).
+    destruct (find _ _).
     - destruct p. inv Hinit. reflexivity.
     - inv Hinit; simpl. reflexivity.
   Qed.

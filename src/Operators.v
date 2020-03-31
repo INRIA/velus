@@ -26,6 +26,8 @@ Module Type OPERATORS.
   Parameter false_const : const.
   Parameter sem_true_const : sem_const true_const = true_val.
   Parameter sem_false_const : sem_const false_const = false_val.
+  Parameter type_true_const : type_const true_const = bool_type.
+  Parameter type_false_const : type_const false_const = bool_type.
 
   (* Operations *)
 

@@ -195,26 +195,23 @@ Module Type COMPLETENESS
       destruct a. constructor...
     - (* fby *)
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H5. destruct H5 as [[? [? ?]] [? Hin]]; subst...
+      repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind.
       apply map_bind2_normalized_lexp in H0...
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H1. destruct H1 as [[? ?] [? ?]]; subst...
+      repeat simpl_In...
     - (* merge *)
       destruct a. repeat inv_bind.
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H4. destruct H4 as [[? ?] [? ?]]; subst.
-      destruct a...
+      repeat simpl_In. destruct a...
     - (* ite *)
       destruct a. repeat inv_bind.
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H5. destruct H5 as [[? ?] [? ?]]; subst.
-      destruct a...
+      repeat simpl_In. destruct a...
     - (* app *)
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H4. destruct H4 as [[? ?] [? ?]]; subst.
-      destruct a0...
+      repeat simpl_In. destruct a0...
   Qed.
   Hint Resolve normalize_exp_normalized_lexp.
 
@@ -231,33 +228,31 @@ Module Type COMPLETENESS
     - (* binop *)
       destruct a. constructor...
     - (* fby *)
-      repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H5. destruct H5 as [[? [? ?]] [? Hin]]; subst...
+      solve_forall.
+      repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind.
       apply map_bind2_normalized_lexp in H0; solve_forall.
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H1. destruct H1 as [[? ?] [? Hin]]; subst...
+      repeat simpl_In...
     - (* merge *)
       destruct a. repeat inv_bind.
       apply map_bind2_normalized_cexp in H1; solve_forall.
       apply map_bind2_normalized_cexp in H2; solve_forall.
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H3. destruct H3 as [[[? ?] ?] [? Hin]]; subst.
-      constructor...
+      repeat simpl_In...
     - (* ite *)
       destruct a. repeat inv_bind.
       apply normalize_exp_normalized_lexp in H1.
       apply map_bind2_normalized_cexp in H2; solve_forall.
       apply map_bind2_normalized_cexp in H3; solve_forall.
       repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H4. destruct H4 as [[[? ?] ?] [? Hin]]; subst.
+      repeat simpl_In.
       constructor...
-      apply normalized_lexp_hd_default. repeat rewrite_Forall_forall...
+      apply normalized_lexp_hd_default. solve_forall.
     - (* app *)
-      repeat rewrite_Forall_forall.
-      rewrite in_map_iff in H4. destruct H4 as [[? ?] [? ?]]; subst.
-      destruct a0...
+      solve_forall.
+      repeat simpl_In. destruct a0...
   Qed.
 
   Fact init_var_for_clock_normalized_eq : forall cl id eqs' out st st',
@@ -362,20 +357,18 @@ Module Type COMPLETENESS
         clear H H0.
         unfold normalize_fby in H3; repeat inv_bind. apply map_bind2_values in H.
         repeat rewrite_Forall_forall.
-        rewrite in_map_iff in H5; destruct H5 as [[[? ?] ?] [? Hin]]; subst.
-        specialize (in_combine_l _ _ _ _ Hin) as Hin2.
-        apply in_combine_r in Hin.
-        apply In_nth with (d:=(hd_default [])) in Hin; destruct Hin as [n [? ?]].
-        replace (length x5) in H5.
-        specialize (H3 (e, e, a0) (hd_default []) [] _ _ _ _ H5 eq_refl eq_refl eq_refl). destruct H3 as [? [? H3]].
+        repeat simpl_In.
+        apply In_nth with (d:=(hd_default [])) in H6; destruct H6 as [n [? ?]].
+        replace (length x5) in H6.
+        specialize (H3 (e, e, a0) (hd_default []) [] _ _ _ _ H6 eq_refl eq_refl eq_refl). destruct H3 as [? [? H3]].
         destruct (nth n _) as [[e0 e'] [ty cl]] eqn:Hnth.
         specialize (fby_iteexp_spec e0 e' ty cl) as [[? [? Hspec]]|Hspec]; subst;
           rewrite Hspec in H3; clear Hspec; repeat inv_bind.
-        * rewrite <- H7. repeat constructor.
+        * rewrite <- H8. repeat constructor.
           -- intro contra. apply Hlt in contra.
              eapply idents_for_anns_smallest_ident in H4. rewrite Forall_forall in H4.
              assert (In i (map fst x8)) as Hin.
-             { rewrite in_map_iff. exists (i, a0); auto. }
+             { simpl_In. exists (i, a0); auto. }
              apply H4 in Hin.
              destruct Hfollows1. destruct Hfollows2. destruct Hfollows3.
              apply (Pos.lt_irrefl i).
@@ -383,9 +376,9 @@ Module Type COMPLETENESS
              etransitivity; eauto.
              etransitivity; eauto.
              etransitivity; eauto.
-          -- eapply nth_In in H5; rewrite Hnth in H5...
+          -- eapply nth_In in H6; rewrite Hnth in H6...
         * repeat constructor.
-          eapply nth_In in H5; rewrite Hnth in H5...
+          eapply nth_In in H6; rewrite Hnth in H6...
       + eapply map_bind2_normalized_eq in H1... solve_forall.
       + eapply map_bind2_normalized_eq in H2...
         * eapply map_bind2_st_follows in H1; solve_forall.
@@ -408,9 +401,7 @@ Module Type COMPLETENESS
       1,2: (eapply map_bind2_st_follows in H1; eauto; solve_forall; destruct H1 as [_ Hfollows];
             eapply Pos.lt_le_trans; eauto).
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
-      specialize (in_combine_l _ _ _ _ Hin) as Hin1.
-      apply in_combine_r in Hin. rewrite in_map_iff in Hin; destruct Hin as [[[? ?] ?] [? Hin2]]; subst.
-      rewrite in_map_iff in Hin1; destruct Hin1 as [[? ?] [? Hin1]]; subst.
+      repeat simpl_In.
       constructor. constructor.
       + eapply map_bind2_normalized_cexp in H1; eauto; solve_forall.
         rewrite Forall_forall in H1...
@@ -418,7 +409,8 @@ Module Type COMPLETENESS
       + eapply map_bind2_normalized_cexp in H2; eauto; solve_forall.
         rewrite Forall_forall in H2...
         eapply normalize_exp_normalized_cexp...
-    - destruct a; destruct is_control; repeat inv_bind;
+    - (* ite *)
+      destruct a; destruct is_control; repeat inv_bind;
         repeat rewrite Forall_app; repeat split.
       1,5: (eapply IHe; eauto).
       1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
@@ -427,9 +419,7 @@ Module Type COMPLETENESS
       1,2: (eapply map_bind2_st_follows in H2; eauto; solve_forall; destruct H2 as [_ Hfollows2];
             etransitivity; eauto).
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
-      specialize (in_combine_l _ _ _ _ Hin) as Hin1.
-      apply in_combine_r in Hin. rewrite in_map_iff in Hin; destruct Hin as [[[? ?] ?] [? Hin2]]; subst.
-      rewrite in_map_iff in Hin1; destruct Hin1 as [[? ?] [? Hin1]]; subst.
+      repeat simpl_In.
       constructor. constructor.
       + eapply normalized_lexp_hd_default.
         eapply normalize_exp_normalized_lexp...

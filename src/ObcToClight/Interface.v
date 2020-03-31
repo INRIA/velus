@@ -123,10 +123,12 @@ Module Export Op <: OPERATORS.
     end.
 
   (* Booleans *)
-  Definition true_const : const := Cint Int.one Ctypes.IBool Ctypes.Unsigned.
-  Definition false_const : const := Cint Int.zero Ctypes.IBool Ctypes.Unsigned.
+  Definition true_const : const := Cint Int.one Ctypes.IBool Ctypes.Signed.
+  Definition false_const : const := Cint Int.zero Ctypes.IBool Ctypes.Signed.
   Definition sem_true_const : sem_const true_const = true_val := eq_refl.
   Definition sem_false_const : sem_const false_const = false_val := eq_refl.
+  Definition type_true_const : type_const true_const = bool_type := eq_refl.
+  Definition type_false_const : type_const false_const = bool_type := eq_refl.
 
   Inductive unop' : Type :=
   | UnaryOp: Cop.unary_operation -> unop'
