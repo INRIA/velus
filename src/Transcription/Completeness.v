@@ -108,7 +108,7 @@ Module Type COMPLETENESS
   Fact to_equation_complete : forall xs es out env envo,
       normalized_equation out (xs, es) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
-      (forall x e, envo x = Error e -> In x out) ->
+      (forall x e, envo x = Error e -> PS.In x out) ->
       exists eq', to_equation env envo (xs, es) = OK eq'.
   Proof with eauto.
     intros xs es out env envo Hnorm Hfind Henvo.
@@ -138,7 +138,7 @@ Module Type COMPLETENESS
   Corollary mmap_to_equation_complete : forall eqs out env envo,
       Forall (normalized_equation out) eqs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined eqs) ->
-      (forall x e, envo x = Error e -> In x out) ->
+      (forall x e, envo x = Error e -> PS.In x out) ->
       exists eqs', mmap (to_equation env envo) eqs = OK eqs'.
   Proof.
     induction eqs; intros out env envo Hnorm Hfind Henvo; simpl.
@@ -153,7 +153,7 @@ Module Type COMPLETENESS
   Corollary mmap_to_equation_complete' : forall n out env envo,
       Forall (normalized_equation out) (n_eqs n) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined (n_eqs n)) ->
-      (forall x e, envo x = Error e -> In x out) ->
+      (forall x e, envo x = Error e -> PS.In x out) ->
       exists eqs', mmap_to_equation env envo n = OK eqs'.
   Proof.
     intros n out env envo Hnorm Hfind Henvo.
@@ -182,6 +182,7 @@ Module Type COMPLETENESS
         exists t. repeat rewrite in_app_iff in *.
         destruct Hin; auto.
     - intros x e Hmem; simpl in Hmem.
+      rewrite ps_from_list_In.
       rewrite <- fst_InMembers. rewrite <- Env.In_from_list.
       apply Env.mem_2.
       destruct (Env.mem x (Env.from_list (n_out n))); congruence.

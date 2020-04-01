@@ -215,12 +215,12 @@ Module Type NORMALIZATION
                   ((firstn n xs), [hd])::(aux (skipn n xs) tl)
        end) xs es.
 
-  Definition normalize_equation (to_cut : list ident) (e : equation) : FreshAnn (list equation) :=
+  Definition normalize_equation (to_cut : PS.t) (e : equation) : FreshAnn (list equation) :=
     let '(xs, es) := e in
-    do (es', eqs) <- normalize_rhss (negb (existsb (fun x => existsb (fun c => Pos.eqb x c) to_cut) xs)) es;
+    do (es', eqs) <- normalize_rhss (negb (existsb (fun x => PS.mem x to_cut) xs)) es;
     ret ((split_equation (xs, es'))++eqs).
 
-  Fixpoint normalize_equations (to_cut : list ident) (eqs : list equation) : FreshAnn (list equation) :=
+  Fixpoint normalize_equations (to_cut : PS.t) (eqs : list equation) : FreshAnn (list equation) :=
     match eqs with
     | [] => ret []
     | hd::tl => do eqs1 <- normalize_equation to_cut hd;
@@ -1360,7 +1360,7 @@ Module Type NORMALIZATION
         rewrite Permutation_app_comm. assumption.
   Qed.
 
-  Definition normalize_equations' (to_cut : list ident) (eq : list equation) (st : fresh_st (ann * bool)) :
+  Definition normalize_equations' (to_cut : PS.t) (eq : list equation) (st : fresh_st (ann * bool)) :
     { res | normalize_equations to_cut eq st = res }.
   Proof.
     remember (normalize_equations to_cut eq st) as eqs'.
@@ -1368,9 +1368,9 @@ Module Type NORMALIZATION
   Defined.
 
   (** Normalization of a full node *)
-  Program Definition normalize_node (n : node) (Hwt : exists G, wt_node G n) : node :=
+  Program Definition normalize_node (to_cut : PS.t) (n : node) (Hwt : exists G, wt_node G n) : node :=
     let id0 := first_unused_ident n in
-    let eqs := normalize_equations' (map fst (n_out n)) (n_eqs n) (id0, nil) in
+    let eqs := normalize_equations' (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) (id0, nil) in
     let nvars := (List.map (fun var => (fst var, (fst (fst (snd var)), (fst (snd (fst (snd var))))))) (snd (snd (proj1_sig eqs)))) in
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
@@ -1394,7 +1394,7 @@ Module Type NORMALIZATION
     eapply Permutation_app_head. symmetry. assumption.
   Qed.
   Next Obligation.
-    remember (normalize_equations (map fst (n_out n)) (n_eqs n) (first_unused_ident n, [])) as res.
+    remember (normalize_equations _ (n_eqs n) (first_unused_ident n, [])) as res.
     assert (fresh_st_follows (first_unused_ident n, []) (snd res)) as Hfollows.
     { subst. eapply normalize_equations_st_follows. eapply surjective_pairing. }
     assert (fresh_st_valid (snd res)) as Hvalid.
@@ -1431,7 +1431,7 @@ Module Type NORMALIZATION
   Proof.
     destruct G as [|hd tl].
     - exact [].
-    - refine ((normalize_node hd _)::(normalize_global tl _)).
+    - refine ((normalize_node PS.empty hd _)::(normalize_global tl _)).
       + eapply wt_find_node with (f:=n_name hd); simpl; eauto.
         destruct hd; simpl.
         rewrite ident_eqb_refl. reflexivity.

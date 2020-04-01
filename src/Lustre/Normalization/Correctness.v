@@ -1055,16 +1055,16 @@ Module Type CORRECTNESS
       solve_forall. repeat solve_incl.
   Qed.
 
-  Lemma normalize_node_wt : forall n G Hwt n',
-      normalize_node n (ex_intro _ G Hwt) = n' ->
+  Lemma normalize_node_wt : forall n G Hwt to_cut n',
+      normalize_node to_cut n (ex_intro _ G Hwt) = n' ->
       wt_node G n'.
   Proof.
-    intros n G Hwt n' Hnorm. simpl in Hwt.
+    intros n G Hwt to_cut n' Hnorm. simpl in Hwt.
     unfold normalize_node in Hnorm. subst.
     destruct Hwt as [Hclin [Hclout [Hclvars Heq]]].
     repeat constructor; simpl; auto.
     - admit. (* wt_clocks hum... *)
-    - remember (normalize_equations (map fst (n_out n)) (n_eqs n) (first_unused_ident n, [])) as res.
+    - remember (normalize_equations _ (n_eqs n) (first_unused_ident n, [])) as res.
       destruct res as [eqs' st']; simpl.
       symmetry in Heqres.
       eapply normalize_equations_wt_eq in Heqres; eauto.
@@ -1078,7 +1078,6 @@ Module Type CORRECTNESS
         apply incl_appr. apply incl_appl. apply incl_appr.
         repeat rewrite map_map; simpl. reflexivity.
   Admitted.
-
 End CORRECTNESS.
 
 Module CorrectnessFun
