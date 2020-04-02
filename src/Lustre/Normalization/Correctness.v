@@ -2,6 +2,8 @@ From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Require Import Omega.
+
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
@@ -77,26 +79,28 @@ Module Type CORRECTNESS
 
   Ltac singleton_length :=
     simpl in *;
+    let Hsingl := fresh "Hsingl" in
     match goal with
     | H : length ?x = 1 |- _ =>
-      destruct x; simpl in *; try congruence
+      destruct x eqn:Hsingl; simpl in *; try congruence
     end;
+    let Hsingl := fresh "Hsingl" in
     match goal with
     | H : S (length ?x) = 1 |- _ =>
-      destruct x; simpl in *; try congruence;
+      destruct x eqn:Hsingl; simpl in *; try congruence;
       clear H
     end.
 
   Ltac subst_length :=
     match goal with
     | H: length ?x1 = length ?x2 |- context l [length ?x1] =>
-      rewrite H
+      setoid_rewrite H
     | H: length ?x1 = length ?x2, H1: context l [length ?x1] |- _ =>
-      rewrite H in H1
+      setoid_rewrite H in H1
     | H: ?x1 = ?x2 |- context l [length ?x1] =>
-      rewrite H
+      setoid_rewrite H
     | H: ?x1 = ?x2, H1: context l [length ?x1] |- _ =>
-      rewrite H in H1
+      setoid_rewrite H in H1
     end.
 
   Ltac simpl_length :=
@@ -106,7 +110,7 @@ Module Type CORRECTNESS
        repeat rewrite PeanoNat.Nat.min_id in H
      | H : context c [length (combine _ _)] |- _ =>
        rewrite combine_length in H
-     | H : context c [length (map _ _)] |- _ =>
+     | H : context c [length (map ?l1 ?l2)] |- _ =>
        rewrite map_length in H
      | |- context c [Nat.min ?x1 ?x1] =>
        rewrite PeanoNat.Nat.min_id
@@ -114,17 +118,22 @@ Module Type CORRECTNESS
        rewrite combine_length
      | |- context c [length (map _ _)] =>
        rewrite map_length
+     | _ => idtac
     end).
 
   Ltac solve_length :=
-    repeat simpl_length; solve [auto].
+    repeat simpl_length; solve [auto;congruence].
 
   Ltac simpl_nth :=
     match goal with
     | H : In ?x _ |- _ =>
-      apply In_nth with (d:=x) in H; destruct H as [? [? ?]]; try simpl_nth
-    | H : nth _ (combine _ _) _ = _ |- _ =>
-      rewrite combine_nth in H; [inv H; try simpl_nth|repeat solve_length]
+      apply In_nth with (d:=x) in H; destruct H as [? [? ?]]
+    | H : context c [nth _ (combine _ _) (?x1, ?x2)] |- _ =>
+      rewrite (combine_nth _ _ _ x1 x2) in H; [inv H|clear H;try solve_length]
+    | H : context c [nth _ (map _ _) _] |- _ =>
+      erewrite map_nth' in H; [|clear H; try solve_length]
+    | |- context c [nth _ (map _ _) _] =>
+      erewrite map_nth'; [| try solve_length]
     end.
 
   Hint Resolve in_combine_l in_combine_r.
@@ -292,10 +301,10 @@ Module Type CORRECTNESS
           repeat solve_incl.
         * rewrite app_nil_r.
           repeat rewrite_Forall_forall.
-          simpl_nth; repeat simpl_length.
+          repeat simpl_nth; repeat simpl_length.
           specialize (H4 _ _ _ _ _ H0 H11 H10). simpl in H4.
           congruence.
-        * f_equal. simpl_nth; repeat simpl_length.
+        * f_equal. repeat simpl_nth; repeat simpl_length.
           specialize (H6 _ _ _ _ _ H0 H8 H10); simpl in H6.
           congruence.
         * repeat simpl_In.
@@ -329,7 +338,7 @@ Module Type CORRECTNESS
           eapply H3. simpl; auto.
         * repeat simpl_In. apply Hclock in H0. repeat solve_incl.
         * rewrite app_nil_r.
-          simpl_nth. repeat simpl_length.
+          repeat simpl_nth. repeat simpl_length.
           specialize (H8 _ _ _ _ _ H0 H10 H12). simpl in H8.
           congruence.
         * repeat simpl_In. apply Hclock in H0. repeat solve_incl.
@@ -804,6 +813,8 @@ Module Type CORRECTNESS
           try destruct l2; try destruct l3; simpl in *; subst; inv H0; reflexivity.
   Qed.
 
+  Definition default_ann : ann := (Op.bool_type, (Cbase, None)).
+
   Fact normalize_exp_wt_eq : forall G vars e is_control es' eqs' st st',
       wt_exp G vars e ->
       normalize_exp is_control e st = (es', eqs', st') ->
@@ -835,17 +846,60 @@ Module Type CORRECTNESS
           -- eapply map_bind2_normalize_exp_wt_exp in H1...
              solve_forall. repeat solve_incl.
           -- eapply map_bind2_normalize_exp_wt_exp in H2...
-          -- admit.
-          -- admit.
+          -- specialize (map_bind2_normalize_exp_numstreams _ _ _ _ _ _ H1) as Hnumstreams.
+             eapply map_bind2_normalize_exp_typeof in H1...
+             rewrite <- Forall2_map_2 with (P:=(fun e0 a => typeof e0 = [a])) (f:=fst).
+             rewrite <- H11. rewrite <- H1.
+             clear H1 H3 H10. induction x2; simpl in *...
+             rewrite Forall_app in Hnumstreams; destruct Hnumstreams.
+             unfold typesof in *. rewrite flat_map_concat_map in *. rewrite map_app; rewrite concat_app.
+             apply Forall2_app... clear IHx2.
+             induction a1; simpl...
+             inv H1. rewrite <- numstreams_length_typeof in H13. repeat singleton_length.
+             constructor...
+          -- specialize (map_bind2_normalize_exp_numstreams _ _ _ _ _ _ H2) as Hnumstreams.
+             eapply map_bind2_normalize_exp_typeof in H2...
+             rewrite <- Forall2_map_2 with (P:=(fun e0 a => typeof e0 = [a])) (f:=fst).
+             rewrite <- H10. rewrite <- H2.
+             clear H2 H3 H11. induction x9; simpl in *...
+             rewrite Forall_app in Hnumstreams; destruct Hnumstreams.
+             unfold typesof in *. rewrite flat_map_concat_map in *. rewrite map_app; rewrite concat_app.
+             apply Forall2_app... clear IHx9.
+             induction a1; simpl...
+             inv H2. rewrite <- numstreams_length_typeof in H13. repeat singleton_length.
+             constructor...
           -- rewrite Forall_forall in *; intros [ty cl] Hin.
              apply H12. repeat simpl_In. exists (ty, cl)...
         * specialize (normalize_fby_numstreams _ _ _ _ _ _ _ H3) as Hnumstreams. rewrite Forall_forall in Hnumstreams.
-          repeat simpl_In. inv H5. simpl. rewrite app_nil_r.
-          specialize (Hnumstreams _ H6). rewrite <- numstreams_length_typeof in Hnumstreams.
-          remember (typeof e) as ts.
-          singleton_length. repeat constructor.
-          apply idents_for_anns_values in H4.
-          apply normalize_fby_typeof in H3; admit. (* penible *)
+          repeat simpl_nth; simpl_length.
+          destruct (nth _ _) eqn:Hnth. destruct p. inv H6.
+          simpl. rewrite app_nil_r.
+          assert (numstreams e = 1).
+          { apply Hnumstreams. eapply nth_In in H5. rewrite Hnth in H5. repeat simpl_In... }
+          rewrite <- numstreams_length_typeof in H6. repeat singleton_length.
+          repeat constructor. apply in_or_app. right.
+          specialize (idents_for_anns_incl _ _ _ _ H4) as Hincl.
+          unfold st_tys. eapply incl_map in Hincl. eapply Hincl. clear Hincl.
+          repeat simpl_In. exists (i, a0); simpl... split.
+          -- f_equal.
+             specialize (normalize_fby_numstreams _ _ _ _ _ _ _ H3) as Hnum.
+             specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H8 H1) as Hlen1.
+             specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H9 H2) as Hlen2.
+             assert (length x5 = length a) by (eapply normalize_fby_length in H3; solve_length).
+             apply normalize_fby_typeof in H3; try solve_length...
+             assert (length x8 = length a) by (eapply idents_for_anns_length in H4; auto).
+             apply idents_for_anns_values in H4.
+             rewrite <- Forall2_map_2 with (f:=snd) (P:=(fun a a' => a = a')) in H4.
+             erewrite Forall2_eq in H4. rewrite H4 in H3.
+             erewrite combine_nth in Hnth; try solve_length. inv Hnth. rewrite <- H15 in Hsingl.
+             rewrite concat_length_map_nth with (db:=Op.bool_type) in Hsingl; try solve_length.
+             2: solve_forall; rewrite numstreams_length_typeof...
+             unfold typesof in H3. rewrite flat_map_concat_map in H3.
+             rewrite H3 in Hsingl.
+             repeat simpl_nth.
+             rewrite H14 in Hsingl; simpl in Hsingl. congruence.
+             Unshelve. exact (xH, default_ann). exact (hd_default []). exact default_ann.
+          -- eapply nth_In in H5. rewrite Hnth in H5. repeat simpl_In...
       + eapply map_bind2_wt_eq in H1; eauto.
         rewrite Forall_forall in *; intros.
         specialize (H _ H5 _ _ _ _ _ (H8 _ H5) H6).
@@ -859,8 +913,28 @@ Module Type CORRECTNESS
         * eapply map_bind2_normalize_exp_wt_exp in H1...
           solve_forall. repeat solve_incl.
         * eapply map_bind2_normalize_exp_wt_exp in H2...
-        * admit.
-        * admit.
+        * specialize (map_bind2_normalize_exp_numstreams _ _ _ _ _ _ H1) as Hnumstreams.
+          eapply map_bind2_normalize_exp_typeof in H1...
+          rewrite <- Forall2_map_2 with (P:=(fun e0 a => typeof e0 = [a])) (f:=fst).
+          rewrite <- H11. rewrite <- H1.
+          clear H1 H3 H10. induction x2; simpl in *...
+          rewrite Forall_app in Hnumstreams; destruct Hnumstreams.
+          unfold typesof in *. rewrite flat_map_concat_map in *. rewrite map_app; rewrite concat_app.
+          apply Forall2_app... clear IHx2.
+          induction a0; simpl...
+          inv H1. rewrite <- numstreams_length_typeof in H7. repeat singleton_length.
+          constructor...
+        * specialize (map_bind2_normalize_exp_numstreams _ _ _ _ _ _ H2) as Hnumstreams.
+          eapply map_bind2_normalize_exp_typeof in H2...
+          rewrite <- Forall2_map_2 with (P:=(fun e0 a => typeof e0 = [a])) (f:=fst).
+          rewrite <- H10. rewrite <- H2.
+          clear H2 H3 H11. induction x9; simpl in *...
+          rewrite Forall_app in Hnumstreams; destruct Hnumstreams.
+          unfold typesof in *. rewrite flat_map_concat_map in *. rewrite map_app; rewrite concat_app.
+          apply Forall2_app... clear IHx9.
+          induction a0; simpl...
+          inv H2. rewrite <- numstreams_length_typeof in H7. repeat singleton_length.
+          constructor...
         * rewrite Forall_forall in *; intros [ty cl] Hin.
           apply H12. repeat simpl_In. exists (ty, cl)...
     - (* when *)
@@ -887,20 +961,36 @@ Module Type CORRECTNESS
         repeat rewrite Forall_app; repeat split.
         * solve_forall.
           destruct x0 as [xs es].
-          repeat constructor; [repeat simpl_In |]; repeat constructor; simpl.
-          -- eapply map_bind2_normalize_exp_wt_exp in H1; eauto.
-             rewrite Forall_forall in H1. eapply H1 in H12.
-             eapply map_bind2_st_follows in H2; solve_forall.
-             repeat solve_incl.
-          -- eapply map_bind2_normalize_exp_wt_exp in H2; eauto.
-             rewrite Forall_forall in H2. eapply H2 in H4.
-             eapply idents_for_anns_st_follows in H3.
-             repeat solve_incl.
-          -- apply in_or_app...
-          -- rewrite app_nil_r. admit.
-          -- rewrite app_nil_r. admit.
-          -- repeat solve_incl.
-          -- admit. (* penible *)
+          repeat constructor.
+          -- specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H5 H1) as Hlen1.
+             specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H6 H2) as Hlen2.
+             apply idents_for_anns_values in H3.
+             repeat rewrite_Forall_forall. repeat simpl_length. admit.
+             (* replace <- es in *; simpl in *. destruct x1; try omega. *)
+             (* repeat simpl_nth. destruct (nth x9 (combine _ _)) as [[? ?] ?]. subst. *)
+             (* constructor. *)
+
+          (* repeat constructor; [repeat simpl_In |]; repeat constructor; simpl. *)
+          (* -- eapply map_bind2_normalize_exp_wt_exp in H1; eauto. *)
+          (*    rewrite Forall_forall in H1. eapply H1 in H12. *)
+          (*    eapply map_bind2_st_follows in H2; solve_forall. *)
+          (*    repeat solve_incl. *)
+          (* -- eapply map_bind2_normalize_exp_wt_exp in H2; eauto. *)
+          (*    rewrite Forall_forall in H2. eapply H2 in H4. *)
+          (*    eapply idents_for_anns_st_follows in H3. *)
+          (*    repeat solve_incl. *)
+          (* -- apply in_or_app... *)
+          (* -- rewrite app_nil_r. *)
+          (*    specialize (map_bind2_normalize_exp_numstreams _ _ _ _ _ _ H1) as Hnumstreams. *)
+          (*    eapply map_bind2_normalize_exp_typeof in H1; [| rewrite Forall_forall in *; intros; auto]. *)
+          (*    rewrite <- H8 in Hin. *)
+          (*    repeat simpl_nth. *)
+          (*    unfold typesof. rewrite flat_map_concat_map. *)
+          (*    eapply concat_length_map_nth; solve_forall. *)
+          (*    ++ repeat solve_length. *)
+          (*    ++ rewrite numstreams_length_typeof... *)
+          (* -- repeat solve_incl. *)
+          -- admit.
         * eapply map_bind2_wt_eq in H1; eauto.
           rewrite Forall_forall in *; intros.
           eapply H in H4; [| eauto | eauto].
@@ -927,14 +1017,12 @@ Module Type CORRECTNESS
         rewrite <- H0 in H3.
         specialize (H1 (b, (Cbase, None)) (a0, (b, (Cbase, None))) _ _ _ H3 eq_refl eq_refl).
         destruct (nth _ _ _) eqn:Hnth; subst.
-        erewrite map_nth'. 2: congruence.
+        repeat simpl_nth.
         rewrite H0 in H3. eapply nth_In in H3.
-        rewrite Hnth in *; simpl.
         unfold st_tys. eapply Hincl in H3...
         unfold idty. repeat simpl_In.
         eexists; split; eauto; simpl. f_equal.
-        replace b with (fst (b, (Cbase, @None ident))) by reflexivity.
-        rewrite map_nth; reflexivity.
+        setoid_rewrite Hnth. setoid_rewrite <- H1. reflexivity.
       + clear H H0 H8 H10 H11 H12.
         specialize (idents_for_anns_incl _ _ _ _ H3) as Hincl.
         apply idents_for_anns_values in H3.
@@ -943,14 +1031,12 @@ Module Type CORRECTNESS
         rewrite <- H in H3.
         specialize (H0 (b, (Cbase, None)) (a0, (b, (Cbase, None))) _ _ _ H3 eq_refl eq_refl).
         destruct (nth _ _ _) eqn:Hnth; subst.
-        erewrite map_nth'. 2: congruence.
+        repeat simpl_nth.
         rewrite H in H3. eapply nth_In in H3.
-        rewrite Hnth in *; simpl.
         unfold st_tys. eapply Hincl in H3...
         unfold idty. repeat simpl_In.
         eexists; split; eauto; simpl. f_equal.
-        replace b with (fst (b, (Cbase, @None ident))) by reflexivity.
-        rewrite map_nth; reflexivity.
+        setoid_rewrite Hnth. setoid_rewrite <- H0. reflexivity.
       + eapply map_bind2_wt_eq in H2; eauto.
         rewrite Forall_forall in *; intros.
         eapply H0 in H4; eauto.
@@ -990,6 +1076,19 @@ Module Type CORRECTNESS
           solve_forall. repeat solve_incl.
   Admitted.
 
+  Corollary normalize_exps_wt_eq : forall G vars es es' eqs' st st',
+      Forall (wt_exp G vars) es ->
+      normalize_exps es st = (es', eqs', st') ->
+      Forall (wt_equation G (vars++(st_tys st'))) eqs'.
+  Proof with eauto.
+    intros G vars es es' eqs' st st' Hwt Hnorm.
+    unfold normalize_exps in Hnorm. repeat inv_bind.
+    eapply map_bind2_wt_eq in H...
+    solve_forall.
+    eapply normalize_exp_wt_eq in H1...
+    solve_forall. repeat solve_incl.
+  Qed.
+
   Fact normalize_rhs_wt_eq : forall G vars e keep_fby es' eqs' st st',
       wt_exp G vars e ->
       normalize_rhs keep_fby e st = (es', eqs', st') ->
@@ -999,10 +1098,53 @@ Module Type CORRECTNESS
     destruct e; unfold normalize_rhs in Hnorm;
       try eapply normalize_exp_wt_eq in Hnorm; eauto;
         [destruct keep_fby|].
-    - (* fby *) admit.
+    - (* fby *)
+      inv Hwt. repeat inv_bind.
+      repeat rewrite Forall_app. repeat split.
+      + eapply normalize_exps_wt_eq in H...
+        solve_forall. repeat solve_incl.
+      + eapply normalize_exps_wt_eq in H0...
+        solve_forall. repeat solve_incl.
+      + eapply normalize_fby_wt_eq in H1...
+        * eapply normalize_exps_wt_exp in H...
+          solve_forall. repeat solve_incl.
+        * eapply normalize_exps_wt_exp in H0...
+        * specialize (normalize_exps_numstreams _ _ _ _ _ H) as Hnumstreams.
+          eapply normalize_exps_typesof in H...
+          rewrite <- Forall2_map_2 with (P:=(fun e0 a => typeof e0 = [a])) (f:=fst).
+          rewrite <- H5. rewrite <- H.
+          clear H H1 H4 H5. induction x; simpl...
+          inv Hnumstreams. rewrite <- numstreams_length_typeof in H4. repeat singleton_length.
+          constructor...
+        * specialize (normalize_exps_numstreams _ _ _ _ _ H0) as Hnumstreams.
+          eapply normalize_exps_typesof in H0...
+          rewrite <- Forall2_map_2 with (P:=(fun e0 a => typeof e0 = [a])) (f:=fst).
+          rewrite <- H4. rewrite <- H0.
+          clear H H0 H1 H4 H5. induction x2; simpl...
+          inv Hnumstreams. rewrite <- numstreams_length_typeof in H1. repeat singleton_length.
+          constructor...
+        * rewrite Forall_forall in *; intros.
+          destruct x5. eapply H6. simpl_In.
+          exists (t, n)...
     - eapply normalize_exp_wt_eq...
-    - (* app *) admit.
-  Admitted.
+    - (* app *)
+      repeat inv_bind.
+      apply Forall_app. split.
+      + inv Hwt; repeat inv_bind; try constructor.
+        apply Forall_app. split.
+        * eapply normalize_exp_wt_eq in H...
+          solve_forall. repeat solve_incl.
+        * eapply normalize_reset_wt_eq with (G:=G) (vars:=vars) in H1...
+          -- solve_forall. repeat solve_incl.
+          -- eapply hd_default_wt_exp.
+             eapply normalize_exp_wt_exp in H...
+          -- specialize (normalize_exp_numstreams _ _ _ _ _ _ H) as Hnumstreams.
+             eapply normalize_exp_typeof in H...
+             rewrite H11 in H.
+             destruct x4; simpl in *; try congruence.
+             inv Hnumstreams. rewrite <- numstreams_length_typeof in H4. singleton_length.
+      + inv Hwt; eapply normalize_exps_wt_eq in H0...
+  Qed.
 
   Corollary normalize_rhss_wt_eq : forall G vars es keep_fby es' eqs' st st',
       Forall (wt_exp G vars) es ->
@@ -1033,14 +1175,30 @@ Module Type CORRECTNESS
       + inv H. repeat constructor...
         simpl. rewrite app_nil_r.
         repeat rewrite_Forall_forall.
-        * admit.
+        * rewrite app_length in H.
+          rewrite firstn_length. rewrite H.
+          rewrite numstreams_length_typeof.
+          apply Nat.min_l. omega.
         * rewrite firstn_length in H2.
-          rewrite PeanoNat.Nat.min_glb_lt_iff in H2; destruct H2 as [_ H2].
-          admit.
+          rewrite PeanoNat.Nat.min_glb_lt_iff in H2; destruct H2 as [Hlen1 Hlen2].
+          specialize (H1 a0 b _ _ _ Hlen2 eq_refl eq_refl).
+          rewrite app_nth1 in H1. 2: rewrite numstreams_length_typeof...
+          rewrite nth_firstn_1...
+          apply in_or_app...
       + inv H. apply IHx...
-        admit.
+        repeat rewrite_Forall_forall.
+        * rewrite app_length in H.
+          rewrite skipn_length. rewrite H.
+          rewrite numstreams_length_typeof. omega.
+        * rewrite skipn_length in H2.
+          rewrite nth_skipn.
+          assert (n + numstreams a < length xs) as Hlen by omega.
+          specialize (H1 a0 b _ _ _ Hlen eq_refl eq_refl).
+          rewrite app_nth2 in H1. 2: rewrite numstreams_length_typeof; omega.
+          rewrite numstreams_length_typeof in H1.
+          replace (n + numstreams a - numstreams a) with n in H1 by omega...
     - eapply normalize_rhss_wt_eq in H...
-  Admitted.
+  Qed.
 
   Corollary normalize_equations_wt_eq : forall G vars eqs to_cut eqs' st st',
       Forall (wt_equation G vars) eqs ->
@@ -1055,6 +1213,11 @@ Module Type CORRECTNESS
       solve_forall. repeat solve_incl.
   Qed.
 
+  Definition clocks_of_st (st : fresh_st (ann * bool)) : list nclock :=
+    map snd (map fst (map snd (snd st))).
+
+  (* TODO wt_nclock *)
+
   Lemma normalize_node_wt : forall n G Hwt to_cut n',
       normalize_node to_cut n (ex_intro _ G Hwt) = n' ->
       wt_node G n'.
@@ -1063,7 +1226,11 @@ Module Type CORRECTNESS
     unfold normalize_node in Hnorm. subst.
     destruct Hwt as [Hclin [Hclout [Hclvars Heq]]].
     repeat constructor; simpl; auto.
-    - admit. (* wt_clocks hum... *)
+    - unfold wt_clocks in *.
+      apply Forall_app. split.
+      + solve_forall. destruct a as [_ [_ ck]]. unfold idty in *.
+        solve_incl. repeat rewrite map_app. repeat solve_incl.
+      + admit. (* wt_clocks hum... *)
     - remember (normalize_equations _ (n_eqs n) (first_unused_ident n, [])) as res.
       destruct res as [eqs' st']; simpl.
       symmetry in Heqres.

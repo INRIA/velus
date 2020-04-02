@@ -57,13 +57,22 @@ Module Type NORMALIZATION
 
   Fact idents_for_anns_values : forall anns idents st st',
       idents_for_anns anns st = (idents, st') ->
-      Forall2 (fun a '(id, a') => a = a') anns idents.
+      Forall2 (fun a a' => a = snd a') anns idents.
   Proof.
     induction anns; intros idents st st' Hanns; simpl in *.
     - inv Hanns. constructor.
     - repeat inv_bind.
       specialize (IHanns _ _ _ H0).
       constructor; eauto.
+  Qed.
+
+  Corollary idents_for_anns_length : forall anns idents st st',
+      idents_for_anns anns st = (idents, st') ->
+      length idents = length anns.
+  Proof.
+    intros.
+    apply idents_for_anns_values in H.
+    rewrite Forall2_forall2 in H; destruct H; auto.
   Qed.
 
   (** Add some whens on top of an expression *)

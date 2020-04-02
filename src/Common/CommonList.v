@@ -1684,6 +1684,16 @@ Section SkipnDropn.
         now rewrite Plus.plus_Snm_nSm.
   Qed.
 
+  Lemma nth_firstn_1: forall (xs: list A) n' n x_d,
+      n' < n ->
+      nth n' (firstn n xs) x_d = nth n' xs x_d.
+  Proof.
+    induction xs; intros; simpl.
+    - destruct n'; destruct n; auto.
+    - destruct n'; destruct n; auto; try omega.
+      simpl. apply IHxs. omega.
+  Qed.
+
 End SkipnDropn.
 
 Section Forall2.
