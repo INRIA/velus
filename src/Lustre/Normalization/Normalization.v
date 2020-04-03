@@ -6,7 +6,7 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping.
-From Velus Require Import Lustre.Normalization.Fresh.
+From Velus Require Lustre.Normalization.Fresh.
 
 (** * Normalization procedure *)
 
@@ -38,6 +38,8 @@ Module Type NORMALIZATION
     apply max_fold_in; auto.
   Qed.
 
+  Import Fresh Fresh.Fresh Notations Facts Tactics.
+
   (** Fresh ident generation keeping type annotations;
       also retaining if the var is an init var or not *)
   Definition FreshAnn A := Fresh A (ann * bool).
@@ -59,10 +61,9 @@ Module Type NORMALIZATION
       idents_for_anns anns st = (idents, st') ->
       Forall2 (fun a a' => a = snd a') anns idents.
   Proof.
-    induction anns; intros idents st st' Hanns; simpl in *.
-    - inv Hanns. constructor.
-    - repeat inv_bind.
-      specialize (IHanns _ _ _ H0).
+    induction anns; intros idents st st' Hanns; simpl in *; repeat inv_bind.
+    - constructor.
+    - specialize (IHanns _ _ _ H0).
       constructor; eauto.
   Qed.
 
@@ -85,12 +86,16 @@ Module Type NORMALIZATION
   (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
       just return the variable *)
   Definition init_var_for_clock (cl : nclock) : FreshAnn (ident * list equation) :=
-    fun '(n, l) => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (ty ==b Op.bool_type) && (cl ==b cl'))) l with
-                | Some (x, _) => ((x, []), (n, l))
-                | None => ((n, [([n], [Efby [add_whens (Econst true_const) bool_type (fst cl)]
-                                           [add_whens (Econst false_const) bool_type (fst cl)] [(bool_type, cl)]])]),
-                          (Pos.succ n, (n, ((bool_type, cl), true))::l))
-                end.
+    fun st => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (ty ==b Op.bool_type) && (cl ==b cl')) (st_anns st)) with
+           | Some (x, _) => ((x, []), st)
+           | None => let (x, st') := fresh_ident ((bool_type, cl), true) st in
+                    ((x, [([x], [Efby [add_whens (Econst true_const) bool_type (fst cl)]
+                                      [add_whens (Econst false_const) bool_type (fst cl)]
+                                      [(bool_type, cl)]])]), st')
+           end.
+    (* ret (x, [([x], [Efby [add_whens (Econst true_const) bool_type (fst cl)] *)
+    (*                      [add_whens (Econst false_const) bool_type (fst cl)] *)
+    (*                      [(bool_type, cl)]])]). *)
 
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
   Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
@@ -233,8 +238,8 @@ Module Type NORMALIZATION
     match eqs with
     | [] => ret []
     | hd::tl => do eqs1 <- normalize_equation to_cut hd;
-              do eqs2 <- normalize_equations to_cut tl;
-              ret (eqs1++eqs2)
+                do eqs2 <- normalize_equations to_cut tl;
+                ret (eqs1++eqs2)
     end.
 
   Ltac solve_forall :=
@@ -277,21 +282,13 @@ Module Type NORMALIZATION
       fresh_st_valid st ->
       fresh_st_valid st'.
   Proof.
-    intros cl res [n l] st' Hinit Hvalid.
+    intros cl res st st' Hinit Hvalid.
     unfold init_var_for_clock in Hinit.
+    repeat inv_bind.
     destruct (find _ _).
     - destruct p. inv Hinit. assumption.
-    - inv Hinit. destruct Hvalid as [Hlt Hndup].
-      constructor.
-      + constructor.
-        * apply Pos.lt_succ_diag_r.
-        * eapply Forall_impl; eauto.
-          intros [x _] Hlt'. apply Pos.lt_lt_succ; auto.
-      + constructor; auto.
-        intro contra.
-        induction l; inv Hlt; inv Hndup; simpl in *; auto.
-        destruct contra; subst; auto.
-        apply Pos.lt_irrefl in H1; auto.
+    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+      apply fresh_ident_st_valid in Hfresh; assumption.
   Qed.
   Hint Resolve init_var_for_clock_st_valid.
 
@@ -308,7 +305,7 @@ Module Type NORMALIZATION
     intros [[i e] [ty cl]] HIn e' eq' st1 st1' Hfby Hst1.
     destruct (fby_iteexp_spec i e ty cl) as [[c [Hite1 Hite2]]|Hite]; subst.
     - rewrite Hite2 in Hfby; clear Hite2.
-      inv Hfby. auto.
+      repeat inv_bind...
     - rewrite Hite in Hfby.
       repeat inv_bind...
   Qed.
@@ -340,17 +337,17 @@ Module Type NORMALIZATION
       normalize_exp is_control e st = (res, st') ->
       fresh_st_valid st ->
       fresh_st_valid st'.
-  Proof.
+  Proof with eauto.
     induction e using exp_ind2; intros is_control res st st' Hnorm Hvalid;
       simpl in Hnorm.
     - (* const *)
-      inv_bind; auto.
+      repeat inv_bind...
     - (* var *)
-      inv_bind; auto.
+      repeat inv_bind...
     - (* unop *)
-      repeat inv_bind; eauto.
+      repeat inv_bind...
     - (* binop *)
-      repeat inv_bind; destruct x1; eauto.
+      repeat inv_bind...
     - (* fby *)
       repeat inv_bind; repeat solve_st_valid.
     - (* when *)
@@ -364,7 +361,7 @@ Module Type NORMALIZATION
       destruct is_control; repeat inv_bind; repeat solve_st_valid.
     - (* app *)
       repeat inv_bind; repeat solve_st_valid;
-        destruct ro; repeat inv_bind; eauto.
+        destruct ro; repeat inv_bind...
   Qed.
   Hint Resolve normalize_exp_st_valid.
 
@@ -423,30 +420,32 @@ Module Type NORMALIZATION
   Qed.
   Hint Resolve idents_for_anns_st_follows.
 
+  Corollary idents_for_anns_incl : forall anns ids st st',
+      idents_for_anns anns st = (ids, st') ->
+      incl ids (idty (st_anns st')).
+  Proof.
+    induction anns; intros ids st st' Hids; simpl in Hids; repeat inv_bind;
+      unfold incl; intros ? Hin; inv Hin.
+    - apply fresh_ident_In in H.
+      apply idents_for_anns_st_follows in H0.
+      apply st_follows_incl in H0.
+      apply H0 in H.
+      unfold idty. simpl_In.
+      exists (x, (a, false)); simpl. split; auto.
+    - apply IHanns in H0; auto.
+  Qed.
+
   Fact init_var_for_clock_st_follows : forall cl res st st',
       init_var_for_clock cl st = (res, st') ->
       fresh_st_follows st st'.
   Proof.
-    intros cl res [n l] [n' l'] Hinit.
+    intros cl res st st' Hinit.
     unfold init_var_for_clock in Hinit.
+    repeat inv_bind.
     destruct (find _ _).
     - destruct p. inv Hinit. reflexivity.
-    - inv Hinit.
-      unfold fresh_st_follows, smallest_ident in *; simpl in *.
-      split.
-      + apply incl_tl. reflexivity.
-      + induction l as [|[a ?]]; simpl in *.
-        * rewrite Pos.min_glb_iff.
-          split.
-          -- reflexivity.
-          -- apply Pos.lt_le_incl.
-             apply Pos.lt_succ_diag_r.
-        * rewrite Pos.min_glb_iff in *.
-          destruct IHl as [IHl1 IHl2].
-          split.
-          -- etransitivity; eauto.
-             eapply Pos.le_min_r.
-          -- eapply Pos.min_le_compat_l; eauto.
+    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+      apply fresh_ident_st_follows in Hfresh. auto.
   Qed.
   Hint Resolve init_var_for_clock_st_follows.
 
@@ -512,18 +511,17 @@ Module Type NORMALIZATION
   Fact normalize_exp_st_follows : forall e is_control res st st',
       normalize_exp is_control e st = (res, st') ->
       fresh_st_follows st st'.
-  Proof.
-    intros e.
+  Proof with eauto.
     induction e using exp_ind2; intros is_control res st st' Hnorm;
       simpl in Hnorm.
     - (* const *)
-      inv_bind; reflexivity.
+      repeat inv_bind; reflexivity.
     - (* var *)
-      inv_bind; reflexivity.
+      repeat inv_bind; reflexivity.
     - (* unop *)
-      repeat inv_bind; eauto.
+      repeat inv_bind...
     - (* binop *)
-      repeat inv_bind; etransitivity; eauto.
+      repeat inv_bind; etransitivity...
     - (* fby *)
       repeat inv_bind; repeat solve_st_follows'.
     - (* when *)
@@ -932,10 +930,8 @@ Module Type NORMALIZATION
   Proof.
     intros e0 e ann es' eqs' st st' Hfby.
     destruct ann as [ty cl]; simpl.
-    specialize (fby_iteexp_spec e0 e ty cl) as [[c [Heq Hspec]]|Hspec].
-    - rewrite Hspec in Hfby; clear Hspec. inv Hfby. auto.
-    - rewrite Hspec in Hfby; clear Hspec.
-      repeat inv_bind. reflexivity.
+    specialize (fby_iteexp_spec e0 e ty cl) as [[c [Heq Hspec]]|Hspec];
+      rewrite Hspec in Hfby; repeat inv_bind; reflexivity.
   Qed.
 
   Fact normalize_fby_typeof : forall inits es anns es' eqs' st st',
@@ -1007,7 +1003,7 @@ Module Type NORMALIZATION
 
   Fact idents_for_anns_vars_perm : forall anns ids st st',
       idents_for_anns anns st = (ids, st') ->
-      Permutation ((map fst ids)++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((map fst ids)++(st_ids st)) (st_ids st').
   Proof.
     induction anns; intros ids st st' Hidents; simpl in Hidents; repeat inv_bind.
     - reflexivity.
@@ -1020,21 +1016,23 @@ Module Type NORMALIZATION
 
   Fact init_var_for_clock_vars_perm : forall cl id eqs st st',
       init_var_for_clock cl st = ((id, eqs), st') ->
-      Permutation ((vars_defined eqs)++(map fst (snd st))) ((map fst (snd st'))).
+      Permutation ((vars_defined eqs)++(st_ids st)) (st_ids st').
   Proof.
     intros cl id eqs st st' Hinit.
-    destruct st; destruct st'; simpl in *.
+    unfold init_var_for_clock in Hinit. repeat inv_bind.
     destruct (find _ _).
     - destruct p. inv Hinit. reflexivity.
-    - inv Hinit; simpl. reflexivity.
+    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+      apply fresh_ident_vars_perm in Hfresh.
+      simpl. assumption.
   Qed.
 
   Fact map_bind2_vars_perm {A B} : forall (k : A -> FreshAnn (B * list equation)) es es' eqs' st st',
       map_bind2 k es st = (es', eqs', st') ->
       Forall (fun e => forall es' eqs' st st',
                   k e st = (es', eqs', st') ->
-                  Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st'))) es ->
-      Permutation ((vars_defined (concat eqs'))++(map fst (snd st))) (map fst (snd st')).
+                  Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st')) es ->
+      Permutation ((vars_defined (concat eqs'))++(st_ids st)) (st_ids st').
   Proof.
     induction es; intros es' eqs' st st' Hmap Hf;
       simpl in *; repeat inv_bind.
@@ -1043,14 +1041,14 @@ Module Type NORMALIZATION
       specialize (IHes _ _ _ _ H0 H4).
       specialize (H3 _ _ _ _ H).
       etransitivity. 2: apply IHes.
-      unfold vars_defined in *. rewrite <- flat_map_app.
+      unfold vars_defined in *. simpl in *. rewrite <- flat_map_app.
       rewrite <- app_assoc. rewrite Permutation_swap.
       apply Permutation_app_head. assumption.
   Qed.
 
   Fact normalize_fby_vars_perm : forall inits es anns es' eqs' st st',
       normalize_fby inits es anns st = ((es', eqs'), st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof.
     intros inits es anns es' eqs' st st' Hnorm.
     unfold normalize_fby in Hnorm; repeat inv_bind.
@@ -1067,12 +1065,12 @@ Module Type NORMALIZATION
 
   Fact normalize_reset_vars_perm : forall e e' eqs' st st',
       normalize_reset e st = ((e', eqs'), st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof.
     intros e e' eqs' st st' Hnorm.
     destruct (normalize_reset_spec e) as [[v [ann [Hv Hspec]]]| Hspec];
       subst; rewrite Hspec in Hnorm; clear Hspec.
-    - inv_bind. reflexivity.
+    - repeat inv_bind. reflexivity.
     - destruct (hd _ _); simpl in *. repeat inv_bind.
       eapply fresh_ident_vars_perm; eauto.
   Qed.
@@ -1080,7 +1078,7 @@ Module Type NORMALIZATION
   Fact normalize_exp_vars_perm : forall G vars e is_control es' eqs' st st',
       wt_exp G vars e ->
       normalize_exp is_control e st = ((es', eqs'), st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof with eauto.
     induction e using exp_ind2; intros is_control e' eqs' st st' Hwt Hnorm;
       simpl in Hnorm; inv Hwt.
@@ -1230,7 +1228,7 @@ Module Type NORMALIZATION
   Corollary normalize_exps_vars_perm : forall G vars es es' eqs' st st',
       Forall (wt_exp G vars) es ->
       normalize_exps es st = ((es', eqs'), st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof with eauto.
     intros G vars es es' eqs' st st' Hf Hnorm.
     unfold normalize_exps in Hnorm.
@@ -1243,7 +1241,7 @@ Module Type NORMALIZATION
   Fact normalize_rhs_vars_perm : forall G vars e keep_fby es' eqs' st st',
       wt_exp G vars e ->
       normalize_rhs keep_fby e st = ((es', eqs'), st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof with eauto.
     intros G vars e keep_fby es' eqs' st st' Hwt Hnorm.
     destruct e; unfold normalize_rhs in Hnorm;
@@ -1283,7 +1281,7 @@ Module Type NORMALIZATION
   Corollary normalize_rhss_vars_perm : forall G vars es keep_fby es' eqs' st st',
       Forall (wt_exp G vars) es ->
       normalize_rhss keep_fby es st = ((es', eqs'), st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) (map fst (snd st')).
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof.
     intros G vars es keep_fby es' eqs' st st' Hf Hnorm.
     unfold normalize_rhss in Hnorm.
@@ -1328,7 +1326,7 @@ Module Type NORMALIZATION
   Fact normalize_equation_vars_perm : forall G vars eq to_cut eqs' st st',
       wt_equation G vars eq ->
       normalize_equation to_cut eq st = (eqs', st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) ((vars_defined [eq])++(map fst (snd st'))).
+      Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined [eq])++(st_ids st')).
   Proof.
     intros G vars eq to_cut eqs' st st' Hwt Hnorm.
     destruct eq; simpl in *.
@@ -1353,7 +1351,7 @@ Module Type NORMALIZATION
   Corollary normalize_equations_vars_perm : forall G vars eqs to_cut eqs' st st',
       Forall (wt_equation G vars) eqs ->
       normalize_equations to_cut eqs st = (eqs', st') ->
-      Permutation ((vars_defined eqs')++(map fst (snd st))) ((vars_defined eqs)++(map fst (snd st'))).
+      Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined eqs)++(st_ids st')).
   Proof.
     induction eqs; intros to_cut eqs' st st' Hf Hnorm ;simpl in *; repeat inv_bind.
     - reflexivity.
@@ -1379,8 +1377,8 @@ Module Type NORMALIZATION
   (** Normalization of a full node *)
   Program Definition normalize_node (to_cut : PS.t) (n : node) (Hwt : exists G, wt_node G n) : node :=
     let id0 := first_unused_ident n in
-    let eqs := normalize_equations' (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) (id0, nil) in
-    let nvars := (List.map (fun var => (fst var, (fst (fst (snd var)), (fst (snd (fst (snd var))))))) (snd (snd (proj1_sig eqs)))) in
+    let eqs := normalize_equations' (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) (init_st id0) in
+    let nvars := (List.map (fun var => (fst var, (fst (fst (snd var)), (fst (snd (fst (snd var))))))) (st_anns (snd (proj1_sig eqs)))) in
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
        n_in := (n_in n);
@@ -1393,26 +1391,26 @@ Module Type NORMALIZATION
   Next Obligation.
     rename Hwt into G.
     destruct H as [_ [_ [_ Hwt]]].
-    eapply normalize_equations_vars_perm with (st:=(first_unused_ident n, [])) in Hwt. 2: eapply surjective_pairing.
+    eapply normalize_equations_vars_perm with (st:=init_st (first_unused_ident n)) in Hwt. 2: eapply surjective_pairing.
     specialize (n_defd n) as Hperm'.
     repeat rewrite map_app in *; rewrite map_map; simpl in *.
-    rewrite app_nil_r in Hwt.
+    unfold st_ids in Hwt. rewrite init_st_anns in Hwt. rewrite app_nil_r in Hwt.
     etransitivity. apply Hwt.
     rewrite Permutation_app_comm. symmetry.
     rewrite <- app_assoc. rewrite Permutation_swap.
     eapply Permutation_app_head. symmetry. assumption.
   Qed.
   Next Obligation.
-    remember (normalize_equations _ (n_eqs n) (first_unused_ident n, [])) as res.
-    assert (fresh_st_follows (first_unused_ident n, []) (snd res)) as Hfollows.
+    remember (normalize_equations _ (n_eqs n) (init_st (first_unused_ident n))) as res.
+    assert (fresh_st_follows (init_st (first_unused_ident n)) (snd res)) as Hfollows.
     { subst. eapply normalize_equations_st_follows. eapply surjective_pairing. }
     assert (fresh_st_valid (snd res)) as Hvalid.
     { subst. eapply normalize_equations_st_valid.
       eapply surjective_pairing.
-      repeat constructor. }
-    destruct res as [eqs [n' l]]. simpl in *.
-    unfold fresh_st_follows in Hfollows; simpl in *. destruct Hfollows as [_ Hfollows].
-    destruct Hvalid as [Hvalid1 Hvalid2].
+      eapply init_st_valid. }
+    destruct res as [eqs st']. simpl in *.
+    apply init_st_follows in Hfollows.
+    apply st_valid_NoDupMembers in Hvalid.
     specialize (n_nodup n) as Hndup.
     specialize (first_unused_ident_gt n _ eq_refl) as Hfirst; unfold used_idents in *.
     rewrite Forall_forall in Hfirst. repeat rewrite map_app in Hfirst.
@@ -1429,10 +1427,9 @@ Module Type NORMALIZATION
         repeat (apply in_app_or in contra; destruct contra as [?|contra]);
           repeat (apply in_or_app; auto; try (left; assumption); right).
       + clear Hfirst.
-        apply min_fold_in with (x0 := n') in Hin.
+        rewrite Forall_forall in Hfollows. specialize (Hfollows x Hin).
         apply (Pos.lt_irrefl x).
         eapply Pos.lt_le_trans; eauto.
-        eapply Pos.le_trans; eauto.
   Qed.
   Admit Obligations.
 

@@ -19,6 +19,8 @@ Module Type COMPLETENESS
        (Import Typ : LTYPING Ids Op Syn)
        (Import Norm : NORMALIZATION Ids Op OpAux Syn Typ).
 
+  Import Fresh Fresh.Fresh Facts Tactics.
+
   (** Describe normalized nodes *)
 
   Inductive normalized_lexp : exp -> Prop :=
@@ -150,12 +152,11 @@ Module Type COMPLETENESS
     induction a; intros out a1s eqs' st st' Hmap Hlt Hfollows Hf;
       simpl in *; repeat inv_bind.
     - constructor.
-    - inv Hf.
+    - inv Hf. simpl.
       rewrite Forall_app.
       split; eauto.
       eapply IHa; eauto.
       clear IHa H3 H4.
-      specialize (Hfollows _ _ _ _ _ H) as [_ Hfollows].
       intros o Hin. eapply Pos.lt_le_trans; eauto.
   Qed.
 
@@ -259,17 +260,20 @@ Module Type COMPLETENESS
       (forall o, PS.In o out -> Pos.lt o (smallest_ident st)) ->
       Forall (normalized_equation out) eqs'.
   Proof.
-    intros cl id eqs' out [n l] st' Hinit Hlt.
-    simpl in Hinit.
+    intros cl id eqs' out st st' Hinit Hlt.
+    unfold init_var_for_clock in Hinit.
     destruct (find _ _).
     - destruct p. inv Hinit. constructor.
-    - inv Hinit. repeat constructor.
+    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit. repeat constructor.
       + simpl in Hlt.
         intros contra.
         apply Hlt in contra.
-        specialize (min_fold_le (map fst l) id) as contra'.
+        specialize (fresh_ident_st_follows _ _ _ _ Hfresh) as Hfollows. apply st_follows_smallest in Hfollows.
+        apply fresh_ident_In in Hfresh.
+        assert (In id (st_ids st')) as Hin by (rewrite <- st_anns_ids_In; eexists; eauto).
+        eapply smallest_ident_In in Hin.
         apply (Pos.lt_irrefl id).
-        eapply Pos.lt_le_trans; eauto.
+        eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
       + apply add_whens_is_constant. auto.
       + apply add_whens_normalized_lexp. auto.
   Qed.
@@ -289,12 +293,11 @@ Module Type COMPLETENESS
         intro contra.
         apply Hlt in contra; clear Hlt.
         assert (fresh_st_follows st st') as Hfollows by (etransitivity; eauto).
-        destruct Hfollows as [_ Hfollows].
-        unfold fresh_ident in H0; destruct x1. inv H0.
-        simpl in Hfollows.
-        apply Pos.min_glb_l in Hfollows.
+        apply fresh_ident_In in H0.
+        assert (In x2 (st_ids st')) by (unfold st_ids, idty; simpl_In; exists (x2, (ty, cl, false)); eauto).
+        apply smallest_ident_In in H1.
         apply (Pos.lt_irrefl x2).
-        eapply Pos.lt_le_trans; eauto.
+        eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
       + eapply init_var_for_clock_normalized_eq in H; eauto.
   Qed.
 
@@ -316,24 +319,6 @@ Module Type COMPLETENESS
         rewrite Forall_forall in Hf...
   Qed.
 
-  Fact idents_for_anns_smallest_ident : forall anns ids st st',
-      idents_for_anns anns st = (ids, st') ->
-      Forall (fun id => Pos.le (smallest_ident st) id) (map fst ids).
-  Proof.
-    induction anns; intros ids st st' Hids;
-      simpl in Hids; repeat inv_bind.
-    - constructor.
-    - destruct st as [n l]; simpl in H; inv H.
-      constructor; eauto.
-      + simpl. apply min_fold_le.
-      + eapply IHanns in H0. solve_forall.
-        clear H0.
-        apply Pos.min_le in H. destruct H as [H|H].
-        * etransitivity. eapply min_fold_le. eauto.
-        * etransitivity; eauto. apply min_fold_eq.
-          apply Pos.lt_le_incl. apply Pos.lt_succ_diag_r.
-  Qed.
-
   Lemma normalize_exp_normalized_eq : forall e is_control es' eqs' out st st',
       normalize_exp is_control e st = (es', eqs', st') ->
       (forall o, PS.In o out -> Pos.lt o (smallest_ident st)) ->
@@ -344,8 +329,9 @@ Module Type COMPLETENESS
     - (* unop *) eauto.
     - (* binop *)
       apply Forall_app. split...
-      apply normalize_exp_st_follows in H; destruct H.
-      assert (forall o, PS.In o out -> (o < smallest_ident x1)%positive) by (intros; eapply Pos.lt_le_trans; eauto)...
+      apply normalize_exp_st_follows in H.
+      assert (forall o, PS.In o out -> (o < smallest_ident x1)%positive)...
+      intros. eapply Pos.lt_le_trans...
     - (* fby *)
       repeat rewrite Forall_app. repeat split.
       + assert (fresh_st_follows st x1) as Hfollows1 by (eapply map_bind2_st_follows; eauto; solve_forall).
@@ -363,31 +349,30 @@ Module Type COMPLETENESS
         destruct (nth n _) as [[e0 e'] [ty cl]] eqn:Hnth.
         specialize (fby_iteexp_spec e0 e' ty cl) as [[? [? Hspec]]|Hspec]; subst;
           rewrite Hspec in H3; clear Hspec; repeat inv_bind.
-        * rewrite <- H8. repeat constructor.
+        * simpl in *. rewrite <- H8. repeat constructor.
           -- intro contra. apply Hlt in contra.
-             eapply idents_for_anns_smallest_ident in H4. rewrite Forall_forall in H4.
-             assert (In i (map fst x8)) as Hin.
-             { simpl_In. exists (i, a0); auto. }
-             apply H4 in Hin.
-             destruct Hfollows1. destruct Hfollows2. destruct Hfollows3.
+             specialize (idents_for_anns_st_follows _ _ _ _ H4) as Hfollows.
+             apply idents_for_anns_incl in H4.
+             apply H4 in H5.
+             assert (In i (st_ids st')) as Hin.
+             { unfold st_ids, idty in *. repeat simpl_In. inv H3.
+               exists (i, (a0, b)); auto. }
+             apply smallest_ident_In in Hin.
              apply (Pos.lt_irrefl i).
              eapply Pos.lt_le_trans; eauto.
-             etransitivity; eauto.
-             etransitivity; eauto.
-             etransitivity; eauto.
+             repeat (etransitivity; eauto).
           -- eapply nth_In in H6; rewrite Hnth in H6...
         * repeat constructor.
           eapply nth_In in H6; rewrite Hnth in H6...
       + eapply map_bind2_normalized_eq in H1... solve_forall.
       + eapply map_bind2_normalized_eq in H2...
         * eapply map_bind2_st_follows in H1; solve_forall.
-          destruct H1 as [_ Hfollows].
           intros. eapply Pos.lt_le_trans...
         * solve_forall.
       + eapply normalize_fby_normalized_eq in H3; eauto.
         * eapply map_bind2_normalized_lexp; eauto. solve_forall.
-        * eapply map_bind2_st_follows in H1; solve_forall. destruct H1 as [_ H1].
-          eapply map_bind2_st_follows in H2; solve_forall. destruct H2 as [_ H2].
+        * eapply map_bind2_st_follows in H1; solve_forall.
+          eapply map_bind2_st_follows in H2; solve_forall.
           intros. eapply Pos.lt_le_trans; eauto.
           etransitivity; eauto.
     - (* when *)
@@ -397,7 +382,7 @@ Module Type COMPLETENESS
       destruct a; destruct is_control; repeat inv_bind;
         repeat rewrite Forall_app; repeat split.
       1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
-      1,2: (eapply map_bind2_st_follows in H1; eauto; solve_forall; destruct H1 as [_ Hfollows];
+      1,2: (eapply map_bind2_st_follows in H1; eauto; solve_forall;
             intros; eapply Pos.lt_le_trans; eauto).
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
       repeat simpl_In.
@@ -413,9 +398,9 @@ Module Type COMPLETENESS
         repeat rewrite Forall_app; repeat split.
       1,5: (eapply IHe; eauto).
       1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
-      1,2,3,4: (eapply normalize_exp_st_follows in H1; eauto; destruct H1 as [_ Hfollows1];
+      1,2,3,4: (eapply normalize_exp_st_follows in H1; eauto;
                 intros; eapply Pos.lt_le_trans; eauto).
-      1,2: (eapply map_bind2_st_follows in H2; eauto; solve_forall; destruct H2 as [_ Hfollows2];
+      1,2: (eapply map_bind2_st_follows in H2; eauto; solve_forall;
             etransitivity; eauto).
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
       repeat simpl_In.
@@ -446,8 +431,8 @@ Module Type COMPLETENESS
         repeat constructor. apply normalized_lexp_hd_default...
       + destruct ro; repeat inv_bind;
           eapply map_bind2_normalized_eq; eauto; solve_forall.
-        eapply normalize_exp_st_follows in H1; destruct H1.
-        eapply normalize_reset_st_follows in H4; destruct H4.
+        eapply normalize_exp_st_follows in H1.
+        eapply normalize_reset_st_follows in H4.
         intros. eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
   Qed.
   Hint Resolve normalize_exp_normalized_eq.
@@ -512,7 +497,7 @@ Module Type COMPLETENESS
       specialize (H3 (x5, x5, (bool_type, (Cbase, None))) (hd_default []) [] _ _ _ _ Hn eq_refl eq_refl eq_refl).
       destruct H3 as [? [? H3]]. destruct (nth n _ _) as [[e0 e] [ty cl]] eqn:Hnth'.
       specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-        rewrite Hspec in H3; clear Hspec; repeat inv_bind.
+        rewrite Hspec in H3; clear Hspec; repeat inv_bind; simpl in *.
       + rewrite <- H5. repeat constructor.
         eapply nth_In in Hn. rewrite Hnth' in Hn...
       + repeat constructor.
@@ -550,12 +535,12 @@ Module Type COMPLETENESS
       simpl in Hnorm. repeat inv_bind.
       repeat rewrite Forall_app. repeat split...
       + eapply normalize_exps_normalized_eq; eauto; solve_forall.
-        eapply normalize_exps_st_follows in H; destruct H as [_ Hfollows].
+        eapply normalize_exps_st_follows in H;
         intros. eapply Pos.lt_le_trans...
       + unfold normalize_fby in H1. repeat inv_bind.
         eapply map_bind2_normalized_eq in H1; eauto; solve_forall.
-        * eapply normalize_exps_st_follows in H; destruct H as [_ Hfollows1].
-          eapply normalize_exps_st_follows in H0; destruct H0 as [_ Hfollows2].
+        * eapply normalize_exps_st_follows in H.
+          eapply normalize_exps_st_follows in H0.
           intros. eapply Pos.lt_le_trans... etransitivity...
         * intros. destruct a as [[e0 e] ann]. apply fby_iteexp_st_follows in H2...
         * repeat rewrite_Forall_forall. destruct x5 as [[e0 e] [ty cl]].
@@ -563,13 +548,15 @@ Module Type COMPLETENESS
             rewrite Hspec in H3; clear Hspec; repeat inv_bind; inv H5.
           -- econstructor...
              ++ intro contra. apply H4 in contra.
-                unfold fresh_ident in H6; destruct x9 as [n' l']. inv H6.
-                eapply init_var_for_clock_st_follows in H3; destruct H3 as [_ Hfollows].
-                simpl in Hfollows.
+                specialize (fresh_ident_In _ _ _ _ H6) as Hin.
+                apply fresh_ident_st_follows in H6.
+                apply init_var_for_clock_st_follows in H3.
+                assert (In x10 (st_ids st'0)).
+                { unfold st_ids, idty. repeat simpl_In. exists (x10, (ty, cl, false))... }
+                apply smallest_ident_In in H5.
                 eapply (Pos.lt_irrefl x10).
                 eapply Pos.lt_le_trans...
-                etransitivity...
-                eapply min_fold_le.
+                repeat (etransitivity; eauto).
              ++ eapply normalize_exps_normalized_lexp in H0. rewrite Forall_forall in H0...
           -- eapply init_var_for_clock_normalized_eq in H3; intros...
              rewrite Forall_forall in *...
@@ -584,8 +571,8 @@ Module Type COMPLETENESS
         repeat inv_bind. repeat constructor.
         apply normalized_lexp_hd_default...
       + eapply normalize_exps_normalized_eq in H0; eauto.
-        apply normalize_exp_st_follows in H; destruct H as [_ Hfollows1].
-        apply normalize_reset_st_follows in H1; destruct H1 as [_ Hfollows2].
+        apply normalize_exp_st_follows in H.
+        apply normalize_reset_st_follows in H1.
         intros. eapply Pos.lt_le_trans... etransitivity...
   Qed.
   Hint Resolve normalize_rhs_normalized_eq.
@@ -660,7 +647,7 @@ Module Type COMPLETENESS
     - constructor.
     - inv Hf. apply Forall_app; split.
       + eapply normalize_equation_normalized_eq; eauto.
-      + eapply normalize_equation_st_follows in H; destruct H as [_ Hfollows].
+      + eapply normalize_equation_st_follows in H.
         eapply IHeqs; eauto. solve_forall.
         intros. eapply Pos.lt_le_trans; eauto.
   Qed.
@@ -679,7 +666,8 @@ Module Type COMPLETENESS
       unfold used_idents in Hgt. repeat rewrite map_app in Hgt.
       repeat rewrite Forall_app in Hgt.
       destruct Hgt as [_ [_ [_ Hgt]]].
-      rewrite Forall_forall in Hgt; auto.
+      rewrite Forall_forall in Hgt.
+      rewrite init_st_smallest. auto.
     - apply PSP.union_subset_2.
   Qed.
 

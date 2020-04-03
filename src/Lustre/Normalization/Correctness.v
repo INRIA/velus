@@ -25,33 +25,19 @@ Module Type CORRECTNESS
        (Import Norm : NORMALIZATION Ids Op OpAux Syn Typ).
   Import List.
 
-  Definition st_tys (st : fresh_st (ann * bool)) := idty (idty (snd st)).
+  Import Fresh Facts Tactics.
+
+  Definition st_tys (st : fresh_st (ann * bool)) := idty (idty (st_anns st)).
 
   Fact st_follows_tys_incl : forall st st',
       fresh_st_follows st st' ->
       incl (st_tys st) (st_tys st').
   Proof.
-    intros st st' [Hincl _].
-    unfold incl in *. intros [id data] Hin.
-    unfold st_tys, idty in *.
-    repeat simpl_In. inv H. inv H0.
-    exists (id, (data, n)). split; auto.
-    repeat simpl_In.
-    exists (id, (data, n, b)). eauto.
-  Qed.
-
-  Fact idents_for_anns_incl : forall anns ids st st',
-      idents_for_anns anns st = (ids, st') ->
-      incl ids (idty (snd st')).
-  Proof.
-    induction anns; intros ids st st' Hids; simpl in Hids; repeat inv_bind;
-      unfold incl; intros ? Hin; inv Hin.
-    - unfold fresh_ident in H; destruct st as [n l]; inv H.
-      apply idents_for_anns_st_follows in H0; destruct H0 as [Hfollows _].
-      unfold idty. simpl_In.
-      exists (x, (a, false)); simpl. split; auto.
-      apply Hfollows. simpl. auto.
-    - apply IHanns in H0; auto.
+    intros st st' Hfollows.
+    apply st_follows_incl in Hfollows.
+    unfold st_tys, idty.
+    repeat apply incl_map.
+    assumption.
   Qed.
 
   Ltac solve_incl :=
@@ -71,6 +57,8 @@ Module Type CORRECTNESS
       eapply incl_app
     | |- incl ?l1 (?l2 ++ ?l3) =>
       eapply incl_appr
+    | |- incl ?l1 (?a::?l2) =>
+      eapply incl_tl
     | |- incl (st_tys ?st1) (st_tys _) =>
       eapply st_follows_tys_incl; repeat solve_st_follows
     | H : incl ?l1 ?l2 |- incl (idty ?l1) (idty ?l2) =>
@@ -205,9 +193,8 @@ Module Type CORRECTNESS
       econstructor; eauto.
       + repeat constructor; simpl; auto.
         * apply in_or_app. right. constructor; auto.
-        * eapply wt_nclock_incl; [| eauto]. eauto.
-      + eapply Forall_impl; [| eauto].
-        intros. eapply wt_exp_incl; [| eauto]. eauto.
+        * repeat solve_incl.
+      + solve_forall. repeat solve_incl.
   Qed.
 
   Fact hd_default_wt_exp : forall G vars es,
@@ -312,30 +299,33 @@ Module Type CORRECTNESS
       + repeat rewrite_Forall_forall.
         repeat simpl_length.
         repeat constructor; simpl.
-        * unfold init_var_for_clock in H1. destruct st0.
+        * unfold init_var_for_clock in H1.
           destruct (find _ _) eqn:Hfind.
           -- destruct p. inv H1.
              apply find_some in Hfind; destruct Hfind as [Hfind1 Hfind2].
              destruct p as [[? ?] ?].
              repeat rewrite Bool.andb_true_iff in Hfind2. destruct Hfind2 as [[_ Hfind2] _].
              rewrite equiv_decb_equiv in Hfind2.
-             apply fresh_ident_st_follows in H4.
-             assert (incl (idty (idty l)) (vars++(st_tys st'))) as Hincl.
-             { repeat solve_incl. apply st_follows_tys_incl in H4. apply st_follows_tys_incl in H3.
-               simpl in *. etransitivity; eauto. }
-             apply Hincl. repeat unfold idty; repeat simpl_In.
+             assert (incl (st_tys x2) (vars++(st_tys st'))) as Hincl by repeat solve_incl.
+             apply Hincl. repeat unfold st_tys, idty; repeat simpl_In.
              exists (x, (t, n)); simpl; auto. split.
              ++ repeat f_equal. apply Hfind2.
              ++ repeat simpl_In. exists (x, (t, n, b)); simpl; eauto.
-          -- inv H1.
-             assert (incl (idty(idty(snd (Pos.succ x, (x, (Op.bool_type, cl, true))::l)))) (vars++(st_tys st'))).
-             { repeat solve_incl. apply st_follows_tys_incl. repeat solve_st_follows. }
-             apply H1; simpl; auto.
+          -- destruct (fresh_ident _ _) eqn:Hfresh. inv H1.
+             apply fresh_ident_In in Hfresh.
+             assert (incl (st_tys x2) (st_tys st')) as Hincl by repeat solve_incl.
+             apply in_or_app. right. apply Hincl.
+             unfold st_tys, idty. repeat simpl_In.
+             exists (x, (Op.bool_type, cl)); simpl; split; auto.
+             repeat simpl_In. exists (x, (Op.bool_type, cl, true)); simpl; auto.
         * repeat simpl_In. apply Hclock in H0. repeat solve_incl.
         * repeat simpl_In. apply Hwt1 in H10. repeat solve_incl.
-        * unfold fresh_ident in H4; destruct x2 as [n l]; inv H4.
-          apply st_follows_tys_incl in H3. eapply incl_appr in H3.
-          eapply H3. simpl; auto.
+        * apply fresh_ident_In in H4.
+          apply st_follows_tys_incl in H3.
+          apply in_or_app. right. apply H3.
+          unfold st_tys, idty.
+          repeat simpl_In. exists (x3, (ty, cl)); simpl; split; auto.
+          simpl_In. exists (x3, ((ty, cl), false)); simpl; auto.
         * repeat simpl_In. apply Hclock in H0. repeat solve_incl.
         * rewrite app_nil_r.
           repeat simpl_nth. repeat simpl_length.
@@ -373,8 +363,10 @@ Module Type CORRECTNESS
     - assumption.
     - destruct (hd _) eqn:Hann; simpl in *; repeat inv_bind.
       constructor.
-      + unfold fresh_ident in H. destruct st as [n l]. inv H.
-        apply in_or_app. simpl. auto.
+      + apply fresh_ident_In in H.
+        apply in_or_app; right. unfold st_tys, idty.
+        repeat simpl_In. exists (x, (t, (c, o))). simpl; split; auto.
+        simpl_In. eexists; split; eauto; simpl; eauto.
       + apply fresh_ident_st_follows in H.
         destruct e; simpl in Hann; inv Hann; inv Hwt.
         1: repeat constructor.
@@ -769,23 +761,27 @@ Module Type CORRECTNESS
         * f_equal. apply Op.type_init_type.
         * repeat simpl_In.
           apply Hclock in H4. repeat solve_incl.
-        * destruct x3; simpl in H9; inv H9.
-          apply st_follows_tys_incl in H7.
+        * apply fresh_ident_In in H9.
           apply in_or_app; right.
-          apply H7. simpl...
-      + destruct st0; simpl in H5.
-        destruct (find _ _) eqn:Hfind; inv H5; [destruct p; inv H11|]; inv H10;
-          repeat constructor; simpl; try rewrite app_nil_r.
+          apply st_follows_tys_incl in H7. apply H7.
+          unfold st_tys, idty.
+          repeat simpl_In. exists (x4, (ty, cl)); simpl; split...
+          simpl_In; exists (x4, ((ty, cl), false))...
+      + unfold init_var_for_clock in H5.
+        destruct (find _ _) eqn:Hfind; [destruct p | destruct (fresh_ident _ _) eqn:Hfresh];
+          inv H5; inv H10; repeat constructor; simpl; try rewrite app_nil_r.
         1,2: eapply add_whens_wt_exp; eauto; simpl.
         5,6: rewrite add_whens_typeof; eauto; simpl.
         1,6: f_equal; apply Op.type_true_const.
         2,4: f_equal; apply Op.type_false_const.
         1,2: repeat simpl_In; apply Hclock in H4; destruct cl; inv H4; simpl in *; repeat solve_incl.
         * simpl_In. apply Hclock in H4. repeat solve_incl.
-        * apply fresh_ident_st_follows in H9. apply st_follows_tys_incl in H9.
-          apply st_follows_tys_incl in H7.
-          apply in_or_app. right. apply H7. apply H9.
-          simpl...
+        * apply fresh_ident_In in Hfresh.
+          assert (incl (st_tys x3) (st_tys st')) as Hincl by repeat solve_incl.
+          apply in_or_app. right. apply Hincl.
+          unfold st_tys, idty. repeat simpl_In.
+          exists (x, (Op.bool_type, cl)); simpl; split; auto.
+          repeat simpl_In. exists (x, (Op.bool_type, cl, true)); auto.
         * inv H5.
   Qed.
 
@@ -804,13 +800,15 @@ Module Type CORRECTNESS
       + repeat solve_incl.
       + rewrite app_nil_r. rewrite Hty.
         repeat constructor.
-        unfold fresh_ident in H.
-        destruct st. inv H.
-        apply in_or_app; simpl. right. left.
-        f_equal.
+        apply fresh_ident_In in H.
+        apply in_or_app; right.
+        unfold st_tys, idty.
+        repeat simpl_In.
+        exists (x, (t, (c, o))); simpl; split; auto.
+        2: simpl_In; exists (x, ((t, (c, o)), false)); auto.
         destruct (annot e) eqn:Hannot; simpl in Hann; inv Hann. reflexivity.
         destruct e; simpl in *; inv Hannot; inv Hty; auto;
-          try destruct l2; try destruct l3; simpl in *; subst; inv H0; reflexivity.
+          try destruct l1; try destruct l2; simpl in *; subst; inv H1; reflexivity.
   Qed.
 
   Definition default_ann : ann := (Op.bool_type, (Cbase, None)).
@@ -1214,7 +1212,7 @@ Module Type CORRECTNESS
   Qed.
 
   Definition clocks_of_st (st : fresh_st (ann * bool)) : list nclock :=
-    map snd (map fst (map snd (snd st))).
+    map snd (map fst (map snd (st_anns st))).
 
   (* TODO wt_nclock *)
 
@@ -1231,7 +1229,7 @@ Module Type CORRECTNESS
       + solve_forall. destruct a as [_ [_ ck]]. unfold idty in *.
         solve_incl. repeat rewrite map_app. repeat solve_incl.
       + admit. (* wt_clocks hum... *)
-    - remember (normalize_equations _ (n_eqs n) (first_unused_ident n, [])) as res.
+    - remember (normalize_equations _ (n_eqs n) (init_st (first_unused_ident n))) as res.
       destruct res as [eqs' st']; simpl.
       symmetry in Heqres.
       eapply normalize_equations_wt_eq in Heqres; eauto.
