@@ -246,17 +246,58 @@ Module Type LSYNTAX
 
   End exp_ind2.
 
-  (** typeof *)
+  (** annots *)
 
-  Fact numstreams_length_typeof : forall e,
+  Fact length_annot_numstreams : forall e,
+      length (annot e) = numstreams e.
+  Proof.
+    destruct e; simpl; auto.
+    - destruct l0. apply map_length.
+    - destruct l1. apply map_length.
+    - destruct l1. apply map_length.
+  Qed.
+
+  (** typesof *)
+
+  Fact typeof_annot : forall e,
+      typeof e = map fst (annot e).
+  Proof.
+    destruct e; simpl; try reflexivity.
+    - destruct l0; simpl.
+      rewrite map_map; simpl.
+      symmetry. apply map_id.
+    - destruct l1; simpl.
+      rewrite map_map; simpl.
+      symmetry. apply map_id.
+    - destruct l1; simpl.
+      rewrite map_map; simpl.
+      symmetry. apply map_id.
+  Qed.
+
+  Corollary typesof_annots : forall es,
+      typesof es = map fst (annots es).
+  Proof.
+    induction es; simpl.
+    - reflexivity.
+    - rewrite map_app.
+      f_equal; auto. apply typeof_annot.
+  Qed.
+
+  Corollary length_typesof_annots : forall es,
+      length (typesof es) = length (annots es).
+  Proof.
+    intros es.
+    rewrite typesof_annots.
+    apply map_length.
+  Qed.
+
+  Fact length_typeof_numstreams : forall e,
       length (typeof e) = numstreams e.
   Proof.
-    induction e using exp_ind2; simpl; auto.
-    - rewrite map_length; auto.
-    - destruct a; auto.
-    - destruct a; auto.
-    - destruct a; auto.
-    - rewrite map_length; auto.
+    intros.
+    rewrite typeof_annot.
+    rewrite map_length.
+    apply length_annot_numstreams.
   Qed.
 
   Fact typeof_concat_typesof : forall l,
@@ -271,6 +312,32 @@ Module Type LSYNTAX
   Qed.
 
   (** clocksof *)
+
+  Fact clockof_annot : forall e,
+      clockof e = map fst (map snd (annot e)).
+  Proof.
+    destruct e; simpl; try unfold clock_of_nclock, stripname; simpl; try reflexivity.
+    - rewrite map_map. reflexivity.
+    - destruct l0; simpl.
+      repeat rewrite map_map.
+      reflexivity.
+    - destruct l1; simpl.
+      repeat rewrite map_map.
+      reflexivity.
+    - destruct l1; simpl.
+      repeat rewrite map_map.
+      reflexivity.
+    - rewrite map_map. reflexivity.
+  Qed.
+
+  Corollary clocksof_annots : forall es,
+      clocksof es = map fst (map snd (annots es)).
+  Proof.
+    induction es; simpl.
+    - reflexivity.
+    - repeat rewrite map_app.
+      f_equal; auto. apply clockof_annot.
+  Qed.
 
   Lemma In_clocksof:
     forall sck es,

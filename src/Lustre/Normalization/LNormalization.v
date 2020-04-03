@@ -17,7 +17,6 @@ Module Type LNORMALIZATION
   Declare Module Export Norm : NORMALIZATION Ids Op OpAux Syn Typ.
   Declare Module Export Correct : CORRECTNESS Ids Op OpAux Str Syn Typ Lord Sem Norm.
   Declare Module Export Complete : COMPLETENESS Ids Op OpAux Syn Typ Norm.
-
 End LNORMALIZATION.
 
 Module LNormalizationFun

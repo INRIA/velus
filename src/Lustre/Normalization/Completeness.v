@@ -609,11 +609,12 @@ Module Type COMPLETENESS
     }
     clear Heqkeep_fby.
     rewrite Forall_app. split.
-    - assert (length xs = length (typesof x)) as Hlen.
+    - assert (length xs = length (annots x)) as Hlen.
       { destruct Hwt as [Hwt1 Hwt2].
-        eapply normalize_rhss_typeof in H; eauto.
+        eapply normalize_rhss_annots in H; eauto.
         rewrite H.
-        repeat rewrite_Forall_forall. auto. } clear Hwt.
+        repeat rewrite_Forall_forall.
+        rewrite typesof_annots in H0. solve_length. } clear Hwt.
       eapply normalize_rhss_normalized_rhs in H; eauto.
       revert xs Hin Hlen.
       induction H; intros xs Hin Hlen; constructor.
@@ -622,7 +623,7 @@ Module Type COMPLETENESS
           constructor...
           specialize (Hin eq_refl). inv Hin. auto.
         * simpl in Hlen. rewrite app_length in Hlen.
-          rewrite numstreams_length_typeof in Hlen.
+          rewrite length_annot_numstreams in Hlen.
           specialize (normalized_cexp_numstreams _ H1) as Hlen'.
           rewrite Hlen' in *. simpl.
           destruct xs... simpl in Hlen. omega.
@@ -631,7 +632,7 @@ Module Type COMPLETENESS
           apply Forall_skipn...
         * rewrite skipn_length.
           rewrite Hlen. simpl. rewrite app_length.
-          rewrite numstreams_length_typeof. omega.
+          rewrite length_annot_numstreams. omega.
     - eapply normalize_rhss_normalized_eq in H; eauto.
   Qed.
 
