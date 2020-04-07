@@ -695,6 +695,18 @@ Module Type NORMALIZATION
       eapply H0; eauto.
   Qed.
 
+  Ltac simpl_nth :=
+    match goal with
+    | H : In ?x _ |- _ =>
+      apply In_nth with (d:=x) in H; destruct H as [? [? ?]]
+    | H : context c [nth _ (combine _ _) (?x1, ?x2)] |- _ =>
+      rewrite (combine_nth _ _ _ x1 x2) in H; [inv H|clear H;try solve_length]
+    | H : context c [nth _ (map _ _) _] |- _ =>
+      erewrite map_nth' in H; [|clear H; try solve_length]
+    | |- context c [nth _ (map _ _) _] =>
+      erewrite map_nth'; [| try solve_length]
+    end.
+
   Local Hint Resolve nth_In.
   Fact normalize_exp_length : forall G vars e is_control es' eqs' st st',
       wt_exp G vars e ->
@@ -1416,7 +1428,7 @@ Module Type NORMALIZATION
       normalize_equations to_cut eqs st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined eqs)++(st_ids st')).
   Proof.
-    induction eqs; intros to_cut eqs' st st' Hf Hnorm ;simpl in *; repeat inv_bind.
+    induction eqs; intros to_cut eqs' st st' Hf Hnorm; simpl in *; repeat inv_bind.
     - reflexivity.
     - inv Hf. eapply IHeqs in H0; eauto.
       eapply normalize_equation_vars_perm in H; eauto; simpl in *.
@@ -1438,7 +1450,7 @@ Module Type NORMALIZATION
   Defined.
 
   (** Normalization of a full node *)
-  Program Definition normalize_node (to_cut : PS.t) (n : node) (Hwt : exists G, wt_node G n) : node :=
+  Program Definition normalize_node (to_cut : PS.t) (n : node) (G : {G | wt_node G n}) : node :=
     let id0 := first_unused_ident n in
     let eqs := normalize_equations' (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) (init_st id0) in
     let nvars := (List.map (fun var => (fst var, (fst (fst (snd var)), (fst (snd (fst (snd var))))))) (st_anns (snd (proj1_sig eqs)))) in
@@ -1452,7 +1464,6 @@ Module Type NORMALIZATION
        n_outgt0 := (n_outgt0 n);
     |}.
   Next Obligation.
-    rename Hwt into G.
     destruct H as [_ [_ [_ Hwt]]].
     eapply normalize_equations_vars_perm with (st:=init_st (first_unused_ident n)) in Hwt. 2: eapply surjective_pairing.
     specialize (n_defd n) as Hperm'.
@@ -1501,9 +1512,7 @@ Module Type NORMALIZATION
     destruct G as [|hd tl].
     - exact [].
     - refine ((normalize_node PS.empty hd _)::(normalize_global tl _)).
-      + eapply wt_find_node with (f:=n_name hd); simpl; eauto.
-        destruct hd; simpl.
-        rewrite ident_eqb_refl. reflexivity.
+      + exists tl. inv Hwt. assumption.
       + inv Hwt; auto.
   Defined.
 End NORMALIZATION.

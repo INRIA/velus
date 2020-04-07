@@ -3280,19 +3280,19 @@ Section minmax.
   Qed.
 End minmax.
 
-  Ltac singleton_length :=
-    simpl in *;
-    let Hsingl := fresh "Hsingl" in
-    match goal with
-    | H : length ?x = 1 |- _ =>
-      destruct x eqn:Hsingl; simpl in *; try congruence
-    end;
-    let Hsingl := fresh "Hsingl" in
-    match goal with
-    | H : S (length ?x) = 1 |- _ =>
-      destruct x eqn:Hsingl; simpl in *; try congruence;
-      clear H; repeat rewrite app_nil_r in *
-    end.
+Ltac singleton_length :=
+  simpl in *;
+  let Hsingl := fresh "Hsingl" in
+  match goal with
+  | H : length ?x = 1 |- _ =>
+    destruct x eqn:Hsingl; simpl in *; try congruence
+  end;
+  let Hsingl := fresh "Hsingl" in
+  match goal with
+  | H : S (length ?x) = 1 |- _ =>
+    destruct x eqn:Hsingl; simpl in *; try congruence;
+    clear H; repeat rewrite app_nil_r in *
+  end.
 
 (* (* Induction on a triplet of lists of the same length *) *)
 (* Section list_ind3. *)

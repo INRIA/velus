@@ -481,6 +481,77 @@ Module Type LSYNTAX
     intros * Hf. now apply find_split in Hf.
   Qed.
 
+  (** Equivalence between globals *)
+
+  Section global_interface_eq.
+
+    (** Globals are equivalent if their interface are equivalent,
+        that is if they contain nodes with the same identifier and the same
+        input/output types *)
+    Definition global_eq G G' : Prop :=
+      forall f, (find_node f G = None /\ find_node f G' = None) \/
+           (exists n, exists n', find_node f G = Some n /\ find_node f G' = Some n' /\
+                     n.(n_in) = n'.(n_in) /\
+                     n.(n_out) = n'.(n_out)).
+
+    Fact global_eq_refl : Reflexive global_eq.
+    Proof.
+      intros G f.
+      destruct (find_node f G) eqn:Hfind.
+      - right. exists n. exists n. auto.
+      - left. auto.
+    Qed.
+
+    Fact global_eq_sym : Symmetric global_eq.
+    Proof.
+      intros G G' Heq f.
+      specialize (Heq f). destruct Heq.
+      - left. destruct H. auto.
+      - destruct H as [n [n' [Hfind [Hfind' [Hin Hout]]]]].
+        right. exists n'. exists n. auto.
+    Qed.
+
+    Fact global_eq_trans : Transitive global_eq.
+    Proof.
+      intros G1 G2 G3 Heq12 Heq23 f.
+      specialize (Heq12 f). specialize (Heq23 f).
+      destruct Heq12; destruct Heq23.
+      - left. destruct H; destruct H0. auto.
+      - destruct H. destruct H0 as [n [n' [? [? [? ?]]]]]. congruence.
+      - destruct H0. destruct H as [n [n' [? [? [? ?]]]]]. congruence.
+      - destruct H as [n1 [n1' [? [? [? ?]]]]].
+        destruct H0 as [n2 [n2' [? [? [? ?]]]]].
+        rewrite H0 in H1. inv H1.
+        right. exists n1. exists n2'.
+        repeat split; congruence.
+    Qed.
+
+    Global Instance global_eq_eq : Equivalence global_eq.
+    Proof.
+      constructor.
+      - exact global_eq_refl.
+      - exact global_eq_sym.
+      - exact global_eq_trans.
+    Qed.
+
+    Fact global_eq_cons : forall G G' n n',
+        global_eq G G' ->
+        n.(n_name) = n'.(n_name) ->
+        n.(n_in) = n'.(n_in) ->
+        n.(n_out) = n'.(n_out) ->
+        global_eq (n::G) (n'::G').
+    Proof.
+      intros G G' n n' Heq Hname Hin Hout f.
+      destruct (Pos.eq_dec (n_name n) f) eqn:Hname'.
+      - subst. simpl. rewrite <- Hname.
+        repeat rewrite ident_eqb_refl.
+        right. exists n. exists n'. auto.
+      - repeat rewrite find_node_tl; auto.
+        congruence.
+    Qed.
+
+  End global_interface_eq.
+
 End LSYNTAX.
 
 Module LSyntaxFun

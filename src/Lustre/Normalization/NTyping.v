@@ -170,18 +170,6 @@ Module Type NTYPING
       eapply incl_map; eauto
     end.
 
-  Ltac simpl_nth :=
-    match goal with
-    | H : In ?x _ |- _ =>
-      apply In_nth with (d:=x) in H; destruct H as [? [? ?]]
-    | H : context c [nth _ (combine _ _) (?x1, ?x2)] |- _ =>
-      rewrite (combine_nth _ _ _ x1 x2) in H; [inv H|clear H;try solve_length]
-    | H : context c [nth _ (map _ _) _] |- _ =>
-      erewrite map_nth' in H; [|clear H; try solve_length]
-    | |- context c [nth _ (map _ _) _] =>
-      erewrite map_nth'; [| try solve_length]
-    end.
-
   Hint Resolve in_combine_l in_combine_r.
   Hint Resolve incl_tl incl_appl incl_appr incl_app incl_refl.
 
@@ -1589,11 +1577,11 @@ Module Type NTYPING
       eapply normalize_equation_wt_nclock in H; eauto.
   Qed.
 
-  Lemma normalize_node_wt : forall n G Hwt to_cut n',
-      normalize_node to_cut n (ex_intro _ G Hwt) = n' ->
-      wt_node G n'.
+  Lemma normalize_node_wt : forall n G to_cut n',
+      normalize_node to_cut n G = n' ->
+      wt_node (proj1_sig G) n'.
   Proof.
-    intros n G Hwt to_cut n' Hnorm. simpl in Hwt.
+    intros n G to_cut n' Hnorm. destruct G as [G Hwt]. simpl in Hwt.
     unfold normalize_node in Hnorm. subst.
     destruct Hwt as [Hclin [Hclout [Hclvars Heq]]].
     repeat constructor; simpl; auto.
@@ -1636,6 +1624,41 @@ Module Type NTYPING
         apply incl_appr. apply incl_appl. apply incl_appr.
         repeat rewrite map_map; simpl. reflexivity.
   Qed.
+
+  Fact normalize_global_eq : forall G Hwt,
+      global_eq G (normalize_global G Hwt).
+  Proof.
+    induction G; intros Hwt.
+    - reflexivity.
+    - simpl. apply global_eq_cons; auto.
+  Qed.
+
+  Fact normalize_global_names : forall a G Hwt,
+      Forall (fun n => (n_name a <> n_name n)%type) G ->
+      Forall (fun n => (n_name a <> n_name n)%type) (normalize_global G Hwt).
+  Proof.
+    induction G; intros Hwt Hnames; simpl.
+    - constructor.
+    - inv Hnames.
+      constructor; eauto.
+  Qed.
+
+  Lemma normalize_global_wt : forall G G' (Hwt : wt_global G),
+      normalize_global G Hwt = G' ->
+      wt_global G'.
+  Proof.
+    induction G; intros G' Hwt Hnorm; simpl in Hnorm.
+    - subst. constructor.
+    - inv Hnorm. constructor.
+      + eapply IHG; eauto.
+      + remember (normalize_node _ _ _) as n'. symmetry in Heqn'.
+        eapply normalize_node_wt in Heqn'. simpl in Heqn'.
+        eapply global_eq_wt_node; eauto.
+        eapply normalize_global_eq.
+      + eapply normalize_global_names; simpl.
+        inv Hwt; eauto.
+  Qed.
+
 End NTYPING.
 
 Module NTypingFun

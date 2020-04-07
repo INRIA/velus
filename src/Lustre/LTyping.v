@@ -773,60 +773,136 @@ Module Type LTYPING
 
   (** Adding variables to the environment preserves typing *)
 
-  Fact wt_clock_incl : forall vars vars' cl,
+  Section incl.
+
+    Fact wt_clock_incl : forall vars vars' cl,
       incl vars vars' ->
       wt_clock vars cl ->
       wt_clock vars' cl.
-  Proof.
-    intros vars vars' cl Hincl Hwt.
-    induction Hwt.
-    - constructor.
-    - constructor; auto.
-  Qed.
-  Local Hint Resolve wt_clock_incl.
+    Proof.
+      intros vars vars' cl Hincl Hwt.
+      induction Hwt.
+      - constructor.
+      - constructor; auto.
+    Qed.
+    Local Hint Resolve wt_clock_incl.
 
-  Fact wt_nclock_incl : forall vars vars' cl,
-      incl vars vars' ->
-      wt_nclock vars cl ->
-      wt_nclock vars' cl.
-  Proof.
-    intros vars vars' cl Hincl Hwt.
-    destruct Hwt; constructor; eauto.
-  Qed.
-  Local Hint Resolve wt_nclock_incl.
+    Fact wt_nclock_incl : forall vars vars' cl,
+        incl vars vars' ->
+        wt_nclock vars cl ->
+        wt_nclock vars' cl.
+    Proof.
+      intros vars vars' cl Hincl Hwt.
+      destruct Hwt; constructor; eauto.
+    Qed.
+    Local Hint Resolve wt_nclock_incl.
 
-  Lemma wt_exp_incl : forall G vars vars' e,
-      incl vars vars' ->
-      wt_exp G vars e ->
-      wt_exp G vars' e.
-  Proof.
-    intros G vars vars' e Hincl Hwt.
-    induction Hwt using wt_exp_ind2;
-      econstructor; eauto.
-    - (* fby *)
-      eapply Forall_impl; [| eauto].
-      intros; eauto.
-    - (* app *)
-      eapply Forall_impl; [| eauto].
-      intros; eauto.
-    - (* app (reset) *)
-      eapply Forall_impl; [| eauto].
-      intros; eauto.
-  Qed.
+    Lemma wt_exp_incl : forall G vars vars' e,
+        incl vars vars' ->
+        wt_exp G vars e ->
+        wt_exp G vars' e.
+    Proof.
+      intros G vars vars' e Hincl Hwt.
+      induction Hwt using wt_exp_ind2;
+        econstructor; eauto.
+      - (* fby *)
+        eapply Forall_impl; [| eauto].
+        intros; eauto.
+      - (* app *)
+        eapply Forall_impl; [| eauto].
+        intros; eauto.
+      - (* app (reset) *)
+        eapply Forall_impl; [| eauto].
+        intros; eauto.
+    Qed.
 
-  Lemma wt_equation_incl : forall G vars vars' eq,
-      incl vars vars' ->
-      wt_equation G vars eq ->
-      wt_equation G vars' eq.
-  Proof.
-    intros G vars vars' eq Hincl Hwt.
-    destruct eq; simpl in *. destruct Hwt as [Hwt1 Hwt2].
-    split.
-    - eapply Forall_impl; [| eauto].
-      intros. eapply wt_exp_incl; eauto.
-    - eapply Forall2_impl_In; [| eauto].
-      intros; simpl in H1. eauto.
-  Qed.
+    Lemma wt_equation_incl : forall G vars vars' eq,
+        incl vars vars' ->
+        wt_equation G vars eq ->
+        wt_equation G vars' eq.
+    Proof.
+      intros G vars vars' eq Hincl Hwt.
+      destruct eq; simpl in *. destruct Hwt as [Hwt1 Hwt2].
+      split.
+      - eapply Forall_impl; [| eauto].
+        intros. eapply wt_exp_incl; eauto.
+      - eapply Forall2_impl_In; [| eauto].
+        intros; simpl in H1. eauto.
+    Qed.
+
+  End incl.
+
+  Section global_interface_eq.
+
+    Hint Constructors wt_exp.
+    Fact global_eq_wt_exp : forall G G' vars e,
+        global_eq G G' ->
+        wt_exp G vars e ->
+        wt_exp G' vars e.
+    Proof with eauto.
+      induction e using exp_ind2; intros Heq Hwt; inv Hwt...
+      - (* fby *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      - (* when *)
+        econstructor...
+        rewrite Forall_forall in *...
+      - (* merge *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      - (* ite *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      - (* app *)
+        assert (Forall (wt_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
+        specialize (Heq f). destruct Heq.
+        + destruct H1. congruence.
+        + destruct H1 as [? [n' [? [? [? ?]]]]].
+          rewrite H1 in H6. inv H6.
+          apply wt_Eapp with (n:=n')...
+          * congruence.
+          * congruence.
+      - (* app (reset) *)
+        assert (Forall (wt_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
+        assert (wt_exp G' vars r) as Hwt' by (rewrite Forall_forall in *; eauto).
+        specialize (Heq f). destruct Heq.
+        + destruct H1. congruence.
+        + destruct H1 as [? [n' [? [? [? ?]]]]].
+          rewrite H1 in H6. inv H6.
+          apply wt_EappReset with (n:=n')...
+          * congruence.
+          * congruence.
+    Qed.
+
+    Fact global_eq_wt_equation : forall G G' vars equ,
+        global_eq G G' ->
+        wt_equation G vars equ ->
+        wt_equation G' vars equ.
+    Proof.
+      intros G G' vars [xs es] Heq Hwt.
+      simpl in *. destruct Hwt.
+      split.
+      + rewrite Forall_forall in *. intros x Hin.
+        eapply global_eq_wt_exp; eauto.
+      + assumption.
+    Qed.
+
+    Lemma global_eq_wt_node : forall G G' n,
+        global_eq G G' ->
+        wt_node G n ->
+        wt_node G' n.
+    Proof.
+      intros G G' n Heq Hwt.
+      destruct Hwt as [? [? [? Hwt]]].
+      repeat split; auto.
+      rewrite Forall_forall in *; intros.
+      eapply global_eq_wt_equation; eauto.
+    Qed.
+
+  End global_interface_eq.
 
 End LTYPING.
 
