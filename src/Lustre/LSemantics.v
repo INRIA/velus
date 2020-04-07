@@ -143,12 +143,6 @@ Module Type LSEMANTICS
                Forall2 (sem_var H) xs (concat ss) ->
                sem_equation H b (xs, es)
 
-    with sem_equations: history -> Stream bool -> list equation -> Prop :=
-      Seqs:
-        forall H b eqs,
-          Forall (sem_equation H b) eqs ->
-          sem_equations H b eqs
-
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
       Snode:
         forall f ss os n H b,
@@ -702,6 +696,77 @@ Module Type LSEMANTICS
     + eapply Forall_forall; intros * Hin.
       eapply Forall_forall in H3; eauto.
       now rewrite <-Exss.
+  Qed.
+
+  Ltac rewrite_Forall_forall :=
+    match goal with
+    | H : Forall _ _ |- _ =>
+      rewrite Forall_forall in H
+    | H : Forall2 _ _ _ |- _ =>
+      rewrite Forall2_forall2 in H; destruct H
+    | H : Forall3 _ _ _ _ |- _ =>
+      rewrite Forall3_forall3 in H; destruct H as [? [? ?]]
+    | |- Forall _ _ =>
+      rewrite Forall_forall; intros; subst
+    | |- Forall2 _ _ _ =>
+      rewrite Forall2_forall2; repeat split; auto; intros; subst
+    | |- Forall3 _ _ _ _ =>
+      rewrite Forall3_forall3; repeat split; auto; intros; subst
+    end.
+
+  Fact sem_var_refines : forall H H' id v,
+      Env.refines eq H H' ->
+      sem_var H id v ->
+      sem_var H' id v.
+  Proof.
+    intros H H' id v Href Hsem.
+    destruct Hsem.
+    econstructor; eauto.
+    apply Env.find_1 in H0.
+    apply Href in H0. destruct H0 as [? [? Hfind]]; subst.
+    apply Env.find_2; auto.
+  Qed.
+
+  Hint Resolve nth_In.
+  Fact sem_exp_refines : forall G b e H H' v,
+      Env.refines eq H H' ->
+      sem_exp G H b e v ->
+      sem_exp G H' b e v.
+  Proof with eauto.
+    induction e using exp_ind2; intros Hi Hi' v Href Hsem; inv Hsem.
+    - (* const *) constructor...
+    - (* var *)
+      constructor. eapply sem_var_refines...
+    - (* unop *) econstructor...
+    - (* binop *) econstructor...
+    - (* fby *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+    - (* when *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+      eapply sem_var_refines...
+    - (* merge *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+      eapply sem_var_refines...
+    - (* ite *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+    - (* app *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+    - (* app (reset) *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+  Qed.
+
+  Fact sem_equation_refines : forall G H H' b equ,
+      Env.refines eq H H' ->
+      sem_equation G H b equ ->
+      sem_equation G H' b equ.
+  Proof with eauto.
+    intros G H H' b eq Href Hsem.
+    destruct Hsem.
+    econstructor.
+    + eapply Forall2_impl_In; [| eauto].
+      intros. eapply sem_exp_refines...
+    + eapply Forall2_impl_In; [| eauto].
+      intros. eapply sem_var_refines...
   Qed.
 
 End LSEMANTICS.

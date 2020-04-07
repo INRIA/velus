@@ -1007,6 +1007,57 @@ Module Type NORMALIZATION
       f_equal; auto.
   Qed.
 
+  Fact normalize_exp_numstreams : forall e is_control es' eqs' st st',
+      normalize_exp is_control e st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) es'.
+  Proof.
+    intros e is_control es' eqs' st st' Hnorm.
+    induction e; simpl in Hnorm; repeat inv_bind; repeat constructor.
+    2: destruct l0.
+    3,4: destruct l1.
+    3,4: destruct is_control.
+    1,2,3,4,5,6,7:(repeat inv_bind; rewrite Forall_forall; intros ? Hin;
+                   repeat simpl_In; reflexivity).
+  Qed.
+
+  Corollary map_bind2_normalize_exp_numstreams : forall es is_control es' eqs' st st',
+      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) (concat es').
+  Proof.
+    intros es is_control es' eqs' st st' Hmap.
+    apply map_bind2_values in Hmap.
+    induction Hmap; simpl.
+    - constructor.
+    - apply Forall_app; split; auto.
+      destruct H as [? [? H]].
+      eapply normalize_exp_numstreams; eauto.
+  Qed.
+
+  Corollary normalize_exps_numstreams : forall es es' eqs' st st',
+      normalize_exps es st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) es'.
+  Proof.
+    intros es es' eqs' st st' Hnorm.
+    unfold normalize_exps in Hnorm. repeat inv_bind.
+    eapply map_bind2_normalize_exp_numstreams. eauto.
+  Qed.
+
+  Fact normalize_fby_numstreams : forall e0s es anns es' eqs' st st',
+      normalize_fby e0s es anns st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) es'.
+  Proof.
+    intros e0s es anns es' eqs' st st' Hnorm.
+    unfold normalize_fby in Hnorm. repeat inv_bind.
+    apply map_bind2_values in H.
+    repeat rewrite_Forall_forall.
+    eapply In_nth with (d:=x) in H2; destruct H2 as [n [? ?]].
+    repeat simpl_length.
+    specialize (H1 (x, x, (Op.bool_type, (Cbase, None))) x [] _ _ _ _ H2 eq_refl eq_refl eq_refl).
+    destruct H1 as [st'' [st''' H1]]. destruct (nth _ _ _) as [[e0 e] [ty cl]]. rewrite <- H3.
+    specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
+      rewrite Hspec in H1; clear Hspec; repeat inv_bind; reflexivity.
+  Qed.
+
   (** ** Propagation of the variable permutation property *)
 
   Fact idents_for_anns_vars_perm : forall anns ids st st',

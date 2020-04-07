@@ -34,7 +34,7 @@ Ltac cases_eqn E :=
    https://stackoverflow.com/a/55998007/
 
    E.g.,
-      take (_ /\ _) and destruct it as (P1 & P2).
+      take (_ /\ _) and destruct it as (P1 & P2)
       take (sem _ _ _) and inversion it.
       take (_ \/ _) and rename it into HD.
  *)

@@ -7,10 +7,10 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
-(** * Correctness of the Normalization *)
+(** * Preservation of Typing through Normalization *)
 
 Local Set Warnings "-masking-absolute-name".
 Module Type NTYPING
@@ -116,6 +116,8 @@ Module Type NTYPING
     repeat rewrite typesof_annots. congruence.
   Qed.
 
+  (** ** A few additional tactics *)
+
   Definition st_tys (st : fresh_st (ann * bool)) := idty (idty (st_anns st)).
 
   Fact st_anns_tys_In : forall st id ty,
@@ -143,8 +145,6 @@ Module Type NTYPING
     assumption.
   Qed.
 
-  (** ** A few additional tactics *)
-
   Ltac solve_incl :=
     match goal with
     | H : wt_clock ?l1 ?cl |- wt_clock ?l2 ?cl =>
@@ -170,20 +170,6 @@ Module Type NTYPING
       eapply incl_map; eauto
     end.
 
-  Ltac singleton_length :=
-    simpl in *;
-    let Hsingl := fresh "Hsingl" in
-    match goal with
-    | H : length ?x = 1 |- _ =>
-      destruct x eqn:Hsingl; simpl in *; try congruence
-    end;
-    let Hsingl := fresh "Hsingl" in
-    match goal with
-    | H : S (length ?x) = 1 |- _ =>
-      destruct x eqn:Hsingl; simpl in *; try congruence;
-      clear H
-    end.
-
   Ltac simpl_nth :=
     match goal with
     | H : In ?x _ |- _ =>
@@ -198,57 +184,6 @@ Module Type NTYPING
 
   Hint Resolve in_combine_l in_combine_r.
   Hint Resolve incl_tl incl_appl incl_appr incl_app incl_refl.
-
-  Fact normalize_exp_numstreams : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) es'.
-  Proof.
-    intros e is_control es' eqs' st st' Hnorm.
-    induction e; simpl in Hnorm; repeat inv_bind; repeat constructor.
-    2: destruct l0.
-    3,4: destruct l1.
-    3,4: destruct is_control.
-    1,2,3,4,5,6,7:(repeat inv_bind; rewrite Forall_forall; intros ? Hin;
-                   repeat simpl_In; reflexivity).
-  Qed.
-
-  Corollary map_bind2_normalize_exp_numstreams : forall es is_control es' eqs' st st',
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) (concat es').
-  Proof.
-    intros es is_control es' eqs' st st' Hmap.
-    apply map_bind2_values in Hmap.
-    induction Hmap; simpl.
-    - constructor.
-    - apply Forall_app; split; auto.
-      destruct H as [? [? H]].
-      eapply normalize_exp_numstreams; eauto.
-  Qed.
-
-  Corollary normalize_exps_numstreams : forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) es'.
-  Proof.
-    intros es es' eqs' st st' Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
-    eapply map_bind2_normalize_exp_numstreams. eauto.
-  Qed.
-
-  Fact normalize_fby_numstreams : forall e0s es anns es' eqs' st st',
-      normalize_fby e0s es anns st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) es'.
-  Proof.
-    intros e0s es anns es' eqs' st st' Hnorm.
-    unfold normalize_fby in Hnorm. repeat inv_bind.
-    apply map_bind2_values in H.
-    repeat rewrite_Forall_forall.
-    eapply In_nth with (d:=x) in H2; destruct H2 as [n [? ?]].
-    repeat simpl_length.
-    specialize (H1 (x, x, (Op.bool_type, (Cbase, None))) x [] _ _ _ _ H2 eq_refl eq_refl eq_refl).
-    destruct H1 as [st'' [st''' H1]]. destruct (nth _ _ _) as [[e0 e] [ty cl]]. rewrite <- H3.
-    specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-      rewrite Hspec in H1; clear Hspec; repeat inv_bind; reflexivity.
-  Qed.
 
   (** ** Preservation of wt *)
 
@@ -1145,8 +1080,7 @@ Module Type NTYPING
                 specialize (normalize_exp_length _ _ _ _ _ _ _ _ H5 H1) as Hlength.
                 rewrite <- length_typeof_numstreams in Hlength. rewrite H8 in Hlength; simpl in Hlength.
                 eapply normalize_exp_typeof in H1...
-                repeat singleton_length.
-                rewrite app_nil_r in H1. congruence.
+                repeat singleton_length. congruence.
              ++ rewrite app_nil_r.
                 specialize (map_bind2_normalize_exp_numstreams _ _ _ _ _ _ H2) as Hnumstreams.
                 eapply map_bind2_normalize_exp_typesof in H2; [| rewrite Forall_forall in *; intros; auto].
@@ -1567,7 +1501,7 @@ Module Type NTYPING
       assert (length x2 = 1).
       { rewrite Hlength. rewrite <- length_annot_numstreams.
         rewrite typeof_annot in H11. erewrite <- map_length. rewrite H11. reflexivity. }
-      repeat singleton_length. rewrite app_nil_r in Hannot.
+      repeat singleton_length.
       rewrite clockof_annot. rewrite Hannot. rewrite <- clockof_annot. assumption.
   Qed.
 
@@ -1613,7 +1547,7 @@ Module Type NTYPING
       assert (length x4 = 1).
       { rewrite Hlength. rewrite typeof_annot in H9. rewrite <- length_annot_numstreams.
         erewrite <- map_length. rewrite H9. reflexivity. }
-      repeat singleton_length. rewrite app_nil_r in Hannot.
+      repeat singleton_length.
       rewrite clockof_annot. rewrite Hannot. rewrite <- clockof_annot.
       eapply wt_exp_clockof in H8. assumption.
   Qed.
