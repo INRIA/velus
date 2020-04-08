@@ -308,6 +308,17 @@ Section Extra.
     intros * Hxs. destruct xs; inv Hxs. now constructor.
   Qed.
 
+  Lemma split_map_fst {B} : forall (l : list (A * B)),
+      fst (split l) = map fst l.
+  Proof.
+    intros l.
+    induction l; simpl.
+    - reflexivity.
+    - destruct a; simpl.
+      destruct (split l); simpl in *.
+      f_equal. auto.
+  Qed.
+
 End Extra.
 
 Section find.
@@ -1837,6 +1848,14 @@ Section Forall2.
   Lemma Forall2_combine:
     forall P (xs: list A) (ys: list B),
       Forall2 P xs ys -> Forall (fun x => P (fst x) (snd x)) (combine xs ys).
+  Proof.
+    intros P xs ys Hfa2.
+    induction Hfa2; now constructor.
+  Qed.
+
+  Lemma Forall2_combine':
+    forall P (xs : list A) (ys : list B),
+      Forall2 (fun x y => P (x, y)) xs ys -> Forall P (combine xs ys).
   Proof.
     intros P xs ys Hfa2.
     induction Hfa2; now constructor.

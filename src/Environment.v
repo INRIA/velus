@@ -1215,6 +1215,36 @@ Module Env.
     typeclasses eauto.
   Qed.
 
+  Section RefinesAdds.
+    Context {V : Type}.
+
+    Fact refines_adds' : forall (xs : list (ident * V)) H H',
+        refines eq H H' ->
+        refines eq (adds' xs H) (adds' xs H').
+    Proof.
+      induction xs; intros H H' Href; simpl.
+      - assumption.
+      - destruct a.
+        eapply IHxs.
+        apply refines_add_both; auto.
+    Qed.
+
+    Lemma refines_adds : forall ids (vs : list V) H,
+        Forall (fun id => ~In id H) ids ->
+        refines eq H (adds ids vs H).
+    Proof.
+      induction ids; intros vs H Hnin; inv Hnin.
+      - unfold adds. reflexivity.
+      - unfold adds in *.
+        destruct vs; simpl.
+        + reflexivity.
+        + etransitivity.
+          * apply IHids; auto.
+          * eapply refines_adds'.
+            apply refines_add; auto.
+    Qed.
+  End RefinesAdds.
+
   Lemma In_add1 {A : Type}:
     forall x (v : A) env,
       In x (add x v env).
@@ -1290,6 +1320,15 @@ Module Env.
       - now setoid_rewrite (perm_swap x).
       - now setoid_rewrite Pxs1; setoid_rewrite Pxs2.
       - now setoid_rewrite Pxs1; setoid_rewrite Pxs2.
+    Qed.
+
+    Corollary dom_Permutation : forall d l1 l2,
+        Permutation l1 l2 ->
+        dom d l1 <-> dom d l2.
+    Proof.
+      intros d l1 l2 Hperm.
+      apply dom_Equiv_Permutation with (E:=eq); auto.
+      reflexivity.
     Qed.
 
     Lemma dom_equal_empty:
@@ -1389,6 +1428,52 @@ Module Env.
       split; intros (H1 & H2); split; auto.
       now apply nequiv_decb_true.
   Qed.
+
+  Section DomAdds.
+
+    Context { V : Type }.
+
+    Fact dom_adds' : forall (xs : list (ident * V)) H d,
+        dom H d ->
+        dom (adds' xs H) ((List.map fst xs)++d).
+    Proof.
+      induction xs; intros H d Hdom.
+      - simpl. assumption.
+      - destruct a; simpl.
+        apply dom_add_cons with (x:=i) (v0:=v) in Hdom.
+        apply IHxs in Hdom.
+        erewrite dom_Permutation; [eauto|].
+        apply Permutation.Permutation_middle.
+    Qed.
+
+    Lemma dom_adds : forall ids (vs : list V) H d,
+        length ids = length vs ->
+        dom H d ->
+        dom (adds ids vs H) (ids++d).
+    Proof.
+      intros.
+      unfold adds.
+      apply dom_adds' with (xs:=(combine ids vs)) in H1.
+      rewrite combine_map_fst' in H1; auto.
+    Qed.
+
+    Lemma adds_MapsTo : forall ids (vs : list V) H n d d',
+        length ids = length vs ->
+        n < length ids ->
+        NoDup ids ->
+        Env.MapsTo (nth n ids d) (nth n vs d') (Env.adds ids vs H).
+    Proof.
+      induction ids; intros vs H n d d' Hlen Hn Hndup.
+      - unfold adds; simpl in *; try omega.
+      - destruct vs; simpl in *; try congruence.
+        inv Hndup.
+        destruct n.
+        + unfold MapsTo in *.
+          apply find_gsss; auto.
+        + eapply IHids; eauto.
+          omega.
+    Qed.
+  End DomAdds.
 
   (** Notations *)
 
