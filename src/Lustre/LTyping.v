@@ -836,7 +836,7 @@ Module Type LTYPING
 
     Hint Constructors wt_exp.
     Fact global_eq_wt_exp : forall G G' vars e,
-        global_eq G G' ->
+        global_iface_eq G G' ->
         wt_exp G vars e ->
         wt_exp G' vars e.
     Proof with eauto.
@@ -858,27 +858,31 @@ Module Type LTYPING
         + rewrite Forall_forall in *...
       - (* app *)
         assert (Forall (wt_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
-        specialize (Heq f). destruct Heq.
-        + destruct H1. congruence.
-        + destruct H1 as [? [n' [? [? [? ?]]]]].
-          rewrite H1 in H6. inv H6.
-          apply wt_Eapp with (n:=n')...
+        specialize (Heq f).
+        remember (find_node f G') as find.
+        destruct Heq.
+        + congruence.
+        + inv H6.
+          destruct H1 as [? [? [? ?]]].
+          apply wt_Eapp with (n:=sy)...
           * congruence.
           * congruence.
       - (* app (reset) *)
         assert (Forall (wt_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
         assert (wt_exp G' vars r) as Hwt' by (rewrite Forall_forall in *; eauto).
-        specialize (Heq f). destruct Heq.
-        + destruct H1. congruence.
-        + destruct H1 as [? [n' [? [? [? ?]]]]].
-          rewrite H1 in H6. inv H6.
-          apply wt_EappReset with (n:=n')...
+        specialize (Heq f).
+        remember (find_node f G') as find.
+        destruct Heq.
+        + congruence.
+        + inv H6.
+          destruct H1 as [? [? [? ?]]].
+          apply wt_EappReset with (n:=sy)...
           * congruence.
           * congruence.
     Qed.
 
     Fact global_eq_wt_equation : forall G G' vars equ,
-        global_eq G G' ->
+        global_iface_eq G G' ->
         wt_equation G vars equ ->
         wt_equation G' vars equ.
     Proof.
@@ -891,7 +895,7 @@ Module Type LTYPING
     Qed.
 
     Lemma global_eq_wt_node : forall G G' n,
-        global_eq G G' ->
+        global_iface_eq G G' ->
         wt_node G n ->
         wt_node G' n.
     Proof.

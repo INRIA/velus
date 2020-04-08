@@ -485,67 +485,88 @@ Module Type LSYNTAX
 
   Section global_interface_eq.
 
-    (** Globals are equivalent if their interface are equivalent,
-        that is if they contain nodes with the same identifier and the same
+    (** Nodes are equivalent if their interface are equivalent,
+        that is if they have the same identifier and the same
         input/output types *)
-    Definition global_eq G G' : Prop :=
-      forall f, (find_node f G = None /\ find_node f G' = None) \/
-           (exists n, exists n', find_node f G = Some n /\ find_node f G' = Some n' /\
-                     n.(n_in) = n'.(n_in) /\
-                     n.(n_out) = n'.(n_out)).
+    Definition node_iface_eq n n' : Prop :=
+      n.(n_name) = n'.(n_name) /\
+      n.(n_hasstate) = n'.(n_hasstate) /\
+      n.(n_in) = n'.(n_in) /\
+      n.(n_out) = n'.(n_out).
 
-    Fact global_eq_refl : Reflexive global_eq.
+    Fact node_iface_eq_refl : Reflexive node_iface_eq.
     Proof.
-      intros G f.
-      destruct (find_node f G) eqn:Hfind.
-      - right. exists n. exists n. auto.
-      - left. auto.
+      intros n. repeat split.
     Qed.
 
-    Fact global_eq_sym : Symmetric global_eq.
+    Fact node_iface_eq_sym : Symmetric node_iface_eq.
+    Proof.
+      intros n n' H.
+      destruct H as [? [? [? ?]]].
+      repeat split; symmetry; assumption.
+    Qed.
+
+    Fact node_iface_eq_trans : Transitive node_iface_eq.
+    Proof.
+      intros n1 n2 n3 H12 H23.
+      destruct H12 as [? [? [? ?]]].
+      destruct H23 as [? [? [? ?]]].
+      repeat split; etransitivity; eauto.
+    Qed.
+
+    Global Instance node_iface_eq_eq : Equivalence node_iface_eq.
+    Proof.
+      constructor.
+      - exact node_iface_eq_refl.
+      - exact node_iface_eq_sym.
+      - exact node_iface_eq_trans.
+    Qed.
+
+    (** Globals are equivalent if they contain equivalent nodes *)
+    Definition global_iface_eq G G' : Prop :=
+      forall f, orel node_iface_eq (find_node f G) (find_node f G').
+
+    Fact global_eq_refl : Reflexive global_iface_eq.
+    Proof.
+      intros G f. reflexivity.
+    Qed.
+
+    Fact global_eq_sym : Symmetric global_iface_eq.
     Proof.
       intros G G' Heq f.
-      specialize (Heq f). destruct Heq.
-      - left. destruct H. auto.
-      - destruct H as [n [n' [Hfind [Hfind' [Hin Hout]]]]].
-        right. exists n'. exists n. auto.
+      specialize (Heq f).
+      symmetry. assumption.
     Qed.
 
-    Fact global_eq_trans : Transitive global_eq.
+    Fact global_eq_trans : Transitive global_iface_eq.
     Proof.
       intros G1 G2 G3 Heq12 Heq23 f.
       specialize (Heq12 f). specialize (Heq23 f).
-      destruct Heq12; destruct Heq23.
-      - left. destruct H; destruct H0. auto.
-      - destruct H. destruct H0 as [n [n' [? [? [? ?]]]]]. congruence.
-      - destruct H0. destruct H as [n [n' [? [? [? ?]]]]]. congruence.
-      - destruct H as [n1 [n1' [? [? [? ?]]]]].
-        destruct H0 as [n2 [n2' [? [? [? ?]]]]].
-        rewrite H0 in H1. inv H1.
-        right. exists n1. exists n2'.
-        repeat split; congruence.
+      etransitivity; eauto.
     Qed.
 
-    Global Instance global_eq_eq : Equivalence global_eq.
+    Global Instance global_iface_eq_eq : Equivalence global_iface_eq.
     Proof.
+      unfold global_iface_eq.
       constructor.
       - exact global_eq_refl.
       - exact global_eq_sym.
       - exact global_eq_trans.
     Qed.
 
-    Fact global_eq_cons : forall G G' n n',
-        global_eq G G' ->
+    Fact global_iface_eq_cons : forall G G' n n',
+        global_iface_eq G G' ->
         n.(n_name) = n'.(n_name) ->
+        n.(n_hasstate) = n'.(n_hasstate) ->
         n.(n_in) = n'.(n_in) ->
         n.(n_out) = n'.(n_out) ->
-        global_eq (n::G) (n'::G').
+        global_iface_eq (n::G) (n'::G').
     Proof.
-      intros G G' n n' Heq Hname Hin Hout f.
+      intros G G' n n' Heq Hname Hstate Hin Hout f.
       destruct (Pos.eq_dec (n_name n) f) eqn:Hname'.
       - subst. simpl. rewrite <- Hname.
         repeat rewrite ident_eqb_refl.
-        right. exists n. exists n'. auto.
+        right. repeat split; auto.
       - repeat rewrite find_node_tl; auto.
         congruence.
     Qed.

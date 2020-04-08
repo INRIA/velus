@@ -86,7 +86,7 @@ Module Type NORMALIZATION
   (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
       just return the variable *)
   Definition init_var_for_clock (cl : nclock) : FreshAnn (ident * list equation) :=
-    fun st => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (ty ==b Op.bool_type) && (cl ==b cl')) (st_anns st)) with
+    fun st => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (cl ==b cl') && (ty ==b Op.bool_type)) (st_anns st)) with
            | Some (x, _) => ((x, []), st)
            | None => let (x, st') := fresh_ident ((bool_type, cl), true) st in
                     ((x, [([x], [Efby [add_whens (Econst true_const) bool_type (fst cl)]
@@ -241,6 +241,10 @@ Module Type NORMALIZATION
                 do eqs2 <- normalize_equations to_cut tl;
                 ret (eqs1++eqs2)
     end.
+
+  (** ** Some additional tactics *)
+
+  Definition default_ann : ann := (Op.bool_type, (Cbase, None)).
 
   Ltac solve_forall :=
     match goal with

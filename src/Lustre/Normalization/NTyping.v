@@ -299,7 +299,7 @@ Module Type NTYPING
           -- destruct p. inv H1.
              apply find_some in Hfind; destruct Hfind as [Hfind1 Hfind2].
              destruct p as [[? ?] ?].
-             repeat rewrite Bool.andb_true_iff in Hfind2. destruct Hfind2 as [[_ Hfind2] _].
+             repeat rewrite Bool.andb_true_iff in Hfind2. destruct Hfind2 as [_ Hfind2].
              rewrite equiv_decb_equiv in Hfind2.
              assert (incl (st_tys x2) (vars++(st_tys st'))) as Hincl by repeat solve_incl.
              apply Hincl. repeat unfold st_tys, idty; repeat simpl_In.
@@ -1626,11 +1626,11 @@ Module Type NTYPING
   Qed.
 
   Fact normalize_global_eq : forall G Hwt,
-      global_eq G (normalize_global G Hwt).
+      global_iface_eq G (normalize_global G Hwt).
   Proof.
     induction G; intros Hwt.
     - reflexivity.
-    - simpl. apply global_eq_cons; auto.
+    - simpl. apply global_iface_eq_cons; auto.
   Qed.
 
   Fact normalize_global_names : forall a G Hwt,

@@ -1698,7 +1698,7 @@ End SkipnDropn.
 
 Section Forall2.
 
-  Context {A B : Type}.
+  Context {A B C : Type}.
 
   Open Scope bool_scope.
 
@@ -1840,6 +1840,32 @@ Section Forall2.
   Proof.
     intros P xs ys Hfa2.
     induction Hfa2; now constructor.
+  Qed.
+
+  Lemma Forall2_combine_ll: forall P (xs : list A) (ys : list B) (zs : list C),
+      Forall2 P xs ys ->
+      length zs = length xs ->
+      Forall2 (fun '(_, x) y => P x y) (combine zs xs) ys.
+  Proof.
+    intros P xs ys zs Hf. revert zs.
+    induction Hf; intros zs Hlen; simpl in *.
+    - destruct zs; simpl in *; try congruence.
+      constructor.
+    - destruct zs; simpl in *; try congruence.
+      constructor; auto.
+  Qed.
+
+  Lemma Forall2_combine_lr: forall P (xs : list A) (ys : list B) (zs : list C),
+      Forall2 P xs ys ->
+      length zs = length xs ->
+      Forall2 (fun '(x, _) y => P x y) (combine xs zs) ys.
+  Proof.
+    intros P xs ys zs Hf. revert zs.
+    induction Hf; intros zs Hlen; simpl in *.
+    - destruct zs; simpl in *; try congruence.
+      constructor.
+    - destruct zs; simpl in *; try congruence.
+      constructor; auto.
   Qed.
 
   Lemma Forall2_same:
