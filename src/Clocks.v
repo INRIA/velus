@@ -74,6 +74,12 @@ Proof.
     + left. reflexivity.
 Qed.
 
+Lemma nclock_eqb_eq :
+  forall (x y: nclock), x ==b y = true <-> x = y.
+Proof.
+  setoid_rewrite equiv_decb_equiv; reflexivity.
+Qed.
+
 Lemma clock_not_in_clock:
   forall ck x b,
     ~(ck = Con ck x b).

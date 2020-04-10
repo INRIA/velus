@@ -93,9 +93,6 @@ Module Type NORMALIZATION
                                       [add_whens (Econst false_const) bool_type (fst cl)]
                                       [(bool_type, cl)]])]), st')
            end.
-    (* ret (x, [([x], [Efby [add_whens (Econst true_const) bool_type (fst cl)] *)
-    (*                      [add_whens (Econst false_const) bool_type (fst cl)] *)
-    (*                      [(bool_type, cl)]])]). *)
 
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
   Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
@@ -220,14 +217,16 @@ Module Type NORMALIZATION
   Definition normalize_rhss (keep_fby : bool) (es : list exp) :=
     do (es, eqs) <- map_bind2 (normalize_rhs keep_fby) es; ret (concat es, concat eqs).
 
+  Fixpoint combine_for_numstreams {B} (es : list exp) (vs : list B) :=
+    match es with
+    | [] => []
+    | hd::tl => let n := numstreams hd in
+                (hd, (firstn n vs))::(combine_for_numstreams tl (skipn n vs))
+    end.
+
   Definition split_equation (eq : equation) : list equation :=
     let (xs, es) := eq in
-    (fix aux (xs : list ident) (es : list exp) :=
-       match es with
-       | [] => []
-       | hd::tl => let n := numstreams hd in
-                  ((firstn n xs), [hd])::(aux (skipn n xs) tl)
-       end) xs es.
+    List.map (fun '(e, xs) => (xs, [e])) (combine_for_numstreams es xs).
 
   Definition normalize_equation (to_cut : PS.t) (e : equation) : FreshAnn (list equation) :=
     let '(xs, es) := e in
@@ -296,6 +295,17 @@ Module Type NORMALIZATION
   Qed.
   Hint Resolve init_var_for_clock_st_valid.
 
+  Fact fby_iteexp_st_valid : forall e0 e a e' eqs' st st',
+      fby_iteexp e0 e a st = (e', eqs', st') ->
+      fresh_st_valid st ->
+      fresh_st_valid st'.
+  Proof with eauto.
+    intros e0 e [ty cl] e' eqs' st st' Hfby Hvalid.
+    destruct (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
+      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind...
+  Qed.
+  Hint Resolve fby_iteexp_st_valid.
+
   Fact normalize_fby_st_valid : forall inits es anns res st st',
       normalize_fby inits es anns st = (res, st') ->
       fresh_st_valid st ->
@@ -307,11 +317,7 @@ Module Type NORMALIZATION
     eapply map_bind2_st_valid; eauto.
     apply Forall_forall.
     intros [[i e] [ty cl]] HIn e' eq' st1 st1' Hfby Hst1.
-    destruct (fby_iteexp_spec i e ty cl) as [[c [Hite1 Hite2]]|Hite]; subst.
-    - rewrite Hite2 in Hfby; clear Hite2.
-      repeat inv_bind...
-    - rewrite Hite in Hfby.
-      repeat inv_bind...
+    eapply fby_iteexp_st_valid...
   Qed.
   Hint Resolve normalize_fby_st_valid.
 

@@ -369,6 +369,22 @@ Module Facts.
       unfold st_ids in *. rewrite H.
       reflexivity.
     Qed.
+
+    Fact fresh_ident_nIn : forall (b : B) id st st',
+        fresh_st_valid st ->
+        fresh_ident b st = (id, st') ->
+        ~List.In id (st_ids st).
+    Proof.
+      intros b id st st' Hvalid Hfresh.
+      eapply fresh_ident_st_valid in Hvalid; eauto.
+      apply st_valid_NoDupMembers in Hvalid.
+      apply fresh_ident_vars_perm in Hfresh.
+      unfold st_ids in *.
+      rewrite fst_NoDupMembers in Hvalid.
+      rewrite <- Hfresh in Hvalid. inv Hvalid.
+      assumption.
+    Qed.
+
   End fresh_ident.
 End Facts.
 

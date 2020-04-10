@@ -819,6 +819,22 @@ Section ConcatMap.
         eapply IHl; eauto. omega.
   Qed.
 
+  Fact concat_map_singl1 : forall (l : list A),
+    (concat (map (fun x => [x]) l)) = l.
+  Proof.
+    induction l; simpl; auto.
+    f_equal. assumption.
+  Qed.
+
+  Fact concat_map_singl2 : forall (l : list (list A)),
+    (concat (concat (List.map (fun x => List.map (fun x => [x]) x) l))) = (concat l).
+  Proof.
+    induction l; simpl; auto.
+    rewrite concat_app.
+    rewrite IHl; clear IHl.
+    f_equal. apply concat_map_singl1.
+  Qed.
+
 End ConcatMap.
 
 Section FoldLeft2.

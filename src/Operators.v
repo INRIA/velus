@@ -217,6 +217,13 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     destruct (x ==b y); auto.
   Qed.
 
+
+  Lemma type_eqb_eq:
+    forall (x y: type), x ==b y = true <-> x = y.
+  Proof.
+    setoid_rewrite equiv_decb_equiv; reflexivity.
+  Qed.
+
 End OPERATORS_AUX.
 
 Module OperatorsAux (Import Ops : OPERATORS) <: OPERATORS_AUX Ops.
