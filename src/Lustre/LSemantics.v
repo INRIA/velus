@@ -714,6 +714,7 @@ Module Type LSEMANTICS
       rewrite Forall3_forall3; repeat split; auto; intros; subst
     end.
 
+  (** ** Preservation of the semantics while refining an environment *)
   Fact sem_var_refines : forall H H' id v,
       Env.refines eq H H' ->
       sem_var H id v ->

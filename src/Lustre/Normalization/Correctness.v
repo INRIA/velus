@@ -29,6 +29,9 @@ Module Type CORRECTNESS
   Module Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Import Typ.
 
+  CoFixpoint default_stream : Stream OpAux.value :=
+    Cons OpAux.absent default_stream.
+
   Fact sem_exp_numstreams : forall G vars H b e v,
       wt_exp G vars e ->
       sem_exp G H b e v ->
@@ -690,7 +693,7 @@ Module Type CORRECTNESS
            destruct (nth _ x8 _) eqn:Hnth1.
            econstructor.
            ++ repeat constructor.
-              specialize (H0 b0 (Str.const b Op.false_const) _ _ _ H22 eq_refl eq_refl).
+              specialize (H0 b0 default_stream _ _ _ H22 eq_refl eq_refl).
               eapply sem_exp_refines...
            ++ simpl. repeat constructor.
               econstructor.
@@ -917,13 +920,13 @@ Module Type CORRECTNESS
              apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))).
              ++ apply Forall2_concat.
                 repeat rewrite_Forall_forall; solve_length;
-                  specialize (H3 a0 (List.map (fun _ => (Str.const b (Op.false_const))) b0) _ _ _ H13 eq_refl eq_refl);
+                  specialize (H3 a0 (List.map (fun _ => default_stream) b0) _ _ _ H13 eq_refl eq_refl);
                   repeat rewrite_Forall_forall; simpl_length.
                 ** rewrite <- map_nth.
                    rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length.
                    repeat rewrite map_map.
                    apply map_ext_in. intros; solve_length.
-                ** specialize (H16 a1 (Str.const b (Op.false_const)) _ _ _ H15 eq_refl eq_refl).
+                ** specialize (H16 a1 default_stream _ _ _ H15 eq_refl eq_refl).
                    repeat simpl_nth; [| eassumption].
                    eapply sem_exp_refines...
              ++ rewrite concat_map_singl2. assumption.
@@ -981,13 +984,13 @@ Module Type CORRECTNESS
              apply Sreset with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs)...
              ++ apply Forall2_concat.
                 repeat rewrite_Forall_forall; solve_length;
-                  specialize (H1 a0 (List.map (fun _ => (Str.const b (Op.false_const))) b0) _ _ _ H15 eq_refl eq_refl);
+                  specialize (H1 a0 (List.map (fun _ => default_stream) b0) _ _ _ H15 eq_refl eq_refl);
                   repeat rewrite_Forall_forall; simpl_length.
                 ** rewrite <- map_nth.
                    rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length.
                    repeat rewrite map_map.
                    apply map_ext_in. intros; solve_length.
-                ** specialize (H20 a1 (Str.const b (Op.false_const)) _ _ _ H16 eq_refl eq_refl).
+                ** specialize (H20 a1 default_stream _ _ _ H16 eq_refl eq_refl).
                    repeat simpl_nth; [| eassumption].
                    eapply sem_exp_refines...
              ++ eapply sem_exp_refines; [| eauto]. etransitivity...
@@ -1078,13 +1081,13 @@ Module Type CORRECTNESS
       apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))).
       * apply Forall2_concat.
         repeat rewrite_Forall_forall; solve_length;
-          specialize (H1 a (List.map (fun _ => (Str.const b (Op.false_const))) b0) _ _ _ H11 eq_refl eq_refl);
+          specialize (H1 a (List.map (fun _ => default_stream) b0) _ _ _ H11 eq_refl eq_refl);
           repeat rewrite_Forall_forall; simpl_length.
         -- rewrite <- map_nth.
            rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length.
            repeat rewrite map_map.
            apply map_ext_in. intros; solve_length.
-        -- specialize (H14 a0 (Str.const b (Op.false_const)) _ _ _ H12 eq_refl eq_refl).
+        -- specialize (H14 a0 default_stream _ _ _ H12 eq_refl eq_refl).
            repeat simpl_nth; [| eassumption].
            eauto.
       * rewrite concat_map_singl2. assumption.
@@ -1108,13 +1111,13 @@ Module Type CORRECTNESS
         apply Sreset with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs); eauto.
         * apply Forall2_concat.
           repeat rewrite_Forall_forall; solve_length;
-            specialize (H1 a (List.map (fun _ => (Str.const b (Op.false_const))) b0) _ _ _ H19 eq_refl eq_refl);
+            specialize (H1 a (List.map (fun _ => default_stream) b0) _ _ _ H19 eq_refl eq_refl);
             repeat rewrite_Forall_forall; simpl_length.
           -- rewrite <- map_nth.
              rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length.
              repeat rewrite map_map.
              apply map_ext_in. intros; solve_length.
-          -- specialize (H21 a0 (Str.const b (Op.false_const)) _ _ _ H20 eq_refl eq_refl).
+          -- specialize (H21 a0 default_stream _ _ _ H20 eq_refl eq_refl).
              repeat simpl_nth; [| eassumption].
              eauto.
         * eapply sem_exp_refines...
@@ -1347,6 +1350,133 @@ Module Type CORRECTNESS
         solve_forall. eapply sem_equation_refines...
   Qed.
 
+
+  (** ** Preservation of the semantics while restricting an environment *)
+
+  Fact sem_var_restrict {B} : forall (vars : list (ident * B)) H id ty v,
+      In (id, ty) vars ->
+      sem_var H id v ->
+      sem_var (Env.restrict H (List.map fst vars)) id v.
+  Proof.
+    intros vars H id ty v HIn Hsem.
+    inv Hsem.
+    econstructor; eauto.
+    apply Env.find_1 in H1. apply Env.find_2.
+    apply Env.restrict_find; auto.
+    simpl_In. exists (id, ty); auto.
+  Qed.
+
+  Fact sem_exp_restrict : forall G vars H b e vs,
+      wt_exp G vars e ->
+      sem_exp G H b e vs ->
+      sem_exp G (Env.restrict H (List.map fst vars)) b e vs.
+  Proof with eauto.
+    induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem.
+    - (* const *)
+      constructor...
+    - (* var *)
+      constructor. eapply sem_var_restrict...
+    - (* unop *)
+      econstructor...
+    - (* binop *)
+      econstructor...
+    - (* fby *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+    - (* when *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + eapply sem_var_restrict...
+    - (* merge *)
+      econstructor...
+      + eapply sem_var_restrict...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+    - (* ite *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+    - (* app *)
+      econstructor...
+      repeat rewrite_Forall_forall. eapply H1...
+    - (* app (reset) *)
+      econstructor...
+      repeat rewrite_Forall_forall. eapply H1...
+  Qed.
+
+  Fact sem_equation_restrict : forall G vars H b eq,
+      wt_equation G vars eq ->
+      sem_equation G H b eq ->
+      sem_equation G (Env.restrict H (List.map fst vars)) b eq.
+  Proof with eauto.
+    intros G vars H b [xs es] Hwt Hsem.
+    inv Hwt. inv Hsem.
+    econstructor.
+    + repeat rewrite_Forall_forall; eauto.
+      eapply sem_exp_restrict...
+    + repeat rewrite_Forall_forall.
+      eapply sem_var_restrict...
+      Unshelve. eapply Op.bool_type.
+  Qed.
+
+  (** ** Preservation of sem_node *)
+
+  Fact init_st_valid_after {B} : forall n,
+      valid_after (idty (n_in n++n_vars n++n_out n)) (@init_st B (first_unused_ident n)).
+  Proof.
+    intros n.
+    constructor.
+    - eapply init_st_valid.
+    - unfold before_st.
+      rewrite init_st_smallest.
+      specialize (first_unused_ident_gt n _ eq_refl) as H.
+      unfold used_idents in H.
+      repeat rewrite_Forall_forall.
+      apply H. apply in_or_app. right.
+      unfold idty in H0; rewrite map_map in H0; simpl in H0.
+      assumption.
+  Qed.
+
+  Fact init_st_hist_st : forall G b H n,
+      Env.dom H (List.map fst (n_in n++n_vars n++n_out n)) ->
+      hist_st G (idty (n_in n++n_vars n++n_out n)) b H (init_st (first_unused_ident n)).
+  Proof.
+    intros G b H n Hdom.
+    constructor.
+    - unfold st_ids.
+      rewrite init_st_anns; simpl. rewrite app_nil_r.
+      unfold idty; rewrite map_map; simpl.
+      assumption.
+    - unfold init_eqs_valids.
+      rewrite init_st_anns. constructor.
+  Qed.
+
+  Fact sem_var_In : forall H vs ss,
+      Forall2 (sem_var H) vs ss ->
+      Forall (fun v => Env.In v H) vs.
+  Proof.
+    intros. repeat rewrite_Forall_forall.
+    apply In_nth with (d:=xH) in H2. destruct H2 as [n [Hn H2]].
+    eapply H1 in Hn. 2,3:reflexivity.
+    setoid_rewrite H2 in Hn.
+    inv Hn. apply Env.find_1 in H4.
+    apply Env.find_In in H4. auto.
+    Unshelve. exact default_stream.
+  Qed.
+
+  Fact sem_equation_In : forall G H b eqs,
+      Forall (sem_equation G H b) eqs ->
+      Forall (fun v => Env.In v H) (vars_defined eqs).
+  Proof.
+    induction eqs; intros Hsem; inv Hsem; simpl.
+    - constructor.
+    - destruct a; simpl.
+      inv H2.
+      apply Forall_app. split; auto.
+      apply sem_var_In in H8; auto.
+  Qed.
+
   Lemma normalize_node_sem : forall f n G ins outs to_cut f' n',
       find_node f (proj1_sig G) = Some n ->
       sem_node (proj1_sig G) f ins outs ->
@@ -1360,18 +1490,53 @@ Module Type CORRECTNESS
     remember (normalize_equations (PS.union to_cut (ps_from_list (List.map fst (n_out n0))))
                                   (n_eqs n0) (init_st (first_unused_ident n0))) as res.
     destruct res as [eqs' st']. symmetry in Heqres.
-    (* Idée : se débarasser des flots inutiles dans l'historie issu de sem_node.
-       autrement dit, réduire dom H à vars, et prouver que ça suffit à donner une sémantique à la node d'origine n;
-       puis utiliser cela pour prouver que la sémantique de n est conservée par la normalisation *)
-    (* eapply normalize_equations_sem in Heqres. *)
-    (* specialize (normalize_equations_sem _ _ _ _ _ _ _ _ _ Hwt H3 Heqres) as [H' [Href Hsem']]. *)
-    (* eapply Snode with (H:=H'); eauto; unfold normalize_node; simpl. *)
-    (* - repeat rewrite_Forall_forall. *)
-    (*   eapply H4 in H5... eapply sem_var_refines... *)
-    (* - repeat rewrite_Forall_forall. *)
-    (*   eapply H2 in H5... eapply sem_var_refines... *)
-    (* - rewrite Heqres... *)
-  Admitted.
+    remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
+    assert (Env.refines eq H' H) as Href.
+    { rewrite HeqH'. eapply Env.restrict_refines... }
+    assert (Forall2 (sem_var H') (idents (n_in n0)) ins) as Hin.
+    { repeat rewrite_Forall_forall.
+      eapply sem_var_restrict...
+      unfold idents in *. erewrite map_nth'; [| solve_length].
+      rewrite <- surjective_pairing.
+      apply in_or_app. left. apply nth_In. solve_length.
+      Unshelve. exact (xH, (Op.bool_type, Cbase)). } clear H1.
+    assert (Forall2 (sem_var H') (idents (n_out n0)) outs) as Hout.
+    { repeat rewrite_Forall_forall.
+      eapply sem_var_restrict...
+      unfold idents in *. erewrite map_nth'; [| solve_length].
+      rewrite <- surjective_pairing.
+      repeat (apply in_or_app; right). apply nth_In. solve_length.
+      Unshelve. exact (xH, (Op.bool_type, Cbase)). } clear H2.
+    assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)) as Heqs.
+    { clear Hin Hout Hfind'.
+      repeat rewrite_Forall_forall.
+      specialize (sem_equation_restrict G _ _ _ _ (Hwt _ H0) (H3 _ H0)) as Hrestr.
+      unfold idty in Hrestr; rewrite map_map in Hrestr; simpl in Hrestr.
+      assumption. } clear H3.
+    assert (Env.dom H' (List.map fst (n_in n0 ++ n_vars n0 ++ n_out n0))) as Hdom.
+    { rewrite HeqH'. apply Env.dom_lb_restrict_dom.
+      apply Env.dom_lb_intro. intros x HIn.
+      repeat rewrite map_app in HIn. repeat rewrite in_app_iff in HIn. destruct HIn as [HIn|[HIn|HIn]].
+      + eapply Env.In_refines...
+        apply sem_var_In in Hin. rewrite Forall_forall in Hin...
+      + eapply Env.In_refines...
+        specialize (n_defd n0) as Hdef; symmetry in Hdef.
+        assert (In x (vars_defined (n_eqs n0))) as HIn'.
+        { eapply Permutation_in in Hdef...
+          rewrite map_app. apply in_or_app... }
+        apply sem_equation_In in Heqs. rewrite Forall_forall in Heqs...
+      + eapply Env.In_refines...
+        apply sem_var_In in Hout. rewrite Forall_forall in Hout...
+    }
+    eapply init_st_hist_st in Hdom.
+    specialize (normalize_equations_sem _ _ _ _ _ _ _ _ _ Hwt Heqs (init_st_valid_after n0) Hdom Heqres) as [H'' [Href1 Hsem]].
+    eapply Snode with (H:=H''); eauto; unfold normalize_node; simpl.
+    - repeat rewrite_Forall_forall.
+      eapply sem_var_refines...
+    - repeat rewrite_Forall_forall.
+      eapply sem_var_refines...
+    - rewrite Heqres...
+  Qed.
 
 End CORRECTNESS.
 

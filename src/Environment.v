@@ -1475,6 +1475,249 @@ Module Env.
     Qed.
   End DomAdds.
 
+  Section EnvDomUpperBound.
+
+    Context { V : Type }.
+
+    Definition dom_ub (env : t V) (dom : list ident) :=
+      forall x, In x env -> List.In x dom.
+
+    Lemma dom_ub_use:
+      forall {env xs},
+        dom_ub env xs ->
+        forall x, In x env -> List.In x xs.
+    Proof. auto. Qed.
+
+    Lemma dom_ub_intro:
+      forall env xs,
+        (forall x, In x env -> List.In x xs) ->
+        dom_ub env xs.
+    Proof. auto. Qed.
+
+    Lemma dom_dom_ub:
+    forall H d,
+      Env.dom H d ->
+      dom_ub H d.
+    Proof.
+      intros * DH.
+      apply dom_ub_intro. intros x Ix.
+      now apply dom_use with (1:=DH) in Ix.
+    Qed.
+
+    Lemma dom_ub_empty:
+      forall d, dom_ub (empty V) d.
+    Proof.
+      intro d. apply dom_ub_intro.
+      intros x Ix. now apply Env.Props.P.F.empty_in_iff in Ix.
+    Qed.
+
+    Lemma dom_ub_app:
+      forall H xs ys,
+        dom_ub H xs ->
+        dom_ub H (xs ++ ys).
+    Proof.
+      intros H xs ys DH x Ix.
+      apply DH in Ix. apply in_or_app. auto.
+    Qed.
+
+    Global Opaque dom_ub.
+  End EnvDomUpperBound.
+
+  Lemma refines_dom_ub_dom:
+    forall {A R} (H H' : Env.t A) d,
+      refines R H H' ->
+      dom H d ->
+      dom_ub H' d ->
+      dom H' d.
+  Proof.
+    intros A R H H' d HH DH DH'.
+    apply dom_intro. intro x.
+    split; intro Ix.
+    now eapply dom_ub_use with (1:=DH') in Ix.
+    now apply dom_use with (1:=DH) in Ix; rewrite HH in Ix.
+  Qed.
+
+  Lemma dom_ub_cons:
+    forall {V} x xs (env: t V),
+      dom_ub env xs ->
+      dom_ub env (x::xs).
+  Proof.
+    intros * DU.
+    apply dom_ub_intro. intros y Iy.
+    apply DU in Iy. now constructor 2.
+  Qed.
+
+  Lemma dom_ub_add:
+    forall {V} x v xs (env: t V),
+      dom_ub env xs ->
+      dom_ub (add x v env) (x::xs).
+  Proof.
+    intros * DU.
+    apply Env.dom_ub_intro. intros y Iy.
+    apply Env.Props.P.F.add_in_iff in Iy as [Iy|Iy].
+    now subst; constructor.
+    apply DU in Iy. now constructor 2.
+  Qed.
+
+  Lemma dom_Forall_not_In:
+    forall {A} (H : Env.t A) xs ys,
+      dom H xs ->
+      Forall (fun x => ~List.In x xs) ys ->
+      forall y, List.In y ys -> ~(In y H).
+  Proof.
+    intros * DH FA y Iy Ey.
+    apply Env.dom_use with (1:=DH) in Ey.
+    rewrite Forall_forall in FA.
+    apply FA in Iy. auto.
+  Qed.
+
+  Section EnvDomLowerBound.
+
+    Context { V : Type }.
+
+    Definition dom_lb (env : t V) (dom : list ident) :=
+      forall x, List.In x dom -> In x env.
+
+    Lemma dom_lb_cons : forall (env : t V) (id : ident) (xs : list ident),
+        dom_lb env (id::xs) <-> (In id env /\ dom_lb env xs).
+    Proof.
+      intros env id xs.
+      unfold dom_lb in *.
+      split.
+      - intro H. split.
+        + apply H. constructor; auto.
+        + intros x Hin. apply H. right; auto.
+      - intros [H1 H2] x HIn.
+        destruct HIn; subst; auto.
+    Qed.
+
+    Lemma dom_lb_use:
+      forall {env xs},
+        dom_lb env xs ->
+        forall x, List.In x xs -> In x env.
+    Proof. auto. Qed.
+
+    Lemma dom_lb_intro:
+      forall env xs,
+        (forall x, List.In x xs -> In x env) ->
+        dom_lb env xs.
+    Proof. auto. Qed.
+
+    Lemma dom_dom_lb:
+    forall H d,
+      dom H d ->
+      dom_lb H d.
+    Proof.
+      intros * DH.
+      apply dom_lb_intro. intros x Ix.
+      now apply Env.dom_use with (1:=DH) in Ix.
+    Qed.
+
+    Lemma dom_lb_nil:
+      forall E, dom_lb E nil.
+    Proof.
+      intro E. apply dom_lb_intro. now inversion 1.
+    Qed.
+
+    Lemma dom_lb_add_cons:
+      forall x xs v H,
+        dom_lb H xs ->
+        dom_lb (add x v H) (x :: xs).
+    Proof.
+      intros x xs v H DH y Iy.
+      inv Iy; auto using In_add1, In_add2.
+    Qed.
+
+    Lemma dom_lb_app:
+      forall H xs ys,
+        dom_lb H (xs ++ ys) ->
+        dom_lb H xs.
+    Proof.
+      intros H xs ys DH x Ix.
+      apply DH, in_or_app. auto.
+    Qed.
+
+    Global Opaque dom_lb.
+  End EnvDomLowerBound.
+
+  Hint Resolve dom_lb_nil.
+
+  Lemma dom_lb_ub_dom:
+    forall {A} (H : t A) d,
+      dom_lb H d ->
+      dom_ub H d ->
+      dom H d.
+  Proof.
+    intros * Min Max.
+    apply dom_intro; intro x.
+    split; intros Ix.
+    now apply dom_ub_use with (1:=Max) in Ix.
+    now apply dom_lb_use with (1:=Min) in Ix.
+  Qed.
+
+  Hint Resolve dom_lb_ub_dom.
+
+  Section EnvRestrict.
+    Context {V : Type}.
+
+    Definition restrict (H : Env.t V) (xs : list ident) : Env.t V :=
+      List.fold_right (fun id H' => match (Env.find id H) with
+                                 | None => H'
+                                 | Some v => add id v H'
+                                 end) (empty V) xs.
+
+    Lemma restrict_dom_ub : forall xs (H : Env.t V),
+        dom_ub (restrict H xs) xs.
+    Proof.
+      induction xs; intro H; simpl.
+      - apply dom_ub_empty.
+      - destruct (find a H); simpl.
+        + apply dom_ub_add; auto.
+        + apply dom_ub_cons; auto.
+    Qed.
+
+    Lemma restrict_refines : forall R xs (H : Env.t V),
+        Reflexive R ->
+        Transitive R ->
+        refines R (restrict H xs) H.
+    Proof.
+      induction xs; intros H Hrefl Htrans; simpl.
+      - apply refines_empty.
+      - destruct (find a H) eqn:Hfind; simpl.
+        + eapply refines_add_left; eauto.
+        + eauto.
+    Qed.
+
+    Lemma dom_lb_restrict_dom : forall xs (H : Env.t V),
+        dom_lb H xs ->
+        dom (restrict H xs) xs.
+    Proof.
+      induction xs; intros H Hdom; simpl.
+      - apply dom_empty.
+      - rewrite dom_lb_cons in Hdom; destruct Hdom.
+        rewrite In_find in H0. destruct H0 as [v H0].
+        rewrite H0.
+        apply dom_add_cons. auto.
+    Qed.
+
+    Lemma restrict_find : forall xs (H : Env.t V) id v,
+        List.In id xs ->
+        find id H = Some v ->
+        find id (restrict H xs) = Some v.
+    Proof.
+      induction xs; intros H id v HIn Hfind; simpl; inv HIn.
+      - rewrite Hfind. apply gss.
+      - eapply IHxs in H0; eauto.
+        destruct (find a H) eqn:Hfind2; auto.
+        destruct (Pos.eqb a id) eqn:Heq.
+        + rewrite Pos.eqb_eq in Heq; subst.
+          rewrite Hfind in Hfind2. inv Hfind2.
+          apply gss.
+        + rewrite Pos.eqb_neq in Heq.
+          rewrite <- H0. apply gso. auto.
+    Qed.
+  End EnvRestrict.
+
   (** Notations *)
 
   Module Notations.
