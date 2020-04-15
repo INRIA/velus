@@ -274,7 +274,16 @@ Module Type LSYNTAX
       symmetry. apply map_id.
   Qed.
 
-  Corollary typesof_annots : forall es,
+  Corollary length_typeof_numstreams : forall e,
+      length (typeof e) = numstreams e.
+  Proof.
+    intros.
+    rewrite typeof_annot.
+    rewrite map_length.
+    apply length_annot_numstreams.
+  Qed.
+
+  Fact typesof_annots : forall es,
       typesof es = map fst (annots es).
   Proof.
     induction es; simpl.
@@ -289,15 +298,6 @@ Module Type LSYNTAX
     intros es.
     rewrite typesof_annots.
     apply map_length.
-  Qed.
-
-  Fact length_typeof_numstreams : forall e,
-      length (typeof e) = numstreams e.
-  Proof.
-    intros.
-    rewrite typeof_annot.
-    rewrite map_length.
-    apply length_annot_numstreams.
   Qed.
 
   Fact typeof_concat_typesof : forall l,
@@ -330,13 +330,30 @@ Module Type LSYNTAX
     - rewrite map_map. reflexivity.
   Qed.
 
-  Corollary clocksof_annots : forall es,
+  Corollary length_clockof_numstreams : forall e,
+      length (clockof e) = numstreams e.
+  Proof.
+    intros.
+    rewrite clockof_annot.
+    repeat rewrite map_length.
+    apply length_annot_numstreams.
+  Qed.
+
+  Fact clocksof_annots : forall es,
       clocksof es = map fst (map snd (annots es)).
   Proof.
     induction es; simpl.
     - reflexivity.
     - repeat rewrite map_app.
       f_equal; auto. apply clockof_annot.
+  Qed.
+
+  Corollary length_clocksof_annots : forall es,
+      length (clocksof es) = length (annots es).
+  Proof.
+    intros es.
+    rewrite clocksof_annots. rewrite map_map.
+    apply map_length.
   Qed.
 
   Lemma In_clocksof:

@@ -3353,7 +3353,8 @@ Ltac singleton_length :=
   | H : S (length ?x) = 1 |- _ =>
     destruct x eqn:Hsingl; simpl in *; try congruence;
     clear H; repeat rewrite app_nil_r in *
-  end.
+  end;
+  subst.
 
 (* (* Induction on a triplet of lists of the same length *) *)
 (* Section list_ind3. *)

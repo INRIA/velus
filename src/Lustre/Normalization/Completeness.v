@@ -589,14 +589,14 @@ Module Type COMPLETENESS
   Qed.
   Hint Resolve normalize_rhss_normalized_eq.
 
-  Lemma normalize_equation_normalized_eq : forall G vars eq to_cut eqs' out st st',
-      wt_equation G vars eq ->
+  Lemma normalize_equation_normalized_eq : forall eq to_cut eqs' out st st',
+      wl_equation eq ->
       normalize_equation to_cut eq st = (eqs', st') ->
       (forall o, PS.In o out -> Pos.lt o (smallest_ident st)) ->
       PS.Subset out to_cut ->
       Forall (normalized_equation out) eqs'.
   Proof with eauto.
-    intros G vars [xs es] to_cut eqs' out st st' Hwt Hnorm Hlt Hincl.
+    intros [xs es] to_cut eqs' out st st' Hwl Hnorm Hlt Hincl.
     unfold normalize_equation in Hnorm.
     repeat inv_bind.
     remember (negb (existsb (fun x => PS.mem x to_cut) xs)) as keep_fby.
@@ -610,11 +610,9 @@ Module Type COMPLETENESS
     clear Heqkeep_fby.
     rewrite Forall_app. split.
     - assert (length xs = length (annots x)) as Hlen.
-      { destruct Hwt as [Hwt1 Hwt2].
+      { destruct Hwl as [Hwl1 Hwl2].
         eapply normalize_rhss_annots in H; eauto.
-        rewrite H.
-        repeat rewrite_Forall_forall.
-        rewrite typesof_annots in H0. solve_length. } clear Hwt.
+        congruence. } clear Hwl.
       eapply normalize_rhss_normalized_rhs in H; eauto.
       revert xs Hin Hlen.
       induction H; intros xs Hin Hlen; constructor.
@@ -636,8 +634,8 @@ Module Type COMPLETENESS
     - eapply normalize_rhss_normalized_eq in H; eauto.
   Qed.
 
-  Corollary normalize_equations_normalized_eq : forall G vars eqs to_cut eqs' out st st',
-      Forall (wt_equation G vars) eqs ->
+  Corollary normalize_equations_normalized_eq : forall eqs to_cut eqs' out st st',
+      Forall wl_equation eqs ->
       normalize_equations to_cut eqs st = (eqs', st') ->
       (forall o, PS.In o out -> Pos.lt o (smallest_ident st)) ->
       PS.Subset out to_cut ->
@@ -653,13 +651,12 @@ Module Type COMPLETENESS
         intros. eapply Pos.lt_le_trans; eauto.
   Qed.
 
-  Lemma normalize_node_normalized_node : forall n to_cut Hwt,
-      normalized_node (normalize_node to_cut n Hwt).
+  Lemma normalize_node_normalized_node : forall n to_cut Hwl,
+      normalized_node (normalize_node to_cut n Hwl).
   Proof.
-    intros n to_cut [G Hwt].
+    intros n to_cut Hwl.
     unfold normalize_node.
     unfold normalized_node; simpl.
-    destruct Hwt as [_ [_ [_ Hwt]]].
     eapply normalize_equations_normalized_eq; eauto.
     - apply surjective_pairing.
     - intros o HIn. rewrite ps_from_list_In in HIn.

@@ -423,7 +423,7 @@ Module Type CORRECTNESS
       exists H''. repeat (split; eauto).
       + etransitivity...
       + constructor; eauto. subst.
-        specialize (normalize_exp_length _ _ _ _ _ _ _ _ H2 H0) as Hlength1.
+        assert (length x = numstreams a) as Hlength1 by (eapply normalize_exp_length; eauto).
         specialize (sem_exp_numstreams _ _ _ _ _ _ H2 H4) as Hlength2.
         specialize (normalize_exp_sem_length _ _ _ _ _ _ _ _ H2 H0) as Hnormlength.
         repeat rewrite_Forall_forall.
@@ -653,8 +653,8 @@ Module Type CORRECTNESS
       + apply Forall_app. split; solve_forall...
         eapply sem_equation_refines...
     - (* fby *)
-      specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H4 H1) as Hlength1.
-      specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H5 H2) as Hlength2.
+      assert (length (concat x2) = length (annots e0s)) as Hlength1 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x9) = length (annots es)) as Hlength2 by (eapply map_bind2_normalize_exp_length; eauto).
       eapply map_bind2_sem in H1... 2:(repeat rewrite_Forall_forall; eapply nth_In in H17; eauto). clear H.
       destruct H1 as [H' [Href1 [Histst1 [Hdom1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
       assert (Forall2 (sem_exp G H' b) es sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
@@ -707,7 +707,7 @@ Module Type CORRECTNESS
         -- solve_forall. repeat (eapply sem_equation_refines; eauto).
         -- solve_forall. eapply sem_equation_refines...
     - (* when *)
-      specialize (map_bind2_normalize_exp_length _ _ _ _ _ _ _ _ H4 H0) as Hlength.
+      assert (length (concat x1) = length (annots es)) as Hlength by (eapply map_bind2_normalize_exp_length; eauto).
       erewrite <- (map_length _ (annots es)) in Hlength. erewrite <- typesof_annots in Hlength.
       eapply map_bind2_sem in H0... 2: (repeat rewrite_Forall_forall; eapply nth_In in H8; eauto).
       destruct H0 as [H' [Hvalid1 [Href1 [Hdom1 [Hsem1 Hsem1']]]]].
@@ -803,7 +803,8 @@ Module Type CORRECTNESS
              Unshelve. exact default_ann. exact s.
     - (* ite *)
       specialize (sem_exp_numstreams _ _ _ _ _ _ H5 H14) as Hlength1. simpl in Hlength1.
-      specialize (normalize_exp_length _ _ _ _ _ _ _ _ H5 H1) as Hlength1'. rewrite <- Hlength1 in Hlength1'. clear Hlength1.
+      assert (length x = numstreams e) as Hlength1' by (eapply normalize_exp_length; eauto).
+      rewrite <- Hlength1 in Hlength1'. clear Hlength1.
       specialize (sem_exps_numstreams _ _ _ _ _ _ H6 H16) as Hlength3.
       eapply IHe in H1... clear IHe. destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
       assert (Forall2 (sem_exp G H' b) ets ts) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
@@ -1050,8 +1051,8 @@ Module Type CORRECTNESS
       1,2:(unfold normalize_rhs in Hnorm). destruct keep_fby. 1,2,3:(inv Hwt; inv Hsem).
     - (* fby (keep) *)
       repeat inv_bind.
-      specialize (normalize_exps_length _ _ _ _ _ _ _ H3 H0) as Hlength2.
-      specialize (normalize_exps_length _ _ _ _ _ _ _ H4 H1) as Hlength1.
+      assert (length x = length (annots l)) as Hlength1 by (eapply normalize_exps_length; eauto).
+      assert (length x2 = length (annots l0)) as Hlength2 by (eapply normalize_exps_length; eauto).
       unfold normalize_exps in *. repeat inv_bind.
       eapply normalize_exps_sem in H0...
       destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
@@ -1286,7 +1287,7 @@ Module Type CORRECTNESS
     unfold normalize_equation in Hnorm.
     destruct equ as [xs es]. inv Hwt. inv Hsem.
     repeat inv_bind.
-    specialize (normalize_rhss_annots _ _ _ _ _ _ _ _ H0 H2) as Hannots.
+    assert (annots x = annots es) as Hannots by (eapply normalize_rhss_annots; eauto).
     eapply normalize_rhss_sem in H2...
     destruct H2 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
     exists H'. repeat (split; eauto).
@@ -1349,7 +1350,6 @@ Module Type CORRECTNESS
       + eapply Forall_app. split...
         solve_forall. eapply sem_equation_refines...
   Qed.
-
 
   (** ** Preservation of the semantics while restricting an environment *)
 
@@ -1477,16 +1477,16 @@ Module Type CORRECTNESS
       apply sem_var_In in H8; auto.
   Qed.
 
-  Lemma normalize_node_sem : forall f n G ins outs to_cut f' n',
-      find_node f (proj1_sig G) = Some n ->
-      sem_node (proj1_sig G) f ins outs ->
-      normalize_node to_cut n G = n' ->
-      find_node f' (proj1_sig G) = Some n' ->
-      sem_node (proj1_sig G) f' ins outs.
+  Lemma normalize_node_sem : forall G f n Hwl ins outs to_cut f' n',
+      wt_node G n ->
+      find_node f G = Some n ->
+      sem_node G f ins outs ->
+      normalize_node to_cut n Hwl = n' ->
+      find_node f' G = Some n' ->
+      sem_node G f' ins outs.
   Proof with eauto.
-    intros f n [G Hwt] ins outs to_cut n' f' Hfind Hsem Hnorm Hfind'; simpl in *.
+    intros G f n Hwl ins outs to_cut n' f' [_ [_ [_ Hwt]]] Hfind Hsem Hnorm Hfind'; simpl in *.
     inv Hsem. rewrite Hfind in H0. inv H0.
-    destruct Hwt as [? [? [? Hwt]]].
     remember (normalize_equations (PS.union to_cut (ps_from_list (List.map fst (n_out n0))))
                                   (n_eqs n0) (init_st (first_unused_ident n0))) as res.
     destruct res as [eqs' st']. symmetry in Heqres.
@@ -1554,6 +1554,3 @@ Module CorrectnessFun
   Include CORRECTNESS Ids Op OpAux Str Syn Typ Lord Sem Norm.
   Module Typing := NTypingFun Ids Op OpAux Syn Typ Norm.
 End CorrectnessFun.
-
-(* H sem_node G n
-   H' \ dom H' (in++out++vars) /\ refines eq H' H *)
