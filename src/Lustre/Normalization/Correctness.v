@@ -163,7 +163,9 @@ Module Type CORRECTNESS
       valid_after l st'.
   Proof.
     induction anns; intros ids st st' Hids Hvalid;
-      simpl in Hids; repeat inv_bind; eauto.
+      simpl in Hids.
+    - repeat inv_bind; eauto.
+    - destruct a as [ty [cl _]]. repeat inv_bind. eauto.
   Qed.
   Hint Resolve idents_for_anns_valid_after.
 
@@ -176,7 +178,7 @@ Module Type CORRECTNESS
     destruct (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind; auto.
     destruct (List.hd _ _); simpl in *.
-    repeat inv_bind. eauto.
+    destruct p. repeat inv_bind. eauto.
   Qed.
   Hint Resolve normalize_reset_valid_after.
 
@@ -286,13 +288,13 @@ Module Type CORRECTNESS
     intros vars H H' anns ids vs st st' Hlen Hvalid Hdom Hids Heq.
     assert (Forall (fun id => ~List.In id (List.map fst vars)) (List.map fst ids)) as Hnvar.
     { assert (valid_after vars st') by eauto.
-      apply idents_for_anns_incl in Hids.
+      apply idents_for_anns_incl_ids in Hids.
       solve_forall.
-      eapply incl_map in Hids. apply Hids in H1. clear Hids.
+      apply Hids in H1. clear Hids.
       intro contra.
       destruct H0 as [_ H0]. unfold before_st in H0.
       rewrite Forall_forall in H0. apply H0 in contra.
-      unfold idty in H1. rewrite map_map in H1. simpl in H1.
+      unfold idty in H1.
       apply smallest_ident_In in H1.
       apply (Pos.lt_irrefl x). eapply Pos.lt_le_trans...
     }
@@ -311,26 +313,24 @@ Module Type CORRECTNESS
   (** We want to specify the semantics of the init equations created during the normalization
       with idents stored in the env *)
 
-  Axiom init_stream : clock -> Stream OpAux.value.
+  Axiom init_stream : clock -> Stream bool -> Stream OpAux.value.
 
-  Definition init_eqs_valids G b H st :=
-    Forall (fun '(id, (ty, cl, is_init)) =>
+  Definition init_eqs_valids H b (st : fresh_st (Op.type * clock * bool)) :=
+    Forall (fun '(id, (_, cl, is_init)) =>
                   is_init = true ->
-                  sem_equation G (Env.add id (init_stream (fst cl)) H)
-                               b ([id], [Efby [add_whens (Econst Op.true_const) ty (fst cl)]
-                                              [add_whens (Econst Op.false_const) ty (fst cl)] [(ty, cl)]])) (st_anns st).
+                  sem_var H id (init_stream cl b)) (st_anns st).
 
-  Definition hist_st {A} G (l : list (ident * A)) b H st :=
+  Definition hist_st {A} (l : list (ident * A)) b H st :=
     Env.dom H ((List.map fst l)++(st_ids st)) /\
-    init_eqs_valids G b H st.
+    init_eqs_valids H b st.
 
-  Fact fresh_ident_hist_st {A} : forall G (vars : list (ident * A)) b a id v H st st',
+  Fact fresh_ident_hist_st {A} : forall (vars : list (ident * A)) b a id v H st st',
       valid_after vars st ->
       fresh_ident (a, false) st = (id, st') ->
-      hist_st G vars b H st ->
-      hist_st G vars b (Env.add id v H) st'.
+      hist_st vars b H st ->
+      hist_st vars b (Env.add id v H) st'.
   Proof.
-    intros G vars b a id v H st st' Hvalid Hfresh [H1 H2].
+    intros vars b a id v H st st' Hvalid Hfresh [H1 H2].
     constructor.
     - eapply fresh_ident_dom; eauto.
     - unfold init_eqs_valids in *.
@@ -344,9 +344,8 @@ Module Type CORRECTNESS
         destruct x as [id0 [[ty cl] is_init]].
         specialize (H2 _ H3). simpl in H2.
         intro His. apply H2 in His. clear H2.
-        eapply sem_equation_refines; [| eauto].
-        apply Env.refines_add_both; [| reflexivity].
-        eapply Env.refines_add. eauto.
+        eapply sem_var_refines; [| eauto].
+        apply Env.refines_add. eauto.
         intro contra.
         erewrite Env.dom_use in contra; [| eauto].
         eapply in_app_or in contra.
@@ -363,21 +362,22 @@ Module Type CORRECTNESS
   Qed.
   Hint Resolve fresh_ident_hist_st.
 
-  Fact idents_for_anns_hist_st {A} : forall G (vars : list (ident * A)) b anns ids vs H st st',
+  Fact idents_for_anns_hist_st {A} : forall (vars : list (ident * A)) b anns ids vs H st st',
       length vs = length ids ->
       valid_after vars st ->
       idents_for_anns anns st = (ids, st') ->
-      hist_st G vars b H st ->
-      hist_st G vars b (Env.adds (List.map fst ids) vs H) st'.
+      hist_st vars b H st ->
+      hist_st vars b (Env.adds (List.map fst ids) vs H) st'.
   Proof with eauto.
-    intros G vars b anns ids vs H st st' Hlen Hvalid Hids Hist.
+    intros vars b anns ids vs H st st' Hlen Hvalid Hids Hist.
     constructor.
     - destruct Hist.
       eapply idents_for_anns_dom in Hids...
     - revert ids vs H st st' Hlen Hvalid Hids Hist.
       induction anns; intros; simpl in Hids; repeat inv_bind; simpl.
       + unfold Env.adds; simpl. destruct Hist. assumption.
-      + destruct vs; simpl in Hlen; try congruence.
+      + destruct a as [? [? ?]]. repeat inv_bind.
+        destruct vs; simpl in Hlen; try congruence.
         unfold Env.adds; simpl.
         assert (valid_after vars st') by eauto.
         assert (valid_after vars x0) by eauto.
@@ -392,23 +392,23 @@ Module Type CORRECTNESS
       Forall (wt_exp G vars) es ->
       Forall2 (sem_exp G H b) es vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       Forall2 (fun e v => forall H es' eqs' st st',
                    sem_exp G H b e v ->
                    valid_after vars st ->
-                   hist_st G vars b H st ->
+                   hist_st vars b H st ->
                    normalize_exp is_control e st = (es', eqs', st') ->
                    (exists H',
                        Env.refines eq H H' /\
                        valid_after vars st' /\
-                       hist_st G vars b H' st' /\
+                       hist_st vars b H' st' /\
                        Forall2 (fun e v => sem_exp G H' b e [v]) es' v /\
                        Forall (sem_equation G H' b) eqs')) es vs ->
       map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           Forall2 (fun es vs => Forall2 (fun e v => sem_exp G H' b e [v]) es vs) es' vs /\
           Forall (sem_equation G H' b) (concat eqs')).
   Proof with eauto.
@@ -435,13 +435,13 @@ Module Type CORRECTNESS
   Fact normalize_reset_sem {B} : forall G (vars : list (ident * B)) b e H v e' eqs' st st',
       sem_exp G H b e [v] ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       Env.dom H ((List.map fst vars)++(st_ids st)) ->
       normalize_reset e st = (e', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           sem_exp G H' b e' [v] /\
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
@@ -449,11 +449,11 @@ Module Type CORRECTNESS
     specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
     - exists H. repeat (split; auto).
-    - destruct (List.hd _ _) eqn:Heqann; simpl in *; repeat inv_bind.
+    - destruct (List.hd _ _) as [? [? ?]] eqn:Heqann; simpl in *; repeat inv_bind.
       assert (fresh_st_follows st st') as Hfollows by eauto.
       assert (valid_after vars st') as Hvalid1 by eauto.
       remember (Env.add x v H) as H'.
-      assert (hist_st G vars b H' st') by (subst; eauto).
+      assert (hist_st vars b H' st') by (subst; eauto).
       assert (Env.refines eq H H') as Href by (eapply fresh_ident_refines with (st0:=st); eauto).
       exists H'. repeat (split; eauto).
       + constructor.
@@ -473,12 +473,12 @@ Module Type CORRECTNESS
       sem_exp G H b e [y] ->
       fby y0 y z ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       fby_iteexp e0 e a st = (e', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           sem_exp G H' b e' [z] /\
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
@@ -501,16 +501,13 @@ Module Type CORRECTNESS
           rewrite <- HeqH' in H1.
           destruct H1...
         * (* We can get data about x back from our hist_st hypothesis *)
-          assert (sem_equation G (Env.add x (init_stream (fst cl)) H) b
-                               ([x], [Efby [add_whens (Econst Op.true_const) Op.bool_type (fst cl)]
-                                           [add_whens (Econst Op.false_const) Op.bool_type (fst cl)]
-                                           [(Op.bool_type, cl)]])) as Hsemx.
+          assert (sem_var H x (init_stream (fst cl) b)).
           { destruct Histst as [_ Hvalids]. unfold init_eqs_valids in Hvalids.
             rewrite Forall_forall in Hvalids.
             eapply find_some in Hfind. destruct p as [[ty' cl'] isinit].
             repeat rewrite Bool.andb_true_iff in Hfind. destruct Hfind as [Hin [[Hisinit Hcl] Hty]].
             rewrite OpAux.type_eqb_eq in Hty.
-            rewrite Clocks.nclock_eqb_eq in Hcl. subst.
+            rewrite Clocks.clock_eqb_eq in Hcl. subst.
             eapply Hvalids in Hin. apply Hin...
           }
           (* not exactly z *) admit.
@@ -518,24 +515,24 @@ Module Type CORRECTNESS
       + clear Hfind.
         destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
         assert (valid_after vars x1) as Hvalid1 by eauto.
-        remember (Env.add x (init_stream (fst cl)) H) as H'.
+        remember (Env.add x (init_stream (fst cl) b) H) as H'.
         assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines in Hident; eauto).
         (* sem_exp (true fby false) init_stream *)
         (* sem_equation H' ([x], [true fby false]) *)
-        assert (hist_st G vars b H' x1) as Histst1 by admit.
+        assert (hist_st vars b H' x1) as Histst1 by admit.
         assert (valid_after vars st') as Hvalid2 by eauto.
         remember (Env.add x2 z H') as H''.
         assert (Env.refines eq H' H'') as Href2 by (destruct Histst1; eapply fresh_ident_refines in H1; eauto).
-        assert (hist_st G vars b H'' st') as Histst2 by (rewrite HeqH''; eauto).
+        assert (hist_st vars b H'' st') as Histst2 by (rewrite HeqH''; eauto).
         assert (~Env.E.eq x2 x) as Hneq.
         { intro contra. eapply Facts.fresh_ident_In in Hident.
           assert (In x (st_ids x1)).
-          { unfold st_ids, idty. rewrite in_map_iff. exists (x, (Op.bool_type, cl, true)); eauto. }
+          { unfold st_ids, idty. rewrite in_map_iff. exists (x, (Op.bool_type, (fst cl), true)); eauto. }
           eapply Facts.fresh_ident_nIn in H1. 2:(destruct Hvalid1; eauto).
           rewrite contra in H1. congruence. }
         exists H''. repeat (split; eauto)...
         * etransitivity...
-        * eapply Site with (s:=(init_stream (fst cl))) (ts:=[[y0]]) (fs:=[[z]]).
+        * eapply Site with (s:=(init_stream (fst cl) b)) (ts:=[[y0]]) (fs:=[[z]]).
           -- constructor. econstructor; [| reflexivity].
              rewrite HeqH''. rewrite HeqH'.
              eapply Env.add_2... eapply Env.add_1. reflexivity.
@@ -549,7 +546,7 @@ Module Type CORRECTNESS
           -- apply Seq with (ss:=[[z]]); simpl.
              ++ repeat constructor. admit. (* pas exactement z *)
              ++ repeat constructor. admit. (* ce serait trop facile *)
-          -- apply Seq with (ss:=[[init_stream (fst cl)]]); simpl.
+          -- apply Seq with (ss:=[[init_stream (fst cl) b]]); simpl.
              ++ admit.
              ++ repeat constructor. econstructor; [| reflexivity].
                 rewrite HeqH''. rewrite HeqH'.
@@ -563,12 +560,12 @@ Module Type CORRECTNESS
       Forall2 (fun e v => sem_exp G H b e [v]) es ss ->
       Forall3 fby s0s ss vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       normalize_fby e0s es anns st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           Forall2 (fun e v => sem_exp G H' b e [v]) es' vs /\
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
@@ -606,12 +603,12 @@ Module Type CORRECTNESS
       wt_exp G vars e ->
       sem_exp G H b e vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       normalize_exp is_control e st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           Forall2 (fun e v => sem_exp G H' b e [v]) es' vs /\
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
@@ -672,7 +669,7 @@ Module Type CORRECTNESS
       remember (Env.adds (List.map fst x8) vs H''') as H''''.
       assert (Env.refines eq H''' H'''') as Href4.
       { destruct Hdom3. eapply idents_for_anns_refines... solve_length. }
-      assert (hist_st G vars b H'''' st') as Histst4.
+      assert (hist_st vars b H'''' st') as Histst4.
       { rewrite HeqH''''. eapply idents_for_anns_hist_st in H9... solve_length. }
       exists H''''. repeat (split; eauto)...
       * repeat (etransitivity; eauto).
@@ -753,7 +750,7 @@ Module Type CORRECTNESS
         assert (Env.refines eq H'' H''') as Href3.
         { destruct Histst2. eapply idents_for_anns_refines...
           repeat rewrite_Forall_forall; solve_length. }
-        assert (hist_st G vars b H''' st') as Histst3.
+        assert (hist_st vars b H''' st') as Histst3.
         { rewrite HeqH'''. eapply idents_for_anns_hist_st in H...
           repeat rewrite_Forall_forall. solve_length. }
         exists H'''. repeat (split; eauto).
@@ -841,7 +838,7 @@ Module Type CORRECTNESS
         assert (Env.refines eq H''' H'''') as Href4.
         { destruct Histst3. eapply idents_for_anns_refines...
           repeat rewrite_Forall_forall; solve_length. }
-        assert (hist_st G vars b H'''' st').
+        assert (hist_st vars b H'''' st').
         { rewrite HeqH''''. eapply idents_for_anns_hist_st in H...
           repeat rewrite_Forall_forall. solve_length. }
         exists H''''. repeat (split; eauto)...
@@ -900,7 +897,7 @@ Module Type CORRECTNESS
       assert (Env.refines eq H' H'') as Href2.
       { destruct Histst1.
         eapply idents_for_anns_refines... repeat rewrite_Forall_forall; solve_length. }
-      assert (hist_st G vars b H'' st').
+      assert (hist_st vars b H'' st').
       { rewrite HeqH''. eapply idents_for_anns_hist_st in H2...
         repeat rewrite_Forall_forall. solve_length. }
       exists H''. repeat (split; eauto).
@@ -964,7 +961,7 @@ Module Type CORRECTNESS
       { destruct Histst3. eapply idents_for_anns_refines...
         repeat rewrite_Forall_forall; solve_length. }
       assert (valid_after vars st') as Hvalid4 by eauto.
-      assert (hist_st G vars b H'''' st').
+      assert (hist_st vars b H'''' st').
       { rewrite HeqH''''. eapply idents_for_anns_hist_st in H3...
         repeat rewrite_Forall_forall; solve_length. }
       exists H''''. repeat (split; auto).
@@ -1012,12 +1009,12 @@ Module Type CORRECTNESS
       Forall (wt_exp G vars) es ->
       Forall2 (sem_exp G H b) es vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       map_bind2 (normalize_exp false) es st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           Forall2
             (fun (es : list exp) (vs : list (Stream OpAux.value)) =>
              Forall2 (fun e v => sem_exp G H' b e [v]) es vs) es' vs /\
@@ -1034,12 +1031,12 @@ Module Type CORRECTNESS
       wt_exp G vars e ->
       sem_exp G H b e vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       normalize_rhs keep_fby e st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           (Forall2 (fun e v => sem_exp G H' b e [v]) es' vs \/
            exists e', (es' = [e'] /\ sem_exp G H' b e' vs)) /\
           Forall (sem_equation G H' b) eqs').
@@ -1132,12 +1129,12 @@ Module Type CORRECTNESS
       Forall (wt_exp G vars) es ->
       Forall2 (sem_exp G H b) es vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       map_bind2 (normalize_rhs keep_fby) es st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           Forall2 (fun es' vs =>
                      Forall2 (fun e v => sem_exp G H' b e [v]) es' vs \/
                      exists e', (es' = [e'] /\ sem_exp G H' b e' vs)) es' vs /\
@@ -1168,12 +1165,12 @@ Module Type CORRECTNESS
       Forall (wt_exp G vars) es ->
       Forall2 (sem_exp G H b) es vs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       normalize_rhss keep_fby es st = (es', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           valid_after vars st' /\
-          hist_st G vars b H' st' /\
+          hist_st vars b H' st' /\
           Forall (fun '(e, v) => sem_exp G H' b e v)
                  (combine_for_numstreams es' (concat vs)) /\
           Forall (sem_equation G H' b) eqs').
@@ -1276,18 +1273,18 @@ Module Type CORRECTNESS
       wt_equation G vars equ ->
       sem_equation G H b equ ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       normalize_equation to_cut equ st = (eqs', st') ->
       (exists H', Env.refines eq H H' /\
              valid_after vars st' /\
-             hist_st G vars b H' st' /\
+             hist_st vars b H' st' /\
              Forall (sem_equation G H' b) eqs').
   Proof with eauto.
     intros G vars H b to_cut equ eqs' st st' Hwt Hsem Hvalid Histst Hnorm.
     unfold normalize_equation in Hnorm.
     destruct equ as [xs es]. inv Hwt. inv Hsem.
     repeat inv_bind.
-    assert (annots x = annots es) as Hannots by (eapply normalize_rhss_annots; eauto).
+    assert (typesof x = typesof es) as Hannots by (eapply Typ.normalize_rhss_typesof; eauto).
     eapply normalize_rhss_sem in H2...
     destruct H2 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
     exists H'. repeat (split; eauto).
@@ -1310,7 +1307,7 @@ Module Type CORRECTNESS
     + repeat constructor...
     + simpl. rewrite app_nil_r.
       repeat rewrite_Forall_forall.
-      * rewrite typesof_annots in H1. rewrite map_length in H1. rewrite <- Hannots in H1.
+      * rewrite <- Hannots in H1. rewrite typesof_annots in H1. rewrite map_length in H1.
         replace (length l) with (numstreams e0). replace (length l0) with (numstreams e0). reflexivity.
         { rewrite H2 in H1. apply combine_for_numstreams_numstreams in H1.
           rewrite Forall_forall in H1. apply H1 in HIn'... }
@@ -1320,7 +1317,7 @@ Module Type CORRECTNESS
         specialize (combine_for_numstreams_nth_2 x xs (concat ss) n n0 e0 l l0
                                                  a b0 (hd_default [], []) (hd_default [], [])) as Hcomb.
         apply Hcomb in H7. clear Hcomb.
-        2,3:(rewrite typesof_annots in H1; rewrite <- Hannots in H1; rewrite map_length in H1).
+        2,3:(rewrite <- Hannots in H1; rewrite typesof_annots in H1; rewrite map_length in H1).
         2:eapply H1. 2:(rewrite H2 in H1; eapply H1).
         3,4:auto.
         2:(rewrite combine_for_numstreams_length in Hn; auto).
@@ -1332,7 +1329,7 @@ Module Type CORRECTNESS
       Forall (wt_equation G vars) eqs ->
       Forall (sem_equation G H b) eqs ->
       valid_after vars st ->
-      hist_st G vars b H st ->
+      hist_st vars b H st ->
       normalize_equations to_cut eqs st = (eqs', st') ->
       (exists H', Env.refines eq H H' /\
              Forall (sem_equation G H' b) eqs').
@@ -1438,11 +1435,11 @@ Module Type CORRECTNESS
       assumption.
   Qed.
 
-  Fact init_st_hist_st : forall G b H n,
+  Fact init_st_hist_st : forall b H n,
       Env.dom H (List.map fst (n_in n++n_vars n++n_out n)) ->
-      hist_st G (idty (n_in n++n_vars n++n_out n)) b H (init_st (first_unused_ident n)).
+      hist_st (idty (n_in n++n_vars n++n_out n)) b H (init_st (first_unused_ident n)).
   Proof.
-    intros G b H n Hdom.
+    intros b H n Hdom.
     constructor.
     - unfold st_ids.
       rewrite init_st_anns; simpl. rewrite app_nil_r.

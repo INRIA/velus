@@ -294,7 +294,7 @@ Module Type COMPLETENESS
         apply Hlt in contra; clear Hlt.
         assert (fresh_st_follows st st') as Hfollows by (etransitivity; eauto).
         apply fresh_ident_In in H0.
-        assert (In x2 (st_ids st')) by (unfold st_ids, idty; simpl_In; exists (x2, (ty, cl, false)); eauto).
+        assert (In x2 (st_ids st')) by (unfold st_ids, idty; simpl_In; exists (x2, (ty, fst cl, false)); eauto).
         apply smallest_ident_In in H1.
         apply (Pos.lt_irrefl x2).
         eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
@@ -352,12 +352,9 @@ Module Type COMPLETENESS
         * simpl in *. rewrite <- H8. repeat constructor.
           -- intro contra. apply Hlt in contra.
              specialize (idents_for_anns_st_follows _ _ _ _ H4) as Hfollows.
-             apply idents_for_anns_incl in H4.
-             apply H4 in H5.
-             assert (In i (st_ids st')) as Hin.
-             { unfold st_ids, idty in *. repeat simpl_In. inv H3.
-               exists (i, (a0, b)); auto. }
-             apply smallest_ident_In in Hin.
+             apply idents_for_anns_incl_ids in H4.
+             apply in_split_l in H5; simpl in H5. rewrite split_map_fst in H5. apply H4 in H5.
+             apply smallest_ident_In in H5.
              apply (Pos.lt_irrefl i).
              eapply Pos.lt_le_trans; eauto.
              repeat (etransitivity; eauto).
@@ -419,7 +416,7 @@ Module Type COMPLETENESS
       + specialize (normalize_reset_spec (hd_default x2)) as [[? [? [? Hspec]]]|Hspec]; subst;
           rewrite Hspec in H4; clear Hspec; repeat inv_bind.
         * destruct x0...
-        * destruct (hd _); simpl in *; repeat inv_bind...
+        * destruct (hd _) as [? [? ?]]; simpl in *; repeat inv_bind...
       + constructor...
     - (* app (auxiliary equations) *)
       rewrite Forall_app. split.
@@ -427,7 +424,7 @@ Module Type COMPLETENESS
         eapply Forall_app. split...
         specialize (normalize_reset_spec (hd_default x2)) as [[? [? [? Hspec]]]|Hspec]; subst;
           rewrite Hspec in H4; clear Hspec; repeat inv_bind...
-        destruct (hd _); simpl in *; repeat inv_bind.
+        destruct (hd _) as [? [? ?]]; simpl in *; repeat inv_bind.
         repeat constructor. apply normalized_lexp_hd_default...
       + destruct ro; repeat inv_bind;
           eapply map_bind2_normalized_eq; eauto; solve_forall.
@@ -552,7 +549,7 @@ Module Type COMPLETENESS
                 apply fresh_ident_st_follows in H6.
                 apply init_var_for_clock_st_follows in H3.
                 assert (In x10 (st_ids st'0)).
-                { unfold st_ids, idty. repeat simpl_In. exists (x10, (ty, cl, false))... }
+                { unfold st_ids, idty. repeat simpl_In. exists (x10, (ty, (fst cl), false))... }
                 apply smallest_ident_In in H5.
                 eapply (Pos.lt_irrefl x10).
                 eapply Pos.lt_le_trans...
@@ -567,7 +564,7 @@ Module Type COMPLETENESS
       specialize (normalize_reset_spec (hd_default x4)) as [[? [? [? Hspec]]]|Hspec]; subst;
         rewrite Hspec in H1; clear Hspec; repeat inv_bind.
       + constructor.
-      + destruct (hd _ _); simpl in H1.
+      + destruct (hd _ _) as [? [? ?]]; simpl in H1.
         repeat inv_bind. repeat constructor.
         apply normalized_lexp_hd_default...
       + eapply normalize_exps_normalized_eq in H0; eauto.
@@ -612,7 +609,9 @@ Module Type COMPLETENESS
     - assert (length xs = length (annots x)) as Hlen.
       { destruct Hwl as [Hwl1 Hwl2].
         eapply normalize_rhss_annots in H; eauto.
-        congruence. } clear Hwl.
+        rewrite Hwl2. unfold without_names in H.
+        erewrite <- map_length. setoid_rewrite <- H.
+        rewrite map_length. reflexivity. } clear Hwl.
       eapply normalize_rhss_normalized_rhs in H; eauto.
       revert xs Hin Hlen.
       induction H; intros xs Hin Hlen; constructor.

@@ -62,6 +62,12 @@ Proof.
   discriminate.
 Qed.
 
+Lemma clock_eqb_eq :
+  forall (x y: clock), x ==b y = true <-> x = y.
+Proof.
+  setoid_rewrite equiv_decb_equiv; reflexivity.
+Qed.
+
 Instance nclock_EqDec : EqDec nclock eq.
 Proof.
   eapply prod_eqdec.

@@ -42,7 +42,7 @@ Module Type NORMALIZATION
 
   (** Fresh ident generation keeping type annotations;
       also retaining if the var is an init var or not *)
-  Definition FreshAnn A := Fresh A (ann * bool).
+  Definition FreshAnn A := Fresh A ((type * clock) * bool).
 
   Local Open Scope fresh_monad_scope.
 
@@ -52,18 +52,20 @@ Module Type NORMALIZATION
   Fixpoint idents_for_anns (anns : list ann) : FreshAnn (list (ident * ann)) :=
     match anns with
     | [] => ret []
-    | hd::tl => do x <- fresh_ident (hd, false);
+    | (ty, (cl, _))::tl => do x <- fresh_ident ((ty, cl), false);
               do xs <- idents_for_anns tl;
-              ret ((x, hd)::xs)
+              ret ((x, (ty, (cl, Some x)))::xs)
     end.
 
   Fact idents_for_anns_values : forall anns idents st st',
       idents_for_anns anns st = (idents, st') ->
-      Forall2 (fun a a' => a = snd a') anns idents.
+      Forall2 (fun '(ty, (cl, _)) '(x, (ty', (cl', k))) =>
+                 ty' = ty /\ cl' = cl /\ k = Some x) anns idents.
   Proof.
     induction anns; intros idents st st' Hanns; simpl in *; repeat inv_bind.
     - constructor.
-    - specialize (IHanns _ _ _ H0).
+    - destruct a as [ty [cl ?]]. repeat inv_bind.
+      specialize (IHanns _ _ _ H0).
       constructor; eauto.
   Qed.
 
@@ -86,9 +88,9 @@ Module Type NORMALIZATION
   (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
       just return the variable *)
   Definition init_var_for_clock (cl : nclock) : FreshAnn (ident * list equation) :=
-    fun st => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (cl ==b cl') && (ty ==b Op.bool_type)) (st_anns st)) with
+    fun st => match (find (fun '(_, ((ty, cl'), isinit)) => isinit && (cl' ==b (fst cl)) && (ty ==b Op.bool_type)) (st_anns st)) with
            | Some (x, _) => ((x, []), st)
-           | None => let (x, st') := fresh_ident ((bool_type, cl), true) st in
+           | None => let (x, st') := fresh_ident ((bool_type, (fst cl)), true) st in
                     ((x, [([x], [Efby [add_whens (Econst true_const) bool_type (fst cl)]
                                       [add_whens (Econst false_const) bool_type (fst cl)]
                                       [(bool_type, cl)]])]), st')
@@ -100,16 +102,18 @@ Module Type NORMALIZATION
     match e0 with
     | Econst c => ret (Efby [e0] [e] [ann], [])
     | _ => do (initid, eqs) <- init_var_for_clock cl;
-          do px <- fresh_ident (ann, false);
-          ret (Eite (Evar initid (bool_type, cl)) [e0] [Evar px ann] ([ty], cl),
+          do px <- fresh_ident ((ty, fst cl), false);
+          ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
+                    [Evar px ann] ([ty], (fst cl, Some px)),
                ([px], [Efby [Econst (init_type ty)] [e] [ann]])::eqs)
     end.
 
   Lemma fby_iteexp_spec : forall e0 e ty cl,
       (exists c, e0 = Econst c /\ fby_iteexp e0 e (ty, cl) = ret (Efby [e0] [e] [(ty, cl)], []))
       \/ fby_iteexp e0 e (ty, cl) = do (initid, eqs) <- init_var_for_clock cl;
-                                   do px <- fresh_ident ((ty, cl), false);
-                                   ret (Eite (Evar initid (bool_type, cl)) [e0] [Evar px (ty, cl)] ([ty], cl),
+                                   do px <- fresh_ident ((ty, fst cl), false);
+                                   ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
+                                             [Evar px (ty, cl)] ([ty], (fst cl, Some px)),
                                         ([px], [Efby [Econst (init_type ty)] [e] [(ty, cl)]])::eqs).
   Proof. destruct e0; eauto. Qed.
 
@@ -121,16 +125,16 @@ Module Type NORMALIZATION
   Definition normalize_reset (e : exp) : FreshAnn (exp * list equation) :=
     match e with
     | Evar v ann => ret (Evar v ann, [])
-    | e => let ann := hd (bool_type, (Cbase, None)) (annot e) in
-          do x <- fresh_ident (ann, false);
-          ret (Evar x ann, ([x], [e])::[])
+    | e => let '(ty, (cl, _)) := hd (bool_type, (Cbase, None)) (annot e) in
+          do x <- fresh_ident ((ty, cl), false);
+          ret (Evar x (ty, (cl, Some x)), ([x], [e])::[])
     end.
 
   Lemma normalize_reset_spec : forall e,
       (exists v, exists ann, e = Evar v ann /\ normalize_reset e = ret (Evar v ann, []))
-      \/ normalize_reset e = let ann := hd (bool_type, (Cbase, None)) (annot e) in
-                            do x <- fresh_ident (ann, false);
-                            ret (Evar x ann, ([x], [e])::[]).
+      \/ normalize_reset e = let '(ty, (cl, _)) := hd (bool_type, (Cbase, None)) (annot e) in
+                            do x <- fresh_ident ((ty, cl), false);
+                            ret (Evar x (ty, (cl, Some x)), ([x], [e])::[]).
   Proof. destruct e; eauto. Qed.
 
   Fixpoint normalize_exp (is_control : bool) (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
@@ -276,7 +280,8 @@ Module Type NORMALIZATION
     induction anns; intros res st st' Hidforanns Hvalid;
       simpl in *; repeat inv_bind.
     - assumption.
-    - eapply IHanns; eauto.
+    - destruct a as [ty [cl _]]. repeat inv_bind.
+      eapply IHanns; eauto.
   Qed.
   Hint Resolve idents_for_anns_st_valid.
 
@@ -329,6 +334,7 @@ Module Type NORMALIZATION
     intros e res st st' Hnorm Hvalid.
     destruct (normalize_reset_spec e) as [[v [ann [He Hnorm']]]|Hnorm']; subst;
       rewrite Hnorm' in Hnorm; clear Hnorm';
+        try (destruct (hd _ _) as [ty [cl _]]);
         simpl in *; repeat inv_bind; eauto.
   Qed.
   Hint Resolve normalize_reset_st_valid.
@@ -426,23 +432,49 @@ Module Type NORMALIZATION
     induction anns; intros res st st' Hidforanns;
       simpl in *; repeat inv_bind.
     - reflexivity.
-    - etransitivity; eauto.
+    - destruct a as [ty [cl _]]. repeat inv_bind.
+      etransitivity; eauto.
   Qed.
   Hint Resolve idents_for_anns_st_follows.
 
   Corollary idents_for_anns_incl : forall anns ids st st',
       idents_for_anns anns st = (ids, st') ->
-      incl ids (idty (st_anns st')).
+      incl (List.map (fun '(id, (ty, (cl, _))) => (id, (ty, cl))) ids) (idty (st_anns st')).
   Proof.
     induction anns; intros ids st st' Hids; simpl in Hids; repeat inv_bind;
-      unfold incl; intros ? Hin; inv Hin.
-    - apply fresh_ident_In in H.
+      unfold incl; intros ? Hin; simpl in *; try destruct Hin.
+    destruct a as [ty [cl _]]. repeat inv_bind.
+    repeat simpl_In. inv H1. inv H2.
+    - inv H1.
+      apply fresh_ident_In in H.
       apply idents_for_anns_st_follows in H0.
       apply st_follows_incl in H0.
       apply H0 in H.
       unfold idty. simpl_In.
-      exists (x, (a, false)); simpl. split; auto.
-    - apply IHanns in H0; auto.
+      exists (i, ((t, c), false)); auto.
+    - apply IHanns in H0.
+      apply H0. repeat simpl_In.
+      exists (i, (t, (c, o))); auto.
+  Qed.
+
+  Corollary idents_for_anns_incl_ids : forall anns ids st st',
+      idents_for_anns anns st = (ids, st') ->
+      incl (List.map fst ids) (st_ids st').
+  Proof.
+    induction anns; intros ids st st' Hids; simpl in Hids; repeat inv_bind;
+      unfold incl; intros ? Hin; simpl in *; try destruct Hin.
+    destruct a as [ty [cl _]]. repeat inv_bind.
+    repeat simpl_In; simpl. inv H2.
+    - inv H1.
+      apply fresh_ident_In in H.
+      unfold st_ids.
+      apply idents_for_anns_st_follows in H0.
+      apply st_follows_incl in H0.
+      apply H0 in H.
+      repeat simpl_In. exists (i, ((ty, cl), false)); auto.
+    - apply IHanns in H0.
+      apply H0. repeat simpl_In.
+      exists (i, a); auto.
   Qed.
 
   Fact init_var_for_clock_st_follows : forall cl res st st',
@@ -492,6 +524,7 @@ Module Type NORMALIZATION
       simpl in *; repeat inv_bind.
     - reflexivity.
     - rewrite Hnorm' in Hnorm; clear Hnorm'.
+      destruct (hd _ _) as [ty [cl _]].
       repeat inv_bind. eauto.
   Qed.
   Hint Resolve normalize_reset_st_follows.
@@ -883,10 +916,53 @@ Module Type NORMALIZATION
 
   (** ** Preservation of annotations : useful for the rest of the proofs :p *)
 
+  Definition without_names (anns: list ann) : list (type * clock) :=
+    List.map (fun '(ty, (cl, _)) => (ty, cl)) anns.
+
+  Fact typeof_without_names : forall e,
+      typeof e = map fst (without_names (annot e)).
+  Proof.
+    intros e.
+    unfold without_names.
+    rewrite map_map; simpl. rewrite typeof_annot.
+    induction (annot e); simpl; f_equal; auto.
+    destruct a as [ty [cl ?]]; auto.
+  Qed.
+
+  Fact typesof_without_names : forall e,
+      typesof e = map fst (without_names (annots e)).
+  Proof.
+    intros e.
+    unfold without_names.
+    rewrite map_map; simpl. rewrite typesof_annots.
+    induction (annots e); simpl; f_equal; auto.
+    destruct a as [ty [cl ?]]; auto.
+  Qed.
+
+  Fact clockof_without_names : forall e,
+      clockof e = map snd (without_names (annot e)).
+  Proof.
+    intros e.
+    unfold without_names.
+    rewrite map_map; simpl. rewrite clockof_annot.
+    induction (annot e); simpl; f_equal; auto.
+    destruct a as [ty [cl ?]]; auto.
+  Qed.
+
+  Fact clocksof_without_names : forall e,
+      clocksof e = map snd (without_names (annots e)).
+  Proof.
+    intros e.
+    unfold without_names.
+    rewrite map_map; simpl. rewrite clocksof_annots.
+    induction (annots e); simpl; f_equal; auto.
+    destruct a as [ty [cl ?]]; auto.
+  Qed.
+
   Fact normalize_exp_annot : forall e is_control es' eqs' st st',
       wl_exp e ->
       normalize_exp is_control e st = (es', eqs', st')  ->
-      annots es' = annot e.
+      without_names (annots es') = without_names (annot e).
   Proof.
     induction e; intros is_control es' eqs' st st' Hwt Hnorm;
       specialize (normalize_exp_length _ _ es' eqs' st st' Hwt Hnorm) as Hlength;
@@ -894,6 +970,8 @@ Module Type NORMALIZATION
     - (* fby *)
       apply idents_for_anns_values in H2.
       clear H1 Hwt; (induction H2; [ auto | destruct y; subst; simpl; f_equal; auto ]).
+      destruct p as [ty [cl ?]]. destruct x as [ty' [cl' ?]].
+      destruct H1 as [? [? _]]. f_equal; auto.
     - (* when *)
       destruct l0. repeat inv_bind.
       rewrite map_length in Hlength.
@@ -932,6 +1010,8 @@ Module Type NORMALIZATION
         rewrite Forall2_map_1 in H1.
         induction H1; simpl; auto.
         destruct y; simpl in *. f_equal; auto.
+        destruct p as [ty [cl ?]]. destruct n as [cl' ?].
+        destruct H1 as [? [? _]]. f_equal; auto.
     - (* ite *)
       clear Hwt.
       destruct l1.
@@ -956,19 +1036,23 @@ Module Type NORMALIZATION
         rewrite Forall2_map_1 in H2.
         induction H2; simpl; auto.
         destruct y; simpl in *. f_equal; auto.
+        destruct p as [ty [cl ?]]. destruct n as [cl' ?].
+        destruct H2 as [? [? _]]. f_equal; auto.
     - (* app *)
       clear Hwt.
       repeat inv_bind.
       apply idents_for_anns_values in H1.
       induction H1; simpl in *; auto.
       destruct y; subst; simpl. inv Hlength. f_equal; auto.
+      destruct p as [ty [cl ?]]. destruct x2 as [ty' [cl' ?]].
+      destruct H1 as [? [? _]]. f_equal; auto.
   Qed.
 
   Corollary map_bind2_normalize_exp_annots' :
     forall is_control es es' eqs' st st',
       Forall wl_exp es ->
       map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
-      Forall2 (fun es' e => annots es' = annot e) es' es.
+      Forall2 (fun es' e => without_names (annots es') = without_names (annot e)) es' es.
   Proof.
     intros is_control es es' eqs' st st' Hf Hmap.
     apply map_bind2_values in Hmap.
@@ -983,7 +1067,7 @@ Module Type NORMALIZATION
     forall is_control es es' eqs' st st',
       Forall wl_exp es ->
       map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
-      annots (concat es') = annots es.
+      without_names (annots (concat es')) = without_names (annots es).
   Proof.
     intros is_control es es' a2s st st' Hwt Hmap.
     eapply map_bind2_normalize_exp_annots' in Hmap; eauto.
@@ -991,14 +1075,14 @@ Module Type NORMALIZATION
     - reflexivity.
     - inv Hwt.
       unfold annots in *; rewrite flat_map_concat_map in *.
-      rewrite map_app; rewrite concat_app.
+      unfold without_names in *; rewrite map_app; rewrite concat_app; repeat rewrite map_app.
       f_equal; auto.
   Qed.
 
   Corollary normalize_exps_annots : forall es es' eqs' st st',
       Forall wl_exp es ->
       normalize_exps es st = (es', eqs', st') ->
-      annots es' = annots es.
+      without_names (annots es') = without_names (annots es).
   Proof.
     intros es es' eqs' st st' Hwt Hnorm.
     unfold normalize_exps in Hnorm; repeat inv_bind.
@@ -1007,11 +1091,10 @@ Module Type NORMALIZATION
 
   Fact fby_iteexp_annot : forall e0 e ann es' eqs' st st',
       fby_iteexp e0 e ann st = (es', eqs', st') ->
-      annot es' = [ann].
+      without_names (annot es') = without_names [ann].
   Proof.
-    intros e0 e ann es' eqs' st st' Hfby.
-    destruct ann as [ty cl]; simpl.
-    specialize (fby_iteexp_spec e0 e ty cl) as [[c [Heq Hspec]]|Hspec];
+    intros e0 e [ty [cl n]] es' eqs' st st' Hfby.
+    specialize (fby_iteexp_spec e0 e ty (cl, n)) as [[c [Heq Hspec]]|Hspec]; subst;
       rewrite Hspec in Hfby; repeat inv_bind; reflexivity.
   Qed.
 
@@ -1019,14 +1102,14 @@ Module Type NORMALIZATION
       length inits = length anns ->
       length es = length anns ->
       normalize_fby inits es anns st = (es', eqs', st') ->
-      annots es' = anns.
+      without_names (annots es') = without_names anns.
   Proof.
     intros inits es anns es' eqs' st st' Hlen1 Hlen2 Hnorm.
     specialize (normalize_fby_length _ _ _ _ _ _ _ Hlen1 Hlen2 Hnorm) as Hlen.
     unfold normalize_fby in Hnorm.
     repeat inv_bind.
     apply map_bind2_values in H.
-    assert (Forall2 (fun e a => annot e = [a]) es' anns) as Hf.
+    assert (Forall2 (fun e a => without_names (annot e) = without_names [a]) es' anns) as Hf.
     { repeat rewrite_Forall_forall.
       rewrite <- H in H2.
       specialize (H1 (a, a, b) a [] _ _ _ _ H2 eq_refl eq_refl eq_refl); destruct H1 as [? [? ?]].
@@ -1039,13 +1122,15 @@ Module Type NORMALIZATION
         apply PeanoNat.Nat.min_id.
     } clear H Hlen Hlen1 Hlen2.
     induction Hf; simpl; auto.
-    rewrite H. simpl. f_equal; auto.
+    unfold without_names in *. rewrite map_app.
+    destruct y as [? [? ?]].
+    setoid_rewrite H. setoid_rewrite IHHf. auto.
   Qed.
 
   Fact normalize_rhs_annot : forall e keep_fby es' eqs' st st',
       wl_exp e ->
       normalize_rhs keep_fby e st = (es', eqs', st') ->
-      annots es' = annot e.
+      without_names (annots es') = without_names (annot e).
   Proof.
     intros e keep_fby es' eqs' st st' Hwt Hnorm.
     destruct e; unfold normalize_rhs in Hnorm;
@@ -1053,18 +1138,18 @@ Module Type NORMALIZATION
     - (* fby *)
       destruct keep_fby.
       + repeat inv_bind. inv Hwt.
-        eapply normalize_fby_annot; eauto.
+        erewrite normalize_fby_annot; eauto.
         * eapply normalize_exps_length in H; eauto. congruence.
         * eapply normalize_exps_length in H0; eauto. congruence.
       + eapply normalize_exp_annot in Hnorm; eauto.
     - (* app *)
-      destruct o; repeat inv_bind; apply app_nil_r.
+      destruct o; repeat inv_bind; simpl; rewrite app_nil_r; reflexivity.
   Qed.
 
   Corollary normalize_rhss_annots : forall es keep_fby es' eqs' st st',
       Forall wl_exp es ->
       normalize_rhss keep_fby es st = (es', eqs', st') ->
-      annots es' = annots es.
+      without_names (annots es') = without_names (annots es).
   Proof.
     intros es keep_fby es' eqs' st st' Hf Hnorm.
     unfold normalize_rhss in Hnorm. repeat inv_bind.
@@ -1074,7 +1159,7 @@ Module Type NORMALIZATION
     - inv Hf.
       destruct H as [? [? H]]. eapply normalize_rhs_annot in H; eauto.
       unfold annots in *. rewrite flat_map_concat_map in *.
-      rewrite map_app. rewrite concat_app.
+      unfold without_names in *. rewrite map_app. rewrite concat_app. repeat rewrite map_app.
       f_equal; auto.
   Qed.
 
@@ -1137,7 +1222,8 @@ Module Type NORMALIZATION
   Proof.
     induction anns; intros ids st st' Hidents; simpl in Hidents; repeat inv_bind.
     - reflexivity.
-    - apply fresh_ident_vars_perm in H.
+    - destruct a as [ty [cl _]]. repeat inv_bind.
+      apply fresh_ident_vars_perm in H.
       apply IHanns in H0.
       etransitivity. 2: eapply H0.
       etransitivity. eapply Permutation_middle.
@@ -1201,7 +1287,7 @@ Module Type NORMALIZATION
     destruct (normalize_reset_spec e) as [[v [ann [Hv Hspec]]]| Hspec];
       subst; rewrite Hspec in Hnorm; clear Hspec.
     - repeat inv_bind. reflexivity.
-    - destruct (hd _ _); simpl in *. repeat inv_bind.
+    - destruct (hd _ _) as [ty [cl _]]; simpl in *. repeat inv_bind.
       eapply fresh_ident_vars_perm; eauto.
   Qed.
 
@@ -1458,7 +1544,8 @@ Module Type NORMALIZATION
     { apply split_equations_vars_defined.
       repeat constructor.
       eapply normalize_rhss_annots in H; eauto.
-      congruence. }
+      unfold without_names in H. rewrite Hl.
+      erewrite <- map_length. setoid_rewrite <- H. apply map_length. }
     unfold vars_defined in *; repeat rewrite flat_map_concat_map in *.
     repeat rewrite map_app; repeat rewrite concat_app.
     repeat rewrite <- app_assoc.
@@ -1486,7 +1573,7 @@ Module Type NORMALIZATION
         rewrite Permutation_app_comm. assumption.
   Qed.
 
-  Definition normalize_equations' (to_cut : PS.t) (eq : list equation) (st : fresh_st (ann * bool)) :
+  Definition normalize_equations' (to_cut : PS.t) (eq : list equation) (st : fresh_st ((type * clock) * bool)) :
     { res | normalize_equations to_cut eq st = res }.
   Proof.
     remember (normalize_equations to_cut eq st) as eqs'.
@@ -1497,7 +1584,7 @@ Module Type NORMALIZATION
   Program Definition normalize_node (to_cut : PS.t) (n : node) (Hwl : wl_node n) : node :=
     let id0 := first_unused_ident n in
     let eqs := normalize_equations' (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) (init_st id0) in
-    let nvars := (List.map (fun var => (fst var, (fst (fst (snd var)), (fst (snd (fst (snd var))))))) (st_anns (snd (proj1_sig eqs)))) in
+    let nvars := (idty (st_anns (snd (proj1_sig eqs)))) in
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
        n_in := (n_in n);
@@ -1510,7 +1597,7 @@ Module Type NORMALIZATION
   Next Obligation.
     eapply normalize_equations_vars_perm with (st:=init_st (first_unused_ident n)) in Hwl. 2: eapply surjective_pairing.
     specialize (n_defd n) as Hperm'.
-    repeat rewrite map_app in *; rewrite map_map; simpl in *.
+    unfold idty in *; repeat rewrite map_app in *; rewrite map_map; simpl in *.
     unfold st_ids in Hwl. rewrite init_st_anns in Hwl. rewrite app_nil_r in Hwl.
     etransitivity. apply Hwl.
     rewrite Permutation_app_comm. symmetry.
@@ -1532,7 +1619,7 @@ Module Type NORMALIZATION
     specialize (first_unused_ident_gt n _ eq_refl) as Hfirst; unfold used_idents in *.
     rewrite Forall_forall in Hfirst. repeat rewrite map_app in Hfirst.
     rewrite fst_NoDupMembers in *.
-    repeat rewrite map_app in *; rewrite map_map; simpl.
+    unfold idty in *; repeat rewrite map_app in *; rewrite map_map; simpl.
     rewrite NoDup_swap. rewrite <- app_assoc. rewrite NoDup_swap.
     apply NoDup_app'; auto.
     - rewrite <- fst_NoDupMembers. assumption.

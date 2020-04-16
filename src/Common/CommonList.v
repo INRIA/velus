@@ -319,6 +319,17 @@ Section Extra.
       f_equal. auto.
   Qed.
 
+  Lemma split_map_snd {B} : forall (l : list (A * B)),
+      snd (split l) = map snd l.
+  Proof.
+    intros l.
+    induction l; simpl.
+    - reflexivity.
+    - destruct a; simpl.
+      destruct (split l); simpl in *.
+      f_equal. auto.
+  Qed.
+
 End Extra.
 
 Section find.
