@@ -17,7 +17,7 @@ Module Type COMPLETENESS
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
        (Import Typ : LTYPING Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn Typ).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Fresh.Fresh Facts Tactics.
 
@@ -676,7 +676,7 @@ Module CompletenessFun
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
        (Typ : LTYPING Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn Typ)
+       (Norm : NORMALIZATION Ids Op OpAux Syn)
        <: COMPLETENESS Ids Op OpAux Syn Typ Norm.
   Include COMPLETENESS Ids Op OpAux Syn Typ Norm.
 End CompletenessFun.

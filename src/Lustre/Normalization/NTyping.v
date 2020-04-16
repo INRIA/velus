@@ -19,7 +19,7 @@ Module Type NTYPING
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
        (Import Typ : LTYPING Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn Typ).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
   Import List.
   Import Fresh Facts Tactics.
 
@@ -399,32 +399,20 @@ Module Type NTYPING
       + repeat rewrite_Forall_forall.
         repeat simpl_length.
         repeat constructor; simpl.
-        * unfold init_var_for_clock in H1.
-          destruct (find _ _) eqn:Hfind.
-          -- destruct p. inv H1.
-             apply find_some in Hfind; destruct Hfind as [Hfind1 Hfind2].
-             destruct p as [[? ?] ?].
-             repeat rewrite Bool.andb_true_iff in Hfind2. destruct Hfind2 as [_ Hfind2].
-             rewrite equiv_decb_equiv in Hfind2.
-             assert (incl (st_tys x2) (vars++(st_tys st'))) as Hincl by repeat solve_incl.
-             apply Hincl. repeat unfold st_tys, idty; repeat simpl_In.
-             exists (x, (t, c)); simpl; auto. split.
-             ++ repeat f_equal. apply Hfind2.
-             ++ repeat simpl_In. exists (x, (t, c, b)); simpl; eauto.
-          -- destruct (fresh_ident _ _) eqn:Hfresh. inv H1.
-             apply fresh_ident_In in Hfresh.
-             assert (incl (st_tys x2) (st_tys st')) as Hincl by repeat solve_incl.
-             apply in_or_app. right. apply Hincl.
-             unfold st_tys, idty. repeat simpl_In.
-             exists (x, (Op.bool_type, (fst cl))); simpl; split; auto.
-             repeat simpl_In. exists (x, (Op.bool_type, (fst cl), true)); simpl; auto.
+        * apply init_var_for_clock_In in H1.
+          apply in_or_app; right.
+          eapply fresh_ident_st_follows in H4. eapply st_follows_incl in H4.
+          eapply st_follows_incl in H3.
+          eapply H4 in H1. eapply H3 in H1; simpl in H1.
+          unfold st_tys, idty. rewrite map_map; simpl.
+          repeat simpl_In. exists (x, (Op.bool_type, (fst cl), true)); auto.
         * repeat simpl_In. apply Hclock in H0. inv H0. repeat solve_incl.
         * repeat simpl_In. apply Hwt1 in H10. repeat solve_incl.
         * apply fresh_ident_In in H4.
           apply st_follows_tys_incl in H3.
           apply in_or_app; right. apply H3.
           rewrite st_anns_tys_In. exists (fst cl). exists false. assumption.
-        * repeat simpl_In. apply Hclock in H0. repeat solve_incl.
+        * repeat simpl_In. apply Hclock in H0. inv H0. repeat solve_incl.
         * rewrite app_nil_r.
           repeat simpl_nth. repeat simpl_length.
           specialize (H8 _ _ _ _ _ H0 H10 H12). simpl in H8.
@@ -1762,7 +1750,7 @@ Module NTypingFun
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
        (Typ : LTYPING Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn Typ)
+       (Norm : NORMALIZATION Ids Op OpAux Syn)
        <: NTYPING Ids Op OpAux Syn Typ Norm.
   Include NTYPING Ids Op OpAux Syn Typ Norm.
 End NTypingFun.

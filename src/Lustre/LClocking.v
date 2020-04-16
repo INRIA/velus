@@ -105,6 +105,39 @@ Module Type LCLOCKING
   (* substitution of identifiers *)
   Definition ident_map := ident -> option ident.
 
+  Definition sub_set (l : list (ident * option ident)) (sub : ident_map) :=
+    fold_right (fun '(x, v) s => fun x' => if (x' =? x)%positive then v else s x') sub l.
+
+  Fact sub_set_In : forall l sub x y,
+      NoDupMembers l ->
+      In (x, y) l ->
+      (sub_set l sub) x = y.
+  Proof.
+    induction l; intros sub x y Hndup HIn; inv HIn.
+    - simpl. rewrite Pos.eqb_refl. reflexivity.
+    - destruct a as [x' y']; simpl.
+      inv Hndup.
+      destruct (Pos.eqb x x') eqn:Heq; eauto.
+      rewrite Pos.eqb_eq in Heq; subst.
+      exfalso. apply H2.
+      eapply In_InMembers; eauto.
+  Qed.
+
+  Fact sub_set_nIn : forall l sub x,
+      ~ InMembers x l ->
+      (sub_set l sub) x = sub x.
+  Proof.
+    induction l; intros sub x HnIn; simpl; auto.
+    destruct a as [x' y'].
+    destruct (Pos.eqb x x') eqn:Heq.
+    + rewrite Pos.eqb_eq in Heq; subst.
+      exfalso.
+      apply HnIn. constructor; auto.
+    + apply IHl.
+      intro HIn. apply HnIn.
+      right; auto.
+  Qed.
+
   (* xc : name and clock from the node interface
      nc : named clock from the annotated expression *)
   Definition WellInstantiated (bck : clock) (sub : ident_map)
@@ -1669,6 +1702,74 @@ Module Type LCLOCKING
     Qed.
 
   End ValidateExpression.
+
+  (** Adding variables to the environment preserves clocking *)
+
+  Section incl.
+
+    Fact wc_clock_incl : forall vars vars' cl,
+      incl vars vars' ->
+      wc_clock vars cl ->
+      wc_clock vars' cl.
+    Proof.
+      intros vars vars' cl Hincl Hwc.
+      induction Hwc; auto.
+    Qed.
+
+    Hint Constructors wc_exp.
+    Fact wc_exp_incl : forall G vars vars' e,
+        incl vars vars' ->
+        wc_exp G vars e ->
+        wc_exp G vars' e .
+    Proof with eauto.
+      induction e using exp_ind2; intros Hincl Hwc; inv Hwc; eauto;
+        econstructor; rewrite Forall_forall in *; eauto.
+    Qed.
+
+    (* Hint Constructors DisjointFresh. *)
+    (* Fact DisjointFresh_incl : forall vars vars' e, *)
+    (*     incl vars vars' -> *)
+    (*     DisjointFresh vars e -> *)
+    (*     DisjointFresh vars' e. *)
+    (* Proof with eauto. *)
+    (*   induction e using exp_ind2; intros Hincl Hdisj; inv Hdisj; eauto. *)
+    (*   - (* fby *) *)
+    (*     constructor... *)
+    (*     eapply Forall_app in H5; destruct H5. *)
+    (*     eapply Forall_app. split; rewrite Forall_forall in *... *)
+    (*   - (* when *) *)
+    (*     constructor... *)
+    (*     rewrite Forall_forall in *... *)
+    (*   - (* merge *) *)
+    (*     constructor... *)
+    (*     eapply Forall_app in H6; destruct H6. *)
+    (*     eapply Forall_app. split; rewrite Forall_forall in *... *)
+    (*   - (* ite *) *)
+    (*     constructor... *)
+    (*     inv H6. eapply Forall_app in H5; destruct H5. *)
+    (*     constructor... eapply Forall_app. split; rewrite Forall_forall in *... *)
+    (*   - (* app *) *)
+    (*     constructor... *)
+    (*     + rewrite Forall_forall in *... *)
+    (*     + (* a stream anonymous in vars is not necessary anonymous in vars'... *) *)
+    (* Qed. *)
+
+    (* Fact wc_equation_incl : forall G vars vars' eq, *)
+    (*     incl vars vars' -> *)
+    (*     wc_equation G vars eq -> *)
+    (*     wc_equation G vars' eq. *)
+    (* Proof with eauto. *)
+    (*   intros G vars vars' [xs es] Hincl Hwc. *)
+    (*   destruct Hwc as [? [? [? ?]]]. *)
+    (*   repeat split... *)
+    (*   - rewrite Forall_forall in *; intros. *)
+    (*     eapply wc_exp_incl... *)
+    (*   - admit. *)
+    (*   - clear H0 H1. *)
+    (*     eapply Forall2_impl_In; [| eauto]. *)
+    (*     intros a b Hin1 Hin2 Hin; simpl in Hin. eapply Hincl... *)
+    (* Qed. *)
+  End incl.
 
 End LCLOCKING.
 

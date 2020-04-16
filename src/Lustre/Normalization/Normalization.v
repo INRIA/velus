@@ -15,8 +15,7 @@ Module Type NORMALIZATION
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Import Syn : LSYNTAX Ids Op)
-       (Import Typ : LTYPING Ids Op Syn).
+       (Import Syn : LSYNTAX Ids Op).
 
   (** All the indents currently used in the node *)
   Definition used_idents (n : node) : list ident :=
@@ -104,7 +103,7 @@ Module Type NORMALIZATION
     | _ => do (initid, eqs) <- init_var_for_clock cl;
           do px <- fresh_ident ((ty, fst cl), false);
           ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
-                    [Evar px ann] ([ty], (fst cl, Some px)),
+                    [Evar px (ty, (fst cl, Some px))] ([ty], (fst cl, None)),
                ([px], [Efby [Econst (init_type ty)] [e] [ann]])::eqs)
     end.
 
@@ -113,7 +112,7 @@ Module Type NORMALIZATION
       \/ fby_iteexp e0 e (ty, cl) = do (initid, eqs) <- init_var_for_clock cl;
                                    do px <- fresh_ident ((ty, fst cl), false);
                                    ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
-                                             [Evar px (ty, cl)] ([ty], (fst cl, Some px)),
+                                             [Evar px (ty, (fst cl, Some px))] ([ty], (fst cl, None)),
                                         ([px], [Efby [Econst (init_type ty)] [e] [(ty, cl)]])::eqs).
   Proof. destruct e0; eauto. Qed.
 
@@ -1573,6 +1572,26 @@ Module Type NORMALIZATION
         rewrite Permutation_app_comm. assumption.
   Qed.
 
+  (** Additional properties *)
+
+  Fact init_var_for_clock_In : forall cl id eqs' st st',
+      init_var_for_clock cl st = (id, eqs', st') ->
+      In (id, (Op.bool_type, (fst cl), true)) (st_anns st').
+  Proof.
+    intros cl id eqs' st st' Hinit.
+    unfold init_var_for_clock in Hinit.
+    destruct (find _ _) eqn:Hfind.
+    - destruct p; inv Hinit.
+      eapply find_some in Hfind. destruct Hfind as [Hin H].
+      destruct p as [[? ?] ?].
+      repeat rewrite Bool.andb_true_iff in H. destruct H as [[Hb Hcl] Hty].
+      rewrite OpAux.type_eqb_eq in Hty. rewrite Clocks.clock_eqb_eq in Hcl. subst. eauto.
+    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+      eapply fresh_ident_In in Hfresh; eauto.
+  Qed.
+
+  (** Normalization of a full node *)
+
   Definition normalize_equations' (to_cut : PS.t) (eq : list equation) (st : fresh_st ((type * clock) * bool)) :
     { res | normalize_equations to_cut eq st = res }.
   Proof.
@@ -1580,7 +1599,6 @@ Module Type NORMALIZATION
     econstructor; eauto.
   Defined.
 
-  (** Normalization of a full node *)
   Program Definition normalize_node (to_cut : PS.t) (n : node) (Hwl : wl_node n) : node :=
     let id0 := first_unused_ident n in
     let eqs := normalize_equations' (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) (init_st id0) in
@@ -1652,7 +1670,6 @@ Module NormalizationFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
-       (Typ : LTYPING Ids Op Syn)
-       <: NORMALIZATION Ids Op OpAux Syn Typ.
-  Include NORMALIZATION Ids Op OpAux Syn Typ.
+       <: NORMALIZATION Ids Op OpAux Syn.
+  Include NORMALIZATION Ids Op OpAux Syn.
 End NormalizationFun.

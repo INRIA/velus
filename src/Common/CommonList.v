@@ -804,6 +804,17 @@ Section ConcatMap.
     rewrite Forall_forall in Hf. auto.
   Qed.
 
+  Lemma concat_length_1 : forall (f : A -> list B) (l : list A),
+      Forall (fun x => length (f x) = 1) l ->
+      length (concat (map f l)) = length l.
+  Proof.
+    induction l; intros Hf; simpl; auto.
+    inv Hf.
+    rewrite app_length.
+    rewrite H1; simpl.
+    f_equal; auto.
+  Qed.
+
   Lemma concat_length_eq : forall (l1 : list (list A)) (l2 : list (list B)),
       Forall2 (fun l1 l2 => length l1 = length l2) l1 l2 ->
       length (concat l1) = length (concat l2).

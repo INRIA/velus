@@ -7,9 +7,9 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
-From Velus Require Import Lustre.Normalization.NTyping.
+From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking.
 
 (** * Correctness of the Normalization *)
 
@@ -21,13 +21,15 @@ Module Type CORRECTNESS
        (Str : COINDSTREAMS Op OpAux)
        (Import Syn : LSYNTAX Ids Op)
        (Import Typ : LTYPING Ids Op Syn)
+       (Cl : LCLOCKING Ids Op Syn)
        (Lord : LORDERED Ids Op Syn)
        (Import Sem : LSEMANTICS Ids Op OpAux Syn Lord Str)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn Typ).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Tactics.
   Module Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Import Typ.
+  Module Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
 
   CoFixpoint default_stream : Stream OpAux.value :=
     Cons OpAux.absent default_stream.
@@ -1544,10 +1546,12 @@ Module CorrectnessFun
        (Str : COINDSTREAMS Op OpAux)
        (Syn : LSYNTAX Ids Op)
        (Typ : LTYPING Ids Op Syn)
+       (Clo : LCLOCKING Ids Op Syn)
        (Lord : LORDERED Ids Op Syn)
        (Sem : LSEMANTICS Ids Op OpAux Syn Lord Str)
-       (Norm : NORMALIZATION Ids Op OpAux Syn Typ)
-       <: CORRECTNESS Ids Op OpAux Str Syn Typ Lord Sem Norm.
-  Include CORRECTNESS Ids Op OpAux Str Syn Typ Lord Sem Norm.
+       (Norm : NORMALIZATION Ids Op OpAux Syn)
+       <: CORRECTNESS Ids Op OpAux Str Syn Typ Clo Lord Sem Norm.
+  Include CORRECTNESS Ids Op OpAux Str Syn Typ Clo Lord Sem Norm.
   Module Typing := NTypingFun Ids Op OpAux Syn Typ Norm.
+  Module Clocking := NClockingFun Ids Op OpAux Syn Clo Norm.
 End CorrectnessFun.
