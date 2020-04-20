@@ -95,26 +95,23 @@ Module Type NORMALIZATION
                                       [(bool_type, cl)]])]), st')
            end.
 
+  Fixpoint is_constant (e : exp) : bool :=
+    match e with
+    | Econst _ => true
+    | Ewhen [e] _ _ ([ty], _) => is_constant e
+    | _ => false
+    end.
+
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
   Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
     let '(ty, cl) := ann in
-    match e0 with
-    | Econst c => ret (Efby [e0] [e] [ann], [])
-    | _ => do (initid, eqs) <- init_var_for_clock cl;
-          do px <- fresh_ident ((ty, fst cl), false);
-          ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
-                    [Evar px (ty, (fst cl, Some px))] ([ty], (fst cl, None)),
-               ([px], [Efby [Econst (init_type ty)] [e] [ann]])::eqs)
-    end.
-
-  Lemma fby_iteexp_spec : forall e0 e ty cl,
-      (exists c, e0 = Econst c /\ fby_iteexp e0 e (ty, cl) = ret (Efby [e0] [e] [(ty, cl)], []))
-      \/ fby_iteexp e0 e (ty, cl) = do (initid, eqs) <- init_var_for_clock cl;
-                                   do px <- fresh_ident ((ty, fst cl), false);
-                                   ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
-                                             [Evar px (ty, (fst cl, Some px))] ([ty], (fst cl, None)),
-                                        ([px], [Efby [Econst (init_type ty)] [e] [(ty, cl)]])::eqs).
-  Proof. destruct e0; eauto. Qed.
+    if (is_constant e0)
+    then ret (Efby [e0] [e] [ann], [])
+    else do (initid, eqs) <- init_var_for_clock cl;
+         do px <- fresh_ident ((ty, fst cl), false);
+         ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
+                   [Evar px (ty, (fst cl, Some px))] ([ty], (fst cl, None)),
+              ([px], [Efby [Econst (init_type ty)] [e] [ann]])::eqs).
 
   (** Normalize a `fby inits es anns` expression, with inits and es already normalized *)
   Definition normalize_fby (inits : list exp) (es : list exp) (anns : list ann) : FreshAnn (list exp * list equation) :=
@@ -305,8 +302,8 @@ Module Type NORMALIZATION
       fresh_st_valid st'.
   Proof with eauto.
     intros e0 e [ty cl] e' eqs' st st' Hfby Hvalid.
-    destruct (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind...
+    unfold fby_iteexp in Hfby.
+    destruct (is_constant e0); repeat inv_bind...
   Qed.
   Hint Resolve fby_iteexp_st_valid.
 
@@ -495,8 +492,8 @@ Module Type NORMALIZATION
       fresh_st_follows st st'.
   Proof.
     intros e0 e [ty cl] res st st' Hfby.
-    destruct (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind.
+    unfold fby_iteexp in Hfby.
+    destruct (is_constant e0); repeat inv_bind.
     - reflexivity.
     - etransitivity; eauto.
   Qed.
@@ -1093,8 +1090,8 @@ Module Type NORMALIZATION
       without_names (annot es') = without_names [ann].
   Proof.
     intros e0 e [ty [cl n]] es' eqs' st st' Hfby.
-    specialize (fby_iteexp_spec e0 e ty (cl, n)) as [[c [Heq Hspec]]|Hspec]; subst;
-      rewrite Hspec in Hfby; repeat inv_bind; reflexivity.
+    unfold fby_iteexp in Hfby.
+    destruct (is_constant e0); repeat inv_bind; reflexivity.
   Qed.
 
   Fact normalize_fby_annot : forall inits es anns es' eqs' st st',
@@ -1209,8 +1206,8 @@ Module Type NORMALIZATION
     repeat simpl_length.
     specialize (H1 (x, x, (Op.bool_type, (Cbase, None))) x [] _ _ _ _ H2 eq_refl eq_refl eq_refl).
     destruct H1 as [st'' [st''' H1]]. destruct (nth _ _ _) as [[e0 e] [ty cl]]. rewrite <- H3.
-    specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-      rewrite Hspec in H1; clear Hspec; repeat inv_bind; reflexivity.
+    unfold fby_iteexp in H1.
+    destruct (is_constant e0); repeat inv_bind; reflexivity.
   Qed.
 
   (** ** Propagation of the variable permutation property *)
@@ -1269,8 +1266,8 @@ Module Type NORMALIZATION
     unfold normalize_fby in Hnorm; repeat inv_bind.
     eapply map_bind2_vars_perm. eapply H.
     apply Forall_forall; intros [[e0 e] [ty cl]] Hin; intros.
-    destruct (fby_iteexp_spec e0 e ty cl) as [[c [Hc Hspec]]|Hspec];
-      subst; rewrite Hspec in H0; clear Hspec; repeat inv_bind.
+    unfold fby_iteexp in H0.
+    destruct (is_constant e0); repeat inv_bind.
     - reflexivity.
     - apply fresh_ident_vars_perm in H1.
       etransitivity. 2 : apply H1.

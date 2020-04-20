@@ -485,8 +485,8 @@ Module Type CORRECTNESS
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
     intros G vars b H e0 e [ty cl] y0 y z e' eqs' st st' Hsem0 Hsem Hfby Hvalid Histst Hiteexp.
-    destruct (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-      rewrite Hspec in Hiteexp; clear Hspec; repeat inv_bind.
+    unfold fby_iteexp in Hiteexp.
+    destruct (is_constant e0); repeat inv_bind.
     - exists H. repeat (split; eauto).
       econstructor.
       + constructor; eauto.

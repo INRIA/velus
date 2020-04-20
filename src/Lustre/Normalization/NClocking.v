@@ -352,21 +352,24 @@ Module Type NCLOCKING
     eapply map_bind2_wc_exp' in H...
     - destruct a as [[e0 e] a]...
     - solve_forall. destruct x as [[e0 e] [ty [cl n]]].
-      specialize (fby_iteexp_spec e0 e ty (cl, n)) as [[? [? Hspec]]|Hspec]; subst;
-        rewrite Hspec in H1; clear Hspec; repeat inv_bind.
+      unfold fby_iteexp in H1.
+      destruct (is_constant e0); repeat inv_bind.
       + repeat rewrite_Forall_forall.
         repeat constructor; simpl...
         * repeat simpl_In.
+          apply Hwc1 in H8.
+          repeat solve_incl.
+        * repeat simpl_In.
           apply Hwc2 in H7.
           repeat solve_incl.
-        * unfold clock_of_nclock; simpl.
+        * rewrite app_nil_r. unfold clock_of_nclock; simpl.
           repeat simpl_nth; repeat simpl_length.
           specialize (H6 _ _ _ _ _ H7 H8 H10); simpl in H6.
-          congruence.
+          rewrite H8. rewrite H6...
         * rewrite app_nil_r.
           repeat simpl_nth; repeat simpl_length.
           specialize (H4 _ _ _ _ _ H7 H11 H10).
-          rewrite <- H11 in H4. rewrite H4.
+          rewrite H11. rewrite H4.
           repeat constructor. rewrite H10. reflexivity.
         * repeat simpl_In...
       + repeat rewrite_Forall_forall.

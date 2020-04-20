@@ -2,6 +2,7 @@ From Coq Require Import List Sorting.Permutation.
 Import List.ListNotations.
 Open Scope list_scope.
 Require Import Omega.
+Require Import ProofIrrelevance.
 
 From Velus Require Import Common Ident.
 From Velus Require Import Operators.
@@ -77,7 +78,24 @@ Module Type COMPLETENESS
   Definition normalized_node (n : node) :=
     Forall (normalized_equation (ps_from_list (List.map fst (n_out n)))) (n_eqs n).
 
+  Definition normalized_global (G : global) := Forall normalized_node G.
+
   Hint Constructors is_constant normalized_lexp normalized_cexp normalized_equation.
+
+  Fact constant_normalized_lexp : forall e,
+      is_constant e ->
+      normalized_lexp e.
+  Proof.
+    intros e Hconst.
+    induction Hconst; auto.
+  Qed.
+
+  Fact is_constant_numstreams : forall e,
+      is_constant e ->
+      numstreams e = 1.
+  Proof.
+    intros e Hconst; induction Hconst; reflexivity.
+  Qed.
 
   Fact normalized_lexp_numstreams : forall e,
       normalized_lexp e ->
@@ -93,6 +111,8 @@ Module Type COMPLETENESS
     induction e; intros Hnorm; inv Hnorm;
       try apply normalized_lexp_numstreams in H; auto.
   Qed.
+
+  (** ** After normalization, a node is normalized *)
 
   Fact normalized_lexp_hd_default : forall es,
       Forall normalized_lexp es ->
@@ -180,6 +200,21 @@ Module Type COMPLETENESS
 
   Hint Resolve in_combine_l in_combine_r.
   Hint Resolve normalized_lexp_hd_default.
+
+  Fact is_constant_is_constant : forall e,
+      Norm.is_constant e = true <->
+      is_constant e.
+  Proof with eauto.
+    intros e. split; intros Hconst.
+    - induction e using exp_ind2; simpl in Hconst; try congruence.
+      + constructor.
+      + repeat (destruct es; try congruence).
+        inv H; inv H3.
+        destruct a.
+        repeat (destruct l; try congruence).
+        constructor...
+    - induction Hconst...
+  Qed.
 
   Lemma normalize_exp_normalized_lexp : forall e es' eqs' st st',
       normalize_exp false e st = (es', eqs', st') ->
@@ -285,8 +320,8 @@ Module Type COMPLETENESS
       Forall (normalized_equation out) eqs'.
   Proof.
     intros e0 e [ty cl] e' eqs' out st st' Hfby He Hlt.
-    specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind.
+    unfold fby_iteexp in Hfby.
+    destruct (Norm.is_constant e0); repeat inv_bind.
     - constructor.
     - constructor.
       + constructor; auto.
@@ -347,9 +382,9 @@ Module Type COMPLETENESS
         replace (length x5) in H6.
         specialize (H3 (e, e, a0) (hd_default []) [] _ _ _ _ H6 eq_refl eq_refl eq_refl). destruct H3 as [? [? H3]].
         destruct (nth n _) as [[e0 e'] [ty cl]] eqn:Hnth.
-        specialize (fby_iteexp_spec e0 e' ty cl) as [[? [? Hspec]]|Hspec]; subst;
-          rewrite Hspec in H3; clear Hspec; repeat inv_bind.
-        * simpl in *. rewrite <- H8. repeat constructor.
+        unfold fby_iteexp in H3.
+        destruct (Norm.is_constant e0) eqn:Hisconst; repeat inv_bind.
+        * simpl in *. rewrite <- H9. repeat constructor.
           -- intro contra. apply Hlt in contra.
              specialize (idents_for_anns_st_follows _ _ _ _ H4) as Hfollows.
              apply idents_for_anns_incl_ids in H4.
@@ -358,8 +393,9 @@ Module Type COMPLETENESS
              apply (Pos.lt_irrefl i).
              eapply Pos.lt_le_trans; eauto.
              repeat (etransitivity; eauto).
+          -- rewrite is_constant_is_constant in Hisconst...
           -- eapply nth_In in H6; rewrite Hnth in H6...
-        * repeat constructor.
+        * simpl. rewrite <- H11. repeat constructor.
           eapply nth_In in H6; rewrite Hnth in H6...
       + eapply map_bind2_normalized_eq in H1... solve_forall.
       + eapply map_bind2_normalized_eq in H2...
@@ -474,6 +510,17 @@ Module Type COMPLETENESS
       normalized_rhs keep_fby e.
   Hint Constructors normalized_rhs.
 
+  Fact normalized_equation_normalized_rhs : forall xs es to_cut,
+      normalized_equation to_cut (xs, es) ->
+      Forall (normalized_rhs (negb (existsb (fun x => PS.mem x to_cut) xs))) es.
+  Proof with eauto.
+    intros xs es to_cut Hnormed.
+    inv Hnormed...
+    constructor; [| constructor].
+    simpl.
+    apply PSE.mem_3 in H1. rewrite H1; simpl...
+  Qed.
+
   Fact normalize_rhs_normalized_rhs : forall e keep_fby es' eqs' st st',
       normalize_rhs keep_fby e st = (es', eqs', st') ->
       Forall (normalized_rhs keep_fby) es'.
@@ -493,11 +540,12 @@ Module Type COMPLETENESS
       replace (length es') in Hn.
       specialize (H3 (x5, x5, (bool_type, (Cbase, None))) (hd_default []) [] _ _ _ _ Hn eq_refl eq_refl eq_refl).
       destruct H3 as [? [? H3]]. destruct (nth n _ _) as [[e0 e] [ty cl]] eqn:Hnth'.
-      specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-        rewrite Hspec in H3; clear Hspec; repeat inv_bind; simpl in *.
+      unfold fby_iteexp in H3.
+      destruct (Norm.is_constant e0) eqn:Hisconst; repeat inv_bind; simpl in *.
       + rewrite <- H5. repeat constructor.
-        eapply nth_In in Hn. rewrite Hnth' in Hn...
-      + repeat constructor.
+        * rewrite is_constant_is_constant in Hisconst...
+        * eapply nth_In in Hn. rewrite Hnth' in Hn...
+      + rewrite <- H7. repeat constructor.
         eapply nth_In in Hn. rewrite Hnth' in Hn...
     - (* app *)
       destruct o; repeat inv_bind...
@@ -541,8 +589,8 @@ Module Type COMPLETENESS
           intros. eapply Pos.lt_le_trans... etransitivity...
         * intros. destruct a as [[e0 e] ann]. apply fby_iteexp_st_follows in H2...
         * repeat rewrite_Forall_forall. destruct x5 as [[e0 e] [ty cl]].
-          specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-            rewrite Hspec in H3; clear Hspec; repeat inv_bind; inv H5.
+          unfold fby_iteexp in H3.
+          destruct (Norm.is_constant e0) eqn:Hisconstant; repeat inv_bind; simpl in *; inv H5.
           -- econstructor...
              ++ intro contra. apply H4 in contra.
                 specialize (fresh_ident_In _ _ _ _ H6) as Hin.
@@ -668,6 +716,329 @@ Module Type COMPLETENESS
     - apply PSP.union_subset_2.
   Qed.
 
+  Theorem normalize_global_normalized_global : forall G Hwl,
+      normalized_global (normalize_global G Hwl).
+  Proof.
+    induction G; intros Hwl; simpl; constructor.
+    - apply normalize_node_normalized_node.
+    - apply IHG.
+  Qed.
+
+  (** ** Idempotence of normalization *)
+
+  Fact normalized_lexp_normalize_idem : forall e is_control st,
+      normalized_lexp e ->
+      normalize_exp is_control e st = ([e], [], st).
+  Proof with eauto.
+    intros e is_control st Hnormed; revert is_control.
+    induction Hnormed; intro is_control; simpl; repeat inv_bind...
+    - (* unop *)
+      repeat eexists...
+      inv_bind...
+    - (* binop *)
+      repeat eexists...
+      inv_bind. repeat eexists...
+      inv_bind...
+    - (* when *)
+      exists [e]. exists []. exists st.
+      repeat split; inv_bind...
+      exists [[e]]. exists [[]]. exists st.
+      repeat split; simpl; inv_bind...
+      repeat eexists...
+      inv_bind.
+      repeat eexists; inv_bind...
+  Qed.
+
+  Corollary normalized_lexps_normalize_idem' : forall es is_control st,
+      Forall normalized_lexp es ->
+      (exists eqs, map_bind2 (normalize_exp is_control) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
+  Proof with eauto.
+    induction es; intros is_control st Hf;
+      inv Hf; simpl; repeat inv_bind...
+    eapply normalized_lexp_normalize_idem in H1...
+    eapply (IHes is_control st) in H2; clear IHes.
+    destruct H2 as [eqs [H2 Heqs]].
+    exists ([]::eqs).
+    repeat eexists... inv_bind.
+    repeat eexists... inv_bind.
+    repeat eexists... inv_bind.
+    repeat f_equal.
+  Qed.
+
+  Corollary normalized_lexps_normalize_idem : forall es st,
+      Forall normalized_lexp es ->
+      normalize_exps es st = (es, [], st).
+  Proof with eauto.
+    intros.
+    eapply normalized_lexps_normalize_idem' in H. destruct H as [eqs [H Heqs]].
+    unfold normalize_exps; inv_bind.
+    repeat eexists...
+    inv_bind. rewrite concat_map_singl1. congruence.
+  Qed.
+
+  Fact normalized_cexp_normalize_idem : forall e st,
+      normalized_cexp e ->
+      normalize_exp true e st = ([e], [], st).
+  Proof with eauto.
+    intros e st Hnormed.
+    induction Hnormed; simpl; repeat inv_bind...
+    - (* merge *)
+      exists [et]. exists []. exists st.
+      repeat split; inv_bind...
+      + exists [[et]]. exists [[]]. exists st.
+        repeat split; simpl; inv_bind...
+        repeat eexists...
+        inv_bind.
+        repeat eexists; inv_bind...
+      + exists [ef]. exists []. exists st.
+        repeat split; simpl; inv_bind...
+        exists [[ef]]. exists [[]]. exists st.
+        repeat split; simpl; inv_bind...
+        repeat eexists...
+        inv_bind.
+        repeat eexists; inv_bind...
+    - (* ite *)
+      eapply normalized_lexp_normalize_idem in H. repeat eexists...
+      repeat inv_bind.
+      exists [et]. exists []. exists st.
+      repeat split; inv_bind...
+      + exists [[et]]. exists [[]]. exists st.
+        repeat split; simpl; inv_bind...
+        repeat eexists...
+        inv_bind.
+        repeat eexists; inv_bind...
+      + exists [ef]. exists []. exists st.
+        repeat split; simpl; inv_bind...
+        exists [[ef]]. exists [[]]. exists st.
+        repeat split; simpl; inv_bind...
+        repeat eexists...
+        inv_bind.
+        repeat eexists; inv_bind...
+    - (* lexp *) eapply normalized_lexp_normalize_idem...
+  Qed.
+
+  Fact normalize_fby_idem : forall e0 e ann st,
+      is_constant e0 ->
+      normalized_lexp e ->
+      normalize_fby [e0] [e] [ann] st = ([Efby [e0] [e] [ann]], [], st).
+  Proof with eauto.
+    intros e0 e [ty cl] st Hcons Hnormed.
+    unfold normalize_fby; inv_bind.
+    eexists. exists [[]]. exists st. split; simpl; inv_bind...
+    eexists. exists []. exists st. split; simpl.
+    - unfold fby_iteexp.
+      destruct (Norm.is_constant e0) eqn:Hisconstant; repeat inv_bind...
+      rewrite <- is_constant_is_constant in Hcons. congruence.
+    - inv_bind.
+      repeat eexists; inv_bind...
+  Qed.
+
+  Fact normalized_rhs_normalize_idem : forall e keep_fby st,
+      normalized_rhs keep_fby e ->
+      normalize_rhs keep_fby e st = ([e], [], st).
+  Proof with eauto.
+    intros e keep_fby st Hnormed.
+    destruct e; inv Hnormed; unfold normalize_rhs;
+      try (solve [eapply normalized_cexp_normalize_idem; eauto]);
+      try (solve [inv H; inv H0]).
+    - (* fby *)
+      repeat inv_bind.
+      exists [e0]. exists []. exists st.
+      split; unfold normalize_exps; inv_bind.
+      + exists [[e0]]. exists [[]]. exists st. split; simpl; inv_bind...
+        eapply constant_normalized_lexp in H2. eapply normalized_lexp_normalize_idem in H2.
+        repeat eexists...
+        inv_bind.
+        exists []. exists []. exists st.
+        repeat split; inv_bind...
+      + exists [e]. exists []. exists st. split; simpl; inv_bind...
+        * exists [[e]]. exists [[]]. exists st. split; simpl; inv_bind...
+          eapply normalized_lexp_normalize_idem in H4.
+          repeat eexists... inv_bind.
+          repeat eexists; inv_bind...
+        * repeat eexists; try inv_bind...
+          eapply normalize_fby_idem...
+    - (* app *)
+      repeat inv_bind.
+      repeat eexists. inv_bind.
+      eapply normalized_lexps_normalize_idem in H1.
+      repeat eexists...
+      inv_bind...
+    - (* app (reset) *)
+      repeat inv_bind.
+      repeat eexists; inv_bind.
+      + repeat eexists; simpl; inv_bind...
+        repeat eexists; simpl; inv_bind...
+      + eapply normalized_lexps_normalize_idem in H1.
+        repeat eexists...
+        inv_bind...
+  Qed.
+
+  Corollary normalized_rhss_normalize_idem' : forall es keep_fby st,
+      Forall (normalized_rhs keep_fby) es ->
+      (exists eqs, map_bind2 (normalize_rhs keep_fby) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
+  Proof with eauto.
+    induction es; intros keep_fby st Hf;
+      inv Hf; simpl; repeat inv_bind...
+    eapply normalized_rhs_normalize_idem in H1...
+    eapply (IHes keep_fby st) in H2; clear IHes.
+    destruct H2 as [eqs [H2 Heqs]].
+    exists ([]::eqs).
+    repeat eexists... inv_bind.
+    repeat eexists... inv_bind.
+    repeat eexists... inv_bind.
+    repeat f_equal.
+  Qed.
+
+  Corollary normalized_rhss_normalize_idem : forall es keep_fby st,
+      Forall (normalized_rhs keep_fby) es ->
+      normalize_rhss keep_fby es st = (es, [], st).
+  Proof with eauto.
+    intros.
+    eapply normalized_rhss_normalize_idem' in H. destruct H as [eqs [H Heqs]].
+    unfold normalize_rhss; inv_bind.
+    repeat eexists...
+    inv_bind. rewrite concat_map_singl1. congruence.
+  Qed.
+
+  Fact normalized_equation_normalize_idem : forall eq to_cut st,
+      wl_equation eq ->
+      normalized_equation to_cut eq ->
+      normalize_equation to_cut eq st = ([eq], st).
+  Proof with eauto.
+    intros [xs es] to_cut st Hwl Hnormed. inv Hwl.
+    specialize (normalized_equation_normalized_rhs _ _ _ Hnormed) as Hnormed2.
+    apply normalized_rhss_normalize_idem with (st:=st) in Hnormed2.
+    inv Hnormed; simpl; repeat inv_bind;
+      repeat eexists; eauto;
+        inv_bind; rewrite app_nil_r;
+          simpl in *; repeat f_equal.
+    - rewrite app_nil_r in H0.
+      apply firstn_all2. rewrite H0. apply le_refl.
+    - rewrite app_nil_r in H0.
+      apply firstn_all2. rewrite H0. apply le_refl.
+    - rewrite app_nil_r in H0. rewrite length_annot_numstreams in H0.
+      apply firstn_all2. simpl. rewrite H0. apply le_refl.
+  Qed.
+
+  Corollary normalized_equations_normalize_idem : forall eqs to_cut st,
+      Forall wl_equation eqs ->
+      Forall (normalized_equation to_cut) eqs ->
+      normalize_equations to_cut eqs st = (eqs, st).
+  Proof with eauto.
+    induction eqs; intros to_cut st Hwl Hnormed; inv Hwl; inv Hnormed;
+      unfold normalize_equations; repeat inv_bind...
+    eapply normalized_equation_normalize_idem in H3...
+    repeat eexists... inv_bind.
+    repeat eexists... inv_bind.
+    rewrite <- cons_is_app...
+  Qed.
+
+  Definition transport1 {n1 n2 : node} (Hin : n_in n1 = n_in n2) : 0 < length (n_in n1) -> 0 < length (n_in n2).
+  Proof. intros. induction Hin. auto. Defined.
+
+  Definition transport2 {n1 n2 : node} (Hout : n_out n1 = n_out n2) : 0 < length (n_out n1) -> 0 < length (n_out n2).
+  Proof. intros. induction Hout. auto. Defined.
+
+  Definition transport3 {n1 n2 : node}
+             (Heqs : n_eqs n1 = n_eqs n2)
+             (Hvars : n_vars n1 = n_vars n2)
+             (Hout : n_out n1 = n_out n2) :
+    Permutation (vars_defined (n_eqs n1)) (map fst ((n_vars n1) ++ (n_out n1))) ->
+    Permutation (vars_defined (n_eqs n2)) (map fst ((n_vars n2) ++ (n_out n2))).
+  Proof.
+    intros.
+    induction Heqs. induction Hvars. induction Hout.
+    auto.
+  Defined.
+
+  Definition transport4 {n1 n2 : node}
+             (Hin : n_in n1 = n_in n2)
+             (Hvars : n_vars n1 = n_vars n2)
+             (Hout : n_out n1 = n_out n2) :
+    NoDupMembers (n_in n1 ++ n_vars n1 ++ n_out n1) ->
+    NoDupMembers (n_in n2 ++ n_vars n2 ++ n_out n2).
+  Proof.
+    intros.
+    induction Hin. induction Hvars. induction Hout.
+    auto.
+  Defined.
+
+  Definition transport5 {n1 n2 : node}
+             (Hname : n_name n1 = n_name n2)
+             (Hin : n_in n1 = n_in n2)
+             (Hvars : n_vars n1 = n_vars n2)
+             (Hout : n_out n1 = n_out n2) :
+    Forall ValidId (n_in n1 ++ n_vars n1 ++ n_out n1) /\ valid (n_name n1) ->
+    Forall ValidId (n_in n2 ++ n_vars n2 ++ n_out n2) /\ valid (n_name n2).
+  Proof.
+    intros.
+    induction Hname. induction Hin. induction Hvars. induction Hout.
+    auto.
+  Defined.
+
+  Fact equal_node (n1 n2 : node)
+    (Hname : n_name n1 = n_name n2)
+    (Hstate : n_hasstate n1 = n_hasstate n2)
+    (Hin : n_in n1 = n_in n2)
+    (Hout : n_out n1 = n_out n2)
+    (Hvars : n_vars n1 = n_vars n2)
+    (Heqs : n_eqs n1 = n_eqs n2) :
+    (transport1 Hin (n_ingt0 n1) = n_ingt0 n2) ->
+    (transport2 Hout (n_outgt0 n1) = n_outgt0 n2) ->
+    (transport3 Heqs Hvars Hout (n_defd n1) = n_defd n2) ->
+    (transport4 Hin Hvars Hout (n_nodup n1) = n_nodup n2) ->
+    (transport5 Hname Hin Hvars Hout (n_good n1) = n_good n2) ->
+    n1 = n2.
+  Proof.
+    intros Heq1 Heq2 Heq3 Heq4 Heq5.
+    destruct n1. destruct n2.
+    simpl in *.
+    destruct Hname. destruct Hstate.
+    destruct Hin. destruct Hout. destruct Hvars.
+    destruct Heqs.
+    simpl in *; subst.
+    reflexivity.
+  Qed.
+
+  Lemma normalized_node_normalize_idem : forall n Hwl,
+      normalized_node n ->
+      normalize_node PS.empty n Hwl = n.
+  Proof with eauto.
+    intros n Hwl Hnormed.
+    unfold normalize_node, normalized_node in *.
+    apply normalized_equations_normalize_idem with (st:=init_st (first_unused_ident n)) in Hnormed...
+    destruct n; simpl in *.
+    eapply equal_node; simpl...
+    Unshelve. 6,7,8,9,10:simpl.
+    6,7,8: exact eq_refl.
+    1,2:reflexivity.
+    4: { rewrite Hnormed; simpl.
+         rewrite init_st_anns; simpl.
+         apply app_nil_r. }
+    4: { rewrite Hnormed... }
+    simpl.
+    1,2,3:apply proof_irrelevance.
+  Qed.
+
+  Corollary normalized_global_normalize_idem : forall G Hwl,
+      normalized_global G ->
+      normalize_global G Hwl = G.
+  Proof with eauto.
+    induction G; intros Hwl Hnormed...
+    simpl. inv Hnormed.
+    eapply normalized_node_normalize_idem in H1...
+    rewrite H1.
+    rewrite IHG...
+  Qed.
+
+  Theorem normalize_global_idem : forall G Hwl1 Hwl2,
+      normalize_global (normalize_global G Hwl1) Hwl2 = normalize_global G Hwl1.
+  Proof.
+    intros G Hwl1 Hwl2.
+    apply normalized_global_normalize_idem.
+    apply normalize_global_normalized_global.
+  Qed.
 End COMPLETENESS.
 
 Module CompletenessFun

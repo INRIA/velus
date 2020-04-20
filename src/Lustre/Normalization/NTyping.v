@@ -379,10 +379,13 @@ Module Type NTYPING
     eapply map_bind2_wt_exp' in H; eauto.
     - destruct a as [[e0 e] a]. eauto.
     - solve_forall. destruct x as [[e0 e] [ty cl]].
-      specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]|Hspec]; subst;
-        rewrite Hspec in H1; clear Hspec; repeat inv_bind.
+      unfold fby_iteexp in H1.
+      destruct (is_constant e0); repeat inv_bind.
       + repeat rewrite_Forall_forall.
         repeat constructor; simpl.
+        * repeat simpl_In.
+          apply Hwt1 in H8.
+          repeat solve_incl.
         * repeat simpl_In.
           apply Hwt2 in H7.
           repeat solve_incl.
@@ -391,7 +394,7 @@ Module Type NTYPING
           repeat simpl_nth; repeat simpl_length.
           specialize (H4 _ _ _ _ _ H0 H11 H10). simpl in H4.
           congruence.
-        * f_equal. repeat simpl_nth; repeat simpl_length.
+        * rewrite app_nil_r. repeat simpl_nth; repeat simpl_length.
           specialize (H6 _ _ _ _ _ H0 H8 H10); simpl in H6.
           congruence.
         * repeat simpl_In.
@@ -836,9 +839,8 @@ Module Type NTYPING
     eapply map_bind2_wt_eq in H; eauto.
     - intros; destruct a as [[e0 e] a]...
     - repeat rewrite_Forall_forall. destruct x as [[e0 e] [ty cl]].
-      specialize (fby_iteexp_spec e0 e ty cl) as [[c [? Hspec]]|Hspec]; subst;
-        rewrite Hspec in H5; clear Hspec;
-          repeat inv_bind; inv H8.
+      unfold fby_iteexp in H5.
+      destruct (is_constant e0); repeat inv_bind; inv H8.
       + repeat constructor; simpl.
         * repeat simpl_In.
           apply Hwt2 in H8. repeat solve_incl.
@@ -1466,8 +1468,8 @@ Module Type NTYPING
     unfold normalize_fby in Hnorm. repeat inv_bind.
     eapply map_bind2_wt_nclock in H...
     solve_forall. destruct x as [[e0 e] [ty cl]].
-    specialize (fby_iteexp_spec e0 e ty cl) as [[? [? Hspec]]| Hspec]; subst;
-      rewrite Hspec in H2; clear Hspec; repeat inv_bind.
+    unfold fby_iteexp in H2.
+    destruct (is_constant e0); repeat inv_bind.
     - assumption.
     - repeat simpl_In.
       unfold init_var_for_clock in H2.
