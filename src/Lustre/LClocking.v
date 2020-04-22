@@ -150,6 +150,8 @@ Module Type LCLOCKING
     Variable G    : global.
     Variable vars : list (ident * clock).
 
+    (** EvarAnon is used at toplevel of an equation, to allow for equations of the form
+        x = y, without having to specify a name. Evar is used internally to expressions *)
     Inductive wc_exp : exp -> Prop :=
     | wc_Econst: forall c,
         wc_exp (Econst c)
@@ -157,6 +159,10 @@ Module Type LCLOCKING
     | wc_Evar: forall x ty ck,
         In (x, ck) vars ->
         wc_exp (Evar x (ty, (ck, Some x)))
+
+    | wc_EvarAnon: forall x ty ck,
+        In (x, ck) vars ->
+        wc_exp (Evar x (ty, (ck, None)))
 
     | wc_Eunop: forall op e ty ck,
         wc_exp e ->
@@ -379,6 +385,11 @@ Module Type LCLOCKING
       forall x ty ck,
         In (x, ck) vars ->
         P (Evar x (ty, (ck, Some x))).
+
+    Hypothesis EvarAnonCase:
+      forall x ty ck,
+        In (x, ck) vars ->
+        P (Evar x (ty, (ck, None))).
 
     Hypothesis EunopCase:
       forall op e ty ck,
@@ -1751,7 +1762,9 @@ Module Type LCLOCKING
     (*   - (* app *) *)
     (*     constructor... *)
     (*     + rewrite Forall_forall in *... *)
-    (*     + (* a stream anonymous in vars is not necessary anonymous in vars'... *) *)
+    (*     + eapply Forall_impl; [| eauto]. *)
+    (*       intros a0 Hisanon. destruct a0; simpl in *... *)
+    (*       intros contra. apply Hisanon. admit. (* non, ca ne marche pas *) *)
     (* Qed. *)
 
     (* Fact wc_equation_incl : forall G vars vars' eq, *)

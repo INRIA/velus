@@ -411,6 +411,9 @@ Module Type NCLOCKING
     - (* var *)
       repeat constructor...
       eapply in_or_app; auto.
+    - (* var (anon) *)
+      repeat constructor...
+      eapply in_or_app; auto.
     - (* unop *)
       assert (length x = numstreams e) as Hlen by (eapply normalize_exp_length; eauto).
       assert (clocksof x = clockof e) as Hclockof by (eapply normalize_exp_clockof; eauto).
