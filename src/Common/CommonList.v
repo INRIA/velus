@@ -1337,6 +1337,75 @@ Section ForallExists.
     intro H; apply not_In_app in H; auto.
   Qed.
 
+  Lemma Exists_concat : forall xs,
+      Exists P (concat xs) <-> Exists (Exists P) xs.
+  Proof.
+    intros xs. split; intro H.
+    - rewrite Exists_exists in *.
+      destruct H as [x [Hin H]].
+      rewrite in_concat in Hin. destruct Hin as [l [Hin1 Hin2]].
+      exists l. split; auto.
+      rewrite Exists_exists. exists x; auto.
+    - rewrite Exists_exists in *.
+      destruct H as [l [Hin1 H]].
+      rewrite Exists_exists in H. destruct H as [x [Hin2 H]].
+      exists x. split; auto. rewrite in_concat. exists l; auto.
+  Qed.
+
+  Lemma Exists_concat_nth : forall xs n d,
+      n < length xs ->
+      Exists P (nth n xs d) -> Exists P (concat xs).
+  Proof.
+    intros xs n d Hlen Hex.
+    apply nth_In with (d:=d) in Hlen.
+    rewrite Exists_concat.
+    rewrite Exists_exists.
+    exists (nth n xs d); auto.
+  Qed.
+
+  Lemma Exists_concat_nth' : forall xs d,
+      Exists P (concat xs) ->
+      exists n, (n < length xs /\ Exists P (nth n xs d)).
+  Proof.
+    intros xs d Hex.
+    rewrite Exists_concat in Hex.
+    rewrite Exists_exists in Hex. destruct Hex as [x [Hin Hex]].
+    apply In_nth with (d:=d) in Hin. destruct Hin as [n [Hlen Hnth]]; subst.
+    exists n. auto.
+  Qed.
+
+  Lemma Exists_combine_l {B} : forall xs (ys : list B),
+      length xs = length ys ->
+      Exists P xs <-> Exists (fun '(x, _) => P x) (combine xs ys).
+  Proof.
+    induction xs; intros ys Hlen;
+      destruct ys; simpl in *; try congruence.
+    - split; intros H; inv H.
+    - inv Hlen.
+      apply IHxs in H0.
+      split; intros H.
+      + inv H; auto.
+        right. rewrite <- H0. assumption.
+      + inv H; auto.
+        right. rewrite H0. assumption.
+  Qed.
+
+  Lemma Exists_combine_r {B} : forall xs (ys : list B),
+      length xs = length ys ->
+      Exists P xs <-> Exists (fun '(_, x) => P x) (combine ys xs).
+  Proof.
+    induction xs; intros ys Hlen;
+      destruct ys; simpl in *; try congruence.
+    - split; intros H; inv H.
+    - inv Hlen.
+      apply IHxs in H0.
+      split; intros H.
+      + inv H; auto.
+        right. rewrite <- H0. assumption.
+      + inv H; auto.
+        right. rewrite H0. assumption.
+  Qed.
+
 End ForallExists.
 
 Lemma Forall_iff_insideout:

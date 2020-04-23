@@ -5,7 +5,7 @@ Require Import Omega.
 
 From Velus Require Import Common Ident.
 From Velus Require Import Operators.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping.
+From Velus Require Import Lustre.LSyntax.
 From Velus Require Lustre.Normalization.Fresh.
 
 (** * Normalization procedure *)
@@ -265,6 +265,19 @@ Module Type NORMALIZATION
     | |- In ?x (map ?f ?l) =>
       rewrite in_map_iff
     end.
+
+  (** ** Some additional facts *)
+
+  Fact combine_for_numstreams_In {B} : forall es (xs : list B) e x,
+      In (e, x) (combine_for_numstreams es xs) ->
+      In e es.
+  Proof.
+    induction es; intros xs e x Hin; simpl in Hin.
+    - inv Hin.
+    - destruct Hin.
+      + inv H. constructor; auto.
+      + right. eauto.
+  Qed.
 
   (** ** Propagation of the st_valid property *)
 

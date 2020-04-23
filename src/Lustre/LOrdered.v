@@ -83,20 +83,35 @@ Module Type LORDERED
       - destruct HH; inversion_clear 1; intuition.
     Qed.
 
+    Lemma Is_node_in_Exists: forall n eqs,
+        Is_node_in n eqs <-> List.Exists (Is_node_in_eq n) eqs.
+    Proof.
+      intros.
+      induction eqs as [|eq eqs IH].
+      - split; intro Hisin; inv Hisin.
+      - split; intro Hisin.
+        + inv Hisin.
+          * constructor; auto.
+          * apply Exists_cons_tl; auto.
+        + inv Hisin.
+          * constructor; auto.
+          * apply Exists_cons_tl; auto.
+    Qed.
+
     Lemma Is_node_in_Forall:
       forall n eqs,
         ~Is_node_in n eqs <-> List.Forall (fun eq=>~Is_node_in_eq n eq) eqs.
     Proof.
-      induction eqs as [|eq eqs IH];
-      [split; [now constructor|now inversion 2]|].
-      split; intro HH.
-      - apply not_Is_node_in_cons in HH.
-        destruct HH as [Heq Heqs].
-        constructor; [exact Heq|apply IH with (1:=Heqs)].
-      - apply not_Is_node_in_cons.
-        inversion_clear HH as [|? ? Heq Heqs].
-        apply IH in Heqs.
-        intuition.
+      intros n eqs.
+      rewrite Is_node_in_Exists. symmetry. apply Forall_Exists_neg.
+    Qed.
+
+    Lemma Is_node_in_app: forall n eqs1 eqs2,
+        Is_node_in n (eqs1++eqs2) <-> (Is_node_in n eqs1 \/ Is_node_in n eqs2).
+    Proof.
+      intros n eqs1 eqs2.
+      unfold Is_node_in.
+      apply Exists_app'.
     Qed.
 
   End Is_node_Properties.
