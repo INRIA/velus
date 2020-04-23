@@ -431,6 +431,17 @@ Module Type NORDERED
     f_equal; eauto.
   Qed.
 
+  Fact normalize_node_ordered : forall G n Hwl to_cut,
+      Ordered_nodes (n::G) ->
+      Ordered_nodes (normalize_node to_cut n Hwl::G).
+  Proof.
+    intros G n Hwl to_cut Hordered.
+    inv Hordered.
+    constructor; eauto.
+    intros f Hisin.
+    eapply normalize_node_Is_node_in in Hisin; auto.
+  Qed.
+
   Lemma normalize_global_ordered : forall G Hwl,
       Ordered_nodes G ->
       Ordered_nodes (normalize_global G Hwl).

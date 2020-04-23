@@ -402,6 +402,95 @@ Module Type LSEMANTICS
       auto.
   Qed.
 
+  Lemma sem_node_cons':
+    forall node G f xs ys,
+      Ordered_nodes (node::G)
+      -> sem_node G f xs ys
+      -> node.(n_name) <> f
+      -> sem_node (node::G) f xs ys.
+  Proof.
+    intros node G f xs ys Hord Hsem.
+    induction Hsem using sem_node_ind2
+      with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
+                                      -> sem_equation (node::G) bk H eq)
+           (P_exp := fun H bk e ss => ~ Is_node_in_exp node.(n_name) e
+                                   -> sem_exp (node::G) H bk e ss);
+      try (now econstructor; eauto).
+    - econstructor; eauto. apply IHHsem.
+      intro. destruct H3. constructor. auto.
+    - econstructor; eauto.
+      apply IHHsem. intro. destruct H5. constructor. auto.
+      apply IHHsem0. intro. destruct H5. constructor. auto.
+    - econstructor; eauto.
+      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
+      intro. destruct H5. constructor. auto. inv H0.
+      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
+      destruct H5; auto.
+      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
+      intro. destruct H5. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
+      destruct H6; auto.
+    - econstructor; eauto.
+      clear H0 H3. induction H1; eauto. constructor. apply H0.
+      intro. destruct H4. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H4. constructor. inv H3; eauto.
+    - econstructor; eauto.
+      clear H1 H3 H4 H5. induction H2; eauto. constructor. apply H1.
+      intro. destruct H6. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H6. constructor. inv H3.
+      destruct H6; auto.
+      clear H1 H3 H2 H5. induction H4; eauto. constructor. apply H1.
+      intro. destruct H6. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H6. constructor. inv H2.
+      destruct H6; auto.
+    - econstructor; eauto. apply IHHsem.
+      intro. destruct H6. constructor. auto.
+      clear H1 H3 H4 H5. induction H2; eauto. constructor. apply H1.
+      intro. destruct H6. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H6. constructor. inv H3.
+      destruct H6; auto. destruct H3; auto.
+      clear H1 H3 H2 H5. induction H4; eauto. constructor. apply H1.
+      intro. destruct H6. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H6. constructor. inv H2.
+      destruct H6; auto. destruct H2; auto.
+    - inv Hord.
+      econstructor; try apply IHHsem; eauto.
+      + eapply Forall2_impl_In; [| eauto].
+        intros a0 b0 Hina Hinb Hsem'; simpl in Hsem'.
+        eapply Hsem'.
+        intro contra. apply H2. constructor.
+        rewrite Exists_exists. exists a0; auto.
+      + rewrite Forall_forall in H6.
+        inv Hsem. unfold find_node in H7. apply find_some in H7; destruct H7 as [Hin Heq].
+        rewrite ident_eqb_eq in Heq; subst. eauto.
+    - inv Hord.
+      econstructor; eauto.
+      + eapply Forall2_impl_In in H1; eauto. intros * ?? Hi. apply Hi. intro.
+        take (~ _) and apply it. constructor. right. eapply Exists_exists; eauto.
+      + apply IHHsem. intro. take (~ _) and apply it. constructor; eauto.
+      + intro k. take (forall k, _ /\ _) and specialize (it k) as (? & Hk).
+        apply Hk.
+        rewrite Forall_forall in H9.
+        inv H4. unfold find_node in H10. apply find_some in H10; destruct H10 as [Hin Heq].
+        rewrite ident_eqb_eq in Heq; subst. eauto.
+    - econstructor; eauto.
+      clear H0 H2. induction H1; eauto.
+      constructor. apply H0. intro. destruct H3. now constructor.
+      apply IHForall2. intro. destruct H3. unfold Is_node_in_eq.
+      simpl. rewrite Exists_cons. right. auto.
+    - intro Hnf.
+      econstructor; eauto.
+      + simpl.
+        rewrite <- ident_eqb_neq in Hnf. rewrite Hnf; auto.
+      + eapply Forall_impl_In; [| eauto].
+        intros a HIn Hsem; simpl in Hsem.
+        apply Hsem.
+        eapply find_node_later_not_Is_node_in in H0; eauto.
+        intro contra. apply H0.
+        unfold Is_node_in. rewrite Exists_exists.
+        exists a; auto.
+  Qed.
+
   Lemma sem_equation_global_tl:
     forall nd G H b eq,
       Ordered_nodes (nd :: G) ->
@@ -478,7 +567,7 @@ Module Type LSEMANTICS
       rewrite Exists_cons. right. auto.
   Qed.
 
-  Lemma Forall_sem_equation_global_tl:
+  Corollary Forall_sem_equation_global_tl:
     forall nd G b H eqs,
       Ordered_nodes (nd :: G)
       -> ~ Is_node_in nd.(n_name) eqs
@@ -489,6 +578,85 @@ Module Type LSEMANTICS
     apply Forall_impl_In.
     intros eq Hin Hsem.
     eapply sem_equation_global_tl; eauto.
+    apply Is_node_in_Forall in Hnini.
+    apply Forall_forall with (1:=Hnini) (2:=Hin).
+  Qed.
+
+  Lemma sem_equation_global_tl':
+    forall nd G H b eq,
+      Ordered_nodes (nd :: G) ->
+      ~ Is_node_in_eq nd.(n_name) eq ->
+      sem_equation G H b eq ->
+      sem_equation (nd :: G) H b eq.
+  Proof.
+    destruct eq as [ xs es ]. intros * Hord Hnin Hsem. inv Hsem.
+
+    econstructor; eauto.
+    clear H6. induction H5 as [ | ? ? ? ? Hsem ]; eauto. constructor.
+
+    clear IHForall2. revert dependent y.
+
+    induction x using exp_ind2; intros * Hsem; inv Hsem;
+      try (now econstructor; eauto).
+    - econstructor; eauto. eapply IHx; eauto. SolveNin Hnin.
+    - econstructor; eauto.
+      apply IHx1; eauto. SolveNin Hnin.
+      apply IHx2; eauto. SolveNin Hnin.
+    - econstructor; eauto.
+      clear H5 H1 H11 H12. induction H9; auto. constructor.
+      inv H0. apply H4; auto. SolveNin Hnin.
+      inv H0. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H9 H12. induction H11; auto. constructor.
+      inv H1. apply H4; auto. SolveNin Hnin.
+      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    - econstructor; eauto.
+      clear H5 H11 H12. induction H10; eauto. constructor.
+      inv H0. apply H4; eauto. SolveNin Hnin.
+      inv H0. apply IHForall2; eauto. SolveNin Hnin.
+    - econstructor; eauto.
+      clear H5 H1 H10 H13 H14. induction H12; auto. constructor.
+      inv H0. apply H4; auto. SolveNin Hnin.
+      inv H0. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
+      inv H1. apply H4; auto. SolveNin Hnin.
+      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    - econstructor; eauto. eapply IHx; eauto. SolveNin Hnin.
+      clear H5 H1 H10 H13 H14. induction H12; auto. constructor.
+      inv H0. apply H4; auto. SolveNin Hnin.
+      inv H0. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
+      inv H1. apply H4; auto. SolveNin Hnin.
+      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    - econstructor.
+      + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
+        eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
+        intro Ini. apply Hnin. inv Ini. repeat constructor.
+        apply Exists_exists; eauto. now constructor 2.
+      + eapply sem_node_cons'; eauto. intro. subst. apply Hnin.
+        constructor. apply INEapp2.
+    - econstructor; eauto.
+      + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
+        eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
+        intro Ini. apply Hnin. inv Ini. constructor. constructor. right.
+        apply Exists_exists; eauto. now constructor 2.
+      + apply H0; auto. SolveNin Hnin.
+      + intro k. eapply sem_node_cons'; eauto. intro. subst.
+        apply Hnin. constructor. constructor.
+    - apply IHForall2. intro. destruct Hnin. unfold Is_node_in_eq. simpl.
+      rewrite Exists_cons. right. auto.
+  Qed.
+
+  Corollary Forall_sem_equation_global_tl':
+    forall nd G b H eqs,
+      Ordered_nodes (nd :: G)
+      -> ~ Is_node_in nd.(n_name) eqs
+      -> Forall (sem_equation G H b) eqs
+      -> Forall (sem_equation (nd :: G) H b) eqs.
+  Proof.
+    intros nd G H b eqs Hord Hnini.
+    apply Forall_impl_In.
+    intros eq Hin Hsem.
+    eapply sem_equation_global_tl'; eauto.
     apply Is_node_in_Forall in Hnini.
     apply Forall_forall with (1:=Hnini) (2:=Hin).
   Qed.
@@ -769,6 +937,114 @@ Module Type LSEMANTICS
     + eapply Forall2_impl_In; [| eauto].
       intros. eapply sem_var_refines...
   Qed.
+
+  (** ** Semantic refinement relation between nodes *)
+  Section sem_ref.
+
+    (** Functional equivalence for nodes *)
+    Definition node_sem_refines G G' f : Prop :=
+      (forall ins outs, (sem_node G f ins outs) -> (sem_node G' f ins outs)).
+
+    Fact node_sem_refines_refl : forall G f, node_sem_refines G G f.
+    Proof. intros G f ins outs. auto. Qed.
+
+    Fact node_sem_refines_trans : forall G1 G2 G3 f,
+        node_sem_refines G1 G2 f ->
+        node_sem_refines G2 G3 f ->
+        node_sem_refines G1 G3 f.
+    Proof.
+      intros G1 G2 G3 f H1 H2 ins outs Hsem.
+      auto.
+    Qed.
+
+    Definition global_sem_refines G G' : Prop :=
+      forall f, node_sem_refines G G' f.
+
+    Hint Constructors sem_exp.
+    Fact sem_eq_sem_exp : forall G G' H b e vs,
+        global_sem_refines G G' ->
+        sem_exp G H b e vs ->
+        sem_exp G' H b e vs.
+    Proof with eauto.
+      induction e using exp_ind2; intros vs Heq Hsem; inv Hsem...
+      - (* fby *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + repeat rewrite_Forall_forall...
+      - (* when *)
+        econstructor...
+        repeat rewrite_Forall_forall...
+      - (* merge *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + repeat rewrite_Forall_forall...
+      - (* ite *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + repeat rewrite_Forall_forall...
+      - (* app *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + specialize (Heq f (concat ss) vs).
+          auto.
+      - (* app (reset) *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + intros k. specialize (H13 k).
+          specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
+          auto.
+    Qed.
+
+    Fact sem_eq_sem_equation : forall G G' H b eq,
+        global_sem_refines G G' ->
+        sem_equation G H b eq ->
+        sem_equation G' H b eq.
+    Proof.
+      intros G G' H b [xs es] Heq Hsem.
+      inv Hsem.
+      econstructor; eauto.
+      eapply Forall2_impl_In; [| eauto].
+      intros. eapply sem_eq_sem_exp; eauto.
+    Qed.
+
+    Fact global_sem_eq_nil :
+      global_sem_refines [] [].
+    Proof.
+      intros f ins outs Hsem. assumption.
+    Qed.
+
+    Fact global_sem_eq_cons : forall G G' n n' f,
+        Ordered_nodes (n::G) ->
+        Ordered_nodes (n'::G') ->
+        n_name n = f ->
+        n_name n' = f ->
+        global_sem_refines G G' ->
+        node_sem_refines (n::G) (n'::G') f ->
+        global_sem_refines (n::G) (n'::G').
+    Proof with eauto.
+      intros G G' n n' f Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
+      inv Hsem.
+      simpl in H0.
+      destruct (ident_eqb (n_name n) f0) eqn:Heq.
+      + specialize (Hnode ins outs).
+        inv H0.
+        rewrite ident_eqb_eq in Heq; subst.
+        eapply Hnode.
+        eapply Snode with (n:=n0)...
+        simpl. rewrite ident_eqb_refl...
+      + rewrite ident_eqb_neq in Heq.
+        apply sem_node_cons'...
+        specialize (Hglob f0 ins outs). apply Hglob.
+        econstructor...
+        rewrite Forall_forall in *. intros.
+        eapply sem_equation_global_tl...
+        eapply find_node_later_not_Is_node_in in Hord1; eauto.
+        intro contra.
+        rewrite Is_node_in_Forall in Hord1. rewrite Forall_forall in *.
+        apply Hord1 in H4. congruence.
+    Qed.
+
+  End sem_ref.
 
 End LSEMANTICS.
 

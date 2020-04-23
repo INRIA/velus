@@ -9,7 +9,7 @@ From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
-From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking.
+From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking Lustre.Normalization.NOrdered.
 
 (** * Correctness of the Normalization *)
 
@@ -22,14 +22,15 @@ Module Type CORRECTNESS
        (Import Syn : LSYNTAX Ids Op)
        (Import Typ : LTYPING Ids Op Syn)
        (Cl : LCLOCKING Ids Op Syn)
-       (Lord : LORDERED Ids Op Syn)
-       (Import Sem : LSEMANTICS Ids Op OpAux Syn Lord Str)
+       (Import Ord : LORDERED Ids Op Syn)
+       (Import Sem : LSEMANTICS Ids Op OpAux Syn Ord Str)
        (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Tactics.
   Module Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Import Typ.
   Module Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
+  Module Ord := NOrderedFun Ids Op OpAux Syn Ord Norm.
 
   CoFixpoint default_stream : Stream OpAux.value :=
     Cons OpAux.absent default_stream.
@@ -1476,65 +1477,118 @@ Module Type CORRECTNESS
       apply sem_var_In in H8; auto.
   Qed.
 
-  Lemma normalize_node_sem : forall G f n Hwl ins outs to_cut f' n',
+  Fact normalize_node_sem_equation : forall G H n Hwl ins to_cut,
+      Env.dom H (List.map fst (n_in n ++ n_vars n ++ n_out n)) ->
+      Forall (wt_equation G (idty (n_in n ++ n_vars n ++ n_out n))) (n_eqs n) ->
+      Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n) ->
+      exists H', Env.refines eq H H' /\
+            Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs (normalize_node to_cut n Hwl)).
+  Proof.
+    intros G H n Hwl ins to_cut Hdom Hwt Hsem.
+    eapply normalize_equations_sem with (st:=init_st (first_unused_ident n)) in Hsem.
+    - destruct Hsem as [H' [Href Hsem]].
+      exists H'; simpl; eauto.
+    - eassumption.
+    - apply init_st_valid_after.
+    - apply init_st_hist_st; eauto.
+    - rewrite <- surjective_pairing. reflexivity.
+  Qed.
+
+  Lemma normalize_node_eq : forall G G' f n Hwl ins outs to_cut,
+      Ordered_nodes (n::G) ->
+      Ordered_nodes ((normalize_node to_cut n Hwl)::G') ->
+      global_sem_refines G G' ->
       wt_node G n ->
-      find_node f G = Some n ->
-      sem_node G f ins outs ->
-      normalize_node to_cut n Hwl = n' ->
-      find_node f' G = Some n' ->
-      sem_node G f' ins outs.
+      sem_node (n::G) f ins outs ->
+      sem_node ((normalize_node to_cut n Hwl)::G') f ins outs.
   Proof with eauto.
-    intros G f n Hwl ins outs to_cut n' f' [_ [_ [_ Hwt]]] Hfind Hsem Hnorm Hfind'; simpl in *.
-    inv Hsem. rewrite Hfind in H0. inv H0.
-    remember (normalize_equations (PS.union to_cut (ps_from_list (List.map fst (n_out n0))))
-                                  (n_eqs n0) (init_st (first_unused_ident n0))) as res.
-    destruct res as [eqs' st']. symmetry in Heqres.
-    remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
-    assert (Env.refines eq H' H) as Href.
-    { rewrite HeqH'. eapply Env.restrict_refines... }
-    assert (Forall2 (sem_var H') (idents (n_in n0)) ins) as Hin.
-    { repeat rewrite_Forall_forall.
-      eapply sem_var_restrict...
-      unfold idents in *. erewrite map_nth'; [| solve_length].
-      rewrite <- surjective_pairing.
-      apply in_or_app. left. apply nth_In. solve_length.
-      Unshelve. exact (xH, (Op.bool_type, Cbase)). } clear H1.
-    assert (Forall2 (sem_var H') (idents (n_out n0)) outs) as Hout.
-    { repeat rewrite_Forall_forall.
-      eapply sem_var_restrict...
-      unfold idents in *. erewrite map_nth'; [| solve_length].
-      rewrite <- surjective_pairing.
-      repeat (apply in_or_app; right). apply nth_In. solve_length.
-      Unshelve. exact (xH, (Op.bool_type, Cbase)). } clear H2.
-    assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)) as Heqs.
-    { clear Hin Hout Hfind'.
-      repeat rewrite_Forall_forall.
-      specialize (sem_equation_restrict G _ _ _ _ (Hwt _ H0) (H3 _ H0)) as Hrestr.
-      unfold idty in Hrestr; rewrite map_map in Hrestr; simpl in Hrestr.
-      assumption. } clear H3.
-    assert (Env.dom H' (List.map fst (n_in n0 ++ n_vars n0 ++ n_out n0))) as Hdom.
-    { rewrite HeqH'. apply Env.dom_lb_restrict_dom.
-      apply Env.dom_lb_intro. intros x HIn.
-      repeat rewrite map_app in HIn. repeat rewrite in_app_iff in HIn. destruct HIn as [HIn|[HIn|HIn]].
-      + eapply Env.In_refines...
-        apply sem_var_In in Hin. rewrite Forall_forall in Hin...
-      + eapply Env.In_refines...
-        specialize (n_defd n0) as Hdef; symmetry in Hdef.
-        assert (In x (vars_defined (n_eqs n0))) as HIn'.
-        { eapply Permutation_in in Hdef...
-          rewrite map_app. apply in_or_app... }
-        apply sem_equation_In in Heqs. rewrite Forall_forall in Heqs...
-      + eapply Env.In_refines...
-        apply sem_var_In in Hout. rewrite Forall_forall in Hout...
-    }
-    eapply init_st_hist_st in Hdom.
-    specialize (normalize_equations_sem _ _ _ _ _ _ _ _ _ Hwt Heqs (init_st_valid_after n0) Hdom Heqres) as [H'' [Href1 Hsem]].
-    eapply Snode with (H:=H''); eauto; unfold normalize_node; simpl.
-    - repeat rewrite_Forall_forall.
-      eapply sem_var_refines...
-    - repeat rewrite_Forall_forall.
-      eapply sem_var_refines...
-    - rewrite Heqres...
+    intros G G' f n Hwl ins outs to_cut Hord1 Hord2 Href Hwt Hsem.
+    inv Hsem; simpl in H0. destruct (ident_eqb (n_name n) f) eqn:Hident.
+    - inv H0.
+      (* New env H' (restrict H) and its properties *)
+      remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
+      assert (Env.refines eq H' H) as Href'.
+      { rewrite HeqH'. eapply Env.restrict_refines... }
+      assert (Forall2 (sem_var H') (idents (n_in n0)) ins) as Hin.
+      { repeat rewrite_Forall_forall.
+        eapply sem_var_restrict...
+        unfold idents in *. erewrite map_nth'; [| solve_length].
+        rewrite <- surjective_pairing.
+        apply in_or_app. left. apply nth_In. solve_length.
+        Unshelve. exact (xH, (Op.bool_type, Cbase)). } clear H1.
+      assert (Forall2 (sem_var H') (idents (n_out n0)) outs) as Hout.
+      { repeat rewrite_Forall_forall.
+        eapply sem_var_restrict...
+        unfold idents in *. erewrite map_nth'; [| solve_length].
+        rewrite <- surjective_pairing.
+        repeat (apply in_or_app; right). apply nth_In. solve_length.
+        Unshelve. exact (xH, (Op.bool_type, Cbase)). } clear H2.
+      assert (Env.dom H' (List.map fst (n_in n0 ++ n_vars n0 ++ n_out n0))) as Hdom.
+      { rewrite HeqH'. apply Env.dom_lb_restrict_dom.
+        apply Env.dom_lb_intro. intros x HIn.
+        repeat rewrite map_app in HIn. repeat rewrite in_app_iff in HIn. destruct HIn as [HIn|[HIn|HIn]].
+        + eapply Env.In_refines...
+          apply sem_var_In in Hin. rewrite Forall_forall in Hin...
+        + specialize (n_defd n0) as Hdef; symmetry in Hdef.
+          assert (In x (vars_defined (n_eqs n0))) as HIn'.
+          { eapply Permutation_in in Hdef...
+            rewrite map_app. apply in_or_app... }
+          apply sem_equation_In in H3. rewrite Forall_forall in H3...
+        + eapply Env.In_refines...
+          apply sem_var_In in Hout. rewrite Forall_forall in Hout...
+      }
+      (* Reasoning on the semantics of equations *)
+      assert (Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n0)).
+      { eapply Forall_sem_equation_global_tl...
+        eapply find_node_not_Is_node_in in Hord1...
+        simpl. rewrite ident_eqb_refl... } clear H3.
+      destruct Hwt as [_ [_ [_ Hwt]]].
+      assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)).
+      { rewrite HeqH'.
+        clear Hin Hout.
+        repeat rewrite_Forall_forall.
+        specialize (H0 _ H1). specialize (Hwt _ H1).
+        eapply sem_equation_restrict in H0...
+        unfold idty in H0. rewrite map_map in H0. simpl in H0... } clear H0.
+      eapply normalize_node_sem_equation in H1...
+      destruct H1 as [H'' [Href'' Heqs']].
+      eapply Snode with (H:=H''); simpl. 5:reflexivity.
+      + rewrite Hident; reflexivity.
+      + simpl. repeat rewrite_Forall_forall. eapply sem_var_refines...
+      + simpl. repeat rewrite_Forall_forall. eapply sem_var_refines...
+      + clear Hin Hout Hdom.
+        assert (Forall (sem_equation G' H'' (Str.clocks_of ins)) (n_eqs (normalize_node to_cut n0 Hwl))).
+        { eapply Forall_impl; [| eauto]. intros a Hsem. eapply sem_eq_sem_equation... } clear Heqs'.
+        apply Forall_sem_equation_global_tl'...
+        eapply find_node_not_Is_node_in in Hord2...
+        simpl. rewrite ident_eqb_refl...
+    - specialize (Href f ins outs).
+      eapply sem_node_cons'...
+      + apply Href. econstructor...
+        eapply Forall_impl_In; [| eauto]. intros eq Hin Hsem.
+        eapply sem_equation_global_tl...
+        eapply find_node_later_not_Is_node_in in Hord1...
+        intro Hisin. apply Hord1. rewrite Is_node_in_Exists. rewrite Exists_exists.
+        eexists...
+      + simpl. apply ident_eqb_neq in Hident...
+  Qed.
+
+  Lemma normalize_global_eq : forall G Hwl,
+      wt_global G ->
+      Ordered_nodes G ->
+      global_sem_refines G (normalize_global G Hwl).
+  Proof with eauto.
+    induction G; intros Hwl Hwt Hordered; simpl; inv Hwt.
+    - apply global_sem_eq_nil.
+    - apply global_sem_eq_cons with (f:=n_name a)...
+      + eapply Ord.normalize_global_ordered in Hordered.
+        simpl in Hordered...
+      + inv Hordered...
+      + intros f ins outs.
+        eapply normalize_node_eq...
+        * eapply Ord.normalize_global_ordered in Hordered.
+          simpl in Hordered...
+        * inv Hordered...
   Qed.
 
 End CORRECTNESS.
@@ -1554,4 +1608,5 @@ Module CorrectnessFun
   Include CORRECTNESS Ids Op OpAux Str Syn Typ Clo Lord Sem Norm.
   Module Typing := NTypingFun Ids Op OpAux Syn Typ Norm.
   Module Clocking := NClockingFun Ids Op OpAux Syn Clo Norm.
+  Module Ordered := NOrderedFun Ids Op OpAux Syn Lord Norm.
 End CorrectnessFun.

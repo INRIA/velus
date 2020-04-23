@@ -498,9 +498,9 @@ Module Type LSYNTAX
     intros * Hf. now apply find_split in Hf.
   Qed.
 
-  (** Equivalence between globals *)
+  (** Interface equivalence between nodes *)
 
-  Section global_interface_eq.
+  Section interface_eq.
 
     (** Nodes are equivalent if their interface are equivalent,
         that is if they have the same identifier and the same
@@ -588,7 +588,20 @@ Module Type LSYNTAX
         congruence.
     Qed.
 
-  End global_interface_eq.
+    Fact global_iface_eq_find : forall G G' f n,
+        global_iface_eq G G' ->
+        find_node f G = Some n ->
+        exists n', (find_node f G' = Some n' /\
+               node_iface_eq n n').
+    Proof.
+      intros G G' f n Hglob Hfind.
+      specialize (Hglob f).
+      inv Hglob; try congruence.
+      rewrite Hfind in H. inv H.
+      exists sy. auto.
+    Qed.
+
+  End interface_eq.
 
 End LSYNTAX.
 

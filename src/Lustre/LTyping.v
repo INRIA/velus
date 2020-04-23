@@ -832,10 +832,10 @@ Module Type LTYPING
 
   End incl.
 
-  Section global_interface_eq.
+  Section interface_eq.
 
     Hint Constructors wt_exp.
-    Fact global_eq_wt_exp : forall G G' vars e,
+    Fact iface_eq_wt_exp : forall G G' vars e,
         global_iface_eq G G' ->
         wt_exp G vars e ->
         wt_exp G' vars e.
@@ -881,7 +881,7 @@ Module Type LTYPING
           * congruence.
     Qed.
 
-    Fact global_eq_wt_equation : forall G G' vars equ,
+    Fact iface_eq_wt_equation : forall G G' vars equ,
         global_iface_eq G G' ->
         wt_equation G vars equ ->
         wt_equation G' vars equ.
@@ -890,11 +890,11 @@ Module Type LTYPING
       simpl in *. destruct Hwt.
       split.
       + rewrite Forall_forall in *. intros x Hin.
-        eapply global_eq_wt_exp; eauto.
+        eapply iface_eq_wt_exp; eauto.
       + assumption.
     Qed.
 
-    Lemma global_eq_wt_node : forall G G' n,
+    Lemma iface_eq_wt_node : forall G G' n,
         global_iface_eq G G' ->
         wt_node G n ->
         wt_node G' n.
@@ -903,10 +903,10 @@ Module Type LTYPING
       destruct Hwt as [? [? [? Hwt]]].
       repeat split; auto.
       rewrite Forall_forall in *; intros.
-      eapply global_eq_wt_equation; eauto.
+      eapply iface_eq_wt_equation; eauto.
     Qed.
 
-  End global_interface_eq.
+  End interface_eq.
 
 End LTYPING.
 

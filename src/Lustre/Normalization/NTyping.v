@@ -1739,7 +1739,7 @@ Module Type NTYPING
       + eapply IHG; eauto.
       + remember (normalize_node _ _ _) as n'. symmetry in Heqn'.
         eapply normalize_node_wt in Heqn'; eauto. simpl in Heqn'.
-        eapply global_eq_wt_node; eauto.
+        eapply iface_eq_wt_node; eauto.
         eapply normalize_global_eq.
       + eapply normalize_global_names; eauto.
   Qed.
