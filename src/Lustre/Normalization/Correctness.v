@@ -1,13 +1,14 @@
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
+From Coq Require Import Setoid Morphisms.
 
 Require Import Omega.
 
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking Lustre.Normalization.NOrdered.
 
@@ -16,9 +17,9 @@ From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClo
 Local Set Warnings "-masking-absolute-name".
 Module Type CORRECTNESS
        (Import Ids : IDS)
-       (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Str : COINDSTREAMS Op OpAux)
+       (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Str : COINDSTREAMS Op OpAux)
        (Import Syn : LSYNTAX Ids Op)
        (Import Typ : LTYPING Ids Op Syn)
        (Cl : LCLOCKING Ids Op Syn)
@@ -27,13 +28,13 @@ Module Type CORRECTNESS
        (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Tactics.
-  Module Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
-  Import Typ.
+  Module Import ClockSem := LClockSemanticsFun Ids Op OpAux Syn Ord Str Sem.
+  Module Import Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Module Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
   Module Ord := NOrderedFun Ids Op OpAux Syn Ord Norm.
 
   CoFixpoint default_stream : Stream OpAux.value :=
-    Cons OpAux.absent default_stream.
+    Cons absent default_stream.
 
   Fact sem_exp_numstreams : forall G vars H b e v,
       wt_exp G vars e ->
@@ -316,12 +317,195 @@ Module Type CORRECTNESS
   (** We want to specify the semantics of the init equations created during the normalization
       with idents stored in the env *)
 
-  Axiom init_stream : clock -> Stream bool -> Stream OpAux.value.
+  (* Pas possible de prouver que c'est la semantique de Swhen false sans le lemme d'alignement...
+     Ou alors il faut calculer les horloges differement *)
+
+  CoFixpoint const_val (b : Stream bool) (v : Op.val) : Stream value :=
+    Cons (if hd b then present v else absent) (const_val (tl b) v).
+
+  Fact const_val_Cons : forall b bs v,
+      const_val (Cons b bs) v =
+      Cons (if b then present v else absent) (const_val bs v).
+  Proof.
+    intros b bs v.
+    rewrite Stream_decompose_thm at 1; reflexivity.
+  Qed.
+
+  Fact const_val_const : forall b c,
+      Str.const b c ≡ const_val b (Op.sem_const c).
+  Proof.
+    cofix const_val_const.
+    intros [b0 b] c; simpl.
+    constructor; simpl; auto.
+  Qed.
+
+  CoFixpoint shift (v : Op.val) (str : Stream OpAux.value) :=
+    match str with
+    | Cons (present v') str' => Cons (present v) (shift v' str')
+    | Cons absent str' => Cons absent (shift v str')
+    end.
+
+  Fact shift_Cons : forall v y ys,
+      shift v (Cons y ys) =
+      match y with
+      | present v' => Cons (present v) (shift v' ys)
+      | absent => Cons absent (shift v ys)
+      end.
+  Proof.
+    intros v y ys.
+    rewrite Stream_decompose_thm at 1; simpl.
+    destruct y; reflexivity.
+  Qed.
+
+  Add Parametric Morphism : shift
+      with signature eq ==> @EqSt value ==> @EqSt value
+    as shift_EqSt.
+  Proof.
+    cofix CoFix.
+    intros v [x xs] [y ys] Heq.
+    inv Heq; simpl in *; subst.
+    repeat rewrite shift_Cons.
+    destruct y; simpl; constructor; simpl; auto.
+  Qed.
+
+  Lemma shift_const : forall bs v,
+      shift v (const_val bs v) ≡ (const_val bs v).
+  Proof.
+    cofix CoFix.
+    intros [b bs] v.
+    rewrite const_val_Cons.
+    destruct b; rewrite shift_Cons; constructor; simpl; auto.
+  Qed.
+
+  Lemma ite_false : forall bs xs ys,
+      synchronized xs bs ->
+      synchronized ys bs ->
+      ite (const_val bs false_val) xs ys ys.
+  Proof.
+    cofix CoFix.
+    intros [b bs] xs ys Hsync1 Hsync2.
+    rewrite const_val_Cons.
+    inv Hsync1; inv Hsync2; constructor; auto.
+  Qed.
+
+  Lemma fby1_shift : forall bs v y ys,
+      synchronized ys bs ->
+      fby1 y (const_val bs v) ys (shift y ys).
+  Proof with eauto.
+    cofix fby1_shift.
+    intros [b bs] v y ys Hsync.
+    specialize (fby1_shift bs).
+    inv Hsync;
+      rewrite const_val_Cons; rewrite Stream_decompose_thm; simpl.
+    - constructor...
+    - constructor...
+  Qed.
+
+  Lemma fby1_shift' : forall y y0s ys zs,
+      fby1 y y0s ys zs ->
+      zs ≡ (shift y ys).
+  Proof.
+    cofix CoFix.
+    intros y y0s ys zs Hfby1.
+    inv Hfby1; constructor; simpl; eauto.
+  Qed.
+
+  CoFixpoint prefix_with_val b (v : Op.val) (ys : Stream OpAux.value) :=
+    match (hd b) with
+    | true => shift v ys
+    | false => Cons absent (prefix_with_val (tl b) v (tl ys))
+    end.
+
+  Fact prefix_with_val_Cons : forall b bs v ys,
+      prefix_with_val (Cons b bs) v ys =
+      match b with
+      | true => shift v ys
+      | false => Cons absent (prefix_with_val bs v (tl ys))
+      end.
+  Proof.
+    intros b bs v ys.
+    rewrite Stream_decompose_thm at 1; simpl.
+    destruct b; auto.
+    destruct (shift v ys); auto.
+  Qed.
+
+  Add Parametric Morphism : prefix_with_val
+    with signature eq ==> eq ==> @EqSt value ==> @EqSt value
+      as prefix_with_val_EqSt.
+  Proof.
+    cofix CoFix.
+    intros [b bs] v [x xs] [y ys] Heq.
+    inv Heq; simpl in *.
+    repeat rewrite prefix_with_val_Cons.
+    destruct b.
+    - destruct x; rewrite <- H; simpl.
+      + constructor; simpl; auto.
+        rewrite H0. reflexivity.
+      + constructor; simpl; auto.
+        rewrite H0. reflexivity.
+    - constructor; simpl; auto.
+  Qed.
+
+  Lemma prefix_with_val_fby : forall b v y,
+      synchronized y b ->
+      fby (const_val b v) y (prefix_with_val b v y).
+  Proof with eauto.
+    cofix prefix_with_val_fby.
+    intros [b0 b] v y Hsync.
+    rewrite const_val_Cons.
+    rewrite Stream_decompose_thm; simpl.
+    destruct b0; simpl; inv Hsync.
+    - econstructor. eapply fby1_shift...
+    - econstructor; simpl...
+  Qed.
+
+  Definition init_stream H b cl :=
+    let b := interp_clock H b cl in
+    prefix_with_val b true_val (Str.const b false_const).
+
+  Lemma fby_ite : forall bs v y0s ys zs,
+      synchronized y0s bs ->
+      synchronized ys bs ->
+      synchronized zs bs ->
+      fby y0s ys zs ->
+      ite (prefix_with_val bs true_val (const_val bs false_val)) y0s (prefix_with_val bs v ys) zs.
+  Proof with eauto.
+    cofix fby_init_stream_ite.
+    intros [b bs] v y0s ys zs Hsync1 Hsync2 Hsync3 Hfby1.
+    specialize (prefix_with_val_fby _ v _ Hsync2) as Hfby2.
+    specialize (fby_init_stream_ite bs v).
+    destruct b; inv Hsync1; inv Hsync2; inv Hsync3.
+    - repeat rewrite prefix_with_val_Cons in *. repeat rewrite const_val_Cons in *.
+      inv Hfby1.
+      repeat rewrite shift_Cons. constructor.
+      rewrite shift_const.
+      rewrite <- fby1_shift'...
+      apply ite_false...
+    - repeat rewrite prefix_with_val_Cons in *. constructor; simpl in *.
+      rewrite const_val_Cons in Hfby2.
+      inv Hfby1. inv Hfby2.
+      eapply fby_init_stream_ite...
+  Qed.
+
+  Corollary fby_init_stream_ite : forall H bs cl v y0s ys zs,
+      let b' := interp_clock H bs cl in
+      synchronized y0s b' ->
+      synchronized ys b' ->
+      synchronized zs b' ->
+      fby y0s ys zs ->
+      ite (init_stream H bs cl) y0s (prefix_with_val b' v ys) zs.
+  Proof.
+    intros H b cl v y0 ys zs; simpl. intros Hsync1 Hsync2 Hsync3 Hfby1.
+    eapply fby_ite in Hfby1; eauto.
+    unfold init_stream.
+    rewrite const_val_const. rewrite sem_false_const. eassumption.
+  Qed.
 
   Definition init_eqs_valids H b (st : fresh_st (Op.type * clock * bool)) :=
     Forall (fun '(id, (_, cl, is_init)) =>
                   is_init = true ->
-                  sem_var H id (init_stream cl b)) (st_anns st).
+                  ((* wt_clock (idty (idty (st_anns st))) cl /\  *)sem_var H id (init_stream H b cl))) (st_anns st).
+  (* Typing hypothesis ? *)
 
   Definition hist_st {A} (l : list (ident * A)) b H st :=
     Env.dom H ((List.map fst l)++(st_ids st)) /\
@@ -362,7 +546,9 @@ Module Type CORRECTNESS
           apply (Pos.lt_irrefl id).
           eapply Pos.lt_le_trans; eauto.
         * congruence.
-  Qed.
+        * admit. (* We have to proove that the variables in cl are in H
+                    (cl is well-typed in the env corresponding to H) *)
+  Admitted.
   Hint Resolve fresh_ident_hist_st.
 
   Fact idents_for_anns_hist_st {A} : forall (vars : list (ident * A)) b anns ids vs H st st',
@@ -496,7 +682,9 @@ Module Type CORRECTNESS
     - unfold init_var_for_clock in H0.
       destruct (find _ _) eqn:Hfind.
       + destruct p; inv H0.
-        remember (Env.add x2 z H) as H'. (* z ? *)
+        remember (interp_clock H b (fst cl)) as b'.
+        remember (prefix_with_val b' (Op.sem_const (Op.init_type ty)) y) as y'.
+        remember (Env.add x2 y' H) as H'.
         assert (Env.refines eq H H') by (destruct Histst; eapply fresh_ident_refines in H1; eauto).
         exists H'. repeat (split; eauto).
         * destruct Histst. eapply fresh_ident_dom in H1...
@@ -504,7 +692,7 @@ Module Type CORRECTNESS
           rewrite <- HeqH' in H1.
           destruct H1...
         * (* We can get data about x back from our hist_st hypothesis *)
-          assert (sem_var H x (init_stream (fst cl) b)).
+          assert (sem_var H x (init_stream H b (fst cl))).
           { destruct Histst as [_ Hvalids]. unfold init_eqs_valids in Hvalids.
             rewrite Forall_forall in Hvalids.
             eapply find_some in Hfind. destruct p as [[ty' cl'] isinit].
@@ -513,18 +701,57 @@ Module Type CORRECTNESS
             rewrite Clocks.clock_eqb_eq in Hcl. subst.
             eapply Hvalids in Hin. apply Hin...
           }
-          (* not exactly z *) admit.
-        * repeat constructor. (* idem *) admit.
+          econstructor...
+          -- constructor. eapply sem_var_refines...
+          -- repeat econstructor...
+             eapply sem_exp_refines...
+          -- repeat constructor...
+             rewrite HeqH'.
+             econstructor; [| reflexivity].
+             apply Env.add_1. reflexivity.
+          -- simpl. repeat constructor.
+             rewrite Heqy'.
+             specialize (fby_init_stream_ite H b (fst cl) (sem_const (init_type ty)) y0 y z) as Hinit.
+             simpl in Hinit. rewrite Heqb'. apply Hinit...
+             1,2,3:admit.
+        * repeat constructor.
+          eapply Seq with (ss:=[[y']]); simpl.
+          -- repeat constructor.
+             eapply Sfby with (s0ss:=[[const b' (init_type ty)]]).
+             2:(repeat constructor; eapply sem_exp_refines; eauto).
+             ++ repeat constructor.
+                admit. (* alignment ? *)
+             ++ repeat constructor.
+                rewrite Heqy'.
+                rewrite const_val_const.
+                eapply prefix_with_val_fby.
+                admit. (* alignment ? *)
+          -- repeat constructor.
+             rewrite HeqH'.
+             econstructor; [| reflexivity].
+             apply Env.add_1. reflexivity.
       + clear Hfind.
         destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
         assert (valid_after vars x1) as Hvalid1 by eauto.
-        remember (Env.add x (init_stream (fst cl) b) H) as H'.
+        remember (Env.add x (init_stream H b (fst cl)) H) as H'.
         assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines in Hident; eauto).
-        (* sem_exp (true fby false) init_stream *)
-        (* sem_equation H' ([x], [true fby false]) *)
-        assert (hist_st vars b H' x1) as Histst1 by admit.
+        assert (hist_st vars b H' x1) as Histst1.
+        { destruct Histst.
+          constructor.
+          + eapply fresh_ident_dom in Hident...
+          + unfold init_eqs_valids in *.
+            erewrite fresh_ident_anns...
+            constructor...
+            * intros _.
+              rewrite HeqH'. econstructor. eapply Env.add_1; reflexivity.
+              admit. (* init_stream only uses whats in cl, which is not changed in H' *)
+            * solve_forall. destruct a as [? [[? ?] ?]].
+              intuition. admit. (* init_stream only uses whats in cl, which is not changed in H' *)
+        }
         assert (valid_after vars st') as Hvalid2 by eauto.
-        remember (Env.add x2 z H') as H''.
+        remember (interp_clock H b (fst cl)) as b'.
+        remember (prefix_with_val b' (Op.sem_const (Op.init_type ty)) y) as y'.
+        remember (Env.add x2 y' H') as H''.
         assert (Env.refines eq H' H'') as Href2 by (destruct Histst1; eapply fresh_ident_refines in H1; eauto).
         assert (hist_st vars b H'' st') as Histst2 by (rewrite HeqH''; eauto).
         assert (~Env.E.eq x2 x) as Hneq.
@@ -535,7 +762,7 @@ Module Type CORRECTNESS
           rewrite contra in H1. congruence. }
         exists H''. repeat (split; eauto)...
         * etransitivity...
-        * eapply Site with (s:=(init_stream (fst cl) b)) (ts:=[[y0]]) (fs:=[[z]]).
+        * eapply Site with (s:=(init_stream H b (fst cl))) (ts:=[[y0]]) (fs:=[[y']]).
           -- constructor. econstructor; [| reflexivity].
              rewrite HeqH''. rewrite HeqH'.
              eapply Env.add_2... eapply Env.add_1. reflexivity.
@@ -544,13 +771,15 @@ Module Type CORRECTNESS
           -- repeat constructor. econstructor; [| reflexivity].
              rewrite HeqH''. eapply Env.add_1. reflexivity.
           -- simpl. repeat constructor.
-             admit. (* Dire des choses sur init_stream (Un bout d'intepreteur ?) *)
+             subst. eapply fby_init_stream_ite...
+             1,2,3:admit.
         * repeat constructor.
-          -- apply Seq with (ss:=[[z]]); simpl.
-             ++ repeat constructor. admit. (* pas exactement z *)
-             ++ repeat constructor. admit. (* ce serait trop facile *)
-          -- apply Seq with (ss:=[[init_stream (fst cl) b]]); simpl.
-             ++ admit.
+          -- apply Seq with (ss:=[[y']]); simpl.
+             ++ repeat constructor. admit.
+             ++ repeat constructor. econstructor; [| reflexivity].
+                rewrite HeqH''. apply Env.add_1; reflexivity.
+          -- apply Seq with (ss:=[[init_stream H b (fst cl)]]); simpl.
+             ++ repeat constructor. admit.
              ++ repeat constructor. econstructor; [| reflexivity].
                 rewrite HeqH''. rewrite HeqH'.
                 eapply Env.add_2... eapply Env.add_1. reflexivity.

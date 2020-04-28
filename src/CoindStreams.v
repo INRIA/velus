@@ -36,12 +36,6 @@ Module Type COINDSTREAMS
     destruct xs;
     simpl.
 
-  Add Parametric Relation A : (Stream A) (@EqSt A)
-      reflexivity proved by (@EqSt_reflex A)
-      symmetry proved by (@sym_EqSt A)
-      transitivity proved by (@trans_EqSt A)
-        as EqStrel.
-
   Lemma eq_EqSt:
     forall {A}, inclusion (Stream A) eq (@EqSt A).
   Proof.
@@ -672,6 +666,16 @@ Module Type COINDSTREAMS
       induction xs; intros; try inv Exs; simpl; constructor.
       + now rewrite H1.
       + now apply IHxs.
+  Qed.
+
+  Add Parametric Morphism : ite
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as ite_EqSt.
+  Proof.
+    cofix Cofix.
+    intros [? ?] [? ?] Heq [? ?] [? ?] Heq0 [? ?] [? ?] Heq1 [? ?] [? ?] Heq2 Hite.
+    inv Heq. inv Heq0. inv Heq1. inv Heq2. simpl in *.
+    inv Hite; constructor; eapply Cofix; eauto.
   Qed.
 
 End COINDSTREAMS.

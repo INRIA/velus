@@ -9,6 +9,7 @@ src/CoindStreams.v
 
 src/Common/CommonList.v
 src/Common/CommonTactics.v
+src/Common/CommonStreams.v
 src/Common/Common.v
 src/Common/CompCertLib.v
 src/CheckGraph.v
@@ -20,6 +21,7 @@ src/Lustre/Parser/LustreAst.v
 src/Lustre/LTyping.v
 src/Lustre/LClocking.v
 src/Lustre/LOrdered.v
+src/Lustre/LClockSemantics.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 

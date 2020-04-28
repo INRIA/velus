@@ -843,11 +843,18 @@ Module Type NTYPING
       destruct (is_constant e0); repeat inv_bind; inv H8.
       + repeat constructor; simpl.
         * repeat simpl_In.
+          eapply add_whens_wt_exp...
+          -- simpl. f_equal. apply Op.type_init_type.
+          -- eapply Hclock in H4. destruct cl; simpl. inv H4.
+             solve_incl.
+        * repeat simpl_In.
           apply Hwt2 in H8. repeat solve_incl.
         * rewrite app_nil_r.
           repeat simpl_nth. repeat simpl_length.
           specialize (H1 _ _ _ _ _ H4 H13 H12); simpl in H1. congruence.
-        * f_equal. apply Op.type_init_type.
+        * rewrite app_nil_r.
+          apply add_whens_typeof; simpl.
+          f_equal. apply Op.type_init_type.
         * repeat simpl_In.
           apply Hclock in H4. repeat solve_incl.
         * apply fresh_ident_In in H9.

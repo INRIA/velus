@@ -81,7 +81,8 @@ Module Type NORDERED
         * inv H2; inv H3.
       + inv H1.
         * inv H3; inv H2.
-          destruct H4; (inv H1; [| inv H3])... inv H3.
+          destruct H4; (inv H1; [| inv H3])...
+          apply add_whens_Is_node_in in H3. inv H3.
         * unfold init_var_for_clock in H.
           destruct (find _ _).
           -- destruct p; inv H. inv H3.

@@ -111,7 +111,7 @@ Module Type NORMALIZATION
          do px <- fresh_ident ((ty, fst cl), false);
          ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
                    [Evar px (ty, (fst cl, Some px))] ([ty], (fst cl, None)),
-              ([px], [Efby [Econst (init_type ty)] [e] [ann]])::eqs).
+              ([px], [Efby [add_whens (Econst (init_type ty)) ty (fst cl)] [e] [ann]])::eqs).
 
   (** Normalize a `fby inits es anns` expression, with inits and es already normalized *)
   Definition normalize_fby (inits : list exp) (es : list exp) (anns : list ann) : FreshAnn (list exp * list equation) :=

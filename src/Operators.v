@@ -155,6 +155,12 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
       eauto using val_to_bool_true, val_to_bool_false.
   Qed.
 
+  Definition val_of_bool (b : bool) : val :=
+    match b with
+    | true => true_val
+    | false => false_val
+    end.
+
   Definition wt_vals vs (xts: list (ident * type))
     := List.Forall2 (fun v xt => wt_val v (snd xt)) vs xts.
 

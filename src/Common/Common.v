@@ -15,6 +15,7 @@ From Coq Require Import Classes.EquivDec.
 
 From Velus Require Export Common.CommonTactics.
 From Velus Require Export Common.CommonList.
+From Velus Require Export Common.CommonStreams.
 From Velus Require Export ClockDefs.
 
 Open Scope list.

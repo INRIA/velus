@@ -325,14 +325,15 @@ Module Type COMPLETENESS
     - constructor.
     - constructor.
       + constructor; auto.
-        intro contra.
-        apply Hlt in contra; clear Hlt.
-        assert (fresh_st_follows st st') as Hfollows by (etransitivity; eauto).
-        apply fresh_ident_In in H0.
-        assert (In x2 (st_ids st')) by (unfold st_ids, idty; simpl_In; exists (x2, (ty, fst cl, false)); eauto).
-        apply smallest_ident_In in H1.
-        apply (Pos.lt_irrefl x2).
-        eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
+        * intro contra.
+          apply Hlt in contra; clear Hlt.
+          assert (fresh_st_follows st st') as Hfollows by (etransitivity; eauto).
+          apply fresh_ident_In in H0.
+          assert (In x2 (st_ids st')) by (unfold st_ids, idty; simpl_In; exists (x2, (ty, fst cl, false)); eauto).
+          apply smallest_ident_In in H1.
+          apply (Pos.lt_irrefl x2).
+          eapply Pos.lt_le_trans; eauto. etransitivity; eauto.
+        * eapply add_whens_is_constant; eauto.
       + eapply init_var_for_clock_normalized_eq in H; eauto.
   Qed.
 
@@ -602,6 +603,7 @@ Module Type COMPLETENESS
                 eapply (Pos.lt_irrefl x10).
                 eapply Pos.lt_le_trans...
                 repeat (etransitivity; eauto).
+             ++ eapply add_whens_is_constant...
              ++ eapply normalize_exps_normalized_lexp in H0. rewrite Forall_forall in H0...
           -- eapply init_var_for_clock_normalized_eq in H3; intros...
              rewrite Forall_forall in *...
