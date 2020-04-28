@@ -636,14 +636,14 @@ Module Type COMPLETENESS
   Qed.
   Hint Resolve normalize_rhss_normalized_eq.
 
-  Lemma normalize_equation_normalized_eq : forall eq to_cut eqs' out st st',
-      wl_equation eq ->
+  Lemma normalize_equation_normalized_eq : forall G eq to_cut eqs' out st st',
+      wl_equation G eq ->
       normalize_equation to_cut eq st = (eqs', st') ->
       (forall o, PS.In o out -> Pos.lt o (smallest_ident st)) ->
       PS.Subset out to_cut ->
       Forall (normalized_equation out) eqs'.
   Proof with eauto.
-    intros [xs es] to_cut eqs' out st st' Hwl Hnorm Hlt Hincl.
+    intros G [xs es] to_cut eqs' out st st' Hwl Hnorm Hlt Hincl.
     unfold normalize_equation in Hnorm.
     repeat inv_bind.
     remember (negb (existsb (fun x => PS.mem x to_cut) xs)) as keep_fby.
@@ -683,8 +683,8 @@ Module Type COMPLETENESS
     - eapply normalize_rhss_normalized_eq in H; eauto.
   Qed.
 
-  Corollary normalize_equations_normalized_eq : forall eqs to_cut eqs' out st st',
-      Forall wl_equation eqs ->
+  Corollary normalize_equations_normalized_eq : forall G eqs to_cut eqs' out st st',
+      Forall (wl_equation G) eqs ->
       normalize_equations to_cut eqs st = (eqs', st') ->
       (forall o, PS.In o out -> Pos.lt o (smallest_ident st)) ->
       PS.Subset out to_cut ->
@@ -703,7 +703,7 @@ Module Type COMPLETENESS
   Lemma normalize_node_normalized_node : forall n to_cut Hwl,
       normalized_node (normalize_node to_cut n Hwl).
   Proof.
-    intros n to_cut Hwl.
+    intros n to_cut [G Hwl].
     unfold normalize_node.
     unfold normalized_node; simpl.
     eapply normalize_equations_normalized_eq; eauto.
@@ -903,12 +903,12 @@ Module Type COMPLETENESS
     inv_bind. rewrite concat_map_singl1. congruence.
   Qed.
 
-  Fact normalized_equation_normalize_idem : forall eq to_cut st,
-      wl_equation eq ->
+  Fact normalized_equation_normalize_idem : forall G eq to_cut st,
+      wl_equation G eq ->
       normalized_equation to_cut eq ->
       normalize_equation to_cut eq st = ([eq], st).
   Proof with eauto.
-    intros [xs es] to_cut st Hwl Hnormed. inv Hwl.
+    intros G [xs es] to_cut st Hwl Hnormed. inv Hwl.
     specialize (normalized_equation_normalized_rhs _ _ _ Hnormed) as Hnormed2.
     apply normalized_rhss_normalize_idem with (st:=st) in Hnormed2.
     inv Hnormed; simpl; repeat inv_bind;
@@ -923,8 +923,8 @@ Module Type COMPLETENESS
       apply firstn_all2. simpl. rewrite H0. apply le_refl.
   Qed.
 
-  Corollary normalized_equations_normalize_idem : forall eqs to_cut st,
-      Forall wl_equation eqs ->
+  Corollary normalized_equations_normalize_idem : forall G eqs to_cut st,
+      Forall (wl_equation G) eqs ->
       Forall (normalized_equation to_cut) eqs ->
       normalize_equations to_cut eqs st = (eqs, st).
   Proof with eauto.
@@ -1007,9 +1007,9 @@ Module Type COMPLETENESS
       normalized_node n ->
       normalize_node PS.empty n Hwl = n.
   Proof with eauto.
-    intros n Hwl Hnormed.
+    intros n [G Hwl] Hnormed.
     unfold normalize_node, normalized_node in *.
-    apply normalized_equations_normalize_idem with (st:=init_st (first_unused_ident n)) in Hnormed...
+    eapply normalized_equations_normalize_idem with (st:=init_st (first_unused_ident n)) in Hnormed...
     destruct n; simpl in *.
     eapply equal_node; simpl...
     Unshelve. 6,7,8,9,10:simpl.

@@ -28,7 +28,7 @@ Module Type NTYPING
   Hint Constructors wl_exp.
   Fact wt_exp_wl_exp : forall G vars e,
       wt_exp G vars e ->
-      wl_exp e.
+      wl_exp G e.
   Proof with eauto.
     induction e using exp_ind2; intro Hwt; inv Hwt; auto.
     - (* unop *)
@@ -64,24 +64,28 @@ Module Type NTYPING
       + rewrite typesof_annots. solve_length.
       + rewrite <- H10. clear H10. rewrite typesof_annots. solve_length.
     - (* app *)
-      constructor...
-      repeat rewrite_Forall_forall...
+      repeat rewrite_Forall_forall.
+      econstructor...
+      + rewrite_Forall_forall...
+      + solve_length.
     - (* app (reset) *)
-      constructor...
-      + repeat rewrite_Forall_forall...
+      repeat rewrite_Forall_forall.
+      econstructor...
+      + rewrite_Forall_forall...
       + rewrite <- length_typeof_numstreams. rewrite H11. reflexivity.
+      + solve_length.
   Qed.
   Hint Resolve wt_exp_wl_exp.
 
   Corollary Forall_wt_exp_wl_exp : forall G vars es,
       Forall (wt_exp G vars) es ->
-      Forall wl_exp es.
+      Forall (wl_exp G) es.
   Proof. intros. solve_forall. Qed.
   Hint Resolve Forall_wt_exp_wl_exp.
 
   Fact wt_equation_wl_equation : forall G vars equ,
       wt_equation G vars equ ->
-      wl_equation equ.
+      wl_equation G equ.
   Proof with eauto.
     intros G vars [xs es] Hwt.
     inv Hwt. constructor.
@@ -93,7 +97,7 @@ Module Type NTYPING
 
   Fact wt_node_wl_node : forall G n,
       wt_node G n ->
-      wl_node n.
+      wl_node G n.
   Proof with eauto.
     intros G n [_ [_ [_ Hwt]]].
     unfold wl_node.
@@ -106,8 +110,7 @@ Module Type NTYPING
       wl_global G.
   Proof with eauto.
     intros G Hwt.
-    unfold wl_global.
-    induction Hwt...
+    induction Hwt; constructor...
   Qed.
   Hint Resolve wt_global_wl_global.
 

@@ -28,7 +28,7 @@ Module Type CORRECTNESS
        (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Tactics.
-  Module Import ClockSem := LClockSemanticsFun Ids Op OpAux Syn Ord Str Sem.
+  Module Import ClockSem := LClockSemanticsFun Ids Op OpAux Syn Cl Ord Str Sem.
   Module Import Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Module Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
   Module Ord := NOrderedFun Ids Op OpAux Syn Ord Norm.
@@ -36,71 +36,71 @@ Module Type CORRECTNESS
   CoFixpoint default_stream : Stream OpAux.value :=
     Cons absent default_stream.
 
-  Fact sem_exp_numstreams : forall G vars H b e v,
-      wt_exp G vars e ->
+  Fact sem_exp_numstreams : forall G H b e v,
+      wl_exp G e ->
       sem_exp G H b e v ->
       length v = numstreams e.
   Proof with eauto.
-    induction e using exp_ind2; intros v Hsem Hwt; inv Hwt; inv Hsem; simpl; auto.
+    induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
     - (* fby *)
       repeat rewrite_Forall_forall.
-      rewrite <- H11.
-      replace (length a) with (length (List.map fst a)) by (rewrite map_length; reflexivity).
-      rewrite <- H9. unfold typesof; rewrite flat_map_concat_map.
+      rewrite <- H9. rewrite <- H10.
+      unfold annots; rewrite flat_map_concat_map.
       apply concat_length_eq.
       rewrite Forall2_map_2.
       rewrite_Forall_forall; solve_length.
-      rewrite length_typeof_numstreams. eapply H0...
+      rewrite length_annot_numstreams. eapply H0...
       + apply nth_In; congruence.
       + apply H5. apply nth_In; congruence.
     - (* when *)
       repeat rewrite_Forall_forall.
-      rewrite <- H1. unfold typesof; rewrite flat_map_concat_map.
+      rewrite <- H1. rewrite <- H7.
+      unfold annots; rewrite flat_map_concat_map.
       apply concat_length_eq.
       rewrite Forall2_map_2.
       rewrite_Forall_forall; solve_length.
-      rewrite length_typeof_numstreams. eapply H0...
+      rewrite length_annot_numstreams. eapply H0...
       + apply nth_In; congruence.
-      + apply H5. apply nth_In; congruence.
+      + apply H4. apply nth_In; congruence.
     - (* merge *)
       repeat rewrite_Forall_forall.
-      rewrite <- H11. unfold typesof; rewrite flat_map_concat_map.
+      rewrite <- H10. rewrite <- H11.
+      unfold annots; rewrite flat_map_concat_map.
       apply concat_length_eq.
       rewrite Forall2_map_2.
       rewrite_Forall_forall; solve_length.
-      rewrite length_typeof_numstreams. eapply H0...
+      rewrite length_annot_numstreams. eapply H0...
       + apply nth_In; congruence.
-      + apply H6. apply nth_In; congruence.
+      + apply H7. apply nth_In; congruence.
     - (* ite *)
       repeat rewrite_Forall_forall.
-      rewrite <- H12. unfold typesof; rewrite flat_map_concat_map.
+      rewrite <- H11. rewrite <- H15.
+      unfold annots; rewrite flat_map_concat_map.
       apply concat_length_eq.
       rewrite Forall2_map_2.
       rewrite_Forall_forall; solve_length.
-      rewrite length_typeof_numstreams.
+      rewrite length_annot_numstreams.
       eapply H0...
       + apply nth_In; congruence.
       + apply H7. apply nth_In; congruence.
     - (* app *)
-      destruct H11.
-      rewrite H3 in H6; clear H3; inv H6.
+      inv H11.
       repeat rewrite_Forall_forall.
-      unfold idents in H11.
+      unfold idents in H6.
       solve_length.
     - (* app (reset) *)
       specialize (H13 0). inv H13.
-      rewrite H3 in H7; clear H3; inv H7.
       repeat rewrite_Forall_forall.
       unfold idents in H5.
       solve_length.
   Qed.
 
-  Corollary sem_exps_numstreams : forall G vars H b es vs,
-      Forall (wt_exp G vars) es ->
+  Corollary sem_exps_numstreams : forall G H b es vs,
+      Forall (wl_exp G) es ->
       Forall2 (sem_exp G H b) es vs ->
       length (concat vs) = length (annots es).
   Proof.
-    intros G vars H b es vs Hwt Hsem.
+    intros G H b es vs Hwt Hsem.
     assert (Forall2 (fun v e => length v = numstreams e) vs es) as Hf.
     { repeat rewrite_Forall_forall.
       eapply sem_exp_numstreams.
@@ -613,7 +613,7 @@ Module Type CORRECTNESS
       + etransitivity...
       + constructor; eauto. subst.
         assert (length x = numstreams a) as Hlength1 by (eapply normalize_exp_length; eauto).
-        specialize (sem_exp_numstreams _ _ _ _ _ _ H2 H4) as Hlength2.
+        assert (length y = numstreams a) as Hlength2 by (eapply sem_exp_numstreams; eauto).
         specialize (normalize_exp_sem_length _ _ _ _ _ _ _ _ H2 H0) as Hnormlength.
         repeat rewrite_Forall_forall.
         eapply sem_exp_refines; eauto.
@@ -951,7 +951,7 @@ Module Type CORRECTNESS
       + eapply sem_var_refines...
       + simpl. repeat constructor...
     - (* merge *)
-      specialize (sem_exps_numstreams _ _ _ _ _ _ H5 H15) as Hlength3.
+      assert (length (concat ts) = length (annots ets)) as Hlength1 by (eapply sem_exps_numstreams; eauto).
       eapply map_bind2_sem in H1... 2:(repeat rewrite_Forall_forall; eapply nth_In in H17; eauto). clear H.
       destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
       assert (Forall2 (sem_exp G H' b) efs fs) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
@@ -1031,10 +1031,10 @@ Module Type CORRECTNESS
           -- solve_forall. eapply sem_equation_refines...
              Unshelve. exact default_ann. exact s.
     - (* ite *)
-      specialize (sem_exp_numstreams _ _ _ _ _ _ H5 H14) as Hlength1. simpl in Hlength1.
+      assert (length [s] = numstreams e) as Hlength1 by (eapply sem_exp_numstreams; eauto). simpl in Hlength1.
       assert (length x = numstreams e) as Hlength1' by (eapply normalize_exp_length; eauto).
       rewrite <- Hlength1 in Hlength1'. clear Hlength1.
-      specialize (sem_exps_numstreams _ _ _ _ _ _ H6 H16) as Hlength3.
+      assert (length (concat ts) = length (annots ets)) as Hlength3 by (eapply sem_exps_numstreams; eauto).
       eapply IHe in H1... clear IHe. destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
       assert (Forall2 (sem_exp G H' b) ets ts) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
       eapply map_bind2_sem in H2... 2:(repeat rewrite_Forall_forall; eapply nth_In in H22; eauto). clear H.

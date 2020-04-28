@@ -371,6 +371,30 @@ Module Type LSYNTAX
 
   (** nclockof and nclocksof *)
 
+  Fact nclockof_annot : forall e,
+      nclockof e = map snd (annot e).
+  Proof.
+    destruct e; simpl; try reflexivity.
+    - destruct l0; simpl.
+      repeat rewrite map_map.
+      reflexivity.
+    - destruct l1; simpl.
+      repeat rewrite map_map.
+      reflexivity.
+    - destruct l1; simpl.
+      repeat rewrite map_map.
+      reflexivity.
+  Qed.
+
+  Fact nclocksof_annots : forall es,
+      nclocksof es = map snd (annots es).
+  Proof.
+    induction es; simpl.
+    - reflexivity.
+    - repeat rewrite map_app.
+      f_equal; auto. apply nclockof_annot.
+  Qed.
+
   Lemma clockof_nclockof:
     forall e,
       clockof e = map stripname (nclockof e).

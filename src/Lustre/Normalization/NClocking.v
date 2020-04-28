@@ -28,7 +28,7 @@ Module Type NCLOCKING
   Hint Constructors wl_exp.
   Fact wc_exp_wl_exp : forall G vars e,
       wc_exp G vars e ->
-      wl_exp e.
+      wl_exp G e.
   Proof with eauto.
     induction e using exp_ind2; intro Hwt; inv Hwt; auto.
     - (* unop *)
@@ -55,24 +55,30 @@ Module Type NCLOCKING
       + solve_length.
       + solve_length.
     - (* app *)
-      constructor...
-      repeat rewrite_Forall_forall...
+      repeat rewrite_Forall_forall.
+      econstructor...
+      + rewrite_Forall_forall...
+      + unfold idck in *. rewrite nclocksof_annots in *. solve_length.
+      + solve_length.
     - (* app (reset) *)
-      constructor...
-      + repeat rewrite_Forall_forall...
+      repeat rewrite_Forall_forall.
+      econstructor...
+      + rewrite_Forall_forall...
       + rewrite <- length_clockof_numstreams. rewrite H10. reflexivity.
+      + unfold idck in *. rewrite nclocksof_annots in *. solve_length.
+      + solve_length.
   Qed.
   Hint Resolve wc_exp_wl_exp.
 
   Corollary Forall_wc_exp_wl_exp : forall G vars es,
       Forall (wc_exp G vars) es ->
-      Forall wl_exp es.
+      Forall (wl_exp G) es.
   Proof. intros. solve_forall. Qed.
   Hint Resolve Forall_wc_exp_wl_exp.
 
   Fact wc_equation_wl_equation : forall G vars equ,
       wc_equation G vars equ ->
-      wl_equation equ.
+      wl_equation G equ.
   Proof with eauto.
     intros G vars [xs es] [Hwc1 [Hwc2 [Hwc3 Hwc4]]].
     constructor.
@@ -84,7 +90,7 @@ Module Type NCLOCKING
 
   Fact wc_node_wl_node : forall G n,
       wc_node G n ->
-      wl_node n.
+      wl_node G n.
   Proof with eauto.
     intros G n [_ [_ [_ Hwc]]].
     unfold wl_node.
@@ -97,8 +103,7 @@ Module Type NCLOCKING
       wl_global G.
   Proof with eauto.
     intros G Hwt.
-    unfold wl_global.
-    induction Hwt...
+    induction Hwt; constructor...
   Qed.
   Hint Resolve wc_global_wl_global.
 
