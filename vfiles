@@ -27,12 +27,14 @@ src/Lustre/Lustre.v
 
 src/Lustre/Normalization/Fresh.v
 src/Lustre/Normalization/Normalization.v
+src/Lustre/Normalization/Specification.v
+src/Lustre/Normalization/FullNorm.v
 src/Lustre/Normalization/NTyping.v
 src/Lustre/Normalization/NClocking.v
 src/Lustre/Normalization/NOrdered.v
 src/Lustre/Normalization/Correctness.v
 src/Lustre/Normalization/Correctness.v
-src/Lustre/Normalization/Completeness.v
+src/Lustre/Normalization/Idempotence.v
 src/Lustre/Normalization/LNormalization.v
 
 src/CoreExpr/CESyntax.v

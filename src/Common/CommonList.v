@@ -330,6 +330,17 @@ Section Extra.
       f_equal. auto.
   Qed.
 
+  Lemma map_ext_in' {B C} : forall (f : A -> C) (g : B -> C) l1 l2,
+      length l1 = length l2 ->
+      (forall a b, In (a, b) (combine l1 l2) -> f a = g b) ->
+      map f l1 = map g l2.
+  Proof.
+    induction l1; intros l2 Hlen Hin;
+      destruct l2; simpl in *; try congruence.
+    inv Hlen.
+    apply IHl1 in H0; auto.
+    f_equal; auto.
+  Qed.
 End Extra.
 
 Section find.
@@ -536,6 +547,20 @@ Section Nodup.
     constructor; auto.
     intro Hin. apply Hnin.
     apply in_or_app; now left.
+  Qed.
+
+  Lemma NoDup_app_l : forall (xs : list A) ys,
+      NoDup (xs ++ ys) ->
+      NoDup xs.
+  Proof. exact NoDup_app_weaken. Qed.
+
+  Lemma NoDup_app_r : forall (xs : list A) ys,
+      NoDup (xs ++ ys) ->
+      NoDup ys.
+  Proof.
+    intros ws xs H.
+    rewrite Permutation_app_comm in H.
+    apply NoDup_app_l in H; auto.
   Qed.
 
   Lemma NoDup_app_cons:
@@ -875,6 +900,18 @@ Section ConcatMap.
     rewrite concat_app.
     rewrite IHl; clear IHl.
     f_equal. apply concat_map_singl1.
+  Qed.
+
+  Lemma concat_eq_nil : forall (l : list (list A)),
+      concat l = [] <-> Forall (fun l => l = nil) l.
+  Proof.
+    intros l.
+    split; intro H.
+    - induction l; auto.
+      simpl in *. apply app_eq_nil in H as [H1 H2].
+      constructor; auto.
+    - induction l; auto.
+      simpl. inv H. auto.
   Qed.
 
 End ConcatMap.
@@ -1424,6 +1461,14 @@ Section ForallExists.
         right. rewrite <- H0. assumption.
       + inv H; auto.
         right. rewrite H0. assumption.
+  Qed.
+
+  Lemma Exists_singl : forall (x : A),
+      Exists P [x] ->
+      P x.
+  Proof.
+    intros x Hex.
+    inv Hex; auto. inv H0.
   Qed.
 
 End ForallExists.

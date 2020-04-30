@@ -105,39 +105,6 @@ Module Type LCLOCKING
   (* substitution of identifiers *)
   Definition ident_map := ident -> option ident.
 
-  Definition sub_set (l : list (ident * option ident)) (sub : ident_map) :=
-    fold_right (fun '(x, v) s => fun x' => if (x' =? x)%positive then v else s x') sub l.
-
-  Fact sub_set_In : forall l sub x y,
-      NoDupMembers l ->
-      In (x, y) l ->
-      (sub_set l sub) x = y.
-  Proof.
-    induction l; intros sub x y Hndup HIn; inv HIn.
-    - simpl. rewrite Pos.eqb_refl. reflexivity.
-    - destruct a as [x' y']; simpl.
-      inv Hndup.
-      destruct (Pos.eqb x x') eqn:Heq; eauto.
-      rewrite Pos.eqb_eq in Heq; subst.
-      exfalso. apply H2.
-      eapply In_InMembers; eauto.
-  Qed.
-
-  Fact sub_set_nIn : forall l sub x,
-      ~ InMembers x l ->
-      (sub_set l sub) x = sub x.
-  Proof.
-    induction l; intros sub x HnIn; simpl; auto.
-    destruct a as [x' y'].
-    destruct (Pos.eqb x x') eqn:Heq.
-    + rewrite Pos.eqb_eq in Heq; subst.
-      exfalso.
-      apply HnIn. constructor; auto.
-    + apply IHl.
-      intro HIn. apply HnIn.
-      right; auto.
-  Qed.
-
   (* xc : name and clock from the node interface
      nc : named clock from the annotated expression *)
   Definition WellInstantiated (bck : clock) (sub : ident_map)

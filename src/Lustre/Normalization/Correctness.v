@@ -134,7 +134,7 @@ Module Type CORRECTNESS
     Forall (fun id => Pos.lt id (smallest_ident st)) l.
 
   Fact before_st_follows {B} : forall l (st st' : fresh_st B),
-      fresh_st_follows st st' ->
+      st_follows st st' ->
       before_st l st ->
       before_st l st'.
   Proof.
@@ -149,7 +149,7 @@ Module Type CORRECTNESS
   (** ** Conservation of valid_after *)
 
   Definition valid_after {A B} (l : list (ident * A)) (st : fresh_st B) :=
-    fresh_st_valid st /\ before_st (List.map fst l) st.
+    st_valid st /\ before_st (List.map fst l) st.
 
   Fact fresh_ident_valid_after {A B} : forall (l : list (ident * A)) (a : B) id st st',
       fresh_ident a st = (id, st') ->
@@ -189,7 +189,7 @@ Module Type CORRECTNESS
   (** Some additional stuff *)
 
   Fact idents_for_anns_NoDupMembers : forall anns ids st st',
-      fresh_st_valid st ->
+      st_valid st ->
       idents_for_anns anns st = (ids, st') ->
       NoDupMembers ids.
   Proof.
@@ -204,7 +204,7 @@ Module Type CORRECTNESS
   Qed.
 
   Fact idents_for_anns_nIn : forall anns ids st st',
-      fresh_st_valid st ->
+      st_valid st ->
       idents_for_anns anns st = (ids, st') ->
       Forall (fun id => ~List.In id (st_ids st)) (List.map fst ids).
   Proof.
@@ -639,7 +639,7 @@ Module Type CORRECTNESS
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
     - exists H. repeat (split; auto).
     - destruct (List.hd _ _) as [? [? ?]] eqn:Heqann; simpl in *; repeat inv_bind.
-      assert (fresh_st_follows st st') as Hfollows by eauto.
+      assert (st_follows st st') as Hfollows by eauto.
       assert (valid_after vars st') as Hvalid1 by eauto.
       remember (Env.add x v H) as H'.
       assert (hist_st vars b H' st') by (subst; eauto).

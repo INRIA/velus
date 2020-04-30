@@ -25,9 +25,10 @@ Module Type COMPLETENESS
        (Str  : COINDSTREAMS Op OpAux)
        (Import LSyn : LSYNTAX Ids Op)
        (LTyp : LTYPING Ids Op LSyn)
+       (LClo : LCLOCKING Ids Op LSyn)
        (LOrd : LORDERED Ids Op LSyn)
        (LSem : LSEMANTICS Ids Op OpAux LSyn LOrd Str)
-       (Import LNorm : LNORMALIZATION Ids Op OpAux Str LSyn LTyp LOrd LSem)
+       (Import LNorm : LNORMALIZATION Ids Op OpAux Str LSyn LTyp LClo LOrd LSem)
        (Import CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (Import TR : TRANSCRIPTION Ids Op OpAux LSyn CE NL).
@@ -186,6 +187,29 @@ Module Type COMPLETENESS
       rewrite <- fst_InMembers. rewrite <- Env.In_from_list.
       apply Env.mem_2.
       destruct (Env.mem x (Env.from_list (n_out n))); congruence.
+  Qed.
+
+  Lemma to_global_complete : forall G,
+      normalized_global G ->
+      exists G', to_global G = OK G'.
+  Proof.
+    intros G Hnormed.
+    induction Hnormed.
+    - exists nil. reflexivity.
+    - eapply to_node_complete in H.
+      destruct H as [n' Hn'].
+      destruct IHHnormed as [G' HG'].
+      exists (n'::G').
+      unfold to_global in *; simpl. unfold bind.
+      rewrite Hn'. rewrite HG'. reflexivity.
+  Qed.
+
+  Theorem normalize_global_complete : forall G Hwl,
+      exists G', to_global (normalize_global G Hwl) = OK G'.
+  Proof.
+    intros G Hwl.
+    eapply to_global_complete.
+    eapply normalize_global_normalized_global.
   Qed.
 End COMPLETENESS.
 

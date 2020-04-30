@@ -703,6 +703,34 @@ Proof.
   intro S; simpl; rewrite IH; rewrite PSP.add_add; reflexivity.
 Qed.
 
+Lemma ps_add_eq : forall x1 x2 s,
+    PS.eq (PS.add x1 (PS.add x2 s)) (PS.add x2 (PS.add x1 s)).
+Proof.
+  intros x1 x2 s.
+  split; intros Hin;
+    repeat rewrite PS.add_spec in Hin; destruct Hin as [?|[?|?]]; subst.
+  1,3,4,6: apply PSF.add_2.
+  1,3,5,6: apply PSF.add_1; auto.
+  1,2: apply PSF.add_2; eauto.
+Qed.
+
+Lemma ps_add_adds_eq : forall xs x s,
+    PS.eq (PS.add x (ps_adds xs s)) (ps_adds xs (PS.add x s)).
+Proof.
+  induction xs; intros x s; simpl.
+  - reflexivity.
+  - rewrite IHxs. rewrite ps_add_eq. reflexivity.
+Qed.
+
+Lemma ps_adds_app: forall xs1 xs2 s,
+    PS.eq (ps_adds (xs1 ++ xs2) s)
+          (ps_adds xs1 (ps_adds xs2 s)).
+Proof.
+  induction xs1; intros xs2 s; simpl.
+  - reflexivity.
+  - rewrite IHxs1. rewrite ps_add_adds_eq. reflexivity.
+Qed.
+
 Lemma ps_from_list_In:
   forall xs x,
     PS.In x (ps_from_list xs) <-> In x xs.
@@ -766,6 +794,19 @@ Proof.
       intro; subst; auto.
 Qed.
 
+Lemma Permutation_PS_elements_ps_adds':
+  forall xs S,
+    NoDup (xs ++ PS.elements S) ->
+    Permutation (PS.elements (ps_adds xs S)) (xs ++ PS.elements S).
+Proof.
+  intros xs S Hnd.
+  rewrite NoDup_app'_iff in Hnd. destruct Hnd as [Hnd1 [_ Hnd2]].
+  eapply Permutation_PS_elements_ps_adds; eauto.
+  eapply Forall_impl; [| eauto].
+  intros a Hnin contra; simpl in *.
+  rewrite In_PS_elements in Hnin. congruence.
+Qed.
+
 Lemma Subset_ps_adds:
   forall xs S S',
     PS.Subset S S' ->
@@ -807,6 +848,17 @@ Proof.
   intuition.
 Qed.
 
+Corollary PS_For_all_Forall': forall P xs,
+    PS.For_all P (ps_from_list xs) <-> (Forall P xs).
+Proof.
+  intros P xs.
+  unfold ps_from_list. rewrite PS_For_all_ps_adds.
+  split; intros.
+  - destruct H; auto.
+  - split; auto.
+    apply PS_For_all_empty.
+Qed.
+
 Lemma ps_adds_of_list:
   forall xs,
     PS.Equal (ps_adds xs PS.empty) (PSP.of_list xs).
@@ -814,6 +866,23 @@ Proof.
   intros xs x. rewrite ps_adds_spec, PSP.of_list_1; split.
   -intros [Hin|Hin]; auto. now apply not_In_empty in Hin.
   - intro Hin. apply SetoidList.InA_alt in Hin as (y & Hy & Hin); subst; auto.
+Qed.
+
+Corollary ps_from_list_ps_of_list : forall xs,
+    PS.eq (ps_from_list xs) (PSP.of_list xs).
+Proof.
+  intros xs. unfold ps_from_list. apply ps_adds_of_list.
+Qed.
+
+Lemma ps_of_list_ps_to_list_Perm : forall xs,
+    NoDup xs ->
+    Permutation (PSP.to_list (PSP.of_list xs)) xs.
+Proof.
+  intros xs Hnd; simpl.
+  rewrite <- ps_from_list_ps_of_list.
+  unfold PSP.to_list, ps_from_list.
+  rewrite Permutation_PS_elements_ps_adds';
+    rewrite PSP.elements_empty, app_nil_r; auto.
 Qed.
 
 Inductive DisjointSetList : list PS.t -> Prop :=
