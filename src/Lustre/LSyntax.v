@@ -141,6 +141,45 @@ Module Type LSYNTAX
   Definition vars_defined (eqs: list equation) : list ident :=
     flat_map fst eqs.
 
+  Definition anon_streams (anns : list ann) :=
+    map_filter (fun '(ty, (cl, name)) => match name with
+                                      | None => None
+                                      | Some x => Some (x, (ty, cl))
+                                      end) anns.
+
+  Fixpoint fresh_in (e : exp) : list (ident * (type * clock)) :=
+    match e with
+    | Econst _ => []
+    | Evar _ _ => []
+    | Eunop _ e _ => fresh_in e
+    | Ebinop _ e1 e2 _ => (fresh_in e1)++(fresh_in e2)
+    | Efby e0s es _ => concat (map fresh_in e0s)++concat (map fresh_in es)
+    | Ewhen es _ _ _ => concat (map fresh_in es)
+    | Emerge _ ets efs _ => concat (map fresh_in ets)++concat (map fresh_in efs)
+    | Eite e ets efs _ => (fresh_in e)++concat (map fresh_in ets)++concat (map fresh_in efs)
+    | Eapp _ es None anns => concat (map fresh_in es)++anon_streams anns
+    | Eapp _ es (Some r) anns => concat (map fresh_in es)++fresh_in r++anon_streams anns
+    end.
+
+  Definition fresh_ins (es : list exp) : list (ident * (type * clock)) :=
+    concat (map fresh_in es).
+
+  Definition anon_in (e : exp) : list (ident * (type * clock)) :=
+    match e with
+    | Eapp _ es None _ => fresh_ins es
+    | Eapp _ es (Some r) _ => fresh_ins es++fresh_in r
+    | e => fresh_in e
+    end.
+
+  Definition anon_ins (es : list exp) : list (ident * (type * clock)) :=
+    concat (map anon_in es).
+
+  Definition anon_in_eq (eq : equation) : list (ident * (type * clock)) :=
+    anon_ins (snd eq).
+
+  Definition anon_in_eqs (eqs : list equation) : list (ident * (type * clock)) :=
+    concat (map anon_in_eq eqs).
+
   Record node : Type :=
     mk_node {
         n_name     : ident;
@@ -154,7 +193,7 @@ Module Type LSYNTAX
         n_outgt0   : 0 < length n_out;
         n_defd     : Permutation (vars_defined n_eqs)
                                  (map fst (n_vars ++ n_out));
-        n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out);
+        n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out ++ anon_in_eqs n_eqs);
         n_good     :  Forall ValidId (n_in ++ n_vars ++ n_out)
                       /\ valid n_name
       }.
@@ -476,7 +515,79 @@ Module Type LSYNTAX
     intro n.
     rewrite n.(n_defd).
     apply fst_NoDupMembers.
-    apply (NoDupMembers_app_r _ _ n.(n_nodup)).
+    specialize (n.(n_nodup)) as Hndup.
+    apply NoDupMembers_app_r in Hndup.
+    rewrite app_assoc in Hndup.
+    apply NoDupMembers_app_l in Hndup. auto.
+  Qed.
+
+  (** fresh_in and anon_in specification and properties *)
+
+  Inductive FreshIn : exp -> list (ident * (type * clock)) -> Prop :=
+  | FIEconst : forall c,
+      FreshIn (Econst c) []
+  | FIEvar : forall id a,
+      FreshIn (Evar id a) []
+  | FIEunop : forall op e ann anns,
+      FreshIn e anns ->
+      FreshIn (Eunop op e ann) anns
+  | FIEbinop : forall op e1 e2 ann anns1 anns2,
+      FreshIn e1 anns1 ->
+      FreshIn e2 anns2 ->
+      FreshIn (Ebinop op e1 e2 ann) (anns1++anns2)
+  | FIEfby : forall e0s es anns anns1 anns2,
+      Forall2 FreshIn e0s anns1 ->
+      Forall2 FreshIn es anns2 ->
+      FreshIn (Efby e0s es anns) (concat anns1++concat anns2)
+  | FIEwhen : forall es ck b lann anns1,
+      Forall2 FreshIn es anns1 ->
+      FreshIn (Ewhen es ck b lann) (concat anns1)
+  | FIEmerge : forall ets efs ck lann anns1 anns2,
+      Forall2 FreshIn ets anns1 ->
+      Forall2 FreshIn efs anns2 ->
+      FreshIn (Emerge ck ets efs lann) (concat anns1++concat anns2)
+  | FIEite : forall e ets efs lann anns1 anns2 anns3,
+      FreshIn e anns1 ->
+      Forall2 FreshIn ets anns2 ->
+      Forall2 FreshIn efs anns3 ->
+      FreshIn (Eite e ets efs lann) (anns1++concat anns2++concat anns3)
+  | FIEapp : forall f es anns anns1,
+      Forall2 FreshIn es anns1 ->
+      FreshIn (Eapp f es None anns) (concat anns1++anon_streams anns)
+  | FIEreset : forall f es r anns anns1 anns2,
+      Forall2 FreshIn es anns1 ->
+      FreshIn r anns2 ->
+      FreshIn (Eapp f es (Some r) anns) (concat anns1++anns2++anon_streams anns).
+
+  Inductive FreshIns : list exp -> list (ident * (type * clock)) -> Prop :=
+  | FreshIns_conc : forall es anns,
+      Forall2 FreshIn es anns ->
+      FreshIns es (concat anns).
+
+  Lemma fresh_in_sound : forall e,
+      FreshIn e (fresh_in e).
+  Proof.
+    induction e using exp_ind2; simpl;
+      try destruct ro;
+      constructor; auto;
+      try (rewrite Forall2_map_2, <- Forall2_same; assumption).
+  Qed.
+
+  Corollary fresh_ins_sound : forall es,
+      FreshIns es (fresh_ins es).
+  Proof.
+    intros es.
+    constructor.
+    rewrite Forall2_map_2, <- Forall2_same.
+    apply Forall_forall. intros ? _.
+    apply fresh_in_sound.
+  Qed.
+
+  Lemma anon_in_fresh_in : forall e,
+      incl (anon_in e) (fresh_in e).
+  Proof.
+    destruct e; simpl; try reflexivity.
+    destruct o; try rewrite app_assoc; apply incl_appl; reflexivity.
   Qed.
 
   (** find_node *)

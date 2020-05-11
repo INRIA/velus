@@ -230,132 +230,18 @@ Module Type LCLOCKING
         (* TODO: clock of r *)
         wc_exp (Eapp f es (Some r) anns).
 
-    Inductive Is_fresh_in : ident -> exp -> Prop :=
-    | IFEunop: forall x op e ann,
-        Is_fresh_in x e ->
-        Is_fresh_in x (Eunop op e ann)
-
-    | IFEbinop: forall x op e1 e2 ann,
-        Is_fresh_in x e1 \/ Is_fresh_in x e2 ->
-        Is_fresh_in x (Ebinop op e1 e2 ann)
-
-    | IFEfby: forall x e0s es anns,
-        Exists (Is_fresh_in x) (e0s ++ es) ->
-        Is_fresh_in x (Efby e0s es anns)
-
-    | IFEwhen: forall x es y b anns,
-        Exists (Is_fresh_in x) es ->
-        Is_fresh_in x (Ewhen es y b anns)
-
-    | IFEmerge: forall x ets efs y anns,
-        Exists (Is_fresh_in x) (ets ++ efs) ->
-        Is_fresh_in x (Emerge y ets efs anns)
-
-    | IFEifte: forall x e ets efs anns,
-        Exists (Is_fresh_in x) (e :: (ets ++ efs)) ->
-        Is_fresh_in x (Eite e ets efs anns)
-
-    | IFEapp: forall x f es anns,
-        Exists (Is_fresh_in x) es
-        \/ Ino x (map stream_name anns) ->
-        Is_fresh_in x (Eapp f es None anns)
-
-    | IFEreset: forall x f es e anns,
-        Exists (Is_fresh_in x) (e :: es)
-        \/ Ino x (map stream_name anns) ->
-        Is_fresh_in x (Eapp f es (Some e) anns).
-
-    Inductive DisjointFreshList : list exp -> Prop :=
-    | DWnil:
-        DisjointFreshList []
-
-    | DWcons: forall e es,
-        DisjointFreshList es ->
-        (forall x, Is_fresh_in x e -> ~Exists (Is_fresh_in x) es) ->
-        DisjointFreshList (e::es).
-
-    Definition Is_AnonStream (x : option ident) : Prop :=
-      match x with
-      | None => True
-      | Some x => ~ InMembers x vars
-      end.
-
-    Inductive DisjointFresh : exp -> Prop :=
-    | DFEconst: forall c,
-        DisjointFresh (Econst c)
-
-    | DFEvar: forall x ann,
-        DisjointFresh (Evar x ann)
-
-    | DFEunop: forall op e ann,
-        DisjointFresh e ->
-        DisjointFresh (Eunop op e ann)
-
-    | DFEbinop: forall op e1 e2 ann,
-        DisjointFresh e1 ->
-        DisjointFresh e2 ->
-        (forall x, Is_fresh_in x e1 -> ~Is_fresh_in x e2) ->
-        DisjointFresh (Ebinop op e1 e2 ann)
-
-    | DFEfby: forall e0s es anns,
-        DisjointFreshList (e0s ++ es) ->
-        Forall DisjointFresh (e0s ++ es) ->
-        DisjointFresh (Efby e0s es anns)
-
-    | DFEwhen: forall es x b anns,
-        DisjointFreshList es ->
-        Forall DisjointFresh es ->
-        DisjointFresh (Ewhen es x b anns)
-
-    | DFEmerge: forall x ets efs anns,
-        DisjointFreshList (ets ++ efs) ->
-        Forall DisjointFresh (ets ++ efs) ->
-        DisjointFresh (Emerge x ets efs anns)
-
-    | DFEifte: forall e ets efs anns,
-        DisjointFreshList (e :: (ets ++ efs)) ->
-        Forall DisjointFresh (e :: (ets ++ efs)) ->
-        DisjointFresh (Eite e ets efs anns)
-
-    | DFEapp: forall f es anns,
-        DisjointFreshList es ->
-        Forall DisjointFresh es ->
-        NoDupo (map stream_name anns) ->
-        Forall Is_AnonStream (map stream_name anns) ->
-        (forall x, Ino x (map stream_name anns) -> ~Exists (Is_fresh_in x) es) ->
-        DisjointFresh (Eapp f es None anns)
-
-    | DFEreset: forall f es e anns,
-        DisjointFreshList (e :: es) ->
-        Forall DisjointFresh (e :: es) ->
-        NoDupo (map stream_name anns) ->
-        Forall Is_AnonStream (map stream_name anns) ->
-        (forall x, Ino x (map stream_name anns) -> ~Exists (Is_fresh_in x) (e :: es)) ->
-        DisjointFresh (Eapp f es (Some e) anns).
-
-    Definition WellFormedAnon (e : exp) : Prop :=
-      match e with
-      | Eapp f es None anns => Forall DisjointFresh es /\ DisjointFreshList es
-      | Eapp f es (Some r) anns =>
-        Forall DisjointFresh (r :: es) /\ DisjointFreshList (r :: es)
-      | _ => DisjointFresh e
-      end.
-
-    Definition wc_equation (xses : equation) : Prop :=
-      let (xs, es) := xses in
-      Forall wc_exp es
-      /\ Forall WellFormedAnon es
-      /\ Forall2 (fun x nc => LiftO True (eq x) (snd nc)) xs (nclocksof es)
-      /\ Forall2 (fun x ck => In (x, ck) vars) xs (clocksof es).
-
+  Definition wc_equation (xses : equation) : Prop :=
+    let (xs, es) := xses in
+    Forall wc_exp es
+    /\ Forall2 (fun x nc => LiftO True (eq x) (snd nc)) xs (nclocksof es)
+    /\ Forall2 (fun x ck => In (x, ck) vars) xs (clocksof es).
   End WellClocked.
 
   Definition wc_node (G: global) (n: node) : Prop
     :=    wc_env (idck  n.(n_in))
        /\ wc_env (idck (n.(n_in) ++ n.(n_out)))
        /\ wc_env (idck (n.(n_in) ++ n.(n_out) ++ n.(n_vars)))
-       /\ Forall (wc_equation G (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
-                 n.(n_eqs).
+       /\ Forall (wc_equation G (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out)))) n.(n_eqs).
 
   Inductive wc_global : global -> Prop :=
   | wcg_nil:
@@ -555,89 +441,17 @@ Module Type LCLOCKING
     now rewrite Henv, HG.
   Qed.
 
-  Instance Is_AnonStream_pointwise_Proper:
-    Proper (@Permutation.Permutation (ident * clock) ==> pointwise_relation _ iff)
-           Is_AnonStream.
-  Proof.
-    intros G' G EG xo.
-    unfold Is_AnonStream; destruct xo; [now rewrite EG|now intuition].
-  Qed.
-
-  Instance Is_AnonStream_Proper:
-    Proper (@Permutation.Permutation (ident * clock) ==> eq ==> iff)
-           Is_AnonStream.
-  Proof.
-    intros G' G EG xo' xo Exo; subst.
-    unfold Is_AnonStream; destruct xo; [now rewrite EG|now intuition].
-  Qed.
-
-  Instance DisjointFresh_pointwise_Proper:
-    Proper (@Permutation.Permutation (ident * clock) ==> pointwise_relation _ iff)
-           DisjointFresh.
-  Proof.
-    intros G' G EG e.
-    Local Hint Extern 4 (Forall _ (_ ++ _)) => apply Forall_app.
-    induction e using exp_ind2; split; inversion 1; subst;
-      repeat match goal with
-             | H:_ <-> _ |- _ => destruct H
-             | H:Forall (fun e => _ e <-> _ e) _ |- _ => apply Forall_iff_insideout in H
-             | H:Forall _ (_ ++ _) |- _ => apply Forall_app in H as (? & ?)
-             | H:Forall _ (_ :: _) |- _ => apply Forall_hd_tl in H as (? & ?)
-             | H:Forall (Is_AnonStream G') _ |- DisjointFresh G _ => rewrite EG in H
-             | H:Forall (Is_AnonStream G) _ |- DisjointFresh G' _ => rewrite <-EG in H
-             end;
-      eauto 8 using DisjointFresh.
-  Qed.
-
-  Instance DisjointFresh_Proper:
-    Proper (@Permutation.Permutation (ident * clock) ==> eq ==> iff)
-           DisjointFresh.
-  Proof.
-    intros G' G EG e' e Ee; subst.
-    induction e using exp_ind2; split; inversion 1; subst;
-      repeat match goal with
-             | H:_ <-> _ |- _ => destruct H
-             | H:Forall (fun e => _ e <-> _ e) _ |- _ => apply Forall_iff_insideout in H
-             | H:Forall _ (_ ++ _) |- _ => apply Forall_app in H as (? & ?)
-             | H:Forall _ (_ :: _) |- _ => apply Forall_hd_tl in H as (? & ?)
-             | H:Forall (Is_AnonStream G') _ |- DisjointFresh G _ => rewrite EG in H
-             | H:Forall (Is_AnonStream G) _ |- DisjointFresh G' _ => rewrite <-EG in H
-             end;
-      eauto 8 using DisjointFresh.
-  Qed.
-
-  Instance WellFormedAnon_Proper:
-    Proper (@Permutation.Permutation (ident * clock) ==> eq ==> iff)
-           WellFormedAnon.
-  Proof.
-    intros G' G EG e' e Ee; subst.
-    unfold WellFormedAnon.
-    destruct e; try rewrite EG; intuition.
-    now destruct o; rewrite EG in *; intuition.
-    now destruct o; rewrite EG; intuition.
-  Qed.
-
-  Instance WellFormedAnon_pointwise_Proper:
-    Proper (@Permutation.Permutation (ident * clock) ==> pointwise_relation _ iff)
-           WellFormedAnon.
-  Proof.
-    intros env' env Henv e. now rewrite Henv.
-  Qed.
-
   Instance wc_equation_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * clock)
                 ==> @eq equation ==> iff)
            wc_equation.
-  Proof.
+  Proof with auto.
     intros G1 G2 HG env1 env2 Henv eq1 eq2 Heq; subst.
     destruct eq2 as (xs & es). unfold wc_equation. rewrite Henv.
-    split.
-    - intros (HA & HB & HC & HD).
-      repeat split; auto.
-      now setoid_rewrite Henv in HD.
-    - intros (HA & HB & HC & HD).
-      repeat split; auto.
-      now setoid_rewrite <-Henv in HD.
+    split; intros (HA & HB & HC);
+      repeat split...
+    - setoid_rewrite <- Henv...
+    - setoid_rewrite Henv...
   Qed.
 
   Instance wc_equation_pointwise_Proper:
@@ -872,70 +686,6 @@ Module Type LCLOCKING
 
       | _ => None end.
 
-    Definition assert_no_intersection (S1 S2 : PS.t) : option PS.t :=
-      if PS.is_empty (PS.inter S1 S2) then Some (PS.union S1 S2) else None.
-
-    Definition check_anon_name (ann : type * nclock) (U : PS.t) : option PS.t :=
-      match snd (snd ann) with
-      | None => Some U
-      | Some x => if PS.mem x U || Env.mem x venv then None else Some (PS.add x U)
-      end.
-
-    Fixpoint check_disjoint_fresh (e : exp) : option PS.t :=
-      match e with
-      | Econst c => Some PS.empty
-      | Evar x _ => Some PS.empty
-      | Eunop op e _ => check_disjoint_fresh e
-      | Ebinop op e1 e2 _ =>
-        do F1 <- check_disjoint_fresh e1;
-        do F2 <- check_disjoint_fresh e2;
-        assert_no_intersection F1 F2
-      | Efby e0s es anns =>
-        do F0s <- omap check_disjoint_fresh e0s;
-        do Fs <- omap check_disjoint_fresh es;
-        let U := ofold_right assert_no_intersection (Some PS.empty) F0s in
-        ofold_right assert_no_intersection U Fs
-      | Ewhen es x b _ =>
-        do Fs <- omap check_disjoint_fresh es;
-        ofold_right assert_no_intersection (Some PS.empty) Fs
-      | Emerge x ets efs _ =>
-        do FTs <- omap check_disjoint_fresh ets;
-        do FFs <- omap check_disjoint_fresh efs;
-        let U := ofold_right assert_no_intersection (Some PS.empty) FTs in
-        ofold_right assert_no_intersection U FFs
-      | Eite e ets efs _ =>
-        do F <- check_disjoint_fresh e;
-        do FTs <- omap check_disjoint_fresh ets;
-        do FFs <- omap check_disjoint_fresh efs;
-        let U := ofold_right assert_no_intersection (Some F) FTs in
-        ofold_right assert_no_intersection U FFs
-
-      | Eapp f es ro anns =>
-        do Fs <- omap check_disjoint_fresh es;
-        let F := match ro with None => Some PS.empty | Some e => check_disjoint_fresh e end in
-        let U := ofold_right assert_no_intersection F Fs in
-        ofold_right check_anon_name U anns
-      end.
-
-    Definition check_wellformedanon (e : exp) : bool :=
-      match e with
-      | Eapp f es ro anns =>
-        match omap check_disjoint_fresh es with
-        | None => false
-        | Some Fs =>
-          let F := match ro with
-                   | None => Some PS.empty
-                   | Some e => check_disjoint_fresh e
-                   end
-          in
-          isSome (ofold_right assert_no_intersection F Fs)
-        end
-      | _ => isSome (check_disjoint_fresh e)
-      end.
-
-    Definition check_wellformedanon_and_exp (e : exp) : option (list nclock) :=
-      if check_wellformedanon e then check_exp e else None.
-
     Function check_nclock (x : ident) (nck : nclock) : bool :=
       let '(ck, nm) := nck in
       check_var x ck && (match nm with
@@ -945,357 +695,10 @@ Module Type LCLOCKING
 
     Definition check_equation (eq : equation) : bool :=
       let '(xs, es) := eq in
-      match oconcat (map check_wellformedanon_and_exp es) with
+      match oconcat (map check_exp es) with
       | None => false
       | Some ncks => forall2b check_nclock xs ncks
       end.
-
-    Lemma assert_no_intersection_correct:
-      forall F S1 S2,
-        assert_no_intersection S1 S2 = Some F ->
-        F = PS.union S1 S2
-        /\ PS.Empty (PS.inter S1 S2).
-    Proof.
-      unfold assert_no_intersection.
-      intros S1 S2 F NI. DestructMatch; inv NI.
-      auto using PSF.is_empty_2.
-    Qed.
-
-    Lemma ofold_right_assert_no_intersection:
-      forall F Fs F',
-        ofold_right assert_no_intersection (Some F) Fs = Some F' ->
-        F' === (PSUnion (F::Fs))
-        /\ DisjointSetList (F::Fs).
-    Proof.
-      induction Fs; simpl.
-      now inversion_clear 1; split; auto using DisjointSetList; reflexivity.
-      intros F' ANI. DestructMatch.
-      specialize (IHFs _ eq_refl) as (? & ?).
-      take (assert_no_intersection _ _ = Some _)
-           and apply assert_no_intersection_correct in it as (? & ?); subst.
-      take (PS.Equal _ _) and rewrite it.
-      rewrite <-perm_swap, (PSUnion_cons _ (F::Fs)).
-      split; [reflexivity|].
-      constructor; auto. rewrite Forall_forall.
-      intros S IS. apply In_PSUnion in IS.
-      rewrite <-it in IS. now rewrite IS.
-    Qed.
-
-    Lemma DisjointFreshList_app:
-      forall es1 es2,
-        DisjointFreshList (es1 ++ es2)
-        <-> (DisjointFreshList es1
-           /\ DisjointFreshList es2
-           /\ Forall (fun e => forall x, Is_fresh_in x e -> ~Exists (Is_fresh_in x) es2) es1).
-    Proof.
-      induction es1 as [|e es1 IH]; intro es2. now intuition constructor.
-      rewrite <-app_comm_cons. split.
-      - inversion 1 as [|?? DFL1 DFL2]; subst.
-        apply IH in DFL1 as (DF1 & DF2 & DFC).
-        setoid_rewrite Exists_app' in DFL2.
-        setoid_rewrite not_or' in DFL2.
-        repeat split; auto using DisjointFreshList; constructor; auto;
-          now intros x FI; apply DFL2 in FI.
-      - intros (DFL1 & DFL2 & DFC).
-        inversion_clear DFL1 as [|?? DFL3 DFL4].
-        apply Forall_hd_tl in DFC as (DFC1 & DFC2).
-        constructor. now apply IH; intuition.
-        intros x Fx. rewrite Exists_app', not_or'. firstorder.
-    Qed.
-
-    Lemma ofold_right_check_anon_name_correct:
-      forall anns F F',
-        ofold_right check_anon_name (Some F) anns = Some F' ->
-        PS.Subset F F'
-        /\ NoDupo (map stream_name anns)
-        /\ Forall (Is_AnonStream (idck (Env.elements venv))) (map stream_name anns)
-        /\ (forall x, Ino x (map stream_name anns) <-> ~PS.In x F /\ PS.In x F').
-    Proof.
-      induction anns as [|ann anns IH]; simpl.
-      now inversion_clear 1;
-        repeat split; eauto using NoDupo_nil, PSP.subset_refl; intuition.
-      intros F F' OFR. DestructMatch.
-      take (ofold_right check_anon_name _ _ = Some _)
-           and apply IH in it as (SS & ND & FA & INO).
-      destruct ann as (ty, (ck, nm)). destruct nm.
-      - unfold check_anon_name in OFR; simpl in *.
-        DestructMatch.
-        take (_ || _ = false) and rewrite Bool.orb_false_iff, <-PSF.not_mem_iff,
-                                         <-Env.Props.P.F.not_mem_in_iff in it.
-        destruct it as (NI & NV). inv OFR. repeat split.
-        + now rewrite SS; apply PSP.subset_add_2.
-        + apply NoDupo_conss; auto.
-          intro Ii; apply INO in Ii as (? & ?); auto.
-        + constructor; auto. simpl.
-          now rewrite InMembers_idck, <-Env.In_Members.
-        + take (_ \/ _) and destruct it; subst; auto.
-          now take (Ino _ _) and apply INO in it as (? & ?).
-        + take (_ \/ _) and destruct it; subst; auto using PSF.add_1.
-          take (Ino _ _) and apply INO in it as (? & ?); auto using PSF.add_2.
-        + intros (Nx & Ix). apply PS.add_spec in Ix as [Ix|Ix]; auto.
-          right. apply INO; auto.
-      - inv OFR; unfold stream_name, Is_AnonStream; simpl.
-        repeat split; auto using NoDupo_consn.
-        + take (_ \/ _) and destruct it; try contradiction;
-            now take (Ino _ _) and apply INO in it as (? & ?).
-        + take (_ \/ _) and destruct it; try contradiction;
-            now take (Ino _ _) and apply INO in it as (? & ?).
-        + intros (Nx & Ix); right. apply INO; auto.
-    Qed.
-
-    Lemma Disjoint_Is_fresh_in_DisjointFreshList:
-      forall es Fs,
-        Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) es Fs ->
-        DisjointSetList Fs ->
-        DisjointFreshList es.
-    Proof.
-      induction es as [|e es IH]; auto using DisjointFreshList.
-      intros Fs FA DL. destruct Fs as [|F Fs]; inv FA; inv DL.
-      match goal with DJ:DisjointSetList Fs, FA:Forall2 _ _ _ |- _ =>
-                      specialize (IH _ FA DJ) end.
-      constructor; auto. intros x Fx.
-      take (forall x, Is_fresh_in x _ <-> PS.In x _) and apply it in Fx.
-      apply Forall_Exists_neg.
-      take (Forall2 _ _ _) and apply Forall2_ignore2 in it.
-      apply Forall_impl_In with (2:=it).
-      intros e' Ie' (F' & IF' & HF') Fx'.
-      apply HF' in Fx'.
-      take (Forall _ Fs) and apply Forall_forall with (x:=F') in it; auto.
-      apply PS_disjoint1 with (2:=Fx) in it; auto.
-    Qed.
-
-    Lemma check_disjoint_fresh_correct:
-      forall e F,
-        check_disjoint_fresh e = Some F ->
-        DisjointFresh (idck (Env.elements venv)) e
-        /\ (forall x, Is_fresh_in x e <-> PS.In x F).
-    Proof.
-      assert (forall es1 es2 fs1 fs2,
-                 Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) es1 fs1 ->
-                 Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) es2 fs2 ->
-                 Forall (fun t => PS.Empty (PS.inter (PSUnion fs1) t)) fs2 ->
-                 Forall (fun e => forall x, Is_fresh_in x e -> ~ Exists (Is_fresh_in x) es2) es1)
-        as L1.
-      { induction es1 as [|e es1 IH]; auto.
-        intros es2 fs1 fs2 FA1 FA2 DJ. inversion FA1 as [|???? FI FA]; subst.
-        constructor.
-        - intros x Fx. apply FI in Fx.
-          apply Forall2_ignore2 in FA2.
-          apply Forall_Exists_neg, Forall_impl_In with (2:=FA2).
-          intros e' Ie' (s & Is & FI') Fx'.
-          apply FI' in Fx'. rewrite Forall_forall in DJ. apply DJ in Is.
-          apply (Is x). rewrite PS.inter_spec, PSUnion_cons.
-          auto using PSF.union_2.
-        - eapply IH; eauto. apply Forall_impl_In with (2:=DJ).
-          intros f If Df x Ix. apply (Df x).
-          apply PS.inter_spec in Ix as (Ix1 & Ix2).
-          apply PS.inter_spec. split; auto.
-          rewrite PSUnion_cons. auto using PSF.union_3. }
-      assert (forall es ss,
-                 Forall2 (fun e s => check_disjoint_fresh e = Some s) es ss ->
-                 Forall (fun e => forall F, check_disjoint_fresh e = Some F ->
-                                    DisjointFresh (idck (Env.elements venv)) e
-                                    /\ (forall x, Is_fresh_in x e <-> PS.In x F)) es ->
-                 Forall (DisjointFresh (idck (Env.elements venv))) es
-                 /\ Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) es ss) as L2.
-      { intros es ss FA2 FA. split.
-        - apply Forall2_ignore2 in FA2.
-          apply Forall_impl_In with (2:=FA2).
-          intros e Ie (? & Ix & CDF).
-          rewrite Forall_forall in FA.
-          apply FA with (1:=Ie) in CDF as (? & ?); auto.
-        - apply Forall2_impl_In with (2:=FA2).
-          intros e E Ie IE CDF. rewrite Forall_forall in FA.
-          apply FA with (1:=Ie) in CDF as (? & ?); auto. }
-      assert (forall es ss x t,
-                 Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) es ss ->
-                 Forall (fun s => PS.Empty (PS.inter t s)) ss ->
-                 PS.In x t ->
-                 Forall (fun e => ~Is_fresh_in x e) es) as L3.
-      { intros es ss x t FA2 FA Ix.
-        apply Forall2_ignore2 in FA2. apply Forall_impl_In with (2:=FA2).
-        intros e' Ie' (s & Is & Ps) Fs. apply Ps in Fs.
-        apply Forall_forall with (2:=Is) in FA. apply (FA x).
-        auto using PSF.inter_3. }
-      assert (forall es ss x F Fs,
-                 Forall2 (fun e F => forall x : ident, Is_fresh_in x e <-> PS.In x F) es ss ->
-                 Forall (fun s => PS.Empty (PS.inter (PSUnion (F :: Fs)) s)) ss ->
-                 PS.In x F ->
-                 Forall (fun e => ~ Is_fresh_in x e) es) as L4.
-      { intros es ss x F Fx FA2 FA Ix.
-        apply Forall2_ignore2 in FA2. apply Forall_impl_In with (2:=FA2).
-        intros e' Ie' (s & Is & Ps) Fe'. apply Ps in Fe'.
-        apply Forall_forall with (2:=Is) in FA. apply (FA x).
-        rewrite PSUnion_cons. auto using PSF.inter_3, PSF.union_2. }
-      assert (forall x xs ss,
-                 Forall (fun s => PS.Empty (PS.inter (PSUnion (x :: xs)) s)) ss ->
-                 Forall (fun s => PS.Empty (PS.inter (PSUnion xs) s)) ss) as L5.
-      { intros x xs ss FA. apply Forall_impl_In with (2:=FA).
-        intros s Is EI. intro z. specialize (EI z). intro Iz.
-        apply PS.inter_spec in Iz as (? & ?).
-        apply EI, PS.inter_spec. rewrite PSUnion_cons. auto using PSF.union_3. }
-
-      Local Hint Resolve <-Exists_app'.
-      Local Hint Resolve <-Exists_exists.
-      Local Hint Resolve ->Forall_Exists_neg.
-      Local Hint Resolve <-DisjointFreshList_app.
-      Local Hint Constructors DisjointFresh.
-      Local Hint Constructors DisjointFreshList.
-      Local Hint Constructors Is_fresh_in.
-      Local Hint Resolve Disjoint_Is_fresh_in_DisjointFreshList.
-      Local Hint Resolve Forall_app.
-      Local Hint Resolve In_In_PSUnion.
-
-      induction e using exp_ind2; simpl; intros F CD; split;
-        repeat match goal with
-               | ro:option exp |- _ => destruct ro
-               | H:Some _ = Some _ |- _ => inv H
-               | H:_ \/ _ |- _ => destruct H; subst
-               | H:context [ PSUnion (PS.empty :: _) ] |- _ =>
-                 rewrite PSUnion_cons_empty in H
-               | |- context [ PSUnion (_ :: _) ] => rewrite PSUnion_cons
-               | |- context [ PS.In _ (PS.union _ _) ] => rewrite PS.union_spec
-               | |- (forall x, _ <-> _) => intro; split; [inversion_clear 1|intro HH]
-               | H:PS.In ?x PS.empty |- _ => inv H
-               | H:check_disjoint_fresh ?e = Some ?F,
-                 IH:(forall F : PS.t, check_disjoint_fresh ?e = Some F -> _) |- _
-                 => apply IH in H as (? & ?)
-               | H:(forall x, Is_fresh_in x ?e <-> PS.In x ?s) |- _ =>
-                 assert (forall x, Is_fresh_in x e -> PS.In x s) by (setoid_rewrite H; auto);
-                   assert (forall x, PS.In x s -> Is_fresh_in x e) by (setoid_rewrite <-H; auto);
-                   clear H
-               | H:obind ?v _ = Some _ |- _ =>
-                 let OE:=fresh "OE0" in destruct v eqn:OE; [simpl in H|now omonadInv H]
-               | H:forall F, Some _ = Some _ -> _ |- _ => specialize (H _ eq_refl) as (? & ?)
-               | H:assert_no_intersection _ _ = Some _ |- _ =>
-                 apply assert_no_intersection_correct in H as (? & ?); subst
-               | E:PS.Empty (PS.inter _ _) |- _ =>
-                 pose proof (PS_disjoint1 _ _ E); pose proof (PS_disjoint2 _ _ E); clear E
-               | |- PS.In _ (PS.union _ _) => apply PS.union_spec
-               | H:PS.In ?x (PS.union _ _) |- _ => apply PSF.union_1 in H
-               | H: Exists _ (_ ++ _) |- _ => apply Exists_app' in H
-               | H:ofold_right _ (ofold_right assert_no_intersection ?F ?xs) _ = Some F |- _ =>
-                 let OFR:=fresh "OFR" in destruct (ofold_right assert_no_intersection F xs) eqn:OFR
-               | H:ofold_right assert_no_intersection _ _ = Some _ |- _ =>
-                 apply ofold_right_assert_no_intersection in H as (? & ?)
-               | H:ofold_right _ None _ = Some _ |- _ =>
-                 now rewrite ofold_right_none_none in H
-               | H:Forall2 (fun e s => check_disjoint_fresh e = Some s) _ _ |- _ =>
-                 apply L2 in H as (? & ?); [|now auto]
-               | H:Exists (Is_fresh_in _) _ |- _ => apply Exists_exists in H as (? & ? & ?)
-               | H:omap check_disjoint_fresh _ = Some _ |- _ => apply omap_inversion in H
-               | H:ofold_right assert_no_intersection (check_disjoint_fresh ?e) ?xs = Some ?s |- _ =>
-                 let CDF:=fresh "CDF" in destruct (check_disjoint_fresh e) eqn:CDF
-               | H:ofold_right check_anon_name _ _ = Some _ |- _ =>
-                 apply ofold_right_check_anon_name_correct in H as (? & ? & ? & ?)
-               | H:DisjointSetList (_ :: _) |- _ => inv H
-               | T:?t === PSUnion _, H:context [PS.inter ?t _] |- _ =>
-                 setoid_rewrite T in H
-               | EQ:?F === PSUnion ?xs |- PS.In _ ?F => rewrite EQ
-               | EQ:?F === PSUnion ?xs, H:PS.In _ ?F |- _ => rewrite EQ in H
-               | E:?t === PSUnion ?xs |- context [ PS.In _ ?t ] => rewrite E
-               | E:?F === PSUnion (_ :: _), FI:PS.In ?x ?F |- _ => rewrite E in FI
-               | E:?t === PSUnion ?xs, FI:PS.In ?x (PSUnion (?t::?ys)) |- _ =>
-                 let RR:=fresh "RR" in
-                 assert (SetoidList.eqlistA PS.Equal (t :: ys) (PSUnion xs :: ys)) as RR
-                     by (constructor; intuition);
-                   rewrite RR, PSUnion_app, PSUnion_In_app in FI; clear RR
-               | FA:Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) ?es ?xs,
-                    Ix:In ?x ?es |- _ =>
-                 apply Forall2_ignore2, Forall_forall with (2:=Ix) in FA as (? & ? & ?)
-               | FA:Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) ?es ?Fs,
-                    Ix:In ?x ?Fs |- _ =>
-                 apply Forall2_ignore1, Forall_forall with (2:=Ix) in FA as (? & ? & ?)
-               | H:PS.In ?x (PSUnion ?xs) |- _ =>
-                 apply PSUnion_In_In in H as (? & ? & ?)
-               | H:In ?x (_ :: _) |- _ => apply in_inv in H
-               | H:In _ (_ ++ _) |- _ => apply in_app in H
-               | FP:(forall x, Is_fresh_in x ?e -> PS.In x ?s), FI:Is_fresh_in ?x ?e |- PS.In ?x ?F =>
-                 apply FP in FI
-               | Ix:Ino ?x (map stream_name ?anns),
-                 H:(forall x, Ino x (map stream_name ?anns) <-> _ /\ _) |- _
-                 => apply H in Ix as (? & ?); auto
-               | SS:PS.Subset ?t ?F, TE:?t === PSUnion _ |- PS.In ?x ?F =>
-                 rewrite <-SS, TE, ?PSUnion_cons, ?PS.union_spec; auto
-               end;
-        eauto 20.
-      - (* DisjointFresh (idck (Env.elements venv)) (Ebinop op e1 e2 a) *)
-        constructor; firstorder.
-      - (* DisjointFresh (idck (Env.elements venv)) (Eapp f es (Some e) a) *)
-        constructor; eauto 6.
-        intros x Ix.
-        take (forall x, Ino x (map stream_name _) <-> _ /\ _) and apply it in Ix as (Nx & Ix).
-        take (_ === PSUnion (_ :: _)) and rewrite it, PSUnion_cons, PS.union_spec, not_or' in Nx.
-        destruct Nx as (? & ?).
-        apply Forall_Exists_neg; constructor; auto.
-        take (Forall2 _ _ _) and apply Forall2_ignore2 in it.
-        apply Forall_impl_In with (2:=it).
-        intros e' Ie' (z & Iz & Pz) Fe'.
-        apply Pz in Fe'; eauto.
-      - (* DisjointFresh (idck (Env.elements venv)) (Eapp f es None a) *)
-        constructor; eauto.
-        intros x Ix.
-        take (forall x, Ino x (map stream_name _) <-> _ /\ _) and apply it in Ix as (Nx & Ix).
-        take (_ === PSUnion _) and rewrite it in Nx.
-        apply Forall_Exists_neg.
-        take (Forall2 _ _ _) and apply Forall2_ignore2 in it.
-        apply Forall_impl_In with (2:=it).
-        intros e' Ie' (z & Iz & Pz) Fe'.
-        apply Pz in Fe'; eauto.
-      - (* Is_fresh_in x (Eapp f es (Some e) a) *)
-        constructor.
-        destruct (PSP.In_dec x t) as [Ix|Nx].
-        + left.
-          take (t === PSUnion _) and rewrite it, PSUnion_cons, PS.union_spec in Ix.
-          destruct Ix as [Ix|Ix]; auto.
-          apply PSUnion_In_In in Ix as (? & Ix1 & Ix2).
-          take (Forall2 _ _ _) and apply Forall2_ignore1, Forall_forall
-            with (2:=Ix1) in it as (? & ? & IFI).
-          apply IFI in Ix2; eauto.
-        + right; firstorder.
-      - (* Is_fresh_in x (Eapp f es None a) *)
-        constructor.
-        destruct (PSP.In_dec x t) as [Ix|Nx].
-        + left.
-          take (t === _) and rewrite it in Ix.
-          apply PSUnion_In_In in Ix as (? & Ix1 & Ix2).
-          take (Forall2 _ _ _) and apply Forall2_ignore1 in it;
-            apply Forall_forall with (2:=Ix1) in it as (? & ? & IFI);
-            apply IFI in Ix2; eauto.
-        + right. firstorder.
-    Qed.
-
-    Lemma check_wellformedanon_correct:
-      forall e,
-        check_wellformedanon e = true ->
-        WellFormedAnon (idck (Env.elements venv)) e.
-    Proof.
-      intros e CW.
-      destruct e; simpl in *;
-        try apply isSome_true in CW as (? & ?);
-        eauto using (proj1 (check_disjoint_fresh_correct _ _ _)).
-      DestructMatch.
-      apply isSome_true in CW as (F & CW).
-      match goal with H:omap check_disjoint_fresh ?ls = Some ?ys |- _ =>
-        rename ls into es, ys into Fs, H into CDF end.
-      apply omap_inversion in CDF.
-      assert (Forall (DisjointFresh (idck (Env.elements venv))) es) as DF.
-      { apply Forall2_ignore2 in CDF. apply Forall_impl_In with (2:=CDF).
-        intros e Ie (F' & IF' & CDF').
-        apply check_disjoint_fresh_correct in CDF' as (? & ?); eauto. }
-      assert (Forall2 (fun e F => forall x, Is_fresh_in x e <-> PS.In x F) es Fs) as FI.
-      { apply Forall2_impl_In with (2:=CDF).
-        intros e s Ie Is CDF'.
-        apply check_disjoint_fresh_correct in CDF' as (? & ?); eauto. }
-      take (option exp) and destruct it.
-      - destruct (check_disjoint_fresh e) eqn:CDFe;
-          [|now rewrite ofold_right_none_none in CW].
-        apply ofold_right_assert_no_intersection in CW as (HF & DL).
-        apply check_disjoint_fresh_correct in CDFe as (DFe & FIe).
-        eauto using Disjoint_Is_fresh_in_DisjointFreshList.
-      - apply ofold_right_assert_no_intersection in CW as (HF & DL).
-        inv DL. eauto using Disjoint_Is_fresh_in_DisjointFreshList.
-    Qed.
 
     Lemma check_var_correct:
       forall x ck,
@@ -1637,7 +1040,8 @@ Module Type LCLOCKING
           rewrite <-fst_InMembers.
           apply NoDupMembers_app_InMembers with (2:=Ix).
           pose proof n.(n_nodup) as ND.
-          now rewrite Permutation_swap in ND; apply NoDupMembers_app_r in ND. }
+          rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND.
+          rewrite app_assoc in ND. apply NoDupMembers_app_l in ND. auto. }
 
         assert (Forall2 (WellInstantiated bck
            (fun x => Env.find x (fold_left2 add_osub n.(n_out) a
@@ -1651,7 +1055,7 @@ Module Type LCLOCKING
           destruct Ix as (((y & (yt & yc)), (yc' & ynm)) & EE & Ix); inv EE.
           constructor; simpl.
           2:now apply Forall2_In with (1:=Ix), check_inst_correct in FA2.
-          pose proof (NoDupMembers_app_r _ _ (NoDupMembers_app_r _ _ n.(n_nodup))).
+          pose proof (NoDupMembers_app_l _ _ (NoDupMembers_app_r _ _ (NoDupMembers_app_r _ _ n.(n_nodup)))).
           rewrite fold_left2_add_osub with (1:=Ix); auto.
           setoid_rewrite Env.Props.P.F.not_find_in_iff.
           rewrite fold_left2_add_isub_skip; auto using Env.gempty.
@@ -1660,7 +1064,9 @@ Module Type LCLOCKING
           apply NoDupMembers_app_InMembers with (2:=Ix).
           rewrite Permutation_app_comm.
           pose proof n.(n_nodup) as ND.
-          now rewrite Permutation_swap in ND; apply NoDupMembers_app_r in ND. }
+          rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND.
+          rewrite app_assoc in ND. apply NoDupMembers_app_l in ND. auto. }
+
         destruct ro;
           simpl in *; DestructMatch; subst;
             try match goal with H:check_exp ?e = Some [?nc] |- _ => destruct nc end;
@@ -1670,23 +1076,19 @@ Module Type LCLOCKING
         now apply nclockof_clockof with (1:=CE2).
     Qed.
 
-    Lemma oconcat_map_check_wellformedanon_and_exp:
+    Lemma oconcat_map_check_exp:
       forall es ncks,
-        oconcat (map check_wellformedanon_and_exp es) = Some ncks ->
+        oconcat (map check_exp es) = Some ncks ->
         Forall (wc_exp G (idck (Env.elements venv))) es
-        /\ nclocksof es = ncks
-        /\ Forall (WellFormedAnon (idck (Env.elements venv))) es.
+        /\ nclocksof es = ncks.
     Proof.
       induction es as [|e es IH]; intros ncks CE. now inv CE; eauto.
       simpl in CE. DestructMatch.
-      take (check_wellformedanon_and_exp _ = Some _) and rename it into CWF.
-      unfold check_wellformedanon_and_exp in CWF.
-      DestructMatch.
-      take (check_wellformedanon _ = true)
-           and apply check_wellformedanon_correct in it.
+      take (check_exp _ = Some _) and rename it into CWF.
       apply check_exp_correct in CWF as (WCe & NCe).
-      destruct (oconcat (map check_wellformedanon_and_exp es)) eqn:CWF; inv CE.
-      specialize (IH _ eq_refl) as (? & ? & ?).
+      destruct (oconcat (map check_exp es)) eqn:CWF; inv CE.
+      specialize (IH _ eq_refl) as (? & ?).
+      split; auto.
       simpl. take (nclocksof _ = _) and rewrite it. eauto.
     Qed.
 
@@ -1698,11 +1100,10 @@ Module Type LCLOCKING
       intros eq CE. destruct eq as (xs, es); simpl in CE.
       DestructMatch.
       take (oconcat (map _ _) = Some _)
-      and apply oconcat_map_check_wellformedanon_and_exp in it as (WC & NC & WA).
+      and apply oconcat_map_check_exp in it as (WC & NC).
       subst. apply forall2b_Forall2 in CE.
       constructor; auto.
       rewrite clocksof_nclocksof, Forall2_map_2.
-      split; auto.
       split; apply Forall2_impl_In with (2:=CE); intros x (ck, nm) Ix Inc CNC;
         simpl in *; DestructMatch;
         apply Bool.andb_true_iff in CNC as (CNC1 & CNC2);
@@ -1737,51 +1138,20 @@ Module Type LCLOCKING
         econstructor; rewrite Forall_forall in *; eauto.
     Qed.
 
-    (* Hint Constructors DisjointFresh. *)
-    (* Fact DisjointFresh_incl : forall vars vars' e, *)
-    (*     incl vars vars' -> *)
-    (*     DisjointFresh vars e -> *)
-    (*     DisjointFresh vars' e. *)
-    (* Proof with eauto. *)
-    (*   induction e using exp_ind2; intros Hincl Hdisj; inv Hdisj; eauto. *)
-    (*   - (* fby *) *)
-    (*     constructor... *)
-    (*     eapply Forall_app in H5; destruct H5. *)
-    (*     eapply Forall_app. split; rewrite Forall_forall in *... *)
-    (*   - (* when *) *)
-    (*     constructor... *)
-    (*     rewrite Forall_forall in *... *)
-    (*   - (* merge *) *)
-    (*     constructor... *)
-    (*     eapply Forall_app in H6; destruct H6. *)
-    (*     eapply Forall_app. split; rewrite Forall_forall in *... *)
-    (*   - (* ite *) *)
-    (*     constructor... *)
-    (*     inv H6. eapply Forall_app in H5; destruct H5. *)
-    (*     constructor... eapply Forall_app. split; rewrite Forall_forall in *... *)
-    (*   - (* app *) *)
-    (*     constructor... *)
-    (*     + rewrite Forall_forall in *... *)
-    (*     + eapply Forall_impl; [| eauto]. *)
-    (*       intros a0 Hisanon. destruct a0; simpl in *... *)
-    (*       intros contra. apply Hisanon. admit. (* non, ca ne marche pas *) *)
-    (* Qed. *)
-
-    (* Fact wc_equation_incl : forall G vars vars' eq, *)
-    (*     incl vars vars' -> *)
-    (*     wc_equation G vars eq -> *)
-    (*     wc_equation G vars' eq. *)
-    (* Proof with eauto. *)
-    (*   intros G vars vars' [xs es] Hincl Hwc. *)
-    (*   destruct Hwc as [? [? [? ?]]]. *)
-    (*   repeat split... *)
-    (*   - rewrite Forall_forall in *; intros. *)
-    (*     eapply wc_exp_incl... *)
-    (*   - admit. *)
-    (*   - clear H0 H1. *)
-    (*     eapply Forall2_impl_In; [| eauto]. *)
-    (*     intros a b Hin1 Hin2 Hin; simpl in Hin. eapply Hincl... *)
-    (* Qed. *)
+    Fact wc_equation_incl : forall G vars vars' eq,
+        incl vars vars' ->
+        wc_equation G vars eq ->
+        wc_equation G vars' eq.
+    Proof with eauto.
+      intros G vars vars' [xs es] Hincl Hwc.
+      destruct Hwc as [? [? ?]].
+      repeat split...
+      - rewrite Forall_forall in *; intros.
+        eapply wc_exp_incl...
+      - clear H H0.
+        eapply Forall2_impl_In; [| eauto].
+        intros a b Hin1 Hin2 Hin; simpl in Hin. eapply Hincl...
+    Qed.
   End incl.
 
 End LCLOCKING.

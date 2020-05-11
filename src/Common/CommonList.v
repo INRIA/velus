@@ -476,6 +476,26 @@ Section Incl.
     exists x. split; auto.
   Qed.
 
+  Lemma incl_appl' : forall (l n m : list A),
+      incl n m ->
+      incl (n ++ l) (m ++ l).
+  Proof.
+    intros l n m Hincl.
+    intros x Hin.
+    rewrite in_app_iff in *.
+    destruct Hin as [Hin|Hin]; auto.
+  Qed.
+
+  Lemma incl_appr' : forall (l n m : list A),
+      incl n m ->
+      incl (l ++ n) (l ++ m).
+  Proof.
+    intros l n m Hincl.
+    intros x Hin.
+    rewrite in_app_iff in *.
+    destruct Hin as [Hin|Hin]; auto.
+  Qed.
+
   Global Instance incl_refl : Reflexive (@incl A).
   Proof. unfold Reflexive. intros. apply incl_refl. Qed.
 
@@ -3446,6 +3466,22 @@ Ltac singleton_length :=
     clear H; repeat rewrite app_nil_r in *
   end;
   subst.
+
+Section map_filter.
+  Context {A B : Type}.
+
+  Variable (f : A -> option B).
+
+  Fixpoint map_filter (ls : list A) : list B :=
+    match ls with
+    | [] => []
+    | a::tl =>
+      match f a with
+      | Some b => b::(map_filter tl)
+      | None => map_filter tl
+      end
+    end.
+End map_filter.
 
 (* (* Induction on a triplet of lists of the same length *) *)
 (* Section list_ind3. *)

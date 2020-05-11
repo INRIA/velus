@@ -656,6 +656,14 @@ Proof.
   intros (y & Hxy & Hyin); subst; auto.
 Qed.
 
+Lemma PS_elements_NoDup: forall s,
+    NoDup (PS.elements s).
+Proof.
+  intros s.
+  rewrite NoDup_NoDupA.
+  apply PS.elements_spec2w.
+Qed.
+
 Definition ps_adds (xs: list positive) (s: PS.t) :=
   fold_left (fun s x => PS.add x s) xs s.
 
@@ -778,6 +786,14 @@ Proof.
   induction xs; intro s; simpl.
   - intuition.
   - rewrite IHxs. rewrite PS.remove_spec. intuition.
+Qed.
+
+Lemma ps_removes_app : forall xs1 xs2 s,
+    ps_removes (xs1 ++ xs2) s = ps_removes xs2 (ps_removes xs1 s).
+Proof.
+  induction xs1; intros xs2 s; simpl.
+  - reflexivity.
+  - rewrite IHxs1. reflexivity.
 Qed.
 
 Lemma PS_For_all_ps_adds:

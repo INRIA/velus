@@ -552,6 +552,23 @@ Module Env.
         eauto using elements_complete.
     Qed.
 
+    Lemma elements_adds:
+      forall xs m,
+        NoDupMembers (elements m++xs) ->
+        Permutation.Permutation (elements (adds' xs m)) (elements m++xs).
+    Proof.
+      induction xs as [|[k a] xs]; intros m Hndup; simpl.
+      - rewrite app_nil_r. reflexivity.
+      - specialize (IHxs (add k a m)).
+        rewrite elements_add in IHxs.
+        2: { rewrite <- Permutation.Permutation_middle in Hndup.
+             inv Hndup. apply NotInMembers_app in H1 as [_ H1].
+             rewrite In_Members; auto. }
+        rewrite <- Permutation.Permutation_middle in *.
+        apply IHxs in Hndup.
+        etransitivity; eauto.
+    Qed.
+
     Lemma Equiv_empty:
       forall m eq,
         (forall x, find x m = None) ->
