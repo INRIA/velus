@@ -2,7 +2,8 @@ From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
-From Velus Require Import Lustre.Normalization.FullNorm (* Lustre.Normalization.Correctness *) Lustre.Normalization.Idempotence.
+From Velus Require Import Lustre.Normalization.Normalization Lustre.Normalization.Specification Lustre.Normalization.FullNorm.
+From Velus Require Import (* Lustre.Normalization.Correctness *) Lustre.Normalization.Idempotence.
 
 Local Set Warnings "-masking-absolute-name".
 Module Type LNORMALIZATION

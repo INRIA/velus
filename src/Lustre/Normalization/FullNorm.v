@@ -17,8 +17,8 @@ Module Type FULLNORM
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op).
 
-  Declare Module Export Norm : NORMALIZATION Ids Op OpAux Syn.
-  Declare Module Export Spec : SPECIFICATION Ids Op OpAux Syn Norm.
+  Module Export Norm := NormalizationFun Ids Op OpAux Syn.
+  Module Export Spec := SpecificationFun Ids Op OpAux Syn Norm.
 
   Import Fresh Fresh.Fresh Facts Tactics.
 

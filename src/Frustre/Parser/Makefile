@@ -6,7 +6,8 @@ all: FrustreParser.v FrustreLexer.ml FrustreParser2.ml FrustreParser2.mli
 
 clean:
 	rm -f FrustreParser.v FrustreLexer.ml FrustreParser2.ml \
-	      FrustreParser2.mli FrustreParser2.mly
+	      FrustreParser2.mli FrustreParser2.mly \
+	      *.vo
 
 FrustreParser.v: FrustreParser.vy
 	$(MENHIR) --no-stdlib --coq $<

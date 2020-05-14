@@ -16,8 +16,8 @@ COQLIBS=\
 	-R "$(RUSTRE_ABSDIR)/src" Velus
 
 VELUS_VFILES=../Common/Common.v\
-	     ../Operators.v\
-	     ../Clocks.v\
+	../Operators.v\
+	../Clocks.v\
 
 VELUS_MLFILES=../veluscommon.ml\
 
@@ -28,13 +28,13 @@ FRUSTRE_VFILES=FSyntax.v\
 	       Parser/FrustreParser.v
 
 FRUSTRE_MLFILES=FSyntax_of_frustre.ml\
-		FSyntax_pp.ml\
-		frustre.ml\
-		frustre_of_ast.ml\
-		frustre_pp.ml\
-		frustre_test.ml\
-		frustre_typing.ml\
-		frustre_clocking.ml
+	FSyntax_pp.ml\
+	frustre.ml\
+	frustre_of_ast.ml\
+	frustre_pp.ml\
+	frustre_test.ml\
+	frustre_typing.ml\
+	frustre_clocking.ml
 
 VFILES=$(VELUS_VFILES) $(FRUSTRE_VFILES)
 
@@ -86,10 +86,10 @@ COMPCERT_MLFILES=\
 DOCDIR=doc
 COQDEP="$(COQBIN)coqdep" -c
 COQFLAGS=-q $(COQLIBS) $(OTHERFLAGS)
-COQC="$(COQBIN)coqc"
+COQC="$(COQBIN)coqc" -R $(MKFILE_DIR)/$(SRC_DIR) Velus $(COQFLAGS)
 COQEXEC="$(COQBIN)coqtop" $(COQFLAGS) -batch -load-vernac-source
-$(shell mkdir -p $(DOCDIR) >/dev/null)
-export $(COQEXEC)
+# $(shell mkdir -p $(DOCDIR) >/dev/null)
+# export $(COQEXEC)
 
 INCLUDES = -I extraction/extracted
 OCAMLC=ocamlc $(INCLUDES)
@@ -97,7 +97,7 @@ OCAMLOPT=ocamlopt $(INCLUDES)
 OCAMLDEP=ocamldep $(INCLUDES)
 
 # RULES
-all: .depend.extr frustre_test.native
+all: depend_extr frustre_test.native
 
 clean:
 	$(MAKE) -C Parser clean
@@ -106,7 +106,7 @@ clean:
 	rm -f extraction/STAMP
 	rm -f *.cmi *.cmx *.o *.vo *.native
 
-.depend: $(VFILES)
+depend: $(VFILES)
 	@echo "Analyzing Coq dependencies"
 	$(COQDEP) $(COQLIBS) $^ > .depend
 
@@ -122,17 +122,15 @@ Parser/FrustreParser.v: Parser/FrustreParser.vy
 Parser/FrustreLexer.ml: Parser/FrustreLexer.mll
 	ocamllex $<
 
-extraction/STAMP: .depend $(VOFILES) Parser/FrustreLexer.ml extraction/Extraction.v
+extraction/STAMP: depend $(VOFILES) Parser/FrustreLexer.ml extraction/Extraction.v
 	rm -f extraction/extracted/*.ml*
-	$(COQEXEC) Frustre/extraction/Extraction.v
+	$(COQEXEC) extraction/Extraction.v
 	cp -f Parser/FrustreLexer.ml extraction/extracted/
 	cp -f $(COMPCERT_MLFILES:%=$(COMPCERTDIR)/%) extraction/extracted/
 	cp -f $(VELUS_MLFILES) extraction/extracted/
 	touch extraction/STAMP
 
-extraction: extraction/STAMP
-
-.depend.extr: frustre_test.ml extraction/STAMP $(FRUSTRE_MLFILES)
+depend_extr: frustre_test.ml extraction/STAMP $(FRUSTRE_MLFILES)
 	@echo "Analyzing OCaml dependencies"
 	@$(OCAMLDEP) extraction/extracted/*.ml extraction/extracted/*.mli *.ml > .depend.extr
 
@@ -146,7 +144,7 @@ endif
 
 frustre_test.native : $(FRUSTRE_OBJS)
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $+
+	@$(OCAMLOPT) -o $@ $(LIBS) $(FRUSTRE_OBJS)
 
 -include .depend.extr
 
@@ -158,8 +156,8 @@ frustre_test.native : $(FRUSTRE_OBJS)
 	@echo "$(OCAMLOPT) $<"
 	@$(OCAMLOPT) -c $<
 
-tests: frustre_test.native
-	-@for f in ../tests/ko_*; do echo "${blue}--$$f${normal}"; \
-# 	    ./$< $$f 2>/dev/null && echo "${red}FAIL${normal}"; done
-	-@for f in ../tests/ok_*; do echo "${blue}--$$f${normal}"; \
-# 	    ./$< $$f >/dev/null || echo "${red}FAIL${normal}"; done
+# tests: frustre_test.native
+# 	-@for f in ../tests/ko_*; do echo "${blue}--$$f${normal}"; \
+# 		 ./$< $$f 2>/dev/null && echo "${red}FAIL${normal}"; done
+# 	-@for f in ../tests/ok_*; do echo "${blue}--$$f${normal}"; \
+# 		./$< $$f >/dev/null || echo "${red}FAIL${normal}"; done

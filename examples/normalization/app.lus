@@ -1,0 +1,13 @@
+node f (b : bool; x : int when b) returns (c : bool; y : int when c)
+let
+  c = not b;
+  y = (0 when c) fby (y+(1 when c));
+tel
+
+node use_f (b : bool) returns (z : int);
+var x : int when b; c : bool; y : int when c;
+let
+  x = 0 when b;
+  (c, y) = f(f(b, x));
+  z = merge c y (0 when not c);
+tel

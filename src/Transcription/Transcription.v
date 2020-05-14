@@ -258,7 +258,7 @@ Module Type TRANSCRIPTION
           NL.n_outgt0   := L.n_outgt0 n;
           NL.n_defd     := _;
           NL.n_vout     := _;
-          NL.n_nodup    := L.n_nodup n;
+          NL.n_nodup    := _;
           NL.n_good     := _
         |}
     | Error e => Error e
@@ -300,9 +300,14 @@ Module Type TRANSCRIPTION
         destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
         eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
         destruct n. simpl. assert (Hnodup := n_nodup).
-        now repeat apply NoDupMembers_app_r in Hnodup.
+        apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; auto.
       + apply IHlist_forall2; auto.
     - apply IHlist_forall2; eauto.
+  Qed.
+
+  Next Obligation.
+    specialize (L.n_nodup n) as Hndup.
+    repeat rewrite app_assoc in *. apply NoDupMembers_app_l in Hndup; auto.
   Qed.
 
   (* NL.n_good obligation *)
@@ -494,14 +499,16 @@ Module Type TRANSCRIPTION
       rewrite envs_eq_app_comm.
       rewrite <- app_assoc.
       apply env_eq_env_adds'. rewrite app_assoc.
-      rewrite Permutation_app_comm. exact (L.n_nodup n).
+      rewrite Permutation_app_comm. specialize (L.n_nodup n) as Hnd.
+      repeat rewrite app_assoc in *. apply NoDupMembers_app_l in Hnd; auto.
       rewrite envs_eq_app_comm.
       apply env_eq_env_adds'. assert (Hnodup := L.n_nodup n).
+      repeat rewrite app_assoc in Hnodup. apply NoDupMembers_app_l in Hnodup. rewrite <- app_assoc in Hnodup.
       rewrite Permutation_app_comm in Hnodup.
       rewrite <- app_assoc in Hnodup. apply NoDupMembers_app_r in Hnodup.
       now rewrite Permutation_app_comm.
       apply env_eq_env_from_list. assert (Hnodup := L.n_nodup n).
-      now apply NoDupMembers_app_r, NoDupMembers_app_r in Hnodup.
+      now apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup.
     Qed.
 
   End Envs_eq.
@@ -663,7 +670,8 @@ Module Type TRANSCRIPTION
       - setoid_rewrite <- app_nil_l in Hs at 2.
         rewrite suffix_of_clock_app in Hs.
         symmetry in Hs. now apply app_cons_not_nil in Hs.
-      - setoid_rewrite <- app_nil_l in Hs at 2 4.
+      - setoid_rewrite <- app_nil_l in Hs at 2.
+        symmetry in Hs. setoid_rewrite <- app_nil_l in Hs at 2. symmetry in Hs.
         rewrite 2 suffix_of_clock_app in Hs.
         apply app_inj_tail in Hs as [He Hp]. inv Hp.
         specialize (IHck _ He). now subst.
