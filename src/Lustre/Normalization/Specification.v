@@ -758,7 +758,7 @@ Module Type SPECIFICATION
     rewrite Forall_app. split.
     - assert (length xs = length (annots x)) as Hlen.
       { destruct Hwl as [Hwl1 Hwl2].
-        eapply normalize_rhss_annots in H; eauto.
+        eapply normalize_rhss_annots_length in H...
         congruence. } clear Hwl.
       eapply normalize_rhss_normalized_rhs in H; eauto.
       revert xs Hin Hlen.
@@ -831,6 +831,34 @@ Module Type SPECIFICATION
       rewrite normalized_lexp_no_fresh...
     - (* lexp *)
       eapply normalized_lexp_no_fresh...
+  Qed.
+
+  Corollary normalize_exp_no_fresh : forall e is_control es' eqs' st st',
+      normalize_exp is_control e st = (es', eqs', st') ->
+      fresh_ins es' = [].
+  Proof.
+    intros e is_control es' eqs' st st' Hnorm.
+    unfold fresh_ins. rewrite concat_eq_nil, Forall_map.
+    destruct is_control.
+    - apply normalize_exp_normalized_cexp in Hnorm.
+      eapply Forall_impl; eauto. intros. apply normalized_cexp_no_fresh; auto.
+    - apply normalize_exp_normalized_lexp in Hnorm.
+      eapply Forall_impl; eauto. intros. apply normalized_lexp_no_fresh; auto.
+  Qed.
+
+  Corollary normalize_exps_no_fresh : forall es es' eqs' st st',
+      normalize_exps es st = (es', eqs', st') ->
+      fresh_ins es' = [].
+  Proof.
+    induction es; intros es' eqs' st st' Hnorm;
+      unfold fresh_ins;
+      unfold normalize_exps in Hnorm; simpl in *; repeat inv_bind; auto.
+    simpl. rewrite map_app, concat_app.
+    eapply normalize_exp_no_fresh in H.
+    unfold fresh_ins in H, IHes; rewrite H; simpl.
+    eapply IHes.
+    unfold normalize_exps; inv_bind.
+    repeat eexists; eauto. inv_bind; eauto.
   Qed.
 
   Fact normalized_equation_no_anon_in_eq : forall to_cut e,

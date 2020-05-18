@@ -454,6 +454,15 @@ Section Incl.
     unfold incl; intuition.
   Qed.
 
+  Lemma incl_tl': forall (x : A) xs ys,
+      incl xs ys -> incl (x::xs) (x::ys).
+  Proof.
+    intros x xs ys Hincl.
+    eapply incl_cons.
+    + left; auto.
+    + apply incl_tl; auto.
+  Qed.
+
   Lemma incl_nil:
     forall (xs: list A),
       incl xs [] -> xs = [].
@@ -464,6 +473,10 @@ Section Incl.
     specialize (H a (in_eq a xs)).
     contradict H.
   Qed.
+
+  Lemma incl_nil': forall (xs : list A),
+      incl [] xs.
+  Proof. intros xs x Hin; inv Hin. Qed.
 
   Lemma Forall_incl:
     forall (l l': list A) P,

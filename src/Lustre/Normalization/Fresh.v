@@ -727,5 +727,6 @@ Hint Resolve Fresh.fresh_ident_st_follows.
 Hint Resolve Fresh.reuse_ident_st_valid_reuse.
 Hint Resolve Fresh.reuse_ident_weak_valid.
 Hint Resolve Fresh.reuse_ident_st_follows.
+Hint Resolve Fresh.st_follows_incl.
 Hint Resolve map_bind2_st_valid.
 Hint Resolve map_bind2_st_follows.

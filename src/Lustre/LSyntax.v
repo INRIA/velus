@@ -633,6 +633,16 @@ Module Type LSYNTAX
     intros * Hf. now apply find_split in Hf.
   Qed.
 
+  Lemma fresh_ins_nil:
+    forall e es,
+      fresh_ins (e::es) = [] ->
+      fresh_in e = [].
+  Proof.
+    intros e es Hfresh.
+    unfold fresh_ins in Hfresh; simpl in Hfresh.
+    apply app_eq_nil in Hfresh as [? _]; auto.
+  Qed.
+
   (** Interface equivalence between nodes *)
 
   Section interface_eq.

@@ -411,60 +411,6 @@ Module Type LTYPING
       now rewrite <-Henv in Hin.
   Qed.
 
-  (* Lemma wt_exp_clockof: *)
-  (*   forall G env e, *)
-  (*     wt_exp G env e -> *)
-  (*     Forall (wt_clock env) (clockof e). *)
-  (* Proof. *)
-  (*   intros * Hwt. *)
-  (*   apply Forall_forall. intros ck Hin. *)
-  (*   inv Hwt; simpl in *. *)
-  (*   - destruct Hin as [Hin|]; [|contradiction]. *)
-  (*     rewrite <-Hin; auto with ltyping. *)
-  (*   - destruct Hin as [Hin|]; [|contradiction]. *)
-  (*     rewrite <-Hin. *)
-  (*     destruct nck; unfold clock_of_nclock; simpl in *; *)
-  (*       match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - destruct Hin as [Hin|]; [|contradiction]. *)
-  (*     rewrite <-Hin. *)
-  (*     destruct nck; unfold clock_of_nclock; simpl in *; *)
-  (*       match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - destruct Hin as [Hin|]; [|contradiction]. *)
-  (*     rewrite <-Hin. *)
-  (*     destruct nck; unfold clock_of_nclock; simpl in *; *)
-  (*       match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - match goal with H:Forall (wt_nclock _) _ |- _ => *)
-  (*                     rewrite Forall_map in H end. *)
-  (*     apply in_map_iff in Hin. *)
-  (*     destruct Hin as ((ty & nck) & Hck & Hin). *)
-  (*     apply Forall_forall with (1:=H3) in Hin. *)
-  (*     destruct nck; unfold clock_of_nclock in *; simpl in *; subst; *)
-  (*       match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - destruct nck; unfold clock_of_nclock in *; simpl in *; *)
-  (*       apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst; *)
-  (*         match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - destruct nck; unfold clock_of_nclock in *; simpl in *; *)
-  (*       apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst; *)
-  (*         match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - destruct nck; unfold clock_of_nclock in *; simpl in *; *)
-  (*       apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst; *)
-  (*         match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - apply in_map_iff in Hin. *)
-  (*     destruct Hin as (x & Hs & Hin). *)
-  (*     match goal with H:Forall _ anns |- _ => *)
-  (*                     apply Forall_forall with (1:=H) in Hin end. *)
-  (*     destruct x as (ty, nck). *)
-  (*     destruct nck; unfold clock_of_nclock in *; simpl in *; *)
-  (*       subst; match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (*   - apply in_map_iff in Hin. *)
-  (*     destruct Hin as (x & Hs & Hin). *)
-  (*     match goal with H:Forall _ anns |- _ => *)
-  (*                     apply Forall_forall with (1:=H) in Hin end. *)
-  (*     destruct x as (ty, nck). *)
-  (*     destruct nck; unfold clock_of_nclock in *; simpl in *; *)
-  (*       subst; match goal with H:wt_nclock _ _ |- _ => inv H end; auto. *)
-  (* Qed. *)
-
   (** Adding variables to the environment preserves typing *)
 
   Section incl.
@@ -529,6 +475,65 @@ Module Type LTYPING
     Qed.
 
   End incl.
+
+  Local Hint Resolve wt_clock_incl incl_appl incl_refl.
+  Lemma wt_exp_clockof:
+    forall G env e,
+      wt_exp G env e ->
+      Forall (wt_clock (env++idty (fresh_in e))) (clockof e).
+  Proof.
+    intros * Hwt.
+    apply Forall_forall. intros ck Hin.
+    inv Hwt; simpl in *.
+    - destruct Hin as [Hin|]; [|contradiction].
+      rewrite <-Hin; auto with ltyping.
+    - destruct Hin as [Hin|]; [|contradiction].
+      rewrite <-Hin.
+      destruct nck; unfold clock_of_nclock; simpl in *;
+        match goal with H:wt_nclock _ _ |- _ => inv H end.
+      rewrite app_nil_r; auto.
+    - destruct Hin as [Hin|]; [|contradiction].
+      rewrite <-Hin.
+      destruct nck; unfold clock_of_nclock; simpl in *;
+        match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - destruct Hin as [Hin|]; [|contradiction].
+      rewrite <-Hin.
+      destruct nck; unfold clock_of_nclock; simpl in *;
+        match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - match goal with H:Forall (wt_nclock _) _ |- _ =>
+                      rewrite Forall_map in H end.
+      apply in_map_iff in Hin.
+      destruct Hin as ((ty & nck) & Hck & Hin).
+      apply Forall_forall with (1:=H3) in Hin.
+      destruct nck; unfold clock_of_nclock in *; simpl in *; subst;
+        match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - destruct nck; unfold clock_of_nclock in *; simpl in *;
+        apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
+          match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - destruct nck; unfold clock_of_nclock in *; simpl in *;
+        apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
+          match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - destruct nck; unfold clock_of_nclock in *; simpl in *;
+        apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
+          match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - apply in_map_iff in Hin.
+      destruct Hin as (x & Hs & Hin).
+      match goal with H:Forall _ anns |- _ =>
+                      apply Forall_forall with (1:=H) in Hin end.
+      destruct x as (ty, nck).
+      destruct nck; unfold clock_of_nclock in *; simpl in *;
+        subst; match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - apply in_map_iff in Hin.
+      destruct Hin as (x & Hs & Hin).
+      match goal with H:Forall _ anns |- _ =>
+                      apply Forall_forall with (1:=H) in Hin end.
+      destruct x as (ty, nck).
+      destruct nck; unfold clock_of_nclock in *; simpl in *;
+        subst; match goal with H:wt_nclock _ _ |- _ => inv H end.
+      eapply wt_clock_incl; [| eauto].
+      eapply incl_appr'. unfold idty; repeat rewrite map_app.
+      eapply incl_appr'. eapply incl_appr. reflexivity.
+  Qed.
 
   (** Validation *)
 
@@ -957,7 +962,7 @@ Module Type LTYPING
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
           unfold idty in *; rewrite map_app in *.
           apply check_nclock_correct in EQ1. rewrite Env.elements_adds in EQ1; auto.
-          + eapply wt_nclock_incl; eauto. apply incl_appr'.
+          + eapply wt_nclock_incl; [| eauto]. apply incl_appr'.
             eapply incl_appl. reflexivity.
           + destruct o; auto.
             rewrite map_app in ND. rewrite app_assoc in ND.
