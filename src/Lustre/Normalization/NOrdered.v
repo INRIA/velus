@@ -6,7 +6,7 @@ From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered.
-From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
+From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.
 
 (** * Conservation of order through normalization *)
 
@@ -17,7 +17,7 @@ Module Type NORDERED
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
        (Import Ord : LORDERED Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Norm : FULLNORM Ids Op OpAux Syn).
 
   Import Fresh Tactics.
 
@@ -72,7 +72,7 @@ Module Type NORDERED
   Proof with eauto.
     intros f e0 e [ty cl] e' eqs' st st' Hfby Hisin.
     unfold fby_iteexp in Hfby.
-    destruct (is_constant e0); repeat inv_bind.
+    destruct (Norm.is_constant e0); repeat inv_bind.
     - destruct Hisin; inv H.
       destruct H2; (inv H; [| inv H1])...
     - destruct Hisin.
@@ -291,23 +291,24 @@ Module Type NORDERED
         * inv H5; inv H4...
           eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
         * eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
+          rewrite app_nil_r in H5...
     - (* app (reset) *)
-      assert (length x2 = numstreams r) as Hlen by (eapply normalize_exp_length; eauto).
+      assert (length x6 = numstreams r) as Hlen by eauto.
       rewrite H8 in Hlen. singleton_length. clear H8.
       destruct Hisin.
       + exfalso.
         rewrite CommonList.Exists_map, Exists_exists in H7.
         destruct H7 as [[id ann] [Hin Hex]]. inv Hex.
-      + inv H7; [| repeat rewrite Exists_app' in H12; destruct H12 as [[H12|H12]|H12]]...
+      + inv H7; [| repeat rewrite Exists_app' in H12; destruct H12 as [H12|[H12|H12]]]...
         * inv H12; [| inv H8].
           inv H8...
           inv H13.
           -- eapply normalize_reset_Is_node_in in H4...
-            eapply H in H1...
-          -- eapply map_bind2_Is_node_in in H2... (repeat rewrite_Forall_forall; eauto).
+             eapply H in H2...
+          -- eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
+        * eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
         * eapply normalize_reset_Is_node_in in H4...
-          eapply H in H1...
-        * eapply map_bind2_Is_node_in in H2... (repeat rewrite_Forall_forall; eauto).
+          eapply H in H2...
   Qed.
   Local Hint Resolve normalize_exp_Is_node_in.
 
@@ -354,14 +355,15 @@ Module Type NORDERED
       + inv H2; inv H6...
         inv H10...
         eapply normalize_reset_Is_node_in in H1...
-        eapply normalize_exp_Is_node_in in H...
-      + repeat rewrite Is_node_in_app in H2. destruct H2 as [[H2|H2]|H2]...
+        eapply normalize_exp_Is_node_in in H0...
+      + repeat rewrite Is_node_in_app in H2. destruct H2 as [H2|[H2|H2]]...
         eapply normalize_reset_Is_node_in in H1...
-        eapply normalize_exp_Is_node_in in H...
+        eapply normalize_exp_Is_node_in in H0...
     - (* app *)
       inv Hwl. repeat inv_bind.
       destruct Hisin...
       inv H0; inv H3...
+      rewrite app_nil_r in H0...
   Qed.
   Local Hint Resolve normalize_rhs_Is_node_in.
 
@@ -468,7 +470,7 @@ Module NOrderedFun
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
        (Lord : LORDERED Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
+       (Norm : FULLNORM Ids Op OpAux Syn)
        <: NORDERED Ids Op OpAux Syn Lord Norm.
   Include NORDERED Ids Op OpAux Syn Lord Norm.
 End NOrderedFun.

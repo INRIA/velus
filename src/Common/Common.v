@@ -874,6 +874,19 @@ Proof.
   intros xs. unfold ps_from_list. apply ps_adds_of_list.
 Qed.
 
+Lemma ps_of_list_ps_to_list : forall id xs,
+    In id (PSP.to_list (PSP.of_list xs)) <-> In id xs.
+Proof.
+  intros id xs.
+  specialize (PSP.of_list_2 xs id) as Heq.
+  repeat rewrite InA_alt in Heq.
+  split; intros Hin.
+  - destruct Heq as [[? [? ?]] _]; subst; auto.
+    exists id; auto.
+  - destruct Heq as [_ [? [? ?]]]; subst; auto.
+    exists id; auto.
+Qed.
+
 Lemma ps_of_list_ps_to_list_Perm : forall xs,
     NoDup xs ->
     Permutation (PSP.to_list (PSP.of_list xs)) xs.

@@ -9,7 +9,7 @@ From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LClockSemantics.
-From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
+From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.
 From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking Lustre.Normalization.NOrdered.
 
 (** * Correctness of the Normalization *)
@@ -25,16 +25,17 @@ Module Type CORRECTNESS
        (Cl : LCLOCKING Ids Op Syn)
        (Import Ord : LORDERED Ids Op Syn)
        (Import Sem : LSEMANTICS Ids Op OpAux Syn Ord Str)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Norm : FULLNORM Ids Op OpAux Syn).
 
   Import Fresh Tactics.
   Module Import ClockSem := LClockSemanticsFun Ids Op OpAux Syn Cl Ord Str Sem.
   Module Import Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Module Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
   Module Ord := NOrderedFun Ids Op OpAux Syn Ord Norm.
+  Import List.
 
   CoFixpoint default_stream : Stream OpAux.value :=
-    Cons absent default_stream.
+    absent ⋅ default_stream.
 
   Fact sem_exp_numstreams : forall G H b e v,
       wl_exp G e ->
@@ -130,90 +131,32 @@ Module Type CORRECTNESS
     eapply sem_exp_numstreams; eauto.
   Qed.
 
-  Definition before_st {B} (l : list ident) (st : fresh_st B) :=
-    Forall (fun id => Pos.lt id (smallest_ident st)) l.
-
-  Fact before_st_follows {B} : forall l (st st' : fresh_st B),
-      st_follows st st' ->
-      before_st l st ->
-      before_st l st'.
-  Proof.
-    intros l st st' Hfollows Hbef.
-    apply st_follows_smallest in Hfollows.
-    unfold before_st in *.
-    solve_forall.
-    eapply Pos.lt_le_trans; eauto.
-  Qed.
-  Hint Resolve before_st_follows.
-
-  (** ** Conservation of valid_after *)
-
-  Definition valid_after {A B} (l : list (ident * A)) (st : fresh_st B) :=
-    st_valid st /\ before_st (List.map fst l) st.
-
-  Fact fresh_ident_valid_after {A B} : forall (l : list (ident * A)) (a : B) id st st',
-      fresh_ident a st = (id, st') ->
-      valid_after l st ->
-      valid_after l st'.
-  Proof.
-    intros l a id st st' Hfresh [Hvalid Hbef].
-    repeat constructor; eauto.
-  Qed.
-  Hint Resolve fresh_ident_valid_after.
-
-  Fact idents_for_anns_valid_after {A} : forall (l : list (ident * A)) anns ids st st',
-      idents_for_anns anns st = (ids, st') ->
-      valid_after l st ->
-      valid_after l st'.
-  Proof.
-    induction anns; intros ids st st' Hids Hvalid;
-      simpl in Hids.
-    - repeat inv_bind; eauto.
-    - destruct a as [ty [cl _]]. repeat inv_bind. eauto.
-  Qed.
-  Hint Resolve idents_for_anns_valid_after.
-
-  Fact normalize_reset_valid_after {A} : forall (l : list (ident * A)) e e' eqs' st st',
-      normalize_reset e st = (e', eqs', st') ->
-      valid_after l st ->
-      valid_after l st'.
-  Proof.
-    intros l e e' eqs' st st' Hnorm Hvalid.
-    destruct (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
-      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind; auto.
-    destruct (List.hd _ _); simpl in *.
-    destruct p. repeat inv_bind. eauto.
-  Qed.
-  Hint Resolve normalize_reset_valid_after.
-
   (** Some additional stuff *)
 
-  Fact idents_for_anns_NoDupMembers : forall anns ids st st',
-      st_valid st ->
+  Fact idents_for_anns_NoDupMembers : forall anns ids st st' aft,
+      st_valid_after st aft ->
       idents_for_anns anns st = (ids, st') ->
       NoDupMembers ids.
   Proof.
-    intros anns ids st st' Hvalid Hids.
-    eapply idents_for_anns_st_valid in Hvalid; eauto.
+    intros anns ids st st' aft Hvalid Hids.
+    eapply idents_for_anns_st_valid_after in Hvalid; eauto.
     apply idents_for_anns_vars_perm in Hids.
-    apply st_valid_NoDupMembers in Hvalid.
-    unfold st_ids in *.
-    rewrite fst_NoDupMembers in Hvalid; rewrite fst_NoDupMembers.
+    apply st_valid_NoDup, NoDup_app_l in Hvalid.
+    rewrite fst_NoDupMembers in *.
     rewrite <- Hids in Hvalid.
-    apply NoDup_app_weaken in Hvalid; auto.
+    apply NoDup_app_l in Hvalid; auto.
   Qed.
 
-  Fact idents_for_anns_nIn : forall anns ids st st',
-      st_valid st ->
+  Fact idents_for_anns_nIn : forall anns ids st st' aft,
+      st_valid_after st aft ->
       idents_for_anns anns st = (ids, st') ->
-      Forall (fun id => ~List.In id (st_ids st)) (List.map fst ids).
+      Forall (fun id => ~In id (st_ids st)) (map fst ids).
   Proof.
-    intros anns ids st st' Hvalid Hids.
-    eapply idents_for_anns_st_valid in Hvalid; eauto.
-    apply st_valid_NoDupMembers in Hvalid.
+    intros anns ids st st' aft Hvalid Hids.
+    eapply idents_for_anns_st_valid_after in Hvalid; eauto.
+    apply st_valid_NoDup, NoDup_app_l in Hvalid.
     apply idents_for_anns_vars_perm in Hids.
     unfold st_ids in *.
-    rewrite fst_NoDupMembers in Hvalid.
     rewrite <- Hids in Hvalid.
     rewrite Forall_forall. intros x Hin.
     eapply NoDup_app_In; eauto.
@@ -222,13 +165,12 @@ Module Type CORRECTNESS
   Import Permutation.
 
   Fact fresh_ident_dom {A B V} : forall (vars : list (ident * A)) H H' a id (v : V) (st st' : fresh_st B),
-      valid_after vars st ->
-      Env.dom H ((List.map fst vars)++(st_ids st)) ->
+      Env.dom H (map fst vars++st_ids st) ->
       fresh_ident a st = (id, st') ->
       H' = Env.add id v H ->
-      Env.dom H' ((List.map fst vars)++(st_ids st')).
+      Env.dom H' (map fst vars++st_ids st').
   Proof.
-    intros vars H H' a id v st st' Hvalid Hdom Hfresh Heq.
+    intros vars H H' a id v st st' Hdom Hfresh Heq.
     apply Facts.fresh_ident_vars_perm in Hfresh.
     rewrite Heq.
     apply Env.dom_add_cons with (x:=id) (v0:=v) in Hdom.
@@ -238,15 +180,15 @@ Module Type CORRECTNESS
   Qed.
 
   Fact fresh_ident_refines {A B V} : forall (vars : list (ident * A)) H H' a id (v : V) (st st' : fresh_st B),
-      valid_after vars st ->
-      Env.dom H ((List.map fst vars)++(st_ids st)) ->
+      st_valid_after st (PSP.of_list (map fst vars)) ->
+      Env.dom H (map fst vars++st_ids st) ->
       fresh_ident a st = (id, st') ->
       H' = Env.add id v H ->
       Env.refines eq H H'.
   Proof with eauto.
     intros vars H H' a id v st st' Hvalid Hdom Hfresh Heq.
     rewrite Heq.
-    assert (before_st (List.map fst vars) st') as Hbef1 by (destruct Hvalid as [_ ?]; eauto).
+    assert (st_valid_after st' (PSP.of_list (List.map fst vars))) as Hvalid' by eauto.
     eapply Env.refines_add...
     intro contra. erewrite Env.dom_use in contra; [| eauto].
     apply in_app_or in contra. destruct contra.
@@ -254,27 +196,25 @@ Module Type CORRECTNESS
       assert (In id (st_ids st')).
       { unfold st_ids, idty. repeat simpl_In; simpl in *.
         exists (i, a); auto. }
-      apply smallest_ident_In in H1.
-      unfold before_st in Hbef1.
-      repeat rewrite_Forall_forall.
-      apply Hbef1 in H0.
-      apply (Pos.lt_irrefl id). eapply Pos.lt_le_trans...
-    + eapply Facts.fresh_ident_nIn in Hfresh. 2:(destruct Hvalid; eauto).
-      congruence.
+      apply st_valid_NoDup in Hvalid'.
+      eapply NoDup_app_In in Hvalid'...
+      apply Hvalid'; clear Hvalid'.
+      rewrite ps_of_list_ps_to_list...
+    + eapply Facts.fresh_ident_nIn in Hfresh...
   Qed.
 
   Fact idents_for_anns_dom {B V} : forall (vars : list (ident * B)) H H' anns ids (vs : list V) st st',
       length vs = length ids ->
-      valid_after vars st ->
-      Env.dom H ((List.map fst vars)++(st_ids st)) ->
+      st_valid_after st (PSP.of_list (map fst vars)) ->
+      Env.dom H (map fst vars++st_ids st) ->
       idents_for_anns anns st = (ids, st') ->
-      H' = Env.adds (List.map fst ids) vs H ->
-      Env.dom H' ((List.map fst vars)++(st_ids st')).
+      H' = Env.adds (map fst ids) vs H ->
+      Env.dom H' (map fst vars++st_ids st').
   Proof with eauto.
     intros vars H H' anns ids vs st st' Hlen Hvalid Hdom Hids Heq.
     apply idents_for_anns_vars_perm in Hids.
     rewrite Heq.
-    apply Env.dom_adds with (ids0:=List.map fst ids) (vs0:=vs) in Hdom.
+    apply Env.dom_adds with (ids0:=map fst ids) (vs0:=vs) in Hdom.
     2:(repeat rewrite_Forall_forall; solve_length).
     eapply Env.dom_Permutation; [|eauto].
     symmetry. rewrite Permutation_app_comm. rewrite <- app_assoc. apply Permutation_app_head.
@@ -283,33 +223,29 @@ Module Type CORRECTNESS
 
   Fact idents_for_anns_refines {B V} : forall (vars : list (ident * B)) H H' anns ids (vs : list V) st st',
       length vs = length ids ->
-      valid_after vars st ->
-      Env.dom H ((List.map fst vars)++(st_ids st)) ->
+      st_valid_after st (PSP.of_list (map fst vars)) ->
+      Env.dom H (map fst vars++st_ids st) ->
       idents_for_anns anns st = (ids, st') ->
-      H' = Env.adds (List.map fst ids) vs H ->
+      H' = Env.adds (map fst ids) vs H ->
       Env.refines eq H H'.
   Proof with eauto.
     intros vars H H' anns ids vs st st' Hlen Hvalid Hdom Hids Heq.
-    assert (Forall (fun id => ~List.In id (List.map fst vars)) (List.map fst ids)) as Hnvar.
-    { assert (valid_after vars st') by eauto.
+    assert (Forall (fun id => ~In id (List.map fst vars)) (List.map fst ids)) as Hnvar.
+    { assert (st_valid_after st' (PSP.of_list (map fst vars))) by eauto.
       apply idents_for_anns_incl_ids in Hids.
       solve_forall.
       apply Hids in H1. clear Hids.
       intro contra.
-      destruct H0 as [_ H0]. unfold before_st in H0.
-      rewrite Forall_forall in H0. apply H0 in contra.
-      unfold idty in H1.
-      apply smallest_ident_In in H1.
-      apply (Pos.lt_irrefl x). eapply Pos.lt_le_trans...
-    }
+      apply st_valid_NoDup in H0.
+      eapply NoDup_app_In in H0...
+      apply H0. rewrite ps_of_list_ps_to_list... }
     rewrite Heq. apply Env.refines_adds.
-    apply idents_for_anns_nIn in Hids; auto.
+    eapply idents_for_anns_nIn in Hids...
     rewrite Forall_forall in *. intros x1 Hin contra.
-    erewrite Env.dom_use in contra; [|eauto].
+    erewrite Env.dom_use in contra...
     apply in_app_or in contra; destruct contra.
     + eapply Hnvar...
     + eapply Hids...
-    + destruct Hvalid...
   Qed.
 
   (** ** Relation between state and history *)
@@ -321,14 +257,14 @@ Module Type CORRECTNESS
      Ou alors il faut calculer les horloges differement *)
 
   CoFixpoint const_val (b : Stream bool) (v : Op.val) : Stream value :=
-    Cons (if hd b then present v else absent) (const_val (tl b) v).
+    (if Streams.hd b then present v else absent) ⋅ (const_val (Streams.tl b) v).
 
   Fact const_val_Cons : forall b bs v,
-      const_val (Cons b bs) v =
-      Cons (if b then present v else absent) (const_val bs v).
+      const_val (b ⋅ bs) v =
+      (if b then present v else absent) ⋅ (const_val bs v).
   Proof.
     intros b bs v.
-    rewrite Stream_decompose_thm at 1; reflexivity.
+    rewrite unfold_Stream at 1; reflexivity.
   Qed.
 
   Fact const_val_const : forall b c,
@@ -341,19 +277,19 @@ Module Type CORRECTNESS
 
   CoFixpoint shift (v : Op.val) (str : Stream OpAux.value) :=
     match str with
-    | Cons (present v') str' => Cons (present v) (shift v' str')
-    | Cons absent str' => Cons absent (shift v str')
+    | (present v') ⋅ str' => (present v) ⋅ (shift v' str')
+    | absent ⋅ str' => absent ⋅ (shift v str')
     end.
 
   Fact shift_Cons : forall v y ys,
-      shift v (Cons y ys) =
+      shift v (y ⋅ ys) =
       match y with
-      | present v' => Cons (present v) (shift v' ys)
-      | absent => Cons absent (shift v ys)
+      | present v' => (present v) ⋅ (shift v' ys)
+      | absent => absent ⋅ (shift v ys)
       end.
   Proof.
     intros v y ys.
-    rewrite Stream_decompose_thm at 1; simpl.
+    rewrite unfold_Stream at 1; simpl.
     destruct y; reflexivity.
   Qed.
 
@@ -364,8 +300,9 @@ Module Type CORRECTNESS
     cofix CoFix.
     intros v [x xs] [y ys] Heq.
     inv Heq; simpl in *; subst.
-    repeat rewrite shift_Cons.
-    destruct y; simpl; constructor; simpl; auto.
+    constructor; simpl.
+    + destruct y; auto.
+    + destruct y; auto.
   Qed.
 
   Lemma shift_const : forall bs v,
@@ -396,7 +333,7 @@ Module Type CORRECTNESS
     intros [b bs] v y ys Hsync.
     specialize (fby1_shift bs).
     inv Hsync;
-      rewrite const_val_Cons; rewrite Stream_decompose_thm; simpl.
+      rewrite const_val_Cons; rewrite unfold_Stream; simpl.
     - constructor...
     - constructor...
   Qed.
@@ -411,20 +348,20 @@ Module Type CORRECTNESS
   Qed.
 
   CoFixpoint prefix_with_val b (v : Op.val) (ys : Stream OpAux.value) :=
-    match (hd b) with
+    match (Streams.hd b) with
     | true => shift v ys
-    | false => Cons absent (prefix_with_val (tl b) v (tl ys))
+    | false => absent ⋅ (prefix_with_val (Streams.tl b) v (Streams.tl ys))
     end.
 
   Fact prefix_with_val_Cons : forall b bs v ys,
-      prefix_with_val (Cons b bs) v ys =
+      prefix_with_val (b ⋅ bs) v ys =
       match b with
       | true => shift v ys
-      | false => Cons absent (prefix_with_val bs v (tl ys))
+      | false => absent ⋅ (prefix_with_val bs v (Streams.tl ys))
       end.
   Proof.
     intros b bs v ys.
-    rewrite Stream_decompose_thm at 1; simpl.
+    rewrite unfold_Stream at 1; simpl.
     destruct b; auto.
     destruct (shift v ys); auto.
   Qed.
@@ -453,7 +390,7 @@ Module Type CORRECTNESS
     cofix prefix_with_val_fby.
     intros [b0 b] v y Hsync.
     rewrite const_val_Cons.
-    rewrite Stream_decompose_thm; simpl.
+    rewrite unfold_Stream; simpl.
     destruct b0; simpl; inv Hsync.
     - econstructor. eapply fby1_shift...
     - econstructor; simpl...
@@ -512,40 +449,35 @@ Module Type CORRECTNESS
     init_eqs_valids H b st.
 
   Fact fresh_ident_hist_st {A} : forall (vars : list (ident * A)) b a id v H st st',
-      valid_after vars st ->
+      st_valid_after st (PSP.of_list (map fst vars)) ->
       fresh_ident (a, false) st = (id, st') ->
       hist_st vars b H st ->
       hist_st vars b (Env.add id v H) st'.
-  Proof.
+  Proof with eauto.
     intros vars b a id v H st st' Hvalid Hfresh [H1 H2].
     constructor.
-    - eapply fresh_ident_dom; eauto.
+    - eapply fresh_ident_dom...
     - unfold init_eqs_valids in *.
-      assert (~In id (st_ids st)) by (destruct Hvalid; eapply Facts.fresh_ident_nIn in Hfresh; eauto).
-      assert (valid_after vars st') as Hvalid2 by eauto.
+      assert (~In id (st_ids st)) as Hnin by (eapply Facts.fresh_ident_nIn in Hfresh; eauto).
+      assert (st_valid_after st' (PSP.of_list (map fst vars))) as Hvalid2 by eauto.
       eapply fresh_ident_anns in Hfresh.
       rewrite Hfresh.
-      constructor; eauto.
+      constructor...
       + destruct a. intros. congruence.
       + repeat rewrite_Forall_forall.
         destruct x as [id0 [[ty cl] is_init]].
-        specialize (H2 _ H3). simpl in H2.
+        specialize (H2 _ H0). simpl in H2.
         intro His. apply H2 in His. clear H2.
-        eapply sem_var_refines; [| eauto].
-        apply Env.refines_add. eauto.
-        intro contra.
-        erewrite Env.dom_use in contra; [| eauto].
-        eapply in_app_or in contra.
-        destruct contra.
-        * assert (In id (st_ids st')).
-          { unfold st_ids, idty. rewrite Hfresh. simpl. auto. }
-          eapply smallest_ident_In in H4.
-          destruct Hvalid2 as [_ Hvalid2].
-          unfold before_st in Hvalid2. rewrite Forall_forall in Hvalid2.
-          apply Hvalid2 in H2.
-          apply (Pos.lt_irrefl id).
-          eapply Pos.lt_le_trans; eauto.
-        * congruence.
+        eapply sem_var_refines.
+        * apply Env.refines_add...
+          intro contra.
+          erewrite Env.dom_use in contra; [| eauto].
+          eapply in_app_or in contra.
+          destruct contra; [|congruence].
+          assert (In id (st_ids st')).
+          { unfold st_ids, idty. rewrite Hfresh. simpl... }
+          eapply st_valid_NoDup, NoDup_app_In in Hvalid2...
+          apply Hvalid2. rewrite ps_of_list_ps_to_list...
         * admit. (* We have to proove that the variables in cl are in H
                     (cl is well-typed in the env corresponding to H) *)
   Admitted.
@@ -1118,124 +1050,124 @@ Module Type CORRECTNESS
           -- solve_forall. eapply sem_equation_refines with (H:=H'')... etransitivity...
           -- solve_forall. eapply sem_equation_refines...
              Unshelve. exact default_ann. exact (hd_default []). 1,2:exact s.
-    - (* app *)
-      specialize (idents_for_anns_length _ _ _ _ H2) as Hlength1.
-      assert (length (n_out n) = length vs) as Hlength2.
-      { destruct H14. repeat rewrite_Forall_forall.
-        rewrite H4 in H6. inv H6. unfold idents in *. solve_length. }
-      eapply map_bind2_sem in H1... 2:(repeat rewrite_Forall_forall; eapply nth_In in H12; eauto). clear H0.
-      destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
-      remember (Env.adds (List.map fst x3) vs H') as H''.
-      assert (Env.refines eq H' H'') as Href2.
-      { destruct Histst1.
-        eapply idents_for_anns_refines... repeat rewrite_Forall_forall; solve_length. }
-      assert (hist_st vars b H'' st').
-      { rewrite HeqH''. eapply idents_for_anns_hist_st in H2...
-        repeat rewrite_Forall_forall. solve_length. }
-      exists H''. repeat (split; eauto).
-      + etransitivity...
-      + rewrite Forall2_map_1.
-        repeat rewrite_Forall_forall; solve_length.
-        destruct (nth _ x3 _) eqn:Hnth.
-        repeat constructor. econstructor; [|reflexivity].
-        destruct a1. rewrite split_nth in Hnth; inv Hnth.
-        rewrite split_map_fst.
-        apply Env.adds_MapsTo; solve_length.
-        rewrite <- fst_NoDupMembers.
-        destruct Hvalid1.
-        apply idents_for_anns_NoDupMembers in H2...
-      + constructor.
-        * apply Seq with (ss:=[vs]).
-          -- repeat constructor.
-             apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))).
-             ++ apply Forall2_concat.
-                repeat rewrite_Forall_forall; solve_length;
-                  specialize (H3 a0 (List.map (fun _ => default_stream) b0) _ _ _ H13 eq_refl eq_refl);
-                  repeat rewrite_Forall_forall; simpl_length.
-                ** rewrite <- map_nth.
-                   rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length.
-                   repeat rewrite map_map.
-                   apply map_ext_in. intros; solve_length.
-                ** specialize (H16 a1 default_stream _ _ _ H15 eq_refl eq_refl).
-                   repeat simpl_nth; [| eassumption].
-                   eapply sem_exp_refines...
-             ++ rewrite concat_map_singl2. assumption.
-          -- simpl. rewrite app_nil_r.
-             repeat rewrite_Forall_forall; solve_length.
-             repeat constructor. econstructor; [| reflexivity].
-             apply Env.adds_MapsTo; solve_length.
-             rewrite <- fst_NoDupMembers.
-             destruct Hvalid1.
-             apply idents_for_anns_NoDupMembers in H2...
-        * solve_forall.
-          eapply sem_equation_refines...
-    - (* app (reset) *)
-      specialize (idents_for_anns_length _ _ _ _ H3) as Hlength1.
-      assert (length (n_out n) = length vs) as Hlength3.
-      { clear H H0 H1 H4. specialize (H19 0); inv H19; subst.
-        repeat rewrite_Forall_forall.
-        rewrite H0 in H6; inv H6. unfold idents in *. solve_length. }
-      assert (length x2 = 1) as Hlength2.
-      { eapply normalize_exp_length in H1... rewrite <- length_typeof_numstreams in H1.
-        rewrite H1. rewrite H11. reflexivity. }
-      repeat singleton_length; subst.
-      eapply H in H1... clear H.
-      destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. inv Hsem1; inv H16.
-      eapply normalize_reset_sem in H4... 2:(destruct Histst1; eauto).
-      destruct H4 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]].
-      assert (Forall2 (sem_exp G H'' b) es ss) as Hsem'.
-      { repeat rewrite_Forall_forall.
-        eapply sem_exp_refines; [| eauto]. etransitivity... } clear H15.
-      eapply map_bind2_sem in H2... 2:(repeat rewrite_Forall_forall; eapply nth_In in H14; eauto). clear H0.
-      destruct H2 as [H''' [Href3 [Hvalid3 [Histst3 [Hsem3 Hsem3']]]]].
-      remember (Env.adds (List.map fst x5) vs H''') as H''''.
-      assert (Env.refines eq H''' H'''') as Href4.
-      { destruct Histst3. eapply idents_for_anns_refines...
-        repeat rewrite_Forall_forall; solve_length. }
-      assert (valid_after vars st') as Hvalid4 by eauto.
-      assert (hist_st vars b H'''' st').
-      { rewrite HeqH''''. eapply idents_for_anns_hist_st in H3...
-        repeat rewrite_Forall_forall; solve_length. }
-      exists H''''. repeat (split; auto).
-      + repeat (etransitivity; eauto).
-      + rewrite Forall2_map_1.
-        repeat rewrite_Forall_forall; solve_length.
-        destruct (nth _ x5 _) eqn:Hnth.
-        repeat constructor. econstructor; [|reflexivity].
-        destruct a1. rewrite split_nth in Hnth; inv Hnth.
-        rewrite split_map_fst.
-        apply Env.adds_MapsTo; solve_length.
-        rewrite <- fst_NoDupMembers.
-        destruct Hvalid3.
-        apply idents_for_anns_NoDupMembers in H3...
-      + constructor.
-        * apply Seq with (ss:=[vs]).
-          -- repeat constructor.
-             apply Sreset with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs)...
-             ++ apply Forall2_concat.
-                repeat rewrite_Forall_forall; solve_length;
-                  specialize (H1 a0 (List.map (fun _ => default_stream) b0) _ _ _ H15 eq_refl eq_refl);
-                  repeat rewrite_Forall_forall; simpl_length.
-                ** rewrite <- map_nth.
-                   rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length.
-                   repeat rewrite map_map.
-                   apply map_ext_in. intros; solve_length.
-                ** specialize (H20 a1 default_stream _ _ _ H16 eq_refl eq_refl).
-                   repeat simpl_nth; [| eassumption].
-                   eapply sem_exp_refines...
-             ++ eapply sem_exp_refines; [| eauto]. etransitivity...
-             ++ rewrite concat_map_singl2. assumption.
-          -- simpl. rewrite app_nil_r.
-             repeat rewrite_Forall_forall; solve_length.
-             repeat constructor. econstructor; [| reflexivity].
-             apply Env.adds_MapsTo; solve_length.
-             rewrite <- fst_NoDupMembers.
-             destruct Hvalid3.
-             apply idents_for_anns_NoDupMembers in H3...
-        * repeat rewrite Forall_app.
-          repeat split; solve_forall; solve_length.
-          1,2,3: (eapply sem_equation_refines; [| eauto]; repeat (etransitivity; eauto)).
-  Qed.
+    (* - (* app *) *)
+    (*   specialize (idents_for_anns_subst_length _ _ _ _ _ H2) as Hlength1. *)
+    (*   assert (length (n_out n) = length vs) as Hlength2. *)
+    (*   { destruct H14. repeat rewrite_Forall_forall. *)
+    (*     rewrite H4 in H6. inv H6. unfold idents in *. solve_length. } *)
+    (*   eapply map_bind2_sem in H1... 2:(repeat rewrite_Forall_forall; eapply nth_In in H12; eauto). clear H0. *)
+    (*   destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. *)
+    (*   remember (Env.adds (List.map fst x3) vs H') as H''. *)
+    (*   assert (Env.refines eq H' H'') as Href2. *)
+    (*   { destruct Histst1. *)
+    (*     eapply idents_for_anns_subst_refines... repeat rewrite_Forall_forall; solve_length. } *)
+    (*   assert (hist_st vars b H'' st'). *)
+    (*   { rewrite HeqH''. eapply idents_for_anns_hist_st in H2... *)
+    (*     repeat rewrite_Forall_forall. solve_length. } *)
+    (*   exists H''. repeat (split; eauto). *)
+    (*   + etransitivity... *)
+    (*   + rewrite Forall2_map_1. *)
+    (*     repeat rewrite_Forall_forall; solve_length. *)
+    (*     destruct (nth _ x3 _) eqn:Hnth. *)
+    (*     repeat constructor. econstructor; [|reflexivity]. *)
+    (*     destruct a1. rewrite split_nth in Hnth; inv Hnth. *)
+    (*     rewrite split_map_fst. *)
+    (*     apply Env.adds_MapsTo; solve_length. *)
+    (*     rewrite <- fst_NoDupMembers. *)
+    (*     destruct Hvalid1. *)
+    (*     apply idents_for_anns_NoDupMembers in H2... *)
+    (*   + constructor. *)
+    (*     * apply Seq with (ss:=[vs]). *)
+    (*       -- repeat constructor. *)
+    (*          apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))). *)
+    (*          ++ apply Forall2_concat. *)
+    (*             repeat rewrite_Forall_forall; solve_length; *)
+    (*               specialize (H3 a0 (List.map (fun _ => default_stream) b0) _ _ _ H13 eq_refl eq_refl); *)
+    (*               repeat rewrite_Forall_forall; simpl_length. *)
+    (*             ** rewrite <- map_nth. *)
+    (*                rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length. *)
+    (*                repeat rewrite map_map. *)
+    (*                apply map_ext_in. intros; solve_length. *)
+    (*             ** specialize (H16 a1 default_stream _ _ _ H15 eq_refl eq_refl). *)
+    (*                repeat simpl_nth; [| eassumption]. *)
+    (*                eapply sem_exp_refines... *)
+    (*          ++ rewrite concat_map_singl2. assumption. *)
+    (*       -- simpl. rewrite app_nil_r. *)
+    (*          repeat rewrite_Forall_forall; solve_length. *)
+    (*          repeat constructor. econstructor; [| reflexivity]. *)
+    (*          apply Env.adds_MapsTo; solve_length. *)
+    (*          rewrite <- fst_NoDupMembers. *)
+    (*          destruct Hvalid1. *)
+    (*          apply idents_for_anns_NoDupMembers in H2... *)
+    (*     * solve_forall. *)
+    (*       eapply sem_equation_refines... *)
+    (* - (* app (reset) *) *)
+    (*   specialize (idents_for_anns_length _ _ _ _ H3) as Hlength1. *)
+    (*   assert (length (n_out n) = length vs) as Hlength3. *)
+    (*   { clear H H0 H1 H4. specialize (H19 0); inv H19; subst. *)
+    (*     repeat rewrite_Forall_forall. *)
+    (*     rewrite H0 in H6; inv H6. unfold idents in *. solve_length. } *)
+    (*   assert (length x2 = 1) as Hlength2. *)
+    (*   { eapply normalize_exp_length in H1... rewrite <- length_typeof_numstreams in H1. *)
+    (*     rewrite H1. rewrite H11. reflexivity. } *)
+    (*   repeat singleton_length; subst. *)
+    (*   eapply H in H1... clear H. *)
+    (*   destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. inv Hsem1; inv H16. *)
+    (*   eapply normalize_reset_sem in H4... 2:(destruct Histst1; eauto). *)
+    (*   destruct H4 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]]. *)
+    (*   assert (Forall2 (sem_exp G H'' b) es ss) as Hsem'. *)
+    (*   { repeat rewrite_Forall_forall. *)
+    (*     eapply sem_exp_refines; [| eauto]. etransitivity... } clear H15. *)
+    (*   eapply map_bind2_sem in H2... 2:(repeat rewrite_Forall_forall; eapply nth_In in H14; eauto). clear H0. *)
+    (*   destruct H2 as [H''' [Href3 [Hvalid3 [Histst3 [Hsem3 Hsem3']]]]]. *)
+    (*   remember (Env.adds (List.map fst x5) vs H''') as H''''. *)
+    (*   assert (Env.refines eq H''' H'''') as Href4. *)
+    (*   { destruct Histst3. eapply idents_for_anns_refines... *)
+    (*     repeat rewrite_Forall_forall; solve_length. } *)
+    (*   assert (valid_after vars st') as Hvalid4 by eauto. *)
+    (*   assert (hist_st vars b H'''' st'). *)
+    (*   { rewrite HeqH''''. eapply idents_for_anns_hist_st in H3... *)
+    (*     repeat rewrite_Forall_forall; solve_length. } *)
+    (*   exists H''''. repeat (split; auto). *)
+    (*   + repeat (etransitivity; eauto). *)
+    (*   + rewrite Forall2_map_1. *)
+    (*     repeat rewrite_Forall_forall; solve_length. *)
+    (*     destruct (nth _ x5 _) eqn:Hnth. *)
+    (*     repeat constructor. econstructor; [|reflexivity]. *)
+    (*     destruct a1. rewrite split_nth in Hnth; inv Hnth. *)
+    (*     rewrite split_map_fst. *)
+    (*     apply Env.adds_MapsTo; solve_length. *)
+    (*     rewrite <- fst_NoDupMembers. *)
+    (*     destruct Hvalid3. *)
+    (*     apply idents_for_anns_NoDupMembers in H3... *)
+    (*   + constructor. *)
+    (*     * apply Seq with (ss:=[vs]). *)
+    (*       -- repeat constructor. *)
+    (*          apply Sreset with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs)... *)
+    (*          ++ apply Forall2_concat. *)
+    (*             repeat rewrite_Forall_forall; solve_length; *)
+    (*               specialize (H1 a0 (List.map (fun _ => default_stream) b0) _ _ _ H15 eq_refl eq_refl); *)
+    (*               repeat rewrite_Forall_forall; simpl_length. *)
+    (*             ** rewrite <- map_nth. *)
+    (*                rewrite <- (map_nth (length (A:=_)) (List.map _ ss)). f_equal; solve_length. *)
+    (*                repeat rewrite map_map. *)
+    (*                apply map_ext_in. intros; solve_length. *)
+    (*             ** specialize (H20 a1 default_stream _ _ _ H16 eq_refl eq_refl). *)
+    (*                repeat simpl_nth; [| eassumption]. *)
+    (*                eapply sem_exp_refines... *)
+    (*          ++ eapply sem_exp_refines; [| eauto]. etransitivity... *)
+    (*          ++ rewrite concat_map_singl2. assumption. *)
+    (*       -- simpl. rewrite app_nil_r. *)
+    (*          repeat rewrite_Forall_forall; solve_length. *)
+    (*          repeat constructor. econstructor; [| reflexivity]. *)
+    (*          apply Env.adds_MapsTo; solve_length. *)
+    (*          rewrite <- fst_NoDupMembers. *)
+    (*          destruct Hvalid3. *)
+    (*          apply idents_for_anns_NoDupMembers in H3... *)
+    (*     * repeat rewrite Forall_app. *)
+    (*       repeat split; solve_forall; solve_length. *)
+    (*       1,2,3: (eapply sem_equation_refines; [| eauto]; repeat (etransitivity; eauto)). *)
+  Admitted.
 
   Corollary normalize_exps_sem : forall G vars b es H vs es' eqs' st st',
       Forall (wt_exp G vars) es ->
@@ -1661,10 +1593,8 @@ Module Type CORRECTNESS
       rewrite init_st_smallest.
       specialize (first_unused_ident_gt n _ eq_refl) as H.
       unfold used_idents in H.
-      repeat rewrite_Forall_forall.
-      apply H. apply in_or_app. right.
-      unfold idty in H0; rewrite map_map in H0; simpl in H0.
-      assumption.
+      repeat rewrite Forall_app in H. destruct H as [_ [H _]].
+      unfold idty. rewrite map_map; simpl. assumption.
   Qed.
 
   Fact init_st_hist_st : forall b H n,

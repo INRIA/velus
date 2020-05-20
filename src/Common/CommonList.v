@@ -383,8 +383,26 @@ Section find.
     intro Hfind.
     destruct (f x) eqn:Hpx; try inv Hfind; auto.
   Qed.
-
 End find.
+
+Section split.
+  Context {A B : Type}.
+
+  Lemma split_fst_snd : forall (xs : list (A * B)),
+      split xs = (map fst xs, map snd xs).
+  Proof.
+    induction xs; simpl; auto.
+    destruct a. rewrite IHxs; auto.
+  Qed.
+
+  Corollary combine_fst_snd : forall (xs : list (A * B)),
+      xs = combine (map fst xs) (map snd xs).
+  Proof.
+    intros xs.
+    specialize (split_combine xs) as Hcomb.
+    rewrite split_fst_snd in Hcomb; auto.
+  Qed.
+End split.
 
 Section Map.
 
@@ -394,7 +412,7 @@ Section Map.
   Remark map_cons':
     forall l y ys,
       map f l = y :: ys ->
-      exists x xs, y = f x /\ ys = map f xs.
+      exists x xs, l = x :: xs /\ y = f x /\ ys = map f xs.
   Proof.
     destruct l; simpl; intros * H.
     - contradict H. apply nil_cons.
@@ -404,16 +422,15 @@ Section Map.
   Remark map_app':
     forall l1 l l2,
       map f l = l1 ++ l2 ->
-      exists k1 k2, l1 = map f k1 /\ l2 = map f k2.
+      exists k1 k2, l = k1 ++ k2 /\ l1 = map f k1 /\ l2 = map f k2.
   Proof.
     induction l1; simpl; intros * H.
     - exists [], l; auto.
     - apply map_cons' in H.
-      destruct H as (x & xs & Ha & Happ).
-      symmetry in Happ.
-      apply IHl1 in Happ.
-      destruct Happ as (k1 & k2 & Hl1 & Hl2).
-      exists (x :: k1), k2; simpl; split; auto.
+      destruct H as (x & xs & Happ & Hl & Hr).
+      symmetry in Hr. apply IHl1 in Hr.
+      destruct Hr as (k1 & k2 & Hl1 & Hl2 & Hl3).
+      exists (x :: k1), k2; simpl; repeat split; auto. congruence.
       f_equal; auto.
   Qed.
 
@@ -518,6 +535,16 @@ Section Incl.
     intros x Hin.
     rewrite in_app_iff in *.
     destruct Hin as [Hin|Hin]; auto.
+  Qed.
+
+  Lemma concat_map_incl {B} : forall (f : A -> list B) x xs,
+      In x xs ->
+      incl (f x) (concat (map f xs)).
+  Proof.
+    induction xs; intros Hin; inv Hin; simpl.
+    - apply incl_appl, incl_refl.
+    - apply IHxs in H.
+      apply incl_appr, H.
   Qed.
 
   Global Instance incl_refl : Reflexive (@incl A).
@@ -1621,6 +1648,12 @@ Section Combine.
     - intros a l1 b l2 IHl. f_equal; auto.
   Qed.
 
+  Lemma combine_same : forall (xs : list A),
+      combine xs xs = map (fun x => (x, x)) xs.
+  Proof.
+    induction xs; simpl; f_equal; auto.
+  Qed.
+
   Lemma combine_nil_l:
     forall (xs: list B),
       combine (@nil A) xs = [].
@@ -2497,6 +2530,13 @@ Section Forall3.
     induction 1; eauto.
   Qed.
 
+  Lemma Forall3_ignore3:
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      Forall2 (fun x y => exists z, R x y z) xs ys.
+  Proof.
+    induction 1; eauto.
+  Qed.
 End Forall3.
 
 Lemma Forall3_forall3 {A B C}:

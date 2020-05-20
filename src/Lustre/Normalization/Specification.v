@@ -667,18 +667,18 @@ Module Type SPECIFICATION
       apply normalize_exps_normalized_lexp in H.
       apply normalize_exps_normalized_lexp in H0.
       unfold normalize_fby in H1. repeat inv_bind.
-      apply map_bind2_values in H1.
+      eapply map_bind2_values, Forall3_ignore3 in H1.
       repeat rewrite_Forall_forall.
-      apply In_nth with (d:=(hd_default [])) in H4; destruct H4 as [n [Hn Hnth]].
+      apply In_nth with (d:=(hd_default [])) in H3; destruct H3 as [n [Hn Hnth]].
       replace (length es') in Hn.
-      specialize (H3 (x5, x5, (bool_type, (Cbase, None))) (hd_default []) [] _ _ _ _ Hn eq_refl eq_refl eq_refl).
-      destruct H3 as [? [? H3]]. destruct (nth n _ _) as [[e0 e] [ty cl]] eqn:Hnth'.
-      unfold fby_iteexp in H3.
+      specialize (H2 (x5, x5, (bool_type, (Cbase, None))) (hd_default []) _ _ _ Hn eq_refl eq_refl) as [? [? [? H2]]].
+      destruct (nth n (combine _ _) _) as [[e0 e] [ty cl]] eqn:Hnth'.
+      unfold fby_iteexp in H2.
       destruct (Norm.is_constant e0) eqn:Hisconst; repeat inv_bind; simpl in *.
-      + rewrite <- H5. repeat constructor.
+      + rewrite <- H4. repeat constructor.
         * rewrite is_constant_is_constant in Hisconst...
         * eapply nth_In in Hn. rewrite Hnth' in Hn...
-      + rewrite <- H7. repeat constructor.
+      + rewrite <- H6. repeat constructor.
         eapply nth_In in Hn. rewrite Hnth' in Hn...
     - (* app *)
       destruct o; repeat inv_bind...

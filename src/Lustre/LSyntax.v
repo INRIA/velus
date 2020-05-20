@@ -408,6 +408,17 @@ Module Type LSYNTAX
     eauto with datatypes.
   Qed.
 
+  Fact clockof_concat_clocksof : forall l,
+      concat (map clockof (concat l)) = concat (map clocksof l).
+  Proof.
+    intros l.
+    unfold clocksof.
+    induction l; simpl.
+    - reflexivity.
+    - rewrite map_app, concat_app, flat_map_concat_map.
+      f_equal; eauto.
+  Qed.
+
   (** nclockof and nclocksof *)
 
   Fact nclockof_annot : forall e,
