@@ -326,7 +326,7 @@ Module Type NORMALIZATION
       idents_for_anns' anns st = (res, st') ->
       st_valid_reuse st aft (ps_adds (map fst (anon_streams anns)) reusable) ->
       st_valid_reuse st' aft reusable.
-  Proof.
+  Proof with eauto.
     induction anns; intros res st st' aft reusable HND Hidforanns Hvalid;
       simpl in *; repeat inv_bind.
     - assumption.
@@ -335,14 +335,10 @@ Module Type NORMALIZATION
       + inv HND; eauto.
       + inv HND. destruct x.
         eapply reuse_ident_st_valid_reuse in H; eauto.
-        * rewrite <- ps_add_adds_eq in H.
-          rewrite PSP.remove_add in H; eauto.
-          intro contra. apply H3; clear H3.
-          rewrite in_app_iff.
-          rewrite ps_adds_spec in contra. destruct contra; auto.
-          right. rewrite In_PS_elements; auto.
-        * rewrite <- ps_add_adds_eq.
-          apply PSF.add_1; auto.
+        * intro contra; apply H3.
+          rewrite <- In_PS_elements in contra.
+          rewrite Permutation_PS_elements_ps_adds' in contra...
+        * rewrite ps_add_adds_eq...
   Qed.
   Hint Resolve idents_for_anns'_st_valid.
 
@@ -601,20 +597,14 @@ Module Type NORMALIZATION
       idents_for_anns anns st = (ids, st') ->
       incl (List.map fst ids) (st_ids st').
   Proof.
-    induction anns; intros ids st st' Hids; simpl in Hids; repeat inv_bind;
-      unfold incl; intros ? Hin; simpl in *; try destruct Hin.
-    destruct a as [ty [cl name]]. repeat inv_bind.
-    repeat simpl_In; simpl. inv H2.
-    - inv H1.
-      apply fresh_ident_In in H.
-      unfold st_ids.
-      apply idents_for_anns_st_follows in H0.
-      apply st_follows_incl in H0.
-      apply H0 in H.
-      repeat simpl_In. exists (i, ((ty, cl), false)); auto.
-    - apply IHanns in H0.
-      apply H0. repeat simpl_In.
-      exists (i, a); auto.
+    intros.
+    eapply idents_for_anns_incl in H.
+    unfold st_ids, idty in *.
+    eapply incl_map with (f:=fst) in H.
+    repeat rewrite map_map in H; simpl in H.
+    replace (map (fun x => fst (let '(id, (ty, (cl, _))) := x in (id, (ty, cl)))) ids) with (map fst ids) in H.
+    2: { eapply map_ext. intros [? [? [? ?]]]; auto. }
+    assumption.
   Qed.
 
   Fact idents_for_anns'_st_follows : forall anns res st st',
@@ -656,6 +646,20 @@ Module Type NORMALIZATION
     - apply IHanns in H0.
       apply H0. repeat simpl_In.
       exists (i, (t, (c, o))); auto.
+  Qed.
+
+  Corollary idents_for_anns'_incl_ids : forall anns ids st st',
+      idents_for_anns' anns st = (ids, st') ->
+      incl (List.map fst ids) (st_ids st').
+  Proof.
+    intros.
+    eapply idents_for_anns'_incl in H.
+    unfold st_ids, idty in *.
+    eapply incl_map with (f:=fst) in H.
+    repeat rewrite map_map in H; simpl in H.
+    replace (map (fun x => fst (let '(id, (ty, (cl, _))) := x in (id, (ty, cl)))) ids) with (map fst ids) in H.
+    2: { eapply map_ext. intros [? [? [? ?]]]; auto. }
+    assumption.
   Qed.
 
   Fact init_var_for_clock_st_follows : forall cl res st st',
