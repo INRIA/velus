@@ -2348,6 +2348,24 @@ Section Forall2.
     inv Hf. apply IHl1 in H5; eauto. split; try econstructor; tauto.
   Qed.
 
+  Lemma Forall2_Permutation_1 : forall (P : A -> B -> Prop) l1 l1' l2,
+      Permutation l1 l1' ->
+      Forall2 P l1 l2 ->
+      exists l2', Permutation l2 l2' /\ Forall2 P l1' l2'.
+  Proof.
+    intros P l1 l1' l2 Hperm Hf. revert l2 Hf.
+    induction Hperm; intros l2 Hf.
+    - inv Hf. exists []; auto.
+    - inv Hf.
+      apply IHHperm in H3 as [l2' [Hperm' Hf']].
+      exists (y::l2'). split; auto.
+    - inv Hf. inv H3.
+      exists (y1::y0::l'0). split; auto.
+      repeat constructor.
+    - eapply IHHperm1 in Hf. destruct Hf as [l2' [Hperm' Hf']].
+      eapply IHHperm2 in Hf'. destruct Hf' as [l2'' [Hperm'' Hf'']].
+      exists l2''. split; auto. etransitivity; eauto.
+  Qed.
 End Forall2.
 
 Hint Resolve (proj2 (Forall2_eq _ _)).
@@ -3579,7 +3597,128 @@ Section map_filter.
       | None => map_filter tl
       end
     end.
+
+  Lemma map_filter_app : forall xs ys,
+      map_filter (xs ++ ys) = map_filter xs ++ map_filter ys.
+  Proof.
+    induction xs; simpl; auto.
+    intros ys.
+    destruct (f a); eauto.
+    rewrite <- app_comm_cons.
+    f_equal; eauto.
+  Qed.
+
+  Lemma map_filter_In : forall x y xs,
+      In x xs ->
+      f x = Some y ->
+      In y (map_filter xs).
+  Proof.
+    induction xs; intros Hin Hf; simpl; inv Hin.
+    - rewrite Hf. left; auto.
+    - destruct (f a); [right|]; auto.
+  Qed.
 End map_filter.
+
+
+Global Instance Permutation_map_filter_Proper {A B}:
+  Proper ((@eq (A -> option B)) ==> Permutation (A:=A) ==> (Permutation (A:=B)))
+         (@map_filter A B).
+Proof.
+  intros f g Heq l1 l2 Hperm; subst.
+  induction Hperm; simpl; auto.
+  - destruct (g x); auto.
+  - destruct (g x), (g y); auto.
+    apply perm_swap.
+  - etransitivity; eauto.
+Qed.
+
+Section remove_member.
+  Context {A B : Type}.
+  Variable (eq_dec : forall x y : A, {x = y} + {x <> y}).
+
+  Fixpoint remove_member (y : A) (xs : list (A * B)) : (list (A * B)) :=
+    match xs with
+    | [] => []
+    | (x1, x2)::tl => if eq_dec y x1 then remove_member y tl
+                    else (x1, x2)::remove_member y tl
+    end.
+
+  Lemma remove_member_incl : forall x xs,
+      incl (remove_member x xs) xs.
+  Proof.
+    induction xs as [|[x1 x2] xs]; simpl.
+    - apply incl_refl.
+    - destruct (eq_dec x x1); subst.
+      + apply incl_tl, IHxs.
+      + apply incl_tl', IHxs.
+  Qed.
+
+  Lemma remove_member_nIn : forall x xs,
+      ~InMembers x (remove_member x xs).
+  Proof.
+    induction xs as [|[x1 x2] xs]; simpl.
+    - intro f; inv f.
+    - destruct (eq_dec x x1); auto.
+      intros [contra|contra]; congruence.
+  Qed.
+
+  Lemma remove_member_nIn_idem : forall x xs,
+      ~InMembers x xs ->
+      remove_member x xs = xs.
+  Proof.
+    induction xs as [|[x1 x2] xs]; intros Hnin; simpl; auto.
+    destruct (eq_dec x x1); subst.
+    - exfalso. apply Hnin.
+      constructor; auto.
+    - f_equal. apply IHxs.
+      intro contra. apply Hnin. right; auto.
+  Qed.
+
+  Lemma remove_member_Perm : forall x y xs,
+      NoDupMembers xs ->
+      In (x, y) xs ->
+      Permutation ((x, y)::(remove_member x xs)) xs.
+  Proof.
+    induction xs as [|[x1 x2] xs]; intros Hndup Hin; simpl.
+    - inv Hin.
+    - inv Hndup. inv Hin.
+      + inv H. destruct eq_dec; subst; try congruence.
+        apply perm_skip. rewrite remove_member_nIn_idem; auto.
+      + specialize (IHxs H3 H).
+        destruct eq_dec; subst; try congruence.
+        * exfalso. apply In_InMembers in H; auto.
+        * rewrite perm_swap. apply perm_skip; auto.
+  Qed.
+
+  Lemma remove_member_NoDupMembers : forall x xs,
+      NoDupMembers xs ->
+      NoDupMembers (remove_member x xs).
+  Proof.
+    induction xs as [|[x1 x2] xs]; intros Hndup; simpl; auto.
+    inv Hndup.
+    destruct (eq_dec x x1); subst; auto.
+    constructor; auto.
+    intro contra. apply H1.
+    apply InMembers_In in contra as [y contra].
+    apply In_InMembers with (b:=y).
+    specialize (remove_member_incl x xs) as Hincl. apply Hincl; auto.
+  Qed.
+
+  Lemma remove_member_neq_In : forall x xs x' y',
+      x' <> x ->
+      In (x', y') xs ->
+      In (x', y') (remove_member x xs).
+  Proof.
+    induction xs as [|[x1 y1] xs]; intros x' y' Hneq Hin; simpl.
+    - inv Hin.
+    - inv Hin.
+      + inv H.
+        destruct (eq_dec x x'); try congruence. left; auto.
+      + specialize (IHxs _ _ Hneq H).
+        destruct (eq_dec x x1); eauto.
+        right; eauto.
+  Qed.
+End remove_member.
 
 (* (* Induction on a triplet of lists of the same length *) *)
 (* Section list_ind3. *)

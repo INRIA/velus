@@ -336,6 +336,21 @@ Proof.
     destruct Hcp as [Hcp|Hcp]; [rewrite Hcp| inversion Hcp]; now auto.
 Qed.
 
+Lemma Is_free_in_clock_parent: forall vars x ck ck',
+    NoDupMembers vars ->
+    In (x, ck') vars ->
+    wc_clock vars ck ->
+    Is_free_in_clock x ck ->
+    clock_parent ck' ck.
+Proof.
+  induction ck as [|? IH]; intros ck' Hndup Hin Hwc Hfree;
+    inv Hfree; inv Hwc.
+  - clear IH.
+    eapply NoDupMembers_det with (t:=ck) (t':=ck') in Hndup; eauto; subst.
+    constructor.
+  - constructor; auto.
+Qed.
+
 Lemma wc_clock_parent:
   forall C ck' ck,
     wc_env C
@@ -384,3 +399,77 @@ Proof.
   now subst ck; apply Con_not_clock_parent in Hck.
 Qed.
 
+Lemma clock_parent_dec : forall ck ck',
+    clock_parent ck ck' \/ ~clock_parent ck ck'.
+Proof.
+  intros ck; induction ck'.
+  - right. intro contra; inv contra.
+  - destruct IHck'.
+    + left. constructor; auto.
+    + destruct (clock_EqDec ck ck') as [Heq|Hneq].
+      * rewrite Heq. left. constructor.
+      * right. intro contra. inv contra; try congruence.
+Qed.
+
+Lemma exists_child_clock : forall (vars : list (ident * clock)),
+    vars = nil \/
+    exists id, exists ck,
+        In (id, ck) vars /\
+        Forall (fun '(_, ck') => ~clock_parent ck ck') vars.
+Proof.
+  induction vars; auto.
+  right. destruct a as [id ck]. destruct IHvars as [?|[id' [ck' [HIn cl]]]]; subst.
+  - exists id. exists ck. split; constructor; auto.
+    intro contra. apply clock_parent_no_loops in contra; auto.
+  - destruct (clock_parent_dec ck' ck).
+    + exists id. exists ck. split.
+      * left; auto.
+      * constructor; auto.
+        intro contra.
+        eapply clock_parent_strict; eauto.
+        eapply Forall_impl; eauto.
+        intros [id'' ck''] Hpar; simpl in Hpar.
+        intro contra. apply Hpar. etransitivity; eauto.
+    + exists id'. exists ck'. split.
+      * right; auto.
+      * constructor; auto.
+Qed.
+
+Corollary exists_child_clock' : forall (vars : list (ident * clock)),
+    NoDupMembers vars ->
+    wc_env vars ->
+    vars = nil \/
+    exists id, exists ck,
+        In (id, ck) vars /\
+        Forall (fun '(_, ck') => ~Is_free_in_clock id ck') vars.
+Proof.
+  intros vars Hndup Hwc.
+  destruct (exists_child_clock vars) as [?|[id [ck [Hin Hclock]]]]; auto.
+  right. exists id. exists ck. split; auto.
+  eapply Forall_impl_In; eauto.
+  intros [id' ck'] Hin' H; simpl in H.
+  intro contra. apply H; clear H.
+  eapply Is_free_in_clock_parent; eauto.
+  unfold wc_env in Hwc. rewrite Forall_forall in Hwc. eapply Hwc in Hin'; eauto.
+Qed.
+
+Lemma wc_clock_nparent_remove : forall vars id ck ck',
+    ~clock_parent ck' ck ->
+    wc_clock ((id, ck')::vars) ck ->
+    wc_clock vars ck.
+Proof.
+  induction ck; intros ck' Hnpar Hwc; constructor; inv Hwc.
+  - eapply IHck; eauto.
+  - destruct H3; eauto.
+    inv H.
+    exfalso. apply Hnpar. constructor.
+Qed.
+
+Corollary wc_clock_no_loops_remove : forall vars id ck,
+    wc_clock ((id, ck)::vars) ck ->
+    wc_clock vars ck.
+Proof.
+  intros vars id ck Hwc.
+  apply wc_clock_nparent_remove in Hwc; auto.
+  intro contra. apply clock_parent_no_loops in contra. congruence.
+Qed.
