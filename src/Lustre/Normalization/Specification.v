@@ -119,7 +119,7 @@ Module Type SPECIFICATION
       weak_valid_after st' out.
   Proof.
     induction anns; intros ids st st' out Hids Hval;
-      simpl in *; repeat inv_bind; auto.
+      repeat inv_bind; auto.
     destruct a as [? [? ?]]. repeat inv_bind; eauto.
   Qed.
   Local Hint Resolve idents_for_anns_weak_valid.
@@ -130,7 +130,7 @@ Module Type SPECIFICATION
       weak_valid_after st' out.
   Proof.
     induction anns; intros ids st st' out Hids Hval;
-      simpl in *; repeat inv_bind; auto.
+      repeat inv_bind; auto.
     destruct a as [? [? ?]]. destruct o; repeat inv_bind; [destruct x|]; eauto.
   Qed.
   Local Hint Resolve idents_for_anns'_weak_valid.
@@ -204,7 +204,7 @@ Module Type SPECIFICATION
       weak_valid_after st' out.
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' out Hnorm Hval;
-      simpl in *; repeat inv_bind...
+      repeat inv_bind...
     - (* fby *) repeat solve_weak_valid.
     - (* when *)
       destruct a; repeat inv_bind. repeat solve_weak_valid.
@@ -294,7 +294,7 @@ Module Type SPECIFICATION
     - inv Hf; auto.
   Qed.
 
-  Fact map_bind2_normalized_lexp {A A2} :
+  Fact map_bind2_normalized_lexp' {A A2} :
     forall (k : A -> FreshAnn ((list exp) * A2)) a es' a2s st st',
       map_bind2 k a st = (es', a2s, st') ->
       Forall (fun a => forall es' a2s st st',
@@ -369,7 +369,7 @@ Module Type SPECIFICATION
       Forall normalized_lexp es'.
   Proof with eauto.
     induction e using exp_ind2; intros es' eqs' st st' Hnorm;
-      simpl in Hnorm; repeat inv_bind; repeat constructor.
+      repeat inv_bind; repeat constructor.
     - (* var *)
       destruct a...
     - (* unop *)
@@ -381,7 +381,7 @@ Module Type SPECIFICATION
       repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind.
-      apply map_bind2_normalized_lexp in H0...
+      apply map_bind2_normalized_lexp' in H0...
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
@@ -398,6 +398,16 @@ Module Type SPECIFICATION
   Qed.
   Hint Resolve normalize_exp_normalized_lexp.
 
+  Corollary map_bind2_normalized_lexp : forall es es' eqs' st st',
+      map_bind2 (normalize_exp false) es st = (es', eqs', st') ->
+      Forall normalized_lexp (concat es').
+  Proof.
+    intros es es' eqs' st st' Hnorm.
+    eapply map_bind2_normalized_lexp' in Hnorm; auto.
+    solve_forall.
+  Qed.
+  Hint Resolve map_bind2_normalized_lexp.
+
   Corollary normalize_exps_normalized_lexp: forall es es' eqs' st st',
       normalize_exps es st = (es', eqs', st') ->
       Forall normalized_lexp es'.
@@ -405,7 +415,6 @@ Module Type SPECIFICATION
     intros es es' eqs' st st' Hnorm.
     unfold normalize_exps in Hnorm. repeat inv_bind.
     apply map_bind2_normalized_lexp in H; auto.
-    rewrite Forall_forall; intros; eauto.
   Qed.
   Hint Resolve normalize_exps_normalized_lexp.
 
@@ -414,7 +423,7 @@ Module Type SPECIFICATION
       Forall normalized_cexp es'.
   Proof with eauto.
     induction e using exp_ind2; intros es' eqs' st st' Hnorm;
-      simpl in Hnorm; repeat inv_bind; repeat constructor.
+      repeat inv_bind; repeat constructor.
     - (* var *)
       destruct a...
     - (* unop *)
@@ -426,7 +435,7 @@ Module Type SPECIFICATION
       repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind.
-      apply map_bind2_normalized_lexp in H0; solve_forall.
+      apply map_bind2_normalized_lexp in H0.
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
@@ -495,7 +504,7 @@ Module Type SPECIFICATION
       Forall (normalized_equation out) (concat eqs').
   Proof.
     induction a; intros out a1s eqs' st st' Hmap Hlt Hfollows Hf;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - inv Hf. simpl.
       rewrite Forall_app; eauto.
@@ -524,7 +533,7 @@ Module Type SPECIFICATION
       Forall (normalized_equation out) eqs'.
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' out st st' Hval Hnorm;
-      simpl in Hnorm; repeat inv_bind; repeat constructor; eauto.
+      repeat inv_bind; repeat constructor; eauto.
     - (* binop *)
       apply Forall_app. split...
     - (* fby *)
@@ -532,8 +541,8 @@ Module Type SPECIFICATION
       assert (weak_valid_after x4 out) as Hvalid2 by solve_weak_valid.
       assert (weak_valid_after x7 out) as Hvalid3 by solve_weak_valid.
       repeat rewrite Forall_app. repeat split.
-      + apply map_bind2_normalized_lexp in H1; [| solve_forall].
-        apply map_bind2_normalized_lexp in H2; [| solve_forall].
+      + apply map_bind2_normalized_lexp in H1.
+        apply map_bind2_normalized_lexp in H2.
         clear H H0.
         unfold normalize_fby in H3; repeat inv_bind. apply map_bind2_values in H.
         repeat rewrite_Forall_forall.
@@ -556,8 +565,7 @@ Module Type SPECIFICATION
       + eapply map_bind2_normalized_eq in H1... solve_forall.
       + eapply map_bind2_normalized_eq in H2...
         * eapply map_bind2_st_follows in H1; solve_forall.
-      + eapply normalize_fby_normalized_eq in H3; eauto.
-        eapply map_bind2_normalized_lexp; eauto. solve_forall.
+      + eapply normalize_fby_normalized_eq in H3...
     - (* when *)
       destruct a. repeat inv_bind.
       eapply map_bind2_normalized_eq in H0; eauto. solve_forall.
@@ -593,12 +601,12 @@ Module Type SPECIFICATION
         rewrite Forall_forall in H3...
         eapply normalize_exp_normalized_cexp...
     - (* app *)
-      eapply map_bind2_normalized_lexp in H1; eauto; solve_forall.
+      eapply map_bind2_normalized_lexp in H1...
       destruct ro; repeat inv_bind.
       + specialize (normalize_reset_spec (hd_default x)) as [[? [? [? Hspec]]]|Hspec]; subst;
           rewrite Hspec in H4; clear Hspec; repeat inv_bind.
         * destruct x3...
-        * destruct (hd _) as [? [? ?]]; simpl in *; repeat inv_bind...
+        * destruct (hd _) as [? [? ?]]; repeat inv_bind...
       + constructor...
     - (* app (auxiliary equations) *)
       rewrite Forall_app. split.
@@ -609,7 +617,7 @@ Module Type SPECIFICATION
         * eapply H in H2... solve_weak_valid.
         * specialize (normalize_reset_spec (hd_default x)) as [[? [? [? Hspec]]]|Hspec]; subst;
           rewrite Hspec in H4; clear Hspec; repeat inv_bind...
-          destruct (hd _) as [? [? ?]]; simpl in *; repeat inv_bind.
+          destruct (hd _) as [? [? ?]]; repeat inv_bind.
           repeat constructor. apply normalized_lexp_hd_default...
   Qed.
   Local Hint Resolve normalize_exp_normalized_eq.
@@ -684,7 +692,7 @@ Module Type SPECIFICATION
       destruct o; repeat inv_bind...
       specialize (normalize_reset_spec (hd_default x4)) as [[? [[? ?] [? Hspec]]]|Hspec]; subst;
         rewrite Hspec in H1; clear Hspec; repeat inv_bind...
-      destruct (hd _) as [? [ty cl]]; simpl in H1. repeat inv_bind...
+      destruct (hd _) as [? [ty cl]]; repeat inv_bind...
   Qed.
 
   Corollary normalize_rhss_normalized_rhs : forall es keep_fby es' eqs' st st',
@@ -710,7 +718,7 @@ Module Type SPECIFICATION
       try (eapply normalize_exp_normalized_eq in Hnorm; eauto).
     - (* fby *)
       destruct keep_fby; try (eapply normalize_exp_normalized_eq in Hnorm; eauto).
-      simpl in Hnorm. repeat inv_bind.
+      repeat inv_bind.
       repeat rewrite Forall_app. repeat split...
       + eapply normalize_fby_normalized_eq in H1; eauto.
     - (* app *)
@@ -789,7 +797,7 @@ Module Type SPECIFICATION
       Forall (normalized_equation out) eqs'.
   Proof.
     induction eqs; intros to_cut eqs' out st st' Hval Hwl Hnorm Hincl;
-      simpl in Hnorm; repeat inv_bind; auto.
+      repeat inv_bind; auto.
     inv Hwl. apply Forall_app; split.
     - eapply normalize_equation_normalized_eq; eauto.
     - eapply IHeqs in H0; eauto.
@@ -852,7 +860,7 @@ Module Type SPECIFICATION
   Proof.
     induction es; intros es' eqs' st st' Hnorm;
       unfold fresh_ins;
-      unfold normalize_exps in Hnorm; simpl in *; repeat inv_bind; auto.
+      unfold normalize_exps in Hnorm; repeat inv_bind; auto.
     simpl. rewrite map_app, concat_app.
     eapply normalize_exp_no_fresh in H.
     unfold fresh_ins in H, IHes; rewrite H; simpl.

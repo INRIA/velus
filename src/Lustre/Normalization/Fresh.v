@@ -614,15 +614,16 @@ End Facts.
 Module Tactics.
   Import Fresh.
   Ltac inv_bind :=
+    simpl in *;
     match goal with
     | H : context c [ret _ _] |- _ =>
       rewrite ret_spec in H
     | H : (_, _) = (_, _) |- _ =>
       inv H
     | H : bind _ _ _ = (_, _) |- _ =>
-      apply bind_spec in H; destruct H as [? [? [? ?]]]; simpl
+      apply bind_spec in H; destruct H as [? [? [? ?]]]; simpl in *
     | H : bind2 _ _ _ = (_, _) |- _ =>
-      apply bind2_spec in H; destruct H as [? [? [? [? ?]]]]; simpl
+      apply bind2_spec in H; destruct H as [? [? [? [? ?]]]]; simpl in *
     | |- context c [ret _ _] =>
       rewrite ret_spec
     | |- bind _ _ _ = (_, _) =>

@@ -28,7 +28,7 @@ Module Type IDEMPOTENCE
       normalize_exp is_control e st = ([e], [], st).
   Proof with eauto.
     intros e is_control st Hnormed; revert is_control.
-    induction Hnormed; intro is_control; simpl; repeat inv_bind...
+    induction Hnormed; intro is_control; repeat inv_bind...
     - (* unop *)
       repeat eexists...
       inv_bind...
@@ -51,7 +51,7 @@ Module Type IDEMPOTENCE
       (exists eqs, map_bind2 (normalize_exp is_control) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
   Proof with eauto.
     induction es; intros is_control st Hf;
-      inv Hf; simpl; repeat inv_bind...
+      inv Hf; repeat inv_bind...
     eapply normalized_lexp_normalize_idem in H1...
     eapply (IHes is_control st) in H2; clear IHes.
     destruct H2 as [eqs [H2 Heqs]].
@@ -78,7 +78,7 @@ Module Type IDEMPOTENCE
       normalize_exp true e st = ([e], [], st).
   Proof with eauto.
     intros e st Hnormed.
-    induction Hnormed; simpl; repeat inv_bind...
+    induction Hnormed; repeat inv_bind...
     - (* merge *)
       exists [et]. exists []. exists st.
       repeat split; inv_bind...
@@ -172,7 +172,7 @@ Module Type IDEMPOTENCE
       (exists eqs, map_bind2 (normalize_rhs keep_fby) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
   Proof with eauto.
     induction es; intros keep_fby st Hf;
-      inv Hf; simpl; repeat inv_bind...
+      inv Hf; repeat inv_bind...
     eapply normalized_rhs_normalize_idem in H1...
     eapply (IHes keep_fby st) in H2; clear IHes.
     destruct H2 as [eqs [H2 Heqs]].
@@ -199,15 +199,13 @@ Module Type IDEMPOTENCE
     intros G [xs es] to_cut st Hwl Hnormed. inv Hwl.
     specialize (normalized_equation_normalized_rhs _ _ _ Hnormed) as Hnormed2.
     apply normalized_rhss_normalize_idem with (st:=st) in Hnormed2.
-    inv Hnormed; simpl; repeat inv_bind;
+    inv Hnormed; repeat inv_bind;
       repeat eexists; eauto;
-        inv_bind; rewrite app_nil_r;
+        inv_bind; try rewrite app_nil_r in *;
           simpl in *; repeat f_equal.
-    - rewrite app_nil_r in H0.
-      apply firstn_all2. rewrite H0. apply le_refl.
-    - rewrite app_nil_r in H0.
-      apply firstn_all2. rewrite H0. apply le_refl.
-    - rewrite app_nil_r in H0. rewrite length_annot_numstreams in H0.
+    - apply firstn_all2. rewrite H0. apply le_refl.
+    - apply firstn_all2. rewrite H0. apply le_refl.
+    - rewrite length_annot_numstreams in H0.
       apply firstn_all2. simpl. rewrite H0. apply le_refl.
   Qed.
 
@@ -220,8 +218,7 @@ Module Type IDEMPOTENCE
       unfold normalize_equations; repeat inv_bind...
     eapply normalized_equation_normalize_idem in H3...
     repeat eexists... inv_bind.
-    repeat eexists... inv_bind.
-    rewrite <- cons_is_app...
+    repeat eexists... inv_bind...
   Qed.
 
   Definition transport1 {n1 n2 : node} (Hin : n_in n1 = n_in n2) : 0 < length (n_in n1) -> 0 < length (n_in n2).

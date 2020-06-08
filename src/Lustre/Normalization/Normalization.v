@@ -40,7 +40,7 @@ Module Type NORMALIZATION
       idents_for_anns anns st = (ids, st') ->
       map snd ids = anns.
   Proof.
-    induction anns; intros idents st st' Hanns; simpl in *; repeat inv_bind; auto.
+    induction anns; intros idents st st' Hanns; repeat inv_bind; auto.
     destruct a as [ty [cl ?]]. repeat inv_bind.
     specialize (IHanns _ _ _ H0); simpl.
     f_equal; auto.
@@ -73,7 +73,7 @@ Module Type NORMALIZATION
       idents_for_anns' anns st = (idents, st') ->
       map snd idents = anns.
   Proof.
-    induction anns; intros idents st st' Hanns; simpl in *; repeat inv_bind; simpl; auto.
+    induction anns; intros idents st st' Hanns; repeat inv_bind; simpl; auto.
     destruct a as [ty [cl [name|]]]; repeat inv_bind; simpl;
       specialize (IHanns _ _ _ H0);
       f_equal; eauto.
@@ -299,7 +299,7 @@ Module Type NORMALIZATION
       st_valid_after st' aft.
   Proof.
     induction anns; intros res st st' aft Hidforanns Hvalid;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - assumption.
     - destruct a as [ty [cl name]]. repeat inv_bind.
       eapply IHanns; eauto.
@@ -314,7 +314,7 @@ Module Type NORMALIZATION
       st_valid_reuse st' aft reusable.
   Proof.
     induction anns; intros res st st' aft reuse Hidforanns Hvalid;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - assumption.
     - destruct a as [ty [cl name]]. repeat inv_bind.
       eapply IHanns; eauto.
@@ -328,7 +328,7 @@ Module Type NORMALIZATION
       st_valid_reuse st' aft reusable.
   Proof with eauto.
     induction anns; intros res st st' aft reusable HND Hidforanns Hvalid;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - assumption.
     - destruct a as [ty [cl [name|]]]; repeat inv_bind; simpl in *;
         eapply IHanns; eauto.
@@ -392,7 +392,7 @@ Module Type NORMALIZATION
     destruct (normalize_reset_spec e) as [[v [ann [He Hnorm']]]|Hnorm']; subst;
       rewrite Hnorm' in Hnorm; clear Hnorm';
         try (destruct (hd _ _) as [ty [cl _]]);
-        simpl in *; repeat inv_bind; eauto.
+        repeat inv_bind; eauto.
   Qed.
   Hint Resolve normalize_reset_st_valid.
 
@@ -420,7 +420,7 @@ Module Type NORMALIZATION
       st_valid_reuse st' aft reusable.
   Proof.
     induction es; intros es' eqs' st st' aft reusable Hf Hnd Hmap Hvalid;
-      simpl in *; repeat inv_bind; auto.
+      repeat inv_bind; auto.
     inv Hf.
     ndup_simpl.
     assert (NoDup (map fst (k a)++PS.elements reusable)) by ndup_l Hnd.
@@ -549,7 +549,7 @@ Module Type NORMALIZATION
       st_valid_reuse st' aft reusable.
   Proof.
     induction eqs; intros to_cut res st st' aft reusable Hnd Hnorm Hvalid;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - assumption.
     - unfold anon_in_eqs in *; simpl in *.
       ndup_simpl.
@@ -566,7 +566,7 @@ Module Type NORMALIZATION
       st_follows st st'.
   Proof.
     induction anns; intros res st st' Hidforanns;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - reflexivity.
     - destruct a as [ty [cl name]]. repeat inv_bind.
       etransitivity; eauto.
@@ -612,7 +612,7 @@ Module Type NORMALIZATION
       st_follows st st'.
   Proof.
     induction anns; intros res st st' Hidforanns;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - reflexivity.
     - destruct a as [ty [cl [name|]]]; repeat inv_bind;
         [destruct x|]; etransitivity; eauto.
@@ -706,7 +706,7 @@ Module Type NORMALIZATION
   Proof.
     intros e res st st' Hnorm.
     destruct (normalize_reset_spec e) as [[v [ann [He Hnorm']]]|Hnorm']; subst;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - reflexivity.
     - rewrite Hnorm' in Hnorm; clear Hnorm'.
       destruct (hd _ _) as [ty [cl _]].
@@ -797,14 +797,22 @@ Module Type NORMALIZATION
   Qed.
   Hint Resolve normalize_rhs_st_follows.
 
+  Corollary normalize_rhss_st_follows : forall es keep_fby res st st',
+      normalize_rhss keep_fby es st = (res, st') ->
+      st_follows st st'.
+  Proof.
+    intros es keep_fby res st st' Hnorm.
+    unfold normalize_rhss in Hnorm; repeat inv_bind.
+    repeat solve_st_follows'.
+  Qed.
+  Hint Resolve normalize_rhss_st_follows.
+
   Fact normalize_equation_st_follows : forall e to_cut res st st',
       normalize_equation to_cut e st = (res, st') ->
       st_follows st st'.
   Proof.
     intros [xs es] to_cut res st st' Hnorm.
-    simpl in *; unfold normalize_rhss in *; repeat inv_bind.
-    eapply map_bind2_st_follows; eauto.
-    apply Forall_forall. intros; eauto.
+    simpl in *; repeat inv_bind; eauto.
   Qed.
   Hint Resolve normalize_equation_st_follows.
 
@@ -813,7 +821,7 @@ Module Type NORMALIZATION
       st_follows st st'.
   Proof.
     induction eqs; intros to_cut res st st' Hnorm;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - reflexivity.
     - etransitivity; eauto.
   Qed.
@@ -827,6 +835,8 @@ Module Type NORMALIZATION
       etransitivity; [ eapply normalize_exps_st_follows in H; eauto |]
     | H : normalize_rhs _ _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply normalize_rhs_st_follows in H; eauto |]
+    | H : normalize_rhss _ _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply normalize_rhss_st_follows in H; eauto |]
     | H : normalize_equation _ _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply normalize_equation_st_follows in H; eauto |]
     | H : normalize_equations _ _ ?st = _ |- st_follows ?st _ =>
@@ -1124,7 +1134,7 @@ Module Type NORMALIZATION
       + eapply normalize_exps_length in H; eauto. congruence.
       + eapply normalize_exps_length in H0; eauto. congruence.
     - (* keep_fby = false *)
-      eapply normalize_exp_length in Hnorm; eauto.
+      eapply idents_for_anns_length in H2; solve_length.
   Qed.
   Hint Resolve normalize_rhs_length.
 
@@ -1166,7 +1176,7 @@ Module Type NORMALIZATION
   Proof with eauto.
     destruct e; intros is_control es' eqs' st st' Hwl Hnorm;
       (* specialize (normalize_exp_length _ _ _ es' eqs' st st' Hwl Hnorm) as Hlength; *)
-        inv Hwl; simpl in *; repeat inv_bind...
+        inv Hwl; repeat inv_bind...
     - (* fby *) apply idents_for_anns_annots in H3...
     - (* when *)
       assert (length (concat x0) = length (annots l)) as Hlen by eauto.
@@ -1470,7 +1480,7 @@ Module Type NORMALIZATION
       Permutation ((vars_defined (concat eqs'))++(st_ids st)) (st_ids st').
   Proof.
     induction es; intros es' eqs' st st' Hmap Hf;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - reflexivity.
     - inv Hf.
       specialize (IHes _ _ _ _ H0 H4).
@@ -1506,7 +1516,7 @@ Module Type NORMALIZATION
     destruct (normalize_reset_spec e) as [[v [ann [Hv Hspec]]]| Hspec];
       subst; rewrite Hspec in Hnorm; clear Hspec.
     - repeat inv_bind. reflexivity.
-    - destruct (hd _ _) as [ty [cl _]]; simpl in *. repeat inv_bind.
+    - destruct (hd _ _) as [ty [cl _]]. repeat inv_bind.
       eapply fresh_ident_vars_perm; eauto.
   Qed.
 
@@ -1770,7 +1780,7 @@ Module Type NORMALIZATION
       normalize_equations to_cut eqs st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined eqs)++(st_ids st')).
   Proof.
-    induction eqs; intros to_cut eqs' st st' Hf Hnorm; simpl in *; repeat inv_bind.
+    induction eqs; intros to_cut eqs' st st' Hf Hnorm; repeat inv_bind.
     - reflexivity.
     - inv Hf. eapply IHeqs in H0; eauto.
       eapply normalize_equation_vars_perm in H; eauto; simpl in *.
@@ -1802,7 +1812,7 @@ Module Type NORMALIZATION
       incl (anon_streams anns) (anon_streams (map snd ids)).
   Proof.
     induction anns; intros ids st st' Hids;
-      simpl in *; repeat inv_bind; simpl; auto.
+      repeat inv_bind; simpl; auto.
     - reflexivity.
     - destruct a as [ty [cl [name|]]]; repeat inv_bind; simpl in *.
       + apply incl_tl'; eauto.
@@ -1817,7 +1827,7 @@ Module Type NORMALIZATION
       incl (anon_streams anns) (without_names' ids).
   Proof.
     induction anns; intros ids st st' Hids;
-      simpl in *; repeat inv_bind; simpl; try reflexivity.
+      repeat inv_bind; simpl; try reflexivity.
     destruct a as [ty [cl [name|]]]; repeat inv_bind; simpl.
     - eapply incl_tl'; eauto.
     - eapply incl_tl; eauto.
@@ -1833,7 +1843,7 @@ Module Type NORMALIZATION
       incl (fresh_ins es) (idty (st_anns st')).
   Proof with eauto.
     induction es; intros es' eqs' st st' Hf Hmap;
-      simpl in *; repeat inv_bind; try apply incl_nil'.
+      repeat inv_bind; try apply incl_nil'.
     inv Hf.
     apply incl_app; eauto.
     etransitivity; eauto.
@@ -1856,7 +1866,7 @@ Module Type NORMALIZATION
       incl (fresh_in e) (idty (st_anns st')).
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hnorm;
-      simpl in *; repeat inv_bind; eauto.
+      repeat inv_bind; eauto.
     - (* const *) apply incl_nil'.
     - (* var *) apply incl_nil'.
     - (* binop *)

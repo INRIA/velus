@@ -436,6 +436,15 @@ Module Type LSYNTAX
       reflexivity.
   Qed.
 
+  Corollary length_nclockof_numstreams : forall e,
+      length (nclockof e) = numstreams e.
+  Proof.
+    intros.
+    rewrite nclockof_annot.
+    repeat rewrite map_length.
+    apply length_annot_numstreams.
+  Qed.
+
   Fact nclocksof_annots : forall es,
       nclocksof es = map snd (annots es).
   Proof.

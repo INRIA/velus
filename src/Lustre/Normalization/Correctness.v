@@ -571,7 +571,7 @@ Module Type CORRECTNESS
     - destruct Hist.
       eapply idents_for_anns_dom in Hids...
     - revert ids vs H st st' Hlen Hvalid Hids Hist.
-      induction anns; intros; simpl in Hids; repeat inv_bind; simpl.
+      induction anns; intros; repeat inv_bind; simpl.
       + unfold Env.adds; simpl. destruct Hist. assumption.
       + destruct a as [? [? ?]]. repeat inv_bind.
         destruct vs; simpl in Hlen; try congruence.
@@ -647,7 +647,7 @@ Module Type CORRECTNESS
     - destruct Hist.
       eapply idents_for_anns'_dom in Hids...
     - revert ids vs H st st' Hlen Hvalid Hids Hist.
-      induction anns; intros; simpl in Hids; repeat inv_bind; simpl.
+      induction anns; intros; repeat inv_bind; simpl.
       + unfold Env.adds; simpl. destruct Hist. assumption.
       + destruct a as [? [? [o|]]]; repeat inv_bind;
           destruct vs; simpl in Hlen; try congruence;
@@ -697,7 +697,7 @@ Module Type CORRECTNESS
           Forall (sem_equation G H' b) (concat eqs')).
   Proof with eauto.
     induction es; intros H vs es' eqs' st st' reusable Hndup Hwt Hsem Hvalid Histst Hf Hmap;
-      inv Hwt; inv Hsem; inv Hf; simpl in Hmap; repeat inv_bind.
+      inv Hwt; inv Hsem; inv Hf; repeat inv_bind.
     - exists H; simpl. repeat (split; eauto).
     - unfold fresh_ins in *; simpl in *; rewrite map_app, ps_adds_app in Hvalid.
       assert (NoDup (map fst (fresh_ins es)++PS.elements reusable)) as Hndup2 by ndup_r Hndup.
@@ -737,7 +737,7 @@ Module Type CORRECTNESS
     specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
     - exists H. repeat (split; auto).
-    - destruct (List.hd _ _) as [? [? ?]] eqn:Heqann; simpl in *; repeat inv_bind.
+    - destruct (List.hd _ _) as [? [? ?]] eqn:Heqann; repeat inv_bind.
       assert (st_follows st st') as Hfollows by eauto.
       assert (st_valid_after st (PSP.of_list vars)) as Hvalid' by eauto.
       remember (Env.add x v H) as H'.
@@ -957,7 +957,7 @@ Module Type CORRECTNESS
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
     induction e using exp_ind2; intros Hi vs is_control es' eqs' st st' reusable Hndup Hwt Hsem Hvalid Histst Hnorm;
-      inv Hwt; inv Hsem; simpl in Hnorm; repeat inv_bind.
+      inv Hwt; inv Hsem; repeat inv_bind.
     - (* const *)
       exists Hi. repeat (split; eauto).
     - (* var *)
@@ -1517,7 +1517,7 @@ Module Type CORRECTNESS
           Forall (sem_equation G H' b) (concat eqs')).
   Proof with eauto.
     induction es; intros H vs es' eqs' st st' reusable Hndup Hwt Hsem Hvalid Histst Hmap;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - exists H; simpl. inv Hsem. repeat (split; auto).
     - inv Hwt. inv Hsem.
       unfold anon_ins in *. simpl in *. rewrite map_app, ps_adds_app in Hvalid.
@@ -1718,7 +1718,7 @@ Module Type CORRECTNESS
              Forall (sem_equation G H' b) eqs').
   Proof with eauto.
     induction eqs; intros H eqs' st st' reusable Hndup Hwt Hsem Hvalid Hdome Hnorm;
-      inv Hwt; inv Hsem; simpl in Hnorm; repeat inv_bind.
+      inv Hwt; inv Hsem; repeat inv_bind.
     - exists H...
     - unfold anon_in_eqs in *; simpl in *. rewrite map_app, ps_adds_app in Hvalid.
       assert (NoDup (map fst (anon_in_eqs eqs) ++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.

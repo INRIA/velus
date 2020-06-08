@@ -162,6 +162,25 @@ Module Type FULLNORM
     - apply IHG.
   Qed.
 
+  (** normalize_global produces an equivalent global *)
+
+  Fact normalize_global_eq : forall G Hwt,
+      global_iface_eq G (normalize_global G Hwt).
+  Proof.
+    induction G; intros Hwt.
+    - reflexivity.
+    - simpl. apply global_iface_eq_cons; auto.
+  Qed.
+
+  Fact normalize_global_names : forall a G Hwt,
+      Forall (fun n => (n_name a <> n_name n)%type) G ->
+      Forall (fun n => (n_name a <> n_name n)%type) (normalize_global G Hwt).
+  Proof.
+    induction G; intros Hwt Hnames; simpl.
+    - constructor.
+    - inv Hnames.
+      constructor; eauto.
+  Qed.
 End FULLNORM.
 
 Module FullNormFun

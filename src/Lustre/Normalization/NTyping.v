@@ -312,7 +312,7 @@ Module Type NTYPING
       Forall (wt_exp G (vars++(idty ids))) (map (fun '(x, ann) => Evar x ann) ids).
   Proof.
     induction anns; intros ids st st' Hidents Hf;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - inv Hf. destruct a as [ty [cl ?]]. repeat inv_bind.
       rewrite Forall_map.
@@ -331,7 +331,7 @@ Module Type NTYPING
       Forall (wt_exp G (vars++(idty ids)++st_tys st')) (map (fun '(x, ann) => Evar x ann) ids).
   Proof.
     induction anns; intros ids st st' Hidents Hf;
-      simpl in *; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - inv Hf. destruct a as [ty [cl ?]]. repeat inv_bind.
       rewrite Forall_map.
@@ -387,7 +387,7 @@ Module Type NTYPING
   Proof.
     intros G vars k a.
     induction a; intros es' a2s st st' Hmap Hfollows Hforall;
-      simpl in Hmap; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - constructor.
       + rewrite Forall_forall in Hforall.
@@ -430,7 +430,7 @@ Module Type NTYPING
   Proof.
     intros G vars k a.
     induction a; intros es' a2s st st' Hmap Hfollows Hforall;
-      simpl in Hmap; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - apply Forall_app. split; eauto.
       + rewrite Forall_forall in Hforall.
@@ -807,7 +807,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
     intros e e' eqs' st st' Htyp Hnorm.
     specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind; simpl in *...
-    destruct (hd _) as [? [? ?]] eqn:Hann; simpl in *; repeat inv_bind.
+    destruct (hd _) as [? [? ?]] eqn:Hann; repeat inv_bind.
     rewrite typeof_annot in Htyp.
     destruct (annot e); simpl in *; try congruence.
     inv Hann.
@@ -825,7 +825,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
     specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
     - assumption.
-    - destruct (hd _) as [? [? ?]] eqn:Hann; simpl in *; repeat inv_bind.
+    - destruct (hd _) as [? [? ?]] eqn:Hann; repeat inv_bind.
       constructor.
       + apply fresh_ident_In in H.
         apply in_or_app; right.
@@ -913,7 +913,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
   Proof.
    intros G vars k a.
     induction a; intros es' a2s st st' Hmap Hfollows Hforall;
-      simpl in Hmap; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - apply Forall_app. split; eauto.
       + rewrite Forall_forall in Hforall.
@@ -1011,7 +1011,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
     intros G vars e e' eqs' st st' Hwt Hty Hnorm.
     specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind; auto.
-    destruct (hd _) as [? [? ?]] eqn:Hann; simpl in *. repeat inv_bind.
+    destruct (hd _) as [? [? ?]] eqn:Hann; repeat inv_bind.
     repeat constructor; simpl.
     - repeat solve_incl.
     - rewrite app_nil_r. rewrite Hty.
@@ -1035,7 +1035,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_nclock (vars++idty (anon_streams (map snd ids))++st_tys st')) (map snd (map snd ids)).
   Proof with eauto.
     induction anns; intros ids st st' Hidents Hf;
-      simpl in *; repeat inv_bind; simpl; auto.
+      repeat inv_bind; simpl; auto.
     inv Hf. destruct a as [ty [cl ?]].
     destruct o; repeat inv_bind; econstructor.
     - repeat constructor; simpl.
@@ -1071,7 +1071,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_equation G (vars++(st_tys st'))) eqs'.
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hwt Hnorm;
-      simpl in Hnorm; repeat inv_bind.
+      repeat inv_bind.
     - (* const *) constructor.
     - (* var *) constructor.
     - (* unop *) inv Hwt...
@@ -1547,7 +1547,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_equation G (vars++(st_tys st'))) eqs'.
   Proof with eauto.
     induction eqs; intros to_cut eqs' st st' Hwt Hnorm;
-      simpl in Hnorm; repeat inv_bind.
+      repeat inv_bind.
     - constructor.
     - inv Hwt. apply Forall_app. split...
       eapply normalize_equation_wt_eq in H...
@@ -1578,7 +1578,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_clock vars) (st_clocks st').
   Proof.
     induction anns; intros ids st st' Hclocks Hwt Hidents;
-      simpl in Hidents; repeat inv_bind.
+      repeat inv_bind.
     - assumption.
     - inv Hwt. destruct a as [ty [cl ?]]. repeat inv_bind.
       eapply IHanns in H0; eauto.
@@ -1605,7 +1605,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_clock vars) (st_clocks st').
   Proof.
     induction anns; intros ids st st' Hclocks Hwt Hidents;
-      simpl in Hidents; repeat inv_bind.
+      repeat inv_bind.
     - assumption.
     - inv Hwt. destruct a as [ty [cl ?]]. destruct o; repeat inv_bind.
       + eapply IHanns in H0; eauto.
@@ -1630,7 +1630,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof with eauto.
     induction a; intros a1s a2s st st' Hclocks Hmap Hfollows Hf;
-      simpl in Hmap; repeat inv_bind...
+      repeat inv_bind...
     inv Hf.
     specialize (H3 _ _ _ _ Hclocks H).
     eapply IHa in H3...
@@ -1685,7 +1685,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
   intros vars e e' eqs' st st' Hwt Hclocks Hnorm.
     specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
       rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind...
-    destruct (hd _) as [? [? ?]] eqn:Hhd; simpl in Hnorm.
+    destruct (hd _) as [? [? ?]] eqn:Hhd.
     repeat inv_bind.
     eapply fresh_ident_wt_clock in H...
     rewrite clockof_annot in Hwt.
@@ -1701,7 +1701,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hwt Hclocks Hnorm;
-      inv Hwt; simpl in Hnorm; repeat inv_bind; eauto.
+      inv Hwt; repeat inv_bind; eauto.
     - (* fby *)
       eapply map_bind2_wt_clock in H1...
       2: rewrite Forall_forall in *; intros...
@@ -1845,7 +1845,7 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof.
     intros G vars eq to_cut eqs' st st' Hwt Hclocks Hnorm.
-    destruct eq; simpl in Hnorm. repeat inv_bind.
+    destruct eq; repeat inv_bind.
     destruct Hwt.
     eapply normalize_rhss_wt_clock in H; eauto.
   Qed.
@@ -1904,24 +1904,6 @@ Fact normalize_fby_wt_exp : forall G vars e0s es anns es' eqs' st st',
         repeat rewrite map_app; simpl.
         apply incl_appr. apply incl_appl. apply incl_appr.
         repeat rewrite map_map; simpl. reflexivity.
-  Qed.
-
-  Fact normalize_global_eq : forall G Hwt,
-      global_iface_eq G (normalize_global G Hwt).
-  Proof.
-    induction G; intros Hwt.
-    - reflexivity.
-    - simpl. apply global_iface_eq_cons; auto.
-  Qed.
-
-  Fact normalize_global_names : forall a G Hwt,
-      Forall (fun n => (n_name a <> n_name n)%type) G ->
-      Forall (fun n => (n_name a <> n_name n)%type) (normalize_global G Hwt).
-  Proof.
-    induction G; intros Hwt Hnames; simpl.
-    - constructor.
-    - inv Hnames.
-      constructor; eauto.
   Qed.
 
   Lemma normalize_global_wt : forall G Hwl G',

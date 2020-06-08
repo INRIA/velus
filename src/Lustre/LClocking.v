@@ -1831,6 +1831,101 @@ Module Type LCLOCKING
       + destruct Hwcnode as [_ [Hwcnode _]].
         unfold idck in *. rewrite map_app in Hwcnode...
   Qed.
+
+  Corollary wc_exp_clocksof : forall G vars es,
+      wc_global G ->
+      wc_env vars ->
+      Forall (wc_exp G vars) es ->
+      Forall (wc_clock (vars++idck (fresh_ins es))) (clocksof es).
+  Proof with eauto.
+    intros G vars es HwG Hwenv Hwc.
+    induction Hwc; simpl. constructor.
+    - eapply Forall_app. split.
+      + eapply wc_exp_clockof in H...
+        eapply Forall_impl; [|eauto]. intros.
+        eapply wc_clock_incl; [|eauto].
+        unfold fresh_ins, idck. simpl; rewrite map_app.
+        apply incl_appr', incl_appl, incl_refl.
+      + eapply Forall_impl; [|eauto]. intros.
+        eapply wc_clock_incl; [|eauto].
+        unfold fresh_ins, idck. simpl; rewrite map_app.
+        apply incl_appr', incl_appr, incl_refl.
+  Qed.
+
+  Section interface_eq.
+
+    Hint Constructors wc_exp.
+    Fact iface_eq_wc_exp : forall G G' vars e,
+        global_iface_eq G G' ->
+        wc_exp G vars e ->
+        wc_exp G' vars e.
+    Proof with eauto.
+      induction e using exp_ind2; intros Heq Hwt; inv Hwt...
+      - (* fby *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      - (* when *)
+        econstructor...
+        rewrite Forall_forall in *...
+      - (* merge *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      - (* ite *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      - (* app *)
+        assert (Forall (wc_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
+        specialize (Heq f).
+        remember (find_node f G') as find.
+        destruct Heq.
+        + congruence.
+        + inv H6.
+          destruct H1 as [? [? [? ?]]].
+          eapply wc_Eapp with (n:=sy)...
+          * rewrite <- H3...
+          * rewrite <- H4...
+      - (* app (reset) *)
+        assert (Forall (wc_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
+        assert (wc_exp G' vars r) as Hwt' by (rewrite Forall_forall in *; eauto).
+        specialize (Heq f).
+        remember (find_node f G') as find.
+        destruct Heq.
+        + congruence.
+        + inv H6.
+          destruct H1 as [? [? [? ?]]].
+          eapply wc_EappReset with (n:=sy)...
+          * rewrite <- H3...
+          * rewrite <- H4...
+    Qed.
+
+    Fact iface_eq_wc_equation : forall G G' vars equ,
+        global_iface_eq G G' ->
+        wc_equation G vars equ ->
+        wc_equation G' vars equ.
+    Proof.
+      intros G G' vars [xs es] Heq Hwc.
+      simpl in *. destruct Hwc as [Hwc1 [Hwc2 Hwc3]].
+      repeat split; auto.
+      rewrite Forall_forall in *. intros x Hin.
+      eapply iface_eq_wc_exp; eauto.
+    Qed.
+
+    Lemma iface_eq_wc_node : forall G G' n,
+        global_iface_eq G G' ->
+        wc_node G n ->
+        wc_node G' n.
+    Proof.
+      intros G G' n Heq Hwt.
+      destruct Hwt as [? [? [? Hwc]]].
+      repeat split; auto.
+      rewrite Forall_forall in *; intros.
+      eapply iface_eq_wc_equation; eauto.
+    Qed.
+
+  End interface_eq.
 End LCLOCKING.
 
 Module LClockingFun
