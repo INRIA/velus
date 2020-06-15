@@ -12,11 +12,6 @@ Module Type COINDSTREAMS
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op).
 
-  Infix "⋅" := Cons (at level 60, right associativity) : stream_scope.
-  Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.
-  Notation "s # n " := (Str_nth n s) (at level 9) : stream_scope.
-
-  Delimit Scope stream_scope with Stream.
   Open Scope stream_scope.
 
   Lemma const_nth:
@@ -395,16 +390,6 @@ Module Type COINDSTREAMS
         of the coinductive hypothesis for the direct direction, and by coinduction
         on the converse.
    *)
-
-  Fact Str_nth_0:
-    forall {A} (xs: Stream A) x,
-      (x ⋅ xs) # 0 = x.
-  Proof. reflexivity. Qed.
-
-  Fact Str_nth_S:
-    forall {A} (xs: Stream A) x n,
-      (x ⋅ xs) # (S n) = xs # n.
-  Proof. reflexivity. Qed.
 
   Lemma const_spec:
     forall xs c b,

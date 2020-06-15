@@ -3,13 +3,29 @@ From Coq Require Import Streams.
 
 (** Additional streams utilities *)
 
+Delimit Scope stream_scope with Stream.
+Infix "⋅" := Cons (at level 60, right associativity) : stream_scope.
+Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.
+Notation "s # n " := (Str_nth n s) (at level 9) : stream_scope.
+Open Scope stream_scope.
+
+Fact Str_nth_0:
+  forall {A} (xs: Stream A) x,
+    (x ⋅ xs) # 0 = x.
+Proof. reflexivity. Qed.
+
+Fact Str_nth_S:
+  forall {A} (xs: Stream A) x n,
+    (x ⋅ xs) # (S n) = xs # n.
+Proof. reflexivity. Qed.
+
 Section map.
   Context {A B : Type}.
 
   Variable (f : (A -> B)).
 
   Lemma map_Cons : forall a (sa : Stream A),
-      (map f (Cons a sa)) = (Cons (f a) (map f sa)).
+      (map f (a ⋅ sa)) = ((f a) ⋅ (map f sa)).
   Proof.
     intros a sa; simpl.
     rewrite unfold_Stream at 1; reflexivity.
@@ -23,12 +39,12 @@ Section map2.
 
   CoFixpoint map2 (sa : Stream A) (sb : Stream B) : Stream C :=
     match sa, sb with
-    | Cons hda tla, Cons hdb tlb =>
-      Cons (f hda hdb) (map2 tla tlb)
+    | hda ⋅ tla, hdb ⋅ tlb =>
+      (f hda hdb) ⋅ (map2 tla tlb)
     end.
 
   Lemma map2_Cons : forall a b (sa : Stream A) (sb : Stream B),
-      (map2 (Cons a sa) (Cons b sb)) = (Cons (f a b) (map2 sa sb)).
+      (map2 (a ⋅ sa) (b ⋅ sb)) = ((f a b) ⋅ (map2 sa sb)).
   Proof.
     intros a b sa sb; simpl.
     rewrite unfold_Stream at 1; reflexivity.
@@ -77,3 +93,32 @@ Proof.
   rewrite map2_Cons. rewrite map2_Cons.
   constructor; simpl; auto.
 Qed.
+
+Section Forall.
+  Context {A : Type}.
+  Variable (P : A -> Prop).
+
+  CoInductive SForall : Stream A -> Prop :=
+  | Forall_Cons : forall a sa,
+      P a ->
+      SForall sa ->
+      SForall (a ⋅ sa).
+
+  Lemma SForall_forall : forall sa,
+      SForall sa <-> forall n, P (Str_nth n sa).
+  Proof with auto.
+    intros sa.
+    split; intros H.
+    - intro n; revert n sa H.
+      induction n; intros [a sa] Hf; inversion Hf; subst.
+      + rewrite Str_nth_0...
+      + rewrite Str_nth_S...
+    - revert sa H.
+      cofix forall_Forall.
+      intros [a sa] H. constructor.
+      + specialize (H 0). rewrite Str_nth_0 in H...
+      + apply forall_Forall.
+        intro n. specialize (H (S n)).
+        rewrite Str_nth_S in H...
+  Qed.
+End Forall.

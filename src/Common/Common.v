@@ -1833,6 +1833,23 @@ Section OptionReasoning.
         Some (x ++ xs')
     end.
 
+  Lemma option_map_inv_Some : forall (f : A -> B) oa b,
+      option_map f oa = Some b ->
+      exists a, oa = Some a /\ f a = b.
+  Proof.
+    intros f oa b Hmap.
+    unfold option_map in Hmap; destruct oa; try congruence.
+    inv Hmap.
+    exists a; auto.
+  Qed.
+
+  Lemma option_map_inv_None : forall (f : A -> B) oa,
+      option_map f oa = None ->
+      oa = None.
+  Proof.
+    intros f oa Hmap.
+    unfold option_map in Hmap; destruct oa; try congruence.
+  Qed.
 End OptionReasoning.
 
 Definition orel_obind_intro_endo {A} {R: relation A}

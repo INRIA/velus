@@ -64,6 +64,24 @@ Module Env.
       apply xmapi_xmapi.
     Qed.
 
+    Fact xmapi_ext : forall {B} (f g : positive -> A -> B) (m : t A) p,
+        (forall p x, f p x = g p x) ->
+        xmapi f m p = xmapi g m p.
+    Proof.
+      induction m; intros p Heq; simpl; auto.
+      f_equal; auto.
+      destruct o; simpl; f_equal; auto.
+    Qed.
+
+    Lemma map_ext: forall {B} (f g : A -> B) (m: t A),
+        (forall x, f x = g x) ->
+        map f m = map g m.
+    Proof.
+      intros * Heq.
+      unfold map, mapi in *.
+      eapply xmapi_ext; intuition.
+    Qed.
+
     (* fold_left is preferred over fold_right when used in executable code,
        when fold_right is easier to work with in proofs *)
     Definition adds_with {B} (f: B -> A) (xs: list (positive * B)) (m: t A) : t A :=
