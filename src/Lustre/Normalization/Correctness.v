@@ -460,14 +460,13 @@ Module Type CORRECTNESS
     prefix_with_val b true_val (Str.const b false_const).
 
   Lemma fby_ite : forall bs v y0s ys zs,
-      synchronized y0s bs ->
-      synchronized ys bs ->
-      synchronized zs bs ->
+      (synchronized y0s bs \/ synchronized ys bs \/ synchronized zs bs) ->
       fby y0s ys zs ->
       ite (prefix_with_val bs true_val (const_val bs false_val)) y0s (prefix_with_val bs v ys) zs.
   Proof with eauto.
     cofix fby_init_stream_ite.
-    intros [b bs] v y0s ys zs Hsync1 Hsync2 Hsync3 Hfby1.
+    intros [b bs] v y0s ys zs Hsync Hfby1.
+    apply fby_synchronized in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
     specialize (prefix_with_val_fby _ v _ Hsync2) as Hfby2.
     specialize (fby_init_stream_ite bs v).
     destruct b; inv Hsync1; inv Hsync2; inv Hsync3.
@@ -485,13 +484,11 @@ Module Type CORRECTNESS
 
   Corollary fby_init_stream_ite : forall H bs cl v y0s ys zs,
       let b' := interp_clock H bs cl in
-      synchronized y0s b' ->
-      synchronized ys b' ->
-      synchronized zs b' ->
+      (synchronized y0s b' \/ synchronized ys b' \/ synchronized zs b') ->
       fby y0s ys zs ->
       ite (init_stream H bs cl) y0s (prefix_with_val b' v ys) zs.
   Proof.
-    intros H b cl v y0 ys zs; simpl. intros Hsync1 Hsync2 Hsync3 Hfby1.
+    intros H b cl v y0 ys zs; simpl. intros Hsync Hfby1.
     eapply fby_ite in Hfby1; eauto.
     unfold init_stream.
     rewrite const_val_const. rewrite sem_false_const. eassumption.
@@ -782,6 +779,97 @@ Module Type CORRECTNESS
     - apply IHHwc; auto.
   Qed.
 
+  Fact interp_clock_base : forall H b,
+      interp_clock H b Cbase ≡ b.
+  Proof.
+    intros H b.
+    apply ntheq_eqst; intros.
+    rewrite interp_clock_nth; auto.
+  Qed.
+
+  Fact init_var_for_clock_sem : forall G vars b H ck x eqs' st st' reusable,
+      wt_clock vars ck ->
+      st_valid_reuse st (PSP.of_list (map fst vars)) reusable ->
+      hist_st (map fst vars) b H st ->
+      init_var_for_clock ck st = (x, eqs', st') ->
+      (exists H',
+          Env.refines eq H H' /\
+          st_valid_reuse st' (PSP.of_list (map fst vars)) reusable /\
+          hist_st (map fst vars) b H' st' /\
+          sem_var H' x (init_stream H b ck) /\
+          Forall (sem_equation G H' b) eqs').
+  Proof with eauto.
+    intros * Hwt Hvalid Histst Hinit.
+    unfold init_var_for_clock in Hinit.
+    destruct find eqn:Hfind.
+    - (* We already introduced such an equation previously.
+         We will use the hist_st invariant to get some information back about it *)
+      destruct p; inv Hinit.
+      exists H. repeat (split; eauto).
+      destruct Histst as [_ Hvalids]. unfold init_eqs_valids in Hvalids.
+      rewrite Forall_forall in Hvalids.
+      eapply find_some in Hfind. destruct p as [[ty' ck'] isinit].
+      repeat rewrite Bool.andb_true_iff in Hfind. destruct Hfind as [Hin [[Hisinit Hcl] Hty]].
+      rewrite OpAux.type_eqb_eq in Hty.
+      rewrite Clocks.clock_eqb_eq in Hcl. subst.
+      apply Hvalids in Hin. apply Hin...
+    - (* We need to introduce a new init equation to the history and state,
+         and prove its properties *)
+      clear Hfind.
+      destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
+      assert (st_valid_reuse st' (PSP.of_list (map fst vars)) reusable) as Hvalid1 by eauto.
+      remember (Env.add x (init_stream H b ck) H) as H'.
+      assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines in Hident; eauto).
+      assert (hist_st (map fst vars) b H' st') as Histst1.
+      { destruct Histst.
+        constructor.
+        - eapply fresh_ident_dom in Hident...
+        - assert (only_depends_on (map fst vars) ck) as Hdep by (apply wt_clock_only_depends_on in Hwt; auto).
+          assert (~In x (st_ids st)) as Hnin1 by (eapply Facts.fresh_ident_nIn in Hident; eauto).
+          assert (~In x (map fst vars)) as Hnin2.
+          { apply Facts.fresh_ident_In in Hident.
+            eapply st_valid_reuse_st_valid, st_valid_NoDup, NoDup_app_In with (x0:=x) in Hvalid1.
+            rewrite ps_of_list_ps_to_list in Hvalid1...
+            unfold st_ids. repeat simpl_In. exists (x, (bool_type, ck, true))... }
+          assert (~Env.In x H) as Hnin3.
+          { eapply Env.dom_use in H0; rewrite H0.
+            intro contra. apply in_app_or in contra as [?|?]; auto. }
+          unfold init_eqs_valids in *.
+          erewrite fresh_ident_anns...
+          constructor; [intros _; split|].
+          + eapply only_depends_on_incl; [|eauto].
+            apply incl_appl, incl_refl.
+          + rewrite HeqH'. econstructor. eapply Env.add_1; reflexivity.
+            unfold init_stream.
+            rewrite interp_clock_add... reflexivity.
+          + eapply Forall_impl_In; [|eauto].
+            intros [? [[? ?] ?]] Hin H3 Heq; subst.
+            specialize (H3 eq_refl) as [Hdep' Hsem']; split.
+            * eapply only_depends_on_incl; [|eauto].
+               unfold st_ids.
+               apply incl_appr', incl_map, st_follows_incl. repeat solve_st_follows.
+            * eapply sem_var_refines. eapply Env.refines_add; auto.
+               unfold init_stream. rewrite interp_clock_add; auto.
+               intro contra. apply Hdep', in_app_or in contra as [?|?]; auto.
+      }
+      assert (st_valid_reuse st' (PSP.of_list (map fst vars)) reusable) as Hvalid2 by eauto.
+      exists H'. repeat (split; eauto).
+      + rewrite HeqH'. econstructor. 2:reflexivity.
+        apply Env.add_1. reflexivity.
+      + repeat constructor.
+        remember (interp_clock H b ck) as b'.
+        apply Seq with (ss:=[[(init_stream H b ck)]]); simpl; repeat constructor.
+        * eapply Sfby with (s0ss:=[[(const b' true_const)]]) (sss:=[[(const b' false_const)]]); repeat constructor.
+          -- admit.
+          -- admit.
+          -- unfold init_stream.
+             repeat rewrite const_val_const; subst.
+             rewrite <- sem_true_const. apply prefix_with_val_fby.
+             rewrite <- const_val_const. apply const_synchronized.
+        * econstructor. 2:reflexivity.
+          rewrite HeqH'. apply Env.add_1. reflexivity.
+  Admitted.
+
   Fact fby_iteexp_sem : forall G vars b H e0 e ty cl y0 y z e' eqs' st st' reusable,
       wt_nclock vars cl ->
       sem_exp G H b e0 [y0] ->
@@ -800,133 +888,38 @@ Module Type CORRECTNESS
     intros * Hwt Hsem0 Hsem Hfby Hvalid Histst Hiteexp.
     unfold fby_iteexp in Hiteexp. inv Hwt; rename H0 into Hwt.
     destruct (Norm.is_constant e0); repeat inv_bind.
-    - exists H. repeat (split; eauto).
-      econstructor.
-      + constructor; eauto.
-      + constructor; eauto.
-      + repeat constructor. assumption.
-    - unfold init_var_for_clock in H0.
-      destruct (find _ _) eqn:Hfind.
-      + destruct p; inv H0.
-        remember (interp_clock H b ck) as b'.
-        remember (prefix_with_val b' (Op.sem_const (Op.init_type ty)) y) as y'.
-        remember (Env.add x2 y' H) as H'.
-        assert (Env.refines eq H H') by (destruct Histst; eapply fresh_ident_refines in H1; eauto).
-        exists H'. repeat (split; eauto).
-        * destruct Histst. eapply fresh_ident_dom in H1...
-        * eapply fresh_ident_hist_st in H1...
-          rewrite <- HeqH' in H1.
-          destruct H1...
-        * (* We can get data about x back from our hist_st hypothesis *)
-          assert (sem_var H x (init_stream H b ck)).
-          { destruct Histst as [_ Hvalids]. unfold init_eqs_valids in Hvalids.
-            rewrite Forall_forall in Hvalids.
-            eapply find_some in Hfind. destruct p as [[ty' cl'] isinit].
-            repeat rewrite Bool.andb_true_iff in Hfind. destruct Hfind as [Hin [[Hisinit Hcl] Hty]].
-            rewrite OpAux.type_eqb_eq in Hty.
-            rewrite Clocks.clock_eqb_eq in Hcl. subst.
-            eapply Hvalids in Hin. apply Hin... }
-          econstructor...
-          -- constructor. eapply sem_var_refines...
-          -- repeat econstructor...
-             eapply sem_exp_refines...
-          -- repeat constructor...
-             rewrite HeqH'.
-             econstructor; [| reflexivity].
-             apply Env.add_1. reflexivity.
-          -- simpl. repeat constructor.
-             rewrite Heqy'.
-             specialize (fby_init_stream_ite H b ck (sem_const (init_type ty)) y0 y z) as Hinit.
-             simpl in Hinit. rewrite Heqb'. apply Hinit...
-             1,2,3:admit.
-        * repeat constructor.
-          eapply Seq with (ss:=[[y']]); simpl.
-          -- repeat constructor.
-             eapply Sfby with (s0ss:=[[const b' (init_type ty)]]).
-             2:(repeat constructor; eapply sem_exp_refines; eauto).
-             ++ repeat constructor.
-                admit. (* alignment ? *)
-             ++ repeat constructor.
-                rewrite Heqy'.
-                rewrite const_val_const.
-                eapply prefix_with_val_fby.
-                admit. (* alignment ? *)
-          -- repeat constructor.
-             rewrite HeqH'.
-             econstructor; [| reflexivity].
-             apply Env.add_1. reflexivity.
-      + clear Hfind.
-        destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
-        assert (st_valid_reuse x1 (PSP.of_list (map fst vars)) reusable) as Hvalid1 by eauto.
-        remember (Env.add x (init_stream H b ck) H) as H'.
-        assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines in Hident; eauto).
-        assert (hist_st (map fst vars) b H' x1) as Histst1.
-        { destruct Histst.
-          constructor.
-          + eapply fresh_ident_dom in Hident...
-          + assert (only_depends_on (map fst vars) ck) as Hdep by (apply wt_clock_only_depends_on in Hwt; auto).
-            assert (~In x (st_ids st)) as Hnin1 by (eapply Facts.fresh_ident_nIn in Hident; eauto).
-            assert (~In x (map fst vars)) as Hnin2.
-            { apply Facts.fresh_ident_In in Hident.
-              eapply st_valid_reuse_st_valid, st_valid_NoDup, NoDup_app_In with (x0:=x) in Hvalid1.
-              rewrite ps_of_list_ps_to_list in Hvalid1...
-              unfold st_ids. repeat simpl_In. exists (x, (bool_type, ck, true))... }
-            assert (~Env.In x H) as Hnin3.
-            { eapply Env.dom_use in H0; rewrite H0.
-              intro contra. apply in_app_or in contra as [?|?]; auto. }
-            unfold init_eqs_valids in *.
-            erewrite fresh_ident_anns...
-            constructor; [intros _; split|].
-            * eapply only_depends_on_incl; [|eauto].
-              apply incl_appl, incl_refl.
-            * rewrite HeqH'. econstructor. eapply Env.add_1; reflexivity.
-              unfold init_stream.
-              rewrite interp_clock_add... reflexivity.
-            * eapply Forall_impl_In; [|eauto].
-              intros [? [[? ?] ?]] Hin H3 Heq; subst.
-              specialize (H3 eq_refl) as [Hdep' Hsem']; split.
-              -- eapply only_depends_on_incl; [|eauto].
-                 unfold st_ids.
-                 apply incl_appr', incl_map, st_follows_incl. repeat solve_st_follows.
-              -- eapply sem_var_refines. eapply Env.refines_add; auto.
-                 unfold init_stream. rewrite interp_clock_add; auto.
-                 intro contra. apply Hdep', in_app_or in contra as [?|?]; auto.
-        }
-        assert (st_valid_reuse st' (PSP.of_list (map fst vars)) reusable) as Hvalid2 by eauto.
-        remember (interp_clock H b ck) as b'.
-        remember (prefix_with_val b' (Op.sem_const (Op.init_type ty)) y) as y'.
-        remember (Env.add x2 y' H') as H''.
-        assert (Env.refines eq H' H'') as Href2 by (destruct Histst1; eapply fresh_ident_refines in H1; eauto).
-        assert (hist_st (map fst vars) b H'' st') as Histst2 by (rewrite HeqH''; eauto).
-        assert (~Env.E.eq x2 x) as Hneq.
-        { intro contra. eapply Facts.fresh_ident_In in Hident.
-          assert (In x (st_ids x1)).
-          { unfold st_ids, idty. rewrite in_map_iff. exists (x, (Op.bool_type, ck, true)); eauto. }
-          eapply Facts.fresh_ident_nIn in H1. 2:eauto.
-          rewrite contra in H1. congruence. }
-        exists H''. repeat (split; eauto)...
-        * etransitivity...
-        * eapply Site with (s:=(init_stream H b ck)) (ts:=[[y0]]) (fs:=[[y']]).
-          -- constructor. econstructor; [| reflexivity].
-             rewrite HeqH''. rewrite HeqH'.
-             eapply Env.add_2... eapply Env.add_1. reflexivity.
-          -- repeat constructor.
-             eapply sem_exp_refines; [| eauto]. etransitivity...
-          -- repeat constructor. econstructor; [| reflexivity].
-             rewrite HeqH''. eapply Env.add_1. reflexivity.
-          -- simpl. repeat constructor.
-             subst. eapply fby_init_stream_ite...
-             1,2,3:admit.
-        * repeat constructor.
-          -- apply Seq with (ss:=[[y']]); simpl.
-             ++ repeat constructor. admit.
-             ++ repeat constructor. econstructor; [| reflexivity].
-                rewrite HeqH''. apply Env.add_1; reflexivity.
-          -- apply Seq with (ss:=[[init_stream H b ck]]); simpl.
-             ++ repeat constructor. admit.
-             ++ repeat constructor. econstructor; [| reflexivity].
-                rewrite HeqH''. rewrite HeqH'.
-                eapply Env.add_2... eapply Env.add_1. reflexivity.
+    - (* e0 is a constant, no equation is introduced *)
+      exists H. repeat (split; eauto).
+      repeat (econstructor; eauto).
+    - (* e0 is not a constant, we have to introduce an ite equation and (maybe) an init equation *)
+      eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
+      remember (interp_clock H b ck) as b'.
+      remember (prefix_with_val b' (Op.sem_const (Op.init_type ty)) y) as y'.
+      remember (Env.add x2 y' H') as H''.
+      assert (Env.refines eq H' H'') by (destruct Histst1; eapply fresh_ident_refines in H1; eauto).
+      assert (hist_st (map fst vars) b H'' st') as Histst2.
+      { eapply fresh_ident_hist_st in H1; [|eauto|eauto].
+        rewrite HeqH''... }
+      exists H''. repeat (split; eauto); try constructor.
+      + etransitivity; eauto.
+      + eapply Site with (s:=(init_stream H b ck)) (ts:=[[y0]]) (fs:=[[y']]); repeat constructor.
+        * eapply sem_var_refines...
+        * eapply sem_exp_refines; [| eauto]. etransitivity...
+        * econstructor.
+          rewrite HeqH''. eapply Env.add_1. 1,2:reflexivity.
+        * subst. eapply fby_init_stream_ite...
+          admit. (* alignment ? *)
+      + apply Seq with (ss:=[[y']]); repeat constructor.
+        * eapply Sfby with (s0ss:=[[const b' (init_type ty)]]) (sss:=[[y]]); repeat constructor.
+          -- admit. (* alignment ? *)
+          -- eapply sem_exp_refines; [| eauto]. etransitivity...
+          -- rewrite Heqy'.
+             rewrite const_val_const.
+             eapply prefix_with_val_fby.
+             admit. (* alignment ? *)
+        * econstructor.
+          rewrite HeqH''. apply Env.add_1. 1,2:reflexivity.
+      + solve_forall. eapply sem_equation_refines...
   Admitted.
 
   Fact normalize_fby_sem : forall G vars b anns H e0s es s0s ss vs es' eqs' st st' reusable,

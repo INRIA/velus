@@ -356,6 +356,18 @@ Module Type LCLOCKSEMANTICS
         synchronized vs bs ->
         synchronized (absent ⋅ vs) (false ⋅ bs).
 
+  Instance synchronized_Proper:
+    Proper (@EqSt value ==> @EqSt bool ==> iff)
+           synchronized.
+  Proof.
+    intros vs vs' Heq1 bs bs' Heq2.
+    split; revert vs vs' Heq1 bs bs' Heq2;
+      cofix synchronized_Proper;
+      intros [v vs] [v' vs'] Heq1 [b bs] [b' bs'] Heq2 H;
+      inv Heq1; inv Heq2; simpl in *; subst; inv H;
+        constructor; eauto.
+  Qed.
+
   Lemma synchronized_spec : forall vs bs,
       synchronized vs bs <->
       (forall n, (exists v, bs # n = true /\ vs # n = present v)
@@ -389,6 +401,110 @@ Module Type LCLOCKSEMANTICS
     - right...
   Qed.
 
+  (** fby keeps the synchronization *)
+
+  Local Ltac fby1_synchronized :=
+    cofix fby1_synchronized;
+    intros [b bs] v [x xs] [y ys] [z zs] Hfby Hsync;
+    inv Hfby; inv Hsync; constructor; eauto.
+
+  Fact fby1_synchronized12 : forall bs v xs ys zs,
+      fby1 v xs ys zs ->
+      synchronized xs bs ->
+      synchronized ys bs.
+  Proof. fby1_synchronized. Qed.
+  Hint Resolve fby1_synchronized12.
+
+  Fact fby1_synchronized13 : forall bs v xs ys zs,
+      fby1 v xs ys zs ->
+      synchronized xs bs ->
+      synchronized zs bs.
+  Proof. fby1_synchronized. Qed.
+  Hint Resolve fby1_synchronized13.
+
+  Fact fby1_synchronized21 : forall bs v xs ys zs,
+      fby1 v xs ys zs ->
+      synchronized ys bs ->
+      synchronized xs bs.
+  Proof. fby1_synchronized. Qed.
+  Hint Resolve fby1_synchronized21.
+
+  Fact fby1_synchronized23 : forall bs v xs ys zs,
+      fby1 v xs ys zs ->
+      synchronized ys bs ->
+      synchronized zs bs.
+  Proof. fby1_synchronized. Qed.
+  Hint Resolve fby1_synchronized23.
+
+  Fact fby1_synchronized31 : forall bs v xs ys zs,
+      fby1 v xs ys zs ->
+      synchronized zs bs ->
+      synchronized xs bs.
+  Proof. fby1_synchronized. Qed.
+  Hint Resolve fby1_synchronized31.
+
+  Fact fby1_synchronized32 : forall bs v xs ys zs,
+      fby1 v xs ys zs ->
+      synchronized zs bs ->
+      synchronized ys bs.
+  Proof. fby1_synchronized. Qed.
+  Hint Resolve fby1_synchronized32.
+
+  Local Ltac fby_synchronized :=
+    cofix fby_synchronized;
+    intros [b bs] [x xs] [y ys] [z zs] Hfby Hsync;
+    inv Hfby; inv Hsync; constructor; eauto.
+
+  Fact fby_synchronized12 : forall bs xs ys zs,
+      fby xs ys zs ->
+      synchronized xs bs ->
+      synchronized ys bs.
+  Proof. fby_synchronized. Qed.
+  Hint Resolve fby_synchronized12.
+
+  Fact fby_synchronized13 : forall bs xs ys zs,
+      fby xs ys zs ->
+      synchronized xs bs ->
+      synchronized zs bs.
+  Proof. fby_synchronized. Qed.
+  Hint Resolve fby_synchronized13.
+
+  Fact fby_synchronized21 : forall bs xs ys zs,
+      fby xs ys zs ->
+      synchronized ys bs ->
+      synchronized xs bs.
+  Proof. fby_synchronized. Qed.
+  Hint Resolve fby_synchronized21.
+
+  Fact fby_synchronized23 : forall bs xs ys zs,
+      fby xs ys zs ->
+      synchronized ys bs ->
+      synchronized zs bs.
+  Proof. fby_synchronized. Qed.
+  Hint Resolve fby_synchronized23.
+
+  Fact fby_synchronized31 : forall bs xs ys zs,
+      fby xs ys zs ->
+      synchronized zs bs ->
+      synchronized xs bs.
+  Proof. fby_synchronized. Qed.
+  Hint Resolve fby_synchronized31.
+
+  Fact fby_synchronized32 : forall bs xs ys zs,
+      fby xs ys zs ->
+      synchronized zs bs ->
+      synchronized ys bs.
+  Proof. fby_synchronized. Qed.
+  Hint Resolve fby_synchronized32.
+
+  Lemma fby_synchronized : forall bs xs ys zs,
+      fby xs ys zs ->
+      (synchronized xs bs \/ synchronized ys bs \/ synchronized zs bs) ->
+      (synchronized xs bs /\ synchronized ys bs /\ synchronized zs bs).
+  Proof with eauto.
+    intros bs xs ys zs Hfby [Hsync|[Hsync|Hsync]];
+      repeat split; eauto.
+  Qed.
 End LCLOCKSEMANTICS.
 
 
