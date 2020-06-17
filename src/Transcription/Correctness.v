@@ -152,7 +152,7 @@ Module Type CORRECTNESS
       now inv H5.
   Qed.
 
-    Lemma sem_lexp_step :
+  Lemma sem_lexp_step :
     forall G H b e e' v s,
       to_lexp e = OK e' ->
       LS.sem_exp G H b e [v ⋅ s] ->
@@ -362,12 +362,13 @@ Module Type CORRECTNESS
         rewrite app_length. rewrite app_length.
         f_equal. apply H5; auto.
         apply IHets; auto.
-    - inv Hsem. inv H9. inv Hwt. rewrite H2 in H11. inv H11.
-      simpl. rewrite map_length.
-      repeat (take (Forall2 _ _ _) and apply Forall2_length in it).
-      unfold LS.idents in *. repeat rewrite map_length in *.
-      congruence.
-    - inv Hsem. specialize (H12 0). inv H12. inv Hwt. rewrite H2 in H14. inv H14.
+    - inv Hsem.
+      + inv H11. inv Hwt. rewrite H2 in H11. inv H11.
+        simpl. rewrite map_length.
+        repeat (take (Forall2 _ _ _) and apply Forall2_length in it).
+        unfold LS.idents in *. repeat rewrite map_length in *.
+        congruence.
+      + specialize (H12 0). inv H12. inv Hwt. rewrite H2 in H14. inv H14.
       simpl. rewrite map_length.
       repeat (take (Forall2 _ _ _) and apply Forall2_length in it).
       unfold LS.idents in *. repeat rewrite map_length in *.
@@ -2000,13 +2001,16 @@ Module Type CORRECTNESS
 
   (* induction hypothesis over the program *)
   Definition sc_nodes (G : L.global) : Prop :=
-    forall H f n xs os,
+    forall H f n xs vs os,
       LS.sem_node G f xs os ->
       L.find_node f G = Some n ->
       Forall2 (LS.sem_var H) (LS.idents (L.n_in n)) xs ->
+      Forall2 (LS.sem_var H) (LS.idents (L.n_vars n)) vs ->
       Forall2 (LS.sem_var H) (LS.idents (L.n_out n)) os ->
       Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc))
               (idck (L.n_in n)) (map abstract_clock xs) ->
+      Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc))
+              (idck (L.n_vars n)) (map abstract_clock vs) /\
       Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc))
               (idck (L.n_out n)) (map abstract_clock os).
   Hint Unfold sc_nodes.

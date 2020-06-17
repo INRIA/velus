@@ -88,16 +88,6 @@ Module Type TRCLOCKING
     inv H. tauto. eauto using In_InMembers.
   Qed.
 
-  (* TODO: move to CommonList *)
-  Lemma NoDup_app_weaken' :
-    forall {A} (xs: list A) ys,
-      NoDup (xs ++ ys) ->
-      NoDup ys.
-  Proof.
-    induction xs; simpl; auto.
-    intros ? Hdup. inv Hdup. auto.
-  Qed.
-
   Lemma envs_eq_in :
     forall env cenv x ck,
       envs_eq env cenv ->
@@ -128,17 +118,19 @@ Module Type TRCLOCKING
     intros * Hto Hwc. revert dependent e'.
     induction e using L.exp_ind2; intros; inv Hto; inv Hwc.
     - exists Cbase. split; constructor.
-    - simpl. unfold L.ckstream, stripname. simpl. esplit; split; eauto.
+    - simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       monadInv H0. now constructor.
-    - simpl. unfold L.ckstream, stripname. simpl. esplit; split; eauto.
+    - simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
+      monadInv H0. now constructor.
+    - simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       monadInv H0. constructor. apply IHe in EQ as (?&?&?); eauto.
       congruence.
-    - simpl. unfold L.ckstream, stripname. simpl. esplit; split; eauto.
+    - simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       monadInv H0. constructor.
       + apply IHe1 in EQ as (?&?&?); eauto. congruence.
       + apply IHe2 in EQ1 as (?&?&?); eauto. congruence.
     - cases.
-      simpl. unfold L.ckstream, stripname. simpl. esplit; split; eauto.
+      simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       take (_ = OK e') and monadInv it. simpl_Foralls.
       constructor; auto.
       take (_ -> _) and apply it in EQ as (?& Heq &?); auto.
@@ -169,7 +161,7 @@ Module Type TRCLOCKING
                 eauto); eauto using wc_exp_cexp.
     - cases. monadInv Hto.
       simpl_Foralls.
-      simpl. unfold L.ckstream, stripname. simpl. esplit; split; eauto.
+      simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       inv Hwc. simpl_Foralls. constructor; simpl; auto.
       + take (_ -> _) and apply it in EQ as (?& Heq &?); auto.
         unfold L.clocksof in *. simpl in *. rewrite app_nil_r in *.
@@ -179,7 +171,7 @@ Module Type TRCLOCKING
         rewrite Heq in *. simpl_Foralls. congruence.
     - cases. monadInv Hto.
       simpl_Foralls.
-      simpl. unfold L.ckstream, stripname. simpl. esplit; split; eauto.
+      simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       inv Hwc. simpl_Foralls. constructor; simpl; auto.
       + eapply wc_lexp in EQ as (?& Heq &?); eauto. congruence.
       + take (_ -> _) and apply it in EQ1 as (?& Heq &?); auto.
@@ -217,7 +209,7 @@ Module Type TRCLOCKING
       LC.wc_equation G vars e ->
       NLC.wc_equation P vars e'.
   Proof.
-    intros ????? [xs [|? []]] e' Hg Htr Henvs Hwcg (Hwc & Hwf & Hlift & Hf2);
+    intros ????? [xs [|? []]] e' Hg Htr Henvs Hwcg (Hwc & Hlift & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *; simpl_Foralls; try monadInv Htr.
     - constructor; eauto using envs_eq_in.
@@ -226,16 +218,19 @@ Module Type TRCLOCKING
       repeat constructor.
     - constructor; eauto using envs_eq_in.
       monadInv EQ1. destruct a. inv EQ0.
-      unfold L.ckstream, stripname in *.
-      take (LC.wc_exp _ _ _) and inv it.  simpl in *. subst.
-      eapply envs_eq_find in Henvs; eauto.
-      pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
-      now repeat constructor.
+      unfold L.clock_of_nclock, stripname in *; simpl in *.
+      take (LC.wc_exp _ _ _) and inv it; simpl in *; subst.
+      + eapply envs_eq_find with (x:=i) in Henvs; eauto.
+        rewrite EQ in Henvs; inv Henvs.
+        now repeat constructor.
+      + eapply envs_eq_find with (x:=x) in Henvs; eauto.
+        rewrite EQ in Henvs; inv Henvs.
+        now repeat constructor.
     - constructor; eauto using envs_eq_in. destruct a.
       monadInv EQ1. monadInv EQ0.
       take (LC.wc_exp _ _ _) and inv it.
       eapply wc_lexp in EQ1 as (?&?&?); eauto.
-      unfold L.ckstream, stripname in *. simpl in *.
+      unfold L.clock_of_nclock, stripname in *. simpl in *.
       eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
       repeat constructor.
@@ -245,7 +240,7 @@ Module Type TRCLOCKING
       take (LC.wc_exp _ _ _) and inv it.
       eapply wc_lexp in EQ0 as (?&?&?); eauto.
       eapply wc_lexp in EQ1 as (?&?&?); eauto.
-      unfold L.ckstream, stripname in *. simpl in *.
+      unfold L.clock_of_nclock, stripname in *. simpl in *.
       eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
       repeat constructor; congruence.
@@ -263,7 +258,7 @@ Module Type TRCLOCKING
       constructor; eauto using envs_eq_in. constructor.
       take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
       eapply wc_lexp in EQ1 as (?& Heq &?); eauto.
-      unfold L.ckstream, stripname in *. simpl in *.
+      unfold L.clock_of_nclock, stripname in *. simpl in *.
       eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
       constructor; auto.
@@ -272,7 +267,7 @@ Module Type TRCLOCKING
     - cases; try monadInv Htr; monadInv EQ1.
       constructor; eauto using envs_eq_in.
       take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
-      unfold L.ckstream, stripname in *. simpl in *. rewrite app_nil_r in *.
+      unfold L.clock_of_nclock, stripname in *. simpl in *. rewrite app_nil_r in *.
       eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
       constructor; auto.
@@ -283,7 +278,7 @@ Module Type TRCLOCKING
     - cases; try monadInv Htr; monadInv EQ1.
       constructor; eauto using envs_eq_in.
       take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
-      unfold L.ckstream, stripname in *. simpl in *. rewrite app_nil_r in *.
+      unfold L.clock_of_nclock, stripname in *. simpl in *. rewrite app_nil_r in *.
       eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
       constructor; auto.
@@ -294,7 +289,7 @@ Module Type TRCLOCKING
         rewrite Heq in *. now simpl_Foralls.
     - cases; monadInv Htr;
         take (LC.wc_exp _ _ _) and inversion_clear it
-        as [| | | | | | | |???? bck sub Wce ? WIi WIo|?????? bck sub Wce ? WIi WIo];
+        as [| | | | | | | | |???? bck sub Wce ? WIi WIo|?????? bck sub Wce ? WIi WIo];
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and
@@ -320,7 +315,6 @@ Module Type TRCLOCKING
           pose proof (L.n_nodup n) as Hdup.
           remember (L.n_in n) as ins. clear Heqins.
           revert dependent ins.
-          take (LC.WellFormedAnon _ _) and clear it.
           revert dependent x.
           induction l as [| e].
           { intros. inv EQ. simpl in WIi. inv WIi.
@@ -348,7 +342,7 @@ Module Type TRCLOCKING
               rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
               apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
               eapply Hin, In_InMembers.
-              repeat (apply in_or_app; right; eauto).
+              repeat rewrite in_app_iff. right; right; left; eauto.
               apply Forall2_length in Hf2. apply Forall2_length in WIo.
               unfold idents, idck in *. repeat rewrite map_length in *.
               congruence.
@@ -378,8 +372,8 @@ Module Type TRCLOCKING
                  esplit; split; eauto. now simpl. }
              apply NoDup_NoDupMembers_combine.
              pose proof (L.n_nodup n) as Hdup.
-             rewrite fst_NoDupMembers, app_assoc, map_app in Hdup.
-             eauto using  NoDup_app_weaken'.
+             rewrite fst_NoDupMembers in Hdup. repeat rewrite map_app in Hdup.
+             eauto using NoDup_app_l, NoDup_app_r.
           -- rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
              apply Forall2_swap_args in Hf2.
              pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hf2) as Ho.
@@ -406,7 +400,6 @@ Module Type TRCLOCKING
           pose proof (L.n_nodup n) as Hdup.
           remember (L.n_in n) as ins. clear Heqins.
           revert dependent ins.
-          take (LC.WellFormedAnon _ _) and clear it.
           revert dependent x.
           induction l as [| e].
           { intros. inv EQ. simpl in WIi. inv WIi.
@@ -434,7 +427,7 @@ Module Type TRCLOCKING
               rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
               apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
               eapply Hin, In_InMembers.
-              repeat (apply in_or_app; right; eauto).
+              repeat rewrite in_app_iff. right; right; left; eauto.
               apply Forall2_length in Hf2. apply Forall2_length in WIo.
               unfold idents, idck in *. repeat rewrite map_length in *.
               congruence.
@@ -464,8 +457,8 @@ Module Type TRCLOCKING
                  esplit; split; eauto. now simpl. }
              apply NoDup_NoDupMembers_combine.
              pose proof (L.n_nodup n) as Hdup.
-             rewrite fst_NoDupMembers, app_assoc, map_app in Hdup.
-             eauto using  NoDup_app_weaken'.
+             rewrite fst_NoDupMembers in Hdup. repeat rewrite map_app in Hdup.
+             eauto using NoDup_app_l, NoDup_app_r.
           -- rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
              apply Forall2_swap_args in Hf2.
              pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hf2) as Ho.

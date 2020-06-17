@@ -11,6 +11,7 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import CoreExpr.CETyping.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLTyping.
+From Velus Require Import Lustre.Normalization.FullNorm.
 
 From Coq Require Import String.
 From Coq Require Import Permutation.
@@ -28,14 +29,16 @@ Module Type TRTYPING
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
        (L           : LSYNTAX  Ids Op)
-       (Import CE   : CESYNTAX     Op)
-       (NL          : NLSYNTAX Ids Op CE)
-       (Import TR   : TRANSCRIPTION Ids Op OpAux L CE NL)
-       (Ord         : NLORDERED Ids Op CE     NL)
        (LT          : LTYPING  Ids Op L)
+       (FN          : FULLNORM Ids Op OpAux L)
+       (Import CE   : CESYNTAX     Op)
        (CET         : CETYPING Ids Op CE)
-       (NLT         : NLTYPING  Ids Op CE NL Ord CET).
+       (NL          : NLSYNTAX Ids Op CE)
+       (Ord         : NLORDERED Ids Op CE     NL)
+       (NLT         : NLTYPING  Ids Op CE NL Ord CET)
+       (Import TR   : TRANSCRIPTION Ids Op OpAux L CE NL).
 
+  Module FNS := FN.Spec.
 
   Lemma wt_clock_l_ce :
     forall vars ck,
@@ -252,50 +255,31 @@ Module Type TRTYPING
     apply Exists_exists in Hfr as (?& Hin & Hfr).
     eapply Forall_forall in Hin; eauto.
     eapply wt_clock_free in Hin; eauto.
- Qed.
+  Qed.
 
   Lemma wt_clockof :
     forall G vars e,
+      FNS.normalized_cexp e ->
       LT.wt_exp G vars e ->
       Forall (LT.wt_clock vars) (L.clockof e).
   Proof.
-    induction e using L.exp_ind2; simpl; intro Hwt; inv Hwt.
-    - repeat constructor.
-    - repeat constructor. unfold L.ckstream, stripname. simpl.
-      now take (LT.wt_nclock _ _) and inv it.
-    - repeat constructor. unfold L.ckstream, stripname. simpl.
-      now take (LT.wt_nclock _ _) and inv it.
-    - repeat constructor. unfold L.ckstream, stripname. simpl.
-      now take (LT.wt_nclock _ _) and inv it.
-    - rewrite Forall_map. rewrite Forall_map in H8.
-      eapply Forall_impl_In; eauto. intros * Hin ?.
-      eapply Forall_forall in Hin; eauto. simpl in Hin.
-      unfold L.ckstream, stripname. simpl in *. now inv Hin.
-    - unfold L.ckstream, stripname. simpl in *.
-      take (LT.wt_nclock _ _) and rename it into Hn. clear - Hn.
-      induction (L.typesof es); simpl; auto. inv Hn. constructor; auto.
-    - unfold L.ckstream, stripname. simpl in *.
-      take (LT.wt_nclock _ _) and rename it into Hn. clear - Hn.
-      induction (L.typesof ets); simpl; auto. inv Hn. constructor; auto.
-    - unfold L.ckstream, stripname. simpl in *.
-      take (LT.wt_nclock _ _) and rename it into Hn. clear - Hn.
-      induction (L.typesof ets); simpl; auto. inv Hn. constructor; auto.
-    - eapply Forall_map, Forall_impl_In; eauto. simpl. intros * ? Hn.
-      unfold L.ckstream, stripname. now inv Hn.
-    - eapply Forall_map, Forall_impl_In; eauto. simpl. intros * ? Hn.
-      unfold L.ckstream, stripname. now inv Hn.
+    intros * Hnormed Hwt.
+    eapply LT.wt_exp_clockof in Hwt.
+    eapply FNS.normalized_cexp_no_fresh in Hnormed.
+    rewrite Hnormed, app_nil_r in Hwt; auto.
   Qed.
 
   Lemma wt_equation :
-    forall G P env envo vars e e',
+    forall G P to_cut env envo vars e e',
       to_global G = OK P ->
       to_equation env envo e = OK e' ->
       (forall i ck, find_clock env i = OK ck -> LT.wt_clock vars ck) ->
       NoDup (fst e) ->
+      FNS.normalized_equation to_cut e ->
       LT.wt_equation G vars e ->
       NLT.wt_equation P vars e'.
   Proof.
-    intros ????? [xs [|? []]] e' Hg Htr Henvs Hdup (Hwt & Hf2);
+    intros ?????? [xs [|? []]] e' Hg Htr Henvs Hdup Hnormed (Hwt & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *.
     - cases. monadInv Htr. inv Hf2. constructor; eauto using wt_clock_l_ce.
@@ -371,10 +355,12 @@ Module Type TRTYPING
           rewrite H1 in H5. inv H5.
           constructor; eauto.
         * apply wt_clock_l_ce, wt_find_base_clock.
-          take (Forall (LT.wt_exp _ _) _) and clear - it.
-          induction l; simpl; auto. inv it. apply Forall_app.
-          eauto using wt_clockof.
-        * clear H5. revert dependent l. induction x0; intros; auto.
+          inv Hnormed; [|inv H8; inv H1].
+          clear H5 H6 H7 EQ.
+          induction l; simpl; auto. inv H3; inv H8. apply Forall_app.
+          split; auto.
+          apply wt_clockof in H5; auto.
+        * clear H5 H7 Hnormed. revert dependent l. induction x0; intros; auto.
           inv EQ. simpl_Foralls.
           constructor; eauto using wt_lexp.
       + cases; monadInv Htr.
@@ -397,10 +383,12 @@ Module Type TRTYPING
           rewrite H1 in H5. inv H5.
           constructor; eauto.
         * apply wt_clock_l_ce, wt_find_base_clock.
-          take (Forall (LT.wt_exp _ _) _) and clear - it.
-          induction l; simpl; auto. inv it. apply Forall_app.
-          eauto using wt_clockof.
-        * clear H5. revert dependent l. induction x0; intros; auto.
+          inv Hnormed; [|inv H10; inv H1].
+          clear H5 H6 H7 EQ.
+          induction l; simpl; auto. inv H3; inv H10. apply Forall_app.
+          split; auto.
+          apply wt_clockof in H5; auto.
+        * clear H5 H7 Hnormed. revert dependent l. induction x0; intros; auto.
           inv EQ. simpl_Foralls.
           constructor; eauto using wt_lexp.
         * take (LT.wt_exp _ _ _) and inv it;
@@ -445,17 +433,19 @@ Module Type TRTYPING
     forall G P n n',
       to_node n = OK n' ->
       to_global G = OK P ->
+      FNS.normalized_node n ->
       LT.wt_node G n ->
       NLT.wt_node P n'.
   Proof.
-    intros * Htr Hg (Wti& Wto & Wtv & Hwt).
+    intros * Htr Hg Hnormed (Wti& Wto & Wtv & Hwt).
     tonodeInv Htr. unfold NLT.wt_node. simpl.
     pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
     revert dependent x.
+    unfold FNS.normalized_node in Hnormed.
     induction (L.n_eqs n); intros; monadInv Hmmap.
     - now take (Coqlib.list_forall2 _ _ _) and inv it.
     - take (Coqlib.list_forall2 _ _ _) and inv it.
-      inv Hwt. apply mmap_cons3 in Hmmap as [].
+      inv Hwt. inv Hnormed. apply mmap_cons3 in Hmmap as [].
       simpl in Hdup. apply NoDup_app'_iff in Hdup as (?&?&?).
       constructor; auto. eapply wt_equation; eauto.
 
@@ -478,13 +468,14 @@ Module Type TRTYPING
 
   Lemma wt_transcription :
     forall G P,
+      FNS.normalized_global G ->
       LT.wt_global G ->
       to_global G = OK P ->
       NLT.wt_global P.
   Proof.
-    induction G as [| n]. inversion 2. constructor.
-    intros * Hwt Htr. monadInv Htr. inversion H as [|?? n' ?? Hn]. subst.
-    inversion_clear Hwt as [|???? Hf ].
+    induction G as [| n]. inversion 3. constructor.
+    intros * Hnormed Hwt Htr. monadInv Htr. inversion H as [|?? n' ?? Hn]. subst.
+    inversion_clear Hwt as [|???? Hf ]. inv Hnormed.
     apply mmap_cons3 in Htr as [].
     constructor; eauto using wt_node.
     rewrite (to_node_name n n') in Hf; auto.
@@ -499,13 +490,14 @@ Module TrTypingFun
        (Op   : OPERATORS)
        (OpAux: OPERATORS_AUX Op)
        (L    : LSYNTAX  Ids Op)
-       (CE   : CESYNTAX     Op)
-       (NL   : NLSYNTAX Ids Op CE)
-       (TR   : TRANSCRIPTION Ids Op OpAux L CE NL)
-       (Ord  : NLORDERED Ids Op CE     NL)
        (LT   : LTYPING  Ids Op L)
+       (FN          : FULLNORM Ids Op OpAux L)
+       (CE   : CESYNTAX     Op)
        (CET  : CETYPING Ids Op CE)
+       (NL   : NLSYNTAX Ids Op CE)
+       (Ord  : NLORDERED Ids Op CE     NL)
        (NLT  : NLTYPING  Ids Op CE NL Ord CET)
-<: TRTYPING Ids Op OpAux L CE NL TR Ord LT CET NLT.
-  Include TRTYPING Ids Op OpAux L CE NL TR Ord LT CET NLT.
+       (TR   : TRANSCRIPTION Ids Op OpAux L CE NL)
+<: TRTYPING Ids Op OpAux L LT FN CE CET NL Ord NLT TR.
+  Include TRTYPING Ids Op OpAux L LT FN CE CET NL Ord NLT TR.
 End TrTypingFun.

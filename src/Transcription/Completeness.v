@@ -12,7 +12,7 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics.
-From Velus Require Import Lustre.Normalization.LNormalization.
+From Velus Require Import Lustre.Normalization.FullNorm.
 
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
@@ -24,14 +24,12 @@ Module Type COMPLETENESS
        (Import OpAux : OPERATORS_AUX Op)
        (Str  : COINDSTREAMS Op OpAux)
        (Import LSyn : LSYNTAX Ids Op)
-       (LTyp : LTYPING Ids Op LSyn)
-       (LClo : LCLOCKING Ids Op LSyn)
-       (LOrd : LORDERED Ids Op LSyn)
-       (LSem : LSEMANTICS Ids Op OpAux LSyn LOrd Str)
-       (Import LNorm : LNORMALIZATION Ids Op OpAux Str LSyn LTyp LClo LOrd LSem)
+       (Import Norm : FULLNORM Ids Op OpAux LSyn)
        (Import CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (Import TR : TRANSCRIPTION Ids Op OpAux LSyn CE NL).
+
+  Import Norm.
 
   Fact to_constant_complete : forall c,
     is_constant c ->
@@ -52,16 +50,16 @@ Module Type COMPLETENESS
     - (* const *) eexists; simpl...
     - (* var *) eexists; simpl...
     - (* unop *)
-      apply IHe in H0. destruct H0 as [e' He'].
+      apply IHe in H0 as [e' He'].
       eexists; simpl.
       rewrite He'; simpl...
     - (* binop *)
-      apply IHe1 in H1. destruct H1 as [e1' He1].
-      apply IHe2 in H4. destruct H4 as [e2' He2].
+      apply IHe1 in H1 as [e1' He1].
+      apply IHe2 in H4 as [e2' He2].
       eexists; simpl.
       rewrite He1. rewrite He2. simpl...
     - (* when *)
-      inv H. apply H3 in H1. destruct H1 as [e' He'].
+      inv H. apply H3 in H1 as [e' He'].
       eexists; simpl.
       rewrite He'. simpl...
   Qed.
@@ -73,8 +71,8 @@ Module Type COMPLETENESS
     intros es Hf.
     induction Hf.
     - eexists; simpl...
-    - apply to_lexp_complete in H.
-      destruct H as [e' He']. destruct IHHf as [es' Hes'].
+    - apply to_lexp_complete in H as [e' He'].
+      destruct IHHf as [es' Hes'].
       eexists; simpl.
       rewrite He'; rewrite Hes'. simpl...
   Qed.
@@ -85,23 +83,23 @@ Module Type COMPLETENESS
   Proof with eauto.
     intros e Hnorm.
     induction e using exp_ind2; inv Hnorm;
-      try (eapply to_lexp_complete in H; destruct H as [e' He'];
+      try (eapply to_lexp_complete in H as [e' He'];
            exists (Eexp e'); unfold to_cexp; rewrite He'; simpl; eauto);
       try (solve [inv H1]).
     - (* when *)
-      eapply to_lexp_complete in H0. destruct H0 as [e' He'].
+      eapply to_lexp_complete in H0 as [e' He'].
       exists (Eexp e'). unfold to_cexp. rewrite He'; simpl...
     - (* merge *)
       inv H. inv H0.
-      apply H4 in H3. destruct H3 as [et' Het'].
-      apply H2 in H6. destruct H6 as [ef' Hef'].
+      apply H4 in H3 as [et' Het'].
+      apply H2 in H6 as [ef' Hef'].
       eexists. simpl.
       rewrite Het'. rewrite Hef'. simpl...
     - (* ite *)
       inv H. inv H0.
-      apply to_lexp_complete in H4. destruct H4 as [e' He'].
-      apply H3 in H6. destruct H6 as [et' Het'].
-      apply H2 in H7. destruct H7 as [ef' Hef'].
+      apply to_lexp_complete in H4 as [e' He'].
+      apply H3 in H6 as [et' Het'].
+      apply H2 in H7 as [ef' Hef'].
       eexists; simpl.
       rewrite He'. rewrite Het'. rewrite Hef'. simpl...
   Qed.
@@ -114,13 +112,13 @@ Module Type COMPLETENESS
   Proof with eauto.
     intros xs es out env envo Hnorm Hfind Henvo.
     inv Hnorm.
-    - apply mmap_to_lexp_complete in H1. destruct H1 as [es' Hes'].
+    - apply mmap_to_lexp_complete in H1 as [es' Hes'].
       eexists; simpl. rewrite Hes'; simpl...
-    - apply mmap_to_lexp_complete in H1. destruct H1 as [es' Hes'].
+    - apply mmap_to_lexp_complete in H1 as [es' Hes'].
       destruct cl.
       eexists; simpl. rewrite Hes'. simpl...
-    - apply to_constant_complete in H3. destruct H3 as [e0' He0'].
-      apply to_lexp_complete in H4. destruct H4 as [e' He'].
+    - apply to_constant_complete in H3 as [e0' He0'].
+      apply to_lexp_complete in H4 as [e' He'].
       inv Hfind. destruct H2 as [cl Hcl].
       eexists; simpl.
       rewrite He0'. rewrite He'. rewrite Hcl.
@@ -219,13 +217,10 @@ Module CompletenessFun
        (OpAux : OPERATORS_AUX Op)
        (Str  : COINDSTREAMS Op OpAux)
        (LSyn : LSYNTAX Ids Op)
-       (LTyp : LTYPING Ids Op LSyn)
-       (LOrd : LORDERED Ids Op LSyn)
-       (LSem : LSEMANTICS Ids Op OpAux LSyn LOrd Str)
-       (LNorm : LNORMALIZATION Ids Op OpAux Str LSyn LTyp LOrd LSem)
+       (Norm : FULLNORM Ids Op OpAux LSyn)
        (CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (TR : TRANSCRIPTION Ids Op OpAux LSyn CE NL)
-       <: COMPLETENESS Ids Op OpAux Str LSyn LTyp LOrd LSem LNorm CE NL TR.
-  Include COMPLETENESS Ids Op OpAux Str LSyn LTyp LOrd LSem LNorm CE NL TR.
+       <: COMPLETENESS Ids Op OpAux Str LSyn Norm CE NL TR.
+  Include COMPLETENESS Ids Op OpAux Str LSyn Norm CE NL TR.
 End CompletenessFun.
