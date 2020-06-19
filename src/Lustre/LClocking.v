@@ -1691,6 +1691,22 @@ Module Type LCLOCKING
     unfold fresh_ins. apply concat_map_incl; auto.
   Qed.
 
+  Fact anon_in_incl : forall e es,
+      In e es ->
+      incl (anon_in e) (anon_ins es).
+  Proof.
+    intros e es Hin.
+    unfold anon_ins. apply concat_map_incl; auto.
+  Qed.
+
+  Fact anon_in_eq_incl : forall e es,
+      In e es ->
+      incl (anon_in_eq e) (anon_in_eqs es).
+  Proof.
+    intros e es Hin.
+    unfold anon_in_eqs. apply concat_map_incl; auto.
+  Qed.
+
   Lemma wc_exp_clockof : forall G vars e,
       wc_global G ->
       wc_env vars ->
@@ -1926,6 +1942,93 @@ Module Type LCLOCKING
     Qed.
 
   End interface_eq.
+
+  (** ** wc implies wl *)
+
+  Hint Constructors wl_exp.
+  Fact wc_exp_wl_exp : forall G vars e,
+      wc_exp G vars e ->
+      wl_exp G e.
+  Proof with eauto.
+    induction e using exp_ind2; intro Hwt; inv Hwt; auto.
+    - (* unop *)
+      constructor...
+      rewrite <- length_clockof_numstreams. rewrite H3. reflexivity.
+    - (* binop *)
+      constructor...
+      + rewrite <- length_clockof_numstreams. rewrite H5. reflexivity.
+      + rewrite <- length_clockof_numstreams. rewrite H6. reflexivity.
+    - (* fby *)
+      constructor; rewrite Forall_forall in *...
+      + apply Forall2_length in H6. rewrite clocksof_annots in H6. repeat rewrite map_length in H6...
+      + apply Forall2_length in H7. rewrite clocksof_annots in H7. repeat rewrite map_length in H7...
+    - (* when *)
+      constructor; rewrite Forall_forall in *...
+      rewrite clocksof_annots, map_length, map_length in H7...
+    - (* merge *)
+      constructor; rewrite Forall_forall in *...
+      + rewrite clocksof_annots, map_length, map_length in H10...
+      + rewrite clocksof_annots, map_length, map_length in H11...
+    - (* ite *)
+      constructor; rewrite Forall_forall in *...
+      + rewrite <- length_clockof_numstreams, H8. reflexivity.
+      + rewrite clocksof_annots, map_length, map_length in H11...
+      + rewrite clocksof_annots, map_length, map_length in H12...
+    - (* app *)
+      econstructor...
+      + rewrite Forall_forall in *...
+      + apply Forall2_length in H7. unfold idck in H7.
+        rewrite nclocksof_annots in H7. repeat rewrite map_length in H7...
+      + apply Forall2_length in H8. unfold idck in H8.
+        repeat rewrite map_length in H8...
+    - (* app (reset) *)
+      econstructor...
+      + rewrite Forall_forall in *...
+      + rewrite <- length_clockof_numstreams, H10...
+      + apply Forall2_length in H7. unfold idck in H7.
+        rewrite nclocksof_annots in H7. repeat rewrite map_length in H7...
+      + apply Forall2_length in H8. unfold idck in H8.
+        repeat rewrite map_length in H8...
+  Qed.
+  Hint Resolve wc_exp_wl_exp.
+
+  Corollary Forall_wc_exp_wl_exp : forall G vars es,
+      Forall (wc_exp G vars) es ->
+      Forall (wl_exp G) es.
+  Proof. intros. rewrite Forall_forall in *; eauto. Qed.
+  Hint Resolve Forall_wc_exp_wl_exp.
+
+  Fact wc_equation_wl_equation : forall G vars equ,
+      wc_equation G vars equ ->
+      wl_equation G equ.
+  Proof with eauto.
+    intros G vars [xs es] [Hwc1 [Hwc2 _]].
+    constructor.
+    + rewrite Forall_forall in *...
+    + rewrite nclocksof_annots in Hwc2.
+      apply Forall2_length in Hwc2.
+      rewrite map_length in Hwc2...
+  Qed.
+  Hint Resolve wc_equation_wl_equation.
+
+  Fact wc_node_wl_node : forall G n,
+      wc_node G n ->
+      wl_node G n.
+  Proof with eauto.
+    intros G n [_ [_ [_ Hwc]]].
+    unfold wl_node.
+    rewrite Forall_forall in *...
+  Qed.
+  Hint Resolve wc_node_wl_node.
+
+  Fact wc_global_wl_global : forall G,
+      wc_global G ->
+      wl_global G.
+  Proof with eauto.
+    intros G Hwt.
+    induction Hwt; constructor...
+  Qed.
+  Hint Resolve wc_global_wl_global.
 End LCLOCKING.
 
 Module LClockingFun

@@ -473,3 +473,47 @@ Proof.
   apply wc_clock_nparent_remove in Hwc; auto.
   intro contra. apply clock_parent_no_loops in contra. congruence.
 Qed.
+
+Lemma instck_inv :
+  forall bck sub ck ck' x,
+    instck bck sub ck = Some ck' ->
+    Is_free_in_clock x ck' ->
+    Is_free_in_clock x bck \/
+    (exists x', sub x' = Some x /\ Is_free_in_clock x' ck).
+Proof.
+  induction ck; intros * Hinst Hfree.
+  - inv Hinst. auto.
+  - inversion Hinst as [Hins]. cases_eqn Hins. inv Hins.
+    inversion_clear Hfree as [| ???? Hfr].
+    right. exists i. split. auto. constructor.
+    apply IHck in Hfr as [|[y []]] ; auto. right.
+    exists y. split; auto. now constructor.
+Qed.
+
+Lemma instck_free_bck :
+  forall bck sub ck ck' x,
+    instck bck sub ck = Some ck' ->
+    Is_free_in_clock x bck ->
+    Is_free_in_clock x ck'.
+Proof.
+  induction ck; intros * Hinst Hfree.
+  - inv Hinst. auto.
+  - inversion Hinst as [Hins]. cases_eqn Hins. inv Hins.
+    specialize (IHck c x eq_refl Hfree). now constructor.
+Qed.
+
+Lemma instck_free_sub :
+  forall bck sub ck ck' x x',
+    instck bck sub ck = Some ck' ->
+    Is_free_in_clock x ck ->
+    sub x = Some x' ->
+    Is_free_in_clock x' ck'.
+Proof.
+  induction ck; intros * Hinst Hfree Hsub.
+  - inv Hfree.
+  - inv Hfree.
+    + inversion Hinst as [Hins]. cases_eqn Hins. inv Hsub. inv Hins.
+      constructor.
+    + inversion Hinst as [Hins]. cases_eqn Hins. inv Hins.
+      specialize (IHck c x x' eq_refl H1 Hsub). now constructor.
+Qed.

@@ -1253,6 +1253,14 @@ Section Pointwise.
     - now rewrite IHHperm1, Hperm2.
   Qed.
 
+  Global Instance Permutation_flat_map_Proper :
+    forall A B f,
+      Proper (Permutation (A:=A) ==> Permutation (A:=B))
+             (flat_map (A:=A) (B:=B) f).
+  Proof.
+    intros * l l' Perm. now rewrite 2 flat_map_concat_map, Perm.
+  Qed.
+
 End Pointwise.
 
 Section ForallExists.
@@ -3208,6 +3216,27 @@ Section InMembers.
     apply Forall_forall with (1:=Hfa) (2:=Him).
   Qed.
 
+  Lemma NoDupMembers_app':
+    forall (xs ys : list (A * B)),
+      NoDupMembers (xs++ys) ->
+      NoDupMembers xs /\ NoDupMembers ys.
+  Proof.
+    intros xs ys Hndup.
+    split.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+  Qed.
+
+  Lemma InMembers_incl : forall x (xs ys : list (A * B)),
+      incl xs ys ->
+      InMembers x xs ->
+      InMembers x ys.
+  Proof.
+    intros * Hincl Hin.
+    rewrite fst_InMembers in *.
+    eapply incl_map in Hincl; eauto.
+  Qed.
+
 End InMembers.
 
 Section OptionLists.
@@ -3248,6 +3277,22 @@ Section OptionLists.
            | H: (match ?l with _ => _ end) = Some _ |- _ => destruct l
            | H: Some _ = Some _ |- _ => inv H
            end; try discriminate; auto.
+  Qed.
+
+  Lemma Ino_In :
+    forall (x : A) xs, Ino x xs <-> In (Some x) xs.
+  Proof.
+    split; intro H; induction xs as [| e]; auto.
+    - destruct e; inv H; simpl in *; subst; auto. tauto.
+    - destruct e; inversion H as [Heq|]; try inv Heq;
+        simpl in *; intuition.
+  Qed.
+
+  Lemma ino_app_iff :
+    forall (l l' : list (option A)) (a : A),
+      Ino a (l ++ l') <-> Ino a l \/ Ino a l'.
+  Proof.
+    setoid_rewrite Ino_In. auto using in_app_iff.
   Qed.
 
 End OptionLists.

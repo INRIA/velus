@@ -177,12 +177,32 @@ Module Type TRANSCRIPTION
     (* | _ => Error (msg "equation not normalized") *)
     (* end. *)
 
-  Lemma find_clock_in :
+  Lemma find_clock_in_env :
     forall x env ty ck,
       Env.find x env = Some (ty, ck) ->
       find_clock env x = OK ck.
   Proof.
     intros * H. unfold find_clock. now rewrite H.
+  Qed.
+
+  Lemma find_clock_out : forall n x ty ck,
+      In (x, (ty, ck)) (L.n_out n) ->
+      find_clock
+        (Env.adds' (L.n_vars n)
+                   (Env.adds' (L.n_in n) (Env.from_list (L.n_out n)))
+        ) x = OK ck.
+  Proof.
+    intros * Hin.
+    unfold Env.from_list. eapply find_clock_in_env.
+    apply In_InMembers in Hin as Hinm.
+    pose proof (L.n_nodup n) as Hnodup.
+    rewrite 2 Env.gsso'. apply Env.In_find_adds'; eauto.
+    - eapply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; eauto.
+    - eapply NoDupMembers_app_InMembers_l; eauto.
+      repeat rewrite InMembers_app; auto.
+    - eapply NoDupMembers_app_r in Hnodup.
+      eapply NoDupMembers_app_InMembers_l; eauto.
+      rewrite InMembers_app; auto.
   Qed.
 
   Lemma ok_fst_defined eq eq' :

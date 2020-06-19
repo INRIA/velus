@@ -461,6 +461,12 @@ Module Type LSYNTAX
     destruct e; simpl; unfold clock_of_nclock; try rewrite map_map; auto.
   Qed.
 
+  Lemma nclockof_length :
+    forall e, length (nclockof e) = length (clockof e).
+  Proof.
+    intros e. rewrite clockof_nclockof, map_length; auto.
+  Qed.
+
   Lemma clocksof_nclocksof:
     forall es,
       clocksof es = map stripname (nclocksof es).
@@ -767,6 +773,77 @@ Module Type LSYNTAX
     Qed.
 
   End interface_eq.
+
+  (** ** Property of length in expressions; is implied by wc and wt *)
+
+  Inductive wl_exp : global -> exp -> Prop :=
+  | wl_Const : forall G c,
+      wl_exp G (Econst c)
+  | wl_Evar : forall G x a,
+      wl_exp G (Evar x a)
+  | wl_Eunop : forall G op e a,
+      wl_exp G e ->
+      numstreams e = 1 ->
+      wl_exp G (Eunop op e a)
+  | wl_Ebinop : forall G op e1 e2 a,
+      wl_exp G e1 ->
+      wl_exp G e2 ->
+      numstreams e1 = 1 ->
+      numstreams e2 = 1 ->
+      wl_exp G (Ebinop op e1 e2 a)
+  | wl_Efby : forall G e0s es anns,
+      Forall (wl_exp G) e0s ->
+      Forall (wl_exp G) es ->
+      length (annots e0s) = length anns ->
+      length (annots es) = length anns ->
+      wl_exp G (Efby e0s es anns)
+  | wl_Ewhen : forall G es x b tys nck,
+      Forall (wl_exp G) es ->
+      length (annots es) = length tys ->
+      wl_exp G (Ewhen es x b (tys, nck))
+  | wl_Emerge : forall G x ets efs tys nck,
+      Forall (wl_exp G) ets ->
+      Forall (wl_exp G) efs ->
+      length (annots ets) = length tys ->
+      length (annots efs) = length tys ->
+      wl_exp G (Emerge x ets efs (tys, nck))
+  | wl_Eifte : forall G e ets efs tys nck,
+      wl_exp G e ->
+      Forall (wl_exp G) ets ->
+      Forall (wl_exp G) efs ->
+      numstreams e = 1 ->
+      length (annots ets) = length tys ->
+      length (annots efs) = length tys ->
+      wl_exp G (Eite e ets efs (tys, nck))
+  | wl_Eapp : forall G f n es anns,
+      Forall (wl_exp G) es ->
+      find_node f G = Some n ->
+      length (annots es) = length (n_in n) ->
+      length anns = length (n_out n) ->
+      wl_exp G (Eapp f es None anns)
+  | wl_EappReset : forall G f n es r anns,
+      wl_exp G r ->
+      Forall (wl_exp G) es ->
+      numstreams r = 1 ->
+      find_node f G = Some n ->
+      length (annots es) = length (n_in n) ->
+      length anns = length (n_out n) ->
+      wl_exp G (Eapp f es (Some r) anns).
+
+  Definition wl_equation G (eq : equation) :=
+    let (xs, es) := eq in
+    Forall (wl_exp G) es /\ length xs = length (annots es).
+
+  Definition wl_node G (n : node) :=
+    Forall (wl_equation G) (n_eqs n).
+
+  Inductive wl_global : global -> Prop :=
+  | wlg_nil:
+      wl_global []
+  | wlg_cons: forall n ns,
+      wl_global ns ->
+      wl_node ns n ->
+      wl_global (n::ns).
 
 End LSYNTAX.
 

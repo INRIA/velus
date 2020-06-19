@@ -1046,6 +1046,91 @@ Module Type LSEMANTICS
 
   End sem_ref.
 
+  (** ** The number of streams equals numstreams *)
+
+  Fact sem_exp_numstreams : forall G H b e v,
+      wl_exp G e ->
+      sem_exp G H b e v ->
+      length v = numstreams e.
+  Proof with eauto.
+    induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
+    - (* fby *)
+      repeat rewrite_Forall_forall.
+      rewrite <- H9. rewrite <- H10.
+      unfold annots; rewrite flat_map_concat_map.
+      apply concat_length_eq.
+      rewrite Forall2_map_2.
+      rewrite_Forall_forall.
+      rewrite length_annot_numstreams. eapply H0.
+      + apply nth_In; congruence.
+      + apply H5. apply nth_In; congruence.
+      + eapply H6... congruence.
+    - (* when *)
+      repeat rewrite_Forall_forall.
+      rewrite <- H1. rewrite <- H7.
+      unfold annots; rewrite flat_map_concat_map.
+      apply concat_length_eq.
+      rewrite Forall2_map_2.
+      rewrite_Forall_forall.
+      rewrite length_annot_numstreams. eapply H0; [| |eauto].
+      + apply nth_In; congruence.
+      + apply H4. apply nth_In; congruence.
+      + eapply H5... congruence.
+    - (* merge *)
+      repeat rewrite_Forall_forall.
+      rewrite <- H10. rewrite <- H11.
+      unfold annots; rewrite flat_map_concat_map.
+      apply concat_length_eq.
+      rewrite Forall2_map_2.
+      rewrite_Forall_forall.
+      rewrite length_annot_numstreams. eapply H0; [| |eauto].
+      + apply nth_In; congruence.
+      + apply H7. apply nth_In; congruence.
+      + eapply H5... congruence.
+    - (* ite *)
+      repeat rewrite_Forall_forall.
+      rewrite <- H11. rewrite <- H15.
+      unfold annots; rewrite flat_map_concat_map.
+      apply concat_length_eq.
+      rewrite Forall2_map_2.
+      rewrite_Forall_forall.
+      rewrite length_annot_numstreams. eapply H0; [| |eauto].
+      + apply nth_In; congruence.
+      + apply H7. apply nth_In; congruence.
+      + eapply H5... congruence.
+    - (* app *)
+      inv H11.
+      repeat rewrite_Forall_forall.
+      rewrite H3 in H7; inv H7.
+      unfold idents in H6.
+      rewrite <- H6, map_length...
+    - (* app (reset) *)
+      specialize (H13 0). inv H13.
+      repeat rewrite_Forall_forall.
+      rewrite H3 in H14; inv H14.
+      unfold idents in H5.
+      repeat rewrite map_length in *. congruence.
+  Qed.
+
+  Corollary sem_exps_numstreams : forall G H b es vs,
+      Forall (wl_exp G) es ->
+      Forall2 (sem_exp G H b) es vs ->
+      length (concat vs) = length (annots es).
+  Proof.
+    intros G H b es vs Hwt Hsem.
+    assert (Forall2 (fun v e => length v = numstreams e) vs es) as Hf.
+    { repeat rewrite_Forall_forall.
+      eapply sem_exp_numstreams.
+      + eapply Hwt. eapply nth_In. congruence.
+      + eapply H1; eauto. congruence. }
+    clear Hwt Hsem.
+    induction Hf; simpl.
+    - reflexivity.
+    - repeat rewrite app_length.
+      f_equal; auto.
+      rewrite length_annot_numstreams. assumption.
+  Qed.
+
 End LSEMANTICS.
 
 Module LSemanticsFun

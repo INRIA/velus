@@ -21,6 +21,7 @@ src/Lustre/Parser/LustreAst.v
 src/Lustre/LTyping.v
 src/Lustre/LClocking.v
 src/Lustre/LOrdered.v
+src/Lustre/LCausality.v
 src/Lustre/LClockSemantics.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
