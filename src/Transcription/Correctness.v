@@ -938,39 +938,6 @@ Module Type CORRECTNESS
     unfold L.anon_ins, L.fresh_ins in H; simpl in H;
     repeat rewrite idck_app.
 
-  Lemma app_length_impl :
-    forall {A: Type} (l1 l1' l2 l2' : list A),
-      l1 ++ l2 = l1' ++ l2' ->
-      length l1 = length l1' ->
-      l2 = l2'.
-  Proof.
-    intros * Happ Hlen.
-    apply f_equal with (f := skipn (length l1)) in Happ.
-    rewrite Hlen, skipn_app, skipn_app in Happ; auto.
-  Qed.
-
-  Lemma app_length_impl' :
-    forall {A: Type} (l1 l1' l2 l2' : list A),
-      l1 ++ l2 = l1' ++ l2' ->
-      length l1 = length l1' ->
-      l1 = l1'.
-  Proof.
-    intros * Happ Hlen.
-    apply f_equal with (f := firstn (length l1)) in Happ.
-    rewrite Hlen in Happ at 2.
-    do 2 rewrite CommonList.firstn_app in Happ; auto.
-  Qed.
-
-  (* TODO: move elsewhere *)
-  Lemma Ino_Forall:
-    forall (A : Type) (x : A) (xs : list (option A)) (P : option A -> Prop),
-      Forall P xs -> Ino x xs -> P (Some x).
-  Proof.
-    intros * Hforall Hin.
-    induction xs as [|a]; inversion Hin; inversion Hforall; subst; auto.
-    destruct a; simpl in *; subst; tauto.
-  Qed.
-
   Lemma In_clockof :
     forall ck e es,
       In ck (L.clockof e) ->
@@ -1336,143 +1303,26 @@ Module Type CORRECTNESS
     rewrite <- idck_idents. reflexivity.
   Qed.
 
-  (* TODO: move somewhere *)
-  Definition adds_opt' {A : Type} (xos: list (option positive))
-             (vs : list A) (e : Env.t A) : Env.t A :=
-    fold_right (fun (xov: option positive * A) env =>
-                  match xov with
-                  | (Some x, v) => Env.add x v env
-                  | _ => env end) e (combine xos vs).
-
-  Lemma find_adds_opt'_spec_Some:
-    forall {A} xs vs x (a : A) m,
-      length xs = length vs ->
-      Env.find x (adds_opt' xs vs m) = Some a ->
-      List.In (Some x, a) (combine xs vs)
-      \/ Env.find x m = Some a.
-  Proof.
-    unfold adds_opt'.
-    induction xs as [|x'], vs as [|v']; simpl; auto; try discriminate.
-    intros * Length Find; inv Length.
-    destruct x'.
-    - destruct (Pos.eq_dec x p) as [|].
-      + subst; rewrite Env.gss in Find; inv Find; auto.
-      + rewrite Env.gso in Find; auto.
-        apply IHxs in Find as [|()]; auto.
-    - apply IHxs in Find as [|]; auto.
-  Qed.
-
-  Lemma find_gsso_opt':
-    forall {A}x x' xs (vs: list A) S,
-      Some x <> x' ->
-      Env.find x (adds_opt' (x' :: xs) vs S) =
-      Env.find x (adds_opt' xs (tl vs) S).
-  Proof.
-    intros * Hneq.
-    unfold adds_opt'.
-    destruct vs. now destruct xs; auto.
-    destruct x'; simpl; auto.
-    rewrite Env.gso; auto. intro. apply Hneq. congruence.
-  Qed.
-
-  Lemma find_gsss_opt':
-    forall {A} x v xs (vs: list A) S,
-      Env.find x (adds_opt' (Some x :: xs) (v :: vs) S) = Some v.
-  Proof.
-    intros. unfold adds_opt'. apply Env.gss.
-  Qed.
-
-  Lemma find_In_gsso_opt':
-    forall {A} x ys (vs: list A) env,
-      ~ Ino x ys ->
-      Env.find x (adds_opt' ys vs env) = Env.find x env.
-  Proof.
-    intros ? x ys vs env Hin.
-    revert vs; induction ys; intro vs; simpl; auto.
-    rewrite find_gsso_opt'.
-    - apply IHys. rewrite Ino_In in *. intuition.
-    - intro. apply Hin. rewrite Ino_In. now left.
-  Qed.
-
-  (* TODO: move *)
-  Lemma adds_opt'_cons_Some:
-    forall {A} xs x (v: A) vs e,
-      adds_opt' (Some x :: xs) (v :: vs) e =
-      Env.add x v (adds_opt' xs vs e).
-  Proof.
-    induction xs as [|x']; intros; simpl; auto.
-  Qed.
-
-  Lemma adds_opt'_cons_None:
-    forall {A} xs (v : A) vs e,
-      adds_opt' (None :: xs) (v :: vs) e = adds_opt' xs vs e.
-  Proof. auto. Qed.
-
-  Lemma adds_opt'_app :
-    forall {A} xs (vs : list A) xs' vs' m,
-      length xs = length vs ->
-      adds_opt' (xs ++ xs') (vs ++ vs') m
-      = adds_opt' xs vs (adds_opt' xs' vs' m).
-  Proof.
-    induction xs as [|x xs IH]; simpl; intros * Hlen.
-    - symmetry in Hlen. apply length_zero_iff_nil in Hlen. subst. auto.
-    - destruct vs as [| v vs]; simpl in Hlen; inv Hlen.
-      destruct x; simpl.
-      + do 2 rewrite adds_opt'_cons_Some.
-        rewrite IH; auto.
-      + do 2 rewrite adds_opt'_cons_None.
-        rewrite IH; auto.
-  Qed.
-
-  Lemma adds_opt'_nil:
-    forall {A} vs (e : Env.t A),
-      adds_opt' [] vs e = e.
-  Proof. auto. Qed.
-
-  Lemma adds_opt'_nil':
-    forall {A} xs (e : Env.t A),
-      adds_opt' xs [] e = e.
-  Proof.
-    unfold adds_opt'.
-    setoid_rewrite combine_nil_r. simpl. auto.
-  Qed.
-
-  Lemma adds_opt'_None:
-    forall {A B} xs vs (e : Env.t A),
-      adds_opt' (map (fun _ : B => None) xs) vs e = e.
-  Proof.
-    induction xs; simpl. now setoid_rewrite adds_opt'_nil.
-    destruct vs. now setoid_rewrite adds_opt'_nil'.
-    setoid_rewrite adds_opt'_cons_None. auto.
-  Qed.
-
   Lemma sc_switch_adds :
     forall H b ck cks xs ss,
-      NLSC.sem_clock (adds_opt' xs ss H) b ck cks ->
+      NLSC.sem_clock (Env.adds_opt' xs ss H) b ck cks ->
       (forall x, Is_free_in_clock x ck -> ~Ino x xs) ->
       NLSC.sem_clock H b ck cks.
   Proof.
     intros * Hsc Hino. eapply sc_switch_env; eauto.
     intros * Hfree. apply Hino in Hfree.
-    rewrite find_In_gsso_opt'; auto.
+    rewrite Env.find_In_gsso_opt'; auto.
   Qed.
 
   Lemma sc_switch_adds' :
     forall H b ck cks xs ss,
       NLSC.sem_clock H b ck cks ->
       (forall x, Is_free_in_clock x ck -> ~Ino x xs) ->
-      NLSC.sem_clock (adds_opt' xs ss H) b ck cks.
+      NLSC.sem_clock (Env.adds_opt' xs ss H) b ck cks.
   Proof.
     intros * Hsc Hino. eapply sc_switch_env; eauto.
     intros * Hfree. apply Hino in Hfree.
-    rewrite find_In_gsso_opt'; auto.
-  Qed.
-
-  Lemma in_app_weak :
-    forall {A} (x : A) l l',
-      In x l -> In x (l ++ l').
-  Proof.
-    intros. apply in_app; auto.
+    rewrite Env.find_In_gsso_opt'; auto.
   Qed.
 
   (* permute quantifiers to ease instantiation *)
@@ -1622,155 +1472,31 @@ Module Type CORRECTNESS
     intros. destruct x; simpl in *; auto.
   Qed.
 
-  (* TODO: move *)
-  Lemma ino_dec:
-    forall {A} (x : A) xos,
-      (forall x y : A, {x = y} + {x <> y}) ->
-      Ino x xos \/ ~Ino x xos.
-  Proof.
-    intros * H; rewrite Ino_In. eapply ListDec.In_decidable.
-    intros y z. destruct y as [a|], z as [b|]; try (right; congruence).
-    destruct (H a b); [left|right]; congruence.
-    now left.
-  Qed.
-
-  (* TODO: move *)
-  Lemma find_adds_opt'_disj:
-    forall {A} (x : ident) xs xs' vs vs' (e : Env.t A),
-      (forall x, Ino x xs -> ~ Ino x xs') ->
-      Ino x xs ->
-      Env.find x (adds_opt' xs vs e)
-      = Env.find x (adds_opt' xs vs (adds_opt' xs' vs' e)).
-  Proof.
-    intros * Hino Hin.
-    revert dependent x. revert vs. induction xs; intros; inv Hin.
-    destruct a as [p|]; take (LiftO _ _ _) and inv it. destruct vs.
-    do 2 rewrite adds_opt'_nil'.
-    specialize (Hino p). simpl in Hino.
-    specialize (Hino (or_introl (eq_refl p))).
-    now rewrite find_In_gsso_opt'.
-    now rewrite 2 find_gsss_opt'.
-    destruct a as [p|], vs.
-    + eapply IHxs with (vs := []) in H; eauto.
-      2: intros; apply Hino; now right.
-      now rewrite 2 adds_opt'_nil' in *.
-    + destruct (decidable_eq_ident x p). subst.
-      now rewrite 2 find_gsss_opt'.
-      rewrite 2 find_gsso_opt'; simpl. 2-3: intro Heq; inv Heq; auto.
-      apply IHxs; auto. intros. apply Hino. now right.
-    + eapply IHxs with (vs := []) in H; eauto.
-      2: intros; apply Hino; now right.
-      now rewrite 2 adds_opt'_nil' in *.
-    + rewrite 2 adds_opt'_cons_None; auto.
-      apply IHxs; auto. intros. apply Hino. now right.
-  Qed.
-
-  Lemma find_permute_adds_opt':
-    forall {A} (x : ident) xs xs' vs vs' (e : Env.t A),
-      (forall x, Ino x xs -> ~ Ino x xs') ->
-      Env.find x (adds_opt' xs vs (adds_opt' xs' vs' e))
-      = Env.find x (adds_opt' xs' vs' (adds_opt' xs vs e)).
-  Proof.
-    intros * Hino.
-    destruct (ino_dec x xs (ident_eq_dec)) as [Hin|Hin].
-    - erewrite <- find_adds_opt'_disj; eauto.
-      apply Hino in Hin. setoid_rewrite find_In_gsso_opt' at 2; auto.
-    - rewrite find_In_gsso_opt'; auto.
-      destruct (ino_dec x xs' (ident_eq_dec)) as [Hin'|Hin'].
-      erewrite <- find_adds_opt'_disj; eauto. intros ?? HH.
-      now apply Hino in HH.
-      rewrite 3 find_In_gsso_opt'; auto.
-  Qed.
-
   Lemma sc_permute_adds :
     forall H b ck cks xs vs xs' vs',
-      NLSC.sem_clock (adds_opt' xs vs (adds_opt' xs' vs' H)) b ck cks ->
+      NLSC.sem_clock (Env.adds_opt' xs vs (Env.adds_opt' xs' vs' H)) b ck cks ->
       (forall x, Ino x xs -> ~ Ino x xs') ->
-      NLSC.sem_clock (adds_opt' xs' vs' (adds_opt' xs vs H)) b ck cks.
+      NLSC.sem_clock (Env.adds_opt' xs' vs' (Env.adds_opt' xs vs H)) b ck cks.
   Proof.
     intros * Hsc Hino. eapply sc_switch_env; eauto.
     intros * Hfree.
-    rewrite <- find_permute_adds_opt'; auto.
+    rewrite <- Env.find_permute_adds_opt'; auto.
   Qed.
 
   Lemma sc_permute_adds_nest :
     forall H b ck cks xs vs xs' vs' xs'' vs'',
-      NLSC.sem_clock (adds_opt' xs vs (adds_opt' xs' vs' (adds_opt' xs'' vs'' H))) b ck cks ->
+      NLSC.sem_clock (Env.adds_opt' xs vs (Env.adds_opt' xs' vs' (Env.adds_opt' xs'' vs'' H))) b ck cks ->
       (forall x, Ino x xs -> ~ Ino x xs') ->
       (forall x, Ino x xs -> ~ Ino x xs'') ->
       length xs' = length vs' ->
-      NLSC.sem_clock (adds_opt' xs' vs' (adds_opt' xs'' vs'' (adds_opt' xs vs H))) b ck cks.
+      NLSC.sem_clock (Env.adds_opt' xs' vs' (Env.adds_opt' xs'' vs'' (Env.adds_opt' xs vs H))) b ck cks.
   Proof.
     intros * Hsc Hino Hino' Hlen. eapply sc_switch_env; eauto.
     intros * Hfree.
-    rewrite <- adds_opt'_app; auto. setoid_rewrite <- adds_opt'_app at 3; auto.
-    rewrite find_permute_adds_opt'; auto.
+    rewrite <- Env.adds_opt'_app; auto. setoid_rewrite <- Env.adds_opt'_app at 3; auto.
+    rewrite Env.find_permute_adds_opt'; auto.
     intros ? HH ?. apply ino_app_iff in HH as [Hin|Hin]; eauto.
     apply Hino in Hin; auto. apply Hino' in Hin; auto.
-  Qed.
-
-  (* TODO: move *)
-  Lemma find_adds_opt'_ino:
-    forall {A} (x : ident) xs vs (e : Env.t A),
-      length xs = length vs ->
-      Ino x xs ->
-      Env.find x (adds_opt' xs vs e)
-      = Env.find x (adds_opt' xs vs (Env.empty A)).
-  Proof.
-    induction xs. inversion 2. intros * Hlen Hino.
-    destruct vs. inv Hlen. apply Ino_In in Hino. inv Hino.
-    - now rewrite 2 find_gsss_opt'.
-    - destruct a as [p|]. destruct (ident_eq_dec x p).
-      subst. now rewrite 2 find_gsss_opt'.
-      rewrite 2 find_gsso_opt'; try (intro HH; inv HH; auto).
-      simpl. apply IHxs; auto. now apply Ino_In.
-      rewrite 2 adds_opt'_cons_None. apply IHxs; auto. now apply Ino_In.
-  Qed.
-
-  (* TODO: move *)
-  Lemma in_combine_nodup :
-    forall {A B} xs ys (x : A) (y : B) y',
-      NoDup xs ->
-      In (x, y) (combine xs ys) ->
-      In (x, y') (combine xs ys) ->
-      y = y'.
-  Proof.
-    induction xs. inversion 2. intros * Hdup Hin Hin'.
-    destruct ys. inv Hin. inv Hin; inv Hin'; try congruence.
-    - inv H. inv Hdup. now take (In _ _) and apply in_combine_l in it.
-    - inv H0. inv Hdup. now take (In _ _) and apply in_combine_l in it.
-    - inv Hdup. eauto.
-  Qed.
-
-  Lemma In_find_adds_opt':
-    forall {A} x (v : A) xs vs m,
-      NoDupo xs ->
-      In (Some x, v) (combine xs vs) ->
-      Env.find x (adds_opt' xs vs m) = Some v.
-  Proof.
-    induction xs. inversion 2.
-    intros * Hdupo Hino. destruct vs. rewrite combine_nil_r in Hino.
-    inv Hino. inv Hino. inv H. now rewrite find_gsss_opt'.
-    destruct a as [p|]; inv Hdupo; try rewrite adds_opt'.
-    destruct (Pos.eq_dec x p). subst.
-    + now apply in_combine_l, Ino_In in H.
-    + rewrite find_gsso_opt'; auto. congruence.
-    + rewrite adds_opt'_cons_None; eauto.
-  Qed.
-
-  Lemma NoDupo_app':
-    forall (A : Type) (xs ws : list (option A)),
-      NoDupo xs ->
-      NoDupo ws ->
-      (forall x : A, Ino x xs -> ~ Ino x ws) ->
-      NoDupo (xs ++ ws).
-  Proof.
-    induction xs as [|[]]; intros * D1 D2 Hino; simpl; auto.
-    - constructor. inv D1. rewrite Ino_In in *. rewrite in_app.
-      intros []; auto. specialize (Hino a).
-      apply Hino; simpl; rewrite Ino_In in *; auto.
-      inv D1. apply IHxs; auto. intros. apply Hino. now right.
-    - inv D1. constructor. apply IHxs; auto. intros. apply Hino. now right.
   Qed.
 
   (* TODO: move to Lsyntax *)
@@ -1868,8 +1594,8 @@ Module Type CORRECTNESS
              exists ncs nss,
              Datatypes.length ncs = Datatypes.length nss /\
              Forall (LiftO True (fun x : ident => InMembers x (L.fresh_in e))) ncs /\
-             (let H := adds_opt' ncs nss H in
-              let H0 := adds_opt' (filter_anons (idck env)(map snd anns)) ss H in
+             (let H := Env.adds_opt' ncs nss H in
+              let H0 := Env.adds_opt' (filter_anons (idck env)(map snd anns)) ss H in
               Forall2 (NLSC.sem_clock H0 b) (L.clockof e) (map abstract_clock ss))
            | _ => Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
            end) es ss0
@@ -1877,8 +1603,8 @@ Module Type CORRECTNESS
       exists ncs nss,
         Datatypes.length ncs = Datatypes.length nss /\
         Forall (LiftO True (fun x : ident => Exists (fun e => InMembers x (L.fresh_in e)) es)) ncs /\
-        (let H0 := adds_opt' ncs nss H in
-         let H1 := adds_opt' (filter_anons (idck env)(L.nclocksof es)) (concat ss0) H0 in
+        (let H0 := Env.adds_opt' ncs nss H in
+         let H1 := Env.adds_opt' (filter_anons (idck env)(L.nclocksof es)) (concat ss0) H0 in
          Forall2 (NLSC.sem_clock H1 b) (L.clocksof es)
                  (map abstract_clock (concat ss0))).
   Proof.
@@ -1922,7 +1648,7 @@ Module Type CORRECTNESS
     1-8:(inv Hwc; rewrite map_app; apply Forall2_app;
          [ (take (_ _ (L.clockof _) (map abstract_clock _)) and eapply Forall2_impl_In in it); eauto;
            intros ck ? Hinck ??; auto;
-           erewrite filter_anons_app, filter_nclock_eq, adds_opt'_app, adds_opt'_None; eauto; [| solve_length];
+           erewrite filter_anons_app, filter_nclock_eq, Env.adds_opt'_app, Env.adds_opt'_None; eauto; [| solve_length];
            apply sc_switch_adds'; simpl; eauto;
            [ apply sc_switch_adds'; simpl; eauto;
              intros x Hfree Hncs; eapply clockof_defined in Hfree; eauto; simpl in Hfree;
@@ -1931,7 +1657,7 @@ Module Type CORRECTNESS
            | intros x Hfr Hfil; eapply clockof_defined in Hfr; eauto; simpl in Hfr;
              apply filter_anons_ino in Hfil; apply InMembers_idck in Hfr; eauto ]
          | eapply Forall2_impl_In; eauto; intros;
-           erewrite filter_anons_app, filter_nclock_eq, adds_opt'_app, adds_opt'_None; eauto; solve_length ]).
+           erewrite filter_anons_app, filter_nclock_eq, Env.adds_opt'_app, Env.adds_opt'_None; eauto; solve_length ]).
 
     (* Eapp *)
     Local Ltac solve_NoDupMembers2 H :=
@@ -1952,8 +1678,8 @@ Module Type CORRECTNESS
     - take (_ _ (L.clockof _) (map abstract_clock _)) and
            eapply Forall2_impl_In in it; eauto.
       intros c ? Hin ? Hsc. simpl in *.
-      rewrite adds_opt'_app; auto.
-      unfold filter_anons. rewrite map_app, adds_opt'_app.
+      rewrite Env.adds_opt'_app; auto.
+      unfold filter_anons. rewrite map_app, Env.adds_opt'_app.
       2:{ apply Forall2_length in it. now rewrite 2 map_length in *. }
       apply sc_permute_adds.
       2:{
@@ -2004,7 +1730,7 @@ Module Type CORRECTNESS
       assumption.
     - eapply Forall2_impl_In in Hscl; eauto; intros c ? Hin ? Hsc'. simpl in *.
       unfold filter_anons. rewrite map_app.
-      rewrite 2 adds_opt'_app; auto.
+      rewrite 2 Env.adds_opt'_app; auto.
       2:{ apply Forall2_length in Hsc. now rewrite 2 map_length in *. }
       apply sc_switch_adds'.
       2:{
@@ -2068,8 +1794,8 @@ Module Type CORRECTNESS
         sub i = Some i' ->
         Forall (LiftO True (fun x : ident => Exists (fun e => InMembers x (L.fresh_in e)) es)) ncs ->
         orel (@EqSt value) (Env.find i Hi)
-             (Env.find i' (adds_opt' (filter_anons (idck env) (L.nclocksof es))
-                                     (concat ss0) (adds_opt' ncs nss H))).
+             (Env.find i' (Env.adds_opt' (filter_anons (idck env) (L.nclocksof es))
+                                         (concat ss0) (Env.adds_opt' ncs nss H))).
   Proof.
     intros * Hin Hwcg Henv WCin Hwt Hwc Hndup WIi Hse Hsv i' ncs nss Sub Hncs.
     (* i is a node variable, i' its image *)
@@ -2079,7 +1805,7 @@ Module Type CORRECTNESS
       rewrite idck_idents, Forall2_map_1 in Hsv.
       pose proof (Forall2_in_left_combine  _ _ _ _ Hsv Hin) as (?&Hcomb&Hvar).
       inv Hvar. take (Env.MapsTo _ _ _) and apply Env.find_1 in it as Heq.
-      simpl in *. erewrite In_find_adds_opt'. rewrite Heq; eauto.
+      simpl in *. erewrite Env.In_find_adds_opt'. rewrite Heq; eauto.
       now take (_ ≡ _) and rewrite <- it.
       { (* nodupo *)
         clear - Hwcg Henv Hwc Hwt Hndup. induction es; simpl. constructor.
@@ -2115,11 +1841,11 @@ Module Type CORRECTNESS
       apply mem_assoc_ident_true in Hb as (?&IM).
       apply In_InMembers in IM; congruence.
     + (* i' was not added, it necessarily comes from the environment *)
-      rewrite find_In_gsso_opt'; auto.
+      rewrite Env.find_In_gsso_opt'; auto.
       apply filter_anons_filter' in Hnino; auto.
       2:{ eapply Forall2_in_left in WIi as (?&?&Heq&?); eauto. simpl in *.
           rewrite Ino_In, in_map_iff. rewrite Heq in Sub. eauto. }
-      rewrite find_In_gsso_opt'.
+      rewrite Env.find_In_gsso_opt'.
       2:{ intro Hino. rewrite Ino_In in Hino. eapply Forall_forall in Hncs; eauto.
           simpl in Hncs. eapply Exists_exists in Hncs as (?&?&Hfr).
           eapply NoDupMembers_app_InMembers in Hndup; eauto.
@@ -2196,8 +1922,8 @@ Module Type CORRECTNESS
              exists ncs nss,
              length ncs = length nss /\
              Forall (LiftO True (fun x => InMembers x (L.fresh_in e))) ncs /\
-             let H := adds_opt' ncs nss H in
-             let H := adds_opt' (filter_anons (idck env)(map snd anns)) ss H in
+             let H := Env.adds_opt' ncs nss H in
+             let H := Env.adds_opt' (filter_anons (idck env)(map snd anns)) ss H in
              Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
            | _ =>
              Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
@@ -2252,9 +1978,9 @@ Module Type CORRECTNESS
         exists ncs nss,
         length ncs = length nss /\
         Forall (LiftO True (fun x => InMembers x (L.fresh_in e))) ncs /\
-        let H := adds_opt' ncs nss H in
+        let H := Env.adds_opt' ncs nss H in
         (* no need for disjointedness with ncs here *)
-        let H := adds_opt' (filter_anons (idck env) (map snd anns)) ss H in
+        let H := Env.adds_opt' (filter_anons (idck env) (map snd anns)) ss H in
         Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
       | _ =>
         Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
@@ -2580,7 +2306,7 @@ Module Type CORRECTNESS
                  simpl in H14. inv H14. now apply in_map. }
              rewrite L.clocksof_nclocksof in Hscin.
              eapply Forall2_impl_In in Hscin; eauto. simpl. intros ?? Hinnc ??.
-             rewrite adds_opt'_app.
+             rewrite Env.adds_opt'_app.
              2:{ unfold filter_anons. apply Forall2_length in Hscin.
                  now rewrite 2 map_length in *. }
              eapply sc_switch_adds'; eauto.
@@ -2597,10 +2323,10 @@ Module Type CORRECTNESS
              2:{ unfold idck. rewrite map_app. apply in_or_app. right. eauto. }
              rewrite idck_app in Hin. apply in_app_or in Hin as [Hin | Hin].
              + (* i ∈ idck(n_in n) *)
-               rewrite adds_opt'_app.
+               rewrite Env.adds_opt'_app.
                2: unfold filter_anons; apply Forall2_length in Hscin;
                  now rewrite L.clocksof_nclocksof, 2 map_length in *.
-               rewrite find_In_gsso_opt'.
+               rewrite Env.find_In_gsso_opt'.
                2:{
                  intro Hino. apply filter_anons_spec in Hino as [Hino].
                  unfold L.stream_name in Hino; rewrite map_map in Hino.
@@ -2617,7 +2343,7 @@ Module Type CORRECTNESS
                rewrite idck_idents, Forall2_map_1 in Hvout.
                pose proof (Forall2_in_left_combine  _ _ _ _ Hvout Hin) as (?&Hcomb&Hv).
                inv Hv. take (Env.MapsTo _ _ _) and apply Env.find_1 in it as Heq.
-               simpl in *. erewrite In_find_adds_opt'; auto. rewrite Heq; eauto.
+               simpl in *. erewrite Env.In_find_adds_opt'; auto. rewrite Heq; eauto.
                now take (_ ≡ _) and rewrite <- it.
                rewrite Forall2_swap_args in WIo. rewrite Forall2_map_2 in Hsemn.
                pose proof (Forall2_chain_In' _ _ _ _ _ _ _ WIo Hsemn Hcomb)
@@ -2788,10 +2514,10 @@ Module Type CORRECTNESS
             rewrite idck_app in Hin. apply in_app_or in Hin as [Hin | Hin].
             + (* i ∈ idck(n_in n) *)
               eapply inst_in_eqst with (env := cenv) (nss := nss) in Hin; eauto.
-              rewrite find_In_gsso_opt' in Hin.
+              rewrite Env.find_In_gsso_opt' in Hin.
               2: { intro HH; apply filter_anons_spec in HH as []; eauto.
                    rewrite InMembers_idck in H11; eauto. }
-              rewrite find_In_gsso_opt' in Hin.
+              rewrite Env.find_In_gsso_opt' in Hin.
               2:{ intro Hino.
                   eapply Ino_Forall in Hino; eauto. simpl in Hino.
                   apply Exists_exists in Hino as (?&?&Hf).

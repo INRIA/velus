@@ -1753,6 +1753,197 @@ Module Env.
     Qed.
   End EnvRestrict.
 
+  Section adds_opt'.
+    Import List.ListNotations.
+    Definition adds_opt' {A : Type} (xos: list (option positive))
+               (vs : list A) (e : Env.t A) : Env.t A :=
+      fold_right (fun (xov: option positive * A) env =>
+                    match xov with
+                    | (Some x, v) => Env.add x v env
+                    | _ => env end) e (combine xos vs).
+
+    Lemma find_adds_opt'_spec_Some:
+      forall {A} xs vs x (a : A) m,
+        length xs = length vs ->
+        Env.find x (adds_opt' xs vs m) = Some a ->
+        List.In (Some x, a) (combine xs vs)
+        \/ Env.find x m = Some a.
+    Proof.
+      unfold adds_opt'.
+      induction xs as [|x'], vs as [|v']; simpl; auto; try discriminate.
+      intros * Length Find; inv Length.
+      destruct x'.
+      - destruct (Pos.eq_dec x p) as [|].
+        + subst; rewrite Env.gss in Find; inv Find; auto.
+        + rewrite Env.gso in Find; auto.
+          apply IHxs in Find as [|()]; auto.
+      - apply IHxs in Find as [|]; auto.
+    Qed.
+
+    Lemma find_gsso_opt':
+      forall {A}x x' xs (vs: list A) S,
+        Some x <> x' ->
+        Env.find x (adds_opt' (x' :: xs) vs S) =
+        Env.find x (adds_opt' xs (tl vs) S).
+    Proof.
+      intros * Hneq.
+      unfold adds_opt'.
+      destruct vs. now destruct xs; auto.
+      destruct x'; simpl; auto.
+      rewrite Env.gso; auto. intro. apply Hneq. congruence.
+    Qed.
+
+    Lemma find_gsss_opt':
+      forall {A} x v xs (vs: list A) S,
+        Env.find x (adds_opt' (Some x :: xs) (v :: vs) S) = Some v.
+    Proof.
+      intros. unfold adds_opt'. apply Env.gss.
+    Qed.
+
+    Lemma find_In_gsso_opt':
+      forall {A} x ys (vs: list A) env,
+        ~ Ino x ys ->
+        Env.find x (adds_opt' ys vs env) = Env.find x env.
+    Proof.
+      intros ? x ys vs env Hin.
+      revert vs; induction ys; intro vs; simpl; auto.
+      rewrite find_gsso_opt'.
+      - apply IHys. rewrite Ino_In in *. intuition.
+      - intro. apply Hin. rewrite Ino_In. now left.
+    Qed.
+
+    Lemma adds_opt'_cons_Some:
+      forall {A} xs x (v: A) vs e,
+        adds_opt' (Some x :: xs) (v :: vs) e =
+        Env.add x v (adds_opt' xs vs e).
+    Proof.
+      induction xs as [|x']; intros; simpl; auto.
+    Qed.
+
+    Lemma adds_opt'_cons_None:
+      forall {A} xs (v : A) vs e,
+        adds_opt' (None :: xs) (v :: vs) e = adds_opt' xs vs e.
+    Proof. auto. Qed.
+
+    Lemma adds_opt'_app :
+      forall {A} xs (vs : list A) xs' vs' m,
+        length xs = length vs ->
+        adds_opt' (xs ++ xs') (vs ++ vs') m
+        = adds_opt' xs vs (adds_opt' xs' vs' m).
+    Proof.
+      induction xs as [|x xs IH]; simpl; intros * Hlen.
+      - symmetry in Hlen. apply length_zero_iff_nil in Hlen. subst. auto.
+      - destruct vs as [| v vs]; simpl in Hlen; inv Hlen.
+        destruct x; simpl.
+        + do 2 rewrite adds_opt'_cons_Some.
+             rewrite IH; auto.
+             + do 2 rewrite adds_opt'_cons_None.
+                  rewrite IH; auto.
+    Qed.
+
+    Lemma adds_opt'_nil:
+      forall {A} vs (e : Env.t A),
+        adds_opt' [] vs e = e.
+    Proof. auto. Qed.
+
+    Lemma adds_opt'_nil':
+      forall {A} xs (e : Env.t A),
+        adds_opt' xs [] e = e.
+    Proof.
+      unfold adds_opt'.
+      setoid_rewrite combine_nil_r. simpl. auto.
+    Qed.
+
+    Lemma adds_opt'_None:
+      forall {A B} xs vs (e : Env.t A),
+        adds_opt' (List.map (fun _ : B => None) xs) vs e = e.
+    Proof.
+      induction xs; simpl. now setoid_rewrite adds_opt'_nil.
+      destruct vs. now setoid_rewrite adds_opt'_nil'.
+      setoid_rewrite adds_opt'_cons_None. auto.
+    Qed.
+
+    Lemma find_adds_opt'_disj:
+      forall {A} (x : ident) xs xs' vs vs' (e : Env.t A),
+        (forall x, Ino x xs -> ~ Ino x xs') ->
+        Ino x xs ->
+        Env.find x (adds_opt' xs vs e)
+        = Env.find x (adds_opt' xs vs (adds_opt' xs' vs' e)).
+    Proof.
+      intros * Hino Hin.
+      revert dependent x. revert vs. induction xs; intros; inv Hin.
+      destruct a as [p|]; take (LiftO _ _ _) and inv it. destruct vs.
+      do 2 rewrite adds_opt'_nil'.
+         specialize (Hino p). simpl in Hino.
+         specialize (Hino (or_introl (eq_refl p))).
+         now rewrite find_In_gsso_opt'.
+         now rewrite 2 find_gsss_opt'.
+         destruct a as [p|], vs.
+         + eapply IHxs with (vs := []) in H; eauto.
+           2: intros; apply Hino; now right.
+           now rewrite 2 adds_opt'_nil' in *.
+         + destruct (decidable_eq_ident x p). subst.
+           now rewrite 2 find_gsss_opt'.
+           rewrite 2 find_gsso_opt'; simpl. 2-3: intro Heq; inv Heq; auto.
+           apply IHxs; auto. intros. apply Hino. now right.
+         + eapply IHxs with (vs := []) in H; eauto.
+           2: intros; apply Hino; now right.
+           now rewrite 2 adds_opt'_nil' in *.
+         + rewrite 2 adds_opt'_cons_None; auto.
+           apply IHxs; auto. intros. apply Hino. now right.
+    Qed.
+
+    Lemma find_permute_adds_opt':
+      forall {A} (x : ident) xs xs' vs vs' (e : Env.t A),
+        (forall x, Ino x xs -> ~ Ino x xs') ->
+        Env.find x (adds_opt' xs vs (adds_opt' xs' vs' e))
+        = Env.find x (adds_opt' xs' vs' (adds_opt' xs vs e)).
+    Proof.
+      intros * Hino.
+      destruct (ino_dec x xs (ident_eq_dec)) as [Hin|Hin].
+      - erewrite <- find_adds_opt'_disj; eauto.
+        apply Hino in Hin. setoid_rewrite find_In_gsso_opt' at 2; auto.
+      - rewrite find_In_gsso_opt'; auto.
+        destruct (ino_dec x xs' (ident_eq_dec)) as [Hin'|Hin'].
+        erewrite <- find_adds_opt'_disj; eauto. intros ?? HH.
+        now apply Hino in HH.
+        rewrite 3 find_In_gsso_opt'; auto.
+    Qed.
+
+    Lemma find_adds_opt'_ino:
+      forall {A} (x : ident) xs vs (e : Env.t A),
+        length xs = length vs ->
+        Ino x xs ->
+        Env.find x (adds_opt' xs vs e)
+        = Env.find x (adds_opt' xs vs (Env.empty A)).
+    Proof.
+      induction xs. inversion 2. intros * Hlen Hino.
+      destruct vs. inv Hlen. apply Ino_In in Hino. inv Hino.
+      - now rewrite 2 find_gsss_opt'.
+      - destruct a as [p|]. destruct (ident_eq_dec x p).
+        subst. now rewrite 2 find_gsss_opt'.
+        rewrite 2 find_gsso_opt'; try (intro HH; inv HH; auto).
+        simpl. apply IHxs; auto. now apply Ino_In.
+        rewrite 2 adds_opt'_cons_None. apply IHxs; auto. now apply Ino_In.
+    Qed.
+
+    Lemma In_find_adds_opt':
+      forall {A} (x : ident) (v : A) xs vs m,
+        NoDupo xs ->
+        List.In (Some x, v) (combine xs vs) ->
+        Env.find x (adds_opt' xs vs m) = Some v.
+    Proof.
+      induction xs. inversion 2.
+      intros * Hdupo Hino. destruct vs. rewrite combine_nil_r in Hino.
+      inv Hino. inv Hino. inv H. now rewrite find_gsss_opt'.
+      destruct a as [p|]; inv Hdupo; try rewrite adds_opt'.
+      destruct (Pos.eq_dec x p). subst.
+      + now apply in_combine_l, Ino_In in H.
+      + rewrite find_gsso_opt'; auto. congruence.
+      + rewrite adds_opt'_cons_None; eauto.
+    Qed.
+  End adds_opt'.
+
   (** Notations *)
 
   Module Notations.
