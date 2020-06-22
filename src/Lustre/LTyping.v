@@ -1178,6 +1178,25 @@ Module Type LTYPING
   Qed.
   Hint Resolve wt_global_wl_global.
 
+  (** ** Other useful stuff *)
+
+  Lemma wt_clock_Is_free_in : forall x env ck,
+      wt_clock env ck ->
+      Is_free_in_clock x ck ->
+      InMembers x env.
+  Proof.
+    induction ck; intros Hwt Hfree;
+      inv Hwt; inv Hfree; eauto using In_InMembers.
+  Qed.
+
+  Corollary wt_nclock_Is_free_in : forall x env name ck,
+      wt_nclock env (ck, name) ->
+      Is_free_in_clock x ck ->
+      InMembers x env.
+  Proof.
+    intros * Hwt Hin; inv Hwt. eapply wt_clock_Is_free_in; eauto.
+  Qed.
+
 End LTYPING.
 
 Module LTypingFun
