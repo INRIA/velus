@@ -91,11 +91,12 @@ src/Obc/Equiv.v
 src/Obc/ObcInvariants.v
 src/Obc/Obc.v
 
-src/Transcription/Transcription.v
-src/Transcription/Correctness.v
-src/Transcription/Completeness.v
+src/Transcription/Tr.v
 src/Transcription/TrTyping.v
 src/Transcription/TrClocking.v
+src/Transcription/Correctness.v
+src/Transcription/Completeness.v
+src/Transcription/Transcription.v
 
 src/NLustreToStc/NL2StcTyping.v
 src/NLustreToStc/NL2StcClocking.v

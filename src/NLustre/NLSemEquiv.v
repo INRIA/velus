@@ -176,7 +176,7 @@ Module Type NLSEMEQUIV
 
 
 
-(* Definition history_equivalence (H: CoInd.History) (H': Indexed.history) := *)
+(* Definition history_equivalence (H: CoInd.history) (H': Indexed.history) := *)
 (*   forall x xs xs', *)
 (*     (PM.MapsTo x xs H -> *)
 (*      PM.MapsTo x xs' H' /\ stream_equivalence xs xs') *)
@@ -206,7 +206,7 @@ Module Type NLSEMEQUIV
 
 (* Record unified_history := *)
 (*   { *)
-(*     coind_h: CoInd.History; *)
+(*     coind_h: history; *)
 (*     indexed_h: Indexed.history; *)
 (*     equiv_h: history_equivalence coind_h indexed_h *)
 (*   }. *)
@@ -228,7 +228,7 @@ Module Type NLSEMEQUIV
 (*     split; intros Sem. *)
 (*     - constructor. *)
 (*       inv Sem. *)
-(*       unfold Indexed.restr, tr_History. *)
+(*       unfold Indexed.restr, tr_history. *)
 (*       unfold PM.map. *)
 (*       rewrite PM.gmapi. *)
 (*       erewrite PM.find_1; eauto; simpl. *)

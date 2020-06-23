@@ -2422,6 +2422,21 @@ Section Forall2.
       eapply IHHperm2 in Hf'. destruct Hf' as [l2'' [Hperm'' Hf'']].
       exists l2''. split; auto. etransitivity; eauto.
   Qed.
+
+
+  Lemma Forall2_const_map :
+    forall (P : A -> B -> Prop) (e : A) (l : list C) (l' : list B),
+      Forall (fun y => P e y) l' ->
+      length l = length l' ->
+      Forall2 (fun x y => P x y) (map (fun _ => e) l) l'.
+  Proof.
+    intros * Hf Hlen.
+    apply Forall2_forall; split; [| now rewrite map_length].
+    intros * Hin. revert dependent l'.
+    induction l; intros. inv Hin.
+    destruct l'; inv Hlen. simpl in Hin.
+    destruct Hin; inv Hf; try inv H; eauto.
+  Qed.
 End Forall2.
 
 Hint Resolve (proj2 (Forall2_eq _ _)).

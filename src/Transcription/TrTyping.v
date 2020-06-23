@@ -5,7 +5,7 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
-From Velus Require Import Transcription.Transcription.
+From Velus Require Import Transcription.Tr.
 
 From Velus Require Import Lustre.LTyping.
 From Velus Require Import CoreExpr.CETyping.
@@ -36,7 +36,7 @@ Module Type TRTYPING
        (NL          : NLSYNTAX Ids Op CE)
        (Ord         : NLORDERED Ids Op CE     NL)
        (NLT         : NLTYPING  Ids Op CE NL Ord CET)
-       (Import TR   : TRANSCRIPTION Ids Op OpAux L CE NL).
+       (Import TR   : TR Ids Op OpAux L CE NL).
 
   Module FNS := FN.Spec.
 
@@ -491,13 +491,13 @@ Module TrTypingFun
        (OpAux: OPERATORS_AUX Op)
        (L    : LSYNTAX  Ids Op)
        (LT   : LTYPING  Ids Op L)
-       (FN          : FULLNORM Ids Op OpAux L)
+       (FN   : FULLNORM Ids Op OpAux L)
        (CE   : CESYNTAX     Op)
        (CET  : CETYPING Ids Op CE)
        (NL   : NLSYNTAX Ids Op CE)
        (Ord  : NLORDERED Ids Op CE     NL)
        (NLT  : NLTYPING  Ids Op CE NL Ord CET)
-       (TR   : TRANSCRIPTION Ids Op OpAux L CE NL)
+       (TR   : TR Ids Op OpAux L CE NL)
 <: TRTYPING Ids Op OpAux L LT FN CE CET NL Ord NLT TR.
   Include TRTYPING Ids Op OpAux L LT FN CE CET NL Ord NLT TR.
 End TrTypingFun.

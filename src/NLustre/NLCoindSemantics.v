@@ -35,54 +35,7 @@ Module Type NLCOINDSEMANTICS
        (Import Str   : COINDSTREAMS  Op OpAux)
        (Import Ord   : NLORDERED Ids Op CESyn Syn).
 
-  Definition History := Env.t (Stream value).
-
-  Definition History_tl (H: History) : History := Env.map (@tl value) H.
-
-   Inductive sem_var: History -> ident -> Stream value -> Prop :=
-    sem_var_intro:
-      forall H x xs xs',
-        Env.find x H = Some xs' ->
-        xs ≡ xs' ->
-        sem_var H x xs.
-
-  CoInductive sem_clock: History -> Stream bool -> clock -> Stream bool -> Prop :=
-  | Sbase:
-      forall H b b',
-        b ≡ b' ->
-        sem_clock H b Cbase b'
-  | Son:
-      forall H b bk bs ck x k xs c,
-        sem_clock H b ck (true ⋅ bk) ->
-        sem_var H x (present c ⋅ xs) ->
-        val_to_bool c = Some k ->
-        sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (true ⋅ bs)
-  | Son_abs1:
-      forall H b bk bs ck x k xs,
-        sem_clock H b ck (false ⋅ bk) ->
-        sem_var H x (absent ⋅ xs) ->
-        sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (false ⋅ bs)
-  | Son_abs2:
-      forall H b bk bs ck x k c xs,
-        sem_clock H b ck (true ⋅ bk) ->
-        sem_var H x (present c ⋅ xs) ->
-        val_to_bool c = Some k ->
-        sem_clock (History_tl H) (tl b) (Con ck x (negb k)) bs ->
-        sem_clock H b (Con ck x (negb k)) (false ⋅ bs).
-
-  CoInductive synchronized: Stream value -> Stream bool -> Prop :=
-  | synchro_present:
-      forall v vs bs,
-        synchronized vs bs ->
-        synchronized (present v ⋅ vs) (true ⋅ bs)
-  | synchro_absent:
-      forall vs bs,
-        synchronized vs bs ->
-        synchronized (absent ⋅ vs) (false ⋅ bs).
-
-  Definition sem_clocked_var (H: History) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
+  Definition sem_clocked_var (H: history) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
     (forall xs,
         sem_var H x xs ->
         exists bs,
@@ -93,10 +46,10 @@ Module Type NLCOINDSEMANTICS
           exists xs,
             sem_var H x xs).
 
-  Definition sem_clocked_vars (H: History) (b: Stream bool) (xs: list (ident * clock)) : Prop :=
+  Definition sem_clocked_vars (H: history) (b: Stream bool) (xs: list (ident * clock)) : Prop :=
     Forall (fun xc => sem_clocked_var H b (fst xc) (snd xc)) xs.
 
-  Inductive sem_exp: History -> Stream bool -> exp -> Stream value -> Prop :=
+  Inductive sem_exp: history -> Stream bool -> exp -> Stream value -> Prop :=
   | Sconst:
       forall H b c cs,
         cs ≡ const b c ->
@@ -123,7 +76,7 @@ Module Type NLCOINDSEMANTICS
         lift2 op (typeof e1) (typeof e2) es1 es2 os ->
         sem_exp H b (Ebinop op e1 e2 ty) os.
 
-  Inductive sem_cexp: History -> Stream bool -> cexp -> Stream value -> Prop :=
+  Inductive sem_cexp: history -> Stream bool -> cexp -> Stream value -> Prop :=
   | Smerge:
       forall H b x t f xs ts fs os,
         sem_var H x xs ->
@@ -143,19 +96,19 @@ Module Type NLCOINDSEMANTICS
         sem_exp H b e es ->
         sem_cexp H b (Eexp e) es.
 
-  CoInductive sem_annot {A} (sem: History -> Stream bool -> A -> Stream value -> Prop):
-    History -> Stream bool -> clock -> A -> Stream value -> Prop :=
+  CoInductive sem_annot {A} (sem: history -> Stream bool -> A -> Stream value -> Prop):
+    history -> Stream bool -> clock -> A -> Stream value -> Prop :=
   | Stick:
       forall H b ck a e es bs,
         sem H b a (present e ⋅ es) ->
         sem_clock H b ck (true ⋅ bs) ->
-        sem_annot sem (History_tl H) (tl b) ck a es ->
+        sem_annot sem (history_tl H) (tl b) ck a es ->
         sem_annot sem H b ck a (present e ⋅ es)
   | Sabs:
       forall H b ck a es bs,
         sem H b a (absent ⋅ es) ->
         sem_clock H b ck (false ⋅ bs) ->
-        sem_annot sem (History_tl H) (tl b) ck a es ->
+        sem_annot sem (history_tl H) (tl b) ck a es ->
         sem_annot sem H b ck a (absent ⋅ es).
 
   Definition sem_aexp := sem_annot sem_exp.
@@ -171,7 +124,7 @@ Module Type NLCOINDSEMANTICS
 
     Variable G: global.
 
-    Inductive sem_equation: History -> Stream bool -> equation -> Prop :=
+    Inductive sem_equation: history -> Stream bool -> equation -> Prop :=
     | SeqDef:
         forall H b x ck e es,
           sem_caexp H b ck e es ->
@@ -216,7 +169,7 @@ Module Type NLCOINDSEMANTICS
 
     Variable G: global.
 
-    Variable P_equation: History -> Stream bool -> equation -> Prop.
+    Variable P_equation: history -> Stream bool -> equation -> Prop.
     Variable P_node: ident -> list (Stream value) -> list (Stream value) -> Prop.
 
     Hypothesis EqDefCase:
@@ -263,7 +216,7 @@ Module Type NLCOINDSEMANTICS
         P_node f xss oss.
 
     Fixpoint sem_equation_mult
-             (H: History) (b: Stream bool) (e: equation)
+             (H: history) (b: Stream bool) (e: equation)
              (Sem: sem_equation G H b e) {struct Sem}
       : P_equation H b e
     with sem_node_mult
@@ -461,23 +414,6 @@ Module Type NLCOINDSEMANTICS
       constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
 
-  Add Parametric Morphism H : (sem_clock H)
-      with signature @EqSt bool ==> eq ==> @EqSt bool ==> Basics.impl
-        as sem_clock_morph.
-  Proof.
-    revert H; cofix Cofix.
-    intros H b b' Eb ck bk bk' Ebk Sem.
-    inv Sem.
-    - constructor.
-      now rewrite <-Ebk, <-Eb.
-    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
-        econstructor; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
-    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
-        econstructor; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
-    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
-        eapply Son_abs2; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
-  Qed.
-
   Add Parametric Morphism H : (sem_exp H)
       with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
         as sem_exp_morph.
@@ -618,18 +554,6 @@ Module Type NLCOINDSEMANTICS
     intros xs xs' Exs bs bs' Ebs Synchro.
     unfold_Stv xs'; unfold_Stv bs'; inv Synchro; inv Exs; inv Ebs;
       try discriminate; constructor; eapply CoFix; eauto.
-  Qed.
-
-  Lemma sem_var_det:
-    forall x H xs xs',
-      sem_var H x xs ->
-      sem_var H x xs' ->
-      xs ≡ xs'.
-  Proof.
-    inversion_clear 1 as [???? Find E];
-      inversion_clear 1 as [???? Find' E'];
-      rewrite Find in Find'; inv Find'.
-    etransitivity; eauto; symmetry; auto.
   Qed.
 
 End NLCOINDSEMANTICS.

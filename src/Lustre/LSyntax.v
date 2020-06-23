@@ -532,6 +532,16 @@ Module Type LSYNTAX
     eauto with datatypes.
   Qed.
 
+  Corollary In_snd_nclocksof:
+    forall n es,
+      In n (map snd (nclocksof es)) ->
+      exists e, In e es /\ In n (map snd (nclockof e)).
+  Proof.
+    intros * Hin. apply in_map_iff in Hin as (?&?&Hin).
+    apply In_nclocksof in Hin as (e&?&?).
+    exists e. split; auto. apply in_map_iff; eauto.
+  Qed.
+
   (** vars_defined *)
 
   Lemma NoDup_vars_defined_n_eqs:

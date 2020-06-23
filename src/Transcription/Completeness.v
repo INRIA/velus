@@ -16,8 +16,9 @@ From Velus Require Import Lustre.Normalization.FullNorm.
 
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
-From Velus Require Import Transcription.Transcription.
+From Velus Require Import Transcription.Tr.
 
+Local Set Warnings "-masking-absolute-name".
 Module Type COMPLETENESS
        (Import Ids : IDS)
        (Import Op : OPERATORS)
@@ -27,7 +28,7 @@ Module Type COMPLETENESS
        (Import Norm : FULLNORM Ids Op OpAux LSyn)
        (Import CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
-       (Import TR : TRANSCRIPTION Ids Op OpAux LSyn CE NL).
+       (Import TR : TR Ids Op OpAux LSyn CE NL).
 
   Import Norm.
 
@@ -220,7 +221,7 @@ Module CompletenessFun
        (Norm : FULLNORM Ids Op OpAux LSyn)
        (CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
-       (TR : TRANSCRIPTION Ids Op OpAux LSyn CE NL)
+       (TR : TR Ids Op OpAux LSyn CE NL)
        <: COMPLETENESS Ids Op OpAux Str LSyn Norm CE NL TR.
   Include COMPLETENESS Ids Op OpAux Str LSyn Norm CE NL TR.
 End CompletenessFun.

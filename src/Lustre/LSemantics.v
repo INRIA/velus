@@ -27,8 +27,6 @@ Module Type LSEMANTICS
        (Import Lord  : LORDERED   Ids Op Syn)
        (Import Str   : COINDSTREAMS   Op OpAux).
 
-  Definition history := Env.t (Stream value).
-
   CoInductive fby1
     : val -> Stream value -> Stream value -> Stream value -> Prop :=
   | Fby1A:
@@ -52,13 +50,6 @@ Module Type LSEMANTICS
 
   (* TODO: Use everywhere, esp. in LustreElab.v *)
   Definition idents xs := List.map (@fst ident (type * clock)) xs.
-
-  Inductive sem_var: history -> ident -> Stream value -> Prop :=
-    sem_var_intro:
-      forall H x xs xs',
-        Env.MapsTo x xs' H ->
-        xs ≡ xs' ->
-        sem_var H x xs.
 
   Section NodeSemantics.
 
@@ -1183,20 +1174,6 @@ Module Type LSEMANTICS
     unfold idents in *; rewrite map_app in *; split.
     - eapply sem_node_sem_vars; eauto.
     - eapply sem_node_sem_outs; eauto.
-  Qed.
-
-  (** ** Some elements of semantic determinism *)
-
-  Lemma sem_var_det : forall H x s1 s2,
-      sem_var H x s1 ->
-      sem_var H x s2 ->
-      s1 ≡ s2.
-  Proof.
-    intros * Hsem1 Hsem2.
-    inv Hsem1. inv Hsem2.
-    rewrite H2, H4.
-    apply Env.find_1 in H1. apply Env.find_1 in H3.
-    rewrite H1 in H3. inv H3. reflexivity.
   Qed.
 
 End LSEMANTICS.

@@ -59,7 +59,7 @@ Module Type NLCOINDTOINDEXED
     (** Translate an history from coinductive to indexed world.
         Every element of the history is translated.
      *)
-    Definition tr_History (H: CoInd.History) : CESem.history :=
+    Definition tr_history (H: history) : CESem.history :=
       fun n => Env.map (fun xs => tr_Stream xs n) H.
 
     (** ** Properties  *)
@@ -127,9 +127,9 @@ Module Type NLCOINDTOINDEXED
     Qed.
 
     (** The counterpart of [tr_Stream_tl] for histories. *)
-    Lemma tr_History_tl:
+    Lemma tr_history_tl:
       forall n H,
-        tr_History H (S n) = tr_History (CoInd.History_tl H) n.
+        tr_history H (S n) = tr_history (history_tl H) n.
     Proof.
       now repeat setoid_rewrite Env.map_map.
     Qed.
@@ -140,21 +140,21 @@ Module Type NLCOINDTOINDEXED
 
     Lemma sem_var_impl:
       forall H x xs,
-      CoInd.sem_var H x xs ->
-      CESem.sem_var (tr_History H) x (tr_Stream xs).
+      sem_var H x xs ->
+      CESem.sem_var (tr_history H) x (tr_Stream xs).
     Proof.
       intros * Find n.
       unfold CESem.sem_var_instant.
       inversion_clear Find as [???? Find' E].
-      unfold tr_History, Env.map.
+      unfold tr_history, Env.map.
       rewrite Env.gmapi, Find', E; simpl; auto.
     Qed.
     Hint Resolve sem_var_impl.
 
     Corollary sem_vars_impl:
       forall H xs xss,
-      Forall2 (CoInd.sem_var H) xs xss ->
-      CESem.sem_vars (tr_History H) xs (tr_Streams xss).
+      Forall2 (sem_var H) xs xss ->
+      CESem.sem_vars (tr_history H) xs (tr_Streams xss).
     Proof.
       unfold CESem.sem_vars, CESem.lift'.
       induction 1 as [|? ? ? ? Find];
@@ -174,15 +174,15 @@ Module Type NLCOINDTOINDEXED
     Hint Constructors CESem.sem_clock_instant.
     Lemma sem_clock_index:
       forall n H b ck bs,
-        CoInd.sem_clock H b ck bs ->
+        sem_clock H b ck bs ->
         (ck = Cbase
          /\ tr_Stream b n = tr_Stream bs n)
         \/
         (exists ck' x k c,
             ck = Con ck' x k
             /\ CESem.sem_clock_instant
-                (tr_Stream b n) (tr_History H n) ck' true
-            /\ CESem.sem_var_instant (tr_History H n) x
+                (tr_Stream b n) (tr_history H n) ck' true
+            /\ CESem.sem_var_instant (tr_history H n) x
                                       (present c)
             /\ val_to_bool c = Some k
             /\ tr_Stream bs n = true)
@@ -190,15 +190,15 @@ Module Type NLCOINDTOINDEXED
         (exists ck' x k,
             ck = Con ck' x k
             /\ CESem.sem_clock_instant
-                (tr_Stream b n) (tr_History H n) ck' false
-            /\ CESem.sem_var_instant (tr_History H n) x absent
+                (tr_Stream b n) (tr_history H n) ck' false
+            /\ CESem.sem_var_instant (tr_history H n) x absent
             /\ tr_Stream bs n = false)
         \/
         (exists ck' x k c,
             ck = Con ck' x (negb k)
             /\ CESem.sem_clock_instant
-                (tr_Stream b n) (tr_History H n) ck' true
-            /\ CESem.sem_var_instant (tr_History H n) x
+                (tr_Stream b n) (tr_history H n) ck' true
+            /\ CESem.sem_var_instant (tr_history H n) x
                                       (present c)
             /\ val_to_bool c = Some k
             /\ tr_Stream bs n = false).
@@ -239,14 +239,14 @@ Module Type NLCOINDTOINDEXED
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
             rewrite E, tr_Stream_0; constructor.
-        + inversion_clear Indexed; rewrite <-tr_Stream_tl, tr_History_tl; eauto.
+        + inversion_clear Indexed; rewrite <-tr_Stream_tl, tr_history_tl; eauto.
     Qed.
 
     (** We can then deduce the correspondence lemma for [sem_clock]. *)
     Corollary sem_clock_impl:
       forall H b ck bs,
-        CoInd.sem_clock H b ck bs ->
-        CESem.sem_clock (tr_Stream b) (tr_History H) ck (tr_Stream bs).
+        sem_clock H b ck bs ->
+        CESem.sem_clock (tr_Stream b) (tr_history H) ck (tr_Stream bs).
     Proof.
       intros * Indexed n.
       apply (sem_clock_index n) in Indexed. destruct Indexed as [|[|[|]]];
@@ -264,7 +264,7 @@ Module Type NLCOINDTOINDEXED
     Lemma sem_exp_impl:
       forall H b e es,
         CoInd.sem_exp H b e es ->
-        CESem.sem_exp (tr_Stream b) (tr_History H) e (tr_Stream es).
+        CESem.sem_exp (tr_Stream b) (tr_history H) e (tr_Stream es).
     Proof.
       unfold tr_Stream.
       induction 1 as [? ? ? ? Hconst
@@ -302,7 +302,7 @@ Module Type NLCOINDTOINDEXED
     Corollary sem_exps_impl:
       forall H b es ess,
         Forall2 (CoInd.sem_exp H b) es ess ->
-        CESem.sem_exps (tr_Stream b) (tr_History H) es (tr_Streams ess).
+        CESem.sem_exps (tr_Stream b) (tr_history H) es (tr_Streams ess).
     Proof.
       induction 1; simpl; constructor.
       - apply sem_exp_impl; auto.
@@ -316,16 +316,16 @@ Module Type NLCOINDTOINDEXED
       forall n H b ck le es,
         CoInd.sem_aexp H b ck le es ->
         (CESem.sem_clock_instant (tr_Stream b n)
-                                   (tr_History H n) ck false
+                                   (tr_history H n) ck false
          /\ CESem.sem_exp_instant
-             (tr_Stream b n) (tr_History H n) le absent
+             (tr_Stream b n) (tr_history H n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
             CESem.sem_clock_instant (tr_Stream b n)
-                                      (tr_History H n) ck true
+                                      (tr_history H n) ck true
             /\ CESem.sem_exp_instant
-                (tr_Stream b n) (tr_History H n) le (present e)
+                (tr_Stream b n) (tr_history H n) le (present e)
             /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.
@@ -338,7 +338,7 @@ Module Type NLCOINDTOINDEXED
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_exp_impl in Indexed';
-          rewrite tr_Stream_S, tr_History_tl; eauto.
+          rewrite tr_Stream_S, tr_history_tl; eauto.
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated
@@ -347,7 +347,7 @@ Module Type NLCOINDTOINDEXED
     Corollary sem_aexp_impl:
       forall H b e es ck,
         CoInd.sem_aexp H b ck e es ->
-        CESem.sem_aexp (tr_Stream b) (tr_History H) ck e (tr_Stream es).
+        CESem.sem_aexp (tr_Stream b) (tr_history H) ck e (tr_Stream es).
     Proof.
       intros * Indexed n.
       apply (sem_aexp_index n) in Indexed;
@@ -382,7 +382,7 @@ Module Type NLCOINDTOINDEXED
     Lemma sem_cexp_impl:
       forall H b e es,
         CoInd.sem_cexp H b e es ->
-        CESem.sem_cexp (tr_Stream b) (tr_History H) e (tr_Stream es).
+        CESem.sem_cexp (tr_Stream b) (tr_history H) e (tr_Stream es).
     Proof.
       unfold tr_Stream.
       induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
@@ -426,16 +426,16 @@ Module Type NLCOINDTOINDEXED
       forall n H b ck le es,
         CoInd.sem_caexp H b ck le es ->
         (CESem.sem_clock_instant (tr_Stream b n)
-                                   (tr_History H n) ck false
+                                   (tr_history H n) ck false
          /\ CESem.sem_cexp_instant
-             (tr_Stream b n) (tr_History H n) le absent
+             (tr_Stream b n) (tr_history H n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
             CESem.sem_clock_instant (tr_Stream b n)
-                                      (tr_History H n) ck true
+                                      (tr_history H n) ck true
             /\ CESem.sem_cexp_instant
-                (tr_Stream b n) (tr_History H n) le (present e)
+                (tr_Stream b n) (tr_history H n) le (present e)
             /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.
@@ -448,7 +448,7 @@ Module Type NLCOINDTOINDEXED
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_cexp_impl in Indexed';
-          repeat rewrite tr_Stream_S; rewrite tr_History_tl; eauto.
+          repeat rewrite tr_Stream_S; rewrite tr_history_tl; eauto.
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated
@@ -456,7 +456,7 @@ Module Type NLCOINDTOINDEXED
     Corollary sem_caexp_impl:
       forall H b e es ck,
         CoInd.sem_caexp H b ck e es ->
-        CESem.sem_caexp (tr_Stream b) (tr_History H) ck e (tr_Stream es).
+        CESem.sem_caexp (tr_Stream b) (tr_history H) ck e (tr_Stream es).
     Proof.
       intros * Indexed n.
       apply (sem_caexp_index n) in Indexed; destruct Indexed
@@ -582,7 +582,7 @@ Module Type NLCOINDTOINDEXED
     (** Give an indexed specification for Streams synchronization. *)
     Lemma synchronized_index:
       forall xs bs,
-        CoInd.synchronized xs bs ->
+        synchronized xs bs ->
         forall n, tr_Stream bs n = true <-> tr_Stream xs n <> absent.
     Proof.
       intros * Sync n; revert dependent xs; revert bs; induction n; intros.
@@ -593,9 +593,9 @@ Module Type NLCOINDTOINDEXED
 
     Lemma sem_clocked_var_impl:
       forall H b x ck xs,
-        CoInd.sem_var H x xs ->
+        sem_var H x xs ->
         CoInd.sem_clocked_var H b x ck ->
-        CESem.sem_clocked_var (tr_Stream b) (tr_History H) x ck.
+        CESem.sem_clocked_var (tr_Stream b) (tr_history H) x ck.
     Proof.
       intros * Var (Sem & Sem').
       pose proof Var as Var'.
@@ -627,9 +627,9 @@ Module Type NLCOINDTOINDEXED
 
     Lemma sem_clocked_vars_impl:
       forall H b xcs xss,
-        Forall2 (CoInd.sem_var H) (List.map fst xcs) xss ->
+        Forall2 (sem_var H) (List.map fst xcs) xss ->
         CoInd.sem_clocked_vars H b xcs ->
-        CESem.sem_clocked_vars (tr_Stream b) (tr_History H) xcs.
+        CESem.sem_clocked_vars (tr_Stream b) (tr_history H) xcs.
     Proof.
       intros * Vars Sem n.
       apply Forall_forall; intros (x, ck) Hin; simpl.
@@ -653,7 +653,7 @@ Module Type NLCOINDTOINDEXED
                        using CoInd.sem_node_mult with
           (P_equation := fun H b e =>
                            CoInd.sem_equation G H b e ->
-                           Indexed.sem_equation G (tr_Stream b) (tr_History H) e);
+                           Indexed.sem_equation G (tr_Stream b) (tr_history H) e);
         eauto.
 
       - econstructor; eauto.

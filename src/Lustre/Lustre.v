@@ -21,11 +21,11 @@ Module Type LUSTRE
   Declare Module Export Syn: LSYNTAX    Ids Op.
   Declare Module Export Typ: LTYPING    Ids Op       Syn.
   Declare Module Export Clo: LCLOCKING  Ids Op       Syn.
-  Declare Module Export Lord: LORDERED  Ids Op       Syn.
-  Declare Module Export Lcau: LCAUSALITY Ids Op       Syn.
-  Declare Module Export Sem: LSEMANTICS Ids Op OpAux Syn Lord Str.
-  Declare Module Export ClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Typ Clo Lord Str Sem.
-  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Str Syn Typ Clo Lord Sem.
+  Declare Module Export Ord: LORDERED   Ids Op       Syn.
+  Declare Module Export Cau: LCAUSALITY Ids Op       Syn.
+  Declare Module Export Sem: LSEMANTICS Ids Op OpAux Syn Ord Str.
+  Declare Module Export ClSem : LCLOCKSEMANTICS Ids Op OpAux Syn Typ Clo Cau Ord Str Sem.
+  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Str Syn Typ Clo Ord Sem.
 End LUSTRE.
 
 Module LustreFun
@@ -37,9 +37,9 @@ Module LustreFun
   Module Export Syn := LSyntaxFun     Ids Op.
   Module Export Typ := LTypingFun     Ids Op       Syn.
   Module Export Clo := LClockingFun   Ids Op       Syn.
-  Module Export Lord:= LOrderedFun    Ids Op       Syn.
-  Module Export Lcau:= LCausality     Ids Op       Syn.
-  Module Export Sem := LSemanticsFun  Ids Op OpAux Syn Lord Str.
-  Module Export ClockSem := LClockSemanticsFun Ids Op OpAux Syn Typ Clo Lord Str Sem.
-  Module Export Norm := LNormalizationFun Ids Op OpAux Str Syn Typ Clo Lord Sem.
+  Module Export Ord:= LOrderedFun     Ids Op       Syn.
+  Module Export Cau:= LCausality      Ids Op       Syn.
+  Module Export Sem := LSemanticsFun  Ids Op OpAux Syn Ord Str.
+  Module Export ClSem := LClockSemanticsFun Ids Op OpAux Syn Typ Clo Cau Ord Str Sem.
+  Module Export Norm := LNormalizationFun Ids Op OpAux Str Syn Typ Clo Ord Sem.
 End LustreFun.

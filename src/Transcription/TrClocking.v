@@ -5,7 +5,7 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
-From Velus Require Import Transcription.Transcription.
+From Velus Require Import Transcription.Tr.
 
 From Velus Require Import CoreExpr.CEIsFree.
 From Velus Require Import CoreExpr.CEClocking.
@@ -43,7 +43,7 @@ Module Type TRCLOCKING
        (Import IsF  : ISFREE     Ids Op CE NL CEIsF)
        (Import CEClo: CECLOCKING Ids Op CE)
        (NLC         : NLCLOCKING Ids Op CE NL Ord Mem IsD CEIsF IsF CEClo)
-       (Import TR   : TRANSCRIPTION Ids Op OpAux L CE NL).
+       (Import TR   : TR Ids Op OpAux L CE NL).
 
   (* TODO: duplicate from LSemantics.v *)
   Definition idents xs := List.map (@fst ident (type * clock)) xs.
@@ -505,7 +505,7 @@ Module Type TRCLOCKING
 
 End TRCLOCKING.
 
-Module Type TrClockingFun
+Module TrClockingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX  Op)
@@ -520,7 +520,7 @@ Module Type TrClockingFun
        (IsF   : ISFREE     Ids Op CE NL CEIsF)
        (CEClo : CECLOCKING Ids Op CE)
        (NLC   : NLCLOCKING Ids Op CE NL Ord Mem IsD CEIsF IsF CEClo)
-       (TR    : TRANSCRIPTION Ids Op OpAux L CE NL)
+       (TR    : TR Ids Op OpAux L CE NL)
 <: TRCLOCKING Ids Op OpAux L LC CE NL Ord Mem IsD CEIsF IsF CEClo NLC TR.
   Include TRCLOCKING Ids Op OpAux L LC CE NL Ord Mem IsD CEIsF IsF CEClo NLC TR.
 End TrClockingFun.

@@ -8,7 +8,7 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LClockSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.
 From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking Lustre.Normalization.NOrdered.
 
@@ -23,12 +23,13 @@ Module Type CORRECTNESS
        (Import Syn : LSYNTAX Ids Op)
        (Import Typ : LTYPING Ids Op Syn)
        (Import Cl : LCLOCKING Ids Op Syn)
+       (LCA        : LCAUSALITY Ids Op Syn)
        (Import Ord : LORDERED Ids Op Syn)
        (Import Sem : LSEMANTICS Ids Op OpAux Syn Ord Str)
+       (Import LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Typ Cl LCA Ord Str Sem)
        (Import Norm : FULLNORM Ids Op OpAux Syn).
 
   Import Fresh Tactics.
-  Module Import ClockSem := LClockSemanticsFun Ids Op OpAux Syn Typ Cl Ord Str Sem.
   Module Import Typ := NTypingFun Ids Op OpAux Syn Typ Norm.
   Module Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
   Module Ord := NOrderedFun Ids Op OpAux Syn Ord Norm.
@@ -1949,11 +1950,13 @@ Module CorrectnessFun
        (Syn : LSYNTAX Ids Op)
        (Typ : LTYPING Ids Op Syn)
        (Clo : LCLOCKING Ids Op Syn)
+       (LCA        : LCAUSALITY Ids Op Syn)
        (Lord : LORDERED Ids Op Syn)
        (Sem : LSEMANTICS Ids Op OpAux Syn Lord Str)
+       (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Typ Clo LCA Lord Str Sem)
        (Norm : FULLNORM Ids Op OpAux Syn)
-       <: CORRECTNESS Ids Op OpAux Str Syn Typ Clo Lord Sem Norm.
-  Include CORRECTNESS Ids Op OpAux Str Syn Typ Clo Lord Sem Norm.
+       <: CORRECTNESS Ids Op OpAux Str Syn Typ Clo LCA Lord Sem LClockSem Norm.
+  Include CORRECTNESS Ids Op OpAux Str Syn Typ Clo LCA Lord Sem LClockSem Norm.
   Module Typing := NTypingFun Ids Op OpAux Syn Typ Norm.
   Module Clocking := NClockingFun Ids Op OpAux Syn Clo Norm.
   Module Ordered := NOrderedFun Ids Op OpAux Syn Lord Norm.

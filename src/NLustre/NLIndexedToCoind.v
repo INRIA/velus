@@ -89,13 +89,13 @@ Module Type NLINDEXEDTOCOIND
 
     (** Translate an history from indexed to coinductive world.
         Every element of the history is translated. *)
-    Definition tr_history_from (n: nat) (H: CESem.history) : CoInd.History :=
+    Definition tr_history_from (n: nat) (H: CESem.history) : history :=
       Env.mapi (fun x _ => init_from n (fun n => match Env.find x (H n) with
                                                  | Some v => v
                                                  | None => absent
                                                  end)) (H 0).
 
-    Definition tr_history : CESem.history -> CoInd.History :=
+    Definition tr_history : CESem.history -> history :=
       tr_history_from 0.
 
     (** ** Properties  *)
@@ -207,7 +207,7 @@ Module Type NLINDEXEDTOCOIND
     (** The counterpart of [tr_stream_from_tl] for histories. *)
     Lemma tr_history_from_tl:
       forall n H,
-        CoInd.History_tl (tr_history_from n H) = tr_history_from (S n) H.
+        history_tl (tr_history_from n H) = tr_history_from (S n) H.
     Proof.
       now setoid_rewrite Env.mapi_mapi.
     Qed.

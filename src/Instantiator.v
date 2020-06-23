@@ -17,7 +17,7 @@ Module NL := NLustreFun Ids Op OpAux CStr IStr CE.
 
 From Velus Require Import Transcription.
 
-Module TR := TranscriptionFun Ids Op OpAux L.Syn CE.Syn NL.Syn.
+Module TR := TranscriptionFun Ids Op OpAux CStr IStr L CE NL.
 
 From Velus Require Import Stc.
 
