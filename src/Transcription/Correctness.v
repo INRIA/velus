@@ -2709,6 +2709,125 @@ Module Type CORRECTNESS
       inv Hwt. inv Hwc. inv Hcaus. eapply IHG; eauto.
   Qed.
 
+  (* We can also get the semantics for the clocks of internal variables.
+     But we have to open sem_node for that *)
+  Definition sc_node' (G : L.global) (n : L.node) : Prop :=
+    forall H xs vs os,
+      Forall2 (LS.sem_var H) (LS.idents (L.n_in n)) xs ->
+      Forall2 (LS.sem_var H) (LS.idents (L.n_vars n)) vs ->
+      Forall2 (LS.sem_var H) (LS.idents (L.n_out n)) os ->
+      Forall (LS.sem_equation G H (clocks_of xs)) (L.n_eqs n) ->
+      Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc))
+              (idck (L.n_in n)) (map abstract_clock xs) ->
+      Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc))
+              (idck (L.n_vars n)) (map abstract_clock vs) /\
+      Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc))
+              (idck (L.n_out n)) (map abstract_clock os).
+
+  Theorem l_sem_node_clock' : forall G n,
+      Forall LCA.node_causal G ->
+      Lord.Ordered_nodes G ->
+      LT.wt_global G ->
+      LC.wc_global G ->
+      In n G ->
+      sc_node' G n.
+  Proof.
+    intros * Hcaus Hord Hwt Hwc Hin.
+    specialize (LT.wt_global_Forall _ Hwt) as Hwt'.
+    specialize (LC.wc_global_Forall _ Hwc) as Hwc'.
+    assert (NoDupMembers (L.n_in n ++ L.n_vars n ++ L.n_out n)) as Hndup.
+    { specialize (L.n_nodup n) as Hndup.
+      repeat rewrite app_assoc in *. apply NoDupMembers_app_l in Hndup; auto. }
+    assert (sc_nodes G) as Hsc by (eapply l_sem_node_clock; eauto).
+    unfold sc_node'. intros * Hinv Hvarsv Houtv Heqs Hins.
+    eapply causal_variables in Hord; eauto.
+    7: (eapply env_eq_env_from_list; eauto).
+    4: (eapply Forall_forall in Hin; eauto).
+    4: (eapply Forall_forall in Hwt' as (?&?&?&?); eauto).
+    2,3,4: (eapply Forall_forall in Hwc' as (?&?&?&?); eauto).
+    rewrite L.n_defd, map_app, Forall_app in Hord. destruct Hord as [Hsemc1 Hsemc2].
+    rewrite Forall_map in Hsemc1, Hsemc2.
+    unfold LS.idents in Hvarsv, Houtv. rewrite Forall2_map_1 in Hvarsv, Houtv.
+    split; unfold idck; rewrite Forall2_map_1, Forall2_map_2;
+      eapply Forall2_impl_In; eauto; intros [? [? ?]] ? ? ? ?; simpl in *.
+    - eapply Forall_forall in Hsemc1; eauto; simpl in *.
+      eapply Hsemc1; eauto.
+      eapply find_clock_in_env, Env.find_In_from_list; eauto.
+      apply in_or_app, or_intror, in_or_app, or_introl, H0.
+    - eapply Forall_forall in Hsemc2; eauto; simpl in *.
+      eapply Hsemc2; eauto.
+      eapply find_clock_in_env, Env.find_In_from_list; eauto.
+      apply in_or_app, or_intror, in_or_app, or_intror, H0.
+  Qed.
+
+  Definition var_inv' env H b :=
+    Forall (fun '(x, ck) => exists ss, (LS.sem_var H x ss /\ NLSC.sem_clock H b ck (abstract_clock ss))) env.
+
+  Lemma sc_node_var_inv : forall G n H xs,
+      sc_node' G n ->
+      Forall2 (LS.sem_var H) (LS.idents (L.n_in n)) xs ->
+      Forall2 (fun xc => NLSC.sem_clock H (clocks_of xs) (snd xc)) (idck (L.n_in n)) (map abstract_clock xs) ->
+      Forall (LS.sem_equation G H (clocks_of xs)) (L.n_eqs n) ->
+      var_inv' (idck (L.n_in n ++ L.n_vars n ++ L.n_out n)) H (clocks_of xs).
+  Proof.
+    intros * Hnode Hin Hinc Heqs. unfold sc_node' in Hnode.
+    assert (Heqs':=Heqs).
+    eapply LS.sem_node_sem_vars_outs in Heqs' as [[vs Hvars] [os Hout]]. 2:eapply L.n_defd.
+    unfold var_inv'.
+    specialize (Hnode _ _ _ _ Hin Hvars Hout Heqs Hinc) as [Hvarsc Houtc]. clear Heqs.
+    unfold idck, LS.idents in *. rewrite Forall2_map_1, Forall2_map_2 in Hinc, Hvarsc, Houtc.
+    rewrite Forall2_map_1 in Hin, Hvars, Hout. rewrite Forall_map.
+    eapply Forall2_Forall2 in Hin; eauto. clear Hinc.
+    eapply Forall2_Forall2 in Hvars; eauto. clear Hvarsc.
+    eapply Forall2_Forall2 in Hout; eauto. clear Houtc.
+    eapply Forall2_app in Hout; [|eapply Hvars]. eapply Forall2_app in Hout; [|eapply Hin].
+    clear Hin Hvars.
+    eapply Forall2_ignore2 in Hout.
+    eapply Forall_impl; eauto; intros; simpl in *.
+    destruct H0 as [y [_ [? ?]]]. exists y; auto.
+  Qed.
+
+  (** Now, we can use this conclusion to write a simpler version of sc_exp *)
+
+  Lemma var_inv'_var_inv : forall D H b env,
+      var_inv' env H b ->
+      var_inv D env H b.
+  Proof.
+    intros * Hinv.
+    unfold var_inv', var_inv in *.
+    intros ? _ ck xs Hin Hsem.
+    eapply Forall_forall in Hin; eauto; simpl in *.
+    destruct Hin as [? [Hsem' ?]]; eauto.
+    eapply LS.sem_var_det in Hsem; eauto.
+    rewrite Hsem in H0; auto.
+  Qed.
+
+  Lemma sc_exp' :
+    forall G H b env e ss,
+      LS.sem_exp G H b e ss ->
+      LT.wt_exp G (idty env) e ->
+      LC.wc_exp G (idck env) e ->
+      wc_env (idck env) ->
+      NoDupMembers (env ++ L.fresh_in e) ->
+      LC.wc_global G ->
+      sc_nodes G ->
+      var_inv' (idck env) H b ->
+      match e with
+      | L.Eapp f es _ anns =>
+        exists ncs nss,
+        length ncs = length nss /\
+        Forall (LiftO True (fun x => InMembers x (L.fresh_in e))) ncs /\
+        let H := Env.adds_opt' ncs nss H in
+        let H := Env.adds_opt' (filter_anons (idck env) (map snd anns)) ss H in
+        Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
+      | _ =>
+        Forall2 (NLSC.sem_clock H b) (L.clockof e) (map abstract_clock ss)
+      end.
+  Proof with eauto.
+    intros. eapply sc_exp; eauto.
+    eapply var_inv'_var_inv; eauto.
+  Qed.
+
   Lemma sem_lexp_step2: forall H b e v s,
       NLSC.sem_exp H b e (v ⋅ s) ->
       NLSC.sem_exp (NLSC.History_tl H) (Streams.tl b) e s.

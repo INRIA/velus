@@ -476,6 +476,63 @@ Module Type LTYPING
 
   End incl.
 
+  (** The global can also be extended ! *)
+
+  Section global_incl.
+    Fact wt_exp_global_incl : forall G G' vars e,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      wt_exp G vars e ->
+      wt_exp G' vars e.
+    Proof.
+      intros * Hincl Hndup1 Hndup2 Hwt.
+      induction Hwt using wt_exp_ind2; eauto using wt_exp, find_node_incl.
+    Qed.
+
+    Fact wt_equation_global_incl : forall G G' vars e,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      wt_equation G vars e ->
+      wt_equation G' vars e.
+    Proof.
+      intros G G' vars [xs es] Hincl Hndup1 Hndup2 [Hwt1 Hwt2].
+      constructor; auto.
+      eapply Forall_impl; [|eauto]. intros; eauto using wt_exp_global_incl.
+    Qed.
+
+    Fact wt_node_global_incl : forall G G' e,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      wt_node G e ->
+      wt_node G' e.
+    Proof.
+      intros * Hincl Hndup1 Hndup2 (?&?&?&?).
+      repeat constructor; auto.
+      eapply Forall_impl; [|eauto]. intros; eauto using wt_equation_global_incl.
+    Qed.
+
+    (** Now that we know this, we can deduce a weaker version of wt_global using Forall: *)
+    Lemma wt_global_Forall : forall G,
+        wt_global G ->
+        Forall (wt_node G) G.
+    Proof.
+      intros G Hwt.
+      specialize (wt_global_NoDup _ Hwt) as Hndup.
+      induction Hwt; constructor.
+      - eapply wt_node_global_incl in H; eauto.
+        apply incl_tl, incl_refl.
+        inv Hndup; auto.
+      - inv Hndup. specialize (IHHwt H4).
+        eapply Forall_impl; [|eauto]. intros.
+        eapply wt_node_global_incl in H1; eauto.
+        apply incl_tl, incl_refl.
+        constructor; auto.
+    Qed.
+  End global_incl.
+
   Local Hint Resolve wt_clock_incl incl_appl incl_refl.
   Lemma wt_exp_clockof:
     forall G env e,

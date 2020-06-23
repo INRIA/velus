@@ -669,6 +669,38 @@ Module Type LSYNTAX
     apply app_eq_nil in Hfresh as [? _]; auto.
   Qed.
 
+  Lemma find_node_In : forall G n,
+      In n G ->
+      NoDup (map n_name G) ->
+      find_node (n_name n) G = Some n.
+  Proof.
+    intros * Hin Hndup.
+    induction G; inv Hin; simpl in *.
+    - destruct ident_eqb eqn:Hident; auto.
+      rewrite ident_eqb_neq in Hident; congruence.
+    - inv Hndup. destruct ident_eqb eqn:Hident; auto.
+      exfalso. rewrite ident_eqb_eq in Hident.
+      apply H2. rewrite Hident, in_map_iff.
+      exists n; auto.
+  Qed.
+
+  Lemma find_node_incl : forall f G G' n,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      find_node f G = Some n ->
+      find_node f G' = Some n.
+  Proof.
+    intros * Hincl Hndup1 Hndup2 Hfind.
+    induction G; simpl in *; try congruence.
+    apply incl_cons' in Hincl as [Hin Hincl].
+    destruct ident_eqb eqn:Hident.
+    - clear IHG Hincl. rewrite ident_eqb_eq in Hident; subst.
+      inv Hfind. apply find_node_In; auto.
+    - clear Hin. inv Hndup1.
+      specialize (IHG Hincl H2 Hfind); auto.
+  Qed.
+
   (** Interface equivalence between nodes *)
 
   Section interface_eq.

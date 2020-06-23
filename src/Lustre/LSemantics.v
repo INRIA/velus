@@ -1131,6 +1131,74 @@ Module Type LSEMANTICS
       rewrite length_annot_numstreams. assumption.
   Qed.
 
+  (** When we have the semantic for the equations of a node,
+      we have a semantic for the internal variables, as well as the outputs *)
+  Lemma sem_node_sem_vars : forall G H b vars eqs outs,
+      Permutation (vars_defined eqs) (vars ++ outs) ->
+      Forall (sem_equation G H b) eqs ->
+      exists vs, Forall2 (sem_var H) vars vs.
+  Proof.
+    induction vars; intros * Hperm Hf.
+    - exists []; constructor.
+    - specialize (IHvars eqs (a::outs)); simpl in *.
+      rewrite Permutation_middle in Hperm.
+      specialize (IHvars Hperm Hf) as [vs Hsem].
+      symmetry in Hperm. eapply Permutation_in with (x:= a) in Hperm.
+      2: eapply in_or_app; right; left; auto.
+      unfold vars_defined in Hperm.
+      rewrite flat_map_concat_map, in_concat in Hperm; destruct Hperm as [l [Hin Hin']].
+      apply in_map_iff in Hin' as [l' [? Hin']]; subst.
+      eapply Forall_forall in Hin'; eauto. inv Hin'; simpl in Hin.
+      eapply Forall2_in_left in Hin as [v [_ Hsem']]; [|eauto].
+      exists (v::vs). constructor; auto.
+  Qed.
+
+  Lemma sem_node_sem_outs : forall G H b outs eqs vars,
+      Permutation (vars_defined eqs) (vars ++ outs) ->
+      Forall (sem_equation G H b) eqs ->
+      exists vs, Forall2 (sem_var H) outs vs.
+  Proof.
+    induction outs; intros * Hperm Hf.
+    - exists []; constructor.
+    - specialize (IHouts eqs (a::vars)); simpl in *.
+      rewrite Permutation_middle in IHouts.
+      specialize (IHouts Hperm Hf) as [vs Hsem].
+      symmetry in Hperm. eapply Permutation_in with (x:= a) in Hperm.
+      2: eapply in_or_app; right; left; auto.
+      unfold vars_defined in Hperm.
+      rewrite flat_map_concat_map, in_concat in Hperm; destruct Hperm as [l [Hin Hin']].
+      apply in_map_iff in Hin' as [l' [? Hin']]; subst.
+      eapply Forall_forall in Hin'; eauto. inv Hin'; simpl in Hin.
+      eapply Forall2_in_left in Hin as [v [_ Hsem']]; [|eauto].
+      exists (v::vs). constructor; auto.
+  Qed.
+
+  Corollary sem_node_sem_vars_outs : forall G H b vars outs eqs,
+      Permutation (vars_defined eqs) (idents (vars ++ outs)) ->
+      Forall (sem_equation G H b) eqs ->
+      (exists vs, Forall2 (sem_var H) (idents vars) vs) /\
+      (exists os, Forall2 (sem_var H) (idents outs) os).
+  Proof.
+    intros * Hperm Hf.
+    unfold idents in *; rewrite map_app in *; split.
+    - eapply sem_node_sem_vars; eauto.
+    - eapply sem_node_sem_outs; eauto.
+  Qed.
+
+  (** ** Some elements of semantic determinism *)
+
+  Lemma sem_var_det : forall H x s1 s2,
+      sem_var H x s1 ->
+      sem_var H x s2 ->
+      s1 ≡ s2.
+  Proof.
+    intros * Hsem1 Hsem2.
+    inv Hsem1. inv Hsem2.
+    rewrite H2, H4.
+    apply Env.find_1 in H1. apply Env.find_1 in H3.
+    rewrite H1 in H3. inv H3. reflexivity.
+  Qed.
+
 End LSEMANTICS.
 
 Module LSemanticsFun

@@ -353,6 +353,22 @@ Module Type LCLOCKING
 
   End wc_exp_ind2.
 
+  Lemma wc_global_NoDup:
+    forall g,
+      wc_global g ->
+      NoDup (map n_name g).
+  Proof.
+    induction g; eauto using NoDup.
+    intro WTg. simpl. constructor.
+    2:apply IHg; now inv WTg.
+    intro Hin.
+    inversion_clear WTg as [|? ? ? WTn Hn].
+    change (Forall (fun n' => (fun i=> a.(n_name) <> i) n'.(n_name)) g)%type in Hn.
+    apply Forall_map in Hn.
+    apply Forall_forall with (1:=Hn) in Hin.
+    now contradiction Hin.
+  Qed.
+
   Lemma wc_global_app:
     forall G G',
       wc_global (G' ++ G) ->
@@ -1120,6 +1136,63 @@ Module Type LCLOCKING
         intros a b Hin1 Hin2 Hin; simpl in Hin. eapply Hincl...
     Qed.
   End incl.
+
+  (** The global can also be extended ! *)
+
+  Section global_incl.
+    Fact wc_exp_global_incl : forall G G' vars e,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      wc_exp G vars e ->
+      wc_exp G' vars e.
+    Proof.
+      intros * Hincl Hndup1 Hndup2 Hwc.
+      induction Hwc using wc_exp_ind2; eauto using wc_exp, find_node_incl.
+    Qed.
+
+    Fact wc_equation_global_incl : forall G G' vars e,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      wc_equation G vars e ->
+      wc_equation G' vars e.
+    Proof.
+      intros G G' vars [xs es] Hincl Hndup1 Hndup2 [Hwc1 Hwc2].
+      constructor; auto.
+      eapply Forall_impl; [|eauto]. intros; eauto using wc_exp_global_incl.
+    Qed.
+
+    Fact wc_node_global_incl : forall G G' e,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      wc_node G e ->
+      wc_node G' e.
+    Proof.
+      intros * Hincl Hndup1 Hndup2 (?&?&?&?).
+      repeat constructor; auto.
+      eapply Forall_impl; [|eauto]. intros; eauto using wc_equation_global_incl.
+    Qed.
+
+    (** Now that we know this, we can deduce a weaker version of wc_global using Forall: *)
+    Lemma wc_global_Forall : forall G,
+        wc_global G ->
+        Forall (wc_node G) G.
+    Proof.
+      intros G Hwc.
+      specialize (wc_global_NoDup _ Hwc) as Hndup.
+      induction Hwc; constructor.
+      - eapply wc_node_global_incl in H; eauto.
+        apply incl_tl, incl_refl.
+        inv Hndup; auto.
+      - inv Hndup. specialize (IHHwc H4).
+        eapply Forall_impl; [|eauto]. intros.
+        eapply wc_node_global_incl in H1; eauto.
+        apply incl_tl, incl_refl.
+        constructor; auto.
+    Qed.
+  End global_incl.
 
   (** *** Some additional properties related to remove_member *)
 
