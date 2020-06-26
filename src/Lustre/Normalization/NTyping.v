@@ -1,7 +1,6 @@
 Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
-From Velus Require Import CoindStreams.
 From Coq Require Import List. Import List.ListNotations. Open Scope list_scope.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.

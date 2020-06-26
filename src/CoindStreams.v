@@ -422,6 +422,26 @@ Module Type COINDSTREAMS
         apply COFIX; intro n; specialize (E (S n)); rewrite 2 Str_nth_S in E; auto.
   Qed.
 
+  Corollary const_true: forall bs c n,
+      bs # n = true ->
+      (const bs c) # n = present (sem_const c).
+  Proof.
+    intros.
+    specialize (EqSt_reflex (const bs c)) as Hconst.
+    eapply const_spec with (n:=n) in Hconst.
+    rewrite Hconst, H; auto.
+  Qed.
+
+  Corollary const_false : forall bs c n,
+      bs # n = false ->
+      (const bs c) # n = absent.
+  Proof.
+    intros.
+    specialize (EqSt_reflex (const bs c)) as Hconst.
+    eapply const_spec with (n:=n) in Hconst.
+    rewrite Hconst, H; auto.
+  Qed.
+
   Lemma const_inv1 :
     forall c b s,
       const b c ≡ absent ⋅ s ->
@@ -451,6 +471,14 @@ Module Type COINDSTREAMS
   Proof.
     intros * H.
     unfold_Stv b; inv H; simpl in *; inv H0; assumption.
+  Qed.
+
+  Lemma const_Cons : forall c b bs,
+      const (b ⋅ bs) c ≡
+      (if b then present (sem_const c) else absent) ⋅ (const bs c).
+  Proof.
+    intros.
+    rewrite unfold_Stream at 1; reflexivity.
   Qed.
 
   Ltac cofix_step CoFix H :=
@@ -750,6 +778,31 @@ Module Type COINDSTREAMS
     intros [x xs]. rewrite Str_nth_S; auto.
   Qed.
 
+  Fact history_nth_find_None : forall n (H: history) id,
+      Env.find id H = None ->
+      Env.find id (history_nth n H) = None.
+  Proof.
+   induction n; intros H id Hfind.
+   - unfold history_nth.
+     rewrite Env.Props.P.F.map_o, Hfind. reflexivity.
+   - rewrite history_nth_tl.
+     rewrite IHn; auto.
+     erewrite history_tl_find_None; auto.
+  Qed.
+
+  Fact history_nth_find_None' : forall n (H: history) id,
+      Env.find id (history_nth n H) = None ->
+      Env.find id H = None.
+  Proof.
+   induction n; intros H id Hfind.
+   - unfold history_nth in Hfind.
+     rewrite Env.Props.P.F.map_o in Hfind.
+     apply option_map_inv_None in Hfind; auto.
+   - rewrite history_nth_tl in Hfind.
+     apply IHn in Hfind.
+     apply history_tl_find_None' in Hfind; auto.
+  Qed.
+
   Fact history_nth_find_Some : forall n (H: history) id vs,
       Env.find id H = Some vs ->
       Env.find id (history_nth n H) = Some (Str_nth n vs).
@@ -777,29 +830,19 @@ Module Type COINDSTREAMS
      exists (v' ⋅ vs'); split; auto.
   Qed.
 
-  Fact history_nth_find_None : forall n (H: history) id,
-      Env.find id H = None ->
-      Env.find id (history_nth n H) = None.
+  Fact history_nth_find_Some'' : forall (H: history) vs id,
+      (forall n, Env.find id (history_nth n H) = Some (vs # n)) ->
+      exists vs', Env.find id H = Some vs' /\ vs' ≡ vs.
   Proof.
-   induction n; intros H id Hfind.
-   - unfold history_nth.
-     rewrite Env.Props.P.F.map_o, Hfind. reflexivity.
-   - rewrite history_nth_tl.
-     rewrite IHn; auto.
-     erewrite history_tl_find_None; auto.
-  Qed.
-
-  Fact history_nth_find_None' : forall n (H: history) id,
-      Env.find id (history_nth n H) = None ->
-      Env.find id H = None.
-  Proof.
-   induction n; intros H id Hfind.
-   - unfold history_nth in Hfind.
-     rewrite Env.Props.P.F.map_o in Hfind.
-     apply option_map_inv_None in Hfind; auto.
-   - rewrite history_nth_tl in Hfind.
-     apply IHn in Hfind.
-     apply history_tl_find_None' in Hfind; auto.
+    intros * Hfind.
+    destruct (Env.find id H) as [vs'|] eqn:Hfind'.
+    - exists vs'. split; auto.
+      apply ntheq_eqst. intros n.
+      specialize (Hfind n).
+      apply history_nth_find_Some' in Hfind as [vs'' [? ?]].
+      rewrite H0 in Hfind'. inv Hfind'; auto.
+    - apply history_nth_find_None with (n:=0) in Hfind'.
+      congruence.
   Qed.
 
   Fact history_hd_refines : forall H H',
@@ -952,7 +995,6 @@ Module Type COINDSTREAMS
       + now apply IHxs.
   Qed.
 
-
   CoInductive sem_clock: history -> Stream bool -> clock -> Stream bool -> Prop :=
   | Sbase:
       forall H b b',
@@ -1051,6 +1093,15 @@ Module Type COINDSTREAMS
         try (now eapply Cofix; eauto).
       rewrite H1 in H2. inv H2. now simpl in H3.
       rewrite H6 in H14. eapply Cofix; eauto.
+  Qed.
+
+  Fact sem_clock_true_inv : forall H ck b bs bs',
+      sem_clock H (b ⋅ bs) ck (true ⋅ bs') ->
+      b = true.
+  Proof.
+    induction ck; intros * Hsem; inv Hsem.
+    - inv H1; auto.
+    - eapply IHck in H7; auto.
   Qed.
 
   Ltac discriminate_clock :=

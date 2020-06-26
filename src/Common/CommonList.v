@@ -2075,6 +2075,16 @@ Section Forall2.
     intros a Ia (b & Ib & Pb). eauto with datatypes.
   Qed.
 
+  Lemma Forall2_ignore2': forall (P : A -> Prop) xs (ys : list B),
+      length xs = length ys ->
+      Forall P xs ->
+      Forall2 (fun x _ => P x) xs ys.
+  Proof.
+    induction xs; intros * Hlen Hf; inv Hf;
+      destruct ys; simpl in *; try congruence;
+        constructor; auto.
+  Qed.
+
   Lemma Forall2_ignore1:
     forall {A B} (P : A -> B -> Prop) xs ys,
       Forall2 P xs ys ->

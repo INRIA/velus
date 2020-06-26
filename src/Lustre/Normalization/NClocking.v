@@ -1,8 +1,11 @@
+From Coq Require Import List.
+Import List.ListNotations.
+Open Scope list_scope.
+Require Import Omega.
+
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
-From Velus Require Import CoindStreams Clocks.
-From Coq Require Import List. Import List.ListNotations. Open Scope list_scope.
-Require Import Omega.
+From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LClocking.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization Lustre.Normalization.FullNorm.
 
@@ -1449,6 +1452,30 @@ Module Type NCLOCKING
         intros. rewrite <- app_assoc in H. repeat solve_incl.
         apply incl_app; [repeat solve_incl|].
         unfold st_clocks. apply incl_map...
+  Qed.
+
+  Corollary normalize_exp_wc_env : forall G vars e is_control es' eqs' st st',
+      wc_global G ->
+      wc_env (vars++st_clocks st) ->
+      wc_exp G (vars++st_clocks st) e ->
+      normalize_exp is_control e st = (es', eqs', st') ->
+      wc_env (vars++st_clocks st').
+  Proof.
+    intros. eapply normalize_exp_wc_eq in H as [_ ?]; eauto.
+  Qed.
+
+  Corollary map_bind2_normalize_exp_wc_env : forall G vars es is_control es' eqs' st st',
+      wc_global G ->
+      wc_env (vars++st_clocks st) ->
+      Forall (wc_exp G (vars++st_clocks st)) es ->
+      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      wc_env (vars++st_clocks st').
+  Proof.
+    intros.
+    eapply map_bind2_wc_env in H2; eauto.
+    rewrite Forall_forall in *; intros.
+    eapply normalize_exp_wc_env in H5; eauto.
+    eapply H1 in H3. repeat solve_incl.
   Qed.
 
   Corollary normalize_exps_wc_eq : forall G vars es es' eqs' st st',
