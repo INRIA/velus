@@ -377,19 +377,20 @@ Module Type SPECIFICATION
     - (* binop *)
       destruct a. constructor...
     - (* fby *)
+      simpl_forall.
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a0...
     - (* when *)
-      destruct a. repeat inv_bind.
+      destruct a. repeat inv_bind. unfold normalize_when.
       apply map_bind2_normalized_lexp' in H0...
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
-      destruct a. repeat inv_bind.
+      destruct a. repeat inv_bind. unfold normalize_merge.
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a...
     - (* ite *)
-      destruct a. repeat inv_bind.
+      destruct a. repeat inv_bind. unfold normalize_ite.
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a...
     - (* app *)
@@ -434,21 +435,22 @@ Module Type SPECIFICATION
       solve_forall.
       repeat simpl_In. destruct a0...
     - (* when *)
-      destruct a. repeat inv_bind.
+      destruct a. repeat inv_bind. unfold normalize_when.
       apply map_bind2_normalized_lexp in H0.
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
-      destruct a. repeat inv_bind.
-      apply map_bind2_normalized_cexp in H1; solve_forall.
-      apply map_bind2_normalized_cexp in H2; solve_forall.
+      destruct a. repeat inv_bind. unfold normalize_merge.
+      apply map_bind2_normalized_cexp in H1; [|solve_forall].
+      apply map_bind2_normalized_cexp in H2; [|solve_forall].
       repeat rewrite_Forall_forall.
-      repeat simpl_In...
+      repeat simpl_In.
+      repeat (constructor; auto).
     - (* ite *)
-      destruct a. repeat inv_bind.
+      destruct a. repeat inv_bind. unfold normalize_ite.
       apply normalize_exp_normalized_lexp in H1.
-      apply map_bind2_normalized_cexp in H2; solve_forall.
-      apply map_bind2_normalized_cexp in H3; solve_forall.
+      apply map_bind2_normalized_cexp in H2; [|solve_forall].
+      apply map_bind2_normalized_cexp in H3; [|solve_forall].
       repeat rewrite_Forall_forall.
       repeat simpl_In.
       constructor...
@@ -570,7 +572,7 @@ Module Type SPECIFICATION
       destruct a. repeat inv_bind.
       eapply map_bind2_normalized_eq in H0; eauto. solve_forall.
     - (* merge *)
-      destruct a; destruct is_control; repeat inv_bind;
+      destruct a; destruct is_control; repeat inv_bind; unfold normalize_merge;
         repeat rewrite Forall_app; repeat split.
       1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
       1,2: solve_weak_valid.
@@ -584,7 +586,7 @@ Module Type SPECIFICATION
         rewrite Forall_forall in H2...
         eapply normalize_exp_normalized_cexp...
     - (* ite *)
-      destruct a; destruct is_control; repeat inv_bind;
+      destruct a; destruct is_control; repeat inv_bind; unfold normalize_ite;
         repeat rewrite Forall_app; repeat split.
       1,5: (eapply IHe; eauto).
       1,2,4,5: (eapply map_bind2_normalized_eq; eauto; solve_forall).
@@ -759,7 +761,7 @@ Module Type SPECIFICATION
     { intro Hkeep; subst.
       rewrite Bool.negb_true_iff in Hkeep. rewrite existsb_Forall in Hkeep.
       rewrite forallb_Forall in Hkeep. solve_forall.
-      rewrite Bool.negb_true_iff in H0. apply PSE.mem_4 in H0.
+      apply Bool.negb_true_iff, PSE.mem_4 in H1.
       intro contra. apply Hincl in contra. contradiction.
     }
     clear Heqkeep_fby.

@@ -195,7 +195,7 @@ Module Type NORDERED
       constructor.
       eapply map_bind2_Is_node_in in H0... (repeat rewrite_Forall_forall; eauto).
       destruct Hisin...
-      left.
+      left. unfold normalize_when in H2.
       rewrite CommonList.Exists_map in H2.
       rewrite Exists_combine_l with (ys:=tys); solve_length.
       rewrite Exists_exists in *. destruct H2 as [[e ty] [HIn Hex]].
@@ -206,7 +206,7 @@ Module Type NORDERED
       assert (length (concat x6) = length (annots efs)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
       constructor. destruct is_control; repeat inv_bind.
       + destruct Hisin.
-        * rewrite CommonList.Exists_map in H3.
+        * unfold normalize_merge in H3. rewrite CommonList.Exists_map in H3.
           rewrite Exists_exists in H3. destruct H3 as [[[e0 e] ty] [HIn Hnode]].
           repeat simpl_In.
           inv Hnode. destruct H11; (inv H5; [| inv H11]).
@@ -222,7 +222,7 @@ Module Type NORDERED
           rewrite CommonList.Exists_map in H4.
           rewrite Exists_exists in H4. destruct H4 as [[id ann] [Hin Hex]]. inv Hex.
         * repeat rewrite Is_node_in_app in H4. destruct H4 as [H4|[H4|H4]].
-          -- rewrite Is_node_in_Exists in H4.
+          -- unfold normalize_merge in H4. rewrite Is_node_in_Exists in H4.
              rewrite map_map in H4. rewrite combine_map_fst in H4. rewrite combine_map_snd in H4.
              rewrite map_map in H4; simpl in H4.
              rewrite CommonList.Exists_map in H4.
@@ -246,7 +246,7 @@ Module Type NORDERED
       assert (length (concat x8) = length (annots efs)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
       constructor. destruct is_control; repeat inv_bind.
       + destruct Hisin.
-        * rewrite CommonList.Exists_map in H4.
+        * unfold normalize_ite in H4. rewrite CommonList.Exists_map in H4.
           rewrite Exists_exists in H4. destruct H4 as [[[et ef] ty] [HIn Hnode]].
           repeat simpl_In.
           inv Hnode. destruct H13 as [H13|[H13|H13]]...
@@ -266,7 +266,7 @@ Module Type NORDERED
           rewrite CommonList.Exists_map in H7.
           rewrite Exists_exists in H7. destruct H7 as [[id ann] [Hin Hex]]. inv Hex.
         * repeat rewrite Is_node_in_app in H7. destruct H7 as [H7|[H7|[H7|H7]]]...
-          -- rewrite Is_node_in_Exists in H7.
+          -- unfold normalize_ite in H7. rewrite Is_node_in_Exists in H7.
              rewrite map_map, combine_map_fst, combine_map_snd, map_map in H7; simpl in H7.
              rewrite CommonList.Exists_map, Exists_exists in H7.
              destruct H7 as [[[id ann] [[et ef] ty]] [Hin Hex]]; simpl in Hex.

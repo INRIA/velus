@@ -130,6 +130,17 @@ Module Type NORMALIZATION
     do (es, eqs) <- map_bind2 (fun '((init, e), ann) => fby_iteexp init e ann) (combine (combine inits es) anns);
     ret (es, concat eqs).
 
+  Definition normalize_when ckid b es tys ck :=
+    map (fun '(e, ty) => Ewhen [e] ckid b ([ty], ck)) (combine es tys).
+
+  Definition normalize_merge ckid ets efs tys ck :=
+    map (fun '((e1, e2), ty) => Emerge ckid [e1] [e2] ([ty], ck)) (combine (combine ets efs) tys).
+
+  Definition normalize_ite e ets efs tys ck :=
+    map (fun '((et, ef), ty) => Eite e [et] [ef] ([ty], ck)) (combine (combine ets efs) tys).
+
+  Hint Unfold normalize_when normalize_merge normalize_ite.
+
   Definition normalize_reset (e : exp) : FreshAnn (exp * list equation) :=
     match e with
     | Evar v ann => ret (Evar v ann, [])
@@ -158,28 +169,28 @@ Module Type NORMALIZATION
       do (e1', eqs1) <- normalize_exp false e1;
       do (e2', eqs2) <- normalize_exp false e2;
       ret ([Ebinop op (hd_default e1') (hd_default e2') ann], eqs1++eqs2)
-    | Ewhen es clid b (tys, cl) =>
+    | Ewhen es ckid b (tys, ck) =>
       do (es', eqs) <- normalize_exps es;
-      ret (map (fun '(e, ty) => Ewhen [e] clid b ([ty], cl)) (combine es' tys), eqs)
-    | Emerge clid es1 es2 (tys, cl) =>
+      ret (normalize_when ckid b es' tys ck, eqs)
+    | Emerge ckid es1 es2 (tys, cl) =>
       do (es1', eqs1) <- normalize_controls es1;
       do (es2', eqs2) <- normalize_controls es2;
-      let merges := map (fun '((e1, e2), ty) => Emerge clid [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
+      let merges := normalize_merge ckid es1' es2' tys cl in
       if is_control then
         ret (merges, eqs1++eqs2)
       else
         do xs <- idents_for_anns (List.map (fun ty => (ty, cl)) tys);
         ret (List.map (fun '(id, ann) => Evar id ann) xs,
              (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) merges))++eqs1++eqs2)
-    | Eite e es1 es2 (tys, cl) =>
+    | Eite e es1 es2 (tys, ck) =>
       do (e', eqs0) <- normalize_exp false e;
       do (es1', eqs1) <- normalize_controls es1;
       do (es2', eqs2) <- normalize_controls es2;
-      let ites := map (fun '((e1, e2), ty) => Eite (hd_default e') [e1] [e2] ([ty], cl)) (combine (combine es1' es2') tys) in
+      let ites :=  normalize_ite (hd_default e') es1' es2' tys ck in
       if is_control then
         ret (ites, eqs0++eqs1++eqs2)
       else
-        do xs <- idents_for_anns (List.map (fun ty => (ty, cl)) tys);
+        do xs <- idents_for_anns (List.map (fun ty => (ty, ck)) tys);
         ret (List.map (fun '(id, ann) => Evar id ann) xs,
              (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) ites))++eqs0++eqs1++eqs2)
     | Efby e0s es anns =>
@@ -257,14 +268,67 @@ Module Type NORMALIZATION
 
   Definition default_ann : ann := (Op.bool_type, (Cbase, None)).
 
+  Ltac simpl_forall :=
+    repeat
+      match goal with
+      (* same *)
+      | |- Forall2 _ ?l1 ?l1 => apply Forall2_same
+      (* Get rid of maps *)
+      | H : Forall _ (map _ _) |- _ => rewrite Forall_map in H
+      | H : Forall2 _ (map _ _) _ |- _ => rewrite Forall2_map_1 in H
+      | H : Forall2 _ _ (map _ _) |- _ => rewrite Forall2_map_2 in H
+      | |- Forall _ (map _ _) => rewrite Forall_map
+      | |- Forall2 _ (map _ _) _ => rewrite Forall2_map_1
+      | |- Forall2 _ _ (map _ _) => rewrite Forall2_map_2
+      (* Get rid of combines *)
+      | |- Forall _ (combine _ _) => eapply Forall2_combine'
+      | |- Forall2 _ (combine _ _) _ => eapply Forall3_combine'1
+      (* Assemble Foralls *)
+      | H1 : Forall _ ?l, H2 : Forall _ ?l |- _ =>
+        eapply Forall_Forall in H1; [|eapply H2]; clear H2
+      | H1 : Forall2 _ ?l1 ?l2, H2 : Forall2 _ ?l1 ?l2 |- _ =>
+        eapply Forall2_Forall2 in H1; [|eapply H2]; clear H2
+      | H1 : Forall3 _ ?l1 ?l2 ?l3, H2 : Forall3 _ ?l1 ?l2 ?l3 |- _ =>
+        eapply Forall3_Forall3 in H1; [|eapply H2]; clear H2
+      (* Try to hyp Foralls in the same form as conclusion *)
+      | H : Forall _ ?l1 |- Forall2 _ ?l1 ?l2 =>
+        eapply Forall2_ignore2' with (ys:=l2) in H; try congruence
+      | H : Forall _ ?l2 |- Forall2 _ ?l1 ?l2 =>
+        eapply Forall2_ignore1' with (xs:=l1) in H; try congruence
+      | H : Forall2 _ ?l2 ?l3 |- Forall3 _ ?l1 ?l2 ?l3 =>
+        eapply Forall3_ignore1' with (xs:=l1) in H; try congruence
+      | H : Forall2 _ ?l1 ?l3 |- Forall3 _ ?l1 ?l2 ?l3 =>
+        eapply Forall3_ignore2' with (ys:=l2) in H; try congruence
+      | H : Forall2 _ ?l1 ?l2 |- Forall3 _ ?l1 ?l2 ?l3 =>
+        eapply Forall3_ignore3' with (zs:=l3) in H; try congruence
+      | H : Forall _ ?l1 |- Forall3 _ ?l1 ?l2 ?l3 =>
+        eapply Forall2_ignore2' with (ys:=l2) in H; try congruence
+      | H : Forall _ ?l2 |- Forall3 _ ?l1 ?l2 ?l3 =>
+        eapply Forall2_ignore1' with (xs:=l1) in H; try congruence
+      | H : Forall _ ?l3 |- Forall3 _ ?l1 ?l2 ?l3 =>
+        eapply Forall2_ignore1' with (xs:=l1) in H; try congruence
+      end; simpl in *; auto.
+
+  Ltac destruct_conjs :=
+    repeat
+      match goal with
+      | H: _ /\ _ |- _ => destruct H
+      | x: _ * _ |- _ => destruct x
+      end.
+
   Ltac solve_forall :=
+    simpl_forall;
     match goal with
     | H: Forall _ ?l |- Forall _ ?l =>
-      eapply Forall_impl; [ | eapply H]; intros; simpl in *; eauto
+      eapply Forall_impl_In; [|eapply H]; clear H; intros; simpl in *
+    | H: Forall2 _ ?l1 ?l2 |- Forall2 _ ?l1 ?l2 =>
+      eapply Forall2_impl_In; [|eapply H]; clear H; intros; simpl in *
+    | H: Forall3 _ ?l1 ?l2 ?l3 |- Forall3 _ ?l1 ?l2 ?l3 =>
+      eapply Forall3_impl_In; [|eapply H]; clear H; intros; simpl in *
     | |- Forall _ _ =>
-      rewrite Forall_forall; intros; eauto
+      eapply Forall_forall; intros
     | _ => idtac
-    end.
+    end; destruct_conjs; eauto.
 
   Ltac simpl_In :=
     match goal with
@@ -848,6 +912,7 @@ Module Type NORMALIZATION
 
   (** Simplify an expression with maps and other stuff... *)
   Ltac simpl_list :=
+    unfold normalize_when, normalize_merge, normalize_ite in *;
     simpl in *;
     match goal with
     (* annots, clocksof and typesof are just plurals *)
@@ -980,25 +1045,23 @@ Module Type NORMALIZATION
       simpl in *. rewrite map_length.
       apply idents_for_anns_length in H5...
     - (* when *)
-      rewrite map_length.
+      unfold normalize_when. rewrite map_length.
       eapply map_bind2_length in H0.
       + solve_length.
       + eapply map_bind2_values in H0.
         repeat rewrite_Forall_forall...
     - (* merge *)
-      destruct is_control; repeat inv_bind.
+      destruct is_control; repeat inv_bind; unfold normalize_merge.
       + apply map_bind2_length in H1; [| eapply map_bind2_values in H1; repeat rewrite_Forall_forall; eauto].
         apply map_bind2_length in H2; [| eapply map_bind2_values in H2; repeat rewrite_Forall_forall; eauto].
-        repeat rewrite typesof_annots. solve_length.
-      + apply idents_for_anns_length in H3.
         solve_length.
+      + apply idents_for_anns_length in H3. solve_length.
     - (* ite *)
-      destruct is_control; repeat inv_bind.
+      destruct is_control; repeat inv_bind; unfold normalize_ite.
       + apply map_bind2_length in H2; [| eapply map_bind2_values in H2; repeat rewrite_Forall_forall; eauto].
         apply map_bind2_length in H3; [| eapply map_bind2_values in H3; repeat rewrite_Forall_forall; eauto].
-        repeat rewrite typesof_annots. solve_length.
-      + apply idents_for_anns_length in H4.
         solve_length.
+      + apply idents_for_anns_length in H4. solve_length.
     - (* app *)
       apply idents_for_anns'_length in H2.
       solve_length.
@@ -1048,6 +1111,24 @@ Module Type NORMALIZATION
   Qed.
   Hint Resolve normalize_fby_length.
 
+  Fact normalize_merge_length : forall ckid ets efs tys nck,
+    length ets = length tys ->
+    length efs = length tys ->
+    length (normalize_merge ckid ets efs tys nck) = length tys.
+  Proof.
+    intros * Hl1 Hl2.
+    unfold normalize_merge. solve_length.
+  Qed.
+
+  Fact normalize_ite_length : forall e ets efs tys nck,
+    length ets = length tys ->
+    length efs = length tys ->
+    length (normalize_ite e ets efs tys nck) = length tys.
+  Proof.
+    intros * Hl1 Hl2.
+    unfold normalize_ite. solve_length.
+  Qed.
+
   Fact normalize_rhs_length : forall G e keep_fby es' eqs' st st',
       wl_exp G e ->
       normalize_rhs keep_fby e st = (es', eqs', st') ->
@@ -1066,6 +1147,42 @@ Module Type NORMALIZATION
       eapply idents_for_anns_length in H2; solve_length.
   Qed.
   Hint Resolve normalize_rhs_length.
+
+  Fact normalize_exp_numstreams : forall e is_control es' eqs' st st',
+      normalize_exp is_control e st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) es'.
+  Proof.
+    intros e is_control es' eqs' st st' Hnorm.
+    induction e; simpl in Hnorm; repeat inv_bind; repeat constructor.
+    2: destruct l0.
+    3,4: destruct l1.
+    3,4: destruct is_control.
+    1,2,3,4,5,6,7:(repeat inv_bind; unfold normalize_when, normalize_merge, normalize_ite;
+                   rewrite Forall_forall; intros ? Hin;
+                   repeat simpl_In; reflexivity).
+  Qed.
+
+  Corollary map_bind2_normalize_exp_numstreams : forall es is_control es' eqs' st st',
+      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) (concat es').
+  Proof.
+    intros es is_control es' eqs' st st' Hmap.
+    apply map_bind2_values in Hmap.
+    induction Hmap; simpl.
+    - constructor.
+    - apply Forall_app; split; auto.
+      destruct H as [? [? H]].
+      eapply normalize_exp_numstreams; eauto.
+  Qed.
+
+  Corollary normalize_exps_numstreams : forall es es' eqs' st st',
+      normalize_exps es st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) es'.
+  Proof.
+    intros es es' eqs' st st' Hnorm.
+    unfold normalize_exps in Hnorm. repeat inv_bind.
+    eapply map_bind2_normalize_exp_numstreams. eauto.
+  Qed.
 
   (** ** Preservation of annotations *)
 
@@ -1096,6 +1213,28 @@ Module Type NORMALIZATION
     eapply idents_for_anns'_values in H; subst.
     induction ids; simpl; auto.
     destruct a; simpl. f_equal; auto.
+  Qed.
+
+  Fact normalize_merge_annot : forall ckid ets efs tys ck,
+      length ets = length tys ->
+      length efs = length tys ->
+      Forall2 (fun ty e => annot e = [(ty, ck)]) tys (normalize_merge ckid ets efs tys ck).
+  Proof.
+    intros * Hlen1 Hlen2. unfold normalize_merge. rewrite Forall2_map_2.
+    revert ets efs Hlen1 Hlen2.
+    induction tys; intros; destruct ets, efs; simpl in *; try congruence;
+      constructor; auto.
+  Qed.
+
+  Fact normalize_ite_annot : forall e ets efs tys ck,
+      length ets = length tys ->
+      length efs = length tys ->
+      Forall2 (fun ty e => annot e = [(ty, ck)]) tys (normalize_ite e ets efs tys ck).
+  Proof.
+    intros * Hlen1 Hlen2. unfold normalize_ite. rewrite Forall2_map_2.
+    revert ets efs Hlen1 Hlen2.
+    induction tys; intros; destruct ets, efs; simpl in *; try congruence;
+      constructor; auto.
   Qed.
 
   Fact normalize_exp_annot : forall G e is_control es' eqs' st st',
@@ -1163,6 +1302,28 @@ Module Type NORMALIZATION
       eapply normalize_exp_annot; eauto.
   Qed.
 
+  Corollary map_bind2_normalize_exp_annots'' : forall G is_control es es' eqs' st st',
+      Forall (wl_exp G) es ->
+      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      Forall2 (fun e ann => annot e = [ann]) (concat es') (annots es).
+  Proof.
+    intros * Hwl Hmap.
+    assert (Forall (fun e => numstreams e = 1) (concat es')) as Hnumstreams.
+    { eapply map_bind2_normalize_exp_numstreams in Hmap; eauto. }
+    eapply map_bind2_normalize_exp_annots' in Hmap; eauto.
+    unfold annots; rewrite flat_map_concat_map.
+    apply Forall2_concat. rewrite Forall2_map_2.
+    eapply Forall2_impl_In; eauto. clear Hmap. intros; simpl in *.
+    rewrite <- H1, <- (concat_map_singl1 a) at 1.
+    unfold annots; rewrite flat_map_concat_map.
+    apply Forall2_concat. rewrite Forall2_map_1, Forall2_map_2.
+    apply Forall2_same, Forall_forall. intros.
+    assert (In x (concat es')) as HIn by eauto using in_concat'.
+    eapply Forall_forall in HIn; eauto; simpl in HIn.
+    rewrite <- length_annot_numstreams in HIn. singleton_length.
+    repeat constructor; auto.
+  Qed.
+
   Corollary map_bind2_normalize_exp_annots_length' :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
@@ -1227,6 +1388,19 @@ Module Type NORMALIZATION
     intros e0 e [ty [cl n]] es' eqs' st st' Hfby.
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind; reflexivity.
+  Qed.
+
+  Fact normalize_fby_numstreams : forall e0s es anns es' eqs' st st',
+      normalize_fby e0s es anns st = (es', eqs', st') ->
+      Forall (fun e => numstreams e = 1) es'.
+  Proof.
+    intros e0s es anns es' eqs' st st' Hnorm.
+    unfold normalize_fby in Hnorm. repeat inv_bind.
+    apply map_bind2_values in H.
+    eapply Forall3_ignore13 in H.
+    solve_forall. destruct H0 as [[[? ?] ?] [? [? [? H0]]]].
+    eapply fby_iteexp_annot in H0.
+    rewrite <- length_annot_numstreams, H0. reflexivity.
   Qed.
 
   Fact normalize_fby_annot : forall e0s es anns es' eqs' st st',
@@ -1307,54 +1481,6 @@ Module Type NORMALIZATION
     intros G es keep_fby es' eqs' st st' Hf Hnorm.
     eapply normalize_rhss_annots in Hnorm; eauto.
     congruence.
-  Qed.
-
-  Fact normalize_exp_numstreams : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) es'.
-  Proof.
-    intros e is_control es' eqs' st st' Hnorm.
-    induction e; simpl in Hnorm; repeat inv_bind; repeat constructor.
-    2: destruct l0.
-    3,4: destruct l1.
-    3,4: destruct is_control.
-    1,2,3,4,5,6,7:(repeat inv_bind; rewrite Forall_forall; intros ? Hin;
-                   repeat simpl_In; reflexivity).
-  Qed.
-
-  Corollary map_bind2_normalize_exp_numstreams : forall es is_control es' eqs' st st',
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) (concat es').
-  Proof.
-    intros es is_control es' eqs' st st' Hmap.
-    apply map_bind2_values in Hmap.
-    induction Hmap; simpl.
-    - constructor.
-    - apply Forall_app; split; auto.
-      destruct H as [? [? H]].
-      eapply normalize_exp_numstreams; eauto.
-  Qed.
-
-  Corollary normalize_exps_numstreams : forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) es'.
-  Proof.
-    intros es es' eqs' st st' Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
-    eapply map_bind2_normalize_exp_numstreams. eauto.
-  Qed.
-
-  Fact normalize_fby_numstreams : forall e0s es anns es' eqs' st st',
-      normalize_fby e0s es anns st = (es', eqs', st') ->
-      Forall (fun e => numstreams e = 1) es'.
-  Proof.
-    intros e0s es anns es' eqs' st st' Hnorm.
-    unfold normalize_fby in Hnorm. repeat inv_bind.
-    apply map_bind2_values in H.
-    eapply Forall3_ignore13 in H.
-    solve_forall. destruct H0 as [[[? ?] ?] [? [? [? H0]]]].
-    eapply fby_iteexp_annot in H0.
-    rewrite <- length_annot_numstreams, H0. reflexivity.
   Qed.
 
   (** ** Propagation of the variable permutation property *)

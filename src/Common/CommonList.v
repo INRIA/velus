@@ -2096,6 +2096,17 @@ Section Forall2.
     intros a Ia (b & Ib & Pb). eauto with datatypes.
   Qed.
 
+  Lemma Forall2_ignore1': forall (P : B -> Prop) (xs : list A) ys,
+      length ys = length xs ->
+      Forall P ys ->
+      Forall2 (fun _ y => P y) xs ys.
+  Proof.
+    intros P xs ys; revert xs.
+    induction ys; intros * Hlen Hf; inv Hf;
+      destruct xs; simpl in *; try congruence;
+        constructor; auto.
+  Qed.
+
   Lemma Forall2_cons':
     forall P (x : A) (y : B) l l',
       (P x y /\ Forall2 P l l') <-> Forall2 P (x::l) (y::l').
@@ -2683,6 +2694,51 @@ Lemma Forall3_impl_In:
     Forall3 P xs ys zs -> Forall3 Q xs ys zs.
 Proof.
   intros * PQ FA. induction FA; constructor; auto with datatypes.
+Qed.
+
+
+Lemma Forall3_Forall3 {A B C}: forall (P Q : A -> B -> C -> Prop) xs ys zs,
+    Forall3 P xs ys zs ->
+    Forall3 Q xs ys zs ->
+    Forall3 (fun x y z => P x y z /\ Q x y z) xs ys zs.
+Proof.
+  intros * Hf1 Hf2.
+  induction Hf1; inv Hf2; constructor; auto.
+Qed.
+
+Lemma Forall3_combine'1 {A B C} : forall (P : (A * B) -> C -> Prop) xs ys zs,
+    Forall3 (fun x y z => P (x, y) z) xs ys zs ->
+    Forall2 P (combine xs ys) zs.
+Proof.
+  intros * Hf.
+  induction Hf; simpl; constructor; auto.
+Qed.
+
+Lemma Forall3_ignore1' {A B C} : forall P (xs : list A) (ys : list B) (zs : list C),
+    length xs = length ys ->
+    Forall2 P ys zs ->
+    Forall3 (fun _ y z => P y z) xs ys zs.
+Proof.
+  intros * Hlen Hf. revert xs Hlen.
+  induction Hf; intros; destruct xs; simpl in *; try congruence; constructor; auto.
+Qed.
+
+Lemma Forall3_ignore2' {A B C} : forall P (xs : list A) (ys : list B) (zs : list C),
+    length ys = length xs ->
+    Forall2 P xs zs ->
+    Forall3 (fun x _ z => P x z) xs ys zs.
+Proof.
+  intros * Hlen Hf. revert ys Hlen.
+  induction Hf; intros; destruct ys; simpl in *; try congruence; constructor; auto.
+Qed.
+
+Lemma Forall3_ignore3' {A B C} : forall P (xs : list A) (ys : list B) (zs : list C),
+    length zs = length xs ->
+    Forall2 P xs ys ->
+    Forall3 (fun x y _ => P x y) xs ys zs.
+Proof.
+  intros * Hlen Hf. revert zs Hlen.
+  induction Hf; intros; destruct zs; simpl in *; try congruence; constructor; auto.
 Qed.
 
 Global Instance Forall3_Proper' {A B C}:
@@ -3735,6 +3791,29 @@ Ltac singleton_length :=
     clear H; repeat rewrite app_nil_r in *
   end;
   subst.
+
+Lemma Forall_concat' {A} : forall P (l : (list (list A))),
+    Forall (fun x => length x = 1) l ->
+    Forall P (concat l) ->
+    Forall (Forall P) l.
+Proof.
+  induction l; intros Hlen Hf; [constructor|].
+  - simpl in Hf. inv Hlen.
+    apply Forall_app in Hf as [Hf1 Hf2].
+    singleton_length.
+    inv Hf1. repeat constructor; auto.
+Qed.
+
+Lemma Forall2_eq_concat2 {A} : forall (l1 : (list A)) (l2 : (list (list A))),
+    Forall (fun x => length x = 1) l2 ->
+    Forall2 eq l1 (concat l2) ->
+    Forall2 (fun x y => [x] = y) l1 l2.
+Proof.
+  intros l1 l2; revert l1. induction l2; intros * Hlen Heq.
+  - simpl in Heq. inv Heq. constructor.
+  - inv Hlen. singleton_length. inv Heq.
+    constructor; auto.
+Qed.
 
 Section map_filter.
   Context {A B : Type}.
