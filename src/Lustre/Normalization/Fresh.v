@@ -43,9 +43,9 @@ Module Type FRESH.
     Axiom st_valid_reuse_st_valid : forall st aft reusable,
         st_valid_reuse st aft reusable ->
         st_valid_after st aft.
-    Axiom st_valid_reuse_nIn : forall st aft reusable,
+    Axiom st_valid_reuse_NoDup : forall st aft reusable,
         st_valid_reuse st aft reusable ->
-        PS.For_all (fun x => ~In x (st_ids st)) reusable.
+        NoDup (st_ids st++PSP.to_list aft++PSP.to_list reusable).
     Axiom st_valid_reuse_PSeq : forall st aft re1 re2,
         PS.eq re1 re2 ->
         st_valid_reuse st aft re1 ->
@@ -205,6 +205,23 @@ Module Fresh : FRESH.
         st_valid_reuse st aft reusable ->
         st_valid_after st aft.
     Proof. intros ? ? ? [? _]; auto. Qed.
+
+    Fact st_valid_reuse_NoDup : forall st aft reusable,
+        st_valid_reuse st aft reusable ->
+        NoDup (st_ids st++PSP.to_list aft++PSP.to_list reusable).
+    Proof.
+      intros [? ?] * [[? [? ?]] [? [? ?]]].
+      rewrite PS_For_all_Forall in *.
+      unfold st_ids, st_anns in *; simpl in *. rewrite app_assoc.
+      apply NoDup_app'; auto. 1:apply PS_elements_NoDup.
+      apply Forall_app; split.
+      - clear - H4.
+        rewrite Forall_forall in *. intros x Hin contra.
+        apply H4 in contra; auto.
+      - clear - H2.
+        rewrite Forall_forall. intros x Hin.
+        eapply NoDup_app_In in H2; eauto.
+    Qed.
 
     Fact st_valid_reuse_nIn : forall st aft reusable,
         st_valid_reuse st aft reusable ->
@@ -542,6 +559,23 @@ Module Facts.
         exists b. assumption.
     Qed.
   End st.
+
+  Section st_valid_reuse.
+    Context {B : Type}.
+
+    Fact st_valid_reuse_nIn : forall (st : fresh_st B) aft reusable,
+        st_valid_reuse st aft reusable ->
+        PS.For_all (fun x => ~In x (st_ids st)) reusable.
+    Proof.
+      intros * Hvalid.
+      apply st_valid_reuse_NoDup in Hvalid.
+      rewrite Permutation_app_comm, <- app_assoc, Permutation_swap in Hvalid.
+      rewrite PS_For_all_Forall, Forall_forall. intros x Hin.
+      eapply NoDup_app_In in Hvalid; eauto.
+      intro contra. apply Hvalid, in_or_app; auto.
+    Qed.
+  End st_valid_reuse.
+
 
   Section fresh_ident.
     Context {B : Type}.

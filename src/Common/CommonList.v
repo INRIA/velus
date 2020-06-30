@@ -3459,6 +3459,18 @@ Section OptionLists.
     destruct a; simpl in *; subst; tauto.
   Qed.
 
+  Lemma NoDupo_NoDup: forall (xs : list A),
+      NoDupo (map Some xs) <-> NoDup xs.
+  Proof.
+    induction xs; split; intro H; inv H; simpl; constructor.
+    - rewrite Ino_In, in_map_iff in H2.
+      intro contra; apply H2. exists a; auto.
+    - rewrite <- IHxs; auto.
+    - rewrite Ino_In, in_map_iff.
+      intros [x [Heq contra]]; inv Heq; auto.
+    - rewrite IHxs; auto.
+  Qed.
+
 End OptionLists.
 
 Ltac app_NoDupMembers_det :=

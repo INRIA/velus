@@ -933,6 +933,9 @@ Module Type NORMALIZATION
     | |- context c [map ?f (app ?l1 ?l2)] => rewrite map_app
     | H: context c [concat (app ?l1 ?l2)] |- _ => rewrite concat_app in H
     | |- context c [concat (app ?l1 ?l2)] => rewrite concat_app
+    (* idck_app, idty_app *)
+    | H: context c [idty (?l1 ++ ?l2)] |- _ => rewrite idty_app in H
+    | H: context c [idck (?l1 ++ ?l2)] |- _ => rewrite idck_app in H
     (* app_nil_r *)
     | H: context c [app ?l nil] |- _ => rewrite app_nil_r in H
     | |- context c [app ?l nil] => rewrite app_nil_r

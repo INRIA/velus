@@ -311,7 +311,7 @@ Module Type SPECIFICATION
       split; eauto.
   Qed.
 
-  Fact map_bind2_normalized_cexp {A A2} :
+  Fact map_bind2_normalized_cexp' {A A2} :
     forall (k : A -> FreshAnn ((list exp) * A2)) a es' a2s st st',
       map_bind2 k a st = (es', a2s, st') ->
       Forall (fun a => forall es' a2s st st',
@@ -419,6 +419,39 @@ Module Type SPECIFICATION
   Qed.
   Hint Resolve normalize_exps_normalized_lexp.
 
+  Fact normalize_reset_normalized_lexp : forall e e' eqs' st st',
+      normalize_reset e st = (e', eqs', st') ->
+      normalized_lexp e'.
+  Proof.
+    intros * Hnorm.
+    specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
+      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
+    - destruct x0. constructor.
+    - destruct hd as [? [? ?]] in Hnorm; repeat inv_bind.
+      constructor.
+  Qed.
+
+  Fact normalize_merge_normalized_cexp : forall x ets efs tys ck,
+      Forall normalized_cexp ets ->
+      Forall normalized_cexp efs ->
+      Forall normalized_cexp (normalize_merge x ets efs tys ck).
+  Proof.
+    intros. unfold normalize_merge.
+    repeat rewrite_Forall_forall. repeat simpl_In.
+    econstructor; eauto.
+  Qed.
+
+  Fact normalize_ite_normalized_cexp : forall e ets efs tys ck,
+      normalized_lexp e ->
+      Forall normalized_cexp ets ->
+      Forall normalized_cexp efs ->
+      Forall normalized_cexp (normalize_ite e ets efs tys ck).
+  Proof.
+    intros. unfold normalize_ite.
+    repeat rewrite_Forall_forall. repeat simpl_In.
+    econstructor; eauto.
+  Qed.
+
   Lemma normalize_exp_normalized_cexp : forall e es' eqs' st st',
       normalize_exp true e st = (es', eqs', st') ->
       Forall normalized_cexp es'.
@@ -440,24 +473,26 @@ Module Type SPECIFICATION
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
-      destruct a. repeat inv_bind. unfold normalize_merge.
-      apply map_bind2_normalized_cexp in H1; [|solve_forall].
-      apply map_bind2_normalized_cexp in H2; [|solve_forall].
-      repeat rewrite_Forall_forall.
-      repeat simpl_In.
-      repeat (constructor; auto).
+      destruct a. repeat inv_bind.
+      eapply normalize_merge_normalized_cexp...
+      apply map_bind2_normalized_cexp' in H1; [|solve_forall]...
+      apply map_bind2_normalized_cexp' in H2; [|solve_forall]...
     - (* ite *)
-      destruct a. repeat inv_bind. unfold normalize_ite.
-      apply normalize_exp_normalized_lexp in H1.
-      apply map_bind2_normalized_cexp in H2; [|solve_forall].
-      apply map_bind2_normalized_cexp in H3; [|solve_forall].
-      repeat rewrite_Forall_forall.
-      repeat simpl_In.
-      constructor...
-      apply normalized_lexp_hd_default. solve_forall.
+      destruct a. repeat inv_bind.
+      eapply normalize_ite_normalized_cexp...
+      apply map_bind2_normalized_cexp' in H2; [|solve_forall]...
+      apply map_bind2_normalized_cexp' in H3; [|solve_forall]...
     - (* app *)
       solve_forall.
       repeat simpl_In. destruct a0...
+  Qed.
+
+  Corollary map_bind2_normalized_cexp : forall es es' eqs' st st',
+      map_bind2 (normalize_exp true) es st = (es', eqs', st') ->
+      Forall normalized_cexp (concat es').
+  Proof.
+    intros. apply map_bind2_normalized_cexp' in H; auto.
+    solve_forall. apply normalize_exp_normalized_cexp in H1; auto.
   Qed.
 
   Fact init_var_for_clock_normalized_eq : forall cl id eqs' out st st',
@@ -578,13 +613,11 @@ Module Type SPECIFICATION
       1,2: solve_weak_valid.
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
       repeat simpl_In.
-      constructor. constructor.
-      + eapply map_bind2_normalized_cexp in H1; eauto; solve_forall.
+      do 2 constructor.
+      + eapply map_bind2_normalized_cexp in H1.
         rewrite Forall_forall in H1...
-        eapply normalize_exp_normalized_cexp...
-      + eapply map_bind2_normalized_cexp in H2; eauto; solve_forall.
+      + eapply map_bind2_normalized_cexp in H2.
         rewrite Forall_forall in H2...
-        eapply normalize_exp_normalized_cexp...
     - (* ite *)
       destruct a; destruct is_control; repeat inv_bind; unfold normalize_ite;
         repeat rewrite Forall_app; repeat split.
@@ -596,12 +629,10 @@ Module Type SPECIFICATION
       constructor. constructor.
       + eapply normalized_lexp_hd_default.
         eapply normalize_exp_normalized_lexp...
-      + eapply map_bind2_normalized_cexp in H2; eauto; solve_forall.
+      + eapply map_bind2_normalized_cexp in H2.
         rewrite Forall_forall in H2...
-        eapply normalize_exp_normalized_cexp...
-      + eapply map_bind2_normalized_cexp in H3; eauto; solve_forall.
+      + eapply map_bind2_normalized_cexp in H3.
         rewrite Forall_forall in H3...
-        eapply normalize_exp_normalized_cexp...
     - (* app *)
       eapply map_bind2_normalized_lexp in H1...
       destruct ro; repeat inv_bind.
@@ -828,6 +859,15 @@ Module Type SPECIFICATION
       rewrite IHHnormed. reflexivity.
   Qed.
 
+  Corollary normalized_lexps_no_fresh : forall es,
+      Forall normalized_lexp es ->
+      fresh_ins es = [].
+  Proof.
+    induction es; intros; auto.
+    unfold fresh_ins in *; simpl.
+    inv H. rewrite IHes, app_nil_r; auto using normalized_lexp_no_fresh.
+  Qed.
+
   Fact normalized_cexp_no_fresh : forall e,
       normalized_cexp e ->
       fresh_in e = [].
@@ -843,6 +883,15 @@ Module Type SPECIFICATION
       eapply normalized_lexp_no_fresh...
   Qed.
 
+  Corollary normalized_cexps_no_fresh : forall es,
+      Forall normalized_cexp es ->
+      fresh_ins es = [].
+  Proof.
+    induction es; intros; auto.
+    unfold fresh_ins in *; simpl.
+    inv H. rewrite IHes, app_nil_r; auto using normalized_cexp_no_fresh.
+  Qed.
+
   Corollary normalize_exp_no_fresh : forall e is_control es' eqs' st st',
       normalize_exp is_control e st = (es', eqs', st') ->
       fresh_ins es' = [].
@@ -854,6 +903,35 @@ Module Type SPECIFICATION
       eapply Forall_impl; eauto. intros. apply normalized_cexp_no_fresh; auto.
     - apply normalize_exp_normalized_lexp in Hnorm.
       eapply Forall_impl; eauto. intros. apply normalized_lexp_no_fresh; auto.
+  Qed.
+
+  Corollary normalize_fby_no_fresh : forall e0s es anns es' eqs' st st',
+      Forall normalized_lexp e0s ->
+      Forall normalized_lexp es ->
+      normalize_fby e0s es anns st = (es', eqs', st') ->
+      fresh_ins es' = [].
+  Proof.
+    induction e0s; intros * Hn1 Hn2 Hfby; unfold normalize_fby in Hfby;
+      repeat inv_bind; unfold fresh_ins; auto.
+    destruct es; destruct anns; repeat inv_bind; simpl; auto.
+    inv Hn1; inv Hn2.
+    assert (fresh_ins x3 = []).
+    { eapply IHe0s; eauto.
+      unfold normalize_fby; repeat inv_bind; repeat eexists; eauto. inv_bind; auto. }
+    unfold fresh_ins in H1; rewrite H1, app_nil_r.
+    unfold fby_iteexp in H. destruct a0, (Norm.is_constant a); simpl in *; repeat inv_bind.
+    - simpl. repeat rewrite app_nil_r.
+      repeat rewrite normalized_lexp_no_fresh; auto.
+    - simpl. repeat rewrite app_nil_r.
+      apply normalized_lexp_no_fresh; auto.
+  Qed.
+
+  Corollary normalize_reset_no_fresh : forall e e' eqs' st st',
+      normalize_reset e st = (e', eqs', st') ->
+      fresh_in e' = [].
+  Proof.
+    intros * Hnorm.
+    apply normalize_reset_normalized_lexp, normalized_lexp_no_fresh in Hnorm; auto.
   Qed.
 
   Corollary normalize_exps_no_fresh : forall es es' eqs' st st',

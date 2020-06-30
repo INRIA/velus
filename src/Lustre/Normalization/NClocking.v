@@ -781,7 +781,7 @@ Module Type NCLOCKING
   Qed.
 
   Corollary normalize_fby_wc_exp' : forall G vars e0s es anns e0s' es' res eqs1 eqs2 eqs3 st st' st'' st''',
-      wc_exp G vars (Efby e0s es anns) ->
+      wc_exp G (vars++st_clocks st) (Efby e0s es anns) ->
       normalize_exps e0s st = (e0s', eqs1, st') ->
       normalize_exps es st' = (es', eqs2, st'') ->
       normalize_fby e0s' es' anns st'' = (res, eqs3, st''') ->
@@ -855,10 +855,7 @@ Module Type NCLOCKING
       try (solve [eapply normalize_exp_wc_exp in Hnorm; eauto]); [| inv Hwc].
     - (* fby *)
       destruct keep_fby.
-      + repeat inv_bind.
-        eapply normalize_fby_wc_exp' in Hwc...
-        solve_forall. solve_incl.
-        rewrite <- app_assoc. apply incl_appr', incl_app; solve_incl.
+      + repeat inv_bind. eapply normalize_fby_wc_exp' in Hwc...
       + eapply normalize_exp_wc_exp in Hnorm...
     - (* app *)
       repeat inv_bind.
@@ -1129,8 +1126,7 @@ Module Type NCLOCKING
         apply Forall2_eq_concat2 in H9. 2:(solve_forall; rewrite length_annot_numstreams; auto).
         solve_forall; simpl in *; repeat rewrite app_nil_r. destruct a as [ty [ck name]].
         repeat constructor.
-        * solve_incl. rewrite <- app_assoc.
-          apply incl_appr', incl_app; solve_incl.
+        * solve_incl. repeat solve_incl.
         * rewrite nclockof_annot. rewrite <- H4 in *; simpl.
           repeat constructor. inv H5. inv H9; simpl in *; subst. constructor.
         * rewrite clockof_annot, <- H4; simpl.

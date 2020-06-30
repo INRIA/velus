@@ -1185,7 +1185,34 @@ Module Type LCLOCKSEMANTICS
     + apply IHxs in Hin; auto.
   Qed.
 
-  Fact filter_anons_In : forall x vars anns,
+  Lemma filter_anons_ino' : forall env ncs x,
+      Ino x (map snd ncs) ->
+      ~ InMembers x env ->
+      Ino x (filter_anons env ncs).
+  Proof.
+    intros * Hino Hnin. induction ncs; inv Hino.
+    - simpl. destruct a as [ck [id|]]; simpl; inv H.
+      destruct mem_assoc_ident eqn:Hm.
+      + apply mem_assoc_ident_true in Hm. destruct Hm as [? Hin].
+        apply In_InMembers in Hin. congruence.
+      + left; constructor.
+    - right; auto.
+  Qed.
+
+  Lemma filter_anons_incl : forall env1 env2 ncs x,
+      incl env1 env2 ->
+      Ino x (filter_anons env2 ncs) ->
+      Ino x (filter_anons env1 ncs).
+  Proof.
+    intros * Hincl Hin.
+    assert (Hin':=Hin). apply filter_anons_filter in Hin. apply filter_anons_ino in Hin'.
+    apply filter_anons_ino'; auto.
+    intro contra. apply Hin'; clear Hin'.
+    apply InMembers_In in contra as [? ?]. apply Hincl in H.
+    eauto using In_InMembers.
+  Qed.
+
+  Fact filter_anons_anon_streams_In : forall x vars anns,
       Ino x (filter_anons vars (map snd anns)) ->
       InMembers x (Syn.anon_streams anns).
   Proof.
@@ -1197,7 +1224,7 @@ Module Type LCLOCKSEMANTICS
     - destruct Hino; [inv H|]; auto.
   Qed.
 
-  Fact filter_anons_NoDupMembers : forall vars anns,
+  Fact filter_anons_anon_streams_NoDupMembers : forall vars anns,
       NoDupMembers (Syn.anon_streams anns) ->
       NoDupo (filter_anons vars (map snd anns)).
   Proof.
@@ -1207,7 +1234,7 @@ Module Type LCLOCKSEMANTICS
     - inv H; simpl.
       destruct mem_assoc_ident; constructor; auto.
       intro contra; apply H2.
-      eapply filter_anons_In; eauto.
+      eapply filter_anons_anon_streams_In; eauto.
     - constructor; auto.
   Qed.
 
@@ -1228,10 +1255,10 @@ Module Type LCLOCKSEMANTICS
     - clear - tys. induction tys; simpl; constructor. auto.
     - simpl in Hdf.
       apply NoDupMembers_app_r in Hdf.
-      eapply filter_anons_NoDupMembers in Hdf; eauto.
+      eapply filter_anons_anon_streams_NoDupMembers in Hdf; eauto.
     - simpl in Hdf.
       repeat apply NoDupMembers_app_r in Hdf.
-      eapply filter_anons_NoDupMembers in Hdf; eauto.
+      eapply filter_anons_anon_streams_NoDupMembers in Hdf; eauto.
   Qed.
 
   (* TODO: move *)

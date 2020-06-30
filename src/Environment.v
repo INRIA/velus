@@ -1942,6 +1942,72 @@ Module Env.
       + rewrite find_gsso_opt'; auto. congruence.
       + rewrite adds_opt'_cons_None; eauto.
     Qed.
+
+    Lemma adds_opt'_adds: forall {A} xs (vs : list A) m,
+        NoDup xs ->
+        length xs = length vs ->
+        Equal (adds_opt' (List.map Some xs) vs m) (adds xs vs m).
+    Proof.
+      induction xs; intros * Hndup Hlen; simpl; destruct vs; simpl in *; try congruence.
+      - rewrite adds_opt'_nil, adds_nil_l. reflexivity.
+      - inv Hndup. rewrite adds_cons_cons, adds_opt'_cons_Some; auto.
+        apply Equal_add_both; eauto.
+    Qed.
+
+    Lemma adds_opt'_ignore: forall {A} xs1 xs2 (vs1 vs2 : list A) m,
+        length xs1 = length vs1 ->
+        length xs2 = length vs2 ->
+        (forall x, Ino x xs2 -> Ino x xs1) ->
+        Env.Equal (adds_opt' xs1 vs1 (adds_opt' xs2 vs2 m)) (adds_opt' xs1 vs1 m).
+    Proof.
+      intros * Hlen1 Hlen2 Hincl x. specialize (Hincl x). revert xs1 xs2 vs1 vs2 Hlen1 Hlen2 Hincl.
+      induction xs1; intros; destruct vs1; simpl in *; try congruence.
+      - repeat rewrite adds_opt'_nil.
+        eapply find_In_gsso_opt'; eauto.
+      - destruct a.
+        + repeat rewrite adds_opt'_cons_Some.
+          destruct (ident_eqb x p) eqn:Heq.
+          * rewrite ident_eqb_eq in Heq; subst.
+            repeat rewrite PositiveMap.gss. reflexivity.
+          * rewrite ident_eqb_neq in Heq.
+            repeat rewrite PositiveMap.gso; auto.
+            eapply IHxs1; eauto.
+            intros Hino. apply Hincl in Hino. destruct Hino as [Hino|?]; auto. congruence.
+        + repeat rewrite adds_opt'_cons_None.
+          apply IHxs1; auto.
+          intros Hino. apply Hincl in Hino. destruct Hino as [Hino|?]; auto. inv Hino.
+    Qed.
+
+    Lemma adds_opt'_refines:  forall {A} xs1 xs2 (vs : list A) m,
+        length xs1 = length vs ->
+        length xs2 = length vs ->
+        NoDupo xs2 ->
+        Forall (fun x => forall id, x = Some id -> ~In id m) xs2 ->
+        Forall2 (fun x1 x2 => forall id, x1 = Some id -> x2 = Some id) xs1 xs2 ->
+        Env.refines eq (adds_opt' xs1 vs m) (adds_opt' xs2 vs m).
+    Proof.
+      induction xs1; intros * Hlen1 Hlen2 Hndup Hnin Hf;
+        destruct vs; destruct xs2; simpl in *; try congruence.
+      - repeat rewrite adds_opt'_nil. reflexivity.
+      - inv Hf. inv Hnin. destruct a.
+        + specialize (H2 k eq_refl); subst. inv Hndup.
+          repeat rewrite adds_opt'_cons_Some.
+          apply refines_add_both; auto.
+        + clear H2. rewrite adds_opt'_cons_None.
+          destruct o; inv Hndup.
+          * rewrite adds_opt'_cons_Some. apply refines_add_right; auto.
+            specialize (H1 k eq_refl).
+            rewrite In_find in *.
+            intros [v Hfind]. apply find_adds_opt'_spec_Some in Hfind as [Hin|Hfind]; auto.
+            -- apply H2. apply in_combine_l in Hin.
+               apply Forall2_forall2 in H4 as [Hlen H4].
+               eapply In_nth with (d:=None) in Hin as [n [Hn Hin]].
+               specialize (H4 _ None _ _ _ Hn Hin eq_refl k eq_refl).
+               setoid_rewrite Hlen in Hn. eapply nth_In in Hn. rewrite H4 in Hn.
+               rewrite Ino_In; auto.
+            -- apply H1; eauto.
+          * rewrite adds_opt'_cons_None; auto.
+    Qed.
   End adds_opt'.
 
   (** Notations *)
