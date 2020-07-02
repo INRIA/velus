@@ -73,5 +73,5 @@ Separate Extraction
          FrustreParser.translation_unit_file
          (* Velus *)
          Common Environment Memory Ident CoindStreams Interface
-         LSyntax LTyping LClocking LNormalization
+         LSyntax LTyping LClocking LCausality LNormalization
 .

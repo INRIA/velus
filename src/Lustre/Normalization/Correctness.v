@@ -2590,11 +2590,13 @@ Module Type CORRECTNESS
       wc_node G n ->
       sc_node' G n ->
       Env.dom H (List.map fst (n_in n ++ n_vars n ++ n_out n)) ->
+      Forall2 (sem_var H) (idents (n_in n)) ins ->
       Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n) ->
+      Forall2 (fun xc : ident * clock => sem_clock H (clocks_of ins) (snd xc)) (idck (n_in n)) (map abstract_clock ins) ->
       exists H', Env.refines eq H H' /\
             Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs (normalize_node to_cut n Hwl)).
   Proof with eauto.
-    intros * HwcG HscG Hwt Hwc Hsc Hdom Hsem.
+    intros * HwcG HscG Hwt Hwc Hsc Hdom Hins Hclockinputs Hsem.
     remember (@init_st ((Op.type * clock) * bool)
                 (first_unused_ident (self::out::(map fst (n_in n++n_vars n++n_out n++anon_in_eqs (n_eqs n)))))) as init.
     specialize (n_nodup n) as Hndup; rewrite fst_NoDupMembers in Hndup; repeat rewrite map_app in Hndup.
@@ -2630,23 +2632,56 @@ Module Type CORRECTNESS
     - rewrite Heqinit.
       eapply init_st_hist_st...
       eapply sc_node_sc_var_inv...
-      + admit.
-      + admit.
-  Admitted.
+  Qed.
 
   Lemma normalize_node_eq : forall G G' f n Hwl ins outs to_cut,
+      Forall2 (fun n n' => n_name n = n_name n') G G' ->
+      global_iface_eq G G' ->
+      global_sem_refines G G' ->
       wt_global (n::G) ->
       wc_global (n::G) ->
-      sc_node' G n ->
-      sc_nodes G ->
+      wt_global G' ->
+      wc_global G' ->
       Ordered_nodes (n::G) ->
       Ordered_nodes ((normalize_node to_cut n Hwl)::G') ->
-      global_sem_refines G G' ->
+      Forall LCA.node_causal (n::G) ->
+      Forall LCA.node_causal G' ->
       sem_node (n::G) f ins outs ->
+      sem_clock_inputs (n::G) f ins ->
       sem_node ((normalize_node to_cut n Hwl)::G') f ins outs.
   Proof with eauto.
-    intros * HwtG HwcG HscG Hsc Hord1 Hord2 Href Hsem.
-    inv Hsem; simpl in H0. destruct (ident_eqb (n_name n) f) eqn:Hident.
+    intros * Hnames Hiface Href HwtG HwcG HwtG' HwcG' Hord1 Hord2 Hcaus1 Hcaus2 Hsem Hinputs.
+    assert (sc_nodes G) as HscG.
+    { inv HwtG. inv HwcG. inv Hord1. inv Hcaus1. eapply l_sem_node_clock... }
+    assert (sc_node' G n) as Hsc.
+    { eapply l_sem_node_clock' in HwtG; auto. 2:left; auto.
+      eapply sc_node'_global_tl... }
+    assert (Forall (fun n' => exists v, In v G /\ n_name n <> n_name n') G') as Hnames'.
+    { assert (length G = length G') by (eapply Forall2_length in Hnames; eauto).
+      inv HwtG. eapply Forall2_ignore1. solve_forall. }
+    assert (wt_global (n::G')) as HwtG''.
+    { constructor...
+      + inv HwtG. eapply iface_eq_wt_node...
+      + solve_forall. destruct H0 as [? [_ ?]]... }
+    assert (wc_global (n::G')) as HwcG''.
+    { constructor...
+      + inv HwcG. eapply iface_eq_wc_node...
+      + solve_forall. destruct H0 as [? [_ ?]]... }
+    assert (Ordered_nodes (n :: G')) as Hord'.
+    { inv Hord2. constructor... clear H2.
+      inv Hord1. intros ? Hisin. apply H4 in Hisin as [Hneq Hname].
+      split; auto. clear - Hnames Hname.
+      induction Hnames; inv Hname.
+      + left; auto.
+      + right; auto. }
+    assert (sc_nodes G') as HscG'.
+    { inv HwtG''. inv HwcG''. inv Hord2. eapply l_sem_node_clock... }
+    assert (sc_node' G' n) as Hsc'.
+    { eapply l_sem_node_clock' in HwtG''; auto. 3:left; auto.
+      + eapply sc_node'_global_tl...
+      + inv Hcaus1. constructor... }
+
+    inv Hsem; assert (Hfind:=H0); simpl in H0. destruct (ident_eqb (n_name n) f) eqn:Hident.
     - inv H0.
       (* New env H' (restrict H) and its properties *)
       remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
@@ -2683,79 +2718,118 @@ Module Type CORRECTNESS
       (* Reasoning on the semantics of equations *)
       assert (Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n0)).
       { eapply Forall_sem_equation_global_tl...
-        eapply find_node_not_Is_node_in in Hord1...
-        simpl. rewrite ident_eqb_refl... } clear H3.
+        eapply find_node_not_Is_node_in in Hord1... }
       inversion_clear HwtG; rename H2 into Hwt.
       inversion_clear HwcG; rename H3 into Hwc.
-      assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)).
+      assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)) as Hsem'.
       { destruct Hwt as [_ [_ [_ Hwt]]].
         rewrite HeqH'.
         clear Hin Hout.
         repeat rewrite_Forall_forall.
-        specialize (H0 _ H3). specialize (Hwt _ H3).
+        specialize (H0 _ H8). specialize (Hwt _ H8).
         eapply sem_equation_restrict in H0...
         unfold idty in H0. rewrite map_map in H0. simpl in H0... } clear H0.
-      eapply normalize_node_sem_equation in H3...
-      destruct H3 as [H'' [Href'' Heqs']].
+      assert (Forall (sem_equation G' H' (Str.clocks_of ins)) (n_eqs n0)) as Hsem''.
+      { destruct Hwt as [_ [_ [_ Hwt']]].
+        destruct H5 as [Hwcclocks1 [_ [Hwcclocks Hwc']]].
+        assert (sc_var_inv' (idck (n_in n0 ++ n_vars n0 ++ n_out n0)) H' (clocks_of ins)) as Hinv.
+        { eapply sc_node_sc_var_inv with (G:=G)...
+          rewrite ident_eqb_eq in Hident. eapply inputs_clocked_vars... }
+        assert (Permutation (n_in n0 ++ n_out n0 ++ n_vars n0) (n_in n0 ++ n_vars n0 ++ n_out n0)) as Hperm.
+        { apply Permutation_app_head, Permutation_app_comm. }
+        solve_forall.
+        eapply sem_eq_sem_equation. 7,8:eauto. 1-8:eauto.
+        + assert (Hndup:=n_nodup n0). repeat rewrite app_assoc in *.
+          eapply NoDupMembers_anon_in_eq'...
+        + rewrite <- Hperm... }
+
+      eapply normalize_node_sem_equation in Hsem''...
+      2:inv HwtG''... 2:inv HwcG''...
+      2:{ rewrite ident_eqb_eq in Hident. eapply inputs_clocked_vars...
+          destruct H5 as [? _]... }
+      destruct Hsem'' as [H'' [Href'' Heqs']].
       eapply Snode with (H:=H''); simpl. 5:reflexivity.
       + rewrite Hident; reflexivity.
       + simpl. repeat rewrite_Forall_forall. eapply sem_var_refines...
       + simpl. repeat rewrite_Forall_forall. eapply sem_var_refines...
       + clear Hin Hout Hdom.
-        assert (Forall (sem_equation G' H'' (Str.clocks_of ins)) (n_eqs (normalize_node to_cut n0 Hwl))).
-        { eapply Forall_impl; [| eauto]. intros a Hsem. eapply sem_eq_sem_equation... } clear Heqs'.
         apply Forall_sem_equation_global_tl'...
         eapply find_node_not_Is_node_in in Hord2...
         simpl. rewrite ident_eqb_refl...
     - specialize (Href f ins outs).
+      rewrite ident_eqb_neq in Hident.
       eapply sem_node_cons'...
-      + apply Href. econstructor...
-        eapply Forall_impl_In; [| eauto]. intros eq Hin Hsem.
-        eapply sem_equation_global_tl...
-        eapply find_node_later_not_Is_node_in in Hord1...
-        intro Hisin. apply Hord1. rewrite Is_node_in_Exists. rewrite Exists_exists.
-        eexists...
-      + simpl. apply ident_eqb_neq in Hident...
+      apply Href. split. 1:rewrite <- sem_clock_inputs_cons in Hinputs...
+      econstructor...
+      eapply Forall_impl_In; [| eauto]. intros eq Hin Hsem.
+      eapply sem_equation_global_tl...
+      eapply find_node_later_not_Is_node_in in Hord1...
+      intro Hisin. apply Hord1. rewrite Is_node_in_Exists. rewrite Exists_exists.
+      eexists...
   Qed.
 
-  Lemma sc_node'_global_tl : forall G n,
-      Ordered_nodes (n::G) ->
-      sc_node' (n::G) n ->
-      sc_node' G n.
+  Fact normalize_global_names' : forall G Hwl,
+      Forall2 (fun n n' => n_name n = n_name n') G (normalize_global G Hwl).
   Proof.
-    intros * Hord Hsc.
-    unfold sc_node' in *.
-    intros. eapply Hsc; eauto.
-    apply Forall_sem_equation_global_tl'; auto.
-    eapply find_node_not_Is_node_in with (f:=n_name n); eauto.
-    simpl. rewrite ident_eqb_refl; auto.
+    intros.
+    specialize (Ord.normalize_global_names G Hwl) as Hnames.
+    rewrite <- Forall2_eq, Forall2_swap_args in Hnames.
+    solve_forall.
   Qed.
 
-  Lemma normalize_global_eq : forall G Hwl,
+  Fact iface_eq_sem_clocks_input : forall G G' f ins,
+      global_iface_eq G G' ->
+      sem_clock_inputs G f ins ->
+      sem_clock_inputs G' f ins.
+  Proof.
+    intros * Hglob [H [n [Hfind [Hinputs Hsem]]]].
+    specialize (Hglob f). rewrite Hfind in Hglob; inv Hglob.
+    destruct H2 as (Hname&_&Hins&_).
+    exists H. exists sy. repeat split; auto; congruence.
+  Qed.
+
+  Lemma normalize_global_refines : forall G Hwl,
       wt_global G ->
       wc_global G ->
       Ordered_nodes G ->
       Forall LCA.node_causal G ->
       global_sem_refines G (normalize_global G Hwl).
   Proof with eauto.
+    intros G Hwl. specialize (normalize_global_eq G Hwl) as Heq.
     induction G; intros * Hwt Hwc Hordered Hcaus; simpl.
     - apply global_sem_eq_nil.
     - apply global_sem_eq_cons with (f:=n_name a)...
       + eapply Ord.normalize_global_ordered in Hordered.
         simpl in Hordered...
-      + inv Hwt; inv Hwc; inv Hordered; inv Hcaus...
-      + intros f ins outs.
-        eapply normalize_node_eq...
-        * eapply l_sem_node_clock' with (n:=a) in Hwt; auto. 2:left;auto.
-          apply sc_node'_global_tl; auto.
-        * inv Hwt; inv Hwc; inv Hordered; inv Hcaus.
-          eapply l_sem_node_clock...
-        * eapply Ord.normalize_global_ordered in Hordered.
-          simpl in Hordered...
-        * inv Hwt; inv Hwc; inv Hordered; inv Hcaus...
-  Qed.
+      + inv Hwt; inv Hwc; inv Hordered; inv Hcaus.
+        eapply IHG... eapply normalize_global_eq...
+      + intros ins outs Hsem. destruct Hsem as [Hinputs Hsem]. split.
+        * eapply iface_eq_sem_clocks_input...
+        * eapply normalize_node_eq...
+          -- apply normalize_global_names'.
+          -- apply normalize_global_eq.
+          -- inv Hwt; inv Hwc; inv Hordered; inv Hcaus.
+             eapply IHG... eapply normalize_global_eq...
+          -- inv Hwt. eapply normalize_global_wt...
+          -- inv Hwc. eapply normalize_global_wc...
+          -- eapply Ord.normalize_global_ordered in Hordered.
+             simpl in Hordered...
+          -- admit. (* conservation of causality, TODO *)
+  Admitted.
 
-  Print Assumptions normalize_global_eq.
+  Theorem normalize_global_sem : forall G Hwl f ins outs,
+      wt_global G ->
+      wc_global G ->
+      Ordered_nodes G ->
+      Forall LCA.node_causal G ->
+      sem_node G f ins outs ->
+      sem_clock_inputs G f ins ->
+      sem_node (normalize_global G Hwl) f ins outs.
+  Proof.
+    intros.
+    eapply normalize_global_refines with (Hwl:=Hwl) in H; eauto.
+    specialize (H f ins outs) as [_ Hsem]; auto.
+  Qed.
 
 End CORRECTNESS.
 

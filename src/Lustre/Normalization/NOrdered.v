@@ -4,7 +4,6 @@ Open Scope list_scope.
 
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
-From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.
 

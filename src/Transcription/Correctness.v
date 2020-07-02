@@ -392,13 +392,6 @@ Module Type CORRECTNESS
         eauto using sc_step, sem_lexp_step2.
   Qed.
 
-  Definition sem_clock_inputs (G : L.global) (f : ident) (xs : list (Stream value)): Prop :=
-    exists H n,
-      L.find_node f G = Some n /\
-      Forall2 (sem_var H) (LS.idents (L.n_in n)) xs /\
-      Forall2 (fun xc => sem_clock H (clocks_of xs) (snd xc))
-              (idck (L.n_in n)) (map abstract_clock xs).
-
   Hint Resolve  envs_eq_find'.
 
   Lemma sem_toeq :
@@ -412,7 +405,7 @@ Module Type CORRECTNESS
       envs_eq env (idck cenv) ->
       (forall f xs ys,
           LS.sem_node G f xs ys ->
-          sem_clock_inputs G f xs ->
+          LCS.sem_clock_inputs G f xs ->
           NLSC.sem_node P f xs ys) ->
       LCS.sc_var_inv (fun x => Exists (fun e => LCA.Is_free_left x e) (snd eq)) (idck cenv) H b ->
       to_equation env envo eq = OK eq' ->
@@ -499,7 +492,7 @@ Module Type CORRECTNESS
       take (LT.wt_exp _ _ _) and inv it.
       econstructor; eauto using sem_exps_lexps.
       2:{ eapply Hsemnode; eauto. take (LS.sem_node _ _ _ _) and inv it.
-          unfold sem_clock_inputs. esplit; esplit; split; eauto. split; eauto.
+          unfold LCS.sem_clock_inputs. esplit; esplit; split; eauto. split; eauto.
           (* now we use sc_inside *)
           destruct Hwc as (Hwc & ?& Hinxs). simpl_Foralls.
           take (LC.wc_exp _ _ _) and inv it.
@@ -571,18 +564,6 @@ Module Type CORRECTNESS
       }
   Admitted.
 
-  Lemma sem_var_env_eq :
-    forall H H' xs ss,
-      Forall2 (sem_var H) xs ss ->
-      Forall2 (sem_var H') xs ss ->
-      Forall (fun x => orel (EqSt (A:=value)) (Env.find x H) (Env.find x H')) xs.
-  Proof.
-    induction 1; auto. intros Hf. inv Hf. constructor; auto.
-    do 2 take (sem_var _ _ _) and inv it.
-    do 2 take (Env.MapsTo _ _ _) and apply Env.find_1 in it as ->.
-    now rewrite <- H4, <- H5.
-  Qed.
-
   Lemma sem_toeqs :
     forall G n H P env envo eqs' ins,
       Forall (LT.wt_equation G (idty (L.n_in n ++ L.n_vars n ++ L.n_out n))) (L.n_eqs n) ->
@@ -596,11 +577,11 @@ Module Type CORRECTNESS
       envs_eq env (idck (L.n_in n ++ L.n_vars n ++ L.n_out n)) ->
       (forall f xs ys,
           LS.sem_node G f xs ys ->
-          sem_clock_inputs G f xs ->
+          LCS.sem_clock_inputs G f xs ->
           NLSC.sem_node P f xs ys) ->
       LC.wc_node G n ->
       Forall2 (sem_var H) (LS.idents (L.n_in n)) ins ->
-      sem_clock_inputs (n :: G) (L.n_name n) ins ->
+      LCS.sem_clock_inputs (n :: G) (L.n_name n) ins ->
       mmap (to_equation env envo) (L.n_eqs n) = OK eqs' ->
       Forall (LS.sem_equation G H (clocks_of ins)) (L.n_eqs n) ->
       Forall (NLSC.sem_equation P H (clocks_of ins)) eqs'.
@@ -729,21 +710,9 @@ Module Type CORRECTNESS
       now apply IHlist_forall2.
   Qed.
 
-  Lemma sem_clock_inputs_cons :
-    forall G f n ins,
-      sem_clock_inputs (n :: G) f ins ->
-      L.n_name n <> f ->
-      sem_clock_inputs G f ins.
-  Proof.
-    intros * Hscin Hname.
-    destruct Hscin as (H & n' & Hfind &?&?).
-    apply L.find_node_other in Hfind; auto.
-    exists H, n'; auto.
-  Qed.
-
   Lemma inputs_clocked_vars :
     forall n G H f ins,
-      sem_clock_inputs (n :: G) f ins ->
+      LCS.sem_clock_inputs (n :: G) f ins ->
       L.n_name n = f ->
       wc_env (idck (L.n_in n)) ->
       Forall2 (sem_var H) (LS.idents (L.n_in n)) ins ->
@@ -777,7 +746,7 @@ Module Type CORRECTNESS
       LC.wc_global G ->
       to_global G = OK P ->
       LS.sem_node G f ins outs ->
-      sem_clock_inputs G f ins ->
+      LCS.sem_clock_inputs G f ins ->
       NLSC.sem_node P f ins outs.
   Proof.
     induction G as [|node]. now inversion 6.
@@ -795,7 +764,7 @@ Module Type CORRECTNESS
       destruct Htr' as (n' & P' & Hp & Htrn & Hmmap). subst.
       assert (forall f ins outs,
                  LS.sem_node G f ins outs ->
-                 sem_clock_inputs G f ins ->
+                 LCS.sem_clock_inputs G f ins ->
                  NLSC.sem_node P' f ins outs) as IHG'
           by auto.
       apply ident_eqb_eq in Hnf. rewrite <- Hnf.
@@ -820,7 +789,7 @@ Module Type CORRECTNESS
           eapply ninin_l_nl; eauto.
     - apply ident_eqb_neq in Hnf.
       eapply LS.sem_node_cons in Hsem; auto.
-      eapply sem_clock_inputs_cons in Hscin; auto.
+      eapply LCS.sem_clock_inputs_cons in Hscin; auto.
       assert (Htr' := Htr).
       apply mmap_cons in Htr.
       destruct Htr as (n' & P' & Hp & Htn & Hmmap). subst.

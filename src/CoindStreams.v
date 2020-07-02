@@ -923,7 +923,6 @@ Module Type COINDSTREAMS
     rewrite H1 in H3. inv H3. reflexivity.
   Qed.
 
-
   Lemma env_maps_tl :
     forall i v s H,
       Env.MapsTo i (v ⋅ s) H -> Env.MapsTo i s (history_tl H).
@@ -965,6 +964,18 @@ Module Type COINDSTREAMS
       rewrite Hr in Hfind; inv Hfind;
         eapply Env.find_1 in Hr; rewrite H1; [rewrite H3|rewrite <- H3];
           econstructor; eauto using Env.find_2; reflexivity.
+  Qed.
+
+  Lemma sem_var_env_eq :
+    forall H H' xs ss,
+      Forall2 (sem_var H) xs ss ->
+      Forall2 (sem_var H') xs ss ->
+      Forall (fun x => orel (EqSt (A:=value)) (Env.find x H) (Env.find x H')) xs.
+  Proof.
+    induction 1; auto. intros Hf. inv Hf. constructor; auto.
+    do 2 take (sem_var _ _ _) and inv it.
+    do 2 take (Env.MapsTo _ _ _) and apply Env.find_1 in it as ->.
+    now rewrite <- H4, <- H5.
   Qed.
 
   (** * sem_clock a

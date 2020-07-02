@@ -30,86 +30,6 @@ Module Type LCLOCKSEMANTICS
        (Import Str : COINDSTREAMS Op OpAux)
        (Import Sem : LSEMANTICS Ids Op OpAux Syn Lord Str).
 
-  (** *** Interpreter *)
-  Fixpoint interp_clock_instant R base ck : bool :=
-    match ck with
-    | Cbase => base
-    | Con ck id b =>
-      let b' := interp_clock_instant R base ck in
-      match Env.find id R with
-      | Some v => match v with
-                  | OpAux.present v =>
-                    match OpAux.val_to_bool v with
-                    | Some true => andb b b'
-                    | Some false => andb (negb b) b'
-                    | _ => false
-                    end
-                  | _ => false
-                  end
-      | None => false
-      end
-    end.
-
-  CoFixpoint interp_clock H base ck : Stream bool :=
-    match base with
-    | b ⋅ base =>
-      (interp_clock_instant (history_hd H) b ck) ⋅ (interp_clock (history_tl H) base ck)
-    end.
-
-  Fact interp_clock_Cons : forall H b bs ck,
-      interp_clock H (b ⋅ bs) ck ≡ (interp_clock_instant (history_hd H) b ck) ⋅ (interp_clock (history_tl H) bs ck).
-  Proof.
-    intros H b bs ck; simpl.
-    constructor; simpl; reflexivity.
-  Qed.
-
-  Lemma interp_clock_nth : forall n H base ck,
-      (interp_clock H base ck) # n = interp_clock_instant (history_nth n H) (base # n) ck.
-  Proof.
-    induction n; intros H [b base] ck; rewrite interp_clock_Cons; simpl.
-    - repeat rewrite Str_nth_0. reflexivity.
-    - repeat rewrite Str_nth_S.
-      rewrite IHn, <- history_nth_tl. reflexivity.
-  Qed.
-
-  (* Definition wt_value (ty : type) (v : value) := *)
-  (*   match v with *)
-  (*   | absent => True *)
-  (*   | present v => wt_val v ty *)
-  (*   end. *)
-
-  (* Definition wt_env_val (R : env) (xty : ident * type) := *)
-  (*   match Env.find (fst xty) R with *)
-  (*   | None => False *)
-  (*   | Some v => wt_value (snd xty) v *)
-  (*   end. *)
-
-  (* Definition wt_env (vars : list (ident * type)) (R : env) := *)
-  (*   Forall (wt_env_val R) vars. *)
-
-  (* Definition wt_hist_val (H : history) (xty : ident * type) := *)
-  (*   match Env.find (fst xty) H with *)
-  (*   | None => False *)
-  (*   | Some vs => SForall (wt_value (snd xty)) vs *)
-  (*   end. *)
-
-  (* Definition wt_hist (vars : list (ident * type)) (H : history) := *)
-  (*   Forall (wt_hist_val H) vars. *)
-
-  (* Fact wt_hist_wt_env : forall vars hist, *)
-  (*     wt_hist vars hist -> *)
-  (*     forall n, wt_env vars (history_nth n hist). *)
-  (* Proof. *)
-  (*   intros vars hist Hwt n. *)
-  (*   unfold wt_hist, wt_env in *. *)
-  (*   eapply Forall_impl; [|eauto]; clear Hwt. *)
-  (*   intros [x ty] Hwt. *)
-  (*   unfold wt_hist_val, wt_env_val in *; simpl in *. *)
-  (*   destruct (Env.find x hist) eqn:Hfind; [|inv Hwt]. *)
-  (*   apply history_nth_find_Some with (n:=n) in Hfind; rewrite Hfind. *)
-  (*   rewrite SForall_forall in Hwt; auto. *)
-  (* Qed. *)
-
   Fact history_nth_add : forall H n id vs,
       Env.Equal (history_nth n (Env.add id vs H)) (Env.add id (vs # n) (history_nth n H)).
   Proof.
@@ -130,73 +50,6 @@ Module Type LCLOCKSEMANTICS
       + rewrite ident_eqb_neq in Heq.
         rewrite Env.gso in *; auto.
         eapply history_nth_find_None; auto.
-  Qed.
-
-  (* Fact interp_clock_instant_refines : forall R R' vars ck base, *)
-  (*     wt_env vars R -> *)
-  (*     wt_clock vars ck -> *)
-  (*     Env.refines eq R R' -> *)
-  (*     interp_clock_instant R base ck = interp_clock_instant R' base ck. *)
-  (* Proof with eauto. *)
-  (*   induction ck; intros * Henv Hck Href; simpl in *; inv Hck. *)
-  (*   - reflexivity. *)
-  (*   - specialize (IHck base Henv H4 Href). *)
-  (*     unfold wt_env in Henv; rewrite Forall_forall in Henv. *)
-  (*     eapply Henv in H2; unfold wt_env_val in H2; simpl in H2. *)
-  (*     destruct (Env.find i R) eqn:Hfind. *)
-  (*     + apply Href in Hfind as [v' [? Hfind]]; subst. rewrite Hfind. *)
-  (*       destruct v'; [auto|]. *)
-  (*       destruct (val_to_bool v); auto. repeat rewrite IHck. reflexivity. *)
-  (*     + inv H2. *)
-  (* Qed. *)
-
-  (* Lemma interp_clock_refines : forall H H' vars ck base, *)
-  (*     wt_hist vars H -> *)
-  (*     wt_clock vars ck -> *)
-  (*     Env.refines eq H H' -> *)
-  (*     interp_clock H base ck ≡ interp_clock H' base ck. *)
-  (* Proof with eauto. *)
-  (*   intros * Hhist Hck Href. *)
-  (*   eapply ntheq_eqst; intros n. *)
-  (*   repeat rewrite interp_clock_nth. *)
-  (*   eapply interp_clock_instant_refines... *)
-  (*   - eapply wt_hist_wt_env... *)
-  (*   - eapply history_nth_refines... *)
-  (* Qed. *)
-
-  Fact interp_clock_instant_add : forall R id v ck base,
-      ~Is_free_in_clock id ck ->
-      interp_clock_instant (Env.add id v R) base ck = interp_clock_instant R base ck.
-  Proof.
-    induction ck; intros base Hnin; simpl; auto.
-    rewrite Env.gso.
-    - destruct Env.find as [[|v']|]; auto.
-      destruct val_to_bool as [[|]|]; f_equal; auto.
-      1,2:rewrite IHck; auto.
-      1,2:intro contra; apply Hnin; constructor; auto.
-    - intro contra; subst. apply Hnin. constructor.
-  Qed.
-
-  Instance interp_clock_instant_Proper:
-    Proper (@Env.Equal value ==> @eq bool ==> @eq clock ==> @eq bool)
-           interp_clock_instant.
-  Proof.
-    intros H H' Hequal base' base ? ck' ck ?; subst.
-    induction ck; simpl; auto.
-    - destruct Env.find as [[|v]|] eqn:Hfind;
-        rewrite Hequal in Hfind; rewrite Hfind; auto.
-      rewrite IHck; auto.
-  Qed.
-
-  Lemma interp_clock_add : forall H id vs ck base,
-      ~Is_free_in_clock id ck ->
-      interp_clock (Env.add id vs H) base ck ≡ interp_clock H base ck.
-  Proof.
-    intros * Hisfree.
-    eapply ntheq_eqst; intros n.
-    repeat rewrite interp_clock_nth.
-    rewrite history_nth_add.
-    apply interp_clock_instant_add; auto.
   Qed.
 
   (** ** Instantaneous semantics (useful for later proofs) *)
@@ -324,19 +177,62 @@ Module Type LCLOCKSEMANTICS
         * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
   Qed.
 
+  Lemma history_tl_same_find : forall H H' vars,
+      Forall (fun x => orel (EqSt (A:=value)) (Env.find x H) (Env.find x H')) vars ->
+      Forall (fun x => orel (EqSt (A:=value)) (Env.find x (history_tl H)) (Env.find x (history_tl H'))) vars.
+  Proof.
+    intros * Hsem.
+    eapply Forall_impl; [|eauto]. intros; simpl in *.
+    destruct (Env.find a H) eqn:Hfind; inv H0.
+    - symmetry in H2.
+      apply history_tl_find_Some in Hfind. apply history_tl_find_Some in H2.
+      rewrite Hfind, H2. constructor. rewrite H3; reflexivity.
+    - symmetry in H1.
+      apply history_tl_find_None in Hfind. apply history_tl_find_None in H1.
+      rewrite Hfind, H1. constructor.
+  Qed.
+
+  Lemma sem_var_same_find : forall H H' vars id vs,
+      Forall (fun x => orel (EqSt (A:=value)) (Env.find x H') (Env.find x H)) vars ->
+      In id vars ->
+      sem_var H id vs ->
+      sem_var H' id vs.
+  Proof.
+    intros * Hf Hin Hsem.
+    eapply Forall_forall in Hf; eauto.
+    inv Hsem.
+    apply Env.find_1 in H1. rewrite H1 in Hf. inv Hf.
+    econstructor. eapply Env.find_2; eauto.
+    rewrite H2, H4; reflexivity.
+  Qed.
+
+  Lemma sem_clock_same_find : forall H H' vars ck bs bs',
+      wc_clock vars ck ->
+      Forall (fun x => orel (EqSt (A:=value)) (Env.find x H') (Env.find x H)) (map fst vars) ->
+      sem_clock H bs ck bs' ->
+      sem_clock H' bs ck bs'.
+  Proof.
+    cofix CoFix; destruct ck; intros * Hwc Hf Hsem.
+    - inv Hsem; constructor; auto.
+    - inv Hwc; inv Hsem.
+      + econstructor; eauto.
+        * eapply sem_var_same_find; eauto.
+          apply in_map_iff. exists (i, ck); auto.
+        * eapply CoFix; [| |eauto]. 1:constructor; eauto.
+          apply history_tl_same_find; auto.
+      + econstructor; eauto.
+        * eapply sem_var_same_find; eauto.
+          apply in_map_iff. exists (i, ck); auto.
+        * eapply CoFix; [| |eauto]. 1:constructor; eauto.
+          apply history_tl_same_find; auto.
+      + eapply Son_abs2; eauto.
+        * eapply sem_var_same_find; eauto.
+          apply in_map_iff. exists (i, ck); auto.
+        * eapply CoFix; [| |eauto]. 1:constructor; eauto.
+          eapply history_tl_same_find; auto.
+  Qed.
+
   (** ** Synchronization (alignement ?) *)
-
-  (** sem_clock H b cl b' ->
-      interp_clock H b cl = b' *)
-
-  (** sem_exp H b e [ss]
-      cl = clockof e
-
-      |- sem_clock H b cl (abstract clock ss)
-      |- interp_clock H b cl = (abstract clock ss)
-      |- synchronized (interp_clock H b cl) (abstract_clock ss)
-      |- synchronized (interp_clock H b cl) ss
-   *)
 
   (** fby keeps the synchronization *)
 
@@ -1039,6 +935,33 @@ Module Type LCLOCKSEMANTICS
     - intros x HIn contra.
       eapply NoDupMembers_app_InMembers in Hndup; eauto.
       eapply InMembers_fresh_in in contra; eauto.
+  Qed.
+
+  Fact NoDupMembers_anon_in : forall e es,
+      In e es ->
+      NoDupMembers (anon_ins es) ->
+      NoDupMembers (anon_in e).
+  Proof.
+    intros * Hin Hndup.
+    unfold anon_ins in *.
+    induction es; inv Hin; simpl in Hndup.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+  Qed.
+
+  Corollary NoDupMembers_anon_in' : forall vars e es,
+      In e es ->
+      NoDupMembers (vars ++ anon_ins es) ->
+      NoDupMembers (vars ++ anon_in e).
+  Proof.
+    intros * Hin Hndup.
+    apply NoDupMembers_app.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+      eapply NoDupMembers_anon_in; eauto.
+    - intros x HIn contra.
+      eapply NoDupMembers_app_InMembers in Hndup; eauto.
+      eapply InMembers_anon_in in contra; eauto.
   Qed.
 
   Fact NoDupMembers_anon_in_eq : forall eq eqs,
@@ -2512,6 +2435,19 @@ Module Type LCLOCKSEMANTICS
       Forall2 (fun xc => sem_clock H (clocks_of xs) (snd xc))
               (idck (n_out n)) (map abstract_clock os).
 
+  Lemma sc_node'_global_tl : forall G n,
+      Ordered_nodes (n::G) ->
+      sc_node' (n::G) n ->
+      sc_node' G n.
+  Proof.
+    intros * Hord Hsc.
+    unfold sc_node' in *.
+    intros. eapply Hsc; eauto.
+    apply Forall_sem_equation_global_tl'; auto.
+    eapply find_node_not_Is_node_in with (f:=n_name n); eauto.
+    simpl. rewrite ident_eqb_refl; auto.
+  Qed.
+
   Theorem l_sem_node_clock' : forall G n,
       Forall LCA.node_causal G ->
       Lord.Ordered_nodes G ->
@@ -2659,6 +2595,199 @@ Module Type LCLOCKSEMANTICS
     intros ? ? ? ? (Hwt&Hwc&Hsem).
     eapply sc_exp'; eauto using NoDupMembers_fresh_in'.
   Qed.
+
+  Corollary sc_inside' : forall G H Hi b env es ss bck sub n,
+      wc_global G ->
+      sc_nodes G ->
+      NoDupMembers (env ++ fresh_ins es) ->
+      wc_env (idck env) ->
+      Forall (wt_exp G (idty env)) es ->
+      Forall (wc_exp G (idck env)) es ->
+      Forall2 (sem_exp G H b) es ss ->
+      sc_var_inv' (idck env) H b ->
+      wc_env (idck (n_in n)) ->
+      Forall2 (WellInstantiated bck sub) (idck (n_in n)) (nclocksof es) ->
+      Forall2 (sem_var Hi) (idents (n_in n)) (concat ss) ->
+      Forall2 (fun xc : ident * clock => sem_clock Hi (clocks_of (concat ss)) (snd xc)) (idck (n_in n)) (map abstract_clock (concat ss)).
+  Proof.
+    intros.
+    eapply sc_inside; eauto.
+    eapply sc_exps'; eauto.
+  Qed.
+
+  Definition sem_clock_inputs (G : global) (f : ident) (xs : list (Stream value)): Prop :=
+    exists H n,
+      find_node f G = Some n /\
+      Forall2 (sem_var H) (idents (n_in n)) xs /\
+      Forall2 (fun xc => sem_clock H (clocks_of xs) (snd xc))
+              (idck (n_in n)) (map abstract_clock xs).
+
+  Lemma sem_clock_inputs_cons :
+    forall G f n ins,
+      n_name n <> f ->
+      sem_clock_inputs G f ins <-> sem_clock_inputs (n :: G) f ins.
+  Proof.
+    intros * Hname.
+    split; intros (H & n' & Hfind &?&?);
+      exists H, n'; repeat split; auto.
+    - rewrite find_node_other; eauto.
+    - rewrite <- find_node_other; eauto.
+  Qed.
+
+  Lemma inputs_clocked_vars :
+    forall n G H f ins,
+      sem_clock_inputs (n :: G) f ins ->
+      n_name n = f ->
+      wc_env (idck (n_in n)) ->
+      Forall2 (sem_var H) (idents (n_in n)) ins ->
+      Forall2 (fun xc => sem_clock H (clocks_of ins) (snd xc)) (idck (n_in n)) (map abstract_clock ins).
+  Proof.
+    intros * (H'&n'& Hfind & Hv & Hscin) Hnf Wcin Hins.
+    simpl in Hfind. rewrite <- Hnf, ident_eqb_refl in Hfind. inv Hfind.
+    pose proof (sem_var_env_eq _ _ _ _ Hins Hv) as Horel.
+    rewrite idck_idents in *. rewrite Forall2_map_1 in Hv, Hins.
+    eapply Forall2_impl_In; [|eauto]. intros; simpl in *.
+    eapply sem_clock_same_find; eauto.
+    unfold wc_env in Wcin. eapply Forall_forall in H0; [|eauto]. auto.
+  Qed.
+
+  Fact NoDupMembers_fresh_in_anon_in : forall vars e,
+      NoDupMembers (vars ++ fresh_in e) ->
+      NoDupMembers (vars ++ anon_in e).
+  Proof.
+    intros * Hndup.
+    destruct e; auto.
+    destruct o; simpl in *.
+    - repeat rewrite app_assoc in *.
+      apply NoDupMembers_app_l in Hndup; auto.
+    - repeat rewrite app_assoc in *.
+      apply NoDupMembers_app_l in Hndup; auto.
+  Qed.
+
+  (** ** Another version of semantics equivalence, including sem_clock_inputs *)
+  Section sem_ref.
+
+    (** Functional equivalence for nodes *)
+    Definition node_sem_refines G G' f : Prop :=
+      (forall ins outs, (sem_clock_inputs G f ins /\ sem_node G f ins outs) ->
+                   (sem_clock_inputs G' f ins /\ sem_node G' f ins outs)).
+
+    Definition global_sem_refines G G' : Prop :=
+      forall f, node_sem_refines G G' f.
+
+    Ltac ndup_l H :=
+      rewrite app_assoc in H;
+      apply NoDupMembers_app_l in H; auto.
+    Ltac ndup_r H :=
+      rewrite Permutation_swap in H;
+      apply NoDupMembers_app_r in H; auto.
+
+    Hint Resolve NoDupMembers_fresh_in_anon_in NoDupMembers_fresh_in' NoDupMembers_anon_in' nth_In.
+    Hint Constructors sem_exp.
+    Fact sem_eq_sem_exp : forall G G' H b vars e vs,
+        global_sem_refines G G' ->
+        wc_global G ->
+        sc_nodes G ->
+        NoDupMembers (vars ++ anon_in e) ->
+        wc_env (idck vars) ->
+        wt_exp G (idty vars) e ->
+        wc_exp G (idck vars) e ->
+        sc_var_inv' (idck vars) H b ->
+        sem_exp G H b e vs ->
+        sem_exp G' H b e vs.
+    Proof with eauto.
+      induction e using exp_ind2; intros * Heq HwcG Hsc Hndup Hwenv Hwt Hwc Hinv Hsem;
+        simpl in Hndup; inv Hwt; inv Hwc; inv Hsem...
+      - (* binop *)
+        econstructor... ndup_l Hndup... ndup_r Hndup...
+      - (* fby *)
+        econstructor...
+        + ndup_l Hndup. repeat rewrite_Forall_forall... eapply H0...
+        + ndup_r Hndup. repeat rewrite_Forall_forall... eapply H1...
+      - (* when *)
+        econstructor...
+        repeat rewrite_Forall_forall... eapply H0...
+      - (* merge *)
+        econstructor...
+        + ndup_l Hndup. repeat rewrite_Forall_forall... eapply H0...
+        + ndup_r Hndup. repeat rewrite_Forall_forall... eapply H1...
+      - (* ite *)
+        econstructor...
+        + ndup_l Hndup.
+        + ndup_r Hndup. ndup_l Hndup. repeat rewrite_Forall_forall... eapply H0...
+        + do 2 ndup_r Hndup. repeat rewrite_Forall_forall... eapply H1...
+      - (* app *)
+        econstructor...
+        + repeat rewrite_Forall_forall... eapply H1...
+        + specialize (Heq f (concat ss) vs).
+          eapply Heq. split; auto.
+          inv H19. rewrite H3 in H7; inv H7. rewrite H3 in H11; inv H11.
+          exists H2; exists n0.
+          repeat split; auto.
+          eapply sc_inside'...
+          eapply wc_find_node in HwcG as [G'' [? _]]...
+      - (* app (reset) *)
+        econstructor...
+        + ndup_l Hndup. repeat rewrite_Forall_forall... eapply H1...
+        + ndup_r Hndup.
+        + intros k. specialize (H26 k).
+          specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
+          eapply Heq. split; auto.
+          inv H26. rewrite H3 in H7; inv H7. rewrite H3 in H14; inv H14.
+          exists H2. exists n0.
+          repeat split; auto.
+          admit. (* reset *)
+    Admitted.
+
+    Fact sem_eq_sem_equation : forall G G' H b vars eq,
+        global_sem_refines G G' ->
+        wc_global G ->
+        sc_nodes G ->
+        NoDupMembers (vars ++ anon_in_eq eq) ->
+        wc_env (idck vars) ->
+        wt_equation G (idty vars) eq ->
+        wc_equation G (idck vars) eq ->
+        sc_var_inv' (idck vars) H b ->
+        sem_equation G H b eq ->
+        sem_equation G' H b eq.
+    Proof.
+      intros G G' H b vars [xs es] Heq HwcG Hsc Hndup Hwenv [Hwt _] [Hwc _] Hinv Hsem.
+      inv Hsem.
+      econstructor; eauto.
+      repeat rewrite_Forall_forall; eauto.
+      eapply sem_eq_sem_exp; eauto.
+    Qed.
+
+    Fact global_sem_eq_nil :
+      global_sem_refines [] [].
+    Proof.
+      intros f ins outs Hsem. assumption.
+    Qed.
+
+    Fact global_sem_eq_cons : forall G G' n n' f,
+        Ordered_nodes (n::G) ->
+        Ordered_nodes (n'::G') ->
+        n_name n = f ->
+        n_name n' = f ->
+        global_sem_refines G G' ->
+        node_sem_refines (n::G) (n'::G') f ->
+        global_sem_refines (n::G) (n'::G').
+    Proof with eauto.
+      intros G G' n n' f Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
+      inv Hsem.
+      simpl in H0.
+      destruct (ident_eqb (n_name n) f0) eqn:Heq.
+      + specialize (Hnode ins outs).
+        rewrite ident_eqb_eq in Heq; subst.
+        eapply Hnode.
+        econstructor; eauto.
+      + rewrite ident_eqb_neq in Heq.
+        rewrite <- sem_clock_inputs_cons... rewrite <- sem_node_cons_iff...
+        specialize (Hglob f0 ins outs). apply Hglob.
+        rewrite sem_clock_inputs_cons... rewrite sem_node_cons_iff...
+    Qed.
+
+  End sem_ref.
 End LCLOCKSEMANTICS.
 
 Module LClockSemanticsFun
