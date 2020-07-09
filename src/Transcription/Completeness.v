@@ -12,7 +12,7 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics.
-From Velus Require Import Lustre.Normalization.FullNorm.
+From Velus Require Import Lustre.Normalization.Normalization.
 
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
@@ -25,15 +25,13 @@ Module Type COMPLETENESS
        (Import OpAux : OPERATORS_AUX Op)
        (Str  : COINDSTREAMS Op OpAux)
        (Import LSyn : LSYNTAX Ids Op)
-       (Import Norm : FULLNORM Ids Op OpAux LSyn)
+       (Import Norm : NORMALIZATION Ids Op OpAux LSyn)
        (Import CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (Import TR : TR Ids Op OpAux LSyn CE NL).
 
-  Import Norm.
-
   Fact to_constant_complete : forall c,
-    is_constant c ->
+    normalized_constant c ->
     exists e', to_constant c = OK e'.
   Proof with eauto.
     intros c Hnorm. induction Hnorm.
@@ -218,7 +216,7 @@ Module CompletenessFun
        (OpAux : OPERATORS_AUX Op)
        (Str  : COINDSTREAMS Op OpAux)
        (LSyn : LSYNTAX Ids Op)
-       (Norm : FULLNORM Ids Op OpAux LSyn)
+       (Norm : NORMALIZATION Ids Op OpAux LSyn)
        (CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (TR : TR Ids Op OpAux LSyn CE NL)

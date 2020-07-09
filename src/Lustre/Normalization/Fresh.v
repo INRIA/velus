@@ -679,6 +679,71 @@ Module Notations.
       (at level 200, X ident, Y ident, A at level 100, B at level 200): fresh_monad_scope.
 End Notations.
 
+Section map_bind.
+  Import Fresh Tactics Notations.
+  Open Scope fresh_monad_scope.
+  Context {A A1 B : Type}.
+  Variable k : A -> Fresh A1 B.
+
+  Fixpoint map_bind a :=
+    match a with
+    | nil => ret nil
+    | hd::tl => do a1 <- k hd;
+              do a1s <- map_bind tl;
+              ret (a1::a1s)
+    end.
+
+  Fact map_bind_values : forall a st a1s st',
+      map_bind a st = (a1s, st') ->
+      Forall2 (fun a a1 => exists st'', exists st''', k a st'' = (a1, st''')) a a1s.
+  Proof.
+    induction a; intros st a1s st' Hfold; simpl in *; repeat inv_bind.
+    - constructor.
+    - specialize (IHa _ _ _ H0).
+      constructor; eauto.
+  Qed.
+
+  Fact map_bind_st_valid : forall a a1s st st' aft,
+      map_bind a st = (a1s, st') ->
+      Forall (fun a => forall a1 st st',
+                  k a st = (a1, st') ->
+                  st_valid_after st aft ->
+                  st_valid_after st' aft) a ->
+      st_valid_after st aft ->
+      st_valid_after st' aft.
+  Proof.
+    induction a; intros * Hmap Hforall Hvalid;
+      simpl in *; repeat inv_bind; auto.
+    inv Hforall. eapply IHa; eauto.
+  Qed.
+
+  Fact map_bind_weak_valid : forall a a1s st st' aft,
+      map_bind a st = (a1s, st') ->
+      Forall (fun a => forall a1 st st',
+                  k a st = (a1, st') ->
+                  weak_valid_after st aft ->
+                  weak_valid_after st' aft) a ->
+      weak_valid_after st aft ->
+      weak_valid_after st' aft .
+  Proof.
+    induction a; intros * Hmap Hforall Hvalid;
+      simpl in *; repeat inv_bind; auto.
+    inv Hforall. eapply IHa; eauto.
+  Qed.
+
+  Fact map_bind_st_follows : forall a a1s st st',
+      map_bind a st = (a1s, st') ->
+      Forall (fun a => forall a1 st st', k a st = (a1, st') -> st_follows st st') a ->
+      st_follows st st'.
+  Proof.
+    induction a; intros * Hmap Hforall;
+      simpl in *; repeat inv_bind; auto.
+    - reflexivity.
+    - inv Hforall.
+      etransitivity; eauto.
+  Qed.
+End map_bind.
+
 Section map_bind2.
   Import Fresh Tactics Notations.
   Open Scope fresh_monad_scope.
@@ -713,20 +778,6 @@ Section map_bind2.
       st_valid_after st' aft.
   Proof.
     induction a; intros a1s a2s st st' aft Hmap Hforall Hvalid;
-      simpl in *; repeat inv_bind; auto.
-    inv Hforall. eapply IHa; eauto.
-  Qed.
-
-  Fact map_bind2_st_valid_reuse : forall a a1s a2s st st' aft reusable,
-      map_bind2 a st = (a1s, a2s, st') ->
-      Forall (fun a => forall a1 a2 st st',
-                  k a st = (a1, a2, st') ->
-                  st_valid_reuse st aft reusable ->
-                  st_valid_reuse st' aft reusable) a ->
-      st_valid_reuse st aft reusable ->
-      st_valid_reuse st' aft reusable.
-  Proof.
-    induction a; intros a1s a2s st st' aft reusable Hmap Hforall Hvalid;
       simpl in *; repeat inv_bind; auto.
     inv Hforall. eapply IHa; eauto.
   Qed.

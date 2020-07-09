@@ -11,7 +11,7 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import CoreExpr.CETyping.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLTyping.
-From Velus Require Import Lustre.Normalization.FullNorm.
+From Velus Require Import Lustre.Normalization.Untuple.
 
 From Coq Require Import String.
 From Coq Require Import Permutation.
@@ -30,15 +30,13 @@ Module Type TRTYPING
        (Import OpAux: OPERATORS_AUX Op)
        (L           : LSYNTAX  Ids Op)
        (LT          : LTYPING  Ids Op L)
-       (FN          : FULLNORM Ids Op OpAux L)
+       (FNS         : UNTUPLE Ids Op OpAux L)
        (Import CE   : CESYNTAX     Op)
        (CET         : CETYPING Ids Op CE)
        (NL          : NLSYNTAX Ids Op CE)
        (Ord         : NLORDERED Ids Op CE     NL)
        (NLT         : NLTYPING  Ids Op CE NL Ord CET)
        (Import TR   : TR Ids Op OpAux L CE NL).
-
-  Module FNS := FN.Spec.
 
   Lemma wt_clock_l_ce :
     forall vars ck,
@@ -270,16 +268,16 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_equation :
-    forall G P to_cut env envo vars e e',
+    forall G P env envo vars e e',
       to_global G = OK P ->
       to_equation env envo e = OK e' ->
       (forall i ck, find_clock env i = OK ck -> LT.wt_clock vars ck) ->
       NoDup (fst e) ->
-      FNS.normalized_equation to_cut e ->
+      FNS.untupled_equation e ->
       LT.wt_equation G vars e ->
       NLT.wt_equation P vars e'.
   Proof.
-    intros ?????? [xs [|? []]] e' Hg Htr Henvs Hdup Hnormed (Hwt & Hf2);
+    intros ????? [xs [|? []]] e' Hg Htr Henvs Hdup Hnormed (Hwt & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *.
     - cases. monadInv Htr. inv Hf2. constructor; eauto using wt_clock_l_ce.
@@ -355,9 +353,9 @@ Module Type TRTYPING
           rewrite H1 in H5. inv H5.
           constructor; eauto.
         * apply wt_clock_l_ce, wt_find_base_clock.
-          inv Hnormed; [|inv H8; inv H1].
+          inv Hnormed; [|inv H2; inv H1].
           clear H5 H6 H7 EQ.
-          induction l; simpl; auto. inv H3; inv H8. apply Forall_app.
+          induction l; simpl; auto. inv H2; inv H3. apply Forall_app.
           split; auto.
           apply wt_clockof in H5; auto.
         * clear H5 H7 Hnormed. revert dependent l. induction x0; intros; auto.
@@ -383,9 +381,9 @@ Module Type TRTYPING
           rewrite H1 in H5. inv H5.
           constructor; eauto.
         * apply wt_clock_l_ce, wt_find_base_clock.
-          inv Hnormed; [|inv H10; inv H1].
+          inv Hnormed; [|inv H2; inv H1].
           clear H5 H6 H7 EQ.
-          induction l; simpl; auto. inv H3; inv H10. apply Forall_app.
+          induction l; simpl; auto. inv H2; inv H3. apply Forall_app.
           split; auto.
           apply wt_clockof in H5; auto.
         * clear H5 H7 Hnormed. revert dependent l. induction x0; intros; auto.
@@ -433,7 +431,7 @@ Module Type TRTYPING
     forall G P n n',
       to_node n = OK n' ->
       to_global G = OK P ->
-      FNS.normalized_node n ->
+      FNS.untupled_node n ->
       LT.wt_node G n ->
       NLT.wt_node P n'.
   Proof.
@@ -441,7 +439,7 @@ Module Type TRTYPING
     tonodeInv Htr. unfold NLT.wt_node. simpl.
     pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
     revert dependent x.
-    unfold FNS.normalized_node in Hnormed.
+    unfold FNS.untupled_node in Hnormed.
     induction (L.n_eqs n); intros; monadInv Hmmap.
     - now take (Coqlib.list_forall2 _ _ _) and inv it.
     - take (Coqlib.list_forall2 _ _ _) and inv it.
@@ -468,7 +466,7 @@ Module Type TRTYPING
 
   Lemma wt_transcription :
     forall G P,
-      FNS.normalized_global G ->
+      FNS.untupled_global G ->
       LT.wt_global G ->
       to_global G = OK P ->
       NLT.wt_global P.
@@ -491,7 +489,7 @@ Module TrTypingFun
        (OpAux: OPERATORS_AUX Op)
        (L    : LSYNTAX  Ids Op)
        (LT   : LTYPING  Ids Op L)
-       (FN   : FULLNORM Ids Op OpAux L)
+       (FN   : UNTUPLE Ids Op OpAux L)
        (CE   : CESYNTAX     Op)
        (CET  : CETYPING Ids Op CE)
        (NL   : NLSYNTAX Ids Op CE)

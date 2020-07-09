@@ -27,9 +27,9 @@ src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
 src/Lustre/Normalization/Fresh.v
+src/Lustre/Normalization/Untuple.v
+src/Lustre/Normalization/NormFby.v
 src/Lustre/Normalization/Normalization.v
-src/Lustre/Normalization/Specification.v
-src/Lustre/Normalization/FullNorm.v
 src/Lustre/Normalization/NTyping.v
 src/Lustre/Normalization/NClocking.v
 src/Lustre/Normalization/NOrdered.v
