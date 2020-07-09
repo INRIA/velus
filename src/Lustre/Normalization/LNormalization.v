@@ -4,7 +4,7 @@ From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
 From Velus Require Import Lustre.Normalization.Normalization.
 (* From Velus Require Import Lustre.Normalization.Correctness. *)
-(* From Velus Require Import Lustre.Normalization.Idempotence. *)
+From Velus Require Import Lustre.Normalization.Idempotence.
 
 Local Set Warnings "-masking-absolute-name".
 Module Type LNORMALIZATION
@@ -19,7 +19,7 @@ Module Type LNORMALIZATION
        (Import Sem : LSEMANTICS Ids Op OpAux Syn Lord Str).
   Declare Module Norm : NORMALIZATION Ids Op OpAux Syn.
   (* Declare Module Export Correct : CORRECTNESS Ids Op OpAux Str Syn Typ Clo Lord Sem Norm. *)
-  (* Declare Module Idempotence : IDEMPOTENCE Ids Op OpAux Syn Norm. *)
+  Declare Module Idempotence : IDEMPOTENCE Ids Op OpAux Syn Norm.
 End LNORMALIZATION.
 
 Module LNormalizationFun
@@ -35,5 +35,5 @@ Module LNormalizationFun
        <: LNORMALIZATION Ids Op OpAux Str Syn Typ Clo Lord Sem.
   Module Norm := NormalizationFun Ids Op OpAux Syn.
   (* Module Export Correct := CorrectnessFun Ids Op OpAux Str Syn Typ Clo Lord Sem Norm. *)
-  (* Module Idempotence := IdempotenceFun Ids Op OpAux Syn Norm. *)
+  Module Idempotence := IdempotenceFun Ids Op OpAux Syn Norm.
 End LNormalizationFun.

@@ -7,7 +7,7 @@ Require Import ProofIrrelevance.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping.
-From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.
+From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
 (** * Idempotence of the normalization *)
 
@@ -17,11 +17,11 @@ Module Type IDEMPOTENCE
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
-       (Import Norm : FULLNORM Ids Op OpAux Syn).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Fresh.Fresh Facts Tactics.
 
-  (** ** Idempotence of normalization *)
+  (** ** Idempotence of untupling *)
 
   Fact normalized_lexp_normalize_idem : forall e is_control st,
       normalized_lexp e ->
@@ -114,27 +114,27 @@ Module Type IDEMPOTENCE
     - (* lexp *) eapply normalized_lexp_normalize_idem...
   Qed.
 
-  Fact normalize_fby_idem : forall e0 e ann st,
-      is_constant e0 ->
-      normalized_lexp e ->
-      normalize_fby [e0] [e] [ann] st = ([Efby [e0] [e] [ann]], [], st).
-  Proof with eauto.
-    intros e0 e [ty cl] st Hcons Hnormed.
-    unfold normalize_fby; inv_bind.
-    eexists. exists [[]]. exists st. split; simpl; inv_bind...
-    eexists. exists []. exists st. split; simpl.
-    - unfold fby_iteexp.
-      destruct (Norm.is_constant e0) eqn:Hisconstant; repeat inv_bind...
-      rewrite <- is_constant_is_constant in Hcons. congruence.
-    - inv_bind.
-      repeat eexists; inv_bind...
-  Qed.
+  (* Fact normalize_fby_idem : forall e0 e ann st, *)
+  (*     normalized_constant e0 -> *)
+  (*     normalized_lexp e -> *)
+  (*     normalize_fby [e0] [e] [ann] st = ([Efby [e0] [e] [ann]], [], st). *)
+  (* Proof with eauto. *)
+  (*   intros e0 e [ty cl] st Hcons Hnormed. *)
+  (*   unfold normalize_fby; inv_bind. *)
+  (*   eexists. exists [[]]. exists st. split; simpl; inv_bind... *)
+  (*   eexists. exists []. exists st. split; simpl. *)
+  (*   - unfold fby_iteexp. *)
+  (*     destruct (Norm.is_constant e0) eqn:Hisconstant; repeat inv_bind... *)
+  (*     rewrite <- is_constant_is_constant in Hcons. congruence. *)
+  (*   - inv_bind. *)
+  (*     repeat eexists; inv_bind... *)
+  (* Qed. *)
 
-  Fact normalized_rhs_normalize_idem : forall e keep_fby st,
-      normalized_rhs keep_fby e ->
-      normalize_rhs keep_fby e st = ([e], [], st).
+  Fact untupled_rhs_normalize_idem : forall e st,
+      untupled_rhs e ->
+      normalize_rhs e st = ([e], [], st).
   Proof with eauto.
-    intros e keep_fby st Hnormed.
+    intros * Hnormed.
     destruct e; inv Hnormed; unfold normalize_rhs;
       try (solve [eapply normalized_cexp_normalize_idem; eauto]);
       try (solve [inv H; inv H0]).
@@ -143,62 +143,61 @@ Module Type IDEMPOTENCE
       exists [e0]. exists []. exists st.
       split; unfold normalize_exps; inv_bind.
       + exists [[e0]]. exists [[]]. exists st. split; simpl; inv_bind...
-        eapply constant_normalized_lexp in H2. eapply normalized_lexp_normalize_idem in H2.
-        repeat eexists...
+        exists [e0]. exists []. exists st. split; simpl.
+        eapply normalized_lexp_normalize_idem in H1...
         inv_bind.
         exists []. exists []. exists st.
         repeat split; inv_bind...
       + exists [e]. exists []. exists st. split; simpl; inv_bind...
         * exists [[e]]. exists [[]]. exists st. split; simpl; inv_bind...
-          eapply normalized_lexp_normalize_idem in H4.
-          repeat eexists... inv_bind.
-          repeat eexists; inv_bind...
-        * repeat eexists; try inv_bind...
-          eapply normalize_fby_idem...
+          exists [e]. exists []. exists st. split; simpl.
+          eapply normalized_lexp_normalize_idem in H3...
+          inv_bind; repeat eexists...
+          1,2:inv_bind...
     - (* app *)
       repeat inv_bind.
-      eapply normalized_lexps_normalize_idem in H1.
+      eapply normalized_lexps_normalize_idem in H0.
       repeat eexists... repeat inv_bind.
       repeat eexists...
       inv_bind...
     - (* app (reset) *)
       repeat inv_bind.
-      eapply normalized_lexps_normalize_idem in H1.
+      eapply normalized_lexps_normalize_idem in H0.
       repeat (repeat eexists; eauto; simpl; inv_bind; eauto).
   Qed.
 
-  Corollary normalized_rhss_normalize_idem' : forall es keep_fby st,
-      Forall (normalized_rhs keep_fby) es ->
-      (exists eqs, map_bind2 (normalize_rhs keep_fby) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
+  Corollary untupled_rhss_normalize_idem' : forall es st,
+      Forall untupled_rhs es ->
+      (exists eqs, map_bind2 normalize_rhs es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
   Proof with eauto.
-    induction es; intros keep_fby st Hf;
+    induction es; intros st Hf;
       inv Hf; repeat inv_bind...
-    eapply normalized_rhs_normalize_idem in H1...
-    eapply (IHes keep_fby st) in H2; clear IHes.
+    eapply untupled_rhs_normalize_idem in H1...
+    eapply (IHes st) in H2; clear IHes.
     destruct H2 as [eqs [H2 Heqs]].
     exists ([]::eqs).
     repeat (repeat eexists; eauto; inv_bind).
   Qed.
 
-  Corollary normalized_rhss_normalize_idem : forall es keep_fby st,
-      Forall (normalized_rhs keep_fby) es ->
-      normalize_rhss keep_fby es st = (es, [], st).
+  Corollary untupled_rhss_normalize_idem : forall es st,
+      Forall untupled_rhs es ->
+      normalize_rhss es st = (es, [], st).
   Proof with eauto.
     intros.
-    eapply normalized_rhss_normalize_idem' in H. destruct H as [eqs [H Heqs]].
+    eapply untupled_rhss_normalize_idem' in H. destruct H as [eqs [H Heqs]].
     unfold normalize_rhss; inv_bind.
     repeat eexists...
     inv_bind. rewrite concat_map_singl1. congruence.
   Qed.
 
-  Fact normalized_equation_normalize_idem : forall G eq to_cut st,
+  Fact untupled_equation_untuple_idem : forall G eq st,
       wl_equation G eq ->
-      normalized_equation to_cut eq ->
-      normalize_equation to_cut eq st = ([eq], st).
+      untupled_equation eq ->
+      untuple_equation eq st = ([eq], st).
   Proof with eauto.
-    intros G [xs es] to_cut st Hwl Hnormed. inv Hwl.
-    specialize (normalized_equation_normalized_rhs _ _ _ Hnormed) as Hnormed2.
-    apply normalized_rhss_normalize_idem with (st:=st) in Hnormed2.
+    intros G [xs es] st Hwl Hnormed. inv Hwl.
+    specialize (untupled_equation_untupled_rhs _ _ Hnormed) as Hnormed2.
+    apply untupled_rhss_normalize_idem with (st:=st) in Hnormed2.
     inv Hnormed; repeat inv_bind;
       repeat eexists; eauto;
         inv_bind; try rewrite app_nil_r in *;
@@ -209,16 +208,21 @@ Module Type IDEMPOTENCE
       apply firstn_all2. simpl. rewrite H0. apply le_refl.
   Qed.
 
-  Corollary normalized_equations_normalize_idem : forall G eqs to_cut st,
+  Corollary untupled_equations_untuple_idem : forall G eqs st,
       Forall (wl_equation G) eqs ->
-      Forall (normalized_equation to_cut) eqs ->
-      normalize_equations to_cut eqs st = (eqs, st).
+      Forall untupled_equation eqs ->
+      untuple_equations eqs st = (eqs, st).
   Proof with eauto.
-    induction eqs; intros to_cut st Hwl Hnormed; inv Hwl; inv Hnormed;
-      unfold normalize_equations; repeat inv_bind...
-    eapply normalized_equation_normalize_idem in H3...
-    repeat eexists... inv_bind.
-    repeat eexists... inv_bind...
+    induction eqs; intros * Hwl Hnormed; inv Hwl; inv Hnormed;
+      unfold untuple_equations; repeat inv_bind...
+    - exists []. exists st. repeat split; inv_bind; auto.
+    - eapply untupled_equation_untuple_idem in H3...
+      eapply IHeqs with (st:=st) in H2... unfold untuple_equations in H2; repeat inv_bind.
+      exists ([a]::x). exists st. inv_bind.
+      split; auto.
+      inv_bind. repeat eexists...
+      inv_bind. repeat eexists...
+      inv_bind...
   Qed.
 
   Definition transport1 {n1 n2 : node} (Hin : n_in n1 = n_in n2) : 0 < length (n_in n1) -> 0 < length (n_in n2).
@@ -289,13 +293,13 @@ Module Type IDEMPOTENCE
     reflexivity.
   Qed.
 
-  Lemma normalized_node_normalize_idem : forall n Hwl,
-      normalized_node n ->
-      normalize_node PS.empty n Hwl = n.
+  Lemma untupled_node_untuple_idem : forall n Hwl,
+      untupled_node n ->
+      untuple_node n Hwl = n.
   Proof with eauto.
     intros n [G Hwl] Hnormed.
-    unfold normalize_node, normalized_node in *.
-    eapply normalized_equations_normalize_idem
+    unfold untupled_node in *.
+    eapply untupled_equations_untuple_idem
       with (st:=init_st (first_unused_ident
                            (self :: out :: map fst (n_in n ++ n_vars n ++ n_out n ++ anon_in_eqs (n_eqs n))))) in Hnormed...
     destruct n; simpl in *.
@@ -311,15 +315,116 @@ Module Type IDEMPOTENCE
     1,2,3:apply proof_irrelevance.
   Qed.
 
-  Corollary normalized_global_normalize_idem : forall G Hwl,
-      normalized_global G ->
-      normalize_global G Hwl = G.
+  Corollary untupled_global_untuple_idem : forall G Hwl,
+      untupled_global G ->
+      untuple_global G Hwl = G.
   Proof with eauto.
     induction G; intros Hwl Hnormed...
     simpl. inv Hnormed.
-    eapply normalized_node_normalize_idem in H1...
+    eapply untupled_node_untuple_idem in H1...
     rewrite H1.
     rewrite IHG...
+  Qed.
+
+  (** ** Idempotence of fby-normalization *)
+
+  Fact normalized_equation_fby_idem : forall to_cut eq st,
+      normalized_equation to_cut eq ->
+      fby_equation to_cut eq st = ([eq], st).
+  Proof.
+    intros to_cut (xs&es) st Hnormed.
+    destruct xs; [|destruct xs]; simpl; repeat inv_bind; auto.
+    inv Hnormed; simpl; repeat inv_bind; auto.
+    - destruct ann0 as [ty [ck name]]; repeat inv_bind.
+      exists (Efby [e0] [e] [(ty, (ck, name))]). exists []. exists st.
+      rewrite <- is_constant_normalized_constant in H3. rewrite H3.
+      split; [inv_bind|]; auto.
+      apply PSE.mem_3 in H1. rewrite H1. repeat inv_bind; auto.
+    - inv H1; repeat inv_bind; auto.
+      inv H; repeat inv_bind; auto.
+  Qed.
+
+  Fact normalized_equations_fby_idem : forall to_cut eqs st,
+      Forall (normalized_equation to_cut) eqs ->
+      fby_equations to_cut eqs st = (eqs, st).
+  Proof.
+    induction eqs; intros * Hnormed;
+      unfold fby_equations in *; simpl; repeat inv_bind.
+    - exists []. exists st. split; auto. inv_bind; auto.
+    - inv Hnormed.
+      apply IHeqs with (st:=st) in H2; clear IHeqs. repeat inv_bind.
+      exists ([a]::x). exists st. repeat inv_bind. split; auto.
+      inv_bind. exists [a]. exists st.
+      split; [eapply normalized_equation_fby_idem in H1;eauto|].
+      inv_bind. exists x. exists st. split; auto. inv_bind; auto.
+  Qed.
+
+  Lemma normalized_node_normfby_idem : forall n Hunt,
+      normalized_node n ->
+      normfby_node PS.empty n Hunt = n.
+  Proof with eauto.
+    intros n Hunt Hnormed.
+    unfold normalized_node in *.
+    eapply normalized_equations_fby_idem
+      with (st:=init_st (first_unused_ident
+                           (self :: out :: map fst (n_in n ++ n_vars n ++ n_out n ++ anon_in_eqs (n_eqs n))))) in Hnormed...
+    destruct n; simpl in *.
+    eapply equal_node; simpl...
+    Unshelve. 6,7,8,9,10:simpl.
+    6,7,8: reflexivity.
+    1,2:reflexivity.
+    4: { rewrite Hnormed; simpl.
+         rewrite init_st_anns; simpl.
+         apply app_nil_r. }
+    4: { rewrite Hnormed... }
+    simpl.
+    1,2,3:apply proof_irrelevance.
+  Qed.
+
+  Corollary normalized_global_normfby_idem : forall G Hunt,
+      normalized_global G ->
+      normfby_global G Hunt = G.
+  Proof with eauto.
+    induction G; intros Hwl Hnormed...
+    simpl. inv Hnormed.
+    eapply normalized_node_normfby_idem in H1...
+    rewrite H1.
+    rewrite IHG...
+  Qed.
+
+  (** ** Idempotence of normalization *)
+
+  Fact normalized_node_untupled_node: forall n,
+      normalized_node n ->
+      untupled_node n.
+  Proof.
+    intros * Hnormed.
+    unfold normalized_node, untupled_node in *.
+    solve_forall.
+    eapply normalized_eq_untupled_eq; eauto.
+  Qed.
+
+  Fact normalized_global_untupled_global : forall G,
+      normalized_global G ->
+      untupled_global G.
+  Proof.
+    intros * Hnormed.
+    unfold normalized_global, untupled_global in *.
+    solve_forall.
+    apply normalized_node_untupled_node; auto.
+  Qed.
+
+  Lemma normalized_global_normalize_idem : forall G Hunt,
+      normalized_global G ->
+      normalize_global G Hunt = G.
+  Proof.
+    intros * Hnormed.
+    unfold normalize_global.
+    erewrite normalized_global_normfby_idem.
+    - eapply normalized_global_untupled_global in Hnormed.
+      eapply untupled_global_untuple_idem; eauto.
+    - erewrite untupled_global_untuple_idem; eauto.
+      eapply normalized_global_untupled_global in Hnormed; eauto.
   Qed.
 
   Theorem normalize_global_idem : forall G Hwl1 Hwl2,
@@ -336,7 +441,7 @@ Module IdempotenceFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
-       (Norm : FULLNORM Ids Op OpAux Syn)
+       (Norm : NORMALIZATION Ids Op OpAux Syn)
        <: IDEMPOTENCE Ids Op OpAux Syn Norm.
   Include IDEMPOTENCE Ids Op OpAux Syn Norm.
 End IdempotenceFun.

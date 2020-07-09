@@ -52,15 +52,6 @@ Module Type FRESH.
         st_valid_reuse st aft re2.
   End validity_reuse.
 
-  (** Weak validity : only gives us information about fresh_ident *)
-  Section weak_validity.
-    Context {B : Type}.
-    Parameter weak_valid_after : fresh_st B -> PS.t -> Prop.
-    Axiom st_valid_weak_valid : forall st aft,
-        st_valid_after st aft ->
-        weak_valid_after st aft.
-  End weak_validity.
-
   Section follows.
     Context {B : Type}.
     Parameter st_follows : fresh_st B -> fresh_st B -> Prop.
@@ -101,17 +92,9 @@ Module Type FRESH.
         fresh_ident b st = (id, st') ->
         st_valid_reuse st aft reusable ->
         st_valid_reuse st' aft reusable.
-    Axiom fresh_ident_weak_valid : forall b id st st' aft,
-        fresh_ident b st = (id, st') ->
-        weak_valid_after st aft ->
-        weak_valid_after st' aft.
     Axiom fresh_ident_st_follows : forall b id st st',
         fresh_ident b st = (id, st') ->
         st_follows st st'.
-    Axiom fresh_ident_weak_valid_nIn : forall b id st st' aft,
-        fresh_ident b st = (id, st') ->
-        weak_valid_after st aft ->
-        ~PS.In id aft.
   End fresh_ident.
 
   Section reuse_ident.
@@ -127,10 +110,6 @@ Module Type FRESH.
         reuse_ident id b st = (tt, st') ->
         st_valid_reuse st aft (PS.add id reusable) ->
         st_valid_reuse st' aft reusable.
-    Axiom reuse_ident_weak_valid : forall b id st st' aft,
-        reuse_ident id b st = (tt, st') ->
-        weak_valid_after st aft ->
-        weak_valid_after st' aft.
     Axiom reuse_ident_st_follows : forall b id st st',
         reuse_ident id b st = (tt, st') ->
         st_follows st st'.
@@ -621,6 +600,20 @@ Module Facts.
       assumption.
     Qed.
 
+    Fact fresh_ident_nIn' : forall (b : B) id st st' aft,
+        st_valid_after st aft ->
+        fresh_ident b st = (id, st') ->
+        ~PS.In id aft.
+    Proof.
+      intros b id st st' aft Hvalid Hfresh.
+      eapply fresh_ident_st_valid in Hvalid; eauto.
+      apply st_valid_NoDup in Hvalid.
+      apply fresh_ident_vars_perm in Hfresh.
+      unfold st_ids in *.
+      rewrite <- Hfresh in Hvalid. inv Hvalid.
+      intro contra. apply H1, in_or_app, or_intror, In_PS_elements; auto.
+    Qed.
+
   End fresh_ident.
 
   Section reuse_ident.
@@ -717,20 +710,6 @@ Section map_bind.
     inv Hforall. eapply IHa; eauto.
   Qed.
 
-  Fact map_bind_weak_valid : forall a a1s st st' aft,
-      map_bind a st = (a1s, st') ->
-      Forall (fun a => forall a1 st st',
-                  k a st = (a1, st') ->
-                  weak_valid_after st aft ->
-                  weak_valid_after st' aft) a ->
-      weak_valid_after st aft ->
-      weak_valid_after st' aft .
-  Proof.
-    induction a; intros * Hmap Hforall Hvalid;
-      simpl in *; repeat inv_bind; auto.
-    inv Hforall. eapply IHa; eauto.
-  Qed.
-
   Fact map_bind_st_follows : forall a a1s st st',
       map_bind a st = (a1s, st') ->
       Forall (fun a => forall a1 st st', k a st = (a1, st') -> st_follows st st') a ->
@@ -782,20 +761,6 @@ Section map_bind2.
     inv Hforall. eapply IHa; eauto.
   Qed.
 
-  Fact map_bind2_weak_valid : forall a a1s a2s st st' aft,
-      map_bind2 a st = (a1s, a2s, st') ->
-      Forall (fun a => forall a1 a2 st st',
-                  k a st = (a1, a2, st') ->
-                  weak_valid_after st aft ->
-                  weak_valid_after st' aft) a ->
-      weak_valid_after st aft ->
-      weak_valid_after st' aft .
-  Proof.
-    induction a; intros a1s a2s st st' aft Hmap Hforall Hvalid;
-      simpl in *; repeat inv_bind; auto.
-    inv Hforall. eapply IHa; eauto.
-  Qed.
-
   Fact map_bind2_st_follows : forall a a1s a2s st st',
       map_bind2 a st = (a1s, a2s, st') ->
       Forall (fun a => forall a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') a ->
@@ -812,10 +777,8 @@ End map_bind2.
 Hint Resolve Fresh.st_valid_reuse_st_valid.
 Hint Resolve Fresh.fresh_ident_st_valid.
 Hint Resolve Fresh.fresh_ident_st_valid_reuse.
-Hint Resolve Fresh.fresh_ident_weak_valid.
 Hint Resolve Fresh.fresh_ident_st_follows.
 Hint Resolve Fresh.reuse_ident_st_valid_reuse.
-Hint Resolve Fresh.reuse_ident_weak_valid.
 Hint Resolve Fresh.reuse_ident_st_follows.
 Hint Resolve Fresh.st_follows_incl.
 Hint Resolve map_bind2_st_valid.

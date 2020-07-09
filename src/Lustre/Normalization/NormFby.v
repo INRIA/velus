@@ -306,58 +306,6 @@ Module Type NORMFBY
 
   Hint Constructors normalized_constant normalized_equation.
 
-  (** *** Propagation of the weak_valid_after property *)
-
-  Fact init_var_for_clock_weak_valid : forall nck id st st' out,
-      init_var_for_clock nck st = (id, st') ->
-      weak_valid_after st out ->
-      weak_valid_after st' out.
-  Proof.
-    intros nck id st st' out Hinit Hval;
-      unfold init_var_for_clock in Hinit.
-    destruct find in Hinit.
-    - destruct p; inv Hinit; auto.
-    - destruct fresh_ident eqn:Hfresh.
-      inv Hinit; eauto.
-  Qed.
-  Local Hint Resolve init_var_for_clock_weak_valid.
-
-  Fact fby_iteexp_weak_valid : forall e0 e a e' eqs' st st' out,
-      fby_iteexp e0 e a st = (e', eqs', st') ->
-      weak_valid_after st out ->
-      weak_valid_after st' out.
-  Proof.
-    intros e0 e [ty cl] e' eqs' st st' out Hfby Hval;
-      unfold fby_iteexp in Hfby.
-    destruct (is_constant e0); repeat inv_bind; eauto.
-  Qed.
-  Local Hint Resolve fby_iteexp_weak_valid.
-
-  Fact fby_equation_weak_valid : forall eq eqs' st st' to_cut out,
-      fby_equation to_cut eq st = (eqs', st') ->
-      weak_valid_after st out ->
-      weak_valid_after st' out.
-  Proof.
-    intros * Hfby Hweak. destruct eq as [xs es].
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec.
-    - destruct x2 as [ty [ck name]]; repeat inv_bind.
-      eapply fby_iteexp_weak_valid with (a:=(ty, (ck, name))) in H; eauto.
-      destruct (PS.mem _ _); repeat inv_bind; eauto.
-    - repeat inv_bind; auto.
-  Qed.
-
-  Fact fby_equations_weak_valid : forall eqs eqs' st st' to_cut out,
-      fby_equations to_cut eqs st = (eqs', st') ->
-      weak_valid_after st out ->
-      weak_valid_after st' out.
-  Proof.
-    intros * Hfby Hweak.
-    unfold fby_equations in Hfby; repeat inv_bind.
-    eapply map_bind_weak_valid in H; eauto.
-    solve_forall. eapply fby_equation_weak_valid; eauto.
-  Qed.
-
   (** *** normalized_node implies untupled_node *)
 
   Fact constant_normalized_lexp : forall e,
@@ -411,7 +359,7 @@ Module Type NORMFBY
   Qed.
 
   Fact init_var_for_clock_normalized_eq : forall cl id eqs' out st st',
-      weak_valid_after st out ->
+      st_valid_after st out ->
       init_var_for_clock cl st = (id, eqs', st') ->
       Forall (normalized_equation out) eqs'.
   Proof.
@@ -421,13 +369,13 @@ Module Type NORMFBY
     - destruct p. inv Hinit. constructor.
     - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
       repeat constructor.
-      + eapply fresh_ident_weak_valid_nIn in Hfresh; eauto.
+      + eapply fresh_ident_nIn' in Hfresh; eauto.
       + apply add_whens_is_constant. auto.
       + apply add_whens_normalized_lexp. auto.
   Qed.
 
   Fact fby_iteexp_normalized_eq : forall e0 e a e' eqs' out st st',
-      weak_valid_after st out ->
+      st_valid_after st out ->
       normalized_lexp e ->
       fby_iteexp e0 e a st = (e', eqs', st') ->
       Forall (normalized_equation out) eqs'.
@@ -435,15 +383,15 @@ Module Type NORMFBY
     intros e0 e [ty cl] e' eqs' out st st' Hvalid He Hfby.
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind; constructor.
-    - assert (weak_valid_after x1 out) as Hvalid' by eauto.
+    - assert (st_valid_after x1 out) as Hvalid' by eauto.
       constructor; auto.
-      + eapply fresh_ident_weak_valid_nIn in H0; eauto.
+      + eapply fresh_ident_nIn' in H0; eauto.
       + eapply add_whens_is_constant; eauto.
     - eapply init_var_for_clock_normalized_eq in H; eauto.
   Qed.
 
   Fact fby_equation_normalized_eq : forall out to_cut eq eqs' st st',
-      weak_valid_after st out ->
+      st_valid_after st out ->
       untupled_equation eq ->
       PS.Subset out to_cut ->
       fby_equation to_cut eq st = (eqs', st') ->
@@ -459,14 +407,14 @@ Module Type NORMFBY
       2,3:destruct (is_constant e0) eqn:Hconst; repeat inv_bind.
       1-5:repeat (constructor; eauto).
       2,4:rewrite is_constant_normalized_constant in Hconst; eauto.
-      + eapply fresh_ident_weak_valid_nIn in H0; eauto.
+      + eapply fresh_ident_nIn' in H0; eauto.
       + apply PSE.mem_4 in Hmem; auto.
     - inv H0; repeat inv_bind; auto.
       inv H; repeat inv_bind; auto.
   Qed.
 
   Fact fby_equations_normalized_eq : forall out to_cut eqs eqs' st st',
-      weak_valid_after st out ->
+      st_valid_after st out ->
       Forall untupled_equation eqs ->
       PS.Subset out to_cut ->
       fby_equations to_cut eqs st = (eqs', st') ->
@@ -477,7 +425,7 @@ Module Type NORMFBY
     inv Hunt.
     eapply Forall_app; split.
     - eapply fby_equation_normalized_eq in H; eauto.
-    - eapply IHeqs with (st:=x1) (st':=st'); eauto. 1:eapply fby_equation_weak_valid; eauto.
+    - eapply IHeqs with (st:=x1) (st':=st'); eauto. 1:eapply fby_equation_st_valid; eauto.
       unfold fby_equations; repeat inv_bind.
       repeat eexists; eauto. inv_bind; eauto.
   Qed.
@@ -493,8 +441,8 @@ Module Type NORMFBY
     rewrite IHHconst...
   Qed.
 
-  Lemma fby_equations_no_fresh : forall out to_cut eqs eqs' st st',
-      weak_valid_after st out ->
+  Lemma fby_equations_no_anon : forall out to_cut eqs eqs' st st',
+      st_valid_after st out ->
       Forall untupled_equation eqs ->
       PS.Subset out to_cut ->
       fby_equations to_cut eqs st = (eqs', st') ->
@@ -545,15 +493,15 @@ Module Type NORMFBY
       apply incl_tl, incl_tl.
       rewrite ps_of_list_ps_to_list_Perm; eauto.
       apply incl_map, incl_appr', incl_appr', incl_appl, incl_refl. }
-    assert (weak_valid_after st (PSP.of_list (map fst (n_out n)))) as Hweak.
-    { rewrite Heqst. eapply st_valid_weak_valid, init_st_valid. symmetry in Heqid0. eapply first_unused_ident_gt in Heqid0.
+    assert (st_valid_after st (PSP.of_list (map fst (n_out n)))) as Hweak.
+    { rewrite Heqst. eapply init_st_valid. symmetry in Heqid0. eapply first_unused_ident_gt in Heqid0.
       rewrite PS_For_all_Forall.
       eapply Forall_incl; eauto.
       apply incl_tl, incl_tl. intros ? Hin.
       rewrite ps_of_list_ps_to_list in Hin. repeat simpl_In.
       exists (i, (t, c)); split; auto. repeat rewrite in_app_iff in *; auto. }
-    simpl. erewrite fby_equations_no_fresh, app_nil_r. 2,3,5:eauto.
-    2:rewrite ps_from_list_ps_of_list; eapply PSP.union_subset_2.
+    simpl. erewrite fby_equations_no_anon, app_nil_r. 2,3,5:eauto.
+    2:rewrite ps_from_list_ps_of_list; eapply PSP.union_subset_2. clear Hweak.
     eapply fby_equations_st_valid, st_valid_NoDup in Heqeqs; eauto.
     rewrite ps_of_list_ps_to_list_Perm in Heqeqs; auto.
     rewrite <- app_assoc, fst_NoDupMembers. repeat rewrite map_app in *.
@@ -583,7 +531,7 @@ Module Type NORMFBY
     remember (fby_equations _ _ _) as eqs. symmetry in Heqeqs. destruct eqs as [eqs st'].
     eapply fby_equations_normalized_eq in Heqeqs; eauto.
     2:rewrite ps_from_list_ps_of_list; eapply PSP.union_subset_2.
-    { rewrite Heqst. eapply st_valid_weak_valid, init_st_valid. symmetry in Heqid0. eapply first_unused_ident_gt in Heqid0.
+    { rewrite Heqst. eapply init_st_valid. symmetry in Heqid0. eapply first_unused_ident_gt in Heqid0.
       rewrite PS_For_all_Forall.
       eapply Forall_incl; eauto.
       apply incl_tl, incl_tl. intros ? Hin.
