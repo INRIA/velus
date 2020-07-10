@@ -760,9 +760,11 @@ Module Type UNTUPLE
       etransitivity; [ eapply normalize_rhs_st_follows in H; eauto |]
     | H : normalize_rhss _ _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply normalize_rhss_st_follows in H; eauto |]
-    | H : untuple_equation _ _ ?st = _ |- st_follows ?st _ =>
+    | H : untuple_equation _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply untuple_equation_st_follows in H; eauto |]
-    | H : untuple_equations _ _ ?st = _ |- st_follows ?st _ =>
+    | H: map_bind _ _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply map_bind_st_follows in H; eauto; solve_forall |]
+    | H : untuple_equations _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply untuple_equations_st_follows in H; eauto |]
     | _ => solve_st_follows'
     end.
@@ -1243,6 +1245,17 @@ Module Type UNTUPLE
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
     f_equal. eauto.
+  Qed.
+
+  Fact normalize_fby_annot' : forall anns e0s es,
+      length e0s = length anns ->
+      length es = length anns ->
+      Forall2 (fun e a => annot e = [a]) (normalize_fby e0s es anns) anns.
+  Proof.
+    induction anns; intros * Hl1 Hl2;
+      destruct e0s; destruct es; simpl in *; try congruence; auto.
+    - constructor.
+    - simpl. constructor; eauto.
   Qed.
 
   Fact normalize_rhs_annot : forall G e es' eqs' st st',

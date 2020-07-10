@@ -5,9 +5,9 @@ Open Scope list_scope.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered.
-From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.FullNorm.
+From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
-(** * Conservation of order through normalization *)
+(** * Preservation of order through normalization *)
 
 Local Set Warnings "-masking-absolute-name".
 Module Type NORDERED
@@ -16,13 +16,13 @@ Module Type NORDERED
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
        (Import Ord : LORDERED Ids Op Syn)
-       (Import Norm : FULLNORM Ids Op OpAux Syn).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Tactics.
 
-  (** ** Conservation of Is_node_in *)
+  (** ** Preservation of order through the first pass *)
 
-  Fact map_bind2_Is_node_in : forall G f (k : exp -> FreshAnn (list exp * list equation)) es es' eqs' st st',
+  Fact map_bind2_Is_node_in : forall G f (k : exp -> Untuple.FreshAnn (list exp * list equation)) es es' eqs' st st',
       Forall (wl_exp G) es ->
       map_bind2 k es st = (es', eqs', st') ->
       Forall (fun e => forall es' eqs' st st',
@@ -54,70 +54,7 @@ Module Type NORDERED
       split; auto.
   Qed.
 
-  Fact add_whens_Is_node_in : forall f ty cl e,
-      Is_node_in_exp f (add_whens e ty cl) ->
-      Is_node_in_exp f e.
-  Proof with eauto.
-    induction cl; intros e Hisin; simpl in Hisin...
-    inv Hisin. inv H1; [| inv H0]...
-  Qed.
-
   Hint Constructors Is_node_in_exp.
-
-  Fact fby_iteexp_Is_node_in : forall f e0 e ann e' eqs' st st',
-      fby_iteexp e0 e ann st = (e', eqs', st') ->
-      (Is_node_in_exp f e' \/ Is_node_in f eqs') ->
-      (Is_node_in_exp f e0 \/ Is_node_in_exp f e).
-  Proof with eauto.
-    intros f e0 e [ty cl] e' eqs' st st' Hfby Hisin.
-    unfold fby_iteexp in Hfby.
-    destruct (Norm.is_constant e0); repeat inv_bind.
-    - destruct Hisin; inv H.
-      destruct H2; (inv H; [| inv H1])...
-    - destruct Hisin.
-      + inv H1. destruct H4; inv H1.
-        * inv H2... inv H3.
-        * inv H2; inv H3.
-      + inv H1.
-        * inv H3; inv H2.
-          destruct H4; (inv H1; [| inv H3])...
-          apply add_whens_Is_node_in in H3. inv H3.
-        * unfold init_var_for_clock in H.
-          destruct (find _ _).
-          -- destruct p; inv H. inv H3.
-          -- destruct (fresh_ident _ _). inv H.
-             inv H3; inv H1; inv H2.
-             destruct H3; (inv H; [| inv H2]); eapply add_whens_Is_node_in in H2; inv H2.
-  Qed.
-
-  Fact normalize_fby_Is_node_in : forall f e0s es anns es' eqs' st st',
-      length e0s = length anns ->
-      length es = length anns ->
-      normalize_fby e0s es anns st = (es', eqs', st') ->
-      (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
-      (List.Exists (Is_node_in_exp f) e0s \/ List.Exists (Is_node_in_exp f) es).
-  Proof with eauto.
-    intros f e0s es anns; revert e0s es.
-    induction anns; intros e0s es es' eqs' st st' Hlen1 Hlen2 Hnorm Hex;
-      destruct e0s; destruct es; simpl in *; try congruence;
-        unfold normalize_fby in Hnorm; simpl in *; repeat inv_bind.
-    - destruct Hex; inv H.
-    - inv Hlen1; inv Hlen2.
-      assert (normalize_fby e0s es anns x2 = (x3, concat x4, st')) as Hnorm.
-      { unfold normalize_fby. repeat inv_bind.
-        exists x3. exists x4. exists st'. split... inv_bind... }
-      specialize (IHanns _ _ _ _ _ _ H2 H3 Hnorm); clear Hnorm.
-      destruct Hex.
-      + inv H1.
-        * eapply fby_iteexp_Is_node_in in H...
-          destruct H...
-        * specialize (IHanns (or_introl H5)) as [?|?]...
-      + simpl in H1. rewrite Is_node_in_app in H1. destruct H1.
-        * eapply fby_iteexp_Is_node_in in H...
-          destruct H...
-        * specialize (IHanns (or_intror H1)) as [?|?]...
-  Qed.
-  Local Hint Resolve normalize_fby_Is_node_in.
 
   Fact normalize_reset_Is_node_in : forall f e e' eqs' st st',
       normalize_reset e st = (e', eqs', st') ->
@@ -165,30 +102,26 @@ Module Type NORDERED
       + rewrite Is_node_in_app in H1. destruct H1...
     - (* fby *)
       assert (length (concat x2) = length (annots e0s)) as Hlen1 by (eapply map_bind2_normalize_exp_length; eauto).
-      assert (length (concat x9) = length (annots es)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x6) = length (annots es)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
       constructor.
-      repeat rewrite Is_node_in_app in Hisin. destruct Hisin as [Hisin|[Hisin|[Hisin|[Hisin|Hisin]]]].
+      repeat rewrite Is_node_in_app in Hisin. destruct Hisin as [Hisin|[Hisin|[Hisin|Hisin]]].
       + exfalso.
         rewrite CommonList.Exists_map in Hisin.
         rewrite Exists_exists in Hisin. destruct Hisin as [[id ann] [Hin Hisin]].
         inv Hisin.
       + rewrite Is_node_in_Exists in Hisin.
         rewrite CommonList.Exists_map in Hisin.
-        eapply normalize_fby_Is_node_in in H3; solve_length.
-        * destruct H3.
-          -- eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
-          -- eapply map_bind2_Is_node_in in H2... (repeat rewrite_Forall_forall; eauto).
-        * left. rewrite Exists_exists in *. destruct Hisin as [[[id ann] e] [Hin Hisin]].
-          repeat simpl_In. inv Hisin; [| inv H11].
-          exists e...
+        unfold normalize_fby in Hisin.
+        apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
+        apply Exists_singl in H5. inv H5. destruct H15 as [Hin|Hin]; eapply Exists_singl in Hin.
+        * eapply map_bind2_Is_node_in in H1... solve_forall.
+          left. eapply Exists_exists. exists e...
+        * eapply map_bind2_Is_node_in in H2... solve_forall.
+          left. eapply Exists_exists. exists e0...
       + left.
-        eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
+        eapply map_bind2_Is_node_in in H1... solve_forall.
       + right.
-        eapply map_bind2_Is_node_in in H2... (repeat rewrite_Forall_forall; eauto).
-      + eapply normalize_fby_Is_node_in in H3; solve_length...
-        destruct H3.
-        * eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
-        * eapply map_bind2_Is_node_in in H2... (repeat rewrite_Forall_forall; eauto).
+        eapply map_bind2_Is_node_in in H2... solve_forall.
     - (* when *)
       assert (length (concat x1) = length (annots es)) by (eapply map_bind2_normalize_exp_length; eauto).
       constructor.
@@ -324,28 +257,32 @@ Module Type NORDERED
   Qed.
   Local Hint Resolve normalize_exps_Is_node_in.
 
-  Fact normalize_rhs_Is_node_in : forall G f e keep_fby es' eqs' st st',
+  Fact normalize_rhs_Is_node_in : forall G f e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs keep_fby e st = (es', eqs', st') ->
+      normalize_rhs e st = (es', eqs', st') ->
       (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
       Is_node_in_exp f e.
   Proof with eauto.
-    intros G f e keep_fby es' eqs' st st' Hwl Hnorm Hisin.
+    intros * Hwl Hnorm Hisin.
     destruct e; unfold normalize_rhs in Hnorm;
       try (eapply normalize_exp_Is_node_in in Hnorm; eauto);
-      [destruct keep_fby|destruct o].
+      [|destruct o].
     - (* fby (keep) *)
       inv Hwl. repeat inv_bind.
       assert (length x = length (annots l)) as Hlen1 by (eapply normalize_exps_length; eauto).
       assert (length x2 = length (annots l0)) as Hlen2 by (eapply normalize_exps_length; eauto).
       repeat rewrite Is_node_in_app in Hisin.
-      destruct Hisin as [Hisin|[Hisin|[Hisin|Hisin]]]...
-      + eapply normalize_fby_Is_node_in in H1; solve_length...
-        destruct H1...
-      + eapply normalize_fby_Is_node_in in H1; solve_length...
-        destruct H1...
-    - (* fby (dont keep) *)
-      eapply normalize_exp_Is_node_in in Hnorm...
+      constructor.
+      destruct Hisin as [Hisin|[Hisin|Hisin]]...
+      unfold normalize_fby in Hisin.
+      rewrite Exists_map in Hisin. apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
+      inv H1. destruct H10 as [Hisin|Hisin].
+      + apply Exists_singl in Hisin.
+        eapply normalize_exps_Is_node_in in H...
+        left. rewrite Exists_exists. exists e; auto.
+      + apply Exists_singl in Hisin.
+        eapply normalize_exps_Is_node_in in H0...
+        left. rewrite Exists_exists. exists e0; auto.
     - (* app (reset) *)
       inv Hwl. repeat inv_bind.
       assert (length x4 = numstreams e) as Hlen by (eapply normalize_exp_length; eauto).
@@ -366,28 +303,28 @@ Module Type NORDERED
   Qed.
   Local Hint Resolve normalize_rhs_Is_node_in.
 
-  Corollary normalize_rhss_Is_node_in : forall G f es keep_fby es' eqs' st st',
+  Corollary normalize_rhss_Is_node_in : forall G f es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_rhss keep_fby es st = (es', eqs', st') ->
+      normalize_rhss es st = (es', eqs', st') ->
       (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
       List.Exists (Is_node_in_exp f) es.
   Proof.
-    intros G f es keep_fby es' eqs' st st' Hwl Hnorm Hisin.
+    intros * Hwl Hnorm Hisin.
     unfold normalize_rhss in Hnorm. repeat inv_bind.
     eapply map_bind2_Is_node_in in H; eauto.
     solve_forall.
   Qed.
   Local Hint Resolve normalize_rhss_Is_node_in.
 
-  Fact normalize_equation_Is_node_in : forall G f eq to_cut eqs' st st',
+  Fact untuple_equation_Is_node_in : forall G f eq eqs' st st',
       wl_equation G eq ->
-      normalize_equation to_cut eq st = (eqs', st') ->
+      untuple_equation eq st = (eqs', st') ->
       Is_node_in f eqs' ->
       Is_node_in_eq f eq.
   Proof with eauto.
-    intros G f [xs es] to_cut eqs' st st' Hwl Hnorm Hisin.
+    intros G f [xs es] eqs' st st' Hwl Hnorm Hisin.
     inv Hwl.
-    unfold normalize_equation in Hnorm; repeat inv_bind.
+    unfold untuple_equation in Hnorm; repeat inv_bind.
     rewrite Is_node_in_app in Hisin. destruct Hisin.
     + rewrite Is_node_in_Exists in H2.
       rewrite CommonList.Exists_map in H2.
@@ -398,67 +335,197 @@ Module Type NORDERED
       left. eapply List.Exists_exists. eexists...
     + eapply normalize_rhss_Is_node_in in H1...
   Qed.
-  Local Hint Resolve normalize_equation_Is_node_in.
+  Local Hint Resolve untuple_equation_Is_node_in.
 
-  Corollary normalize_equations_Is_node_in : forall G f eqs to_cut eqs' st st',
+  Corollary untuple_equations_Is_node_in : forall G f eqs eqs' st st',
       Forall (wl_equation G) eqs ->
-      normalize_equations to_cut eqs st = (eqs', st') ->
+      untuple_equations eqs st = (eqs', st') ->
       Is_node_in f eqs' ->
       Is_node_in f eqs.
   Proof.
-    induction eqs; intros to_cut eqs' st st' Hwl Hnorm Hisin;
-      simpl in Hnorm; repeat inv_bind.
+    induction eqs; intros * Hwl Hnorm Hisin;
+      unfold untuple_equations in Hnorm; simpl in *; repeat inv_bind; simpl in *.
     - inv Hisin.
     - inv Hwl.
       rewrite Is_node_in_app in Hisin; destruct Hisin.
       + left. eauto.
-      + right. rewrite <- Is_node_in_Exists. eauto.
+      + right. rewrite <- Is_node_in_Exists.
+        eapply IHeqs; eauto.
+        unfold untuple_equations.
+        inv_bind. repeat eexists; eauto. inv_bind; eauto.
   Qed.
 
-  Fact normalize_node_Is_node_in : forall f n to_cut Hwl,
-      Is_node_in f (n_eqs (normalize_node to_cut n Hwl)) ->
+  Fact untuple_node_Is_node_in : forall f n Hwl,
+      Is_node_in f (n_eqs (untuple_node n Hwl)) ->
       Is_node_in f (n_eqs n).
   Proof.
-    intros f n to_cut Hwl Hisin; simpl in Hisin.
-    remember (normalize_equations _ _ _) as res; destruct res as [eqs' st'].
+    intros * Hisin; simpl in Hisin.
+    remember (untuple_equations _ _) as res; destruct res as [eqs' st'].
     symmetry in Heqres.
     destruct Hwl. unfold wl_node in w.
-    eapply normalize_equations_Is_node_in in Heqres; eauto.
+    eapply untuple_equations_Is_node_in in Heqres; eauto.
   Qed.
 
-  Fact normalize_global_names : forall G Hwl,
-      List.map n_name (normalize_global G Hwl) = List.map n_name G.
+  Fact untuple_global_names : forall G Hwl,
+      List.map n_name (untuple_global G Hwl) = List.map n_name G.
   Proof.
     induction G; intros Hwl; simpl; eauto.
     f_equal; eauto.
   Qed.
 
-  Fact normalize_node_ordered : forall G n Hwl to_cut,
+  Fact untuple_node_ordered : forall G n Hwl,
       Ordered_nodes (n::G) ->
-      Ordered_nodes (normalize_node to_cut n Hwl::G).
+      Ordered_nodes (untuple_node n Hwl::G).
   Proof.
-    intros G n Hwl to_cut Hordered.
+    intros * Hordered.
     inv Hordered.
     constructor; eauto.
     intros f Hisin.
-    eapply normalize_node_Is_node_in in Hisin; auto.
+    eapply untuple_node_Is_node_in in Hisin; auto.
   Qed.
 
-  Lemma normalize_global_ordered : forall G Hwl,
+  Lemma untuple_global_ordered : forall G Hwl,
       Ordered_nodes G ->
-      Ordered_nodes (normalize_global G Hwl).
+      Ordered_nodes (untuple_global G Hwl).
   Proof with eauto.
     intros G Hwl Hord.
     induction Hord; simpl; constructor...
     - intros f Hisin; simpl.
-      eapply normalize_node_Is_node_in in Hisin.
+      eapply untuple_node_Is_node_in in Hisin.
       eapply H in Hisin. destruct Hisin as [Hname Hnexists].
       split; auto.
       rewrite <- CommonList.Exists_map in *.
-      rewrite normalize_global_names...
+      rewrite untuple_global_names...
     - simpl.
       rewrite <- (Forall_map (fun n => ~(n_name nd = n))) in *.
-      rewrite normalize_global_names...
+      rewrite untuple_global_names...
+  Qed.
+
+  (** ** Preservation of order through the second pass *)
+
+  Fact add_whens_Is_node_in : forall f ty cl e,
+      Is_node_in_exp f (add_whens e ty cl) ->
+      Is_node_in_exp f e.
+  Proof with eauto.
+    induction cl; intros e Hisin; simpl in Hisin...
+    inv Hisin. inv H1; [| inv H0]...
+  Qed.
+
+  Fact fby_iteexp_Is_node_in : forall f e0 e ann e' eqs' st st',
+      fby_iteexp e0 e ann st = (e', eqs', st') ->
+      (Is_node_in_exp f e' \/ Is_node_in f eqs') ->
+      (Is_node_in_exp f e0 \/ Is_node_in_exp f e).
+  Proof with eauto.
+    intros f e0 e [ty cl] e' eqs' st st' Hfby Hisin.
+    unfold fby_iteexp in Hfby.
+    destruct (is_constant e0); repeat inv_bind.
+    - destruct Hisin; inv H.
+      destruct H2; (inv H; [| inv H1])...
+    - destruct Hisin.
+      + inv H1. destruct H4; inv H1.
+        * inv H2... inv H3.
+        * inv H2; inv H3.
+      + inv H1.
+        * inv H3; inv H2.
+          destruct H4; (inv H1; [| inv H3])...
+          apply add_whens_Is_node_in in H3. inv H3.
+        * unfold init_var_for_clock in H.
+          destruct (find _ _).
+          -- destruct p; inv H. inv H3.
+          -- destruct (fresh_ident _ _). inv H.
+             inv H3; inv H1; inv H2.
+             destruct H3; (inv H; [| inv H2]); eapply add_whens_Is_node_in in H2; inv H2.
+  Qed.
+
+  Lemma fby_equation_Is_node_in : forall f to_cut eq eqs' st st',
+      fby_equation to_cut eq st = (eqs', st') ->
+      Is_node_in f eqs' ->
+      Is_node_in f [eq].
+  Proof.
+    intros * Hfby Hisin. destruct eq as [xs es].
+    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
+      rewrite Hspec in Hfby; clear Hspec; [|repeat inv_bind; auto].
+    destruct x2 as [ty [ck name]]; repeat inv_bind.
+    constructor; constructor; constructor.
+    eapply fby_iteexp_Is_node_in with (f:=f) (ann:=(ty, (ck, name))) in H as [H|H].
+    - left. constructor; auto.
+    - right. constructor; auto.
+    - destruct (PS.mem _ _); repeat inv_bind.
+      + inv Hisin. 1:{ apply Exists_singl in H2. inv H2. }
+        inv H2; auto. apply Exists_singl in H3; auto.
+      + inv Hisin; auto. apply Exists_singl in H1; auto.
+  Qed.
+
+  Lemma fby_equations_Is_node_in : forall f to_cut eqs eqs' st st',
+      fby_equations to_cut eqs st = (eqs', st') ->
+      Is_node_in f eqs' ->
+      Is_node_in f eqs.
+  Proof.
+    induction eqs; intros * Hnorm Hisin;
+      unfold fby_equations in Hnorm; simpl in *; repeat inv_bind; simpl in *.
+    - inv Hisin.
+    - rewrite Is_node_in_app in Hisin; destruct Hisin.
+      + left. eapply fby_equation_Is_node_in in H; eauto.
+        apply Exists_singl in H; auto.
+      + right. rewrite <- Is_node_in_Exists.
+        eapply IHeqs; eauto.
+        unfold fby_equations.
+        inv_bind. repeat eexists; eauto. inv_bind; eauto.
+  Qed.
+
+  Fact normfby_node_Is_node_in : forall f to_cut n Hwl,
+      Is_node_in f (n_eqs (normfby_node to_cut n Hwl)) ->
+      Is_node_in f (n_eqs n).
+  Proof.
+    intros * Hisin; simpl in Hisin.
+    remember (fby_equations _ _ _) as res; destruct res as [eqs' st'].
+    symmetry in Heqres.
+    eapply fby_equations_Is_node_in in Heqres; eauto.
+  Qed.
+
+  Fact normfby_global_names : forall G Hwl,
+      List.map n_name (normfby_global G Hwl) = List.map n_name G.
+  Proof.
+    induction G; intros Hwl; simpl; eauto.
+    f_equal; eauto.
+  Qed.
+
+  Fact normfby_node_ordered : forall G n to_cut Hunt,
+      Ordered_nodes (n::G) ->
+      Ordered_nodes (normfby_node to_cut n Hunt::G).
+  Proof.
+    intros * Hordered.
+    inv Hordered.
+    constructor; eauto.
+    intros f Hisin.
+    eapply normfby_node_Is_node_in in Hisin; auto.
+  Qed.
+
+  Lemma normfby_global_ordered : forall G Hwl,
+      Ordered_nodes G ->
+      Ordered_nodes (normfby_global G Hwl).
+  Proof with eauto.
+    intros G Hwl Hord.
+    induction Hord; simpl; constructor...
+    - intros f Hisin; simpl.
+      eapply normfby_node_Is_node_in in Hisin.
+      eapply H in Hisin. destruct Hisin as [Hname Hnexists].
+      split; auto.
+      rewrite <- CommonList.Exists_map in *.
+      rewrite normfby_global_names...
+    - simpl.
+      rewrite <- (Forall_map (fun n => ~(n_name nd = n))) in *.
+      rewrite normfby_global_names...
+  Qed.
+
+  (** ** Conclusion *)
+
+  Lemma normalize_global_ordered : forall G Hwl,
+      Ordered_nodes G ->
+      Ordered_nodes (normalize_global G Hwl).
+  Proof.
+    intros * Hord.
+    eapply normfby_global_ordered, untuple_global_ordered, Hord.
   Qed.
 
 End NORDERED.
@@ -469,7 +536,7 @@ Module NOrderedFun
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
        (Lord : LORDERED Ids Op Syn)
-       (Norm : FULLNORM Ids Op OpAux Syn)
+       (Norm : NORMALIZATION Ids Op OpAux Syn)
        <: NORDERED Ids Op OpAux Syn Lord Norm.
   Include NORDERED Ids Op OpAux Syn Lord Norm.
 End NOrderedFun.

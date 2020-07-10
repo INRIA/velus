@@ -187,6 +187,30 @@ Module Type NORMFBY
   Qed.
   Hint Resolve fby_iteexp_st_follows.
 
+  Fact fby_equation_st_follows : forall to_cut eq eqs' st st',
+      fby_equation to_cut eq st = (eqs', st') ->
+      st_follows st st'.
+  Proof.
+    intros * Hfby. destruct eq as [xs es].
+    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
+      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind.
+    - destruct x2 as [ty [ck name]]; repeat inv_bind.
+      eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H.
+      destruct (PS.mem _ _); repeat inv_bind; auto.
+      eapply fresh_ident_st_follows in H0. etransitivity; eauto.
+    - reflexivity.
+  Qed.
+  Hint Resolve fby_equation_st_follows.
+
+  Fact fby_equations_st_follows : forall to_cut eqs eqs' st st',
+      fby_equations to_cut eqs st = (eqs', st') ->
+      st_follows st st'.
+  Proof.
+    intros * Hfby. unfold fby_equations in *; repeat inv_bind.
+    eapply map_bind_st_follows; eauto.
+    solve_forall.
+  Qed.
+
   (** *** The variables generated are a permutation of the ones contained in the state *)
 
   Fact init_var_for_clock_vars_perm : forall cl id eqs st st',

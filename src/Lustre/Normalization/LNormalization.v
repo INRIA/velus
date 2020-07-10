@@ -3,7 +3,7 @@ From Velus Require Import Operators Environment.
 From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
 From Velus Require Import Lustre.Normalization.Normalization.
-(* From Velus Require Import Lustre.Normalization.Correctness. *)
+From Velus Require Import Lustre.Normalization.Correctness.
 From Velus Require Import Lustre.Normalization.Idempotence.
 
 Local Set Warnings "-masking-absolute-name".
