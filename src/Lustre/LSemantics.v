@@ -940,6 +940,115 @@ Module Type LSEMANTICS
       intros. eapply sem_var_refines...
   Qed.
 
+
+  (** ** Semantic refinement relation between nodes *)
+  Section sem_ref.
+
+    (** Functional equivalence for nodes *)
+    Definition node_sem_refines G G' f : Prop :=
+      (forall ins outs, (sem_node G f ins outs) -> (sem_node G' f ins outs)).
+
+    Fact node_sem_refines_refl : forall G f, node_sem_refines G G f.
+    Proof. intros G f ins outs. auto. Qed.
+
+    Fact node_sem_refines_trans : forall G1 G2 G3 f,
+        node_sem_refines G1 G2 f ->
+        node_sem_refines G2 G3 f ->
+        node_sem_refines G1 G3 f.
+    Proof.
+      intros G1 G2 G3 f H1 H2 ins outs Hsem.
+      auto.
+    Qed.
+
+    Definition global_sem_refines G G' : Prop :=
+      forall f, node_sem_refines G G' f.
+
+    Hint Constructors sem_exp.
+    Fact sem_ref_sem_exp : forall G G' H b e vs,
+        global_sem_refines G G' ->
+        sem_exp G H b e vs ->
+        sem_exp G' H b e vs.
+    Proof with eauto.
+      induction e using exp_ind2; intros vs Heq Hsem; inv Hsem...
+      - (* fby *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + repeat rewrite_Forall_forall...
+      - (* when *)
+        econstructor...
+        repeat rewrite_Forall_forall...
+      - (* merge *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + repeat rewrite_Forall_forall...
+      - (* ite *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + repeat rewrite_Forall_forall...
+      - (* app *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + specialize (Heq f (concat ss) vs).
+          auto.
+      - (* app (reset) *)
+        econstructor...
+        + repeat rewrite_Forall_forall...
+        + intros k. specialize (H13 k).
+          specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
+          auto.
+    Qed.
+
+    Fact sem_ref_sem_equation : forall G G' H b eq,
+        global_sem_refines G G' ->
+        sem_equation G H b eq ->
+        sem_equation G' H b eq.
+    Proof.
+      intros G G' H b [xs es] Heq Hsem.
+      inv Hsem.
+      econstructor; eauto.
+      eapply Forall2_impl_In; [| eauto].
+      intros. eapply sem_ref_sem_exp; eauto.
+    Qed.
+
+    Fact global_sem_ref_nil :
+      global_sem_refines [] [].
+    Proof.
+      intros f ins outs Hsem. assumption.
+    Qed.
+
+    Fact global_sem_ref_cons : forall G G' n n' f,
+        Ordered_nodes (n::G) ->
+        Ordered_nodes (n'::G') ->
+        n_name n = f ->
+        n_name n' = f ->
+        global_sem_refines G G' ->
+        node_sem_refines (n::G) (n'::G') f ->
+        global_sem_refines (n::G) (n'::G').
+    Proof with eauto.
+      intros G G' n n' f Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
+      inv Hsem.
+      simpl in H0.
+      destruct (ident_eqb (n_name n) f0) eqn:Heq.
+      + specialize (Hnode ins outs).
+        inv H0.
+        rewrite ident_eqb_eq in Heq; subst.
+        eapply Hnode.
+        eapply Snode with (n:=n0)...
+        simpl. rewrite ident_eqb_refl...
+      + rewrite ident_eqb_neq in Heq.
+        apply sem_node_cons'...
+        specialize (Hglob f0 ins outs). apply Hglob.
+        econstructor...
+        rewrite Forall_forall in *. intros.
+        eapply sem_equation_global_tl...
+        eapply find_node_later_not_Is_node_in in Hord1; eauto.
+        intro contra.
+        rewrite Is_node_in_Forall in Hord1. rewrite Forall_forall in *.
+        apply Hord1 in H4. congruence.
+    Qed.
+
+  End sem_ref.
+
   (** ** The number of streams equals numstreams *)
 
   Fact sem_exp_numstreams : forall G H b e v,

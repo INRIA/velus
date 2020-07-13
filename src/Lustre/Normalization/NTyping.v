@@ -1555,9 +1555,8 @@ Module Type NTYPING
       fby_equation to_cut eq st = (eqs', st') ->
       Forall (wt_equation G (vars++st_tys' st')) eqs'.
   Proof.
-    intros * Hwt Hfby. destruct eq as [xs es].
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; [|repeat inv_bind; auto].
+    intros * Hwt Hfby.
+    inv_fby_equation Hfby to_cut eq.
     destruct x2 as [ty [ck name]]; repeat inv_bind.
     assert (st_follows st x4) as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H; eauto).
     destruct Hwt as [Hwt Hins]; inv Hwt; clear H4.
@@ -1639,9 +1638,8 @@ Module Type NTYPING
       fby_equation to_cut eq st = (eqs', st') ->
       Forall (wt_clock (vars ++ st_tys' st')) (st_clocks' st').
   Proof.
-    intros * Hwt Hwtck Hfby. destruct eq as [xs es].
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; [|repeat inv_bind; auto].
+    intros * Hwt Hwtck Hfby.
+    inv_fby_equation Hfby to_cut eq.
     destruct x2 as [ty [ck name]]; repeat inv_bind.
     assert (st_follows st x4) as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H; eauto).
     assert (wt_clock (vars ++ st_tys' st) ck) as Hwtc.

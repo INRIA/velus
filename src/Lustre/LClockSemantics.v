@@ -2665,15 +2665,15 @@ Module Type LCLOCKSEMANTICS
   Qed.
 
   (** ** Another version of semantics equivalence, including sem_clock_inputs *)
-  Section sem_ref.
+  Section sc_ref.
 
     (** Functional equivalence for nodes *)
-    Definition node_sem_refines G G' f : Prop :=
+    Definition node_sc_refines G G' f : Prop :=
       (forall ins outs, (sem_clock_inputs G f ins /\ sem_node G f ins outs) ->
                    (sem_clock_inputs G' f ins /\ sem_node G' f ins outs)).
 
-    Definition global_sem_refines G G' : Prop :=
-      forall f, node_sem_refines G G' f.
+    Definition global_sc_refines G G' : Prop :=
+      forall f, node_sc_refines G G' f.
 
     Ltac ndup_l H :=
       rewrite app_assoc in H;
@@ -2684,8 +2684,8 @@ Module Type LCLOCKSEMANTICS
 
     Hint Resolve NoDupMembers_fresh_in_anon_in NoDupMembers_fresh_in' NoDupMembers_anon_in' nth_In.
     Hint Constructors sem_exp.
-    Fact sem_eq_sem_exp : forall G G' H b vars e vs,
-        global_sem_refines G G' ->
+    Fact sc_ref_sem_exp : forall G G' H b vars e vs,
+        global_sc_refines G G' ->
         wc_global G ->
         sc_nodes G ->
         NoDupMembers (vars ++ anon_in e) ->
@@ -2739,8 +2739,8 @@ Module Type LCLOCKSEMANTICS
           admit. (* reset *)
     Admitted.
 
-    Fact sem_eq_sem_equation : forall G G' H b vars eq,
-        global_sem_refines G G' ->
+    Fact sc_ref_sem_equation : forall G G' H b vars eq,
+        global_sc_refines G G' ->
         wc_global G ->
         sc_nodes G ->
         NoDupMembers (vars ++ anon_in_eq eq) ->
@@ -2755,23 +2755,23 @@ Module Type LCLOCKSEMANTICS
       inv Hsem.
       econstructor; eauto.
       repeat rewrite_Forall_forall; eauto.
-      eapply sem_eq_sem_exp; eauto.
+      eapply sc_ref_sem_exp; eauto.
     Qed.
 
-    Fact global_sem_eq_nil :
-      global_sem_refines [] [].
+    Fact global_sc_ref_nil :
+      global_sc_refines [] [].
     Proof.
       intros f ins outs Hsem. assumption.
     Qed.
 
-    Fact global_sem_eq_cons : forall G G' n n' f,
+    Fact global_sc_ref_cons : forall G G' n n' f,
         Ordered_nodes (n::G) ->
         Ordered_nodes (n'::G') ->
         n_name n = f ->
         n_name n' = f ->
-        global_sem_refines G G' ->
-        node_sem_refines (n::G) (n'::G') f ->
-        global_sem_refines (n::G) (n'::G').
+        global_sc_refines G G' ->
+        node_sc_refines (n::G) (n'::G') f ->
+        global_sc_refines (n::G) (n'::G').
     Proof with eauto.
       intros G G' n n' f Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
       inv Hsem.
@@ -2787,7 +2787,7 @@ Module Type LCLOCKSEMANTICS
         rewrite sem_clock_inputs_cons... rewrite sem_node_cons_iff...
     Qed.
 
-  End sem_ref.
+  End sc_ref.
 End LCLOCKSEMANTICS.
 
 Module LClockSemanticsFun

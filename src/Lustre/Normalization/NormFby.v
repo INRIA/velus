@@ -105,6 +105,12 @@ Module Type NORMFBY
     left. repeat eexists; eauto.
   Qed.
 
+  Ltac inv_fby_equation Hfby to_cut eq :=
+    let Hspec := fresh "Hspec" in
+    destruct eq as [xs es];
+    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec];
+    subst; rewrite Hspec in Hfby; clear Hspec; repeat inv_bind; auto.
+
   (** *** Preservation of st_valid *)
 
   Fact init_var_for_clock_st_valid : forall cl res st st' aft,
@@ -138,9 +144,8 @@ Module Type NORMFBY
       st_valid_after st aft ->
       st_valid_after st' aft.
   Proof.
-    intros to_cut [xs es] ? ? ? ? Hfby Hvalid.
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; [|repeat inv_bind; auto].
+    intros * Hfby Hvalid.
+    inv_fby_equation Hfby to_cut eq.
     destruct x2 as [ty [ck name]]; repeat inv_bind.
     destruct (PS.mem _ _); repeat inv_bind; auto.
     - eapply fresh_ident_st_valid; eauto.
@@ -191,9 +196,8 @@ Module Type NORMFBY
       fby_equation to_cut eq st = (eqs', st') ->
       st_follows st st'.
   Proof.
-    intros * Hfby. destruct eq as [xs es].
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; repeat inv_bind.
+    intros * Hfby.
+    inv_fby_equation Hfby to_cut eq.
     - destruct x2 as [ty [ck name]]; repeat inv_bind.
       eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H.
       destruct (PS.mem _ _); repeat inv_bind; auto.
@@ -242,16 +246,14 @@ Module Type NORMFBY
       fby_equation to_cut eq st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined [eq])++(st_ids st')).
   Proof.
-    intros to_cut [xs es] eqs' st st' Hfby.
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec];
-      subst; rewrite Hspec in Hfby; clear Hspec.
-    - destruct x2 as [ty [ck name]]; repeat inv_bind.
-      eapply fby_iteexp_vars_perm with (ann:=(ty, (ck, name))) in H.
-      destruct (PS.mem _ _); repeat inv_bind; simpl.
-      + apply fresh_ident_vars_perm in H0.
-        rewrite H, <- H0; auto.
-      + rewrite H; auto.
-    - repeat inv_bind; simpl; auto.
+    intros * Hfby.
+    inv_fby_equation Hfby to_cut eq.
+    destruct x2 as [ty [ck name]]; repeat inv_bind.
+    eapply fby_iteexp_vars_perm with (ann:=(ty, (ck, name))) in H.
+    destruct (PS.mem _ _); repeat inv_bind; simpl.
+    + apply fresh_ident_vars_perm in H0.
+      rewrite H, <- H0; auto.
+    + rewrite H; auto.
   Qed.
 
   Fact fby_equations_vars_perm : forall to_cut eqs eqs' st st',

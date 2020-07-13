@@ -442,9 +442,8 @@ Module Type NORDERED
       Is_node_in f eqs' ->
       Is_node_in f [eq].
   Proof.
-    intros * Hfby Hisin. destruct eq as [xs es].
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; [|repeat inv_bind; auto].
+    intros * Hfby Hisin.
+    inv_fby_equation Hfby to_cut eq.
     destruct x2 as [ty [ck name]]; repeat inv_bind.
     constructor; constructor; constructor.
     eapply fby_iteexp_Is_node_in with (f:=f) (ann:=(ty, (ck, name))) in H as [H|H].

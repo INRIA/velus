@@ -1489,9 +1489,8 @@ Module Type NCLOCKING
       fby_equation to_cut eq st = (eqs', st') ->
       (Forall (wc_equation G (vars++st_clocks' st')) eqs' /\ wc_env (vars++st_clocks' st')).
   Proof with eauto.
-    intros * Hunt Hwenv Hwc Hfby. destruct eq as [xs es].
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec]; subst;
-      rewrite Hspec in Hfby; clear Hspec; [|repeat inv_bind; auto].
+    intros * Hunt Hwenv Hwc Hfby.
+    inv_fby_equation Hfby to_cut eq.
     destruct x2 as [ty [ck name]]; repeat inv_bind.
     assert (st_follows st x4) as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H; eauto).
     destruct Hwc as [Hwc [_ Hins]]; inv Hwc; clear H4.
