@@ -52,6 +52,19 @@ Module Type FRESH.
         st_valid_reuse st aft re2.
   End validity_reuse.
 
+  (** Weak validity : only gives us information about fresh_ident *)
+  Section weak_validity.
+    Context {B : Type}.
+    Parameter weak_valid_after : fresh_st B -> PS.t -> Prop.
+    Axiom st_valid_weak_valid : forall st aft,
+        st_valid_after st aft ->
+        weak_valid_after st aft.
+    Axiom weak_valid_after_Subset : forall st aft1 aft2,
+        PS.Subset aft2 aft1 ->
+        weak_valid_after st aft1 ->
+        weak_valid_after st aft2.
+  End weak_validity.
+
   Section follows.
     Context {B : Type}.
     Parameter st_follows : fresh_st B -> fresh_st B -> Prop.
@@ -95,6 +108,15 @@ Module Type FRESH.
     Axiom fresh_ident_st_follows : forall b id st st',
         fresh_ident b st = (id, st') ->
         st_follows st st'.
+
+    Axiom fresh_ident_weak_valid : forall b id st st' aft,
+        fresh_ident b st = (id, st') ->
+        weak_valid_after st aft ->
+        weak_valid_after st' (PS.add id aft).
+    Axiom fresh_ident_weak_valid_nIn : forall b id st st' aft,
+        fresh_ident b st = (id, st') ->
+        weak_valid_after st aft ->
+        ~PS.In id aft.
   End fresh_ident.
 
   Section reuse_ident.
@@ -227,6 +249,15 @@ Module Fresh : FRESH.
         st_valid_after st aft ->
         weak_valid_after st aft.
     Proof. intros [? ?] ? [? [? ?]]; auto. Qed.
+    Fact weak_valid_after_Subset : forall st aft1 aft2,
+        PS.Subset aft2 aft1 ->
+        weak_valid_after st aft1 ->
+        weak_valid_after st aft2.
+    Proof.
+      intros [? ?] * Hsub Hweak.
+      unfold weak_valid_after in *.
+      intros ? Hin. eapply Hsub in Hin; eauto.
+    Qed.
   End weak_validity.
 
   Section follows.
@@ -353,20 +384,6 @@ Module Fresh : FRESH.
           * unfold st_ids in Hv4 . simpl in Hv4. congruence.
     Qed.
 
-    Fact fresh_ident_weak_valid : forall b id st st' aft,
-        fresh_ident b st = (id, st') ->
-        weak_valid_after st aft ->
-        weak_valid_after st' aft.
-    Proof.
-      intros b id [n l] [n' l'] aft Hfresh Hval.
-      simpl in *; inv Hfresh.
-      unfold weak_valid_after in *.
-      eapply PS_For_all_impl_In; eauto.
-      intros ? _ H; simpl in H.
-      rewrite Positive_as_OT.lt_succ_r.
-      apply Positive_as_OT.lt_le_incl; auto.
-    Qed.
-
     Fact fresh_ident_st_follows :
       forall (b : B) id st st',
         fresh_ident b st = (id, st') ->
@@ -376,6 +393,21 @@ Module Fresh : FRESH.
       simpl in *; inv Hfresh; simpl.
       unfold st_follows in *; simpl in *.
       apply incl_tl. reflexivity.
+    Qed.
+
+    Fact fresh_ident_weak_valid : forall b id st st' aft,
+        fresh_ident b st = (id, st') ->
+        weak_valid_after st aft ->
+        weak_valid_after st' (PS.add id aft).
+    Proof.
+      intros b id [n l] [n' l'] aft Hfresh Hval.
+      simpl in *; inv Hfresh.
+      eapply PS_For_all_add; split. apply Pos.lt_succ_diag_r.
+      unfold weak_valid_after in *.
+      eapply PS_For_all_impl_In; eauto.
+      intros ? _ H; simpl in H.
+      rewrite Positive_as_OT.lt_succ_r.
+      apply Positive_as_OT.lt_le_incl; auto.
     Qed.
 
     Fact fresh_ident_weak_valid_nIn : forall b id st st' aft,
@@ -446,15 +478,6 @@ Module Fresh : FRESH.
           unfold st_ids in HIn'; simpl in *...
     Qed.
 
-    Fact reuse_ident_weak_valid : forall b id st st' aft,
-        reuse_ident id b st = (tt, st') ->
-        weak_valid_after st aft ->
-        weak_valid_after st' aft.
-    Proof.
-      intros b id [n l] [n' l'] aft Hreuse Hval.
-      simpl in *; inv Hreuse; auto.
-    Qed.
-
     Fact reuse_ident_st_follows : forall b id st st',
         reuse_ident id b st = (tt, st') ->
         st_follows st st'.
@@ -516,6 +539,15 @@ Section Instances.
   Proof.
     intros. intro Hv.
     eapply Fresh.st_valid_reuse_PSeq; eauto.
+  Qed.
+
+  Global Instance weak_valid_after_Proper :
+    Proper (@eq (@Fresh.fresh_st B) ==> PS.Equal ==> @Basics.impl)
+           Fresh.weak_valid_after.
+  Proof.
+    intros ? ? ? ? ? Heq Hweak; subst.
+    eapply Fresh.weak_valid_after_Subset; eauto.
+    eapply PSP.subset_equal. symmetry. assumption.
   Qed.
 End Instances.
 
@@ -612,6 +644,17 @@ Module Facts.
       unfold st_ids in *.
       rewrite <- Hfresh in Hvalid. inv Hvalid.
       intro contra. apply H1, in_or_app, or_intror, In_PS_elements; auto.
+    Qed.
+
+    Fact fresh_ident_weak_valid' : forall (b : B) id st st' aft,
+        weak_valid_after st aft ->
+        fresh_ident b st = (id, st') ->
+        weak_valid_after st' aft.
+    Proof.
+      intros * Hweak Hfresh.
+      eapply fresh_ident_weak_valid in Hfresh; eauto.
+      eapply weak_valid_after_Subset; eauto.
+      eapply PSP.subset_add_2. reflexivity.
     Qed.
 
   End fresh_ident.

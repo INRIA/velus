@@ -516,7 +516,20 @@ Section Incl.
     destruct Hin as [Hin|Hin]; auto.
   Qed.
 
-  Lemma concat_map_incl {B} : forall (f : A -> list B) x xs,
+  Lemma incl_filter : forall (f : A -> bool) xs ys,
+      incl xs ys ->
+      incl (filter f xs) (filter f ys).
+  Proof.
+    induction xs; intros * Hincl.
+    - simpl. apply incl_nil'.
+    - apply incl_cons' in Hincl as [Hin Hincl].
+      apply IHxs in Hincl. simpl.
+      destruct (f a) eqn:Hf; auto.
+      apply incl_cons; auto.
+      apply filter_In; auto.
+  Qed.
+
+  Lemma incl_concat_map {B} : forall (f : A -> list B) x xs,
       In x xs ->
       incl (f x) (concat (map f xs)).
   Proof.
@@ -797,6 +810,14 @@ Section ConcatMap.
     apply IH in Hin.
     destruct Hin as (xs' & Hin & Hinf).
     eauto with datatypes.
+  Qed.
+
+  Fact in_flat_map' : forall (f : A -> list B) (l : list A) (y : B),
+      In y (flat_map f l) <-> Exists (fun x => In y (f x)) l.
+  Proof.
+    intros *.
+    rewrite Exists_exists, in_flat_map.
+    split; intros [x [? ?]]; exists x; auto.
   Qed.
 
   Remark in_concat_cons:
@@ -1370,6 +1391,16 @@ Section ForallExists.
       now constructor 2; apply IH.
   Qed.
 
+  Lemma Exists_Exists:
+    forall (Q : A -> Prop) xs,
+    (forall x, P x -> Q x) ->
+    Exists P xs -> Exists Q xs.
+  Proof.
+    intros * Himpl Hex.
+    rewrite Exists_exists in *. destruct Hex as [? [Hin HP]].
+    exists x; auto.
+  Qed.
+
   Lemma Permutation_Forall:
     forall l l',
       Permutation l l' ->
@@ -1408,6 +1439,13 @@ Section ForallExists.
     - intros [? ?]; now apply Forall_Forall.
     - intro HForall.
       induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.
+  Qed.
+
+  Lemma Forall_singl:
+    forall (x : A),
+      Forall P [x] -> P x.
+  Proof.
+    intros * Hf. inversion Hf; auto.
   Qed.
 
   Lemma Forall_not_In_app:
@@ -2458,6 +2496,12 @@ Section Forall2.
     destruct l'; inv Hlen. simpl in Hin.
     destruct Hin; inv Hf; try inv H; eauto.
   Qed.
+
+  Lemma Forall2_singl : forall (P : A -> B -> Prop) x y,
+      Forall2 P [x] [y] -> P x y.
+  Proof.
+    intros * Hf. inversion Hf; auto.
+  Qed.
 End Forall2.
 
 Hint Resolve (proj2 (Forall2_eq _ _)).
@@ -3366,6 +3410,20 @@ Section InMembers.
     eapply incl_map in Hincl; eauto.
   Qed.
 
+  Fact incl_NoDup_In : forall (l1 l2 : list (A * B)) x y,
+      incl l1 l2 ->
+      NoDupMembers l2 ->
+      InMembers x l1 ->
+      In (x, y) l2 ->
+      In (x, y) l1.
+  Proof.
+    intros * Hincl Hndup Hinm Hin.
+    apply InMembers_In in Hinm as [? Hin'].
+    assert (x0 = y); subst; auto.
+    eapply Hincl in Hin'.
+    eapply NoDupMembers_det in Hndup; eauto.
+  Qed.
+
 End InMembers.
 
 Section OptionLists.
@@ -3860,6 +3918,21 @@ Section map_filter.
     induction xs; intros Hin Hf; simpl; inv Hin.
     - rewrite Hf. left; auto.
     - destruct (f a); [right|]; auto.
+  Qed.
+
+  Lemma map_filter_In' : forall y xs,
+      In y (map_filter xs) ->
+      exists x, In x xs /\ f x = Some y.
+  Proof.
+    induction xs; intros Hin; simpl in *.
+    - inv Hin.
+    - destruct (f a) eqn:Hf.
+      + simpl in Hin; destruct Hin as [Hin|Hin]; subst.
+        * exists a; auto.
+        * eapply IHxs in Hin as [x [Hin Hf']].
+          exists x; auto.
+      + eapply IHxs in Hin as [x [Hin Hf']].
+        exists x; auto.
   Qed.
 End map_filter.
 

@@ -445,6 +445,18 @@ Module Type LCLOCKING
     intros G1 G2 HG env1 env2 Henv eq; subst. now rewrite Henv.
   Qed.
 
+  Lemma wc_env_Is_free_in_clock_In : forall vars x id ck,
+      wc_env vars ->
+      In (x, ck) vars ->
+      Is_free_in_clock id ck ->
+      InMembers id vars.
+  Proof.
+    intros * Hwenv Hin Hfree.
+    unfold wc_env in Hwenv.
+    eapply Forall_forall in Hin; eauto; simpl in Hin.
+    induction Hfree; inv Hin; eauto using In_InMembers.
+  Qed.
+
   Lemma wc_env_has_Cbase':
     forall vars x xck,
       wc_env vars ->
@@ -1490,14 +1502,15 @@ Module Type LCLOCKING
     destruct sub; simpl; [f_equal|]; auto.
   Qed.
 
-  Lemma instck_only_depends_on : forall vars bck sub ck ck',
-      only_depends_on (map_filter sub vars) bck ->
+  Lemma instck_only_depends_on : forall vars bck bckvars sub ck ck',
+      only_depends_on bckvars bck ->
       only_depends_on vars ck ->
       instck bck sub ck = Some ck' ->
-      only_depends_on (map_filter sub vars) ck'.
+      only_depends_on (bckvars++map_filter sub vars) ck'.
   Proof with eauto.
     induction ck; intros ck' Hbck Hdep Hinst; simpl in *.
     - inv Hinst...
+      eapply only_depends_on_incl; eauto. apply incl_appl, incl_refl.
     - destruct instck eqn:Hinst'; try congruence.
       destruct sub eqn:Hsub; try congruence.
       inv Hinst.
@@ -1505,6 +1518,7 @@ Module Type LCLOCKING
       specialize (IHck _ Hbck Hdep' eq_refl).
       intros id Hfree. inv Hfree.
       + specialize (Hdep i (FreeCon1 _ _ _)).
+        apply in_or_app; right.
         eapply map_filter_In; eauto.
       + apply IHck...
   Qed.
@@ -1761,7 +1775,7 @@ Module Type LCLOCKING
       incl (fresh_in e) (fresh_ins es).
   Proof.
     intros e es Hin.
-    unfold fresh_ins. apply concat_map_incl; auto.
+    unfold fresh_ins. apply incl_concat_map; auto.
   Qed.
 
   Fact anon_in_incl : forall e es,
@@ -1769,7 +1783,7 @@ Module Type LCLOCKING
       incl (anon_in e) (anon_ins es).
   Proof.
     intros e es Hin.
-    unfold anon_ins. apply concat_map_incl; auto.
+    unfold anon_ins. apply incl_concat_map; auto.
   Qed.
 
   Fact anon_in_eq_incl : forall e es,
@@ -1777,7 +1791,7 @@ Module Type LCLOCKING
       incl (anon_in_eq e) (anon_in_eqs es).
   Proof.
     intros e es Hin.
-    unfold anon_in_eqs. apply concat_map_incl; auto.
+    unfold anon_in_eqs. apply incl_concat_map; auto.
   Qed.
 
   Lemma wc_exp_clockof : forall G vars e,
@@ -1939,6 +1953,109 @@ Module Type LCLOCKING
         eapply wc_clock_incl; [|eauto].
         unfold fresh_ins, idck. simpl; rewrite map_app.
         apply incl_appr', incl_appr, incl_refl.
+  Qed.
+
+  Lemma wc_clock_is_free_in : forall vars ck,
+      wc_clock vars ck ->
+      forall x, Is_free_in_clock x ck -> InMembers x vars.
+  Proof.
+    intros * Hwc ? Hfree.
+    induction Hwc; inv Hfree; eauto using In_InMembers.
+  Qed.
+
+  Corollary Forall_wc_clock_is_free_in : forall vars cks,
+      Forall (wc_clock vars) cks ->
+      Forall (fun ck => forall x, Is_free_in_clock x ck -> InMembers x vars) cks.
+  Proof.
+    intros * Hwcs.
+    eapply Forall_impl; eauto.
+    intros ck Hwc. eapply wc_clock_is_free_in; eauto.
+  Qed.
+
+  Corollary wc_env_is_free_in : forall vars,
+      wc_env vars ->
+      Forall (fun '(_, ck) => forall x, Is_free_in_clock x ck -> InMembers x vars) vars.
+  Proof.
+    intros * Hwenv. unfold wc_env in Hwenv.
+    eapply Forall_impl; eauto.
+    intros [? ck] Hwc. eapply wc_clock_is_free_in; eauto.
+  Qed.
+
+  Inductive dep_ordered_on' : list ident -> list nclock -> Prop :=
+  | dep_ordered'_nil : forall vars, dep_ordered_on' vars []
+  | dep_ordered'_cons : forall vars ncks ck name,
+      dep_ordered_on' vars ncks ->
+      only_depends_on (vars++map fst (anon_streams ncks)) ck ->
+      dep_ordered_on' vars ((ck, name)::ncks).
+
+  Fact dep_ordered_on'_Forall : forall vars ncks,
+      dep_ordered_on' vars ncks ->
+      Forall (fun '(ck, _) => only_depends_on (vars++map fst (anon_streams ncks)) ck) ncks.
+  Proof.
+    intros * Hdep; induction Hdep; constructor.
+    - destruct name; simpl; auto.
+      eapply only_depends_on_incl; eauto.
+      apply incl_appr', incl_tl, incl_refl.
+    - destruct name; simpl; auto.
+      eapply Forall_impl; eauto.
+      intros [ck' name'] Hdep'.
+      eapply only_depends_on_incl; eauto.
+      apply incl_appr', incl_tl, incl_refl.
+  Qed.
+
+  Lemma WellInstantiated_dep_ordered_on : forall bck bckinputs sub cks ncks,
+      dep_ordered_on cks ->
+      only_depends_on bckinputs bck ->
+      Forall2 (WellInstantiated bck sub) cks ncks ->
+      dep_ordered_on' bckinputs ncks.
+  Proof.
+    induction cks; intros * Hdep Hbck Hwi; inv Hdep; inv Hwi; simpl; try constructor.
+    destruct y as [ck name].
+    constructor; auto; simpl.
+    erewrite <- WellInstantiated_sub_fsts; eauto.
+    inv H3; simpl in *. eapply instck_only_depends_on in H0; eauto.
+  Qed.
+
+  Lemma WellInstantiated_is_free_in : forall G f n inputs ins outs sub bck,
+      wc_global G ->
+      find_node f G = Some n ->
+      Forall (fun '(ck, _) => forall x, Is_free_in_clock x ck -> In x inputs) ins ->
+      Forall2 (WellInstantiated bck sub) (idck (n_in n)) ins ->
+      Forall2 (WellInstantiated bck sub) (idck (n_out n)) outs ->
+      Forall (fun '(ck, _) => forall x, Is_free_in_clock x ck ->
+                                In x inputs \/
+                                In x (map fst (anon_streams ins)) \/
+                                In x (map fst (anon_streams outs))) outs.
+  Proof.
+    intros * HwcG Hfind Hinputs Hwi1 Hwi2.
+    eapply wc_find_node in HwcG as [? Hwnode]; eauto.
+
+    assert (In bck (map stripname ins)) as Hbck.
+    { eapply WellInstantiated_bck in Hwi1; eauto.
+      - destruct Hwnode as [? _]; eauto.
+      - rewrite length_idck. exact (n_ingt0 n). }
+
+    specialize (Forall2_app Hwi1 Hwi2) as Hwi. clear Hwi1 Hwi2.
+    rewrite <- idck_app in Hwi.
+
+    assert (exists vars, Permutation (idck (n_in n ++ n_out n)) vars /\ dep_ordered_on vars) as [vars [Hperm Hdepo]].
+    { eapply wc_env_dep_ordered_on.
+      - specialize (n_nodup n) as Hndup.
+        rewrite NoDupMembers_idck.
+        rewrite (Permutation_app_comm (n_vars n)), <- app_assoc, app_assoc in Hndup.
+        apply NoDupMembers_app_l in Hndup; auto.
+      - destruct Hwnode as [_ [? _]]; auto. }
+    eapply Forall2_Permutation_1 in Hwi as [vars' [Hperm' Hwi]]; eauto.
+
+    eapply WellInstantiated_dep_ordered_on with (bckinputs:=inputs) in Hwi; eauto.
+    - apply dep_ordered_on'_Forall in Hwi.
+      rewrite <- Hperm', Forall_app in Hwi. destruct Hwi as [_ ?].
+      eapply Forall_impl; eauto. intros [ck ?] Hondep ? Hfree.
+      eapply Hondep in Hfree. unfold anon_streams in Hfree; rewrite <- Hperm' in Hfree.
+      rewrite map_filter_app, map_app in Hfree.
+      repeat rewrite in_app_iff in Hfree; auto.
+    - apply in_map_iff in Hbck as [[? ?] [? Hbck]]; subst.
+      eapply Forall_forall in Hbck; eauto; simpl in *; auto.
   Qed.
 
   Section interface_eq.

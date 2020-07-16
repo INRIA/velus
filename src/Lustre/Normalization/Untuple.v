@@ -2415,6 +2415,21 @@ Module Type UNTUPLE
     - eapply incl_tl; eauto.
   Qed.
 
+  Fact untupled_equation_not_nil : forall G eq,
+      untupled_equation eq ->
+      wl_equation G eq ->
+      fst eq <> [].
+  Proof.
+    intros * Hunt Hwl contra.
+    inv Hunt; simpl in *; subst. 3,4:congruence.
+    1,2:(destruct Hwl as [Hwl1 Hwl2]; rewrite app_nil_r in Hwl2; simpl in Hwl2;
+         apply Forall_singl in Hwl1; inv Hwl1).
+    - specialize (n_outgt0 n) as Hout.
+      apply (Nat.lt_irrefl (length (n_out n))). rewrite <- H7 at 1. setoid_rewrite <- Hwl2; auto.
+    - specialize (n_outgt0 n) as Hout.
+      apply (Nat.lt_irrefl (length (n_out n))). rewrite <- H10 at 1. setoid_rewrite <- Hwl2; auto.
+  Qed.
+
   (** ** fresh_ins appear in the state after normalisation *)
 
   Fact map_bind2_fresh_incl : forall is_control es es' eqs' st st',

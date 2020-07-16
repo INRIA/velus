@@ -753,6 +753,13 @@ Proof.
   now rewrite <-E.
 Qed.
 
+Instance ps_from_list_Proper:
+  Proper (@Permutation ident ==> PS.Equal) ps_from_list.
+Proof.
+  intros ? ? Hperm ?.
+  split; intros; rewrite Hperm in *; auto.
+Qed.
+
 Lemma ps_adds_In:
   forall x xs s,
     PS.In x (ps_adds xs s) ->

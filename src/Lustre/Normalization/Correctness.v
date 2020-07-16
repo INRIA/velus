@@ -11,7 +11,8 @@ From Velus Require Import Clocks.
 From Velus Require Import CoindStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
-From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking Lustre.Normalization.NOrdered.
+From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking.
+From Velus Require Import Lustre.Normalization.NCausality Lustre.Normalization.NOrdered.
 
 (** * Correctness of the Normalization *)
 

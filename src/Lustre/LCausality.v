@@ -2,6 +2,7 @@ From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Import Permutation.
+From Coq Require Import Setoid Morphisms.
 
 From Velus Require Import Common.
 From Velus Require Import Operators.
@@ -68,6 +69,91 @@ Module Type LCAUSALITY
   Definition node_causal (n : node) :=
     exists eqs, Permutation (n_eqs n) eqs
            /\ Is_causal (map fst (n_in n)) eqs.
+
+  Instance Is_causal_Proper:
+    Proper (@Permutation ident ==> @eq (list equation) ==> iff)
+           Is_causal.
+  Proof.
+    intros xs xs' Hperm eqs eqs' Heq; subst.
+    split; intros Hcaus; induction Hcaus; auto.
+    - constructor; auto.
+      intros x Hex. apply H in Hex as [?|Hex]; auto.
+      right. rewrite <- Hperm; auto.
+    - constructor; auto.
+      intros x Hex. apply H in Hex as [?|Hex]; auto.
+      right. rewrite Hperm; auto.
+  Qed.
+
+  Lemma Is_causal_incl : forall ins1 ins2 eqs,
+      incl ins1 ins2 ->
+      Is_causal ins1 eqs ->
+      Is_causal ins2 eqs.
+  Proof.
+    induction eqs; intros Hincl Hcaus; inv Hcaus; auto.
+    constructor; auto.
+    intros ? Hex. apply H2 in Hex as [?|Hex]; auto.
+  Qed.
+
+  Instance vars_defined_Proper:
+    Proper (@Permutation equation ==> @Permutation ident)
+           vars_defined.
+  Proof.
+    intros eqs eqs' Hperm; subst.
+    unfold vars_defined. rewrite Hperm. reflexivity.
+  Qed.
+
+  Fact vars_defined_app : forall eqs1 eqs2,
+      vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2.
+  Proof.
+    intros.
+    unfold vars_defined. rewrite flat_map_app; auto.
+  Qed.
+
+  Lemma Is_causal_app1 : forall eqs eqs' ins,
+      Is_causal ins (eqs ++ eqs') ->
+      Is_causal (ins++vars_defined eqs') eqs.
+  Proof.
+    induction eqs; intros * Hcaus; simpl in *.
+    - constructor.
+    - inv Hcaus. eapply IHeqs in H1. constructor; auto.
+      intros x Hex. apply H2 in Hex.
+      rewrite vars_defined_app in Hex. rewrite in_app_iff in *.
+      destruct Hex as [[?|?]|?]; auto.
+  Qed.
+
+  Lemma Is_causal_app2 : forall eqs eqs' ins,
+      Is_causal ins eqs' ->
+      Is_causal (ins++vars_defined eqs') eqs ->
+      Is_causal ins (eqs ++ eqs').
+  Proof.
+    induction eqs; intros * Hcaus1 Hcaus2; simpl in *.
+    - auto.
+    - inv Hcaus2.
+      constructor; auto.
+      intros x Hex. apply H2 in Hex.
+      rewrite vars_defined_app. rewrite in_app_iff in *.
+      destruct Hex as [?|[?|?]]; auto.
+  Qed.
+
+  Lemma Is_causal_app : forall ins eqs1 eqs2,
+      Is_causal ins eqs1 ->
+      Is_causal ins eqs2 ->
+      Is_causal ins (eqs1 ++ eqs2).
+  Proof.
+    intros * Hcaus1 Hcaus2.
+    eapply Is_causal_app2; eauto.
+    eapply Is_causal_incl; eauto.
+    apply incl_appl, incl_refl.
+  Qed.
+
+  Lemma Forall_Is_causal : forall inputs eqs,
+      Forall (fun '(_, es) => forall x, Exists (Is_free_left x) es -> In x inputs) eqs ->
+      Is_causal inputs eqs.
+  Proof.
+    induction eqs; intros Hf; auto.
+    inv Hf. constructor; auto.
+    destruct a. intros x Hex; eauto.
+  Qed.
 
 End LCAUSALITY.
 

@@ -68,6 +68,15 @@ Proof.
   setoid_rewrite equiv_decb_equiv; reflexivity.
 Qed.
 
+Lemma clock_eqb_neq :
+  forall (x y: clock), x ==b y = false <-> x <> y.
+Proof.
+  intros *; split; intro H.
+  - intro contra. rewrite <- clock_eqb_eq in contra. congruence.
+  - destruct (x ==b y) eqn:Hec; auto.
+    rewrite clock_eqb_eq in Hec. congruence.
+Qed.
+
 Instance nclock_EqDec : EqDec nclock eq.
 Proof.
   eapply prod_eqdec.
