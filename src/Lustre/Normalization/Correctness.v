@@ -32,16 +32,17 @@ Module Type CORRECTNESS
        (Import Norm : NORMALIZATION Ids Op OpAux Syn).
 
   Import Fresh Tactics.
-  Module Import Typ := NTypingFun Ids Op OpAux Syn Ty Norm.
-  Module Import Clo := NClockingFun Ids Op OpAux Syn Cl Norm.
-  Module Ord := NOrderedFun Ids Op OpAux Syn Ord Norm.
+  Module Import Typing := NTypingFun Ids Op OpAux Syn Ty Norm.
+  Module Import Clocking := NClockingFun Ids Op OpAux Syn Cl Norm.
+  Module Ordered := NOrderedFun Ids Op OpAux Syn Ord Norm.
+  Module Causality := NCausalityFun Ids Op OpAux Syn Cl LCA Norm.
   Import List.
 
   CoFixpoint default_stream : Stream OpAux.value :=
     absent ⋅ default_stream.
 
   Fact normalize_exp_sem_length : forall G vars e is_control es' eqs' st st',
-      wt_exp G (vars++Typ.st_tys st) e ->
+      wt_exp G (vars++Typing.st_tys st) e ->
       normalize_exp is_control e st = (es', eqs', st') ->
       Forall (fun e => forall v H b,
                   sem_exp G H b e v ->
@@ -1522,7 +1523,7 @@ Module Type CORRECTNESS
       Forall2 (fun n n' => n_name n = n_name n') G (untuple_global G Hwl).
   Proof.
     intros.
-    specialize (Ord.untuple_global_names G Hwl) as Hnames.
+    specialize (Ordered.untuple_global_names G Hwl) as Hnames.
     rewrite <- Forall2_eq, Forall2_swap_args in Hnames.
     solve_forall.
   Qed.
@@ -1536,7 +1537,7 @@ Module Type CORRECTNESS
     induction G; intros * Hwt Hordered; simpl.
     - apply global_sem_ref_nil.
     - apply global_sem_ref_cons with (f:=n_name a)...
-      + eapply Ord.untuple_global_ordered in Hordered.
+      + eapply Ordered.untuple_global_ordered in Hordered.
         simpl in Hordered...
       + inv Hwt; inv Hordered.
         eapply IHG... eapply untuple_global_eq...
@@ -1546,7 +1547,7 @@ Module Type CORRECTNESS
         * apply untuple_global_eq.
         * inv Hwt; inv Hordered.
           eapply IHG... eapply untuple_global_eq...
-        * eapply Ord.untuple_global_ordered in Hordered.
+        * eapply Ordered.untuple_global_ordered in Hordered.
           simpl in Hordered...
   Qed.
 
@@ -2463,7 +2464,7 @@ Module Type CORRECTNESS
       Forall2 (fun n n' => n_name n = n_name n') G (normfby_global G Hwl).
   Proof.
     intros.
-    specialize (Ord.normfby_global_names G Hwl) as Hnames.
+    specialize (Ordered.normfby_global_names G Hwl) as Hnames.
     rewrite <- Forall2_eq, Forall2_swap_args in Hnames.
     solve_forall.
   Qed.
@@ -2479,7 +2480,7 @@ Module Type CORRECTNESS
     induction G; intros * Hwt Hwc Hordered Hcaus; simpl.
     - apply global_sc_ref_nil.
     - apply global_sc_ref_cons with (f:=n_name a)...
-      + eapply Ord.normfby_global_ordered in Hordered.
+      + eapply Ordered.normfby_global_ordered in Hordered.
         simpl in Hordered...
       + inv Hwt; inv Hwc; inv Hordered; inv Hcaus.
         eapply IHG... eapply normfby_global_eq...
@@ -2492,10 +2493,11 @@ Module Type CORRECTNESS
              eapply IHG... eapply normfby_global_eq...
           -- inv Hwt. eapply normfby_global_wt...
           -- inv Hwc. eapply normfby_global_wc...
-          -- eapply Ord.normfby_global_ordered in Hordered.
+          -- eapply Ordered.normfby_global_ordered in Hordered.
              simpl in Hordered...
-          -- admit. (* conservation of causality, TODO *)
-  Admitted.
+          -- inv Hwc. inv Hcaus.
+             eapply Causality.normfby_global_causal; auto.
+  Qed.
 
   Corollary normfby_global_sem : forall G Hunt f ins outs,
       wt_global G ->
@@ -2525,7 +2527,7 @@ Module Type CORRECTNESS
     eapply normfby_global_sem.
     - eapply untuple_global_wt...
     - eapply untuple_global_wc...
-    - eapply Ord.untuple_global_ordered...
+    - eapply Ordered.untuple_global_ordered...
     - admit. (* TODO plug in causality check *)
     - eapply untuple_global_sem...
     - eapply untuple_global_sem_clock_inputs...
@@ -2548,7 +2550,4 @@ Module CorrectnessFun
        (Norm : NORMALIZATION Ids Op OpAux Syn)
        <: CORRECTNESS Ids Op OpAux Str Syn Ty Clo LCA Lord Sem LClockSem Norm.
   Include CORRECTNESS Ids Op OpAux Str Syn Ty Clo LCA Lord Sem LClockSem Norm.
-  Module Typing := NTypingFun Ids Op OpAux Syn Ty Norm.
-  Module Clocking := NClockingFun Ids Op OpAux Syn Clo Norm.
-  Module Ordered := NOrderedFun Ids Op OpAux Syn Lord Norm.
 End CorrectnessFun.
