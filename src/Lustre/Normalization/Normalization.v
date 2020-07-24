@@ -1,10 +1,12 @@
+From Coq Require Import String.
 From Coq Require Import List Sorting.Permutation.
 Import List.ListNotations.
 Open Scope list_scope.
 
+From compcert Require Import common.Errors.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping.
+From Velus Require Import Lustre.LSyntax Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh.
 From Velus Require Import Lustre.Normalization.Untuple Lustre.Normalization.NormFby.
 
@@ -15,23 +17,28 @@ Module Type NORMALIZATION
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Import Syn : LSYNTAX Ids Op).
+       (Import Syn : LSYNTAX Ids Op)
+       (Import Caus : LCAUSALITY Ids Op Syn).
 
   Module Export Untuple := UntupleFun Ids Op OpAux Syn.
   Module Export NormFby := NormFbyFun Ids Op OpAux Syn Untuple.
 
-  Definition normalize_global (G : global) (Hwl : wl_global G) : global.
+  Definition normalize_global (G : global) (Hwl : wl_global G) : res global.
   Proof.
     remember (untuple_global G Hwl) as G'.
-    refine (normfby_global G' _).
+    refine (bind (check_causality G') _).
+    intros _.
+    refine (OK (normfby_global G' _)).
     rewrite HeqG'. eapply untuple_global_untupled_global.
   Defined.
 
-  Theorem normalize_global_normalized_global : forall G (Hwl : wl_global G),
-      normalized_global (normalize_global G Hwl).
+  Theorem normalize_global_normalized_global : forall G (Hwl : wl_global G) G',
+      normalize_global G Hwl = OK G' ->
+      normalized_global G'.
   Proof.
-    intros *.
-    unfold normalize_global.
+    intros * Hnorm.
+    unfold normalize_global in Hnorm.
+    destruct check_causality in Hnorm; inv Hnorm.
     eapply normfby_global_normalized_global.
   Qed.
 End NORMALIZATION.
@@ -41,6 +48,7 @@ Module NormalizationFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
-       <: NORMALIZATION Ids Op OpAux Syn.
-  Include NORMALIZATION Ids Op OpAux Syn.
+       (Caus : LCAUSALITY Ids Op Syn)
+       <: NORMALIZATION Ids Op OpAux Syn Caus.
+  Include NORMALIZATION Ids Op OpAux Syn Caus.
 End NormalizationFun.

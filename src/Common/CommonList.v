@@ -4035,4 +4035,43 @@ Section remove_member.
         destruct (eq_dec x x1); eauto.
         right; eauto.
   Qed.
+
+  Global Instance remove_member_Proper:
+    Proper (@eq A ==> @Permutation (A * B) ==> @Permutation (A * B)) remove_member.
+  Proof.
+    intros ? ? Heq ? ? Hperm; subst.
+    induction Hperm; simpl; auto.
+    - destruct x as [x1 x2]. destruct (eq_dec y x1); auto.
+    - destruct y0, x.
+      destruct (eq_dec y a), (eq_dec y a0); auto.
+      rewrite perm_swap; auto.
+    - rewrite IHHperm1, IHHperm2; auto.
+  Qed.
+
+  Definition remove_members (ys : list A) (xs : list (A * B)) : (list (A * B)) :=
+    fold_left (fun l x => remove_member x l) ys xs.
+
+  Global Instance remove_members_Proper:
+    Proper (@eq (list A) ==> @Permutation (A * B) ==> @Permutation (A * B)) remove_members.
+  Proof.
+    intros ? ? Heq ? ? Hperm; subst.
+    unfold remove_members. repeat rewrite <- fold_left_rev_right.
+    remember (rev y) as y'. clear y Heqy'.
+    induction y'; simpl; auto.
+    rewrite IHy'; auto.
+  Qed.
+
+  Lemma remove_members_Perm : forall (d : B) (xs : list A) (ys zs : list (A * B)),
+      NoDupMembers zs ->
+      Permutation (map (fun x => (x, d)) xs ++ ys) zs ->
+      Permutation ys (remove_members xs zs).
+  Proof.
+    induction xs; intros * Hnd Hperm; simpl in *; auto.
+    apply Permutation_cons_1 in Hperm as [zs' [Hperm1 Hperm2]].
+    apply IHxs in Hperm1. 2:rewrite Hperm2 in Hnd; inv Hnd; auto.
+    rewrite Hperm1, Hperm2; simpl.
+    destruct (eq_dec a a); subst; [|congruence].
+    rewrite Hperm2 in Hnd. inv Hnd.
+    rewrite remove_member_nIn_idem; auto.
+  Qed.
 End remove_member.

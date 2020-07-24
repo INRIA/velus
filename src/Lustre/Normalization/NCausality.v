@@ -6,7 +6,10 @@ From Coq Require Import Decidable.
 From Coq Require Import Omega.
 From Coq Require Import Setoid Morphisms.
 
+From compcert Require Import common.Errors.
+
 From Velus Require Import Common Ident Clocks.
+From Velus Require Import CheckGraph.
 From Velus Require Import Operators Environment.
 From Velus Require Import Lustre.LSyntax Lustre.LClocking Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
@@ -19,9 +22,9 @@ Module Type NCAUSALITY
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
-       (Import Clo : LCLOCKING Ids Op Syn)
        (Import Cau : LCAUSALITY Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Clo : LCLOCKING Ids Op Syn)
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn Cau).
 
   Import Fresh Tactics.
 
@@ -1987,6 +1990,148 @@ Module Type NCAUSALITY
     eapply normfby_node_causal; eauto.
   Qed.
 
+  (** ** The causality check implies causality *)
+
+  Fact n_in_eqs_NoDupMembers : forall G n,
+      untupled_node n ->
+      wl_node G n ->
+      NoDupMembers (n_eqs n ++ map (fun '(x, _) => ([x], [])) (n_in n)).
+  Proof.
+    intros * Hunt Hwl.
+    unfold untupled_node in Hunt. unfold wl_node in Hwl.
+    specialize (in_vars_defined_NoDup n) as Hndup.
+    remember (n_eqs n) as eqs. clear Heqeqs.
+    rewrite Permutation_app_comm in Hndup.
+    induction eqs; simpl in *.
+    - rewrite fst_NoDupMembers. rewrite map_map.
+      remember (n_in n) as ins. clear Heqins.
+      induction ins as [|[? [? ?]] ?]; simpl in *. constructor.
+      inv Hndup. constructor; auto.
+      intros contra. apply H1.
+      repeat simpl_In; simpl in *; inv H.
+      exists (i, (t0, c0)); auto.
+    - inv Hunt. inv Hwl.
+      rewrite <- app_assoc in Hndup.
+      destruct a as [xs es]. constructor.
+      + eapply untupled_equation_not_nil in H1; eauto; simpl in *.
+        destruct xs; try congruence.
+        intro contra. eapply NoDup_app_In in Hndup. 2:left; eauto.
+        apply Hndup.
+        rewrite fst_InMembers, map_app in contra.
+        rewrite in_app_iff in *. destruct contra.
+        * left. simpl_In. destruct x as [? es']; simpl in *; subst.
+          unfold vars_defined. rewrite in_flat_map. exists (i::xs, es'); simpl; auto.
+        * right. repeat simpl_In; simpl in *.
+          inv H. exists (i, (t, c)); auto.
+      + eapply IHeqs; eauto.
+        apply NoDup_app_r in Hndup; auto.
+  Qed.
+
+  Fact vars_defined_incl : forall xs eqs,
+      Forall2 (fun x eq => exists tl : list ident, fst eq = x :: tl) xs eqs ->
+      incl xs (vars_defined eqs).
+  Proof.
+    induction xs; intros * Hf; inv Hf; simpl.
+    - apply incl_refl.
+    - apply incl_cons.
+      + rewrite in_app_iff; left.
+        destruct H1 as [? Hfst]. rewrite Hfst. left; auto.
+      + apply incl_appr; auto.
+  Qed.
+
+  Lemma check_node_causality_correct : forall G n,
+      untupled_node n ->
+      wl_node G n ->
+      check_node_causality n = OK tt ->
+      node_causal n.
+  Proof.
+    intros * Hunt Hwl Hcaus. unfold check_node_causality in Hcaus.
+    destruct (check_graph _) eqn:Hgraph; inv Hcaus.
+    apply check_graph_spec in Hgraph.
+    unfold node_causal.
+    destruct Hgraph as [xs [Hperm Hord]].
+    assert (exists xs, Forall2 (fun x eq => exists tl, fst eq = x::tl) xs (n_eqs n)) as [xs' Hxs'].
+    { unfold untupled_node in Hunt. unfold wl_node in Hwl.
+      exists (map_filter (fun eq => match (fst eq) with
+                            | [] => None
+                            | hd::_ => Some hd
+                            end) (n_eqs n)).
+      remember (n_eqs n) as eqs. clear - Hunt Hwl.
+      induction eqs; simpl; auto.
+      inv Hunt. inv Hwl. eapply untupled_equation_not_nil in H1; eauto.
+      destruct a as [[|x xs] es]; simpl in *; try congruence.
+      constructor; auto. exists xs; auto.
+    }
+    specialize (build_graph_dom _ _ Hxs') as Hdom.
+    assert (Forall2 (fun (x : ident) (eq0 : list ident * list exp) => exists tl : list ident, fst eq0 = x :: tl)
+                    (xs'++map fst (n_in n))
+                    ((n_eqs n)++(map (fun '(x, _) => ([x], [])) (n_in n)))) as Hxs''.
+    { eapply Forall2_app; eauto.
+      rewrite Forall2_map_1, Forall2_map_2. eapply Forall2_same.
+      eapply Forall_forall. intros [? [? ?]] _. exists []; simpl; auto. }
+    specialize (Env.dom_elements (build_graph n)) as Hdom'.
+    rewrite Hperm in Hdom'.
+    assert (Permutation xs (xs' ++ map fst (n_in n))) as Hperm'.
+    { eapply Env.dom_Perm; eauto.
+      + rewrite <- Hperm, <- fst_NoDupMembers.
+        apply Env.NoDupMembers_elements.
+      + assert (NoDup xs') as Hndxs.
+        { specialize (NoDup_vars_defined_n_eqs n) as Hnd.
+          clear - Hxs' Hnd.
+          remember (n_eqs n) as eqs. clear Heqeqs.
+          revert xs' Hxs'. induction eqs; intros; inv Hxs'; constructor; simpl in *; auto.
+          - destruct a. destruct H2 as [? ?]; simpl in *; subst.
+            intro contra. eapply vars_defined_incl in contra; eauto.
+            inv Hnd. apply not_In_app in H1 as [_ H1]; auto.
+          - apply NoDup_app_r in Hnd; auto.
+        }
+        specialize (n_in_eqs_NoDupMembers _ _ Hunt Hwl) as Hnd.
+        clear - Hxs' Hnd Hndxs.
+        rewrite fst_NoDupMembers, map_app in Hnd.
+        assert (forall (ins : list (ident * (Op.type * clock))) x,
+                         In x (map fst ins) -> In [x] (map fst (map (fun '(x, _) => ([x], @nil exp)) ins))) as Hin.
+        { intros * Hin. rewrite map_map.
+          repeat simpl_In. exists (i, (t, c)); auto. }
+        apply NoDup_app'; auto.
+        * apply NoDup_app_r in Hnd. remember (n_in n) as ins; clear Heqins.
+          induction ins as [|[? ?] ?]; simpl in *; constructor; inv Hnd; auto.
+        * solve_forall. intro contra.
+          eapply vars_defined_incl in H; eauto.
+          specialize (in_vars_defined_NoDup n) as Hnd'.
+          eapply NoDup_app_In in Hnd'; eauto.
+    }
+    symmetry in Hperm'. eapply Forall2_Permutation_1 in Hxs'' as [eqs' [Hperm'' Heqs']]; eauto.
+    eapply WellOrdered_Is_causal in Hord; eauto.
+    - exists (remove_members (list_eq_dec ident_eq_dec) (map (fun x => [x]) (map fst (n_in n))) eqs').
+      split.
+      + eapply remove_members_Perm with (d:=[]).
+        * rewrite <- Hperm''. eapply n_in_eqs_NoDupMembers; eauto.
+        * rewrite Permutation_app_comm.
+          replace (map (fun x : list ident => (x, [])) (map (fun x : ident => [x]) (map fst (n_in n))))
+            with (map (fun '(x, _) => ([x], @nil exp)) (n_in n)); auto.
+          repeat rewrite map_map. apply map_ext. intros [? [? ?]]; auto.
+      + rewrite <- app_nil_r at 1. eapply Is_causal_moves_to_input; eauto.
+    - rewrite <- Hperm''. eapply build_var_map_incl.
+    - rewrite <- Hperm'', Permutation_app_comm. eapply build_graph_find.
+  Qed.
+
+  Corollary check_causality_correct : forall G tts,
+      untupled_global G ->
+      wl_global G ->
+      check_causality G = OK tts ->
+      Forall node_causal G.
+  Proof.
+    induction G; intros * Hunt Hwl Hcheck; auto.
+    inv Hunt. inv Hwl.
+    unfold check_causality in Hcheck; simpl in Hcheck.
+    apply bind_inversion in Hcheck as [? [? Hcheck]].
+    constructor.
+    + destruct x. eapply check_node_causality_correct in H; eauto.
+    + apply bind_inversion in Hcheck as [? [? Hcheck]]; eauto.
+  Qed.
+
+  (* TODO a normalized node is causal *)
+
 End NCAUSALITY.
 
 Module NCausalityFun
@@ -1994,9 +2139,9 @@ Module NCausalityFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
-       (Clo : LCLOCKING Ids Op Syn)
        (Cau : LCAUSALITY Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
-       <: NCAUSALITY Ids Op OpAux Syn Clo Cau Norm.
-  Include NCAUSALITY Ids Op OpAux Syn Clo Cau Norm.
+       (Clo : LCLOCKING Ids Op Syn)
+       (Norm : NORMALIZATION Ids Op OpAux Syn Cau)
+       <: NCAUSALITY Ids Op OpAux Syn Cau Clo Norm.
+  Include NCAUSALITY Ids Op OpAux Syn Cau Clo Norm.
 End NCausalityFun.

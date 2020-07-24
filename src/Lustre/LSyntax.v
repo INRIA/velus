@@ -542,21 +542,6 @@ Module Type LSYNTAX
     exists e. split; auto. apply in_map_iff; eauto.
   Qed.
 
-  (** vars_defined *)
-
-  Lemma NoDup_vars_defined_n_eqs:
-    forall n,
-      NoDup (vars_defined n.(n_eqs)).
-  Proof.
-    intro n.
-    rewrite n.(n_defd).
-    apply fst_NoDupMembers.
-    specialize (n.(n_nodup)) as Hndup.
-    apply NoDupMembers_app_r in Hndup.
-    rewrite app_assoc in Hndup.
-    apply NoDupMembers_app_l in Hndup. auto.
-  Qed.
-
   (** fresh_in and anon_in specification and properties *)
 
   Inductive FreshIn : exp -> list (ident * (type * clock)) -> Prop :=
@@ -886,6 +871,26 @@ Module Type LSYNTAX
       wl_global ns ->
       wl_node ns n ->
       wl_global (n::ns).
+
+  (** *** Additional properties *)
+
+  Lemma in_vars_defined_NoDup : forall n,
+      NoDup (map fst (n_in n) ++ vars_defined (n_eqs n)).
+  Proof.
+    intros n.
+    destruct n; simpl. clear - n_nodup0 n_defd0.
+    rewrite n_defd0. rewrite <- map_app, <- fst_NoDupMembers.
+    repeat rewrite app_assoc in *. apply NoDupMembers_app_l in n_nodup0; auto.
+  Qed.
+
+  Corollary NoDup_vars_defined_n_eqs:
+    forall n,
+      NoDup (vars_defined n.(n_eqs)).
+  Proof.
+    intros n.
+    specialize (in_vars_defined_NoDup n) as Hnd.
+    apply NoDup_app_r in Hnd; auto.
+  Qed.
 
 End LSYNTAX.
 

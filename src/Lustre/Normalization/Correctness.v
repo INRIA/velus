@@ -23,19 +23,19 @@ Module Type CORRECTNESS
        (Import OpAux : OPERATORS_AUX Op)
        (Import Str : COINDSTREAMS Op OpAux)
        (Import Syn : LSYNTAX Ids Op)
+       (LCA        : LCAUSALITY Ids Op Syn)
        (Import Ty : LTYPING Ids Op Syn)
        (Import Cl : LCLOCKING Ids Op Syn)
-       (LCA        : LCAUSALITY Ids Op Syn)
        (Import Ord : LORDERED Ids Op Syn)
        (Import Sem : LSEMANTICS Ids Op OpAux Syn Ord Str)
        (Import LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Ty Cl LCA Ord Str Sem)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn LCA).
 
   Import Fresh Tactics.
-  Module Import Typing := NTypingFun Ids Op OpAux Syn Ty Norm.
-  Module Import Clocking := NClockingFun Ids Op OpAux Syn Cl Norm.
-  Module Ordered := NOrderedFun Ids Op OpAux Syn Ord Norm.
-  Module Causality := NCausalityFun Ids Op OpAux Syn Cl LCA Norm.
+  Module Import Typing := NTypingFun Ids Op OpAux Syn LCA Ty Norm.
+  Module Import Clocking := NClockingFun Ids Op OpAux Syn LCA Cl Norm.
+  Module Ordered := NOrderedFun Ids Op OpAux Syn LCA Ord Norm.
+  Module Causality := NCausalityFun Ids Op OpAux Syn LCA Cl Norm.
   Import List.
 
   CoFixpoint default_stream : Stream OpAux.value :=
@@ -2515,23 +2515,27 @@ Module Type CORRECTNESS
 
   (** ** Conclusion *)
 
-  Theorem normalize_global_sem : forall G Hwl f ins outs,
+  Theorem normalize_global_sem : forall G Hwl G' f ins outs,
       wt_global G ->
       wc_global G ->
       Ordered_nodes G ->
       sem_node G f ins outs ->
       sem_clock_inputs G f ins ->
-      sem_node (normalize_global G Hwl) f ins outs.
+      normalize_global G Hwl = Errors.OK G' ->
+      sem_node G' f ins outs.
   Proof with eauto.
-    intros * Hwt Hwc Hord Hsem Hclocks.
+    intros * Hwt Hwc Hord Hsem Hclocks Hnorm.
+    unfold normalize_global in Hnorm. destruct (LCA.check_causality _) eqn:Hcaus; inv Hnorm.
     eapply normfby_global_sem.
     - eapply untuple_global_wt...
     - eapply untuple_global_wc...
     - eapply Ordered.untuple_global_ordered...
-    - admit. (* TODO plug in causality check *)
+    - eapply Causality.check_causality_correct in Hcaus; eauto.
+      + eapply untuple_global_untupled_global.
+      + eapply wt_global_wl_global, untuple_global_wt...
     - eapply untuple_global_sem...
     - eapply untuple_global_sem_clock_inputs...
-  Admitted.
+  Qed.
 
 End CORRECTNESS.
 
@@ -2541,13 +2545,13 @@ Module CorrectnessFun
        (OpAux : OPERATORS_AUX Op)
        (Str : COINDSTREAMS Op OpAux)
        (Syn : LSYNTAX Ids Op)
+       (LCA : LCAUSALITY Ids Op Syn)
        (Ty : LTYPING Ids Op Syn)
        (Clo : LCLOCKING Ids Op Syn)
-       (LCA        : LCAUSALITY Ids Op Syn)
        (Lord : LORDERED Ids Op Syn)
        (Sem : LSEMANTICS Ids Op OpAux Syn Lord Str)
        (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Ty Clo LCA Lord Str Sem)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
-       <: CORRECTNESS Ids Op OpAux Str Syn Ty Clo LCA Lord Sem LClockSem Norm.
-  Include CORRECTNESS Ids Op OpAux Str Syn Ty Clo LCA Lord Sem LClockSem Norm.
+       (Norm : NORMALIZATION Ids Op OpAux Syn LCA)
+       <: CORRECTNESS Ids Op OpAux Str Syn LCA Ty Clo Lord Sem LClockSem Norm.
+  Include CORRECTNESS Ids Op OpAux Str Syn LCA Ty Clo Lord Sem LClockSem Norm.
 End CorrectnessFun.

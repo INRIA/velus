@@ -6,7 +6,7 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LClocking.
+From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LClocking.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
 (** * Preservation of Typing through Normalization *)
@@ -17,8 +17,9 @@ Module Type NCLOCKING
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
+       (Caus : LCAUSALITY Ids Op Syn)
        (Import Clo : LCLOCKING Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn Caus).
   Import Fresh Fresh.Facts Fresh.Tactics.
 
   (** ** Rest of clockof preservation (started in Normalization.v) *)
@@ -1600,12 +1601,13 @@ Module Type NCLOCKING
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_wt : forall G Hwl,
+  Lemma normalize_global_wt : forall G Hwl G',
       wc_global G ->
-      wc_global (normalize_global G Hwl).
+      normalize_global G Hwl = Errors.OK G' ->
+      wc_global G'.
   Proof.
-    intros * Hwc.
-    unfold normalize_global.
+    intros * Hwc Hnorm.
+    unfold normalize_global in Hnorm. destruct (Caus.check_causality _); inv Hnorm.
     eapply normfby_global_wc, untuple_global_wc, Hwc.
   Qed.
 
@@ -1616,8 +1618,9 @@ Module NClockingFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
+       (Caus : LCAUSALITY Ids Op Syn)
        (Clo : LCLOCKING Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
-       <: NCLOCKING Ids Op OpAux Syn Clo Norm.
-  Include NCLOCKING Ids Op OpAux Syn Clo Norm.
+       (Norm : NORMALIZATION Ids Op OpAux Syn Caus)
+       <: NCLOCKING Ids Op OpAux Syn Caus Clo Norm.
+  Include NCLOCKING Ids Op OpAux Syn Caus Clo Norm.
 End NClockingFun.

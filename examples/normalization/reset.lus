@@ -10,5 +10,5 @@ tel
 
 node reset2 (x : int) returns (y : int)
 let
-  y = sum(x) every (y > 42);
+  y = sum(x) every ((0 fby y) > 42);
 tel

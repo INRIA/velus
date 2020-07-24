@@ -8,10 +8,7 @@ From Velus Require Import Clocks.
 From Velus Require Import CoindStreams.
 
 From Velus Require Import Lustre.LSyntax.
-From Velus Require Import Lustre.LTyping.
-From Velus Require Import Lustre.LClocking.
-From Velus Require Import Lustre.LOrdered.
-From Velus Require Import Lustre.LSemantics.
+From Velus Require Import Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Normalization.
 
 From Velus Require Import CoreExpr.CESyntax.
@@ -25,7 +22,8 @@ Module Type COMPLETENESS
        (Import OpAux : OPERATORS_AUX Op)
        (Str  : COINDSTREAMS Op OpAux)
        (Import LSyn : LSYNTAX Ids Op)
-       (Import Norm : NORMALIZATION Ids Op OpAux LSyn)
+       (Import LCau : LCAUSALITY Ids Op LSyn)
+       (Import Norm : NORMALIZATION Ids Op OpAux LSyn LCau)
        (Import CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (Import TR : TR Ids Op OpAux LSyn CE NL).
@@ -201,12 +199,13 @@ Module Type COMPLETENESS
       rewrite Hn'. rewrite HG'. reflexivity.
   Qed.
 
-  Theorem normalize_global_complete : forall G Hwl,
-      exists G', to_global (normalize_global G Hwl) = OK G'.
+  Theorem normalize_global_complete : forall G Hwl G',
+      normalize_global G Hwl = OK G' ->
+      exists G'', to_global G' = OK G''.
   Proof.
-    intros G Hwl.
+    intros * Hnorm.
     eapply to_global_complete.
-    eapply normalize_global_normalized_global.
+    eapply normalize_global_normalized_global; eauto.
   Qed.
 End COMPLETENESS.
 
@@ -216,10 +215,11 @@ Module CompletenessFun
        (OpAux : OPERATORS_AUX Op)
        (Str  : COINDSTREAMS Op OpAux)
        (LSyn : LSYNTAX Ids Op)
-       (Norm : NORMALIZATION Ids Op OpAux LSyn)
+       (LCau : LCAUSALITY Ids Op LSyn)
+       (Norm : NORMALIZATION Ids Op OpAux LSyn LCau)
        (CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (TR : TR Ids Op OpAux LSyn CE NL)
-       <: COMPLETENESS Ids Op OpAux Str LSyn Norm CE NL TR.
-  Include COMPLETENESS Ids Op OpAux Str LSyn Norm CE NL TR.
+       <: COMPLETENESS Ids Op OpAux Str LSyn LCau Norm CE NL TR.
+  Include COMPLETENESS Ids Op OpAux Str LSyn LCau Norm CE NL TR.
 End CompletenessFun.

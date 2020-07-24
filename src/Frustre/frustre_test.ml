@@ -17,6 +17,19 @@ let rec nat_of_int i = match i with
   | 0 -> Datatypes.O
   | n -> Datatypes.S (nat_of_int (n-1))
 
+let string_of_chars chars =
+  let buf = Buffer.create 16 in
+  List.iter (Buffer.add_char buf) chars;
+  Buffer.contents buf
+
+let string_of_errcode = function
+  | Errors.MSG l -> string_of_chars l
+  | Errors.CTX id -> Frustre.string_of_ident id
+  | _ -> ""
+
+let string_of_errmsg mes =
+  String.concat "" (List.map string_of_errcode mes)
+
 module LSyn = FtoLustre.Lus.Syn
 module Norm = FtoLustre.Lus.Norm
 
@@ -40,7 +53,9 @@ let compile source_name filename =
   else (
     let p = FtoLustre.tr_global p in
     let p = Norm.Norm.normalize_global p in
-    Lustre_pp.print_global (Format.std_formatter) p
+    match p with
+    | OK p -> Lustre_pp.print_global (Format.std_formatter) p
+    | Error mes -> print_endline (string_of_errmsg mes)
   )
 
 let process file =

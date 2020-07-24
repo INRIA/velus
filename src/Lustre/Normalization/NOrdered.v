@@ -4,7 +4,7 @@ Open Scope list_scope.
 
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered.
+From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LOrdered.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
 (** * Preservation of order through normalization *)
@@ -15,8 +15,9 @@ Module Type NORDERED
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
+       (Cau : LCAUSALITY Ids Op Syn)
        (Import Ord : LORDERED Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn Cau).
 
   Import Fresh Tactics.
 
@@ -519,11 +520,13 @@ Module Type NORDERED
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_ordered : forall G Hwl,
+  Lemma normalize_global_ordered : forall G Hwl G',
       Ordered_nodes G ->
-      Ordered_nodes (normalize_global G Hwl).
+      normalize_global G Hwl = Errors.OK G' ->
+      Ordered_nodes G'.
   Proof.
-    intros * Hord.
+    intros * Hord Hnorm.
+    unfold normalize_global in Hnorm. destruct (Cau.check_causality _); inv Hnorm.
     eapply normfby_global_ordered, untuple_global_ordered, Hord.
   Qed.
 
@@ -534,8 +537,9 @@ Module NOrderedFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
+       (Cau : LCAUSALITY Ids Op Syn)
        (Lord : LORDERED Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
-       <: NORDERED Ids Op OpAux Syn Lord Norm.
-  Include NORDERED Ids Op OpAux Syn Lord Norm.
+       (Norm : NORMALIZATION Ids Op OpAux Syn Cau)
+       <: NORDERED Ids Op OpAux Syn Cau Lord Norm.
+  Include NORDERED Ids Op OpAux Syn Cau Lord Norm.
 End NOrderedFun.

@@ -2,7 +2,7 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Coq Require Import List. Import List.ListNotations. Open Scope list_scope.
-From Velus Require Import Lustre.LSyntax Lustre.LTyping.
+From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
 (** * Preservation of Typing through Normalization *)
@@ -13,8 +13,9 @@ Module Type NTYPING
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
+       (Caus : LCAUSALITY Ids Op Syn)
        (Import Typ : LTYPING Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn Caus).
   Import Fresh Facts Tactics.
 
   (** ** Preservation of typeof *)
@@ -1714,12 +1715,14 @@ Module Type NTYPING
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_wt : forall G Hwl,
+  Lemma normalize_global_wt : forall G Hwl G',
       wt_global G ->
-      wt_global (normalize_global G Hwl).
+      normalize_global G Hwl = Errors.OK G' ->
+      wt_global G'.
   Proof.
-    intros * Hwt.
-    unfold normalize_global.
+    intros * Hwt Hnorm.
+    unfold normalize_global in Hnorm.
+    destruct (Caus.check_causality _); inv Hnorm.
     eapply normfby_global_wt, untuple_global_wt, Hwt.
   Qed.
 
@@ -1730,8 +1733,9 @@ Module NTypingFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
+       (Caus : LCAUSALITY Ids Op Syn)
        (Typ : LTYPING Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
-       <: NTYPING Ids Op OpAux Syn Typ Norm.
-  Include NTYPING Ids Op OpAux Syn Typ Norm.
+       (Norm : NORMALIZATION Ids Op OpAux Syn Caus)
+       <: NTYPING Ids Op OpAux Syn Caus Typ Norm.
+  Include NTYPING Ids Op OpAux Syn Caus Typ Norm.
 End NTypingFun.

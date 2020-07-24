@@ -1,0 +1,17 @@
+node f (b : int) returns (c : int ; y : int);
+let
+  c = b + 1;
+  y = b + 2;
+tel
+
+node use_f (b : int) returns (z : int);
+var c : int; y : int;
+let
+  (c, y) = f(b);
+  z = c + y;
+tel
+
+node tuple (b : int) returns (x : int; y : int);
+let
+  (x, y) = (y, b);
+tel

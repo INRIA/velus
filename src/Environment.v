@@ -328,6 +328,19 @@ Module Env.
         intuition.
     Qed.
 
+    Lemma find_adds'_In:
+      forall x y xvs (m: t A),
+        find x (adds' xvs m) = Some y -> (List.In (x, y) xvs \/ find x m = Some y).
+    Proof.
+      induction xvs as [|(x', v')]; simpl.
+      - firstorder.
+      - intros. apply IHxvs in H.
+        destruct H as [H|H]; auto.
+        destruct (PositiveMap.E.eq_dec x x'); subst.
+        + rewrite PositiveMap.gss in H. inv H; auto.
+        + rewrite PositiveMap.gso in H; auto.
+    Qed.
+
     Corollary In_adds_spec:
       forall x xs vs (m: t A),
         length xs = length vs ->
@@ -1395,6 +1408,31 @@ Module Env.
       - inv HH; auto. take (InMembers _ _) and apply IH in it; auto.
       - destruct HH as [HH|HH]; subst. now constructor.
         apply fst_InMembers in HH. now constructor 2.
+    Qed.
+
+    Lemma dom_elements: forall (e : t V),
+        dom e (List.map fst (elements e)).
+    Proof.
+      intros * x; rewrite Props.P.F.elements_in_iff; split.
+      - intros [v Hin]. rewrite InA_alt in Hin. destruct Hin as [[x' v'] [Heq Hin]].
+        rewrite in_map_iff. exists (x', v'); simpl; split; auto.
+        inv Heq; simpl in *. inv H; auto.
+      - intro Hin. apply in_map_iff in Hin as [[x' v'] [? Hin]]; simpl; subst.
+        exists v'; simpl. apply In_InA; auto. apply Props.P.eqke_equiv.
+    Qed.
+
+    Lemma dom_Perm : forall e xs ys,
+        NoDup xs ->
+        NoDup ys ->
+        dom e xs ->
+        dom e ys ->
+        Permutation xs ys.
+    Proof.
+      intros * Hnd1 Hnd2 Hdom1 Hdom2.
+      unfold dom in *.
+      apply NoDup_Permutation; auto.
+      intros x.
+      rewrite <- Hdom1, <- Hdom2. reflexivity.
     Qed.
 
     Global Opaque dom.

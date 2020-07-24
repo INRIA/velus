@@ -5,5 +5,5 @@ tel
 
 node count_bananas (banana : bool) returns (n : int)
 let
-  n = merge banana (cumulative_sum(1 when banana)) (n when not banana);
+  n = merge banana (cumulative_sum(1 when banana)) ((0 fby n) when not banana);
 tel

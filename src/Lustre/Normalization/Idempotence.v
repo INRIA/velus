@@ -6,7 +6,7 @@ Require Import ProofIrrelevance.
 
 From Velus Require Import Common Ident.
 From Velus Require Import Operators.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping.
+From Velus Require Import Lustre.LSyntax Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
 (** * Idempotence of the normalization *)
@@ -17,7 +17,8 @@ Module Type IDEMPOTENCE
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Import Syn : LSYNTAX Ids Op)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn).
+       (Cau : LCAUSALITY Ids Op Syn)
+       (Import Norm : NORMALIZATION Ids Op OpAux Syn Cau).
 
   Import Fresh Fresh.Fresh Facts Tactics.
 
@@ -414,26 +415,28 @@ Module Type IDEMPOTENCE
     apply normalized_node_untupled_node; auto.
   Qed.
 
-  Lemma normalized_global_normalize_idem : forall G Hunt,
-      normalized_global G ->
-      normalize_global G Hunt = G.
-  Proof.
-    intros * Hnormed.
-    unfold normalize_global.
-    erewrite normalized_global_normfby_idem.
-    - eapply normalized_global_untupled_global in Hnormed.
-      eapply untupled_global_untuple_idem; eauto.
-    - erewrite untupled_global_untuple_idem; eauto.
-      eapply normalized_global_untupled_global in Hnormed; eauto.
-  Qed.
+  (* FIXME *)
+  (* Lemma normalized_global_normalize_idem : forall G Hunt, *)
+  (*     normalized_global G -> *)
+  (*     normalize_global G Hunt = Errors.OK G' -> *)
+  (*     G = G'. *)
+  (* Proof. *)
+  (*   intros * Hnormed. *)
+  (*   unfold normalize_global. *)
+  (*   erewrite normalized_global_normfby_idem. *)
+  (*   - eapply normalized_global_untupled_global in Hnormed. *)
+  (*     eapply untupled_global_untuple_idem; eauto. *)
+  (*   - erewrite untupled_global_untuple_idem; eauto. *)
+  (*     eapply normalized_global_untupled_global in Hnormed; eauto. *)
+  (* Qed. *)
 
-  Theorem normalize_global_idem : forall G Hwl1 Hwl2,
-      normalize_global (normalize_global G Hwl1) Hwl2 = normalize_global G Hwl1.
-  Proof.
-    intros G Hwl1 Hwl2.
-    apply normalized_global_normalize_idem.
-    apply normalize_global_normalized_global.
-  Qed.
+  (* Theorem normalize_global_idem : forall G Hwl1 Hwl2, *)
+  (*     normalize_global (normalize_global G Hwl1) Hwl2 = normalize_global G Hwl1. *)
+  (* Proof. *)
+  (*   intros G Hwl1 Hwl2. *)
+  (*   apply normalized_global_normalize_idem. *)
+  (*   apply normalize_global_normalized_global. *)
+  (* Qed. *)
 End IDEMPOTENCE.
 
 Module IdempotenceFun
@@ -441,7 +444,8 @@ Module IdempotenceFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
-       (Norm : NORMALIZATION Ids Op OpAux Syn)
-       <: IDEMPOTENCE Ids Op OpAux Syn Norm.
-  Include IDEMPOTENCE Ids Op OpAux Syn Norm.
+       (Cau : LCAUSALITY Ids Op Syn)
+       (Norm : NORMALIZATION Ids Op OpAux Syn Cau)
+       <: IDEMPOTENCE Ids Op OpAux Syn Cau Norm.
+  Include IDEMPOTENCE Ids Op OpAux Syn Cau Norm.
 End IdempotenceFun.
