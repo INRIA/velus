@@ -2537,6 +2537,22 @@ Module Type CORRECTNESS
     - eapply untuple_global_sem_clock_inputs...
   Qed.
 
+  (** ** In addition : normalization only produces causal nodes *)
+
+  Lemma normalize_global_causal : forall G Hwl G',
+      wc_global G ->
+      normalize_global G Hwl = Errors.OK G' ->
+      Forall LCA.node_causal G'.
+  Proof.
+    intros * Hwc Hnorm.
+    unfold normalize_global in Hnorm.
+    apply Errors.bind_inversion in Hnorm as [? [H1 H2]]. inv H2.
+    eapply Causality.normfby_global_causal.
+    2:apply Causality.check_causality_correct in H1; eauto.
+    1,3:eapply untuple_global_wc in Hwc; eauto.
+    eapply untuple_global_untupled_global.
+  Qed.
+
 End CORRECTNESS.
 
 Module CorrectnessFun

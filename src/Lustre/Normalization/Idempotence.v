@@ -415,28 +415,31 @@ Module Type IDEMPOTENCE
     apply normalized_node_untupled_node; auto.
   Qed.
 
-  (* FIXME *)
-  (* Lemma normalized_global_normalize_idem : forall G Hunt, *)
-  (*     normalized_global G -> *)
-  (*     normalize_global G Hunt = Errors.OK G' -> *)
-  (*     G = G'. *)
-  (* Proof. *)
-  (*   intros * Hnormed. *)
-  (*   unfold normalize_global. *)
-  (*   erewrite normalized_global_normfby_idem. *)
-  (*   - eapply normalized_global_untupled_global in Hnormed. *)
-  (*     eapply untupled_global_untuple_idem; eauto. *)
-  (*   - erewrite untupled_global_untuple_idem; eauto. *)
-  (*     eapply normalized_global_untupled_global in Hnormed; eauto. *)
-  (* Qed. *)
+  Lemma normalized_global_normalize_idem : forall G G' Hwl,
+      normalized_global G ->
+      normalize_global G Hwl = Errors.OK G' ->
+      G = G'.
+  Proof.
+    intros * Hnormed Hnorm.
+    unfold normalize_global in Hnorm.
+    apply Errors.bind_inversion in Hnorm as [? [H1 H2]]; inv H2.
+    assert (untuple_global G Hwl = G) as Heq1.
+    { apply untupled_global_untuple_idem.
+      eapply normalized_global_untupled_global; eauto. }
+    rewrite <- Heq1 at 1.
+    erewrite normalized_global_normfby_idem; auto.
+    congruence.
+  Qed.
 
-  (* Theorem normalize_global_idem : forall G Hwl1 Hwl2, *)
-  (*     normalize_global (normalize_global G Hwl1) Hwl2 = normalize_global G Hwl1. *)
-  (* Proof. *)
-  (*   intros G Hwl1 Hwl2. *)
-  (*   apply normalized_global_normalize_idem. *)
-  (*   apply normalize_global_normalized_global. *)
-  (* Qed. *)
+  Theorem normalize_global_idem : forall G Hwl1 G' Hwl2 G'',
+      normalize_global G Hwl1 = Errors.OK G' ->
+      normalize_global G' Hwl2 = Errors.OK G'' ->
+      G' = G''.
+  Proof.
+    intros * Hnorm1 Hnorm2.
+    eapply normalized_global_normalize_idem; eauto.
+    eapply normalize_global_normalized_global; eauto.
+  Qed.
 End IDEMPOTENCE.
 
 Module IdempotenceFun
