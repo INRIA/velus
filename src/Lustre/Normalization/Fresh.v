@@ -196,38 +196,38 @@ Module Fresh : FRESH.
   Section validity_reuse.
     Context {B : Type}.
     Definition st_valid_reuse (st : fresh_st B) (aft : PS.t) (reusable : PS.t) : Prop :=
-      st_valid_after st aft /\
-      NoDup (PSP.to_list aft++PSP.to_list reusable) /\
       let '(n, l) := st in
+      Forall (fun '(x, _) => Pos.lt x n) l /\
+      PS.For_all (fun x => Pos.lt x n) aft /\
       PS.For_all (fun x => Pos.lt x n) reusable /\
-      PS.For_all (fun x => ~In x (st_ids st)) reusable.
+      NoDup (map fst l++PSP.to_list aft++PSP.to_list reusable).
 
     Fact st_valid_reuse_st_valid : forall st aft reusable,
         st_valid_reuse st aft reusable ->
         st_valid_after st aft.
-    Proof. intros ? ? ? [? _]; auto. Qed.
+    Proof.
+      intros [? ?] * [? [? [? Hndup]]].
+      repeat constructor; auto.
+      rewrite app_assoc in Hndup.
+      eapply NoDup_app_l in Hndup; auto.
+    Qed.
 
     Fact st_valid_reuse_NoDup : forall st aft reusable,
         st_valid_reuse st aft reusable ->
         NoDup (st_ids st++PSP.to_list aft++PSP.to_list reusable).
     Proof.
-      intros [? ?] * [[? [? ?]] [? [? ?]]].
-      rewrite PS_For_all_Forall in *.
-      unfold st_ids, st_anns in *; simpl in *. rewrite app_assoc.
-      apply NoDup_app'; auto. 1:apply PS_elements_NoDup.
-      apply Forall_app; split.
-      - clear - H4.
-        rewrite Forall_forall in *. intros x Hin contra.
-        apply H4 in contra; auto.
-      - clear - H2.
-        rewrite Forall_forall. intros x Hin.
-        eapply NoDup_app_In in H2; eauto.
+      intros [? ?] * [? [? [? ?]]]; auto.
     Qed.
 
     Fact st_valid_reuse_nIn : forall st aft reusable,
         st_valid_reuse st aft reusable ->
         PS.For_all (fun x => ~In x (st_ids st)) reusable.
-    Proof. intros [? ?] ? ? [? [? [? ?]]]; auto. Qed.
+    Proof.
+      intros [? ?] ? ? [? [? [? Hndup]]].
+      rewrite Permutation_app_comm, <- app_assoc in Hndup.
+      rewrite PS_For_all_Forall. eapply Forall_forall. intros ? Hin.
+      eapply NoDup_app_r, NoDup_app_In in Hndup; eauto.
+    Qed.
 
     Fact st_valid_reuse_PSeq : forall st aft re1 re2,
         PS.eq re1 re2 ->
@@ -307,10 +307,8 @@ Module Fresh : FRESH.
         PS.For_all (fun x => Pos.lt x id) reusable ->
         st_valid_reuse (init_st id) aft reusable.
     Proof.
-      intros id ids Hnd Hps. unfold init_st.
+      intros * Hnd Hps. unfold init_st.
       repeat constructor; simpl; auto.
-      - apply PS_elements_NoDup.
-      - intros x HIn. simpl. congruence.
     Qed.
   End init.
 
@@ -335,18 +333,15 @@ Module Fresh : FRESH.
         st_valid_after st aft ->
         st_valid_after st' aft.
     Proof.
-      intros b res [n l] [n' l'] aft Hfresh Hvalid.
+      intros b res [n l] [n' l'] aft Hfresh [Hv1 [Hv2 Hv3]].
       simpl in Hfresh; inv Hfresh.
-      destruct Hvalid as [Hv1 [Hv2 Hv3]].
       repeat constructor; auto.
       - apply Positive_as_DT.lt_succ_diag_r.
       - eapply Forall_impl; eauto.
         intros [x _] Hlt'.
         apply Positive_as_OT.lt_lt_succ; auto.
-      - intros x HIn.
-        apply Hv2 in HIn.
-        rewrite Positive_as_DT.lt_succ_r.
-        apply Positive_as_OT.lt_le_incl; auto.
+      - eapply PS_For_all_impl_In; eauto. intros ? _ Hlt'.
+        eapply Positive_as_OT.lt_lt_succ; auto.
       - intro contra; simpl in contra.
         rewrite in_app_iff in contra.
         destruct contra.
@@ -366,22 +361,33 @@ Module Fresh : FRESH.
         st_valid_reuse st aft reusable ->
         st_valid_reuse st' aft reusable.
     Proof.
-      intros b id st st' aft reusable Hfresh [Hv1 [Hv2 Hv3]].
-      constructor; auto.
-      - eapply fresh_ident_st_valid; eauto.
-      - destruct st as [n l]; destruct st' as [n' l'].
-        destruct Hv3 as [Hv3 Hv4].
+      intros b id [n l] [n' l'] * Hfresh [Hv1 [Hv2 [Hv3 Hv4]]].
+      simpl in Hfresh; inv Hfresh.
+      repeat constructor; auto; simpl.
+      - apply Positive_as_DT.lt_succ_diag_r.
+      - eapply Forall_impl; eauto. intros [? _] Hlt'.
+        apply Positive_as_OT.lt_lt_succ; auto.
+      - eapply PS_For_all_impl_In; eauto. intros ? _ Hlt'.
+        eapply Positive_as_OT.lt_lt_succ; auto.
+      - eapply PS_For_all_impl_In; eauto. intros ? _ Hlt'.
+        eapply Positive_as_OT.lt_lt_succ; auto.
+      - intro contra; simpl in contra.
+        repeat rewrite in_app_iff in contra.
+        destruct contra as [?|[?|?]].
         repeat constructor; auto.
-        + unfold fresh_ident in Hfresh. inv Hfresh.
-          intros ? HIn. apply Hv3 in HIn.
-          rewrite Positive_as_OT.lt_succ_r.
-          apply Positive_as_OT.lt_le_incl; auto.
-        + unfold fresh_ident in Hfresh. inv Hfresh.
-          intros ? HIn.
-          specialize (Hv3 _ HIn); specialize (Hv4 _ HIn); simpl in *.
-          intro contra. destruct contra.
-          * subst. apply Pos.lt_irrefl in Hv3; auto.
-          * unfold st_ids in Hv4 . simpl in Hv4. congruence.
+        + rewrite (in_map_iff fst l id) in H.
+          destruct H as [[? ?] [? Hin]]; subst.
+          rewrite Forall_forall in Hv1.
+          apply Hv1 in Hin; simpl in Hin.
+          apply Pos.lt_irrefl in Hin; auto.
+        + rewrite PS_For_all_Forall in Hv2.
+          rewrite Forall_forall in Hv2.
+          apply Hv2 in H; simpl in H.
+          apply Pos.lt_irrefl in H; auto.
+        + rewrite PS_For_all_Forall in Hv3.
+          rewrite Forall_forall in Hv3.
+          apply Hv3 in H; simpl in H.
+          apply Pos.lt_irrefl in H; auto.
     Qed.
 
     Fact fresh_ident_st_follows :
@@ -443,39 +449,13 @@ Module Fresh : FRESH.
         st_valid_reuse st aft (PS.add id reusable) ->
         st_valid_reuse st' aft reusable.
     Proof with eauto.
-      intros b id [n l] [n' l'] aft reusable Hnin Hreuse Hvalid.
+      intros b id [n l] [n' l'] aft reusable Hnin Hreuse [Hv1 [Hv2 [Hv3 Hv4]]].
       unfold reuse_ident in Hreuse. inv Hreuse.
-      destruct Hvalid as [[Hv1 [Hv2 Hv3]] [Hv4 [Hv5 Hv6]]].
       repeat constructor...
-      - rewrite PS_For_all_add in Hv5. destruct Hv5...
-      - intro contra; simpl in contra.
-        rewrite in_app_iff in contra.
-        destruct contra.
-        + rewrite (in_map_iff fst l id) in H.
-          destruct H as [[? ?] [? HIn']]; subst; simpl in *.
-          rewrite PS_For_all_add in Hv6. destruct Hv6 as [HIn _].
-          unfold st_ids in HIn; simpl in HIn.
-          apply HIn. rewrite in_map_iff. exists (i, b0)...
-        + eapply NoDup_app_In in Hv4; eauto.
-          rewrite In_PS_elements in Hv4. apply Hv4, PSF.add_1...
-      - apply NoDup_app'.
-        + apply PS_elements_NoDup.
-        + apply PS_elements_NoDup.
-        + rewrite <- PS_For_all_Forall. intros ? Hin.
-          rewrite <- In_PS_elements in Hin.
-          eapply NoDup_app_In in Hv4; eauto.
-          rewrite In_PS_elements in *.
-          intro contra. apply Hv4. apply PSF.add_2...
-      - intros id' HIn'.
-        apply PS_For_all_add in Hv5. destruct Hv5 as [_ Hv5].
-        apply Hv5 in HIn'...
-      - intros id' HIn' contra.
-        unfold st_ids in contra; simpl in contra.
-        destruct contra; subst.
-        + congruence.
-        + rewrite PS_For_all_add in Hv6. destruct Hv6 as [_ Hv6].
-          eapply Hv6 in HIn'.
-          unfold st_ids in HIn'; simpl in *...
+      1,2:apply PS_For_all_add in Hv3 as [? ?]...
+      1,2:(rewrite Permutation_elements_add in Hv4; auto;
+           repeat rewrite <- Permutation_middle in Hv4;
+           inv Hv4; auto).
     Qed.
 
     Fact reuse_ident_st_follows : forall b id st st',
