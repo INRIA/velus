@@ -2130,8 +2130,6 @@ Module Type NCAUSALITY
     + apply bind_inversion in Hcheck as [? [? Hcheck]]; eauto.
   Qed.
 
-  (* TODO a normalized node is causal *)
-
 End NCAUSALITY.
 
 Module NCausalityFun

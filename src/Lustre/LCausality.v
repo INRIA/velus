@@ -240,13 +240,6 @@ Module Type LCAUSALITY
                                   | hd::_ => Some (hd, frees)
                                   end) (n_eqs n))
                      ++(map (fun '(x, _) => (x, [])) (n_in n))).
-    (* let inputenv := Env.adds (map fst (n_in n)) (map (fun _ => []) (n_in n)) (@Env.empty (list ident)) in *)
-    (* fold_left (fun env eq => *)
-    (*              let frees := collect_free_lefts varmap (snd eq) in *)
-    (*              match (fst eq) with *)
-    (*              | [] => env *)
-    (*              | hd::_ => Env.add hd frees env *)
-    (*              end) (n_eqs n) inputenv. *)
 
   Definition check_node_causality (n : node) :=
     if check_graph (build_graph n)

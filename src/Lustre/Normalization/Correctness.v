@@ -2499,7 +2499,7 @@ Module Type CORRECTNESS
     - eapply untuple_global_sem_clock_inputs...
   Qed.
 
-  (** ** In addition : normalization only produces causal nodes *)
+  (** ** In addition : normalization only produces causal programs *)
 
   Lemma normalize_global_causal : forall G Hwl G',
       wc_global G ->

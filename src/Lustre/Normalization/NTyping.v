@@ -509,9 +509,6 @@ Module Type NTYPING
         match goal with
         | Hnorm : normalize_exp _ _ _ = _, H : context [normalize_exp _ _ _ = _ -> _] |- _ =>
           eapply H in Hnorm as [? ?]; eauto;
-          split; try solve_forall
-        | Hnorm : normalize_exp _ _ _ = _, H : context [normalize_exp _ _ _ = _ -> _] |- _ =>
-          eapply H in Hnorm as [? ?]; eauto;
           [split|]; try solve_forall; repeat solve_incl
         end.
       repeat inv_bind.
