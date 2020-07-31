@@ -1562,17 +1562,17 @@ Module Type CORRECTNESS
     constructor; simpl; auto.
   Qed.
 
-  CoFixpoint shift (v : Op.val) (str : Stream OpAux.value) :=
+  CoFixpoint delay (v : Op.val) (str : Stream OpAux.value) :=
     match str with
-    | (present v') ⋅ str' => (present v) ⋅ (shift v' str')
-    | absent ⋅ str' => absent ⋅ (shift v str')
+    | (present v') ⋅ str' => (present v) ⋅ (delay v' str')
+    | absent ⋅ str' => absent ⋅ (delay v str')
     end.
 
-  Fact shift_Cons : forall v y ys,
-      shift v (y ⋅ ys) =
+  Fact delay_Cons : forall v y ys,
+      delay v (y ⋅ ys) =
       match y with
-      | present v' => (present v) ⋅ (shift v' ys)
-      | absent => absent ⋅ (shift v ys)
+      | present v' => (present v) ⋅ (delay v' ys)
+      | absent => absent ⋅ (delay v ys)
       end.
   Proof.
     intros v y ys.
@@ -1580,9 +1580,9 @@ Module Type CORRECTNESS
     destruct y; reflexivity.
   Qed.
 
-  Add Parametric Morphism : shift
+  Add Parametric Morphism : delay
       with signature eq ==> @EqSt value ==> @EqSt value
-    as shift_EqSt.
+    as delay_EqSt.
   Proof.
     cofix CoFix.
     intros v [x xs] [y ys] Heq.
@@ -1592,13 +1592,13 @@ Module Type CORRECTNESS
     + destruct y; auto.
   Qed.
 
-  Lemma shift_const : forall bs v,
-      shift v (const_val bs v) ≡ (const_val bs v).
+  Lemma delay_const : forall bs v,
+      delay v (const_val bs v) ≡ (const_val bs v).
   Proof.
     cofix CoFix.
     intros [b bs] v.
     rewrite const_val_Cons.
-    destruct b; rewrite shift_Cons; constructor; simpl; auto.
+    destruct b; rewrite delay_Cons; constructor; simpl; auto.
   Qed.
 
   Lemma ite_false : forall bs xs ys,
@@ -1612,77 +1612,43 @@ Module Type CORRECTNESS
     inv Hsync1; inv Hsync2; constructor; auto.
   Qed.
 
-  Lemma fby1_shift : forall bs v y ys,
+  Lemma delay_fby1 : forall bs v y ys,
       synchronized ys bs ->
-      fby1 y (const_val bs v) ys (shift y ys).
+      fby1 y (const_val bs v) ys (delay y ys).
   Proof with eauto.
-    cofix fby1_shift.
+    cofix delay_fby1.
     intros [b bs] v y ys Hsync.
-    specialize (fby1_shift bs).
+    specialize (delay_fby1 bs).
     inv Hsync;
       rewrite const_val_Cons; rewrite unfold_Stream; simpl.
     - constructor...
     - constructor...
   Qed.
 
-  Lemma fby1_shift' : forall y y0s ys zs,
+  Lemma delay_fby1' : forall y y0s ys zs,
       fby1 y y0s ys zs ->
-      zs ≡ (shift y ys).
+      zs ≡ (delay y ys).
   Proof.
     cofix CoFix.
     intros y y0s ys zs Hfby1.
     inv Hfby1; constructor; simpl; eauto.
   Qed.
 
-  CoFixpoint prefix_with_val b (v : Op.val) (ys : Stream OpAux.value) :=
-    match (Streams.hd b) with
-    | true => shift v ys
-    | false => absent ⋅ (prefix_with_val (Streams.tl b) v (Streams.tl ys))
-    end.
-
-  Fact prefix_with_val_Cons : forall b bs v ys,
-      prefix_with_val (b ⋅ bs) v ys =
-      match b with
-      | true => shift v ys
-      | false => absent ⋅ (prefix_with_val bs v (Streams.tl ys))
-      end.
-  Proof.
-    intros b bs v ys.
-    rewrite unfold_Stream at 1; simpl.
-    destruct b; auto.
-    destruct (shift v ys); auto.
-  Qed.
-
-  Instance prefix_with_val_Proper:
-    Proper (@EqSt bool ==> eq ==> @EqSt value ==> @EqSt value)
-           prefix_with_val.
-  Proof.
-    intros bs bs' Heq1 v v' ? vs vs' Heq2; subst.
-    revert bs bs' Heq1 vs vs' Heq2.
-    cofix CoFix.
-    intros [b bs] [b' bs'] Heq1 [x xs] [y ys] Heq2.
-    inv Heq1; inv Heq2; simpl in *; subst.
-    repeat rewrite prefix_with_val_Cons.
-    destruct b'.
-    - rewrite H2. reflexivity.
-    - constructor; simpl; auto.
-  Qed.
-
-  Lemma prefix_with_val_fby : forall b v y,
+  Lemma delay_fby : forall b v y,
       synchronized y b ->
-      fby (const_val b v) y (prefix_with_val b v y).
+      fby (const_val b v) y (delay v y).
   Proof with eauto.
-    cofix prefix_with_val_fby.
-    intros [b0 b] v y Hsync.
+    cofix delay_fby.
+    intros [b bs] v y Hsync.
     rewrite const_val_Cons.
     rewrite unfold_Stream; simpl.
-    destruct b0; simpl; inv Hsync.
-    - econstructor. eapply fby1_shift...
+    destruct b; simpl; inv Hsync.
+    - econstructor. eapply delay_fby1...
     - econstructor; simpl...
   Qed.
 
   Definition init_stream bs :=
-    prefix_with_val bs true_val (Str.const bs false_const).
+    delay true_val (Str.const bs false_const).
 
   Instance init_stream_Proper:
     Proper (@EqSt bool ==> @EqSt value) init_stream.
@@ -1694,30 +1660,27 @@ Module Type CORRECTNESS
   Lemma fby_ite : forall bs v y0s ys zs,
       (synchronized y0s bs \/ synchronized ys bs \/ synchronized zs bs) ->
       fby y0s ys zs ->
-      ite (prefix_with_val bs true_val (const_val bs false_val)) y0s (prefix_with_val bs v ys) zs.
+      ite (delay true_val (const_val bs false_val)) y0s (delay v ys) zs.
   Proof with eauto.
     cofix fby_init_stream_ite.
     intros [b bs] v y0s ys zs Hsync Hfby1.
     apply fby_synchronized in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
-    specialize (prefix_with_val_fby _ v _ Hsync2) as Hfby2.
-    specialize (fby_init_stream_ite bs v).
     destruct b; inv Hsync1; inv Hsync2; inv Hsync3.
-    - repeat rewrite prefix_with_val_Cons in *. repeat rewrite const_val_Cons in *.
+    - repeat rewrite const_val_Cons.
       inv Hfby1.
-      repeat rewrite shift_Cons. constructor.
-      rewrite shift_const.
-      rewrite <- fby1_shift'...
+      repeat rewrite delay_Cons. constructor.
+      rewrite delay_const.
+      rewrite <- delay_fby1'...
       apply ite_false...
-    - repeat rewrite prefix_with_val_Cons in *. constructor; simpl in *.
-      rewrite const_val_Cons in Hfby2.
-      inv Hfby1. inv Hfby2.
-      eapply fby_init_stream_ite...
+    - rewrite const_val_Cons. repeat rewrite delay_Cons.
+      inv Hfby1.
+      constructor; auto.
   Qed.
 
   Corollary fby_init_stream_ite : forall bs v y0s ys zs,
       (synchronized y0s bs \/ synchronized ys bs \/ synchronized zs bs) ->
       fby y0s ys zs ->
-      ite (init_stream bs) y0s (prefix_with_val bs v ys) zs.
+      ite (init_stream bs) y0s (delay v ys) zs.
   Proof.
     intros * Hsync Hfby1.
     eapply fby_ite in Hfby1; eauto.
@@ -1725,25 +1688,12 @@ Module Type CORRECTNESS
     rewrite const_val_const. rewrite sem_false_const. eassumption.
   Qed.
 
-  Lemma ac_shift : forall c vs,
-      abstract_clock (shift c vs) ≡ abstract_clock vs.
+  Lemma ac_delay : forall c vs,
+      abstract_clock (delay c vs) ≡ abstract_clock vs.
   Proof.
     cofix CoFix. intros c [v vs].
-    rewrite shift_Cons.
+    rewrite delay_Cons.
     destruct v; constructor; simpl; auto.
-  Qed.
-
-  Lemma ac_prefix_with_val : forall bs vs c,
-      abstract_clock vs ≡ bs ->
-      abstract_clock (prefix_with_val bs c vs) ≡ bs.
-  Proof.
-    cofix CoFix.
-    intros [b bs] [v vs] c Hsync.
-    rewrite prefix_with_val_Cons.
-    destruct b; simpl.
-    - rewrite ac_shift; auto.
-    - constructor; simpl; auto.
-      apply CoFix. inv Hsync; destruct v; simpl in *; auto.
   Qed.
 
   Lemma init_stream_ac : forall bs,
@@ -1751,8 +1701,7 @@ Module Type CORRECTNESS
   Proof.
     intros bs.
     unfold init_stream.
-    apply ac_prefix_with_val.
-    symmetry. eapply ac_const. reflexivity.
+    rewrite ac_delay, <- ac_const. 1,2:reflexivity.
   Qed.
 
   (** *** Additional stuff *)
@@ -1990,7 +1939,7 @@ Module Type CORRECTNESS
           -- apply add_whens_sem_exp. eauto using sem_clock_refines.
           -- unfold init_stream.
              repeat rewrite const_val_const; subst.
-             rewrite <- sem_true_const. apply prefix_with_val_fby.
+             rewrite <- sem_true_const. apply delay_fby.
              rewrite <- const_val_const. apply const_synchronized.
         * econstructor. 2:reflexivity.
           rewrite HeqH'. apply Env.add_1. reflexivity.
@@ -2054,16 +2003,15 @@ Module Type CORRECTNESS
       eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
       2: rewrite map_fst_idck...
       remember (abstract_clock y0) as bs'.
-      remember (prefix_with_val bs' (Op.sem_const (Op.init_type ty)) y) as y'.
+      remember (delay (Op.sem_const (Op.init_type ty)) y) as y'.
       remember (Env.add x2 y' H') as H''.
       assert (Env.refines eq H' H'') by (destruct Histst1; eapply fresh_ident_refines in H1; eauto).
       assert (hist_st (idck vars) bs H'' st') as Histst2.
       { eapply fresh_ident_hist_st in H1; eauto.
         rewrite HeqH''...
-        rewrite Heqy', ac_prefix_with_val.
+        rewrite Heqy', ac_delay.
         1: eapply sem_clock_refines; eauto.
-        rewrite Heqbs', ac_fby2; eauto.
-        symmetry. eapply ac_fby1; eauto. }
+        rewrite ac_fby2, <- ac_fby1, <- Heqbs'; eauto. }
       exists H''. repeat (split; eauto); try constructor.
       + etransitivity; eauto.
       + rewrite map_fst_idck in Hvalid1...
@@ -2081,7 +2029,7 @@ Module Type CORRECTNESS
           -- eapply sem_exp_refines; [| eauto]. etransitivity...
           -- rewrite Heqy'.
              rewrite const_val_const.
-             eapply prefix_with_val_fby.
+             eapply delay_fby.
              eapply fby_synchronized in Hfby as [_ [? _]]; eauto.
              left. rewrite Heqbs'. apply ac_synchronized.
         * econstructor.
