@@ -734,7 +734,7 @@ Module Type CORRECTNESS
       rewrite <- fst_InMembers. now apply In_InMembers in Hmem.
       simpl in *.
       eapply sem_var_det in Hvar; eauto. rewrite <- Hvar.
-      apply ac_synchronized.
+      apply ac_aligned.
     - pose proof (Forall2_in_left _ _ _ _ Hins Hin) as (?&?&?); eauto.
   Qed.
 

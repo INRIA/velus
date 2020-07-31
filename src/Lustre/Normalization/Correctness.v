@@ -1602,8 +1602,8 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma ite_false : forall bs xs ys,
-      synchronized xs bs ->
-      synchronized ys bs ->
+      aligned xs bs ->
+      aligned ys bs ->
       ite (const_val bs false_val) xs ys ys.
   Proof.
     cofix CoFix.
@@ -1613,7 +1613,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma delay_fby1 : forall bs v y ys,
-      synchronized ys bs ->
+      aligned ys bs ->
       fby1 y (const_val bs v) ys (delay y ys).
   Proof with eauto.
     cofix delay_fby1.
@@ -1635,7 +1635,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma delay_fby : forall b v y,
-      synchronized y b ->
+      aligned y b ->
       fby (const_val b v) y (delay v y).
   Proof with eauto.
     cofix delay_fby.
@@ -1658,13 +1658,13 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma fby_ite : forall bs v y0s ys zs,
-      (synchronized y0s bs \/ synchronized ys bs \/ synchronized zs bs) ->
+      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       fby y0s ys zs ->
       ite (delay true_val (const_val bs false_val)) y0s (delay v ys) zs.
   Proof with eauto.
     cofix fby_init_stream_ite.
     intros [b bs] v y0s ys zs Hsync Hfby1.
-    apply fby_synchronized in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
+    apply fby_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
     destruct b; inv Hsync1; inv Hsync2; inv Hsync3.
     - repeat rewrite const_val_Cons.
       inv Hfby1.
@@ -1678,7 +1678,7 @@ Module Type CORRECTNESS
   Qed.
 
   Corollary fby_init_stream_ite : forall bs v y0s ys zs,
-      (synchronized y0s bs \/ synchronized ys bs \/ synchronized zs bs) ->
+      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       fby y0s ys zs ->
       ite (init_stream bs) y0s (delay v ys) zs.
   Proof.
@@ -1937,7 +1937,7 @@ Module Type CORRECTNESS
           -- unfold init_stream.
              repeat rewrite const_val_const; subst.
              rewrite <- sem_true_const. apply delay_fby.
-             rewrite <- const_val_const. apply const_synchronized.
+             rewrite <- const_val_const. apply const_aligned.
         * econstructor. 2:reflexivity.
           rewrite HeqH'. apply Env.add_1. reflexivity.
   Qed.
@@ -2018,7 +2018,7 @@ Module Type CORRECTNESS
         * econstructor.
           rewrite HeqH''. eapply Env.add_1. 1,2:reflexivity.
         * subst. eapply fby_init_stream_ite...
-          left. apply ac_synchronized.
+          left. apply ac_aligned.
       + apply Seq with (ss:=[[y']]); repeat constructor.
         * eapply Sfby with (s0ss:=[[const bs' (init_type ty)]]) (sss:=[[y]]); repeat constructor.
           -- eapply add_whens_sem_exp...
@@ -2027,8 +2027,8 @@ Module Type CORRECTNESS
           -- rewrite Heqy'.
              rewrite const_val_const.
              eapply delay_fby.
-             eapply fby_synchronized in Hfby as [_ [? _]]; eauto.
-             left. rewrite Heqbs'. apply ac_synchronized.
+             eapply fby_aligned in Hfby as [_ [? _]]; eauto.
+             left. rewrite Heqbs'. apply ac_aligned.
         * econstructor.
           rewrite HeqH''. apply Env.add_1. 1,2:reflexivity.
       + solve_forall. eapply sem_equation_refines...

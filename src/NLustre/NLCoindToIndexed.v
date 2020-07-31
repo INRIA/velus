@@ -580,9 +580,9 @@ Module Type NLCOINDTOINDEXED
     Hint Resolve tr_clocks_of.
 
     (** Give an indexed specification for Streams synchronization. *)
-    Lemma synchronized_index:
+    Lemma aligned_index:
       forall xs bs,
-        synchronized xs bs ->
+        aligned xs bs ->
         forall n, tr_Stream bs n = true <-> tr_Stream xs n <> absent.
     Proof.
       intros * Sync n; revert dependent xs; revert bs; induction n; intros.
@@ -602,7 +602,7 @@ Module Type NLCOINDTOINDEXED
       apply Sem in Var as (bs & Clock & Sync); rename Var' into Var.
       apply sem_var_impl in Var;
         apply sem_clock_impl in Clock.
-      pose proof (synchronized_index _ _ Sync) as Spec.
+      pose proof (aligned_index _ _ Sync) as Spec.
       intro n; specialize (Var n); specialize (Clock n).
       split; split.
       - intros * Clock'.

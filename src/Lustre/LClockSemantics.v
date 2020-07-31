@@ -260,21 +260,21 @@ Module Type LCLOCKSEMANTICS
     unfold_Stv ys; inv Hfby1; econstructor; simpl; eauto.
   Qed.
 
-  Lemma fby_synchronized : forall bs xs ys zs,
+  Lemma fby_aligned : forall bs xs ys zs,
       fby xs ys zs ->
-      (synchronized xs bs \/ synchronized ys bs \/ synchronized zs bs) ->
-      (synchronized xs bs /\ synchronized ys bs /\ synchronized zs bs).
+      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
+      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
   Proof with eauto.
     intros bs xs ys zs Hfby.
     specialize (ac_fby1 _ _ _ Hfby) as Hac1. specialize (ac_fby2 _ _ _ Hfby) as Hac2.
-    specialize (ac_synchronized xs) as Hs1. specialize (ac_synchronized ys) as Hs2. specialize (ac_synchronized zs) as Hs3.
+    specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
     intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
-    - eapply synchronized_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
-    - eapply synchronized_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
-    - eapply synchronized_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
-    - eapply synchronized_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
-    - eapply synchronized_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
-    - eapply synchronized_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
   Qed.
 
   (** ** Alignment proof extracted from Transcription/Correctness.v *)

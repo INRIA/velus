@@ -40,7 +40,7 @@ Module Type NLCOINDSEMANTICS
         sem_var H x xs ->
         exists bs,
           sem_clock H b ck bs
-          /\ synchronized xs bs)
+          /\ aligned xs bs)
     /\ (forall bs,
           sem_clock H b ck bs ->
           exists xs,
@@ -546,9 +546,9 @@ Module Type NLCOINDSEMANTICS
       intro; now rewrite Exss.
   Qed.
 
-  Add Parametric Morphism : (synchronized)
+  Add Parametric Morphism : (aligned)
       with signature @EqSt value ==> @EqSt bool ==> Basics.impl
-        as synchronized_EqSt.
+        as aligned_EqSt.
   Proof.
     cofix CoFix.
     intros xs xs' Exs bs bs' Ebs Synchro.

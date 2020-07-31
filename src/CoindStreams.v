@@ -1203,32 +1203,32 @@ Module Type COINDSTREAMS
           apply IHHparent in Hck'; etransitivity; eauto.
   Qed.
 
-  (** ** Synchronized and its properties *)
+  (** ** Aligned and its properties *)
 
-  CoInductive synchronized: Stream value -> Stream bool -> Prop :=
+  CoInductive aligned: Stream value -> Stream bool -> Prop :=
   | synchro_present:
       forall v vs bs,
-        synchronized vs bs ->
-        synchronized (present v ⋅ vs) (true ⋅ bs)
+        aligned vs bs ->
+        aligned (present v ⋅ vs) (true ⋅ bs)
   | synchro_absent:
       forall vs bs,
-        synchronized vs bs ->
-        synchronized (absent ⋅ vs) (false ⋅ bs).
+        aligned vs bs ->
+        aligned (absent ⋅ vs) (false ⋅ bs).
 
-  Instance synchronized_Proper:
+  Instance aligned_Proper:
     Proper (@EqSt value ==> @EqSt bool ==> iff)
-           synchronized.
+           aligned.
   Proof.
     intros vs vs' Heq1 bs bs' Heq2.
     split; revert vs vs' Heq1 bs bs' Heq2;
-      cofix synchronized_Proper;
+      cofix aligned_Proper;
       intros [v vs] [v' vs'] Heq1 [b bs] [b' bs'] Heq2 H;
       inv Heq1; inv Heq2; simpl in *; subst; inv H;
         constructor; eauto.
   Qed.
 
-  Lemma synchronized_spec : forall vs bs,
-      synchronized vs bs <->
+  Lemma aligned_spec : forall vs bs,
+      aligned vs bs <->
       (forall n, (exists v, bs # n = true /\ vs # n = present v)
             \/ (bs # n = false /\ vs # n = absent)).
   Proof with eauto.
@@ -1247,9 +1247,9 @@ Module Type COINDSTREAMS
       1,2:(constructor; cofix_step CoFix H).
   Qed.
 
-  Lemma synchronized_EqSt : forall vs bs1 bs2,
-      synchronized vs bs1 ->
-      synchronized vs bs2 ->
+  Lemma aligned_EqSt : forall vs bs1 bs2,
+      aligned vs bs1 ->
+      aligned vs bs2 ->
       bs1 ≡ bs2.
   Proof.
     cofix CoFix.
@@ -1257,12 +1257,12 @@ Module Type COINDSTREAMS
     inv Hsync1; inv Hsync2; constructor; simpl; eauto.
   Qed.
 
-  Lemma const_synchronized : forall bs c,
-      synchronized (const bs c) bs.
+  Lemma const_aligned : forall bs c,
+      aligned (const bs c) bs.
   Proof with eauto.
     intros bs c.
     remember (const bs c) as vs.
-    rewrite synchronized_spec. intros n.
+    rewrite aligned_spec. intros n.
     eapply eq_EqSt, const_spec with (n:=n) in Heqvs.
     rewrite Heqvs; clear Heqvs.
     destruct (bs # n).
@@ -1337,8 +1337,8 @@ Module Type COINDSTREAMS
     unfold_Stv s1; inv Hlift; econstructor; simpl; eauto.
   Qed.
 
-  Lemma ac_synchronized :
-    forall s, synchronized s (abstract_clock s).
+  Lemma ac_aligned :
+    forall s, aligned s (abstract_clock s).
   Proof.
     cofix Cofix. intro.
     unfold_Stv s; rewrite unfold_Stream; simpl; constructor; auto.
