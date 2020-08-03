@@ -35,7 +35,7 @@ Module Type CORRECTNESS
   Module Import Typing := NTypingFun Ids Op OpAux Syn LCA Ty Norm.
   Module Import Clocking := NClockingFun Ids Op OpAux Syn LCA Cl Norm.
   Module Ordered := NOrderedFun Ids Op OpAux Syn LCA Ord Norm.
-  Module Causality := NCausalityFun Ids Op OpAux Syn LCA Cl Norm.
+  Module Import Causality := NCausalityFun Ids Op OpAux Syn LCA Cl Norm.
   Import List.
 
   CoFixpoint default_stream : Stream OpAux.value :=
@@ -1778,10 +1778,9 @@ Module Type CORRECTNESS
   (** *** Relation between state and history *)
 
   Definition init_eqs_valids bs H (st : fresh_st (Op.type * clock * bool)) :=
-    Forall (fun '(id, (_, ck, is_init)) =>
-              is_init = true ->
+    Forall (fun '(id, ck) =>
               (exists bs', sem_clock H bs ck bs' /\
-                      sem_var H id (init_stream bs'))) (st_anns st).
+                      sem_var H id (init_stream bs'))) (st_inits st).
 
   Definition hist_st (vars : list (ident * clock)) b H st :=
     Env.dom H (map fst vars++st_ids st) /\
@@ -1797,18 +1796,14 @@ Module Type CORRECTNESS
   Proof with auto.
     intros * Hvalid Hdom Hfresh Hinits.
     assert (~In id (st_ids st)) as Hnin by (eapply Facts.fresh_ident_nIn in Hfresh; eauto).
-    assert (st_valid_after st' (PSP.of_list vars)) as Hvalid2 by eauto.
-    assert (Hfresh':=Hfresh). apply fresh_ident_anns in Hfresh'.
     assert (Env.refines eq H (Env.add id v H)) as Href.
     { eapply fresh_ident_refines in Hfresh; eauto. }
-    unfold init_eqs_valids in *.
-    eapply fresh_ident_anns in Hfresh.
-    rewrite Hfresh.
-    constructor...
-    - intros. congruence.
-    - solve_forall.
-      intros Htrue. specialize (H1 Htrue) as [bs' [Hvar Hclock]].
-      exists bs'. split; [eapply sem_clock_refines|eapply sem_var_refines]; eauto.
+    eapply fresh_ident_false_st_inits in Hfresh.
+    unfold init_eqs_valids in *. rewrite Hfresh.
+    solve_forall. destruct H1 as [bs' [? ?]].
+    exists bs'; split.
+    - eapply sem_clock_refines; eauto.
+    - eapply sem_var_refines; eauto.
   Qed.
 
   Fact fresh_ident_hist_st : forall vars b ty ck id v H st st',
@@ -1888,13 +1883,16 @@ Module Type CORRECTNESS
          We will use the hist_st invariant to get some information back about it *)
       destruct p; inv Hinit.
       exists H. repeat (split; eauto).
-      destruct Histst as [_ Hvalids]. unfold init_eqs_valids in Hvalids.
+      destruct Histst as [_ [Hvalids _]]. unfold init_eqs_valids in Hvalids.
       rewrite Forall_forall in Hvalids.
       eapply find_some in Hfind. destruct p as [[ty' ck'] isinit].
       repeat rewrite Bool.andb_true_iff in Hfind. destruct Hfind as [Hin [[Hisinit Hcl] Hty]].
       rewrite OpAux.type_eqb_eq in Hty.
       rewrite Clocks.clock_eqb_eq in Hcl. subst.
-      apply Hvalids in Hin. specialize (Hin eq_refl) as [bs'' [Hsemc' Hsemcv]].
+      assert (In (x, ck) (st_inits st')) as Hin'.
+      { unfold st_inits. repeat simpl_In. exists (x, (bool_type, ck, true)); split; auto.
+        rewrite filter_In. rewrite equiv_decb_refl; auto. }
+      apply Hvalids in Hin' as [bs'' [? ?]].
       eapply sem_clock_det in Hsemc; eauto. rewrite <- Hsemc; auto.
     - (* We need to introduce a new init equation to the history and state,
          and prove its properties *)
@@ -1908,14 +1906,13 @@ Module Type CORRECTNESS
         repeat split.
         - eapply fresh_ident_dom in Hident...
         - unfold init_eqs_valids in *.
-          erewrite fresh_ident_anns...
-          constructor; [intros _|].
+          erewrite fresh_ident_true_st_inits...
+          constructor.
           + exists bs'. split; [eapply sem_clock_refines|]; eauto.
             rewrite HeqH'. econstructor. eapply Env.add_1.
             1,2:reflexivity.
-          + eapply Forall_impl_In; [|eauto].
-            intros [? [[? ?] ?]] Hin Hex Heq; subst.
-            specialize (Hex eq_refl) as [bs'' [Hdep' Hsem']].
+          + solve_forall.
+            destruct H2 as [bs'' [? ?]].
             exists bs''. split; [eapply sem_clock_refines|eapply sem_var_refines]; eauto.
         - unfold st_clocks', sc_var_inv' in *.
           erewrite fresh_ident_anns; simpl; eauto.
@@ -2180,7 +2177,7 @@ Module Type CORRECTNESS
     - unfold st_ids.
       rewrite init_st_anns; simpl.
       rewrite app_nil_r, map_fst_idck. assumption.
-    - unfold init_eqs_valids.
+    - unfold init_eqs_valids, st_inits.
       rewrite init_st_anns. constructor.
     - unfold st_clocks'. rewrite init_st_anns; simpl.
       rewrite app_nil_r. assumption.
