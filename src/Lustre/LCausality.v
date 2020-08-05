@@ -37,6 +37,10 @@ Module Type LCAUSALITY
   | IFLfby : forall e0s es a,
       Exists (Is_free_left x) e0s ->
       Is_free_left x (Efby e0s es a)
+  | IFLarrow : forall e0s es a,
+      Exists (Is_free_left x) e0s
+      \/ Exists (Is_free_left x) es ->
+      Is_free_left x (Earrow e0s es a)
   | IFLwhen : forall es y b a,
       x = y
       \/ Exists (Is_free_left x) es ->
@@ -201,8 +205,11 @@ Module Type LCAUSALITY
     | Evar id (_, (ck, _)) => [m id]
     | Eunop _ e (_, (ck, _)) => (collect_free_left m e)
     | Ebinop _ e1 e2 (_, (ck, _)) => (collect_free_left m e1)++(collect_free_left m e2)
-    | Efby e0s es anns =>
+    | Efby e0s _ _ =>
       (collect_free_lefts e0s)
+    | Earrow e0s es _ =>
+      (collect_free_lefts e0s)++(collect_free_lefts es)
+    (* | Epre _ _ => [] *)
     | Ewhen es id _ (_, (ck, _)) =>
       (m id)::(collect_free_lefts es)
     | Emerge id ets efs (_, (ck, _)) =>
@@ -359,6 +366,10 @@ Module Type LCAUSALITY
     - (* binop *) destruct H0; auto.
     - (* fby *)
       Forall_Exists_Exists H2.
+    - (* arrow *)
+      destruct H2 as [Hex|Hex].
+      + left. Forall_Exists_Exists Hex.
+      + right. Forall_Exists_Exists Hex.
     - (* when *)
       destruct H1 as [Hex|Hex].
       + inv Hex. left; auto.

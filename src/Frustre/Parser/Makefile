@@ -10,7 +10,7 @@ clean:
 	      *.vo
 
 FrustreParser.v: FrustreParser.vy
-	$(MENHIR) --no-stdlib --coq $<
+	$(MENHIR) --no-stdlib --coq --coq-no-complete $<
 
 FrustreParser2.mly: FrustreParser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@

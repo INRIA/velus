@@ -117,7 +117,7 @@ depend: $(VFILES)
 	$(COQC) -dump-glob $(DOCDIR)/$(*F).glob $(COQFLAGS) $*
 
 Parser/FrustreParser.v: Parser/FrustreParser.vy
-	$(MENHIR) --no-stdlib --coq $<
+	$(MAKE) -C Parser FrustreParser.v
 
 Parser/FrustreLexer.ml: Parser/FrustreLexer.mll
 	ocamllex $<

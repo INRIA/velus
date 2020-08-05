@@ -158,6 +158,8 @@ and desc =
   | Eunop  of unop * exp
   | Ebinop of binop * exp * exp
   | Efby   of exp list * exp list
+  | Earrow of exp list * exp list
+  (* | Epre   of exp list *)
   | Ewhen  of exp list * ident * bool
   | Emerge of ident * exp list * exp list
   | Eite   of exp * exp list * exp list

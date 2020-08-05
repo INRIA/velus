@@ -38,6 +38,8 @@ Module Type LSYNTAX
   | Ebinop : binop -> exp -> exp -> ann -> exp
 
   | Efby   : list exp -> list exp -> list ann -> exp
+  | Earrow : list exp -> list exp -> list ann -> exp
+  (* | Epre   : list exp -> list ann -> exp *)
   | Ewhen  : list exp -> ident -> bool -> lann -> exp
   | Emerge : ident -> list exp -> list exp -> lann -> exp
   | Eite   : exp -> list exp -> list exp -> lann -> exp
@@ -58,6 +60,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => 1
     | Efby _ _ anns
+    | Earrow _ _ anns
+    (* | Epre _ anns *)
     | Eapp _ _ _ anns => length anns
     | Evar _ _
     | Eunop _ _ _
@@ -73,6 +77,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => [(type_const c, (Cbase, None))]
     | Efby _ _ anns
+    | Earrow _ _ anns
+    (* | Epre _ anns *)
     | Eapp _ _ _ anns => anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -89,6 +95,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => [type_const c]
     | Efby _ _ anns
+    | Earrow _ _ anns
+    (* | Epre _ anns *)
     | Eapp _ _ _ anns => map fst anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -110,6 +118,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => [Cbase]
     | Efby _ _ anns
+    | Earrow _ _ anns
+    (* | Epre _ anns *)
     | Eapp _ _ _ anns => map clock_of_nclock anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -126,6 +136,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => [(Cbase, None)]
     | Efby _ _ anns
+    | Earrow _ _ anns
+    (* | Epre _ anns *)
     | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -153,8 +165,9 @@ Module Type LSYNTAX
     | Evar _ _ => []
     | Eunop _ e _ => fresh_in e
     | Ebinop _ e1 e2 _ => (fresh_in e1)++(fresh_in e2)
-    | Efby e0s es _ => concat (map fresh_in e0s)++concat (map fresh_in es)
-    | Ewhen es _ _ _ => concat (map fresh_in es)
+    | Efby e0s es _
+    | Earrow e0s es _ => concat (map fresh_in e0s)++concat (map fresh_in es)
+    | Ewhen es _ _ _ (* | Epre es _ *) => concat (map fresh_in es)
     | Emerge _ ets efs _ => concat (map fresh_in ets)++concat (map fresh_in efs)
     | Eite e ets efs _ => (fresh_in e)++concat (map fresh_in ets)++concat (map fresh_in efs)
     | Eapp _ es None anns => concat (map fresh_in es)++anon_streams anns
@@ -239,6 +252,17 @@ Module Type LSYNTAX
         Forall P es ->
         P (Efby e0s es a).
 
+    Hypothesis EarrowCase:
+      forall e0s es a,
+        Forall P e0s ->
+        Forall P es ->
+        P (Earrow e0s es a).
+
+    (* Hypothesis EpreCase: *)
+    (*   forall es a, *)
+    (*     Forall P es -> *)
+    (*     P (Epre es a). *)
+
     Hypothesis EwhenCase:
       forall es x b a,
         Forall P es ->
@@ -277,6 +301,8 @@ Module Type LSYNTAX
       - apply EunopCase; auto.
       - apply EbinopCase; auto.
       - apply EfbyCase; SolveForall.
+      - apply EarrowCase; SolveForall.
+      (* - apply EpreCase; SolveForall. *)
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
       - apply EiteCase; SolveForall; auto.
@@ -357,6 +383,8 @@ Module Type LSYNTAX
   Proof.
     destruct e; simpl; try unfold clock_of_nclock, stripname; simpl; try reflexivity.
     - rewrite map_map. reflexivity.
+    - rewrite map_map. reflexivity.
+    (* - rewrite map_map. reflexivity. *)
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
@@ -543,66 +571,6 @@ Module Type LSYNTAX
   Qed.
 
   (** fresh_in and anon_in specification and properties *)
-
-  Inductive FreshIn : exp -> list (ident * (type * clock)) -> Prop :=
-  | FIEconst : forall c,
-      FreshIn (Econst c) []
-  | FIEvar : forall id a,
-      FreshIn (Evar id a) []
-  | FIEunop : forall op e ann anns,
-      FreshIn e anns ->
-      FreshIn (Eunop op e ann) anns
-  | FIEbinop : forall op e1 e2 ann anns1 anns2,
-      FreshIn e1 anns1 ->
-      FreshIn e2 anns2 ->
-      FreshIn (Ebinop op e1 e2 ann) (anns1++anns2)
-  | FIEfby : forall e0s es anns anns1 anns2,
-      Forall2 FreshIn e0s anns1 ->
-      Forall2 FreshIn es anns2 ->
-      FreshIn (Efby e0s es anns) (concat anns1++concat anns2)
-  | FIEwhen : forall es ck b lann anns1,
-      Forall2 FreshIn es anns1 ->
-      FreshIn (Ewhen es ck b lann) (concat anns1)
-  | FIEmerge : forall ets efs ck lann anns1 anns2,
-      Forall2 FreshIn ets anns1 ->
-      Forall2 FreshIn efs anns2 ->
-      FreshIn (Emerge ck ets efs lann) (concat anns1++concat anns2)
-  | FIEite : forall e ets efs lann anns1 anns2 anns3,
-      FreshIn e anns1 ->
-      Forall2 FreshIn ets anns2 ->
-      Forall2 FreshIn efs anns3 ->
-      FreshIn (Eite e ets efs lann) (anns1++concat anns2++concat anns3)
-  | FIEapp : forall f es anns anns1,
-      Forall2 FreshIn es anns1 ->
-      FreshIn (Eapp f es None anns) (concat anns1++anon_streams anns)
-  | FIEreset : forall f es r anns anns1 anns2,
-      Forall2 FreshIn es anns1 ->
-      FreshIn r anns2 ->
-      FreshIn (Eapp f es (Some r) anns) (concat anns1++anns2++anon_streams anns).
-
-  Inductive FreshIns : list exp -> list (ident * (type * clock)) -> Prop :=
-  | FreshIns_conc : forall es anns,
-      Forall2 FreshIn es anns ->
-      FreshIns es (concat anns).
-
-  Lemma fresh_in_sound : forall e,
-      FreshIn e (fresh_in e).
-  Proof.
-    induction e using exp_ind2; simpl;
-      try destruct ro;
-      constructor; auto;
-      try (rewrite Forall2_map_2, <- Forall2_same; assumption).
-  Qed.
-
-  Corollary fresh_ins_sound : forall es,
-      FreshIns es (fresh_ins es).
-  Proof.
-    intros es.
-    constructor.
-    rewrite Forall2_map_2, <- Forall2_same.
-    apply Forall_forall. intros ? _.
-    apply fresh_in_sound.
-  Qed.
 
   Lemma anon_in_fresh_in : forall e,
       incl (anon_in e) (fresh_in e).
@@ -824,6 +792,16 @@ Module Type LSYNTAX
       length (annots e0s) = length anns ->
       length (annots es) = length anns ->
       wl_exp G (Efby e0s es anns)
+  | wl_Earrow : forall G e0s es anns,
+      Forall (wl_exp G) e0s ->
+      Forall (wl_exp G) es ->
+      length (annots e0s) = length anns ->
+      length (annots es) = length anns ->
+      wl_exp G (Earrow e0s es anns)
+  (* | wl_Epre : forall G es anns, *)
+  (*     Forall (wl_exp G) es -> *)
+  (*     length (annots es) = length anns -> *)
+  (*     wl_exp G (Epre es anns) *)
   | wl_Ewhen : forall G es x b tys nck,
       Forall (wl_exp G) es ->
       length (annots es) = length tys ->

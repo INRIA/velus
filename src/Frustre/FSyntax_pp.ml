@@ -131,6 +131,8 @@ let precedence = function
   | FS.Eunop  (op, _, _)    -> prec_unop op
   | FS.Ebinop (op, _, _, _) -> prec_binop op
   | FS.Efby _   -> (14, RtoL) (* higher than * / % *)
+  | FS.Earrow _ -> (14, RtoL)
+  (* | FS.Epre _   -> (14, NA) *)
   | FS.Ewhen _  -> (12, LtoR) (* precedence of + - *)
   | FS.Emerge _ -> ( 5, LtoR) (* precedence of lor - 1 *)
   | FS.Eite _   -> ( 5, LtoR)
@@ -183,7 +185,9 @@ let annot_typs p = function
   | FS.Evar (_, (ty, ck))           -> typ p ty
   | FS.Eunop (_, _, (ty, ck))       -> typ p ty
   | FS.Ebinop (_, _, _, (ty, ck))   -> typ p ty
-  | FS.Efby (_, _, tycks)           -> typs p (List.map fst tycks)
+  | FS.Efby (_, _, tycks)
+  | FS.Earrow (_, _, tycks)
+  (* | FS.Epre (_, tycks) *)        -> typs p (List.map fst tycks)
   | FS.Ewhen (_, _, _, (tys, ck))   -> typs p tys
   | FS.Emerge (_, _, _, (tys, ck))  -> typs p tys
   | FS.Eite (_, _, _, (tys, ck))    -> typs p tys
@@ -194,7 +198,9 @@ let annot_cks p = function
   | FS.Evar (_, (ty, ck))          -> nclock p ck
   | FS.Eunop (_, _, (ty, ck))      -> nclock p ck
   | FS.Ebinop (_, _, _, (ty, ck))  -> nclock p ck
-  | FS.Efby (_, _, tycks)          -> nclocks p (List.map snd tycks)
+  | FS.Efby (_, _, tycks)
+  | FS.Earrow (_, _, tycks)
+  (* | FS.Epre (_, tycks) *)       -> nclocks p (List.map snd tycks)
   | FS.Ewhen (_, _, _, (tys, ck))  -> nclock p ck
   | FS.Emerge (_, _, _, (tys, ck)) -> nclock p ck
   | FS.Eite (_, _, _, (tys, ck))   -> nclock p ck
@@ -221,6 +227,10 @@ let rec exp prec p e =
       binop p op ty (exp prec1) e1 (exp prec2) e2
   | FS.Efby (e0s, es, _) ->
       fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
+  | FS.Earrow (e0s, es, _) ->
+      fprintf p "%a -> %a" (exp_list prec1) e0s (exp_list prec2) es
+  (* | FS.Epre (es, _) ->
+   *     fprintf p "pre(%a)" (exp_list prec1) es *)
   | FS.Ewhen (e, x, v, _) ->
       if v
       then fprintf p "%a when %a" (exp_list prec') e ident x

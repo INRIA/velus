@@ -230,6 +230,10 @@ let rec tr_exp = function
       mke F.(Evar x) loc
   | A.FBY (e0s, es, loc) ->
       mke F.(Efby (tr_exps e0s, tr_exps es)) loc
+  | A.ARROW (e0s, es, loc) ->
+     mke F.(Earrow (tr_exps e0s, tr_exps es)) loc
+  (* | A.PRE (es, loc) ->
+   *    mke F.(Epre (tr_exps es)) loc *)
   | A.WHEN (es, x, b, loc) ->
       mke F.(Ewhen (tr_exps es, x, b)) loc
   | A.MERGE (x, ets, efs, loc) ->

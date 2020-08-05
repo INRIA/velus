@@ -146,12 +146,15 @@ let exp genv env =
            | _, _ -> error e.e_loc
                (sprintf "cannot apply binary operator to more than two flows"))
 
-      | Efby (e0s, es) ->
+      | Efby (e0s, es) | Earrow (e0s, es) ->
           let ty0s = List.(concat (map f e0s)) in
           let tys  = List.(concat (map f es)) in
           if ty0s = tys then tys
           else error e.e_loc (sprintf "mismatched types: %a versus %a"
                PP.typs ty0s PP.typs tys)
+
+      (* | Epre es ->
+       *    List.(concat (map f es)) *)
 
       | Ewhen (es, x, b) ->
           if not (is_bool_type (tyvar x))

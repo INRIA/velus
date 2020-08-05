@@ -176,6 +176,14 @@ Module Type LCLOCKSEMANTICS
     - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
   Qed.
 
+  Lemma ac_arrow2 : forall xs ys rs,
+      arrow xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
+  Proof.
+    cofix Cofix. intros * Hfby.
+    unfold_Stv ys; inv Hfby; econstructor; simpl; eauto.
+    rewrite H3. reflexivity.
+  Qed.
+
   (** ** Alignment proof extracted from Transcription/Correctness.v *)
 
   Lemma length_typeof :
@@ -215,6 +223,13 @@ Module Type LCLOCKSEMANTICS
     - tauto.
     - take (Exists _ _) and apply Exists_exists in it as (?& Hin &?).
       eapply Forall_forall in H; eauto. apply H; auto.
+      eapply Forall_forall in Hin; eauto.
+    - destruct H2.
+      take (Exists _ _) and apply Exists_exists in it as (?& Hin &?).
+      eapply Forall_forall in H; eauto. apply H; auto.
+      eapply Forall_forall in Hin; eauto.
+      take (Exists _ _) and apply Exists_exists in it as (?& Hin &?).
+      eapply Forall_forall in H0; eauto. apply H0; auto.
       eapply Forall_forall in Hin; eauto.
     - intuition; subst; eauto using In_InMembers.
       take (Exists _ _) and apply Exists_exists in it as (?& Hin &?).
@@ -609,6 +624,31 @@ Module Type LCLOCKSEMANTICS
       destruct Henv; auto. right.
       simpl. rewrite InMembers_app; right.
       eapply InMembers_fresh_in; eauto.
+    - (* Earrow *)
+      inv Hwc. take (Forall2 eq _ _) and apply Forall2_eq in it as Heq.
+      rewrite Heq, Exists_exists in Hfree. destruct Hfree as [Hino|(?&Hin &?)].
+      apply Ino_In in Hino. apply in_map_iff in Hino as ((?&?)&?&Hino).
+      apply in_map_iff in Hino as ((?&?)&?&Hino).
+      eapply Forall_forall in Hino; eauto. simpl in *. subst. inv Hino.
+      unfold clocksof in Hin. apply in_flat_map in Hin as (?&?&?).
+      eapply Forall_forall in H0; eauto.
+      eapply H0 in Henv; auto; [|eapply Forall_forall|right; eapply Exists_exists];
+        eauto.
+      destruct Henv; auto. right.
+      simpl. rewrite InMembers_app; right.
+      eapply InMembers_fresh_in; eauto.
+    (* - (* Epre *) *)
+    (*   inv Hwc. take (Forall2 eq _ _) and apply Forall2_eq in it as Heq. *)
+    (*   rewrite Heq, Exists_exists in Hfree. destruct Hfree as [Hino|(?&Hin &?)]. *)
+    (*   apply Ino_In in Hino. apply in_map_iff in Hino as ((?&?)&?&Hino). *)
+    (*   apply in_map_iff in Hino as ((?&?)&?&Hino). *)
+    (*   eapply Forall_forall in Hino; eauto. simpl in *. subst. inv Hino. *)
+    (*   unfold clocksof in Hin. apply in_flat_map in Hin as (?&?&?). *)
+    (*   eapply Forall_forall in H; eauto. *)
+    (*   eapply H in Henv; auto; [|eapply Forall_forall|right; eapply Exists_exists]; *)
+    (*     eauto. *)
+    (*   destruct Henv; auto. right. *)
+    (*   eapply InMembers_fresh_in; eauto. *)
     - (* Ewhen *)
       inv Hwc. simpl in Hfree. destruct Hfree as [Hf|Hf].
       { clear - Hf. exfalso. induction tys; simpl in *; intuition. }
@@ -1066,6 +1106,12 @@ Module Type LCLOCKSEMANTICS
     - clear - H6. induction l1; simpl in *. constructor.
       inv H6. unfold unnamed_stream in *. destruct a as (?&?&?).
       simpl in *. subst. constructor. auto.
+    - clear - H6. induction l1; simpl in *. constructor.
+      inv H6. unfold unnamed_stream in *. destruct a as (?&?&?).
+      simpl in *. subst. constructor. auto.
+    (* - clear - H3. induction l0; simpl in *. constructor. *)
+    (*   inv H3. unfold unnamed_stream in *. destruct a as (?&?&?). *)
+    (*   simpl in *. subst. constructor. auto. *)
     - clear - tys. induction tys; simpl; constructor. auto.
     - clear - tys. induction tys; simpl; constructor. auto.
     - clear - tys. induction tys; simpl; constructor. auto.
@@ -1130,6 +1176,14 @@ Module Type LCLOCKSEMANTICS
       take (_ unnamed_stream _) and eapply Forall_forall in it as un; eauto.
       unfold  unnamed_stream in un. now repeat (simpl in *; subst).
     - eapply map_ext_in; eauto. intros (?&?) Hin.
+      apply in_map_iff in Hin as ((?&?)&?&?).
+      take (_ unnamed_stream _) and eapply Forall_forall in it as un; eauto.
+      unfold  unnamed_stream in un. now repeat (simpl in *; subst).
+    (* - eapply map_ext_in; eauto. intros (?&?) Hin. *)
+    (*   apply in_map_iff in Hin as ((?&?)&?&?). *)
+    (*   take (_ unnamed_stream _) and eapply Forall_forall in it as un; eauto. *)
+    (*   unfold  unnamed_stream in un. now repeat (simpl in *; subst). *)
+    - eapply map_ext_in; eauto. intros (?&?) Hin.
       apply in_map_iff in Hin as (?&HH&?). inv HH. now simpl.
     - eapply map_ext_in; eauto. intros (?&?) Hin.
       apply in_map_iff in Hin as (?&HH&?). inv HH. now simpl.
@@ -1165,6 +1219,16 @@ Module Type LCLOCKSEMANTICS
       rewrite Forall_map, Forall_forall in H6. unfold clock_of_nclock, stripname in *.
       apply in_map_iff in Hin as [[? ?] [? Hin]].
       apply H6 in Hin; simpl in *; subst; inv Hin; auto.
+    - inv Hwt; inv Hwc.
+      eapply wt_clock_Is_free_in with (env:=idty env0) in Hfr; eauto. eapply InMembers_idty; eauto.
+      rewrite Forall_map, Forall_forall in H6. unfold clock_of_nclock, stripname in *.
+      apply in_map_iff in Hin as [[? ?] [? Hin]].
+      apply H6 in Hin; simpl in *; subst; inv Hin; auto.
+    (* - inv Hwt; inv Hwc. *)
+    (*   eapply wt_clock_Is_free_in with (env:=idty env0) in Hfr; eauto. eapply InMembers_idty; eauto. *)
+    (*   rewrite Forall_map, Forall_forall in H3. unfold clock_of_nclock, stripname in *. *)
+    (*   apply in_map_iff in Hin as [[? ?] [? Hin]]. *)
+    (*   apply H3 in Hin; simpl in *; subst; inv Hin; auto. *)
     - inv Hwt; inv Hwc.
       eapply wt_clock_Is_free_in with (env:=idty env0) in Hfr; eauto. eapply InMembers_idty; eauto.
       unfold clock_of_nclock, stripname in *.
@@ -1225,7 +1289,7 @@ Module Type LCLOCKSEMANTICS
       eapply NoDupMembers_app_InMembers in H; eauto;
       eapply H, InMembers_app, or_intror, InMembers_fresh_in; eauto.
     simpl in *. destruct a.
-    1-8: exists ncs,nss; split; auto; split;
+    1-9: exists ncs,nss; split; auto; split;
                  [ apply Forall_impl with (2 := Hfresh); auto; intros;
                    eapply LiftO_impl; eauto; intros; now right |].
     (* all cases except Eapp are identical... *)
@@ -1249,7 +1313,7 @@ Module Type LCLOCKSEMANTICS
     (*     adds_opt'_app, adds_opt'_None; eauto. solve_length. *)
     (* } *)
 
-    1-8:(inv Hwc; rewrite map_app; apply Forall2_app;
+    1-9:(inv Hwc; rewrite map_app; apply Forall2_app;
          [ (take (_ _ (clockof _) (map abstract_clock _)) and eapply Forall2_impl_In in it); eauto;
            intros ck ? Hinck ??; auto;
            erewrite filter_anons_app, filter_nclock_eq, Env.adds_opt'_app, Env.adds_opt'_None; eauto; [| solve_length];
@@ -1486,6 +1550,10 @@ Module Type LCLOCKSEMANTICS
         - inv Hck; try tauto. congruence.
         - eapply in_map_iff in Hck as ((?&?&?)&?&HH). simpl in *.
           eapply Forall_forall in HH; eauto. inv H6. inv HH.
+        - eapply in_map_iff in Hck as ((?&?&?)&?&HH). simpl in *.
+          eapply Forall_forall in HH; eauto. inv H6. inv HH.
+        (* - eapply in_map_iff in Hck as ((?&?&?)&?&HH). simpl in *. *)
+        (*   eapply Forall_forall in HH; eauto. inv H6. inv HH. *)
         - clear - Hck. induction tys; simpl; inv Hck; auto. congruence.
         - clear - Hck. induction tys; simpl; inv Hck; auto. congruence.
         - clear - Hck. induction tys; simpl; inv Hck; auto. congruence.
@@ -1773,6 +1841,8 @@ Module Type LCLOCKSEMANTICS
         - inv Hck; try tauto. congruence.
         - eapply in_map_iff in Hck as ((?&?&?)&?&HH). simpl in *.
           eapply Forall_forall in HH; eauto. inv H6. inv HH.
+        - eapply in_map_iff in Hck as ((?&?&?)&?&HH). simpl in *.
+          eapply Forall_forall in HH; eauto. inv H6. inv HH.
         - clear - Hck. induction tys; simpl; inv Hck; auto. congruence.
         - clear - Hck. induction tys; simpl; inv Hck; auto. congruence.
         - clear - Hck. induction tys; simpl; inv Hck; auto. congruence.
@@ -1972,6 +2042,58 @@ Module Type LCLOCKSEMANTICS
          { eapply sc_var_inv_weaken; eauto. simpl. intros * Hf. constructor.
            inv Hf. now right. }
          { intros. apply Heq. simpl. apply in_or_app. now right. }
+     - (* Earrow *)
+       inv Hwc. inv Hsem.
+       assert (EqSts (map abstract_clock ss)
+                     (map abstract_clock (concat sss))) as Hmap.
+       { clear - H16.
+         revert dependent sss. revert s0ss.
+         induction ss; intros. inv H16. simpl. constructor.
+         inv H16. rewrite 2 map_cons.
+         constructor. symmetry. eapply ac_arrow2; eauto.
+         assert (l0 = concat [l0]) as Hl0 by (simpl; rewrite app_nil_r; auto).
+         assert (l1 = concat [l1]) as Hl1 by (simpl; rewrite app_nil_r; auto).
+         rewrite Hl1. rewrite Hl0 in H4.
+         eapply IHss; eauto. simpl. rewrite app_nil_r. eauto. }
+       setoid_rewrite Hmap.
+
+       pose proof (Forall2_in_right' _ _ _ H8) as Heq.
+       rewrite Forall2_eq in H8. rewrite H8.
+       take (Forall2 (sem_exp _ _ _) es _) and rename it into Hsem.
+       take (Forall (wc_exp _ _) es) and rename it into Hwc.
+       inv Hwt. rename H10 into Hwt.
+       clear - Hndup H1 Hsem Henv Hwcg Hnode Hvar Hwt Hwc Heq Hmem.
+       revert dependent sss.
+       induction es as [|e]; intros. inv Hsem. now simpl.
+       inv Hsem. inv Hwc; inv Hwt.
+       simpl. rewrite map_app. apply Forall2_app.
+       + simpl in Hndup; rewrite Permutation_swap in Hndup; apply NoDupMembers_app_r in Hndup.
+         inversion_clear H1 as [|?? He Hg]. clear Hg IHes.
+         take (sem_exp _ _ _ e _) and apply He in it as ?; auto.
+         2:{ rewrite app_assoc in Hndup. apply NoDupMembers_app_l in Hndup; auto. }
+         2:{ eapply sc_var_inv_weaken; eauto. simpl. intros. constructor. auto. }
+         destruct e; auto. simpl in *.
+         take (exists _, _) and destruct it as (?&?&?&?&HF2).
+         eapply Forall2_impl_In in HF2; eauto. intros * Hin ? Hsc.
+         eapply in_app_weak in Hin. apply Heq in Hin as (?&Hin&?). subst.
+         unfold clock_of_nclock, stripname in Hin.
+         apply in_map_iff in Hin as ((?&?&?)&?&?). simpl in *. subst.
+         eapply sc_switch_adds in Hsc; eauto.
+         2:{ intros ? Hfree Hino. apply filter_anons_spec in Hino as []. rewrite InMembers_idck in H10.
+             eapply Hmem in Hfree; eauto. apply in_map_iff.
+             esplit; split; eauto; simpl; eauto. }
+         eapply sc_switch_adds in Hsc; eauto.
+         intros ? Hfree Hino. eapply Ino_Forall in Hino; eauto. simpl in Hino.
+         apply Hmem in Hfree. 2:apply in_map_iff; esplit; split; eauto; simpl; eauto.
+         eapply NoDupMembers_app_InMembers in Hndup; eauto.
+         apply Hndup, InMembers_app; eauto.
+       + inv H1.
+         eapply IHes; eauto; try constructor; eauto.
+         { simpl in Hndup. rewrite (Permutation_app_comm (fresh_in _)) in Hndup; repeat rewrite app_assoc in Hndup.
+           apply NoDupMembers_app_l in Hndup. rewrite <- app_assoc in Hndup; auto. }
+         { eapply sc_var_inv_weaken; eauto. simpl. intros * Hf. constructor.
+           inv Hf. destruct H1 as [Hf|Hf]; auto. }
+         { intros. apply Heq. simpl. apply in_or_app. now right. }
      - (* Ewhen *)
        clear Hwt. inv Hwc. unfold clock_of_nclock, stripname. simpl. clear Hmem.
        revert dependent tys. revert dependent ss.
@@ -2136,8 +2258,8 @@ Module Type LCLOCKSEMANTICS
          eapply NoDupMembers_app_r in Hndup'.
          pose proof (nodupo_filter_anons _ _ _ Hwc Hndup') as Hnodupo.
          inversion_clear Hwc as
-             [| | | | | | | | |???? bck sub Hwce Hfind WIi WIo|].
-         inversion_clear Hsem as [| | | | | | | |??????? Hse Hsemn |].
+             [| | | | | | | | | |???? bck sub Hwce Hfind WIi WIo|].
+         inversion_clear Hsem as [| | | | | | | | |??????? Hse Hsemn |].
 
          rewrite app_assoc in Hndup.
          assert (Hndup'':=Hndup). apply NoDupMembers_app_l in Hndup''; auto.
@@ -2275,8 +2397,8 @@ Module Type LCLOCKSEMANTICS
          eapply NoDupMembers_app_r in Hndup'.
          pose proof (nodupo_filter_anons _ _ _ Hwc Hndup') as Hnodupo.
          inversion_clear Hwc as
-             [| | | | | | | | | |?????? bck sub Hwce Hfind WIi WIo Hwcr Hckr].
-         inversion_clear Hsem as [| | | | | | | | |?????????? Hse Hsr Hboolsof Hsemn].
+             [| | | | | | | | | | |?????? bck sub Hwce Hfind WIi WIo Hwcr Hckr].
+         inversion_clear Hsem as [| | | | | | | | | |?????????? Hse Hsr Hboolsof Hsemn].
 
          rewrite app_assoc in Hndup.
          assert (Hndup'':=Hndup). apply NoDupMembers_app_l in Hndup''; auto.
@@ -2510,14 +2632,14 @@ Module Type LCLOCKSEMANTICS
       assert (NoDupMembers (idck cenv)) as Hndup'.
       { apply NoDupMembers_app_l in Hndup. apply NoDupMembers_idck; auto. }
       destruct e.
-      1-8:(eapply sc_exp in Hse; eauto using extract_sc;
+      1-9:(eapply sc_exp in Hse; eauto using extract_sc;
            eapply sc_var_inv_weaken; eauto; intros; simpl; left; eauto).
       (* Eapp case, we can't use sc_exp directly because
          we don't have DisjointFresh at top-level *)
       eapply extract_sc; eauto.
       inv Hse.
       + take (sem_node _ _ _ _) and inversion it; subst.
-        inversion_clear Hwc as [| | | | | | | | |???? bck sub Wce ? WIi WIo|].
+        inversion_clear Hwc as [| | | | | | | | | |???? bck sub Wce ? WIi WIo|].
         match goal with
         | H1: find_node _ G = Some _, H2: find_node _ G = Some _ |- _
           => rewrite H2 in H1; inv H1
@@ -2632,7 +2754,7 @@ Module Type LCLOCKSEMANTICS
         rename H3 into Hwt.
         rename H15 into Hsemn.
         inversion_clear Hwc as
-            [| | | | | | | | | |?????? bck sub Hwce ? WIi WIo Hwcr Hckr].
+            [| | | | | | | | | | |?????? bck sub Hwce ? WIi WIo Hwcr Hckr].
 
         assert (Hndup'':=Hndup); simpl in Hndup''. rewrite app_assoc in Hndup''. apply NoDupMembers_app_l in Hndup''.
         assert (Hse':=H11).
@@ -3237,6 +3359,13 @@ Module Type LCLOCKSEMANTICS
         econstructor...
         + ndup_l Hndup. repeat rewrite_Forall_forall... eapply H0...
         + ndup_r Hndup. repeat rewrite_Forall_forall... eapply H1...
+      - (* arrow *)
+        econstructor...
+        + ndup_l Hndup. repeat rewrite_Forall_forall... eapply H0...
+        + ndup_r Hndup. repeat rewrite_Forall_forall... eapply H1...
+      (* - (* pre *) *)
+      (*   econstructor... *)
+      (*   repeat rewrite_Forall_forall... eapply H0... *)
       - (* when *)
         econstructor...
         repeat rewrite_Forall_forall... eapply H0...

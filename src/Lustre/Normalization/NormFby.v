@@ -53,14 +53,20 @@ Module Type NORMFBY
 
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
   Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
-    let '(ty, cl) := ann in
+    let '(ty, (ck, name)) := ann in
     if (is_constant e0)
     then ret (Efby [e0] [e] [ann], [])
-    else do (initid, eqs) <- init_var_for_clock (fst cl);
-         do px <- fresh_ident ((ty, fst cl), false);
-         ret (Eite (Evar initid (bool_type, (fst cl, Some initid))) [e0]
-                   [Evar px (ty, (fst cl, Some px))] ([ty], cl),
-              ([px], [Efby [add_whens (Econst (init_type ty)) ty (fst cl)] [e] [ann]])::eqs).
+    else do (initid, eqs) <- init_var_for_clock ck;
+         do px <- fresh_ident ((ty, ck), false);
+         ret (Eite (Evar initid (bool_type, (ck, Some initid))) [e0]
+                   [Evar px (ty, (ck, Some px))] ([ty], (ck, name)),
+              ([px], [Efby [add_whens (Econst (init_type ty)) ty ck] [e] [ann]])::eqs).
+
+  Definition arrow_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
+    let '(ty, (ck, name)) := ann in
+    do (initid, eqs) <- init_var_for_clock ck;
+    ret (Eite (Evar initid (bool_type, (ck, Some initid))) [e0] [e]
+              ([ty], (ck, name)), eqs).
 
   Definition fby_equation (to_cut : PS.t) (eq : equation) : FreshAnn (list equation) :=
     match eq with
@@ -71,6 +77,9 @@ Module Type NORMFBY
       then do x' <- fresh_ident ((ty, ck), false);
            ret (([x], [Evar x' ann])::([x'], [fby])::eqs)
       else ret (([x], [fby])::eqs)
+    | ([x], [Earrow [e0] [e] [ann]]) =>
+      do (ite, eqs) <- arrow_iteexp e0 e ann;
+      ret (([x], [ite])::eqs)
     | _ => ret [eq]
     end.
 
@@ -94,21 +103,31 @@ Module Type NORMFBY
                  then do x' <- fresh_ident ((ty, ck), false);
                       ret (([x], [Evar x' ann])::([x'], [fby])::eqs)
                  else ret (([x], [fby])::eqs)))
+      \/ (exists x, exists e0, exists e, exists ann,
+                xs = [x] /\
+                es = [Earrow [e0] [e] [ann]] /\
+                fby_equation to_cut (xs, es) =
+                (do (ite, eqs) <- arrow_iteexp e0 e ann;
+                   ret (([x], [ite])::eqs)))
       \/ fby_equation to_cut (xs, es) = (ret [(xs, es)]).
   Proof.
     intros *.
     destruct_to_singl xs. destruct_to_singl es.
-    2: { right; simpl. destruct e; auto.
-         destruct_to_singl l. destruct_to_singl l0. destruct_to_singl l1. }
+    2: { repeat right; simpl. destruct e; auto.
+         1,2,3:(destruct_to_singl l; destruct_to_singl l0; destruct_to_singl l1).
+    }
     destruct e; auto.
-    destruct_to_singl l. destruct_to_singl l0. destruct_to_singl l1.
-    left. repeat eexists; eauto.
+    1,2,3:destruct_to_singl l; destruct_to_singl l0. 1,2:destruct_to_singl l1.
+    left. 2:right;left.
+    1,2:repeat eexists; eauto.
   Qed.
 
   Ltac inv_fby_equation Hfby to_cut eq :=
     let Hspec := fresh "Hspec" in
     destruct eq as [xs es];
-    specialize (fby_equation_spec to_cut xs es) as [[? [? [? [? [? [? Hspec]]]]]]|Hspec];
+    specialize (fby_equation_spec to_cut xs es) as
+        [[? [? [? [? [? [? Hspec]]]]]]|
+         [[? [? [? [? [? [? Hspec]]]]]]|Hspec]];
     subst; rewrite Hspec in Hfby; clear Hspec; repeat inv_bind; auto.
 
   (** *** Preservation of st_valid *)
@@ -133,11 +152,22 @@ Module Type NORMFBY
       st_valid_after st aft ->
       st_valid_after st' aft.
   Proof with eauto.
-    intros e0 e [ty cl] e' eqs' st st' aft Hfby Hvalid.
+    intros e0 e [ty [ck name]] e' eqs' st st' aft Hfby Hvalid.
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind...
   Qed.
   Hint Resolve fby_iteexp_st_valid.
+
+  Fact arrow_iteexp_st_valid : forall e0 e a e' eqs' st st' aft,
+      arrow_iteexp e0 e a st = (e', eqs', st') ->
+      st_valid_after st aft ->
+      st_valid_after st' aft.
+  Proof with eauto.
+    intros e0 e [ty [ck name]] e' eqs' st st' aft Hfby Hvalid.
+    unfold arrow_iteexp in Hfby.
+    repeat inv_bind...
+  Qed.
+  Hint Resolve arrow_iteexp_st_valid.
 
   Fact fby_equation_st_valid : forall to_cut eq eqs' st st' aft,
       fby_equation to_cut eq st = (eqs', st') ->
@@ -151,6 +181,7 @@ Module Type NORMFBY
     - eapply fresh_ident_st_valid; eauto.
       eapply fby_iteexp_st_valid with (a:=(ty, (ck, name))); unfold fby_iteexp; eauto.
     - eapply fby_iteexp_st_valid with (a:=(ty, (ck, name))); unfold fby_iteexp; eauto.
+    - eapply arrow_iteexp_st_valid; eauto.
   Qed.
 
   Fact fby_equations_st_valid : forall to_cut eqs eqs' st st' aft,
@@ -184,13 +215,23 @@ Module Type NORMFBY
       fby_iteexp e0 e ann st = (res, st') ->
       st_follows st st'.
   Proof.
-    intros e0 e [ty cl] res st st' Hfby.
+    intros e0 e [ty [ck name]] res st st' Hfby.
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind.
     - reflexivity.
     - etransitivity; eauto.
   Qed.
   Hint Resolve fby_iteexp_st_follows.
+
+  Fact arrow_iteexp_st_follows : forall e0 e ann res st st',
+      arrow_iteexp e0 e ann st = (res, st') ->
+      st_follows st st'.
+  Proof.
+    intros e0 e [ty [ck name]] res st st' Hfby.
+    unfold arrow_iteexp in Hfby.
+    repeat inv_bind; eauto.
+  Qed.
+  Hint Resolve arrow_iteexp_st_follows.
 
   Fact fby_equation_st_follows : forall to_cut eq eqs' st st',
       fby_equation to_cut eq st = (eqs', st') ->
@@ -202,6 +243,7 @@ Module Type NORMFBY
       eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H.
       destruct (PS.mem _ _); repeat inv_bind; auto.
       eapply fresh_ident_st_follows in H0. etransitivity; eauto.
+    - eapply arrow_iteexp_st_follows; eauto.
     - reflexivity.
   Qed.
   Hint Resolve fby_equation_st_follows.
@@ -242,6 +284,15 @@ Module Type NORMFBY
     rewrite <- H0, H; auto.
   Qed.
 
+  Fact arrow_iteexp_vars_perm : forall e0 e ann e' eqs' st st',
+      arrow_iteexp e0 e ann st = (e', eqs', st') ->
+      Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
+  Proof.
+    intros ? ? [ty [ck name]] ? ? ? ? Hfby.
+    unfold arrow_iteexp in Hfby. repeat inv_bind.
+    eapply init_var_for_clock_vars_perm in H; eauto.
+  Qed.
+
   Fact fby_equation_vars_perm : forall to_cut eq eqs' st st',
       fby_equation to_cut eq st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined [eq])++(st_ids st')).
@@ -249,11 +300,12 @@ Module Type NORMFBY
     intros * Hfby.
     inv_fby_equation Hfby to_cut eq.
     destruct x2 as [ty [ck name]]; repeat inv_bind.
-    eapply fby_iteexp_vars_perm with (ann:=(ty, (ck, name))) in H.
-    destruct (PS.mem _ _); repeat inv_bind; simpl.
-    + apply fresh_ident_vars_perm in H0.
-      rewrite H, <- H0; auto.
-    + rewrite H; auto.
+    - eapply fby_iteexp_vars_perm with (ann:=(ty, (ck, name))) in H.
+      destruct (PS.mem _ _); repeat inv_bind; simpl.
+      + apply fresh_ident_vars_perm in H0.
+        rewrite H, <- H0; auto.
+      + rewrite H; auto.
+    - eapply arrow_iteexp_vars_perm in H; simpl; auto.
   Qed.
 
   Fact fby_equations_vars_perm : forall to_cut eqs eqs' st st',
@@ -430,6 +482,42 @@ Module Type NORMFBY
     - eapply init_var_for_clock_wl; eauto.
   Qed.
 
+  Fact arrow_iteexp_numstreams : forall e0 e a e' eqs' st st',
+      arrow_iteexp e0 e a st = (e', eqs', st') ->
+      numstreams e' = 1.
+  Proof.
+    intros * Hfby. destruct a as [ty [ck name]].
+    unfold arrow_iteexp in Hfby.
+    repeat inv_bind. reflexivity.
+  Qed.
+
+  Fact arrow_iteexp_wl_exp : forall G e0 e a e' eqs' st st',
+      wl_exp G e0 ->
+      wl_exp G e ->
+      numstreams e0 = 1 ->
+      numstreams e = 1 ->
+      arrow_iteexp e0 e a st = (e', eqs', st') ->
+      wl_exp G e'.
+  Proof.
+    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby. destruct a as [ty [ck name]].
+    unfold arrow_iteexp in Hfby; repeat inv_bind.
+    repeat constructor; auto; simpl.
+    1,2:rewrite app_nil_r, length_annot_numstreams; auto.
+  Qed.
+
+  Fact arrow_iteexp_wl_eq : forall G e0 e a e' eqs' st st',
+      wl_exp G e0 ->
+      wl_exp G e ->
+      numstreams e0 = 1 ->
+      numstreams e = 1 ->
+      arrow_iteexp e0 e a st = (e', eqs', st') ->
+      Forall (wl_equation G) eqs'.
+  Proof.
+    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby. destruct a as [ty [ck name]].
+    unfold arrow_iteexp in Hfby; repeat inv_bind.
+    eapply init_var_for_clock_wl in H; eauto.
+  Qed.
+
   Fact fby_equation_wl : forall G to_cut eq eqs' st st',
       wl_equation G eq ->
       fby_equation to_cut eq st = (eqs', st') ->
@@ -437,16 +525,23 @@ Module Type NORMFBY
   Proof.
     intros * Hwl Hfby.
     inv_fby_equation Hfby to_cut eq.
-    destruct x2 as [ty [ck name]]; repeat inv_bind.
-    destruct Hwl as [Hwl _]. apply Forall_singl in Hwl.
-    inv Hwl. apply Forall_singl in H4. apply Forall_singl in H6.
-    simpl in *. rewrite app_nil_r, length_annot_numstreams in *.
-    assert (Hn:=H). eapply fby_iteexp_numstreams with (a:=(ty, (ck, name))) in Hn; eauto.
-    assert (H':=H). eapply fby_iteexp_wl_exp with (a:=(ty, (ck, name))) in H'; eauto.
-    eapply fby_iteexp_wl_eq with (a:=(ty, (ck, name))) in H; eauto.
-    destruct (PS.mem _ _); repeat inv_bind; auto.
-    1,2:(repeat constructor; simpl; auto;
-         rewrite app_nil_r, length_annot_numstreams; auto).
+    - destruct x2 as [ty [ck name]]; repeat inv_bind.
+      destruct Hwl as [Hwl _]. apply Forall_singl in Hwl.
+      inv Hwl. apply Forall_singl in H4. apply Forall_singl in H6.
+      simpl in *. rewrite app_nil_r, length_annot_numstreams in *.
+      assert (Hn:=H). eapply fby_iteexp_numstreams with (a:=(ty, (ck, name))) in Hn; eauto.
+      assert (H':=H). eapply fby_iteexp_wl_exp with (a:=(ty, (ck, name))) in H'; eauto.
+      eapply fby_iteexp_wl_eq with (a:=(ty, (ck, name))) in H; eauto.
+      destruct (PS.mem _ _); repeat inv_bind; auto.
+      1,2:(repeat constructor; simpl; auto;
+           rewrite app_nil_r, length_annot_numstreams; auto).
+    - destruct Hwl as [Hwl _]. inv Hwl. inv H2.
+      inv H5. inv H7. simpl in *. rewrite app_nil_r, length_annot_numstreams in *.
+      constructor. 2:eapply arrow_iteexp_wl_eq in H; eauto.
+      repeat constructor; simpl.
+      + eapply arrow_iteexp_wl_exp in H; eauto.
+      + eapply arrow_iteexp_numstreams in H.
+        rewrite app_nil_r, length_annot_numstreams; auto.
   Qed.
 
   (** ** After normalization, equations and expressions are normalized *)
@@ -519,7 +614,7 @@ Module Type NORMFBY
       fby_iteexp e0 e a st = (e', eqs', st') ->
       Forall untupled_equation eqs'.
   Proof.
-    intros * Hnormed1 Hnormed2 Hfby. destruct a as [ty ck].
+    intros * Hnormed1 Hnormed2 Hfby. destruct a as [ty [ck name]].
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind; auto.
     repeat constructor; auto.
@@ -533,7 +628,7 @@ Module Type NORMFBY
       fby_iteexp e0 e a st = (e', eqs', st') ->
       Forall (normalized_equation out) eqs'.
   Proof.
-    intros e0 e [ty cl] e' eqs' out st st' Hvalid He Hfby.
+    intros e0 e [ty [ck name]] e' eqs' out st st' Hvalid He Hfby.
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind; constructor.
     - assert (st_valid_after x1 out) as Hvalid' by eauto.
@@ -549,14 +644,17 @@ Module Type NORMFBY
       Forall untupled_equation eqs'.
   Proof.
     intros * Hunt Hfby.
-    inv_fby_equation Hfby to_cut eq.
-    destruct x2 as [ty [ck name]]; repeat inv_bind.
-    inv Hunt. 2:(inv H2; inv H1).
-    destruct (is_constant _); repeat inv_bind.
-    - destruct (PS.mem _ _); repeat inv_bind; repeat constructor; auto.
-    - destruct (PS.mem _ _); repeat inv_bind; repeat constructor; auto.
-      1,3:eapply add_whens_normalized_lexp; eauto.
-      1,2:eapply init_var_for_clock_untupled_eq; eauto.
+    inv_fby_equation Hfby to_cut eq;
+      try destruct x2 as [ty [ck name]]; repeat inv_bind.
+    1-3:inv Hunt.
+    2:(inv H2; inv H1). 3:(inv H1; inv H0).
+    - destruct (is_constant _); repeat inv_bind.
+      + destruct (PS.mem _ _); repeat inv_bind; repeat constructor; auto.
+      + destruct (PS.mem _ _); repeat inv_bind; repeat constructor; auto.
+        1,3:eapply add_whens_normalized_lexp; eauto.
+        1,2:eapply init_var_for_clock_untupled_eq; eauto.
+    - repeat constructor; auto.
+      eapply init_var_for_clock_untupled_eq in H; eauto.
   Qed.
 
   Fact fby_equation_normalized_eq : forall out to_cut eq eqs' st st',
@@ -578,6 +676,9 @@ Module Type NORMFBY
       2,4:rewrite is_constant_normalized_constant in Hconst; eauto.
       + eapply fresh_ident_nIn' in H0; eauto.
       + apply PSE.mem_4 in Hmem; auto.
+    - destruct ann0 as [ty [ck name]]; repeat inv_bind.
+      repeat constructor; auto.
+      eapply init_var_for_clock_normalized_eq in H; eauto.
     - inv H0; repeat inv_bind; auto.
       inv H; repeat inv_bind; auto.
   Qed.

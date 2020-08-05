@@ -89,6 +89,8 @@ Inductive exp : Type :=
 | Ebinop : binop -> exp -> exp -> ann -> exp
 
 | Efby   : list exp -> list exp -> list ann -> exp
+| Earrow : list exp -> list exp -> list ann -> exp
+(* | Epre   : list exp -> list ann -> exp *)
 | Ewhen  : list exp -> ident -> bool -> lann -> exp
 | Emerge : ident -> list exp -> list exp -> lann -> exp
 | Eite   : exp -> list exp -> list exp -> lann -> exp

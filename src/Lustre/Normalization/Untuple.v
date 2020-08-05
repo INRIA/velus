@@ -90,6 +90,9 @@ Module Type UNTUPLE
   Definition normalize_fby (e0s : list exp) (es : list exp) (anns : list ann) :=
     map (fun '((e0, e), a) => Efby [e0] [e] [a]) (combine (combine e0s es) anns).
 
+  Definition normalize_arrow (e0s : list exp) (es : list exp) (anns : list ann) :=
+    map (fun '((e0, e), a) => Earrow [e0] [e] [a]) (combine (combine e0s es) anns).
+
   Definition normalize_when ckid b es tys ck :=
     map (fun '(e, ty) => Ewhen [e] ckid b ([ty], ck)) (combine es tys).
 
@@ -129,6 +132,20 @@ Module Type UNTUPLE
       do (e1', eqs1) <- normalize_exp false e1;
       do (e2', eqs2) <- normalize_exp false e2;
       ret ([Ebinop op (hd_default e1') (hd_default e2') ann], eqs1++eqs2)
+    | Efby e0s es anns =>
+      do (e0s', eqs1) <- normalize_exps e0s;
+      do (es', eqs2) <- normalize_exps es;
+      let fbys := normalize_fby e0s' es' anns in
+      do xs <- idents_for_anns anns;
+      ret (List.map (fun '(x, ann) => Evar x ann) xs,
+           (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2)
+    | Earrow e0s es anns =>
+      do (e0s', eqs1) <- normalize_exps e0s;
+      do (es', eqs2) <- normalize_exps es;
+      let arrows := normalize_arrow e0s' es' anns in
+      do xs <- idents_for_anns anns;
+      ret (List.map (fun '(id, ann) => Evar id ann) xs,
+           (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) arrows))++eqs1++eqs2)
     | Ewhen es ckid b (tys, ck) =>
       do (es', eqs) <- normalize_exps es;
       ret (normalize_when ckid b es' tys ck, eqs)
@@ -153,13 +170,6 @@ Module Type UNTUPLE
         do xs <- idents_for_anns (List.map (fun ty => (ty, ck)) tys);
         ret (List.map (fun '(id, ann) => Evar id ann) xs,
              (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) ites))++eqs0++eqs1++eqs2)
-    | Efby e0s es anns =>
-      do (e0s', eqs1) <- normalize_exps e0s;
-      do (es', eqs2) <- normalize_exps es;
-      let fbys := normalize_fby e0s' es' anns in
-      do xs <- idents_for_anns anns;
-      ret (List.map (fun '(x, ann) => Evar x ann) xs,
-           (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2)
     | Eapp f es r anns =>
       do (es', eqs1) <- normalize_exps es;
       do (r', eqs2) <- match r with
@@ -193,6 +203,11 @@ Module Type UNTUPLE
       do (es', eqs2) <- normalize_exps es;
       let fbys := normalize_fby e0s' es' anns in
       ret (fbys, eqs1++eqs2)
+    | Earrow e0s es anns =>
+      do (e0s', eqs1) <- normalize_exps e0s;
+      do (es', eqs2) <- normalize_exps es;
+      let arrows := normalize_arrow e0s' es' anns in
+      ret (arrows, eqs1++eqs2)
     | _ => normalize_exp true e
     end.
 
@@ -447,6 +462,12 @@ Module Type UNTUPLE
       assert (NoDup (map fst (fresh_ins es)++PS.elements reusable)) by ndup_r Hnd.
       rewrite ps_adds_app in Hvalid... repeat solve_st_valid.
       rewrite Permutation_PS_elements_ps_adds'; eauto.
+    - (* arrow *)
+      repeat inv_bind. ndup_simpl.
+      assert (NoDup (map fst (fresh_ins e0s)++PS.elements reusable)) by ndup_l Hnd.
+      assert (NoDup (map fst (fresh_ins es)++PS.elements reusable)) by ndup_r Hnd.
+      rewrite ps_adds_app in Hvalid... repeat solve_st_valid.
+      rewrite Permutation_PS_elements_ps_adds'; eauto.
     - (* when *)
       destruct a.
       repeat inv_bind; repeat solve_st_valid.
@@ -487,6 +508,13 @@ Module Type UNTUPLE
     destruct e; try (solve [eapply normalize_exp_st_valid in Hnorm; eauto]);
       simpl in *; unfold normalize_exps in *.
     - (* fby *)
+      ndup_simpl.
+      repeat inv_bind.
+      repeat rewrite ps_adds_app in Hvalid;
+        repeat solve_st_valid.
+      2: rewrite Permutation_PS_elements_ps_adds'; eauto.
+      1,2: ndup_r Hnd.
+    - (* arrow *)
       ndup_simpl.
       repeat inv_bind.
       repeat rewrite ps_adds_app in Hvalid;
@@ -679,6 +707,8 @@ Module Type UNTUPLE
       repeat inv_bind; etransitivity...
     - (* fby *)
       repeat inv_bind; repeat solve_st_follows'.
+    - (* arrow *)
+      repeat inv_bind; repeat solve_st_follows'.
     - (* when *)
       destruct a.
       repeat inv_bind; repeat solve_st_follows'.
@@ -711,7 +741,7 @@ Module Type UNTUPLE
     intros * Hnorm.
     destruct e; try (solve [eapply normalize_exp_st_follows; eauto]);
       simpl in Hnorm; unfold normalize_exps in *.
-    - (* fby *)
+    1,2:
       repeat inv_bind;
         repeat solve_st_follows';
         eapply Forall_forall; intros; eauto.
@@ -908,6 +938,9 @@ Module Type UNTUPLE
     - (* fby *)
       simpl in *. rewrite map_length.
       apply idents_for_anns_length in H3...
+    - (* arrow *)
+      simpl in *. rewrite map_length.
+      apply idents_for_anns_length in H3...
     - (* when *)
       unfold normalize_when. rewrite map_length.
       eapply map_bind2_length in H0.
@@ -969,6 +1002,23 @@ Module Type UNTUPLE
     unfold normalize_fby. solve_length.
   Qed.
 
+  Fact normalize_arrow_length : forall e0s es anns,
+      length e0s = length anns ->
+      length es = length anns ->
+      length (normalize_arrow e0s es anns) = length anns.
+  Proof.
+    intros * Hl1 Hl2.
+    unfold normalize_arrow. solve_length.
+  Qed.
+
+  (* Fact normalize_pre_length : forall es anns, *)
+  (*     length es = length anns -> *)
+  (*     length (normalize_pre es anns) = length anns. *)
+  (* Proof. *)
+  (*   intros * Hl1. *)
+  (*   unfold normalize_pre. solve_length. *)
+  (* Qed. *)
+
   Fact normalize_merge_length : forall ckid ets efs tys nck,
     length ets = length tys ->
     length efs = length tys ->
@@ -996,11 +1046,12 @@ Module Type UNTUPLE
       destruct e; unfold normalize_rhs in Hnorm;
         try (solve [right; eapply normalize_exp_length; eauto]);
         try (destruct o); repeat inv_bind; auto.
-    (* keep_fby = true *)
-    right. inv Hwt.
-    eapply normalize_fby_length; eauto.
-    - eapply normalize_exps_length in H; eauto. congruence.
-    - eapply normalize_exps_length in H0; eauto. congruence.
+    1,2,3:right; inv Hwt;
+      eapply normalize_exps_length in H; eauto.
+    1,2:eapply normalize_exps_length in H0; eauto.
+    eapply normalize_fby_length; eauto; congruence.
+    eapply normalize_arrow_length; eauto; congruence.
+    (* eapply normalize_pre_length; eauto; congruence. *)
   Qed.
   Hint Resolve normalize_rhs_length.
 
@@ -1010,12 +1061,12 @@ Module Type UNTUPLE
   Proof.
     intros e is_control es' eqs' st st' Hnorm.
     induction e; simpl in Hnorm; repeat inv_bind; repeat constructor.
-    2: destruct l0.
-    3,4: destruct l1.
-    3,4: destruct is_control.
-    1,2,3,4,5,6,7:(repeat inv_bind; unfold normalize_when, normalize_merge, normalize_ite;
-                   rewrite Forall_forall; intros ? Hin;
-                   repeat simpl_In; reflexivity).
+    3:destruct l0; repeat inv_bind.
+    4,5: destruct l1, is_control; repeat inv_bind.
+    1,2,5,7,8:rewrite Forall_map; eapply Forall_forall; intros [? ?] ?; auto.
+    1,2,3:(unfold normalize_when, normalize_merge, normalize_ite;
+           rewrite Forall_forall; intros ? Hin;
+           repeat simpl_In; reflexivity).
   Qed.
 
   Corollary map_bind2_normalize_exp_numstreams : forall es is_control es' eqs' st st',
@@ -1102,6 +1153,7 @@ Module Type UNTUPLE
       (* specialize (normalize_exp_length _ _ _ es' eqs' st st' Hwl Hnorm) as Hlength; *)
         inv Hwl; repeat inv_bind...
     - (* fby *) apply idents_for_anns_annots in H1...
+    - (* assoc *) apply idents_for_anns_annots in H1...
     - (* when *)
       assert (length (concat x0) = length (annots l)) as Hlen by eauto.
       repeat simpl_list.
@@ -1247,6 +1299,25 @@ Module Type UNTUPLE
     f_equal. eauto.
   Qed.
 
+  Fact normalize_arrow_annot : forall anns e0s es,
+      length e0s = length anns ->
+      length es = length anns ->
+      annots (normalize_arrow e0s es anns) = anns.
+  Proof.
+    induction anns; intros * Hl1 Hl2;
+      destruct e0s; destruct es; simpl in *; try congruence; auto.
+    f_equal. eauto.
+  Qed.
+
+  (* Fact normalize_pre_annot : forall anns es, *)
+  (*     length es = length anns -> *)
+  (*     annots (normalize_pre es anns) = anns. *)
+  (* Proof. *)
+  (*   induction anns; intros * Hl1; *)
+  (*     destruct es; simpl in *; try congruence; auto. *)
+  (*   f_equal. eauto. *)
+  (* Qed. *)
+
   Fact normalize_fby_annot' : forall anns e0s es,
       length e0s = length anns ->
       length es = length anns ->
@@ -1257,6 +1328,27 @@ Module Type UNTUPLE
     - constructor.
     - simpl. constructor; eauto.
   Qed.
+
+  Fact normalize_arrow_annot' : forall anns e0s es,
+      length e0s = length anns ->
+      length es = length anns ->
+      Forall2 (fun e a => annot e = [a]) (normalize_arrow e0s es anns) anns.
+  Proof.
+    induction anns; intros * Hl1 Hl2;
+      destruct e0s; destruct es; simpl in *; try congruence; auto.
+    - constructor.
+    - simpl. constructor; eauto.
+  Qed.
+
+  (* Fact normalize_pre_annot' : forall anns es, *)
+  (*     length es = length anns -> *)
+  (*     Forall2 (fun e a => annot e = [a]) (normalize_pre es anns) anns. *)
+  (* Proof. *)
+  (*   induction anns; intros * Hl1; *)
+  (*     destruct es; simpl in *; try congruence; auto. *)
+  (*   - constructor. *)
+  (*   - simpl. constructor; eauto. *)
+  (* Qed. *)
 
   Fact normalize_rhs_annot : forall G e es' eqs' st st',
       wl_exp G e ->
@@ -1269,6 +1361,11 @@ Module Type UNTUPLE
     - (* fby *)
       repeat inv_bind. inv Hwt.
       eapply normalize_fby_annot; eauto.
+      + eapply normalize_exps_length in H; eauto. congruence.
+      + eapply normalize_exps_length in H0; eauto. congruence.
+    - (* arrow *)
+      repeat inv_bind. inv Hwt.
+      eapply normalize_arrow_annot; eauto.
       + eapply normalize_exps_length in H; eauto. congruence.
       + eapply normalize_exps_length in H0; eauto. congruence.
     - (* app *)
@@ -1394,7 +1491,7 @@ Module Type UNTUPLE
       etransitivity. 2: eauto. repeat simpl_list.
       rewrite Permutation_swap.
       apply Permutation_app_head...
-    - (* fby *)
+    - (* arrow *)
       repeat inv_bind.
       remember (normalize_fby _ _ _) as fby.
       assert (length x5 = length fby) as Hlen.
@@ -1409,9 +1506,33 @@ Module Type UNTUPLE
       repeat simpl_list.
       etransitivity. 2:apply H3.
       replace (map (fun x => fst (let '(x0, _, fby) := x in ([x0], [fby]))) (combine x5 _)) with (map (fun x => [fst x]) x5).
-      2: { clear - Hlen. revert fby Hlen.
-           induction x5; intros; destruct fby; simpl in *; try congruence.
-           destruct a. f_equal; eauto. }
+      2:{ clear - Hlen. revert fby Hlen.
+          induction x5; intros; destruct fby; simpl in *; try congruence.
+          destruct a. f_equal; eauto. }
+      repeat rewrite concat_app.
+      replace (concat (map (fun x => [fst x]) x5)) with (map fst x5).
+      2: { clear. induction x5; simpl; f_equal; auto. }
+      repeat rewrite <- app_assoc. apply Permutation_app_head.
+      etransitivity. 2: eauto.
+      rewrite Permutation_swap. apply Permutation_app_head; auto.
+    - (* arrow *)
+      repeat inv_bind.
+      remember (normalize_arrow _ _ _) as fby.
+      assert (length x5 = length fby) as Hlen.
+      { eapply map_bind2_normalize_exp_length in H1...
+        eapply map_bind2_normalize_exp_length in H2...
+        apply idents_for_anns_length in H3...
+        rewrite Heqfby, normalize_arrow_length; solve_length.
+      }
+      apply map_bind2_vars_perm in H1. 2:solve_forall.
+      apply map_bind2_vars_perm in H2. 2:solve_forall.
+      apply idents_for_anns_vars_perm in H3.
+      repeat simpl_list.
+      etransitivity. 2:apply H3.
+      replace (map fst (combine _ _)) with (map (fun x => [fst x]) x5).
+      2:{ clear - Hlen. revert fby Hlen.
+          induction x5; intros; destruct fby; simpl in *; try congruence.
+          destruct a. f_equal; eauto. }
       repeat rewrite concat_app.
       replace (concat (map (fun x => [fst x]) x5)) with (map fst x5).
       2: { clear. induction x5; simpl; f_equal; auto. }
@@ -1534,6 +1655,13 @@ Module Type UNTUPLE
     destruct e; unfold normalize_rhs in Hnorm;
       try (solve [eapply normalize_exp_vars_perm; eauto]); inv Hwt; repeat inv_bind.
     - (* fby *)
+      repeat inv_bind.
+      eapply normalize_exps_vars_perm in H...
+      eapply normalize_exps_vars_perm in H0...
+      etransitivity. 2: eauto.
+      repeat simpl_list.
+      rewrite Permutation_swap. apply Permutation_app_head; auto.
+    - (* arrow *)
       repeat inv_bind.
       eapply normalize_exps_vars_perm in H...
       eapply normalize_exps_vars_perm in H0...
@@ -1674,6 +1802,10 @@ Module Type UNTUPLE
       normalized_lexp e0 ->
       normalized_lexp e ->
       untupled_equation ([x], [Efby [e0] [e] [ann]])
+  | untupled_eq_Earrow : forall x e0 e ann,
+      normalized_lexp e0 ->
+      normalized_lexp e ->
+      untupled_equation ([x], [Earrow [e0] [e] [ann]])
   | untupled_eq_cexp : forall x e,
       normalized_cexp e ->
       untupled_equation ([x], [e]).
@@ -1767,6 +1899,10 @@ Module Type UNTUPLE
       simpl_forall.
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a0...
+    - (* arrow *)
+      simpl_forall.
+      repeat rewrite_Forall_forall.
+      repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind. unfold normalize_when.
       apply map_bind2_normalized_lexp' in H0...
@@ -1854,6 +1990,9 @@ Module Type UNTUPLE
     - (* fby *)
       solve_forall.
       repeat simpl_In. destruct a0...
+    - (* arrow *)
+      solve_forall.
+      repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind. unfold normalize_when.
       apply map_bind2_normalized_lexp in H0.
@@ -1915,8 +2054,17 @@ Module Type UNTUPLE
         * eapply Forall_forall in H7...
         * eapply Forall_forall in H5...
       + eapply map_bind2_untupled_eq in H1... solve_forall.
-      + eapply map_bind2_untupled_eq in H2...
-        eapply map_bind2_st_follows in H1; solve_forall.
+      + eapply map_bind2_untupled_eq in H2... solve_forall.
+    - (* arrow *)
+      repeat rewrite Forall_app. repeat split.
+      + eapply map_bind2_normalized_lexp in H1.
+        eapply map_bind2_normalized_lexp in H2.
+        eapply Forall_forall; intros ? Hin.
+        unfold normalize_arrow in Hin. destruct x. repeat simpl_In.
+        constructor.
+        1,2:eapply Forall_forall; [|eauto]...
+      + eapply map_bind2_untupled_eq in H1... solve_forall.
+      + eapply map_bind2_untupled_eq in H2... solve_forall.
     - (* when *)
       destruct a. repeat inv_bind.
       eapply map_bind2_untupled_eq in H0; eauto. solve_forall.
@@ -1990,6 +2138,10 @@ Module Type UNTUPLE
       normalized_lexp e0 ->
       normalized_lexp e ->
       untupled_rhs (Efby [e0] [e] [ann])
+  | untupled_rhs_Earrow : forall e0 e ann,
+      normalized_lexp e0 ->
+      normalized_lexp e ->
+      untupled_rhs (Earrow [e0] [e] [ann])
   | untupled_rhs_cexp : forall e,
       normalized_cexp e ->
       untupled_rhs e.
@@ -2020,6 +2172,14 @@ Module Type UNTUPLE
       constructor.
       + eapply Forall_forall in H3; eauto.
       + eapply Forall_forall in H1; eauto.
+    - (* arrow *)
+      repeat inv_bind.
+      apply normalize_exps_normalized_lexp in H.
+      apply normalize_exps_normalized_lexp in H0.
+      unfold normalize_arrow.
+      apply Forall_forall; intros * Hin.
+      repeat simpl_In.
+      constructor. 1,2:eapply Forall_forall; [|eauto]...
     - (* app *)
       destruct o; repeat inv_bind...
       specialize (normalize_reset_spec (hd_default x4)) as [[? [[? ?] [? Hspec]]]|Hspec]; subst;
@@ -2048,6 +2208,9 @@ Module Type UNTUPLE
     destruct e; unfold normalize_rhs in Hnorm;
       try (eapply normalize_exp_untupled_eq in Hnorm; eauto).
     - (* fby *)
+      repeat inv_bind.
+      repeat rewrite Forall_app. repeat split...
+    - (* arrow *)
       repeat inv_bind.
       repeat rewrite Forall_app. repeat split...
     - (* app *)
@@ -2089,8 +2252,7 @@ Module Type UNTUPLE
       revert xs Hlen.
       induction H; intros xs Hlen; constructor.
       + inv H...
-        * destruct xs; simpl in *; try omega.
-          constructor...
+        1,2:destruct xs; simpl in *; try omega; constructor...
         * simpl in Hlen. rewrite app_length in Hlen.
           rewrite length_annot_numstreams in Hlen.
           specialize (normalized_cexp_numstreams _ H1) as Hlen'.
@@ -2212,9 +2374,8 @@ Module Type UNTUPLE
     - (* app (reset) *)
       unfold fresh_ins. rewrite concat_eq_nil, Forall_map.
       solve_forall. eapply normalized_lexp_no_fresh...
-    - (* fby *)
-      rewrite normalized_lexp_no_fresh...
-      rewrite normalized_lexp_no_fresh...
+    - (* fby *) repeat rewrite normalized_lexp_no_fresh...
+    - (* arrow *) repeat rewrite normalized_lexp_no_fresh...
     - (* cexp *)
       specialize (anon_in_fresh_in e) as Hincl.
       rewrite normalized_cexp_no_fresh in Hincl...
@@ -2428,6 +2589,7 @@ Module Type UNTUPLE
       apply (Nat.lt_irrefl (length (n_out n))). rewrite <- H7 at 1. setoid_rewrite <- Hwl2; auto.
     - specialize (n_outgt0 n) as Hout.
       apply (Nat.lt_irrefl (length (n_out n))). rewrite <- H10 at 1. setoid_rewrite <- Hwl2; auto.
+    - inv contra.
   Qed.
 
   (** ** fresh_ins appear in the state after normalisation *)
@@ -2468,6 +2630,14 @@ Module Type UNTUPLE
       apply incl_app; eauto.
       etransitivity...
     - (* fby *)
+      apply incl_app.
+      + assert (st_follows x1 st') by repeat solve_st_follows.
+        apply map_bind2_fresh_incl in H1. 2:solve_forall.
+        etransitivity...
+      + assert (st_follows x4 st') by repeat solve_st_follows.
+        apply map_bind2_fresh_incl in H2. 2:solve_forall.
+        etransitivity...
+    - (* arrow *)
       apply incl_app.
       + assert (st_follows x1 st') by repeat solve_st_follows.
         apply map_bind2_fresh_incl in H1. 2:solve_forall.

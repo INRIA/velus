@@ -121,6 +121,11 @@ let rec tr_exp { F.e_desc = e; F.e_typ = tys; F.e_clk = cks } =
                                         (tr_single_type tys, tr_single_nclock cks))
   | F.Efby (e0s, es)      -> FS.Efby (tr_exps e0s, tr_exps es,
                                 List.combine (tr_types tys) (tr_nclocks cks))
+
+  | F.Earrow (e0s, es)    -> FS.Earrow (tr_exps e0s, tr_exps es,
+                                List.combine (tr_types tys) (tr_nclocks cks))
+  (* | F.Epre es             -> FS.Epre (tr_exps es,
+   *                               List.combine (tr_types tys) (tr_nclocks cks)) *)
   | F.Ewhen (es, x, b)    -> FS.Ewhen (tr_exps es, x, b,
                                        (tr_types tys, tr_first_nclock cks))
   | F.Emerge (x, ets, efs) -> FS.Emerge (x, tr_exps ets, tr_exps efs,

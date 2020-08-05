@@ -151,6 +151,20 @@ Module Type LCLOCKING
         Forall unnamed_stream anns ->
         wc_exp (Efby e0s es anns)
 
+    | wc_Earrow: forall e0s es anns,
+        Forall wc_exp e0s ->
+        Forall wc_exp es ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
+        Forall unnamed_stream anns ->
+        wc_exp (Earrow e0s es anns)
+
+    (* | wc_Epre: forall es anns, *)
+    (*     Forall wc_exp es -> *)
+    (*     Forall2 eq (map clock_of_nclock anns) (clocksof es) -> *)
+    (*     Forall unnamed_stream anns -> *)
+    (*     wc_exp (Epre es anns) *)
+
     | wc_Ewhen: forall es x b tys ck,
         Forall wc_exp es ->
         In (x, ck) vars ->
@@ -272,6 +286,25 @@ Module Type LCLOCKING
         Forall unnamed_stream anns ->
         P (Efby e0s es anns).
 
+    Hypothesis EarrowCase:
+      forall e0s es anns,
+        Forall (wc_exp G vars) e0s ->
+        Forall (wc_exp G vars) es ->
+        Forall P es ->
+        Forall P e0s ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
+        Forall unnamed_stream anns ->
+        P (Earrow e0s es anns).
+
+    (* Hypothesis EpreCase: *)
+    (*   forall es anns, *)
+    (*     Forall (wc_exp G vars) es -> *)
+    (*     Forall P es -> *)
+    (*     Forall2 eq (map clock_of_nclock anns) (clocksof es) -> *)
+    (*     Forall unnamed_stream anns -> *)
+    (*     P (Epre es anns). *)
+
     Hypothesis EwhenCase:
       forall es x b tys ck,
         Forall (wc_exp G vars) es ->
@@ -337,6 +370,11 @@ Module Type LCLOCKING
       - apply EfbyCase; auto.
         + clear H2. induction H0; auto.
         + clear H1. induction H; auto.
+      - apply EarrowCase; auto.
+        + clear H2. induction H0; auto.
+        + clear H1. induction H; auto.
+      (* - apply EpreCase; auto. *)
+      (*   clear H0. induction H; auto. *)
       - apply EwhenCase; auto.
         clear H1 H2. induction H; auto.
       - apply EmergeCase; auto.
@@ -1541,6 +1579,20 @@ Module Type LCLOCKING
            rewrite <- IHa... unfold unnamed_stream in H1.
            destruct a as [ty [ck id]]; simpl in *; subst. reflexivity. }
       apply incl_nil'.
+    - (* arrow *)
+      replace (anon_streams _) with (@nil (ident * clock)).
+      2: { clear H H0 H4 H5 H6 H7.
+           induction a; simpl; auto. inv H8.
+           rewrite <- IHa... unfold unnamed_stream in H1.
+           destruct a as [ty [ck id]]; simpl in *; subst. reflexivity. }
+      apply incl_nil'.
+    (* - (* pre *) *)
+    (*   replace (anon_streams _) with (@nil (ident * clock)). *)
+    (*   2: { clear - H4. *)
+    (*        induction a; simpl; auto. inv H4. *)
+    (*        rewrite <- IHa... unfold unnamed_stream in H1. *)
+    (*        destruct a as [ty [ck id]]; simpl in *; subst. reflexivity. } *)
+    (*   apply incl_nil'. *)
     - (* when *)
       replace (anon_streams _) with (@nil (ident * clock)).
       2: { clear H H4 H5 H6 H7.
@@ -1829,6 +1881,16 @@ Module Type LCLOCKING
       Forall_clocksof...
       specialize (H _ Hin (H4 _ Hin)). rewrite Forall_forall in *; intros.
         apply H in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, incl_appl, fresh_in_incl, Hin.
+    - (* arrow *)
+      rewrite Forall2_eq in H6, H7. unfold clock_of_nclock, stripname in H6; rewrite H6.
+      Forall_clocksof...
+      specialize (H _ Hin (H4 _ Hin)). rewrite Forall_forall in *; intros.
+        apply H in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, incl_appl, fresh_in_incl, Hin.
+    (* - (* pre *) *)
+    (*   rewrite Forall2_eq in H3. unfold clock_of_nclock, stripname in H3; rewrite H3. *)
+    (*   Forall_clocksof... *)
+    (*   specialize (H _ Hin (H2 _ Hin)). rewrite Forall_forall in *; intros. *)
+    (*     apply H in H0. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, fresh_in_incl, Hin. *)
     - (* when *)
       destruct tys; [simpl in *; auto|].
       rewrite Forall_map. eapply Forall_forall; intros ? _.
@@ -2071,6 +2133,13 @@ Module Type LCLOCKING
         econstructor...
         + rewrite Forall_forall in *...
         + rewrite Forall_forall in *...
+      - (* arrow *)
+        econstructor...
+        + rewrite Forall_forall in *...
+        + rewrite Forall_forall in *...
+      (* - (* pre *) *)
+      (*   econstructor... *)
+      (*   rewrite Forall_forall in *... *)
       - (* when *)
         econstructor...
         rewrite Forall_forall in *...
@@ -2152,6 +2221,13 @@ Module Type LCLOCKING
       constructor; rewrite Forall_forall in *...
       + apply Forall2_length in H6. rewrite clocksof_annots in H6. repeat rewrite map_length in H6...
       + apply Forall2_length in H7. rewrite clocksof_annots in H7. repeat rewrite map_length in H7...
+    - (* arrow *)
+      constructor; rewrite Forall_forall in *...
+      + apply Forall2_length in H6. rewrite clocksof_annots in H6. repeat rewrite map_length in H6...
+      + apply Forall2_length in H7. rewrite clocksof_annots in H7. repeat rewrite map_length in H7...
+    (* - (* pre *) *)
+    (*   constructor; rewrite Forall_forall in *... *)
+    (*   apply Forall2_length in H3. rewrite clocksof_annots in H3. repeat rewrite map_length in H3... *)
     - (* when *)
       constructor; rewrite Forall_forall in *...
       rewrite clocksof_annots, map_length, map_length in H7...

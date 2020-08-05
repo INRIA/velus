@@ -155,6 +155,7 @@ let precedence = function
   | F.Eunop  (op, _)    -> prec_unop op
   | F.Ebinop (op, _, _) -> prec_binop op
   | F.Efby _   -> (14, RtoL) (* higher than * / % *)
+  | F.Earrow _ -> (13, RtoL)
   | F.Ewhen _  -> (12, LtoR) (* precedence of + - *)
   | F.Emerge _ -> ( 5, LtoR) (* precedence of lor - 1 *)
   | F.Eite _   -> ( 5, LtoR)
@@ -185,6 +186,8 @@ let rec exp prec p { F.e_desc; F.e_typ; F.e_clk } =
       binop p op (single_typ e_typ) (exp prec1) e1 (exp prec2) e2
   | F.Efby (e0s, es) ->
       fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
+  | F.Earrow (e0s, es) ->
+      fprintf p "%a -> %a" (exp_list prec1) e0s (exp_list prec2) es
   | F.Ewhen (e, x, v) ->
       if v
       then fprintf p "%a when %a" (exp_list prec') e ident x

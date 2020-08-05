@@ -255,6 +255,7 @@ Module Type TRCLOCKING
       pose proof (find_clock_det _ _ _ _ EQ0 Henvs) as ->.
       congruence.
     - cases; try monadInv Htr; monadInv EQ1; monadInv EQ0.
+    - cases; try monadInv Htr; monadInv EQ1; monadInv EQ0.
       constructor; eauto using envs_eq_in. constructor.
       take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
       eapply wc_lexp in EQ1 as (?& Heq &?); eauto.
@@ -289,7 +290,7 @@ Module Type TRCLOCKING
         rewrite Heq in *. now simpl_Foralls.
     - cases; monadInv Htr;
         take (LC.wc_exp _ _ _) and inversion_clear it
-        as [| | | | | | | | |???? bck sub Wce ? WIi WIo|?????? bck sub Wce ? WIi WIo];
+        as [| | | | | | | | | |???? bck sub Wce ? WIi WIo|?????? bck sub Wce ? WIi WIo];
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and

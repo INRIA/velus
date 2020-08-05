@@ -105,12 +105,15 @@ let exp genv env =
                       PP.sclock (stripname ck1) PP.sclock (stripname ck2)))
            | _, _ -> assert false (* guaranteed by typing *))
 
-      | Efby (e0s, es) ->
+      | Efby (e0s, es) | Earrow (e0s, es) ->
           let ck0s = List.(concat (map f e0s)) in
           let cks  = List.(concat (map f es)) in
           (try List.iter2 unify_nclocks ck0s cks
            with Unify -> expected_got e.e_loc ck0s cks);
           ck0s
+
+      (* | Epre es ->
+       *    List.(concat (map f es)) *)
 
       | Ewhen (es, x, b) ->
           let xck = ckvar x in
@@ -255,6 +258,11 @@ let rec infer_whens e =
   | Efby (e0s, es) ->
       { e with e_desc = Efby (List.map infer_whens e0s,
                               List.map infer_whens es) }
+  | Earrow (e0s, es) ->
+     { e with e_desc = Earrow (List.map infer_whens e0s,
+                               List.map infer_whens es) }
+  (* | Epre es ->
+   *    { e with e_desc = Epre (List.map infer_whens es) } *)
   | Ewhen (es, x, b) ->
       { e with e_desc = Ewhen (List.map infer_whens es, x, b) }
   | Emerge (x, ets, efs) ->

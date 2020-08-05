@@ -115,6 +115,7 @@ let precedence = function
   | L.Eunop  (op, _, _)    -> PrintOps.prec_unop op
   | L.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
   | L.Efby _   -> (14, RtoL) (* higher than * / % *)
+  | L.Earrow _ -> (14, RtoL)
   | L.Ewhen _  -> (12, LtoR) (* precedence of + - *)
   | L.Emerge _ -> ( 5, LtoR) (* precedence of lor - 1 *)
   | L.Eite _   -> ( 5, LtoR)
@@ -160,6 +161,8 @@ let rec exp prec p e =
       PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
     | L.Efby (e0s, es, _) ->
       fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
+    | L.Earrow (e0s, es, _) ->
+      fprintf p "%a -> %a" (exp_list prec1) e0s (exp_list prec2) es
     | L.Ewhen (e, x, v, _) ->
       fprintf p "%a when%s %a"
         (exp_list prec') e

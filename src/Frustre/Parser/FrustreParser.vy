@@ -41,7 +41,7 @@ Import ListNotations.
 %token<FrustreAst.astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
   INT64 UINT64 FLOAT32 FLOAT64
 
-%token<FrustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR FBY
+%token<FrustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR FBY (* PRE *)
 %token<FrustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<FrustreAst.astloc> ASSERT
 
@@ -157,6 +157,8 @@ unary_expression:
     { expr }
 | op=unary_operator expr=cast_expression
     { [FrustreAst.UNARY (fst op) expr (snd op)] }
+(* | loc=PRE expr=cast_expression
+    { [FrustreAst.PRE expr loc] } *)
 
 unary_operator:
 | loc=MINUS
@@ -173,12 +175,14 @@ cast_expression:
 | LPAREN expr=cast_expression loc=COLON typ=type_name RPAREN
     { [FrustreAst.CAST (fst typ) expr loc] }
 
-(* Frustre fby operator *)
+(* Frustre fby operator, and such *)
 fby_expression:
 | expr=cast_expression
     { expr }
 | v0=cast_expression loc=FBY expr=fby_expression
     { [FrustreAst.FBY v0 expr loc] }
+| v0=cast_expression loc=RARROW expr=fby_expression
+    { [FrustreAst.ARROW v0 expr loc] }
 
 (* 6.5.5 *)
 multiplicative_expression:

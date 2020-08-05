@@ -41,6 +41,7 @@ Module Type TR
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                     OK (CE.Ewhen le x b)
     | L.Efby _ _ _
+    | L.Earrow _ _ _
     | L.Ewhen _ _ _ _
     | L.Emerge _ _ _ _
     | L.Eite _ _ _ _
@@ -68,6 +69,7 @@ Module Type TR
     | L.Emerge _ _ _ _
     | L.Eite _ _ _ _
     | L.Efby _ _ _
+    | L.Earrow _ _ _
     | L.Eapp _ _ _ _    => Error (msg "control expression not normalized")
     end.
 

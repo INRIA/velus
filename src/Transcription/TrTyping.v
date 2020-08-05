@@ -301,6 +301,7 @@ Module Type TRTYPING
       erewrite typeof_const; eauto.
       erewrite typeof_const; eauto. erewrite typeof_lexp; eauto.
     - cases; monadInv Htr; monadInv EQ1; try discriminate.
+    - cases; monadInv Htr; monadInv EQ1; try discriminate.
       monadInv EQ0.
       simpl_Foralls. take (LT.wt_exp _ _ _) and inv it. simpl_Foralls.
       take (L.typesof _ = _) and inversion it as [Ht].

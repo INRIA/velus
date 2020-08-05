@@ -62,6 +62,7 @@ let () =
       ("on",       fun loc -> ON       loc);
       ("onot",     fun loc -> ONOT     loc);
       ("or",       fun loc -> OR       loc);
+      (* ("pre",      fun loc -> PRE      loc); *)
       ("real",     fun loc -> FLOAT64  loc); (* LEGACY *)
       ("restart",  fun loc -> RESTART  loc);
       ("returns",  fun loc -> RETURNS  loc);

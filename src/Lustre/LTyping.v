@@ -77,6 +77,20 @@ Module Type LTYPING
         Forall (wt_nclock vars) (map snd anns) ->
         wt_exp (Efby e0s es anns)
 
+    | wt_Earrow: forall e0s es anns,
+        Forall wt_exp e0s ->
+        Forall wt_exp es ->
+        typesof es = map fst anns ->
+        typesof e0s = map fst anns ->
+        Forall (wt_nclock vars) (map snd anns) ->
+        wt_exp (Earrow e0s es anns)
+
+    (* | wt_Epre: forall es anns, *)
+    (*     Forall wt_exp es -> *)
+    (*     typesof es = map fst anns -> *)
+    (*     Forall (wt_nclock vars) (map snd anns) -> *)
+    (*     wt_exp (Epre es anns) *)
+
     | wt_Ewhen: forall es x b tys nck,
         Forall wt_exp es ->
         typesof es = tys ->
@@ -167,6 +181,25 @@ Module Type LTYPING
           Forall (wt_nclock vars) (map snd anns) ->
           P (Efby e0s es anns).
 
+      Hypothesis EarrowCase:
+        forall e0s es anns,
+          Forall wt_exp e0s ->
+          Forall wt_exp es ->
+          Forall P e0s ->
+          Forall P es ->
+          typesof es = map fst anns ->
+          typesof e0s = map fst anns ->
+          Forall (wt_nclock vars) (map snd anns) ->
+          P (Earrow e0s es anns).
+
+      (* Hypothesis EpreCase: *)
+      (*   forall es anns, *)
+      (*     Forall wt_exp es -> *)
+      (*     Forall P es -> *)
+      (*     typesof es = map fst anns -> *)
+      (*     Forall (wt_nclock vars) (map snd anns) -> *)
+      (*     P (Epre es anns). *)
+
       Hypothesis EwhenCase:
         forall es x b tys nck,
           Forall wt_exp es ->
@@ -231,6 +264,11 @@ Module Type LTYPING
         - apply EfbyCase; auto.
           + clear H2. induction H; auto.
           + clear H1. induction H0; auto.
+        - apply EarrowCase; auto.
+          + clear H2. induction H; auto.
+          + clear H1. induction H0; auto.
+        (* - apply EpreCase; auto. *)
+        (*   clear H0. induction H; auto. *)
         - apply EwhenCase; auto.
           clear H0. induction H; auto.
         - apply EmergeCase; auto.
@@ -448,6 +486,12 @@ Module Type LTYPING
       - (* fby *)
         eapply Forall_impl; [| eauto].
         intros; eauto.
+      - (* arrow *)
+        eapply Forall_impl; [| eauto].
+        intros; eauto.
+      (* - (* pre *) *)
+      (*   eapply Forall_impl; [| eauto]. *)
+      (*   intros; eauto. *)
       - (* app *)
         eapply Forall_impl; [| eauto].
         intros; simpl in *; eauto.
@@ -564,6 +608,20 @@ Module Type LTYPING
       apply Forall_forall with (1:=H3) in Hin.
       destruct nck; unfold clock_of_nclock in *; simpl in *; subst;
         match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    - match goal with H:Forall (wt_nclock _) _ |- _ =>
+                      rewrite Forall_map in H end.
+      apply in_map_iff in Hin.
+      destruct Hin as ((ty & nck) & Hck & Hin).
+      apply Forall_forall with (1:=H3) in Hin.
+      destruct nck; unfold clock_of_nclock in *; simpl in *; subst;
+        match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
+    (* - match goal with H:Forall (wt_nclock _) _ |- _ => *)
+    (*                   rewrite Forall_map in H end. *)
+    (*   apply in_map_iff in Hin. *)
+    (*   destruct Hin as ((ty & nck) & Hck & Hin). *)
+    (*   apply Forall_forall with (1:=H1) in Hin. *)
+    (*   destruct nck; unfold clock_of_nclock in *; simpl in *; subst; *)
+    (*     match goal with H:wt_nclock _ _ |- _ => inv H end; eauto. *)
     - destruct nck; unfold clock_of_nclock in *; simpl in *;
         apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
           match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
@@ -648,7 +706,11 @@ Module Type LTYPING
 
     Open Scope option_monad_scope.
 
-    Definition check_paired_types (t1 t2 : type) (tc : ann) : bool :=
+    Definition check_paired_types2 (t1 : type) (tc : ann) : bool :=
+      let '(t, c) := tc in
+      (t1 ==b t) && (check_nclock venv c).
+
+    Definition check_paired_types3 (t1 t2 : type) (tc : ann) : bool :=
       let '(t, c) := tc in
       (t1 ==b t) && (t2 ==b t) && (check_nclock venv c).
 
@@ -686,8 +748,19 @@ Module Type LTYPING
       | Efby e0s es anns =>
         do t0s <- oconcat (map check_exp e0s);
         do ts <- oconcat (map check_exp es);
-        if forall3b check_paired_types t0s ts anns
+        if forall3b check_paired_types3 t0s ts anns
         then Some (map fst anns) else None
+
+      | Earrow e0s es anns =>
+        do t0s <- oconcat (map check_exp e0s);
+        do ts <- oconcat (map check_exp es);
+        if forall3b check_paired_types3 t0s ts anns
+        then Some (map fst anns) else None
+
+      (* | Epre es anns => *)
+      (*   do ts <- oconcat (map check_exp es); *)
+      (*   if forall2b check_paired_types2 ts anns *)
+      (*   then Some (map fst anns) else None *)
 
       | Ewhen es x b (tys, nck) =>
         do ts <- oconcat (map check_exp es);
@@ -758,9 +831,26 @@ Module Type LTYPING
     Qed.
     Local Hint Resolve check_var_correct.
 
-    Lemma check_paired_types_correct:
+    Lemma check_paired_types2_correct:
+      forall tys1 anns,
+        forall2b check_paired_types2 tys1 anns = true ->
+        tys1 = map fst anns
+        /\ Forall (wt_nclock (Env.elements venv)) (map snd anns).
+    Proof.
+      setoid_rewrite forall2b_Forall2.
+      induction 1 as [|ty1 (ty, nck) tys1 anns IH1 IH3];
+        subst; simpl; eauto.
+      simpl in IH1.
+      repeat rewrite Bool.andb_true_iff in IH1.
+      setoid_rewrite equiv_decb_equiv in IH1.
+      destruct IH1 as (-> & IH1).
+      apply check_nclock_correct in IH1.
+      destruct IHIH3; split; try f_equal; auto.
+    Qed.
+
+    Lemma check_paired_types3_correct:
       forall tys1 tys2 anns,
-        forall3b check_paired_types tys1 tys2 anns = true ->
+        forall3b check_paired_types3 tys1 tys2 anns = true ->
         tys1 = map fst anns
         /\ tys2 = map fst anns
         /\ Forall (wt_nclock (Env.elements venv)) (map snd anns).
@@ -833,8 +923,10 @@ Module Type LTYPING
                | H:Some _ = Some _ |- _ => inv H
                | H:assert_singleton _ = Some _ |- _ => apply assert_singleton_spec in H
                | H:check_var _ _ = true |- _ => apply check_var_correct in H
-               | H:forall3b check_paired_types ?tys1 ?tys2 ?anns = true |- _ =>
-                 apply check_paired_types_correct in H as (? & ? & ?)
+               | H:forall2b check_paired_types2 ?tys1 ?anns = true |- _ =>
+                 apply check_paired_types2_correct in H as (? & ?)
+               | H:forall3b check_paired_types3 ?tys1 ?tys2 ?anns = true |- _ =>
+                 apply check_paired_types3_correct in H as (? & ? & ?)
                | H:forall2b equiv_decb ?xs ?ys = true |- _ =>
                  apply forall2b_Forall2_equiv_decb in H
                | H:forall3b equiv_decb3 _ _ _ = true |- _ =>
@@ -867,6 +959,18 @@ Module Type LTYPING
         subst; eauto using wt_exp.
         + ndup_r ND.
         + ndup_l ND.
+      - (* Earrow *)
+        take (Forall _ e0s) and rewrite Forall_forall in it.
+        take (Forall _ es) and rewrite Forall_forall in it.
+        apply oconcat_map_check_exp' in OE0 as (? & ?)...
+        apply oconcat_map_check_exp' in OE1 as (? & ?)...
+        subst; eauto using wt_exp.
+        + ndup_r ND.
+        + ndup_l ND.
+      (* - (* Epre *) *)
+      (*   take (Forall _ es) and rewrite Forall_forall in it. *)
+      (*   apply oconcat_map_check_exp' in OE0 as (? & ?)... *)
+      (*   subst; eauto using wt_exp. *)
       - (* Ewhen *)
         subst. take (Forall _ es) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
@@ -1077,22 +1181,9 @@ Module Type LTYPING
         wt_exp G' vars e.
     Proof with eauto.
       induction e using exp_ind2; intros Heq Hwt; inv Hwt...
-      - (* fby *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
-      - (* when *)
-        econstructor...
-        rewrite Forall_forall in *...
-      - (* merge *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
-      - (* ite *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
-      - (* app *)
+      1-5:econstructor...
+      1-9:rewrite Forall_forall in *...
+     - (* app *)
         assert (Forall (wt_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
         specialize (Heq f).
         remember (find_node f G') as find.
@@ -1167,6 +1258,19 @@ Module Type LTYPING
         erewrite <- map_length, H7, map_length...
       + rewrite typesof_annots in *.
         erewrite <- map_length, H6, map_length...
+    - (* arrow *)
+      constructor...
+      + rewrite Forall_forall in *...
+      + rewrite Forall_forall in *...
+      + rewrite typesof_annots in *.
+        erewrite <- map_length, H7, map_length...
+      + rewrite typesof_annots in *.
+        erewrite <- map_length, H6, map_length...
+    (* - (* pre *) *)
+    (*   constructor... *)
+    (*   + rewrite Forall_forall in *... *)
+    (*   + rewrite typesof_annots in *. *)
+    (*     erewrite <- map_length, H3, map_length... *)
     - (* when *)
       constructor...
       + rewrite Forall_forall in *...

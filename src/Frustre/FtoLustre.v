@@ -120,6 +120,9 @@ Fixpoint tr_exp (e : F.exp) : L.exp :=
 
   | F.Efby e0s es aa => L.Efby (List.map tr_exp e0s) (List.map tr_exp es)
                                (List.map tr_ann aa)
+  | F.Earrow e0s es aa => L.Earrow (List.map tr_exp e0s) (List.map tr_exp es)
+                                  (List.map tr_ann aa)
+  (* | F.Epre es aa => L.Epre (List.map tr_exp es) (List.map tr_ann aa) *)
   | F.Ewhen es x b a => L.Ewhen (List.map tr_exp es) x b (tr_lann a)
   | F.Emerge x ets efs a => L.Emerge x (List.map tr_exp ets)
                                        (List.map tr_exp efs) (tr_lann a)

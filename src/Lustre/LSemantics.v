@@ -48,6 +48,30 @@ Module Type LSEMANTICS
         fby1 y xs ys rs ->
         fby (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
+  CoInductive arrow: Stream value -> Stream value -> Stream value -> Prop :=
+  | ArrowA:
+      forall xs ys rs,
+        arrow xs ys rs ->
+        arrow (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
+  | ArrowP:
+      forall x y xs ys rs,
+        ys ≡ rs ->
+        arrow (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
+
+  (* TODO : define semantics for pre (nil ?) *)
+  (* CoInductive pre1 : val -> Stream value -> Stream value -> Prop := *)
+  (* | Pre1A: *)
+  (*     forall v xs rs, *)
+  (*       pre1 v xs rs -> *)
+  (*       pre1 v (absent ⋅ xs) (absent ⋅ rs) *)
+  (* | Pre1P: *)
+  (*     forall v s xs rs, *)
+  (*       pre1 s xs rs -> *)
+  (*       pre1 v (present s ⋅ xs) (present v ⋅ rs). *)
+
+  (* Definition pre (ty : Op.type) (xs rs : Stream value) : Prop := *)
+  (*   pre1 (sem_const (init_type ty)) xs rs. *)
+
   (* TODO: Use everywhere, esp. in LustreElab.v *)
   Definition idents xs := List.map (@fst ident (type * clock)) xs.
 
@@ -89,6 +113,19 @@ Module Type LSEMANTICS
           Forall2 (sem_exp H b) es sss ->
           Forall3 fby (concat s0ss) (concat sss) os ->
           sem_exp H b (Efby e0s es anns) os
+
+    | Sarrow:
+        forall H b e0s es anns s0ss sss os,
+          Forall2 (sem_exp H b) e0s s0ss ->
+          Forall2 (sem_exp H b) es sss ->
+          Forall3 arrow (concat s0ss) (concat sss) os ->
+          sem_exp H b (Earrow e0s es anns) os
+
+    (* | Spre: *)
+    (*     forall H b es anns sss os, *)
+    (*       Forall2 (sem_exp H b) es sss -> *)
+    (*       Forall3 pre (List.map fst anns) (concat sss) os -> *)
+    (*       sem_exp H b (Epre es anns) os *)
 
     | Swhen:
         forall H b x s k es lann ss os,
@@ -198,6 +235,22 @@ Module Type LSEMANTICS
         Forall3 fby (concat s0ss) (concat sss) os ->
         P_exp H b (Efby e0s es anns) os.
 
+    Hypothesis ArrowCase:
+      forall H b e0s es anns s0ss sss os,
+        Forall2 (sem_exp G H b) e0s s0ss ->
+        Forall2 (P_exp H b) e0s s0ss ->
+        Forall2 (sem_exp G H b) es sss ->
+        Forall2 (P_exp H b) es sss ->
+        Forall3 arrow (concat s0ss) (concat sss) os ->
+        P_exp H b (Earrow e0s es anns) os.
+
+    (* Hypothesis PreCase: *)
+    (*   forall H b es anns sss os, *)
+    (*     Forall2 (sem_exp G H b) es sss -> *)
+    (*     Forall2 (P_exp H b) es sss -> *)
+    (*     Forall3 pre (List.map fst anns) (concat sss) os -> *)
+    (*     P_exp H b (Epre es anns) os. *)
+
     Hypothesis WhenCase:
       forall H b x s k es lann ss os,
         Forall2 (sem_exp G H b) es ss ->
@@ -294,6 +347,8 @@ Module Type LSEMANTICS
         + eapply UnopCase; eauto.
         + eapply BinopCase; eauto.
         + eapply FbyCase; eauto; clear H2; SolveForall.
+        + eapply ArrowCase; eauto; clear H2; SolveForall.
+        (* + eapply PreCase; eauto; clear H1; SolveForall. *)
         + eapply WhenCase; eauto; clear H2; SolveForall.
         + eapply MergeCase; eauto; clear H3; SolveForall.
         + eapply IteCase; eauto; clear H2; SolveForall.
@@ -339,6 +394,20 @@ Module Type LSEMANTICS
       intro. destruct H5. constructor. auto.
       apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
       destruct H6; auto.
+    - econstructor; eauto.
+      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
+      intro. destruct H5. constructor. auto. inv H0.
+      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
+      destruct H5; auto.
+      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
+      intro. destruct H5. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
+      destruct H6; auto.
+    (* - econstructor; eauto. *)
+    (*   clear H2. induction H1; eauto. constructor. apply H1. *)
+    (*   intro. destruct H3. constructor. auto. inv H0. *)
+    (*   apply IHForall2; eauto. intro. destruct H3. constructor. inv H0. *)
+    (*   right; auto. *)
     - econstructor; eauto.
       clear H0 H3. induction H1; eauto. constructor. apply H0.
       intro. destruct H4. constructor. auto.
@@ -421,6 +490,20 @@ Module Type LSEMANTICS
       intro. destruct H5. constructor. auto.
       apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
       destruct H6; auto.
+    - econstructor; eauto.
+      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
+      intro. destruct H5. constructor. auto. inv H0.
+      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
+      destruct H5; auto.
+      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
+      intro. destruct H5. constructor. auto.
+      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
+      destruct H6; auto.
+    (* - econstructor; eauto. *)
+    (*   clear H2. induction H1; eauto. constructor. apply H1. *)
+    (*   intro. destruct H3. constructor. auto. inv H0. *)
+    (*   apply IHForall2; eauto. intro. destruct H3. constructor. inv H0. *)
+    (*   right; auto. *)
     - econstructor; eauto.
       clear H0 H3. induction H1; eauto. constructor. apply H0.
       intro. destruct H4. constructor. auto.
@@ -516,7 +599,7 @@ Module Type LSEMANTICS
       [ econstructor; econstructor; auto
       | unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto];
       inversion_clear Hn2 as
-          [ | | ? ? ? ? Hn3 | | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | | |]; auto;
+          [ | | ? ? ? ? Hn3 | ? ? ? ? Hn3 | (* ? ? ? ? Hn3 | *) | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | | |]; auto;
       try (destruct Hn3 as [| Hn4 ]; eauto; destruct Hn4; eauto).
 
     induction x using exp_ind2; intros * Hsem; inv Hsem;
@@ -532,6 +615,17 @@ Module Type LSEMANTICS
       clear H5 H0 H9 H12. induction H11; auto. constructor.
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    - econstructor; eauto.
+      clear H5 H1 H11 H12. induction H9; auto. constructor.
+      inv H0. apply H4; auto. SolveNin Hnin.
+      inv H0. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H9 H12. induction H11; auto. constructor.
+      inv H1. apply H4; auto. SolveNin Hnin.
+      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    (* - econstructor; eauto. *)
+    (*   clear H9. induction H7; auto. constructor. *)
+    (*   inv H0. apply H4; auto. SolveNin Hnin. *)
+    (*   inv H0. apply IHForall2; eauto. SolveNin Hnin. *)
     - econstructor; eauto.
       clear H5 H11 H12. induction H10; eauto. constructor.
       inv H0. apply H4; eauto. SolveNin Hnin.
@@ -612,6 +706,17 @@ Module Type LSEMANTICS
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
+      clear H5 H1 H11 H12. induction H9; auto. constructor.
+      inv H0. apply H4; auto. SolveNin Hnin.
+      inv H0. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H9 H12. induction H11; auto. constructor.
+      inv H1. apply H4; auto. SolveNin Hnin.
+      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    (* - econstructor; eauto. *)
+    (*   clear H5 H9. induction H7; auto. constructor. *)
+    (*   inv H0. apply H4; auto. SolveNin Hnin. *)
+    (*   inv H0. apply IHForall2; eauto. SolveNin Hnin. *)
+    - econstructor; eauto.
       clear H5 H11 H12. induction H10; eauto. constructor.
       inv H0. apply H4; eauto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
@@ -690,6 +795,42 @@ Module Type LSEMANTICS
     + inv H4. inv H. econstructor. inv H2.
       rewrite <- H1. rewrite <- H3. rewrite <- H5. assumption.
   Qed.
+
+  Add Parametric Morphism : arrow
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as arrow_EqSt.
+  Proof.
+    cofix Cofix.
+    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
+    destruct cs' as [[]], xs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
+        try discriminate.
+    + constructor; eapply Cofix; eauto.
+    + inv H4. inv H. econstructor.
+      rewrite <- H3, H0; auto.
+  Qed.
+
+  (* Add Parametric Morphism : pre1 *)
+  (*     with signature @eq val ==> @EqSt value ==> @EqSt value ==> Basics.impl *)
+  (*       as pre1_EqSt. *)
+  (* Proof. *)
+  (*   cofix Cofix. *)
+  (*   intros v xs xs' Exs rs rs' Ers H. *)
+  (*   destruct xs' as [[]], rs' as [[]]; *)
+  (*     inv H; inv Exs; inv Ers; simpl in *; *)
+  (*       try discriminate. *)
+  (*   + constructor; eapply Cofix; eauto. *)
+  (*   + rewrite <- H, <- H2. econstructor; eapply Cofix; eauto. *)
+  (* Qed. *)
+
+  (* Add Parametric Morphism : pre *)
+  (*     with signature @eq type ==> @EqSt value ==> @EqSt value ==> Basics.impl *)
+  (*       as pre_EqSt. *)
+  (* Proof. *)
+  (*   intros ty xs xs' Exs rs rs' Ers H. *)
+  (*   unfold pre in *. *)
+  (*   rewrite <- Exs, <- Ers; auto. *)
+  (* Qed. *)
 
   Add Parametric Morphism k : (when k)
       with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
@@ -810,6 +951,16 @@ Module Type LSEMANTICS
       + eapply Forall2_impl_In; [|apply H3].
         intros * ?? Hs; apply Hs; auto; reflexivity.
       + eapply Forall3_EqSt; eauto. solve_proper.
+    - econstructor.
+      + eapply Forall2_impl_In; [|apply H1].
+        intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eapply Forall2_impl_In; [|apply H3].
+        intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eapply Forall3_EqSt; eauto. solve_proper.
+    (* - econstructor. *)
+    (*   + eapply Forall2_impl_In; [|apply H1]. *)
+    (*     intros * ?? Hs; apply Hs; auto; reflexivity. *)
+    (*   + eapply Forall3_EqSt; eauto. solve_proper. *)
     - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H1].
         intros * ?? Hs; apply Hs; auto; reflexivity.
@@ -912,6 +1063,10 @@ Module Type LSEMANTICS
     - (* binop *) econstructor...
     - (* fby *)
       econstructor; eauto; repeat rewrite_Forall_forall...
+    - (* arrow *)
+      econstructor; eauto; repeat rewrite_Forall_forall...
+    (* - (* pre *) *)
+    (*   econstructor; eauto; repeat rewrite_Forall_forall... *)
     - (* when *)
       econstructor; eauto; repeat rewrite_Forall_forall...
       eapply sem_var_refines...
@@ -969,31 +1124,14 @@ Module Type LSEMANTICS
         sem_exp G H b e vs ->
         sem_exp G' H b e vs.
     Proof with eauto.
-      induction e using exp_ind2; intros vs Heq Hsem; inv Hsem...
-      - (* fby *)
+      induction e using exp_ind2; intros vs Heq Hsem; inv Hsem;
         econstructor...
-        + repeat rewrite_Forall_forall...
-        + repeat rewrite_Forall_forall...
-      - (* when *)
-        econstructor...
-        repeat rewrite_Forall_forall...
-      - (* merge *)
-        econstructor...
-        + repeat rewrite_Forall_forall...
-        + repeat rewrite_Forall_forall...
-      - (* ite *)
-        econstructor...
-        + repeat rewrite_Forall_forall...
-        + repeat rewrite_Forall_forall...
+      1-13:repeat rewrite_Forall_forall...
       - (* app *)
-        econstructor...
-        + repeat rewrite_Forall_forall...
-        + specialize (Heq f (concat ss) vs).
-          auto.
+        specialize (Heq f (concat ss) vs).
+        auto.
       - (* app (reset) *)
-        econstructor...
-        + repeat rewrite_Forall_forall...
-        + intros k. specialize (H13 k).
+        intros k. specialize (H13 k).
           specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
           auto.
     Qed.
@@ -1068,6 +1206,28 @@ Module Type LSEMANTICS
       + apply nth_In; congruence.
       + apply H5. apply nth_In; congruence.
       + eapply H6... congruence.
+    - (* arrow *)
+      repeat rewrite_Forall_forall.
+      rewrite <- H9. rewrite <- H10.
+      unfold annots; rewrite flat_map_concat_map.
+      apply concat_length_eq.
+      rewrite Forall2_map_2.
+      rewrite_Forall_forall.
+      rewrite length_annot_numstreams. eapply H0.
+      + apply nth_In; congruence.
+      + apply H5. apply nth_In; congruence.
+      + eapply H6... congruence.
+    (* - (* pre *) *)
+    (*   repeat rewrite_Forall_forall. *)
+    (*   rewrite <- H5, <- H6, H3. *)
+    (*   unfold annots; rewrite flat_map_concat_map. *)
+    (*   apply concat_length_eq. *)
+    (*   rewrite Forall2_map_2. *)
+    (*   rewrite_Forall_forall. *)
+    (*   rewrite length_annot_numstreams. eapply H0. *)
+    (*   + apply nth_In; congruence. *)
+    (*   + apply H4. apply nth_In; congruence. *)
+    (*   + eapply H2... congruence. *)
     - (* when *)
       repeat rewrite_Forall_forall.
       rewrite <- H1. rewrite <- H7.

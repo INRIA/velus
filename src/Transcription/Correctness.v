@@ -450,8 +450,8 @@ Module Type CORRECTNESS
       assert (Hsc := Hwc). eapply LCS.sc_equation in Hsc; simpl; eauto.
       inversion_clear Hwc as [Hwce ?]. inv Hwce.
       inversion_clear Hwt as [Hwte ?]. inversion Hwte as [|?? Hwt].
-      inversion Hwt as [| | | | ? ? ? ? Hwte1 | | | | |]. inv Hwte1.
-      inversion Hsef as [| | | |???????? Hse0 Hse1 Hwfby | | | | |].
+      inversion Hwt as [| | | | ? ? ? ? Hwte1 | | | | | |]. inv Hwte1.
+      inversion Hsef as [| | | |???????? Hse0 Hse1 Hwfby | | | | | |].
       inversion Hse1 as [|????? Hf2]. inv Hf2.
       inversion Hwfby as [|?????? Hlsf Hf Hcat]. inv Hf. rewrite app_nil_r in *.
       subst. eapply sem_exp_lexp in EQ2; eauto.
@@ -465,6 +465,12 @@ Module Type CORRECTNESS
       inversion HFin as [|?????  Hf2 Huseless Hnil].
       inv Hf2. rewrite app_nil_r in Hnil.
       eapply var_fby_const; eauto.
+    - unfold to_equation in Htoeq. cases. monadInv Htoeq.
+      inversion Hsem. subst. simpl_Foralls.
+      eapply LCS.sc_equation in Hwc; simpl; eauto.
+      econstructor; eauto.
+      inv Hwt. simpl_Foralls. eapply sem_exp_caexp; eauto.
+      simpl in *. rewrite app_nil_r in *. now subst.
     - unfold to_equation in Htoeq. cases. monadInv Htoeq.
       inversion Hsem. subst. simpl_Foralls.
       eapply LCS.sc_equation in Hwc; simpl; eauto.
@@ -515,7 +521,7 @@ Module Type CORRECTNESS
 
         destruct Hwc as (Hwc & ?& Hinxs). simpl_Foralls.
         take (LC.wc_exp _ _ _) and inversion_clear it
-          as [| | | | | | | | | |?????? bck sub Wce ? WIi WIo Wcr ?].
+          as [| | | | | | | | | | |?????? bck sub Wce ? WIi WIo Wcr ?].
         take (Forall2 (LS.sem_exp _ _ _) _ _) and eapply LCS.sc_union_envs
           in it as (?&?&?&?& Hsc); eauto.
         2:{
@@ -593,7 +599,7 @@ Module Type CORRECTNESS
 
         destruct Hwc as (Hwc & ?& Hinxs). simpl_Foralls.
         take (LC.wc_exp _ _ _) and inversion_clear it
-          as [| | | | | | | | |???? bck sub Wce ? WIi WIo|].
+          as [| | | | | | | | | |???? bck sub Wce ? WIi WIo|].
         take (Forall2 (LS.sem_exp _ _ _) _ _) and eapply LCS.sc_union_envs
           in it as (?&?&?&?& Hsc); eauto.
         2:{
