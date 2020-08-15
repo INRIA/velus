@@ -226,7 +226,8 @@ Module Type LCAUSALITY
               (@Env.empty ident).
 
   Definition build_var_map (eqs : list equation) : (ident -> ident) :=
-    fun x => match Env.find x (build_var_map' eqs) with
+    let m := build_var_map' eqs in
+    fun x => match Env.find x m with
           | Some y => y
           | None => x
           end.
