@@ -115,22 +115,6 @@ Module Type IDEMPOTENCE
     - (* lexp *) eapply normalized_lexp_normalize_idem...
   Qed.
 
-  (* Fact normalize_fby_idem : forall e0 e ann st, *)
-  (*     normalized_constant e0 -> *)
-  (*     normalized_lexp e -> *)
-  (*     normalize_fby [e0] [e] [ann] st = ([Efby [e0] [e] [ann]], [], st). *)
-  (* Proof with eauto. *)
-  (*   intros e0 e [ty cl] st Hcons Hnormed. *)
-  (*   unfold normalize_fby; inv_bind. *)
-  (*   eexists. exists [[]]. exists st. split; simpl; inv_bind... *)
-  (*   eexists. exists []. exists st. split; simpl. *)
-  (*   - unfold fby_iteexp. *)
-  (*     destruct (Norm.is_constant e0) eqn:Hisconstant; repeat inv_bind... *)
-  (*     rewrite <- is_constant_is_constant in Hcons. congruence. *)
-  (*   - inv_bind. *)
-  (*     repeat eexists; inv_bind... *)
-  (* Qed. *)
-
   Fact untupled_rhs_normalize_idem : forall e st,
       untupled_rhs e ->
       normalize_rhs e st = ([e], [], st).
@@ -149,6 +133,22 @@ Module Type IDEMPOTENCE
         inv_bind.
         exists []. exists []. exists st.
         repeat split; inv_bind...
+      + exists [e]. exists []. exists st. split; simpl; inv_bind...
+        * exists [[e]]. exists [[]]. exists st. split; simpl; inv_bind...
+          exists [e]. exists []. exists st. split; simpl.
+          eapply normalized_lexp_normalize_idem in H3...
+          inv_bind; repeat eexists...
+          1,2:inv_bind...
+    - (* arrow *)
+      repeat inv_bind.
+      exists [e0]. exists []. exists st.
+      split; unfold normalize_exps; inv_bind.
+      + exists [[e0]]. exists [[]]. exists st. split; simpl; inv_bind...
+        exists [e0]. exists []. exists st. split; simpl.
+        eapply normalized_lexp_normalize_idem in H1...
+        inv_bind.
+        exists []. exists []. exists st.
+        split; inv_bind...
       + exists [e]. exists []. exists st. split; simpl; inv_bind...
         * exists [[e]]. exists [[]]. exists st. split; simpl; inv_bind...
           exists [e]. exists []. exists st. split; simpl.

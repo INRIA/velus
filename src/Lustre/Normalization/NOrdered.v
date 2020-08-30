@@ -123,6 +123,27 @@ Module Type NORDERED
         eapply map_bind2_Is_node_in in H1... solve_forall.
       + right.
         eapply map_bind2_Is_node_in in H2... solve_forall.
+    - (* arrow *)
+      assert (length (concat x2) = length (annots e0s)) as Hlen1 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x6) = length (annots es)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
+      constructor.
+      repeat rewrite Is_node_in_app in Hisin. destruct Hisin as [Hisin|[Hisin|[Hisin|Hisin]]].
+      + exfalso.
+        rewrite CommonList.Exists_map in Hisin.
+        rewrite Exists_exists in Hisin. destruct Hisin as [[id ann] [Hin Hisin]].
+        inv Hisin.
+      + rewrite Is_node_in_Exists in Hisin.
+        unfold normalize_arrow in Hisin.
+        apply Exists_exists in Hisin as [[? ?] [Hin ?]]; repeat simpl_In.
+        apply Exists_singl in H5. inv H5. destruct H15 as [Hin|Hin]; eapply Exists_singl in Hin.
+        * eapply map_bind2_Is_node_in in H1... solve_forall.
+          left. eapply Exists_exists. exists e...
+        * eapply map_bind2_Is_node_in in H2... solve_forall.
+          left. eapply Exists_exists. exists e0...
+      + left.
+        eapply map_bind2_Is_node_in in H1... solve_forall.
+      + right.
+        eapply map_bind2_Is_node_in in H2... solve_forall.
     - (* when *)
       assert (length (concat x1) = length (annots es)) by (eapply map_bind2_normalize_exp_length; eauto).
       constructor.
@@ -267,8 +288,8 @@ Module Type NORDERED
     intros * Hwl Hnorm Hisin.
     destruct e; unfold normalize_rhs in Hnorm;
       try (eapply normalize_exp_Is_node_in in Hnorm; eauto);
-      [|destruct o].
-    - (* fby (keep) *)
+      [| |destruct o].
+    - (* fby *)
       inv Hwl. repeat inv_bind.
       assert (length x = length (annots l)) as Hlen1 by (eapply normalize_exps_length; eauto).
       assert (length x2 = length (annots l0)) as Hlen2 by (eapply normalize_exps_length; eauto).
@@ -276,6 +297,22 @@ Module Type NORDERED
       constructor.
       destruct Hisin as [Hisin|[Hisin|Hisin]]...
       unfold normalize_fby in Hisin.
+      rewrite Exists_map in Hisin. apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
+      inv H1. destruct H10 as [Hisin|Hisin].
+      + apply Exists_singl in Hisin.
+        eapply normalize_exps_Is_node_in in H...
+        left. rewrite Exists_exists. exists e; auto.
+      + apply Exists_singl in Hisin.
+        eapply normalize_exps_Is_node_in in H0...
+        left. rewrite Exists_exists. exists e0; auto.
+    - (* arrow *)
+      inv Hwl. repeat inv_bind.
+      assert (length x = length (annots l)) as Hlen1 by (eapply normalize_exps_length; eauto).
+      assert (length x2 = length (annots l0)) as Hlen2 by (eapply normalize_exps_length; eauto).
+      repeat rewrite Is_node_in_app in Hisin.
+      constructor.
+      destruct Hisin as [Hisin|[Hisin|Hisin]]...
+      unfold normalize_arrow in Hisin.
       rewrite Exists_map in Hisin. apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
       inv H1. destruct H10 as [Hisin|Hisin].
       + apply Exists_singl in Hisin.
@@ -412,12 +449,24 @@ Module Type NORDERED
     inv Hisin. inv H1; [| inv H0]...
   Qed.
 
+  Fact init_var_for_clock_nIs_node_in : forall f ck x eqs' st st',
+    init_var_for_clock ck st = (x, eqs', st') ->
+    ~Exists (Is_node_in_eq f) eqs'.
+  Proof.
+    intros * Hinit contra.
+    unfold init_var_for_clock in Hinit. destruct (find _ _).
+    - destruct p; inv Hinit. inv contra.
+    - destruct (fresh_ident _ _). inv Hinit.
+      inv contra; inv H0; inv H1.
+      destruct H2; (inv H; [| inv H1]); eapply add_whens_Is_node_in in H1; inv H1.
+  Qed.
+
   Fact fby_iteexp_Is_node_in : forall f e0 e ann e' eqs' st st',
       fby_iteexp e0 e ann st = (e', eqs', st') ->
       (Is_node_in_exp f e' \/ Is_node_in f eqs') ->
       (Is_node_in_exp f e0 \/ Is_node_in_exp f e).
   Proof with eauto.
-    intros f e0 e [ty cl] e' eqs' st st' Hfby Hisin.
+    intros f e0 e [ty [ck ann]] e' eqs' st st' Hfby Hisin.
     unfold fby_iteexp in Hfby.
     destruct (is_constant e0); repeat inv_bind.
     - destruct Hisin; inv H.
@@ -430,12 +479,8 @@ Module Type NORDERED
         * inv H3; inv H2.
           destruct H4; (inv H1; [| inv H3])...
           apply add_whens_Is_node_in in H3. inv H3.
-        * unfold init_var_for_clock in H.
-          destruct (find _ _).
-          -- destruct p; inv H. inv H3.
-          -- destruct (fresh_ident _ _). inv H.
-             inv H3; inv H1; inv H2.
-             destruct H3; (inv H; [| inv H2]); eapply add_whens_Is_node_in in H2; inv H2.
+        * exfalso.
+          eapply init_var_for_clock_nIs_node_in in H; eauto.
   Qed.
 
   Lemma fby_equation_Is_node_in : forall f to_cut eq eqs' st st',
@@ -445,15 +490,24 @@ Module Type NORDERED
   Proof.
     intros * Hfby Hisin.
     inv_fby_equation Hfby to_cut eq.
-    destruct x2 as [ty [ck name]]; repeat inv_bind.
-    constructor; constructor; constructor.
-    eapply fby_iteexp_Is_node_in with (f:=f) (ann:=(ty, (ck, name))) in H as [H|H].
-    - left. constructor; auto.
-    - right. constructor; auto.
-    - destruct (PS.mem _ _); repeat inv_bind.
-      + inv Hisin. 1:{ apply Exists_singl in H2. inv H2. }
-        inv H2; auto. apply Exists_singl in H3; auto.
-      + inv Hisin; auto. apply Exists_singl in H1; auto.
+    - (* fby *)
+      destruct x2 as [ty [ck name]]; repeat inv_bind.
+      constructor; constructor; constructor.
+      eapply fby_iteexp_Is_node_in with (f:=f) (ann:=(ty, (ck, name))) in H as [H|H].
+      + left. constructor; auto.
+      + right. constructor; auto.
+      + destruct (PS.mem _ _); repeat inv_bind.
+        * inv Hisin. 1:{ apply Exists_singl in H2. inv H2. }
+          inv H2; auto. apply Exists_singl in H3; auto.
+        * inv Hisin; auto. apply Exists_singl in H1; auto.
+    - (* arrow *)
+      destruct x2 as [ty [ck name]]. repeat inv_bind.
+      constructor; constructor; constructor.
+      inv Hisin.
+      + apply Exists_singl in H1. inv H1. destruct H3 as [Hisin|[Hisin|Hisin]]; auto.
+        inv Hisin.
+      + exfalso.
+        eapply init_var_for_clock_nIs_node_in in H; eauto.
   Qed.
 
   Lemma fby_equations_Is_node_in : forall f to_cut eqs eqs' st st',

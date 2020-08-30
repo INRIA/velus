@@ -395,6 +395,26 @@ Module Type CORRECTNESS
   Qed.
   Hint Resolve In_fresh_in_NoDup.
 
+  Fact normalize_arrow_sem : forall G H bs e0s es anns s0s ss os,
+      length e0s = length anns ->
+      length es = length anns ->
+      Forall2 (fun e s => sem_exp G H bs e [s]) e0s s0s ->
+      Forall2 (fun e s => sem_exp G H bs e [s]) es ss ->
+      Forall3 arrow s0s ss os ->
+      Forall2 (fun e s => sem_exp G H bs e [s]) (normalize_arrow e0s es anns) os.
+  Proof with eauto.
+    intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
+    unfold normalize_arrow.
+    repeat rewrite_Forall_forall. 1:solve_length.
+    repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
+    destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
+    eapply Sarrow.
+    - repeat constructor...
+    - repeat constructor...
+    - simpl. repeat constructor...
+      Unshelve. 1,2:exact default_stream.
+  Qed.
+
   Fact normalize_fby_sem : forall G H bs e0s es anns s0s ss os,
       length e0s = length anns ->
       length es = length anns ->
@@ -675,6 +695,65 @@ Module Type CORRECTNESS
         -- solve_forall. repeat (eapply sem_equation_refines; eauto).
         -- solve_forall. repeat (eapply sem_equation_refines; eauto).
            Unshelve. exact default_stream.
+    - (* arrow *)
+      simpl in *. rewrite map_app, ps_adds_app in Hvalid.
+      assert (length (concat x2) = length (annots e0s)) as Hlength1 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x6) = length (annots es)) as Hlength2 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (NoDup (map fst (fresh_ins es) ++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.
+      assert (NoDup (map fst (fresh_ins e0s) ++ PS.elements (ps_adds (map fst (concat (map fresh_in es))) reusable))) as Hndup1.
+      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+      assert (Forall (fun e => numstreams e = 1) (concat x2)) as Hnumstreams.
+      { eapply map_bind2_normalize_exp_numstreams in H2... }
+
+      assert (length s0ss = length e0s) as Hlen1 by (eapply Forall2_length in H12; eauto).
+      assert (H2':=H2). eapply map_bind2_sem in H2... 2:solve_forall. clear H.
+      destruct H2 as [H' [Href1 [Histst1 [Hdom1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
+
+      assert (Forall2 (sem_exp G H' b) es sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+      assert (length sss = length es) as Hlen2 by (eapply Forall2_length in H14; eauto).
+      assert (H3':=H3). eapply map_bind2_sem in H3... 2:solve_forall. clear H0.
+      destruct H3 as [H'' [Href2 [Hvalid2 [Hdom2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
+
+      assert (Forall2 (fun (e : exp) (v : Stream OpAux.value) => sem_exp G H'' b e [v]) (concat x2) (concat s0ss)) as Hsem''.
+      { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
+      specialize (idents_for_anns_length _ _ _ _ H4) as Hlength.
+      assert (length vs = length a) as Hlength'''.
+      { eapply Forall3_length in H15 as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
+
+      remember (Env.adds (List.map fst x5) vs H'') as H'''.
+      assert (length x5 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
+
+      assert (Forall2 (sem_var H''') (map fst x5) vs) as Hsemvars.
+      { rewrite HeqH'''. eapply sem_var_adds; eauto.
+        + rewrite map_length; auto.
+        + eapply idents_for_anns_NoDupMembers in H4; eauto. rewrite <- fst_NoDupMembers; eauto. }
+
+      assert (Env.refines eq H'' H''') as Href4.
+      { eapply idents_for_anns_refines in H4... }
+      assert (Forall2 (fun e v => sem_exp G H''' b e [v]) (normalize_arrow (concat x2) (concat x6) a) vs) as Hsemf.
+      { eapply normalize_arrow_sem... 2:congruence.
+        + eapply map_bind2_normalize_exp_length in H2'... congruence.
+        + clear - Hsem1 Href2 Href4. solve_forall. repeat (eapply sem_exp_refines; eauto).
+        + clear - Hsem2 Href2 Href4. solve_forall. repeat (eapply sem_exp_refines; eauto). }
+
+      exists H'''. repeat (split; eauto).
+      * repeat (etransitivity; eauto).
+      * eapply idents_for_anns_dom in H4; eauto.
+      * clear - Hsemvars. solve_forall.
+      * repeat rewrite Forall_app. repeat split.
+        -- clear - Hsemvars Hsemf.
+           remember (normalize_arrow _ _ _) as fby. clear Heqfby.
+           simpl_forall.
+           repeat rewrite_Forall_forall. 1:congruence.
+           destruct (nth _ x5 _) eqn:Hnth1.
+           econstructor.
+           ++ repeat constructor.
+              eapply H0... congruence.
+           ++ repeat constructor.
+              eapply H2 with (x1:=(i, a1))...
+        -- solve_forall. repeat (eapply sem_equation_refines; eauto).
+        -- solve_forall. repeat (eapply sem_equation_refines; eauto).
+           Unshelve. exact default_stream.
     - (* when *)
       assert (length (concat x1) = length (annots es)) as Hlength by (eapply map_bind2_normalize_exp_length; eauto).
       assert (length es = length ss) by (apply Forall2_length in H11; auto).
@@ -942,9 +1021,9 @@ Module Type CORRECTNESS
   Proof with eauto.
     intros * Hndup1 Hwt Hsem Hvalid Hhistst Hnorm.
     destruct e; try eapply normalize_exp_sem in Hnorm; eauto.
-    1,2,3,4,6,7,8: (destruct Hnorm as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem1 Hsem2]]]]];
+    1,2,3,4,7,8,9: (destruct Hnorm as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem1 Hsem2]]]]];
                     exists H'; repeat (split; eauto)).
-    1,2:(unfold normalize_rhs in Hnorm). 1,2:(inv Hwt; inv Hsem).
+    1,2,3:(unfold normalize_rhs in Hnorm;inv Hwt; inv Hsem).
     - (* fby *)
       simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
       repeat inv_bind.
@@ -967,6 +1046,30 @@ Module Type CORRECTNESS
       exists H''. repeat (split; auto).
       + repeat (etransitivity; eauto).
       + left. eapply normalize_fby_sem... 1,2:solve_length.
+      + repeat rewrite Forall_app. repeat split...
+        solve_forall. eapply sem_equation_refines; [| eauto]. etransitivity...
+    - (* arrow *)
+      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
+      repeat inv_bind.
+      assert (length x = length (annots l)) as Hlength1 by (eapply normalize_exps_length; eauto).
+      assert (length x2 = length (annots l0)) as Hlength2 by (eapply normalize_exps_length; eauto).
+      unfold normalize_exps in *. repeat inv_bind.
+      assert (NoDup (map fst (fresh_ins l0) ++ PS.elements reusable)) as Hndup4 by ndup_r Hndup1.
+      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_ins l0)) reusable))) as Hndup3.
+      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+
+      eapply normalize_exps_sem in H0...
+      destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
+      assert (Forall2 (sem_exp G H' b) l0 sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+
+      eapply normalize_exps_sem in H1...
+      destruct H1 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
+      assert (Forall2 (fun (e : exp) (v : Stream OpAux.value) => sem_exp G H'' b e [v]) (concat x2) (concat s0ss)) as Hsem''.
+      { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
+
+      exists H''. repeat (split; auto).
+      + repeat (etransitivity; eauto).
+      + left. eapply normalize_arrow_sem... 1,2:solve_length.
       + repeat rewrite Forall_app. repeat split...
         solve_forall. eapply sem_equation_refines; [| eauto]. etransitivity...
     - (* app *)
@@ -1281,6 +1384,10 @@ Module Type CORRECTNESS
     - (* binop *)
       econstructor...
     - (* fby *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+    - (* arrow *)
       econstructor...
       + repeat rewrite_Forall_forall. eapply H0...
       + repeat rewrite_Forall_forall. eapply H1...
@@ -1690,6 +1797,37 @@ Module Type CORRECTNESS
     rewrite const_val_const. rewrite sem_false_const. eassumption.
   Qed.
 
+  Lemma arrow_ite : forall bs y0s ys zs,
+      aligned y0s bs ->
+      aligned ys bs ->
+      arrow y0s ys zs ->
+      ite (delay true_val (const_val bs false_val)) y0s ys zs.
+  Proof.
+    cofix CoFix.
+    intros [b bs] y0s ys zs Hsyn1 Hsyn2 Harrow.
+    destruct b; inv Hsyn1; inv Hsyn2; inv Harrow.
+    - rewrite const_val_Cons, delay_Cons.
+      constructor.
+      rewrite delay_const, H6.
+      apply ite_false; auto.
+      rewrite <- H6. assumption.
+    - rewrite const_val_Cons, delay_Cons.
+      constructor.
+      apply CoFix; auto.
+  Qed.
+
+  Corollary arrow_init_stream_ite : forall bs y0s ys zs,
+      aligned y0s bs ->
+      aligned ys bs ->
+      arrow y0s ys zs ->
+      ite (init_stream bs) y0s ys zs.
+  Proof.
+    intros * Hsyn1 Hsyn2 Harrow.
+    eapply arrow_ite in Harrow; eauto.
+    unfold init_stream.
+    rewrite const_val_const. rewrite sem_false_const. eassumption.
+  Qed.
+
   Lemma ac_delay : forall c vs,
       abstract_clock (delay c vs) ≡ abstract_clock vs.
   Proof.
@@ -2039,6 +2177,58 @@ Module Type CORRECTNESS
       + solve_forall. eapply sem_equation_refines...
   Qed.
 
+  Fact arrow_iteexp_sem : forall G vars bs H e0 e ty nck y0 y z e' eqs' st st',
+      wc_global G ->
+      sc_nodes G ->
+      NoDupMembers vars ->
+      wc_env (idck vars++st_clocks' st) ->
+      normalized_lexp e0 ->
+      normalized_lexp e ->
+      clockof e0 = [fst nck] ->
+      clockof e = [fst nck] ->
+      wt_exp G (idty vars++st_tys' st) e0 ->
+      wc_exp G (idck vars++st_clocks' st) e0 ->
+      wt_exp G (idty vars++st_tys' st) e ->
+      wc_exp G (idck vars++st_clocks' st) e ->
+      sem_exp G H bs e0 [y0] ->
+      sem_exp G H bs e [y] ->
+      arrow y0 y z ->
+      st_valid_after st (PSP.of_list (map fst vars)) ->
+      hist_st (idck vars) bs H st ->
+      arrow_iteexp e0 e (ty, nck) st = (e', eqs', st') ->
+      (exists H',
+          Env.refines eq H H' /\
+          st_valid_after st' (PSP.of_list (map fst vars)) /\
+          hist_st (idck vars) bs H' st' /\
+          sem_exp G H' bs e' [z] /\
+          Forall (sem_equation G H' bs) eqs').
+  Proof with eauto.
+    intros * HwcG Hsc Hndup Hwenv Hnormed1 Hnormed2 Hck1 Hck2 Hwt1 Hwt2 Hwc1 Hwc2 Hsem0 Hsem Harrow Hvalid Histst Hiteexp.
+    destruct nck as [ck ?]; simpl in *.
+    unfold arrow_iteexp in Hiteexp. repeat inv_bind.
+    eapply sc_normalized_lexp with (env:=vars++st_vars st) in Hnormed1...
+    3,6:rewrite idck_app... 4:rewrite idty_app...
+    2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
+    2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
+    eapply sc_normalized_lexp with (env:=vars++st_vars st) in Hnormed2...
+    3,6:rewrite idck_app... 4:rewrite idty_app...
+    2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
+    2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
+    eapply sem_clock_det in Hnormed2; [|eapply Hnormed1].
+
+    eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
+    2: rewrite map_fst_idck...
+    remember (abstract_clock y0) as bs'.
+    exists H'. repeat (split; auto).
+    + rewrite map_fst_idck in Hvalid1...
+    + eapply Site with (s:=(init_stream bs')) (ts:=[[y0]]) (fs:=[[y]]); repeat constructor...
+      * eapply sem_exp_refines...
+      * eapply sem_exp_refines...
+      * subst. eapply arrow_init_stream_ite...
+        apply ac_aligned.
+        rewrite Hnormed2. apply ac_aligned.
+  Qed.
+
   Fact fby_equation_sc_exp : forall G H vars bs e0 ck s0s ss vs,
       wc_global G ->
       sc_nodes G ->
@@ -2088,11 +2278,11 @@ Module Type CORRECTNESS
       simpl in *; repeat rewrite app_nil_r in *.
       inv H20; inv H21. inv H25; inv H22.
       assert (wc_env (idck (vars ++ st_vars x4))) as Hwenv1.
-      { eapply fby_iteexp_wc_env in H0...
+      { eapply fby_iteexp_wc_env with (cl:=(ck, name)) in H0...
         + rewrite idck_app, <- st_clocks'_st_vars...
         + eapply normalized_lexp_wc_exp_clockof in H6...
           rewrite <- H15 in H6; inv H6... }
-      eapply fby_iteexp_sem in H0 as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem1 Hsem1']]]]]...
+      eapply fby_iteexp_sem with (nck:=(ck, name)) in H0 as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem1 Hsem1']]]]]...
       destruct (PS.mem _ _); repeat inv_bind.
       + remember (Env.add x6 y2 H') as H''.
         assert (Env.refines eq H' H'') as Href2.
@@ -2127,7 +2317,24 @@ Module Type CORRECTNESS
         constructor; eauto.
         econstructor; eauto. simpl. constructor; auto.
         eapply sem_var_refines; eauto.
-    - exists H. repeat (split; eauto).
+    - (* arrow *)
+      inv Hsem. inv H6; inv H5.
+      inv H3. inv H9; inv H5. inv H11; inv H6.
+      simpl in *. repeat rewrite app_nil_r in *. inv H7; inv H8. inv H12; inv H9.
+      inv Hunt. 2:(inv H2; inv H1).
+      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt. inv Hwt.
+      apply Forall_singl in H9. apply Forall_singl in H11.
+      destruct Hwc as [Hwc _]. apply Forall_singl in Hwc. inv Hwc.
+      apply Forall_singl in H15. apply Forall_singl in H16.
+      destruct x2 as [ty [ck name]].
+      eapply arrow_iteexp_sem in H0 as [H' [Href [Hvalid1 [Hhistst1 [Hsem1 Hsem1']]]]]; eauto.
+      2,3:simpl in *; rewrite app_nil_r in *; rewrite Forall2_eq in H17, H18.
+      2:rewrite <- H17; auto. 2:rewrite <- H18; auto.
+      exists H'. repeat (split; auto).
+      constructor; auto.
+      econstructor; eauto.
+      constructor; auto. eapply sem_var_refines; eauto.
+    - (* other *) exists H. repeat (split; eauto).
   Qed.
 
   Fact fby_equations_sem : forall G vars bs to_cut eqs eqs' H st st',

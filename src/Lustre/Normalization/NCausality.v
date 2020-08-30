@@ -69,6 +69,10 @@ Module Type NCAUSALITY
     - (* fby *)
       eapply Forall_Forall in H; eauto. clear H4.
       Forall_Exists_free H2.
+    - (* arrow *)
+      eapply Forall_Forall in H; eauto. clear H4.
+      eapply Forall_Forall in H0; eauto. clear H5.
+      destruct H2 as [Hfree|Hfree]; Forall_Exists_free Hfree.
     - (* when *)
       destruct H1 as [?|Hfree]; subst...
       eapply Forall_Forall in H; eauto. clear H4.
@@ -111,6 +115,11 @@ Module Type NCAUSALITY
       Exists (Is_free_left_ck x) e0s \/
       Exists (Is_free_in_clock x) (map clock_of_nclock a) ->
       Is_free_left_ck x (Efby e0s es a)
+  | IFLarrow : forall e0s es a,
+      Exists (Is_free_left_ck x) e0s \/
+      Exists (Is_free_left_ck x) es \/
+      Exists (Is_free_in_clock x) (map clock_of_nclock a) ->
+      Is_free_left_ck x (Earrow e0s es a)
   | IFLwhen : forall es y b tys ck name,
       x = y \/
       Exists (Is_free_left_ck x) es \/
@@ -158,6 +167,11 @@ Module Type NCAUSALITY
       eapply Forall_Exists in H2; eauto.
       constructor. left.
       eapply Exists_Exists; [|eauto]. intros ? [? ?]; eauto.
+    - (* arrow *)
+      destruct H2 as [Hfree|Hfree].
+      1,2:eapply Forall_Exists in Hfree; eauto.
+      + constructor. left. eapply Exists_Exists; [|eauto]. intros ? [? ?]; eauto.
+      + constructor. right. left. eapply Exists_Exists; [|eauto]. intros ? [? ?]; eauto.
     - (* when *)
       destruct H1; auto.
       eapply Forall_Exists in H; eauto.
@@ -410,6 +424,16 @@ Module Type NCAUSALITY
       + eapply wc_normalized_lexp_Is_free_left in Hex as [?|[y [ck' [? [? ?]]]]]; eauto 10.
       + eapply wc_normalized_lexp_clockof_free_in in H as [?|[y [ck' [? [? ?]]]]]; eauto 10.
         rewrite <- H9; auto.
+    - (* arrow *)
+      inv Hwc. inv Hex.
+      simpl in *. rewrite app_nil_r in *. inv H5; inv H10. inv H6; inv H11. inv H7; inv H11.
+      destruct ann0 as (ty&ck&name); unfold clock_of_nclock, stripname in *; simpl in *.
+      apply Forall_singl in H4.
+      destruct H2 as [Hex|[Hex|Hex]]; apply Exists_singl in Hex.
+      + eapply wc_normalized_lexp_Is_free_left in Hex as [?|[y [ck' [? [? ?]]]]]; eauto 10.
+      + eapply wc_normalized_lexp_Is_free_left in Hex as [?|[y [ck' [? [? ?]]]]]; eauto 10.
+      + eapply wc_normalized_lexp_clockof_free_in in H as [?|[y [ck' [? [? ?]]]]]; eauto 10.
+        rewrite <- H5; auto.
     - (* cexp *)
       eapply wc_normalized_cexp_Is_free_left in H as [?|[y [ck' [? [? ?]]]]]; eauto 10.
   Qed.
@@ -598,7 +622,21 @@ Module Type NCAUSALITY
       simpl in H6; rewrite app_nil_r, Forall2_eq in H6.
       eapply wc_normalized_lexp_clockof_free_in in H4 as [Hex|[y [ck' [Hfree' [Hin' Hex]]]]]; eauto.
       2:rewrite <- H6; auto.
-      right. left. exists y. exists ck'. repeat split; auto.
+      right. left. exists y. exists ck'. auto.
+    - (* arrow *)
+      clear Hwc2. simpl in *.
+      constructor; auto.
+      intros ck Hin ? Hfree.
+      apply Forall_singl in Hwc1. apply Forall2_singl in Hwc3.
+      destruct ann0 as [ty [ck' name]].
+      assert (ck' = ck); subst.
+      { eapply NoDupMembers_det in Hndup; eauto. }
+      right. inv Hwc1.
+      clear H2 H5 H7. apply Forall_singl in H4.
+      simpl in H6; rewrite app_nil_r, Forall2_eq in H6.
+      eapply wc_normalized_lexp_clockof_free_in in H4 as [Hex|[y [ck' [Hfree' [Hin' Hex]]]]]; eauto 6.
+      2:rewrite <- H6; auto.
+      right. left. exists y. exists ck'. auto.
     - (* cexp *)
       clear Hwc2.
       constructor; auto.
@@ -764,6 +802,8 @@ Module Type NCAUSALITY
     | Ebinop _ e1 e2 (_, (ck, _)) => (collect_free_left_ck e1)++(collect_free_left_ck e2)++(collect_free_in_clock ck)
     | Efby e0s es anns =>
       (collect_free_lefts_ck e0s)++(collect_free_in_clocks (map clock_of_nclock anns))
+    | Earrow e0s es anns =>
+      (collect_free_lefts_ck e0s)++(collect_free_lefts_ck es)++(collect_free_in_clocks (map clock_of_nclock anns))
     | Ewhen es id _ (_, (ck, _)) =>
       id::(collect_free_lefts_ck es)++(collect_free_in_clock ck)
     | Emerge id ets efs (_, (ck, _)) =>
@@ -783,7 +823,7 @@ Module Type NCAUSALITY
       In x (collect_free_left_ck e) <-> Is_free_left_ck x e.
   Proof.
     intros e x. split; intros H.
-    - induction e using exp_ind2; simpl in *. 9:destruct ro.
+    - induction e using exp_ind2; simpl in *. 10:destruct ro.
       Local Ltac Forall_Exists_Exists H :=
         rewrite in_flat_map' in H;
         eapply Forall_Exists in H; [|eauto];
@@ -802,6 +842,11 @@ Module Type NCAUSALITY
         rewrite in_app_iff in H. destruct H.
         * constructor. left. Forall_Exists_Exists H.
         * constructor. right. apply collect_free_in_clocks_In'; auto.
+      + (* arrow *)
+        repeat rewrite in_app_iff in H. destruct H as [H|[H|H]].
+        * constructor. left. Forall_Exists_Exists H.
+        * constructor. right. left. Forall_Exists_Exists H.
+        * constructor. right. right. apply collect_free_in_clocks_In'; auto.
       + (* when *)
         destruct a as [tys [ck name]].
         destruct H; auto. rewrite in_app_iff, <- collect_free_in_clock_In in H; destruct H; auto.
@@ -844,6 +889,11 @@ Module Type NCAUSALITY
         rewrite collect_free_in_clocks_In'.
         destruct H3; auto.
         left. Forall_Exists_Exists2 H.
+      + (* arrow *)
+        rewrite collect_free_in_clocks_In'.
+        destruct H3 as [?|[?|?]]; auto.
+        * left. Forall_Exists_Exists2 H.
+        * right. left. Forall_Exists_Exists2 H.
       + (* when *)
         simpl. rewrite in_app_iff, <- collect_free_in_clock_In.
         destruct H2 as [?|[?|?]]; auto.
@@ -1104,7 +1154,8 @@ Module Type NCAUSALITY
   Proof.
     intros * Hweak Hfby.
     inv_fby_equation Hfby to_cut eq.
-    - destruct x2 as [ty [ck name]]; repeat inv_bind.
+    - (* fby *)
+      destruct x2 as [ty [ck name]]; repeat inv_bind.
       eapply fby_iteexp_weak_valid with (eqs:=([x], [Efby [x0] [x1] [(ty, (ck, name))]])::eqs) in H; simpl in *; eauto.
       destruct (PS.mem _ _); repeat inv_bind.
       + eapply fresh_ident_weak_valid in H0; eauto.
@@ -1113,7 +1164,13 @@ Module Type NCAUSALITY
         rewrite <- add_ps_from_list_cons; auto.
       + rewrite vars_defined_app in *; simpl in *.
         rewrite <- Permutation_middle; auto.
-    - rewrite vars_defined_app; simpl.
+    - (* arrow *)
+      destruct x2 as [ty [ck name]]; repeat inv_bind.
+      rewrite vars_defined_app; simpl.
+      eapply init_var_for_clock_weak_valid with (eqs:=([x], [Econst Op.false_const])::eqs) in H; simpl in *; eauto.
+      rewrite vars_defined_app, app_comm_cons, Permutation_middle in H; auto.
+    - (* cexp *)
+      rewrite vars_defined_app; simpl.
       rewrite app_nil_r, (Permutation_app_comm (vars_defined _)); auto.
   Qed.
 
@@ -1249,10 +1306,13 @@ Module Type NCAUSALITY
   Proof.
     intros * Hin Hweak Hnin Hfby.
     inv_fby_equation Hfby to_cut eq.
-    destruct x2 as [ty [ck name]]; repeat inv_bind.
-    eapply fby_iteexp_weak_valid_nIn_st_inits with (a:=(ty, (ck, name))) in H; eauto.
-    destruct (PS.mem _ _); repeat inv_bind; auto.
-    eapply fresh_ident_false_st_inits in H0. congruence.
+    1,2:destruct x2 as [ty [ck name]]; repeat inv_bind.
+    - (* fby *)
+      eapply fby_iteexp_weak_valid_nIn_st_inits with (a:=(ty, (ck, name))) in H; eauto.
+      destruct (PS.mem _ _); repeat inv_bind; auto.
+      eapply fresh_ident_false_st_inits in H0. congruence.
+    - (* arrow *)
+      eapply init_var_for_clock_weak_valid_nIn_st_inits in H; eauto.
   Qed.
 
   (** *** Causality invariant
@@ -1758,135 +1818,180 @@ Module Type NCAUSALITY
   Proof.
     intros * Hunt Hwl Hwc Hvalid Hnin Hinv Hfby.
     inv_fby_equation Hfby to_cut eq.
-    2: { rewrite cons_is_app, Permutation_app_comm in Hinv; auto. }
-    destruct x2 as [ty [ck name]]; repeat inv_bind.
-    assert (normalized_lexp x0) as Hnormed.
-    { inv Hunt. inv H3; auto. inv H2. inv H1. }
-    assert (clockof x0 = [ck]) as Hck.
-    { destruct Hwc as [Hwc _]. apply Forall_singl in Hwc. inv Hwc; simpl in *.
-      rewrite Forall2_eq, app_nil_r in H6; auto. }
-    assert (weak_valid_after st (ps_from_list (vars_defined eqs++inputs))) as Hvalid2.
-    { eapply weak_valid_after_Subset; eauto. rewrite <- add_ps_from_list_cons.
-      apply PSP.subset_add_2. reflexivity. }
-    assert (Hnd':=H). eapply fby_iteexp_NoDup in Hnd'; eauto.
-    2:{ destruct Hinv as [Hnd _]; simpl in Hnd. inv Hnd; auto. }
-    assert (Hfby:=H). eapply fby_iteexp_causal_inv in H as [eqs1 [eqs2 [Hperm [Hcaus [Heqs2 He']]]]]; eauto; auto.
-    - destruct (PS.mem _ _); repeat inv_bind.
-      + rewrite Hperm, Permutation_app_comm, (Permutation_app_comm eqs1); simpl.
-        rewrite <- app_assoc, (Permutation_app_comm eqs1).
-        eapply causal_replace with (eqs':=([x], [Evar x5 (ty, (ck, name))])::([x5], [x2])::eqs2) in Hcaus; simpl in *; eauto.
-        2,3:rewrite app_comm_cons, Forall_app; split; eauto.
-        * eapply fresh_ident_false_causal_inv; eauto.
-        * eapply fby_iteexp_untupled_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
-          rewrite Hperm, Forall_app in Hfby; destruct Hfby; auto.
-          inv Hunt. inv H2; auto. inv H1;inv H0.
-        * inv Hwl. inv H2.
-          apply Forall_singl in H0. inv H0; simpl in *.
-          apply Forall_singl in H6. apply Forall_singl in H8.
-          rewrite app_nil_r, length_annot_numstreams in *.
-          eapply fby_iteexp_wl_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
-          rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
-        * repeat constructor; simpl.
-          -- rewrite app_nil_r.
-             eapply fby_iteexp_annot with (ann0:=(ty, (ck, name))) in Hfby.
-             rewrite clockof_annot, Hfby; auto.
-          -- eapply fby_iteexp_clocksof in Hfby; eauto.
-             rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
-        * intros ? Hcaus'.
-          constructor; [constructor|]; simpl; auto.
-          -- inv Hcaus'. clear H2.
-             eapply Is_causal_ck_Forall'.
-             solve_forall; simpl in *.
-             eapply H1 in H2.
-             rewrite in_app_iff.
-             assert (False \/ In x6 inputs0) as [Hf|?]; eauto. 2:inv Hf.
-             eapply H3; auto.
-          -- intros ? Hex. apply Exists_singl in Hex. apply He' in Hex.
-             rewrite in_app_iff. destruct Hex as [Hex|[?|?]]; auto.
-             ++ inv Hcaus'. clear H2; simpl in *.
+    3: { rewrite cons_is_app, Permutation_app_comm in Hinv; auto. }
+    { (* fby *)
+      destruct x2 as [ty [ck name]]; repeat inv_bind.
+      assert (normalized_lexp x0) as Hnormed.
+      { inv Hunt. inv H3; auto. inv H2. inv H1. }
+      assert (clockof x0 = [ck]) as Hck.
+      { destruct Hwc as [Hwc _]. apply Forall_singl in Hwc. inv Hwc; simpl in *.
+        rewrite Forall2_eq, app_nil_r in H6; auto. }
+      assert (weak_valid_after st (ps_from_list (vars_defined eqs++inputs))) as Hvalid2.
+      { eapply weak_valid_after_Subset; eauto. rewrite <- add_ps_from_list_cons.
+        apply PSP.subset_add_2. reflexivity. }
+      assert (Hnd':=H). eapply fby_iteexp_NoDup in Hnd'; eauto.
+      2:{ destruct Hinv as [Hnd _]; simpl in Hnd. inv Hnd; auto. }
+      assert (Hfby:=H). eapply fby_iteexp_causal_inv in H as [eqs1 [eqs2 [Hperm [Hcaus [Heqs2 He']]]]]; eauto; auto.
+      - destruct (PS.mem _ _); repeat inv_bind.
+        + rewrite Hperm, Permutation_app_comm, (Permutation_app_comm eqs1); simpl.
+          rewrite <- app_assoc, (Permutation_app_comm eqs1).
+          eapply causal_replace with (eqs':=([x], [Evar x5 (ty, (ck, name))])::([x5], [x2])::eqs2) in Hcaus; simpl in *; eauto.
+          2,3:rewrite app_comm_cons, Forall_app; split; eauto.
+          * eapply fresh_ident_false_causal_inv; eauto.
+          * eapply fby_iteexp_untupled_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
+            rewrite Hperm, Forall_app in Hfby; destruct Hfby; auto.
+            inv Hunt. inv H2; auto. inv H1;inv H0.
+          * inv Hwl. inv H2.
+            apply Forall_singl in H0. inv H0; simpl in *.
+            apply Forall_singl in H6. apply Forall_singl in H8.
+            rewrite app_nil_r, length_annot_numstreams in *.
+            eapply fby_iteexp_wl_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
+            rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
+          * repeat constructor; simpl.
+            -- rewrite app_nil_r.
+               eapply fby_iteexp_annot with (ann0:=(ty, (ck, name))) in Hfby.
+               rewrite clockof_annot, Hfby; auto.
+            -- eapply fby_iteexp_clocksof in Hfby; eauto.
+               rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
+          * intros ? Hcaus'.
+            constructor; [constructor|]; simpl; auto.
+            -- inv Hcaus'. clear H2.
+               eapply Is_causal_ck_Forall'.
+               solve_forall; simpl in *.
+               eapply H1 in H2.
+               rewrite in_app_iff.
                assert (False \/ In x6 inputs0) as [Hf|?]; eauto. 2:inv Hf.
                eapply H3; auto.
-             ++ right. right. simpl_In.
-                exists (x6, ck); split; auto. apply filter_In; split; auto.
-                apply equiv_decb_refl.
-          -- intros ? Hex. apply Exists_singl in Hex. inv Hex. destruct H1 as [?|Hex]; auto.
-             inv Hcaus'; clear H2. specialize (H3 x6); simpl in H3.
-             rewrite in_app_iff.
-             assert (False \/ In x6 inputs0) as [Hf|?]; auto. 2:inv Hf.
-             apply H3. constructor. constructor. right; simpl. constructor; auto.
-        * clear - Hnin Hvalid Hfby.
-          eapply fby_iteexp_weak_valid_nIn_st_inits with (a:=(ty, (ck, name))) in Hfby; eauto. 2:inv Hnin; auto.
-          rewrite <- add_ps_from_list_cons. apply PSF.add_1; auto.
-        * constructor; [|constructor].
-          -- intro contra.
-             clear Hvalid2. assert (Hfby':=Hfby). eapply fby_iteexp_weak_valid_nIn with (a:=(ty, (ck, name))) in Hfby; eauto.
-             2:rewrite <- add_ps_from_list_cons; apply PSF.add_1; reflexivity.
-             rewrite Hperm in Hfby.
-             destruct Hcaus as [Hcaus _]. simpl in *; inv Hcaus.
-             repeat rewrite vars_defined_app in *. repeat rewrite in_app_iff in *.
-             destruct contra as [?|[[?|[?|?]]|?]]; subst; auto.
-             eapply fresh_ident_weak_valid_nIn in H; eauto.
-             2:eapply fby_iteexp_weak_valid with (eqs:=([x], [Efby [x0] [x1] [(ty, (ck, name))]])::eqs) in Hfby'; simpl in *; eauto.
-             eapply H. rewrite ps_from_list_In. left; auto.
-          -- eapply fby_iteexp_weak_valid in Hfby; eauto.
-             eapply fresh_ident_weak_valid_nIn in H; eauto.
-             rewrite ps_from_list_In, Hperm in H.
-             rewrite (Permutation_app_swap eqs1), app_assoc, (Permutation_app_comm _ eqs2), <- app_assoc in H; auto.
-          -- rewrite Permutation_app_comm in Hperm. rewrite Hperm, Permutation_swap in Hnd'; auto.
-      + rewrite Hperm, Permutation_app_comm, (Permutation_app_comm eqs1); simpl.
-        rewrite <- app_assoc, (Permutation_app_comm eqs1).
-        eapply causal_replace with (eqs':=([x], [x2])::eqs2) in Hcaus; simpl in *; eauto.
-        1,2:rewrite app_comm_cons, Forall_app; split; eauto.
-        * eapply fby_iteexp_untupled_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
-          rewrite Hperm, Forall_app in Hfby; destruct Hfby; auto.
-          inv Hunt. inv H1; auto. inv H0;inv H.
-        * inv Hwl. inv H1.
-          apply Forall_singl in H. inv H; simpl in *.
-          apply Forall_singl in H5. apply Forall_singl in H7.
-          rewrite app_nil_r, length_annot_numstreams in *.
-          eapply fby_iteexp_wl_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
-          rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
-        * constructor; simpl.
-          -- rewrite app_nil_r.
-             eapply fby_iteexp_annot with (ann0:=(ty, (ck, name))) in Hfby.
-             rewrite clockof_annot, Hfby; auto.
-          -- eapply fby_iteexp_clocksof in Hfby; eauto.
-             rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
-        * intros ? Hcaus'.
-          constructor; auto.
-          -- inv Hcaus'. clear H1.
-             eapply Is_causal_ck_Forall'.
-             solve_forall; simpl in *.
-             eapply H0 in H1.
-             assert (False \/ In x4 inputs0) as [Hf|?]; eauto. 2:inv Hf.
-             eapply H2; auto. rewrite in_app_iff; auto.
-          -- intros ? Hex. apply Exists_singl in Hex. apply He' in Hex.
-             rewrite in_app_iff. destruct Hex as [Hex|[?|?]]; auto.
-             ++ inv Hcaus'. clear H1; simpl in *.
+            -- intros ? Hex. apply Exists_singl in Hex. apply He' in Hex.
+               rewrite in_app_iff. destruct Hex as [Hex|[?|?]]; auto.
+               ++ inv Hcaus'. clear H2; simpl in *.
+                  assert (False \/ In x6 inputs0) as [Hf|?]; eauto. 2:inv Hf.
+                  eapply H3; auto.
+               ++ right. right. simpl_In.
+                  exists (x6, ck); split; auto. apply filter_In; split; auto.
+                  apply equiv_decb_refl.
+            -- intros ? Hex. apply Exists_singl in Hex. inv Hex. destruct H1 as [?|Hex]; auto.
+               inv Hcaus'; clear H2. specialize (H3 x6); simpl in H3.
+               rewrite in_app_iff.
+               assert (False \/ In x6 inputs0) as [Hf|?]; auto. 2:inv Hf.
+               apply H3. constructor. constructor. right; simpl. constructor; auto.
+          * clear - Hnin Hvalid Hfby.
+            eapply fby_iteexp_weak_valid_nIn_st_inits with (a:=(ty, (ck, name))) in Hfby; eauto. 2:inv Hnin; auto.
+            rewrite <- add_ps_from_list_cons. apply PSF.add_1; auto.
+          * constructor; [|constructor].
+            -- intro contra.
+               clear Hvalid2. assert (Hfby':=Hfby). eapply fby_iteexp_weak_valid_nIn with (a:=(ty, (ck, name))) in Hfby; eauto.
+               2:rewrite <- add_ps_from_list_cons; apply PSF.add_1; reflexivity.
+               rewrite Hperm in Hfby.
+               destruct Hcaus as [Hcaus _]. simpl in *; inv Hcaus.
+               repeat rewrite vars_defined_app in *. repeat rewrite in_app_iff in *.
+               destruct contra as [?|[[?|[?|?]]|?]]; subst; auto.
+               eapply fresh_ident_weak_valid_nIn in H; eauto.
+               2:eapply fby_iteexp_weak_valid with (eqs:=([x], [Efby [x0] [x1] [(ty, (ck, name))]])::eqs) in Hfby'; simpl in *; eauto.
+               eapply H. rewrite ps_from_list_In. left; auto.
+            -- eapply fby_iteexp_weak_valid in Hfby; eauto.
+               eapply fresh_ident_weak_valid_nIn in H; eauto.
+               rewrite ps_from_list_In, Hperm in H.
+               rewrite (Permutation_app_swap eqs1), app_assoc, (Permutation_app_comm _ eqs2), <- app_assoc in H; auto.
+            -- rewrite Permutation_app_comm in Hperm. rewrite Hperm, Permutation_swap in Hnd'; auto.
+        + rewrite Hperm, Permutation_app_comm, (Permutation_app_comm eqs1); simpl.
+          rewrite <- app_assoc, (Permutation_app_comm eqs1).
+          eapply causal_replace with (eqs':=([x], [x2])::eqs2) in Hcaus; simpl in *; eauto.
+          1,2:rewrite app_comm_cons, Forall_app; split; eauto.
+          * eapply fby_iteexp_untupled_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
+            rewrite Hperm, Forall_app in Hfby; destruct Hfby; auto.
+            inv Hunt. inv H1; auto. inv H0;inv H.
+          * inv Hwl. inv H1.
+            apply Forall_singl in H. inv H; simpl in *.
+            apply Forall_singl in H5. apply Forall_singl in H7.
+            rewrite app_nil_r, length_annot_numstreams in *.
+            eapply fby_iteexp_wl_eq with (a:=(ty, (ck, name))) in Hfby; eauto.
+            rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
+          * constructor; simpl.
+            -- rewrite app_nil_r.
+               eapply fby_iteexp_annot with (ann0:=(ty, (ck, name))) in Hfby.
+               rewrite clockof_annot, Hfby; auto.
+            -- eapply fby_iteexp_clocksof in Hfby; eauto.
+               rewrite Hperm, Forall_app in Hfby. destruct Hfby; auto.
+          * intros ? Hcaus'.
+            constructor; auto.
+            -- inv Hcaus'. clear H1.
+               eapply Is_causal_ck_Forall'.
+               solve_forall; simpl in *.
+               eapply H0 in H1.
                assert (False \/ In x4 inputs0) as [Hf|?]; eauto. 2:inv Hf.
-               eapply H2; auto.
-             ++ right. right. simpl_In.
-                exists (x4, ck); split; auto. apply filter_In; split; auto.
-                apply equiv_decb_refl.
-        * clear - Hnin Hvalid Hfby.
-          eapply fby_iteexp_weak_valid_nIn_st_inits with (a:=(ty, (ck, name))) in Hfby; eauto. 2:inv Hnin; auto.
+               eapply H2; auto. rewrite in_app_iff; auto.
+            -- intros ? Hex. apply Exists_singl in Hex. apply He' in Hex.
+               rewrite in_app_iff. destruct Hex as [Hex|[?|?]]; auto.
+               ++ inv Hcaus'. clear H1; simpl in *.
+                  assert (False \/ In x4 inputs0) as [Hf|?]; eauto. 2:inv Hf.
+                  eapply H2; auto.
+               ++ right. right. simpl_In.
+                  exists (x4, ck); split; auto. apply filter_In; split; auto.
+                  apply equiv_decb_refl.
+          * clear - Hnin Hvalid Hfby.
+            eapply fby_iteexp_weak_valid_nIn_st_inits with (a:=(ty, (ck, name))) in Hfby; eauto. 2:inv Hnin; auto.
+            rewrite <- add_ps_from_list_cons. apply PSF.add_1; auto.
+          * simpl. constructor; auto.
+            -- intro contra.
+               clear Hvalid2.
+               eapply fby_iteexp_weak_valid_nIn with (id:=x) (a:=(ty, (ck, name))) in Hfby; [| |eauto].
+               2:rewrite <- add_ps_from_list_cons. 2:apply PSF.add_1; auto.
+               rewrite Hperm in Hfby.
+               destruct Hcaus as [Hcaus _]. simpl in Hcaus; inv Hcaus.
+               repeat rewrite vars_defined_app in *. repeat rewrite in_app_iff in *.
+               destruct contra as [[?|[?|?]]|?]; auto.
+            -- rewrite Permutation_app_comm in Hperm. rewrite Hperm, Permutation_swap in Hnd'; auto.
+      - clear - Hinv Hck Hnormed. intros ? Hfree.
+        eapply normalized_lexp_clockof in Hnormed. 2:rewrite Hck; eauto.
+        destruct Hinv as [_ [_ [ceqs [Hperm [Hcaus _]]]]]. rewrite Hperm.
+        eapply Permutation_in in Hperm. 2:left; eauto.
+        eapply Is_causal_ck_Forall, Forall_forall in Hcaus; eauto.
+        eapply Hcaus; simpl; auto. }
+    { (* arrow *)
+      destruct x2 as [ty [ck name]]. repeat inv_bind.
+      assert (Hcaus:=H). eapply init_var_for_clock_causal_inv in Hcaus; eauto; simpl; auto.
+      - eapply causal_replace with (eqs':=([x], [_])::[]) in Hcaus; simpl in *; eauto.
+        + rewrite Permutation_middle in Hcaus. eassumption.
+        + inv Hunt. inv H2. 2:{ inv H1. inv H0. }
+          repeat constructor; eauto.
+          eapply Forall_app; split; auto.
+          eapply init_var_for_clock_untupled_eq in H; auto.
+        + inv Hwl. inv H2. inv H0. inv H5. simpl in *. inv H7. inv H9.
+          repeat constructor; eauto.
+          eapply Forall_app; split; auto.
+          eapply init_var_for_clock_wl in H; eauto.
+        + repeat constructor.
+        + intros * Hcaus'. inv Hcaus'. inv H2.
+          constructor; [constructor|]; simpl.
+          intros * Hex. right.
+          apply Exists_singl in Hex. inv Hex.
+          apply in_or_app.
+          destruct H1 as [Hex|Hex].
+          * inv Hex. destruct H1; subst.
+            -- right.
+               apply init_var_for_clock_In_st_inits in H.
+               simpl_In. exists (x2, ck). split; auto.
+               apply filter_In. split; auto.
+               apply equiv_decb_refl.
+            -- left.
+               assert (In x3 (vars_defined []) \/ In x3 inputs0) as Hin.
+               { apply H3. constructor; constructor; simpl; auto. }
+               destruct Hin as [Hin|?]; auto. inv Hin.
+          * left.
+            assert (In x3 (vars_defined []) \/ In x3 inputs0) as Hin.
+            { apply H3. constructor; constructor; simpl.
+              destruct Hex as [Hex|[Hex|Hex]]; auto. }
+            destruct Hin as [Hin|?]; auto. inv Hin.
+        + inv Hnin. eapply init_var_for_clock_weak_valid_nIn_st_inits in H; eauto.
           rewrite <- add_ps_from_list_cons. apply PSF.add_1; auto.
-        * simpl. constructor; auto.
-          -- intro contra.
-             clear Hvalid2.
-             eapply fby_iteexp_weak_valid_nIn with (id:=x) (a:=(ty, (ck, name))) in Hfby; [| |eauto].
-             2:rewrite <- add_ps_from_list_cons. 2:apply PSF.add_1; auto.
-             rewrite Hperm in Hfby.
-             destruct Hcaus as [Hcaus _]. simpl in Hcaus; inv Hcaus.
-             repeat rewrite vars_defined_app in *. repeat rewrite in_app_iff in *.
-             destruct contra as [[?|[?|?]]|?]; auto.
-          -- rewrite Permutation_app_comm in Hperm. rewrite Hperm, Permutation_swap in Hnd'; auto.
-    - clear - Hinv Hck Hnormed. intros ? Hfree.
-      eapply normalized_lexp_clockof in Hnormed. 2:rewrite Hck; eauto.
-      destruct Hinv as [_ [_ [ceqs [Hperm [Hcaus _]]]]]. rewrite Hperm.
-      eapply Permutation_in in Hperm. 2:left; eauto.
-      eapply Is_causal_ck_Forall, Forall_forall in Hcaus; eauto.
-      eapply Hcaus; simpl; auto.
+        + destruct Hcaus as [Hcaus _]; auto.
+      - intros ? Hisfree.
+        destruct Hinv as [_ [_ [ceqs [Hperm [Hcaus' _]]]]].
+        apply Is_causal_ck_Forall in Hcaus'. rewrite <- Hperm in Hcaus'. inv Hcaus'.
+        specialize (H2 x3). rewrite <- Hperm in H2; apply H2.
+        constructor. constructor. right. right. constructor; auto.
+    }
   Qed.
 
   Fact fby_equations_causal' : forall G vars to_cut inputs eqs ceqs eqs' st st',
