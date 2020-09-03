@@ -9,5 +9,5 @@ var x : int when b; c : bool; y : int when c;
 let
   x = 0 when b;
   (c, y) = f(f(b, x));
-  z = merge c y (0 when not c);
+  z = merge(c; y; (0 when not c));
 tel

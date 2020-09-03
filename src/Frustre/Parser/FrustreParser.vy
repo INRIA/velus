@@ -289,7 +289,7 @@ expression:
     { expr }
 | loc=IFTE expr1=expression THEN expr2=expression ELSE expr3=expression
     { [FrustreAst.IFTE expr1 expr2 expr3 loc] }
-| loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
+| loc=MERGE LPAREN id=VAR_NAME SEMICOLON expr1=primary_expression SEMICOLON expr2=primary_expression RPAREN
     { [FrustreAst.MERGE (fst id) expr1 expr2 loc] }
 | loc=MERGE id=VAR_NAME LPAREN TRUE  RARROW expr1=expression RPAREN
 			LPAREN FALSE RARROW expr2=expression RPAREN

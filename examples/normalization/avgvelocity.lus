@@ -1,13 +1,14 @@
 node counter (inc : int; restart : bool)
 returns (i : int)
 let
-  i = if restart then 0 else (pre i + inc);
+  i = if restart then 0 else (0 fby i + inc);
 tel
 
 node avgvelocity (delta : int; sec : bool)
 returns (v : int)
 let
-  v = merge sec ((counter (delta, false) when sec) / 
-                 (counter (1 when sec, false when sec)))
-                ((pre v) whenot sec);
+  v = merge sec
+            (true -> ((counter (delta, false) when sec) / 
+                      (counter (1 when sec, false when sec))))
+            (false -> ((0 fby v) whenot sec));
 tel
