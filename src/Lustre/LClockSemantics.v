@@ -176,12 +176,45 @@ Module Type LCLOCKSEMANTICS
     - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
   Qed.
 
+  Lemma ac_arrow1 : forall xs ys rs,
+      arrow xs ys rs -> abstract_clock xs ≡ abstract_clock rs.
+  Proof.
+    cofix Cofix.
+    intros * Harrow.
+    unfold_Stv xs; inv Harrow; econstructor; simpl; eauto.
+    clear - H3. revert H3. revert xs ys0 rs0.
+    cofix Cofix.
+    intros * Harrow1.
+    unfold_Stv xs; inv Harrow1; econstructor; simpl; eauto.
+  Qed.
+
   Lemma ac_arrow2 : forall xs ys rs,
       arrow xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
   Proof.
-    cofix Cofix. intros * Hfby.
-    unfold_Stv ys; inv Hfby; econstructor; simpl; eauto.
-    rewrite H3. reflexivity.
+    cofix Cofix.
+    intros * Harrow.
+    unfold_Stv ys; inv Harrow; econstructor; simpl; eauto.
+    clear - H3. revert H3. revert xs0 ys rs0.
+    cofix Cofix.
+    intros * Harrow1.
+    unfold_Stv ys; inv Harrow1; econstructor; simpl; eauto.
+  Qed.
+
+  Lemma arrow_aligned : forall bs xs ys zs,
+      arrow xs ys zs ->
+      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
+      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
+  Proof with eauto.
+    intros bs xs ys zs Hfby.
+    specialize (ac_arrow1 _ _ _ Hfby) as Hac1. specialize (ac_arrow2 _ _ _ Hfby) as Hac2.
+    specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
+    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
   Qed.
 
   (** ** Alignment proof extracted from Transcription/Correctness.v *)

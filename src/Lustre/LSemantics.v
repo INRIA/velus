@@ -48,15 +48,21 @@ Module Type LSEMANTICS
         fby1 y xs ys rs ->
         fby (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
+  CoInductive arrow1: Stream value -> Stream value -> Stream value -> Prop :=
+  | Arrow1A: forall xs ys rs,
+      arrow1 xs ys rs ->
+      arrow1 (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
+  | Arrow1P: forall x y xs ys rs,
+      arrow1 xs ys rs ->
+      arrow1 (present x ⋅ xs) (present y ⋅ ys) (present y ⋅ rs).
+
   CoInductive arrow: Stream value -> Stream value -> Stream value -> Prop :=
-  | ArrowA:
-      forall xs ys rs,
-        arrow xs ys rs ->
-        arrow (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
-  | ArrowP:
-      forall x y xs ys rs,
-        ys ≡ rs ->
-        arrow (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
+  | ArrowA: forall xs ys rs,
+      arrow xs ys rs ->
+      arrow (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
+  | ArrowP: forall x y xs ys rs,
+      arrow1 xs ys rs ->
+      arrow (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
   (* TODO : define semantics for pre (nil ?) *)
   (* CoInductive pre1 : val -> Stream value -> Stream value -> Prop := *)
@@ -796,6 +802,20 @@ Module Type LSEMANTICS
       rewrite <- H1. rewrite <- H3. rewrite <- H5. assumption.
   Qed.
 
+  Add Parametric Morphism : arrow1
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as arrow1_EqSt.
+  Proof.
+    cofix Cofix.
+    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
+    destruct cs' as [[]], xs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
+        try discriminate.
+    + constructor; eapply Cofix; eauto.
+    + inv H. inv H2. inv H4. econstructor.
+      eapply Cofix; eauto.
+  Qed.
+
   Add Parametric Morphism : arrow
       with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
         as arrow_EqSt.
@@ -806,8 +826,8 @@ Module Type LSEMANTICS
       inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
         try discriminate.
     + constructor; eapply Cofix; eauto.
-    + inv H4. inv H. econstructor.
-      rewrite <- H3, H0; auto.
+    + inv H. inv H2. inv H4. econstructor.
+      rewrite <- H1, <- H3, <- H5; auto.
   Qed.
 
   (* Add Parametric Morphism : pre1 *)

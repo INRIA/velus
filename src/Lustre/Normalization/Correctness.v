@@ -1798,31 +1798,31 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma arrow_ite : forall bs y0s ys zs,
-      aligned y0s bs ->
-      aligned ys bs ->
+      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       arrow y0s ys zs ->
       ite (delay true_val (const_val bs false_val)) y0s ys zs.
   Proof.
     cofix CoFix.
-    intros [b bs] y0s ys zs Hsyn1 Hsyn2 Harrow.
-    destruct b; inv Hsyn1; inv Hsyn2; inv Harrow.
+    intros [b bs] y0s ys zs Hsync Harrow.
+    apply arrow_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
+    destruct b; inv Hsync1; inv Hsync2; inv Hsync3; inv Harrow.
     - rewrite const_val_Cons, delay_Cons.
       constructor.
-      rewrite delay_const, H6.
-      apply ite_false; auto.
-      rewrite <- H6. assumption.
+      rewrite delay_const.
+      clear - H0 H1 H2 H3. revert bs vs vs0 vs1 H1 H2 H3 H0.
+      cofix CoFix. intros * Hsync1 Hsync2 Hsync3 Harrow.
+      destruct bs as [[|] bs]; inv Hsync1; inv Hsync2; inv Hsync3; inv Harrow.
+      1,2:rewrite const_val_Cons; constructor; auto.
     - rewrite const_val_Cons, delay_Cons.
-      constructor.
-      apply CoFix; auto.
+      constructor; auto.
   Qed.
 
   Corollary arrow_init_stream_ite : forall bs y0s ys zs,
-      aligned y0s bs ->
-      aligned ys bs ->
+      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       arrow y0s ys zs ->
       ite (init_stream bs) y0s ys zs.
   Proof.
-    intros * Hsyn1 Hsyn2 Harrow.
+    intros * Hsync Harrow.
     eapply arrow_ite in Harrow; eauto.
     unfold init_stream.
     rewrite const_val_const. rewrite sem_false_const. eassumption.
@@ -2183,13 +2183,9 @@ Module Type CORRECTNESS
       NoDupMembers vars ->
       wc_env (idck vars++st_clocks' st) ->
       normalized_lexp e0 ->
-      normalized_lexp e ->
       clockof e0 = [fst nck] ->
-      clockof e = [fst nck] ->
       wt_exp G (idty vars++st_tys' st) e0 ->
       wc_exp G (idck vars++st_clocks' st) e0 ->
-      wt_exp G (idty vars++st_tys' st) e ->
-      wc_exp G (idck vars++st_clocks' st) e ->
       sem_exp G H bs e0 [y0] ->
       sem_exp G H bs e [y] ->
       arrow y0 y z ->
@@ -2203,18 +2199,13 @@ Module Type CORRECTNESS
           sem_exp G H' bs e' [z] /\
           Forall (sem_equation G H' bs) eqs').
   Proof with eauto.
-    intros * HwcG Hsc Hndup Hwenv Hnormed1 Hnormed2 Hck1 Hck2 Hwt1 Hwt2 Hwc1 Hwc2 Hsem0 Hsem Harrow Hvalid Histst Hiteexp.
+    intros * HwcG Hsc Hndup Hwenv Hnormed1 Hck Hwt Hwc Hsem0 Hsem Harrow Hvalid Histst Hiteexp.
     destruct nck as [ck ?]; simpl in *.
     unfold arrow_iteexp in Hiteexp. repeat inv_bind.
     eapply sc_normalized_lexp with (env:=vars++st_vars st) in Hnormed1...
     3,6:rewrite idck_app... 4:rewrite idty_app...
     2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
     2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
-    eapply sc_normalized_lexp with (env:=vars++st_vars st) in Hnormed2...
-    3,6:rewrite idck_app... 4:rewrite idty_app...
-    2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
-    2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
-    eapply sem_clock_det in Hnormed2; [|eapply Hnormed1].
 
     eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
     2: rewrite map_fst_idck...
@@ -2225,8 +2216,7 @@ Module Type CORRECTNESS
       * eapply sem_exp_refines...
       * eapply sem_exp_refines...
       * subst. eapply arrow_init_stream_ite...
-        apply ac_aligned.
-        rewrite Hnormed2. apply ac_aligned.
+        left. apply ac_aligned.
   Qed.
 
   Fact fby_equation_sc_exp : forall G H vars bs e0 ck s0s ss vs,
@@ -2328,8 +2318,7 @@ Module Type CORRECTNESS
       apply Forall_singl in H15. apply Forall_singl in H16.
       destruct x2 as [ty [ck name]].
       eapply arrow_iteexp_sem in H0 as [H' [Href [Hvalid1 [Hhistst1 [Hsem1 Hsem1']]]]]; eauto.
-      2,3:simpl in *; rewrite app_nil_r in *; rewrite Forall2_eq in H17, H18.
-      2:rewrite <- H17; auto. 2:rewrite <- H18; auto.
+      2:simpl in *; rewrite app_nil_r in *; rewrite Forall2_eq in H17; rewrite <- H17; auto.
       exists H'. repeat (split; auto).
       constructor; auto.
       econstructor; eauto.
