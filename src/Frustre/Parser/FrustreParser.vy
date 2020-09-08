@@ -43,8 +43,9 @@ Import ListNotations.
 
 %token<FrustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR FBY
 %token<FrustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
-%token<FrustreAst.astloc> EVERY
 %token<FrustreAst.astloc> ASSERT
+
+%token<FrustreAst.astloc> RESTART EVERY
 
 %token<FrustreAst.astloc> EOF
 
@@ -139,8 +140,9 @@ postfix_expression:
     { expr }
 | fn=VAR_NAME LPAREN args=expression_list RPAREN
     { [FrustreAst.APP (fst fn) (rev args) (snd fn)] }
-| fn = VAR_NAME LPAREN args=expression_list RPAREN EVERY er=primary_expression
-    { [FrustreAst.APPRESET (fst fn) (rev args) er (snd fn)] }
+| LPAREN RESTART fn=VAR_NAME EVERY e=expression RPAREN
+  LPAREN args=expression_list RPAREN
+    { [FrustreAst.APPRESET (fst fn) (rev args) e (snd fn)] }
 
 (* Semantic value is in reverse order. *)
 expression_list:

@@ -191,10 +191,10 @@ let rec exp prec p e =
           exp_arg_list es
           (exp prec') r
           print_ncks (List.map snd anns)
-      else fprintf p "%a%a@ every@ %a"
+      else fprintf p "(restart %a every@ %a)%a"
           print_ident f
-          exp_arg_list es
           (exp prec') r
+          exp_arg_list es
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

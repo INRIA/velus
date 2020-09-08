@@ -237,12 +237,15 @@ let rec exp prec p e =
       else fprintf p "%a%a" ident f exp_arg_list es
   | FS.Eapp (f, es, (Some er), anns) ->
     if !print_appclocks
-    then fprintf p "%a@[<v 1>%a@ every@ %a@ (* @[<hov>%a@] *)@]"
+    then fprintf p "(restart %a every %a)@[<v 1>%a@ (* @[<hov>%a@] *)@]"
         ident f
-        exp_arg_list es
         (exp prec') er
+        exp_arg_list es
         nclocks (List.map snd anns)
-    else fprintf p "%a%a@ every@ %a" ident f exp_arg_list es (exp prec') er
+    else fprintf p "(restart %a every@ %a)%a"
+        ident f
+        (exp prec') er
+        exp_arg_list es
   end;
   if !show_annot_types then fprintf p " : @[%a@]" annot_typs e;
   if !show_annot_clocks then fprintf p " :: @[%a@]" annot_cks e;
