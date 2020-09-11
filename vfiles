@@ -6,6 +6,8 @@ src/Operators.v
 src/VelusMemory.v
 src/IndexedStreams.v
 src/CoindStreams.v
+src/IndexedToCoind.v
+src/CoindToIndexed.v
 
 src/Common/CommonList.v
 src/Common/CommonTactics.v

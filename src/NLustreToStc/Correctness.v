@@ -10,6 +10,7 @@ From Velus Require Import NLustreToStc.Translation.
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import VelusMemory.
+From Velus Require Import CoindToIndexed.
 
 From Coq Require Import Omega.
 
@@ -25,8 +26,9 @@ Module Type CORRECTNESS
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CStr  : COINDSTREAMS    Op OpAux)
        (Import IStr  : INDEXEDSTREAMS  Op OpAux)
+       (Import CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
        (Import CE    : COREEXPR    Ids Op OpAux      IStr)
-       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CE)
+       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
        (Import Stc   : STC         Ids Op OpAux      IStr CE)
        (Import Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem).
 
@@ -442,7 +444,7 @@ Module Type CORRECTNESS
            specialize (Htcs' (fun n => Mx 0) n).
            destruct (ys n) eqn: E'; try discriminate.
            do 2 (econstructor; eauto using sem_trconstr).
-           - eapply Sem.Son; eauto.
+           - eapply Son; eauto.
              apply Cky; eauto.
            - simpl; rewrite Mmask_0; auto.
              eapply msem_node_initial_state; eauto.
@@ -466,7 +468,7 @@ Module Type CORRECTNESS
            specialize (Htcs' Mx n).
            destruct (ys n) eqn: E'.
            - do 2 (econstructor; eauto using sem_trconstr).
-             + apply Sem.Son_abs1; auto.
+             + apply Son_abs1; auto.
                apply Cky; auto.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
@@ -475,7 +477,7 @@ Module Type CORRECTNESS
                  rewrite <-Mmask_n; auto.
            - do 2 (econstructor; eauto using sem_trconstr).
              + change true with (negb false).
-               eapply Sem.Son_abs2; eauto.
+               eapply Son_abs2; eauto.
                apply Cky; eauto.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
@@ -692,10 +694,11 @@ Module CorrectnessFun
        (OpAux : OPERATORS_AUX   Op)
        (CStr  : COINDSTREAMS    Op OpAux)
        (IStr  : INDEXEDSTREAMS  Op OpAux)
+       (CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
        (CE    : COREEXPR    Ids Op OpAux      IStr)
-       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CE)
-       (Stc   : STC         Ids Op OpAux      IStr CE)
+       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
+       (Stc   : STC         Ids Op OpAux      IStr       CE)
        (Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux CStr IStr CE NL Stc Trans.
-  Include CORRECTNESS Ids Op OpAux CStr IStr CE NL Stc Trans.
+<: CORRECTNESS Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
+  Include CORRECTNESS Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
 End CorrectnessFun.

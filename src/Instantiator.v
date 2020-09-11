@@ -3,21 +3,26 @@ From Velus Require Import Ident.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
+From Velus Require Import CoindToIndexed IndexedToCoind.
+
+Module CIStr := CoindToIndexedFun Op OpAux CStr IStr.
+Module ICStr := IndexedToCoindFun Op OpAux IStr CStr.
+
 From Velus Require Import CoreExpr.
 
 Module CE := CoreExprFun Ids Op OpAux IStr.
 
 From Velus Require Import Lustre.
 
-Module L := LustreFun Ids Op OpAux CStr.
+Module L := LustreFun Ids Op OpAux CStr IStr.
 
 From Velus Require Import NLustre.
 
-Module NL := NLustreFun Ids Op OpAux CStr IStr CE.
+Module NL := NLustreFun Ids Op OpAux CStr IStr CIStr CE.
 
 From Velus Require Import Transcription.
 
-Module TR := TranscriptionFun Ids Op OpAux CStr IStr L CE NL.
+Module TR := TranscriptionFun Ids Op OpAux CStr IStr CIStr L CE NL.
 
 From Velus Require Import Stc.
 
@@ -31,10 +36,10 @@ From Velus Require Import NLustreToStc.NL2StcClocking.
 From Velus Require Import NLustreToStc.NL2StcNormalArgs.
 
 Module NL2Stc           := TranslationFun      Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem.
-Module NL2StcCorr       := CorrectnessFun      Ids Op OpAux CStr IStr CE NL Stc NL2Stc.
-Module NL2StcTyping     := NL2StcTypingFun     Ids Op OpAux CStr IStr CE NL Stc NL2Stc.
-Module NL2StcClocking   := NL2StcClockingFun   Ids Op OpAux CStr IStr CE NL Stc NL2Stc.
-Module NL2StcNormalArgs := NL2StcNormalArgsFun Ids Op OpAux CStr IStr CE NL Stc NL2Stc.
+Module NL2StcCorr       := CorrectnessFun      Ids Op OpAux CStr IStr CIStr CE NL Stc NL2Stc.
+Module NL2StcTyping     := NL2StcTypingFun     Ids Op OpAux CStr IStr CIStr CE NL Stc NL2Stc.
+Module NL2StcClocking   := NL2StcClockingFun   Ids Op OpAux CStr IStr CIStr CE NL Stc NL2Stc.
+Module NL2StcNormalArgs := NL2StcNormalArgsFun Ids Op OpAux CStr IStr CIStr CE NL Stc NL2Stc.
 
 From Velus Require Import StcToObc.Translation.
 From Velus Require Import StcToObc.StcMemoryCorres.

@@ -9,6 +9,7 @@ From Coq Require Import Omega.
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
+From Coq Require Import Logic.FunctionalExtensionality.
 
 (** * Extensional model of synchronous streams *)
 
@@ -399,116 +400,431 @@ if the clocked stream is [absent] at the corresponding instant. *)
     fun n => map (fun c => present (sem_const c)) (xss n).
 
   (** Restrictions of Environments *)
-  Section HistoryRestriction.
+  (* Section HistoryRestriction. *)
+
+  (*   Definition env := Env.t value. *)
+  (*   Definition history := Env.t (stream value). *)
+
+  (*   Definition restr_hist (H : history) (n: nat): env := *)
+  (*     Env.map (fun xs => xs n) H. *)
+
+  (*   Lemma Env_find_restr_hist: *)
+  (*     forall H x i, *)
+  (*       Env.find x (restr_hist H i) = option_map (fun xs => xs i) (Env.find x H). *)
+  (*   Proof. *)
+  (*     unfold restr_hist. now setoid_rewrite Env.Props.P.F.map_o. *)
+  (*   Qed. *)
+
+  (*   Lemma Env_add_restr_hist: *)
+  (*     forall H x s i, *)
+  (*       Env.Equal (restr_hist (Env.add x s H) i) (Env.add x (s i) (restr_hist H i)). *)
+  (*   Proof. *)
+  (*     intros H x s i x'. unfold restr_hist. *)
+  (*     setoid_rewrite Env.Props.P.F.map_o. *)
+  (*     destruct (ident_eq_dec x' x). *)
+  (*     - subst. now setoid_rewrite Env.gss. *)
+  (*     - now setoid_rewrite Env.gso; auto; rewrite <-Env.Props.P.F.map_o. *)
+  (*   Qed. *)
+
+  (*   Lemma Env_In_restr_hist: *)
+  (*     forall H x i, *)
+  (*       Env.In x H <-> Env.In x (restr_hist H i). *)
+  (*   Proof. *)
+  (*     intros. unfold restr_hist. *)
+  (*     now rewrite Env.Props.P.F.map_in_iff. *)
+  (*   Qed. *)
+
+  (*   Lemma Env_dom_restr_hist: *)
+  (*     forall H xs i, *)
+  (*       Env.dom H xs <-> Env.dom (restr_hist H i) xs. *)
+  (*   Proof. *)
+  (*     split; intros HH; apply Env.dom_intro; intro x; *)
+  (*       apply Env.dom_use with (x0:=x) in HH; *)
+  (*       now rewrite <-HH, Env_In_restr_hist. *)
+  (*   Qed. *)
+
+  (*   Lemma stream_env_to_env_stream: *)
+  (*     forall xs (H : stream (Env.t value)), *)
+  (*       (forall i, Env.dom (H i) xs) -> *)
+  (*       (exists (H' : Env.t (stream value)), *)
+  (*           (forall i, Env.Equal (H i) (restr_hist H' i)) *)
+  (*           /\ (forall x, In x xs -> Env.find x H' = Some (fun i => match Env.find x (H i) with *)
+  (*                                                           Some v => v | None => absent end))). *)
+  (*   Proof. *)
+  (*     setoid_rewrite <-(nub_same_elements ident_eq_dec). *)
+  (*     intros ys. *)
+  (*     pose proof (NoDup_nub ident_eq_dec ys) as NDN; revert NDN. *)
+  (*     induction (nub ident_eq_dec ys) as [|x xs IH]; clear ys; *)
+  (*       intros ND H DH. *)
+  (*     - (* environment is empty *) *)
+  (*       exists (Env.empty _). split; [|now inversion 1]. *)
+  (*       intros i y. specialize (DH i). *)
+  (*       apply Env.dom_use with (x:=y) in DH. *)
+  (*       unfold Env.from_list. rewrite Env_find_restr_hist, Env.gempty; simpl. *)
+  (*       apply Env.Props.P.F.not_find_in_iff; rewrite DH; auto. *)
+  (*     - (* environment is not empty *) *)
+  (*       inversion ND as [|? ? Nx ND']; subst. *)
+  (*       exists (Env.add x (fun i => match Env.find x (H i) with Some y => y | None => absent end) *)
+  (*                  (Env.from_list (map (fun x => (x, *)
+  (*                                              fun i => match Env.find x (H i) with Some y => y | None => absent end)) xs))). *)
+  (*       setoid_rewrite Env_add_restr_hist. *)
+  (*       split. *)
+  (*       + (* show point-wise equality of H and H' *) *)
+  (*         intro i. *)
+  (*         assert (forall i, Env.In x (H i)) as Ix *)
+  (*             by (intro j; specialize (DH j); *)
+  (*                 apply Env.dom_use with (x0:=x) in DH; firstorder). *)
+  (*         setoid_rewrite Env.In_find in Ix. *)
+  (*         destruct (Ix i) as (v & Ixi). rewrite Ixi. *)
+  (*         apply Env.add_remove in Ixi. rewrite Ixi at 1. *)
+  (*         apply Env.Equal_add_both. *)
+  (*         assert (forall i, Env.dom (Env.remove x (H i)) xs) as Dr. *)
+  (*         { intro j. specialize (DH j). *)
+  (*           apply Env.dom_cons_remove with (x0:=x) in DH. simpl in DH. *)
+  (*           rewrite nequiv_decb_refl, not_in_filter_nequiv_decb in DH; auto. } *)
+  (*         specialize (IH ND' (fun i => Env.remove x (H i)) Dr) as (H' & IH1 & IH2). *)
+  (*         intro y. destruct (in_dec ident_eq_dec y xs) as [Iy|Ny]. *)
+  (*         * (* element in domain of environment *) *)
+  (*           rewrite IH1. *)
+  (*           assert (y <> x) by (intro; subst; auto). *)
+  (*           repeat rewrite Env_find_restr_hist. rewrite IH2; auto; clear IH2. *)
+  (*           simpl. specialize (Dr i). apply Env.dom_use with (x0:=y) in Dr. *)
+  (*           destruct Dr as (Dr1 & Dr2). specialize (Dr2 Iy). *)
+  (*           rewrite Env.In_find in Dr2. destruct Dr2 as (yv & Fy); rewrite Fy. *)
+  (*           erewrite Env.find_In_from_list. *)
+  (*           2:now apply in_map_iff; eauto. *)
+  (*           now simpl; rewrite Env.gro in Fy; auto; rewrite Fy. *)
+  (*           now apply fst_NoDupMembers; rewrite map_map, map_id. *)
+  (*         * (* element outside domain of environment *) *)
+  (*           rewrite Env.find_not_In_dom with (1:=Dr i) (2:=Ny). *)
+  (*           rewrite Env.find_not_In_dom with (2:=Ny); auto. *)
+  (*           apply Env_dom_restr_hist, Env.dom_from_list_map_fst; *)
+  (*             [apply fst_NoDupMembers|]; now rewrite map_map, map_id. *)
+  (*       + (* show characterization of H' *) *)
+  (*         intros y Iy. inv Iy. now rewrite Env.gss. *)
+  (*         rewrite Env.gso; [|intro; subst; auto]. *)
+  (*         erewrite Env.find_In_from_list. reflexivity. *)
+  (*         now apply in_map_iff; eauto. *)
+  (*         apply fst_NoDupMembers. rewrite map_map; simpl. *)
+  (*         rewrite map_id. inv ND; auto. *)
+  (*   Qed. *)
+
+  (* End HistoryRestriction. *)
+
+  (** ** Instantaneous semantics *)
+
+  Section InstantSemantics.
+
+    (**
+
+An history maps variables to streams of values (the variables'
+histories). Taking a snapshot of the history at a given time yields an
+environment.
+
+     *)
 
     Definition env := Env.t value.
-    Definition history := Env.t (stream value).
+    Definition history := stream env.
 
-    Definition restr_hist (H : history) (n: nat): env :=
-      Env.map (fun xs => xs n) H.
+    Variable base: bool.
+    Variable R: env.
 
-    Lemma Env_find_restr_hist:
-      forall H x i,
-        Env.find x (restr_hist H i) = option_map (fun xs => xs i) (Env.find x H).
+    Definition sem_var_instant (x: ident) (v: value) : Prop :=
+      Env.find x R = Some v.
+
+    Inductive sem_clock_instant: clock -> bool -> Prop :=
+    | Sbase:
+        sem_clock_instant Cbase base
+    | Son:
+        forall ck x c b,
+          sem_clock_instant ck true ->
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
+          sem_clock_instant (Con ck x b) true
+    | Son_abs1:
+        forall ck x c,
+          sem_clock_instant ck false ->
+          sem_var_instant x absent ->
+          sem_clock_instant (Con ck x c) false
+    | Son_abs2:
+        forall ck x c b,
+          sem_clock_instant ck true ->
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
+          sem_clock_instant (Con ck x (negb b)) false.
+
+  End InstantSemantics.
+
+  Fact sem_clock_instant_true_inv : forall b H ck,
+      sem_clock_instant b H ck true ->
+      b = true.
+  Proof.
+    intros * Hsem.
+    induction ck; inv Hsem; auto.
+  Qed.
+
+  Section LiftSemantics.
+
+    Variable bk : stream bool.
+    Variable H : history.
+
+    Definition lift {A B} (sem: bool -> env -> A -> B -> Prop)
+               x (ys: stream B): Prop :=
+      forall n, sem (bk n) (H n) x (ys n).
+    Hint Unfold lift.
+
+    Definition lift' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
+      forall n, sem (H n) x (ys n).
+    Hint Unfold lift'.
+
+    Definition sem_var (x: ident) (xs: stream value): Prop :=
+      lift' sem_var_instant x xs.
+
+    Definition sem_clock (ck: clock) (xs: stream bool): Prop :=
+      lift sem_clock_instant ck xs.
+
+  End LiftSemantics.
+
+  (** ** Determinism of the semantics *)
+
+  (** *** Instantaneous semantics *)
+
+  Section InstantDeterminism.
+
+    Variable base: bool.
+    Variable R: env.
+
+    Lemma sem_var_instant_det:
+      forall x v1 v2,
+        sem_var_instant R x v1
+        -> sem_var_instant R x v2
+        -> v1 = v2.
     Proof.
-      unfold restr_hist. now setoid_rewrite Env.Props.P.F.map_o.
+      congruence.
     Qed.
 
-    Lemma Env_add_restr_hist:
-      forall H x s i,
-        Env.Equal (restr_hist (Env.add x s H) i) (Env.add x (s i) (restr_hist H i)).
+    Lemma sem_clock_instant_det:
+      forall ck v1 v2,
+        sem_clock_instant base R ck v1
+        -> sem_clock_instant base R ck v2
+        -> v1 = v2.
     Proof.
-      intros H x s i x'. unfold restr_hist.
-      setoid_rewrite Env.Props.P.F.map_o.
-      destruct (ident_eq_dec x' x).
-      - subst. now setoid_rewrite Env.gss.
-      - now setoid_rewrite Env.gso; auto; rewrite <-Env.Props.P.F.map_o.
+      induction ck; repeat inversion 1; subst; intuition;
+        try repeat progress match goal with
+                            | H1: sem_clock_instant ?bk ?R ?ck ?l,
+                                  H2: sem_clock_instant ?bk ?R ?ck ?r |- _ =>
+                              apply IHck with (1:=H1) in H2; discriminate
+                            | H1: sem_var_instant ?R ?i (present ?l),
+                                  H2: sem_var_instant ?R ?i (present ?r) |- _ =>
+                              apply sem_var_instant_det with (1:=H1) in H2;
+                                injection H2; intro; subst
+                            | H1: val_to_bool _ = Some ?b, H2: val_to_bool _ = _ |- _ =>
+                              rewrite H1 in H2; destruct b; discriminate
+                            end.
     Qed.
 
-    Lemma Env_In_restr_hist:
-      forall H x i,
-        Env.In x H <-> Env.In x (restr_hist H i).
+  End InstantDeterminism.
+
+  Section LiftDeterminism.
+
+    Variable bk : stream bool.
+    Variable H : history.
+
+    Lemma lift_det:
+      forall {A B} (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
+        x (xs1 xs2 : stream B),
+        (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
+        lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.
     Proof.
-      intros. unfold restr_hist.
-      now rewrite Env.Props.P.F.map_in_iff.
+      intros * Hpoint H1 H2.
+      extensionality n. specialize (H1 n). specialize (H2 n).
+      eapply Hpoint; eassumption.
     Qed.
 
-    Lemma Env_dom_restr_hist:
-      forall H xs i,
-        Env.dom H xs <-> Env.dom (restr_hist H i) xs.
+    Lemma lift'_det:
+      forall {A B} (P: env -> A -> B -> Prop)
+        x (xs1 xs2 : stream B),
+        (forall R v1 v2, P R x v1 -> P R x v2 -> v1 = v2) ->
+        lift' H P x xs1 -> lift' H P x xs2 -> xs1 = xs2.
     Proof.
-      split; intros HH; apply Env.dom_intro; intro x;
-        apply Env.dom_use with (x0:=x) in HH;
-        now rewrite <-HH, Env_In_restr_hist.
+      intros * Hpoint H1 H2.
+      extensionality n. specialize (H1 n). specialize (H2 n).
+      eapply Hpoint; eassumption.
     Qed.
 
-    Lemma stream_env_to_env_stream:
-      forall xs (H : stream (Env.t value)),
-        (forall i, Env.dom (H i) xs) ->
-        (exists (H' : Env.t (stream value)),
-            (forall i, Env.Equal (H i) (restr_hist H' i))
-            /\ (forall x, In x xs -> Env.find x H' = Some (fun i => match Env.find x (H i) with
-                                                            Some v => v | None => absent end))).
+    Ltac apply_lift sem_det :=
+      intros; eapply lift_det; try eassumption;
+      compute; intros; eapply sem_det; eauto.
+
+    Ltac apply_lift' sem_det :=
+      intros; eapply lift'_det; try eassumption;
+      compute; intros; eapply sem_det; eauto.
+
+    Lemma sem_var_det:
+      forall x xs1 xs2,
+        sem_var H x xs1 -> sem_var H x xs2 -> xs1 = xs2.
     Proof.
-      setoid_rewrite <-(nub_same_elements ident_eq_dec).
-      intros ys.
-      pose proof (NoDup_nub ident_eq_dec ys) as NDN; revert NDN.
-      induction (nub ident_eq_dec ys) as [|x xs IH]; clear ys;
-        intros ND H DH.
-      - (* environment is empty *)
-        exists (Env.empty _). split; [|now inversion 1].
-        intros i y. specialize (DH i).
-        apply Env.dom_use with (x:=y) in DH.
-        unfold Env.from_list. rewrite Env_find_restr_hist, Env.gempty; simpl.
-        apply Env.Props.P.F.not_find_in_iff; rewrite DH; auto.
-      - (* environment is not empty *)
-        inversion ND as [|? ? Nx ND']; subst.
-        exists (Env.add x (fun i => match Env.find x (H i) with Some y => y | None => absent end)
-                   (Env.from_list (map (fun x => (x,
-                                               fun i => match Env.find x (H i) with Some y => y | None => absent end)) xs))).
-        setoid_rewrite Env_add_restr_hist.
-        split.
-        + (* show point-wise equality of H and H' *)
-          intro i.
-          assert (forall i, Env.In x (H i)) as Ix
-              by (intro j; specialize (DH j);
-                  apply Env.dom_use with (x0:=x) in DH; firstorder).
-          setoid_rewrite Env.In_find in Ix.
-          destruct (Ix i) as (v & Ixi). rewrite Ixi.
-          apply Env.add_remove in Ixi. rewrite Ixi at 1.
-          apply Env.Equal_add_both.
-          assert (forall i, Env.dom (Env.remove x (H i)) xs) as Dr.
-          { intro j. specialize (DH j).
-            apply Env.dom_cons_remove with (x0:=x) in DH. simpl in DH.
-            rewrite nequiv_decb_refl, not_in_filter_nequiv_decb in DH; auto. }
-          specialize (IH ND' (fun i => Env.remove x (H i)) Dr) as (H' & IH1 & IH2).
-          intro y. destruct (in_dec ident_eq_dec y xs) as [Iy|Ny].
-          * (* element in domain of environment *)
-            rewrite IH1.
-            assert (y <> x) by (intro; subst; auto).
-            repeat rewrite Env_find_restr_hist. rewrite IH2; auto; clear IH2.
-            simpl. specialize (Dr i). apply Env.dom_use with (x0:=y) in Dr.
-            destruct Dr as (Dr1 & Dr2). specialize (Dr2 Iy).
-            rewrite Env.In_find in Dr2. destruct Dr2 as (yv & Fy); rewrite Fy.
-            erewrite Env.find_In_from_list.
-            2:now apply in_map_iff; eauto.
-            now simpl; rewrite Env.gro in Fy; auto; rewrite Fy.
-            now apply fst_NoDupMembers; rewrite map_map, map_id.
-          * (* element outside domain of environment *)
-            rewrite Env.find_not_In_dom with (1:=Dr i) (2:=Ny).
-            rewrite Env.find_not_In_dom with (2:=Ny); auto.
-            apply Env_dom_restr_hist, Env.dom_from_list_map_fst;
-              [apply fst_NoDupMembers|]; now rewrite map_map, map_id.
-        + (* show characterization of H' *)
-          intros y Iy. inv Iy. now rewrite Env.gss.
-          rewrite Env.gso; [|intro; subst; auto].
-          erewrite Env.find_In_from_list. reflexivity.
-          now apply in_map_iff; eauto.
-          apply fst_NoDupMembers. rewrite map_map; simpl.
-          rewrite map_id. inv ND; auto.
+      apply_lift' sem_var_instant_det.
     Qed.
 
-  End HistoryRestriction.
+    Lemma sem_clock_det:
+      forall ck bs1 bs2,
+        sem_clock bk H ck bs1 -> sem_clock bk H ck bs2 -> bs1 = bs2.
+    Proof.
+      apply_lift sem_clock_instant_det.
+    Qed.
+
+  End LiftDeterminism.
+
+  Ltac sem_det :=
+    match goal with
+    | H1: sem_clock_instant ?bk ?H ?C ?X,
+          H2: sem_clock_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_clock_instant_det; eexact H1 || eexact H2
+    | H1: sem_clock ?bk ?H ?C ?X,
+          H2: sem_clock ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_clock_det; eexact H1 || eexact H2
+    | H1: sem_var_instant ?H ?C ?X,
+          H2: sem_var_instant ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_var_instant_det; eexact H1 || eexact H2
+    | H1: sem_var ?H ?C ?X,
+          H2: sem_var ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_var_det; eexact H1 || eexact H2
+    end.
+
+  Ltac by_sem_det :=
+    repeat match goal with
+           | H: exists _, _ |- _ => destruct H
+           end;
+    match goal with
+    | H1: sem_clock_instant ?bk ?H ?C ?X,
+          H2: sem_clock_instant ?bk ?H ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_clock_instant_det; eexact H1 || eexact H2)
+    | H1: sem_var_instant ?H ?C ?X,
+          H2: sem_var_instant ?H ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_var_instant_det; eexact H1 || eexact H2)
+    end; discriminate.
+
+  (** ** Interpreter *)
+
+  Section InstantInterpreter.
+
+    Variable base : bool.
+    Variable R: env.
+
+    Definition interp_var_instant (x: ident): value :=
+      match Env.find x R with
+      | Some v => v
+      | None => absent
+      end.
+
+    Lemma interp_var_instant_sound:
+      forall x v,
+        sem_var_instant R x v ->
+        v = interp_var_instant x.
+    Proof.
+      unfold interp_var_instant; now intros * ->.
+    Qed.
+
+    Fixpoint interp_clock_instant (c: clock): bool :=
+      match c with
+      | Cbase =>
+        base
+      | Con c x b =>
+        let cb := interp_clock_instant c in
+        match interp_var_instant x with
+        | present xv =>
+          match val_to_bool xv with
+          | Some b' =>
+            andb cb b' ==b b
+          | None => false
+          end
+        | absent =>
+          false
+        end
+      end.
+
+    Ltac rw_exp_helper :=
+      repeat match goal with
+             | _: sem_var_instant R ?x ?v |- context[interp_var_instant ?x] =>
+               erewrite <-(interp_var_instant_sound x v); eauto; simpl
+             | H: val_to_bool ?x = _ |- context[val_to_bool ?x] =>
+               rewrite H
+             | H: sem_unop ?op ?c ?t = _ |- context[sem_unop ?op ?c ?t] =>
+               rewrite H
+             | H: sem_binop ?op ?c1 ?t1 ?c2 ?t2 = _ |- context[sem_binop ?op ?c1 ?t1 ?c2 ?t2] =>
+               rewrite H
+          end.
+
+    Lemma interp_clock_instant_sound:
+      forall c b,
+        sem_clock_instant base R c b ->
+        b = interp_clock_instant c.
+    Proof.
+      induction 1; auto; simpl; rw_exp_helper;
+        rewrite <-IHsem_clock_instant; destruct b; auto.
+    Qed.
+
+  End InstantInterpreter.
+
+  (** ** Liftings of instantaneous semantics *)
+
+  Section LiftInterpreter.
+
+    Variable bk : stream bool.
+    Variable H: history.
+
+    Definition lift_interp {A B} (interp: bool -> env -> A -> B) x: stream B :=
+      fun n => interp (bk n) (H n) x.
+
+    Definition lift_interp' {A B} (interp: env -> A -> B) x: stream B :=
+      fun n => interp (H n) x.
+
+    Definition interp_clock (ck: clock): stream bool :=
+      lift_interp interp_clock_instant ck.
+
+    Definition interp_var (x: ident): stream value :=
+      lift_interp' interp_var_instant x.
+
+    Lemma lift_sound:
+      forall {A B} (sem: bool -> env -> A -> B -> Prop) interp x xs,
+        (forall b R x v, sem b R x v -> v = interp b R x) ->
+        lift bk H sem x xs ->
+        xs ≈ lift_interp interp x.
+    Proof.
+      intros * Instant Sem n.
+      specialize (Sem n); unfold lift_interp; auto.
+    Qed.
+
+    Lemma lift'_sound:
+      forall {A B} (sem: env -> A -> B -> Prop) interp x xs,
+        (forall R x v, sem R x v -> v = interp R x) ->
+        lift' H sem x xs ->
+        xs ≈ lift_interp' interp x.
+    Proof.
+      intros * Instant Sem n.
+      specialize (Sem n); unfold lift_interp'; auto.
+    Qed.
+
+    Corollary interp_clock_sound:
+      forall ck bs,
+        sem_clock bk H ck bs ->
+        bs ≈ interp_clock ck.
+    Proof.
+      intros; eapply lift_sound; eauto;
+        apply interp_clock_instant_sound.
+    Qed.
+
+    Corollary interp_var_sound:
+      forall x vs,
+        sem_var H x vs ->
+        vs ≈ interp_var x.
+    Proof.
+      intros; eapply lift'_sound; eauto;
+        apply interp_var_instant_sound.
+    Qed.
+
+  End LiftInterpreter.
 
 End INDEXEDSTREAMS.
 

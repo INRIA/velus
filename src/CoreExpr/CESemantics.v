@@ -13,8 +13,6 @@ From Velus Require Import VelusMemory.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import IndexedStreams.
 
-(* Used in Lift Determinism *)
-From Coq Require Import Logic.FunctionalExtensionality.
 
 Module Type CESEMANTICS
        (Import Ids   : IDS)
@@ -43,36 +41,12 @@ environment.
     Variable base: bool.
     Variable R: env.
 
-    Definition sem_var_instant (x: ident) (v: value) : Prop :=
-      Env.find x R = Some v.
-
     Definition sem_vars_instant (xs: list ident) (vs: list value) : Prop :=
-      Forall2 sem_var_instant xs vs.
-
-    Inductive sem_clock_instant: clock -> bool -> Prop :=
-    | Sbase:
-        sem_clock_instant Cbase base
-    | Son:
-        forall ck x c b,
-          sem_clock_instant ck true ->
-          sem_var_instant x (present c) ->
-          val_to_bool c = Some b ->
-          sem_clock_instant (Con ck x b) true
-    | Son_abs1:
-        forall ck x c,
-          sem_clock_instant ck false ->
-          sem_var_instant x absent ->
-          sem_clock_instant (Con ck x c) false
-    | Son_abs2:
-        forall ck x c b,
-          sem_clock_instant ck true ->
-          sem_var_instant x (present c) ->
-          val_to_bool c = Some b ->
-          sem_clock_instant (Con ck x (negb b)) false.
+      Forall2 (sem_var_instant R) xs vs.
 
     Definition sem_clocked_var_instant (x: ident) (ck: clock) : Prop :=
-      (sem_clock_instant ck true <-> exists c, sem_var_instant x (present c))
-      /\ (sem_clock_instant ck false <-> sem_var_instant x absent).
+      (sem_clock_instant base R ck true <-> exists c, sem_var_instant R x (present c))
+      /\ (sem_clock_instant base R ck false <-> sem_var_instant R x absent).
 
     Definition sem_clocked_vars_instant (xs: list (ident * clock)) : Prop :=
       Forall (fun xc => sem_clocked_var_instant (fst xc) (snd xc)) xs.
@@ -84,23 +58,23 @@ environment.
           sem_exp_instant (Econst c) v
     | Svar:
         forall x v ty,
-          sem_var_instant x v ->
+          sem_var_instant R x v ->
           sem_exp_instant (Evar x ty) v
     | Swhen_eq:
         forall s x sc xc b,
-          sem_var_instant x (present xc) ->
+          sem_var_instant R x (present xc) ->
           sem_exp_instant s (present sc) ->
           val_to_bool xc = Some b ->
           sem_exp_instant (Ewhen s x b) (present sc)
     | Swhen_abs1:
         forall s x sc xc b,
-          sem_var_instant x (present xc) ->
+          sem_var_instant R x (present xc) ->
           val_to_bool xc = Some b ->
           sem_exp_instant s (present sc) ->
           sem_exp_instant (Ewhen s x (negb b)) absent
     | Swhen_abs:
         forall s x b,
-          sem_var_instant x absent ->
+          sem_var_instant R x absent ->
           sem_exp_instant s absent ->
           sem_exp_instant (Ewhen s x b) absent
     | Sunop_eq:
@@ -130,19 +104,19 @@ environment.
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
         forall x t f c,
-          sem_var_instant x (present true_val) ->
+          sem_var_instant R x (present true_val) ->
           sem_cexp_instant t (present c) ->
           sem_cexp_instant f absent ->
           sem_cexp_instant (Emerge x t f) (present c)
     | Smerge_false:
         forall x t f c,
-          sem_var_instant x (present false_val) ->
+          sem_var_instant R x (present false_val) ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f (present c) ->
           sem_cexp_instant (Emerge x t f) (present c)
     | Smerge_abs:
         forall x t f,
-          sem_var_instant x absent ->
+          sem_var_instant R x absent ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f absent ->
           sem_cexp_instant (Emerge x t f) absent
@@ -199,23 +173,8 @@ environment.
     Variable bk : stream bool.
     Variable H : history.
 
-    Definition lift {A B} (sem: bool -> env -> A -> B -> Prop)
-               x (ys: stream B): Prop :=
-      forall n, sem (bk n) (H n) x (ys n).
-    Hint Unfold lift.
-
-    Definition lift' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
-      forall n, sem (H n) x (ys n).
-    Hint Unfold lift'.
-
-    Definition sem_clock (ck: clock) (xs: stream bool): Prop :=
-      lift sem_clock_instant ck xs.
-
-    Definition sem_var (x: ident) (xs: stream value): Prop :=
-      lift' sem_var_instant x xs.
-
     Definition sem_vars (x: list ident) (xs: stream (list value)): Prop :=
-      lift' sem_vars_instant x xs.
+      lift' H sem_vars_instant x xs.
 
     Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
       forall n, sem_clocked_var_instant (bk n) (H n) x ck.
@@ -224,19 +183,19 @@ environment.
       forall n, sem_clocked_vars_instant (bk n) (H n) xs.
 
     Definition sem_aexp ck (e: exp) (xs: stream value): Prop :=
-      lift (fun base R => sem_aexp_instant base R ck) e xs.
+      lift bk H (fun base R => sem_aexp_instant base R ck) e xs.
 
     Definition sem_exp (e: exp) (xs: stream value): Prop :=
-      lift sem_exp_instant e xs.
+      lift bk H sem_exp_instant e xs.
 
     Definition sem_exps (e: list exp) (xs: stream (list value)): Prop :=
-      lift sem_exps_instant e xs.
+      lift bk H sem_exps_instant e xs.
 
     Definition sem_caexp ck (c: cexp) (xs: stream value): Prop :=
-      lift (fun base R => sem_caexp_instant base R ck) c xs.
+      lift bk H (fun base R => sem_caexp_instant base R ck) c xs.
 
     Definition sem_cexp (c: cexp) (xs: stream value): Prop :=
-      lift sem_cexp_instant c xs.
+      lift bk H sem_cexp_instant c xs.
 
   End LiftSemantics.
 
@@ -384,35 +343,6 @@ environment.
 
     Variable base: bool.
     Variable R: env.
-
-    Lemma sem_var_instant_det:
-      forall x v1 v2,
-        sem_var_instant R x v1
-        -> sem_var_instant R x v2
-        -> v1 = v2.
-    Proof.
-      congruence.
-    Qed.
-
-    Lemma sem_clock_instant_det:
-      forall ck v1 v2,
-        sem_clock_instant base R ck v1
-        -> sem_clock_instant base R ck v2
-        -> v1 = v2.
-    Proof.
-      induction ck; repeat inversion 1; subst; intuition;
-        try repeat progress match goal with
-                            | H1: sem_clock_instant ?bk ?R ?ck ?l,
-                                  H2: sem_clock_instant ?bk ?R ?ck ?r |- _ =>
-                              apply IHck with (1:=H1) in H2; discriminate
-                            | H1: sem_var_instant ?R ?i (present ?l),
-                                  H2: sem_var_instant ?R ?i (present ?r) |- _ =>
-                              apply sem_var_instant_det with (1:=H1) in H2;
-                                injection H2; intro; subst
-                            | H1: val_to_bool _ = Some ?b, H2: val_to_bool _ = _ |- _ =>
-                              rewrite H1 in H2; destruct b; discriminate
-                            end.
-    Qed.
 
     Lemma sem_exp_instant_det:
       forall e v1 v2,
@@ -574,28 +504,6 @@ environment.
     Variable bk : stream bool.
     Variable H : history.
 
-    Lemma lift_det:
-      forall {A B} (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
-        x (xs1 xs2 : stream B),
-        (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
-        lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.
-    Proof.
-      intros * Hpoint H1 H2.
-      extensionality n. specialize (H1 n). specialize (H2 n).
-      eapply Hpoint; eassumption.
-    Qed.
-
-    Lemma lift'_det:
-      forall {A B} (P: env -> A -> B -> Prop)
-        x (xs1 xs2 : stream B),
-        (forall R v1 v2, P R x v1 -> P R x v2 -> v1 = v2) ->
-        lift' H P x xs1 -> lift' H P x xs2 -> xs1 = xs2.
-    Proof.
-      intros * Hpoint H1 H2.
-      extensionality n. specialize (H1 n). specialize (H2 n).
-      eapply Hpoint; eassumption.
-    Qed.
-
     Ltac apply_lift sem_det :=
       intros; eapply lift_det; try eassumption;
       compute; intros; eapply sem_det; eauto.
@@ -603,20 +511,6 @@ environment.
     Ltac apply_lift' sem_det :=
       intros; eapply lift'_det; try eassumption;
       compute; intros; eapply sem_det; eauto.
-
-    Lemma sem_var_det:
-      forall x xs1 xs2,
-        sem_var H x xs1 -> sem_var H x xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift' sem_var_instant_det.
-    Qed.
-
-    Lemma sem_clock_det:
-      forall ck bs1 bs2,
-        sem_clock bk H ck bs1 -> sem_clock bk H ck bs2 -> bs1 = bs2.
-    Proof.
-      apply_lift sem_clock_instant_det.
-    Qed.
 
     Lemma sem_exp_det:
       forall e xs1 xs2,

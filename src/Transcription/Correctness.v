@@ -15,7 +15,7 @@ From Velus Require Import Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLCoindSemantics.
 
-From Velus Require Import CoindStreams.
+From Velus Require Import CoindStreams IndexedStreams.
 
 From Coq Require Import String.
 
@@ -49,8 +49,9 @@ Module Type CORRECTNESS
        (Ord         : NLORDERED        Ids Op              CE NL)
        (Lord        : LORDERED         Ids Op       L)
        (Import Str  : COINDSTREAMS         Op OpAux)
+       (IStr        : INDEXEDSTREAMS       Op OpAux)
        (LS          : LSEMANTICS       Ids Op OpAux L Lord       Str)
-       (LCS         : LCLOCKSEMANTICS  Ids Op OpAux L LT LC LCA Lord Str LS)
+       (LCS         : LCLOCKSEMANTICS  Ids Op OpAux L LT LC LCA Lord Str IStr LS)
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux        CE NL Str Ord).
 
   Lemma sem_const_step :
@@ -820,9 +821,10 @@ Module CorrectnessFun
        (Ord   : NLORDERED        Ids Op              CE NL)
        (Lord  : LORDERED         Ids Op       L)
        (Str   : COINDSTREAMS         Op OpAux)
+       (IStr  : INDEXEDSTREAMS       Op OpAux)
        (LS    : LSEMANTICS       Ids Op OpAux L Lord       Str)
-       (LCS   : LCLOCKSEMANTICS  Ids Op OpAux L LT LC LCA Lord Str LS)
+       (LCS   : LCLOCKSEMANTICS  Ids Op OpAux L LT LC LCA Lord Str IStr LS)
        (NLSC  : NLCOINDSEMANTICS Ids Op OpAux        CE NL Str Ord)
-<: CORRECTNESS Ids Op OpAux L CE NL TR LT LC LCA Ord Lord Str LS LCS NLSC.
-  Include CORRECTNESS Ids Op OpAux L CE NL TR LT LC LCA Ord Lord Str LS LCS NLSC.
+<: CORRECTNESS Ids Op OpAux L CE NL TR LT LC LCA Ord Lord Str IStr LS LCS NLSC.
+  Include CORRECTNESS Ids Op OpAux L CE NL TR LT LC LCA Ord Lord Str IStr LS LCS NLSC.
 End CorrectnessFun.

@@ -393,6 +393,82 @@ Module Type COINDSTREAMS
           rewrite E; auto.
   Qed.
 
+  Lemma mask_EqSt' : forall b x y,
+    (forall (k : nat), mask k b x ≡ mask k b y) ->
+    x ≡ y.
+  Proof.
+    intros * Heq.
+    apply ntheq_eqst. intros n.
+    specialize (Heq ((count b) # n)).
+    apply Str_nth_EqSt with (n:=n) in Heq.
+    repeat rewrite mask_nth in Heq.
+    rewrite Nat.eqb_refl in Heq; auto.
+  Qed.
+
+  (** *** Boolean mask *)
+
+  CoFixpoint maskb (k: nat) (rs: Stream bool) (xs: Stream bool) : Stream bool :=
+    let mask' k' := maskb k' (tl rs) (tl xs) in
+    match k, hd rs with
+    | 0, true    => Streams.const false
+    | 0, false   => hd xs  ⋅ mask' 0
+    | 1, true    => hd xs  ⋅ mask' 0
+    | S k', true => false ⋅ mask' k'
+    | S _, false => false ⋅ mask' k
+    end.
+
+  Lemma maskb_nth:
+    forall n k rs xs,
+      (maskb k rs xs) # n = if (count rs) # n  =? k then xs # n else false.
+  Proof.
+    unfold Str_nth.
+    induction n, k as [|[|k]]; intros;
+      unfold_Stv rs; simpl; auto.
+    - pose proof (count_acc_grow 1 rs) as H.
+      apply (ForAll_Str_nth_tl n) in H; inv H.
+      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by omega;
+        apply beq_nat_false_iff in E; rewrite E.
+      pose proof (const_nth n false); auto.
+    - rewrite IHn; unfold count.
+      destruct (hd (Str_nth_tl n (count_acc 1 rs)) =? 1) eqn: E;
+        rewrite count_S_nth in E.
+      + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
+      + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+          rewrite E; auto.
+    - rewrite IHn; unfold count.
+      destruct (hd (Str_nth_tl n (count_acc 1 rs)) =? S (S k)) eqn: E;
+        rewrite count_S_nth in E.
+      + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
+      + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+          rewrite E; auto.
+  Qed.
+
+  Corollary maskb_Cons:
+    forall k r rs x xs,
+      (maskb k (r ⋅ rs) (x ⋅ xs))
+        ≡ (match k with
+           | 0 => if r then (Streams.const false) else (x ⋅ (maskb 0 rs xs))
+           | 1 => if r then (x ⋅ (maskb 0 rs xs)) else (false ⋅ maskb 1 rs xs)
+           | S (S _ as k') => if r then (false ⋅ maskb k' rs xs) else (false ⋅ maskb k rs xs)
+           end).
+  Proof.
+    intros *.
+    constructor; simpl.
+    1,2:destruct k; [|destruct k]; destruct r; try reflexivity.
+  Qed.
+
+  Lemma maskb_EqSt' : forall b x y,
+    (forall (k : nat), maskb k b x ≡ maskb k b y) ->
+    x ≡ y.
+  Proof.
+    intros * Heq.
+    apply ntheq_eqst. intros n.
+    specialize (Heq ((count b) # n)).
+    apply Str_nth_EqSt with (n:=n) in Heq.
+    repeat rewrite maskb_nth in Heq.
+    rewrite Nat.eqb_refl in Heq; auto.
+  Qed.
+
   (** ** exp level synchronous operators specifications
 
         To ease the use of coinductive hypotheses to prove non-coinductive
@@ -696,6 +772,17 @@ Module Type COINDSTREAMS
           destruct k as [|[]]; auto; try reflexivity.
   Qed.
 
+  Add Parametric Morphism k : (maskb k)
+      with signature @EqSt bool ==> @EqSt bool ==> @EqSt bool
+        as maskb_EqSt.
+  Proof.
+    revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
+    unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
+      constructor; inv Ers; inv Exs;
+        simpl in *; try discriminate;
+          destruct k as [|[]]; auto; try reflexivity.
+  Qed.
+
   (* Remark mask_const_absent: *)
   (*   forall n rs, *)
   (*     mask n rs (Streams.const absent) ≡ Streams.const absent. *)
@@ -978,7 +1065,7 @@ Module Type COINDSTREAMS
     now rewrite <- H4, <- H5.
   Qed.
 
-  (** * sem_clock a
+  (** * sem_clock
         This is also common to Lustre and NLustre **)
 
   (** ** clocks_of and its properties *)
@@ -1368,6 +1455,38 @@ Module Type COINDSTREAMS
       eapply in_map in Hin. eapply Cofix; eauto. rewrite Forall_map.
       eapply Forall_impl; eauto. intros * HH. simpl in HH.
       rewrite ac_tl. now apply sub_clock_step.
+  Qed.
+
+  Fact ac_Streams_const :
+    abstract_clock (Streams.const absent) ≡ Streams.const false.
+  Proof.
+    cofix CoFix.
+    constructor; simpl; auto.
+  Qed.
+
+  Lemma ac_mask : forall k rs xs,
+      abstract_clock (mask k rs xs) ≡ maskb k rs (abstract_clock xs).
+  Proof.
+    cofix CoFix.
+    intros.
+    unfold_Stv xs; unfold_Stv rs;
+      constructor; simpl; destruct k as [|[|?]]; eauto.
+    1,2:unfold Streams.const; apply ac_Streams_const.
+  Qed.
+
+  Fact sem_clock_mask' : forall H bs ck bs' rs,
+      (forall k, exists xs, sem_clock H bs ck xs /\ (maskb k rs xs) ≡ (maskb k rs bs')) ->
+      sem_clock H bs ck bs'.
+  Proof.
+    intros * Hsem.
+    assert (exists xs, sem_clock H bs ck xs /\ forall k, maskb k rs xs ≡ maskb k rs bs') as Hex.
+    { assert (Hsem0:=(Hsem 0)). destruct Hsem0 as [xs [Hsem1 _]].
+      exists xs; split; auto. intros k.
+      specialize (Hsem k) as [xs' [Hsem2 Hmask]].
+      eapply sem_clock_det in Hsem1; eauto. rewrite <- Hsem1; auto. }
+    destruct Hex as [xs [Hsem' Heq]].
+    eapply maskb_EqSt' in Heq.
+    rewrite <- Heq. assumption.
   Qed.
 
 End COINDSTREAMS.

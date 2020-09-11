@@ -17,7 +17,7 @@ Module Type CEPROPERTIES
        (Op           : OPERATORS)
        (       OpAux : OPERATORS_AUX   Op)
        (Import Syn   : CESYNTAX        Op)
-       (       Str   : INDEXEDSTREAMS  Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import Sem   : CESEMANTICS Ids Op OpAux Syn Str)
        (Import Typ   : CETYPING    Ids Op       Syn)
        (Import IsF   : CEISFREE    Ids Op       Syn).

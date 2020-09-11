@@ -5,6 +5,7 @@ From Velus Require Import NLustreToStc.Translation.
 
 From Velus Require Import VelusMemory.
 From Velus Require Import Common.
+From Velus Require Import CoindToIndexed.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -15,8 +16,9 @@ Module Type NL2STCNORMALARGS
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CStr  : COINDSTREAMS    Op OpAux)
        (Import IStr  : INDEXEDSTREAMS  Op OpAux)
+       (Import CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
        (Import CE    : COREEXPR    Ids Op OpAux      IStr)
-       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CE)
+       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
        (Import Stc   : STC         Ids Op OpAux      IStr CE)
        (Import Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem).
 
@@ -60,10 +62,11 @@ Module NL2StcNormalArgsFun
        (OpAux : OPERATORS_AUX   Op)
        (CStr  : COINDSTREAMS    Op OpAux)
        (IStr  : INDEXEDSTREAMS  Op OpAux)
+       (CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
        (CE    : COREEXPR    Ids Op OpAux      IStr)
-       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CE)
-       (Stc   : STC         Ids Op OpAux      IStr CE)
+       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
+       (Stc   : STC         Ids Op OpAux      IStr       CE)
        (Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem)
-<: NL2STCNORMALARGS Ids Op OpAux CStr IStr CE NL Stc Trans.
-  Include NL2STCNORMALARGS Ids Op OpAux CStr IStr CE NL Stc Trans.
+<: NL2STCNORMALARGS Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
+  Include NL2STCNORMALARGS Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
 End NL2StcNormalArgsFun.

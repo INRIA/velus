@@ -8,7 +8,7 @@ Require Import Omega.
 From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
-From Velus Require Import CoindStreams.
+From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking.
@@ -21,14 +21,15 @@ Module Type CORRECTNESS
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Str : COINDSTREAMS Op OpAux)
+       (Import CStr : COINDSTREAMS Op OpAux)
+       (IStr : INDEXEDSTREAMS Op OpAux)
        (Import Syn : LSYNTAX Ids Op)
        (LCA        : LCAUSALITY Ids Op Syn)
        (Import Ty : LTYPING Ids Op Syn)
        (Import Cl : LCLOCKING Ids Op Syn)
        (Import Ord : LORDERED Ids Op Syn)
-       (Import Sem : LSEMANTICS Ids Op OpAux Syn Ord Str)
-       (Import LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Ty Cl LCA Ord Str Sem)
+       (Import Sem : LSEMANTICS Ids Op OpAux Syn Ord CStr)
+       (Import LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Ty Cl LCA Ord CStr IStr Sem)
        (Import Norm : NORMALIZATION Ids Op OpAux Syn LCA).
 
   Import Fresh Tactics.
@@ -1349,10 +1350,10 @@ Module Type CORRECTNESS
       wt_node G n ->
       Env.dom H (List.map fst (n_in n ++ n_vars n ++ n_out n)) ->
       Forall2 (sem_var H) (idents (n_in n)) ins ->
-      Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n) ->
+      Forall (sem_equation G H (clocks_of ins)) (n_eqs n) ->
       (* Forall2 (fun xc : ident * clock => sem_clock H (clocks_of ins) (snd xc)) (idck (n_in n)) (map abstract_clock ins) -> *)
       exists H', Env.refines eq H H' /\
-            Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs (untuple_node n Hwl)).
+            Forall (sem_equation G H' (clocks_of ins)) (n_eqs (untuple_node n Hwl)).
   Proof with eauto.
     intros * Hwt Hdom Hins Hsem.
     remember (@init_st (Op.type * clock)
@@ -1439,11 +1440,11 @@ Module Type CORRECTNESS
           apply sem_var_In in Hout. rewrite Forall_forall in Hout...
       }
       (* Reasoning on the semantics of equations *)
-      assert (Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n0)).
+      assert (Forall (sem_equation G H (clocks_of ins)) (n_eqs n0)).
       { eapply Forall_sem_equation_global_tl...
         eapply find_node_not_Is_node_in in Hord1... }
       inversion_clear HwtG; rename H2 into Hwt.
-      assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)) as Hsem'.
+      assert (Forall (sem_equation G H' (clocks_of ins)) (n_eqs n0)) as Hsem'.
       { destruct Hwt as [_ [_ [_ Hwt]]].
         rewrite HeqH'.
         clear Hin Hout.
@@ -1451,7 +1452,7 @@ Module Type CORRECTNESS
         specialize (H0 _ H6). specialize (Hwt _ H6).
         eapply sem_equation_restrict in H0...
         unfold idty in H0. rewrite map_map in H0. simpl in H0... } clear H0.
-      assert (Forall (sem_equation G' H' (Str.clocks_of ins)) (n_eqs n0)) as Hsem''.
+      assert (Forall (sem_equation G' H' (clocks_of ins)) (n_eqs n0)) as Hsem''.
       { destruct Hwt as [_ [_ [_ Hwt']]].
         assert (Permutation (n_in n0 ++ n_out n0 ++ n_vars n0) (n_in n0 ++ n_vars n0 ++ n_out n0)) as Hperm.
         { apply Permutation_app_head, Permutation_app_comm. }
@@ -1555,7 +1556,7 @@ Module Type CORRECTNESS
   Qed.
 
   Fact const_val_const : forall b c,
-      Str.const b c ≡ const_val b (Op.sem_const c).
+      const b c ≡ const_val b (Op.sem_const c).
   Proof.
     cofix const_val_const.
     intros [b0 b] c; simpl.
@@ -1648,7 +1649,7 @@ Module Type CORRECTNESS
   Qed.
 
   Definition init_stream bs :=
-    delay true_val (Str.const bs false_const).
+    delay true_val (const bs false_const).
 
   Instance init_stream_Proper:
     Proper (@EqSt bool ==> @EqSt value) init_stream.
@@ -1842,15 +1843,15 @@ Module Type CORRECTNESS
     apply sem_clock_sem_clock_instant with (n:=n) in Hcl1.
     apply sem_clock_sem_clock_instant with (n:=n) in Hcl2.
     rewrite sem_var_sem_var_instant in Hvar. specialize (Hvar n).
-    inv Hcl2; (eapply sem_var_instant_det in Hvar; eauto;
-               eapply sem_clock_instant_det in Hcl1; eauto).
+    inv Hcl2; (eapply IStr.sem_var_instant_det in Hvar; eauto;
+               eapply IStr.sem_clock_instant_det in Hcl1; eauto).
     - right. right.
       exists (sem_const c). exists c0. repeat split; auto using const_true.
     - left.
       repeat split; auto using const_false.
     - right. left.
       exists (sem_const c). exists c0. repeat split; auto using const_true, const_false.
-      destruct k; auto.
+      destruct b; auto.
   Qed.
 
   Lemma add_whens_sem_exp : forall G H b ck ty b' c,
@@ -2304,12 +2305,12 @@ Module Type CORRECTNESS
           apply sem_var_In in Hout. rewrite Forall_forall in Hout...
       }
       (* Reasoning on the semantics of equations *)
-      assert (Forall (sem_equation G H (Str.clocks_of ins)) (n_eqs n0)).
+      assert (Forall (sem_equation G H (clocks_of ins)) (n_eqs n0)).
       { eapply Forall_sem_equation_global_tl...
         eapply find_node_not_Is_node_in in Hord1... }
       inversion_clear HwtG; rename H2 into Hwt.
       inversion_clear HwcG; rename H3 into Hwc.
-      assert (Forall (sem_equation G H' (Str.clocks_of ins)) (n_eqs n0)) as Hsem'.
+      assert (Forall (sem_equation G H' (clocks_of ins)) (n_eqs n0)) as Hsem'.
       { destruct Hwt as [_ [_ [_ Hwt]]].
         rewrite HeqH'.
         clear Hin Hout.
@@ -2317,7 +2318,7 @@ Module Type CORRECTNESS
         specialize (H0 _ H8). specialize (Hwt _ H8).
         eapply sem_equation_restrict in H0...
         unfold idty in H0. rewrite map_map in H0. simpl in H0... } clear H0.
-      assert (Forall (sem_equation G' H' (Str.clocks_of ins)) (n_eqs n0)) as Hsem''.
+      assert (Forall (sem_equation G' H' (clocks_of ins)) (n_eqs n0)) as Hsem''.
       { destruct Hwt as [_ [_ [_ Hwt']]].
         destruct H5 as [Hwcclocks1 [_ [Hwcclocks Hwc']]].
         assert (sc_var_inv' (idck (n_in n0 ++ n_vars n0 ++ n_out n0)) H' (clocks_of ins)) as Hinv.
@@ -2466,15 +2467,16 @@ Module CorrectnessFun
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Str : COINDSTREAMS Op OpAux)
+       (CStr : COINDSTREAMS Op OpAux)
+       (IStr : INDEXEDSTREAMS Op OpAux)
        (Syn : LSYNTAX Ids Op)
        (LCA : LCAUSALITY Ids Op Syn)
        (Ty : LTYPING Ids Op Syn)
        (Clo : LCLOCKING Ids Op Syn)
        (Lord : LORDERED Ids Op Syn)
-       (Sem : LSEMANTICS Ids Op OpAux Syn Lord Str)
-       (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Ty Clo LCA Lord Str Sem)
+       (Sem : LSEMANTICS Ids Op OpAux Syn Lord CStr)
+       (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Syn Ty Clo LCA Lord CStr IStr Sem)
        (Norm : NORMALIZATION Ids Op OpAux Syn LCA)
-       <: CORRECTNESS Ids Op OpAux Str Syn LCA Ty Clo Lord Sem LClockSem Norm.
-  Include CORRECTNESS Ids Op OpAux Str Syn LCA Ty Clo Lord Sem LClockSem Norm.
+       <: CORRECTNESS Ids Op OpAux CStr IStr Syn LCA Ty Clo Lord Sem LClockSem Norm.
+  Include CORRECTNESS Ids Op OpAux CStr IStr Syn LCA Ty Clo Lord Sem LClockSem Norm.
 End CorrectnessFun.
