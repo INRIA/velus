@@ -19,6 +19,11 @@ Fact Str_nth_S:
     (x ⋅ xs) # (S n) = xs # n.
 Proof. reflexivity. Qed.
 
+Fact Str_nth_S_tl:
+  forall {A} (xs: Stream A) n,
+    xs # (S n) = (tl xs) # n.
+Proof. reflexivity. Qed.
+
 Section map.
   Context {A B : Type}.
 

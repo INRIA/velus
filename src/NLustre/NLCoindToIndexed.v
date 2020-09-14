@@ -363,7 +363,6 @@ Module Type NLCOINDTOINDEXED
         unfold tr_Stream; cases.
     Qed.
 
-
     (** * FINAL LEMMAS *)
 
 

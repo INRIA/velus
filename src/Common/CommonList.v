@@ -1614,6 +1614,27 @@ Section ForallExistsB.
 
 End ForallExistsB.
 
+Section ExistsB.
+  Context {A B: Type}.
+  Variable p q : B -> bool.
+  Variable f : A -> B.
+
+  Lemma existsb_map: forall xs,
+      existsb p (map f xs) = existsb (fun a => p (f a)) xs.
+  Proof.
+    induction xs; simpl; auto.
+    rewrite IHxs; auto.
+  Qed.
+
+  Lemma existsb_ext : forall xs,
+      (forall x, p x = q x) ->
+      existsb p xs = existsb q xs.
+  Proof.
+    induction xs; intros H; simpl; auto.
+    - rewrite H, IHxs; auto.
+  Qed.
+End ExistsB.
+
 (* Induction on a pair of lists of the same length *)
 Section list_ind2.
   Context {A B : Type}.

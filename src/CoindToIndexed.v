@@ -112,6 +112,41 @@ Module Type COINDTOINDEXED
       now repeat setoid_rewrite Env.map_map.
     Qed.
 
+    Fact tr_history_find_orel : forall H H' x x',
+        orel (@EqSt value) (Env.find x H) (Env.find x' H') ->
+        (forall n, orel (@eq value) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+    Proof.
+      intros * Horel n.
+      unfold tr_history, tr_Stream.
+      repeat rewrite Env.Props.P.F.map_o.
+      inv Horel; simpl; auto.
+      rewrite H2; auto.
+    Qed.
+
+    Fact tr_history_find_orel_mask : forall H H' rs k x x',
+        orel (fun v1 v2 => EqSt (CStr.mask k rs v1) v2) (Env.find x H) (Env.find x' H') ->
+        (forall n, orel (fun v1 v2 => (if (CStr.count rs) # n =? k then v1 else absent) = v2) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+    Proof.
+      intros * Horel n.
+      unfold tr_history, tr_Stream.
+      repeat rewrite Env.Props.P.F.map_o.
+      inv Horel; simpl; auto.
+      constructor; auto.
+      rewrite <- H2, mask_nth. reflexivity.
+    Qed.
+
+    Fact tr_history_find_orel_mask' : forall H H' rs k x x',
+        orel (fun v1 v2 => EqSt v1 (CStr.mask k rs v2)) (Env.find x H) (Env.find x' H') ->
+        (forall n, orel (fun v1 v2 => (v1 = if (CStr.count rs) # n =? k then v2 else absent)) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+    Proof.
+      intros * Horel n.
+      unfold tr_history, tr_Stream.
+      repeat rewrite Env.Props.P.F.map_o.
+      inv Horel; simpl; auto.
+      constructor; auto.
+      rewrite H2, mask_nth. reflexivity.
+    Qed.
+
     (** * SEMANTICS CORRESPONDENCE *)
 
     (** ** Variables *)

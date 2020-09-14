@@ -9,6 +9,7 @@ From Velus Require Import Common Ident.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
 From Velus Require Import CoindStreams IndexedStreams.
+From Velus Require Import CoindIndexed.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking.
@@ -1832,6 +1833,8 @@ Module Type CORRECTNESS
       + eapply sc_var_inv'_refines with (H:=H); eauto.
   Qed.
 
+  Module Import CIStr := CoindIndexedFun Op OpAux CStr IStr.
+
   Fact sem_clock_when : forall H bs bs' bs'' cs ck id ckb c,
       sem_clock H bs ck bs' ->
       sem_clock H bs (Con ck id ckb) bs'' ->
@@ -1840,9 +1843,10 @@ Module Type CORRECTNESS
   Proof.
     intros * Hcl1 Hcl2 Hvar.
     rewrite when_spec. intros n.
-    apply sem_clock_sem_clock_instant with (n:=n) in Hcl1.
-    apply sem_clock_sem_clock_instant with (n:=n) in Hcl2.
-    rewrite sem_var_sem_var_instant in Hvar. specialize (Hvar n).
+    rewrite sem_clock_equiv in Hcl1, Hcl2.
+    apply CIStr.sem_var_impl in Hvar.
+    specialize (Hcl1 n). specialize (Hcl2 n). specialize (Hvar n).
+    unfold tr_Stream in *; simpl in *.
     inv Hcl2; (eapply IStr.sem_var_instant_det in Hvar; eauto;
                eapply IStr.sem_clock_instant_det in Hcl1; eauto).
     - right. right.

@@ -469,6 +469,15 @@ Module Type COINDSTREAMS
     rewrite Nat.eqb_refl in Heq; auto.
   Qed.
 
+  Lemma maskb_idem : forall k b x,
+      maskb k b (maskb k b x) ≡ maskb k b x.
+  Proof.
+    intros.
+    eapply ntheq_eqst; intros n.
+    repeat rewrite maskb_nth.
+    destruct (_ =? k); auto.
+  Qed.
+
   (** ** exp level synchronous operators specifications
 
         To ease the use of coinductive hypotheses to prove non-coinductive
@@ -1093,6 +1102,35 @@ Module Type COINDSTREAMS
       + now apply IHxs.
   Qed.
 
+  Lemma clocks_of_nth : forall n xs,
+      (clocks_of xs) # n = existsb (fun s => s <>b absent) (List.map (Str_nth n) xs).
+  Proof.
+    induction n; intros x.
+    - cbn. rewrite existsb_map; auto.
+    - rewrite Str_nth_S_tl; simpl.
+      rewrite IHn, map_map.
+      repeat rewrite existsb_map.
+      reflexivity.
+  Qed.
+
+  Lemma clocks_of_mask : forall xs k rs,
+      clocks_of (List.map (mask k rs) xs) ≡ (maskb k rs (clocks_of xs)).
+  Proof.
+    intros.
+    apply ntheq_eqst; intros.
+    rewrite maskb_nth. repeat rewrite clocks_of_nth.
+    repeat rewrite existsb_map.
+    destruct (_ =? k) eqn:Hcount.
+    - apply existsb_ext; intros x.
+      rewrite mask_nth, Hcount; auto.
+    - rewrite existsb_Forall, forallb_forall.
+      intros ? _.
+      rewrite mask_nth, Hcount, neg_eq_value.
+      apply equiv_decb_refl.
+  Qed.
+
+  (** ** sem_clock and its properties *)
+
   CoInductive sem_clock: history -> Stream bool -> clock -> Stream bool -> Prop :=
   | Sbase:
       forall H b b',
@@ -1119,21 +1157,37 @@ Module Type COINDSTREAMS
         sem_clock (history_tl H) (tl b) (Con ck x (negb k)) bs ->
         sem_clock H b (Con ck x (negb k)) (false ⋅ bs).
 
-  Add Parametric Morphism H : (sem_clock H)
-      with signature @EqSt bool ==> eq ==> @EqSt bool ==> Basics.impl
+  Fact history_tl_Equiv : forall H H',
+      Env.Equiv (@EqSt value) H H' ->
+      Env.Equiv (@EqSt value) (history_tl H) (history_tl H').
+  Proof.
+    intros * [Heq1 Heq2].
+    unfold history_tl. constructor.
+    - intros k.
+      repeat rewrite Env.Props.P.F.map_in_iff; auto.
+    - intros * Hm1 Hm2.
+      rewrite Env.Props.P.F.map_mapsto_iff in Hm1, Hm2.
+      destruct Hm1 as [e1 [Htl1 Hm1]]. destruct Hm2 as [e2 [Htl2 Hm2]]. subst.
+      apply tl_EqSt; eauto.
+  Qed.
+
+  Add Parametric Morphism : sem_clock
+      with signature Env.Equiv (@EqSt value) ==> @EqSt bool ==> eq ==> @EqSt bool ==> Basics.impl
         as sem_clock_morph.
   Proof.
-    revert H; cofix Cofix.
-    intros H b b' Eb ck bk bk' Ebk Sem.
+    cofix CoFix.
+    intros H H' Hequiv b b' Eb ck bk bk' Ebk Sem.
     inv Sem.
-    - constructor.
-      now rewrite <-Ebk, <-Eb.
-    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
-        econstructor; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
-    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
-        econstructor; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
-    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
-        eapply Son_abs2; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
+    1:constructor; now rewrite <-Ebk, <-Eb.
+    1-3:(destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate).
+    1,2,3:(assert (Hequiv':=Hequiv); destruct Hequiv' as [Heq1 Heq2]; inv H2;
+           take (Env.MapsTo _ _ _) and (apply Env.find_In in it as HIn);
+           rewrite Heq1, Env.In_find in HIn; destruct HIn as [xs'' Hfind];
+           assert (Heq:=Hfind); eapply Heq2 in Heq; eauto).
+    1,2:(econstructor; eauto). 7:eapply Son_abs2; eauto.
+    1,3,4,6,7,9:(eapply CoFix; eauto; try reflexivity; inv Eb; auto).
+    1-3:apply history_tl_Equiv; auto.
+    1-3:econstructor; [eauto|etransitivity; eauto].
   Qed.
 
   Lemma sc_step :
@@ -1472,21 +1526,6 @@ Module Type COINDSTREAMS
     unfold_Stv xs; unfold_Stv rs;
       constructor; simpl; destruct k as [|[|?]]; eauto.
     1,2:unfold Streams.const; apply ac_Streams_const.
-  Qed.
-
-  Fact sem_clock_mask' : forall H bs ck bs' rs,
-      (forall k, exists xs, sem_clock H bs ck xs /\ (maskb k rs xs) ≡ (maskb k rs bs')) ->
-      sem_clock H bs ck bs'.
-  Proof.
-    intros * Hsem.
-    assert (exists xs, sem_clock H bs ck xs /\ forall k, maskb k rs xs ≡ maskb k rs bs') as Hex.
-    { assert (Hsem0:=(Hsem 0)). destruct Hsem0 as [xs [Hsem1 _]].
-      exists xs; split; auto. intros k.
-      specialize (Hsem k) as [xs' [Hsem2 Hmask]].
-      eapply sem_clock_det in Hsem1; eauto. rewrite <- Hsem1; auto. }
-    destruct Hex as [xs [Hsem' Heq]].
-    eapply maskb_EqSt' in Heq.
-    rewrite <- Heq. assumption.
   Qed.
 
 End COINDSTREAMS.
