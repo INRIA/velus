@@ -8,7 +8,7 @@ From Velus Require Import ObcToClight.Interface.
 
 Module F := FSyntax.
 Module Str := CoindStreamsFun Op OpAux.
-Module Lus := LustreFun Ids Op OpAux Str.
+Module Lus := LustreFun Ids Op OpAux CStr IStr.
 Module L := Lus.Syn.
 
 Definition tr_signedness (sg : F.signedness) : Ctypes.signedness :=
