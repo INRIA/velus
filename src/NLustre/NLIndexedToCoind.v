@@ -18,6 +18,7 @@ From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoindStreams.
+From Velus Require Import IndexedToCoind.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
@@ -34,6 +35,7 @@ Module Type NLINDEXEDTOCOIND
        (Import Syn    : NLSYNTAX           Ids Op       CESyn)
        (Import IStr   : INDEXEDSTREAMS         Op OpAux)
        (Import CStr   : COINDSTREAMS           Op OpAux)
+       (Import ICStr  : INDEXEDTOCOIND         Op OpAux IStr CStr)
        (Import Ord    : NLORDERED          Ids Op       CESyn Syn)
        (CESem         : CESEMANTICS        Ids Op OpAux CESyn     IStr)
        (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
@@ -43,105 +45,6 @@ Module Type NLINDEXEDTOCOIND
   Section Global.
 
     Variable G : global.
-
-    (** The length of the range-built list of Streams is simply the difference
-        between the bounds of the range.  *)
-    Lemma seq_streams_length:
-      forall {A} m (str: nat -> Stream A),
-        length (seq_streams str m) = m.
-    Proof.
-      intros; unfold seq_streams.
-      now rewrite map_length, seq_length.
-    Qed.
-
-    (** The [n]th element of the range-built list of Streams starting at 0 is
-        the result of the function at [n]. *)
-    Lemma nth_seq_streams:
-      forall {A} m str n (xs_d: Stream A),
-        n < m ->
-        nth n (seq_streams str m) xs_d = str n.
-    Proof.
-      unfold seq_streams; intros.
-      rewrite map_nth' with (d':=0); simpl.
-      - rewrite seq_nth; auto; omega.
-      - rewrite seq_length; omega.
-    Qed.
-
-    Corollary nth_tr_streams_from_nth:
-      forall n k xss xs_d,
-        k < length (xss n) ->
-        nth k (tr_streams_from n xss) xs_d =
-        nth_tr_streams_from n xss k.
-    Proof.
-      unfold_tr_streams.
-      intros; now rewrite nth_seq_streams.
-    Qed.
-
-    (** A generalization of [tr_stream_from_tl] for lists. *)
-    Lemma tr_streams_from_tl:
-      forall n xss,
-        wf_streams xss ->
-        List.map (@tl value) (tr_streams_from n xss) = tr_streams_from (S n) xss.
-    Proof.
-      intros * Len.
-      apply Forall2_eq, Forall2_forall2.
-      split; unfold_tr_streams; rewrite map_length.
-      - now rewrite 2 seq_streams_length.
-      - intros * Hlen E1 E2; rewrite <-E1, <-E2.
-        rewrite map_nth' with (d':=a); auto.
-        rewrite seq_streams_length in Hlen.
-        rewrite 2 nth_seq_streams; try omega.
-        + reflexivity.
-        + rewrite (Len n); omega.
-    Qed.
-
-    Lemma tr_streams_from_length:
-      forall n xss,
-        length (tr_streams_from n xss) = length (xss n).
-    Proof.
-      unfold_tr_streams; intros.
-      rewrite seq_streams_length; simpl; omega.
-    Qed.
-
-    (** If at instant [n], a property is true for all elements of the list
-        obtained from the indexed stream, then it is true for the first element
-        of the Streams starting at [n] in the translated list. *)
-    Lemma Forall_In_tr_streams_from_hd:
-      forall n P xss x,
-        Forall P (xss n) ->
-        In x (tr_streams_from n xss) ->
-        P (hd x).
-    Proof.
-      unfold_tr_streams; intros * Ps Hin.
-      apply In_nth with (d:=x) in Hin as (k & Len & Nth).
-      rewrite seq_streams_length in Len.
-      rewrite nth_seq_streams in Nth; auto.
-      apply eq_EqSt in Nth.
-      unfold nth_tr_streams_from in Nth.
-      rewrite init_from_n in Nth.
-      inversion Nth as (Hhd).
-      rewrite <-Hhd; simpl.
-      unfold streams_nth.
-      eapply Forall_forall; eauto.
-      apply nth_In; auto.
-    Qed.
-
-    Lemma Exists_In_tr_streams_from_hd:
-      forall n P xss,
-        List.Exists P (xss n) ->
-        List.Exists (fun v => P (hd v)) (tr_streams_from n xss).
-    Proof.
-      intros * Hin.
-      apply Exists_exists in Hin as (v & Hin & Hv).
-      apply In_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
-      apply Exists_exists.
-      exists (nth k (tr_streams_from n xss) (Streams.const absent)).
-      split.
-      - apply nth_In.
-        rewrite tr_streams_from_length; auto.
-      - rewrite nth_tr_streams_from_nth; auto.
-    Qed.
-
 
     (** * SEMANTICS CORRESPONDENCE *)
 
@@ -175,10 +78,10 @@ Module Type NLINDEXEDTOCOIND
       forall H xs xss,
         CESem.sem_vars H xs xss ->
         forall n,
-          Forall2 (fun x k => CESem.sem_var H x (streams_nth k xss))
+          Forall2 (fun x k => IStr.sem_var H x (streams_nth k xss))
                   (skipn n xs) (seq n (length xs - n)).
     Proof.
-      unfold CESem.sem_vars, CESem.lift.
+      unfold CESem.sem_vars, IStr.lift.
       intros * Sem n.
       apply Forall2_forall2; split.
       - now rewrite skipn_length, seq_length.
@@ -196,7 +99,7 @@ Module Type NLINDEXEDTOCOIND
     Corollary sem_vars_inv:
       forall H xs xss,
         CESem.sem_vars H xs xss ->
-        Forall2 (fun x k => CESem.sem_var H x (streams_nth k xss))
+        Forall2 (fun x k => IStr.sem_var H x (streams_nth k xss))
                 xs (seq 0 (length xs)).
     Proof.
       intros * Sem; apply sem_vars_inv_from with (n:=0) in Sem.
@@ -210,7 +113,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       assert (length xs = length (xss n)) as Length by
-            (unfold CESem.sem_vars, CESem.lift in Sem; specialize (Sem n);
+            (unfold CESem.sem_vars, IStr.lift in Sem; specialize (Sem n);
              now apply Forall2_length in Sem).
       apply Forall2_forall2; split.
       - now rewrite tr_streams_from_length.
@@ -256,18 +159,18 @@ Module Type NLINDEXEDTOCOIND
       let sol sem interp sound :=
           assert (sem b H x (interp b H x)) as Sem_x
               by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                  unfold interp, lift; inv Sem; erewrite <-sound; eauto)
+                  unfold interp, lift_interp; inv Sem; erewrite <-sound; eauto)
       in
       let sol' sem interp sound :=
           assert (sem H x (interp H x)) as Sem_x
               by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                  unfold interp, lift'; inv Sem; erewrite <-sound; eauto)
+                  unfold interp, lift_interp'; inv Sem; erewrite <-sound; eauto)
       in
       match type of x with
       | exp => sol CESem.sem_exp interp_exp interp_exp_instant_sound
       | cexp => sol CESem.sem_cexp interp_cexp interp_cexp_instant_sound
-      | ident => sol' CESem.sem_var interp_var interp_var_instant_sound
-      | clock => sol CESem.sem_clock interp_clock interp_clock_instant_sound
+      | ident => sol' IStr.sem_var interp_var interp_var_instant_sound
+      | clock => sol IStr.sem_clock interp_clock interp_clock_instant_sound
       end.
 
     Lemma when_inv:
@@ -275,7 +178,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_exp b H (Ewhen e x k) es ->
         exists ys xs,
           CESem.sem_exp b H e ys
-          /\ CESem.sem_var H x xs
+          /\ IStr.sem_var H x xs
           /\
           (forall n,
               (exists sc xc,
@@ -381,7 +284,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros * Sem; unfold CESem.sem_exp, CESem.lift in Sem.
+      induction e; intros * Sem; unfold CESem.sem_exp, lift in Sem.
 
       - constructor.
         apply const_spec; use_spec Sem; inv Sem; auto.
@@ -468,7 +371,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_aexp b H ck e es ->
         CESem.sem_exp b H e es
         /\ exists bs,
-            CESem.sem_clock b H ck bs
+            IStr.sem_clock b H ck bs
             /\ forall n,
               bs n = match es n with
                      | present _ => true
@@ -516,7 +419,7 @@ Module Type NLINDEXEDTOCOIND
       forall H b x t f es,
         CESem.sem_cexp b H (Emerge x t f) es ->
         exists xs ts fs,
-          CESem.sem_var H x xs
+          IStr.sem_var H x xs
           /\ CESem.sem_cexp b H t ts
           /\ CESem.sem_cexp b H f fs
           /\
@@ -628,7 +531,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros * Sem; unfold CESem.sem_cexp, CESem.lift in Sem.
+      induction e; intros * Sem; unfold CESem.sem_cexp, IStr.lift in Sem.
 
       - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
@@ -657,7 +560,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_caexp b H ck e es ->
         CESem.sem_cexp b H e es
         /\ exists bs,
-            CESem.sem_clock b H ck bs
+            IStr.sem_clock b H ck bs
             /\ (forall n, bs n = match es n with
                            | present _ => true
                            | absent => false
@@ -806,16 +709,16 @@ Module Type NLINDEXEDTOCOIND
 
     Lemma sem_clocked_var_inv:
       forall b H x xs ck,
-        CESem.sem_var H x xs ->
+        IStr.sem_var H x xs ->
         CESem.sem_clocked_var b H x ck ->
         exists bs,
-          CESem.sem_clock b H ck bs
+          IStr.sem_clock b H ck bs
           /\ (forall n, bs n = true <-> xs n <> absent).
     Proof.
       intros * Var Sem.
-      assert (CESem.sem_clock b H ck (interp_clock b H ck)) as SemCk.
+      assert (IStr.sem_clock b H ck (interp_clock b H ck)) as SemCk.
       { intro n; specialize (Sem n); specialize (Var n); destruct Sem as (Sem & Sem').
-        unfold interp_clock, lift.
+        unfold interp_clock, lift_interp.
         destruct (xs n).
         - erewrite <-interp_clock_instant_sound; eauto; apply Sem'; auto.
         - erewrite <-interp_clock_instant_sound; eauto; apply Sem; eauto.
@@ -827,17 +730,17 @@ Module Type NLINDEXEDTOCOIND
       - intros E E'.
         rewrite E in SemCk; apply Sem in SemCk as (?&?).
         rewrite E' in Var.
-        eapply CESem.sem_var_instant_det in Var; eauto; discriminate.
+        eapply sem_var_instant_det in Var; eauto; discriminate.
       - intro E; apply not_absent_present in E as (?& E).
         rewrite E in Var.
-        assert (CESem.sem_clock_instant (b n) (H n) ck true)
+        assert (sem_clock_instant (b n) (H n) ck true)
           by (apply Sem; eauto).
-        eapply CESem.sem_clock_instant_det; eauto.
+        eapply sem_clock_instant_det; eauto.
     Qed.
 
     Lemma sem_clocked_var_impl_from:
       forall n H b x xs ck,
-        CESem.sem_var H x xs ->
+        IStr.sem_var H x xs ->
         CESem.sem_clocked_var b H x ck ->
         CoInd.sem_clocked_var (tr_history_from n H) (tr_stream_from n b) x ck.
     Proof.
@@ -846,7 +749,7 @@ Module Type NLINDEXEDTOCOIND
         apply sem_clock_impl_from with (n := n) in Clock.
       split; eauto.
       intros * Var'.
-      eapply CoInd.sem_var_det in Var; eauto.
+      eapply sem_var_det in Var; eauto.
       eexists; split; eauto.
       rewrite Var.
       clear - Spec.
@@ -864,7 +767,7 @@ Module Type NLINDEXEDTOCOIND
 
     Corollary sem_clocked_var_impl:
       forall H b x xs ck,
-        CESem.sem_var H x xs ->
+        IStr.sem_var H x xs ->
         CESem.sem_clocked_var b H x ck ->
         CoInd.sem_clocked_var (tr_history H) (tr_stream b) x ck.
     Proof. apply sem_clocked_var_impl_from. Qed.

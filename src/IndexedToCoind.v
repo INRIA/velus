@@ -132,6 +132,104 @@ Module Type INDEXEDTOCOIND
     now rewrite IHn, Nat.add_succ_r.
   Qed.
 
+  (** The length of the range-built list of Streams is simply the difference *)
+  (*  between the bounds of the range.  *)
+  Lemma seq_streams_length:
+    forall {A} m (str: nat -> Stream A),
+      length (seq_streams str m) = m.
+  Proof.
+    intros; unfold seq_streams.
+    now rewrite map_length, seq_length.
+  Qed.
+
+  (** The [n]th element of the range-built list of Streams starting at 0 is *)
+  (*  the result of the function at [n]. *)
+  Lemma nth_seq_streams:
+    forall {A} m str n (xs_d: Stream A),
+      n < m ->
+      nth n (seq_streams str m) xs_d = str n.
+  Proof.
+    unfold seq_streams; intros.
+    rewrite map_nth' with (d':=0); simpl.
+    - rewrite seq_nth; auto; omega.
+    - rewrite seq_length; omega.
+  Qed.
+
+  Corollary nth_tr_streams_from_nth:
+    forall n k xss xs_d,
+      k < length (xss n) ->
+      nth k (tr_streams_from n xss) xs_d =
+      nth_tr_streams_from n xss k.
+  Proof.
+    unfold_tr_streams.
+    intros; now rewrite nth_seq_streams.
+  Qed.
+
+  (** A generalization of [tr_stream_from_tl] for lists. *)
+  Lemma tr_streams_from_tl:
+    forall n xss,
+      wf_streams xss ->
+      List.map (@tl value) (tr_streams_from n xss) = tr_streams_from (S n) xss.
+  Proof.
+    intros * Len.
+    apply Forall2_eq, Forall2_forall2.
+    split; unfold_tr_streams; rewrite map_length.
+    - now rewrite 2 seq_streams_length.
+    - intros * Hlen E1 E2; rewrite <-E1, <-E2.
+      rewrite map_nth' with (d':=a); auto.
+      rewrite seq_streams_length in Hlen.
+      rewrite 2 nth_seq_streams; try omega.
+      + reflexivity.
+      + rewrite (Len n); omega.
+  Qed.
+
+  Lemma tr_streams_from_length:
+    forall n xss,
+      length (tr_streams_from n xss) = length (xss n).
+  Proof.
+    unfold_tr_streams; intros.
+    rewrite seq_streams_length; simpl; omega.
+  Qed.
+
+  (** If at instant [n], a property is true for all elements of the list *)
+  (*  obtained from the indexed stream, then it is true for the first element *)
+  (*  of the Streams starting at [n] in the translated list. *)
+  Lemma Forall_In_tr_streams_from_hd:
+    forall n P xss x,
+      Forall P (xss n) ->
+      In x (tr_streams_from n xss) ->
+      P (hd x).
+  Proof.
+    unfold_tr_streams; intros * Ps Hin.
+    apply In_nth with (d:=x) in Hin as (k & Len & Nth).
+    rewrite seq_streams_length in Len.
+    rewrite nth_seq_streams in Nth; auto.
+    apply eq_EqSt in Nth.
+    unfold nth_tr_streams_from in Nth.
+    rewrite init_from_n in Nth.
+    inversion Nth as (Hhd).
+    rewrite <-Hhd; simpl.
+    unfold streams_nth.
+    eapply Forall_forall; eauto.
+    apply nth_In; auto.
+  Qed.
+
+  Lemma Exists_In_tr_streams_from_hd:
+    forall n P xss,
+      List.Exists P (xss n) ->
+      List.Exists (fun v => P (hd v)) (tr_streams_from n xss).
+  Proof.
+    intros * Hin.
+    apply Exists_exists in Hin as (v & Hin & Hv).
+    apply In_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
+    apply Exists_exists.
+    exists (nth k (tr_streams_from n xss) (Streams.const absent)).
+    split.
+    - apply nth_In.
+      rewrite tr_streams_from_length; auto.
+    - rewrite nth_tr_streams_from_nth; auto.
+  Qed.
+
   (** * SEMANTICS CORRESPONDENCE *)
 
   Lemma sem_var_impl_from:
