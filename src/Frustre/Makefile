@@ -97,7 +97,7 @@ OCAMLOPT=ocamlopt $(INCLUDES)
 OCAMLDEP=ocamldep $(INCLUDES)
 
 # RULES
-all: depend_extr frustre_test.native
+all: frustre_test.native
 
 clean:
 	$(MAKE) -C Parser clean
@@ -106,7 +106,7 @@ clean:
 	rm -f extraction/STAMP
 	rm -f *.cmi *.cmx *.o *.vo *.native
 
-depend: $(VFILES)
+.depend: $(VFILES)
 	@echo "Analyzing Coq dependencies"
 	$(COQDEP) $(COQLIBS) $^ > .depend
 
@@ -122,7 +122,7 @@ Parser/FrustreParser.v: Parser/FrustreParser.vy
 Parser/FrustreLexer.ml: Parser/FrustreLexer.mll
 	ocamllex $<
 
-extraction/STAMP: depend $(VOFILES) Parser/FrustreLexer.ml extraction/Extraction.v
+extraction/STAMP: .depend $(VOFILES) Parser/FrustreLexer.ml extraction/Extraction.v
 	rm -f extraction/extracted/*.ml*
 	$(COQEXEC) extraction/Extraction.v
 	cp -f Parser/FrustreLexer.ml extraction/extracted/
@@ -130,21 +130,20 @@ extraction/STAMP: depend $(VOFILES) Parser/FrustreLexer.ml extraction/Extraction
 	cp -f $(VELUS_MLFILES) extraction/extracted/
 	touch extraction/STAMP
 
-depend_extr: frustre_test.ml extraction/STAMP $(FRUSTRE_MLFILES)
+.depend.extr: frustre_test.ml extraction/STAMP $(FRUSTRE_MLFILES)
 	@echo "Analyzing OCaml dependencies"
 	@$(OCAMLDEP) extraction/extracted/*.ml extraction/extracted/*.mli *.ml > .depend.extr
 
 ifeq ($(wildcard .depend.extr),.depend.extr)
 
 MODORDER=$(COMPCERTDIR)/tools/modorder .depend.extr
-FRUSTRE_OBJS:=$(shell $(MODORDER) frustre_test.cmx)
 LIBS=str.cmxa unix.cmxa
 
 endif
 
-frustre_test.native : $(FRUSTRE_OBJS)
+frustre_test.native : .depend.extr frustre_test.cmx
 	@echo "Linking $@"
-	@$(OCAMLOPT) -o $@ $(LIBS) $(FRUSTRE_OBJS)
+	@$(OCAMLOPT) -o $@ $(LIBS) $(shell $(MODORDER) frustre_test.cmx)
 
 -include .depend.extr
 
