@@ -18,6 +18,7 @@ From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoindStreams.
+From Velus Require Import CoindIndexed.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
@@ -41,8 +42,9 @@ Module Type NLSEMEQUIV
        (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr      Ord CESem)
        (Import Interp : CEINTERPRETER      Ids Op OpAux CESyn     IStr          CESem)
        (CoInd         : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn      CStr Ord)
-       (IdxToCoind    : NLINDEXEDTOCOIND   Ids Op OpAux CESyn Syn IStr CStr Ord CESem Indexed Interp CoInd)
-       (CoindToIdx    : NLCOINDTOINDEXED   Ids Op OpAux CESyn Syn IStr CStr Ord CESem Indexed        CoInd).
+       (CIStr         : COINDINDEXED           Op OpAux           CStr IStr)
+       (IdxToCoind    : NLINDEXEDTOCOIND   Ids Op OpAux CESyn Syn IStr CStr CIStr.ICStr Ord CESem Indexed Interp CoInd)
+       (CoindToIdx    : NLCOINDTOINDEXED   Ids Op OpAux CESyn Syn IStr CStr CIStr.CIStr Ord CESem Indexed        CoInd).
 
   (* Lemma inverse_1: *)
   (*   forall A (s: Stream A), *)
@@ -75,7 +77,7 @@ Module Type NLSEMEQUIV
 
   Lemma indexed_equiv:
     forall (xss: unified_streams value),
-      CoindToIdx.tr_Streams xss ≈ xss.
+      CIStr.CIStr.tr_Streams xss ≈ xss.
   Proof.
     intros * n.
     destruct xss as (coind, idx, E); simpl.
@@ -127,7 +129,7 @@ Module Type NLSEMEQUIV
 
   Lemma coind_equiv:
     forall (xss: unified_streams value),
-      EqSts (IdxToCoind.tr_streams xss) xss.
+      EqSts (CIStr.ICStr.tr_streams xss) xss.
   Proof.
     intros.
     destruct xss as (coind, idx, E); simpl.
@@ -135,8 +137,8 @@ Module Type NLSEMEQUIV
     intro n.
     eapply pointwise_eq_list with (d := absent).
     - rewrite 2 map_length.
-      unfold IdxToCoind.tr_streams.
-      rewrite IdxToCoind.tr_streams_from_length.
+      unfold CIStr.ICStr.tr_streams.
+      rewrite CIStr.ICStr.tr_streams_from_length.
       specialize (E 0); now apply Forall2_length in E.
     - assert (forall n, length coind = length (idx n)) as Length
           by (intro k; specialize (E k); apply Forall2_length in E; auto).
@@ -146,15 +148,15 @@ Module Type NLSEMEQUIV
       replace absent with (Str_nth n (Streams.const absent))
         by apply const_nth.
       rewrite 2 map_nth.
-      unfold IdxToCoind.tr_streams, IdxToCoind.tr_streams_from.
+      unfold CIStr.ICStr.tr_streams, CIStr.ICStr.tr_streams_from.
       destruct (Compare_dec.le_lt_dec (length coind) k).
       + rewrite 2 nth_overflow; auto.
-        rewrite IdxToCoind.seq_streams_length.
+        rewrite CIStr.ICStr.seq_streams_length.
         rewrite <-Length; omega.
-      + rewrite IdxToCoind.nth_seq_streams; try (rewrite <-Length; omega).
-        unfold IdxToCoind.nth_tr_streams_from.
-        rewrite IdxToCoind.init_from_nth.
-        unfold IdxToCoind.streams_nth.
+      + rewrite CIStr.ICStr.nth_seq_streams; try (rewrite <-Length; omega).
+        unfold CIStr.ICStr.nth_tr_streams_from.
+        rewrite CIStr.ICStr.init_from_nth.
+        unfold CIStr.ICStr.streams_nth.
         symmetry; eapply H0; eauto.
         rewrite <-plus_n_O; eauto.
   Qed.

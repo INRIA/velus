@@ -396,7 +396,7 @@ Definition make_entry_point (do_sync: bool): AST.globdef Clight.fundef Ctypes.ty
   fundef [] [] [] Ctypes.type_int32s body.
 
 Definition ef_sync: Clight.fundef :=
-  let sg := AST.mksignature [] None AST.cc_default in
+  let sg := AST.mksignature [] AST.Tvoid AST.cc_default in
   let ef := AST.EF_external "sync" sg in
   Ctypes.External ef Ctypes.Tnil Ctypes.Tvoid AST.cc_default.
 

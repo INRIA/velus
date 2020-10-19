@@ -26,6 +26,7 @@ Import Fusion.
 Import Stc2ObcInvariants.
 Import IStr.
 Import CStr.
+Import CIStr.
 Import OpAux.
 Import Op.
 From Velus Require Import ObcToClight.Correctness.
@@ -118,10 +119,11 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
      @@ add_builtins
      @@@ transf_clight2_program.
 
-Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
-  elab_declarations D
-                    @@@ (fun G => L2NL.to_global (proj1_sig G))
-                    @@@ nl_to_asm main_node.
+(* TODO fix elab *)
+(* Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program := *)
+(*   elab_declarations D *)
+(*                     @@@ (fun G => L2NL.to_global (proj1_sig G)) *)
+(*                     @@@ nl_to_asm main_node. *)
 
 Section ForallStr.
   Context {A: Type}.
@@ -131,7 +133,7 @@ Section ForallStr.
     forall x xs,
       P x ->
       Forall_Str xs ->
-      Forall_Str (x ::: xs).
+      Forall_Str (x ⋅ xs).
 
   Lemma Forall_Str_nth:
     forall s,

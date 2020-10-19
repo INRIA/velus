@@ -654,7 +654,7 @@ Section Fieldsrep.
     - intros m Hr.
       rewrite Env.gempty.
       apply range_contains'; auto with mem.
-      now apply Zdivides_trans with (1:=Halign) (2:=Hoff).
+      now apply Z.divide_trans with (1:=Halign) (2:=Hoff).
       erewrite <-sizeof_by_value with (1:=Haccess); eauto.
     - simpl. now rewrite sizeof_by_value with (1:=Haccess).
     - rewrite Env.gempty, sizeof_by_value with (1:=Haccess), Z.add_0_l.

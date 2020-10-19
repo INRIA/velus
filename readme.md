@@ -115,10 +115,10 @@ Vélus, we recommend installing an ad-hoc
 
     $ cd $VELUS_DIR
     $ mkdir opam
-    $ opam init --root=opam --compiler=4.02.3
+    $ opam init --root=opam --compiler=4.07.1
     $ eval `opam config env --root=$VELUS_DIR/opam`
     $ opam repo add coq-released https://coq.inria.fr/opam/released
-    $ opam install -j4 coq.8.4.6 menhir.20170101
+    $ opam install -j4 coq.8.9.1 menhir.20200624 coq-menhirlib.20200624
 
 To check the proofs and build Vélus:
 
