@@ -33,17 +33,7 @@ module type SYNTAX =
     | Cbase
     | Con of clock * ident * bool
 
-    type ckid =
-    | Vidx of positive
-    | Vnm  of ident
-
-    type sclock =
-    | Sbase
-    | Son of sclock * ckid * bool
-
-    type nclock =
-    | Cstream of sclock
-    | Cnamed  of ckid * sclock
+    type nclock = clock * ident option
 
     type ann = typ * nclock
     type lann = typ list * nclock
@@ -54,6 +44,7 @@ module type SYNTAX =
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
     | Efby   of exp list * exp list * ann list
+    | Earrow of exp list * exp list * ann list
     | Ewhen  of exp list * ident * bool * lann
     | Emerge of ident * exp list * exp list * lann
     | Eite   of exp * exp list * exp list * lann
@@ -98,6 +89,7 @@ module PrintFun (L: SYNTAX)
       | L.Eunop  (op, _, _)    -> PrintOps.prec_unop op
       | L.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
       | L.Efby _   -> (14, RtoL) (* higher than * / % *)
+      | L.Earrow _ -> (14, RtoL)
       | L.Ewhen _  -> (12, LtoR) (* precedence of + - *)
       | L.Emerge _ -> ( 5, LtoR) (* precedence of lor - 1 *)
       | L.Eite _   -> ( 5, LtoR)
@@ -114,25 +106,12 @@ module PrintFun (L: SYNTAX)
             (if b then "on" else "onot")
             print_ident x
 
-    let print_ckid p = function
-      | L.Vidx i -> fprintf p "?c%d" (int_of_positive i)
-      | L.Vnm x  -> print_ident p x
-
-    let rec print_sclock p sck =
-      match sck with
-      | L.Sbase -> fprintf p "."
-      | L.Son (ck', cid, b) ->
-          fprintf p "%a %s %a"
-            print_sclock ck'
-            (if b then "on" else "onot")
-            print_ckid cid
-
     let print_nclock p = function
-      | L.Cstream sck -> print_sclock p sck
-      | L.Cnamed (cid, sck) ->
-        fprintf p "(%a : @[<hov 2>%a@])"
-          print_ckid cid
-          print_sclock sck
+      | (ck, None) -> print_clock p ck
+      | (ck, Some cid) ->
+         fprintf p "(%a : @[<hov 2>%a@])"
+           print_ident cid
+           print_clock ck
 
     let print_ncks =
       pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_nclock
@@ -160,6 +139,8 @@ module PrintFun (L: SYNTAX)
         PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
       | L.Efby (e0s, es, _) ->
         fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
+      | L.Earrow (e0s, es, _) ->
+        fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Ewhen (e, x, v, _) ->
         fprintf p "%a when%s %a"
           (exp_list prec') e

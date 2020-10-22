@@ -30,7 +30,8 @@ Import CIStr.
 Import OpAux.
 Import Op.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Lustre.LustreElab.
+(* From Velus Require Import Lustre.LustreElab. *)
+From Velus Require Import NLustre.NLElaboration.
 
 From Coq Require Import String.
 From Coq Require Import List.
@@ -120,10 +121,10 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
      @@@ transf_clight2_program.
 
 (* TODO fix elab *)
-(* Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program := *)
-(*   elab_declarations D *)
-(*                     @@@ (fun G => L2NL.to_global (proj1_sig G)) *)
-(*                     @@@ nl_to_asm main_node. *)
+Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
+  elab_declarations D
+                    @@@ (fun G => OK (proj1_sig G))
+                    @@@ nl_to_asm main_node.
 
 Section ForallStr.
   Context {A: Type}.

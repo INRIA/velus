@@ -5,7 +5,8 @@ From Coq Require ZArith.BinIntDef.
 
 From Velus Require Import VelusCorrectness.
 From Velus Require Import ObcToClight.Generation.
-From Velus Require Import Lustre.LustreElab.
+(* From Velus Require Import Lustre.LustreElab. *)
+From Velus Require Import NLustre.NLElaboration.
 From Velus Require Import Lustre.Parser.LustreParser.
 
 From compcert Require
@@ -22,6 +23,7 @@ Extraction Blacklist Int String List.
 
 (* Selection *)
 Extract Constant Selection.compile_switch => "Switchaux.compile_switch".
+Extract Constant Selection.if_conversion_heuristic => "Selectionaux.if_conversion_heuristic".
 
 (* RTLgen *)
 Extract Constant RTLgen.more_likely => "RTLgenaux.more_likely".
@@ -132,7 +134,7 @@ Extract Constant elab_const_char =>
     | _ -> assert false".
 
 (* Cabs *)
-Extract Constant Cabs.cabsloc =>
+Extract Constant Cabs.loc =>
 "{ lineno : int;
    filename: string;
    byteno: int;
@@ -141,8 +143,8 @@ Extract Constant Cabs.cabsloc =>
 Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
-Extract Constant LustreElab.do_add_when_to_constants =>
-    "Veluslib.do_add_when_to_constants".
+(* Extract Constant LustreElab.do_add_when_to_constants => *)
+(*     "Veluslib.do_add_when_to_constants". *)
 
 (* Extract Constant VelusCorrectness.print_lustre => *)
 (*   "Veluslib.print_lustre_if". *)
@@ -169,8 +171,9 @@ Separate Extraction
          Compiler.transf_clight_program Cabs
          AST.signature_main
          VelusCorrectness.compile elab_declarations translation_unit_file
-         Instantiator.L2NL.to_global (* XXX *)
+         (* Instantiator.L2NL.to_global (* XXX *) *)
          Initializers.transl_init
+         Ctyping.eselection
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg
 	 Machregs.destroyed_at_indirect_call

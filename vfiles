@@ -69,6 +69,7 @@ src/NLustre/NLMemSemantics.v
 src/NLustre/NLSyntax.v
 src/NLustre/NoDup.v
 src/NLustre/NLClockingSemantics.v
+src/NLustre/NLElaboration.v
 src/NLustre/NLustre.v
 
 src/Stc/StcOrdered.v

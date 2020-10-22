@@ -31,52 +31,52 @@ let tok t v = Coq_existT (t, Obj.magic v)
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
     [
-      ("assert",   fun loc -> tok ASSERT't   loc);
-      ("and",      fun loc -> tok AND't      loc);
-      ("bool",     fun loc -> tok BOOL't     loc);
-      ("double",   fun loc -> tok FLOAT64't  loc); (* LEGACY *)
-      ("else",     fun loc -> tok ELSE't     loc);
-      ("every",    fun loc -> tok EVERY't    loc);
-      ("false",    fun loc -> tok FALSE't    loc);
-      ("fby",      fun loc -> tok FBY't      loc);
-      ("float",    fun loc -> tok FLOAT32't  loc); (* LEGACY *)
-      ("float32",  fun loc -> tok FLOAT32't  loc);
-      ("float64",  fun loc -> tok FLOAT64't  loc);
-      ("if",       fun loc -> tok IF't       loc);
-      ("int",      fun loc -> tok INT32't    loc); (* LEGACY *)
-      ("int16",    fun loc -> tok INT16't    loc);
-      ("int32",    fun loc -> tok INT32't    loc);
-      ("int64",    fun loc -> tok INT64't    loc);
-      ("int8",     fun loc -> tok INT8't     loc);
-      ("land",     fun loc -> tok LAND't     loc);
-      ("let",      fun loc -> tok LET't      loc);
-      ("lnot",     fun loc -> tok LNOT't     loc);
-      ("lor",      fun loc -> tok LOR't      loc);
-      ("lsl",      fun loc -> tok LSL't      loc);
-      ("lsr",      fun loc -> tok LSR't      loc);
-      ("lxor",     fun loc -> tok LXOR't     loc);
-      ("merge",    fun loc -> tok MERGE't    loc);
-      ("mod",      fun loc -> tok MOD't      loc);
-      ("node",     fun loc -> tok NODE't     loc);
-      ("not",      fun loc -> tok NOT't      loc);
-      ("on",       fun loc -> tok ON't       loc);
-      ("onot",     fun loc -> tok ONOT't     loc);
-      ("or",       fun loc -> tok OR't       loc);
-      ("real",     fun loc -> tok FLOAT64't  loc); (* LEGACY *)
-      ("restart",  fun loc -> tok RESTART't  loc);
-      ("returns",  fun loc -> tok RETURNS't  loc);
-      ("tel",      fun loc -> tok TEL't      loc);
-      ("then",     fun loc -> tok THEN't     loc);
-      ("true",     fun loc -> tok TRUE't     loc);
-      ("uint",     fun loc -> tok UINT32't   loc); (* LEGACY *)
-      ("uint16",   fun loc -> tok UINT16't   loc);
-      ("uint32",   fun loc -> tok UINT32't   loc);
-      ("uint64",   fun loc -> tok UINT64't   loc);
-      ("uint8",    fun loc -> tok UINT8't    loc);
-      ("var",      fun loc -> tok VAR't      loc);
-      ("when",     fun loc -> tok WHEN't     loc);
-      ("whenot",   fun loc -> tok WHENOT't   loc);
-      ("xor",      fun loc -> tok XOR't      loc);
+      ("assert",   fun loc ->  ASSERT   loc);
+      ("and",      fun loc ->  AND      loc);
+      ("bool",     fun loc ->  BOOL     loc);
+      ("double",   fun loc ->  FLOAT64  loc); (* LEGACY *)
+      ("else",     fun loc ->  ELSE     loc);
+      ("every",    fun loc ->  EVERY    loc);
+      ("false",    fun loc ->  FALSE    loc);
+      ("fby",      fun loc ->  FBY      loc);
+      ("float",    fun loc ->  FLOAT32  loc); (* LEGACY *)
+      ("float32",  fun loc ->  FLOAT32  loc);
+      ("float64",  fun loc ->  FLOAT64  loc);
+      ("if",       fun loc ->  IFTE     loc);
+      ("int",      fun loc ->  INT32    loc); (* LEGACY *)
+      ("int16",    fun loc ->  INT16    loc);
+      ("int32",    fun loc ->  INT32    loc);
+      ("int64",    fun loc ->  INT64    loc);
+      ("int8",     fun loc ->  INT8     loc);
+      ("land",     fun loc ->  LAND     loc);
+      ("let",      fun loc ->  LET      loc);
+      ("lnot",     fun loc ->  LNOT     loc);
+      ("lor",      fun loc ->  LOR      loc);
+      ("lsl",      fun loc ->  LSL      loc);
+      ("lsr",      fun loc ->  LSR      loc);
+      ("lxor",     fun loc ->  LXOR     loc);
+      ("merge",    fun loc ->  MERGE    loc);
+      ("mod",      fun loc ->  MOD      loc);
+      ("node",     fun loc ->  NODE     loc);
+      ("not",      fun loc ->  NOT      loc);
+      ("on",       fun loc ->  ON       loc);
+      ("onot",     fun loc ->  ONOT     loc);
+      ("or",       fun loc ->  OR       loc);
+      ("real",     fun loc ->  FLOAT64  loc); (* LEGACY *)
+      ("restart",  fun loc ->  RESTART  loc);
+      ("returns",  fun loc ->  RETURNS  loc);
+      ("tel",      fun loc ->  TEL      loc);
+      ("then",     fun loc ->  THEN     loc);
+      ("true",     fun loc ->  TRUE     loc);
+      ("uint",     fun loc ->  UINT32   loc); (* LEGACY *)
+      ("uint16",   fun loc ->  UINT16   loc);
+      ("uint32",   fun loc ->  UINT32   loc);
+      ("uint64",   fun loc ->  UINT64   loc);
+      ("uint8",    fun loc ->  UINT8    loc);
+      ("var",      fun loc ->  VAR      loc);
+      ("when",     fun loc ->  WHEN     loc);
+      ("whenot",   fun loc ->  WHENOT   loc);
+      ("xor",      fun loc ->  XOR      loc);
     ]
 
 let init filename channel : Lexing.lexbuf =
@@ -246,9 +246,9 @@ rule initial = parse
   | "/*"                          { multiline_comment2 lexbuf; initial lexbuf }
   | "--"                          { singleline_comment lexbuf; initial lexbuf }
   | "//"                          { singleline_comment lexbuf; initial lexbuf }
-  | integer_constant as s         { tok CONSTANT't (LustreAst.CONST_INT s,
+  | integer_constant as s         { CONSTANT (LustreAst.CONST_INT s,
                                                     currentLoc lexbuf) }
-  | decimal_floating_constant     { tok CONSTANT't (LustreAst.CONST_FLOAT
+  | decimal_floating_constant     { CONSTANT (LustreAst.CONST_FLOAT
                                       {LustreAst.isHex_FI = false;
                                        LustreAst.integer_FI = intpart;
                                        LustreAst.fraction_FI = frac;
@@ -258,7 +258,7 @@ rule initial = parse
                                          | None -> None
                                          | Some c -> Some (String.make 1 c) },
                                       currentLoc lexbuf) }
-  | hexadecimal_floating_constant { tok CONSTANT't (LustreAst.CONST_FLOAT
+  | hexadecimal_floating_constant { CONSTANT (LustreAst.CONST_FLOAT
                                       {LustreAst.isHex_FI = true;
                                        LustreAst.integer_FI = intpart;
                                        LustreAst.fraction_FI = frac;
@@ -270,37 +270,37 @@ rule initial = parse
                                       currentLoc lexbuf)}
   | "'"                           { let l = char_literal lexbuf.lex_start_p []
                                               lexbuf in
-                                    tok CONSTANT't
+                                    CONSTANT
                                           (LustreAst.CONST_CHAR(false, l),
                                                     currentLoc lexbuf) }
   | "L'"                          { let l = char_literal lexbuf.lex_start_p []
                                               lexbuf in
-                                    tok CONSTANT't
+                                   CONSTANT
                                           (LustreAst.CONST_CHAR(true, l),
                                                     currentLoc lexbuf) }
-  | "<>"                          { tok NEQ't (currentLoc lexbuf) }
-  | "<="                          { tok LEQ't (currentLoc lexbuf) }
-  | ">="                          { tok GEQ't (currentLoc lexbuf) }
-  | "="                           { tok EQ't (currentLoc lexbuf) }
-  | "#"                           { tok HASH't (currentLoc lexbuf) }
-  | "<"                           { tok LT't (currentLoc lexbuf) }
-  | ">"                           { tok GT't (currentLoc lexbuf) }
-  | "+"                           { tok PLUS't (currentLoc lexbuf) }
-  | "-"                           { tok MINUS't (currentLoc lexbuf) }
-  | "*"                           { tok STAR't (currentLoc lexbuf) }
-  | "/"                           { tok SLASH't (currentLoc lexbuf) }
-  | "::"                          { tok COLONCOLON't (currentLoc lexbuf) }
-  | ":"                           { tok COLON't (currentLoc lexbuf) }
-  | "("                           { tok LPAREN't (currentLoc lexbuf) }
-  | ")"                           { tok RPAREN't (currentLoc lexbuf) }
-  | ";"                           { tok SEMICOLON't (currentLoc lexbuf) }
-  | ","                           { tok COMMA't (currentLoc lexbuf) }
-  | "."                           { tok DOT't (currentLoc lexbuf) }
-  | "->"                          { tok RARROW't (currentLoc lexbuf) }
+  | "<>"                          { NEQ (currentLoc lexbuf) }
+  | "<="                          { LEQ (currentLoc lexbuf) }
+  | ">="                          { GEQ (currentLoc lexbuf) }
+  | "="                           { EQ (currentLoc lexbuf) }
+  | "#"                           { HASH (currentLoc lexbuf) }
+  | "<"                           { LT (currentLoc lexbuf) }
+  | ">"                           { GT (currentLoc lexbuf) }
+  | "+"                           { PLUS (currentLoc lexbuf) }
+  | "-"                           { MINUS (currentLoc lexbuf) }
+  | "*"                           { STAR (currentLoc lexbuf) }
+  | "/"                           { SLASH (currentLoc lexbuf) }
+  | "::"                          { COLONCOLON (currentLoc lexbuf) }
+  | ":"                           { COLON (currentLoc lexbuf) }
+  | "("                           { LPAREN (currentLoc lexbuf) }
+  | ")"                           { RPAREN (currentLoc lexbuf) }
+  | ";"                           { SEMICOLON (currentLoc lexbuf) }
+  | ","                           { COMMA (currentLoc lexbuf) }
+  | "."                           { DOT (currentLoc lexbuf) }
+  | "->"                          { RARROW (currentLoc lexbuf) }
   | identifier as id              {
       try Hashtbl.find lexicon id (currentLoc lexbuf)
-      with Not_found -> tok VAR_NAME't (makeident id, currentLoc lexbuf) }
-  | eof                           { tok EOF't (currentLoc lexbuf) }
+      with Not_found -> VAR_NAME (makeident id, currentLoc lexbuf) }
+  | eof                           { EOF (currentLoc lexbuf) }
   | _ as c                        { fatal_error lexbuf "invalid symbol %C" c }
 
 and initial_linebegin = parse
@@ -367,12 +367,14 @@ and singleline_comment = parse
   | _      { singleline_comment lexbuf }
 
 {
-  open Streams
 
-  let tokens_stream filename : token coq_Stream =
+  open MenhirLibParser.Inter
+
+  let tokens_stream filename : buffer =
     let lexbuf = init filename (open_in filename) in
     let rec loop () =
-      Cons (initial lexbuf, Lazy.from_fun loop)
+      Buf_cons (initial lexbuf, Lazy.from_fun loop)
     in
     Lazy.from_fun loop
+
 }

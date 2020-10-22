@@ -95,11 +95,11 @@ let add_builtin p (name, (out, ins, b)) =
     if name = "free" then AST.EF_free else
     if Str.string_match C2C.re_runtime name 0 then AST.EF_runtime(id', sg) else
     if Str.string_match C2C.re_builtin name 0
-    && List.mem_assoc name C2C.builtins.Builtins.functions
+    && List.mem_assoc name C2C.builtins.builtin_functions
     then AST.EF_builtin(id', sg)
     else AST.EF_external(id', sg) in
   let decl = (id, AST.Gfun (Ctypes.External (ef, targs, tres, AST.cc_default))) in
   { p with Ctypes.prog_defs = decl :: p.Ctypes.prog_defs }
 
 let add_builtins p =
-  List.fold_left add_builtin p C2C.builtins_generic.Builtins.functions
+  List.fold_left add_builtin p C2C.builtins_generic.builtin_functions

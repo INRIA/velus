@@ -43,10 +43,10 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
     (* The parser needs a token. Request one from the lexer,
        and offer it to the parser, which will produce a new
        checkpoint. Then, repeat. *)
-    let (token, loc) = Relexer.map_token (Streams.hd toks) in
+    let (token, loc) = Relexer.map_token (LustreParser.MenhirLibParser.Inter.buf_head toks) in
     let loc = LustreLexer.lexing_loc loc in
     let checkpoint = I.offer checkpoint (token, loc, loc) in
-    parsing_loop (Streams.tl toks) checkpoint
+    parsing_loop (LustreParser.MenhirLibParser.Inter.buf_tail toks) checkpoint
   | I.Shifting _
   | I.AboutToReduce _ ->
     let checkpoint = I.resume checkpoint in
@@ -57,7 +57,7 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
                  LustreAst.ast_lnum  = lnum;
                  LustreAst.ast_cnum  = cnum;
                  LustreAst.ast_bol   = bol }) =
-                  Relexer.map_token (Streams.hd toks)
+                  Relexer.map_token (LustreParser.MenhirLibParser.Inter.buf_head toks)
     in
     (* TODO: improve error messages *)
     Printf.fprintf stderr "%s:%d:%d: syntax error.\n%!"
@@ -70,7 +70,7 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
     assert false
 
 let reparse toks =
-  let (_, l) = Relexer.map_token (Streams.hd toks) in
+  let (_, l) = Relexer.map_token (LustreParser.MenhirLibParser.Inter.buf_head toks) in
   parsing_loop toks
     (LustreParser2.Incremental.translation_unit_file (LustreLexer.lexing_loc l))
 
@@ -78,12 +78,10 @@ let reparse toks =
 
 let parse toks =
   Diagnostics.reset();
-  let rec inf = Datatypes.S inf in
-  match LustreParser.translation_unit_file inf toks with
-  | LustreParser.Parser.Inter.Fail_pr -> (reparse toks; exit 1)
-  | LustreParser.Parser.Inter.Timeout_pr -> assert false
-  | LustreParser.Parser.Inter.Parsed_pr (ast, _) ->
-    (Obj.magic ast : LustreAst.declaration list)
+  match LustreParser.translation_unit_file (Camlcoq.Nat.of_int 10000) toks with
+  | LustreParser.MenhirLibParser.Inter.Fail_pr -> (reparse toks; exit 1)
+  | LustreParser.MenhirLibParser.Inter.Timeout_pr -> assert false
+  | LustreParser.MenhirLibParser.Inter.Parsed_pr (ast, _) -> ast
 
 let compile source_name filename =
   if !write_lustre
@@ -189,7 +187,7 @@ let _ =
                    else Machine.rv32
     | _         -> assert false
   end;
-  Builtins.set C2C.builtins;
+  (* Builtins.set C2C.builtins; (* ?? *) *)
   (* Cutil.declare_attributes C2C.attributes; *)
   CPragmas.initialize()
 
