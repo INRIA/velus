@@ -574,12 +574,12 @@ Module Type NORDERED
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_ordered : forall G Hwl G',
+  Lemma normalize_global_ordered : forall (G : global_wl) G',
       Ordered_nodes G ->
-      normalize_global G Hwl = Errors.OK G' ->
+      normalize_global G = Errors.OK G' ->
       Ordered_nodes G'.
   Proof.
-    intros * Hord Hnorm.
+    intros [G Hwl] * Hord Hnorm.
     unfold normalize_global in Hnorm. destruct (Cau.check_causality _); inv Hnorm.
     eapply normfby_global_ordered, untuple_global_ordered, Hord.
   Qed.

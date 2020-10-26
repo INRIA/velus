@@ -42,6 +42,7 @@ Open Scope error_monad_scope.
 Open Scope stream_scope.
 
 Parameter schedule      : ident -> list trconstr -> list positive.
+Parameter print_lustre  : L.Syn.global -> unit.
 Parameter print_nlustre : global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
@@ -93,6 +94,11 @@ Qed.
 
 Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
+
+Definition l_to_nl (g : L.Syn.global_wl) : res global :=
+  OK g
+     @@@ L.Norm.Norm.normalize_global
+     @@@ TR.Tr.to_global.
 
 Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
   OK g

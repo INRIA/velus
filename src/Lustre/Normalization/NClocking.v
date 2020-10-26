@@ -1623,12 +1623,12 @@ Module Type NCLOCKING
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_wc : forall G Hwl G',
+  Lemma normalize_global_wc : forall (G : global_wl) G',
       wc_global G ->
-      normalize_global G Hwl = Errors.OK G' ->
+      normalize_global G = Errors.OK G' ->
       wc_global G'.
   Proof.
-    intros * Hwc Hnorm.
+    intros [G Hwl] * Hwc Hnorm.
     unfold normalize_global in Hnorm. destruct (Caus.check_causality _); inv Hnorm.
     eapply normfby_global_wc, untuple_global_wc, Hwc.
   Qed.

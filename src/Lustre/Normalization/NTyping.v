@@ -1620,12 +1620,12 @@ Module Type NTYPING
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_wt : forall G Hwl G',
+  Lemma normalize_global_wt : forall (G : global_wl) G',
       wt_global G ->
-      normalize_global G Hwl = Errors.OK G' ->
+      normalize_global G = Errors.OK G' ->
       wt_global G'.
   Proof.
-    intros * Hwt Hnorm.
+    intros [G Hwl] * Hwt Hnorm.
     unfold normalize_global in Hnorm.
     destruct (Caus.check_causality _); inv Hnorm.
     eapply normfby_global_wt, untuple_global_wt, Hwt.

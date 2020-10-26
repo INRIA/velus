@@ -199,8 +199,8 @@ Module Type COMPLETENESS
       rewrite Hn'. rewrite HG'. reflexivity.
   Qed.
 
-  Theorem normalize_global_complete : forall G Hwl G',
-      normalize_global G Hwl = OK G' ->
+  Theorem normalize_global_complete : forall G G',
+      normalize_global G = OK G' ->
       exists G'', to_global G' = OK G''.
   Proof.
     intros * Hnorm.

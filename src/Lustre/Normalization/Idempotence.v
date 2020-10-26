@@ -415,26 +415,25 @@ Module Type IDEMPOTENCE
     apply normalized_node_untupled_node; auto.
   Qed.
 
-  Lemma normalized_global_normalize_idem : forall G G' Hwl,
+  Lemma normalized_global_normalize_idem : forall (G : global_wl) G',
       normalized_global G ->
-      normalize_global G Hwl = Errors.OK G' ->
-      G = G'.
+      normalize_global G = Errors.OK G' ->
+      G' = G.
   Proof.
-    intros * Hnormed Hnorm.
+    intros [G Hwl] * Hnormed Hnorm; simpl in *.
     unfold normalize_global in Hnorm.
     apply Errors.bind_inversion in Hnorm as [? [H1 H2]]; inv H2.
     assert (untuple_global G Hwl = G) as Heq1.
     { apply untupled_global_untuple_idem.
       eapply normalized_global_untupled_global; eauto. }
-    rewrite <- Heq1 at 1.
     erewrite normalized_global_normfby_idem; auto.
     congruence.
   Qed.
 
-  Theorem normalize_global_idem : forall G Hwl1 G' Hwl2 G'',
-      normalize_global G Hwl1 = Errors.OK G' ->
-      normalize_global G' Hwl2 = Errors.OK G'' ->
-      G' = G''.
+  Theorem normalize_global_idem : forall (G G' : global_wl) G'',
+      normalize_global G = Errors.OK (G' : global) ->
+      normalize_global G' = Errors.OK G'' ->
+      G'' = G'.
   Proof.
     intros * Hnorm1 Hnorm2.
     eapply normalized_global_normalize_idem; eauto.

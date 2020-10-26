@@ -2623,16 +2623,16 @@ Module Type CORRECTNESS
 
   (** ** Conclusion *)
 
-  Theorem normalize_global_sem : forall G Hwl G' f ins outs,
+  Theorem normalize_global_sem : forall (G : global_wl) G' f ins outs,
       wt_global G ->
       wc_global G ->
       Ordered_nodes G ->
       sem_node G f ins outs ->
       sem_clock_inputs G f ins ->
-      normalize_global G Hwl = Errors.OK G' ->
+      normalize_global G = Errors.OK G' ->
       sem_node G' f ins outs.
   Proof with eauto.
-    intros * Hwt Hwc Hord Hsem Hclocks Hnorm.
+    intros [? ?] * Hwt Hwc Hord Hsem Hclocks Hnorm.
     unfold normalize_global in Hnorm. destruct (LCA.check_causality _) eqn:Hcaus; inv Hnorm.
     eapply normfby_global_sem.
     - eapply untuple_global_wt...
@@ -2647,12 +2647,12 @@ Module Type CORRECTNESS
 
   (** ** In addition : normalization only produces causal programs *)
 
-  Lemma normalize_global_causal : forall G Hwl G',
+  Lemma normalize_global_causal : forall (G : global_wl) G',
       wc_global G ->
-      normalize_global G Hwl = Errors.OK G' ->
+      normalize_global G = Errors.OK G' ->
       Forall LCA.node_causal G'.
   Proof.
-    intros * Hwc Hnorm.
+    intros [? ?] * Hwc Hnorm.
     unfold normalize_global in Hnorm.
     apply Errors.bind_inversion in Hnorm as [? [H1 H2]]. inv H2.
     eapply Causality.normfby_global_causal.

@@ -850,6 +850,10 @@ Module Type LSYNTAX
       wl_node ns n ->
       wl_global (n::ns).
 
+  Definition global_wl := { G : global | wl_global G}.
+  Definition proj1_global (G : global_wl) := proj1_sig G.
+  Coercion proj1_global : global_wl >-> global.
+
   (** *** Additional properties *)
 
   Lemma in_vars_defined_NoDup : forall n,

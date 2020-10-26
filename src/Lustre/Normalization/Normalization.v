@@ -23,8 +23,9 @@ Module Type NORMALIZATION
   Module Export Untuple := UntupleFun Ids Op OpAux Syn.
   Module Export NormFby := NormFbyFun Ids Op OpAux Syn Untuple.
 
-  Definition normalize_global (G : global) (Hwl : wl_global G) : res global.
+  Definition normalize_global (G : { G : global | wl_global G }) : res global.
   Proof.
+    destruct G as [G Hwl].
     remember (untuple_global G Hwl) as G'.
     refine (bind (check_causality G') _).
     intros _.
@@ -32,11 +33,11 @@ Module Type NORMALIZATION
     rewrite HeqG'. eapply untuple_global_untupled_global.
   Defined.
 
-  Theorem normalize_global_normalized_global : forall G (Hwl : wl_global G) G',
-      normalize_global G Hwl = OK G' ->
+  Theorem normalize_global_normalized_global : forall G G',
+      normalize_global G = OK G' ->
       normalized_global G'.
   Proof.
-    intros * Hnorm.
+    intros [G Hwl] * Hnorm.
     unfold normalize_global in Hnorm.
     destruct check_causality in Hnorm; inv Hnorm.
     eapply normfby_global_normalized_global.
