@@ -709,6 +709,46 @@ Section Nodup.
     intro; eapply Hnin_x, in_filter; eauto.
   Qed.
 
+  Lemma NoDup_Permutation_ter: forall (l l' : list A),
+      NoDup l ->
+      incl l l' ->
+      length l = length l' ->
+      Permutation l l'.
+  Proof.
+    induction l; intros * Hndup Hincl Hlen;
+      destruct l'; simpl in *; inv Hlen.
+    constructor.
+    apply incl_cons' in Hincl as [Hin Hincl].
+    inv Hin.
+    - inv Hndup.
+      assert (incl l l').
+      { intros x Hin'. specialize (Hincl x Hin').
+        inv Hincl; auto. contradiction. }
+      constructor; auto.
+    - inv Hndup.
+      assert(Hin:=H).
+      eapply Add_inv in H as [l'' Hadd].
+      assert (Permutation l (a0::l'')) as Hperm.
+      { apply IHl; auto.
+        + eapply Add_cons with (x:=a0) in Hadd. eapply incl_Add_inv in Hadd; eauto.
+          apply incl_cons; auto. right; auto.
+        + apply Add_length in Hadd; simpl. congruence. }
+      rewrite Hperm, perm_swap.
+      apply perm_skip.
+      apply Permutation_Add; auto.
+  Qed.
+
+  Corollary NoDup_length_incl': forall (l l' : list A),
+      NoDup l ->
+      incl l l' ->
+      length l = length l' ->
+      NoDup l'.
+  Proof.
+    intros.
+    eapply Permutation_NoDup; [|eauto].
+    eapply NoDup_Permutation_ter; eauto.
+  Qed.
+
 End Nodup.
 
 Lemma concat_length:

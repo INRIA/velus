@@ -514,7 +514,7 @@ Module Type CORRECTNESS
             eapply LCS.sc_inside_mask with (es := l); eauto.
             eapply Forall2_impl_In; eauto. intros.
             eapply LCS.sc_exp; eauto; try (now eapply Forall_forall; eauto).
-            { eapply LCS.NoDupMembers_fresh_in'; eauto. }
+            { eapply L.NoDupMembers_fresh_in'; eauto. }
             eapply LCS.sc_var_inv_weaken; eauto. intros. simpl. constructor.
             constructor. right. eapply Exists_exists; eauto.
         }
@@ -527,7 +527,7 @@ Module Type CORRECTNESS
         2:{
           eapply Forall2_impl_In; eauto. intros ???? Hse.
           eapply LCS.sc_exp in Hse; eauto; try (now eapply Forall_forall; eauto).
-          { eapply LCS.NoDupMembers_fresh_in'; eauto. }
+          { eapply L.NoDupMembers_fresh_in'; eauto. }
           eapply LCS.sc_var_inv_weaken; eauto. simpl. intros. constructor.
           constructor. right. apply Exists_exists; eauto.
         }
@@ -569,7 +569,7 @@ Module Type CORRECTNESS
           apply Exists_exists in Hino as (?&?& Hf).
           apply H17 in Hfr.
           eapply NoDupMembers_app_InMembers in Hnodup; eauto.
-          eapply Hnodup, LCS.InMembers_fresh_in; eauto.
+          eapply Hnodup, L.InMembers_fresh_in; eauto.
         }
       + (* not reset *)
         unfold L.anon_in_eq, L.anon_ins in Hnodup; simpl in Hnodup; rewrite app_nil_r in Hnodup.
@@ -592,7 +592,7 @@ Module Type CORRECTNESS
             eapply LCS.sc_inside with (es := l); eauto.
             eapply Forall2_impl_In; eauto. intros.
             eapply LCS.sc_exp; eauto; try (now eapply Forall_forall; eauto).
-            { eapply LCS.NoDupMembers_fresh_in'; eauto. }
+            { eapply L.NoDupMembers_fresh_in'; eauto. }
             eapply LCS.sc_var_inv_weaken; eauto. intros. simpl. constructor.
             constructor. eapply Exists_exists; eauto.
         }
@@ -605,7 +605,7 @@ Module Type CORRECTNESS
         2:{
           eapply Forall2_impl_In; eauto. intros ???? Hse.
           eapply LCS.sc_exp in Hse; eauto; try (now eapply Forall_forall; eauto).
-          { eapply LCS.NoDupMembers_fresh_in'; eauto. }
+          { eapply L.NoDupMembers_fresh_in'; eauto. }
           eapply LCS.sc_var_inv_weaken; eauto. simpl. intros. constructor.
           constructor. apply Exists_exists; eauto.
         }
@@ -647,7 +647,7 @@ Module Type CORRECTNESS
           apply Exists_exists in Hino as (?&?& Hf).
           apply H12 in Hfr.
           eapply NoDupMembers_app_InMembers in Hnodup; eauto.
-          eapply Hnodup, LCS.InMembers_fresh_in; eauto.
+          eapply Hnodup, L.InMembers_fresh_in; eauto.
         }
   Qed.
 
@@ -685,7 +685,7 @@ Module Type CORRECTNESS
     { rewrite Forall_forall. intros e Hin.
       assert (Hndup:=(L.n_nodup n0)).
       unfold L.anon_in_eqs in Hndup.
-      repeat rewrite app_assoc. eapply LCS.NoDupMembers_anon_in_eq'; eauto.
+      repeat rewrite app_assoc. eapply L.NoDupMembers_anon_in_eq'; eauto.
       repeat rewrite <- app_assoc; eauto. }
 
     assert (Hvar2 := Hvar). rewrite L.n_defd in Hvar2.

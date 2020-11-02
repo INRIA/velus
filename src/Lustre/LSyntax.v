@@ -854,6 +854,154 @@ Module Type LSYNTAX
   Definition proj1_global (G : global_wl) := proj1_sig G.
   Coercion proj1_global : global_wl >-> global.
 
+  (** *** fresh_in, anon_in properties *)
+
+  Fact fresh_in_incl : forall e es,
+      In e es ->
+      incl (fresh_in e) (fresh_ins es).
+  Proof.
+    intros e es Hin.
+    unfold fresh_ins. apply incl_concat_map; auto.
+  Qed.
+
+  Fact anon_in_incl : forall e es,
+      In e es ->
+      incl (anon_in e) (anon_ins es).
+  Proof.
+    intros e es Hin.
+    unfold anon_ins. apply incl_concat_map; auto.
+  Qed.
+
+  Fact anon_in_eq_incl : forall eq eqs,
+      In eq eqs ->
+      incl (anon_in_eq eq) (anon_in_eqs eqs).
+  Proof.
+    intros e es Hin.
+    unfold anon_in_eqs. apply incl_concat_map; auto.
+  Qed.
+
+  Fact InMembers_fresh_in : forall x e es,
+      In e es ->
+      InMembers x (fresh_in e) ->
+      InMembers x (fresh_ins es).
+  Proof.
+    intros * Hin Hinm.
+    eapply fresh_in_incl, incl_map with (f:=fst) in Hin.
+    rewrite fst_InMembers in *. eauto.
+  Qed.
+
+  Fact InMembers_anon_in : forall x e es,
+      In e es ->
+      InMembers x (anon_in e) ->
+      InMembers x (anon_ins es).
+  Proof.
+    intros * Hin Hinm.
+    eapply anon_in_incl, incl_map with (f:=fst) in Hin.
+    rewrite fst_InMembers in *. eauto.
+  Qed.
+
+  Fact InMembers_anon_in_eq : forall x eq eqs,
+      In eq eqs ->
+      InMembers x (anon_in_eq eq) ->
+      InMembers x (anon_in_eqs eqs).
+  Proof.
+    intros * Hin Hinm.
+    eapply anon_in_eq_incl, incl_map with (f:=fst) in Hin.
+    rewrite fst_InMembers in *. eauto.
+  Qed.
+
+  Fact Ino_In_anon_streams : forall x anns,
+      Ino x (map (fun x => snd (snd x)) anns) ->
+      InMembers x (anon_streams anns).
+  Proof.
+    intros x anns H.
+    rewrite Ino_In, in_map_iff in H; destruct H as [[? [? ?]] [? ?]]; simpl in *; subst.
+    rewrite fst_InMembers, in_map_iff.
+    exists (x, (t, c)); split; auto.
+    eapply map_filter_In; eauto.
+  Qed.
+
+  Fact NoDupMembers_fresh_in : forall e es,
+      In e es ->
+      NoDupMembers (fresh_ins es) ->
+      NoDupMembers (fresh_in e).
+  Proof.
+    intros * Hin Hndup.
+    unfold fresh_ins in *.
+    induction es; inv Hin; simpl in Hndup.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+  Qed.
+
+  Corollary NoDupMembers_fresh_in' : forall vars e es,
+      In e es ->
+      NoDupMembers (vars ++ fresh_ins es) ->
+      NoDupMembers (vars ++ fresh_in e).
+  Proof.
+    intros * Hin Hndup.
+    apply NoDupMembers_app.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+      eapply NoDupMembers_fresh_in; eauto.
+    - intros x HIn contra.
+      eapply NoDupMembers_app_InMembers in Hndup; eauto.
+      eapply InMembers_fresh_in in contra; eauto.
+  Qed.
+
+  Fact NoDupMembers_anon_in : forall e es,
+      In e es ->
+      NoDupMembers (anon_ins es) ->
+      NoDupMembers (anon_in e).
+  Proof.
+    intros * Hin Hndup.
+    unfold anon_ins in *.
+    induction es; inv Hin; simpl in Hndup.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+  Qed.
+
+  Corollary NoDupMembers_anon_in' : forall vars e es,
+      In e es ->
+      NoDupMembers (vars ++ anon_ins es) ->
+      NoDupMembers (vars ++ anon_in e).
+  Proof.
+    intros * Hin Hndup.
+    apply NoDupMembers_app.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+      eapply NoDupMembers_anon_in; eauto.
+    - intros x HIn contra.
+      eapply NoDupMembers_app_InMembers in Hndup; eauto.
+      eapply InMembers_anon_in in contra; eauto.
+  Qed.
+
+  Fact NoDupMembers_anon_in_eq : forall eq eqs,
+      In eq eqs ->
+      NoDupMembers (anon_in_eqs eqs) ->
+      NoDupMembers (anon_in_eq eq).
+  Proof.
+    intros * Hin Hndup.
+    unfold fresh_ins in *.
+    induction eqs; inv Hin; simpl in Hndup.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+  Qed.
+
+  Corollary NoDupMembers_anon_in_eq' : forall vars eq eqs,
+      In eq eqs ->
+      NoDupMembers (vars ++ anon_in_eqs eqs) ->
+      NoDupMembers (vars ++ anon_in_eq eq).
+  Proof.
+    intros * Hin Hndup.
+    apply NoDupMembers_app.
+    - apply NoDupMembers_app_l in Hndup; auto.
+    - apply NoDupMembers_app_r in Hndup; auto.
+      eapply NoDupMembers_anon_in_eq; eauto.
+    - intros x HIn contra.
+      eapply NoDupMembers_app_InMembers in Hndup; eauto.
+      eapply InMembers_anon_in_eq in contra; eauto.
+  Qed.
+
   (** *** Additional properties *)
 
   Lemma in_vars_defined_NoDup : forall n,

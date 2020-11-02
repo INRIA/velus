@@ -30,8 +30,7 @@ Import CIStr.
 Import OpAux.
 Import Op.
 From Velus Require Import ObcToClight.Correctness.
-(* From Velus Require Import Lustre.LustreElab. *)
-From Velus Require Import NLustre.NLElaboration.
+From Velus Require Import Lustre.LustreElab.
 
 From Coq Require Import String.
 From Coq Require Import List.
@@ -95,10 +94,17 @@ Qed.
 Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
 
-Definition l_to_nl (g : L.Syn.global_wl) : res global :=
+Definition l_to_nl' (g : L.Syn.global_wl) : res global :=
   OK g
      @@@ L.Norm.Norm.normalize_global
      @@@ TR.Tr.to_global.
+
+Definition l_to_nl (g : {G : L.Syn.global | L.Typ.wt_global G /\ L.Clo.wc_global G}) : res global.
+Proof.
+  destruct g as [g [Ht _]].
+  apply l_to_nl'.
+  econstructor; eauto.
+Defined.
 
 Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
   OK g
@@ -129,7 +135,7 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
 (* TODO fix elab *)
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
   elab_declarations D
-                    @@@ (fun G => OK (proj1_sig G))
+                    @@@ l_to_nl
                     @@@ nl_to_asm main_node.
 
 Section ForallStr.

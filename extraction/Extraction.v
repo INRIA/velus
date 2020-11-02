@@ -5,8 +5,8 @@ From Coq Require ZArith.BinIntDef.
 
 From Velus Require Import VelusCorrectness.
 From Velus Require Import ObcToClight.Generation.
-(* From Velus Require Import Lustre.LustreElab. *)
-From Velus Require Import NLustre.NLElaboration.
+From Velus Require Import Lustre.LustreElab.
+(* From Velus Require Import NLustre.NLElaboration. *)
 From Velus Require Import Lustre.Parser.LustreParser.
 
 From compcert Require
@@ -171,7 +171,6 @@ Separate Extraction
          Compiler.transf_clight_program Cabs
          AST.signature_main
          VelusCorrectness.compile elab_declarations translation_unit_file
-         (* Instantiator.L2NL.to_global (* XXX *) *)
          Initializers.transl_init
          Ctyping.eselection
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr

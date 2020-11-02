@@ -103,14 +103,6 @@ let compile source_name filename =
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in
-  (* XXX Elaboration testing. Compilation disconnected. XXX *)
-  (* let p =
-   *   match LustreElab.elab_declarations ast with
-   *   | Errors.OK p -> p
-   *   | Errors.Error msg ->
-   *     Format.eprintf "%a@." Driveraux.print_error msg; exit 1
-   * in *)
-  (* Format.printf "%a@." Interfacelib.PrintLustre.print_global p; *)
   match Compiler.apply_partial
           (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with

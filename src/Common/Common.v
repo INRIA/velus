@@ -1908,3 +1908,24 @@ Ltac rewrite_orel_obinds :=
                  end; try reflexivity).
 
 Ltac solve_orel_obinds := split_orel_obinds; repeat rewrite_orel_obinds.
+
+Section check_nodup.
+
+  Definition check_nodup (l : list positive) := 
+    Nat.eqb (PS.cardinal (ps_from_list l)) (List.length l).
+
+  Lemma check_nodup_correct : forall l,
+      check_nodup l = true ->
+      NoDup l.
+  Proof.
+    intros l Hcheck.
+    unfold check_nodup in Hcheck.
+    rewrite ps_from_list_ps_of_list, PeanoNat.Nat.eqb_eq, PS.cardinal_spec in Hcheck.
+    eapply NoDup_length_incl'; eauto.
+    + apply PS_elements_NoDup.
+    + intros x Hin.
+      rewrite In_PS_elements, PSP.of_list_1, InA_alt in Hin.
+      destruct Hin as [? [? ?]]; subst; auto.
+  Qed.
+
+End check_nodup.

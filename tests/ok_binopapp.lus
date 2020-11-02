@@ -3,7 +3,7 @@ node notnot (x : bool) returns (y : bool);
 var w : bool;
 let
   w = false fby x;
-  y = w or y;
+  y = w or x;
 tel
 
 node binop (x : bool)

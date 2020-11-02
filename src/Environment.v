@@ -828,6 +828,13 @@ Module Env.
       rewrite Fx. apply IH in Dxs as (vs & -> & HH). eauto.
     Qed.
 
+    Lemma elements_from_list_incl : forall xs,
+        incl (elements (from_list xs)) xs.
+    Proof.
+      intros xs [? ?] Hin.
+      apply PositiveMap.elements_complete, from_list_find_In in Hin; auto.
+    Qed.
+
   End Extra.
 
   (** Equivalence of Environments *)

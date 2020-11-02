@@ -1073,7 +1073,7 @@ Module Type LTYPING
 
     Lemma check_rhs_correct:
       forall e tys,
-        NoDupMembers (Env.elements venv++(idty (anon_in e))) -> (* Should be anon_in ? *)
+        NoDupMembers (Env.elements venv++(idty (anon_in e))) ->
         check_rhs e = Some tys ->
         wt_exp G (Env.elements venv) e
         /\ typeof e = tys.
@@ -1171,6 +1171,65 @@ Module Type LTYPING
     Qed.
 
   End ValidateExpression.
+
+  Section ValidateGlobal.
+    Definition check_node (G : global) (n : node) :=
+      forallb (check_clock (Env.from_list (idty (n_in n)))) (List.map (fun '(_, (_, ck)) => ck) (n_in n)) &&
+      forallb (check_clock (Env.from_list (idty (n_in n ++ n_out n)))) (List.map (fun '(_, (_, ck)) => ck) (n_out n)) &&
+      forallb (check_clock (Env.from_list (idty (n_in n ++ n_out n ++ n_vars n)))) (List.map (fun '(_, (_, ck)) => ck) (n_vars n)) &&
+      forallb (check_equation G (Env.from_list (idty (n_in n ++ n_vars n ++ n_out n)))) (n_eqs n).
+
+    Definition check_global (G : global) :=
+      check_nodup (List.map n_name G) &&
+      (fix aux G := match G with
+                    | [] => true
+                    | hd::tl => check_node tl hd && aux tl
+                    end) G.
+
+    Lemma check_node_correct : forall G n,
+        check_node G n = true ->
+        wt_node G n.
+    Proof.
+      intros * Hcheck.
+      specialize (n_nodup n) as Hndup.
+      unfold check_node in Hcheck.
+      repeat rewrite Bool.andb_true_iff in Hcheck. destruct Hcheck as [[[Hc1 Hc2] Hc3] Hc4].
+      rewrite forallb_Forall, Forall_map in Hc1, Hc2, Hc3. setoid_rewrite forallb_Forall in Hc4.
+      repeat constructor.
+      1-3:(eapply Forall_impl; eauto;
+           intros [_ [_ ?]] Hck;
+           eapply check_clock_correct in Hck;
+           eapply wt_clock_incl; [|eauto]; eapply Env.elements_from_list_incl).
+      eapply Forall_impl_In; [|eauto]; intros * Hin Hwt; simpl in Hwt.
+      eapply check_equation_correct in Hwt.
+      - eapply wt_equation_incl; [|eauto]. eapply Env.elements_from_list_incl.
+      - apply NoDupMembers_app.
+        + apply Env.NoDupMembers_elements.
+        + rewrite NoDupMembers_idty.
+          repeat apply NoDupMembers_app_r in Hndup.
+          eapply NoDupMembers_anon_in_eq; eauto.
+        + intros x Hin' contra.
+          rewrite <- Env.In_Members, Env.In_from_list in Hin'.
+          rewrite InMembers_idty in Hin', contra.
+          repeat rewrite app_assoc in Hndup. repeat rewrite app_assoc in Hin'.
+          eapply NoDupMembers_app_InMembers in Hndup; eauto.
+          eapply Hndup, InMembers_anon_in_eq; eauto.
+    Qed.
+
+    Lemma check_global_correct : forall G,
+        check_global G = true ->
+        wt_global G.
+    Proof.
+      intros G Hcheck.
+      apply Bool.andb_true_iff in Hcheck; destruct Hcheck as [Hndup Hcheck].
+      apply check_nodup_correct in Hndup.
+      induction G; constructor; inv Hndup.
+      1-3:simpl in Hcheck; apply Bool.andb_true_iff in Hcheck as [Hc1 Hc2]; auto.
+      - apply check_node_correct in Hc1; auto.
+      - apply Forall_forall. intros ? Hin contra.
+        apply H1. rewrite in_map_iff. exists x; split; auto.
+    Qed.
+  End ValidateGlobal.
 
   Section interface_eq.
 

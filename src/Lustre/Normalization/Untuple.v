@@ -1160,7 +1160,7 @@ Module Type UNTUPLE
       rewrite H5 in Hlen.
       remember (concat x0) as l0.
       clear x0 H H2 H5 Heql0. revert l0 Hlen.
-      induction tys; intros l0 Hlen; destruct l0; simpl in *; try congruence.
+      induction tys; intros l0 Hlen; destruct l0; simpl in *; try congruence; auto.
       destruct nck. f_equal; auto.
     - (* merge *)
       destruct is_control; repeat inv_bind.
@@ -1169,7 +1169,7 @@ Module Type UNTUPLE
         repeat simpl_list.
         remember (concat x2) as l1. remember (concat x5) as l2.
         clear x2 x5 H H0 H4 H5 H6 H7 Heql1 Heql2. revert l1 l2 Hlen1 Hlen2.
-        induction tys; intros l1 l2 Hlen1 Hlen2; destruct l1; destruct l2; simpl in *; try congruence.
+        induction tys; intros l1 l2 Hlen1 Hlen2; destruct l1; destruct l2; simpl in *; try congruence; auto.
         destruct nck. f_equal; auto.
       + apply idents_for_anns_annots in H1...
     - (* ite *)
@@ -1179,7 +1179,7 @@ Module Type UNTUPLE
         repeat simpl_list.
         remember (concat x5) as l1. remember (concat x8) as l2.
         clear x5 x8 H0 H1 H8 H9 Heql1 Heql2. revert l1 l2 Hlen1 Hlen2.
-        induction tys; intros l1 l2 Hlen1 Hlen2; destruct l1; destruct l2; simpl in *; try congruence.
+        induction tys; intros l1 l2 Hlen1 Hlen2; destruct l1; destruct l2; simpl in *; try congruence; auto.
         destruct nck. f_equal; auto.
       + apply idents_for_anns_annots in H2...
     - (* app *) apply idents_for_anns'_annots in H0...
