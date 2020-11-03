@@ -1622,9 +1622,18 @@ Module Type CORRECTNESS
           simpl in Hordered...
   Qed.
 
+  Fact wt_global_ordered_nodes : forall G,
+      wt_global G ->
+      Ordered_nodes G.
+  Proof.
+    intros.
+    apply wl_global_ordered_nodes; auto.
+    apply wt_global_NoDup; auto.
+  Qed.
+  Hint Resolve wt_global_ordered_nodes.
+
   Corollary untuple_global_sem : forall G Hwl f ins outs,
       wt_global G ->
-      Ordered_nodes G ->
       sem_node G f ins outs ->
       sem_node (untuple_global G Hwl) f ins outs.
   Proof.
@@ -2580,29 +2589,28 @@ Module Type CORRECTNESS
   Lemma normfby_global_refines : forall G Hunt,
       wt_global G ->
       wc_global G ->
-      Ordered_nodes G ->
       Forall LCA.node_causal G ->
       global_sc_refines G (normfby_global G Hunt).
   Proof with eauto.
     intros G Hunt. specialize (normfby_global_eq G Hunt) as Heq.
-    induction G; intros * Hwt Hwc Hordered Hcaus; simpl.
+    induction G; intros * Hwt Hwc Hcaus; simpl.
     - apply global_sc_ref_nil.
     - apply global_sc_ref_cons with (f:=n_name a)...
-      + eapply Ordered.normfby_global_ordered in Hordered.
-        simpl in Hordered...
-      + inv Hwt; inv Hwc; inv Hordered; inv Hcaus.
+      + eapply wt_global_ordered_nodes.
+        eapply Typing.normfby_global_wt in Hwt; eauto.
+      + inv Hwt; inv Hwc; inv Hcaus.
         eapply IHG... eapply normfby_global_eq...
       + intros ins outs Hsem. destruct Hsem as [Hinputs Hsem]. split.
         * eapply iface_eq_sem_clocks_input...
         * eapply normfby_node_eq...
           -- apply normfby_global_names'.
           -- apply normfby_global_eq.
-          -- inv Hwt; inv Hwc; inv Hordered; inv Hcaus.
+          -- inv Hwt; inv Hwc; inv Hcaus.
              eapply IHG... eapply normfby_global_eq...
           -- inv Hwt. eapply normfby_global_wt...
           -- inv Hwc. eapply normfby_global_wc...
-          -- eapply Ordered.normfby_global_ordered in Hordered.
-             simpl in Hordered...
+          -- eapply wt_global_ordered_nodes.
+             eapply normfby_global_wt in Hwt...
           -- inv Hwc. inv Hcaus.
              eapply Causality.normfby_global_causal; auto.
   Qed.
@@ -2621,18 +2629,29 @@ Module Type CORRECTNESS
     specialize (H f ins outs (conj H4 H3)) as [_ ?]; auto.
   Qed.
 
+  Corollary normfby_global_sem_clock_inputs : forall G Hwl f ins,
+      sem_clock_inputs G f ins ->
+      sem_clock_inputs (normfby_global G Hwl) f ins.
+  Proof.
+    intros.
+    specialize (normfby_global_eq G Hwl) as Heq.
+    destruct H as [H [n' [Hfind [Hvars Hsem]]]].
+    eapply global_iface_eq_find in Heq as [? [? [Hname [_ [Hin Hout]]]]]; eauto.
+    exists H. exists x. repeat split; auto.
+    1,2:congruence.
+  Qed.
+
   (** ** Conclusion *)
 
   Theorem normalize_global_sem : forall (G : global_wl) G' f ins outs,
       wt_global G ->
       wc_global G ->
-      Ordered_nodes G ->
       sem_node G f ins outs ->
       sem_clock_inputs G f ins ->
       normalize_global G = Errors.OK G' ->
       sem_node G' f ins outs.
   Proof with eauto.
-    intros [? ?] * Hwt Hwc Hord Hsem Hclocks Hnorm.
+    intros [? ?] * Hwt Hwc Hsem Hclocks Hnorm.
     unfold normalize_global in Hnorm. destruct (LCA.check_causality _) eqn:Hcaus; inv Hnorm.
     eapply normfby_global_sem.
     - eapply untuple_global_wt...
@@ -2643,6 +2662,17 @@ Module Type CORRECTNESS
       + eapply wt_global_wl_global, untuple_global_wt...
     - eapply untuple_global_sem...
     - eapply untuple_global_sem_clock_inputs...
+  Qed.
+
+  Corollary normalize_global_sem_clock_inputs : forall (G : global_wl) G' f ins,
+      sem_clock_inputs G f ins ->
+      normalize_global G = Errors.OK G' ->
+      sem_clock_inputs G' f ins.
+  Proof.
+    intros [G ?] * Hsc Hnorm.
+    unfold normalize_global in Hnorm.
+    destruct (LCA.check_causality _) eqn:Hcheck; inv Hnorm.
+    apply normfby_global_sem_clock_inputs, untuple_global_sem_clock_inputs, Hsc.
   Qed.
 
   (** ** In addition : normalization only produces causal programs *)

@@ -181,6 +181,86 @@ Module Type LORDERED
 
   End Ordered_nodes_Properties.
 
+  (** Actually, any wt or wc program is also ordered :)
+      We can use the wl predicates + hypothesis that there is no duplication in the node names *)
+
+  Lemma wl_exp_Is_node_in_exp : forall G e f,
+      wl_exp G e ->
+      Is_node_in_exp f e ->
+      In f (map n_name G).
+  Proof.
+    intros * Hwl Hisin.
+    Local Ltac Forall_Exists :=
+      match goal with
+      | Hex : Exists _ ?es, Hwl : Forall (wl_exp ?G) ?Es, H: Forall (fun _ => _) ?es |- _ =>
+        eapply Forall_Forall in H; [|eapply Hwl]; clear Hwl;
+        eapply Forall_Exists, Exists_exists in H as [? [_ [[? ?] ?]]]; eauto
+      end.
+    induction e using exp_ind2; inv Hwl; inv Hisin.
+    - (* unop *) auto.
+    - (* binop *) destruct H1; auto.
+    - (* fby *) destruct H3; Forall_Exists.
+    - (* arrow *) destruct H3; Forall_Exists.
+    - (* when *) Forall_Exists.
+    - (* merge *) destruct H3; Forall_Exists.
+    - (* ite *) destruct H3 as [?|[?|?]]; auto; Forall_Exists.
+    - (* app *) Forall_Exists.
+    - assert (find_node f0 G <> None) as Hfind.
+      { intro contra. congruence. }
+      apply find_node_Exists, Exists_exists in Hfind as [? [Hin Hname]].
+      rewrite in_map_iff; eauto.
+    - (* app (reset) *)
+      assert (find_node f0 G <> None) as Hfind.
+      { intro contra. congruence. }
+      apply find_node_Exists, Exists_exists in Hfind as [? [Hin Hname]].
+      rewrite in_map_iff; eauto.
+    - inv H3; auto. Forall_Exists.
+  Qed.
+
+  Lemma wl_equation_Is_node_in_eq : forall G eq f,
+      wl_equation G eq ->
+      Is_node_in_eq f eq ->
+      In f (map n_name G).
+  Proof.
+    intros ? [xs es] * Hwl Hisin.
+    destruct Hwl as [Hwl _].
+    unfold Is_node_in_eq in Hisin.
+    eapply Forall_Exists in Hisin; eauto.
+    eapply Exists_exists in Hisin as [? [_ [? ?]]].
+    eapply wl_exp_Is_node_in_exp; eauto.
+  Qed.
+
+  Lemma wl_node_Is_node_in : forall G n f,
+      wl_node G n ->
+      Is_node_in f (n_eqs n) ->
+      In f (map n_name G).
+  Proof.
+    intros * Hwl Hisin.
+    unfold wl_node in Hwl.
+    unfold Is_node_in in Hisin.
+    eapply Forall_Exists in Hisin; eauto.
+    eapply Exists_exists in Hisin as [? [_ [? ?]]].
+    eapply wl_equation_Is_node_in_eq; eauto.
+  Qed.
+
+  Lemma wl_global_ordered_nodes : forall G,
+      NoDup (List.map n_name G) ->
+      wl_global G ->
+      Ordered_nodes G.
+  Proof.
+    induction G; intros Hnd Hwl; inv Hnd; inv Hwl;
+      constructor; auto.
+    - intros f Hisin.
+      eapply wl_node_Is_node_in in Hisin; eauto.
+      split.
+      + intro contra; subst. contradiction.
+      + apply in_map_iff in Hisin as [? [? ?]].
+        rewrite Exists_exists; eauto.
+    - apply Forall_forall; intros ? Hin contra.
+      rewrite in_map_iff in H1.
+      apply H1; eauto.
+  Qed.
+
 End LORDERED.
 
 Module LOrderedFun
@@ -190,4 +270,3 @@ Module LOrderedFun
        <: LORDERED Ids Op Syn.
   Include LORDERED Ids Op Syn.
 End LOrderedFun.
-
