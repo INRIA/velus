@@ -30,7 +30,7 @@ src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
 src/Lustre/Normalization/Fresh.v
-src/Lustre/Normalization/Untuple.v
+src/Lustre/Normalization/Unnesting.v
 src/Lustre/Normalization/NormFby.v
 src/Lustre/Normalization/Normalization.v
 src/Lustre/Normalization/NTyping.v

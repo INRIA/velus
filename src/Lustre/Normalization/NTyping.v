@@ -20,62 +20,62 @@ Module Type NTYPING
 
   (** ** Preservation of typeof *)
 
-  Fact normalize_exp_typeof : forall G e is_control es' eqs' st st',
+  Fact unnest_exp_typeof : forall G e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = (es', eqs', st')  ->
+      unnest_exp is_control e st = (es', eqs', st')  ->
       typesof es' = typeof e.
   Proof with eauto.
     intros * Hwl Hnorm.
-    eapply normalize_exp_annot in Hnorm...
+    eapply unnest_exp_annot in Hnorm...
     rewrite typesof_annots, Hnorm, <- typeof_annot...
   Qed.
 
   Hint Resolve nth_In.
-  Corollary map_bind2_normalize_exp_typesof' :
+  Corollary map_bind2_unnest_exp_typesof' :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall2 (fun es' e => typesof es' = typeof e) es' es.
   Proof with eauto.
     intros * Hwl Hmap.
-    eapply map_bind2_normalize_exp_annots' in Hmap...
+    eapply map_bind2_unnest_exp_annots' in Hmap...
     clear Hwl.
     induction Hmap; constructor; eauto.
     rewrite typesof_annots, H, <- typeof_annot...
   Qed.
 
-  Corollary map_bind2_normalize_exp_typesof'' : forall G is_control es es' eqs' st st',
+  Corollary map_bind2_unnest_exp_typesof'' : forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall2 (fun e ty => typeof e = [ty]) (concat es') (typesof es).
   Proof.
     intros * Hwl Hmap.
-    eapply map_bind2_normalize_exp_annots'' in Hmap; eauto.
+    eapply map_bind2_unnest_exp_annots'' in Hmap; eauto.
     rewrite typesof_annots, Forall2_map_2.
     eapply Forall2_impl_In; eauto. intros; simpl in *.
     rewrite typeof_annot, H1; auto.
   Qed.
 
-  Corollary map_bind2_normalize_exp_typesof :
+  Corollary map_bind2_unnest_exp_typesof :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       typesof (concat es') = typesof es.
   Proof.
     intros * Hwl Hmap.
-    eapply map_bind2_normalize_exp_annots in Hmap; eauto.
+    eapply map_bind2_unnest_exp_annots in Hmap; eauto.
     rewrite typesof_annots, Hmap, <- typesof_annots; eauto.
   Qed.
-  Hint Resolve map_bind2_normalize_exp_typesof.
+  Hint Resolve map_bind2_unnest_exp_typesof.
 
-  Corollary normalize_exps_typesof : forall G es es' eqs' st st',
+  Corollary unnest_exps_typesof : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       typesof es' = typesof es.
   Proof.
     intros * Hwl Hnorm.
-    unfold normalize_exps in Hnorm; repeat inv_bind.
-    eapply map_bind2_normalize_exp_typesof in H; eauto.
+    unfold unnest_exps in Hnorm; repeat inv_bind.
+    eapply map_bind2_unnest_exp_typesof in H; eauto.
   Qed.
 
   Fact fby_iteexp_typeof : forall e0 e ann e' eqs' st st',
@@ -87,23 +87,23 @@ Module Type NTYPING
     destruct (is_constant e0); repeat inv_bind; try reflexivity.
   Qed.
 
-  Fact normalize_rhs_typeof : forall G e es' eqs' st st',
+  Fact unnest_rhs_typeof : forall G e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       typesof es' = typeof e.
   Proof with eauto.
     intros * Hwl Hnorm.
-    eapply normalize_rhs_annot in Hnorm...
+    eapply unnest_rhs_annot in Hnorm...
     rewrite typesof_annots, Hnorm, <- typeof_annot...
   Qed.
 
-  Corollary normalize_rhss_typesof : forall G es es' eqs' st st',
+  Corollary unnest_rhss_typesof : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_rhss es st = (es', eqs', st') ->
+      unnest_rhss es st = (es', eqs', st') ->
       typesof es' = typesof es.
   Proof with eauto.
     intros * Hwl Hnorm.
-    eapply normalize_rhss_annots in Hnorm...
+    eapply unnest_rhss_annots in Hnorm...
     rewrite typesof_annots, Hnorm, <- typesof_annots...
   Qed.
 
@@ -191,6 +191,8 @@ Module Type NTYPING
       unfold st_tys', idty; do 2 eapply incl_map; eapply st_follows_incl; repeat solve_st_follows
     | H : incl ?l1 ?l2 |- incl (idty ?l1) (idty ?l2) =>
       eapply incl_map; eauto
+    | H : In ?x ?l1 |- In ?x ?l2 =>
+      assert (incl l1 l2); eauto
     end; auto.
 
   Hint Resolve in_combine_l in_combine_r.
@@ -316,46 +318,46 @@ Module Type NTYPING
   Definition idck' (vars : list (ident * ann)) : list (ident * clock) :=
     idck (without_names' vars).
 
-  Fact normalize_fby_wt_exp : forall G vars e0s es anns,
+  Fact unnest_fby_wt_exp : forall G vars e0s es anns,
       Forall (wt_nclock vars) (map snd anns) ->
       Forall (wt_exp G vars) e0s ->
       Forall (wt_exp G vars) es ->
       Forall2 (fun e0 a => typeof e0 = [a]) e0s (map fst anns) ->
       Forall2 (fun e a => typeof e = [a]) es (map fst anns) ->
-      Forall (wt_exp G vars) (normalize_fby e0s es anns).
+      Forall (wt_exp G vars) (unnest_fby e0s es anns).
   Proof.
     intros * Hwtc Hwt1 Hwt2 Hty1 Hty2.
-    unfold normalize_fby.
+    unfold unnest_fby.
     assert (length e0s = length anns) as Hlen1 by (eapply Forall2_length in Hty1; solve_length).
     assert (length es = length anns) as Hlen2 by (eapply Forall2_length in Hty2; solve_length).
     solve_forall.
     constructor; simpl; try rewrite app_nil_r; eauto.
   Qed.
 
-  Fact normalize_arrow_wt_exp : forall G vars e0s es anns,
+  Fact unnest_arrow_wt_exp : forall G vars e0s es anns,
       Forall (wt_nclock vars) (map snd anns) ->
       Forall (wt_exp G vars) e0s ->
       Forall (wt_exp G vars) es ->
       Forall2 (fun e0 a => typeof e0 = [a]) e0s (map fst anns) ->
       Forall2 (fun e a => typeof e = [a]) es (map fst anns) ->
-      Forall (wt_exp G vars) (normalize_arrow e0s es anns).
+      Forall (wt_exp G vars) (unnest_arrow e0s es anns).
   Proof.
     intros * Hwtc Hwt1 Hwt2 Hty1 Hty2.
-    unfold normalize_arrow.
+    unfold unnest_arrow.
     assert (length e0s = length anns) as Hlen1 by (eapply Forall2_length in Hty1; solve_length).
     assert (length es = length anns) as Hlen2 by (eapply Forall2_length in Hty2; solve_length).
     solve_forall.
     constructor; simpl; try rewrite app_nil_r; eauto.
   Qed.
 
-  Fact normalize_when_wt_exp : forall G vars b ckid es tys ck,
+  Fact unnest_when_wt_exp : forall G vars b ckid es tys ck,
       In (ckid, Op.bool_type) vars ->
       wt_nclock vars ck ->
       Forall (wt_exp G vars) es ->
       Forall2 (fun e ty => typeof e = [ty]) es tys ->
-      Forall (wt_exp G vars) (normalize_when ckid b es tys ck).
+      Forall (wt_exp G vars) (unnest_when ckid b es tys ck).
   Proof.
-    intros * HIn Hwtck Hwt Htys. unfold normalize_when.
+    intros * HIn Hwtck Hwt Htys. unfold unnest_when.
     assert (length es = length tys) as Hlength by (eapply Forall2_length in Htys; eauto).
     rewrite Forall_map. apply Forall2_combine'.
     eapply Forall2_ignore2' with (ys:=tys) in Hwt; eauto.
@@ -365,23 +367,23 @@ Module Type NTYPING
     rewrite app_nil_r; auto.
   Qed.
 
-  Fact normalize_merge_wt_exp : forall G vars ckid ets efs tys ck,
+  Fact unnest_merge_wt_exp : forall G vars ckid ets efs tys ck,
       In (ckid, Op.bool_type) vars ->
       wt_nclock vars ck ->
       Forall (wt_exp G vars) ets ->
       Forall (wt_exp G vars) efs ->
       Forall2 (fun e ty => typeof e = [ty]) ets tys ->
       Forall2 (fun e ty => typeof e = [ty]) efs tys ->
-      Forall (wt_exp G vars) (normalize_merge ckid ets efs tys ck).
+      Forall (wt_exp G vars) (unnest_merge ckid ets efs tys ck).
   Proof with eauto.
-    intros * HIn Hwtck Hwt1 Hwt2 Htys1 Htys2. unfold normalize_merge.
+    intros * HIn Hwtck Hwt1 Hwt2 Htys1 Htys2. unfold unnest_merge.
     assert (length ets = length tys) as Hlen1 by (eauto using Forall2_length).
     assert (length efs = length tys) as Hlen2 by (eauto using Forall2_length).
     solve_forall.
     repeat constructor; simpl; auto. 1,2:rewrite app_nil_r; auto.
   Qed.
 
-  Fact normalize_ite_wt_exp : forall G vars e ets efs tys ck,
+  Fact unnest_ite_wt_exp : forall G vars e ets efs tys ck,
       wt_nclock vars ck ->
       wt_exp G vars e ->
       typeof e = [Op.bool_type] ->
@@ -389,9 +391,9 @@ Module Type NTYPING
       Forall (wt_exp G vars) efs ->
       Forall2 (fun e ty => typeof e = [ty]) ets tys ->
       Forall2 (fun e ty => typeof e = [ty]) efs tys ->
-      Forall (wt_exp G vars) (normalize_ite e ets efs tys ck).
+      Forall (wt_exp G vars) (unnest_ite e ets efs tys ck).
   Proof with eauto.
-    intros * Hwtck Hwt Htye Hwt1 Hwt2 Htys1 Htys2. unfold normalize_ite.
+    intros * Hwtck Hwt Htye Hwt1 Hwt2 Htys1 Htys2. unfold unnest_ite.
     assert (length ets = length tys) as Hlen1 by (eauto using Forall2_length).
     assert (length efs = length tys) as Hlen2 by (eauto using Forall2_length).
     solve_forall.
@@ -426,61 +428,65 @@ Module Type NTYPING
 
   Import Permutation.
 
-  Fact normalize_reset_wt : forall G vars e e' eqs' st st',
-      incl (fresh_in e) (st_anns st') ->
-      wt_exp G (vars++st_tys st) e ->
-      typeof e = [Op.bool_type] ->
-      normalize_reset e st = (e', eqs', st') ->
-      wt_exp G (vars++st_tys st') e' /\
+  Fact unnest_reset_wt : forall G vars e e' eqs' st st',
+      LiftO True (fun e => forall es' eqs' st',
+                   unnest_exp true e st = (es', eqs', st') ->
+                   Forall (wt_exp G (vars++st_tys st')) es' /\
+                   Forall (wt_equation G (vars++st_tys st')) eqs') e ->
+      LiftO True (fun e => incl (fresh_in e) (st_anns st')) e ->
+      LiftO True (wt_exp G (vars++st_tys st)) e ->
+      LiftO True (fun e => typeof e = [Op.bool_type]) e ->
+      unnest_reset (unnest_exp true) e st = (e', eqs', st') ->
+      LiftO True (fun e' => typeof e' = [Op.bool_type]) e' /\
+      LiftO True (wt_exp G (vars++st_tys st')) e' /\
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof.
-    intros * Hincl Hwt Hty Hnorm.
-    assert (length (annot e) = 1). 2:singleton_length.
-    { erewrite <- map_length, <- typeof_annot, Hty; auto. }
-    assert (st_follows st st') as Hfollows by eauto.
-    specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
-      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind; split; auto;
-        rewrite Hsingl in Hnorm; simpl in Hnorm; destruct p as [? [? ?]];
-          repeat inv_bind.
-    - constructor.
-      + apply fresh_ident_In in H.
+    intros * Hunwt Hincl Hwt Hty Hnorm.
+    assert (st_follows st st') as Hfollows.
+    { repeat solve_st_follows; destruct e; simpl; eauto. }
+    unnest_reset_spec; simpl in *; auto.
+    1,2:assert (length l = 1).
+    1,3:(eapply unnest_exp_length in Hk0; eauto;
+         rewrite <- length_typeof_numstreams, Hty in Hk0; auto).
+    1,2:singleton_length.
+    - assert (Hk:=Hk0). eapply unnest_exp_typeof in Hk0; eauto; simpl in Hk0.
+      eapply Hunwt in Hk as [He Heq]; inv He; eauto.
+      repeat split; eauto. congruence.
+    - assert (Hk:=Hk0). eapply unnest_exp_annot in Hk0; eauto. simpl in Hk0. rewrite app_nil_r in Hk0. 
+      assert (Hk1:=Hk). eapply unnest_exp_fresh_incl in Hk1.
+      assert (x = Op.bool_type) as Hbool.
+      { rewrite Hk0 in Hhd.
+        rewrite typeof_annot in *.
+        destruct (annot e0); simpl in *. inv Hty.
+        subst; simpl in *. destruct l; try congruence.
+      }
+      eapply Hunwt in Hk as [He Heq]; inv He.
+      repeat constructor.
+      + eapply fresh_ident_In in Hfresh.
         apply in_or_app; right.
-        rewrite st_anns_tys_In. exists c. assumption.
-      + constructor.
-        eapply wt_exp_clockof in Hwt.
-        rewrite Forall_forall in Hwt.
-        eapply wt_clock_incl; [| eapply Hwt].
-        -- rewrite <- app_assoc.
-           eapply incl_appr'. eapply incl_app.
-           ++ eapply st_follows_tys_incl; auto.
-           ++ apply incl_map; auto.
-        -- rewrite clockof_annot. rewrite Hsingl; simpl. left; auto.
-    - repeat constructor. repeat solve_incl.
-      simpl. rewrite app_nil_r, Hty.
-      repeat constructor. eapply fresh_ident_In in H.
-      apply in_or_app; right.
-      rewrite st_anns_tys_In. exists c.
-      rewrite typeof_annot, Hsingl in Hty. inv Hty. assumption.
+        rewrite st_anns_tys_In. exists x0. assumption.
+      + apply wt_exp_clockof in Hwt.
+        rewrite Hk0 in Hhd.
+        rewrite clockof_annot in Hwt.
+        rewrite typeof_annot in Hty.
+        destruct (annot e0); simpl in *. inv Hty.
+        inv Hwt; simpl in *. solve_incl.
+        rewrite <- app_assoc. apply incl_appr'.
+        apply incl_app; repeat solve_incl.
+        eapply fresh_ident_st_follows, st_follows_incl in Hfresh.
+        unfold st_tys, idty. apply incl_map. etransitivity; eauto.
+      + repeat solve_incl.
+      + simpl; rewrite app_nil_r, typeof_annot, Hk0, <- typeof_annot, Hty.
+        repeat constructor.
+        eapply fresh_ident_In in Hfresh.
+        apply in_or_app; right.
+        unfold st_tys, idty. simpl_In; eexists; split; eauto. simpl. f_equal.
+      + solve_forall; repeat solve_incl.
   Qed.
 
-  Fact normalize_reset_typeof_bool : forall e e' eqs' st st',
-      typeof e = [Op.bool_type] ->
-      normalize_reset e st = (e', eqs', st') ->
-      typeof e' = [Op.bool_type].
-  Proof with eauto.
-    intros e e' eqs' st st' Htyp Hnorm.
-    specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
-      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind; simpl in *...
-    destruct (hd _) as [? [? ?]] eqn:Hann; repeat inv_bind.
-    rewrite typeof_annot in Htyp.
-    destruct (annot e); simpl in *; try congruence.
-    inv Hann.
-    destruct l; simpl in *; try congruence.
-  Qed.
-
-  Lemma normalize_exp_wt : forall G vars e is_control es' eqs' st st',
+  Lemma unnest_exp_wt : forall G vars e is_control es' eqs' st st',
       wt_exp G (vars++st_tys st) e ->
-      normalize_exp is_control e st = (es', eqs', st') ->
+      unnest_exp is_control e st = (es', eqs', st') ->
       Forall (wt_exp G (vars++st_tys st')) es' /\
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof with eauto.
@@ -498,7 +504,7 @@ Module Type NTYPING
       assert (Hnorm:=H); eapply IHe in H as [Hwt1 Hwt1']; eauto.
       repeat econstructor...
       + inv Hwt1; eauto.
-      + eapply normalize_exp_typeof in Hnorm; simpl in Hnorm; eauto.
+      + eapply unnest_exp_typeof in Hnorm; simpl in Hnorm; eauto.
         rewrite app_nil_r, H3 in Hnorm...
       + repeat solve_incl.
     - (* binop *)
@@ -512,9 +518,9 @@ Module Type NTYPING
       repeat econstructor...
       + inv Hwt1. repeat solve_incl.
       + inv Hwt2...
-      + eapply normalize_exp_typeof in Hnorm1; simpl in Hnorm1; eauto.
+      + eapply unnest_exp_typeof in Hnorm1; simpl in Hnorm1; eauto.
         rewrite app_nil_r, H5 in Hnorm1...
-      + eapply normalize_exp_typeof in Hnorm2; simpl in Hnorm2; eauto.
+      + eapply unnest_exp_typeof in Hnorm2; simpl in Hnorm2; eauto.
         rewrite app_nil_r, H6 in Hnorm2...
       + repeat solve_incl.
       + apply Forall_app; split; auto.
@@ -523,7 +529,7 @@ Module Type NTYPING
       Local Ltac solve_map_bind2 :=
         solve_forall;
         match goal with
-        | Hnorm : normalize_exp _ _ _ = _, H : context [normalize_exp _ _ _ = _ -> _] |- _ =>
+        | Hnorm : unnest_exp _ _ _ = _, H : context [unnest_exp _ _ _ = _ -> _] |- _ =>
           eapply H in Hnorm as [? ?]; eauto;
           [split|]; try solve_forall; repeat solve_incl
         end.
@@ -535,24 +541,24 @@ Module Type NTYPING
       3,4:solve_forall; repeat solve_incl.
       + eapply idents_for_anns_wt in H3...
         solve_forall. repeat solve_incl.
-      + assert (Forall (wt_exp G (vars++st_tys st')) (normalize_fby (concat x2) (concat x6) a)) as Hwcfby.
-        { eapply normalize_fby_wt_exp...
+      + assert (Forall (wt_exp G (vars++st_tys st')) (unnest_fby (concat x2) (concat x6) a)) as Hwcfby.
+        { eapply unnest_fby_wt_exp...
           1-3:solve_forall; repeat solve_incl.
-          + eapply map_bind2_normalize_exp_typesof'' in Hnorm1... congruence.
-          + eapply map_bind2_normalize_exp_typesof'' in Hnorm2... congruence. }
-        remember (normalize_fby _ _ _) as fby.
+          + eapply map_bind2_unnest_exp_typesof'' in Hnorm1... congruence.
+          + eapply map_bind2_unnest_exp_typesof'' in Hnorm2... congruence. }
+        remember (unnest_fby _ _ _) as fby.
         assert (length (concat x2) = length a) as Hlen1.
-        { eapply map_bind2_normalize_exp_length in Hnorm1...
+        { eapply map_bind2_unnest_exp_length in Hnorm1...
           repeat simpl_length. erewrite <- map_length, H7; solve_length. }
         assert (length (concat x6) = length a) as Hlen2.
-        { eapply map_bind2_normalize_exp_length in Hnorm2...
+        { eapply map_bind2_unnest_exp_length in Hnorm2...
           repeat simpl_length. erewrite <- map_length, H6; solve_length. }
         assert (length fby = length x5).
-        { rewrite Heqfby, normalize_fby_length...
+        { rewrite Heqfby, unnest_fby_length...
           eapply idents_for_anns_length in H3... }
         assert (Forall2 (fun '(ty, _) e => typeof e = [ty]) (map snd x5) fby) as Htys.
         { eapply idents_for_anns_values in H3; subst.
-          specialize (normalize_fby_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
+          specialize (unnest_fby_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
           eapply Forall2_swap_args. solve_forall.
           destruct a0 as [ty ck]; simpl in *. rewrite typeof_annot, H1; auto. }
         solve_forall.
@@ -569,24 +575,24 @@ Module Type NTYPING
       3,4:solve_forall; repeat solve_incl.
       + eapply idents_for_anns_wt in H3...
         solve_forall. repeat solve_incl.
-      + assert (Forall (wt_exp G (vars++st_tys st')) (normalize_arrow (concat x2) (concat x6) a)) as Hwcfby.
-        { eapply normalize_arrow_wt_exp...
+      + assert (Forall (wt_exp G (vars++st_tys st')) (unnest_arrow (concat x2) (concat x6) a)) as Hwcfby.
+        { eapply unnest_arrow_wt_exp...
           1-3:solve_forall; repeat solve_incl.
-          + eapply map_bind2_normalize_exp_typesof'' in Hnorm1... congruence.
-          + eapply map_bind2_normalize_exp_typesof'' in Hnorm2... congruence. }
-        remember (normalize_arrow _ _ _) as fby.
+          + eapply map_bind2_unnest_exp_typesof'' in Hnorm1... congruence.
+          + eapply map_bind2_unnest_exp_typesof'' in Hnorm2... congruence. }
+        remember (unnest_arrow _ _ _) as fby.
         assert (length (concat x2) = length a) as Hlen1.
-        { eapply map_bind2_normalize_exp_length in Hnorm1...
+        { eapply map_bind2_unnest_exp_length in Hnorm1...
           repeat simpl_length. erewrite <- map_length, H7; solve_length. }
         assert (length (concat x6) = length a) as Hlen2.
-        { eapply map_bind2_normalize_exp_length in Hnorm2...
+        { eapply map_bind2_unnest_exp_length in Hnorm2...
           repeat simpl_length. erewrite <- map_length, H6; solve_length. }
         assert (length fby = length x5).
-        { rewrite Heqfby, normalize_arrow_length...
+        { rewrite Heqfby, unnest_arrow_length...
           eapply idents_for_anns_length in H3... }
         assert (Forall2 (fun '(ty, _) e => typeof e = [ty]) (map snd x5) fby) as Htys.
         { eapply idents_for_anns_values in H3; subst.
-          specialize (normalize_arrow_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
+          specialize (unnest_arrow_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
           eapply Forall2_swap_args. solve_forall.
           destruct a0 as [ty ck]; simpl in *. rewrite typeof_annot, H1; auto. }
         solve_forall.
@@ -599,24 +605,24 @@ Module Type NTYPING
       assert (Hnorm:=H0). eapply map_bind2_wt with (G0:=G) (vars0:=vars++st_tys st') in H0 as [Hwt1 Hwt1']; eauto.
       2:solve_map_bind2.
       split; eauto.
-      eapply normalize_when_wt_exp; auto.
+      eapply unnest_when_wt_exp; auto.
       + assert (incl (vars ++ st_tys st) (vars ++ st_tys st')) as Hincl by repeat solve_incl...
       + repeat solve_incl.
-      + eapply map_bind2_normalize_exp_typesof'' in Hnorm; eauto.
+      + eapply map_bind2_unnest_exp_typesof'' in Hnorm; eauto.
     - (* merge *)
       repeat inv_bind.
       assert (Hnorm1:=H1). eapply map_bind2_wt with (G0:=G) (vars0:=vars++st_tys x2) in H1 as [Hwt1 Hwt1']; eauto.
       2:solve_map_bind2.
       assert (Hnorm2:=H2). eapply map_bind2_wt with (G0:=G) (vars0:=vars++st_tys x5) in H2 as [Hwt2 Hwt2']; eauto.
       2:solve_map_bind2.
-      remember (normalize_merge _ _ _ _ _) as merges.
+      remember (unnest_merge _ _ _ _ _) as merges.
       assert (Forall (wt_exp G (vars++st_tys x5)) merges) as Hwt'.
-      { subst. apply normalize_merge_wt_exp; auto.
+      { subst. apply unnest_merge_wt_exp; auto.
         - assert (incl (vars ++ st_tys st) (vars ++ st_tys x5)) by repeat solve_incl; eauto.
         - repeat solve_incl.
         - solve_forall. repeat solve_incl.
-        - eapply map_bind2_normalize_exp_typesof'' in Hnorm1...
-        - eapply map_bind2_normalize_exp_typesof'' in Hnorm2... congruence.
+        - eapply map_bind2_unnest_exp_typesof'' in Hnorm1...
+        - eapply map_bind2_unnest_exp_typesof'' in Hnorm2... congruence.
       }
       destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split.
       1,2,3,6,7:solve_forall; repeat solve_incl.
@@ -625,16 +631,16 @@ Module Type NTYPING
         rewrite Forall_forall; intros.
         repeat simpl_In. inv H2... repeat solve_incl.
       + assert (length (concat x3) = length (typesof ets)) as Hlen1.
-        { eapply map_bind2_normalize_exp_length in Hnorm1; eauto; solve_length. }
+        { eapply map_bind2_unnest_exp_length in Hnorm1; eauto; solve_length. }
         assert (length (concat x6) = length (typesof efs)) as Hlen2.
-        { clear H9. eapply map_bind2_normalize_exp_length in Hnorm2; eauto; solve_length. }
-        remember (normalize_merge _ _ _ _ _) as merges.
+        { clear H9. eapply map_bind2_unnest_exp_length in Hnorm2; eauto; solve_length. }
+        remember (unnest_merge _ _ _ _ _) as merges.
         assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x0) merges) as Htys.
         { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
-          subst; eapply normalize_merge_annot; eauto. congruence. } rewrite Forall2_map_1 in Htys.
+          subst; eapply unnest_merge_annot; eauto. congruence. } rewrite Forall2_map_1 in Htys.
         eapply Forall2_ignore1' with (xs:=x0) in Hwt'.
         2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
-            rewrite normalize_merge_length... congruence. }
+            rewrite unnest_merge_length... congruence. }
         solve_forall.
         repeat constructor... 1:repeat solve_incl.
         destruct a; simpl in *.
@@ -647,23 +653,23 @@ Module Type NTYPING
     - (* ite *)
       repeat inv_bind.
       assert (length x = 1). 2:singleton_length.
-      { eapply normalize_exp_length in H1; eauto.
+      { eapply unnest_exp_length in H1; eauto.
         rewrite <- length_typeof_numstreams, H8 in H1; auto. }
       assert (Hnorm0:=H1). eapply IHe in H1 as [Hwt0 Hwt0']... clear IHe.
       assert (Hnorm1:=H2). eapply map_bind2_wt with (G0:=G) (vars0:=vars++st_tys x4) in H2 as [Hwt1 Hwt1']; eauto.
       2:solve_map_bind2.
       assert (Hnorm2:=H3). eapply map_bind2_wt with (G0:=G) (vars0:=vars++st_tys x7) in H3 as [Hwt2 Hwt2']; eauto.
       2:solve_map_bind2. clear H H0.
-      remember (normalize_ite _ _ _ _ _) as ites.
+      remember (unnest_ite _ _ _ _ _) as ites.
       assert (Forall (wt_exp G (vars++st_tys x7)) ites) as Hwt'.
-      { subst. apply normalize_ite_wt_exp; auto.
+      { subst. apply unnest_ite_wt_exp; auto.
         - repeat solve_incl.
         - inv Hwt0. repeat solve_incl.
-        - eapply normalize_exp_typeof in Hnorm0; eauto.
+        - eapply unnest_exp_typeof in Hnorm0; eauto.
           simpl in Hnorm0. rewrite app_nil_r in Hnorm0; congruence.
         - solve_forall. repeat solve_incl.
-        - eapply map_bind2_normalize_exp_typesof'' in Hnorm1...
-        - eapply map_bind2_normalize_exp_typesof'' in Hnorm2... congruence.
+        - eapply map_bind2_unnest_exp_typesof'' in Hnorm1...
+        - eapply map_bind2_unnest_exp_typesof'' in Hnorm2... congruence.
       }
       destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split.
       1,2,3,4,7,8,9:solve_forall; repeat solve_incl.
@@ -672,16 +678,16 @@ Module Type NTYPING
         rewrite Forall_forall; intros.
         repeat simpl_In. inv H0... repeat solve_incl.
       + assert (length (concat x5) = length (typesof ets)) as Hlen1.
-        { eapply map_bind2_normalize_exp_length in Hnorm1; eauto; solve_length. }
+        { eapply map_bind2_unnest_exp_length in Hnorm1; eauto; solve_length. }
         assert (length (concat x8) = length (typesof efs)) as Hlen2.
-        { clear H10. eapply map_bind2_normalize_exp_length in Hnorm2; eauto; solve_length. }
-        remember (normalize_ite _ _ _ _ _) as ites.
+        { clear H10. eapply map_bind2_unnest_exp_length in Hnorm2; eauto; solve_length. }
+        remember (unnest_ite _ _ _ _ _) as ites.
         assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x) ites) as Htys.
         { eapply idents_for_anns_values in H. rewrite H, Forall2_map_1.
-          subst; eapply normalize_ite_annot; eauto. congruence. } rewrite Forall2_map_1 in Htys.
+          subst; eapply unnest_ite_annot; eauto. congruence. } rewrite Forall2_map_1 in Htys.
         eapply Forall2_ignore1' with (xs:=x) in Hwt'.
         2:{ subst. apply idents_for_anns_length in H. rewrite map_length in H.
-            rewrite normalize_ite_length... congruence. }
+            rewrite unnest_ite_length... congruence. }
         solve_forall.
         repeat constructor... 1:repeat solve_incl.
         destruct a; simpl in *.
@@ -701,7 +707,7 @@ Module Type NTYPING
         solve_forall; simpl in *...
         solve_incl. unfold idty. rewrite map_app, <- app_assoc.
         apply incl_appr', incl_app; [repeat solve_incl|apply incl_app;[apply incl_appr|apply incl_appl]].
-        * eapply map_bind2_normalize_exp_fresh_incl in Hnorm.
+        * eapply map_bind2_unnest_exp_fresh_incl in Hnorm.
           unfold st_tys, idty in *. eapply incl_map; eauto.
         * eapply idents_for_anns'_anon_streams_incl, incl_map in H2.
           etransitivity. eapply H2.
@@ -710,7 +716,7 @@ Module Type NTYPING
           apply map_ext; intros [? [? [? ?]]]; auto.
       + repeat econstructor; eauto.
         * solve_forall; repeat solve_incl.
-        * eapply map_bind2_normalize_exp_typesof in Hnorm; eauto. congruence.
+        * eapply map_bind2_unnest_exp_typesof in Hnorm; eauto. congruence.
         * eapply idents_for_anns'_values in H2. congruence.
         * eapply idents_for_anns'_wt_nclock with (vars:=vars) in H2.
           -- rewrite Forall_map in H2. solve_forall.
@@ -722,7 +728,7 @@ Module Type NTYPING
              solve_incl. rewrite <- app_assoc. apply incl_appr'.
              unfold idty. rewrite map_app. apply incl_app; [repeat solve_incl|].
              apply incl_app; [apply incl_appr|apply incl_appl]...
-             apply map_bind2_normalize_exp_fresh_incl in Hnorm.
+             apply map_bind2_unnest_exp_fresh_incl in Hnorm.
              assert (incl (fresh_ins es) (st_anns x4)) by (repeat (etransitivity; eauto)).
              eapply incl_map...
         * simpl. rewrite app_nil_r.
@@ -732,39 +738,39 @@ Module Type NTYPING
           exists (i, (t, (c, o))); auto.
       + solve_forall; repeat solve_incl.
     - (* app (reset) *)
-      repeat inv_bind.
+      do 2 inv_bind.
+      assert (st_follows x1 x4) as Hfollows.
+      { eapply (unnest_reset_st_follows _ (Some r)) in H2; eauto. }
+      assert (Hs:=H2). apply unnest_reset_Some in Hs as [er' ?]; subst.
+      eapply (unnest_reset_wt _ _ (Some r)) in H2 as [Hwt2 [Hwt2' Hwt2'']]; simpl...
+      2:(intros; eapply H in H4; eauto).
+      1,2,4:repeat inv_bind. 2,3:repeat solve_incl.
+      2:(eapply (unnest_reset_fresh_incl _ (Some r)) in H2; simpl; eauto;
+         intros; eapply unnest_exp_fresh_incl in H4; eauto).
+
       assert (Hnorm:=H1). eapply map_bind2_wt with (G0:=G) (vars0:=vars++st_tys x4) in H1 as [Hwt1 Hwt1']...
       2:solve_map_bind2. clear H0.
-      assert (length x6 = 1). 2:singleton_length.
-      { eapply normalize_exp_length in H2... rewrite <- length_typeof_numstreams in H2. rewrite H2, H11; auto. }
-      assert (Hnorm2:=H2). eapply H in H2 as [Hwt2 Hwt2']... 2:repeat solve_incl. clear H.
-      assert (Hnorm3:=H4). eapply normalize_reset_wt in H4 as [Hwt3 Hwt3']...
-      2:{ eapply normalize_exp_no_fresh in Hnorm2.
-          unfold fresh_ins in Hnorm2; simpl in Hnorm2; rewrite app_nil_r in Hnorm2.
-          rewrite Hnorm2. apply incl_nil'. }
-      2:inv Hwt2; eauto.
-      2:{ eapply normalize_exp_typeof in Hnorm2... simpl in Hnorm2; rewrite app_nil_r in Hnorm2. congruence. }
       split; [|constructor]; repeat rewrite Forall_app; repeat split.
       4-6:solve_forall; repeat solve_incl.
-      + specialize (idents_for_anns'_incl_ty _ _ _ _ H3) as Hincl.
-        eapply idents_for_anns'_wt with (G:=G) (vars:=vars) in H3... 1:solve_forall; repeat solve_incl.
+      + specialize (idents_for_anns'_incl_ty _ _ _ _ H2) as Hincl.
+        eapply idents_for_anns'_wt with (G:=G) (vars:=vars) in H2... 1:solve_forall; repeat solve_incl.
         solve_forall; simpl in *...
         solve_incl. unfold idty. rewrite map_app, <- app_assoc.
         apply incl_appr', incl_app; [repeat solve_incl|apply incl_app;[apply incl_appr|apply incl_appl]].
-        * eapply map_bind2_normalize_exp_fresh_incl in Hnorm.
+        * eapply map_bind2_unnest_exp_fresh_incl in Hnorm.
           unfold st_tys, idty in *. eapply incl_map; eauto.
           assert (incl (st_anns x1) (st_anns x4)) by repeat solve_incl. etransitivity...
-        * eapply idents_for_anns'_anon_streams_incl, incl_map in H3.
-          etransitivity. eapply H3.
-          replace (map _ (without_names' x5)) with (map (fun xtc => (fst xtc, fst (snd xtc))) x5); auto.
+        * eapply idents_for_anns'_anon_streams_incl, incl_map in H2.
+          etransitivity. eapply H2.
+          replace (map _ (without_names' x2)) with (map (fun xtc => (fst xtc, fst (snd xtc))) x2); auto.
           unfold without_names'; rewrite map_map; simpl.
           apply map_ext; intros [? [? [? ?]]]; auto.
       + repeat econstructor; eauto.
         * solve_forall; repeat solve_incl.
-        * eapply map_bind2_normalize_exp_typesof in Hnorm; eauto. congruence.
-        * eapply idents_for_anns'_values in H3. congruence.
-        * eapply idents_for_anns'_wt_nclock with (vars:=vars) in H3.
-          -- rewrite Forall_map in H3. solve_forall.
+        * eapply map_bind2_unnest_exp_typesof in Hnorm; eauto. congruence.
+        * eapply idents_for_anns'_values in H2. congruence.
+        * eapply idents_for_anns'_wt_nclock with (vars:=vars) in H2.
+          -- rewrite Forall_map in H2. solve_forall.
              solve_incl.
              rewrite <- app_assoc. apply incl_appr'.
              rewrite Permutation_app_comm. apply incl_appr'.
@@ -773,141 +779,141 @@ Module Type NTYPING
              solve_incl. rewrite <- app_assoc. apply incl_appr'.
              unfold idty. rewrite map_app. apply incl_app; [repeat solve_incl|].
              apply incl_app; [apply incl_appr|apply incl_appl]...
-             apply map_bind2_normalize_exp_fresh_incl in Hnorm.
+             apply map_bind2_unnest_exp_fresh_incl in Hnorm.
              eapply incl_map...
              assert (incl (st_anns x1) (st_anns x4)) by repeat solve_incl. etransitivity...
         * repeat solve_incl.
-        * eapply normalize_reset_typeof_bool in Hnorm3...
-          eapply normalize_exp_typeof in Hnorm2... simpl in Hnorm2; rewrite app_nil_r in Hnorm2. congruence.
       + simpl. rewrite app_nil_r.
-        eapply idents_for_anns'_incl_ty in H3.
-        clear - H3. solve_forall; simpl.
-        apply in_or_app, or_intror, H3. unfold idty. simpl_In.
+        eapply idents_for_anns'_incl_ty in H2.
+        clear - H2. solve_forall; simpl.
+        apply in_or_app, or_intror, H2. unfold idty. simpl_In.
         exists (i, (t, (c, o))); auto.
   Qed.
 
-  Corollary map_bind2_normalize_exp_wt : forall G vars is_control es es' eqs' st st',
+  Corollary map_bind2_unnest_exp_wt : forall G vars is_control es es' eqs' st st',
       Forall (wt_exp G (vars++st_tys st)) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall (wt_exp G (vars++st_tys st')) (concat es') /\
       Forall (wt_equation G (vars++st_tys st')) (concat eqs').
   Proof.
     intros G vars is_control es es' eqs' st st' Hwt Hmap.
     eapply map_bind2_wt in Hmap; solve_forall; eauto.
-    eapply normalize_exp_wt with (G:=G) (vars:=vars) in H1 as [? ?]; eauto.
+    eapply unnest_exp_wt with (G:=G) (vars:=vars) in H1 as [? ?]; eauto.
     split. 1,2:solve_forall. 1,2,3:repeat solve_incl.
   Qed.
 
-  Corollary normalize_exps_wt : forall G vars es es' eqs' st st',
+  Corollary unnest_exps_wt : forall G vars es es' eqs' st st',
       Forall (wt_exp G (vars++st_tys st)) es ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       Forall (wt_exp G (vars++st_tys st')) es' /\
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof.
     intros G vars es es' eqs' st st' Hwt Hmap.
-    unfold normalize_exps in Hmap; repeat inv_bind.
-    eapply map_bind2_normalize_exp_wt in H; eauto.
+    unfold unnest_exps in Hmap; repeat inv_bind.
+    eapply map_bind2_unnest_exp_wt in H; eauto.
   Qed.
 
-  Fact normalize_rhs_wt : forall G vars e es' eqs' st st',
+  Fact unnest_rhs_wt : forall G vars e es' eqs' st st',
       wt_exp G (vars++st_tys st) e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       Forall (wt_exp G (vars++st_tys st')) es' /\
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof with eauto.
     intros * Hwt Hnorm.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try (solve [eapply normalize_exp_wt in Hnorm; eauto]); inv Hwt; repeat inv_bind.
+    destruct e; unfold unnest_rhs in Hnorm;
+      try (solve [eapply unnest_exp_wt in Hnorm; eauto]); inv Hwt.
     - (* fby *)
-      assert (Hnorm1:=H). eapply normalize_exps_wt in H as [Hwt1 Hwt1']...
-      assert (Hnorm2:=H0). eapply normalize_exps_wt with (G:=G) (vars:=vars) in H0 as [Hwt2 Hwt2']...
+      repeat inv_bind.
+      assert (Hnorm1:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']...
+      assert (Hnorm2:=H0). eapply unnest_exps_wt with (G:=G) (vars:=vars) in H0 as [Hwt2 Hwt2']...
       2:solve_forall; repeat solve_incl.
       rewrite Forall_app; repeat split... 2:solve_forall; repeat solve_incl.
-      eapply normalize_fby_wt_exp.
+      eapply unnest_fby_wt_exp.
       1,2,3:solve_forall; repeat solve_incl.
-      + unfold normalize_exps in Hnorm1; repeat inv_bind.
-        eapply map_bind2_normalize_exp_typesof'' in H... congruence.
-      + unfold normalize_exps in Hnorm2; repeat inv_bind.
-        eapply map_bind2_normalize_exp_typesof'' in H... congruence.
+      + unfold unnest_exps in Hnorm1; repeat inv_bind.
+        eapply map_bind2_unnest_exp_typesof'' in H... congruence.
+      + unfold unnest_exps in Hnorm2; repeat inv_bind.
+        eapply map_bind2_unnest_exp_typesof'' in H... congruence.
     - (* arrow *)
-      assert (Hnorm1:=H). eapply normalize_exps_wt in H as [Hwt1 Hwt1']...
-      assert (Hnorm2:=H0). eapply normalize_exps_wt with (G:=G) (vars:=vars) in H0 as [Hwt2 Hwt2']...
+      repeat inv_bind.
+      assert (Hnorm1:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']...
+      assert (Hnorm2:=H0). eapply unnest_exps_wt with (G:=G) (vars:=vars) in H0 as [Hwt2 Hwt2']...
       2:solve_forall; repeat solve_incl.
       rewrite Forall_app; repeat split... 2:solve_forall; repeat solve_incl.
-      eapply normalize_arrow_wt_exp.
+      eapply unnest_arrow_wt_exp.
       1,2,3:solve_forall; repeat solve_incl.
-      + unfold normalize_exps in Hnorm1; repeat inv_bind.
-        eapply map_bind2_normalize_exp_typesof'' in H... congruence.
-      + unfold normalize_exps in Hnorm2; repeat inv_bind.
-        eapply map_bind2_normalize_exp_typesof'' in H... congruence.
+      + unfold unnest_exps in Hnorm1; repeat inv_bind.
+        eapply map_bind2_unnest_exp_typesof'' in H... congruence.
+      + unfold unnest_exps in Hnorm2; repeat inv_bind.
+        eapply map_bind2_unnest_exp_typesof'' in H... congruence.
     - (* app *)
+      repeat inv_bind.
       rewrite app_nil_r.
-      assert (Hnorm:=H). eapply normalize_exps_wt with (G:=G) (vars:=vars) in H as [Hwt1 Hwt1']...
+      assert (Hnorm:=H). eapply unnest_exps_wt with (G:=G) (vars:=vars) in H as [Hwt1 Hwt1']...
       split; auto.
       repeat econstructor; eauto.
-      + eapply normalize_exps_typesof in Hnorm; eauto. congruence.
+      + eapply unnest_exps_typesof in Hnorm; eauto. congruence.
       + solve_forall; simpl. solve_incl.
         repeat rewrite <- app_assoc.
         apply incl_appr', incl_app.
         * apply incl_appl. repeat solve_incl.
         * unfold st_tys. rewrite <- idty_app.
           apply incl_map. apply incl_app; [|repeat solve_incl].
-          apply incl_appl. apply normalize_exps_fresh_incl in Hnorm; eauto.
+          apply incl_appl. apply unnest_exps_fresh_incl in Hnorm; eauto.
     - (* app (reset) *)
-      repeat inv_bind.
-      assert (Hnorm:=H). eapply normalize_exps_wt with (G:=G) (vars:=vars) in H as [Hwt1 Hwt1']...
-      assert (length x4 = 1). 2:singleton_length.
-      { eapply normalize_exp_length in H0... rewrite <- length_typeof_numstreams in H0. rewrite H0, H9; auto. }
-      assert (Hnorm2:=H0). eapply normalize_exp_wt with (G:=G) (vars:=vars) in H0 as [Hwt2 Hwt2']... 2:repeat solve_incl.
-      assert (Hnorm3:=H1). eapply normalize_reset_wt in H1 as [Hwt3 Hwt3']...
-      2:{ eapply normalize_exp_no_fresh in Hnorm2.
-          unfold fresh_ins in Hnorm2; simpl in Hnorm2; rewrite app_nil_r in Hnorm2.
-          rewrite Hnorm2. apply incl_nil'. }
-      2:inv Hwt2; eauto.
-      2:{ eapply normalize_exp_typeof in Hnorm2... simpl in Hnorm2; rewrite app_nil_r in Hnorm2. congruence. }
-      repeat rewrite Forall_app; repeat split.
-      2-4:solve_forall; repeat solve_incl.
+      do 4 inv_bind.
+      assert (st_follows st x1) as Hfollows1 by repeat solve_st_follows.
+      assert (st_follows x1 st') as Hfollows2.
+      { eapply (unnest_reset_st_follows _ (Some r)) in H0; eauto. }
+      assert (Hs:=H0). eapply unnest_reset_Some in Hs as [er' ?]; subst.
+      apply (unnest_reset_wt G vars (Some r)) in H0 as [Hwt2 [Hwt2' Hwt2'']]; simpl...
+      2:(intros; eapply unnest_exp_wt in H1; eauto).
+      1,2,4:repeat inv_bind. 2,3:repeat solve_incl.
+      2:(eapply (unnest_reset_fresh_incl _ (Some r)) in H0; simpl; eauto;
+         intros; eapply unnest_exp_fresh_incl in H1; eauto).
+
+      assert (Hnorm:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']; eauto.
+      rewrite Forall_app.
+      repeat split; auto.
+      2:solve_forall; repeat solve_incl.
+      repeat constructor.
       repeat econstructor; eauto.
       + solve_forall; repeat solve_incl.
-      + eapply normalize_exps_typesof in Hnorm; eauto. congruence.
-      + solve_forall; simpl. solve_incl.
-        repeat rewrite <- app_assoc.
-        apply incl_appr', incl_app.
-        * apply incl_appl. repeat solve_incl.
-        * unfold st_tys. rewrite <- idty_app.
-          apply incl_map. apply incl_app; [|repeat solve_incl].
-          apply incl_appl. apply normalize_exps_fresh_incl in Hnorm; eauto.
-          etransitivity... repeat solve_incl.
-      + eapply normalize_reset_typeof_bool in Hnorm3...
-        eapply normalize_exp_typeof in Hnorm2... simpl in Hnorm2; rewrite app_nil_r in Hnorm2. congruence.
+      + eapply unnest_exps_typesof in Hnorm; eauto; congruence.
+      + eapply unnest_exps_fresh_incl in Hnorm.
+        solve_forall; solve_incl.
+        repeat rewrite idty_app; repeat rewrite <- app_assoc.
+        repeat apply incl_app; auto.
+        1,2:apply incl_appr, incl_appl; repeat solve_incl.
+        unfold st_tys, idty; rewrite incl_map; etransitivity; eauto.
   Qed.
 
-  Corollary normalize_rhss_wt : forall G vars es es' eqs' st st',
+  Corollary unnest_rhss_wt : forall G vars es es' eqs' st st',
       Forall (wt_exp G (vars++st_tys st)) es ->
-      normalize_rhss es st = (es', eqs', st') ->
+      unnest_rhss es st = (es', eqs', st') ->
       Forall (wt_exp G (vars++st_tys st')) es' /\
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof with eauto.
     intros * Hwt Hnorm.
-    unfold normalize_rhss in Hnorm; repeat inv_bind.
+    unfold unnest_rhss in Hnorm; repeat inv_bind.
     eapply map_bind2_wt in H...
     solve_forall.
-    eapply normalize_rhs_wt with (G:=G) (vars:=vars) in H2 as [? ?]...
+    eapply unnest_rhs_wt with (G:=G) (vars:=vars) in H2 as [? ?]...
     split. 1,2:solve_forall. 1,2,3:repeat solve_incl.
   Qed.
 
-  Fact untuple_equation_wt_eq : forall G vars eq eqs' st st',
+  Fact unnest_equation_wt_eq : forall G vars eq eqs' st st',
       wt_equation G (vars++st_tys st) eq ->
-      untuple_equation eq st = (eqs', st') ->
+      unnest_equation eq st = (eqs', st') ->
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof with eauto.
     intros * Hwt Hnorm.
     destruct eq as [xs es]; simpl in Hnorm.
     repeat inv_bind. destruct Hwt.
-    assert (Hnorm:=H). eapply normalize_rhss_wt in H as [Hwt Hwt']...
+    assert (Hnorm:=H). eapply unnest_rhss_wt in H as [Hwt Hwt']...
     apply Forall_app. split; eauto.
     assert (st_follows st st') as Hfollows by eauto.
-    eapply normalize_rhss_typesof in Hnorm...
+    eapply unnest_rhss_typesof in Hnorm...
     rewrite <- Hnorm in H1.
     clear Hnorm. revert xs H1.
     induction x; intros xs H1; constructor; simpl in H1.
@@ -939,19 +945,19 @@ Module Type NTYPING
         replace (n + numstreams a - numstreams a) with n in H1 by omega...
   Qed.
 
-  Corollary untuple_equations_wt_eq : forall G vars eqs eqs' st st',
+  Corollary unnest_equations_wt_eq : forall G vars eqs eqs' st st',
       Forall (wt_equation G (vars++st_tys st)) eqs ->
-      untuple_equations eqs st = (eqs', st') ->
+      unnest_equations eqs st = (eqs', st') ->
       Forall (wt_equation G (vars++st_tys st')) eqs'.
   Proof with eauto.
     induction eqs; intros * Hwt Hnorm;
-      unfold untuple_equations in Hnorm;
+      unfold unnest_equations in Hnorm;
       repeat inv_bind; auto.
     inv Hwt. apply Forall_app. split.
-    - eapply untuple_equation_wt_eq in H...
+    - eapply unnest_equation_wt_eq in H...
       solve_forall; repeat solve_incl.
-    - assert (untuple_equations eqs x1 = (concat x2, st')) as Hnorm.
-      { unfold untuple_equations; repeat inv_bind. repeat eexists; eauto. inv_bind; eauto. }
+    - assert (unnest_equations eqs x1 = (concat x2, st')) as Hnorm.
+      { unfold unnest_equations; repeat inv_bind. repeat eexists; eauto. inv_bind; eauto. }
       eapply IHeqs in Hnorm...
       solve_forall; repeat solve_incl.
   Qed.
@@ -1021,7 +1027,7 @@ Module Type NTYPING
   Qed.
 
   Fact map_bind2_wt_clock {A A1 A2 : Type} :
-    forall vars (k : A -> Untuple.FreshAnn (A1 * A2)) a a1s a2s st st',
+    forall vars (k : A -> Unnesting.FreshAnn (A1 * A2)) a a1s a2s st st',
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
       map_bind2 k a st = (a1s, a2s, st') ->
       (forall st st' a es a2s, k a st = (es, a2s, st') -> st_follows st st') ->
@@ -1046,36 +1052,47 @@ Module Type NTYPING
       etransitivity...
   Qed.
 
-  Fact normalize_reset_wt_clock : forall vars e e' eqs' st st',
-      Forall (wt_clock vars) (clockof e) ->
-      Forall (wt_clock vars) (st_clocks st) ->
-      normalize_reset e st = (e', eqs', st') ->
-      Forall (wt_clock vars) (st_clocks st').
+  Fact unnest_reset_wt_clock : forall G vars e e' eqs' st st',
+      LiftO True (fun e => forall st' es' eqs',
+                   unnest_exp true e st = (es', eqs', st') ->
+                   Forall (wt_clock (vars++st_tys st')) (st_clocks st')) e ->
+      LiftO True (wt_exp G (vars++st_tys st)) e ->
+      Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
+      unnest_reset (unnest_exp true) e st = (e', eqs', st') ->
+      Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof with eauto.
-  intros vars e e' eqs' st st' Hwt Hclocks Hnorm.
-    specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
-      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind...
-    destruct (hd _) as [? [? ?]] eqn:Hhd.
-    repeat inv_bind.
-    eapply fresh_ident_wt_clock in H...
-    rewrite clockof_annot in Hwt.
-    destruct (annot e); simpl in *; inv Hhd.
-    - constructor.
-    - simpl in Hwt. inv Hwt...
+    intros * Hkck Hwt Hclocks Hnorm.
+    unnest_reset_spec; simpl in *; eauto.
+    assert (Forall (wt_clock (vars++st_tys st')) (clockof e0)) as Hwtck.
+    { eapply wt_exp_clockof in Hwt.
+      assert (Hk:=Hk0). eapply unnest_exp_fresh_incl in Hk0.
+      solve_forall; solve_incl. rewrite <- app_assoc.
+      apply incl_app; [repeat solve_incl|apply incl_appr, incl_app].
+      repeat solve_incl. unfold st_tys, idty. apply incl_map.
+      etransitivity; eauto. }
+    eapply fresh_ident_wt_clock in Hfresh...
+    - eapply Hkck in Hk0.
+      solve_forall; repeat solve_incl.
+    - assert (Hk:=Hk0). eapply unnest_exp_annot in Hk0; eauto.
+      rewrite clockof_annot, <- Hk0 in Hwtck.
+      destruct l; simpl in *. 1:inv Hhd; constructor.
+      destruct (annot e); simpl in *. inv Hhd; constructor.
+      subst; simpl in *.
+      inv Hwtck. repeat solve_incl.
   Qed.
 
-  Fact normalize_exp_wt_clock : forall G vars e is_control es' eqs' st st',
+  Fact unnest_exp_wt_clock : forall G vars e is_control es' eqs' st st',
       wt_exp G (vars++st_tys st) e ->
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
-      normalize_exp is_control e st = (es', eqs', st') ->
+      unnest_exp is_control e st = (es', eqs', st') ->
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hwt Hclocks Hnorm;
-      inv Hwt; repeat inv_bind; eauto.
+      inv Hwt. 1-10: repeat inv_bind; eauto.
     Ltac solve_map_bind2' :=
       solve_forall;
       match goal with
-      | Hnorm : normalize_exp _ _ _ = _, Hf : forall (_ : bool), _ |- Forall _ ?l =>
+      | Hnorm : unnest_exp _ _ _ = _, Hf : forall (_ : bool), _ |- Forall _ ?l =>
         eapply Hf in Hnorm; eauto
       end; repeat solve_incl.
     - (* binop *)
@@ -1116,7 +1133,7 @@ Module Type NTYPING
     - (* app *)
       eapply Forall_Forall in H0; eauto; clear H5.
       assert (st_follows st st') as Hfollows by repeat solve_st_follows.
-      assert (incl (fresh_ins es) (st_anns x4)) as Hincl by (apply map_bind2_normalize_exp_fresh_incl in H1; auto).
+      assert (incl (fresh_ins es) (st_anns x4)) as Hincl by (apply map_bind2_unnest_exp_fresh_incl in H1; auto).
       eapply map_bind2_wt_clock in H1... 2:solve_map_bind2'.
       eapply idents_for_anns'_wt_clock in H2...
       1: solve_forall; repeat solve_incl.
@@ -1126,155 +1143,134 @@ Module Type NTYPING
       + etransitivity...
       + apply idents_for_anns'_fresh_incl in H2...
     - (* app (reset) *)
-      eapply Forall_Forall in H0; eauto; clear H5.
-      assert (st_follows st x1) by repeat solve_st_follows. assert (st_follows x1 st') by repeat solve_st_follows.
-      assert (st_follows x1 x8) by eauto. assert (st_follows x8 st') by repeat solve_st_follows.
-      assert (incl (fresh_in r) (st_anns x8)) as Hincl1 by (apply normalize_exp_fresh_incl in H2; auto).
-      assert (incl (fresh_ins es) (st_anns x1)) as Hincl2 by (apply map_bind2_normalize_exp_fresh_incl in H1; auto).
-      assert (length x6 = numstreams r) as Hlength by eauto.
-      assert (clocksof x6 = clockof r) as Hannot by eauto.
-      eapply map_bind2_wt_clock in H1... 2:solve_map_bind2'.
-      eapply H in H2... 2:repeat solve_incl.
-      eapply normalize_reset_wt_clock in H4...
-      2: { apply wt_exp_clockof in H10. rewrite <- Hannot in H10.
-           rewrite <- length_typeof_numstreams, H11 in Hlength; simpl in Hlength.
-           singleton_length.
-           solve_forall. solve_incl.
-           rewrite <- app_assoc. apply incl_appr', incl_app...
-           1: apply st_follows_tys_incl; repeat solve_st_follows.
-           unfold st_tys, idty; apply incl_map... }
-      eapply idents_for_anns'_wt_clock in H3...
-      1: solve_forall; repeat solve_incl.
+      do 5 inv_bind.
+      assert (st_follows x1 x4) as Hfollows.
+      { clear - H2. eapply (unnest_reset_st_follows _ (Some r)) in H2; eauto. }
+      assert (Forall (wt_clock (vars ++ st_tys x1)) (st_clocks x1)) as Hck1.
+      { repeat inv_bind. eapply map_bind2_wt_clock in H1... solve_map_bind2'. }
+      eapply (unnest_reset_wt_clock G vars (Some r)) in H2; simpl; eauto.
+      2-4:clear H2. 1-4:repeat inv_bind.
+      2:intros; eapply H in H2; eauto. 2,3: repeat solve_incl.
+      eapply idents_for_anns'_wt_clock in H3; eauto.
+      solve_forall. repeat solve_incl.
       rewrite Forall_map. solve_forall. solve_incl.
       rewrite <- app_assoc. apply incl_appr', incl_app; repeat solve_incl.
       unfold st_tys, idty; apply incl_map, incl_app.
-      + etransitivity...
+      + eapply map_bind2_unnest_exp_fresh_incl in H1.
+        etransitivity... repeat solve_incl.
       + apply idents_for_anns'_fresh_incl in H3...
   Qed.
 
-  Corollary normalize_exps_wt_clock : forall G vars es es' eqs' st st',
+  Corollary unnest_exps_wt_clock : forall G vars es es' eqs' st st',
       Forall (wt_exp G (vars++st_tys st)) es ->
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof.
     intros G vars es es' eqs' st st' Hwt Hclocks Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
+    unfold unnest_exps in Hnorm. repeat inv_bind.
     eapply map_bind2_wt_clock in H; eauto.
     solve_forall.
     assert (st_follows st0 st0') by eauto.
-    eapply normalize_exp_wt_clock with (G:=G) (vars:=vars) in H3; repeat solve_incl.
+    eapply unnest_exp_wt_clock with (G:=G) (vars:=vars) in H3; repeat solve_incl.
     - solve_forall; solve_incl.
     - solve_forall; solve_incl.
   Qed.
 
-  Corollary normalize_rhs_wt_clock : forall G vars e es' eqs' st st',
+  Corollary unnest_rhs_wt_clock : forall G vars e es' eqs' st st',
       wt_exp G (vars++st_tys st) e ->
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof with eauto.
     intros * Hwt Hclocks Hnorm.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try eapply normalize_exp_wt_clock in Hnorm; eauto;
+    destruct e; unfold unnest_rhs in Hnorm;
+      try eapply unnest_exp_wt_clock in Hnorm; eauto;
         inv Hwt.
     - (* fby *)
       repeat inv_bind.
       assert (st_follows st x1) by repeat solve_st_follows. assert (st_follows st st') by repeat solve_st_follows.
-      eapply normalize_exps_wt_clock with (G:=G) in H...
-      eapply normalize_exps_wt_clock with (G:=G) in H0...
+      eapply unnest_exps_wt_clock with (G:=G) in H...
+      eapply unnest_exps_wt_clock with (G:=G) in H0...
       solve_forall; do 3 solve_incl; apply st_follows_tys_incl; auto.
     - (* arrow *)
       repeat inv_bind.
       assert (st_follows st x1) by repeat solve_st_follows. assert (st_follows st st') by repeat solve_st_follows.
-      eapply normalize_exps_wt_clock with (G:=G) in H...
-      eapply normalize_exps_wt_clock with (G:=G) in H0...
+      eapply unnest_exps_wt_clock with (G:=G) in H...
+      eapply unnest_exps_wt_clock with (G:=G) in H0...
       solve_forall; do 3 solve_incl; apply st_follows_tys_incl; auto.
     - (* app *)
       repeat inv_bind.
-      eapply normalize_exps_wt_clock with (G:=G) in H...
+      eapply unnest_exps_wt_clock with (G:=G) in H...
     - (* app (reset) *)
-      repeat inv_bind.
-      assert (incl (fresh_in r) (st_anns x6)) as Hincl by (eapply normalize_exp_fresh_incl; eauto).
-      assert (st_follows x6 st') as Hfollows2 by repeat solve_st_follows.
-      assert (length x4 = numstreams r) as Hlength by eauto.
-      assert (clocksof x4 = clockof r) as Hclockof by eauto.
-      assert (wt_exp G (vars ++ st_tys x1) r) as Hwt' by repeat solve_incl.
-      assert (st_follows st st') as Hfollows by repeat solve_st_follows.
-      assert (Hwt:=H0). eapply normalize_exp_wt in Hwt as [Hwt _]...
-      eapply normalize_exps_wt_clock with (G:=G) in H...
-      eapply normalize_exp_wt_clock with (G:=G) in H0...
-      eapply normalize_reset_wt_clock in H1... 2:solve_forall; repeat solve_incl.
-      assert (length x4 = 1).
-      { rewrite Hlength. rewrite typeof_annot in H9. rewrite <- length_annot_numstreams.
-        erewrite <- map_length. rewrite H9. reflexivity. }
-      singleton_length.
-      rewrite Hclockof.
-      eapply wt_exp_clockof in H8.
-      solve_forall; solve_incl.
-      rewrite <- app_assoc. apply incl_appr'; repeat solve_incl.
-      apply incl_app; repeat solve_incl. unfold st_tys, idty.
-      apply incl_map; etransitivity...
+      do 4 inv_bind.
+      assert (st_follows x1 st') as Hfollows.
+      { clear - H0. eapply (unnest_reset_st_follows _ (Some r)) in H0; eauto. }
+      assert (Forall (wt_clock (vars ++ st_tys x1)) (st_clocks x1)) as Hck1.
+      { repeat inv_bind. eapply unnest_exps_wt_clock in H... }
+      eapply (unnest_reset_wt_clock G vars (Some r)) in H0; simpl; eauto.
+      intros; eapply unnest_exp_wt_clock with (G:=G) in H1; eauto.
+      1,2:repeat solve_incl.
   Qed.
 
-  Corollary normalize_rhss_wt_clock : forall G vars es es' eqs' st st',
+  Corollary unnest_rhss_wt_clock : forall G vars es es' eqs' st st',
       Forall (wt_exp G (vars++st_tys st)) es ->
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
-      normalize_rhss es st = (es', eqs', st') ->
+      unnest_rhss es st = (es', eqs', st') ->
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof.
     intros * Hwt Hclocks Hnorm.
-    unfold normalize_rhss in Hnorm. repeat inv_bind.
+    unfold unnest_rhss in Hnorm. repeat inv_bind.
     eapply map_bind2_wt_clock in H; eauto.
-    solve_forall. eapply normalize_rhs_wt_clock with (G:=G) in H3; eauto.
+    solve_forall. eapply unnest_rhs_wt_clock with (G:=G) in H3; eauto.
     repeat solve_incl.
   Qed.
 
-  Fact untuple_equation_wt_clock : forall G vars eq eqs' st st',
+  Fact unnest_equation_wt_clock : forall G vars eq eqs' st st',
       wt_equation G (vars++st_tys st) eq ->
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
-      untuple_equation eq st = (eqs', st') ->
+      unnest_equation eq st = (eqs', st') ->
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof.
     intros * Hwt Hclocks Hnorm.
     destruct eq; repeat inv_bind.
     destruct Hwt.
-    eapply normalize_rhss_wt_clock in H; eauto.
+    eapply unnest_rhss_wt_clock in H; eauto.
   Qed.
 
-  Corollary untuple_equations_wt_clock : forall G vars eqs eqs' st st',
+  Corollary unnest_equations_wt_clock : forall G vars eqs eqs' st st',
       Forall (wt_equation G (vars++st_tys st)) eqs ->
       Forall (wt_clock (vars++st_tys st)) (st_clocks st) ->
-      untuple_equations eqs st = (eqs', st') ->
+      unnest_equations eqs st = (eqs', st') ->
       Forall (wt_clock (vars++st_tys st')) (st_clocks st').
   Proof.
     induction eqs; intros * Hwt Hclocks Hnorm;
-      unfold untuple_equations in Hnorm; repeat inv_bind.
+      unfold unnest_equations in Hnorm; repeat inv_bind.
     - assumption.
     - inv Hwt.
       assert (st_follows st x1) by repeat solve_st_follows.
-      eapply untuple_equation_wt_clock in H; eauto.
-      assert (untuple_equations eqs x1 = (concat x2, st')) as Hnorm.
-      { unfold untuple_equations; repeat inv_bind.
+      eapply unnest_equation_wt_clock in H; eauto.
+      assert (unnest_equations eqs x1 = (concat x2, st')) as Hnorm.
+      { unfold unnest_equations; repeat inv_bind.
         repeat eexists; eauto. inv_bind; auto. }
       eapply IHeqs in Hnorm; eauto.
       solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma untuple_node_wt : forall G n Hwl,
+  Lemma unnest_node_wt : forall G n Hwl,
       wt_node G n ->
-      wt_node G (untuple_node n Hwl).
+      wt_node G (unnest_node n Hwl).
   Proof.
     intros * [Hclin [Hclout [Hclvars Heq]]].
-    unfold untuple_node.
+    unfold unnest_node.
     repeat constructor; simpl; auto.
     - unfold wt_clocks in *.
       apply Forall_app. split.
       + solve_forall. unfold idty in *.
         solve_incl. repeat rewrite map_app. repeat solve_incl.
-      + remember (untuple_equations _ _) as res.
+      + remember (unnest_equations _ _) as res.
         destruct res as [eqs st']. symmetry in Heqres.
-        eapply untuple_equations_wt_clock with (G:=G) in Heqres; eauto.
+        eapply unnest_equations_wt_clock with (G:=G) in Heqres; eauto.
         * simpl. unfold st_clocks in Heqres.
           unfold idty. solve_forall.
           repeat solve_incl.
@@ -1284,10 +1280,10 @@ Module Type NTYPING
           repeat rewrite <- app_assoc. repeat rewrite <- map_app.
           solve_forall; repeat solve_incl. apply incl_map, incl_appr'. rewrite Permutation_app_comm; auto.
         * unfold st_clocks. rewrite init_st_anns; simpl; constructor.
-    - remember (untuple_equations _ _) as res.
+    - remember (unnest_equations _ _) as res.
       destruct res as [eqs' st']; simpl.
       symmetry in Heqres.
-      eapply untuple_equations_wt_eq with (G:=G) (vars:=(idty (n_in n ++ n_vars n ++ n_out n))) in Heqres; eauto.
+      eapply unnest_equations_wt_eq with (G:=G) (vars:=(idty (n_in n ++ n_vars n ++ n_out n))) in Heqres; eauto.
       + solve_forall; solve_incl.
         unfold st_tys; rewrite <- idty_app. apply incl_map.
         repeat rewrite <- app_assoc. apply incl_appr', incl_appr'.
@@ -1295,20 +1291,20 @@ Module Type NTYPING
       + solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma untuple_global_wt : forall G Hwl,
+  Lemma unnest_global_wt : forall G Hwl,
       wt_global G ->
-      wt_global (untuple_global G Hwl).
+      wt_global (unnest_global G Hwl).
   Proof.
     induction G; intros * Hwt; simpl; inv Hwt.
     - constructor.
     - constructor.
       + eapply IHG; eauto.
-      + remember (untuple_node _ _) as n'. symmetry in Heqn'.
+      + remember (unnest_node _ _) as n'. symmetry in Heqn'.
         subst.
-        eapply untuple_node_wt; eauto.
+        eapply unnest_node_wt; eauto.
         eapply iface_eq_wt_node; eauto.
-        eapply untuple_global_eq.
-      + eapply untuple_global_names; eauto.
+        eapply unnest_global_eq.
+      + eapply unnest_global_names; eauto.
   Qed.
 
   (** ** Preservation of wt through the second pass *)
@@ -1363,19 +1359,20 @@ Module Type NTYPING
       wt_exp G (vars++st_tys' st') e'.
   Proof.
     intros * Hwtc Hwt1 Hwt2 Hty1 Hty2 Hfby.
-    unfold fby_iteexp in Hfby. destruct (is_constant e0); repeat inv_bind.
-    - repeat constructor; simpl; try rewrite app_nil_r; auto.
-    - repeat constructor; simpl; try rewrite app_nil_r; auto.
-      2,3,5,6:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
-      + apply init_var_for_clock_In in H.
-        apply in_or_app, or_intror. unfold st_tys', idty.
-        simpl_In. exists (x, (Op.bool_type, ck)); split; auto.
-        simpl_In. exists (x, (Op.bool_type, ck, true)); split; auto.
-        eapply st_follows_incl; eauto.
-      + apply fresh_ident_In in H0.
-        apply in_or_app, or_intror. unfold st_tys', idty.
-        simpl_In. exists (x2, (ty, ck)); split; auto.
-        simpl_In. exists (x2, (ty, ck, false)); split; auto.
+    unfold fby_iteexp in Hfby; repeat inv_bind.
+    repeat constructor; simpl in *; try rewrite app_nil_r; auto.
+    2,3,5,6:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
+    1:(apply init_var_for_clock_In in H;
+         apply in_or_app, or_intror; unfold st_tys', idty;
+         simpl_In; exists (x, (Op.bool_type, ck)); split; auto;
+         simpl_In).
+    simpl in H.
+    exists (x, (Op.bool_type, ck, true)); split; auto.
+    eapply st_follows_incl; eauto.
+    1:(apply fresh_ident_In in H0;
+       apply in_or_app, or_intror; unfold st_tys', idty;
+       simpl_In; exists (x2, (ty, ck)); split; auto;
+       simpl_In; exists (x2, (ty, ck, false)); split; auto).
   Qed.
 
   Fact fby_iteexp_wt_eq : forall G vars e0 e ty ck name e' eqs' st st',
@@ -1388,7 +1385,7 @@ Module Type NTYPING
       Forall (wt_equation G (vars++st_tys' st')) eqs'.
   Proof.
     intros * Hwtc Hwt1 Hwt2 Hty1 Hty2 Hfby.
-    unfold fby_iteexp in Hfby. destruct (is_constant e0); repeat inv_bind; auto.
+    unfold fby_iteexp in Hfby; repeat inv_bind.
     assert (wt_clock (vars ++ st_tys' st') ck) as Hwtck'.
     { repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows. }
     constructor.
@@ -1423,42 +1420,48 @@ Module Type NTYPING
   Proof.
     intros * Hwt Hfby.
     inv_fby_equation Hfby to_cut eq.
+    - (* constant fby *)
+      destruct x2 as (ty&ck&name).
+      destruct (PS.mem x to_cut); repeat inv_bind; auto.
+      destruct Hwt as [Hwt Hin]. apply Forall_singl in Hwt. apply Forall2_singl in Hin.
+      eapply wt_exp_incl with (vars':=vars ++ st_tys' st') in Hwt. 2:repeat solve_incl.
+      repeat (constructor; auto).
+      3:repeat solve_incl.
+      + apply fresh_ident_In in H. apply in_or_app, or_intror.
+        unfold st_tys', idty. repeat simpl_In. exists (x2, (ty, ck)); split; auto.
+        repeat simpl_In. exists (x2, (ty, ck, false)); auto.
+      + inv Hwt.
+        apply Forall_singl in H7. inv H7; repeat solve_incl.
+      + apply fresh_ident_In in H. apply in_or_app, or_intror.
+        unfold st_tys', idty. repeat simpl_In. exists (x2, (ty, ck)); split; auto.
+        repeat simpl_In. exists (x2, (ty, ck, false)); auto.
     - (* fby *)
-      destruct x2 as [ty [ck name]]; repeat inv_bind.
-      assert (st_follows st x4) as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H; eauto).
-      destruct Hwt as [Hwt Hins]; inv Hwt; clear H4.
-      inv H3; simpl in *; rewrite app_nil_r in *.
-      inv H5; clear H4. inv H6; clear H5. inv H9; clear H6. inv H5.
-      inv Hins; clear H11.
-      assert (H':=H). eapply fby_iteexp_wt_eq in H; eauto.
-      destruct (PS.mem _ _); repeat inv_bind; repeat constructor; simpl; auto.
-      5,8:rewrite app_nil_r.
-      + eapply fresh_ident_In in H0.
-        apply in_or_app, or_intror. unfold st_tys', idty. rewrite map_map.
-        simpl_In. exists (x5, (ty, ck, false)); split; auto.
-      + repeat solve_incl.
-      + assert (incl (vars ++ st_tys' st) (vars ++ st_tys' st')) by repeat solve_incl; eauto.
-      + eapply fby_iteexp_wt_exp in H'; eauto. repeat solve_incl.
-      + eapply fby_iteexp_typeof with (ann:=(ty, (ck, name))) in H'.
-        rewrite H'; simpl. constructor; auto.
-        eapply fresh_ident_In in H0.
-        apply in_or_app, or_intror. unfold st_tys', idty.
-        simpl_In. exists (x5, (ty, ck)); split; auto.
-        simpl_In. exists (x5, (ty, ck, false)); split; auto.
-      + eapply fby_iteexp_typeof with (ann:=(ty, (ck, name))) in H'.
-        rewrite H'; simpl. constructor; auto.
-        assert (incl (vars ++ st_tys' st) (vars ++ st_tys' st')) by repeat solve_incl; eauto.
-      + solve_forall; repeat solve_incl.
-      + eapply fby_iteexp_wt_exp in H'; eauto.
+      destruct x2 as (ty&ck&name).
+      assert (st_follows st st') as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H; eauto).
+      destruct Hwt as [Hwt Hins]. apply Forall_singl in Hwt. apply Forall2_singl in Hins.
+      inv Hwt.
+      simpl in *; rewrite app_nil_r in *.
+      apply Forall_singl in H3; apply Forall_singl in H4.
+      apply Forall_singl in H7; inv H7.
+      assert (Hwte:=H). eapply fby_iteexp_wt_exp in Hwte; eauto.
+      assert (Hty:=H). eapply (fby_iteexp_typeof _ _ (ty, (ck, name))) in Hty; eauto.
+      assert (Hwteq:=H). eapply fby_iteexp_wt_eq in Hwteq; eauto.
+      repeat constructor; auto.
+      simpl; rewrite app_nil_r, Hty. repeat constructor. repeat solve_incl.
     - (* arrow *)
       destruct x2 as [ty [ck name]].
-      destruct Hwt as [Hwt1 Hwt2]. inv Hwt1. inv Hwt2. clear H3 H7.
-      inv H2. inv H4. inv H6. inv H9. clear H3 H10 H11. inv H6.
-      constructor. 2:eapply arrow_iteexp_wt_eq in H; eauto.
-      repeat inv_bind. rewrite app_nil_r; simpl.
-      assert (st_follows st st') as Hfollows by (eapply init_var_for_clock_st_follows in H; eauto).
-      split; repeat constructor; auto.
-      2,3,4,5:repeat solve_incl.
+      destruct Hwt as [Hwt Hins]. apply Forall_singl in Hwt. apply Forall2_singl in Hins.
+      inv Hwt.
+      simpl in *; rewrite app_nil_r in *.
+      apply Forall_singl in H3; apply Forall_singl in H4.
+      apply Forall_singl in H7; inv H7.
+      assert (Hwte:=H). eapply arrow_iteexp_wt_eq in Hwte; eauto.
+      assert (st_follows st st') as Hfollows.
+      { repeat inv_bind. eapply init_var_for_clock_st_follows; eauto. }
+      repeat inv_bind.
+      repeat constructor; auto. 9:eapply Hwte.
+      2,3,4,7:repeat solve_incl.
+      2,3:simpl; rewrite app_nil_r; auto.
       + eapply init_var_for_clock_In in H.
         apply in_or_app, or_intror. unfold st_tys', idty. rewrite map_map.
         simpl_In. exists (x2, (Op.bool_type, ck, true)); auto.
@@ -1514,7 +1517,7 @@ Module Type NTYPING
       Forall (wt_clock (vars ++ st_tys' st')) (st_clocks' st').
   Proof.
     intros * Hwtc1 Hwtc2 Hfby.
-    unfold fby_iteexp in Hfby. destruct (is_constant e0); repeat inv_bind; auto.
+    unfold fby_iteexp in Hfby; repeat inv_bind; auto.
     assert (st_follows st x1) as Hfollows1 by (eapply init_var_for_clock_st_follows in H; eauto).
     assert (st_follows x1 st') as Hfollows2 by eauto.
     eapply fresh_ident_wt_clock' in H0; eauto. 2:repeat solve_incl.
@@ -1541,14 +1544,19 @@ Module Type NTYPING
   Proof.
     intros * Hwt Hwtck Hfby.
     inv_fby_equation Hfby to_cut eq.
+    - (* fby (constant) *)
+      destruct x2 as (ty&ck&name).
+      destruct PS.mem; repeat inv_bind; auto.
+      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt.
+      inv Hwt.
+      apply Forall_singl in H7; inv H7.
+      eapply fresh_ident_wt_clock' in H; eauto.
+      1:solve_forall. 1,2:repeat solve_incl.
     - (* fby *)
-      destruct x2 as [ty [ck name]]; repeat inv_bind.
-      assert (st_follows st x4) as Hfollows by (eapply fby_iteexp_st_follows with (ann:=(ty, (ck, name))) in H; eauto).
-      assert (wt_clock (vars ++ st_tys' st) ck) as Hwtc.
-      { destruct Hwt as [Hwt _]. inv Hwt; inv H3; inv H10; inv H3; auto. }
+      destruct x2 as (ty&ck&name).
       eapply fby_iteexp_wt_clock in H; eauto.
-      destruct (PS.mem _ _); repeat inv_bind; auto.
-      eapply fresh_ident_wt_clock' in H0; eauto. solve_forall. 1,2:repeat solve_incl.
+      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt.
+      inv Hwt. apply Forall_singl in H7; inv H7; auto.
     - (* arrow *)
       destruct x2 as [ty [ck name]].
       destruct Hwt as [Hwt _]. inv Hwt. inv H2. inv H9. inv H2.
@@ -1628,7 +1636,7 @@ Module Type NTYPING
     intros [G Hwl] * Hwt Hnorm.
     unfold normalize_global in Hnorm.
     destruct (Caus.check_causality _); inv Hnorm.
-    eapply normfby_global_wt, untuple_global_wt, Hwt.
+    eapply normfby_global_wt, unnest_global_wt, Hwt.
   Qed.
 
 End NTYPING.

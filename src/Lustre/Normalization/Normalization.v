@@ -8,7 +8,7 @@ From Velus Require Import Common Ident.
 From Velus Require Import Operators.
 From Velus Require Import Lustre.LSyntax Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh.
-From Velus Require Import Lustre.Normalization.Untuple Lustre.Normalization.NormFby.
+From Velus Require Import Lustre.Normalization.Unnesting Lustre.Normalization.NormFby.
 
 (** * Normalization of a full norm *)
 
@@ -20,17 +20,17 @@ Module Type NORMALIZATION
        (Import Syn : LSYNTAX Ids Op)
        (Import Caus : LCAUSALITY Ids Op Syn).
 
-  Module Export Untuple := UntupleFun Ids Op OpAux Syn.
-  Module Export NormFby := NormFbyFun Ids Op OpAux Syn Untuple.
+  Module Export Unnesting := UnnestingFun Ids Op OpAux Syn.
+  Module Export NormFby := NormFbyFun Ids Op OpAux Syn Unnesting.
 
   Definition normalize_global (G : { G : global | wl_global G }) : res global.
   Proof.
     destruct G as [G Hwl].
-    remember (untuple_global G Hwl) as G'.
+    remember (unnest_global G Hwl) as G'.
     refine (bind (check_causality G') _).
     intros _.
     refine (OK (normfby_global G' _)).
-    rewrite HeqG'. eapply untuple_global_untupled_global.
+    rewrite HeqG'. eapply unnest_global_unnested_global.
   Defined.
 
   Theorem normalize_global_normalized_global : forall G G',

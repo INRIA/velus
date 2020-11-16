@@ -23,7 +23,7 @@ Module Type NORDERED
 
   (** ** Preservation of order through the first pass *)
 
-  Fact map_bind2_Is_node_in : forall G f (k : exp -> Untuple.FreshAnn (list exp * list equation)) es es' eqs' st st',
+  Fact map_bind2_Is_node_in : forall G f (k : exp -> Unnesting.FreshAnn (list exp * list equation)) es es' eqs' st st',
       Forall (wl_exp G) es ->
       map_bind2 k es st = (es', eqs', st') ->
       Forall (fun e => forall es' eqs' st st',
@@ -57,44 +57,49 @@ Module Type NORDERED
 
   Hint Constructors Is_node_in_exp.
 
-  Fact normalize_reset_Is_node_in : forall f e e' eqs' st st',
-      normalize_reset e st = (e', eqs', st') ->
-      (Is_node_in_exp f e' \/ Is_node_in f eqs') ->
-      Is_node_in_exp f e.
+  Fact unnest_reset_Is_node_in : forall k f e e' eqs' st st',
+      LiftO True (fun e => forall es' eqs' st st',
+                   k e st = (es', eqs', st') ->
+                   Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs' ->
+                   Is_node_in_exp f e) e ->
+      unnest_reset k e st = (e', eqs', st') ->
+      LiftO True (Is_node_in_exp f) e' \/ Is_node_in f eqs' ->
+      LiftO True (Is_node_in_exp f) e.
   Proof.
-    intros f e e' eqs' st st' Hnorm Hisin.
-    specialize (normalize_reset_spec e) as [[v [ann [? Hspec]]]|Hspec]; subst;
-      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
-    - destruct Hisin; inv H.
-    - destruct (List.hd _ _) as [? [? ?]].
-      repeat inv_bind.
-      destruct Hisin; inv H; inv H0; inv H1; auto; inv H0.
+    intros * Hkisin Hnorm Hisin.
+    unnest_reset_spec; simpl in *; eauto.
+    - eapply Hkisin in Hk0; eauto.
+      destruct Hisin as [Hisin|Hisin]; auto. inv Hisin.
+    - eapply Hkisin in Hk0; eauto.
+      destruct Hisin as [Hisin|Hisin]; inv Hisin; auto.
+      apply Exists_singl in H0.
+      destruct l; simpl in H0; auto. inv H0.
   Qed.
-  Local Hint Resolve normalize_reset_Is_node_in.
+  Local Hint Resolve unnest_reset_Is_node_in.
 
-  Fact normalize_exp_Is_node_in : forall G f e is_control es' eqs' st st',
+  Fact unnest_exp_Is_node_in : forall G f e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = (es', eqs', st') ->
+      unnest_exp is_control e st = (es', eqs', st') ->
       (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
       Is_node_in_exp f e.
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hwl Hnorm Hisin;
-      inv Hwl; simpl in Hnorm; repeat inv_bind.
+      inv Hwl; simpl in Hnorm. 1-10:repeat inv_bind.
     - (* const *) exfalso.
       destruct Hisin as [H|H]; inv H; inv H1.
     - (* var *) exfalso.
       destruct Hisin as [H|H]; inv H; inv H1.
     - (* unop *)
-      assert (length x = numstreams e) as Hlen by (eapply normalize_exp_length; eauto).
+      assert (length x = numstreams e) as Hlen by (eapply unnest_exp_length; eauto).
       rewrite H4 in Hlen. singleton_length. clear H4.
       constructor. eapply IHe...
       destruct Hisin...
       left. constructor.
       inv H0; inv H3...
     - (* binop *)
-      assert (length x = numstreams e1) as Hlen1 by (eapply normalize_exp_length; eauto).
+      assert (length x = numstreams e1) as Hlen1 by (eapply unnest_exp_length; eauto).
       rewrite H6 in Hlen1. singleton_length. clear H6.
-      assert (length x2 = numstreams e2) as Hlen2 by (eapply normalize_exp_length; eauto).
+      assert (length x2 = numstreams e2) as Hlen2 by (eapply unnest_exp_length; eauto).
       rewrite H7 in Hlen2. singleton_length. clear H7.
       constructor.
       destruct Hisin.
@@ -102,8 +107,8 @@ Module Type NORDERED
         destruct H6...
       + rewrite Is_node_in_app in H1. destruct H1...
     - (* fby *)
-      assert (length (concat x2) = length (annots e0s)) as Hlen1 by (eapply map_bind2_normalize_exp_length; eauto).
-      assert (length (concat x6) = length (annots es)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x2) = length (annots e0s)) as Hlen1 by (eapply map_bind2_unnest_exp_length; eauto).
+      assert (length (concat x6) = length (annots es)) as Hlen2 by (eapply map_bind2_unnest_exp_length; eauto).
       constructor.
       repeat rewrite Is_node_in_app in Hisin. destruct Hisin as [Hisin|[Hisin|[Hisin|Hisin]]].
       + exfalso.
@@ -112,7 +117,7 @@ Module Type NORDERED
         inv Hisin.
       + rewrite Is_node_in_Exists in Hisin.
         rewrite CommonList.Exists_map in Hisin.
-        unfold normalize_fby in Hisin.
+        unfold unnest_fby in Hisin.
         apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
         apply Exists_singl in H5. inv H5. destruct H15 as [Hin|Hin]; eapply Exists_singl in Hin.
         * eapply map_bind2_Is_node_in in H1... solve_forall.
@@ -124,8 +129,8 @@ Module Type NORDERED
       + right.
         eapply map_bind2_Is_node_in in H2... solve_forall.
     - (* arrow *)
-      assert (length (concat x2) = length (annots e0s)) as Hlen1 by (eapply map_bind2_normalize_exp_length; eauto).
-      assert (length (concat x6) = length (annots es)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x2) = length (annots e0s)) as Hlen1 by (eapply map_bind2_unnest_exp_length; eauto).
+      assert (length (concat x6) = length (annots es)) as Hlen2 by (eapply map_bind2_unnest_exp_length; eauto).
       constructor.
       repeat rewrite Is_node_in_app in Hisin. destruct Hisin as [Hisin|[Hisin|[Hisin|Hisin]]].
       + exfalso.
@@ -133,7 +138,7 @@ Module Type NORDERED
         rewrite Exists_exists in Hisin. destruct Hisin as [[id ann] [Hin Hisin]].
         inv Hisin.
       + rewrite Is_node_in_Exists in Hisin.
-        unfold normalize_arrow in Hisin.
+        unfold unnest_arrow in Hisin.
         apply Exists_exists in Hisin as [[? ?] [Hin ?]]; repeat simpl_In.
         apply Exists_singl in H5. inv H5. destruct H15 as [Hin|Hin]; eapply Exists_singl in Hin.
         * eapply map_bind2_Is_node_in in H1... solve_forall.
@@ -145,22 +150,22 @@ Module Type NORDERED
       + right.
         eapply map_bind2_Is_node_in in H2... solve_forall.
     - (* when *)
-      assert (length (concat x1) = length (annots es)) by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x1) = length (annots es)) by (eapply map_bind2_unnest_exp_length; eauto).
       constructor.
       eapply map_bind2_Is_node_in in H0... (repeat rewrite_Forall_forall; eauto).
       destruct Hisin...
-      left. unfold normalize_when in H2.
+      left. unfold unnest_when in H2.
       rewrite CommonList.Exists_map in H2.
       rewrite Exists_combine_l with (ys:=tys); solve_length.
       rewrite Exists_exists in *. destruct H2 as [[e ty] [HIn Hex]].
       exists (e, ty); split...
       inv Hex. inv H5... inv H4.
     - (* merge *)
-      assert (length (concat x3) = length (annots ets)) as Hlen1 by (eapply map_bind2_normalize_exp_length; eauto).
-      assert (length (concat x6) = length (annots efs)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x3) = length (annots ets)) as Hlen1 by (eapply map_bind2_unnest_exp_length; eauto).
+      assert (length (concat x6) = length (annots efs)) as Hlen2 by (eapply map_bind2_unnest_exp_length; eauto).
       constructor. destruct is_control; repeat inv_bind.
       + destruct Hisin.
-        * unfold normalize_merge in H3. rewrite CommonList.Exists_map in H3.
+        * unfold unnest_merge in H3. rewrite CommonList.Exists_map in H3.
           rewrite Exists_exists in H3. destruct H3 as [[[e0 e] ty] [HIn Hnode]].
           repeat simpl_In.
           inv Hnode. destruct H11; (inv H5; [| inv H11]).
@@ -176,7 +181,7 @@ Module Type NORDERED
           rewrite CommonList.Exists_map in H4.
           rewrite Exists_exists in H4. destruct H4 as [[id ann] [Hin Hex]]. inv Hex.
         * repeat rewrite Is_node_in_app in H4. destruct H4 as [H4|[H4|H4]].
-          -- unfold normalize_merge in H4. rewrite Is_node_in_Exists in H4.
+          -- unfold unnest_merge in H4. rewrite Is_node_in_Exists in H4.
              rewrite map_map in H4. rewrite combine_map_fst in H4. rewrite combine_map_snd in H4.
              rewrite map_map in H4; simpl in H4.
              rewrite CommonList.Exists_map in H4.
@@ -194,13 +199,13 @@ Module Type NORDERED
           -- left. eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
           -- right. eapply map_bind2_Is_node_in in H2... (repeat rewrite_Forall_forall; eauto).
     - (* ite *)
-      assert (length x = numstreams e) as Hlen by (eapply normalize_exp_length; eauto).
+      assert (length x = numstreams e) as Hlen by (eapply unnest_exp_length; eauto).
       rewrite H9 in Hlen. singleton_length. clear H9.
-      assert (length (concat x5) = length (annots ets)) as Hlen1 by (eapply map_bind2_normalize_exp_length; eauto).
-      assert (length (concat x8) = length (annots efs)) as Hlen2 by (eapply map_bind2_normalize_exp_length; eauto).
+      assert (length (concat x5) = length (annots ets)) as Hlen1 by (eapply map_bind2_unnest_exp_length; eauto).
+      assert (length (concat x8) = length (annots efs)) as Hlen2 by (eapply map_bind2_unnest_exp_length; eauto).
       constructor. destruct is_control; repeat inv_bind.
       + destruct Hisin.
-        * unfold normalize_ite in H4. rewrite CommonList.Exists_map in H4.
+        * unfold unnest_ite in H4. rewrite CommonList.Exists_map in H4.
           rewrite Exists_exists in H4. destruct H4 as [[[et ef] ty] [HIn Hnode]].
           repeat simpl_In.
           inv Hnode. destruct H13 as [H13|[H13|H13]]...
@@ -220,7 +225,7 @@ Module Type NORDERED
           rewrite CommonList.Exists_map in H7.
           rewrite Exists_exists in H7. destruct H7 as [[id ann] [Hin Hex]]. inv Hex.
         * repeat rewrite Is_node_in_app in H7. destruct H7 as [H7|[H7|[H7|H7]]]...
-          -- unfold normalize_ite in H7. rewrite Is_node_in_Exists in H7.
+          -- unfold unnest_ite in H7. rewrite Is_node_in_Exists in H7.
              rewrite map_map, combine_map_fst, combine_map_snd, map_map in H7; simpl in H7.
              rewrite CommonList.Exists_map, Exists_exists in H7.
              destruct H7 as [[[id ann] [[et ef] ty]] [Hin Hex]]; simpl in Hex.
@@ -247,196 +252,196 @@ Module Type NORDERED
         * eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
           rewrite app_nil_r in H5...
     - (* app (reset) *)
-      assert (length x6 = numstreams r) as Hlen by eauto.
-      rewrite H8 in Hlen. singleton_length. clear H8.
-      destruct Hisin.
+      do 5 inv_bind.
+      assert (LiftO True (Is_node_in_exp f) x2 \/ Is_node_in f x3 ->
+              Is_node_in_exp f (Eapp f0 es (Some r) a)) as Hisin2.
+      { intros.
+        eapply (unnest_reset_Is_node_in _ _ (Some r)) in H2; simpl; eauto.
+      } clear H2.
+      repeat inv_bind.
+      destruct Hisin as [Hisin|Hisin].
       + exfalso.
-        rewrite CommonList.Exists_map, Exists_exists in H7.
-        destruct H7 as [[id ann] [Hin Hex]]. inv Hex.
-      + inv H7; [| repeat rewrite Exists_app' in H12; destruct H12 as [H12|[H12|H12]]]...
-        * inv H12; [| inv H8].
-          inv H8...
-          inv H13.
-          -- eapply normalize_reset_Is_node_in in H4...
-             eapply H in H2...
-          -- eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
+        rewrite CommonList.Exists_map, Exists_exists in Hisin.
+        destruct Hisin as [[id ann] [Hin Hex]]. inv Hex.
+      + inv Hisin; [| repeat rewrite Exists_app' in H4; destruct H4 as [H4|H4]]...
+        * inv H4; [| inv H7].
+          inv H7; simpl in *...
+          inv H12; eauto.
+          eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
         * eapply map_bind2_Is_node_in in H1... (repeat rewrite_Forall_forall; eauto).
-        * eapply normalize_reset_Is_node_in in H4...
-          eapply H in H2...
   Qed.
-  Local Hint Resolve normalize_exp_Is_node_in.
+  Local Hint Resolve unnest_exp_Is_node_in.
 
-  Corollary normalize_exps_Is_node_in : forall G f es es' eqs' st st',
+  Corollary unnest_exps_Is_node_in : forall G f es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
       List.Exists (Is_node_in_exp f) es.
   Proof.
     intros G f es es' eqs' st st' Hwl Hnorm Hex.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
+    unfold unnest_exps in Hnorm. repeat inv_bind.
     eapply map_bind2_Is_node_in in H; eauto.
     solve_forall.
   Qed.
-  Local Hint Resolve normalize_exps_Is_node_in.
+  Local Hint Resolve unnest_exps_Is_node_in.
 
-  Fact normalize_rhs_Is_node_in : forall G f e es' eqs' st st',
+  Fact unnest_rhs_Is_node_in : forall G f e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
       Is_node_in_exp f e.
   Proof with eauto.
     intros * Hwl Hnorm Hisin.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try (eapply normalize_exp_Is_node_in in Hnorm; eauto);
+    destruct e; unfold unnest_rhs in Hnorm;
+      try (eapply unnest_exp_Is_node_in in Hnorm; eauto);
       [| |destruct o].
     - (* fby *)
       inv Hwl. repeat inv_bind.
-      assert (length x = length (annots l)) as Hlen1 by (eapply normalize_exps_length; eauto).
-      assert (length x2 = length (annots l0)) as Hlen2 by (eapply normalize_exps_length; eauto).
+      assert (length x = length (annots l)) as Hlen1 by (eapply unnest_exps_length; eauto).
+      assert (length x2 = length (annots l0)) as Hlen2 by (eapply unnest_exps_length; eauto).
       repeat rewrite Is_node_in_app in Hisin.
       constructor.
       destruct Hisin as [Hisin|[Hisin|Hisin]]...
-      unfold normalize_fby in Hisin.
+      unfold unnest_fby in Hisin.
       rewrite Exists_map in Hisin. apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
       inv H1. destruct H10 as [Hisin|Hisin].
       + apply Exists_singl in Hisin.
-        eapply normalize_exps_Is_node_in in H...
+        eapply unnest_exps_Is_node_in in H...
         left. rewrite Exists_exists. exists e; auto.
       + apply Exists_singl in Hisin.
-        eapply normalize_exps_Is_node_in in H0...
+        eapply unnest_exps_Is_node_in in H0...
         left. rewrite Exists_exists. exists e0; auto.
     - (* arrow *)
       inv Hwl. repeat inv_bind.
-      assert (length x = length (annots l)) as Hlen1 by (eapply normalize_exps_length; eauto).
-      assert (length x2 = length (annots l0)) as Hlen2 by (eapply normalize_exps_length; eauto).
+      assert (length x = length (annots l)) as Hlen1 by (eapply unnest_exps_length; eauto).
+      assert (length x2 = length (annots l0)) as Hlen2 by (eapply unnest_exps_length; eauto).
       repeat rewrite Is_node_in_app in Hisin.
       constructor.
       destruct Hisin as [Hisin|[Hisin|Hisin]]...
-      unfold normalize_arrow in Hisin.
+      unfold unnest_arrow in Hisin.
       rewrite Exists_map in Hisin. apply Exists_exists in Hisin as [[[? ?] ?] [Hin ?]]; repeat simpl_In.
       inv H1. destruct H10 as [Hisin|Hisin].
       + apply Exists_singl in Hisin.
-        eapply normalize_exps_Is_node_in in H...
+        eapply unnest_exps_Is_node_in in H...
         left. rewrite Exists_exists. exists e; auto.
       + apply Exists_singl in Hisin.
-        eapply normalize_exps_Is_node_in in H0...
+        eapply unnest_exps_Is_node_in in H0...
         left. rewrite Exists_exists. exists e0; auto.
     - (* app (reset) *)
-      inv Hwl. repeat inv_bind.
-      assert (length x4 = numstreams e) as Hlen by (eapply normalize_exp_length; eauto).
-      rewrite H6 in Hlen. singleton_length. clear H6.
-      destruct Hisin.
-      + inv H2; inv H6...
-        inv H10...
-        eapply normalize_reset_Is_node_in in H1...
-        eapply normalize_exp_Is_node_in in H0...
-      + repeat rewrite Is_node_in_app in H2. destruct H2 as [H2|[H2|H2]]...
-        eapply normalize_reset_Is_node_in in H1...
-        eapply normalize_exp_Is_node_in in H0...
+      inv Hwl. do 4 inv_bind.
+      assert (LiftO True (Is_node_in_exp f) x2 \/ Is_node_in f x3 ->
+              Is_node_in_exp f (Eapp i l (Some e) l0)) as Hisin2.
+      { intros.
+        eapply (unnest_reset_Is_node_in _ _ (Some e)) in H0; simpl; eauto.
+      } clear H0.
+      destruct Hisin as [Hisin|Hisin].
+      + apply Exists_singl in Hisin.
+        inv Hisin... inv H2...
+      + unfold Is_node_in in Hisin. rewrite Exists_app' in Hisin; destruct Hisin as [Hisin|Hisin]...
     - (* app *)
       inv Hwl. repeat inv_bind.
       destruct Hisin...
       inv H0; inv H3...
       rewrite app_nil_r in H0...
   Qed.
-  Local Hint Resolve normalize_rhs_Is_node_in.
+  Local Hint Resolve unnest_rhs_Is_node_in.
 
-  Corollary normalize_rhss_Is_node_in : forall G f es es' eqs' st st',
+  Corollary unnest_rhss_Is_node_in : forall G f es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_rhss es st = (es', eqs', st') ->
+      unnest_rhss es st = (es', eqs', st') ->
       (List.Exists (Is_node_in_exp f) es' \/ Is_node_in f eqs') ->
       List.Exists (Is_node_in_exp f) es.
   Proof.
     intros * Hwl Hnorm Hisin.
-    unfold normalize_rhss in Hnorm. repeat inv_bind.
+    unfold unnest_rhss in Hnorm. repeat inv_bind.
     eapply map_bind2_Is_node_in in H; eauto.
     solve_forall.
   Qed.
-  Local Hint Resolve normalize_rhss_Is_node_in.
+  Local Hint Resolve unnest_rhss_Is_node_in.
 
-  Fact untuple_equation_Is_node_in : forall G f eq eqs' st st',
+  Fact unnest_equation_Is_node_in : forall G f eq eqs' st st',
       wl_equation G eq ->
-      untuple_equation eq st = (eqs', st') ->
+      unnest_equation eq st = (eqs', st') ->
       Is_node_in f eqs' ->
       Is_node_in_eq f eq.
   Proof with eauto.
     intros G f [xs es] eqs' st st' Hwl Hnorm Hisin.
     inv Hwl.
-    unfold untuple_equation in Hnorm; repeat inv_bind.
+    unfold unnest_equation in Hnorm; repeat inv_bind.
     rewrite Is_node_in_app in Hisin. destruct Hisin.
     + rewrite Is_node_in_Exists in H2.
       rewrite CommonList.Exists_map in H2.
       rewrite Exists_exists in H2. destruct H2 as [[e xs'] [Hin Hisin]].
       repeat simpl_In. inv Hisin; [| inv H3].
       eapply combine_for_numstreams_In in Hin.
-      eapply normalize_rhss_Is_node_in in H1...
+      eapply unnest_rhss_Is_node_in in H1...
       left. eapply List.Exists_exists. eexists...
-    + eapply normalize_rhss_Is_node_in in H1...
+    + eapply unnest_rhss_Is_node_in in H1...
   Qed.
-  Local Hint Resolve untuple_equation_Is_node_in.
+  Local Hint Resolve unnest_equation_Is_node_in.
 
-  Corollary untuple_equations_Is_node_in : forall G f eqs eqs' st st',
+  Corollary unnest_equations_Is_node_in : forall G f eqs eqs' st st',
       Forall (wl_equation G) eqs ->
-      untuple_equations eqs st = (eqs', st') ->
+      unnest_equations eqs st = (eqs', st') ->
       Is_node_in f eqs' ->
       Is_node_in f eqs.
   Proof.
     induction eqs; intros * Hwl Hnorm Hisin;
-      unfold untuple_equations in Hnorm; simpl in *; repeat inv_bind; simpl in *.
+      unfold unnest_equations in Hnorm; simpl in *; repeat inv_bind; simpl in *.
     - inv Hisin.
     - inv Hwl.
       rewrite Is_node_in_app in Hisin; destruct Hisin.
       + left. eauto.
       + right. rewrite <- Is_node_in_Exists.
         eapply IHeqs; eauto.
-        unfold untuple_equations.
+        unfold unnest_equations.
         inv_bind. repeat eexists; eauto. inv_bind; eauto.
   Qed.
 
-  Fact untuple_node_Is_node_in : forall f n Hwl,
-      Is_node_in f (n_eqs (untuple_node n Hwl)) ->
+  Fact unnest_node_Is_node_in : forall f n Hwl,
+      Is_node_in f (n_eqs (unnest_node n Hwl)) ->
       Is_node_in f (n_eqs n).
   Proof.
     intros * Hisin; simpl in Hisin.
-    remember (untuple_equations _ _) as res; destruct res as [eqs' st'].
+    remember (unnest_equations _ _) as res; destruct res as [eqs' st'].
     symmetry in Heqres.
     destruct Hwl. unfold wl_node in w.
-    eapply untuple_equations_Is_node_in in Heqres; eauto.
+    eapply unnest_equations_Is_node_in in Heqres; eauto.
   Qed.
 
-  Fact untuple_global_names : forall G Hwl,
-      List.map n_name (untuple_global G Hwl) = List.map n_name G.
+  Fact unnest_global_names : forall G Hwl,
+      List.map n_name (unnest_global G Hwl) = List.map n_name G.
   Proof.
     induction G; intros Hwl; simpl; eauto.
     f_equal; eauto.
   Qed.
 
-  Fact untuple_node_ordered : forall G n Hwl,
+  Fact unnest_node_ordered : forall G n Hwl,
       Ordered_nodes (n::G) ->
-      Ordered_nodes (untuple_node n Hwl::G).
+      Ordered_nodes (unnest_node n Hwl::G).
   Proof.
     intros * Hordered.
     inv Hordered.
     constructor; eauto.
     intros f Hisin.
-    eapply untuple_node_Is_node_in in Hisin; auto.
+    eapply unnest_node_Is_node_in in Hisin; auto.
   Qed.
 
-  Lemma untuple_global_ordered : forall G Hwl,
+  Lemma unnest_global_ordered : forall G Hwl,
       Ordered_nodes G ->
-      Ordered_nodes (untuple_global G Hwl).
+      Ordered_nodes (unnest_global G Hwl).
   Proof with eauto.
     intros G Hwl Hord.
     induction Hord; simpl; constructor...
     - intros f Hisin; simpl.
-      eapply untuple_node_Is_node_in in Hisin.
+      eapply unnest_node_Is_node_in in Hisin.
       eapply H in Hisin. destruct Hisin as [Hname Hnexists].
       split; auto.
       rewrite <- CommonList.Exists_map in *.
-      rewrite untuple_global_names...
+      rewrite unnest_global_names...
     - simpl.
       rewrite <- (Forall_map (fun n => ~(n_name nd = n))) in *.
-      rewrite untuple_global_names...
+      rewrite unnest_global_names...
   Qed.
 
   (** ** Preservation of order through the second pass *)
@@ -467,20 +472,17 @@ Module Type NORDERED
       (Is_node_in_exp f e0 \/ Is_node_in_exp f e).
   Proof with eauto.
     intros f e0 e [ty [ck ann]] e' eqs' st st' Hfby Hisin.
-    unfold fby_iteexp in Hfby.
-    destruct (is_constant e0); repeat inv_bind.
-    - destruct Hisin; inv H.
-      destruct H2; (inv H; [| inv H1])...
-    - destruct Hisin.
-      + inv H1. destruct H4; inv H1.
-        * inv H2... inv H3.
-        * inv H2; inv H3.
-      + inv H1.
-        * inv H3; inv H2.
-          destruct H4; (inv H1; [| inv H3])...
-          apply add_whens_Is_node_in in H3. inv H3.
-        * exfalso.
-          eapply init_var_for_clock_nIs_node_in in H; eauto.
+    unfold fby_iteexp in Hfby; repeat inv_bind.
+    destruct Hisin.
+    + inv H1. destruct H4; inv H1.
+      * inv H2... inv H3.
+      * inv H2; inv H3.
+    + inv H1.
+      * inv H3; inv H2.
+        destruct H4; (inv H1; [| inv H3])...
+        apply add_whens_Is_node_in in H3. inv H3.
+      * exfalso.
+        eapply init_var_for_clock_nIs_node_in in H; eauto.
   Qed.
 
   Lemma fby_equation_Is_node_in : forall f to_cut eq eqs' st st',
@@ -489,19 +491,23 @@ Module Type NORDERED
       Is_node_in f [eq].
   Proof.
     intros * Hfby Hisin.
-    inv_fby_equation Hfby to_cut eq.
+    inv_fby_equation Hfby to_cut eq; destruct x2 as (ty&ck&name).
+    - (* fby (constant) *)
+      destruct PS.mem; repeat inv_bind; auto.
+      inv Hisin; auto.
+      + inv H1; [|inv H2]. inv H2.
+      + apply Exists_singl in H1; auto.
+        constructor. constructor. inv H1; auto.
     - (* fby *)
-      destruct x2 as [ty [ck name]]; repeat inv_bind.
       constructor; constructor; constructor.
       eapply fby_iteexp_Is_node_in with (f:=f) (ann:=(ty, (ck, name))) in H as [H|H].
       + left. constructor; auto.
       + right. constructor; auto.
-      + destruct (PS.mem _ _); repeat inv_bind.
-        * inv Hisin. 1:{ apply Exists_singl in H2. inv H2. }
-          inv H2; auto. apply Exists_singl in H3; auto.
-        * inv Hisin; auto. apply Exists_singl in H1; auto.
+      + inv Hisin.
+        * inv H1; auto. inv H2.
+        * right; auto.
     - (* arrow *)
-      destruct x2 as [ty [ck name]]. repeat inv_bind.
+      repeat inv_bind.
       constructor; constructor; constructor.
       inv Hisin.
       + apply Exists_singl in H1. inv H1. destruct H3 as [Hisin|[Hisin|Hisin]]; auto.
@@ -581,7 +587,7 @@ Module Type NORDERED
   Proof.
     intros [G Hwl] * Hord Hnorm.
     unfold normalize_global in Hnorm. destruct (Cau.check_causality _); inv Hnorm.
-    eapply normfby_global_ordered, untuple_global_ordered, Hord.
+    eapply normfby_global_ordered, unnest_global_ordered, Hord.
   Qed.
 
 End NORDERED.

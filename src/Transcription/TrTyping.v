@@ -11,7 +11,7 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import CoreExpr.CETyping.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLTyping.
-From Velus Require Import Lustre.Normalization.Untuple.
+From Velus Require Import Lustre.Normalization.Unnesting.
 
 From Coq Require Import String.
 From Coq Require Import Permutation.
@@ -30,7 +30,7 @@ Module Type TRTYPING
        (Import OpAux: OPERATORS_AUX Op)
        (L           : LSYNTAX  Ids Op)
        (LT          : LTYPING  Ids Op L)
-       (FNS         : UNTUPLE Ids Op OpAux L)
+       (FNS         : UNNESTING Ids Op OpAux L)
        (Import CE   : CESYNTAX     Op)
        (CET         : CETYPING Ids Op CE)
        (NL          : NLSYNTAX Ids Op CE)
@@ -273,7 +273,7 @@ Module Type TRTYPING
       to_equation env envo e = OK e' ->
       (forall i ck, find_clock env i = OK ck -> LT.wt_clock vars ck) ->
       NoDup (fst e) ->
-      FNS.untupled_equation e ->
+      FNS.unnested_equation e ->
       LT.wt_equation G vars e ->
       NLT.wt_equation P vars e'.
   Proof.
@@ -432,7 +432,7 @@ Module Type TRTYPING
     forall G P n n',
       to_node n = OK n' ->
       to_global G = OK P ->
-      FNS.untupled_node n ->
+      FNS.unnested_node n ->
       LT.wt_node G n ->
       NLT.wt_node P n'.
   Proof.
@@ -440,7 +440,7 @@ Module Type TRTYPING
     tonodeInv Htr. unfold NLT.wt_node. simpl.
     pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
     revert dependent x.
-    unfold FNS.untupled_node in Hnormed.
+    unfold FNS.unnested_node in Hnormed.
     induction (L.n_eqs n); intros; monadInv Hmmap.
     - now take (Coqlib.list_forall2 _ _ _) and inv it.
     - take (Coqlib.list_forall2 _ _ _) and inv it.
@@ -467,7 +467,7 @@ Module Type TRTYPING
 
   Lemma wt_transcription :
     forall G P,
-      FNS.untupled_global G ->
+      FNS.unnested_global G ->
       LT.wt_global G ->
       to_global G = OK P ->
       NLT.wt_global P.
@@ -490,7 +490,7 @@ Module TrTypingFun
        (OpAux: OPERATORS_AUX Op)
        (L    : LSYNTAX  Ids Op)
        (LT   : LTYPING  Ids Op L)
-       (FN   : UNTUPLE Ids Op OpAux L)
+       (FN   : UNNESTING Ids Op OpAux L)
        (CE   : CESYNTAX     Op)
        (CET  : CETYPING Ids Op CE)
        (NL   : NLSYNTAX Ids Op CE)

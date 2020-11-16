@@ -11,7 +11,7 @@ From Velus Require Lustre.Normalization.Fresh.
 (** * Normalization procedure *)
 
 Local Set Warnings "-masking-absolute-name".
-Module Type UNTUPLE
+Module Type UNNESTING
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
@@ -87,72 +87,119 @@ Module Type UNTUPLE
   Qed.
   Hint Resolve idents_for_anns'_length.
 
-  Definition normalize_fby (e0s : list exp) (es : list exp) (anns : list ann) :=
+  Definition unnest_fby (e0s : list exp) (es : list exp) (anns : list ann) :=
     map (fun '((e0, e), a) => Efby [e0] [e] [a]) (combine (combine e0s es) anns).
 
-  Definition normalize_arrow (e0s : list exp) (es : list exp) (anns : list ann) :=
+  Definition unnest_arrow (e0s : list exp) (es : list exp) (anns : list ann) :=
     map (fun '((e0, e), a) => Earrow [e0] [e] [a]) (combine (combine e0s es) anns).
 
-  Definition normalize_when ckid b es tys ck :=
+  Definition unnest_when ckid b es tys ck :=
     map (fun '(e, ty) => Ewhen [e] ckid b ([ty], ck)) (combine es tys).
 
-  Definition normalize_merge ckid ets efs tys ck :=
+  Definition unnest_merge ckid ets efs tys ck :=
     map (fun '((e1, e2), ty) => Emerge ckid [e1] [e2] ([ty], ck)) (combine (combine ets efs) tys).
 
-  Definition normalize_ite e ets efs tys ck :=
+  Definition unnest_ite e ets efs tys ck :=
     map (fun '((et, ef), ty) => Eite e [et] [ef] ([ty], ck)) (combine (combine ets efs) tys).
 
-  Hint Unfold normalize_when normalize_merge normalize_ite.
+  Hint Unfold unnest_when unnest_merge unnest_ite.
 
-  Definition normalize_reset (e : exp) : FreshAnn (exp * list equation) :=
+  Definition unnest_reset k (e : option exp) : FreshAnn (option exp * list equation) :=
     match e with
-    | Evar v ann => ret (Evar v ann, [])
-    | e => let '(ty, (cl, _)) := hd (bool_type, (Cbase, None)) (annot e) in
-          do x <- fresh_ident (ty, cl);
-          ret (Evar x (ty, (cl, Some x)), ([x], [e])::[])
+    | None => ret (None, [])
+    | Some e => do (e', eqs1) <- k e;
+               match hd_default e' with
+               | Evar v ann => ret (Some (Evar v ann), eqs1)
+               | e => let '(ty, (ck, _)) := hd (bool_type, (Cbase, None)) (annot e) in
+                     do x <- fresh_ident (ty, ck);
+                     ret (Some (Evar x (ty, (ck, Some x))), ([x], [e])::eqs1)
+               end
     end.
 
-  Lemma normalize_reset_spec : forall e,
-      (exists v, exists ann, e = Evar v ann /\ normalize_reset e = ret (Evar v ann, []))
-      \/ normalize_reset e = let '(ty, (cl, _)) := hd (bool_type, (Cbase, None)) (annot e) in
-                            do x <- fresh_ident (ty, cl);
-                            ret (Evar x (ty, (cl, Some x)), ([x], [e])::[]).
-  Proof. destruct e; eauto. Qed.
+  Lemma unnest_reset_spec : forall k e es' eqs' st st',
+      k e st = ((es', eqs'), st') ->
+      (exists v, exists ann, (hd_default es') = Evar v ann /\ unnest_reset k (Some e) st = ((Some (Evar v ann), eqs'), st'))
+      \/ exists ty ck o x st'', hd (bool_type, (Cbase, None)) (annot (hd_default es')) = (ty, (ck, o)) /\
+                          fresh_ident (ty, ck) st' = (x, st'') /\
+                          unnest_reset k (Some e) st = ((Some (Evar x (ty, (ck, Some x))), ([x], [hd_default es'])::eqs'), st'').
+  Proof.
+    intros * Hk.
+    unfold unnest_reset; simpl.
+    destruct (hd_default es') eqn:Hes'.
+    1,3-10:
+      (right; destruct (hd _) as [ty [ck ?]] eqn:Hx; simpl;
+       destruct (fresh_ident (ty, ck) st') as [x st''] eqn:Hfresh;
+       repeat eexists; eauto; repeat inv_bind;
+       repeat eexists; eauto;
+       rewrite Hes'; try rewrite Hx;
+       repeat inv_bind; repeat eexists; eauto;
+       repeat inv_bind; eauto).
+    - left. repeat eexists.
+      inv_bind; repeat eexists; eauto. rewrite Hes'; inv_bind; eauto.
+  Qed.
 
-  Fixpoint normalize_exp (is_control : bool) (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
-    let normalize_exps := fun es => do (es, eqs) <- map_bind2 (normalize_exp false) es; ret (concat es, concat eqs) in
-    let normalize_controls := fun es => do (es, eqs) <- map_bind2 (normalize_exp true) es; ret (concat es, concat eqs) in
+  Ltac unnest_reset_spec :=
+    match goal with
+    | H:unnest_reset ?k ?e ?st = (?res, ?st') |- _ =>
+      let e' := fresh "e" in
+      destruct e as [e'|];
+      [ let Hk := fresh "Hk" in let Hk' := fresh "Hk" in
+        let Hhd := fresh "Hhd" in
+        let Hfresh := fresh "Hfresh" in
+        let Hnorm' := fresh "Hnorm" in
+        destruct (k e' st) as [[? ?] ?] eqn:Hk;
+        assert (Hk' := Hk);
+        eapply unnest_reset_spec in Hk as [[? [[? [? ?]] [? Hnorm']]]|[? [? [? [? [? [Hhd [Hfresh Hnorm']]]]]]]]; subst;
+        rewrite Hnorm' in H; clear Hnorm'; inv H
+      | simpl in H; repeat inv_bind ] 
+    end.
+
+  Corollary unnest_reset_Some : forall k e e' eqs' st st',
+      unnest_reset k (Some e) st = (e', eqs', st') ->
+      exists e'', e' = Some e''.
+  Proof.
+    intros * Hun.
+    simpl in Hun. repeat inv_bind.
+    destruct (hd_default x);
+      try destruct a as [? [? ?]];
+      try destruct (hd _ _) as [? [? ?]];
+      repeat inv_bind; eauto.
+  Qed.
+
+  Fixpoint unnest_exp (is_control : bool) (e : exp) {struct e} : FreshAnn (list exp * list equation) :=
+    let unnest_exps := fun es => do (es, eqs) <- map_bind2 (unnest_exp false) es; ret (concat es, concat eqs) in
+    let unnest_controls := fun es => do (es, eqs) <- map_bind2 (unnest_exp true) es; ret (concat es, concat eqs) in
     match e with
     | Econst c => ret ([Econst c], [])
     | Evar v ann => ret ([Evar v ann], [])
     | Eunop op e1 ann =>
-      do (e1', eqs) <- normalize_exp false e1;
+      do (e1', eqs) <- unnest_exp false e1;
       ret ([Eunop op (hd_default e1') ann], eqs)
     | Ebinop op e1 e2 ann =>
-      do (e1', eqs1) <- normalize_exp false e1;
-      do (e2', eqs2) <- normalize_exp false e2;
+      do (e1', eqs1) <- unnest_exp false e1;
+      do (e2', eqs2) <- unnest_exp false e2;
       ret ([Ebinop op (hd_default e1') (hd_default e2') ann], eqs1++eqs2)
     | Efby e0s es anns =>
-      do (e0s', eqs1) <- normalize_exps e0s;
-      do (es', eqs2) <- normalize_exps es;
-      let fbys := normalize_fby e0s' es' anns in
+      do (e0s', eqs1) <- unnest_exps e0s;
+      do (es', eqs2) <- unnest_exps es;
+      let fbys := unnest_fby e0s' es' anns in
       do xs <- idents_for_anns anns;
       ret (List.map (fun '(x, ann) => Evar x ann) xs,
            (List.map (fun '((x, _), fby) => ([x], [fby])) (combine xs fbys))++eqs1++eqs2)
     | Earrow e0s es anns =>
-      do (e0s', eqs1) <- normalize_exps e0s;
-      do (es', eqs2) <- normalize_exps es;
-      let arrows := normalize_arrow e0s' es' anns in
+      do (e0s', eqs1) <- unnest_exps e0s;
+      do (es', eqs2) <- unnest_exps es;
+      let arrows := unnest_arrow e0s' es' anns in
       do xs <- idents_for_anns anns;
       ret (List.map (fun '(id, ann) => Evar id ann) xs,
            (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) arrows))++eqs1++eqs2)
     | Ewhen es ckid b (tys, ck) =>
-      do (es', eqs) <- normalize_exps es;
-      ret (normalize_when ckid b es' tys ck, eqs)
+      do (es', eqs) <- unnest_exps es;
+      ret (unnest_when ckid b es' tys ck, eqs)
     | Emerge ckid es1 es2 (tys, cl) =>
-      do (es1', eqs1) <- normalize_controls es1;
-      do (es2', eqs2) <- normalize_controls es2;
-      let merges := normalize_merge ckid es1' es2' tys cl in
+      do (es1', eqs1) <- unnest_controls es1;
+      do (es2', eqs2) <- unnest_controls es2;
+      let merges := unnest_merge ckid es1' es2' tys cl in
       if is_control then
         ret (merges, eqs1++eqs2)
       else
@@ -160,59 +207,49 @@ Module Type UNTUPLE
         ret (List.map (fun '(id, ann) => Evar id ann) xs,
              (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) merges))++eqs1++eqs2)
     | Eite e es1 es2 (tys, ck) =>
-      do (e', eqs0) <- normalize_exp false e;
-      do (es1', eqs1) <- normalize_controls es1;
-      do (es2', eqs2) <- normalize_controls es2;
-      let ites :=  normalize_ite (hd_default e') es1' es2' tys ck in
+      do (e', eqs0) <- unnest_exp false e;
+      do (es1', eqs1) <- unnest_controls es1;
+      do (es2', eqs2) <- unnest_controls es2;
+      let ites :=  unnest_ite (hd_default e') es1' es2' tys ck in
       if is_control then
         ret (ites, eqs0++eqs1++eqs2)
       else
         do xs <- idents_for_anns (List.map (fun ty => (ty, ck)) tys);
         ret (List.map (fun '(id, ann) => Evar id ann) xs,
              (combine (List.map (fun '(id, _) => [id]) xs) (List.map (fun e => [e]) ites))++eqs0++eqs1++eqs2)
-    | Eapp f es r anns =>
-      do (es', eqs1) <- normalize_exps es;
-      do (r', eqs2) <- match r with
-                      | Some er => do (er, eqs1) <- normalize_exp false er;
-                                  do (er', eqs2) <- normalize_reset (hd_default er);
-                                  ret (Some er', eqs1++eqs2)
-                      | None => ret (None, [])
-                      end;
+    | Eapp f es er anns =>
+      do (es', eqs1) <- unnest_exps es;
+      do (er', eqs2) <- unnest_reset (unnest_exp true) er;
       do xs <- idents_for_anns' anns;
       ret (List.map (fun '(id, ann) => Evar id ann) xs,
-           (List.map fst xs, [Eapp f es' r' (List.map snd xs)])::eqs1++eqs2)
+           (List.map fst xs, [Eapp f es' er' (List.map snd xs)])::eqs1++eqs2)
     end.
 
-  Definition normalize_exps (es : list exp) :=
-    do (es, eqs) <- map_bind2 (normalize_exp false) es;
+  Definition unnest_exps (es : list exp) :=
+    do (es, eqs) <- map_bind2 (unnest_exp false) es;
     ret (concat es, concat eqs).
 
-  Definition normalize_rhs (e : exp) : FreshAnn (list exp * list equation) :=
+  Definition unnest_rhs (e : exp) : FreshAnn (list exp * list equation) :=
     match e with
-    | Eapp f es r anns =>
-      do (es', eqs1) <- normalize_exps es;
-      do (r', eqs2) <- match r with
-                      | Some er => do (er, eqs1) <- normalize_exp false er;
-                                  do (er', eqs2) <- normalize_reset (hd_default er);
-                                  ret (Some er', eqs1++eqs2)
-                      | None => ret (None, [])
-                      end;
-      ret ([Eapp f es' r' anns], eqs1++eqs2)
+    | Eapp f es er anns =>
+      do (es', eqs1) <- unnest_exps es;
+      do (er', eqs2) <- unnest_reset (unnest_exp true) er;
+      ret ([Eapp f es' er' anns], eqs1++eqs2)
     | Efby e0s es anns =>
-      do (e0s', eqs1) <- normalize_exps e0s;
-      do (es', eqs2) <- normalize_exps es;
-      let fbys := normalize_fby e0s' es' anns in
+      do (e0s', eqs1) <- unnest_exps e0s;
+      do (es', eqs2) <- unnest_exps es;
+      let fbys := unnest_fby e0s' es' anns in
       ret (fbys, eqs1++eqs2)
     | Earrow e0s es anns =>
-      do (e0s', eqs1) <- normalize_exps e0s;
-      do (es', eqs2) <- normalize_exps es;
-      let arrows := normalize_arrow e0s' es' anns in
+      do (e0s', eqs1) <- unnest_exps e0s;
+      do (es', eqs2) <- unnest_exps es;
+      let arrows := unnest_arrow e0s' es' anns in
       ret (arrows, eqs1++eqs2)
-    | _ => normalize_exp true e
+    | _ => unnest_exp true e
     end.
 
-  Definition normalize_rhss (es : list exp) :=
-    do (es, eqs) <- map_bind2 normalize_rhs es; ret (concat es, concat eqs).
+  Definition unnest_rhss (es : list exp) :=
+    do (es, eqs) <- map_bind2 unnest_rhs es; ret (concat es, concat eqs).
 
   Fixpoint combine_for_numstreams {B} (es : list exp) (vs : list B) :=
     match es with
@@ -225,13 +262,13 @@ Module Type UNTUPLE
     let (xs, es) := eq in
     List.map (fun '(e, xs) => (xs, [e])) (combine_for_numstreams es xs).
 
-  Definition untuple_equation (e : equation) : FreshAnn (list equation) :=
+  Definition unnest_equation (e : equation) : FreshAnn (list equation) :=
     let '(xs, es) := e in
-    do (es', eqs) <- normalize_rhss es;
+    do (es', eqs) <- unnest_rhss es;
     ret ((split_equation (xs, es'))++eqs).
 
-  Definition untuple_equations (eqs : list equation) : FreshAnn (list equation) :=
-    do eqs <- map_bind untuple_equation eqs;
+  Definition unnest_equations (eqs : list equation) : FreshAnn (list equation) :=
+    do eqs <- map_bind unnest_equation eqs;
     ret (concat eqs).
 
   (** ** Some additional tactics *)
@@ -376,18 +413,19 @@ Module Type UNTUPLE
   Qed.
   Hint Resolve idents_for_anns'_st_valid.
 
-  Fact normalize_reset_st_valid : forall e res st st' aft reusable,
-      normalize_reset e st = (res, st') ->
-      st_valid_reuse st aft reusable ->
-      st_valid_reuse st' aft reusable.
+  Fact unnest_reset_st_valid : forall k e e' eqs' st st' aft reu,
+      LiftO True (fun e => forall res st st',
+                   k e st = (res, st') ->
+                   st_valid_reuse st aft (ps_adds (map fst (fresh_in e)) reu) ->
+                   st_valid_reuse st' aft reu) e ->
+      unnest_reset k e st = (e', eqs', st') ->
+      st_valid_reuse st aft (match e with None => reu | Some e' => ps_adds (map fst (fresh_in e')) reu end) ->
+      st_valid_reuse st' aft reu.
   Proof.
-    intros e res st st' aft reusable Hnorm Hvalid.
-    destruct (normalize_reset_spec e) as [[v [ann [He Hnorm']]]|Hnorm']; subst;
-      rewrite Hnorm' in Hnorm; clear Hnorm';
-        try (destruct (hd _ _) as [ty [cl _]]);
-        repeat inv_bind; eauto.
+    intros * Hkvalid Hnorm Hvalid.
+    unnest_reset_spec; eauto.
   Qed.
-  Hint Resolve normalize_reset_st_valid.
+  Hint Resolve unnest_reset_st_valid.
 
   Ltac ndup_simpl :=
     repeat rewrite map_app, <- app_assoc in *.
@@ -427,17 +465,17 @@ Module Type UNTUPLE
     match goal with
     | H : map_bind2 _ _ _ = (_, _, ?st) |- st_valid_reuse ?st _ _ =>
       eapply map_bind2_st_valid_reuse' in H; eauto; solve_forall
-    | H : normalize_reset _ _ = (_, _, ?st) |- st_valid_reuse ?st _ _ =>
-      eapply normalize_reset_st_valid; eauto
+    | H : unnest_reset _ _ = (_, _, ?st) |- st_valid_reuse ?st _ _ =>
+      eapply unnest_reset_st_valid; eauto
     | H : idents_for_anns _ _ = (_, ?st) |- st_valid_reuse ?st _ _ =>
       eapply idents_for_anns_st_valid_reuse; eauto
     | H : idents_for_anns' _ _ = (_, ?st) |- st_valid_reuse ?st _ _ =>
       eapply idents_for_anns'_st_valid; eauto
     end.
 
-  Fact normalize_exp_st_valid : forall e is_control res st st' aft reusable,
+  Fact unnest_exp_st_valid : forall e is_control res st st' aft reusable,
       NoDup (map fst (fresh_in e)++PS.elements reusable) ->
-      normalize_exp is_control e st = (res, st') ->
+      unnest_exp is_control e st = (res, st') ->
       st_valid_reuse st aft (ps_adds (map fst (fresh_in e)) reusable) ->
       st_valid_reuse st' aft reusable.
   Proof with eauto.
@@ -489,24 +527,28 @@ Module Type UNTUPLE
       2,4:eapply IHe; eauto.
       1,2,3,4: repeat rewrite Permutation_PS_elements_ps_adds'; eauto.
     - (* app *)
-      repeat inv_bind;
-        destruct ro; ndup_simpl;
-        repeat rewrite ps_adds_app in Hvalid; repeat inv_bind; repeat solve_st_valid...
-      2: (eapply H; eauto; repeat solve_st_valid).
-      2,3,5: repeat rewrite Permutation_PS_elements_ps_adds'; eauto.
-      1,2,3,4,5,6,7,8:repeat ndup_r Hnd.
+      repeat inv_bind.
+      eapply idents_for_anns'_st_valid; eauto. 1:destruct ro; repeat ndup_r Hnd.
+      eapply unnest_reset_st_valid; eauto. 1:destruct ro; simpl; auto; intros; subst; eapply H; eauto.
+      rewrite Permutation_PS_elements_ps_adds'. 1,2:repeat ndup_r Hnd.
+      clear H2 H3.
+      destruct ro; repeat solve_st_valid.
+      2,4:repeat rewrite map_app, ps_adds_app in *; eauto.
+      1,2:repeat rewrite Permutation_PS_elements_ps_adds'; eauto.
+      1-6:try (solve [repeat ndup_r Hnd]).
+      1-2:repeat rewrite map_app, <- app_assoc in *; auto.
   Qed.
-  Hint Resolve normalize_exp_st_valid.
+  Hint Resolve unnest_exp_st_valid.
 
-  Fact normalize_rhs_st_valid : forall e res st st' aft reusable,
+  Fact unnest_rhs_st_valid : forall e res st st' aft reusable,
       NoDup (map fst (anon_in e)++PS.elements reusable) ->
-      normalize_rhs e st = (res, st') ->
+      unnest_rhs e st = (res, st') ->
       st_valid_reuse st aft (ps_adds (map fst (anon_in e)) reusable) ->
       st_valid_reuse st' aft reusable.
   Proof.
     intros * Hnd Hnorm Hvalid.
-    destruct e; try (solve [eapply normalize_exp_st_valid in Hnorm; eauto]);
-      simpl in *; unfold normalize_exps in *.
+    destruct e; try (solve [eapply unnest_exp_st_valid in Hnorm; eauto]);
+      simpl in *; unfold unnest_exps in *.
     - (* fby *)
       ndup_simpl.
       repeat inv_bind.
@@ -523,43 +565,45 @@ Module Type UNTUPLE
       1,2: ndup_r Hnd.
     - (* app *)
       repeat inv_bind.
-      destruct o; repeat inv_bind; ndup_simpl;
-        try rewrite ps_adds_app in Hvalid;
-        repeat solve_st_valid.
-      eapply normalize_exp_st_valid in H0; eauto. 2:solve_st_valid.
-      2:rewrite Permutation_PS_elements_ps_adds'; eauto.
-      1,2:ndup_r Hnd.
+      eapply unnest_reset_st_valid; eauto. 1:destruct o; simpl; intros; auto; eapply unnest_exp_st_valid; eauto.
+      ndup_r Hnd. clear H0.
+      repeat solve_st_valid.
+      1,2:destruct o; eauto.
+      2:rewrite <- ps_adds_app, <- map_app; auto.
+      rewrite Permutation_PS_elements_ps_adds'.
+      rewrite map_app, <- app_assoc in Hnd; auto.
+      ndup_r Hnd.
   Qed.
-  Hint Resolve normalize_rhs_st_valid.
+  Hint Resolve unnest_rhs_st_valid.
 
-  Fact untuple_equation_st_valid : forall e res st st' aft reusable,
+  Fact unnest_equation_st_valid : forall e res st st' aft reusable,
       NoDup (map fst (anon_in_eq e)++PS.elements reusable) ->
-      untuple_equation e st = (res, st') ->
+      unnest_equation e st = (res, st') ->
       st_valid_reuse st aft (ps_adds (map fst (anon_in_eq e)) reusable) ->
       st_valid_reuse st' aft reusable.
   Proof.
     intros [xs es] * Hnd Hnorm Hvalid.
     unfold anon_in_eq in Hnd.
-    simpl in *; unfold normalize_rhss in *; repeat inv_bind.
+    simpl in *; unfold unnest_rhss in *; repeat inv_bind.
     eapply map_bind2_st_valid_reuse' in H; eauto.
     apply Forall_forall. intros; eauto.
   Qed.
-  Hint Resolve untuple_equation_st_valid.
+  Hint Resolve unnest_equation_st_valid.
 
-  Fact untuple_equations_st_valid : forall eqs res st st' aft reusable,
+  Fact unnest_equations_st_valid : forall eqs res st st' aft reusable,
       NoDup (map fst (anon_in_eqs eqs)++PS.elements reusable) ->
-      untuple_equations eqs st = (res, st') ->
+      unnest_equations eqs st = (res, st') ->
       st_valid_reuse st aft (ps_adds (map fst (anon_in_eqs eqs)) reusable) ->
       st_valid_reuse st' aft reusable.
   Proof.
     induction eqs; intros * Hndup Hnorm Hvalid;
-      unfold untuple_equations in Hnorm; repeat inv_bind; auto.
+      unfold unnest_equations in Hnorm; repeat inv_bind; auto.
     - unfold anon_in_eqs in *; simpl in *.
       ndup_simpl.
       rewrite ps_adds_app in Hvalid.
       eapply IHeqs; eauto. 1:ndup_r Hndup.
-      unfold untuple_equations; repeat inv_bind; repeat eexists; eauto; inv_bind; eauto.
-      eapply untuple_equation_st_valid; eauto.
+      unfold unnest_equations; repeat inv_bind; repeat eexists; eauto; inv_bind; eauto.
+      eapply unnest_equation_st_valid; eauto.
       rewrite Permutation_PS_elements_ps_adds'; auto. ndup_r Hndup.
   Qed.
 
@@ -653,23 +697,23 @@ Module Type UNTUPLE
     eapply incl_map with (f:=fst) in H.
     repeat rewrite map_map in H; simpl in H.
     replace (map (fun x => fst (let '(id, (ty, (cl, _))) := x in (id, (ty, cl)))) ids) with (map fst ids) in H.
-    2: { eapply map_ext. intros [? [? [? ?]]]; auto. }
+    2: (eapply map_ext; intros [? [? [? ?]]]; auto).
     assumption.
   Qed.
 
-  Fact normalize_reset_st_follows : forall e res st st',
-      normalize_reset e st = (res, st') ->
+  Fact unnest_reset_st_follows' : forall k e res st st',
+      LiftO True (fun e => forall res st st',
+                   k e st = (res, st') ->
+                   st_follows st st') e ->
+      unnest_reset k e st = (res, st') ->
       st_follows st st'.
   Proof.
-    intros e res st st' Hnorm.
-    destruct (normalize_reset_spec e) as [[v [ann [He Hnorm']]]|Hnorm']; subst;
-      repeat inv_bind.
+    intros * Hkfollow Hnorm.
+    unnest_reset_spec; eauto.
+    - etransitivity; eapply fresh_ident_st_follows in Hfresh; eauto.
     - reflexivity.
-    - rewrite Hnorm' in Hnorm; clear Hnorm'.
-      destruct (hd _ _) as [ty [cl _]].
-      repeat inv_bind. eauto.
   Qed.
-  Hint Resolve normalize_reset_st_follows.
+  Hint Resolve unnest_reset_st_follows'.
 
   Local Ltac solve_st_follows' :=
     match goal with
@@ -685,14 +729,14 @@ Module Type UNTUPLE
       etransitivity; [ eapply idents_for_anns_st_follows in H; eauto | ]
     | H : idents_for_anns' _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply idents_for_anns'_st_follows in H; eauto | ]
-    | H : normalize_reset _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply normalize_reset_st_follows in H; eauto | ]
+    | H : unnest_reset _ _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_reset_st_follows' in H; eauto | ]
     | H : map_bind2 _ _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply map_bind2_st_follows in H; eauto; solve_forall | ]
     end.
 
-  Fact normalize_exp_st_follows : forall e is_control res st st',
-      normalize_exp is_control e st = (res, st') ->
+  Fact unnest_exp_st_follows : forall e is_control res st st',
+      unnest_exp is_control e st = (res, st') ->
       st_follows st st'.
   Proof with eauto.
     induction e using exp_ind2; intros is_control res st st' Hnorm;
@@ -720,82 +764,99 @@ Module Type UNTUPLE
       destruct is_control; repeat inv_bind;
         (etransitivity; [ eapply IHe; eauto | repeat solve_st_follows' ]).
     - (* app *)
-      destruct ro; repeat inv_bind; [eapply H in H2|]; repeat solve_st_follows'.
+      repeat inv_bind.
+      etransitivity; eauto.
+      etransitivity; eauto. 2:eapply unnest_reset_st_follows'; eauto. repeat solve_st_follows'.
+      destruct ro; simpl; auto. intros; eauto.
   Qed.
-  Hint Resolve normalize_exp_st_follows.
+  Hint Resolve unnest_exp_st_follows.
 
-  Corollary normalize_exps_st_follows : forall es res st st',
-      normalize_exps es st = (res, st') ->
+  Corollary unnest_exps_st_follows : forall es res st st',
+      unnest_exps es st = (res, st') ->
       st_follows st st'.
   Proof.
     intros es res st st' Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
+    unfold unnest_exps in Hnorm. repeat inv_bind.
     eapply map_bind2_st_follows; eauto.
     rewrite Forall_forall; intros; eauto.
   Qed.
 
-  Fact normalize_rhs_st_follows : forall e res st st',
-      normalize_rhs e st = (res, st') ->
+  Fact unnest_rhs_st_follows : forall e res st st',
+      unnest_rhs e st = (res, st') ->
       st_follows st st'.
   Proof.
     intros * Hnorm.
-    destruct e; try (solve [eapply normalize_exp_st_follows; eauto]);
-      simpl in Hnorm; unfold normalize_exps in *.
+    destruct e; try (solve [eapply unnest_exp_st_follows; eauto]);
+      simpl in Hnorm; unfold unnest_exps in *.
     1,2:
       repeat inv_bind;
         repeat solve_st_follows';
         eapply Forall_forall; intros; eauto.
     - (* app *)
-      destruct o; repeat inv_bind; [eapply normalize_exp_st_follows in H0|]; repeat solve_st_follows'.
+      repeat inv_bind.
+      etransitivity; eauto. 2:eapply unnest_reset_st_follows'; eauto. repeat solve_st_follows'.
+      destruct o; simpl; auto. intros; eauto.
   Qed.
-  Hint Resolve normalize_rhs_st_follows.
+  Hint Resolve unnest_rhs_st_follows.
 
-  Corollary normalize_rhss_st_follows : forall es res st st',
-      normalize_rhss es st = (res, st') ->
+  Corollary unnest_rhss_st_follows : forall es res st st',
+      unnest_rhss es st = (res, st') ->
       st_follows st st'.
   Proof.
     intros * Hnorm.
-    unfold normalize_rhss in Hnorm; repeat inv_bind.
+    unfold unnest_rhss in Hnorm; repeat inv_bind.
     repeat solve_st_follows'.
   Qed.
-  Hint Resolve normalize_rhss_st_follows.
+  Hint Resolve unnest_rhss_st_follows.
 
-  Fact untuple_equation_st_follows : forall e res st st',
-      untuple_equation e st = (res, st') ->
+  Fact unnest_equation_st_follows : forall e res st st',
+      unnest_equation e st = (res, st') ->
       st_follows st st'.
   Proof.
     intros [xs es] * Hnorm.
     simpl in *; repeat inv_bind; eauto.
   Qed.
-  Hint Resolve untuple_equation_st_follows.
+  Hint Resolve unnest_equation_st_follows.
 
-  Fact untuple_equations_st_follows : forall eqs res st st',
-      untuple_equations eqs st = (res, st') ->
+  Fact unnest_equations_st_follows : forall eqs res st st',
+      unnest_equations eqs st = (res, st') ->
       st_follows st st'.
   Proof.
     intros * Hnorm.
-    unfold untuple_equations in Hnorm; repeat inv_bind.
+    unfold unnest_equations in Hnorm; repeat inv_bind.
     eapply map_bind_st_follows; eauto.
     solve_forall.
+  Qed.
+
+  Fact unnest_reset_st_follows : forall b e res st st',
+      unnest_reset (unnest_exp b) e st = (res, st') ->
+      st_follows st st'.
+  Proof.
+    intros * Hunn.
+    apply unnest_reset_st_follows' in Hunn; auto.
+    destruct e; simpl; auto.
+    intros. eapply unnest_exp_st_follows; eauto.
   Qed.
 
   Ltac solve_st_follows :=
     match goal with
     | |- st_follows ?st ?st => reflexivity
-    | H : normalize_exp _ _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply normalize_exp_st_follows in H; eauto |]
-    | H : normalize_exps _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply normalize_exps_st_follows in H; eauto |]
-    | H : normalize_rhs _ _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply normalize_rhs_st_follows in H; eauto |]
-    | H : normalize_rhss _ _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply normalize_rhss_st_follows in H; eauto |]
-    | H : untuple_equation _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply untuple_equation_st_follows in H; eauto |]
+    | H : unnest_exp _ _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_exp_st_follows in H; eauto |]
+    | H : unnest_exps _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_exps_st_follows in H; eauto |]
+    | H : unnest_rhs _ _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_rhs_st_follows in H; eauto |]
+    | H : unnest_rhss _ _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_rhss_st_follows in H; eauto |]
+    | H : unnest_equation _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_equation_st_follows in H; eauto |]
     | H: map_bind _ _ ?st = _ |- st_follows ?st _ =>
       etransitivity; [ eapply map_bind_st_follows in H; eauto; solve_forall |]
-    | H : untuple_equations _ ?st = _ |- st_follows ?st _ =>
-      etransitivity; [ eapply untuple_equations_st_follows in H; eauto |]
+    | H : unnest_equations _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_equations_st_follows in H; eauto |]
+    | H : unnest_reset (unnest_exp _) _ ?st = _ |- st_follows ?st _ =>
+      etransitivity; [ eapply unnest_reset_st_follows in H; eauto |]
     | _ => solve_st_follows'
     end.
 
@@ -803,7 +864,7 @@ Module Type UNTUPLE
 
   (** Simplify an expression with maps and other stuff... *)
   Ltac simpl_list :=
-    unfold normalize_when, normalize_merge, normalize_ite in *;
+    unfold unnest_when, unnest_merge, unnest_ite in *;
     simpl in *;
     match goal with
     (* annots, clocksof and typesof are just plurals *)
@@ -835,7 +896,7 @@ Module Type UNTUPLE
     | |- context c [app (app ?l1 ?l2) ?l3] => rewrite <- app_assoc
     end.
 
-  (** ** Length of normalized expression *)
+  (** ** Length of unnested expression *)
 
   Ltac rewrite_Forall_forall :=
     match goal with
@@ -912,9 +973,9 @@ Module Type UNTUPLE
 
   Fact map_bind2_length : forall is_control es es' eqs' st st',
       Forall2 (fun e es' => forall eqs' st st',
-                   normalize_exp is_control e st = (es', eqs', st') ->
+                   unnest_exp is_control e st = (es', eqs', st') ->
                    length es' = numstreams e) es es' ->
-    map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+    map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
     length (concat es') = length (annots es).
   Proof.
     intros is_control es es' eqs' st st' Hf Hmap.
@@ -928,9 +989,9 @@ Module Type UNTUPLE
   Qed.
 
   Local Hint Resolve nth_In.
-  Fact normalize_exp_length : forall G e is_control es' eqs' st st',
+  Fact unnest_exp_length : forall G e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = (es', eqs', st') ->
+      unnest_exp is_control e st = (es', eqs', st') ->
       length es' = numstreams e.
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hwl Hnorm;
@@ -942,19 +1003,19 @@ Module Type UNTUPLE
       simpl in *. rewrite map_length.
       apply idents_for_anns_length in H3...
     - (* when *)
-      unfold normalize_when. rewrite map_length.
+      unfold unnest_when. rewrite map_length.
       eapply map_bind2_length in H0.
       + solve_length.
       + eapply map_bind2_values in H0.
         repeat rewrite_Forall_forall...
     - (* merge *)
-      destruct is_control; repeat inv_bind; unfold normalize_merge.
+      destruct is_control; repeat inv_bind; unfold unnest_merge.
       + apply map_bind2_length in H1; [| eapply map_bind2_values in H1; repeat rewrite_Forall_forall; eauto].
         apply map_bind2_length in H2; [| eapply map_bind2_values in H2; repeat rewrite_Forall_forall; eauto].
         solve_length.
       + apply idents_for_anns_length in H3. solve_length.
     - (* ite *)
-      destruct is_control; repeat inv_bind; unfold normalize_ite.
+      destruct is_control; repeat inv_bind; unfold unnest_ite.
       + apply map_bind2_length in H2; [| eapply map_bind2_values in H2; repeat rewrite_Forall_forall; eauto].
         apply map_bind2_length in H3; [| eapply map_bind2_values in H3; repeat rewrite_Forall_forall; eauto].
         solve_length.
@@ -966,97 +1027,97 @@ Module Type UNTUPLE
       apply idents_for_anns'_length in H3.
       solve_length.
   Qed.
-  Hint Resolve normalize_exp_length.
+  Hint Resolve unnest_exp_length.
 
-  Corollary map_bind2_normalize_exp_length : forall G is_control es es' eqs' st st',
+  Corollary map_bind2_unnest_exp_length : forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       length (concat es') = length (annots es).
   Proof.
     intros G is_control es es' eqs' st st' Hf Hmap.
     eapply map_bind2_length; eauto.
     eapply map_bind2_values in Hmap.
     repeat rewrite_Forall_forall.
-    eapply normalize_exp_length; eauto.
+    eapply unnest_exp_length; eauto.
   Qed.
-  Hint Resolve map_bind2_normalize_exp_length.
+  Hint Resolve map_bind2_unnest_exp_length.
 
-  Corollary normalize_exps_length : forall G es es' eqs' st st',
+  Corollary unnest_exps_length : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       length es' = length (annots es).
   Proof.
     intros G es es' eqs' st st' Hwt Hnorm.
-    unfold normalize_exps in Hnorm.
+    unfold unnest_exps in Hnorm.
     repeat inv_bind.
-    eapply map_bind2_normalize_exp_length; eauto.
+    eapply map_bind2_unnest_exp_length; eauto.
   Qed.
-  Hint Resolve normalize_exps_length.
+  Hint Resolve unnest_exps_length.
 
-  Fact normalize_fby_length : forall e0s es anns,
+  Fact unnest_fby_length : forall e0s es anns,
       length e0s = length anns ->
       length es = length anns ->
-      length (normalize_fby e0s es anns) = length anns.
+      length (unnest_fby e0s es anns) = length anns.
   Proof.
     intros * Hl1 Hl2.
-    unfold normalize_fby. solve_length.
+    unfold unnest_fby. solve_length.
   Qed.
 
-  Fact normalize_arrow_length : forall e0s es anns,
+  Fact unnest_arrow_length : forall e0s es anns,
       length e0s = length anns ->
       length es = length anns ->
-      length (normalize_arrow e0s es anns) = length anns.
+      length (unnest_arrow e0s es anns) = length anns.
   Proof.
     intros * Hl1 Hl2.
-    unfold normalize_arrow. solve_length.
+    unfold unnest_arrow. solve_length.
   Qed.
 
-  (* Fact normalize_pre_length : forall es anns, *)
+  (* Fact unnest_pre_length : forall es anns, *)
   (*     length es = length anns -> *)
-  (*     length (normalize_pre es anns) = length anns. *)
+  (*     length (unnest_pre es anns) = length anns. *)
   (* Proof. *)
   (*   intros * Hl1. *)
-  (*   unfold normalize_pre. solve_length. *)
+  (*   unfold unnest_pre. solve_length. *)
   (* Qed. *)
 
-  Fact normalize_merge_length : forall ckid ets efs tys nck,
+  Fact unnest_merge_length : forall ckid ets efs tys nck,
     length ets = length tys ->
     length efs = length tys ->
-    length (normalize_merge ckid ets efs tys nck) = length tys.
+    length (unnest_merge ckid ets efs tys nck) = length tys.
   Proof.
     intros * Hl1 Hl2.
-    unfold normalize_merge. solve_length.
+    unfold unnest_merge. solve_length.
   Qed.
 
-  Fact normalize_ite_length : forall e ets efs tys nck,
+  Fact unnest_ite_length : forall e ets efs tys nck,
     length ets = length tys ->
     length efs = length tys ->
-    length (normalize_ite e ets efs tys nck) = length tys.
+    length (unnest_ite e ets efs tys nck) = length tys.
   Proof.
     intros * Hl1 Hl2.
-    unfold normalize_ite. solve_length.
+    unfold unnest_ite. solve_length.
   Qed.
 
-  Fact normalize_rhs_length : forall G e es' eqs' st st',
+  Fact unnest_rhs_length : forall G e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       (length es' = 1 \/ length es' = numstreams e).
   Proof.
     intros * Hwt Hnorm;
-      destruct e; unfold normalize_rhs in Hnorm;
-        try (solve [right; eapply normalize_exp_length; eauto]);
+      destruct e; unfold unnest_rhs in Hnorm;
+        try (solve [right; eapply unnest_exp_length; eauto]);
         try (destruct o); repeat inv_bind; auto.
     1,2,3:right; inv Hwt;
-      eapply normalize_exps_length in H; eauto.
-    1,2:eapply normalize_exps_length in H0; eauto.
-    eapply normalize_fby_length; eauto; congruence.
-    eapply normalize_arrow_length; eauto; congruence.
-    (* eapply normalize_pre_length; eauto; congruence. *)
+      eapply unnest_exps_length in H; eauto.
+    1,2:eapply unnest_exps_length in H0; eauto.
+    eapply unnest_fby_length; eauto; congruence.
+    eapply unnest_arrow_length; eauto; congruence.
+    (* eapply unnest_pre_length; eauto; congruence. *)
   Qed.
-  Hint Resolve normalize_rhs_length.
+  Hint Resolve unnest_rhs_length.
 
-  Fact normalize_exp_numstreams : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
+  Fact unnest_exp_numstreams : forall e is_control es' eqs' st st',
+      unnest_exp is_control e st = (es', eqs', st') ->
       Forall (fun e => numstreams e = 1) es'.
   Proof.
     intros e is_control es' eqs' st st' Hnorm.
@@ -1064,13 +1125,13 @@ Module Type UNTUPLE
     3:destruct l0; repeat inv_bind.
     4,5: destruct l1, is_control; repeat inv_bind.
     1,2,5,7,8:rewrite Forall_map; eapply Forall_forall; intros [? ?] ?; auto.
-    1,2,3:(unfold normalize_when, normalize_merge, normalize_ite;
+    1,2,3:(unfold unnest_when, unnest_merge, unnest_ite;
            rewrite Forall_forall; intros ? Hin;
            repeat simpl_In; reflexivity).
   Qed.
 
-  Corollary map_bind2_normalize_exp_numstreams : forall es is_control es' eqs' st st',
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+  Corollary map_bind2_unnest_exp_numstreams : forall es is_control es' eqs' st st',
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall (fun e => numstreams e = 1) (concat es').
   Proof.
     intros es is_control es' eqs' st st' Hmap.
@@ -1079,16 +1140,16 @@ Module Type UNTUPLE
     - constructor.
     - apply Forall_app; split; auto.
       destruct H as [? [? H]].
-      eapply normalize_exp_numstreams; eauto.
+      eapply unnest_exp_numstreams; eauto.
   Qed.
 
-  Corollary normalize_exps_numstreams : forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
+  Corollary unnest_exps_numstreams : forall es es' eqs' st st',
+      unnest_exps es st = (es', eqs', st') ->
       Forall (fun e => numstreams e = 1) es'.
   Proof.
     intros es es' eqs' st st' Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
-    eapply map_bind2_normalize_exp_numstreams. eauto.
+    unfold unnest_exps in Hnorm. repeat inv_bind.
+    eapply map_bind2_unnest_exp_numstreams. eauto.
   Qed.
 
   (** ** Preservation of annotations *)
@@ -1122,35 +1183,35 @@ Module Type UNTUPLE
     destruct a; simpl. f_equal; auto.
   Qed.
 
-  Fact normalize_merge_annot : forall ckid ets efs tys ck,
+  Fact unnest_merge_annot : forall ckid ets efs tys ck,
       length ets = length tys ->
       length efs = length tys ->
-      Forall2 (fun ty e => annot e = [(ty, ck)]) tys (normalize_merge ckid ets efs tys ck).
+      Forall2 (fun ty e => annot e = [(ty, ck)]) tys (unnest_merge ckid ets efs tys ck).
   Proof.
-    intros * Hlen1 Hlen2. unfold normalize_merge. rewrite Forall2_map_2.
+    intros * Hlen1 Hlen2. unfold unnest_merge. rewrite Forall2_map_2.
     revert ets efs Hlen1 Hlen2.
     induction tys; intros; destruct ets, efs; simpl in *; try congruence;
       constructor; auto.
   Qed.
 
-  Fact normalize_ite_annot : forall e ets efs tys ck,
+  Fact unnest_ite_annot : forall e ets efs tys ck,
       length ets = length tys ->
       length efs = length tys ->
-      Forall2 (fun ty e => annot e = [(ty, ck)]) tys (normalize_ite e ets efs tys ck).
+      Forall2 (fun ty e => annot e = [(ty, ck)]) tys (unnest_ite e ets efs tys ck).
   Proof.
-    intros * Hlen1 Hlen2. unfold normalize_ite. rewrite Forall2_map_2.
+    intros * Hlen1 Hlen2. unfold unnest_ite. rewrite Forall2_map_2.
     revert ets efs Hlen1 Hlen2.
     induction tys; intros; destruct ets, efs; simpl in *; try congruence;
       constructor; auto.
   Qed.
 
-  Fact normalize_exp_annot : forall G e is_control es' eqs' st st',
+  Fact unnest_exp_annot : forall G e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = (es', eqs', st')  ->
+      unnest_exp is_control e st = (es', eqs', st')  ->
       annots es' = annot e.
   Proof with eauto.
     destruct e; intros is_control es' eqs' st st' Hwl Hnorm;
-      (* specialize (normalize_exp_length _ _ _ es' eqs' st st' Hwl Hnorm) as Hlength; *)
+      (* specialize (unnest_exp_length _ _ _ es' eqs' st st' Hwl Hnorm) as Hlength; *)
         inv Hwl; repeat inv_bind...
     - (* fby *) apply idents_for_anns_annots in H1...
     - (* assoc *) apply idents_for_anns_annots in H1...
@@ -1186,19 +1247,19 @@ Module Type UNTUPLE
     - (* app (reset) *) apply idents_for_anns'_annots in H1...
   Qed.
 
-  Corollary normalize_exp_annot_length : forall G e is_control es' eqs' st st',
+  Corollary unnest_exp_annot_length : forall G e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = (es', eqs', st')  ->
+      unnest_exp is_control e st = (es', eqs', st')  ->
       length (annots es') = length (annot e).
   Proof with eauto.
     intros.
-    eapply normalize_exp_annot in H0; eauto.
+    eapply unnest_exp_annot in H0; eauto.
     congruence.
   Qed.
 
-  Fact map_bind2_normalize_exp_annots': forall G is_control es es' eqs' st st',
+  Fact map_bind2_unnest_exp_annots': forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall2 (fun es' e => annots es' = annot e) es' es.
   Proof.
     intros G is_control es es' eqs' st st' Hf Hmap.
@@ -1207,18 +1268,18 @@ Module Type UNTUPLE
     - constructor.
     - destruct H as [? [? Hnorm]]. inv Hf.
       constructor; eauto.
-      eapply normalize_exp_annot; eauto.
+      eapply unnest_exp_annot; eauto.
   Qed.
 
-  Corollary map_bind2_normalize_exp_annots'' : forall G is_control es es' eqs' st st',
+  Corollary map_bind2_unnest_exp_annots'' : forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall2 (fun e ann => annot e = [ann]) (concat es') (annots es).
   Proof.
     intros * Hwl Hmap.
     assert (Forall (fun e => numstreams e = 1) (concat es')) as Hnumstreams.
-    { eapply map_bind2_normalize_exp_numstreams in Hmap; eauto. }
-    eapply map_bind2_normalize_exp_annots' in Hmap; eauto.
+    { eapply map_bind2_unnest_exp_numstreams in Hmap; eauto. }
+    eapply map_bind2_unnest_exp_annots' in Hmap; eauto.
     unfold annots; rewrite flat_map_concat_map.
     apply Forall2_concat. rewrite Forall2_map_2.
     eapply Forall2_impl_In; eauto. clear Hmap. intros; simpl in *.
@@ -1232,96 +1293,96 @@ Module Type UNTUPLE
     repeat constructor; auto.
   Qed.
 
-  Corollary map_bind2_normalize_exp_annots_length' :
+  Corollary map_bind2_unnest_exp_annots_length' :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       Forall2 (fun es' e => length (annots es') = length (annot e)) es' es.
   Proof.
     intros G is_control es es' eqs' st st' Hf Hmap.
-    eapply map_bind2_normalize_exp_annots' in Hmap; eauto.
+    eapply map_bind2_unnest_exp_annots' in Hmap; eauto.
     induction Hmap; inv Hf; constructor; eauto.
     congruence.
   Qed.
 
-  Fact map_bind2_normalize_exp_annots :
+  Fact map_bind2_unnest_exp_annots :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       annots (concat es') = annots es.
   Proof.
     intros G is_control es es' a2s st st' Hwl Hmap.
-    eapply map_bind2_normalize_exp_annots' in Hmap; eauto.
+    eapply map_bind2_unnest_exp_annots' in Hmap; eauto.
     induction Hmap; simpl; auto.
     inv Hwl.
     repeat simpl_list.
     f_equal; auto.
   Qed.
 
-  Fact map_bind2_normalize_exp_annots_length :
+  Fact map_bind2_unnest_exp_annots_length :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       length (annots (concat es')) = length (annots es).
   Proof.
     intros G is_control es es' a2s st st' Hwl Hmap.
-    eapply map_bind2_normalize_exp_annots in Hmap; eauto.
+    eapply map_bind2_unnest_exp_annots in Hmap; eauto.
     congruence.
   Qed.
 
-  Fact normalize_exps_annots : forall G es es' eqs' st st',
+  Fact unnest_exps_annots : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       annots es' = annots es.
   Proof.
     intros G es es' eqs' st st' Hwt Hnorm.
-    unfold normalize_exps in Hnorm; repeat inv_bind.
-    eapply map_bind2_normalize_exp_annots in H; eauto.
+    unfold unnest_exps in Hnorm; repeat inv_bind.
+    eapply map_bind2_unnest_exp_annots in H; eauto.
   Qed.
 
-  Corollary normalize_exps_annots_length : forall G es es' eqs' st st',
+  Corollary unnest_exps_annots_length : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_exps es st = (es', eqs', st') ->
+      unnest_exps es st = (es', eqs', st') ->
       length (annots es') = length (annots es).
   Proof.
     intros G es es' eqs' st st' Hwt Hnorm.
-    eapply normalize_exps_annots in Hnorm; eauto.
+    eapply unnest_exps_annots in Hnorm; eauto.
     congruence.
   Qed.
 
-  Fact normalize_fby_annot : forall anns e0s es,
+  Fact unnest_fby_annot : forall anns e0s es,
       length e0s = length anns ->
       length es = length anns ->
-      annots (normalize_fby e0s es anns) = anns.
+      annots (unnest_fby e0s es anns) = anns.
   Proof.
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
     f_equal. eauto.
   Qed.
 
-  Fact normalize_arrow_annot : forall anns e0s es,
+  Fact unnest_arrow_annot : forall anns e0s es,
       length e0s = length anns ->
       length es = length anns ->
-      annots (normalize_arrow e0s es anns) = anns.
+      annots (unnest_arrow e0s es anns) = anns.
   Proof.
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
     f_equal. eauto.
   Qed.
 
-  (* Fact normalize_pre_annot : forall anns es, *)
+  (* Fact unnest_pre_annot : forall anns es, *)
   (*     length es = length anns -> *)
-  (*     annots (normalize_pre es anns) = anns. *)
+  (*     annots (unnest_pre es anns) = anns. *)
   (* Proof. *)
   (*   induction anns; intros * Hl1; *)
   (*     destruct es; simpl in *; try congruence; auto. *)
   (*   f_equal. eauto. *)
   (* Qed. *)
 
-  Fact normalize_fby_annot' : forall anns e0s es,
+  Fact unnest_fby_annot' : forall anns e0s es,
       length e0s = length anns ->
       length es = length anns ->
-      Forall2 (fun e a => annot e = [a]) (normalize_fby e0s es anns) anns.
+      Forall2 (fun e a => annot e = [a]) (unnest_fby e0s es anns) anns.
   Proof.
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
@@ -1329,10 +1390,10 @@ Module Type UNTUPLE
     - simpl. constructor; eauto.
   Qed.
 
-  Fact normalize_arrow_annot' : forall anns e0s es,
+  Fact unnest_arrow_annot' : forall anns e0s es,
       length e0s = length anns ->
       length es = length anns ->
-      Forall2 (fun e a => annot e = [a]) (normalize_arrow e0s es anns) anns.
+      Forall2 (fun e a => annot e = [a]) (unnest_arrow e0s es anns) anns.
   Proof.
     induction anns; intros * Hl1 Hl2;
       destruct e0s; destruct es; simpl in *; try congruence; auto.
@@ -1340,9 +1401,9 @@ Module Type UNTUPLE
     - simpl. constructor; eauto.
   Qed.
 
-  (* Fact normalize_pre_annot' : forall anns es, *)
+  (* Fact unnest_pre_annot' : forall anns es, *)
   (*     length es = length anns -> *)
-  (*     Forall2 (fun e a => annot e = [a]) (normalize_pre es anns) anns. *)
+  (*     Forall2 (fun e a => annot e = [a]) (unnest_pre es anns) anns. *)
   (* Proof. *)
   (*   induction anns; intros * Hl1; *)
   (*     destruct es; simpl in *; try congruence; auto. *)
@@ -1350,61 +1411,61 @@ Module Type UNTUPLE
   (*   - simpl. constructor; eauto. *)
   (* Qed. *)
 
-  Fact normalize_rhs_annot : forall G e es' eqs' st st',
+  Fact unnest_rhs_annot : forall G e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       annots es' = annot e.
   Proof.
     intros * Hwt Hnorm.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try (solve [eapply normalize_exp_annot in Hnorm; eauto]).
+    destruct e; unfold unnest_rhs in Hnorm;
+      try (solve [eapply unnest_exp_annot in Hnorm; eauto]).
     - (* fby *)
       repeat inv_bind. inv Hwt.
-      eapply normalize_fby_annot; eauto.
-      + eapply normalize_exps_length in H; eauto. congruence.
-      + eapply normalize_exps_length in H0; eauto. congruence.
+      eapply unnest_fby_annot; eauto.
+      + eapply unnest_exps_length in H; eauto. congruence.
+      + eapply unnest_exps_length in H0; eauto. congruence.
     - (* arrow *)
       repeat inv_bind. inv Hwt.
-      eapply normalize_arrow_annot; eauto.
-      + eapply normalize_exps_length in H; eauto. congruence.
-      + eapply normalize_exps_length in H0; eauto. congruence.
+      eapply unnest_arrow_annot; eauto.
+      + eapply unnest_exps_length in H; eauto. congruence.
+      + eapply unnest_exps_length in H0; eauto. congruence.
     - (* app *)
       destruct o; repeat inv_bind; simpl; rewrite app_nil_r; reflexivity.
   Qed.
 
-  Corollary normalize_rhs_annot_length : forall G e es' eqs' st st',
+  Corollary unnest_rhs_annot_length : forall G e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs e st = (es', eqs', st') ->
+      unnest_rhs e st = (es', eqs', st') ->
       length (annots es') = length (annot e).
   Proof.
     intros * Hwt Hnorm.
-    eapply normalize_rhs_annot in Hnorm; eauto.
+    eapply unnest_rhs_annot in Hnorm; eauto.
     congruence.
   Qed.
 
-  Fact normalize_rhss_annots : forall G es es' eqs' st st',
+  Fact unnest_rhss_annots : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_rhss es st = (es', eqs', st') ->
+      unnest_rhss es st = (es', eqs', st') ->
       annots es' = annots es.
   Proof.
     intros * Hf Hnorm.
-    unfold normalize_rhss in Hnorm. repeat inv_bind.
+    unfold unnest_rhss in Hnorm. repeat inv_bind.
     apply map_bind2_values in H.
     induction H; simpl in *.
     - reflexivity.
     - inv Hf.
-      destruct H as [? [? H]]. eapply normalize_rhs_annot in H; eauto.
+      destruct H as [? [? H]]. eapply unnest_rhs_annot in H; eauto.
       repeat simpl_list.
       f_equal; auto.
   Qed.
 
-  Corollary normalize_rhss_annots_length : forall G es es' eqs' st st',
+  Corollary unnest_rhss_annots_length : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_rhss es st = (es', eqs', st') ->
+      unnest_rhss es st = (es', eqs', st') ->
       length (annots es') = length (annots es).
   Proof.
     intros G es es' eqs' st st' Hf Hnorm.
-    eapply normalize_rhss_annots in Hnorm; eauto.
+    eapply unnest_rhss_annots in Hnorm; eauto.
     congruence.
   Qed.
 
@@ -1458,21 +1519,24 @@ Module Type UNTUPLE
       apply Permutation_app_head. assumption.
   Qed.
 
-  Fact normalize_reset_vars_perm : forall e e' eqs' st st',
-      normalize_reset e st = ((e', eqs'), st') ->
+  Fact unnest_reset_vars_perm : forall k e es' eqs' st st',
+      LiftO True (fun e => forall es' eqs' st st',
+                   k e st = ((es', eqs'), st') ->
+                   Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st')) e ->
+      unnest_reset k e st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof.
-    intros e e' eqs' st st' Hnorm.
-    destruct (normalize_reset_spec e) as [[v [ann [Hv Hspec]]]| Hspec];
-      subst; rewrite Hspec in Hnorm; clear Hspec.
-    - repeat inv_bind. reflexivity.
-    - destruct (hd _ _) as [ty [cl _]]. repeat inv_bind.
-      eapply fresh_ident_vars_perm; eauto.
+    intros * Hkperm Hnorm.
+    unnest_reset_spec; simpl; eauto.
+    destruct (hd _ _) as [ty [ck o]]; repeat inv_bind.
+    eapply Hkperm in Hk0.
+    eapply fresh_ident_vars_perm in Hfresh; eauto.
+    rewrite <- Hfresh, <- Hk0; auto.
   Qed.
 
-  Fact normalize_exp_vars_perm : forall G e is_control es' eqs' st st',
+  Fact unnest_exp_vars_perm : forall G e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = ((es', eqs'), st') ->
+      unnest_exp is_control e st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st')(* ++(fresh_in e) *).
   Proof with eauto.
     induction e using exp_ind2; intros is_control e' eqs' st st' Hwt Hnorm;
@@ -1493,12 +1557,12 @@ Module Type UNTUPLE
       apply Permutation_app_head...
     - (* arrow *)
       repeat inv_bind.
-      remember (normalize_fby _ _ _) as fby.
+      remember (unnest_fby _ _ _) as fby.
       assert (length x5 = length fby) as Hlen.
-      { eapply map_bind2_normalize_exp_length in H1...
-        eapply map_bind2_normalize_exp_length in H2...
+      { eapply map_bind2_unnest_exp_length in H1...
+        eapply map_bind2_unnest_exp_length in H2...
         apply idents_for_anns_length in H3...
-        rewrite Heqfby, normalize_fby_length; solve_length.
+        rewrite Heqfby, unnest_fby_length; solve_length.
       }
       apply map_bind2_vars_perm in H1. 2:solve_forall.
       apply map_bind2_vars_perm in H2. 2:solve_forall.
@@ -1517,12 +1581,12 @@ Module Type UNTUPLE
       rewrite Permutation_swap. apply Permutation_app_head; auto.
     - (* arrow *)
       repeat inv_bind.
-      remember (normalize_arrow _ _ _) as fby.
+      remember (unnest_arrow _ _ _) as fby.
       assert (length x5 = length fby) as Hlen.
-      { eapply map_bind2_normalize_exp_length in H1...
-        eapply map_bind2_normalize_exp_length in H2...
+      { eapply map_bind2_unnest_exp_length in H1...
+        eapply map_bind2_unnest_exp_length in H2...
         apply idents_for_anns_length in H3...
-        rewrite Heqfby, normalize_arrow_length; solve_length.
+        rewrite Heqfby, unnest_arrow_length; solve_length.
       }
       apply map_bind2_vars_perm in H1. 2:solve_forall.
       apply map_bind2_vars_perm in H2. 2:solve_forall.
@@ -1615,87 +1679,76 @@ Module Type UNTUPLE
       rewrite <- app_assoc.
       apply Permutation_app_head. rewrite app_nil_r. assumption.
     - (* app (reset) *)
-      repeat inv_bind.
-      assert (length x5 = length a) as Hlen by eauto.
-      apply idents_for_anns'_vars_perm in H3.
+      do 5 inv_bind.
+      eapply idents_for_anns'_vars_perm in H3.
+      apply (unnest_reset_vars_perm _ (Some r)) in H2. 2:intros; simpl; eauto.
+      simpl; repeat inv_bind.
       apply map_bind2_vars_perm in H1. 2: (repeat rewrite_Forall_forall; eauto).
-      apply normalize_reset_vars_perm in H4.
-      apply H in H2; eauto.
-      etransitivity. 2: eauto.
-      repeat rewrite <- app_assoc.
-      apply Permutation_app_head.
+      rewrite <- H3, <- H2, <- H1; simpl.
       repeat simpl_list.
-      etransitivity; [| eauto].
-      rewrite Permutation_app_comm, Permutation_swap, <- app_assoc.
-      apply Permutation_app_head.
-      etransitivity; [| eauto].
-      repeat simpl_list. apply Permutation_app_head.
-      rewrite Permutation_app_comm. assumption.
+      apply Permutation_app_head. rewrite Permutation_swap. reflexivity.
   Qed.
 
-  Corollary normalize_exps_vars_perm : forall G es es' eqs' st st',
+  Corollary unnest_exps_vars_perm : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_exps es st = ((es', eqs'), st') ->
+      unnest_exps es st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof with eauto.
     intros G es es' eqs' st st' Hf Hnorm.
-    unfold normalize_exps in Hnorm.
+    unfold unnest_exps in Hnorm.
     repeat inv_bind.
     eapply map_bind2_vars_perm...
     repeat rewrite_Forall_forall.
-    eapply normalize_exp_vars_perm...
+    eapply unnest_exp_vars_perm...
   Qed.
 
-  Fact normalize_rhs_vars_perm : forall G e es' eqs' st st',
+  Fact unnest_rhs_vars_perm : forall G e es' eqs' st st',
       wl_exp G e ->
-      normalize_rhs e st = ((es', eqs'), st') ->
+      unnest_rhs e st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof with eauto.
     intros * Hwt Hnorm.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try (solve [eapply normalize_exp_vars_perm; eauto]); inv Hwt; repeat inv_bind.
+    destruct e; unfold unnest_rhs in Hnorm;
+      try (solve [eapply unnest_exp_vars_perm; eauto]); inv Hwt.
     - (* fby *)
       repeat inv_bind.
-      eapply normalize_exps_vars_perm in H...
-      eapply normalize_exps_vars_perm in H0...
+      eapply unnest_exps_vars_perm in H...
+      eapply unnest_exps_vars_perm in H0...
       etransitivity. 2: eauto.
       repeat simpl_list.
       rewrite Permutation_swap. apply Permutation_app_head; auto.
     - (* arrow *)
       repeat inv_bind.
-      eapply normalize_exps_vars_perm in H...
-      eapply normalize_exps_vars_perm in H0...
+      eapply unnest_exps_vars_perm in H...
+      eapply unnest_exps_vars_perm in H0...
       etransitivity. 2: eauto.
       repeat simpl_list.
       rewrite Permutation_swap. apply Permutation_app_head; auto.
     - (* app *)
-      eapply normalize_exps_vars_perm in H; eauto.
+      repeat inv_bind.
+      eapply unnest_exps_vars_perm in H; eauto.
       rewrite app_nil_r; eauto.
     - (* app (reset) *)
-      eapply normalize_exps_vars_perm in H; eauto.
-      eapply normalize_exp_vars_perm in H0; eauto.
-      eapply normalize_reset_vars_perm in H1.
-      etransitivity. 2: eauto.
+      do 4 inv_bind.
+      eapply unnest_exps_vars_perm in H; eauto.
+      eapply (unnest_reset_vars_perm _ (Some r)) in H0; eauto.
+      2:simpl; intros; eapply unnest_exp_vars_perm; eauto.
+      rewrite <- H0, <- H.
       repeat simpl_list.
-      rewrite Permutation_app_comm, Permutation_swap, <- app_assoc, <- app_assoc.
-      apply Permutation_app_head.
-      etransitivity. 2: eauto.
-      apply Permutation_app_head.
-      rewrite Permutation_app_comm.
-      assumption.
+      rewrite Permutation_swap. reflexivity.
   Qed.
 
-  Corollary normalize_rhss_vars_perm : forall G es es' eqs' st st',
+  Corollary unnest_rhss_vars_perm : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
-      normalize_rhss es st = ((es', eqs'), st') ->
+      unnest_rhss es st = ((es', eqs'), st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) (st_ids st').
   Proof.
     intros * Hf Hnorm.
-    unfold normalize_rhss in Hnorm.
+    unfold unnest_rhss in Hnorm.
     repeat inv_bind.
     eapply map_bind2_vars_perm in H; eauto.
     repeat rewrite_Forall_forall.
-    eapply normalize_rhs_vars_perm; eauto.
+    eapply unnest_rhs_vars_perm; eauto.
   Qed.
 
   Fact split_equation_vars_defined : forall xs es,
@@ -1725,64 +1778,64 @@ Module Type UNTUPLE
       f_equal; simpl in *; auto.
   Qed.
 
-  Fact untuple_equation_vars_perm : forall G eq eqs' st st',
+  Fact unnest_equation_vars_perm : forall G eq eqs' st st',
       wl_equation G eq ->
-      untuple_equation eq st = (eqs', st') ->
+      unnest_equation eq st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined [eq])++(st_ids st')).
   Proof.
     intros * Hwt Hnorm.
     destruct eq; simpl in *.
     repeat inv_bind. destruct Hwt as [Hwt Hl].
-    specialize (normalize_rhss_vars_perm _ _ _ _ _ _ Hwt H) as Hperm1.
+    specialize (unnest_rhss_vars_perm _ _ _ _ _ _ Hwt H) as Hperm1.
     rewrite app_nil_r.
     assert (vars_defined (flat_map split_equation [(l, x)]) = vars_defined [(l, x)]) as Hxl.
     { apply split_equations_vars_defined.
       repeat constructor.
-      eapply normalize_rhss_annots_length in H; eauto. congruence. }
+      eapply unnest_rhss_annots_length in H; eauto. congruence. }
     repeat simpl_list.
     apply Permutation_app; auto.
     rewrite <- Hxl at 2. reflexivity.
   Qed.
 
-  Corollary untuple_equations_vars_perm : forall G eqs eqs' st st',
+  Corollary unnest_equations_vars_perm : forall G eqs eqs' st st',
       Forall (wl_equation G) eqs ->
-      untuple_equations eqs st = (eqs', st') ->
+      unnest_equations eqs st = (eqs', st') ->
       Permutation ((vars_defined eqs')++(st_ids st)) ((vars_defined eqs)++(st_ids st')).
   Proof.
-    induction eqs; intros * Hf Hnorm; unfold untuple_equations in Hnorm; repeat inv_bind.
+    induction eqs; intros * Hf Hnorm; unfold unnest_equations in Hnorm; repeat inv_bind.
     - reflexivity.
     - inv Hf.
-      assert (untuple_equations eqs x1 = (concat x2, st')) as Hnorm'.
-      { unfold untuple_equations. repeat inv_bind. repeat eexists; eauto.
+      assert (unnest_equations eqs x1 = (concat x2, st')) as Hnorm'.
+      { unfold unnest_equations. repeat inv_bind. repeat eexists; eauto.
         inv_bind; eauto. } eapply IHeqs in Hnorm'; eauto.
-      eapply untuple_equation_vars_perm in H; eauto; simpl in *.
+      eapply unnest_equation_vars_perm in H; eauto; simpl in *.
       repeat simpl_list.
       rewrite Permutation_swap, H, Permutation_swap.
       apply Permutation_app_head. assumption.
   Qed.
 
-  (** ** Specification of an (almost) normalized node *)
+  (** ** Specification of an (almost) unnested node *)
 
   Inductive normalized_lexp : exp -> Prop :=
-  | normalized_Econst : forall c, normalized_lexp (Econst c)
-  | normalized_Evar : forall x ty cl, normalized_lexp (Evar x (ty, cl))
-  | normalized_Eunop : forall op e1 ty cl,
+  | unnested_Econst : forall c, normalized_lexp (Econst c)
+  | unnested_Evar : forall x ty cl, normalized_lexp (Evar x (ty, cl))
+  | unnested_Eunop : forall op e1 ty cl,
       normalized_lexp e1 ->
       normalized_lexp (Eunop op e1 (ty, cl))
-  | normalized_Ebinop : forall op e1 e2 ty cl,
+  | unnested_Ebinop : forall op e1 e2 ty cl,
       normalized_lexp e1 ->
       normalized_lexp e2 ->
       normalized_lexp (Ebinop op e1 e2 (ty, cl))
-  | normalized_Ewhen : forall e x b ty cl,
+  | unnested_Ewhen : forall e x b ty cl,
       normalized_lexp e ->
       normalized_lexp (Ewhen [e] x b ([ty], cl)).
 
   Inductive normalized_cexp : exp -> Prop :=
-  | normalized_Emerge : forall x et ef ty cl,
+  | unnested_Emerge : forall x et ef ty cl,
       normalized_cexp et ->
       normalized_cexp ef ->
       normalized_cexp (Emerge x [et] [ef] ([ty], cl))
-  | normalized_Eite : forall e et ef ty cl,
+  | unnested_Eite : forall e et ef ty cl,
       normalized_lexp e ->
       normalized_cexp et ->
       normalized_cexp ef ->
@@ -1791,31 +1844,31 @@ Module Type UNTUPLE
       normalized_lexp e ->
       normalized_cexp e.
 
-  Inductive untupled_equation : equation -> Prop :=
-  | untupled_eq_Eapp : forall xs f es lann,
+  Inductive unnested_equation : equation -> Prop :=
+  | unnested_eq_Eapp : forall xs f es lann,
       Forall normalized_lexp es ->
-      untupled_equation (xs, [Eapp f es None lann])
-  | untupled_eq_Eapp_reset : forall xs f es x ty cl lann,
+      unnested_equation (xs, [Eapp f es None lann])
+  | unnested_eq_Eapp_reset : forall xs f es x ty cl lann,
       Forall normalized_lexp es ->
-      untupled_equation (xs, [Eapp f es (Some (Evar x (ty, cl))) lann])
-  | untupled_eq_Efby : forall x e0 e ann,
+      unnested_equation (xs, [Eapp f es (Some (Evar x (ty, cl))) lann])
+  | unnested_eq_Efby : forall x e0 e ann,
       normalized_lexp e0 ->
       normalized_lexp e ->
-      untupled_equation ([x], [Efby [e0] [e] [ann]])
-  | untupled_eq_Earrow : forall x e0 e ann,
+      unnested_equation ([x], [Efby [e0] [e] [ann]])
+  | unnested_eq_Earrow : forall x e0 e ann,
       normalized_lexp e0 ->
       normalized_lexp e ->
-      untupled_equation ([x], [Earrow [e0] [e] [ann]])
-  | untupled_eq_cexp : forall x e,
+      unnested_equation ([x], [Earrow [e0] [e] [ann]])
+  | unnested_eq_cexp : forall x e,
       normalized_cexp e ->
-      untupled_equation ([x], [e]).
+      unnested_equation ([x], [e]).
 
-  Definition untupled_node (n : node) :=
-    Forall untupled_equation (n_eqs n).
+  Definition unnested_node (n : node) :=
+    Forall unnested_equation (n_eqs n).
 
-  Definition untupled_global (G : global) := Forall untupled_node G.
+  Definition unnested_global (G : global) := Forall unnested_node G.
 
-  Hint Constructors normalized_lexp normalized_cexp untupled_equation.
+  Hint Constructors normalized_lexp normalized_cexp unnested_equation.
 
   (** A few initial properties *)
 
@@ -1834,7 +1887,7 @@ Module Type UNTUPLE
       try apply normalized_lexp_numstreams in H; auto.
   Qed.
 
-  (** ** After normalization, equations and expressions are normalized *)
+  (** ** After normalization, equations and expressions are unnested *)
 
   Fact normalized_lexp_hd_default : forall es,
       Forall normalized_lexp es ->
@@ -1843,6 +1896,16 @@ Module Type UNTUPLE
     intros es Hf.
     destruct es; simpl.
     - constructor.
+    - inv Hf; auto.
+  Qed.
+
+  Fact normalized_cexp_hd_default : forall es,
+      Forall normalized_cexp es ->
+      normalized_cexp (hd_default es).
+  Proof.
+    intros es Hf.
+    destruct es; simpl.
+    - repeat constructor.
     - inv Hf; auto.
   Qed.
 
@@ -1881,10 +1944,10 @@ Module Type UNTUPLE
   Qed.
 
   Hint Resolve in_combine_l in_combine_r.
-  Hint Resolve normalized_lexp_hd_default.
+  Hint Resolve normalized_lexp_hd_default normalized_cexp_hd_default.
 
-  Lemma normalize_exp_normalized_lexp : forall e es' eqs' st st',
-      normalize_exp false e st = (es', eqs', st') ->
+  Lemma unnest_exp_normalized_lexp : forall e es' eqs' st st',
+      unnest_exp false e st = (es', eqs', st') ->
       Forall normalized_lexp es'.
   Proof with eauto.
     induction e using exp_ind2; intros es' eqs' st st' Hnorm;
@@ -1904,26 +1967,26 @@ Module Type UNTUPLE
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a0...
     - (* when *)
-      destruct a. repeat inv_bind. unfold normalize_when.
+      destruct a. repeat inv_bind. unfold unnest_when.
       apply map_bind2_normalized_lexp' in H0...
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
-      destruct a. repeat inv_bind. unfold normalize_merge.
+      destruct a. repeat inv_bind. unfold unnest_merge.
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a...
     - (* ite *)
-      destruct a. repeat inv_bind. unfold normalize_ite.
+      destruct a. repeat inv_bind. unfold unnest_ite.
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a...
     - (* app *)
       repeat rewrite_Forall_forall.
       repeat simpl_In. destruct a0...
   Qed.
-  Hint Resolve normalize_exp_normalized_lexp.
+  Hint Resolve unnest_exp_normalized_lexp.
 
   Corollary map_bind2_normalized_lexp : forall es es' eqs' st st',
-      map_bind2 (normalize_exp false) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp false) es st = (es', eqs', st') ->
       Forall normalized_lexp (concat es').
   Proof.
     intros es es' eqs' st st' Hnorm.
@@ -1932,51 +1995,60 @@ Module Type UNTUPLE
   Qed.
   Hint Resolve map_bind2_normalized_lexp.
 
-  Corollary normalize_exps_normalized_lexp: forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
+  Corollary unnest_exps_normalized_lexp: forall es es' eqs' st st',
+      unnest_exps es st = (es', eqs', st') ->
       Forall normalized_lexp es'.
   Proof.
     intros es es' eqs' st st' Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
+    unfold unnest_exps in Hnorm. repeat inv_bind.
     apply map_bind2_normalized_lexp in H; auto.
   Qed.
-  Hint Resolve normalize_exps_normalized_lexp.
+  Hint Resolve unnest_exps_normalized_lexp.
 
-  Fact normalize_reset_normalized_lexp : forall e e' eqs' st st',
-      normalize_reset e st = (e', eqs', st') ->
-      normalized_lexp e'.
+  Fact unnest_reset_is_var : forall k e e' eqs' st st',
+      unnest_reset k e st = (e', eqs', st') ->
+      LiftO True (fun e => exists x ann, e = Evar x ann) e'.
   Proof.
     intros * Hnorm.
-    specialize (normalize_reset_spec e) as [[? [? [? Hspec]]]|Hspec]; subst;
-      rewrite Hspec in Hnorm; clear Hspec; repeat inv_bind.
-    - destruct x0. constructor.
-    - destruct hd as [? [? ?]] in Hnorm; repeat inv_bind.
-      constructor.
+    unnest_reset_spec; simpl; auto.
+    1,2:repeat eexists; simpl; eauto.
   Qed.
 
-  Fact normalize_merge_normalized_cexp : forall x ets efs tys ck,
+  Fact unnest_reset_unnested_eq : forall k e e' eqs' st st',
+      LiftO True (fun e => forall es' eqs' st st',
+                   k e st = (es', eqs', st') ->
+                   Forall normalized_cexp es' /\ Forall unnested_equation eqs') e ->
+      unnest_reset k e st = (e', eqs', st') ->
+      Forall unnested_equation eqs'.
+  Proof.
+    intros * Hkunn Hnorm.
+    unnest_reset_spec; auto.
+    1,2:specialize (Hkunn _ _ _ _ Hk0) as [? ?]; eauto.
+  Qed.
+
+  Fact unnest_merge_normalized_cexp : forall x ets efs tys ck,
       Forall normalized_cexp ets ->
       Forall normalized_cexp efs ->
-      Forall normalized_cexp (normalize_merge x ets efs tys ck).
+      Forall normalized_cexp (unnest_merge x ets efs tys ck).
   Proof.
-    intros. unfold normalize_merge.
+    intros. unfold unnest_merge.
     repeat rewrite_Forall_forall. repeat simpl_In.
     econstructor; eauto.
   Qed.
 
-  Fact normalize_ite_normalized_cexp : forall e ets efs tys ck,
+  Fact unnest_ite_normalized_cexp : forall e ets efs tys ck,
       normalized_lexp e ->
       Forall normalized_cexp ets ->
       Forall normalized_cexp efs ->
-      Forall normalized_cexp (normalize_ite e ets efs tys ck).
+      Forall normalized_cexp (unnest_ite e ets efs tys ck).
   Proof.
-    intros. unfold normalize_ite.
+    intros. unfold unnest_ite.
     repeat rewrite_Forall_forall. repeat simpl_In.
     econstructor; eauto.
   Qed.
 
-  Lemma normalize_exp_normalized_cexp : forall e es' eqs' st st',
-      normalize_exp true e st = (es', eqs', st') ->
+  Lemma unnest_exp_normalized_cexp : forall e es' eqs' st st',
+      unnest_exp true e st = (es', eqs', st') ->
       Forall normalized_cexp es'.
   Proof with eauto.
     induction e using exp_ind2; intros es' eqs' st st' Hnorm;
@@ -1994,40 +2066,41 @@ Module Type UNTUPLE
       solve_forall.
       repeat simpl_In. destruct a0...
     - (* when *)
-      destruct a. repeat inv_bind. unfold normalize_when.
+      destruct a. repeat inv_bind. unfold unnest_when.
       apply map_bind2_normalized_lexp in H0.
       repeat rewrite_Forall_forall.
       repeat simpl_In...
     - (* merge *)
       destruct a. repeat inv_bind.
-      eapply normalize_merge_normalized_cexp...
+      eapply unnest_merge_normalized_cexp...
       apply map_bind2_normalized_cexp' in H1; [|solve_forall]...
       apply map_bind2_normalized_cexp' in H2; [|solve_forall]...
     - (* ite *)
       destruct a. repeat inv_bind.
-      eapply normalize_ite_normalized_cexp...
+      eapply unnest_ite_normalized_cexp...
       apply map_bind2_normalized_cexp' in H2; [|solve_forall]...
       apply map_bind2_normalized_cexp' in H3; [|solve_forall]...
     - (* app *)
       solve_forall.
       repeat simpl_In. destruct a0...
   Qed.
+  Hint Resolve unnest_exp_normalized_cexp.
 
   Corollary map_bind2_normalized_cexp : forall es es' eqs' st st',
-      map_bind2 (normalize_exp true) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp true) es st = (es', eqs', st') ->
       Forall normalized_cexp (concat es').
   Proof.
     intros. apply map_bind2_normalized_cexp' in H; auto.
-    solve_forall. apply normalize_exp_normalized_cexp in H1; auto.
+    solve_forall.
   Qed.
 
-  Fact map_bind2_untupled_eq {A A1} :
+  Fact map_bind2_unnested_eq {A A1} :
     forall (k : A -> FreshAnn (A1 * (list equation))) a a1s eqs' st st',
       map_bind2 k a st = (a1s, eqs', st') ->
       Forall (fun a => forall a1s eqs' st st',
                   k a st = (a1s, eqs', st') ->
-                  Forall untupled_equation eqs') a ->
-      Forall untupled_equation (concat eqs').
+                  Forall unnested_equation eqs') a ->
+      Forall unnested_equation (concat eqs').
   Proof.
     induction a; intros * Hmap Hf;
       repeat inv_bind.
@@ -2036,9 +2109,9 @@ Module Type UNTUPLE
       rewrite Forall_app; eauto.
   Qed.
 
-  Lemma normalize_exp_untupled_eq : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
-      Forall untupled_equation eqs'.
+  Lemma unnest_exp_unnested_eq : forall e is_control es' eqs' st st',
+      unnest_exp is_control e st = (es', eqs', st') ->
+      Forall unnested_equation eqs'.
   Proof with eauto.
     induction e using exp_ind2; intros * Hnorm;
       repeat inv_bind; repeat constructor; eauto.
@@ -2049,29 +2122,29 @@ Module Type UNTUPLE
       + eapply map_bind2_normalized_lexp in H1.
         eapply map_bind2_normalized_lexp in H2.
         eapply Forall_forall; intros ? Hin.
-        unfold normalize_fby in Hin. repeat simpl_In.
+        unfold unnest_fby in Hin. repeat simpl_In.
         constructor.
         * eapply Forall_forall in H7...
         * eapply Forall_forall in H5...
-      + eapply map_bind2_untupled_eq in H1... solve_forall.
-      + eapply map_bind2_untupled_eq in H2... solve_forall.
+      + eapply map_bind2_unnested_eq in H1... solve_forall.
+      + eapply map_bind2_unnested_eq in H2... solve_forall.
     - (* arrow *)
       repeat rewrite Forall_app. repeat split.
       + eapply map_bind2_normalized_lexp in H1.
         eapply map_bind2_normalized_lexp in H2.
         eapply Forall_forall; intros ? Hin.
-        unfold normalize_arrow in Hin. destruct x. repeat simpl_In.
+        unfold unnest_arrow in Hin. destruct x. repeat simpl_In.
         constructor.
         1,2:eapply Forall_forall; [|eauto]...
-      + eapply map_bind2_untupled_eq in H1... solve_forall.
-      + eapply map_bind2_untupled_eq in H2... solve_forall.
+      + eapply map_bind2_unnested_eq in H1... solve_forall.
+      + eapply map_bind2_unnested_eq in H2... solve_forall.
     - (* when *)
       destruct a. repeat inv_bind.
-      eapply map_bind2_untupled_eq in H0; eauto. solve_forall.
+      eapply map_bind2_unnested_eq in H0; eauto. solve_forall.
     - (* merge *)
-      destruct a; destruct is_control; repeat inv_bind; unfold normalize_merge;
+      destruct a; destruct is_control; repeat inv_bind; unfold unnest_merge;
         repeat rewrite Forall_app; repeat split.
-      1,2,4,5: (eapply map_bind2_untupled_eq; eauto; solve_forall).
+      1,2,4,5: (eapply map_bind2_unnested_eq; eauto; solve_forall).
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
       repeat simpl_In.
       do 2 constructor.
@@ -2080,93 +2153,83 @@ Module Type UNTUPLE
       + eapply map_bind2_normalized_cexp in H2.
         rewrite Forall_forall in H2...
     - (* ite *)
-      destruct a; destruct is_control; repeat inv_bind; unfold normalize_ite;
+      destruct a; destruct is_control; repeat inv_bind; unfold unnest_ite;
         repeat rewrite Forall_app; repeat split.
       1,5: (eapply IHe; eauto).
-      1,2,4,5: (eapply map_bind2_untupled_eq; eauto; solve_forall).
+      1,2,4,5: (eapply map_bind2_unnested_eq; eauto; solve_forall).
       rewrite Forall_forall; intros [? ?] Hin. rewrite map_map in Hin; simpl in Hin.
       repeat simpl_In.
       constructor. constructor.
       + eapply normalized_lexp_hd_default.
-        eapply normalize_exp_normalized_lexp...
+        eapply unnest_exp_normalized_lexp...
       + eapply map_bind2_normalized_cexp in H2.
         rewrite Forall_forall in H2...
       + eapply map_bind2_normalized_cexp in H3.
         rewrite Forall_forall in H3...
     - (* app *)
       eapply map_bind2_normalized_lexp in H1...
-      destruct ro; repeat inv_bind.
-      + specialize (normalize_reset_spec (hd_default x)) as [[? [? [? Hspec]]]|Hspec]; subst;
-          rewrite Hspec in H4; clear Hspec; repeat inv_bind.
-        * destruct x3...
-        * destruct (hd _) as [? [? ?]]; repeat inv_bind...
-      + constructor...
+      eapply unnest_reset_is_var in H2.
+      destruct x2; eauto.
+      destruct H2 as [? [[? ?] ?]]; subst; eauto.
     - (* app (auxiliary equations) *)
-      rewrite Forall_app. split.
-      + destruct ro; repeat inv_bind;
-        eapply map_bind2_untupled_eq in H1; eauto; solve_forall.
-      + destruct ro; repeat inv_bind; try constructor;
-        eapply Forall_app. split.
-        * eapply H in H2...
-        * specialize (normalize_reset_spec (hd_default x)) as [[? [? [? Hspec]]]|Hspec]; subst;
-          rewrite Hspec in H4; clear Hspec; repeat inv_bind...
-          destruct (hd _) as [? [? ?]]; repeat inv_bind.
-          repeat constructor. apply normalized_lexp_hd_default...
+      eapply unnest_reset_unnested_eq in H2. 2:destruct ro; simpl; eauto.
+      rewrite Forall_app. split; auto.
+      eapply map_bind2_unnested_eq in H1; eauto; solve_forall.
   Qed.
-  Local Hint Resolve normalize_exp_untupled_eq.
+  Local Hint Resolve unnest_exp_unnested_eq.
 
-  Corollary normalize_exps_untupled_eq : forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
-      Forall untupled_equation eqs'.
+  Corollary unnest_exps_unnested_eq : forall es es' eqs' st st',
+      unnest_exps es st = (es', eqs', st') ->
+      Forall unnested_equation eqs'.
   Proof.
     intros * Hnorm.
-    unfold normalize_exps in Hnorm. repeat inv_bind.
-    eapply map_bind2_untupled_eq in H; eauto.
+    unfold unnest_exps in Hnorm. repeat inv_bind.
+    eapply map_bind2_unnested_eq in H; eauto.
     solve_forall.
   Qed.
-  Local Hint Resolve normalize_exps_untupled_eq.
+  Local Hint Resolve unnest_exps_unnested_eq.
 
-  (* Intermediary predicate for normalized rhs *)
-  Inductive untupled_rhs : exp -> Prop :=
-  | untupled_rhs_Eapp : forall f es lann,
+  (* Intermediary predicate for unnested rhs *)
+  Inductive unnested_rhs : exp -> Prop :=
+  | unnested_rhs_Eapp : forall f es lann,
       Forall normalized_lexp es ->
-      untupled_rhs (Eapp f es None lann)
-  | untupled_rhs_Eapp_reset : forall f es x ty cl lann,
+      unnested_rhs (Eapp f es None lann)
+  | unnested_rhs_Eapp_reset : forall f es x ty cl lann,
       Forall normalized_lexp es ->
-      untupled_rhs (Eapp f es (Some (Evar x (ty, cl))) lann)
-  | untupled_rhs_Efby : forall e0 e ann,
+      unnested_rhs (Eapp f es (Some (Evar x (ty, cl))) lann)
+  | unnested_rhs_Efby : forall e0 e ann,
       normalized_lexp e0 ->
       normalized_lexp e ->
-      untupled_rhs (Efby [e0] [e] [ann])
-  | untupled_rhs_Earrow : forall e0 e ann,
+      unnested_rhs (Efby [e0] [e] [ann])
+  | unnested_rhs_Earrow : forall e0 e ann,
       normalized_lexp e0 ->
       normalized_lexp e ->
-      untupled_rhs (Earrow [e0] [e] [ann])
-  | untupled_rhs_cexp : forall e,
+      unnested_rhs (Earrow [e0] [e] [ann])
+  | unnested_rhs_cexp : forall e,
       normalized_cexp e ->
-      untupled_rhs e.
-  Hint Constructors untupled_rhs.
+      unnested_rhs e.
+  Hint Constructors unnested_rhs.
 
-  Fact untupled_equation_untupled_rhs : forall xs es,
-      untupled_equation (xs, es) ->
-      Forall untupled_rhs es.
+  Fact unnested_equation_unnested_rhs : forall xs es,
+      unnested_equation (xs, es) ->
+      Forall unnested_rhs es.
   Proof with eauto.
     intros * Hnormed.
     inv Hnormed...
   Qed.
 
-  Fact normalize_rhs_untupled_rhs : forall e es' eqs' st st',
-      normalize_rhs e st = (es', eqs', st') ->
-      Forall untupled_rhs es'.
+  Fact unnest_rhs_unnested_rhs : forall e es' eqs' st st',
+      unnest_rhs e st = (es', eqs', st') ->
+      Forall unnested_rhs es'.
   Proof with eauto.
     intros * Hnorm.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try (apply normalize_exp_normalized_cexp in Hnorm; solve_forall; auto).
+    destruct e; unfold unnest_rhs in Hnorm;
+      try (apply unnest_exp_normalized_cexp in Hnorm; solve_forall; auto).
     - (* fby *)
       repeat inv_bind.
-      apply normalize_exps_normalized_lexp in H.
-      apply normalize_exps_normalized_lexp in H0.
-      unfold normalize_fby.
+      apply unnest_exps_normalized_lexp in H.
+      apply unnest_exps_normalized_lexp in H0.
+      unfold unnest_fby.
       apply Forall_forall; intros * Hin.
       repeat simpl_In.
       constructor.
@@ -2174,39 +2237,40 @@ Module Type UNTUPLE
       + eapply Forall_forall in H1; eauto.
     - (* arrow *)
       repeat inv_bind.
-      apply normalize_exps_normalized_lexp in H.
-      apply normalize_exps_normalized_lexp in H0.
-      unfold normalize_arrow.
+      apply unnest_exps_normalized_lexp in H.
+      apply unnest_exps_normalized_lexp in H0.
+      unfold unnest_arrow.
       apply Forall_forall; intros * Hin.
       repeat simpl_In.
       constructor. 1,2:eapply Forall_forall; [|eauto]...
     - (* app *)
-      destruct o; repeat inv_bind...
-      specialize (normalize_reset_spec (hd_default x4)) as [[? [[? ?] [? Hspec]]]|Hspec]; subst;
-        rewrite Hspec in H1; clear Hspec; repeat inv_bind...
-      destruct (hd _) as [? [ty cl]]; repeat inv_bind...
+      repeat inv_bind...
+      eapply unnest_reset_is_var in H0.
+      constructor; [|constructor].
+      destruct x2; [destruct H0 as [? [[? ?] ?]]|]; subst.
+      1,2:constructor; eapply unnest_exps_normalized_lexp in H; eauto.
   Qed.
 
-  Corollary normalize_rhss_untupled_rhs : forall es es' eqs' st st',
-      normalize_rhss es st = (es', eqs', st') ->
-      Forall untupled_rhs es'.
+  Corollary unnest_rhss_unnested_rhs : forall es es' eqs' st st',
+      unnest_rhss es st = (es', eqs', st') ->
+      Forall unnested_rhs es'.
   Proof with eauto.
     intros * Hnorm.
-    unfold normalize_rhss in Hnorm. repeat inv_bind.
+    unfold unnest_rhss in Hnorm. repeat inv_bind.
     eapply map_bind2_values in H.
     induction H; simpl; try constructor.
     apply Forall_app. split; auto.
     destruct H as [? [? H]].
-    eapply normalize_rhs_untupled_rhs; eauto.
+    eapply unnest_rhs_unnested_rhs; eauto.
   Qed.
 
-  Fact normalize_rhs_untupled_eq : forall e es' eqs' st st',
-      normalize_rhs e st = (es', eqs', st') ->
-      Forall untupled_equation eqs'.
+  Fact unnest_rhs_unnested_eq : forall e es' eqs' st st',
+      unnest_rhs e st = (es', eqs', st') ->
+      Forall unnested_equation eqs'.
   Proof with eauto.
     intros * Hnorm.
-    destruct e; unfold normalize_rhs in Hnorm;
-      try (eapply normalize_exp_untupled_eq in Hnorm; eauto).
+    destruct e; unfold unnest_rhs in Hnorm;
+      try (eapply unnest_exp_unnested_eq in Hnorm; eauto).
     - (* fby *)
       repeat inv_bind.
       repeat rewrite Forall_app. repeat split...
@@ -2215,40 +2279,37 @@ Module Type UNTUPLE
       repeat rewrite Forall_app. repeat split...
     - (* app *)
       repeat inv_bind...
-      destruct o; repeat inv_bind; repeat rewrite Forall_app; repeat split...
-      specialize (normalize_reset_spec (hd_default x4)) as [[? [? [? Hspec]]]|Hspec]; subst;
-        rewrite Hspec in H1; clear Hspec; repeat inv_bind; eauto.
-      + destruct (hd _ _) as [? [? ?]]; simpl in H1.
-        repeat inv_bind. repeat constructor.
-        apply normalized_lexp_hd_default...
+      eapply unnest_reset_unnested_eq in H0. 2:destruct o; simpl; eauto.
+      apply Forall_app; split; auto.
+      apply unnest_exps_unnested_eq in H; eauto.
   Qed.
-  Hint Resolve normalize_rhs_untupled_eq.
+  Hint Resolve unnest_rhs_unnested_eq.
 
-  Corollary normalize_rhss_untupled_eq : forall es es' eqs' st st',
-      normalize_rhss es st = (es', eqs', st') ->
-      Forall untupled_equation eqs'.
+  Corollary unnest_rhss_unnested_eq : forall es es' eqs' st st',
+      unnest_rhss es st = (es', eqs', st') ->
+      Forall unnested_equation eqs'.
   Proof.
     intros * Hnorm.
-    unfold normalize_rhss in Hnorm; repeat inv_bind.
-    eapply map_bind2_untupled_eq in H; eauto.
+    unfold unnest_rhss in Hnorm; repeat inv_bind.
+    eapply map_bind2_unnested_eq in H; eauto.
     rewrite Forall_forall; intros; eauto.
   Qed.
-  Hint Resolve normalize_rhss_untupled_eq.
+  Hint Resolve unnest_rhss_unnested_eq.
 
-  Lemma untuple_equation_untupled_eq : forall G eq eqs' st st',
+  Lemma unnest_equation_unnested_eq : forall G eq eqs' st st',
       wl_equation G eq ->
-      untuple_equation eq st = (eqs', st') ->
-      Forall untupled_equation eqs'.
+      unnest_equation eq st = (eqs', st') ->
+      Forall unnested_equation eqs'.
   Proof with eauto.
     intros G [xs es] * Hwl Hnorm.
-    unfold untuple_equation in Hnorm.
+    unfold unnest_equation in Hnorm.
     repeat inv_bind.
     rewrite Forall_app. split.
     - assert (length xs = length (annots x)) as Hlen.
       { destruct Hwl as [Hwl1 Hwl2].
-        eapply normalize_rhss_annots_length in H...
+        eapply unnest_rhss_annots_length in H...
         congruence. } clear Hwl.
-      eapply normalize_rhss_untupled_rhs in H; eauto.
+      eapply unnest_rhss_unnested_rhs in H; eauto.
       revert xs Hlen.
       induction H; intros xs Hlen; constructor.
       + inv H...
@@ -2262,24 +2323,24 @@ Module Type UNTUPLE
         rewrite skipn_length.
         rewrite Hlen. simpl. rewrite app_length.
         rewrite length_annot_numstreams. omega.
-    - eapply normalize_rhss_untupled_eq in H; eauto.
+    - eapply unnest_rhss_unnested_eq in H; eauto.
   Qed.
 
-  Corollary untuple_equations_untupled_eq : forall G eqs eqs' st st',
+  Corollary unnest_equations_unnested_eq : forall G eqs eqs' st st',
       Forall (wl_equation G) eqs ->
-      untuple_equations eqs st = (eqs', st') ->
-      Forall untupled_equation eqs'.
+      unnest_equations eqs st = (eqs', st') ->
+      Forall unnested_equation eqs'.
   Proof.
     induction eqs; intros * Hwl Hnorm;
-      unfold untuple_equations in Hnorm; repeat inv_bind; simpl; auto.
+      unfold unnest_equations in Hnorm; repeat inv_bind; simpl; auto.
     inv Hwl. apply Forall_app; split.
-    - eapply untuple_equation_untupled_eq; eauto.
+    - eapply unnest_equation_unnested_eq; eauto.
     - eapply IHeqs; eauto.
-      unfold untuple_equations; repeat inv_bind; repeat eexists; eauto.
+      unfold unnest_equations; repeat inv_bind; repeat eexists; eauto.
       inv_bind; eauto.
   Qed.
 
-  (** ** No anonymous names in a normalized node *)
+  (** ** No anonymous names in a unnested node *)
 
   Fact normalized_lexp_no_fresh : forall e,
       normalized_lexp e ->
@@ -2326,44 +2387,36 @@ Module Type UNTUPLE
     inv H. rewrite IHes, app_nil_r; auto using normalized_cexp_no_fresh.
   Qed.
 
-  Corollary normalize_exp_no_fresh : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
+  Corollary unnest_exp_no_fresh : forall e is_control es' eqs' st st',
+      unnest_exp is_control e st = (es', eqs', st') ->
       fresh_ins es' = [].
   Proof.
     intros e is_control es' eqs' st st' Hnorm.
     unfold fresh_ins. rewrite concat_eq_nil, Forall_map.
     destruct is_control.
-    - apply normalize_exp_normalized_cexp in Hnorm.
+    - apply unnest_exp_normalized_cexp in Hnorm.
       eapply Forall_impl; eauto. intros. apply normalized_cexp_no_fresh; auto.
-    - apply normalize_exp_normalized_lexp in Hnorm.
+    - apply unnest_exp_normalized_lexp in Hnorm.
       eapply Forall_impl; eauto. intros. apply normalized_lexp_no_fresh; auto.
   Qed.
 
-  Corollary normalize_reset_no_fresh : forall e e' eqs' st st',
-      normalize_reset e st = (e', eqs', st') ->
-      fresh_in e' = [].
-  Proof.
-    intros * Hnorm.
-    apply normalize_reset_normalized_lexp, normalized_lexp_no_fresh in Hnorm; auto.
-  Qed.
-
-  Corollary normalize_exps_no_fresh : forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
+  Corollary unnest_exps_no_fresh : forall es es' eqs' st st',
+      unnest_exps es st = (es', eqs', st') ->
       fresh_ins es' = [].
   Proof.
     induction es; intros es' eqs' st st' Hnorm;
       unfold fresh_ins;
-      unfold normalize_exps in Hnorm; repeat inv_bind; auto.
+      unfold unnest_exps in Hnorm; repeat inv_bind; auto.
     simpl. rewrite map_app, concat_app.
-    eapply normalize_exp_no_fresh in H.
+    eapply unnest_exp_no_fresh in H.
     unfold fresh_ins in H, IHes; rewrite H; simpl.
     eapply IHes.
-    unfold normalize_exps; inv_bind.
+    unfold unnest_exps; inv_bind.
     repeat eexists; eauto. inv_bind; eauto.
   Qed.
 
-  Fact untupled_equation_no_anon_in_eq : forall e,
-      untupled_equation e ->
+  Fact unnested_equation_no_anon_in_eq : forall e,
+      unnested_equation e ->
       anon_in_eq e = [].
   Proof with eauto.
     intros * Hnormed.
@@ -2382,34 +2435,34 @@ Module Type UNTUPLE
       apply incl_nil...
   Qed.
 
-  Lemma untupled_equations_no_anon : forall eqs,
-      Forall untupled_equation eqs ->
+  Lemma unnested_equations_no_anon : forall eqs,
+      Forall unnested_equation eqs ->
       anon_in_eqs eqs = [].
   Proof.
     intros * Hnormed.
     unfold anon_in_eqs.
     rewrite concat_eq_nil, Forall_map.
-    solve_forall. eapply untupled_equation_no_anon_in_eq; eauto.
+    solve_forall. eapply unnested_equation_no_anon_in_eq; eauto.
   Qed.
 
-  Corollary untuple_equations_no_anon : forall G eqs eqs' st st',
+  Corollary unnest_equations_no_anon : forall G eqs eqs' st st',
       Forall (wl_equation G) eqs ->
-      untuple_equations eqs st = (eqs', st') ->
+      unnest_equations eqs st = (eqs', st') ->
       anon_in_eqs eqs' = [].
   Proof.
     intros * Hwl Hnorm.
-    eapply untupled_equations_no_anon.
-    eapply untuple_equations_untupled_eq; eauto.
+    eapply unnested_equations_no_anon.
+    eapply unnest_equations_unnested_eq; eauto.
   Qed.
 
   (** ** Normalization of a full node *)
 
   Import Fresh Fresh.Fresh Facts Tactics.
 
-  Definition untuple_equations' (eq : list equation) (st : fresh_st (type * clock)) :
-    { res | untuple_equations eq st = res }.
+  Definition unnest_equations' (eq : list equation) (st : fresh_st (type * clock)) :
+    { res | unnest_equations eq st = res }.
   Proof.
-    remember (untuple_equations eq st) as eqs'.
+    remember (unnest_equations eq st) as eqs'.
     econstructor; eauto.
   Defined.
 
@@ -2427,10 +2480,10 @@ Module Type UNTUPLE
     apply max_fold_in; auto.
   Qed.
 
-  Program Definition untuple_node (n : node) (G : { G | wl_node G n}) : node :=
+  Program Definition unnest_node (n : node) (G : { G | wl_node G n}) : node :=
     let anon := anon_in_eqs (n_eqs n) in
     let id0 := first_unused_ident (reserved++List.map fst (n_in n++n_vars n++n_out n++anon)) in
-    let eqs := untuple_equations' (n_eqs n) (init_st id0) in
+    let eqs := unnest_equations' (n_eqs n) (init_st id0) in
     let nvars := (st_anns (snd (proj1_sig eqs))) in
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
@@ -2443,7 +2496,7 @@ Module Type UNTUPLE
     |}.
   Next Obligation.
     remember (first_unused_ident _) as id0.
-    eapply untuple_equations_vars_perm with (st:=init_st id0) in H. 2: eapply surjective_pairing.
+    eapply unnest_equations_vars_perm with (st:=init_st id0) in H. 2: eapply surjective_pairing.
     specialize (n_defd n) as Hperm'.
     unfold st_ids, idty in *. rewrite init_st_anns in H. rewrite app_nil_r in H.
     etransitivity. apply H.
@@ -2455,12 +2508,12 @@ Module Type UNTUPLE
   Next Obligation.
     remember (first_unused_ident _) as id0.
     specialize (first_unused_ident_gt _ id0 (eq_sym Heqid0)) as Hident.
-    remember (untuple_equations (n_eqs n) (init_st id0)) as res.
+    remember (unnest_equations (n_eqs n) (init_st id0)) as res.
     assert (st_valid_reuse (snd res) (PSP.of_list (map fst (n_in n ++ n_vars n ++ n_out n)))
                            PS.empty) as Hvalid.
     { specialize (n_nodup n) as Hndup. rewrite fst_NoDupMembers in Hndup.
       repeat rewrite map_app in Hndup.
-      subst. eapply untuple_equations_st_valid.
+      subst. eapply unnest_equations_st_valid.
       2: eapply surjective_pairing.
       2: eapply init_st_valid_reuse.
       + rewrite PSP.elements_empty, app_nil_r.
@@ -2491,7 +2544,7 @@ Module Type UNTUPLE
       unfold idty, st_ids in *; simpl.
       rewrite <- app_assoc, app_assoc, Permutation_swap, <- app_assoc.
       assert (anon_in_eqs eqs = []).
-      { symmetry in Heqres. eapply untuple_equations_no_anon in Heqres; eauto. }
+      { symmetry in Heqres. eapply unnest_equations_no_anon in Heqres; eauto. }
       rewrite H0; simpl. rewrite app_nil_r. assumption.
     - rewrite <- fst_NoDupMembers.
       repeat rewrite app_assoc in *.
@@ -2499,48 +2552,48 @@ Module Type UNTUPLE
   Qed.
   Admit Obligations.
 
-  Fixpoint untuple_global (G : global) (Hwl: wl_global G) : global.
+  Fixpoint unnest_global (G : global) (Hwl: wl_global G) : global.
   Proof.
     destruct G as [|hd tl].
     - exact [].
-    - refine ((untuple_node hd _)::(untuple_global tl _)).
+    - refine ((unnest_node hd _)::(unnest_global tl _)).
       + econstructor. inv Hwl; eauto.
       + inv Hwl; eauto.
   Defined.
 
-  (** *** After normalization, a global is normalized *)
+  (** *** After normalization, a global is unnested *)
 
-  Lemma untuple_node_untupled_node : forall n Hwl,
-      untupled_node (untuple_node n Hwl).
+  Lemma unnest_node_unnested_node : forall n Hwl,
+      unnested_node (unnest_node n Hwl).
   Proof.
     intros n [G Hwl].
-    unfold untuple_node.
-    unfold untupled_node; simpl.
-    eapply untuple_equations_untupled_eq; eauto.
+    unfold unnest_node.
+    unfold unnested_node; simpl.
+    eapply unnest_equations_unnested_eq; eauto.
     apply surjective_pairing.
   Qed.
 
-  Lemma untuple_global_untupled_global : forall G Hwl,
-      untupled_global (untuple_global G Hwl).
+  Lemma unnest_global_unnested_global : forall G Hwl,
+      unnested_global (unnest_global G Hwl).
   Proof.
     induction G; intros Hwl; simpl; constructor.
-    - apply untuple_node_untupled_node.
+    - apply unnest_node_unnested_node.
     - apply IHG.
   Qed.
 
-  (** *** untuple_global produces an equivalent global *)
+  (** *** unnest_global produces an equivalent global *)
 
-  Fact untuple_global_eq : forall G Hwt,
-      global_iface_eq G (untuple_global G Hwt).
+  Fact unnest_global_eq : forall G Hwt,
+      global_iface_eq G (unnest_global G Hwt).
   Proof.
     induction G; intros Hwt.
     - reflexivity.
     - simpl. apply global_iface_eq_cons; auto.
   Qed.
 
-  Fact untuple_global_names : forall a G Hwt,
+  Fact unnest_global_names : forall a G Hwt,
       Forall (fun n => (n_name a <> n_name n)%type) G ->
-      Forall (fun n => (n_name a <> n_name n)%type) (untuple_global G Hwt).
+      Forall (fun n => (n_name a <> n_name n)%type) (unnest_global G Hwt).
   Proof.
     induction G; intros Hwt Hnames; simpl.
     - constructor.
@@ -2576,8 +2629,8 @@ Module Type UNTUPLE
     - eapply incl_tl; eauto.
   Qed.
 
-  Fact untupled_equation_not_nil : forall G eq,
-      untupled_equation eq ->
+  Fact unnested_equation_not_nil : forall G eq,
+      unnested_equation eq ->
       wl_equation G eq ->
       fst eq <> [].
   Proof.
@@ -2594,11 +2647,24 @@ Module Type UNTUPLE
 
   (** ** fresh_ins appear in the state after normalisation *)
 
+  Fact unnest_reset_fresh_incl : forall k e e' eqs' st st',
+      LiftO True (fun e => forall es' eqs' st st',
+                   k e st = (es', eqs', st') ->
+                   incl (fresh_in e) (st_anns st')) e ->
+      unnest_reset k e st = (e', eqs', st') ->
+      LiftO True (fun e => incl (fresh_in e) (st_anns st')) e.
+  Proof.
+    intros * Hkincl Hun.
+    unnest_reset_spec; simpl; eauto.
+    eapply fresh_ident_st_follows, st_follows_incl in Hfresh; eauto.
+    etransitivity; eauto.
+  Qed.
+
   Fact map_bind2_fresh_incl : forall is_control es es' eqs' st st',
       Forall (fun e => forall es' eqs' st st',
-                normalize_exp is_control e st = (es', eqs', st') ->
+                unnest_exp is_control e st = (es', eqs', st') ->
                 incl (fresh_in e) (st_anns st')) es ->
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       incl (fresh_ins es) (st_anns st').
   Proof with eauto.
     induction es; intros es' eqs' st st' Hf Hmap;
@@ -2618,8 +2684,8 @@ Module Type UNTUPLE
     eapply idents_for_anns'_incl; eauto.
   Qed.
 
-  Fact normalize_exp_fresh_incl : forall e is_control es' eqs' st st',
-      normalize_exp is_control e st = (es', eqs', st') ->
+  Fact unnest_exp_fresh_incl : forall e is_control es' eqs' st st',
+      unnest_exp is_control e st = (es', eqs', st') ->
       incl (fresh_in e) (st_anns st').
   Proof with eauto.
     induction e using exp_ind2; intros is_control es' eqs' st st' Hnorm;
@@ -2668,52 +2734,52 @@ Module Type UNTUPLE
       repeat eapply incl_app; repeat (etransitivity; eauto).
     - (* app *)
       apply map_bind2_fresh_incl in H1. 2:solve_forall.
-      assert (st_follows x1 st').
-      { destruct ro; repeat inv_bind; repeat solve_st_follows. }
+      assert (st_follows x1 st') by repeat solve_st_follows.
+      apply unnest_reset_fresh_incl in H2. 2:destruct ro; simpl; eauto.
       destruct ro; repeat inv_bind; repeat eapply incl_app.
       1,4:etransitivity; eauto; eapply incl_map; etransitivity; eauto; reflexivity.
       2,3:eapply idents_for_anns'_fresh_incl...
-      assert (st_follows x8 st') by repeat solve_st_follows.
+      assert (st_follows x4 st') by repeat solve_st_follows.
       etransitivity...
   Qed.
 
-  Corollary map_bind2_normalize_exp_fresh_incl : forall es is_control es' eqs' st st',
-      map_bind2 (normalize_exp is_control) es st = (es', eqs', st') ->
+  Corollary map_bind2_unnest_exp_fresh_incl : forall es is_control es' eqs' st st',
+      map_bind2 (unnest_exp is_control) es st = (es', eqs', st') ->
       incl (fresh_ins es) (st_anns st').
   Proof.
     intros es is_control es' eqs' st st' Hmap.
     apply map_bind2_fresh_incl in Hmap; auto.
-    solve_forall. apply normalize_exp_fresh_incl in H0; auto.
+    solve_forall. apply unnest_exp_fresh_incl in H0; auto.
   Qed.
 
-  Corollary normalize_exps_fresh_incl : forall es es' eqs' st st',
-      normalize_exps es st = (es', eqs', st') ->
+  Corollary unnest_exps_fresh_incl : forall es es' eqs' st st',
+      unnest_exps es st = (es', eqs', st') ->
       incl (fresh_ins es) (st_anns st').
   Proof.
     intros es es' eqs' st st' Hnorm.
-    unfold normalize_exps in Hnorm; repeat inv_bind.
-    apply map_bind2_normalize_exp_fresh_incl in H; auto.
+    unfold unnest_exps in Hnorm; repeat inv_bind.
+    apply map_bind2_unnest_exp_fresh_incl in H; auto.
   Qed.
 
   (** ** Preservation of clockof *)
 
-  Fact normalize_exp_clockof : forall G e is_control es' eqs' st st',
+  Fact unnest_exp_clockof : forall G e is_control es' eqs' st st',
       wl_exp G e ->
-      normalize_exp is_control e st = (es', eqs', st')  ->
+      unnest_exp is_control e st = (es', eqs', st')  ->
       clocksof es' = clockof e.
   Proof with eauto.
     intros vars e is_control es' eqs' st st' Hwl Hnorm.
-    eapply normalize_exp_annot in Hnorm...
+    eapply unnest_exp_annot in Hnorm...
     rewrite clocksof_annots, Hnorm, <- clockof_annot...
   Qed.
-  Hint Resolve normalize_exp_clockof.
-End UNTUPLE.
+  Hint Resolve unnest_exp_clockof.
+End UNNESTING.
 
-Module UntupleFun
+Module UnnestingFun
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Syn : LSYNTAX Ids Op)
-       <: UNTUPLE Ids Op OpAux Syn.
-  Include UNTUPLE Ids Op OpAux Syn.
-End UntupleFun.
+       <: UNNESTING Ids Op OpAux Syn.
+  Include UNNESTING Ids Op OpAux Syn.
+End UnnestingFun.
