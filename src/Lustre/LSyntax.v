@@ -1004,6 +1004,16 @@ Module Type LSYNTAX
 
   (** *** Additional properties *)
 
+  Lemma node_NoDup : forall n,
+      NoDup (map fst (n_in n ++ n_vars n ++ n_out n)).
+  Proof.
+    intros n.
+    rewrite <- fst_NoDupMembers.
+    specialize (n_nodup n) as Hnd.
+    repeat rewrite app_assoc in *.
+    apply NoDupMembers_app_l in Hnd; auto.
+  Qed.
+
   Lemma in_vars_defined_NoDup : forall n,
       NoDup (map fst (n_in n) ++ vars_defined (n_eqs n)).
   Proof.

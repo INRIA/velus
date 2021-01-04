@@ -34,6 +34,10 @@ Module Type FRESH.
     Axiom st_valid_NoDup : forall st aft,
         st_valid_after st aft ->
         NoDup (st_ids st++PSP.to_list aft).
+    Axiom st_valid_PSeq : forall st aft1 aft2,
+        PS.eq aft1 aft2 ->
+        st_valid_after st aft1 ->
+        st_valid_after st aft2.
   End validity.
 
   (** Reusability: we can define a set of identifier to be reused by the state *)
@@ -53,6 +57,7 @@ Module Type FRESH.
   End validity_reuse.
 
   (** Weak validity : only gives us information about fresh_ident *)
+  (* TODO remove *)
   Section weak_validity.
     Context {B : Type}.
     Parameter weak_valid_after : fresh_st B -> PS.t -> Prop.
@@ -191,6 +196,15 @@ Module Fresh : FRESH.
     Proof.
       intros [n l] aft [_ [_ Hvalid]]; auto.
     Qed.
+
+    Fact st_valid_PSeq : forall st aft1 aft2,
+        PS.eq aft1 aft2 ->
+        st_valid_after st aft1 ->
+        st_valid_after st aft2.
+    Proof.
+      intros [n l] aft1 aft2 Heq [Hv1 [Hv2 Hv3]].
+      repeat (constructor; auto); rewrite <- Heq; auto.
+    Qed.
   End validity.
 
   Section validity_reuse.
@@ -249,6 +263,7 @@ Module Fresh : FRESH.
         st_valid_after st aft ->
         weak_valid_after st aft.
     Proof. intros [? ?] ? [? [? ?]]; auto. Qed.
+
     Fact weak_valid_after_Subset : forall st aft1 aft2,
         PS.Subset aft2 aft1 ->
         weak_valid_after st aft1 ->
@@ -521,6 +536,14 @@ Section Instances.
     eapply Fresh.st_valid_reuse_PSeq; eauto.
   Qed.
 
+  Global Instance st_valid_after_Proper :
+    Proper (@eq (@Fresh.fresh_st B) ==> PS.Equal ==> @Basics.impl)
+           Fresh.st_valid_after.
+  Proof.
+    intros ? ? ? ? ? Heq Hfresh; subst.
+    eapply Fresh.st_valid_PSeq; eauto.
+  Qed.
+
   Global Instance weak_valid_after_Proper :
     Proper (@eq (@Fresh.fresh_st B) ==> PS.Equal ==> @Basics.impl)
            Fresh.weak_valid_after.
@@ -551,6 +574,22 @@ Module Facts.
     Qed.
   End st.
 
+  Section st_valid_after.
+    Context {B : Type}.
+
+    Fact st_valid_after_NoDupMembers {C} : forall (st : fresh_st B) (vars : list (ident * C)),
+        NoDupMembers vars ->
+        st_valid_after st (PSP.of_list (map fst vars)) ->
+        NoDup (map fst vars ++ st_ids st).
+    Proof.
+      intros * Hndup Hvalid.
+      eapply st_valid_NoDup in Hvalid.
+      rewrite ps_of_list_ps_to_list_Perm in Hvalid. 2:rewrite <- fst_NoDupMembers; auto.
+      unfold st_ids in Hvalid.
+      rewrite Permutation_app_comm; auto.
+    Qed.
+  End st_valid_after.
+
   Section st_valid_reuse.
     Context {B : Type}.
 
@@ -565,8 +604,17 @@ Module Facts.
       eapply NoDup_app_In in Hvalid; eauto.
       intro contra. apply Hvalid, in_or_app; auto.
     Qed.
-  End st_valid_reuse.
 
+
+    Fact st_valid_reuse_NoDupMembers {C} : forall (st : fresh_st B) (vars : list (ident * C)) reusable,
+        NoDupMembers vars ->
+        st_valid_reuse st (PSP.of_list (map fst vars)) reusable ->
+        NoDup (map fst vars ++ st_ids st).
+    Proof.
+      intros * Hndup Hvalid.
+      eapply st_valid_after_NoDupMembers; eauto using st_valid_reuse_st_valid.
+    Qed.
+  End st_valid_reuse.
 
   Section fresh_ident.
     Context {B : Type}.
@@ -624,6 +672,19 @@ Module Facts.
       unfold st_ids in *.
       rewrite <- Hfresh in Hvalid. inv Hvalid.
       intro contra. apply H1, in_or_app, or_intror, In_PS_elements; auto.
+    Qed.
+
+    Fact fresh_ident_nIn'' : forall (b : B) id st st' aft,
+        st_valid_after st (PSP.of_list aft) ->
+        fresh_ident b st = (id, st') ->
+        ~In id (aft ++ st_ids st).
+    Proof.
+      intros b id st st' aft Hvalid Hfresh.
+      intro contra.
+      apply in_app in contra as [contra|contra].
+      - eapply fresh_ident_nIn' in Hfresh; eauto.
+        rewrite <- ps_from_list_ps_of_list, ps_from_list_In in Hfresh; auto.
+      - eapply fresh_ident_nIn in Hvalid; eauto.
     Qed.
 
     Fact fresh_ident_weak_valid' : forall (b : B) id st st' aft,

@@ -1376,20 +1376,28 @@ Module Type LCLOCKING
       apply Hnfree. constructor.
   Qed.
 
+  Fact clock_parent_In : forall vars ck ck' id b,
+      wc_clock vars ck ->
+      clock_parent (Con ck' id b) ck ->
+      In (id, ck') vars.
+  Proof.
+    induction ck; intros * Hwc Hparent; inv Hwc; inv Hparent; eauto.
+    inv H1; eauto.
+  Qed.
+
   (** The clock of a var cant depend on its var *)
   Lemma wc_nfree_in_clock : forall vars ck id,
-      wc_env vars ->
       NoDupMembers vars ->
       In (id, ck) vars ->
       wc_clock vars ck ->
       ~Is_free_in_clock id ck.
   Proof.
-    intros vars ck id Hwenv Hndup Hin Hwc contra.
+    intros vars ck id Hndup Hin Hwc contra.
     apply Is_free_in_clock_self_or_parent in contra as [ck' [b [H|H]]]; subst.
     - inv Hwc.
       eapply NoDupMembers_det in Hndup. 2:eapply H3. 2:eapply Hin.
       apply clock_not_in_clock in Hndup; auto.
-    - assert (In (id, ck') vars) as Hin' by (eapply wc_clock_parent in H; eauto; inv H; eauto).
+    - assert (In (id, ck') vars) as Hin' by (eapply clock_parent_In; eauto).
       apply clock_parent_parent' in H.
       apply clock_parent_no_loops in H.
       eapply NoDupMembers_det in Hndup. 2:eapply Hin. 2:eapply Hin'. congruence.
@@ -1535,14 +1543,14 @@ Module Type LCLOCKING
       dep_ordered_clocks ncks.
   Proof with eauto.
     induction ncks as [|[id ck]]; intros Hndup Hwc Hdep; [constructor|].
-    inv Hndup; inv Hdep. simpl in *; constructor.
+    assert (Hndup':=Hndup). inv Hndup'; inv Hdep. simpl in *; constructor.
     - apply IHncks...
       eapply wc_env_nfreein_remove with (id:=id) in Hwc.
       + simpl in *. destruct EqDec_instance_0 in Hwc; try congruence.
         unfold remove_member in Hwc. rewrite remove_member_nIn_idem in Hwc...
       + constructor...
       + constructor.
-        * eapply wc_nfree_in_clock in Hwc... 1,2:constructor...
+        * eapply wc_nfree_in_clock in Hndup... 1:constructor...
            inv Hwc...
         * apply dep_ordered_on_InMembers in H2.
           rewrite Forall_map in H2.

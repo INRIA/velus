@@ -345,8 +345,13 @@ Module Type UNNESTING
       specialize (in_combine_l _ _ _ _ H) as ?; apply in_combine_r in H
     | H : In ?x (map ?f ?l) |- _ =>
       rewrite in_map_iff in H; destruct H as [? [? ?]]; subst
-    | |- In ?x (map ?f ?l) =>
-      rewrite in_map_iff
+    | H : In ?x (idty ?l) |- _ =>
+      rewrite In_idty_exists in H; destruct H as (?&?); subst
+    | H : In ?x (idck ?l) |- _ =>
+      rewrite In_idck_exists in H; destruct H as (?&?); subst
+    | |- In ?x (map ?f ?l) => rewrite in_map_iff
+    | |- In ?x (idty ?l) => rewrite In_idty_exists
+    | |- In ?x (idck ?l) => rewrite In_idck_exists
     end.
 
   (** ** Some additional facts *)

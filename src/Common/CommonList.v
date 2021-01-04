@@ -2745,6 +2745,14 @@ Section Forall3.
     induction 1; eauto.
   Qed.
 
+  Lemma Forall3_ignore2:
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      Forall2 (fun x z => exists y, R x y z) xs zs.
+  Proof.
+    induction 1; eauto.
+  Qed.
+
   Lemma Forall3_ignore3:
     forall xs ys zs,
       Forall3 xs ys zs ->
@@ -4136,3 +4144,65 @@ Section remove_member.
     rewrite remove_member_nIn_idem; auto.
   Qed.
 End remove_member.
+
+Section ForallTail.
+  Context {A : Type}.
+
+  Inductive ForallTail (P : A -> list A -> Prop) : list A -> Prop :=
+  | FTnil : ForallTail P []
+  | FTcons : forall x xs,
+      P x xs ->
+      ForallTail P xs ->
+      ForallTail P (x::xs).
+  Hint Constructors ForallTail.
+
+  Lemma ForallTail_impl : forall (P Q : A -> list A -> Prop) (xs : list A),
+      (forall x xs, P x xs -> Q x xs) ->
+      ForallTail P xs ->
+      ForallTail Q xs.
+  Proof.
+    induction xs; intros * Hpq Hf; auto.
+    inv Hf. constructor; eauto.
+  Qed.
+
+  Lemma ForallTail_impl_In : forall (P Q : A -> list A -> Prop) (xs : list A),
+      (forall x xs', In x xs -> P x xs' -> Q x xs') ->
+      ForallTail P xs ->
+      ForallTail Q xs.
+  Proof.
+    induction xs; intros * Hpq Hf; auto.
+    inv Hf. constructor; eauto.
+    - eapply Hpq in H1; eauto. left; auto.
+    - eapply IHxs; eauto.
+      intros. eapply Hpq; eauto. right; auto.
+  Qed.
+
+  Lemma ForallTail_ForallTail : forall (P Q : A -> list A -> Prop) (xs : list A),
+      ForallTail P xs ->
+      ForallTail Q xs ->
+      ForallTail (fun x xs => P x xs /\ Q x xs) xs.
+  Proof.
+    induction xs; intros * Hp Hq; auto.
+    inv Hp. inv Hq. constructor; eauto.
+  Qed.
+
+  Lemma ForallTail_insert : forall (P : A -> list A -> Prop) x xs1 xs2,
+      ForallTail P (xs1 ++ xs2) ->
+      P x xs2 ->
+      Forall (fun x' => forall xs1, P x' (xs1 ++ xs2) -> P x' (xs1 ++ x :: xs2)) xs1 ->
+      ForallTail P (xs1 ++ x :: xs2).
+  Proof.
+    induction xs1; intros * Hft Hp Hf; simpl in *.
+    - constructor; auto.
+    - inv Hf. inv Hft.
+      econstructor; eauto.
+  Qed.
+
+  Lemma ForallTail_middle : forall (P : A -> list A -> Prop) x xs1 xs2,
+      ForallTail P (xs1 ++ x :: xs2) ->
+      P x xs2.
+  Proof.
+    induction xs1; intros * Hft; simpl in *; inv Hft; auto.
+  Qed.
+
+End ForallTail.
