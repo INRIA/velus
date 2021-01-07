@@ -20,7 +20,7 @@ tel
 
 node control_merge (b : bool; x : int when b; y : int when not b) returns (z : int)
 let
-  z = merge(b; x; y);
+  z = merge b x y;
 tel
 
 node control_fby (x : int) returns (y : int)

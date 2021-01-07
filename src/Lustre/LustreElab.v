@@ -795,7 +795,7 @@ Section ElabExpressions.
     end.
 
   Definition discardname (ann : (type * nsclock * astloc)) : (type * nsclock) :=
-    let '(ty, (ck, id), _) := ann in (ty, (ck, id)).
+    let '(ty, (ck, id), _) := ann in (ty, (ck, None)).
 
   (* Elaborate an expression. *)
 
