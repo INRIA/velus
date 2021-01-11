@@ -72,11 +72,11 @@ In the case where the version of OCaml available in your system package manager
 is too old, you should still be able to install a newer version by using an opam
 switch.
 ```
-opam init                                  # if running opam for the first time
-opam switch create 4.07.1                  # create a global switch
-eval $(opam env)                           # update PATH
-opam update                                # sync opam database
-opam install coq.8.9.0 menhir ocamlbuild   # install dependencies
+opam init                                           # if running opam for the first time
+opam switch create 4.07.1                           # create a global switch
+eval $(opam env)                                    # update PATH
+opam update                                         # sync opam database
+opam install coq.8.9.0 menhir.20181113 ocamlbuild   # install dependencies
 ```
 
 #### Build
