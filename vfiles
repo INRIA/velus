@@ -16,6 +16,7 @@ src/Common/CommonStreams.v
 src/Common/Common.v
 src/Common/CompCertLib.v
 src/CheckGraph.v
+src/AcyGraph.v
 
 src/Lustre/LSemantics.v
 src/Lustre/LSyntax.v

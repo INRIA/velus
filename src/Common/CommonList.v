@@ -1370,6 +1370,29 @@ Section ForallExists.
     intuition.
   Qed.
 
+  Lemma Exists_dec_In:
+    forall xs,
+      (forall x, In x xs -> {P x} + {~P x}) ->
+      {Exists P xs} + {~Exists P xs}.
+  Proof.
+    intros * Hdec.
+    induction xs as [|x xs].
+    - right. now intro HH; apply Exists_nil in HH.
+    - destruct (Hdec x) as [Hx|Hx].
+      + now constructor.
+      + destruct IHxs as [Hxs|Hxs];
+          try (now left; constructor).
+        intros y Hin.
+        apply Hdec. now constructor 2.
+      + destruct IHxs as [Hxs|Hxs].
+        * intros y Hin.
+          apply Hdec. now constructor 2.
+        * left. now constructor 2.
+        * right. intro HH.
+          apply Exists_cons in HH.
+          intuition.
+  Qed.
+
   Lemma Forall_Exists:
     forall Q xs,
       Forall P xs ->
@@ -4206,3 +4229,78 @@ Section ForallTail.
   Qed.
 
 End ForallTail.
+Hint Constructors ForallTail.
+
+Section Partition.
+  Context {A : Type}.
+  Variable P : A -> Prop.
+
+  Inductive Partition : list A -> list A -> list A -> Prop :=
+  | Partition_nil : Partition [] [] []
+  | Partition_cons1 : forall x xs xs1 xs2,
+      Partition xs xs1 xs2 ->
+      P x ->
+      Partition (x::xs) (x::xs1) xs2
+  | Partition_cons2 : forall x xs xs1 xs2,
+      Partition xs xs1 xs2 ->
+      ~P x ->
+      Partition (x::xs) xs1 (x::xs2).
+
+  Lemma Partition_left_nil : forall xs xs2,
+      Partition xs [] xs2 ->
+      xs = xs2.
+  Proof.
+    induction xs; intros * Hpart; inv Hpart; auto.
+    f_equal; auto.
+  Qed.
+
+  Lemma Partition_Permutation : forall xs xs1 xs2,
+      Partition xs xs1 xs2 ->
+      Permutation xs (xs1++xs2).
+  Proof.
+    induction xs; intros * Hpart; inv Hpart; simpl; auto.
+    rewrite <- Permutation_middle; auto.
+  Qed.
+
+  Lemma Partition_Forall1 : forall xs xs1 xs2,
+      Partition xs xs1 xs2 ->
+      Forall P xs1.
+  Proof.
+    intros * Hpart.
+    induction Hpart; auto.
+  Qed.
+
+  Lemma dec_Partition : forall xs,
+      (forall x, (P x) \/ (~ P x)) ->
+      exists xs1 xs2, Partition xs xs1 xs2.
+  Proof.
+    induction xs; intros Hp.
+    - exists []. exists []. constructor.
+    - specialize (IHxs Hp) as (xs1&xs2&Hpart).
+      destruct (Hp a) as [?|?].
+      + exists (a::xs1). exists xs2. constructor; auto.
+      + exists xs1. exists (a::xs2). constructor; auto.
+  Qed.
+End Partition.
+Hint Constructors Partition.
+
+Lemma Partition_ext {A} : forall (P Q : A -> Prop) xs xs1 xs2,
+    (forall x, P x <-> Q x) ->
+    Partition P xs xs1 xs2 ->
+    Partition Q xs xs1 xs2.
+Proof.
+  induction xs; intros * Heq Hpart; inv Hpart; auto.
+  - rewrite Heq in H4. auto.
+  - rewrite Heq in H4. auto.
+Qed.
+
+Lemma partition_Partition {A} : forall (f : A -> bool) xs xs1 xs2,
+    partition f xs = (xs1, xs2) ->
+    Partition (fun x => f x = true) xs xs1 xs2.
+Proof.
+  induction xs; intros * Hpart; simpl in *.
+  - inv Hpart; auto.
+  - destruct (partition f xs) eqn:Hpart'.
+    destruct (f a) eqn:Ha; inv Hpart; constructor; auto.
+    rewrite Bool.not_true_iff_false; auto.
+Qed.

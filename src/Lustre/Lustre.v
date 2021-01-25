@@ -40,7 +40,7 @@ Module LustreFun
   Module Export Typ := LTypingFun     Ids Op       Syn.
   Module Export Clo := LClockingFun   Ids Op       Syn.
   Module Export Ord:= LOrderedFun     Ids Op       Syn.
-  Module Export Cau:= LCausality      Ids Op       Syn.
+  Module Export Cau:= LCausalityFun      Ids Op       Syn.
   Module Export Sem := LSemanticsFun  Ids Op OpAux Syn Ord CStr.
   Module Export ClSem := LClockSemanticsFun Ids Op OpAux Syn Clo Cau Ord CStr IStr Sem.
   Module Export Norm := LNormalizationFun Ids Op OpAux CStr IStr Syn Typ Clo Cau Ord Sem ClSem.

@@ -980,12 +980,9 @@ Module Type LCLOCKSEMANTICS
              specialize (Henv' i i0 n (FreeCon1 _ _ _) Hcase1); rewrite H5 in Henv';
              inv Henv'; auto).
       * rewrite H3 in *; eapply IHck in Hcase0; eauto.
-        intros. eapply Henv'; auto. right; auto.
       * rewrite H4 in *; eapply IHck in Hcase0; eauto.
-        intros. eapply Henv'; auto. right; auto.
       * eapply IHck with (cks:=Streams.const true) in Hcase0; eauto.
         rewrite const_nth in Hcase0; auto. rewrite const_nth; eauto.
-        intros; eapply Henv'; auto; right; auto.
   Qed.
 
   Lemma sc_inst':
@@ -1007,27 +1004,30 @@ Module Type LCLOCKSEMANTICS
       revert Hinst. revert b' i b0 ck' b H. cofix Cofix; intros.
       inversion Hinst as [Hcase]. cases_eqn Hcase. inv Hcase.
       unfold_Stv cks; assert (Hck' := Hck); inv Hck.
-      + econstructor; eauto. eapply IHck in Hcase0; eauto.
-        intros. eapply Henv; eauto. now constructor.
-        specialize (Henv i i0 (FreeCon1 i ck b) Hcase1).
-        inversion_clear H8 as [???? Hf]. rewrite Hf in Henv. inv Henv.
-        rewrite <- H3 in H1. econstructor; eauto. destruct b0.
-        eapply Cofix; eauto using sc_step. intros * Hfree ?.
-        apply Henv with (x':= x') in Hfree; auto. now apply env_find_tl.
-      + econstructor; eauto. eapply IHck in Hcase0; eauto.
-        intros. eapply Henv; eauto. now constructor.
-        specialize (Henv i i0 (FreeCon1 i ck b) Hcase1).
-        inversion_clear H8 as [???? Hf]. rewrite Hf in Henv. inv Henv.
-        rewrite <- H3 in H1. econstructor; eauto. destruct b0.
-        eapply Cofix; eauto using sc_step. intros * Hfree ?.
-        apply Henv with (x':= x') in Hfree; auto. now apply env_find_tl.
-      + eapply Son_abs2; eauto. eapply IHck in Hcase0; eauto.
-        intros. eapply Henv; eauto. now constructor.
-        specialize (Henv i i0 (FreeCon1 i ck (negb k)) Hcase1).
-        inversion_clear H8 as [???? Hf]. rewrite Hf in Henv. inv Henv.
-        rewrite <- H3 in H1. econstructor; eauto. destruct b0.
-        eapply Cofix; eauto using sc_step. intros * Hfree ?.
-        apply Henv with (x':= x') in Hfree; auto. now apply env_find_tl.
+      + econstructor; eauto.
+        * specialize (Henv _ _ (FreeCon1 _ _ _) Hcase1).
+          inversion_clear H8 as [???? Hf]. rewrite Hf in Henv. inv Henv.
+          rewrite <- H3 in H1. econstructor; eauto.
+        * eapply IHck in Hcase0; eauto.
+          destruct b0.
+          eapply Cofix; eauto using sc_step. intros * Hfree ?.
+          apply Henv with (x':= x') in Hfree; auto. now apply env_find_tl.
+      + econstructor; eauto.
+        * specialize (Henv _ _ (FreeCon1 _ _ _) Hcase1).
+          inversion_clear H8 as [???? Hf]. rewrite Hf in Henv. inv Henv.
+          rewrite <- H3 in H1. econstructor; eauto.
+        * eapply IHck in Hcase0; eauto.
+          destruct b0.
+          eapply Cofix; eauto using sc_step. intros * Hfree ?.
+          apply Henv with (x':= x') in Hfree; auto. now apply env_find_tl.
+      + eapply Son_abs2; eauto.
+        * specialize (Henv _ _ (FreeCon1 _ _ _) Hcase1).
+          inversion_clear H8 as [???? Hf]. rewrite Hf in Henv. inv Henv.
+          rewrite <- H3 in H1. econstructor; eauto.
+        * eapply IHck in Hcase0; eauto.
+          destruct b0.
+          eapply Cofix; eauto using sc_step. intros * Hfree ?.
+          apply Henv with (x':= x') in Hfree; auto. now apply env_find_tl.
   Qed.
 
   Lemma sc_parent :
@@ -1258,12 +1258,9 @@ Module Type LCLOCKSEMANTICS
              specialize (Henv' i i0 (FreeCon1 _ _ _) Hcase1); rewrite H5 in Henv';
              inv Henv'; auto).
       * rewrite H3 in *; eapply IHck in Hcase0; eauto.
-        intros. eapply Henv'; auto; right; auto.
       * rewrite H4 in *; eapply IHck in Hcase0; eauto.
-        intros. eapply Henv'; auto; right; auto.
       * eapply IHck with (cks:=Streams.const true) in Hcase0; eauto.
         rewrite const_nth in Hcase0; auto. rewrite const_nth; eauto.
-        intros; eapply Henv'; auto; right; auto.
   Qed.
 
   Lemma sc_inst_mask':
@@ -1299,27 +1296,21 @@ Module Type LCLOCKSEMANTICS
                inv Henv'; auto; rewrite Hcount; auto).
         * rewrite H3 in *; eapply IHck with (b':=b') in Hcase0; eauto.
           repeat rewrite maskb_nth, Hcount, <- H3 in Hcase0. rewrite <- H3; eauto.
-          repeat rewrite maskb_nth, Hcount, <- H3; auto.
-          intros. eapply Henv'; auto. right; auto.
         * rewrite H4 in *; eapply IHck with (b':=b') in Hcase0; eauto.
           repeat rewrite maskb_nth, Hcount in Hcase0; eauto.
-          repeat rewrite maskb_nth, Hcount; auto.
-          intros. eapply Henv'; auto. right; auto.
         * assert (Htrue:=H4). apply sem_clock_instant_true_inv in H4; eauto.
           eapply IHck with (b:=b0) (b':=b') (cks:=Streams.const true) in Hcase0; eauto.
           repeat rewrite maskb_nth, Hcount in Hcase0. rewrite const_nth in Hcase0; eauto.
           rewrite const_nth; eauto.
-          repeat rewrite maskb_nth, Hcount; auto.
-          intros; eapply Henv'; auto; right; auto.
       + inv Hck.
         1,2,3:econstructor; eauto.
         2,4,6:(unfold sem_var_instant in *;
-               specialize (Henv' i i0 n (FreeCon1 _ _ _) Hcase1); rewrite H5 in Henv';
+               specialize (Henv' _ _ n (FreeCon1 _ _ _) Hcase1); rewrite H5 in Henv';
                inv Henv'; auto; rewrite Hcount; auto).
-        2:eapply IHck with (b':=b') (b:=b0) (cks:=Streams.const false) in Hcase0; eauto.
-        1,5:eapply IHck with (b':=b') (b:=b0) (cks:=Streams.const true) in Hcase0; eauto.
-        3,6,9:(intros; eapply Henv'; auto; right; auto).
-        1-9:repeat rewrite maskb_nth, Hcount in *; repeat rewrite const_nth in *; auto.
+        1,3:eapply IHck with (b':=b') (b:=b0) (cks:=Streams.const true) in Hcase0; eauto.
+        1-5:repeat rewrite maskb_nth, Hcount in *; repeat rewrite const_nth in *; auto.
+        eapply IHck in Hcase0; eauto. 2:rewrite <-H4; eauto.
+        repeat rewrite maskb_nth, Hcount in Hcase0; eauto.
   Qed.
 
   Lemma inst_in_eqst_mask:

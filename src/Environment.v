@@ -2254,6 +2254,106 @@ Module Env.
 
   End union.
 
+  Section diff.
+    Context {V : Type}.
+
+    Definition diff (a b : Env.t V) :=
+      fold (fun k _ a => Env.remove k a) b a.
+
+    Lemma diff_spec : forall a b x v,
+        MapsTo x v (diff a b) <->
+        MapsTo x v a /\ ~In x b.
+    Proof.
+      intros *.
+      unfold diff. revert x v.
+      apply Props.P.fold_rec; intros *.
+      - intros Hempty; split; [intros H|intros (?&?)]; auto.
+        split; auto.
+        intro contra. apply In_find in contra as (?&?).
+        eapply Hempty; eauto.
+      - intros Hmaps Hnin Hadd Hrec *.
+        split; [intros Hmap|intros (Hmap&Hin)].
+        + apply Props.P.F.remove_mapsto_iff in Hmap as (Hneq&Hmap).
+          rewrite Hrec in Hmap. destruct Hmap as (Hmap&Hnin').
+          split; auto.
+          intro contra.
+          apply In_find in contra as (?&?).
+          unfold MapsTo in H. rewrite Hadd in H.
+          rewrite PositiveMap.gso in H; auto.
+          apply find_In in H; auto.
+        + assert (k <> x) as Hneq.
+          { intro contra; subst.
+            apply Hin. eapply find_In. rewrite Hadd.
+            apply Env.gss. }
+          rewrite Props.P.F.remove_mapsto_iff; split; auto.
+          rewrite Hrec. split; auto.
+          intro Hin'.
+          eapply In_find in Hin' as (v'&?).
+          eapply Hin, find_In. rewrite Hadd.
+          rewrite Env.gso; eauto.
+    Qed.
+
+    Corollary diff_In_iff : forall a b x,
+        In x (diff a b) <->
+        In x a /\ ~In x b.
+    Proof.
+      intros *. split.
+      - intros (?&?).
+        apply diff_spec in H as (?&?); unfold In in *; eauto.
+      - intros ((x'&?)&?).
+        exists x'. rewrite diff_spec; auto.
+    Qed.
+
+    Lemma diff_empty : forall a b,
+        Env.Empty b ->
+        Env.Equal (diff a b) a.
+    Proof.
+      intros * Hempty.
+      unfold diff. apply Props.P.fold_Empty; auto.
+    Qed.
+
+    Lemma diff_remove : forall a b x x' y',
+        find x' (diff a (remove x b)) = Some y' ->
+        x <> x' /\ Env.find x' (diff a b) = Some y' \/ x = x'.
+    Proof.
+      intros * Hfind.
+      destruct (ident_eq_dec x x'); subst; auto.
+      left. split; auto.
+      apply diff_spec in Hfind as (Hfind&Hnin).
+      setoid_rewrite diff_spec. split; auto.
+      intro contra. apply Hnin.
+      rewrite Props.P.F.remove_in_iff; auto.
+    Qed.
+  End diff.
+
+  Section find_pred.
+    Context {V : Type}.
+    Variable P : key -> V -> bool.
+
+    (** Find a key / value pair that respects P in the environment *)
+    Definition find_pred (m : Env.t V) : option (key * V) :=
+      fold (fun k v acc => if P k v then Some (k, v) else acc) m None.
+
+    Lemma find_pred_spec : forall m k v,
+        find_pred m = Some (k, v) ->
+        MapsTo k v m /\ P k v = true.
+    Proof.
+      intros *. unfold find_pred.
+      apply Props.P.fold_rec.
+      - intros * _ contra. inv contra.
+      - intros * Hmaps Hnin Hadd Hrec Heq.
+        unfold MapsTo, Props.P.Add in *. rewrite Hadd; clear Hadd.
+        destruct (P k0 e) eqn:Hpk; subst.
+        + inv Heq.
+          rewrite Env.gss; auto.
+        + specialize (Hrec eq_refl) as (Hfind&Hp).
+          split; auto.
+          rewrite Env.gso; auto.
+          intro contra; subst.
+          apply find_In in Hfind. contradiction.
+    Qed.
+  End find_pred.
+
   (** Notations *)
 
   Module Notations.

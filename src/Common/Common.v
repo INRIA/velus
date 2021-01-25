@@ -881,6 +881,14 @@ Proof.
   intros xs. unfold ps_from_list. apply ps_adds_of_list.
 Qed.
 
+Corollary ps_of_list_In : forall xs x,
+    PS.In x (PSP.of_list xs) <-> In x xs.
+Proof.
+  intros *.
+  rewrite <- ps_from_list_ps_of_list, ps_from_list_In.
+  reflexivity.
+Qed.
+
 Lemma ps_of_list_ps_to_list : forall id xs,
     In id (PSP.to_list (PSP.of_list xs)) <-> In id xs.
 Proof.

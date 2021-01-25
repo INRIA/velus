@@ -1,14 +1,14 @@
-node f (b : int) returns (c : int ; y : int);
+node f (b : int) returns (c : bool; y : int when c);
 let
-  c = b + 1;
-  y = b + 2;
+  c = true fby false;
+  y = 42 when c;
 tel
 
 node use_f (b : int) returns (z : int);
-var c : int; y : int;
+var c : bool; y : int when c;
 let
   (c, y) = f(b);
-  z = c + y;
+  z = merge c y 0;
 tel
 
 node tuple (b : int) returns (x : int; y : int);
