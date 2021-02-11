@@ -876,8 +876,8 @@ let
 
    ck = vinit or time_unit;
    r = divide(10 when ck);
-   second = merge ck ((time_unit when ck) and r)
-                     ((time_unit and pre_second) when not ck);
+   second = merge ck (true -> (time_unit when ck) and r)
+                     (false -> (time_unit and pre_second) when not ck);
    pre_second = false fby second;
                 -- converts the time unit (assumed to be the 1/10
                 -- sec.) into the second

@@ -8,7 +8,7 @@ node use_f (b : int) returns (z : int);
 var c : bool; y : int when c;
 let
   (c, y) = f(b);
-  z = merge c y 0;
+  z = merge(c; y; 0);
 tel
 
 node tuple (b : int) returns (x : int; y : int);

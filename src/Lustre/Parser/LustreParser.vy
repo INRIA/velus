@@ -54,7 +54,7 @@ Import ListNotations.
     multiplicative_expression additive_expression shift_expression
     when_expression relational_expression equality_expression AND_expression
     exclusive_OR_expression inclusive_OR_expression logical_AND_expression
-    logical_OR_expression expression
+    logical_OR_expression arrow_expression expression
 %type<LustreAst.constant * LustreAst.astloc> bool_constant
 %type<LustreAst.constant * LustreAst.astloc> constant
 %type<list LustreAst.expression> expression_list
@@ -295,13 +295,20 @@ logical_OR_expression:
 | expr1=logical_OR_expression loc=OR expr2=logical_AND_expression
     { [LustreAst.BINARY LustreAst.LOR expr1 expr2 loc] }
 
+(* Lustre Arrow Operator *)
+arrow_expression:
+| expr=logical_OR_expression
+    { expr }
+| e0=arrow_expression loc=RARROW e1=logical_OR_expression
+    { [LustreAst.ARROW e0 e1 loc] }
+
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
 expression:
-| expr=logical_OR_expression
+| expr=arrow_expression
     { expr }
 | loc=IFTE expr1=expression THEN expr2=expression ELSE expr3=expression
     { [LustreAst.IFTE expr1 expr2 expr3 loc] }
-| loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
+| loc=MERGE LPAREN id=VAR_NAME SEMICOLON expr1=expression SEMICOLON expr2=expression RPAREN
     { [LustreAst.MERGE (fst id) expr1 expr2 loc] }
 | loc=MERGE id=VAR_NAME LPAREN TRUE  RARROW expr1=expression RPAREN
 			LPAREN FALSE RARROW expr2=expression RPAREN

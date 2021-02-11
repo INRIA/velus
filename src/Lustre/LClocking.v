@@ -772,6 +772,12 @@ Module Type LCLOCKING
         if forall3b check_paired_clocks nc0s ncs anns
         then Some (map snd anns) else None
 
+      | Earrow e0s es anns =>
+        do nc0s <- oconcat (map check_exp e0s);
+        do ncs <- oconcat (map check_exp es);
+        if forall3b check_paired_clocks nc0s ncs anns
+        then Some (map snd anns) else None
+
       | Ewhen es x b (tys, nc) =>
         match nc with
         | (Con xc y yb, None) =>
@@ -1113,6 +1119,13 @@ Module Type LCLOCKING
         apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?).
         eauto using wc_exp, nclockof_clockof.
       - (* Efby *)
+        repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
+        apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
+        apply oconcat_map_check_exp' in OE1 as (? & ?); auto. subst.
+        repeat take (map stripname _ = map clock_of_nclock _)
+               and rewrite <-clocksof_nclocksof in it.
+        eauto using wc_exp.
+      - (* Earrow *)
         repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
         apply oconcat_map_check_exp' in OE1 as (? & ?); auto. subst.

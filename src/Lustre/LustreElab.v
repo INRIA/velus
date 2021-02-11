@@ -846,7 +846,13 @@ Section ElabExpressions.
       do ans0 <- mmap update_ann (map discardname ans0);
       ret (Efby (map fst e0s) (map fst es) ans0, loc)
 
-    (* TODO arrow *)
+    | ARROW ae0s aes loc =>
+      do e0s <- mmap elab_exp ae0s;
+      do es <- mmap elab_exp aes;
+      let ans0 := lnannots e0s in
+      do _ <- unify_paired_clock_types loc ans0 (lnannots es);
+      do ans0 <- mmap update_ann (map discardname ans0);
+      ret (Earrow (map fst e0s) (map fst es) ans0, loc)
 
     | WHEN aes' x b loc =>
       do (xty, xck) <- find_var loc x;
@@ -930,7 +936,7 @@ Section ElabExpressions.
     do ck <- freeze_clock sck;
     match x with
     | None => ret (ck, None)
-    | Some x => 
+    | Some x =>
       do x <- freeze_ident x;
       ret (ck, Some x)
     end.
@@ -1299,7 +1305,7 @@ Section ElabDeclaration.
 End ElabDeclaration.
 
 Section ElabDeclarations.
-  
+
   Open Scope error_monad_scope.
 
   Fixpoint elab_declarations'

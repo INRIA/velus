@@ -17,7 +17,7 @@ node h(x: bool)
 returns (y: bool);
 var w: bool when x;
 let
-  y = merge x w false;
+  y = merge(x; w; false);
   (* The correct form is:
         w = g(f(true when x), x);
      

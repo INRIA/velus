@@ -1,0 +1,3 @@
+node arrow(x : int; y : int) returns (z : int)
+let z = x -> y;
+tel
