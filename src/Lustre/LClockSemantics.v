@@ -306,7 +306,7 @@ Module Type LCLOCKSEMANTICS
   (** The case of applications is annoying to handle in the proof : because
       of clock dependencies, clock streams can sometimes be built from anonymous
       streams (which are not in the history)
-      We proove that we can give the semantics of a node with these anonymous streams
+      We prove that we can give the semantics of a node with these anonymous streams
       named in the history.
       This allows for simpler reasoning down the line *)
   Section AnonSemantics.

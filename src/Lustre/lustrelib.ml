@@ -59,6 +59,7 @@ module type SYNTAX =
           n_out      : (ident * (typ * clock)) list;
           n_vars     : (ident * (typ * clock)) list;
           n_eqs      : equation list;
+          n_prefixes : MSetPositive.PositiveSet.t;
         }
 
     type global = node list

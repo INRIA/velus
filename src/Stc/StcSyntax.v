@@ -106,10 +106,10 @@ Module Type STCSYNTAX
         s_reset_consistency: reset_consistency s_tcs;
         s_reset_incl       : incl (resets_of s_tcs) (calls_of s_tcs);
 
-        s_good             : Forall ValidId (s_in ++ s_vars ++ s_out)
-                             /\ Forall ValidId s_lasts
-                             /\ Forall ValidId s_subs
-                             /\ valid s_name
+        s_good             : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst (s_in ++ s_vars ++ s_out))
+                             /\ Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst s_lasts)
+                             /\ Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst s_subs)
+                             /\ atom s_name
       }.
 
   Lemma s_nodup_lasts:

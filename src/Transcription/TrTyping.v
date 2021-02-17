@@ -268,8 +268,8 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_equation :
-    forall G P env envo vars e e',
-      to_global G = OK P ->
+    forall G P Hprefs env envo vars e e',
+      to_global G Hprefs = OK P ->
       to_equation env envo e = OK e' ->
       (forall i ck, find_clock env i = OK ck -> LT.wt_clock vars ck) ->
       NoDup (fst e) ->
@@ -277,7 +277,7 @@ Module Type TRTYPING
       LT.wt_equation G vars e ->
       NLT.wt_equation P vars e'.
   Proof.
-    intros ????? [xs [|? []]] e' Hg Htr Henvs Hdup Hnormed (Hwt & Hf2);
+    intros ?????? [xs [|? []]] e' Hg Htr Henvs Hdup Hnormed (Hwt & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *.
     - cases. monadInv Htr. inv Hf2. constructor; eauto using wt_clock_l_ce.
@@ -333,21 +333,21 @@ Module Type TRTYPING
     - rewrite app_nil_r in Hf2.
       simpl_Foralls.
       take (LT.wt_exp _ _ _) and inv it;
-        eapply find_node_global in Hg as (?&?&?); eauto.
+        eapply find_node_global in Hg as (?&?&?&?); eauto.
       + monadInv Htr.
         apply mmap_inversion in EQ.
         econstructor; eauto.
-        * rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
+        * erewrite <- (to_node_out n); eauto. rewrite Forall2_map_2 in Hf2.
           apply Forall2_forall. split.
           2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
               congruence. }
           intros ? (?&(?&?)) Hin.
           eapply Forall2_chain_In in Hin; eauto.
           now destruct Hin as (?&?& <-).
-        * rewrite <- (to_node_in n); auto.
+        * erewrite <- (to_node_in n); eauto.
           clear - H3 H5 EQ.
           remember (L.n_in n). clear Heql0. revert dependent l0.
-          revert dependent x0.
+          revert dependent x1.
           induction l; intros; inv EQ; auto.
           inv H5; auto.
           simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
@@ -359,23 +359,23 @@ Module Type TRTYPING
           induction l; simpl; auto. inv H2; inv H3. apply Forall_app.
           split; auto.
           apply wt_clockof in H5; auto.
-        * clear H5 H7 Hnormed. revert dependent l. induction x0; intros; auto.
+        * clear H5 H7 Hnormed. revert dependent l. induction x1; intros; auto.
           inv EQ. simpl_Foralls.
           constructor; eauto using wt_lexp.
       + cases; monadInv Htr.
         apply mmap_inversion in EQ.
         econstructor; eauto.
-        * rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
+        * erewrite <- (to_node_out n); eauto. rewrite Forall2_map_2 in Hf2.
           apply Forall2_forall. split.
           2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
               congruence. }
           intros ? (?&(?&?)) Hin.
           eapply Forall2_chain_In in Hin; eauto.
           now destruct Hin as (?&?& <-).
-        * rewrite <- (to_node_in n); auto.
+        * erewrite <- (to_node_in n); eauto.
           clear - H3 H5 EQ.
           remember (L.n_in n). clear Heql0. revert dependent l0.
-          revert dependent x0.
+          revert dependent x1.
           induction l; intros; inv EQ; auto.
           inv H5; auto.
           simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
@@ -387,7 +387,7 @@ Module Type TRTYPING
           induction l; simpl; auto. inv H2; inv H3. apply Forall_app.
           split; auto.
           apply wt_clockof in H5; auto.
-        * clear H5 H7 Hnormed. revert dependent l. induction x0; intros; auto.
+        * clear H5 H7 Hnormed. revert dependent l. induction x1; intros; auto.
           inv EQ. simpl_Foralls.
           constructor; eauto using wt_lexp.
         * take (LT.wt_exp _ _ _) and inv it;
@@ -429,9 +429,9 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_node :
-    forall G P n n',
-      to_node n = OK n' ->
-      to_global G = OK P ->
+    forall G P n n' Hpref Hprefs,
+      to_node n Hpref = OK n' ->
+      to_global G Hprefs = OK P ->
       FNS.unnested_node n ->
       LT.wt_node G n ->
       NLT.wt_node P n'.
@@ -466,20 +466,18 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_transcription :
-    forall G P,
+    forall G P Hprefs,
       FNS.unnested_global G ->
       LT.wt_global G ->
-      to_global G = OK P ->
+      to_global G Hprefs = OK P ->
       NLT.wt_global P.
   Proof.
     induction G as [| n]. inversion 3. constructor.
-    intros * Hnormed Hwt Htr. monadInv Htr. inversion H as [|?? n' ?? Hn]. subst.
+    intros * Hnormed Hwt Htr. monadInv Htr.
     inversion_clear Hwt as [|???? Hf ]. inv Hnormed.
-    apply mmap_cons3 in Htr as [].
     constructor; eauto using wt_node.
-    rewrite (to_node_name n n') in Hf; auto.
-    clear - Hf Hn. induction Hn as [|m ? m']; auto. inv Hf.
-    constructor; auto. rewrite <- (to_node_name m m'); auto.
+    erewrite (to_node_name n x) in Hf; eauto.
+    clear - Hf EQ1. eapply to_global_names; eauto.
   Qed.
 
 End TRTYPING.

@@ -97,14 +97,6 @@ Module Type TRANSLATION
 
   End Translate.
 
-  Lemma ValidIds_idty:
-    forall A B (xs: list (ident * (A * B))),
-    Forall ValidId xs ->
-    Forall ValidId (idty xs).
-  Proof.
-    induction 1; constructor; auto.
-  Qed.
-
   Program Definition step_method (s: system) : method :=
     let memids := map fst s.(s_lasts) in
     let mems := ps_from_list memids in
@@ -123,8 +115,9 @@ Module Type TRANSLATION
       apply NoDupMembers_idty, s_nodup_vars.
   Qed.
   Next Obligation.
-    rewrite <-2 idty_app;
-      apply ValidIds_idty, s_good.
+    split; auto.
+    - rewrite <-2 idty_app, map_fst_idty. apply s_good.
+    - apply step_atom.
   Qed.
 
   Definition reset_mems (mems: list (ident * (const * clock))) : stmt :=
@@ -145,6 +138,10 @@ Module Type TRANSLATION
        m_out  := [];
        m_body := translate_reset b
     |}.
+  Next Obligation.
+     split; auto.
+     apply reset_atom.
+  Qed.
 
   Program Definition translate_system (b: system) : class :=
     {| c_name    := b.(s_name);
@@ -163,9 +160,6 @@ Module Type TRANSLATION
   Next Obligation.
     pose proof b.(s_good) as (?&?& Subs &?).
     split; auto.
-    clear - Subs.
-    induction Subs as [|?? Valid]; constructor; auto.
-    apply Valid.
   Qed.
 
   Definition translate (P: SynStc.program) : program :=

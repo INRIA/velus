@@ -202,24 +202,99 @@ Module Type LSYNTAX
         n_vars     : list (ident * (type * clock));
         n_eqs      : list equation;
 
+        n_prefixes  : PS.t;
         n_ingt0    : 0 < length n_in;
         n_outgt0   : 0 < length n_out;
         n_defd     : Permutation (vars_defined n_eqs)
                                  (map fst (n_vars ++ n_out));
         n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out ++ anon_in_eqs n_eqs);
-        n_good     :  Forall ValidId (n_in ++ n_vars ++ n_out)
-                      /\ valid n_name
+        n_good     :  Forall (AtomOrGensym n_prefixes) (map fst (n_in ++ n_vars ++ n_out ++ anon_in_eqs n_eqs)) /\ atom n_name
       }.
 
   (** ** Program *)
 
   Definition global := list node.
 
-  Implicit Type G: global.
+  (* Implicit Type G: (global _). *)
 
   (* definition is needed in signature *)
   Definition find_node (f : ident) : global -> option node :=
     List.find (fun n=> ident_eqb n.(n_name) f).
+
+  (** find_node *)
+
+  Lemma find_node_Exists:
+    forall f G, find_node f G <> None <-> List.Exists (fun n=> n.(n_name) = f) G.
+  Proof.
+    intros f G.
+    setoid_rewrite find_Exists.
+    now setoid_rewrite BinPos.Pos.eqb_eq.
+  Qed.
+
+  Lemma find_node_tl:
+    forall f node G,
+      node.(n_name) <> f
+      -> find_node f (node::G) = find_node f G.
+  Proof.
+    intros f node G Hnf.
+    unfold find_node. unfold List.find at 1.
+    apply Pos.eqb_neq in Hnf. unfold ident_eqb.
+    now rewrite Hnf.
+  Qed.
+
+  Lemma find_node_other:
+    forall f node G node',
+      node.(n_name) <> f
+      -> (find_node f (node::G) = Some node'
+         <-> find_node f G = Some node').
+  Proof.
+    intros f node G node' Hnf.
+    apply BinPos.Pos.eqb_neq in Hnf.
+    simpl. unfold ident_eqb.
+    now rewrite Hnf.
+  Qed.
+
+  Lemma find_node_split:
+    forall f G node,
+      find_node f G = Some node
+      -> exists bG aG,
+        G = bG ++ node :: aG.
+  Proof.
+    unfold find_node.
+    intros * Hf. now apply find_split in Hf.
+  Qed.
+
+  Lemma find_node_In : forall G n,
+      In n G ->
+      NoDup (map n_name G) ->
+      find_node (n_name n) G = Some n.
+  Proof.
+    intros * Hin Hndup.
+    induction G; inv Hin; simpl in *.
+    - destruct ident_eqb eqn:Hident; auto.
+      rewrite ident_eqb_neq in Hident; congruence.
+    - inv Hndup. destruct ident_eqb eqn:Hident; auto.
+      exfalso. rewrite ident_eqb_eq in Hident.
+      apply H2. rewrite Hident, in_map_iff.
+      exists n; auto.
+  Qed.
+
+  Lemma find_node_incl : forall f G G' n,
+      incl G G' ->
+      NoDup (map n_name G) ->
+      NoDup (map n_name G') ->
+      find_node f G = Some n ->
+      find_node f G' = Some n.
+  Proof.
+    intros * Hincl Hndup1 Hndup2 Hfind.
+    induction G; simpl in *; try congruence.
+    apply incl_cons' in Hincl as [Hin Hincl].
+    destruct ident_eqb eqn:Hident.
+    - clear IHG Hincl. rewrite ident_eqb_eq in Hident; subst.
+      inv Hfind. apply find_node_In; auto.
+    - clear Hin. inv Hndup1.
+      specialize (IHG Hincl H2 Hfind); auto.
+  Qed.
 
   (** Structural properties *)
 
@@ -579,49 +654,6 @@ Module Type LSYNTAX
     destruct o; try rewrite app_assoc; apply incl_appl; reflexivity.
   Qed.
 
-  (** find_node *)
-
-  Lemma find_node_Exists:
-    forall f G, find_node f G <> None <-> List.Exists (fun n=> n.(n_name) = f) G.
-  Proof.
-    intros f G.
-    setoid_rewrite find_Exists.
-    now setoid_rewrite BinPos.Pos.eqb_eq.
-  Qed.
-
-  Lemma find_node_tl:
-    forall f node G,
-      node.(n_name) <> f
-      -> find_node f (node::G) = find_node f G.
-  Proof.
-    intros f node G Hnf.
-    unfold find_node. unfold List.find at 1.
-    apply Pos.eqb_neq in Hnf. unfold ident_eqb.
-    now rewrite Hnf.
-  Qed.
-
-  Lemma find_node_other:
-    forall f node G node',
-      node.(n_name) <> f
-      -> (find_node f (node::G) = Some node'
-         <-> find_node f G = Some node').
-  Proof.
-    intros f node G node' Hnf.
-    apply BinPos.Pos.eqb_neq in Hnf.
-    simpl. unfold ident_eqb.
-    now rewrite Hnf.
-  Qed.
-
-  Lemma find_node_split:
-    forall f G node,
-      find_node f G = Some node
-      -> exists bG aG,
-        G = bG ++ node :: aG.
-  Proof.
-    unfold find_node.
-    intros * Hf. now apply find_split in Hf.
-  Qed.
-
   Lemma fresh_ins_nil:
     forall e es,
       fresh_ins (e::es) = [] ->
@@ -630,38 +662,6 @@ Module Type LSYNTAX
     intros e es Hfresh.
     unfold fresh_ins in Hfresh; simpl in Hfresh.
     apply app_eq_nil in Hfresh as [? _]; auto.
-  Qed.
-
-  Lemma find_node_In : forall G n,
-      In n G ->
-      NoDup (map n_name G) ->
-      find_node (n_name n) G = Some n.
-  Proof.
-    intros * Hin Hndup.
-    induction G; inv Hin; simpl in *.
-    - destruct ident_eqb eqn:Hident; auto.
-      rewrite ident_eqb_neq in Hident; congruence.
-    - inv Hndup. destruct ident_eqb eqn:Hident; auto.
-      exfalso. rewrite ident_eqb_eq in Hident.
-      apply H2. rewrite Hident, in_map_iff.
-      exists n; auto.
-  Qed.
-
-  Lemma find_node_incl : forall f G G' n,
-      incl G G' ->
-      NoDup (map n_name G) ->
-      NoDup (map n_name G') ->
-      find_node f G = Some n ->
-      find_node f G' = Some n.
-  Proof.
-    intros * Hincl Hndup1 Hndup2 Hfind.
-    induction G; simpl in *; try congruence.
-    apply incl_cons' in Hincl as [Hin Hincl].
-    destruct ident_eqb eqn:Hident.
-    - clear IHG Hincl. rewrite ident_eqb_eq in Hident; subst.
-      inv Hfind. apply find_node_In; auto.
-    - clear Hin. inv Hndup1.
-      specialize (IHG Hincl H2 Hfind); auto.
   Qed.
 
   (** Interface equivalence between nodes *)
@@ -849,10 +849,6 @@ Module Type LSYNTAX
       wl_global ns ->
       wl_node ns n ->
       wl_global (n::ns).
-
-  Definition global_wl := { G : global | wl_global G}.
-  Definition proj1_global (G : global_wl) := proj1_sig G.
-  Coercion proj1_global : global_wl >-> global.
 
   (** *** fresh_in, anon_in properties *)
 

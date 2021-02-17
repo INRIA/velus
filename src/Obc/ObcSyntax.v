@@ -42,6 +42,7 @@ Module Type OBCSYNTAX
   | Comp : stmt -> stmt -> stmt                      (* s1; s2 *)
   | Call : list ident -> ident -> ident -> ident -> list exp -> stmt
   (* y1, ..., yn := class instance method (e1, ..., em) *)
+  (* The method name must be an atom, in order to guarantee injectivity of the prefixed C call *)
   | Skip.
 
   Record method : Type :=
@@ -53,7 +54,8 @@ Module Type OBCSYNTAX
         m_body : stmt;
 
         m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
-        m_good      : Forall ValidId (m_in ++ m_vars ++ m_out)
+        m_good      : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst (m_in ++ m_vars ++ m_out)) /\
+                      atom m_name
       }.
 
   Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
@@ -94,54 +96,48 @@ Module Type OBCSYNTAX
     now app_NoDupMembers_det.
   Qed.
 
-  Lemma m_notreserved:
-    forall x m,
-      In x reserved ->
-      ~InMembers x (meth_vars m).
-  Proof.
-    intros * Hin Hinm.
-    pose proof m.(m_good) as Good.
-    unfold meth_vars in Hinm.
-    induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
-      inv Hinm; inversion_clear Good as [|? ? Valid'].
-    - inv Valid'. contradiction.
-    - now apply IHl.
-  Qed.
-
   Lemma m_good_out:
     forall m x,
       In x m.(m_out) ->
-      ValidId x.
+      AtomOrGensym (PSP.of_list gensym_prefs) (fst x).
   Proof.
     intros.
-    pose proof (m_good m) as G.
+    pose proof (m_good m) as (G&_).
     eapply Forall_forall; eauto.
-    apply in_app; right; apply in_app; now right.
+    apply in_map, in_app; right; apply in_app; now right.
   Qed.
 
   Lemma m_good_in:
     forall m x,
       In x m.(m_in) ->
-      ValidId x.
+      AtomOrGensym (PSP.of_list gensym_prefs) (fst x).
   Proof.
     intros.
-    pose proof (m_good m) as G.
+    pose proof (m_good m) as (G&_).
     eapply Forall_forall; eauto.
-    apply in_app; now left.
+    apply in_map, in_app; now left.
   Qed.
 
-  Lemma m_notprefixed:
-    forall x m,
-      prefixed x ->
-      ~InMembers x (meth_vars m).
+  Lemma m_good_vars:
+    forall m x,
+      In x m.(m_vars) ->
+      AtomOrGensym (PSP.of_list gensym_prefs) (fst x).
   Proof.
-    intros * Hin Hinm.
-    pose proof m.(m_good) as Good.
-    unfold meth_vars in Hinm.
-    induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
-      inv Hinm; inversion_clear Good as [|? ? Valid'].
-    - inv Valid'. eapply valid_not_prefixed; eauto.
-    - now apply IHl.
+    intros.
+    pose proof (m_good m) as (G&_).
+    eapply Forall_forall; eauto.
+    apply in_map, in_app; right; apply in_app; now left.
+  Qed.
+
+  Lemma m_AtomOrGensym :
+    forall x m,
+      InMembers x (meth_vars m) ->
+      AtomOrGensym (PSP.of_list gensym_prefs) x.
+  Proof.
+    intros * Hinm.
+    pose proof m.(m_good) as (Good&_).
+    eapply fst_InMembers in Hinm.
+    eapply Forall_forall in Good; eauto.
   Qed.
 
   Record class : Type :=
@@ -153,7 +149,7 @@ Module Type OBCSYNTAX
 
         c_nodup   : NoDup (map fst c_mems ++ map fst c_objs);
         c_nodupm  : NoDup (map m_name c_methods);
-        c_good    : Forall (fun xt => valid (fst xt)) c_objs /\ valid c_name
+        c_good    : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst c_objs) /\ atom c_name
       }.
 
   Lemma c_nodupmems:

@@ -3,7 +3,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 Require Import Omega.
 
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LClocking.
@@ -317,10 +317,10 @@ Module Type NCLOCKING
 
   Import Permutation.
 
-  Fact fresh_ident_wc_env : forall vars ty ck id st st',
+  Fact fresh_ident_wc_env : forall pref vars ty ck id st st',
       wc_env (vars++st_clocks st) ->
       wc_clock (vars++st_clocks st) ck ->
-      fresh_ident (ty, ck) st = (id, st') ->
+      fresh_ident pref (ty, ck) st = (id, st') ->
       wc_env (vars++st_clocks st').
   Proof.
     intros * Hwenv Hwc Hfresh.
@@ -613,7 +613,7 @@ Module Type NCLOCKING
       2,4,5,7,9,11:
         (unfold clock_of_nclock, stripname; simpl;
          match goal with
-         | H : fresh_ident _ _ = _ |- _ =>
+         | H : fresh_ident _ _ _ = _ |- _ =>
            apply fresh_ident_In in H
          end;
          apply in_or_app, or_intror;
@@ -1310,10 +1310,10 @@ Module Type NCLOCKING
     apply IHeqs in Hnorm as Hwenv2... solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma unnest_node_wc : forall G n Hwl,
+  Lemma unnest_node_wc : forall G n Hwl Hpref,
       wc_global G ->
       wc_node G n ->
-      wc_node G (unnest_node n Hwl).
+      wc_node G (unnest_node n Hwl Hpref).
   Proof with eauto.
     intros * HwG [Hin [Hout [Henv Heq]]].
     unfold unnest_node.
@@ -1336,9 +1336,9 @@ Module Type NCLOCKING
       rewrite Permutation_app_comm. reflexivity.
   Qed.
 
-  Lemma unnest_global_wc : forall G Hwl,
+  Lemma unnest_global_wc : forall G Hwl Hprefs,
       wc_global G ->
-      wc_global (unnest_global G Hwl).
+      wc_global (unnest_global G Hwl Hprefs).
   Proof.
     induction G; intros * Hwc; simpl; inv Hwc.
     - constructor.
@@ -1395,10 +1395,10 @@ Module Type NCLOCKING
      eapply fresh_ident_In in H0; eauto).
   Qed.
 
-  Fact fresh_ident_wc_env' : forall vars ty ck b id st st',
+  Fact fresh_ident_wc_env' : forall pref vars ty ck b id st st',
       wc_env (vars++st_clocks' st) ->
       wc_clock (vars++st_clocks' st) ck ->
-      fresh_ident (ty, ck, b) st = (id, st') ->
+      fresh_ident pref (ty, ck, b) st = (id, st') ->
       wc_env (vars++st_clocks' st').
   Proof.
     intros * Hwenv Hwc Hfresh.
@@ -1606,9 +1606,9 @@ Module Type NCLOCKING
     solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma normfby_node_wc : forall G to_cut n Hunt,
+  Lemma normfby_node_wc : forall G to_cut n Hunt Hpref,
       wc_node G n ->
-      wc_node G (normfby_node to_cut n Hunt).
+      wc_node G (normfby_node to_cut n Hunt Hpref).
   Proof.
     intros * [Hclin [Hclout [Hclvars Heq]]].
     unfold normfby_node.
@@ -1636,9 +1636,9 @@ Module Type NCLOCKING
         rewrite (Permutation_app_comm (n_out n)). reflexivity.
   Qed.
 
-  Lemma normfby_global_wc : forall G Hunt,
+  Lemma normfby_global_wc : forall G Hunt Hprefs,
       wc_global G ->
-      wc_global (normfby_global G Hunt).
+      wc_global (normfby_global G Hunt Hprefs).
   Proof.
     induction G; intros * Hwt; simpl; inv Hwt.
     - constructor.
@@ -1654,12 +1654,12 @@ Module Type NCLOCKING
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_wc : forall (G : global_wl) G',
+  Lemma normalize_global_wc : forall G G' Hwl Hprefs,
       wc_global G ->
-      normalize_global G = Errors.OK G' ->
+      normalize_global G Hwl Hprefs = Errors.OK G' ->
       wc_global G'.
   Proof.
-    intros [G Hwl] * Hwc Hnorm.
+    intros * Hwc Hnorm.
     unfold normalize_global in Hnorm. destruct (Caus.check_causality _); inv Hnorm.
     eapply normfby_global_wc, unnest_global_wc, Hwc.
   Qed.

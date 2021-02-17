@@ -4,7 +4,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 From compcert Require Import common.Errors.
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Lustre.LSyntax Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh.
@@ -23,21 +23,38 @@ Module Type NORMALIZATION
   Module Export Unnesting := UnnestingFun Ids Op OpAux Syn.
   Module Export NormFby := NormFbyFun Ids Op OpAux Syn Unnesting.
 
-  Definition normalize_global (G : { G : global | wl_global G }) : res global.
+  Definition normalize_global G :
+    wl_global G ->
+    Forall (fun n => n_prefixes n = elab_prefs) G ->
+    res global.
   Proof.
-    destruct G as [G Hwl].
-    remember (unnest_global G Hwl) as G'.
-    refine (bind (check_causality G') _).
+    intros Hwl Hprefs.
+    remember (unnest_global G Hwl Hprefs) as G'.
+    refine (Errors.bind (check_causality G') _).
     intros _.
-    refine (OK (normfby_global G' _)).
-    rewrite HeqG'. eapply unnest_global_unnested_global.
+    refine (OK (normfby_global G' _ _)).
+    - rewrite HeqG'. eapply unnest_global_unnested_global.
+    - eapply unnest_global_prefixes; eauto.
   Defined.
 
-  Theorem normalize_global_normalized_global : forall G G',
-      normalize_global G = OK G' ->
+  Lemma normalize_global_prefixes : forall G Hwl Hprefs G',
+      normalize_global G Hwl Hprefs = OK G' ->
+      Forall (fun n => PS.Equal (n_prefixes n) (PSP.of_list gensym_prefs)) G'.
+  Proof.
+    intros * Hnorm.
+    unfold normalize_global in Hnorm.
+    monadInv Hnorm.
+    eapply Forall_impl; [|eauto]. 2:eapply normfby_global_prefixes; eauto.
+    intros ? Heq; rewrite Heq.
+    rewrite <- ps_adds_of_list. simpl.
+    reflexivity.
+  Qed.
+
+  Theorem normalize_global_normalized_global : forall G G' Hwl Hprefs,
+      normalize_global G Hwl Hprefs = OK G' ->
       normalized_global G'.
   Proof.
-    intros [G Hwl] * Hnorm.
+    intros G * Hnorm.
     unfold normalize_global in Hnorm.
     destruct check_causality in Hnorm; inv Hnorm.
     eapply normfby_global_normalized_global.

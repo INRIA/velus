@@ -675,8 +675,8 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma inin_l_nl :
-    forall f n n',
-      to_node n = OK n' ->
+    forall f n n' Hpref,
+      to_node n Hpref = OK n' ->
       Ord.Is_node_in f (NL.n_eqs n') ->
       Lord.Is_node_in f (L.n_eqs n).
   Proof.
@@ -698,43 +698,41 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma ninin_l_nl :
-    forall f n n',
-      to_node n = OK n' ->
+    forall f n n' Hpref,
+      to_node n Hpref = OK n' ->
       ~ Lord.Is_node_in f (L.n_eqs n) ->
       ~ Ord.Is_node_in f (NL.n_eqs n').
   Proof.
     intros. intro. destruct H0. eapply inin_l_nl; eauto.
   Qed.
 
+  Fact to_global_names : forall name G G' Hprefs,
+      Exists (fun n => (name = L.n_name n)%type) G ->
+      to_global G Hprefs = OK G' ->
+      Exists (fun n => (name = NL.n_name n)%type) G'.
+  Proof.
+    induction G; intros * Hnames Htog; inv Hnames; monadInv Htog; eauto.
+    left. eapply to_node_name; eauto.
+  Qed.
+
   Lemma ord_l_nl :
-    forall G P,
-      to_global G = OK P ->
+    forall G P Hprefs,
+      to_global G Hprefs = OK P ->
       Lord.Ordered_nodes G ->
       Ord.Ordered_nodes P.
   Proof.
     intros * Htr Hord.
     revert dependent P.
-    induction Hord; intros. inv Htr. constructor.
-    apply mmap_cons in Htr.
-    destruct Htr as (n' & P' & HP & Hton & Hmmap). subst.
-    constructor; auto.
+    induction Hord; intros; monadInv Htr; constructor; eauto.
     - intros f Hin.
       assert (Lord.Is_node_in f (L.n_eqs nd)) as Hfin.
       eapply inin_l_nl; eauto.
       apply H in Hfin. destruct Hfin as [ Hf Hnds ].
       split.
-      apply to_node_name in Hton. now rewrite <- Hton.
-      clear - Hnds Hmmap. revert dependent P'.
-      induction nds; intros; inv Hnds;
-        apply mmap_cons in Hmmap;
-        destruct Hmmap as (n'' & P'' & HP & Hton' & Hmmap); subst.
-      constructor. now apply to_node_name.
-      apply Exists_cons_tl. apply IHnds; auto.
-    - apply to_node_name in Hton. rewrite <- Hton.
-      monadInv Hmmap. clear - H0 H1.
-      induction H1; eauto. inv H0.
-      constructor. apply to_node_name in H. now rewrite <- H.
-      now apply IHlist_forall2.
+      + apply to_node_name in EQ. now rewrite <- EQ.
+      + eapply to_global_names; eauto.
+    - apply to_node_name in EQ. rewrite <- EQ.
+      eapply TR.to_global_names; eauto.
   Qed.
 
   Lemma inputs_clocked_vars :
@@ -759,13 +757,13 @@ Module Type CORRECTNESS
   Qed.
 
   Theorem sem_l_nl :
-    forall G P f ins outs,
+    forall G P Hprefs f ins outs,
       Forall LN.NormFby.normalized_node G ->
       Lord.Ordered_nodes G ->
       Forall LCA.node_causal G ->
       LT.wt_global G ->
       LC.wc_global G ->
-      to_global G = OK P ->
+      to_global G Hprefs = OK P ->
       LS.sem_node G f ins outs ->
       LCS.sem_clock_inputs G f ins ->
       NLSC.sem_node P f ins outs.
@@ -781,48 +779,42 @@ Module Type CORRECTNESS
     simpl in Hfind. destruct (ident_eqb (L.n_name node) f) eqn:Hnf.
     - assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
-      injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
+      inv Hfind.
       eapply LS.Forall_sem_equation_global_tl in Heqs; eauto.
-      assert (Htr' := Htr). apply mmap_cons in Htr'.
-      destruct Htr' as (n' & P' & Hp & Htrn & Hmmap). subst.
+      assert (Htr':=Htr). monadInv Htr'.
       assert (forall f ins outs,
                  LS.sem_node G f ins outs ->
                  LCS.sem_clock_inputs G f ins ->
-                 NLSC.sem_node P' f ins outs) as IHG'
-          by auto.
+                 NLSC.sem_node x0 f ins outs) as IHG'
+          by eauto.
       apply ident_eqb_eq in Hnf. rewrite <- Hnf.
       take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
       take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3 & Hwc4).
       econstructor; simpl.
-      + tonodeInv Htrn. rewrite ident_eqb_refl; eauto.
-      + tonodeInv Htrn. simpl.
-        eapply Forall2_impl_In in Hins; eauto.
-      + tonodeInv Htrn. simpl. eapply Forall2_impl_In in Houts; eauto.
+      + erewrite <- to_node_name, ident_eqb_refl; eauto.
+      + erewrite <- to_node_in; eauto.
+      + erewrite <- to_node_out; eauto.
       + erewrite <- to_node_in; eauto.
         eapply inputs_clocked_vars; eauto.
       + apply NLSC.sem_equation_cons2; auto.
         * eapply ord_l_nl; eauto.
-        * assert (Hton := Htrn). tonodeInv Htrn. simpl in *.
+        * assert (Hton := EQ). tonodeInv EQ; simpl in *.
           eapply sem_toeqs; eauto.
           apply envs_eq_node.
-        * assert (Htrn' := Htrn).
-          apply to_node_name in Htrn. rewrite <- Htrn.
+        * assert (Htrn' := EQ).
+          apply to_node_name in EQ. rewrite <- EQ.
           eapply ninin_l_nl; eauto.
     - apply ident_eqb_neq in Hnf.
       eapply LS.sem_node_cons in Hsem; auto.
       eapply LCS.sem_clock_inputs_cons in Hscin; auto.
       assert (Htr' := Htr).
-      apply mmap_cons in Htr.
-      destruct Htr as (n' & P' & Hp & Htn & Hmmap). subst.
+      monadInv Htr.
       rewrite cons_is_app in Hord.
       apply Lord.Ordered_nodes_append in Hord.
       eapply NLSC.sem_node_cons2; eauto.
       + eapply ord_l_nl; eauto.
-      + apply to_node_name in Htn. rewrite <- Htn.
-        monadInv Hmmap. clear - H0 H6.
-        induction H0; eauto. inv H6.
-        constructor. apply to_node_name in H. now rewrite <- H.
-        now apply IHlist_forall2.
+      + apply to_node_name in EQ. rewrite <- EQ.
+        eapply TR.to_global_names; eauto.
   Qed.
 
 End CORRECTNESS.

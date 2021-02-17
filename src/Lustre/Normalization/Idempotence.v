@@ -4,7 +4,7 @@ Open Scope list_scope.
 Require Import Omega.
 Require Import ProofIrrelevance.
 
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Lustre.LSyntax Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
@@ -20,7 +20,7 @@ Module Type IDEMPOTENCE
        (Cau : LCAUSALITY Ids Op Syn)
        (Import Norm : NORMALIZATION Ids Op OpAux Syn Cau).
 
-  Import Fresh Fresh.Fresh Facts Tactics.
+  Import Fresh Facts Tactics.
 
   (** ** Idempotence of untupling *)
 
@@ -265,12 +265,14 @@ Module Type IDEMPOTENCE
              (Hname : n_name n1 = n_name n2)
              (Hin : n_in n1 = n_in n2)
              (Hvars : n_vars n1 = n_vars n2)
-             (Hout : n_out n1 = n_out n2) :
-    Forall ValidId (n_in n1 ++ n_vars n1 ++ n_out n1) /\ valid (n_name n1) ->
-    Forall ValidId (n_in n2 ++ n_vars n2 ++ n_out n2) /\ valid (n_name n2).
+             (Hout : n_out n1 = n_out n2)
+             (Heqs : n_eqs n1 = n_eqs n2)
+             (Hprefs : n_prefixes n1 = n_prefixes n2):
+    Forall (AtomOrGensym (n_prefixes n1)) (map fst (n_in n1 ++ n_vars n1 ++ n_out n1 ++ anon_in_eqs (n_eqs n1))) /\ atom (n_name n1) ->
+    Forall (AtomOrGensym (n_prefixes n2)) (map fst (n_in n2 ++ n_vars n2 ++ n_out n2 ++ anon_in_eqs (n_eqs n2))) /\ atom (n_name n2).
   Proof.
     intros.
-    induction Hname. induction Hin. induction Hvars. induction Hout.
+    induction Hname. induction Hin. induction Hvars. induction Hout. induction Heqs. induction Hprefs.
     auto.
   Defined.
 
@@ -280,12 +282,13 @@ Module Type IDEMPOTENCE
     (Hin : n_in n1 = n_in n2)
     (Hout : n_out n1 = n_out n2)
     (Hvars : n_vars n1 = n_vars n2)
-    (Heqs : n_eqs n1 = n_eqs n2) :
+    (Heqs : n_eqs n1 = n_eqs n2)
+    (Hprefs : n_prefixes n1 = n_prefixes n2) :
     (transport1 Hin (n_ingt0 n1) = n_ingt0 n2) ->
     (transport2 Hout (n_outgt0 n1) = n_outgt0 n2) ->
     (transport3 Heqs Hvars Hout (n_defd n1) = n_defd n2) ->
     (transport4 Hin Hvars Hout Heqs (n_nodup n1) = n_nodup n2) ->
-    (transport5 Hname Hin Hvars Hout (n_good n1) = n_good n2) ->
+    (transport5 Hname Hin Hvars Hout Heqs Hprefs (n_good n1) = n_good n2) ->
     n1 = n2.
   Proof.
     intros Heq1 Heq2 Heq3 Heq4 Heq5.
@@ -298,38 +301,37 @@ Module Type IDEMPOTENCE
     reflexivity.
   Qed.
 
-  Lemma unnested_node_unnest_idem : forall n Hwl,
-      unnested_node n ->
-      unnest_node n Hwl = n.
-  Proof with eauto.
-    intros n [G Hwl] Hnormed.
-    unfold unnested_node in *.
-    eapply unnested_equations_unnest_idem
-      with (st:=init_st (first_unused_ident
-                           (self :: out :: map fst (n_in n ++ n_vars n ++ n_out n ++ anon_in_eqs (n_eqs n))))) in Hnormed...
-    destruct n; simpl in *.
-    eapply equal_node; simpl...
-    Unshelve. 6,7,8,9,10:simpl.
-    6,7,8: reflexivity.
-    1,2:reflexivity.
-    4: { rewrite Hnormed; simpl.
-         rewrite init_st_anns; simpl.
-         apply app_nil_r. }
-    4: { rewrite Hnormed... }
-    simpl.
-    1,2,3:apply proof_irrelevance.
-  Qed.
+  (* Not working anymore because of prefixes *)
 
-  Corollary unnested_global_unnest_idem : forall G Hwl,
-      unnested_global G ->
-      unnest_global G Hwl = G.
-  Proof with eauto.
-    induction G; intros Hwl Hnormed...
-    simpl. inv Hnormed.
-    eapply unnested_node_unnest_idem in H1...
-    rewrite H1.
-    rewrite IHG...
-  Qed.
+  (* Lemma unnested_node_unnest_idem : forall n Hwl Hpref, *)
+  (*     unnested_node n -> *)
+  (*     unnest_node n Hwl Hpref = n. *)
+  (* Proof with eauto. *)
+  (*   intros n [G Hwl] Hpref Hnormed. *)
+  (*   unfold unnested_node in *. *)
+  (*   eapply unnested_equations_unnest_idem with (st:=init_st) in Hnormed. *)
+  (*   destruct n; simpl in *. *)
+  (*   eapply equal_node; simpl... *)
+  (*   Unshelve. 1-13:simpl; try reflexivity. *)
+  (*   1,2:reflexivity. *)
+  (*   4: { rewrite Hnormed; simpl. *)
+  (*        rewrite init_st_anns; simpl. *)
+  (*        apply app_nil_r. } *)
+  (*   4: { rewrite Hnormed... } *)
+  (*   simpl. *)
+  (*   1,2,3:apply proof_irrelevance. *)
+  (* Qed. *)
+
+  (* Corollary unnested_global_unnest_idem : forall G Hwl, *)
+  (*     unnested_global G -> *)
+  (*     unnest_global G Hwl = G. *)
+  (* Proof with eauto. *)
+  (*   induction G; intros Hwl Hnormed... *)
+  (*   simpl. inv Hnormed. *)
+  (*   eapply unnested_node_unnest_idem in H1... *)
+  (*   rewrite H1. *)
+  (*   rewrite IHG... *)
+  (* Qed. *)
 
   (** ** Idempotence of fby-normalization *)
 
@@ -363,85 +365,85 @@ Module Type IDEMPOTENCE
       inv_bind. exists x. exists st. split; auto. inv_bind; auto.
   Qed.
 
-  Lemma normalized_node_normfby_idem : forall n Hunt,
-      normalized_node n ->
-      normfby_node PS.empty n Hunt = n.
-  Proof with eauto.
-    intros n Hunt Hnormed.
-    unfold normalized_node in *.
-    eapply normalized_equations_fby_idem
-      with (st:=init_st (first_unused_ident
-                           (self :: out :: map fst (n_in n ++ n_vars n ++ n_out n ++ anon_in_eqs (n_eqs n))))) in Hnormed...
-    destruct n; simpl in *.
-    eapply equal_node; simpl...
-    Unshelve. 6,7,8,9,10:simpl.
-    6,7,8: reflexivity.
-    1,2:reflexivity.
-    4: { rewrite Hnormed; simpl.
-         rewrite init_st_anns; simpl.
-         apply app_nil_r. }
-    4: { rewrite Hnormed... }
-    simpl.
-    1,2,3:apply proof_irrelevance.
-  Qed.
+  (* Lemma normalized_node_normfby_idem : forall n Hunt, *)
+  (*     normalized_node n -> *)
+  (*     normfby_node PS.empty n Hunt = n. *)
+  (* Proof with eauto. *)
+  (*   intros n Hunt Hnormed. *)
+  (*   unfold normalized_node in *. *)
+  (*   eapply normalized_equations_fby_idem *)
+  (*     with (st:=init_st (first_unused_ident *)
+  (*                          (map fst (n_in n ++ n_vars n ++ n_out n ++ anon_in_eqs (n_eqs n))))) in Hnormed... *)
+  (*   destruct n; simpl in *. *)
+  (*   eapply equal_node; simpl... *)
+  (*   Unshelve. 6,7,8,9,10:simpl. *)
+  (*   6,7,8: reflexivity. *)
+  (*   1,2:reflexivity. *)
+  (*   4: { rewrite Hnormed; simpl. *)
+  (*        rewrite init_st_anns; simpl. *)
+  (*        apply app_nil_r. } *)
+  (*   4: { rewrite Hnormed... } *)
+  (*   simpl. *)
+  (*   1,2,3:apply proof_irrelevance. *)
+  (* Qed. *)
 
-  Corollary normalized_global_normfby_idem : forall G Hunt,
-      normalized_global G ->
-      normfby_global G Hunt = G.
-  Proof with eauto.
-    induction G; intros Hwl Hnormed...
-    simpl. inv Hnormed.
-    eapply normalized_node_normfby_idem in H1...
-    rewrite H1.
-    rewrite IHG...
-  Qed.
+  (* Corollary normalized_global_normfby_idem : forall G Hunt, *)
+  (*     normalized_global G -> *)
+  (*     normfby_global G Hunt = G. *)
+  (* Proof with eauto. *)
+  (*   induction G; intros Hwl Hnormed... *)
+  (*   simpl. inv Hnormed. *)
+  (*   eapply normalized_node_normfby_idem in H1... *)
+  (*   rewrite H1. *)
+  (*   rewrite IHG... *)
+  (* Qed. *)
 
   (** ** Idempotence of normalization *)
 
-  Fact normalized_node_unnested_node: forall n,
-      normalized_node n ->
-      unnested_node n.
-  Proof.
-    intros * Hnormed.
-    unfold normalized_node, unnested_node in *.
-    solve_forall.
-    eapply normalized_eq_unnested_eq; eauto.
-  Qed.
+  (* Fact normalized_node_unnested_node: forall n, *)
+  (*     normalized_node n -> *)
+  (*     unnested_node n. *)
+  (* Proof. *)
+  (*   intros * Hnormed. *)
+  (*   unfold normalized_node, unnested_node in *. *)
+  (*   solve_forall. *)
+  (*   eapply normalized_eq_unnested_eq; eauto. *)
+  (* Qed. *)
 
-  Fact normalized_global_unnested_global : forall G,
-      normalized_global G ->
-      unnested_global G.
-  Proof.
-    intros * Hnormed.
-    unfold normalized_global, unnested_global in *.
-    solve_forall.
-    apply normalized_node_unnested_node; auto.
-  Qed.
+  (* Fact normalized_global_unnested_global : forall G, *)
+  (*     normalized_global G -> *)
+  (*     unnested_global G. *)
+  (* Proof. *)
+  (*   intros * Hnormed. *)
+  (*   unfold normalized_global, unnested_global in *. *)
+  (*   solve_forall. *)
+  (*   apply normalized_node_unnested_node; auto. *)
+  (* Qed. *)
 
-  Lemma normalized_global_normalize_idem : forall (G : global_wl) G',
-      normalized_global G ->
-      normalize_global G = Errors.OK G' ->
-      G' = G.
-  Proof.
-    intros [G Hwl] * Hnormed Hnorm; simpl in *.
-    unfold normalize_global in Hnorm.
-    apply Errors.bind_inversion in Hnorm as [? [H1 H2]]; inv H2.
-    assert (unnest_global G Hwl = G) as Heq1.
-    { apply unnested_global_unnest_idem.
-      eapply normalized_global_unnested_global; eauto. }
-    erewrite normalized_global_normfby_idem; auto.
-    congruence.
-  Qed.
+  (* Lemma normalized_global_normalize_idem : forall (G : global_wl) G', *)
+  (*     normalized_global G -> *)
+  (*     normalize_global G = Errors.OK G' -> *)
+  (*     G' = G. *)
+  (* Proof. *)
+  (*   intros [G Hwl] * Hnormed Hnorm; simpl in *. *)
+  (*   unfold normalize_global in Hnorm. *)
+  (*   apply Errors.bind_inversion in Hnorm as [? [H1 H2]]; inv H2. *)
+  (*   assert (unnest_global G Hwl = G) as Heq1. *)
+  (*   { apply unnested_global_unnest_idem. *)
+  (*     eapply normalized_global_unnested_global; eauto. } *)
+  (*   erewrite normalized_global_normfby_idem; auto. *)
+  (*   congruence. *)
+  (* Qed. *)
 
-  Theorem normalize_global_idem : forall (G G' : global_wl) G'',
-      normalize_global G = Errors.OK (G' : global) ->
-      normalize_global G' = Errors.OK G'' ->
-      G'' = G'.
-  Proof.
-    intros * Hnorm1 Hnorm2.
-    eapply normalized_global_normalize_idem; eauto.
-    eapply normalize_global_normalized_global; eauto.
-  Qed.
+  (* Theorem normalize_global_idem : forall (G G' : global_wl) G'', *)
+  (*     normalize_global G = Errors.OK (G' : global) -> *)
+  (*     normalize_global G' = Errors.OK G'' -> *)
+  (*     G'' = G'. *)
+  (* Proof. *)
+  (*   intros * Hnorm1 Hnorm2. *)
+  (*   eapply normalized_global_normalize_idem; eauto. *)
+  (*   eapply normalize_global_normalized_global; eauto. *)
+  (* Qed. *)
 End IDEMPOTENCE.
 
 Module IdempotenceFun

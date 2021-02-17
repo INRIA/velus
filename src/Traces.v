@@ -43,12 +43,12 @@ Section finite_traces.
 
   Definition load_event_of_val (v: val) (xt: ident * type): event :=
     Event_vload (type_chunk (snd xt))
-                (glob_id (fst xt))
+                (prefix_glob (fst xt))
                 Ptrofs.zero (eventval_of_val v).
 
   Definition store_event_of_val (v: val) (xt: ident * type): event :=
     Event_vstore (type_chunk (snd xt))
-                 (glob_id (fst xt))
+                 (prefix_glob (fst xt))
                  Ptrofs.zero (eventval_of_val v).
 
   Definition mk_events (f: val -> ident * type -> event) (vs: list val) (args: list (ident * type)) : trace :=

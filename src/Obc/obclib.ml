@@ -72,7 +72,7 @@ module SyncFun (Obc: SYNTAX)
    let v_reactions = "num_reactions"
 
    let var_name f id =
-     pp_print_string f (Camlcoq.extern_atom (Ident.Ids.glob_id id))
+     pp_print_string f (Camlcoq.extern_atom (Ident.Ids.prefix_glob id))
 
    let external_variable f (id, ty) =
      fprintf f "@[<hov 2>extern volatile %s %a;@]"

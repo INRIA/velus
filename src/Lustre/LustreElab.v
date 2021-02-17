@@ -6,6 +6,7 @@ From Velus Require Instantiator.
 
 From Velus Require Import Lustre.Parser.LustreAst.
 From Velus Require Import Common.
+From Velus Require Import Ident.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
@@ -310,7 +311,7 @@ Section ElabMonad.
   Definition elab_state : Type := (ident * Env.t sclock * Env.t sident).
   Definition Elab A := elab_state -> res (A * elab_state).
 
-  Definition init_state (id : ident) : elab_state := (id, Env.empty _, Env.empty _).
+  Definition init_state : elab_state := (xH, Env.empty _, Env.empty _).
 
   Definition ret (x : A) : Elab A := fun st => OK (x, st).
 
@@ -333,7 +334,9 @@ Section ElabMonad.
     error (MSG (string_of_astloc loc) :: MSG ":" :: m).
 
   Definition fresh_ident : Elab ident :=
-    fun '(id, sub1, sub2) => OK (id, (Pos.succ id, sub1, sub2)).
+    fun '(n, sub1, sub2) =>
+      let id := Ids.gensym Ids.elab n in
+      OK (id, (Pos.succ n, sub1, sub2)).
 
   (** Substitution functions *)
 
@@ -395,14 +398,24 @@ Section ElabMonad.
       | None => OK (tt, (nid, sub1, Env.add id id' sub2'))
       end.
 
-  Lemma monad_inv {B} : forall (x : Elab A) (f : A -> Elab B) res st st',
-      (bind x f) st = OK (res, st') ->
+  Lemma bind_inv {B} : forall (x : Elab A) (f : A -> Elab B) res st,
+      (bind x f) st = OK res ->
       exists y st'',
-        x st = OK (y, st'') /\ f y st'' = OK (res, st').
+        x st = OK (y, st'') /\ f y st'' = OK res.
   Proof.
     intros * Hbind.
     unfold bind in Hbind.
     destruct (x st) as [[y st'']|]; eauto. inv Hbind.
+  Qed.
+
+  Lemma bind2_inv {A1 A2 B} : forall (x : Elab (A1 * A2)) (f : A1 -> A2 -> Elab B) res st,
+      (bind2 x f) st = OK res ->
+      exists y1 y2 st'',
+        x st = OK ((y1, y2), st'') /\ f y1 y2 st'' = OK res.
+  Proof.
+    intros * Hbind.
+    unfold bind2 in Hbind.
+    destruct (x st) as [[[y1 y2] st'']|]; eauto. inv Hbind.
   Qed.
 End ElabMonad.
 
@@ -418,18 +431,7 @@ Module ElabNotations.
 
 End ElabNotations.
 
-Module ElabTactics.
-
-  Ltac monadInv :=
-    let H1 := fresh "Hbind" in let H2 := fresh "Hbind" in
-    match goal with
-    | H: bind ?x ?f ?st = OK (?res, ?st') |- _ =>
-      eapply monad_inv in H as [? [? [H1 H2]]]
-    end.
-
-End ElabTactics.
-
-Import ElabNotations ElabTactics.
+Import ElabNotations.
 
 Section mmap.
   Context {A B : Type}.
@@ -744,7 +746,7 @@ Section ElabExpressions.
     | _, _ => err_loc gloc (msg "arguments are of different lengths")
     end.
 
-  Fixpoint instantiating_subst (xtc : list (ident * (type * clock))) : Elab (Env.t ident) :=
+  Definition instantiating_subst (xtc : list (ident * (type * clock))) : Elab (Env.t ident) :=
     do xs <- mmap (fun '(x, _) => do x' <- fresh_ident; ret (x, x')) xtc;
     ret (Env.from_list xs).
 
@@ -1204,8 +1206,254 @@ Section ElabDeclaration.
     rewrite fst_NoDupMembers; auto.
   Qed.
 
-  Definition first_unused_ident (vs : list ident) : ident :=
-    ((fold_left Pos.max vs xH) + 1)%positive.
+  Definition check_atom loc name :=
+    if is_atom name
+    then ret tt
+    else err_loc loc (CTX name :: MSG " should be an atom" :: nil).
+
+  Lemma check_atom_spec : forall loc name st res,
+      check_atom loc name st = OK res ->
+      atom name.
+  Proof.
+    intros * Hcheck.
+    unfold check_atom in *.
+    destruct is_atom eqn:Hat; inv Hcheck.
+    apply is_atom_spec; auto.
+  Qed.
+
+  (** *** The anons are prefixed by `elab` *)
+
+  Ltac monadInv :=
+    simpl in *;
+    unfold err_not_singleton, err_loc, error in *;
+    match goal with
+    | H: OK _ = OK _ |- _ =>
+      inversion H; clear H; try subst
+    | H: Error _ = OK _ |- _ =>
+      discriminate
+    | H: ret _ _ = _ |- _ =>
+      unfold ret in H
+    | H: bind ?x ?f ?st = OK (?res, ?st') |- _ =>
+      let H1 := fresh "Hbind" in
+      let H2 := fresh "Hbind" in
+      eapply bind_inv in H as [? [? [H1 H2]]]
+    | H: bind2 ?x ?f ?st = OK (?res, ?st') |- _ =>
+      let H1 := fresh "Hbind" in
+      let H2 := fresh "Hbind" in
+      eapply bind2_inv in H as [? [? [? [H1 H2]]]]
+    end; simpl in *.
+
+  Local Ltac destruct_to_singl l :=
+    destruct l; [|destruct l]; auto.
+
+  Definition elab_prefs := PS.singleton elab.
+
+  Fact instantiating_subst_AtomOrGensym' : forall {typ} (xs : list (ident * typ)) sub st1 st2,
+    mmap (fun '(x, ty) => do x' <- fresh_ident; ret (x, x')) xs st1 = OK (sub, st2) ->
+    forall x x', In (x, x') sub -> AtomOrGensym elab_prefs x'.
+  Proof.
+    induction xs as [|(?&?) ?]; intros * Hmmap * Hin; repeat monadInv; inv Hin.
+    - inv H. unfold fresh_ident in Hbind0.
+      destruct st1 as ((?&?)&?); monadInv.
+      right. exists elab. split; eauto.
+      eapply PSF.singleton_2; auto.
+    - eapply IHxs; eauto.
+  Qed.
+
+  Lemma instantiating_subst_AtomOrGensym : forall xs sub st1 st2,
+      instantiating_subst xs st1 = OK (sub, st2) ->
+      forall x x', Env.MapsTo x x' sub -> AtomOrGensym elab_prefs x'.
+  Proof.
+    unfold instantiating_subst.
+    intros * Hinst * Hmap; repeat monadInv.
+    apply Env.from_list_find_In in Hmap.
+    eapply instantiating_subst_AtomOrGensym'; eauto.
+  Qed.
+
+  Lemma anon_streams_AtomOrGensym : forall xs base loc sub anns anns' anns'' st0 st0' st1 st2 st3 st4,
+      instantiating_subst xs st0 = OK (sub, st0') ->
+      mmap (inst_annot loc (Svar base) sub Vnm) anns st1 = OK (anns', st2) ->
+      mmap freeze_ann anns' st3 = OK (anns'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (Syn.anon_streams anns'')).
+  Proof.
+    induction anns; intros * Hsub Hinst Hfreeze; repeat monadInv; auto.
+    destruct x2 as (?&?&[?|]); eauto.
+    constructor; eauto. clear Hbind1 Hbind3.
+    destruct a as (?&?&?); repeat monadInv.
+    destruct (Env.find _ _) eqn:Hfind; repeat monadInv.
+    unfold freeze_ident in Hbind; repeat monadInv.
+    eapply instantiating_subst_AtomOrGensym in Hsub; eauto.
+  Qed.
+
+  Fact fresh_ins_AtomOrGensym' : forall G vars vars' es es' es'' st1 st2 st3 st4,
+      Forall
+        (fun e => forall e' loc e'' st1 st2 st3 st4,
+             elab_exp G vars false e st1 = OK (e', loc, st2) ->
+             freeze_exp vars' e' st3 = OK (e'', st4) -> Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e''))) es ->
+      mmap (elab_exp G vars false) es st1 = OK (es', st2) ->
+      mmap (freeze_exp vars') (map fst es') st3 = OK (es'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (fresh_ins es'')).
+  Proof.
+    induction es; intros * Hf Helab Hfreeze;
+      inv Hf; repeat monadInv; unfold fresh_ins; simpl; auto.
+    rewrite map_app. apply Forall_app; split; eauto.
+    - destruct x. eapply H1; eauto.
+    - eapply IHes; eauto.
+  Qed.
+
+  Lemma fresh_in_AtomOrGensym : forall G vars vars' e e' loc e'' st1 st2 st3 st4,
+      elab_exp G vars false e st1 = OK ((e', loc), st2) ->
+      freeze_exp vars' e' st3 = OK (e'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e'')).
+  Proof.
+    induction e using expression_ind2; intros * Helab Hfreeze; simpl in *.
+    - (* unop *)
+      destruct_to_singl es; repeat monadInv.
+      apply Forall_singl in H; eauto.
+    - (* binop *)
+      destruct_to_singl es1; repeat monadInv.
+      destruct_to_singl es2; repeat monadInv.
+      apply Forall_singl in H. apply Forall_singl in H0.
+      rewrite map_app, Forall_app. eauto.
+    - (* ite *)
+      destruct_to_singl es; repeat monadInv.
+      apply Forall_singl in H.
+      repeat rewrite map_app, Forall_app. repeat split; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H1; eauto.
+    - (* cast *)
+      destruct_to_singl es; repeat monadInv.
+      apply Forall_singl in H. eauto.
+    - (* app *)
+      destruct_to_singl r; repeat monadInv.
+      + rewrite map_app, Forall_app; split. eapply fresh_ins_AtomOrGensym' in H; eauto.
+        eapply anon_streams_AtomOrGensym; eauto.
+      + apply Forall_singl in H0.
+        repeat rewrite map_app, Forall_app; repeat split; eauto.
+        eapply fresh_ins_AtomOrGensym'; eauto.
+        eapply anon_streams_AtomOrGensym; eauto.
+    - (* constant *)
+      repeat monadInv.
+      clear - Hbind1. revert loc e'' x1 st4 Hbind1.
+      induction x0; intros; simpl in *; repeat monadInv; auto.
+      destruct (Env.mem _ _); repeat monadInv.
+      eapply IHx0 in Hbind. rewrite app_nil_r; auto.
+    - (* var *)
+      repeat monadInv; auto.
+    - (* fby *)
+      repeat monadInv.
+      rewrite map_app, Forall_app; split.
+      + eapply fresh_ins_AtomOrGensym' in H; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+    - (* arrow *)
+      repeat monadInv.
+      rewrite map_app, Forall_app; split.
+      + eapply fresh_ins_AtomOrGensym' in H; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+    - (* when *)
+      repeat monadInv.
+      eapply fresh_ins_AtomOrGensym'; eauto.
+    - (* merge *)
+      repeat monadInv.
+      rewrite map_app, Forall_app; split.
+      + eapply fresh_ins_AtomOrGensym' in H; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+  Qed.
+
+  Corollary fresh_ins_AtomOrGensym : forall G vars vars' es es' es'' st1 st2 st3 st4,
+      mmap (elab_exp G vars false) es st1 = OK (es', st2) ->
+      mmap (freeze_exp vars') (map fst es') st3 = OK (es'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (fresh_ins es'')).
+  Proof.
+    intros * Helab Hfreeze.
+    eapply fresh_ins_AtomOrGensym'; [|eauto|eauto].
+    eapply Forall_forall. intros * _ * ??.
+    eapply fresh_in_AtomOrGensym; eauto.
+  Qed.
+  Hint Resolve fresh_in_AtomOrGensym fresh_ins_AtomOrGensym.
+
+  Lemma anon_in_AtomOrGensym : forall G vars vars' e e' loc e'' st1 st2 st3 st4,
+      elab_exp G vars true e st1 = OK ((e', loc), st2) ->
+      freeze_exp vars' e' st3 = OK (e'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (anon_in e'')).
+  Proof.
+    destruct e; intros * Helab Hfreeze; simpl in *.
+    - (* unop *)
+      destruct_to_singl l; repeat monadInv; eauto.
+    - (* binop *)
+      destruct_to_singl l; repeat monadInv.
+      destruct_to_singl l0; repeat monadInv.
+      rewrite map_app, Forall_app. eauto.
+    - (* ite *)
+      destruct_to_singl l; repeat monadInv.
+      repeat rewrite map_app, Forall_app. repeat split; eauto.
+      + eapply fresh_ins_AtomOrGensym in Hbind7; eauto.
+      + eapply fresh_ins_AtomOrGensym in Hbind6; eauto.
+    - (* cast *)
+      destruct_to_singl l; repeat monadInv; eauto.
+    - (* app *)
+      destruct_to_singl l0; repeat monadInv; eauto.
+      rewrite map_app, Forall_app; repeat split; eauto.
+    - (* constant *)
+      eapply Forall_incl; [|eapply incl_map, anon_in_fresh_in].
+      repeat monadInv.
+      clear - Hbind1. revert loc e'' x1 st4 Hbind1.
+      induction x0; intros; simpl in *; repeat monadInv; auto.
+      destruct (Env.mem _ _); repeat monadInv.
+      eapply IHx0 in Hbind. rewrite app_nil_r; auto.
+    - (* var *)
+      repeat monadInv; auto.
+    - (* fby *)
+      repeat monadInv.
+      rewrite map_app, Forall_app; split.
+      + eapply fresh_ins_AtomOrGensym in Hbind3; eauto.
+      + eapply fresh_ins_AtomOrGensym in Hbind5; eauto.
+    - (* arrow *)
+      repeat monadInv.
+      rewrite map_app, Forall_app; split.
+      + eapply fresh_ins_AtomOrGensym in Hbind3; eauto.
+      + eapply fresh_ins_AtomOrGensym in Hbind5; eauto.
+    - (* when *)
+      repeat monadInv.
+      eapply fresh_ins_AtomOrGensym; eauto.
+    - (* merge *)
+      repeat monadInv.
+      rewrite map_app, Forall_app; split.
+      + eapply fresh_ins_AtomOrGensym in Hbind4; eauto.
+      + eapply fresh_ins_AtomOrGensym in Hbind6; eauto.
+  Qed.
+
+  Corollary anon_ins_AtomOrGensym : forall G vars vars' es es' es'' st1 st2 st3 st4,
+      mmap (elab_exp G vars true) es st1 = OK (es', st2) ->
+      mmap (freeze_exp vars') (map fst es') st3 = OK (es'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (anon_ins es'')).
+  Proof.
+    induction es; intros * Helab Hfreeze; repeat monadInv; auto.
+    unfold anon_ins; simpl.
+    rewrite map_app, Forall_app; split.
+    - destruct x. eapply anon_in_AtomOrGensym; eauto.
+    - eapply IHes; eauto.
+  Qed.
+
+  Lemma anon_in_eq_AtomOrGensym : forall G vars eq st eq' st',
+    elab_equation G vars eq st = OK (eq', st') ->
+    Forall (AtomOrGensym elab_prefs) (map fst (anon_in_eq eq')).
+  Proof.
+    intros ?? ((xs&es)&loc) * Helab; unfold anon_in_eq; simpl in *.
+    repeat monadInv; simpl.
+    eapply anon_ins_AtomOrGensym; eauto.
+  Qed.
+
+  Corollary anon_in_eqs_AtomOrGensym : forall G vars eqs st eqs' st',
+    mmap (elab_equation G vars) eqs st = OK (eqs', st') ->
+    Forall (AtomOrGensym elab_prefs) (map fst (anon_in_eqs eqs')).
+  Proof.
+    induction eqs; intros * Hmmap;
+      simpl in *; repeat monadInv; unfold anon_in_eqs; simpl; auto.
+    rewrite map_app, Forall_app; split; auto.
+    - eapply anon_in_eq_AtomOrGensym; eauto.
+    - eapply IHeqs; eauto.
+  Qed.
 
   Local Obligation Tactic :=
     Tactics.program_simpl;
@@ -1222,10 +1470,9 @@ Section ElabDeclaration.
              | H:ret _ _ = OK _ |- _ => unfold ret in H; inv H
              end.
 
-  Program Definition elab_declaration (decl: declaration) : res Syn.node :=
+  Program Definition elab_declaration (decl: declaration) : res {n | n_prefixes n = elab_prefs} :=
     match decl with
       NODE name hasstate inputs outputs locals equations loc =>
-      let id0 := first_unused_ident (Ident.Ids.reserved++map fst (inputs++outputs++locals)) in
       match (do env_in  <- elab_var_decls loc (Env.empty _) inputs;
              do env_out <- elab_var_decls loc env_in outputs;
              do env     <- elab_var_decls loc env_out locals;
@@ -1236,30 +1483,31 @@ Section ElabDeclaration.
              (* TODO better error messages *)
              do _       <- check_nodupanon loc xin xvar xout eqs;
              do _       <- check_defined loc (nameset (nameset PS.empty xvar) xout) eqs;
-             if existsb (fun x => Env.mem x env) Ident.Ids.reserved
-             then err_loc loc (msg "illegal variable name")
-             else if (length xin ==b O) || (length xout ==b O)
-                  then err_loc loc (msg "not enough inputs or outputs")
-                  else ret (xin, xout, xvar, eqs))
-              (init_state id0) with
+             do _       <- check_atom loc name;
+             do _       <- mmap (check_atom loc) (map fst (xin ++ xvar ++ xout));
+             if (length xin ==b O) || (length xout ==b O)
+             then err_loc loc (msg "not enough inputs or outputs")
+             else ret (xin, xout, xvar, eqs)) init_state with
       | Error e => Error e
-      | OK ((xin, xout, xvar, eqs), _) => OK {| n_name     := name;
-                                               n_hasstate := hasstate;
-                                               n_in       := xin;
-                                               n_out      := xout;
-                                               n_vars     := xvar;
-                                               n_eqs      := eqs |}
+      | OK ((xin, xout, xvar, eqs), ((nfui, _), _)) =>
+        OK (exist _ {| n_name     := name;
+                       n_hasstate := hasstate;
+                       n_in       := xin;
+                       n_out      := xout;
+                       n_vars     := xvar;
+                       n_eqs      := eqs;
+                       n_prefixes := elab_prefs |} _)
       end
     end.
   Next Obligation.
     (* 0 < length xin *)
-    rewrite Bool.orb_false_iff in Hb0; destruct Hb0 as (Hin & Hout).
+    rewrite Bool.orb_false_iff in Hb; destruct Hb as (Hin & Hout).
     apply not_equiv_decb_equiv in Hin.
     now apply Nat.neq_0_lt_0 in Hin.
   Qed.
   Next Obligation.
     (* 0 < length xout *)
-    rewrite Bool.orb_false_iff in Hb0; destruct Hb0 as (Hin & Hout).
+    rewrite Bool.orb_false_iff in Hb; destruct Hb as (Hin & Hout).
     apply not_equiv_decb_equiv in Hout.
     now apply Nat.neq_0_lt_0 in Hout.
   Qed.
@@ -1282,30 +1530,23 @@ Section ElabDeclaration.
     (* NoDupMembers (xin ++ xlocal ++ xout ++ anon_in_eqs eqs) *)
     apply check_nodupanon_spec in Hbind6; auto.
   Qed.
-  Admit Obligations.
-    (* Forall ValidId (xin ++ xlocal ++ xout) *)
-    (* MassageElabs outputs locals inputs. *)
-    (* unfold Ident.Ids.NotReserved. *)
-    (* change (Forall (fun xty=>(fun x=>~In x Ident.Ids.reserved) (fst xty)) *)
-    (*                (xin ++ xvar ++ xout)). *)
-    (* rewrite <-Forall_map, map_app, map_app. *)
-    (* rewrite Hvar, Hin, Hout in Helab_var. *)
-    (* rewrite Permutation_app_comm, Permutation_app_assoc, Helab_var. *)
-    (* rewrite 2 Bool.orb_false_iff in Hb. *)
-    (* destruct Hb as (Hb1 & Hb2 & ?). *)
-    (* rewrite <-Env.Props.P.F.not_mem_in_iff in Hb1, Hb2. *)
-    (* apply Forall_forall. *)
-    (* intros xtx Hm Hir. *)
-    (* apply fst_InMembers, Env.In_Members in Hm. *)
-    (* destruct Hir as [Hir|Hir]; subst. *)
-    (* now apply Hb1. *)
-    (* rewrite In_singleton in Hir; subst. *)
-    (* now apply Hb2. *)
+  Next Obligation.
+    (* Forall AtomNotReserved (xin ++ xvar ++ xout) /\ atom name *)
+    replace (map fst (xin ++ xvar ++ xout ++ anon_in_eqs eqs)) with ((map fst (xin ++ xvar ++ xout) ++ map fst (anon_in_eqs eqs))).
+    2:{ repeat rewrite map_app; repeat rewrite <- app_assoc; auto. }
+    rewrite Forall_app. repeat split.
+    - clear - Hbind5 Hbind9.
+      revert nfui wildcard' wildcard'0 x18 x19 Hbind9.
+      induction (xin ++ xvar ++ xout); intros; simpl in *; auto.
+      repeat monadInv. destruct a as (?&?). constructor; eauto.
+      eapply check_atom_spec in Hbind; left; auto.
+    - eapply anon_in_eqs_AtomOrGensym; eauto.
+    - eapply check_atom_spec; eauto.
+  Qed.
 
 End ElabDeclaration.
 
 Section ElabDeclarations.
-
   Open Scope error_monad_scope.
 
   Fixpoint elab_declarations'
@@ -1316,24 +1557,40 @@ Section ElabDeclarations.
   | [] => OK G
   | d :: ds =>
     do n <- elab_declaration nenv d;
+    let n := proj1_sig n in
     elab_declarations' (n :: G) (Env.add n.(n_name) (n.(n_in), n.(n_out)) nenv) ds
   end.
+
+  Fact elab_declarations'_prefixes : forall decls accG accE G,
+      Forall (fun n => n_prefixes n = elab_prefs) accG ->
+      elab_declarations' accG accE decls = OK G ->
+      Forall (fun n => n_prefixes n = elab_prefs) G.
+  Proof.
+    induction decls; intros * Hacc Helab; simpl in *; monadInv Helab; auto.
+    eapply IHdecls in EQ0; eauto.
+    constructor; auto.
+    destruct x as (n&Hprefs); simpl; auto.
+  Qed.
 
   Import Instantiator.L.
 
   Program Definition elab_declarations (decls: list declaration) :
-    res {G | wt_global G /\ wc_global G} :=
-    do G <- elab_declarations' [] (Env.empty _) decls;
-    match Typ.check_global G, Clo.check_global G with
-    | true, true => OK (exist _ G _)
-    | false, _ => Error (msg "Post-elab check failed (typing)")
-    | _, false => Error (msg "Post-elab check failed (clocking)")
+    res {G | wt_global G /\ wc_global G /\ Forall (fun n => n_prefixes n = elab_prefs) G} :=
+    match elab_declarations' [] (Env.empty _) decls with
+    | OK G =>
+      match Typ.check_global G, Clo.check_global G with
+      | true, true => OK (exist _ G _)
+      | false, _ => Error (msg "Post-elab check failed (typing)")
+      | _, false => Error (msg "Post-elab check failed (clocking)")
+      end
+    | Error err => Error err
     end.
   Next Obligation.
-    symmetry in Heq_anonymous, Heq_anonymous0.
-    apply Typ.check_global_correct in Heq_anonymous.
-    apply Clo.check_global_correct in Heq_anonymous0.
-    auto.
+    rename Heq_anonymous into Hwt. rename Heq_anonymous0 into Hwc. rename Heq_anonymous1 into Helab.
+    symmetry in Hwt, Hwc, Helab.
+    apply Typ.check_global_correct in Hwt.
+    apply Clo.check_global_correct in Hwc.
+    repeat split; auto.
+    eapply elab_declarations'_prefixes; eauto.
   Qed.
-
 End ElabDeclarations.

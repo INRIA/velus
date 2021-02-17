@@ -201,15 +201,15 @@ Module Type TRCLOCKING
   Qed.
 
   Lemma wc_equation :
-    forall G P env envo vars e e',
-      to_global G = OK P ->
+    forall G Hprefs P env envo vars e e',
+      to_global G Hprefs = OK P ->
       to_equation env envo e = OK e' ->
       envs_eq env vars ->
       LC.wc_global G ->
       LC.wc_equation G vars e ->
       NLC.wc_equation P vars e'.
   Proof.
-    intros ????? [xs [|? []]] e' Hg Htr Henvs Hwcg (Hwc & Hlift & Hf2);
+    intros ?????? [xs [|? []]] e' Hg Htr Henvs Hwcg (Hwc & Hlift & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *; simpl_Foralls; try monadInv Htr.
     - constructor; eauto using envs_eq_in.
@@ -291,7 +291,7 @@ Module Type TRCLOCKING
     - cases; monadInv Htr;
         take (LC.wc_exp _ _ _) and inversion_clear it
         as [| | | | | | | | | |???? bck sub Wce ? WIi WIo|?????? bck sub Wce ? WIi WIo];
-        eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
+        eapply find_node_global in Hg as (n' & Hpref & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and
                      pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?));
@@ -311,7 +311,7 @@ Module Type TRCLOCKING
                                   | s => s
                                   end).
           (* inputs *)
-          rewrite <- (to_node_in n n'); auto.
+          erewrite <- (to_node_in n n'); eauto.
           apply mmap_inversion in EQ.
           pose proof (L.n_nodup n) as Hdup.
           remember (L.n_in n) as ins. clear Heqins.
@@ -354,7 +354,7 @@ Module Type TRCLOCKING
           -- destruct tys; take (map _ _ = [_]) and inv it.
         * (* outputs *)
           unfold idck in *.
-          rewrite <- (to_node_out n n'); auto.
+          erewrite <- (to_node_out n n'); eauto.
           clear - Hlift Hf2 WIo.
           apply Forall2_forall. split.
           2:{ apply Forall2_length in Hlift. apply Forall2_length in WIo.
@@ -396,7 +396,7 @@ Module Type TRCLOCKING
                                   | s => s
                                   end).
           (* inputs *)
-          rewrite <- (to_node_in n n'); auto.
+          erewrite <- (to_node_in n n'); eauto.
           apply mmap_inversion in EQ.
           pose proof (L.n_nodup n) as Hdup.
           remember (L.n_in n) as ins. clear Heqins.
@@ -439,7 +439,7 @@ Module Type TRCLOCKING
           -- destruct tys; take (map _ _ = [_]) and inv it.
         * (* outputs *)
           unfold idck in *.
-          rewrite <- (to_node_out n n'); auto.
+          erewrite <- (to_node_out n n'); eauto.
           clear - Hlift Hf2 WIo.
           apply Forall2_forall. split.
           2:{ apply Forall2_length in Hlift. apply Forall2_length in WIo.
@@ -471,17 +471,17 @@ Module Type TRCLOCKING
   Qed.
 
   Lemma wc_node :
-    forall G P n n',
-      to_node n = OK n' ->
-      to_global G = OK P ->
+    forall G P n n' Hpref Hprefs,
+      to_node n Hpref = OK n' ->
+      to_global G Hprefs = OK P ->
       LC.wc_global G ->
       LC.wc_node G n ->
       NLC.wc_node P n'.
   Proof.
     intros * Htn Hwcg Htg Hwc.
     unfold NLC.wc_node.
-    rewrite <- (to_node_in n n'), <- (to_node_out n n'), <- (to_node_vars n n');
-      auto.
+    erewrite <- (to_node_in n n'), <- (to_node_out n n'), <- (to_node_vars n n');
+      eauto.
     inversion Hwc as (?&?&?& WCeq). repeat (split; try tauto).
     now setoid_rewrite  Permutation_app_comm at 2.
     unfold to_node in Htn. cases. inv Htn. simpl.
@@ -492,15 +492,14 @@ Module Type TRCLOCKING
   Qed.
 
   Lemma wc_transcription :
-    forall G P,
+    forall G P Hprefs,
       LC.wc_global G ->
-      to_global G = OK P ->
+      to_global G Hprefs = OK P ->
       NLC.wc_global P.
   Proof.
     induction G as [| n]. inversion 2. constructor.
-    intros * Hwt Htr. monadInv Htr. inversion H as [|?? n' ?? Hn]. subst.
+    intros * Hwt Htr. monadInv Htr.
     inversion_clear Hwt as [|???? Hf ].
-    apply mmap_cons3 in Htr as [].
     constructor; eauto using wc_node.
   Qed.
 

@@ -979,20 +979,20 @@ Section SubRep.
       M.MapsTo (o, f') c' (instance_methods f) ->
       m |= subrep f e ** P <->
       exists b co ws xs,
-        e ! (prefix_out o f') = Some (b, type_of_inst (prefix_fun c' f'))
-        /\ ge ! (prefix_fun c' f') = Some co
-        /\ make_out_vars (instance_methods f) = ws ++ (prefix_out o f', type_of_inst (prefix_fun c' f')) :: xs
+        e ! (prefix_out f' o) = Some (b, type_of_inst (prefix_fun f' c'))
+        /\ ge ! (prefix_fun f' c') = Some co
+        /\ make_out_vars (instance_methods f) = ws ++ (prefix_out f' o, type_of_inst (prefix_fun f' c')) :: xs
         /\ m |= fieldsrep ge vempty (co_members co) b
               ** sepall (subrep_inst_env e) (ws ++ xs)
               ** P.
   Proof.
     intros * Hin.
     unfold subrep.
-    assert (In (prefix_out o f', type_of_inst (prefix_fun c' f'))
+    assert (In (prefix_out f' o, type_of_inst (prefix_fun f' c'))
                (make_out_vars (instance_methods f))) as Hin'.
     { apply M.elements_1, setoid_in_key_elt in Hin.
       apply in_map with
-      (f:=fun x => let '(o0, f0, cid) := x in (prefix_out o0 f0, type_of_inst (prefix_fun cid f0))) in Hin.
+      (f:=fun x => let '(o0, f0, cid) := x in (prefix_out f0 o0, type_of_inst (prefix_fun f0 cid))) in Hin.
       unfold make_out_vars; auto.
     }
     clear Hin.
@@ -1001,13 +1001,13 @@ Section SubRep.
       rewrite Heq, sep_assoc.
       intro Hmem.
       unfold subrep_inst_env at 1 in Hmem.
-      destruct e ! (prefix_out o f') as [(oblk, t)|]; [|destruct Hmem; contradiction].
+      destruct e ! (prefix_out f' o) as [(oblk, t)|]; [|destruct Hmem; contradiction].
       destruct t; try (destruct Hmem; contradiction).
-      destruct (type_eq (type_of_inst (prefix_fun c' f')) (Tstruct i a)) as [Eq|]; [|destruct Hmem; contradiction].
+      destruct (type_eq (type_of_inst (prefix_fun f' c')) (Tstruct i a)) as [Eq|]; [|destruct Hmem; contradiction].
       unfold type_of_inst in Eq.
       inv Eq.
       unfold fieldsrep_of in *.
-      destruct ge ! (prefix_fun c' f'); [|destruct Hmem; contradiction].
+      destruct ge ! (prefix_fun f' c'); [|destruct Hmem; contradiction].
       exists oblk, c, ws, xs; intuition.
     - intros (oblk & c & ws' & xs' & He & Hge & Eq &?).
       (* rewrite Eq. *)
@@ -1176,27 +1176,29 @@ Section MatchStates.
              (fun x _ => pure (match_var ve le x))
              (fun _ => match outb_co with
                     | Some (outb, outco) =>
-                      pure (le ! out = Some (var_ptr outb))
-                      ** pure (ge ! (prefix_fun c.(c_name) f.(m_name)) = Some outco)
+                      pure (le ! (prefix obc2c out) = Some (var_ptr outb))
+                      ** pure (ge ! (prefix_fun f.(m_name) c.(c_name)) = Some outco)
                       ** fieldsrep ge ve outco.(co_members) outb
                     | None => sepfalse
                     end).
 
   Lemma outputrep_add_prefix:
     forall c f ve le outb_co f' x v,
-      outputrep c f ve le outb_co <-*-> outputrep c f ve (PTree.set (prefix f' x) v le) outb_co.
+      atom f' ->
+      outputrep c f ve le outb_co <-*-> outputrep c f ve (PTree.set (prefix_temp f' x) v le) outb_co.
   Proof.
-    intros.
+    intros * Hat.
     unfold outputrep, case_out.
     destruct_list (m_out f) as (?,?) (?,?) ? : Hout; auto.
     - unfold match_var; rewrite PTree.gso; auto.
       intro; subst.
-      eapply (m_notprefixed (prefix f' x)); auto using prefixed.
-      unfold meth_vars; rewrite Hout.
-      rewrite 2 InMembers_app; right; right; constructor; auto.
+      pose proof (m_good_out f) as Good.
+      assert (In (prefix_temp f' x, t) (m_out f)) as Hin.
+      { rewrite Hout. left; auto. }
+      apply Good, AtomOrGensym_inv in Hin; auto.
     - cases.
-      rewrite PTree.gso; auto.
-      intro E; apply out_not_prefixed; rewrite E; auto using prefixed.
+      rewrite PTree.gso; eauto.
+      eapply prefix_injective'. left. prove_str_to_pos_neq.
   Qed.
 
   Lemma outputrep_nil:
@@ -1226,8 +1228,8 @@ Section MatchStates.
        exists outb outco,
          outb_co = Some (outb, outco)
          /\ m |= fieldsrep ge ve outco.(co_members) outb ** P
-         /\ le ! out = Some (var_ptr outb)
-         /\ ge ! (prefix_fun c.(c_name) f.(m_name)) = Some outco).
+         /\ le ! (prefix obc2c out) = Some (var_ptr outb)
+         /\ ge ! (prefix_fun f.(m_name) c.(c_name)) = Some outco).
   Proof.
     intros * Length.
     unfold outputrep, case_out; split; intros * H;
@@ -1261,7 +1263,7 @@ Section MatchStates.
   Hint Resolve bounded_struct_of_class_ge0.
 
   Definition selfrep (p: program) (c: class) (me: menv) (le: Clight.temp_env) (sb: block) (sofs: ptrofs) : massert :=
-    pure (le ! self = Some (Vptr sb sofs))
+    pure (le ! (prefix obc2c self) = Some (Vptr sb sofs))
     ** pure (bounded_struct_of_class c sofs)
     ** staterep ge p c.(c_name) me sb (Ptrofs.unsigned sofs).
 
@@ -1269,7 +1271,7 @@ Section MatchStates.
     forall m p c me le sb sofs P,
       m |= selfrep p c me le sb sofs ** P
       <-> m |= staterep ge p c.(c_name) me sb (Ptrofs.unsigned sofs) ** P
-        /\ le ! self = Some (Vptr sb sofs)
+        /\ le ! (prefix obc2c self) = Some (Vptr sb sofs)
         /\ bounded_struct_of_class c sofs.
   Proof.
     unfold selfrep; split; intros * H.
@@ -1303,12 +1305,12 @@ Section MatchStates.
            ** P
       /\ bounded_struct_of_class c sofs
       /\ wt_state p me ve c (meth_vars f)
-      /\ le ! self = Some (Vptr sb sofs)
+      /\ le ! (prefix obc2c self)= Some (Vptr sb sofs)
       /\ prefix_out_env e.
   Proof.
     unfold match_states, selfrep, outputsrep; split; intros * H.
     - repeat rewrite sep_assoc in H; repeat rewrite sep_pure in H.
-      rewrite sep_swap3, sep_pure, sep_swap in H; tauto.
+      rewrite sep_swap3, sep_pure, sep_swap in H. tauto.
     - repeat rewrite sep_assoc; repeat rewrite sep_pure.
       rewrite sep_swap3, sep_pure, sep_swap; tauto.
   Qed.
@@ -1355,7 +1357,7 @@ Section MatchStates.
     Hypothesis (Findcl      : find_class ownerid prog = Some (owner, prog'))
                (Findmth     : find_method callerid owner.(c_methods) = Some caller)
                (OutputMatch : forall outco , (1 < length (m_out caller))%nat ->
-                                        ge ! (prefix_fun ownerid callerid) = Some outco ->
+                                        ge ! (prefix_fun callerid ownerid) = Some outco ->
                                         map translate_param caller.(m_out) = outco.(co_members)).
 
     Variable (v : val) (x : ident) (ty : type).
@@ -1439,9 +1441,7 @@ Section MatchStates.
         repeat apply sep_imp'; auto.
         + apply pure_imp.
           rewrite PTree.gso; auto.
-          intro; subst; apply (m_notreserved out caller).
-          * right; constructor; auto.
-          * eapply In_InMembers; eauto.
+          intro; subst; eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto.
         + rewrite 2 sep_assoc, 2 sep_pure in Hmem.
           destruct Hmem as (?&?&?).
           eapply fieldsrep_add; eauto.
@@ -1702,7 +1702,7 @@ Section FunctionEntry.
       unfold make_out_vars in Hget; simpl in Hget.
       apply in_map_iff in Hget.
       destruct Hget as (((o, f'), c) & Eq & Hget).
-      inv Eq. now exists o, f'.
+      inv Eq. now exists f', o.
     - pose proof Perm as Perm_fst.
       apply Permutation_fst in Perm_fst.
       rewrite map_fst_drop_block in Perm_fst.
@@ -1774,7 +1774,7 @@ Section FunctionEntry.
                    m |= staterep gcenv prog cid me sb (Ptrofs.unsigned sofs)
                         ** fieldsrep gcenv vempty (co_members instco) instb
                         ** P ->
-                   gcenv ! (prefix_fun cid fid) = Some instco ->
+                   gcenv ! (prefix_fun fid cid) = Some instco ->
                    exists e_f le_f m_f,
                      function_entry2 tge fd (Vptr sb sofs :: var_ptr instb :: vs) m e_f le_f m_f
                      /\ m_f |= match_states gcenv prog c f (me, Env.adds (map fst f.(m_in)) vs vempty) (e_f, le_f) sb sofs
@@ -1807,11 +1807,11 @@ Section FunctionEntry.
       (* get the temporaries *)
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
-                                           self (type_of_inst_p (c_name c))
+                                           (prefix obc2c self) (type_of_inst_p (c_name c))
                                            (make_out_temps (instance_methods_temp (rev prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars); eauto.
-      assert (le_f ! self = Some (Vptr sb sofs))
+      assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
         by (eapply bind_parameter_temps_implies in Bind; eauto).
       setoid_rewrite <-P_f in Bind.
 
@@ -1827,10 +1827,11 @@ Section FunctionEntry.
         rewrite 2 Forall_app in Vars; rewrite Forall_app; tauto.
 
     (* one output *)
-    - assert (self <> a)
-        by (intro; subst; eapply (m_notreserved self); auto;
-            do 2 setoid_rewrite InMembers_app; rewrite Hout;
-            right; right; constructor; auto).
+    - assert (prefix obc2c self <> a).
+      { intro contra; subst.
+        pose proof (m_good_out f) as Good. rewrite Hout in Good.
+        assert (In (prefix obc2c self, ta) [(prefix obc2c self, ta)]) as Hin by (left; auto).
+        apply Good, AtomOrGensym_inv in Hin; auto. }
 
       (* get the allocated environment and memory *)
       edestruct alloc_result as (e_f & m_f &?&?&?); eauto.
@@ -1838,12 +1839,12 @@ Section FunctionEntry.
       (* get the temporaries (+ the local return temporary) *)
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
-                                           self (type_of_inst_p (c_name c))
+                                           (prefix obc2c self) (type_of_inst_p (c_name c))
                                            ((a, cltype ta) :: make_out_temps (instance_methods_temp (rev prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars);
         eauto; try eapply NotInMembers_cons; eauto.
-      assert (le_f ! self = Some (Vptr sb sofs))
+      assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
         by (eapply bind_parameter_temps_implies in Bind; eauto).
       setoid_rewrite <-P_f in Bind.
 
@@ -1863,17 +1864,20 @@ Section FunctionEntry.
     - assert (1 < Datatypes.length (m_out f))%nat
         by (rewrite Hout; simpl; omega).
 
+      assert (prefix obc2c self <> prefix obc2c out) as Hnso
+          by (apply prefix_injective'; right; prove_str_to_pos_neq).
+
       (* get the allocated environment and memory *)
       edestruct alloc_result as (e_f & m_f &?&?&?); eauto.
 
       (* get the temporaries *)
       edestruct
-        (bind_parameter_temps_exists (map translate_param f.(m_in)) self (type_of_inst_p (c_name c))
-                                     out (type_of_inst_p (prefix_fun (c_name c) (m_name f)))
+        (bind_parameter_temps_exists (map translate_param f.(m_in)) (prefix obc2c self) (type_of_inst_p (c_name c))
+                                     (prefix obc2c out) (type_of_inst_p (prefix_fun (m_name f) (c_name c)))
                                      (make_out_temps (instance_methods_temp (rev prog) f)
                                                      ++ map translate_param f.(m_vars))
                                      vs (Vptr sb sofs) (var_ptr instb)) as (le_f & Bind & Vars); eauto.
-      assert (le_f ! self = Some (Vptr sb sofs) /\ le_f ! out = Some (var_ptr instb)) as (?&?)
+      assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs) /\ le_f ! (prefix obc2c out) = Some (var_ptr instb)) as (?&?)
           by (eapply bind_parameter_temps_implies_two in Bind; eauto).
       setoid_rewrite <-P_f in Bind; setoid_rewrite <-T_f in Bind.
 
@@ -1917,7 +1921,7 @@ Section MainProgram.
              (WT     : wt_program prog).
 
   Let out_step   := prefix out step.
-  Let t_out_step := type_of_inst (prefix_fun main_node step).
+  Let t_out_step := type_of_inst (prefix_fun step main_node).
 
   Let main_step := main_step _ _ _ _ _ TRANSL.
   Let main_f    := main_f _ _ _ _ _ TRANSL.
@@ -1929,7 +1933,7 @@ Section MainProgram.
       exists m' step_b step_co,
         alloc_variables tge empty_env m (fn_vars main_f)
                         (PTree.set out_step (step_b, t_out_step) empty_env) m'
-        /\ gcenv ! (prefix_fun main_node step) = Some step_co
+        /\ gcenv ! (prefix_fun step main_node) = Some step_co
         /\ m' |= fieldsrep gcenv vempty step_co.(co_members) step_b ** P.
   Proof.
     intros * Len Hm.
@@ -1939,7 +1943,7 @@ Section MainProgram.
       try (simpl in Len; omega).
 
     (* get the allocated memory *)
-    destruct (Mem.alloc m 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
+    destruct (Mem.alloc m 0 (sizeof tge (type_of_inst (prefix_fun step main_node))))
       as (m', step_b) eqn: AllocStep.
 
     (* get the out struct *)
@@ -1950,7 +1954,7 @@ Section MainProgram.
 
     exists m', step_b, step_co; intuition.
     - repeat (econstructor; eauto).
-    - assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Ptrofs.modulus)
+    - assert (sizeof tge (type_of_inst (prefix_fun step main_node)) <= Ptrofs.modulus)
         by (simpl; setoid_rewrite Hsco; transitivity Ptrofs.max_unsigned;
             auto; unfold Ptrofs.max_unsigned; omega).
       eapply alloc_rule in AllocStep; eauto; try reflexivity.
@@ -1964,7 +1968,7 @@ Section MainProgram.
   Lemma init_mem:
     exists m sb,
       Genv.init_mem tprog = Some m
-      /\ Genv.find_symbol tge (glob_id self) = Some sb
+      /\ Genv.find_symbol tge (prefix_glob (prefix self main_id)) = Some sb
       /\ m |= staterep gcenv prog main_node mempty sb Z0.
   Proof.
     destruct Genv.init_mem_exists with (p:=tprog) as (m' & Initmem);

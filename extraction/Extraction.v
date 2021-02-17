@@ -70,8 +70,10 @@ Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
-Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
+Extract Constant Ident.str_to_pos => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
+Extract Constant Ident.Ids.prefix => "Veluscommon.prefix".
+Extract Constant Ident.Ids.gensym => "Veluscommon.gensym".
 
 (* Lexing/Parsing/Elaboration *)
 Extract Constant LustreAst.astloc =>

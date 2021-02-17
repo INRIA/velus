@@ -18,16 +18,16 @@ Module Type OPERATORS.
 
   Parameter true_val  : val.
   Parameter false_val : val.
-  Axiom true_not_false_val : true_val <> false_val.
+  Conjecture true_not_false_val : true_val <> false_val.
 
   Parameter bool_type : type.
 
   Parameter true_const : const.
   Parameter false_const : const.
-  Parameter sem_true_const : sem_const true_const = true_val.
-  Parameter sem_false_const : sem_const false_const = false_val.
-  Parameter type_true_const : type_const true_const = bool_type.
-  Parameter type_false_const : type_const false_const = bool_type.
+  Conjecture sem_true_const : sem_const true_const = true_val.
+  Conjecture sem_false_const : sem_const false_const = false_val.
+  Conjecture type_true_const : type_const true_const = bool_type.
+  Conjecture type_false_const : type_const false_const = bool_type.
 
   (* Operations *)
 
@@ -44,22 +44,22 @@ Module Type OPERATORS.
 
   Parameter wt_val : val -> type -> Prop.
 
-  Axiom wt_val_bool :
+  Conjecture wt_val_bool :
     forall v, (v = true_val \/ v = false_val) <-> wt_val v bool_type.
 
-  Axiom wt_val_const : forall c, wt_val (sem_const c) (type_const c).
+  Conjecture wt_val_const : forall c, wt_val (sem_const c) (type_const c).
 
-  Axiom wt_init_type : forall ty, wt_val (sem_const (init_type ty)) ty.
-  Axiom type_init_type : forall ty, type_const (init_type ty) = ty.
+  Conjecture wt_init_type : forall ty, wt_val (sem_const (init_type ty)) ty.
+  Conjecture type_init_type : forall ty, type_const (init_type ty) = ty.
 
-  Axiom pres_sem_unop:
+  Conjecture pres_sem_unop:
     forall op ty1 ty v1 v,
       type_unop op ty1 = Some ty ->
       sem_unop op v1 ty1 = Some v ->
       wt_val v1 ty1 ->
       wt_val v ty.
 
-  Axiom pres_sem_binop:
+  Conjecture pres_sem_binop:
     forall op ty1 ty2 ty v1 v2 v,
       type_binop op ty1 ty2 = Some ty ->
       sem_binop op v1 ty1 v2 ty2 = Some v ->
@@ -69,11 +69,11 @@ Module Type OPERATORS.
 
   (* Decidability of elements *)
 
-  Axiom val_dec   : forall v1  v2  : val,    {v1 = v2}  +  {v1 <> v2}.
-  Axiom type_dec  : forall t1  t2  : type,   {t1 = t2}  +  {t1 <> t2}.
-  Axiom const_dec : forall c1  c2  : const,  {c1 = c2}  +  {c1 <> c2}.
-  Axiom unop_dec  : forall op1 op2 : unop,  {op1 = op2} + {op1 <> op2}.
-  Axiom binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
+  Conjecture val_dec   : forall v1  v2  : val,    {v1 = v2}  +  {v1 <> v2}.
+  Conjecture type_dec  : forall t1  t2  : type,   {t1 = t2}  +  {t1 <> t2}.
+  Conjecture const_dec : forall c1  c2  : const,  {c1 = c2}  +  {c1 <> c2}.
+  Conjecture unop_dec  : forall op1 op2 : unop,  {op1 = op2} + {op1 <> op2}.
+  Conjecture binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
 
 End OPERATORS.
 

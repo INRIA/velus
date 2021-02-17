@@ -62,7 +62,7 @@ Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
     let mems := ps_from_list (map fst s.(s_lasts)) in
     if Stc.Wdef.well_sch mems args s.(s_tcs)
     then OK tt
-    else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).
+    else Error (MSG "system " :: CTX s.(s_name) :: MSG " is not well scheduled." :: nil).
 
 Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
   do _ <- fold_left is_well_sch_system P (OK tt);
@@ -94,16 +94,16 @@ Qed.
 Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
 
-Definition l_to_nl' (g : L.Syn.global_wl) : res global :=
-  OK g
-     @@@ L.Norm.Norm.normalize_global
-     @@@ TR.Tr.to_global.
-
-Definition l_to_nl (g : {G : L.Syn.global | L.Typ.wt_global G /\ L.Clo.wc_global G}) : res global.
+Definition l_to_nl (g : {G : L.Syn.global |
+                          L.Typ.wt_global G /\ L.Clo.wc_global G /\
+                          Forall (fun n => L.Syn.n_prefixes n = elab_prefs) G}) :
+  res global.
 Proof.
-  destruct g as [g [Ht _]].
-  apply l_to_nl'.
-  econstructor; eauto.
+  destruct g as (g&Hwt&_&Hprefs).
+  eapply L.Typ.wt_global_wl_global in Hwt.
+  destruct (L.Norm.Norm.normalize_global g Hwt Hprefs) as [g'|err] eqn:Hnorm. 2:right; exact err.
+  eapply L.Norm.Norm.normalize_global_prefixes in Hnorm as Hprefs'.
+  exact (TR.Tr.to_global g' Hprefs').
 Defined.
 
 Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
@@ -132,7 +132,6 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
      @@ add_builtins
      @@@ transf_clight2_program.
 
-(* TODO fix elab *)
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
   elab_declarations D
                     @@@ l_to_nl

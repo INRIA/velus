@@ -152,6 +152,7 @@ Section expression_ind2.
   Hypothesis APPCase:
     forall f es r a,
       Forall P es ->
+      Forall P r ->
       P (APP f es r a).
 
   Hypothesis CONSTANTCase:

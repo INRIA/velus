@@ -144,36 +144,64 @@ Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
 Module Type IDS.
   Parameter self : ident.
   Parameter out  : ident.
+  Parameter temp : ident.
 
   Parameter step  : ident.
   Parameter reset : ident.
 
+  Parameter elab : ident.
+  Parameter norm1 : ident.
+  Parameter norm2 : ident.
+  Parameter obc2c : ident.
+
+  Definition gensym_prefs := [elab; norm1; norm2].
+  Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
+
   Parameter default : ident.
 
-  Definition reserved : list ident := [ self; out ].
+  Conjecture reset_not_step: reset <> step.
 
-  Definition methods  : list ident := [ step; reset ].
+  Parameter atom : ident -> Prop.
 
-  Axiom reserved_nodup: NoDup reserved.
-  Axiom methods_nodup: NoDup methods.
+  Conjecture self_atom : atom self.
+  Conjecture out_atom : atom out.
+  Conjecture temp_atom : atom temp.
 
-  Axiom reset_not_step: reset <> step.
+  Conjecture step_atom : atom step.
+  Conjecture reset_atom : atom reset.
+  Conjecture elab_atom : atom elab.
+  Conjecture norm1_atom : atom norm1.
+  Conjecture norm2_atom : atom norm2.
+  Conjecture obc2c_atom : atom obc2c.
 
-  Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
-    ~In (fst xty) reserved.
+  (** *** Name generation by prefixing *)
 
   Parameter prefix : ident -> ident -> ident.
 
-  Parameter valid : ident -> Prop.
+  Conjecture prefix_not_atom:
+    forall pref id,
+      ~atom (prefix pref id).
 
-  Inductive prefixed: ident -> Prop :=
-    prefixed_intro: forall pref id,
-      prefixed (prefix pref id).
+  Conjecture prefix_injective:
+    forall pref id pref' id',
+      prefix pref id = prefix pref' id' ->
+      pref = pref' /\ id = id'.
 
-  Axiom valid_not_prefixed: forall x, valid x -> ~prefixed x.
+  (** *** Name generation with fresh identifiers *)
 
-  Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
-    NotReserved xty /\ valid (fst xty).
+  Parameter gensym : ident -> ident -> ident.
+
+  Conjecture gensym_not_atom:
+    forall pref x,
+      ~atom (gensym pref x).
+
+  Conjecture gensym_injective:
+    forall pref x pref' x',
+      gensym pref x = gensym pref' x' ->
+      pref = pref' /\ x = x'.
+
+  Definition AtomOrGensym (prefs : PS.t) (id : ident) :=
+    atom id \/ PS.Exists (fun pre => exists n, id = gensym pre n) prefs.
 
 End IDS.
 

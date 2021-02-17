@@ -8,7 +8,7 @@ From Coq Require Import Setoid Morphisms.
 
 From compcert Require Import common.Errors.
 
-From Velus Require Import Common Ident Clocks.
+From Velus Require Import Common Clocks.
 From Velus Require Import Operators Environment.
 From Velus Require Import AcyGraph.
 From Velus Require Import Lustre.LSyntax Lustre.LClocking Lustre.LCausality.
@@ -175,8 +175,8 @@ Module Type NCAUSALITY
     rewrite Hty, equiv_decb_refl in Hfind; simpl in Hfind. congruence.
   Qed.
 
-  Fact fresh_ident_false_st_inits : forall (st st' : fresh_st (Op.type * clock * bool)) a id,
-      fresh_ident (a, false) st = (id, st') ->
+  Fact fresh_ident_false_st_inits : forall pref (st st' : fresh_st (Op.type * clock * bool)) a id,
+      fresh_ident pref (a, false) st = (id, st') ->
       st_inits st' = st_inits st.
   Proof.
     intros * Hfresh.
@@ -185,8 +185,8 @@ Module Type NCAUSALITY
     simpl; auto.
   Qed.
 
-  Fact fresh_ident_true_st_inits : forall st st' ck id,
-      fresh_ident ((Op.bool_type, ck), true) st = (id, st') ->
+  Fact fresh_ident_true_st_inits : forall pref st st' ck id,
+      fresh_ident pref ((Op.bool_type, ck), true) st = (id, st') ->
       st_inits st' = (id, ck)::st_inits st.
   Proof.
     intros * Hfresh.
@@ -388,7 +388,7 @@ Module Type NCAUSALITY
 
   Definition causal_inv vars eqs (st : fresh_st (Op.type * clock * bool)) :=
     NoDupMembers vars /\
-    st_valid_after st (PSP.of_list (map fst vars)) /\
+    st_valid_after st norm2 (PSP.of_list (map fst vars)) /\
     exists v a (g : AcyGraph v a),
       graph_of_eqs (vars ++ st_clocks st) eqs g /\
       Forall (fun '(y, ck) => forall x, is_trans_arc g x y -> used_in_clock g x ck) (st_inits st).
@@ -405,16 +405,18 @@ Module Type NCAUSALITY
       rewrite <- Hp1, <- Hp2. assumption.
   Qed.
 
-  Fact graph_of_eqs_ck_causal_inv : forall {v a} vars eqs id0 (g : AcyGraph v a),
+  Fact graph_of_eqs_ck_causal_inv : forall {v a} vars eqs (g : AcyGraph v a),
       NoDupMembers vars ->
-      Forall (fun id => (id < id0)%positive) (map fst vars) ->
+      ~PS.In norm2 norm1_prefs ->
+      Forall (AtomOrGensym norm1_prefs) (map fst vars) ->
       graph_of_eqs vars eqs g ->
-      causal_inv vars eqs (init_st id0).
+      causal_inv vars eqs init_st.
   Proof.
-    intros * Hndup Hlt Hg.
+    intros * Hndup Hg.
     repeat (split; auto).
-    - apply init_st_valid.
-      rewrite <- ps_from_list_ps_of_list, PS_For_all_Forall'; auto.
+    - eapply init_st_valid; eauto.
+      intros ? Hin. rewrite ps_of_list_In in Hin.
+      eapply Forall_forall in H; eauto.
     - exists v, a, g. split; auto.
       + unfold st_clocks; rewrite init_st_anns, app_nil_r; auto.
       + unfold st_inits; rewrite init_st_anns; simpl; auto.
@@ -435,7 +437,7 @@ Module Type NCAUSALITY
       wc_clock (vars++st_clocks st) ck ->
       (forall x, Is_free_left x 0 e -> Is_free_in_clock x ck) ->
       ~In ck (map snd (st_inits st)) ->
-      fresh_ident (Op.bool_type, ck, true) st = (x, st') ->
+      fresh_ident norm2 (Op.bool_type, ck, true) st = (x, st') ->
       causal_inv vars (([x], [e])::eqs) st'.
   Proof.
     intros * (Hnd&Hvalid&v&a&g&(Hv&Ha)&Hinits) Hwc Hfree Hnin Hfresh.
@@ -596,7 +598,7 @@ Module Type NCAUSALITY
       In (x, ck) vars ->
       ~InMembers x (st_inits st) ->
       numstreams e = 1 ->
-      fresh_ident (ty, ck, false) st = (x', st') ->
+      fresh_ident norm2 (ty, ck, false) st = (x', st') ->
       causal_inv vars (([x], [e]) :: eqs) st ->
       (forall y, Is_free_left y 0 e1 -> (y = x' \/ Is_free_left y 0 e)) ->
       (forall y, Is_free_left y 0 e2 -> Is_free_left y 0 e) ->
@@ -702,7 +704,7 @@ Module Type NCAUSALITY
       ~InMembers x (st_inits st) ->
       In (xinit, ck) (st_inits st) ->
       numstreams e = 1 ->
-      fresh_ident (ty, ck, false) st = (x', st') ->
+      fresh_ident norm2 (ty, ck, false) st = (x', st') ->
       causal_inv vars (([x], [e]) :: eqs) st ->
       (forall y, Is_free_left y 0 e1 -> (y = x' \/ Is_free_left y 0 e \/ y = xinit)) ->
       (forall y, Is_free_left y 0 e2 -> Is_free_in_clock y ck) ->
@@ -957,11 +959,11 @@ Module Type NCAUSALITY
       + rewrite map_app; simpl. reflexivity.
   Qed.
 
-  Lemma normfby_node_causal : forall G n to_cut Hunt,
+  Lemma normfby_node_causal : forall G n to_cut Hunt Hpref,
       wc_global G ->
       wc_node G n ->
       node_causal n ->
-      node_causal (normfby_node to_cut n Hunt).
+      node_causal (normfby_node to_cut n Hunt Hpref).
   Proof.
     intros * HwcG Hwc Hcaus.
     destruct Hcaus as (v&a&g&Hg).
@@ -984,15 +986,18 @@ Module Type NCAUSALITY
     - eapply graph_of_eqs_ck_causal_inv; eauto.
       + rewrite NoDupMembers_idck, fst_NoDupMembers.
         apply node_NoDup.
-      + eapply Forall_incl. eapply first_unused_ident_gt; eauto.
+      + eapply norm2_not_in_norm1_prefs.
+      + pose proof (n_good n) as (Good&_).
+        rewrite <- Hpref.
+        eapply Forall_incl; eauto.
         rewrite map_fst_idck.
-        apply incl_tl, incl_tl, incl_map, incl_appr', incl_appr', incl_appl, incl_refl.
+        apply incl_map, incl_appr', incl_appr', incl_appl, incl_refl.
   Qed.
 
-  Lemma normfby_global_causal : forall G Hunt,
+  Lemma normfby_global_causal : forall G Hunt Hprefs,
       wc_global G ->
       Forall node_causal G ->
-      Forall node_causal (normfby_global G Hunt).
+      Forall node_causal (normfby_global G Hunt Hprefs).
   Proof.
     induction G; intros * Hwc Hcaus; auto.
     inv Hwc. inv Hcaus.

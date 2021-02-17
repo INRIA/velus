@@ -203,14 +203,6 @@ Module Type TRANSLATION
         now right; left; left.
   Qed.
 
-  Lemma Forall_ValidId_idty:
-    forall A B (xs: list (ident * (A * B))),
-      Forall ValidId (idty xs) <-> Forall ValidId xs.
-  Proof.
-    induction xs as [|x xs]; split; inversion_clear 1; simpl; eauto;
-      destruct x as (x & tyck); constructor; try rewrite IHxs in *; auto.
-  Qed.
-
   Hint Resolve n_ingt0.
 
   (* =translate_node= *)
@@ -388,6 +380,7 @@ Module Type TRANSLATION
     split; [|split; [|split]]; auto.
     - rewrite (Permutation_app_comm n.(n_in)).
       rewrite Permutation_app_assoc.
+      rewrite Forall_map in *.
       match goal with |- context [snd (partition ?p ?l)] =>
                       apply (Forall_app_weaken _ (fst (partition p l))) end.
       rewrite <-(Permutation_app_assoc (fst _)).
@@ -395,37 +388,33 @@ Module Type TRANSLATION
       rewrite <-(Permutation_app_assoc n.(n_vars)).
       rewrite Permutation_app_comm; auto.
     - pose proof (n_defd n) as Perm.
-      unfold ValidId, NotReserved in *.
       apply Forall_forall; rewrite Forall_forall in ValidApp.
       intros * Hin.
-      apply in_map with (f := fst) in Hin.
       rewrite fst_fst_gather_eqs_var_defined in Hin.
       rewrite <-is_filtered_vars_defined in Perm.
-      assert (In (fst x) (vars_defined (filter is_def (n_eqs n)) ++
+      assert (In x (vars_defined (filter is_def (n_eqs n)) ++
                                        vars_defined (filter is_app (n_eqs n)) ++
                                        vars_defined (filter is_fby (n_eqs n)))) as Hin'
           by (rewrite 2 in_app; intuition).
       eapply Permutation_in in Perm; eauto.
       apply in_map_iff in Perm as (? & E & Perm).
       rewrite <-E; apply ValidApp.
-      apply in_app; auto.
+      apply in_map, in_app; auto.
     - pose proof (n_defd n) as Perm.
-      unfold ValidId, NotReserved in *.
       apply Forall_forall; rewrite Forall_forall in ValidApp.
       intros * Hin.
-      apply in_map with (f := fst) in Hin.
-      assert (In (fst x) (map fst (snd (gather_eqs (n_eqs n))) ++ gather_app_vars (n_eqs n))) as Hin'
+      assert (In x (map fst (snd (gather_eqs (n_eqs n))) ++ gather_app_vars (n_eqs n))) as Hin'
           by (apply in_app; auto).
       rewrite fst_snd_gather_eqs_var_defined in Hin'.
       rewrite <-is_filtered_vars_defined in Perm.
-      assert (In (fst x) (vars_defined (filter is_def (n_eqs n)) ++
-                                       vars_defined (filter is_app (n_eqs n)) ++
-                                       vars_defined (filter is_fby (n_eqs n)))) as Hin''
+      assert (In x (vars_defined (filter is_def (n_eqs n)) ++
+                                 vars_defined (filter is_app (n_eqs n)) ++
+                                 vars_defined (filter is_fby (n_eqs n)))) as Hin''
           by (rewrite 2 in_app; intuition).
       eapply Permutation_in in Perm; eauto.
       apply in_map_iff in Perm as (? & E & Perm).
       rewrite <-E; apply ValidApp.
-      apply in_app; auto.
+      apply in_map, in_app; auto.
   Qed.
 
   Definition translate (G: global) : SynStc.program :=

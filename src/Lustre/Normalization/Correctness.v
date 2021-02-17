@@ -5,7 +5,7 @@ From Coq Require Import Setoid Morphisms.
 
 Require Import Omega.
 
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
 From Velus Require Import CoindStreams IndexedStreams.
@@ -33,7 +33,7 @@ Module Type CORRECTNESS
        (LCS : LCLOCKSEMANTICS Ids Op OpAux Syn Cl LCA Ord CStr IStr Sem)
        (Import Norm : NORMALIZATION Ids Op OpAux Syn LCA).
 
-  Import Fresh Tactics.
+  Import Fresh Tactics Unnesting.
   Module Import Typing := NTypingFun Ids Op OpAux Syn LCA Ty Norm.
   Module Import Clocking := NClockingFun Ids Op OpAux Syn LCA Cl Norm.
   Module Ordered := NOrderedFun Ids Op OpAux Syn LCA Ord Norm.
@@ -63,16 +63,16 @@ Module Type CORRECTNESS
 
   Import Permutation.
 
-  Fact fresh_ident_refines {B V} : forall vars H H' a id (v : V) (st st' : fresh_st B),
-      st_valid_after st (PSP.of_list vars) ->
+  Fact fresh_ident_refines {B V} : forall vars H H' a id (v : V) (st st' : fresh_st B) reu,
+      st_valid_reuse st (PSP.of_list vars) reu ->
       Env.dom H (vars++st_ids st) ->
-      fresh_ident a st = (id, st') ->
+      fresh_ident norm1 a st = (id, st') ->
       H' = Env.add id v H ->
       Env.refines eq H H'.
   Proof with eauto.
-    intros vars H H' a id v st st' Hvalid Hdom Hfresh Heq.
+    intros * Hvalid Hdom Hfresh Heq.
     rewrite Heq.
-    assert (st_valid_after st' (PSP.of_list vars)) as Hvalid' by eauto.
+    assert (st_valid_reuse st' (PSP.of_list vars) reu) as Hvalid' by eauto.
     eapply Env.refines_add...
     intro contra. erewrite Env.dom_use in contra; [| eauto].
     apply in_app_or in contra. destruct contra.
@@ -80,35 +80,36 @@ Module Type CORRECTNESS
       assert (In id (st_ids st')).
       { unfold st_ids, idty. repeat simpl_In; simpl in *.
         exists (id, a); auto. }
-      apply st_valid_NoDup in Hvalid'.
+      apply st_valid_reuse_NoDup in Hvalid'.
       eapply NoDup_app_In in Hvalid'; [|eauto].
       apply Hvalid'; clear Hvalid'.
+      apply in_or_app; left.
       rewrite ps_of_list_ps_to_list...
-    + eapply Facts.fresh_ident_nIn in Hfresh...
+    + eapply Facts.fresh_ident_reuse_nIn in Hfresh; eauto.
   Qed.
 
-  Fact idents_for_anns_NoDupMembers : forall anns ids st st' aft,
-      st_valid_after st aft ->
+  Fact idents_for_anns_NoDupMembers : forall anns ids st st' aft reu,
+      st_valid_reuse st aft reu ->
       idents_for_anns anns st = (ids, st') ->
       NoDupMembers ids.
   Proof.
-    intros anns ids st st' aft Hvalid Hids.
-    eapply idents_for_anns_st_valid_after in Hvalid; eauto.
+    intros * Hvalid Hids.
+    eapply idents_for_anns_st_valid_reuse in Hvalid; eauto.
     apply idents_for_anns_vars_perm in Hids.
-    apply st_valid_NoDup, NoDup_app_l in Hvalid.
+    apply st_valid_reuse_NoDup, NoDup_app_l in Hvalid.
     rewrite fst_NoDupMembers in *.
     rewrite <- Hids in Hvalid.
     apply NoDup_app_l in Hvalid; auto.
   Qed.
 
-  Fact idents_for_anns_nIn : forall anns ids st st' aft,
-      st_valid_after st aft ->
+  Fact idents_for_anns_nIn : forall anns ids st st' aft reu,
+      st_valid_reuse st aft reu ->
       idents_for_anns anns st = (ids, st') ->
       Forall (fun id => ~In id (st_ids st)) (map fst ids).
   Proof.
-    intros anns ids st st' aft Hvalid Hids.
-    eapply idents_for_anns_st_valid_after in Hvalid; eauto.
-    apply st_valid_NoDup, NoDup_app_l in Hvalid.
+    intros * Hvalid Hids.
+    eapply idents_for_anns_st_valid_reuse in Hvalid; eauto.
+    apply st_valid_reuse_NoDup, NoDup_app_l in Hvalid.
     apply idents_for_anns_vars_perm in Hids.
     unfold st_ids in *.
     rewrite <- Hids in Hvalid.
@@ -116,15 +117,15 @@ Module Type CORRECTNESS
     eapply NoDup_app_In; eauto.
   Qed.
 
-  Fact idents_for_anns_dom {V} : forall vars H H' anns ids (vs : list V) st st',
+  Fact idents_for_anns_dom {V} : forall vars H H' anns ids (vs : list V) st st' reu,
       length vs = length ids ->
-      st_valid_after st (PSP.of_list vars) ->
+      st_valid_reuse st (PSP.of_list vars) reu ->
       Env.dom H (vars++st_ids st) ->
       idents_for_anns anns st = (ids, st') ->
       H' = Env.adds (map fst ids) vs H ->
       Env.dom H' (vars++st_ids st').
   Proof with eauto.
-    intros vars H H' anns ids vs st st' Hlen Hvalid Hdom Hids Heq.
+    intros * Hlen Hvalid Hdom Hids Heq.
     apply idents_for_anns_vars_perm in Hids.
     rewrite Heq.
     apply Env.dom_adds with (ids0:=map fst ids) (vs0:=vs) in Hdom.
@@ -134,24 +135,24 @@ Module Type CORRECTNESS
     rewrite Permutation_app_comm. assumption.
   Qed.
 
-  Fact idents_for_anns_refines {V} : forall vars H H' anns ids (vs : list V) st st',
+  Fact idents_for_anns_refines {V} : forall vars H H' anns ids (vs : list V) st st' reu,
       length vs = length ids ->
-      st_valid_after st (PSP.of_list vars) ->
+      st_valid_reuse st (PSP.of_list vars) reu ->
       Env.dom H (vars++st_ids st) ->
       idents_for_anns anns st = (ids, st') ->
       H' = Env.adds (map fst ids) vs H ->
       Env.refines eq H H'.
   Proof with eauto.
-    intros vars H H' anns ids vs st st' Hlen Hvalid Hdom Hids Heq.
+    intros * Hlen Hvalid Hdom Hids Heq.
     assert (Forall (fun id => ~In id vars) (List.map fst ids)) as Hnvar.
-    { assert (st_valid_after st' (PSP.of_list vars)) by eauto.
+    { assert (st_valid_reuse st' (PSP.of_list vars) reu) by eauto.
       apply idents_for_anns_incl_ids in Hids.
       solve_forall; simpl.
       assert (In i (map fst ids)) by (simpl_In; exists (i, a); eauto).
       apply Hids in H2.
       intro contra.
-      eapply st_valid_NoDup, NoDup_app_In in H0; [|eauto].
-      apply H0. rewrite ps_of_list_ps_to_list... }
+      eapply st_valid_reuse_NoDup, NoDup_app_In in H0; [|eauto].
+      apply H0, in_or_app. left. rewrite ps_of_list_ps_to_list... }
     rewrite Heq. apply Env.refines_adds.
     eapply idents_for_anns_nIn in Hids...
     rewrite Forall_forall in *. intros x1 Hin contra.
@@ -170,7 +171,7 @@ Module Type CORRECTNESS
     intros anns ids st st' aft reusable Hndup Hvalid Hids.
     eapply idents_for_anns'_st_valid in Hvalid; eauto.
     apply idents_for_anns'_vars_perm in Hids.
-    apply st_valid_reuse_st_valid, st_valid_NoDup, NoDup_app_l in Hvalid.
+    apply st_valid_reuse_NoDup, NoDup_app_l in Hvalid.
     rewrite fst_NoDupMembers in *.
     rewrite <- Hids in Hvalid.
     apply NoDup_app_l in Hvalid; auto.
@@ -184,7 +185,7 @@ Module Type CORRECTNESS
   Proof.
     intros anns ids st st' aft reusable Hndup Hvalid Hids.
     eapply idents_for_anns'_st_valid in Hvalid; eauto.
-    apply st_valid_reuse_st_valid, st_valid_NoDup, NoDup_app_l in Hvalid.
+    apply st_valid_reuse_NoDup, NoDup_app_l in Hvalid.
     apply idents_for_anns'_vars_perm in Hids.
     unfold st_ids in *.
     rewrite <- Hids in Hvalid.
@@ -200,23 +201,26 @@ Module Type CORRECTNESS
   Proof.
     intros anns ids st st' aft reusable Hndup Hvalid Hids.
     eapply idents_for_anns'_st_valid in Hvalid; eauto.
-    apply st_valid_reuse_st_valid, st_valid_NoDup in Hvalid.
+    apply st_valid_reuse_NoDup in Hvalid.
     apply idents_for_anns'_vars_perm in Hids.
     unfold st_ids in *.
     rewrite <- Hids, Permutation_app_comm, Permutation_swap in Hvalid.
     rewrite Forall_forall. intros x Hin.
-    eapply NoDup_app_In; eauto.
+    eapply NoDup_app_In in Hvalid; eauto.
+    rewrite <- app_assoc in Hvalid.
+    repeat rewrite not_In_app in Hvalid. rewrite not_In_app.
+    destruct Hvalid as (?&?&?); auto.
   Qed.
 
-  Fact idents_for_anns'_dom {V} : forall vars H H' anns ids (vs : list V) st st',
+  Fact idents_for_anns'_dom {V} : forall vars H H' anns ids (vs : list V) st st' reu,
       length vs = length ids ->
-      st_valid_after st (PSP.of_list vars) ->
+      st_valid_reuse st (PSP.of_list vars) reu ->
       Env.dom H (vars++st_ids st) ->
       idents_for_anns' anns st = (ids, st') ->
       H' = Env.adds (map fst ids) vs H ->
       Env.dom H' (vars++st_ids st').
   Proof with eauto.
-    intros vars H H' anns ids vs st st' Hlen Hvalid Hdom Hids Heq.
+    intros * Hlen Hvalid Hdom Hids Heq.
     apply idents_for_anns'_vars_perm in Hids.
     rewrite Heq.
     apply Env.dom_adds with (ids0:=map fst ids) (vs0:=vs) in Hdom.
@@ -244,9 +248,9 @@ Module Type CORRECTNESS
       assert (In id (st_ids st')).
       { unfold st_ids, idty. repeat simpl_In; simpl in *.
         exists (id, a); auto. }
-      apply st_valid_reuse_st_valid, st_valid_NoDup in Hvalid'.
+      apply st_valid_reuse_NoDup in Hvalid'.
       eapply NoDup_app_In in Hvalid'; [|eauto].
-      apply Hvalid'; clear Hvalid'.
+      apply Hvalid', in_or_app; clear Hvalid'.
       rewrite ps_of_list_ps_to_list...
     + eapply Facts.st_valid_reuse_nIn, PS_For_all_add in Hvalid as [? _]...
   Qed.
@@ -268,8 +272,8 @@ Module Type CORRECTNESS
       assert (In i (map fst ids)) by (simpl_In; exists (i, (t, (c, o))); eauto).
       apply Hids in H2.
       intro contra.
-      eapply st_valid_reuse_st_valid, st_valid_NoDup, NoDup_app_In in H0; [|eauto].
-      apply H0. rewrite ps_of_list_ps_to_list... }
+      eapply st_valid_reuse_NoDup, NoDup_app_In in H0; [|eauto].
+      apply H0, in_or_app. rewrite ps_of_list_ps_to_list... }
     rewrite Heq. apply Env.refines_adds.
     eapply idents_for_anns'_nIn in Hids...
     rewrite Forall_forall in *. intros x1 Hin contra.
@@ -279,13 +283,13 @@ Module Type CORRECTNESS
     + eapply Hids...
   Qed.
 
-  Fact fresh_ident_dom {B V} : forall vars H H' a id (v : V) (st st' : fresh_st B),
+  Fact fresh_ident_dom {B V} : forall pref vars H H' a id (v : V) (st st' : fresh_st B),
       Env.dom H (vars++st_ids st) ->
-      fresh_ident a st = (id, st') ->
+      fresh_ident pref a st = (id, st') ->
       H' = Env.add id v H ->
       Env.dom H' (vars++st_ids st').
   Proof.
-    intros vars H H' a id v st st' Hdom Hfresh Heq.
+    intros * Hdom Hfresh Heq.
     apply Facts.fresh_ident_vars_perm in Hfresh.
     rewrite Heq.
     apply Env.dom_add_cons with (x:=id) (v0:=v) in Hdom.
@@ -1333,53 +1337,58 @@ Module Type CORRECTNESS
 
   (** *** Preservation of sem_node *)
 
-  Fact unnest_node_sem_equation : forall G H n Hwl ins,
+  Fact unnest_node_sem_equation : forall G H n Hwl Hpref ins,
       wt_node G n ->
       Env.dom H (List.map fst (n_in n ++ n_vars n ++ n_out n)) ->
       Forall2 (sem_var H) (idents (n_in n)) ins ->
       Forall (sem_equation G H (clocks_of ins)) (n_eqs n) ->
       (* Forall2 (fun xc : ident * clock => sem_clock H (clocks_of ins) (snd xc)) (idck (n_in n)) (map abstract_clock ins) -> *)
       exists H', Env.refines eq H H' /\
-            Forall (sem_equation G H' (clocks_of ins)) (n_eqs (unnest_node n Hwl)).
+            Forall (sem_equation G H' (clocks_of ins)) (n_eqs (unnest_node n Hwl Hpref)).
   Proof with eauto.
     intros * Hwt Hdom Hins Hsem.
-    remember (@init_st (Op.type * clock)
-                (first_unused_ident (self::out::(map fst (n_in n++n_vars n++n_out n++anon_in_eqs (n_eqs n)))))) as init.
     specialize (n_nodup n) as Hndup; rewrite fst_NoDupMembers in Hndup; repeat rewrite map_app in Hndup.
-    eapply unnest_equations_sem with (eqs:=n_eqs n) (st:=init)...
+    eapply unnest_equations_sem with (eqs:=n_eqs n) (st:=init_st)...
     5: simpl; rewrite <- surjective_pairing; subst; reflexivity.
     - rewrite PSP.elements_empty, app_nil_r.
       repeat ndup_r Hndup...
-    - unfold st_tys. rewrite Heqinit, init_st_anns, app_nil_r.
+    - unfold st_tys. rewrite init_st_anns, app_nil_r.
       destruct Hwt as [_ [_ [_ Hwt]]]; eauto.
-    - rewrite Heqinit.
+    - rewrite map_fst_idty.
       apply init_st_valid_reuse.
-      rewrite ps_adds_of_list.
-      + repeat rewrite ps_of_list_ps_to_list_Perm.
-        * unfold idty. rewrite map_map, <- map_app, <- fst_NoDupMembers. repeat rewrite <- app_assoc. eapply (n_nodup n).
-        * repeat ndup_r Hndup.
-        * repeat rewrite <- map_app in Hndup. repeat rewrite app_assoc in Hndup.
-          rewrite <- fst_NoDupMembers in Hndup. rewrite <- fst_NoDupMembers, NoDupMembers_idty. apply NoDupMembers_app_l in Hndup.
-          repeat rewrite <- app_assoc in Hndup...
-      + rewrite <- ps_adds_of_list, PS_For_all_ps_adds; split. 2:apply PS_For_all_empty.
-        eapply Forall_incl. eapply first_unused_ident_gt; reflexivity.
-        apply incl_tl, incl_tl. rewrite map_fst_idty. apply incl_map, incl_appr', incl_appr', incl_appl, incl_refl.
-      + rewrite PS_For_all_ps_adds; split. 2:apply PS_For_all_empty.
-        eapply Forall_incl. eapply first_unused_ident_gt; reflexivity.
-        apply incl_tl, incl_tl, incl_map, incl_appr, incl_appr, incl_appr, incl_refl.
-    - unfold st_ids. rewrite Heqinit, init_st_anns, app_nil_r, map_fst_idty...
+      + replace (ps_adds _ PS.empty) with (ps_from_list (map fst (anon_in_eqs (n_eqs n)))); auto.
+        rewrite ps_from_list_ps_of_list.
+        repeat rewrite ps_of_list_ps_to_list_Perm; repeat rewrite map_app; repeat rewrite <- app_assoc in *; auto.
+        repeat ndup_r Hndup.
+        repeat rewrite app_assoc in Hndup. apply NoDup_app_l in Hndup.
+        repeat rewrite <- app_assoc in Hndup; auto.
+      + apply norm1_not_in_elab_prefs.
+      + rewrite <- ps_from_list_ps_of_list, PS_For_all_Forall', <- Hpref.
+        pose proof (n_good n) as (Good&_).
+        eapply Forall_incl; [eauto|].
+        repeat rewrite map_app.
+        repeat apply incl_tl.
+        repeat rewrite app_assoc. apply incl_appl. reflexivity.
+      + replace (ps_adds _ PS.empty) with (ps_from_list (map fst (anon_in_eqs (n_eqs n)))); auto.
+        rewrite PS_For_all_Forall', <- Hpref.
+        pose proof (n_good n) as (Good&_).
+        eapply Forall_incl; [eauto|].
+        repeat rewrite map_app.
+        repeat apply incl_tl.
+        repeat apply incl_appr. reflexivity.
+    - unfold st_ids. rewrite init_st_anns, app_nil_r, map_fst_idty...
   Qed.
 
-  Lemma unnest_node_eq : forall G G' f n Hwl ins outs,
+  Lemma unnest_node_eq : forall G G' f n Hwl Hpref ins outs,
       Forall2 (fun n n' => n_name n = n_name n') G G' ->
       global_iface_eq G G' ->
       global_sem_refines G G' ->
       wt_global (n::G) ->
       wc_global (n::G) ->
       Ordered_nodes (n::G) ->
-      Ordered_nodes ((unnest_node n Hwl)::G') ->
+      Ordered_nodes ((unnest_node n Hwl Hpref)::G') ->
       sem_node (n::G) f ins outs ->
-      sem_node ((unnest_node n Hwl)::G') f ins outs.
+      sem_node ((unnest_node n Hwl Hpref)::G') f ins outs.
   Proof with eauto.
     intros * Hnames Hiface Href HwtG HwcG Hord1 Hord2 Hsem.
     assert (Forall (fun n' => exists v, In v G /\ n_name n <> n_name n') G') as Hnames'.
@@ -1427,20 +1436,20 @@ Module Type CORRECTNESS
       eexists...
   Qed.
 
-  Fact unnest_global_names' : forall G Hwl,
-      Forall2 (fun n n' => n_name n = n_name n') G (unnest_global G Hwl).
+  Fact unnest_global_names' : forall G Hwl Hpref,
+      Forall2 (fun n n' => n_name n = n_name n') G (unnest_global G Hwl Hpref).
   Proof.
     intros.
-    specialize (Ordered.unnest_global_names G Hwl) as Hnames.
+    specialize (Ordered.unnest_global_names G Hwl Hpref) as Hnames.
     rewrite <- Forall2_eq, Forall2_swap_args in Hnames.
     solve_forall.
   Qed.
 
-  Lemma unnest_global_refines : forall G Hwl,
+  Lemma unnest_global_refines : forall G Hwl Hprefs,
       wt_global G ->
       wc_global G ->
       Ordered_nodes G ->
-      global_sem_refines G (unnest_global G Hwl).
+      global_sem_refines G (unnest_global G Hwl Hprefs).
   Proof with eauto.
     intros G Hwl. specialize (unnest_global_eq G Hwl) as Heq.
     induction G; intros * Hwt Hwc Hordered; simpl.
@@ -1470,23 +1479,23 @@ Module Type CORRECTNESS
   Qed.
   Hint Resolve wt_global_ordered_nodes.
 
-  Corollary unnest_global_sem : forall G Hwl f ins outs,
+  Corollary unnest_global_sem : forall G Hwl Hprefs f ins outs,
       wt_global G ->
       wc_global G ->
       sem_node G f ins outs ->
-      sem_node (unnest_global G Hwl) f ins outs.
+      sem_node (unnest_global G Hwl Hprefs) f ins outs.
   Proof.
     intros.
     eapply unnest_global_refines with (Hwl:=Hwl) in H; eauto.
     specialize (H f ins outs); auto.
   Qed.
 
-  Corollary unnest_global_sem_clock_inputs : forall G Hwl f ins,
+  Corollary unnest_global_sem_clock_inputs : forall G Hwl Hprefs f ins,
       LCS.sem_clock_inputs G f ins ->
-      LCS.sem_clock_inputs (unnest_global G Hwl) f ins.
+      LCS.sem_clock_inputs (unnest_global G Hwl Hprefs) f ins.
   Proof.
     intros.
-    specialize (unnest_global_eq G Hwl) as Heq.
+    specialize (unnest_global_eq G Hwl Hprefs) as Heq.
     destruct H as [H [n' [Hfind [Hvars Hsem]]]].
     eapply global_iface_eq_find in Heq as [? [? [Hname [_ [Hin Hout]]]]]; eauto.
     exists H. exists x. repeat split; auto.
@@ -1729,6 +1738,8 @@ Module Type CORRECTNESS
     unfold st_vars. apply incl_map, st_follows_incl, H.
   Qed.
 
+  Import NormFby.
+
   Fact st_valid_after_NoDupMembers : forall st vars,
       NoDupMembers vars ->
       st_valid_after st (PSP.of_list (map fst vars)) ->
@@ -1739,27 +1750,28 @@ Module Type CORRECTNESS
     rewrite fst_NoDupMembers, map_app, <- st_ids_st_vars; auto.
   Qed.
 
-  Fact st_valid_reuse_NoDupMembers : forall st vars reusable,
-      NoDupMembers vars ->
-      st_valid_reuse st (PSP.of_list (map fst vars)) reusable ->
-      NoDupMembers (vars++st_vars st).
-  Proof.
-    intros * Hndup Hvalid.
-    eapply st_valid_after_NoDupMembers; eauto using st_valid_reuse_st_valid.
-  Qed.
-
-  Fact st_valid_reuse_NoDupMembers' : forall st vars reu reusable,
-      NoDupMembers vars ->
-      NoDup (map fst reu ++ PS.elements reusable) ->
-      st_valid_reuse st (PSP.of_list (map fst vars)) (ps_adds (map fst reu) reusable) ->
-      NoDupMembers (vars++st_vars st++reu).
+  Fact fresh_ident_refines' {B V} : forall vars H H' a id (v : V) (st st' : fresh_st B),
+      st_valid_after st (PSP.of_list vars) ->
+      Env.dom H (vars++st_ids st) ->
+      fresh_ident norm2 a st = (id, st') ->
+      H' = Env.add id v H ->
+      Env.refines eq H H'.
   Proof with eauto.
-    intros * Hndup1 Hndup2 Hvalid.
-    eapply st_valid_reuse_NoDup in Hvalid.
-    rewrite ps_of_list_ps_to_list_Perm in Hvalid. 2:rewrite <- fst_NoDupMembers; auto.
-    rewrite Permutation_PS_elements_ps_adds' in Hvalid...
-    rewrite Permutation_swap, fst_NoDupMembers, map_app, map_app. repeat rewrite app_assoc in *.
-    apply NoDup_app_l in Hvalid. rewrite st_ids_st_vars in Hvalid; auto.
+    intros * Hvalid Hdom Hfresh Heq.
+    rewrite Heq.
+    assert (st_valid_after st' (PSP.of_list vars)) as Hvalid' by eauto.
+    eapply Env.refines_add...
+    intro contra. erewrite Env.dom_use in contra; [| eauto].
+    apply in_app_or in contra. destruct contra.
+    + eapply Facts.fresh_ident_In in Hfresh.
+      assert (In id (st_ids st')).
+      { unfold st_ids, idty. repeat simpl_In; simpl in *.
+        exists (id, a); auto. }
+      apply st_valid_NoDup in Hvalid'.
+      eapply NoDup_app_In in Hvalid'; [|eauto].
+      apply Hvalid'; clear Hvalid'.
+      rewrite ps_of_list_ps_to_list...
+    + eapply Facts.fresh_ident_nIn in Hfresh...
   Qed.
 
   (** *** Relation between state and history *)
@@ -1777,14 +1789,14 @@ Module Type CORRECTNESS
   Fact fresh_ident_init_eqs : forall vars b ty ck id v H st st',
       st_valid_after st (PSP.of_list vars) ->
       Env.dom H (vars ++ st_ids st) ->
-      fresh_ident ((ty, ck), false) st = (id, st') ->
+      fresh_ident norm2 ((ty, ck), false) st = (id, st') ->
       init_eqs_valids b H st ->
       init_eqs_valids b (Env.add id v H) st'.
   Proof with auto.
     intros * Hvalid Hdom Hfresh Hinits.
     assert (~In id (st_ids st)) as Hnin by (eapply Facts.fresh_ident_nIn in Hfresh; eauto).
     assert (Env.refines eq H (Env.add id v H)) as Href.
-    { eapply fresh_ident_refines in Hfresh; eauto. }
+    { eapply fresh_ident_refines' in Hfresh; eauto. }
     eapply fresh_ident_false_st_inits in Hfresh.
     unfold init_eqs_valids in *. rewrite Hfresh.
     solve_forall. destruct H1 as [bs' [? ?]].
@@ -1796,7 +1808,7 @@ Module Type CORRECTNESS
   Fact fresh_ident_hist_st : forall vars b ty ck id v H st st',
       st_valid_after st (PSP.of_list (map fst vars)) ->
       sem_clock H b ck (abstract_clock v) ->
-      fresh_ident ((ty, ck), false) st = (id, st') ->
+      fresh_ident norm2 ((ty, ck), false) st = (id, st') ->
       hist_st vars b H st ->
       hist_st vars b (Env.add id v H) st'.
   Proof with auto.
@@ -1805,7 +1817,7 @@ Module Type CORRECTNESS
     assert (st_valid_after st' (PSP.of_list (map fst vars))) as Hvalid2 by eauto.
     assert (Hfresh':=Hfresh). apply fresh_ident_anns in Hfresh'.
     assert (Env.refines eq H (Env.add id v H)) as Href.
-    { eapply fresh_ident_refines in Hfresh; eauto. }
+    { eapply fresh_ident_refines' in Hfresh; eauto. }
     repeat split.
     - eapply fresh_ident_dom; eauto.
     - eapply fresh_ident_init_eqs in Hfresh; eassumption.
@@ -1890,7 +1902,7 @@ Module Type CORRECTNESS
       destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
       assert (st_valid_after st' (PSP.of_list (map fst vars))) as Hvalid1 by eauto.
       remember (Env.add x (init_stream bs') H) as H'.
-      assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines in Hident; eauto).
+      assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines' in Hident; eauto).
       assert (hist_st vars bs H' st') as Histst1.
       { destruct Histst as [H1 [H2 H3]].
         repeat split.
@@ -2081,7 +2093,7 @@ Module Type CORRECTNESS
     remember (abstract_clock y0) as bs'.
     remember (hold (Op.sem_const (Op.init_type ty)) y) as y'.
     remember (Env.add x2 y' H') as H''.
-    assert (Env.refines eq H' H'') by (destruct Histst1; eapply fresh_ident_refines in H1; eauto).
+    assert (Env.refines eq H' H'') by (destruct Histst1; eapply fresh_ident_refines' in H1; eauto).
     assert (hist_st (idck vars) bs H'' st') as Histst2.
     { eapply fresh_ident_hist_st in H1; eauto.
       rewrite HeqH''...
@@ -2210,7 +2222,7 @@ Module Type CORRECTNESS
         remember (Env.add x2 y0 H) as H'.
         assert (Env.refines eq H H') as Href.
         { destruct Hhistst as [Hdom _]; rewrite map_fst_idck in Hdom.
-          eapply fresh_ident_refines in H0... }
+          eapply fresh_ident_refines' in H0... }
         assert (hist_st (idck vars) bs H' st') as Histst1.
         { eapply fresh_ident_hist_st in H0...
           + rewrite HeqH'...
@@ -2308,8 +2320,7 @@ Module Type CORRECTNESS
   Fact init_st_hist_st : forall b H n,
       Env.dom H (List.map fst (n_in n++n_vars n++n_out n)) ->
       LCS.sc_var_inv' (idck (n_in n++n_vars n++n_out n)) H b ->
-      hist_st (idck (n_in n++n_vars n++n_out n)) b H
-              (init_st (first_unused_ident (self::out::(map fst (n_in n++n_vars n++n_out n++anon_in_eqs (n_eqs n)))))).
+      hist_st (idck (n_in n++n_vars n++n_out n)) b H init_st.
   Proof.
     intros b H n Hdom Hinv.
     repeat constructor.
@@ -2322,7 +2333,7 @@ Module Type CORRECTNESS
       rewrite app_nil_r. assumption.
   Qed.
 
-  Fact normfby_node_sem_equation : forall G H to_cut n Hwl ins,
+  Fact normfby_node_sem_equation : forall G H to_cut n Hwl Hpref ins,
       wc_global G ->
       LCS.sc_nodes G ->
       unnested_node n ->
@@ -2334,29 +2345,29 @@ Module Type CORRECTNESS
       Forall2 (fun xc => sem_clock H (clocks_of ins) (snd xc)) (idck (n_in n)) (map abstract_clock ins) ->
       Forall (sem_equation G H (clocks_of ins)) (n_eqs n) ->
       exists H' : Env.t (Stream value),
-        Env.refines eq H H' /\ Forall (sem_equation G H' (clocks_of ins)) (n_eqs (normfby_node to_cut n Hwl)).
+        Env.refines eq H H' /\ Forall (sem_equation G H' (clocks_of ins)) (n_eqs (normfby_node to_cut n Hwl Hpref)).
   Proof with eauto.
     intros * HwcG HscG Hunt Hwt Hwc Hcaus Hdom Hvars Hsemclock Hsem.
-    remember (first_unused_ident (self::out::(map fst (n_in n++n_vars n++n_out n++anon_in_eqs (n_eqs n))))) as id0.
-    remember (@init_st (Op.type * clock * bool) id0) as init.
     assert (NoDup (map fst (n_in n ++ n_vars n ++ n_out n))) as Hndup.
     { specialize (n_nodup n) as Hndup; rewrite fst_NoDupMembers in Hndup.
       repeat rewrite map_app in Hndup. repeat rewrite app_assoc in Hndup. apply NoDup_app_l in Hndup.
       repeat rewrite <- app_assoc in Hndup. repeat rewrite <- map_app in Hndup... }
-    eapply fby_equations_sem with (vars:=(n_in n++n_vars n++n_out n)) (eqs:=n_eqs n) (st:=init)...
+    eapply fby_equations_sem with (vars:=(n_in n++n_vars n++n_out n)) (eqs:=n_eqs n) (st:=init_st)...
     7: simpl; rewrite <- surjective_pairing; subst; reflexivity.
     3:rewrite st_tys'_st_vars. 2,4:rewrite st_clocks'_st_vars.
-    2,3,4:unfold st_vars; rewrite Heqinit, init_st_anns, app_nil_r.
+    2,3,4:unfold st_vars; rewrite init_st_anns, app_nil_r.
     - rewrite fst_NoDupMembers...
     - destruct Hwc as [_ [_ [? _]]].
       rewrite (Permutation_app_comm (n_vars _))...
     - destruct Hwc as [_ [_ [_ ?]]]...
     - destruct Hwt as [_ [_ [_ ?]]]...
-    - rewrite Heqinit.
-      apply init_st_valid.
-      rewrite PS_For_all_Forall, ps_of_list_ps_to_list_Perm...
-      symmetry in Heqid0. eapply first_unused_ident_gt, Forall_incl in Heqid0...
-      apply incl_tl, incl_tl, incl_map, incl_appr', incl_appr', incl_appl; auto.
+    - eapply init_st_valid.
+      + eapply norm2_not_in_norm1_prefs.
+      + rewrite PS_For_all_Forall, ps_of_list_ps_to_list_Perm...
+        pose proof (n_good n) as (Good&_).
+        rewrite <- Hpref.
+        eapply Forall_incl; eauto.
+        apply incl_map, incl_appr', incl_appr', incl_appl; auto.
     - subst. eapply init_st_hist_st...
       eapply LCS.sc_node_sc_var_inv'; eauto.
       + eapply Forall_impl_In; [|eauto]. intros.
@@ -2365,7 +2376,7 @@ Module Type CORRECTNESS
         eapply unnested_equation_sem_sem_anon; eauto. 1,2:eapply Forall_forall; eauto.
   Qed.
 
-  Lemma normfby_node_eq : forall G G' f n Hwl ins outs to_cut,
+  Lemma normfby_node_eq : forall G G' f n Hwl Hpref ins outs to_cut,
       Forall2 (fun n n' => n_name n = n_name n') G G' ->
       global_iface_eq G G' ->
       LCS.global_sc_refines G G' ->
@@ -2374,12 +2385,12 @@ Module Type CORRECTNESS
       wt_global G' ->
       wc_global G' ->
       Ordered_nodes (n::G) ->
-      Ordered_nodes ((normfby_node to_cut n Hwl)::G') ->
+      Ordered_nodes ((normfby_node to_cut n Hwl Hpref)::G') ->
       Forall LCA.node_causal (n::G) ->
       Forall LCA.node_causal G' ->
       sem_node (n::G) f ins outs ->
       LCS.sem_clock_inputs (n::G) f ins ->
-      sem_node ((normfby_node to_cut n Hwl)::G') f ins outs.
+      sem_node ((normfby_node to_cut n Hwl Hpref)::G') f ins outs.
   Proof with eauto.
     intros * Hnames Hiface Href HwtG HwcG HwtG' HwcG' Hord1 Hord2 Hcaus1 Hcaus2 Hsem Hinputs.
     assert (LCS.sc_nodes G) as HscG.
@@ -2430,19 +2441,19 @@ Module Type CORRECTNESS
         apply Forall_sem_equation_global_tl'...
         eapply find_node_not_Is_node_in in Hord2...
         simpl. rewrite ident_eqb_refl...
-        assert (normalized_node (normfby_node to_cut n0 Hwl)) as Hunt'.
+        assert (normalized_node (normfby_node to_cut n0 Hwl Hpref)) as Hunt'.
         { eapply normfby_node_normalized_node. }
-        assert (wc_node G (normfby_node to_cut n0 Hwl)) as Hwc'.
+        assert (wc_node G (normfby_node to_cut n0 Hwl Hpref)) as Hwc'.
         { eapply normfby_node_wc; eauto. }
-        assert (Forall (LCS.sem_equation_anon G H'' (clocks_of ins)) (n_eqs (normfby_node to_cut n0 Hwl))) as Heqs'''.
+        assert (Forall (LCS.sem_equation_anon G H'' (clocks_of ins)) (n_eqs (normfby_node to_cut n0 Hwl Hpref))) as Heqs'''.
         { eapply Forall_impl_In; [|eapply Heqs''].
           intros. eapply normalized_equation_sem_sem_anon; eauto.
           eapply Forall_forall in Hunt'; eauto.
           destruct Hwc' as (_&_&_&Hwc'). eapply Forall_forall in Hwc'; eauto.
         } clear Heqs''.
-        assert (LCS.sc_var_inv' (idck (n_in (normfby_node to_cut n0 Hwl) ++
-                                            n_vars (normfby_node to_cut n0 Hwl) ++
-                                            n_out (normfby_node to_cut n0 Hwl))) H'' (clocks_of ins)) as Hinv.
+        assert (LCS.sc_var_inv' (idck (n_in (normfby_node to_cut n0 Hwl Hpref) ++
+                                            n_vars (normfby_node to_cut n0 Hwl Hpref) ++
+                                            n_out (normfby_node to_cut n0 Hwl Hpref))) H'' (clocks_of ins)) as Hinv.
         { destruct Hinputs as (H'''&?&Hfind'&?&Hcks).
           rewrite Hfind in Hfind'; inv Hfind'.
           eapply LCS.sc_node_sc_var_inv'; eauto.
@@ -2480,20 +2491,20 @@ Module Type CORRECTNESS
     exists H. exists sy. repeat split; auto; congruence.
   Qed.
 
-  Fact normfby_global_names' : forall G Hwl,
-      Forall2 (fun n n' => n_name n = n_name n') G (normfby_global G Hwl).
+  Fact normfby_global_names' : forall G Hwl Hprefs,
+      Forall2 (fun n n' => n_name n = n_name n') G (normfby_global G Hwl Hprefs).
   Proof.
     intros.
-    specialize (Ordered.normfby_global_names G Hwl) as Hnames.
+    specialize (Ordered.normfby_global_names G Hwl Hprefs) as Hnames.
     rewrite <- Forall2_eq, Forall2_swap_args in Hnames.
     solve_forall.
   Qed.
 
-  Lemma normfby_global_refines : forall G Hunt,
+  Lemma normfby_global_refines : forall G Hunt Hprefs,
       wt_global G ->
       wc_global G ->
       Forall LCA.node_causal G ->
-      LCS.global_sc_refines G (normfby_global G Hunt).
+      LCS.global_sc_refines G (normfby_global G Hunt Hprefs).
   Proof with eauto.
     intros G Hunt. specialize (normfby_global_eq G Hunt) as Heq.
     induction G; intros * Hwt Hwc Hcaus; simpl.
@@ -2518,26 +2529,26 @@ Module Type CORRECTNESS
              eapply normfby_global_causal; eauto.
   Qed.
 
-  Corollary normfby_global_sem : forall G Hunt f ins outs,
+  Corollary normfby_global_sem : forall G Hunt Hprefs f ins outs,
       wt_global G ->
       wc_global G ->
       Ordered_nodes G ->
       Forall LCA.node_causal G ->
       sem_node G f ins outs ->
       LCS.sem_clock_inputs G f ins ->
-      sem_node (normfby_global G Hunt) f ins outs.
+      sem_node (normfby_global G Hunt Hprefs) f ins outs.
   Proof.
     intros.
     eapply normfby_global_refines with (Hunt:=Hunt) in H; eauto.
-    specialize (H f ins outs (conj H4 H3)) as [_ ?]; auto.
+    specialize (H f ins outs (conj H4 H3)) as [_ ?]; eauto.
   Qed.
 
-  Corollary normfby_global_sem_clock_inputs : forall G Hwl f ins,
+  Corollary normfby_global_sem_clock_inputs : forall G Hwl Hprefs f ins,
       LCS.sem_clock_inputs G f ins ->
-      LCS.sem_clock_inputs (normfby_global G Hwl) f ins.
+      LCS.sem_clock_inputs (normfby_global G Hwl Hprefs) f ins.
   Proof.
     intros.
-    specialize (normfby_global_eq G Hwl) as Heq.
+    specialize (normfby_global_eq G Hwl Hprefs) as Heq.
     destruct H as [H [n' [Hfind [Hvars Hsem]]]].
     eapply global_iface_eq_find in Heq as [? [? [Hname [_ [Hin Hout]]]]]; eauto.
     exists H. exists x. repeat split; auto.
@@ -2546,15 +2557,15 @@ Module Type CORRECTNESS
 
   (** ** Conclusion *)
 
-  Theorem normalize_global_sem : forall (G : global_wl) G' f ins outs,
+  Theorem normalize_global_sem : forall G Hwl Hprefs G' f ins outs,
       wt_global G ->
       wc_global G ->
       sem_node G f ins outs ->
       LCS.sem_clock_inputs G f ins ->
-      normalize_global G = Errors.OK G' ->
+      normalize_global G Hwl Hprefs = Errors.OK G' ->
       sem_node G' f ins outs.
   Proof with eauto.
-    intros [? ?] * Hwt Hwc Hsem Hclocks Hnorm.
+    intros  * Hwt Hwc Hsem Hclocks Hnorm.
     unfold normalize_global in Hnorm. destruct (LCA.check_causality _) eqn:Hcaus; inv Hnorm.
     eapply normfby_global_sem.
     - eapply unnest_global_wt...
@@ -2566,12 +2577,12 @@ Module Type CORRECTNESS
     - eapply unnest_global_sem_clock_inputs...
   Qed.
 
-  Corollary normalize_global_sem_clock_inputs : forall (G : global_wl) G' f ins,
+  Corollary normalize_global_sem_clock_inputs : forall G G' Hwl Hprefs f ins,
       LCS.sem_clock_inputs G f ins ->
-      normalize_global G = Errors.OK G' ->
+      normalize_global G Hwl Hprefs = Errors.OK G' ->
       LCS.sem_clock_inputs G' f ins.
   Proof.
-    intros [G ?] * Hsc Hnorm.
+    intros * Hsc Hnorm.
     unfold normalize_global in Hnorm.
     destruct (LCA.check_causality _) eqn:Hcheck; inv Hnorm.
     apply normfby_global_sem_clock_inputs, unnest_global_sem_clock_inputs, Hsc.
@@ -2579,12 +2590,12 @@ Module Type CORRECTNESS
 
   (** ** In addition : normalization only produces causal programs *)
 
-  Lemma normalize_global_causal : forall (G : global_wl) G',
+  Lemma normalize_global_causal : forall G G' Hwl Hprefs,
       wc_global G ->
-      normalize_global G = Errors.OK G' ->
+      normalize_global G Hwl Hprefs = Errors.OK G' ->
       Forall LCA.node_causal G'.
   Proof.
-    intros [? ?] * Hwc Hnorm.
+    intros * Hwc Hnorm.
     unfold normalize_global in Hnorm.
     apply Errors.bind_inversion in Hnorm as [? [H1 H2]]. inv H2.
     eapply normfby_global_causal.

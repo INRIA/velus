@@ -2,7 +2,7 @@ From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LOrdered.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
@@ -398,8 +398,8 @@ Module Type NORDERED
         inv_bind. repeat eexists; eauto. inv_bind; eauto.
   Qed.
 
-  Fact unnest_node_Is_node_in : forall f n Hwl,
-      Is_node_in f (n_eqs (unnest_node n Hwl)) ->
+  Fact unnest_node_Is_node_in : forall f n Hwl Hpref,
+      Is_node_in f (n_eqs (unnest_node n Hwl Hpref)) ->
       Is_node_in f (n_eqs n).
   Proof.
     intros * Hisin; simpl in Hisin.
@@ -409,16 +409,16 @@ Module Type NORDERED
     eapply unnest_equations_Is_node_in in Heqres; eauto.
   Qed.
 
-  Fact unnest_global_names : forall G Hwl,
-      List.map n_name (unnest_global G Hwl) = List.map n_name G.
+  Fact unnest_global_names : forall G Hwl Hprefs,
+      List.map n_name (unnest_global G Hwl Hprefs) = List.map n_name G.
   Proof.
-    induction G; intros Hwl; simpl; eauto.
+    induction G; intros *; simpl; eauto.
     f_equal; eauto.
   Qed.
 
-  Fact unnest_node_ordered : forall G n Hwl,
+  Fact unnest_node_ordered : forall G n Hwl Hpref,
       Ordered_nodes (n::G) ->
-      Ordered_nodes (unnest_node n Hwl::G).
+      Ordered_nodes (unnest_node n Hwl Hpref::G).
   Proof.
     intros * Hordered.
     inv Hordered.
@@ -427,11 +427,11 @@ Module Type NORDERED
     eapply unnest_node_Is_node_in in Hisin; auto.
   Qed.
 
-  Lemma unnest_global_ordered : forall G Hwl,
+  Lemma unnest_global_ordered : forall G Hwl Hprefs,
       Ordered_nodes G ->
-      Ordered_nodes (unnest_global G Hwl).
+      Ordered_nodes (unnest_global G Hwl Hprefs).
   Proof with eauto.
-    intros G Hwl Hord.
+    intros G * Hord.
     induction Hord; simpl; constructor...
     - intros f Hisin; simpl.
       eapply unnest_node_Is_node_in in Hisin.
@@ -533,8 +533,8 @@ Module Type NORDERED
         inv_bind. repeat eexists; eauto. inv_bind; eauto.
   Qed.
 
-  Fact normfby_node_Is_node_in : forall f to_cut n Hwl,
-      Is_node_in f (n_eqs (normfby_node to_cut n Hwl)) ->
+  Fact normfby_node_Is_node_in : forall f to_cut n Hwl Hpref,
+      Is_node_in f (n_eqs (normfby_node to_cut n Hwl Hpref)) ->
       Is_node_in f (n_eqs n).
   Proof.
     intros * Hisin; simpl in Hisin.
@@ -543,16 +543,16 @@ Module Type NORDERED
     eapply fby_equations_Is_node_in in Heqres; eauto.
   Qed.
 
-  Fact normfby_global_names : forall G Hwl,
-      List.map n_name (normfby_global G Hwl) = List.map n_name G.
+  Fact normfby_global_names : forall G Hwl Hprefs,
+      List.map n_name (normfby_global G Hwl Hprefs) = List.map n_name G.
   Proof.
-    induction G; intros Hwl; simpl; eauto.
+    induction G; intros *; simpl; eauto.
     f_equal; eauto.
   Qed.
 
-  Fact normfby_node_ordered : forall G n to_cut Hunt,
+  Fact normfby_node_ordered : forall G n to_cut Hunt Hpref,
       Ordered_nodes (n::G) ->
-      Ordered_nodes (normfby_node to_cut n Hunt::G).
+      Ordered_nodes (normfby_node to_cut n Hunt Hpref::G).
   Proof.
     intros * Hordered.
     inv Hordered.
@@ -561,11 +561,11 @@ Module Type NORDERED
     eapply normfby_node_Is_node_in in Hisin; auto.
   Qed.
 
-  Lemma normfby_global_ordered : forall G Hwl,
+  Lemma normfby_global_ordered : forall G Hwl Hprefs,
       Ordered_nodes G ->
-      Ordered_nodes (normfby_global G Hwl).
+      Ordered_nodes (normfby_global G Hwl Hprefs).
   Proof with eauto.
-    intros G Hwl Hord.
+    intros * Hord.
     induction Hord; simpl; constructor...
     - intros f Hisin; simpl.
       eapply normfby_node_Is_node_in in Hisin.
@@ -580,12 +580,12 @@ Module Type NORDERED
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_ordered : forall (G : global_wl) G',
+  Lemma normalize_global_ordered : forall G G' Hwl Hprefs,
       Ordered_nodes G ->
-      normalize_global G = Errors.OK G' ->
+      normalize_global G Hwl Hprefs = Errors.OK G' ->
       Ordered_nodes G'.
   Proof.
-    intros [G Hwl] * Hord Hnorm.
+    intros * Hord Hnorm.
     unfold normalize_global in Hnorm. destruct (Cau.check_causality _); inv Hnorm.
     eapply normfby_global_ordered, unnest_global_ordered, Hord.
   Qed.

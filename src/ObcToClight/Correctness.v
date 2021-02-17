@@ -209,7 +209,7 @@ Section PRESERVATION.
 
         Variable (x  : ident)
                  (ty : type).
-        Let out_ind_field := deref_field out (prefix_fun (c_name owner) (m_name caller)) x (cltype ty).
+        Let out_ind_field := deref_field (prefix obc2c out) (prefix_fun (m_name caller) (c_name owner)) x (cltype ty).
 
         Hypothesis (Hin    : In (x, ty) caller.(m_out))
                    (Length : (1 < length caller.(m_out))%nat).
@@ -316,7 +316,7 @@ Section PRESERVATION.
 
         Variable (x  : ident)
                  (ty : type).
-        Let self_ind_field := deref_field self (c_name owner) x (cltype ty).
+        Let self_ind_field := deref_field (prefix obc2c self) (c_name owner) x (cltype ty).
 
         Hypothesis (Hmems : In (x, ty) owner.(c_mems)).
 
@@ -477,12 +477,11 @@ Section PRESERVATION.
             /\ m' |= outputrep gcenv owner caller (Env.add x v ve1) le' outb_co
                      ** varsrep caller (Env.add x v ve1) le'
                      ** P1
-            /\ forall v, le1 ! self = Some v -> le' ! self = Some v.
+            /\ forall v, le1 ! (prefix obc2c self) = Some v -> le' ! (prefix obc2c self) = Some v.
       Proof.
         clear Hmem; intros * Hmem Ev.
-        assert (x <> self)
-          by (intro; subst;  eapply (m_notreserved self); eauto;
-              eapply In_InMembers; eauto).
+        assert (x <> prefix obc2c self).
+        { intro; subst. eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto. }
         destruct (mem_assoc_ident x caller.(m_out)) eqn:E.
 
         (* x is a caller output *)
@@ -572,13 +571,13 @@ Section PRESERVATION.
       Hypothesis (Findchild  : find_class cid prog = Some (c, prog''))
                  (Findcallee : find_method fid c.(c_methods) = Some callee)
                  (Len        : (1 < Datatypes.length (m_out callee))%nat)
-                 (Ho         : e ! o = Some (instb, type_of_inst (prefix_fun cid fid)))
-                 (Hinstco    : gcenv ! (prefix_fun cid fid) = Some instco).
+                 (Ho         : e ! o = Some (instb, type_of_inst (prefix_fun fid cid)))
+                 (Hinstco    : gcenv ! (prefix_fun fid cid) = Some instco).
 
       (** o.x : a local output structure field is evaluated to the value found in the callee env *)
       Lemma eval_inst_field:
         forall x ty v le2 m1 P1,
-          let inst_field := Efield (Evar o (type_of_inst (prefix_fun cid fid))) x (cltype ty) in
+          let inst_field := Efield (Evar o (type_of_inst (prefix_fun fid cid))) x (cltype ty) in
           m1 |= fieldsrep gcenv ve_callee (co_members instco) instb ** P1 ->
           In (x, ty) callee.(m_out) ->
           Env.find x ve_callee = Some v ->
@@ -618,7 +617,7 @@ Section PRESERVATION.
 
       Lemma exec_funcall_assign_outs:
         forall outs xs vs,
-          let tyo := type_of_inst (prefix_fun cid fid) in
+          let tyo := type_of_inst (prefix_fun fid cid) in
           incl outs callee.(m_out) ->
           Forall2 (fun y xt => In (y, snd xt) (meth_vars caller)) xs outs ->
           wt_vals vs outs ->
@@ -631,7 +630,7 @@ Section PRESERVATION.
                     ** outputrep gcenv owner caller (Env.adds xs vs ve) le' outb_co
                     ** varsrep caller (Env.adds xs vs ve) le'
                     ** P1
-            /\ forall v, le ! self = Some v -> le' ! self = Some v.
+            /\ forall v, le ! (prefix obc2c self) = Some v -> le' ! (prefix obc2c self) = Some v.
       Proof.
         clear Hmem.
         intro outs; revert dependent m1; clear Hmem1 m1; revert ve le.
@@ -655,7 +654,7 @@ Section PRESERVATION.
 
       Corollary exec_funcall_assign:
         forall xs vs,
-          let tyo := type_of_inst (prefix_fun cid fid) in
+          let tyo := type_of_inst (prefix_fun fid cid) in
           Forall2 (fun y xt => In (y, snd xt) (meth_vars caller)) xs callee.(m_out) ->
           wt_vals vs callee.(m_out) ->
           Forall2 (fun xt v => Env.find (fst xt) ve_callee = Some v) callee.(m_out) vs ->
@@ -667,7 +666,7 @@ Section PRESERVATION.
                     ** outputrep gcenv owner caller (Env.adds xs vs ve) le' outb_co
                     ** varsrep caller (Env.adds xs vs ve) le'
                     ** P1
-            /\ forall v, le ! self = Some v -> le' ! self = Some v.
+            /\ forall v, le ! (prefix obc2c self) = Some v -> le' ! (prefix obc2c self) = Some v.
       Proof.
         intros; eapply exec_funcall_assign_outs; eauto.
         apply incl_refl.
@@ -713,7 +712,7 @@ Section PRESERVATION.
                  )
                  (fun outs =>
                     forall instb instco,
-                      gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some instco ->
+                      gcenv ! (prefix_fun f.(m_name) c.(c_name)) = Some instco ->
                       m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs)
                            ** fieldsrep gcenv vempty instco.(co_members) instb
                            ** P ->
@@ -762,7 +761,7 @@ Section PRESERVATION.
         edestruct methods_corres with (3 := Findchild')
         as (loc_f & fun_f & Gf & Gptrf & Spec_f); eauto.
       assert (forall targs tres cc,
-                 eval_expr tge e le m (Evar (prefix_fun cid fid) (Tfunction targs tres cc))
+                 eval_expr tge e le m (Evar (prefix_fun fid cid) (Tfunction targs tres cc))
                            (Vptr loc_f Ptrofs.zero)).
       { intros; eapply eval_Elvalue.
         - apply eval_Evar_global; eauto.
@@ -770,11 +769,8 @@ Section PRESERVATION.
           intros (?, ?) Hget.
           apply match_states_conj in Hmem as (?&?&?&?& He).
           apply He in Hget; destruct Hget as (? & ? & Eqpref).
-          unfold prefix_fun, prefix_out in Eqpref.
-          apply prefix_injective in Eqpref; destruct Eqpref.
-          + apply fun_not_out; auto.
-          + apply fun_id_valid.
-          + apply out_valid.
+          apply prefix_injective in Eqpref as (Heq1&_).
+          apply fun_not_out in Heq1; auto.
         - apply deref_loc_reference; auto.
       }
       assert (Genv.find_funct (Genv.globalenv tprog) (Vptr loc_f Ptrofs.zero)
@@ -786,7 +782,7 @@ Section PRESERVATION.
                             (Tcons (type_of_inst_p cid) (list_type_to_typelist (map Clight.typeof es)))
                             (fun _ _ => Tcons (type_of_inst_p cid) (list_type_to_typelist (map Clight.typeof es)))
                             (fun _ => Tcons (type_of_inst_p cid)
-                                         (Tcons (type_of_inst_p (prefix_fun cid fid))
+                                         (Tcons (type_of_inst_p (prefix_fun fid cid))
                                                 (list_type_to_typelist (map Clight.typeof es)))))
                   (case_out callee Tvoid (fun _ t => cltype t) (fun _ => Tvoid))
                   AST.cc_default) as Type_f.
@@ -878,16 +874,22 @@ Section PRESERVATION.
         rewrite sep_swap34, sep_swap23, sep_swap,
         sep_swap67, sep_swap56, sep_swap45, sep_swap34, sep_swap23 in Hmem'.
         edestruct exec_assign with (x := x) (ty := ta)
-                                   (ae := Etempvar (prefix fid a) (cltype ta))
-                                   (le1 := PTree.set (prefix fid a) rv le)
+                                   (ae := Etempvar (prefix_temp fid a) (cltype ta))
+                                   (le1 := PTree.set (prefix_temp fid a) rv le)
           as (m'' & le' & ? & Hmem'' & Hself);
           eauto using eval_expr, PTree.gss.
-        { eapply sep_imp; eauto.
-          - apply outputrep_add_prefix.
+        { eapply find_method_name in Findcallee; subst.
+          specialize (m_good callee) as (_&Hat).
+          eapply sep_imp; eauto.
+          - apply outputrep_add_prefix; auto.
           - repeat apply sep_imp'; auto.
             apply varsrep_add'''.
-            intro; eapply (m_notprefixed (prefix fid a)); auto using prefixed.
-            unfold meth_vars; rewrite app_assoc, InMembers_app; eauto.
+            intro contra.
+            eapply InMembers_In in contra as (?&Hin').
+            specialize (m_good caller) as (Hvars&_). rewrite Forall_map in Hvars.
+            repeat rewrite Forall_app in Hvars. destruct Hvars as (?&?&?).
+            eapply Forall_forall in Hin'. 2:rewrite Forall_app in *; eauto.
+            eapply AtomOrGensym_inv in Hin'; eauto.
         }
         clear Hmem'.
 
@@ -895,7 +897,7 @@ Section PRESERVATION.
         + change E0 with (Eapp E0 (Eapp E0 E0)).
           unfold funcall.
           eapply exec_Sseq_1; eauto.
-          change (PTree.set (prefix fid a) rv le) with (set_opttemp (Some (prefix fid a)) rv le).
+          change (PTree.set (prefix_temp fid a) rv le) with (set_opttemp (Some (prefix_temp fid a)) rv le).
           econstructor; simpl; eauto using eval_exprlist.
         + simpl map; rewrite Env.adds_opt_cons_cons, Env.adds_opt_nil_l.
           apply match_states_conj; intuition; eauto using m_nodupvars.
@@ -911,7 +913,7 @@ Section PRESERVATION.
             -- apply staterep_objs_not_in; auto.
           * apply Hself.
             rewrite PTree.gso; auto.
-            intro Eself; apply self_not_prefixed; rewrite Eself; auto using prefixed.
+            eapply prefix_injective'. left. prove_str_to_pos_neq.
 
       (* multiple outputs *)
       - (* get the local structure *)
@@ -923,15 +925,15 @@ Section PRESERVATION.
           erewrite <-(find_class_name cid), <-(find_method_name fid) in Hinstco; eauto.
 
         (* get the &o parameter *)
-        assert (eval_expr tge e le m (Eaddrof (Evar (prefix_out o fid) (type_of_inst (prefix_fun cid fid)))
-                                              (pointer_of (type_of_inst (prefix_fun cid fid))))
+        assert (eval_expr tge e le m (Eaddrof (Evar (prefix_out fid o) (type_of_inst (prefix_fun fid cid)))
+                                              (pointer_of (type_of_inst (prefix_fun fid cid))))
                           (Vptr instb Ptrofs.zero))
           by (constructor; constructor; auto).
         assert (Cop.sem_cast (Vptr instb Ptrofs.zero)
                              (Clight.typeof
-                                (Eaddrof (Evar (prefix_out o fid) (type_of_inst (prefix_fun cid fid)))
-                                         (pointer_of (type_of_inst (prefix_fun cid fid)))))
-                             (pointer_of (type_of_inst (prefix_fun cid fid))) m
+                                (Eaddrof (Evar (prefix_out o fid) (type_of_inst (prefix_fun fid cid)))
+                                         (pointer_of (type_of_inst (prefix_fun fid cid)))))
+                             (pointer_of (type_of_inst (prefix_fun fid cid))) m
                 = Some (Vptr instb Ptrofs.zero)) by auto.
 
         (* get the induction invariant *)
@@ -1321,7 +1323,7 @@ Section PRESERVATION.
 
   Let le_main    := create_undef_temps main_f.(fn_temps).
   Let out_step   := prefix out step.
-  Let t_out_step := type_of_inst (prefix_fun main_node step).
+  Let t_out_step := type_of_inst (prefix_fun step main_node).
 
   (* !!!: do not use case_out or match on outputs directly because of further dependent destruction failure *)
   Lemma main_entry:
@@ -1332,7 +1334,7 @@ Section PRESERVATION.
         exists m1 step_b step_co,
           function_entry2 tge main_f [] m0
                           (PTree.set out_step (step_b, t_out_step) empty_env) le_main m1
-          /\ gcenv ! (prefix_fun main_node step) = Some step_co
+          /\ gcenv ! (prefix_fun step main_node) = Some step_co
           /\ m1 |= P
                   ** fieldsrep gcenv vempty step_co.(co_members) step_b
       else function_entry2 tge main_f [] m0 empty_env le_main m0.
@@ -1361,18 +1363,18 @@ Section PRESERVATION.
       e ! x = Some (b, t) ->
       x = out_step.
 
-  Remark out_step_env_no_glob_id:
+  Remark out_step_env_no_prefix_glob:
     forall e x,
-      valid x ->
       out_step_env e ->
-      e ! (glob_id x) = None.
+      e ! (prefix_glob x) = None.
   Proof.
-    intros * Valid He.
+    intros * He.
     rewrite <-not_Some_is_None.
     intros (b, t') Hget.
     apply He in Hget.
-    apply (glob_id_not_prefixed x); auto.
-    rewrite Hget. constructor.
+    eapply prefix_injective in Hget as (?&?); auto.
+    assert (glob <> out); auto.
+    prove_str_to_pos_neq.
   Qed.
 
   Lemma exec_read:
@@ -1406,7 +1408,7 @@ Section PRESERVATION.
                  exec_stmt_fe function_entry2 tge e le m
                            (Sbuiltin (Some x) (AST.EF_vload (type_chunk t))
                                      (Ctypes.Tcons (Tpointer (cltype t) noattr) Ctypes.Tnil)
-                                     [Eaddrof (Evar (glob_id x) (cltype t)) (Tpointer (cltype t) noattr)])
+                                     [Eaddrof (Evar (prefix_glob x) (cltype t)) (Tpointer (cltype t) noattr)])
                            [load_event_of_val v (x, t)] le' m Out_normal
                  /\ le' ! x = Some v
                  /\ forall y, y <> x -> le' ! y = le ! y)
@@ -1420,8 +1422,7 @@ Section PRESERVATION.
         econstructor.
         - econstructor; eauto using eval_exprlist.
           + apply eval_Eaddrof, eval_Evar_global; eauto.
-            apply out_step_env_no_glob_id; auto.
-            apply (Good (x, t)), in_eq.
+            apply out_step_env_no_prefix_glob; auto.
           + unfold Cop.sem_cast; simpl; eauto.
         - constructor.
           unfold load_event_of_val; simpl.
@@ -1430,7 +1431,7 @@ Section PRESERVATION.
           apply eventval_of_val_match; auto.
       }
 
-      assert (forall xt, In xt l -> ValidId xt)
+      assert (forall xt, In xt l -> AtomOrGensym (PSP.of_list gensym_prefs) (fst xt))
         by (intros; apply Good, in_cons; auto).
       edestruct IHl with (le := le') as (le'' & ? & Hgss & Hgso); eauto.
       exists le''; repeat split.
@@ -1450,7 +1451,7 @@ Section PRESERVATION.
         NoDupMembers outs ->
         out_step_env e ->
         wt_vals rvs outs ->
-        gcenv ! (prefix_fun main_node step) = Some step_co ->
+        gcenv ! (prefix_fun step main_node) = Some step_co ->
         e ! out_step = Some (step_b, t_out_step) ->
         Forall2 (fun xt v => Env.find (fst xt) ve = Some v) outs rvs ->
         m |= fieldsrep gcenv ve (co_members step_co) step_b ->
@@ -1462,8 +1463,8 @@ Section PRESERVATION.
     intros ? Incl Len.
     assert (Forall (is_volatile tprog) outs) as Vol
       by (apply Forall_incl with (2 := Incl), volatile_step_out; auto).
-    assert (Forall ValidId outs) as Good
-        by (apply Forall_incl with (2 := Incl), Forall_forall, m_good_out).
+    assert (Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst outs)) as Good
+        by (rewrite Forall_map; apply Forall_incl with (2 := Incl), Forall_forall, m_good_out).
 
     unfold exec_stmt_fe.
     induction outs as [|(x, t)]; intros * Nodup He WTrvs Hrco Findstr Hrvs Hm.
@@ -1487,8 +1488,7 @@ Section PRESERVATION.
           end.
         * econstructor.
           apply eval_Evar_global; eauto.
-          apply out_step_env_no_glob_id; auto.
-          apply Good_x.
+          apply out_step_env_no_prefix_glob; auto.
         * reflexivity.
         * eapply sem_cast_same; eauto.
       + constructor.
@@ -1506,7 +1506,7 @@ Section PRESERVATION.
                (fun y t => exists rv, rvs = [rv] /\ le ! y = Some rv)
                (fun outs =>
                   exists ve step_b step_co,
-                    gcenv ! (prefix_fun main_node step) = Some step_co
+                    gcenv ! (prefix_fun step main_node) = Some step_co
                     /\ e ! out_step = Some (step_b, t_out_step)
                     /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) outs rvs
                     /\ m |= fieldsrep gcenv ve (co_members step_co) step_b) ->
@@ -1541,8 +1541,7 @@ Section PRESERVATION.
           end.
         * econstructor.
           apply eval_Evar_global; eauto.
-          apply out_step_env_no_glob_id; auto.
-          apply (Good (y, t)), in_eq.
+          apply out_step_env_no_prefix_glob; auto.
         * reflexivity.
         * econstructor; eauto.
         * eapply sem_cast_same; eauto.
@@ -1591,7 +1590,7 @@ Section PRESERVATION.
                       exists ve step_b step_co,
                         eval_funcall_fe function_entry2 tge m (Internal step_f)
                                      (var_ptr sb :: var_ptr step_b :: ins n) E0 m' Vundef
-                          /\ gcenv ! (prefix_fun main_node step) = Some step_co
+                          /\ gcenv ! (prefix_fun step main_node) = Some step_co
                         /\ e ! out_step = Some (step_b, t_out_step)
                         /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) ys (outs n)
                         /\ m' |= fieldsrep gcenv ve (co_members step_co) step_b) ->
@@ -1622,7 +1621,7 @@ Section PRESERVATION.
                         exists ve step_b step_co,
                           eval_funcall_fe function_entry2 tge m (Internal step_f)
                                        (var_ptr sb :: var_ptr step_b :: ins n) E0 m' Vundef
-                          /\ gcenv ! (prefix_fun main_node step) = Some step_co
+                          /\ gcenv ! (prefix_fun step main_node) = Some step_co
                           /\ e ! out_step = Some (step_b, t_out_step)
                           /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) ys (outs n)
                           /\ m' |= fieldsrep gcenv ve (co_members step_co) step_b)
@@ -1651,22 +1650,22 @@ Section PRESERVATION.
     Remark out_step_env_no_prefix_fun:
       forall e x f,
         out_step_env e ->
-        e ! (prefix_fun x f) = None.
+        e ! (prefix_fun f x) = None.
     Proof.
       intros * He.
       rewrite <-not_Some_is_None.
       intros (b, t') Hget.
       apply He in Hget; unfold out_step in Hget.
       unfold prefix_fun in Hget.
-      apply prefix_injective in Hget as (?&?); auto using fun_id_valid, out_valid.
+      apply prefix_injective in Hget as (?&?); auto.
     Qed.
     Hint Resolve out_step_env_no_prefix_fun.
 
-    Let step_name := Evar (prefix_fun main_node step).
-    Let self_addr := Eaddrof (Evar (glob_id self) (type_of_inst main_node))
+    Let step_name := Evar (prefix_fun step main_node).
+    Let self_addr := Eaddrof (Evar (prefix_glob (prefix self main_id)) (type_of_inst main_node))
                                (type_of_inst_p main_node).
 
-    Hypothesis Find_self : Genv.find_symbol tge (glob_id self) = Some sb.
+    Hypothesis Find_self : Genv.find_symbol tge (prefix_glob (prefix self main_id)) = Some sb.
 
     (** evaluate the self parameter *)
     Lemma eval_expr_self:
@@ -1676,7 +1675,7 @@ Section PRESERVATION.
     Proof.
       econstructor.
       apply eval_Evar_global; eauto.
-      apply out_step_env_no_glob_id; auto; apply self_valid.
+      apply out_step_env_no_prefix_glob; auto; apply self_valid.
     Qed.
     Hint Resolve eval_expr_self.
 
@@ -1807,7 +1806,7 @@ Section PRESERVATION.
                  (Hm_main   : if lt_dec 1 (length (m_out main_step))
                               then
                                 exists step_b step_co,
-                                  gcenv ! (prefix_fun main_node step) = Some step_co
+                                  gcenv ! (prefix_fun step main_node) = Some step_co
                                   /\ e ! out_step = Some (step_b, t_out_step)
                                   /\ m_main |= staterep gcenv prog main_node mempty sb Z0
                                            ** fieldsrep gcenv vempty step_co.(co_members) step_b
@@ -1867,7 +1866,7 @@ Section PRESERVATION.
                                         loop_call prog main_node step
                                                   (fun n => map Some (ins n)) (fun n => map Some (outs n)) n me
                                         /\ wt_mem me prog_main c_main
-                                        /\ gcenv ! (prefix_fun main_node step) = Some step_co
+                                        /\ gcenv ! (prefix_fun step main_node) = Some step_co
                                         /\ e ! out_step = Some (step_b, t_out_step)
                                         /\ m |= staterep gcenv prog main_node me sb 0
                                             ** fieldsrep gcenv vempty (co_members step_co) step_b)).
@@ -1930,7 +1929,7 @@ Section PRESERVATION.
           now rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm0.
       Qed.
 
-      Let reset_name := Evar (prefix_fun main_node reset).
+      Let reset_name := Evar (prefix_fun reset main_node).
 
       Corollary exec_reset:
         exists m0,

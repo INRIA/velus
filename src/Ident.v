@@ -6,23 +6,16 @@ Import List.ListNotations.
 
 Open Scope bool_scope.
 
-Axiom pos_to_str: ident -> string.
-Axiom pos_of_str: string -> ident.
+(** *** ident <-> string conversion *)
+Axiom pos_to_str: ident -> string. (* uses extern_atom *)
+Axiom str_to_pos: string -> ident. (* uses intern_string *)
 
-Axiom pos_to_str_injective:
+Axiom str_to_pos_injective:
   forall x x',
-    pos_to_str x = pos_to_str x' ->
+    str_to_pos x = str_to_pos x' ->
     x = x'.
-Axiom pos_of_str_injective:
-  forall x x',
-    pos_of_str x = pos_of_str x' ->
-    x = x'.
-Axiom pos_to_str_not_empty:
-  forall x, pos_to_str x <> ("")%string.
 Axiom pos_to_str_equiv:
-  forall s, pos_to_str (pos_of_str s) = s.
-Axiom pos_of_str_equiv:
-  forall x, pos_of_str (pos_to_str x) = x.
+  forall x, pos_to_str (str_to_pos x) = x.
 
 Fixpoint In_str (x: ascii) (s: string): Prop :=
   match s with
@@ -71,517 +64,325 @@ Proof.
       * now apply IHs.
 Qed.
 
-Lemma In_str_eq:
-  forall x s,
-    In_str x (String x s).
-Proof.
-  simpl; now left.
-Qed.
-
-Lemma In_str_app:
-  forall x s1 s2,
-    In_str x (s1 ++ s2)%string <-> In_str x s1 \/ In_str x s2.
-Proof.
-  induction s1; split; simpl; intro H.
-  - now right.
-  - destruct H; auto; contradiction.
-  - destruct H.
-    + now repeat left.
-    + rewrite IHs1 in H; destruct H.
-      * now left; right.
-      * now repeat right.
-  - rewrite IHs1; destruct H as [[|]|].
-    + now left.
-    + now right; left.
-    + now repeat right.
-Qed.
-
-Lemma not_in_str_cons:
-  forall x x' s,
-    ~ In_str x (String x' s) <-> x <> x' /\ ~ In_str x s.
-Proof.
-  split; intro H.
-  - simpl in H; split; intro E; apply H; auto.
-  - simpl; intros [|]; destruct H; auto.
-Qed.
-
-Lemma append_assoc:
-  forall s s' s'',
-    (s ++ s' ++ s'' = (s ++ s') ++ s'')%string.
-Proof.
-  induction s; auto; intros; simpl.
-  f_equal; auto.
-Qed.
-
 Definition sep: ascii := "$"%char.
 
-Lemma append_sep_injectivity:
-  forall x pre1 pre2 post1 post2,
-    ~ In_str x pre1 ->
-    ~ In_str x pre2 ->
-    (pre1 ++ (String x post1) = pre2 ++ (String x post2))%string ->
-    pre1 = pre2 /\ post1 = post2.
-Proof.
-  induction pre1; intros pre2 post1 post2 Hin1 Hin2 Heq.
-  - assert (pre2 = ""%string).
-    { destruct pre2; trivial; []. exfalso. simpl in Heq. inv Heq. apply Hin2. now left. }
-    subst. simpl in Heq. inv Heq. now split.
-  - destruct pre2.
-    + exfalso. apply Hin1. inv Heq. now left.
-    + simpl in Heq. inv Heq. rewrite not_in_str_cons in *.
-      destruct (IHpre1 pre2 post1 post2); try tauto. subst. now split.
-Qed.
-
-Lemma append_eq_empty:
-  forall s s', (s ++ s' = "" -> s = "" /\ s' = "")%string.
-Proof.
-  induction s; simpl; intros; auto.
-  discriminate.
-Qed.
-
-Lemma append_same_last:
-  forall pre1 post1 pre2 x,
-    (pre1 ++ post1 = pre2 ++ String x "")%string ->
-    (post1 <> "")%string ->
-    exists post1',
-      (post1 = post1' ++ String x "")%string.
-Proof.
-  induction pre1; simpl; intros * E H; eauto.
-  destruct pre2; simpl in *.
-  - inv E; apply append_eq_empty in H2; destruct H2; contradiction.
-  - inv E; eauto.
-Qed.
-
-Lemma append_string:
-  forall s x s', (s ++ String x s' = (s ++ String x "") ++ s')%string.
-Proof.
-  induction s; simpl; auto; intros.
-  now f_equal.
-Qed.
-
-Lemma append_injectivity_left:
-  forall pre1 pre2 post,
-    (pre1 ++ post = pre2 ++ post)%string ->
-    pre1 = pre2.
-Proof.
-  induction pre1, pre2; simpl; intros * E; auto.
-  - exfalso.
-    revert dependent pre2; revert a.
-    induction post; intros; try discriminate.
-    inversion E; subst a0.
-    destruct pre2; simpl in *.
-    + apply (IHpost a ""%string); now simpl.
-    + rewrite append_string in H1; eauto.
-  - exfalso.
-    clear IHpre1.
-    revert dependent pre1; revert a.
-    induction post; intros; try discriminate.
-    inversion E; subst a0.
-    destruct pre1; simpl in *.
-    + apply (IHpost a ""%string); now simpl.
-    + rewrite append_string in H1; eauto.
-  - inv E; f_equal; eauto.
-Qed.
-
 Module Export Ids <: IDS.
-  Definition self := pos_of_str "self".
-  Definition out := pos_of_str "out".
-  Definition fun_id: ident  := pos_of_str "fun".
-  Definition sync_id: ident := pos_of_str "sync".
-  Definition main_id: ident := pos_of_str "main".
-  Definition main_proved_id: ident := pos_of_str "main_proved".
-  Definition main_sync_id: ident := pos_of_str "main_sync".
+  Definition self := str_to_pos "self".
+  Definition out := str_to_pos "out".
+  Definition temp := str_to_pos "temp".
+  Definition fun_id: ident  := str_to_pos "fun".
+  Definition sync_id: ident := str_to_pos "sync".
+  Definition main_id: ident := str_to_pos "main".
+  Definition main_proved_id: ident := str_to_pos "main_proved".
+  Definition main_sync_id: ident := str_to_pos "main_sync".
+  Definition step := str_to_pos "step".
+  Definition reset := str_to_pos "reset".
+  Definition glob := str_to_pos "glob".
+  Definition elab := str_to_pos "elab".
+  Definition norm1 := str_to_pos "norm1".
+  Definition norm2 := str_to_pos "norm2".
+  Definition obc2c := str_to_pos "obc2c".
 
-  Definition step := pos_of_str "step".
-  Definition reset := pos_of_str "reset".
+  Definition default := 1%positive.
 
-  Definition reserved : list ident := [ self; out ].
+  Ltac prove_str_to_pos_neq :=
+    match goal with
+    | |- ?x1 <> ?x2 =>
+      intros Heq; apply str_to_pos_injective in Heq; inv Heq
+    end.
 
-  Definition methods  : list ident := [ step; reset ].
+  Definition gensym_prefs := [elab; norm1; norm2].
 
-  (* The following identifier is (provably) never used in practice. *)
-  Definition default : ident := pos_of_str "$$$$".
-
-  Lemma self_reserved:
-    In self reserved.
+  Lemma gensym_prefs_NoDup : NoDup gensym_prefs.
   Proof.
-    left; auto.
-  Qed.
-  Hint Resolve self_reserved.
-
-  Lemma out_reserved:
-    In out reserved.
-  Proof.
-    right; constructor; auto.
-  Qed.
-  Hint Resolve out_reserved.
-
-  Lemma reserved_nodup: NoDup reserved.
-  Proof.
-    constructor.
-    - inversion_clear 1 as [E|Hin].
-      + unfold out, self in E.
-        apply pos_of_str_injective in E.
-        discriminate.
-      + contradict Hin.
-    - repeat constructor; auto.
+    unfold gensym_prefs.
+    repeat constructor; auto.
+    1,2:repeat rewrite not_in_cons; repeat split; auto.
+    1-3:prove_str_to_pos_neq.
   Qed.
 
   Lemma self_not_out: self <> out.
-  Proof.
-    intro Eq.
-    pose proof reserved_nodup as Nodup.
-    unfold reserved in Nodup.
-    inversion Nodup as [|? ? Notin]; subst; clear Nodup.
-    rewrite Eq in Notin.
-    contradict Notin; apply in_eq.
-  Qed.
+  Proof. prove_str_to_pos_neq. Qed.
   Hint Resolve self_not_out.
-
-  Lemma methods_nodup: NoDup methods.
-  Proof.
-    constructor.
-    - inversion_clear 1 as [E|Hin].
-      + unfold reset, step in E.
-        apply pos_of_str_injective in E.
-        discriminate.
-      + contradict Hin.
-    - repeat constructor; auto.
-  Qed.
 
   Lemma reset_not_step:
     reset <> step.
-  Proof.
-    pose proof methods_nodup as Hndup.
-    unfold methods in Hndup.
-    inversion_clear Hndup.
-    intro Hrs. rewrite Hrs in *.
-    intuition.
-  Qed.
+  Proof. prove_str_to_pos_neq. Qed.
   Hint Resolve reset_not_step.
 
   Lemma fun_not_out: fun_id <> out.
-  Proof.
-    intro E; unfold fun_id, out in E.
-    apply pos_of_str_injective in E.
-    discriminate.
-  Qed.
+  Proof. prove_str_to_pos_neq. Qed.
   Hint Resolve fun_not_out.
 
-  Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
-    ~In (fst xty) reserved.
+  Lemma fun_not_glob: fun_id <> glob.
+  Proof. prove_str_to_pos_neq. Qed.
+  Hint Resolve fun_not_glob.
 
-  Definition prefix (pre id: ident) :=
-    pos_of_str (pos_to_str pre ++ (String sep (pos_to_str id))).
-
-  Definition valid (x: ident) := ~In_str sep (pos_to_str x).
-
-  Inductive prefixed: ident -> Prop :=
-    prefixed_intro: forall pref id,
-      prefixed (prefix pref id).
-
-   Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
-    NotReserved xty /\ valid (fst xty).
-
-  Lemma In_sep_prefix:
-    forall pre id,
-      In_str sep (pos_to_str (prefix pre id)).
+  Fact obc2c_not_in_gensym_prefs :
+    ~In obc2c gensym_prefs.
   Proof.
-    intros.
-    unfold prefix.
-    rewrite pos_to_str_equiv, In_str_app; right.
-    apply In_str_eq.
+    unfold gensym_prefs.
+    repeat rewrite not_in_cons.
+    repeat split; auto; prove_str_to_pos_neq.
+  Qed.
+  Hint Resolve obc2c_not_in_gensym_prefs.
+
+  Fact self_not_in_gensym_prefs :
+    ~In self gensym_prefs.
+  Proof.
+    unfold gensym_prefs.
+    repeat rewrite not_in_cons.
+    repeat split; auto; prove_str_to_pos_neq.
+  Qed.
+  Hint Resolve self_not_in_gensym_prefs.
+
+  Fact temp_not_in_gensym_prefs :
+    ~In temp gensym_prefs.
+  Proof.
+    unfold gensym_prefs.
+    repeat rewrite not_in_cons.
+    repeat split; auto; prove_str_to_pos_neq.
+  Qed.
+  Hint Resolve temp_not_in_gensym_prefs.
+
+  Definition atom x := ~In_str sep (pos_to_str x).
+  Definition is_atom x := negb (mem_str sep (pos_to_str x)).
+
+  Lemma is_atom_spec : forall x,
+      is_atom x = true <->
+      atom x.
+  Proof.
+    intros x. unfold is_atom, atom.
+    rewrite Bool.negb_true_iff.
+    rewrite not_mem_In_str. reflexivity.
   Qed.
 
-  Lemma valid_not_prefixed:
-    forall x, valid x -> ~prefixed x.
-  Proof.
-    intros * V H.
-    inv H.
-    apply V, In_sep_prefix.
-  Qed.
+  Local Ltac prove_atom :=
+    match goal with
+    | |- atom ?x =>
+      unfold atom, x; rewrite pos_to_str_equiv;
+      rewrite not_mem_In_str; reflexivity
+    end.
 
-  Definition prefix_fun (c f: ident): ident :=
-    prefix fun_id (prefix c f).
-  Definition prefix_out (o f: ident): ident :=
-    prefix out (prefix o f).
+  Lemma self_atom: atom self.
+  Proof. prove_atom. Qed.
+  Lemma out_atom: atom out.
+  Proof. prove_atom. Qed.
+  Lemma temp_atom: atom temp.
+  Proof. prove_atom. Qed.
 
-  Lemma prefix_injective:
+  Lemma fun_id_atom: atom fun_id.
+  Proof. prove_atom. Qed.
+  Lemma sync_id_atom: atom sync_id.
+  Proof. prove_atom. Qed.
+  Lemma main_id_atom: atom main_id.
+  Proof. prove_atom. Qed.
+  Lemma main_proved_id_atom: atom main_proved_id.
+  Proof. prove_atom. Qed.
+  Lemma main_sync_id_atom: atom main_sync_id.
+  Proof. prove_atom. Qed.
+
+  Lemma step_atom: atom step.
+  Proof. prove_atom. Qed.
+  Lemma reset_atom: atom reset.
+  Proof. prove_atom. Qed.
+
+  Lemma glob_atom: atom glob.
+  Proof. prove_atom. Qed.
+
+  Lemma elab_atom: atom elab.
+  Proof. prove_atom. Qed.
+  Lemma norm1_atom: atom norm1.
+  Proof. prove_atom. Qed.
+  Lemma norm2_atom: atom norm2.
+  Proof. prove_atom. Qed.
+  Lemma obc2c_atom: atom obc2c.
+  Proof. prove_atom. Qed.
+
+  Hint Resolve step_atom reset_atom fun_id_atom sync_id_atom
+       out_atom main_id_atom main_proved_id_atom main_sync_id_atom
+       self_atom glob_atom elab_atom norm1_atom norm2_atom obc2c_atom.
+
+  Axiom prefix : ident -> ident -> ident.
+
+  Axiom prefix_not_atom:
+    forall pref id,
+      ~atom (prefix pref id).
+  Hint Resolve prefix_not_atom.
+
+  Axiom prefix_injective':
     forall pref id pref' id',
-      valid pref ->
-      valid pref' ->
+      pref <> pref' \/ id <> id' ->
+      prefix pref id <> prefix pref' id'.
+
+  Corollary prefix_injective:
+    forall pref id pref' id',
       prefix pref id = prefix pref' id' ->
       pref = pref' /\ id = id'.
   Proof.
-    unfold prefix.
-    intros ? ? ? ? ? ? H.
-    apply pos_of_str_injective in H.
-    apply append_sep_injectivity in H; auto.
-    destruct H as [E1 E2].
-    apply pos_to_str_injective in E1;
-      apply pos_to_str_injective in E2; auto.
+    intros * Heq.
+    destruct (ident_eq_dec pref pref'), (ident_eq_dec id id'); auto.
+    1-3:exfalso; eapply prefix_injective' in Heq; eauto.
   Qed.
 
-  Remark fun_id_valid: valid fun_id.
-  Proof.
-    unfold fun_id, valid, sep.
-    rewrite pos_to_str_equiv.
-    intro.
-    simpl in H.
-    destruct H as [|[|[|]]]; discriminate || auto.
-  Qed.
+  Definition prefix_fun (f c: ident): ident :=
+    prefix fun_id (prefix f c).
+  Definition prefix_out (f o: ident): ident :=
+    prefix out (prefix f o).
+  Definition prefix_temp (f c: ident): ident :=
+    prefix temp (prefix f c).
 
   Lemma prefix_fun_injective:
     forall c c' f f',
-      valid c ->
-      valid c' ->
       prefix_fun c f = prefix_fun c' f' ->
       c = c' /\ f = f'.
   Proof.
     unfold prefix_fun.
-    intros ? ? ? ? ? ? Eq.
-    pose proof fun_id_valid.
-    apply prefix_injective in Eq; auto; destruct Eq as [E Eq]; clear E.
-    now apply prefix_injective.
-  Qed.
-
-  Remark out_valid: valid out.
-  Proof.
-    unfold out, valid, sep.
-    rewrite pos_to_str_equiv.
-    intro.
-    simpl in H.
-    destruct H as [|[|[|]]]; discriminate || auto.
+    intros * Heq.
+    eapply prefix_injective, prefix_injective; eauto.
   Qed.
 
   Lemma prefix_out_injective:
     forall c c' f f',
-      valid c ->
-      valid c' ->
       prefix_out c f = prefix_out c' f' ->
       c = c' /\ f = f'.
   Proof.
     unfold prefix_out.
-    intros ? ? ? ? ? ? Eq.
-    pose proof out_valid.
-    apply prefix_injective in Eq; auto; destruct Eq as [E Eq]; clear E.
-    now apply prefix_injective.
-  Qed.
-
-  Inductive prefixed_fun: ident -> Prop :=
-    prefixed_fun_intro: forall c f, prefixed_fun (prefix_fun c f).
-
-  Lemma prefixed_fun_prefixed:
-    forall x, prefixed_fun x -> prefixed x.
-  Proof.
-    inversion 1; unfold prefix_fun; constructor.
-    (* apply fun_id_valid. *)
+    intros * Hneq.
+    eapply prefix_injective, prefix_injective; eauto.
   Qed.
 
   Lemma prefix_fun_not_out:
     forall c f c' f', prefix_fun c f <> prefix_out c' f'.
   Proof.
-    unfold prefix_fun, prefix_out.
-    intros * E.
-    pose proof fun_id_valid; pose proof out_valid.
-    apply prefix_injective in E; auto; destruct E as [E]; contradict E.
-    apply fun_not_out.
+    intros *.
+    eapply prefix_injective'. left.
+    prove_str_to_pos_neq.
   Qed.
 
-  Definition glob_id (id: ident): ident :=
-    pos_of_str ((pos_to_str id) ++ String sep EmptyString)%string.
-
-  Lemma last_det:
-    forall s s' a b,
-      (s ++ String a EmptyString = s' ++ String b EmptyString)%string ->
-      a = b.
-  Proof.
-    induction s, s'; simpl; intros.
-    - inv H; auto.
-    - inv H.
-      destruct s'; simpl in *; discriminate.
-    - inv H.
-      destruct s; simpl in *; discriminate.
-    - inv H.
-      eapply IHs; eauto.
-  Qed.
+  Definition prefix_glob (id: ident): ident :=
+    prefix glob id.
 
   Lemma main_not_glob:
-    forall x, glob_id x <> main_id.
+    forall x, prefix_glob x <> main_id.
   Proof.
-    unfold glob_id, main_id.
+    unfold prefix_glob.
     intros * H.
-    apply pos_of_str_injective in H.
-    change "main"%string with ("mai" ++ "n")%string in H.
-    apply last_det in H.
-    inv H.
+    eapply prefix_not_atom.
+    rewrite H; eauto.
   Qed.
 
   Lemma main_proved_not_glob:
-    forall x, glob_id x <> main_proved_id.
+    forall x, prefix_glob x <> main_proved_id.
   Proof.
-    unfold glob_id, main_proved_id.
+    unfold prefix_glob.
     intros * H.
-    apply pos_of_str_injective in H.
-    change "main_proved"%string with ("main_prove" ++ "d")%string in H.
-    apply last_det in H.
-    inv H.
+    eapply prefix_not_atom.
+    rewrite H; eauto.
   Qed.
 
   Lemma sync_not_glob:
-    forall x, glob_id x <> sync_id.
+    forall x, prefix_glob x <> sync_id.
   Proof.
-    unfold glob_id, sync_id.
+    unfold prefix_glob.
     intros * H.
-    apply pos_of_str_injective in H.
-    change "sync"%string with ("syn" ++ "c")%string in H.
-    apply last_det in H.
-    inv H.
+    eapply prefix_not_atom.
+    rewrite H; eauto.
   Qed.
 
   Lemma main_sync_not_glob:
-    forall x, glob_id x <> main_sync_id.
+    forall x, prefix_glob x <> main_sync_id.
   Proof.
-    unfold glob_id, main_sync_id.
+    unfold prefix_glob.
     intros * H.
-    apply pos_of_str_injective in H.
-    change "main_sync"%string with ("main_syn" ++ "c")%string in H.
-    apply last_det in H.
-    inv H.
+    eapply prefix_not_atom.
+    rewrite H; eauto.
   Qed.
 
   Lemma self_not_glob:
-    forall x, glob_id x <> self.
+    forall x, prefix_glob x <> self.
   Proof.
-    unfold glob_id, self.
+    unfold prefix_glob.
     intros * H.
-    apply pos_of_str_injective in H.
-    change "self"%string with ("sel" ++ "f")%string in H.
-    apply last_det in H.
-    inv H.
+    eapply prefix_not_atom.
+    rewrite H; eauto.
   Qed.
 
-  Lemma glob_id_injective:
+  Lemma prefix_glob_injective:
     forall x x',
-      valid x ->
-      valid x' ->
-      glob_id x = glob_id x' ->
+      prefix_glob x = prefix_glob x' ->
       x = x'.
   Proof.
-    unfold glob_id.
-    intros ? ? ? ? * H.
-    apply pos_of_str_injective in H.
-    apply append_sep_injectivity in H; auto; destruct H.
-    now apply pos_to_str_injective.
-  Qed.
-
-  Lemma glob_id_not_prefixed:
-    forall x,
-      valid x ->
-      ~ prefixed (glob_id x).
-  Proof.
-    intros * V H.
-    inversion H as [? ? E].
-    unfold prefix, glob_id in E.
-    apply pos_of_str_injective in E.
-    apply append_sep_injectivity in E; auto.
-    - destruct E as [? E]; contradict E.
-      apply pos_to_str_not_empty.
-    - intro Hin.
-      pose proof E as E'.
-      apply append_same_last in E'.
-      + destruct E' as [post E'].
-        rewrite E', append_assoc in E.
-        apply append_injectivity_left in E.
-        apply V.
-        rewrite <-E, In_str_app.
-        now left.
-      + intro; discriminate.
-  Qed.
-
-  Remark self_valid: valid self.
-  Proof.
-    unfold self, valid, sep.
-    rewrite pos_to_str_equiv.
-    intro.
-    simpl in H.
-    destruct H as [|[|[|[|]]]]; discriminate || auto.
-  Qed.
-
-  Lemma self_not_prefixed: ~ prefixed self.
-  Proof.
-    intro H.
-    inversion H as [? ? E].
-    unfold prefix, self in E.
-    apply pos_of_str_injective in E.
-    apply self_valid; unfold self; rewrite pos_to_str_equiv.
-    rewrite <- E, In_str_app; right; apply In_str_eq.
-  Qed.
-  Hint Resolve self_not_prefixed.
-
-  Lemma out_not_prefixed: ~ prefixed out.
-  Proof.
-    intro H.
-    inversion H as [? ? E].
-    unfold prefix, out in E.
-    apply pos_of_str_injective in E.
-    apply out_valid; unfold out; rewrite pos_to_str_equiv.
-    rewrite <- E, In_str_app; right; apply In_str_eq.
-  Qed.
-  Hint Resolve out_not_prefixed.
-
-  Remark sync_id_valid: valid sync_id.
-  Proof.
-    unfold sync_id, valid, sep.
-    rewrite pos_to_str_equiv.
-    intro.
-    simpl in H.
-    destruct H as [|[|[|[|]]]]; discriminate || auto.
-  Qed.
-
-  Lemma sync_not_prefixed: ~ prefixed sync_id.
-  Proof.
-    intro H.
-    inversion H as [? ? E].
-    unfold prefix, sync_id in E.
-    apply pos_of_str_injective in E.
-    apply sync_id_valid; unfold sync_id; rewrite pos_to_str_equiv.
-    rewrite <- E, In_str_app; right; apply In_str_eq.
+    intros * Hneq.
+    eapply prefix_injective; eauto.
   Qed.
 
   Lemma glob_not_in_prefixed:
     forall {A} (xs: list (ident * A)) ps,
-      Forall prefixed ps ->
-      Forall (fun x => valid (fst x)) xs ->
-      Forall (fun z => ~ In z ps) (map (fun xt => glob_id (fst xt)) xs).
+      Forall (fun x => exists m c, x = prefix_fun m c) ps ->
+      Forall (fun z => ~ In z ps) (map (fun xt => prefix_glob (fst xt)) xs).
   Proof.
-    induction xs as [|(x, t)]; simpl; intros * Pref Valid; auto.
-    inv Valid. constructor; auto.
+    induction xs as [|(x, t)]; simpl; intros * Pref; auto.
+    constructor; auto.
     intro Hin.
-    eapply Forall_forall in Hin; eauto.
-    contradict Hin; apply glob_id_not_prefixed; auto.
+    eapply Forall_forall in Hin; eauto; simpl in Hin.
+    destruct Hin as (?&?&Hpre).
+    eapply prefix_injective in Hpre as (Heq&?); subst.
+    contradict Heq. prove_str_to_pos_neq.
   Qed.
 
   Lemma NoDupMembers_glob:
     forall {A} (ys xs: list (ident * A)),
       NoDupMembers (xs ++ ys) ->
-      Forall (fun x => valid (fst x)) (xs ++ ys) ->
-      Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) xs))
-             (map (fun xt => glob_id (fst xt)) ys).
+      Forall (fun z => ~ In z (map (fun xt => prefix_glob (fst xt)) xs))
+             (map (fun xt => prefix_glob (fst xt)) ys).
   Proof.
-    induction ys as [|(y, t)]; simpl; intros * Nodup Valid; auto.
-    rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup];
-      rewrite Forall_app in Valid; destruct Valid as [Validxs Validys];
-        rewrite Forall_cons2 in Validys; destruct Validys as [Validy Validys].
+    induction ys as [|(y, t)]; simpl; intros * Nodup; auto.
+    rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup].
     constructor; auto.
-    - rewrite in_map_iff; intros ((x, t') & E & Hin).
-      simpl in E; apply glob_id_injective in E; auto.
-      + subst y.
-        apply Notin.
-        apply InMembers_app; left; eapply In_InMembers; eauto.
-      + eapply Forall_forall in Hin; eauto; now simpl in Hin.
-    - apply IHys; auto.
-      rewrite Forall_app; split; auto.
+    rewrite in_map_iff; intros ((x, t') & E & Hin).
+    eapply prefix_injective in E as (?&?); subst.
+    eapply Notin, In_InMembers, in_app; eauto.
   Qed.
 
+  (** *** Name generation with fresh identifiers *)
+
+  Axiom gensym : ident -> ident -> ident.
+
+  Axiom gensym_not_atom:
+    forall pref x,
+      ~atom (gensym pref x).
+
+  Axiom gensym_injective':
+    forall pref id pref' id',
+      pref <> pref' \/ id <> id' ->
+      gensym pref id <> gensym pref' id'.
+
+  Corollary gensym_injective:
+    forall pref id pref' id',
+      gensym pref id = gensym pref' id' ->
+      pref = pref' /\ id = id'.
+  Proof.
+    intros * Heq.
+    destruct (ident_eq_dec pref pref'), (ident_eq_dec id id'); auto.
+    1-3:exfalso; eapply gensym_injective' in Heq; eauto.
+  Qed.
+
+  Definition AtomOrGensym (prefs : PS.t) (id : ident) :=
+    atom id \/ PS.Exists (fun pre => exists n, id = gensym pre n) prefs.
+
+  Axiom prefix_gensym_injective':
+    forall pref id pref' id',
+      pref <> pref' ->
+      prefix pref id <> gensym pref' id'.
+
+  Corollary prefix_gensym_injective:
+    forall pref id pref' id',
+      prefix pref id = gensym pref' id' ->
+      pref = pref'.
+  Proof.
+    intros * Heq.
+    destruct (ident_eq_dec pref pref'); auto.
+    exfalso. eapply prefix_gensym_injective' in n; eauto.
+  Qed.
 End Ids.

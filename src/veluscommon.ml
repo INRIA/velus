@@ -51,3 +51,32 @@ let z_of_int n =
   else if n < 0 then BinNums.Zneg (positive_of_int n)
   else BinNums.Zpos (positive_of_int n)
 
+(** Prefixing an identifier with another
+    There are two properties to verify:
+    - ~atom (prefix pre x)
+    - pre <> pre' \/ x <> x' -> prefix pre id <> prefix pre' id'
+*)
+let prefix pre x =
+  let open Camlcoq in
+  (* Both pre and x should be in the table to guarantee injectivity *)
+  if (not (Hashtbl.mem string_of_atom pre) || not (Hashtbl.mem string_of_atom x))
+  then invalid_arg "prefix: both identifier should be in the table";
+  (* pre should be an atom to guarantee injectivity *)
+  let pres = extern_atom pre and xs = extern_atom x in
+  if String.contains pres '$' then invalid_arg "prefix: should be an atom";
+  intern_string (pres^"$"^xs)
+
+(** Generation of a fresh identifier.
+    Countrary to prefix, we dont get the prefixed ident from the table :
+    it's just a number.
+    There are two properties to verify:
+    - prefixed pre (gensym pre x)
+    - pre <> pre' \/ x <> x' -> gensym pre id <> gensym pre' id'
+*)
+let gensym pre x =
+  let open Camlcoq in
+  let pres = extern_atom pre in
+  (* pre should be an atom to guarantee injectivity *)
+  if String.contains pres '$'
+  then invalid_arg "gensym: the prefix should be an atom";
+  intern_string (pres^"$"^(string_of_int (P.to_int x)))

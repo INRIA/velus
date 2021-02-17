@@ -73,7 +73,7 @@ Module Type NLSYNTAX
         n_vout   : forall out, In out (map fst n_out) ->
                           ~ In out (vars_defined (filter is_fby n_eqs));
         n_nodup  : NoDupMembers (n_in ++ n_vars ++ n_out);
-        n_good   : Forall ValidId (n_in ++ n_vars ++ n_out) /\ valid n_name
+        n_good   : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst (n_in ++ n_vars ++ n_out)) /\ atom n_name
       }.
 
   (** ** Program *)

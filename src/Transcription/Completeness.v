@@ -159,11 +159,11 @@ Module Type COMPLETENESS
     unfold mmap_to_equation. rewrite Heqs'. reflexivity.
   Qed.
 
-  Lemma to_node_complete : forall n,
+  Lemma to_node_complete : forall n Hpref,
       normalized_node n ->
-      exists n', to_node n = OK n'.
+      exists n', to_node n Hpref = OK n'.
   Proof.
-    intros n Hnorm.
+    intros * Hnorm.
     unfold to_node.
     edestruct mmap_to_equation_complete' as [[? ?] H].
     4: (rewrite H; eauto).
@@ -184,24 +184,21 @@ Module Type COMPLETENESS
       destruct (Env.mem x (Env.from_list (n_out n))); congruence.
   Qed.
 
-  Lemma to_global_complete : forall G,
+  Lemma to_global_complete : forall G Hprefs,
       normalized_global G ->
-      exists G', to_global G = OK G'.
+      exists G', to_global G Hprefs = OK G'.
   Proof.
-    intros G Hnormed.
-    induction Hnormed.
+    induction G; intros * Hnormed; inv Hnormed.
     - exists nil. reflexivity.
-    - eapply to_node_complete in H.
-      destruct H as [n' Hn'].
-      destruct IHHnormed as [G' HG'].
-      exists (n'::G').
-      unfold to_global in *; simpl. unfold bind.
-      rewrite Hn'. rewrite HG'. reflexivity.
+    - unfold to_global; simpl.
+      eapply to_node_complete in H1 as (hd'&Hton). erewrite Hton; clear Hton; simpl.
+      eapply IHG in H2 as (tl'&HtoG). erewrite HtoG; clear HtoG; simpl.
+      eauto.
   Qed.
 
-  Theorem normalize_global_complete : forall G G',
-      normalize_global G = OK G' ->
-      exists G'', to_global G' = OK G''.
+  Theorem normalize_global_complete : forall G G' Hwl Hprefs Hprefs',
+      normalize_global G Hwl Hprefs = OK G' ->
+      exists G'', to_global G' Hprefs' = OK G''.
   Proof.
     intros * Hnorm.
     eapply to_global_complete.

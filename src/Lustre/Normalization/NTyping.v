@@ -1,5 +1,5 @@
 Require Import Omega.
-From Velus Require Import Common Ident.
+From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Coq Require Import List. Import List.ListNotations. Open Scope list_scope.
 From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LTyping.
@@ -969,10 +969,10 @@ Module Type NTYPING
   Definition st_clocks' (st : fresh_st (Op.type * clock * bool)) : list clock :=
     map (fun '(_, (_, cl, _)) => cl) (st_anns st).
 
-  Fact fresh_ident_wt_clock : forall vars ty cl id st st',
+  Fact fresh_ident_wt_clock : forall pref vars ty cl id st st',
       Forall (wt_clock vars) (st_clocks st) ->
       wt_clock vars cl ->
-      fresh_ident (ty, cl) st = (id, st') ->
+      fresh_ident pref (ty, cl) st = (id, st') ->
       Forall (wt_clock vars) (st_clocks st').
   Proof.
     intros * Hclocks Hwt Hfresh.
@@ -1257,9 +1257,9 @@ Module Type NTYPING
       solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma unnest_node_wt : forall G n Hwl,
+  Lemma unnest_node_wt : forall G n Hwl Hpref,
       wt_node G n ->
-      wt_node G (unnest_node n Hwl).
+      wt_node G (unnest_node n Hwl Hpref).
   Proof.
     intros * [Hclin [Hclout [Hclvars Heq]]].
     unfold unnest_node.
@@ -1291,9 +1291,9 @@ Module Type NTYPING
       + solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma unnest_global_wt : forall G Hwl,
+  Lemma unnest_global_wt : forall G Hwl Hprefs,
       wt_global G ->
-      wt_global (unnest_global G Hwl).
+      wt_global (unnest_global G Hwl Hprefs).
   Proof.
     induction G; intros * Hwt; simpl; inv Hwt.
     - constructor.
@@ -1484,10 +1484,10 @@ Module Type NTYPING
       eapply IHeqs in Hnorm; eauto. solve_forall; repeat solve_incl; eauto.
   Qed.
 
-  Fact fresh_ident_wt_clock' : forall vars ty cl b id st st',
+  Fact fresh_ident_wt_clock' : forall pref vars ty cl b id st st',
       Forall (wt_clock vars) (st_clocks' st) ->
       wt_clock vars cl ->
-      fresh_ident (ty, cl, b) st = (id, st') ->
+      fresh_ident pref (ty, cl, b) st = (id, st') ->
       Forall (wt_clock vars) (st_clocks' st').
   Proof.
     intros * Hclocks Hwt Hfresh.
@@ -1579,9 +1579,9 @@ Module Type NTYPING
       eapply IHeqs in Hnorm; eauto. solve_forall; repeat solve_incl; eauto.
   Qed.
 
-  Lemma normfby_node_wt : forall G to_cut n Hunt,
+  Lemma normfby_node_wt : forall G to_cut n Hunt Hpref,
       wt_node G n ->
-      wt_node G (normfby_node to_cut n Hunt).
+      wt_node G (normfby_node to_cut n Hunt Hpref).
   Proof.
     intros * [Hclin [Hclout [Hclvars Heq]]].
     unfold normfby_node.
@@ -1610,9 +1610,9 @@ Module Type NTYPING
       + solve_forall; repeat solve_incl.
   Qed.
 
-  Lemma normfby_global_wt : forall G Hunt,
+  Lemma normfby_global_wt : forall G Hunt Hprefs,
       wt_global G ->
-      wt_global (normfby_global G Hunt).
+      wt_global (normfby_global G Hunt Hprefs).
   Proof.
     induction G; intros * Hwt; simpl; inv Hwt.
     - constructor.
@@ -1628,12 +1628,12 @@ Module Type NTYPING
 
   (** ** Conclusion *)
 
-  Lemma normalize_global_wt : forall (G : global_wl) G',
+  Lemma normalize_global_wt : forall G G' Hwl Hprefs,
       wt_global G ->
-      normalize_global G = Errors.OK G' ->
+      normalize_global G Hwl Hprefs = Errors.OK G' ->
       wt_global G'.
   Proof.
-    intros [G Hwl] * Hwt Hnorm.
+    intros * Hwt Hnorm.
     unfold normalize_global in Hnorm.
     destruct (Caus.check_causality _); inv Hnorm.
     eapply normfby_global_wt, unnest_global_wt, Hwt.

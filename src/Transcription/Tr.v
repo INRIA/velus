@@ -260,7 +260,8 @@ Module Type TR
   Defined.
 
   Unset Program Cases.
-  Program Definition to_node (n : L.node) : res NL.node :=
+  Program Definition to_node (n : L.node)
+    (Hpref : PS.Equal (L.n_prefixes n) (PSP.of_list gensym_prefs)) : res NL.node :=
     let envo := Env.from_list n.(L.n_out) in
     let env := Env.adds' n.(L.n_vars) (Env.adds' n.(L.n_in) envo) in
     let is_not_out :=
@@ -334,16 +335,29 @@ Module Type TR
 
   (* NL.n_good obligation *)
   Next Obligation.
-    exact (L.n_good n).
+    pose proof (L.n_good n) as (Hgood&Hat).
+    split; auto.
+    repeat rewrite map_app in *.
+    eapply Forall_impl; [|eapply Forall_incl; eauto].
+    - intros * [?|(pref&?&?&?)]; subst; [left|right]; auto.
+      exists pref. rewrite <- Hpref. eauto.
+    - apply incl_appr', incl_appr', incl_appl, incl_refl.
   Qed.
 
-  Definition to_global (g : L.global) : res NL.global :=
-    mmap to_node g.
-
+  Fixpoint to_global (g : L.global) :
+    Forall (fun n => PS.Equal (L.n_prefixes n) (PSP.of_list gensym_prefs)) g ->
+    res NL.global.
+  Proof.
+    destruct g as [|hd tl]; intros Hprefs.
+    - exact (OK []).
+    - refine (bind (to_node hd _) (fun hd' => bind (to_global tl _) (fun tl' => OK (hd'::tl')))).
+      + inv Hprefs; auto.
+      + inv Hprefs; auto.
+  Defined.
 
   Ltac tonodeInv H :=
     match type of H with
-    | (to_node ?n = OK _) =>
+    | (to_node ?n _ = OK _) =>
       let Hs := fresh in
       let Hmmap := fresh "Hmmap" in
       unfold to_node in H;
@@ -378,50 +392,46 @@ Module Type TR
     simpl. right. now apply IHG.
   Qed.
 
-  Lemma to_node_name n n' :
-    to_node n = OK n' -> L.n_name n = NL.n_name n'.
+  Lemma to_node_name n n' Hpref :
+    to_node n Hpref = OK n' -> L.n_name n = NL.n_name n'.
   Proof.
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
-  Lemma to_node_in n n' :
-    to_node n = OK n' -> L.n_in n = NL.n_in n'.
+  Lemma to_node_in n n' Hpref :
+    to_node n Hpref = OK n' -> L.n_in n = NL.n_in n'.
   Proof.
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
-  Lemma to_node_out n n' :
-    to_node n = OK n' -> L.n_out n = NL.n_out n'.
+  Lemma to_node_out n n' Hpref :
+    to_node n Hpref = OK n' -> L.n_out n = NL.n_out n'.
   Proof.
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
-  Lemma to_node_vars n n' :
-    to_node n = OK n' -> L.n_vars n = NL.n_vars n'.
+  Lemma to_node_vars n n' Hpref :
+    to_node n Hpref = OK n' -> L.n_vars n = NL.n_vars n'.
   Proof.
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
-  Lemma find_node_global (G: L.global) (P: NL.global) (f: ident) (n: L.node) :
-    to_global G = OK P ->
+  Lemma find_node_global (G: L.global) Hprefs (P: NL.global) (f: ident) (n: L.node) :
+    to_global G Hprefs = OK P ->
     L.find_node f G = Some n ->
-    exists n', NL.find_node f P = Some n' /\ to_node n = OK n'.
+    exists n' Hpref, NL.find_node f P = Some n' /\ to_node n Hpref = OK n'.
   Proof.
     revert P.
-    induction G; intros P Htrans Hfind. inversion Hfind.
+    induction G; intros * Htrans Hfind. inversion Hfind.
     apply find_node_hd in Hfind.
-    destruct Hfind.
-    - inv H. apply mmap_cons in Htrans.
-      destruct Htrans as [ n' [ l' [ Hp [ Hnode Hmmap ]]]]; subst.
-      exists n'.
-      remember Hnode as Heq; clear HeqHeq. apply to_node_name in Heq.
-      split; auto. simpl. rewrite <- Heq. rewrite H0. reflexivity.
-    - destruct H as [ Hneq Hfind ].
-      apply mmap_cons in Htrans.
-      destruct Htrans as [ n' [P' [nP [Hton  Htrans]]]]. subst.
-      apply IHG in Htrans; auto. destruct Htrans. destruct H as [ H Hnode ].
-      exists x. split; auto. apply NL.find_node_other; auto.
-      apply to_node_name in Hton. rewrite <- Hton. apply ident_eqb_neq. auto.
+    destruct Hfind as [(Heq&?)|(Hneq&Hfind)]; subst.
+    - monadInv Htrans.
+      exists x. eexists; split; eauto.
+      simpl. apply to_node_name in EQ. rewrite <- EQ, Heq. reflexivity.
+    - monadInv Htrans.
+      eapply IHG in EQ1 as (n'&?&P'&nP); eauto.
+      exists n'. eexists; split; eauto. simpl.
+      apply to_node_name in EQ. rewrite <- EQ, Hneq; auto.
   Qed.
 
   Section Envs_eq.
@@ -808,6 +818,15 @@ Module Type TR
     Qed.
 
   End Clock_operations.
+
+  Fact to_global_names : forall name G G' Hprefs,
+      Forall (fun n => (name <> L.n_name n)%type) G ->
+      to_global G Hprefs = OK G' ->
+      Forall (fun n => (name <> NL.n_name n)%type) G'.
+  Proof.
+    induction G; intros * Hnames Htog; inv Hnames; monadInv Htog; constructor; eauto.
+    erewrite to_node_name in H1; eauto.
+  Qed.
 
   Ltac simpl_Foralls :=
     repeat

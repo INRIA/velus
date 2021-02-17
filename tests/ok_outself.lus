@@ -1,0 +1,3 @@
+node f(self : int) returns (out : bool);
+let out = self < 42;
+tel
