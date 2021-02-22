@@ -2278,6 +2278,21 @@ Section Forall2.
     induction Hfa2; now constructor.
   Qed.
 
+  Lemma Forall2_combine'':
+    forall P (xs : list A) (ys : list B),
+      length xs = length ys ->
+      Forall (fun '(x, y) => P x y) (combine xs ys) ->
+      Forall2 P xs ys.
+  Proof.
+    intros * Hlen Hf.
+    eapply Forall2_forall2. split; auto.
+    intros * Hn Hnth1 Hnth2.
+    eapply Forall_forall in Hf; eauto.
+    2:eapply nth_In with (d:=(a, b)); eauto; rewrite combine_length, <-Hlen, Nat.min_id; eauto.
+    rewrite combine_nth in Hf; eauto.
+    congruence.
+  Qed.
+
   Lemma Forall2_combine_ll: forall P (xs : list A) (ys : list B) (zs : list C),
       Forall2 P xs ys ->
       length zs = length xs ->

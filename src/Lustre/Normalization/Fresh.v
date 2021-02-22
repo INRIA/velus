@@ -841,6 +841,20 @@ Module Fresh(Ids : IDS).
       inv Hforall. eapply IHa; eauto.
     Qed.
 
+    Fact map_bind2_st_valid_reuse : forall a a1s a2s st st' pref aft reprefs reu,
+        map_bind2 a st = (a1s, a2s, st') ->
+        Forall (fun a => forall a1 a2 st st',
+                    k a st = (a1, a2, st') ->
+                    st_valid_reuse st pref aft reprefs reu ->
+                    st_valid_reuse st' pref aft reprefs reu) a ->
+        st_valid_reuse st pref aft reprefs reu ->
+        st_valid_reuse st' pref aft reprefs reu.
+    Proof.
+      induction a; intros * Hmap Hforall Hvalid;
+        simpl in *; repeat inv_bind; auto.
+      inv Hforall. eapply IHa; eauto.
+    Qed.
+
     Fact map_bind2_st_follows : forall a a1s a2s st st',
         map_bind2 a st = (a1s, a2s, st') ->
         Forall (fun a => forall a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') a ->

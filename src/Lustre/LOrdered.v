@@ -243,7 +243,7 @@ Module Type LORDERED
     eapply wl_equation_Is_node_in_eq; eauto.
   Qed.
 
-  Lemma wl_global_ordered_nodes : forall G,
+  Lemma wl_global_Ordered_nodes : forall G,
       NoDup (List.map n_name G) ->
       wl_global G ->
       Ordered_nodes G.

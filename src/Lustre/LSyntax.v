@@ -557,6 +557,14 @@ Module Type LSYNTAX
       f_equal; auto. apply nclockof_annot.
   Qed.
 
+  Corollary length_nclocksof_annots : forall es,
+      length (nclocksof es) = length (annots es).
+  Proof.
+    intros es.
+    rewrite nclocksof_annots.
+    apply map_length.
+  Qed.
+
   Lemma clockof_nclockof:
     forall e,
       clockof e = map stripname (nclockof e).

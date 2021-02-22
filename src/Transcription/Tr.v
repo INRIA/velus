@@ -355,6 +355,10 @@ Module Type TR
       + inv Hprefs; auto.
   Defined.
 
+  (** Helper for the l_to_nl function *)
+  Program Definition to_global' (G : {G | Forall (fun n => PS.Equal (L.n_prefixes n) (PSP.of_list gensym_prefs)) G}) :
+    res NL.global := to_global G _.
+
   Ltac tonodeInv H :=
     match type of H with
     | (to_node ?n _ = OK _) =>
@@ -432,6 +436,20 @@ Module Type TR
       eapply IHG in EQ1 as (n'&?&P'&nP); eauto.
       exists n'. eexists; split; eauto. simpl.
       apply to_node_name in EQ. rewrite <- EQ, Hneq; auto.
+  Qed.
+
+  Lemma find_node_global' (G: L.global) Hprefs (P: NL.global) (f: ident) (n': NL.node) :
+    to_global G Hprefs = OK P ->
+    NL.find_node f P = Some n' ->
+    exists n Hpref, L.find_node f G = Some n /\ to_node n Hpref = OK n'.
+  Proof.
+    revert P.
+    induction G; intros * Htrans Hfind; simpl in *; monadInv Htrans; simpl in *; try congruence.
+    destruct (ident_eqb (NL.n_name x) f) eqn:Hname.
+    - clear EQ1. inv Hfind.
+      erewrite to_node_name, Hname; eauto.
+    - eapply IHG in EQ1 as (n&?&Hfind'&Hton); eauto.
+      erewrite to_node_name, Hname; eauto.
   Qed.
 
   Section Envs_eq.

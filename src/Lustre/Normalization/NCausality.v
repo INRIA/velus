@@ -830,7 +830,7 @@ Module Type NCAUSALITY
   Qed.
 
   Fact fby_equation_causal : forall G vars to_cut eq eqs eqs' st st',
-      Forall unnested_equation (eq::eqs) ->
+      Forall (unnested_equation G) (eq::eqs) ->
       wc_env vars ->
       wc_equation G vars eq ->
       causal_inv vars (eq::eqs) st ->
@@ -907,7 +907,7 @@ Module Type NCAUSALITY
   Fact fby_equations_causal' :
     forall G vars to_cut eqs ceqs eqs' st st',
       wc_env vars ->
-      Forall unnested_equation (ceqs++eqs) ->
+      Forall (unnested_equation G) (ceqs++eqs) ->
       Forall (wc_equation G vars) eqs ->
       causal_inv vars (ceqs++eqs) st ->
       fby_equations to_cut eqs st = (eqs', st') ->
@@ -917,11 +917,11 @@ Module Type NCAUSALITY
       unfold fby_equations in Hfby; simpl in *; repeat inv_bind; simpl; auto.
     inv Hwc.
     rewrite <- Permutation_middle in Hinv.
-    eapply fby_equation_causal in H as Hcaus'. 2,3,4,5:eauto.
+    eapply fby_equation_causal in H as Hcaus'. 3,4,5:eauto.
     2:rewrite Permutation_middle; eauto.
     rewrite <- app_assoc, (Permutation_app_comm eqs), app_assoc in Hcaus'.
-    eapply IHeqs in Hcaus'; eauto.
-    - rewrite <- app_assoc in Hcaus'; eauto.
+    eapply IHeqs in Hcaus'; auto.
+    - rewrite app_assoc; eauto.
     - apply Forall_app in Hunt as [Hunt1 Hunt2]. inv Hunt2.
       repeat rewrite Forall_app. repeat split; auto.
       eapply fby_equation_unnested_eq; eauto.
@@ -931,7 +931,7 @@ Module Type NCAUSALITY
   Corollary fby_equations_causal :
     forall G vars to_cut eqs eqs' st st',
       wc_env vars ->
-      Forall unnested_equation eqs ->
+      Forall (unnested_equation G) eqs ->
       Forall (wc_equation G vars) eqs ->
       causal_inv vars eqs st ->
       fby_equations to_cut eqs st = (eqs', st') ->
@@ -963,7 +963,7 @@ Module Type NCAUSALITY
       wc_global G ->
       wc_node G n ->
       node_causal n ->
-      node_causal (normfby_node to_cut n Hunt Hpref).
+      node_causal (normfby_node G to_cut n Hunt Hpref).
   Proof.
     intros * HwcG Hwc Hcaus.
     destruct Hcaus as (v&a&g&Hg).

@@ -390,26 +390,30 @@ Module Type NORMFBY
       normalized_constant e ->
       normalized_constant (Ewhen [e] x b ([ty], cl)).
 
-  Inductive normalized_equation : PS.t -> equation -> Prop :=
-  | normalized_eq_Eapp : forall out xs f es lann,
+  Inductive normalized_equation G : PS.t -> equation -> Prop :=
+  | normalized_eq_Eapp : forall out xs f n es lann,
       Forall normalized_lexp es ->
-      normalized_equation out (xs, [Eapp f es None lann])
-  | normalized_eq_Eapp_reset : forall out xs f es x ty cl lann,
+      find_node f G = Some n ->
+      Forall2 noops_exp (map (fun '(_, (_, ck)) => ck) n.(n_in)) es ->
+      normalized_equation G out (xs, [Eapp f es None lann])
+  | normalized_eq_Eapp_reset : forall out xs f n es x ty cl lann,
       Forall normalized_lexp es ->
-      normalized_equation out (xs, [Eapp f es (Some (Evar x (ty, cl))) lann])
+      find_node f G = Some n ->
+      Forall2 noops_exp (map (fun '(_, (_, ck)) => ck) n.(n_in)) es ->
+      normalized_equation G out (xs, [Eapp f es (Some (Evar x (ty, cl))) lann])
   | normalized_eq_Efby : forall out x e0 e ann,
       ~PS.In x out ->
       normalized_constant e0 ->
       normalized_lexp e ->
-      normalized_equation out ([x], [Efby [e0] [e] [ann]])
+      normalized_equation G out ([x], [Efby [e0] [e] [ann]])
   | normalized_eq_cexp : forall out x e,
       normalized_cexp e ->
-      normalized_equation out ([x], [e]).
+      normalized_equation G out ([x], [e]).
 
-  Definition normalized_node (n : node) :=
-    Forall (normalized_equation (ps_from_list (List.map fst (n_out n)))) (n_eqs n).
+  Definition normalized_node G (n : node) :=
+    Forall (normalized_equation G (ps_from_list (List.map fst (n_out n)))) (n_eqs n).
 
-  Definition normalized_global (G : global) := Forall normalized_node G.
+  Definition normalized_global (G : global) := ForallTail (fun n G => normalized_node G n) G.
 
   Hint Constructors normalized_constant normalized_equation.
 
@@ -423,11 +427,30 @@ Module Type NORMFBY
     induction Hconst; auto.
   Qed.
 
-  Fact normalized_eq_unnested_eq : forall to_cut eq,
-      normalized_equation to_cut eq ->
-      unnested_equation eq.
+  Fact normalized_eq_unnested_eq : forall G to_cut eq,
+      normalized_equation G to_cut eq ->
+      unnested_equation G eq.
   Proof.
-    intros * Hnormed. inv Hnormed; auto using constant_normalized_lexp.
+    intros * Hnormed. inv Hnormed; eauto using constant_normalized_lexp.
+  Qed.
+
+  Fact normalized_node_unnested_node: forall G n,
+      normalized_node G n ->
+      unnested_node G n.
+  Proof.
+    intros * Hnormed.
+    unfold normalized_node, unnested_node in *.
+    solve_forall.
+    eapply normalized_eq_unnested_eq; eauto.
+  Qed.
+
+  Fact normalized_global_unnested_global : forall G,
+      normalized_global G ->
+      unnested_global G.
+  Proof.
+    intros * Hnormed.
+    induction Hnormed; constructor; auto.
+    apply normalized_node_unnested_node; auto.
   Qed.
 
   (** *** Preservation of wl property *)
@@ -438,7 +461,6 @@ Module Type NORMFBY
   Proof.
     induction ck; intros *; simpl; auto.
   Qed.
-
 
   Fact add_whens_wl : forall G ty ck e,
       numstreams e = 1 ->
@@ -611,9 +633,9 @@ Module Type NORMFBY
     - induction Hconst...
   Qed.
 
-  Fact init_var_for_clock_unnested_eq : forall ck id eqs' st st',
+  Fact init_var_for_clock_unnested_eq : forall G ck id eqs' st st',
       init_var_for_clock ck st = (id, eqs', st') ->
-      Forall unnested_equation eqs'.
+      Forall (unnested_equation G) eqs'.
   Proof.
     intros * Hinit.
     unfold init_var_for_clock in Hinit.
@@ -624,12 +646,12 @@ Module Type NORMFBY
       1,2:eapply add_whens_normalized_lexp; eauto.
   Qed.
 
-  Fact init_var_for_clock_normalized_eq : forall cl id eqs' out st st',
+  Fact init_var_for_clock_normalized_eq : forall G cl id eqs' out st st',
       st_valid_after st out ->
       init_var_for_clock cl st = (id, eqs', st') ->
-      Forall (normalized_equation out) eqs'.
+      Forall (normalized_equation G out) eqs'.
   Proof.
-    intros cl id eqs' out st st' Hvalid Hinit.
+    intros * Hvalid Hinit.
     unfold init_var_for_clock in Hinit.
     destruct (find _ _).
     - destruct p. inv Hinit. constructor.
@@ -640,27 +662,27 @@ Module Type NORMFBY
       + apply add_whens_normalized_lexp. auto.
   Qed.
 
-  Fact fby_iteexp_unnested_eq : forall e0 e a e' eqs' st st',
+  Fact fby_iteexp_unnested_eq : forall G e0 e a e' eqs' st st',
       normalized_lexp e0 ->
       normalized_lexp e ->
       fby_iteexp e0 e a st = (e', eqs', st') ->
-      Forall unnested_equation eqs'.
+      Forall (unnested_equation G) eqs'.
   Proof.
     intros * Hnormed1 Hnormed2 Hfby. destruct a as [ty [ck name]].
     unfold fby_iteexp in Hfby.
     repeat inv_bind; auto.
     repeat constructor; auto.
     - apply add_whens_normalized_lexp; auto.
-    - eapply init_var_for_clock_unnested_eq in H; auto.
+    - eapply init_var_for_clock_unnested_eq in H; eauto.
   Qed.
 
-  Fact fby_iteexp_normalized_eq : forall e0 e a e' eqs' out st st',
+  Fact fby_iteexp_normalized_eq : forall G e0 e a e' eqs' out st st',
       st_valid_after st out ->
       normalized_lexp e ->
       fby_iteexp e0 e a st = (e', eqs', st') ->
-      Forall (normalized_equation out) eqs'.
+      Forall (normalized_equation G out) eqs'.
   Proof.
-    intros e0 e [ty [ck name]] e' eqs' out st st' Hvalid He Hfby.
+    intros G e0 e [ty [ck name]] e' eqs' out st st' Hvalid He Hfby.
     unfold fby_iteexp in Hfby.
     repeat inv_bind; constructor.
     - assert (st_valid_after x1 out) as Hvalid' by eauto.
@@ -670,10 +692,10 @@ Module Type NORMFBY
     - eapply init_var_for_clock_normalized_eq in H; eauto.
   Qed.
 
-  Fact fby_equation_unnested_eq : forall to_cut eq eqs' st st',
-      unnested_equation eq ->
+  Fact fby_equation_unnested_eq : forall G to_cut eq eqs' st st',
+      unnested_equation G eq ->
       fby_equation to_cut eq st = (eqs', st') ->
-      Forall unnested_equation eqs'.
+      Forall (unnested_equation G) eqs'.
   Proof.
     intros * Hunt Hfby.
     inv_fby_equation Hfby to_cut eq.
@@ -682,28 +704,28 @@ Module Type NORMFBY
       constructor; constructor; auto.
       inv Hunt; constructor; auto. 1,2:inv H1; inv H0.
     - inv Hunt. 2:inv H1; inv H0.
-      assert (H':=H). eapply fby_iteexp_unnested_eq in H'; eauto.
-      constructor; auto.
+      assert (H':=H). eapply fby_iteexp_unnested_eq in H'; auto.
+      constructor; eauto.
       destruct x2 as (?&?&?). repeat inv_bind.
-      repeat constructor; auto.
+      repeat constructor; eauto.
     - destruct x2 as (?&?&?). repeat inv_bind.
       repeat constructor; auto.
       3:eapply init_var_for_clock_unnested_eq in H; eauto.
       1-2:(clear - Hunt; inv Hunt; auto; inv H0; inv H).
   Qed.
 
-  Fact fby_equation_normalized_eq : forall out to_cut eq eqs' st st',
+  Fact fby_equation_normalized_eq : forall G out to_cut eq eqs' st st',
       st_valid_after st out ->
-      unnested_equation eq ->
+      unnested_equation G eq ->
       PS.Subset out to_cut ->
       fby_equation to_cut eq st = (eqs', st') ->
-      Forall (normalized_equation out) eqs'.
+      Forall (normalized_equation G out) eqs'.
   Proof.
     intros * Hvalid Hunt Hsub Hfby.
-    inv Hunt; simpl in *; repeat inv_bind; auto.
-    1,2:destruct_to_singl xs; repeat inv_bind; auto.
-    - (* fby *)
-      destruct ann0 as (?&?&?); destruct (is_constant e0) eqn:Hconst;
+    inv Hunt; simpl in *; repeat inv_bind; eauto.
+    1,2:destruct_to_singl xs; repeat inv_bind; eauto.
+    (* fby *)
+    - destruct ann0 as (?&?&?); destruct (is_constant e0) eqn:Hconst;
         [apply is_constant_normalized_constant in Hconst;
          destruct PS.mem eqn:Hmem; [|apply PSE.mem_4 in Hmem]|]; repeat inv_bind.
       1-3:repeat constructor; auto.
@@ -720,12 +742,12 @@ Module Type NORMFBY
       inv H0; repeat inv_bind; auto.
   Qed.
 
-  Fact fby_equations_normalized_eq : forall out to_cut eqs eqs' st st',
+  Fact fby_equations_normalized_eq : forall G out to_cut eqs eqs' st st',
       st_valid_after st out ->
-      Forall unnested_equation eqs ->
+      Forall (unnested_equation G) eqs ->
       PS.Subset out to_cut ->
       fby_equations to_cut eqs st = (eqs', st') ->
-      Forall (normalized_equation out) eqs'.
+      Forall (normalized_equation G out) eqs'.
   Proof.
     induction eqs; intros * Hvalid Hunt Hsub Hfby;
       unfold fby_equations in Hfby; repeat inv_bind; simpl; auto.
@@ -748,9 +770,9 @@ Module Type NORMFBY
     rewrite IHHconst...
   Qed.
 
-  Lemma fby_equations_no_anon : forall out to_cut eqs eqs' st st',
+  Lemma fby_equations_no_anon : forall G out to_cut eqs eqs' st st',
       st_valid_after st out ->
-      Forall unnested_equation eqs ->
+      Forall (unnested_equation G) eqs ->
       PS.Subset out to_cut ->
       fby_equations to_cut eqs st = (eqs', st') ->
       anon_in_eqs eqs' = [].
@@ -779,8 +801,8 @@ Module Type NORMFBY
     + apply Hnin1; right; left; auto.
   Qed.
 
-  Program Definition normfby_node (to_cut : PS.t) (n : node)
-          (Hunt : unnested_node n)
+  Program Definition normfby_node G (to_cut : PS.t) (n : node)
+          (Hunt : unnested_node G n)
           (Hpref : n_prefixes n = norm1_prefs) : node :=
     let anon := anon_in_eqs (n_eqs n) in
     let eqs := fby_equations (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) init_st in
@@ -862,23 +884,69 @@ Module Type NORMFBY
   Qed.
 
   Fixpoint normfby_global (G : global) :
-    Forall unnested_node G ->
+    unnested_global G ->
     Forall (fun n => n_prefixes n = norm1_prefs) G ->
     global.
   Proof.
     destruct G as [|hd tl]; intros Hunt Hprefs.
     - exact [].
-    - refine ((normfby_node PS.empty hd _ _)::(normfby_global tl _ _)).
+    - refine ((normfby_node tl PS.empty hd _ _)::(normfby_global tl _ _)).
       + inv Hunt; auto.
       + inv Hprefs; auto.
       + inv Hunt; auto.
       + inv Hprefs; auto.
   Defined.
 
+  (** *** normfby_global produces an equivalent global *)
+
+  Fact normfby_global_eq : forall G Hunt Hprefs,
+      global_iface_eq G (normfby_global G Hunt Hprefs).
+  Proof.
+    induction G; intros *.
+    - reflexivity.
+    - simpl. apply global_iface_eq_cons; auto.
+  Qed.
+
+  Fact normfby_global_names : forall a G Hunt Hprefs,
+      Forall (fun n => (n_name a <> n_name n)%type) G ->
+      Forall (fun n => (n_name a <> n_name n)%type) (normfby_global G Hunt Hprefs).
+  Proof.
+    induction G; intros * Hnames; simpl.
+    - constructor.
+    - inv Hnames.
+      constructor; eauto.
+  Qed.
+
   (** *** After normalization, a global is normalized *)
 
-  Fact normfby_node_normalized_node : forall n to_cut Hunt Hpref,
-      normalized_node (normfby_node to_cut n Hunt Hpref).
+  Lemma iface_eq_normalized_equation : forall G G' to_cut eq,
+      global_iface_eq G G' ->
+      normalized_equation G to_cut eq ->
+      normalized_equation G' to_cut eq.
+  Proof.
+    intros * Heq Hunt.
+    inv Hunt; try constructor; eauto.
+    - specialize (Heq f).
+      rewrite H0 in Heq. inv Heq. destruct H4 as (_&_&?&_).
+      econstructor; eauto. congruence.
+    - specialize (Heq f).
+      rewrite H0 in Heq. inv Heq. destruct H4 as (_&_&?&_).
+      econstructor; eauto. congruence.
+  Qed.
+
+  Corollary iface_eq_normalized_node : forall G G' n,
+      global_iface_eq G G' ->
+      normalized_node G n ->
+      normalized_node G' n.
+  Proof.
+    intros * Hglob Hunt.
+    unfold normalized_node in *.
+    eapply Forall_impl; [|eauto]. intros.
+    eapply iface_eq_normalized_equation; eauto.
+  Qed.
+
+  Fact normfby_node_normalized_node : forall G n to_cut Hunt Hpref,
+      normalized_node G (normfby_node G to_cut n Hunt Hpref).
   Proof.
     intros *.
     unfold normfby_node, normalized_node; simpl.
@@ -898,8 +966,9 @@ Module Type NORMFBY
   Fact normfby_global_normalized_global : forall G Hunt Hprefs,
       normalized_global (normfby_global G Hunt Hprefs).
   Proof.
-    induction G; intros; simpl; constructor.
-    - eapply normfby_node_normalized_node.
+    induction G; intros; constructor.
+    - eapply iface_eq_normalized_node. eapply normfby_global_eq.
+      eapply normfby_node_normalized_node.
     - eapply IHG.
   Qed.
 
@@ -911,26 +980,6 @@ Module Type NORMFBY
   Proof.
     induction G; intros * Hnorm; simpl in *; inv Hnorm; constructor; simpl; eauto.
     inv Hprefs. congruence.
-  Qed.
-
-  (** *** normfby_global produces an equivalent global *)
-
-  Fact normfby_global_eq : forall G Hunt Hprefs,
-      global_iface_eq G (normfby_global G Hunt Hprefs).
-  Proof.
-    induction G; intros Hunt Hprefs.
-    - reflexivity.
-    - simpl. apply global_iface_eq_cons; auto.
-  Qed.
-
-  Fact normfby_global_names : forall a G Hunt Hprefs,
-      Forall (fun n => (n_name a <> n_name n)%type) G ->
-      Forall (fun n => (n_name a <> n_name n)%type) (normfby_global G Hunt Hprefs).
-  Proof.
-    induction G; intros * Hnames; simpl.
-    - constructor.
-    - inv Hnames.
-      constructor; eauto.
   Qed.
 End NORMFBY.
 

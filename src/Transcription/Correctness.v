@@ -5,7 +5,7 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
-From Velus Require Import Transcription.Tr.
+From Velus Require Import Transcription.Tr Transcription.TrOrdered.
 
 From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
@@ -433,7 +433,7 @@ Module Type CORRECTNESS
 
   Lemma sem_toeq :
     forall cenv out G H P env envo eq eq' b,
-      LN.NormFby.normalized_equation out eq ->
+      LN.NormFby.normalized_equation G out eq ->
       LT.wt_equation G (idty cenv) eq ->
       LC.wc_equation G (idck cenv) eq ->
       LC.wc_global G ->
@@ -615,7 +615,7 @@ Module Type CORRECTNESS
 
   Lemma sem_toeqs' :
     forall cenv out G H P env envo eqs eqs' b,
-      Forall (LN.NormFby.normalized_equation out) eqs ->
+      Forall (LN.NormFby.normalized_equation G out) eqs ->
       Forall (LT.wt_equation G (idty cenv)) eqs ->
       Forall (LC.wc_equation G (idck cenv)) eqs ->
       LC.wc_global G ->
@@ -639,7 +639,7 @@ Module Type CORRECTNESS
 
   Lemma sem_toeqs :
     forall G n H P env envo eqs' ins,
-      LN.NormFby.normalized_node n ->
+      LN.NormFby.normalized_node G n ->
       Forall (LT.wt_equation G (idty (L.n_in n ++ L.n_vars n ++ L.n_out n))) (L.n_eqs n) ->
       Forall (LC.wc_equation G (idck (L.n_in n ++ L.n_vars n ++ L.n_out n))) (L.n_eqs n) ->
       LCA.node_causal n ->
@@ -674,67 +674,6 @@ Module Type CORRECTNESS
     eapply fst_NoDupMembers, L.node_NoDup.
   Qed.
 
-  Lemma inin_l_nl :
-    forall f n n' Hpref,
-      to_node n Hpref = OK n' ->
-      Ord.Is_node_in f (NL.n_eqs n') ->
-      Lord.Is_node_in f (L.n_eqs n).
-  Proof.
-    intros * Htr Hord.
-    destruct n'. simpl in Hord.
-    tonodeInv Htr.
-    clear - Hord Hmmap. revert dependent n_eqs.
-    induction (L.n_eqs n); intros. inv Hmmap. inv Hord.
-    apply mmap_cons in Hmmap.
-    destruct Hmmap as (eq' & l' & Hneqs & Hteq & Hmmap); subst.
-    inversion_clear Hord as [ ? ? Hord' |].
-    - econstructor.
-      destruct eq' as [| i ck x le |]; inv Hord'.
-      destruct a as [ xs [|]]. inv Hteq. cases.
-      destruct l0; [ idtac | inv Hteq; cases ].
-      destruct e; inv Hteq; cases; monadInv H0;
-        econstructor; apply Lord.INEapp2.
-    - apply Exists_cons_tl. eapply IHl; eauto.
-  Qed.
-
-  Lemma ninin_l_nl :
-    forall f n n' Hpref,
-      to_node n Hpref = OK n' ->
-      ~ Lord.Is_node_in f (L.n_eqs n) ->
-      ~ Ord.Is_node_in f (NL.n_eqs n').
-  Proof.
-    intros. intro. destruct H0. eapply inin_l_nl; eauto.
-  Qed.
-
-  Fact to_global_names : forall name G G' Hprefs,
-      Exists (fun n => (name = L.n_name n)%type) G ->
-      to_global G Hprefs = OK G' ->
-      Exists (fun n => (name = NL.n_name n)%type) G'.
-  Proof.
-    induction G; intros * Hnames Htog; inv Hnames; monadInv Htog; eauto.
-    left. eapply to_node_name; eauto.
-  Qed.
-
-  Lemma ord_l_nl :
-    forall G P Hprefs,
-      to_global G Hprefs = OK P ->
-      Lord.Ordered_nodes G ->
-      Ord.Ordered_nodes P.
-  Proof.
-    intros * Htr Hord.
-    revert dependent P.
-    induction Hord; intros; monadInv Htr; constructor; eauto.
-    - intros f Hin.
-      assert (Lord.Is_node_in f (L.n_eqs nd)) as Hfin.
-      eapply inin_l_nl; eauto.
-      apply H in Hfin. destruct Hfin as [ Hf Hnds ].
-      split.
-      + apply to_node_name in EQ. now rewrite <- EQ.
-      + eapply to_global_names; eauto.
-    - apply to_node_name in EQ. rewrite <- EQ.
-      eapply TR.to_global_names; eauto.
-  Qed.
-
   Lemma inputs_clocked_vars :
     forall n G H f ins,
       LCS.sem_clock_inputs (n :: G) f ins ->
@@ -756,9 +695,11 @@ Module Type CORRECTNESS
     eapply sem_var_det in H1; eauto. rewrite <- H1. apply ac_aligned.
   Qed.
 
+  Module Import TrOrdered := TrOrderedFun Ids Op OpAux L Lord CE NL Ord TR.
+
   Theorem sem_l_nl :
     forall G P Hprefs f ins outs,
-      Forall LN.NormFby.normalized_node G ->
+      LN.NormFby.normalized_global G ->
       Lord.Ordered_nodes G ->
       Forall LCA.node_causal G ->
       LT.wt_global G ->

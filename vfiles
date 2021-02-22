@@ -37,8 +37,6 @@ src/Lustre/Normalization/Normalization.v
 src/Lustre/Normalization/NTyping.v
 src/Lustre/Normalization/NClocking.v
 src/Lustre/Normalization/NCausality.v
-src/Lustre/Normalization/NOrdered.v
-src/Lustre/Normalization/Correctness.v
 src/Lustre/Normalization/Correctness.v
 src/Lustre/Normalization/Idempotence.v
 src/Lustre/Normalization/LNormalization.v
@@ -101,7 +99,9 @@ src/Transcription/Tr.v
 src/Transcription/TrTyping.v
 src/Transcription/TrClocking.v
 src/Transcription/Correctness.v
+src/Transcription/TrOrdered.v
 src/Transcription/Completeness.v
+src/Transcription/TrNormalArgs.v
 src/Transcription/Transcription.v
 
 src/NLustreToStc/NL2StcTyping.v
@@ -127,4 +127,5 @@ src/Traces.v
 src/ClightToAsm.v
 
 src/Instantiator.v
+src/NLCorrectness.v
 src/VelusCorrectness.v

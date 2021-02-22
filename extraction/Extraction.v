@@ -148,20 +148,20 @@ Extract Constant Cabs.char_code => "int64".
 (* Extract Constant LustreElab.do_add_when_to_constants => *)
 (*     "Veluslib.do_add_when_to_constants". *)
 
-(* Extract Constant VelusCorrectness.print_lustre => *)
-(*   "Veluslib.print_lustre_if". *)
-Extract Constant VelusCorrectness.print_nlustre =>
+Extract Constant VelusCorrectness.print_lustre =>
+  "Veluslib.print_lustre_if".
+Extract Constant NLCorrectness.print_nlustre =>
   "Veluslib.print_nlustre_if".
-Extract Constant VelusCorrectness.print_stc => "Veluslib.print_stc_if".
-Extract Constant VelusCorrectness.print_sch => "Veluslib.print_sch_if".
-Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
-Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
-Extract Constant VelusCorrectness.do_sync   => "Veluslib.do_sync".
-Extract Constant VelusCorrectness.do_expose => "Veluslib.do_expose".
-Extract Constant VelusCorrectness.schedule  => "Interfacelib.Scheduler.schedule".
+Extract Constant NLCorrectness.print_stc => "Veluslib.print_stc_if".
+Extract Constant NLCorrectness.print_sch => "Veluslib.print_sch_if".
+Extract Constant NLCorrectness.print_obc => "Veluslib.print_obc_if".
+Extract Constant NLCorrectness.do_fusion => "Veluslib.do_fusion".
+Extract Constant NLCorrectness.do_sync   => "Veluslib.do_sync".
+Extract Constant NLCorrectness.do_expose => "Veluslib.do_expose".
+Extract Constant NLCorrectness.schedule  => "Interfacelib.Scheduler.schedule".
 
 (* builtins *)
-Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".
+Extract Constant NLCorrectness.add_builtins => "Veluslib.add_builtins".
 
 Separate Extraction
          ZArith.BinIntDef

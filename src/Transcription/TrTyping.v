@@ -273,7 +273,7 @@ Module Type TRTYPING
       to_equation env envo e = OK e' ->
       (forall i ck, find_clock env i = OK ck -> LT.wt_clock vars ck) ->
       NoDup (fst e) ->
-      FNS.unnested_equation e ->
+      FNS.unnested_equation G e ->
       LT.wt_equation G vars e ->
       NLT.wt_equation P vars e'.
   Proof.
@@ -355,8 +355,9 @@ Module Type TRTYPING
           constructor; eauto.
         * apply wt_clock_l_ce, wt_find_base_clock.
           inv Hnormed; [|inv H2; inv H1].
-          clear H5 H6 H7 EQ.
-          induction l; simpl; auto. inv H2; inv H3. apply Forall_app.
+          clear H5 H6 H7 H12 EQ.
+          induction l; simpl; auto.
+          inv H3. inv H9. apply Forall_app.
           split; auto.
           apply wt_clockof in H5; auto.
         * clear H5 H7 Hnormed. revert dependent l. induction x1; intros; auto.
@@ -383,8 +384,9 @@ Module Type TRTYPING
           constructor; eauto.
         * apply wt_clock_l_ce, wt_find_base_clock.
           inv Hnormed; [|inv H2; inv H1].
-          clear H5 H6 H7 EQ.
-          induction l; simpl; auto. inv H2; inv H3. apply Forall_app.
+          clear H5 H6 H7 H17 EQ.
+          induction l; simpl; auto.
+          inv H3. inv H11. apply Forall_app.
           split; auto.
           apply wt_clockof in H5; auto.
         * clear H5 H7 Hnormed. revert dependent l. induction x1; intros; auto.
@@ -432,7 +434,7 @@ Module Type TRTYPING
     forall G P n n' Hpref Hprefs,
       to_node n Hpref = OK n' ->
       to_global G Hprefs = OK P ->
-      FNS.unnested_node n ->
+      FNS.unnested_node G n ->
       LT.wt_node G n ->
       NLT.wt_node P n'.
   Proof.

@@ -48,8 +48,8 @@ let print_if flag print prog =
       print (Format.formatter_of_out_channel oc) prog;
       close_out oc
 
-(* let print_lustre_if =
- *   print_if lustre_destination Interfacelib.PrintLustre.print_global *)
+let print_lustre_if =
+  print_if lustre_destination Interfacelib.PrintLustre.print_global
 
 let print_nlustre_if =
   print_if nlustre_destination Interfacelib.PrintNLustre.print_global

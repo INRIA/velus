@@ -5,7 +5,6 @@ From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import CoindStreams.
 
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LCausality.
@@ -20,7 +19,6 @@ Module Type COMPLETENESS
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Str  : COINDSTREAMS Op OpAux)
        (Import LSyn : LSYNTAX Ids Op)
        (Import LCau : LCAUSALITY Ids Op LSyn)
        (Import Norm : NORMALIZATION Ids Op OpAux LSyn LCau)
@@ -101,13 +99,13 @@ Module Type COMPLETENESS
       rewrite He'. rewrite Het'. rewrite Hef'. simpl...
   Qed.
 
-  Fact to_equation_complete : forall xs es out env envo,
-      normalized_equation out (xs, es) ->
+  Fact to_equation_complete : forall G xs es out env envo,
+      normalized_equation G out (xs, es) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
       exists eq', to_equation env envo (xs, es) = OK eq'.
   Proof with eauto.
-    intros xs es out env envo Hnorm Hfind Henvo.
+    intros * Hnorm Hfind Henvo.
     inv Hnorm.
     - apply mmap_to_lexp_complete in H1 as [es' Hes'].
       eexists; simpl. rewrite Hes'; simpl...
@@ -131,36 +129,36 @@ Module Type COMPLETENESS
       inv He'.
   Qed.
 
-  Corollary mmap_to_equation_complete : forall eqs out env envo,
-      Forall (normalized_equation out) eqs ->
+  Corollary mmap_to_equation_complete : forall G eqs out env envo,
+      Forall (normalized_equation G out) eqs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined eqs) ->
       (forall x e, envo x = Error e -> PS.In x out) ->
       exists eqs', mmap (to_equation env envo) eqs = OK eqs'.
   Proof.
-    induction eqs; intros out env envo Hnorm Hfind Henvo; simpl.
+    induction eqs; intros * Hnorm Hfind Henvo; simpl.
     - eexists; eauto.
     - inv Hnorm. destruct a.
       simpl in Hfind. rewrite Forall_app in Hfind. destruct Hfind as [Hfind1 Hfind2].
-      specialize (to_equation_complete _ _ _ _ _ H1 Hfind1 Henvo) as [eq' Heq'].
+      specialize (to_equation_complete _ _ _ _ _ _ H1 Hfind1 Henvo) as [eq' Heq'].
       eapply IHeqs in H2; eauto. destruct H2 as [eqs' Heqs'].
       rewrite Heqs'; rewrite Heq'; eexists; simpl; eauto.
   Qed.
 
-  Corollary mmap_to_equation_complete' : forall n out env envo,
-      Forall (normalized_equation out) (n_eqs n) ->
+  Corollary mmap_to_equation_complete' : forall G n out env envo,
+      Forall (normalized_equation G out) (n_eqs n) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined (n_eqs n)) ->
       (forall x e, envo x = Error e -> PS.In x out) ->
       exists eqs', mmap_to_equation env envo n = OK eqs'.
   Proof.
-    intros n out env envo Hnorm Hfind Henvo.
+    intros * Hnorm Hfind Henvo.
     eapply mmap_to_equation_complete in Hnorm; eauto.
     destruct Hnorm as [eqs' Heqs'].
     exists (exist (fun neqs : list NL.equation => _) eqs' Heqs').
     unfold mmap_to_equation. rewrite Heqs'. reflexivity.
   Qed.
 
-  Lemma to_node_complete : forall n Hpref,
-      normalized_node n ->
+  Lemma to_node_complete : forall G n Hpref,
+      normalized_node G n ->
       exists n', to_node n Hpref = OK n'.
   Proof.
     intros * Hnorm.
@@ -210,13 +208,12 @@ Module CompletenessFun
        (Ids : IDS)
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Str  : COINDSTREAMS Op OpAux)
        (LSyn : LSYNTAX Ids Op)
        (LCau : LCAUSALITY Ids Op LSyn)
        (Norm : NORMALIZATION Ids Op OpAux LSyn LCau)
        (CE : CESYNTAX Op)
        (NL : NLSYNTAX Ids Op CE)
        (TR : TR Ids Op OpAux LSyn CE NL)
-       <: COMPLETENESS Ids Op OpAux Str LSyn LCau Norm CE NL TR.
-  Include COMPLETENESS Ids Op OpAux Str LSyn LCau Norm CE NL TR.
+       <: COMPLETENESS Ids Op OpAux LSyn LCau Norm CE NL TR.
+  Include COMPLETENESS Ids Op OpAux LSyn LCau Norm CE NL TR.
 End CompletenessFun.

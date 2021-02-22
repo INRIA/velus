@@ -50,6 +50,16 @@ Module Type NORMALIZATION
     reflexivity.
   Qed.
 
+  Lemma normalize_global_iface_eq : forall G Hwl Hprefs G',
+      normalize_global G Hwl Hprefs = OK G' ->
+      global_iface_eq G G'.
+  Proof.
+    intros * Hnorm.
+    unfold normalize_global in Hnorm. monadInv Hnorm.
+    etransitivity.
+    eapply unnest_global_eq. eapply normfby_global_eq.
+  Qed.
+
   Theorem normalize_global_normalized_global : forall G G' Hwl Hprefs,
       normalize_global G Hwl Hprefs = OK G' ->
       normalized_global G'.
@@ -58,6 +68,15 @@ Module Type NORMALIZATION
     unfold normalize_global in Hnorm.
     destruct check_causality in Hnorm; inv Hnorm.
     eapply normfby_global_normalized_global.
+  Qed.
+
+  (** Helper for the l_to_nl function *)
+  Program Definition normalize_global' (G : {G | wl_global G /\ Forall (fun n => n_prefixes n = elab_prefs) G}) :
+    {G | match G with OK G => Forall (fun n => PS.Equal (n_prefixes n) (PSP.of_list gensym_prefs)) G | _ => True end } :=
+    exist _ (normalize_global G _ _) _.
+  Next Obligation.
+    destruct (normalize_global _ _) eqn:Hglob; auto.
+    eapply normalize_global_prefixes in Hglob; eauto.
   Qed.
 End NORMALIZATION.
 
