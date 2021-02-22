@@ -291,7 +291,7 @@ module PrintFun (Obc: SYNTAX)
         p objs;
       print_decl_list
         (fun p (id, ty) ->
-          fprintf p "@[<h>register %a@ : %a@]" print_ident id PrintOps.print_typ ty)
+          fprintf p "@[<h>state %a@ : %a@]" print_ident id PrintOps.print_typ ty)
         p mems;
       fprintf p "@;";
       print_methods p true meths;
