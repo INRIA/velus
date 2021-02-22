@@ -121,8 +121,8 @@ struct
       | CE.Emerge (id, ce1, ce2) ->
         fprintf p "@[<hv 6>merge %a@ (true -> %a)@ (false -> %a)@]"
           print_ident id
-          (cexp 16) ce1
-          (cexp 16) ce2
+          (cexp 0) ce1
+          (cexp 0) ce2
       | CE.Eite (e, ce1, ce2) ->
         fprintf p "@[<hv 0>if %a@ then %a@ else %a@]"
           (exp prec') e

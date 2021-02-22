@@ -153,8 +153,8 @@ module PrintFun (L: SYNTAX)
       | L.Emerge (id, e1s, e2s, _) ->
         fprintf p "merge %a@ (true -> %a)@ (false -> %a)"
           print_ident id
-          (exp_list 16) e1s
-          (exp_list 16) e2s
+          exp_enclosed_list e1s
+          exp_enclosed_list e2s
       | L.Eite (e, e1s, e2s, _) ->
         fprintf p "if %a@ then %a@ else %a"
           (exp 16) e
@@ -190,6 +190,10 @@ module PrintFun (L: SYNTAX)
 
     and exp_arg_list p es =
       fprintf p "(@[<hv 0>%a@])"
+        (print_comma_list (exp 0)) es
+
+    and exp_enclosed_list p es =
+      fprintf p "@[<hv 0>%a@]"
         (print_comma_list (exp 0)) es
 
     let print_exp = exp 0
