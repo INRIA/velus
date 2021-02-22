@@ -107,7 +107,7 @@ module PrintFun
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        (print_comma_list_as "var" print_decl) locals
+        (print_semicol_list_as "var" print_decl) locals
         print_equations (List.rev eqs)
 
     let print_global p prog =

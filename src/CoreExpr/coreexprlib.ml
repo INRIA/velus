@@ -53,17 +53,19 @@ module PrintFun (CE: SYNTAX)
                            and type unop  = CE.unop
                            and type binop = CE.binop) :
 sig
-  val print_ident         : formatter -> ident -> unit
-  val print_exp           : formatter -> CE.exp -> unit
-  val print_cexp          : formatter -> CE.cexp -> unit
-  val print_fullclocks    : bool ref
-  val print_clock         : formatter -> CE.clock -> unit
-  val print_clock_decl    : formatter -> CE.clock -> unit
-  val print_decl          : formatter -> (ident * (CE.typ * CE.clock)) -> unit
-  val print_decl_list     : formatter -> (ident * (CE.typ * CE.clock)) list -> unit
-  val print_comma_list    : (formatter -> 'a -> unit) -> formatter -> 'a list -> unit
-  val print_comma_list_as : string -> (formatter -> 'a -> unit) -> formatter -> 'a list -> unit
-  val print_pattern       : formatter -> idents -> unit
+  val print_ident           : formatter -> ident -> unit
+  val print_exp             : formatter -> CE.exp -> unit
+  val print_cexp            : formatter -> CE.cexp -> unit
+  val print_fullclocks      : bool ref
+  val print_clock           : formatter -> CE.clock -> unit
+  val print_clock_decl      : formatter -> CE.clock -> unit
+  val print_decl            : formatter -> (ident * (CE.typ * CE.clock)) -> unit
+  val print_decl_list       : formatter -> (ident * (CE.typ * CE.clock)) list -> unit
+  val print_comma_list      : (formatter -> 'a -> unit) -> formatter -> 'a list -> unit
+  val print_comma_list_as   : string -> (formatter -> 'a -> unit) -> formatter -> 'a list -> unit
+  val print_semicol_list    : (formatter -> 'a -> unit) -> formatter -> 'a list -> unit
+  val print_semicol_list_as : string -> (formatter -> 'a -> unit) -> formatter -> 'a list -> unit
+  val print_pattern         : formatter -> idents -> unit
 end
 =
 struct
@@ -117,7 +119,7 @@ struct
     else fprintf p "@[<hov 2>";
     begin match e with
       | CE.Emerge (id, ce1, ce2) ->
-        fprintf p "@[<hv 6>merge %a@ %a@ %a@]"
+        fprintf p "@[<hv 6>merge %a@ (true -> %a)@ (false -> %a)@]"
           print_ident id
           (cexp 16) ce1
           (cexp 16) ce2
@@ -163,17 +165,26 @@ struct
   let print_comma_list p =
     pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") p
 
+  let print_semicol_list p =
+    pp_print_list ~pp_sep:(fun p () -> fprintf p ";@ ") p
+
   let print_pattern p xs =
     match xs with
     | [x] -> print_ident p x
     | xs  -> fprintf p "(@[<hv 0>%a@])"
                (print_comma_list print_ident) xs
 
-  let print_decl_list = print_comma_list print_decl
+  let print_decl_list = print_semicol_list print_decl
 
   let print_comma_list_as name px p xs =
     if List.length xs > 0 then
       fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
         name
         (print_comma_list px) xs
+
+  let print_semicol_list_as name px p xs =
+    if List.length xs > 0 then
+      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
+        name
+        (print_semicol_list px) xs
 end

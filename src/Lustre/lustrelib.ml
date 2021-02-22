@@ -120,6 +120,9 @@ module PrintFun (L: SYNTAX)
     let print_comma_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") p
 
+    let print_semicol_list p =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p ";@ ") p
+
     let rec exp prec p e =
       let (prec', assoc) = precedence e in
       let (prec1, prec2) =
@@ -148,7 +151,7 @@ module PrintFun (L: SYNTAX)
           (if v then "" else " not")
           print_ident x
       | L.Emerge (id, e1s, e2s, _) ->
-        fprintf p "merge %a@ %a@ %a"
+        fprintf p "merge %a@ (true -> %a)@ (false -> %a)"
           print_ident id
           (exp_list 16) e1s
           (exp_list 16) e2s
@@ -168,15 +171,15 @@ module PrintFun (L: SYNTAX)
             exp_arg_list es
       | L.Eapp (f, es, Some r, anns) ->
         if !print_appclocks
-        then fprintf p "%a@[<v 1>%a@ every@ %a@ (* @[<hov>%a@] *)@]"
+        then fprintf p "(restart@ %a@ every@ %a)@[<v 1>%a@ (* @[<hov>%a@] *)@]"
             print_ident f
-            exp_arg_list es
             (exp prec') r
+            exp_arg_list es
             print_ncks (List.map snd anns)
-        else fprintf p "%a%a@ every@ %a"
+        else fprintf p "(restart@ %a@ every@ %a)%a"
             print_ident f
-            exp_arg_list es
             (exp prec') r
+            exp_arg_list es
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -207,7 +210,7 @@ module PrintFun (L: SYNTAX)
         PrintOps.print_typ ty
         print_clock_decl ck
 
-    let print_decl_list = print_comma_list print_decl
+    let print_decl_list = print_semicol_list print_decl
 
     let print_pattern p xs =
       match xs with
@@ -219,11 +222,11 @@ module PrintFun (L: SYNTAX)
       fprintf p "@[<hov 2>%a =@ %a;@]"
         print_pattern xs (exp_list 0) es
 
-    let print_comma_list_as name px p xs =
+    let print_semicol_list_as name px p xs =
     if List.length xs > 0 then
       fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
         name
-        (print_comma_list px) xs
+        (print_semicol_list px) xs
 
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;
@@ -243,7 +246,7 @@ module PrintFun (L: SYNTAX)
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        (print_comma_list_as "var" print_decl) locals
+        (print_semicol_list_as "var" print_decl) locals
         (pp_print_list print_equation) (List.rev eqs)
 
     let print_global p prog =

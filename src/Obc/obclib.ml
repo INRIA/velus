@@ -246,8 +246,11 @@ module PrintFun (Obc: SYNTAX)
       | Obc.Skip ->
           fprintf p "skip"
 
+    let print_semicol_list p =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p ";@ ") p
+
     let print_decls =
-      print_comma_list
+      print_semicol_list
         (fun p (id, ty) ->
           fprintf p "%a@ : %a" print_ident id PrintOps.print_typ ty)
 
