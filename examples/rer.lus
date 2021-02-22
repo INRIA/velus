@@ -16,7 +16,7 @@ let
   edge = i and (false fby (not i));
   ck = edge or (false fby o);
   v = merge ck (true -> (restart count_down every edge)(n) when ck)
-               (false -> 0 when not ck);
+               (false -> 0);
   o = v > 0;
 tel
 
