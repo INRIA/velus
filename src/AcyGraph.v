@@ -4,11 +4,14 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 From Coq Require Import RelationClasses.
+Import Coq.Relations.Relation_Operators.
+From Coq Require Import Arith.Arith.
+From Coq Require Import Setoid.
+From Coq Require Import Omega.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
 
-Import Coq.Relations.Relation_Operators.
 
 (** ** Vertices and arcs *)
 
@@ -597,110 +600,309 @@ Proof.
     apply PSF.add_2; auto.
 Qed.
 
-Definition find_addable (v : V_set) (g : Env.t PS.t) :=
-  Env.find_pred (fun k preds =>
-                   andb (negb (PS.mem k v))
-                        (PS.for_all (fun x => PS.mem x v) preds)) g.
-
-Definition errmsg_of_env {A} (s : Env.t A) :=
-  Env.fold (fun x _ a => (CTX x)::(MSG ", ")::a) s nil.
-
 Definition acgraph_of_graph g v a :=
   (forall x, Env.In x g <-> PS.In x v) /\
-  (forall x y, (exists xs, Env.find y g = Some xs /\ PS.In x xs) -> has_arc a x y).
+  (forall x y, (exists xs, Env.find y g = Some xs /\ In x xs) -> has_arc a x y).
 
-Program Fixpoint bacg_aux
-        (g0 g : Env.t PS.t)
-        (Href : Env.refines eq g g0)
-        v (ag : exists a, AcyGraph v a /\ acgraph_of_graph (Env.diff g0 g) v a) {measure (Env.cardinal g)}
-  : res { v | exists a, AcyGraph v a /\ acgraph_of_graph g0 v a } :=
-  match Env.is_empty g with
-    | true => OK (exist _ v _)
-    | false =>
-      match (find_addable v g) with
-      | None => Error (MSG "Cannot build acyclic graph, there is a cycle between the following vars : "::(errmsg_of_env g))
-      | Some (x, preds) => bacg_aux g0 (Env.remove x g) _ (PS.add x v) _
-      end
-  end.
-Next Obligation.
-  exists ag. split; auto.
-  rename Heq_anonymous into Hempty. symmetry in Hempty.
-  apply Env.is_empty_2 in Hempty.
-  clear bacg_aux. destruct H0 as (Hv&Ha).
-  constructor.
-  - intros ?.
-    rewrite <- Hv.
-    rewrite Env.diff_empty; auto. reflexivity.
-  - intros * (?&Hfind&?).
-    apply Ha. eexists; split; eauto.
-    rewrite Env.diff_empty; auto.
-Qed.
-Next Obligation.
-  etransitivity; [|eauto].
-  eapply Env.refines_remove; auto.
-Qed.
-Next Obligation.
-  clear bacg_aux.
-  rename Heq_anonymous into Hfind. symmetry in Hfind.
-  rename Heq_anonymous0 into Hempty. symmetry in Hempty.
-  apply Env.find_pred_spec in Hfind as (Hin&Hb).
-  apply Bool.andb_true_iff in Hb as (Hnin&Hpreds).
-  apply Bool.negb_true_iff, PSE.mem_4 in Hnin.
-  rewrite PS.for_all_spec in Hpreds. 2:intros ? ? Heq; rewrite Heq; auto.
-  exists (add_after preds x ag). destruct H0 as (Hv&Ha).
-  split; [|split].
-  - eapply add_after_AcyGraph'; eauto.
-    intro contra. apply Hpreds in contra; auto.
-  - intros ?.
-    rewrite PS.add_spec, <- Hv.
-    repeat rewrite Env.diff_In_iff.
-    split; [intros (?&Hnin')|intros [?|(?&Hnin')]]; subst.
-    + destruct (ident_eq_dec x0 x); auto.
-      right; split; auto.
-      intros contra. apply Hnin'.
-      rewrite Env.Props.P.F.remove_in_iff; auto.
-    + split.
-      * exists preds. eapply Href in Hin as (?&Heq&?); subst; auto.
-      * apply Env.remove_1. reflexivity.
-    + split; auto.
-      intro contra. apply Hnin'.
-      apply Env.Props.P.F.remove_in_iff in contra as (?&?); auto.
-  - intros x' y' (?&Hfind&Hin').
-    specialize (Ha x' y').
-    assert (Hfind':=Hfind). apply Env.diff_remove in Hfind' as [(Hneq&Hfind')|?]; subst.
-    + specialize (Ha (ex_intro _ _ (conj Hfind' Hin'))) as Harc.
-      apply add_after_has_arc1; auto.
-    + apply Env.diff_spec in Hfind as (Hfind&?).
-      apply Href in Hin as (?&?&Hin); subst.
-      rewrite Hfind in Hin. inv Hin.
-      apply add_after_has_arc2; auto.
-Qed.
-Next Obligation.
-  clear Heq_anonymous0.
-  rename Heq_anonymous into Hfind. symmetry in Hfind.
-  apply Env.find_pred_spec in Hfind as (Hin&_).
-  erewrite (@Env.Props.P.cardinal_2 _ _ g).
-  - apply PeanoNat.Nat.lt_succ_diag_r.
-  - apply Env.remove_1. reflexivity.
-  - unfold Env.Props.P.Add. intros ?.
-    rewrite <- Env.add_remove; auto. apply Hin.
-Qed.
+Section Dfs.
 
-Program Definition build_acyclic_graph (g : Env.t PS.t) : res { v | exists a, AcyGraph v a /\ acgraph_of_graph g v a } :=
-  bacg_aux g g _ PS.empty _.
-Next Obligation.
-  exists empty_arc_set; split; auto.
-  split.
-  - intros ?.
-    split; intros H; exfalso.
-    + apply Env.In_find in H as (?&Hfind).
-      apply Env.diff_spec in Hfind as (Hmap&Hnin).
-      apply Env.find_In in Hmap; auto.
-    + apply not_In_empty in H; auto.
-  - intros xs ? (?&Hfind&Hin).
-    exfalso.
-    apply Env.diff_spec in Hfind as (Hmap&Hnin).
-    apply Env.find_In in Hmap; auto.
+  Variable graph : Env.t (list positive).
+
+  Record dfs_state : Type :=
+    mk_dfs_state {
+        in_progress : PS.t;
+        progress_in_graph : forall x, PS.In x in_progress -> Env.In x graph
+      }.
+
+  Extraction Inline in_progress.
+
+  Definition empty_dfs_state :=
+    {| in_progress := PS.empty;
+       progress_in_graph := fun x Hin =>
+                              False_ind (Env.In x graph) (not_In_empty x Hin) |}.
+  Extraction Inline empty_dfs_state.
+
+  Lemma cardinals_in_progress_le_graph:
+    forall a,
+      PS.cardinal a.(in_progress) <= Env.cardinal graph.
+  Proof.
+    intro a.
+    rewrite Env.cardinal_1, PS.cardinal_spec.
+    rewrite <-(map_length fst).
+    pose proof a.(progress_in_graph) as Hag.
+    assert (NoDup (PS.elements (in_progress a))) as Hnds
+        by (rewrite NoDup_NoDupA; apply PS.elements_spec2w).
+    assert (NoDupMembers (Env.elements graph)) as Hndg
+        by (apply Env.NoDupMembers_elements).
+    apply fst_NoDupMembers in Hndg.
+    setoid_rewrite PSF.elements_iff in Hag.
+    setoid_rewrite Env.In_Members in Hag.
+    setoid_rewrite fst_InMembers in Hag.
+    revert Hag Hnds Hndg.
+    generalize (map fst (Env.elements graph)) as g.
+    generalize (PS.elements a.(in_progress)) as n.
+    induction n as [|x n IH]; auto using le_0_n.
+    intros g Hin NDn NDg. simpl.
+    inversion_clear NDn as [|?? Hnx NDn'].
+    assert (In x g) as Hxg by auto.
+    apply in_split in Hxg as (g1 & g2 & Hg); subst.
+    rewrite <-Permutation.Permutation_middle.
+    simpl; apply le_n_S.
+    rewrite <-Permutation.Permutation_middle in NDg; inv NDg.
+    apply IH; auto.
+    intros y Hyi.
+    apply (In_weaken_cons x).
+    now rewrite Permutation.Permutation_middle; auto.
+    intro; subst. apply Hnx.
+    apply SetoidList.InA_alt in Hyi as (y & Heq & Hyin).
+    subst; auto.
+  Qed.
+
+  Definition max_depth_remaining (s : dfs_state) : nat :=
+    Env.cardinal graph - PS.cardinal s.(in_progress).
+
+  Definition deeper : dfs_state -> dfs_state -> Prop :=
+    ltof _ max_depth_remaining.
+
+  Lemma wf_deeper: well_founded deeper.
+  Proof.
+    apply well_founded_ltof.
+  Defined.
+
+  Lemma add_deeper:
+    forall x s P,
+      ~ PS.In x (in_progress s) ->
+      deeper {| in_progress := PS.add x (in_progress s);
+                progress_in_graph := P |} s.
+  Proof.
+    unfold deeper, ltof, max_depth_remaining.
+    intros x s Hprog Hnin.
+    pose proof (cardinals_in_progress_le_graph s) as Hag.
+    pose proof (cardinals_in_progress_le_graph
+                  {| in_progress := PS.add x (in_progress s);
+                     progress_in_graph := Hprog |}) as Hbg.
+    simpl in *.
+    rewrite PSP.add_cardinal_2 with (1:=Hnin) in *.
+    omega.
+  Qed.
+
+  Definition visited (p : PS.t) (v : PS.t) : Prop :=
+    (forall x, PS.In x p -> ~PS.In x v)
+    /\ exists a, AcyGraph v a
+           /\ (forall x, PS.In x v ->
+                   exists zs, Env.find x graph = Some zs
+                         /\ (forall y, In y zs -> has_arc a y x)).
+
+  Definition none_visited : { v | visited PS.empty v }.
+  Proof.
+    exists PS.empty.
+    repeat split; auto using not_In_empty.
+    exists empty_arc_set.
+    repeat split; auto using not_In_empty.
+    intros * Hin. now apply not_In_empty in Hin.
+  Defined.
+  Extraction Inline none_visited.
+
+  Lemma sig2_of_sig:
+    forall {A : Type} {P Q : A -> Prop} (s : { s : A | P s }),
+      Q (proj1_sig s) ->
+      { s | P s & Q s }.
+  Proof.
+    intros ? ? ? (s, Ps) Qs.
+    exact (exist2 _ _ s Ps Qs).
+  Defined.
+  Extraction Inline sig2_of_sig.
+
+  Lemma sig2_weaken2:
+    forall {A : Type} {P Q Q' : A -> Prop},
+      (forall s, Q s -> Q' s) ->
+      { s : A | P s & Q s } ->
+      { s | P s & Q' s }.
+  Proof.
+    intros * HQQ s.
+    destruct s as (s, Ps, Qs).
+    apply HQQ in Qs.
+    exact (exist2 _ _ s Ps Qs).
+  Defined.
+  Extraction Inline sig2_weaken2.
+
+  Definition In_ps (xs : list positive) (v : PS.t) :=
+    Forall (fun x => PS.In x v) xs.
+
+  Lemma In_ps_nil:
+    forall v, In_ps [] v.
+  Proof.
+    intro v. apply Forall_nil.
+  Qed.
+
+  Lemma In_ps_singleton:
+    forall x v,
+      PS.In x v <-> In_ps [x] v.
+  Proof.
+    split; intro HH; [|now inv HH].
+    now apply Forall_cons; auto.
+  Qed.
+
+  Definition dfs'_loop
+             (inp : PS.t)
+             (dfs' : forall x (v : { v | visited inp v }),
+                 option { v' | visited inp v'
+                               & (In_ps [x] v'
+                                  /\ PS.Subset (proj1_sig v) v') })
+             (zs : list positive)
+             (v : {v | visited inp v })
+    : option { v' | visited inp v' & (In_ps zs v' /\ PS.Subset (proj1_sig v) v') }.
+  Proof.
+    revert zs v.
+    fix dfs'_loop 1.
+    intros zs v.
+    destruct zs as [|w ws].
+    - refine (Some (sig2_of_sig v _)).
+      split. now apply In_ps_nil. reflexivity.
+    - destruct (dfs' w v) as [(v', Pv', (Hinv', Hsubv'))|]; [|exact None].
+      destruct (dfs'_loop ws (exist _ v' Pv')) as [v''|]; [|exact None].
+      refine (Some (sig2_weaken2 _ v'')).
+      intros S (Hin, Hsub). split.
+      + apply Forall_cons; auto.
+        rewrite <-Hsub. now inv Hinv'.
+      + rewrite <-Hsub. simpl. rewrite <-Hsubv'. reflexivity.
+  Defined.
+  Extraction Inline dfs'_loop.
+
+  Definition pre_visited_add:
+    forall {inp} x
+      (v : { v | visited inp v }),
+      ~PS.In x (proj1_sig v) ->
+      { v' | visited (PS.add x inp) v' & v' = (proj1_sig v) }.
+  Proof.
+    intros inp x (v, (Pv1 & Pv2)) Hnxp.
+    simpl in *. exists v; split; auto.
+    intros y Hyp. apply PS.add_spec in Hyp as [HH|HH]; subst; auto.
+  Defined.
+  Extraction Inline pre_visited_add.
+
+  Definition dfs'
+     (s : dfs_state)
+     (dfs'' : forall s', deeper s' s ->
+                forall x (v : { v | visited s'.(in_progress) v }),
+                  option { v' | visited s'.(in_progress) v'
+                                & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' })
+     (x : positive)
+     (v : { v | visited s.(in_progress) v })
+    : option { v' | visited s.(in_progress) v'
+                    & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' }.
+  Proof.
+    destruct (PS.mem x s.(in_progress)) eqn:Mxs; [exact None|].
+    destruct (PS.mem x (proj1_sig v)) eqn:Mxv.
+    (* This node has already been visited. Show postcondition. *)
+    now refine (Some (sig2_of_sig v _)); split;
+      [apply In_ps_singleton; apply (PSF.mem_2 Mxv)|reflexivity].
+    (* Not yet visited ... *)
+    destruct (Env.find x graph) as [zs|] eqn:Mxg; [|exact None].
+    assert (forall z, PS.In z (PS.add x s.(in_progress)) -> Env.In z graph) as Hprog.
+    { intros z Hzin.
+      apply PS.add_spec in Hzin as [|Hzin]; subst.
+      - now apply Env.find_In in Mxg.
+      - now apply s.(progress_in_graph). }
+    pose (s' := mk_dfs_state (PS.add x s.(in_progress)) Hprog).
+    apply PSE.mem_4 in Mxs. apply PSE.mem_4 in Mxv.
+    assert (deeper s' s) as Hdeeper by now apply add_deeper.
+    pose proof (pre_visited_add x v Mxv) as (v', V', Qv'). subst.
+    destruct (dfs'_loop s'.(in_progress) (dfs'' s' Hdeeper) zs (exist _ _ V'))
+      as [(v'', (P1 & P2), (Hzs & Hsub))|]; [|exact None]. simpl in *.
+    refine (Some _).
+    exists (PS.add x v'').
+    (* Show postconditions *)
+    repeat split.
+    - intros y Hyin.
+      setoid_rewrite PS.add_spec.
+      apply not_or'. split; [now intro; subst; auto|].
+      apply P1. now apply PSF.add_2.
+    - destruct P2 as (a & P2 & P3).
+      exists (add_after (PSP.of_list zs) x a); split.
+      + apply add_after_AcyGraph; auto using PSF.add_1.
+        * rewrite ps_of_list_In. intro contra.
+          eapply Forall_forall in Hzs; eauto.
+          eapply P1; eauto using PSF.add_1.
+        * intros ? Hin. rewrite ps_of_list_In in Hin.
+          apply PSF.add_2. eapply Forall_forall in Hzs; eauto.
+        * intros ? _ HasArc.
+          eapply is_trans_arc_is_vertex with (g:=P2) in HasArc as (Ver&_); eauto.
+          eapply P1 in Ver; eauto using PSF.add_1.
+      + intros y Hyin.
+        apply PS.add_spec in Hyin as [HH|HH].
+        * subst. exists zs; split; auto.
+          intros z HH. apply add_after_has_arc2.
+          rewrite ps_of_list_In; auto.
+        * destruct (P3 _ HH) as (? & ? & ?).
+          exists x0. split; eauto using add_after_has_arc1.
+    - split. now apply In_ps_singleton, PS.add_spec; left.
+      rewrite <-Hsub. apply PSP.subset_add_2. reflexivity.
+  Defined.
+
+  Definition dfs
+    : forall x (v : { v | visited PS.empty v }),
+      option { v' | visited PS.empty v' &
+                    (In_ps [x] v'
+                     /\ PS.Subset (proj1_sig v) v') }
+    := Fix wf_deeper _ dfs' empty_dfs_state.
+
+End Dfs.
+
+Program Definition build_acyclic_graph (graph : Env.t (list positive)) : res PS.t :=
+  bind (Env.fold (fun x _ vo =>
+                    bind vo
+                         (fun v => match dfs graph x v with
+                                | None => Error (msg "Couldn't build acyclic graph")
+                                | Some v => OK (sig_of_sig2 v)
+                                end))
+                         graph (OK (none_visited graph)))
+                 (fun v => OK _).
+
+Lemma build_acyclic_graph_spec : forall graph v,
+    build_acyclic_graph graph = OK v ->
+    exists a, acgraph_of_graph graph v a /\ AcyGraph v a.
+Proof.
+  unfold build_acyclic_graph.
+  intros graph v Hcheck.
+  monadInv Hcheck. rename EQ into Hfold.
+  rename x into v'.
+  rewrite Env.fold_1 in Hfold.
+  assert (PS.Equal (proj1_sig v')
+                   (ps_adds (map fst (Env.elements graph))
+                            (proj1_sig (none_visited graph)))) as Hveq;
+    [apply PSP.double_inclusion; split|].
+  - destruct v' as (v' & Pv'1 & a & Pv'2 & Pv'3).
+    simpl. intros x Hx.
+    apply Pv'3 in Hx as (zs & Hx & Hsuc).
+    apply Env.elements_correct in Hx.
+    apply ps_adds_spec; left.
+    apply in_map_iff. exists (x, zs); auto.
+  - revert Hfold.
+    revert v'.
+    generalize (none_visited graph) as acc.
+    generalize (Env.elements graph) as xs.
+    induction xs as [|x xs IH]; [inversion 1; reflexivity|].
+    simpl. intros acc v' (* Hacc *) Hfold.
+    destruct (dfs graph (fst x) acc) as [acc'|] eqn:Hacc'; simpl in *.
+    + apply IH in Hfold.
+      rewrite <-Hfold.
+      apply Subset_ps_adds.
+      destruct acc' as (acc', Vacc', (H1acc' & H2acc')); simpl in *.
+      apply PSP.subset_add_3; auto. now apply In_ps_singleton.
+    + clear - Hfold. exfalso.
+      induction xs; simpl in *; try congruence.
+  - clear Hfold. destruct v' as (v & Pv1 & a & Pv2 & Pv3).
+    simpl in *.
+    exists a. split; auto.
+    constructor; auto.
+    + intros x. rewrite Hveq, ps_adds_of_list, ps_of_list_In, Env.In_Members, fst_InMembers.
+      reflexivity.
+    + intros ?? (?&Find&In).
+      specialize (Pv3 y). rewrite Hveq, ps_adds_of_list, ps_of_list_In in Pv3.
+      assert (Find':=Find). apply Env.elements_correct in Find'.
+      eapply in_map with (f:=fst), Pv3 in Find' as (?&Find'&?).
+      setoid_rewrite Find in Find'; inv Find'; eauto.
 Qed.
 
 (** ** Extracting a prefix

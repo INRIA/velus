@@ -245,7 +245,7 @@ Module Type LCAUSALITY
   Open Scope error_monad_scope.
 
   Definition check_node_causality (n : node) : res unit :=
-    match build_acyclic_graph (build_graph n) with
+    match build_acyclic_graph (Env.map PSP.to_list (build_graph n)) with
     | OK _ => OK tt
     | Error msg => Error (MSG "Node " :: (CTX (n_name n)) :: MSG " : " :: msg)
     end.
@@ -649,16 +649,20 @@ Module Type LCAUSALITY
   Proof.
     intros * Hwl Hcheck.
     unfold check_node_causality in Hcheck.
-    destruct (build_acyclic_graph _); inv Hcheck.
-    destruct s as (v&a&g&(Hv&Ha)); simpl in *.
-    exists v. exists a. exists g. split.
+    destruct (build_acyclic_graph _) eqn:Build; inv Hcheck.
+    eapply build_acyclic_graph_spec in Build as (a&(Hv&Ha)&Graph).
+
+    exists t. exists a. exists Graph. split.
     - intros x. rewrite <- Hv.
       apply build_graph_dom in Hwl.
-      rewrite (Hwl x), <- ps_from_list_ps_of_list, ps_from_list_In, map_fst_idck.
+      rewrite Env.Props.P.F.map_in_iff, (Hwl x), <- ps_from_list_ps_of_list, ps_from_list_In, map_fst_idck.
       reflexivity.
     - intros x y Hdep.
       apply Ha.
-      eapply build_graph_find; eauto.
+      eapply build_graph_find in Hwl as (ys & Find & In); eauto.
+      exists (PSP.to_list ys).
+      rewrite Env.Props.P.F.map_o, Find; split; auto.
+      apply In_PS_elements; auto.
   Qed.
 
   Corollary check_causality_correct : forall G tts,
