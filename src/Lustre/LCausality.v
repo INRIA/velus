@@ -70,7 +70,7 @@ Module Type LCAUSALITY
       Is_free_left_list x k (e::es)
   | IFLLlater : forall k e es,
       k >= numstreams e ->
-      Is_free_left_list x (k-numstreams e) es ->
+      Is_free_left_list x (k - numstreams e) es ->
       Is_free_left_list x k (e::es).
 
   Hint Constructors Is_free_left Is_free_left_list.
@@ -682,9 +682,9 @@ Module Type LCAUSALITY
   (** *** Consequence of causality.
       We can "follow the trail" of variables *)
 
-  Lemma Prefix_inv {v a} : forall (g : AcyGraph v a) eqs x xs,
+  Lemma TopoOrder_inv {v a} : forall (g : AcyGraph v a) eqs x xs,
       (forall x y, depends_on eqs x y -> is_arc g y x) ->
-      Prefix g (x::xs) ->
+      TopoOrder g (x::xs) ->
       In x (vars_defined eqs) ->
       Exists (fun '(xs', es) =>
                 exists k, k < length xs' /\ nth k xs' xH = x /\
@@ -883,7 +883,7 @@ Module Type LCAUSALITY
         Forall P_var (PS.elements (vertices g)).
     Proof.
       intros * Hwl [Hv Ha].
-      specialize (has_Prefix g) as (xs'&Heq&Hpre).
+      specialize (has_TopoOrder g) as (xs'&Heq&Hpre).
       rewrite Heq, <- PS_For_all_Forall, <- ps_from_list_ps_of_list, PS_For_all_Forall'.
       assert (incl xs' (map fst (n_in n) ++ vars_defined (n_eqs n))) as Hincl.
       { rewrite Hv in Heq.
@@ -900,7 +900,7 @@ Module Type LCAUSALITY
       - (* a is in the inputs *)
         eapply Forall_forall; [|eauto]. apply Inputs.
       - (* a is in the lhs of an equation *)
-        eapply Prefix_inv in Hpre; eauto.
+        eapply TopoOrder_inv in Hpre; eauto.
         apply Exists_exists in Hpre as [(?&?) (?&k&Hk&Hnth&Hfree)]; subst.
         eapply EqVars; eauto.
         eapply Forall_forall in Hwl; eauto. inv Hwl.

@@ -914,14 +914,14 @@ Qed.
     in which arcs are directed from the tail of the list to the head
  *)
 
-Definition Prefix {v a} (g : AcyGraph v a) (xs : list ident) :=
+Definition TopoOrder {v a} (g : AcyGraph v a) (xs : list ident) :=
   ForallTail (fun x xs => ~In x xs
                        /\ is_vertex g x
                        /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
-Hint Unfold Prefix.
+Hint Unfold TopoOrder.
 
-Lemma Prefix_weaken : forall {v a} (g : AcyGraph v a) xs,
-    Prefix g xs ->
+Lemma TopoOrder_weaken : forall {v a} (g : AcyGraph v a) xs,
+    TopoOrder g xs ->
     Forall (fun x => forall y, is_trans_arc g y x -> In y xs) xs.
 Proof.
   intros * Hpref.
@@ -932,20 +932,20 @@ Proof.
   intros * ? ? ?. right; auto.
 Qed.
 
-Lemma Prefix_nIn : forall {v a} (g : AcyGraph v a) x xs,
+Lemma TopoOrder_nIn : forall {v a} (g : AcyGraph v a) x xs,
     ~In x xs ->
-    Prefix g xs ->
+    TopoOrder g xs ->
     ~Exists (fun y => is_trans_arc g x y) xs.
 Proof.
   intros * Hnin Hpre Hex.
-  apply Prefix_weaken in Hpre.
+  apply TopoOrder_weaken in Hpre.
   eapply Forall_Exists in Hex; eauto.
   eapply Exists_exists in Hex as (?&_&Ha&Ha').
   specialize (Ha _ Ha'); auto.
 Qed.
 
-Lemma Prefix_NoDup : forall {v a} (g : AcyGraph v a) xs,
-    Prefix g xs ->
+Lemma TopoOrder_NoDup : forall {v a} (g : AcyGraph v a) xs,
+    TopoOrder g xs ->
     NoDup xs.
 Proof.
   intros * Hpref.
@@ -953,9 +953,9 @@ Proof.
   destruct H; auto.
 Qed.
 
-Fact Prefix_AGaddv : forall {v a} (g : AcyGraph v a) x xs,
-    Prefix g xs ->
-    Prefix (AGaddv v a x g) xs.
+Fact TopoOrder_AGaddv : forall {v a} (g : AcyGraph v a) x xs,
+    TopoOrder g xs ->
+    TopoOrder (AGaddv v a x g) xs.
 Proof.
   induction xs; intros * Hpre; inv Hpre; auto.
   destruct H1 as (?&?&?).
@@ -964,12 +964,12 @@ Proof.
   apply PSF.add_2; auto.
 Qed.
 
-Lemma Prefix_insert : forall {v a} (g : AcyGraph v a) xs1 xs2 x,
+Lemma TopoOrder_insert : forall {v a} (g : AcyGraph v a) xs1 xs2 x,
     is_vertex g x ->
     ~In x (xs1++xs2) ->
     (forall y, is_trans_arc g y x -> In y xs2) ->
-    Prefix g (xs1 ++ xs2) ->
-    Prefix g (xs1 ++ x :: xs2).
+    TopoOrder g (xs1 ++ xs2) ->
+    TopoOrder g (xs1 ++ x :: xs2).
 Proof.
   induction xs1; intros * Hver Hnin Ha Hpre; simpl in *.
   - constructor; repeat split; auto.
@@ -1021,10 +1021,10 @@ Import Permutation.
 
 (** Given a prefix of the form xs1 ++ y :: xs2, we can split xs1
     into two list: xs1l depends on y and xs1r doesnt *)
-Fact Prefix_Partition_split : forall {v a} (g : AcyGraph v a) xs1 xs2 xs1l xs1r y,
+Fact TopoOrder_Partition_split : forall {v a} (g : AcyGraph v a) xs1 xs2 xs1l xs1r y,
     Partition (fun z => is_trans_arc g y z) xs1 xs1l xs1r ->
-    Prefix g (xs1 ++ y :: xs2) ->
-    Prefix g (xs1l ++ y :: xs1r ++ xs2).
+    TopoOrder g (xs1 ++ y :: xs2) ->
+    TopoOrder g (xs1l ++ y :: xs1r ++ xs2).
 Proof.
   induction xs1; intros * Hpart Hpre; inv Hpart; simpl in *.
   - assumption.
@@ -1036,7 +1036,7 @@ Proof.
     + apply IHxs1; auto.
   - inversion_clear Hpre as [|?? (Hnin&Hver&Ha) Hf].
     rewrite cons_is_app, app_assoc.
-    apply Prefix_insert; auto; try rewrite <- app_assoc, <- cons_is_app.
+    apply TopoOrder_insert; auto; try rewrite <- app_assoc, <- cons_is_app.
     + erewrite (Partition_Permutation _ xs1), <- app_assoc, <- Permutation_middle in Hnin; eauto.
     + intros * Ha'. specialize (Ha _ Ha').
       erewrite (Partition_Permutation _ xs1), <- app_assoc in Ha; eauto.
@@ -1048,16 +1048,16 @@ Proof.
     + apply IHxs1; auto.
 Qed.
 
-(* Is there is no arc between y and x, it is possible to reorganize the Prefix *)
+(* Is there is no arc between y and x, it is possible to reorganize the TopoOrder *)
 (* so that x ends up before y *)
-Lemma Prefix_reorganize : forall {v a} (g : AcyGraph v a) xs x y,
+Lemma TopoOrder_reorganize : forall {v a} (g : AcyGraph v a) xs x y,
     x <> y ->
     In x xs ->
     In y xs ->
-    Prefix g xs ->
+    TopoOrder g xs ->
     ~is_trans_arc g y x ->
     exists xs', Permutation.Permutation xs' xs /\
-           Prefix g xs' /\
+           TopoOrder g xs' /\
            Before x y xs'.
 Proof.
   induction xs; intros * Hneq Hin1 Hin2 Hpref Hna;
@@ -1080,9 +1080,9 @@ Proof.
     + repeat rewrite <- Permutation_middle.
       rewrite app_assoc, <- Hperm.
       apply perm_swap.
-    + eapply Prefix_Partition_split in H0; eauto.
+    + eapply TopoOrder_Partition_split in H0; eauto.
       rewrite cons_is_app, app_assoc.
-      apply Prefix_insert; try rewrite <- app_assoc, <- cons_is_app; auto.
+      apply TopoOrder_insert; try rewrite <- app_assoc, <- cons_is_app; auto.
       * rewrite Hperm, <- app_assoc, <- Permutation_middle in Hnin; auto.
       * intros ? Ha'. specialize (Ha _ Ha').
         rewrite Hperm, <- app_assoc in Ha.
@@ -1092,7 +1092,7 @@ Proof.
         eapply Partition_Forall1, Forall_forall in Hpart; [|eauto].
         eapply Hna. etransitivity; eauto.
     + assert (~ In y (xs1 ++ xs2)).
-      { apply Prefix_NoDup in H0.
+      { apply TopoOrder_NoDup in H0.
         rewrite <- Permutation_middle in H0.
         inv H0; auto. }
       rewrite Hperm, <- app_assoc in H.
@@ -1115,10 +1115,10 @@ Proof.
       rewrite Hperm; auto.
 Qed.
 
-Lemma Prefix_AGadda : forall {v a} (g : AcyGraph v a) xs x y Hneq Hin1 Hin2 Hna,
+Lemma TopoOrder_AGadda : forall {v a} (g : AcyGraph v a) xs x y Hneq Hin1 Hin2 Hna,
     Before x y xs ->
-    Prefix g xs ->
-    Prefix (AGadda _ _ x y g Hneq Hin1 Hin2 Hna) xs.
+    TopoOrder g xs ->
+    TopoOrder (AGadda _ _ x y g Hneq Hin1 Hin2 Hna) xs.
 Proof.
   induction xs; intros * Hbef Hpre; auto.
   inv Hbef. inversion_clear Hpre as [|?? (?&?&?) Hf].
@@ -1129,32 +1129,32 @@ Proof.
   - apply H3 in H5; auto.
     eapply Before_In in H2; eauto.
   - specialize (H1 eq_refl).
-    eapply Prefix_weaken, Forall_forall in Hf; eauto.
+    eapply TopoOrder_weaken, Forall_forall in Hf; eauto.
   - specialize (H3 _ H5).
     eapply Before_In in H2; eauto.
-    eapply Prefix_weaken, Forall_forall in Hf; eauto.
+    eapply TopoOrder_weaken, Forall_forall in Hf; eauto.
 Qed.
 
-(** Every Directed Acyclic Graph has at least one complete Prefix *)
-Lemma has_Prefix {v a} :
+(** Every Directed Acyclic Graph has at least one complete TopoOrder *)
+Lemma has_TopoOrder {v a} :
   forall g : AcyGraph v a,
   exists xs,
     PS.Equal (vertices g) (PSP.of_list xs)
-    /\ Prefix g xs.
+    /\ TopoOrder g xs.
 Proof.
   revert v a.
-  fix has_Prefix 3.
+  fix has_TopoOrder 3.
   intros *.
   destruct g.
   - exists []; simpl. split; auto.
     reflexivity.
-  - specialize (has_Prefix _ _ g) as (xs&Heq&Hp).
+  - specialize (has_TopoOrder _ _ g) as (xs&Heq&Hp).
     destruct (PSP.In_dec x v).
     + exists xs; simpl; split; auto.
       * rewrite <- Heq.
         intros ?. setoid_rewrite PSF.add_iff.
         split; [intros [?|?]| intros ?]; subst; auto.
-      * apply Prefix_AGaddv; auto.
+      * apply TopoOrder_AGaddv; auto.
     + exists (x::xs); simpl; split; [|constructor;repeat split].
       * unfold vertices in *.
         rewrite Heq. reflexivity.
@@ -1166,15 +1166,15 @@ Proof.
         apply PSF.add_3 in H; auto.
         rewrite <- ps_from_list_ps_of_list in Heq.
         rewrite <- ps_from_list_In, <- Heq; auto.
-      * apply Prefix_AGaddv; auto.
-  - specialize (has_Prefix _ _ g) as (xs&Heq&Hp).
-    specialize (Prefix_reorganize g xs x y) as (xs'&?&Hp'&Hbef); auto.
+      * apply TopoOrder_AGaddv; auto.
+  - specialize (has_TopoOrder _ _ g) as (xs&Heq&Hp).
+    specialize (TopoOrder_reorganize g xs x y) as (xs'&?&Hp'&Hbef); auto.
     + rewrite Heq, <- ps_from_list_ps_of_list, ps_from_list_In in i; auto.
     + rewrite Heq, <- ps_from_list_ps_of_list, ps_from_list_In in i0; auto.
     + exists xs'; split.
       * rewrite <- ps_from_list_ps_of_list, H, ps_from_list_ps_of_list.
         assumption.
-      * eapply Prefix_AGadda; eauto.
+      * eapply TopoOrder_AGadda; eauto.
 Qed.
 
 (** ** Inserting into the graph
