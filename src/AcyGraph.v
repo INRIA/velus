@@ -703,6 +703,7 @@ Section Dfs.
   Defined.
   Extraction Inline none_visited.
 
+  (* TODO: move to Common *)
   Lemma sig2_of_sig:
     forall {A : Type} {P Q : A -> Prop} (s : { s : A | P s }),
       Q (proj1_sig s) ->
@@ -713,6 +714,7 @@ Section Dfs.
   Defined.
   Extraction Inline sig2_of_sig.
 
+  (* TODO: move to Common *)
   Lemma sig2_weaken2:
     forall {A : Type} {P Q Q' : A -> Prop},
       (forall s, Q s -> Q' s) ->
@@ -726,6 +728,7 @@ Section Dfs.
   Defined.
   Extraction Inline sig2_weaken2.
 
+  (* TODO: move this and following two lemmas to Common. *)
   Definition In_ps (xs : list positive) (v : PS.t) :=
     Forall (fun x => PS.In x v) xs.
 
@@ -912,7 +915,9 @@ Qed.
  *)
 
 Definition Prefix {v a} (g : AcyGraph v a) (xs : list ident) :=
-  ForallTail (fun x xs => ~In x xs /\ is_vertex g x /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
+  ForallTail (fun x xs => ~In x xs
+                       /\ is_vertex g x
+                       /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
 Hint Unfold Prefix.
 
 Lemma Prefix_weaken : forall {v a} (g : AcyGraph v a) xs,
@@ -1131,10 +1136,13 @@ Proof.
 Qed.
 
 (** Every Directed Acyclic Graph has at least one complete Prefix *)
-Lemma has_Prefix : forall {v a} (g : AcyGraph v a),
-    exists xs, (PS.Equal (vertices g) (PSP.of_list xs)) /\
-          Prefix g xs.
+Lemma has_Prefix {v a} :
+  forall g : AcyGraph v a,
+  exists xs,
+    PS.Equal (vertices g) (PSP.of_list xs)
+    /\ Prefix g xs.
 Proof.
+  revert v a.
   fix has_Prefix 3.
   intros *.
   destruct g.
