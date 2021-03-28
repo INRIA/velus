@@ -76,8 +76,8 @@ Module Type LCAUSALITY
   Hint Constructors Is_free_left Is_free_left_list.
 
   Definition depends_on (eqs : list equation) (x : ident) (y : ident) :=
-    Exists (fun '(xs, es) => exists k, k < length xs /\
-                               nth k xs xH = x /\
+    Exists (fun '(xs, es) => exists k,
+                               nth_error xs k = Some x /\
                                Is_free_left_list y k es) eqs.
 
   Definition depends_on_ck vars (eqs : list equation) (x : ident) (y : ident) :=
@@ -172,6 +172,7 @@ Module Type LCAUSALITY
       exists k'. right; auto.
   Qed.
 
+  (* TODO: move to LSyntax *)
   Instance vars_defined_Proper:
     Proper (@Permutation equation ==> @Permutation ident)
            vars_defined.
@@ -180,6 +181,7 @@ Module Type LCAUSALITY
     unfold vars_defined. rewrite Hperm. reflexivity.
   Qed.
 
+  (* TOOD: move to LSyntax *)
   Fact vars_defined_app : forall eqs1 eqs2,
       vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2.
   Proof.
@@ -214,7 +216,9 @@ Module Type LCAUSALITY
       let ps0 := collect_free_left e in
       let ps1 := collect_free_left_list ets in
       let ps2 := collect_free_left_list efs in
-      List.map (fun '(ps1, ps2) => PS.union (List.hd PS.empty ps0) (PS.union ps1 ps2)) (List.combine ps1 ps2)
+      List.map (fun '(ps1, ps2) =>
+                  PS.union (List.hd PS.empty ps0) (PS.union ps1 ps2))
+               (List.combine ps1 ps2)
     | Eapp _ es None a =>
       let ps := PSUnion (collect_free_left_list es) in
       List.map (fun _ => ps) a
@@ -590,6 +594,38 @@ Module Type LCAUSALITY
       + eapply Pos.eqb_neq in n. rewrite n; auto.
   Qed.
 
+  (* TODO: delete after upgrade to latest Coq version *)
+  Lemma nth_error_nth {A} : forall (l : list A) (n : nat) (x d : A),
+      nth_error l n = Some x -> nth n l d = x.
+  Proof.
+    intros l n x d H.
+    apply nth_error_split in H. destruct H as [l1 [l2 [H H']]].
+    subst. rewrite app_nth2; [|auto].
+    rewrite PeanoNat.Nat.sub_diag. reflexivity.
+  Qed.
+
+  (* TODO: delete after upgrade to latest Coq version *)
+  Lemma nth_error_nth' {A} : forall (l : list A) (n : nat) (d : A),
+    n < length l -> nth_error l n = Some (nth n l d).
+  Proof.
+    intros l n d H.
+    apply (nth_split _ d) in H. destruct H as [l1 [l2 [H H']]].
+    subst. rewrite H. rewrite nth_error_app2; [|auto].
+    rewrite app_nth2; [| auto]. repeat (rewrite PeanoNat.Nat.sub_diag). reflexivity.
+  Qed.
+
+  (* TODO: move to Common *)
+  Lemma nth_error_length_nth {A} : forall (l : list A) (n : nat) (x : A),
+      nth_error l n = Some x <-> (forall d, n < Datatypes.length l /\ nth n l d = x).
+  Proof.
+    split; intro H.
+    - split.
+      + apply nth_error_Some; rewrite H; discriminate.
+      + now apply nth_error_nth.
+    - specialize (H x) as (Hl&Hn). rewrite <-Hn.
+      now apply nth_error_nth'.
+  Qed.
+
   Lemma build_graph_find : forall G n x y,
       wl_node G n ->
       depends_on_ck (idck (n_in n ++ n_vars n ++ n_out n)) (n_eqs n) x y ->
@@ -600,12 +636,12 @@ Module Type LCAUSALITY
     eapply Env.dom_use with (x0:=x) in Hdom.
     rewrite Env.In_find in Hdom. symmetry in Hdom.
     destruct Hdep as [Hdep|(ck&Hin&Hfree)].
-    - apply Exists_exists in Hdep as ((xs&es)&Hin&k&Hk&Hnth&Hfree).
+    - apply Exists_exists in Hdep as ((xs&es)&Hin&k&Hnth&Hfree).
       assert (In x (map fst (n_in n ++ n_vars n ++ n_out n))) as Hin'.
       { rewrite map_app. apply in_or_app; right.
         rewrite <- n_defd. unfold vars_defined.
         rewrite flat_map_concat_map. eapply in_concat'; eauto; subst.
-        + eapply nth_In; eauto.
+        + eapply nth_error_In; eauto.
         + eapply in_map_iff. exists (xs, es); auto.
       }
       apply Hdom in Hin' as (?&Hfind). clear Hdom.
@@ -622,7 +658,9 @@ Module Type LCAUSALITY
         assert (Datatypes.length xs = Datatypes.length (collect_free_left_list es)) as Hlen.
       { eapply Forall_forall in Hwl; eauto. inv Hwl.
         erewrite collect_free_left_list_length; eauto. }
-      rewrite <- Hnth, <- combine_nth; auto.
+      assert (k < Datatypes.length xs) by (apply nth_error_Some, not_None_is_Some; eauto).
+      eapply (nth_error_nth _ _ _ xH) in Hnth as <-.
+      rewrite <- combine_nth; auto.
       eapply nth_In. rewrite combine_length, <- Hlen, PeanoNat.Nat.min_id; auto.
       + rewrite fst_NoDupMembers, map_app.
         erewrite wl_node_vars_defined; eauto.
@@ -698,6 +736,7 @@ Module Type LCAUSALITY
     eapply Exists_exists. exists (xs', es); split; eauto.
     apply In_nth with (d:=xH) in Hin' as [k [Hlen Hnth]].
     exists k. repeat split; auto.
+    eapply nth_error_nth' with (d:=xH) in Hlen; subst x.
     intros y' Hfree.
     apply H1. left. apply Hdep. unfold depends_on.
     eapply Exists_exists. exists (xs', es); split; eauto.
@@ -1022,9 +1061,14 @@ Module Type LCAUSALITY
       intros (xs&es) Hin.
       eapply Forall_forall in Hwl; eauto.
       destruct (depends_on_eqb x y xs es (length xs)) eqn:Hdep.
-      - left. rewrite depends_on_eqb_spec in Hdep; eauto.
-      - right.
-        intro contra. rewrite <- depends_on_eqb_spec in contra; eauto.
+      - left. rewrite depends_on_eqb_spec in Hdep; eauto. destruct Hdep as (?&Hl&?&?).
+        apply nth_error_nth' with (d:=xH) in Hl; subst x; eauto.
+      - right. intro contra.
+        assert (exists k : nat, k < Datatypes.length xs
+                                /\ nth k xs xH = x /\ Is_free_left_list y k es) as contra2.
+        { destruct contra as (k & Hnth & ?).
+          apply nth_error_length_nth with (d:=xH) in Hnth as (?&?); eauto. }
+        rewrite <- depends_on_eqb_spec in contra2; eauto.
         congruence.
     Qed.
 

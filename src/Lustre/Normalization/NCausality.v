@@ -473,7 +473,9 @@ Module Type NCAUSALITY
       unfold is_arc. rewrite add_after_spec.
       destruct Hdep as [Hdep|Hdep]; eauto.
       + inversion_clear Hdep as [?? Hk|?? Hex]. 2:(left; eapply Ha; left; eauto).
-        destruct Hk as (?&Hl&Hnth&Hfree'); simpl in *.
+        destruct Hk as (?&Hnth&Hfree'); simpl in *.
+        rewrite nth_error_length_nth in Hnth.
+        specialize (Hnth xH) as (Hl&Hnth).
         rewrite Nat.lt_1_r in Hl; subst.
         inv Hfree'; [|inv H3].
         right; split; auto.
@@ -562,7 +564,9 @@ Module Type NCAUSALITY
     (* All the arcs are here *)
     - intros ? ? [Hdep|Hdep]; [inv Hdep|].
       1-3:unfold is_arc; rewrite add_arc_spec. 2,3:left.
-      + destruct H3 as (?&Hlen&Hnth&Hfree'); simpl in *.
+      + destruct H3 as (?&Hnth&Hfree'); simpl in *.
+        rewrite nth_error_length_nth in Hnth.
+        specialize (Hnth xH) as (Hlen&Hnth).
         apply Nat.lt_1_r in Hlen; subst.
         inv Hfree'; [|inv H6].
         apply Hfree in H6 as [Hfree'|?]; subst; clear Hfree.
@@ -587,9 +591,9 @@ Module Type NCAUSALITY
   Proof.
     intros * Hdep.
     unfold depends_on in Hdep.
-    apply Exists_exists in Hdep as ((?&?)&?&?&Hl&Hnth&_).
+    apply Exists_exists in Hdep as ((?&?)&?&?&Hnth&_).
     eapply vars_defined_In; eauto.
-    rewrite <- Hnth. apply nth_In; auto.
+    eauto using nth_error_In.
   Qed.
 
   Lemma causal_inv_insert_eq :
@@ -664,14 +668,18 @@ Module Type NCAUSALITY
       intros * Hdep.
       unfold is_arc. rewrite add_between_spec; eauto.
       destruct Hdep as [Hdep|Hdep]; [inv Hdep;[|inv H2]|].
-      + destruct H2 as (?&?&?&?); simpl in *.
-        apply Nat.lt_1_r in H1; subst. inv H3; [|inv H6].
+      + destruct H2 as (?&Hnth&?); simpl in *.
+        rewrite nth_error_length_nth in Hnth.
+        specialize (Hnth xH) as (Hlen&Hnth).
+        apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
         apply Hf1 in H6 as [?|?]; subst; auto 10.
         left. apply Ha. left. left.
         exists 0. repeat split; auto. left; auto.
         rewrite Hnum; auto.
-      + destruct H3 as (?&?&?&?); simpl in *.
-        apply Nat.lt_1_r in H1; subst. inv H3; [|inv H6].
+      + destruct H3 as (?&Hnth&?); simpl in *.
+        rewrite nth_error_length_nth in Hnth.
+        specialize (Hnth xH) as (Hlen&Hnth).
+        apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
         right; left. split; auto.
         rewrite PS.union_spec, collect_free_left_spec; eauto.
       + left. apply Ha. left. right; auto.
@@ -793,14 +801,18 @@ Module Type NCAUSALITY
       intros * Hdep.
       unfold is_arc. rewrite add_arc_spec. repeat rewrite add_between_spec; eauto.
       destruct Hdep as [Hdep|Hdep]; [inv Hdep;[|inv H2]|].
-      + destruct H2 as (?&?&?&?); simpl in *.
-        apply Nat.lt_1_r in H1; subst. inv H3; [|inv H6].
+      + destruct H2 as (?&Hnth&?); simpl in *.
+        rewrite nth_error_length_nth in Hnth.
+        specialize (Hnth xH) as (Hlen&Hnth).
+        apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
         apply Hf1 in H6 as [?|[?|?]]; subst; auto 10.
         left. left. apply Ha. left. left.
         exists 0. repeat split; auto. left; auto.
         rewrite Hnum; auto.
-      + destruct H3 as (?&?&?&?); simpl in *.
-        apply Nat.lt_1_r in H1; subst. inv H3; [|inv H6].
+      + destruct H3 as (?&Hnth&?); simpl in *.
+        rewrite nth_error_length_nth in Hnth.
+        specialize (Hnth xH) as (Hlen&Hnth).
+        apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
         left. right; left. split; auto.
         rewrite PS.union_spec, collect_free_left_spec; eauto.
       + left. left. apply Ha. left. right; auto.
