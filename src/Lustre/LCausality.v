@@ -240,11 +240,14 @@ Module Type LCAUSALITY
     let vo := flat_map (fun '(xs, es) =>
                                  let frees := collect_free_left_list es in
                                  List.combine xs frees) (n_eqs n) in
-    let env := Env.from_list (vo ++ (map (fun '(x, (_, ck)) => (x, PS.empty)) (n_in n))) in
-    Env.mapi (fun x deps => match List.find (fun '(x', _) => (x' =? x)%positive) (n_in n ++ n_vars n ++ n_out n) with
-                         | Some (_, (_, ck)) => PS.union deps (collect_free_clock ck)
-                         | None => deps
-                         end) env.
+    let env := Env.from_list (vo ++ (map (fun '(x, _) => (x, PS.empty)) (n_in n))) in
+    Env.mapi (fun x deps =>
+                match List.find (fun xtc => (fst xtc =? x)%positive)
+                                (n_in n ++ n_vars n ++ n_out n)
+                with
+                | Some (_, (_, ck)) => PS.union deps (collect_free_clock ck)
+                | None => deps
+                end) env.
 
   Open Scope error_monad_scope.
 
@@ -323,7 +326,8 @@ Module Type LCAUSALITY
 
   Lemma collect_free_left_list_spec' : forall G es x k,
       Forall (wl_exp G) es ->
-      Forall (fun e => forall k, wl_exp G e -> PS.In x (nth k (collect_free_left e) PS.empty) <-> Is_free_left x k e) es ->
+      Forall (fun e => forall k, wl_exp G e -> PS.In x (nth k (collect_free_left e) PS.empty)
+                                               <-> Is_free_left x k e) es ->
       PS.In x (List.nth k (collect_free_left_list es) PS.empty) <->
       Is_free_left_list x k es.
   Proof.
@@ -347,7 +351,8 @@ Module Type LCAUSALITY
 
   Lemma psunion_collect_free_list_spec' : forall G es x,
       Forall (wl_exp G) es ->
-      Forall (fun e => forall k, wl_exp G e -> PS.In x (nth k (collect_free_left e) PS.empty) <-> Is_free_left x k e) es ->
+      Forall (fun e => forall k, wl_exp G e -> PS.In x (nth k (collect_free_left e) PS.empty)
+                                               <-> Is_free_left x k e) es ->
       PS.In x (PSUnion (collect_free_left_list es)) <->
       (exists k', Exists (Is_free_left x k') es).
   Proof.
@@ -530,6 +535,7 @@ Module Type LCAUSALITY
   Qed.
 
   Hint Constructors Is_free_in_clock.
+
   Lemma collect_free_clock_spec : forall ck x,
       PS.In x (collect_free_clock ck) <->
       Is_free_in_clock x ck.
@@ -582,10 +588,11 @@ Module Type LCAUSALITY
     - apply node_NoDup.
   Qed.
 
+  (* TODO: Move to CommonList? *)
   Fact find_some' : forall {A} (xs : list (ident * A)) x v ,
       NoDupMembers xs ->
       In (x, v) xs ->
-      find (fun '(x', _) => (x' =? x)%positive) xs = Some (x, v).
+      find (fun xtc => (fst xtc =? x)%positive) xs = Some (x, v).
   Proof.
     induction xs; intros * Hndup Hin; inv Hin; inv Hndup; simpl.
     - rewrite Pos.eqb_refl. reflexivity.
@@ -726,8 +733,8 @@ Module Type LCAUSALITY
       In x (vars_defined eqs) ->
       Exists (fun '(xs', es) =>
                 exists k, k < length xs' /\ nth k xs' xH = x /\
-                     (forall y, Is_free_left_list y k es -> In y xs)
-             ) eqs.
+                          (forall y, Is_free_left_list y k es -> In y xs))
+             eqs.
   Proof.
     intros * Hdep Hpref Hin.
     inversion_clear Hpref as [|?? (?&?&?) ?].
@@ -762,7 +769,9 @@ Module Type LCAUSALITY
         P_exps (e::es) k.
 
     Lemma Pexp_Pexps : forall es k,
-        Forall (fun e => forall k, k < numstreams e -> (forall x, Is_free_left x k e -> P_var x) -> P_exp e k) es ->
+        Forall (fun e => forall k, k < numstreams e
+                                   -> (forall x, Is_free_left x k e -> P_var x)
+                                   -> P_exp e k) es ->
         (forall x, Is_free_left_list x k es -> P_var x) ->
         k < length (annots es) ->
         P_exps es k.
@@ -996,10 +1005,12 @@ Module Type LCAUSALITY
     Fixpoint depends_on_eqb x y xs es n :=
       match n with
       | O => false
-      | S n => orb (andb (ident_eqb x (nth n xs xH)) (PS.mem y (nth n (collect_free_left_list es) PS.empty)))
-                  (depends_on_eqb x y xs es n)
+      | S n => (ident_eqb x (nth n xs xH)
+                && PS.mem y (nth n (collect_free_left_list es) PS.empty))
+               || depends_on_eqb x y xs es n
       end.
 
+    (* TODO: Move to Common *)
     Fact lt_S_n_inv : forall m n,
         m < S n ->
         m = n \/ m < n.
@@ -1040,6 +1051,7 @@ Module Type LCAUSALITY
         + right. exists k. repeat split; auto.
     Qed.
 
+    (* TODO: Move to Clocks *)
     Lemma Is_free_in_clock_dec : forall x ck,
         {Is_free_in_clock x ck} + {~Is_free_in_clock x ck}.
     Proof.
@@ -1072,6 +1084,7 @@ Module Type LCAUSALITY
         congruence.
     Qed.
 
+    (* TODO: Move to CommonList *)
     Lemma in_map_fst {A B} : forall (l : list (A * B)) x,
         (forall (x y : A), {x = y} + {x <> y}) ->
         In x (map fst l) ->
