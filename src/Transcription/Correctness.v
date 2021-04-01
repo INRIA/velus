@@ -653,7 +653,7 @@ Module Type CORRECTNESS
           LCS.sem_clock_inputs G f xs ->
           NLSC.sem_node P f xs ys) ->
       LC.wc_node G n ->
-      Forall2 (sem_var H) (LS.idents (L.n_in n)) ins ->
+      Forall2 (sem_var H) (L.idents (L.n_in n)) ins ->
       LCS.sem_clock_inputs (n :: G) (L.n_name n) ins ->
       mmap (to_equation env envo) (L.n_eqs n) = OK eqs' ->
       Forall (LS.sem_equation G H (clocks_of ins)) (L.n_eqs n) ->
@@ -679,13 +679,13 @@ Module Type CORRECTNESS
       LCS.sem_clock_inputs (n :: G) f ins ->
       L.n_name n = f ->
       wc_env (idck (L.n_in n)) ->
-      Forall2 (sem_var H) (LS.idents (L.n_in n)) ins ->
+      Forall2 (sem_var H) (L.idents (L.n_in n)) ins ->
       NLSC.sem_clocked_vars H (clocks_of ins) (idck (L.n_in n)).
   Proof.
     intros * Hv Hnf Wcin Hins.
     eapply LCS.inputs_clocked_vars in Hv; eauto.
     unfold NLSC.sem_clocked_vars, NLSC.sem_clocked_var.
-    unfold idck, LS.idents in *.
+    unfold idck, L.idents in *.
     rewrite Forall2_map_1 in Hins. rewrite Forall2_map_1, Forall2_map_2 in Hv. rewrite Forall_map.
     eapply Forall2_Forall2 in Hv; [|eapply Hins].
     eapply Forall2_ignore2 in Hv. eapply Forall_impl; [|eauto].

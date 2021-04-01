@@ -143,7 +143,7 @@ Module Type CORRECTNESS
       Env.refines eq H H'.
   Proof with eauto.
     intros * Hlen Hvalid Hdom Hids Heq.
-    assert (Forall (fun id => ~In id vars) (List.map fst ids)) as Hnvar.
+    assert (Forall (fun id => ~In id vars) (map fst ids)) as Hnvar.
     { assert (st_valid_reuse st' (PSP.of_list vars) reu) by eauto.
       apply idents_for_anns_incl_ids in Hids.
       solve_forall; simpl.
@@ -264,7 +264,7 @@ Module Type CORRECTNESS
       Env.refines eq H H'.
   Proof with eauto.
     intros vars H H' anns ids vs st st' reusable Hndup Hlen Hvalid Hdom Hids Heq.
-    assert (Forall (fun id => ~In id vars) (List.map fst ids)) as Hnvar.
+    assert (Forall (fun id => ~In id vars) (map fst ids)) as Hnvar.
     { assert (st_valid_reuse st' (PSP.of_list vars) reusable) by eauto.
       apply idents_for_anns'_incl_ids in Hids.
       solve_forall; simpl.
@@ -698,7 +698,7 @@ Module Type CORRECTNESS
       assert (length vs = length a) as Hlength'''.
       { eapply Forall3_length in H15 as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
 
-      remember (Env.adds (List.map fst x5) vs H'') as H'''.
+      remember (Env.adds (map fst x5) vs H'') as H'''.
       assert (length x5 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
 
       assert (Forall2 (sem_var H''') (map fst x5) vs) as Hsemvars.
@@ -757,7 +757,7 @@ Module Type CORRECTNESS
       assert (length vs = length a) as Hlength'''.
       { eapply Forall3_length in H15 as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
 
-      remember (Env.adds (List.map fst x5) vs H'') as H'''.
+      remember (Env.adds (map fst x5) vs H'') as H'''.
       assert (length x5 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
 
       assert (Forall2 (sem_var H''') (map fst x5) vs) as Hsemvars.
@@ -830,7 +830,7 @@ Module Type CORRECTNESS
         * rewrite Forall_app. split; auto.
           solve_forall. eapply sem_equation_refines...
       + (* exp *)
-        remember (Env.adds (List.map fst x0) vs H'') as H'''.
+        remember (Env.adds (map fst x0) vs H'') as H'''.
         assert (length vs = length x0) as Hlength'.
         { eapply idents_for_anns_length in H2. repeat simpl_length.
           apply Forall3_length in H17 as [? ?]; congruence. }
@@ -897,7 +897,7 @@ Module Type CORRECTNESS
         * repeat (rewrite Forall_app; split); auto.
           1,2:solve_forall; repeat (eapply sem_equation_refines; eauto).
       + (* exp *)
-        remember (Env.adds (List.map fst x) vs H''') as H''''.
+        remember (Env.adds (map fst x) vs H''') as H''''.
         assert (length vs = length x) as Hlength'.
         { eapply idents_for_anns_length in H0. repeat simpl_length.
           apply Forall3_length in H19 as [? ?]; congruence. }
@@ -1430,7 +1430,7 @@ Module Type CORRECTNESS
 
   Fact unnest_node_sem_equation : forall G H n Hwl Hpref ins,
       wt_node G n ->
-      Env.dom H (List.map fst (n_in n ++ n_vars n ++ n_out n)) ->
+      Env.dom H (idents (n_in n ++ n_vars n ++ n_out n)) ->
       Forall2 (sem_var H) (idents (n_in n)) ins ->
       Forall (sem_equation G H (clocks_of ins)) (n_eqs n) ->
       exists H', Env.refines eq H H' /\
@@ -1446,7 +1446,7 @@ Module Type CORRECTNESS
       destruct Hwt as [_ [_ [_ Hwt]]]; eauto.
     - rewrite map_fst_idty.
       apply init_st_valid_reuse.
-      + replace (ps_adds _ PS.empty) with (ps_from_list (map fst (anon_in_eqs (n_eqs n)))); auto.
+      + replace (ps_adds _ PS.empty) with (ps_from_list (idents (anon_in_eqs (n_eqs n)))); auto.
         rewrite ps_from_list_ps_of_list.
         repeat rewrite ps_of_list_ps_to_list_Perm; repeat rewrite map_app; repeat rewrite <- app_assoc in *; auto.
         repeat ndup_r Hndup.
@@ -1459,7 +1459,7 @@ Module Type CORRECTNESS
         repeat rewrite map_app.
         repeat apply incl_tl.
         repeat rewrite app_assoc. apply incl_appl. reflexivity.
-      + replace (ps_adds _ PS.empty) with (ps_from_list (map fst (anon_in_eqs (n_eqs n)))); auto.
+      + replace (ps_adds _ PS.empty) with (ps_from_list (idents (anon_in_eqs (n_eqs n)))); auto.
         rewrite PS_For_all_Forall', <- Hpref.
         pose proof (n_good n) as (Good&_).
         eapply Forall_incl; [eauto|].
@@ -1500,7 +1500,7 @@ Module Type CORRECTNESS
       (* New env H' (restrict H) and its properties *)
       eapply LCS.sem_node_restrict in H3 as (Hdom&Hins'&Houts'&Heqs'); eauto.
       2:destruct H6 as (?&?&?&?); auto.
-      remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
+      remember (Env.restrict H (idents (n_in n0++n_vars n0++n_out n0))) as H'.
       clear H H1 H2 HeqH'.
       inversion_clear HwtG. rename H0 into Hwt.
 
@@ -2402,7 +2402,7 @@ Module Type CORRECTNESS
   Qed.
 
   Fact init_st_hist_st : forall b H n,
-      Env.dom H (List.map fst (n_in n++n_vars n++n_out n)) ->
+      Env.dom H (idents (n_in n++n_vars n++n_out n)) ->
       LCS.sc_var_inv' (idck (n_in n++n_vars n++n_out n)) H b ->
       hist_st (idck (n_in n++n_vars n++n_out n)) b H init_st.
   Proof.
@@ -2509,7 +2509,7 @@ Module Type CORRECTNESS
       (* New env H' (restrict H) and its properties *)
       eapply LCS.sem_node_restrict in H3 as (Hdom&Hins'&Houts'&Heqs'); eauto.
       2:destruct H6 as (?&?&?&?); auto.
-      remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
+      remember (Env.restrict H (idents (n_in n0++n_vars n0++n_out n0))) as H'.
       clear H H1 H2 HeqH'.
 
       inversion_clear HwtG. rename H0 into Hwt.

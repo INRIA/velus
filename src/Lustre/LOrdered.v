@@ -35,9 +35,6 @@ Module Type LORDERED
   | INEarrow: forall f le1 le2 la,
       Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 ->
       Is_node_in_exp f (Earrow le1 le2 la)
-  (* | INEpre: forall f le1 la, *)
-  (*     Exists (Is_node_in_exp f) le1 -> *)
-  (*     Is_node_in_exp f (Epre le1 la) *)
   | INEwhen: forall f le x b la,
       Exists (Is_node_in_exp f) le ->
       Is_node_in_exp f (Ewhen le x b la)

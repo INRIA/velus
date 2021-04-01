@@ -320,6 +320,16 @@ Section Extra.
     apply IHl1 in H0; auto.
     f_equal; auto.
   Qed.
+
+  Remark map_cons'':
+    forall {A B : Type} l y ys (f : A -> B),
+      map f l = y :: ys ->
+      exists x xs, l = x :: xs /\ y = f x /\ ys = map f xs.
+  Proof.
+    destruct l; simpl; intros * H.
+    - contradict H. apply nil_cons.
+    - exists a, l. inversion H; auto.
+  Qed.
 End Extra.
 
 Section find.
@@ -411,21 +421,6 @@ Section Map.
       destruct Hr as (k1 & k2 & Hl1 & Hl2 & Hl3).
       exists (x :: k1), k2; simpl; repeat split; auto. congruence.
       f_equal; auto.
-  Qed.
-
-  Remark map_inj: forall xs ys,
-      (forall x y, f x = f y -> x = y) ->
-      map f xs = map f ys -> xs = ys.
-  (* XXX: Is that not defined already?! *)
-  Proof.
-  intros ? ? Hinj ?.
-  generalize dependent ys; generalize dependent xs.
-  induction xs as [| x xs IHxs];
-    intro ys; destruct ys as [ | y ys ]; try discriminate; simpl; auto.
-  intro Heq; inv Heq.
-  assert (x = y) by now apply Hinj.
-  assert (xs = ys) by now apply IHxs.
-  now congruence.
   Qed.
 
   Lemma map_nth':
@@ -3530,8 +3525,19 @@ Section InMembers.
     eapply Hincl in Hin'.
     eapply NoDupMembers_det in Hndup; eauto.
   Qed.
-
 End InMembers.
+
+Fact find_some' : forall {A} (xs : list (positive * A)) x v ,
+    NoDupMembers xs ->
+    In (x, v) xs ->
+    find (fun xtc => (fst xtc =? x)%positive) xs = Some (x, v).
+Proof.
+  induction xs; intros * Hndup Hin; inv Hin; inv Hndup; simpl.
+  - rewrite Pos.eqb_refl. reflexivity.
+  - destruct (Pos.eq_dec a0 x); subst.
+    + apply In_InMembers in H. contradiction.
+    + eapply Pos.eqb_neq in n. rewrite n; auto.
+Qed.
 
 Section OptionLists.
 
@@ -4319,3 +4325,36 @@ Proof.
     destruct (f a) eqn:Ha; inv Hpart; constructor; auto.
     rewrite Bool.not_true_iff_false; auto.
 Qed.
+
+Section nth_error.
+  (* TODO: delete after upgrade to latest Coq version *)
+  Lemma nth_error_nth {A} : forall (l : list A) (n : nat) (x d : A),
+      nth_error l n = Some x -> nth n l d = x.
+  Proof.
+    intros l n x d H.
+    apply nth_error_split in H. destruct H as [l1 [l2 [H H']]].
+    subst. rewrite app_nth2; [|auto].
+    rewrite PeanoNat.Nat.sub_diag. reflexivity.
+  Qed.
+
+  (* TODO: delete after upgrade to latest Coq version *)
+  Lemma nth_error_nth' {A} : forall (l : list A) (n : nat) (d : A),
+    n < length l -> nth_error l n = Some (nth n l d).
+  Proof.
+    intros l n d H.
+    apply (nth_split _ d) in H. destruct H as [l1 [l2 [H H']]].
+    subst. rewrite H. rewrite nth_error_app2; [|auto].
+    rewrite app_nth2; [| auto]. repeat (rewrite PeanoNat.Nat.sub_diag). reflexivity.
+  Qed.
+
+  Lemma nth_error_length_nth {A} : forall (l : list A) (n : nat) (x : A),
+      nth_error l n = Some x <-> (forall d, n < Datatypes.length l /\ nth n l d = x).
+  Proof.
+    split; intro H.
+    - split.
+      + apply nth_error_Some; rewrite H; discriminate.
+      + now apply nth_error_nth.
+    - specialize (H x) as (Hl&Hn). rewrite <-Hn.
+      now apply nth_error_nth'.
+  Qed.
+End nth_error.

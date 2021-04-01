@@ -34,9 +34,9 @@ From compcert Require Import common.Errors.
 
 (** *)
 (*   Lexing and parsing gives a list of LustreAst declarations. Elaboration *)
-(*   transforms them into Lustre declarations, whilst simultaneously ensuring *)
-(*   that the resulting program is well-typed and well-clocked. Several other *)
-(*   well-formedness requirements (node invariants) are also checked. *)
+(*   transforms them into Lustre declarations, and checks that the resulting *)
+(*   program is well-typed and well-clocked. Several other well-formedness *)
+(*   requirements (node invariants) are also checked. *)
 
 (*   The type and clock checking is done during elaboration for two reasons: *)
 
@@ -45,8 +45,9 @@ From compcert Require Import common.Errors.
 
 (*   - The Lustre AST requires type and clock annotations. *)
 
-(*   Types and clocks are checked simultaneously. Doing both in one pass is not *)
-(*   only more efficient, it also simplifies the proofs. *)
+(*   Types and clocks are inferred simultaneously, and checked separately *)
+(*   Simultaneous inferrence is more efficient, and separate checking simplifies *)
+(*   the proofs *)
 
 (*   Variable declarations within nodes are elaborated to produce a map from *)
 (*   each identifier to its declared type and clock. A PositiveMap is used for *)
@@ -83,11 +84,7 @@ From compcert Require Import common.Errors.
 (*   The [elab_var_decls] function builds the map in three cumulative steps: *)
 (*   first inputs, then outputs, then locals. This is done to ensure that input *)
 (*   clocks are only dependent on other inputs and that output clocks are only *)
-(*   dependent on inputs or other outputs. This requirement is not yet needed as *)
-(*   an invariant; possibly because we do not currently support clocked inputs *)
-(*   and outputs. *)
-(* TODO: it is required by typing and clocking. *)
-(*  *)
+(*   dependent on inputs or other outputs. *)
 
 Parameter elab_const_int : Cabs.loc -> string -> constant.
 Parameter elab_const_float : Cabs.floatInfo -> constant.
@@ -1191,7 +1188,7 @@ Section ElabDeclaration.
   Qed.
 
   Definition check_nodupanon loc (xin xvar xout : list (ident * (type * clock))) (eqs : list equation) :=
-    if check_nodup (List.map fst (xin++xvar++xout++anon_in_eqs eqs))
+    if check_nodup (Syn.idents (xin++xvar++xout++anon_in_eqs eqs))
     then ret tt
     else err_loc loc (msg "Duplicate in input, vars and outputs of node").
 

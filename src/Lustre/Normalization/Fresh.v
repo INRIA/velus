@@ -9,10 +9,22 @@ From Velus Require Import Common.
 (** * Fresh name generation *)
 
 (** The fresh monad (with memory) : generates new names and keeps
-    a record of each name generated along with some information *)
+    a record of each name generated along with some information
+
+    The file is structured as such:
+
+    - a signature FRESHKERNEL, which exposes the kernel features of the monad
+    - a functor FreshKernel which implements the previous signature,
+      and contains some gruesome definitions details that we prefer to hide
+    - a functor Fresh that includes FreshKernel and also offers some additional lemmas.
+      This module should be instanciated using an IDS module that contains, among other things,
+      the gensym function used for name generation
+ *)
 Module Type FRESHKERNEL
        (Import Ids : IDS).
 
+  (** The Monad manipulates a state, which exposes a list of the identifiers generated
+      by the monad, paired with some data *)
   Section st.
     Parameter fresh_st : Type -> Type.
     Context {B : Type}.
@@ -22,47 +34,49 @@ Module Type FRESHKERNEL
 
   Definition Fresh (A B : Type) : Type := fresh_st B -> A * fresh_st B.
 
-  Section ret.
-    Context {A B : Type}.
-    Parameter ret : A -> Fresh A B.
-    Conjecture ret_spec : forall a st,
-        ret a st = (a, st).
-  End ret.
-
+  (** The state can be deemed as "valid".
+      [st_valid_after st prefix aft] means that the state only contains
+      identifier prefixed by [prefix] and that are distinct from the ones in [aft].
+      This properties also ensures that all ids in the state are distinct *)
   Section validity.
     Context {B : Type}.
     Parameter st_valid_after : fresh_st B -> ident -> PS.t -> Prop.
-    Conjecture st_valid_NoDup : forall st pref aft,
-        st_valid_after st pref aft ->
+    Conjecture st_valid_NoDup : forall st prefix aft,
+        st_valid_after st prefix aft ->
         NoDup (st_ids st++PSP.to_list aft).
-    Conjecture st_valid_PSeq : forall st pref aft1 aft2,
+    Conjecture st_valid_PSeq : forall st prefix aft1 aft2,
         PS.eq aft1 aft2 ->
-        st_valid_after st pref aft1 ->
-        st_valid_after st pref aft2.
-    Conjecture st_valid_prefixed : forall st pref aft,
-        st_valid_after st pref aft ->
-        Forall (fun x => exists n, x = gensym pref n) (st_ids st).
+        st_valid_after st prefix aft1 ->
+        st_valid_after st prefix aft2.
+    Conjecture st_valid_prefixed : forall st prefix aft,
+        st_valid_after st prefix aft ->
+        Forall (fun x => exists n, x = gensym prefix n) (st_ids st).
   End validity.
 
-  (** Reusability: we can define a set of identifier to be reused by the state *)
+  (** Sometimes we need to reuse allready existing identifiers.
+      [st_valid_reuse st prefix aft reprefs reusable] means that
+      the state only contains idents prefixed by either [prefix] or [reprefs].
+      These idents are distinct from [aft] and [reusable], but the ones in
+      [reusable] can also by reused by the function [reuse_ident] (see below)
+      while preserving this invariant *)
   Section validity_reuse.
     Context {B : Type}.
     Parameter st_valid_reuse : fresh_st B -> ident -> PS.t -> PS.t -> PS.t -> Prop.
-    (* Conjecture st_valid_reuse_st_valid : forall st pref aft reprefs reusable, *)
-    (*     st_valid_reuse st pref aft reprefs reusable -> *)
-    (*     st_valid_after st pref aft. *)
-    Conjecture st_valid_reuse_NoDup : forall st pref aft reprefs reusable,
-        st_valid_reuse st pref aft reprefs reusable ->
+    Conjecture st_valid_reuse_NoDup : forall st prefix aft reprefs reusable,
+        st_valid_reuse st prefix aft reprefs reusable ->
         NoDup (st_ids st++PSP.to_list aft++PSP.to_list reusable).
-    Conjecture st_valid_reuse_PSeq : forall st pref aft reprefs re1 re2,
+    Conjecture st_valid_reuse_PSeq : forall st prefix aft reprefs re1 re2,
         PS.eq re1 re2 ->
-        st_valid_reuse st pref aft reprefs re1 ->
-        st_valid_reuse st pref aft reprefs re2.
-    Conjecture st_valid_reuse_prefixed : forall st pref aft reprefs reu,
-        st_valid_reuse st pref aft reprefs reu ->
-        Forall (AtomOrGensym (PS.add pref reprefs)) (st_ids st).
+        st_valid_reuse st prefix aft reprefs re1 ->
+        st_valid_reuse st prefix aft reprefs re2.
+    Conjecture st_valid_reuse_prefixed : forall st prefix aft reprefs reu,
+        st_valid_reuse st prefix aft reprefs reu ->
+        Forall (AtomOrGensym (PS.add prefix reprefs)) (st_ids st).
   End validity_reuse.
 
+  (** [st_follows] forms an inclusion relation over the contents of the states.
+      We show below that every primimitive Fresh operation produces a new state
+      that follows the previous one *)
   Section follows.
     Context {B : Type}.
     Parameter st_follows : fresh_st B -> fresh_st B -> Prop.
@@ -73,22 +87,31 @@ Module Type FRESHKERNEL
         incl (st_anns st) (st_anns st').
   End follows.
 
+  (** The initial state is empty.
+      An empty state is valid under a few assumption :
+      - the [prefix] used for generating must be different from the ones used previously.
+      - in the case of [st_valid_reuse], the reusable and non-reusable idents must be distinct
+      When initializing *)
   Section init.
     Context {B : Type}.
     Parameter init_st : fresh_st B.
     Conjecture init_st_anns : st_anns init_st = [].
-    Conjecture init_st_valid : forall pref aft aftprefs,
-        ~PS.In pref aftprefs ->
+    Conjecture init_st_valid : forall prefix aft aftprefs,
+        ~PS.In prefix aftprefs ->
         PS.For_all (AtomOrGensym aftprefs) aft ->
-        st_valid_after init_st pref aft.
-    Conjecture init_st_valid_reuse : forall pref aft reprefs reusable,
+        st_valid_after init_st prefix aft.
+    Conjecture init_st_valid_reuse : forall prefix aft reprefs reusable,
         NoDup (PSP.to_list aft++PSP.to_list reusable) ->
-        ~PS.In pref reprefs ->
+        ~PS.In prefix reprefs ->
         PS.For_all (AtomOrGensym reprefs) aft ->
         PS.For_all (AtomOrGensym reprefs) reusable ->
-        st_valid_reuse init_st pref aft reprefs reusable.
+        st_valid_reuse init_st prefix aft reprefs reusable.
   End init.
 
+  (** The central function for fresh identifier generation,
+      [fresh_ident prefix d] generates a new identifier prefixed by [prefix] and
+      associated with data [d] in the new state.
+      [fresh_ident prefix d] preserves validity as long as [prefix] is the correct one *)
   Section fresh_ident.
     Context {B : Type}.
     Parameter fresh_ident : ident -> B -> Fresh ident B.
@@ -110,6 +133,10 @@ Module Type FRESHKERNEL
         st_follows st st'.
   End fresh_ident.
 
+  (** As stated above, it is also possible to reuse already existing identifiers,
+      that is adding it to the state.
+      [reuse_ident x d] adds [x] into the state, associated with [d].
+      If this function is used, only the [st_valid_reuse] property can be preserved *)
   Section reuse_ident.
     Context {B : Type}.
     Parameter reuse_ident : ident -> B -> Fresh unit B.
@@ -127,6 +154,13 @@ Module Type FRESHKERNEL
         reuse_ident id b st = (tt, st') ->
         st_follows st st'.
   End reuse_ident.
+
+  Section ret.
+    Context {A B : Type}.
+    Parameter ret : A -> Fresh A B.
+    Conjecture ret_spec : forall a st,
+        ret a st = (a, st).
+  End ret.
 
   Section bind.
     Context {A A' B : Type}.

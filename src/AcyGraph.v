@@ -703,49 +703,6 @@ Section Dfs.
   Defined.
   Extraction Inline none_visited.
 
-  (* TODO: move to Common *)
-  Lemma sig2_of_sig:
-    forall {A : Type} {P Q : A -> Prop} (s : { s : A | P s }),
-      Q (proj1_sig s) ->
-      { s | P s & Q s }.
-  Proof.
-    intros ? ? ? (s, Ps) Qs.
-    exact (exist2 _ _ s Ps Qs).
-  Defined.
-  Extraction Inline sig2_of_sig.
-
-  (* TODO: move to Common *)
-  Lemma sig2_weaken2:
-    forall {A : Type} {P Q Q' : A -> Prop},
-      (forall s, Q s -> Q' s) ->
-      { s : A | P s & Q s } ->
-      { s | P s & Q' s }.
-  Proof.
-    intros * HQQ s.
-    destruct s as (s, Ps, Qs).
-    apply HQQ in Qs.
-    exact (exist2 _ _ s Ps Qs).
-  Defined.
-  Extraction Inline sig2_weaken2.
-
-  (* TODO: move this and following two lemmas to Common. *)
-  Definition In_ps (xs : list positive) (v : PS.t) :=
-    Forall (fun x => PS.In x v) xs.
-
-  Lemma In_ps_nil:
-    forall v, In_ps [] v.
-  Proof.
-    intro v. apply Forall_nil.
-  Qed.
-
-  Lemma In_ps_singleton:
-    forall x v,
-      PS.In x v <-> In_ps [x] v.
-  Proof.
-    split; intro HH; [|now inv HH].
-    now apply Forall_cons; auto.
-  Qed.
-
   Definition dfs'_loop
              (inp : PS.t)
              (dfs' : forall x (v : { v | visited inp v }),

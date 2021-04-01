@@ -64,23 +64,6 @@ Module Type LSEMANTICS
       arrow1 xs ys rs ->
       arrow (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
-  (* TODO : define semantics for pre (nil ?) *)
-  (* CoInductive pre1 : val -> Stream value -> Stream value -> Prop := *)
-  (* | Pre1A: *)
-  (*     forall v xs rs, *)
-  (*       pre1 v xs rs -> *)
-  (*       pre1 v (absent ⋅ xs) (absent ⋅ rs) *)
-  (* | Pre1P: *)
-  (*     forall v s xs rs, *)
-  (*       pre1 s xs rs -> *)
-  (*       pre1 v (present s ⋅ xs) (present v ⋅ rs). *)
-
-  (* Definition pre (ty : Op.type) (xs rs : Stream value) : Prop := *)
-  (*   pre1 (sem_const (init_type ty)) xs rs. *)
-
-  (* TODO: Use everywhere, esp. in LustreElab.v *)
-  Definition idents xs := List.map (@fst ident (type * clock)) xs.
-
   Section NodeSemantics.
 
     Variable G : global.
@@ -126,12 +109,6 @@ Module Type LSEMANTICS
           Forall2 (sem_exp H b) es sss ->
           Forall3 arrow (concat s0ss) (concat sss) os ->
           sem_exp H b (Earrow e0s es anns) os
-
-    (* | Spre: *)
-    (*     forall H b es anns sss os, *)
-    (*       Forall2 (sem_exp H b) es sss -> *)
-    (*       Forall3 pre (List.map fst anns) (concat sss) os -> *)
-    (*       sem_exp H b (Epre es anns) os *)
 
     | Swhen:
         forall H b x s k es lann ss os,
@@ -250,13 +227,6 @@ Module Type LSEMANTICS
         Forall3 arrow (concat s0ss) (concat sss) os ->
         P_exp H b (Earrow e0s es anns) os.
 
-    (* Hypothesis PreCase: *)
-    (*   forall H b es anns sss os, *)
-    (*     Forall2 (sem_exp G H b) es sss -> *)
-    (*     Forall2 (P_exp H b) es sss -> *)
-    (*     Forall3 pre (List.map fst anns) (concat sss) os -> *)
-    (*     P_exp H b (Epre es anns) os. *)
-
     Hypothesis WhenCase:
       forall H b x s k es lann ss os,
         Forall2 (sem_exp G H b) es ss ->
@@ -354,7 +324,6 @@ Module Type LSEMANTICS
         + eapply BinopCase; eauto.
         + eapply FbyCase; eauto; clear H2; SolveForall.
         + eapply ArrowCase; eauto; clear H2; SolveForall.
-        (* + eapply PreCase; eauto; clear H1; SolveForall. *)
         + eapply WhenCase; eauto; clear H2; SolveForall.
         + eapply MergeCase; eauto; clear H3; SolveForall.
         + eapply IteCase; eauto; clear H2; SolveForall.
@@ -409,11 +378,6 @@ Module Type LSEMANTICS
       intro. destruct H5. constructor. auto.
       apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
       destruct H6; auto.
-    (* - econstructor; eauto. *)
-    (*   clear H2. induction H1; eauto. constructor. apply H1. *)
-    (*   intro. destruct H3. constructor. auto. inv H0. *)
-    (*   apply IHForall2; eauto. intro. destruct H3. constructor. inv H0. *)
-    (*   right; auto. *)
     - econstructor; eauto.
       clear H0 H3. induction H1; eauto. constructor. apply H0.
       intro. destruct H4. constructor. auto.
@@ -505,11 +469,6 @@ Module Type LSEMANTICS
       intro. destruct H5. constructor. auto.
       apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
       destruct H6; auto.
-    (* - econstructor; eauto. *)
-    (*   clear H2. induction H1; eauto. constructor. apply H1. *)
-    (*   intro. destruct H3. constructor. auto. inv H0. *)
-    (*   apply IHForall2; eauto. intro. destruct H3. constructor. inv H0. *)
-    (*   right; auto. *)
     - econstructor; eauto.
       clear H0 H3. induction H1; eauto. constructor. apply H0.
       intro. destruct H4. constructor. auto.
@@ -628,10 +587,6 @@ Module Type LSEMANTICS
       clear H5 H0 H9 H12. induction H11; auto. constructor.
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
-    (* - econstructor; eauto. *)
-    (*   clear H9. induction H7; auto. constructor. *)
-    (*   inv H0. apply H4; auto. SolveNin Hnin. *)
-    (*   inv H0. apply IHForall2; eauto. SolveNin Hnin. *)
     - econstructor; eauto.
       clear H5 H11 H12. induction H10; eauto. constructor.
       inv H0. apply H4; eauto. SolveNin Hnin.
@@ -718,10 +673,6 @@ Module Type LSEMANTICS
       clear H5 H0 H9 H12. induction H11; auto. constructor.
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
-    (* - econstructor; eauto. *)
-    (*   clear H5 H9. induction H7; auto. constructor. *)
-    (*   inv H0. apply H4; auto. SolveNin Hnin. *)
-    (*   inv H0. apply IHForall2; eauto. SolveNin Hnin. *)
     - econstructor; eauto.
       clear H5 H11 H12. induction H10; eauto. constructor.
       inv H0. apply H4; eauto. SolveNin Hnin.
@@ -829,28 +780,6 @@ Module Type LSEMANTICS
     + inv H. inv H2. inv H4. econstructor.
       rewrite <- H1, <- H3, <- H5; auto.
   Qed.
-
-  (* Add Parametric Morphism : pre1 *)
-  (*     with signature @eq val ==> @EqSt value ==> @EqSt value ==> Basics.impl *)
-  (*       as pre1_EqSt. *)
-  (* Proof. *)
-  (*   cofix Cofix. *)
-  (*   intros v xs xs' Exs rs rs' Ers H. *)
-  (*   destruct xs' as [[]], rs' as [[]]; *)
-  (*     inv H; inv Exs; inv Ers; simpl in *; *)
-  (*       try discriminate. *)
-  (*   + constructor; eapply Cofix; eauto. *)
-  (*   + rewrite <- H, <- H2. econstructor; eapply Cofix; eauto. *)
-  (* Qed. *)
-
-  (* Add Parametric Morphism : pre *)
-  (*     with signature @eq type ==> @EqSt value ==> @EqSt value ==> Basics.impl *)
-  (*       as pre_EqSt. *)
-  (* Proof. *)
-  (*   intros ty xs xs' Exs rs rs' Ers H. *)
-  (*   unfold pre in *. *)
-  (*   rewrite <- Exs, <- Ers; auto. *)
-  (* Qed. *)
 
   Add Parametric Morphism k : (when k)
       with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
@@ -977,10 +906,6 @@ Module Type LSEMANTICS
       + eapply Forall2_impl_In; [|apply H3].
         intros * ?? Hs; apply Hs; auto; reflexivity.
       + eapply Forall3_EqSt; eauto. solve_proper.
-    (* - econstructor. *)
-    (*   + eapply Forall2_impl_In; [|apply H1]. *)
-    (*     intros * ?? Hs; apply Hs; auto; reflexivity. *)
-    (*   + eapply Forall3_EqSt; eauto. solve_proper. *)
     - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H1].
         intros * ?? Hs; apply Hs; auto; reflexivity.
@@ -1085,8 +1010,6 @@ Module Type LSEMANTICS
       econstructor; eauto; repeat rewrite_Forall_forall...
     - (* arrow *)
       econstructor; eauto; repeat rewrite_Forall_forall...
-    (* - (* pre *) *)
-    (*   econstructor; eauto; repeat rewrite_Forall_forall... *)
     - (* when *)
       econstructor; eauto; repeat rewrite_Forall_forall...
       eapply sem_var_refines...
@@ -1237,17 +1160,6 @@ Module Type LSEMANTICS
       + apply nth_In; congruence.
       + apply H5. apply nth_In; congruence.
       + eapply H6... congruence.
-    (* - (* pre *) *)
-    (*   repeat rewrite_Forall_forall. *)
-    (*   rewrite <- H5, <- H6, H3. *)
-    (*   unfold annots; rewrite flat_map_concat_map. *)
-    (*   apply concat_length_eq. *)
-    (*   rewrite Forall2_map_2. *)
-    (*   rewrite_Forall_forall. *)
-    (*   rewrite length_annot_numstreams. eapply H0. *)
-    (*   + apply nth_In; congruence. *)
-    (*   + apply H4. apply nth_In; congruence. *)
-    (*   + eapply H2... congruence. *)
     - (* when *)
       repeat rewrite_Forall_forall.
       rewrite <- H1. rewrite <- H7.

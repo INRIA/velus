@@ -549,11 +549,6 @@ environment.
       apply_lift sem_caexp_instant_det.
     Qed.
 
-  (* XXX: every semantics definition, including [sem_var] which doesn't
-need it, takes a base clock value or base clock stream, except
-[sem_var_instant]. For uniformity, we may want to pass a (useless)
-clock to [sem_var_instant] too. *)
-
   End LiftDeterminism.
 
   (* Lemma clock_of_det: *)

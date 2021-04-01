@@ -45,49 +45,6 @@ Module Type TRCLOCKING
        (NLC         : NLCLOCKING Ids Op CE NL Ord Mem IsD CEIsF IsF CEClo)
        (Import TR   : TR Ids Op OpAux L CE NL).
 
-  (* TODO: duplicate from LSemantics.v *)
-  Definition idents xs := List.map (@fst ident (type * clock)) xs.
-
-  (*  TODO: move to CommonList *)
-  Remark map_cons'':
-    forall {A B : Type} l y ys (f : A -> B),
-      map f l = y :: ys ->
-      exists x xs, l = x :: xs /\ y = f x /\ ys = map f xs.
-  Proof.
-    destruct l; simpl; intros * H.
-    - contradict H. apply nil_cons.
-    - exists a, l. inversion H; auto.
-  Qed.
-
-  (* TODO: move to Common *)
-  Lemma assoc_ident_true :
-    forall {A} (x: ident) (y : A) (xs: list (ident * A)),
-      NoDupMembers xs ->
-      In (x,y) xs ->
-      assoc_ident x xs = Some y.
-  Proof.
-    induction xs as [| a]. inversion 2.
-    intros Hdup Hin.
-    inv Hdup. unfold assoc_ident. simpl. destruct Hin as [He |].
-    - inv He. now rewrite ident_eqb_refl.
-    - destruct (ident_eqb a0 x) eqn:Heq; auto. apply ident_eqb_eq in Heq.
-      subst. exfalso. eauto using In_InMembers.
-  Qed.
-
-  (* TODO: move to Common *)
-  Lemma assoc_ident_false:
-    forall {A} (x: ident) (xs: list (ident * A)),
-      ~InMembers x xs ->
-      assoc_ident x xs = None.
-  Proof.
-    induction xs as [| a]; auto.
-    intro nin. unfold assoc_ident. cases_eqn EE.
-    apply find_some in EE as [Hin Eq]. destruct a. subst. simpl in *.
-    apply ident_eqb_eq in Eq as ->.
-    exfalso. apply nin. destruct Hin as [H|H].
-    inv H. tauto. eauto using In_InMembers.
-  Qed.
-
   Lemma envs_eq_in :
     forall env cenv x ck,
       envs_eq env cenv ->
@@ -307,7 +264,7 @@ Module Type TRCLOCKING
            in the left side of the equation may have no image bu [sub].
            -> see LClocking.wc_equation *)
         * instantiate (1 := fun x => match sub x with
-                                  | None => assoc_ident x (combine (idents (L.n_out n)) xs)
+                                  | None => assoc_ident x (combine (L.idents (L.n_out n)) xs)
                                   | s => s
                                   end).
           (* inputs *)
@@ -340,12 +297,12 @@ Module Type TRCLOCKING
           2:{ simpl.
               rewrite assoc_ident_false. constructor.
               apply nodupmembers_cons in Hdup as [Hin].
-              rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
+              rewrite <- In_InMembers_combine. unfold L.idents. intro Hin'.
               apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
               eapply Hin, In_InMembers.
               repeat rewrite in_app_iff. right; right; left; eauto.
               apply Forall2_length in Hf2. apply Forall2_length in WIo.
-              unfold idents, idck in *. repeat rewrite map_length in *.
+              unfold L.idents, idck in *. repeat rewrite map_length in *.
               congruence.
           }
           simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
@@ -368,7 +325,7 @@ Module Type TRCLOCKING
              destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
              rewrite Hsub in Heq. rewrite <- Heq in Hl. simpl in Hl.
              now subst.
-             unfold idents. apply assoc_ident_true.
+             unfold L.idents. apply assoc_ident_true.
              2:{ rewrite combine_map_fst, in_map_iff.
                  esplit; split; eauto. now simpl. }
              apply NoDup_NoDupMembers_combine.
@@ -392,7 +349,7 @@ Module Type TRCLOCKING
            in the left side of the equation may have no image bu [sub].
            -> see LClocking.wc_equation *)
         * instantiate (1 := fun x => match sub x with
-                                  | None => assoc_ident x (combine (idents (L.n_out n)) xs)
+                                  | None => assoc_ident x (combine (L.idents (L.n_out n)) xs)
                                   | s => s
                                   end).
           (* inputs *)
@@ -425,12 +382,12 @@ Module Type TRCLOCKING
           2:{ simpl.
               rewrite assoc_ident_false. constructor.
               apply nodupmembers_cons in Hdup as [Hin].
-              rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
+              rewrite <- In_InMembers_combine. unfold L.idents. intro Hin'.
               apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
               eapply Hin, In_InMembers.
               repeat rewrite in_app_iff. right; right; left; eauto.
               apply Forall2_length in Hf2. apply Forall2_length in WIo.
-              unfold idents, idck in *. repeat rewrite map_length in *.
+              unfold L.idents, idck in *. repeat rewrite map_length in *.
               congruence.
           }
           simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
@@ -453,7 +410,7 @@ Module Type TRCLOCKING
              destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
              rewrite Hsub in Heq. rewrite <- Heq in Hl. simpl in Hl.
              now subst.
-             unfold idents. apply assoc_ident_true.
+             unfold L.idents. apply assoc_ident_true.
              2:{ rewrite combine_map_fst, in_map_iff.
                  esplit; split; eauto. now simpl. }
              apply NoDup_NoDupMembers_combine.

@@ -80,7 +80,7 @@ Module Type OBCADDDEFAULTS
       | Call xs f o m es =>
         let (es', required') := fold_right add_valid
                                            ([], ps_removes xs required) es
-        in (Call xs f o m es', required', PS.empty, ps_adds xs PS.empty)
+        in (Call xs f o m es', required', PS.empty, PSP.of_list xs)
       | Comp s1 s2 =>
         let '(t2, required2, sometimes2, always2) := add_defaults_stmt required s2 in
         let '(t1, required1, sometimes1, always1) := add_defaults_stmt required2 s1 in
@@ -125,7 +125,7 @@ Module Type OBCADDDEFAULTS
          (let tyenv := fun x => Env.find x
                 (Env.adds' outs (Env.adds' vars (Env.from_list ins))) in
           let '(body', required, sometimes, always) :=
-              add_defaults_stmt tyenv (ps_adds (map fst outs) PS.empty) body in
+              add_defaults_stmt tyenv (PSP.of_list (map fst outs)) body in
           add_writes tyenv (ps_removes (map fst ins) required) body')
          nodup good
     end.
@@ -591,14 +591,14 @@ Module Type OBCADDDEFAULTS
       inv Hadd. repeat split; auto.
       + intros x Hin.
         destruct (In_dec ident_eq_dec x ys) as [Hys|Hnys]; [left|right].
-        * now apply ps_adds_spec; auto.
+        * now apply ps_of_list_In; auto.
         * apply In_snd_fold_right_add_valid, ps_removes_spec; auto.
       + setoid_rewrite PS.union_spec.
         intros x [Hin|Hin]; try not_In_empty.
-        apply ps_adds_spec in Hin as [Hin|Hin]; try not_In_empty; auto.
+        apply ps_of_list_In in Hin; auto.
       + setoid_rewrite PS.union_spec.
         intros x Hncw [Hin|Hin]; try not_In_empty.
-        apply ps_adds_spec in Hin as [Hin|Hin]; try not_In_empty; auto.
+        apply ps_of_list_In in Hin; auto.
       + constructor. rewrite add_valid_add_valid', app_nil_r.
         rewrite Forall_map; auto. apply Forall_forall.
         intros e Hin y ty. destruct e; try discriminate.
@@ -778,7 +778,7 @@ Module Type OBCADDDEFAULTS
       rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
       inv Hadd. inv Heval.
       apply Env.find_In_gsso_opt.
-      intro Hin; apply Hnin. setoid_rewrite ps_adds_spec; auto.
+      intro Hin; apply Hnin. apply PSF.union_3, ps_of_list_In; auto.
     - (* * Skip *)
       now inv Heval.
   Qed.
@@ -979,9 +979,7 @@ Module Type OBCADDDEFAULTS
             match goal with H:Forall _ _ |- _ =>
                             apply Forall_impl_In with (2:=H) end.
             intros e Hin WTe. destruct e; simpl; inv WTe; auto using wt_exp.
-        + apply PS_For_all_ps_adds; split; auto using PS_For_all_empty.
-          apply Forall_forall.
-          intros x Hin.
+        + intros x Hin. apply ps_of_list_In in Hin.
           match goal with H:Forall2 _ _ _ |- _ =>
             apply Forall2_in_left with (1:=H) in Hin as (xty & Hin1 & Hin2) end.
           eauto using In_InMembers.
@@ -1209,7 +1207,7 @@ Module Type OBCADDDEFAULTS
         + (* forall x, ~x ∈ (st ∪ al) -> Env.find x env' = Env.find x env *)
           intros x Hnin.
           apply Env.find_In_gsso_opt.
-          rewrite PSP.empty_union_1, ps_adds_spec in Hnin; auto.
+          rewrite PSP.empty_union_1, ps_of_list_In in Hnin; auto.
         + (* forall x, x ∈ al -> Env.In x env' *)
           assert (length ys = length rvos) as Hlys.
           { inv Hwt.
@@ -1232,7 +1230,7 @@ Module Type OBCADDDEFAULTS
           match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ =>
                           apply Hcall in H; rename H into Hnn end.
           *{ intros x Hinadds.
-             apply ps_adds_In in Hinadds; auto using not_In_empty.
+             apply ps_of_list_In in Hinadds.
              revert Hnn Hinadds Hlys'; clear; intros Hnn Hinadds Hlys'.
              induction Hlys'; inv Hinadds.
              - inversion_clear Hnn as [|? ? Hrvo Hrvos].
@@ -1308,13 +1306,13 @@ Module Type OBCADDDEFAULTS
     Qed.
 
     Lemma in1_notin2_Var_Not_In:
-      forall ys s1 s2 ve' ve,
-        in1_notin2 s1 (ps_adds ys s2) ve' ve ->
+      forall ys s1 ve' ve,
+        in1_notin2 s1 (PSP.of_list ys) ve' ve ->
         Forall (fun x => ~ Env.In x ve) ys.
     Proof.
       intros * (?& Hnin).
       apply Forall_forall; intros * Hin.
-      apply Hnin, ps_adds_spec; auto.
+      apply Hnin, ps_of_list_In; auto.
     Qed.
 
     Lemma in1_notin2_infer:
@@ -1406,7 +1404,7 @@ Module Type OBCADDDEFAULTS
                           as (rvos' & Hcall' & Hrvos') end.
         { inv Hwt.
           exists (Env.adds_opt ys rvos' ve1); split; eauto using stmt_eval.
-          apply env_refines_adds_opt; auto.
+          apply Env.refines_adds_opt; auto.
           simpl in *.
           eapply in1_notin2_Var_Not_In; eauto.
         }
@@ -1580,7 +1578,7 @@ Module Type OBCADDDEFAULTS
     forall {A} (min mvars mout : list (ident * A)) S,
       NoDupMembers (min ++ mvars ++ mout) ->
       PS.For_all
-        (fun x => PS.In x (ps_adds (map fst mout) PS.empty) \/
+        (fun x => PS.In x (PSP.of_list (map fst mout)) \/
                   InMembers x (min ++ mvars ++ mout)) S ->
       PS.For_all (fun x => Env.find x (Env.from_list (min ++ mvars ++ mout)) <> None)
                  (ps_removes (map fst min) S).
@@ -1588,7 +1586,7 @@ Module Type OBCADDDEFAULTS
     intros A min mvars mout S Hmndup HS x Hin.
     apply ps_removes_spec in Hin as (Hnin & Hin).
     apply PS_In_Forall with (1:=HS) in Hin as [Hin|Hin].
-    - apply ps_adds_spec in Hin as [Hin|Hin]; try not_In_empty.
+    - apply ps_of_list_In in Hin.
       apply in_map_iff in Hin as ((y & yty) & Heq & Hin).
       do 2 (eapply or_intror, in_app in Hin).
       eapply Env.In_find_adds' in Hin; eauto.
@@ -1633,10 +1631,9 @@ Module Type OBCADDDEFAULTS
           by (now unfold Env.from_list; repeat rewrite Env.adds'_app).
       rewrite Hpmeq in Heval'; clear Hpmeq.
 
-      (* TODO: Use PSP.of_list instead of ps_adds in main definitions *)
       remember (add_defaults_stmt
                   (fun x => Env.find x (Env.from_list (min ++ mvars ++ mout)))
-                  (ps_adds (map fst mout) PS.empty) mbody) as defs.
+                  (PSP.of_list (map fst mout)) mbody) as defs.
       symmetry in Heqdefs.
       setoid_rewrite Heqdefs in Heval'.
       destruct defs as [[[t req'] stimes] always].
@@ -1669,7 +1666,7 @@ Module Type OBCADDDEFAULTS
           apply fst_InMembers in Hin.
           apply NoDupMembers_app_InMembers with (1:=Hmndup) in Hin'.
           apply Hin', InMembers_app; auto. }
-        eapply or_introl, ps_adds_spec, Halreq' in Hin as [Hin|Hin].
+        eapply ps_of_list_In, Halreq' in Hin as [Hin|Hin].
         * apply Hal, Env.Props.P.F.in_find_iff in Hin. now rewrite Hfind in Hin.
         * apply (conj Hnmin), ps_removes_spec, Hreq'in in Hin.
           apply stmt_eval_mono' with (3:=Heval') in Hin; auto.
@@ -1717,7 +1714,7 @@ Module Type OBCADDDEFAULTS
 
     remember (add_defaults_stmt
                 (fun x => Env.find x (Env.from_list (min ++ mvars ++ mout)))
-                (ps_adds (map fst mout) PS.empty) s) as defs.
+                (PSP.of_list (map fst mout)) s) as defs.
     symmetry in Heqdefs.
     setoid_rewrite Heqdefs.
     destruct defs as [[[t req'] stimes] always].
@@ -1822,7 +1819,7 @@ Module Type OBCADDDEFAULTS
       apply ps_removes_spec in Hin as (Hnin & Hin).
       apply PS_In_Forall with (1:=Hrq') in Hin as [Hin|Hin]; auto.
       do 2 (apply InMembers_app; right). apply fst_InMembers.
-      apply ps_adds_spec in Hin as [Hin|Hin]; try not_In_empty; auto. }
+      apply ps_of_list_In in Hin; auto. }
 
     destruct Hpre as (Hpre1 & Hpre2).
     assert (PS.For_all (fun x => ~Env.In x ve1) (ps_removes (map fst ins) rq')).

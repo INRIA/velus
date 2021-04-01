@@ -11,6 +11,7 @@ src/CoindToIndexed.v
 src/CoindIndexed.v
 
 src/Common/CommonList.v
+src/Common/CommonPS.v
 src/Common/CommonTactics.v
 src/Common/CommonStreams.v
 src/Common/Common.v

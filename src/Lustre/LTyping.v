@@ -85,12 +85,6 @@ Module Type LTYPING
         Forall (wt_nclock vars) (map snd anns) ->
         wt_exp (Earrow e0s es anns)
 
-    (* | wt_Epre: forall es anns, *)
-    (*     Forall wt_exp es -> *)
-    (*     typesof es = map fst anns -> *)
-    (*     Forall (wt_nclock vars) (map snd anns) -> *)
-    (*     wt_exp (Epre es anns) *)
-
     | wt_Ewhen: forall es x b tys nck,
         Forall wt_exp es ->
         typesof es = tys ->
@@ -192,14 +186,6 @@ Module Type LTYPING
           Forall (wt_nclock vars) (map snd anns) ->
           P (Earrow e0s es anns).
 
-      (* Hypothesis EpreCase: *)
-      (*   forall es anns, *)
-      (*     Forall wt_exp es -> *)
-      (*     Forall P es -> *)
-      (*     typesof es = map fst anns -> *)
-      (*     Forall (wt_nclock vars) (map snd anns) -> *)
-      (*     P (Epre es anns). *)
-
       Hypothesis EwhenCase:
         forall es x b tys nck,
           Forall wt_exp es ->
@@ -267,8 +253,6 @@ Module Type LTYPING
         - apply EarrowCase; auto.
           + clear H2. induction H; auto.
           + clear H1. induction H0; auto.
-        (* - apply EpreCase; auto. *)
-        (*   clear H0. induction H; auto. *)
         - apply EwhenCase; auto.
           clear H0. induction H; auto.
         - apply EmergeCase; auto.
@@ -489,9 +473,6 @@ Module Type LTYPING
       - (* arrow *)
         eapply Forall_impl; [| eauto].
         intros; eauto.
-      (* - (* pre *) *)
-      (*   eapply Forall_impl; [| eauto]. *)
-      (*   intros; eauto. *)
       - (* app *)
         eapply Forall_impl; [| eauto].
         intros; simpl in *; eauto.
@@ -615,13 +596,6 @@ Module Type LTYPING
       apply Forall_forall with (1:=H3) in Hin.
       destruct nck; unfold clock_of_nclock in *; simpl in *; subst;
         match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
-    (* - match goal with H:Forall (wt_nclock _) _ |- _ => *)
-    (*                   rewrite Forall_map in H end. *)
-    (*   apply in_map_iff in Hin. *)
-    (*   destruct Hin as ((ty & nck) & Hck & Hin). *)
-    (*   apply Forall_forall with (1:=H1) in Hin. *)
-    (*   destruct nck; unfold clock_of_nclock in *; simpl in *; subst; *)
-    (*     match goal with H:wt_nclock _ _ |- _ => inv H end; eauto. *)
     - destruct nck; unfold clock_of_nclock in *; simpl in *;
         apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
           match goal with H:wt_nclock _ _ |- _ => inv H end; eauto.
@@ -667,22 +641,13 @@ Module Type LTYPING
   Definition check_nclock (venv : Env.t type) (nck : nclock) : bool :=
     check_clock venv (fst nck).
 
-  (* TODO: Move elsewhere? *)
-  Local Ltac DestructMatch :=
-    repeat progress
-           match goal with
-           | H:match ?e with _ => _ end = _ |- _ =>
-             let Heq := fresh "Heq" in
-             destruct e eqn:Heq; try discriminate
-           end.
-
   Lemma check_clock_correct:
     forall venv ck,
       check_clock venv ck = true ->
       wt_clock (Env.elements venv) ck.
   Proof.
     induction ck; intro CC. now constructor.
-    simpl in CC. DestructMatch.
+    simpl in CC. cases_eqn Heq.
     rewrite Bool.andb_true_iff in CC; destruct CC as (CC1 & CC2).
     apply IHck in CC2. rewrite equiv_decb_equiv in CC1; inv CC1.
     apply Env.elements_correct in Heq.
@@ -757,11 +722,6 @@ Module Type LTYPING
         if forall3b check_paired_types3 t0s ts anns
         then Some (map fst anns) else None
 
-      (* | Epre es anns => *)
-      (*   do ts <- oconcat (map check_exp es); *)
-      (*   if forall2b check_paired_types2 ts anns *)
-      (*   then Some (map fst anns) else None *)
-
       | Ewhen es x b (tys, nck) =>
         do ts <- oconcat (map check_exp es);
         if check_var x bool_type && (forall2b equiv_decb ts tys) && (check_nclock venv nck)
@@ -823,7 +783,7 @@ Module Type LTYPING
         check_var x ty = true <-> In (x, ty) (Env.elements venv).
     Proof.
       unfold check_var. split; intros HH.
-      - DestructMatch; simpl.
+      - cases_eqn Heq; simpl.
         rewrite equiv_decb_equiv in HH. inv HH.
         take (Env.find _ _ = Some _) and apply Env.elements_correct in it; eauto.
       - apply Env.elements_complete in HH as ->.
@@ -967,10 +927,6 @@ Module Type LTYPING
         subst; eauto using wt_exp.
         + ndup_r ND.
         + ndup_l ND.
-      (* - (* Epre *) *)
-      (*   take (Forall _ es) and rewrite Forall_forall in it. *)
-      (*   apply oconcat_map_check_exp' in OE0 as (? & ?)... *)
-      (*   subst; eauto using wt_exp. *)
       - (* Ewhen *)
         subst. take (Forall _ es) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
@@ -1042,7 +998,7 @@ Module Type LTYPING
           rewrite <- app_assoc in ND; auto.
         }
         destruct ro; econstructor; eauto; simpl in *;
-          clear it; DestructMatch; subst;
+          clear it; cases_eqn Heq; subst;
             destruct (H [t]) as [CE1 CE2]; auto.
         + ndup_simpl.
           repeat rewrite app_assoc in ND.
@@ -1128,7 +1084,7 @@ Module Type LTYPING
           + destruct o; auto.
             rewrite map_app in ND. rewrite app_assoc in ND.
             apply NoDupMembers_app_l in ND. assumption. }
-        destruct o; simpl in H0; DestructMatch; econstructor...
+        destruct o; simpl in H0; cases_eqn Heq; econstructor...
         1,2:(apply check_exp_correct in Heq as [Hwt Heq]; eauto).
         1,3:unfold idty in *; rewrite map_app in *; rewrite Permutation_swap in ND; apply NoDupMembers_app_r in ND; auto.
         rewrite equiv_decb_equiv in H0. congruence.
@@ -1160,7 +1116,7 @@ Module Type LTYPING
         wt_equation G (Env.elements venv) eq.
     Proof.
       intros eq ND CE. destruct eq as (xs, es); simpl in CE.
-      DestructMatch.
+      cases_eqn Heq.
       take (oconcat (map check_rhs _) = Some _)
            and apply oconcat_map_check_rhs in it as (? & ?).
       take (forall2b check_var _ _ = true)
@@ -1325,11 +1281,6 @@ Module Type LTYPING
         erewrite <- map_length, H7, map_length...
       + rewrite typesof_annots in *.
         erewrite <- map_length, H6, map_length...
-    (* - (* pre *) *)
-    (*   constructor... *)
-    (*   + rewrite Forall_forall in *... *)
-    (*   + rewrite typesof_annots in *. *)
-    (*     erewrite <- map_length, H3, map_length... *)
     - (* when *)
       constructor...
       + rewrite Forall_forall in *...

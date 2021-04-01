@@ -1,11 +1,5 @@
 * Rename AST into ParseTree (or similar)
 
-* Refactor [lexp] to [exp]
-
-Using modules to deal with namespace conflicts when importing both
-CoreDF and Minimp
-
-* Remove call to decision procedures in [Correctness.v]
 * Define a [Sampling] type-class
 
 We can sample streams and histories. We would like to do so using a
@@ -14,10 +8,6 @@ single, common notation.
 * Remove [sem_var_instant]
 
 It's not really a semantic rule.
-
-* Type of CoreDF programs
-
-Do we stick with [Global]? What did we use in the paper?
 
 * Grep for "XXX:"  and "TODO:"
 * Use type classes for predicates
@@ -48,11 +38,6 @@ this in another predicate, [Welldef_global] including the new one.
 
 Use it in the Example
 
-* Rename [Clocking]
-
-For the sake of uniformity, it should be called [WellClocked], along
-the lines of [WellFormed]
-
 * Follow consistent naming
 
 Follow the 'Implicit Type' declarations
@@ -61,10 +46,6 @@ Follow the 'Implicit Type' declarations
 
 Cf. branch 'dumb' for a construction that does not require a dedicated
 inductive predicate.
-
-* Rename type [heap] to [memory] in Minimp.Semantics
-
-And use a qualified import to disambiguate.
 
 * [equiv_env] is misleading
 

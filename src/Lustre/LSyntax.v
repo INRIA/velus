@@ -3,6 +3,7 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Coq Require Import PArith.
 From Coq Require Import Sorting.Permutation.
+From Coq Require Import Setoid Morphisms.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -31,6 +32,8 @@ Module Type LSYNTAX
   Definition ann : Type := (type * nclock)%type.
   Definition lann : Type := (list type * nclock)%type.
 
+  Definition idents xs := List.map (@fst ident (type * clock)) xs.
+
   Inductive exp : Type :=
   | Econst : const -> exp
   | Evar   : ident -> ann -> exp
@@ -39,7 +42,6 @@ Module Type LSYNTAX
 
   | Efby   : list exp -> list exp -> list ann -> exp
   | Earrow : list exp -> list exp -> list ann -> exp
-  (* | Epre   : list exp -> list ann -> exp *)
   | Ewhen  : list exp -> ident -> bool -> lann -> exp
   | Emerge : ident -> list exp -> list exp -> lann -> exp
   | Eite   : exp -> list exp -> list exp -> lann -> exp
@@ -61,7 +63,6 @@ Module Type LSYNTAX
     | Econst c => 1
     | Efby _ _ anns
     | Earrow _ _ anns
-    (* | Epre _ anns *)
     | Eapp _ _ _ anns => length anns
     | Evar _ _
     | Eunop _ _ _
@@ -78,7 +79,6 @@ Module Type LSYNTAX
     | Econst c => [(type_const c, (Cbase, None))]
     | Efby _ _ anns
     | Earrow _ _ anns
-    (* | Epre _ anns *)
     | Eapp _ _ _ anns => anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -96,7 +96,6 @@ Module Type LSYNTAX
     | Econst c => [type_const c]
     | Efby _ _ anns
     | Earrow _ _ anns
-    (* | Epre _ anns *)
     | Eapp _ _ _ anns => map fst anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -119,7 +118,6 @@ Module Type LSYNTAX
     | Econst c => [Cbase]
     | Efby _ _ anns
     | Earrow _ _ anns
-    (* | Epre _ anns *)
     | Eapp _ _ _ anns => map clock_of_nclock anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -137,7 +135,6 @@ Module Type LSYNTAX
     | Econst c => [(Cbase, None)]
     | Efby _ _ anns
     | Earrow _ _ anns
-    (* | Epre _ anns *)
     | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -167,7 +164,7 @@ Module Type LSYNTAX
     | Ebinop _ e1 e2 _ => (fresh_in e1)++(fresh_in e2)
     | Efby e0s es _
     | Earrow e0s es _ => concat (map fresh_in e0s)++concat (map fresh_in es)
-    | Ewhen es _ _ _ (* | Epre es _ *) => concat (map fresh_in es)
+    | Ewhen es _ _ _ => concat (map fresh_in es)
     | Emerge _ ets efs _ => concat (map fresh_in ets)++concat (map fresh_in efs)
     | Eite e ets efs _ => (fresh_in e)++concat (map fresh_in ets)++concat (map fresh_in efs)
     | Eapp _ es None anns => concat (map fresh_in es)++anon_streams anns
@@ -333,11 +330,6 @@ Module Type LSYNTAX
         Forall P es ->
         P (Earrow e0s es a).
 
-    (* Hypothesis EpreCase: *)
-    (*   forall es a, *)
-    (*     Forall P es -> *)
-    (*     P (Epre es a). *)
-
     Hypothesis EwhenCase:
       forall es x b a,
         Forall P es ->
@@ -377,7 +369,6 @@ Module Type LSYNTAX
       - apply EbinopCase; auto.
       - apply EfbyCase; SolveForall.
       - apply EarrowCase; SolveForall.
-      (* - apply EpreCase; SolveForall. *)
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
       - apply EiteCase; SolveForall; auto.
@@ -459,7 +450,6 @@ Module Type LSYNTAX
     destruct e; simpl; try unfold clock_of_nclock, stripname; simpl; try reflexivity.
     - rewrite map_map. reflexivity.
     - rewrite map_map. reflexivity.
-    (* - rewrite map_map. reflexivity. *)
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
@@ -585,51 +575,6 @@ Module Type LSYNTAX
     induction es as [|e es IH]; auto; simpl.
     now rewrite map_app, IH, <-clockof_nclockof.
   Qed.
-
-  (*
-  Lemma Is_index_in_nclocks_Cstream:
-    forall i e,
-      Is_index_in_nclocks i (map Cstream (clockof e)) ->
-      Is_index_in_nclocks i (nclockof e).
-  Proof.
-    intros * Hii.
-    rewrite clockof_nclockof, map_map in Hii.
-    unfold Is_index_in_nclocks in Hii.
-    induction (nclockof e) as [|nck ncks IH];
-      inversion_clear Hii as [? ? Hi|].
-    2:now constructor 2; apply IH.
-    constructor.
-    destruct nck; inversion_clear Hi;
-      auto using Is_index_in_nclock.
-  Qed.
-
-  (* Tidy up: we don't need two lemmas *)
-  Lemma Is_index_in_nclocks_stripname_nclockof:
-    forall i e sclk,
-      Is_index_in_nclocks i [Cstream sclk] ->
-      map stripname (nclockof e) = [sclk] ->
-      Is_index_in_nclocks i (nclockof e).
-  Proof.
-    intros * Hii Hmap.
-    inversion_clear Hii as [? ? Hii'|? ? Hii']; inv Hii'.
-    destruct (nclockof e) as [|nck ncks]. discriminate.
-    destruct ncks. 2:discriminate.
-    constructor. destruct nck; inv Hmap; now constructor.
-  Qed.
-
-  Lemma Is_index_in_nclock_stripname_nclockof:
-    forall i e sclk,
-      Is_index_in_nclock i (Cstream sclk) ->
-      map stripname (nclockof e) = [sclk] ->
-      Is_index_in_nclocks i (nclockof e).
-  Proof.
-    intros * Hii Hmap.
-    inv Hii.
-    destruct (nclockof e) as [|nck ncks]. discriminate.
-    destruct ncks. 2:discriminate.
-    constructor. destruct nck; inv Hmap; now constructor.
-  Qed.
-   *)
 
   Lemma In_nclocksof:
     forall nck es,
@@ -806,10 +751,6 @@ Module Type LSYNTAX
       length (annots e0s) = length anns ->
       length (annots es) = length anns ->
       wl_exp G (Earrow e0s es anns)
-  (* | wl_Epre : forall G es anns, *)
-  (*     Forall (wl_exp G) es -> *)
-  (*     length (annots es) = length anns -> *)
-  (*     wl_exp G (Epre es anns) *)
   | wl_Ewhen : forall G es x b tys nck,
       Forall (wl_exp G) es ->
       length (annots es) = length tys ->
@@ -1034,6 +975,21 @@ Module Type LSYNTAX
     intros n.
     specialize (in_vars_defined_NoDup n) as Hnd.
     apply NoDup_app_r in Hnd; auto.
+  Qed.
+
+  Instance vars_defined_Proper:
+    Proper (@Permutation equation ==> @Permutation ident)
+           vars_defined.
+  Proof.
+    intros eqs eqs' Hperm; subst.
+    unfold vars_defined. rewrite Hperm. reflexivity.
+  Qed.
+
+  Fact vars_defined_app : forall eqs1 eqs2,
+      vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2.
+  Proof.
+    intros.
+    unfold vars_defined. rewrite flat_map_app; auto.
   Qed.
 
 End LSYNTAX.

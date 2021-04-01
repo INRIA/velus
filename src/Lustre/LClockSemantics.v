@@ -1816,8 +1816,8 @@ Module Type LCLOCKSEMANTICS
       Forall2 (sem_var H) (idents (n_in n)) xs ->
       Forall2 (sem_var H) (idents (n_out n)) ys ->
       Forall (sem_equation G H b) (n_eqs n) ->
-      let H' := Env.restrict H (map fst (n_in n ++ n_vars n ++ n_out n)) in
-      Env.dom H' (map fst (n_in n ++ n_vars n ++ n_out n)) /\
+      let H' := Env.restrict H (idents (n_in n ++ n_vars n ++ n_out n)) in
+      Env.dom H' (idents (n_in n ++ n_vars n ++ n_out n)) /\
       Forall2 (sem_var H') (idents (n_in n)) xs /\
       Forall2 (sem_var H') (idents (n_out n)) ys /\
       Forall (sem_equation G H' b) (n_eqs n).
@@ -1895,7 +1895,7 @@ Module Type LCLOCKSEMANTICS
 
       (* restrict H0 *)
       eapply sem_node_restrict in Heqs as (Hdom&Hins'&Houts'&Heqs'); eauto.
-      remember (Env.restrict H0 (map fst (n_in n0 ++ n_vars n0 ++ n_out n0))) as H.
+      remember (Env.restrict H0 (idents (n_in n0 ++ n_vars n0 ++ n_out n0))) as H.
       eapply sem_clocks_det with (ins:=n_out n0) in Hscin; eauto. 2:rewrite Permutation_app_comm; eauto.
       eapply sem_clocks_det; eauto.
       clear H0 HeqH Hins Houts.

@@ -495,20 +495,6 @@ Module Type TR
              now apply Heq).
     Qed.
 
-    (* TODO: move to Environment *)
-    Lemma env_find_env_from_list':
-      forall {A} x (v: A) xs s,
-        Env.find x (Env.adds' xs s) = Some v
-        -> In (x, v) xs \/ (~InMembers x xs /\ Env.find x s = Some v).
-    Proof.
-      induction xs as [|(x', v') xs IH]; simpl. now intuition.
-      intros s Hfind. apply IH in Hfind as [|(Hnim & Hfind)]; auto.
-      destruct (ident_eq_dec x' x).
-      + subst. rewrite Env.gss in Hfind.
-        injection Hfind. intro; subst; auto.
-      + rewrite Env.gso in Hfind; intuition.
-    Qed.
-
     Lemma env_eq_env_from_list:
       forall xs,
         NoDupMembers xs ->
@@ -545,7 +531,7 @@ Module Type TR
         eapply NoDupMembers_app_InMembers; eauto.
         now rewrite Permutation_app_comm.
       - destruct 1 as [ty Hfind].
-        apply env_find_env_from_list' in Hfind.
+        apply Env.find_env_from_list' in Hfind.
         destruct Hfind as [Hin | [Hin Hfind]];
           rewrite idck_app; apply in_app_iff.
         left. rewrite In_idck_exists. eauto.

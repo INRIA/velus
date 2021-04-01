@@ -206,8 +206,6 @@ Module Type TRANSLATION
   Hint Resolve n_ingt0.
 
   (* =translate_node= *)
-  (* TODO: fst (gather_eqs) should be a PS.t
-     (i.e., do ps_from_list directly) *)
   Program Definition translate_node (n: node) : SynStc.system :=
     let gathered := gather_eqs n.(n_eqs) in
     let lasts := fst gathered in

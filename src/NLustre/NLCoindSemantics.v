@@ -240,18 +240,6 @@ Module Type NLCOINDSEMANTICS
 
   (** ** Properties of the [global] environment *)
 
-  (* TODO: move to NLSyntax? *)
-  Lemma find_node_In:
-    forall f G n,
-      find_node f G = Some n ->
-      In n G.
-  Proof.
-    intros * Hfind.
-    apply find_node_split in Hfind.
-    destruct Hfind as (bG & aG & Hge).
-    rewrite Hge. auto using in_app with datatypes.
-  Qed.
-
   Lemma sem_node_cons2:
     forall nd G f xs ys,
       Ordered_nodes G
@@ -276,7 +264,7 @@ Module Type NLCOINDSEMANTICS
     -
       assert (nd.(n_name) <> f) as Hnf.
       { intro Hnf. rewrite Hnf in *.
-        apply Forall_forall with (2:=find_node_In _ _ _ Hfind) in Hnin.
+        eapply Forall_forall in Hnin; [|eapply find_node_In; eauto].
         apply find_node_name in Hfind. auto. }
       econstructor; eauto.
       now apply find_node_other; auto.
@@ -287,12 +275,12 @@ Module Type NLCOINDSEMANTICS
       inversion_clear Hsem as [| ? ? ? ? ? ? ? ? ? ? Hsemn| |].
       inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
       pose proof (find_node_name _ _ _ Hfind').
-      apply find_node_In in Hfind'.
+      apply find_node_In in Hfind' as (_&Hfind').
       apply Forall_forall with (1:=Hnin) in Hfind'. auto.
       take (forall k, _) and specialize (it 0) as Hsem.
       inversion_clear Hsem as [ ? ? ? ? ? Hfind'].
       pose proof (find_node_name _ _ _ Hfind').
-      apply find_node_In in Hfind'.
+      apply find_node_In in Hfind' as (_&Hfind').
       apply Forall_forall with (1:=Hnin) in Hfind'. auto.
   Qed.
 

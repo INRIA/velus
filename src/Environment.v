@@ -852,6 +852,19 @@ Module Env.
       apply PositiveMap.elements_complete, from_list_find_In in Hin; auto.
     Qed.
 
+    Lemma find_env_from_list':
+      forall x (v: A) xs s,
+        find x (adds' xs s) = Some v
+        -> List.In (x, v) xs \/ (~InMembers x xs /\ find x s = Some v).
+    Proof.
+      induction xs as [|(x', v') xs IH]; simpl. now intuition.
+      intros s Hfind. apply IH in Hfind as [|(Hnim & Hfind)]; auto.
+      destruct (ident_eq_dec x' x).
+      + subst. rewrite Env.gss in Hfind.
+        injection Hfind. intro; subst; auto.
+      + rewrite Env.gso in Hfind; intuition.
+    Qed.
+
   End Extra.
 
   (** Equivalence of Environments *)
@@ -954,8 +967,6 @@ Module Env.
 
   (** Refinement of Environments *)
 
-  (* TODO: shift to Environment and update Obc/Equiv.v.
-           note: argument order changed. *)
   Section EnvRefines.
 
     Import Relation_Definitions Basics.
@@ -1100,7 +1111,6 @@ Module Env.
           rewrite F2 in M2. now inv M2.
     Qed.
 
-    (* TODO: Use to simplify Env.Equal lemmas... *)
     Global Add Parametric Morphism `{Equivalence _ R} : refines
         with signature (Equiv R ==> Equiv R ==> iff)
           as refines_Equiv.
@@ -1314,6 +1324,29 @@ Module Env.
           * apply IHids; auto.
           * eapply refines_adds'.
             apply refines_add; auto.
+    Qed.
+
+    Lemma refines_adds_opt:
+      forall {A} xs m1 m2 (vos1 vos2 : list (option A)),
+        refines eq m2 m1 ->
+        Forall2 (fun vo1 vo2 => forall v, vo2 = Some v -> vo1 = Some v) vos1 vos2 ->
+        NoDup xs ->
+        Forall (fun x => ~Env.In x m2) xs ->
+        refines eq (Env.adds_opt xs vos2 m2) (Env.adds_opt xs vos1 m1).
+    Proof.
+      induction xs as [|x xs]; induction 2 as [|vo1 vo2 vos1 vos2 Hvo Hvos]; auto.
+      inversion_clear 1 as [|? ? Hnxs Hndup].
+      rewrite Forall_cons2; intros (? & Hnin).
+      destruct vo1, vo2.
+      - specialize (Hvo a0 eq_refl); inv Hvo.
+        setoid_rewrite Env.adds_opt_cons_cons.
+        auto using Env.refines_add_both.
+      - setoid_rewrite Env.adds_opt_cons_cons'; auto.
+        setoid_rewrite Env.adds_opt_cons_cons_None.
+        apply IHxs; auto.
+        apply Env.refines_add_right; auto using eq_Transitive.
+      - now specialize (Hvo a eq_refl).
+      - setoid_rewrite Env.adds_opt_cons_cons_None; auto.
     Qed.
   End RefinesAdds.
 

@@ -399,35 +399,13 @@ Module Type TRTYPING
           apply wt_clock_l_ce; auto.
   Qed.
 
-  (* TODO: move to Environment, duplicated from Correctness *)
-  Lemma env_find_env_from_list':
-    forall {A} x (v: A) xs s,
-      Env.find x (Env.adds' xs s) = Some v
-      -> In (x, v) xs \/ (~InMembers x xs /\ Env.find x s = Some v).
-  Proof.
-    induction xs as [|(x', v') xs IH]; simpl. now intuition.
-    intros s Hfind. apply IH in Hfind as [|(Hnim & Hfind)]; auto.
-    destruct (ident_eq_dec x' x).
-    + subst. rewrite Env.gss in Hfind.
-      injection Hfind. intro; subst; auto.
-    + rewrite Env.gso in Hfind; intuition.
-  Qed.
-
-  (* TODO: duplicated from Correctness *)
-  Lemma in_app_weak :
-    forall {A} (x : A) l l',
-      In x l -> In x (l ++ l').
-  Proof.
-    intros. apply in_app; auto.
-  Qed.
-
   Lemma wt_clock_app :
     forall ck l l',
       LT.wt_clock l ck -> LT.wt_clock (l ++ l') ck.
   Proof.
     intros * Hwt.
     induction ck; auto with ltyping.
-    constructor; inv Hwt; eauto using in_app_weak.
+    constructor; inv Hwt; eauto using in_or_app.
   Qed.
 
   Lemma wt_node :
@@ -453,10 +431,10 @@ Module Type TRTYPING
       intros i ck Hfind.
       unfold find_clock in Hfind.
       cases_eqn Hfind. inv Hfind.
-      apply env_find_env_from_list' in Hfind0 as [Hin|[? Hfind]].
+      apply Env.find_env_from_list' in Hfind0 as [Hin|[? Hfind]].
       pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
       simpl in Wt. now setoid_rewrite Permutation_app_comm in Wt at 2.
-      apply env_find_env_from_list' in Hfind as [Hin|[? Hfind]].
+      apply Env.find_env_from_list' in Hfind as [Hin|[? Hfind]].
       pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
       simpl in Wt. unfold idty. rewrite map_app.
       eapply wt_clock_app in Wt; eauto.

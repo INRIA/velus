@@ -172,23 +172,6 @@ Module Type LCAUSALITY
       exists k'. right; auto.
   Qed.
 
-  (* TODO: move to LSyntax *)
-  Instance vars_defined_Proper:
-    Proper (@Permutation equation ==> @Permutation ident)
-           vars_defined.
-  Proof.
-    intros eqs eqs' Hperm; subst.
-    unfold vars_defined. rewrite Hperm. reflexivity.
-  Qed.
-
-  (* TOOD: move to LSyntax *)
-  Fact vars_defined_app : forall eqs1 eqs2,
-      vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2.
-  Proof.
-    intros.
-    unfold vars_defined. rewrite flat_map_app; auto.
-  Qed.
-
   (** ** Causality check *)
 
   Fixpoint collect_free_left (e : exp) {struct e} : list PS.t :=
@@ -563,9 +546,9 @@ Module Type LCAUSALITY
 
   Lemma build_graph_dom : forall G n,
       wl_node G n ->
-      Env.dom (build_graph n) (map fst (n_in n ++ n_vars n ++ n_out n)).
+      Env.dom (build_graph n) (idents (n_in n ++ n_vars n ++ n_out n)).
   Proof.
-    intros * Hwl. unfold build_graph.
+    intros * Hwl. unfold idents, build_graph.
     eapply Env.dom_intro. intros x.
     rewrite Env.Props.P.F.mapi_in_iff.
     rewrite Env.In_from_list, fst_InMembers.
@@ -578,7 +561,7 @@ Module Type LCAUSALITY
 
   Corollary build_graph_Perm : forall G n,
       wl_node G n ->
-      Permutation (map fst (Env.elements (build_graph n))) (map fst (n_in n ++ n_vars n ++ n_out n)).
+      Permutation (map fst (Env.elements (build_graph n))) (idents (n_in n ++ n_vars n ++ n_out n)).
   Proof.
     intros * Hwl.
     specialize (build_graph_dom _ _ Hwl) as Hdom1.
@@ -586,51 +569,6 @@ Module Type LCAUSALITY
     eapply Env.dom_Perm in Hdom1; eauto.
     - rewrite <- fst_NoDupMembers. apply Env.NoDupMembers_elements.
     - apply node_NoDup.
-  Qed.
-
-  (* TODO: Move to CommonList? *)
-  Fact find_some' : forall {A} (xs : list (ident * A)) x v ,
-      NoDupMembers xs ->
-      In (x, v) xs ->
-      find (fun xtc => (fst xtc =? x)%positive) xs = Some (x, v).
-  Proof.
-    induction xs; intros * Hndup Hin; inv Hin; inv Hndup; simpl.
-    - rewrite Pos.eqb_refl. reflexivity.
-    - destruct (ident_eq_dec a0 x); subst.
-      + apply In_InMembers in H. contradiction.
-      + eapply Pos.eqb_neq in n. rewrite n; auto.
-  Qed.
-
-  (* TODO: delete after upgrade to latest Coq version *)
-  Lemma nth_error_nth {A} : forall (l : list A) (n : nat) (x d : A),
-      nth_error l n = Some x -> nth n l d = x.
-  Proof.
-    intros l n x d H.
-    apply nth_error_split in H. destruct H as [l1 [l2 [H H']]].
-    subst. rewrite app_nth2; [|auto].
-    rewrite PeanoNat.Nat.sub_diag. reflexivity.
-  Qed.
-
-  (* TODO: delete after upgrade to latest Coq version *)
-  Lemma nth_error_nth' {A} : forall (l : list A) (n : nat) (d : A),
-    n < length l -> nth_error l n = Some (nth n l d).
-  Proof.
-    intros l n d H.
-    apply (nth_split _ d) in H. destruct H as [l1 [l2 [H H']]].
-    subst. rewrite H. rewrite nth_error_app2; [|auto].
-    rewrite app_nth2; [| auto]. repeat (rewrite PeanoNat.Nat.sub_diag). reflexivity.
-  Qed.
-
-  (* TODO: move to Common *)
-  Lemma nth_error_length_nth {A} : forall (l : list A) (n : nat) (x : A),
-      nth_error l n = Some x <-> (forall d, n < Datatypes.length l /\ nth n l d = x).
-  Proof.
-    split; intro H.
-    - split.
-      + apply nth_error_Some; rewrite H; discriminate.
-      + now apply nth_error_nth.
-    - specialize (H x) as (Hl&Hn). rewrite <-Hn.
-      now apply nth_error_nth'.
   Qed.
 
   Lemma build_graph_find : forall G n x y,
@@ -923,7 +861,7 @@ Module Type LCAUSALITY
         P_var (nth k xs xH).
 
     Hypothesis Inputs :
-      Forall P_var (map fst (n_in n)).
+      Forall P_var (idents (n_in n)).
 
     Lemma causal_ind {v a} : forall (g : AcyGraph v a),
         Forall (wl_equation G) (n_eqs n) ->
@@ -933,7 +871,7 @@ Module Type LCAUSALITY
       intros * Hwl [Hv Ha].
       specialize (has_TopoOrder g) as (xs'&Heq&Hpre).
       rewrite Heq, <- PS_For_all_Forall, <- ps_from_list_ps_of_list, PS_For_all_Forall'.
-      assert (incl xs' (map fst (n_in n) ++ vars_defined (n_eqs n))) as Hincl.
+      assert (incl xs' (idents (n_in n) ++ vars_defined (n_eqs n))) as Hincl.
       { rewrite Hv in Heq.
         repeat rewrite <- ps_from_list_ps_of_list in Heq.
         intros ? Hin. rewrite <- ps_from_list_In in *.
@@ -980,7 +918,7 @@ Module Type LCAUSALITY
 
         wl_exp G e ->
         forall k,
-          (forall x, Is_free_left x k e -> In x (map fst (n_in n ++ n_vars n ++ n_out n))) ->
+          (forall x, Is_free_left x k e -> In x (idents (n_in n ++ n_vars n ++ n_out n))) ->
           (* wt_exp G (...) e is enough *)
           k < numstreams e ->
           P_exp e k.

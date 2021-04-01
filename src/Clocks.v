@@ -394,7 +394,6 @@ Proof.
   destruct IHck; subst; auto.
 Qed.
 
-(* TODO: move elsewhere *)
 Lemma instck_subclock_not_clock_eq:
   forall ck isub xck c x b,
     instck ck isub xck = Some c ->

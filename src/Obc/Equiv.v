@@ -182,29 +182,6 @@ Module Type EQUIV
     eauto using Forall2_cons.
   Qed.
 
-  Lemma env_refines_adds_opt:
-    forall {A} xs m1 m2 (vos1 vos2 : list (option A)),
-      m2 ⊑ m1 ->
-      Forall2 (fun vo1 vo2 => forall v, vo2 = Some v -> vo1 = Some v) vos1 vos2 ->
-      NoDup xs ->
-      Forall (fun x => ~Env.In x m2) xs ->
-      (Env.adds_opt xs vos2 m2) ⊑ (Env.adds_opt xs vos1 m1).
-  Proof.
-    induction xs as [|x xs]; induction 2 as [|vo1 vo2 vos1 vos2 Hvo Hvos]; auto.
-    inversion_clear 1 as [|? ? Hnxs Hndup].
-    rewrite Forall_cons2; intros (? & Hnin).
-    destruct vo1, vo2.
-    - specialize (Hvo a0 eq_refl); inv Hvo.
-      setoid_rewrite Env.adds_opt_cons_cons.
-      auto using Env.refines_add_both.
-    - setoid_rewrite Env.adds_opt_cons_cons'; auto.
-      setoid_rewrite Env.adds_opt_cons_cons_None.
-      apply IHxs; auto.
-      apply Env.refines_add_right; auto.
-    - now specialize (Hvo a eq_refl).
-    - setoid_rewrite Env.adds_opt_cons_cons_None; auto.
-  Qed.
-
   (* If a statement s' refines s, it should be possible to use s' instead
      of s. *)
 
@@ -266,6 +243,45 @@ Module Type EQUIV
         destruct (HH n c2 prog2' Hfind) as (c1' & prog1' & Hfind' & Hcr & Hfix);
         eauto.
     - intros * H. now setoid_rewrite H.
+  Qed.
+
+  Lemma program_refines_by_class':
+    forall (Pc : class -> class -> Prop) P p1 p2,
+      wt_program p2 ->
+      Forall2 (fun c1 c2 => forall p1' p2',
+                   wt_program p2' ->
+                   wt_class p2' c2 ->
+                   program_refines P p1' p2' ->
+                   Forall2 Pc p1' p2' ->
+                   Pc c1 c2 ->
+                   c1.(c_name) = c2.(c_name)
+                   /\ class_refines p1' p2' (P c1.(c_name)) c1 c2) p1 p2 ->
+      Forall2 Pc p1 p2 ->
+      program_refines P p1 p2.
+  Proof.
+    intros Pc P p1 p2 WTp Hfa.
+    pose proof (Forall2_length _ _ _ Hfa) as Hlen.
+    revert WTp Hfa.
+    pattern p1, p2.
+    apply forall2_right; auto.
+    now intros; rewrite program_refines_def; inversion 1.
+    clear Hlen. intros c1 c2 p1' p2' Hfa' WTp2' Hpr' Hpc'.
+    inversion_clear Hpr' as [|? ? ? ? Hcr' Hpr].
+    inversion_clear Hpc' as [|? ? ? ? Hpc Hpcs].
+    inversion_clear WTp2' as [|? ? WTc WTp Hnodup].
+    apply Hfa' in Hpr; auto. clear Hfa'.
+    destruct (Hcr' _ _ WTp WTc Hpr Hpcs Hpc) as [Hcn Hcr].
+    rewrite program_refines_def.
+    intros n c2' p2'' Hfind2.
+    simpl in Hfind2.
+    destruct (ident_eqb c2.(c_name) n) eqn:Heq.
+    - inv Hfind2. apply ident_eqb_eq in Heq.
+      rewrite <-Heq, <-Hcn.
+      simpl. setoid_rewrite ident_eqb_refl. eauto.
+    - rewrite program_refines_def in Hpr.
+      destruct (Hpr _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
+      exists c1', p1'''. simpl.
+      setoid_rewrite Hcn. setoid_rewrite Heq. auto.
   Qed.
 
   (* TODO: Try an alternative definition of program_refines based on
@@ -335,7 +351,7 @@ Module Type EQUIV
     apply Hcr in Hfindm as (m & Hfindm & (Hm1 & Hm2 & Hsr)).
     assert ((Env.adds_opt (map fst fm.(m_in)) vos vempty)
               ⊑ (Env.adds_opt (map fst m.(m_in)) vos' vempty)) as Henv.
-    { rewrite <-Hm1. apply env_refines_adds_opt.
+    { rewrite <-Hm1. apply Env.refines_adds_opt.
       - reflexivity.
       - now apply Forall2_swap_args in Hvos.
       - apply fst_NoDupMembers. pose proof m.(m_nodupvars) as Hnd.
@@ -369,46 +385,6 @@ Module Type EQUIV
       apply Hcr in H as (m' & Hfindm & (Hmi & Hmo & Hmr)) end.
     rewrite <-Hmi, <-Hmo in *.
     econstructor; eauto.
-  Qed.
-
-  (* TODO: Move earlier *)
-  Lemma program_refines_by_class':
-    forall (Pc : class -> class -> Prop) P p1 p2,
-      wt_program p2 ->
-      Forall2 (fun c1 c2 => forall p1' p2',
-                   wt_program p2' ->
-                   wt_class p2' c2 ->
-                   program_refines P p1' p2' ->
-                   Forall2 Pc p1' p2' ->
-                   Pc c1 c2 ->
-                   c1.(c_name) = c2.(c_name)
-                   /\ class_refines p1' p2' (P c1.(c_name)) c1 c2) p1 p2 ->
-      Forall2 Pc p1 p2 ->
-      program_refines P p1 p2.
-  Proof.
-    intros Pc P p1 p2 WTp Hfa.
-    pose proof (Forall2_length _ _ _ Hfa) as Hlen.
-    revert WTp Hfa.
-    pattern p1, p2.
-    apply forall2_right; auto.
-    now intros; rewrite program_refines_def; inversion 1.
-    clear Hlen. intros c1 c2 p1' p2' Hfa' WTp2' Hpr' Hpc'.
-    inversion_clear Hpr' as [|? ? ? ? Hcr' Hpr].
-    inversion_clear Hpc' as [|? ? ? ? Hpc Hpcs].
-    inversion_clear WTp2' as [|? ? WTc WTp Hnodup].
-    apply Hfa' in Hpr; auto. clear Hfa'.
-    destruct (Hcr' _ _ WTp WTc Hpr Hpcs Hpc) as [Hcn Hcr].
-    rewrite program_refines_def.
-    intros n c2' p2'' Hfind2.
-    simpl in Hfind2.
-    destruct (ident_eqb c2.(c_name) n) eqn:Heq.
-    - inv Hfind2. apply ident_eqb_eq in Heq.
-      rewrite <-Heq, <-Hcn.
-      simpl. setoid_rewrite ident_eqb_refl. eauto.
-    - rewrite program_refines_def in Hpr.
-      destruct (Hpr _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
-      exists c1', p1'''. simpl.
-      setoid_rewrite Hcn. setoid_rewrite Heq. auto.
   Qed.
 
 End EQUIV.
