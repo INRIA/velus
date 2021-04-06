@@ -1611,6 +1611,7 @@ Module Type CORRECTNESS
     constructor; simpl; auto.
   Qed.
 
+  (* TODO: rename to `sfby` and shift to `CoIndStreams` with related lemmas. *)
   CoFixpoint hold (v : Op.val) (str : Stream OpAux.value) :=
     match str with
     | (present v') ⋅ str' => (present v) ⋅ (hold v' str')
@@ -2451,7 +2452,8 @@ Module Type CORRECTNESS
         rewrite <- Hpref.
         eapply Forall_incl; eauto.
         apply incl_map, incl_appr', incl_appr', incl_appl; auto.
-    - subst. eapply init_st_hist_st...
+    - subst.
+      eapply init_st_hist_st...
       eapply LCS.sc_node_sc_var_inv'; eauto.
       + eapply Forall_impl_In; [|eauto]. intros.
         unfold unnested_node in Hunt.
