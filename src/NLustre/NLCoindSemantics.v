@@ -114,15 +114,6 @@ Module Type NLCOINDSEMANTICS
   Definition sem_aexp := sem_annot sem_exp.
   Definition sem_caexp := sem_annot sem_cexp.
 
-  (* TODO: shift to `CoIndStreams` with related lemmas, and merge with the
-           identical constant previously called `hold` from the normalization
-           correctness proof. *)
-  CoFixpoint fby (v0: val) (xs: Stream value) : Stream value :=
-    match xs with
-    | absent    ⋅ xs => absent     ⋅ fby v0 xs
-    | present x ⋅ xs => present v0 ⋅ fby x xs
-    end.
-
   Section NodeSemantics.
 
     Variable G: global.
@@ -152,7 +143,7 @@ Module Type NLCOINDSEMANTICS
     | SeqFby:
         forall H b x ck c0 e es os,
           sem_aexp H b ck e es ->
-          os = fby (sem_const c0) es ->
+          os = sfby (sem_const c0) es ->
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e)
 
@@ -204,7 +195,7 @@ Module Type NLCOINDSEMANTICS
     Hypothesis EqFbyCase:
       forall H b x ck c0 e es os,
         sem_aexp H b ck e es ->
-        os = fby (sem_const c0) es ->
+        os = sfby (sem_const c0) es ->
         sem_var H x os ->
         P_equation H b (EqFby x ck c0 e).
 

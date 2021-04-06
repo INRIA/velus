@@ -164,7 +164,7 @@ Module Type NLCOINDTOINDEXED
         correspondence.  *)
     Lemma fby_impl:
       forall c xs,
-      tr_Stream (CoInd.fby c xs) ≈ Indexed.fby c (tr_Stream xs).
+      tr_Stream (sfby c xs) ≈ Indexed.fby c (tr_Stream xs).
     Proof.
       intros * n; revert c xs.
       induction n; intros.

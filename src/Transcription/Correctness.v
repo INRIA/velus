@@ -251,7 +251,7 @@ Module Type CORRECTNESS
       LS.fby xs ys rs ->
       xs ≡ const b c ->
       b  ≡ abstract_clock rs ->
-      rs ≡ NLSC.fby (sem_const c) ys.
+      rs ≡ sfby (sem_const c) ys.
   Proof.
     cofix Cofix; intros * Hfby Hconst Hac.
     unfold_Stv ys; inv Hfby; rewrite unfold_Stream in Hac;
@@ -298,7 +298,7 @@ Module Type CORRECTNESS
       to_constant e = OK c ->
       LS.sem_exp G H bk e [cs] ->
       when b cs s css ->
-      xs ≡ NLSC.fby (sem_const c) ys.
+      xs ≡ sfby (sem_const c) ys.
   Proof.
     cofix Cofix; intros * Hsemv Hsc Hfby Htoc Hse Hwhen.
     unfold_Stv xs; inv Hfby; rewrite unfold_Stream; simpl;
@@ -337,7 +337,7 @@ Module Type CORRECTNESS
       envs_eq env cenv ->
       to_constant e0 = OK c ->
       sem_clock H b ck (abstract_clock xs) ->
-      sem_var H x (NLSC.fby (sem_const c) ys).
+      sem_var H x (sfby (sem_const c) ys).
   Proof.
     destruct ck; intros * Hse Hxs Hfby Hfind Hwc Hckx Hin Henv Htoc Hsc.
     - (* ck = Base. Show that e0 is not EWhen *)

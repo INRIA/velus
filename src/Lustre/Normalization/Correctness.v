@@ -1611,44 +1611,13 @@ Module Type CORRECTNESS
     constructor; simpl; auto.
   Qed.
 
-  (* TODO: rename to `sfby` and shift to `CoIndStreams` with related lemmas. *)
-  CoFixpoint hold (v : Op.val) (str : Stream OpAux.value) :=
-    match str with
-    | (present v') ⋅ str' => (present v) ⋅ (hold v' str')
-    | absent ⋅ str' => absent ⋅ (hold v str')
-    end.
-
-  Fact hold_Cons : forall v y ys,
-      hold v (y ⋅ ys) =
-      match y with
-      | present v' => (present v) ⋅ (hold v' ys)
-      | absent => absent ⋅ (hold v ys)
-      end.
-  Proof.
-    intros v y ys.
-    rewrite unfold_Stream at 1; simpl.
-    destruct y; reflexivity.
-  Qed.
-
-  Add Parametric Morphism : hold
-      with signature eq ==> @EqSt value ==> @EqSt value
-    as hold_EqSt.
-  Proof.
-    cofix CoFix.
-    intros v [x xs] [y ys] Heq.
-    inv Heq; simpl in *; subst.
-    constructor; simpl.
-    + destruct y; auto.
-    + destruct y; auto.
-  Qed.
-
-  Lemma hold_const : forall bs v,
-      hold v (const_val bs v) ≡ (const_val bs v).
+  Lemma sfby_const : forall bs v,
+      sfby v (const_val bs v) ≡ (const_val bs v).
   Proof.
     cofix CoFix.
     intros [b bs] v.
     rewrite const_val_Cons.
-    destruct b; rewrite hold_Cons; constructor; simpl; auto.
+    destruct b; rewrite sfby_Cons; constructor; simpl; auto.
   Qed.
 
   Lemma ite_false : forall bs xs ys,
@@ -1662,43 +1631,43 @@ Module Type CORRECTNESS
     inv Hsync1; inv Hsync2; constructor; auto.
   Qed.
 
-  Lemma hold_fby1 : forall bs v y ys,
+  Lemma sfby_fby1 : forall bs v y ys,
       aligned ys bs ->
-      fby1 y (const_val bs v) ys (hold y ys).
+      fby1 y (const_val bs v) ys (sfby y ys).
   Proof with eauto.
-    cofix hold_fby1.
+    cofix sfby_fby1.
     intros [b bs] v y ys Hsync.
-    specialize (hold_fby1 bs).
+    specialize (sfby_fby1 bs).
     inv Hsync;
       rewrite const_val_Cons; rewrite unfold_Stream; simpl.
     - constructor...
     - constructor...
   Qed.
 
-  Lemma hold_fby1' : forall y y0s ys zs,
+  Lemma sfby_fby1' : forall y y0s ys zs,
       fby1 y y0s ys zs ->
-      zs ≡ (hold y ys).
+      zs ≡ (sfby y ys).
   Proof.
     cofix CoFix.
     intros y y0s ys zs Hfby1.
     inv Hfby1; constructor; simpl; eauto.
   Qed.
 
-  Lemma hold_fby : forall b v y,
+  Lemma sfby_fby : forall b v y,
       aligned y b ->
-      fby (const_val b v) y (hold v y).
+      fby (const_val b v) y (sfby v y).
   Proof with eauto.
-    cofix hold_fby.
+    cofix sfby_fby.
     intros [b bs] v y Hsync.
     rewrite const_val_Cons.
     rewrite unfold_Stream; simpl.
     destruct b; simpl; inv Hsync.
-    - econstructor. eapply hold_fby1...
+    - econstructor. eapply sfby_fby1...
     - econstructor; simpl...
   Qed.
 
   Definition init_stream bs :=
-    hold true_val (const bs false_const).
+    sfby true_val (const bs false_const).
 
   Instance init_stream_Proper:
     Proper (@EqSt bool ==> @EqSt value) init_stream.
@@ -1710,7 +1679,7 @@ Module Type CORRECTNESS
   Lemma fby_ite : forall bs v y0s ys zs,
       (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       fby y0s ys zs ->
-      ite (hold true_val (const_val bs false_val)) y0s (hold v ys) zs.
+      ite (sfby true_val (const_val bs false_val)) y0s (sfby v ys) zs.
   Proof with eauto.
     cofix fby_init_stream_ite.
     intros [b bs] v y0s ys zs Hsync Hfby1.
@@ -1718,11 +1687,11 @@ Module Type CORRECTNESS
     destruct b; inv Hsync1; inv Hsync2; inv Hsync3.
     - repeat rewrite const_val_Cons.
       inv Hfby1.
-      repeat rewrite hold_Cons. constructor.
-      rewrite hold_const.
-      rewrite <- hold_fby1'...
+      repeat rewrite sfby_Cons. constructor.
+      rewrite sfby_const.
+      rewrite <- sfby_fby1'...
       apply ite_false...
-    - rewrite const_val_Cons. repeat rewrite hold_Cons.
+    - rewrite const_val_Cons. repeat rewrite sfby_Cons.
       inv Hfby1.
       constructor; auto.
   Qed.
@@ -1730,7 +1699,7 @@ Module Type CORRECTNESS
   Corollary fby_init_stream_ite : forall bs v y0s ys zs,
       (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       fby y0s ys zs ->
-      ite (init_stream bs) y0s (hold v ys) zs.
+      ite (init_stream bs) y0s (sfby v ys) zs.
   Proof.
     intros * Hsync Hfby1.
     eapply fby_ite in Hfby1; eauto.
@@ -1741,20 +1710,20 @@ Module Type CORRECTNESS
   Lemma arrow_ite : forall bs y0s ys zs,
       (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
       arrow y0s ys zs ->
-      ite (hold true_val (const_val bs false_val)) y0s ys zs.
+      ite (sfby true_val (const_val bs false_val)) y0s ys zs.
   Proof.
     cofix CoFix.
     intros [b bs] y0s ys zs Hsync Harrow.
     apply LCS.arrow_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
     destruct b; inv Hsync1; inv Hsync2; inv Hsync3; inv Harrow.
-    - rewrite const_val_Cons, hold_Cons.
+    - rewrite const_val_Cons, sfby_Cons.
       constructor.
-      rewrite hold_const.
+      rewrite sfby_const.
       clear - H0 H1 H2 H3. revert bs vs vs0 vs1 H1 H2 H3 H0.
       cofix CoFix. intros * Hsync1 Hsync2 Hsync3 Harrow.
       destruct bs as [[|] bs]; inv Hsync1; inv Hsync2; inv Hsync3; inv Harrow.
       1,2:rewrite const_val_Cons; constructor; auto.
-    - rewrite const_val_Cons, hold_Cons.
+    - rewrite const_val_Cons, sfby_Cons.
       constructor; auto.
   Qed.
 
@@ -1769,11 +1738,11 @@ Module Type CORRECTNESS
     rewrite const_val_const. rewrite sem_false_const. eassumption.
   Qed.
 
-  Lemma ac_hold : forall c vs,
-      abstract_clock (hold c vs) ≡ abstract_clock vs.
+  Lemma ac_sfby : forall c vs,
+      abstract_clock (sfby c vs) ≡ abstract_clock vs.
   Proof.
     cofix CoFix. intros c [v vs].
-    rewrite hold_Cons.
+    rewrite sfby_Cons.
     destruct v; constructor; simpl; auto.
   Qed.
 
@@ -1782,7 +1751,7 @@ Module Type CORRECTNESS
   Proof.
     intros bs.
     unfold init_stream.
-    rewrite ac_hold, <- ac_const. 1,2:reflexivity.
+    rewrite ac_sfby, <- ac_const. 1,2:reflexivity.
   Qed.
 
   (** *** Additional stuff *)
@@ -2022,7 +1991,7 @@ Module Type CORRECTNESS
           -- apply add_whens_sem_exp. eauto using LCS.sem_clock_refines.
           -- unfold init_stream.
              repeat rewrite const_val_const; subst.
-             rewrite <- sem_true_const. apply hold_fby.
+             rewrite <- sem_true_const. apply sfby_fby.
              rewrite <- const_val_const. apply const_aligned.
         * econstructor. 2:reflexivity.
           rewrite HeqH'. apply Env.add_1. reflexivity.
@@ -2175,13 +2144,13 @@ Module Type CORRECTNESS
     eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
     2: rewrite map_fst_idck...
     remember (abstract_clock y0) as bs'.
-    remember (hold (Op.sem_const (Op.init_type ty)) y) as y'.
+    remember (sfby (Op.sem_const (Op.init_type ty)) y) as y'.
     remember (Env.add x2 y' H') as H''.
     assert (Env.refines eq H' H'') by (destruct Histst1; eapply fresh_ident_refines' in H1; eauto).
     assert (hist_st (idck vars) bs H'' st') as Histst2.
     { eapply fresh_ident_hist_st in H1; eauto.
       rewrite HeqH''...
-      rewrite Heqy', ac_hold.
+      rewrite Heqy', ac_sfby.
       1: eapply LCS.sem_clock_refines; eauto.
       rewrite LCS.ac_fby2, <- LCS.ac_fby1, <- Heqbs'; eauto. }
     exists H''. repeat (split; eauto); try constructor.
@@ -2201,7 +2170,7 @@ Module Type CORRECTNESS
         -- eapply sem_exp_refines; [| eauto]. etransitivity...
         -- rewrite Heqy'.
            rewrite const_val_const.
-           eapply hold_fby.
+           eapply sfby_fby.
            eapply LCS.fby_aligned in Hfby as [_ [? _]]; eauto.
            left. rewrite Heqbs'. apply ac_aligned.
       * econstructor.

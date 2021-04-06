@@ -499,7 +499,7 @@ Module Type NLINDEXEDTOCOIND
     Lemma fby_impl_from:
       forall n c xs,
         tr_stream_from n (Indexed.fby c xs) ≡
-        CoInd.fby (Indexed.hold c xs n) (tr_stream_from n xs).
+        sfby (Indexed.hold c xs n) (tr_stream_from n xs).
     Proof.
       cofix Cofix; intros.
       rewrite init_from_n; rewrite (init_from_n xs).
@@ -513,7 +513,7 @@ Module Type NLINDEXEDTOCOIND
 
     Corollary fby_impl:
       forall c xs,
-      tr_stream (Indexed.fby c xs) ≡ CoInd.fby c (tr_stream xs).
+      tr_stream (Indexed.fby c xs) ≡ sfby c (tr_stream xs).
     Proof.
       now setoid_rewrite fby_impl_from.
     Qed.

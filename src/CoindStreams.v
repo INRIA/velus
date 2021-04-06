@@ -478,6 +478,38 @@ Module Type COINDSTREAMS
     destruct (_ =? k); auto.
   Qed.
 
+  (** ** fby stream *)
+
+  CoFixpoint sfby (v : Op.val) (str : Stream OpAux.value) :=
+    match str with
+    | (present v') ⋅ str' => (present v) ⋅ (sfby v' str')
+    | absent ⋅ str' => absent ⋅ (sfby v str')
+    end.
+
+  Fact sfby_Cons : forall v y ys,
+      sfby v (y ⋅ ys) =
+      match y with
+      | present v' => (present v) ⋅ (sfby v' ys)
+      | absent => absent ⋅ (sfby v ys)
+      end.
+  Proof.
+    intros v y ys.
+    rewrite unfold_Stream at 1; simpl.
+    destruct y; reflexivity.
+  Qed.
+
+  Add Parametric Morphism : sfby
+      with signature eq ==> @EqSt value ==> @EqSt value
+    as sfby_EqSt.
+  Proof.
+    cofix CoFix.
+    intros v [x xs] [y ys] Heq.
+    inv Heq; simpl in *; subst.
+    constructor; simpl.
+    + destruct y; auto.
+    + destruct y; auto.
+  Qed.
+
   (** ** exp level synchronous operators specifications
 
         To ease the use of coinductive hypotheses to prove non-coinductive
