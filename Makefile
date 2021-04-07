@@ -4,7 +4,7 @@
 
 include variables.mk
 
-.PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR)
+.PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR) documentation
 
 all: $(VELUS)
 
@@ -67,6 +67,17 @@ $(TOOLSDIR)/$(AUTOMAKE).ml: $(TOOLSDIR)/$(AUTOMAKE).mll
 # EXAMPLES
 $(EXAMPLESDIR): $(VELUS)
 	$(MAKE) $(EXAMPLESFLAGS)
+
+# DOCUMENTATION
+documentation: proof $(MAKEFILEAUTO)
+	@echo "${bold}Exporting CompCert HTML doc...${normal}"
+	$(MAKE) $(COMPCERTFLAGS) documentation
+	@echo "${bold}OK.${normal}"
+	@echo "${bold}Exporting Velus HTML doc...${normal}"
+	mkdir -p doc/html
+	rm -f doc/html/*.html
+	make -s -f $(MAKEFILEAUTO) $@
+	@echo "${bold}OK.${normal}"
 
 # CLEAN
 clean:
