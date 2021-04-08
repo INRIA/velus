@@ -6,7 +6,6 @@ From Coq Require ZArith.BinIntDef.
 From Velus Require Import VelusCorrectness.
 From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Lustre.LustreElab.
-(* From Velus Require Import NLustre.NLElaboration. *)
 From Velus Require Import Lustre.Parser.LustreParser.
 
 From compcert Require
