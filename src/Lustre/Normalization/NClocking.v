@@ -11,7 +11,6 @@ From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normal
 
 (** * Preservation of Typing through Normalization *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type NCLOCKING
        (Import Ids : IDS)
        (Op : OPERATORS)

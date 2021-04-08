@@ -11,7 +11,6 @@ From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normal
 
 (** * Idempotence of the normalization *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type IDEMPOTENCE
        (Import Ids : IDS)
        (Import Op : OPERATORS)

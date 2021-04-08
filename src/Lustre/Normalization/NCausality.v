@@ -16,7 +16,6 @@ From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normal
 
 (** * Conservation of causality through normalization *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type NCAUSALITY
        (Import Ids : IDS)
        (Op : OPERATORS)

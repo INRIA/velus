@@ -624,9 +624,9 @@ Module Type LTYPING
       eapply incl_appr'. eapply incl_appr. reflexivity.
   Qed.
 
-  (** Validation *)
+  (** ** Validation *)
 
-  Module OpAux := OperatorsAux Op.
+  Module MyOpAux := OperatorsAux Op.
 
   Fixpoint check_clock (venv : Env.t type) (ck : clock) : bool :=
     match ck with
@@ -1250,7 +1250,7 @@ Module Type LTYPING
 
   End interface_eq.
 
-  (** ** wt implies wl *)
+  (** *** wt implies wl *)
 
   Hint Constructors wl_exp.
   Fact wt_exp_wl_exp : forall G vars e,
@@ -1349,7 +1349,7 @@ Module Type LTYPING
   Qed.
   Hint Resolve wt_global_wl_global.
 
-  (** ** Other useful stuff *)
+  (** Other useful stuff *)
 
   Lemma wt_clock_Is_free_in : forall x env ck,
       wt_clock env ck ->

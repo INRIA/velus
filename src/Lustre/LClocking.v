@@ -619,9 +619,7 @@ Module Type LCLOCKING
     Qed.
   End global_incl.
 
-  (** Validation *)
-
-  Module OpAux := OperatorsAux Op.
+  (** ** Validation *)
 
   (* TODO: add to a database *)
   Hint Extern 2 (In _ (idck _)) => apply In_idck_exists.

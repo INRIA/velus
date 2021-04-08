@@ -18,7 +18,6 @@ From Velus Require Import CoindIndexed.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LOrdered Lustre.LSemantics.
 
-Local Set Warnings "-masking-absolute-name".
 Module Type LCLOCKSEMANTICS
        (Import Ids : IDS)
        (Import Op : OPERATORS)

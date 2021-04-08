@@ -15,7 +15,6 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax NLustre.NLNormalArgs NLustre.NLOrdered.
 From Velus Require Import Transcription.Tr Transcription.TrOrdered.
 
-Local Set Warnings "-masking-absolute-name".
 Module Type TRNORMALARGS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)

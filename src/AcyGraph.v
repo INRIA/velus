@@ -431,11 +431,14 @@ Proof.
          repeat destruct_conj_disj; auto).
 Qed.
 
-(** ** Building an acyclic graph
-    We can try to build an acyclic graph from any graph
+(** ** Building an acyclic graph *)
+(** We can try to build an acyclic graph from any graph
     (defined as a mapping from vertices to their direct predecessors)
     We iterate through the list of vertices, trying to add some that are
-    not already in the graph, and which predecessors are all already in the graph *)
+    not already in the graph, and which predecessors are all already in the graph.
+
+    This algorithm only succeeds if the graph is indeed acyclic, and produces a witness of that fact.
+ *)
 
 From compcert Require Import common.Errors.
 
@@ -865,10 +868,10 @@ Proof.
       setoid_rewrite Find in Find'; inv Find'; eauto.
 Qed.
 
-(** ** Extracting a prefix
-    In order to build an induction principle over the graph, we need to linearize it.
-    We want to extract a "prefix" from the graph, which is an order of the vertices
-    in which arcs are directed from the tail of the list to the head
+(** ** Extracting a prefix *)
+(** In order to build an induction principle over the graph, we need to linearize it.
+    We want to extract a Topological Order ([TopoOrder]) from the graph,
+    which is simply encoded as a list, with the head variable only depending on the tail ones.
  *)
 
 Definition TopoOrder {v a} (g : AcyGraph v a) (xs : list ident) :=
@@ -1134,8 +1137,8 @@ Proof.
       * eapply TopoOrder_AGadda; eauto.
 Qed.
 
-(** ** Inserting into the graph
-    When we compile the program, what we do is often add some intermediate vertices
+(** ** Inserting into the graph *)
+(** When we compile the program, what we do is often add some intermediate vertices
     between a set of predecessors and an existing vertex.
  *)
 

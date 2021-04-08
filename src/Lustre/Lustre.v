@@ -12,7 +12,6 @@ From Velus Require Export Lustre.Normalization.LNormalization.
 
 From Velus Require Import Common.
 
-Local Set Warnings "-masking-absolute-name".
 Module Type LUSTRE
        (Ids   : IDS)
        (Op    : OPERATORS)

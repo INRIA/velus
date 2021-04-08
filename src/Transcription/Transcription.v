@@ -9,7 +9,6 @@ From Velus Require Import Transcription.TrTyping Transcription.TrClocking Transc
 From Velus Require Import Transcription.Completeness.
 From Velus Require Import Transcription.TrNormalArgs.
 
-Local Set Warnings "-masking-absolute-name".
 Module Type TRANSCRIPTION
        (Ids : IDS)
        (Op : OPERATORS)

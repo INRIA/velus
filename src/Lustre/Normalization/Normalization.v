@@ -10,9 +10,8 @@ From Velus Require Import Lustre.LSyntax Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Fresh.
 From Velus Require Import Lustre.Normalization.Unnesting Lustre.Normalization.NormFby.
 
-(** * Normalization of a full norm *)
+(** * Complete Normalization *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type NORMALIZATION
        (Import Ids : IDS)
        (Import Op : OPERATORS)

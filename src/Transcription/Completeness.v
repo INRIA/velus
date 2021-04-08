@@ -14,7 +14,6 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import Transcription.Tr.
 
-Local Set Warnings "-masking-absolute-name".
 Module Type COMPLETENESS
        (Import Ids : IDS)
        (Import Op : OPERATORS)

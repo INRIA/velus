@@ -17,7 +17,6 @@ From Velus Require Import Lustre.Normalization.NCausality.
 
 (** * Correctness of the Normalization *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type CORRECTNESS
        (Import Ids : IDS)
        (Import Op : OPERATORS)

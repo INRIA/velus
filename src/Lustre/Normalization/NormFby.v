@@ -11,7 +11,6 @@ From Velus Require Import Lustre.Normalization.Unnesting.
 
 (** * Putting FBYs into normalized form *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type NORMFBY
        (Import Ids : IDS)
        (Import Op : OPERATORS)

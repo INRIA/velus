@@ -12,7 +12,6 @@ From Velus Require Lustre.Normalization.Fresh.
 
 (** * Normalization procedure *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type UNNESTING
        (Import Ids : IDS)
        (Import Op : OPERATORS)

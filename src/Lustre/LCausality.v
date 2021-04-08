@@ -22,6 +22,7 @@ Module Type LCAUSALITY
 
   (** ** Causality definition *)
 
+  (** Variables that appear in the nth stream of an expression, to the left of fbys. *)
   Inductive Is_free_left (x : ident) : nat -> exp -> Prop :=
   | IFLvar : forall a,
       Is_free_left x 0 (Evar x a)
@@ -625,6 +626,10 @@ Module Type LCAUSALITY
       apply PSF.union_3. rewrite collect_free_clock_spec; auto.
   Qed.
 
+  (** We prove that the [check_node_causality] function only succeeds if
+      the node is indeed causal.
+      This is a simple consequence of [build_graph_find] and [build_acyclic_graph_spec].
+   *)
   Lemma check_node_causality_correct : forall G n,
       wl_node G n ->
       check_node_causality n = OK tt ->
@@ -662,9 +667,10 @@ Module Type LCAUSALITY
     + apply bind_inversion in Hcheck as [? [? Hcheck]]; eauto.
   Qed.
 
-  (** *** Consequence of causality.
-      We can "follow the trail" of variables *)
+  (** ** Induction tactic over a causal set of equations *)
 
+  (** We can "follow" the [TopOrder] extracted from an [AcyGraph].
+      This gives us an order over the variables of the node *)
   Lemma TopoOrder_inv {v a} : forall (g : AcyGraph v a) eqs x xs,
       (forall x y, depends_on eqs x y -> is_arc g y x) ->
       TopoOrder g (x::xs) ->
@@ -686,8 +692,6 @@ Module Type LCAUSALITY
     apply H1. left. apply Hdep. unfold depends_on.
     eapply Exists_exists. exists (xs', es); split; eauto.
   Qed.
-
-  (** ** Induction tactic over a causal set of equations *)
 
   Section causal_ind.
     Variable G : global.
@@ -743,7 +747,7 @@ Module Type LCAUSALITY
         P_exp e2 0 ->
         P_exp (Ebinop op e1 e2 ann) 0.
 
-    (* We're reasoning on causality, so we only get the hypothesis on the lhs *)
+    (** We're reasoning on causality, so we only get the hypothesis on the lhs *)
     Hypothesis EfbyCase : forall e0s es ann k,
         k < length ann ->
         P_exps e0s k ->
@@ -910,8 +914,8 @@ Module Type LCAUSALITY
       rewrite <- PS_For_all_Forall', ps_from_list_ps_of_list, <- map_fst_idck, <- Heq; auto.
     Qed.
 
-    (** Bonus : now that the induction is done, this is true for any exp or equation *)
-
+    (** Bonus : now that the induction is done, the property is true for
+        any exp or equation *)
     Fact exp_causal_ind' : forall e,
         wl_node G n ->
         node_causal n ->

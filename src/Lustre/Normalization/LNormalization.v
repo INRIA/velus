@@ -8,7 +8,6 @@ From Velus Require Import Lustre.Normalization.Normalization.
 From Velus Require Import Lustre.Normalization.Correctness.
 (* From Velus Require Import Lustre.Normalization.Idempotence. *)
 
-Local Set Warnings "-masking-absolute-name".
 Module Type LNORMALIZATION
        (Ids : IDS)
        (Op : OPERATORS)
