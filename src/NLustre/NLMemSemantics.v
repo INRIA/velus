@@ -48,26 +48,6 @@ Set Implicit Arguments.
 
  *)
 
-
-(* XXX: Is this comment still relevant?
-
-   NB: The history H is not really necessary here. We could just as well
-       replay all the semantic definitions using a valueEnv N ('N' for now),
-       since all the historical information is in ms. This approach would
-       have two advantages:
-
-       1. Conceptually cleanliness: N corresponds more or less to the
-          temporary variables in the Obc implementation (except that it
-          would also contain values for variables defined by EqFby).
-
-       2. No index needed to access values in when reasoning about
-          translation correctness.
-
-       But this approach requires more uninteresting definitions and
-       and associated proofs of properties, and a longer proof of equivalence
-       with sem_node: too much work for too little gain.
- *)
-
 Module Type NLMEMSEMANTICS
        (Import Ids      : IDS)
        (Import Op       : OPERATORS)
@@ -500,40 +480,6 @@ enough: it does not support the internal fixpoint introduced by
       eauto.
   Qed.
 
-
-  (* XXX: I believe that this comment is outdated ([no_dup_defs] is long gone)
-
-   - The no_dup_defs hypothesis is essential for the EqApp case.
-
-     If the set of equations contains two EqApp's to the same variable:
-        eq::eqs = [ EqApp x f lae; ...; EqApp x g lae' ]
-
-     Then it is possible to have a coherent H, namely if
-        f(lae) = g(lae')
-
-     But nothing forces the 'memory streams' (internal memories) of
-     f(lae) and g(lae') to be the same. This is problematic since they are
-     both 'stored' at M x...
-
-   - The no_dup_defs hypothesis is not essential for the EqFby case.
-
-     If the set of equations contains two EqFby's to for the same variable:
-        eq::eqs = [ EqFby x v0 lae; ...; EqFby x v0' lae'; ... ]
-
-     then the 'memory streams' associated with each, ms and ms', must be
-     identical since if (Forall (sem_equation G H) (eq::eqs)) exists then
-     then the H forces the coherence between 'both' x's, and necessarily also
-     between v0 and v0', and lae and lae'.
-
-     That said, proving this result is harder than just assuming something
-     that should be true anyway: that there are no duplicate definitions in
-     eqs.
-
-   Note that the no_dup_defs hypothesis requires a stronger definition of
-   either Is_well_sch or Welldef_global.
-   *)
-
-
   (** ** Fundamental theorem *)
 
   (**
@@ -581,180 +527,179 @@ dataflow memory for which the non-standard semantics holds true.
       apply not_None_is_Some; eauto.
   Qed.
 
-  Theorem sem_msem_reset:
-    forall G f r xs ys,
-      (forall f xs ys,
-          sem_node G f xs ys ->
-          exists M, msem_node G f xs M ys) ->
-      (forall k, sem_node G f (mask k r xs) (mask k r ys)) ->
-      exists M,
-      forall k, exists Mk, msem_node G f (mask k r xs) Mk (mask k r ys)
-                     /\ memory_masked k r M Mk.
-  Proof.
-    intros * IH Sem.
-    assert (forall k, exists Mk, msem_node G f (mask k r xs) Mk (mask k r ys)) as Msem
-        by (intro; specialize (Sem k); apply IH in Sem; auto).
-    assert (exists F, forall k, msem_node G f (mask k r xs) (F k) (mask k r ys))
-      as (F & Msem').
-    {
-      (** Infinite Description  *)
-      apply functional_choice in Msem as (?&?); eauto.
+  Section sem_msem_eq.
 
-      (** Epsilon  *)
-      (* assert (inhabited memories) as I *)
-      (*     by (constructor; exact (fun n => @empty_memory val)). *)
-      (* exists (fun n => epsilon *)
-      (*            I (fun M => msem_node G f (mask (all_absent (xs 0)) n r xs) M *)
-      (*                               (mask (all_absent (ys 0)) n r ys))). *)
-      (* intro; now apply epsilon_spec.  *)
+    Variable (G : global).
 
-      (** Constructive Epsilon  *)
-      (* pose proof (constructive_ground_epsilon memories) as F. *)
+    Hypothesis Hnode :
+      forall f xs ys,
+        sem_node G f xs ys ->
+        exists M, msem_node G f xs M ys.
 
-      (** Classical Choice  *)
-      (* now apply choice in Msem'.   *)
-    }
-    clear Msem Sem.
+    Theorem sem_msem_reset:
+      forall f r xs ys,
+        (forall k, sem_node G f (mask k r xs) (mask k r ys)) ->
+        exists M,
+        forall k, exists Mk, msem_node G f (mask k r xs) Mk (mask k r ys)
+                   /\ memory_masked k r M Mk.
+    Proof.
+      intros * Sem.
+      assert (forall k, exists Mk, msem_node G f (mask k r xs) Mk (mask k r ys)) as Msem
+          by (intro; specialize (Sem k); apply Hnode in Sem; auto).
+      assert (exists F, forall k, msem_node G f (mask k r xs) (F k) (mask k r ys))
+        as (F & Msem').
+      {
+        (** Infinite Description  *)
+        apply functional_choice in Msem as (?&?); eauto.
 
-    exists (fun n => F (if r n then pred (count r n) else count r n) n).
-    intro k; specialize (Msem' k).
-    do 2 eexists; intuition eauto;
-      intros n Count; auto.
-    rewrite Count; cases.
-  Qed.
+        (** Epsilon  *)
+        (* assert (inhabited memories) as I *)
+        (*     by (constructor; exact (fun n => @empty_memory val)). *)
+        (* exists (fun n => epsilon *)
+        (*            I (fun M => msem_node G f (mask (all_absent (xs 0)) n r xs) M *)
+        (*                               (mask (all_absent (ys 0)) n r ys))). *)
+        (* intro; now apply epsilon_spec.  *)
 
-  Lemma sem_msem_eq:
-    forall G bk H eqs M eq,
-      (forall f xs ys,
-          sem_node G f xs ys ->
-          exists M, msem_node G f xs M ys) ->
-      sem_equation G bk H eq ->
-      NoDup_defs (eq :: eqs) ->
-      Forall (msem_equation G bk H M) eqs ->
-      memory_closed_n M eqs ->
-      exists M1, Forall (msem_equation G bk H M1) (eq :: eqs)
-            /\ memory_closed_n M1 (eq :: eqs).
-  Proof.
-    intros * IH Heq NoDup Hmeqs WF.
-    inversion Heq as [|
-                      ???????? Hls Hxs ? Hsem|
-                      ???????????? Hls Hxs ? Hy Hr Hsem|
-                      ???????? Hle Hvar Hfby];
-      match goal with H:_=eq |- _ => rewrite <-H in * end.
+        (** Constructive Epsilon  *)
+        (* pose proof (constructive_ground_epsilon memories) as F. *)
 
-    - exists M.
-      econstructor; eauto.
-
-    - apply IH in Hsem as (Mx & Hmsem).
-      exists (add_inst_n (hd Ids.default x) Mx M).
-
-      assert (exists i, hd_error x = Some i) as [i Hsome].
-      { assert (Hlen: 0 < length x).
-        { assert (length x = length (xs 0))
-            by (specialize (Hxs 0); simpl in Hxs; eapply Forall2_length; eauto).
-
-          assert (exists n, length (map fst n.(n_out)) = length (xs 0)
-                       /\ 0 < length n.(n_out)) as (n & ? & ?).
-          { inversion_clear Hmsem as [?????????? Out].
-            exists n; split; auto.
-            - eapply Forall2_length; eauto.
-              specialize (Out 0); eauto.
-            - exact n.(n_outgt0).
-          }
-          assert (length (map fst n.(n_out)) = length n.(n_out))
-            by apply map_length.
-          intuition.
-        }
-        now apply length_hd_error.
+        (** Classical Choice  *)
+        (* now apply choice in Msem'.   *)
       }
-      erewrite hd_error_Some_hd; eauto; split.
-      + constructor.
-        * econstructor; eauto;
-            unfold add_inst_n; intro; now apply find_inst_gss.
-        * inv NoDup.
-          apply hd_error_Some_In in Hsome.
-          apply msem_equation_madd_inst; auto.
-      + split; apply memory_closed_n_App; auto.
+      clear Msem Sem.
 
-    - pose proof Hsem as Hsem'.
-      apply sem_msem_reset in Hsem as (Mx & Hmsem); auto.
-      exists (add_inst_n (hd Ids.default x) Mx M).
+      exists (fun n => F (if r n then pred (count r n) else count r n) n).
+      intro k; specialize (Msem' k).
+      do 2 eexists; intuition eauto;
+        intros n Count; auto.
+      rewrite Count; cases.
+    Qed.
 
-      assert (exists i, hd_error x = Some i) as [i Hsome].
-      { assert (Hlen: 0 < length x).
-        { assert (length x = length (xs 0))
-            by (specialize (Hxs 0); simpl in Hxs; eapply Forall2_length; eauto).
+    Lemma sem_msem_eq:
+      forall bk H eqs M eq,
+        sem_equation G bk H eq ->
+        NoDup_defs (eq :: eqs) ->
+        Forall (msem_equation G bk H M) eqs ->
+        memory_closed_n M eqs ->
+        exists M1, Forall (msem_equation G bk H M1) (eq :: eqs)
+              /\ memory_closed_n M1 (eq :: eqs).
+    Proof.
+      intros * Heq NoDup Hmeqs WF.
+      inversion Heq as [|
+                        ???????? Hls Hxs ? Hsem|
+                        ???????????? Hls Hxs ? Hy Hr Hsem|
+                        ???????? Hle Hvar Hfby];
+        match goal with H:_=eq |- _ => rewrite <-H in * end.
 
-          assert (exists n, length (map fst n.(n_out)) = length (xs 0)
-                       /\ 0 < length n.(n_out)) as (n & ? & ?).
-          { destruct (Hmsem 0) as (?& Hmsem' & ?);
-              inversion_clear Hmsem' as [?????????? Hout].
-            exists n; split; auto.
-            - unfold sem_vars, lift in Hout; specialize (Hout 0).
-              apply Forall2_length in Hout; rewrite Hout.
-              rewrite mask_length; auto.
-              eapply wf_streams_mask.
-              intro n'; specialize (Hsem' n');
-                apply sem_node_wf in Hsem' as (? & ?); eauto.
-            - exact n.(n_outgt0).
+      - exists M.
+        econstructor; eauto.
+
+      - apply Hnode in Hsem as (Mx & Hmsem).
+        exists (add_inst_n (hd Ids.default x) Mx M).
+
+        assert (exists i, hd_error x = Some i) as [i Hsome].
+        { assert (Hlen: 0 < length x).
+          { assert (length x = length (xs 0))
+              by (specialize (Hxs 0); simpl in Hxs; eapply Forall2_length; eauto).
+
+            assert (exists n, length (map fst n.(n_out)) = length (xs 0)
+                         /\ 0 < length n.(n_out)) as (n & ? & ?).
+            { inversion_clear Hmsem as [?????????? Out].
+              exists n; split; auto.
+              - eapply Forall2_length; eauto.
+                specialize (Out 0); eauto.
+              - exact n.(n_outgt0).
+            }
+            assert (length (map fst n.(n_out)) = length n.(n_out))
+              by apply map_length.
+            intuition.
           }
-          assert (length (map fst n.(n_out)) = length n.(n_out))
-            by apply map_length.
-          intuition.
+          now apply length_hd_error.
         }
-        now apply length_hd_error.
-      }
-      erewrite hd_error_Some_hd; eauto; split.
-      + constructor.
-        * econstructor; eauto;
-            unfold add_inst_n; intro; now apply find_inst_gss.
-        * inv NoDup.
-          apply hd_error_Some_In in Hsome.
-          apply msem_equation_madd_inst; auto.
-      + split; apply memory_closed_n_App; auto.
+        erewrite hd_error_Some_hd; eauto; split.
+        + constructor.
+          * econstructor; eauto;
+              unfold add_inst_n; intro; now apply find_inst_gss.
+          * inv NoDup.
+            apply hd_error_Some_In in Hsome.
+            apply msem_equation_madd_inst; auto.
+        + split; apply memory_closed_n_App; auto.
 
-    - exists (add_val_n x (hold (sem_const c0) ls) M);
-        split.
-      + constructor.
-        * unfold add_val_n.
-          econstructor; eauto; split;
-            intros; try rewrite Hfby; unfold fby;
-              simpl; repeat rewrite find_val_gss; auto.
-          destruct (ls n); auto.
-        * inv NoDup.
-          apply msem_equation_madd_val; eauto.
-      + split; apply memory_closed_n_Fby; auto.
-  Qed.
+      - pose proof Hsem as Hsem'.
+        apply sem_msem_reset in Hsem as (Mx & Hmsem); auto.
+        exists (add_inst_n (hd Ids.default x) Mx M).
 
-  Lemma memory_closed_empty:
-    memory_closed_n (fun _ : nat => empty_memory val) [].
-  Proof.
-    constructor; simpl.
-    - setoid_rewrite find_inst_gempty; congruence.
-    - setoid_rewrite find_val_gempty; congruence.
-  Qed.
+        assert (exists i, hd_error x = Some i) as [i Hsome].
+        { assert (Hlen: 0 < length x).
+          { assert (length x = length (xs 0))
+              by (specialize (Hxs 0); simpl in Hxs; eapply Forall2_length; eauto).
 
-  (* XXX: for this lemma, and the ones before/after it, factorize 'G',
-'bk' and possibly other variables in a Section *)
-  Corollary sem_msem_eqs:
-    forall G bk H eqs,
-      (forall f xs ys,
-          sem_node G f xs ys ->
-          exists M, msem_node G f xs M ys) ->
-      NoDup_defs eqs ->
-      Forall (sem_equation G bk H) eqs ->
-      exists M1, Forall (msem_equation G bk H M1) eqs
-            /\ memory_closed_n M1 eqs.
-  Proof.
-    intros G bk H eqs IH NoDup Heqs.
-    induction eqs as [|eq eqs IHeqs].
-    - exists (fun n => empty_memory _); split; auto.
-      apply memory_closed_empty.
-    - apply Forall_cons2 in Heqs as [Heq Heqs].
-      eapply IHeqs in Heqs as (?&?&?).
-      + eapply sem_msem_eq; eauto.
-      + eapply NoDup_defs_cons; eauto.
-  Qed.
+            assert (exists n, length (map fst n.(n_out)) = length (xs 0)
+                         /\ 0 < length n.(n_out)) as (n & ? & ?).
+            { destruct (Hmsem 0) as (?& Hmsem' & ?);
+                inversion_clear Hmsem' as [?????????? Hout].
+              exists n; split; auto.
+              - unfold sem_vars, lift in Hout; specialize (Hout 0).
+                apply Forall2_length in Hout; rewrite Hout.
+                rewrite mask_length; auto.
+                eapply wf_streams_mask.
+                intro n'; specialize (Hsem' n');
+                  apply sem_node_wf in Hsem' as (? & ?); eauto.
+              - exact n.(n_outgt0).
+            }
+            assert (length (map fst n.(n_out)) = length n.(n_out))
+              by apply map_length.
+            intuition.
+          }
+          now apply length_hd_error.
+        }
+        erewrite hd_error_Some_hd; eauto; split.
+        + constructor.
+          * econstructor; eauto;
+              unfold add_inst_n; intro; now apply find_inst_gss.
+          * inv NoDup.
+            apply hd_error_Some_In in Hsome.
+            apply msem_equation_madd_inst; auto.
+        + split; apply memory_closed_n_App; auto.
+
+      - exists (add_val_n x (hold (sem_const c0) ls) M);
+          split.
+        + constructor.
+          * unfold add_val_n.
+            econstructor; eauto; split;
+              intros; try rewrite Hfby; unfold fby;
+                simpl; repeat rewrite find_val_gss; auto.
+            destruct (ls n); auto.
+          * inv NoDup.
+            apply msem_equation_madd_val; eauto.
+        + split; apply memory_closed_n_Fby; auto.
+    Qed.
+
+    Lemma memory_closed_empty:
+      memory_closed_n (fun _ : nat => empty_memory val) [].
+    Proof.
+      constructor; simpl.
+      - setoid_rewrite find_inst_gempty; congruence.
+      - setoid_rewrite find_val_gempty; congruence.
+    Qed.
+
+    Corollary sem_msem_eqs:
+      forall bk H eqs,
+        NoDup_defs eqs ->
+        Forall (sem_equation G bk H) eqs ->
+        exists M1, Forall (msem_equation G bk H M1) eqs
+              /\ memory_closed_n M1 eqs.
+    Proof.
+      intros bk H eqs NoDup Heqs.
+      induction eqs as [|eq eqs IHeqs].
+      - exists (fun n => empty_memory _); split; auto.
+        apply memory_closed_empty.
+      - apply Forall_cons2 in Heqs as [Heq Heqs].
+        eapply IHeqs in Heqs as (?&?&?).
+        + eapply sem_msem_eq; eauto.
+        + eapply NoDup_defs_cons; eauto.
+    Qed.
+  End sem_msem_eq.
 
   Theorem sem_msem_node:
     forall G f xs ys,

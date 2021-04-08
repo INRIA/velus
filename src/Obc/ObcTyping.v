@@ -201,12 +201,6 @@ Module Type OBCTYPING
   Definition wt_state (p: program) (me: menv) (ve: venv) (c: class) (vars: list (ident * type)) : Prop :=
     wt_mem me p c /\ wt_env ve vars.
 
-
-  Scheme wt_mem_ind_2 := Minimality for wt_mem Sort Prop
-    with wt_mem_inst_ind_2 := Minimality for wt_mem_inst Sort Prop.
-  (* XXX: why does this fail? *)
-  (* Combined Scheme wt_mem_inst_ind' from wt_mem_ind_2, wt_mem_inst_ind_2. *)
-
   Section wt_mem_mult.
 
     Variable P : forall me p cl, wt_mem me p cl -> Prop.
