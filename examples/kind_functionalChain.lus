@@ -78,30 +78,23 @@ tel
 
 node controllaw(in1, in2 : real) returns (integ : real);
 var
-  vinit : bool;
   inp,sum1,dtf : real;
   c1,c2,c3 : bool;
   out_stable: bool;
-  pre_integ, pre_dtf : real;
 let
   assert((-3.6 <= in1) and (in1 <= 3.6) and
          (-3.6 <= in2) and (in2 <= 3.6));
-  vinit = true fby false;
 
   inp = in1 - 0.0392 * dtf;
-  sum1 = if vinit then 0.0 else 0.04 * pre_integ + 0.15 * inp;
+  sum1 = 0.0 -> 0.04 * (0.0 fby integ) + 0.15 * inp;
 
   c1 = (sum1 <=  1.0 and sum1 >= -1.0);
   c2 = (sum1 >=  1.0 and inp < 0.0);
   c3 = (sum1 <= -1.0 and inp > 0.0);
 
-  pre_integ = 0.0 fby integ;
-  integ = if vinit then 0.0
-          else if (c1 or c2 or c3) then pre_integ + inp
-          else pre_integ;
+  integ = 0.0 -> (0.0 fby integ) + (if (c1 or c2 or c3) then inp else 0.0);
 
-  pre_dtf = 0.0 fby dtf;
-  dtf = if vinit then 0.0 else in2 + 0.9608 * pre_dtf;
+  dtf = 0.0 -> in2 + 0.9608 * (0.0 fby dtf);
 
   out_stable = ((-25.0 <= integ) and (integ <= 25.0));
 
@@ -123,9 +116,9 @@ node saturation3(
   outa, outb, outc: real
 );
 let
-  outa = saturation(ina, min, max);
-  outb = saturation(inb, min, max);
-  outc = saturation(inc, min, max);
+  (outa, outb, outc) = (saturation(ina, min, max),
+                        saturation(inb, min, max),
+                        saturation(inc, min, max));
 tel
 
 -- |===| channel node.
@@ -205,14 +198,12 @@ node range_monitor(
   out_of_range, corrupt: bool; 
   ranged_signal: real
 );
-var corrupt_a : bool;
 let
   assert(min < max);
 
   out_of_range = signal > max or min < signal;
 
-  corrupt_a = conf1(out_of_range, n);
-  corrupt = latch(corrupt_a);
+  corrupt = latch(conf1(out_of_range, n));
 
   ranged_signal =
     if corrupt then default_signal
@@ -234,10 +225,8 @@ node priority(
   safe_command: real; 
   in_command: bool
 );
-var arg : bool;
 let
-  arg = conf1(not other_in_command, n);
-  in_command = not command_failure and arg;
+  in_command = not command_failure and conf1(not other_in_command, n);
   safe_command = if in_command then command else safe_command_value;
 tel
 
@@ -261,7 +250,6 @@ var
   default_value: real;
   out_of_range1, out_of_range2, out_of_range3: bool;
   corrupt1, corrupt2, corrupt3: bool;
-  arg: bool;
 
   safe_value: real;
   n1, n2, n3: int;
@@ -314,8 +302,7 @@ let
   no_command = not(in_command1 or in_command2 or in_command3);
 
   -- ... but it cannot be true forever. hopefully.
-  arg = conf1(no_command, m3);
-  ok = not arg;
+  ok = not conf1(no_command, m3);
 
   --%property ok;
 tel

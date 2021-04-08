@@ -1,101 +1,64 @@
 (* ums_verif example from the lustre v4 distribution. *)
 
-node two_vstates(set,vreset,vinit: bool) returns (vstate:bool);
-var first, pre_vstate : bool;
+node two_vstates(set,vreset,vinit:bool) returns (vstate:bool);
 let
-  first = true fby false;
-  vstate=
-      if first then vinit
-      else if set and not pre_vstate then true
-      else if vreset and pre_vstate then false
-      else pre_vstate;
-  pre_vstate = false fby vstate;
+  vstate = vinit -> (if set and not (false fby vstate) then true
+                     else if vreset and (false fby vstate) then false
+                     else false fby vstate);
 tel
 
 node edge(x: bool) returns (edge : bool);
-var first, pre_x : bool;
 let
-  first = true fby false;
-  edge = if first then x else (x and not pre_x);
-  pre_x = false fby x;
+  edge = x -> x and not (false fby x);
 tel
 
 node implies(a,b:bool) returns (implies: bool);
 let implies = if a then b else true; tel
 
 node after (a: bool) returns (x: bool);
-var vstate_x : bool;
 let
-  vstate_x = false fby (a or x);
-  x = vstate_x;
+  x = false -> false fby (a or x);
 tel
 
 node always_since (c,a: bool) returns (x: bool);
-var pre_x, after_a : bool;
 let
-  after_a = after(a);
   x = if a then c
-      else if after_a then c and pre_x
+      else if after(a) then c and (false fby x)
       else true;
-  pre_x = false fby x;
 tel
 
 node once_since (c,a: bool) returns (x: bool);
-var pre_x, after_a : bool;
 let
-  after_a = after(a);
   x = if a then c
-      else if after_a then c or pre_x
+      else if after(a) then c or (false fby x)
       else true;
-  pre_x = false fby x;
 tel
 
 node always_from_to (c,a,b: bool) returns (x: bool);
-var after_a, als, ons : bool;
 let
-  after_a = after(a);
-  als = always_since(c,a);
-  ons = once_since(b,a);
-  x = implies (after_a, als or ons);
+  x = implies (after(a), always_since(c, a) or once_since(b, a));
 tel
 
 node once_from_to (c,a,b: bool) returns (x: bool);
-var after_a, once_since_ca : bool;
 let
-  after_a = after(a);
-  once_since_ca = once_since(c,a);
-  x = implies (after_a and b, once_since_ca);
+  x = implies (after(a) and b, once_since(c, a));
 tel
 
 node alternating(a,b: bool) returns (x:bool);
 var a_forbiden, b_forbiden: bool;
-    vinit, pre_a, pre_b, pre_a_forbiden, pre_b_forbiden : bool;
 let
-  vinit = true fby false;
-
-  a_forbiden =
-            if vinit then false
-            else if pre_a and not a then true
-            else if pre_b and not b then false 
-                 else pre_a_forbiden;
-  b_forbiden =
-            if vinit then true
-            else if pre_b and not b then true
-            else if pre_a and not a then false  
-            else pre_b_forbiden;
+  a_forbiden = false -> (if (false fby a) and not a then true
+                         else if (false fby x) and not b then false 
+                         else (false fby a_forbiden));
+  b_forbiden = true -> (if (false fby b) and not b then true
+                        else if (false fby a) and not a then false  
+                        else (false fby b_forbiden));
   x = not(a and a_forbiden) and not(b and b_forbiden);
-
-  pre_a = false fby a;
-  pre_a_forbiden = false fby a_forbiden;
-  pre_b = false fby b;
-  pre_b_forbiden = false fby b_forbiden;
 tel
 
 node not_between_and (a,b,c: bool) returns (x: bool);
-var os : bool;
 let
-  os = once_since(a,b);
-  x = implies(c, not os); 
+  x = implies(c, not once_since(a,b)); 
 tel
 
 node ums(on_a,on_b,on_c,ack_ab,ack_bc: bool)
@@ -120,25 +83,23 @@ var
    no_collision,exclusive_req: bool;
    no_derail_ab,no_derail_bc: bool;
    empty_section, only_on_b: bool;
-   vinit : bool;
 let
    empty_section = not(on_a or on_b or on_c);
    only_on_b = on_b and not(on_a or on_c);
    
    -- assertions
-   vinit = true fby false;
    assert not(ack_ab and ack_bc);
-   assert vinit or always_from_to(ack_ab,ack_ab,do_bc);
-   assert vinit or always_from_to(ack_bc,ack_bc,do_ab);
-   assert empty_section or not vinit;
-   assert vinit or
+   assert true -> always_from_to(ack_ab,ack_ab,do_bc);
+   assert true -> always_from_to(ack_bc,ack_bc,do_ab);
+   assert empty_section -> true;
+   assert true ->
     implies(edge(not empty_section),
       false fby grant_access);
-   assert vinit or
+   assert true ->
     implies(edge(on_c),
       false fby grant_exit);
-   assert vinit or implies(edge(not on_a),on_b);
-   assert vinit or implies(edge(not on_b), on_a or on_c);
+   assert true -> implies(edge(not on_a),on_b);
+   assert true -> implies(edge(not on_b), on_a or on_c);
 
    -- ums call
    (grant_access,grant_exit,do_ab,do_bc) =

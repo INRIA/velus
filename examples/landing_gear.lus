@@ -12,45 +12,31 @@
 *)
 
 
--- vrai si la derniere occurrence de start est arrivee il y a au moins time
+-- true if the last occurence of start arrived after time
 node end_delay_last (time_base, start : bool; time : int)
 returns (ended : bool);
-var x_c, pre_x_c : int;
-    vinit : bool;
+var x_c : int;
 let
   assert (x_c < 400);
-  x_c = if vinit then 0 
-        else if start then 0
-        else if time_base then pre_x_c + 1
-        else pre_x_c;
-  pre_x_c = 0 fby x_c;
-  vinit = true fby false;
+  x_c = 0 -> (if start then 0
+              else (0 fby x_c) + (if time_base then 1 else 0));
   ended = x_c = time;
 tel
 
 node end_delay (time_base, started : bool; time : int)
 returns (ended : bool);
-var x_d, pre_x_d : int;
-    pre_started, vinit : bool;
+var x_d : int;
 let
-  vinit = true fby false;
-  x_d = if vinit then 0
-        else if started and not pre_started then 0
-        else if started and time_base
-        then pre_x_d + 1 else pre_x_d;
+  x_d = 0 -> (if started and not (true fby started) then 0
+              else (0 fby x_d) + (if started and time_base then 1 else 0));
   ended = started and x_d >= time;
-
-  pre_started = true fby started;
-  pre_x_d = 0 fby x_d;
 tel
 
 node since_last_never (a, b : bool) returns (since_last_a_never_b : bool);
-var pre_since_last_a_never_b : bool;
 let
-  pre_since_last_a_never_b = true fby since_last_a_never_b;
   since_last_a_never_b = if a then true
                          else if b then false
-                              else pre_since_last_a_never_b;
+                         else (true fby since_last_a_never_b);
 tel
 
 node implies (a, b : bool)
@@ -61,29 +47,20 @@ tel
 
 node alternate (a, b : bool) returns (ok : bool);
 var attentea, attenteb : bool;
-    pre_attentea, pre_attenteb, vinit : bool;
 let
-  vinit = true fby false;
-  attenteb = if vinit then true
-             else if a then true
-             else if b then false
-             else pre_attenteb;
-  attentea = if vinit then true
-             else if b then true
-             else if a then false
-             else pre_attentea;
+  attenteb = true -> (if a then true
+                      else if b then false
+                      else (false fby attenteb));
+  attentea = true -> (if b then true
+                      else if a then false
+                      else (false fby attentea));
   ok = not (a and b) and
-    (not (not pre_attenteb and b) or (not pre_attentea and a));
-
-  pre_attentea = false fby attentea;
-  pre_attenteb = false fby attenteb;
+    (not (not (false fby attenteb) and b) or (not (false fby attentea) and a));
 tel
 
 node never (b : bool) returns (never : bool);
-var pre_never : bool;
 let
-  never = if b then false else pre_never;
-  pre_never = true fby never;
+  never = if b then false else (true fby never);
 tel
 
 
@@ -101,42 +78,32 @@ tel
 node analogical_switch_all_outputs (time_base, handle_up, handle_down : bool)
 returns (x_a : int; vopen, closing, opening, closed : bool);
 var handle_move : bool; position : int;
-    vinit, pre_vopen, pre_opening,
-    pre_closed, pre_closing, pre_pre_closing : bool;
-    pre_x_a : int;
 let
 
   handle_move = handle_up or handle_down;
 
-  vinit = true fby false;
-  vopen = vinit or ((pre_vopen and pre_x_a = 0) or pre_opening and (pre_x_a >= 3*12)
-         and not handle_move);
-  pre_vopen = false fby vopen;
-  pre_opening = false fby opening;
-  pre_x_a = 0 fby x_a;
+  vopen = true -> (((false fby vopen) and (0 fby x_a) = 0) or (false fby opening) and ((0 fby x_a) >= 3*12)
+                   and not handle_move);
 
-  closing = pre_closing and (pre_x_a < 3*8)
-            or ((pre_opening or pre_vopen) and handle_move);
-  pre_closed = false fby closed;
-  pre_closing = false fby closing;
-  pre_pre_closing = false fby pre_closing;
+  closing = (false fby closing) and ((0 fby x_a) < 3*8)
+            or (((false fby opening) or (false fby vopen)) and handle_move);
 
-  closed = not vinit or (pre_closed and (handle_move or (pre_x_a < 3*200))
-           or pre_closing and (pre_x_a >= 3*8));
+  closed = false -> ((false fby closed) and (handle_move or ((0 fby x_a) < 3*200))
+                     or (false fby closing) and ((0 fby x_a) >= 3*8));
 
-  opening = (pre_opening and (pre_x_a < 3*12 - 2*position)
-            or pre_closed and (pre_x_a >= 3*200)) and not handle_move;
+  opening = ((false fby opening) and ((0 fby x_a) < 3*12 - 2*position)
+             or (false fby closed) and ((0 fby x_a) >= 3*200)) and not handle_move;
 
   x_a =
     if vopen
-       or closing and (pre_vopen or pre_opening)
-       or closed  and (pre_closing or handle_move)
-       or opening and pre_closed
+       or closing and ((false fby vopen) or (false fby opening))
+       or closed  and ((false fby closing) or handle_move)
+       or opening and (false fby closed)
     then 0
-    else if time_base then pre_x_a + 1
-         else pre_x_a;
+    else if time_base then (0 fby x_a) + 1
+         else (0 fby x_a);
 
-   position = if pre_opening and pre_pre_closing then pre_x_a else 0;
+   position = if (false fby opening) and (false fby closing) then (0 fby x_a) else 0;
 tel
 
 node analogical_switch (time_base, handle_up, handle_down : bool)
@@ -166,47 +133,38 @@ node cylinder_all_outputs (time_base, pressure_up, pressure_down, i : bool;
 returns (down, down_to_up, up, up_to_down : bool;
          x : int);
 var condition : bool;
-    vinit, pre_down, pre_up_to_down, pre_down_to_up, pre_up : bool;
-    pre_x : int;
 let
   
   condition = false fby (x >= 100);
   
-  vinit = true fby false;
-  down = (vinit and not i) or (pre_up_to_down and pressure_down and
-                              (pre_x >= time_up_to_down)
-                               or pre_down and not pressure_up);
-  pre_down = false fby down;
-  pre_up_to_down = false fby up_to_down;
-  pre_down_to_up = false fby down_to_up;
-  pre_x = 0 fby x;
+  down = not i -> (((false fby up_to_down) and pressure_down and
+                    ((0 fby x) >= time_up_to_down)
+                    or (false fby down) and not pressure_up));
 
-  down_to_up = pre_down and pressure_up
-               or pre_up_to_down and pressure_up
-               or pre_down_to_up and not pressure_down and
-               (not vinit and (not pressure_up or (pre_x < time_down_to_up)));
+  down_to_up = false -> ((false fby down) and pressure_up
+                         or (false fby up_to_down) and pressure_up
+                         or (false fby down_to_up) and not pressure_down and
+                         (not pressure_up or ((0 fby x) < time_down_to_up)));
    
-  up = (vinit and i) or
-       (pre_down_to_up and pressure_up and (pre_x >= time_down_to_up)
-        or pre_up and not pressure_down);
-  pre_up = false fby up;
+  up = i -> (((false fby down_to_up) and pressure_up and ((0 fby x) >= time_down_to_up)
+              or (false fby up) and not pressure_down));
 
-  up_to_down = pre_up and pressure_down
-               or pre_down_to_up and pressure_down
-               or pre_up_to_down and not pressure_up and
-               (not vinit and (not pressure_down or (pre_x < time_up_to_down)));
+  up_to_down = false -> ((false fby up) and pressure_down
+                         or (false fby down_to_up) and pressure_down
+                         or (false fby up_to_down) and not pressure_up and
+                         (not pressure_down or ((0 fby x) < time_up_to_down)));
 
-  x = if down and pre_up_to_down
-    or up and pre_down_to_up
-    or down_to_up and pre_up_to_down
-    or up_to_down and pre_down_to_up
-    or down_to_up and pre_down
-    or up_to_down and pre_up
-         then 0
-    else if (pressure_down and up_to_down)
-         or (pressure_up and down_to_up) and time_base
-         then pre_x + 1 
-    else pre_x;
+  x = 0 -> (if down and (false fby up_to_down)
+            or up and (false fby down_to_up)
+            or down_to_up and (false fby up_to_down)
+            or up_to_down and (false fby down_to_up)
+            or down_to_up and (false fby down)
+            or up_to_down and (false fby up)
+            then 0
+            else if (pressure_down and up_to_down)
+            or (pressure_up and down_to_up) and time_base
+                 then (0 fby x) + 1 
+            else (0 fby x));
 
 tel
 
@@ -248,19 +206,12 @@ tel
 
 node circuit_pressurized (time_base, ev : bool)
 returns (circuit_pressurized : bool);
-
 var depressurize : bool;
-    not_vinit : bool;
-    end_delay_1, end_delay_2, never_ev : bool;
-
 let
-  not_vinit = false fby true;
-  never_ev = never(ev);
-  depressurize = not_vinit and (not never_ev and not ev);
+  depressurize = false -> not never(ev) and not ev;
 
-  end_delay_1 = end_delay (time_base, ev, 3*20);
-  end_delay_2 = end_delay (time_base, depressurize, 3*36);
-  circuit_pressurized = end_delay_1 and not end_delay_2;
+  circuit_pressurized = end_delay(time_base, ev, 3*20)
+                        and not  end_delay(time_base, depressurize, 3*36);
 tel
 
 -- -----------------------------------------------------------------------------
@@ -278,10 +229,6 @@ node computing_module (time_base, handle_up, handle_down,
 returns (general_ev, close_ev, open_ev, retract_ev, extend_ev, detect_anomaly : bool);
 var handle_move, outgoing, retraction,
     pressure_problem, door_blocked, gear_blocked : bool;
-    not_vinit : bool;
-    pressure_problem_1, pressure_problem_2, pre_retraction, pre_outgoing,
-    door_blocked_1, door_blocked_2, door_blocked_3, door_blocked_4,
-    gear_blocked_1, gear_blocked_2, gear_blocked_3, gear_blocked_4 : bool;
 let
 
 -- etats admissibles
@@ -309,46 +256,33 @@ let
   and (retraction and door_open and (gear_shock_absorber and not gear_retracted
                                      or not gear_shock_absorber));
 
-  not_vinit = false fby true;
-  general_ev = not_vinit and (outgoing or retraction) and analogical_switch;
+  general_ev = false -> (outgoing or retraction) and analogical_switch;
 
   outgoing = if (gear_extended and door_closed) then false
              else if handle_down then true
                   else if handle_up then false    
-             else pre_outgoing;
-  pre_outgoing = false fby outgoing;
+             else (false fby outgoing);
 
   retraction = if (gear_retracted and door_closed) then false
                else if handle_up then true
                else if handle_down then false
-               else pre_retraction;
-  pre_retraction = false fby retraction;
+               else (false fby retraction);
 
 -- monitoring
 
-  pressure_problem_1 = end_delay (time_base, general_ev, 3*20);
-  pressure_problem_2 = end_delay (time_base, not general_ev, 3*100);
-  pressure_problem = pressure_problem_1 and
-                     not circuit_pressurized or
-                     pressure_problem_2 and circuit_pressurized;
+  pressure_problem = end_delay (time_base, general_ev, 3*20) and
+    not circuit_pressurized or
+    end_delay (time_base, not general_ev, 3*100) and circuit_pressurized;
 
-  door_blocked_1 = end_delay (time_base, open_ev, 5);
-  door_blocked_2 = end_delay (time_base, open_ev, 3*20);
-  door_blocked_3 = end_delay (time_base, close_ev, 3*5);
-  door_blocked_4 = end_delay (time_base, close_ev, 3*20);
-  door_blocked = door_blocked_1 and door_closed or
-                 door_blocked_2 and not door_open or
-                 door_blocked_3 and door_open or
-                 door_blocked_4 and not door_closed;
+  door_blocked = end_delay (time_base, open_ev, 5) and door_closed or
+    end_delay (time_base, open_ev, 3*20) and not door_open or
+    end_delay (time_base, close_ev, 3*5) and door_open or
+    end_delay (time_base, close_ev, 3*20) and not door_closed;
 
-  gear_blocked_1 = end_delay (time_base, retract_ev, 3*5);
-  gear_blocked_2 = end_delay (time_base, retract_ev, 3*100);
-  gear_blocked_3 = end_delay (time_base, extend_ev, 3*5);
-  gear_blocked_4 = end_delay (time_base, extend_ev, 3*100);
-  gear_blocked = gear_blocked_1 and gear_extended or
-                 gear_blocked_2 and not gear_retracted or
-                 gear_blocked_3 and gear_retracted or
-                 gear_blocked_4 and not gear_extended;
+  gear_blocked = end_delay (time_base, retract_ev, 3*5) and gear_extended or
+    end_delay (time_base, retract_ev, 3*100) and not gear_retracted or
+    end_delay (time_base, extend_ev, 3*5) and gear_retracted or
+    end_delay (time_base, extend_ev, 3*100) and not gear_extended;
  
   detect_anomaly = door_blocked or gear_blocked or pressure_problem;
 
@@ -361,9 +295,6 @@ returns (closed_ana, general_ev, circuit_pressurized,
          extend_ev, retract_ev, gear_extended, gear_maneuvring, gear_retracted,
          close_ev, open_ev, door_closed, door_maneuvring, door_open : bool);
 var anomaly, time_base : bool;
-    pre_open_ev, pre_close_ev : bool;
-    pre_extend_ev, pre_retract_ev : bool;
-    pre_circuit_pressurized : bool;
  
 let
 
@@ -372,28 +303,22 @@ let
   closed_ana = analogical_switch (time_base, handle_up, handle_down);
   
   circuit_pressurized = circuit_pressurized (time_base, general_ev);
-  pre_circuit_pressurized = false fby circuit_pressurized;
 
   (general_ev, close_ev, open_ev, retract_ev,
    extend_ev, anomaly) = computing_module (time_base, handle_up, handle_down,
                                            gear_extended, gear_retracted,
                                            gear_shock_absorber,
                                            door_closed, door_open,
-                                           closed_ana, pre_circuit_pressurized);
+                                           closed_ana, (false fby circuit_pressurized));
   (gear_extended, gear_retracted) = cylinder (time_base,
-                                    pre_extend_ev, pre_retract_ev, true,
+                                    false fby extend_ev, false fby retract_ev, true,
                                     3*4, 3*16, 3*4, 3*8, 3*20, 3*8);
   (door_open, door_closed) = cylinder (time_base,
-                             pre_open_ev, pre_close_ev, false,
+                             false fby open_ev, false fby close_ev, false,
                              1, 3*12, 3*8, 3*12, 3*12, 3*12);
 
   gear_maneuvring = not (gear_extended or gear_retracted);
   door_maneuvring = not (door_open or door_closed);
-
-  pre_open_ev = false fby open_ev;
-  pre_close_ev = false fby close_ev;
-  pre_extend_ev = false fby extend_ev;
-  pre_retract_ev = false fby retract_ev;
 tel
 
 node system (time_base, handle_up, handle_down, gear_shock_absorber: bool)
@@ -401,37 +326,27 @@ returns (closed_ana, general_ev, circuit_pressurized,
          extend_ev, retract_ev, gear_extended, gear_maneuvring, gear_retracted,
          close_ev, open_ev, door_closed, door_maneuvring, door_open,
          anomaly : bool);
-var pre_open_ev, pre_close_ev : bool;
-    pre_extend_ev, pre_retract_ev : bool;
-    pre_circuit_pressurized : bool;
- 
 let
 
   closed_ana = analogical_switch (time_base, handle_up, handle_down);
   
   circuit_pressurized = circuit_pressurized (time_base, general_ev);
-  pre_circuit_pressurized = false fby circuit_pressurized;
 
   (general_ev, close_ev, open_ev, retract_ev,
    extend_ev, anomaly) = computing_module (time_base, handle_up, handle_down,
                                            gear_extended, gear_retracted,
                                            gear_shock_absorber,
                                            door_closed, door_open,
-                                           closed_ana, pre_circuit_pressurized);
+                                           closed_ana, (false fby circuit_pressurized));
   (gear_extended, gear_retracted) = cylinder(time_base,
-                                    pre_extend_ev, pre_retract_ev, true,
+                                    (false fby extend_ev), (false fby retract_ev), true,
                                     3*4, 3*16, 3*4, 3*8, 3*20, 3*8);
   (door_open, door_closed) = cylinder (time_base,
-                             pre_open_ev, pre_close_ev, false,
+                             (false fby open_ev), (false fby close_ev), false,
                              1, 3*12, 3*8, 3*12, 3*12, 3*12);
 
   gear_maneuvring = not (gear_extended or gear_retracted);
   door_maneuvring = not (door_open or door_closed);
-
-  pre_open_ev = false fby open_ev;
-  pre_close_ev = false fby close_ev;
-  pre_extend_ev = false fby extend_ev;
-  pre_retract_ev = false fby retract_ev;
 tel
 
 node verify (time_base, handle_up, handle_down, gear_shock_absorber : bool)
@@ -442,7 +357,6 @@ var r11, r12,
     extend_ev, retract_ev, gear_extended, gear_maneuvring, gear_retracted,
     close_ev, open_ev, door_closed, door_maneuvring, door_open, open_ana,
     anomaly, handle_move : bool;
-    r11_a, r11_b, r12_a, r12_b : bool;
 
 let
 
@@ -455,13 +369,11 @@ let
                                 gear_shock_absorber);
   -- temporal propreties
  
-  r11_a = end_delay_last (time_base, handle_up, 3*140);
-  r11_b = since_last_never (handle_up, handle_down);
-  r11 = implies (r11_a and r11_b, door_closed and gear_retracted);
+  r11 = implies (end_delay_last (time_base, handle_up, 3*140) and
+                 since_last_never (handle_up, handle_down), door_closed and gear_retracted);
 
-  r12_a = end_delay_last (time_base, handle_down, 3*150);
-  r12_b = since_last_never (handle_down, handle_up);
-  r12 = implies (r12_a and r12_b, door_closed and gear_extended);
+  r12 = implies (end_delay_last (time_base, handle_down, 3*150) and
+                 since_last_never (handle_down, handle_up), door_closed and gear_extended);
 
   ok = r11 and r12;
 

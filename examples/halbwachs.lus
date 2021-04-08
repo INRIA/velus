@@ -3,111 +3,77 @@
 
 node counter(vinit_value, incr_value: int; vreset: bool)
    returns (n: int);
-var vinit : bool; pre_n : int;
 let
-   vinit = true fby false;
-   pre_n = 0 fby n;
-   n = if vreset or vinit then vinit_value
-       else pre_n + incr_value;
+   n = vinit_value -> (if vreset then vinit_value
+                       else (0 fby n) + incr_value);
 tel
 
 node watchdog1 (set, vreset, deadline: bool)
    returns (alarm: bool);
 var watchdog_is_on: bool;
-    pre_watchdog_is_on, vinit: bool;
 let
-   vinit = true fby false;
    alarm = deadline and watchdog_is_on;
-   watchdog_is_on =
-      if vinit then false
-      else if set then true
-      else if vreset then false
-      else pre_watchdog_is_on;
-   pre_watchdog_is_on = false fby watchdog_is_on;
+   watchdog_is_on = false -> (if set then true
+                              else if vreset then false
+                              else (false fby watchdog_is_on));
    assert not(set and vreset);
 tel
 
 node edge (b: bool) returns (edge: bool);
-var pre_b : bool;
 let
-   pre_b = true fby b;
-   edge = b and not pre_b;
+   edge = false -> (b and not (false fby b));
 tel
 
 node watchdog2 (set, vreset: bool; delay: int)
    returns (alarm: bool);
 var remaining_delay: int; deadline: bool;
-    pre_remaining_delay: int;
 let
    alarm = watchdog1(set, vreset, deadline);
    deadline = edge(remaining_delay = 0);
-   remaining_delay = if set then delay else
-                     pre_remaining_delay;
-   pre_remaining_delay = 0 fby (remaining_delay - 1);
+   remaining_delay = if set then delay
+                     else (0 fby (remaining_delay - 1));
 tel
 
 node simple_stopwatch (start_stop, vreset, hs: bool)
    returns (time: int; running: bool);
-var vinit, pre_running : bool;
-    pre_time : int;
 let
-  vinit = true fby false;
-  time =
-    if vinit then 0
-    else if hs and running then pre_time + 1
-    else if vreset then 0 else pre_time;
-  pre_time = 0 fby time;
-  running = if vinit then false
-            else if start_stop then not pre_running
-            else pre_running;
-  pre_running = false fby running;
+  time = 0 -> (if hs and running then (0 fby time) + 1
+               else if vreset then 0 else (0 fby time));
+  running = false -> (if start_stop
+                      then not (false fby running)
+                      else (false fby running));
 tel
 
 node stopwatch (start_stop, vreset, hs: bool)
    returns (displayed_time: int; running, frozen: bool);
 var internal_time: int; actual_vreset: bool;
-    vinit, pre_running, pre_frozen, r: bool;
-    pre_displayed_time: int;
 let
-  vinit = true fby false;
-  frozen = if vinit then false
-           else if vreset and pre_running then true
-           else if vreset and pre_frozen then false
-           else pre_frozen;
+  frozen = false ->
+              (if vreset and (false fby running) then true
+               else if vreset and (false fby frozen) then false
+                    else (false fby frozen));
   displayed_time =
-           merge frozen
-                 (true -> pre_displayed_time when frozen)
-                 (false -> internal_time when not frozen);
-  pre_displayed_time = 0 fby displayed_time;
+    merge frozen
+          (true -> (0 fby displayed_time) when frozen)
+          (false -> internal_time when not frozen);
   (internal_time, running) =
       simple_stopwatch(start_stop, actual_vreset, hs);
-  actual_vreset = vreset and r;
-
-  r = true fby (not running and not frozen);
-  pre_running = false fby running;
-  pre_frozen = false fby frozen;
+  actual_vreset =
+      vreset and false fby (not running and not frozen);
 tel
 
 node switch_1(von, voff, vinit: bool) returns (vstate: bool);
-var first, pre_vstate : bool;
 let
-   first = true fby false;
-   vstate = if first then vinit
-           else if von then true
-           else if voff then false
-           else pre_vstate;
-   pre_vstate = false fby vstate;
+   vstate = vinit -> (if von then true
+                      else if voff then false
+                      else (false fby vstate));
 tel
 
 node nswitch(von, voff, vinit: bool) returns (vstate: bool);
-var first, pre_vstate : bool;
 let
-   first = true fby false;
-   vstate = if first then vinit
-           else if von and not pre_vstate then true
-           else if voff and pre_vstate then false
-           else pre_vstate;
-   pre_vstate = false fby vstate;
+   vstate = vinit -> (if von and not (false fby vstate) then true
+                      else if voff and (false fby vstate) then false
+                      else (false fby vstate));
 tel
 
 node compare(von, voff, vinit: bool) returns (ok: bool);
@@ -123,15 +89,12 @@ node watchdog3 (set, vreset, time_unit: bool;
                 delay: int)
    returns (alarm: bool);
 var clock: bool;
-    vinit, pre_alarm : bool;
-    r : bool when clock;
 let
-   r = watchdog2(set when clock,
-                 vreset when clock,
-                 delay when clock);
-   alarm = merge clock (true -> r) (false -> pre_alarm when not clock);
-   pre_alarm = false fby alarm;
-   clock = vinit or set or vreset or time_unit;
-   vinit = true fby false;
+   alarm = merge clock
+                 (true -> watchdog2(set when clock,
+                                    vreset when clock,
+                                    delay when clock)) 
+                 (false -> (false fby alarm) when not clock);
+   clock = true -> set or vreset or time_unit;
 tel
 

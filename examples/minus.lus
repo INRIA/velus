@@ -1,33 +1,23 @@
 (* minus example from the lustre v4 distribution. *)
 
-node two_vstates(set,vreset,vvinit:bool) returns (vstate:bool);
-var first, pre_vstate : bool;
+node two_vstates(set,vreset,vinit:bool) returns (vstate:bool);
 let
-  first = true fby false;
-  vstate = if first then vvinit
-          else if set and not pre_vstate then true
-          else if vreset and pre_vstate then false
-          else pre_vstate;
-  pre_vstate = false fby vstate;
+  vstate = vinit -> (if set and not (false fby vstate) then true
+                     else if vreset and (false fby vstate) then false
+                     else false fby vstate);
 tel;
 
-node one_button(change,vvinit: bool) returns (vstate:bool);
-var first, pre_vstate : bool;
+node one_button(change,vinit: bool) returns (vstate:bool);
 let
-  first = true fby false;
-  vstate = if first then vvinit
-          else if change then not pre_vstate else pre_vstate;
-  pre_vstate = false fby vstate;
+  vstate = vinit -> (if change then not (false fby vstate)
+                     else (false fby vstate));
 tel;
 
-node two_buttons(von,voff,vvinit:bool) returns(vstate:bool);
-var first, pre_vstate : bool;
+node two_buttons(von,voff,vinit:bool) returns(vstate:bool);
 let
-  first = true fby false;
-  vstate = if first then vvinit
-          else if von then true
-          else if voff then false else pre_vstate;
-  pre_vstate = false fby vstate;
+  vstate = vinit -> (if von then true 
+                     else if voff then false 
+                     else (false fby vstate));
 tel;
 
 node minus (e1,e2,e3,vvinit:bool) returns (ok:bool);

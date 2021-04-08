@@ -9,9 +9,6 @@ GCC?=arm-none-eabi-gcc
 HEPT_PATH?=$(HOME)/Projects/heptagon-working
 HEPT_FLAGS?=-stdlib $(HEPT_PATH)/lib -memalloc
 
-# For building ARM executables
-CCOMP_EXTRA=-WUl,--specs=nosys.specs
-
 # Verbose or not
 V?=
 
@@ -41,8 +38,7 @@ VELUS_OPT=-dobc -dclight -lib
 
 COMPCERT=$(realpath ../CompCert)
 CCOMP=$(COMPCERT)/ccomp
-CCOMP_OPT=-stdlib $(COMPCERT)/runtime \
-	    -Wa$(comma)$(subst $(space),$(comma),$(ARCH_FLAGS))
+CCOMP_OPT=-stdlib $(COMPCERT)/runtime
 
 GCC_NOINLINING?=-fno-inline-functions \
 	      -fno-inline-functions-called-once \
@@ -53,6 +49,7 @@ OWCET_FLAGS=--script trivial
 
 EXAMPLES= avgvelocity.lus \
 	  count.lus \
+		rer.lus \
 	  cruise.lus \
 	  emsoft03.lus \
 	  emsoft05.lus \
@@ -65,7 +62,8 @@ EXAMPLES= avgvelocity.lus \
 	  tracker.lus \
 	  ums_verif.lus \
 	  cocospec_mono_system.lus \
-	  # new_watch.lus
+	  new_watch.lus \
+		stopwatch.lus
 
 ## Main targets
 
@@ -223,11 +221,9 @@ rename-inlining.hept:
 
 %.s: %.lus
 	$(VELUS) $(VELUS_OPT) -sync $<
-	sed -i.bkp -e 's/\$$/_/g' $(<:.lus=.sync.c)
-	sed -i.bkp -e 's/\$$/_/g' $@
 
 %.exe: %.s
-	$(CCOMP) $(V) $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
+	$(CCOMP) $(V) $(CCOMP_OPT) $(CCOMP_EXTRA) \
 	    -o $@ $(@:.exe=.sync.c) $<
 
 %.hept.exe %.hept.c %.hept.s: %.lus
