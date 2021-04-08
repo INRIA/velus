@@ -262,7 +262,7 @@ equality_expression:
 AND_expression:
 | expr=equality_expression
     { expr }
-| expr1=AND_expression loc=LAND expr2=equality_expression
+| expr1=AND_expression loc=AND expr2=equality_expression
     { [LustreAst.BINARY LustreAst.BAND expr1 expr2 loc] }
 
 (* 6.5.11 *)
@@ -285,7 +285,7 @@ inclusive_OR_expression:
 logical_AND_expression:
 | expr=inclusive_OR_expression
     { expr }
-| expr1=logical_AND_expression loc=AND expr2=inclusive_OR_expression
+| expr1=logical_AND_expression loc=LAND expr2=inclusive_OR_expression
     { [LustreAst.BINARY LustreAst.LAND expr1 expr2 loc] }
 
 (* 6.5.14 *)

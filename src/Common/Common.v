@@ -1198,7 +1198,7 @@ Ltac solve_orel_obinds := split_orel_obinds; repeat rewrite_orel_obinds.
 
 Section check_nodup.
 
-  Definition check_nodup (l : list positive) := 
+  Definition check_nodup (l : list positive) :=
     Nat.eqb (PS.cardinal (ps_from_list l)) (List.length l).
 
   Lemma check_nodup_correct : forall l,

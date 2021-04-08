@@ -62,10 +62,6 @@ Module Type NLTYPING
     := Forall (wt_equation G (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
               n.(n_eqs).
 
-  (* TODO: replace Welldef_global; except for the Is_well_sch component.
-           Notably, typing arguments replace the ~Is_node_in and
-           Is_node_in/find_node components. The no duplicate names
-           component is replicated exactly. *)
   Inductive wt_global : global -> Prop :=
   | wtg_nil:
       wt_global []

@@ -136,7 +136,6 @@ Module Type TRTYPING
       erewrite 2 typeofc_cexp; eauto.
   Qed.
 
-  (* TODO: duplicated from Correctness *)
   Lemma ty_lexp :
     forall G env e e',
       LT.wt_exp G env e ->

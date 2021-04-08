@@ -158,8 +158,8 @@ Module Type NLMEMSEMANTICS
   (** ** Induction principle for [msem_equation] and [msem_node] *)
 
   (** The automagically-generated induction principle is not strong
-enough: it does not support the internal fixpoint introduced by
-[Forall] *)
+      enough: it does not support the internal fixpoint introduced by
+      [Forall] *)
 
   Section msem_node_mult.
 
@@ -257,13 +257,6 @@ enough: it does not support the internal fixpoint introduced by
   (** ** Properties *)
 
   (** *** Environment cons-ing lemmas *)
-
-  (* Instead of repeating all these cons lemmas (i.e., copying and pasting them),
-   and dealing with similar obligations multiple times in translation_correct,
-   maybe it would be better to bake Ordered_nodes into msem_node and to make
-   it like Miniimp, i.e.,
-      find_node f G = Some (nd, G') and msem_node G' nd xs ys ?
-   TODO: try this when the other elements are stabilised. *)
 
   Lemma msem_node_cons:
     forall n G f xs M ys,

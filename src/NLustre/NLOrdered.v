@@ -17,8 +17,6 @@ The compilation of a whole program is only correct if that program satisfies
 the [Ordered_nodes] predicate, which states that a node may only call nodes
 that were defined earlier.
 
-Remark: [Ordered_nodes] is implied by [Welldef_global].
-
  *)
 
 Module Type NLORDERED

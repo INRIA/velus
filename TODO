@@ -18,26 +18,6 @@ Example: Is_free_*, Is_Defined_*, Is_Variable_*, clk_
 
 Cf. [NLustre/Memories.v]
 
-* Do we really need [Ordered_nodes] and [NoDup]?
-
-These are directly implied by [Welldef_global] and are used only in
-situations where we have the stronger [Welldef_global] property.
-
-* Defined Welldef_global as a zipper over a list of equations
-
-So that we don't need to split the equations [alleqs = eqs ++ oeqs] in
-the correctness proof.
-
-* Extract a [Welldef_node] from [Welldef_global] 
-
-Currently, [Welldef_global] contains constraints about a single node
-as well as constraints about this node in the larger context. Extract
-this in another predicate, [Welldef_global] including the new one.
-
-* Repair the decision procedure for [WellFormed]
-
-Use it in the Example
-
 * Follow consistent naming
 
 Follow the 'Implicit Type' declarations

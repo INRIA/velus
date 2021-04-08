@@ -58,10 +58,6 @@ Module Type STCTYPING
                         (map (fun x => (fst x, type_const (fst (snd x)))) s.(s_lasts)))
            s.(s_tcs).
 
-  (* TODO: replace Welldef_global; except for the Is_well_sch component.
-           Notably, typing arguments replace the ~Is_node_in and
-           Is_node_in/find_node components. The no duplicate names
-           component is replicated exactly. *)
   Inductive wt_program : program -> Prop :=
   | wtg_nil:
       wt_program []

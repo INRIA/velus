@@ -621,7 +621,6 @@ Module Type LCLOCKING
 
   (** ** Validation *)
 
-  (* TODO: add to a database *)
   Hint Extern 2 (In _ (idck _)) => apply In_idck_exists.
 
   Section ValidateExpression.

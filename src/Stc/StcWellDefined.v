@@ -290,25 +290,16 @@ Module Type STCWELLDEFINED
         (PS.In x mems -> ~PS.In x defined)
         /\ (~PS.In x mems -> PS.In x variables).
     Proof.
-      (*  TODO: how to automate all of this? *)
       intros defined variables x.
       unfold check_var.
+      repeat rewrite <-PS.mem_spec. repeat rewrite Bool.not_true_iff_false.
       split.
       - intro Hif.
-        split; intro Hin.
-        + apply PS.mem_spec in Hin.
-          rewrite Hin, Bool.negb_true_iff in Hif.
-          apply PSP.Dec.F.not_mem_iff in Hif. exact Hif.
-        + apply PSP.Dec.F.not_mem_iff in Hin.
-          rewrite Hin, PS.mem_spec in Hif. exact Hif.
+        split; intro Hin; rewrite Hin in Hif; auto.
+        rewrite <-Bool.negb_true_iff; auto.
       - destruct 1 as [Hin Hnin].
-        destruct PSP.In_dec with x mems as [H|H].
-        + assert (PS.mem x mems = true) as H' by auto.
-          rewrite H', Bool.negb_true_iff, <-PSP.Dec.F.not_mem_iff.
-          now apply Hin with (1:=H).
-        + assert (PS.mem x mems = false) as H' by now apply PSP.Dec.F.not_mem_iff.
-          rewrite H', PS.mem_spec.
-          now apply Hnin with (1:=H).
+        destruct (PS.mem x mems); auto.
+        rewrite Hin; auto.
     Qed.
 
     Lemma Is_sub_in_sub_tc:
