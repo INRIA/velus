@@ -1,7 +1,7 @@
 # A Formally Verified Compiler for Lustre
 
 These source files contain the implementation, models, and proof of
-correctness of a formally verified Lustre compiler backend.
+correctness of a formally verified Lustre compiler
 
 This file contains instructions for (i) using the compiler, (ii) running
 from docker, a virtual machine, or a local opam installation, and (iii)
@@ -10,31 +10,13 @@ cross-references from material presented in the paper to the source files.
 The `examples/` subdirectory contains another readme file presenting several
 example programs that can be used to test the compiler.
 
-Since submitting the paper, we have implemented the scheduling pass (the
-relevant dashed line in Figure 1 becomes solid and elaboration produces
-N-Lustre).
-
-We are still working on the normalization pass, which means that Lustre
-source programs must currently be manually normalized (each `fby` and
-`application` must be given its own equation; `merge` and `if` constructs
-may only appear at the top level of an expression; output variables cannot
-be defined directly by `fby` equations). Also, the `->` and `pre` operators
-used in many Lustre programs are not yet treated. An equation like
-
-    x = e1 -> e2
-
-must instead be "manually compiled" into
-
-    x = if init then e1 else e2
-    init = true fby false
-
-and an uninitialized delay `pre e` must be replaced by an initialized one
-`0 fby e`.
+The `pre` operator used in many Lustre programs is not yet treated.
+An uninitialized delay `pre e` must be replaced by an initialized one `0 fby e`.
 
 Compiler error messages are still very brutal. In particular the parser only
 reports syntax errors with a line number and character offset. We will
 implement more helpful messages when we have finalized one or two remaining
-details of the final (unnormalized) language.
+details of the final language.
 
 ## Using the compiler
 
@@ -51,10 +33,14 @@ program examples/count.s.
 
 The compiler also accepts the options
 
-* -snlustre
-  Output the scheduled code into <file>.sn.lustre. Use `-fullclocks` to show
-  the full abstract clock paths in the output code (rather than the standard
-  `when` declarations).
+* -dnlustre
+  Output the normalized NLustre code into <file>.n.lus
+
+* -dstc
+  Output the Stc intermediate code into <file>.stc
+
+* -dsch
+  Output the scheduled code into <file>.sch.stc
 
 * -dobc
   Output the Obc intermediate code into <file>.obc
@@ -68,10 +54,8 @@ The compiler also accepts the options
 * -sync
   Generate an optional `main_sync` entry point and a <file>.sync.c
   containing a simulation that prints the outputs at each cycle and requests
-  inputs. In contrast to `main`, this entry point is not formally verified
+  inputs. In contrast to `main_proved`, this entry point is not formally verified
   but it is useful for testing the dynamic behaviour of compiled programs.
-  The alternative entry point can be selected by compiling using CompCert
-  with `-Wl,-emain_sync` (or with by passing `-emain_sync -m32` to `gcc`).
   See `examples/Makefile` for examples.
 
 ## Execution from Docker
