@@ -72,8 +72,8 @@ rule scan = parse
     print_var oc "COQLIBS" (rev !libs);
     print_var oc "VFILES" (rev !files);
     output_endline oc "VOFILES:=$(VFILES:.v=.vo)";
-    output_endline oc "BASEVFILES:=$(notdir $(VFILES))";
-    output_endline oc "GLOBFILES=$(BASEVFILES:%.v=$(DOCDIR)/%.glob)";
+    output_endline oc "DOTVFILES:=$(subst /,.,$(VFILES))";
+    output_endline oc "GLOBFILES=$(DOTVFILES:src.%.v=$(DOCDIR)/%.glob)";
 
     print_section oc "VARIABLES";
     iter (output_endline oc) vars_defs;
@@ -93,7 +93,7 @@ rule scan = parse
                                   "$(COQDEP) $(COQLIBS) $^ > .depend"];
       ["src/%.vo"; "$(DOCDIR)/%.glob"], ["src/%.v"],
       ["@echo \"COQC src/$*.v\"";
-       "$(COQC) -dump-glob $(DOCDIR)/$(*F).glob $(COQFLAGS) src/$*.v"];
+       "$(COQC) -dump-glob $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
       ["documentation"], ["$(GLOBFILES)"],
       ["cd src && " ^
        "coq2html -d ../$(DOCDIR)/html/ -base Velus -external ../../CompCert/doc/html compcert "^
