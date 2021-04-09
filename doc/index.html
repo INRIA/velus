@@ -163,5 +163,86 @@ a:active {color : Red; text-decoration : underline; }
         : add defaults arguments initializations to a statement</li>
 </ul>
 
+<h2>Outline of the compiler</h2>
+
+<h3>Lustre</h3>
+<ul>
+    <li><a href="html/Velus.Lustre.LSyntax.html">LSyntax</a>: Syntax of Lustre</li>
+    <li><a href="html/Velus.Lustre.LSemantics.html">LSemantics</a>: Coinductive semantics of Lustre</li>
+    <li><a href="html/Velus.Lustre.LTyping.html">LTyping</a>: Typing rules of Lustre</li>
+    <li><a href="html/Velus.Lustre.LClocking.html">LClocking</a>: Clocking rules of Lustre</li>
+    <li><a href="html/Velus.Lustre.LCausality.html">LCausality</a>: Causal rules of Lustre</li>
+    <li><a href="html/Velus.Lustre.LClockSemantics.html">LClockSemantics</a>: Proof of the clock system correctness</li>
+    <h4>Normalization</h4>
+    <ul>
+        <li><a href="html/Velus.Lustre.Normalization.Unnesting.html">Unnesting</a> and Distributivity transformation</li>
+        <li><a href="html/Velus.Lustre.Normalization.NormFby.html">Expression Initialization</a> algorithms</li>
+        <li><a href="html/Velus.Lustre.Normalization.Correctness.html">Correctness</a> of the normalization</li>
+    </ul>
+</ul>
+
+<h3>Transcription</h3>
+<ul>
+    <li><a href="html/Velus.Transcription.Tr.html">Transcription</a> algorithm</li>
+    <li><a href="html/Velus.Transcription.Correctness.html">Correctness</a> of the transcription algorithm</li>
+</ul>
+
+<h3>CoreExpr</h3>
+Core expressions, used in NLustre and Stc
+<ul>
+    <li><a href="html/Velus.CoreExpr.CESyntax.html">CESyntax</a>: Syntax of core expressions</li>
+    <li><a href="html/Velus.CoreExpr.CESemantics.html">CESemantics</a>: Semantics of core expressions</li>
+    <li><a href="html/Velus.CoreExpr.CETyping.html">CETyping</a>: Typing rules of core expressions</li>
+    <li><a href="html/Velus.CoreExpr.CEClocking.html">CEClocking</a>: Clocking rules of core expressions</li>
+</ul>
+
+<h3>NLustre</h3>
+<ul>
+    <li><a href="html/Velus.NLustre.NLSyntax.html">NLSyntax</a>: Syntax of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLCoindSemantics.html">NLCoindSemantics</a>: Coinductive semantics of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLIndexedSemantics.html">NLIndexedSemantics</a>: Indexed semantics of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLMemSemantics.html">NLMemSemantics</a>: Indexed semantics of NLustre with explicit memory</li>
+    <li><a href="html/Velus.NLustre.NLTyping.html">NLTyping</a>: Typing rules of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLClocking.html">NLClocking</a>: Clocking rules of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLNormalArgs.html">NLNormalArgs</a>: Normalized arguments in NLustre</li>
+</ul>
+
+<h3>NLustreToStc</h3>
+<ul>
+    <li><a href="html/Velus.NLustreToStc.Translation.html">Translation</a> from NLustre to Stc</li>
+    <li><a href="html/Velus.NLustreToStc.Correctness.html">Correctness</a> of the translation from NLustre to Stc</li>
+</ul>
+
+<h3>Stc</h3>
+<ul>
+    <li><a href="html/Velus.Stc.StcSyntax.html">StcSyntax</a>: Syntax of Stc</li>
+    <li><a href="html/Velus.Stc.StcSemantics.html">StcSemantics</a>: Semantics of Stc</li>
+    <li><a href="html/Velus.Stc.StcTyping.html">StcTyping</a>: Typing rules of Stc</li>
+    <li><a href="html/Velus.Stc.StcClocking.html">StcClocking</a>: Clocking rules of Stc</li>
+    <li><a href="html/Velus.Stc.StcSchedule.html">StcSchedule</a>: Stc scheduler</li>
+</ul>
+
+<h3>StcToObc</h3>
+<ul>
+    <li><a href="html/Velus.StcToObc.Translation.html">Translation</a> from Stc to Obc</li>
+    <li><a href="html/Velus.StcToObc.Correctness.html">Correctness</a> of the translation from Stc to Obc</li>
+</ul>
+
+<h3>Obc</h3>
+<ul>
+    <li><a href="html/Velus.Obc.ObcSyntax.html">ObcSyntax</a>: Syntax of Obc</li>
+    <li><a href="html/Velus.Obc.ObcSemantics.html">ObcSemantics</a>: Semantics of Obc</li>
+    <li><a href="html/Velus.Obc.ObcTyping.html">ObcTyping</a>: Typing rules of Obc</li>
+    <li><a href="html/Velus.Obc.ObcInvariants.html">ObcInvariants</a>: Useful invariants for Obc</li>
+    <li><a href="html/Velus.Obc.ObcAddDefaults.html">ObcAddDefaults</a>: Add default initializations</li>
+    <li><a href="html/Velus.Obc.ObcFusion.html">ObcFusion</a>: Fusion optimization</li>
+</ul>
+
+<h3>ObcToClight</h3>
+<ul>
+    <li><a href="html/Velus.ObcToClight.Generation.html">Generation</a> of Clight code</li>
+    <li><a href="html/Velus.ObcToClight.Correctness.html">Correctness</a> of the generation of Clight code</li>
+</ul>
+
 </BODY>
 </HTML>
