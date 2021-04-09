@@ -85,8 +85,6 @@ Module Type CEISFREE
 
   (** * Decision procedure *)
 
-  (* TODO: use auto for the proofs. *)
-
   Lemma Is_free_in_clock_disj:
     forall y ck x c, Is_free_in_clock y (Con ck x c)
                      <-> y = x \/ Is_free_in_clock y ck.

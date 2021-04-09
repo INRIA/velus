@@ -340,7 +340,6 @@ Proof.
   match goal with H:exists _, _ |- _ => destruct H end; discriminate.
 Qed.
 
-(* TODO: Why the hell can't I use <> ?!? *)
 Corollary not_None_is_Some_Forall:
   forall {A} (xs: list (option A)),
     Forall (fun (v: option A) => ~ v = None) xs ->

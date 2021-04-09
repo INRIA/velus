@@ -94,7 +94,6 @@ Parameter elab_const_char : Cabs.loc -> bool -> list char_code -> constant.
 (*    using Require ExtrOCamlString in the extraction file to extract Coq *)
 (*    strings as an OCaml "char list". Then use the Ident.pos_of_string *)
 (*    function. *)
-(*    TODO: In the long run, we should try to use OCaml strings everywhere. *)
 Parameter string_of_astloc : astloc -> String.string.
 Parameter cabsloc_of_astloc : astloc -> Cabs.loc.
 Parameter cabs_floatinfo : floatInfo -> Cabs.floatInfo.
@@ -1477,7 +1476,6 @@ Section ElabDeclaration.
              do xout    <- mmap (annotate env_out) outputs;
              do xvar    <- mmap (annotate env) locals;
              do eqs     <- mmap (elab_equation env nenv) equations;
-             (* TODO better error messages *)
              do _       <- check_nodupanon loc xin xvar xout eqs;
              do _       <- check_defined loc (nameset (nameset PS.empty xvar) xout) eqs;
              do _       <- check_atom loc name;

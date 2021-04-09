@@ -59,7 +59,6 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
                  LustreAst.ast_bol   = bol }) =
                   Relexer.map_token (LustreParser.MenhirLibParser.Inter.buf_head toks)
     in
-    (* TODO: improve error messages *)
     Printf.fprintf stderr "%s:%d:%d: syntax error.\n%!"
       fname lnum (cnum - bol + 1)
   | I.Accepted v ->

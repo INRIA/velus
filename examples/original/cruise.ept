@@ -43,7 +43,6 @@ node cruiseControl (onn, off, resume : bool; speed : float;
 returns (last cruiseSpeed : float = 0.0; throttleCmd : float);
 var braking, accelerator  : bool;
 let
-  (* TODO: use Heptagon to generate the equations from the original automaton... *)
     braking = brake >. 0.0;
     accelerator = accel >. 0.0;
 

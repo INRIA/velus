@@ -223,7 +223,6 @@ Module Type OBCADDDEFAULTS
     now rewrite Hfind.
   Qed.
 
-  (* XXX XXX XXX TODO: Tidy this up and also in the lemmas *)
   Notation "x '∈' y" := (PS.In x y) (at level 10).
   Notation "x '∪' y" := (PS.union x y) (at level 11, right associativity).
   Notation "x '∩' y" := (PS.inter x y) (at level 11, right associativity).
@@ -1376,8 +1375,6 @@ Module Type OBCADDDEFAULTS
       intros p' s rq t rq' st al Hpr Hcall Hno Hwt Hadd
              me ve1 ve2 me' ve2' Hpre Henv Heval.
       revert t rq rq' st al Hadd ve1 Henv Hpre.
-      (* TODO: reformulate stmt_eval to uncurry the final pair or tweak the
-         induction principle for stmt_eval? *)
       remember (me', ve2') as rr.
       assert (me' = fst rr /\ ve2' = snd rr) as (HR1 & HR2) by (subst; auto).
       rewrite HR1, HR2; clear Heqrr HR1 HR2 me' ve2'.

@@ -149,7 +149,6 @@ Module Type NLINDEXEDSEMANTICS
             always equal to true). This oligation, however, will only
             appear in the development when a lemma that asserts the
             existence of a semantics is added.
-        TODO: add a note to this effect near the final theorem.
 
         Alternative approaches:
 

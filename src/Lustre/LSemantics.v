@@ -169,8 +169,6 @@ Module Type LSEMANTICS
   Definition sem_nodes (G: global) : Prop :=
     Forall (fun n => exists xs ys, sem_node G n.(n_name) xs ys) G.
 
-  (* TODO: tidy up file *)
-
   (** Custom induction schemes *)
 
   Section sem_exp_ind2.

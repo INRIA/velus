@@ -284,28 +284,6 @@ Module Type EQUIV
       setoid_rewrite Hcn. setoid_rewrite Heq. auto.
   Qed.
 
-  (* TODO: Try an alternative definition of program_refines based on
-           [stmt_call_eval]?
-
-           Advantages:
-           - simplicity
-           - ability to add a precondition on input arguments
-             (but maybe the only interesting precondition is that
-              all the input arguments are not None, unless the
-              predicate is also over the class name, method name,
-              and input names).
-
-           Disadvantages:
-           - harder to work with since it's less syntactic?
-
-        P vos1 vos2 ->
-        stmt_call_eval p2 omenv clsid f vos2 omenv' rvos2 ->
-        exists rvos1,
-          stmt_call_eval p1 omenv clsid f vos1 omenv' rvos1
-          /\ Forall2 (fun rv1 rv2 => forall v, rv2 = Some v => rv1 = Some v)
-                     rvos1 rvos2
-   *)
-
   Lemma stmt_refines_strengthen:
     forall P Q p1 p2 s1 s2,
       stmt_refines p1 p2 P s1 s2 ->

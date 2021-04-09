@@ -4327,7 +4327,6 @@ Proof.
 Qed.
 
 Section nth_error.
-  (* TODO: delete after upgrade to latest Coq version *)
   Lemma nth_error_nth {A} : forall (l : list A) (n : nat) (x d : A),
       nth_error l n = Some x -> nth n l d = x.
   Proof.
@@ -4337,7 +4336,6 @@ Section nth_error.
     rewrite PeanoNat.Nat.sub_diag. reflexivity.
   Qed.
 
-  (* TODO: delete after upgrade to latest Coq version *)
   Lemma nth_error_nth' {A} : forall (l : list A) (n : nat) (d : A),
     n < length l -> nth_error l n = Some (nth n l d).
   Proof.

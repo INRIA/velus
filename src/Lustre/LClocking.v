@@ -56,13 +56,6 @@ Module Type LCLOCKING
        applications rooted in an equation (a pattern binding of variable
        names to resulting streams):
 
-                                            -e4-  -e5-
-             -e1-  -e2-    -e3-             ----f3----
-             ----f1----    -f2-       e6    ----f4----          -e8-  -e9-
-             --------------------f5-------------------   -e7-   ----f6----
-             =============================================================
-             ----------(v, w,...----------------------   -,x-   --,y ,z)--
-
        The expressions at the tips are clocked in the node environment, thus
        any variables are directly named. Each function call, however, may
        introduce fresh clock names to track dependencies between node outputs

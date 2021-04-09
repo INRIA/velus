@@ -246,8 +246,6 @@ Module Type STCWELLDEFINED
 
     Variable mems : PS.t.
 
-    (* TODO: rewrite using a strong specification?  *)
-
     Open Scope bool_scope.
 
     Definition check_var (defined: PS.t) (variables: PS.t) (x: ident) : bool :=

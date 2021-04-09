@@ -56,7 +56,6 @@ Module Type OBCTYPING
         In (x, ty) vars ->
         wt_exp (Valid x ty).
 
-    (* TODO: eliminate the result types in Call (and EqApp). *)
     Inductive wt_stmt : stmt -> Prop :=
     | wt_Assign: forall x e,
         In (x, typeof e) vars ->

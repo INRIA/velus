@@ -23,14 +23,6 @@ From Velus Require Import NLustre.Memories.
 
  *)
 
-(* TODO: the dispatch on all constructors seems rather unnecessary,
-this generically amounts to:
-
-<<
-  forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs
->>
- *)
-
 Module Type NODUP
        (Ids          : IDS)
        (Op           : OPERATORS)

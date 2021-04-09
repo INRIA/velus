@@ -29,7 +29,6 @@ From Velus Require Import CoreExpr.CEClockingSemantics.
 From Velus Require Import NLustre.NLClockingSemantics.
 
 (* for Theorem sem_msem_reset *)
-(* TODO: Are these really necessary? *)
 From Coq Require Import Logic.ClassicalChoice.
 From Coq Require Import Logic.ConstructiveEpsilon.
 From Coq Require Import Logic.Epsilon.
