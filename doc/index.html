@@ -26,116 +26,113 @@ a:active {color : Red; text-decoration : underline; }
 
 <H3>2.1 Syntaxes</H3>
 <UL>
-<LI> <A HREF="html/Velus.Lustre.LSyntax.html">LSyntax</A>: Lustre
-  expressions, equations and nodes.
-<LI> <A HREF="html/Velus.CoreExpr.CESyntax.html">CESyntax</A>: NLustre expressions.
-<LI> <A HREF="html/Velus.NLustre.NLSyntax.html">NLSyntax</A>:
-  NLustre equations and nodes.
-<LI> <A HREF="html/Velus.ClockDefs.html">ClockDefs</A>: clocks.
+    <LI> <A HREF="html/Velus.Lustre.LSyntax.html">LSyntax</A>: Lustre
+        expressions, equations and nodes.</LI>
+    <LI> <A HREF="html/Velus.CoreExpr.CESyntax.html">CESyntax</A>: NLustre expressions.</LI>
+    <LI> <A HREF="html/Velus.NLustre.NLSyntax.html">NLSyntax</A>: NLustre equations and nodes.</LI>
+    <LI> <A HREF="html/Velus.ClockDefs.html">ClockDefs</A>: clocks.</LI>
 </UL>
 
 <H3>2.2 Semantics</H3>
 <UL>
   <LI> <A HREF="html/Velus.Lustre.LSemantics.html">LSemantics</A>: Lustre
-    semantic rules.
-    <UL>
-      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</A>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</A>
-      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.merge">merge</A>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Smerge">Smerge</A>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">Sequ</A>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">Snode</A>
+      semantic rules.</LI>
+  <UL>
+      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</A>: Sampled constant stream</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</A>: Semantics of a Lustre constant</LI>
+      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.merge">merge</A> coinductive operator</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Smerge">Smerge</A>: Semantics of a Lustre merge</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">Sequ</A>: Semantics of a Lustre equation</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">Snode</A>: Semantics of a Lustre node</LI>
     </UL>
 </UL>
 
 <H3>2.3 Causality</H3>
 <UL>
-  <LI> <A HREF="html/Velus.Lustre.LCausality.html">LCausality</A>: definitions
-    about causality.
-    <UL>
-      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.Is_free_left">IsFreeLeft</A>
-      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.Is_free_left_list">IsFreeLeftList</A>
-      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.depends_on">depends_on</A>
-      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.node_causal">node causality</A>
+  <LI> <A HREF="html/Velus.Lustre.LCausality.html">LCausality</A>: causality definitions.</LI>
+  <UL>
+      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.Is_free_left">IsFreeLeft</A></LI>
+      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.Is_free_left_list">IsFreeLeftList</A></LI>
+      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.depends_on">depends_on</A></LI>
+      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.node_causal">node causality</A></LI>
     </UL>
-  <LI> <A HREF="html/Velus.AcyGraph.html">AcyGraph</A>: acyclic graphs used
-    by causality analysis.
+    <LI> <A HREF="html/Velus.AcyGraph.html">AcyGraph</A>: acyclic graphs used by causality analysis.</LI>
     <UL>
-      <LI> <A HREF="html/Velus.AcyGraph.html#TopoOrder">TopoOrder</A>
-      <LI> <A HREF="html/Velus.AcyGraph.html#has_TopoOrder">has_TopoOrder</A>:
-      existence of a topological ordering.
+        <LI> <A HREF="html/Velus.AcyGraph.html#TopoOrder">TopoOrder</A>: topological ordering of the node of a graph.</LI>
+        <LI> <A HREF="html/Velus.AcyGraph.html#has_TopoOrder">has_TopoOrder</A>:
+            existence of a topological ordering.</LI>
     </UL>
 </UL>
 
 <H3>3 Transcription and Clock System Correctness</H3>
 <UL>
   <LI> <A HREF="html/Velus.Transcription.Tr.html">Transcription</A>:
-    Lustre to NLustre syntactic translation.
+      Lustre to NLustre syntactic translation.</LI>
   <LI>Lustre
-    <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby">fby</A> /
-    <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby1">fby1</A>
-    semantic operator.
+      <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby">fby</A> /
+      <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby1">fby1</A>
+      semantic operator.</LI>
   <LI>NLustre
     <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.sfby">fby</A>
-    semantic operator.
+    semantic operator.</LI>
   <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.sem_clock">sem_clock</A>:
-  clock type interpretation.
+      clock type interpretation.</LI>
   <LI> <A HREF="html/Velus.NLustre.NLCoindSemantics.html#NLCOINDSEMANTICS.sem_annot">sem_annot</A>:
-  alignment between a clock and an expression.
+      alignment between a clock and an expression.</LI>
 </UL>
 
 <H3>3.1 Correctness of the Clock System</H3>
 <UL>
-  <LI> <A HREF="html/Velus.Lustre.LClockSemantics.html#LCLOCKSEMANTICS.l_sem_node_clock">Theorem</A>
+    <LI>Correctness <A HREF="html/Velus.Lustre.LClockSemantics.html#LCLOCKSEMANTICS.l_sem_node_clock">theorem</A>.</LI>
 </UL>
 
 <H3>4 Unnesting and Distribution</H3>
 <UL>
-  <LI> The <A HREF="html/Velus.Lustre.Normalization.Unnesting.html#UNNESTING.unnest_exp">algorithm</A>:
-    unnesting of expressions.
+  <LI> <A HREF="html/Velus.Lustre.Normalization.Unnesting.html#UNNESTING.unnest_exp">unnest_exp</A>:
+      unnesting of expressions.</LI>
   <LI> <A HREF="html/Velus.Lustre.Normalization.Idempotence.html#IDEMPOTENCE.unnested_equation_unnest_idem">Idempotence</A>
-  of unnesting and distribution.
+      of unnesting and distribution.</LI>
   <LI> <A HREF="html/Velus.Lustre.Normalization.Fresh.html">Fresh</A>:
-    fresh name generation, using a state monad.
+      fresh name generation, using a state monad.</LI>
   <LI> <A HREF="html/Velus.Ident.html#Ids.gensym">gensym</A>: axiomatisation
-  of the external function.
+      of the external function.</LI>
 </UL>
 
 <H3>4.1 Correctness of Unnesting and Distribution</H3>
 <UL>
-  <LI> <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.unnest_global_sem">
-      Theorem</A> of correctness.
-  <LI> The <A HREF="html/Velus.Environment.html#Env.refines">refinement</A>
-    relation over environments and its
-    <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.unnest_node_sem_equation">
-      usage</A> in the proof.
-  <LI> Expressions <A HREF="html/Velus.Lustre.Normalization.Unnesting.html#UNNESTING.unnest_exp_length">
-      length</A> preservation.
-  <LI> Typing rules for Lustre <A HREF="html/Velus.Lustre.LTyping.html#LTYPING.wt_exp">
-      expressions</A> and
-    <A HREF="html/Velus.Lustre.LTyping.html#LTYPING.wt_global">nodes.</A>
+    <LI> Correctness
+        <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.unnest_global_sem">theorem</A>.</LI>
+    <LI> The <A HREF="html/Velus.Environment.html#Env.refines">refinement</A>
+        relation over environments and its
+        <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.unnest_node_sem_equation">
+            usage</A> in the proof.</LI>
+    <LI> Expressions <A HREF="html/Velus.Lustre.Normalization.Unnesting.html#UNNESTING.unnest_exp_length">
+        length</A> preservation.</LI>
+    <LI> Typing rules for Lustre <A HREF="html/Velus.Lustre.LTyping.html#LTYPING.wt_exp">
+        expressions</A> and
+        <A HREF="html/Velus.Lustre.LTyping.html#LTYPING.wt_global">nodes.</A></LI>
 </UL>
 
 <H3>5 Expression Initialization</H3>
 <UL>
-  <LI> <A HREF="html/Velus.Lustre.Normalization.NormFby.html#NORMFBY.add_whens">Instrumentation</A>
-  of slow constants.
+  <LI> <A HREF="html/Velus.Lustre.Normalization.NormFby.html#NORMFBY.add_whens">Generation</A>
+      of slow constants.</LI>
   <LI> <A HREF="html/Velus.Lustre.Normalization.NormFby.html#NORMFBY.fby_equation">Generation</A>
-    of initialization equations.
+      of initialization equations.</LI>
 </UL>
 
 <H3>5.1 Correctness of Expression Initialization</H3>
 <UL>
- <LI> <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.normfby_global_sem">
-     Theorem</A> of correctness.
+    <LI> Correctness
+        <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.normfby_global_sem">theorem</A>.</LI>
  <LI> Giving a <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.add_whens_sem_exp">
-     semantic</A> to slow constants.
+     semantic</A> to slow constants.</LI>
  <LI> Building <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.sfby_fby">
-     fby</A> streams.
+     fby</A> streams.</LI>
  <LI> Building <A HREF="html/Velus.Lustre.Normalization.Correctness.html#CORRECTNESS.fby_ite">
-     if-the-else</A> streams.
+     if-the-else</A> streams.</LI>
  <LI> Causality <A HREF="html/Velus.Lustre.Normalization.NCausality.html#NCAUSALITY.normfby_global_causal">
-     preservation</A>.
+     preservation</A>.</LI>
 </UL>
 
 
