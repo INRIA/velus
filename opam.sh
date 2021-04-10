@@ -8,14 +8,14 @@ if [ -z ${ARCH+x} ]; then ARCH=ia32-linux; fi
 
 cd $VELUS_DIR
 mkdir opam
-opam init --root=opam --compiler=4.02.3 -n
+opam init --root=opam --compiler=4.07.1 -n
 eval `opam config env --root=$VELUS_DIR/opam`
 opam repo add coq-released https://coq.inria.fr/opam/released
-opam install -y -j20 coq.8.4.6 menhir.20160825
-opam pin add coq 8.4.6 # to get the correct version of coqide
+opam install -y -j20 coq.8.9.1 menhir.20200624 coq-menhirlib.20200624
+opam pin add coq 8.9.1 # to get the correct version of coqide
 make clean
 make -C CompCert/ clean
-./CompCert/configure $ARCH -prefix $VELUS_DIR/opam/4.02.3
+./CompCert/configure $ARCH
 make -j
 echo "To test the velus compiler, go to the examples/ directory and compile all
 examples with 'make'."
