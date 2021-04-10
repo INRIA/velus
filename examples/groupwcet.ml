@@ -1,7 +1,5 @@
 #! /usr/bin/env ocaml
 
-(* 20170409 T.Bourke: collate wcet information for gnuplot *)
-
 (* Unfortunately, it's not possible to reliably pass "str.cma" as an argument to
    ocaml via env. *)
 #use "topfind"

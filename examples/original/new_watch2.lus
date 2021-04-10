@@ -1,5 +1,4 @@
 (* Watch example from the Lustre v4 distribution. 1999 *)
-(* 2016 Bourke: bit-blast C functions *)
 
 -- This is  a program implementing a digital watch, with alarm and stopwatch, 
 -- as specified in the document "ESTEREL Programming Examples: Programming a 

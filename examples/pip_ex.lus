@@ -1,5 +1,3 @@
-(* 2014 bourke. the "priority inheritance" protocol, version 2. *)
-
 node counter_modulo (tick : bool; max : int)
 returns (c : int);
 var pc : int; vinit : bool;

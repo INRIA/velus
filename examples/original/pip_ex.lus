@@ -1,5 +1,3 @@
-(* 2014 Bourke. The "Priority Inheritance" protocol, version 2. *)
-
 const np = 3; -- number of processes
 const nr = 3; -- number of resources
 
