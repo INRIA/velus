@@ -6,6 +6,8 @@ correctness of a formally verified Lustre compiler
 This file contains instructions for (i) using the compiler from (ii) a local 
 opam installation.
 
+The `doc/` subdirectory contains a file `index.html` that links the definitions in the EMSOFT 2021 submission to the corresponding parts of the Coq source files.
+
 The `examples/` subdirectory contains another readme file presenting several
 example programs that can be used to test the compiler.
 
@@ -81,8 +83,3 @@ To check the proofs and build Vélus:
 
 The configuration script uses the same options as CompCert's, except one
 additional `-compcertdir` option to specify the CompCert directory.
-
-## Documentation
-
-An index, relating the paper to the documentation, is available in [doc/index.html](doc/index.html).
-The documentation can be regenerated using `make documentation`.
