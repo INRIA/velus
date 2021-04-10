@@ -38,12 +38,12 @@ a:active {color : Red; text-decoration : underline; }
   <LI> <A HREF="html/Velus.Lustre.LSemantics.html">LSemantics</A>: Lustre
       semantic rules.</LI>
   <UL>
-      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</A>: Sampled constant stream</LI>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</A>: Semantics of a Lustre constant</LI>
-      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.merge">merge</A> coinductive operator</LI>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Smerge">Smerge</A>: Semantics of a Lustre merge</LI>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">Sequ</A>: Semantics of a Lustre equation</LI>
-      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">Snode</A>: Semantics of a Lustre node</LI>
+      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</A>: Sampled constant stream.</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</A>: Semantics of a Lustre constant.</LI>
+      <LI> <A HREF="html/Velus.CoindStreams.html#COINDSTREAMS.merge">merge</A> coinductive operator.</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Smerge">Smerge</A>: Semantics of a Lustre merge.</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">sem_equation</A>: Semantics of a Lustre equation.</LI>
+      <LI> <A HREF="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">sem_node</A>: Semantics of a Lustre node.</LI>
     </UL>
 </UL>
 
@@ -53,12 +53,12 @@ a:active {color : Red; text-decoration : underline; }
   <UL>
       <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.Is_free_left">IsFreeLeft</A></LI>
       <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.Is_free_left_list">IsFreeLeftList</A></LI>
-      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.depends_on">depends_on</A></LI>
+      <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.depends_on">depends_on</A>: dependency between variables of a node.</LI>
       <LI> <A HREF="html/Velus.Lustre.LCausality.html#LCAUSALITY.node_causal">node causality</A></LI>
     </UL>
     <LI> <A HREF="html/Velus.AcyGraph.html">AcyGraph</A>: acyclic graphs used by causality analysis.</LI>
     <UL>
-        <LI> <A HREF="html/Velus.AcyGraph.html#TopoOrder">TopoOrder</A>: topological ordering of the node of a graph.</LI>
+        <LI> <A HREF="html/Velus.AcyGraph.html#TopoOrder">TopoOrder</A>: topological ordering of the nodes of a graph.</LI>
         <LI> <A HREF="html/Velus.AcyGraph.html#has_TopoOrder">has_TopoOrder</A>:
             existence of a topological ordering.</LI>
     </UL>
@@ -139,7 +139,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H3>6.1 Clock Typing</H3>
 <UL>
-    <li><a href="html/Velus.Clocks.html#wc_clock">wc_clock</a>: well-formedness of clocks.</li>
+    <li><a href="html/Velus.Clocks.html#wc_clock">wc_clock</a>, <a href="html/Velus.Clocks.html#wc_env">wc_env</a> : well-formedness of clocks and environnements.</li>
     <li><a href="html/Velus.ClockDefs.html#instck">instck</a></li>
     <li><a href="html/Velus.Lustre.LClocking.html#LCLOCKING.WellInstantiated">WellInstantiated</a></li>
     <li><a href="html/Velus.Lustre.LClocking.html#LCLOCKING.wc_exp">wc_exp</a>: clocking of expressions.</li>
@@ -155,14 +155,15 @@ a:active {color : Red; text-decoration : underline; }
     <li><a href="html/Velus.Obc.ObcSemantics.html#OBCSEMANTICS.stmt_eval">stmt_eval</a>:
         semantics of Obc statements.</li>
     <li><a href="html/Velus.NLustre.NLNormalArgs.html#NLNORMALARGS.normal_args_eq">normal_args_eq</a>:
-        normalization condition on the arguments of NLustre programs</li>
+        well-formedness condition on the arguments of NLustre node calls.</li>
 </ul>
 
 <h3>6.4 Argument Initialization</h3>
 <ul>
-    <li><a href="html/Velus.Obc.ObcAddDefaults.html#OBCADDDEFAULTS.add_valid">add_valid</a> function</li>
+    <li><a href="html/Velus.Obc.ObcAddDefaults.html#OBCADDDEFAULTS.add_valid">add_valid:</a>
+        add validity assertions for the variables used in a node call.</li>
     <li><a href="html/Velus.Obc.ObcAddDefaults.html#OBCADDDEFAULTS.add_defaults_stmt">add_defaults_stmt</a>
-        : add defaults arguments initializations to a statement</li>
+        : add defaults arguments initializations to a statement.</li>
 </ul>
 
 <BR>

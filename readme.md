@@ -81,3 +81,8 @@ To check the proofs and build Vélus:
 
 The configuration script uses the same options as CompCert's, except one
 additional `-compcertdir` option to specify the CompCert directory.
+
+## Documentation
+
+An index, relating the paper to the documentation, is available in [doc/index.html](doc/index.html).
+The documentation can be regenerated using `make documentation`.
