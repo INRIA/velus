@@ -39,9 +39,9 @@ Module Type NLUSTRE
   Declare Module Export IsD        : ISDEFINED            Ids Op       CE.Syn Syn                     Mem.
   Declare Module Export IsV        : ISVARIABLE           Ids Op       CE.Syn Syn                     Mem IsD.
   Declare Module Export NoD        : NODUP                Ids Op       CE.Syn Syn                     Mem IsD IsV.
-  Declare Module Export Clo        : NLCLOCKING           Ids Op       CE.Syn Syn     Ord             Mem IsD CE.IsF IsF CE.Clo.
-  Declare Module Export CloSem     : NLCLOCKINGSEMANTICS  Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.IsF IsF CE.Clo Clo CE.CloSem.
-  Declare Module Export MemSem     : NLMEMSEMANTICS       Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV CE.IsF IsF NoD CE.Clo Clo CE.CloSem CloSem.
+  Declare Module Export Clo        : NLCLOCKING           Ids Op       CE.Syn Syn     Ord             Mem IsD CE.Clo.
+  Declare Module Export CloSem     : NLCLOCKINGSEMANTICS  Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.Clo Clo CE.CloSem.
+  Declare Module Export MemSem     : NLMEMSEMANTICS       Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV NoD CE.Clo Clo CE.CloSem CloSem.
 End NLUSTRE.
 
 Module NLustreFun
@@ -65,7 +65,7 @@ Module NLustreFun
   Module Export IsD        := IsDefinedFun            Ids Op       CE.Syn Syn                     Mem.
   Module Export IsV        := IsVariableFun           Ids Op       CE.Syn Syn                     Mem IsD.
   Module Export NoD        := NoDupFun                Ids Op       CE.Syn Syn                     Mem IsD IsV.
-  Module Export Clo        := NLClockingFun           Ids Op       CE.Syn Syn     Ord             Mem IsD CE.IsF IsF CE.Clo.
-  Module Export CloSem     := NLClockingSemanticsFun  Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.IsF IsF CE.Clo Clo CE.CloSem.
-  Module Export MemSem     := NLMemSemanticsFun       Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV CE.IsF IsF NoD CE.Clo Clo CE.CloSem CloSem.
+  Module Export Clo        := NLClockingFun           Ids Op       CE.Syn Syn     Ord             Mem IsD CE.Clo.
+  Module Export CloSem     := NLClockingSemanticsFun  Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.Clo Clo CE.CloSem.
+  Module Export MemSem     := NLMemSemanticsFun       Ids Op OpAux CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV NoD CE.Clo Clo CE.CloSem CloSem.
 End NLustreFun.

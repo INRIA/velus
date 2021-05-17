@@ -5,7 +5,7 @@ From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Clocks.
 
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsNext.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -17,27 +17,27 @@ Module Type STCISDEFINED
        (Import CESyn : CESYNTAX          Op)
        (Import Syn   : STCSYNTAX     Ids Op CESyn)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn).
+       (Import Next  : STCISNEXT     Ids Op CESyn Syn).
 
   Inductive Is_defined_in_tc: ident -> trconstr -> Prop :=
   | DefTcDef:
       forall x ck e,
         Is_defined_in_tc x (TcDef x ck e)
   | DefTcNext:
-      forall x ck e,
-        Is_defined_in_tc x (TcNext x ck e)
-  | DefTcCall:
+      forall x ck ckrs e,
+        Is_defined_in_tc x (TcNext x ck ckrs e)
+  | DefTcStep:
       forall x i xs ck rst f es,
         In x xs ->
-        Is_defined_in_tc x (TcCall i xs ck rst f es).
+        Is_defined_in_tc x (TcStep i xs ck rst f es).
 
   Definition Is_defined_in (x: ident) (tcs: list trconstr) : Prop :=
     Exists (Is_defined_in_tc x) tcs.
 
-  Lemma Is_defined_Is_variable_Is_last_in:
+  Lemma Is_defined_Is_variable_Is_next_in:
     forall tcs x,
       Is_defined_in x tcs <->
-      Is_variable_in x tcs \/ Is_last_in x tcs.
+      Is_variable_in x tcs \/ Is_next_in x tcs.
   Proof.
     induction tcs; split.
     - inversion 1.
@@ -59,22 +59,30 @@ Module Type STCISDEFINED
       + right; apply IHtcs; auto.
   Qed.
 
+  Corollary Is_variable_in_Is_defined_in:
+    forall x tcs,
+      Is_variable_in x tcs ->
+      Is_defined_in x tcs.
+  Proof.
+    intros * Hvar.
+    rewrite Is_defined_Is_variable_Is_next_in; auto.
+  Qed.
+
+  Corollary Is_next_in_Is_defined_in:
+    forall x tcs,
+      Is_next_in x tcs ->
+      Is_defined_in x tcs.
+  Proof.
+    intros * Hvar.
+    rewrite Is_defined_Is_variable_Is_next_in; auto.
+  Qed.
+
   Lemma Is_variable_in_tc_Is_defined_in_tc:
     forall x tc,
       Is_variable_in_tc x tc ->
       Is_defined_in_tc x tc.
   Proof.
     destruct tc; inversion_clear 1; auto using Is_defined_in_tc.
-  Qed.
-
-  Lemma Is_variable_in_Is_defined_in:
-    forall x tcs,
-      Is_variable_in x tcs ->
-      Is_defined_in x tcs.
-  Proof.
-    induction tcs; inversion_clear 1 as [?? Var|].
-    - inv Var; left; constructor; auto.
-    - right; auto; apply IHtcs; auto.
   Qed.
 
   Lemma s_ins_not_def:
@@ -85,11 +93,11 @@ Module Type STCISDEFINED
     intros * Hin Hdef.
     pose proof (s_nodup s) as Nodup.
     eapply (NoDup_app_In x) in Nodup.
-    - apply Is_defined_Is_variable_Is_last_in in Hdef as [Var|Last];
+    - apply Is_defined_Is_variable_Is_next_in in Hdef as [Var|Next];
         apply Nodup; rewrite app_assoc, in_app.
       + apply Is_variable_in_variables in Var; rewrite <-s_vars_out_in_tcs in Var;
           auto.
-      + apply lasts_of_In in Last; rewrite <-s_lasts_in_tcs in Last; auto.
+      + apply nexts_of_In in Next; rewrite <-s_nexts_in_tcs in Next; auto.
     - apply fst_InMembers; auto.
   Qed.
 
@@ -100,12 +108,12 @@ Module Type STCISDEFINED
     intros * NIsDef E; subst; apply NIsDef; auto using Is_defined_in_tc.
   Qed.
 
-  Lemma not_Is_defined_in_tc_TcNext:
-    forall y x ck e,
-      ~ Is_defined_in_tc y (TcNext x ck e) -> x <> y.
-  Proof.
-    intros * NIsDef E; subst; apply NIsDef; auto using Is_defined_in_tc.
-  Qed.
+  (* Lemma not_Is_defined_in_tc_TcNext: *)
+  (*   forall y x ck ro, *)
+  (*     ~ Is_defined_in_tc y (TcNext x ck ro) -> x <> y. *)
+  (* Proof. *)
+  (*   intros * NIsDef E; subst; apply NIsDef; auto using Is_defined_in_tc. *)
+  (* Qed. *)
 
   Lemma not_Is_defined_in_cons:
     forall x tc tcs,
@@ -121,10 +129,11 @@ Module Type STCISDEFINED
 
   Definition defined_tc (tc: trconstr): list ident :=
     match tc with
-    | TcNext x _ _
+    | TcNext x _ _ _
     | TcDef x _ _ => [x]
-    | TcCall _ xs _ _ _ _ => xs
-    | TcReset _ _ _ => []
+    | TcStep _ xs _ _ _ _ => xs
+    | TcReset _ _ _
+    | TcInstReset _ _ _ => []
     end.
 
   Definition defined := flat_map defined_tc.
@@ -179,7 +188,7 @@ Module Type STCISDEFINED
 
   Lemma s_defined:
     forall s,
-      Permutation.Permutation (defined (s_tcs s)) (variables (s_tcs s) ++ lasts_of (s_tcs s)).
+      Permutation.Permutation (defined (s_tcs s)) (variables (s_tcs s) ++ nexts_of (s_tcs s)).
   Proof.
     unfold defined, variables; intro;
       induction (s_tcs s) as [|[]]; simpl; auto.
@@ -192,34 +201,31 @@ Module Type STCISDEFINED
   Proof.
     intros; eapply Permutation.Permutation_NoDup.
     - apply Permutation.Permutation_sym, s_defined.
-    - rewrite <-s_lasts_in_tcs, <-s_vars_out_in_tcs.
+    - rewrite <-s_nexts_in_tcs, <-s_vars_out_in_tcs.
       rewrite <-app_assoc.
       eapply NoDup_app_weaken.
       rewrite Permutation.Permutation_app_comm.
       apply s_nodup.
   Qed.
 
-  Lemma Is_last_in_not_Is_variable_in:
-    forall tcs x,
-      NoDup (defined tcs) ->
-      Is_last_in x tcs ->
-      ~ Is_variable_in x tcs.
+  Lemma incl_defined_nexts:
+    forall tcs, incl (nexts_of tcs) (defined tcs).
   Proof.
-    induction tcs; intros * Nodup Last Var;
-      inversion_clear Last as [?? IsLast|];
-      inversion_clear Var as [?? IsVar|?? IsVar_in].
-    - inv IsLast; inv IsVar.
-    - apply Is_variable_in_Is_defined_in in IsVar_in.
-      inv IsLast.
-      simpl in Nodup; inv Nodup.
-      now apply Is_defined_in_defined in IsVar_in.
-    - apply Is_variable_in_tc_Is_defined_in_tc in IsVar.
-      assert (Is_defined_in x tcs) as Hins by (apply Is_defined_Is_variable_Is_last_in; auto).
-      apply Is_defined_in_defined in Hins; apply Is_defined_in_defined_tc in IsVar.
-      simpl in Nodup; eapply NoDup_app_In in Nodup; eauto.
-    - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
-        apply NoDup_app_weaken in Nodup.
-      eapply IHtcs; eauto.
+    induction tcs; intros ? Hin; simpl in *; [inv Hin|].
+    apply in_app.
+    destruct a; simpl in *; auto.
+    destruct Hin; auto.
+  Qed.
+
+  Lemma nodup_defined_nodup_nexts:
+    forall tcs, NoDup (defined tcs) -> NoDup (nexts_of tcs).
+  Proof.
+    induction tcs; intros; simpl in *; auto.
+    destruct a; simpl in *; auto.
+    - inv H; auto.
+    - inv H; constructor; auto.
+      intro Hin. apply H2, incl_defined_nexts; auto.
+    - apply NoDup_app_r in H; auto.
   Qed.
 
   Lemma defined_app:
@@ -241,7 +247,7 @@ Module StcIsDefinedFun
        (CESyn : CESYNTAX          Op)
        (Syn   : STCSYNTAX     Ids Op CESyn)
        (Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Last  : STCISLAST     Ids Op CESyn Syn)
-<: STCISDEFINED Ids Op CESyn Syn Var Last.
-  Include STCISDEFINED Ids Op CESyn Syn Var Last.
+       (Next  : STCISNEXT     Ids Op CESyn Syn)
+<: STCISDEFINED Ids Op CESyn Syn Var Next.
+  Include STCISDEFINED Ids Op CESyn Syn Var Next.
 End StcIsDefinedFun.

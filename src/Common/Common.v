@@ -774,6 +774,34 @@ Proof.
   - reflexivity.
 Qed.
 
+(** Lift boolean relations into the option type *)
+
+Section ORelB.
+  Context {A : Type}
+          (f : A -> A -> bool).
+
+  Definition orelb (x y : option A) :=
+    match x, y with
+    | None, None => true
+    | Some x, Some y => f x y
+    | _, _ => false
+    end.
+
+  Lemma orelb_orel : forall R x y,
+      (forall x y, f x y = true <-> R x y) ->
+      orelb x y = true <-> orel R x y.
+  Proof.
+    intros * Heq.
+    destruct x, y; simpl.
+    - rewrite Heq; split; intros.
+      constructor; auto. inv H; auto.
+    - split; intros. 1,2:inv H.
+    - split; intros. 1,2:inv H.
+    - split; intros. 1,2:constructor.
+  Qed.
+
+End ORelB.
+
 (** The option monad *)
 
 (* Do notation, lemmas and tactis for the option monad taken directly

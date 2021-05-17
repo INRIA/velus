@@ -25,6 +25,9 @@ From Velus Require Import CoreExpr.CEInterpreter.
 From Velus Require Import NLustre.NLIndexedSemantics.
 From Velus Require Import NLustre.NLCoindSemantics.
 
+(** We can simplify the proofs a bit :p *)
+From Velus Require Import CoindToIndexed NLCoindToIndexed.
+
 From Coq Require Import Setoid.
 
 Module Type NLINDEXEDTOCOIND
@@ -41,6 +44,10 @@ Module Type NLINDEXEDTOCOIND
        (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
        (Import Interp : CEINTERPRETER      Ids Op OpAux CESyn     IStr     CESem)
        (CoInd         : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord).
+
+  (* Simplifying the proof a bit :p *)
+  Module CIStr := CoindToIndexedFun Op OpAux CStr IStr.
+  Module NLCIStr := NLCoindToIndexedFun Ids Op OpAux CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
 
   Section Global.
 
@@ -518,6 +525,42 @@ Module Type NLINDEXEDTOCOIND
       now setoid_rewrite fby_impl_from.
     Qed.
 
+    Fact tr_Stream_eqst {A} : forall (x : stream A),
+        CIStr.tr_Stream (tr_stream x) ≈ x.
+    Proof.
+      unfold tr_stream, tr_stream_from, CIStr.tr_Stream.
+      intros x n.
+      rewrite ICStr.init_from_nth, Nat.add_0_r.
+      reflexivity.
+    Qed.
+
+    Lemma reset_impl:
+      forall v0 xs rs,
+        tr_stream (Indexed.reset v0 xs rs) ≡
+        CoInd.reset v0 (tr_stream xs) (tr_stream rs).
+    Proof.
+      intros *.
+      apply ntheq_eqst. intros n.
+      unfold tr_stream, tr_stream_from. rewrite init_from_nth, plus_0_r.
+      replace (Indexed.reset v0 xs rs n) with
+          (Indexed.reset v0 (CIStr.tr_Stream (tr_stream xs)) (CIStr.tr_Stream (tr_stream rs)) n).
+      2:{ unfold Indexed.reset.
+          rewrite tr_Stream_eqst. destruct (xs n); auto.
+          induction n; simpl; rewrite tr_Stream_eqst; auto.
+          destruct (rs _); auto.
+          rewrite tr_Stream_eqst. destruct (xs _); auto. }
+      rewrite <- NLCIStr.reset_impl. reflexivity.
+    Qed.
+
+    Corollary reset_fby_impl:
+      forall v0 xs rs,
+        tr_stream (Indexed.reset v0 (Indexed.fby v0 xs) rs) ≡
+        CoInd.reset v0 (sfby v0 (tr_stream xs)) (tr_stream rs).
+    Proof.
+      intros *.
+      rewrite reset_impl, fby_impl. reflexivity.
+    Qed.
+
     (** ** Semantics of cexps *)
 
     (** State the correspondence for [cexp].
@@ -621,6 +664,26 @@ Module Type NLINDEXEDTOCOIND
         CESem.bools_of xs rs ->
         CStr.bools_of (tr_stream xs) (tr_stream rs).
     Proof. apply bools_of_impl_from. Qed.
+
+    (** And for [bools_ofs] *)
+    Corollary bools_ofs_impl:
+      forall xss rs,
+        Indexed.bools_ofs xss rs ->
+        CStr.bools_ofs (List.map tr_stream xss) (tr_stream rs).
+    Proof.
+      unfold CStr.bools_ofs, Indexed.bools_ofs.
+      intros * (rss&Bools1&Bools2).
+      exists (List.map tr_stream rss). split.
+      - rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto].
+        auto using bools_of_impl.
+      - eapply ntheq_eqst.
+        intros n. specialize (Bools2 n).
+        rewrite disj_str_spec.
+        unfold tr_stream, tr_stream_from. rewrite init_from_nth, plus_0_r, Bools2.
+        rewrite existsb_map. eapply existsb_ext.
+        intros ?. rewrite init_from_nth, Nat.add_0_r; auto.
+    Qed.
 
     (** ** Properties about [count] and [mask] *)
 
@@ -788,7 +851,23 @@ Module Type NLINDEXEDTOCOIND
       intro n; specialize (Sem n).
       eapply Forall_forall in Sem; eauto.
     Qed.
-    Hint Resolve sem_clocked_vars_impl.
+
+    Lemma sem_clocked_vars_impl':
+      forall H b xs xss,
+        Forall2 (IStr.sem_var H) (List.map fst xs) xss ->
+        CESem.sem_clocked_vars b H xs ->
+        CoInd.sem_clocked_vars (tr_history H) (tr_stream b) xs.
+    Proof.
+      unfold CESem.sem_clocked_vars; intros * Vars Sem.
+      apply Forall_forall; intros (x, ck) Hin.
+      pose proof Hin as Hin'.
+      apply in_map with (f := fst) in Hin.
+      eapply Forall2_in_left in Vars as (?&?&?); eauto.
+      eapply sem_clocked_var_impl; eauto.
+      intro n; specialize (Sem n).
+      eapply Forall_forall in Sem; eauto.
+    Qed.
+    Hint Resolve sem_clocked_vars_impl'.
 
     (** The final theorem stating the correspondence for nodes applications.
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
@@ -798,7 +877,7 @@ Module Type NLINDEXEDTOCOIND
         Indexed.sem_node G f xss oss ->
         CoInd.sem_node G f (tr_streams xss) (tr_streams oss).
     Proof.
-      induction 1 as [| |????????????????? IH| |??????????? Heqs IH]
+      induction 1 as [|???????????????? IH| |??????????? Heqs IH]
                        using Indexed.sem_node_mult with
           (P_equation := fun b H e =>
                            Indexed.sem_equation G b H e ->
@@ -806,22 +885,23 @@ Module Type NLINDEXEDTOCOIND
         eauto.
 
       - econstructor; eauto.
-        rewrite tr_clocks_of; eauto.
-        edestruct Indexed.sem_node_wf; eauto.
-
-      - econstructor; eauto.
+        3:eapply bools_ofs_impl; eauto.
         + rewrite tr_clocks_of; eauto.
           eapply wf_streams_mask.
           intro k; destruct (IH k) as (Sem &?).
           apply Indexed.sem_node_wf in Sem as (?&?); eauto.
-        + apply bools_of_impl; eauto.
+        + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros.
+          eapply sem_var_impl; eauto.
         + intro k; destruct (IH k) as (?&?).
           rewrite <- 2 mask_impl; eauto;
             eapply wf_streams_mask; intro n'; destruct (IH n') as (Sem &?);
               apply Indexed.sem_node_wf in Sem as (?&?); eauto.
 
       - econstructor; eauto; subst.
-        rewrite <-fby_impl; eauto.
+        2:eapply bools_ofs_impl; eauto.
+        + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros.
+          eapply sem_var_impl; eauto.
+        + rewrite <-reset_fby_impl; eauto.
 
       - subst.
         CESem.assert_const_length xss.

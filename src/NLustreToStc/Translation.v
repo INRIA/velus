@@ -7,6 +7,8 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.Memories.
 From Velus Require Import Stc.StcSyntax.
+From Velus Require Import Stc.StcIsReset.
+From Velus Require Import Stc.StcIsNext.
 From Velus Require Environment.
 
 From Coq Require Import List.
@@ -33,7 +35,7 @@ Module Type TRANSLATION
     | EqDef _ _ _ => acc
     | EqApp [] _ _ _ _ => acc
     | EqApp (x :: _) _ f _ _ => (fst acc, (x, f) :: snd acc)
-    | EqFby x ck c0 _ => ((x, (c0, ck)) :: fst acc, snd acc)
+    | EqFby x ck c0 _ _ => ((x, (c0, ck)) :: fst acc, snd acc)
     end.
 
   Definition gather_eqs (eqs: list equation) : list (ident * (const * clock)) * list (ident * ident) :=
@@ -47,13 +49,14 @@ Module Type TRANSLATION
       [ SynStc.TcDef x ck e ]
     | EqApp [] _ _ _ _ =>
       []                        (* This way we can ensure b_blocks_in_eqs *)
-    | EqApp (x :: xs) ck f les None =>
-      [ SynStc.TcCall x (x :: xs) ck false f les ]
-    | EqApp (x :: xs) ck f les (Some (r, ckr)) =>
-      [ SynStc.TcReset x (Con ckr r true) f;
-          SynStc.TcCall x (x :: xs) ck true f les ]
-    | EqFby x ck _ e =>
-      [ SynStc.TcNext x ck e ]
+    | EqApp (x :: xs) ck f les xrs =>
+      let ckrs := map (fun '(xr, ckr) => Con ckr xr true) xrs in
+      (SynStc.TcStep x (x :: xs) ck ckrs f les)
+        ::(map (fun ckr => SynStc.TcInstReset x ckr f) ckrs)
+    | EqFby x ck c0 e xrs =>
+      let ckrs := map (fun '(xr, ckr) => Con ckr xr true) xrs in
+      (SynStc.TcNext x ck ckrs e)
+        ::(map (fun ckr => SynStc.TcReset x ckr c0) ckrs)
     end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
@@ -132,12 +135,12 @@ Module Type TRANSLATION
                                (vars_defined (filter is_app eqs))).
     {
       induction eqs as [|[] eqs]; simpl; auto.
-      destruct l as [ | x xs ]; auto.
-      assert (Happ: gather_app_vars (EqApp (x :: xs) c i l0 o :: eqs)
+      destruct l as [ | x xs ]; simpl; auto.
+      assert (Happ: gather_app_vars (EqApp (x :: xs) c i l0 l1 :: eqs)
                     = xs ++ gather_app_vars eqs)
         by now unfold gather_app_vars.
 
-      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i l0 o :: eqs))
+      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i l0 l1 :: eqs))
                      = x :: map fst (gather_insts eqs))
         by now unfold gather_insts.
 
@@ -203,21 +206,61 @@ Module Type TRANSLATION
         now right; left; left.
   Qed.
 
+  Lemma gather_mems_nexts_of : forall eqs,
+      Permutation (gather_mems eqs) (SynStc.nexts_of (translate_eqns eqs)).
+  Proof.
+    intros *.
+    unfold gather_mems, translate_eqns.
+    induction eqs as [|[]]; simpl; auto.
+    - destruct l; simpl; auto.
+      induction l1; simpl; auto.
+    - induction l; simpl; auto.
+  Qed.
+
+  Lemma resets_of_incl : forall eqs,
+      incl (SynStc.resets_of (translate_eqns eqs)) (SynStc.nexts_of (translate_eqns eqs)).
+  Proof.
+    induction eqs as [|[]]; simpl in *; auto.
+    - reflexivity.
+    - destruct l; auto.
+      induction l1; simpl; auto.
+    - induction l; simpl; auto using incl_tl, incl_cons, in_eq.
+  Qed.
+
+  Lemma iresets_of_incl : forall eqs,
+      incl (SynStc.iresets_of (translate_eqns eqs)) (SynStc.steps_of (translate_eqns eqs)).
+  Proof.
+    induction eqs as [|[]]; simpl in *; auto.
+    - reflexivity.
+    - destruct l; simpl; auto using incl_tl', incl_tl.
+      induction l1; simpl; auto using incl_tl, incl_cons, in_eq.
+    - induction l; simpl; auto.
+  Qed.
+
+  Corollary iresets_of_incl' : forall eqs,
+      incl (map fst (SynStc.iresets_of (translate_eqns eqs))) (map fst (SynStc.steps_of (translate_eqns eqs))).
+  Proof.
+    intros. apply incl_map, iresets_of_incl.
+  Qed.
+
   Hint Resolve n_ingt0.
+
+  Module Import StcIsReset := StcIsResetFun Ids Op CESyn SynStc.
+  Module Import StcIsNext := StcIsNextFun Ids Op CESyn SynStc.
 
   (* =translate_node= *)
   Program Definition translate_node (n: node) : SynStc.system :=
     let gathered := gather_eqs n.(n_eqs) in
-    let lasts := fst gathered in
-    let lasts_ids := ps_from_list (map fst (fst gathered)) in
+    let nexts := fst gathered in
+    let resets_ids := ps_from_list (map fst (fst gathered)) in
     let subs := snd gathered in
-    let partitioned := partition (fun x => PS.mem (fst x) lasts_ids) n.(n_vars) in
+    let partitioned := partition (fun x => PS.mem (fst x) resets_ids) n.(n_vars) in
     let vars := snd partitioned in
     {| SynStc.s_name  := n.(n_name);
        SynStc.s_subs  := subs;
        SynStc.s_in    := n.(n_in);
        SynStc.s_vars  := vars;
-       SynStc.s_lasts := lasts;
+       SynStc.s_nexts := nexts;
        SynStc.s_out   := n.(n_out);
        SynStc.s_tcs   := translate_eqns n.(n_eqs)
     |}.
@@ -251,24 +294,78 @@ Module Type TRANSLATION
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto; try reflexivity.
     destruct l; simpl; auto.
-    destruct o as [(?&?)|]; simpl.
-    - rewrite IHl, 2 map_app, 2 in_app; simpl;
-        tauto.
-    - rewrite IHl; reflexivity.
+    - rewrite IHl. induction l1; simpl; try reflexivity.
+      rewrite <-Permutation_middle; simpl.
+      rewrite <-IHl1. intuition.
+    - rewrite IHl. induction l; simpl; try reflexivity.
+      rewrite <-IHl0. reflexivity.
   Qed.
   Next Obligation.
     rewrite gather_eqs_snd_spec.
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct l; simpl; auto.
-    destruct o as [(?&?)|]; simpl; auto.
+    - constructor.
+      induction l1; simpl; auto.
+    - induction l; simpl; auto.
   Qed.
   Next Obligation.
     rewrite gather_eqs_fst_spec.
-    unfold gather_mems, translate_eqns.
+    apply gather_mems_nexts_of.
+  Qed.
+  Next Obligation.
+    pose proof (translate_node_obligation_3 n) as Nodup; simpl in *.
+    rewrite gather_eqs_fst_spec, gather_mems_nexts_of in Nodup.
+    apply NoDup_app_weaken in Nodup.
+    unfold SynStc.reset_consistency.
+    unfold translate_eqns in *; intros.
+    induction (n_eqs n) as [|[]]; simpl in *.
+    - inv H.
+    - inv H. inv H1.
+      rewrite IHl; auto.
+      split; intro H. right; auto. inv H; auto. inv H2.
+    - destruct l; simpl in *; auto.
+      rewrite SynStc.Next_with_reset_in_cons_not_next in H. 2:congruence.
+      induction l1 as [|(?&?) ?]; simpl in *; auto.
+      + rewrite Is_reset_in_reflect in *; auto.
+      + rewrite SynStc.Next_with_reset_in_cons_not_next in H. 2:congruence.
+        rewrite Is_reset_in_reflect in *; simpl in *. auto.
+    - inv Nodup.
+      rewrite SynStc.nexts_of_app in H2, H3.
+      split; intros.
+      + right.
+        inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]].
+        * apply Exists_app'; left.
+          apply Exists_map, Exists_exists.
+          exists ckr; split; auto using SynStc.Is_reset_in_tc.
+        * exfalso. clear - Ex.
+          induction l; simpl in *; inv Ex; auto. inv H0.
+        * apply Exists_app'; right.
+          apply NoDup_app_r in H3.
+          apply IHl; auto.
+      + inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]];
+          (inv H0; [inv H1|apply Exists_app' in H1 as [Ex'|Ex']]).
+        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&In&Res).
+          inv Res; auto.
+        * apply Exists_exists in Ex' as (?&In&Res).
+          exfalso.
+          apply H2, in_or_app, or_intror, resets_of_incl, resets_of_In. exists ckr.
+          apply Exists_exists; eauto.
+        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
+        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
+        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&?&Ex'). inv Ex'.
+          exfalso.
+          eapply H2, in_or_app, or_intror, nexts_of_In, Next_with_reset_in_Is_next_in; eauto.
+        * apply NoDup_app_r in H3.
+          rewrite IHl; auto.
+  Qed.
+  Next Obligation.
+    unfold translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
-    destruct l; simpl; auto.
-    destruct o as [(?&?)|]; simpl; auto.
+    - inversion 1.
+    - destruct l; simpl; auto.
+      induction l1; simpl; auto.
+    - induction l; simpl; auto using incl_tl, incl_cons, in_eq.
   Qed.
   Next Obligation.
     rewrite <-map_app.
@@ -292,86 +389,69 @@ Module Type TRANSLATION
     unfold SynStc.variables, translate_eqns, vars_defined.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct l; simpl; auto.
-    destruct o as [(?&?)|]; simpl; rewrite IHl; auto.
+    - constructor. apply Permutation_app_head.
+      induction l1; simpl; auto.
+    - induction l; simpl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns in *.
+    pose proof (translate_node_obligation_3 n) as Nodup; simpl in *.
+    pose proof (translate_node_obligation_5 n) as Insts; simpl in *.
+    rewrite Insts in Nodup. clear Insts.
+    apply NoDup_app_r in Nodup.
+    unfold SynStc.ireset_consistency.
+    unfold translate_eqns in *; intros.
     induction (n_eqs n) as [|[]]; simpl in *.
     - inv H.
-    - inversion_clear H as [?? Rst|?]; try inv Rst.
-      right; apply IHl; auto.
+    - inv H. inv H1.
+      rewrite IHl; auto.
+      split; intro H. right; auto. inv H; auto. inv H2.
     - destruct l; simpl in *; auto.
-      destruct o as [(?&?)|].
-      + inversion_clear H as [?? Rst|?? Rst];
-          inversion_clear Rst as [?? Rst'|]; try inv Rst'.
-        * right; left; constructor.
-        * apply Exists_app; apply IHl; auto.
-      + inversion_clear H as [?? Rst|]; try inv Rst.
-        apply Exists_app; apply IHl; auto.
-    - inversion_clear H as [?? Rst|?]; try inv Rst.
-      right; apply IHl; auto.
-  Qed.
-  Next Obligation.
-    unfold SynStc.reset_consistency.
-    unfold translate_eqns in *; intros.
-    destruct rst.
-    - induction (n_eqs n) as [|[]]; simpl in *.
-      + inv H.
-      + inversion_clear H as [?? Step|]; try inv Step.
-        right; apply IHl; auto.
-      + destruct l; simpl in *; auto.
-        destruct o as [(?&?)|]; simpl in *;
-          inversion_clear H as [?? Step|?? Step']; try inv Step.
-        *{ inversion_clear Step' as [?? Step|]; try inv Step.
-           - left; constructor.
-           - right; right; apply IHl; auto.
-         }
-        * right; apply IHl; auto.
-      + inversion_clear H as [?? Step|]; try inv Step.
-        right; apply IHl; auto.
-    - pose proof (translate_node_obligation_5 n) as Eq;
-      pose proof (translate_node_obligation_3 n) as Nodup;
-      pose proof (translate_node_obligation_8 n) as ResetSpec;
-      unfold gather_eqs in Nodup; rewrite Permutation_app_comm in Nodup;
-      eapply NoDup_app_weaken in Nodup;
-      rewrite Eq in Nodup; clear Eq; simpl in ResetSpec.
-      unfold translate_eqns in *.
-      intros * Reset.
-      apply ResetSpec in Reset; clear ResetSpec.
-      induction (n_eqs n) as [|[]]; simpl in *.
-      + inv H.
-      + inversion_clear H as [?? Step|]; try inv Step.
-        inversion_clear Reset as [?? Rst|]; try inv Rst.
-        apply IHl; auto.
-      + destruct l; simpl in *; auto.
-        destruct o as [(?&?)|]; simpl in *; inversion_clear Nodup as [|?? Notin];
-          inversion_clear Reset as [?? Rst|?? Rst']; try inv Rst;
-            inversion_clear H as [?? Step|?? Step']; try inv Step.
-        *{ inversion_clear Step' as [?? Step|?? Hin]; try inv Step.
-           inversion_clear Rst' as [?? Rst|]; try inv Rst.
-           - apply Notin.
-             clear - Hin; induction Hin as [?? Step|[]];
-               try inv Step; simpl; auto.
-           - apply IHl; auto.
-         }
-        * apply Notin.
-          clear - Rst'; induction Rst' as [?? Step|[]];
-            try inv Step; simpl; auto.
-        * apply IHl; auto.
-      + inversion_clear H as [?? Step|]; try inv Step.
-        inversion_clear Reset as [?? Rst|]; try inv Rst.
-        apply IHl; auto.
+      inv Nodup.
+      rewrite SynStc.steps_of_app, map_app in H2, H3.
+      split; intros.
+      + right.
+        inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]].
+        * apply Exists_app'; left.
+          apply Exists_map, Exists_exists.
+          exists ckr; split; auto using SynStc.Is_ireset_in_tc.
+        * exfalso. clear - Ex.
+          induction l1; simpl in *; inv Ex; auto. inv H0.
+        * apply Exists_app'; right.
+          apply NoDup_app_r in H3.
+          apply IHl; auto.
+      + inv H; [inv H4|apply Exists_app' in H4 as [Ex|Ex]];
+          (inv H0; [inv H1|apply Exists_app' in H1 as [Ex'|Ex']]).
+        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&In&Res).
+          inv Res; auto.
+        * apply Exists_exists in Ex' as (?&In&Res).
+          exfalso.
+          apply H2, in_or_app, or_intror, iresets_of_incl', SynStc.iresets_of_In. exists ckr.
+          apply Exists_exists; eauto.
+        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
+        * rewrite Exists_map in Ex. apply Exists_exists in Ex as (?&?&Next); inv Next.
+        * rewrite Exists_map in Ex'. apply Exists_exists in Ex' as (?&?&Ex'). inv Ex'.
+          exfalso.
+          eapply H2, in_or_app, or_intror, SynStc.steps_of_In, SynStc.Step_with_ireset_in_Is_step_in; eauto.
+        * apply NoDup_app_r in H3.
+          rewrite IHl; auto.
+    - inv H. inv H1.
+      rewrite SynStc.steps_of_app, map_app in Nodup.
+      apply NoDup_app_r in Nodup.
+      apply Exists_app' in H1 as [Ex|Ex].
+      + exfalso. clear - Ex. induction l; inv Ex; auto. inv H0.
+      + rewrite IHl; auto.
+        unfold SynStc.Is_ireset_in.
+        rewrite Exists_cons, Exists_app'. intuition.
+        * inv H2.
+        * exfalso. clear - H0. induction l; inv H0; auto. inv H1.
   Qed.
   Next Obligation.
     unfold translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     - inversion 1.
     - destruct l; simpl; auto.
-      destruct o as [(?&?)|]; simpl.
-      + apply incl_cons.
-        * constructor; auto.
-        * apply incl_tl; auto.
-      + apply incl_tl; auto.
+      induction l1; simpl; auto using incl_tl, incl_cons, in_eq.
+    - induction l; simpl; auto.
   Qed.
   Next Obligation.
     pose proof n.(n_good) as [ValidApp].

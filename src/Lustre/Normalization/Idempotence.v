@@ -131,6 +131,27 @@ Module Type IDEMPOTENCE
       + inv_bind; eauto.
   Qed.
 
+  Lemma unnested_reset_normalize_idem : forall G x ann st,
+      unnest_reset (unnest_exp G true) (Evar x ann) st = (Evar x ann, [], st).
+  Proof.
+    intros.
+    unfold unnest_reset. repeat inv_bind.
+    repeat esplit. simpl.
+    repeat inv_bind; eauto.
+  Qed.
+
+  Corollary unnested_resets_normalize_idem : forall G es st,
+      Forall (fun e : exp => exists (x : ident) (ann : ann), e = Evar x ann) es ->
+      map_bind2 (unnest_reset (unnest_exp G true)) es st = (es, List.map (fun _ => []) es, st).
+  Proof.
+    induction es; intros * F; simpl; inv F; repeat inv_bind; auto.
+    destruct H1 as (?&?&?); subst.
+    setoid_rewrite unnested_reset_normalize_idem.
+    repeat esplit. repeat inv_bind.
+    setoid_rewrite IHes; eauto.
+    repeat esplit. repeat inv_bind; eauto.
+  Qed.
+
   Fact unnested_rhs_normalize_idem : forall G e st,
       unnested_rhs G e ->
       unnest_rhs G e st = ([e], [], st).
@@ -140,54 +161,31 @@ Module Type IDEMPOTENCE
       try (solve [eapply normalized_cexp_normalize_idem; eauto]);
       try (solve [inv H; inv H0]).
     - (* fby *)
-      repeat inv_bind.
-      exists [e0]. exists []. exists st.
-      split; unfold unnest_exps; inv_bind.
-      + exists [[e0]]. exists [[]]. exists st. split; simpl; inv_bind...
-        exists [e0]. exists []. exists st. split; simpl.
-        eapply normalized_lexp_normalize_idem in H1...
-        inv_bind.
-        exists []. exists []. exists st.
-        repeat split; inv_bind...
-      + exists [e]. exists []. exists st. split; simpl; inv_bind...
-        * exists [[e]]. exists [[]]. exists st. split; simpl; inv_bind...
-          exists [e]. exists []. exists st. split; simpl.
-          eapply normalized_lexp_normalize_idem in H3...
-          inv_bind; repeat eexists...
-          1,2:inv_bind...
+      unfold unnest_exps.
+      repeat (repeat eexists; try inv_bind).
+      1,2:eapply normalized_lexp_normalize_idem; eauto.
+      eapply unnested_resets_normalize_idem; eauto.
+      simpl; repeat f_equal.
+      clear - l1. induction l1; simpl; auto.
     - (* arrow *)
-      repeat inv_bind.
-      exists [e0]. exists []. exists st.
-      split; unfold unnest_exps; inv_bind.
-      + exists [[e0]]. exists [[]]. exists st. split; simpl; inv_bind...
-        exists [e0]. exists []. exists st. split; simpl.
-        eapply normalized_lexp_normalize_idem in H1...
-        inv_bind.
-        exists []. exists []. exists st.
-        split; inv_bind...
-      + exists [e]. exists []. exists st. split; simpl; inv_bind...
-        * exists [[e]]. exists [[]]. exists st. split; simpl; inv_bind...
-          exists [e]. exists []. exists st. split; simpl.
-          eapply normalized_lexp_normalize_idem in H3...
-          inv_bind; repeat eexists...
-          1,2:inv_bind...
+      unfold unnest_exps.
+      repeat (repeat eexists; try inv_bind).
+      1,2:eapply normalized_lexp_normalize_idem; eauto.
+      eapply unnested_resets_normalize_idem; eauto.
+      simpl; repeat f_equal.
+      clear - l1. induction l1; simpl; auto.
     - (* app *)
-      eapply normalized_lexps_normalize_idem in H2.
-      inv_bind. repeat eexists...
-      inv_bind. repeat eexists...
-      unfold find_node_incks; rewrite H4.
-      eapply unnest_noops_exps_idem...
-      inv_bind. repeat eexists...
-      1,2:inv_bind...
-    - (* app (reset) *)
-      eapply normalized_lexps_normalize_idem in H2.
-      inv_bind. repeat eexists...
+      eapply normalized_lexps_normalize_idem in H3.
+      repeat inv_bind. repeat esplit. eauto.
       inv_bind. repeat eexists...
       unfold find_node_incks; rewrite H4.
       eapply unnest_noops_exps_idem...
-      inv_bind. repeat eexists...
-      inv_bind. repeat eexists... inv_bind...
-      1,2:inv_bind...
+      repeat inv_bind. repeat esplit.
+      repeat inv_bind. repeat esplit.
+      eapply unnested_resets_normalize_idem; eauto.
+      repeat inv_bind...
+      repeat inv_bind... repeat f_equal.
+      clear - l0. induction l0; simpl; auto.
   Qed.
 
   Corollary unnested_rhss_normalize_idem' : forall G es st,
@@ -226,7 +224,6 @@ Module Type IDEMPOTENCE
       repeat eexists; eauto;
         inv_bind; try rewrite app_nil_r in *;
           simpl in *; repeat f_equal.
-    - apply firstn_all2. rewrite H0. apply le_refl.
     - apply firstn_all2. rewrite H0. apply le_refl.
     - rewrite length_annot_numstreams in H0.
       apply firstn_all2. simpl. rewrite H0. apply le_refl.
@@ -361,10 +358,10 @@ Module Type IDEMPOTENCE
     intros G to_cut (xs&es) st Hnormed.
     destruct xs; [|destruct xs]; simpl; repeat inv_bind; auto.
     inv Hnormed; simpl; repeat inv_bind; auto.
-    destruct ann0 as (?&?&?);
-      rewrite <- is_constant_normalized_constant in H3; rewrite H3;
-        apply PSE.mem_3 in H1; rewrite H1;
-          inv_bind; auto.
+    1:(destruct ann0 as (?&?&?);
+       rewrite <- is_constant_normalized_constant in H2; rewrite H2;
+       apply PSE.mem_3 in H1; rewrite H1;
+       inv_bind; auto).
     inv H1; try inv_bind; auto.
     inv H; try inv_bind; auto.
   Qed.

@@ -178,6 +178,73 @@ Module Type NLCOINDTOINDEXED
                   rewrite tr_Stream_S; destruct (tr_Stream xs n); auto.
     Qed.
 
+    Fact all_absent_or_presence : forall (xs: Stream value) n,
+        (forall m, m <= n -> xs # m = absent) \/
+        (exists m x, m < n /\ xs # m = present x) \/
+        ((forall m, m < n -> xs # m = absent) /\ exists x, xs # n = present x).
+    Proof.
+      induction n.
+      - destruct (xs # 0) eqn:Hx.
+        + left. intros ? Hle. inv Hle; auto.
+        + do 2 right. split; eauto.
+          intros ? Hlt. inv Hlt.
+      - destruct IHn as [?|[(?&?&Hmn&Hx)|(Hm&?&Hx)]].
+        + destruct (xs # (S n)) eqn:Hx.
+          * left. intros ? Hmn. inv Hmn; auto.
+          * do 2 right. split; eauto.
+            intros ? Hlt. apply H; auto. apply lt_n_Sm_le; auto.
+        + right; left. exists x. exists x0. auto.
+        + right; left. exists n. exists x. auto.
+    Qed.
+
+    (** We also directly state the correspondence for [reset] *)
+    Lemma reset_impl:
+      forall v0 xs rs,
+        tr_Stream (CoInd.reset v0 xs rs) ≈ Indexed.reset v0 (tr_Stream xs) (tr_Stream rs).
+    Proof.
+      unfold CoInd.reset.
+      intros * n. revert v0 xs rs.
+      induction n; intros.
+      - unfold_Stv xs; unfold_Stv rs;
+          repeat rewrite <- tr_Stream_hd; auto.
+      - unfold_Stv xs; unfold_Stv rs;
+          repeat rewrite <- tr_Stream_tl; simpl.
+        2-4:erewrite IHn, Indexed.reset_shift; eauto. 2:left; exists v; auto.
+        (* Difficult case. Three possibilities :
+           - there is no present before n, so in particular xs n is absent, so both are absent
+           - there is a present strictly before n, in which case the "doreset" flag is lowered
+           - xs n is the first present, in which case both are equal to v0 *)
+        destruct (all_absent_or_presence xs n) as [?|[(?&?&Hmn&Hx)|(Hm&?&Hx)]].
+        + specialize (H n (Nat.le_refl _)).
+          rewrite tr_Stream_nth, CoInd.reset1_absent; eauto.
+          symmetry. apply Indexed.reset_spec; auto.
+        + erewrite tr_Stream_nth, CoInd.reset1_present1; eauto.
+          rewrite <- tr_Stream_nth, IHn.
+          erewrite Indexed.reset_shift'; eauto.
+        + erewrite tr_Stream_nth, CoInd.reset1_present2; eauto.
+          symmetry. apply Indexed.reset_spec.
+          do 2 right. exists x.
+          repeat split; auto.
+          rewrite Indexed.doreset_spec.
+          right. exists 0. repeat split; auto. apply Nat.lt_0_succ.
+          intros ? Hk Hl. rewrite tr_Stream_nth. destruct k; auto.
+          apply Hm, lt_S_n; auto.
+    Qed.
+
+    Corollary reset_fby_impl:
+      forall v0 xs rs,
+        tr_Stream (CoInd.reset v0 (sfby v0 xs) rs) ≈
+        Indexed.reset v0 (Indexed.fby v0 (tr_Stream xs)) (tr_Stream rs).
+    Proof.
+      intros * n.
+      rewrite reset_impl. unfold Indexed.reset.
+      repeat rewrite <-fby_impl.
+      destruct (tr_Stream (sfby v0 xs) n); auto.
+      induction n; simpl; auto.
+      destruct (tr_Stream _ _); auto.
+      rewrite <-fby_impl. destruct (tr_Stream _ _); auto.
+    Qed.
+
     (** ** Semantics of cexps *)
 
     (** State the correspondence for [cexp].
@@ -283,6 +350,26 @@ Module Type NLCOINDTOINDEXED
           inv Rst; simpl in *; auto.
       - unfold_Stv xs; unfold_Stv rs; rewrite 2 tr_Stream_S;
           inv Rst; simpl in *; auto.
+    Qed.
+
+    (** And for [bools_ofs] *)
+    Lemma bools_ofs_impl:
+      forall xss rs,
+        CStr.bools_ofs xss rs ->
+        Indexed.bools_ofs (List.map tr_Stream xss) (tr_Stream rs).
+    Proof.
+      unfold CStr.bools_ofs, Indexed.bools_ofs.
+      intros * (rss&Bools1&Bools2).
+      exists (List.map tr_Stream rss). split.
+      - rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto].
+        auto using bools_of_impl.
+      - intros n.
+        eapply Str_nth_EqSt with (n:=n) in Bools2.
+        rewrite disj_str_spec in Bools2.
+        rewrite tr_Stream_nth, Bools2.
+        rewrite existsb_map. eapply existsb_ext.
+        intros ?. apply tr_Stream_nth.
     Qed.
 
     (** ** Properties about [count] and [mask] *)
@@ -452,7 +539,7 @@ Module Type NLCOINDTOINDEXED
         CoInd.sem_node G f xss yss ->
         Indexed.sem_node G f (tr_Streams xss) (tr_Streams yss).
     Proof.
-      induction 1 as [| |???????????????? IH| |???????? Same Heqs IH]
+      induction 1 as [|????????????? Vars Bools IH| |???????? Same Heqs IH]
                        using CoInd.sem_node_mult with
           (P_equation := fun H b e =>
                            CoInd.sem_equation G H b e ->
@@ -460,18 +547,21 @@ Module Type NLCOINDTOINDEXED
         eauto.
 
       - econstructor; eauto.
-        intro; rewrite tr_clocks_of; auto.
-        apply sem_clock_impl; auto.
-
-      - econstructor; eauto.
+        3:apply bools_ofs_impl; eauto.
         + intro; rewrite tr_clocks_of; auto.
           apply sem_clock_impl; auto.
-        + apply bools_of_impl; eauto.
+        + rewrite Forall2_map_2.
+          eapply Forall2_impl_In; [|eauto].
+          intros. eapply sem_var_impl; eauto.
         + intro k; destruct (IH k).
           now rewrite <- 2 mask_impl.
 
       - econstructor; auto; subst; eauto.
-        rewrite <-fby_impl; auto.
+        3:apply bools_ofs_impl; eauto.
+        + rewrite <-reset_fby_impl; auto.
+        + rewrite Forall2_map_2.
+          eapply Forall2_impl_In; [|eauto].
+          intros. eapply sem_var_impl; eauto.
 
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.

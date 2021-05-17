@@ -5,9 +5,8 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import CoreExpr.CEClocking.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsReset.
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsDefined.
 From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
 
@@ -29,9 +28,8 @@ Module Type STCCLOCKING
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX          Op)
        (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Reset : STCISRESET     Ids Op CESyn Syn)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
        (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import CEClo : CECLOCKING    Ids Op CESyn).
@@ -42,15 +40,20 @@ Module Type STCCLOCKING
         In (x, ck) vars ->
         wc_cexp vars e ck ->
         wc_trconstr P vars (TcDef x ck e)
-  | CTcFby:
-      forall x ck e,
+  | CTcReset:
+      forall x ck ckr c0,
+        In (x, ck) vars ->
+        wc_clock vars ckr ->
+        wc_trconstr P vars (TcReset x ckr c0)
+  | CTcNext:
+      forall x ck ckrs e,
         In (x, ck) vars ->
         wc_exp vars e ck ->
-        wc_trconstr P vars (TcNext x ck e)
-  | CTcReset:
+        wc_trconstr P vars (TcNext x ck ckrs e)
+  | CTcIReset:
       forall i ck f,
         wc_clock vars ck ->
-        wc_trconstr P vars (TcReset i ck f)
+        wc_trconstr P vars (TcInstReset i ck f)
   | CTcApp:
       forall i xs ck rst f es s P' sub,
         find_system f P = Some (s, P') ->
@@ -64,13 +67,13 @@ Module Type STCCLOCKING
                    /\ exists xck, In (x, xck) vars
                             /\ instck ck sub yck = Some xck)
                 s.(s_out) xs ->
-        wc_trconstr P vars (TcCall i xs ck rst f es).
+        wc_trconstr P vars (TcStep i xs ck rst f es).
 
   Definition wc_system (P: program) (s: system) : Prop :=
     wc_env (idck (s.(s_in))) /\
     wc_env (idck (s.(s_in) ++ s.(s_out))) /\
-    wc_env (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_lasts)) /\
-    Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_lasts)))
+    wc_env (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_nexts)) /\
+    Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_nexts)))
            s.(s_tcs).
 
   Inductive wc_program : program -> Prop :=
@@ -86,15 +89,18 @@ Module Type STCCLOCKING
   | HcTcDef:
       forall x ck e,
         Has_clock_tc ck (TcDef x ck e)
-  | HcTcNext:
-      forall x ck e,
-        Has_clock_tc ck (TcNext x ck e)
   | HcTcReset:
+      forall x ckr c0,
+        Has_clock_tc ckr (TcReset x ckr c0)
+  | HcTcNext:
+      forall x ck ckrs e,
+        Has_clock_tc ck (TcNext x ck ckrs e)
+  | HcTcIReset:
       forall s ck f,
-      Has_clock_tc ck (TcReset s ck f)
-  | HcTcCall:
-      forall s xs ck rst f es,
-      Has_clock_tc ck (TcCall s xs ck rst f es).
+        Has_clock_tc ck (TcInstReset s ck f)
+  | HcTcStep:
+      forall s xs ck ckrs f es,
+        Has_clock_tc ck (TcStep s xs ck ckrs f es).
 
   Hint Constructors wc_clock wc_exp wc_cexp wc_trconstr wc_program.
   Hint Unfold wc_env wc_system.
@@ -153,7 +159,7 @@ Module Type STCCLOCKING
   Proof.
     intros * OnG WCnG.
     inversion_clear OnG as [|? ? OG ? HndG].
-    inversion_clear WCnG as [| | |????????? Find]; eauto using wc_trconstr.
+    inversion_clear WCnG as [| | | |????????? Find]; eauto using wc_trconstr.
     econstructor; eauto.
     rewrite find_system_other; eauto.
     intro; subst.
@@ -209,94 +215,82 @@ Module Type STCCLOCKING
     Variable Hnd : NoDupMembers vars.
     Variable Hwc : wc_env vars.
 
-    Lemma wc_trconstr_not_Is_free_in_clock:
-      forall tc x ck,
-        wc_trconstr P vars tc ->
-        Is_defined_in_tc x tc ->
-        Has_clock_tc ck tc ->
-        ~ Is_free_in_clock x ck.
-    Proof.
-      intros tc x' ck' Hwce Hdef Hhasck Hfree.
-      inversion Hwce as [??? Hin|??? Hin| |?????? b P' sub Hfind Hisub Hosub];
-        clear Hwce; subst; inv Hdef; inv Hhasck.
-      - pose proof (wc_env_var _ _ _ Hwc Hin) as Hclock.
-        apply Is_free_in_clock_self_or_parent in Hfree as (ck' & b & [Hck|Hck]).
-        + subst.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto.
-          eapply clock_no_loops; eauto.
-        + apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto; subst.
-          apply clock_parent_parent' in Hck.
-          eapply clock_parent_not_refl; eauto.
-      - pose proof (wc_env_var _ _ _ Hwc Hin) as Hclock.
-        apply Is_free_in_clock_self_or_parent in Hfree as (ck' & b & [Hck|Hck]).
-        + subst.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto.
-          eapply clock_no_loops; eauto.
-        + apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-           eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto; subst.
-          apply clock_parent_parent' in Hck.
-          eapply clock_parent_not_refl; eauto.
-      - rename x' into x.
-        match goal with H:List.In x xs |- _ => rename H into Hin end.
-        destruct (Forall2_in_right _ _ _ _ Hosub Hin) as ((?&(?&?)) & Ho & Hxtc & xck & Hxck & Hxi).
-        pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
-        apply Is_free_in_clock_self_or_parent in Hfree.
-        apply instck_parent in Hxi.
-        destruct Hxi as [Hxi|Hxi]; destruct Hfree as (ck' & bb & [Hck|Hck]).
-        + subst ck xck.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          pose proof (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) as Hloop.
-          apply clock_no_loops with (1:=Hloop).
-        + subst ck.
-          apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
-          apply clock_parent_parent' in Hck.
-          apply clock_parent_not_refl with (1:=Hck).
-        + subst ck.
-          apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
-          apply clock_parent_parent' in Hxi.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
-          apply clock_parent_not_refl with (1:=Hxi).
-        + apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
-          apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
-          apply wc_clock_sub with (1:=Hwc) in Hclock.
-          rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
-          apply clock_parent_parent' in Hck.
-          apply clock_parent_trans with (1:=Hck) in Hxi.
-          apply clock_parent_not_refl with (1:=Hxi).    Qed.
-
     Corollary wc_TcDef_not_Is_free_in_clock:
       forall x ce ck,
         wc_trconstr P vars (TcDef x ck ce) ->
         ~ Is_free_in_clock x ck.
     Proof.
-      intros; eapply wc_trconstr_not_Is_free_in_clock;
-        eauto using Has_clock_tc, Is_defined_in_tc.
+      intros * Hwctr Hfree.
+      inversion_clear Hwctr as [??? Hin| | | |].
+      pose proof (wc_env_var _ _ _ Hwc Hin) as Hclock.
+      apply Is_free_in_clock_self_or_parent in Hfree as (ck' & b & [Hck|Hck]).
+      - subst.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto.
+        eapply clock_no_loops; eauto.
+      - apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto; subst.
+        apply clock_parent_parent' in Hck.
+        eapply clock_parent_not_refl; eauto.
     Qed.
 
-    Corollary wc_TcNext_not_Is_free_in_clock:
-      forall x le ck,
-        wc_trconstr P vars (TcNext x ck le) ->
+    Lemma wc_TcNext_not_Is_free_in_clock:
+      forall x ck ckrs le,
+        wc_trconstr P vars (TcNext x ck ckrs le) ->
         ~ Is_free_in_clock x ck.
     Proof.
-      intros; eapply wc_trconstr_not_Is_free_in_clock;
-        eauto using Has_clock_tc, Is_defined_in_tc.
+      intros * Hwctr Hfree.
+      inversion_clear Hwctr as [| |???? Hin He| |].
+      pose proof (wc_env_var _ _ _ Hwc Hin) as Hclock.
+      apply Is_free_in_clock_self_or_parent in Hfree as (ck' & b & [Hck|Hck]).
+      - subst.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto.
+        eapply clock_no_loops; eauto.
+      - apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        eapply NoDupMembers_det with (2 := Hin) in Hclock; eauto; subst.
+        apply clock_parent_parent' in Hck.
+        eapply clock_parent_not_refl; eauto.
     Qed.
 
-    Corollary wc_TcCall_not_Is_free_in_clock:
+    Corollary wc_TcStep_not_Is_free_in_clock:
       forall s xs rst f es ck,
-        wc_trconstr P vars (TcCall s xs ck rst f es) ->
+        wc_trconstr P vars (TcStep s xs ck rst f es) ->
         forall x, In x xs -> ~ Is_free_in_clock x ck.
     Proof.
-      intros; eapply wc_trconstr_not_Is_free_in_clock;
-        eauto using Is_defined_in_tc, Has_clock_tc.
+      intros * Hwctr ? Hin Hfree.
+      inversion_clear Hwctr as [| | | |?????? b P' sub Hfind Hisub Hosub].
+      match goal with H:List.In x xs |- _ => rename H into Hin end.
+      destruct (Forall2_in_right _ _ _ _ Hosub Hin) as ((?&(?&?)) & Ho & Hxtc & xck & Hxck & Hxi).
+      pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
+      apply Is_free_in_clock_self_or_parent in Hfree.
+      apply instck_parent in Hxi.
+      destruct Hxi as [Hxi|Hxi]; destruct Hfree as (ck' & bb & [Hck|Hck]).
+      - subst ck xck.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        pose proof (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) as Hloop.
+        apply clock_no_loops with (1:=Hloop).
+      - subst ck.
+        apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
+        apply clock_parent_parent' in Hck.
+        apply clock_parent_not_refl with (1:=Hck).
+      - subst ck.
+        apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
+        apply clock_parent_parent' in Hxi.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
+        apply clock_parent_not_refl with (1:=Hxi).
+      - apply wc_clock_parent with (1:=Hwc) (2:=Hxi) in Hclock.
+        apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
+        apply wc_clock_sub with (1:=Hwc) in Hclock.
+        rewrite (NoDupMembers_det _ _ _ _ Hnd Hxck Hclock) in *.
+        apply clock_parent_parent' in Hck.
+        apply clock_parent_trans with (1:=Hck) in Hxi.
+        apply clock_parent_not_refl with (1:=Hxi).
     Qed.
 
   End Well_clocked.
@@ -308,12 +302,11 @@ Module StcClockingFun
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX         Op)
        (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Reset : STCISRESET     Ids Op CESyn Syn)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
-       (Import Syst : STCISSYSTEM    Ids Op CESyn Syn)
+       (Import Syst  : STCISSYSTEM    Ids Op CESyn Syn)
        (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import CEClo : CECLOCKING   Ids Op CESyn)
-  <: STCCLOCKING Ids Op CESyn Syn Last Var Def Syst Ord CEClo.
-  Include STCCLOCKING Ids Op CESyn Syn Last Var Def Syst Ord CEClo.
+  <: STCCLOCKING Ids Op CESyn Syn Reset Var Syst Ord CEClo.
+  Include STCCLOCKING Ids Op CESyn Syn Reset Var Syst Ord CEClo.
 End StcClockingFun.

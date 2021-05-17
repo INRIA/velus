@@ -167,7 +167,7 @@ Module Type ISVARIABLE
     match eq with
     | EqDef x _ _   => PS.add x vars
     | EqApp xs _ _ _ _ => ps_adds xs vars
-    | EqFby _ _ _ _ => vars
+    | EqFby _ _ _ _ _ => vars
     end.
 
   Definition variables (eqs: list equation) : PS.t :=

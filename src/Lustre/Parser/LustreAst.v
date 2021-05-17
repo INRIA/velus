@@ -85,8 +85,8 @@ Inductive expression :=
 | APP      : ident -> list expression -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
-| FBY      : list expression -> list expression -> astloc -> expression
-| ARROW    : list expression -> list expression -> astloc -> expression
+| FBY      : list expression -> list expression -> list expression -> astloc -> expression
+| ARROW    : list expression -> list expression -> list expression -> astloc -> expression
 | WHEN     : list expression -> ident -> bool -> astloc -> expression
 | MERGE    : ident -> list expression -> list expression -> astloc -> expression.
 
@@ -99,8 +99,8 @@ Definition expression_loc (e: expression) : astloc :=
   | APP _ _ _ l => l
   | CONSTANT _ l => l
   | VARIABLE _ l => l
-  | FBY _ _ l => l
-  | ARROW _ _ l => l
+  | FBY _ _ _ l => l
+  | ARROW _ _ _ l => l
   | WHEN _ _ _ l => l
   | MERGE _ _ _ l => l
   end.
@@ -164,16 +164,18 @@ Section expression_ind2.
       P (VARIABLE x a).
 
   Hypothesis FBYCase:
-    forall e0s es a,
+    forall e0s es er a,
       Forall P e0s ->
       Forall P es ->
-      P (FBY e0s es a).
+      Forall P er ->
+      P (FBY e0s es er a).
 
   Hypothesis ARROWCase:
-    forall e0s es a,
+    forall e0s es er a,
       Forall P e0s ->
       Forall P es ->
-      P (ARROW e0s es a).
+      Forall P er ->
+      P (ARROW e0s es er a).
 
   Hypothesis WHENCase:
     forall es x b a,

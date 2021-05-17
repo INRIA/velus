@@ -58,8 +58,8 @@ Module Type NLNORMALARGS
         Forall2 noops_exp (map (fun '(_, (_, ck)) => ck) n.(n_in)) les ->
         normal_args_eq G (EqApp xs ck f les r)
   | CEqFby:
-      forall x ck v0 le,
-        normal_args_eq G (EqFby x ck v0 le).
+      forall x ck v0 le r,
+        normal_args_eq G (EqFby x ck v0 le r).
 
   Definition normal_args_node (G: global) (n: node) : Prop :=
     Forall (normal_args_eq G) n.(n_eqs).

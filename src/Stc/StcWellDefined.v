@@ -8,8 +8,8 @@ From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
 
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
-From Velus Require Import Stc.StcIsDefined.
+From Velus Require Import Stc.StcIsReset.
+From Velus Require Import Stc.StcIsNext.
 
 From Velus Require Import CoreExpr.CEIsFree.
 From Velus Require Import Stc.StcIsFree.
@@ -28,8 +28,8 @@ Module Type STCWELLDEFINED
        (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Last  : STCISLAST     Ids Op CESyn Syn)
-       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import Reset : STCISRESET     Ids Op CESyn Syn)
+       (Import Next  : STCISNEXT     Ids Op CESyn Syn)
        (Import CEIsF : CEISFREE      Ids Op CESyn)
        (Import Free  : STCISFREE     Ids Op CESyn Syn CEIsF).
 
@@ -42,15 +42,16 @@ Module Type STCWELLDEFINED
         (forall x,
             Is_free_in_tc x tc ->
             if PS.mem x mems
-            then ~ Is_defined_in x tcs
+            then ~Is_next_in x tcs
             else Is_variable_in x tcs \/ In x inputs) ->
-        (forall s k,
-            Is_sub_in_tc s k tc ->
-            Forall (fun tc => forall k', Is_sub_in_tc s k' tc -> k' < k) tcs) ->
+        (* reset must happen before usage and update *)
+        (forall x ck, Is_reset_in_tc x ck tc -> ~Is_free_in x (tc::tcs) /\ ~Is_next_in x tcs) ->
+        (* Idem, reset must happen before steps *)
+        (forall s ck, Is_ireset_in_tc s ck tc -> ~Is_step_in s tcs) ->
         Is_well_sch inputs mems (tc :: tcs).
 
   Definition Well_scheduled: program -> Prop :=
-    Forall (fun s => Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_lasts s))) (s_tcs s)).
+    Forall (fun s => Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_nexts s))) (s_tcs s)).
 
   Lemma Is_well_sch_app:
     forall inputs mems tcs tcs',
@@ -61,36 +62,13 @@ Module Type STCWELLDEFINED
     inversion 1; auto.
   Qed.
 
-  Lemma Reset_not_Step_in:
+  Lemma Reset_not_Is_step_in:
     forall tcs inputs mems i ck f,
-      Is_well_sch inputs mems (TcReset i ck f :: tcs) ->
-      ~ Step_in i tcs.
+      Is_well_sch inputs mems (TcInstReset i ck f :: tcs) ->
+      ~ Is_step_in i tcs.
   Proof.
-    inversion_clear 1 as [|???? Subs].
-    unfold Step_in, Is_sub_in.
-    rewrite Exists_exists.
-    intros (tc' & Hin & IsStin).
-    assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 0) tcs)
-      by (apply Subs; auto using Is_sub_in_tc).
-    eapply Forall_forall in Hin; eauto.
-    apply Hin in IsStin.
-    omega.
-  Qed.
-
-  Lemma Reset_not_Reset_in:
-    forall tcs inputs mems i ck f,
-      Is_well_sch inputs mems (TcReset i ck f :: tcs) ->
-      ~ Reset_in i tcs.
-  Proof.
-    inversion_clear 1 as [|???? Subs].
-    unfold Reset_in, Is_sub_in.
-    rewrite Exists_exists.
-    intros (tc' & Hin & IsStin).
-    assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 0) tcs)
-      by (apply Subs; auto using Is_sub_in_tc).
-    eapply Forall_forall in Hin; eauto.
-    apply Hin in IsStin.
-    omega.
+    inversion_clear 1 as [|????? Subs].
+    eapply Subs; econstructor; eauto.
   Qed.
 
    (** The [normal_args] predicate defines a normalization condition on
@@ -126,22 +104,24 @@ Module Type STCWELLDEFINED
       instance, if ck = false at the first reaction).
  *)
 
-
   Inductive normal_args_tc (P: program) : trconstr -> Prop :=
   | CTcDef:
       forall x ck e,
         normal_args_tc P (TcDef x ck e)
-  | CTcNext:
-      forall x ck e,
-        normal_args_tc P (TcNext x ck e)
   | CTcReset:
+      forall x ck c0,
+        normal_args_tc P (TcReset x ck c0)
+  | CTcNext:
+      forall x ck ckrs e,
+        normal_args_tc P (TcNext x ck ckrs e)
+  | CTcIReset:
       forall s ck f,
-        normal_args_tc P (TcReset s ck f)
-  | CTcCall:
+        normal_args_tc P (TcInstReset s ck f)
+  | CTcStep:
       forall s xs ck rst f es b P',
         find_system f P = Some (b, P') ->
         Forall2 noops_exp (map (fun '(_,(_, ck)) => ck) b.(s_in)) es ->
-        normal_args_tc P (TcCall s xs ck rst f es).
+        normal_args_tc P (TcStep s xs ck rst f es).
 
   Definition normal_args_system (P: program) (s: system) : Prop :=
     Forall (normal_args_tc P) s.(s_tcs).
@@ -163,7 +143,7 @@ Module Type STCWELLDEFINED
     intros tc Hin.
     destruct tc; eauto using normal_args_tc.
     apply Forall_forall with (2:=Hin) in Hnarg.
-    inversion_clear Hnarg as [| | |???????? Hfind Hnargs].
+    inversion_clear Hnarg as [| | | |???????? Hfind Hnargs].
     rewrite find_system_other in Hfind;
       eauto using normal_args_tc.
     intro; subst; apply Hord.
@@ -181,66 +161,66 @@ Module Type STCWELLDEFINED
       reset_consistency tcs'.
   Proof.
     unfold reset_consistency.
-    induction tcs as [|[]]; simpl; auto; intros * Wsch Spec ?? Step;
-      inversion_clear Wsch as [|??? Free Subs]; clear Free;
-        try (eapply IHtcs; eauto; intros j r Step';
-             specialize (Spec j r); rewrite Step_with_reset_in_cons_not_call in Spec;
+    induction tcs as [|[]]; simpl; auto; intros * Wsch Spec;
+      inversion_clear Wsch as [|??? _ Nexts _];
+        try (eapply IHtcs; eauto; intros j r Step' ckr;
+             specialize (Spec j r); rewrite Next_with_reset_in_cons_not_next in Spec;
              [|now discriminate]).
-    - apply Spec in Step'; destruct r.
-      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
-      + intro; apply Step'; right; auto.
-    - apply Spec in Step'; destruct r.
-      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
-      + intro; apply Step'; right; auto.
-    - assert (j <> i).
-      { assert (Is_sub_in_tc i 0 (TcReset i c i0)) as Sub by constructor.
-        apply Subs in Sub.
-        eapply Forall_Exists, Exists_exists in Sub as (?&?& SubSpec & Step_tc); eauto.
-        inv Step_tc; intro; subst.
-        assert (1 < 0) by (apply SubSpec; constructor).
-        omega.
-      }
-      apply Spec in Step'; destruct r.
-      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
-        congruence.
-      + intro; apply Step'; right; auto.
-    - eapply IHtcs; eauto; intros j r ?.
-      assert (Step_with_reset_in j r (TcCall i l c b i0 l0 :: tcs ++ tcs')) as Step'
+    - eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_reset_in_reflect. reflexivity.
+    - assert (j <> i) as Hneq.
+      { assert (Is_reset_in_tc i c (TcReset i c c0)) as Reset by constructor.
+        apply Nexts in Reset as (?&Next).
+        apply Next_with_reset_in_Is_next_in in Step'.
+        intro contra; subst. contradiction. }
+      eapply Spec in Step'. rewrite Step'.
+      apply ident_eqb_neq in Hneq.
+      repeat rewrite Is_reset_in_reflect; simpl.
+      rewrite Hneq; reflexivity.
+    - eapply IHtcs; eauto; intros j r ckr ?.
+      assert (Next_with_reset_in j r (TcNext i c l e :: tcs ++ tcs')) as Step'
           by (right; auto).
-      apply Spec in Step'.
-      destruct r.
-      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
-      + intro; apply Step'; right; auto.
+      eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_reset_in_reflect. reflexivity.
+    - eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_reset_in_reflect. reflexivity.
+    - eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_reset_in_reflect. reflexivity.
   Qed.
 
-  Lemma Step_not_Step_Reset_in:
-    forall tcs inputs mems i ys ck rst f es,
-      let tcs' := TcCall i ys ck rst f es :: tcs in
-      Is_well_sch inputs mems tcs' ->
-      reset_consistency tcs' ->
-      ~ Step_in i tcs
-      /\ if rst then Reset_in i tcs else ~ Reset_in i tcs.
+  Lemma ireset_consistency_app:
+    forall tcs tcs' inputs mems,
+      Is_well_sch inputs mems (tcs ++ tcs') ->
+      ireset_consistency (tcs ++ tcs') ->
+      ireset_consistency tcs'.
   Proof.
-    inversion_clear 1 as [|??? Free Subs]; clear Free.
-    intros * Spec.
-    split.
-    - setoid_rewrite Exists_exists.
-      intros (tc' & Hin & IsStin).
-      assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 1) tcs)
-        by (apply Subs; auto using Is_sub_in_tc).
-      eapply Forall_forall in Hin; eauto.
-      apply Hin in IsStin.
-      omega.
-    - assert (Step_with_reset_in i rst tcs') as Step by do 2 constructor.
-      apply Spec in Step.
-      destruct rst.
-      + inversion_clear Step as [?? Step'|]; auto; inv Step'.
-      + intro; apply Step.
-        right; auto.
+    unfold ireset_consistency.
+    induction tcs as [|[]]; simpl; auto; intros * Wsch Spec;
+      inversion_clear Wsch as [|??? Free Next Subs]; clear Free Next;
+        try (eapply IHtcs; eauto; intros j r Step' ckr;
+             specialize (Spec j r); rewrite Step_with_ireset_in_cons_not_step in Spec;
+             [|now discriminate]).
+    - eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_ireset_in_reflect. reflexivity.
+    - eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_ireset_in_reflect. reflexivity.
+    - eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_ireset_in_reflect. reflexivity.
+    - assert (j <> i) as Hneq.
+      { assert (Is_ireset_in_tc i c (TcInstReset i c i0)) as Sub by constructor.
+        apply Subs in Sub.
+        apply Step_with_ireset_in_Is_step_in in Step'.
+        intro contra; subst. contradiction. }
+      eapply Spec in Step'. rewrite Step'.
+      apply ident_eqb_neq in Hneq.
+      repeat rewrite Is_ireset_in_reflect; simpl.
+      rewrite Hneq; reflexivity.
+    - eapply IHtcs; eauto; intros j r ckr ?.
+      assert (Step_with_ireset_in j r (TcStep i l c l0 i0 l1 :: tcs ++ tcs')) as Step'
+          by (right; auto).
+      eapply Spec in Step'. rewrite Step'.
+      repeat rewrite Is_ireset_in_reflect. reflexivity.
   Qed.
-
-  Module PN_as_OT := OrdersEx.PairOrderedType OrdersEx.Positive_as_OT OrdersEx.Nat_as_OT.
-  Module PNS := MSetList.Make PN_as_OT.
 
   Section Decide.
 
@@ -250,47 +230,60 @@ Module Type STCWELLDEFINED
 
     Open Scope bool_scope.
 
-    Definition check_var (defined: PS.t) (variables: PS.t) (x: ident) : bool :=
-      if PS.mem x mems then negb (PS.mem x defined) else PS.mem x variables.
+    Definition check_var (nexts: PS.t) (variables: PS.t) (x: ident) : bool :=
+      if PS.mem x mems
+      then negb (PS.mem x nexts)
+      else PS.mem x variables.
 
-    Definition sub_tc (tc: trconstr) : option (ident * nat) :=
+    Definition check_reset (frees: PS.t) (nexts: PS.t) (x : ident) : bool :=
+      andb (negb (PS.mem x frees)) (negb (PS.mem x nexts)).
+
+    Definition ireset_tc (tc: trconstr) : option ident :=
       match tc with
-      | TcReset i _ _      => Some (i, 0)
-      | TcCall i _ _ _ _ _ => Some (i, 1)
+      | TcInstReset i _ _      => Some i
       | _ => None
       end.
 
-    Definition check_sub (i: ident) (k: nat) (ik': ident * nat) : bool :=
-      negb (ident_eqb (fst ik') i) || Nat.ltb (snd ik') k.
+    Definition step_tc (tc: trconstr) : list ident :=
+      match tc with
+      | TcStep i _ _ _ _ _ => [i]
+      | _ => []
+      end.
 
-    Definition check_tc (tc: trconstr) (acc: bool * PS.t * PS.t * PNS.t)
-      : bool * PS.t * PS.t * PNS.t :=
+    Definition check_ireset (steps: PS.t) (i: ident) : bool :=
+      negb (PS.mem i steps).
+
+    Definition check_tc (tc: trconstr) (acc: bool * PS.t * PS.t * PS.t * PS.t)
+      : bool * PS.t * PS.t * PS.t * PS.t :=
       match acc with
-      | (true, defs, vars, subs) =>
-        let b := PS.for_all (check_var defs vars) (free_in_tc tc PS.empty) in
-        let defs := ps_adds (defined_tc tc) defs in
+      | (true, frees, nexts, vars, steps) =>
+        let b1 := PS.for_all (check_var nexts vars) (free_in_tc tc PS.empty) in
+        let frees := free_in_tc tc frees in
+        let b := b1 && forallb (check_reset frees nexts) (resets_of [tc]) in
+        let nexts := ps_adds (nexts_of [tc]) nexts in
         let vars := ps_adds (variables_tc tc) vars in
-        match sub_tc tc with
-        | Some (i, k) =>
-          (PNS.for_all (check_sub i k) subs && b, defs, vars, PNS.add (i, k) subs)
-        | None => (b, defs, vars, subs)
+        let steps' := ps_adds (step_tc tc) steps in
+        match ireset_tc tc with
+        | Some i =>
+          (check_ireset steps i && b, frees, nexts, vars, steps')
+        | None => (b, frees, nexts, vars, steps')
         end
       | acc => acc
       end.
 
     Definition well_sch (args: list ident) (tcs: list trconstr) : bool :=
-      fst (fst (fst (fold_right check_tc
-                                (true, PS.empty, ps_from_list args, PNS.empty)
-                                tcs))).
+      fst (fst (fst (fst (fold_right check_tc
+                                     (true, PS.empty, PS.empty, ps_from_list args, PS.empty)
+                                     tcs)))).
 
     Lemma check_var_spec:
-      forall defined variables x,
-        check_var defined variables x = true
+      forall nexts variables x,
+        check_var nexts variables x = true
         <->
-        (PS.In x mems -> ~PS.In x defined)
+        (PS.In x mems -> ~PS.In x nexts)
         /\ (~PS.In x mems -> PS.In x variables).
     Proof.
-      intros defined variables x.
+      intros *.
       unfold check_var.
       repeat rewrite <-PS.mem_spec. repeat rewrite Bool.not_true_iff_false.
       split.
@@ -299,31 +292,44 @@ Module Type STCWELLDEFINED
         rewrite <-Bool.negb_true_iff; auto.
       - destruct 1 as [Hin Hnin].
         destruct (PS.mem x mems); auto.
-        rewrite Hin; auto.
+        rewrite Bool.negb_true_iff; auto.
     Qed.
 
-    Lemma Is_sub_in_sub_tc:
-      forall tc i k,
-        Is_sub_in_tc i k tc <-> sub_tc tc = Some (i, k).
+    Lemma check_reset_spec:
+      forall frees nexts x,
+        check_reset frees nexts x = true
+        <-> ~PS.In x frees /\ ~PS.In x nexts.
     Proof.
-      destruct tc; simpl; split; try inversion_clear 1; auto using Is_sub_in_tc.
+      intros *. unfold check_reset.
+      rewrite Bool.andb_true_iff.
+      repeat rewrite PSF.mem_iff, Bool.negb_true_iff, Bool.not_true_iff_false.
+      reflexivity.
     Qed.
 
-    Lemma check_sub_spec:
-      forall i k i' k',
-        check_sub i k (i', k') = true
-        <->
-        (i = i' -> k' < k).
+    Lemma Is_ireset_in_ireset_tc:
+      forall tc i,
+        (exists ck, Is_ireset_in_tc i ck tc) <-> ireset_tc tc = Some i.
     Proof.
-      intros; unfold check_sub; simpl.
-      split.
-      - intros * E Tc; subst.
-        rewrite ident_eqb_refl in E.
-        apply Nat.ltb_lt; auto.
-      - intros Spec.
-        destruct (ident_eqb i' i) eqn: E; auto.
-        apply Nat.ltb_lt, Spec.
-        symmetry; apply ident_eqb_eq; auto.
+      destruct tc; simpl; split; try inversion_clear 1; subst; eauto using Is_ireset_in_tc.
+      1-5:inv H0; auto.
+    Qed.
+
+    Lemma Is_step_in_step_tc:
+      forall tc i,
+        Is_step_in_tc i tc <-> In i (step_tc tc).
+    Proof.
+      destruct tc; simpl; split; try inversion_clear 1; subst; auto using Is_step_in_tc.
+      inv H0.
+    Qed.
+
+    Lemma check_ireset_spec:
+      forall steps i,
+        check_ireset steps i = true
+        <-> ~PS.In i steps.
+    Proof.
+      intros *. unfold check_ireset.
+      rewrite PSF.mem_iff, Bool.not_true_iff_false, Bool.negb_true_iff.
+      reflexivity.
     Qed.
 
     Lemma PS_not_for_all_spec:
@@ -344,73 +350,26 @@ Module Type STCWELLDEFINED
         assumption.
     Qed.
 
-    Lemma pair_tc:
-      forall A B (x y: A * B),
-        RelationPairs.RelProd Logic.eq Logic.eq x y <-> x = y.
-    Proof.
-      split; intros * E; subst; auto.
-      destruct x, y.
-      inversion_clear E as [Fst Snd]; inv Fst; inv Snd; simpl in *; subst; auto.
-    Qed.
-
-    Lemma PNS_compat:
-      forall A (f: (positive * nat) -> A),
-        Morphisms.Proper (Morphisms.respectful (RelationPairs.RelProd Logic.eq Logic.eq) Logic.eq) f.
-    Proof.
-      intros * x y E.
-      apply pair_tc in E; subst; auto.
-    Qed.
-    Hint Resolve PNS_compat.
-
-    Lemma PNS_not_for_all_spec:
-      forall (s : PNS.t) (f : positive * nat -> bool),
-        PNS.for_all f s = false <-> ~ PNS.For_all (fun x => f x = true) s.
-    Proof.
-      split.
-      - intros Hfa HFa.
-        apply PNS.for_all_spec in HFa; auto.
-        rewrite Hfa in HFa.
-        discriminate.
-      - intro HFa.
-        apply Bool.not_true_iff_false.
-        intro Hfa; apply HFa.
-        apply PNS.for_all_spec; auto.
-    Qed.
-
     Lemma free_spec:
-      forall tcs args defs vars tc x,
-        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+      forall tcs args nexts vars tc x,
+        (forall x, PS.In x nexts <-> Is_next_in x tcs) ->
         (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
-        PS.For_all (fun x => check_var defs vars x = true) (free_in_tc tc PS.empty) ->
+        PS.For_all (fun x => check_var nexts vars x = true) (free_in_tc tc PS.empty) ->
         Is_free_in_tc x tc ->
-        if PS.mem x mems then ~ Is_defined_in x tcs else Is_variable_in x tcs \/ In x args.
+        if PS.mem x mems then ~ Is_next_in x tcs else Is_variable_in x tcs \/ In x args.
     Proof.
-      intros * DefSpec VarSpec E Hfree.
+      intros * NextSpec VarSpec E Hfree.
       apply free_in_tc_spec', E, check_var_spec in Hfree as (Hin & Hnin).
       destruct (PS.mem x mems) eqn: Mem.
-      - rewrite <-DefSpec; apply PSE.MP.Dec.F.mem_iff, Hin in Mem; auto.
+      - rewrite <-NextSpec; apply PSE.MP.Dec.F.mem_iff, Hin in Mem; auto.
       - rewrite <-VarSpec; apply PSE.MP.Dec.F.not_mem_iff, Hnin in Mem; auto.
     Qed.
 
-    Lemma def_spec:
-      forall tcs defs tc x,
-        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
-        existsb (fun x => PS.mem x defs) (defined_tc tc) = false ->
-        Is_defined_in_tc x tc ->
-        ~ Is_defined_in x tcs.
-    Proof.
-      intros * DefSpec E Hdef Hdefs.
-      apply DefSpec in Hdefs; apply Is_defined_in_defined_tc in Hdef.
-      apply In_nth with (d := Ids.default) in Hdef as (?&?&?); subst.
-      eapply existsb_nth with (d := Ids.default) in E; eauto.
-      apply PSE.MP.Dec.F.not_mem_iff in E; auto.
-    Qed.
-
     Lemma check_var_compat:
-      forall defined variables,
-        SetoidList.compat_bool PS.E.eq (check_var defined variables).
+      forall next variables,
+        SetoidList.compat_bool PS.E.eq (check_var next variables).
     Proof.
-      intros defined variables x y Htc.
+      intros * x y Htc.
       unfold PS.E.eq in Htc.
       rewrite Htc.
       reflexivity.
@@ -418,33 +377,85 @@ Module Type STCWELLDEFINED
     Hint Resolve check_var_compat.
 
     Lemma not_well_sch_vars_defs_spec:
-      forall tcs args defs vars tc,
-        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+      forall tcs args nexts vars tc,
+        (forall x, PS.In x nexts <-> Is_next_in x tcs) ->
         (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
-        PS.for_all (check_var defs vars) (free_in_tc tc PS.empty) = false ->
+        PS.for_all (check_var nexts vars) (free_in_tc tc PS.empty) = false ->
         ~ Is_well_sch args mems (tc :: tcs).
     Proof.
-      intros * DefSpec VarSpec E Wsch.
+      intros * NextSpec VarSpec E Wsch.
       inversion_clear Wsch as [|??? Hfree Hdefs].
       apply PS_not_for_all_spec in E; auto.
       apply E; intros x Hin; apply free_in_tc_spec' in Hin.
       apply Hfree in Hin.
       apply check_var_spec; split.
       - rewrite PSE.MP.Dec.F.mem_iff; intro Hin'; rewrite Hin' in Hin.
-        now rewrite DefSpec.
+        now rewrite NextSpec.
       - rewrite PSE.MP.Dec.F.not_mem_iff; intro Hin'; rewrite Hin' in Hin.
         now rewrite VarSpec.
     Qed.
 
-    Lemma Is_defined_in_adds_defined_tc:
-      forall tcs defs tc x,
-        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
-        (PS.In x (ps_adds (defined_tc tc) defs) <-> Is_defined_in x (tc :: tcs)).
+    Lemma not_well_sch_resets_spec:
+      forall tcs args frees nexts tc,
+        (forall x, PS.In x frees <-> Is_free_in x (tc::tcs)) ->
+        (forall x, PS.In x nexts <-> Is_next_in x tcs) ->
+        forallb (check_reset frees nexts) (resets_of [tc]) = false ->
+        ~ Is_well_sch args mems (tc :: tcs).
     Proof.
-      intros * DefSpec; split; intro Hin;
+      intros * FreeSpec ResetSpec E Wsch.
+      inversion_clear Wsch as [|??? _ Hreset _].
+      apply forallb_exists in E as (?&Hin&Hcheck).
+      apply resets_of_In in Hin as (?&Hin).
+      inv Hin. 2:inv H1.
+      rewrite <- Bool.not_true_iff_false, check_reset_spec, FreeSpec, ResetSpec in Hcheck.
+      eauto.
+    Qed.
+
+    Lemma Is_free_in_free_tc:
+      forall tcs frees tc x,
+        (forall x, PS.In x frees <-> Is_free_in x tcs) ->
+        (PS.In x (free_in_tc tc frees) <-> Is_free_in x (tc :: tcs)).
+    Proof.
+      intros * FreeSpec.
+      rewrite free_in_tc_spec, FreeSpec.
+      split; intro Hin; (inv Hin; [left|right]); auto.
+    Qed.
+
+    Lemma Is_reset_in_adds_resets_tc:
+      forall tcs resets tc x,
+        (forall x, PS.In x resets <-> exists ck, Is_reset_in x ck tcs) ->
+        (PS.In x (ps_adds (resets_of [tc]) resets) <-> exists ck, Is_reset_in x ck (tc :: tcs)).
+    Proof.
+      intros * ResetSpec; split; [intro Hin|intros (?&Hin)];
+        [apply ps_adds_spec in Hin as [|]|apply ps_adds_spec; inv Hin].
+      - apply resets_of_In in H as (ck&H). apply Exists_singl in H. exists ck.
+        left; auto.
+      - apply ResetSpec in H as (ck&H). exists ck. right; auto.
+      - left. apply resets_of_In. exists x0. left; auto.
+      - right. rewrite ResetSpec; eauto.
+    Qed.
+
+    Lemma Is_next_in_adds_next_tc:
+      forall tcs defs tc x,
+        (forall x, PS.In x defs <-> Is_next_in x tcs) ->
+        (PS.In x (ps_adds (nexts_of [tc]) defs) <-> Is_next_in x (tc :: tcs)).
+    Proof.
+      intros * NextSpec; split; intro Hin;
         [apply ps_adds_spec in Hin as [|]|apply ps_adds_spec; inv Hin];
-        try (now left; apply Is_defined_in_defined_tc; auto);
-        try (now right; apply DefSpec; auto); auto.
+        try (now right; apply NextSpec; auto); auto.
+      - apply nexts_of_In, Exists_singl in H. left; auto.
+      - left. apply nexts_of_In. left; auto.
+    Qed.
+
+    Lemma Is_step_in_adds_step_tc:
+      forall tcs steps tc x,
+        (forall x, PS.In x steps <-> Is_step_in x tcs) ->
+        (PS.In x (ps_adds (step_tc tc) steps) <-> Is_step_in x (tc :: tcs)).
+    Proof.
+      intros * StepSpec; split; intro Hin;
+        [apply ps_adds_spec in Hin as [|]|apply ps_adds_spec; inv Hin];
+        try (now right; apply StepSpec; auto); auto.
+      1,2:left; apply Is_step_in_step_tc; auto.
     Qed.
 
     Lemma Is_variable_in_variables_tc:
@@ -468,17 +479,19 @@ Module Type STCWELLDEFINED
     Qed.
 
     Lemma well_sch_pre_spec:
-      forall args tcs ok defs vars subs,
+      forall args tcs ok frees nexts vars steps,
         fold_right check_tc (true,
                              PS.empty,
+                             PS.empty,
                              ps_from_list args,
-                             PNS.empty) tcs = (ok, defs, vars, subs) ->
+                             PS.empty) tcs = (ok, frees, nexts, vars, steps) ->
         if ok
         then
           Is_well_sch args mems tcs
-          /\ (forall x, PS.In x defs <-> Is_defined_in x tcs)
+          /\ (forall x, PS.In x frees <-> Is_free_in x tcs)
+          /\ (forall x, PS.In x nexts <-> Is_next_in x tcs)
           /\ (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args)
-          /\ (forall i k, PNS.In (i, k) subs <-> Is_sub_in i k tcs)
+          /\ (forall i, PS.In i steps <-> Is_step_in i tcs)
         else
           ~Is_well_sch args mems tcs.
     Proof.
@@ -486,76 +499,70 @@ Module Type STCWELLDEFINED
       - simpl; inversion_clear 1; intuition; try (now constructor);
           repeat match goal with
                  | H:PS.In _ PS.empty |- _ => apply PS.empty_spec in H; contradiction
-                 | H:PNS.In _ PNS.empty |- _ => apply PNS.empty_spec in H; contradiction
-                 | H:Is_defined_in _ nil |- _ => inversion H
+                 | H:Is_free_in _ nil |- _ => inversion H
+                 | H:Is_next_in _ nil |- _ => inversion H
                  | H:Is_variable_in _ nil |- _ => inversion H
-                 | H:Is_sub_in _ _ nil |- _ => inversion H
+                 | H:Is_step_in _ nil |- _ => inversion H
                  | H: context[ps_from_list _] |- _ =>
                    apply ps_from_list_In in H
                  | _ => intuition
                  end.
         apply ps_from_list_In; auto.
       - simpl; intros * HH.
-        destruct (fold_right check_tc (true, PS.empty, ps_from_list args, PNS.empty) tcs)
-          as [[[ok' defs'] vars'] subs'].
-        specialize (IHtcs ok' defs'  vars' subs' eq_refl).
+        destruct (fold_right check_tc (true, PS.empty, PS.empty, ps_from_list args, PS.empty) tcs)
+          as [[[[ok' frees'] nexts'] vars'] steps'].
+        specialize (IHtcs ok' frees' nexts' vars' steps' eq_refl).
         simpl in HH.
         destruct ok'.
-        + destruct IHtcs as (Wsch & DefSpec & VarSpec & SubSpec).
-          assert (forall x, PS.In x (ps_adds (defined_tc tc) defs') <-> Is_defined_in x (tc :: tcs))
-            by (intros; eapply Is_defined_in_adds_defined_tc; eauto).
+        + destruct IHtcs as (Wsch & FreeSpec & NextSpec & VarSpec & StepSpec).
+          assert (forall x, PS.In x (free_in_tc tc frees') <-> Is_free_in x (tc :: tcs)) as FreeSpec'
+            by (intros; eapply Is_free_in_free_tc; eauto).
+          assert (forall x, PS.In x (ps_adds (nexts_of [tc]) nexts') <-> Is_next_in x (tc :: tcs))
+            by (intros; eapply Is_next_in_adds_next_tc; eauto).
           assert (forall x, PS.In x (ps_adds (variables_tc tc) vars') <-> Is_variable_in x (tc :: tcs) \/ In x args)
             by (intros; eapply Is_variable_in_variables_tc; eauto).
-          destruct (sub_tc tc) as [(i, k)|] eqn: St.
+          assert (forall x, PS.In x (ps_adds (step_tc tc) steps') <-> Is_step_in x (tc :: tcs))
+            by (intros; eapply Is_step_in_adds_step_tc; eauto).
+          destruct (ireset_tc tc) as [i|] eqn: St.
           *{ destruct ok; inversion HH as [E]; clear HH.
-             - apply Bool.andb_true_iff in E as (E & E').
-               apply PNS.for_all_spec in E; auto.
+             - repeat rewrite Bool.andb_true_iff in E. destruct E as (E & E' & E'').
+               apply check_ireset_spec in E; auto.
                apply PS.for_all_spec in E'; auto.
-               split; [|split; [|split]]; auto.
-               + constructor; auto.
-                 * intros; eapply free_spec; eauto.
-                 * intros * Hin; apply Is_sub_in_sub_tc in Hin; rewrite Hin in St; inv St.
-                   apply Forall_forall; intros.
-                   assert (Is_sub_in i k' tcs) as Hst
-                       by (apply Exists_exists; eexists; intuition; eauto).
-                   apply SubSpec in Hst; apply E in Hst.
-                   apply check_sub_spec in Hst; auto.
-               + rewrite <-Is_sub_in_sub_tc in St.
-                 intros i' k'; split; rewrite PNS.add_spec.
-                 *{ intros [Tc|Hin].
-                    - apply pair_tc in Tc; inv Tc; left; auto.
-                    - apply SubSpec in Hin; right; auto.
-                  }
-                 *{ rewrite pair_tc; inversion_clear 1 as [?? St'|].
-                    - inv St; inv St'; auto.
-                    - right; apply SubSpec; auto.
-                  }
+               apply forallb_Forall in E''.
+               split; [|split; [|split; [|split]]]; auto.
+               constructor; auto.
+               + intros; eapply free_spec; eauto.
+               + intros * Hreset.
+                 assert (In x (resets_of [tc])) as Hin by (eapply reset_of_In; eauto).
+                 eapply Forall_forall in Hin; eauto.
+                 rewrite check_reset_spec, FreeSpec', NextSpec in Hin; auto.
+               + intros * Hin. inv Hin. inv St.
+                 rewrite <- StepSpec; auto.
 
-             - apply Bool.andb_false_iff in E as [E|];
-                 [|eapply not_well_sch_vars_defs_spec; eauto].
-               inversion_clear 1 as [|???? Hsubs].
-               rewrite <-Is_sub_in_sub_tc in St.
-               apply Hsubs in St.
-               apply PNS_not_for_all_spec in E; apply E; clear E.
-               intros (i', k') Hin.
-               apply check_sub_spec; intros; subst.
-               apply SubSpec in Hin.
-               eapply Forall_Exists, Exists_exists in Hin as (?&?& Spec & St'); eauto; auto.
+             - repeat rewrite Bool.andb_false_iff in E. destruct E as [E|[E|E]].
+               + inversion_clear 1 as [|????? Hsubs].
+                 apply Is_ireset_in_ireset_tc in St as (?&St).
+                 apply Hsubs in St.
+                 rewrite <-StepSpec, <-check_ireset_spec in St.
+                 congruence.
+               + eapply not_well_sch_vars_defs_spec; eauto.
+               + eapply not_well_sch_resets_spec; eauto.
            }
           *{ destruct ok; inversion HH as [E].
-             - apply PS.for_all_spec in E; try apply check_var_compat.
-               split; [|split; [|split]]; auto.
-               + constructor; auto.
-                 * intros; eapply free_spec; eauto.
-                 * intros * Hin; apply Is_sub_in_sub_tc in Hin; rewrite Hin in St; inv St.
-               + subst; setoid_rewrite SubSpec.
-                 split.
-                 * right; auto.
-                 * rewrite <-not_Some_is_None in St.
-                   specialize (St (i, k)).
-                   rewrite <-Is_sub_in_sub_tc in St.
-                   inversion 1; auto; contradiction.
-             - eapply not_well_sch_vars_defs_spec; eauto.
+             - repeat rewrite Bool.andb_true_iff in E. destruct E as (E&E').
+               apply PS.for_all_spec in E; try apply check_var_compat.
+               split; [|split; [|split; [|split]]]; auto.
+               constructor; auto.
+               + intros; eapply free_spec; eauto.
+               + intros * Hreset.
+                 rewrite forallb_Forall in E'.
+                 assert (In x (resets_of [tc])) as Hin by (eapply reset_of_In; eauto).
+                 eapply Forall_forall in Hin; eauto.
+                 rewrite check_reset_spec, FreeSpec', NextSpec in Hin; auto.
+               + intros * Hin. inv Hin. inv St.
+             - repeat rewrite Bool.andb_false_iff in E. destruct E as [E|E].
+               + eapply not_well_sch_vars_defs_spec; eauto.
+               + eapply not_well_sch_resets_spec; eauto.
            }
 
         + inv HH; inversion 1; auto.
@@ -571,9 +578,9 @@ Module Type STCWELLDEFINED
       pose proof (well_sch_pre_spec args tcs) as Spec.
       unfold well_sch.
       destruct (fold_right check_tc
-                  (true, PS.empty, ps_from_list args, PNS.empty) tcs)
-        as [[[ok defs] vars] subs]; simpl.
-      specialize (Spec ok defs vars subs eq_refl).
+                  (true, PS.empty, PS.empty, ps_from_list args, PS.empty) tcs)
+        as [[[[ok resets] nexts] vars] subs]; simpl.
+      specialize (Spec ok resets nexts vars subs eq_refl).
       destruct ok; intuition.
     Qed.
 
@@ -600,6 +607,44 @@ Module Type STCWELLDEFINED
 
   End Decide.
 
+  (** *** Result of scheduling : Reset constraints always appear before Nexts,
+          and Resets always appear before Steps *)
+
+  Lemma Is_well_sch_Reset_Next : forall inputs mems x ck ro tcs,
+      Is_well_sch inputs mems (TcReset x ck ro :: tcs) ->
+      ~Is_next_in x tcs.
+  Proof.
+    intros * Sch.
+    inversion_clear Sch.
+    specialize (H1 _ _ (ResetTcReset _ _ _)) as (?&?); auto.
+  Qed.
+
+  Lemma Is_well_sch_Reset_Step : forall inputs mems i ck f tcs,
+      Is_well_sch inputs mems (TcInstReset i ck f :: tcs) ->
+      ~Is_step_in i tcs.
+  Proof.
+    intros * Sch.
+    inversion_clear Sch.
+    eapply H2. constructor.
+  Qed.
+
+  Lemma Is_well_sch_free_Reset : forall inputs mems tcs tc tcs' x,
+      Is_well_sch inputs mems ((tcs ++ [tc]) ++ tcs') ->
+      Is_free_in_tc x tc ->
+      ~exists ck, Is_reset_in x ck (tcs ++ [tc]).
+  Proof.
+    induction tcs; intros * Wsch Free (ck&Reset); simpl in *;
+      inversion_clear Wsch as [|?? Wsch' _ Resets _].
+    - inv Reset. 2:inv H0.
+      apply Resets in H0 as (NFree&_).
+      apply NFree. left; auto.
+    - inv Reset.
+      + inv H0.
+        specialize (Resets _ _ (ResetTcReset _ _ _)) as (NFree&_).
+        apply NFree. right. repeat rewrite Exists_app'; auto.
+      + eapply IHtcs in Wsch'; eauto.
+  Qed.
+
 End STCWELLDEFINED.
 
 Module StcWellDefinedFun
@@ -610,10 +655,10 @@ Module StcWellDefinedFun
        (Syst  : STCISSYSTEM   Ids Op CESyn Syn)
        (Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Last  : STCISLAST     Ids Op CESyn Syn)
-       (Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Reset : STCISRESET     Ids Op CESyn Syn)
+       (Next  : STCISNEXT     Ids Op CESyn Syn)
        (CEIsF : CEISFREE      Ids Op CESyn)
        (Free  : STCISFREE     Ids Op CESyn Syn CEIsF)
-<: STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free.
-  Include STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free.
+<: STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Reset Next CEIsF Free.
+  Include STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Reset Next CEIsF Free.
 End StcWellDefinedFun.

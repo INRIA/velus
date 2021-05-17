@@ -142,21 +142,25 @@ Module Type LCLOCKING
         clockof e2 = [ck] ->
         wc_exp (Ebinop op e1 e2 (ty, (ck, None)))
 
-    | wc_Efby: forall e0s es anns,
+    | wc_Efby: forall e0s es er anns,
         Forall wc_exp e0s ->
         Forall wc_exp es ->
+        Forall wc_exp er ->
         Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
         Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
+        Forall (fun e => exists ck, clockof e = [ck]) er ->
         Forall unnamed_stream anns ->
-        wc_exp (Efby e0s es anns)
+        wc_exp (Efby e0s es er anns)
 
-    | wc_Earrow: forall e0s es anns,
+    | wc_Earrow: forall e0s es er anns,
         Forall wc_exp e0s ->
         Forall wc_exp es ->
+        Forall wc_exp er ->
         Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
         Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
+        Forall (fun e => exists ck, clockof e = [ck]) er ->
         Forall unnamed_stream anns ->
-        wc_exp (Earrow e0s es anns)
+        wc_exp (Earrow e0s es er anns)
 
     | wc_Ewhen: forall es x b tys ck,
         Forall wc_exp es ->
@@ -187,21 +191,14 @@ Module Type LCLOCKING
         0 < length tys ->
         wc_exp (Eite e ets efs (tys, (ck, None)))
 
-    | wc_Eapp: forall f es anns n bck sub,
+    | wc_Eapp: forall f es er anns n bck sub,
         Forall wc_exp es ->
+        Forall wc_exp er ->
         find_node f G = Some n ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es) ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
-        wc_exp (Eapp f es None anns)
-
-    | wc_EappReset: forall f es r ckr anns n bck sub,
-        Forall wc_exp es ->
-        find_node f G = Some n ->
-        Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es) ->
-        Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
-        wc_exp r ->
-        clockof r = [ckr] ->
-        wc_exp (Eapp f es (Some r) anns).
+        Forall (fun e => exists ck, clockof e = [ck]) er ->
+        wc_exp (Eapp f es er anns).
 
   Definition wc_equation (xses : equation) : Prop :=
     let (xs, es) := xses in
@@ -268,26 +265,32 @@ Module Type LCLOCKING
         P (Ebinop op e1 e2 (ty, (ck, None))).
 
     Hypothesis EfbyCase:
-      forall e0s es anns,
+      forall e0s es er anns,
         Forall (wc_exp G vars) e0s ->
         Forall (wc_exp G vars) es ->
+        Forall (wc_exp G vars) er ->
         Forall P es ->
         Forall P e0s ->
+        Forall P er ->
         Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
         Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
+        Forall (fun e => exists ck, clockof e = [ck]) er ->
         Forall unnamed_stream anns ->
-        P (Efby e0s es anns).
+        P (Efby e0s es er anns).
 
     Hypothesis EarrowCase:
-      forall e0s es anns,
+      forall e0s es er anns,
         Forall (wc_exp G vars) e0s ->
         Forall (wc_exp G vars) es ->
+        Forall (wc_exp G vars) er ->
         Forall P es ->
         Forall P e0s ->
+        Forall P er ->
         Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
         Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
+        Forall (fun e => exists ck, clockof e = [ck]) er ->
         Forall unnamed_stream anns ->
-        P (Earrow e0s es anns).
+        P (Earrow e0s es er anns).
 
     Hypothesis EwhenCase:
       forall es x b tys ck,
@@ -328,35 +331,28 @@ Module Type LCLOCKING
         P (Eite e ets efs (tys, (ck, None))).
 
     Hypothesis EappCase:
-      forall f es anns n bck sub,
+      forall f es er anns n bck sub,
         Forall (wc_exp G vars) es ->
+        Forall (wc_exp G vars) er ->
         Forall P es ->
+        Forall P er ->
         find_node f G = Some n ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es) ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
-        P (Eapp f es None anns).
-
-    Hypothesis EappResetCase:
-      forall f es r ckr anns n bck sub,
-        Forall (wc_exp G vars) es ->
-        Forall P es ->
-        find_node f G = Some n ->
-        Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es) ->
-        Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
-        wc_exp G vars r ->
-        clockof r = [ckr] ->
-        P r ->
-        P (Eapp f es (Some r) anns).
+        Forall (fun e => exists ck, clockof e = [ck]) er ->
+        P (Eapp f es er anns).
 
     Fixpoint wc_exp_ind2 (e: exp) (H: wc_exp G vars e) {struct H} : P e.
     Proof.
       destruct H; eauto.
       - apply EfbyCase; auto.
-        + clear H2. induction H0; auto.
-        + clear H1. induction H; auto.
+        + clear H3. induction H0; auto.
+        + clear H2. induction H; auto.
+        + clear H4. induction H1; auto.
       - apply EarrowCase; auto.
-        + clear H2. induction H0; auto.
-        + clear H1. induction H; auto.
+        + clear H3. induction H0; auto.
+        + clear H2. induction H; auto.
+        + clear H4. induction H1; auto.
       - apply EwhenCase; auto.
         clear H1 H2. induction H; auto.
       - apply EmergeCase; auto.
@@ -366,9 +362,8 @@ Module Type LCLOCKING
         clear H3 H5. induction H0; auto.
         clear H4 H6. induction H1; auto.
       - eapply EappCase; eauto.
-        clear H0 H1. induction H; eauto.
-      - eapply EappResetCase; eauto.
-        clear H0 H1 H2. induction H; eauto.
+        + clear H2 H3. induction H; eauto.
+        + clear H4. induction H0; eauto.
     Qed.
 
   End wc_exp_ind2.
@@ -692,12 +687,8 @@ Module Type LCLOCKING
         end
       end.
 
-    Definition check_reset (rt : option (option (list nclock))) : bool :=
-      match rt with
-      | None => true
-      | Some (Some [nckr]) => true
-      | _ => false
-      end.
+    Definition check_reset (ckr : list (list nclock)) : bool :=
+      forallb (fun cks => match cks with [ck] => true | _ => false end) ckr.
 
     Lemma nclockof_clockof:
       forall e xs ys,
@@ -736,16 +727,18 @@ Module Type LCLOCKING
         | _ => None
         end
 
-      | Efby e0s es anns =>
+      | Efby e0s es er anns =>
         do nc0s <- oconcat (map check_exp e0s);
         do ncs <- oconcat (map check_exp es);
-        if forall3b check_paired_clocks nc0s ncs anns
+        do nr <- omap check_exp er;
+        if forall3b check_paired_clocks nc0s ncs anns && check_reset nr
         then Some (map snd anns) else None
 
-      | Earrow e0s es anns =>
+      | Earrow e0s es er anns =>
         do nc0s <- oconcat (map check_exp e0s);
         do ncs <- oconcat (map check_exp es);
-        if forall3b check_paired_clocks nc0s ncs anns
+        do nr <- omap check_exp er;
+        if forall3b check_paired_clocks nc0s ncs anns && check_reset nr
         then Some (map snd anns) else None
 
       | Ewhen es x b (tys, nc) =>
@@ -774,9 +767,10 @@ Module Type LCLOCKING
                        && (length tys <>b 0)
         then Some (map (fun _ => nc') tys) else None
 
-      | Eapp f es ro anns =>
+      | Eapp f es er anns =>
         do n <- find_node f G;
         do nces <- oconcat (map check_exp es);
+        do nr <- omap check_exp er;
         do nin0 <- option_map (fun '(_, (_, ck)) => ck) (hd_error n.(n_in));
         do nces0 <- option_map fst (hd_error nces);
         do bck <- find_base_clock nin0 nces0;
@@ -786,7 +780,7 @@ Module Type LCLOCKING
                      n.(n_in) nces)
            && (forall2b (fun '(_, (_, ck)) '(_, (ck', _)) => check_inst bck sub ck ck')
                         n.(n_out) anns)
-           && (check_reset (option_map check_exp ro))
+           && (check_reset nr)
         then Some (map snd anns) else None
 
       | _ => None end.
@@ -927,6 +921,25 @@ Module Type LCLOCKING
       intros * Ies Fe. apply WTf in Fe; auto with datatypes.
     Qed.
 
+    Lemma omap_check_exp':
+      forall {f} es cks,
+        (forall e cks,
+            In e es ->
+            f e = Some cks ->
+            wc_exp G (Env.elements venv) e /\ nclockof e = cks) ->
+        omap f es = Some cks ->
+        Forall (wc_exp G (Env.elements venv)) es
+        /\ Forall2 (fun e ck => nclockof e = ck) es cks.
+    Proof.
+      induction es as [|e es IH]; intros cks WTf CE. now inv CE; auto.
+      simpl in CE. destruct (f e) eqn:Ce; [|now omonadInv CE].
+      destruct (omap f es) as [ces|]; [|now omonadInv CE].
+      omonadInv CE. simpl.
+      apply WTf in Ce as (Ce1 & Ce2); auto with datatypes.
+      destruct (IH ces) as (? & ?); auto.
+      intros * Ies Fe. apply WTf in Fe; auto with datatypes.
+    Qed.
+
     Lemma find_add_isub:
       forall sub x tc ck nm,
         ~Env.In x sub ->
@@ -1034,6 +1047,16 @@ Module Type LCLOCKING
       1,2:erewrite IHxc in Heq0; [|eauto]; inv Heq0; auto.
     Qed.
 
+    Lemma check_reset_correct: forall cks,
+        check_reset cks = true ->
+        Forall (fun cks => exists ck, cks = [ck]) cks.
+    Proof.
+      intros * Che.
+      eapply forallb_Forall in Che.
+      eapply Forall_impl; [|eauto]. intros ? Eq.
+      destruct a as [|? [|? ?]]; try congruence; eauto.
+    Qed.
+
     Lemma check_exp_correct:
       forall e ncks,
         check_exp e = Some ncks ->
@@ -1092,16 +1115,28 @@ Module Type LCLOCKING
         repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
         apply oconcat_map_check_exp' in OE1 as (? & ?); auto. subst.
+        apply omap_check_exp' in OE2 as (? & ?); auto. subst.
         repeat take (map stripname _ = map clock_of_nclock _)
                and rewrite <-clocksof_nclocksof in it.
-        eauto using wc_exp.
+        split; eauto. econstructor; eauto.
+        eapply check_reset_correct in H3.
+        eapply Forall2_ignore1' in H3. 2:symmetry; eapply Forall2_length; eauto.
+        eapply Forall2_Forall2, Forall2_ignore2 in H6; eauto.
+        eapply Forall_impl; [|eauto]. intros ? (?&?&(?&?)&?); subst.
+        rewrite clockof_nclockof, H7; simpl; eauto.
       - (* Earrow *)
         repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
         apply oconcat_map_check_exp' in OE1 as (? & ?); auto. subst.
+        apply omap_check_exp' in OE2 as (? & ?); auto. subst.
         repeat take (map stripname _ = map clock_of_nclock _)
                and rewrite <-clocksof_nclocksof in it.
-        eauto using wc_exp.
+        split; eauto. econstructor; eauto.
+        eapply check_reset_correct in H3.
+        eapply Forall2_ignore1' in H3. 2:symmetry; eapply Forall2_length; eauto.
+        eapply Forall2_Forall2, Forall2_ignore2 in H6; eauto.
+        eapply Forall_impl; [|eauto]. intros ? (?&?&(?&?)&?); subst.
+        rewrite clockof_nclockof, H7; simpl; eauto.
       - (* Ewhen *)
         take (Forall _ es) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
@@ -1130,7 +1165,7 @@ Module Type LCLOCKING
         apply IHe in AS as (? & ?); auto.
         eauto using wc_exp, nclockof_clockof.
       - (* Eapp *)
-        take (Forall _ _) and rewrite Forall_forall in it.
+        repeat take (Forall _ _) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
              apply oconcat_map_check_exp' in it as (? & ?); auto.
         take (nclocksof _ = _) and rewrite <- it in *; clear it.
@@ -1182,13 +1217,13 @@ Module Type LCLOCKING
           rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND.
           rewrite app_assoc in ND. apply NoDupMembers_app_l in ND. auto. }
 
-        destruct ro;
-          simpl in *; cases_eqn Heq; subst;
-            try match goal with H:check_exp ?e = Some [?nc] |- _ => destruct nc end;
-            econstructor; eauto;
-            take (forall ncks, Some _ = Some ncks -> _ /\ _) and rename it into CE;
-            specialize (CE _ eq_refl) as (CE1 & CE2); eauto.
-        now apply nclockof_clockof with (1:=CE2).
+        eapply omap_check_exp' in OE2 as (? & ?); eauto.
+        econstructor; eauto.
+        eapply check_reset_correct in H2.
+        eapply Forall2_ignore1' in H2. 2:symmetry; eapply Forall2_length; eauto.
+        eapply Forall2_Forall2, Forall2_ignore2 in H4; eauto.
+        eapply Forall_impl; [|eauto]. intros ? (?&?&(?&?)&?); subst.
+        rewrite clockof_nclockof, H7; simpl; eauto.
     Qed.
 
     Lemma oconcat_map_check_exp:
@@ -1647,19 +1682,19 @@ Module Type LCLOCKING
       intros id Hin; inv Hin... inv H.
     - (* fby *)
       replace (anon_streams _) with (@nil (ident * clock)).
-      2: { clear H H0 H4 H5 H6 H7.
-           induction a; simpl; auto. inv H8.
+      2: { clear - H12.
+           induction a; simpl; auto. inv H12.
            rewrite <- IHa... unfold unnamed_stream in H1.
            destruct a as [ty [ck id]]; simpl in *; subst. reflexivity. }
       apply incl_nil'.
     - (* arrow *)
       replace (anon_streams _) with (@nil (ident * clock)).
-      2: { clear H H0 H4 H5 H6 H7.
-           induction a; simpl; auto. inv H8.
+      2: { clear - H12.
+           induction a; simpl; auto. inv H12.
            rewrite <- IHa... unfold unnamed_stream in H1.
            destruct a as [ty [ck id]]; simpl in *; subst. reflexivity. }
       apply incl_nil'.
-    - (* when *)
+     - (* when *)
       replace (anon_streams _) with (@nil (ident * clock)).
       2: { clear H H4 H5 H6 H7.
            induction tys; simpl; auto. }
@@ -1674,10 +1709,6 @@ Module Type LCLOCKING
       2: { clear H H0 H5 H6 H7 H8 H9 H10 H11 H12 H13.
            induction tys; simpl; auto. }
       apply incl_nil'.
-    - (* app *)
-      unfold idck. rewrite map_app.
-      apply incl_appr, incl_appr.
-      rewrite anon_streams_anon_streams. reflexivity.
     - (* app *)
       unfold idck. repeat rewrite map_app.
       apply incl_appr, incl_appr, incl_appr.
@@ -1865,9 +1896,9 @@ Module Type LCLOCKING
           -- eapply preserving_sub_incl3. 1:eapply incl_tl, only_depends_on_frees_in_clock...
              eapply preserving_sub_incl2... apply incl_appr, incl_refl.
       + eapply Forall_impl; [|eauto].
-          intros. eapply wc_clock_incl; eauto.
-          apply incl_appr'.
-          destruct y as [ck [id|]]; [apply incl_tl|]; apply incl_refl.
+        intros. eapply wc_clock_incl; eauto.
+        apply incl_appr'.
+        destruct y as [ck [id|]]; [apply incl_tl|]; apply incl_refl.
   Qed.
 
   Corollary WellInstantiated_wc_clocks : forall vars' bck sub xs ys,
@@ -1895,7 +1926,11 @@ Module Type LCLOCKING
       Forall (wc_clock (vars++idck (fresh_in e))) (clockof e).
   Proof with eauto.
     Local Ltac Forall_clocksof :=
-      unfold clocksof; rewrite flat_map_concat_map;
+      match goal with
+      | |- Forall _ (clocksof ?es) =>
+        replace (clocksof es) with (concat (map clockof es))
+          by (unfold clocksof; rewrite flat_map_concat_map; auto)
+      end;
       apply Forall_concat; rewrite Forall_map;
       rewrite Forall_forall in *; intros ? Hin; eauto.
 
@@ -1919,15 +1954,15 @@ Module Type LCLOCKING
       eapply wc_clock_incl; eauto.
       eapply incl_appr', incl_map, incl_appl, incl_refl.
     - (* fby *)
-      rewrite Forall2_eq in H6, H7. unfold clock_of_nclock, stripname in H6; rewrite H6.
+      rewrite Forall2_eq in H9, H10. unfold clock_of_nclock, stripname in H9; rewrite H9.
       Forall_clocksof...
-      specialize (H _ Hin (H4 _ Hin)). rewrite Forall_forall in *; intros.
-        apply H in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, incl_appl, fresh_in_incl, Hin.
+      specialize (H _ Hin (H6 _ Hin)). rewrite Forall_forall in *; intros.
+        apply H in H2. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, incl_appl, fresh_in_incl, Hin.
     - (* arrow *)
-      rewrite Forall2_eq in H6, H7. unfold clock_of_nclock, stripname in H6; rewrite H6.
+      rewrite Forall2_eq in H9, H10. unfold clock_of_nclock, stripname in H9; rewrite H9.
       Forall_clocksof...
-      specialize (H _ Hin (H4 _ Hin)). rewrite Forall_forall in *; intros.
-        apply H in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, incl_appl, fresh_in_incl, Hin.
+      specialize (H _ Hin (H6 _ Hin)). rewrite Forall_forall in *; intros.
+        apply H in H2. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, incl_appl, fresh_in_incl, Hin.
     - (* when *)
       destruct tys; [simpl in *; auto|].
       rewrite Forall_map. eapply Forall_forall; intros ? _.
@@ -1967,51 +2002,17 @@ Module Type LCLOCKING
     - (* app *)
       assert (Forall (wc_clock (vars++idck (fresh_ins es))) (clocksof es)) as Hwc.
       { Forall_clocksof.
-        specialize (H0 _ Hin (H5 _ Hin)). rewrite Forall_forall in *; intros.
-        apply H0 in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, fresh_in_incl, Hin.
+        specialize (H _ Hin (H5 _ Hin)). rewrite Forall_forall in *; intros.
+        apply H in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, fresh_in_incl, Hin.
       } clear H.
-      eapply wc_find_node in H6 as [G' Hwcnode]...
+      eapply wc_find_node in H7 as [G' Hwcnode]...
       assert (wc_clock (vars ++ idck (fresh_ins es)) bck) as Hbck.
-      { eapply WellInstantiated_bck in H7...
-        + rewrite <- clocksof_nclocksof in H7.
-          rewrite Forall_forall in Hwc. apply Hwc in H7...
+      { eapply WellInstantiated_bck in H8...
+        + rewrite <- clocksof_nclocksof in H8.
+          rewrite Forall_forall in Hwc. apply Hwc in H8...
         + destruct Hwcnode as [? _]...
         + unfold idck. rewrite map_length. apply n_ingt0... }
-      specialize (Forall2_app H7 H8) as Hinst.
-      eapply WellInstantiated_wc_clocks in Hinst...
-      + rewrite map_app, map_map, Forall_app in Hinst. destruct Hinst as [_ Hinst].
-        eapply Forall_impl; [|eauto].
-        intros; simpl in *. eapply wc_clock_incl...
-        unfold anon_streams; rewrite map_filter_app.
-        repeat rewrite <- app_assoc. repeat apply incl_app.
-        * apply incl_appl, incl_refl.
-        * apply incl_appr, incl_map, incl_appl, incl_refl.
-        * etransitivity. eapply anon_streams_nclocksof_fresh_ins...
-          apply incl_appr', incl_map, incl_appl, incl_refl.
-        * unfold idck; rewrite map_app.
-          apply incl_appr, incl_appr. rewrite anon_streams_anon_streams.
-          reflexivity.
-      + specialize (n_nodup n) as Hndup.
-        repeat rewrite app_assoc in Hndup. eapply NoDupMembers_app_l in Hndup.
-        rewrite <- app_assoc, <- Permutation_swap in Hndup. eapply NoDupMembers_app_r in Hndup.
-        rewrite fst_NoDupMembers in Hndup. rewrite fst_NoDupMembers.
-        unfold idck. rewrite map_app in *. repeat rewrite map_map; simpl...
-      + destruct Hwcnode as [_ [Hwcnode _]].
-        unfold idck in *. rewrite map_app in Hwcnode...
-    - (* app (reset) *)
-      assert (Forall (wc_clock (vars++idck (fresh_ins es))) (clocksof es)) as Hwc.
-      { Forall_clocksof.
-        specialize (H0 _ Hin (H5 _ Hin)). rewrite Forall_forall in *; intros.
-        apply H0 in H1. eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, fresh_in_incl, Hin.
-      } clear H.
-      eapply wc_find_node in H6 as [G' Hwcnode]...
-      assert (wc_clock (vars ++ idck (fresh_ins es)) bck) as Hbck.
-      { eapply WellInstantiated_bck in H7...
-        + rewrite <- clocksof_nclocksof in H7.
-          rewrite Forall_forall in Hwc. apply Hwc in H7...
-        + destruct Hwcnode as [? _]...
-        + unfold idck. rewrite map_length. apply n_ingt0... }
-      specialize (Forall2_app H7 H8) as Hinst.
+      specialize (Forall2_app H8 H9) as Hinst.
       eapply WellInstantiated_wc_clocks in Hinst...
       + rewrite map_app, map_map, Forall_app in Hinst. destruct Hinst as [_ Hinst].
         eapply Forall_impl; [|eauto].
@@ -2166,46 +2167,17 @@ Module Type LCLOCKING
         wc_exp G' vars e.
     Proof with eauto.
       induction e using exp_ind2; intros Heq Hwt; inv Hwt...
-      - (* fby *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
-      - (* arrow *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
-      - (* when *)
-        econstructor...
-        rewrite Forall_forall in *...
-      - (* merge *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
-      - (* ite *)
-        econstructor...
-        + rewrite Forall_forall in *...
-        + rewrite Forall_forall in *...
+      1-5:(econstructor; eauto; rewrite Forall_forall in *; eauto).
       - (* app *)
         assert (Forall (wc_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
+        assert (Forall (wc_exp G' vars) er) as Hwt' by (rewrite Forall_forall in *; eauto).
         specialize (Heq f).
         remember (find_node f G') as find.
         destruct Heq.
         + congruence.
-        + inv H6.
+        + inv H7.
           destruct H1 as [? [? [? ?]]].
           eapply wc_Eapp with (n:=sy)...
-          * rewrite <- H3...
-          * rewrite <- H4...
-      - (* app (reset) *)
-        assert (Forall (wc_exp G' vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
-        assert (wc_exp G' vars r) as Hwt' by (rewrite Forall_forall in *; eauto).
-        specialize (Heq f).
-        remember (find_node f G') as find.
-        destruct Heq.
-        + congruence.
-        + inv H6.
-          destruct H1 as [? [? [? ?]]].
-          eapply wc_EappReset with (n:=sy)...
           * rewrite <- H3...
           * rewrite <- H4...
     Qed.
@@ -2253,12 +2225,14 @@ Module Type LCLOCKING
       + rewrite <- length_clockof_numstreams. rewrite H6. reflexivity.
     - (* fby *)
       constructor; rewrite Forall_forall in *...
-      + apply Forall2_length in H6. rewrite clocksof_annots in H6. repeat rewrite map_length in H6...
-      + apply Forall2_length in H7. rewrite clocksof_annots in H7. repeat rewrite map_length in H7...
+      + apply Forall2_length in H9. rewrite clocksof_annots in H9. repeat rewrite map_length in H9...
+      + apply Forall2_length in H10. rewrite clocksof_annots in H10. repeat rewrite map_length in H10...
+      + intros ? In. eapply H11 in In as (?&Ck). rewrite <- length_clockof_numstreams, Ck; auto.
     - (* arrow *)
       constructor; rewrite Forall_forall in *...
-      + apply Forall2_length in H6. rewrite clocksof_annots in H6. repeat rewrite map_length in H6...
-      + apply Forall2_length in H7. rewrite clocksof_annots in H7. repeat rewrite map_length in H7...
+      + apply Forall2_length in H9. rewrite clocksof_annots in H9. repeat rewrite map_length in H9...
+      + apply Forall2_length in H10. rewrite clocksof_annots in H10. repeat rewrite map_length in H10...
+      + intros ? In. eapply H11 in In as (?&Ck). rewrite <- length_clockof_numstreams, Ck; auto.
     - (* when *)
       constructor; rewrite Forall_forall in *...
       rewrite clocksof_annots, map_length, map_length in H7...
@@ -2274,18 +2248,13 @@ Module Type LCLOCKING
     - (* app *)
       econstructor...
       + rewrite Forall_forall in *...
-      + apply Forall2_length in H7. unfold idck in H7.
-        rewrite nclocksof_annots in H7. repeat rewrite map_length in H7...
-      + apply Forall2_length in H8. unfold idck in H8.
-        repeat rewrite map_length in H8...
-    - (* app (reset) *)
-      econstructor...
       + rewrite Forall_forall in *...
-      + rewrite <- length_clockof_numstreams, H10...
-      + apply Forall2_length in H7. unfold idck in H7.
-        rewrite nclocksof_annots in H7. repeat rewrite map_length in H7...
+      + eapply Forall_impl; [|eauto]. intros ? (?&Ck).
+        rewrite <- length_clockof_numstreams, Ck...
       + apply Forall2_length in H8. unfold idck in H8.
-        repeat rewrite map_length in H8...
+        rewrite nclocksof_annots in H8. repeat rewrite map_length in H8...
+      + apply Forall2_length in H9. unfold idck in H9.
+        repeat rewrite map_length in H9...
   Qed.
   Hint Resolve wc_exp_wl_exp.
 
@@ -2326,6 +2295,7 @@ Module Type LCLOCKING
     induction Hwt; constructor...
   Qed.
   Hint Resolve wc_global_wl_global.
+
 End LCLOCKING.
 
 Module LClockingFun

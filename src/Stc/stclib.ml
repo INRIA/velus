@@ -32,15 +32,16 @@ module type SYNTAX =
 
     type trconstr =
     | TcDef   of ident * clock * cexp
-    | TcNext  of ident * clock * exp
-    | TcReset of ident * clock * ident
-    | TcCall  of ident * idents * clock * bool * ident * exp list
+    | TcReset  of ident * clock * const
+    | TcNext  of ident * clock * clock list * exp
+    | TcInstReset of ident * clock * ident
+    | TcStep  of ident * idents * clock * clock list * ident * exp list
 
     type system = {
       s_name : ident;
       s_in   : (ident * (typ * clock)) list;
       s_vars : (ident * (typ * clock)) list;
-      s_lasts: (ident * (const * clock)) list;
+      s_nexts: (ident * (const * clock)) list;
       s_subs : (ident * ident) list;
       s_out  : (ident * (typ * clock)) list;
       s_tcs  : trconstr list }
@@ -70,7 +71,7 @@ module PrintFun
 
     include Coreexprlib.PrintFun (CE) (PrintOps)
 
-    let print_last p (id, (c0, ck)) =
+    let print_reset p (id, (c0, ck)) =
       fprintf p "%a@ = %a%a"
         print_ident id
         PrintOps.print_const c0
@@ -87,16 +88,21 @@ module PrintFun
         fprintf p "@[<hov 2>%a =@ %a@]"
           print_ident x
           print_cexp e
-      | Stc.TcNext (x, ck, e) ->
+      | Stc.TcReset (x, ckr, c0) ->
+        fprintf p "@[<hov 2>reset@ %a = %a every@ (%a)@]"
+          print_ident x
+          PrintOps.print_const c0
+          print_clock ckr
+      | Stc.TcNext (x, ck, _, e) ->
         fprintf p "@[<hov 2>next@ %a =@ %a@]"
           print_ident x
           print_exp e
-      | Stc.TcReset (s, ck, f) ->
+      | Stc.TcInstReset (s, ck, f) ->
         fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
             print_ident f
             print_ident s
             print_clock ck
-      | Stc.TcCall (i, xs, ck, _, f, es) ->
+      | Stc.TcStep (i, xs, ck, _, f, es) ->
         fprintf p "@[<hov 2>%a =@ %a<%a>(@[<hv 0>%a@])@]"
           print_pattern xs
           print_ident f
@@ -110,7 +116,7 @@ module PrintFun
                          Stc.s_in     = inputs;
                          Stc.s_out    = outputs;
                          Stc.s_vars   = locals;
-                         Stc.s_lasts  = lasts;
+                         Stc.s_nexts  = nexts;
                          Stc.s_subs   = subs;
                          Stc.s_tcs    = tcs } =
       fprintf p "@[<v>\
@@ -125,7 +131,7 @@ module PrintFun
                  @[<v 2>{@;%a@;<0 -2>@]\
                  }@]@]@]@;}"
         print_ident name
-        (print_comma_list_as "init" print_last) lasts
+        (print_comma_list_as "init" print_reset) nexts
         (print_comma_list_as "sub" print_subsystem) subs
         print_decl_list inputs
         print_decl_list outputs
@@ -207,9 +213,10 @@ module SchedulerFun
           end
       (* Standard cases *)
       | TcDef (_, ck, _)
-      | TcNext (_, ck, _)
       | TcReset (_, ck, _)
-      | TcCall (_, _, ck, _, _, _) -> ck
+      | TcNext (_, ck, _, _)
+      | TcInstReset (_, ck, _)
+      | TcStep (_, _, ck, _, _, _) -> ck
 
     let rec clock_path acc = let open CE in function
       | Cbase          -> acc
@@ -253,31 +260,45 @@ module SchedulerFun
       | TcDef (_, ck, ce) ->
         add_clock_deps add_dep_var ck;
         add_cexp_deps add_dep_var ce
-      | TcNext (x, ck, e) ->
+      | TcReset (x, ckr, _) ->
+        add_clock_deps add_dep_var ckr
+      | TcNext (x, ck, _, e) ->
         add_clock_deps add_dep_var ck;
         add_exp_deps (fun y -> if y <> x then add_dep_var y) e
-      | TcReset (_, ck, _) ->
+      | TcInstReset (_, ck, _) ->
         add_clock_deps add_dep_var ck
-      | TcCall (i, _, ck, _, _, es) ->
+      | TcStep (i, _, ck, _, _, es) ->
         add_clock_deps add_dep_var ck;
         List.iter (add_exp_deps add_dep_var) es;
         add_dep_inst i
+
+    let add_reset_dependencies add_dep_next = function
+      | TcReset (x, _, _) ->
+        add_dep_next x
+      | _ -> ()
 
     (** Map variable identifiers to trconstr ids *)
 
     module PM = PositiveMap
 
-    (* Each variable identifier is associated with a pair giving the
-       trconstr (id) that defines it and whether that trconstr is a fby. *)
+    let pm_update key value (map : ('a list) PM.t) =
+      match PM.find key map with
+      | None -> PM.add key [value] map
+      | Some l -> PM.add key (value::l) map
+
+    (* Each variable identifier is associated with a list of pairs giving the
+       trconstr (id) that define (def, step, reset), and possibly remove it (next). *)
     let variable_inst_maps_from_tc id (vars, insts) = function
       | TcDef (x, _, _) ->
-        PM.add x (id, false) vars, insts
-      | TcNext (x, _, _) ->
-        PM.add x (id, true) vars, insts
-      | TcReset (i, _, _) ->
+        PM.add x [(id, false)] vars, insts
+      | TcReset (x, _, _) ->
+        pm_update x (id, false) vars, insts
+      | TcNext (x, _, _, _) ->
+        pm_update x (id, true) vars, insts
+      | TcInstReset (i, _, _) ->
         vars, PM.add i id insts
-      | TcCall (_, xs, _, _, _, _) ->
-        List.fold_left (fun m x -> PM.add x (id, false) m) vars xs, insts
+      | TcStep (_, xs, _, _, _, _) ->
+        List.fold_left (fun m x -> PM.add x [(id, false)] m) vars xs, insts
 
     let fold_left_i f acc l =
       List.fold_left (fun (acc, i) x -> f i acc x, i + 1) (acc, 0) l
@@ -326,11 +347,13 @@ module SchedulerFun
       match List.nth nltcs i with
       | TcDef (x, _, _) ->
         pp_print_string fmt (extern_atom x)
-      | TcNext (x, _, _) ->
-        pp_print_string fmt (extern_atom x)
-      | TcReset (_, _, _) ->
+      | TcReset (x, _, _) ->
+        fprintf fmt "reset %s" (extern_atom x)
+      | TcNext (x, _, _, _) ->
+        fprintf fmt "next %s" (extern_atom x)
+      | TcInstReset (_, _, _) ->
         pp_print_string fmt "_"
-      | TcCall (_, xs, _, _, _, _) ->
+      | TcStep (_, xs, _, _, _, _) ->
         fprintf fmt "{@[<hov 2>%a@]}"
           (pp_print_list ~pp_sep:pp_print_space pp_print_string)
           (List.map extern_atom xs)
@@ -504,15 +527,27 @@ module SchedulerFun
       let add_dep_var xi y =
         match PM.find y varmap with
         | None             -> ()        (* ignore inputs *)
-        | Some (yi, false) -> add xi yi
-        | Some (yi, true)  -> add yi xi (* reverse-deps for fby *)
+        | Some ys ->
+          List.iter (fun (yi, isnext) ->
+              if isnext then add yi xi (* reverse dep for next *)
+              else add xi yi) ys
       in
       let add_dep_inst xi y =
         match PM.find y instmap with
-        | None    -> ()                 (* ignore simple calls *)
+        | None    -> ()                 (* ignore simple steps *)
         | Some yi -> add xi yi
       in
+      let add_dep_next xi y =
+        match PM.find y varmap with
+        | Some ys -> List.iter (fun (yi, isnext) -> if isnext then add yi xi else ()) ys
+        | _ -> ()
+      in
+
+      (* Add dependencies to free variables *)
       List.iteri (fun n -> add_dependencies (add_dep_var n) (add_dep_inst n)) sbtcs;
+
+      (* Add dependencies between reset and next *)
+      List.iteri (fun n -> add_reset_dependencies (add_dep_next n)) sbtcs;
 
       let ct = empty_clock_tree () in
       Array.iter (enqueue_tc ct) tcs;

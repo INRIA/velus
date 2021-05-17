@@ -79,7 +79,7 @@ Module Type COMPLETENESS
     induction e using exp_ind2; inv Hnorm;
       try (eapply to_lexp_complete in H as [e' He'];
            exists (Eexp e'); unfold to_cexp; rewrite He'; simpl; eauto);
-      try (solve [inv H1]).
+      try (solve [inv H1]); try (solve [inv H2]).
     - (* when *)
       eapply to_lexp_complete in H0 as [e' He'].
       exists (Eexp e'). unfold to_cexp. rewrite He'; simpl...
@@ -107,16 +107,14 @@ Module Type COMPLETENESS
     intros * Hnorm Hfind Henvo.
     inv Hnorm.
     - apply mmap_to_lexp_complete in H1 as [es' Hes'].
-      eexists; simpl. rewrite Hes'; simpl...
-    - apply mmap_to_lexp_complete in H1 as [es' Hes'].
-      destruct cl.
-      eexists; simpl. rewrite Hes'. simpl...
-    - apply to_constant_complete in H3 as [e0' He0'].
+      apply vars_of_Some in H5 as (?&Vars).
+      eexists; simpl. rewrite Hes', Vars; simpl...
+    - apply to_constant_complete in H2 as [e0' He0'].
       apply to_lexp_complete in H4 as [e' He'].
-      inv Hfind. destruct H2 as [cl Hcl].
+      inv Hfind. destruct H2 as [? Hck].
+      eapply vars_of_Some in H5 as (?&Vars).
       eexists; simpl.
-      rewrite He0'. rewrite He'. rewrite Hcl.
-      simpl.
+      rewrite He0', He', Hck, Vars; simpl...
       specialize (Henvo x).
       destruct (envo x); simpl...
       exfalso...

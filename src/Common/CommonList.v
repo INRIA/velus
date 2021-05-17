@@ -2795,6 +2795,56 @@ Section Forall3.
   Qed.
 End Forall3.
 
+Section Forall3_map.
+  Context {A B C D : Type}.
+
+  Lemma Forall3_map_1:
+    forall (P : D -> B -> C -> Prop) (f: A -> D) xs ys zs,
+      Forall3 P (map f xs) ys zs <-> Forall3 (fun x y z => P (f x) y z) xs ys zs.
+  Proof.
+    induction xs as [|x xs]; destruct ys as [|y ys]; destruct zs as [|z zs];
+      try (now split; inversion 1; constructor).
+    split; intro HH.
+    - inversion_clear HH.
+      apply Forall3_cons; auto.
+      apply IHxs; auto.
+    - inversion_clear HH.
+      apply Forall3_cons; auto.
+      apply IHxs; auto.
+  Qed.
+
+  Lemma Forall3_map_2:
+    forall (P : A -> D -> C -> Prop) (f: B -> D) xs ys zs,
+      Forall3 P xs (map f ys) zs <-> Forall3 (fun x y z => P x (f y) z) xs ys zs.
+  Proof.
+    induction xs as [|x xs]; destruct ys as [|y ys]; destruct zs as [|z zs];
+      try (now split; inversion 1; constructor).
+    split; intro HH.
+    - inversion_clear HH.
+      apply Forall3_cons; auto.
+      apply IHxs; auto.
+    - inversion_clear HH.
+      apply Forall3_cons; auto.
+      apply IHxs; auto.
+  Qed.
+
+  Lemma Forall3_map_3:
+    forall (P : A -> B -> D -> Prop) (f: C -> D) xs ys zs,
+      Forall3 P xs ys (map f zs) <-> Forall3 (fun x y z => P x y (f z)) xs ys zs.
+  Proof.
+    induction xs as [|x xs]; destruct ys as [|y ys]; destruct zs as [|z zs];
+      try (now split; inversion 1; constructor).
+    split; intro HH.
+    - inversion_clear HH.
+      apply Forall3_cons; auto.
+      apply IHxs; auto.
+    - inversion_clear HH.
+      apply Forall3_cons; auto.
+      apply IHxs; auto.
+  Qed.
+
+End Forall3_map.
+
 Lemma Forall3_forall3 {A B C}:
   forall P l1 l2 l3,
     Forall3 P l1 l2 l3
@@ -3722,6 +3772,101 @@ Proof.
   intros x xs ys S. now split; intro HH; apply S in HH.
 Qed.
 
+(** List equality modulo a given relation and duplicates,
+    defined using and inductive *)
+Section SameElements.
+  Import SetoidList.
+
+  Context {A : Type}.
+  Variable (eqA : A -> A -> Prop).
+
+  (** [SameElements eqA l1 l2] means that [l1] and [l2] contain the same elements wrt the relation [eqA].
+      This is equivalent to [SetoidList.listequivA], but given as an inductive. *)
+  Inductive SameElements : list A -> list A -> Prop :=
+  | SE_nil : SameElements [] []
+  | SE_skip : forall x x' l l',
+      SameElements l l' ->
+      eqA x x' ->
+      SameElements (x::l) (x'::l')
+  | SE_dup1 : forall x l, (* Adding only to one side (1) *)
+      InA eqA x l ->
+      SameElements (x::l) l
+  | SE_dup2 : forall x l, (* Adding only to one side (2) *)
+      InA eqA x l ->
+      SameElements l (x::l)
+  | SE_perm : forall l l', (* Permutes elements *)
+      Permutation l l' ->
+      SameElements l l'
+  | SE_trans : forall l l' l'',
+      SameElements l l' ->
+      SameElements l' l'' ->
+      SameElements l l''.
+  Hint Constructors SameElements.
+End SameElements.
+Hint Constructors SameElements.
+
+Global Instance SameElements_sym {A} : Symmetric (SameElements (@eq A)).
+Proof.
+  intros ?? Same. induction Same; eauto.
+  symmetry in H. eauto.
+Qed.
+
+Section Forall2_SameElements_1.
+  Import SetoidList.
+
+  Context {A B : Type}.
+  Context {eqA : A -> A -> Prop}.
+  Context {eqB : B -> B -> Prop}.
+
+  Hypothesis EqA_refl : Reflexive eqA.
+  Hypothesis EqA_sym : Symmetric eqA.
+  Hypothesis EqB_refl : Reflexive eqB.
+
+  Variable (P : A -> B -> Prop).
+
+  Hypothesis P_proper : forall x x' y y',
+      eqA x x' ->
+      eqB y y' ->
+      P x y ->
+      P x' y'.
+
+  Hypothesis P_det : forall x y y',
+      P x y ->
+      P x y' ->
+      eqB y y'.
+
+  Lemma Forall2_inA_left : forall x l1 l2,
+      Forall2 P l1 l2 ->
+      InA eqA x l1 ->
+      exists y, InA eqB y l2 /\ P x y.
+  Proof.
+    induction l1; intros * F Hin; inv F; inv Hin.
+    - exists y; eauto.
+    - eapply IHl1 with (l2:=l') in H0 as (?&?&?); eauto.
+  Qed.
+
+  Lemma Forall2_SameElements_1 : forall l1 l1' l2,
+      SameElements eqA l1 l1' ->
+      Forall2 P l1 l2 ->
+      exists l2' , SameElements eqB l2 l2' /\ Forall2 P l1' l2'.
+  Proof.
+    intros * Same. revert l2.
+    induction Same; intros l2 Hf.
+    - inv Hf. eauto.
+    - inv Hf.
+      eapply IHSame in H4 as (l2'&?&F').
+      exists (y::l2'); eauto.
+    - inv Hf. assert (Hf:=H4).
+      eapply Forall2_inA_left in H4 as (?&?&?); eauto.
+      exists l'. split; auto.
+      eapply P_det in H1; eauto.
+    - eapply Forall2_inA_left in H as (?&Hin'&HP); eauto.
+    - eapply Forall2_Permutation_1 in H as (?&?&?); eauto.
+    - eapply IHSame1 in Hf as (?&?&Hf').
+      eapply IHSame2 in Hf' as (l2''&?&Hf''); eauto.
+  Qed.
+End Forall2_SameElements_1.
+
 (** Tactics wellfoundedness and termination *)
 
 Section LL.
@@ -4047,8 +4192,17 @@ Section map_filter.
       + eapply IHxs in Hin as [x [Hin Hf']].
         exists x; auto.
   Qed.
-End map_filter.
 
+  Lemma incl_map_filter : forall xs ys,
+      incl xs ys ->
+      incl (map_filter xs) (map_filter ys).
+  Proof.
+    intros * Incl ? In.
+    eapply map_filter_In' in In as (?&In&F).
+    eapply Incl in In.
+    eapply map_filter_In; eauto.
+  Qed.
+End map_filter.
 
 Global Instance Permutation_map_filter_Proper {A B}:
   Proper ((@eq (A -> option B)) ==> Permutation (A:=A) ==> (Permutation (A:=B)))

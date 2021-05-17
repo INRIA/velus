@@ -3,7 +3,8 @@ From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
-From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsReset.
+From Velus Require Import Stc.StcIsNext.
 From Velus Require Import Stc.StcIsVariable.
 From Velus Require Import Stc.StcIsDefined.
 From Velus Require Import Stc.StcIsSystem.
@@ -35,16 +36,17 @@ Module Type STCCLOCKINGSEMANTICS
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : STCSYNTAX           Ids Op       CESyn)
        (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Last     : STCISLAST           Ids Op       CESyn Syn)
+       (Import Reset    : STCISRESET           Ids Op       CESyn Syn)
+       (Import Next     : STCISNEXT           Ids Op       CESyn Syn)
        (Import Var      : STCISVARIABLE       Ids Op       CESyn Syn)
-       (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Last)
+       (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Next)
        (Import Syst     : STCISSYSTEM         Ids Op       CESyn Syn)
        (Import Ord      : STCORDERED          Ids Op       CESyn Syn Syst)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn               Str)
        (Import Sem      : STCSEMANTICS        Ids Op OpAux CESyn Syn Syst Ord Str CESem)
        (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Last Var Def Syst Ord CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem                  CEClo).
+       (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Reset Var Syst Ord CEClo)
+       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem             CEClo).
 
   Lemma sem_clocked_var_instant_tc:
     forall P base R S I S' vars x ck tc,
@@ -60,8 +62,8 @@ Module Type STCCLOCKINGSEMANTICS
     intros ?????????? Ord WCP Nodup Sem WC Def Hin.
     revert dependent ck; revert dependent x; revert dependent vars.
     induction Sem as [????????? Hexp Hvar|
-                      ?????????? Find Hvar Hexp Find'|
-                      ?????????? Clock Find Init|
+                      |
+                      ???????????? Find Hexp Hvar| |
                       ??????????????? Hexps Clock Rst Find System Vars Sub IH|
                       ????????? Find Hins Houts Hvars Htcs ??? IH]
                        using sem_trconstr_mult with
@@ -73,21 +75,25 @@ Module Type STCCLOCKINGSEMANTICS
                          sem_vars_instant R (map fst s.(s_out)) ys ->
                          sem_clocked_vars_instant base R (idck s.(s_in)) ->
                          sem_clocked_vars_instant base R (idck s.(s_out)));
-      intros; try inversion Def as [| |??????? Hyys];
+      intros;
+      try inv Def;
       try inversion WC
-        as [| | |?????? bl' ? sub Hfind' Hfai Hfao]; subst.
+        as [| | | |?????? bl' ? sub Hfind' Hfai Hfao]; subst.
 
-    - match goal with H1:In (x, _) vars, H2:In (x, _) vars |- _ =>
+    - (* TcDef *)
+      match goal with H1:In (x, _) vars, H2:In (x, _) vars |- _ =>
                       eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       unfold sem_clocked_var_instant.
       inv Hexp; eauto; intuition; eauto; by_sem_det.
 
-    - match goal with H1:In (x, _) vars, H2:In (x, _) vars |- _ =>
-        eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
+    - (* TcNext *)
+      match goal with H1:In (x, _) vars, H2:In (x, _) vars |- _ =>
+                    eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       unfold sem_clocked_var_instant.
-      inv Hexp; eauto; intuition; eauto; by_sem_det.
+      inv Hexp; eauto; intuition; eauto; try by_sem_det.
 
-    - inversion_clear System as [?????? R' ?? Hfind Hvi Hvo Hsck].
+    - (* TcStep *)
+      inversion_clear System as [?????? R' ?? Hfind Hvi Hvo Hsck].
       specialize (IH _ _ _ _ Hfind eq_refl Hvi Hvo).
       assert (Hvi' := Hvi).
       rewrite <-map_fst_idck in Hvi'.
@@ -150,7 +156,7 @@ Module Type STCCLOCKINGSEMANTICS
       pose proof Find' as Find; apply find_system_app in Find as (?&?&?); subst.
       apply wc_find_system with (1:=WCP) in Find' as (WCi & WCo & WCv & WCtcs).
       eapply Forall_forall in WCtcs; eauto.
-      assert (NoDupMembers (idck (s_in s ++ s_vars s ++ s_out s) ++ idck (s_lasts s)))
+      assert (NoDupMembers (idck (s_in s ++ s_vars s ++ s_out s) ++ idck (s_nexts s)))
         as Hnd.
       { apply fst_NoDupMembers.
         rewrite map_app, 2 map_fst_idck, 2 map_app, <-2 app_assoc.
@@ -222,16 +228,17 @@ Module StcClockingSemanticsFun
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : STCSYNTAX           Ids Op       CESyn)
        (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Last     : STCISLAST           Ids Op       CESyn Syn)
+       (Import Reset    : STCISRESET           Ids Op       CESyn Syn)
+       (Import Next     : STCISNEXT           Ids Op       CESyn Syn)
        (Import Var      : STCISVARIABLE       Ids Op       CESyn Syn)
-       (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Last)
+       (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Next)
        (Import Syst     : STCISSYSTEM         Ids Op       CESyn Syn)
        (Import Ord      : STCORDERED          Ids Op       CESyn Syn Syst)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn               Str)
        (Import Sem      : STCSEMANTICS        Ids Op OpAux CESyn Syn Syst Ord Str CESem)
        (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Last Var Def Syst Ord CEClo)
+       (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Reset Var Syst Ord CEClo)
        (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem                  CEClo)
-<: STCCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Last Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
-  Include STCCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Last Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
+<: STCCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Reset Next Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
+  Include STCCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Reset Next Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
 End StcClockingSemanticsFun.

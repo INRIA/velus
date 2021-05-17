@@ -114,6 +114,102 @@ Module Type NLCOINDSEMANTICS
   Definition sem_aexp := sem_annot sem_exp.
   Definition sem_caexp := sem_annot sem_cexp.
 
+  CoFixpoint reset1 (v0: val) (xs: Stream value) (rs: Stream bool) (doreset : bool) : Stream value :=
+    match xs, rs, doreset with
+    | absent ⋅ xs, false ⋅ rs, false => absent ⋅ (reset1 v0 xs rs false)
+    | absent ⋅ xs, true ⋅ rs, _
+    | absent ⋅ xs, _ ⋅ rs, true => absent ⋅ (reset1 v0 xs rs true)
+    | present x ⋅ xs, false ⋅ rs, false => present x ⋅ (reset1 v0 xs rs false)
+    | present x ⋅ xs, true ⋅ rs, _
+    | present x ⋅ xs, _ ⋅ rs, true => present v0 ⋅ (reset1 v0 xs rs false)
+    end.
+
+  Definition reset (v0: val) (xs: Stream value) (rs: Stream bool) : Stream value :=
+    reset1 v0 xs rs false.
+
+  Lemma reset_false : forall v0 xs,
+      reset v0 xs (Streams.const false) ≡ xs.
+  Proof.
+    cofix CoFix. intros *.
+    unfold_Stv xs; constructor; simpl; auto.
+    1,2:apply CoFix.
+  Qed.
+
+  Lemma reset1_fby : forall v0 v xs rs,
+      reset1 v0 (sfby v xs) rs true ≡ reset1 v0 (sfby v0 xs) rs false.
+  Proof.
+    intros *.
+    apply ntheq_eqst. intros n. revert n v0 v xs rs.
+    induction n; intros *.
+    1,2:unfold_Stv xs; unfold_Stv rs; simpl; auto.
+    - do 2 rewrite Str_nth_S_tl; simpl.
+      etransitivity. 2:symmetry. 1,2:eapply IHn.
+    - do 2 rewrite Str_nth_S_tl; simpl.
+      eapply IHn.
+  Qed.
+
+  Lemma reset1_absent : forall n v0 xs rs r,
+      xs # n = absent ->
+      (reset1 v0 xs rs r) # n = absent.
+  Proof.
+    induction n;
+      (intros * Hx;
+       unfold_Stv xs; unfold_Stv rs;
+       repeat rewrite Str_nth_0_hd in *; repeat rewrite Str_nth_S_tl in *;
+       simpl in *; try congruence; auto).
+    1-3:destruct r; auto.
+  Qed.
+
+  Fact lt_S_inv : forall n m,
+      n < S m ->
+      (n < m \/ n = m).
+  Proof.
+    intros * Hlt.
+    apply Lt.le_lt_or_eq, Lt.lt_n_Sm_le; auto.
+  Qed.
+
+  Lemma reset1_present1 : forall n k v0 xs rs x,
+      k < n ->
+      xs # k = present x ->
+      (reset1 v0 xs rs true) # n = (reset1 v0 xs rs false) # n.
+  Proof.
+    induction n;
+      (intros * Hk Hx;
+       unfold_Stv xs; unfold_Stv rs;
+       repeat rewrite Str_nth_0_hd in *; repeat rewrite Str_nth_S_tl in *;
+       simpl in *; try congruence; auto).
+    - inv Hk.
+    - apply lt_S_inv in Hk as [?|?]; subst.
+      + destruct k. rewrite Str_nth_0 in Hx; congruence.
+        rewrite Str_nth_S in Hx.
+        eapply IHn; [|eauto]. apply Nat.lt_succ_l; auto.
+      + destruct n. rewrite Str_nth_0 in Hx; congruence.
+        specialize (IHn n).
+        eapply IHn; eauto.
+  Qed.
+
+  Lemma reset1_present2 : forall n v0 xs rs x,
+      (forall k, k < n -> xs # k = absent) ->
+      xs # n = present x ->
+      (reset1 v0 xs rs true) # n = present v0.
+  Proof.
+    induction n;
+      (intros * Hk Hx;
+       unfold_Stv xs; unfold_Stv rs;
+       repeat rewrite Str_nth_0_hd in *; repeat rewrite Str_nth_S_tl in *;
+       simpl in *; try congruence; auto).
+    - eapply IHn; eauto.
+      intros ? Hkn. specialize (Hk (S k)).
+      rewrite Str_nth_S in Hk. apply Hk, lt_n_S; auto.
+    - eapply IHn; eauto.
+      intros ? Hkn. specialize (Hk (S k)).
+      rewrite Str_nth_S in Hk. apply Hk, lt_n_S; auto.
+    - specialize (Hk 0 (Nat.lt_0_succ _)).
+      rewrite Str_nth_0 in Hk. inv Hk.
+    - specialize (Hk 0 (Nat.lt_0_succ _)).
+      rewrite Str_nth_0 in Hk. inv Hk.
+  Qed.
+
   Section NodeSemantics.
 
     Variable G: global.
@@ -125,27 +221,23 @@ Module Type NLCOINDSEMANTICS
           sem_var H x es ->
           sem_equation H b (EqDef x ck e)
     | SeqApp:
-        forall H b ys ck f es ess oss,
+        forall H b xs ck f es xrs ys rs ess oss,
           Forall2 (sem_exp H b) es ess ->
           sem_clock H b ck (clocks_of ess) ->
-          sem_node f ess oss ->
-          Forall2 (sem_var H) ys oss ->
-          sem_equation H b (EqApp ys ck f es None)
-    | SeqReset:
-        forall H b xs ck f es y cky ys rs ess oss,
-          Forall2 (sem_exp H b) es ess ->
-          sem_clock H b ck (clocks_of ess) ->
-          sem_var H y ys ->
-          bools_of ys rs ->
+          Forall2 (sem_var H) (List.map fst xrs) ys ->
+          bools_ofs ys rs ->
           (forall k, sem_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
           Forall2 (sem_var H) xs oss ->
-          sem_equation H b (EqApp xs ck f es (Some (y, cky)))
+          sem_equation H b (EqApp xs ck f es xrs)
     | SeqFby:
-        forall H b x ck c0 e es os,
+        forall H b x ck c0 e xrs es os ys rs,
           sem_aexp H b ck e es ->
-          os = sfby (sem_const c0) es ->
+          Forall2 (sem_var H) (List.map fst xrs) ys ->
+          sem_clocked_vars H b xrs ->
+          bools_ofs ys rs ->
+          os = reset (sem_const c0) (sfby (sem_const c0) es) rs ->
           sem_var H x os ->
-          sem_equation H b (EqFby x ck c0 e)
+          sem_equation H b (EqFby x ck c0 e xrs)
 
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
       SNode:
@@ -173,31 +265,25 @@ Module Type NLCOINDSEMANTICS
         P_equation H b (EqDef x ck e).
 
     Hypothesis EqAppCase:
-      forall H b ys ck f es ess oss,
+      forall H b xs ck f es xrs ys rs ess oss,
         Forall2 (sem_exp H b) es ess ->
         sem_clock H b ck (clocks_of ess) ->
-        sem_node G f ess oss ->
-        Forall2 (sem_var H) ys oss ->
-        P_node f ess oss ->
-        P_equation H b (EqApp ys ck f es None).
-
-    Hypothesis EqResetCase:
-      forall H b xs ck f es y cky ys rs ess oss,
-        Forall2 (sem_exp H b) es ess ->
-        sem_clock H b ck (clocks_of ess) ->
-        sem_var H y ys ->
-        bools_of ys rs ->
+        Forall2 (sem_var H) (List.map fst xrs) ys ->
+        bools_ofs ys rs ->
         (forall k, sem_node G f (List.map (mask k rs) ess) (List.map (mask k rs) oss)
               /\ P_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
         Forall2 (sem_var H) xs oss ->
-        P_equation H b (EqApp xs ck f es (Some (y, cky))).
+        P_equation H b (EqApp xs ck f es xrs).
 
     Hypothesis EqFbyCase:
-      forall H b x ck c0 e es os,
+      forall H b x ck c0 e xrs es os ys rs,
         sem_aexp H b ck e es ->
-        os = sfby (sem_const c0) es ->
+        Forall2 (sem_var H) (List.map fst xrs) ys ->
+        sem_clocked_vars H b xrs ->
+        bools_ofs ys rs ->
+        os = reset (sem_const c0) (sfby (sem_const c0) es) rs ->
         sem_var H x os ->
-        P_equation H b (EqFby x ck c0 e).
+        P_equation H b (EqFby x ck c0 e xrs).
 
     Hypothesis NodeCase:
       forall H f n xss oss,
@@ -242,7 +328,6 @@ Module Type NLCOINDSEMANTICS
     assert (Hnin':=Hnin).
     revert Hnin'.
     induction Hsem as [
-                     |
                      | |
                      | bk f n xs ys Hfind Hinp Hout Hscvs Heqs IH]
       using sem_node_mult
@@ -263,13 +348,8 @@ Module Type NLCOINDSEMANTICS
       intros eq Hin HH. apply HH; clear HH.
       destruct eq; try inversion 1; subst.
       pose proof Hin as Hsem; apply Forall_forall with (1:=Heqs)in Hsem.
-      inversion_clear Hsem as [| ? ? ? ? ? ? ? ? ? ? Hsemn| |].
-      inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
-      pose proof (find_node_name _ _ _ Hfind').
-      apply find_node_In in Hfind' as (_&Hfind').
-      apply Forall_forall with (1:=Hnin) in Hfind'. auto.
-      take (forall k, _) and specialize (it 0) as Hsem.
-      inversion_clear Hsem as [ ? ? ? ? ? Hfind'].
+      inversion_clear Hsem as [| ??????????????? Hsemn|].
+      specialize (Hsemn 0). inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
       pose proof (find_node_name _ _ _ Hfind').
       apply find_node_In in Hfind' as (_&Hfind').
       apply Forall_forall with (1:=Hnin) in Hfind'. auto.
@@ -295,8 +375,6 @@ Module Type NLCOINDSEMANTICS
     econstructor; eauto using sem_equation.
     inversion_clear Hord as [|? ? Hord' Hnn Hnns].
     auto using sem_node_cons2.
-    econstructor; eauto. intro k.
-    inv Hord. apply sem_node_cons2; eauto.
   Qed.
 
 
@@ -387,13 +465,26 @@ Module Type NLCOINDSEMANTICS
       + now inv H1; inv H3; inv H5.
       + eapply Cofix; eauto.
   Qed.
- Add Parametric Morphism : (const)
+
+  Add Parametric Morphism : (const)
       with signature @EqSt bool ==> eq ==> @EqSt value
         as const_EqSt.
   Proof.
     cofix CoFix; intros b b' Eb.
     unfold_Stv b; unfold_Stv b';
       constructor; inv Eb; simpl in *; try discriminate; auto.
+  Qed.
+
+  Add Parametric Morphism : reset
+      with signature @eq val ==> @EqSt value ==> @EqSt bool ==> @EqSt value
+        as reset_EqSt.
+  Proof.
+    unfold reset. remember false as b. clear Heqb. revert b.
+    cofix CoFix.
+    intros * Heq1 * Heq2.
+    unfold_St x; unfold_St x0; unfold_St y0; unfold_St y1.
+    inv Heq1. inv Heq2. simpl in *; subst.
+    destruct v0, b, b1; constructor; simpl; auto.
   Qed.
 
   Add Parametric Morphism H : (sem_exp H)
@@ -485,6 +576,13 @@ Module Type NLCOINDSEMANTICS
       simpl in *; try discriminate; auto.
   Qed.
 
+  Add Parametric Morphism H : (sem_clocked_var H)
+      with signature @EqSt bool ==> eq ==> eq ==> Basics.impl
+        as sem_clocked_var_morph.
+  Proof.
+    intros bs bs' E x ck (Sem & Sem'); split; now setoid_rewrite <-E.
+  Qed.
+
   Add Parametric Morphism G H : (sem_equation G H)
       with signature @EqSt bool ==> eq ==> Basics.impl
         as mod_sem_equation_morph.
@@ -493,15 +591,9 @@ Module Type NLCOINDSEMANTICS
     induction Sem; econstructor; eauto; try now rewrite <-Eb.
     - eapply Forall2_impl_In with (P := sem_exp H b); auto.
       intros; now rewrite <-Eb.
-    - eapply Forall2_impl_In with (P := sem_exp H b); auto.
+    - unfold sem_clocked_vars in *.
+      eapply Forall_impl; [|eauto].
       intros; now rewrite <-Eb.
-  Qed.
-
-  Add Parametric Morphism H : (sem_clocked_var H)
-      with signature @EqSt bool ==> eq ==> eq ==> Basics.impl
-        as sem_clocked_var_morph.
-  Proof.
-    intros bs bs' E x ck (Sem & Sem'); split; now setoid_rewrite <-E.
   Qed.
 
   Add Parametric Morphism H : (sem_clocked_vars H)

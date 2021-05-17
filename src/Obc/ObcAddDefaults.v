@@ -452,8 +452,8 @@ Module Type OBCADDDEFAULTS
       add_defaults_stmt tyenv req s = (t, req', stimes, always) ->
       PS.Empty (PS.inter stimes always)
       /\ (forall x, PS.In x req -> PS.In x always \/ PS.In x req')
-      /\ (forall x, PS.In x (PS.union stimes always) -> Can_write_in x s)
-      /\ (forall x, ~Can_write_in x s -> ~PS.In x (PS.union stimes always))
+      /\ (forall x, PS.In x (PS.union stimes always) -> Can_write_in_var x s)
+      /\ (forall x, ~Can_write_in_var x s -> ~PS.In x (PS.union stimes always))
       /\ No_Naked_Vars t.
   Proof.
     induction s as [| | | |ys clsid o f es|]; intros t rq rq' st al Hadd; inv Hadd.
@@ -535,7 +535,7 @@ Module Type OBCADDDEFAULTS
                    repeat rewrite PS.inter_spec in H;
                      destruct H as ((HB1 & HB2) & HB3)
                  end.
-      + (* forall x, PS.In x (PS.union stimes always) -> Can_write_in x s *)
+      + (* forall x, PS.In x (PS.union stimes always) -> Can_write_in_var x s *)
         intros x Hin.
         cut (PS.In x (PS.union (PS.union st1 al1) (PS.union st2 al2))).
         now rewrite PS.union_spec; destruct 1 as [HH|HH]; auto.
@@ -545,7 +545,7 @@ Module Type OBCADDDEFAULTS
                                        | H:PS.In _ w2 |- _ => apply Hw2 in H end;
         auto.
         subst w; PS_split; tauto.
-      + (* forall x, ~Can_write_in x s -> ~PS.In x (PS.union stimes always) *)
+      + (* forall x, ~Can_write_in_var x s -> ~PS.In x (PS.union stimes always) *)
         intros x Hncw.
         cut (~PS.In x (PS.union (PS.union st1 al1) (PS.union st2 al2))).
         * intros HH1 HH; apply HH1; clear HH1.
@@ -606,10 +606,10 @@ Module Type OBCADDDEFAULTS
       setoid_rewrite PSF.empty_iff; intuition.
   Qed.
 
-  Lemma Can_write_in_add_writes_mono:
+  Lemma Can_write_in_var_add_writes_mono:
     forall tyenv s W x,
-      Can_write_in x s ->
-      Can_write_in x (add_writes tyenv W s).
+      Can_write_in_var x s ->
+      Can_write_in_var x (add_writes tyenv W s).
   Proof.
     intros tyenv s W x Hcan.
     setoid_rewrite PSE.MP.fold_spec_right.
@@ -620,10 +620,10 @@ Module Type OBCADDDEFAULTS
     destruct (tyenv w); auto.
   Qed.
 
-  Lemma Can_write_in_add_writes:
+  Lemma Can_write_in_var_add_writes:
     forall tyenv s W x,
-      Can_write_in x (add_writes tyenv W s) ->
-      PS.In x W \/ Can_write_in x s.
+      Can_write_in_var x (add_writes tyenv W s) ->
+      PS.In x W \/ Can_write_in_var x s.
   Proof.
     intros tyenv s W x.
     setoid_rewrite PSE.MP.fold_spec_right.
@@ -636,14 +636,14 @@ Module Type OBCADDDEFAULTS
     induction ws as [|w ws IH]; auto.
     simpl. unfold add_write at 1.
     destruct (tyenv w); [intro Hcw|now intuition].
-    inversion_clear Hcw as [| | | | |? ? ? Hcw'|? ? ? Hcw'].
+    inversion_clear Hcw as [| | | |? ? ? Hcw'|? ? ? Hcw'].
     now inversion_clear Hcw'; auto. intuition.
   Qed.
 
-  Lemma Can_write_in_add_defaults_stmt:
+  Lemma Can_write_in_var_add_defaults_stmt:
     forall tyenv s req t req' st al,
       add_defaults_stmt tyenv req s = (t, req', st, al) ->
-      (forall x, Can_write_in x s <-> Can_write_in x t).
+      (forall x, Can_write_in_var x s <-> Can_write_in_var x t).
   Proof.
     induction s.
     - (* Assign i e *)
@@ -672,19 +672,19 @@ Module Type OBCADDDEFAULTS
       specialize (IHs2 _ _ _ _ _ Hdefs2).
 
       split; intro Hcan.
-      + apply Can_write_in_add_writes_mono.
+      + apply Can_write_in_var_add_writes_mono.
         inversion_clear Hcan.
-        now apply CWIIfteTrue, Can_write_in_add_writes_mono, IHs1.
-        now apply CWIIfteFalse, Can_write_in_add_writes_mono, IHs2.
+        now apply CWIVIfteTrue, Can_write_in_var_add_writes_mono, IHs1.
+        now apply CWIVIfteFalse, Can_write_in_var_add_writes_mono, IHs2.
       + apply add_defaults_stmt_inv1 in Hdefs1 as (? & ? & Hcw1).
         apply add_defaults_stmt_inv1 in Hdefs2 as (? & ? & Hcw2).
-        apply Can_write_in_add_writes in Hcan as [Hcw|Hcw].
+        apply Can_write_in_var_add_writes in Hcan as [Hcw|Hcw].
         now subst w; apply PS.union_spec in Hcw as [Hcw|Hcw]; PS_split; auto.
-        inversion_clear Hcw as [| |? ? ? ? Hcw'|? ? ? ? Hcw'| | |].
-        * apply Can_write_in_add_writes in Hcw' as [Hcw|Hcw].
-          now subst w1; PS_split; auto. now apply CWIIfteTrue, IHs1.
-        * apply Can_write_in_add_writes in Hcw' as [Hcw|Hcw].
-          now subst w2; PS_split; auto. now apply CWIIfteFalse, IHs2.
+        inversion_clear Hcw as [|? ? ? ? Hcw'|? ? ? ? Hcw'| | |].
+        * apply Can_write_in_var_add_writes in Hcw' as [Hcw|Hcw].
+          now subst w1; PS_split; auto. now apply CWIVIfteTrue, IHs1.
+        * apply Can_write_in_var_add_writes in Hcw' as [Hcw|Hcw].
+          now subst w2; PS_split; auto. now apply CWIVIfteFalse, IHs2.
     - (* * Comp s1 s2 *)
       simpl; intros * Hadd x.
 
@@ -1858,12 +1858,12 @@ Module Type OBCADDDEFAULTS
           apply InMembers_app in Hin.
           destruct Hin as [Hin|]; auto.
           apply InMembers_Forall with (1:=Hncwin) in Hin.
-          contradiction.
+          exfalso; auto.
         + apply PS_In_Forall with (1:=Hval) in Hin.
           apply InMembers_app in Hin.
           destruct Hin as [Hin|]; auto.
           apply InMembers_Forall with (1:=Hncwin) in Hin.
-          contradiction. }
+          exfalso; auto. }
 
     eapply Hsr in Heval as (ve3' & Henv3' & Heval3'); eauto.
 

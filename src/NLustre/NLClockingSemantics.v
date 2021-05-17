@@ -6,8 +6,6 @@ From Velus Require Import IndexedStreams.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
-From Velus Require Import CoreExpr.CEIsFree.
-From Velus Require Import NLustre.IsFree.
 From Velus Require Import NLustre.Memories.
 From Velus Require Import NLustre.IsDefined.
 From Velus Require Import CoreExpr.CEClocking.
@@ -40,11 +38,9 @@ Module Type NLCLOCKINGSEMANTICS
        (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
        (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
-       (Import CEIsF    : CEISFREE            Ids Op       CESyn)
-       (Import IsF      : ISFREE              Ids Op       CESyn Syn CEIsF)
        (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEIsF IsF CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem                     CEClo).
+       (Import Clkg     : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEClo)
+       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem           CEClo).
 
   Lemma sem_clocked_var_eq:
     forall G bk H vars x ck eq,
@@ -60,9 +56,8 @@ Module Type NLCLOCKINGSEMANTICS
     intros ??????? Ord WCG Nodup Sem WC Def Hin.
     revert dependent ck; revert dependent x; revert dependent vars.
     induction Sem as [?????? Hvar Hexp|
-                      ????????? Hvars ? Hsem|
-                      ????????????? Hvars ??? Hsem|
-                      ???????? Hexp Hvar|
+                      ???????????? Hvars ??? Hsem|
+                      ??????????? Hexp Hvar|
                       ?????? Hbk Find Hins Houts Hvars Heqs IH] using sem_equation_mult with
         (P_node := fun f xss yss =>
                      forall n H bk,
@@ -86,59 +81,6 @@ Module Type NLCLOCKINGSEMANTICS
         intuition; eauto; by_sem_det.
 
     - (* EqApp *)
-      inversion_clear Def as [|? ? ? ? ? Hyys|].
-      inversion_clear Hsem as [cks' H' ??? node Hco' Hfind Hvi Hvo Hsck].
-      specialize (IHSem _ _ _ Hfind Hco' Hvi Hvo Hsck).
-      assert (Hvi' := Hvi).
-      rewrite <-map_fst_idck in Hvi.
-      rewrite Hfind in Hfind'; inv Hfind'.
-      assert (forall x y ys,
-                 InMembers x (idck (node'.(n_in) ++ node'.(n_out))) ->
-                 sub x = Some y ->
-                 forall n,
-                   sem_var_instant (H' n) x ys ->
-                   sem_var_instant (H n) y ys) as Htranso.
-      { setoid_rewrite InMembers_idck.
-        eapply sem_var_instant_transfer_out; eauto.
-        - pose proof node'.(n_nodup) as Hnd.
-          rewrite <-Permutation_app_assoc,
-                  (Permutation.Permutation_app_comm node'.(n_in)),
-                  Permutation_app_assoc in Hnd.
-          now apply NoDupMembers_app_r in Hnd.
-        - apply Forall2_impl_In with (2:=Hfai); intuition.
-        - apply Forall2_impl_In with (2:=Hfao); intuition.
-      }
-
-      rewrite <-map_fst_idck in Hvo; unfold idck in Hvo; rewrite map_map in Hvo.
-      specialize (Hvo n); specialize (Hvars n); simpl in *.
-      unfold sem_vars_instant in Hvo.
-      rewrite Forall2_map_1 in Hvo.
-      apply Forall2_swap_args in Hfao.
-      apply Forall2_trans_ex with (1:=Hfao) in Hvo.
-      apply Forall2_swap_args in Hvars.
-      apply Forall2_trans_ex with (1:=Hvo) in Hvars.
-      apply Forall2_same in Hvars.
-      eapply Forall_forall in Hvars
-        as (s & Hins & ((x', (xty, xck)) & Hxin & ((Hoeq & yck' & Hin' & Hinst) & Hsvx)) & Hsvy);
-        eauto; simpl in *.
-      apply NoDupMembers_det with (2:=Hin) in Hin'; eauto; subst yck'.
-      unfold idck in *. specialize (IHSem n); setoid_rewrite Forall_map in IHSem.
-      eapply Forall_forall in IHSem; eauto; simpl in IHSem.
-      apply wc_find_node with (1:=WCG) in Hfind as (G'' & G' & HG' & Hfind).
-      destruct Hfind as (WCi & WCo & WCv & WCeqs).
-      assert (In (x', xck) (idck (node'.(n_in) ++ node'.(n_out)))) as Hxin'
-        by (rewrite idck_app, in_app; right;
-            apply In_idck_exists; eauto).
-      apply wc_env_var with (1:=WCo) in Hxin'.
-      destruct s.
-      + split; intuition; eauto; try by_sem_det;
-          eapply IHSem, sem_clock_instant_transfer_out in Hsvx; eauto; by_sem_det.
-      + split; intuition; eauto; try by_sem_det.
-        * eapply sem_clock_instant_transfer_out; eauto; eapply IHSem; eauto.
-        * assert (exists c, sem_var_instant (H' n) x' (present c)) as Hsvx' by eauto.
-          eapply IHSem, sem_clock_instant_transfer_out in Hsvx'; eauto; by_sem_det.
-
-    - (* EqReset *)
       inversion_clear Def as [|????? Hyys|].
       specialize (Hsem (count rs n)); destruct Hsem as (Hsems & IHHsem).
 
@@ -204,10 +146,10 @@ Module Type NLCLOCKINGSEMANTICS
       match goal with H1:In (?y, _) vars, H2:In (?y, _) vars |- _ =>
         eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       specialize (Hexp n); specialize (Hvar n).
-      unfold fby in Hvar.
+      unfold fby, reset in Hvar.
       unfold sem_clocked_var_instant.
-      inv Hexp; match goal with H:_ = ls n |- _ => rewrite <-H in * end;
-        intuition; eauto; by_sem_det.
+      inv Hexp; match goal with H:_ = ls n |- _ => rewrite <-H in * end.
+      destruct (doreset _ _ _). 1-3:intuition; eauto; by_sem_det.
 
     - (* nodes *)
       intros * Find' Hbk' Hins' Houts' Hvars'.
@@ -297,11 +239,9 @@ Module NLClockingSemanticsFun
        (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
        (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
-       (Import CEIsF    : CEISFREE            Ids Op       CESyn)
-       (Import IsF      : ISFREE              Ids Op       CESyn Syn CEIsF)
        (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEIsF IsF CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem                     CEClo)
-<: NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEIsF IsF CEClo Clkg CECloSem.
-  Include NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEIsF IsF CEClo Clkg CECloSem.
+       (Import Clkg     : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEClo)
+       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem           CEClo)
+<: NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clkg CECloSem.
+  Include NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clkg CECloSem.
 End NLClockingSemanticsFun.

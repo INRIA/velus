@@ -17,6 +17,7 @@ From Velus Require Import Lustre.Normalization.NCausality.
 
 (** * Correctness of the Normalization *)
 
+Local Set Warnings "-masking-absolute-name".
 Module Type CORRECTNESS
        (Import Ids : IDS)
        (Import Op : OPERATORS)
@@ -142,7 +143,7 @@ Module Type CORRECTNESS
       Env.refines eq H H'.
   Proof with eauto.
     intros * Hlen Hvalid Hdom Hids Heq.
-    assert (Forall (fun id => ~In id vars) (map fst ids)) as Hnvar.
+    assert (Forall (fun id => ~In id vars) (List.map fst ids)) as Hnvar.
     { assert (st_valid_reuse st' (PSP.of_list vars) reu) by eauto.
       apply idents_for_anns_incl_ids in Hids.
       solve_forall; simpl.
@@ -263,7 +264,7 @@ Module Type CORRECTNESS
       Env.refines eq H H'.
   Proof with eauto.
     intros vars H H' anns ids vs st st' reusable Hndup Hlen Hvalid Hdom Hids Heq.
-    assert (Forall (fun id => ~In id vars) (map fst ids)) as Hnvar.
+    assert (Forall (fun id => ~In id vars) (List.map fst ids)) as Hnvar.
     { assert (st_valid_reuse st' (PSP.of_list vars) reusable) by eauto.
       apply idents_for_anns'_incl_ids in Hids.
       solve_forall; simpl.
@@ -314,33 +315,33 @@ Module Type CORRECTNESS
   (** ** Conservation of sem_exp *)
 
   Fact unnest_reset_sem : forall G vars b e H v e' eqs' st st' reusable,
-      LiftO True (fun e => forall e' eqs' st',
-                   unnest_exp G true e st = ([e'], eqs', st') ->
-                   exists H',
-                     Env.refines eq H H' /\
-                     st_valid_reuse st' (PSP.of_list vars) reusable /\
-                     Env.dom H' (vars++st_ids st') /\
-                     sem_exp G H' b e' [v] /\ Forall (sem_equation G H' b) eqs') e ->
-      LiftO True (wl_exp G) e ->
-      LiftO True (fun e => numstreams e = 1) e ->
-      LiftO True (fun e => sem_exp G H b e [v]) e ->
-      st_valid_reuse st (PSP.of_list vars) (ps_adds (match e with None => [] | Some e => map fst (fresh_in e) end) reusable) ->
+      (forall e' eqs' st',
+          unnest_exp G true e st = ([e'], eqs', st') ->
+          exists H',
+            Env.refines eq H H' /\
+            st_valid_reuse st' (PSP.of_list vars) reusable /\
+            Env.dom H' (vars++st_ids st') /\
+            sem_exp G H' b e' [v] /\ Forall (sem_equation G H' b) eqs') ->
+      wl_exp G e ->
+      numstreams e = 1 ->
+      sem_exp G H b e [v] ->
+      st_valid_reuse st (PSP.of_list vars) (ps_adds (map fst (fresh_in e)) reusable) ->
       Env.dom H (vars++st_ids st) ->
       unnest_reset (unnest_exp G true) e st = (e', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           st_valid_reuse st' (PSP.of_list vars) reusable /\
           Env.dom H' (vars++st_ids st') /\
-          LiftO True (fun e' => sem_exp G H' b e' [v]) e' /\
+          sem_exp G H' b e' [v] /\
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
     intros * Hun Hwl Hnum Hsem Hvalid Histst Hnorm.
     unnest_reset_spec; simpl in *.
     1,2:assert (length l = 1) by (eapply unnest_exp_length in Hk0; eauto; congruence).
     1,2:singleton_length.
-    - eapply Hun in Hk0 as [H' [Href [Hval [Hdom [Hsem1 Hsem2]]]]].
+    - specialize (Hun _ _ _ eq_refl) as (H'&Href&Hval&Hdom&Hsem1&Hsem2).
       exists H'. repeat split; eauto.
-    - eapply Hun in Hk0 as [H' [Href [Hval [Hdom [Hsem1 Hsem2]]]]].
+    - specialize (Hun _ _ _ eq_refl) as (H'&Href&Hval&Hdom&Hsem1&Hsem2).
       assert (Href':=Hfresh); eapply fresh_ident_refines in Href'; eauto.
       exists (Env.add x2 v H'). repeat split. 5:constructor.
       + etransitivity; eauto.
@@ -354,8 +355,55 @@ Module Type CORRECTNESS
         * econstructor. eapply Env.add_1. 1,2:reflexivity.
       + solve_forall.
         eapply sem_equation_refines; eauto.
-    - exists H. repeat split; auto.
   Qed.
+
+  Corollary unnest_resets_sem : forall G vars b es H vs es' eqs' st st' reusable,
+      NoDup (map fst (fresh_ins es)++PS.elements reusable) ->
+      Forall (wl_exp G) es ->
+      Forall (fun e => numstreams e = 1) es ->
+      Forall2 (fun e v => sem_exp G H b e [v]) es vs ->
+      st_valid_reuse st (PSP.of_list vars) (ps_adds (map fst (fresh_ins es)) reusable) ->
+      Env.dom H (vars++st_ids st) ->
+      Forall2 (fun e v => forall H e' eqs' st st' reusable,
+                   NoDup (map fst (fresh_in e)++PS.elements reusable) ->
+                   wl_exp G e ->
+                   sem_exp G H b e [v] ->
+                   st_valid_reuse st (PSP.of_list vars) (ps_adds (map fst (fresh_in e)) reusable) ->
+                   Env.dom H (vars++st_ids st) ->
+                   unnest_exp G true e st = ([e'], eqs', st') ->
+                   (exists H',
+                       Env.refines eq H H' /\
+                       st_valid_reuse st' (PSP.of_list vars) reusable /\
+                       Env.dom H' (vars++st_ids st') /\
+                       sem_exp G H' b e' [v] /\
+                       Forall (sem_equation G H' b) eqs')) es vs ->
+      map_bind2 (unnest_reset (unnest_exp G true)) es st = (es', eqs', st') ->
+      (exists H',
+          Env.refines eq H H' /\
+          st_valid_reuse st' (PSP.of_list vars) reusable /\
+          Env.dom H' (vars++st_ids st') /\
+          Forall2 (fun e v => sem_exp G H' b e [v]) es' vs /\
+          Forall (sem_equation G H' b) (concat eqs')).
+    Proof with eauto.
+    induction es; intros * Hndup Hwt Hnum Hsem Hvalid Histst Hf Hmap;
+      inv Hwt; inv Hnum; inv Hsem; inv Hf; repeat inv_bind.
+    - exists H; simpl. repeat (split; eauto).
+    - unfold fresh_ins in *; simpl in *; rewrite map_app, ps_adds_app in Hvalid.
+      assert (NoDup (map fst (fresh_ins es)++PS.elements reusable)) as Hndup2 by ndup_r Hndup.
+      assert (NoDup (map fst (fresh_in a) ++ PS.elements (ps_adds (map fst (fresh_ins es)) reusable))) as Hndup1.
+      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+      eapply unnest_reset_sem in H0 as (H'&Href1&Hvalid1&Histst1&Hsem1&Hsem1'); eauto.
+      assert (Forall2 (fun e v => sem_exp G H' b e [v]) es l') as Hsem'.
+      { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
+      eapply IHes in H1 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]]...
+      clear IHes H9.
+      exists H''. repeat (split; eauto).
+      + etransitivity...
+      + constructor; eauto. subst.
+        eapply sem_exp_refines; eauto.
+      + apply Forall_app. split...
+        solve_forall. eapply sem_equation_refines...
+    Qed.
 
   Ltac solve_incl :=
     repeat unfold idty; repeat unfold idck;
@@ -404,45 +452,48 @@ Module Type CORRECTNESS
   Qed.
   Hint Resolve In_fresh_in_NoDup.
 
-  Fact unnest_arrow_sem : forall G H bs e0s es anns s0s ss os,
+  Fact unnest_arrow_sem : forall G H bs e0s es er anns s0s ss rs r os,
       length e0s = length anns ->
       length es = length anns ->
       Forall2 (fun e s => sem_exp G H bs e [s]) e0s s0s ->
       Forall2 (fun e s => sem_exp G H bs e [s]) es ss ->
-      Forall3 arrow s0s ss os ->
-      Forall2 (fun e s => sem_exp G H bs e [s]) (unnest_arrow e0s es anns) os.
+      Forall2 (fun er r => sem_exp G H bs er [r]) er rs ->
+      bools_ofs rs r ->
+      Forall3 (fun s0 s o => arrow s0 s r o) s0s ss os ->
+      Forall2 (fun e s => sem_exp G H bs e [s]) (unnest_arrow e0s es er anns) os.
   Proof with eauto.
-    intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
+    intros * Hlen1 Hlen2 Hsem1 Hsem2 Hsemr Bools Hfby.
     unfold unnest_arrow.
     repeat rewrite_Forall_forall. 1:solve_length.
     repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
     destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
-    eapply Sarrow.
-    - repeat constructor...
-    - repeat constructor...
-    - simpl. repeat constructor...
-      Unshelve. 1,2:exact default_stream.
+    econstructor...
+    eapply Forall2_forall2; split; intros; eauto. eapply H1... congruence.
+    1:repeat constructor...
+    Unshelve. 1-2:exact default_stream.
   Qed.
 
-  Fact unnest_fby_sem : forall G H bs e0s es anns s0s ss os,
+  Fact unnest_fby_sem : forall G H bs e0s es er anns s0s ss rs r os,
       length e0s = length anns ->
       length es = length anns ->
       Forall2 (fun e s => sem_exp G H bs e [s]) e0s s0s ->
       Forall2 (fun e s => sem_exp G H bs e [s]) es ss ->
-      Forall3 fby s0s ss os ->
-      Forall2 (fun e s => sem_exp G H bs e [s]) (unnest_fby e0s es anns) os.
+      Forall2 (fun er r => sem_exp G H bs er [r]) er rs ->
+      bools_ofs rs r ->
+      Forall3 (fun s0 s o => fby s0 s r o) s0s ss os ->
+      Forall2 (fun e s => sem_exp G H bs e [s]) (unnest_fby e0s es er anns) os.
   Proof with eauto.
-    intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
+
+    intros * Hlen1 Hlen2 Hsem1 Hsem2 Hsemr Bools Hfby.
     unfold unnest_fby.
     repeat rewrite_Forall_forall. 1:solve_length.
     repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
     destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
-    eapply Sfby.
-    - repeat constructor...
-    - repeat constructor...
-    - simpl. repeat constructor...
-      Unshelve. 1,2:exact default_stream.
-  Qed.
+    econstructor...
+    eapply Forall2_forall2; split; intros; eauto. eapply H1... congruence.
+    1:repeat constructor...
+    Unshelve. 1-2:exact default_stream.
+    Qed.
 
   Fact unnest_when_sem : forall G H bs es tys ckid b ck s ss os,
       length es = length tys ->
@@ -639,30 +690,31 @@ Module Type CORRECTNESS
           Forall2 (fun e v => sem_exp G H' b e [v]) es' vs /\
           Forall (sem_equation G H' b) eqs').
   Proof with eauto.
-    induction e using exp_ind2; intros * Hndup Hwl Hsem Hvalid Histst Hnorm;
-      inv Hwl; inv Hsem. 1-10:repeat inv_bind.
+    induction e using exp_ind2; intros * Hndup Hwl Hsem Hvalid Histst Hnorm; repeat inv_bind. 10:inv Hwl; inv Hsem.
     - (* const *)
-      exists H. repeat (split; eauto).
+      inv Hsem. exists H. repeat (split; eauto).
     - (* var *)
-      exists H. repeat (split; eauto).
+      inv Hsem. exists H. repeat (split; eauto).
     - (* unop *)
+      inv Hsem. inv Hwl.
       assert (Htypeof:=H0). eapply unnest_exp_typeof in Htypeof...
-      specialize (IHe _ _ _ _ _ _ _ _ Hndup H3 H8 Hvalid Histst H0) as [H' [Href1 [Hvalid1 [Hdom1 [Hsem1 Hsem1']]]]].
-      eapply unnest_exp_length in H0... rewrite H5 in H0. singleton_length.
-      inv Hsem1; clear H7.
+      assert (Hnorm:=H0). eapply IHe in Hnorm as [H' [Href1 [Hvalid1 [Hdom1 [Hsem1 Hsem1']]]]]...
+      eapply unnest_exp_length in H0... rewrite H6 in H0. singleton_length.
+      inv Hsem1.
       exists H'. repeat (split; eauto).
       repeat econstructor... congruence.
     - (* binop *)
+      inv Hsem; inv Hwl.
       simpl in *. rewrite map_app, ps_adds_app in Hvalid.
       assert (Htypeof1:=H0). eapply unnest_exp_typeof in Htypeof1...
       assert (Htypeof2:=H1). eapply unnest_exp_typeof in Htypeof2...
       assert (NoDup (map fst (fresh_in e1) ++ PS.elements (ps_adds (map fst (fresh_in e2)) reusable))) as Hndup1.
       { rewrite Permutation_PS_elements_ps_adds'. ndup_simpl... ndup_r Hndup. }
       eapply IHe1 in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]... clear IHe1.
-      eapply sem_exp_refines in H12; [| eauto].
+      eapply sem_exp_refines in H10; [| eauto].
       assert (NoDup (map fst (fresh_in e2) ++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.
       eapply IHe2 in H1 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]]... clear IHe2.
-      inv Hsem1. inv Hsem2. inv H4. inv H11.
+      inv Hsem1; inv H4. inv Hsem2; inv H5.
       simpl in *; rewrite app_nil_r in *.
       exists H''. repeat (split; eauto).
       + etransitivity...
@@ -673,124 +725,149 @@ Module Type CORRECTNESS
       + apply Forall_app. split; solve_forall...
         eapply sem_equation_refines...
     - (* fby *)
-      simpl in *. rewrite map_app, ps_adds_app in Hvalid.
+      inversion_clear Hwl as [| | | |????? Hwl1 Hwl2 Hwlr Hl1 Hl2 Hlr| | | | |].
+      inversion_clear Hsem as [| | | |??????????? Hsem1 Hsem2 Hsemr Bools Fby| | | | |].
+      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
       assert (length (concat x2) = length (annots e0s)) as Hlength1 by (eapply map_bind2_unnest_exp_length; eauto).
       assert (length (concat x6) = length (annots es)) as Hlength2 by (eapply map_bind2_unnest_exp_length; eauto).
-      assert (NoDup (map fst (fresh_ins es) ++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.
-      assert (NoDup (map fst (fresh_ins e0s) ++ PS.elements (ps_adds (map fst (concat (map fresh_in es))) reusable))) as Hndup1.
-      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+      assert (NoDup (map fst (fresh_ins er) ++ PS.elements reusable)) as Hndup3 by repeat ndup_r Hndup.
+      assert (NoDup (map fst (fresh_ins es) ++ PS.elements (ps_adds (map fst (fresh_ins er)) reusable))) as Hndup2.
+      { ndup_r Hndup. rewrite Permutation_PS_elements_ps_adds'... }
+      assert (NoDup (map fst (fresh_ins e0s) ++ PS.elements (ps_adds (map fst (fresh_ins es)) (ps_adds (map fst (fresh_ins er)) reusable)))) as Hndup1.
+      { repeat rewrite Permutation_PS_elements_ps_adds'... ndup_simpl... ndup_r Hndup. }
       assert (Forall (fun e => numstreams e = 1) (concat x2)) as Hnumstreams.
-      { eapply map_bind2_unnest_exp_numstreams in H2... }
+      { eapply map_bind2_unnest_exp_numstreams in H3... }
 
-      assert (length s0ss = length e0s) as Hlen1 by (eapply Forall2_length in H12; eauto).
-      assert (H2':=H2). eapply map_bind2_sem in H2... 2:solve_forall. clear H.
-      destruct H2 as [H' [Href1 [Histst1 [Hdom1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
+      assert (length s0ss = length e0s) as Hlen1 by (eapply Forall2_length in Hsem1; eauto).
+      assert (H2':=H3). eapply map_bind2_sem in H3... 2:solve_forall. clear H Hsem1.
+      destruct H3 as [H' [Href1 [Histst1 [Hdom1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
 
       assert (Forall2 (sem_exp G H' b) es sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
-      assert (length sss = length es) as Hlen2 by (eapply Forall2_length in H14; eauto).
-      assert (H3':=H3). eapply map_bind2_sem in H3... 2:solve_forall. clear H0.
-      destruct H3 as [H'' [Href2 [Hvalid2 [Hdom2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
+      assert (length sss = length es) as Hlen2 by (eapply Forall2_length in Hsem2; eauto).
+      assert (H3':=H4). eapply map_bind2_sem in H4... 2:solve_forall. clear H0 Hsem2.
+      destruct H4 as [H'' [Href2 [Hvalid2 [Hdom2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
+
+      assert (length sr = length er) as Hlen3 by (eapply Forall2_length in Hsemr; eauto).
+      assert (Forall2 (fun er sr => sem_exp G H'' b er [sr]) er sr) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+      assert (Hr:=H5). eapply unnest_resets_sem in H5...
+      2:{ solve_forall. eapply H13 in H11 as (H'''&?&?&?&?&?); eauto. exists H'''; repeat split; eauto.
+          inv H18; eauto. }
+      destruct H5 as (H'''&Href3&Hvalid3&Hdom3&Hsem3&Hsem3').
 
       assert (Forall2 (fun (e : exp) (v : Stream OpAux.value) => sem_exp G H'' b e [v]) (concat x2) (concat s0ss)) as Hsem''.
       { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
-      specialize (idents_for_anns_length _ _ _ _ H4) as Hlength.
+      specialize (idents_for_anns_length _ _ _ _ H6) as Hlength.
       assert (length vs = length a) as Hlength'''.
-      { eapply Forall3_length in H15 as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
+      { eapply Forall3_length in Fby as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
 
-      remember (Env.adds (map fst x5) vs H'') as H'''.
-      assert (length x5 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
+      remember (Env.adds (List.map fst x8) vs H''') as H''''.
+      assert (length x8 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
 
-      assert (Forall2 (sem_var H''') (map fst x5) vs) as Hsemvars.
-      { rewrite HeqH'''. eapply sem_var_adds; eauto.
+      assert (Forall2 (sem_var H'''') (map fst x8) vs) as Hsemvars.
+      { rewrite HeqH''''. eapply sem_var_adds; eauto.
         + rewrite map_length; auto.
-        + eapply idents_for_anns_NoDupMembers in H4; eauto. rewrite <- fst_NoDupMembers; eauto. }
+        + eapply idents_for_anns_NoDupMembers in H6; eauto. rewrite <- fst_NoDupMembers; eauto. }
 
-      assert (Env.refines eq H'' H''') as Href4.
-      { eapply idents_for_anns_refines in H4... }
-      assert (Forall2 (fun e v => sem_exp G H''' b e [v]) (unnest_fby (concat x2) (concat x6) a) vs) as Hsemf.
-      { eapply unnest_fby_sem... 2:congruence.
+      assert (Env.refines eq H''' H'''') as Href4.
+      { eapply idents_for_anns_refines in H6... }
+      assert (Forall2 (fun e v => sem_exp G H'''' b e [v]) (unnest_fby (concat x2) (concat x6) x5 a) vs) as Hsemf.
+      { eapply unnest_fby_sem; simpl... 2:congruence.
         + eapply map_bind2_unnest_exp_length in H2'... congruence.
-        + clear - Hsem1 Href2 Href4. solve_forall. repeat (eapply sem_exp_refines; eauto).
-        + clear - Hsem2 Href2 Href4. solve_forall. repeat (eapply sem_exp_refines; eauto). }
+        + clear - Hsem1 Href2 Href3 Href4. eapply Forall2_impl_In... intros; simpl in *.
+          repeat (eapply sem_exp_refines; eauto).
+        + clear - Hsem2 Href2 Href3 Href4. eapply Forall2_impl_In... intros; simpl in *.
+          repeat (eapply sem_exp_refines; eauto).
+        + solve_forall. eapply sem_exp_refines; eauto. }
 
-      exists H'''. repeat (split; eauto).
+      exists H''''. repeat (split; eauto).
       * repeat (etransitivity; eauto).
-      * eapply idents_for_anns_dom in H4; eauto.
+      * eapply idents_for_anns_dom in H6; eauto.
       * clear - Hsemvars. solve_forall.
       * repeat rewrite Forall_app. repeat split.
-        -- clear - Hsemvars Hsemf.
-           remember (unnest_fby _ _ _) as fby. clear Heqfby.
-           simpl_forall.
-           repeat rewrite_Forall_forall. 1:congruence.
-           destruct (nth _ x5 _) eqn:Hnth1.
-           econstructor.
-           ++ repeat constructor.
-              eapply H0... congruence.
-           ++ repeat constructor.
-              eapply H2 with (x1:=(i, a1))...
-        -- solve_forall. repeat (eapply sem_equation_refines; eauto).
-        -- solve_forall. repeat (eapply sem_equation_refines; eauto).
-           Unshelve. exact default_stream.
+        2-4:(solve_forall; repeat (eapply sem_equation_refines; eauto)).
+        clear - Hsemvars Hsemf.
+        remember (unnest_fby _ _ _ _) as fby. clear Heqfby.
+        simpl_forall.
+        repeat rewrite_Forall_forall. congruence.
+        destruct (nth _ x8 _) eqn:Hnth1.
+        econstructor.
+        -- repeat constructor.
+           eapply H0... congruence.
+        -- repeat constructor.
+           eapply H2 with (x1:=(i, a1))...
     - (* arrow *)
-      simpl in *. rewrite map_app, ps_adds_app in Hvalid.
+      inversion_clear Hwl as [| | | | |????? Hwl1 Hwl2 Hwlr Hl1 Hl2 Hlr| | | |].
+      inversion_clear Hsem as [| | | | |??????????? Hsem1 Hsem2 Hsemr Bools Arrow| | | |].
+      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
       assert (length (concat x2) = length (annots e0s)) as Hlength1 by (eapply map_bind2_unnest_exp_length; eauto).
       assert (length (concat x6) = length (annots es)) as Hlength2 by (eapply map_bind2_unnest_exp_length; eauto).
-      assert (NoDup (map fst (fresh_ins es) ++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.
-      assert (NoDup (map fst (fresh_ins e0s) ++ PS.elements (ps_adds (map fst (concat (map fresh_in es))) reusable))) as Hndup1.
-      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+      assert (NoDup (map fst (fresh_ins er) ++ PS.elements reusable)) as Hndup3 by repeat ndup_r Hndup.
+      assert (NoDup (map fst (fresh_ins es) ++ PS.elements (ps_adds (map fst (fresh_ins er)) reusable))) as Hndup2.
+      { ndup_r Hndup. rewrite Permutation_PS_elements_ps_adds'... }
+      assert (NoDup (map fst (fresh_ins e0s) ++ PS.elements (ps_adds (map fst (fresh_ins es)) (ps_adds (map fst (fresh_ins er)) reusable)))) as Hndup1.
+      { repeat rewrite Permutation_PS_elements_ps_adds'... ndup_simpl... ndup_r Hndup. }
       assert (Forall (fun e => numstreams e = 1) (concat x2)) as Hnumstreams.
-      { eapply map_bind2_unnest_exp_numstreams in H2... }
+      { eapply map_bind2_unnest_exp_numstreams in H3... }
 
-      assert (length s0ss = length e0s) as Hlen1 by (eapply Forall2_length in H12; eauto).
-      assert (H2':=H2). eapply map_bind2_sem in H2... 2:solve_forall. clear H.
-      destruct H2 as [H' [Href1 [Histst1 [Hdom1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
+      assert (length s0ss = length e0s) as Hlen1 by (eapply Forall2_length in Hsem1; eauto).
+      assert (H2':=H3). eapply map_bind2_sem in H3... 2:solve_forall. clear H Hsem1.
+      destruct H3 as [H' [Href1 [Histst1 [Hdom1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
 
       assert (Forall2 (sem_exp G H' b) es sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
-      assert (length sss = length es) as Hlen2 by (eapply Forall2_length in H14; eauto).
-      assert (H3':=H3). eapply map_bind2_sem in H3... 2:solve_forall. clear H0.
-      destruct H3 as [H'' [Href2 [Hvalid2 [Hdom2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
+      assert (length sss = length es) as Hlen2 by (eapply Forall2_length in Hsem2; eauto).
+      assert (H3':=H4). eapply map_bind2_sem in H4... 2:solve_forall. clear H0 Hsem2.
+      destruct H4 as [H'' [Href2 [Hvalid2 [Hdom2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
+
+      assert (length sr = length er) as Hlen3 by (eapply Forall2_length in Hsemr; eauto).
+      assert (Forall2 (fun er sr => sem_exp G H'' b er [sr]) er sr) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+      assert (Hr:=H5). eapply unnest_resets_sem in H5...
+      2:{ solve_forall. eapply H13 in H11 as (H'''&?&?&?&?&?); eauto. exists H'''; repeat split; eauto.
+          inv H18; eauto. }
+      destruct H5 as (H'''&Href3&Hvalid3&Hdom3&Hsem3&Hsem3').
 
       assert (Forall2 (fun (e : exp) (v : Stream OpAux.value) => sem_exp G H'' b e [v]) (concat x2) (concat s0ss)) as Hsem''.
       { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
-      specialize (idents_for_anns_length _ _ _ _ H4) as Hlength.
+      specialize (idents_for_anns_length _ _ _ _ H6) as Hlength.
       assert (length vs = length a) as Hlength'''.
-      { eapply Forall3_length in H15 as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
+      { eapply Forall3_length in Arrow as [_ ?]. eapply Forall2_length in Hsem2. congruence. }
 
-      remember (Env.adds (map fst x5) vs H'') as H'''.
-      assert (length x5 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
+      remember (Env.adds (List.map fst x8) vs H''') as H''''.
+      assert (length x8 = length vs) as Hlength'''' by (rewrite Hlength, Hlength'''; auto).
 
-      assert (Forall2 (sem_var H''') (map fst x5) vs) as Hsemvars.
-      { rewrite HeqH'''. eapply sem_var_adds; eauto.
+      assert (Forall2 (sem_var H'''') (map fst x8) vs) as Hsemvars.
+      { rewrite HeqH''''. eapply sem_var_adds; eauto.
         + rewrite map_length; auto.
-        + eapply idents_for_anns_NoDupMembers in H4; eauto. rewrite <- fst_NoDupMembers; eauto. }
+        + eapply idents_for_anns_NoDupMembers in H6; eauto. rewrite <- fst_NoDupMembers; eauto. }
 
-      assert (Env.refines eq H'' H''') as Href4.
-      { eapply idents_for_anns_refines in H4... }
-      assert (Forall2 (fun e v => sem_exp G H''' b e [v]) (unnest_arrow (concat x2) (concat x6) a) vs) as Hsemf.
-      { eapply unnest_arrow_sem... 2:congruence.
+      assert (Env.refines eq H''' H'''') as Href4.
+      { eapply idents_for_anns_refines in H6... }
+      assert (Forall2 (fun e v => sem_exp G H'''' b e [v]) (unnest_arrow (concat x2) (concat x6) x5 a) vs) as Hsemf.
+      { eapply unnest_arrow_sem; simpl... 2:congruence.
         + eapply map_bind2_unnest_exp_length in H2'... congruence.
-        + clear - Hsem1 Href2 Href4. solve_forall. repeat (eapply sem_exp_refines; eauto).
-        + clear - Hsem2 Href2 Href4. solve_forall. repeat (eapply sem_exp_refines; eauto). }
+        + clear - Hsem1 Href2 Href3 Href4. eapply Forall2_impl_In... intros; simpl in *.
+          repeat (eapply sem_exp_refines; eauto).
+        + clear - Hsem2 Href2 Href3 Href4. eapply Forall2_impl_In... intros; simpl in *.
+          repeat (eapply sem_exp_refines; eauto).
+        + solve_forall. eapply sem_exp_refines; eauto. }
 
-      exists H'''. repeat (split; eauto).
+      exists H''''. repeat (split; eauto).
       * repeat (etransitivity; eauto).
-      * eapply idents_for_anns_dom in H4; eauto.
+      * eapply idents_for_anns_dom in H6; eauto.
       * clear - Hsemvars. solve_forall.
       * repeat rewrite Forall_app. repeat split.
-        -- clear - Hsemvars Hsemf.
-           remember (unnest_arrow _ _ _) as fby. clear Heqfby.
-           simpl_forall.
-           repeat rewrite_Forall_forall. 1:congruence.
-           destruct (nth _ x5 _) eqn:Hnth1.
-           econstructor.
-           ++ repeat constructor.
-              eapply H0... congruence.
-           ++ repeat constructor.
-              eapply H2 with (x1:=(i, a1))...
-        -- solve_forall. repeat (eapply sem_equation_refines; eauto).
-        -- solve_forall. repeat (eapply sem_equation_refines; eauto).
-           Unshelve. exact default_stream.
+        2-4:(solve_forall; repeat (eapply sem_equation_refines; eauto)).
+        clear - Hsemvars Hsemf.
+        remember (unnest_arrow _ _ _ _) as fby. clear Heqfby.
+        simpl_forall.
+        repeat rewrite_Forall_forall. congruence.
+        destruct (nth _ x8 _) eqn:Hnth1.
+        econstructor.
+        -- repeat constructor.
+           eapply H0... congruence.
+        -- repeat constructor.
+           eapply H2 with (x1:=(i, a1))...
     - (* when *)
+      inv Hwl. inv Hsem. repeat inv_bind.
       assert (length (concat x1) = length (annots es)) as Hlength by (eapply map_bind2_unnest_exp_length; eauto).
       assert (length es = length ss) by (apply Forall2_length in H11; auto).
       eapply map_bind2_sem in H1... 2:solve_forall. clear H.
@@ -800,12 +877,13 @@ Module Type CORRECTNESS
       eapply unnest_when_sem... congruence.
       eapply sem_var_refines...
     - (* merge *)
+      inv Hwl. inv Hsem. repeat inv_bind.
       simpl in *. rewrite map_app, ps_adds_app in Hvalid.
       assert (length (concat x3) = length (annots ets)) as Hlength1 by (eapply map_bind2_unnest_exp_length; eauto).
       assert (length (concat x6) = length (annots efs)) as Hlength2 by (eapply map_bind2_unnest_exp_length; eauto).
       assert (length (concat ts) = length (annots ets)) as Hlength1' by (eapply sem_exps_numstreams; eauto).
       assert (NoDup (map fst (fresh_ins efs) ++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.
-      assert (NoDup (map fst (fresh_ins ets) ++ PS.elements (ps_adds (map fst (concat (map fresh_in efs))) reusable))) as Hndup1.
+      assert (NoDup (map fst (fresh_ins ets) ++ PS.elements (ps_adds (map fst (fresh_ins efs)) reusable))) as Hndup1.
       { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
 
       assert (length ets = length ts) by (apply Forall2_length in H15; auto).
@@ -829,7 +907,7 @@ Module Type CORRECTNESS
         * rewrite Forall_app. split; auto.
           solve_forall. eapply sem_equation_refines...
       + (* exp *)
-        remember (Env.adds (map fst x0) vs H'') as H'''.
+        remember (Env.adds (List.map fst x0) vs H'') as H'''.
         assert (length vs = length x0) as Hlength'.
         { eapply idents_for_anns_length in H2. repeat simpl_length.
           apply Forall3_length in H17 as [? ?]; congruence. }
@@ -856,6 +934,7 @@ Module Type CORRECTNESS
           -- solve_forall. repeat (eapply sem_equation_refines; eauto).
           -- solve_forall. eapply sem_equation_refines...
     - (* ite *)
+      inv Hwl. inv Hsem. repeat inv_bind.
       simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
       assert (length x = 1). 2:singleton_length.
       { eapply unnest_exp_length in H2... congruence. }
@@ -863,7 +942,7 @@ Module Type CORRECTNESS
       assert (length (concat x8) = length (annots efs)) as Hlength2 by (eapply map_bind2_unnest_exp_length; eauto).
       assert (length (concat ts) = length (annots ets)) as Hlength1' by (eapply sem_exps_numstreams; eauto).
       assert (NoDup (map fst (fresh_ins efs) ++ PS.elements reusable)) as Hndup3 by repeat ndup_r Hndup.
-      assert (NoDup (map fst (fresh_ins ets) ++ PS.elements (ps_adds (map fst (concat (map fresh_in efs))) reusable))) as Hndup2.
+      assert (NoDup (map fst (fresh_ins ets) ++ PS.elements (ps_adds (map fst (fresh_ins efs)) reusable))) as Hndup2.
       { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup. }
       assert (NoDup
                 (map fst (fresh_in e) ++
@@ -896,7 +975,7 @@ Module Type CORRECTNESS
         * repeat (rewrite Forall_app; split); auto.
           1,2:solve_forall; repeat (eapply sem_equation_refines; eauto).
       + (* exp *)
-        remember (Env.adds (map fst x) vs H''') as H''''.
+        remember (Env.adds (List.map fst x) vs H''') as H''''.
         assert (length vs = length x) as Hlength'.
         { eapply idents_for_anns_length in H0. repeat simpl_length.
           apply Forall3_length in H19 as [? ?]; congruence. }
@@ -922,97 +1001,43 @@ Module Type CORRECTNESS
             1,2:repeat constructor... eapply sem_exp_refines... }
           solve_forall. destruct H1 as [? ?]...
     - (* app *)
-      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
-      assert (a = map snd x4) as Hanns; subst.
-      { eapply idents_for_anns'_values in H4... }
-      specialize (idents_for_anns'_length _ _ _ _ H4) as Hlength1.
-      assert (length (n_out n) = length vs) as Hlength2.
-      { destruct H14. apply Forall2_length in H12.
-        rewrite H6 in H8; inv H8. unfold idents in *. solve_length. }
-      assert (length es = length ss) as Hlength3.
-      { apply Forall2_length in H13... }
-      assert (length (concat x5) = length (n_in n)) as Hlength4.
-      { eapply map_bind2_unnest_exp_length in H2; eauto. congruence. }
-      assert (NoDup (map fst (Syn.anon_streams (map snd x4))++ PS.elements reusable)) as Hndup2 by ndup_r Hndup.
-      assert (NoDup (map fst (fresh_ins es) ++ PS.elements (ps_adds (map fst (Syn.anon_streams (map snd x4))) reusable))).
-      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
-
-      eapply map_bind2_sem in H2... 2:solve_forall... clear H0.
-      destruct H2 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
-
-      eapply unnest_noops_exps_sem in H3 as (H''&Href2&Hvalid2&Histst2&Hsem2&Hsem2')...
-      3:eapply Forall2_concat; eauto.
-      2:{ unfold find_node_incks. rewrite H8.
-          rewrite map_length. auto. }
-
-      assert (sem_exp G H'' b (Eapp f x2 None (map snd x4)) vs) as Hsem'.
-      { apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))).
-        + rewrite <- concat_map, Forall2_map_2; eauto.
-        + rewrite concat_map_singl2. assumption. }
-      remember (Env.adds (map fst x4) vs H'') as H'''.
-      assert (length vs = length x4) as Hlen' by solve_length.
-      assert (Env.refines eq H'' H''') as Href3.
-      { eapply idents_for_anns'_refines... }
-      assert (NoDupMembers x4) as Hndup'.
-      { eapply idents_for_anns'_NoDupMembers in H4... }
-      assert (Forall2 (sem_var H''') (map fst x4) vs) as Hvars.
-      { rewrite HeqH'''. eapply sem_var_adds... 1:rewrite map_length... rewrite <- fst_NoDupMembers... }
-      exists H'''. repeat (split; eauto).
-      + do 2 etransitivity...
-      + eapply idents_for_anns'_dom in H4...
-      + clear - Hvars. solve_forall.
-      + rewrite app_nil_r. constructor.
-        * apply Seq with (ss:=[vs]).
-          -- repeat constructor...
-             eapply sem_exp_refines...
-          -- simpl. rewrite app_nil_r; auto.
-        * rewrite Forall_app. split.
-          1,2:solve_forall; eapply sem_equation_refines; [|eauto]...
-          etransitivity...
-    - (* app (reset) *)
-      do 6 inv_bind.
-      assert (Hs:=H4). eapply unnest_reset_Some in Hs as [er' ?]; subst.
-      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
+      repeat rewrite map_app, ps_adds_app in Hvalid.
       assert (a = map snd x8) as Hanns; subst.
       { eapply idents_for_anns'_values in H5... }
       specialize (idents_for_anns'_length _ _ _ _ H5) as Hlength1.
       assert (length (n_out n) = length vs) as Hlength2.
-      { specialize (H19 0). inv H19. apply Forall2_length in H16.
-        unfold idents in *. repeat rewrite map_length in H16. congruence. }
+      { specialize (H23 0). inv H23. apply Forall2_length in H9.
+        unfold idents in *. repeat rewrite map_length in H9. congruence. }
       assert (length es = length ss) as Hlength3.
-      { apply Forall2_length in H15... }
-      assert (length x = length (n_in n)) as Hlength4.
-      { eapply unnest_exps_length in H2; eauto. congruence. }
+      { apply Forall2_length in H19... }
+      assert (length (concat x6) = length (n_in n)) as Hlength4.
+      { eapply map_bind2_unnest_exp_length in H2; eauto. congruence. }
       assert (NoDup (map fst (Syn.anon_streams (map snd x8))++ PS.elements reusable)) as Hndup2 by repeat ndup_r Hndup.
-      assert (NoDup (map fst (fresh_in r) ++ PS.elements (ps_adds (map fst (Syn.anon_streams (map snd x8))) reusable))) as Hndup3.
+      assert (NoDup (map fst (fresh_ins er) ++ PS.elements (ps_adds (map fst (Syn.anon_streams (map snd x8))) reusable))) as Hndup3.
       { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup. }
-      assert (NoDup (map fst (fresh_ins es) ++ PS.elements (ps_adds (map fst (fresh_in r)) (ps_adds (map fst (Syn.anon_streams (map snd x8))) reusable)))) as Hndup4.
+      assert (NoDup (map fst (fresh_ins es) ++ PS.elements (ps_adds (map fst (fresh_ins er)) (ps_adds (map fst (Syn.anon_streams (map snd x8))) reusable)))) as Hndup4.
       { repeat rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup. }
 
-      apply bind2_spec in H2 as [? [? [? [? Hret]]]]. rewrite ret_spec in Hret; inv Hret.
-      eapply map_bind2_sem in H2... 2:solve_forall... clear H0.
+      eapply map_bind2_sem in H2... 2:solve_forall... clear H.
       destruct H2 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
 
       eapply unnest_noops_exps_sem in H3 as (H''&Href2&Hvalid2&Histst2&Hsem2&Hsem2')...
       3:eapply Forall2_concat; eauto.
-      2:{ unfold find_node_incks. rewrite H10.
+      2:{ unfold find_node_incks. rewrite H14.
           rewrite map_length. auto. }
 
-      assert (sem_exp G H' b r [rs]) as Hsemr' by (eapply sem_exp_refines; eauto). clear H17.
-      eapply (unnest_reset_sem _ _ _ (Some r)) with (H0:=H'') in H4; simpl...
-      2:{ clear H4. intros. eapply H in H0 as [H''' [? [? [? [? ?]]]]]. 2,3,5,6:eauto.
-          2:eapply sem_exp_refines; eauto.
-          inv H4.
-          exists H'''. repeat split...
-      }
-      2:eapply sem_exp_refines...
-      destruct H4 as [H''' [Href3 [Hvalid3 [Histst3 [Hsem3 Hsem3']]]]].
+      assert (length rs = length er) as Hlen3 by (eapply Forall2_length in H21; eauto).
+      assert (Forall2 (fun er sr => sem_exp G H'' b er [sr]) er rs) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+      assert (Hr:=H4). eapply unnest_resets_sem in H4...
+      2:{ solve_forall. eapply H17 in H12 as (H'''&?&?&?&?&?); eauto. exists H'''; repeat split; eauto.
+          inv H25; eauto. }
+      destruct H4 as (H'''&Href3&Hvalid3&Hdom3&Hsem3&Hsem3').
 
-      assert (sem_exp G H''' b (Eapp f x2 (Some er') (map snd x8)) vs) as Hsem'.
-      { eapply Sreset with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss)))...
+      assert (sem_exp G H''' b (Eapp f x2 x5 (map snd x8)) vs) as Hsem'.
+      { eapply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss)))...
         + rewrite <- concat_map, Forall2_map_2.
           solve_forall. eapply sem_exp_refines...
-        + intros k. specialize (H19 k).
+        + intros k. specialize (H23 k).
           rewrite concat_map_singl2. assumption. }
       remember (Env.adds (map fst x8) vs H''') as H''''.
       assert (length vs = length x8) as Hlen' by solve_length.
@@ -1034,6 +1059,7 @@ Module Type CORRECTNESS
         * solve_forall. repeat (eapply sem_equation_refines; eauto).
         * solve_forall. repeat (eapply sem_equation_refines; eauto).
         * solve_forall. eapply sem_equation_refines...
+          Unshelve. 1,2:exact default_stream.
   Qed.
 
   Corollary unnest_exps_sem : forall G vars b es H vs es' eqs' st st' reusable,
@@ -1078,81 +1104,85 @@ Module Type CORRECTNESS
     destruct e; try eapply unnest_exp_sem in Hnorm; eauto.
     1,2,3,4,7,8,9: (destruct Hnorm as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem1 Hsem2]]]]];
                     exists H'; repeat (split; eauto)).
-    1,2,3:(unfold unnest_rhs in Hnorm;inv Hwt; inv Hsem).
+    1,2,3:unfold unnest_rhs in Hnorm; repeat inv_bind. 3:inv Hwt; inv Hsem.
     - (* fby *)
-      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
-      repeat inv_bind.
+      inversion_clear Hwt as [| | | |????? Hwl1 Hwl2 Hwlr Hl1 Hl2 Hlr| | | | |].
+      inversion_clear Hsem as [| | | |??????????? Hsem1 Hsem2 Hsemr Bools Fby| | | | |].
       assert (length x = length (annots l)) as Hlength1 by (eapply unnest_exps_length; eauto).
       assert (length x2 = length (annots l0)) as Hlength2 by (eapply unnest_exps_length; eauto).
       unfold unnest_exps in *. repeat inv_bind.
-      assert (NoDup (map fst (fresh_ins l0) ++ PS.elements reusable)) as Hndup4 by ndup_r Hndup1.
-      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_ins l0)) reusable))) as Hndup3.
-      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
+      assert (NoDup (map fst (fresh_ins l1) ++ PS.elements reusable)) as Hndup4 by repeat ndup_r Hndup1.
+      assert (NoDup (map fst (fresh_ins l0) ++ PS.elements (ps_adds (map fst (fresh_ins l1)) reusable))) as Hndup3.
+      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup1. }
+      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_ins l0)) (ps_adds (map fst (fresh_ins l1)) reusable)))) as Hndup2.
+      { repeat rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup1. }
 
-      eapply unnest_exps_sem in H0...
+      eapply unnest_exps_sem in H0... clear Hsem1.
       destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
       assert (Forall2 (sem_exp G H' b) l0 sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
 
-      eapply unnest_exps_sem in H1...
+      eapply unnest_exps_sem in H1... clear Hsem2.
       destruct H1 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
       assert (Forall2 (fun (e : exp) (v : Stream OpAux.value) => sem_exp G H'' b e [v]) (concat x2) (concat s0ss)) as Hsem''.
       { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
 
-      exists H''. repeat (split; auto).
+      assert (length sr = length l1) as Hlen3 by (eapply Forall2_length in Hsemr; eauto).
+      assert (Forall2 (fun er sr => sem_exp G H'' b er [sr]) l1 sr) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+      assert (Hr:=H2). eapply unnest_resets_sem in H2...
+      2:{ solve_forall. eapply unnest_exp_sem in H10 as (H'''&?&?&?&Sem1&?)... inv Sem1...
+          exists H'''. repeat (split; eauto). }
+      destruct H2 as (H'''&Href3&Hvalid3&Hdom3&Hsem3&Hsem3').
+
+      exists H'''. repeat (split; auto).
       + repeat (etransitivity; eauto).
       + left. eapply unnest_fby_sem... 1,2:solve_length.
+        1,2:solve_forall; eapply sem_exp_refines; eauto.
       + repeat rewrite Forall_app. repeat split...
-        solve_forall. eapply sem_equation_refines; [| eauto]. etransitivity...
+        1,2:solve_forall; (eapply sem_equation_refines; [| eauto]; etransitivity; eauto).
     - (* arrow *)
-      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
-      repeat inv_bind.
+      inversion_clear Hwt as [| | | | |????? Hwl1 Hwl2 Hwlr Hl1 Hl2 Hlr| | | |].
+      inversion_clear Hsem as [| | | | |??????????? Hsem1 Hsem2 Hsemr Bools Fby| | | |].
       assert (length x = length (annots l)) as Hlength1 by (eapply unnest_exps_length; eauto).
       assert (length x2 = length (annots l0)) as Hlength2 by (eapply unnest_exps_length; eauto).
       unfold unnest_exps in *. repeat inv_bind.
-      assert (NoDup (map fst (fresh_ins l0) ++ PS.elements reusable)) as Hndup4 by ndup_r Hndup1.
-      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_ins l0)) reusable))) as Hndup3.
-      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
+      simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
+      assert (NoDup (map fst (fresh_ins l1) ++ PS.elements reusable)) as Hndup4 by repeat ndup_r Hndup1.
+      assert (NoDup (map fst (fresh_ins l0) ++ PS.elements (ps_adds (map fst (fresh_ins l1)) reusable))) as Hndup3.
+      { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup1. }
+      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_ins l0)) (ps_adds (map fst (fresh_ins l1)) reusable)))) as Hndup2.
+      { repeat rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... ndup_r Hndup1. }
 
-      eapply unnest_exps_sem in H0...
+      eapply unnest_exps_sem in H0... clear Hsem1.
       destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
       assert (Forall2 (sem_exp G H' b) l0 sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
 
-      eapply unnest_exps_sem in H1...
+      eapply unnest_exps_sem in H1... clear Hsem2.
       destruct H1 as [H'' [Href2 [Hvalid2 [Histst2 [Hsem2 Hsem2']]]]]. apply Forall2_concat in Hsem2.
       assert (Forall2 (fun (e : exp) (v : Stream OpAux.value) => sem_exp G H'' b e [v]) (concat x2) (concat s0ss)) as Hsem''.
       { repeat rewrite_Forall_forall. eapply sem_exp_refines... }
 
-      exists H''. repeat (split; auto).
+      assert (length sr = length l1) as Hlen3 by (eapply Forall2_length in Hsemr; eauto).
+      assert (Forall2 (fun er sr => sem_exp G H'' b er [sr]) l1 sr) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+      assert (Hr:=H2). eapply unnest_resets_sem in H2...
+      2:{ solve_forall. eapply unnest_exp_sem in H10 as (H'''&?&?&?&Sem1&?)... inv Sem1...
+          exists H'''. repeat (split; eauto). }
+      destruct H2 as (H'''&Href3&Hvalid3&Hdom3&Hsem3&Hsem3').
+
+      exists H'''. repeat (split; auto).
       + repeat (etransitivity; eauto).
       + left. eapply unnest_arrow_sem... 1,2:solve_length.
+        1,2:solve_forall; eapply sem_exp_refines; eauto.
       + repeat rewrite Forall_app. repeat split...
-        solve_forall. eapply sem_equation_refines; [| eauto]. etransitivity...
+        1,2:solve_forall; (eapply sem_equation_refines; [| eauto]; etransitivity; eauto).
     - (* app *)
-      repeat inv_bind. unfold unnest_exps in H0; repeat inv_bind.
-      assert (length (concat x4) = length (n_in n)) as Hlength4.
-      { eapply map_bind2_unnest_exp_length in H0; eauto. congruence. }
-      eapply unnest_exps_sem in H0...
-      destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]].
-      eapply unnest_noops_exps_sem in H1 as (H''&Href2&Hvalid2&Histst2&Hsem2&Hsem2')...
-      3:eapply Forall2_concat...
-      2:{ unfold find_node_incks. rewrite H6, map_length; auto. }
-      exists H''. repeat (split; auto). etransitivity...
-      right. eexists; split...
-      apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))).
-      * rewrite <- concat_map, Forall2_map_2; auto.
-      * rewrite concat_map_singl2. assumption.
-      * rewrite app_nil_r...
-        rewrite Forall_app; split; auto.
-        solve_forall. eapply sem_equation_refines...
-    - (* app (reset) *)
       simpl in *. repeat rewrite map_app, ps_adds_app in Hvalid.
-      do 5 inv_bind. unfold unnest_exps in H0.
-      assert (Hs:=H2). eapply unnest_reset_Some in Hs as [er' ?]; subst.
-      apply bind2_spec in H0 as [? [? [? [? Hret]]]]. rewrite ret_spec in Hret; inv Hret.
-      assert (NoDup (map fst (fresh_in r) ++ PS.elements reusable)) as Hndup4 by ndup_r Hndup1.
-      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_in r)) reusable))) as Hndup3.
+      unfold unnest_exps in H0.
+      repeat inv_bind.
+      assert (NoDup (map fst (fresh_ins l0) ++ PS.elements reusable)) as Hndup4 by ndup_r Hndup1.
+      assert (NoDup (map fst (fresh_ins l) ++ PS.elements (ps_adds (map fst (fresh_ins l0)) reusable))) as Hndup3.
       { rewrite Permutation_PS_elements_ps_adds'; ndup_simpl... }
-      assert (length (concat x5) = length (n_in n)) as Hlength4.
+      assert (length (concat x6) = length (n_in n)) as Hlength4.
       { eapply map_bind2_unnest_exp_length in H0; eauto. congruence. }
 
       eapply unnest_exps_sem in H0...
@@ -1160,22 +1190,19 @@ Module Type CORRECTNESS
 
       eapply unnest_noops_exps_sem in H1 as (H''&Href2&Hvalid2&Histst2&Hsem2&Hsem2')...
       3:eapply Forall2_concat...
-      2:{ unfold find_node_incks. rewrite H8, map_length; auto. }
+      2:{ unfold find_node_incks. rewrite H11, map_length; auto. }
 
-      assert (sem_exp G H' b r [rs]) as Hsemr'.
-      { eapply sem_exp_refines; eauto. } clear H15.
-      eapply (unnest_reset_sem _ _ _ (Some r)) with (H0:=H'') in H2; simpl...
-      3:eapply sem_exp_refines...
-      2:{ clear H2; intros.
-          eapply unnest_exp_sem with (H:=H'') in H0 as [H''' [? [? [? [? ?]]]]]; eauto.
-          2:eapply sem_exp_refines...
-          inv H3. exists H'''; repeat split; eauto. }
-      repeat inv_bind.
-      destruct H2 as [H'''' [Href3 [Hvalid3 [Histst3 [Hsem3 Hsem3']]]]].
-      exists H''''. repeat (split; auto).
+      assert (length rs = length l0) as Hlen3 by (eapply Forall2_length in H18; eauto).
+      assert (Forall2 (fun er sr => sem_exp G H'' b er [sr]) l0 rs) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+      assert (Hr:=H2). eapply unnest_resets_sem in H2...
+      2:{ solve_forall. eapply unnest_exp_sem in H10 as (H'''&?&?&?&Sem1&?)... inv Sem1...
+          exists H'''. repeat (split; eauto). }
+      destruct H2 as (H'''&Href3&Hvalid3&Hdom3&Hsem3&Hsem3').
+
+      exists H'''. repeat (split; auto).
       + repeat (etransitivity; eauto).
       + right. eexists; split...
-        apply Sreset with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs); eauto.
+        apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs); eauto.
         * rewrite <- concat_map, Forall2_map_2; auto.
           solve_forall. repeat (eapply sem_exp_refines; eauto).
         * rewrite concat_map_singl2. assumption.
@@ -1425,11 +1452,108 @@ Module Type CORRECTNESS
         solve_forall. eapply sem_equation_refines...
   Qed.
 
+  (** *** Preservation of the semantics while restricting an environment *)
+
+  Fact sem_var_restrict {B} : forall (vars : list (ident * B)) H id ty v,
+      In (id, ty) vars ->
+      sem_var H id v ->
+      sem_var (Env.restrict H (List.map fst vars)) id v.
+  Proof.
+    intros vars H id ty v HIn Hsem.
+    inv Hsem.
+    econstructor; eauto.
+    apply Env.find_1 in H1. apply Env.find_2.
+    apply Env.restrict_find; auto.
+    simpl_In. exists (id, ty); auto.
+  Qed.
+
+  Fact sem_exp_restrict : forall G vars H b e vs,
+      wt_exp G vars e ->
+      sem_exp G H b e vs ->
+      sem_exp G (Env.restrict H (List.map fst vars)) b e vs.
+  Proof with eauto.
+    induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem.
+    - (* const *)
+      constructor...
+    - (* var *)
+      constructor. eapply sem_var_restrict...
+    - (* unop *)
+      econstructor...
+    - (* binop *)
+      econstructor...
+    - (* fby *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+      + repeat rewrite_Forall_forall. eapply H2...
+    - (* arrow *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+      + repeat rewrite_Forall_forall. eapply H2...
+    - (* when *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + eapply sem_var_restrict...
+    - (* merge *)
+      econstructor...
+      + eapply sem_var_restrict...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+    - (* ite *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+    - (* app *)
+      econstructor...
+      + repeat rewrite_Forall_forall. eapply H0...
+      + repeat rewrite_Forall_forall. eapply H1...
+  Qed.
+
+  Fact sem_equation_restrict : forall G vars H b eq,
+      wt_equation G vars eq ->
+      sem_equation G H b eq ->
+      sem_equation G (Env.restrict H (List.map fst vars)) b eq.
+  Proof with eauto.
+    intros G vars H b [xs es] Hwt Hsem.
+    inv Hwt. inv Hsem.
+    econstructor.
+    + repeat rewrite_Forall_forall; eauto.
+      eapply sem_exp_restrict...
+    + repeat rewrite_Forall_forall.
+      eapply sem_var_restrict...
+      Unshelve. eapply Op.bool_type.
+  Qed.
+
   (** *** Preservation of sem_node *)
+
+  Fact sem_var_In : forall H vs ss,
+      Forall2 (sem_var H) vs ss ->
+      Forall (fun v => Env.In v H) vs.
+  Proof.
+    intros. repeat rewrite_Forall_forall.
+    apply In_nth with (d:=xH) in H2. destruct H2 as [n [Hn H2]].
+    eapply H1 with (b:=default_stream) in Hn. 2,3:reflexivity.
+    setoid_rewrite H2 in Hn.
+    inv Hn. apply Env.find_1 in H4.
+    apply Env.find_In in H4. auto.
+  Qed.
+
+  Fact sem_equation_In : forall G H b eqs,
+      Forall (sem_equation G H b) eqs ->
+      Forall (fun v => Env.In v H) (vars_defined eqs).
+  Proof.
+    induction eqs; intros Hsem; inv Hsem; simpl.
+    - constructor.
+    - destruct a; simpl.
+      inv H2.
+      apply Forall_app. split; auto.
+      apply sem_var_In in H8; auto.
+  Qed.
 
   Fact unnest_node_sem_equation : forall G H n Hwl Hpref ins,
       wt_node G n ->
-      Env.dom H (idents (n_in n ++ n_vars n ++ n_out n)) ->
+      Env.dom H (List.map fst (n_in n ++ n_vars n ++ n_out n)) ->
       Forall2 (sem_var H) (idents (n_in n)) ins ->
       Forall (sem_equation G H (clocks_of ins)) (n_eqs n) ->
       exists H', Env.refines eq H H' /\
@@ -1445,7 +1569,7 @@ Module Type CORRECTNESS
       destruct Hwt as [_ [_ [_ Hwt]]]; eauto.
     - rewrite map_fst_idty.
       apply init_st_valid_reuse.
-      + replace (ps_adds _ PS.empty) with (ps_from_list (idents (anon_in_eqs (n_eqs n)))); auto.
+      + replace (ps_adds _ PS.empty) with (ps_from_list (map fst (anon_in_eqs (n_eqs n)))); auto.
         rewrite ps_from_list_ps_of_list.
         repeat rewrite ps_of_list_ps_to_list_Perm; repeat rewrite map_app; repeat rewrite <- app_assoc in *; auto.
         repeat ndup_r Hndup.
@@ -1458,7 +1582,7 @@ Module Type CORRECTNESS
         repeat rewrite map_app.
         repeat apply incl_tl.
         repeat rewrite app_assoc. apply incl_appl. reflexivity.
-      + replace (ps_adds _ PS.empty) with (ps_from_list (idents (anon_in_eqs (n_eqs n)))); auto.
+      + replace (ps_adds _ PS.empty) with (ps_from_list (map fst (anon_in_eqs (n_eqs n)))); auto.
         rewrite PS_For_all_Forall', <- Hpref.
         pose proof (n_good n) as (Good&_).
         eapply Forall_incl; [eauto|].
@@ -1479,7 +1603,7 @@ Module Type CORRECTNESS
       sem_node (n::G) f ins outs ->
       sem_node ((unnest_node G n Hwl Hpref)::G') f ins outs.
   Proof with eauto.
-    intros * Hnames Hiface Href HwtG HwcG Hord1 Hord2 Hsem.
+   intros * Hnames Hiface Href HwtG HwcG Hord1 Hord2 Hsem.
     assert (Forall (fun n' => exists v, In v G /\ n_name n <> n_name n') G') as Hnames'.
     { assert (length G = length G') by (eapply Forall2_length in Hnames; eauto).
       inv HwtG. eapply Forall2_ignore1. solve_forall. }
@@ -1499,8 +1623,8 @@ Module Type CORRECTNESS
       (* New env H' (restrict H) and its properties *)
       eapply LCS.sem_node_restrict in H3 as (Hdom&Hins'&Houts'&Heqs'); eauto.
       2:destruct H6 as (?&?&?&?); auto.
-      remember (Env.restrict H (idents (n_in n0++n_vars n0++n_out n0))) as H'.
-      clear H H1 H2 HeqH'.
+      remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
+      clear H1 H2 HeqH'.
       inversion_clear HwtG. rename H0 into Hwt.
 
       eapply unnest_node_sem_equation in Heqs' as (H''&Href'&Heqs'')...
@@ -1610,13 +1734,38 @@ Module Type CORRECTNESS
     constructor; simpl; auto.
   Qed.
 
-  Lemma sfby_const : forall bs v,
-      sfby v (const_val bs v) ≡ (const_val bs v).
+  CoFixpoint sfby_reset (v0 : Op.val) (s : Stream OpAux.value) (sr : Stream bool) (v : Op.val) :=
+    match s, sr with
+    | absent ⋅ s', false ⋅ sr' => absent ⋅ (sfby_reset v0 s' sr' v)
+    | (present v') ⋅ s', false ⋅ sr' => (present v) ⋅ (sfby_reset v0 s' sr' v')
+    | absent ⋅ s', true ⋅ sr' => absent ⋅ (sfby_reset v0 s' sr' v0)
+    | (present v') ⋅ s', true ⋅ sr' => (present v0) ⋅ (sfby_reset v0 s' sr' v')
+    end.
+
+  Fact sfby_reset_Cons : forall v0 x y s' sr' v,
+      sfby_reset v0 (x ⋅ s') (y ⋅ sr') v =
+      match x, y with
+      | absent, false => absent ⋅ (sfby_reset v0 s' sr' v)
+      | (present v'), false => (present v) ⋅ (sfby_reset v0 s' sr' v')
+      | absent, true => absent ⋅ (sfby_reset v0 s' sr' v0)
+      | (present v'), true => (present v0) ⋅ (sfby_reset v0 s' sr' v')
+      end.
+  Proof.
+    intros.
+    rewrite unfold_Stream at 1; simpl.
+    destruct x, y; reflexivity.
+  Qed.
+
+  Add Parametric Morphism : sfby_reset
+      with signature eq ==> @EqSt value ==> @EqSt bool ==> eq ==> @EqSt value
+    as sfby_reset_EqSt.
   Proof.
     cofix CoFix.
-    intros [b bs] v.
-    rewrite const_val_Cons.
-    destruct b; rewrite sfby_Cons; constructor; simpl; auto.
+    intros v [? ?] [? ?] Heq1 [? ?] [? ?] Heq2 ?.
+    inv Heq1; inv Heq2; simpl in *; subst.
+    constructor; simpl.
+    + destruct v1, b0; auto.
+    + destruct v1, b0; auto.
   Qed.
 
   Lemma ite_false : forall bs xs ys,
@@ -1630,132 +1779,131 @@ Module Type CORRECTNESS
     inv Hsync1; inv Hsync2; constructor; auto.
   Qed.
 
-  Lemma sfby_fby1 : forall bs v y ys,
-      aligned ys bs ->
-      fby1 y (const_val bs v) ys (sfby y ys).
+  Lemma sfby_reset_fby1 : forall bs v0 v v' s r,
+      aligned s bs ->
+      LiftO (v = v0) (fun v' => v = v') v' ->
+      fby1 v' (const_val bs v0) s r (sfby_reset v0 s r v).
   Proof with eauto.
-    cofix sfby_fby1.
-    intros [b bs] v y ys Hsync.
-    specialize (sfby_fby1 bs).
-    inv Hsync;
+    cofix hold_fby1.
+    intros [b bs] * Haligned Hlift.
+    specialize (hold_fby1 bs).
+    inv Haligned;
       rewrite const_val_Cons; rewrite unfold_Stream; simpl.
-    - constructor...
-    - constructor...
+    - unfold_Stv r.
+      + constructor. eapply hold_fby1; simpl; eauto.
+      + destruct v'; simpl in *; subst.
+        1,2:econstructor; eauto; eapply hold_fby1; simpl; eauto.
+    - unfold_Stv r.
+      + constructor. eapply hold_fby1; simpl; eauto.
+      + destruct v'; simpl in *; subst.
+        1,2:econstructor; eauto; eapply hold_fby1; simpl; eauto.
   Qed.
 
-  Lemma sfby_fby1' : forall y y0s ys zs,
-      fby1 y y0s ys zs ->
-      zs ≡ (sfby y ys).
+  Corollary hold_fby : forall bs v0 s r,
+      aligned s bs ->
+      fby (const_val bs v0) s r (sfby_reset v0 s r v0).
   Proof.
-    cofix CoFix.
-    intros y y0s ys zs Hfby1.
-    inv Hfby1; constructor; simpl; eauto.
+    intros * Hal.
+    apply sfby_reset_fby1; simpl; auto.
   Qed.
 
-  Lemma sfby_fby : forall b v y,
-      aligned y b ->
-      fby (const_val b v) y (sfby v y).
-  Proof with eauto.
-    cofix sfby_fby.
-    intros [b bs] v y Hsync.
-    rewrite const_val_Cons.
-    rewrite unfold_Stream; simpl.
-    destruct b; simpl; inv Hsync.
-    - econstructor. eapply sfby_fby1...
-    - econstructor; simpl...
-  Qed.
+  (* Lemma sfby_reset_fby1' : forall y y0s ys rs zs, *)
+  (*     fby1 y y0s ys rs zs -> *)
+  (*     zs ≡ (sfby_reset y ys). *)
+  (* Proof. *)
+  (*   cofix CoFix. *)
+  (*   intros y y0s ys zs Hfby1. *)
+  (*   inv Hfby1; constructor; simpl; eauto. *)
+  (* Qed. *)
 
-  Definition init_stream bs :=
-    sfby true_val (const bs false_const).
+  Definition init_stream bs rs :=
+    sfby_reset true_val (const bs false_const) rs true_val.
 
   Instance init_stream_Proper:
-    Proper (@EqSt bool ==> @EqSt value) init_stream.
+    Proper (@EqSt bool ==> @EqSt bool ==> @EqSt value) init_stream.
   Proof.
-    intros bs bs' Heq.
-    unfold init_stream. rewrite Heq. reflexivity.
+    intros bs bs' Heq1 rs rs' Heq2.
+    unfold init_stream. rewrite Heq1, Heq2. reflexivity.
   Qed.
 
-  Lemma fby_ite : forall bs v y0s ys zs,
+  Lemma fby1_ite : forall bs v v' y0s ys zs rs v1 v2,
       (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
-      fby y0s ys zs ->
-      ite (sfby true_val (const_val bs false_val)) y0s (sfby v ys) zs.
+      LiftO (v1 = true_val) (fun v' => v1 = false_val /\ v' = v2) v' ->
+      fby1 v' y0s ys rs zs ->
+      ite (sfby_reset true_val (const_val bs false_val) rs v1) y0s (sfby_reset v ys (Streams.const false) v2) zs.
   Proof with eauto.
-    cofix fby_init_stream_ite.
-    intros [b bs] v y0s ys zs Hsync Hfby1.
-    apply LCS.fby_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
-    destruct b; inv Hsync1; inv Hsync2; inv Hsync3.
-    - repeat rewrite const_val_Cons.
-      inv Hfby1.
-      repeat rewrite sfby_Cons. constructor.
-      rewrite sfby_const.
-      rewrite <- sfby_fby1'...
-      apply ite_false...
-    - rewrite const_val_Cons. repeat rewrite sfby_Cons.
-      inv Hfby1.
-      constructor; auto.
-  Qed.
-
-  Corollary fby_init_stream_ite : forall bs v y0s ys zs,
-      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
-      fby y0s ys zs ->
-      ite (init_stream bs) y0s (sfby v ys) zs.
-  Proof.
-    intros * Hsync Hfby1.
-    eapply fby_ite in Hfby1; eauto.
-    unfold init_stream.
-    rewrite const_val_const. rewrite sem_false_const. eassumption.
-  Qed.
-
-  Lemma arrow_ite : forall bs y0s ys zs,
-      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
-      arrow y0s ys zs ->
-      ite (sfby true_val (const_val bs false_val)) y0s ys zs.
-  Proof.
     cofix CoFix.
-    intros [b bs] y0s ys zs Hsync Harrow.
-    apply LCS.arrow_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|auto].
-    destruct b; inv Hsync1; inv Hsync2; inv Hsync3; inv Harrow.
-    - rewrite const_val_Cons, sfby_Cons.
-      constructor.
-      rewrite sfby_const.
-      clear - H0 H1 H2 H3. revert bs vs vs0 vs1 H1 H2 H3 H0.
-      cofix CoFix. intros * Hsync1 Hsync2 Hsync3 Harrow.
-      destruct bs as [[|] bs]; inv Hsync1; inv Hsync2; inv Hsync3; inv Harrow.
-      1,2:rewrite const_val_Cons; constructor; auto.
-    - rewrite const_val_Cons, sfby_Cons.
-      constructor; auto.
+    intros [b bs] * Hsync Hv' Hfby1.
+    eapply fby1_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|eauto].
+    inv Hfby1; inv Hsync1; inv Hsync2; inv Hsync3; simpl in *.
+    1-5:rewrite CommonStreams.const_Cons, const_val_Cons; repeat rewrite sfby_reset_Cons.
+    - constructor. eapply CoFix; eauto. simpl; auto.
+    - constructor. eapply CoFix; eauto. simpl; auto.
+    - constructor. eapply CoFix; eauto.
+    - subst; constructor. eapply CoFix; eauto. simpl; auto.
+    - destruct Hv'; subst. constructor. eapply CoFix; eauto. simpl; auto.
   Qed.
 
-  Corollary arrow_init_stream_ite : forall bs y0s ys zs,
+  Corollary fby_init_stream_ite : forall bs v y0s ys rs zs,
       (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
-      arrow y0s ys zs ->
-      ite (init_stream bs) y0s ys zs.
+      fby y0s ys rs zs ->
+      ite (init_stream bs rs) y0s (sfby_reset v ys (Streams.const false) v) zs.
+    intros * Hsync Hfby1.
+    eapply fby1_ite in Hfby1; eauto. 2:simpl; eauto.
+    unfold init_stream.
+    rewrite const_val_const, sem_false_const. eassumption.
+  Qed.
+
+  Lemma arrow1_ite : forall bs b y0s ys zs rs v1,
+      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
+      val_to_bool v1 = Some b ->
+      arrow1 b y0s ys rs zs ->
+      ite (sfby_reset true_val (const_val bs false_val) rs v1) y0s ys zs.
+  Proof with eauto.
+    cofix CoFix.
+    intros [b bs] * Hsync Hb Harrow1.
+    eapply arrow1_aligned in Hsync as [Hsync1 [Hsync2 Hsync3]]; [|eauto].
+    inv Harrow1; inv Hsync1; inv Hsync2; inv Hsync3; simpl in *.
+    1-5:rewrite const_val_Cons, sfby_reset_Cons.
+    - constructor. eapply CoFix; eauto. apply val_to_bool_true.
+    - constructor. eapply CoFix; eauto. apply val_to_bool_false.
+    - constructor. eapply CoFix; eauto.
+    - apply val_to_bool_true' in Hb; subst.
+      constructor. eapply CoFix; eauto. apply val_to_bool_false.
+    - apply val_to_bool_false' in Hb; subst.
+      constructor. eapply CoFix; eauto. apply val_to_bool_false.
+  Qed.
+
+  Corollary arrow_init_stream_ite : forall bs y0s ys rs zs,
+      (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
+      arrow y0s ys rs zs ->
+      ite (init_stream bs rs) y0s ys zs.
   Proof.
     intros * Hsync Harrow.
-    eapply arrow_ite in Harrow; eauto.
+    eapply arrow1_ite in Harrow; eauto. 2:apply val_to_bool_true.
     unfold init_stream.
-    rewrite const_val_const. rewrite sem_false_const. eassumption.
+    rewrite const_val_const, sem_false_const. assumption.
   Qed.
 
-  Lemma ac_sfby : forall c vs,
-      abstract_clock (sfby c vs) ≡ abstract_clock vs.
+  Lemma ac_sfby_reset : forall v0 xs rs v,
+      abstract_clock (sfby_reset v0 xs rs v) ≡ abstract_clock xs.
   Proof.
-    cofix CoFix. intros c [v vs].
-    rewrite sfby_Cons.
-    destruct v; constructor; simpl; auto.
+    cofix CoFix. intros v0 [x xs] [r rs] v.
+    rewrite sfby_reset_Cons.
+    destruct x, r; constructor; simpl; auto.
   Qed.
 
-  Lemma init_stream_ac : forall bs,
-      abstract_clock (init_stream bs) ≡ bs.
+  Lemma init_stream_ac : forall bs rs,
+      abstract_clock (init_stream bs rs) ≡ bs.
   Proof.
-    intros bs.
+    intros bs rs.
     unfold init_stream.
-    rewrite ac_sfby, <- ac_const. 1,2:reflexivity.
+    rewrite ac_sfby_reset, <- ac_const. 1,2:reflexivity.
   Qed.
 
   (** *** Additional stuff *)
 
-  Definition st_vars (st : fresh_st (type * clock * bool)) : list (ident * (type * clock)) :=
+  Definition st_vars (st : fresh_st (type * clock * option PS.t)) : list (ident * (type * clock)) :=
     idty (st_anns st).
 
   Fact st_ids_st_vars : forall st,
@@ -1798,8 +1946,9 @@ Module Type CORRECTNESS
       NoDupMembers (vars++st_vars st).
   Proof.
     intros * Hndup Hvalid.
-    eapply Facts.st_valid_after_NoDupMembers in Hvalid; eauto.
-    rewrite fst_NoDupMembers, map_app, <- st_ids_st_vars; auto.
+    eapply st_valid_NoDup in Hvalid.
+    rewrite ps_of_list_ps_to_list_Perm in Hvalid. 2:rewrite <- fst_NoDupMembers; auto.
+    rewrite Permutation_app_comm, st_ids_st_vars, <- map_app, <- fst_NoDupMembers in Hvalid; auto.
   Qed.
 
   Fact fresh_ident_refines' {B V} : forall vars H H' a id (v : V) (st st' : fresh_st B),
@@ -1828,10 +1977,13 @@ Module Type CORRECTNESS
 
   (** *** Relation between state and history *)
 
-  Definition init_eqs_valids bs H (st : fresh_st (Op.type * clock * bool)) :=
-    Forall (fun '(id, ck) =>
-              (exists bs', sem_clock H bs ck bs' /\
-                      sem_var H id (init_stream bs'))) (st_inits st).
+  Definition init_eqs_valids bs H (st : fresh_st (Op.type * clock * option PS.t)) :=
+    Forall (fun '(id, (ck, xr)) =>
+              (exists bs' rs rs',
+                  sem_clock H bs ck bs' /\
+                  Forall2 (sem_var H) (PSP.to_list xr) rs /\
+                  bools_ofs rs rs' /\
+                  sem_var H id (init_stream bs' rs'))) (st_inits st).
 
   Definition hist_st (vars : list (ident * clock)) b H st :=
     Env.dom H (map fst vars++st_ids st) /\
@@ -1841,7 +1993,7 @@ Module Type CORRECTNESS
   Fact fresh_ident_init_eqs : forall vars b ty ck id v H st st',
       st_valid_after st (PSP.of_list vars) ->
       Env.dom H (vars ++ st_ids st) ->
-      fresh_ident norm2 ((ty, ck), false) st = (id, st') ->
+      fresh_ident norm2 ((ty, ck), None) st = (id, st') ->
       init_eqs_valids b H st ->
       init_eqs_valids b (Env.add id v H) st'.
   Proof with auto.
@@ -1851,16 +2003,18 @@ Module Type CORRECTNESS
     { eapply fresh_ident_refines' in Hfresh; eauto. }
     eapply fresh_ident_false_st_inits in Hfresh.
     unfold init_eqs_valids in *. rewrite Hfresh.
-    solve_forall. destruct H1 as [bs' [? ?]].
-    exists bs'; split.
+    solve_forall. destruct H1 as (bs'&rs&rs'&?&?&?&?).
+    exists bs' ; exists rs; exists rs' ; repeat split; eauto.
     - eapply LCS.sem_clock_refines; eauto.
+    - solve_forall.
+      eapply sem_var_refines; eauto.
     - eapply sem_var_refines; eauto.
   Qed.
 
   Fact fresh_ident_hist_st : forall vars b ty ck id v H st st',
       st_valid_after st (PSP.of_list (map fst vars)) ->
       sem_clock H b ck (abstract_clock v) ->
-      fresh_ident norm2 ((ty, ck), false) st = (id, st') ->
+      fresh_ident norm2 ((ty, ck), None) st = (id, st') ->
       hist_st vars b H st ->
       hist_st vars b (Env.add id v H) st'.
   Proof with auto.
@@ -1918,42 +2072,80 @@ Module Type CORRECTNESS
             eapply sem_clock_when; eauto).
   Qed.
 
-  Fact init_var_for_clock_sem : forall G vars bs H ck bs' x eqs' st st',
+  Lemma Forall2_bools : forall H xs vs rs,
+      Forall2 (sem_var H) xs vs ->
+      bools_ofs vs rs ->
+      exists vs' , Forall2 (sem_var H) (PSP.to_list (PSP.of_list xs)) vs' /\
+              bools_ofs vs' rs.
+  Proof.
+    intros * Vars Bools; simpl.
+    assert (SameElements eq xs (PSP.to_list (PSP.of_list xs))) as Same.
+    { eapply ps_of_list_ps_to_list_SameElements; eauto. }
+    assert (Vars':=Vars). eapply Forall2_SameElements_1 in Vars' as (vs'&Same'&?); eauto.
+    rewrite Same' in Bools. 1-3:eauto using EqStrel_Reflexive.
+    - intros * Eq1 Eq2 Var. rewrite <-Eq1, <-Eq2; auto.
+    - eauto using sem_var_det.
+  Qed.
+
+  Lemma ps_equal_Forall2_bools :
+    forall H xs ys vs vs' rs rs',
+      PS.Equal xs (PSP.of_list ys) ->
+      Forall2 (sem_var H) (PSP.to_list xs) vs ->
+      Forall2 (sem_var H) ys vs' ->
+      bools_ofs vs rs ->
+      bools_ofs vs' rs' ->
+      rs ≡ rs'.
+  Proof.
+    intros * Eq Vars Vars' Bools Bools'.
+    assert (SameElements eq (PSP.to_list xs) ys) as Same.
+    { eapply SE_trans. eapply SE_perm, PS_elements_Equal; eauto.
+      symmetry. eapply ps_of_list_ps_to_list_SameElements. }
+    eapply Forall2_SameElements_1 in Vars as (vs''&Same'&Vars); eauto.
+    assert (EqSts vs' vs'') as HEqSts.
+    { unfold EqSts. eapply Forall2_swap_args in Vars'. eapply Forall2_trans_ex in Vars; eauto.
+      eapply Forall2_impl_In; [|eauto]. intros ?? _ _ (?&?&?&?).
+      eapply sem_var_det in H2; eauto. }
+    rewrite HEqSts in Bools'. rewrite Same' in Bools.
+    eapply bools_ofs_det in Bools'; eauto.
+    1,2:eauto using EqStrel_Reflexive.
+    - intros * Eq1 Eq2 Var. rewrite <-Eq1, <-Eq2; auto.
+    - eauto using sem_var_det.
+  Qed.
+
+  Fact init_var_for_clock_sem : forall G vars bs H ck xr bs' rs rs' x eqs' st st',
       sem_clock H bs ck bs' ->
+      Forall2 (sem_var H) (map fst xr) rs ->
+      bools_ofs rs rs' ->
       st_valid_after st (PSP.of_list (map fst vars)) ->
       hist_st vars bs H st ->
-      init_var_for_clock ck st = (x, eqs', st') ->
+      init_var_for_clock ck xr st = (x, eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           st_valid_after st' (PSP.of_list (map fst vars)) /\
           hist_st vars bs H' st' /\
-          sem_var H' x (init_stream bs') /\
+          sem_var H' x (init_stream bs' rs') /\
           Forall (sem_equation G H' bs) eqs').
   Proof with eauto.
-    intros * Hsemc Hvalid Histst Hinit.
+    intros * Hsemc Hr Hbools Hvalid Histst Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct find eqn:Hfind.
+    destruct find_init_var eqn:Hfind.
     - (* We already introduced such an equation previously.
          We will use the hist_st invariant to get some information back about it *)
-      destruct p; inv Hinit.
+      inv Hinit.
       exists H. repeat (split; eauto).
       destruct Histst as [_ [Hvalids _]]. unfold init_eqs_valids in Hvalids.
       rewrite Forall_forall in Hvalids.
-      eapply find_some in Hfind. destruct p as [[ty' ck'] isinit].
-      repeat rewrite Bool.andb_true_iff in Hfind. destruct Hfind as [Hin [[Hisinit Hcl] Hty]].
-      rewrite OpAux.type_eqb_eq in Hty.
-      rewrite Clocks.clock_eqb_eq in Hcl. subst.
-      assert (In (x, ck) (st_inits st')) as Hin'.
-      { unfold st_inits. simpl_In. exists bool_type. simpl_In. exists true.
-        rewrite filter_In. rewrite equiv_decb_refl; auto. }
-      apply Hvalids in Hin' as [bs'' [? ?]].
+      eapply st_inits_find_Some in Hfind as (?&Eq&Hfind).
+      apply Hvalids in Hfind as (bs''&rs''&rs'''&?&?&?&?); subst.
       eapply sem_clock_det in Hsemc; eauto. rewrite <- Hsemc; auto.
+      eapply ps_equal_Forall2_bools in Eq; eauto.
+      rewrite <-Eq. assumption.
     - (* We need to introduce a new init equation to the history and state,
          and prove its properties *)
       clear Hfind.
       destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
       assert (st_valid_after st' (PSP.of_list (map fst vars))) as Hvalid1 by eauto.
-      remember (Env.add x (init_stream bs') H) as H'.
+      remember (Env.add x (init_stream bs' rs') H) as H'.
       assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines' in Hident; eauto).
       assert (hist_st vars bs H' st') as Histst1.
       { destruct Histst as [H1 [H2 H3]].
@@ -1962,16 +2154,24 @@ Module Type CORRECTNESS
         - unfold init_eqs_valids in *.
           erewrite fresh_ident_true_st_inits...
           constructor.
-          + exists bs'. split; [eapply LCS.sem_clock_refines|]; eauto.
-            rewrite HeqH'. econstructor. eapply Env.add_1.
-            1,2:reflexivity.
+          + eapply Forall2_bools in Hr as (rs''&?&?); eauto.
+            exists bs'. exists rs''. exists rs'. repeat split...
+            * eapply LCS.sem_clock_refines; eauto.
+            * solve_forall.
+              eapply sem_var_refines; eauto.
+            * rewrite HeqH'. econstructor. eapply Env.add_1.
+              1,2:reflexivity.
           + solve_forall.
-            destruct H2 as [bs'' [? ?]].
-            exists bs''. split; [eapply LCS.sem_clock_refines|eapply sem_var_refines]; eauto.
+            destruct H2 as [bs'' [rs'' [rs''' [? [? [? ?]]]]]].
+            exists bs''. exists rs''. exists rs'''. repeat split; eauto.
+            * eapply LCS.sem_clock_refines; eauto.
+            * solve_forall.
+              eapply sem_var_refines; eauto.
+            * eapply sem_var_refines; eauto.
         - unfold st_clocks', LCS.sc_var_inv' in *.
           erewrite fresh_ident_anns; simpl; eauto.
           rewrite <- Permutation_middle; constructor; simpl.
-          + exists (init_stream bs'). split.
+          + exists (init_stream bs' rs'). split.
             * rewrite HeqH'. econstructor.
               eapply Env.add_1. 1,2:reflexivity.
             * rewrite init_stream_ac.
@@ -1984,14 +2184,16 @@ Module Type CORRECTNESS
       + rewrite HeqH'. econstructor. 2:reflexivity.
         apply Env.add_1. reflexivity.
       + repeat constructor.
-        apply Seq with (ss:=[[(init_stream bs')]]); simpl; repeat constructor.
-        * eapply Sfby with (s0ss:=[[(const bs' true_const)]]) (sss:=[[(const bs' false_const)]]); repeat constructor.
-          -- apply add_whens_sem_exp. eauto using LCS.sem_clock_refines.
-          -- apply add_whens_sem_exp. eauto using LCS.sem_clock_refines.
-          -- unfold init_stream.
+        apply Seq with (ss:=[[(init_stream bs' rs')]]); simpl; repeat constructor.
+        * econstructor; repeat constructor.
+          1,2:apply add_whens_sem_exp; eauto using LCS.sem_clock_refines.
+          -- rewrite Forall2_map_1. rewrite Forall2_map_1 in Hr. eapply Forall2_impl_In; [|eauto].
+             intros (?&?) ? _ _ ?. econstructor. eapply sem_var_refines; eauto.
+          -- eauto.
+          -- repeat constructor. unfold init_stream.
              repeat rewrite const_val_const; subst.
-             rewrite <- sem_true_const. apply sfby_fby.
-             rewrite <- const_val_const. apply const_aligned.
+             rewrite <- sem_true_const. apply sfby_reset_fby1; eauto.
+             rewrite <- const_val_const. apply const_aligned. simpl; auto.
         * econstructor. 2:reflexivity.
           rewrite HeqH'. apply Env.add_1. reflexivity.
   Qed.
@@ -2030,35 +2232,33 @@ Module Type CORRECTNESS
   Proof.
     intros * Hnormed Hwc Hsem.
     inv Hnormed; inv Hsem; intros.
-    - inv H8; inv H7.
-      inv H5.
+    - inv H9; inv H8.
+      inv H6.
       repeat (econstructor; eauto).
       + eapply Forall2_impl_In; [|eauto].
         intros. eapply normalized_lexp_sem_sem_anon; eauto. eapply Forall_forall; eauto.
+      + eapply Forall2_impl_In; [|eauto]. intros * In1 In2 Sem.
+        eapply normalized_lexp_sem_sem_anon; eauto.
+        eapply Forall_forall in H3 as (?&(?&?)&?); eauto; subst; constructor.
       + destruct Hwc as (_&Hcks&_); simpl in *; rewrite app_nil_r in *.
         rewrite Forall2_map_2, Forall2_swap_args in Hcks.
-        eapply Forall2_trans_ex in H9; [|eauto].
+        eapply Forall2_trans_ex in H10; [|eauto].
         eapply Forall2_impl_In; [|eauto]. intros (?&?&?) ? ? ? (?&?&?&?).
         destruct o; simpl in *; subst; auto.
-    - inv H8; inv H7.
-      inv H5.
-      do 3 (econstructor; eauto).
-      + eapply Forall2_impl_In; [|eauto].
-        intros. eapply normalized_lexp_sem_sem_anon; eauto. eapply Forall_forall; eauto.
-      + eapply normalized_lexp_sem_sem_anon; eauto.
-      + destruct Hwc as (_&Hcks&_); simpl in *; rewrite app_nil_r in *.
-        rewrite Forall2_map_2, Forall2_swap_args in Hcks.
-        eapply Forall2_trans_ex in H9; [|eauto].
-        eapply Forall2_impl_In; [|eauto]. intros (?&?&?) ? ? ? (?&?&?&?).
-        destruct o; simpl in *; subst; auto.
-    - inv H7; inv H6.
-      inv H4. inv H10; inv H6. inv H12; inv H7.
-      repeat econstructor; eauto.
+    - inv H8; inv H7. inv H5.
+      inv H10; inv H7. inv H13; inv H8.
+      repeat (econstructor; eauto).
       1,2:eapply normalized_lexp_sem_sem_anon; eauto.
-    - inv H7; inv H6.
-      inv H4. inv H10; inv H6. inv H12; inv H7.
-      repeat econstructor; eauto.
+      eapply Forall2_impl_In; [|eauto]. intros * In1 In2 Sem.
+      eapply normalized_lexp_sem_sem_anon; eauto.
+      eapply Forall_forall in H2 as (?&(?&?)&?); eauto; subst; constructor.
+    - inv H8; inv H7. inv H5.
+      inv H10; inv H7. inv H13; inv H8.
+      repeat (econstructor; eauto).
       1,2:eapply normalized_lexp_sem_sem_anon; eauto.
+      eapply Forall2_impl_In; [|eauto]. intros * In1 In2 Sem.
+      eapply normalized_lexp_sem_sem_anon; eauto.
+      eapply Forall_forall in H2 as (?&(?&?)&?); eauto; subst; constructor.
     - inv H6; inv H5.
       repeat econstructor; eauto.
       eapply normalized_cexp_sem_sem_anon; eauto.
@@ -2074,6 +2274,7 @@ Module Type CORRECTNESS
     eapply unnested_equation_sem_sem_anon; eauto.
     eapply normalized_eq_unnested_eq; eauto.
   Qed.
+
 
   Lemma sc_lexp :  forall G H bs env e s ck,
       wc_global G ->
@@ -2096,22 +2297,7 @@ Module Type CORRECTNESS
     inv Hsem; auto.
   Qed.
 
-  Lemma sc_cexp : forall G env H b e vs,
-      wc_global G ->
-      LCS.sc_nodes G ->
-      NoDupMembers env ->
-      LCS.sc_var_inv' env H b ->
-      normalized_cexp e ->
-      wc_exp G env e ->
-      sem_exp G H b e vs ->
-      Forall2 (sem_clock H b) (clockof e) (map abstract_clock vs).
-  Proof.
-    intros * HwcG Hsc Hnd Hinv Hnormed Hwc Hsem.
-    eapply LCS.sc_exp; eauto.
-    eapply normalized_cexp_sem_sem_anon; eauto.
-  Qed.
-
-  Fact fby_iteexp_sem : forall G vars bs H e0 e ty nck y0 y z e' eqs' st st',
+  Fact fby_iteexp_sem : forall G vars bs H e0 e xr ty nck y0 y rs r z e' eqs' st st',
       wc_global G ->
       LCS.sc_nodes G ->
       NoDupMembers vars ->
@@ -2122,10 +2308,12 @@ Module Type CORRECTNESS
       wc_exp G (idck vars++st_clocks' st) e0 ->
       sem_exp G H bs e0 [y0] ->
       sem_exp G H bs e [y] ->
-      fby y0 y z ->
+      Forall2 (sem_var H) (map fst xr) rs ->
+      bools_ofs rs r ->
+      fby y0 y r z ->
       st_valid_after st (PSP.of_list (map fst vars)) ->
       hist_st (idck vars) bs H st ->
-      fby_iteexp e0 e (ty, nck) st = (e', eqs', st') ->
+      fby_iteexp e0 e xr (ty, nck) st = (e', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           st_valid_after st' (PSP.of_list (map fst vars)) /\
@@ -2133,7 +2321,7 @@ Module Type CORRECTNESS
           sem_exp G H' bs e' [z] /\
           Forall (sem_equation G H' bs) eqs').
   Proof with eauto.
-    intros * HwcG Hsc Hndup Hwenv Hnormed Hck Hwt Hwc Hsem0 Hsem Hfby Hvalid Histst Hiteexp.
+    intros * HwcG Hsc Hndup Hwenv Hnormed Hck Hwt Hwc Hsem0 Hsem Hsr Hbools Hfby Hvalid Histst Hiteexp.
     destruct nck as [ck ?]; simpl in *.
     unfold fby_iteexp in Hiteexp; repeat inv_bind.
     eapply sc_lexp with (env:=vars++st_vars st) in Hnormed...
@@ -2141,43 +2329,44 @@ Module Type CORRECTNESS
     2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
     2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
     eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
-    2: rewrite map_fst_idck...
+    2:rewrite map_fst_idck...
     remember (abstract_clock y0) as bs'.
-    remember (sfby (Op.sem_const (Op.init_type ty)) y) as y'.
+    remember (sfby_reset (Op.sem_const (Op.init_type ty)) y (Streams.const false) (Op.sem_const (Op.init_type ty))) as y'.
     remember (Env.add x2 y' H') as H''.
     assert (Env.refines eq H' H'') by (destruct Histst1; eapply fresh_ident_refines' in H1; eauto).
     assert (hist_st (idck vars) bs H'' st') as Histst2.
     { eapply fresh_ident_hist_st in H1; eauto.
       rewrite HeqH''...
-      rewrite Heqy', ac_sfby.
+      rewrite Heqy', ac_sfby_reset.
       1: eapply LCS.sem_clock_refines; eauto.
-      rewrite LCS.ac_fby2, <- LCS.ac_fby1, <- Heqbs'; eauto. }
+      rewrite ac_fby2, <- ac_fby1, <- Heqbs'; eauto. }
     exists H''. repeat (split; eauto); try constructor.
-    + etransitivity; eauto.
-    + rewrite map_fst_idck in Hvalid1...
-    + eapply Site with (s:=(init_stream bs')) (ts:=[[y0]]) (fs:=[[y']]); repeat constructor.
-      * eapply sem_var_refines...
-      * eapply sem_exp_refines; [| eauto]. etransitivity...
-      * econstructor.
+    - etransitivity; eauto.
+    - rewrite map_fst_idck in Hvalid1...
+    - eapply Site with (s:=(init_stream bs' r)) (ts:=[[y0]]) (fs:=[[y']]); repeat constructor.
+      + eapply sem_var_refines...
+      + eapply sem_exp_refines; [| eauto]. etransitivity...
+      + econstructor.
         rewrite HeqH''. eapply Env.add_1. 1,2:reflexivity.
-      * subst. eapply fby_init_stream_ite...
+      + subst. eapply fby_init_stream_ite...
         left. apply ac_aligned.
-    + apply Seq with (ss:=[[y']]); repeat constructor.
-      * eapply Sfby with (s0ss:=[[const bs' (init_type ty)]]) (sss:=[[y]]); repeat constructor.
-        -- eapply add_whens_sem_exp...
-           eapply LCS.sem_clock_refines; [|eauto]. etransitivity...
-        -- eapply sem_exp_refines; [| eauto]. etransitivity...
-        -- rewrite Heqy'.
-           rewrite const_val_const.
-           eapply sfby_fby.
-           eapply LCS.fby_aligned in Hfby as [_ [? _]]; eauto.
-           left. rewrite Heqbs'. apply ac_aligned.
-      * econstructor.
+    - apply Seq with (ss:=[[y']]); repeat constructor.
+      + eapply Sfby with (s0ss:=[[const bs' (init_type ty)]]) (sss:=[[y]]); repeat constructor.
+        * eapply add_whens_sem_exp...
+          eapply LCS.sem_clock_refines; [|eauto]. etransitivity...
+        * eapply sem_exp_refines; [| eauto]. etransitivity...
+        * eapply bools_ofs_empty.
+        * rewrite Heqy'.
+          rewrite const_val_const.
+          eapply sfby_reset_fby1.
+          eapply fby_aligned in Hfby as [_ [? _]]; eauto.
+          left. rewrite Heqbs'. apply ac_aligned. simpl; auto.
+      + econstructor.
         rewrite HeqH''. apply Env.add_1. 1,2:reflexivity.
-    + solve_forall. eapply sem_equation_refines...
+    - solve_forall. eapply sem_equation_refines...
   Qed.
 
-  Fact arrow_iteexp_sem : forall G vars bs H e0 e ty nck y0 y z e' eqs' st st',
+  Fact arrow_iteexp_sem : forall G vars bs H e0 e xr ty nck y0 y rs r z e' eqs' st st',
       wc_global G ->
       LCS.sc_nodes G ->
       NoDupMembers vars ->
@@ -2188,10 +2377,12 @@ Module Type CORRECTNESS
       wc_exp G (idck vars++st_clocks' st) e0 ->
       sem_exp G H bs e0 [y0] ->
       sem_exp G H bs e [y] ->
-      arrow y0 y z ->
+      Forall2 (sem_var H) (map fst xr) rs ->
+      bools_ofs rs r ->
+      arrow y0 y r z ->
       st_valid_after st (PSP.of_list (map fst vars)) ->
       hist_st (idck vars) bs H st ->
-      arrow_iteexp e0 e (ty, nck) st = (e', eqs', st') ->
+      arrow_iteexp e0 e xr (ty, nck) st = (e', eqs', st') ->
       (exists H',
           Env.refines eq H H' /\
           st_valid_after st' (PSP.of_list (map fst vars)) /\
@@ -2199,7 +2390,7 @@ Module Type CORRECTNESS
           sem_exp G H' bs e' [z] /\
           Forall (sem_equation G H' bs) eqs').
   Proof with eauto.
-    intros * HwcG Hsc Hndup Hwenv Hnormed1 Hck Hwt Hwc Hsem0 Hsem Harrow Hvalid Histst Hiteexp.
+    intros * HwcG Hsc Hndup Hwenv Hnormed1 Hck Hwt Hwc Hsem0 Hsem Hr Hbools Harrow Hvalid Histst Hiteexp.
     destruct nck as [ck ?]; simpl in *.
     unfold arrow_iteexp in Hiteexp. repeat inv_bind.
     eapply sc_lexp with (env:=vars++st_vars st) in Hnormed1...
@@ -2208,18 +2399,18 @@ Module Type CORRECTNESS
     2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
 
     eapply init_var_for_clock_sem with (G:=G) in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
-    2: rewrite map_fst_idck...
+    2:rewrite map_fst_idck...
     remember (abstract_clock y0) as bs'.
     exists H'. repeat (split; auto).
     + rewrite map_fst_idck in Hvalid1...
-    + eapply Site with (s:=(init_stream bs')) (ts:=[[y0]]) (fs:=[[y]]); repeat constructor...
+    + eapply Site with (s:=(init_stream bs' r)) (ts:=[[y0]]) (fs:=[[y]]); repeat constructor...
       * eapply sem_exp_refines...
       * eapply sem_exp_refines...
       * subst. eapply arrow_init_stream_ite...
         left. apply ac_aligned.
   Qed.
 
-  Fact fby_equation_sc_exp : forall G H vars bs e0 ck s0s ss vs,
+  Fact fby_equation_sc_exp : forall G H vars bs e0 ck s0s ss r vs,
       wc_global G ->
       LCS.sc_nodes G ->
       NoDupMembers vars ->
@@ -2229,13 +2420,13 @@ Module Type CORRECTNESS
       wc_exp G (idck vars) e0 ->
       clockof e0 = [ck] ->
       sem_exp G H bs e0 [s0s] ->
-      fby s0s ss vs ->
+      fby s0s ss r vs ->
       LCS.sc_var_inv' (idck vars) H bs ->
       sem_clock H bs ck (abstract_clock vs).
   Proof with eauto.
     intros * HwG Hsc Hndup Hwenv Hnormed Hwt Hwc Hck Hsem Hfby Hinv.
     eapply sc_lexp in Hnormed. 2-10:eauto.
-    rewrite LCS.ac_fby1 in Hnormed; eauto.
+    rewrite ac_fby1 in Hnormed; eauto.
   Qed.
 
   Fact fby_equation_sem : forall G vars bs H to_cut equ eqs' st st',
@@ -2257,21 +2448,19 @@ Module Type CORRECTNESS
           Forall (sem_equation G H' bs) eqs').
   Proof with eauto.
     intros * HwcG Hsc Hndup Hwcenv Hunt Hwt Hwc Hsem Hvalid Hhistst Hfby.
-    inv_fby_equation Hfby to_cut equ; try destruct x2 as (ty&ck&name).
+    inv_fby_equation Hfby to_cut equ; try destruct x3 as (ty&ck&name).
     - (* constant fby *)
       destruct PS.mem; repeat inv_bind.
       + inv Hsem. inv H6; inv H5.
         simpl in H7; rewrite app_nil_r in H7. inv H7; inv H6.
-        assert(Hsem':=H3). inv H3.
-        inv H9; inv H6. inv H11; inv H7.
-        simpl in *. repeat rewrite app_nil_r in *.
-        inv H12; inv H9.
-        destruct Hwt as [Hwt _]. apply Forall_singl in Hwt. inv Hwt.
-        apply Forall_singl in H7.
-        destruct Hwc as [Hwc _]. apply Forall_singl in Hwc; inv Hwc.
-        apply Forall_singl in H13. rewrite Forall2_eq in H15; simpl in H15; rewrite app_nil_r in H15.
+        assert(Hsem':=H3). inversion_clear H3 as [| | | |??????????? Hsem0 Hsem1 Hsemr Bools Hsem| | | | |].
+        inv Hsem0; inv H6. inv Hsem1; inv H7.
+        simpl in Hsem; repeat rewrite app_nil_r in Hsem. inv Hsem; inv H9.
+        destruct Hwt as [Hwt _]. apply Forall_singl in Hwt. inv Hwt. apply Forall_singl in H9.
+        destruct Hwc as [Hwc _]. apply Forall_singl in Hwc. inv Hwc.
+        apply Forall_singl in H16. rewrite Forall2_eq in H19; simpl in H19; rewrite app_nil_r in H19.
 
-        remember (Env.add x2 y0 H) as H'.
+        remember (Env.add x3 y0 H) as H'.
         assert (Env.refines eq H H') as Href.
         { destruct Hhistst as [Hdom _]; rewrite map_fst_idck in Hdom.
           eapply fresh_ident_refines' in H0... }
@@ -2297,34 +2486,45 @@ Module Type CORRECTNESS
           rewrite HeqH'. econstructor. eapply Env.add_1. 1,2:reflexivity.
       + exists H. repeat (split; eauto).
     - (* fby *)
-      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt; inv Hwt.
-      apply Forall_singl in H4.
-      destruct Hwc as [Hwc _]. apply Forall_singl in Hwc; inv Hwc.
-      apply Forall_singl in H9. rewrite Forall2_eq in H11; simpl in H11; rewrite app_nil_r in H11.
-      inv Hsem. inv H16; inv H15. simpl in *; rewrite app_nil_r in *. inv H17; inv H16.
-      inv H3. inv H19; inv H16. inv H21; inv H17.
-      simpl in *; repeat rewrite app_nil_r in *. inv H22; inv H19.
+      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt. inv Hwt. apply Forall_singl in H5.
+      destruct Hwc as [Hwc _]. apply Forall_singl in Hwc. inv Hwc.
+      apply Forall_singl in H12. rewrite Forall2_eq in H15; simpl in H15; rewrite app_nil_r in H15.
+      inv Hsem. inv H20; inv H19. simpl in H21; rewrite app_nil_r in H21. inv H21; inv H20.
+      inversion_clear H3 as [| | | |??????????? Hsem0 Hsem1 Hsemr Bools Hsem| | | | |].
+      inv Hsem0; inv H20. inv Hsem1; inv H21.
+      simpl in Hsem; repeat rewrite app_nil_r in Hsem. inv Hsem; inv H23.
       assert (normalized_lexp x0).
       { clear - Hunt. inv Hunt; eauto. inv H0; inv H. }
       eapply fby_iteexp_sem with (nck:=(ck, name)) in H0 as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem' Hsem'']]]]]...
+      2:{ clear - Hr Hsemr.
+          rewrite Forall2_swap_args in Hr.
+          eapply Forall2_trans_ex in Hsemr; eauto.
+          rewrite Forall2_map_1. eapply Forall2_impl_In; eauto.
+          intros (?&?) ? _ _ (?&?&(?&?)&?); subst. inv H2; auto. }
       exists H'. repeat (split; eauto).
       constructor; auto.
       eapply Seq with (ss:=[[y0]]); simpl; repeat constructor; auto.
       eapply sem_var_refines; eauto.
     - (* arrow *)
-      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt; inv Hwt.
-      apply Forall_singl in H4.
-      destruct Hwc as [Hwc _]. apply Forall_singl in Hwc; inv Hwc.
-      apply Forall_singl in H9. simpl in *; rewrite app_nil_r, Forall2_eq in H11.
-      inv Hsem. inv H16; inv H15.
-      inv H3. inv H19; inv H15. inv H21; inv H16.
-      simpl in *; repeat rewrite app_nil_r in *. inv H17; inv H18. inv H22; inv H19.
-      inv Hunt. 2:(inv H2; inv H1).
-      eapply arrow_iteexp_sem with (nck:=(ck, name)) in H0 as [H' [Href [Hvalid1 [Hhistst1 [Hsem1 Hsem1']]]]]; eauto.
-      exists H'. repeat (split; auto).
+      destruct Hwt as [Hwt _]. apply Forall_singl in Hwt. inv Hwt. apply Forall_singl in H5.
+      destruct Hwc as [Hwc _]. apply Forall_singl in Hwc. inv Hwc.
+      apply Forall_singl in H12. rewrite Forall2_eq in H15; simpl in H15; rewrite app_nil_r in H15.
+      inv Hsem. inv H20; inv H19. simpl in H21; rewrite app_nil_r in H21. inv H21; inv H20.
+      inversion_clear H3 as [| | | | |??????????? Hsem0 Hsem1 Hsemr Bools Hsem| | | |].
+      inv Hsem0; inv H20. inv Hsem1; inv H21.
+      simpl in Hsem; repeat rewrite app_nil_r in Hsem. inv Hsem; inv H23.
+      assert (normalized_lexp x0).
+      { clear - Hunt. inv Hunt; eauto. inv H0; inv H. }
+      eapply arrow_iteexp_sem with (nck:=(ck, name)) in H0 as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem' Hsem'']]]]]...
+      2:{ clear - Hr Hsemr.
+          rewrite Forall2_swap_args in Hr.
+          eapply Forall2_trans_ex in Hsemr; eauto.
+          rewrite Forall2_map_1. eapply Forall2_impl_In; eauto.
+          intros (?&?) ? _ _ (?&?&(?&?)&?); subst. inv H2; auto. }
+      exists H'. repeat (split; eauto).
       constructor; auto.
-      econstructor; eauto.
-      constructor; auto. eapply sem_var_refines; eauto.
+      eapply Seq with (ss:=[[y0]]); simpl; repeat constructor; auto.
+      eapply sem_var_refines; eauto.
     - (* other *) exists H. repeat (split; eauto).
   Qed.
 
@@ -2370,7 +2570,7 @@ Module Type CORRECTNESS
   Qed.
 
   Fact init_st_hist_st : forall b H n,
-      Env.dom H (idents (n_in n++n_vars n++n_out n)) ->
+      Env.dom H (List.map fst (n_in n++n_vars n++n_out n)) ->
       LCS.sc_var_inv' (idck (n_in n++n_vars n++n_out n)) H b ->
       hist_st (idck (n_in n++n_vars n++n_out n)) b H init_st.
   Proof.
@@ -2420,8 +2620,7 @@ Module Type CORRECTNESS
         rewrite <- Hpref.
         eapply Forall_incl; eauto.
         apply incl_map, incl_appr', incl_appr', incl_appl; auto.
-    - subst.
-      eapply init_st_hist_st...
+    - subst. eapply init_st_hist_st...
       eapply LCS.sc_node_sc_var_inv'; eauto.
       + eapply Forall_impl_In; [|eauto]. intros.
         unfold unnested_node in Hunt.
@@ -2477,8 +2676,8 @@ Module Type CORRECTNESS
       (* New env H' (restrict H) and its properties *)
       eapply LCS.sem_node_restrict in H3 as (Hdom&Hins'&Houts'&Heqs'); eauto.
       2:destruct H6 as (?&?&?&?); auto.
-      remember (Env.restrict H (idents (n_in n0++n_vars n0++n_out n0))) as H'.
-      clear H H1 H2 HeqH'.
+      remember (Env.restrict H (List.map fst (n_in n0++n_vars n0++n_out n0))) as H'.
+      clear H1 H2 HeqH'.
 
       inversion_clear HwtG. rename H0 into Hwt.
       inv Hcaus1.
@@ -2514,13 +2713,13 @@ Module Type CORRECTNESS
           + eapply LCS.sem_clocks_det' in Hcks; eauto. destruct H6; auto.
         }
         eapply Forall_impl_In; [|eauto]. intros.
-        eapply LCS.sc_ref_sem_equation, LCS.sem_equation_anon_sem_equation in H2; eauto.
+        eapply LCS.sc_ref_sem_equation, LCS.sem_equation_anon_sem_equation in H3; eauto.
         2:destruct Hwc' as (_&_&_&Hwc'); eapply Forall_forall in Hwc'; eauto.
         rewrite NoDupMembers_idck, fst_NoDupMembers. apply node_NoDup.
       + destruct Hinputs as (H''&?&?&?&?).
         rewrite H0 in Hfind. inv Hfind.
         destruct H6 as (?&_).
-        eapply LCS.sem_clocks_det' in H8; eauto.
+        eapply LCS.sem_clocks_det' in H9; eauto.
     - specialize (Href f ins outs).
       rewrite ident_eqb_neq in Hident.
       eapply sem_node_cons'...
@@ -2649,9 +2848,10 @@ Module Type CORRECTNESS
     intros * Hwc Hnorm.
     unfold normalize_global in Hnorm.
     apply Errors.bind_inversion in Hnorm as [? [H1 H2]]. inv H2.
-    eapply normfby_global_causal.
+    eapply Causality.normfby_global_causal.
     2:apply LCA.check_causality_correct in H1; eauto.
-    1,2:eapply unnest_global_wc in Hwc; eauto.
+    1,3:eapply unnest_global_wc in Hwc; eauto.
+    eapply wc_global_wl_global, unnest_global_wc; eauto.
   Qed.
 
 End CORRECTNESS.

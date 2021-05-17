@@ -35,28 +35,23 @@ Module Type NLTYPING
       wt_clock vars ck ->
       wt_cexp vars e ->
       wt_equation G vars (EqDef x ck e)
-  | wt_EqApp: forall n xs ck f es,
+  | wt_EqApp: forall n xs ck f es xrs,
       find_node f G = Some n ->
       Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs n.(n_out) ->
       Forall2 (fun e '(_, (t, _)) => typeof e = t) es n.(n_in) ->
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
-      wt_equation G vars (EqApp xs ck f es None)
-  | wt_EqReset: forall n xs ck f es y cky,
-      find_node f G = Some n ->
-      Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs n.(n_out) ->
-      Forall2 (fun e '(_, (t, _)) => typeof e = t) es n.(n_in) ->
-      wt_clock vars ck ->
-      Forall (wt_exp vars) es ->
-      In (y, bool_type) vars ->
-      wt_clock vars cky ->
-      wt_equation G vars (EqApp xs ck f es (Some (y, cky)))
-  | wt_EqFby: forall x ck c0 e,
+      Forall (fun xr => In (xr, Op.bool_type) vars) (map fst xrs) ->
+      Forall (wt_clock vars) (map snd xrs) ->
+      wt_equation G vars (EqApp xs ck f es xrs)
+  | wt_EqFby: forall x ck c0 e xrs,
       In (x, type_const c0) vars ->
       typeof e = type_const c0 ->
       wt_clock vars ck ->
       wt_exp vars e ->
-      wt_equation G vars (EqFby x ck c0 e).
+      Forall (fun xr => In (xr, Op.bool_type) vars) (map fst xrs) ->
+      Forall (wt_clock vars) (map snd xrs) ->
+      wt_equation G vars (EqFby x ck c0 e xrs).
 
   Definition wt_node (G: global) (n: node) : Prop
     := Forall (wt_equation G (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
@@ -100,14 +95,22 @@ Module Type NLTYPING
     split; intro WTeq.
     - inv WTeq; rewrite Henv in *; eauto;
         econstructor; eauto;
-          match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
-                          apply Forall2_impl_In with (2:=H) end;
-          intros ? (?&(?&?)); rewrite Henv in *; auto.
+          match goal with
+          | H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
+            apply Forall2_impl_In with (2:=H)
+          | H:Forall _ ?x |- Forall _ ?x =>
+            apply Forall_impl_In with (2:=H) end.
+      intros ? (?&(?&?)); rewrite Henv in *; auto.
+      1-4:intros; rewrite Henv in *; auto.
     - inv WTeq; rewrite <-Henv in *; eauto;
         econstructor; eauto;
-          match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
-                          apply Forall2_impl_In with (2:=H) end;
-          intros ? (?&(?&?)); rewrite Henv in *; auto.
+          match goal with
+          | H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
+            apply Forall2_impl_In with (2:=H)
+          | H:Forall _ ?x |- Forall _ ?x =>
+            apply Forall_impl_In with (2:=H) end.
+      intros ? (?&(?&?)); rewrite Henv in *; auto.
+      1-4:intros; rewrite Henv in *; auto.
   Qed.
 
   Lemma wt_global_Ordered_nodes:

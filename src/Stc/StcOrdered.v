@@ -104,7 +104,7 @@ Module Type STCORDERED
     apply find_system_app in Hfind as (?& E &?); rewrite E, app_comm_cons in Hord.
     pose proof Hord as Hord'; inversion_clear Hord' as [|??? Sub Hnin]; clear Sub.
     apply Ordered_systems_split in Hord.
-    apply calls_resets_of_Is_system_in in Hini.
+    apply steps_iresets_of_Is_system_in in Hini.
     apply s_subs_in_tcs, in_map_iff in Hini as (?&?& Hin).
     eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?&?& Find); simpl in Find.
     apply Forall_app_weaken in Hnin; inversion_clear Hnin as [|??? Hnin'].
@@ -123,7 +123,7 @@ Module Type STCORDERED
     intros * Hord Hfind Hini.
     apply find_system_app in Hfind as (?& E &?); rewrite E in Hord.
     apply Ordered_systems_split in Hord.
-    apply calls_resets_of_Is_system_in in Hini.
+    apply steps_iresets_of_Is_system_in in Hini.
     apply s_subs_in_tcs, in_map_iff in Hini as (?&?& Hin).
     eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?); auto.
   Qed.

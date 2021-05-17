@@ -40,8 +40,8 @@ Module Type TR
                                     OK (CE.Ebinop op le1 le2 ty)
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                     OK (CE.Ewhen le x b)
-    | L.Efby _ _ _
-    | L.Earrow _ _ _
+    | L.Efby _ _ _ _
+    | L.Earrow _ _ _ _
     | L.Ewhen _ _ _ _
     | L.Emerge _ _ _ _
     | L.Eite _ _ _ _
@@ -68,8 +68,8 @@ Module Type TR
 
     | L.Emerge _ _ _ _
     | L.Eite _ _ _ _
-    | L.Efby _ _ _
-    | L.Earrow _ _ _
+    | L.Efby _ _ _ _
+    | L.Earrow _ _ _ _
     | L.Eapp _ _ _ _    => Error (msg "control expression not normalized")
     end.
 
@@ -120,28 +120,36 @@ Module Type TR
     | _ => Error (msg "not a constant")
     end.
 
+  Definition vars_of (es : list L.exp) :=
+    omap (fun e => match e with
+                | L.Evar x (_, (ck, _)) => Some (x, ck)
+                | _ => None
+                end) es.
+
   Definition to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
                          (eq : L.equation) : res NL.equation :=
     let (xs, es) := eq in
     match es with
     | [e] =>
       match e with
-      | L.Eapp f es None _ =>
+      | L.Eapp f es r _ =>
         do les <- mmap to_lexp es;
-        OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les None)
-      | L.Eapp f es (Some (L.Evar x (_, (ckx, _)))) _ => (* use clock annot or lookup? *)
-        do les <- mmap to_lexp es;
-        OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les (Some (x, ckx)))
-      | L.Eapp f es (Some _) _ => Error (msg "reset equation not normalized")
-      | L.Efby [e0] [e] _ =>
+        match (vars_of r) with
+        | Some xr => OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les xr)
+        | _ => Error (msg "reset equation not normalized")
+        end
+      | L.Efby [e0] [e] r _ =>
         match xs with
-          | [x] =>
-            do _  <- envo x;
-            do c0 <- to_constant e0;
-            do ck <- find_clock env x;
-            do le <- to_lexp e;
-            OK (NL.EqFby x ck c0 le)
+        | [x] =>
+          do _  <- envo x;
+          do c0 <- to_constant e0;
+          do ck <- find_clock env x;
+          do le <- to_lexp e;
+          match (vars_of r) with
+          | Some xr => OK (NL.EqFby x ck c0 le xr)
           | _ => Error (msg "fby equation not normalized")
+          end
+        | _ => Error (msg "fby equation not normalized")
         end
       | _ =>
         match xs with
@@ -830,6 +838,31 @@ Module Type TR
   Proof.
     induction G; intros * Hnames Htog; inv Hnames; monadInv Htog; constructor; eauto.
     erewrite to_node_name in H1; eauto.
+  Qed.
+
+  Fact vars_of_spec: forall es xr,
+      vars_of es = Some xr <->
+      Forall2 (fun e '(x, ck) => exists ty n, e = L.Evar x (ty, (ck, n))) es xr.
+  Proof.
+    induction es; intros *; simpl in *; split; intros H.
+    - inv H; auto.
+    - inv H; auto.
+    - destruct a; inv H.
+      destruct a as (?&?&?). cases; inv H1.
+      constructor; eauto. eapply IHes; eauto.
+    - inv H. destruct y, H2 as (?&?&?); subst.
+      eapply IHes in H4. rewrite H4; auto.
+  Qed.
+
+  Lemma vars_of_Some: forall es,
+      Forall (fun e => exists x ann, e = L.Evar x ann) es ->
+      exists xr, vars_of es = Some xr.
+  Proof.
+    induction es; intros F; inv F.
+    - exists []; auto.
+    - eapply IHes in H2 as (xr&?).
+      destruct H1 as (?&(?&?&?)&?); subst.
+      simpl. setoid_rewrite H. eauto.
   Qed.
 
   Ltac simpl_Foralls :=

@@ -4,8 +4,6 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
-From Velus Require Import CoreExpr.CEIsFree.
-From Velus Require Import NLustre.IsFree.
 From Velus Require Import NLustre.Memories.
 From Velus Require Import NLustre.IsDefined.
 From Velus Require Import NLustre.NLOrdered.
@@ -32,8 +30,6 @@ Module Type NLCLOCKING
        (Import Ord   : NLORDERED  Ids Op CESyn Syn)
        (Import Mem   : MEMORIES   Ids Op CESyn Syn)
        (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
-       (Import CEIsF : CEISFREE   Ids Op CESyn)
-       (Import IsF   : ISFREE     Ids Op CESyn Syn CEIsF)
        (Import CEClo : CECLOCKING Ids Op CESyn).
 
   Inductive wc_equation (G: global) (vars: list (ident * clock)): equation -> Prop :=
@@ -43,7 +39,7 @@ Module Type NLCLOCKING
         wc_cexp vars ce ck ->
         wc_equation G vars (EqDef x ck ce)
   | CEqApp:
-      forall xs ck f les r n sub,
+      forall xs ck f les xrs n sub,
         find_node f G = Some n ->
         Forall2 (fun '(x, (_, xck)) le =>
                    SameVar (sub x) le
@@ -55,13 +51,14 @@ Module Type NLCLOCKING
                    /\ exists xck, In (x, xck) vars
                             /\ instck ck sub yck = Some xck)
                 n.(n_out) xs ->
-        (forall yck, r = Some yck -> In yck vars) ->
-        wc_equation G vars (EqApp xs ck f les r)
+        Forall (fun xr => In xr vars) xrs ->
+        wc_equation G vars (EqApp xs ck f les xrs)
   | CEqFby:
-      forall x ck v0 le,
+      forall x ck v0 le xrs,
         In (x, ck) vars ->
         wc_exp vars le ck ->
-        wc_equation G vars (EqFby x ck v0 le).
+        Forall (fun xr => In xr vars) xrs ->
+        wc_equation G vars (EqFby x ck v0 le xrs).
 
   Definition wc_node (G: global) (n: node) : Prop :=
     wc_env (idck (n.(n_in))) /\
@@ -83,8 +80,8 @@ Module Type NLCLOCKING
       Has_clock_eq ck (EqDef x ck ce)
   | HcEqApp: forall x f ck les r,
       Has_clock_eq ck (EqApp x ck f les r)
-  | HcEqFby: forall x v0 ck le,
-      Has_clock_eq ck (EqFby x ck v0 le).
+  | HcEqFby: forall x v0 ck le r,
+      Has_clock_eq ck (EqFby x ck v0 le r).
 
   Hint Constructors wc_clock wc_exp wc_cexp wc_equation wc_global : nlclocking.
   Hint Unfold wc_env wc_node : nlclocking.
@@ -98,23 +95,29 @@ Module Type NLCLOCKING
     rewrite Heq, Hg; clear Heq Hg.
     split; intro WTeq.
     - inv WTeq; try rewrite Henv in *; eauto with nlclocking.
-      econstructor; eauto.
-      + eapply Forall2_impl_In; eauto.
-        intros (?&(?&?)) ??? (?&?&?); simpl.
-        rewrite Henv in *; eauto.
-      + eapply Forall2_impl_In; eauto.
-        intros (?&(?&?)) ??? (?&?&?); simpl.
-        rewrite Henv in *; eauto.
-      + now setoid_rewrite <-Henv.
+      + econstructor; eauto.
+        * eapply Forall2_impl_In; eauto.
+          intros (?&(?&?)) ??? (?&?&?); simpl.
+          rewrite Henv in *; eauto.
+        * eapply Forall2_impl_In; eauto.
+          intros (?&(?&?)) ??? (?&?&?); simpl.
+          rewrite Henv in *; eauto.
+        * now setoid_rewrite <-Henv.
+      + econstructor; eauto.
+        eapply Forall_impl; [|eauto].
+        intros. rewrite <-Henv; eauto.
     - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
-      econstructor; eauto.
-      + eapply Forall2_impl_In; eauto.
-        intros (?&(?&?)) ??? (?&?&?); simpl.
-        rewrite <-Henv in *; eauto.
-      + eapply Forall2_impl_In; eauto.
-        intros (?&(?&?)) ??? (?&?&?); simpl.
-        rewrite <-Henv in *; eauto.
-      + now setoid_rewrite Henv.
+      + econstructor; eauto.
+        * eapply Forall2_impl_In; eauto.
+          intros (?&(?&?)) ??? (?&?&?); simpl.
+          rewrite <-Henv in *; eauto.
+        * eapply Forall2_impl_In; eauto.
+          intros (?&(?&?)) ??? (?&?&?); simpl.
+          rewrite <-Henv in *; eauto.
+        * now setoid_rewrite Henv.
+      + econstructor; eauto.
+        eapply Forall_impl; [|eauto].
+        intros. rewrite Henv; eauto.
   Qed.
 
   Lemma wc_global_app_weaken:
@@ -217,7 +220,7 @@ Module Type NLCLOCKING
       intros eq x' ck' Hwce Hdef Hhasck Hfree.
       inversion Hwce as [x ck e Hcv Hexp Heq
                         |xs ck f e r n sub Hfind Hisub Hosub Heq
-                        |x ck v' e Hcv Hexp].
+                        |x ck v' e r Hcv Hexp Hr].
       - subst eq. inv Hdef. inv Hhasck.
         pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
         apply Is_free_in_clock_self_or_parent in Hfree.
@@ -298,8 +301,8 @@ Module Type NLCLOCKING
     Qed.
 
     Corollary wc_EqFby_not_Is_free_in_clock:
-      forall x v0 le ck,
-        wc_equation G vars (EqFby x ck v0 le)
+      forall x v0 le ck r,
+        wc_equation G vars (EqFby x ck v0 le r)
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x v0 le ck Hwce Hwt.
@@ -319,9 +322,7 @@ Module NLClockingFun
        (Import Ord   : NLORDERED  Ids Op CESyn Syn)
        (Import Mem   : MEMORIES   Ids Op CESyn Syn)
        (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
-       (Import CEIsF : CEISFREE   Ids Op CESyn)
-       (Import IsF   : ISFREE     Ids Op CESyn Syn CEIsF)
        (Import CEClo : CECLOCKING Ids Op CESyn)
-  <: NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
-  Include NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
+  <: NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEClo.
+  Include NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEClo.
 End NLClockingFun.

@@ -15,7 +15,7 @@ Module Type OBCINVARIANTS
        (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc).
 
-  (** ** Determine whether an Obc command can modify a variable. *)
+  (** ** Determine whether an Obc command can modify a variable or state. *)
 
   Inductive Can_write_in : ident -> stmt -> Prop :=
   | CWIAssign: forall x e,
@@ -120,6 +120,72 @@ Module Type OBCINVARIANTS
     split; [inversion_clear 1|intros [HH|HH]]; auto.
   Qed.
 
+  (** ** Determine whether an Obc command can modify a variable . *)
+
+  Inductive Can_write_in_var : ident -> stmt -> Prop :=
+  | CWIVAssign: forall x e,
+      Can_write_in_var x (Assign x e)
+  | CWIVIfteTrue: forall x e s1 s2,
+      Can_write_in_var x s1 ->
+      Can_write_in_var x (Ifte e s1 s2)
+  | CWIVIfteFalse: forall x e s1 s2,
+      Can_write_in_var x s2 ->
+      Can_write_in_var x (Ifte e s1 s2)
+  | CWIVCall_ap: forall x xs cls i f es,
+      In x xs ->
+      Can_write_in_var x (Call xs cls i f es)
+  | CWIVComp1: forall x s1 s2,
+      Can_write_in_var x s1 ->
+      Can_write_in_var x (Comp s1 s2)
+  | CWIVComp2: forall x s1 s2,
+      Can_write_in_var x s2 ->
+      Can_write_in_var x (Comp s1 s2).
+  Hint Constructors Can_write_in_var.
+
+  Lemma Can_write_in_var_Can_write_in : forall x stmt,
+      Can_write_in_var x stmt ->
+      Can_write_in x stmt.
+  Proof.
+    intros * CanWrite.
+    induction CanWrite; auto using Can_write_in.
+  Qed.
+  Hint Resolve Can_write_in_var_Can_write_in.
+
+  Lemma Can_write_in_var_Ifte:
+    forall e s1 s2 x,
+      Can_write_in_var x (Ifte e s1 s2) <-> (Can_write_in_var x s1 \/ Can_write_in_var x s2).
+  Proof.
+    split; [inversion_clear 1|intros [HH|HH]]; auto.
+  Qed.
+
+  Lemma cannot_write_in_var_Ifte:
+    forall x e s1 s2,
+      ~ Can_write_in_var x (Ifte e s1 s2)
+      <->
+      ~ Can_write_in_var x s1 /\ ~ Can_write_in_var x s2.
+  Proof.
+    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
+  Qed.
+
+  Lemma Can_write_in_var_Comp:
+    forall x s1 s2,
+      Can_write_in_var x (Comp s1 s2) <-> (Can_write_in_var x s1 \/ Can_write_in_var x s2).
+  Proof.
+    split; intros HH.
+    - inversion_clear HH; auto.
+    - destruct HH; auto.
+  Qed.
+
+  Lemma cannot_write_in_var_Comp:
+    forall x s1 s2,
+      ~ Can_write_in_var x (Comp s1 s2)
+      <->
+      ~ Can_write_in_var x s1 /\ ~ Can_write_in_var x s2.
+  Proof.
+    Hint Constructors Can_write_in.
+    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
+  Qed.
+
   (** ** Assert that an Obc command never writes to a variable more than once. *)
 
   Inductive No_Overwrites : stmt -> Prop :=
@@ -134,8 +200,8 @@ Module Type OBCINVARIANTS
   | NoOCall: forall xs cls i f es,
       No_Overwrites (Call xs cls i f es)
   | NoOComp: forall s1 s2,
-      (forall x, Can_write_in x s1 -> ~Can_write_in x s2) ->
-      (forall x, Can_write_in x s2 -> ~Can_write_in x s1) ->
+      (forall x, Can_write_in_var x s1 -> ~Can_write_in_var x s2) ->
+      (forall x, Can_write_in_var x s2 -> ~Can_write_in_var x s1) ->
       No_Overwrites s1 ->
       No_Overwrites s2 ->
       No_Overwrites (Comp s1 s2)
@@ -144,15 +210,15 @@ Module Type OBCINVARIANTS
 
   Hint Constructors No_Overwrites.
 
-  Lemma cannot_write_in_No_Overwrites:
+  Lemma cannot_write_in_var_No_Overwrites:
     forall s,
-      (forall x, ~Can_write_in x s) -> No_Overwrites s.
+      (forall x, ~Can_write_in_var x s) -> No_Overwrites s.
   Proof.
     induction s; auto; intro HH.
-    - setoid_rewrite cannot_write_in_Ifte in HH.
+    - setoid_rewrite cannot_write_in_var_Ifte in HH.
       constructor; (apply IHs1 || apply IHs2);
         intros x; specialize (HH x); intuition.
-    - setoid_rewrite cannot_write_in_Comp in HH.
+    - setoid_rewrite cannot_write_in_var_Comp in HH.
       constructor; try (apply IHs1 || apply IHs2);
         intros x Hcw; specialize (HH x); intuition.
   Qed.

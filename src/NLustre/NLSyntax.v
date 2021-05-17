@@ -21,8 +21,8 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : list ident -> clock -> ident -> list exp -> option (ident * clock) -> equation
-  | EqFby : ident -> clock -> const -> exp -> equation.
+  | EqApp : list ident -> clock -> ident -> list exp -> list (ident * clock) -> equation
+  | EqFby : ident -> clock -> const -> exp -> list (ident * clock) -> equation.
 
   Implicit Type eqn: equation.
 
@@ -32,7 +32,7 @@ Module Type NLSYNTAX
     match eq with
     | EqDef x _ _ => [x]
     | EqApp x _ _ _ _ => x
-    | EqFby x _ _ _ => [x]
+    | EqFby x _ _ _ _ => [x]
     end.
 
   Definition vars_defined (eqs: list equation) : list ident :=
@@ -40,7 +40,7 @@ Module Type NLSYNTAX
 
   Definition is_fby (eq: equation) : bool :=
     match eq with
-    | EqFby _ _ _ _ => true
+    | EqFby _ _ _ _ _ => true
     | _ => false
     end.
 
@@ -186,13 +186,13 @@ Module Type NLSYNTAX
     match eq with
     | EqDef _ _ _
     | EqApp _ _ _ _ _ => []
-    | EqFby x _ _ _ => [x]
+    | EqFby x _ _ _ _ => [x]
     end.
 
   Definition gather_inst_eq (eq: equation): list (ident * ident) :=
     match eq with
     | EqDef _ _ _
-    | EqFby _ _ _ _ => []
+    | EqFby _ _ _ _ _ => []
     | EqApp i _ f _ _ =>
       match i with
       | [] => []
@@ -203,7 +203,7 @@ Module Type NLSYNTAX
   Definition gather_app_vars_eq (eq: equation): list ident :=
     match eq with
     | EqDef _ _ _
-    | EqFby _ _ _ _ => []
+    | EqFby _ _ _ _ _ => []
     | EqApp xs _ _ _ _ => tl xs
     end.
 

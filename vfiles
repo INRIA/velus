@@ -71,7 +71,8 @@ src/NLustre/NLClockingSemantics.v
 src/NLustre/NLustre.v
 
 src/Stc/StcOrdered.v
-src/Stc/StcIsLast.v
+src/Stc/StcIsReset.v
+src/Stc/StcIsNext.v
 src/Stc/StcSemantics.v
 src/Stc/StcIsSystem.v
 src/Stc/StcIsVariable.v

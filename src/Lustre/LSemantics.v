@@ -27,42 +27,53 @@ Module Type LSEMANTICS
        (Import Lord  : LORDERED   Ids Op Syn)
        (Import Str   : COINDSTREAMS   Op OpAux).
 
-  CoInductive fby1
-    : val -> Stream value -> Stream value -> Stream value -> Prop :=
-  | Fby1A:
-      forall v xs ys rs,
-        fby1 v xs ys rs ->
-        fby1 v (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
-  | Fby1P:
-      forall v w s xs ys rs,
-        fby1 s xs ys rs ->
-        fby1 v (present w ⋅ xs) (present s ⋅ ys) (present v ⋅ rs).
+  CoInductive fby1 : option val -> Stream value -> Stream value -> Stream bool -> Stream value -> Prop :=
+  | FbyRA: (* Reset while absent *)
+      forall v xs ys rs zs,
+        fby1 None xs ys rs zs ->
+        fby1 v (absent ⋅ xs) (absent ⋅ ys) (true ⋅ rs) (absent ⋅ zs)
+  | FbyRP: (* Reset while present *)
+      forall v x y xs ys rs zs,
+        fby1 (Some y) xs ys rs zs ->
+        fby1 v (present x ⋅ xs) (present y ⋅ ys) (true ⋅ rs) (present x ⋅ zs)
+  | FbyA: (* Absence *)
+      forall v xs ys rs zs,
+        fby1 v xs ys rs zs ->
+        fby1 v (absent ⋅ xs) (absent ⋅ ys) (false ⋅ rs) (absent ⋅ zs)
+  | FbyP1: (* First presence *)
+      forall x y xs ys rs zs,
+        fby1 (Some y) xs ys rs zs ->
+        fby1 None (present x ⋅ xs) (present y ⋅ ys) (false ⋅ rs) (present x ⋅ zs)
+  | FbyP2: (* Following presences *)
+      forall v x y xs ys rs zs,
+        fby1 (Some y) xs ys rs zs ->
+        fby1 (Some v) (present x ⋅ xs) (present y ⋅ ys) (false ⋅ rs) (present v ⋅ zs).
 
-  CoInductive fby: Stream value -> Stream value -> Stream value -> Prop :=
-  | FbyA:
-      forall xs ys rs,
-        fby xs ys rs ->
-        fby (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
-  | FbyP:
-      forall x y xs ys rs,
-        fby1 y xs ys rs ->
-        fby (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
+  Definition fby := fby1 None.
 
-  CoInductive arrow1: Stream value -> Stream value -> Stream value -> Prop :=
-  | Arrow1A: forall xs ys rs,
-      arrow1 xs ys rs ->
-      arrow1 (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
-  | Arrow1P: forall x y xs ys rs,
-      arrow1 xs ys rs ->
-      arrow1 (present x ⋅ xs) (present y ⋅ ys) (present y ⋅ rs).
+  CoInductive arrow1: bool -> Stream value -> Stream value -> Stream bool -> Stream value -> Prop :=
+  | ArrowRA:
+      forall b xs ys rs zs,
+      arrow1 true xs ys rs zs ->
+      arrow1 b (absent ⋅ xs) (absent ⋅ ys) (true ⋅ rs) (absent ⋅ zs)
+  | ArrowRP:
+      forall b x y xs ys rs zs,
+      arrow1 false xs ys rs zs ->
+      arrow1 b (present x ⋅ xs) (present y ⋅ ys) (true ⋅ rs) (present x ⋅ zs)
+  | ArrowA:
+      forall b xs ys rs zs,
+      arrow1 b xs ys rs zs ->
+      arrow1 b (absent ⋅ xs) (absent ⋅ ys) (false ⋅ rs) (absent ⋅ zs)
+  | ArrowP1: (* First presence *)
+      forall x y xs ys rs zs,
+      arrow1 false xs ys rs zs ->
+      arrow1 true (present x ⋅ xs) (present y ⋅ ys) (false ⋅ rs) (present x ⋅ zs)
+  | ArrowP2: (* Following presences *)
+      forall x y xs ys rs zs,
+      arrow1 false xs ys rs zs ->
+      arrow1 false (present x ⋅ xs) (present y ⋅ ys) (false ⋅ rs) (present y ⋅ zs).
 
-  CoInductive arrow: Stream value -> Stream value -> Stream value -> Prop :=
-  | ArrowA: forall xs ys rs,
-      arrow xs ys rs ->
-      arrow (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
-  | ArrowP: forall x y xs ys rs,
-      arrow1 xs ys rs ->
-      arrow (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
+  Definition arrow := arrow1 true.
 
   Section NodeSemantics.
 
@@ -97,18 +108,22 @@ Module Type LSEMANTICS
           sem_exp H b (Ebinop op e1 e2 ann) [o]
 
     | Sfby:
-        forall H b e0s es anns s0ss sss os,
+        forall H b e0s es er anns s0ss sss sr r os,
           Forall2 (sem_exp H b) e0s s0ss ->
           Forall2 (sem_exp H b) es sss ->
-          Forall3 fby (concat s0ss) (concat sss) os ->
-          sem_exp H b (Efby e0s es anns) os
+          Forall2 (fun e r => sem_exp H b e [r]) er sr ->
+          bools_ofs sr r ->
+          Forall3 (fun s0 s1 o => fby s0 s1 r o) (concat s0ss) (concat sss) os ->
+          sem_exp H b (Efby e0s es er anns) os
 
     | Sarrow:
-        forall H b e0s es anns s0ss sss os,
+        forall H b e0s es er anns s0ss sss sr r os,
           Forall2 (sem_exp H b) e0s s0ss ->
           Forall2 (sem_exp H b) es sss ->
-          Forall3 arrow (concat s0ss) (concat sss) os ->
-          sem_exp H b (Earrow e0s es anns) os
+          Forall2 (fun e r => sem_exp H b e [r]) er sr ->
+          bools_ofs sr r ->
+          Forall3 (fun s0 s1 o => arrow s0 s1 r o) (concat s0ss) (concat sss) os ->
+          sem_exp H b (Earrow e0s es er anns) os
 
     | Swhen:
         forall H b x s k es lann ss os,
@@ -134,18 +149,12 @@ Module Type LSEMANTICS
           sem_exp H b (Eite e ets efs lann) os
 
     | Sapp:
-        forall H b f es lann ss os,
+        forall H b f es er lann ss os rs bs,
           Forall2 (sem_exp H b) es ss ->
-          sem_node f (concat ss) os ->
-          sem_exp H b (Eapp f es None lann) os
-
-    | Sreset:
-        forall H b f es r lann ss os rs bs,
-          Forall2 (sem_exp H b) es ss ->
-          sem_exp H b r [rs] ->
-          bools_of rs bs ->
+          Forall2 (fun e r => sem_exp H b e [r]) er rs ->
+          bools_ofs rs bs ->
           (forall k, sem_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
-          sem_exp H b (Eapp f es (Some r) lann) os
+          sem_exp H b (Eapp f es er lann) os
 
     with sem_equation: history -> Stream bool -> equation -> Prop :=
            Seq:
@@ -210,22 +219,28 @@ Module Type LSEMANTICS
         P_exp H b (Ebinop op e1 e2 ann) [o].
 
     Hypothesis FbyCase:
-      forall H b e0s es anns s0ss sss os,
+      forall H b e0s es er anns s0ss sss sr r os,
         Forall2 (sem_exp G H b) e0s s0ss ->
         Forall2 (P_exp H b) e0s s0ss ->
         Forall2 (sem_exp G H b) es sss ->
         Forall2 (P_exp H b) es sss ->
-        Forall3 fby (concat s0ss) (concat sss) os ->
-        P_exp H b (Efby e0s es anns) os.
+        Forall2 (fun e r => sem_exp G H b e [r]) er sr ->
+        Forall2 (fun e r => P_exp H b e [r]) er sr ->
+        bools_ofs sr r ->
+        Forall3 (fun s0 s1 o => fby s0 s1 r o) (concat s0ss) (concat sss) os ->
+        P_exp H b (Efby e0s es er anns) os.
 
     Hypothesis ArrowCase:
-      forall H b e0s es anns s0ss sss os,
+      forall H b e0s es er anns s0ss sss sr r os,
         Forall2 (sem_exp G H b) e0s s0ss ->
         Forall2 (P_exp H b) e0s s0ss ->
         Forall2 (sem_exp G H b) es sss ->
         Forall2 (P_exp H b) es sss ->
-        Forall3 arrow (concat s0ss) (concat sss) os ->
-        P_exp H b (Earrow e0s es anns) os.
+        Forall2 (fun e r => sem_exp G H b e [r]) er sr ->
+        Forall2 (fun e r => P_exp H b e [r]) er sr ->
+        bools_ofs sr r ->
+        Forall3 (fun s0 s1 o => arrow s0 s1 r o) (concat s0ss) (concat sss) os ->
+        P_exp H b (Earrow e0s es er anns) os.
 
     Hypothesis WhenCase:
       forall H b x s k es lann ss os,
@@ -257,23 +272,15 @@ Module Type LSEMANTICS
         P_exp H b (Eite e ets efs lann) os.
 
     Hypothesis AppCase:
-      forall H b f es lann ss os,
+      forall H b f es er lann ss os sr bs,
         Forall2 (sem_exp G H b) es ss ->
         Forall2 (P_exp H b) es ss ->
-        sem_node G f (concat ss) os ->
-        P_node f (concat ss) os ->
-        P_exp H b (Eapp f es None lann) os.
-
-    Hypothesis ResetCase:
-      forall H b f es r lann ss os rs bs,
-        Forall2 (sem_exp G H b) es ss ->
-        Forall2 (P_exp H b) es ss ->
-        sem_exp G H b r [rs] ->
-        P_exp H b r [rs] ->
-        bools_of rs bs ->
+        Forall2 (fun e r => sem_exp G H b e [r]) er sr ->
+        Forall2 (fun e r => P_exp H b e [r]) er sr ->
+        bools_ofs sr bs ->
         (forall k, sem_node G f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)
               /\ P_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
-        P_exp H b (Eapp f es (Some r) lann) os.
+        P_exp H b (Eapp f es er lann) os.
 
     Hypothesis Equation:
       forall H b xs es ss,
@@ -322,13 +329,12 @@ Module Type LSEMANTICS
         + apply VarCase; auto.
         + eapply UnopCase; eauto.
         + eapply BinopCase; eauto.
-        + eapply FbyCase; eauto; clear H2; SolveForall.
-        + eapply ArrowCase; eauto; clear H2; SolveForall.
+        + eapply FbyCase; eauto; clear H3 H4; SolveForall.
+        + eapply ArrowCase; eauto; clear H3 H4; SolveForall.
         + eapply WhenCase; eauto; clear H2; SolveForall.
         + eapply MergeCase; eauto; clear H3; SolveForall.
         + eapply IteCase; eauto; clear H2; SolveForall.
-        + eapply AppCase; eauto; clear H1; SolveForall.
-        + eapply ResetCase; eauto; clear H2; SolveForall.
+        + eapply AppCase; eauto; clear H2 H3; SolveForall.
       - destruct Sem.
         eapply Equation with (ss:=ss); eauto; clear H1; SolveForall.
       - destruct Sem.
@@ -360,61 +366,38 @@ Module Type LSEMANTICS
     - econstructor; eauto.
       apply IHHsem. intro. destruct H5. constructor. auto.
       apply IHHsem0. intro. destruct H5. constructor. auto.
+    - econstructor; eauto;
+        (eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H11; intro; apply H8; constructor);
+        [left|right;left|right;right]; apply Exists_exists; eauto.
+    - econstructor; eauto;
+        (eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H11; intro; apply H8; constructor);
+        [left|right;left|right;right]; apply Exists_exists; eauto.
     - econstructor; eauto.
-      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto. inv H0.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
-      destruct H5; auto.
-      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
-      destruct H6; auto.
+      eapply Forall2_impl_In; [|eauto]; intros.
+      apply H7; intro contra.
+      apply H4; constructor. apply Exists_exists; eauto.
+    - econstructor; eauto;
+        (eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H9; intro; apply H6;
+         constructor);
+        [left|right]; apply Exists_exists; eauto.
     - econstructor; eauto.
-      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto. inv H0.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
-      destruct H5; auto.
-      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
-      destruct H6; auto.
-    - econstructor; eauto.
-      clear H0 H3. induction H1; eauto. constructor. apply H0.
-      intro. destruct H4. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H4. constructor. inv H3; eauto.
-    - econstructor; eauto.
-      clear H1 H3 H4 H5. induction H2; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H3.
-      destruct H6; auto.
-      clear H1 H3 H2 H5. induction H4; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H2.
-      destruct H6; auto.
-    - econstructor; eauto. apply IHHsem.
-      intro. destruct H6. constructor. auto.
-      clear H1 H3 H4 H5. induction H2; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H3.
-      destruct H6; auto. destruct H3; auto.
-      clear H1 H3 H2 H5. induction H4; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H2.
-      destruct H6; auto. destruct H2; auto.
-    - inv Hord.
-      econstructor; try apply IHHsem.
-      clear H0 Hsem IHHsem. induction H1; eauto.
-      constructor. apply H0. intro. destruct H2. constructor. auto.
-      apply IHForall2. intro. destruct H2. inv H3. constructor. auto.
-      apply INEapp2.
-      intro. apply H2. rewrite H3. apply INEapp2.
+      eapply IHHsem.
+      2,3:(eapply Forall2_impl_In; [|eauto]; intros; eapply H9).
+      1-3:(intro; apply H6; constructor).
+      1:left; auto. 1:right;left. 2:right;right.
+      1,2:apply Exists_exists; eauto.
     - inv Hord.
       econstructor; eauto.
-      + eapply Forall2_impl_In in H1; eauto. intros * ?? Hi. apply Hi. intro.
+      + eapply Forall2_impl_In in H1; [|eauto]; eauto.
+        intros * ?? Sem. eapply Sem; intro. take (~ _) and apply it.
+        constructor; left. eapply Exists_exists; eauto.
+      + eapply Forall2_impl_In in H3; eauto. intros * ?? Hi. simpl. apply Hi. intro.
         take (~ _) and apply it. constructor. right. eapply Exists_exists; eauto.
-      + apply IHHsem. intro. take (~ _) and apply it. constructor; eauto.
       + intro k. take (forall k, _ /\ _) and specialize (it k) as (? & Hk).
-        apply Hk. intro Hn. subst. take (~ _) and apply it. constructor.
+        apply Hk. intro Hn. subst. take (~ _) and apply it. eapply INEapp2.
     - econstructor; eauto.
       clear H0 H2. induction H1; eauto.
       constructor. apply H0. intro. destruct H3. now constructor.
@@ -451,67 +434,38 @@ Module Type LSEMANTICS
     - econstructor; eauto.
       apply IHHsem. intro. destruct H5. constructor. auto.
       apply IHHsem0. intro. destruct H5. constructor. auto.
+   - econstructor; eauto;
+        (eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H11; intro; apply H8; constructor);
+        [left|right;left|right;right]; apply Exists_exists; eauto.
+    - econstructor; eauto;
+        (eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H11; intro; apply H8; constructor);
+        [left|right;left|right;right]; apply Exists_exists; eauto.
     - econstructor; eauto.
-      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto. inv H0.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
-      destruct H5; auto.
-      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
-      destruct H6; auto.
+      eapply Forall2_impl_In; [|eauto]; intros.
+      apply H7; intro contra.
+      apply H4; constructor. apply Exists_exists; eauto.
+    - econstructor; eauto;
+        (eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H9; intro; apply H6;
+         constructor);
+        [left|right]; apply Exists_exists; eauto.
     - econstructor; eauto.
-      clear H2 H3 H4. induction H1; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto. inv H0.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H0.
-      destruct H5; auto.
-      clear H1 H2 H4. induction H3; eauto. constructor. apply H1.
-      intro. destruct H5. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H5. constructor. inv H2.
-      destruct H6; auto.
-    - econstructor; eauto.
-      clear H0 H3. induction H1; eauto. constructor. apply H0.
-      intro. destruct H4. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H4. constructor. inv H3; eauto.
-    - econstructor; eauto.
-      clear H1 H3 H4 H5. induction H2; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H3.
-      destruct H6; auto.
-      clear H1 H3 H2 H5. induction H4; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H2.
-      destruct H6; auto.
-    - econstructor; eauto. apply IHHsem.
-      intro. destruct H6. constructor. auto.
-      clear H1 H3 H4 H5. induction H2; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H3.
-      destruct H6; auto. destruct H3; auto.
-      clear H1 H3 H2 H5. induction H4; eauto. constructor. apply H1.
-      intro. destruct H6. constructor. auto.
-      apply IHForall2; eauto. intro. destruct H6. constructor. inv H2.
-      destruct H6; auto. destruct H2; auto.
-    - inv Hord.
-      econstructor; try apply IHHsem; eauto.
-      + eapply Forall2_impl_In; [| eauto].
-        intros a0 b0 Hina Hinb Hsem'; simpl in Hsem'.
-        eapply Hsem'.
-        intro contra. apply H2. constructor.
-        rewrite Exists_exists. exists a0; auto.
-      + rewrite Forall_forall in H6.
-        inv Hsem. unfold find_node in H7. apply find_some in H7; destruct H7 as [Hin Heq].
-        rewrite ident_eqb_eq in Heq; subst. eauto.
+      eapply IHHsem.
+      2,3:(eapply Forall2_impl_In; [|eauto]; intros; eapply H9).
+      1-3:(intro; apply H6; constructor).
+      1:left; auto. 1:right;left. 2:right;right.
+      1,2:apply Exists_exists; eauto.
     - inv Hord.
       econstructor; eauto.
-      + eapply Forall2_impl_In in H1; eauto. intros * ?? Hi. apply Hi. intro.
+      + eapply Forall2_impl_In in H1; [|eauto]; eauto.
+        intros * ?? Sem. eapply Sem; intro. take (~ _) and apply it.
+        constructor; left. eapply Exists_exists; eauto.
+      + eapply Forall2_impl_In in H3; eauto. intros * ?? Hi. simpl. apply Hi. intro.
         take (~ _) and apply it. constructor. right. eapply Exists_exists; eauto.
-      + apply IHHsem. intro. take (~ _) and apply it. constructor; eauto.
       + intro k. take (forall k, _ /\ _) and specialize (it k) as (? & Hk).
-        apply Hk.
-        rewrite Forall_forall in H9.
-        inv H4. unfold find_node in H10. apply find_some in H10; destruct H10 as [Hin Heq].
-        rewrite ident_eqb_eq in Heq; subst. eauto.
+        apply Hk. intro Hn. subst. take (~ _) and apply it. eapply INEapp2.
     - econstructor; eauto.
       clear H0 H2. induction H1; eauto.
       constructor. apply H0. intro. destruct H3. now constructor.
@@ -555,6 +509,15 @@ Module Type LSEMANTICS
 
     clear IHForall2. revert dependent y.
 
+    Ltac SolveNin' Hnin :=
+      let Hn := fresh in
+      let Hn2 := fresh in
+      let Hn3 := fresh in
+      let Hn4 := fresh in
+      intro Hn; destruct Hnin; inversion_clear Hn as [? ? Hn2 |]; subst;
+      [ econstructor; econstructor; auto
+      | unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto].
+
     Ltac SolveNin Hnin :=
       let Hn := fresh in
       let Hn2 := fresh in
@@ -564,7 +527,7 @@ Module Type LSEMANTICS
       [ econstructor; econstructor; auto
       | unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto];
       inversion_clear Hn2 as
-          [ | | ? ? ? ? Hn3 | ? ? ? ? Hn3 | (* ? ? ? ? Hn3 | *) | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | | |]; auto;
+          [ | | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | |]; auto;
       try (destruct Hn3 as [| Hn4 ]; eauto; destruct Hn4; eauto).
 
     induction x using exp_ind2; intros * Hsem; inv Hsem;
@@ -574,19 +537,25 @@ Module Type LSEMANTICS
       apply IHx1; eauto. SolveNin Hnin.
       apply IHx2; eauto. SolveNin Hnin.
     - econstructor; eauto.
-      clear H5 H1 H11 H12. induction H9; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
+      clear H5 H1 H14 H16. induction H9; auto. constructor.
+      inv H0. apply H5; auto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H9 H12. induction H11; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
+      clear H5 H0 H14 H16. induction H12; auto. constructor.
+      inv H1. apply H5; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H1 H9 H12 H15 H16. induction H14; auto. constructor.
+      inv H2. apply H4; auto. SolveNin Hnin.
+      inv H2. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
-      clear H5 H1 H11 H12. induction H9; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
+      clear H5 H1 H14 H16. induction H9; auto. constructor.
+      inv H0. apply H5; auto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H9 H12. induction H11; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
+      clear H5 H0 H14 H16. induction H12; auto. constructor.
+      inv H1. apply H5; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H1 H9 H12 H15 H16. induction H14; auto. constructor.
+      inv H2. apply H4; auto. SolveNin Hnin.
+      inv H2. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
       clear H5 H11 H12. induction H10; eauto. constructor.
       inv H0. apply H4; eauto. SolveNin Hnin.
@@ -605,21 +574,22 @@ Module Type LSEMANTICS
       clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
-    - econstructor.
-      + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
-        eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
-        intro Ini. apply Hnin. inv Ini. repeat constructor.
-        apply Exists_exists; eauto. now constructor 2.
-      + eapply sem_node_cons; eauto. intro. subst. apply Hnin.
-        constructor. apply INEapp2.
     - econstructor; eauto.
+      + clear H1 H12 H14. induction H10; auto. constructor.
+        inv H0. apply H4; auto. SolveNin Hnin.
+        inv H0. apply IHForall2; eauto.
+        intro Hn; destruct Hnin; inversion_clear Hn as [? ? Hn2 |]; subst;
+          [ econstructor; eauto
+          | unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto].
+          inversion_clear Hn2.
+        * constructor. destruct H0; auto.
+        * apply INEapp2.
       + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
         eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
         intro Ini. apply Hnin. inv Ini. constructor. constructor. right.
         apply Exists_exists; eauto. now constructor 2.
-      + apply H0; auto. SolveNin Hnin.
       + intro k. eapply sem_node_cons; eauto. intro. subst.
-        apply Hnin. constructor. constructor.
+        apply Hnin. constructor. apply INEapp2.
     - apply IHForall2. intro. destruct Hnin. unfold Is_node_in_eq. simpl.
       rewrite Exists_cons. right. auto.
   Qed.
@@ -660,19 +630,25 @@ Module Type LSEMANTICS
       apply IHx1; eauto. SolveNin Hnin.
       apply IHx2; eauto. SolveNin Hnin.
     - econstructor; eauto.
-      clear H5 H1 H11 H12. induction H9; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
+      clear H5 H1 H14 H16. induction H9; auto. constructor.
+      inv H0. apply H5; auto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H9 H12. induction H11; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
+      clear H5 H0 H14 H16. induction H12; auto. constructor.
+      inv H1. apply H5; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H1 H9 H12 H15 H16. induction H14; auto. constructor.
+      inv H2. apply H4; auto. SolveNin Hnin.
+      inv H2. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
-      clear H5 H1 H11 H12. induction H9; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
+      clear H5 H1 H14 H16. induction H9; auto. constructor.
+      inv H0. apply H5; auto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H9 H12. induction H11; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
+      clear H5 H0 H14 H16. induction H12; auto. constructor.
+      inv H1. apply H5; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H0 H1 H9 H12 H15 H16. induction H14; auto. constructor.
+      inv H2. apply H4; auto. SolveNin Hnin.
+      inv H2. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
       clear H5 H11 H12. induction H10; eauto. constructor.
       inv H0. apply H4; eauto. SolveNin Hnin.
@@ -691,21 +667,22 @@ Module Type LSEMANTICS
       clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
-    - econstructor.
-      + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
-        eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
-        intro Ini. apply Hnin. inv Ini. repeat constructor.
-        apply Exists_exists; eauto. now constructor 2.
-      + eapply sem_node_cons'; eauto. intro. subst. apply Hnin.
-        constructor. apply INEapp2.
     - econstructor; eauto.
+      + clear H1 H12 H14. induction H10; auto. constructor.
+        inv H0. apply H4; auto. SolveNin Hnin.
+        inv H0. apply IHForall2; eauto.
+        intro Hn; destruct Hnin; inversion_clear Hn as [? ? Hn2 |]; subst;
+          [ econstructor; eauto
+          | unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto].
+          inversion_clear Hn2.
+        * constructor. destruct H0; auto.
+        * apply INEapp2.
       + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
         eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
         intro Ini. apply Hnin. inv Ini. constructor. constructor. right.
         apply Exists_exists; eauto. now constructor 2.
-      + apply H0; auto. SolveNin Hnin.
       + intro k. eapply sem_node_cons'; eauto. intro. subst.
-        apply Hnin. constructor. constructor.
+        apply Hnin. constructor. apply INEapp2.
     - apply IHForall2. intro. destruct Hnin. unfold Is_node_in_eq. simpl.
       rewrite Exists_cons. right. auto.
   Qed.
@@ -726,59 +703,45 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism v : (fby1 v)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
         as fby1_EqSt.
   Proof.
     revert v.
     cofix Cofix.
-    intros v cs cs' Ecs xs xs' Exs ys ys' Eys H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
-        try discriminate.
-    + constructor. eapply Cofix; eauto.
-    + inv H4. econstructor. eapply Cofix; eauto. now inv H2.
+    intros v xs xs' Exs ys ys' Eys rs rs' Ers zs zs' Ezs H.
+    destruct xs', ys', rs', zs';
+      inv H; inv Exs; inv Eys; inv Ers; inv Ezs; simpl in *;
+        try discriminate; subst.
+    1-5:constructor; eauto; eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism : fby
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
         as fby_EqSt.
   Proof.
-    cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
-        try discriminate.
-    + constructor; eapply Cofix; eauto.
-    + inv H4. inv H. econstructor. inv H2.
-      rewrite <- H1. rewrite <- H3. rewrite <- H5. assumption.
+    intros * Exs * Eys * Ers * Ezs H.
+    unfold fby in *. rewrite Exs, Eys, Ers, Ezs in H; auto.
   Qed.
 
-  Add Parametric Morphism : arrow1
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+  Add Parametric Morphism b : (arrow1 b)
+      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
         as arrow1_EqSt.
   Proof.
+    revert b.
     cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
-        try discriminate.
-    + constructor; eapply Cofix; eauto.
-    + inv H. inv H2. inv H4. econstructor.
-      eapply Cofix; eauto.
+    intros b xs xs' Exs ys ys' Eys rs rs' Ers zs zs' Ezs H.
+    destruct xs', ys', rs', zs';
+      inv H; inv Exs; inv Eys; inv Ers; inv Ezs; simpl in *;
+        try discriminate; subst.
+    1-5:constructor; eauto; eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism : arrow
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
         as arrow_EqSt.
   Proof.
-    cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
-        try discriminate.
-    + constructor; eapply Cofix; eauto.
-    + inv H. inv H2. inv H4. econstructor.
-      rewrite <- H1, <- H3, <- H5; auto.
+    intros * Exs * Eys * Ers * Ezs H.
+    unfold arrow in *. rewrite Exs, Eys, Ers, Ezs in H; auto.
   Qed.
 
   Add Parametric Morphism k : (when k)
@@ -899,12 +862,18 @@ Module Type LSEMANTICS
         intros * ?? Hs; apply Hs; auto; reflexivity.
       + eapply Forall2_impl_In; [|apply H3].
         intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eapply Forall2_impl_In; [|eapply H5].
+        intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eauto.
       + eapply Forall3_EqSt; eauto. solve_proper.
     - econstructor.
       + eapply Forall2_impl_In; [|apply H1].
         intros * ?? Hs; apply Hs; auto; reflexivity.
       + eapply Forall2_impl_In; [|apply H3].
         intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eapply Forall2_impl_In; [|eapply H5].
+        intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eauto.
       + eapply Forall3_EqSt; eauto. solve_proper.
     - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H1].
@@ -924,13 +893,11 @@ Module Type LSEMANTICS
         intros * ?? Hs; apply Hs; auto; reflexivity.
       + eapply Forall3_EqSt; eauto. solve_proper.
     - econstructor; eauto.
-      eapply Forall2_impl_In; [|apply H1].
-      intros * ?? Hs; apply Hs; auto; reflexivity.
-    - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H1].
         intros * ?? Hs; apply Hs; auto; reflexivity.
-      + apply IHSem; auto; reflexivity.
-      + intro k; specialize (H3 k); destruct H3 as (?&Hr).
+      + eapply Forall2_impl_In; [|apply H3].
+        intros * ?? Hs; apply Hs; auto; reflexivity.
+      + intro k; specialize (H5 k); destruct H5 as (?&Hr).
         apply Hr.
         apply map_st_EqSt_Proper; auto.
         intros ?? ->; reflexivity.
@@ -1023,8 +990,6 @@ Module Type LSEMANTICS
       econstructor; eauto; repeat rewrite_Forall_forall...
     - (* app *)
       econstructor; eauto; repeat rewrite_Forall_forall...
-    - (* app (reset) *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
   Qed.
 
   Fact sem_equation_refines : forall G H H' b equ,
@@ -1079,13 +1044,10 @@ Module Type LSEMANTICS
       induction e using exp_ind2; intros vs Heq Hsem; inv Hsem;
         econstructor...
       1-13:repeat rewrite_Forall_forall...
-      - (* app *)
-        specialize (Heq f (concat ss) vs).
-        auto.
       - (* app (reset) *)
         intros k. specialize (H13 k).
-          specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
-          auto.
+        specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
+        auto.
     Qed.
 
     Fact sem_ref_sem_equation : forall G G' H b eq,
@@ -1148,26 +1110,26 @@ Module Type LSEMANTICS
     induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
     - (* fby *)
       repeat rewrite_Forall_forall.
-      rewrite <- H9. rewrite <- H10.
+      rewrite <- H13, <- H16.
       unfold annots; rewrite flat_map_concat_map.
       apply concat_length_eq.
       rewrite Forall2_map_2.
       rewrite_Forall_forall.
       rewrite length_annot_numstreams. eapply H0.
       + apply nth_In; congruence.
-      + apply H5. apply nth_In; congruence.
-      + eapply H6... congruence.
-    - (* arrow *)
+      + apply H7. apply nth_In; congruence.
+      + eapply H10... congruence.
+    - (* arrow (reset) *)
       repeat rewrite_Forall_forall.
-      rewrite <- H9. rewrite <- H10.
+      rewrite <- H13, <- H16.
       unfold annots; rewrite flat_map_concat_map.
       apply concat_length_eq.
       rewrite Forall2_map_2.
       rewrite_Forall_forall.
       rewrite length_annot_numstreams. eapply H0.
       + apply nth_In; congruence.
-      + apply H5. apply nth_In; congruence.
-      + eapply H6... congruence.
+      + apply H7. apply nth_In; congruence.
+      + eapply H10... congruence.
     - (* when *)
       repeat rewrite_Forall_forall.
       rewrite <- H1. rewrite <- H7.
@@ -1201,12 +1163,6 @@ Module Type LSEMANTICS
       + apply nth_In; congruence.
       + apply H7. apply nth_In; congruence.
       + eapply H5... congruence.
-    - (* app *)
-      inv H11.
-      repeat rewrite_Forall_forall.
-      rewrite H3 in H7; inv H7.
-      unfold idents in H6.
-      rewrite <- H6, map_length...
     - (* app (reset) *)
       specialize (H13 0). inv H13.
       repeat rewrite_Forall_forall.
@@ -1287,6 +1243,118 @@ Module Type LSEMANTICS
     - eapply sem_node_sem_vars; eauto.
     - eapply sem_node_sem_outs; eauto.
   Qed.
+
+  (** *** Alignement properties *)
+
+  (** fby keeps the synchronization *)
+
+  Lemma ac_fby11 : forall v xs ys rs zs,
+      fby1 v xs ys rs zs ->
+      abstract_clock xs ≡ abstract_clock zs.
+  Proof.
+    cofix Cofix.
+    intros * Hfby.
+    inv Hfby; simpl; constructor; simpl; auto;
+      eapply Cofix; eauto.
+  Qed.
+
+  Corollary ac_fby1 : forall xs ys rs zs,
+      fby xs ys rs zs ->
+      abstract_clock xs ≡ abstract_clock zs.
+  Proof. intros. eapply ac_fby11; eauto. Qed.
+
+  Lemma ac_fby12 : forall v xs ys rs zs,
+      fby1 v xs ys rs zs ->
+      abstract_clock ys ≡ abstract_clock zs.
+  Proof.
+    cofix Cofix.
+    intros * Hfby.
+    inv Hfby; simpl; constructor; simpl; auto;
+      eapply Cofix; eauto.
+  Qed.
+
+  Corollary ac_fby2 : forall xs ys rs zs,
+      fby xs ys rs zs ->
+      abstract_clock ys ≡ abstract_clock zs.
+  Proof. intros. eapply ac_fby12; eauto. Qed.
+
+  Lemma fby1_aligned : forall v bs xs ys rs zs,
+      fby1 v xs ys rs zs ->
+      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
+      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
+  Proof with eauto.
+    intros * Hfby.
+    specialize (ac_fby11 _ _ _ _ _ Hfby) as Hac1. specialize (ac_fby12 _ _ _ _ _ Hfby) as Hac2.
+    specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
+    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
+  Qed.
+
+  Corollary fby_aligned : forall bs xs ys rs zs,
+      fby xs ys rs zs ->
+      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
+      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
+  Proof. intros. eapply fby1_aligned; eauto. Qed.
+
+  Lemma ac_arrow11 : forall v xs ys rs zs,
+      arrow1 v xs ys rs zs ->
+      abstract_clock xs ≡ abstract_clock zs.
+  Proof.
+    cofix Cofix.
+    intros * Harrow.
+    inv Harrow; simpl; constructor; simpl; auto;
+      eapply Cofix; eauto.
+  Qed.
+
+  Corollary ac_arrow1 : forall xs ys rs zs,
+      arrow xs ys rs zs ->
+      abstract_clock xs ≡ abstract_clock zs.
+  Proof. intros. eapply ac_arrow11; eauto. Qed.
+
+  Lemma ac_arrow12 : forall v xs ys rs zs,
+      arrow1 v xs ys rs zs ->
+      abstract_clock ys ≡ abstract_clock zs.
+  Proof.
+    cofix Cofix.
+    intros * Harrow.
+    inv Harrow; simpl; constructor; simpl; auto;
+      eapply Cofix; eauto.
+  Qed.
+
+  Corollary ac_arrow2 : forall xs ys rs zs,
+      arrow xs ys rs zs ->
+      abstract_clock ys ≡ abstract_clock zs.
+  Proof. intros. eapply ac_arrow12; eauto. Qed.
+
+  Lemma arrow1_aligned : forall v bs xs ys rs zs,
+      arrow1 v xs ys rs zs ->
+      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
+      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
+  Proof with eauto.
+    intros * Harrow.
+    specialize (ac_arrow11 _ _ _ _ _ Harrow) as Hac1. specialize (ac_arrow12 _ _ _ _ _ Harrow) as Hac2.
+    specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
+    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
+    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
+    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
+  Qed.
+
+  Corollary arrow_aligned : forall bs xs ys rs zs,
+      arrow xs ys rs zs ->
+      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
+      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
+  Proof. intros. eapply arrow1_aligned; eauto. Qed.
+
+  (** *** Additional facts *)
 
 End LSEMANTICS.
 

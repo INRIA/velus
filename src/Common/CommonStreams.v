@@ -19,6 +19,11 @@ Fact Str_nth_S:
     (x ⋅ xs) # (S n) = xs # n.
 Proof. reflexivity. Qed.
 
+Fact Str_nth_0_hd:
+  forall {A} (xs: Stream A),
+    xs # 0 = (hd xs).
+Proof. reflexivity. Qed.
+
 Fact Str_nth_S_tl:
   forall {A} (xs: Stream A) n,
     xs # (S n) = (tl xs) # n.
@@ -127,3 +132,10 @@ Section Forall.
         rewrite Str_nth_S in H...
   Qed.
 End Forall.
+
+Lemma const_Cons : forall {A} (a : A),
+    Streams.const a = a ⋅ (Streams.const a).
+Proof.
+  intros.
+  rewrite unfold_Stream at 1. reflexivity.
+Qed.

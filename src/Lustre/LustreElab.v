@@ -260,14 +260,14 @@ Inductive eexp : Type :=
 | Eunop  : unop -> eexp -> ann -> eexp
 | Ebinop : binop -> eexp -> eexp -> ann -> eexp
 
-| Efby   : list eexp -> list eexp -> list ann -> eexp
-| Earrow : list eexp -> list eexp -> list ann -> eexp
+| Efby   : list eexp -> list eexp -> list eexp -> list ann -> eexp
+| Earrow : list eexp -> list eexp -> list eexp -> list ann -> eexp
 
 | Ewhen  : list eexp -> ident -> bool -> lann -> eexp
 | Emerge : ident -> list eexp -> list eexp -> lann -> eexp
 | Eite   : eexp -> list eexp -> list eexp -> lann -> eexp
 
-| Eapp   : ident -> list eexp -> option eexp -> list ann -> eexp.
+| Eapp   : ident -> list eexp -> list eexp -> list ann -> eexp.
 
 Fixpoint msg_of_clock (ck: clock) : errmsg :=
   match ck with
@@ -638,7 +638,8 @@ Section ElabExpressions.
     | Eunop _ _ (ty, nck)
     | Ebinop _ _ _ (ty, nck)
     | Ewhen _ _ _ ([ty], nck)
-    | Efby _ _ [(ty, nck)]
+    | Efby _ _ _ [(ty, nck)]
+    | Earrow _ _ _ [(ty, nck)]
     | Emerge _ _ _ ([ty], nck)
     | Eite _ _ _ ([ty], nck) => ret (ty, stripname nck)
     | _ => err_not_singleton loc
@@ -656,8 +657,8 @@ Section ElabExpressions.
     | Eite _ _ _ (tys, nck) =>
       let ck := stripname nck in
       map (fun ty=> ((ty, ck), loc)) tys
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns =>
       map (fun tc => ((fst tc, stripname (snd tc)), loc)) anns
     end.
@@ -676,8 +677,8 @@ Section ElabExpressions.
     | Emerge _ _ _ (tys, nck)
     | Eite _ _ _ (tys, nck) =>
       map (fun ty=> ((ty, nck), loc)) tys
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns => map (fun tc => (tc, loc)) anns
     end.
 
@@ -796,6 +797,10 @@ Section ElabExpressions.
   Definition discardname (ann : (type * nsclock * astloc)) : (type * nsclock) :=
     let '(ty, (ck, id), _) := ann in (ty, (ck, None)).
 
+  Definition assert_reset_type '(er, loc) :=
+    do (erty, _) <- single_annot loc er;
+    assert_type loc erty bool_type.
+
   (* Elaborate an expression. *)
 
   Fixpoint elab_exp (is_top : bool) (ae: expression) {struct ae} : Elab (eexp * astloc) :=
@@ -837,21 +842,25 @@ Section ElabExpressions.
       ret (Ebinop op e1 e2 (ty', (sck1, None)), loc)
     | BINARY _ _ _ loc => err_not_singleton loc
 
-    | FBY ae0s aes loc =>
+    | FBY ae0s aes aer loc =>
       do e0s <- mmap elab_exp ae0s;
       do es <- mmap elab_exp aes;
       let ans0 := lnannots e0s in
       do _ <- unify_paired_clock_types loc ans0 (lnannots es);
       do ans0 <- mmap update_ann (map discardname ans0);
-      ret (Efby (map fst e0s) (map fst es) ans0, loc)
+      do er <- mmap elab_exp aer;
+      do _ <- mmap assert_reset_type er;
+      ret (Efby (map fst e0s) (map fst es) (map fst er) ans0, loc)
 
-    | ARROW ae0s aes loc =>
+    | ARROW ae0s aes aer loc =>
       do e0s <- mmap elab_exp ae0s;
       do es <- mmap elab_exp aes;
       let ans0 := lnannots e0s in
       do _ <- unify_paired_clock_types loc ans0 (lnannots es);
       do ans0 <- mmap update_ann (map discardname ans0);
-      ret (Earrow (map fst e0s) (map fst es) ans0, loc)
+      do er <- mmap elab_exp aer;
+      do _ <- mmap assert_reset_type er;
+      ret (Earrow (map fst e0s) (map fst es) (map fst er) ans0, loc)
 
     | WHEN aes' x b loc =>
       do (xty, xck) <- find_var loc x;
@@ -886,29 +895,14 @@ Section ElabExpressions.
                 (lannots_ty ants, (eck, None)), loc)
     | IFTE _ _ _ loc => err_not_singleton loc
 
-    | APP f aes [] loc =>
-      (* node interface *)
-      do (tyck_in, tyck_out) <- find_node_interface loc f;
-      (* elaborate arguments *)
-      do eas <- mmap elab_exp aes;
-      (* instantiate annotations *)
-      let anns := lnannots eas in
-      do sub <- instantiating_subst (tyck_in++tyck_out);
-      do xbase <- fresh_ident;
-      do ianns <- mmap (inst_annot loc (Svar xbase) sub Vidx) tyck_in;
-      do oanns <- mmap (inst_annot loc (Svar xbase) sub (if is_top then Vidx else Vnm)) tyck_out;
-      do _ <- unify_inputs loc ianns anns;
-      ret (Eapp f (map fst eas) None oanns, loc)
-
-    | APP f aes [aer] loc =>
+    | APP f aes aer loc =>
       (* node interface *)
       do (tyck_in, tyck_out) <- find_node_interface loc f;
       (* elaborate arguments *)
       do eas <- mmap elab_exp aes;
       (* elaborate reset and check it has boolean type *)
-      do (er, erloc) <- elab_exp aer;
-      do (erty, _) <- single_annot erloc er;
-      do _ <- assert_type erloc erty bool_type;
+      do er <- mmap elab_exp aer;
+      do _ <- mmap assert_reset_type er;
       (* instantiate annotations *)
       let anns := lnannots eas in
       do sub <- instantiating_subst (tyck_in++tyck_out);
@@ -916,8 +910,7 @@ Section ElabExpressions.
       do ianns <- mmap (inst_annot loc (Svar xbase) sub Vidx) tyck_in;
       do oanns <- mmap (inst_annot loc (Svar xbase) sub (if is_top then Vidx else Vnm)) tyck_out;
       do _ <- unify_inputs loc ianns anns;
-      ret (Eapp f (map fst eas) (Some er) oanns, loc)
-    | APP _ _ _ loc => err_not_singleton loc
+      ret (Eapp f (map fst eas) (map fst er) oanns, loc)
     end.
 
   Definition freeze_ident (sid : sident) : Elab ident :=
@@ -979,17 +972,19 @@ Section ElabExpressions.
       do ann' <- freeze_ann ann;
       ret (Syn.Ebinop binop e1' e2' ann')
 
-    | Efby e0s es anns =>
+    | Efby e0s es er anns =>
       do e0s <- freeze_exps e0s;
       do es <- freeze_exps es;
+      do er <- freeze_exps er;
       do anns <- mmap freeze_ann anns;
-      ret (Syn.Efby e0s es anns)
+      ret (Syn.Efby e0s es er anns)
 
-    | Earrow e0s es anns =>
+    | Earrow e0s es er anns =>
       do e0s <- freeze_exps e0s;
       do es <- freeze_exps es;
+      do er <- freeze_exps er;
       do anns <- mmap freeze_ann anns;
-      ret (Syn.Earrow e0s es anns)
+      ret (Syn.Earrow e0s es er anns)
 
     | Ewhen es ckid b (tys, nck) =>
       do es <- freeze_exps es;
@@ -1009,16 +1004,11 @@ Section ElabExpressions.
       do nck <- freeze_nclock nck;
       ret (Syn.Eite e ets efs (tys, nck))
 
-    | Eapp f es None anns =>
+    | Eapp f es er anns =>
       do es <- freeze_exps es;
+      do er <- freeze_exps er;
       do anns <- mmap freeze_ann anns;
-      ret (Syn.Eapp f es None anns)
-
-    | Eapp f es (Some er) anns =>
-      do es <- freeze_exps es;
-      do er <- freeze_exp er;
-      do anns <- mmap freeze_ann anns;
-      ret (Syn.Eapp f es (Some er) anns)
+      ret (Syn.Eapp f es er anns)
     end.
 
   Fixpoint unify_pat (gloc: astloc)
@@ -1294,8 +1284,7 @@ Section ElabDeclaration.
     induction es; intros * Hf Helab Hfreeze;
       inv Hf; repeat monadInv; unfold fresh_ins; simpl; auto.
     rewrite map_app. apply Forall_app; split; eauto.
-    - destruct x. eapply H1; eauto.
-    - eapply IHes; eauto.
+    destruct x. eapply H1; eauto.
   Qed.
 
   Lemma fresh_in_AtomOrGensym : forall G vars vars' e e' loc e'' st1 st2 st3 st4,
@@ -1322,13 +1311,11 @@ Section ElabDeclaration.
       destruct_to_singl es; repeat monadInv.
       apply Forall_singl in H. eauto.
     - (* app *)
-      destruct_to_singl r; repeat monadInv.
-      + rewrite map_app, Forall_app; split. eapply fresh_ins_AtomOrGensym' in H; eauto.
-        eapply anon_streams_AtomOrGensym; eauto.
-      + apply Forall_singl in H0.
-        repeat rewrite map_app, Forall_app; repeat split; eauto.
-        eapply fresh_ins_AtomOrGensym'; eauto.
-        eapply anon_streams_AtomOrGensym; eauto.
+      repeat monadInv.
+      repeat rewrite map_app, Forall_app; repeat split; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+      + eapply anon_streams_AtomOrGensym; eauto.
     - (* constant *)
       repeat monadInv.
       clear - Hbind1. revert loc e'' x1 st4 Hbind1.
@@ -1339,14 +1326,16 @@ Section ElabDeclaration.
       repeat monadInv; auto.
     - (* fby *)
       repeat monadInv.
-      rewrite map_app, Forall_app; split.
+      repeat rewrite map_app, Forall_app; repeat split; simpl; auto.
       + eapply fresh_ins_AtomOrGensym' in H; eauto.
       + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H1; eauto.
     - (* arrow *)
       repeat monadInv.
-      rewrite map_app, Forall_app; split.
+      repeat rewrite map_app, Forall_app; repeat split; simpl; auto.
       + eapply fresh_ins_AtomOrGensym' in H; eauto.
       + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+      + eapply fresh_ins_AtomOrGensym' in H1; eauto.
     - (* when *)
       repeat monadInv.
       eapply fresh_ins_AtomOrGensym'; eauto.
@@ -1384,12 +1373,10 @@ Section ElabDeclaration.
     - (* ite *)
       destruct_to_singl l; repeat monadInv.
       repeat rewrite map_app, Forall_app. repeat split; eauto.
-      + eapply fresh_ins_AtomOrGensym in Hbind7; eauto.
-      + eapply fresh_ins_AtomOrGensym in Hbind6; eauto.
     - (* cast *)
       destruct_to_singl l; repeat monadInv; eauto.
     - (* app *)
-      destruct_to_singl l0; repeat monadInv; eauto.
+      repeat monadInv; eauto.
       rewrite map_app, Forall_app; repeat split; eauto.
     - (* constant *)
       eapply Forall_incl; [|eapply incl_map, anon_in_fresh_in].
@@ -1402,14 +1389,10 @@ Section ElabDeclaration.
       repeat monadInv; auto.
     - (* fby *)
       repeat monadInv.
-      rewrite map_app, Forall_app; split.
-      + eapply fresh_ins_AtomOrGensym in Hbind3; eauto.
-      + eapply fresh_ins_AtomOrGensym in Hbind5; eauto.
+      repeat rewrite map_app, Forall_app; repeat split; simpl; eauto.
     - (* arrow *)
       repeat monadInv.
-      rewrite map_app, Forall_app; split.
-      + eapply fresh_ins_AtomOrGensym in Hbind3; eauto.
-      + eapply fresh_ins_AtomOrGensym in Hbind5; eauto.
+      repeat rewrite map_app, Forall_app; repeat split; simpl; eauto.
     - (* when *)
       repeat monadInv.
       eapply fresh_ins_AtomOrGensym; eauto.

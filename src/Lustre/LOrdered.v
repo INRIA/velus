@@ -29,12 +29,14 @@ Module Type LORDERED
   | INEbinop: forall f op e1 e2 a,
       Is_node_in_exp f e1 \/ Is_node_in_exp f e2 ->
       Is_node_in_exp f (Ebinop op e1 e2 a)
-  | INEfby: forall f le1 le2 la,
-      Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 ->
-      Is_node_in_exp f (Efby le1 le2 la)
-  | INEarrow: forall f le1 le2 la,
-      Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 ->
-      Is_node_in_exp f (Earrow le1 le2 la)
+  | INEfby: forall f le1 le2 ler la,
+      Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 \/
+      Exists (Is_node_in_exp f) ler ->
+      Is_node_in_exp f (Efby le1 le2 ler la)
+  | INEarrow: forall f le1 le2 ler la,
+      Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 \/
+      Exists (Is_node_in_exp f) ler ->
+      Is_node_in_exp f (Earrow le1 le2 ler la)
   | INEwhen: forall f le x b la,
       Exists (Is_node_in_exp f) le ->
       Is_node_in_exp f (Ewhen le x b la)
@@ -46,13 +48,11 @@ Module Type LORDERED
       \/ Exists (Is_node_in_exp f) le1
       \/ Exists (Is_node_in_exp f) le2 ->
       Is_node_in_exp f (Eite e le1 le2 la)
-  | INEapp1: forall f g le a,
-      Exists (Is_node_in_exp f) le ->
-      Is_node_in_exp f (Eapp g le None a)
-  | INEapp2: forall f le r a, Is_node_in_exp f (Eapp f le r a)
-  | INEapp3: forall f g le e a,
-      Exists (Is_node_in_exp f) (e :: le) ->
-      Is_node_in_exp f (Eapp g le (Some e) a).
+  | INEapp1: forall f g le ler a,
+      Exists (Is_node_in_exp f) le \/
+      Exists (Is_node_in_exp f) ler ->
+      Is_node_in_exp f (Eapp g le ler a)
+  | INEapp2: forall f le ler a, Is_node_in_exp f (Eapp f le ler a).
 
   Definition Is_node_in_eq (f: ident) (eq: equation) : Prop :=
     List.Exists (Is_node_in_exp f) (snd eq).
@@ -196,22 +196,16 @@ Module Type LORDERED
     induction e using exp_ind2; inv Hwl; inv Hisin.
     - (* unop *) auto.
     - (* binop *) destruct H1; auto.
-    - (* fby *) destruct H3; Forall_Exists.
-    - (* arrow *) destruct H3; Forall_Exists.
+    - (* fby *) clear H12. destruct H4 as [?|[?|?]]; Forall_Exists.
+    - (* arrow *) clear H12. destruct H4 as [?|[?|?]]; Forall_Exists.
     - (* when *) Forall_Exists.
     - (* merge *) destruct H3; Forall_Exists.
     - (* ite *) destruct H3 as [?|[?|?]]; auto; Forall_Exists.
-    - (* app *) Forall_Exists.
-    - assert (find_node f0 G <> None) as Hfind.
+    - (* app1 *) clear H8. destruct H3; Forall_Exists.
+    - (* app2 *) assert (find_node f0 G <> None) as Hfind.
       { intro contra. congruence. }
       apply find_node_Exists, Exists_exists in Hfind as [? [Hin Hname]].
       rewrite in_map_iff; eauto.
-    - (* app (reset) *)
-      assert (find_node f0 G <> None) as Hfind.
-      { intro contra. congruence. }
-      apply find_node_Exists, Exists_exists in Hfind as [? [Hin Hname]].
-      rewrite in_map_iff; eauto.
-    - inv H3; auto. Forall_Exists.
   Qed.
 
   Lemma wl_equation_Is_node_in_eq : forall G eq f,

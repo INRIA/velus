@@ -30,8 +30,8 @@ module type SYNTAX =
 
     type equation =
     | EqDef of ident * clock * cexp
-    | EqApp of idents * clock * ident * exp list * (ident * clock) option
-    | EqFby of ident * clock * const * exp
+    | EqApp of idents * clock * ident * exp list * (ident * clock) list
+    | EqFby of ident * clock * const * exp * (ident * clock) list
 
     type node = {
       n_name : ident;
@@ -71,22 +71,28 @@ module PrintFun
           fprintf p "@[<hov 2>%a =@ %a;@]"
             print_ident x
             print_cexp e
-      | NL.EqApp (xs, ck, f, es, None) ->
+      | NL.EqApp (xs, ck, f, es, []) ->
           fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@]);@]"
             print_pattern xs
             print_ident f
             (print_comma_list print_exp) es
-      | NL.EqApp (xs, ck, f, es, Some (r,rck)) ->
+      | NL.EqApp (xs, ck, f, es, ckrs) ->
         fprintf p "@[<hov 2>%a =@ (restart@ %a@ every@ %a)(@[<hv 0>%a@]);@]"
           print_pattern xs
           print_ident f
-          print_ident r
+          (print_comma_list print_ident) (List.map fst ckrs)
           (print_comma_list print_exp) es
-      | NL.EqFby (x, ck, v0, e) ->
+      | NL.EqFby (x, ck, v0, e, []) ->
           fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
             print_ident x
             PrintOps.print_const v0
             print_exp e
+      | NL.EqFby (x, ck, v0, e, ckrs) ->
+        fprintf p "@[<hov 2>%a =@ reset %a fby@ %a every %a;@]"
+          print_ident x
+          PrintOps.print_const v0
+          print_exp e
+          (print_comma_list print_ident) (List.map fst ckrs)
 
     let print_equations p =
       pp_print_list ~pp_sep:pp_force_newline print_equation p

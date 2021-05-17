@@ -33,13 +33,15 @@ Module Type LCAUSALITY
       Is_free_left x 0 e1
       \/ Is_free_left x 0 e2 ->
       Is_free_left x 0 (Ebinop op e1 e2 a)
-  | IFLfby : forall e0s es a k,
-      Is_free_left_list x k e0s ->
-      Is_free_left x k (Efby e0s es a)
-  | IFLarrow : forall e0s es a k,
+  | IFLfby : forall e0s es er a k,
       Is_free_left_list x k e0s
-      \/ Is_free_left_list x k es ->
-      Is_free_left x k (Earrow e0s es a)
+      \/ (k < length a /\ Exists (Is_free_left x 0) er) ->
+      Is_free_left x k (Efby e0s es er a)
+  | IFLarrow : forall e0s es er a k,
+      Is_free_left_list x k e0s
+      \/ Is_free_left_list x k es
+      \/ (k < length a /\ Exists (Is_free_left x 0) er) ->
+      Is_free_left x k (Earrow e0s es er a)
   | IFLwhen : forall es y b a k,
       (k < length (fst a) /\ x = y)
       \/ Is_free_left_list x k es ->
@@ -54,15 +56,11 @@ Module Type LCAUSALITY
       \/ Is_free_left_list x k ets
       \/ Is_free_left_list x k efs->
       Is_free_left x k (Eite e ets efs a)
-  | IFLapp : forall f es a k,
-      k < length a ->
-      (exists k', Exists (Is_free_left x k') es) ->
-      Is_free_left x k (Eapp f es None a)
-  | IFLreset : forall f es r a k,
+  | IFLapp : forall f es er a k,
       k < length a ->
       (exists k', Exists (Is_free_left x k') es)
-      \/ Is_free_left x 0 r ->
-      Is_free_left x k (Eapp f es (Some r) a)
+      \/ (Exists (Is_free_left x 0) er) ->
+      Is_free_left x k (Eapp f es er a)
 
   with Is_free_left_list (x : ident) : nat -> list exp -> Prop :=
   | IFLLnow : forall k e es,
@@ -138,9 +136,10 @@ Module Type LCAUSALITY
       eapply Forall_impl; eauto; intros ? [? ?] ? ? ?; eauto.
 
     induction e using exp_ind2; intros * Hwl Hfree; inv Hfree; inv Hwl; simpl; auto.
-    - (* fby *) solve_forall2 H8 H.
+    - (* fby *)
+      destruct H4 as [?|(?&?)]; auto. solve_forall2 H11 H.
     - (* arrow *)
-      destruct H3. solve_forall2 H8 H. solve_forall2 H9 H0.
+      destruct H4 as [?|[?|(?&?)]]; auto. solve_forall2 H11 H. solve_forall2 H12 H0.
     - (* when *)
       rewrite map_length. destruct H2 as [[? ?]|?]; auto.
       solve_forall2 H7 H.
@@ -185,11 +184,14 @@ Module Type LCAUSALITY
       let ps1 := collect_free_left e1 in
       let ps2 := collect_free_left e2 in
       List.map (fun '(ps1, ps2) => PS.union ps1 ps2) (List.combine ps1 ps2)
-    | Efby e0s _ _ => (collect_free_left_list e0s)
-    | Earrow e0s es _ =>
+    | Efby e0s _ er _ =>
+      let psr := PSUnion (collect_free_left_list er) in
+      List.map (PS.union psr) (collect_free_left_list e0s)
+    | Earrow e0s es er _ =>
       let ps1 := collect_free_left_list e0s in
       let ps2 := collect_free_left_list es in
-      List.map (fun '(ps1, ps2) => PS.union ps1 ps2) (List.combine ps1 ps2)
+      let psr := PSUnion (collect_free_left_list er) in
+      List.map (fun '(ps1, ps2) => PS.union psr (PS.union ps1 ps2)) (List.combine ps1 ps2)
     | Ewhen es id _ (_, (ck, _)) =>
       List.map (fun ps => PS.add id ps) (collect_free_left_list es)
     | Emerge id ets efs (_, (ck, _)) =>
@@ -200,14 +202,9 @@ Module Type LCAUSALITY
       let ps0 := collect_free_left e in
       let ps1 := collect_free_left_list ets in
       let ps2 := collect_free_left_list efs in
-      List.map (fun '(ps1, ps2) =>
-                  PS.union (List.hd PS.empty ps0) (PS.union ps1 ps2))
-               (List.combine ps1 ps2)
-    | Eapp _ es None a =>
-      let ps := PSUnion (collect_free_left_list es) in
-      List.map (fun _ => ps) a
-    | Eapp _ es (Some r) a =>
-      let ps := PSUnion (collect_free_left r ++ collect_free_left_list es) in
+      List.map (fun '(ps1, ps2) => PS.union (nth 0 ps0 PS.empty) (PS.union ps1 ps2)) (List.combine ps1 ps2)
+    | Eapp _ es er a =>
+      let ps := PSUnion (collect_free_left_list er ++ collect_free_left_list es) in
       List.map (fun _ => ps) a
     end.
 
@@ -273,12 +270,13 @@ Module Type LCAUSALITY
       rewrite <- length_annot_numstreams in H6, H7.
       rewrite map_length, combine_length, IHe1, IHe2, H6, H7; auto.
     - (* fby *)
+      rewrite map_length.
       setoid_rewrite collect_free_left_list_length'; auto.
       solve_forall H.
     - (* arrow *)
       rewrite map_length, combine_length.
       setoid_rewrite collect_free_left_list_length'.
-      rewrite H7, H8. apply PeanoNat.Nat.min_id.
+      rewrite H10, H11. apply PeanoNat.Nat.min_id.
       solve_forall H. solve_forall H0.
     - (* when *)
       destruct nck. rewrite map_length, map_length.
@@ -295,7 +293,6 @@ Module Type LCAUSALITY
       rewrite H10, H11. apply PeanoNat.Nat.min_id.
       solve_forall H. solve_forall H0.
     - (* app *) rewrite map_length; auto.
-    - (* app (reset) *) rewrite map_length; auto.
   Qed.
 
   Corollary collect_free_left_list_length : forall G es,
@@ -372,6 +369,21 @@ Module Type LCAUSALITY
       + apply Lt.lt_n_S; auto.
   Qed.
 
+  Lemma Exists_Exists_Is_free: forall G es x k,
+    Forall (wl_exp G) es ->
+    Forall (fun e => numstreams e = 1) es ->
+    Exists (Is_free_left x k) es ->
+    Exists (Is_free_left x 0) es.
+  Proof.
+    intros * Wl Num Free.
+    eapply Exists_exists in Free as (?&In&Ex). eapply Exists_exists; do 2 esplit; eauto.
+    assert (k = 0) as Hk'; subst; eauto.
+    eapply Is_free_left_length in Ex. 2:eapply Forall_forall in Wl; eauto.
+    eapply Forall_forall in Num; eauto. rewrite length_annot_numstreams, Num in Ex.
+    apply PeanoNat.Nat.lt_1_r; auto.
+  Qed.
+  Hint Resolve Exists_Exists_Is_free.
+
   Fact collect_free_left_spec: forall G x e k,
       wl_exp G e ->
       PS.In x (List.nth k (collect_free_left e) PS.empty) <->
@@ -411,22 +423,36 @@ Module Type LCAUSALITY
         * apply PSF.union_2. rewrite <- IHe1 in H; eauto.
         * apply PSF.union_3. rewrite <- IHe2 in H; eauto.
     - (* fby *)
-      rewrite collect_free_left_list_spec'; eauto.
-      split; intros; auto.
-      inv H1; auto.
+      split; intros.
+      + specialize (ps_In_k_lt _ _ _ H2) as Hk. rewrite map_length in Hk.
+        erewrite map_nth' with (d':=PS.empty) in H2; eauto.
+        rewrite PS.union_spec, collect_free_left_list_spec' in H2; eauto.
+        constructor. destruct H2; auto.
+        right. setoid_rewrite <- Hlen2. rewrite map_length. split; auto.
+        eapply psunion_collect_free_list_spec' in H2 as (k'&Ex); eauto.
+      + erewrite <- collect_free_left_list_length in H10, H11; eauto.
+        erewrite map_nth' with (d':=PS.empty).
+        2:(erewrite <- map_length, Hlen2; eauto).
+        rewrite PS.union_spec, collect_free_left_list_spec'; eauto.
+        inv H2. destruct H5 as [?|(?&?)]; auto.
+        left. eapply psunion_collect_free_list_spec'; eauto.
     - (* arrow *)
       split; intros.
-      + specialize (ps_In_k_lt _ _ _ H1) as Hk. rewrite map_length in Hk.
-        erewrite map_nth' with (d':=(PS.empty, PS.empty)) in H1; eauto.
-        rewrite combine_nth in H1.
-        2:(repeat erewrite collect_free_left_list_length; eauto; rewrite H7, H8; auto).
-        rewrite PS.union_spec in H1. do 2 rewrite collect_free_left_list_spec' in H1; eauto.
-      + erewrite <- collect_free_left_list_length in H7, H8; eauto.
+      + specialize (ps_In_k_lt _ _ _ H2) as Hk. rewrite map_length in Hk.
+        erewrite map_nth' with (d':=(PS.empty, PS.empty)) in H2; eauto.
+        rewrite combine_nth in H2.
+        2:(repeat erewrite collect_free_left_list_length; eauto; rewrite H10, H11; auto).
+        repeat rewrite PS.union_spec in H2. do 2 rewrite collect_free_left_list_spec' in H2; eauto.
+        destruct H2 as [?|[?|?]]; auto.
+        constructor. repeat right. setoid_rewrite <- Hlen2. rewrite map_length. split; auto.
+        eapply psunion_collect_free_list_spec' in H2 as (k'&Ex); eauto.
+      + erewrite <- collect_free_left_list_length in H10, H11; eauto.
         erewrite map_nth' with (d':=(PS.empty, PS.empty)).
         2:(erewrite <- map_length, Hlen2; eauto).
-        rewrite combine_nth. 2:setoid_rewrite H7; setoid_rewrite H8; auto.
-        rewrite PS.union_spec. repeat rewrite collect_free_left_list_spec'; eauto.
-        inv H1; auto.
+        rewrite combine_nth. 2:setoid_rewrite H10; setoid_rewrite H11; auto.
+        repeat rewrite PS.union_spec. repeat rewrite collect_free_left_list_spec'; eauto.
+        inv H2. destruct H5 as [?|[?|(?&?)]]; auto.
+        left. eapply psunion_collect_free_list_spec'; eauto.
     - (* when *)
       split; intros.
       + specialize (ps_In_k_lt _ _ _ H0) as Hk. rewrite map_length in Hk.
@@ -471,7 +497,7 @@ Module Type LCAUSALITY
         destruct H1 as [?|?]; subst; auto.
         left; split; auto.
         erewrite <- map_length, Hlen2, map_length in Hk; auto.
-        rewrite <- IHe; eauto. destruct (collect_free_left _); auto.
+        rewrite <- IHe; eauto.
       + erewrite <- collect_free_left_list_length in H11, H12; eauto.
         erewrite map_nth' with (d':=(PS.empty, PS.empty)).
         2:(erewrite <- map_length, Hlen2; eauto).
@@ -479,32 +505,19 @@ Module Type LCAUSALITY
         repeat rewrite PS.union_spec. repeat rewrite collect_free_left_list_spec'; eauto.
         inv H1; auto. destruct H4 as [(_&?)|?]; auto.
         left. rewrite <- IHe in H1; eauto.
-        destruct (collect_free_left _); auto.
     - (* app *)
       split; intros.
       + assert (Hk:=H1). eapply ps_In_k_lt in Hk. rewrite map_length in Hk.
         erewrite map_nth' in H1; eauto. 2:exact (Op.bool_type, (Cbase, None)).
         constructor; auto.
-        rewrite <- psunion_collect_free_list_spec'; eauto.
-      + inv H1. erewrite map_nth'; eauto. 2:exact (Op.bool_type, (Cbase, None)).
-        rewrite psunion_collect_free_list_spec'; eauto.
-    - (* app (reset) *)
-      split; intros.
-      + assert (Hk:=H1). eapply ps_In_k_lt in Hk. rewrite map_length in Hk.
-        erewrite map_nth' in H1; eauto. 2:exact (Op.bool_type, (Cbase, None)).
-        constructor; auto.
         apply PSUnion_In_app in H1 as [?|?].
-        * right. rewrite <- H; eauto.
-          erewrite <- collect_free_left_length in H8; eauto.
-          singleton_length. unfold PSUnion in H1; simpl in H1; auto.
+        * right. eapply psunion_collect_free_list_spec' in H1 as (k'&Ex); eauto.
         * left. rewrite <- psunion_collect_free_list_spec'; eauto.
       + inv H1. erewrite map_nth'; eauto. 2:exact (Op.bool_type, (Cbase, None)).
         rewrite PSUnion_In_app.
         destruct H14.
         * right. rewrite psunion_collect_free_list_spec'; eauto.
-        * left. rewrite <- H in H1; eauto.
-          eapply In_In_PSUnion; eauto.
-          eapply nth_In. erewrite collect_free_left_length, H8; eauto.
+        * left. eapply psunion_collect_free_list_spec'; eauto.
   Qed.
 
   Corollary collect_free_left_list_spec : forall G es x k,
@@ -747,17 +760,19 @@ Module Type LCAUSALITY
         P_exp e2 0 ->
         P_exp (Ebinop op e1 e2 ann) 0.
 
-    (** We're reasoning on causality, so we only get the hypothesis on the lhs *)
-    Hypothesis EfbyCase : forall e0s es ann k,
+    (* We're reasoning on causality, so we only get the hypothesis on the lhs *)
+    Hypothesis EfbyCase : forall e0s es er ann k,
         k < length ann ->
         P_exps e0s k ->
-        P_exp (Efby e0s es ann) k.
+        (forall k, k < length (annots er) -> P_exps er k) ->
+        P_exp (Efby e0s es er ann) k.
 
-    Hypothesis EarrowCase : forall e0s es ann k,
+    Hypothesis EarrowCase : forall e0s es er ann k,
         k < length ann ->
         P_exps e0s k ->
         P_exps es k ->
-        P_exp (Earrow e0s es ann) k.
+        (forall k, k < length (annots er) -> P_exps er k) ->
+        P_exp (Earrow e0s es er ann) k.
 
     Hypothesis EwhenCase : forall es x b ann k,
         k < length (fst ann) ->
@@ -779,16 +794,11 @@ Module Type LCAUSALITY
         P_exps efs k ->
         P_exp (Eite e ets efs ann) k.
 
-    Hypothesis EappCase : forall f es ann k,
+    Hypothesis EappCase : forall f es er ann k,
         k < length ann ->
         (forall k, k < length (annots es) -> P_exps es k) ->
-        P_exp (Eapp f es None ann) k.
-
-    Hypothesis EappResetCase : forall f es er ann k,
-        k < length ann ->
-        (forall k, k < length (annots es) -> P_exps es k) ->
-        P_exp er 0 ->
-        P_exp (Eapp f es (Some er) ann) k.
+        (forall k, k < length (annots er) -> P_exps er k) ->
+        P_exp (Eapp f es er ann) k.
 
     (* Exp-level induction *)
     Fixpoint exp_causal_ind e {struct e} : forall k,
@@ -804,7 +814,7 @@ Module Type LCAUSALITY
           induction es; inv H; constructor; auto
         end.
 
-      intros * Hwl Hfree Hnum; destruct e; try destruct o; inv Hwl; simpl in *.
+      intros * Hwl Hfree Hnum; destruct e; inv Hwl; simpl in *.
       - (* const *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         apply EconstCase.
@@ -820,13 +830,23 @@ Module Type LCAUSALITY
         apply EbinopCase.
         1,2:eapply exp_causal_ind; eauto. rewrite H6; auto. rewrite H7; auto.
       - (* fby *)
-        apply EfbyCase; eauto.
-        eapply Pexp_Pexps; eauto. 2:congruence.
-        solve_forall l.
+        eapply EfbyCase; eauto.
+        + eapply Pexp_Pexps; eauto. 2:congruence.
+          solve_forall l.
+        + intros ? Len. eapply Pexp_Pexps; eauto.
+          solve_forall l1.
+          intros ? Free. eapply Hfree. constructor.
+          right; split; auto.
+          eapply Is_free_left_list_Exists in Free as (?&Ex); eauto.
       - (* arrow *)
-        apply EarrowCase; eauto.
-        1,2:eapply Pexp_Pexps; eauto. 2,4:congruence.
+        eapply EarrowCase; eauto.
+        1,2:eapply Pexp_Pexps; eauto; try congruence.
         solve_forall l. solve_forall l0.
+        intros ? Len. eapply Pexp_Pexps; eauto.
+        solve_forall l1.
+        intros ? Free. eapply Hfree. constructor.
+        right; right; split; auto.
+        eapply Is_free_left_list_Exists in Free as (?&Ex); eauto.
       - (* when *)
         apply EwhenCase; eauto.
         eapply Pexp_Pexps; eauto. 2:congruence.
@@ -841,21 +861,17 @@ Module Type LCAUSALITY
         1,2:eapply Pexp_Pexps; eauto. 2,4:congruence.
         solve_forall l. solve_forall l0.
       - (* app (reset) *)
-        apply EappResetCase; auto.
+        apply EappCase; auto.
         + intros k' Hk'. eapply Pexp_Pexps; eauto.
           * solve_forall l.
           * intros ? Hfree'. eapply Hfree.
             constructor; eauto.
             eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.
-        + eapply exp_causal_ind; eauto.
-          rewrite H6; auto.
-      - (* app *)
-        apply EappCase; auto.
-        intros k' Hk'. eapply Pexp_Pexps; eauto.
-        + solve_forall l.
-        + intros ? Hfree'. eapply Hfree.
-          constructor; eauto.
-          eapply Is_free_left_list_Exists; eauto.
+        + intros k' Hk'. eapply Pexp_Pexps; eauto.
+          * solve_forall l0.
+          * intros ? Hfree'. eapply Hfree.
+            constructor; eauto.
+            eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.
     Qed.
 
     Hypothesis EqVars: forall xs es k,

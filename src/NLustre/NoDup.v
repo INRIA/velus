@@ -53,10 +53,10 @@ Module Type NODUP
         (forall x, In x xs -> ~Is_defined_in x eqs) ->
         NoDup_defs (EqApp xs ck f e r :: eqs)
   | NDDEqFby:
-      forall x ck v e eqs,
+      forall x ck v e r eqs,
         NoDup_defs eqs ->
         ~Is_defined_in x eqs ->
-        NoDup_defs (EqFby x ck v e :: eqs).
+        NoDup_defs (EqFby x ck v e r :: eqs).
 
   (** ** Properties *)
 
@@ -106,7 +106,7 @@ Module Type NODUP
         assert (Is_variable_in x eqs)
           by now inv Hvar; auto; exfalso; inv Hndd;
             match goal with
-            | H: Is_variable_in_eq ?x (EqFby ?i _ _ _) |- _ => inv H
+            | H: Is_variable_in_eq ?x (EqFby ?i _ _ _ _) |- _ => inv H
             end.
         now apply IHeqs.
       * assert (x = i) as ->.
@@ -120,7 +120,7 @@ Module Type NODUP
           by now apply not_Is_defined_in_not_Is_variable_in;
           inv Hndd.
 
-        assert (~ Is_variable_in_eq i (EqFby i c c0 e))
+        assert (~ Is_variable_in_eq i (EqFby i c c0 e l))
           by now intro His_var; inv His_var.
 
         now inv Hvar.

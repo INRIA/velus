@@ -15,12 +15,12 @@ Module Type STCISSYSTEM
        (Import Syn   : STCSYNTAX Ids Op CESyn).
 
   Inductive Is_system_in_tc : ident -> trconstr -> Prop :=
-  | Is_system_inTcCall:
+  | Is_system_inTcStep:
       forall s ys ck rst f es,
-        Is_system_in_tc f (TcCall s ys ck rst f es)
-  | Is_system_inTcReset:
+        Is_system_in_tc f (TcStep s ys ck rst f es)
+  | Is_system_inTcInstReset:
       forall s ck f,
-        Is_system_in_tc f (TcReset s ck f).
+        Is_system_in_tc f (TcInstReset s ck f).
 
   Definition Is_system_in (f: ident) (tcs: list trconstr) : Prop :=
     Exists (Is_system_in_tc f) tcs.
@@ -34,12 +34,14 @@ Module Type STCISSYSTEM
     - destruct HH; inversion_clear 1; intuition.
   Qed.
 
-  Lemma calls_resets_of_Is_system_in:
+  Lemma steps_iresets_of_Is_system_in:
     forall tcs b,
-      Is_system_in b tcs <-> In b (map snd (calls_of tcs ++ resets_of tcs)).
+      Is_system_in b tcs <-> In b (map snd (steps_of tcs ++ iresets_of tcs)).
   Proof.
     induction tcs as [|[]]; simpl.
     - split; try contradiction; inversion 1.
+    - setoid_rewrite <-IHtcs; split; try (right; auto);
+        inversion_clear 1 as [?? IsSystem|]; auto; inv IsSystem.
     - setoid_rewrite <-IHtcs; split; try (right; auto);
         inversion_clear 1 as [?? IsSystem|]; auto; inv IsSystem.
     - setoid_rewrite <-IHtcs; split; try (right; auto);

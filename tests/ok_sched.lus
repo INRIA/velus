@@ -1,0 +1,10 @@
+node last_next_order(x : int) returns (y : int);
+let y = 0 fby 1;
+tel
+
+node unused_fby(x : int) returns (y : int);
+var v : int;
+let
+  v = 0 fby 1;
+  y = 42;
+tel

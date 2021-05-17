@@ -18,8 +18,8 @@ From Velus Require Import IndexedStreams.
 From Velus Require Import Stc.StcSemantics.
 From Velus Require Import Stc.StcTyping.
 From Velus Require Import Stc.StcIsVariable.
-From Velus Require Import Stc.StcIsLast.
-From Velus Require Import Stc.StcIsDefined.
+From Velus Require Import Stc.StcIsReset.
+From Velus Require Import Stc.StcIsNext.
 From Velus Require Import Stc.StcClocking.
 From Velus Require Import Stc.StcIsFree.
 From Velus Require Import Stc.StcWellDefined.
@@ -66,11 +66,11 @@ Module Type STCSCHEDULE
        (Import StcSem : STCSEMANTICS     Ids Op OpAux CE.Syn StcSyn Syst Ord Str CE.Sem)
        (Import StcTyp : STCTYPING        Ids Op       CE.Syn StcSyn CE.Typ)
        (Import Var    : STCISVARIABLE    Ids Op       CE.Syn StcSyn)
-       (Import Last   : STCISLAST        Ids Op       CE.Syn StcSyn)
-       (Import Def    : STCISDEFINED     Ids Op       CE.Syn StcSyn Var Last)
-       (Import StcClo : STCCLOCKING      Ids Op       CE.Syn StcSyn Last Var Def Syst Ord CE.Clo)
+       (Import Reset  : STCISRESET        Ids Op       CE.Syn StcSyn)
+       (Import Next   : STCISNEXT        Ids Op       CE.Syn StcSyn)
+       (Import StcClo : STCCLOCKING      Ids Op       CE.Syn StcSyn Reset Var Syst Ord CE.Clo)
        (Import Free   : STCISFREE        Ids Op       CE.Syn StcSyn                        CE.IsF)
-       (Import Wdef   : STCWELLDEFINED   Ids Op       CE.Syn StcSyn Syst Ord Var Last Def CE.IsF Free)
+       (Import Wdef   : STCWELLDEFINED   Ids Op       CE.Syn StcSyn Syst Ord Var Reset Next CE.IsF Free)
        (Import Sch    : EXT_STCSCHEDULER Ids Op       CE.Syn StcSyn).
 
   Section OCombine.
@@ -157,9 +157,19 @@ Module Type STCSCHEDULE
     rewrite <-Hoc, map_snd_combine; auto.
   Qed.
 
-  Add Parametric Morphism : (calls_of)
+  Add Parametric Morphism : (steps_of)
       with signature @Permutation trconstr ==> @Permutation (ident * ident)
-        as calls_of_permutation.
+        as steps_of_permutation.
+  Proof.
+    induction 1; simpl; auto.
+    - cases; rewrite IHPermutation.
+    - cases; apply perm_swap.
+    - etransitivity; eauto.
+  Qed.
+
+  Add Parametric Morphism : (iresets_of)
+      with signature @Permutation trconstr ==> @Permutation (ident * ident)
+        as iresets_of_permutation.
   Proof.
     induction 1; simpl; auto.
     - cases; rewrite IHPermutation.
@@ -168,7 +178,7 @@ Module Type STCSCHEDULE
   Qed.
 
   Add Parametric Morphism : (resets_of)
-      with signature @Permutation trconstr ==> @Permutation (ident * ident)
+      with signature @Permutation trconstr ==> @Permutation ident
         as resets_of_permutation.
   Proof.
     induction 1; simpl; auto.
@@ -177,9 +187,9 @@ Module Type STCSCHEDULE
     - etransitivity; eauto.
   Qed.
 
-  Add Parametric Morphism : (lasts_of)
+  Add Parametric Morphism : (nexts_of)
       with signature @Permutation trconstr ==> @Permutation ident
-        as lasts_of_permutation.
+        as nexts_of_permutation.
   Proof.
     induction 1; simpl; auto.
     - cases; rewrite IHPermutation.
@@ -213,26 +223,18 @@ Module Type STCSCHEDULE
         * now right; right.
   Qed.
 
-  Add Parametric Morphism i k: (Is_sub_in i k)
-      with signature @Permutation trconstr ==> Basics.impl
-        as Is_sub_in_permutation.
-  Proof.
-    unfold Is_sub_in; intros * E St.
-    now rewrite <-E.
-  Qed.
-
   Program Definition schedule_system (b: system) : system :=
     {| s_name  := b.(s_name);
        s_subs  := b.(s_subs);
        s_in    := b.(s_in);
        s_vars  := b.(s_vars);
-       s_lasts := b.(s_lasts);
+       s_nexts := b.(s_nexts);
        s_out   := b.(s_out);
        s_tcs   := schedule_tcs b.(s_name) b.(s_tcs);
 
        s_ingt0            := b.(s_ingt0);
        s_nodup            := b.(s_nodup);
-       s_nodup_lasts_subs := b.(s_nodup_lasts_subs);
+       s_nodup_resets_subs := b.(s_nodup_resets_subs);
        s_good             := b.(s_good)
     |}.
   Next Obligation.
@@ -240,25 +242,31 @@ Module Type STCSCHEDULE
       apply s_subs_in_tcs.
   Qed.
   Next Obligation.
-    rewrite schedule_tcs_permutation; apply s_subs_calls_of.
+    rewrite schedule_tcs_permutation; apply s_subs_steps_of.
   Qed.
   Next Obligation.
-    rewrite schedule_tcs_permutation; apply s_lasts_in_tcs.
+    rewrite schedule_tcs_permutation; apply s_nexts_in_tcs.
+  Qed.
+  Next Obligation.
+    intros ??.
+    unfold reset_consistency, Next_with_reset_in, Is_reset_in.
+    repeat setoid_rewrite schedule_tcs_permutation.
+    eapply s_reset_consistency.
+  Qed.
+  Next Obligation.
+    rewrite schedule_tcs_permutation; apply s_reset_incl.
   Qed.
   Next Obligation.
     rewrite schedule_tcs_permutation; apply s_vars_out_in_tcs.
   Qed.
   Next Obligation.
-    unfold Step_with_reset_in; rewrite schedule_tcs_permutation in *;
-      now apply s_no_single_reset.
+    intros ??.
+    unfold reset_consistency, Step_with_ireset_in, Is_ireset_in.
+    repeat setoid_rewrite schedule_tcs_permutation.
+    apply s_ireset_consistency.
   Qed.
   Next Obligation.
-    intros ?? Spec; unfold Step_with_reset_in in Spec; rewrite schedule_tcs_permutation in Spec.
-    apply s_reset_consistency in Spec.
-    cases; rewrite schedule_tcs_permutation; auto.
-  Qed.
-  Next Obligation.
-    rewrite schedule_tcs_permutation; apply s_reset_incl.
+    rewrite schedule_tcs_permutation; apply s_ireset_incl.
   Qed.
 
   Definition schedule (P: program) : program :=
@@ -305,9 +313,9 @@ Module Type STCSCHEDULE
   Qed.
 
   Lemma scheduler_wt_trconstr:
-    forall P vars lasts tc,
-      wt_trconstr P vars lasts tc ->
-      wt_trconstr (schedule P) vars lasts tc.
+    forall P vars resets tc,
+      wt_trconstr P vars resets tc ->
+      wt_trconstr (schedule P) vars resets tc.
   Proof.
     induction P as [|b].
     - destruct tc; inversion_clear 1; eauto.
@@ -495,12 +503,12 @@ Module StcScheduleFun
        (Sem   : STCSEMANTICS     Ids Op OpAux CE.Syn Syn Syst Ord Str CE.Sem)
        (Typ   : STCTYPING        Ids Op       CE.Syn Syn CE.Typ)
        (Var   : STCISVARIABLE    Ids Op       CE.Syn Syn)
-       (Last  : STCISLAST        Ids Op       CE.Syn Syn)
-       (Def   : STCISDEFINED     Ids Op       CE.Syn Syn Var Last)
-       (Clo   : STCCLOCKING      Ids Op       CE.Syn Syn Last Var Def Syst Ord CE.Clo)
+       (Reset : STCISRESET        Ids Op       CE.Syn Syn)
+       (Next  : STCISNEXT        Ids Op       CE.Syn Syn)
+       (Clo   : STCCLOCKING      Ids Op       CE.Syn Syn Reset Var Syst Ord CE.Clo)
        (Free  : STCISFREE        Ids Op       CE.Syn Syn                        CE.IsF)
-       (Wdef  : STCWELLDEFINED   Ids Op       CE.Syn Syn Syst Ord Var Last Def CE.IsF Free)
+       (Wdef  : STCWELLDEFINED   Ids Op       CE.Syn Syn Syst Ord Var Reset Next CE.IsF Free)
        (Sch   : EXT_STCSCHEDULER Ids Op       CE.Syn Syn)
-<: STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Last Def Clo Free Wdef Sch.
-  Include STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Last Def Clo Free Wdef Sch.
+<: STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Reset Next Clo Free Wdef Sch.
+  Include STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Reset Next Clo Free Wdef Sch.
 End StcScheduleFun.

@@ -580,6 +580,25 @@ Proof.
     rewrite PSP.elements_empty, app_nil_r; auto.
 Qed.
 
+Lemma ps_of_list_ps_to_list_SameElements : forall xs,
+    SameElements eq xs (PSP.to_list (PSP.of_list xs)).
+Proof.
+  unfold PSP.to_list.
+  induction xs; simpl.
+  - rewrite PSP.elements_empty; auto.
+  - destruct (in_dec CommonPS.EqDec_instance_0 a xs).
+    + eapply SE_trans.
+      2:{ eapply SE_perm. eapply PS_elements_Equal. symmetry.
+          apply PSP.add_equal, ps_of_list_In; auto. }
+      assert (In a (PS.elements (PSP.of_list xs))) as Hin'.
+      { apply In_PS_elements, ps_of_list_In; auto. }
+      eapply SE_trans; eauto.
+    + eapply SE_trans.
+      2:{ eapply SE_perm; symmetry; eapply Permutation_elements_add; eauto.
+          rewrite ps_of_list_In; auto. }
+      eapply SE_skip; eauto.
+Qed.
+
 Inductive DisjointSetList : list PS.t -> Prop :=
 | DJSnil: DisjointSetList []
 | DJScons: forall s ss,

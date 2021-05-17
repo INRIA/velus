@@ -39,14 +39,13 @@ Module Type LSYNTAX
   | Evar   : ident -> ann -> exp
   | Eunop  : unop -> exp -> ann -> exp
   | Ebinop : binop -> exp -> exp -> ann -> exp
-
-  | Efby   : list exp -> list exp -> list ann -> exp
-  | Earrow : list exp -> list exp -> list ann -> exp
+  | Efby   : list exp -> list exp -> list exp -> list ann -> exp
+  | Earrow : list exp -> list exp -> list exp -> list ann -> exp
   | Ewhen  : list exp -> ident -> bool -> lann -> exp
   | Emerge : ident -> list exp -> list exp -> lann -> exp
   | Eite   : exp -> list exp -> list exp -> lann -> exp
 
-  | Eapp   : ident -> list exp -> option exp -> list ann -> exp.
+  | Eapp   : ident -> list exp -> list exp -> list ann -> exp.
 
   Implicit Type e: exp.
 
@@ -61,8 +60,8 @@ Module Type LSYNTAX
   Fixpoint numstreams (e: exp) : nat :=
     match e with
     | Econst c => 1
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns => length anns
     | Evar _ _
     | Eunop _ _ _
@@ -77,8 +76,8 @@ Module Type LSYNTAX
   Fixpoint annot (e: exp): list (type * nclock) :=
     match e with
     | Econst c => [(type_const c, (Cbase, None))]
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns => anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -94,8 +93,8 @@ Module Type LSYNTAX
   Fixpoint typeof (e: exp): list type :=
     match e with
     | Econst c => [type_const c]
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns => map fst anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -116,8 +115,8 @@ Module Type LSYNTAX
   Fixpoint clockof (e: exp): list clock :=
     match e with
     | Econst c => [Cbase]
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns => map clock_of_nclock anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -133,8 +132,8 @@ Module Type LSYNTAX
   Fixpoint nclockof (e: exp): list nclock :=
     match e with
     | Econst c => [(Cbase, None)]
-    | Efby _ _ anns
-    | Earrow _ _ anns
+    | Efby _ _ _ anns
+    | Earrow _ _ _ anns
     | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -157,38 +156,38 @@ Module Type LSYNTAX
                                       end) anns.
 
   Fixpoint fresh_in (e : exp) : list (ident * (type * clock)) :=
+    let fresh_ins := flat_map fresh_in in
     match e with
     | Econst _ => []
     | Evar _ _ => []
     | Eunop _ e _ => fresh_in e
-    | Ebinop _ e1 e2 _ => (fresh_in e1)++(fresh_in e2)
-    | Efby e0s es _
-    | Earrow e0s es _ => concat (map fresh_in e0s)++concat (map fresh_in es)
-    | Ewhen es _ _ _ => concat (map fresh_in es)
-    | Emerge _ ets efs _ => concat (map fresh_in ets)++concat (map fresh_in efs)
-    | Eite e ets efs _ => (fresh_in e)++concat (map fresh_in ets)++concat (map fresh_in efs)
-    | Eapp _ es None anns => concat (map fresh_in es)++anon_streams anns
-    | Eapp _ es (Some r) anns => concat (map fresh_in es)++fresh_in r++anon_streams anns
+    | Ebinop _ e1 e2 _ => fresh_in e1 ++ fresh_in e2
+    | Efby e0s es er _
+    | Earrow e0s es er _ =>
+      fresh_ins e0s ++ fresh_ins es ++ fresh_ins er
+    | Ewhen es _ _ _ => fresh_ins es
+    | Emerge _ ets efs _ => fresh_ins ets ++ fresh_ins efs
+    | Eite e ets efs _ => fresh_in e ++ fresh_ins ets ++ fresh_ins efs
+    | Eapp _ es er anns => fresh_ins es ++ fresh_ins er ++ anon_streams anns
     end.
 
   Definition fresh_ins (es : list exp) : list (ident * (type * clock)) :=
-    concat (map fresh_in es).
+    flat_map fresh_in es.
 
   Definition anon_in (e : exp) : list (ident * (type * clock)) :=
     match e with
-    | Eapp _ es None _ => fresh_ins es
-    | Eapp _ es (Some r) _ => fresh_ins es++fresh_in r
+    | Eapp _ es er _ => fresh_ins es++fresh_ins er
     | e => fresh_in e
     end.
 
   Definition anon_ins (es : list exp) : list (ident * (type * clock)) :=
-    concat (map anon_in es).
+    flat_map anon_in es.
 
   Definition anon_in_eq (eq : equation) : list (ident * (type * clock)) :=
     anon_ins (snd eq).
 
   Definition anon_in_eqs (eqs : list equation) : list (ident * (type * clock)) :=
-    concat (map anon_in_eq eqs).
+    flat_map anon_in_eq eqs.
 
   Record node : Type :=
     mk_node {
@@ -319,16 +318,18 @@ Module Type LSYNTAX
         P (Ebinop op e1 e2 a).
 
     Hypothesis EfbyCase:
-      forall e0s es a,
+      forall e0s es er a,
         Forall P e0s ->
         Forall P es ->
-        P (Efby e0s es a).
+        Forall P er ->
+        P (Efby e0s es er a).
 
     Hypothesis EarrowCase:
-      forall e0s es a,
+      forall e0s es er a,
         Forall P e0s ->
         Forall P es ->
-        P (Earrow e0s es a).
+        Forall P er ->
+        P (Earrow e0s es er a).
 
     Hypothesis EwhenCase:
       forall es x b a,
@@ -349,10 +350,10 @@ Module Type LSYNTAX
         P (Eite e ets efs a).
 
     Hypothesis EappCase:
-      forall f es ro a,
-        (match ro with None => True | Some r => P r end) ->
+      forall f es er a,
         Forall P es ->
-        P (Eapp f es ro a).
+        Forall P er ->
+        P (Eapp f es er a).
 
     Local Ltac SolveForall :=
       match goal with
@@ -367,12 +368,12 @@ Module Type LSYNTAX
       - apply EvarCase; auto.
       - apply EunopCase; auto.
       - apply EbinopCase; auto.
-      - apply EfbyCase; SolveForall.
-      - apply EarrowCase; SolveForall.
+      - apply EfbyCase; SolveForall; auto.
+      - apply EarrowCase; SolveForall; auto.
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
       - apply EiteCase; SolveForall; auto.
-      - destruct o; apply EappCase; SolveForall; auto.
+      - apply EappCase; SolveForall; auto.
     Qed.
 
   End exp_ind2.
@@ -604,7 +605,7 @@ Module Type LSYNTAX
       incl (anon_in e) (fresh_in e).
   Proof.
     destruct e; simpl; try reflexivity.
-    destruct o; try rewrite app_assoc; apply incl_appl; reflexivity.
+    rewrite app_assoc; apply incl_appl; reflexivity.
   Qed.
 
   Lemma fresh_ins_nil:
@@ -739,18 +740,22 @@ Module Type LSYNTAX
       numstreams e1 = 1 ->
       numstreams e2 = 1 ->
       wl_exp G (Ebinop op e1 e2 a)
-  | wl_Efby : forall G e0s es anns,
+  | wl_Efby : forall G e0s es er anns,
       Forall (wl_exp G) e0s ->
       Forall (wl_exp G) es ->
+      Forall (wl_exp G) er ->
       length (annots e0s) = length anns ->
       length (annots es) = length anns ->
-      wl_exp G (Efby e0s es anns)
-  | wl_Earrow : forall G e0s es anns,
+      Forall (fun e => numstreams e = 1) er ->
+      wl_exp G (Efby e0s es er anns)
+  | wl_Earrow : forall G e0s es er anns,
       Forall (wl_exp G) e0s ->
       Forall (wl_exp G) es ->
+      Forall (wl_exp G) er ->
       length (annots e0s) = length anns ->
       length (annots es) = length anns ->
-      wl_exp G (Earrow e0s es anns)
+      Forall (fun e => numstreams e = 1) er ->
+      wl_exp G (Earrow e0s es er anns)
   | wl_Ewhen : forall G es x b tys nck,
       Forall (wl_exp G) es ->
       length (annots es) = length tys ->
@@ -769,20 +774,14 @@ Module Type LSYNTAX
       length (annots ets) = length tys ->
       length (annots efs) = length tys ->
       wl_exp G (Eite e ets efs (tys, nck))
-  | wl_Eapp : forall G f n es anns,
+  | wl_Eapp : forall G f n es er anns,
       Forall (wl_exp G) es ->
+      Forall (wl_exp G) er ->
+      Forall (fun e => numstreams e = 1) er ->
       find_node f G = Some n ->
       length (annots es) = length (n_in n) ->
       length anns = length (n_out n) ->
-      wl_exp G (Eapp f es None anns)
-  | wl_EappReset : forall G f n es r anns,
-      wl_exp G r ->
-      Forall (wl_exp G) es ->
-      numstreams r = 1 ->
-      find_node f G = Some n ->
-      length (annots es) = length (n_in n) ->
-      length anns = length (n_out n) ->
-      wl_exp G (Eapp f es (Some r) anns).
+      wl_exp G (Eapp f es er anns).
 
   Definition wl_equation G (eq : equation) :=
     let (xs, es) := eq in
@@ -806,7 +805,9 @@ Module Type LSYNTAX
       incl (fresh_in e) (fresh_ins es).
   Proof.
     intros e es Hin.
-    unfold fresh_ins. apply incl_concat_map; auto.
+    unfold fresh_ins.
+    rewrite flat_map_concat_map.
+    apply incl_concat_map; auto.
   Qed.
 
   Fact anon_in_incl : forall e es,
@@ -814,7 +815,9 @@ Module Type LSYNTAX
       incl (anon_in e) (anon_ins es).
   Proof.
     intros e es Hin.
-    unfold anon_ins. apply incl_concat_map; auto.
+    unfold anon_ins.
+    rewrite flat_map_concat_map.
+    apply incl_concat_map; auto.
   Qed.
 
   Fact anon_in_eq_incl : forall eq eqs,
@@ -822,7 +825,9 @@ Module Type LSYNTAX
       incl (anon_in_eq eq) (anon_in_eqs eqs).
   Proof.
     intros e es Hin.
-    unfold anon_in_eqs. apply incl_concat_map; auto.
+    unfold anon_in_eqs.
+    rewrite flat_map_concat_map.
+    apply incl_concat_map; auto.
   Qed.
 
   Fact InMembers_fresh_in : forall x e es,
@@ -991,7 +996,6 @@ Module Type LSYNTAX
     intros.
     unfold vars_defined. rewrite flat_map_app; auto.
   Qed.
-
 End LSYNTAX.
 
 Module LSyntaxFun

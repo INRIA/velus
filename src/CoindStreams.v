@@ -326,6 +326,68 @@ Module Type COINDSTREAMS
         value_to_bool v = Some b ->
         bools_of (v ⋅ vs) (b ⋅ bs).
 
+  Definition bools_of' :=
+    Streams.map (fun v => match value_to_bool v with Some b => b | None => false end).
+
+  Instance bools_of_Proper:
+    Proper (@EqSt value ==> @EqSt bool ==> Basics.impl)
+           bools_of.
+  Proof.
+    cofix CoFix.
+    intros [x xs] [x' xs'] Heq1 [y ys] [y' ys'] Heq2 Hsem.
+    inv Hsem; inv Heq1; inv Heq2;
+      simpl in *; subst; econstructor; eauto.
+    eapply CoFix; eauto.
+  Qed.
+
+  Lemma bools_of_sound : forall xs ys,
+      bools_of xs ys ->
+      bools_of' xs ≡ ys.
+  Proof.
+    cofix CoFix.
+    intros [x xs] [y ys] Hbools; inv Hbools.
+    constructor; simpl; eauto.
+    rewrite H4; auto.
+  Qed.
+
+  Corollary bools_of_det : forall xs ys ys',
+      bools_of xs ys ->
+      bools_of xs ys' ->
+      ys ≡ ys'.
+  Proof.
+    intros * Hb1 Hb2.
+    eapply bools_of_sound in Hb1. eapply bools_of_sound in Hb2.
+    etransitivity; eauto. symmetry; eauto.
+  Qed.
+
+  Lemma bools_of_absent :
+    bools_of (Streams.const absent) (Streams.const false).
+  Proof.
+    cofix CoFix.
+    rewrite (const_Cons absent), (const_Cons false).
+    constructor; auto.
+  Qed.
+
+  CoFixpoint disj_str (rss : list (Stream bool)) : Stream bool :=
+    (existsb (fun rs => hd rs) rss) ⋅ (disj_str (List.map (@tl _) rss)).
+
+  Lemma disj_str_spec:
+    forall n rss,
+      (disj_str rss) # n = existsb (fun rs => rs # n) rss.
+  Proof.
+    induction n; intros *; rewrite unfold_Stream at 1; simpl.
+    + induction rss; simpl; auto.
+    + rewrite Str_nth_S. induction rss; simpl; eauto.
+      rewrite IHn; simpl.
+      rewrite Str_nth_S_tl. f_equal.
+      rewrite existsb_map. apply existsb_ext.
+      intros ?. apply Str_nth_S_tl.
+  Qed.
+
+  Definition bools_ofs (vs : list (Stream value)) (rs : Stream bool) :=
+    exists rss, Forall2 bools_of vs rss /\
+           rs ≡ disj_str rss.
+
   CoFixpoint mask (k: nat) (rs: Stream bool) (xs: Stream value) : Stream value :=
     let mask' k' := mask k' (tl rs) (tl xs) in
     match k, hd rs with
@@ -335,6 +397,94 @@ Module Type COINDSTREAMS
     | S k', true => absent ⋅ mask' k'
     | S _, false => absent ⋅ mask' k
     end.
+
+  Lemma bools_ofs_empty:
+    bools_ofs nil (Streams.const false).
+  Proof.
+    exists nil. split; auto.
+    apply ntheq_eqst. intros n.
+    rewrite disj_str_spec; simpl.
+    setoid_rewrite const_nth. reflexivity.
+  Qed.
+
+  Lemma bools_ofs_absent {A} : forall (xs : list A),
+      bools_ofs (List.map (fun _ => Streams.const absent) xs) (Streams.const false).
+  Proof.
+    intros *.
+    unfold bools_ofs. exists (List.map (fun _ => Streams.const false) xs).
+    split.
+    - rewrite Forall2_map_1, Forall2_map_2.
+      eapply Forall2_same, Forall_forall. intros ? _. apply bools_of_absent.
+    - apply ntheq_eqst. intros n.
+      rewrite disj_str_spec.
+      rewrite existsb_map, const_nth.
+      induction xs; simpl; auto.
+  Qed.
+
+  Instance bools_ofs_Proper:
+    Proper (@EqSts value ==> @EqSt bool ==> Basics.impl)
+           bools_ofs.
+  Proof.
+    intros xs xs' Eq1 bs bs' Eq2 (rs&Bools&Disj).
+    rewrite Eq2 in Disj.
+    exists rs; split; auto.
+    unfold EqSts in Eq1. symmetry in Eq1.
+    eapply Forall2_trans_ex in Bools; eauto.
+    eapply Forall2_impl_In; [|eauto]. intros ? ? _ _ (?&?&Eq&?).
+    rewrite Eq; auto.
+  Qed.
+
+  Lemma bools_ofs_det : forall xs r r',
+      bools_ofs xs r ->
+      bools_ofs xs r' ->
+      r ≡ r'.
+  Proof.
+    intros * (?&Bools1&Disj1) (?&Bools2&Disj2).
+    rewrite Disj1, Disj2. clear Disj1 Disj2.
+    eapply ntheq_eqst. intros n.
+    repeat rewrite disj_str_spec in *.
+    revert x x0 Bools1 Bools2.
+    induction xs; intros; simpl in *; inv Bools1; inv Bools2; simpl in *; auto.
+    eapply bools_of_det in H1; eauto. erewrite H1, IHxs; eauto.
+  Qed.
+
+  Instance disj_str_SameElements_Proper:
+    Proper (SameElements (@EqSt bool) ==> @EqSt bool) disj_str.
+  Proof.
+    intros ?? Eq.
+    eapply ntheq_eqst. intros n.
+    repeat rewrite disj_str_spec.
+    induction Eq; simpl; auto.
+    - rewrite H, IHEq; auto.
+    - destruct (x # n) eqn:Hxn; simpl; auto.
+      symmetry. rewrite <- Exists_existsb with (P:=fun x' => x' # n = x # n).
+      2:{ intros x0. split; intros; congruence. }
+      eapply SetoidList.InA_altdef in H.
+      eapply Exists_Exists; [|eauto]. intros ? Eq. rewrite Eq; auto.
+    - destruct (x # n) eqn:Hxn; simpl; auto.
+      rewrite <- Exists_existsb with (P:=fun x' => x' # n = x # n).
+      2:{ intros x0. split; intros; congruence. }
+      eapply SetoidList.InA_altdef in H.
+      eapply Exists_Exists; [|eauto]. intros ? Eq. rewrite Eq; auto.
+    - destruct (existsb _ l') eqn:Ex.
+      + rewrite <-Exists_existsb with (P:=fun x => x # n = true) in *. 2,3:reflexivity.
+        rewrite H; auto.
+      + rewrite existsb_Forall, forallb_Forall in *. rewrite H; auto.
+    - congruence.
+  Qed.
+
+  Instance bools_ofs_SameElements_Proper:
+    Proper (SameElements (@EqSt value) ==> eq ==> Basics.impl)
+           bools_ofs.
+  Proof.
+    intros xs xs' Eq bs bs' ? (rs&Bools&Disj); subst.
+    eapply Forall2_SameElements_1 in Bools as (rs'&Perm'&Bools'); eauto.
+    econstructor; esplit. eauto.
+    rewrite Disj, Perm'. 1-3:eauto using EqStrel_Reflexive, EqStrel_Symmetric.
+    - reflexivity.
+    - intros * Eq1 Eq2 Bools'. rewrite <-Eq1, <-Eq2; auto.
+    - eauto using bools_of_det.
+  Qed.
 
   CoFixpoint count_acc (s: nat) (rs: Stream bool): Stream nat :=
     let s := if hd rs then S s else s in
@@ -403,6 +553,42 @@ Module Type COINDSTREAMS
     apply Str_nth_EqSt with (n:=n) in Heq.
     repeat rewrite mask_nth in Heq.
     rewrite Nat.eqb_refl in Heq; auto.
+  Qed.
+
+  Lemma mask_false_0 : forall xs,
+      mask 0 (Streams.const false) xs ≡ xs.
+  Proof.
+    intros *.
+    assert (forall k, (count (Streams.const false)) # k = 0) as Count.
+    { induction k; simpl; auto. }
+    eapply ntheq_eqst. intros k.
+    rewrite mask_nth, Count; auto.
+  Qed.
+
+  Corollary masks_false_0 : forall xs,
+      EqSts (List.map (mask 0 (Streams.const false)) xs) xs.
+  Proof.
+    intros *. unfold EqSts.
+    rewrite Forall2_map_1. apply Forall2_same.
+    eapply Forall_forall. intros ? _. apply mask_false_0.
+  Qed.
+
+  Lemma mask_false_S : forall n xs,
+      mask (S n) (Streams.const false) xs ≡ Streams.const absent.
+  Proof.
+    intros *.
+    assert (forall k, (count (Streams.const false)) # k = 0) as Count.
+    { induction k; simpl; auto. }
+    eapply ntheq_eqst. intros k.
+    rewrite mask_nth, Count, const_nth; auto.
+  Qed.
+
+  Corollary masks_false_S : forall n xs,
+      EqSts (List.map (mask (S n) (Streams.const false)) xs) (List.map (fun _ => Streams.const absent) xs).
+  Proof.
+    intros *. unfold EqSts.
+    rewrite Forall2_map_1, Forall2_map_2. apply Forall2_same.
+    eapply Forall_forall. intros ? _. apply mask_false_S.
   Qed.
 
   (** *** Boolean mask *)
@@ -557,6 +743,15 @@ Module Type COINDSTREAMS
     specialize (EqSt_reflex (const bs c)) as Hconst.
     eapply const_spec with (n:=n) in Hconst.
     rewrite Hconst, H; auto.
+  Qed.
+
+  Corollary const_nth' : forall bs c n,
+      (const bs c) # n = if (bs # n) then present (sem_const c) else absent.
+  Proof.
+    intros bs c n.
+    destruct (bs # n) eqn:Hb.
+    - apply const_true; auto.
+    - apply const_false; auto.
   Qed.
 
   Lemma const_inv1 :
@@ -1458,10 +1653,27 @@ Module Type COINDSTREAMS
       constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
 
+  Lemma ac_Cons : forall x xs,
+      abstract_clock (x ⋅ xs) ≡
+      (match x with absent => false | _ => true end) ⋅ (abstract_clock xs).
+  Proof.
+    intros *. constructor; simpl.
+    1,2:destruct x; reflexivity.
+  Qed.
+
   Lemma ac_tl :
     forall s, abstract_clock (Streams.tl s) ≡ Streams.tl (abstract_clock s).
   Proof.
     intros. unfold_Stv s; reflexivity.
+  Qed.
+
+  Lemma ac_nth : forall xs n,
+      (abstract_clock xs) # n = (match xs # n with absent => false | _ => true end).
+  Proof.
+    intros xs n. revert xs.
+    induction n; intros; unfold_Stv xs; rewrite ac_Cons.
+    1,2:rewrite Str_nth_0; auto.
+    1,2:repeat rewrite Str_nth_S; eauto.
   Qed.
 
   Lemma ac_when :

@@ -49,6 +49,12 @@ Module Type COINDTOINDEXED
         tr_Stream (x ⋅ xs) 0 = x.
     Proof. reflexivity. Qed.
 
+    (** Another version of the previous lemma *)
+    Lemma tr_Stream_hd:
+      forall {A} (xs: Stream A),
+        hd xs = tr_Stream xs 0.
+    Proof. reflexivity. Qed.
+
     (** Indexing a translated Stream at [S n] is indexing the tail of the source
         Stream at [n]. *)
     Lemma tr_Stream_S:
@@ -62,13 +68,21 @@ Module Type COINDTOINDEXED
         tr_Stream (tl xs) n = tr_Stream xs (S n).
     Proof. reflexivity. Qed.
 
-    Lemma tr_Stream_const:
+    Lemma tr_Stream_nth {A}: forall (xs : Stream A) n,
+        tr_Stream xs n = xs # n.
+    Proof.
+      intros xs n. revert xs.
+      induction n; intros; unfold_St xs.
+      rewrite tr_Stream_0, Str_nth_0. reflexivity.
+      rewrite tr_Stream_S, Str_nth_S. eauto.
+    Qed.
+
+    Corollary tr_Stream_const:
       forall {A} (c: A) n,
         tr_Stream (Streams.const c) n = c.
     Proof.
-      induction n; rewrite unfold_Stream at 1; simpl.
-      - now rewrite tr_Stream_0.
-      - now rewrite tr_Stream_S.
+      intros. rewrite tr_Stream_nth.
+      apply const_nth.
     Qed.
 
     (** [tr_Stream] is compatible wrt to [EqSt]. *)
@@ -145,6 +159,13 @@ Module Type COINDTOINDEXED
       inv Horel; simpl; auto.
       constructor; auto.
       rewrite H2, mask_nth. reflexivity.
+    Qed.
+
+    Fact tr_Stream_ac : forall xs n,
+        tr_Stream (abstract_clock xs) n = match (xs # n) with absent => false | _ => true end.
+    Proof.
+      intros xs n.
+      rewrite tr_Stream_nth. apply ac_nth.
     Qed.
 
     (** * SEMANTICS CORRESPONDENCE *)

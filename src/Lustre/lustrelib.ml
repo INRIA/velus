@@ -43,12 +43,12 @@ module type SYNTAX =
     | Evar   of ident * ann
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
-    | Efby   of exp list * exp list * ann list
-    | Earrow of exp list * exp list * ann list
+    | Efby   of exp list * exp list * exp list * ann list
+    | Earrow of exp list * exp list * exp list * ann list
     | Ewhen  of exp list * ident * bool * lann
     | Emerge of ident * exp list * exp list * lann
     | Eite   of exp * exp list * exp list * lann
-    | Eapp   of ident * exp list * exp option * ann list
+    | Eapp   of ident * exp list * exp list * ann list
 
     type equation = idents * exp list
 
@@ -141,10 +141,14 @@ module PrintFun (L: SYNTAX)
         PrintOps.print_unop p op ty (exp prec') e
       | L.Ebinop (op, e1, e2, (ty, _)) ->
         PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
-      | L.Efby (e0s, es, _) ->
+      | L.Efby (e0s, es, [], _) ->
         fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
-      | L.Earrow (e0s, es, _) ->
+      | L.Efby (e0s, es, er, _) ->
+        fprintf p "reset@ %a fby@ %a every@ %a" (exp_list prec1) e0s (exp_list prec2) es (exp_list prec') er
+      | L.Earrow (e0s, es, [], _) ->
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
+      | L.Earrow (e0s, es, er, _) ->
+        fprintf p "reset@ %a ->@ %a every@ %a" (exp_list prec1) e0s (exp_list prec2) es (exp_list prec') er
       | L.Ewhen (e, x, v, _) ->
         fprintf p "%a when%s %a"
           (exp_list prec') e
@@ -160,7 +164,7 @@ module PrintFun (L: SYNTAX)
           (exp 16) e
           (exp_list 16) e1s
           (exp_list 16) e2s
-      | L.Eapp (f, es, None, anns) ->
+      | L.Eapp (f, es, [], anns) ->
         if !print_appclocks
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
             print_ident f
@@ -169,16 +173,16 @@ module PrintFun (L: SYNTAX)
         else fprintf p "%a%a"
             print_ident f
             exp_arg_list es
-      | L.Eapp (f, es, Some r, anns) ->
+      | L.Eapp (f, es, er, anns) ->
         if !print_appclocks
         then fprintf p "(restart@ %a@ every@ %a)@[<v 1>%a@ (* @[<hov>%a@] *)@]"
             print_ident f
-            (exp prec') r
+            (exp_list prec') er
             exp_arg_list es
             print_ncks (List.map snd anns)
         else fprintf p "(restart@ %a@ every@ %a)%a"
             print_ident f
-            (exp prec') r
+            (exp_list prec') er
             exp_arg_list es
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"

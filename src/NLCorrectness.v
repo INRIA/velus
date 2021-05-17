@@ -60,7 +60,7 @@ Module Scheduler := Stc.Scheduler ExternalSchedule.
 Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
   do _ <- r;
     let args := map fst s.(s_in) in
-    let mems := ps_from_list (map fst s.(s_lasts)) in
+    let mems := ps_from_list (map fst s.(s_nexts)) in
     if Stc.Wdef.well_sch mems args s.(s_tcs)
     then OK tt
     else Error (MSG "system " :: CTX s.(s_name) :: MSG " is not well scheduled." :: nil).
@@ -85,7 +85,7 @@ Proof.
   induction P as [|s]; simpl.
   - constructor.
   - intro Fold.
-    destruct (Stc.Wdef.well_sch (ps_from_list (map fst (Stc.Syn.s_lasts s)))
+    destruct (Stc.Wdef.well_sch (ps_from_list (map fst (Stc.Syn.s_nexts s)))
                                (map fst (Stc.Syn.s_in s)) (Stc.Syn.s_tcs s)) eqn: E.
     + apply Stc.Wdef.Is_well_sch_by_refl in E.
       constructor; auto.
@@ -400,7 +400,7 @@ Proof.
         NL2StcTyping.translate_wt; auto).
   assert (wt_mem me0 (Stc2Obc.translate (Scheduler.schedule P'))
                  (Stc2Obc.translate_system sch_tr_main_node))
-    by (eapply pres_sem_stmt_call with (f := reset) in Find as (? & ?);
+    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?);
         eauto; simpl; constructor).
   assert (wt_outs G main outs) as Hwto.
   { unfold wt_outs.

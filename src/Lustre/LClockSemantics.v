@@ -129,93 +129,7 @@ Module Type LCLOCKSEMANTICS
           eapply history_tl_same_find; auto.
   Qed.
 
-  (** ** Alignment *)
-
-  (** fby keeps the synchronization *)
-
-  Lemma ac_fby1 :
-    forall xs ys rs,
-      fby xs ys rs -> abstract_clock xs ≡ abstract_clock rs.
-  Proof.
-    cofix Cofix.
-    intros * Hfby.
-    unfold_Stv xs; inv Hfby; econstructor; simpl; eauto.
-    clear - H3. revert H3. revert y xs ys0 rs0.
-    cofix Cofix.
-    intros * Hfby1.
-    unfold_Stv xs; inv Hfby1; econstructor; simpl; eauto.
-  Qed.
-
-  Lemma ac_fby2 :
-    forall xs ys rs,
-      fby xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
-  Proof.
-    cofix Cofix. intros * Hfby.
-    unfold_Stv ys; inv Hfby; econstructor; simpl; eauto.
-    clear - H3. revert H3. revert v ys xs0 rs0.
-    cofix Cofix. intros * Hfby1.
-    unfold_Stv ys; inv Hfby1; econstructor; simpl; eauto.
-  Qed.
-
-  Lemma fby_aligned : forall bs xs ys zs,
-      fby xs ys zs ->
-      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
-      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
-  Proof with eauto.
-    intros bs xs ys zs Hfby.
-    specialize (ac_fby1 _ _ _ Hfby) as Hac1. specialize (ac_fby2 _ _ _ Hfby) as Hac2.
-    specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
-    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
-  Qed.
-
-  Lemma ac_arrow1 : forall xs ys rs,
-      arrow xs ys rs -> abstract_clock xs ≡ abstract_clock rs.
-  Proof.
-    cofix Cofix.
-    intros * Harrow.
-    unfold_Stv xs; inv Harrow; econstructor; simpl; eauto.
-    clear - H3. revert H3. revert xs ys0 rs0.
-    cofix Cofix.
-    intros * Harrow1.
-    unfold_Stv xs; inv Harrow1; econstructor; simpl; eauto.
-  Qed.
-
-  Lemma ac_arrow2 : forall xs ys rs,
-      arrow xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
-  Proof.
-    cofix Cofix.
-    intros * Harrow.
-    unfold_Stv ys; inv Harrow; econstructor; simpl; eauto.
-    clear - H3. revert H3. revert xs0 ys rs0.
-    cofix Cofix.
-    intros * Harrow1.
-    unfold_Stv ys; inv Harrow1; econstructor; simpl; eauto.
-  Qed.
-
-  Lemma arrow_aligned : forall bs xs ys zs,
-      arrow xs ys zs ->
-      (aligned xs bs \/ aligned ys bs \/ aligned zs bs) ->
-      (aligned xs bs /\ aligned ys bs /\ aligned zs bs).
-  Proof with eauto.
-    intros bs xs ys zs Hfby.
-    specialize (ac_arrow1 _ _ _ Hfby) as Hac1. specialize (ac_arrow2 _ _ _ Hfby) as Hac2.
-    specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
-    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
-  Qed.
-
-  (** ** Preservation of the semantics while restricting an environment *)
+  (** ** Alignment proof extracted from Transcription/Correctness.v *)
 
   Fact sem_var_restrict {B} : forall (vars : list (ident * B)) H id ty v,
       In (id, ty) vars ->
@@ -248,10 +162,12 @@ Module Type LCLOCKSEMANTICS
       econstructor...
       + repeat rewrite_Forall_forall. eapply H0...
       + repeat rewrite_Forall_forall. eapply H1...
+      + repeat rewrite_Forall_forall. eapply H2...
     - (* arrow *)
       econstructor...
       + repeat rewrite_Forall_forall. eapply H0...
       + repeat rewrite_Forall_forall. eapply H1...
+      + repeat rewrite_Forall_forall. eapply H2...
     - (* when *)
       econstructor...
       + repeat rewrite_Forall_forall. eapply H0...
@@ -267,10 +183,8 @@ Module Type LCLOCKSEMANTICS
       + repeat rewrite_Forall_forall. eapply H1...
     - (* app *)
       econstructor...
-      repeat rewrite_Forall_forall. eapply H1...
-    - (* app (reset) *)
-      econstructor...
-      repeat rewrite_Forall_forall. eapply H1...
+      1,2:repeat rewrite_Forall_forall.
+      eapply H0... eapply H1...
   Qed.
 
   Lemma sem_equation_restrict : forall G vars H b eq,
@@ -340,18 +254,22 @@ Module Type LCLOCKSEMANTICS
           sem_exp_anon H b (Ebinop op e1 e2 ann) [o]
 
     | Sfby:
-        forall H b e0s es anns s0ss sss os,
+        forall H b e0s es er anns s0ss sss sr r os,
           Forall2 (sem_exp_anon H b) e0s s0ss ->
           Forall2 (sem_exp_anon H b) es sss ->
-          Forall3 fby (concat s0ss) (concat sss) os ->
-          sem_exp_anon H b (Efby e0s es anns) os
+          Forall2 (fun e r => sem_exp_anon H b e [r]) er sr ->
+          bools_ofs sr r ->
+          Forall3 (fun s0 s1 o => fby s0 s1 r o) (concat s0ss) (concat sss) os ->
+          sem_exp_anon H b (Efby e0s es er anns) os
 
     | Sarrow:
-        forall H b e0s es anns s0ss sss os,
+        forall H b e0s es er anns s0ss sss sr r os,
           Forall2 (sem_exp_anon H b) e0s s0ss ->
           Forall2 (sem_exp_anon H b) es sss ->
-          Forall3 arrow (concat s0ss) (concat sss) os ->
-          sem_exp_anon H b (Earrow e0s es anns) os
+          Forall2 (fun e r => sem_exp_anon H b e [r]) er sr ->
+          bools_ofs sr r ->
+          Forall3 (fun s0 s1 o => arrow s0 s1 r o) (concat s0ss) (concat sss) os ->
+          sem_exp_anon H b (Earrow e0s es er anns) os
 
     | Swhen:
         forall H b x s k es lann ss os,
@@ -377,20 +295,13 @@ Module Type LCLOCKSEMANTICS
           sem_exp_anon H b (Eite e ets efs lann) os
 
     | Sapp:
-        forall H b f es lann ss os,
+        forall H b f es er lann ss os rs bs,
           Forall2 (sem_exp_anon H b) es ss ->
-          sem_node G f (concat ss) os ->
-          Forall2 (fun '(_, (_, o)) s => LiftO True (fun x => sem_var H x s) o) lann os ->
-          sem_exp_anon H b (Eapp f es None lann) os
-
-    | Sreset:
-        forall H b f es r lann ss os rs bs,
-          Forall2 (sem_exp_anon H b) es ss ->
-          sem_exp_anon H b r [rs] ->
-          bools_of rs bs ->
+          Forall2 (fun e r => sem_exp_anon H b e [r]) er rs ->
+          bools_ofs rs bs ->
           (forall k, sem_node G f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
           Forall2 (fun '(_, (_, o)) s => LiftO True (fun x => sem_var H x s) o) lann os ->
-          sem_exp_anon H b (Eapp f es (Some r) lann) os
+          sem_exp_anon H b (Eapp f es er lann) os
 
     with sem_equation_anon: history -> Stream bool -> equation -> Prop :=
            Seq:
@@ -416,8 +327,6 @@ Module Type LCLOCKSEMANTICS
         econstructor; eauto; repeat rewrite_Forall_forall...
       - (* arrow *)
         econstructor; eauto; repeat rewrite_Forall_forall...
-      (* - (* pre *) *)
-      (*   econstructor; eauto; repeat rewrite_Forall_forall... *)
       - (* when *)
         econstructor; eauto; repeat rewrite_Forall_forall...
         eapply sem_var_refines...
@@ -427,12 +336,7 @@ Module Type LCLOCKSEMANTICS
       - (* ite *)
         econstructor; eauto; repeat rewrite_Forall_forall...
       - (* app *)
-        econstructor; eauto. repeat rewrite_Forall_forall...
-        eapply Forall2_impl_In; eauto.
-        intros [? [? [?|]]] ? ? ? ?; simpl in *; auto.
-        eapply sem_var_refines...
-      - (* app (reset) *)
-        econstructor; eauto. repeat rewrite_Forall_forall...
+        econstructor; eauto. 1,2:repeat rewrite_Forall_forall...
         eapply Forall2_impl_In; eauto.
         intros [? [? [?|]]] ? ? ? ?; simpl in *; auto.
         eapply sem_var_refines...
@@ -459,7 +363,7 @@ Module Type LCLOCKSEMANTICS
         sem_exp G H b e vs.
     Proof.
       induction e using exp_ind2; intros * Hsem; inv Hsem; econstructor; eauto.
-      1-11:(eapply Forall2_impl_In; [|eauto];
+      1-15:(eapply Forall2_impl_In; [|eauto];
             intros ? ? Hin ? ?; eapply Forall_forall in Hin; eauto;
             simpl in Hin; eauto).
     Qed.
@@ -547,15 +451,13 @@ Module Type LCLOCKSEMANTICS
       - simpl_ndup Hnd. exists H; auto.
       - unfold fresh_ins in Hnd; simpl_ndup Hnd.
         eapply IHes in H7 as (H'2&Hr2&Hd2&Hs2); eauto. 2:ndup_r Hnd. clear IHes.
-        eapply H5 in H4 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_l Hnd. clear H3.
+        eapply H5 in H4 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_l Hnd. clear H5.
         exists (Env.union H'1 H'2). repeat split; auto.
-        + unfold fresh_ins; simpl_ndup Hnd.
-          eapply Env.union_dom; eauto.
-        + apply NoDupMembers_app_r, fst_NoDupMembers in Hnd. rewrite map_app in Hnd.
-          constructor; eauto. 2:eapply Forall2_impl_In; [|eauto]; intros.
-          1,2:eapply sem_exp_anon_refines; [|eauto].
-          eapply Env.union_refines3 in Hdom; eauto.
-          eapply Env.union_refines4 in Hdom; eauto.
+        apply NoDupMembers_app_r, fst_NoDupMembers in Hnd. rewrite map_app in Hnd.
+        constructor; eauto. 2:eapply Forall2_impl_In; [|eauto]; intros.
+        1,2:eapply sem_exp_anon_refines; [|eauto].
+        eapply Env.union_refines3 in Hdom; eauto.
+        eapply Env.union_refines4 in Hdom; eauto.
     Qed.
 
     Lemma sem_exp_sem_exp_fresh : forall env H b e vs,
@@ -585,25 +487,35 @@ Module Type LCLOCKSEMANTICS
         eapply Env.union_refines3 in Hdom; eauto.
         eapply Env.union_refines4 in Hdom; eauto.
       - (* fby *)
-        eapply sem_exps_sem_exps_fresh' in H0 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_l Hnd.
-        eapply sem_exps_sem_exps_fresh' in H1 as (H'2&Hr2&Hd2&Hs2); eauto. 2:ndup_r Hnd.
-        exists (Env.union H'1 H'2). repeat split; auto.
+        eapply sem_exps_sem_exps_fresh' in H0 as (H'0&Hr0&Hd0&Hs0); eauto. 2:ndup_l Hnd.
+        eapply sem_exps_sem_exps_fresh' in H1 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_r Hnd; ndup_l Hnd.
+        eapply sem_exps_sem_exps_fresh' in H2 as (H'2&Hr2&Hd2&Hs2); eauto. 2:ndup_r Hnd; ndup_r Hnd.
+        2:eapply Forall2_map_2; eapply H19. rewrite Forall2_map_2 in Hs2. clear H19.
+        exists (Env.union H'0 (Env.union H'1 H'2)). repeat split; auto 10.
         apply NoDupMembers_app_r, fst_NoDupMembers in Hnd.
-        rewrite map_app in Hnd.
+        repeat rewrite map_app in Hnd.
         econstructor; eauto.
-        1,2:eapply Forall2_impl_In; [|eauto]; intros; eapply sem_exp_anon_refines; [|eauto].
-        eapply Env.union_refines3 in Hdom; eauto.
-        eapply Env.union_refines4 in Hdom; eauto.
+        1-3:eapply Forall2_impl_In; [|eauto]; simpl; intros; eapply sem_exp_anon_refines; [|eauto].
+        eapply Env.union_refines3 with (m:=H). 1-6:eauto.
+        etransitivity. 2:eapply Env.union_refines4 with (m:=H). eapply Env.union_refines3 with (m:=H).
+        2-6,8-12:eauto. 2:eauto. apply NoDup_app_r in Hnd; auto.
+        etransitivity. 2:eapply Env.union_refines4 with (m:=H). eapply Env.union_refines4 with (m:=H).
+        2-6,8-12:eauto. 2:eauto. apply NoDup_app_r in Hnd; auto.
       - (* arrow *)
-        eapply sem_exps_sem_exps_fresh' in H0 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_l Hnd.
-        eapply sem_exps_sem_exps_fresh' in H1 as (H'2&Hr2&Hd2&Hs2); eauto. 2:ndup_r Hnd.
-        exists (Env.union H'1 H'2). repeat split; auto.
+        eapply sem_exps_sem_exps_fresh' in H0 as (H'0&Hr0&Hd0&Hs0); eauto. 2:ndup_l Hnd.
+        eapply sem_exps_sem_exps_fresh' in H1 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_r Hnd; ndup_l Hnd.
+        eapply sem_exps_sem_exps_fresh' in H2 as (H'2&Hr2&Hd2&Hs2); eauto. 2:ndup_r Hnd; ndup_r Hnd.
+        2:eapply Forall2_map_2; eapply H19. rewrite Forall2_map_2 in Hs2. clear H19.
+        exists (Env.union H'0 (Env.union H'1 H'2)). repeat split; auto 10.
         apply NoDupMembers_app_r, fst_NoDupMembers in Hnd.
-        rewrite map_app in Hnd.
+        repeat rewrite map_app in Hnd.
         econstructor; eauto.
-        1,2:eapply Forall2_impl_In; [|eauto]; intros; eapply sem_exp_anon_refines; [|eauto].
-        eapply Env.union_refines3 in Hdom; eauto.
-        eapply Env.union_refines4 in Hdom; eauto.
+        1-3:eapply Forall2_impl_In; [|eauto]; simpl; intros; eapply sem_exp_anon_refines; [|eauto].
+        eapply Env.union_refines3 with (m:=H). 1-6:eauto.
+        etransitivity. 2:eapply Env.union_refines4 with (m:=H). eapply Env.union_refines3 with (m:=H).
+        2-6,8-12:eauto. 2:eauto. apply NoDup_app_r in Hnd; auto.
+        etransitivity. 2:eapply Env.union_refines4 with (m:=H). eapply Env.union_refines4 with (m:=H).
+        2-6,8-12:eauto. 2:eauto. apply NoDup_app_r in Hnd; auto.
       - (* when *)
         eapply sem_exps_sem_exps_fresh' in H0 as (H'1&Hr1&Hd1&Hs1); eauto.
         exists H'1. repeat split; auto.
@@ -636,55 +548,22 @@ Module Type LCLOCKSEMANTICS
         + etransitivity. 2:eapply Env.union_refines4 in Hdom; eauto.
           apply NoDup_app_r in Hnd. eapply Env.union_refines4 in Hdom; eauto.
       - (* app *)
-        eapply sem_exps_sem_exps_fresh' in H1 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_l Hnd.
+        eapply sem_exps_sem_exps_fresh' in H0 as (H'0&Hr0&Hd0&Hs0); eauto. 2:ndup_l Hnd.
+        eapply sem_exps_sem_exps_fresh' in H1 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_r Hnd; ndup_l Hnd.
+        2:eapply Forall2_map_2; eapply H17. rewrite Forall2_map_2 in Hs1. clear H17.
         assert (length vs = length a) as Hlen.
-        { inv H14. rewrite H2 in H8; inv H8.
-          apply Forall2_length in H4. unfold idents in H4. rewrite map_length in H4.
+        { specialize (H19 0). inv H19. rewrite H1 in H10; inv H10.
+          apply Forall2_length in H3. unfold idents in H3. repeat rewrite map_length in H3.
           congruence. }
-        remember (Env.adds_opt' (anons a) vs H'1) as H'2.
+        remember (Env.adds_opt' (anons a) vs (Env.union H'0 H'1)) as H'3.
         rewrite fst_NoDupMembers in Hnd. repeat rewrite map_app in Hnd.
-        assert (Env.refines eq H'1 H'2) as Hr2.
-        { subst. eapply Env.adds_opt'_refines.
-          + unfold anons. rewrite map_length; eauto.
-          + rewrite app_assoc, (Permutation_app_comm (_ ++ _)) in Hnd.
-            eapply Forall_forall; intros; subst.
-            eapply anons_In in H1. eapply NoDup_app_In in Hnd; eauto.
-            erewrite Env.dom_use; eauto.
-        }
-        exists H'2. repeat split; auto.
-        + etransitivity; eauto.
-        + rewrite HeqH'2, <- anons_anon_streams, app_assoc.
-          eapply Env.adds_opt'_dom; eauto.
-          unfold anons. rewrite map_length; auto.
-        + econstructor; eauto.
-          * eapply Forall2_impl_In; [|eauto]; intros.
-            eapply sem_exp_anon_refines; eauto.
-          * assert (Forall2 (fun o v => forall x, o = Some x -> Env.find x H'2 = Some v) (anons a) vs) as Hvs.
-            { eapply all_In_Forall2; eauto. unfold anons; rewrite map_length; auto.
-              intros ? ? Hin ? ?; subst.
-              eapply Env.In_find_adds_opt'; eauto.
-              eapply anons_NoDup, NoDup_app_r, NoDup_app_r; eauto. }
-            clear - Hvs.
-            unfold anons in Hvs. rewrite Forall2_map_1 in Hvs.
-            induction Hvs; intros; constructor; auto.
-            destruct x as (?&?&?). destruct o; simpl; auto.
-            econstructor. eapply H. 1,2:reflexivity.
-      - (* app (reset) *)
-        eapply sem_exps_sem_exps_fresh' in H1 as (H'1&Hr1&Hd1&Hs1); eauto. 2:ndup_l Hnd.
-        assert (length vs = length a) as Hlen.
-        { specialize (H19 0). inv H19. rewrite H2 in H10; inv H10.
-          apply Forall2_length in H4. unfold idents in H4. repeat rewrite map_length in H4.
-          congruence. }
-        eapply H0 in H17 as (H'2&Hr2&Hd2&?); eauto. 2:ndup_r Hnd; ndup_l Hnd.
-        remember (Env.adds_opt' (anons a) vs (Env.union H'1 H'2)) as H'3.
-        rewrite fst_NoDupMembers in Hnd. repeat rewrite map_app in Hnd.
-        assert (Env.refines eq (Env.union H'1 H'2) H'3) as Hr3.
+        assert (Env.refines eq (Env.union H'0 H'1) H'3) as Hr3.
         { subst. eapply Env.adds_opt'_refines.
           + unfold anons. rewrite map_length; eauto.
           + repeat rewrite app_assoc in Hnd. rewrite (Permutation_app_comm _ (map fst (Syn.anon_streams a))) in Hnd.
             repeat rewrite <- app_assoc in Hnd.
             eapply Forall_forall; intros; subst.
-            eapply anons_In in H2. eapply NoDup_app_In in Hnd; eauto.
+            eapply anons_In in H0. eapply NoDup_app_In in Hnd; eauto.
             erewrite Env.dom_use; eauto.
         }
         exists H'3. repeat split; auto.
@@ -696,10 +575,11 @@ Module Type LCLOCKSEMANTICS
         + econstructor; eauto.
           * eapply Forall2_impl_In; [|eauto]; intros.
             eapply sem_exp_anon_refines; [|eauto]. etransitivity; eauto.
-            eapply Env.union_refines3 in Hd2; eauto.
+            eapply Env.union_refines3 in Hd1; eauto.
             apply NoDup_app_r in Hnd. rewrite app_assoc in Hnd. apply NoDup_app_l in Hnd; auto.
-          * eapply sem_exp_anon_refines; [|eauto]. etransitivity; eauto.
-            eapply Env.union_refines4 in Hd2; eauto.
+          * eapply Forall2_impl_In; [|eauto]; intros; simpl in *.
+            eapply sem_exp_anon_refines; [|eauto]. etransitivity; eauto.
+            eapply Env.union_refines4 in Hd1; eauto.
             apply NoDup_app_r in Hnd. rewrite app_assoc in Hnd. apply NoDup_app_l in Hnd; auto.
           * assert (Forall2 (fun o v => forall x, o = Some x -> Env.find x H'3 = Some v) (anons a) vs) as Hvs.
             { eapply all_In_Forall2; eauto. unfold anons; rewrite map_length; auto.
@@ -728,20 +608,14 @@ Module Type LCLOCKSEMANTICS
       1-9:eapply sem_exp_sem_exp_fresh in Hsem; eauto.
       inv Hwl; inv Hsem.
       - (* app *)
-        eapply sem_exps_sem_exps_fresh' in H11 as (H'1&Hr1&?&?); eauto.
-        2:{ eapply Forall_forall; intros * Hin ?????.
-            eapply sem_exp_sem_exp_fresh; eauto. }
-        exists H'1. repeat split; auto.
-        + econstructor; eauto.
-          eapply Forall2_impl_In; eauto.
-          intros (?&?&[?|]) ? ? ? ?; simpl in *; auto.
-          eapply sem_var_refines; eauto.
-      - (* app (reset) *)
         eapply sem_exps_sem_exps_fresh' in H13 as (H'1&Hr1&?&?); eauto. 3:ndup_l Hndup.
         2:{ eapply Forall_forall; intros * Hin ?????.
             eapply sem_exp_sem_exp_fresh; eauto. }
-        eapply sem_exp_sem_exp_fresh in H15 as (H'2&Hr2&?&?); eauto. 2:ndup_r Hndup.
-        assert (Env.dom (Env.union H'1 H'2) (map fst env0 ++ map fst (fresh_ins l) ++ map fst (fresh_in r))) as Hd3 by eauto.
+        eapply Forall2_map_2 in H15.
+        eapply sem_exps_sem_exps_fresh' in H15 as (H'2&Hr2&?&?); eauto. 3:ndup_r Hndup.
+        2:{ eapply Forall_forall; intros * Hin ?????.
+            eapply sem_exp_sem_exp_fresh; eauto. }
+        assert (Env.dom (Env.union H'1 H'2) (map fst env0 ++ map fst (fresh_ins l) ++ map fst (fresh_ins l0))) as Hd3 by eauto.
         exists (Env.union H'1 H'2). repeat split; auto.
         + repeat rewrite map_app. eauto.
         + rewrite fst_NoDupMembers, map_app, map_app in Hndup.
@@ -749,7 +623,9 @@ Module Type LCLOCKSEMANTICS
           * eapply Forall2_impl_In; [|eauto]. intros.
             eapply sem_exp_anon_refines; [|eauto].
             eapply Env.union_refines3 in H2; eauto. apply NoDup_app_r in Hndup; auto.
-          * eapply sem_exp_anon_refines; [|eauto].
+          * rewrite Forall2_map_2 in H3.
+            eapply Forall2_impl_In; [|eapply H3]; simpl in *. intros.
+            eapply sem_exp_anon_refines; [|eauto].
             eapply Env.union_refines4 in H2; eauto. apply NoDup_app_r in Hndup; auto.
           * eapply Forall2_impl_In; eauto.
             intros (?&?&[?|]) ? ? ? ?; simpl in *; auto.
@@ -845,14 +721,14 @@ Module Type LCLOCKSEMANTICS
       inv Hwc; inv Hsem; simpl in *.
       1-5:constructor; simpl; auto.
       - (* fby *)
-        clear - Hlen H4. rewrite map_length in Hlen; symmetry in Hlen.
-        eapply Forall2_ignore2' in H4; eauto.
-        clear Hlen. induction H4; simpl; constructor; auto.
+        clear - Hlen H6. rewrite map_length in Hlen; symmetry in Hlen.
+        eapply Forall2_ignore2' in H6; eauto.
+        clear Hlen. induction H6; simpl; constructor; auto.
         destruct x as [? [? [?|]]]; simpl; auto. inv H0.
       - (* arrow *)
-        clear - Hlen H4. rewrite map_length in Hlen; symmetry in Hlen.
-        eapply Forall2_ignore2' in H4; eauto.
-        clear Hlen. induction H4; simpl; constructor; auto.
+        clear - Hlen H6. rewrite map_length in Hlen; symmetry in Hlen.
+        eapply Forall2_ignore2' in H6; eauto.
+        clear Hlen. induction H6; simpl; constructor; auto.
         destruct x as [? [? [?|]]]; simpl; auto. inv H0.
       - (* when *)
         rewrite map_length in Hlen.
@@ -864,10 +740,6 @@ Module Type LCLOCKSEMANTICS
         rewrite map_length in Hlen.
         rewrite Forall2_map_1; simpl. apply Forall2_forall2; split; auto.
       - (* app *)
-        clear - H13.
-        rewrite Forall2_map_1.
-        eapply Forall2_impl_In; eauto. intros (?&?&?) ? ? ? ?; eauto.
-      - (* app (reset) *)
         clear - H18.
         rewrite Forall2_map_1.
         eapply Forall2_impl_In; eauto. intros (?&?&?) ? ? ? ?; eauto.
@@ -1140,11 +1012,11 @@ Module Type LCLOCKSEMANTICS
     apply WellInstantiated_parent in WIi as Hp.
     change (Forall (fun ck => (fun x => x = bck \/ clock_parent bck x) (fst ck))
                    ncks) in Hp.
-      rewrite <- Forall_map in Hp.
-      eapply sc_parent; eauto.
-      now rewrite Forall2_map_1.
-      pose proof (Forall2_in_left _ _ _ _ WIi Hin) as [?(?&?& H14)].
-      simpl in H14. inv H14. now apply in_map.
+    rewrite <- Forall_map in Hp.
+    eapply sc_parent; eauto.
+    now rewrite Forall2_map_1.
+    pose proof (Forall2_in_left _ _ _ _ WIi Hin) as [?(?&?& H14)].
+    simpl in H14. inv H14. now apply in_map.
   Qed.
 
   (* When function call parameters are well instantiated and have
@@ -1511,42 +1383,44 @@ Module Type LCLOCKSEMANTICS
     rewrite <- ac_lift2; eauto.
   Qed.
 
-  Lemma sc_exp_fby : forall G env H b e0s es ann k,
+  Lemma sc_exp_fby : forall G env H b e0s es er ann k,
       k < length ann ->
       LCA.P_exps (sc_exp_inv G env H b) e0s k ->
-      sc_exp_inv G env H b (Efby e0s es ann) k.
+      (forall k0 : nat, k0 < length (annots er) -> LCA.P_exps (sc_exp_inv G env H b) er k0) ->
+      sc_exp_inv G env H b (Efby e0s es er ann) k.
   Proof.
-    intros * Hk Hexps ss Hwc Hsem; simpl.
+    intros * Hk Hexps _ ss Hwc Hsem; simpl.
     inv Hwc. inv Hsem.
     eapply P_exps_sc_exp_inv in Hexps; eauto.
-    rewrite Forall2_eq in H5. rewrite H5.
+    rewrite Forall2_eq in H7. rewrite H7.
     assert (Forall2 (fun x y => abstract_clock x ≡ abstract_clock y) (concat s0ss) ss).
-    { clear - H14. eapply Forall3_ignore2 in H14.
+    { clear - H19. eapply Forall3_ignore2 in H19.
       eapply Forall2_impl_In; eauto.
       intros ? ? _ _ [? ?]. apply ac_fby1 in H; auto. }
     apply Forall2_forall2 in H0 as [_ Hac].
     erewrite <- Hac; eauto.
-    erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H5, map_length; eauto.
+    erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H7, map_length; eauto.
     eapply sem_exps_anon_sem_exps; eauto.
   Qed.
 
-  Lemma sc_exp_arrow: forall G env H b e0s es ann k,
+  Lemma sc_exp_arrow : forall G env H b e0s es er ann k,
       k < length ann ->
       LCA.P_exps (sc_exp_inv G env H b) e0s k ->
       LCA.P_exps (sc_exp_inv G env H b) es k ->
-      sc_exp_inv G env H b (Earrow e0s es ann) k.
+      (forall k0 : nat, k0 < length (annots er) -> LCA.P_exps (sc_exp_inv G env H b) er k0) ->
+      sc_exp_inv G env H b (Earrow e0s es er ann) k.
   Proof.
-    intros * Hk He0s Hes ss Hwc Hsem; simpl.
+    intros * Hk He0s Hes _ ss Hwc Hsem; simpl.
     inv Hwc. inv Hsem.
     eapply P_exps_sc_exp_inv in He0s; eauto.
-    rewrite Forall2_eq in H5. rewrite H5.
+    rewrite Forall2_eq in H7. rewrite H7.
     assert (Forall2 (fun x y => abstract_clock x ≡ abstract_clock y) (concat s0ss) ss).
-    { clear - H14. eapply Forall3_ignore2 in H14.
+    { clear - H19. eapply Forall3_ignore2 in H19.
       eapply Forall2_impl_In; eauto.
       intros ? ? _ _ [? ?]. apply ac_arrow1 in H; auto. }
     apply Forall2_forall2 in H0 as [_ Hac].
     erewrite <- Hac; eauto.
-    erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H5, map_length; eauto.
+    erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H7, map_length; eauto.
     eapply sem_exps_anon_sem_exps; eauto.
   Qed.
 
@@ -1615,39 +1489,12 @@ Module Type LCLOCKSEMANTICS
     symmetry. eapply sem_exps_numstreams, sem_exps_anon_sem_exps; eauto.
   Qed.
 
-  Lemma sc_exp_app : forall G env H b f es ann k,
+  Lemma sc_exp_app : forall G env H b f es er ann k,
       wc_global G ->
       sc_nodes G ->
       k < length ann ->
       (forall k0 : nat, k0 < length (annots es) -> LCA.P_exps (sc_exp_inv G env H b) es k0) ->
-      sc_exp_inv G env H b (Eapp f es None ann) k.
-  Proof.
-    intros * HwcG HscG Hlen Hk' ? Hwc Hsem; simpl.
-    inv Hwc. inv Hsem. inv H12.
-    rewrite H1 in H4; inv H4.
-    (* Arguments *)
-    assert (Hse:=H10). eapply P_exps_sc_exp_inv_all in Hse; eauto.
-
-    (* Node call *)
-    eapply wc_find_node in HwcG as [G' (WcIn&WcInOut&_)]; eauto.
-    assert (Hsc:=H10). eapply sc_inside in Hsc; eauto.
-
-    (* Returning aligned values *)
-    eapply sc_outside with (ncks:=map snd ann0) in H2; eauto.
-    2:rewrite Forall2_map_1; eapply Forall2_impl_In; eauto; intros [? [? ?]] ? ? ? ?; eauto.
-    - eapply Forall2_forall2 in H2 as [? Hck].
-      repeat rewrite map_length in *.
-      specialize (Hck Cbase (abstract_clock (def_stream b)) _ _ _ Hlen eq_refl eq_refl).
-      rewrite map_nth, map_map in Hck; auto.
-    - eapply HscG in H1; eauto. econstructor; eauto.
-  Qed.
-
-  Lemma sc_exp_app_reset : forall G env H b f es er ann k,
-      wc_global G ->
-      sc_nodes G ->
-      k < length ann ->
-      (forall k0 : nat, k0 < length (annots es) -> LCA.P_exps (sc_exp_inv G env H b) es k0) ->
-      sc_exp_inv G env H b (Eapp f es (Some er) ann) k.
+      sc_exp_inv G env H b (Eapp f es er ann) k.
   Proof.
     intros * HwcG HscG Hlen Hk' ? Hwc Hsem; simpl.
     inv Hwc. inv Hsem.
@@ -1665,9 +1512,9 @@ Module Type LCLOCKSEMANTICS
       rewrite map_nth, map_map in Hck; eauto.
     - (* Returning aligned values *)
       intros k'.
-      specialize (H17 k'). inv H17. rewrite H1 in H5; inv H5.
+      specialize (H17 k'). inv H17. rewrite H1 in H6; inv H6.
       exists H0. repeat split; eauto.
-      eapply sc_inside_mask in WcIn; eauto.
+      eapply sc_inside_mask in WcIn. 3-6:eauto. 2:eauto.
       eapply HscG in H1; eauto. econstructor; eauto.
   Qed.
 
@@ -1722,7 +1569,6 @@ Module Type LCLOCKSEMANTICS
     - apply sc_exp_merge.
     - apply sc_exp_ite.
     - intros. eapply sc_exp_app; eauto.
-    - intros. eapply sc_exp_app_reset; eauto.
     - intros. eapply sc_exp_equation; eauto.
   Qed.
 
@@ -2023,9 +1869,12 @@ Module Type LCLOCKSEMANTICS
     induction e using exp_ind2; intros * Hwc Hfree;
       inv Hwc; inv Hfree; eauto.
     - (* binop *) destruct H1; eauto.
-    - (* fby *) solve_forall_exists H H4 H3.
+    - (* fby *)
+      destruct H4 as [Hex|(?&Hex)]; eauto.
+      solve_forall_exists H H6 Hex. solve_forall_exists H1 H8 Hex.
     - (* arrow *)
-      destruct H3 as [Hex|Hex]. solve_forall_exists H H4 Hex. solve_forall_exists H0 H5 Hex.
+      destruct H4 as [Hex|[Hex|(?&Hex)]]; eauto.
+      solve_forall_exists H H6 Hex. solve_forall_exists H0 H7 Hex. solve_forall_exists H1 H8 Hex.
     - (* when *)
       destruct H2 as [[? Hex]|Hex]; subst; eauto.
       solve_forall_exists H H4 Hex.
@@ -2035,9 +1884,9 @@ Module Type LCLOCKSEMANTICS
     - (* ite *)
       destruct H3 as [[? Hex]|[Hex|Hex]]; eauto.
       solve_forall_exists H H6 Hex. solve_forall_exists H0 H7 Hex.
-    - (* app *) solve_forall_exists H0 H5 H10.
-    - (* app (reset) *)
-      destruct H13 as [Hex|Hex]; eauto. solve_forall_exists H0 H5 Hex.
+    - (* app *)
+      destruct H13 as [Hex|Hex]; eauto.
+      solve_forall_exists H H5 Hex. solve_forall_exists H0 H6 Hex.
   Qed.
 
   (** After getting sc_var_inv', we can easily give an alignment lemma for expressions *)
@@ -2066,7 +1915,6 @@ Module Type LCLOCKSEMANTICS
     - apply sc_exp_merge.
     - apply sc_exp_ite.
     - intros. eapply sc_exp_app; eauto.
-    - intros. eapply sc_exp_app_reset; eauto.
     - intros ? Hcau.
       eapply Forall_forall in Hinv; eauto.
       eapply wc_exp_Is_free_left in Hcau; eauto.
@@ -2180,12 +2028,9 @@ Module Type LCLOCKSEMANTICS
       NoDupMembers (vars ++ anon_in e).
   Proof.
     intros * Hndup.
-    destruct e; auto.
-    destruct o; simpl in *.
-    - repeat rewrite app_assoc in *.
-      apply NoDupMembers_app_l in Hndup; auto.
-    - repeat rewrite app_assoc in *.
-      apply NoDupMembers_app_l in Hndup; auto.
+    destruct e; auto; simpl in *.
+    repeat rewrite app_assoc in *.
+    apply NoDupMembers_app_l in Hndup; auto.
   Qed.
 
   (** ** Another version of semantics equivalence, including sem_clock_inputs *)
@@ -2224,10 +2069,12 @@ Module Type LCLOCKSEMANTICS
         econstructor...
         + repeat rewrite_Forall_forall... eapply H0...
         + repeat rewrite_Forall_forall... eapply H1...
+        + repeat rewrite_Forall_forall... eapply H2...
       - (* arrow *)
         econstructor...
         + repeat rewrite_Forall_forall... eapply H0...
         + repeat rewrite_Forall_forall... eapply H1...
+        + repeat rewrite_Forall_forall... eapply H2...
       - (* when *)
         econstructor...
         repeat rewrite_Forall_forall... eapply H0...
@@ -2241,23 +2088,16 @@ Module Type LCLOCKSEMANTICS
         + repeat rewrite_Forall_forall... eapply H1...
       - (* app *)
         econstructor...
-        + repeat rewrite_Forall_forall... eapply H1...
-        + specialize (Heq f (concat ss) vs).
-          eapply Heq. split; auto.
-          inv H14. rewrite H3 in H7; inv H7.
-          exists H2; exists n.
-          repeat split; auto.
-          eapply sc_inside'... eapply wc_find_node in HwcG as (?&?&_); eauto.
-      - (* app (reset) *)
-        econstructor...
+        + repeat rewrite_Forall_forall... eapply H0...
         + repeat rewrite_Forall_forall... eapply H1...
         + intros k. specialize (H19 k).
           specialize (Heq f (map (mask k bs) (concat ss)) (map (mask k bs) vs)).
           eapply Heq. split; auto.
-          inv H19. rewrite H3 in H7; inv H7.
+          inv H19. rewrite H3 in H8; inv H8.
           exists H2. exists n.
           repeat split; auto.
-          eapply sc_inside_mask'... eapply wc_find_node in H3 as [? [? _]]; eauto.
+          eapply sc_inside_mask'. 1-3,5-12:eauto. 2:eauto.
+          eapply wc_find_node in H3 as [? [? _]]; eauto.
     Qed.
 
     Fact sc_ref_sem_equation : forall G G' H b vars eq,
@@ -2307,6 +2147,183 @@ Module Type LCLOCKSEMANTICS
     Qed.
 
   End sc_ref.
+
+  (** ** Execution of a node with absent inputs *)
+
+  Section sem_node_absent.
+
+    Lemma Forall2_sem_exp_absent: forall (f : list (Stream value) -> list (Stream value)) G H b es ss,
+        Forall2 (fun e vs => sem_exp G H b e (f vs)) es ss ->
+        Forall2 (sem_exp G H b) es (map f ss).
+    Proof.
+      intros * Sem. rewrite Forall2_map_2.
+      eapply Forall2_impl_In; [|eauto]. auto.
+    Qed.
+    Hint Resolve Forall2_sem_exp_absent.
+
+    Lemma sem_var_absent: forall H x v,
+        sem_var H x v ->
+        sem_var (Env.map (fun _ => Streams.const absent) H) x (Streams.const absent).
+    Proof.
+      intros * Var. inv Var.
+      econstructor; eauto. 2:reflexivity.
+      eapply PositiveMap.map_1 with (f:=fun _ => Streams.const absent); eauto.
+    Qed.
+    Hint Resolve sem_var_absent.
+
+    Lemma clocks_of_false: forall ss,
+      clocks_of (map (fun _ : Stream value => Streams.const absent) ss) ≡ Streams.const false.
+    Proof.
+      intros *.
+      eapply ntheq_eqst. intros n.
+      rewrite clocks_of_nth, const_nth.
+      induction ss; simpl; auto.
+      rewrite const_nth; simpl; auto.
+    Qed.
+
+    Lemma mask_absent: forall k rs,
+        mask k rs (Streams.const absent) ≡ Streams.const absent.
+    Proof.
+      intros *.
+      eapply ntheq_eqst. intros n.
+      rewrite mask_nth. rewrite const_nth.
+      destruct (_ =? k); auto.
+    Qed.
+
+    Lemma fby_absent: forall rs,
+      fby (Streams.const absent) (Streams.const absent) rs (Streams.const absent).
+    Proof.
+      unfold fby.
+      cofix CoFix. intros rs.
+      rewrite CommonStreams.const_Cons. unfold_Stv rs; constructor; auto.
+    Qed.
+
+    Lemma arrow_absent: forall rs,
+      arrow (Streams.const absent) (Streams.const absent) rs (Streams.const absent).
+    Proof.
+      unfold arrow.
+      cofix CoFix. intros rs.
+      rewrite CommonStreams.const_Cons. unfold_Stv rs; constructor; auto.
+    Qed.
+
+    Lemma sem_node_absent:
+      forall G f xs ys,
+        sem_node G f xs ys ->
+        sem_node G f (map (fun _ => Streams.const absent) xs) (map (fun _ => Streams.const absent) ys).
+    Proof.
+      intros * Sem.
+      induction Sem using sem_node_ind2
+        with (P_exp := (fun H _ e vs => sem_exp G (Env.map (fun _ => Streams.const absent) H)
+                                             (Streams.const false) e (List.map (fun _ => Streams.const absent) vs)))
+             (P_equation := (fun H _ eq => sem_equation G (Env.map (fun _ => Streams.const absent) H) (Streams.const false) eq));
+        simpl in *.
+      - (* Econst *)
+        simpl. constructor.
+        apply ntheq_eqst. intros n.
+        rewrite const_nth. symmetry.
+        apply const_false, const_nth.
+      - (* Evar *)
+        econstructor; eauto.
+      - (* Eunop *)
+        econstructor; eauto.
+        eapply lift1_spec; intros.
+        left. split; apply const_nth.
+      - (* Ebinop *)
+        econstructor; eauto.
+        eapply lift2_spec; intros.
+        left. repeat split; apply const_nth.
+      - (* Efby *)
+        econstructor. 3:eapply Forall2_map_2 with (f:=fun _ => Streams.const absent); eauto.
+        1-3:eauto using bools_ofs_absent.
+        repeat rewrite <-concat_map. rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3.
+        eapply Forall3_impl_In; [|eauto]. intros * _ _ _ _. apply fby_absent.
+      - (* Earrow *)
+        econstructor. 3:eapply Forall2_map_2 with (f:=fun _ => Streams.const absent); eauto.
+        1-3:eauto using bools_ofs_absent.
+        repeat rewrite <-concat_map. rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3.
+        eapply Forall3_impl_In; [|eauto]. intros * _ _ _ _. apply arrow_absent.
+      - (* Ewhen *)
+        econstructor; eauto.
+        rewrite <-concat_map, Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto]. intros ?? _ _ When.
+        apply when_spec. intros n.
+        left. repeat split; apply const_nth.
+      - (* Emerge *)
+        econstructor; eauto.
+        repeat rewrite <-concat_map.
+        rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3. eapply Forall3_impl_In; [|eauto].
+        intros * _ _ _ _.
+        eapply merge_spec. intros n. left.
+        repeat split; apply const_nth.
+      - (* Eite *)
+        econstructor; eauto.
+        repeat rewrite <-concat_map.
+        rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3. eapply Forall3_impl_In; [|eauto].
+        intros * _ _ _ _.
+        eapply ite_spec. intros n. left.
+        repeat split; apply const_nth.
+      - (* Eapp *)
+        econstructor. 2:eapply Forall2_map_2 with (f0:=fun _ => Streams.const absent); eauto.
+        1,2:eauto using bools_ofs_absent.
+        erewrite <-concat_map; eauto.
+        intros k. specialize (H5 k) as (?&SemN).
+        repeat rewrite map_map in *.
+        eapply mod_sem_node_morph; eauto.
+        1,2:eapply map_st_EqSt_Proper. 2,4:reflexivity.
+        1,2:intros * Eq; symmetry; apply mask_absent.
+      - (* Equation *)
+        econstructor; eauto.
+        rewrite <-concat_map, Forall2_map_2.
+        eapply Forall2_impl_In; eauto.
+      - (* Node *)
+        econstructor. 5:reflexivity. 1-4:eauto; subst.
+        1,2:(rewrite Forall2_map_2; eapply Forall2_impl_In; [|eauto];
+             intros; eapply sem_var_absent; eauto).
+        eapply Forall_impl; [|eauto].
+        intros ? Sem; simpl in *.
+        rewrite clocks_of_false; auto.
+    Qed.
+
+    Lemma sem_var_instant_absent: forall H x v,
+        sem_var_instant H x v ->
+        sem_var_instant (Env.map (fun _ => absent) H) x absent.
+    Proof.
+      intros * Var. unfold sem_var_instant in *.
+      rewrite Env.Props.P.F.map_o, Var; auto.
+    Qed.
+    Hint Resolve sem_var_instant_absent.
+
+    Lemma sem_clock_false: forall H ck b b',
+        IStr.sem_clock b H ck b' ->
+        IStr.sem_clock (fun _ => false) (fun n => Env.map (fun _ => absent) (H n)) ck (fun _ => false).
+    Proof.
+      intros * Sem n. specialize (Sem n).
+      revert Sem. generalize (b n) (b' n). clear b b'.
+      induction ck; intros * Sem; inv Sem; eauto using sem_clock_instant.
+    Qed.
+
+    Lemma sem_clock_inputs_false: forall G f xs,
+      sem_clock_inputs G f xs ->
+      sem_clock_inputs G f (map (fun _ => Streams.const absent) xs).
+    Proof.
+      intros * (H&n&Find&Sem&Ck).
+      exists (Env.map (fun _ => Streams.const absent) H). exists n.
+      repeat split; auto.
+      - rewrite Forall2_map_2. eapply Forall2_impl_In; eauto.
+      - rewrite map_map, Forall2_map_2 in *.
+        eapply Forall2_impl_In; eauto. intros (?&?) ? _ _ SemCk.
+        rewrite ac_Streams_const, clocks_of_false.
+        rewrite sem_clock_equiv in *.
+        clear - SemCk. eapply sem_clock_false in SemCk.
+        intros n. specialize (SemCk n); simpl in *.
+        rewrite tr_Stream_const.
+        unfold CIStr.tr_history in *. rewrite Env.map_map in SemCk. rewrite Env.map_map.
+        erewrite Env.map_ext; [eauto|].
+        intros ?; simpl. rewrite tr_Stream_const. reflexivity.
+    Qed.
+
+  End sem_node_absent.
+
 End LCLOCKSEMANTICS.
 
 Module LClockSemanticsFun

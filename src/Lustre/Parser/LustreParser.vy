@@ -45,7 +45,7 @@ Import ListNotations.
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
 
-%token<LustreAst.astloc> RESTART EVERY
+%token<LustreAst.astloc> RESET RESTART EVERY
 
 %token<LustreAst.astloc> EOF
 
@@ -194,7 +194,9 @@ fby_expression:
 | expr=cast_expression
     { expr }
 | v0=cast_expression loc=FBY expr=fby_expression
-    { [LustreAst.FBY v0 expr loc] }
+    { [LustreAst.FBY v0 expr [] loc] }
+| RESET v0=cast_expression loc=FBY expr=fby_expression EVERY er=fby_expression
+    { [LustreAst.FBY v0 expr er loc] }
 
 (* 6.5.5 *)
 multiplicative_expression:
@@ -299,8 +301,10 @@ logical_OR_expression:
 arrow_expression:
 | expr=logical_OR_expression
     { expr }
-| e0=arrow_expression loc=RARROW e1=logical_OR_expression
-    { [LustreAst.ARROW e0 e1 loc] }
+| e0=logical_OR_expression loc=RARROW e1=arrow_expression
+    { [LustreAst.ARROW e0 e1 [] loc] }
+| RESET e0=logical_OR_expression loc=RARROW e1=arrow_expression EVERY er=arrow_expression
+    { [LustreAst.ARROW e0 e1 er loc] }
 
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
 expression:

@@ -34,7 +34,7 @@ Module Type MEMORIES
 
   Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
-    | EqFby x _ _ _ => PS.add x mems
+    | EqFby x _ _ _ _ => PS.add x mems
     | _ => mems
     end.
 

@@ -37,10 +37,18 @@ Module Type NL2STCCLOCKING
     apply find_node_translate in Find as (?&?&?&?); subst.
     cases.
     - constructor.
-      + do 2 (constructor; auto).
+      + econstructor; eauto.
+      + rewrite map_map, Forall_map.
+        eapply Forall_forall. intros (?&?) ?.
+        eapply Forall_forall in H1; eauto.
+        do 2 (econstructor; eauto).
         eapply wc_env_var; eauto.
-      + do 2 (econstructor; eauto).
-    - do 2 (econstructor; eauto).
+    - constructor; eauto.
+      rewrite map_map, Forall_map.
+      eapply Forall_forall. intros (?&?) ?.
+      eapply Forall_forall in H3; eauto.
+      do 2 (econstructor; eauto).
+      eapply wc_env_var; eauto.
   Qed.
 
   Lemma gather_eqs_n_vars_wc:
@@ -87,7 +95,7 @@ Module Type NL2STCCLOCKING
       + split; try contradiction.
         setoid_rewrite PSE.MP.Dec.F.empty_iff; intuition.
       + cases.
-      + inversion_clear WCeq as [| |???? Hinc].
+      + inversion_clear WCeq as [| |????? Hinc].
         rewrite In_fold_left_memory_eq, PSE.MP.Dec.F.add_iff, PSE.MP.Dec.F.empty_iff.
         split.
         *{ intros * Hin.
@@ -102,12 +110,12 @@ Module Type NL2STCCLOCKING
              eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (? & ?); eauto.
              rewrite 2 idck_app, 2 in_app in Hinc; destruct Hinc as [Hinc|[|Hinc]]; auto;
                apply In_InMembers in Hinc; rewrite InMembers_idck in Hinc; contradiction.
-           - assert (In (x, ck) (idck (fst (fold_left gather_eq l ([], l0)))))
+           - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1)))))
                as Hin' by (apply in_map_iff; eexists; intuition; eauto; simpl; auto).
              apply IHl in Hin'; intuition.
          }
          *{ intros * (Hin & [Mem|Mem]).
-            - assert (In (x, ck) (idck (fst (fold_left gather_eq l ([], l0))))) as Hin'
+            - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1))))) as Hin'
                   by (apply IHl; auto; intros * Hin';
                       apply Spec; simpl; auto).
               unfold idck in Hin'; apply in_map_iff in Hin' as ((x', (c', ck')) & E & Hin'); simpl in *; inv E.

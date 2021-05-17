@@ -29,7 +29,8 @@ Module Type NL2STCNORMALARGS
   Proof.
     induction 1 as [|?????? Find|]; simpl; eauto using Forall_cons, normal_args_tc.
     apply find_node_translate in Find as (?&?&?&?); subst.
-    cases; eauto using Forall_cons, normal_args_tc.
+    1,2:cases; constructor; eauto using normal_args_tc.
+    1,2:rewrite Forall_map; eapply Forall_forall; intros; eauto using normal_args_tc.
   Qed.
 
   Lemma translate_node_normal_args:

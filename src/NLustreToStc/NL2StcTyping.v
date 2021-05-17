@@ -34,31 +34,38 @@ Module Type NL2STCTYPING
       (forall x ty, In (x, ty) vars -> NL.IsV.Is_variable_in_eq x eq -> In (x, ty) vars') ->
       Forall (wt_trconstr (translate G) vars' mems) (translate_eqn eq).
   Proof.
-    inversion_clear 1 as [??? Hin|????? Find|??????? Find|];
+    inversion_clear 1 as [??? Hin|?????? Find|?????? Hin];
       intros * SpecVars SpecMems SpecVars'; simpl.
     - constructor; auto.
       constructor; try rewrite SpecVars; auto.
     - destruct xs; auto.
-      constructor; auto.
-      apply find_node_translate in Find as (?&?&?&?); subst.
-      econstructor; try rewrite SpecVars; eauto.
-      simpl; eapply Forall2_impl_In; eauto.
-      intros ? (? & (? & ?)) ? ? Hin.
-      apply SpecVars' in Hin; auto.
-    - destruct xs; auto.
       apply find_node_translate in Find as (?&?&?&?); subst.
       constructor; auto.
       + econstructor; eauto.
-        rewrite SpecVars; auto using wt_clock.
-      + constructor; auto.
-        econstructor; try rewrite SpecVars; eauto.
+        2,3:rewrite SpecVars; auto using wt_clock.
         simpl; eapply Forall2_impl_In; eauto.
         intros ? (? & (?&?)) ? ? Hin.
         apply SpecVars' in Hin; auto.
+      + rewrite map_map, Forall_map.
+        apply Forall_forall. intros (?&?) Hin.
+        econstructor; eauto.
+        constructor; auto.
+        * rewrite Forall_map in H4. eapply Forall_forall in H4; eauto.
+          rewrite SpecVars; auto.
+        * rewrite Forall_map in H5. eapply Forall_forall in H5; eauto.
+          rewrite SpecVars; auto.
     - constructor; auto.
-      constructor; try rewrite SpecVars; auto.
-      apply SpecMems; simpl; auto.
-      congruence.
+      + constructor; try rewrite SpecVars; auto.
+        apply SpecMems; simpl; auto.
+        congruence.
+      + rewrite map_map, Forall_map.
+        apply Forall_forall. intros (?&?) Hin'.
+        econstructor; [|constructor]; eauto.
+        * apply SpecMems; simpl; auto.
+        * rewrite Forall_map in H3. eapply Forall_forall in H3; eauto.
+          rewrite SpecVars; auto.
+        * rewrite Forall_map in H4. eapply Forall_forall in H4; eauto.
+          rewrite SpecVars; auto.
   Qed.
 
   Lemma translate_eqns_wt:
@@ -95,7 +102,7 @@ Module Type NL2STCTYPING
     match eq with
     | NL.Syn.EqDef x _ _
     | NL.Syn.EqApp x _ _ _ _ => acc
-    | NL.Syn.EqFby x _ c _ => (x, type_const c) :: acc
+    | NL.Syn.EqFby x _ c _ _ => (x, type_const c) :: acc
     end.
 
   Definition fbys (eqs: list NL.Syn.equation) : list (ident * type) :=
@@ -200,8 +207,8 @@ Module Type NL2STCTYPING
       induction (n_eqs n) as [|[]]; inversion_clear WT as [|?? WTeq]; simpl; auto.
       + split; try contradiction.
         setoid_rewrite PSE.MP.Dec.F.empty_iff; intuition.
-      + inversion_clear WTeq as [| | |???? Hint].
-        intros (x, t); split.
+      + inversion_clear WTeq as [| |????? Hint].
+        1,2:intros (x, t); split.
         *{ intros * (Hin & Mem); apply in_fbys_spec;
            apply In_fold_left_memory_eq in Mem as [Mem|Mem].
            - apply In_fold_left_memory_eq in Mem as [Mem|Mem];
@@ -256,14 +263,13 @@ Module Type NL2STCTYPING
       unfold gather_mems, fbys.
       induction (n_eqs n) as [|[] eqs]; simpl; intros * Hin Mem; try contradiction;
         inversion_clear WT as [|?? WTeq]; auto.
-      inv WTeq.
       apply in_fbys_spec.
       destruct Mem as [|Mem].
       + subst.
         right; constructor.
         f_equal.
         eapply NoDupMembers_det; eauto.
-        apply NoDupMembers_idty, n_nodup.
+        apply NoDupMembers_idty, n_nodup. inv WTeq; auto.
       + left; auto.
     - intros * Hin IsV.
       rewrite 2 idty_app, 2 in_app.

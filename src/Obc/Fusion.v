@@ -8,7 +8,6 @@ From Velus Require Import Obc.ObcInvariants.
 From Velus Require Import Obc.ObcTyping.
 From Velus Require Import Obc.Equiv.
 
-From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import VelusMemory.
 
 From Coq Require Import List.
@@ -309,6 +308,54 @@ Module Type FUSION
              end.
   Qed.
 
+  Corollary Cannot_write_in_zip:
+    forall s1 s2 x,
+      (~Can_write_in x s1 /\ ~Can_write_in x s2)
+      <-> ~Can_write_in x (zip s1 s2).
+  Proof.
+    intros s1 s2 x.
+    split; intro HH.
+    - intro Hcan; apply Can_write_in_zip in Hcan; intuition.
+    - split; intro Hcan; apply HH; apply Can_write_in_zip; intuition.
+  Qed.
+
+  Lemma Can_write_in_var_zip:
+    forall s1 s2 x,
+      (Can_write_in_var x s1 \/ Can_write_in_var x s2)
+      <-> Can_write_in_var x (zip s1 s2).
+  Proof.
+    Hint Constructors Can_write_in_var.
+    induction s1, s2; simpl;
+      repeat progress
+             match goal with
+             | H:Can_write_in_var _ (Comp _ _) |- _ => inversion H; subst; clear H
+             | H:Can_write_in_var _ (Ifte _ _ _) |- _ => inversion H; subst; clear H
+             | H:Can_write_in_var _ Skip |- _ => now inversion H
+             | H:Can_write_in_var _ _ \/ Can_write_in_var _ _ |- _ => destruct H
+             | |- context [equiv_decb ?e1 ?e2] =>
+               destruct (equiv_decb e1 e2) eqn:Heq
+             | |- Can_write_in_var _ (Ifte _ _ _) =>
+               (apply CWIVIfteTrue; apply IHs1_1; now intuition)
+               || (apply CWIVIfteFalse; apply IHs1_2; now intuition)
+             | H:Can_write_in_var _ (zip _ _) |- _ =>
+               apply IHs1_1 in H || apply IHs1_2 in H
+             | |- Can_write_in_var _ (Comp _ (zip _ _)) =>
+               now (apply CWIVComp2; apply IHs1_2; intuition)
+             | _ => intuition
+             end.
+  Qed.
+
+  Corollary Cannot_write_in_var_zip:
+    forall s1 s2 x,
+      (~Can_write_in_var x s1 /\ ~Can_write_in_var x s2)
+      <-> ~Can_write_in_var x (zip s1 s2).
+  Proof.
+    intros s1 s2 x.
+    split; intro HH.
+    - intro Hcan; apply Can_write_in_var_zip in Hcan; intuition.
+    - split; intro Hcan; apply HH; apply Can_write_in_var_zip; intuition.
+  Qed.
+
   Lemma lift_Ifte:
     forall e s1 s2 t1 t2,
       (forall x, Is_free_in_exp x e
@@ -344,17 +391,6 @@ Module Type FUSION
         apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
       + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
         apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
-  Qed.
-
-  Lemma Cannot_write_in_zip:
-    forall s1 s2 x,
-      (~Can_write_in x s1 /\ ~Can_write_in x s2)
-      <-> ~Can_write_in x (zip s1 s2).
-  Proof.
-    intros s1 s2 x.
-    split; intro HH.
-    - intro Hcan; apply Can_write_in_zip in Hcan; intuition.
-    - split; intro Hcan; apply HH; apply Can_write_in_zip; intuition.
   Qed.
 
   Lemma zip_free_write:
@@ -663,7 +699,6 @@ Module Type FUSION
     now rewrite <-Can_write_in_fuse.
   Qed.
 
-
   (** ** Fusion preserves [No_Overwrites]. *)
 
   Lemma No_Overwrites_zip:
@@ -677,38 +712,38 @@ Module Type FUSION
         | |- No_Overwrites (Ifte _ _ _) => constructor
         | |- No_Overwrites (Comp _ _) => constructor
         | |- No_Overwrites (zip _ _) => apply IHs1_1 || apply IHs1_2
-        | |- ~Can_write_in _ (zip _ _) => apply Cannot_write_in_zip; auto
+        | |- ~Can_write_in_var _ (zip _ _) => apply Cannot_write_in_var_zip; auto
         | |- _ /\ _ => split
-        | Hfa:(forall x, Can_write_in x (Assign ?y ?e) -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x (Assign ?y ?e) |- _ =>
+        | Hfa:(forall x, Can_write_in_var x (Assign ?y ?e) -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x (Assign ?y ?e) |- _ =>
           specialize (Hfa x Hcw)
-        | Hfa:(forall x, Can_write_in x (AssignSt ?y ?e) -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x (AssignSt ?y ?e) |- _ =>
+        | Hfa:(forall x, Can_write_in_var x (AssignSt ?y ?e) -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x (AssignSt ?y ?e) |- _ =>
           specialize (Hfa x Hcw)
-        | Hfa:(forall x, Can_write_in x (Ifte ?e ?s1 ?s2) -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x ?s2 |- _ =>
-          specialize (Hfa x (CWIIfteFalse x e s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in x (Ifte ?e ?s1 ?s2) -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x ?s1 |- _ =>
-          specialize (Hfa x (CWIIfteTrue x e s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in x (Comp ?s1 ?s2) -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x ?s1 |- _ =>
-          specialize (Hfa x (CWIComp1 x s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in x (Comp ?s1 ?s2) -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x ?s2 |- _ =>
-          specialize (Hfa x (CWIComp2 x s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in x (Call ?xs ?f ?o ?m ?es)
-                         -> ~Can_write_in x _),
-              Hcw:Can_write_in ?x (Call ?xs ?f ?o ?m ?es) |- _ =>
+        | Hfa:(forall x, Can_write_in_var x (Ifte ?e ?s1 ?s2) -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x ?s2 |- _ =>
+          specialize (Hfa x (CWIVIfteFalse x e s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in_var x (Ifte ?e ?s1 ?s2) -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x ?s1 |- _ =>
+          specialize (Hfa x (CWIVIfteTrue x e s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in_var x (Comp ?s1 ?s2) -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x ?s1 |- _ =>
+          specialize (Hfa x (CWIVComp1 x s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in_var x (Comp ?s1 ?s2) -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x ?s2 |- _ =>
+          specialize (Hfa x (CWIVComp2 x s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in_var x (Call ?xs ?f ?o ?m ?es)
+                         -> ~Can_write_in_var x _),
+              Hcw:Can_write_in_var ?x (Call ?xs ?f ?o ?m ?es) |- _ =>
           specialize (Hfa x Hcw)
-        | H:~Can_write_in ?x (Ifte ?e ?s1 ?s2) |- _ =>
+        | H:~Can_write_in_var ?x (Ifte ?e ?s1 ?s2) |- _ =>
           apply cannot_write_in_Ifte in H as (? & ?); auto
         | H:No_Overwrites (Ifte _ _ _) |- _ => inversion_clear H
         | H:No_Overwrites (Comp _ _) |- _ => inversion_clear H
-        | H:Can_write_in ?x (Ifte _ _ _) |- _ => inversion_clear H
-        | H:Can_write_in ?x (Comp _ _) |- _ => inversion_clear H
-        | H:Can_write_in ?x (zip _ _) |- _ =>
-          apply Can_write_in_zip in H as [?|?]
+        | H:Can_write_in_var ?x (Ifte _ _ _) |- _ => inversion_clear H
+        | H:Can_write_in_var ?x (Comp _ _) |- _ => inversion_clear H
+        | H:Can_write_in_var ?x (zip _ _) |- _ =>
+          apply Can_write_in_var_zip in H as [?|?]
               end; intros; auto).
   Qed.
 
@@ -722,14 +757,14 @@ Module Type FUSION
     match goal with H:No_Overwrites (Comp _ _) |- _ => inv H end.
     apply IHs2_2; constructor; auto.
     - intros x Hcw.
-      apply Can_write_in_zip in Hcw as [Hcw|Hcw]; auto.
-      match goal with H:forall x, Can_write_in x s1 -> _ |- _ => apply H in Hcw end.
-      apply cannot_write_in_Comp in Hcw as (? & ?); auto.
-    - intros x Hcw; apply Cannot_write_in_zip; auto.
+      apply Can_write_in_var_zip in Hcw as [Hcw|Hcw]; auto.
+      match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
+      apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
+    - intros x Hcw; apply Cannot_write_in_var_zip; auto.
     - apply No_Overwrites_zip.
       constructor; auto. intros x Hcw.
-      match goal with H:forall x, Can_write_in x s1 -> _ |- _ => apply H in Hcw end.
-      apply cannot_write_in_Comp in Hcw as (? & ?); auto.
+      match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
+      apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
   Qed.
 
   Lemma No_Overwrites_fuse:

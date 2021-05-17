@@ -30,17 +30,15 @@ Module Type ISFREE
         Is_free_in_caexp i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
-      forall x f ck les i,
-        Is_free_in_aexps i ck les ->
-        Is_free_in_eq i (EqApp x ck f les None)
-  | FreeEqReset:
-      forall x f ck les i r ck_r,
-        Is_free_in_aexps i ck les \/ r = i \/ Is_free_in_clock i ck_r ->
-        Is_free_in_eq i (EqApp x ck f les (Some (r, ck_r)))
+      forall x f ck les xrs i,
+        Is_free_in_aexps i ck les \/
+        Exists (fun '(xr, ckr) => xr = i \/ Is_free_in_clock i ckr) xrs ->
+        Is_free_in_eq i (EqApp x ck f les xrs)
   | FreeEqFby:
-      forall x v ck le i,
-        Is_free_in_aexp i ck le ->
-        Is_free_in_eq i (EqFby x ck v le).
+      forall x v ck le xrs i,
+        Is_free_in_aexp i ck le \/
+        Exists (fun '(xr, ckr) => xr = i \/ Is_free_in_clock i ckr) xrs ->
+        Is_free_in_eq i (EqFby x ck v le xrs).
 
   Hint Constructors Is_free_in_clock Is_free_in_exp
        Is_free_in_aexp Is_free_in_aexps Is_free_in_cexp
@@ -52,59 +50,49 @@ Module Type ISFREE
   Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
     match eq with
     | EqDef _ ck cae      => free_in_caexp ck cae fvs
-    | EqApp _ ck f laes r =>
+    | EqApp _ ck f laes xrs =>
       let fvs := free_in_aexps ck laes fvs in
-      match r with
-      | Some (x, ck_r) => PS.add x (free_in_clock ck_r fvs)
-      | None => fvs
-      end
-    | EqFby _ ck v lae    => free_in_aexp ck lae fvs
+      fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs fvs
+    | EqFby _ ck v lae xrs =>
+      let fvs := free_in_aexp ck lae fvs in
+      fold_left (fun fvs '(xr, ckr) => PS.add xr (free_in_clock ckr fvs)) xrs fvs
     end.
 
   (** * Specification lemmas *)
+  (* XXX : Dead lemmas ? *)
 
-  Lemma free_in_equation_spec:
-    forall x eq m, PS.In x (free_in_equation eq m)
-                   <-> (Is_free_in_eq x eq \/ PS.In x m).
-  Proof.
-    Local Ltac aux :=
-      repeat (match goal with
-              | H:Is_free_in_eq _ _ |- _ => inversion_clear H
-              | H:PS.In _ (free_in_equation _ _) |- _ =>
-                apply free_in_caexp_spec in H
-                || apply free_in_aexp_spec in H
-                || apply free_in_aexps_spec in H
-              | |- PS.In _ (free_in_equation _ _) =>
-                apply free_in_caexp_spec
-                || apply free_in_aexp_spec
-                || apply free_in_aexps_spec
-              | _ => intuition; eauto
-              end).
+  (* Lemma free_in_equation_spec: *)
+  (*   forall x eq m, PS.In x (free_in_equation eq m) *)
+  (*                  <-> (Is_free_in_eq x eq \/ PS.In x m). *)
+  (* Proof. *)
+  (*   Local Ltac aux := *)
+  (*     repeat (simpl in *; *)
+  (*             match goal with *)
+  (*             | o:option (_ * _) |- _ => destruct o as [[? ?]|] *)
+  (*             | H:Is_free_in_eq _ _ |- _ => inversion_clear H *)
+  (*             | H:PS.In _ (free_in_caexp _ _ _) |- _ => rewrite free_in_caexp_spec in H *)
+  (*             | H:PS.In _ (free_in_aexp _ _ _) |- _ => rewrite free_in_aexp_spec in H *)
+  (*             | H:PS.In _ (free_in_aexps _ _ _) |- _ => rewrite free_in_aexps_spec in H *)
+  (*             | H:PS.In _ (free_in_clock _ _) |- _  => rewrite free_in_clock_spec in H *)
+  (*             | H:PS.In _ (PS.add _ _) |- _ => rewrite PS.add_spec in H *)
+  (*             | |- context [PS.In _ (free_in_caexp _ _ _)] => rewrite free_in_caexp_spec *)
+  (*             | |- context [PS.In _ (free_in_aexp _ _ _)] => rewrite free_in_aexp_spec *)
+  (*             | |- context [PS.In _ (free_in_aexps _ _ _)] => rewrite free_in_aexps_spec *)
+  (*             | |- context [PS.In _ (free_in_clock _ _)] => rewrite free_in_clock_spec *)
+  (*             | |- context [PS.In _ (PS.add _ _)] => rewrite PS.add_spec *)
+  (*             | H:_ \/ _ |- _ => destruct H *)
+  (*             end; eauto). *)
 
-    destruct eq; split; intro H; aux.
-    - destruct o as [(?&?)|]; aux.
-      simpl in H.
-      apply PS.add_spec in H as [|].
-      + subst; left; eauto.
-      + apply free_in_clock_spec in H as [|]; eauto.
-        apply free_in_aexps_spec in H as [|]; aux.
-    - destruct o; aux; simpl; apply PS.add_spec;
-        rewrite free_in_clock_spec, free_in_aexps_spec; intuition.
-    - subst; simpl. now apply PSF.add_1.
-    - destruct o; aux; simpl; apply PS.add_spec;
-        rewrite free_in_clock_spec, free_in_aexps_spec; intuition.
-    - simpl; destruct o as [(?&?)|];
-        try apply PS.add_spec; try rewrite free_in_clock_spec; try rewrite free_in_aexps_spec;
-          auto.
-  Qed.
+  (*   destruct eq; split; intro H; aux. *)
+  (* Qed. *)
 
-  Lemma free_in_equation_spec':
-    forall x eq, PS.In x (free_in_equation eq PS.empty)
-               <-> Is_free_in_eq x eq.
-  Proof.
-    intros; rewrite (free_in_equation_spec x eq PS.empty).
-    intuition.
-  Qed.
+  (* Lemma free_in_equation_spec': *)
+  (*   forall x eq, PS.In x (free_in_equation eq PS.empty) *)
+  (*              <-> Is_free_in_eq x eq. *)
+  (* Proof. *)
+  (*   intros; rewrite (free_in_equation_spec x eq PS.empty). *)
+  (*   intuition. *)
+  (* Qed. *)
 
 End ISFREE.
 

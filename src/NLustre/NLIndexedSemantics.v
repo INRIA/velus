@@ -50,6 +50,210 @@ Module Type NLINDEXEDSEMANTICS
       | _      => present (hold v0 xs n)
       end.
 
+  Fixpoint doreset (xs: stream value) (rs: stream bool) (n : nat) : bool :=
+    if rs n then true
+    else match n with
+         | 0 => false
+         | S m => match xs m with
+                 | absent => doreset xs rs m
+                 | present _ => false
+                 end
+         end.
+
+  Definition reset (v0: val) (xs: stream value) (rs: stream bool) : stream value :=
+    fun n =>
+      match xs n with
+      | absent => absent
+      | present x => if (doreset xs rs n) then present v0 else present x
+      end.
+
+  Lemma reset_spec : forall v0 xs rs v n,
+      reset v0 xs rs n = v <->
+      (xs n = absent /\ v = absent) \/
+      (exists x, xs n = present x /\ doreset xs rs n = false /\ v = present x) \/
+      (exists x, xs n = present x /\ doreset xs rs n = true /\ v = present v0).
+  Proof.
+    intros *. unfold reset.
+    split.
+    - intros Hres.
+      destruct (xs n); simpl in *; auto.
+      destruct (doreset xs rs n) eqn:Hres'; eauto 8.
+    - intros [(Hxs&?)|[(?&Hxs&Hres&?)|(?&Hxs&Hres&?)]]; subst; rewrite Hxs; auto.
+      1,2:rewrite Hres; auto.
+  Qed.
+
+  Fact lt_S_inv : forall n m,
+      n < S m ->
+      (n < m \/ n = m).
+  Proof.
+    intros * Hlt.
+    apply Lt.le_lt_or_eq, Lt.lt_n_Sm_le; auto.
+  Qed.
+
+  Lemma doreset_spec : forall xs rs n,
+      doreset xs rs n = true <->
+      rs n = true \/
+      (exists m, m < n /\ rs m = true /\
+            forall k, m <= k -> k < n -> xs k = absent).
+  Proof.
+    induction n; (split; [intros Hrs|intros [Hrs|(?&Hmn&Hrs&Hk)]]); simpl in *.
+    - destruct (rs 0); auto.
+    - rewrite Hrs; auto.
+    - inv Hmn.
+    - destruct (rs (S n)); auto. right.
+      destruct (xs n) eqn:Hxs. 2:inv Hrs.
+      apply IHn in Hrs as [?|(?&?&?&?)].
+      + exists n. repeat split; auto.
+        intros ? Hle Hlt.
+        apply lt_S_inv in Hlt as [?|?]; subst; auto.
+        exfalso. eapply Lt.lt_irrefl, Lt.lt_le_trans; eauto.
+      + exists x. repeat split; auto.
+        intros ? Hle Hlt.
+        apply lt_S_inv in Hlt as [?|?]; subst; auto.
+    - rewrite Hrs; auto.
+    - destruct (rs (S n)); auto.
+      destruct (xs n) eqn:Hxs.
+      + rewrite IHn.
+        apply lt_S_inv in Hmn as [?|?]; subst; auto.
+        right. exists x. repeat (split; auto).
+      + exfalso. rewrite Hk in Hxs; auto. inv Hxs.
+        apply Lt.lt_n_Sm_le; auto.
+  Qed.
+
+  Fact doreset_shift : forall xs rs xs' rs' ,
+      (forall k, xs' (S k) = xs k) ->
+      (forall k, rs' (S k) = rs k) ->
+      ((exists x, xs' 0 = present x) \/ rs' 0 = false) ->
+      forall n, doreset xs' rs' (S n) = doreset xs rs n.
+  Proof.
+    intros * Hxs Hrs Hxr0 n. induction n; simpl.
+    - destruct (rs' 1) eqn:Hr; rewrite Hrs in Hr; rewrite Hr; auto.
+      destruct Hxr0 as [(?&Hxr0)|Hxr0]; rewrite Hxr0; auto.
+      destruct (xs' 0) eqn:Hx; auto.
+    - destruct (rs' (S (S n))) eqn:Hr; rewrite Hrs in Hr; rewrite Hr; auto.
+      destruct (xs' (S n)) eqn:Hx; rewrite Hxs in Hx; rewrite Hx; auto.
+  Qed.
+
+  Lemma reset_shift : forall v0 xs rs xs' rs' ,
+      (forall k, xs' (S k) = xs k) ->
+      (forall k, rs' (S k) = rs k) ->
+      ((exists x, xs' 0 = present x) \/ rs' 0 = false) ->
+      forall n, reset v0 xs' rs' (S n) = reset v0 xs rs n.
+  Proof.
+    intros * Hxs Hrs Hxr0 n.
+    unfold reset.
+    destruct (xs' (S n)) eqn:Hx; rewrite Hxs in Hx; rewrite Hx; auto.
+    erewrite doreset_shift; eauto.
+  Qed.
+
+  Fact doreset_shift' : forall xs rs xs' rs' k x n,
+      (forall k, xs' (S k) = xs k) ->
+      (forall k, rs' (S k) = rs k) ->
+      k < n -> xs k = present x ->
+      doreset xs' rs' (S n) = doreset xs rs n.
+  Proof.
+    intros * Hxs Hrs Hkn Hxr0. induction n; simpl.
+    - inv Hkn.
+    - destruct (rs' (S (S n))) eqn:Hr; rewrite Hrs in Hr; rewrite Hr; auto.
+      destruct (xs' (S n)) eqn:Hx; rewrite Hxs in Hx; rewrite Hx; auto.
+      apply lt_S_inv in Hkn as [Hkn|?]; subst; try congruence.
+      apply IHn; auto.
+  Qed.
+
+  Lemma reset_shift' : forall n v0 xs rs xs' rs' k x,
+      (forall k, xs' (S k) = xs k) ->
+      (forall k, rs' (S k) = rs k) ->
+      k < n -> xs k = present x ->
+      reset v0 xs' rs' (S n) = reset v0 xs rs n.
+  Proof.
+    intros * Hxs Hrs Hkn Hxr0.
+    unfold reset.
+    destruct (xs' (S n)) eqn:Hx; rewrite Hxs in Hx; rewrite Hx; auto.
+    erewrite doreset_shift'; eauto.
+  Qed.
+
+  Definition bools_ofs (vs : list vstream) (rs : cstream) :=
+    exists rss, Forall2 bools_of vs rss /\
+           (forall n, rs n = existsb (fun rs => rs n) rss).
+
+  Lemma bools_ofs_value_to_bool:
+    forall ys rs n,
+      bools_ofs ys rs ->
+      Forall (fun y => exists r, value_to_bool (y n) = Some r) ys.
+  Proof.
+    intros * (rss&Bools&_).
+    induction Bools; simpl in *; constructor; auto.
+    specialize (H n); eauto.
+  Qed.
+
+  Lemma bools_ofs_value_to_bool_true:
+    forall ys rs n,
+    bools_ofs ys rs ->
+    rs n = true <-> Exists (fun y => value_to_bool (y n) = Some true) ys.
+  Proof.
+    intros * (?&B1&B2).
+    split; intros Rs.
+    - rewrite B2 in Rs. clear B2.
+      eapply Exists_existsb with (P:=fun x => x n = true) in Rs; intuition.
+      induction B1; simpl in *; inv Rs; auto.
+      left. congruence.
+    - rewrite B2. clear B2.
+      eapply Exists_existsb with (P:=fun x => x n = true); intuition.
+      induction B1; simpl in *; inv Rs; auto.
+      rewrite H in H1. inv H1; auto.
+  Qed.
+
+  Lemma bools_ofs_value_to_bool_false:
+    forall ys rs n,
+    bools_ofs ys rs ->
+    rs n = false <-> Forall (fun y => value_to_bool (y n) = Some false) ys.
+  Proof.
+    intros * (?&B1&B2).
+    split; intros Rs.
+    - rewrite B2 in Rs. clear B2.
+      apply existsb_Forall, forallb_Forall in Rs.
+      induction B1; simpl in *; inv Rs; constructor; auto.
+      rewrite H. destruct (y n); simpl in *; auto. congruence.
+    - rewrite B2. clear B2.
+      apply existsb_Forall, forallb_Forall.
+      induction B1; simpl in *; inv Rs; constructor; auto.
+      rewrite H in H2. inv H2. rewrite H1; auto.
+  Qed.
+
+  (** ** Another formulation for the resetable fby.
+         For the sem -> msem proof, it is simpler to have the fby and reset integrated *)
+
+  Fixpoint holdreset (v0 : val) (xs : stream value) (rs : stream bool) (n : nat) :=
+    match n with
+    | 0   => v0
+    | S m => match rs m, xs m with
+            | true, absent => v0
+            | false, absent => holdreset v0 xs rs m
+            | _, present hv => hv
+            end
+      end.
+
+  Definition fbyreset (v0: val) (xs: stream value) (rs : stream bool) : stream value :=
+    fun n =>
+      match rs n, xs n with
+      | _, absent => absent
+      | true, _   => present v0
+      | false, _  => present (holdreset v0 xs rs n)
+      end.
+
+  Lemma reset_fby_fbyreset : forall v0 xs rs,
+      reset v0 (fby v0 xs) rs ≈ fbyreset v0 xs rs.
+  Proof.
+    unfold reset, fby, fbyreset.
+    intros * n.
+    destruct (xs n), (rs n) eqn:Hrs; auto.
+    - destruct n; simpl; rewrite Hrs; auto.
+    - induction n; simpl. destruct (rs 0); auto.
+      rewrite Hrs.
+      destruct (xs n) eqn:Hxs, (rs n) eqn:Hrs'; simpl; auto.
+      destruct n; simpl; rewrite Hrs'; auto.
+  Qed.
+
   Section NodeSemantics.
 
     Variable G: global.
@@ -61,27 +265,24 @@ Module Type NLINDEXEDSEMANTICS
           sem_caexp bk H ck ce xs ->
           sem_equation bk H (EqDef x ck ce)
     | SEqApp:
-        forall bk H x ck f arg ls xs,
+        forall bk H x ck f arg xrs ys rs ls xs,
           sem_exps bk H arg ls ->
           sem_vars H x xs ->
           sem_clock bk H ck (clock_of ls) ->
-          sem_node f ls xs ->
-          sem_equation bk H (EqApp x ck f arg None)
-    | SEqReset:
-        forall bk H x ck f arg y cky ys rs ls xs,
-          sem_exps bk H arg ls ->
-          sem_vars H x xs ->
-          sem_clock bk H ck (clock_of ls) ->
-          sem_var H y ys ->
-          bools_of ys rs ->
+          Forall2 (sem_var H) (map fst xrs) ys ->
+          bools_ofs ys rs ->
           (forall k, sem_node f (mask k rs ls) (mask k rs xs)) ->
-          sem_equation bk H (EqApp x ck f arg (Some (y, cky)))
+          sem_equation bk H (EqApp x ck f arg xrs)
     | SEqFby:
-        forall bk H x ls xs c0 ck le,
+        forall bk H x ls xs c0 ck le xrs ys rs,
           sem_aexp bk H ck le ls ->
           sem_var H x xs ->
-          xs = fby (sem_const c0) ls ->
-          sem_equation bk H (EqFby x ck c0 le)
+          Forall2 (sem_var H) (map fst xrs) ys ->
+          sem_clocked_vars bk H xrs ->
+          bools_ofs ys rs ->
+          xs = reset (sem_const c0) (fby (sem_const c0) ls) rs ->
+          sem_equation bk H (EqFby x ck c0 le xrs)
+
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
          | SNode:
@@ -202,31 +403,25 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H (EqDef x ck ce).
 
     Hypothesis EqAppCase:
-      forall bk H x ck f arg ls xs,
+      forall bk H x ck f arg xrs ys rs ls xs,
         sem_exps bk H arg ls ->
         sem_vars H x xs ->
         sem_clock bk H ck (clock_of ls) ->
-        sem_node G f ls xs ->
-        P_node f ls xs ->
-        P_equation bk H (EqApp x ck f arg None).
-
-    Hypothesis EqResetCase:
-      forall bk H x ck f arg y cky ys rs ls xs,
-        sem_exps bk H arg ls ->
-        sem_vars H x xs ->
-        sem_clock bk H ck (clock_of ls) ->
-        sem_var H y ys ->
-        bools_of ys rs ->
+        Forall2 (sem_var H) (map fst xrs) ys ->
+        bools_ofs ys rs ->
         (forall k, sem_node G f (mask k rs ls) (mask k rs xs)
               /\ P_node f (mask k rs ls) (mask k rs xs)) ->
-        P_equation bk H (EqApp x ck f arg (Some (y, cky))).
+        P_equation bk H (EqApp x ck f arg xrs).
 
     Hypothesis EqFbyCase:
-      forall bk H x ls xs c0 ck le,
+      forall bk H x ls xs c0 ck le xrs ys rs,
         sem_aexp bk H ck le ls ->
         sem_var H x xs ->
-        xs = fby (sem_const c0) ls ->
-        P_equation bk H (EqFby x ck c0 le).
+        Forall2 (sem_var H) (map fst xrs) ys ->
+        sem_clocked_vars bk H xrs ->
+        bools_ofs ys rs ->
+        xs = reset (sem_const c0) (fby (sem_const c0) ls) rs ->
+        P_equation bk H (EqFby x ck c0 le xrs).
 
     Hypothesis NodeCase:
       forall bk H f xss yss n,
@@ -296,8 +491,7 @@ enough: it does not support the internal fixpoint introduced by
     intros node G f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-                     | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
-                     | bk H x ck f le y cky ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
                      |
                      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
@@ -305,10 +499,7 @@ enough: it does not support the internal fixpoint introduced by
                                       -> sem_equation G bk H eq).
     - econstructor; eassumption.
     - intro Hnin.
-      econstructor; eauto.
-      apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
-    - intro Hnin.
-      eapply SEqReset; eauto.
+      eapply SEqApp; eauto.
       intro k; specialize (Hnodes k); destruct Hnodes as (?&IH).
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro; eapply SEqFby; eassumption.
@@ -351,9 +542,6 @@ enough: it does not support the internal fixpoint introduced by
     intros bk nd G H eq Hord Hnini Hsem.
     destruct eq; inversion Hsem; subst; eauto using sem_equation.
     - econstructor; eauto.
-      eapply sem_node_cons; eauto.
-      intro HH; rewrite HH in *; auto using Is_node_in_eq.
-    - econstructor; eauto.
       intro k; eapply sem_node_cons; eauto.
       intro HH; rewrite HH in *; auto using Is_node_in_eq.
   Qed.
@@ -385,8 +573,7 @@ enough: it does not support the internal fixpoint introduced by
     assert (Hnin':=Hnin).
     revert Hnin'.
     induction Hsem as [
-                     | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
-                     | bk H x ck f le y cky ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
                      |
                      | bk H f xs ys n Hbk Hfind Hxs Hys ? Heqs IH]
                         using sem_node_mult
@@ -468,7 +655,8 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros * E ?? Sem.
     induction Sem; econstructor; eauto;
-      eapply lift_eq_str; eauto; reflexivity.
+      try eapply lift_eq_str; eauto; try reflexivity.
+    rewrite <-E. eauto.
   Qed.
 
   Add Parametric Morphism G f: (sem_node G f)

@@ -1,0 +1,4 @@
+node multireset(r1, r2 : bool) returns (x : int)
+let
+  x = reset 0 fby (x + 1) every (r1 or r2);
+tel

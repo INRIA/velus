@@ -137,7 +137,7 @@ Module Type STC2OBCTYPING
     forall P s,
       wt_system P s ->
       wt_method (translate P) (s_subs s)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s))
+                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_nexts s))
                 (step_method s).
   Proof.
     unfold wt_system, wt_method; intros * WT; simpl.
@@ -145,10 +145,10 @@ Module Type STC2OBCTYPING
 
     pose proof (s_nodup_variables s) as NodupVars.
     unfold variables in NodupVars.
-    assert (incl (calls_of (s_tcs s)) (s_subs s)) as Subs
-        by (rewrite s_subs_calls_of; apply incl_refl).
-    assert (incl (resets_of (s_tcs s)) (s_subs s)) as Subs'
-        by (eapply incl_tran; eauto; apply s_reset_incl; auto).
+    assert (incl (steps_of (s_tcs s)) (s_subs s)) as Subs
+        by (rewrite s_subs_steps_of; apply incl_refl).
+    assert (incl (iresets_of (s_tcs s)) (s_subs s)) as Subs'
+        by (eapply incl_tran; eauto; apply s_ireset_incl; auto).
 
     induction (s_tcs s) as [|tc tcs]; inversion_clear WT as [|?? WTtc];
       simpl; eauto using wt_stmt.
@@ -158,27 +158,27 @@ Module Type STC2OBCTYPING
       rewrite Permutation_app_comm in NodupVars';
       apply NoDup_app_weaken in NodupVars';
         apply NoDup_app_weaken in NodupVars.
-    assert (incl (calls_of tcs) (s_subs s))
+    assert (incl (steps_of tcs) (s_subs s))
       by (destruct tc; simpl in *; auto;
           apply incl_cons' in Subs as (? & ?); auto).
-    assert (incl (resets_of tcs) (s_subs s))
+    assert (incl (iresets_of tcs) (s_subs s))
       by (destruct tc; simpl in *; auto;
           apply incl_cons' in Subs' as (? & ?); auto).
 
     rewrite 2 idty_app in WTtc.
-    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s)) in *;
+    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_nexts s)) in *;
       set (vars := idty (s_in s) ++ idty (s_vars s) ++ idty (s_out s)) in *;
       set (nvars := vars ++ mems) in *.
     apply wt_stmt_fold_left_shift; intuition.
     constructor; eauto using wt_stmt.
     assert (forall x ty,
                In (x, ty) nvars ->
-               if PS.mem x (ps_from_list (map fst (s_lasts s)))
+               if PS.mem x (ps_from_list (map fst (s_nexts s)))
                then In (x, ty) mems
                else In (x, ty) vars)
     as NvarsSpec.
     { clear.
-      assert (map fst (s_lasts s) = map fst mems) as ->
+      assert (map fst (s_nexts s) = map fst mems) as ->
           by (subst mems; rewrite map_map; simpl; auto).
       subst nvars.
       assert (NoDupMembers (vars ++ mems)) as Nodup.
@@ -199,8 +199,11 @@ Module Type STC2OBCTYPING
         apply ps_from_list_In in Hin; rewrite PSE.MP.Dec.F.mem_iff in Hin.
         rewrite Hin; auto.
     }
-    destruct tc; inversion_clear WTtc as [| |????? Find|???????? Find Outs Ins ? Exps];
+    destruct tc; inversion_clear WTtc as [| | |????? Find|???????? Find Outs Ins ? Exps];
       simpl in *; eauto.
+    - eapply Control_wt; eauto.
+      constructor; eauto.
+      constructor.
     - eapply Control_wt; eauto.
       constructor; eauto.
       now rewrite typeof_correct.
@@ -225,14 +228,14 @@ Module Type STC2OBCTYPING
   Hint Resolve step_wt.
 
   Lemma reset_mems_wt:
-    forall P insts mems lasts,
-      (forall x c ck, In (x, (c, ck)) lasts -> In (x, type_const c) mems) ->
-      wt_stmt (translate P) insts mems [] (reset_mems lasts).
+    forall P insts mems resets,
+      (forall x c ck, In (x, (c, ck)) resets -> In (x, type_const c) mems) ->
+      wt_stmt (translate P) insts mems [] (reset_mems resets).
   Proof.
     unfold reset_mems; intros * Spec.
-    induction lasts as [|(x, (c, ck))]; simpl; eauto using wt_stmt.
+    induction resets as [|(x, (c, ck))]; simpl; eauto using wt_stmt.
     rewrite wt_stmt_fold_left_lift; split; auto.
-    - apply IHlasts.
+    - apply IHresets.
       intros; eapply Spec; right; eauto.
     - constructor; eauto using wt_stmt.
       constructor; eauto using wt_exp; simpl; auto.
@@ -261,15 +264,15 @@ Module Type STC2OBCTYPING
       wt_stmt (translate P) insts mems [] (reset_insts (s_subs s)).
   Proof.
     unfold wt_system; intros * WT Spec.
-    eapply reset_insts_wt_permutation; try apply s_subs_calls_of.
-    rewrite s_subs_calls_of in Spec.
+    eapply reset_insts_wt_permutation; try apply s_subs_steps_of.
+    rewrite s_subs_steps_of in Spec.
     unfold reset_insts.
     induction (s_tcs s) as [|[] tcs]; simpl in *;
       inversion_clear WT as [|?? WTtc]; eauto using wt_stmt.
     apply incl_cons' in Spec as (? & ?).
     rewrite wt_stmt_fold_left_lift; split; auto.
     constructor; eauto using wt_stmt.
-    inversion_clear WTtc as [| | |???????? Find].
+    inversion_clear WTtc as [| | | |???????? Find].
     apply find_system_translate in Find as (?&?&?&?&?); subst.
     econstructor; eauto.
     - apply exists_reset_method.
@@ -282,7 +285,7 @@ Module Type STC2OBCTYPING
     forall P s,
       wt_system P s ->
       wt_method (translate P) (s_subs s)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s))
+                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_nexts s))
                 (reset_method s).
   Proof.
     unfold wt_system, wt_method; intros * WT; simpl.
@@ -290,7 +293,7 @@ Module Type STC2OBCTYPING
     constructor.
     - clear WT.
       apply reset_mems_wt.
-      intros * Hin; induction (s_lasts s) as [|(x', (c', ck'))];
+      intros * Hin; induction (s_nexts s) as [|(x', (c', ck'))];
         simpl; inv Hin; auto.
       left; congruence.
     - apply reset_insts_wt; auto.
@@ -305,10 +308,10 @@ Module Type STC2OBCTYPING
   Proof.
     unfold wt_system; intros * WT.
     constructor; simpl; eauto using Forall_cons.
-    rewrite s_subs_calls_of.
+    rewrite s_subs_steps_of.
     induction (s_tcs s) as [|[]]; simpl; inversion_clear WT as [|?? WTtc]; auto;
       constructor; simpl; auto.
-    inversion_clear WTtc as [| | |???????? Find].
+    inversion_clear WTtc as [| | | |???????? Find].
     apply find_system_translate in Find as (?&?& -> &?); discriminate.
   Qed.
   Hint Resolve translate_system_wt.

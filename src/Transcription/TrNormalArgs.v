@@ -82,18 +82,13 @@ Module Type TRNORMALARGS
     intros * Htog Hnormed Htoeq.
     inv Hnormed; simpl in *.
     - (* app *)
-      monadInv Htoeq.
+      destruct (vars_of _); monadInv Htoeq.
       eapply find_node_global in H0 as (n'&?&Hfind'&Htonode); eauto.
       econstructor; eauto.
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
-    - (* app (reset) *)
-      destruct cl. monadInv Htoeq.
-      eapply find_node_global in H0 as (n'&?&Hfind'&Htonode); eauto.
-      econstructor; eauto.
-      erewrite <- to_node_in; eauto.
-      eapply to_lexps_noops_exps; eauto.
-    - (* fby *) monadInv Htoeq.
+    - (* fby *)
+      destruct (vars_of _); monadInv Htoeq.
       constructor.
     - (* cexp *)
       inv H. 3:inv H0.

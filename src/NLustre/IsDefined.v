@@ -39,8 +39,8 @@ Module Type ISDEFINED
         In x xs ->
         Is_defined_in_eq x (EqApp xs ck f e r)
   | DefEqFby:
-      forall x ck v e,
-        Is_defined_in_eq x (EqFby x ck v e).
+      forall x ck v e r,
+        Is_defined_in_eq x (EqFby x ck v e r).
 
   (* definition is needed in signature *)
   Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
@@ -80,12 +80,12 @@ Module Type ISDEFINED
   Qed.
 
   Lemma not_Is_defined_in_eq_EqFby:
-    forall x i ck v0 le,
-      ~ Is_defined_in_eq x (EqFby i ck v0 le) -> x <> i.
+    forall x i ck v0 le r,
+      ~ Is_defined_in_eq x (EqFby i ck v0 le r) -> x <> i.
   Proof.
-    intros x i ck v0 le H0 xeqi.
+    intros x i ck v0 le r H0 xeqi.
     rewrite xeqi in H0.
-    assert (Is_defined_in_eq i (EqFby i ck v0 le)) by auto.
+    assert (Is_defined_in_eq i (EqFby i ck v0 le r)) by auto.
     contradiction.
   Qed.
 
@@ -142,8 +142,8 @@ Module Type ISDEFINED
   Qed.
 
   Lemma In_EqFby_Is_defined_in:
-    forall x ck c0 e eqs,
-      In (EqFby x ck c0 e) eqs ->
+    forall x ck c0 e r eqs,
+      In (EqFby x ck c0 e r) eqs ->
       Is_defined_in x eqs.
   Proof.
     induction eqs; inversion_clear 1; subst.
@@ -157,7 +157,7 @@ Module Type ISDEFINED
     match eq with
     | EqDef x _ _   => PS.add x defs
     | EqApp xs _ _ _ _ => ps_adds xs defs
-    | EqFby x _ _ _ => PS.add x defs
+    | EqFby x _ _ _ _ => PS.add x defs
     end.
 
   Definition defined (eqs: list equation) : PS.t :=

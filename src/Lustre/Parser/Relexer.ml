@@ -48,6 +48,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | OR l         -> (LustreParser2.OR         l, l)
   | PLUS l       -> (LustreParser2.PLUS       l, l)
   | RARROW l     -> (LustreParser2.RARROW     l, l)
+  | RESET l      -> (LustreParser2.RESET      l, l)
   | RESTART l    -> (LustreParser2.RESTART    l, l)
   | RETURNS l    -> (LustreParser2.RETURNS    l, l)
   | RPAREN l     -> (LustreParser2.RPAREN     l, l)

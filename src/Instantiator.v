@@ -47,8 +47,8 @@ From Velus Require Import StcToObc.Correctness.
 From Velus Require Import StcToObc.Stc2ObcInvariants.
 From Velus Require Import StcToObc.Stc2ObcTyping.
 
-Module Stc2Obc     := TranslationFun     Ids Op OpAux CE.Syn Stc.Syn Obc.Syn.
-Module MemCorres   := StcMemoryCorresFun Ids Op       CE.Syn Stc.Syn Stc.Last.
+Module Stc2Obc     := TranslationFun     Ids Op OpAux      CE.Syn Stc.Syn Obc.Syn.
+Module MemCorres   := StcMemoryCorresFun Ids Op OpAux IStr CE.Syn Stc.Syn Stc.Reset Stc.Next.
 Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux IStr CE Stc Obc Stc2Obc MemCorres.
 
 Module Stc2ObcInvariants := Stc2ObcInvariantsFun Ids Op OpAux IStr CE Stc Obc Stc2Obc.

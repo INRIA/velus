@@ -10,8 +10,6 @@ From Velus Require Import Transcription.Tr.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import NLustre.NLOrdered.
 
-From Velus Require Import CoindStreams IndexedStreams.
-
 From Coq Require Import String.
 
 From Coq Require Import List.
@@ -53,8 +51,8 @@ Module Type TRORDERED
     inversion_clear Hord as [ ? ? Hord' |].
     - econstructor.
       destruct eq' as [| i ck x le |]; inv Hord'.
-      destruct a as [ xs [|]]. inv Hteq. cases.
-      destruct l0; [ idtac | inv Hteq; cases ].
+      destruct a as [ xs [|]]. inv Hteq.
+      destruct l1; [ idtac | inv Hteq; cases ].
       destruct e; inv Hteq; cases; monadInv H0;
         econstructor; apply Lord.INEapp2.
     - apply Exists_cons_tl. eapply IHl; eauto.
