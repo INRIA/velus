@@ -12,30 +12,41 @@ From Coq Require Import Morphisms.
 Module Type CETYPING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import Syn  : CESYNTAX Op).
+       (Import OpAux: OPERATORS_AUX Ids Op)
+       (Import Cks  : CLOCKS        Ids Op OpAux)
+       (Import Syn  : CESYNTAX      Ids Op OpAux Cks).
 
   (** ** Clocks *)
 
   Section WellTyped.
 
-    Variable vars : list (ident * type).
+    Variable enums : list (ident * nat).
+    Variable Γ : list (ident * type).
 
     Inductive wt_clock : clock -> Prop :=
     | wt_Cbase:
         wt_clock Cbase
-    | wt_Con: forall ck x b,
-        In (x, bool_type) vars ->
+    | wt_Con: forall ck x tn c,
+        In (x, Tenum tn) Γ ->
+        In tn enums ->
+        c < snd tn ->
         wt_clock ck ->
-        wt_clock (Con ck x b).
+        wt_clock (Con ck x (Tenum tn, c)).
 
     Inductive wt_exp : exp -> Prop :=
     | wt_Econst: forall c,
         wt_exp (Econst c)
+    | wt_Eenum: forall x tn,
+        In tn enums ->
+        x < snd tn ->
+        wt_exp (Eenum x (Tenum tn))
     | wt_Evar: forall x ty,
-        In (x, ty) vars ->
+        In (x, ty) Γ ->
         wt_exp (Evar x ty)
-    | wt_Ewhen: forall e x b,
-        In (x, bool_type) vars ->
+    | wt_Ewhen: forall e x b tn,
+        In (x, Tenum tn) Γ ->
+        In tn enums ->
+        b < snd tn ->
         wt_exp e ->
         wt_exp (Ewhen e x b)
     | wt_Eunop: forall op e ty,
@@ -48,27 +59,22 @@ Module Type CETYPING
         wt_exp e2 ->
         wt_exp (Ebinop op e1 e2 ty).
 
-    Fixpoint typeofc (ce: cexp): type :=
-      match ce with
-      | Emerge x t f => typeofc t
-      | Eite e t f   => typeofc t
-      | Eexp e       => typeof e
-      end.
-
     Inductive wt_cexp : cexp -> Prop :=
-    | wt_Emerge: forall x t f,
-        In (x, bool_type) vars ->
-        typeofc t = typeofc f ->
-        wt_cexp t ->
-        wt_cexp f ->
-        wt_cexp (Emerge x t f)
-    | wt_Eite: forall e t f,
-        typeof e = bool_type ->
+    | wt_Emerge: forall x l ty tn,
+        In (x, Tenum tn) Γ ->
+        In tn enums ->
+        snd tn = length l ->
+        Forall (fun e => typeofc e = ty) l ->
+        Forall wt_cexp l ->
+        wt_cexp (Emerge (x, Tenum tn) l ty)
+    | wt_Ecase: forall e l ty tn,
         wt_exp e ->
-        wt_cexp t ->
-        wt_cexp f ->
-        typeofc t = typeofc f ->
-        wt_cexp (Eite e t f)
+        typeof e = Tenum tn ->
+        In tn enums ->
+        snd tn = length l ->
+        Forall (fun e => typeofc e = ty) l ->
+        Forall wt_cexp l ->
+        wt_cexp (Ecase e l ty)
     | wt_Eexp: forall e,
         wt_exp e ->
         wt_cexp (Eexp e).
@@ -78,61 +84,126 @@ Module Type CETYPING
   Hint Constructors wt_clock wt_exp wt_cexp.
 
   Lemma wt_clock_add:
-    forall x v env ck,
-      ~InMembers x env ->
-      wt_clock env ck ->
-      wt_clock ((x, v) :: env) ck.
+    forall x v enums Γ ck,
+      ~InMembers x Γ ->
+      wt_clock enums Γ ck ->
+      wt_clock enums ((x, v) :: Γ) ck.
   Proof.
     induction ck; auto.
     inversion 2.
-    auto with datatypes.
+    eauto with datatypes.
   Qed.
 
   Instance wt_clock_Proper:
-    Proper (@Permutation.Permutation (ident * type) ==> @eq clock ==> iff)
+    Proper (@Permutation.Permutation (ident * nat) ==>
+            @Permutation.Permutation (ident * type) ==>
+            @eq clock ==> iff)
            wt_clock.
   Proof.
-    intros env' env Henv ck' ck Hck.
+    intros enums' enums Henums env' env Henv ck' ck Hck.
     rewrite Hck; clear Hck ck'.
     induction ck.
     - split; auto.
     - destruct IHck.
-      split; inversion_clear 1; constructor;
+      split; inversion_clear 1; econstructor;
         try rewrite Henv in *;
-        auto.
+        try rewrite Henums in *;
+        eauto.
   Qed.
 
   Instance wt_exp_Proper:
-    Proper (@Permutation.Permutation (ident * type) ==> @eq exp ==> iff)
+    Proper (@Permutation.Permutation (ident * nat) ==>
+            @Permutation.Permutation (ident * type) ==>
+            @eq exp ==> iff)
            wt_exp.
   Proof.
-    intros env' env Henv e' e He.
+    intros enums' enums Henums env' env Henv e' e He.
     rewrite He; clear He.
     induction e; try destruct IHe;
       try destruct IHe1, IHe2;
       split; auto;
         inversion_clear 1;
-        (rewrite Henv in * || rewrite <-Henv in * || idtac);
-        auto.
+        ((rewrite Henv in *; try rewrite Henums in *)
+        || (rewrite <-Henv in *; try rewrite <-Henums in *) || idtac);
+         eauto.
+          - econstructor; eauto.
+            now rewrite <-Henums.
+          - econstructor; eauto.
+            now rewrite Henums.
   Qed.
 
   Instance wt_exp_pointwise_Proper:
-    Proper (@Permutation.Permutation (ident * type)
-                                     ==> pointwise_relation exp iff) wt_exp.
+    Proper (@Permutation.Permutation (ident * nat) ==>
+            @Permutation.Permutation (ident * type) ==>
+            pointwise_relation exp iff)
+           wt_exp.
   Proof.
-    intros env' env Henv e.
-    now rewrite Henv.
+    intros enums' enums Henums env' env Henv e.
+    now rewrite Henv, Henums.
   Qed.
 
   Instance wt_cexp_Proper:
-    Proper (@Permutation.Permutation (ident * type) ==> @eq cexp ==> iff)
+    Proper (@Permutation.Permutation (ident * nat) ==>
+            @Permutation.Permutation (ident * type) ==>
+            @eq cexp ==> iff)
            wt_cexp.
   Proof.
-    intros env' env Henv e' e He.
+    intros enums' enums Henums env' env Henv e' e He.
     rewrite He; clear He.
-    induction e; try destruct IHe1, IHe2;
-      split; inversion_clear 1; try rewrite Henv in *;
-        constructor; auto; now rewrite Henv in *.
+    induction e using cexp_ind2; try destruct IHe1, IHe2;
+      split; inversion_clear 1; try rewrite Henv in *; try rewrite Henums in *;
+        econstructor; eauto; try rewrite Henv in *; try rewrite Henums in *; eauto.
+    - apply Forall_forall; intros * Hin.
+      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      apply it; auto.
+    - apply Forall_forall; intros * Hin.
+      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      apply it; auto.
+    - apply Forall_forall; intros * Hin.
+      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      apply it; auto.
+    - apply Forall_forall; intros * Hin.
+      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      apply it; auto.
+  Qed.
+
+  Lemma wt_clock_enums_cons:
+    forall enums e Γ ck,
+      wt_clock enums Γ ck ->
+      wt_clock (e :: enums) Γ ck.
+  Proof.
+    induction 1; eauto using wt_clock.
+    econstructor; eauto.
+    now right.
+  Qed.
+
+  Lemma wt_exp_enums_cons:
+    forall enums e Γ ex,
+      wt_exp enums Γ ex ->
+      wt_exp (e :: enums) Γ ex.
+  Proof.
+    induction 1; eauto using wt_exp.
+    - constructor; auto.
+      now right.
+    - econstructor; eauto.
+      now right.
+  Qed.
+
+  Lemma wt_cexp_enums_cons:
+    forall enums e Γ ce,
+      wt_cexp enums Γ ce ->
+      wt_cexp (e :: enums) Γ ce.
+  Proof.
+    induction ce using cexp_ind2; intros * WT; inv WT;
+      eauto using wt_cexp, wt_exp_enums_cons.
+    - econstructor; eauto.
+      + now right.
+      + apply Forall_forall; intros.
+        repeat take (Forall _ _) and eapply Forall_forall in it; eauto.
+    - econstructor; eauto using wt_exp_enums_cons.
+      + now right.
+      + apply Forall_forall; intros.
+        repeat take (Forall _ _) and eapply Forall_forall in it; eauto.
   Qed.
 
 End CETYPING.
@@ -140,7 +211,9 @@ End CETYPING.
 Module CETypingFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (Syn  : CESYNTAX Op)
-       <: CETYPING Ids Op Syn.
-  Include CETYPING Ids Op Syn.
+       (OpAux: OPERATORS_AUX Ids Op)
+       (Cks  : CLOCKS        Ids Op OpAux)
+       (Syn  : CESYNTAX      Ids Op OpAux Cks)
+       <: CETYPING Ids Op OpAux Cks Syn.
+  Include CETYPING Ids Op OpAux Cks Syn.
 End CETypingFun.

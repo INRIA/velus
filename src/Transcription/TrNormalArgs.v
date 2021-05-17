@@ -11,43 +11,26 @@ From Velus Require Import Lustre.LCausality.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.Normalization.Normalization.
 
-From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import NLustre.NLSyntax NLustre.NLNormalArgs NLustre.NLOrdered.
+From Velus Require Import CoreExpr.CESyntax CoreExpr.CETyping.
+From Velus Require Import NLustre.NLSyntax NLustre.NLNormalArgs NLustre.NLOrdered NLustre.NLTyping.
 From Velus Require Import Transcription.Tr Transcription.TrOrdered.
 
 Module Type TRNORMALARGS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import LSyn  : LSYNTAX Ids Op)
-       (LOrd         : LORDERED Ids Op LSyn)
-       (Import LCau  : LCAUSALITY Ids Op LSyn)
-       (Import Norm  : NORMALIZATION Ids Op OpAux LSyn LCau)
-       (Import CE    : CESYNTAX Op)
-       (NL           : NLSYNTAX Ids Op CE)
-       (Ord          : NLORDERED Ids Op CE NL)
-       (Import NLNA  : NLNORMALARGS Ids Op CE NL)
-       (Import TR    : TR Ids Op OpAux LSyn CE NL).
-
-  (** *** Some lemmas about order and normal args (very boring) *)
-
-  Module Import TrOrdered := TrOrderedFun Ids Op OpAux LSyn LOrd CE NL Ord TR.
-
-  Lemma normal_args_cons : forall n G,
-      ~Ord.Is_node_in (NL.n_name n) (NL.n_eqs n) ->
-      normal_args_node G n ->
-      normal_args_node (n :: G) n.
-  Proof.
-    unfold normal_args_node.
-    intros * Hnin Hnorm.
-    eapply Forall_impl_In; [|eauto].
-    intros ? Hin Heq.
-    inv Heq; econstructor; eauto.
-    rewrite Ord.find_node_tl; auto.
-    contradict Hnin; subst.
-    apply Exists_exists. eexists; split; eauto.
-    constructor.
-  Qed.
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS Ids Op OpAux)
+       (Import LSyn  : LSYNTAX Ids Op OpAux Cks)
+       (LOrd         : LORDERED Ids Op OpAux Cks LSyn)
+       (Import LCau  : LCAUSALITY Ids Op OpAux Cks LSyn)
+       (Import Norm  : NORMALIZATION Ids Op OpAux Cks LSyn LCau)
+       (Import CE    : CESYNTAX Ids Op OpAux Cks)
+       (CETyp        : CETYPING Ids Op OpAux Cks CE)
+       (NL           : NLSYNTAX Ids Op OpAux Cks CE)
+       (Ord          : NLORDERED Ids Op OpAux Cks CE NL)
+       (Typ          : NLTYPING Ids Op OpAux Cks CE NL Ord CETyp)
+       (Import NLNA  : NLNORMALARGS Ids Op OpAux Cks CE CETyp NL Ord Typ)
+       (Import TR    : TR Ids Op OpAux Cks LSyn CE NL).
 
   (** *** The actual result *)
 
@@ -73,8 +56,8 @@ Module Type TRNORMALARGS
     eapply to_lexp_noops_exp; eauto.
   Qed.
 
-  Lemma to_equation_normal_args : forall G G' Hprefs to_cut env envo eq eq',
-    to_global G Hprefs = OK G' ->
+  Lemma to_equation_normal_args : forall G G' to_cut env envo eq eq',
+    to_global G = OK G' ->
     normalized_equation G to_cut eq ->
     to_equation env envo eq = OK eq' ->
     normal_args_eq G' eq'.
@@ -83,7 +66,7 @@ Module Type TRNORMALARGS
     inv Hnormed; simpl in *.
     - (* app *)
       destruct (vars_of _); monadInv Htoeq.
-      eapply find_node_global in H0 as (n'&?&Hfind'&Htonode); eauto.
+      eapply find_node_global in H0 as (n'&Hfind'&Htonode); eauto.
       econstructor; eauto.
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
@@ -92,13 +75,13 @@ Module Type TRNORMALARGS
       constructor.
     - (* cexp *)
       inv H. 3:inv H0.
-      1-7:monadInv Htoeq; constructor.
+      1-8:monadInv Htoeq; constructor.
   Qed.
 
-  Lemma to_node_normal_args : forall G G' n n' Hprefs Hpref,
-    to_global G Hprefs = OK G' ->
+  Lemma to_node_normal_args : forall G G' n n',
+    to_global G = OK G' ->
     normalized_node G n ->
-    to_node n Hpref = OK n' ->
+    to_node n = OK n' ->
     normal_args_node G' n'.
   Proof.
     unfold normal_args_node, to_node.
@@ -112,38 +95,39 @@ Module Type TRNORMALARGS
     eapply to_equation_normal_args; eauto.
   Qed.
 
-  Theorem to_global_normal_args : forall G G' Hprefs,
-      LOrd.Ordered_nodes G ->
+  Theorem to_global_normal_args : forall G G',
       normalized_global G ->
-      to_global G Hprefs = OK G' ->
+      to_global G = OK G' ->
       normal_args G'.
   Proof.
-    unfold to_global.
-    induction G; intros G' Hprefs Hord Hnormed Htog; inv Hord; inv Hnormed; simpl in *;
-      monadInv Htog; constructor; auto.
-    apply normal_args_cons; auto.
-    - eapply ninin_l_nl; eauto.
-      erewrite <- to_node_name; eauto.
-      intro contra. apply H2 in contra as (?&?); congruence.
-    - eapply to_node_normal_args in EQ; eauto.
-    - eapply IHG; eauto.
+    intros (?&nds) ? Hnormed Htog. monadInv Htog.
+    revert dependent x.
+    induction nds; intros * Htog; monadInv Htog; inv Hnormed;
+      constructor; simpl; auto.
+    - destruct H1.
+      eapply to_node_normal_args; eauto.
+      unfold to_global; simpl. rewrite EQ1; auto.
+    - eapply IHnds; eauto.
   Qed.
 
 End TRNORMALARGS.
 
 Module TrNormalArgsFun
-       (Ids : IDS)
-       (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (LSyn : LSYNTAX Ids Op)
-       (LOrd : LORDERED Ids Op LSyn)
-       (LCau  : LCAUSALITY Ids Op LSyn)
-       (Norm  : NORMALIZATION Ids Op OpAux LSyn LCau)
-       (CE : CESYNTAX Op)
-       (NL : NLSYNTAX Ids Op CE)
-       (Ord : NLORDERED Ids Op CE NL)
-       (NLNA : NLNORMALARGS Ids Op CE NL)
-       (TR : TR Ids Op OpAux LSyn CE NL)
-       <: TRNORMALARGS Ids Op OpAux LSyn LOrd LCau Norm CE NL Ord NLNA TR.
-  Include TRNORMALARGS Ids Op OpAux LSyn LOrd LCau Norm CE NL Ord NLNA TR.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS Ids Op OpAux)
+       (LSyn  : LSYNTAX Ids Op OpAux Cks)
+       (LOrd  : LORDERED Ids Op OpAux Cks LSyn)
+       (LCau  : LCAUSALITY Ids Op OpAux Cks LSyn)
+       (Norm  : NORMALIZATION Ids Op OpAux Cks LSyn LCau)
+       (CE    : CESYNTAX Ids Op OpAux Cks)
+       (CETyp : CETYPING Ids Op OpAux Cks CE)
+       (NL    : NLSYNTAX Ids Op OpAux Cks CE)
+       (Ord   : NLORDERED Ids Op OpAux Cks CE NL)
+       (Typ   : NLTYPING Ids Op OpAux Cks CE NL Ord CETyp)
+       (NLNA  : NLNORMALARGS Ids Op OpAux Cks CE CETyp NL Ord Typ)
+       (TR    : TR Ids Op OpAux Cks LSyn CE NL)
+       <: TRNORMALARGS Ids Op OpAux Cks LSyn LOrd LCau Norm CE CETyp NL Ord Typ NLNA TR.
+  Include TRNORMALARGS Ids Op OpAux Cks LSyn LOrd LCau Norm CE CETyp NL Ord Typ NLNA TR.
 End TrNormalArgsFun.

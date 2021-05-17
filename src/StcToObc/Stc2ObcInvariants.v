@@ -6,6 +6,7 @@ From Velus Require Import Obc.
 From Velus Require Import StcToObc.Translation.
 
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -14,12 +15,14 @@ Open Scope list_scope.
 Module Type STC2OBCINVARIANTS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Str)
-       (Import Stc   : STC         Ids Op OpAux Str CE)
-       (Import Obc   : OBC         Ids Op OpAux)
-       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Import Cks   : CLOCKS          Ids Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CE    : COREEXPR    Ids Op OpAux ComTyp Cks Str)
+       (Import Stc   : STC         Ids Op OpAux ComTyp Cks Str CE)
+       (Import Obc   : OBC         Ids Op OpAux ComTyp)
+       (Import Trans : TRANSLATION Ids Op OpAux        Cks CE.Syn Stc.Syn Obc.Syn).
 
   (** ** Show that the Obc code that results from translating a Stc
          program satisfies the [Fusible] invariant, and thus that fusion
@@ -29,7 +32,14 @@ Module Type STC2OBCINVARIANTS
     forall x mems e y,
       x <> y -> ~ Can_write_in y (translate_cexp mems x e).
   Proof.
-    induction e; intros ?? Hcw; inv Hcw; intuition eauto.
+    induction e using cexp_ind2; intros ?? Hcw; inv Hcw; intuition eauto.
+    - take (Exists _ _) and apply Exists_exists in it as (?&Hin&Write).
+      apply in_map_iff in Hin as (?&?&Hin); subst.
+      eapply Forall_forall in Hin; eauto; simpl in *; eauto.
+    - take (Exists _ _) and apply Exists_exists in it as (?&Hin&Write).
+      apply in_map_iff in Hin as (oe &?&Hin); subst.
+      eapply Forall_forall in Hin; eauto; simpl in *.
+      eapply Hin; eauto.
   Qed.
 
   Lemma Is_free_in_tovar:
@@ -47,6 +57,7 @@ Module Type STC2OBCINVARIANTS
   Proof.
     induction e; simpl; intro H; auto.
     - inversion H.
+    - inversion H.
     - now apply Is_free_in_tovar in H; subst.
     - constructor; inversion H; auto.
     - constructor; inversion_clear H as [| | |????? [?|?]|]; subst;
@@ -59,21 +70,29 @@ Module Type STC2OBCINVARIANTS
       Fusible (translate_cexp mems x e).
   Proof.
     intros * Hfree.
-    induction e; eauto using Fusible.
-    - simpl; constructor;
-        [apply IHe1; now auto|apply IHe2; now auto|].
-      intros * Hfree'; split;
-        apply not_Can_write_in_translate_cexp;
-        apply Is_free_in_tovar in Hfree';
-        intro; subst;
-          apply Hfree; constructor.
-    - simpl; constructor;
-        [apply IHe1; now auto|apply IHe2; now auto|].
-      intros * Hfree'; split;
-        apply not_Can_write_in_translate_cexp;
-        apply Is_free_translate_exp in Hfree';
-        intro; subst;
-          apply Hfree; constructor; auto.
+    induction e using cexp_ind2; eauto using Fusible.
+    - destruct x0.
+      simpl; constructor.
+      + apply Forall_map, Forall_forall; intros * Hin.
+        pose proof Hin; eapply Forall_forall in Hin; eauto; simpl in *.
+        apply Hin; intro; apply Hfree.
+        constructor.
+        apply Exists_exists; eauto.
+      + intros * Hfree'; apply Forall_map, Forall_forall; intros * Hin.
+        apply not_Can_write_in_translate_cexp.
+        apply Is_free_in_tovar in Hfree'.
+        intro; subst; apply Hfree; constructor.
+    - simpl; constructor.
+      + apply Forall_map, Forall_forall; intros oe Hin.
+        pose proof Hin; eapply Forall_forall in Hin; eauto; simpl in *.
+        destruct oe; simpl in *;
+          apply Hin; intro; apply Hfree;
+            apply FreeEcase_branches;
+            apply Exists_exists; eauto.
+      + intros * Hfree'; apply Forall_map, Forall_forall; intros * Hin.
+        apply not_Can_write_in_translate_cexp.
+        apply Is_free_translate_exp in Hfree'.
+        intro; subst; apply Hfree; constructor; auto.
   Qed.
 
   Lemma Fusible_Control:
@@ -87,22 +106,28 @@ Module Type STC2OBCINVARIANTS
     cases; apply IH.
     - intros j Hfree Hcw.
       apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
-      inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
-        [assumption|inversion Hskip].
-    - repeat constructor; [assumption| |now inversion 1].
-      apply Hxni.
-      rename H into Hfree.
-      unfold bool_var, tovar in *.
-      cases; inversion Hfree; subst; eauto.
+      inversion_clear Hcw as [| | | | |]; auto.
+      take (Exists _ _) and apply Exists_exists in it as (os & Hin & Cw).
+      destruct os; simpl in *; try now inv Cw.
+      apply skip_branches_with_In_det in Hin; subst; auto.
+    - constructor.
+      + apply Forall_forall; intros [|] Hin; simpl; auto using Fusible.
+        apply skip_branches_with_In_det in Hin; subst; auto.
+      + intros * Hfree; apply Forall_forall; intros [|] Hin; simpl; try now inversion 1.
+        apply skip_branches_with_In_det in Hin; subst.
+        inv Hfree; auto.
     - intros j Hfree Hcw.
       apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
-      inversion_clear Hcw as [| |? ? ? ? Hskip| | | | ];
-        [inversion Hskip|assumption].
-    - repeat constructor; [assumption|now inversion 1|].
-      apply Hxni.
-      rename H into Hfree.
-      unfold bool_var, tovar in *.
-      cases; inversion Hfree; subst; eauto.
+      inversion_clear Hcw as [| | | | |]; auto.
+      take (Exists _ _) and apply Exists_exists in it as (os & Hin & Cw).
+      destruct os; simpl in *; try now inv Cw.
+      apply skip_branches_with_In_det in Hin; subst; auto.
+    - constructor.
+      + apply Forall_forall; intros [|] Hin; simpl; auto using Fusible.
+        apply skip_branches_with_In_det in Hin; subst; auto.
+      + intros * Hfree; apply Forall_forall; intros [|] Hin; simpl; try now inversion 1.
+        apply skip_branches_with_In_det in Hin; subst.
+        inv Hfree; auto.
   Qed.
 
   Lemma translate_tcs_Fusible:
@@ -122,23 +147,23 @@ Module Type STC2OBCINVARIANTS
       by (simpl in Vars; rewrite Permutation.Permutation_app_comm in Vars;
           apply NoDup_app_weaken in Vars; auto).
     inversion_clear Hwks as [|?? Hwktc];
-      inversion_clear Hwsch as [|??? HH HN].
+      inversion_clear Hwsch as [|?? (HH&HN&_)].
     unfold translate_tcs.
     simpl; apply Fusible_fold_left_shift.
     split.
     - apply IH; auto.
-      + intros x Hin; apply Hnvi in Hin.
+      + intros * Hin; apply Hnvi in Hin.
         intro; apply Hin; right; auto.
-      + intros x Hin; apply Hnin in Hin.
+      + intros * Hin; apply Hnin in Hin.
         intro; apply Hin; right; auto.
     - clear IH.
       repeat constructor.
-      destruct tc as [x ck e|x ckr c0|x ck|x ck v0|s xs ck ? f es]; simpl.
-      + assert (~PS.In x mems) as Hnxm
+      destruct tc as [y ck e|y ckr c0|y ck|y ck v0|s xs ck ? f es]; simpl.
+      + assert (~PS.In y mems) as Hnxm
             by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-        assert (forall i, Is_free_in_caexp i ck e -> x <> i) as Hfni.
+        assert (forall i, Is_free_in_caexp i ck e -> y <> i) as Hfni.
         { intros i Hfree.
-          assert (Hfree': Is_free_in_tc i (TcDef x ck e)) by auto.
+          assert (Hfree': Is_free_in_tc i (TcDef y ck e)) by auto.
           eapply HH in Hfree'.
           intro; subst.
           apply PSE.MP.Dec.F.not_mem_iff in Hnxm; rewrite Hnxm in Hfree'.
@@ -153,19 +178,22 @@ Module Type STC2OBCINVARIANTS
           eapply Hfni; auto.
         * apply Fusible_translate_cexp.
           intro; eapply Hfni; eauto.
+      + destruct c; apply Fusible_Control; auto.
+        * intros x' Hfree CanWrite. inv CanWrite.
+          specialize (HN _ _ (ResetTcReset _ _ _ _)) as (HN&_).
+          apply HN; left; auto.
+        * intros x' Hfree CanWrite. inv CanWrite.
+          specialize (HN _ _ (ResetTcReset _ _ _ _)) as (HN&_).
+          apply HN; left; auto.
       + apply Fusible_Control; auto.
-        intros x' Hfree CanWrite. inv CanWrite.
-        specialize (HN _ _ (ResetTcReset _ _ _)) as (HN&_).
-        apply HN; left; auto.
-      + apply Fusible_Control; auto.
-        assert (~Is_free_in_clock x ck) as Hnfree
+        assert (~Is_free_in_clock y ck) as Hnfree
             by (eapply wc_TcNext_not_Is_free_in_clock; eauto).
         inversion 2; subst;  contradiction.
       + apply Fusible_Control; auto.
         inversion 2; contradiction.
       + apply Fusible_Control; auto.
-        intros ?? Hwrite.
-        assert (In x xs) by now inv Hwrite.
+        intros y ? Hwrite.
+        assert (In y xs) by now inv Hwrite.
         now eapply wc_TcStep_not_Is_free_in_clock; eauto.
   Qed.
 
@@ -197,8 +225,8 @@ Module Type STC2OBCINVARIANTS
       ~ Is_variable_in x (s_tcs s).
   Proof.
     intros * Hreset Hvar.
-    assert (In x (nexts_of (s_tcs s))) as Hreset' by (eapply nexts_of_In; eauto).
-    rewrite <-s_nexts_in_tcs in Hreset'.
+    assert (In x (map fst (nexts_of (s_tcs s)))) as Hreset' by (eapply nexts_of_In; eauto).
+    rewrite <-s_nexts_in_tcs, mems_of_nexts_fst in Hreset'.
     rewrite Is_variable_in_variables, <-s_vars_out_in_tcs in Hvar.
     pose proof (s_nodup s) as Nodup.
     repeat rewrite app_assoc in *.
@@ -206,28 +234,26 @@ Module Type STC2OBCINVARIANTS
     repeat rewrite in_app_iff in *. destruct Hvar; auto.
   Qed.
 
-  Theorem ClassFusible_translate:
+  Theorem ProgramFusible_translate:
     forall P,
       wc_program P ->
       Well_scheduled P ->
-      Forall ClassFusible (translate P).
+      ProgramFusible (translate P).
   Proof.
-    induction P as [|s]; intros * WC Wsch;
-      inversion_clear WC as [|??? WCb];
+    intros (?&P); induction P as [|s]; intros * WC Wsch;
+      inversion_clear WC as [|?? (?&?&?& WCb)];
       inversion_clear Wsch as [|??? Wsch'];
-      simpl; constructor; auto.
-    unfold translate_system, ClassFusible; simpl.
+      simpl; constructor; auto; try now apply IHP.
+    unfold ClassFusible; simpl.
     repeat constructor; simpl; auto.
-    inversion_clear WCb as [? (?&?&?)].
-    assert (NoDup (variables (s_tcs s))) by apply s_nodup_variables.
+    assert (NoDup (defined (s_tcs s))) by apply s_nodup_defined.
     eapply translate_tcs_Fusible; eauto.
     - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
       rewrite 2 map_app, <-2 app_assoc.
       apply s_nodup.
-    - intros * Hin.
-      rewrite ps_from_list_In, s_nexts_in_tcs in Hin; auto.
-      eapply nexts_of_In in Hin.
-      eapply Is_next_in_not_Is_variable_in; eauto.
+    - apply s_nodup_variables.
+    - intros; eapply Is_next_in_not_Is_variable_in; eauto.
+      rewrite nexts_of_In, <-ps_from_list_In, <-s_nexts_in_tcs, mems_of_nexts_fst; auto.
     - intros; apply s_ins_not_var, fst_InMembers; auto.
   Qed.
 
@@ -235,93 +261,140 @@ Module Type STC2OBCINVARIANTS
 
   Lemma Can_write_in_Control:
     forall mems ck s x,
+      Can_write_in x (Control mems ck s) -> Can_write_in x s.
+  Proof.
+    induction ck; simpl; auto.
+    destruct p, t as [|(?&?)].
+    - inversion 1.
+    - intros * Cw; apply IHck in Cw; inv Cw.
+      take (Exists _ _) and apply Exists_exists in it as ([|] & Hin & Cw);
+        simpl in *; try now inv Cw.
+      apply skip_branches_with_In_det in Hin; subst; auto.
+  Qed.
+
+  Corollary Can_write_in_Control':
+    forall mems ck s x enums Γ,
+      wt_clock enums Γ ck ->
       Can_write_in x (Control mems ck s) <-> Can_write_in x s.
   Proof.
-    induction ck; simpl; try reflexivity.
-    destruct b; setoid_rewrite IHck; split; auto;
-      inversion_clear 1; auto;
-        match goal with H:Can_write_in _ Skip |- _ => inv H end.
+    intros * WT; split; eauto using Can_write_in_Control.
+    revert s; induction ck; simpl; auto; inv WT.
+    destruct tn; intros * Cw; apply IHck; auto.
+    constructor.
+    apply Exists_exists.
+    take (_ < _) and eapply skip_branches_with_In in it; eauto.
   Qed.
 
   Lemma Can_write_in_var_Control:
     forall mems ck s x,
+      Can_write_in_var x (Control mems ck s) -> Can_write_in_var x s.
+  Proof.
+    induction ck; simpl; auto.
+    destruct p, t as [|(?&?)].
+    - inversion 1.
+    - intros * Cw; apply IHck in Cw; inv Cw.
+      take (Exists _ _) and apply Exists_exists in it as ([|] & Hin & Cw);
+        simpl in *; try now inv Cw.
+      apply skip_branches_with_In_det in Hin; subst; auto.
+  Qed.
+
+  Corollary Can_write_in_var_Control':
+    forall mems ck s x enums Γ,
+      wt_clock enums Γ ck ->
       Can_write_in_var x (Control mems ck s) <-> Can_write_in_var x s.
   Proof.
-    induction ck; simpl; try reflexivity.
-    destruct b; setoid_rewrite IHck; split; auto;
-      inversion_clear 1; auto;
-        match goal with H:Can_write_in_var _ Skip |- _ => inv H end.
+    intros * WT; split; eauto using Can_write_in_var_Control.
+    revert s; induction ck; simpl; auto; inv WT.
+    destruct tn; intros * Cw; apply IHck; auto.
+    constructor.
+    apply Exists_exists.
+    take (_ < _) and eapply skip_branches_with_In in it; eauto.
   Qed.
 
   Lemma No_Overwrites_Control:
-    forall mems ck s,
+    forall mems ck s enums Γ,
+      wt_clock enums Γ ck ->
       No_Overwrites (Control mems ck s) <-> No_Overwrites s.
   Proof.
-    induction ck; simpl; try reflexivity.
-    destruct b; setoid_rewrite IHck; split; auto;
-      inversion_clear 1; auto.
+    induction ck; simpl; try reflexivity; inversion_clear 1.
+    destruct tn; setoid_rewrite IHck; eauto; split; simpl in *.
+    - inversion_clear 1; auto.
+      take (_ < _) and eapply skip_branches_with_In in it; eauto.
+      eapply Forall_forall in it; eauto; auto.
+    - constructor.
+      apply Forall_forall; intros [|] Hin; simpl; auto using No_Overwrites.
+      apply skip_branches_with_In_det in Hin; subst; auto.
   Qed.
 
   Lemma Can_write_in_translate_cexp:
     forall mems e x y,
-      Can_write_in x (translate_cexp mems y e) <-> x = y.
+      Can_write_in x (translate_cexp mems y e) -> x = y.
   Proof.
-    induction e; simpl;
-      try setoid_rewrite Can_write_in_Ifte;
-      try setoid_rewrite IHe1;
-      try setoid_rewrite IHe2.
-    now intuition. now intuition.
-    split. now inversion_clear 1.
-    now intro; subst; auto.
+    induction e using cexp_ind2; simpl;
+      try setoid_rewrite Can_write_in_Switch;
+      try setoid_rewrite Exists_exists.
+    - intros * (os & Hin & Cw).
+      apply in_map_iff in Hin as (?&?& Hin); subst; simpl in *.
+      eapply Forall_forall in Hin; eauto; simpl in *; auto.
+    - intros * (os & Hin & Cw).
+      apply in_map_iff in Hin as (oe &?& Hin); subst; simpl in *.
+      eapply Forall_forall in Hin; eauto; destruct oe; simpl in *; auto.
+    - now inversion_clear 1.
   Qed.
 
   Lemma Can_write_in_var_translate_cexp:
     forall mems e x y,
-      Can_write_in_var x (translate_cexp mems y e) <-> x = y.
+      Can_write_in_var x (translate_cexp mems y e) -> x = y.
   Proof.
-    induction e; simpl;
-      try setoid_rewrite Can_write_in_var_Ifte;
-      try setoid_rewrite IHe1;
-      try setoid_rewrite IHe2.
-    now intuition. now intuition.
-    split. now inversion_clear 1.
-    now intro; subst; auto.
+    induction e using cexp_ind2; simpl;
+      try setoid_rewrite Can_write_in_var_Switch;
+      try setoid_rewrite Exists_exists.
+    - intros * (os & Hin & Cw).
+      apply in_map_iff in Hin as (?&?& Hin); subst; simpl in *.
+      eapply Forall_forall in Hin; eauto; simpl in *; auto.
+    - intros * (os & Hin & Cw).
+      apply in_map_iff in Hin as (oe &?& Hin); subst; simpl in *.
+      eapply Forall_forall in Hin; eauto; destruct oe; simpl in *; auto.
+    - now inversion_clear 1.
   Qed.
 
   Lemma No_Overwrites_translate_cexp:
     forall mems x e,
       No_Overwrites (translate_cexp mems x e).
   Proof.
-    induction e; simpl; auto.
+    induction e using cexp_ind2; simpl; auto;
+      constructor; apply Forall_map, Forall_forall; simpl; intros oe Hin;
+        eapply Forall_forall in Hin; eauto; destruct oe; simpl in *; auto.
   Qed.
 
   Lemma Can_write_in_var_translate_tc_Is_variable_in_tc:
     forall mems clkvars tc x,
-      Can_write_in_var x (translate_tc mems clkvars tc) <-> Is_variable_in_tc x tc.
+      Can_write_in_var x (translate_tc mems clkvars tc) -> Is_variable_in_tc x tc.
   Proof.
-    destruct tc; simpl; split; intros * HH;
-      try destruct o as [(?&?)|];
-      try rewrite Can_write_in_var_Control in *;
-      try rewrite Can_write_in_var_translate_cexp in *;
-      subst; try inversion_clear HH; auto using Is_variable_in_tc.
+    destruct tc; simpl; intros * Cw;
+      try destruct c0;
+      apply Can_write_in_var_Control in Cw;
+      try apply Can_write_in_var_translate_cexp in Cw; inv Cw;
+        auto using Is_variable_in_tc.
     contradiction.
   Qed.
 
   Lemma Can_write_in_var_translate_tcs_Is_variable_in:
     forall mems clkvars tcs x,
-      Can_write_in_var x (translate_tcs mems clkvars tcs) <-> Is_variable_in x tcs.
+      Can_write_in_var x (translate_tcs mems clkvars tcs) -> Is_variable_in x tcs.
   Proof.
     unfold translate_tcs.
     intros mems clkvars tcs x.
-    match goal with |- ?P <-> ?Q => cut (P <-> (Q \/ Can_write_in_var x Skip)) end.
-    now intros HH; setoid_rewrite HH; split; auto; intros [|H]; [intuition|inv H].
+    match goal with |- ?P -> ?Q => cut (P -> (Q \/ Can_write_in_var x Skip)) end;
+      [intros HH Cw; apply HH in Cw as [|Cw]; auto; inv Cw|].
     generalize Skip.
-    induction tcs as [|tc tcs IH]; simpl; intros s.
-    now split; intro HH; auto; destruct HH as [HH|HH]; auto; inv HH.
-    rewrite IH, Can_write_in_var_Comp, Can_write_in_var_translate_tc_Is_variable_in_tc.
-    split.
-    - intros [HH|[HH|HH]]; auto; left; now constructor.
-    - intros [HH|HH]; [inv HH|]; auto.
+    induction tcs as [|tc tcs IH]; simpl; intro s; auto.
+    intros Cw.
+    apply IH in Cw as [|Cw].
+    - now left; right.
+    - apply Can_write_in_var_Comp in Cw as [Cw|]; auto.
+      apply Can_write_in_var_translate_tc_Is_variable_in_tc in Cw.
+      now left; left.
   Qed.
 
   (* Here, we use [Is_well_sch] because it simplifies the inductive proof
@@ -329,13 +402,14 @@ Module Type STC2OBCINVARIANTS
      property that no two trconstrs define the same variable is sufficient. *)
 
   Lemma translate_tcs_No_Overwrites:
-    forall clkvars mems inputs tcs,
+    forall clkvars mems inputs tcs P Γv Γm,
       NoDup (variables tcs) ->
+      Forall (wt_trconstr P Γv Γm) tcs ->
       Is_well_sch inputs mems tcs ->
       No_Overwrites (translate_tcs mems clkvars tcs).
   Proof.
     unfold translate_tcs.
-    intros clkvars mems inputs tcs.
+    intros *.
     pose proof NoOSkip as Hs; revert Hs.
     assert (forall x, Is_variable_in x tcs -> ~Can_write_in_var x Skip) as Hdcw
         by inversion 2; revert Hdcw.
@@ -343,30 +417,33 @@ Module Type STC2OBCINVARIANTS
         by inversion 1; revert Hcwd.
     generalize Skip.
     induction tcs as [|tc tcs IH]; auto.
-    intros s Hcwd Hdcw Hno Nodup Hwsch.
-    inversion_clear Hwsch as [|? ? Hwsch' Hfree Hnext _].
+    intros * Hcwd Hdcw Hno Nodup Wt Hwsch; inv Wt.
+    inversion_clear Hwsch as [|?? (Hfree&Hnext&_) Hwsch'].
     assert (forall x, Is_variable_in_tc x tc -> ~ Is_variable_in x tcs) as Defs
-        by (intro; rewrite Is_variable_in_variables, Is_variable_in_tc_variables;
+        by (intro; rewrite Is_variable_in_variables, Is_variable_in_tc_variables_tc;
             simpl in Nodup; intros; eapply NoDup_app_In in Nodup; eauto).
     simpl. apply IH; auto.
     - setoid_rewrite Can_write_in_var_Comp.
-      setoid_rewrite Can_write_in_var_translate_tc_Is_variable_in_tc.
-      intros x [Hvar|Hcw]; auto.
-      apply Hcwd, not_Is_variable_in_cons in Hcw as (? & ?); auto.
+      intros ? [Hvar|Hcw]; auto.
+      + apply Can_write_in_var_translate_tc_Is_variable_in_tc in Hvar; auto.
+      + apply Hcwd, not_Is_variable_in_cons in Hcw as (? & ?); auto.
     - setoid_rewrite cannot_write_in_var_Comp.
-      setoid_rewrite Can_write_in_var_translate_tc_Is_variable_in_tc.
       intros ? Hdef. split; intro Hcw.
-      + eapply Defs; eauto.
+      + apply Can_write_in_var_translate_tc_Is_variable_in_tc in Hcw.
+        eapply Defs; eauto.
       + apply Hdcw in Hcw; auto. now constructor 2.
     - constructor; auto.
-      + setoid_rewrite Can_write_in_var_translate_tc_Is_variable_in_tc.
-        intros x Hdef. apply Hdcw; left; auto.
-      + setoid_rewrite Can_write_in_var_translate_tc_Is_variable_in_tc.
-        intros x Hcw. apply Hcwd, not_Is_variable_in_cons in Hcw as (? & ?); auto.
+      + intros ? Hdef.
+        apply Can_write_in_var_translate_tc_Is_variable_in_tc in Hdef.
+        apply Hdcw; left; auto.
+      + intros ? Hcw Hcw2.
+        apply Can_write_in_var_translate_tc_Is_variable_in_tc in Hcw2.
+        apply Hcwd, not_Is_variable_in_cons in Hcw as (? & ?); auto.
       + destruct tc; simpl;
-          try destruct o as [(?&?)|];
-          try setoid_rewrite No_Overwrites_Control;
-          auto using No_Overwrites_translate_cexp.
+          try destruct v0; inv H1;
+            try (take (wt_const _ _ _) and inv it);
+            try setoid_rewrite No_Overwrites_Control;
+          eauto using No_Overwrites_translate_cexp.
     - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
         apply NoDup_app_weaken in Nodup; auto.
   Qed.
@@ -380,7 +457,7 @@ Module Type STC2OBCINVARIANTS
     revert CWIS; generalize Skip.
     induction subs; simpl; auto.
     intros; apply IHsubs.
-    inversion_clear 1 as [| | | | |??? CWI]; try inv CWI; contradiction.
+    inversion_clear 1 as [| | | |??? CWI]; try inv CWI; contradiction.
   Qed.
 
   Lemma No_Overwrites_reset_inst:
@@ -411,7 +488,7 @@ Module Type STC2OBCINVARIANTS
     - constructor; auto.
       + inversion 2; subst; eapply CWIS; eauto.
       + inversion_clear 1; auto.
-    - inversion_clear 2 as [| | | | | |??? CWI];
+    - inversion_clear 2 as [| | | | |??? CWI];
         try inv CWI; subst; auto.
       eapply CWIS; eauto.
   Qed.
@@ -429,12 +506,15 @@ Module Type STC2OBCINVARIANTS
   Qed.
 
   Lemma translate_system_No_Overwrites:
-    forall b m,
-      Is_well_sch (map fst (s_in b)) (ps_from_list (map fst (s_nexts b))) (s_tcs b) ->
-      In m (translate_system b).(c_methods) ->
+    forall s m P,
+      Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_nexts s))) (s_tcs s) ->
+      Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
+                          (mems_of_nexts s.(s_nexts)))
+             s.(s_tcs) ->
+      In m (translate_system s).(c_methods) ->
       No_Overwrites m.(m_body).
   Proof.
-    intros ??? Hin.
+    intros ????? Hin.
     destruct Hin as [|[|]]; simpl in *; subst; simpl;
       try contradiction.
     - eapply translate_tcs_No_Overwrites; eauto.
@@ -445,11 +525,13 @@ Module Type STC2OBCINVARIANTS
   Corollary translate_No_Overwrites:
     forall P,
       Well_scheduled P ->
+      Stc.Typ.wt_program P ->
       Forall_methods (fun m => No_Overwrites m.(m_body)) (translate P).
   Proof.
-    intros * Wsch; apply Forall_forall; intros * HinP; apply Forall_forall; intros.
+    intros * Wsch WTp; apply Forall_forall; intros * HinP; apply Forall_forall; intros.
     unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
     eapply Forall_forall in Wsch; eauto.
+    eapply Forall'_In in WTp as (?&?&?& [] &?); eauto.
     eapply translate_system_No_Overwrites; eauto.
   Qed.
 
@@ -460,10 +542,10 @@ Module Type STC2OBCINVARIANTS
       Can_write_in x (translate_tc mems clkvars tc) ->
       Is_variable_in_tc x tc \/ (exists ck, Is_reset_in_tc x ck tc) \/ Is_next_in_tc x tc.
   Proof.
-    destruct tc; simpl; intros * HH;
-      try destruct o as [(?&?)|];
-      try rewrite Can_write_in_Control in *;
-      try rewrite Can_write_in_translate_cexp in *;
+    destruct tc; simpl; intros * Cw;
+      try destruct c0;
+      apply Can_write_in_Control in Cw;
+      try apply Can_write_in_translate_cexp in Cw; inv Cw;
       subst; try inversion_clear HH; eauto using Is_variable_in_tc, Is_reset_in_tc, Is_next_in_tc.
     contradiction.
   Qed.
@@ -516,12 +598,14 @@ End STC2OBCINVARIANTS.
 Module Stc2ObcInvariantsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (Str   : INDEXEDSTREAMS  Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Str)
-       (Stc   : STC         Ids Op OpAux Str CE)
-       (Obc   : OBC         Ids Op OpAux)
-       (Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
-  <: STC2OBCINVARIANTS Ids Op OpAux Str CE Stc Obc Trans.
-  Include STC2OBCINVARIANTS Ids Op OpAux Str CE Stc Obc Trans.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Cks   : CLOCKS          Ids Op OpAux)
+       (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CE    : COREEXPR    Ids Op OpAux ComTyp Cks Str)
+       (Stc   : STC         Ids Op OpAux ComTyp Cks Str CE)
+       (Obc   : OBC         Ids Op OpAux ComTyp)
+       (Trans : TRANSLATION Ids Op OpAux        Cks CE.Syn Stc.Syn Obc.Syn)
+  <: STC2OBCINVARIANTS Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans.
+  Include STC2OBCINVARIANTS Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans.
 End Stc2ObcInvariantsFun.

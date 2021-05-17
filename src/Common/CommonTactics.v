@@ -28,6 +28,14 @@ Ltac cases_eqn E :=
            destruct x eqn: E
          end; auto.
 
+Ltac cases_in H :=
+  repeat match type of H with
+         | context [ match negb ?x with _ => _ end ] =>
+           destruct x; simpl; try solve [inv H; auto]
+         | context [ match ?x with _ => _ end ] =>
+           destruct x; try solve [inv H; auto]
+         end; auto.
+
 (* Tactics for manipulating hypotheses without renaming them.
    Lighter-weight (but less expressive) than match goal with.
 

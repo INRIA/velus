@@ -11,8 +11,10 @@ Open Scope list_scope.
 Module Type STCISVARIABLE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS    Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn).
 
   Inductive Is_variable_in_tc: ident -> trconstr -> Prop :=
   | VarTcDef:
@@ -26,7 +28,7 @@ Module Type STCISVARIABLE
   Definition Is_variable_in (x: ident) (tcs: list trconstr) : Prop :=
     Exists (Is_variable_in_tc x) tcs.
 
-  Lemma Is_variable_in_tc_variables:
+  Lemma Is_variable_in_tc_variables_tc:
     forall tc x,
       Is_variable_in_tc x tc <-> In x (variables_tc tc).
   Proof.
@@ -37,35 +39,16 @@ Module Type STCISVARIABLE
     - constructor; auto.
   Qed.
 
-  Lemma Is_variable_in_variables:
+  Corollary Is_variable_in_variables:
     forall tcs x,
       Is_variable_in x tcs <-> In x (variables tcs).
   Proof.
     unfold variables.
-    induction tcs as [|[]]; simpl.
+    induction tcs; simpl.
     - split; try contradiction; inversion 1.
-    - split.
-      + inversion_clear 1 as [?? Var|]; try inv Var; auto.
-        right; apply IHtcs; auto.
-      + intros [E|].
-        * subst; left; constructor.
-        * right; apply IHtcs; auto.
-    - setoid_rewrite <-IHtcs; split.
-      + inversion_clear 1 as [?? Var|]; auto; inv Var.
-      + right; auto.
-    - setoid_rewrite <-IHtcs; split.
-      + inversion_clear 1 as [?? Var|]; auto; inv Var.
-      + right; auto.
-    - setoid_rewrite <-IHtcs; split.
-      + inversion_clear 1 as [?? Var|]; auto; inv Var.
-      + right; auto.
-    - split.
-      + inversion_clear 1 as [?? Var|]; try inv Var.
-        * apply in_app; auto.
-        * apply in_app; right; apply IHtcs; auto.
-      + rewrite in_app; intros [?|?].
-        * left; constructor; auto.
-        * right; apply IHtcs; auto.
+    - intro; setoid_rewrite Exists_cons.
+      rewrite in_app, Is_variable_in_tc_variables_tc, <-IHtcs.
+      tauto.
   Qed.
 
   Definition is_variable_in_tc_b (x: ident) (tc: trconstr) : bool :=
@@ -131,8 +114,10 @@ End STCISVARIABLE.
 Module StcIsVariableFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : STCSYNTAX Ids Op CESyn)
-<: STCISVARIABLE Ids Op CESyn Syn.
-  Include STCISVARIABLE Ids Op CESyn Syn.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS    Ids Op OpAux)
+       (CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+<: STCISVARIABLE Ids Op OpAux Cks CESyn Syn.
+  Include STCISVARIABLE Ids Op OpAux Cks CESyn Syn.
 End StcIsVariableFun.

@@ -20,7 +20,7 @@ Section finite_traces.
 
   Variable p: Clight.program.
 
-  Definition eventval_of_val (v: val): eventval :=
+  Definition eventval_of_cvalue (v: cvalue): eventval :=
     match v with
     | Vint i => EVint i
     | Vlong i => EVlong i
@@ -30,61 +30,73 @@ Section finite_traces.
     | Vundef => (* Not supported *) EVint Int.zero
     end.
 
-  Lemma eventval_of_val_match:
+  Definition eventval_of_value (v: value) : eventval :=
+    match v with
+    | Vscalar v => eventval_of_cvalue v
+    | Venum n => EVint (enumtag_to_int n)
+    end.
+
+  Lemma eventval_of_cvalue_match:
     forall v t,
-      wt_val v t ->
+      wt_cvalue v t ->
       eventval_match (globalenv p)
-                     (eventval_of_val v)
+                     (eventval_of_cvalue v)
                      (AST.type_of_chunk (type_chunk t)) v.
   Proof.
     destruct v; intros * Wt; inv Wt; simpl; try econstructor.
     destruct sz; try destruct sg; econstructor.
   Qed.
 
-  Definition load_event_of_val (v: val) (xt: ident * type): event :=
-    Event_vload (type_chunk (snd xt))
+  Corollary eventval_of_value_match:
+    forall v t,
+      wt_value v t ->
+      eventval_match (globalenv p)
+                     (eventval_of_value v)
+                     (AST.type_of_chunk (type_to_chunk t))
+                     (value_to_cvalue v).
+  Proof.
+    inversion 1; subst; simpl.
+    - now apply eventval_of_cvalue_match.
+    - destruct tn; simpl in *.
+      destruct (memory_chunk_of_enumtag_spec n) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
+        rewrite E; constructor.
+  Qed.
+
+  Definition load_event_of_value (v: value) (xt: ident * type): event :=
+    Event_vload (type_to_chunk (snd xt))
                 (prefix_glob (fst xt))
-                Ptrofs.zero (eventval_of_val v).
+                Ptrofs.zero (eventval_of_value v).
 
-  Definition store_event_of_val (v: val) (xt: ident * type): event :=
-    Event_vstore (type_chunk (snd xt))
+  Definition store_event_of_value (v: value) (xt: ident * type): event :=
+    Event_vstore (type_to_chunk (snd xt))
                  (prefix_glob (fst xt))
-                 Ptrofs.zero (eventval_of_val v).
+                 Ptrofs.zero (eventval_of_value v).
 
-  Definition mk_events (f: val -> ident * type -> event) (vs: list val) (args: list (ident * type)) : trace :=
-    map (fun vxt => f (fst vxt) (snd vxt)) (combine vs args).
+  Definition load_events  : list value -> list (ident * type) -> trace :=
+    CommonList.map2 load_event_of_value.
+  Definition store_events : list value -> list (ident * type) -> trace :=
+    CommonList.map2 store_event_of_value.
 
-  Definition load_events  : list val -> list (ident * type) -> trace := mk_events load_event_of_val.
-  Definition store_events : list val -> list (ident * type) -> trace := mk_events store_event_of_val.
+  Fact load_events_nil : forall vs, load_events vs [] = [].
+  Proof. apply map2_nil_r. Qed.
 
-  Lemma mk_events_nil: forall f vs, mk_events f vs [] = [].
-  Proof. intros; destruct vs; simpl; auto. Qed.
-
-  Lemma mk_events_cons:
-    forall f v vs xt xts,
-      mk_events f (v :: vs) (xt :: xts) = f v xt :: mk_events f vs xts.
+  Fact load_events_cons : forall v vs xt xts,
+      load_events (v :: vs) (xt :: xts) = [load_event_of_value v xt] ++ load_events vs xts.
   Proof. auto. Qed.
 
-  Corollary load_events_nil : forall vs, load_events vs [] = [].
-  Proof. apply mk_events_nil. Qed.
+  Fact store_events_nil : forall vs, store_events vs [] = [].
+  Proof. apply map2_nil_r. Qed.
 
-  Corollary load_events_cons : forall v vs xt xts,
-      load_events (v :: vs) (xt :: xts) = [load_event_of_val v xt] ++ load_events vs xts.
-  Proof. apply mk_events_cons. Qed.
-
-  Corollary store_events_nil : forall vs, store_events vs [] = [].
-  Proof. apply mk_events_nil. Qed.
-
-  Corollary store_events_cons : forall v vs xt xts,
-      store_events (v :: vs) (xt :: xts) = [store_event_of_val v xt] ++ store_events vs xts.
-  Proof. apply mk_events_cons. Qed.
+  Fact store_events_cons : forall v vs xt xts,
+      store_events (v :: vs) (xt :: xts) = [store_event_of_value v xt] ++ store_events vs xts.
+  Proof. auto. Qed.
 
 End finite_traces.
 
 Section infinite_traces.
 
-  Variable ins  : stream (list val).
-  Variable outs : stream (list val).
+  Variable ins  : stream (list value).
+  Variable outs : stream (list value).
 
   Variable xs : list (ident * type).
   Variable ys : list (ident * type).
@@ -104,23 +116,27 @@ Section infinite_traces.
     - right; destruct ys, (outs n); auto; simpl in Len_outs; discriminate.
   Qed.
 
-  Program CoFixpoint mk_trace (n: nat): traceinf' :=
+  Program CoFixpoint mk_trace' (n: nat): traceinf' :=
     Econsinf' (load_events (ins n) xs ** store_events (outs n) ys)
-              (mk_trace (S n)) _.
+              (mk_trace' (S n)) _.
   Next Obligation.
     intro E; apply Eapp_E0_inv in E.
     pose proof (load_store_events_not_E0 n).
     intuition.
   Qed.
 
+  Definition mk_trace (n: nat) : traceinf :=
+    traceinf_of_traceinf' (mk_trace' n).
+
   Lemma unfold_mk_trace: forall n,
-      traceinf_of_traceinf' (mk_trace n) =
+      mk_trace n =
       (load_events (ins n) xs ** E0 ** store_events (outs n) ys)
         *** E0
-        *** traceinf_of_traceinf' (mk_trace (S n)).
+        *** mk_trace (S n).
   Proof.
+    unfold mk_trace.
     intro.
-    rewrite E0_left, E0_left_inf, (unroll_traceinf' (mk_trace n)).
+    rewrite E0_left, E0_left_inf, (unroll_traceinf' (mk_trace' n)).
     simpl.
     now rewrite traceinf_traceinf'_app.
   Qed.
@@ -129,7 +145,7 @@ End infinite_traces.
 
 (** The trace of an Obc method *)
 Section Obc.
-  Variable (m: method) (ins outs: stream (list val)).
+  Variable (m: method) (ins outs: stream (list value)).
 
   Hypothesis in_out_spec : m.(m_in) <> [] \/ m.(m_out) <> [].
 
@@ -137,6 +153,6 @@ Section Obc.
   Hypothesis Len_outs: forall n, length (outs n) = length m.(m_out).
 
   Program Definition trace_step (n: nat): traceinf :=
-    traceinf_of_traceinf' (mk_trace ins outs m.(m_in) m.(m_out) _ _ _ n).
+    mk_trace ins outs m.(m_in) m.(m_out) _ _ _ n.
 
 End Obc.

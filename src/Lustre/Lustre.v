@@ -15,32 +15,34 @@ From Velus Require Import Common.
 Module Type LUSTRE
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (CStr  : COINDSTREAMS  Op OpAux)
-       (IStr  : INDEXEDSTREAMS Op OpAux).
-  Declare Module Export Syn: LSYNTAX    Ids Op.
-  Declare Module Export Typ: LTYPING    Ids Op       Syn.
-  Declare Module Export Clo: LCLOCKING  Ids Op       Syn.
-  Declare Module Export Ord: LORDERED   Ids Op       Syn.
-  Declare Module Export Cau: LCAUSALITY Ids Op       Syn.
-  Declare Module Export Sem: LSEMANTICS Ids Op OpAux Syn Ord CStr.
-  Declare Module Export ClSem: LCLOCKSEMANTICS Ids Op OpAux Syn Clo Cau Ord CStr IStr Sem.
-  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux CStr IStr Syn Typ Clo Cau Ord Sem ClSem.
+       (OpAux : OPERATORS_AUX  Ids Op)
+       (Cks   : CLOCKS         Ids Op OpAux)
+       (CStr  : COINDSTREAMS   Ids Op OpAux Cks)
+       (IStr  : INDEXEDSTREAMS Ids Op OpAux Cks).
+  Declare Module Export Syn: LSYNTAX    Ids Op OpAux Cks.
+  Declare Module Export Typ: LTYPING    Ids Op OpAux Cks Syn.
+  Declare Module Export Clo: LCLOCKING  Ids Op OpAux Cks Syn.
+  Declare Module Export Ord: LORDERED   Ids Op OpAux Cks Syn.
+  Declare Module Export Cau: LCAUSALITY Ids Op OpAux Cks Syn.
+  Declare Module Export Sem: LSEMANTICS Ids Op OpAux Cks Syn Ord CStr.
+  Declare Module Export ClSem: LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr IStr Sem.
+  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Cks CStr IStr Syn Typ Clo Cau Ord Sem ClSem.
 End LUSTRE.
 
 Module LustreFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (CStr  : COINDSTREAMS  Op OpAux)
-       (IStr  : INDEXEDSTREAMS Op OpAux)
-       <: LUSTRE Ids Op OpAux CStr IStr.
-  Module Export Syn := LSyntaxFun     Ids Op.
-  Module Export Typ := LTypingFun     Ids Op       Syn.
-  Module Export Clo := LClockingFun   Ids Op       Syn.
-  Module Export Ord:= LOrderedFun     Ids Op       Syn.
-  Module Export Cau:= LCausalityFun      Ids Op       Syn.
-  Module Export Sem := LSemanticsFun  Ids Op OpAux Syn Ord CStr.
-  Module Export ClSem := LClockSemanticsFun Ids Op OpAux Syn Clo Cau Ord CStr IStr Sem.
-  Module Export Norm := LNormalizationFun Ids Op OpAux CStr IStr Syn Typ Clo Cau Ord Sem ClSem.
+       (OpAux : OPERATORS_AUX  Ids Op)
+       (Cks   : CLOCKS         Ids Op OpAux)
+       (CStr  : COINDSTREAMS   Ids Op OpAux Cks)
+       (IStr  : INDEXEDSTREAMS Ids Op OpAux Cks)
+       <: LUSTRE Ids Op OpAux Cks CStr IStr.
+  Module Export Syn := LSyntaxFun     Ids Op OpAux Cks.
+  Module Export Typ := LTypingFun     Ids Op OpAux Cks Syn.
+  Module Export Clo := LClockingFun   Ids Op OpAux Cks Syn.
+  Module Export Ord:= LOrderedFun     Ids Op OpAux Cks Syn.
+  Module Export Cau:= LCausalityFun   Ids Op OpAux Cks Syn.
+  Module Export Sem := LSemanticsFun  Ids Op OpAux Cks Syn Ord CStr.
+  Module Export ClSem := LClockSemanticsFun Ids Op OpAux Cks Syn Clo Cau Ord CStr IStr Sem.
+  Module Export Norm := LNormalizationFun Ids Op OpAux Cks CStr IStr Syn Typ Clo Cau Ord Sem ClSem.
 End LustreFun.

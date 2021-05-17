@@ -1,5 +1,4 @@
 From Coq Require Import PArith.
-From Coq Require Import Omega.
 From Coq Require Import List.
 
 Import List.ListNotations.
@@ -22,11 +21,13 @@ From Velus Require Import NLustre.Memories.
  *)
 
 Module Type ISDEFINED
-       (Ids            : IDS)
-       (Op             : OPERATORS)
-       (Import CESyn   : CESYNTAX     Op)
-       (Import Syn     : NLSYNTAX Ids Op CESyn)
-       (Import Mem     : MEMORIES Ids Op CESyn Syn).
+       (Ids          : IDS)
+       (Op           : OPERATORS)
+       (OpAux        : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn)
+       (Import Mem   : MEMORIES Ids  Op OpAux Cks CESyn Syn).
 
   (** ** Logical predicates: *)
 
@@ -76,7 +77,7 @@ Module Type ISDEFINED
   Proof.
     intros * Length.
     constructor.
-    destruct xs; simpl in *; auto; omega.
+    destruct xs; simpl in *; auto; lia.
   Qed.
 
   Lemma not_Is_defined_in_eq_EqFby:
@@ -417,166 +418,168 @@ Module Type ISDEFINED
     - rewrite map_app. apply in_or_app. now right.
   Qed.
 
-  Lemma node_variable_defined_in_eqs:
-    forall n x,
-      In x (map fst n.(n_vars)) ->
-      Is_defined_in x n.(n_eqs).
-  Proof.
-    intros n x Ho.
-    cut (In x (map fst (n.(n_vars) ++ n.(n_out)))).
-    - intro Hvo. rewrite <-n_defd in Hvo.
-      now apply Is_defined_in_vars_defined.
-    - rewrite map_app. apply in_or_app. now left.
-  Qed.
+  (* Lemma node_variable_defined_in_eqs: *)
+  (*   forall n x, *)
+  (*     In x (map fst n.(n_vars)) -> *)
+  (*     Is_defined_in x n.(n_eqs). *)
+  (* Proof. *)
+  (*   intros n x Ho. *)
+  (*   cut (In x (map fst (n.(n_vars) ++ n.(n_out)))). *)
+  (*   - intro Hvo. rewrite <-n_defd in Hvo. *)
+  (*     now apply Is_defined_in_vars_defined. *)
+  (*   - rewrite map_app. apply in_or_app. now left. *)
+  (* Qed. *)
 
-  Lemma vars_defined_cons:
-    forall eq eqs x,
-      In x (vars_defined (eq :: eqs))
-      <-> (Is_defined_in_eq x eq \/ In x (vars_defined eqs)).
-  Proof.
-    intros.
-    destruct eq; simpl; split; intro HH;
-      try destruct HH;
-      repeat match goal with
-             | [ H:Is_defined_in_eq _ _ |- _ ] => now inv H; auto
-             | [ H: In _ (_ ++ _) |- _ ] => apply in_app_or in H as [|]
-             | |- In _ (_ ++ _) => apply in_or_app
-             end;
-      subst; auto.
-  Qed.
+  (* Lemma vars_defined_cons: *)
+  (*   forall eq eqs x, *)
+  (*     In x (vars_defined (eq :: eqs)) *)
+  (*     <-> (Is_defined_in_eq x eq \/ In x (vars_defined eqs)). *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   destruct eq; simpl; split; intro HH; *)
+  (*     try destruct HH; *)
+  (*     repeat match goal with *)
+  (*            | [ H:Is_defined_in_eq _ _ |- _ ] => now inv H; auto *)
+  (*            | [ H: In _ (_ ++ _) |- _ ] => apply in_app_or in H as [|] *)
+  (*            | |- In _ (_ ++ _) => apply in_or_app *)
+  (*            end; *)
+  (*     subst; auto. *)
+  (* Qed. *)
 
-  Lemma Exists_Is_defined_in_eq_vars_defined:
-    forall eqs x,
-      Exists (Is_defined_in_eq x) eqs <-> In x (vars_defined eqs).
-  Proof.
-    induction eqs as [|eq eqs IH]. now split; inversion 1.
-    setoid_rewrite Exists_cons. setoid_rewrite IH.
-    now setoid_rewrite vars_defined_cons.
-  Qed.
+  (* Lemma Exists_Is_defined_in_eq_vars_defined: *)
+  (*   forall eqs x, *)
+  (*     Exists (Is_defined_in_eq x) eqs <-> In x (vars_defined eqs). *)
+  (* Proof. *)
+  (*   induction eqs as [|eq eqs IH]. now split; inversion 1. *)
+  (*   setoid_rewrite Exists_cons. setoid_rewrite IH. *)
+  (*   now setoid_rewrite vars_defined_cons. *)
+  (* Qed. *)
 
-  Lemma NoDup_vars_defined_cons:
-    forall eq eqs,
-      NoDup (vars_defined (eq :: eqs)) ->
-      NoDup (vars_defined eqs).
-  Proof.
-    destruct eq; [inversion 1| |inversion 1]; auto.
-    simpl. setoid_rewrite NoDup_app'_iff. intuition.
-  Qed.
+  (* Lemma NoDup_vars_defined_cons: *)
+  (*   forall eq eqs, *)
+  (*     NoDup (vars_defined (eq :: eqs)) -> *)
+  (*     NoDup (vars_defined eqs). *)
+  (* Proof. *)
+  (*   destruct eq; [inversion 1| |inversion 1]; auto. *)
+  (*   simpl. setoid_rewrite NoDup_app'_iff. intuition. *)
+  (* Qed. *)
 
-  Lemma NoDup_Is_defined_in:
-    forall eq eqs x,
-      NoDup (vars_defined (eq :: eqs)) ->
-      Is_defined_in x (eq :: eqs) ->
-      (Is_defined_in_eq x eq /\ ~Is_defined_in x eqs)
-      \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
-  Proof.
-    intros eq eqs x ND Def.
-    apply Is_defined_in_cons in Def as [Def|]; auto.
-    left; destruct eq; inv Def; simpl in *.
-    - inv ND; rewrite <-Is_defined_in_vars_defined in *; auto.
-    - apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3). split; auto.
-      rewrite Forall_forall in ND3.
-      setoid_rewrite <-Exists_Is_defined_in_eq_vars_defined in ND3.
-      now apply ND3.
-    - inv ND; rewrite <-Is_defined_in_vars_defined in *; auto.
-  Qed.
+  (* Lemma NoDup_Is_defined_in: *)
+  (*   forall eq eqs x, *)
+  (*     NoDup (vars_defined (eq :: eqs)) -> *)
+  (*     Is_defined_in x (eq :: eqs) -> *)
+  (*     (Is_defined_in_eq x eq /\ ~Is_defined_in x eqs) *)
+  (*     \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs). *)
+  (* Proof. *)
+  (*   intros eq eqs x ND Def. *)
+  (*   apply Is_defined_in_cons in Def as [Def|]; auto. *)
+  (*   left; destruct eq; inv Def; simpl in *. *)
+  (*   - inv ND; rewrite <-Is_defined_in_vars_defined in *; auto. *)
+  (*   - apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3). split; auto. *)
+  (*     rewrite Forall_forall in ND3. *)
+  (*     setoid_rewrite <-Exists_Is_defined_in_eq_vars_defined in ND3. *)
+  (*     now apply ND3. *)
+  (*   - inv ND; rewrite <-Is_defined_in_vars_defined in *; auto. *)
+  (* Qed. *)
 
-  Lemma gather_mems_Is_defined_in:
-    forall x eqs,
-      In x (gather_mems eqs) ->
-      Is_defined_in x eqs.
-  Proof.
-    induction eqs as [|eq eqs IH]. now inversion 1.
-    intro Hin. destruct eq; [| |destruct Hin as [Hin|Hin]]; simpl in *;
-                 try (now constructor 2; apply IH).
-    subst. now constructor.
-  Qed.
+  (* Lemma gather_mems_Is_defined_in: *)
+  (*   forall x eqs, *)
+  (*     In x (gather_mems eqs) -> *)
+  (*     Is_defined_in x eqs. *)
+  (* Proof. *)
+  (*   induction eqs as [|eq eqs IH]. now inversion 1. *)
+  (*   intro Hin. destruct eq; [| |destruct Hin as [Hin|Hin]]; simpl in *; *)
+  (*                try (now constructor 2; apply IH). *)
+  (*   subst. now constructor. *)
+  (* Qed. *)
 
-  Lemma gather_insts_Is_defined_in:
-    forall x eqs,
-      InMembers x (gather_insts eqs) ->
-      Is_defined_in x eqs.
-  Proof.
-    induction eqs as [|eq eqs IH]. now inversion 1.
-    intro Hin.
-    destruct eq; [|destruct l; try destruct Hin as [Hin|Hin]|]; simpl in *;
-      try (now constructor 2; apply IH).
-    subst. now repeat constructor.
-  Qed.
+  (* Lemma gather_insts_Is_defined_in: *)
+  (*   forall x eqs, *)
+  (*     InMembers x (gather_insts eqs) -> *)
+  (*     Is_defined_in x eqs. *)
+  (* Proof. *)
+  (*   induction eqs as [|eq eqs IH]. now inversion 1. *)
+  (*   intro Hin. *)
+  (*   destruct eq; [|destruct l; try destruct Hin as [Hin|Hin]|]; simpl in *; *)
+  (*     try (now constructor 2; apply IH). *)
+  (*   subst. now repeat constructor. *)
+  (* Qed. *)
 
-  Lemma gather_mem_eq_Is_defined_in_eq:
-    forall eq x,
-      In x (gather_mem_eq eq) ->
-      Is_defined_in_eq x eq.
-  Proof.
-    destruct eq; auto; simpl; intros x HH; try contradiction.
-    destruct HH; subst; auto. contradiction.
-  Qed.
+  (* Lemma gather_mem_eq_Is_defined_in_eq: *)
+  (*   forall eq x, *)
+  (*     In x (gather_mem_eq eq) -> *)
+  (*     Is_defined_in_eq x eq. *)
+  (* Proof. *)
+  (*   destruct eq; auto; simpl; intros x HH; try contradiction. *)
+  (*   destruct HH; subst; auto. contradiction. *)
+  (* Qed. *)
 
-  Lemma gather_inst_eq_Is_defined_in_eq:
-    forall eq x,
-      InMembers x (gather_inst_eq eq) -> Is_defined_in_eq x eq.
-  Proof.
-    destruct eq; simpl; try contradiction.
-    destruct l. now intuition.
-    inversion 1; subst. now repeat constructor.
-    match goal with [ H: InMembers _ [] |- _ ] => inversion H end.
-  Qed.
+  (* Lemma gather_inst_eq_Is_defined_in_eq: *)
+  (*   forall eq x, *)
+  (*     InMembers x (gather_inst_eq eq) -> Is_defined_in_eq x eq. *)
+  (* Proof. *)
+  (*   destruct eq; simpl; try contradiction. *)
+  (*   destruct l. now intuition. *)
+  (*   inversion 1; subst. now repeat constructor. *)
+  (*   match goal with [ H: InMembers _ [] |- _ ] => inversion H end. *)
+  (* Qed. *)
 
-  Lemma NoDup_In_gather_mems:
-    forall eq eqs x,
-      NoDup (vars_defined (eq :: eqs)) ->
-      In x (gather_mems (eq :: eqs)) ->
-      (In x (gather_mem_eq eq) /\ ~(In x (gather_mems eqs)))
-      \/ (~In x (gather_mem_eq eq) /\ In x (gather_mems eqs)).
-  Proof.
-    intros eq eqs x ND Def.
-    simpl in *. apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3).
-    assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) as ND4.
-    { intros y Dy. apply Is_defined_in_var_defined in Dy.
-      rewrite Forall_forall in ND3. apply ND3 in Dy.
-      now rewrite Is_defined_in_vars_defined. }
-    apply in_app_or in Def as [Def|Def].
-    - left; split; auto.
-      apply gather_mem_eq_Is_defined_in_eq, ND4 in Def.
-      now apply (flip_impl (gather_mems_Is_defined_in _ _)).
-    - right; split; auto.
-      apply (flip_impl (gather_mem_eq_Is_defined_in_eq _ _)).
-      intro D. apply ND4 in D.
-      apply gather_mems_Is_defined_in in Def; auto.
-  Qed.
+  (* Lemma NoDup_In_gather_mems: *)
+  (*   forall eq eqs x, *)
+  (*     NoDup (vars_defined (eq :: eqs)) -> *)
+  (*     In x (gather_mems (eq :: eqs)) -> *)
+  (*     (In x (gather_mem_eq eq) /\ ~(In x (gather_mems eqs))) *)
+  (*     \/ (~In x (gather_mem_eq eq) /\ In x (gather_mems eqs)). *)
+  (* Proof. *)
+  (*   intros eq eqs x ND Def. *)
+  (*   simpl in *. apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3). *)
+  (*   assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) as ND4. *)
+  (*   { intros y Dy. apply Is_defined_in_var_defined in Dy. *)
+  (*     rewrite Forall_forall in ND3. apply ND3 in Dy. *)
+  (*     now rewrite Is_defined_in_vars_defined. } *)
+  (*   apply in_app_or in Def as [Def|Def]. *)
+  (*   - left; split; auto. *)
+  (*     apply gather_mem_eq_Is_defined_in_eq, ND4 in Def. *)
+  (*     now apply (flip_impl (gather_mems_Is_defined_in _ _)). *)
+  (*   - right; split; auto. *)
+  (*     apply (flip_impl (gather_mem_eq_Is_defined_in_eq _ _)). *)
+  (*     intro D. apply ND4 in D. *)
+  (*     apply gather_mems_Is_defined_in in Def; auto. *)
+  (* Qed. *)
 
-  Lemma NoDup_In_gather_insts:
-    forall eq eqs x,
-      NoDup (vars_defined (eq :: eqs)) ->
-      InMembers x (gather_insts (eq :: eqs)) ->
-      (InMembers x (gather_inst_eq eq) /\ ~(InMembers x (gather_insts eqs)))
-      \/ (~InMembers x (gather_inst_eq eq) /\ InMembers x (gather_insts eqs)).
-  Proof.
-    intros eq eqs x ND Def.
-    simpl in *. apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3).
-    assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) as ND4.
-    { intros y Dy. apply Is_defined_in_var_defined in Dy.
-      rewrite Forall_forall in ND3. apply ND3 in Dy.
-      now rewrite Is_defined_in_vars_defined. }
-    apply InMembers_app in Def as [Def|Def].
-    - left; split; auto.
-      apply gather_inst_eq_Is_defined_in_eq, ND4 in Def.
-      now apply (flip_impl (gather_insts_Is_defined_in _ _)).
-    - right; split; auto.
-      apply (flip_impl (gather_inst_eq_Is_defined_in_eq _ _)).
-      intro D. apply ND4 in D.
-      apply gather_insts_Is_defined_in in Def; auto.
-  Qed.
+  (* Lemma NoDup_In_gather_insts: *)
+  (*   forall eq eqs x, *)
+  (*     NoDup (vars_defined (eq :: eqs)) -> *)
+  (*     InMembers x (gather_insts (eq :: eqs)) -> *)
+  (*     (InMembers x (gather_inst_eq eq) /\ ~(InMembers x (gather_insts eqs))) *)
+  (*     \/ (~InMembers x (gather_inst_eq eq) /\ InMembers x (gather_insts eqs)). *)
+  (* Proof. *)
+  (*   intros eq eqs x ND Def. *)
+  (*   simpl in *. apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3). *)
+  (*   assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) as ND4. *)
+  (*   { intros y Dy. apply Is_defined_in_var_defined in Dy. *)
+  (*     rewrite Forall_forall in ND3. apply ND3 in Dy. *)
+  (*     now rewrite Is_defined_in_vars_defined. } *)
+  (*   apply InMembers_app in Def as [Def|Def]. *)
+  (*   - left; split; auto. *)
+  (*     apply gather_inst_eq_Is_defined_in_eq, ND4 in Def. *)
+  (*     now apply (flip_impl (gather_insts_Is_defined_in _ _)). *)
+  (*   - right; split; auto. *)
+  (*     apply (flip_impl (gather_inst_eq_Is_defined_in_eq _ _)). *)
+  (*     intro D. apply ND4 in D. *)
+  (*     apply gather_insts_Is_defined_in in Def; auto. *)
+  (* Qed. *)
 
 End ISDEFINED.
 
 Module IsDefinedFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (CESyn   : CESYNTAX     Op)
-       (Syn     : NLSYNTAX Ids Op CESyn)
-       (Mem     : MEMORIES Ids Op CESyn Syn)
-       <: ISDEFINED Ids Op CESyn Syn Mem.
-  Include ISDEFINED Ids Op CESyn Syn Mem.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn)
+       (Mem   : MEMORIES Ids  Op OpAux Cks CESyn Syn)
+       <: ISDEFINED Ids Op OpAux Cks CESyn Syn Mem.
+  Include ISDEFINED Ids Op OpAux Cks CESyn Syn Mem.
 End IsDefinedFun.

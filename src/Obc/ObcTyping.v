@@ -1,4 +1,5 @@
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import VelusMemory.
@@ -23,26 +24,31 @@ Open Scope list_scope.
 Module Type OBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : OBCSYNTAX Ids Op OpAux)
-       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Syn   : OBCSYNTAX     Ids Op OpAux)
+       (Import ComTyp: COMMONTYPING  Ids Op OpAux)
+       (Import Sem   : OBCSEMANTICS  Ids Op OpAux Syn).
 
   Section WellTyped.
 
     Variable p     : program.
     Variable insts : list (ident * ident).
-    Variable mems  : list (ident * type).
-    Variable vars  : list (ident * type).
+    Variable Γm  : list (ident * type).
+    Variable Γv  : list (ident * type).
 
     Inductive wt_exp : exp -> Prop :=
     | wt_Var: forall x ty,
-        In (x, ty) vars ->
+        In (x, ty) Γv ->
         wt_exp (Var x ty)
     | wt_State: forall x ty,
-        In (x, ty) mems ->
+        In (x, ty) Γm ->
         wt_exp (State x ty)
     | wt_Const: forall c,
         wt_exp (Const c)
+    | wt_Enum: forall c tn,
+        In tn p.(enums) ->
+        c < snd tn ->
+        wt_exp (Enum c (Tenum tn))
     | wt_Unop: forall op e ty,
         type_unop op (typeof e) = Some ty ->
         wt_exp e ->
@@ -53,25 +59,27 @@ Module Type OBCTYPING
         wt_exp e2 ->
         wt_exp (Binop op e1 e2 ty)
     | wt_Valid: forall x ty,
-        In (x, ty) vars ->
+        In (x, ty) Γv ->
         wt_exp (Valid x ty).
 
     (* TODO: eliminate the result types in Call (and EqApp). *)
     Inductive wt_stmt : stmt -> Prop :=
     | wt_Assign: forall x e,
-        In (x, typeof e) vars ->
+        In (x, typeof e) Γv ->
         wt_exp e ->
         wt_stmt (Assign x e)
     | wt_AssignSt: forall x e,
-        In (x, typeof e) mems ->
+        In (x, typeof e) Γm ->
         wt_exp e ->
         wt_stmt (AssignSt x e)
-    | wt_Ifte: forall e s1 s2,
+    | wt_Switch: forall e ss d tn,
         wt_exp e ->
-        typeof e = bool_type ->
-        wt_stmt s1 ->
-        wt_stmt s2 ->
-        wt_stmt (Ifte e s1 s2)
+        typeof e = Tenum tn ->
+        In tn p.(enums) ->
+        snd tn = length ss ->
+        wt_stmt d ->
+        (forall s, In (Some s) ss -> wt_stmt s) -> (* cannot write it with Forall and or_default_with because of positive occurence check *)
+        wt_stmt (Switch e ss d)
     | wt_Comp: forall s1 s2,
         wt_stmt s1 ->
         wt_stmt s2 ->
@@ -81,7 +89,7 @@ Module Type OBCTYPING
         find_class clsid p = Some(cls, p') ->
         find_method f cls.(c_methods) = Some fm ->
         NoDup ys ->
-        Forall2 (fun y xt => In (y, snd xt) vars) ys fm.(m_out) ->
+        Forall2 (fun y xt => In (y, snd xt) Γv) ys fm.(m_out) ->
         Forall2 (fun e xt => typeof e = snd xt) es fm.(m_in) ->
         Forall wt_exp es ->
         wt_stmt (Call ys clsid o f es)
@@ -92,32 +100,30 @@ Module Type OBCTYPING
 
   Definition wt_method (p     : program)
                        (insts : list (ident * ident))
-                       (mems  : list (ident * type))
+                       (Γm  : list (ident * type))
                        (m     : method) : Prop
-    := wt_stmt p insts mems (meth_vars m) m.(m_body).
+    := wt_stmt p insts Γm (meth_vars m) m.(m_body)
+       /\ (forall x tn,
+             In (x, Tenum tn) (meth_vars m) ->
+             In tn (enums p)
+             /\ 0 < snd tn).
 
   Definition wt_class (p : program) (cls: class) : Prop
     := (Forall (fun ocls=> find_class (snd ocls) p <> None) cls.(c_objs))
        /\ Forall (wt_method p cls.(c_objs) cls.(c_mems)) cls.(c_methods).
 
-  Inductive wt_program : program -> Prop :=
-  | wtp_nil:
-      wt_program []
-  | wtp_cons: forall cls p,
-      wt_class p cls ->
-      wt_program p ->
-      Forall (fun cls' => cls.(c_name) <> cls'.(c_name)) p ->
-      wt_program (cls::p).
+  Definition wt_program := CommonTyping.wt_program wt_class.
 
-  Hint Constructors wt_exp wt_stmt wt_program : obctyping.
+  Hint Constructors wt_exp wt_stmt: obctyping.
 
   Instance wt_exp_Proper:
-    Proper (@Permutation.Permutation (ident * type)
-                                     ==> @Permutation.Permutation (ident * type)
-                                     ==> @eq exp ==> iff) wt_exp.
+    Proper (@eq program
+                ==> @Permutation.Permutation (ident * type)
+                ==> @Permutation.Permutation (ident * type)
+                ==> @eq exp ==> iff) wt_exp.
   Proof.
-    intros m2 m1 Hm v2 v1 Hv e' e He; subst.
-    induction e; split; inversion_clear 1; constructor;
+    intros p2 p1 Hp m2 m1 Hm v2 v1 Hv e' e He; subst.
+    induction e; split; inversion_clear 1; econstructor; eauto;
       try rewrite Hm in *;
       try rewrite Hv in *;
       repeat match goal with H:_ <-> _ |- _ => apply H; clear H end;
@@ -133,18 +139,26 @@ Module Type OBCTYPING
   Proof.
     intros p' p Hp xs2 xs1 Hxs ys2 ys1 Hys zs2 zs1 Hzs s' s Hs.
     rewrite Hp, Hs in *; clear Hp Hs.
-    induction s; split; intro HH; inv HH.
+    induction s using stmt_ind2'; split; intro HH; inv HH.
     (* Assign *)
     - constructor; rewrite <-Hzs; try rewrite <-Hys; auto.
     - constructor; rewrite Hzs; try rewrite Hys; auto.
     (* AssignSt *)
     - constructor; try rewrite <-Hzs; rewrite <-Hys; auto.
     - constructor; try rewrite Hzs; rewrite Hys; auto.
-    (* Ifte *)
-    - constructor; try rewrite <-IHs1; try rewrite <-IHs2; auto;
-        try rewrite <-Hzs; try rewrite <-Hys; auto.
-    - constructor; try rewrite IHs1; try rewrite IHs2; auto;
-        try rewrite Hzs; try rewrite Hys; auto.
+    (* Switch *)
+    - econstructor; eauto.
+      + rewrite <-Hys, <-Hzs; auto.
+      + now apply IHs.
+      + intros * Hin.
+        take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in *.
+        apply it; auto.
+    - econstructor; eauto.
+      + rewrite Hys, Hzs; auto.
+      + now apply IHs.
+      + intros * Hin.
+        take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in *.
+        apply it; auto.
     (* Comp *)
     - constructor; try rewrite <-IHs1; try rewrite <-IHs2; auto.
     - constructor; try rewrite IHs1; try rewrite IHs2; auto.
@@ -154,7 +168,7 @@ Module Type OBCTYPING
       * match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
                       apply Forall2_impl_In with (2:=H) end.
         intros; now rewrite <-Hzs.
-      * match goal with H:Forall (wt_exp _ _) _ |- _ =>
+      * match goal with H:Forall (wt_exp _ _ _) _ |- _ =>
                         apply Forall_impl with (2:=H) end.
         intros; now rewrite <-Hys, <-Hzs.
     - econstructor; eauto.
@@ -162,7 +176,7 @@ Module Type OBCTYPING
       * match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
                         apply Forall2_impl_In with (2:=H) end.
         intros; now rewrite Hzs.
-      * match goal with H:Forall (wt_exp _ _) _ |- _ =>
+      * match goal with H:Forall (wt_exp _ _ _) _ |- _ =>
                         apply Forall_impl with (2:=H) end.
         intros; now rewrite Hys, Hzs.
     (* Skip *)
@@ -172,132 +186,19 @@ Module Type OBCTYPING
 
   (** Properties *)
 
-  Definition wt_venv_val (ve: venv) (xty: ident * type) :=
-    match Env.find (fst xty) ve with
-    | None => True
-    | Some v => wt_val v (snd xty)
-    end.
+  Definition wt_state (p: program) (me: menv) (ve: venv) (c: class) (Γv: list (ident * type)) : Prop :=
+    wt_memory me p c.(c_mems) c.(c_objs) /\ wt_env ve Γv.
 
-  Definition wt_env (ve: venv) (vars: list (ident * type)) :=
-    Forall (wt_venv_val ve) vars.
-
-  Hint Unfold wt_env.
-
-  Inductive wt_mem : menv -> program -> class -> Prop :=
-  | WTmenv: forall me p cl,
-      wt_env (values me) cl.(c_mems) ->
-      Forall (wt_mem_inst me p) cl.(c_objs) ->
-      wt_mem me p cl
-  with wt_mem_inst : menv -> program -> (ident * ident) -> Prop :=
-  | WTminst_empty: forall me p o c,
-      find_inst o me = None ->
-      wt_mem_inst me p (o, c)
-  | WTminst: forall me p o c mo cls p',
-      find_inst o me = Some mo ->
-      find_class c p = Some (cls, p') ->
-      wt_mem mo p' cls ->
-      wt_mem_inst me p (o, c).
-
-  Definition wt_state (p: program) (me: menv) (ve: venv) (c: class) (vars: list (ident * type)) : Prop :=
-    wt_mem me p c /\ wt_env ve vars.
-
-  Section wt_mem_mult.
-
-    Variable P : forall me p cl, wt_mem me p cl -> Prop.
-    Variable Pinst : forall me p oc, wt_mem_inst me p oc -> Prop.
-
-    Arguments P {me p cl} H.
-    Arguments Pinst {me p oc} H.
-    Arguments WTmenv {me p cl} Hwt Hinsts.
-    Arguments WTminst_empty {me} p {o} c Hfind.
-    Arguments WTminst {me p o c mo cls p'} Hinst Hclass Hwt.
-
-    Hypothesis WTmenvCase:
-      forall me p cl
-        (x : wt_env (values me) cl.(c_mems))
-        (ys : Forall (wt_mem_inst me p) cl.(c_objs)),
-        Forall (fun cl => exists H, @Pinst me p cl H) cl.(c_objs) ->
-        @P me p cl (WTmenv x ys).
-
-    Hypothesis WTminst_emptyCase:
-      forall me p o c
-        (Hfind: find_inst o me = None),
-        Pinst (WTminst_empty p c Hfind).
-
-    Hypothesis WTminstCase:
-      forall me p o c mo cls p'
-        (Hfind_inst: find_inst o me = Some mo)
-        (Hfind_class: find_class c p = Some (cls, p'))
-        (Hwt: wt_mem mo p' cls),
-        P Hwt ->
-        Pinst (WTminst Hfind_inst Hfind_class Hwt).
-
-    Fixpoint wt_mem_ind_mult {me p cl} (H: wt_mem me p cl) {struct H} : P H
-    with wt_mem_inst_ind_mult {me p oc} (H: wt_mem_inst me p oc) {struct H}: Pinst H.
-    - (* Define: wt_mem_ind_mult *)
-      destruct H as [? ? ? Hwt Hrec].
-      apply WTmenvCase.
-      induction Hrec as [| ? ? Hwt' Hrec' ]; constructor; auto.
-      exists Hwt'; auto.
-    - (* Define: wt_mem_ind_inst_mult *)
-      destruct H;
-        clear wt_mem_inst_ind_mult;
-        auto using WTminst_emptyCase, WTminstCase.
-    Qed.
-
-  End wt_mem_mult.
-
-  Lemma wt_vempty:
-    forall vars,
-      wt_env vempty vars.
-  Proof.
-    induction vars as [|v vars]; auto.
-    apply Forall_cons; auto.
-    unfold wt_venv_val; rewrite Env.gempty; auto.
-  Qed.
-
-  Lemma wt_mempty:
-    forall p cls,
-      wt_mem mempty p cls.
-  Proof.
-    constructor.
-    - now apply wt_vempty.
-    - induction (cls.(c_objs)) as [|(o, c) os]; auto.
-      apply Forall_cons; auto.
-      apply WTminst_empty.
-      apply find_inst_gempty.
-  Qed.
-  Hint Resolve wt_vempty wt_mempty.
-
-  Lemma venv_find_wt_val:
-    forall vars ve x ty v,
-      wt_env ve vars ->
-      In (x, ty) vars ->
-      Env.find x ve = Some v ->
-      wt_val v ty.
-  Proof.
-    intros * WTe Hin Hfind.
-    apply Forall_forall with (1:=WTe) in Hin.
-    unfold wt_venv_val in Hin.
-    simpl in Hin.
-    now rewrite Hfind in Hin.
-  Qed.
-
-  Lemma wt_program_find_class:
-    forall clsid p cls p',
+  Lemma wt_program_nodup_classes:
+    forall p,
       wt_program p ->
-      find_class clsid p = Some (cls, p') ->
-      wt_class p' cls /\ wt_program p'.
+      NoDup (map c_name p.(classes)).
   Proof.
-    induction p as [|cls p]; [now inversion 2|].
-    intros cls' p' WTp Hfind.
-    inversion Hfind as [Heq]; clear Hfind.
-    inversion_clear WTp as [|? ? WTc WTp' Hnodup]; rename WTp' into WTp.
-    destruct (ident_eq_dec cls.(c_name) clsid) as [He|Hne].
-    - subst. rewrite ident_eqb_refl in Heq.
-      injection Heq; intros; subst. auto.
-    - rewrite (proj2 (ident_eqb_neq cls.(c_name) clsid) Hne) in Heq.
-      apply IHp with (1:=WTp) (2:=Heq).
+    unfold wt_program, CommonTyping.wt_program; simpl.
+    induction 1 as [|?? []]; simpl; constructor; auto.
+    intro Hin; apply in_map_iff in Hin as (?&E&Hin).
+    eapply Forall_forall in Hin; eauto; simpl in Hin.
+    apply Hin; auto.
   Qed.
 
   Lemma wt_class_find_method:
@@ -312,71 +213,111 @@ Module Type OBCTYPING
     apply find_method_In with (1:=Hfindm).
   Qed.
 
+  Lemma wt_exp_chained:
+    forall e f p cl p' mems insts,
+    find_class f p = Some (cl, p') ->
+    wt_exp p' mems insts e ->
+    wt_exp p mems insts e.
+  Proof.
+    induction e; inversion_clear 2; eauto using wt_exp.
+    econstructor; eauto.
+    assert (enums p = enums p') as ->
+        by (take (find_class _ _ = _) and apply find_unit_equiv_program in it;
+            specialize (it []); inv it; auto); auto.
+  Qed.
+  Hint Resolve wt_exp_chained.
+
+  Corollary wt_exps_chained:
+    forall es f p cl p' mems insts,
+    find_class f p = Some (cl, p') ->
+    Forall (wt_exp p' mems insts) es ->
+    Forall (wt_exp p mems insts) es.
+  Proof.
+    induction 2; constructor; eauto.
+  Qed.
+  Hint Resolve wt_exps_chained.
+
   Lemma pres_sem_exp:
-    forall mems vars me ve e v,
-      wt_env (values me) mems ->
-      wt_env ve vars ->
-      wt_exp mems vars e ->
+    forall p Γm Γv me ve e v,
+      wt_env (values me) Γm ->
+      wt_env ve Γv ->
+      wt_exp p Γm Γv e ->
       exp_eval me ve e (Some v) ->
-      wt_val v (typeof e).
+      wt_value v (typeof e).
   Proof.
     intros until v. intros WTm WTv.
     revert v.
-    induction e; intros v WTe Hexp.
+    induction e; intros ? WTe Hexp.
     - inv WTe. inv Hexp.
-      eapply venv_find_wt_val with (1:=WTv); eauto.
+      eapply env_find_wt_value with (1:=WTv); eauto.
     - inv WTe. inv Hexp.
       unfold find_val in *.
-      eapply venv_find_wt_val with (1:=WTm); eauto.
-    - inv Hexp. apply wt_val_const.
-    - inv WTe. inv Hexp. eauto using pres_sem_unop.
-    - inv WTe. inv Hexp. eauto using pres_sem_binop.
+      eapply env_find_wt_value with (1:=WTm); eauto.
+    - inv WTe. inv Hexp. now constructor.
+    - inv Hexp. simpl. constructor. apply wt_cvalue_cconst.
+    - inv WTe. inv Hexp. eapply pres_sem_unop; eauto.
+    - inv WTe. inv Hexp. eapply pres_sem_binop; eauto.
     - inv WTe. inv Hexp.
-      eapply venv_find_wt_val with (1:=WTv); eauto.
+      eapply env_find_wt_value with (1:=WTv); eauto.
   Qed.
 
   Lemma pres_sem_exp':
-    forall prog c vars me ve e v,
-      wt_state prog me ve c vars ->
-      wt_exp c.(c_mems) vars e ->
+    forall prog c Γv me ve e v,
+      wt_state prog me ve c Γv ->
+      wt_exp prog c.(c_mems) Γv e ->
       exp_eval me ve e (Some v) ->
-      wt_val v (typeof e).
+      wt_value v (typeof e).
   Proof.
     intros * (WT_mem&?) ? ?.
     inv WT_mem.
-    eapply pres_sem_exp with (vars:=vars); eauto.
+    eapply pres_sem_exp with (Γv:=Γv); eauto.
   Qed.
   Hint Resolve pres_sem_exp'.
 
   Lemma pres_sem_expo:
-    forall mems vars me ve e vo,
-      wt_env (values me) mems ->
-      wt_env ve vars ->
-      wt_exp mems vars e ->
+    forall prog Γm Γv me ve e vo,
+      wt_env (values me) Γm ->
+      wt_env ve Γv ->
+      wt_exp prog Γm Γv e ->
       exp_eval me ve e vo ->
-      wt_valo vo (typeof e).
+      wt_option_value vo (typeof e).
   Proof.
     intros. destruct vo; simpl;
               eauto using pres_sem_exp.
   Qed.
 
   Lemma pres_sem_expo':
-    forall prog c vars me ve e vo,
-      wt_state prog me ve c vars ->
-      wt_exp c.(c_mems) vars e ->
+    forall prog c Γv me ve e vo,
+      wt_state prog me ve c Γv ->
+      wt_exp prog c.(c_mems) Γv e ->
       exp_eval me ve e vo ->
-      wt_valo vo (typeof e).
+      wt_option_value vo (typeof e).
   Proof.
     intros. destruct vo; simpl; eauto.
   Qed.
   Hint Resolve pres_sem_expo'.
 
-  Lemma pres_sem_exps:
-    forall prog c vars me ve es vos,
-      wt_state prog me ve c vars ->
-      Forall (wt_exp c.(c_mems) vars) es ->
+  Lemma pres_sem_expos:
+    forall prog Γm Γv me ve es vos,
+      wt_env (values me) Γm ->
+      wt_env ve Γv ->
+      Forall (wt_exp prog Γm Γv) es ->
       Forall2 (exp_eval me ve) es vos ->
-      Forall2 (fun e vo => wt_valo vo (typeof e)) es vos.
+      Forall2 (fun e vo => wt_option_value vo (typeof e)) es vos.
+  Proof.
+    intros; eapply Forall2_impl_In; eauto.
+    intros. simpl in *.
+    match goal with Hf:Forall _ ?xs, Hi: In _ ?xs |- _ =>
+      apply Forall_forall with (1:=Hf) in Hi end.
+    eapply pres_sem_expo; eauto.
+  Qed.
+
+  Lemma pres_sem_expos':
+    forall prog c Γv me ve es vos,
+      wt_state prog me ve c Γv ->
+      Forall (wt_exp prog c.(c_mems) Γv) es ->
+      Forall2 (exp_eval me ve) es vos ->
+      Forall2 (fun e vo => wt_option_value vo (typeof e)) es vos.
   Proof.
     intros; eapply Forall2_impl_In; eauto.
     intros. simpl in *.
@@ -384,103 +325,28 @@ Module Type OBCTYPING
       apply Forall_forall with (1:=Hf) in Hi end.
     eapply pres_sem_expo'; eauto.
   Qed.
-  Hint Resolve pres_sem_exps.
-
-  Lemma wt_venv_val_add:
-    forall env v x y ty,
-      (y = x /\ wt_val v ty) \/ (y <> x /\ wt_venv_val env (y, ty)) ->
-      wt_venv_val (Env.add x v env) (y, ty).
-  Proof.
-    intros * Hor. unfold wt_venv_val; simpl.
-    destruct Hor as [[Heq Hwt]|[Hne Hwt]].
-    - subst. now rewrite Env.gss.
-    - now rewrite Env.gso with (1:=Hne).
-  Qed.
-
-  Lemma wt_env_add:
-    forall vars env x t v,
-      NoDupMembers vars ->
-      wt_env env vars ->
-      In (x, t) vars ->
-      wt_val v t ->
-      wt_env (Env.add x v env) vars.
-  Proof.
-    intros * Hndup WTenv Hin WTv.
-    unfold wt_env.
-    induction vars as [|y vars]; auto.
-    apply Forall_cons2 in WTenv.
-    destruct WTenv as (WTx & WTenv).
-    destruct y as (y & ty).
-    apply nodupmembers_cons in Hndup.
-    destruct Hndup as (Hnin & Hndup).
-    inv Hin.
-    - match goal with H:(y, ty) = _ |- _ => injection H; intros; subst end.
-      constructor.
-      + apply wt_venv_val_add; left; auto.
-      + apply Forall_impl_In with (2:=WTenv).
-        destruct a as (y & ty).
-        intros Hin HTy.
-        apply NotInMembers_NotIn with (b:=ty) in Hnin.
-        apply wt_venv_val_add; right; split.
-        intro; subst; contradiction.
-        now apply HTy.
-    - constructor.
-      + apply wt_venv_val_add.
-        destruct (ident_eq_dec x y);
-          [subst; left; split|right]; auto.
-        apply NotInMembers_NotIn with (b:=t) in Hnin.
-        contradiction.
-      + apply IHvars; auto.
-  Qed.
-  Hint Resolve wt_env_add.
-
-  Lemma wt_mem_inst_add_val:
-    forall p o c x v me,
-      wt_mem_inst me p (o, c) ->
-      wt_mem_inst (add_val x v me) p (o, c).
-  Proof.
-    inversion_clear 1.
-    - left; auto.
-    - eright; eauto.
-  Qed.
-
-  Lemma wt_mem_add_val:
-    forall p c x t v me,
-      wt_mem me p c ->
-      In (x, t) (c_mems c) ->
-      wt_val v t ->
-      wt_mem (add_val x v me) p c.
-  Proof.
-    inversion_clear 1; intros.
-    constructor; simpl.
-    - eapply wt_env_add; eauto.
-      apply c_nodupmems.
-    - apply Forall_forall; intros (?&?) Hin.
-      eapply wt_mem_inst_add_val.
-      eapply Forall_forall in Hin; eauto.
-  Qed.
-  Hint Resolve wt_mem_add_val.
+  Hint Resolve pres_sem_expos'.
 
   Corollary wt_state_add:
-    forall prog me ve c vars x v t,
-      wt_state prog me ve c vars ->
-      NoDupMembers vars ->
-      In (x, t) vars ->
-      wt_val v t ->
-      wt_state prog me (Env.add x v ve) c vars.
+    forall prog me ve c Γv x v t,
+      wt_state prog me ve c Γv ->
+      NoDupMembers Γv ->
+      In (x, t) Γv ->
+      wt_value v t ->
+      wt_state prog me (Env.add x v ve) c Γv.
   Proof.
     intros * (?&?) ???; split; eauto.
   Qed.
   Hint Resolve wt_state_add.
 
   Corollary wt_state_adds:
-    forall xs prog me ve c vars vs (xts: list (ident * type)),
-      wt_state prog me ve c vars ->
-      NoDupMembers vars ->
-      Forall2 (fun y xt => In (y, snd xt) vars) xs xts ->
+    forall xs prog me ve c Γv vs (xts: list (ident * type)),
+      wt_state prog me ve c Γv ->
+      NoDupMembers Γv ->
+      Forall2 (fun y xt => In (y, snd xt) Γv) xs xts ->
       NoDup xs ->
-      Forall2 (fun rv xt => wt_val rv (snd xt)) vs xts ->
-      wt_state prog me (Env.adds xs vs ve) c vars.
+      Forall2 (fun rv xt => wt_value rv (snd xt)) vs xts ->
+      wt_state prog me (Env.adds xs vs ve) c Γv.
   Proof.
     induction xs; inversion 3; inversion 1; inversion 1; subst; auto.
     rewrite Env.adds_cons_cons; eauto.
@@ -488,142 +354,48 @@ Module Type OBCTYPING
   Hint Resolve wt_state_adds.
 
   Corollary wt_state_adds_opt:
-    forall xs prog me ve c vars vs (xts: list (ident * type)),
-      wt_state prog me ve c vars ->
-      NoDupMembers vars ->
-      Forall2 (fun y xt => In (y, snd xt) vars) xs xts ->
+    forall xs prog me ve c Γv vs (xts: list (ident * type)),
+      wt_state prog me ve c Γv ->
+      NoDupMembers Γv ->
+      Forall2 (fun y xt => In (y, snd xt) Γv) xs xts ->
       NoDup xs ->
-      Forall2 (fun rv xt => wt_val rv (snd xt)) vs xts ->
-      wt_state prog me (Env.adds_opt xs (map Some vs) ve) c vars.
+      Forall2 (fun rv xt => wt_value rv (snd xt)) vs xts ->
+      wt_state prog me (Env.adds_opt xs (map Some vs) ve) c Γv.
   Proof.
     intros; rewrite Env.adds_opt_is_adds; eauto.
   Qed.
   Hint Resolve wt_state_adds_opt.
 
   Corollary wt_state_add_val:
-     forall prog me ve c vars x v t,
-      wt_state prog me ve c vars ->
+     forall prog me ve c Γv x v t,
+      wt_state prog me ve c Γv ->
       In (x, t) (c_mems c) ->
-      wt_val v t ->
-      wt_state prog (add_val x v me) ve c vars.
+      wt_value v t ->
+      wt_state prog (add_val x v me) ve c Γv.
   Proof.
     intros * (?&?) ??; split; eauto.
+    eapply wt_memory_add_val; eauto using c_nodupmems.
   Qed.
   Hint Resolve wt_state_add_val.
 
-  Lemma wt_mem_inst_add_inst_neq:
-    forall p o c x me_x me,
-      wt_mem_inst me p (o, c) ->
-      x <> o ->
-      wt_mem_inst (add_inst x me_x me) p (o, c).
-  Proof.
-    inversion_clear 1.
-    - left; rewrite find_inst_gso; auto.
-    - eright; eauto.
-      rewrite find_inst_gso; auto.
-  Qed.
-
-  Lemma wt_mem_inst_add_inst_eq:
-    forall p c x cls p' me_x me,
-      wt_mem_inst me p (x, c) ->
-      find_class c p = Some (cls, p') ->
-      wt_mem me_x p' cls ->
-      wt_mem_inst (add_inst x me_x me) p (x, c).
-  Proof.
-    inversion_clear 1; intros.
-    - eright; eauto.
-      apply find_inst_gss.
-    - eright; eauto.
-      apply find_inst_gss.
-  Qed.
-
-  Lemma wt_mem_add_inst:
-    forall p c x c_x cls p' me_x me,
-      wt_mem me p c ->
-      In (x, c_x) c.(c_objs) ->
-      find_class c_x p = Some (cls, p') ->
-      wt_mem me_x p' cls ->
-      wt_mem (add_inst x me_x me) p c.
-  Proof.
-    inversion_clear 1 as [???? WT]; intros.
-    constructor; simpl; auto.
-    apply Forall_forall; intros (x', c') Hin.
-    eapply Forall_forall in WT; eauto.
-    destruct (ident_eq_dec x x').
-    - subst.
-      assert (c' = c_x) as ->
-          by (eapply NoDupMembers_det; eauto using c_nodupobjs).
-      eapply wt_mem_inst_add_inst_eq; eauto.
-    - apply wt_mem_inst_add_inst_neq; auto.
-  Qed.
-  Hint Resolve wt_mem_add_inst.
-
   Corollary wt_state_add_inst:
-     forall prog me ve c c' prog' vars x me_x c_x,
-      wt_state prog me ve c vars ->
+     forall prog me ve c c' prog' Γv x me_x c_x,
+      wt_state prog me ve c Γv ->
       In (x, c_x) (c_objs c) ->
       find_class c_x prog = Some (c', prog') ->
-      wt_mem me_x prog' c' ->
-      wt_state prog (add_inst x me_x me) ve c vars.
+      wt_memory me_x prog' c'.(c_mems) c'.(c_objs) ->
+      wt_state prog (add_inst x me_x me) ve c Γv.
   Proof.
     intros * (?&?) ??; split; eauto.
+    eapply wt_memory_add_inst; eauto using c_nodupobjs.
   Qed.
   Hint Resolve wt_state_add_inst.
 
-  Lemma wt_venv_val_remove:
-    forall env x y ty,
-      wt_venv_val env (y, ty) ->
-      wt_venv_val (Env.remove x env) (y, ty).
-  Proof.
-    unfold wt_venv_val; simpl.
-    intros * WTenv.
-    destruct (ident_eq_dec x y); subst.
-    now rewrite Env.grs.
-    now rewrite Env.gro; auto.
-  Qed.
-
-  Lemma wt_env_remove:
-    forall x env vars,
-      wt_env env vars ->
-      wt_env (Env.remove x env) vars.
-  Proof.
-    induction vars as [|(y, yt) vars]; auto.
-    setoid_rewrite Forall_cons2.
-    destruct 1 as (Hy & Hvars).
-    split; [|now apply IHvars].
-    now apply wt_venv_val_remove.
-  Qed.
-  Hint Resolve wt_env_remove.
-
-  Lemma wt_env_adds_opt:
-    forall vars env ys outs rvs,
-      NoDupMembers vars ->
-      NoDup ys ->
-      wt_env env vars ->
-      Forall2 (fun y (xt: ident * type) => In (y, snd xt) vars) ys outs ->
-      Forall2 (fun vo xt => wt_valo vo (snd xt)) rvs outs ->
-      wt_env (Env.adds_opt ys rvs env) vars.
-  Proof.
-    intros * NodupM Nodup WTenv Hin WTv.
-    assert (length ys = length rvs) as Length
-        by (transitivity (length outs); [|symmetry];
-            eapply Forall2_length; eauto).
-    revert env rvs outs WTenv WTv Length Hin.
-    induction ys, rvs, outs; intros * WTenv WTv Length Hin;
-      inv Length; inv Nodup; inv Hin; inv WTv; auto.
-    destruct o.
-    - rewrite Env.adds_opt_cons_cons'; auto.
-      eapply IHys; eauto.
-    - rewrite Env.adds_opt_cons_cons_None; auto.
-      eapply IHys; eauto.
-  Qed.
-  Hint Resolve wt_env_adds_opt.
-
   Lemma wt_params:
     forall vos xs es,
-      Forall2 (fun e vo => wt_valo vo (typeof e)) es vos ->
+      Forall2 (fun e vo => wt_option_value vo (typeof e)) es vos ->
       Forall2 (fun e (xt: ident * type) => typeof e = snd xt) es xs ->
-      Forall2 (fun vo xt => wt_valo vo (snd xt)) vos xs.
+      Forall2 (fun vo xt => wt_option_value vo (snd xt)) vos xs.
   Proof.
     induction vos, xs, es; intros * Wt Eq; inv Wt;
     inversion_clear Eq as [|? ? ? ? E]; auto.
@@ -634,7 +406,7 @@ Module Type OBCTYPING
 
   Lemma wt_env_params:
     forall vos callee,
-      Forall2 (fun vo xt => wt_valo vo (snd xt)) vos (m_in callee) ->
+      Forall2 (fun vo xt => wt_option_value vo (snd xt)) vos (m_in callee) ->
       wt_env (Env.adds_opt (map fst (m_in callee)) vos vempty) (meth_vars callee).
   Proof.
     intros * Wt.
@@ -663,14 +435,14 @@ Module Type OBCTYPING
         apply Notin.
         apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
       }
-      unfold wt_venv_val; simpl.
+      unfold wt_env_value; simpl.
       rewrite Env.find_In_gsso_opt, Env.gempty; auto.
   Qed.
   Hint Resolve wt_env_params.
 
   Lemma wt_env_params_exprs:
     forall vos callee es,
-      Forall2 (fun e vo => wt_valo vo (typeof e)) es vos ->
+      Forall2 (fun e vo => wt_option_value vo (typeof e)) es vos ->
       Forall2 (fun (e : exp) (xt : ident * type) => typeof e = snd xt) es (m_in callee) ->
       wt_env (Env.adds_opt (map fst (m_in callee)) vos vempty) (meth_vars callee).
   Proof.
@@ -682,55 +454,59 @@ Module Type OBCTYPING
   Lemma pres_sem_stmt':
     (forall p me ve stmt e',
         stmt_eval p me ve stmt e' ->
-        forall cls vars,
+        forall mems insts Γv,
           let (me', ve') := e' in
-          NoDupMembers vars ->
+          NoDupMembers Γv ->
+          NoDupMembers mems ->
+          NoDupMembers insts ->
           wt_program p ->
-          wt_state p me ve cls vars ->
-          wt_stmt p cls.(c_objs) cls.(c_mems) vars stmt ->
-          wt_mem me' p cls /\ wt_env ve' vars)
+          wt_memory me p mems insts ->
+          wt_env ve Γv ->
+          wt_stmt p insts mems Γv stmt ->
+          wt_memory me' p mems insts /\ wt_env ve' Γv)
     /\ (forall p me clsid f vs me' rvs,
           stmt_call_eval p me clsid f vs me' rvs ->
           forall p' cls fm,
             wt_program p ->
             find_class clsid p = Some(cls, p') ->
             find_method f cls.(c_methods) = Some fm ->
-            wt_mem me p' cls ->
-            Forall2 (fun v xt => wt_valo v (snd xt)) vs fm.(m_in) ->
-            wt_mem me' p' cls
-            /\ Forall2 (fun v yt => wt_valo v (snd yt)) rvs fm.(m_out)).
+            wt_memory me p' cls.(c_mems) cls.(c_objs) ->
+            Forall2 (fun v xt => wt_option_value v (snd xt)) vs fm.(m_in) ->
+            wt_memory me' p' cls.(c_mems) cls.(c_objs)
+            /\ Forall2 (fun v yt => wt_option_value v (snd yt)) rvs fm.(m_out)).
   Proof.
     apply stmt_eval_call_ind.
     - (* assign *)
-      intros * Hexp cls vars Hndup WTp (WTm & WTe) WTstmt.
+      intros * Hexp mems insts Γv Hndup Hndupm Hndupi WTp WTm WTe WTstmt.
       split; auto.
-      inv WTstmt. inversion_clear WTm as [? ? ? WTmv WTmi].
-      eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; auto.
-      eapply wt_env_add; eauto.
+      inv WTstmt. inversion_clear WTm as [???? WTmv WTmi].
+      eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; eauto.
+
     - (* assign state *)
-      intros * Hexp cls vars Hndup WTp (WTm & WTe) WTstmt.
+      intros * Hexp mems insts Γv Hndup Hndupm Hndupi WTp WTm WTe WTstmt.
       split; auto.
-      inv WTstmt. inversion_clear WTm as [? ? ? WTmv WTmi].
-      eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; auto.
+      inv WTstmt. inversion_clear WTm as [???? WTmv WTmi].
+      eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; eauto.
       constructor.
       + eapply wt_env_add; eauto.
-        apply fst_NoDupMembers.
-        now apply NoDup_app_weaken with (1:=cls.(c_nodup)).
       + apply Forall_impl_In with (2:=WTmi).
-        inversion 2; now eauto using wt_mem_inst.
+        inversion 2.
+        * left; auto.
+        * eright; eauto.
+
     - (* call *)
       intros p * Hevals Hcall IH
-             cls vars Hndups WTp (WTm & WTe) WTstmt.
+             mems insts Γv Hndups Hndupm Hndupi WTp WTm WTe WTstmt.
       inv WTstmt.
       edestruct IH; eauto; clear IH; simpl.
       + (* Instance memory is well-typed before execution. *)
-        unfold instance_match; destruct (find_inst o me) eqn:Hmfind; auto.
-        inversion_clear WTm as [? ? ? WTv WTi].
+        unfold instance_match; destruct (find_inst o me) eqn:Hmfind; auto using wt_memory_empty.
+        inversion_clear WTm as [???? WTv WTi].
         eapply Forall_forall in WTi; eauto.
         inversion_clear WTi as [? ? ? ? Hmfind'|? ? ? ? ? ? ? Hmfind' Hcfind' WTm];
           rewrite Hmfind' in Hmfind; try discriminate.
         match goal with Hcfind:find_class _ _ = Some (_, p') |- _ =>
-                        simpl in Hcfind'; rewrite Hcfind in Hcfind' end.
+                        simpl in Hcfind'; setoid_rewrite Hcfind in Hcfind' end.
         injection Hmfind; injection Hcfind'. intros; subst.
         assumption.
       + (* Arguments are well-typed if given. *)
@@ -745,23 +521,26 @@ Module Type OBCTYPING
         apply in_combine_r in Hxy.
         match goal with H:Forall _ es |- _ =>
           apply Forall_forall with (1:=H) in Hxy end.
-        eapply pres_sem_expo'; eauto; split; eauto.
+        eapply pres_sem_expo in Hxy; eauto; inv WTm; auto.
 
     - (* sequential composition *)
       intros p menv env s1 s2
-             * Hstmt1 IH1 Hstmt2 IH2 cls vars Hndups WTp WTs WTstmt.
+             * Hstmt1 IH1 Hstmt2 IH2 mems insts Γv Hndups Hndupm Hndupi WTp WTm Wte WTstmt.
       inv WTstmt.
       (* match goal with WTstmt1:wt_stmt _ _ _ _ s1 |- _ => *)
       (*                 specialize (IH1 _ _ Hndups WTp WTs WTstmt1) end. *)
-      edestruct IH1 as (WTm1 & WTe1); eauto.
-      assert (wt_state p me1 ve1 cls vars) as WTs1; auto; split; auto.
-    - (* if/then/else *)
-      intros prog me ve cond v b st sf env' menv'
-             Hexp Hvtb Hstmt IH cls vars Hndups WTp WTs WTstmt.
+      edestruct IH1 with (Γv := Γv) as (WTm1 & WTe1); eauto.
+
+    - (* switch *)
+      intros prog me ve cond branches d c s me' ve'
+             Hexp Nth IH mems insts Γv Hndups Hndupm Hndupi WTp WTm WTe WTstmt.
       apply IH; auto.
-      inv WTstmt. destruct b; auto.
+      inv WTstmt; destruct s; simpl; auto.
+      eapply nth_error_In in Nth; auto.
+
     - (* skip *)
       intros; auto.
+
     - (* call eval *)
       intros * Hfindc Hfindm Hlvos Hstmt IH Hrvs
              p'' cls'' fm'' WTp Hfindc' Hfindm' WTmem WTv.
@@ -769,10 +548,9 @@ Module Type OBCTYPING
         injection Hfindc'; intros; subst cls'' p''; clear Hfindc'.
       rewrite Hfindm in Hfindm';
         injection Hfindm'; intros; subst fm''; clear Hfindm'.
-      destruct (wt_program_find_class _ _ _ _ WTp Hfindc) as (WTc & WTp').
-      edestruct IH with (vars := meth_vars fm); eauto.
-      + apply m_nodupvars.
-      + split; eauto.
+      destruct (wt_program_find_unit _ _ _ _ _ WTp Hfindc) as (WTc & WTp').
+      edestruct IH with (Γv := meth_vars fm) (5 := WTmem);
+        eauto using m_nodupvars, c_nodupmems, c_nodupobjs.
       + (* In a well-typed class, method bodies are well-typed. *)
         apply wt_class_find_method with (1:=WTc) (2:=Hfindm).
       + split; auto.
@@ -783,18 +561,21 @@ Module Type OBCTYPING
         intros v x Hvin Hxin Hxv.
         destruct x as (x & ty). simpl in *.
         destruct v; simpl; auto.
-        eapply venv_find_wt_val with (3:=Hxv);
+        eapply env_find_wt_value with (3:=Hxv);
           eauto using in_or_app.
   Qed.
 
   Lemma pres_sem_stmt:
-    forall p cls vars stmt me ve me' ve',
-      NoDupMembers vars ->
+    forall p mems insts Γv stmt me ve me' ve',
+      NoDupMembers Γv ->
+      NoDupMembers mems ->
+      NoDupMembers insts ->
       wt_program p ->
-      wt_state p me ve cls vars ->
-      wt_stmt p cls.(c_objs) cls.(c_mems) vars stmt ->
+      wt_memory me p mems insts ->
+      wt_env ve Γv ->
+      wt_stmt p insts mems Γv stmt ->
       stmt_eval p me ve stmt (me', ve') ->
-      wt_mem me' p cls /\ wt_env ve' vars.
+      wt_memory me' p mems insts /\ wt_env ve' Γv.
   Proof.
     intros.
     eapply ((proj1 pres_sem_stmt') _ _ _ _ (me', ve')); eauto.
@@ -805,11 +586,11 @@ Module Type OBCTYPING
       wt_program p ->
       find_class clsid p = Some(cls, p') ->
       find_method f cls.(c_methods) = Some fm ->
-      wt_mem me p' cls ->
-      Forall2 (fun vo xt => wt_valo vo (snd xt)) vs fm.(m_in) ->
+      wt_memory me p' cls.(c_mems) cls.(c_objs) ->
+      Forall2 (fun vo xt => wt_option_value vo (snd xt)) vs fm.(m_in) ->
       stmt_call_eval p me clsid f vs me' rvs ->
-      wt_mem me' p' cls
-      /\ Forall2 (fun vo yt => wt_valo vo (snd yt)) rvs fm.(m_out).
+      wt_memory me' p' cls.(c_mems) cls.(c_objs)
+      /\ Forall2 (fun vo yt => wt_option_value vo (snd yt)) rvs fm.(m_out).
   Proof.
     intros; eapply (proj2 pres_sem_stmt'); eauto.
   Qed.
@@ -819,20 +600,20 @@ Module Type OBCTYPING
       wt_program prog ->
       find_class cid prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      (forall n, Forall2 (fun vo xt => wt_valo vo (snd xt)) (ins n) f.(m_in)) ->
-      wt_mem me prog' c ->
+      (forall n, Forall2 (fun vo xt => wt_option_value vo (snd xt)) (ins n) f.(m_in)) ->
+      wt_memory me prog' c.(c_mems) c.(c_objs) ->
       loop_call prog cid fid ins outs 0 me ->
       exists me_n,
         loop_call prog cid fid ins outs n me_n
-        /\ wt_mem me_n prog' c
-        /\ Forall2 (fun vo xt => wt_valo vo (snd xt)) (outs n) f.(m_out).
+        /\ wt_memory me_n prog' c.(c_mems) c.(c_objs)
+        /\ Forall2 (fun vo xt => wt_option_value vo (snd xt)) (outs n) f.(m_out).
   Proof.
     induction n; intros * ????? Loop.
     - exists me; split; auto; split; auto.
       inv Loop; eapply pres_sem_stmt_call; eauto.
     - edestruct IHn as (me_n & Loop_n & ? & ?); eauto.
       inversion_clear Loop_n as [???? Loop_Sn].
-      assert (wt_mem me' prog' c) by (eapply pres_sem_stmt_call; eauto).
+      assert (wt_memory me' prog' c.(c_mems) c.(c_objs)) by (eapply pres_sem_stmt_call; eauto).
       eexists; split; eauto; split; auto.
       inv Loop_Sn.
       eapply pres_sem_stmt_call; eauto.
@@ -843,164 +624,115 @@ Module Type OBCTYPING
       wt_program prog ->
       find_class cid prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      (forall n, Forall2 (fun vo xt => wt_valo vo (snd xt)) (ins n) f.(m_in)) ->
-      wt_mem me prog' c ->
+      (forall n, Forall2 (fun vo xt => wt_option_value vo (snd xt)) (ins n) f.(m_in)) ->
+      wt_memory me prog' c.(c_mems) c.(c_objs) ->
       loop_call prog cid fid ins outs 0 me ->
-      forall n, Forall2 (fun vo xt => wt_valo vo (snd xt)) (outs n) f.(m_out).
+      forall n, Forall2 (fun vo xt => wt_option_value vo (snd xt)) (outs n) f.(m_out).
   Proof.
     intros; edestruct pres_loop_call_spec as (?&?&?&?); eauto.
   Qed.
 
-  Lemma wt_program_app:
-    forall cls cls',
-      wt_program (cls ++ cls') ->
-      wt_program cls'.
-  Proof.
-    induction cls; inversion 1; auto.
-  Qed.
-
   Remark wt_program_not_class_in:
-    forall pre post o c cid,
-      wt_program (pre ++ c :: post) ->
+    forall pre post o c cid prog,
+      classes prog = pre ++ c :: post ->
+      wt_program prog ->
       In (o, cid) c.(c_objs) ->
-      find_class cid pre = None.
+      find_class cid (Program prog.(enums) pre) = None.
   Proof.
-    induction pre as [|k]; intros post o c c' WT Hin; auto.
-    simpl in WT. inv WT.
-    simpl.
+    unfold wt_program, CommonTyping.wt_program.
+    intros * E WT Hin; setoid_rewrite E in WT; clear E.
+    induction pre as [|k]; auto.
+    simpl in WT. inversion WT as [|?? []]; subst; clear WT.
+    unfold find_class, find_unit; simpl.
     match goal with H: Forall _ _ |- _ => apply Forall_app_weaken, Forall_cons2 in H as (Hneq &?) end.
     apply ident_eqb_neq in Hneq.
-    simpl.
-    match goal with H:wt_program _ |- _ =>
-      specialize (IHpre _ _ _ _ H Hin); apply wt_program_app in H;
-        inversion_clear H as [|? ? WTc WTp Hnodup] end.
-    destruct (ident_eqb k.(c_name) c') eqn: Heq; auto.
-    apply ident_eqb_eq in Heq; rewrite Heq in *; clear Heq.
+    match goal with H:Forall' _ _ |- _ =>
+      specialize (IHpre H); apply Forall'_app_r in H;
+        inversion_clear H as [|?? [WTc Hnodup]] end.
+    simpl in *.
+    destruct (ident_eq_dec k.(c_name) cid); auto.
+    subst.
     inversion_clear WTc as [Ho Hm].
     apply Forall_forall with (1:=Ho) in Hin.
-    apply not_None_is_Some in Hin.
-    destruct Hin as ((cls, p') & Hin).
+    apply not_None_is_Some in Hin as ((cls, p') & Hin).
     simpl in Hin.
-    rewrite <-(find_class_name _ _ _ _ Hin) in *.
-    apply find_class_In in Hin.
+    apply find_unit_In in Hin as (?& Hin).
     clear Hnodup.
-    eapply Forall_forall in Hin; eauto.
-    contradiction.
+    eapply Forall_forall in Hin; eauto; simpl in Hin.
+    simpl in *; congruence.
   Qed.
 
   Remark wt_program_not_same_name:
-    forall post o c cid,
-      wt_program (c :: post) ->
+    forall post o c cid enums,
+      wt_program (Program enums (c :: post)) ->
       In (o, cid) c.(c_objs) ->
       cid <> c.(c_name).
   Proof.
     intros * WTp Hin Hc'.
     rewrite Hc' in Hin; clear Hc'.
-    inversion_clear WTp as [|? ? WTc WTp' Hnodup]; clear WTp'.
+    inversion_clear WTp as [|?? [WTc Hnodup] WTp']; clear WTp'; simpl in *.
     inversion_clear WTc as [Ho Hm].
     apply Forall_forall with (1:=Ho) in Hin.
-    apply not_None_is_Some in Hin.
-    destruct Hin as ((cls, p') & Hin).
-    simpl in Hin. rewrite <-(find_class_name _ _ _ _ Hin) in *.
-    apply find_class_In in Hin.
+    apply not_None_is_Some in Hin as ((cls, p') & Hin).
+    simpl in Hin.
+    apply find_unit_In in Hin as [? Hin].
     eapply Forall_forall in Hin; eauto.
     now apply Hin.
   Qed.
 
-  Inductive suffix: program -> program -> Prop :=
-    suffix_intro: forall p p',
-      suffix p (p' ++ p).
-
-  Lemma suffix_refl:
-    forall p, suffix p p.
+  Lemma wt_program_find_class_chained_in_objs:
+    forall p f i g cl p',
+      wt_program p ->
+      find_class f p = Some (cl, p') ->
+      In (i, g) cl.(c_objs) ->
+      find_class g p' = find_class g p.
   Proof.
-    intro; rewrite <-app_nil_l; constructor.
-  Qed.
-  Hint Resolve suffix_refl.
-
-  Add Parametric Relation: program suffix
-      reflexivity proved by suffix_refl
-        as suffix_rel.
-
-  Lemma suffix_cons:
-    forall cls prog' prog,
-      suffix (cls :: prog') prog ->
-      suffix prog' prog.
-  Proof.
-    intros * Hsub.
-    inv Hsub.
-    rewrite <-app_last_app. constructor.
-  Qed.
-
-  Remark find_class_sub_same:
-    forall prog1 prog2 clsid cls prog',
-      find_class clsid prog2 = Some (cls, prog') ->
-      wt_program prog1 ->
-      suffix prog2 prog1 ->
-      find_class clsid prog1 = Some (cls, prog').
-  Proof.
-    intros * Hfind WD Sub.
-    inv Sub.
-    induction p' as [|cls' p']; simpl; auto.
-    inversion_clear WD as [|? ? WTc WTp Hnodup].
-    specialize (IHp' WTp).
-    destruct (ident_eq_dec cls'.(c_name) clsid) as [He|Hne].
-    - rewrite He in *; clear He.
-      rewrite <-(find_class_name _ _ _ _ IHp') in *.
-      apply find_class_In in IHp'.
-      eapply Forall_forall in IHp'; eauto; contradiction.
-    - apply ident_eqb_neq in Hne.
-      now rewrite Hne, IHp'.
+    intros * WTp Hfc Hin.
+    destruct (find_class g p) eqn: Hfc'.
+    - assert (equiv_program p p')
+        by (eapply find_unit_equiv_program; eauto).
+      apply find_unit_spec in Hfc as (?& cls & E &?); subst.
+      pose proof Hin as Hin'.
+      eapply wt_program_not_class_in in Hin; eauto.
+      eapply wt_program_not_same_name in Hin';
+        [|eapply wt_program_app in WTp as []; simpl in *; eauto].
+      setoid_rewrite find_unit_app in Hfc'; eauto; simpl in *.
+      setoid_rewrite Hin in Hfc'.
+      setoid_rewrite <-find_unit_other; eauto.
+    - apply find_unit_None; apply find_unit_None in Hfc'.
+      apply find_unit_spec in Hfc as (?& cls & E &?); subst.
+      rewrite E in Hfc'.
+      apply Forall_app in Hfc' as [? Hfc']; inv Hfc'; auto.
   Qed.
 
-  Lemma find_class_sub:
-    forall prog clsid cls prog',
-      find_class clsid prog = Some (cls, prog') ->
-      suffix prog' prog.
-  Proof.
-    intros * Find.
-    apply find_class_app in Find.
-    destruct Find as (? & ? & ?); subst.
-    rewrite List_shift_first.
-    constructor.
-  Qed.
-
-  Lemma wt_stmt_sub:
-    forall prog prog' insts mems vars s,
-      wt_stmt prog' insts mems vars s ->
-      wt_program prog ->
+  Lemma wt_exp_suffix:
+    forall prog prog' Γm Γv e,
+      wt_exp prog' Γm Γv e ->
       suffix prog' prog ->
-      wt_stmt prog insts mems vars s.
+      wt_exp prog Γm Γv e.
   Proof.
     induction 1; intros * Sub; econstructor; eauto.
-    eapply find_class_sub_same; eauto.
+    inv Sub; auto.
+    take (equiv_program _ _) and specialize (it nil); inv it; auto.
   Qed.
 
-  Lemma wt_mem_inst_sub:
-    forall prog prog' mem oc,
-      wt_mem_inst mem prog' oc ->
+  Lemma wt_stmt_suffix:
+    forall prog prog' insts Γm Γv s,
+      wt_stmt prog' insts Γm Γv s ->
       wt_program prog ->
       suffix prog' prog ->
-      wt_mem_inst mem prog oc.
+      wt_stmt prog insts Γm Γv s.
   Proof.
-    induction 1; intros.
-    - left; auto.
-    - eright; eauto.
-      eapply find_class_sub_same; eauto.
-  Qed.
-  Hint Resolve wt_mem_inst_sub.
-
-  Lemma wt_mem_sub:
-    forall prog prog' c mem,
-      wt_mem mem prog' c ->
-      wt_program prog ->
-      suffix prog' prog ->
-      wt_mem mem prog c.
-  Proof.
-    induction 1 as [? ? ? ? WTmem_inst]; intros * Sub.
-    constructor; auto.
-    induction (c_objs cl) as [|(o, c)]; inv WTmem_inst; auto.
-    constructor; eauto.
+    induction s using stmt_ind2'; inversion_clear 1;
+      intros * Sub; econstructor; eauto using wt_exp_suffix.
+    - take (suffix _ _) and inv it; auto.
+      take (equiv_program _ _) and specialize (it nil); inv it; auto.
+    - intros.
+      take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in *; auto.
+    - eapply find_unit_suffix_same; eauto.
+    - apply Forall_forall; intros.
+      take (Forall _ _) and eapply Forall_forall in it; eauto.
+      eapply wt_exp_suffix; eauto.
   Qed.
 
   Hint Constructors suffix.
@@ -1015,7 +747,7 @@ Module Type OBCTYPING
     intros * Ev ? ?.
     induction Ev.
     econstructor; eauto.
-    eapply find_class_sub_same; eauto.
+    eapply find_unit_suffix_same; eauto.
   Qed.
   Hint Resolve stmt_call_eval_suffix.
 
@@ -1031,86 +763,34 @@ Module Type OBCTYPING
   Qed.
   Hint Resolve stmt_eval_suffix.
 
-  Lemma find_class_chained:
-    forall prog c1 c2 cls prog' cls' prog'',
-      wt_program prog ->
-      find_class c1 prog = Some (cls, prog') ->
-      find_class c2 prog' = Some (cls', prog'') ->
-      find_class c2 prog = Some (cls', prog'').
-  Proof.
-    induction prog as [|c prog IH]; [now inversion 2|].
-    intros * WTp Hfc Hfc'.
-    simpl in Hfc.
-    inversion_clear WTp as [|? ? WTc WTp' Hnodup].
-    pose proof (find_class_In _ _ _ _ Hfc') as Hfcin.
-    pose proof (find_class_name _ _ _ _ Hfc') as Hc2.
-    destruct (ident_eq_dec c.(c_name) c1) as [He|Hne].
-    - rewrite He, ident_eqb_refl in Hfc.
-      injection Hfc; intros R1 R2; rewrite <-R1, <-R2 in *; clear Hfc R1 R2.
-      assert (c.(c_name) <> cls'.(c_name)) as Hne.
-      + intro Hn.
-        apply in_split in Hfcin.
-        destruct Hfcin as (ws & xs & Hfcin).
-        rewrite Hfcin in Hnodup.
-        apply Forall_app_weaken in Hnodup; inv Hnodup.
-        contradiction.
-      + simpl. apply ident_eqb_neq in Hne.
-        rewrite Hc2 in Hne. now rewrite Hne.
-    - apply ident_eqb_neq in Hne.
-      rewrite Hne in Hfc. clear Hne.
-      rewrite <- (IH _ _ _ _ _ _ WTp' Hfc Hfc').
-      (* inversion_clear Hnodup as [|? ? Hnin Hnodup']. *)
-      apply find_class_app in Hfc.
-      destruct Hfc as (cls'' & Hprog & Hfc).
-      rewrite Hprog in Hnodup.
-      assert (c.(c_name) <> cls'.(c_name)) as Hne.
-      + intro Hn.
-        apply in_split in Hfcin.
-        destruct Hfcin as (ws & xs & Hfcin).
-        rewrite Hfcin in Hnodup.
-        apply Forall_app_weaken in Hnodup.
-        rewrite app_comm_cons in Hnodup.
-        apply Forall_app_weaken in Hnodup; inv Hnodup.
-        contradiction.
-      + simpl. rewrite <-Hc2. apply ident_eqb_neq in Hne.
-        now rewrite Hne.
-  Qed.
-
-  Lemma wt_mem_chained:
-    forall prog prog' c  mem ownerid owner,
-      wt_program prog ->
-      find_class ownerid prog = Some (owner, prog') ->
-      wt_mem mem prog' c ->
-      wt_mem mem prog c.
-  Proof.
-    intros.
-    eapply wt_mem_sub; eauto.
-    eapply find_class_sub; eauto.
-  Qed.
-  Hint Resolve wt_mem_chained.
-
   Lemma wt_mem_skip:
-    forall prog prog' cid c mem,
-      wt_program prog ->
-      find_class cid prog = Some (c, prog') ->
-      wt_mem mem prog c ->
-      wt_mem mem prog' c.
+    forall p p' f c mem,
+      wt_program p ->
+      find_class f p = Some (c, p') ->
+      wt_memory mem p c.(c_mems) c.(c_objs) ->
+      wt_memory mem p' c.(c_mems) c.(c_objs).
   Proof.
     intros * WT Find WTm.
-    inversion_clear WTm as [???? WTinsts]; constructor; auto.
+    (* pose proof Find as Eq; apply find_class_enums in Eq. *)
+    assert (enums p = enums p') as Enums
+      by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
+    inversion_clear WTm as [????? WTinsts]; constructor; auto.
     apply Forall_forall; intros (?&?) Hin.
     eapply Forall_forall in WTinsts; eauto.
-    apply find_class_app in Find as (prog'' & ? &?); subst.
+    apply find_unit_spec in Find as (?&?&?&?); simpl in *.
+    (* apply find_class_app in Find as (prog'' & ? &?); simpl in *; subst. *)
     pose proof WT as WT'.
     eapply wt_program_not_class_in in WT; eauto.
     inversion_clear WTinsts as [|???????? Find].
-    * left; auto.
-    * eright; eauto.
-      rewrite find_class_app', WT in Find.
-      apply wt_program_app in WT'.
+    - left; auto.
+    - eright; eauto.
+      erewrite find_unit_app in Find; eauto; setoid_rewrite WT in Find.
+      eapply wt_program_app in WT' as [? WT']; eauto.
       eapply wt_program_not_same_name in Hin; eauto.
-      simpl in Find; cases_eqn E.
-      apply ident_eqb_eq in E; congruence.
+      + simpl in *.
+        eapply find_unit_cons in Find as [[]|[]]; simpl in *; eauto; try congruence.
+        destruct p'; simpl in *; subst; auto.
+      + unfold wt_program, CommonTyping.wt_program in *; simpl in *; eauto.
   Qed.
   Hint Resolve wt_mem_skip.
 
@@ -1118,36 +798,33 @@ Module Type OBCTYPING
     forall prog n c prog',
       wt_program prog ->
       find_class n prog = Some (c, prog') ->
-      exists prog'', find_class n (rev prog) = Some (c, prog'').
+      exists prog'', find_class n (rev_prog prog) = Some (c, prog'').
   Proof.
-   induction prog as [|c']; simpl; intros * WTP Find; try discriminate.
-   inversion_clear WTP as [|? ? Hwtc Hwtp Hndup].
-   erewrite find_class_app'; eauto.
-   destruct (ident_eqb c'.(c_name) n) eqn:Heq.
-   - inv Find.
-     apply ident_eqb_eq in Heq.
-     rewrite Heq in *.
-     erewrite not_In_find_class; eauto.
-      + simpl. apply ident_eqb_eq in Heq.
-        rewrite Heq; econstructor; eauto.
-      + rewrite map_rev.
-        intro Hin.
-        apply in_rev, in_map_iff in Hin as (?&?& Hin).
-        eapply Forall_forall in Hin; eauto; congruence.
-   - apply ident_eqb_neq in Heq.
-     edestruct IHprog as (? & Find'); eauto.
-     rewrite Find'.
-     econstructor; eauto.
+    intros (enums & prog).
+    unfold rev_prog; setoid_rewrite rev_tr_spec.
+    induction prog as [|c']; simpl; intros * WTP Find; try discriminate.
+    inversion_clear WTP as [|?? [Hwtc Hndup] Hwtp]; simpl.
+    setoid_rewrite find_unit_app; simpl; eauto.
+    eapply find_unit_cons in Find as [[E Find]|[]]; simpl in *; eauto.
+    - inv Find.
+      assert (find_unit (c_name c') (Program enums (rev prog)) = None) as E
+          by (apply find_unit_None; simpl; now rewrite <-Forall_rev).
+      setoid_rewrite E.
+      unfold find_unit; simpl.
+      destruct (ident_eq_dec (c_name c') (c_name c')); try contradiction; eauto.
+    - edestruct IHprog as (? & Find'); eauto.
+      setoid_rewrite Find'; eauto.
   Qed.
 
 End OBCTYPING.
 
 Module ObcTypingFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : OBCSYNTAX Ids Op OpAux)
-       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn)
-       <: OBCTYPING Ids Op OpAux Syn Sem.
-  Include OBCTYPING Ids Op OpAux Syn Sem.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX Ids Op)
+       (Syn    : OBCSYNTAX     Ids Op OpAux)
+       (ComTyp : COMMONTYPING  Ids Op OpAux)
+       (Sem    : OBCSEMANTICS  Ids Op OpAux Syn)
+       <: OBCTYPING Ids Op OpAux Syn ComTyp Sem.
+  Include OBCTYPING Ids Op OpAux Syn ComTyp Sem.
 End ObcTypingFun.

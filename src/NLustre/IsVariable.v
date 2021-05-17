@@ -27,10 +27,12 @@ From Coq Require Import Sorting.Permutation.
 Module Type ISVARIABLE
        (Ids          : IDS)
        (Op           : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : NLSYNTAX  Ids Op CESyn)
-       (Import Mem   : MEMORIES  Ids Op CESyn Syn)
-       (Import IsD   : ISDEFINED Ids Op CESyn Syn Mem).
+       (OpAux        : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX      Ids Op OpAux Cks CESyn)
+       (Import Mem   : MEMORIES      Ids Op OpAux Cks CESyn Syn)
+       (Import IsD   : ISDEFINED     Ids Op OpAux Cks CESyn Syn Mem).
 
   Inductive Is_variable_in_eq : ident -> equation -> Prop :=
   | VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
@@ -330,12 +332,14 @@ Module Type ISVARIABLE
 End ISVARIABLE.
 
 Module IsVariableFun
-      (Ids    : IDS)
+       (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX      Op)
-       (Syn   : NLSYNTAX  Ids Op CESyn)
-       (Mem   : MEMORIES  Ids Op CESyn Syn)
-       (IsD   : ISDEFINED Ids Op CESyn Syn Mem)
-       <: ISVARIABLE Ids Op CESyn Syn Mem IsD.
-  Include ISVARIABLE Ids Op CESyn Syn Mem IsD.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX      Ids Op OpAux Cks CESyn)
+       (Mem   : MEMORIES      Ids Op OpAux Cks CESyn Syn)
+       (IsD   : ISDEFINED     Ids Op OpAux Cks CESyn Syn Mem)
+       <: ISVARIABLE Ids Op OpAux Cks CESyn Syn Mem IsD.
+  Include ISVARIABLE Ids Op OpAux Cks CESyn Syn Mem IsD.
 End IsVariableFun.

@@ -11,9 +11,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-From Coq Require Numbers.BinNums.
+(* From Coq Require Numbers.BinNums. *)
+From Velus Require Import Common.
 
-Definition ident := Coq.Numbers.BinNums.positive.
+(* Definition ident := Coq.Numbers.BinNums.positive. *)
 
 (* This module draws on the work of Jacques-Henri Jourdan for the CompCert
    project (CompCert/cparser/Cabs.v). *)
@@ -47,8 +48,8 @@ Inductive type_name :=
 | Tint64
 | Tuint64
 | Tfloat32
-| Tfloat64
-| Tbool : type_name.
+| Tfloat64 : type_name
+| Tenum_name : ident -> type_name.
 
 Inductive unary_operator :=
 | MINUS | NOT | BNOT.
@@ -62,24 +63,24 @@ Inductive binary_operator :=
 (* The string is the textual representation of the constant in
    the source code. *)
 Inductive constant :=
-| CONST_BOOL  : bool -> constant
+| CONST_ENUM  : ident -> constant
 | CONST_INT   : string -> constant
 | CONST_FLOAT : floatInfo -> constant
 | CONST_CHAR  : bool -> list char_code -> constant.
 
 Inductive clock :=
 | BASE  : clock
-| ON    : clock -> ident -> bool -> clock.
+| ON    : clock -> ident -> ident -> clock. (* ck on x = C *)
 
 Inductive preclock :=
 | FULLCK : clock -> preclock
-| WHENCK : ident -> bool -> preclock.
+| WHENCK : ident -> ident -> preclock. (* when x = C *)
 
 Inductive expression :=
 | UNARY    : unary_operator -> list expression -> astloc -> expression
 | BINARY   : binary_operator -> list expression -> list expression -> astloc
              -> expression
-| IFTE     : list expression -> list expression -> list expression -> astloc
+| CASE     : list expression -> list (ident * list expression) -> astloc
              -> expression
 | CAST     : type_name -> list expression -> astloc -> expression
 | APP      : ident -> list expression -> list expression -> astloc -> expression
@@ -87,14 +88,14 @@ Inductive expression :=
 | VARIABLE : ident -> astloc -> expression
 | FBY      : list expression -> list expression -> list expression -> astloc -> expression
 | ARROW    : list expression -> list expression -> list expression -> astloc -> expression
-| WHEN     : list expression -> ident -> bool -> astloc -> expression
-| MERGE    : ident -> list expression -> list expression -> astloc -> expression.
+| WHEN     : list expression -> ident -> ident -> astloc -> expression
+| MERGE    : ident -> list (ident * list expression) -> astloc -> expression.
 
 Definition expression_loc (e: expression) : astloc :=
   match e with
   | UNARY _ _ l => l
   | BINARY _ _ _ l => l
-  | IFTE _ _ _ l => l
+  | CASE _ _ l => l
   | CAST _ _ l => l
   | APP _ _ _ l => l
   | CONSTANT _ l => l
@@ -102,7 +103,7 @@ Definition expression_loc (e: expression) : astloc :=
   | FBY _ _ _ l => l
   | ARROW _ _ _ l => l
   | WHEN _ _ _ l => l
-  | MERGE _ _ _ l => l
+  | MERGE _ _ l => l
   end.
 
 Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
@@ -112,11 +113,13 @@ Definition equation : Type := (list ident * list expression * astloc)%type.
 Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
 | NODE : ident -> bool -> var_decls -> var_decls -> var_decls
-         -> list equation -> astloc -> declaration.
+         -> list equation -> astloc -> declaration
+| TYPE : ident -> list ident -> astloc -> declaration.
 
 Definition declaration_loc (d: declaration) : astloc :=
   match d with
   | NODE name has_state inputs outputs locals eqs loc => loc
+  | TYPE name constructors loc => loc
   end.
 
 (** Custom induction schemes *)
@@ -137,12 +140,11 @@ Section expression_ind2.
       Forall P es2 ->
       P (BINARY b es1 es2 a).
 
-  Hypothesis IFTECase:
-    forall es ets efs a,
+  Hypothesis CASECase:
+    forall es brs a,
       Forall P es ->
-      Forall P ets ->
-      Forall P efs ->
-      P (IFTE es ets efs a).
+      Forall (fun e => Forall P (snd e)) brs ->
+      P (CASE es brs a).
 
   Hypothesis CASTCase:
     forall t es a,
@@ -183,10 +185,9 @@ Section expression_ind2.
       P (WHEN es x b a).
 
   Hypothesis MERGECase:
-    forall x ets efs a,
-      Forall P ets ->
-      Forall P efs ->
-      P (MERGE x ets efs a).
+    forall x es a,
+      Forall (fun e => Forall P (snd e)) es ->
+      P (MERGE x es a).
 
   Local Ltac SolveForall :=
     match goal with
@@ -199,7 +200,9 @@ Section expression_ind2.
     destruct e.
     - apply UNARYCase; SolveForall.
     - apply BINARYCase; SolveForall.
-    - apply IFTECase; SolveForall.
+    - apply CASECase; SolveForall.
+      constructor; auto.
+      SolveForall.
     - apply CASTCase; SolveForall.
     - apply APPCase; SolveForall.
     - apply CONSTANTCase; SolveForall.
@@ -208,6 +211,8 @@ Section expression_ind2.
     - apply ARROWCase; SolveForall.
     - apply WHENCase; SolveForall.
     - apply MERGECase; SolveForall.
+      constructor; auto.
+      SolveForall.
   Qed.
 
 End expression_ind2.

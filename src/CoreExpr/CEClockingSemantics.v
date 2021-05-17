@@ -22,23 +22,24 @@ constraints in the NLustre semantic model.
 Module Type CECLOCKINGSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux CESyn     Str)
-       (Import CEClo : CECLOCKING  Ids Op       CESyn).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import Cks   : CLOCKS          Ids Op OpAux)
+       (Import CESyn : CESYNTAX        Ids Op OpAux Cks)
+       (Import Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CESem : CESEMANTICS Ids Op OpAux Cks CESyn     Str)
+       (Import CEClo : CECLOCKING  Ids Op OpAux Cks CESyn).
 
   Section ClockMatchInstant.
 
     Variables
-      (vars: list (ident * clock))
+      (Ω: list (ident * clock))
       (base: bool)
       (R: env)
-      (Hcm: sem_clocked_vars_instant base R vars).
+      (Hcm: sem_clocked_vars_instant base R Ω).
 
     Lemma clock_match_instant_exp:
       forall le ck,
-        wc_exp vars le ck ->
+        wc_exp Ω le ck ->
         forall v,
           sem_exp_instant base R le v ->
           (sem_exp_instant base R le absent
@@ -47,7 +48,9 @@ Module Type CECLOCKINGSEMANTICS
           ((exists c, sem_exp_instant base R le (present c))
            /\ sem_clock_instant base R ck true).
     Proof.
-      induction le; inversion_clear 1.
+      induction le; intros * WCe; inv WCe.
+      - intros.
+        destruct base; [right|left]; eauto using sem_exp_instant, sem_clock_instant.
       - intros.
         destruct base; [right|left]; eauto using sem_exp_instant, sem_clock_instant.
       - inversion_clear 1.
@@ -70,14 +73,14 @@ Module Type CECLOCKINGSEMANTICS
       - inversion_clear 1.
         + right; split; eauto using sem_exp_instant.
           edestruct IHle as [(?&?)|(?&?)]; eauto.
-          now assert (present c = absent) by sem_det.
+          now assert (present v0 = absent) by sem_det.
         + left; split; eauto using sem_exp_instant.
           edestruct IHle as [(?&?)|((c&?)&?)]; eauto.
           now assert (present c = absent) by sem_det.
       - inversion_clear 1.
         + right; split; eauto using sem_exp_instant.
           edestruct IHle1 as [(?&?)|(?&?)]; eauto.
-          now assert (present c1 = absent) by sem_det.
+          now assert (present v1 = absent) by sem_det.
         + left; split; eauto using sem_exp_instant.
           edestruct IHle1 as [(?&?)|((c&?)&?)]; eauto.
           now assert (present c = absent) by sem_det.
@@ -85,7 +88,7 @@ Module Type CECLOCKINGSEMANTICS
 
     Corollary clock_match_instant_exp_contradiction:
       forall le ck b v,
-        wc_exp vars le ck ->
+        wc_exp Ω le ck ->
         sem_exp_instant base R le v ->
         sem_clock_instant base R ck b ->
         (b = true <-> v <> absent).
@@ -103,7 +106,7 @@ Module Type CECLOCKINGSEMANTICS
 
     Lemma clock_match_instant_cexp:
       forall ce ck,
-        wc_cexp vars ce ck ->
+        wc_cexp Ω ce ck ->
         forall v,
           sem_cexp_instant base R ce v ->
           (sem_cexp_instant base R ce absent
@@ -112,49 +115,61 @@ Module Type CECLOCKINGSEMANTICS
           ((exists c, sem_cexp_instant base R ce (present c))
            /\ sem_clock_instant base R ck true).
     Proof.
-      induction ce.
+      induction ce using cexp_ind2.
       - repeat inversion_clear 1.
-        + repeat match goal with
-                 | WC: wc_cexp _ _ _, SL: sem_cexp_instant _ _ _ _ |- _ =>
-                   destruct (IHce1 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_cexp_instant _ _ _ absent,
+        + subst.
+          take (Forall _ (_ ++ _ :: _)) and apply Forall_app in it as (Hes1 & Hes2');
+            inversion_clear Hes2' as [|?? He Hes2].
+          take (Forall2 _ _ _) and apply Forall2_app_inv_r in it as (l1 & l2 & Hl1 & Hl2' & E).
+          inversion_clear Hl2' as [|???? He' Hl2]; eauto.
+          edestruct He as [(Hv & Hc)|((?c & Hv) & Hc)]; eauto.
+          * match goal with
+            | HA: sem_cexp_instant _ _ _ absent,
+                  HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
+              now assert (present cv = absent) by sem_det
+            end.
+          * right; split; eauto using sem_cexp_instant. inv Hc; auto.
+        + left; split.
+          constructor; auto.
+          destruct l; try contradiction.
+          repeat (take (Forall _ (_::_)) and inv it).
+          take (Forall2 _ _ _) and inversion_clear it.
+          take (forall ck : clock, wc_cexp _ _ _ -> _) and edestruct it as [(Hv & Hc)|((?c & Hv) & Hc)]; eauto.
+          * inv Hc; auto.
+            match goal with
+            | HA: sem_var_instant _ _ absent,
+                  HP: sem_var_instant _ _ (present ?cv) |- _ =>
+              now assert (present cv = absent) by sem_det
+            end.
+          * match goal with
+            | HA: sem_cexp_instant _ _ _ absent,
+                  HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
+              now assert (present cv = absent) by sem_det
+            end.
+      - repeat inversion_clear 1.
+        + destruct l as [|oe]; try contradiction.
+          take (Forall2 _ _ _) and inv it.
+          repeat (take (Forall _ (_::_)) and inv it).
+          take (forall ck : clock, wc_cexp _ _ _ -> _)
+                 and edestruct it as [(Hv & Hc)|((?c & Hv) & Hc)]; eauto.
+          -- match goal with
+             | HA: sem_cexp_instant _ _ _ absent,
                    HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 end.
-          right; split; eauto using sem_cexp_instant. inv Hc; auto.
-        + repeat match goal with
-                 | WC: wc_cexp _ _ _, SL: sem_cexp_instant _ _ _ _ |- _ =>
-                   destruct (IHce2 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_cexp_instant _ _ _ absent,
-                   HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 end.
-          right; split; eauto using sem_cexp_instant. inv Hc; auto.
-        + repeat match goal with
-                 | WC: wc_cexp _ _ _, SL: sem_cexp_instant _ _ _ _ |- _ =>
-                   destruct (IHce1 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_cexp_instant _ _ _ absent,
-                   HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 end.
-          left; split; eauto using sem_cexp_instant.
-          inv Hc; auto. now assert (present c = absent) by sem_det.
-      - repeat inversion_clear 1; [right|left];
-          repeat match goal with
-                 | WC: wc_cexp _ _ _, SL: sem_cexp_instant _ _ _ _ |- _ =>
-                   destruct (IHce1 _ WC _ SL) as [(Hv1 & Hc1)|((?c & Hv1) & Hc1)]
-                 | WC: wc_cexp _ _ _, SL: sem_cexp_instant _ _ _ _ |- _ =>
-                   destruct (IHce2 _ WC _ SL) as [(Hv2 & Hc2)|((?c & Hv2) & Hc2)]
-                 | HA: sem_cexp_instant _ _ _ absent,
-                   HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 | Hc: sem_exp_instant _ _ _ (present ?c),
-                   Ht: sem_cexp_instant _ _ _ (present ?ct),
-                   Hf: sem_cexp_instant _ _ _ (present ?cf),
-                   Hv: val_to_bool ?c = Some ?b |- _ =>
-                   apply (Site_eq _ _ _ _ _ _ _ _ _ Hc Ht Hf) in Hv;
-                     destruct b
-                 end; eauto using sem_cexp_instant.
+               now assert (present cv = absent) by sem_det
+             end.
+          -- clear Hv.
+             right; split; eauto using sem_cexp_instant.
+        + left; split.
+          constructor; auto.
+          destruct l as [|oe]; try contradiction.
+          repeat (take (Forall _ (_::_)) and inv it).
+          take (forall ck : clock, wc_cexp _ _ _ -> _) and
+               edestruct it as [(Hv & Hc)|((?c & Hv) & Hc)]; eauto.
+          match goal with
+          | HA: sem_cexp_instant _ _ _ absent,
+                HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
+            now assert (present cv = absent) by sem_det
+          end.
       - inversion_clear 1 as [| |? ? Hwc].
         inversion_clear 1.
         eapply clock_match_instant_exp in Hwc; eauto.
@@ -167,14 +182,14 @@ Module Type CECLOCKINGSEMANTICS
   Section ClockMatch.
 
     Variables
-      (vars: list (ident * clock))
+      (Ω: list (ident * clock))
       (bk: stream bool)
       (H: history)
-      (Hcm: sem_clocked_vars bk H vars).
+      (Hcm: sem_clocked_vars bk H Ω).
 
     Lemma clock_match_exp:
       forall le ck,
-        wc_exp vars le ck ->
+        wc_exp Ω le ck ->
         forall n v,
           sem_exp_instant (bk n) (H n) le v ->
           (sem_exp_instant (bk n) (H n) le absent
@@ -183,24 +198,24 @@ Module Type CECLOCKINGSEMANTICS
           ((exists c, sem_exp_instant (bk n) (H n) le (present c))
            /\ sem_clock_instant (bk n) (H n) ck true).
     Proof.
-      intros; eapply clock_match_instant_exp with (vars := vars); eauto.
+      intros; eapply clock_match_instant_exp with (Ω := Ω); eauto.
     Qed.
 
     Corollary clock_match_exp_contradiction:
       forall le ck b v,
-        wc_exp vars le ck ->
+        wc_exp Ω le ck ->
         forall n,
           sem_exp_instant (bk n) (H n) le v ->
           sem_clock_instant (bk n) (H n) ck b ->
           (b = true <-> v <> absent).
     Proof.
       intros.
-      eapply clock_match_instant_exp_contradiction with (vars := vars); eauto.
+      eapply clock_match_instant_exp_contradiction with (Ω := Ω); eauto.
     Qed.
 
     Lemma clock_match_cexp:
       forall ce ck,
-        wc_cexp vars ce ck ->
+        wc_cexp Ω ce ck ->
         forall n v,
           sem_cexp_instant (bk n) (H n) ce v ->
           (sem_cexp_instant (bk n) (H n) ce absent
@@ -209,7 +224,7 @@ Module Type CECLOCKINGSEMANTICS
           ((exists c, sem_cexp_instant (bk n) (H n) ce (present c))
            /\ sem_clock_instant (bk n) (H n) ck true).
     Proof.
-      intros; eapply clock_match_instant_cexp with (vars := vars); eauto.
+      intros; eapply clock_match_instant_cexp with (Ω := Ω); eauto.
     Qed.
 
   End ClockMatch.
@@ -294,13 +309,13 @@ Module Type CECLOCKINGSEMANTICS
   (* Using the transfer of named streams, also transfer clocks from
      the interface. *)
   Lemma sem_clock_instant_transfer_out_instant:
-    forall vars ck sub base base' R R' xck yck v,
+    forall Ω ck sub base base' R R' xck yck v,
       instck ck sub xck = Some yck ->
       sem_clock_instant base R ck base' ->
-      wc_clock vars xck ->
+      wc_clock Ω xck ->
       sem_clock_instant base' R' xck v ->
       (forall x y ys,
-          InMembers x vars ->
+          InMembers x Ω ->
           sub x = Some y ->
           sem_var_instant R' x ys ->
           sem_var_instant R y ys) ->
@@ -319,13 +334,13 @@ Module Type CECLOCKINGSEMANTICS
   Qed.
 
   Corollary sem_clock_instant_transfer_out:
-    forall vars ck sub bk bk' (H: history) H' xck yck v n,
+    forall Ω ck sub bk bk' (H: history) H' xck yck v n,
       instck ck sub xck = Some yck ->
       sem_clock_instant (bk n) (H n) ck (bk' n) ->
-      wc_clock vars xck ->
+      wc_clock Ω xck ->
       sem_clock_instant (bk' n) (H' n) xck v ->
       (forall x y ys,
-          InMembers x vars ->
+          InMembers x Ω ->
           sub x = Some y ->
           sem_var_instant (H' n) x ys ->
           sem_var_instant (H  n) y ys) ->
@@ -337,17 +352,17 @@ Module Type CECLOCKINGSEMANTICS
   (* Transfer interface variable values onto interface clocks between
      an external environment ([Hn]) and an internal one ([Hn']). *)
   Lemma clock_vars_to_sem_clock_instant:
-    forall vars bkn Hn Hn' ss,
-      Forall2 (fun xtc => sem_var_instant Hn (fst xtc)) vars ss ->
-      Forall2 (fun xtc => sem_var_instant Hn' (fst xtc)) vars ss ->
-      wc_env (idck vars) ->
+    forall Ω bkn Hn Hn' ss,
+      Forall2 (fun xtc => sem_var_instant Hn (fst xtc)) Ω ss ->
+      Forall2 (fun xtc => sem_var_instant Hn' (fst xtc)) Ω ss ->
+      wc_env (idck Ω) ->
       forall x (xty: type) xck v,
-        In (x, (xty, xck)) vars ->
+        In (x, (xty, xck)) Ω ->
         sem_clock_instant bkn Hn xck v ->
         sem_clock_instant bkn Hn' xck v.
   Proof.
-    intros vars bkn Hn Hn' ss HHn HHn' WCenv x xty xck v Hin Hsi.
-    assert (exists xty, In (x, (xty, xck)) vars) as Hin' by eauto.
+    intros Ω bkn Hn Hn' ss HHn HHn' WCenv x xty xck v Hin Hsi.
+    assert (exists xty, In (x, (xty, xck)) Ω) as Hin' by eauto.
     apply In_idck_exists in Hin'.
     apply wc_env_var with (2:=Hin') in WCenv.
     clear Hin Hin' xty.
@@ -361,26 +376,27 @@ Module Type CECLOCKINGSEMANTICS
       destruct HHn as (s & Hsin & Hv' & Hv).
       inversion_clear 1.
       + econstructor; eauto.
-        assert (s = present c) as Hsc by (eapply sem_var_instant_det; eauto).
+        assert (s = present (Venum b)) as Hsc by (eapply sem_var_instant_det; eauto).
         now subst.
       + econstructor; eauto.
         assert (s = absent) as Hsc by (eapply sem_var_instant_det; eauto).
         now subst.
       + eapply Son_abs2; eauto.
-        assert (s = present c) as Hsc by (eapply sem_var_instant_det; eauto).
+        assert (s = present (Venum b')) as Hsc by (eapply sem_var_instant_det; eauto).
         now subst.
   Qed.
 
 End CECLOCKINGSEMANTICS.
 
 Module CEClockingSemanticsFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux CESyn     Str)
-       (Import CEClo : CECLOCKING  Ids Op       CESyn)
-<: CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem CEClo.
-  Include CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem CEClo.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (Cks   : CLOCKS          Ids Op OpAux)
+       (CESyn : CESYNTAX        Ids Op OpAux Cks)
+       (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CESem : CESEMANTICS Ids Op OpAux Cks CESyn     Str)
+       (CEClo : CECLOCKING  Ids Op OpAux Cks CESyn)
+<: CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Str CESem CEClo.
+  Include CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Str CESem CEClo.
 End CEClockingSemanticsFun.

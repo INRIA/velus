@@ -13,19 +13,21 @@ Open Scope list_scope.
 Module Type STCISFREE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn)
-       (Import CEIsF : CEISFREE  Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS    Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+       (Import CEIsF : CEISFREE  Ids Op OpAux Cks CESyn).
 
   Inductive Is_free_in_tc: ident -> trconstr -> Prop :=
   | FreeTcDef:
       forall x ck e y,
         Is_free_in_caexp y ck e ->
         Is_free_in_tc y (TcDef x ck e)
-  | FreeTcLast:
-      forall x ckr c0 y,
+  | FreeTcReset:
+      forall x ckr ty c0 y,
         Is_free_in_clock y ckr ->
-        Is_free_in_tc y (TcReset x ckr c0)
+        Is_free_in_tc y (TcReset x ckr ty c0)
   | FreeTcNext:
       forall x ck ckrs e y,
         Is_free_in_aexp y ck e ->
@@ -45,7 +47,7 @@ Module Type STCISFREE
   Definition free_in_tc (tc: trconstr) (fvs: PS.t) : PS.t :=
     match tc with
     | TcDef _ ck e => free_in_caexp ck e fvs
-    | TcReset _ ckr _ => free_in_clock ckr fvs
+    | TcReset _ ckr _ _ => free_in_clock ckr fvs
     | TcNext _ ck _ e => free_in_aexp ck e fvs
     | TcInstReset _ ck _ => free_in_clock ck fvs
     | TcStep _ _ ck _ _ es => free_in_aexps ck es fvs
@@ -92,9 +94,11 @@ End STCISFREE.
 Module StcIsFreeFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : STCSYNTAX Ids Op CESyn)
-       (CEIsF : CEISFREE Ids Op CESyn)
-<: STCISFREE Ids Op CESyn Syn CEIsF.
-  Include STCISFREE Ids Op CESyn Syn CEIsF.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS    Ids Op OpAux)
+       (CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+       (CEIsF : CEISFREE  Ids Op OpAux Cks CESyn)
+<: STCISFREE Ids Op OpAux Cks CESyn Syn CEIsF.
+  Include STCISFREE Ids Op OpAux Cks CESyn Syn CEIsF.
 End StcIsFreeFun.

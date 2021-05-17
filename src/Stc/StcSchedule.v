@@ -8,6 +8,7 @@ From Coq Require Import Setoid.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.
@@ -47,8 +48,10 @@ From Velus Require Import VelusMemory.
 Module Type EXT_STCSCHEDULER
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn).
 
   Parameter schedule : ident -> list trconstr -> list positive.
 
@@ -57,21 +60,23 @@ End EXT_STCSCHEDULER.
 Module Type STCSCHEDULE
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX        Op)
-       (Import Str    : INDEXEDSTREAMS       Op OpAux)
-       (Import CE     : COREEXPR         Ids Op OpAux Str)
-       (Import StcSyn : STCSYNTAX        Ids Op       CE.Syn)
-       (Import Syst   : STCISSYSTEM      Ids Op       CE.Syn StcSyn)
-       (Import Ord    : STCORDERED       Ids Op       CE.Syn StcSyn Syst)
-       (Import StcSem : STCSEMANTICS     Ids Op OpAux CE.Syn StcSyn Syst Ord Str CE.Sem)
-       (Import StcTyp : STCTYPING        Ids Op       CE.Syn StcSyn CE.Typ)
-       (Import Var    : STCISVARIABLE    Ids Op       CE.Syn StcSyn)
-       (Import Reset  : STCISRESET        Ids Op       CE.Syn StcSyn)
-       (Import Next   : STCISNEXT        Ids Op       CE.Syn StcSyn)
-       (Import StcClo : STCCLOCKING      Ids Op       CE.Syn StcSyn Reset Var Syst Ord CE.Clo)
-       (Import Free   : STCISFREE        Ids Op       CE.Syn StcSyn                        CE.IsF)
-       (Import Wdef   : STCWELLDEFINED   Ids Op       CE.Syn StcSyn Syst Ord Var Reset Next CE.IsF Free)
-       (Import Sch    : EXT_STCSCHEDULER Ids Op       CE.Syn StcSyn).
+       (Import OpAux  : OPERATORS_AUX    Ids Op)
+       (Import ComTyp : COMMONTYPING     Ids Op OpAux)
+       (Import Cks    : CLOCKS           Ids Op OpAux)
+       (Import Str    : INDEXEDSTREAMS   Ids Op OpAux Cks)
+       (Import CE     : COREEXPR         Ids Op OpAux ComTyp Cks Str)
+       (Import StcSyn : STCSYNTAX        Ids Op OpAux Cks CE.Syn)
+       (Import Syst   : STCISSYSTEM      Ids Op OpAux Cks CE.Syn StcSyn)
+       (Import Ord    : STCORDERED       Ids Op OpAux Cks CE.Syn StcSyn Syst)
+       (Import StcSem : STCSEMANTICS     Ids Op OpAux Cks CE.Syn StcSyn Syst Ord Str CE.Sem)
+       (Import StcTyp : STCTYPING        Ids Op OpAux Cks CE.Syn StcSyn CE.Typ)
+       (Import Var    : STCISVARIABLE    Ids Op OpAux Cks CE.Syn StcSyn)
+       (Import Reset  : STCISRESET       Ids Op OpAux Cks CE.Syn StcSyn)
+       (Import Next   : STCISNEXT        Ids Op OpAux Cks CE.Syn StcSyn)
+       (Import StcClo : STCCLOCKING      Ids Op OpAux Cks CE.Syn StcSyn Reset Var Syst Ord CE.Clo)
+       (Import Free   : STCISFREE        Ids Op OpAux Cks CE.Syn StcSyn                         CE.IsF)
+       (Import Wdef   : STCWELLDEFINED   Ids Op OpAux Cks CE.Syn StcSyn Syst Ord Var Reset Next CE.IsF Free)
+       (Import Sch    : EXT_STCSCHEDULER Ids Op OpAux Cks CE.Syn StcSyn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -188,7 +193,7 @@ Module Type STCSCHEDULE
   Qed.
 
   Add Parametric Morphism : (nexts_of)
-      with signature @Permutation trconstr ==> @Permutation ident
+      with signature @Permutation trconstr ==> @Permutation (ident * type)
         as nexts_of_permutation.
   Proof.
     induction 1; simpl; auto.
@@ -270,7 +275,7 @@ Module Type STCSCHEDULE
   Qed.
 
   Definition schedule (P: program) : program :=
-    map schedule_system P.
+    Program P.(enums) (map schedule_system P.(systems)).
 
   Lemma schedule_system_name:
     forall s, (schedule_system s).(s_name) = s.(s_name).
@@ -278,11 +283,11 @@ Module Type STCSCHEDULE
 
   Lemma schedule_map_name:
     forall P,
-      map s_name (schedule P) = map s_name P.
+      map s_name (map schedule_system P) = map s_name P.
   Proof.
     induction P as [|b]; auto.
     destruct b; simpl.
-    now rewrite IHP.
+    simpl in *; now rewrite IHP.
   Qed.
 
   Lemma scheduler_find_system:
@@ -290,10 +295,10 @@ Module Type STCSCHEDULE
       find_system f P = Some (s, P') ->
       find_system f (schedule P) = Some (schedule_system s, schedule P').
   Proof.
-    induction P as [|s']; [now inversion 1|].
+    intros (?&P); induction P as [|s']; [now inversion 1|].
     intros * Hfind.
-    simpl in *.
-    destruct (ident_eqb s'.(s_name) f); auto.
+    setoid_rewrite find_unit_cons; simpl; eauto.
+    eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl in *; eauto.
     inv Hfind; auto.
   Qed.
 
@@ -305,10 +310,9 @@ Module Type STCSCHEDULE
         /\ s = schedule_system s'
         /\ P' = schedule P''.
   Proof.
-    induction P as [|sys]; [now inversion 1|].
-    intros * Hfind.
-    simpl in *.
-    destruct (ident_eqb sys.(s_name) f); eauto.
+    intros (?& P); induction P as [|sys]; [now inversion 1|].
+    intros * Hfind; unfold find_system, find_unit in *; simpl in *.
+    destruct (ident_eq_dec sys.(s_name) f); eauto.
     inv Hfind; eauto.
   Qed.
 
@@ -317,7 +321,7 @@ Module Type STCSCHEDULE
       wt_trconstr P vars resets tc ->
       wt_trconstr (schedule P) vars resets tc.
   Proof.
-    induction P as [|b].
+    intros (?& P); induction P as [|b].
     - destruct tc; inversion_clear 1; eauto.
     - destruct tc; inversion_clear 1; eauto;
         match goal with H:find_system _ _ = _ |- _ =>
@@ -330,7 +334,7 @@ Module Type STCSCHEDULE
       wt_system P s ->
       wt_system (schedule P) (schedule_system s).
   Proof.
-    unfold wt_system; simpl; intros * WT.
+    unfold wt_system; simpl; intros * (WT&?); split; auto.
     rewrite schedule_tcs_permutation.
     apply Forall_impl with (2 := WT), scheduler_wt_trconstr.
   Qed.
@@ -340,12 +344,13 @@ Module Type STCSCHEDULE
       wt_program P ->
       wt_program (schedule P).
   Proof.
-    induction P as [|s]; inversion_clear 1; simpl;
-      constructor; auto.
-    - now apply scheduler_wt_system.
+    intros (?&P); induction P as [|s]; inversion_clear 1 as [|?? []];
+      unfold schedule; simpl; constructor; intuition.
+    - simpl in *.
+      take (wt_system _ _) and apply scheduler_wt_system in it as WT; auto.
     - change (Forall (fun s' =>
                         (fun x => s_name (schedule_system s) <> x) s'.(s_name))
-                     (schedule P)).
+                     (map schedule_system P)).
       rewrite <-Forall_map, schedule_map_name, Forall_map.
       destruct s; auto.
   Qed.
@@ -355,7 +360,7 @@ Module Type STCSCHEDULE
       wc_trconstr P vars tc ->
       wc_trconstr (schedule P) vars tc.
   Proof.
-    induction P as [|s P IH]; auto.
+    intros (?& P); induction P as [|s P IH]; auto.
     intros vars tc Hwc.
     destruct tc; inv Hwc; eauto using wc_trconstr.
     econstructor; auto.
@@ -382,8 +387,10 @@ Module Type STCSCHEDULE
       wc_program P ->
       wc_program (schedule P).
   Proof.
-    induction P; intros * WT; inv WT; simpl; constructor; auto.
-    now apply scheduler_wc_system.
+    intros (?& P); induction P; intros * WT; inv WT;
+      unfold schedule; simpl; constructor; simpl in *; auto.
+    - take (wc_system _ _) and apply scheduler_wc_system in it; auto.
+    - apply IHP; auto.
   Qed.
 
   Lemma scheduler_initial_state:
@@ -448,11 +455,12 @@ Module Type STCSCHEDULE
       Ordered_systems P ->
       Ordered_systems (schedule P).
   Proof.
-    induction 1 as [|????? Names]; simpl; constructor; simpl; auto.
-    - apply Forall_forall; intros (?&?) Hin;
-        eapply Forall_forall in Hin; eauto; destruct Hin as (?& Find); intuition.
-      destruct Find as (?&?& Find); apply scheduler_find_system in Find; eauto.
-    - clear - Names; induction P; simpl; inv Names; constructor; auto.
+    unfold Ordered_systems, Ordered_program; simpl.
+    induction 1 as [|? us [Spec Names]]; simpl; constructor; simpl; auto.
+    split; auto.
+    - intros * Hin; apply Spec in Hin as (?&?&?& Find).
+      intuition; apply scheduler_find_system in Find; eauto.
+    - clear - Names; induction us; simpl; inv Names; constructor; auto.
   Qed.
 
   Lemma scheduler_normal_args_tc:
@@ -483,32 +491,32 @@ Lemma scheduler_normal_args:
     normal_args P ->
     normal_args (schedule P).
 Proof.
-  induction P as [|s]; auto.
-  intros (?&?); split; auto.
-  change (schedule_system s :: schedule P) with (schedule (s :: P)).
-  apply scheduler_normal_args_system; auto.
+  unfold normal_args; simpl; induction 1 as [|?? NAS]; simpl; constructor; auto.
+  apply scheduler_normal_args_system in NAS; auto.
 Qed.
 
 End STCSCHEDULE.
 
 Module StcScheduleFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX        Op)
-       (Str   : INDEXEDSTREAMS       Op OpAux)
-       (CE    : COREEXPR         Ids Op OpAux Str)
-       (Syn   : STCSYNTAX        Ids Op       CE.Syn)
-       (Syst  : STCISSYSTEM      Ids Op       CE.Syn Syn)
-       (Ord   : STCORDERED       Ids Op       CE.Syn Syn Syst)
-       (Sem   : STCSEMANTICS     Ids Op OpAux CE.Syn Syn Syst Ord Str CE.Sem)
-       (Typ   : STCTYPING        Ids Op       CE.Syn Syn CE.Typ)
-       (Var   : STCISVARIABLE    Ids Op       CE.Syn Syn)
-       (Reset : STCISRESET        Ids Op       CE.Syn Syn)
-       (Next  : STCISNEXT        Ids Op       CE.Syn Syn)
-       (Clo   : STCCLOCKING      Ids Op       CE.Syn Syn Reset Var Syst Ord CE.Clo)
-       (Free  : STCISFREE        Ids Op       CE.Syn Syn                        CE.IsF)
-       (Wdef  : STCWELLDEFINED   Ids Op       CE.Syn Syn Syst Ord Var Reset Next CE.IsF Free)
-       (Sch   : EXT_STCSCHEDULER Ids Op       CE.Syn Syn)
-<: STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Reset Next Clo Free Wdef Sch.
-  Include STCSCHEDULE Ids Op OpAux Str CE Syn Syst Ord Sem Typ Var Reset Next Clo Free Wdef Sch.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX    Ids Op)
+       (ComTyp : COMMONTYPING     Ids Op OpAux)
+       (Cks    : CLOCKS           Ids Op OpAux)
+       (Str    : INDEXEDSTREAMS   Ids Op OpAux Cks)
+       (CE     : COREEXPR         Ids Op OpAux ComTyp Cks Str)
+       (StcSyn : STCSYNTAX        Ids Op OpAux Cks CE.Syn)
+       (Syst   : STCISSYSTEM      Ids Op OpAux Cks CE.Syn StcSyn)
+       (Ord    : STCORDERED       Ids Op OpAux Cks CE.Syn StcSyn Syst)
+       (Sem    : STCSEMANTICS     Ids Op OpAux Cks CE.Syn StcSyn Syst Ord Str CE.Sem)
+       (Typ    : STCTYPING        Ids Op OpAux Cks CE.Syn StcSyn CE.Typ)
+       (Var    : STCISVARIABLE    Ids Op OpAux Cks CE.Syn StcSyn)
+       (Reset  : STCISRESET       Ids Op OpAux Cks CE.Syn StcSyn)
+       (Next   : STCISNEXT        Ids Op OpAux Cks CE.Syn StcSyn)
+       (Clo    : STCCLOCKING      Ids Op OpAux Cks CE.Syn StcSyn Reset Var Syst Ord CE.Clo)
+       (Free   : STCISFREE        Ids Op OpAux Cks CE.Syn StcSyn                         CE.IsF)
+       (Wdef   : STCWELLDEFINED   Ids Op OpAux Cks CE.Syn StcSyn Syst Ord Var Reset Next CE.IsF Free)
+       (Sch    : EXT_STCSCHEDULER Ids Op OpAux Cks CE.Syn StcSyn)
+<: STCSCHEDULE Ids Op OpAux ComTyp Cks Str CE StcSyn Syst Ord Sem Typ Var Reset Next Clo Free Wdef Sch.
+  Include STCSCHEDULE Ids Op OpAux ComTyp Cks Str CE StcSyn Syst Ord Sem Typ Var Reset Next Clo Free Wdef Sch.
 End StcScheduleFun.

@@ -20,28 +20,39 @@
  	  ((x land y) = 0) and not (x land (y = 0)) */
 
 %{
-From Velus Require Lustre.Parser.LustreAst.
+From Velus Require Import Common.
+From Velus Require Ident.
+From Velus Require LustreAst.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
 From Coq Require Import Program.Syntax.
 
+From Coq Require Import String.
 From Coq Require Import List.
 Import ListNotations.
+
+Definition true_id := Ident.str_to_pos "True"%string.
+Definition false_id := Ident.str_to_pos "False"%string.
 %}
 
-%token<LustreAst.ident * LustreAst.astloc> VAR_NAME
+%token<Common.ident * LustreAst.astloc> VAR_NAME
+%token<Common.ident * LustreAst.astloc> ENUM_NAME
 %token<LustreAst.constant * LustreAst.astloc> CONSTANT
-%token<LustreAst.astloc> TRUE FALSE
+(* %token<Common.ident * LustreAst.astloc> TRUE FALSE *)
 %token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
-%token<LustreAst.astloc> HASH RARROW
+%token<LustreAst.astloc> HASH
+%token<LustreAst.astloc> BAR
+%token<LustreAst.astloc> RARROW
 %token<LustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
-%token<LustreAst.astloc> IFTE THEN ELSE
+%token<LustreAst.astloc> IFTE THEN ELSE CASE OF
 
 %token<LustreAst.astloc> LPAREN RPAREN COMMA SEMICOLON
-%token<LustreAst.astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
+(* %token<Common.ident * LustreAst.astloc> BOOL *)
+%token<LustreAst.astloc> INT8 UINT8 INT16 UINT16 INT32 UINT32
   INT64 UINT64 FLOAT32 FLOAT64
 
 %token<LustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR FBY
+%token<LustreAst.astloc> TYPE
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
 
@@ -55,24 +66,27 @@ Import ListNotations.
     when_expression relational_expression equality_expression AND_expression
     exclusive_OR_expression inclusive_OR_expression logical_AND_expression
     logical_OR_expression arrow_expression expression
-%type<LustreAst.constant * LustreAst.astloc> bool_constant
+%type<list Common.ident> constructor_list
+%type<list (Common.ident * list LustreAst.expression)> branch_list
+%type<LustreAst.constant * LustreAst.astloc> enum
+(* %type<LustreAst.constant * LustreAst.astloc> bool_constant *)
 %type<LustreAst.constant * LustreAst.astloc> constant
 %type<list LustreAst.expression> expression_list
 %type<LustreAst.unary_operator * LustreAst.astloc> unary_operator
 %type<LustreAst.var_decls> var_decl
 %type<LustreAst.var_decls> var_decl_list
 %type<LustreAst.var_decls> local_var_decl
-%type<list LustreAst.ident (* Reverse order *)> identifier_list
+%type<list Common.ident (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
 %type<LustreAst.preclock> declared_clock
 %type<LustreAst.clock> clock
 %type<LustreAst.var_decls> local_decl
 %type<LustreAst.var_decls> local_decl_list
 %type<LustreAst.var_decls (* Reverse order *)> parameter_list oparameter_list
-%type<list LustreAst.ident> pattern
+%type<list Common.ident> pattern
 %type<LustreAst.equation> equation
 %type<list LustreAst.equation> equations
-%type<unit> optsemicolon
+%type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
 %type<list LustreAst.declaration> translation_unit
@@ -114,17 +128,23 @@ Import ListNotations.
    - Expressions may contain the fby and merge operators.
 *)
 
-bool_constant:
-| loc=TRUE
-    { (LustreAst.CONST_BOOL true, loc) }
-| loc=FALSE
-    { (LustreAst.CONST_BOOL false, loc) }
+(* bool_constant:
+ * | b=TRUE
+ *     { (LustreAst.CONST_ENUM (fst b), snd b) }
+ * | b=FALSE
+ *     { (LustreAst.CONST_ENUM (fst b), snd b) } *)
+
+enum:
+| c=ENUM_NAME
+    { (LustreAst.CONST_ENUM (fst c), snd c) }
+(* | b=bool_constant
+ *     { b } *)
 
 constant:
 | cst=CONSTANT
     { cst }
-| cst=bool_constant
-    { cst }
+| c=enum
+    { c }
 
 primary_expression:
 | var=VAR_NAME
@@ -161,18 +181,21 @@ unary_expression:
     {
       (* Macro expand the Lustre # operator (mutual exclusion: at most
          one of the variable number of arguments may be true). Compare
-	 with "true" to ensure that non-bool arguments are properly
-	 treated. Is there a prettier way to do this?
-	 TODO: This should be done during elaboration. *)
-      [LustreAst.BINARY
-        LustreAst.LE
-        [fold_right (fun es e => LustreAst.BINARY LustreAst.ADD [e] [es] loc)
-	  (LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc)
-	  (map (fun e=>LustreAst.CAST LustreAst.Tbool [e] loc)
-	   args)]
-	[LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc]
-	loc]
-    }
+         with "true" to ensure that non-bool arguments are properly
+ 	       treated. Is there a prettier way to do this?
+ 	       TODO: This should be done during elaboration. *)
+       [LustreAst.BINARY
+         LustreAst.LE
+         [fold_right (fun es e => LustreAst.BINARY LustreAst.ADD [e] [es] loc)
+ 	       (LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc)
+ 	       (map (fun e =>
+                LustreAst.CASE [e]
+                 [(Ident.Ids.true_id, [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc]);
+                  (Ident.Ids.false_id, [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc])] loc)
+              args)]
+ 	    [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc]
+ 	   loc]
+     }
 
 unary_operator:
 | loc=MINUS
@@ -231,12 +254,14 @@ shift_expression:
 when_expression:
 | expr=shift_expression
     { expr }
+| expr=when_expression loc=WHEN c=ENUM_NAME LPAREN id=VAR_NAME RPAREN
+    { [LustreAst.WHEN expr (fst id) (fst c) loc] }
 | expr=when_expression loc=WHEN id=VAR_NAME
-    { [LustreAst.WHEN expr (fst id) true loc] }
+    { [LustreAst.WHEN expr (fst id) true_id loc] }
 | expr=when_expression loc=WHEN NOT id=VAR_NAME
-    { [LustreAst.WHEN expr (fst id) false loc] }
+    { [LustreAst.WHEN expr (fst id) false_id loc] }
 | expr=when_expression loc=WHENOT id=VAR_NAME
-    { [LustreAst.WHEN expr (fst id) false loc] }
+    { [LustreAst.WHEN expr (fst id) false_id loc] }
 
 (* 6.5.8 *)
 relational_expression:
@@ -306,17 +331,24 @@ arrow_expression:
 | RESET e0=logical_OR_expression loc=RARROW e1=arrow_expression EVERY er=arrow_expression
     { [LustreAst.ARROW e0 e1 er loc] }
 
+branch_list:
+| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN
+    { [(fst c, expr)] }
+| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN bs=branch_list
+    { (fst c, expr) :: bs }
+
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
 expression:
 | expr=arrow_expression
     { expr }
 | loc=IFTE expr1=expression THEN expr2=expression ELSE expr3=expression
-    { [LustreAst.IFTE expr1 expr2 expr3 loc] }
+    { [LustreAst.CASE expr1 [(true_id, expr2); (false_id, expr3)] loc] }
+| loc=CASE expr=expression OF bs=branch_list
+    { [LustreAst.CASE expr bs loc] }
 | loc=MERGE LPAREN id=VAR_NAME SEMICOLON expr1=expression SEMICOLON expr2=expression RPAREN
-    { [LustreAst.MERGE (fst id) expr1 expr2 loc] }
-| loc=MERGE id=VAR_NAME LPAREN TRUE  RARROW expr1=expression RPAREN
-			LPAREN FALSE RARROW expr2=expression RPAREN
-    { [LustreAst.MERGE (fst id) expr1 expr2 loc] }
+    { [LustreAst.MERGE (fst id) [(true_id, expr1); (false_id, expr2)] loc] }
+| loc=MERGE id=VAR_NAME bs=branch_list
+    { [LustreAst.MERGE (fst id) bs loc] }
 
 (* Declarations are much simpler than in C. We do not have arrays,
    structs/unions, or pointers. We do not have storage-class specifiers,
@@ -365,28 +397,32 @@ type_name:
     { (LustreAst.Tfloat32, loc) }
 | loc=FLOAT64
     { (LustreAst.Tfloat64, loc) }
-| loc=BOOL
-    { (LustreAst.Tbool, loc) }
+| t=VAR_NAME
+    { (LustreAst.Tenum_name (fst t), snd t) }
 
 declared_clock:
 | /* empty */
     { LustreAst.FULLCK LustreAst.BASE }
+| WHEN c=ENUM_NAME LPAREN id=VAR_NAME RPAREN
+    { LustreAst.WHENCK (fst id) (fst c) }
 | WHEN id=VAR_NAME
-    { LustreAst.WHENCK (fst id) true }
+    { LustreAst.WHENCK (fst id) true_id }
 | WHEN NOT id=VAR_NAME
-    { LustreAst.WHENCK (fst id) false }
+    { LustreAst.WHENCK (fst id) false_id }
 | WHENOT id=VAR_NAME
-    { LustreAst.WHENCK (fst id) false }
+    { LustreAst.WHENCK (fst id) false_id }
 | COLONCOLON clk=clock
     { LustreAst.FULLCK clk }
 
 clock:
 | DOT
     { LustreAst.BASE }
+| clk=clock ON c=ENUM_NAME LPAREN id=VAR_NAME RPAREN
+    { LustreAst.ON clk (fst id) (fst c) }
 | clk=clock ON id=VAR_NAME
-    { LustreAst.ON clk (fst id) true }
+    { LustreAst.ON clk (fst id) true_id }
 | clk=clock ONOT id=VAR_NAME
-    { LustreAst.ON clk (fst id) false }
+    { LustreAst.ON clk (fst id) false_id }
 
 local_decl:
 | vd=local_var_decl
@@ -443,6 +479,18 @@ node_or_function:
 | loc=FUNCTION
     { (false, loc) }
 
+constructor_list:
+| id=ENUM_NAME
+    { [fst id] }
+| id=ENUM_NAME BAR idl=constructor_list
+    { fst id :: idl }
+
+optbar:
+| /* empty */
+    { () }
+| BAR
+    { () }
+
 declaration:
 | is_node=node_or_function id=VAR_NAME
   LPAREN iparams=oparameter_list RPAREN optsemicolon
@@ -450,6 +498,8 @@ declaration:
   locals=local_decl_list LET eqns=equations TEL optsemicolon
     { LustreAst.NODE
         (fst id) (fst is_node) iparams oparams locals eqns (snd is_node) }
+| loc=TYPE id=VAR_NAME EQ optbar cs=constructor_list
+    { LustreAst.TYPE (fst id) cs loc }
 
 translation_unit:
 | def=declaration

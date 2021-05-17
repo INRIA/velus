@@ -11,7 +11,7 @@ Open Scope list_scope.
 Module Type OBCINVARIANTS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
+       (Import OpAux : OPERATORS_AUX Ids Op)
        (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc).
 
@@ -22,12 +22,9 @@ Module Type OBCINVARIANTS
       Can_write_in x (Assign x e)
   | CWIAssignSt: forall x e,
       Can_write_in x (AssignSt x e)
-  | CWIIfteTrue: forall x e s1 s2,
-      Can_write_in x s1 ->
-      Can_write_in x (Ifte e s1 s2)
-  | CWIIfteFalse: forall x e s1 s2,
-      Can_write_in x s2 ->
-      Can_write_in x (Ifte e s1 s2)
+  | CWISwitch: forall x e ss d,
+      Exists (fun s => Can_write_in x (or_default d s)) ss ->
+      Can_write_in x (Switch e ss d)
   | CWICall_ap: forall x xs cls i f es,
       In x xs ->
       Can_write_in x (Call xs cls i f es)
@@ -38,14 +35,19 @@ Module Type OBCINVARIANTS
       Can_write_in x s2 ->
       Can_write_in x (Comp s1 s2).
 
-  Lemma cannot_write_in_Ifte:
-    forall x e s1 s2,
-      ~ Can_write_in x (Ifte e s1 s2)
+  Lemma cannot_write_in_Switch:
+    forall x e ss d,
+      ~ Can_write_in x (Switch e ss d)
       <->
-      ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
+      Forall (fun s => ~ Can_write_in x (or_default d s)) ss.
   Proof.
     Hint Constructors Can_write_in.
-    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
+    intros; split; intro H.
+    - induction ss; constructor; auto.
+      apply IHss; intro W; apply H.
+      inv W; constructor. now right.
+    - induction ss; intro HH; inv HH; inv H; take (Exists _ _) and inv it; eauto.
+      apply IHss; auto.
   Qed.
 
   Lemma Can_write_in_Comp:
@@ -88,15 +90,20 @@ Module Type OBCINVARIANTS
       -> exp_eval me' ve' e v.
   Proof.
     Hint Constructors Is_free_in_exp Can_write_in exp_eval.
-    induction s; intros me ve me' ve' e' v Hfree Hexp Hstmt.
+    induction s using stmt_ind2; intros me ve me' ve' e' v Hfree Hexp Hstmt.
     - inv Hstmt.
       rewrite <-exp_eval_extend_venv; auto.
-      intro Habs. apply (Hfree i); eauto.
+      intro Habs. apply (Hfree x); eauto.
     - inv Hstmt.
       eapply exp_eval_extend_menv; eauto.
-      intro Habs. apply (Hfree i); auto.
-    - inv Hstmt. destruct b; [eapply IHs1|eapply IHs2];
-                   try eassumption; try now cannot_write.
+      intro Habs. apply (Hfree x); auto.
+    - inv Hstmt.
+      take (nth_error _ _ = _) and eapply nth_error_In in it as Hin.
+      pose proof Hin as Hin'; eapply Forall_forall in Hin'; eauto; simpl in Hin'.
+      cases.
+      eapply Hin'; eauto.
+      intros ???; eapply Hfree; eauto.
+      constructor; apply Exists_exists; eauto.
     - inv Hstmt.
       match goal with
       | Hs1: stmt_eval _ _ _ s1 _,
@@ -113,9 +120,9 @@ Module Type OBCINVARIANTS
     - now inv Hstmt.
   Qed.
 
-  Lemma Can_write_in_Ifte:
-    forall e s1 s2 x,
-      Can_write_in x (Ifte e s1 s2) <-> (Can_write_in x s1 \/ Can_write_in x s2).
+  Lemma Can_write_in_Switch:
+    forall e ss d x,
+      Can_write_in x (Switch e ss d) <-> (Exists (fun s => Can_write_in x (or_default d s)) ss).
   Proof.
     split; [inversion_clear 1|intros [HH|HH]]; auto.
   Qed.
@@ -125,12 +132,9 @@ Module Type OBCINVARIANTS
   Inductive Can_write_in_var : ident -> stmt -> Prop :=
   | CWIVAssign: forall x e,
       Can_write_in_var x (Assign x e)
-  | CWIVIfteTrue: forall x e s1 s2,
-      Can_write_in_var x s1 ->
-      Can_write_in_var x (Ifte e s1 s2)
-  | CWIVIfteFalse: forall x e s1 s2,
-      Can_write_in_var x s2 ->
-      Can_write_in_var x (Ifte e s1 s2)
+  | CWIVSwitch: forall x e ss d,
+      Exists (fun s => Can_write_in_var x (or_default d s)) ss ->
+      Can_write_in_var x (Switch e ss d)
   | CWIVCall_ap: forall x xs cls i f es,
       In x xs ->
       Can_write_in_var x (Call xs cls i f es)
@@ -146,25 +150,27 @@ Module Type OBCINVARIANTS
       Can_write_in_var x stmt ->
       Can_write_in x stmt.
   Proof.
-    intros * CanWrite.
-    induction CanWrite; auto using Can_write_in.
+    intros ? stmt.
+    induction stmt using stmt_ind2; intros Can; inv Can; auto using Can_write_in.
+    constructor.
+    eapply Forall_Exists in H2; eauto.
+    eapply Exists_Exists; [|eauto]. intros ? (?&?); auto.
   Qed.
   Hint Resolve Can_write_in_var_Can_write_in.
 
-  Lemma Can_write_in_var_Ifte:
-    forall e s1 s2 x,
-      Can_write_in_var x (Ifte e s1 s2) <-> (Can_write_in_var x s1 \/ Can_write_in_var x s2).
+  Lemma Can_write_in_var_Switch:
+    forall e ss d x,
+      Can_write_in_var x (Switch e ss d) <-> (Exists (fun s => Can_write_in_var x (or_default d s)) ss).
   Proof.
     split; [inversion_clear 1|intros [HH|HH]]; auto.
   Qed.
 
-  Lemma cannot_write_in_var_Ifte:
-    forall x e s1 s2,
-      ~ Can_write_in_var x (Ifte e s1 s2)
-      <->
-      ~ Can_write_in_var x s1 /\ ~ Can_write_in_var x s2.
+  Lemma cannot_write_in_var_Switch:
+    forall x e ss d,
+      ~ Can_write_in_var x (Switch e ss d)
+      <-> Forall (fun s => ~Can_write_in_var x (or_default d s)) ss.
   Proof.
-    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
+    intros. rewrite Forall_Exists_neg, Can_write_in_var_Switch. reflexivity.
   Qed.
 
   Lemma Can_write_in_var_Comp:
@@ -193,10 +199,9 @@ Module Type OBCINVARIANTS
       No_Overwrites (Assign x e)
   | NoOAssignSt: forall x e,
       No_Overwrites (AssignSt x e)
-  | NoOIfte: forall e s1 s2,
-      No_Overwrites s1 ->
-      No_Overwrites s2 ->
-      No_Overwrites (Ifte e s1 s2)
+  | NoOSwitch: forall e ss d,
+      Forall (fun s => No_Overwrites (or_default d s)) ss ->
+      No_Overwrites (Switch e ss d)
   | NoOCall: forall xs cls i f es,
       No_Overwrites (Call xs cls i f es)
   | NoOComp: forall s1 s2,
@@ -214,10 +219,13 @@ Module Type OBCINVARIANTS
     forall s,
       (forall x, ~Can_write_in_var x s) -> No_Overwrites s.
   Proof.
-    induction s; auto; intro HH.
-    - setoid_rewrite cannot_write_in_var_Ifte in HH.
-      constructor; (apply IHs1 || apply IHs2);
-        intros x; specialize (HH x); intuition.
+    induction s using stmt_ind2; auto; intro HH.
+    - setoid_rewrite cannot_write_in_var_Switch in HH.
+      constructor; apply Forall_forall; intros.
+      eapply Forall_forall in H; eauto.
+      apply H.
+      intro y; specialize (HH y).
+      eapply Forall_forall in HH; eauto.
     - setoid_rewrite cannot_write_in_var_Comp in HH.
       constructor; try (apply IHs1 || apply IHs2);
         intros x Hcw; specialize (HH x); intuition.
@@ -230,10 +238,9 @@ Module Type OBCINVARIANTS
       No_Naked_Vars (Assign x e)
   | NNVAssignSt: forall x e,
       No_Naked_Vars (AssignSt x e)
-  | NNVIfte: forall e s1 s2,
-      No_Naked_Vars s1 ->
-      No_Naked_Vars s2 ->
-      No_Naked_Vars (Ifte e s1 s2)
+  | NNVSwitch: forall e ss d,
+      Forall (fun s => No_Naked_Vars (or_default d s)) ss ->
+      No_Naked_Vars (Switch e ss d)
   | NNVCall: forall xs cls i f es,
       Forall (fun e => forall x ty, e <> Var x ty) es ->
       No_Naked_Vars (Call xs cls i f es)
@@ -246,22 +253,15 @@ Module Type OBCINVARIANTS
 
   Hint Constructors No_Naked_Vars.
 
-  Lemma stmt_eval_mono':
-    forall p,
-      (forall ome ome' clsid f vos rvos,
-          Forall (fun vo => vo <> None) vos ->
-          stmt_call_eval p ome clsid f vos ome' rvos ->
-          Forall (fun x => x <> None) rvos) ->
-      forall s me ve me' ve',
-        No_Naked_Vars s ->
-        stmt_eval p me ve s (me', ve') ->
-        forall x, Env.In x ve -> Env.In x ve'.
+  Lemma stmt_eval_mono:
+    forall p s me ve me' ve',
+      stmt_eval p me ve s (me', ve') ->
+      forall x, Env.In x ve -> Env.In x ve'.
   Proof.
-    intros p Hcall.
-    induction s; intros * Hnnv Heval x Hin; inv Heval; inv Hnnv; eauto.
-    - destruct b; eauto.
-    - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.
-      apply Hcall in He; eauto using Env.adds_opt_mono, Forall2_exp_eval_not_None.
+    induction s using stmt_ind2; intros * Heval ??; inv Heval;
+      eauto using Env.adds_opt_mono.
+    take (nth_error _ _ = _) and apply nth_error_In in it.
+    do 2 take (Forall _ _) and eapply Forall_forall in it; eauto.
   Qed.
 
   Lemma no_vars_in_args_spec:
@@ -282,7 +282,7 @@ End OBCINVARIANTS.
 Module ObcInvariantsFun
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
+       (Import OpAux: OPERATORS_AUX Ids Op)
        (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc)
        <: OBCINVARIANTS Ids Op OpAux SynObc SemObc.

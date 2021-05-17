@@ -5,8 +5,6 @@ From Coq Require Import Sorting.Permutation.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 From Coq Require Import Program.Tactics.
-From Coq Require Import NPeano.
-From Coq Require Import Omega.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
@@ -33,21 +31,22 @@ From Coq Require Import Setoid.
 Module Type NLINDEXEDTOCOIND
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX          Op)
-       (Import CESyn  : CESYNTAX               Op)
-       (Import Syn    : NLSYNTAX           Ids Op       CESyn)
-       (Import IStr   : INDEXEDSTREAMS         Op OpAux)
-       (Import CStr   : COINDSTREAMS           Op OpAux)
-       (Import ICStr  : INDEXEDTOCOIND         Op OpAux IStr CStr)
-       (Import Ord    : NLORDERED          Ids Op       CESyn Syn)
-       (CESem         : CESEMANTICS        Ids Op OpAux CESyn     IStr)
-       (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
-       (Import Interp : CEINTERPRETER      Ids Op OpAux CESyn     IStr     CESem)
-       (CoInd         : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord).
+       (Import OpAux  : OPERATORS_AUX      Ids Op)
+       (Import Cks    : CLOCKS             Ids Op OpAux)
+       (Import CESyn  : CESYNTAX           Ids Op OpAux Cks)
+       (Import Syn    : NLSYNTAX           Ids Op OpAux Cks CESyn)
+       (Import IStr   : INDEXEDSTREAMS     Ids Op OpAux Cks)
+       (Import CStr   : COINDSTREAMS       Ids Op OpAux Cks)
+       (Import ICStr  : INDEXEDTOCOIND     Ids Op OpAux Cks IStr CStr)
+       (Import Ord    : NLORDERED          Ids Op OpAux Cks CESyn Syn)
+       (CESem         : CESEMANTICS        Ids Op OpAux Cks CESyn     IStr)
+       (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn IStr Ord CESem)
+       (Import Interp : CEINTERPRETER      Ids Op OpAux Cks CESyn     IStr     CESem)
+       (CoInd         : NLCOINDSEMANTICS   Ids Op OpAux Cks CESyn Syn CStr Ord).
 
   (* Simplifying the proof a bit :p *)
-  Module CIStr := CoindToIndexedFun Op OpAux CStr IStr.
-  Module NLCIStr := NLCoindToIndexedFun Ids Op OpAux CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
+  Module CIStr := CoindToIndexedFun Ids Op OpAux Cks CStr IStr.
+  Module NLCIStr := NLCoindToIndexedFun Ids Op OpAux Cks CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
 
   Section Global.
 
@@ -163,21 +162,21 @@ Module Type NLINDEXEDTOCOIND
     (** This tactic automatically uses the interpretor to give a witness stream. *)
     Ltac interp_str b H x Sem :=
       let Sem_x := fresh "Sem_" x in
-      let sol sem interp sound :=
+      let sol sem interp complete :=
           assert (sem b H x (interp b H x)) as Sem_x
               by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                  unfold interp, lift_interp; inv Sem; erewrite <-sound; eauto)
+                  unfold interp, lift_interp; inv Sem; erewrite <-complete; eauto)
       in
-      let sol' sem interp sound :=
+      let sol' sem interp complete :=
           assert (sem H x (interp H x)) as Sem_x
               by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                  unfold interp, lift_interp'; inv Sem; erewrite <-sound; eauto)
+                  unfold interp, lift_interp'; inv Sem; erewrite <-complete; eauto)
       in
       match type of x with
-      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_sound
-      | cexp => sol CESem.sem_cexp interp_cexp interp_cexp_instant_sound
-      | ident => sol' IStr.sem_var interp_var interp_var_instant_sound
-      | clock => sol IStr.sem_clock interp_clock interp_clock_instant_sound
+      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_complete
+      | cexp => sol CESem.sem_cexp interp_cexp interp_cexp_instant_complete
+      | ident => sol' IStr.sem_var interp_var interp_var_instant_complete
+      | clock => sol IStr.sem_clock interp_clock interp_clock_instant_complete
       end.
 
     Lemma when_inv:
@@ -188,16 +187,15 @@ Module Type NLINDEXEDTOCOIND
           /\ IStr.sem_var H x xs
           /\
           (forall n,
-              (exists sc xc,
-                  val_to_bool xc = Some k
-                  /\ ys n = present sc
-                  /\ xs n = present xc
+              (exists sc,
+                  ys n = present sc
+                  /\ xs n = present (Venum k)
                   /\ es n = present sc)
               \/
-              (exists sc xc,
-                  val_to_bool xc = Some (negb k)
-                  /\ ys n = present sc
-                  /\ xs n = present xc
+              (exists sc k',
+                  ys n = present sc
+                  /\ xs n = present (Venum k')
+                  /\ k <> k'
                   /\ es n = absent)
               \/
               (ys n = absent
@@ -209,10 +207,9 @@ Module Type NLINDEXEDTOCOIND
       interp_str b H x Sem.
       do 2 eexists; intuition; eauto.
       specialize (Sem_e n); specialize (Sem_x n); specialize (Sem n); inv Sem.
-      - left. exists sc, xc. repeat split; auto;
-                               intuition CESem.sem_det.
-      - right; left; exists sc, xc; intuition; try CESem.sem_det.
-        now rewrite Bool.negb_involutive.
+      - left; exists sc.
+        repeat split; auto; intuition CESem.sem_det.
+      - right; left; exists sc, b'; intuition; try CESem.sem_det.
       - right; right; repeat split; auto; intuition CESem.sem_det.
     Qed.
 
@@ -221,22 +218,22 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_exp b H (Eunop op e ty) es ->
         exists ys,
           CESem.sem_exp b H e ys
-          /\
-          (forall n,
-              (exists c c',
-                  ys n = present c
-                  /\ sem_unop op c (typeof e) = Some c'
-                  /\ es n = present c')
-              \/
-              (ys n = absent
-               /\ es n = absent)).
+          /\ forall n,
+            (exists v v',
+                ys n = present v
+                /\ sem_unop op v (typeof e) = Some v'
+                /\ es n = present v')
+            \/
+            (ys n = absent
+             /\ es n = absent).
     Proof.
       intros * Sem.
       interp_str b H e Sem.
       eexists; intuition; eauto.
-      specialize (Sem_e n); specialize (Sem n); inv Sem.
-      - left; exists c, c'; repeat split; auto; intuition CESem.sem_det.
-      - right; repeat split; intuition CESem.sem_det.
+      specialize (Sem_e n); specialize (Sem n); inv Sem;
+        try match goal with H: typeof ?e = _, H': typeof ?e = _ |- _ => rewrite H in H'; inv H' end.
+      - left; do 2 eexists; intuition; eauto; CESem.sem_det.
+      - right; intuition; auto; CESem.sem_det.
     Qed.
 
     Lemma binop_inv:
@@ -245,25 +242,25 @@ Module Type NLINDEXEDTOCOIND
         exists ys zs,
           CESem.sem_exp b H e1 ys
           /\ CESem.sem_exp b H e2 zs
-          /\
-          (forall n,
-              (exists c1 c2 c',
-                  ys n = present c1
-                  /\ zs n = present c2
-                  /\ sem_binop op c1 (typeof e1) c2 (typeof e2) = Some c'
-                  /\ es n = present c')
+          /\ forall n,
+              (exists v1 v2 v',
+                  ys n = present v1
+                  /\ zs n = present v2
+                  /\ sem_binop op v1 (typeof e1) v2 (typeof e2) = Some v'
+                  /\ es n = present v')
               \/
               (ys n = absent
                /\ zs n = absent
-               /\ es n = absent)).
+               /\ es n = absent).
     Proof.
       intros * Sem.
       interp_str b H e1 Sem.
       interp_str b H e2 Sem.
       do 2 eexists; intuition; eauto.
-      specialize (Sem_e1 n); specialize (Sem_e2 n); specialize (Sem n); inv Sem.
-      - left; exists c1, c2, c'; repeat split; auto; intuition CESem.sem_det.
-      - right; repeat split; auto; intuition CESem.sem_det.
+      specialize (Sem_e1 n); specialize (Sem_e2 n); specialize (Sem n); inv Sem;
+        repeat match goal with H: typeof ?e = _, H': typeof ?e = _ |- _ => rewrite H in H'; inv H' end.
+      - left; do 3 eexists; intuition; eauto; try CESem.sem_det.
+      - right; intuition; auto; CESem.sem_det.
     Qed.
 
     (** ** Semantics of exps *)
@@ -297,6 +294,9 @@ Module Type NLINDEXEDTOCOIND
         apply const_spec; use_spec Sem; inv Sem; auto.
 
       - constructor.
+        apply enum_spec; use_spec Sem; inv Sem; auto.
+
+      - constructor.
         apply sem_var_impl_from.
         intros n'; specialize (Sem n').
         now inv Sem.
@@ -311,7 +311,10 @@ Module Type NLINDEXEDTOCOIND
 
       - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
-        apply lift2_spec; use_spec Spec.
+        apply lift2_spec.
+        intro m; repeat rewrite init_from_nth; specialize (Spec (m + n)).
+        repeat match goal with H: _ \/ _ |- _ => destruct H end; destruct_conjs; intuition.
+        right; do 3 eexists; intuition; eauto.
     Qed.
 
     Corollary sem_exp_impl:
@@ -331,10 +334,10 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       exists (interp_exps' b H es); split.
-      - eapply interp_exps'_sound; eauto.
+      - eapply interp_exps'_complete; eauto.
       - intro n; specialize (Sem n); induction Sem; simpl; auto.
         f_equal; auto.
-        unfold interp_exp; now apply interp_exp_instant_sound.
+        unfold interp_exp; now apply interp_exp_instant_complete.
     Qed.
 
     (** Generalization for lists of [exp]. *)
@@ -349,9 +352,9 @@ Module Type NLINDEXEDTOCOIND
       assert (length es = length (ess n)) as Length by
           (rewrite Eess', map_length; simpl; eapply Forall2_length; eauto).
       apply Forall2_forall2; split.
-      - unfold_tr_streams; rewrite seq_streams_length; simpl; omega.
+      - unfold_tr_streams; rewrite seq_streams_length; simpl; lia.
       - intros; subst.
-        rewrite nth_tr_streams_from_nth; try omega.
+        rewrite nth_tr_streams_from_nth; try lia.
         apply sem_exp_impl_from.
         eapply (Forall2_forall2_eq _ _ (@eq_refl exp) (eq_str_refl))
           in Sem as (? & Sem).
@@ -422,74 +425,148 @@ Module Type NLINDEXEDTOCOIND
 
     (** ** cexp level synchronous operators inversion principles *)
 
+    (** An inversion principle for lists of [cexp]. *)
+    Lemma sem_cexps_inv:
+      forall H b es ess,
+        (forall n, Forall2 (CESem.sem_cexp_instant (b n) (H n)) es (ess n)) ->
+        exists ess',
+          Forall2 (CESem.sem_cexp b H) es ess'
+          /\ forall n, ess n = List.map (fun es => es n) ess'.
+    Proof.
+      intros * Sem.
+      exists (interp_cexps' b H es); split.
+      - eapply interp_cexps'_complete; eauto.
+      - intro n; specialize (Sem n); induction Sem; simpl; auto.
+        f_equal; auto.
+        unfold interp_cexp; now apply interp_cexp_instant_complete.
+    Qed.
+
     Lemma merge_inv:
-      forall H b x t f es,
-        CESem.sem_cexp b H (Emerge x t f) es ->
-        exists xs ts fs,
+      forall H b x tx l ty os,
+        CESem.sem_cexp b H (Emerge (x, tx) l ty) os ->
+        exists xs ess,
           IStr.sem_var H x xs
-          /\ CESem.sem_cexp b H t ts
-          /\ CESem.sem_cexp b H f fs
+          /\ Forall2 (CESem.sem_cexp b H) l ess
           /\
           (forall n,
-              (exists c,
-                  xs n = present true_val
-                  /\ ts n = present c
-                  /\ fs n = absent
-                  /\ es n = present c)
-              \/
-              (exists c,
-                  xs n = present false_val
-                  /\ ts n = absent
-                  /\ fs n = present c
-                  /\ es n = present c)
+              (exists b c ess1 es ess2,
+                  xs n = present (Venum b)
+                  /\ ess = ess1 ++ es :: ess2
+                  /\ length ess1 = b
+                  /\ es n = present c
+                  /\ Forall (fun xs => xs n = absent) (ess1 ++ ess2)
+                  /\ os n = present c)
               \/
               (xs n = absent
-               /\ ts n = absent
-               /\ fs n = absent
-               /\ es n = absent)).
+               /\ Forall (fun xs => xs n = absent) ess
+               /\ os n = absent)).
     Proof.
       intros * Sem.
       interp_str b H x Sem.
-      interp_str b H t Sem.
-      interp_str b H f Sem.
-      do 3 eexists; intuition; eauto.
-      specialize (Sem_x n); specialize (Sem_t n); specialize (Sem_f n);
-        specialize (Sem n); inv Sem.
-      - left; exists c; repeat split; auto; intuition CESem.sem_det.
-      - right; left; exists c; repeat split; auto; intuition CESem.sem_det.
-      - right; right; repeat split; auto; intuition CESem.sem_det.
+      assert (forall n, Forall2 (CESem.sem_cexp_instant (b n) (H n)) l (interp_cexps b H l n)) as Seml.
+      { intro n; specialize (Sem n); inv Sem.
+        - take (Forall _ _) and apply Forall_app in it as (Hes1 & Hes2).
+          unfold interp_cexps, lift_interp, interp_cexps_instant.
+          rewrite map_app; apply Forall2_app.
+          + clear - Hes1; induction Hes1; simpl; constructor; auto.
+            erewrite <-interp_cexp_instant_complete; eauto.
+          + simpl; constructor.
+            * erewrite <-interp_cexp_instant_complete; eauto.
+            * clear - Hes2; induction Hes2; simpl; constructor; auto.
+              erewrite <-interp_cexp_instant_complete; eauto.
+        - take (Forall _ _) and induction it; simpl; constructor; auto.
+          erewrite <-interp_cexp_instant_complete; eauto.
+      }
+      apply sem_cexps_inv in Seml as (ess' & Sem_l & E).
+      do 2 eexists; split; eauto; split; eauto.
+      intro; specialize (Sem_x n); specialize (Sem n); inv Sem.
+      - left; exists (length es1), c.
+        apply Forall2_app_inv_l in Sem_l as (ess1 & ess2' & Hess1 & Hess2' & E'); subst.
+        inversion Hess2' as [|? es ? ess2 He Hess2]; subst.
+        assert (length es1 = length ess1) by (eapply Forall2_length; eauto).
+        specialize (E n).
+        unfold interp_cexps, lift_interp, interp_cexps_instant in E.
+        rewrite ? map_app in E; simpl in E.
+        apply app_inv in E as (E1 & E2'); [|rewrite ? map_length; auto].
+        inversion E2' as [[E E2]]; clear E2'.
+        do 3 eexists; intuition eauto; try CESem.sem_det.
+        + erewrite <-E, <-interp_cexp_instant_complete; eauto.
+        + apply Forall_app; take (Forall _ _) and apply Forall_app in it as (Sem1 & Sem2); split.
+          * clear - E1 Sem1; revert dependent ess1;
+              induction Sem1, ess1; simpl in *; try discriminate; constructor; inv E1; auto.
+            erewrite <-interp_cexp_instant_complete; eauto.
+          * clear - E2 Sem2; revert dependent ess2;
+              induction Sem2, ess2; simpl in *; try discriminate; constructor; inv E2; auto.
+            erewrite <-interp_cexp_instant_complete; eauto.
+      - right; repeat split; auto; try CESem.sem_det.
+        take (Forall _ _) and rename it into Sem; clear - Sem E.
+        specialize (E n).
+        revert dependent ess'; induction Sem, ess'; simpl in *; try discriminate; constructor; inv E; auto.
+        erewrite <-interp_cexp_instant_complete; eauto.
     Qed.
 
-    Lemma ite_inv:
-      forall H b le t f es,
-        CESem.sem_cexp b H (Eite le t f) es ->
-        exists les ts fs,
-          CESem.sem_exp b H le les
-          /\ CESem.sem_cexp b H t ts
-          /\ CESem.sem_cexp b H f fs
+    Lemma case_inv:
+      forall H b e l d os,
+        CESem.sem_cexp b H (Ecase e l d) os ->
+        exists xs ess,
+          CESem.sem_exp b H e xs
+          /\ Forall2 (fun e => CESem.sem_cexp b H e) l ess
           /\
           (forall n,
-              (exists c b ct cf,
-                  les n = present c
-                  /\ val_to_bool c = Some b
-                  /\ ts n = present ct
-                  /\ fs n = present cf
-                  /\ es n = if b then present ct else present cf)
+              (Forall (fun xs => xs n <> absent) ess
+               /\ exists b c es,
+                  xs n = present (Venum b)
+                  /\ nth_error ess b = Some es
+                  /\ es n = present c
+                  /\ os n = present c)
               \/
-              (les n = absent
-               /\ ts n = absent
-               /\ fs n = absent
-               /\ es n = absent)).
+              (xs n = absent
+               /\ Forall (fun xs => xs n = absent) ess
+               /\ os n = absent)).
     Proof.
       intros * Sem.
-      interp_str b H le Sem.
-      interp_str b H t Sem.
-      interp_str b H f Sem.
-      do 3 eexists; intuition; eauto.
-      specialize (Sem_le n); specialize (Sem_t n); specialize (Sem_f n);
-        specialize (Sem n); inv Sem.
-      - left; exists c, b0, ct, cf; repeat split; auto; intuition CESem.sem_det.
-      - right; repeat split; auto; intuition CESem.sem_det.
+      interp_str b H e Sem.
+      assert (forall n, Forall2 (fun e => CESem.sem_cexp_instant (b n) (H n) e)
+                                l (interp_cexps b H l n)) as Seml.
+      { intro n; specialize (Sem n); inv Sem.
+        - assert (Forall2 (fun e v => CESem.sem_cexp_instant (b n) (H n) e v)
+                          l (List.map present vs)) by now apply Forall2_map_2.
+          unfold interp_cexps, lift_interp.
+          erewrite <-interp_cexps_instant_complete; eauto.
+        - take (Forall _ _) and clear - it; induction it; simpl; constructor; auto.
+          erewrite <-interp_cexp_instant_complete; eauto.
+      }
+      apply sem_cexps_inv in Seml as (ess' & Sem_l & E).
+      do 2 eexists; split; eauto; split; eauto.
+      intro; specialize (Sem_e n); specialize (Sem n); inv Sem.
+      - left.
+        specialize (E n).
+        unfold interp_cexps, lift_interp, interp_cexps_instant in E.
+        rewrite ? map_app in E; simpl in E.
+        split.
+        + revert dependent ess'.
+          take (Forall2 _ _ _) and clear - it; induction it, ess';
+            inversion_clear 1; constructor; simpl in E; inv E; auto.
+          erewrite <-interp_cexp_instant_complete; eauto; discriminate.
+        + exists b0, c.
+          take (nth_error _ _ = _) and apply nth_error_split in it as (vs1 & vs2 & Nth & Length); subst.
+          take (Forall2 _ _ (_ ++ _)) and apply Forall2_app_inv_r in it as (es1 & es2' & Hes1 & Hes2' & ?); subst.
+          take (Forall2 _ (_ ++ _) _) and apply Forall2_app_inv_l in it as (ess1 & ess2' & Hess1 & Hess2' & ?); subst.
+          apply Forall2_length in Hes1 as L1; apply Forall2_length in Hess1 as L1'.
+          rewrite <-L1, L1'.
+          rewrite nth_error_app2, Nat.sub_diag; auto.
+          inv Hes2'; inv Hess2'; simpl.
+          rewrite <-L1', L1.
+          eexists; intuition eauto; try CESem.sem_det.
+          rewrite ? map_app in E.
+          apply app_inv in E as (?& E'); [|now rewrite 2 map_length].
+          simpl in E'; inv E'.
+          erewrite <-interp_cexp_instant_complete; eauto.
+      - right; repeat split; auto; try CESem.sem_det.
+        take (Forall _ _) and rename it into Sem; clear - Sem E.
+        specialize (E n).
+        revert dependent ess'; induction Sem, ess'; simpl in *; try discriminate; constructor; inv E; auto.
+        erewrite <-interp_cexp_instant_complete; eauto.
     Qed.
 
     Lemma exp_inv:
@@ -541,7 +618,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros *.
       apply ntheq_eqst. intros n.
-      unfold tr_stream, tr_stream_from. rewrite init_from_nth, plus_0_r.
+      unfold tr_stream, tr_stream_from. rewrite init_from_nth, Nat.add_0_r.
       replace (Indexed.reset v0 xs rs n) with
           (Indexed.reset v0 (CIStr.tr_Stream (tr_stream xs)) (CIStr.tr_Stream (tr_stream rs)) n).
       2:{ unfold Indexed.reset.
@@ -565,7 +642,7 @@ Module Type NLINDEXEDTOCOIND
 
     (** State the correspondence for [cexp].
         Goes by induction on [cexp] and uses the previous inversion lemmas. *)
-    Hint Constructors merge ite.
+    Hint Constructors merge case.
     Lemma sem_cexp_impl_from:
       forall n H b e es,
         CESem.sem_cexp b H e es ->
@@ -574,18 +651,40 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros * Sem; unfold CESem.sem_cexp, IStr.lift in Sem.
+      induction e using cexp_ind2; intros * Sem; unfold CESem.sem_cexp, IStr.lift in Sem.
 
-      - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
+      - destruct x; apply merge_inv in Sem as (xs & ess & ? & Hess & Spec).
         econstructor; eauto.
-        apply merge_spec; use_spec Spec.
+        + instantiate (1 := List.map (tr_stream_from n) ess).
+          clear Spec.
+          take (Forall _ _) and rename it into IH.
+          induction Hess; simpl; constructor; inv IH; auto.
+        + apply merge_spec.
+          intro m; specialize (Spec (m + n)); destruct Spec;
+            destruct_conjs; subst; repeat rewrite init_from_nth.
+          * right; do 5 eexists; intuition eauto.
+            -- rewrite map_app; simpl; reflexivity.
+            -- now rewrite map_length.
+            -- rewrite init_from_nth; auto.
+            -- rewrite <-map_app; apply Forall_map; setoid_rewrite init_from_nth; auto.
+          * left; intuition eauto.
+            apply Forall_map; setoid_rewrite init_from_nth; auto.
 
-      - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
+      - apply case_inv in Sem as (xs & ess & ? & Hess & Spec).
         econstructor; eauto.
-        apply ite_spec; use_spec Spec.
-        destruct H4.
-        + apply val_to_bool_true' in H8; subst; firstorder.
-        + apply val_to_bool_false' in H8; subst; firstorder.
+        + instantiate (1 := List.map (tr_stream_from n) ess).
+          clear Spec.
+          take (Forall _ _) and rename it into IH.
+          induction Hess; simpl; constructor; inv IH; auto.
+        + apply case_spec.
+          intro m; specialize (Spec (m + n)); destruct Spec;
+            destruct_conjs; subst; repeat rewrite init_from_nth.
+          * right; do 3 eexists; intuition eauto.
+            -- rewrite Forall_map; setoid_rewrite init_from_nth; auto.
+            -- erewrite map_nth_error; eauto; reflexivity.
+            -- rewrite init_from_nth; auto.
+          * left; intuition eauto.
+            apply Forall_map; setoid_rewrite init_from_nth; auto.
 
       - apply exp_inv in Sem; constructor; auto.
     Qed.
@@ -649,19 +748,19 @@ Module Type NLINDEXEDTOCOIND
     (** We state the correspondence for [bools_of]. *)
     Lemma bools_of_impl_from:
       forall n xs rs,
-        CESem.bools_of xs rs ->
+        Indexed.bools_of xs rs ->
         CStr.bools_of (tr_stream_from n xs) (tr_stream_from n rs).
     Proof.
       cofix Cofix; intros * Rst.
       pose proof Rst.
       specialize (Rst n).
       rewrite (init_from_n xs), (init_from_n rs).
-      destruct (xs n); constructor; auto.
+      destruct Rst as [(-> & ->)|(? & -> & ->)]; auto using bools_of.
     Qed.
 
     Corollary bools_of_impl:
       forall xs rs,
-        CESem.bools_of xs rs ->
+        Indexed.bools_of xs rs ->
         CStr.bools_of (tr_stream xs) (tr_stream rs).
     Proof. apply bools_of_impl_from. Qed.
 
@@ -680,7 +779,7 @@ Module Type NLINDEXEDTOCOIND
       - eapply ntheq_eqst.
         intros n. specialize (Bools2 n).
         rewrite disj_str_spec.
-        unfold tr_stream, tr_stream_from. rewrite init_from_nth, plus_0_r, Bools2.
+        unfold tr_stream, tr_stream_from. rewrite init_from_nth, Nat.add_0_r, Bools2.
         rewrite existsb_map. eapply existsb_ext.
         intros ?. rewrite init_from_nth, Nat.add_0_r; auto.
     Qed.
@@ -698,7 +797,7 @@ Module Type NLINDEXEDTOCOIND
       intros; apply ntheq_eqst; intro m.
       unfold Str_nth; revert n; induction m; intro; simpl.
       - destruct (r n) eqn: R; auto.
-        apply count_true_ge_1 in R; rewrite Minus.minus_Sn_m; omega.
+        apply count_true_ge_1 in R; rewrite Minus.minus_Sn_m; lia.
       - rewrite <-IHm; simpl; destruct (r n) eqn: R; destruct (r (S n));
           try (apply count_true_ge_1 in R; rewrite Minus.minus_Sn_m; auto);
           try (rewrite Nat.sub_succ, Nat.sub_0_r); auto.
@@ -749,7 +848,7 @@ Module Type NLINDEXEDTOCOIND
       cofix Cofix; intros.
       constructor; simpl.
       - unfold CESem.clock_of, CESem.clock_of_instant.
-        destruct (existsb (fun v : value => v <>b absent) (xss n)) eqn: E.
+        destruct (existsb (fun v : svalue => v <>b absent) (xss n)) eqn: E.
         + assert (forall v, v <> absent <-> (v <>b absent) = true)
             by (unfold nequiv_decb; setoid_rewrite Bool.negb_true_iff;
                 setoid_rewrite not_equiv_decb_equiv; reflexivity).
@@ -783,8 +882,8 @@ Module Type NLINDEXEDTOCOIND
       { intro n; specialize (Sem n); specialize (Var n); destruct Sem as (Sem & Sem').
         unfold interp_clock, lift_interp.
         destruct (xs n).
-        - erewrite <-interp_clock_instant_sound; eauto; apply Sem'; auto.
-        - erewrite <-interp_clock_instant_sound; eauto; apply Sem; eauto.
+        - erewrite <-interp_clock_instant_complete; eauto; apply Sem'; auto.
+        - erewrite <-interp_clock_instant_complete; eauto; apply Sem; eauto.
       }
       exists (interp_clock b H ck); split; auto.
       intro n; specialize (Var n); specialize (SemCk n); specialize (Sem n);

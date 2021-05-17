@@ -5,7 +5,6 @@ Open Scope list_scope.
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Morphisms.
 From Coq Require Import Program.Tactics.
-From Coq Require Import Omega.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
@@ -26,18 +25,19 @@ From Velus Require Import NLustre.NLCoindSemantics.
 From Coq Require Import Setoid.
 
 Module Type NLCOINDTOINDEXED
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX          Op)
-       (Import CESyn   : CESYNTAX               Op)
-       (Import Syn     : NLSYNTAX           Ids Op       CESyn)
-       (Import IStr    : INDEXEDSTREAMS         Op OpAux)
-       (Import CStr    : COINDSTREAMS           Op OpAux)
-       (Import CIStr   : COINDTOINDEXED         Op OpAux           CStr IStr)
-       (Import Ord     : NLORDERED          Ids Op       CESyn Syn)
-       (CESem          : CESEMANTICS        Ids Op OpAux CESyn     IStr)
-       (Indexed        : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
-       (CoInd          : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX      Ids Op)
+       (Import Cks   : CLOCKS             Ids Op OpAux)
+       (Import CESyn : CESYNTAX           Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX           Ids Op OpAux Cks CESyn)
+       (Import IStr  : INDEXEDSTREAMS     Ids Op OpAux Cks)
+       (Import CStr  : COINDSTREAMS       Ids Op OpAux Cks)
+       (Import CIStr : COINDTOINDEXED     Ids Op OpAux Cks           CStr IStr)
+       (Import Ord   : NLORDERED          Ids Op OpAux Cks CESyn Syn)
+       (CESem        : CESEMANTICS        Ids Op OpAux Cks CESyn     IStr)
+       (Indexed      : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn IStr Ord CESem)
+       (CoInd        : NLCOINDSEMANTICS   Ids Op OpAux Cks CESyn Syn CStr Ord).
 
   Section Global.
 
@@ -72,11 +72,14 @@ Module Type NLCOINDTOINDEXED
     Proof.
       unfold tr_Stream.
       induction 1 as [? ? ? ? Hconst
-                            |? ? ? ? ? Hvar
-                            |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
-                            |? ? ? ? ? ? ? ? ? Hlift1
-                            |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
+                     |? ? ? ? ? Henum
+                     |? ? ? ? ? Hvar
+                     |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
+                     |? ? ? ? ? ? ? ? ? Hlift1
+                     |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - rewrite const_spec in Hconst; rewrite Hconst.
+        destruct (tr_Stream b n); eauto.
+      - rewrite enum_spec in Henum; rewrite Henum.
         destruct (tr_Stream b n); eauto.
       - apply sem_var_impl in Hvar; eauto.
       - specialize (IHsem_exp n).
@@ -87,17 +90,16 @@ Module Type NLCOINDTOINDEXED
         destruct (Hwhen n)
           as [(Hes & Hxs & Hos)
              |[(? & ? & Hes & Hxs & ? & Hos)
-              |(? & ? & Hes & Hxs & ? & Hos)]];
+              |(? & Hes & Hxs & Hos)]];
           rewrite Hos; rewrite Hes in IHsem_exp; rewrite Hxs in Hvar;
             eauto.
-        rewrite <-(Bool.negb_involutive k); eauto.
       - specialize (IHsem_exp n); simpl in IHsem_exp.
         rewrite lift1_spec in Hlift1; destruct (Hlift1 n)
-          as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
+          as [(Hes & Hos)|(?&?& Hes & ? & Hos)];
           rewrite Hos; rewrite Hes in IHsem_exp; eauto.
       - specialize (IHsem_exp1 n); specialize (IHsem_exp2 n); simpl in *.
         rewrite lift2_spec in Hlift2; destruct (Hlift2 n)
-          as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
+          as [(Hes1 & Hes2 & Hos)|(?&?&?& Hes1 & Hes2 &?& Hos)];
           rewrite Hos; rewrite Hes1 in IHsem_exp1; rewrite Hes2 in IHsem_exp2;
             eauto.
     Qed.
@@ -178,7 +180,7 @@ Module Type NLCOINDTOINDEXED
                   rewrite tr_Stream_S; destruct (tr_Stream xs n); auto.
     Qed.
 
-    Fact all_absent_or_presence : forall (xs: Stream value) n,
+    Fact all_absent_or_presence : forall (xs: Stream svalue) n,
         (forall m, m <= n -> xs # m = absent) \/
         (exists m x, m < n /\ xs # m = present x) \/
         ((forall m, m < n -> xs # m = absent) /\ exists x, xs # n = present x).
@@ -192,7 +194,7 @@ Module Type NLCOINDTOINDEXED
         + destruct (xs # (S n)) eqn:Hx.
           * left. intros ? Hmn. inv Hmn; auto.
           * do 2 right. split; eauto.
-            intros ? Hlt. apply H; auto. apply lt_n_Sm_le; auto.
+            intros ? Hlt. apply H; auto. apply Lt.lt_n_Sm_le; auto.
         + right; left. exists x. exists x0. auto.
         + right; left. exists n. exists x. auto.
     Qed.
@@ -228,7 +230,7 @@ Module Type NLCOINDTOINDEXED
           rewrite Indexed.doreset_spec.
           right. exists 0. repeat split; auto. apply Nat.lt_0_succ.
           intros ? Hk Hl. rewrite tr_Stream_nth. destruct k; auto.
-          apply Hm, lt_S_n; auto.
+          apply Hm, Lt.lt_S_n; auto.
     Qed.
 
     Corollary reset_fby_impl:
@@ -256,36 +258,62 @@ Module Type NLCOINDTOINDEXED
         CESem.sem_cexp (tr_Stream b) (tr_history H) e (tr_Stream es).
     Proof.
       unfold tr_Stream.
-      induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
-                    |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
-                    |? ? ? ? He]; intro n.
-      - specialize (IHsem_cexp1 n); specialize (IHsem_cexp2 n).
-        apply sem_var_impl in Hvar; eauto.
+      induction 1 as [? ? ? ? ? ? ? ? ? Hvar Hsem IH Hmerge
+                    |? ? ? ? ? ? ? ? He Hsem IH Hcase
+                    |? ? ? ? He] using CoInd.sem_cexp_ind2; intro n.
+      - apply sem_var_impl in Hvar; eauto.
         unfold tr_Stream, IStr.sem_var, IStr.lift in Hvar.
         specialize (Hvar n); simpl in *.
-        rename H0_ into Hf.
-        rewrite merge_spec in Hmerge; destruct (Hmerge n)
-          as [(Hxs & Hts & Hfs & Hos)
-             |[(? & Hxs & Hts & Hfs & Hos)
-              |(? & Hxs & Hts & Hfs & Hos)]];
-          rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
-            rewrite Hxs in Hvar; auto.
+        rewrite merge_spec in Hmerge.
+        destruct (Hmerge n)
+          as [(Hxs & Habs & Hos)
+             |(? & ? & ? & ? & ? & Hxs & Heq & Hlength & Hes & Habs & Hos)]; clear Hmerge;
+          rewrite Hos; rewrite Hxs in Hvar.
+        + constructor; auto.
+          clear - IH Habs.
+          induction IH as [|???? He]; inversion_clear Habs as [|?? Hy]; constructor; auto.
+          specialize (He n); simpl in He; rewrite Hy in He; auto.
+        + apply Forall2_trans_ex with (2:=Heq) in IH.
+          apply Forall2_app_inv_r in IH as (es1 & es2 & IH1 & IH2 & ?); subst.
+          inversion_clear IH2 as [|e ? es2' ? (v & Hin & He & Hv) IH2'].
+          specialize (He n); simpl in He.
+          rewrite Hv, Hes in He.
+          econstructor; eauto.
+          * eapply Forall2_length; eauto.
+          * apply Forall2_app with (2 := IH2') in IH1; clear IH2'.
+            clear - IH1 Habs.
+          induction IH1 as [|???? (v & Hin & He & Hv)]; inversion_clear Habs as [|?? Hy]; constructor; auto.
+          specialize (He n); simpl in He; rewrite Hv, Hy in He; auto.
 
-      - specialize (IHsem_cexp1 n); specialize (IHsem_cexp2 n).
-        eapply sem_exp_impl in He; unfold tr_Stream in He.
+      - eapply sem_exp_impl in He; unfold tr_Stream in He.
         specialize (He n); simpl in *.
-        rewrite ite_spec in Hite; destruct (Hite n)
-          as [(Hes & Hts & Hfs & Hos)
-             |[(ct & cf & Hes & Hts & Hfs & Hos)
-              |(ct & cf & Hes & Hts & Hfs & Hos)]];
-          rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
-            rewrite Hes in He; auto.
-        + change (present ct) with (if true then present ct else present cf).
-          eapply CESem.Site_eq; eauto.
-          apply val_to_bool_true.
-        + change (present cf) with (if false then present ct else present cf).
-          eapply CESem.Site_eq; eauto.
-          apply val_to_bool_false.
+        rewrite case_spec in Hcase.
+        destruct (Hcase n)
+          as [(Hxs & Habs & Hos)
+             |(? & ? & ? & Hxs & Habs & Hnth & Hes & Hos)]; clear Hcase;
+          rewrite Hos; rewrite Hxs in He.
+        * constructor; auto.
+          clear - IH Habs.
+          induction IH as [|???? He]; inversion_clear Habs as [|?? Hy]; constructor; auto.
+          specialize (He n); simpl in He; rewrite Hy in He; auto.
+        * inv Hnth; take (_ = nth_error _ _) and symmetry in it; rename it into Hnth; take (_ ≡ _) and rename it into Heq.
+          assert (exists vs, Forall2 (fun es v => es # n = present v) ess vs) as (vs & Hpres).
+          { clear - Habs; induction Habs as [|e es He]; eauto.
+            apply not_absent_present in He as (v & ?).
+            destruct IHHabs as (vs & ?).
+            exists (v :: vs); constructor; auto.
+          }
+          apply Forall2_trans_ex with (2 := Hpres) in IH.
+          econstructor; eauto.
+          -- instantiate (1 := vs).
+             clear - IH. induction IH as [|???? (v & Hin & He & Hy)]; constructor; auto.
+             specialize (He n); simpl in He; rewrite Hy in He; auto.
+          -- apply nth_error_split in Hnth as (ess1 & ess2 & ? & ?); subst.
+             apply Forall2_app_inv_l in Hpres as (vs1 & vs2 & Hpres1 & Hpres2 & ?); subst.
+             inversion_clear Hpres2 as [|???? Hsx].
+             erewrite Forall2_length; eauto.
+             rewrite nth_error_app3; auto.
+             rewrite Heq, Hes in Hsx; inv Hsx; auto.
 
       - apply sem_exp_impl in He; unfold tr_Stream in *; auto.
     Qed.
@@ -342,14 +370,13 @@ Module Type NLCOINDTOINDEXED
     Lemma bools_of_impl:
       forall xs rs,
         CStr.bools_of xs rs ->
-        CESem.bools_of (tr_Stream xs) (tr_Stream rs).
+        Indexed.bools_of (tr_Stream xs) (tr_Stream rs).
     Proof.
       intros ** n; revert dependent xs; revert rs.
       induction n; intros * Rst.
-      - unfold_Stv xs; unfold_Stv rs; rewrite tr_Stream_0; auto;
-          inv Rst; simpl in *; auto.
-      - unfold_Stv xs; unfold_Stv rs; rewrite 2 tr_Stream_S;
-          inv Rst; simpl in *; auto.
+      - unfold_Stv xs; inv Rst; rewrite tr_Stream_0; auto.
+        right; exists c'; rewrite tr_Stream_0; auto.
+      - unfold_Stv xs; inv Rst; rewrite 2 tr_Stream_S; auto.
     Qed.
 
     (** And for [bools_ofs] *)
@@ -407,9 +434,9 @@ Module Type NLCOINDTOINDEXED
       - specialize (IHn r).
         rewrite tr_Stream_S.
         destruct (tr_Stream r n) eqn: E';
-          destruct (tr_Stream r (S n)); rewrite IHn; try omega.
+          destruct (tr_Stream r (S n)); rewrite IHn; try lia.
         + apply Minus.minus_Sn_m, count_true_ge_1; auto.
-        + rewrite Minus.minus_Sn_m; try omega.
+        + rewrite Minus.minus_Sn_m; try lia.
           apply count_true_ge_1; auto.
     Qed.
 
@@ -432,7 +459,7 @@ Module Type NLCOINDTOINDEXED
         + rewrite IHn.
           destruct r; simpl in *; rewrite R, count_false_shift, tr_Stream_S.
           destruct (tr_Stream r n) eqn: R'; auto.
-          apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; omega.
+          apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; lia.
     Qed.
 
     (** State the correspondence for [mask]. *)
@@ -508,7 +535,7 @@ Module Type NLCOINDTOINDEXED
         symmetry in Clock; rewrite <-Bool.not_true_iff_false, Spec in Clock.
         assert (tr_Stream xs n = absent) as <-; auto.
         apply Decidable.not_not in Clock; auto.
-        apply decidable_eq_value.
+        apply decidable_eq_svalue.
       - intros Var'.
         eapply IStr.sem_var_instant_det in Var; eauto.
         assert (tr_Stream bs n = false) as <-; auto.
@@ -579,16 +606,17 @@ End NLCOINDTOINDEXED.
 Module NLCoindToIndexedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX          Op)
-       (CESyn   : CESYNTAX               Op)
-       (Syn     : NLSYNTAX           Ids Op       CESyn)
-       (IStr    : INDEXEDSTREAMS         Op OpAux)
-       (CStr    : COINDSTREAMS           Op OpAux)
-       (CIStr   : COINDTOINDEXED         Op OpAux           CStr IStr)
-       (Ord     : NLORDERED          Ids Op       CESyn Syn)
-       (CESem   : CESEMANTICS        Ids Op OpAux CESyn     IStr)
-       (Indexed : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
-       (CoInd   : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord)
-<: NLCOINDTOINDEXED Ids Op OpAux CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
-  Include NLCOINDTOINDEXED Ids Op OpAux CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
+       (OpAux   : OPERATORS_AUX      Ids Op)
+       (Cks     : CLOCKS             Ids Op OpAux)
+       (CESyn   : CESYNTAX           Ids Op OpAux Cks)
+       (Syn     : NLSYNTAX           Ids Op OpAux Cks CESyn)
+       (IStr    : INDEXEDSTREAMS     Ids Op OpAux Cks)
+       (CStr    : COINDSTREAMS       Ids Op OpAux Cks)
+       (CIStr   : COINDTOINDEXED     Ids Op OpAux Cks           CStr IStr)
+       (Ord     : NLORDERED          Ids Op OpAux Cks CESyn Syn)
+       (CESem   : CESEMANTICS        Ids Op OpAux Cks CESyn     IStr)
+       (Indexed : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn IStr Ord CESem)
+       (CoInd   : NLCOINDSEMANTICS   Ids Op OpAux Cks CESyn Syn CStr Ord)
+<: NLCOINDTOINDEXED Ids Op OpAux Cks CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
+  Include NLCOINDTOINDEXED Ids Op OpAux Cks CESyn Syn IStr CStr CIStr Ord CESem Indexed CoInd.
 End NLCoindToIndexedFun.

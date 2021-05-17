@@ -48,7 +48,7 @@ Module Type IDEMPOTENCE
 
   Corollary normalized_lexps_normalize_idem' : forall G es is_control st,
       Forall normalized_lexp es ->
-      (exists eqs, map_bind2 (unnest_exp G is_control) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
+      (exists eqs, mmap2 (unnest_exp G is_control) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
   Proof with eauto.
     induction es; intros * Hf;
       inv Hf; repeat inv_bind...
@@ -142,7 +142,7 @@ Module Type IDEMPOTENCE
 
   Corollary unnested_resets_normalize_idem : forall G es st,
       Forall (fun e : exp => exists (x : ident) (ann : ann), e = Evar x ann) es ->
-      map_bind2 (unnest_reset (unnest_exp G true)) es st = (es, List.map (fun _ => []) es, st).
+      mmap2 (unnest_reset (unnest_exp G true)) es st = (es, List.map (fun _ => []) es, st).
   Proof.
     induction es; intros * F; simpl; inv F; repeat inv_bind; auto.
     destruct H1 as (?&?&?); subst.
@@ -190,7 +190,7 @@ Module Type IDEMPOTENCE
 
   Corollary unnested_rhss_normalize_idem' : forall G es st,
       Forall (unnested_rhs G) es ->
-      (exists eqs, map_bind2 (unnest_rhs G) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
+      (exists eqs, mmap2 (unnest_rhs G) es st = (List.map (fun e => [e]) es, eqs, st) /\ (concat eqs = [])).
   Proof with eauto.
     induction es; intros st Hf;
       inv Hf; repeat inv_bind...

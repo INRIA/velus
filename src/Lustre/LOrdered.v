@@ -4,6 +4,8 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
+From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
@@ -21,7 +23,9 @@ that were defined earlier.
 Module Type LORDERED
        (Ids         : IDS)
        (Op          : OPERATORS)
-       (Import Syn  : LSYNTAX Ids Op).
+       (OpAux       : OPERATORS_AUX Ids Op)
+       (Cks         : CLOCKS Ids Op OpAux)
+       (Import Syn  : LSYNTAX Ids Op OpAux Cks).
 
   Inductive Is_node_in_exp : ident -> exp -> Prop :=
   | INEunop: forall f op e a,
@@ -40,14 +44,13 @@ Module Type LORDERED
   | INEwhen: forall f le x b la,
       Exists (Is_node_in_exp f) le ->
       Is_node_in_exp f (Ewhen le x b la)
-  | INEmerge: forall f x le1 le2 la,
-      Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 ->
-      Is_node_in_exp f (Emerge x le1 le2 la)
-  | INEite: forall f e le1 le2 la,
+  | INEmerge: forall f x es la,
+      Exists (Exists (Is_node_in_exp f)) es ->
+      Is_node_in_exp f (Emerge x es la)
+  | INEite: forall f e es la,
       Is_node_in_exp f e
-      \/ Exists (Is_node_in_exp f) le1
-      \/ Exists (Is_node_in_exp f) le2 ->
-      Is_node_in_exp f (Eite e le1 le2 la)
+      \/ Exists (Exists (Is_node_in_exp f)) es ->
+      Is_node_in_exp f (Ecase e es la)
   | INEapp1: forall f g le ler a,
       Exists (Is_node_in_exp f) le \/
       Exists (Is_node_in_exp f) ler ->
@@ -61,16 +64,8 @@ Module Type LORDERED
   Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_node_in_eq f) eqs.
 
-  Inductive Ordered_nodes : global -> Prop :=
-  | ONnil: Ordered_nodes nil
-  | ONcons:
-      forall nd nds,
-        Ordered_nodes nds
-        -> (forall f, Is_node_in f nd.(n_eqs) ->
-                f <> nd.(n_name)
-                /\ List.Exists (fun n=> f = n.(n_name)) nds)
-        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name))%type nds
-        -> Ordered_nodes (nd::nds).
+  Definition Ordered_nodes {prefs }: @global prefs -> Prop :=
+    Ordered_program (fun f nd => Is_node_in f nd.(n_eqs)).
 
   (** ** Properties of [Is_node_in] *)
 
@@ -123,57 +118,40 @@ Module Type LORDERED
 
   Section Ordered_nodes_Properties.
 
-    Lemma Ordered_nodes_append:
-      forall G G',
-        Ordered_nodes (G ++ G')
-        -> Ordered_nodes G'.
+    Lemma Ordered_nodes_append {prefs}:
+      forall (G G': @global prefs),
+        suffix G G'
+        -> Ordered_nodes G'
+        -> Ordered_nodes G.
     Proof.
-      induction G as [|nd G IH]; [intuition|].
-      intros G' HnGG.
-      apply IH; inversion_clear HnGG; assumption.
+      intros * Hsuff Hord. inv Hsuff.
+      eapply Ordered_program_append; eauto.
+      eapply program_equiv_rel_Symmetric; eauto.
     Qed.
 
-    Lemma find_node_later_not_Is_node_in:
-      forall f nd G nd',
-        Ordered_nodes (nd::G)
-        -> find_node f G = Some nd'
+    Lemma find_node_later_not_Is_node_in {prefs}:
+      forall f enums (nd: @node prefs) nds nd',
+        Ordered_nodes (Global enums (nd::nds))
+        -> find_node f (Global enums nds) = Some nd'
         -> ~Is_node_in nd.(n_name) nd'.(n_eqs).
     Proof.
-      intros f nd G nd' Hord Hfind Hini.
-      apply find_node_split in Hfind.
-      destruct Hfind as [bG [aG HG]].
-      rewrite HG in Hord.
-      inversion_clear Hord as [|? ? Hord' H0 Hnin]; clear H0.
-      apply Ordered_nodes_append in Hord'.
-      inversion_clear Hord' as [| ? ? Hord Heqs Hnin'].
-      apply Heqs in Hini.
-      destruct Hini as [H0 HH]; clear H0.
-      rewrite Forall_app in Hnin.
-      destruct Hnin as [H0 Hnin]; clear H0.
-      inversion_clear Hnin as [|? ? H0 HH']; clear H0.
-      apply List.Exists_exists in HH.
-      destruct HH as [node [HaG Heq]].
-      rewrite List.Forall_forall in HH'.
-      apply HH' in HaG.
-      contradiction.
+      intros * Hord Hfind Hini.
+      eapply option_map_inv in Hfind as ((?&?)&(Hfind&?)); subst.
+      eapply find_unit_later_not_Is_called_in with (us:=[nd]) in Hfind; eauto.
+      apply Forall_singl in Hfind; auto.
     Qed.
 
-    Lemma find_node_not_Is_node_in:
-      forall f nd G,
+    Lemma find_node_not_Is_node_in {prefs}:
+      forall f (nd: @node prefs) G,
         Ordered_nodes G
         -> find_node f G = Some nd
         -> ~Is_node_in nd.(n_name) nd.(n_eqs).
     Proof.
       intros f nd G Hord Hfind.
-      apply find_node_split in Hfind.
-      destruct Hfind as [bG [aG HG]].
-      rewrite HG in Hord.
-      apply Ordered_nodes_append in Hord.
-      inversion_clear Hord as [|? ? Hord' Heqs Hnin].
-      intro Hini.
-      apply Heqs in Hini.
-      destruct Hini as [HH H0]; clear H0.
-      apply HH; reflexivity.
+      apply option_map_inv in Hfind as ((?&?)&(?&?)); subst.
+      assert (name n = f) by (eapply find_unit_In; eauto); subst.
+      eapply not_Is_called_in_self in H; simpl; eauto.
+      assumption.
     Qed.
 
   End Ordered_nodes_Properties.
@@ -181,10 +159,10 @@ Module Type LORDERED
   (** Actually, any wt or wc program is also ordered :)
       We can use the wl predicates + hypothesis that there is no duplication in the node names *)
 
-  Lemma wl_exp_Is_node_in_exp : forall G e f,
+  Lemma wl_exp_Is_node_in_exp {prefs} : forall (G: @global prefs) e f,
       wl_exp G e ->
       Is_node_in_exp f e ->
-      In f (map n_name G).
+      In f (map n_name (nodes G)).
   Proof.
     intros * Hwl Hisin.
     Local Ltac Forall_Exists :=
@@ -199,8 +177,15 @@ Module Type LORDERED
     - (* fby *) clear H12. destruct H4 as [?|[?|?]]; Forall_Exists.
     - (* arrow *) clear H12. destruct H4 as [?|[?|?]]; Forall_Exists.
     - (* when *) Forall_Exists.
-    - (* merge *) destruct H3; Forall_Exists.
-    - (* ite *) destruct H3 as [?|[?|?]]; auto; Forall_Exists.
+    - (* merge *)
+      eapply Forall_Forall in H; [|eapply H5]; clear H5.
+      eapply Forall_Exists, Exists_exists in H2 as (?&?&He&?); eauto; simpl in *.
+      destruct He. Forall_Exists.
+    - (* case *)
+      destruct H2 as [Hex|Hex]; auto.
+      eapply Forall_Forall in H; [|eapply H7]; clear H7.
+      eapply Forall_Exists, Exists_exists in H as (?&?&He&?); eauto; simpl in *.
+      destruct He. Forall_Exists.
     - (* app1 *) clear H8. destruct H3; Forall_Exists.
     - (* app2 *) assert (find_node f0 G <> None) as Hfind.
       { intro contra. congruence. }
@@ -208,10 +193,10 @@ Module Type LORDERED
       rewrite in_map_iff; eauto.
   Qed.
 
-  Lemma wl_equation_Is_node_in_eq : forall G eq f,
+  Lemma wl_equation_Is_node_in_eq {prefs} : forall (G: @global prefs) eq f,
       wl_equation G eq ->
       Is_node_in_eq f eq ->
-      In f (map n_name G).
+      In f (map n_name (nodes G)).
   Proof.
     intros ? [xs es] * Hwl Hisin.
     destruct Hwl as [Hwl _].
@@ -221,10 +206,10 @@ Module Type LORDERED
     eapply wl_exp_Is_node_in_exp; eauto.
   Qed.
 
-  Lemma wl_node_Is_node_in : forall G n f,
+  Lemma wl_node_Is_node_in {prefs} : forall (G: @global prefs) n f,
       wl_node G n ->
       Is_node_in f (n_eqs n) ->
-      In f (map n_name G).
+      In f (map n_name (nodes G)).
   Proof.
     intros * Hwl Hisin.
     unfold wl_node in Hwl.
@@ -234,30 +219,26 @@ Module Type LORDERED
     eapply wl_equation_Is_node_in_eq; eauto.
   Qed.
 
-  Lemma wl_global_Ordered_nodes : forall G,
-      NoDup (List.map n_name G) ->
+  Lemma wl_global_Ordered_nodes {prefs} : forall (G: @global prefs),
       wl_global G ->
       Ordered_nodes G.
   Proof.
-    induction G; intros Hnd Hwl; inv Hnd; inv Hwl;
-      constructor; auto.
-    - intros f Hisin.
-      eapply wl_node_Is_node_in in Hisin; eauto.
-      split.
-      + intro contra; subst. contradiction.
-      + apply in_map_iff in Hisin as [? [? ?]].
-        rewrite Exists_exists; eauto.
-    - apply Forall_forall; intros ? Hin contra.
-      rewrite in_map_iff in H1.
-      apply H1; eauto.
+    intros * Wl.
+    eapply wt_program_Ordered_program; eauto.
+    intros * Wl' IsNodeIn.
+    eapply wl_node_Is_node_in, in_map_iff in IsNodeIn as (?&Name&Hin); eauto.
+    rewrite find_unit_Exists.
+    eapply Exists_exists; eauto.
   Qed.
 
 End LORDERED.
 
 Module LOrderedFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Syn  : LSYNTAX Ids Op)
-       <: LORDERED Ids Op Syn.
-  Include LORDERED Ids Op Syn.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS Ids Op OpAux)
+       (Syn   : LSYNTAX Ids Op OpAux Cks)
+       <: LORDERED Ids Op OpAux Cks Syn.
+  Include LORDERED Ids Op OpAux Cks Syn.
 End LOrderedFun.

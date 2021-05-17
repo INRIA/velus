@@ -1,11 +1,13 @@
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import CoreExpr.CEClocking.
 From Velus Require Import Stc.StcIsReset.
+From Velus Require Import Stc.StcIsNext.
 From Velus Require Import Stc.StcIsVariable.
 From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
@@ -26,13 +28,15 @@ wrt. its clock annotations.
 Module Type STCCLOCKING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX          Op)
-       (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Reset : STCISRESET     Ids Op CESyn Syn)
-       (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
-       (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
-       (Import CEClo : CECLOCKING    Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX     Ids Op OpAux Cks CESyn)
+       (Import Reset : STCISRESET    Ids Op OpAux Cks CESyn Syn)
+       (Import Var   : STCISVARIABLE Ids Op OpAux Cks CESyn Syn)
+       (Import Syst  : STCISSYSTEM   Ids Op OpAux Cks CESyn Syn)
+       (Import Ord   : STCORDERED    Ids Op OpAux Cks CESyn Syn Syst)
+       (Import CEClo : CECLOCKING    Ids Op OpAux Cks CESyn).
 
   Inductive wc_trconstr (P: program) (vars: list (ident * clock)): trconstr -> Prop :=
   | CTcDef:
@@ -41,10 +45,10 @@ Module Type STCCLOCKING
         wc_cexp vars e ck ->
         wc_trconstr P vars (TcDef x ck e)
   | CTcReset:
-      forall x ck ckr c0,
+      forall x ck ckr ty c0,
         In (x, ck) vars ->
         wc_clock vars ckr ->
-        wc_trconstr P vars (TcReset x ckr c0)
+        wc_trconstr P vars (TcReset x ckr ty c0)
   | CTcNext:
       forall x ck ckrs e,
         In (x, ck) vars ->
@@ -76,22 +80,16 @@ Module Type STCCLOCKING
     Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_nexts)))
            s.(s_tcs).
 
-  Inductive wc_program : program -> Prop :=
-  | wc_global_nil:
-      wc_program nil
-  | wc_global_cons:
-      forall b P,
-      wc_program P ->
-      wc_system P b ->
-      wc_program (b :: P).
+  Definition wc_program (P: program) :=
+    Forall' (fun P' => wc_system (Program P.(enums) P')) P.(systems).
 
   Inductive Has_clock_tc: clock -> trconstr -> Prop :=
   | HcTcDef:
       forall x ck e,
         Has_clock_tc ck (TcDef x ck e)
   | HcTcReset:
-      forall x ckr c0,
-        Has_clock_tc ckr (TcReset x ckr c0)
+      forall x ckr ty c0,
+        Has_clock_tc ckr (TcReset x ckr ty c0)
   | HcTcNext:
       forall x ck ckrs e,
         Has_clock_tc ck (TcNext x ck ckrs e)
@@ -102,7 +100,7 @@ Module Type STCCLOCKING
       forall s xs ck ckrs f es,
         Has_clock_tc ck (TcStep s xs ck ckrs f es).
 
-  Hint Constructors wc_clock wc_exp wc_cexp wc_trconstr wc_program.
+  Hint Constructors wc_clock wc_exp wc_cexp wc_trconstr.
   Hint Unfold wc_env wc_system.
   Hint Resolve Forall_nil.
 
@@ -131,9 +129,9 @@ Module Type STCCLOCKING
   Qed.
 
   Lemma wc_program_app_weaken:
-    forall P P',
-      wc_program (P' ++ P) ->
-      wc_program P.
+    forall P P' enums,
+      wc_program (Program enums (P' ++ P)) ->
+      wc_program (Program enums P).
   Proof.
     induction P'; auto.
     inversion_clear 1; auto.
@@ -145,34 +143,35 @@ Module Type STCCLOCKING
       find_system f P = Some (b, P') ->
       wc_system P' b.
   Proof.
-    intros * WCG Hfind.
-    apply find_system_app in Hfind as (?&?&?); subst.
+    intros (enumsP &P) * WCG Hfind.
+    assert (enumsP = enums P')
+      by (apply find_unit_equiv_program in Hfind; specialize (Hfind nil); inv Hfind; auto).
+    apply find_unit_spec in Hfind as (?&?&?&?); simpl in *; subst.
     apply wc_program_app_weaken in WCG.
-    inversion_clear WCG; auto.
+    inversion_clear WCG; destruct P'; auto.
   Qed.
 
   Lemma wc_trconstr_program_cons:
-    forall vars b P tc,
-      Ordered_systems (b :: P) ->
-      wc_trconstr P vars tc ->
-      wc_trconstr (b :: P) vars tc.
+    forall vars b P tc enums,
+      Ordered_systems (Program enums (b :: P)) ->
+      wc_trconstr (Program enums P) vars tc ->
+      wc_trconstr (Program enums (b :: P)) vars tc.
   Proof.
     intros * OnG WCnG.
-    inversion_clear OnG as [|? ? OG ? HndG].
+    inversion_clear OnG as [|?? []].
     inversion_clear WCnG as [| | | |????????? Find]; eauto using wc_trconstr.
     econstructor; eauto.
     rewrite find_system_other; eauto.
     intro; subst.
-    pose proof Find as Find'; apply find_system_name in Find'.
-    eapply find_system_In, Forall_forall in Find; eauto.
-    congruence.
+    apply find_unit_In in Find as (?& Hin).
+    eapply Forall_forall in Hin; eauto; simpl in *; congruence.
   Qed.
 
   Lemma wc_trconstr_program_app:
-    forall vars P' P tc,
-      Ordered_systems (P' ++ P) ->
-      wc_trconstr P vars tc ->
-      wc_trconstr (P' ++ P) vars tc.
+    forall vars P' P tc enums,
+      Ordered_systems (Program enums (P' ++ P)) ->
+      wc_trconstr (Program enums P) vars tc ->
+      wc_trconstr (Program enums (P' ++ P)) vars tc.
   Proof.
     induction P'; auto.
     simpl. intros * OG WCtc.
@@ -187,17 +186,16 @@ Module Type STCCLOCKING
       find_system f P = Some (b, P') ->
       wc_system P b.
   Proof.
-    intros * OG WCG Hfind.
+    intros (?& P) * OG WCG Hfind.
     induction P as [|b' P IH]; try discriminate.
-    simpl in *.
-    destruct (ident_eqb b'.(s_name) f) eqn:Heq.
-    - inv Hfind. inversion_clear WCG as [|? ? WCG' (WCi & WCo & WCv & WCtcs)].
+    eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl; eauto.
+    - inv Hfind. inversion WCG as [|?? (WCi & WCo & WCv & WCtcs) WCG']; subst.
       constructor; repeat (try split; auto).
       apply Forall_impl_In with (2:=WCtcs).
       intros. apply wc_trconstr_program_cons; auto.
     - assert (OG' := OG).
-      inversion_clear OG as [|? ? OG'' ? ?].
-      inversion_clear WCG as [|? ? WCG'].
+      inversion_clear OG as [|?? [] OG''].
+      inversion_clear WCG as [|??? WCG'].
       specialize (IH OG'' WCG' Hfind).
       destruct IH as (WCi & WCo & WCv & WCtcs).
       repeat (try split; auto).
@@ -300,13 +298,15 @@ End STCCLOCKING.
 Module StcClockingFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX         Op)
-       (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Reset : STCISRESET     Ids Op CESyn Syn)
-       (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Syst  : STCISSYSTEM    Ids Op CESyn Syn)
-       (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
-       (Import CEClo : CECLOCKING   Ids Op CESyn)
-  <: STCCLOCKING Ids Op CESyn Syn Reset Var Syst Ord CEClo.
-  Include STCCLOCKING Ids Op CESyn Syn Reset Var Syst Ord CEClo.
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX     Ids Op OpAux Cks CESyn)
+       (Import Reset : STCISRESET    Ids Op OpAux Cks CESyn Syn)
+       (Import Var   : STCISVARIABLE Ids Op OpAux Cks CESyn Syn)
+       (Import Syst  : STCISSYSTEM   Ids Op OpAux Cks CESyn Syn)
+       (Import Ord   : STCORDERED    Ids Op OpAux Cks CESyn Syn Syst)
+       (Import CEClo : CECLOCKING    Ids Op OpAux Cks CESyn)
+  <: STCCLOCKING Ids Op OpAux Cks CESyn Syn Reset Var Syst Ord CEClo.
+  Include STCCLOCKING Ids Op OpAux Cks CESyn Syn Reset Var Syst Ord CEClo.
 End StcClockingFun.

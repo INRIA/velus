@@ -1,4 +1,5 @@
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import Stc.StcSyntax.
@@ -12,58 +13,58 @@ Open Scope list_scope.
 Module Type STCORDERED
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Syn   : STCSYNTAX   Ids Op CESyn)
-       (Import Syst  : STCISSYSTEM Ids Op CESyn Syn).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import Cks   : CLOCKS      Ids Op OpAux)
+       (Import CESyn : CESYNTAX    Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
+       (Import Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn).
 
-  Inductive Ordered_systems: program -> Prop :=
-  | Ordered_nil:
-      Ordered_systems []
-  | Ordered_cons:
-      forall s P,
-        Ordered_systems P ->
-        Forall (fun xb =>
-                  snd xb <> s.(s_name)
-                  /\ exists s' P', find_system (snd xb) P = Some (s', P'))
-               s.(s_subs) ->
-        Forall (fun s' => s.(s_name) <> s'.(s_name))%type P ->
-        Ordered_systems (s :: P).
-
-  Remark Ordered_systems_split:
-    forall P1 s P,
-      Ordered_systems (P1 ++ s :: P) ->
-      Forall (fun xb =>
-                  find_system (snd xb) P1 = None
-                  /\ snd xb <> s.(s_name)
-                  /\ exists s' P', find_system (snd xb) P = Some (s', P'))
-             s.(s_subs).
-  Proof.
-    induction P1; inversion_clear 1 as [|?? Ord]; apply Forall_Forall; auto.
-    - apply Forall_forall; auto.
-    - apply IHP1 in Ord; apply Forall_forall; intros.
-      eapply Forall_forall in Ord as (?&?&(s' &?& Find)); eauto.
-      rewrite find_system_other; auto.
-      pose proof Find as Find'; apply find_system_name in Find'.
-      apply find_system_In in Find.
-      assert (In s' (P1 ++ s :: P)) as Hin
-          by (apply in_app; right; right; auto).
-      eapply Forall_forall in Hin; eauto.
-      congruence.
-    - apply IHP1 in Ord; apply Forall_forall; intros.
-      eapply Forall_forall in Ord as (?&?&?); eauto.
-  Qed.
+  Definition Ordered_systems := Ordered_program (fun f s => In f (map snd s.(s_subs))).
+  (* Inductive Ordered_systems: program -> Prop := *)
+  (* | Ordered_nil: forall enums, *)
+  (*     Ordered_systems (Program enums []) *)
+  (* | Ordered_cons: *)
+  (*     forall s P enums, *)
+  (*       Ordered_systems (Program enums P) -> *)
+  (*       Forall (fun xb => *)
+  (*                 snd xb <> s.(s_name) *)
+  (*                 /\ exists s' P', find_system (snd xb) (Program enums P) = Some (s', P')) *)
+  (*              s.(s_subs) -> *)
+  (*       Forall (fun s' => s.(s_name) <> s'.(s_name))%type P -> *)
+  (*       Ordered_systems (Program enums (s :: P)). *)
 
   Lemma Ordered_systems_append:
-    forall P P',
-      Ordered_systems (P ++ P') ->
-      Ordered_systems P'.
+    forall P P' enums,
+      Ordered_systems (Program enums (P ++ P')) ->
+      Ordered_systems (Program enums P').
   Proof.
-    induction P; [intuition|].
-    intros * HnPP.
-    apply IHP; inversion_clear HnPP; assumption.
+    intros * Ord; eapply Ordered_program_append' in Ord as (?&?); simpl in *; eauto.
   Qed.
 
-  Lemma Ordered_systems_find_In_systems:
+  Lemma Ordered_systems_split:
+    forall P1 s P enums,
+      Ordered_systems (Program enums (P1 ++ s :: P)) ->
+      Forall (fun xb =>
+                  find_system (snd xb) (Program enums P1) = None
+                  /\ snd xb <> s.(s_name)
+                  /\ exists s' P', find_system (snd xb) (Program enums P) = Some (s', P'))
+             s.(s_subs).
+  Proof.
+    intros * Ord.
+    eapply Ordered_program_append' in Ord as (Ndp & Ord); simpl in *; eauto.
+    inversion_clear Ord as [|?? [Spec]].
+    apply Forall_forall; intros [] Hin; simpl in *.
+    split.
+    - apply in_map with (f := snd) in Hin; apply Spec in Hin as (?&?&?& Find); simpl in *.
+      apply find_unit_spec in Find as (?&?&?&?); simpl in *; subst.
+      apply find_unit_None; simpl.
+      apply Forall_forall; intros * Hin'.
+      eapply Forall'_In in Hin' as (?&?&?& Hnn); eauto; simpl in *; subst.
+      rewrite Forall_app, Forall_cons2, Forall_app, Forall_cons2 in Hnn; intuition.
+    - apply Spec, in_map_iff; eexists; (intuition eauto); reflexivity.
+  Qed.
+
+  Corollary Ordered_systems_find_In_systems:
     forall P b s P',
       Ordered_systems P ->
       find_system b P = Some (s, P') ->
@@ -71,14 +72,14 @@ Module Type STCORDERED
         In (x, b) s.(s_subs) ->
         exists s P'', find_system b P' = Some (s, P'').
   Proof.
-    induction P as [|system]; try now inversion 2.
-    intros * Ord Find ?? Hin.
-    inv Ord.
-    simpl in Find.
-    destruct (ident_eqb (s_name system) b) eqn: E; eauto.
-    inv Find.
-    eapply Forall_forall in Hin; eauto.
-    destruct Hin; eauto.
+    intros * Ord Find.
+    assert (equiv_program P P') as E by (eapply find_unit_equiv_program; eauto).
+    specialize (E nil); inv E.
+    apply find_unit_spec in Find as (?&?&?&?).
+    destruct P, P'; simpl in *; subst.
+    apply Ordered_systems_split in Ord.
+    intros * Hin.
+    eapply Forall_forall in Hin; eauto; simpl in *; intuition.
   Qed.
 
   Lemma Ordered_systems_find_system:
@@ -87,31 +88,24 @@ Module Type STCORDERED
       find_system b P = Some (s, P') ->
       Ordered_systems P'.
   Proof.
-    induction P as [|system]; try now inversion 2.
     intros * Ord Find.
-    inv Ord.
-    simpl in Find.
-    destruct (ident_eqb (s_name system) b) eqn: E; eauto.
-    inv Find; auto.
+    assert (enums P = enums P') as E
+        by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
+    eapply Ordered_program_find_unit in Ord; simpl in *; eauto.
+    rewrite E in Ord; now inv Ord.
   Qed.
- Lemma find_system_later_not_Is_system_in:
-    forall f s P s' P',
-      Ordered_systems (s :: P) ->
-      find_system f P = Some (s', P') ->
+
+  Lemma find_system_other_not_Is_system_in:
+    forall f s P s' P' enums,
+      Ordered_systems (Program enums (s :: P)) ->
+      find_system f (Program enums P) = Some (s', P') ->
       ~ Is_system_in s.(s_name) s'.(s_tcs).
   Proof.
-    intros * Hord Hfind Hini.
-    apply find_system_app in Hfind as (?& E &?); rewrite E, app_comm_cons in Hord.
-    pose proof Hord as Hord'; inversion_clear Hord' as [|??? Sub Hnin]; clear Sub.
-    apply Ordered_systems_split in Hord.
-    apply steps_iresets_of_Is_system_in in Hini.
-    apply s_subs_in_tcs, in_map_iff in Hini as (?&?& Hin).
-    eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?&?& Find); simpl in Find.
-    apply Forall_app_weaken in Hnin; inversion_clear Hnin as [|??? Hnin'].
-    pose proof Find as Find'; apply find_system_name in Find'.
-    apply find_system_In in Find.
-    eapply Forall_forall in Find; eauto.
-    congruence.
+    intros * Ord Find.
+    eapply find_unit_other_not_Is_called_in with (u := s) in Ord; eauto; simpl; auto.
+    intro Hin; apply Ord.
+    apply steps_iresets_of_Is_system_in in Hin.
+    now apply s_subs_in_tcs.
   Qed.
 
   Lemma find_system_not_Is_system_in:
@@ -120,12 +114,12 @@ Module Type STCORDERED
       find_system f P = Some (s, P') ->
       ~ Is_system_in s.(s_name) s.(s_tcs).
   Proof.
-    intros * Hord Hfind Hini.
-    apply find_system_app in Hfind as (?& E &?); rewrite E in Hord.
-    apply Ordered_systems_split in Hord.
-    apply steps_iresets_of_Is_system_in in Hini.
-    apply s_subs_in_tcs, in_map_iff in Hini as (?&?& Hin).
-    eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?); auto.
+    intros * Ord Find.
+    eapply not_Is_called_in_self in Ord; eauto.
+    assert (s_name s = f) as -> by (apply find_unit_In in Find as []; auto).
+    intro Hin; apply Ord.
+    apply steps_iresets_of_Is_system_in in Hin.
+    now apply s_subs_in_tcs.
   Qed.
 
 End STCORDERED.
@@ -133,9 +127,11 @@ End STCORDERED.
 Module StcOrderedFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX        Op)
-       (Syn   : STCSYNTAX   Ids Op CESyn)
-       (Syst  : STCISSYSTEM Ids Op CESyn Syn)
-<: STCORDERED Ids Op CESyn Syn Syst.
-  Include STCORDERED Ids Op CESyn Syn Syst.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (Cks   : CLOCKS      Ids Op OpAux)
+       (CESyn : CESYNTAX    Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
+       (Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn)
+<: STCORDERED Ids Op OpAux Cks CESyn Syn Syst.
+  Include STCORDERED Ids Op OpAux Cks CESyn Syn Syst.
 End StcOrderedFun.

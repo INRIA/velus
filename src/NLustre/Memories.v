@@ -27,10 +27,12 @@ From Coq Require Import Permutation.
  *)
 
 Module Type MEMORIES
-       (Ids            : IDS)
-       (Op             : OPERATORS)
-       (Import CESyn   : CESYNTAX     Op)
-       (Import Syn     : NLSYNTAX Ids Op CESyn).
+       (Ids          : IDS)
+       (Op           : OPERATORS)
+       (OpAux        : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn).
 
   Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
@@ -355,10 +357,12 @@ Module Type MEMORIES
 End MEMORIES.
 
 Module MemoriesFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (CESyn   : CESYNTAX     Op)
-       (Syn     : NLSYNTAX Ids Op CESyn)
-       <: MEMORIES Ids Op CESyn Syn.
-  Include MEMORIES Ids Op CESyn Syn.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn)
+       <: MEMORIES Ids Op OpAux Cks CESyn Syn.
+  Include MEMORIES Ids Op OpAux Cks CESyn Syn.
 End MemoriesFun.

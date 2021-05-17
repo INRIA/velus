@@ -9,39 +9,39 @@ let
   y = merge(ck; x; (d fby y) when not ck);
 tel
 
-node count (init, incr : int; reset : bool)
+node count (init, incr : int; vreset : bool)
 returns (n : int);
 let
-  n = init -> (if reset then init else ((0 fby n) + incr));
+  n = init -> (if vreset then init else ((0 fby n) + incr));
 tel
 
-node two_states (init, set, reset : bool)
+node two_states (init, set, vreset : bool)
 returns (state : bool);
 var pstate : bool;
 let
   state = init -> (if set and not pstate then true
-                   else if reset and pstate then false
+                   else if vreset and pstate then false
                    else pstate);
   pstate = false fby state;
 tel
 
-node simple_stopwatch (start_stop, reset, hs : bool);
+node simple_stopwatch (start_stop, vreset, hs : bool);
 returns (time : int);
 var ck, running : bool;
 let
-  time = current(0, ck, count((0, 1, reset) when ck));
-  ck = true -> (hs and running) or reset;
+  time = current(0, ck, count((0, 1, vreset) when ck));
+  ck = true -> (hs and running) or vreset;
   running = two_states(false, start_stop, start_stop);
 tel
 
 node stopwatch (start_stop, hs, lap : bool);
 returns (disp_time : int);
-var not_in_lap, running, reset : bool; int_time : int;
+var not_in_lap, running, vreset : bool; int_time : int;
 let
   disp_time = current(0, not_in_lap, int_time when not_in_lap);
   not_in_lap = two_states(true, lap, lap and running);
-  int_time = simple_stopwatch (start_stop, reset, hs);
+  int_time = simple_stopwatch (start_stop, vreset, hs);
   running = two_states(false, start_stop, start_stop);
-  reset = lap and (true fby not_in_lap) and (false fby (not running));
+  vreset = lap and (true fby not_in_lap) and (false fby (not running));
 tel
 

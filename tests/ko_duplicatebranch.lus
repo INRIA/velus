@@ -1,0 +1,6 @@
+type t = A | B | C
+
+node f (x: t) returns (y: int)
+let
+   y = case x of (A -> 0) (B -> 1) (B -> 3) (C -> 2);
+tel

@@ -8,18 +8,24 @@ let fmt_coqstring p s = List.iter (Format.pp_print_char p) s
 module type PRINT_OPS =
   sig
     type typ
+    type cconst
     type const
     type unop
     type binop
+    type enumtag
 
-    val print_typ   : Format.formatter -> typ   -> unit
-    val print_const : Format.formatter -> const -> unit
-    val print_unop  : Format.formatter -> unop -> typ
-                        -> (Format.formatter -> 'a -> unit) -> 'a -> unit
-    val print_binop : Format.formatter -> binop -> typ
-                        -> (Format.formatter -> 'a -> unit) -> 'a
-                        -> (Format.formatter -> 'a -> unit) -> 'a
-                        -> unit
+    val print_typ         : Format.formatter -> typ -> unit
+    val print_cconst      : Format.formatter -> cconst -> unit
+    val print_const       : Format.formatter -> const -> unit
+    val print_enumtag     : Format.formatter -> enumtag -> unit
+    val print_unop        : Format.formatter -> unop -> typ
+                            -> (Format.formatter -> 'a -> unit) -> 'a -> unit
+    val print_binop       : Format.formatter -> binop -> typ
+                            -> (Format.formatter -> 'a -> unit) -> 'a
+                            -> (Format.formatter -> 'a -> unit) -> 'a
+                            -> unit
+    val print_branches    : (Format.formatter -> 'a -> unit) -> Format.formatter
+                            -> 'a option list * 'a option -> unit
 
     val prec_unop   : unop  -> int * associativity
     val prec_binop  : binop -> int * associativity

@@ -8,11 +8,10 @@ From Velus Require Import Stc.
 From Velus Require Import NLustreToStc.Translation.
 
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Environment.
 From Velus Require Import VelusMemory.
 From Velus Require Import CoindToIndexed.
-
-From Coq Require Import Omega.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -23,14 +22,16 @@ Open Scope nat.
 Module Type CORRECTNESS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CStr  : COINDSTREAMS    Op OpAux)
-       (Import IStr  : INDEXEDSTREAMS  Op OpAux)
-       (Import CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
-       (Import CE    : COREEXPR    Ids Op OpAux      IStr)
-       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
-       (Import Stc   : STC         Ids Op OpAux      IStr CE)
-       (Import Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Import Cks   : CLOCKS          Ids Op OpAux)
+       (Import CStr  : COINDSTREAMS    Ids Op OpAux Cks)
+       (Import IStr  : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CIStr : COINDTOINDEXED  Ids Op OpAux        Cks CStr IStr)
+       (Import CE    : COREEXPR        Ids Op OpAux ComTyp Cks      IStr)
+       (Import NL    : NLUSTRE         Ids Op OpAux ComTyp Cks CStr IStr CIStr CE)
+       (Import Stc   : STC             Ids Op OpAux ComTyp Cks      IStr CE)
+       (Import Trans : TRANSLATION     Ids Op OpAux Cks              CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -39,7 +40,7 @@ Module Type CORRECTNESS
   Proof.
     unfold gather_eqs.
     intro.
-    generalize (@nil (ident * (Op.const * clock))).
+    generalize (@nil (ident * (Op.const * type * clock))).
     induction eqs as [|[]]; simpl; try contradiction; intros * Hin; auto.
     - right; eapply IHeqs; eauto.
     - destruct l.
@@ -56,20 +57,9 @@ Module Type CORRECTNESS
       Ordered_nodes G ->
       Ordered_systems (translate G).
   Proof.
-    induction 1 as [|??? IH NodeIn Nodup]; simpl; constructor; auto.
-    - destruct nd; simpl in *; clear - NodeIn.
-      apply Forall_forall; intros * Hin.
-      destruct x; apply In_snd_gather_eqs_Is_node_in in Hin.
-      apply NodeIn in Hin as [? E]; split; auto.
-      clear NodeIn.
-      induction nds as [|n].
-      + inv E.
-      + simpl; destruct (ident_eqb (n_name n) i0) eqn: Eq.
-        * inv E; eauto.
-        * inv E; eauto.
-          rewrite ident_eqb_refl in Eq; discriminate.
-    - clear - Nodup.
-      induction Nodup; simpl; auto.
+    intros; eapply transform_units_Ordered_program; eauto.
+    intros * Hin; apply in_map_iff in Hin as ((?&?)&?&?); simpl in *; subst.
+    eapply In_snd_gather_eqs_Is_node_in; eauto.
   Qed.
 
   Lemma msem_eqs_reset_nexts:
@@ -78,7 +68,7 @@ Module Type CORRECTNESS
       Forall (msem_equation G bk H M) (n_eqs n) ->
       reset_nexts (translate_node n) (M 0).
   Proof.
-    intros * Closed Heqs ??? Hin.
+    intros * Closed Heqs ???? Hin.
     destruct n; simpl in *.
     unfold gather_eqs in *.
     clear - Heqs Hin.
@@ -102,7 +92,7 @@ Module Type CORRECTNESS
         /\ sub_inst_n x M Mx.
   Proof.
     unfold gather_eqs.
-    intro; generalize (@nil (ident * (Op.const * clock))).
+    intro; generalize (@nil (ident * (Op.const * type * clock))).
     induction eqs as [|[]]; simpl; intros ??????? Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
       try inversion_clear Heq as [|?????????????? Hd ?????? Rst|];
@@ -121,26 +111,24 @@ Module Type CORRECTNESS
       msem_node G f xss M yss ->
       initial_state (translate G) f (M 0).
   Proof.
+    intros (?& G).
     induction G as [|node ? IH].
     inversion 2;
-      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Clock Hfind Ins ?? Heqs Closed].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    pose proof Hord; inversion_clear Hord as [|??? NodeIn].
+    pose proof Hord; inversion_clear Hord as [|???? NodeIn].
+    apply option_map_inv in Hfind as ((?&?)&Hfind&?); simpl in *; subst.
     pose proof Hfind as Hfind'.
-    simpl in Hfind.
-    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
-    - inversion Hfind; subst n.
-      apply find_node_translate in Hfind' as (?&?&Hfind'&?); subst.
-      pose proof Hfind';
-        simpl in Hfind'; rewrite Hnf in Hfind'; inv Hfind'.
+    eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl in *; eauto.
+    - inversion Hfind; subst.
+      apply find_unit_transform_units_forward in Hfind'.
       eapply msem_equations_cons in Heqs; eauto.
       econstructor; eauto.
       + eapply msem_eqs_reset_nexts; eauto.
       + intros * Hin.
-        destruct node; simpl in *.
         edestruct msem_eqs_In_snd_gather_eqs_spec
           as (?& Mx &?& [Node|(rs & Reset)] & Sub); eauto.
         destruct (Reset (if rs 0 then pred (count rs 0) else count rs 0))
@@ -150,9 +138,9 @@ Module Type CORRECTNESS
         rewrite Mmask in Sub.
         * eexists; split; eauto.
         * simpl; cases.
-    - assert (n_name node <> f) by now apply ident_eqb_neq.
-      eapply msem_node_cons in Hsem; eauto.
-      simpl; rewrite <-initial_state_other; eauto.
+    - eapply msem_node_cons in Hsem; eauto.
+      unfold translate; simpl.
+      rewrite <-initial_state_other; eauto.
   Qed.
 
   Definition sem_trconstrs_n
@@ -163,7 +151,7 @@ Module Type CORRECTNESS
 
   Definition sem_system_n
              (P: program) (f: ident)
-             (E: stream state) (xss yss: stream (list value)) (E': stream state) :=
+             (E: stream state) (xss yss: stream (list svalue)) (E': stream state) :=
     forall n, sem_system P f (E n) (xss n) (yss n) (E' n).
 
   Lemma sem_trconstrs_n_add_val_n:
@@ -226,14 +214,14 @@ Module Type CORRECTNESS
           translate_eqn_nodup_subs (EqFby x ck c e ro) eqs.
 
   Definition translate_eqn_nodup_nexts eq tcs :=
-    forall x, In x (gather_mem_eq eq) ->
+    forall x, In x (map fst (gather_mem_eq eq)) ->
          ~(exists ck, Is_reset_in x ck tcs) /\ ~Is_next_in x tcs.
 
-  Inductive memory_closed_rec: global -> ident -> memory val -> Prop :=
+  Inductive memory_closed_rec: global -> ident -> memory value -> Prop :=
     memory_closed_rec_intro:
       forall G f M n,
         find_node f G = Some n ->
-        (forall x, find_val x M <> None -> In x (gather_mems n.(n_eqs))) ->
+        (forall x, find_val x M <> None -> In x (map fst (gather_mems n.(n_eqs)))) ->
         (forall i Mi, find_inst i M = Some Mi ->
               exists f',
                 In (i, f') (gather_insts n.(n_eqs))
@@ -244,11 +232,11 @@ Module Type CORRECTNESS
     forall n, memory_closed_rec G f (M n).
 
   Lemma memory_closed_rec_other:
-    forall M G f node,
-      Ordered_nodes (node :: G) ->
+    forall M G f node enums,
+      Ordered_nodes (Global enums (node :: G)) ->
       node.(n_name) <> f ->
-      (memory_closed_rec (node :: G) f M
-       <-> memory_closed_rec G f M).
+      (memory_closed_rec (Global enums (node :: G)) f M
+       <-> memory_closed_rec (Global enums G) f M).
   Proof.
     induction M as [? IH] using memory_ind'.
     split; inversion_clear 1 as [???? Find ? Insts].
@@ -260,7 +248,7 @@ Module Type CORRECTNESS
       rewrite <-gather_eqs_snd_spec in Hin.
       apply In_snd_gather_eqs_Is_node_in in Hin.
       intro; subst; contradict Hin.
-      eapply find_node_later_not_Is_node_in; eauto.
+      eapply find_node_other_not_Is_node_in; eauto.
     - pose proof Find; eapply find_node_other in Find; eauto.
       econstructor; eauto.
       intros * Find'; pose proof Find';
@@ -269,15 +257,15 @@ Module Type CORRECTNESS
       rewrite <-gather_eqs_snd_spec in Hin.
       apply In_snd_gather_eqs_Is_node_in in Hin.
       intro; subst; contradict Hin.
-      eapply find_node_later_not_Is_node_in; eauto.
+      eapply find_node_other_not_Is_node_in; eauto.
   Qed.
 
   Lemma memory_closed_rec_n_other:
-    forall M G f node,
-      Ordered_nodes (node :: G) ->
+    forall M G f node enums,
+      Ordered_nodes (Global enums (node :: G)) ->
       node.(n_name) <> f ->
-      (memory_closed_rec_n (node :: G) f M
-       <-> memory_closed_rec_n G f M).
+      (memory_closed_rec_n (Global enums (node :: G)) f M
+       <-> memory_closed_rec_n (Global enums G) f M).
   Proof.
     split; intros Closed n; specialize (Closed n).
     - apply memory_closed_rec_other in Closed; auto.
@@ -317,32 +305,35 @@ Module Type CORRECTNESS
       msem_node G f xss M yss ->
       memory_closed_rec_n G f M.
   Proof.
+    intros (?& G).
     induction G as [|node]; intros ???? Ord;
       inversion_clear 1 as [???????? Find ??? Heqs Closed];
       try now inv Find.
-    pose proof Find; simpl in Find.
-    destruct (ident_eqb node.(n_name) f) eqn:Eq.
+    pose proof Find.
+    apply option_map_inv in Find as ((?&?)&Find&?); simpl in *; subst.
+    eapply find_unit_cons in Find as [[E Find]|[E Find]]; simpl in *; eauto.
     - inv Find.
       econstructor; eauto.
       + apply Closed.
       + intros * Find_i.
-        assert (exists f', In (i, f') (gather_insts (n_eqs n))) as (f' & Hin)
+        assert (exists f', In (i, f') (gather_insts (n_eqs node))) as (f' & Hin)
             by (eapply InMembers_In, Closed, not_None_is_Some; eauto).
         eexists; split; eauto.
-        assert (f' <> n.(n_name)).
+        assert (f' <> node.(n_name)).
         { rewrite <-gather_eqs_snd_spec in Hin.
           apply In_snd_gather_eqs_Is_node_in in Hin.
           intro; subst; contradict Hin; eapply find_node_not_Is_node_in; eauto.
         }
         apply memory_closed_rec_other; auto.
-        assert (~ Is_node_in (n_name n) (n_eqs n))
+        assert (~ Is_node_in (n_name node) (n_eqs node))
           by (eapply find_node_not_Is_node_in; eauto).
         apply msem_equations_cons in Heqs; auto.
         inv Ord.
         eapply msem_equations_memory_closed_rec; eauto.
-    - apply ident_eqb_neq in Eq.
-      assert (~ Is_node_in (n_name node) (n_eqs n))
-        by (eapply find_node_later_not_Is_node_in; eauto).
+    - assert (find_node f {| NL.Syn.enums := enums0; nodes := G |} = Some n0)
+        by (unfold find_node; rewrite Find; auto).
+      assert (~ Is_node_in (n_name node) (n_eqs n0))
+        by (eapply find_node_other_not_Is_node_in; eauto).
       apply msem_equations_cons in Heqs; auto.
       apply memory_closed_rec_n_other; auto; inv Ord; eauto.
   Qed.
@@ -354,12 +345,16 @@ Module Type CORRECTNESS
       state_closed (translate G) f M.
   Proof.
     induction M as [? IH] using memory_ind'.
-    intros * Ord Closed; inversion_clear Closed as [???? Find ? Insts].
-    apply find_node_translate in Find as (?&?&?&?); subst.
+    intros * Ord Closed; inversion_clear Closed as [???? Find Mems Insts].
+    apply option_map_inv in Find as ((?&?)& Find &?); simpl in *; subst.
+    apply find_unit_transform_units_forward in Find.
     econstructor; eauto; simpl.
-    - intros * ??; rewrite gather_eqs_fst_spec; auto.
-    - intros * Find; pose proof Find as Find'.
-      apply Insts in Find as (?& Hin & Closed).
+    - intros * ? Find'. apply Mems in Find'. rewrite <-gather_eqs_fst_spec in Find'; auto.
+      apply in_map_iff in Find' as ((?&?)&?& Hin);
+        apply in_map_iff in Hin as ((?&((?&?)&?))& E & Hin); simpl in *; inv E.
+      apply in_map_iff; eexists; split; eauto; auto.
+    - intros * FindInst; pose proof FindInst as FindInst'.
+      apply Insts in FindInst as (?& Hin & Closed).
       rewrite <-gather_eqs_snd_spec in Hin.
       eexists; split; eauto.
       eapply IH in Closed; eauto.
@@ -400,9 +395,9 @@ Module Type CORRECTNESS
   Lemma sem_clock_vars_instant_Con:
     forall H b xs ys n,
       Forall2 (sem_var H) (map fst xs) ys ->
-      Forall (fun y => exists r, value_to_bool (y n) = Some r) ys ->
+      Forall (fun y => exists r, svalue_to_bool (y n) = Some r) ys ->
       sem_clocked_vars_instant b (H n) xs ->
-      Forall (fun ckr => exists r, sem_clock_instant b (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr true) xs).
+      Forall (fun ckr => exists r, sem_clock_instant b (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
   Proof.
     intros * Vars Bools Clocked.
     rewrite Forall2_map_1 in Vars.
@@ -411,10 +406,13 @@ Module Type CORRECTNESS
     destruct (y n); simpl in *.
     - exists false. eapply Son_abs1; eauto.
       apply H4; eauto.
-    - exists x0. destruct x0.
-      + econstructor; eauto. apply H4; eauto.
-      + replace true with (negb false).
-        eapply Son_abs2; eauto. 2:auto.
+    - exists x0. destruct v; inv Bool.
+      destruct (e ==b true_tag) eqn:Heq.
+      + rewrite enumtag_eqb_eq in Heq; subst.
+        econstructor; eauto.
+        apply H4; eauto.
+      + rewrite enumtag_eqb_neq in Heq; subst.
+        eapply Son_abs2; eauto.
         apply H4; eauto.
   Qed.
 
@@ -422,17 +420,18 @@ Module Type CORRECTNESS
     forall H b xs ys n,
       Forall2 (sem_var H) (map fst xs) ys ->
       sem_clocked_vars_instant b (H n) xs ->
-      Exists (fun y => value_to_bool (y n) = Some true) ys <->
-      Exists (fun ckr => sem_clock_instant b (H n) ckr true) (map (fun '(xr, ckr) => Con ckr xr true) xs).
+      Exists (fun y => svalue_to_bool (y n) = Some true) ys <->
+      Exists (fun ckr => sem_clock_instant b (H n) ckr true) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
   Proof.
     intros * Vars Clocked.
     rewrite Forall2_map_1 in Vars.
     induction Vars as [|(?&?)]; inv Clocked; split; intros Bools; inv Bools; eauto.
     - left. specialize (H0 n).
-      destruct (y n); simpl in *.
-      + inv H2.
-      + econstructor; eauto.
-        apply H3; eauto.
+      destruct (y n); simpl in *. 2:destruct v; simpl in *. 1-3:inv H2.
+      rewrite H5.
+      rewrite enumtag_eqb_eq in H5; subst.
+      econstructor; eauto.
+      apply H3; eauto.
     - right. apply IHVars; auto.
     - left. specialize (H0 n).
       inv H2. 1,2:eapply sem_var_instant_det in H0; [|eauto]; try congruence.
@@ -444,25 +443,26 @@ Module Type CORRECTNESS
     forall H b xs ys n,
       Forall2 (sem_var H) (map fst xs) ys ->
       sem_clocked_vars_instant b (H n) xs ->
-      Forall (fun y => value_to_bool (y n) = Some false) ys <->
-      Forall (fun ckr => sem_clock_instant b (H n) ckr false) (map (fun '(xr, ckr) => Con ckr xr true) xs).
+      Forall (fun y => svalue_to_bool (y n) = Some false) ys <->
+      Forall (fun ckr => sem_clock_instant b (H n) ckr false) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
   Proof.
     intros * Vars Clocked.
     rewrite Forall2_map_1 in Vars.
     induction Vars as [|(?&?)]; inv Clocked; split; intros Bools; inv Bools; constructor; eauto.
     - specialize (H0 n).
-      destruct y; simpl in *.
-      + eapply Son_abs1; eauto.
-        apply H3; eauto.
-      + replace true with (negb false) by auto.
+      destruct (y n); simpl in *. 2:destruct v; simpl in *. 1-3:inv H5.
+      + econstructor; eauto.
+        eapply H3; eauto.
+      + rewrite H2.
+        rewrite enumtag_eqb_neq in H2; subst.
         eapply Son_abs2; eauto.
         apply H3; eauto.
     - apply IHVars; auto.
     - specialize (H0 n).
       destruct y; simpl in *; auto.
       inv H5; eapply sem_var_instant_det in H0; eauto; inv H0.
-      rewrite H10. f_equal.
-      destruct b0; auto.
+      assert (b' <> true_tag) as Hneq by auto.
+      rewrite <-enumtag_eqb_neq in Hneq. rewrite <-Hneq; auto.
     - apply IHVars; auto.
   Qed.
 
@@ -483,7 +483,7 @@ Module Type CORRECTNESS
       exists Is',
         sem_trconstrs_n (translate G) bk H M Is' (next M) (translate_eqn eq ++ tcs)
         /\ (forall n, state_closed_insts (translate G) (gather_inst_eq eq ++ insts) (Is' n))
-        /\ (forall n, state_closed_nexts (gather_mem_eq eq ++ nexts) (Is' n)).
+        /\ (forall n, state_closed_nexts (map fst (gather_mem_eq eq) ++ nexts) (Is' n)).
   Proof.
     intros * IHnode Hord WC ClkM TrNodup1 TrNodup2 Closed1 Closed2 Heq Htcs.
     destruct Heq as [|??????????????????? Var Bools Reset|
@@ -514,9 +514,9 @@ Module Type CORRECTNESS
         specialize (Cky n); simpl in Cky;
           pose proof Node_n as Node_n'; apply IHnode in Node_n; specialize (Node_n n);
             rewrite 2 mask_transparent in Node_n; auto.
-      + assert (Forall (fun ckr => exists r, sem_clock_instant (bk n) (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr true) xrs)) as ClockR.
+      + assert (Forall (fun ckr => exists r, sem_clock_instant (bk n) (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs)) as ClockR.
         { eapply sem_clock_vars_instant_Con in Cky; eauto.
-          eapply bools_ofs_value_to_bool; eauto. }
+          eapply bools_ofs_svalue_to_bool; eauto. }
         destruct (rs n) eqn: Hrst.
         *{ assert (find_inst x (add_inst x (Mx 0) (Is n)) = Some (Mx 0))
              by apply find_inst_gss.
@@ -526,8 +526,8 @@ Module Type CORRECTNESS
                            rewrite Forall_map in ClockR; eapply Forall_forall in ClockR as (?&ClockR)|]];
              try econstructor; eauto using sem_trconstr.
            - intro contra. exfalso.
-             assert (Exists (fun y : nat -> value => value_to_bool (y n) = Some true) ys) as CkTrue.
-             { eapply bools_ofs_value_to_bool_true; eauto. }
+             assert (Exists (fun y : nat -> _ => svalue_to_bool (y n) = Some true) ys) as CkTrue.
+             { eapply bools_ofs_svalue_to_bool_true; eauto. }
              eapply sem_clock_vars_instant_Con_true in CkTrue; eauto.
              eapply Forall_Exists in contra; eauto.
              eapply Exists_exists in contra as (?&In&(Clock1&Clock2)).
@@ -537,7 +537,7 @@ Module Type CORRECTNESS
                intros * Spec.
                rewrite mask_opaque.
                - apply all_absent_spec.
-               - eapply count_positive in Spec; eauto; omega.
+               - eapply count_positive in Spec; eauto; lia.
              }
              eapply same_initial_memory with (2 := Node_n') in Node_0; eauto.
              unfold next in Node_n; simpl in Node_n.
@@ -558,8 +558,8 @@ Module Type CORRECTNESS
            - intros _. rewrite H1. reflexivity.
            - unfold next; simpl.
              rewrite <-Mmask_n; auto.
-           - assert (Forall (fun y : nat -> value => value_to_bool (y n) = Some false) ys) as CkFalse.
-             { eapply bools_ofs_value_to_bool_false; eauto. }
+           - assert (Forall (fun y : nat -> _ => svalue_to_bool (y n) = Some false) ys) as CkFalse.
+             { eapply bools_ofs_svalue_to_bool_false; eauto. }
              eapply sem_clock_vars_instant_Con_false in CkFalse; eauto.
              rewrite Forall_map in CkFalse. eapply Forall_forall in CkFalse; eauto. destruct x0.
              eapply sem_clock_instant_det in ClockR; [|eauto]; subst; auto.
@@ -575,9 +575,9 @@ Module Type CORRECTNESS
     - pose proof mfbyreset_holdreset as Hhold. specialize (Hhold _ _ _ _ _ _ Mfby).
       exists (add_val_n x (fun n => if (rs n) then sem_const c0 else holdreset (sem_const c0) ls rs n) Is).
 
-      assert (forall n, Forall (fun ckr => exists r, sem_clock_instant (bk n) (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr true) xrs)) as ClockR.
+      assert (forall n, Forall (fun ckr => exists r, sem_clock_instant (bk n) (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs)) as ClockR.
       { intros n. eapply sem_clock_vars_instant_Con in ClockedVar; eauto.
-        eapply bools_ofs_value_to_bool; eauto. }
+        eapply bools_ofs_svalue_to_bool; eauto. }
 
       repeat split; auto.
       constructor; specialize (ClockR n);
@@ -589,7 +589,7 @@ Module Type CORRECTNESS
       1-10:eauto.
       + intros CkFalse.
         eapply sem_clock_vars_instant_Con_false in CkFalse; eauto.
-        eapply bools_ofs_value_to_bool_false in CkFalse; eauto.
+        eapply bools_ofs_svalue_to_bool_false in CkFalse; eauto.
         rewrite CkFalse; auto.
       + destruct Mfby as (_&Spec).
         specialize (Spec n); rewrite Hhold in Spec.
@@ -601,10 +601,10 @@ Module Type CORRECTNESS
         destruct (rs n) eqn:Hrs, (ls n) eqn:Hls; auto.
       + unfold add_val_n. rewrite find_val_gss.
         destruct x1; auto.
-        assert (Exists (fun ckr => sem_clock_instant (bk n) (H n) ckr true) (map (fun '(xr, ckr) => Con ckr xr true) xrs)) as CkTrue.
-        { rewrite Exists_map. eapply Exists_exists; eauto. }
+        assert (Exists (fun ckr => sem_clock_instant (bk n) (H n) ckr true) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xrs)) as CkTrue.
+        { rewrite CommonList.Exists_map. eapply Exists_exists; eauto. }
         eapply sem_clock_vars_instant_Con_true in CkTrue; eauto.
-        eapply bools_ofs_value_to_bool_true in CkTrue; eauto.
+        eapply bools_ofs_svalue_to_bool_true in CkTrue; eauto.
         rewrite CkTrue; auto.
       + eapply sem_trconstrs_n_add_val_n; eauto.
         1,2:apply TrNodup2; simpl; auto.
@@ -631,7 +631,7 @@ Module Type CORRECTNESS
              contradict Notin1. inv Notin1; auto using Is_defined_in_eq.
          }
         * inversion_clear Hin as [?? Hin'|?? Hin']. inv Hin'.
-          clear - Hin'. rewrite map_map, Exists_map in Hin'.
+          clear - Hin'. rewrite map_map, CommonList.Exists_map in Hin'.
           induction Hin'; auto. inv H.
       + eapply IHeqs in Notin2 as (Notin2&_); eauto.
     - eapply IsD.not_Is_defined_in_cons in Notin as (Notin1&Notin2).
@@ -640,11 +640,11 @@ Module Type CORRECTNESS
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
         *{ destruct l; try destruct o as [(?&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
            - inv Hin'; apply Notin1; do 3 constructor; auto.
-           - clear - Hin'. rewrite map_map, Exists_map in Hin'.
+           - clear - Hin'. rewrite map_map, CommonList.Exists_map in Hin'.
              induction Hin'; auto. inv H.
          }
         * inversion_clear Hin as [?? Hin'|?? Hin']. inv Hin'.
-          clear - Hin'. rewrite map_map, Exists_map in Hin'.
+          clear - Hin'. rewrite map_map, CommonList.Exists_map in Hin'.
           induction Hin'; auto. inv H.
       + eapply IHeqs in Notin2 as (_&Notin2); eauto.
   Qed.
@@ -671,9 +671,9 @@ Module Type CORRECTNESS
     - apply Exists_app' in Hin as [Hin|].
       + destruct eq; simpl in Hin.
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
-        *{ destruct l; try destruct o as [(?&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
+        *{ destruct l; try destruct o as [(((?&?)&?)&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
            - inv Hin'; apply Notin; do 3 constructor; auto.
-           - clear - Hin'. rewrite map_map, Exists_map in Hin'.
+           - clear - Hin'. rewrite map_map, CommonList.Exists_map in Hin'.
              induction Hin'; auto. inv H.
          }
         * inversion_clear Hin as [?? Hin'|?? Hin']. inv Hin'.
@@ -699,7 +699,7 @@ Module Type CORRECTNESS
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
         *{ destruct l; try destruct o as [(?&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
            - inv Hin'; apply Notin; do 3 constructor; auto.
-           - clear - Hin'. rewrite map_map, Exists_map in Hin'.
+           - clear - Hin'. rewrite map_map, CommonList.Exists_map in Hin'.
              induction Hin'; auto. inv H.
          }
         *{ inversion_clear Hin as [?? Hin'|?? Hin'].
@@ -719,9 +719,9 @@ Module Type CORRECTNESS
       translate_eqn_nodup_nexts eq (translate_eqns eqs).
   Proof.
     destruct eq; inversion_clear 1; inversion_clear 1; econstructor; eauto.
-    1-4:simpl in H0; destruct H0; subst; try contradiction.
-    1,3:apply not_Is_defined_not_Is_reset_in_eqs; auto.
-    1,2:apply not_Is_defined_not_Is_next_in_eqs; auto.
+    1-2:simpl in H0; destruct H0; subst; try contradiction.
+    - apply not_Is_defined_not_Is_reset_in_eqs; auto.
+    - apply not_Is_defined_not_Is_next_in_eqs; auto.
   Qed.
 
   Lemma state_closed_insts_empty:
@@ -744,7 +744,7 @@ Module Type CORRECTNESS
       Forall (msem_equation G bk H M) eqs ->
       exists Is, sem_trconstrs_n (translate G) bk H M Is (next M) (translate_eqns eqs)
             /\ (forall n, state_closed_insts (translate G) (gather_insts eqs) (Is n))
-            /\ (forall n, state_closed_nexts (gather_mems eqs) (Is n)).
+            /\ (forall n, state_closed_nexts (map fst (gather_mems eqs)) (Is n)).
   Proof.
     intros ???????? WC ?? Heqs.
     unfold translate_eqns.
@@ -755,6 +755,7 @@ Module Type CORRECTNESS
     - apply Forall_cons2 in Heqs as [Heq Heqs].
       apply IHeqs in Heqs as (?&?&?&?); auto.
       + unfold gather_insts; simpl.
+        rewrite map_app.
         eapply equation_correctness; eauto.
         eapply Nodup_defs_translate_eqns_subs; eauto.
         eapply Nodup_defs_translate_eqns_nexts; eauto.
@@ -794,23 +795,23 @@ Module Type CORRECTNESS
       msem_node G f xss M yss ->
       sem_system_n (translate G) f M xss yss (next M).
   Proof.
+    intros (enums & G).
     induction G as [|node ? IH].
     inversion 3;
-      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
     intros * Hord WC Hsem n.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Clock Hfind Ins Outs Ck Heqs Closed].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    pose proof Hord; inversion_clear Hord as [|??? NodeIn].
+    pose proof Hord as Hord'; inversion_clear Hord' as [|???? NodeIn].
+    apply option_map_inv in Hfind as ((?&?)&Hfind&?).
     pose proof Hfind as Hfind'.
-    simpl in Hfind.
-    assert (Ordered_systems (translate_node node :: translate G))
-      by (change (translate_node node :: translate G) with (translate (node :: G));
-          apply Ordered_nodes_systems; auto).
-    inversion WC as [|??? (?&?&?& WCeqs)]; subst.
-    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
-    - inversion Hfind; subst n0.
-      apply find_node_translate in Hfind' as (?&?& Hfind' &?); subst.
+    assert (Ordered_systems (Program enums (translate_node node :: map translate_node G)))
+      by (apply Ordered_nodes_systems in Hord; auto).
+    inversion WC as [|?? (?&?&?& WCeqs)]; subst; simpl in WCeqs.
+    eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl in *; eauto.
+    - inv Hfind.
+      apply find_unit_transform_units_forward in Hfind'.
       eapply msem_equations_cons in Heqs; eauto.
       pose proof (NoDup_defs_node node).
       eapply equations_correctness in Heqs as (I & Heqs &?&?); eauto.
@@ -819,7 +820,7 @@ Module Type CORRECTNESS
           apply not_Is_node_in_not_Is_system_in; auto.
         * eapply msem_node_state_closed; eauto.
         * econstructor; eauto; try congruence.
-          rewrite s_nexts_in_tcs; simpl. rewrite <-gather_mems_nexts_of; auto.
+          rewrite s_nexts_in_tcs_fst; simpl. rewrite <-gather_mems_nexts_of; auto.
           eapply state_closed_insts_find_system_other, state_closed_insts_cons; eauto.
           simpl; rewrite gather_eqs_snd_spec; auto.
         * unfold next; eapply msem_node_state_closed; eauto.
@@ -827,15 +828,14 @@ Module Type CORRECTNESS
         intro k; specialize (Ck k); setoid_rewrite Forall_app; split; auto.
         apply Forall_forall; intros (x, ck) ?.
         rewrite idck_app in WCeqs.
-        eapply sem_clocked_var_eqs with (eqs := node.(n_eqs)); eauto.
+        eapply sem_clocked_var_eqs with (5 := WCeqs); eauto.
         * rewrite <-idck_app, NoDupMembers_idck.
           apply n_nodup.
         * eapply msem_sem_equations; eauto.
         * rewrite map_fst_idck.
           apply n_defd.
-    - assert (n_name node <> f) by now apply ident_eqb_neq.
-      eapply msem_node_cons, IH in Hsem; eauto.
-      apply sem_system_cons2; auto using Ordered_systems.
+    - eapply msem_node_cons, IH in Hsem; eauto.
+      apply sem_system_cons2; eauto.
   Qed.
 
   Corollary correctness_loop:
@@ -865,14 +865,16 @@ End CORRECTNESS.
 Module CorrectnessFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (CStr  : COINDSTREAMS    Op OpAux)
-       (IStr  : INDEXEDSTREAMS  Op OpAux)
-       (CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
-       (CE    : COREEXPR    Ids Op OpAux      IStr)
-       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
-       (Stc   : STC         Ids Op OpAux      IStr       CE)
-       (Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
-  Include CORRECTNESS Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Cks   : CLOCKS          Ids Op OpAux)
+       (CStr  : COINDSTREAMS    Ids Op OpAux Cks)
+       (IStr  : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CIStr : COINDTOINDEXED  Ids Op OpAux        Cks CStr IStr)
+       (CE    : COREEXPR        Ids Op OpAux ComTyp Cks      IStr)
+       (NL    : NLUSTRE         Ids Op OpAux ComTyp Cks CStr IStr CIStr CE)
+       (Stc   : STC             Ids Op OpAux ComTyp Cks      IStr       CE)
+       (Trans : TRANSLATION     Ids Op OpAux Cks           CE.Syn NL.Syn Stc.Syn NL.Mem)
+<: CORRECTNESS Ids Op OpAux ComTyp Cks CStr IStr CIStr CE NL Stc Trans.
+  Include CORRECTNESS Ids Op OpAux ComTyp Cks CStr IStr CIStr CE NL Stc Trans.
 End CorrectnessFun.

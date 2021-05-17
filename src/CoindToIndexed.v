@@ -10,14 +10,17 @@ From Coq Require Import Program.Tactics.
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
+From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoindStreams.
 
 Module Type COINDTOINDEXED
+       (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import CStr  : COINDSTREAMS Op OpAux)
-       (Import IStr  : INDEXEDSTREAMS Op OpAux).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS Ids Op OpAux)
+       (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
+       (Import IStr  : INDEXEDSTREAMS Ids Op OpAux Cks).
 
     (** * BASIC CORRESPONDENCES *)
 
@@ -127,8 +130,8 @@ Module Type COINDTOINDEXED
     Qed.
 
     Fact tr_history_find_orel : forall H H' x x',
-        orel (@EqSt value) (Env.find x H) (Env.find x' H') ->
-        (forall n, orel (@eq value) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+        orel (@EqSt _) (Env.find x H) (Env.find x' H') ->
+        (forall n, orel (@eq _) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
     Proof.
       intros * Horel n.
       unfold tr_history, tr_Stream.
@@ -191,36 +194,35 @@ Module Type COINDTOINDEXED
         with added complexity as [sem_clock] depends on [H] and [b].
         We go by induction on the clock [ck] then by induction on [n] and
         inversion of the coinductive hypothesis as before. *)
-    Hint Constructors sem_clock_instant.
+    Hint Constructors IStr.sem_clock_instant.
     Lemma sem_clock_index:
       forall n H b ck bs,
         CStr.sem_clock H b ck bs ->
         (ck = Cbase
          /\ tr_Stream b n = tr_Stream bs n)
         \/
-        (exists ck' x k c,
-            ck = Con ck' x k
-            /\ sem_clock_instant
+        (exists ck' x t c,
+            ck = Con ck' x (t, c)
+            /\ IStr.sem_clock_instant
                 (tr_Stream b n) (tr_history H n) ck' true
-            /\ sem_var_instant (tr_history H n) x
-                                      (present c)
-            /\ val_to_bool c = Some k
+            /\ IStr.sem_var_instant (tr_history H n) x
+                                      (present (Venum c))
             /\ tr_Stream bs n = true)
         \/
-        (exists ck' x k,
-            ck = Con ck' x k
-            /\ sem_clock_instant
+        (exists ck' x c,
+            ck = Con ck' x c
+            /\ IStr.sem_clock_instant
                 (tr_Stream b n) (tr_history H n) ck' false
-            /\ sem_var_instant (tr_history H n) x absent
+            /\ IStr.sem_var_instant (tr_history H n) x absent
             /\ tr_Stream bs n = false)
         \/
-        (exists ck' x k c,
-            ck = Con ck' x (negb k)
-            /\ sem_clock_instant
+        (exists ck' x t c c',
+            ck = Con ck' x (t, c)
+            /\ IStr.sem_clock_instant
                 (tr_Stream b n) (tr_history H n) ck' true
-            /\ sem_var_instant (tr_history H n) x
-                                      (present c)
-            /\ val_to_bool c = Some k
+            /\ IStr.sem_var_instant (tr_history H n) x
+                                      (present (Venum c'))
+            /\ c <> c'
             /\ tr_Stream bs n = false).
     Proof.
       Local Ltac rew_0 :=
@@ -234,7 +236,7 @@ Module Type COINDTOINDEXED
       - intro n; revert x k; induction n; intros x k H bk bk' Indexed.
         + inversion_clear Indexed as [|? ? ? ? ? ? ? ? ? IndexedCk Hvar
                                      |? ? ? ? ? ? ? ? IndexedCk Hvar
-                                     |? ? ? ? ? ? ? ? ? IndexedCk Hvar].
+                                     |? ? ? ? ? ? ? ? ? ? IndexedCk Hvar].
           * right; left.
             apply sem_var_impl in Hvar;
               unfold IStr.sem_var, IStr.lift in Hvar ; specialize (Hvar 0);
@@ -255,7 +257,7 @@ Module Type COINDTOINDEXED
             apply sem_var_impl in Hvar;
               unfold IStr.sem_var, IStr.lift in Hvar; specialize (Hvar 0);
                 rewrite tr_Stream_0 in Hvar.
-            do 4 eexists; intuition; eauto.
+            do 5 eexists; intuition; eauto.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
             rewrite E, tr_Stream_0; constructor.
@@ -266,7 +268,7 @@ Module Type COINDTOINDEXED
     Corollary sem_clock_impl:
       forall H b ck bs,
         CStr.sem_clock H b ck bs ->
-        sem_clock (tr_Stream b) (tr_history H) ck (tr_Stream bs).
+        IStr.sem_clock (tr_Stream b) (tr_history H) ck (tr_Stream bs).
     Proof.
       intros * Indexed n.
       apply (sem_clock_index n) in Indexed. destruct Indexed as [|[|[|]]];
@@ -279,10 +281,12 @@ Module Type COINDTOINDEXED
 End COINDTOINDEXED.
 
 Module CoindToIndexedFun
+       (Ids     : IDS)
        (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX          Op)
-       (CStr    : COINDSTREAMS           Op OpAux)
-       (IStr    : INDEXEDSTREAMS         Op OpAux)
-<: COINDTOINDEXED Op OpAux CStr IStr.
-  Include COINDTOINDEXED Op OpAux CStr IStr.
+       (OpAux   : OPERATORS_AUX          Ids Op)
+       (Cks     : CLOCKS                 Ids Op OpAux)
+       (CStr    : COINDSTREAMS           Ids Op OpAux Cks)
+       (IStr    : INDEXEDSTREAMS         Ids Op OpAux Cks)
+<: COINDTOINDEXED Ids Op OpAux Cks CStr IStr.
+  Include COINDTOINDEXED Ids Op OpAux Cks CStr IStr.
 End CoindToIndexedFun.

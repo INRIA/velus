@@ -1,9 +1,9 @@
 From Coq Require Import List.
+Import List.ListNotations.
 From Coq Require Export Lists.Streams.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 From Coq Require Import Arith.EqNat.
-From Coq Require Import Omega.
 
 From Velus Require Import Common.
 From Velus Require Import Operators.
@@ -11,8 +11,10 @@ From Velus Require Import Environment.
 From Velus Require Import Clocks.
 
 Module Type COINDSTREAMS
+       (Import Ids : IDS)
        (Import Op : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Clocks : CLOCKS Ids Op OpAux).
 
   Open Scope stream_scope.
 
@@ -202,6 +204,20 @@ Module Type COINDSTREAMS
   Qed.
 
   Add Parametric Morphism
+      A B (P : list A -> (Stream B) -> Prop) xs
+      (P_compat: Proper (eq ==> @EqSt B ==> Basics.impl) P)
+    : (@Forall2Transpose A (Stream B) P xs)
+      with signature @EqSts B ==> Basics.impl
+        as Forall2Transpose_EqSt.
+  Proof.
+    intros x y Exy Hxy.
+    revert x y xs Exy Hxy;
+      induction x; intros * Exy H; inv H; inv Exy; eauto.
+    econstructor; eauto.
+    now rewrite <-H1.
+  Qed.
+
+  Add Parametric Morphism
       A B
     : (@List.map (Stream A) (Stream B))
       with signature (fun (f f': Stream A -> Stream B) => forall xs xs', xs ≡ xs' -> f xs ≡ f' xs') ==> @EqSts A ==> @EqSts B
@@ -239,13 +255,73 @@ Module Type COINDSTREAMS
     - apply IHx; auto.
   Qed.
 
+  Add Parametric Morphism
+      A
+      : (@length (Stream A))
+      with signature @EqSts A ==> eq
+        as length_EqSt.
+  Proof.
+    induction x; inversion_clear 1; simpl; auto.
+  Qed.
+
+  (* TODO: generalize *)
+  Lemma map_nth_error_orel:
+    forall {A B} (l : list (Stream A)) (f: Stream A -> Stream B) n x,
+      (forall x y, x ≡ y -> f x ≡ f y) ->
+      orel (@EqSt _) (nth_error l n) (Some x) ->
+      orel (@EqSt _) (nth_error (List.map f l) n) (Some (f x)).
+  Proof.
+    induction l; simpl; intros * ? E.
+    - rewrite nth_error_nil in E; inv E.
+    - destruct n; simpl in *; eauto.
+      inv E; constructor; auto.
+  Qed.
+
+  Lemma map_nth_error_orel':
+    forall {A B} (l: list (Stream A)) (f: Stream A -> Stream B) n x,
+      orel (@EqSt _) (nth_error (List.map f l) n) (Some x) ->
+      exists y,
+        orel (@EqSt _) (nth_error l n) (Some y)
+        /\ x ≡ f y.
+  Proof.
+    induction l; simpl; intros * E.
+    - rewrite nth_error_nil in E; inv E.
+    - destruct n; simpl in *; eauto.
+      inv E; exists a; split; auto.
+      symmetry; auto.
+  Qed.
+
+  Add Parametric Morphism
+      A
+      : (@List.nth_error (Stream A))
+      with signature @EqSts A ==> eq ==> orel (@EqSt A)
+        as nth_error_EqSt.
+  Proof.
+    induction x; inversion_clear 1; simpl.
+    - setoid_rewrite nth_error_nil; reflexivity.
+    - destruct y1; simpl; auto.
+      constructor; auto.
+  Qed.
+
+  Lemma EqSts_nil:
+    forall {A} (l: list (Stream A)),
+      EqSts l [] <-> l = [].
+  Proof.
+    induction l; split; try reflexivity.
+    - inversion_clear 1.
+    - discriminate.
+  Qed.
+
   (** Synchronous operators *)
 
-  CoFixpoint const (b: Stream bool) (c: const): Stream value :=
-    (if hd b then present (sem_const c) else absent) ⋅ const (tl b) c.
+  CoFixpoint const (b: Stream bool) (c: cconst): Stream svalue :=
+    (if hd b then present (Vscalar (sem_cconst c)) else absent) ⋅ const (tl b) c.
+
+  CoFixpoint enum (b: Stream bool) (c: enumtag): Stream svalue :=
+    (if hd b then present (Venum c) else absent) ⋅ enum (tl b) c.
 
   CoInductive lift1 (op: unop) (ty: type)
-    : Stream value -> Stream value -> Prop :=
+    : Stream svalue -> Stream svalue -> Prop :=
   | Lift1A:
       forall xs rs,
         lift1 op ty xs rs ->
@@ -257,97 +333,84 @@ Module Type COINDSTREAMS
         lift1 op ty (present x ⋅ xs) (present r ⋅ rs).
 
   CoInductive lift2 (op: binop) (ty1 ty2: type)
-    : Stream value -> Stream value -> Stream value -> Prop :=
+    : Stream svalue -> Stream svalue -> Stream svalue -> Prop :=
   | Lift2A:
       forall xs ys rs,
         lift2 op ty1 ty2 xs ys rs ->
         lift2 op ty1 ty2 (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
-  | Lift2P:
+  | Lift2ScalarP:
       forall x y r xs ys rs,
         sem_binop op x ty1 y ty2 = Some r ->
         lift2 op ty1 ty2 xs ys rs ->
         lift2 op ty1 ty2 (present x ⋅ xs) (present y ⋅ ys) (present r ⋅ rs).
 
-  CoInductive when (b: bool)
-    : Stream value -> Stream value -> Stream value -> Prop :=
+  CoInductive when (c: enumtag)
+    : Stream svalue -> Stream svalue -> Stream svalue -> Prop :=
   | WhenA:
       forall xs cs rs,
-        when b xs cs rs ->
-        when b (absent ⋅ xs) (absent ⋅ cs) (absent ⋅ rs)
+        when c xs cs rs ->
+        when c (absent ⋅ xs) (absent ⋅ cs) (absent ⋅ rs)
   | WhenPA:
-      forall x c xs cs rs,
-        when b xs cs rs ->
-        val_to_bool c = Some (negb b) ->
-        when b (present x ⋅ xs) (present c ⋅ cs) (absent ⋅ rs)
+      forall x c' xs cs rs,
+        when c xs cs rs ->
+        c <> c' ->
+        when c (present x ⋅ xs) (present (Venum c') ⋅ cs) (absent ⋅ rs)
   | WhenPP:
-      forall x c xs cs rs,
-        when b xs cs rs ->
-        val_to_bool c = Some b ->
-        when b (present x ⋅ xs) (present c ⋅ cs) (present x ⋅ rs).
+      forall x xs cs rs,
+        when c xs cs rs ->
+        when c (present x ⋅ xs) (present (Venum c) ⋅ cs) (present x ⋅ rs).
 
   CoInductive merge
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
+    : Stream svalue -> list (Stream svalue) -> Stream svalue -> Prop :=
   | MergeA:
-      forall xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (absent ⋅ xs) (absent ⋅ ts) (absent ⋅ fs) (absent ⋅ rs)
-  | MergeT:
-      forall t xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present true_val ⋅ xs)
-              (present t ⋅ ts) (absent ⋅ fs) (present t ⋅ rs)
-  | MergeF:
-      forall f xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present false_val ⋅ xs)
-              (absent ⋅ ts) (present f ⋅ fs) (present f ⋅ rs).
+      forall xs ess rs,
+        merge xs (List.map (@tl svalue) ess) rs ->
+        Forall (fun es => hd es = absent) ess ->
+        merge (absent ⋅ xs) ess (absent ⋅ rs)
+  | MergeP:
+      forall c xs ess rs ess1 v es ess2,
+        merge xs (List.map (@tl svalue) ess) rs ->
+        EqSts ess (ess1 ++ (present v ⋅ es) :: ess2) ->
+        length ess1 = c ->
+        Forall (fun es => hd es = absent) (ess1 ++ ess2) ->
+        merge (present (Venum c) ⋅ xs) ess (present v ⋅ rs).
 
-  CoInductive ite
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | IteA:
-      forall s ts fs rs,
-        ite s ts fs rs ->
-        ite (absent ⋅ s) (absent ⋅ ts) (absent ⋅ fs) (absent ⋅ rs)
-  | IteT:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present true_val ⋅ s)
-            (present t ⋅ ts) (present f ⋅ fs) (present t ⋅ rs)
-  | IteF:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present false_val ⋅ s)
-            (present t ⋅ ts) (present f ⋅ fs) (present f ⋅ rs).
+  CoInductive case
+    : Stream svalue -> list (Stream svalue) -> Stream svalue -> Prop :=
+  | CaseA:
+      forall xs ess rs,
+        case xs (List.map (@tl svalue) ess) rs ->
+        Forall (fun es => hd es = absent) ess ->
+        case (absent ⋅ xs) ess (absent ⋅ rs)
+  | CaseP:
+      forall c xs ess rs v es,
+        case xs (List.map (@tl svalue) ess) rs ->
+        Forall (fun es => hd es <> absent) ess ->
+        orel (@EqSt _) (nth_error ess c) (Some (present v ⋅ es)) ->
+        case (present (Venum c) ⋅ xs) ess (present v ⋅ rs).
 
-  CoInductive bools_of: Stream value -> Stream bool -> Prop :=
-    bools_of_intro:
-      forall v vs b bs,
+  CoFixpoint clocks_of (ss: list (Stream svalue)) : Stream bool :=
+    existsb (fun s => hd s <>b absent) ss ⋅ clocks_of (List.map (@tl svalue) ss).
+
+  CoInductive bools_of : Stream svalue -> Stream bool -> Prop :=
+  | bools_of_P:
+      forall c' vs bs,
         bools_of vs bs ->
-        value_to_bool v = Some b ->
-        bools_of (v ⋅ vs) (b ⋅ bs).
-
-  Definition bools_of' :=
-    Streams.map (fun v => match value_to_bool v with Some b => b | None => false end).
+        bools_of (present (Venum c') ⋅ vs) ((c' ==b true_tag) ⋅ bs)
+  | bools_of_A:
+      forall vs bs,
+        bools_of vs bs ->
+        bools_of (absent ⋅ vs) (false ⋅ bs).
 
   Instance bools_of_Proper:
-    Proper (@EqSt value ==> @EqSt bool ==> Basics.impl)
+    Proper (@EqSt svalue ==> @EqSt bool ==> Basics.impl)
            bools_of.
   Proof.
     cofix CoFix.
-    intros [x xs] [x' xs'] Heq1 [y ys] [y' ys'] Heq2 Hsem.
+    intros [x xs] [x' xs'] Heq1 [y ys] [y' ys'] Heq2 Hsem; subst.
     inv Hsem; inv Heq1; inv Heq2;
       simpl in *; subst; econstructor; eauto.
-    eapply CoFix; eauto.
-  Qed.
-
-  Lemma bools_of_sound : forall xs ys,
-      bools_of xs ys ->
-      bools_of' xs ≡ ys.
-  Proof.
-    cofix CoFix.
-    intros [x xs] [y ys] Hbools; inv Hbools.
-    constructor; simpl; eauto.
-    rewrite H4; auto.
+    1,2:eapply CoFix; eauto.
   Qed.
 
   Corollary bools_of_det : forall xs ys ys',
@@ -355,9 +418,9 @@ Module Type COINDSTREAMS
       bools_of xs ys' ->
       ys ≡ ys'.
   Proof.
-    intros * Hb1 Hb2.
-    eapply bools_of_sound in Hb1. eapply bools_of_sound in Hb2.
-    etransitivity; eauto. symmetry; eauto.
+    cofix CoFix.
+    intros * Hb1 Hb2. inv Hb1; inv Hb2.
+    1,2:constructor; eauto.
   Qed.
 
   Lemma bools_of_absent :
@@ -384,11 +447,11 @@ Module Type COINDSTREAMS
       intros ?. apply Str_nth_S_tl.
   Qed.
 
-  Definition bools_ofs (vs : list (Stream value)) (rs : Stream bool) :=
+  Definition bools_ofs (vs : list (Stream svalue)) (rs : Stream bool) :=
     exists rss, Forall2 bools_of vs rss /\
            rs ≡ disj_str rss.
 
-  CoFixpoint mask (k: nat) (rs: Stream bool) (xs: Stream value) : Stream value :=
+  CoFixpoint mask (k: nat) (rs: Stream bool) (xs: Stream svalue) : Stream svalue :=
     let mask' k' := mask k' (tl rs) (tl xs) in
     match k, hd rs with
     | 0, true    => Streams.const absent
@@ -398,7 +461,7 @@ Module Type COINDSTREAMS
     | S _, false => absent ⋅ mask' k
     end.
 
-  Lemma bools_ofs_empty:
+  Lemma bools_ofs_empty :
     bools_ofs nil (Streams.const false).
   Proof.
     exists nil. split; auto.
@@ -422,7 +485,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Instance bools_ofs_Proper:
-    Proper (@EqSts value ==> @EqSt bool ==> Basics.impl)
+    Proper (@EqSts svalue ==> @EqSt bool ==> Basics.impl)
            bools_ofs.
   Proof.
     intros xs xs' Eq1 bs bs' Eq2 (rs&Bools&Disj).
@@ -474,7 +537,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Instance bools_ofs_SameElements_Proper:
-    Proper (SameElements (@EqSt value) ==> eq ==> Basics.impl)
+    Proper (SameElements (@EqSt svalue) ==> eq ==> Basics.impl)
            bools_ofs.
   Proof.
     intros xs xs' Eq bs bs' ? (rs&Bools&Disj); subst.
@@ -526,7 +589,7 @@ Module Type COINDSTREAMS
       unfold_Stv rs; simpl; auto.
     - pose proof (count_acc_grow 1 rs) as H.
       apply (ForAll_Str_nth_tl n) in H; inv H.
-      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by omega;
+      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by lia;
         apply beq_nat_false_iff in E; rewrite E.
       pose proof (const_nth n absent); auto.
     - rewrite IHn; unfold count.
@@ -612,7 +675,7 @@ Module Type COINDSTREAMS
       unfold_Stv rs; simpl; auto.
     - pose proof (count_acc_grow 1 rs) as H.
       apply (ForAll_Str_nth_tl n) in H; inv H.
-      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by omega;
+      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by lia;
         apply beq_nat_false_iff in E; rewrite E.
       pose proof (const_nth n false); auto.
     - rewrite IHn; unfold count.
@@ -666,7 +729,7 @@ Module Type COINDSTREAMS
 
   (** ** fby stream *)
 
-  CoFixpoint sfby (v : Op.val) (str : Stream OpAux.value) :=
+  CoFixpoint sfby (v : value) (str : Stream svalue) :=
     match str with
     | (present v') ⋅ str' => (present v) ⋅ (sfby v' str')
     | absent ⋅ str' => absent ⋅ (sfby v str')
@@ -685,7 +748,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Add Parametric Morphism : sfby
-      with signature eq ==> @EqSt value ==> @EqSt value
+      with signature eq ==> @EqSt svalue ==> @EqSt svalue
     as sfby_EqSt.
   Proof.
     cofix CoFix.
@@ -711,7 +774,7 @@ Module Type COINDSTREAMS
   Lemma const_spec:
     forall xs c b,
       xs ≡ const b c <->
-      forall n, xs # n = if b # n then present (sem_const c) else absent.
+      forall n, xs # n = if b # n then present (Vscalar (sem_cconst c)) else absent.
   Proof.
     split.
     - intros E n; revert dependent xs; revert c b; induction n; intros;
@@ -727,7 +790,7 @@ Module Type COINDSTREAMS
 
   Corollary const_true: forall bs c n,
       bs # n = true ->
-      (const bs c) # n = present (sem_const c).
+      (const bs c) # n = present (Vscalar (sem_cconst c)).
   Proof.
     intros.
     specialize (EqSt_reflex (const bs c)) as Hconst.
@@ -746,7 +809,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Corollary const_nth' : forall bs c n,
-      (const bs c) # n = if (bs # n) then present (sem_const c) else absent.
+      (const bs c) # n = if (bs # n) then present (Vscalar (sem_cconst c)) else absent.
   Proof.
     intros bs c n.
     destruct (bs # n) eqn:Hb.
@@ -769,7 +832,7 @@ Module Type COINDSTREAMS
       const b c ≡ present c' ⋅ s ->
       exists b', s ≡ const b' c
             /\ b ≡ true ⋅ b'
-            /\ c' = sem_const c.
+            /\ c' = Vscalar (sem_cconst c).
   Proof.
     intros * H.
     unfold_Stv b; inv H; simpl in *; inv H0.
@@ -787,10 +850,56 @@ Module Type COINDSTREAMS
 
   Lemma const_Cons : forall c b bs,
       const (b ⋅ bs) c ≡
-      (if b then present (sem_const c) else absent) ⋅ (const bs c).
+      (if b then present (Vscalar (sem_cconst c)) else absent) ⋅ (const bs c).
   Proof.
     intros.
     rewrite unfold_Stream at 1; reflexivity.
+  Qed.
+
+  Lemma enum_spec:
+    forall xs c b,
+      xs ≡ enum b c <->
+      forall n, xs # n = if b # n then present (Venum c) else absent.
+  Proof.
+    split.
+    - intros E n; revert dependent xs; revert c b; induction n; intros;
+        unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
+          repeat rewrite Str_nth_S; auto.
+    - revert xs c b.
+      cofix COFIX.
+      intros * E.
+      unfold_Stv b; unfold_Stv xs; constructor; simpl; auto;
+        try (specialize (E 0); now inv E);
+        apply COFIX; intro n; specialize (E (S n)); rewrite 2 Str_nth_S in E; auto.
+  Qed.
+
+  Corollary enum_true: forall bs c n,
+      bs # n = true ->
+      (enum bs c) # n = present (Venum c).
+  Proof.
+    intros.
+    specialize (EqSt_reflex (enum bs c)) as Henum.
+    eapply enum_spec with (n:=n) in Henum.
+    rewrite Henum, H; auto.
+  Qed.
+
+  Corollary enum_false : forall bs c n,
+      bs # n = false ->
+      (enum bs c) # n = absent.
+  Proof.
+    intros.
+    specialize (EqSt_reflex (enum bs c)) as Henum.
+    eapply enum_spec with (n:=n) in Henum.
+    rewrite Henum, H; auto.
+  Qed.
+
+  Corollary enum_nth' : forall bs c n,
+      (enum bs c) # n = if (bs # n) then present (Venum c) else absent.
+  Proof.
+    intros bs c n.
+    destruct (bs # n) eqn:Hb.
+    - apply enum_true; auto.
+    - apply enum_false; auto.
   Qed.
 
   Ltac cofix_step CoFix H :=
@@ -799,86 +908,88 @@ Module Type COINDSTREAMS
     repeat rewrite Str_nth_S in H; auto.
 
   Lemma when_spec:
-    forall k xs cs rs,
-      when k xs cs rs <->
+    forall c xs cs rs,
+      when c xs cs rs <->
       (forall n,
           (xs # n = absent
            /\ cs # n = absent
            /\ rs # n = absent)
           \/
-          (exists x c,
+          (exists x c',
               xs # n = present x
-              /\ cs # n = present c
-              /\ val_to_bool c = Some (negb k)
+              /\ cs # n = present (Venum c')
+              /\ c <> c'
               /\ rs # n = absent)
           \/
-          (exists x c,
+          (exists x,
               xs # n = present x
-              /\ cs # n = present c
-              /\ val_to_bool c = Some k
+              /\ cs # n = present (Venum c)
               /\ rs # n = present x)).
   Proof.
     split.
-    - intros H n; revert dependent xs; revert cs rs k.
+    - intros H n; revert dependent xs; revert cs rs c.
       induction n; intros.
       + inv H; intuition.
         * right; left. do 2 eexists; intuition.
         * right; right. do 2 eexists; intuition.
       + inv H; repeat rewrite Str_nth_S; auto.
-    - revert xs cs rs k.
+    - revert xs cs rs c.
       cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv cs; unfold_Stv rs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
-             destruct H as [(?&?&?)|[(?&?&?&?&?)|(?&?&?&?&?)]];
+             destruct H as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?)]];
              discriminate).
       + constructor; cofix_step CoFix H.
-      + constructor.
+      + destruct v0.
+        all: try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+                  destruct H as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?)]];
+                  discriminate).
+        constructor.
         * cofix_step CoFix H.
         * specialize (H 0); repeat rewrite Str_nth_0 in H;
-            destruct H as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?&?&?)]];
+            destruct H as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?)]];
             try discriminate.
-          congruence.
-      + destruct (H 0) as [(?&?&?)|[(?&?&?&?&?&?)|(?&?& E & E' &?& E'')]];
+             congruence.
+      + destruct (H 0) as [(?&?&?)|[(?&?&?&?&?&?)|(?& E & E' & E'')]];
           try discriminate.
         rewrite Str_nth_0 in E, E', E''.
-        rewrite E, E''.
+        rewrite E, E', E''.
         constructor; try congruence.
         cofix_step CoFix H.
   Qed.
 
   Lemma lift1_spec:
-    forall op t xs ys,
-      lift1 op t xs ys <->
+    forall op ty xs ys,
+      lift1 op ty xs ys <->
       (forall n,
           (xs # n = absent /\ ys # n = absent)
           \/
           (exists x y,
               xs # n = present x
-              /\ sem_unop op x t = Some y
+              /\ sem_unop op x ty = Some y
               /\ ys # n = present y)).
   Proof.
     split.
-    - intros H n; revert dependent xs; revert ys t op.
+    - intros H n; revert dependent xs; revert ys ty op.
       induction n; intros.
       + inv H; intuition.
         right. do 2 eexists; intuition; auto.
       + inv H; repeat rewrite Str_nth_S;auto.
-    - revert xs ys t op.
+    - revert xs ys ty op.
       cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv ys;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
              destruct H as [(?&?)|(?&?&?&?&?)]; discriminate).
       + constructor; cofix_step CoFix H.
-      + constructor.
-        * destruct (H 0) as [(?&?)|(?&?& E &?& E')]; try discriminate.
-          rewrite Str_nth_0 in E, E'.
-          inv E; inv E'; auto.
-        * cofix_step CoFix H.
+      + destruct (H 0) as [(?&?)|(?&?& E &?& E')]; try discriminate;
+          rewrite Str_nth_0 in E, E'; inv E; inv E'.
+        constructor; auto.
+        cofix_step CoFix H.
   Qed.
 
   Lemma lift2_spec:
-    forall op t1 t2 xs ys zs,
-      lift2 op t1 t2 xs ys zs <->
+    forall op ty1 ty2 xs ys zs,
+      lift2 op ty1 ty2 xs ys zs <->
       (forall n,
           (xs # n = absent
            /\ ys # n = absent
@@ -887,118 +998,291 @@ Module Type COINDSTREAMS
           (exists x y z,
               xs # n = present x
               /\ ys # n = present y
-              /\ sem_binop op x t1 y t2 = Some z
+              /\ sem_binop op x ty1 y ty2 = Some z
               /\ zs # n = present z)).
   Proof.
     split.
-    - intros H n; revert dependent xs; revert ys zs t1 t2 op.
+    - intros H n; revert dependent xs; revert ys zs ty1 ty2 op.
       induction n; intros.
       + inv H; intuition.
         right. do 3 eexists; intuition; auto.
       + inv H; repeat rewrite Str_nth_S; auto.
-    - revert xs ys zs t1 t2 op.
+    - revert xs ys zs ty1 ty2 op.
       cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv ys; unfold_Stv zs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
              destruct H as [(?&?&?)|(?&?&?&?&?&?&?)]; discriminate).
       + constructor; cofix_step CoFix H.
-      + constructor.
-        * destruct (H 0) as [(?&?&?)|(?&?&?& E & E' &?& E'')]; try discriminate.
-          rewrite Str_nth_0 in E, E', E''.
-          inv E; inv E'; inv E''; auto.
-        * cofix_step CoFix H.
+      + destruct (H 0) as [(?&?&?)|(?&?&?& E & E' &?& E'')]; try discriminate;
+          rewrite Str_nth_0 in E, E', E''; inv E; inv E'; inv E''.
+        constructor; auto.
+        cofix_step CoFix H.
   Qed.
 
   (** ** cexp level synchronous operators specifications *)
 
-  Lemma merge_spec:
-    forall xs ts fs rs,
-      merge xs ts fs rs <->
-      (forall n,
-          (xs # n = absent
-           /\ ts # n = absent
-           /\ fs # n = absent
-           /\ rs # n = absent)
-          \/
-          (exists t,
-              xs # n = present true_val
-              /\ ts # n = present t
-              /\ fs # n = absent
-              /\ rs # n = present t)
-          \/
-          (exists f,
-              xs # n = present false_val
-              /\ ts # n = absent
-              /\ fs # n = present f
-              /\ rs # n = present f)).
+  (* Lemma partition_map: *)
+  (*   forall {A B} P (f: A -> B) l l1 l2, *)
+  (*     partition P (List.map f l) = (l1, l2) -> *)
+  (*     exists l1' l2', *)
+  (*       partition (fun x => P (f x)) l = (l1', l2') *)
+  (*       /\ l1 = List.map f l1' *)
+  (*       /\ l2 = List.map f l2'. *)
+  (* Proof. *)
+  (*   induction l; simpl. *)
+  (*   - inversion 1; subst; do 2 eexists; intuition. *)
+  (*   - intros * E. *)
+  (*     destruct (partition P (List.map f l)) eqn: E'. *)
+  (*     edestruct IHl as (?&?&->&?&?); eauto; subst. *)
+  (*     destruct (P (f a)); inv E; eauto. *)
+  (* Qed. *)
+
+  (* Lemma partition_map': *)
+  (*   forall {A B} P (f: A -> B) l l1 l2, *)
+  (*     partition (fun x => P (f x)) l = (l1, l2) -> *)
+  (*     exists l1' l2', *)
+  (*       partition P (List.map f l) = (l1', l2') *)
+  (*       /\ l1' = List.map f l1 *)
+  (*       /\ l2' = List.map f l2. *)
+  (* Proof. *)
+  (*   induction l; simpl. *)
+  (*   - inversion 1; subst; do 2 eexists; intuition. *)
+  (*   - intros * E. *)
+  (*     destruct (partition (fun x => P (f x)) l) eqn: E'. *)
+  (*     edestruct IHl as (?&?&->&?&?); eauto; subst. *)
+  (*     destruct (P (f a)); inv E; eauto. *)
+  (* Qed. *)
+
+  (* TODO: move and generalize with Equivalence *)
+  Lemma map_app_inv:
+    forall {A B} (l: list (Stream A)) (l1 l2: list (Stream B)) (f: Stream A -> Stream B),
+      EqSts (List.map f l) (l1 ++ l2) ->
+      exists l1' l2',
+        l = l1' ++ l2'
+        /\ EqSts l1 (List.map f l1')
+        /\ EqSts l2 (List.map f l2').
   Proof.
-    split.
-    - intros * H n.
-      revert dependent xs; revert ts fs rs.
-      induction n; intros.
-      + inv H; intuition.
-        * right; left. eexists; intuition.
-        * right; right. eexists; intuition.
-      + inv H; repeat rewrite Str_nth_S; auto.
-    - revert xs ts fs rs; cofix CoFix; intros * H.
-      unfold_Stv xs; unfold_Stv ts; unfold_Stv fs; unfold_Stv rs;
-        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
-             destruct H as [(?&?&?&?)|[(?&?&?&?&?)|(?&?&?&?&?)]];
-             discriminate).
-      + constructor; cofix_step CoFix H.
-      + destruct (H 0) as [(?&?&?&?)|[(?&?&?&?&?)|(?& E &?& E' & E'')]];
-          try discriminate.
-        rewrite Str_nth_0 in E, E', E''; inv E; inv E'; inv E''.
-        constructor; cofix_step CoFix H.
-      + destruct (H 0) as [(?&?&?&?)|[(?& E & E' &?& E'')|(?&?&?&?&?)]];
-          try discriminate.
-        rewrite Str_nth_0 in E, E', E''; inv E; inv E'; inv E''.
-        constructor; cofix_step CoFix H.
+    induction l; simpl; intros * E.
+    - symmetry in E; apply EqSts_nil, app_eq_nil in E as (-> & ->).
+      exists [], []; simpl; intuition.
+    - destruct l1; simpl in *.
+      + destruct l2.
+        * apply EqSts_nil in E; discriminate.
+        * inv E.
+          exists [], (a :: l); simpl; intuition.
+          symmetry; constructor; auto.
+      + inv E.
+        edestruct IHl as (l1' & l2' &?&?&?); eauto; subst.
+        exists (a :: l1'), l2'; simpl; intuition.
+        constructor; auto; symmetry; auto.
   Qed.
 
-  Lemma ite_spec:
-    forall xs ts fs rs,
-      ite xs ts fs rs <->
+  Lemma map_cons_inv:
+    forall {A B} (l: list (Stream A)) (l1: list (Stream B)) x (f: Stream A -> Stream B),
+      EqSts (List.map f l) (x :: l1) ->
+      exists y l1',
+        l = y :: l1'
+        /\ x ≡ f y
+        /\ EqSts l1 (List.map f l1').
+  Proof.
+    intros * E.
+    rewrite cons_is_app in E; apply map_app_inv in E as (l1' & l2' & ?& E &?); subst.
+    destruct l1'; simpl in *.
+    - apply EqSts_nil in E; discriminate.
+    - destruct l1'; simpl in *.
+      + inv E.
+        exists s, l2'; auto.
+      + inv E; take (Forall2 _ _ _) and inv it.
+  Qed.
+
+  Lemma merge_spec:
+    forall xs ess rs,
+      merge xs ess rs <->
       (forall n,
           (xs # n = absent
-           /\ ts # n = absent
-           /\ fs # n = absent
+           /\ Forall (fun es => es # n = absent) ess
            /\ rs # n = absent)
           \/
-          (exists t f,
-              xs # n = present true_val
-              /\ ts # n = present t
-              /\ fs # n = present f
-              /\ rs # n = present t)
-          \/
-          (exists t f,
-              xs # n = present false_val
-              /\ ts # n = present t
-              /\ fs # n = present f
-              /\ rs # n = present f)).
+          (exists c ess1 es ess2 v,
+              xs # n = present (Venum c)
+              /\ EqSts ess (ess1 ++ es :: ess2)
+              /\ length ess1 = c
+              /\ es # n = present v
+              /\ Forall (fun es => es # n = absent) (ess1 ++ ess2)
+              /\ rs # n = present v)).
   Proof.
     split.
     - intros * H n.
-      revert dependent xs; revert ts fs rs.
+      revert dependent xs; revert ess rs.
       induction n; intros.
       + inv H; intuition.
-        * right; left. do 2 eexists; now intuition.
-        * right; right. do 2 eexists; now intuition.
-      + inv H; repeat rewrite Str_nth_S; auto.
-    - revert xs ts fs rs; cofix CoFix; intros * H.
-      unfold_Stv xs; unfold_Stv ts; unfold_Stv fs; unfold_Stv rs;
+        right; do 5 eexists; intuition; eauto.
+      + inv H; repeat rewrite Str_nth_S.
+        * take (Forall _ _) and clear it.
+          take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             take (Forall _ _) and apply Forall_map in it.
+             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
+             simpl in Hin; auto.
+          -- take (EqSts _ _) and apply map_app_inv in it as (ess1 & ess2' & E & Hess1 & Hess2').
+             symmetry in Hess2'; apply map_cons_inv in Hess2' as (es & ess2 & Hess2' & ?& Hess2).
+             subst ess2'; setoid_rewrite E; subst.
+             right; do 5 eexists. split; eauto; split; try reflexivity.
+             intuition; eauto.
+             ++ rewrite Hess1, map_length; auto.
+             ++ match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H'; auto end.
+             ++ take (Forall _ _) and eapply Forall_EqSt in it.
+                3: { rewrite Hess1, Hess2; reflexivity. }
+                ** take (Forall _ _) and rewrite <-map_app in it; apply Forall_map in it.
+                   apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+                ** solve_proper.
+        * take (Forall _ _) and clear it.
+          take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             take (Forall _ _) and apply Forall_map in it.
+             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
+             simpl in Hin; auto.
+          -- take (EqSts (List.map _ _) _) and apply map_app_inv in it as (ess1' & ess2'' & E & Hess1 & Hess2').
+             symmetry in Hess2'; apply map_cons_inv in Hess2' as (es' & ess2' & Hess2' & ?& Hess2).
+             subst ess2''; setoid_rewrite E; subst.
+             right; do 5 eexists. split; eauto; split; try reflexivity.
+             intuition; eauto.
+             ++ rewrite Hess1, map_length; auto.
+             ++ match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H'; auto end.
+             ++ take (Forall _ _) and eapply Forall_EqSt in it.
+                3: { rewrite Hess1, Hess2; reflexivity. }
+                ** take (Forall _ _) and rewrite <-map_app in it; apply Forall_map in it.
+                   apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+                ** solve_proper.
+
+    - revert xs ess rs; cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv rs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
-             destruct H as [(?&?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?&?&?)]];
+             destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)];
              discriminate).
-      + constructor; cofix_step CoFix H.
-      + destruct (H 0) as [(?&?&?&?)|[(?&?& E1 & E2 & E3 & E4)|(?&?& E1 & E2 & E3 & E4)]];
-          try discriminate;
-          rewrite Str_nth_0 in E1, E2, E3, E4; inv E1; inv E2; inv E3; inv E4;
-            constructor; cofix_step CoFix H.
+      + constructor.
+        * cofix_step CoFix H.
+          destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             apply Forall_map, Forall_forall; intros (?&?) Hin;
+               eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+          -- subst; right; do 5 eexists. split; eauto; split.
+             ++ etransitivity.
+                ** apply map_st_EqSt; eauto.
+                   intros * ->; reflexivity.
+                ** rewrite map_app; simpl; reflexivity.
+             ++ intuition; eauto.
+                ** rewrite map_length; auto.
+                ** rewrite <-map_app; apply Forall_map, Forall_forall; intros (?&?) Hin;
+                     eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)]; try discriminate.
+          apply Forall_forall; intros (?&?) Hin;
+            eapply Forall_forall in Hin; eauto; simpl in *; auto.
+      + destruct (H 0) as [(?&?&?)|(?&?& (?&?) &?&?& E & ?&? & E' & ? & E'')]; try discriminate.
+        rewrite Str_nth_0 in E, E', E''; inv E; inv E''.
+        econstructor; eauto.
+        cofix_step CoFix H.
+        destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+        -- left; intuition.
+           apply Forall_map, Forall_forall; intros (?&?) Hin;
+             eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+        -- take (EqSts _ (_ ++ (present _ ⋅ _) :: _)) and clear it.
+           right; do 5 eexists. split; eauto; split.
+           ++ etransitivity.
+              ** apply map_st_EqSt; eauto.
+                 intros * ->; reflexivity.
+              ** rewrite map_app; simpl; reflexivity.
+           ++ intuition; eauto.
+              ** rewrite map_length; auto.
+              ** rewrite <-map_app.
+                 apply Forall_map, Forall_forall; intros (?&?) Hin;
+                   eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+  Qed.
+
+  Lemma case_spec:
+    forall xs ess rs,
+      case xs ess rs <->
+      (forall n,
+          (xs # n = absent
+           /\ Forall (fun es => es # n = absent) ess
+           /\ rs # n = absent)
+          \/
+          (exists c es v,
+              xs # n = present (Venum c)
+              /\ Forall (fun es => es # n <> absent) ess
+              /\ orel (@EqSt _) (nth_error ess c) (Some es)
+              /\ es # n = present v
+              /\ rs # n = present v)).
+  Proof.
+    split.
+    - intros * H n.
+      revert dependent xs; revert ess rs.
+      induction n; intros.
+      + inv H; intuition.
+        right; do 3 eexists; intuition; eauto.
+      + inv H; repeat rewrite Str_nth_S.
+        * take (Forall _ _) and clear it.
+          take (case _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             take (Forall _ _) and apply Forall_map in it.
+             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
+             simpl in Hin; auto.
+          -- take (orel _ _ _) and apply map_nth_error_orel' in it as (e &?&?).
+             match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H' end.
+             right; do 3 eexists; intuition; eauto.
+             take (Forall _ _) and apply Forall_map in it.
+             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+        * take (Forall _ _) and clear it.
+          take (case _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             take (Forall _ _) and apply Forall_map in it.
+             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
+             simpl in Hin; auto.
+          -- take (orel _ (nth_error (List.map _ _) _) _) and apply map_nth_error_orel' in it as (e &?&?).
+             match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H' end.
+             right; do 3 eexists; intuition; eauto.
+             take (Forall _ _) and apply Forall_map in it.
+             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+    - revert xs ess rs; cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv rs;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?)];
+             discriminate).
+      + constructor.
+        * cofix_step CoFix H.
+          destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             apply Forall_map, Forall_forall; intros (?&?) Hin;
+               eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+          -- take (orel _ _ _) and eapply map_nth_error_orel in it.
+             ++ right; do 3 eexists; intuition; eauto.
+                apply Forall_map, Forall_forall; intros (?&?) Hin;
+                  eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+             ++ intros * ->; reflexivity.
+        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?&?&?)]; try discriminate.
+          apply Forall_forall; intros (?&?) Hin;
+            eapply Forall_forall in Hin; eauto; simpl in *; auto.
+      + destruct (H 0) as [(?&?&?)|(?& (?&?) &?& E & Abs &? & E' & E'')]; try discriminate.
+        rewrite Str_nth_0 in E, E', E''; inv E; inv E''.
+        clear Abs.
+        econstructor; eauto.
+        * cofix_step CoFix H.
+          destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+          -- left; intuition.
+             apply Forall_map, Forall_forall; intros (?&?) Hin;
+               eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+          -- take (orel _ (nth_error _ x1) _) and eapply map_nth_error_orel in it.
+             ++ right; do 3 eexists; intuition; eauto.
+                apply Forall_map, Forall_forall; intros (?&?) Hin;
+                  eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+             ++ intros * ->; reflexivity.
+        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?&?&?)]; try discriminate.
+          apply Forall_forall; intros (?&?) Hin;
+            eapply Forall_forall in Hin; eauto; simpl in *; auto.
   Qed.
 
   Add Parametric Morphism k : (mask k)
-      with signature @EqSt bool ==> @EqSt value ==> @EqSt value
+      with signature @EqSt bool ==> @EqSt svalue ==> @EqSt svalue
         as mask_EqSt.
   Proof.
     revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
@@ -1029,20 +1313,10 @@ Module Type COINDSTREAMS
   (*   reflexivity. *)
   (* Qed. *)
 
-  Add Parametric Morphism : ite
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
-        as ite_EqSt.
-  Proof.
-    cofix Cofix.
-    intros [? ?] [? ?] Heq [? ?] [? ?] Heq0 [? ?] [? ?] Heq1 [? ?] [? ?] Heq2 Hite.
-    inv Heq. inv Heq0. inv Heq1. inv Heq2. simpl in *.
-    inv Hite; constructor; eapply Cofix; eauto.
-  Qed.
-
   (** ** history and it's properties *)
 
-  Definition history := Env.t (Stream value).
-  Definition history_tl (H: history) : history := Env.map (@tl value) H.
+  Definition history := Env.t (Stream svalue).
+  Definition history_tl (H: history) : history := Env.map (@tl svalue) H.
 
   Fact history_tl_find_Some : forall (H: history) id vs,
       Env.find id H = Some vs ->
@@ -1085,7 +1359,7 @@ Module Type COINDSTREAMS
     apply option_map_inv_None in Hfind; auto.
   Qed.
 
-  Definition env := Env.t value.
+  Definition env := Env.t svalue.
 
   Definition history_nth (n : nat) (H: history) : env :=
     Env.map (Str_nth n) H.
@@ -1204,8 +1478,8 @@ Module Type COINDSTREAMS
   Qed.
 
   Lemma env_find_tl : forall x x' H H',
-      orel (@EqSt value) (Env.find x H) (Env.find x' H') ->
-      orel (@EqSt value)
+      orel (@EqSt svalue) (Env.find x H) (Env.find x' H') ->
+      orel (@EqSt svalue)
            (Env.find x (history_tl H))
            (Env.find x' (history_tl H')).
   Proof.
@@ -1217,7 +1491,7 @@ Module Type COINDSTREAMS
   (** * sem_var
         This is common to Lustre and NLustre Semantics *)
 
-  Inductive sem_var: history -> ident -> Stream value -> Prop :=
+  Inductive sem_var: history -> ident -> Stream svalue -> Prop :=
     sem_var_intro:
       forall H x xs xs',
         Env.MapsTo x xs' H ->
@@ -1225,7 +1499,7 @@ Module Type COINDSTREAMS
         sem_var H x xs.
 
   Instance sem_var_Proper:
-    Proper (@eq history ==> @eq ident ==> @EqSt value ==> iff)
+    Proper (@eq history ==> @eq ident ==> @EqSt svalue ==> iff)
            sem_var.
   Proof.
     intros H H' ? x x' ? xs xs' Heq; subst.
@@ -1280,7 +1554,7 @@ Module Type COINDSTREAMS
 
   Lemma sem_var_switch_env:
     forall H H' x v,
-      orel (@EqSt value) (Env.find x H) (Env.find x H') ->
+      orel (@EqSt svalue) (Env.find x H) (Env.find x H') ->
       sem_var H x v <-> sem_var H' x v.
   Proof.
     intros * Hfind; split; intro Hsem; inversion_clear Hsem as [???? Hr];
@@ -1293,7 +1567,7 @@ Module Type COINDSTREAMS
     forall H H' xs ss,
       Forall2 (sem_var H) xs ss ->
       Forall2 (sem_var H') xs ss ->
-      Forall (fun x => orel (EqSt (A:=value)) (Env.find x H) (Env.find x H')) xs.
+      Forall (fun x => orel (EqSt (A:=svalue)) (Env.find x H) (Env.find x H')) xs.
   Proof.
     induction 1; auto. intros Hf. inv Hf. constructor; auto.
     do 2 take (sem_var _ _ _) and inv it.
@@ -1306,11 +1580,8 @@ Module Type COINDSTREAMS
 
   (** ** clocks_of and its properties *)
 
-  CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
-    existsb (fun s => hd s <>b absent) ss ⋅ clocks_of (List.map (@tl value) ss).
-
   Add Parametric Morphism : clocks_of
-      with signature @EqSts value ==> @EqSt bool
+      with signature @EqSts svalue ==> @EqSt bool
         as clocks_of_EqSt.
   Proof.
     cofix Cofix.
@@ -1352,7 +1623,7 @@ Module Type COINDSTREAMS
       rewrite mask_nth, Hcount; auto.
     - rewrite existsb_Forall, forallb_forall.
       intros ? _.
-      rewrite mask_nth, Hcount, neg_eq_value.
+      rewrite mask_nth, Hcount, neg_eq_svalue.
       apply equiv_decb_refl.
   Qed.
 
@@ -1364,12 +1635,11 @@ Module Type COINDSTREAMS
         b ≡ b' ->
         sem_clock H b Cbase b'
   | Son:
-      forall H b bk bs ck x k xs c,
+      forall H b bk bs ck x t k xs,
         sem_clock H b ck (true ⋅ bk) ->
-        sem_var H x (present c ⋅ xs) ->
-        val_to_bool c = Some k ->
-        sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (true ⋅ bs)
+        sem_var H x (present (Venum k) ⋅ xs) ->
+        sem_clock (history_tl H) (tl b) (Con ck x (t, k)) bs ->
+        sem_clock H b (Con ck x (t, k)) (true ⋅ bs)
   | Son_abs1:
       forall H b bk bs ck x k xs,
         sem_clock H b ck (false ⋅ bk) ->
@@ -1377,16 +1647,16 @@ Module Type COINDSTREAMS
         sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
         sem_clock H b (Con ck x k) (false ⋅ bs)
   | Son_abs2:
-      forall H b bk bs ck x k c xs,
+      forall H b bk bs ck x t k k' xs,
         sem_clock H b ck (true ⋅ bk) ->
-        sem_var H x (present c ⋅ xs) ->
-        val_to_bool c = Some k ->
-        sem_clock (history_tl H) (tl b) (Con ck x (negb k)) bs ->
-        sem_clock H b (Con ck x (negb k)) (false ⋅ bs).
+        sem_var H x (present (Venum k') ⋅ xs) ->
+        k <> k' ->
+        sem_clock (history_tl H) (tl b) (Con ck x (t, k)) bs ->
+        sem_clock H b (Con ck x (t, k)) (false ⋅ bs).
 
   Fact history_tl_Equiv : forall H H',
-      Env.Equiv (@EqSt value) H H' ->
-      Env.Equiv (@EqSt value) (history_tl H) (history_tl H').
+      Env.Equiv (@EqSt _) H H' ->
+      Env.Equiv (@EqSt _) (history_tl H) (history_tl H').
   Proof.
     intros * [Heq1 Heq2].
     unfold history_tl. constructor.
@@ -1399,7 +1669,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Add Parametric Morphism : sem_clock
-      with signature Env.Equiv (@EqSt value) ==> @EqSt bool ==> eq ==> @EqSt bool ==> Basics.impl
+      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt bool ==> Basics.impl
         as sem_clock_morph.
   Proof.
     cofix CoFix.
@@ -1458,20 +1728,19 @@ Module Type COINDSTREAMS
       constructor; simpl; auto. eapply Cofix; eauto.
     - inv Hsc; inv Hsc'; try discriminate_stream;
         try discriminate_var.
-      take (sem_var _ x (present c ⋅ _)) and
+      take (sem_var _ x (present (Venum k) ⋅ _)) and
            eapply sem_var_det in it; eauto.
       inversion it as [Hit]. simpl in Hit. inv Hit.
-      destruct k0; simpl in *; congruence.
+      exfalso; auto.
     - inv Hsc; inv Hsc'; try discriminate_stream;
         try discriminate_var.
-      take (sem_var _ x (present c ⋅ _)) and
+      take (sem_var _ x (present (Venum k') ⋅ _)) and
            eapply sem_var_det in it; eauto.
       inversion it as [Hit]. simpl in Hit. inv Hit.
-      destruct k; simpl in *; congruence.
+      exfalso; auto.
     - inv Hsc; inv Hsc'; constructor; simpl; auto;
         try (now eapply Cofix; eauto).
       rewrite H1 in H2. inv H2. now simpl in H3.
-      rewrite H6 in H14. eapply Cofix; eauto.
   Qed.
 
   Fact sem_clock_true_inv : forall H ck b bs bs',
@@ -1538,22 +1807,22 @@ Module Type COINDSTREAMS
     - destruct ck.
       + inv Hsc. revert Hsc' H1. revert H b x b0 s s'. cofix Cofix; intros.
         unfold_Stv s'; unfold_Stv s.
-        constructor. inv Hsc'. inv H1. eapply Cofix; eauto.
-        inversion_clear Hsc' as [|????????? Hb'| |]. inv Hb'.
+        * constructor. inv Hsc'. inv H1. eapply Cofix; eauto.
+        * inversion_clear Hsc' as [|????????? Hb'| |]. inv Hb'.
         discriminate_stream.
-        constructor. inv Hsc'; inv H1; eapply Cofix; eauto.
-        constructor. inv Hsc'; inv H1; eapply Cofix; eauto.
-      + revert Hsc Hsc'. revert H b ck i b1 s s' x b0.
+        * constructor. inv Hsc'; inv H1; eapply Cofix; eauto.
+        * constructor. inv Hsc'; inv H1; eapply Cofix; eauto.
+      + revert Hsc Hsc'. revert H b ck i s s' x b0.
         cofix Cofix; intros.
         unfold_Stv s'; unfold_Stv s.
-        constructor. apply sc_step in Hsc.
-        apply sc_step in Hsc'.
-        eapply Cofix; eauto.
-        inv Hsc'. discriminate_clock.
-        inv Hsc'. discriminate_clock.
-        constructor. apply sc_step in Hsc. eapply Cofix; eauto.
-        constructor. apply sc_step in Hsc.
-        apply sc_step in Hsc'. eapply Cofix; eauto.
+        * constructor. apply sc_step in Hsc.
+          apply sc_step in Hsc'.
+          eapply Cofix; eauto.
+        * inv Hsc'. discriminate_clock.
+        * inv Hsc'. discriminate_clock.
+          constructor. apply sc_step in Hsc. eapply Cofix; eauto.
+        * constructor. apply sc_step in Hsc.
+          apply sc_step in Hsc'. eapply Cofix; eauto.
   Qed.
 
   Lemma sub_clock_parent :
@@ -1566,14 +1835,14 @@ Module Type COINDSTREAMS
     intros * Hsc Hsc' Hparent.
     revert dependent s'. induction Hparent; intros.
     - eapply sub_clock_Con; eauto.
-    - inversion Hsc' as [|????????? Hck'|???????? Hck' |????????? Hck'];
+    - inversion Hsc' as [|????????? Hck'|???????? Hck' |?????????? Hck'];
         subst; pose proof (sub_clock_Con _ _ _ _ _ _ _ Hck' Hsc');
           apply IHHparent in Hck'; etransitivity; eauto.
   Qed.
 
   (** ** Aligned and its properties *)
 
-  CoInductive aligned: Stream value -> Stream bool -> Prop :=
+  CoInductive aligned: Stream svalue -> Stream bool -> Prop :=
   | synchro_present:
       forall v vs bs,
         aligned vs bs ->
@@ -1584,7 +1853,7 @@ Module Type COINDSTREAMS
         aligned (absent ⋅ vs) (false ⋅ bs).
 
   Instance aligned_Proper:
-    Proper (@EqSt value ==> @EqSt bool ==> iff)
+    Proper (@EqSt _ ==> @EqSt bool ==> iff)
            aligned.
   Proof.
     intros vs vs' Heq1 bs bs' Heq2.
@@ -1638,14 +1907,27 @@ Module Type COINDSTREAMS
     - right...
   Qed.
 
-  CoFixpoint abstract_clock (xs: Stream value) : Stream bool:=
+  Lemma enum_aligned : forall bs c,
+      aligned (enum bs c) bs.
+  Proof with eauto.
+    intros bs c.
+    remember (enum bs c) as vs.
+    rewrite aligned_spec. intros n.
+    eapply eq_EqSt, enum_spec with (n:=n) in Heqvs.
+    rewrite Heqvs; clear Heqvs.
+    destruct (bs # n).
+    - left. eexists...
+    - right...
+  Qed.
+
+  CoFixpoint abstract_clock (xs: Stream svalue) : Stream bool:=
     match xs with
     | absent ⋅ xs => false ⋅ abstract_clock xs
     | present _ ⋅ xs => true ⋅ abstract_clock xs
     end.
 
-  Add Parametric Morphism : (abstract_clock)
-      with signature @EqSt value ==> @EqSt bool
+  Add Parametric Morphism : abstract_clock
+      with signature @EqSt _ ==> @EqSt bool
         as ac_EqSt.
   Proof.
     cofix Cofix; intros b b' Eb.
@@ -1695,13 +1977,27 @@ Module Type COINDSTREAMS
       unfold_Stv cs; constructor; simpl; eauto; inv H.
   Qed.
 
-  Lemma ac_ite :
-    forall s  ts fs rs,
-      ite s ts fs rs -> abstract_clock ts ≡ abstract_clock rs.
+  Lemma ac_enum:
+    forall b k cs,
+      enum b k ≡ cs -> b ≡ abstract_clock cs.
   Proof.
     cofix Cofix.
-    intros * Hite.
-    unfold_Stv ts; inv Hite; econstructor; simpl; eauto.
+    intros * Henum.
+    unfold_Stv b;
+      inv Henum; simpl in *;
+      unfold_Stv cs; constructor; simpl; eauto; inv H.
+  Qed.
+
+  Lemma ac_case:
+    forall cs vs ss,
+      case cs vs ss ->
+      abstract_clock cs ≡ abstract_clock ss.
+  Proof.
+    cofix Cofix.
+    intros * Hcase.
+    unfold_Stv cs;
+      inv Hcase; simpl in *; constructor; simpl; auto.
+    1,2:eapply Cofix; eauto.
   Qed.
 
   Lemma ac_lift1 :
@@ -1775,7 +2071,10 @@ Module Type COINDSTREAMS
 End COINDSTREAMS.
 
 Module CoindStreamsFun
+       (Ids : IDS)
        (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Op) <: COINDSTREAMS Op OpAux.
-  Include COINDSTREAMS Op OpAux.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Clocks : CLOCKS Ids Op OpAux)
+<: COINDSTREAMS Ids Op OpAux Clocks.
+  Include COINDSTREAMS Ids Op OpAux Clocks.
 End CoindStreamsFun.

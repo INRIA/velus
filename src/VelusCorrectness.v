@@ -1,10 +1,3 @@
-From Velus Require Import Common.
-From Velus Require Import Ident.
-From Velus Require Import CoindStreams.
-From Velus Require Import ObcToClight.Generation.
-From Velus Require Import Traces.
-From Velus Require Import ClightToAsm.
-
 From compcert Require Import common.Errors.
 From compcert Require Import common.Events.
 From compcert Require Import common.Behaviors.
@@ -13,8 +6,18 @@ From compcert Require Import cfrontend.ClightBigstep.
 From compcert Require Import lib.Integers.
 From compcert Require Import driver.Compiler.
 
+From Velus Require Import Common.
+From Velus Require Import Ident.
+From Velus Require Import CoindStreams.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import Traces.
+From Velus Require Import ClightToAsm.
+From Velus Require Import ObcToClight.Correctness.
 From Velus Require Import Interface.
 From Velus Require Import Instantiator.
+From Velus Require Import Lustre.LustreElab.
+From Velus Require Import Velus.
+From Velus Require Import NLCorrectness.
 Import Stc.Syn.
 Import NL.
 Import L.
@@ -30,44 +33,21 @@ Import CStr.
 Import CIStr.
 Import OpAux.
 Import Op.
-From Velus Require Import NLCorrectness.
-From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Lustre.LustreElab.
 
 From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
-From Coq Require Import Omega.
 
 Open Scope error_monad_scope.
 Open Scope stream_scope.
 
-Parameter print_lustre  : global -> unit.
-
-Definition l_to_nl (g : {G : global |
-                          wt_global G /\ wc_global G /\
-                          Forall (fun n => L.Syn.n_prefixes n = elab_prefs) G}) :
-  res NL.Syn.global.
-Proof.
-  destruct g as (g&Hwt&_&Hprefs).
-  eapply L.Typ.wt_global_wl_global in Hwt.
-  specialize (Norm.Norm.normalize_global' (exist _ g (conj Hwt Hprefs))) as ([g'|err]&Hprefs'); simpl in *.
-  - exact (TR.Tr.to_global g' Hprefs').
-  - right. exact err.
-Defined.
-
-Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
-  elab_declarations D
-                    @@ print (fun g => print_lustre (proj1_sig g))
-                    @@@ l_to_nl
-                    @@@ nl_to_asm main_node.
-
 Section WtStream.
+  Context {prefs : PS.t}.
 
-  Variable G: global.
+  Variable G: @global prefs.
   Variable main: ident.
-  Variable ins: list (Stream val).
-  Variable outs: list (Stream val).
+  Variable ins: list (Stream value).
+  Variable outs: list (Stream value).
 
   Definition wt_ins :=
     forall node,
@@ -81,21 +61,22 @@ Section WtStream.
 
 End WtStream.
 
-Definition wc_ins G main ins := sem_clock_inputs G main ins.
+Definition wc_ins {prefs} (G: @global prefs) main ins := sem_clock_inputs G main ins.
 
 (** The trace of a Lustre node *)
 Section LTrace.
+  Context {prefs : PS.t}.
 
-  Variable (node: node) (ins outs: list (Stream val)).
+  Variable (node: @node prefs) (ins outs: list (Stream value)).
 
   Hypothesis Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [].
   Hypothesis Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in).
   Hypothesis Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out).
 
   Program Definition trace_node (n: nat): traceinf :=
-    traceinf_of_traceinf' (mk_trace (tr_Streams ins) (tr_Streams outs)
-                                    (idty node.(n_in)) (idty node.(n_out))
-                                    _ _ _ n).
+    mk_trace (tr_Streams ins) (tr_Streams outs)
+             (idty node.(n_in)) (idty node.(n_out))
+             _ _ _ n.
   Next Obligation.
     destruct Spec_in_out.
     - left; intro E; apply map_eq_nil in E; auto.
@@ -143,7 +124,7 @@ Section LTrace.
 End LTrace.
 
 (** A bisimulation relation between a declared node's trace and a given trace *)
-Inductive bisim_IO (G: global) (f: ident) (ins outs: list (Stream val)): traceinf -> Prop :=
+Inductive bisim_IO {prefs} (G: @global prefs) (f: ident) (ins outs: list (Stream value)): traceinf -> Prop :=
   IOStep:
     forall T node
       (Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [])
@@ -162,34 +143,36 @@ Hint Resolve
      normalize_global_sem_clock_inputs.
 
 Local Ltac unfold_l_to_nl Hltonl :=
-  unfold l_to_nl in Hltonl;
-  destruct (normalize_global' _) as ([g'|?]&?) eqn:Hnorm; simpl in *; try congruence;
-  unfold normalize_global' in Hnorm; inv Hnorm.
+  unfold l_to_nl in Hltonl; simpl in Hltonl;
+  rewrite print_identity in Hltonl;
+  destruct normalize_global as [|] eqn:Hnorm; simpl in Hltonl; [|inv Hltonl].
 
 (** Correctness from Lustre to NLustre *)
 Lemma behavior_l_to_nl:
   forall G G' main ins outs,
-    sem_node (proj1_sig G) main ins outs ->
-    wc_ins (proj1_sig G) main ins ->
+    wt_global G ->
+    wc_global G ->
+    sem_node G main ins outs ->
+    wc_ins G main ins ->
     l_to_nl G = OK G' ->
     CoindSem.sem_node G' main ins outs.
 Proof.
-  intros (g&Hwt&Hwc&Hprefs) * Hsem Hwcins Hltonl.
+  intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
   eapply TR.Correctness.sem_l_nl in Hltonl; eauto.
 Qed.
 
 Fact l_to_nl_find_node : forall G G' f n,
-    find_node f (proj1_sig G) = Some n ->
+    find_node f G = Some n ->
     l_to_nl G = OK G' ->
     exists n', NL.Syn.find_node f G' = Some n' /\
           NL.Syn.n_in n' = n_in n /\ NL.Syn.n_out n' = n_out n.
 Proof.
-  intros (g&Hwt&Hwc&Hprefs) * Hfind Hltonl.
+  intros g * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
-  eapply normalize_global_iface_eq in H0.
+  eapply normalize_global_iface_eq in Hnorm.
   eapply global_iface_eq_find in Hfind as (n'&Hfind&(_&_&Hin&Hout)); eauto.
-  eapply TR.Tr.find_node_global in Hfind as (n''&?&Hfind&Htonode); eauto.
+  eapply TR.Tr.find_node_global in Hfind as (n''&Hfind&Htonode); eauto.
   exists n''. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
     congruence.
@@ -200,19 +183,19 @@ Qed.
 Fact l_to_nl_find_node' : forall G G' f n',
     NL.Syn.find_node f G' = Some n' ->
     l_to_nl G = OK G' ->
-    exists n, find_node f (proj1_sig G) = Some n /\
+    exists n, find_node f G = Some n /\
          NL.Syn.n_in n' = n_in n /\ NL.Syn.n_out n' = n_out n.
 Proof.
-  intros (g&Hwt&Hwc&Hprefs) * Hfind Hltonl.
+  intros G * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
-  eapply normalize_global_iface_eq in H0. symmetry in H0.
-  eapply TR.Tr.find_node_global' in Hfind as (n''&?&Hfind&Htonode); eauto.
+  eapply normalize_global_iface_eq in Hnorm. eapply global_iface_eq_sym in Hnorm.
+  eapply TR.Tr.find_node_global' in Hfind as (n''&Hfind&Htonode); eauto.
   eapply global_iface_eq_find in Hfind as (n&Hfind&(_&_&Hin&Hout)); eauto.
   exists n. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
-    congruence.
+    now rewrite <-Htonode.
   - eapply TR.Tr.to_node_out in Htonode; eauto.
-    congruence.
+    now rewrite <-Htonode.
 Qed.
 
 (** The ultimate lemma states that, if
@@ -240,10 +223,9 @@ Proof.
   intros * Elab Hwti Hwci Hsem Comp.
   unfold compile, print in Comp.
   rewrite Elab in Comp. simpl in Comp.
-  replace (match Gp with | _ => _ end) with (l_to_nl (exist _ G Gp)) in Comp; auto.
-  destruct (l_to_nl (exist _ G Gp)) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
+  destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
   destruct (nl_to_asm main G') as [p|] eqn: Comp''; inv Comp.
-  destruct Gp as (Hwc&Hwt&Hprefs).
+  destruct Gp as (Hwc&Hwt).
   eapply behavior_nl_to_asm with (ins:=ins) (outs:=outs) in Comp'' as (T&Hbeh&Hbisim).
   - exists T. split; auto.
     inv Hbisim.
@@ -254,20 +236,20 @@ Proof.
       eapply Lt.lt_irrefl; eauto. }
     assert (Datatypes.length ins = Datatypes.length (n_in x)) as Hlenin by congruence.
     assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout by congruence.
-    eapply IOStep with (Spec_in_out:=or_introl Hnnul)
-                       (Len_ins:=Hlenin) (Len_outs:=Hlenout); eauto.
+    eapply IOStep with (Spec_in_out0:=or_introl Hnnul)
+                       (Len_ins0:=Hlenin) (Len_outs0:=Hlenout); eauto.
     eapply traceinf_sim_trans; eauto.
     eapply trace_inf_sim_node.
     1,2:f_equal; auto.
-  - clear - Comp'. unfold_l_to_nl Comp'.
+  - clear - Hwc Hwt Comp'. unfold_l_to_nl Comp'.
     eapply TR.Clocking.wc_transcription in Comp'; eauto.
-  - clear - Comp'. unfold_l_to_nl Comp'.
+  - clear - Hwc Hwt Comp'. unfold_l_to_nl Comp'.
     eapply TR.Typing.wt_transcription in Comp'; eauto.
   - clear - Hwti Comp'.
     intros ? Hfind.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&_); eauto.
     eapply Hwti in Hfind'. rewrite Hin. eauto.
-  - clear - Comp'. unfold_l_to_nl Comp'.
+  - clear - Hwt Comp'. unfold_l_to_nl Comp'.
     eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto.
   - eapply behavior_l_to_nl in Comp'; eauto.
 Qed.

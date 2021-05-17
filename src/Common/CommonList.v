@@ -5,16 +5,269 @@ From Coq Require Import Decidable.
 From Coq Require Import Relations.
 From Coq Require Import Morphisms.
 From Coq Require Import Classes.EquivDec.
-From Coq Require Import Omega.
+From Coq Require Import PeanoNat.
+From Coq Require Import BinPos.
+From Coq Require Import Lia.
 
 From Velus Require Import CommonTactics.
 
 Import List.ListNotations.
 Open Scope list_scope.
 
+Section map2.
+  Context {A B C: Type}.
+  Variable f: A -> B -> C.
+
+  Fixpoint map2 (l: list A) (l': list B) : list C :=
+    match l, l' with
+    | [], []
+    | [], _
+    | _, [] => []
+    | a :: l, b :: l' =>
+      f a b :: map2 l l'
+    end.
+
+  Lemma map2_combine:
+    forall l l',
+      map2 l l' = map (fun '(a, b) => f a b) (combine l l').
+  Proof.
+    induction l, l'; simpl; auto.
+    f_equal; auto.
+  Qed.
+
+  Lemma map2_nil_r:
+    forall l,
+      map2 l [] = [].
+  Proof.
+    destruct l; auto.
+  Qed.
+
+End map2.
+
+Section fold_left2.
+  Context {A B C: Type}.
+  Variable f: A -> B -> C -> A.
+
+  Fixpoint fold_left2 (l: list B) (l': list C) (acc: A) : A :=
+    match l, l' with
+    | [], []
+    | [], _
+    | _, [] => acc
+    | b :: l, c :: l' =>
+      fold_left2 l l' (f acc b c)
+    end.
+
+  Lemma fold_left2_combine:
+    forall l l' acc,
+      fold_left2 l l' acc = fold_left (fun a '(b, c) => f a b c) (combine l l') acc.
+  Proof.
+    induction l, l'; simpl; auto.
+  Qed.
+
+End fold_left2.
+
+Section fold_right2.
+  Context {A B C: Type}.
+  Variable f: B -> C -> A -> A.
+
+  Fixpoint fold_right2 (acc: A) (l: list B) (l': list C) : A :=
+    match l, l' with
+    | [], []
+    | [], _
+    | _, [] => acc
+    | b :: l, c :: l' =>
+      f b c (fold_right2 acc l l')
+    end.
+
+  Lemma fold_right2_combine:
+    forall l l' acc,
+      fold_right2 acc l l' = fold_right (fun '(b, c) => f b c) acc (combine l l').
+  Proof.
+    induction l, l'; simpl; auto.
+    setoid_rewrite IHl; auto.
+  Qed.
+
+End fold_right2.
+
+Section Forall'.
+
+  Context {A: Type}.
+
+  Inductive Forall' (P: list A -> A -> Prop) : list A -> Prop :=
+  | Forall'_nil:
+      Forall' P []
+  | Forall'_cons: forall x l,
+      P l x ->
+      Forall' P l ->
+      Forall' P (x :: l).
+
+  Lemma Forall'_app_r:
+    forall P l l',
+      Forall' P (l ++ l') -> Forall' P l'.
+  Proof.
+    induction l; simpl; auto.
+    inversion_clear 1; auto.
+  Qed.
+
+  Lemma Forall'_app_cons:
+    forall P l1 x l2,
+      Forall' P (l1 ++ x :: l2) ->
+      P l2 x.
+  Proof.
+    intros * F; apply Forall'_app_r in F; inv F; auto.
+  Qed.
+
+  Lemma Forall'_impl:
+    forall (P Q: list A -> A -> Prop) l,
+      (forall x l, P x l -> Q x l) ->
+      Forall' P l ->
+      Forall' Q l.
+  Proof.
+    induction 2; constructor; auto.
+  Qed.
+
+  Lemma Forall'_In:
+    forall P l x,
+      Forall' P l ->
+      In x l ->
+      exists l1 l2,
+        l = l1 ++ x :: l2
+        /\ P l2 x.
+  Proof.
+    intros * F I.
+    apply in_split in I as (?&?&?); subst.
+    apply Forall'_app_r in F; inv F; eauto.
+  Qed.
+
+End Forall'.
+Hint Constructors Forall'.
+
 Section Extra.
 
   Context {A: Type}.
+
+  Lemma nth_error_last:
+    forall (l: list A) x n d,
+      n = length l ->
+      nth_error (x :: l) n = Some (last (x :: l) d).
+  Proof.
+    intros; subst.
+    revert x.
+    induction l; simpl; intros; auto.
+    rewrite IHl; auto.
+  Qed.
+
+  Lemma map_last:
+    forall {B} (l: list A) (f: A -> B) d,
+      last (map f l) (f d) = f (last l d).
+  Proof.
+    induction l; simpl; intros; auto.
+    rewrite IHl; destruct l; simpl; auto.
+  Qed.
+
+  Lemma map_removelast:
+    forall {B} (l: list A) (f: A -> B),
+      removelast (map f l) = map f (removelast l).
+  Proof.
+    induction l; simpl; intros; auto.
+    rewrite IHl; destruct l; simpl; auto.
+  Qed.
+
+  Lemma last_In_cons:
+    forall (l: list A) x d,
+      In (last (x :: l) d) (x :: l).
+  Proof.
+    induction l; simpl; intros; auto.
+    simpl in *; eauto.
+  Qed.
+
+  Lemma nth_error_app3:
+    forall (l l': list A) x n,
+      n = length l ->
+      nth_error (l ++ x :: l') n = Some x.
+  Proof.
+    intros; subst; rewrite nth_error_app2, Nat.sub_diag; auto.
+  Qed.
+
+  Lemma length_removelast_cons:
+    forall (l: list A) x,
+      length (removelast (x :: l)) = length l.
+  Proof.
+    induction l; simpl; intro; auto.
+    erewrite <-IHl; simpl; eauto.
+  Qed.
+
+  Lemma nth_error_removelast:
+    forall (l: list A) n,
+      (n < length l - 1)%nat ->
+      nth_error (removelast l) n = nth_error l n.
+  Proof.
+    intros * Lt.
+    destruct l; simpl in Lt; try lia.
+    assert (a :: l <> []) as E by discriminate.
+    eapply app_removelast_last with (d := a) in E.
+    rewrite E at 2.
+    rewrite nth_error_app1; auto.
+    rewrite length_removelast_cons; lia.
+  Qed.
+
+  Lemma map_nth_error_inv:
+    forall {B} (f: A -> B) l y n,
+      nth_error (map f l) n = Some y ->
+      exists x,
+        nth_error l n = Some x
+        /\ y = f x.
+  Proof.
+    induction l, n; simpl; try discriminate; auto.
+    inversion_clear 1; eauto.
+  Qed.
+
+  Lemma map_nth_error':
+    forall {B} (f : A -> B) l n,
+      nth_error (map f l) n = option_map f (nth_error l n).
+  Proof.
+    induction l, n; simpl; auto.
+  Qed.
+
+  Lemma nth_error_nil:
+    forall n,
+      @nth_error A [] n = None.
+  Proof.
+    destruct n; auto.
+  Qed.
+
+  Lemma nth_error_length:
+    forall {B} n (l: list A) (l': list B) x,
+      nth_error l n = Some x ->
+      length l' = length l ->
+      exists x', nth_error l' n = Some x'.
+  Proof.
+    induction n, l, l'; simpl; intros * Nth Len; try discriminate; eauto.
+  Qed.
+
+  Lemma nth_error_Forall2:
+    forall {A B} n (P: A -> B -> Prop) l l' x ,
+      nth_error l n = Some x ->
+      Forall2 P l l' ->
+      exists x', nth_error l' n = Some x'
+            /\ P x x'.
+  Proof.
+    induction n, l, l'; simpl; intros * Nth H; inv H; try discriminate; eauto.
+    inv Nth; eauto.
+  Qed.
+
+  Lemma app_inv:
+    forall (l l' l1 l1': list A),
+      l ++ l' = l1 ++ l1' ->
+      length l = length l1 ->
+      l = l1 /\ l' = l1'.
+  Proof.
+    induction l; simpl; intros * E Len.
+    - symmetry in Len; apply length_zero_iff_nil in Len; subst; auto.
+    - destruct l1; simpl in *; try discriminate.
+      inv E.
+      edestruct IHl; eauto; subst; auto.
+  Qed.
 
   Lemma List_shift_first:
     forall ll (x : A) lr,
@@ -75,13 +328,6 @@ Section Extra.
     intros * HF. inv HF. auto.
   Qed.
 
-  Remark Forall_hd_tl:
-    forall (A : Type) (P : A -> Prop) (x : A) (l : list A),
-      Forall P (x :: l) -> P x /\ Forall P l.
-  Proof.
-    intros * HF. inv HF. auto.
-  Qed.
-
   (* should be in standard lib... *)
   Lemma not_in_cons (x a : A) (l : list A):
     ~ In x (a :: l) <-> x <> a /\ ~ In x l.
@@ -119,6 +365,13 @@ Section Extra.
     simpl. now setoid_rewrite IHxs.
   Qed.
 
+  Lemma fold_right_rev_left:
+    forall {B} (f : B -> A -> B) (l : list A) (i : B),
+      fold_left f (rev l) i = fold_right (fun x y => f y x) i l.
+  Proof.
+    intros; rewrite <-fold_left_rev_right, rev_involutive; auto.
+  Qed.
+ 
   Remark not_In2_app:
     forall (x: A) l1 l2,
       ~ In x l2 ->
@@ -159,6 +412,17 @@ Section Extra.
   Proof.
     induction xs as [|x xs]; intro ys; auto.
     simpl; destruct (p x); simpl; rewrite IHxs; auto.
+  Qed.
+
+  Lemma Forall_filter:
+    forall P p (l: list A),
+      Forall P (filter p l) <-> Forall (fun x => p x = true -> P x) l.
+  Proof.
+    split; intros * F; apply Forall_forall; intros * Hin.
+    - intros; assert (In x (filter p l)) by now apply filter_In.
+      eapply Forall_forall in F; eauto.
+    - apply filter_In in Hin as [Hin].
+      eapply Forall_forall in F; eauto.
   Qed.
 
   Remark split_map:
@@ -236,7 +500,7 @@ Section Extra.
       n' < length xs - n ->
       nth n' (seq n (length xs - n)) x = n' + n.
   Proof.
-    intros; rewrite seq_nth; try omega.
+    intros; rewrite seq_nth; try lia.
   Qed.
 
   Lemma seq_cons:
@@ -245,12 +509,12 @@ Section Extra.
       seq m (k - m) = m :: seq (S m) (k - S m).
   Proof.
     induction k; intros * E; simpl.
-    - omega.
+    - lia.
     - destruct m; simpl.
       + now rewrite Nat.sub_0_r.
       + rewrite <- 2 seq_shift.
         rewrite IHk; auto.
-        omega.
+        lia.
   Qed.
 
   Lemma length_hd_error:
@@ -258,7 +522,7 @@ Section Extra.
       0 < length l ->
       exists x, hd_error l = Some x.
   Proof.
-    induction l; simpl; intros * L; try omega.
+    induction l; simpl; intros * L; try lia.
     econstructor; eauto.
   Qed.
 
@@ -330,7 +594,35 @@ Section Extra.
     - contradict H. apply nil_cons.
     - exists a, l. inversion H; auto.
   Qed.
+
 End Extra.
+
+Section RevTR.
+
+  Context {A: Type}.
+
+  (* Ocaml-like tail-rec rev *)
+
+  Fixpoint rev_append (l1 l2: list A) : list A :=
+    match l1 with
+    | [] => l2
+    | a :: l => rev_append l (a :: l2)
+    end.
+
+  Definition rev_tr (l: list A) := rev_append l [].
+
+  Lemma rev_tr_spec:
+    forall l,
+      rev_tr l = rev l.
+  Proof.
+    intro; unfold rev_tr.
+    rewrite (app_nil_end (rev l)).
+    generalize (@nil A).
+    induction l; simpl; intros; auto.
+    rewrite IHl, app_last_app; auto.
+  Qed.
+
+End RevTR.
 
 Section find.
 
@@ -428,8 +720,8 @@ Section Map.
       n < length l ->
       nth n (List.map f l) d = f (nth n l d').
   Proof.
-    induction l, n; simpl; intros * H; try omega; auto.
-    apply IHl; omega.
+    induction l, n; simpl; intros * H; try lia; auto.
+    apply IHl; lia.
   Qed.
 
 End Map.
@@ -540,6 +832,34 @@ Section Incl.
   Global Instance incl_trans : Transitive (@incl A).
   Proof. unfold Transitive. intros. eapply incl_tran; eauto. Qed.
 
+  Lemma incl_filter':
+    forall (l l': list A) p,
+      incl l l' ->
+      incl (filter p l) l'.
+  Proof.
+    intros * Incl ??; eapply Incl, in_filter; eauto.
+  Qed.
+
+  Lemma incl_app':
+    forall (l l' l'': list A),
+      incl (l ++ l') l'' ->
+      incl l l'' /\ incl l' l''.
+  Proof.
+    intros * Incl; split; intros ? Hin; apply Incl, in_app; auto.
+  Qed.
+
+  Lemma incl_in_app:
+    forall (l l': list A) x,
+      incl l l' ->
+      (In x l' <-> In x (l ++ l')).
+  Proof.
+    induction l; simpl; try reflexivity.
+    intros * Incl; apply incl_cons' in Incl as [].
+    split; intros Hin.
+    - rewrite <-IHl; auto.
+    - destruct Hin; subst; rewrite IHl; auto.
+      apply in_app; auto.
+  Qed.
 End Incl.
 
 Section Nodup.
@@ -754,10 +1074,10 @@ Proof.
   rewrite app_length.
   rewrite IHl.
   clear.
-  replace (length a) with (length a + 0) at 2; try omega.
+  replace (length a) with (length a + 0) at 2; try lia.
   generalize 0 as n; generalize (length a) as k.
   induction l; simpl; intros; auto.
-  rewrite IHl, plus_assoc; auto.
+  rewrite IHl, Nat.add_assoc; auto.
 Qed.
 
 Section ConcatMap.
@@ -912,16 +1232,32 @@ Section ConcatMap.
     apply in_concat. eauto.
   Qed.
 
-  Lemma Forall_concat : forall (l : list (list A)) P,
-      Forall (fun l => Forall P l) l -> Forall P (concat l).
+  Lemma Forall_cons2:
+    forall (P : A -> Prop) x l,
+      Forall P (x :: l) <-> P x /\ Forall P l.
+  Proof. intros; split; inversion_clear 1; auto. Qed.
+
+  Lemma Forall_app:
+    forall (P : A -> Prop) ll rr,
+      Forall P (ll ++ rr) <-> (Forall P ll /\ Forall P rr).
   Proof.
-    intros l P Hf.
-    rewrite Forall_forall in *.
-    intros x Hin.
-    apply in_concat in Hin.
-    destruct Hin as [l' [Hin1 Hin2]].
-    specialize (Hf _ Hin2).
-    rewrite Forall_forall in Hf. auto.
+    intros.
+    induction ll as [|x ll IH]; [intuition|].
+    rewrite Forall_cons2.
+    rewrite and_assoc.
+    rewrite <-IH.
+    rewrite <-List.app_comm_cons.
+    now rewrite Forall_cons2.
+  Qed.
+
+  Lemma Forall_concat : forall (l : list (list A)) P,
+      Forall (fun l => Forall P l) l <-> Forall P (concat l).
+  Proof.
+    split; intros Hf.
+    - induction Hf; simpl in *; auto.
+      apply Forall_app; auto.
+    - induction l; simpl in *; auto.
+      apply Forall_app in Hf as (?&?); auto.
   Qed.
 
   Lemma concat_length_1 : forall (f : A -> list B) (l : list A),
@@ -952,13 +1288,13 @@ Section ConcatMap.
   Proof.
     intros f l.
     induction l; intros n da db Hlen Hf; inv Hf; simpl.
-    - simpl in Hlen. omega.
+    - simpl in Hlen. lia.
     - destruct n; auto.
       + destruct (f a); simpl in *; try congruence.
         destruct l0; simpl in *; try congruence.
       + destruct (f a); simpl in *; try congruence.
         destruct l0; simpl in *; try congruence.
-        eapply IHl; eauto. omega.
+        eapply IHl; eauto. lia.
   Qed.
 
   Fact concat_map_singl1 : forall (l : list A),
@@ -990,21 +1326,6 @@ Section ConcatMap.
   Qed.
 
 End ConcatMap.
-
-Section FoldLeft2.
-
-  Context {A B C : Type}.
-
-  Variable (f : A -> B -> C -> A).
-
-  Fixpoint fold_left2 (xs : list B) (ys : list C) (a : A) : A :=
-    match xs, ys with
-    | x::xs', y::ys' => fold_left2 xs' ys' (f a x y)
-    | _, _ => a
-    end.
-
-
-End FoldLeft2.
 
 Section Permutation.
 
@@ -1312,22 +1633,18 @@ Section ForallExists.
 
   Variable P: A -> Prop.
 
-  Lemma Forall_cons2:
-    forall x l,
-      Forall P (x :: l) <-> P x /\ Forall P l.
-  Proof. intros; split; inversion_clear 1; auto. Qed.
-
-  Lemma Forall_app:
-    forall ll rr,
-      Forall P (ll ++ rr) <-> (Forall P ll /\ Forall P rr).
+  Lemma Forall_rev:
+    forall (l: list A),
+      Forall P l <-> Forall P (rev l).
   Proof.
-    intros.
-    induction ll as [|x ll IH]; [intuition|].
-    rewrite Forall_cons2.
-    rewrite and_assoc.
-    rewrite <-IH.
-    rewrite <-List.app_comm_cons.
-    now rewrite Forall_cons2.
+    now setoid_rewrite Permutation.Permutation_rev at 1.
+  Qed.
+
+  Lemma Exists_rev:
+    forall (l: list A) P,
+      Exists P l <-> Exists P (rev l).
+  Proof.
+    now setoid_rewrite Permutation.Permutation_rev at 1.
   Qed.
 
   Lemma Exists_app:
@@ -1602,7 +1919,7 @@ Lemma Forall_iff_insideout:
     (Forall P xs <-> Forall Q xs).
 Proof.
   induction xs. now intuition.
-  intro FA. apply Forall_hd_tl in FA as (FA1 & FA2).
+  intro FA. inv FA.
   split; inversion 1; subst; intuition.
 Qed.
 
@@ -1709,6 +2026,121 @@ Section list_ind2.
       inv Hlen. reflexivity.
   Qed.
 End list_ind2.
+
+Section SkipnDropn.
+
+  Context {A : Type}.
+
+  Lemma skipn_app:
+    forall (xs: list A) ys n,
+      n = length xs ->
+      skipn n (xs ++ ys) = ys.
+  Proof.
+    induction xs as [|x xs IH]; intros * Hn; subst; simpl; auto.
+  Qed.
+
+  Lemma skipn_nil:
+    forall n,
+      skipn n (@nil A) = @nil A.
+  Proof.
+    induction n; auto.
+  Qed.
+
+  Lemma firstn_nil:
+    forall n,
+      firstn n (@nil A) = @nil A.
+  Proof.
+    induction n; auto.
+  Qed.
+
+  Lemma firstn_app_3:
+    forall (xs: list A) ys n,
+      n = length xs ->
+      firstn n (xs ++ ys) = xs.
+  Proof.
+    induction xs; intros ys n Hn; subst; auto.
+    simpl; rewrite IHxs; auto.
+  Qed.
+
+  Lemma In_skipn:
+    forall (xs: list A) n x,
+      In x (skipn n xs) ->
+      In x xs.
+  Proof.
+    induction xs; try setoid_rewrite skipn_nil.
+    now inversion 1.
+    intros * Hin.
+    destruct n; auto.
+    apply IHxs in Hin.
+    auto with datatypes.
+  Qed.
+
+  Lemma In_firstn:
+    forall (xs: list A) n x,
+      In x (firstn n xs) ->
+      In x xs.
+  Proof.
+    induction xs; try setoid_rewrite firstn_nil.
+    now inversion 1.
+    intros * Hin.
+    destruct n; inversion Hin; subst; eauto with datatypes.
+  Qed.
+
+  Lemma Forall_skipn:
+    forall P (xs: list A) n,
+      Forall P xs ->
+      Forall P (skipn n xs).
+  Proof.
+    induction xs as [|x xs IH].
+    setoid_rewrite skipn_nil; auto.
+    intros n Hfa.
+    induction n; auto.
+    inversion_clear Hfa.
+    now apply IH.
+  Qed.
+
+  Lemma skipn_cons:
+    forall n (xs: list A) x,
+      n > 0 ->
+      skipn n (x :: xs) = skipn(n - 1) xs.
+  Proof.
+    induction n; simpl; intros * H.
+    - lia.
+    - now rewrite Nat.sub_0_r.
+  Qed.
+
+  Lemma skipn_length:
+    forall n (l: list A),
+      length (skipn n l) = length l - n.
+  Proof.
+    induction n; intros; simpl.
+    - lia.
+    - destruct l; simpl; auto.
+  Qed.
+
+  Lemma nth_skipn:
+    forall (xs: list A) n' n x_d,
+      nth n' (skipn n xs) x_d = nth (n' + n) xs x_d.
+  Proof.
+    induction xs; intros; simpl.
+    - rewrite skipn_nil; simpl; destruct (n' + n); destruct n'; auto.
+    - destruct n; simpl.
+      + now rewrite <-plus_n_O.
+      + destruct n'; simpl; rewrite IHxs; auto.
+        now rewrite Plus.plus_Snm_nSm.
+  Qed.
+
+  Lemma nth_firstn_1: forall (xs: list A) n' n x_d,
+      n' < n ->
+      nth n' (firstn n xs) x_d = nth n' xs x_d.
+  Proof.
+    induction xs; intros; simpl.
+    - destruct n'; destruct n; auto.
+    - destruct n'; destruct n; auto; try lia.
+      simpl. apply IHxs. lia.
+  Qed.
+
+End SkipnDropn.
 
 Section Combine.
 
@@ -1841,7 +2273,7 @@ Section Combine.
   Proof.
     intros l l' Hlen.
     rewrite combine_length in Hlen.
-    rewrite Nat.min_l_iff in Hlen. omega.
+    rewrite Nat.min_l_iff in Hlen. lia.
   Qed.
 
   Lemma combine_length_r:
@@ -1851,7 +2283,7 @@ Section Combine.
   Proof.
     intros l l' Hlen.
     rewrite combine_length in Hlen.
-    rewrite Nat.min_r_iff in Hlen. omega.
+    rewrite Nat.min_r_iff in Hlen. lia.
   Qed.
 
   Lemma combine_nth_l:
@@ -1862,10 +2294,10 @@ Section Combine.
     induction l, l'; intros n d1 d2 Hlen; simpl in *.
     + exists d2. destruct n; auto.
     + exists d2. destruct n; auto.
-    + omega.
+    + lia.
     + destruct n.
       * exists b; auto.
-      * apply IHl. omega.
+      * apply IHl. lia.
   Qed.
 
   Lemma combine_nth_r:
@@ -1875,11 +2307,11 @@ Section Combine.
   Proof.
     induction l, l'; intros n d1 d2 Hlen; simpl in *.
     + exists d1. destruct n; auto.
-    + omega.
+    + lia.
     + exists d1. destruct n; auto.
     + destruct n.
       * exists a; auto.
-      * apply IHl. omega.
+      * apply IHl. lia.
   Qed.
 
   Lemma in_combine_nodup :
@@ -1897,6 +2329,18 @@ Section Combine.
   Qed.
 
 End Combine.
+
+Definition reduce_with {A B} (f: A -> B -> A) (l: list B) (first: A) (g: B -> A) : A :=
+  match l with
+  | [] => first
+  | b :: l => fold_left f l (g b)
+  end.
+
+Definition reduce {A} (f: A -> A -> A) (l: list A) (first: A) : A :=
+  match l with
+  | [] => first
+  | b :: l => fold_left f l b
+  end.
 
 Lemma In_combine_f_left:
   forall {A B} (f1 : A -> B) xs x x1,
@@ -1928,121 +2372,6 @@ Proof.
   intros; rewrite combine_map_fst, combine_map_snd, map_map; auto.
 Qed.
 
-Section SkipnDropn.
-
-  Context {A : Type}.
-
-  Lemma skipn_app:
-    forall (xs: list A) ys n,
-      n = length xs ->
-      skipn n (xs ++ ys) = ys.
-  Proof.
-    induction xs as [|x xs IH]; intros * Hn; subst; simpl; auto.
-  Qed.
-
-  Lemma skipn_nil:
-    forall n,
-      skipn n (@nil A) = @nil A.
-  Proof.
-    induction n; auto.
-  Qed.
-
-  Lemma firstn_nil:
-    forall n,
-      firstn n (@nil A) = @nil A.
-  Proof.
-    induction n; auto.
-  Qed.
-
-  Lemma firstn_app:
-    forall (xs: list A) ys n,
-      n = length xs ->
-      firstn n (xs ++ ys) = xs.
-  Proof.
-    induction xs; intros ys n Hn; subst; auto.
-    simpl; rewrite IHxs; auto.
-  Qed.
-
-  Lemma In_skipn:
-    forall (xs: list A) n x,
-      In x (skipn n xs) ->
-      In x xs.
-  Proof.
-    induction xs; try setoid_rewrite skipn_nil.
-    now inversion 1.
-    intros * Hin.
-    destruct n; auto.
-    apply IHxs in Hin.
-    auto with datatypes.
-  Qed.
-
-  Lemma In_firstn:
-    forall (xs: list A) n x,
-      In x (firstn n xs) ->
-      In x xs.
-  Proof.
-    induction xs; try setoid_rewrite firstn_nil.
-    now inversion 1.
-    intros * Hin.
-    destruct n; inversion Hin; subst; eauto with datatypes.
-  Qed.
-
-  Lemma Forall_skipn:
-    forall P (xs: list A) n,
-      Forall P xs ->
-      Forall P (skipn n xs).
-  Proof.
-    induction xs as [|x xs IH].
-    setoid_rewrite skipn_nil; auto.
-    intros n Hfa.
-    induction n; auto.
-    inversion_clear Hfa.
-    now apply IH.
-  Qed.
-
-  Lemma skipn_cons:
-    forall n (xs: list A) x,
-      n > 0 ->
-      skipn n (x :: xs) = skipn(n - 1) xs.
-  Proof.
-    induction n; simpl; intros * H.
-    - omega.
-    - now rewrite Nat.sub_0_r.
-  Qed.
-
-  Lemma skipn_length:
-    forall n (l: list A),
-      length (skipn n l) = length l - n.
-  Proof.
-    induction n; intros; simpl.
-    - omega.
-    - destruct l; simpl; auto.
-  Qed.
-
-  Lemma nth_skipn:
-    forall (xs: list A) n' n x_d,
-      nth n' (skipn n xs) x_d = nth (n' + n) xs x_d.
-  Proof.
-    induction xs; intros; simpl.
-    - rewrite skipn_nil; simpl; destruct (n' + n); destruct n'; auto.
-    - destruct n; simpl.
-      + now rewrite <-plus_n_O.
-      + destruct n'; simpl; rewrite IHxs; auto.
-        now rewrite Plus.plus_Snm_nSm.
-  Qed.
-
-  Lemma nth_firstn_1: forall (xs: list A) n' n x_d,
-      n' < n ->
-      nth n' (firstn n xs) x_d = nth n' xs x_d.
-  Proof.
-    induction xs; intros; simpl.
-    - destruct n'; destruct n; auto.
-    - destruct n'; destruct n; auto; try omega.
-      simpl. apply IHxs. omega.
-  Qed.
-
-End SkipnDropn.
-
 Section AppLength.
   Context {A B : Type}.
 
@@ -2054,7 +2383,7 @@ Section AppLength.
   Proof.
     intros * Hl Hlapp.
     rewrite 2 app_length in Hlapp.
-    omega.
+    lia.
   Qed.
 
   Lemma length_app :
@@ -2068,9 +2397,9 @@ Section AppLength.
     rewrite app_length in H.
     exists (firstn (length l1) l),(skipn (length l1) l). split; [|split].
     - symmetry. apply firstn_skipn.
-    - rewrite firstn_length. apply Min.min_l. omega.
+    - rewrite firstn_length. apply Min.min_l. lia.
     - apply app_length_impl with (l'1 := firstn (length l1) l) (l'2 := l1).
-      rewrite firstn_length. apply Min.min_l. omega.
+      rewrite firstn_length. apply Min.min_l. lia.
       rewrite firstn_skipn. now rewrite app_length.
   Qed.
 
@@ -2083,7 +2412,7 @@ Section AppLength.
     intros * Happ Hlen.
     apply f_equal with (f := firstn (length l1)) in Happ.
     rewrite Hlen in Happ at 2.
-    do 2 rewrite firstn_app in Happ; auto.
+    do 2 rewrite firstn_app_3 in Happ; auto.
   Qed.
 
   Lemma app_length_inv2:
@@ -2140,7 +2469,7 @@ Section Forall2.
     intros. revert l2; induction l1; intro.
     - split; intro H.
       + inv H. split; simpl; auto.
-        intros; omega.
+        intros; lia.
       + destruct H as [H _]. destruct l2; try discriminate; auto.
     - split; intro H.
       + inversion_clear H as [|? ? ? ? ? H'].
@@ -2148,13 +2477,13 @@ Section Forall2.
         split; simpl; auto.
         intros; destruct n.
         * eapply P_compat; eauto.
-        * eapply IH; eauto; omega.
+        * eapply IH; eauto; lia.
       + destruct H as [Hlen H].
         destruct l2; simpl in Hlen; try discriminate.
         constructor.
-        * apply (H a b 0); simpl; auto; try omega.
-        * rewrite IHl1; split; try omega.
-          intros a' b' **; eapply (H a' b' (S n)); simpl; eauto; omega.
+        * apply (H a b 0); simpl; auto; try lia.
+        * rewrite IHl1; split; try lia.
+          intros a' b' **; eapply (H a' b' (S n)); simpl; eauto; lia.
   Qed.
 
   Lemma Forall2_forall2 :
@@ -2169,16 +2498,16 @@ Section Forall2.
   Proof.
     intros P l1. induction l1; intro l2.
     * split; intro H.
-    + inversion_clear H. split; simpl; auto. intros. omega.
+    + inversion_clear H. split; simpl; auto. intros. lia.
     + destruct H as [H _]. destruct l2; try discriminate. constructor.
       * split; intro H.
     + inversion_clear H. rewrite IHl1 in H1. destruct H1. split; simpl; auto.
-      intros. destruct n; subst; trivial. eapply H1; eauto. omega.
+      intros. destruct n; subst; trivial. eapply H1; eauto. lia.
     + destruct H as [Hlen H].
       destruct l2; simpl in Hlen; try discriminate. constructor.
-      apply (H a b 0); trivial; simpl; try omega.
-      rewrite IHl1. split; try omega.
-      intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
+      apply (H a b 0); trivial; simpl; try lia.
+      rewrite IHl1. split; try lia.
+      intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; lia.
   Qed.
 
   Lemma Forall2_ignore2:
@@ -2596,9 +2925,79 @@ Section Forall2.
   Proof.
     intros * Hf. inversion Hf; auto.
   Qed.
+
+  Lemma Forall2_rev:
+    forall (l: list A) (l': list B) P,
+      Forall2 P l l' <-> Forall2 P (rev l) (rev l').
+  Proof.
+    induction l, l'; split; simpl; inversion 1; simpl; auto.
+    - exfalso; eapply app_cons_not_nil; eauto.
+    - exfalso; eapply app_cons_not_nil; eauto.
+    - subst. apply Forall2_app; auto.
+      now apply IHl.
+    - exfalso; eapply app_cons_not_nil; eauto.
+    - take (Forall2 _ (_ ++ _) (_ ++ _)) and rename it into Hll'.
+      assert (length (rev l) = length (rev l'))
+        by (apply Forall2_length in Hll'; rewrite 2 app_length in Hll'; simpl in *; lia).
+      apply Forall2_app_split in Hll' as [? Hab]; auto.
+      inv Hab.
+      constructor; auto.
+      now apply IHl.
+  Qed.
+
 End Forall2.
 
 Hint Resolve (proj2 (Forall2_eq _ _)).
+
+Lemma length_in_left_combine:
+  forall {A B} (l: list A) (l': list B) x,
+    length l = length l' ->
+    In x l ->
+    exists y, In (x, y) (combine l l').
+Proof.
+  induction l; intros * Len In; simpl in *; try contradiction.
+  destruct l'; simpl in *; try discriminate.
+  intuition; subst; eauto.
+  inv Len; edestruct IHl; eauto.
+Qed.
+
+Lemma length_in_right_combine:
+  forall {A B} (l': list A) (l: list B) x,
+    length l = length l' ->
+    In x l' ->
+    exists y, In (y, x) (combine l l').
+Proof.
+  induction l'; intros * Len In; simpl in *; try contradiction.
+  destruct l; simpl in *; try discriminate.
+  intuition; subst; eauto.
+  inv Len; edestruct IHl'; eauto.
+Qed.
+
+Lemma combine_nth_error:
+  forall {A B} (l: list A) (l': list B) x y n,
+    nth_error (combine l l') n = Some (x, y) <-> nth_error l n = Some x /\ nth_error l' n = Some y.
+Proof.
+  induction l, l'; simpl;
+    try (setoid_rewrite nth_error_nil; split; try discriminate; intros (?&?); discriminate).
+  split.
+  - destruct n; simpl.
+    + inversion_clear 1; auto.
+    + apply IHl.
+  - destruct n; simpl.
+    + intros (E1 & E2); inv E1; inv E2; auto.
+    + apply IHl.
+Qed.
+
+Corollary In_combine_nth_error:
+  forall {A B} (l: list A) (l': list B) x y,
+    In (x, y) (combine l l') <-> exists n, nth_error l n = Some x /\ nth_error l' n = Some y.
+Proof.
+  split.
+  - intros Hin; apply In_nth_error in Hin as (?& Hin).
+    apply combine_nth_error in Hin; eauto.
+  - intros (?& Hin).
+    apply combine_nth_error, nth_error_In in Hin; auto.
+Qed.
 
 Lemma Forall2_trans_ex:
   forall {A B C} (P: A -> B -> Prop) Q xs ys (zs: list C),
@@ -2667,12 +3066,12 @@ Proof.
     + (* the element is in the rest of the sublist *)
       rewrite Nat.ltb_ge in Hnx.
       rewrite app_length in Hlen3.
-      assert (n - length x < length (concat l)) as Hlen3' by omega.
+      assert (n - length x < length (concat l)) as Hlen3' by lia.
       specialize (IHHlen2 (n - length x) Hlen3' (* (app_nth2 _ _ _ Hnx') (app_nth2 _ _ _ Hny') *)).
-      assert (n >= length x) as Hnx' by omega; assert (n >= length y) as Hny' by omega.
+      assert (n >= length x) as Hnx' by lia; assert (n >= length y) as Hny' by lia.
       rewrite H in IHHlen2 at 2.
       specialize (IHHlen2 (app_nth2 _ _ _ Hnx') (app_nth2 _ _ _ Hny')) as [n' [n'' [Hlen' [Hlen'' [Hnth1 Hnth2]]]]].
-      exists (S n'). exists n''. repeat split; auto. omega.
+      exists (S n'). exists n''. repeat split; auto. lia.
 Qed.
 
 Lemma Forall2_concat {A B} : forall (P : A -> B -> Prop) l1 l2,
@@ -2723,7 +3122,7 @@ Section Forall3.
       length l1 = length l2
       /\ length l2 = length l3.
   Proof.
-    induction 1. tauto. simpl. omega.
+    induction 1. tauto. simpl. lia.
   Qed.
 
   Lemma Forall3_in_right:
@@ -2859,16 +3258,16 @@ Lemma Forall3_forall3 {A B C}:
 Proof.
   intros P l1. induction l1; intros l2 l3.
   - split; intro H.
-    + inv H. repeat split; simpl; auto. intros. omega.
+    + inv H. repeat split; simpl; auto. intros. lia.
     + destruct H as [H1 [H2 _]]. destruct l2; destruct l3; try discriminate. constructor.
   - split; intro H.
     + inv H. rewrite IHl1 in H5. destruct H5 as [? [? ?]]. repeat split; simpl; auto.
-      intros. destruct n; subst; trivial. eapply H1; eauto. omega.
+      intros. destruct n; subst; trivial. eapply H1; eauto. lia.
     + destruct H as [Hlen2 [Hlen3 H]].
       destruct l2; destruct l3; simpl in Hlen2; simpl in Hlen3; try discriminate. constructor.
-      apply (H a b c 0); trivial; simpl; try omega.
-      rewrite IHl1. repeat split; try omega.
-      intros. eapply (H a0 b0 c0 (S n)); simpl; eauto. omega.
+      apply (H a b c 0); trivial; simpl; try lia.
+      rewrite IHl1. repeat split; try lia.
+      intros. eapply (H a0 b0 c0 (S n)); simpl; eauto. lia.
 Qed.
 
 Lemma forall3b_Forall3:
@@ -2952,6 +3351,111 @@ Global Instance Forall3_Proper {A B C}:
 Proof.
   intros P Q HPQ ? xs Pxs ? ys Pys ? zs Pzs; subst.
   split. now rewrite HPQ. now rewrite <-HPQ.
+Qed.
+
+Section Forall2Transpose.
+  Context {A B : Type}.
+  Context (P : list A -> B -> Prop).
+
+  Inductive Forall2Transpose : list (list A) -> list B -> Prop :=
+  | F2Tnil : forall l1,
+      Forall (fun x => x = []) l1 ->
+      Forall2Transpose l1 []
+  | F2Tcons : forall l1 hd1 hd2 tl2,
+      Forall2 (fun l hd => hd_error l = Some hd) l1 hd1 ->
+      P hd1 hd2 ->
+      Forall2Transpose (List.map (@tl _) l1) tl2 ->
+      Forall2Transpose l1 (hd2::tl2).
+
+  Lemma Forall2Transpose_length : forall l1 l2,
+      Forall2Transpose l1 l2 ->
+      Forall (fun l1 => length l1 = length l2) l1.
+  Proof.
+    intros l1 l2. revert l1. induction l2; intros * HF; inv HF.
+    - eapply Forall_impl; [|eauto].
+      intros; simpl in *; subst; auto.
+    - eapply IHl2 in H4.
+      rewrite Forall_map in H4.
+      eapply Forall_impl_In; [|eauto].
+      intros ? Hin Hlen; simpl in *. rewrite <-Hlen.
+      eapply Forall2_ignore2 in H1.
+      eapply Forall_forall in H1 as (?&_&Hhd); eauto.
+      destruct a0; simpl in *; congruence.
+  Qed.
+
+  Lemma Forall2Transpose_nth : forall l1 l2,
+      Forall2Transpose l1 l2 ->
+      (forall k d1 d2, k < length l2 -> P (map (fun l => nth k l d1) l1) (nth k l2 d2)).
+  Proof.
+    intros l1 l2. revert l1.
+    induction l2; intros * Hf * Hlen; simpl in *; inv Hf.
+    - inv Hlen.
+    - destruct k.
+      + replace (map (fun l => nth 0 l d1) l1) with hd1; auto.
+        clear - H1. induction H1; simpl; auto.
+        f_equal; auto. destruct x; simpl in *; congruence.
+      + apply Lt.lt_S_n in Hlen.
+        eapply IHl2 in H4; eauto.
+        rewrite map_map in H4.
+        replace (map (fun x => nth (S k) x d1) l1) with (map (fun x => nth k (tl x) d1) l1); eauto.
+        eapply map_ext_in. intros ? Hin.
+        eapply Forall2_ignore2, Forall_forall in H1 as (?&_&Hhd); eauto.
+        destruct a0; simpl in *; congruence.
+  Qed.
+End Forall2Transpose.
+Hint Constructors Forall2Transpose.
+
+Lemma Forall2Transpose_impl {A B} : forall (P Q : list A -> B -> Prop) l1 l2,
+    (forall x y, P x y -> Q x y) ->
+    Forall2Transpose P l1 l2 ->
+    Forall2Transpose Q l1 l2.
+Proof.
+  intros *. revert l1.
+  induction l2; intros * Hpq F2T; inv F2T; econstructor; eauto.
+Qed.
+
+Lemma Forall2Transpose_map_1 {A B C} : forall (P : list A -> B -> Prop) (f : C -> A) (l1 : list (list C)) l2,
+    Forall2Transpose P (map (map f) l1) l2 <->
+    Forall2Transpose (fun x y => P (map f x) y) l1 l2.
+Proof.
+  intros *. revert l1.
+  induction l2; split; intros * F2T; simpl in *; inv F2T; eauto.
+  - constructor.
+    rewrite Forall_map in H. eapply Forall_impl; [|eauto].
+    intros ? Hmap. eapply map_eq_nil in Hmap; eauto.
+  - constructor.
+    rewrite Forall_map. eapply Forall_impl; [|eauto].
+    now intros; simpl in *; subst.
+  - assert (exists hd1', hd1 = map f hd1' /\
+                    Forall2 (fun (l : list C) (hd : C) => hd_error l = Some hd) l1 hd1') as (hd1'&?&?); subst.
+    { clear - H1. rewrite Forall2_map_1 in H1. induction H1.
+      + exists []; auto.
+      + destruct IHForall2 as (hd1'&?&?); subst.
+        destruct x; inv H. exists (c::hd1'); auto. }
+    econstructor; eauto.
+    rewrite <-IHl2.
+    replace (map (map f) (map (@tl _) l1)) with (map (@tl _) (map (map f) l1)); auto.
+    { repeat rewrite map_map.
+      eapply map_ext. intros. destruct a0; auto. }
+  - econstructor; eauto.
+    + rewrite Forall2_map_1, Forall2_map_2.
+      eapply Forall2_impl_In; [|eauto].
+      intros ?? _ _ Hhd; simpl in *.
+      destruct a0; inv Hhd; auto.
+    + replace (map (@tl _) (map (map f) l1)) with (map (map f) (map (@tl _) l1)).
+      2:{ repeat rewrite map_map.
+          eapply map_ext. intros. destruct a0; auto. }
+      rewrite IHl2; auto.
+Qed.
+
+Lemma Forall2Transpose_map_2 {A B C} : forall (P : list A -> B -> Prop) (f : C -> B) l1 l2,
+    Forall2Transpose P l1 (map f l2) <->
+    Forall2Transpose (fun x y => P x (f y)) l1 l2.
+Proof.
+  intros *. revert l1.
+  induction l2; split; intros * F2T; inv F2T; simpl; econstructor; eauto.
+  - rewrite <-IHl2; auto.
+  - rewrite IHl2; auto.
 Qed.
 
 Section InMembers.
@@ -3575,6 +4079,17 @@ Section InMembers.
     eapply Hincl in Hin'.
     eapply NoDupMembers_det in Hndup; eauto.
   Qed.
+
+  Lemma filter_InMembers:
+    forall p x (l: list (A * B)),
+      InMembers x (filter p l) <-> exists b, In (x, b) l /\ p (x, b) = true.
+  Proof.
+    split.
+    - intro Hin; apply InMembers_In in Hin as (b&Hin).
+      apply filter_In in Hin; eauto.
+    - intros (b & ?&?); eapply In_InMembers, filter_In; eauto.
+  Qed.
+
 End InMembers.
 
 Fact find_some' : forall {A} (xs : list (positive * A)) x v ,
@@ -3901,14 +4416,29 @@ Section ListSuffix.
   Definition ltsuffix (ls1 ls2 : list A) :=
     exists ls1', ls2 = ls1' ++ ls1 /\ ls1' <> nil.
 
+  Lemma ltsuffix_cons:
+    forall l a,
+      ltsuffix l (a :: l).
+  Proof.
+    intros; exists [a]; simpl; intuition; auto; discriminate.
+  Qed.
+
   Lemma ltsuffix_wf:
     well_founded ltsuffix.
   Proof.
     apply Wf_nat.well_founded_lt_compat with (f:=@length A).
     destruct 1 as (x' & H1 & H2).
     subst y. rewrite app_length.
-    assert (length x' <> 0) as H3; try omega.
+    assert (length x' <> 0) as H3; try lia.
     now rewrite length_zero_iff_nil.
+  Qed.
+
+  Lemma list_ind_ltsuffix:
+    forall (P: list A -> Prop),
+      (forall l, (forall l', ltsuffix l' l -> P l') -> P l) ->
+    forall l, P l.
+  Proof.
+    intros; now apply well_founded_induction with (1 := ltsuffix_wf).
   Qed.
 
 End ListSuffix.
@@ -4120,18 +4650,6 @@ Ltac singleton_length :=
   end;
   subst.
 
-Lemma Forall_concat' {A} : forall P (l : (list (list A))),
-    Forall (fun x => length x = 1) l ->
-    Forall P (concat l) ->
-    Forall (Forall P) l.
-Proof.
-  induction l; intros Hlen Hf; [constructor|].
-  - simpl in Hf. inv Hlen.
-    apply Forall_app in Hf as [Hf1 Hf2].
-    singleton_length.
-    inv Hf1. repeat constructor; auto.
-Qed.
-
 Lemma Forall2_eq_concat2 {A} : forall (l1 : (list A)) (l2 : (list (list A))),
     Forall (fun x => length x = 1) l2 ->
     Forall2 eq l1 (concat l2) ->
@@ -4342,69 +4860,6 @@ Section remove_member.
     rewrite remove_member_nIn_idem; auto.
   Qed.
 End remove_member.
-
-Section ForallTail.
-  Context {A : Type}.
-
-  Inductive ForallTail (P : A -> list A -> Prop) : list A -> Prop :=
-  | FTnil : ForallTail P []
-  | FTcons : forall x xs,
-      P x xs ->
-      ForallTail P xs ->
-      ForallTail P (x::xs).
-  Hint Constructors ForallTail.
-
-  Lemma ForallTail_impl : forall (P Q : A -> list A -> Prop) (xs : list A),
-      (forall x xs, P x xs -> Q x xs) ->
-      ForallTail P xs ->
-      ForallTail Q xs.
-  Proof.
-    induction xs; intros * Hpq Hf; auto.
-    inv Hf. constructor; eauto.
-  Qed.
-
-  Lemma ForallTail_impl_In : forall (P Q : A -> list A -> Prop) (xs : list A),
-      (forall x xs', In x xs -> P x xs' -> Q x xs') ->
-      ForallTail P xs ->
-      ForallTail Q xs.
-  Proof.
-    induction xs; intros * Hpq Hf; auto.
-    inv Hf. constructor; eauto.
-    - eapply Hpq in H1; eauto. left; auto.
-    - eapply IHxs; eauto.
-      intros. eapply Hpq; eauto. right; auto.
-  Qed.
-
-  Lemma ForallTail_ForallTail : forall (P Q : A -> list A -> Prop) (xs : list A),
-      ForallTail P xs ->
-      ForallTail Q xs ->
-      ForallTail (fun x xs => P x xs /\ Q x xs) xs.
-  Proof.
-    induction xs; intros * Hp Hq; auto.
-    inv Hp. inv Hq. constructor; eauto.
-  Qed.
-
-  Lemma ForallTail_insert : forall (P : A -> list A -> Prop) x xs1 xs2,
-      ForallTail P (xs1 ++ xs2) ->
-      P x xs2 ->
-      Forall (fun x' => forall xs1, P x' (xs1 ++ xs2) -> P x' (xs1 ++ x :: xs2)) xs1 ->
-      ForallTail P (xs1 ++ x :: xs2).
-  Proof.
-    induction xs1; intros * Hft Hp Hf; simpl in *.
-    - constructor; auto.
-    - inv Hf. inv Hft.
-      econstructor; eauto.
-  Qed.
-
-  Lemma ForallTail_middle : forall (P : A -> list A -> Prop) x xs1 xs2,
-      ForallTail P (xs1 ++ x :: xs2) ->
-      P x xs2.
-  Proof.
-    induction xs1; intros * Hft; simpl in *; inv Hft; auto.
-  Qed.
-
-End ForallTail.
-Hint Constructors ForallTail.
 
 Section Partition.
   Context {A : Type}.

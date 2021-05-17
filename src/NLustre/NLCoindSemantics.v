@@ -5,7 +5,6 @@ From Coq Require Import Sorting.Permutation.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 From Coq Require Import Arith.EqNat.
-From Coq Require Import Omega.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
@@ -29,11 +28,12 @@ From Velus Require Import CoindStreams.
 Module Type NLCOINDSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : NLSYNTAX  Ids Op       CESyn)
-       (Import Str   : COINDSTREAMS  Op OpAux)
-       (Import Ord   : NLORDERED Ids Op CESyn Syn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX      Ids Op OpAux Cks CESyn)
+       (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
+       (Import Ord   : NLORDERED     Ids Op OpAux Cks CESyn Syn).
 
   Definition sem_clocked_var (H: history) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
     (forall xs,
@@ -49,21 +49,25 @@ Module Type NLCOINDSEMANTICS
   Definition sem_clocked_vars (H: history) (b: Stream bool) (xs: list (ident * clock)) : Prop :=
     Forall (fun xc => sem_clocked_var H b (fst xc) (snd xc)) xs.
 
-  Inductive sem_exp: history -> Stream bool -> exp -> Stream value -> Prop :=
+  Inductive sem_exp: history -> Stream bool -> exp -> Stream svalue -> Prop :=
   | Sconst:
       forall H b c cs,
         cs ≡ const b c ->
         sem_exp H b (Econst c) cs
+  | Senum:
+      forall H b x ty cs,
+        cs ≡ enum b x ->
+        sem_exp H b (Eenum x ty) cs
   | Svar:
       forall H b x ty xs,
         sem_var H x xs ->
         sem_exp H b (Evar x ty) xs
   | Swhen:
-      forall H b e x k es xs os,
+      forall H b e x c es xs os,
         sem_exp H b e es ->
         sem_var H x xs ->
-        when k es xs os ->
-        sem_exp H b (Ewhen e x k) os
+        when c es xs os ->
+        sem_exp H b (Ewhen e x c) os
   | Sunop:
       forall H b op e ty es os,
         sem_exp H b e es ->
@@ -76,28 +80,67 @@ Module Type NLCOINDSEMANTICS
         lift2 op (typeof e1) (typeof e2) es1 es2 os ->
         sem_exp H b (Ebinop op e1 e2 ty) os.
 
-  Inductive sem_cexp: history -> Stream bool -> cexp -> Stream value -> Prop :=
+  Inductive sem_cexp: history -> Stream bool -> cexp -> Stream svalue -> Prop :=
   | Smerge:
-      forall H b x t f xs ts fs os,
+      forall H b x tx es ty xs ess os,
         sem_var H x xs ->
-        sem_cexp H b t ts ->
-        sem_cexp H b f fs ->
-        merge xs ts fs os ->
-        sem_cexp H b (Emerge x t f) os
-  | Site:
-      forall H b e t f es ts fs os,
-        sem_exp H b e es ->
-        sem_cexp H b t ts ->
-        sem_cexp H b f fs ->
-        ite es ts fs os ->
-        sem_cexp H b (Eite e t f) os
+        Forall2 (sem_cexp H b) es ess ->
+        merge xs ess os ->
+        sem_cexp H b (Emerge (x, tx) es ty) os
+  | Scase:
+      forall H b e es t xs ess os,
+        sem_exp H b e xs ->
+        Forall2 (fun e => sem_cexp H b e) es ess ->
+        case xs ess os ->
+        sem_cexp H b (Ecase e es t) os
   | Sexp:
       forall H b e es,
         sem_exp H b e es ->
         sem_cexp H b (Eexp e) es.
 
-  CoInductive sem_annot {A} (sem: history -> Stream bool -> A -> Stream value -> Prop):
-    history -> Stream bool -> clock -> A -> Stream value -> Prop :=
+  Section SemInd.
+
+    Variable P_cexp: history -> Stream bool -> cexp -> Stream svalue -> Prop.
+
+    Hypothesis MergeCase:
+      forall H b x tx es ty xs ess os,
+        sem_var H x xs ->
+        Forall2 (sem_cexp H b) es ess ->
+        Forall2 (P_cexp H b) es ess ->
+        merge xs ess os ->
+        P_cexp H b (Emerge (x, tx) es ty) os.
+
+    Hypothesis CaseCase:
+      forall H b e es t xs ess os,
+        sem_exp H b e xs ->
+        Forall2 (fun e => sem_cexp H b e) es ess ->
+        Forall2 (fun e => P_cexp H b e) es ess ->
+        case xs ess os ->
+        P_cexp H b (Ecase e es t) os.
+
+    Hypothesis ExpCase:
+      forall H b e es,
+        sem_exp H b e es ->
+        P_cexp H b (Eexp e) es.
+
+    Fixpoint sem_cexp_ind2
+             (H: history) (b: Stream bool) (e: cexp) (os: Stream svalue)
+             (Sem: sem_cexp H b e os) {struct Sem}
+      : P_cexp H b e os.
+    Proof.
+      destruct Sem; eauto.
+      - eapply MergeCase; eauto.
+        take (merge _ _ _) and clear it.
+        take (Forall2 _ _ _) and induction it; constructor; auto.
+      - eapply CaseCase; eauto.
+        take (case _ _ _) and clear it.
+        take (Forall2 _ _ _) and induction it; constructor; auto.
+    Qed.
+
+  End SemInd.
+
+  CoInductive sem_annot {A} (sem: history -> Stream bool -> A -> Stream svalue -> Prop):
+    history -> Stream bool -> clock -> A -> Stream svalue -> Prop :=
   | Stick:
       forall H b ck a e es bs,
         sem H b a (present e ⋅ es) ->
@@ -114,7 +157,7 @@ Module Type NLCOINDSEMANTICS
   Definition sem_aexp := sem_annot sem_exp.
   Definition sem_caexp := sem_annot sem_cexp.
 
-  CoFixpoint reset1 (v0: val) (xs: Stream value) (rs: Stream bool) (doreset : bool) : Stream value :=
+  CoFixpoint reset1 (v0: value) (xs: Stream svalue) (rs: Stream bool) (doreset : bool) : Stream svalue :=
     match xs, rs, doreset with
     | absent ⋅ xs, false ⋅ rs, false => absent ⋅ (reset1 v0 xs rs false)
     | absent ⋅ xs, true ⋅ rs, _
@@ -124,7 +167,13 @@ Module Type NLCOINDSEMANTICS
     | present x ⋅ xs, _ ⋅ rs, true => present v0 ⋅ (reset1 v0 xs rs false)
     end.
 
-  Definition reset (v0: val) (xs: Stream value) (rs: Stream bool) : Stream value :=
+  CoFixpoint fby (v0: value) (xs: Stream svalue) : Stream svalue :=
+    match xs with
+    | absent    ⋅ xs => absent     ⋅ fby v0 xs
+    | present x ⋅ xs => present v0 ⋅ fby x xs
+    end.
+
+  Definition reset (v0: value) (xs: Stream svalue) (rs: Stream bool) : Stream svalue :=
     reset1 v0 xs rs false.
 
   Lemma reset_false : forall v0 xs,
@@ -200,10 +249,10 @@ Module Type NLCOINDSEMANTICS
        simpl in *; try congruence; auto).
     - eapply IHn; eauto.
       intros ? Hkn. specialize (Hk (S k)).
-      rewrite Str_nth_S in Hk. apply Hk, lt_n_S; auto.
+      rewrite Str_nth_S in Hk. apply Hk, Lt.lt_n_S; auto.
     - eapply IHn; eauto.
       intros ? Hkn. specialize (Hk (S k)).
-      rewrite Str_nth_S in Hk. apply Hk, lt_n_S; auto.
+      rewrite Str_nth_S in Hk. apply Hk, Lt.lt_n_S; auto.
     - specialize (Hk 0 (Nat.lt_0_succ _)).
       rewrite Str_nth_0 in Hk. inv Hk.
     - specialize (Hk 0 (Nat.lt_0_succ _)).
@@ -239,7 +288,7 @@ Module Type NLCOINDSEMANTICS
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e xrs)
 
-    with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
+    with sem_node: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop :=
       SNode:
         forall H f n xss oss,
           find_node f G = Some n ->
@@ -256,7 +305,7 @@ Module Type NLCOINDSEMANTICS
     Variable G: global.
 
     Variable P_equation: history -> Stream bool -> equation -> Prop.
-    Variable P_node: ident -> list (Stream value) -> list (Stream value) -> Prop.
+    Variable P_node: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop.
 
     Hypothesis EqDefCase:
       forall H b x ck e es,
@@ -300,7 +349,7 @@ Module Type NLCOINDSEMANTICS
              (Sem: sem_equation G H b e) {struct Sem}
       : P_equation H b e
     with sem_node_mult
-           (f: ident) (xss oss: list (Stream value))
+           (f: ident) (xss oss: list (Stream svalue))
            (Sem: sem_node G f xss oss) {struct Sem}
          : P_node f xss oss.
     Proof.
@@ -318,30 +367,31 @@ Module Type NLCOINDSEMANTICS
   (** ** Properties of the [global] environment *)
 
   Lemma sem_node_cons2:
-    forall nd G f xs ys,
-      Ordered_nodes G
-      -> sem_node G f xs ys
-      -> Forall (fun nd' : node => n_name nd <> n_name nd') G
-      -> sem_node (nd::G) f xs ys.
+    forall enms nd nds f xs ys,
+      Ordered_nodes (Global enms nds)
+      -> sem_node (Global enms nds) f xs ys
+      -> Forall (fun nd' : node => n_name nd <> n_name nd') nds
+      -> sem_node (Global enms (nd::nds)) f xs ys.
   Proof.
-    intros nd G f xs ys Hord Hsem Hnin.
+    intros * Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
     induction Hsem as [
-                     | |
+                     |
+                     |
                      | bk f n xs ys Hfind Hinp Hout Hscvs Heqs IH]
       using sem_node_mult
       with (P_equation := fun bk H eq =>
                    ~Is_node_in_eq nd.(n_name) eq
-                   -> sem_equation (nd::G) bk H eq);
+                   -> sem_equation (Global enms (nd::nds)) bk H eq);
       try eauto using sem_equation; try intro Hb.
     - econstructor; eauto. intro k.
       take (forall k, _ /\ _) and specialize (it k) as []. auto.
     -
       assert (nd.(n_name) <> f) as Hnf.
-      { intro Hnf. rewrite Hnf in *.
-        eapply Forall_forall in Hnin; [|eapply find_node_In; eauto].
-        apply find_node_name in Hfind. auto. }
+      { intro Hnf; subst.
+        eapply find_node_In in Hfind as (?&?); simpl in *.
+        eapply Forall_forall in Hnin; [|eauto]. congruence. }
       econstructor; eauto.
       now apply find_node_other; auto.
       apply Forall_impl_In with (2:=IH).
@@ -349,20 +399,20 @@ Module Type NLCOINDSEMANTICS
       destruct eq; try inversion 1; subst.
       pose proof Hin as Hsem; apply Forall_forall with (1:=Heqs)in Hsem.
       inversion_clear Hsem as [| ??????????????? Hsemn|].
-      specialize (Hsemn 0). inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
-      pose proof (find_node_name _ _ _ Hfind').
-      apply find_node_In in Hfind' as (_&Hfind').
+      specialize (Hsemn 0).
+      inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
+      eapply find_node_In in Hfind' as (?&Hfind').
       apply Forall_forall with (1:=Hnin) in Hfind'. auto.
   Qed.
 
   Lemma sem_equation_cons2:
-    forall G b H eqs nd,
-      Ordered_nodes (nd::G)
-      -> Forall (sem_equation G H b) eqs
+    forall enms nds b H eqs nd,
+      Ordered_nodes (Global enms (nd::nds))
+      -> Forall (sem_equation (Global enms nds) H b) eqs
       -> ~Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (nd::G) H b) eqs.
+      -> Forall (sem_equation (Global enms (nd::nds)) H b) eqs.
   Proof.
-    intros G b H eqs nd Hord Hsem Hnini.
+    intros * Hord Hsem Hnini.
     induction eqs as [|eq eqs IH]; [now constructor|].
     apply Forall_cons2 in Hsem.
     destruct Hsem as [Heq Heqs].
@@ -373,13 +423,12 @@ Module Type NLCOINDSEMANTICS
     destruct Heq (* as [|? ? ? ? ? ? ? ? ? ? ? ? ? Hsem|] *);
       try now eauto using sem_equation.
     econstructor; eauto using sem_equation.
-    inversion_clear Hord as [|? ? Hord' Hnn Hnns].
-    auto using sem_node_cons2.
+    inversion_clear Hord as [|? ? (?&?) Hnn].
+    intros. apply sem_node_cons2; eauto.
   Qed.
 
-
   Add Parametric Morphism H : (sem_var H)
-      with signature eq ==> @EqSt value ==> Basics.impl
+      with signature eq ==> @EqSt svalue ==> Basics.impl
         as sem_var_EqSt.
   Proof.
     intros x xs xs' E; intro Sem; inv Sem.
@@ -388,39 +437,57 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : merge
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
         as merge_EqSt.
   Proof.
     cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys zs zs' Ezs H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]], zs' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; inv Ezs; simpl in *;
+    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
+    destruct cs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Eys; simpl in *;
         try discriminate.
-      + constructor; eapply Cofix; eauto.
-      + rewrite <-H, <-H4, <-H6.
-        constructor; eapply Cofix; eauto.
-      + rewrite <-H, <-H2, <-H6.
-        constructor; eapply Cofix; eauto.
+    - constructor.
+      + eapply Cofix; eauto.
+        apply map_st_EqSt; auto. (* TODO: why rewrite does not work? *)
+        intros * ->; reflexivity.
+      + eapply Forall_EqSt; eauto. (* DITTO *)
+        solve_proper.
+    - repeat take (_ = _) and inv it.
+      econstructor; eauto.
+      + eapply Cofix; eauto.
+        apply map_st_EqSt; auto.
+        intros * ->; reflexivity.
+      + rewrite <-Exs; eauto.
   Qed.
 
-  Add Parametric Morphism : ite
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
-        as ite_EqSt.
+  Add Parametric Morphism : case
+      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
+        as case_EqSt.
   Proof.
     cofix Cofix.
-    intros es es' Ees ts ts' Ets fs fs' Efs zs zs' Ezs H.
-    destruct es' as [[]], ts' as [[]], fs' as [[]], zs' as [[]];
-      inv H; inv Ees; inv Ets; inv Efs; inv Ezs; simpl in *;
+    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
+    destruct cs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Eys; simpl in *;
         try discriminate.
-      + constructor; eapply Cofix; eauto.
-      + rewrite <-H, <-H2, <-H6.
-        constructor; eapply Cofix; eauto.
-      + rewrite <-H, <-H4, <-H6.
-        constructor; eapply Cofix; eauto.
+    - constructor.
+      + eapply Cofix; eauto.
+        apply map_st_EqSt; auto. (* TODO: why rewrite does not work? *)
+        intros * ->; reflexivity.
+      + eapply Forall_EqSt; eauto. (* DITTO *)
+        solve_proper.
+    - repeat take (_ = _) and inv it.
+      econstructor; eauto.
+      + eapply Cofix; eauto.
+        apply map_st_EqSt; auto.
+        intros * ->; reflexivity.
+      + eapply Forall_EqSt; eauto.
+        solve_proper.
+      + assert (orel (@EqSt svalue) (nth_error xs c) (nth_error xs' c))
+          by (apply nth_error_EqSt; auto).
+        take (orel _ _ _) and rewrite <-it; eauto.
   Qed.
 
   Add Parametric Morphism k : (when k)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as when_EqSt.
   Proof.
     cofix Cofix.
@@ -429,45 +496,44 @@ Module Type NLCOINDSEMANTICS
       inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
         try discriminate.
       + constructor; eapply Cofix; eauto.
-      + constructor.
-        * eapply Cofix; eauto.
-        * now inv H3.
-      + rewrite <-H, <-H5.
+      + repeat (take (present _ = present _) and inv it).
+        constructor; auto.
+        eapply Cofix; eauto.
+      + repeat (take (present _ = present _) and inv it).
         constructor.
-        * eapply Cofix; eauto.
-        * now inv H3.
+        eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism op t : (lift1 op t)
-      with signature @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as lift1_EqSt.
   Proof.
     cofix Cofix.
     intros es es' Ees ys ys' Eys Lift.
     destruct es' as [[]], ys' as [[]];
-      inv Lift; inv Eys; inv Ees; simpl in *; try discriminate.
+      inversion Lift; inversion Eys; inversion Ees; simpl in *; subst ys es; try discriminate.
     - constructor; eapply Cofix; eauto.
-    - constructor.
-      + now inv H1; inv H3.
-      + eapply Cofix; eauto.
+    - repeat (take (present _ = present _) and inv it).
+      constructor; auto.
+      eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism op t1 t2 : (lift2 op t1 t2)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as lift2_EqSt.
   Proof.
     cofix Cofix.
     intros e1s e1s' Ee1s e2s e2s' Ee2s ys ys' Eys Lift.
     destruct e1s' as [[]], e2s' as [[]], ys' as [[]];
-      inv Lift; inv Eys; inv Ee1s; inv Ee2s; simpl in *; try discriminate.
+      inversion Lift; inversion Eys; inversion Ee1s; inversion Ee2s; simpl in *; subst ys e1s e2s; try discriminate.
     - constructor; eapply Cofix; eauto.
-    - constructor.
-      + now inv H1; inv H3; inv H5.
-      + eapply Cofix; eauto.
+    - repeat (take (present _ = present _) and inv it).
+      constructor; auto.
+      eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism : (const)
-      with signature @EqSt bool ==> eq ==> @EqSt value
+      with signature @EqSt bool ==> eq ==> @EqSt svalue
         as const_EqSt.
   Proof.
     cofix CoFix; intros b b' Eb.
@@ -476,7 +542,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : reset
-      with signature @eq val ==> @EqSt value ==> @EqSt bool ==> @EqSt value
+      with signature @eq value ==> @EqSt svalue ==> @EqSt bool ==> @EqSt svalue
         as reset_EqSt.
   Proof.
     unfold reset. remember false as b. clear Heqb. revert b.
@@ -484,15 +550,28 @@ Module Type NLCOINDSEMANTICS
     intros * Heq1 * Heq2.
     unfold_St x; unfold_St x0; unfold_St y0; unfold_St y1.
     inv Heq1. inv Heq2. simpl in *; subst.
-    destruct v0, b, b1; constructor; simpl; auto.
+    destruct s0, b, b1; constructor; simpl; auto.
+  Qed.
+
+  Add Parametric Morphism : (enum)
+      with signature @EqSt bool ==> eq ==> @EqSt svalue
+        as enum_EqSt.
+  Proof.
+    cofix CoFix; intros b b' Eb.
+    unfold_Stv b; unfold_Stv b';
+      constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
 
   Add Parametric Morphism H : (sem_exp H)
-      with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
+      with signature @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_exp_morph.
   Proof.
     intros b b' Eb e xs xs' Exs Sem.
     revert b' xs' Eb Exs; induction Sem.
+    - intros. constructor.
+      rewrite <-Eb.
+      transitivity cs; auto.
+      now symmetry.
     - intros. constructor.
       rewrite <-Eb.
       transitivity cs; auto.
@@ -502,38 +581,45 @@ Module Type NLCOINDSEMANTICS
     - econstructor; eauto.
       apply IHSem; auto; try reflexivity.
       now rewrite <-Exs.
-    - econstructor.
+    - econstructor; eauto.
       + apply IHSem; auto; reflexivity.
       + now rewrite <-Exs.
-    - econstructor.
+    - econstructor; eauto.
       + apply IHSem1; auto; reflexivity.
       + apply IHSem2; auto; reflexivity.
       + now rewrite <-Exs.
   Qed.
 
   Add Parametric Morphism H : (sem_cexp H)
-      with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
+      with signature @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_cexp_morph.
   Proof.
     intros b b' Eb e xs xs' Exs Sem.
-    revert b' xs' Eb Exs; induction Sem.
+    revert b' xs' Eb Exs; revert dependent xs;
+      induction e using cexp_ind2; intros; inv Sem.
     - econstructor; eauto.
-      + apply IHSem1; auto; reflexivity.
-      + apply IHSem2; auto; reflexivity.
+      + instantiate (1 := ess).
+        take (merge _ _ _) and clear it.
+        revert dependent ess; induction l; inversion_clear 1;
+          constructor; take (Forall _ _) and inv it; auto.
+        take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.
       + now rewrite <-Exs.
     - econstructor; eauto.
       + rewrite <-Eb; eauto.
-      + apply IHSem1; auto; reflexivity.
-      + apply IHSem2; auto; reflexivity.
+      + instantiate (1 := ess).
+        take (case _ _ _) and clear it.
+        revert dependent ess; induction l; inversion_clear 1;
+          constructor; take (Forall _ _) and inv it; auto.
+        take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.
       + now rewrite <-Exs.
     - constructor.
       now rewrite <-Eb, <-Exs.
   Qed.
 
   Add Parametric Morphism A sem H
-    (sem_compat: Proper (eq ==> @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl) sem)
+    (sem_compat: Proper (eq ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl) sem)
     : (@sem_annot A sem H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
+      with signature @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_annot_morph.
   Proof.
     revert H sem_compat; cofix Cofix.
@@ -551,7 +637,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism H : (sem_aexp H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
+      with signature @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_aexp_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.
@@ -559,7 +645,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism H : (sem_caexp H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
+      with signature @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_caexp_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.
@@ -606,7 +692,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism G : (sem_node G)
-      with signature eq ==> @EqSts value ==> @EqSts value ==> Basics.impl
+      with signature eq ==> @EqSts svalue ==> @EqSts svalue ==> Basics.impl
         as mod_sem_node_morph.
   Proof.
     unfold Basics.impl; intros f xss xss' Exss yss yss' Eyss Sem.
@@ -620,26 +706,17 @@ Module Type NLCOINDSEMANTICS
       intro; now rewrite Exss.
   Qed.
 
-  Add Parametric Morphism : (aligned)
-      with signature @EqSt value ==> @EqSt bool ==> Basics.impl
-        as aligned_EqSt.
-  Proof.
-    cofix CoFix.
-    intros xs xs' Exs bs bs' Ebs Synchro.
-    unfold_Stv xs'; unfold_Stv bs'; inv Synchro; inv Exs; inv Ebs;
-      try discriminate; constructor; eapply CoFix; eauto.
-  Qed.
-
 End NLCOINDSEMANTICS.
 
 Module NLCoindSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (CESyn : CESYNTAX      Op)
-       (Syn   : NLSYNTAX  Ids Op       CESyn)
-       (Str   : COINDSTREAMS  Op OpAux)
-       (Ord   : NLORDERED Ids Op CESyn Syn)
-<: NLCOINDSEMANTICS Ids Op OpAux CESyn Syn Str Ord.
-  Include NLCOINDSEMANTICS Ids Op OpAux CESyn Syn Str Ord.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX      Ids Op OpAux Cks CESyn)
+       (Str   : COINDSTREAMS  Ids Op OpAux Cks)
+       (Ord   : NLORDERED     Ids Op OpAux Cks CESyn Syn)
+<: NLCOINDSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord.
+  Include NLCOINDSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord.
 End NLCoindSemanticsFun.

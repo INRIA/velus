@@ -6,6 +6,8 @@ From Velus Require Import NLustreToStc.Translation.
 From Velus Require Import VelusMemory.
 From Velus Require Import Common.
 From Velus Require Import CoindToIndexed.
+From Velus Require Import CommonProgram.
+From Velus Require Import CommonTyping.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -17,14 +19,16 @@ Open Scope list.
 Module Type NL2STCCLOCKING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CStr  : COINDSTREAMS    Op OpAux)
-       (Import IStr  : INDEXEDSTREAMS  Op OpAux)
-       (Import CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
-       (Import CE    : COREEXPR    Ids Op OpAux      IStr)
-       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
-       (Import Stc   : STC         Ids Op OpAux      IStr       CE)
-       (Import Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Import Cks   : CLOCKS          Ids Op OpAux)
+       (Import CStr  : COINDSTREAMS    Ids Op OpAux Cks)
+       (Import IStr  : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CIStr : COINDTOINDEXED  Ids Op OpAux        Cks CStr IStr)
+       (Import CE    : COREEXPR        Ids Op OpAux ComTyp Cks IStr)
+       (Import NL    : NLUSTRE         Ids Op OpAux ComTyp Cks CStr IStr CIStr CE)
+       (Import Stc   : STC             Ids Op OpAux ComTyp Cks IStr       CE)
+       (Import Trans : TRANSLATION     Ids Op OpAux        Cks            CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma translate_eqn_wc:
     forall G vars eq,
@@ -34,7 +38,8 @@ Module Type NL2STCCLOCKING
   Proof.
     inversion_clear 2 as [|??????? Find Ins Outs|];
       simpl; auto using Forall_cons.
-    apply find_node_translate in Find as (?&?&?&?); subst.
+    apply option_map_inv in Find as ((?&?)& Find &?); simpl in *; subst.
+    apply find_unit_transform_units_forward in Find.
     cases.
     - constructor.
       + econstructor; eauto.
@@ -58,7 +63,7 @@ Module Type NL2STCCLOCKING
                   (idck
                      (fst
                         (partition
-                           (fun x : positive * (type * clock) =>
+                           (fun x : ident * (type * clock) =>
                               PS.mem (fst x) (ps_from_list (map fst (fst (gather_eqs (n_eqs n))))))
                            (n_vars n)))).
   Proof.
@@ -122,7 +127,7 @@ Module Type NL2STCCLOCKING
               apply in_map_iff; exists (x, (c', ck)); simpl.
               rewrite In_fst_fold_left_gather_eq; intuition.
             - destruct Mem as [E|]; try contradiction; inv E.
-              apply in_map_iff; exists (x, (c0, c)); simpl.
+              apply in_map_iff; exists (x, (c0, typeof e, c)); simpl.
               rewrite In_fst_fold_left_gather_eq; intuition.
               f_equal.
               assert (In (x, ck) (idck (n_in n ++ n_vars n ++ n_out n)))
@@ -154,7 +159,7 @@ Module Type NL2STCCLOCKING
                            (n_in n ++
                                  snd
                                  (partition
-                                    (fun x : positive * (type * clock) =>
+                                    (fun x : ident * (type * clock) =>
                                        PS.mem (fst x) (ps_from_list (map fst (fst (gather_eqs (n_eqs n))))))
                                     (n_vars n)) ++ n_out n) ++ idck (fst (gather_eqs (n_eqs n))))
                         (idck (n_in n ++ n_vars n ++ n_out n))) as E.
@@ -177,10 +182,8 @@ Module Type NL2STCCLOCKING
       wc_global G ->
       wc_program (translate G).
   Proof.
-    intros * WC.
-    induction G; simpl; inv WC; auto.
-    constructor; auto.
-    eapply translate_node_wc; eauto.
+    unfold wc_global, wc_program; simpl; induction 1 as [|?? WC]; simpl; constructor; auto.
+    apply translate_node_wc in WC; auto.
   Qed.
 
 End NL2STCCLOCKING.
@@ -188,14 +191,16 @@ End NL2STCCLOCKING.
 Module NL2StcClockingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (CStr  : COINDSTREAMS    Op OpAux)
-       (IStr  : INDEXEDSTREAMS  Op OpAux)
-       (CIStr : COINDTOINDEXED  Op OpAux CStr IStr)
-       (CE    : COREEXPR    Ids Op OpAux      IStr)
-       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CIStr CE)
-       (Stc   : STC         Ids Op OpAux      IStr       CE)
-       (Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem)
-<: NL2STCCLOCKING Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
-  Include NL2STCCLOCKING Ids Op OpAux CStr IStr CIStr CE NL Stc Trans.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Cks   : CLOCKS          Ids Op OpAux)
+       (CStr  : COINDSTREAMS    Ids Op OpAux Cks)
+       (IStr  : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CIStr : COINDTOINDEXED  Ids Op OpAux        Cks CStr IStr)
+       (CE    : COREEXPR        Ids Op OpAux ComTyp Cks      IStr)
+       (NL    : NLUSTRE         Ids Op OpAux ComTyp Cks CStr IStr CIStr CE)
+       (Stc   : STC             Ids Op OpAux ComTyp Cks      IStr       CE)
+       (Trans : TRANSLATION     Ids Op OpAux Cks                 CE.Syn NL.Syn Stc.Syn NL.Mem)
+<: NL2STCCLOCKING Ids Op OpAux ComTyp Cks CStr IStr CIStr CE NL Stc Trans.
+  Include NL2STCCLOCKING Ids Op OpAux ComTyp Cks CStr IStr CIStr CE NL Stc Trans.
 End NL2StcClockingFun.

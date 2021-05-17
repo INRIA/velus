@@ -5,6 +5,7 @@ From Velus Require Import StcToObc.Translation.
 
 From Velus Require Import VelusMemory.
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -16,12 +17,21 @@ Open Scope list.
 Module Type STC2OBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Str)
-       (Import Stc   : STC         Ids Op OpAux Str CE)
-       (Import Obc   : OBC         Ids Op OpAux)
-       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Import Cks   : CLOCKS          Ids Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CE    : COREEXPR    Ids Op OpAux ComTyp Cks Str)
+       (Import Stc   : STC         Ids Op OpAux ComTyp Cks Str CE)
+       (Import Obc   : OBC         Ids Op OpAux ComTyp)
+       (Import Trans : TRANSLATION Ids Op OpAux Cks CE.Syn Stc.Syn Obc.Syn).
+
+  Fact typeof_tovar:
+    forall mems x t,
+      typeof (tovar mems (x, t)) = t.
+  Proof.
+    unfold tovar; intros; cases.
+  Qed.
 
   Lemma wt_stmt_fold_left_shift:
     forall A xs P insts mems vars (f: A -> stmt) acc,
@@ -51,202 +61,358 @@ Module Type STC2OBCTYPING
 
   Section Expressions.
 
-    Variable nvars  : list (ident * type).
-    Variable mems   : list (ident * type).
-    Variable vars   : list (ident * type).
+    Variable p      : program.
+    Variable enums  : list (ident * nat).
+    Variable Γ      : list (ident * type).
+    Variable Γm     : list (ident * type).
+    Variable Γv     : list (ident * type).
     Variable memset : PS.t.
 
-    Hypothesis NvarsSpec:
+    Hypothesis EnumsSpec:
+      enums = p.(Obc.Syn.enums).
+
+    Definition type_env_spec :=
       forall x ty,
-        In (x, ty) nvars ->
-        if PS.mem x memset then In (x, ty) mems else In (x, ty) vars.
+        In (x, ty) Γ ->
+        if PS.mem x memset then In (x, ty) Γm else In (x, ty) Γv.
+
+    Hypothesis NvarsSpec: type_env_spec.
 
     Ltac FromMemset :=
       match goal with
-      | H: In (?x, _) nvars |- context [ bool_var memset ?x ] =>
-        unfold bool_var; simpl;
-        apply NvarsSpec in H; cases
-      | H: In (?x, _) nvars |- context [ PS.mem ?x memset ] =>
+      (* | H: In (?x, _) nvars |- context [ bool_var memset ?x ] => *)
+      (*   unfold bool_var; simpl; *)
+      (*   apply NvarsSpec in H; cases *)
+      | H: In (?x, _) Γ |- context [ PS.mem ?x memset ] =>
         apply NvarsSpec in H; cases
       end.
 
+    Lemma typeof_correct:
+      forall e,
+        typeof (translate_exp memset e) = CE.Syn.typeof e.
+    Proof.
+      induction e; intros; simpl; auto; cases.
+    Qed.
+
+    Corollary typeof_arg_correct:
+      forall clkvars ck e,
+        typeof (translate_arg memset clkvars ck e) = CE.Syn.typeof e.
+    Proof.
+      unfold translate_arg; intros.
+      cases; simpl; cases.
+      apply typeof_correct.
+    Qed.
+
     Lemma translate_exp_wt:
       forall e,
-        CE.Typ.wt_exp nvars e ->
-        wt_exp mems vars (translate_exp memset e).
+        CE.Typ.wt_exp enums Γ e ->
+        wt_exp p Γm Γv (translate_exp memset e).
     Proof.
-      induction e; simpl; intro WTle; inv WTle; auto using wt_exp.
+      induction e; simpl; intro WTle; inv WTle; eauto using wt_exp.
       - FromMemset; eauto using wt_exp.
-      - constructor; auto; now rewrite typeof_correct.
-      - constructor; auto; now rewrite 2 typeof_correct.
+      - econstructor; eauto; now rewrite typeof_correct.
+      - econstructor; eauto; now rewrite 2 typeof_correct.
     Qed.
     Hint Resolve translate_exp_wt.
 
     Corollary translate_arg_wt:
       forall e clkvars ck,
-        CE.Typ.wt_exp nvars e ->
-        wt_exp mems vars (translate_arg memset clkvars ck e).
+        CE.Typ.wt_exp enums Γ e ->
+        wt_exp p Γm Γv (translate_arg memset clkvars ck e).
     Proof.
       unfold translate_arg, var_on_base_clock; intros * WT.
-      inv WT; auto; simpl.
-      apply NvarsSpec in H; destruct (PS.mem x memset); simpl; auto using wt_exp.
-      cases; auto using wt_exp.
+      destruct e; try apply translate_exp_wt; simpl; auto.
+      inv WT.
+      take (In _ _) and apply NvarsSpec in it.
+      destruct (PS.mem i memset); simpl; eauto using wt_exp.
+      cases; eauto using wt_exp.
     Qed.
     Hint Resolve translate_arg_wt.
 
-    Remark typeof_bool_var_is_bool_type:
-      forall x,
-        typeof (bool_var memset x) = bool_type.
-    Proof.
-      unfold bool_var; intros; simpl; cases.
-    Qed.
-    Hint Resolve typeof_bool_var_is_bool_type.
-
     Lemma translate_cexp_wt:
-      forall p insts x e,
-        wt_cexp nvars e ->
-        In (x, typeofc e) vars ->
-        wt_stmt p insts mems vars (translate_cexp memset x e).
+      forall insts x e,
+        wt_cexp enums Γ e ->
+        In (x, typeofc e) Γv ->
+        wt_stmt p insts Γm Γv (translate_cexp memset x e).
     Proof.
-      induction e; simpl; intros WTe Hv; inv WTe.
-      - match goal with H:typeofc e1 = typeofc e2 |- _ => rewrite <-H in * end.
-        FromMemset; eauto using wt_stmt, wt_exp.
-      - assert (Hv' := Hv).
-        match goal with H:typeofc _ = typeofc _ |- _ => rewrite H in Hv' end.
-        constructor; auto.
-        now rewrite typeof_correct.
+      induction e using cexp_ind2; simpl; intros WTe Hv; inversion WTe.
+      - subst; unfold tovar.
+        FromMemset; econstructor; simpl; eauto using wt_exp, wt_stmt; try rewrite map_length; auto;
+          intros * Hin; apply in_map_iff in Hin as (? & E & Hin); inv E;
+            repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; auto.
+      - take (CE.Typ.wt_exp _ _ _) and apply translate_exp_wt in it.
+        subst.
+        econstructor; eauto using wt_stmt.
+        + now rewrite typeof_correct.
+        + now rewrite map_length.
+        + intros * Hin; apply in_map_iff in Hin as (? & E & Hin); inv E;
+            repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; simpl in *; auto.
       - constructor; auto.
         now rewrite typeof_correct.
     Qed.
 
     Lemma Control_wt:
-      forall p insts ck s,
-        wt_clock nvars ck ->
-        wt_stmt p insts mems vars s ->
-        wt_stmt p insts mems vars (Control memset ck s).
+      forall insts ck s,
+        wt_clock enums Γ ck ->
+        wt_stmt p insts Γm Γv s ->
+        wt_stmt p insts Γm Γv (Control memset ck s).
     Proof.
       induction ck; intros s WTc WTs;
-        inversion_clear WTc as [|??? Hin]; auto.
-      destruct b; simpl; eauto; FromMemset; eauto using wt_stmt, wt_exp.
+        inversion_clear WTc as [|???? Hin]; auto.
+      simpl; destruct tn; FromMemset; apply IHck; eauto;
+        subst; econstructor; simpl; eauto using wt_exp; try rewrite skip_branches_with_length;
+          eauto using wt_stmt.
+      - clear - WTs. induction n.
+        + rewrite skip_branches_with_0; contradiction.
+        + rewrite skip_branches_with_S; setoid_rewrite in_app; intros * [|Hin]; auto.
+          inv Hin; cases; auto; contradiction.
+      - clear - WTs. induction n.
+        + rewrite skip_branches_with_0; contradiction.
+        + rewrite skip_branches_with_S; setoid_rewrite in_app; intros * [|Hin]; auto.
+          inv Hin; cases; auto; contradiction.
+    Qed.
+
+    Lemma Control_wt_inv:
+      forall insts ck s,
+        wt_clock enums Γ ck ->
+        wt_stmt p insts Γm Γv (Control memset ck s) ->
+        wt_stmt p insts Γm Γv s.
+    Proof.
+      clear EnumsSpec.
+      induction ck; simpl; intros s WTc WTcontrol; auto.
+      inv WTc; destruct tn.
+      apply IHck in WTcontrol; auto.
+      inv WTcontrol.
+      simpl in *. take (_ < _) and apply skip_branches_with_In with (s := s) in it; eauto.
     Qed.
 
   End Expressions.
   Hint Resolve translate_exp_wt translate_cexp_wt Control_wt.
 
+  Inductive trconstr_mems_spec (mems: PS.t) : trconstr -> Prop :=
+  | tmsDef: forall x ck e,
+      ~ PS.In x mems ->
+      trconstr_mems_spec mems (TcDef x ck e)
+| tmsReset: forall x ck ckrs e,
+      PS.In x mems ->
+      trconstr_mems_spec mems (TcReset x ck ckrs e)
+  | tmsNext: forall x ck ckrs e,
+      PS.In x mems ->
+      trconstr_mems_spec mems (TcNext x ck ckrs e)
+  | tmsIReset: forall s ck f,
+      trconstr_mems_spec mems (TcInstReset s ck f)
+  | tmsCall: forall s xs ck rst f es,
+      Forall (fun x => ~ PS.In x mems) xs ->
+      trconstr_mems_spec mems (TcStep s xs ck rst f es).
+
+  Inductive trconstr_insts_spec (insts: list (ident * ident)) : trconstr -> Prop :=
+  | tisDef: forall x ck e,
+      trconstr_insts_spec insts (TcDef x ck e)
+  | tisReset: forall x ck ckrs e,
+      trconstr_insts_spec insts (TcReset x ck ckrs e)
+  | tisNext: forall x ck ckrs e,
+      trconstr_insts_spec insts (TcNext x ck ckrs e)
+  | tisIReset: forall s ck f,
+      In (s, f) insts ->
+      trconstr_insts_spec insts (TcInstReset s ck f)
+  | tisCall: forall s xs ck rst f es,
+      In (s, f) insts ->
+      trconstr_insts_spec insts (TcStep s xs ck rst f es).
+
+  Lemma translate_tc_wt:
+    forall P insts Γm Γv Γm' Γv' memset clkvars tc,
+      type_env_spec (Γv ++ Γm) Γm' Γv' memset ->
+      trconstr_mems_spec memset tc ->
+      trconstr_insts_spec insts tc ->
+      NoDup (variables_tc tc) ->
+      wt_trconstr P Γv Γm tc ->
+      wt_stmt (translate P) insts Γm' Γv' (translate_tc memset clkvars tc).
+  Proof.
+    intros * TypeEnvSpec Spec_m Spec_i Nodup WT; induction WT; inv Spec_m; inv Spec_i;
+      try eapply Control_wt; eauto.
+    - eapply translate_cexp_wt; eauto.
+      assert (In (x, typeofc e) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+      apply TypeEnvSpec in Hin.
+      now rewrite PSE.mem_3 in Hin.
+    - inv H0; eapply Control_wt; eauto. 1-2:constructor; eauto.
+      + assert (In (x, Tprimitive (ctype_cconst c)) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+        apply TypeEnvSpec in Hin.
+        now rewrite PSF.mem_1 in Hin.
+      + econstructor; eauto.
+      + assert (In (x, Tenum tn) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+        apply TypeEnvSpec in Hin.
+        now rewrite PSF.mem_1 in Hin.
+      + econstructor; eauto.
+    - constructor; eauto.
+      rewrite typeof_correct.
+      assert (In (x, CE.Syn.typeof e) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+      apply TypeEnvSpec in Hin.
+      now rewrite PSF.mem_1 in Hin.
+    - take (find_system _ _ = _) and apply find_unit_transform_units_forward in it.
+      econstructor; eauto.
+      + apply exists_reset_method.
+      + constructor.
+      + constructor.
+    - take (find_system _ _ = _) and apply find_unit_transform_units_forward in it.
+      econstructor; eauto.
+      + apply exists_step_method.
+      + simpl.
+        take (NoDup _) and clear it.
+        take (Forall2 _ _ (s_out _)) and induction it as [|? (?&t&?)];
+          try (take (Forall _ (_ :: _)) and inv it); simpl; constructor; auto.
+        assert (In (x, t) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+        apply TypeEnvSpec in Hin.
+        now rewrite PSE.mem_3 in Hin.
+      + simpl.
+        take (NoDup _) and clear it.
+        take (Forall2 _ _ (s_in _)) and induction it as [|? (?&t&?)];
+          try (take (Forall _ (_ :: _)) and inv it); simpl; constructor; auto.
+        now rewrite typeof_arg_correct.
+      + apply Forall_map, Forall_forall; intros * Hin.
+        eapply translate_arg_wt; eauto.
+        eapply Forall_forall; eauto.
+  Qed.
+
+  Lemma translate_tcs_wt:
+    forall P insts Γm Γv Γm' Γv' memset clkvars tcs,
+      type_env_spec (Γv ++ Γm) Γm' Γv' memset ->
+      Forall (trconstr_mems_spec memset) tcs ->
+      Forall (trconstr_insts_spec insts) tcs ->
+      NoDup (variables tcs) ->
+      Forall (wt_trconstr P Γv Γm) tcs ->
+      wt_stmt (translate P) insts Γm' Γv' (translate_tcs memset clkvars tcs).
+  Proof.
+    intros * TypeEnvSpec Spec_m Spec_i Nodup WT.
+    cut (forall s,
+            wt_stmt (translate P) insts Γm' Γv' s ->
+            wt_stmt (translate P) insts Γm' Γv'
+                    (fold_left (fun i tc => Comp (translate_tc memset clkvars tc) i) tcs s));
+      unfold translate_tcs; eauto using wt_stmt.
+    induction tcs; simpl; auto.
+    inv Spec_m; inv Spec_i; inv WT; intros * WTs.
+    unfold variables in *; simpl in Nodup; apply NoDup_app'_iff in Nodup as (?&?&?).
+    apply IHtcs; auto.
+    constructor; auto.
+    eapply translate_tc_wt; eauto.
+  Qed.
+
+  Lemma s_trconstr_mems_spec:
+    forall s,
+      Forall (trconstr_mems_spec (ps_from_list (map fst (s_nexts s)))) (s_tcs s).
+  Proof.
+    intro.
+    pose proof (s_nexts_in_tcs s) as P.
+    pose proof (s_defined s) as P'.
+    pose proof (s_nodup_defined s) as N.
+    apply Permutation_map with (f := fst) in P.
+   rewrite mems_of_nexts_fst in P.
+    apply Forall_forall; intros tc Hin; destruct tc; constructor.
+    - rewrite ps_from_list_In, P.
+      apply Permutation_NoDup in P'; auto.
+      eapply NoDup_app_In; eauto.
+      apply Is_variable_in_variables, Exists_exists;
+        eauto using Is_variable_in_tc.
+    - rewrite ps_from_list_In, P.
+      apply s_reset_incl, resets_of_In. exists c.
+      apply Exists_exists; eauto using Is_reset_in_tc.
+    - rewrite ps_from_list_In, P.
+      apply nexts_of_In, Exists_exists;
+        eauto using Is_next_in_tc.
+    - apply Forall_forall; intros * Hin'.
+      rewrite ps_from_list_In, P.
+      apply Permutation_NoDup in P'; auto.
+      eapply NoDup_app_In; eauto.
+      apply Is_variable_in_variables, Exists_exists;
+        eauto using Is_variable_in_tc.
+  Qed.
+  Hint Resolve s_trconstr_mems_spec.
+
+  Lemma s_trconstr_insts_spec:
+    forall s,
+      Forall (trconstr_insts_spec (s_subs s)) (s_tcs s).
+  Proof.
+    intros.
+    pose proof (s_subs_steps_of s) as P.
+    apply Forall_forall; intros tc Hin; destruct tc; constructor.
+    - rewrite P.
+      apply s_ireset_incl.
+      clear P; induction (s_tcs s); try contradiction.
+      inv Hin; simpl; auto.
+      cases; right; auto.
+    - rewrite P.
+      clear P; induction (s_tcs s); try contradiction.
+      inv Hin; simpl; auto.
+      cases; right; auto.
+  Qed.
+  Hint Resolve s_trconstr_insts_spec.
+
+  Lemma s_type_env_spec:
+    forall s,
+      type_env_spec
+        (idty (s_in s ++ s_vars s ++ s_out s) ++ map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
+        (map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
+        (idty (s_in s) ++ idty (s_vars s) ++ idty (s_out s))
+        (ps_from_list (map fst (s_nexts s))).
+  Proof.
+    intros s x t Hin.
+    cases_eqn E.
+    - apply PSF.mem_2 in E; rewrite ps_from_list_In in E.
+      pose proof (s_nodup s) as N.
+      rewrite 2 app_assoc, Permutation_app_comm in N.
+      eapply NoDup_app_In in N; eauto.
+      rewrite Permutation_app_comm in Hin.
+      eapply not_In2_app; eauto.
+      intro Hin'; apply idty_InMembers in Hin'.
+      rewrite <-2 map_app, <-app_assoc, <-fst_InMembers in N.
+      contradiction.
+    - apply PSE.mem_4 in E; rewrite ps_from_list_In in E.
+      unfold meth_vars, step_method; simpl.
+      rewrite <-2 idty_app.
+      eapply not_In2_app; eauto.
+      intro Hin'; apply E.
+      apply in_map_iff in Hin' as ((?&((?&?)&?))& E' &?); simpl in *; inv E'.
+      change x with (fst (x, (c, t, c0))). now apply in_map.
+  Qed.
+
   Lemma step_wt:
     forall P s,
       wt_system P s ->
       wt_method (translate P) (s_subs s)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_nexts s))
+                (map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
                 (step_method s).
   Proof.
-    unfold wt_system, wt_method; intros * WT; simpl.
-    unfold translate_tcs, meth_vars.
-
-    pose proof (s_nodup_variables s) as NodupVars.
-    unfold variables in NodupVars.
-    assert (incl (steps_of (s_tcs s)) (s_subs s)) as Subs
-        by (rewrite s_subs_steps_of; apply incl_refl).
-    assert (incl (iresets_of (s_tcs s)) (s_subs s)) as Subs'
-        by (eapply incl_tran; eauto; apply s_ireset_incl; auto).
-
-    induction (s_tcs s) as [|tc tcs]; inversion_clear WT as [|?? WTtc];
-      simpl; eauto using wt_stmt.
-
-    simpl in NodupVars;
-      pose proof NodupVars as NodupVars';
-      rewrite Permutation_app_comm in NodupVars';
-      apply NoDup_app_weaken in NodupVars';
-        apply NoDup_app_weaken in NodupVars.
-    assert (incl (steps_of tcs) (s_subs s))
-      by (destruct tc; simpl in *; auto;
-          apply incl_cons' in Subs as (? & ?); auto).
-    assert (incl (iresets_of tcs) (s_subs s))
-      by (destruct tc; simpl in *; auto;
-          apply incl_cons' in Subs' as (? & ?); auto).
-
-    rewrite 2 idty_app in WTtc.
-    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_nexts s)) in *;
-      set (vars := idty (s_in s) ++ idty (s_vars s) ++ idty (s_out s)) in *;
-      set (nvars := vars ++ mems) in *.
-    apply wt_stmt_fold_left_shift; intuition.
-    constructor; eauto using wt_stmt.
-    assert (forall x ty,
-               In (x, ty) nvars ->
-               if PS.mem x (ps_from_list (map fst (s_nexts s)))
-               then In (x, ty) mems
-               else In (x, ty) vars)
-    as NvarsSpec.
-    { clear.
-      assert (map fst (s_nexts s) = map fst mems) as ->
-          by (subst mems; rewrite map_map; simpl; auto).
-      subst nvars.
-      assert (NoDupMembers (vars ++ mems)) as Nodup.
-      { subst vars mems.
-        apply fst_NoDupMembers.
-        rewrite 3 map_app, 3 map_fst_idty, map_map; simpl.
-        rewrite <-2 app_assoc. apply s_nodup.
-      }
-      intros * Hin; apply in_app in Hin as [Hin|Hin].
-      - pose proof Hin.
-        eapply In_InMembers, NoDupMembers_app_InMembers in Hin; eauto.
-        cases_eqn E.
-        apply PSE.MP.Dec.F.mem_iff, ps_from_list_In, fst_InMembers in E.
-        contradiction.
-      - pose proof Hin.
-        rewrite Permutation_app_comm in Nodup.
-        apply in_map with (f := fst) in Hin; simpl in Hin.
-        apply ps_from_list_In in Hin; rewrite PSE.MP.Dec.F.mem_iff in Hin.
-        rewrite Hin; auto.
-    }
-    destruct tc; inversion_clear WTtc as [| | |????? Find|???????? Find Outs Ins ? Exps];
-      simpl in *; eauto.
-    - eapply Control_wt; eauto.
-      constructor; eauto.
-      constructor.
-    - eapply Control_wt; eauto.
-      constructor; eauto.
-      now rewrite typeof_correct.
-    - apply incl_cons' in Subs' as (? & ?).
-      apply find_system_translate in Find as (?&?&?&?&?); subst.
-      eapply Control_wt; eauto.
-      econstructor; eauto.
-      + apply exists_reset_method.
-      + simpl; constructor.
-      + simpl; constructor.
-    - apply incl_cons' in Subs as (? & ?).
-      apply find_system_translate in Find as (?&?&?&?&?); subst.
-      eapply Control_wt; eauto.
-      econstructor; eauto.
-      + apply exists_step_method.
-      + simpl; clear - Outs; induction Outs as [|? (?&(?&?))]; simpl; constructor; auto.
-      + simpl; clear - Ins; induction Ins as [|? (?&(?&?))]; simpl; constructor; auto.
-        now rewrite typeof_arg_correct.
-      + clear - Exps NvarsSpec; induction Exps; simpl; constructor; eauto.
-        eapply translate_arg_wt; eauto.
+    unfold wt_system, wt_method; intros * (WT &?& Henums); simpl.
+    split.
+    - eapply translate_tcs_wt; eauto using s_nodup_variables.
+      unfold meth_vars, step_method; simpl.
+      apply s_type_env_spec.
+    - unfold meth_vars, step_method; simpl.
+      do 2 setoid_rewrite <-idty_app; auto.
   Qed.
   Hint Resolve step_wt.
 
   Lemma reset_mems_wt:
-    forall P insts mems resets,
-      (forall x c ck, In (x, (c, ck)) resets -> In (x, type_const c) mems) ->
-      wt_stmt (translate P) insts mems [] (reset_mems resets).
+    forall P insts Γm inits,
+      (forall x c t ck, In (x, (c, t, ck)) inits -> In (x, t) Γm) ->
+      wt_nexts P inits ->
+      wt_stmt (translate P) insts Γm [] (reset_mems inits).
   Proof.
-    unfold reset_mems; intros * Spec.
-    induction resets as [|(x, (c, ck))]; simpl; eauto using wt_stmt.
+    unfold reset_mems; intros * Spec WT.
+    induction inits as [|(x, ((c, t), ck))]; simpl; eauto using wt_stmt;
+      inversion_clear WT as [|?? WTc].
     rewrite wt_stmt_fold_left_lift; split; auto.
-    - apply IHresets.
+    - apply IHinits; auto.
       intros; eapply Spec; right; eauto.
     - constructor; eauto using wt_stmt.
-      constructor; eauto using wt_exp; simpl; auto.
-      eapply Spec; left; eauto.
+      cases; inv WTc; constructor; eauto using wt_exp;
+        eapply Spec; left; eauto.
   Qed.
 
   Lemma reset_insts_wt_permutation:
-    forall subs subs' prog insts mems vars,
+    forall subs subs' prog insts Γm Γv,
       Permutation subs' subs ->
-      wt_stmt prog insts mems vars (reset_insts subs) ->
-      wt_stmt prog insts mems vars (reset_insts subs').
+      wt_stmt prog insts Γm Γv (reset_insts subs) ->
+      wt_stmt prog insts Γm Γv (reset_insts subs').
   Proof.
     unfold reset_insts.
     induction 1; simpl; auto; intros * WT.
@@ -258,12 +424,12 @@ Module Type STC2OBCTYPING
   Qed.
 
   Lemma reset_insts_wt:
-    forall P insts mems s,
+    forall P insts Γm s,
       wt_system P s ->
       incl (s_subs s) insts ->
-      wt_stmt (translate P) insts mems [] (reset_insts (s_subs s)).
+      wt_stmt (translate P) insts Γm [] (reset_insts (s_subs s)).
   Proof.
-    unfold wt_system; intros * WT Spec.
+    unfold wt_system; intros * (WT&?) Spec.
     eapply reset_insts_wt_permutation; try apply s_subs_steps_of.
     rewrite s_subs_steps_of in Spec.
     unfold reset_insts.
@@ -273,7 +439,7 @@ Module Type STC2OBCTYPING
     rewrite wt_stmt_fold_left_lift; split; auto.
     constructor; eauto using wt_stmt.
     inversion_clear WTtc as [| | | |???????? Find].
-    apply find_system_translate in Find as (?&?&?&?&?); subst.
+    apply find_unit_transform_units_forward in Find.
     econstructor; eauto.
     - apply exists_reset_method.
     - constructor.
@@ -285,18 +451,19 @@ Module Type STC2OBCTYPING
     forall P s,
       wt_system P s ->
       wt_method (translate P) (s_subs s)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_nexts s))
+                (map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
                 (reset_method s).
   Proof.
-    unfold wt_system, wt_method; intros * WT; simpl.
+    unfold wt_system, wt_method; intros * (WT & WTinits & Henums).
     unfold translate_tcs, meth_vars, translate_reset; simpl.
+    split; try contradiction.
     constructor.
-    - clear WT.
-      apply reset_mems_wt.
-      intros * Hin; induction (s_nexts s) as [|(x', (c', ck'))];
+    - apply reset_mems_wt; auto.
+      clear WT WTinits.
+      intros * Hin; induction (s_nexts s) as [|(x', ((c', t'), ck'))];
         simpl; inv Hin; auto.
       left; congruence.
-    - apply reset_insts_wt; auto.
+    - apply reset_insts_wt; try now constructor.
       apply incl_refl.
   Qed.
   Hint Resolve reset_wt.
@@ -306,13 +473,13 @@ Module Type STC2OBCTYPING
       wt_system P s ->
       wt_class (translate P) (translate_system s).
   Proof.
-    unfold wt_system; intros * WT.
+    unfold wt_system; intros * WT; pose proof WT as WT'; destruct WT as (WT&?).
     constructor; simpl; eauto using Forall_cons.
     rewrite s_subs_steps_of.
     induction (s_tcs s) as [|[]]; simpl; inversion_clear WT as [|?? WTtc]; auto;
       constructor; simpl; auto.
     inversion_clear WTtc as [| | | |???????? Find].
-    apply find_system_translate in Find as (?&?& -> &?); discriminate.
+    apply find_unit_transform_units_forward in Find; setoid_rewrite Find; discriminate.
   Qed.
   Hint Resolve translate_system_wt.
 
@@ -321,12 +488,7 @@ Module Type STC2OBCTYPING
       Stc.Typ.wt_program P ->
       wt_program (translate P).
   Proof.
-    intros * WT.
-    induction P as [|b]; simpl; auto with obctyping.
-    inv WT.
-    constructor; auto.
-    unfold translate.
-    now apply Forall_map.
+    intros; eapply transform_units_wt_program; eauto.
   Qed.
 
 End STC2OBCTYPING.
@@ -334,12 +496,14 @@ End STC2OBCTYPING.
 Module Stc2ObcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (Str   : INDEXEDSTREAMS  Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Str)
-       (Stc   : STC         Ids Op OpAux Str CE)
-       (Obc   : OBC         Ids Op OpAux)
-       (Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
-<: STC2OBCTYPING Ids Op OpAux Str CE Stc Obc Trans.
-  Include STC2OBCTYPING Ids Op OpAux Str CE Stc Obc Trans.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (ComTyp: COMMONTYPING    Ids Op OpAux)
+       (Cks   : CLOCKS          Ids Op OpAux)
+       (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CE    : COREEXPR        Ids Op OpAux ComTyp Cks Str)
+       (Stc   : STC             Ids Op OpAux ComTyp Cks Str CE)
+       (Obc   : OBC             Ids Op OpAux ComTyp)
+       (Trans : TRANSLATION     Ids Op OpAux Cks CE.Syn Stc.Syn Obc.Syn)
+<: STC2OBCTYPING Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans.
+  Include STC2OBCTYPING Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans.
 End Stc2ObcTypingFun.

@@ -1,12 +1,12 @@
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-From Coq Require Import Omega.
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Arith.Compare_dec.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
@@ -49,45 +49,31 @@ Set Implicit Arguments.
 Module Type NLMEMSEMANTICS
        (Import Ids      : IDS)
        (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX           Op)
-       (Import CESyn    : CESYNTAX                Op)
-       (Import Syn      : NLSYNTAX            Ids Op       CESyn)
-       (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
-       (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
-       (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
-       (Import IsV      : ISVARIABLE          Ids Op       CESyn Syn                 Mem IsD)
-       (Import NoD      : NODUP               Ids Op       CESyn Syn                 Mem IsD IsV)
-       (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clo      : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem                     CEClo)
-       (Import CloSem   : NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clo CECloSem).
+       (Import OpAux    : OPERATORS_AUX       Ids Op)
+       (Import Cks      : CLOCKS              Ids Op OpAux)
+       (Import CESyn    : CESYNTAX            Ids Op OpAux Cks)
+       (Import Syn      : NLSYNTAX            Ids Op OpAux Cks CESyn)
+       (Import Str      : INDEXEDSTREAMS      Ids Op OpAux Cks)
+       (Import Ord      : NLORDERED           Ids Op OpAux Cks CESyn Syn)
+       (Import CESem    : CESEMANTICS         Ids Op OpAux Cks CESyn     Str)
+       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux Cks CESyn Syn Str Ord CESem)
+       (Import Mem      : MEMORIES            Ids Op OpAux Cks CESyn Syn)
+       (Import IsD      : ISDEFINED           Ids Op OpAux Cks CESyn Syn                 Mem)
+       (Import IsV      : ISVARIABLE          Ids Op OpAux Cks CESyn Syn                 Mem IsD)
+       (Import NoD      : NODUP               Ids Op OpAux Cks CESyn Syn                 Mem IsD IsV)
+       (Import CEClo    : CECLOCKING          Ids Op OpAux Cks CESyn)
+       (Import Clo      : NLCLOCKING          Ids Op OpAux Cks CESyn Syn     Ord         Mem IsD CEClo)
+       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn     Str     CESem                     CEClo)
+       (Import CloSem   : NLCLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clo CECloSem).
 
-  Definition memories := stream (memory val).
+  Definition memories := stream (memory value).
 
   Definition memory_masked (k: nat) (rs: cstream) (M Mk: memories) :=
     forall n,
       count rs n = (if rs n then S k else k) ->
       M n = Mk n.
 
-  (* Definition mfby (x: ident) (c0: val) (xs: stream value) (M: memories) (ys: stream value) : Prop := *)
-  (*   find_val x (M 0) = Some c0 *)
-  (*   /\ forall n, match find_val x (M n) with *)
-  (*          | Some mv => *)
-  (*            match xs n with *)
-  (*            | absent => *)
-  (*              find_val x (M (S n)) = Some mv *)
-  (*              /\ ys n = absent *)
-  (*            | present v => *)
-  (*              find_val x (M (S n)) = Some v *)
-  (*              /\ ys n = present mv *)
-  (*            end *)
-  (*          | None => False *)
-  (*          end. *)
-
-  Definition mfbyreset (x: ident) (c0: val) (xs: stream value) (rs: stream bool) (M: memories) (ys: stream value) : Prop :=
+  Definition mfbyreset (x: ident) (c0: value) (xs: stream svalue) (rs: stream bool) (M: memories) (ys: stream svalue) : Prop :=
     find_val x (M 0) = Some c0
     /\ forall n, match find_val x (M n) with
            | Some mv =>
@@ -115,9 +101,9 @@ Module Type NLMEMSEMANTICS
 
     Variable G: global.
 
-    Definition memory_closed (M: memory val) (eqs: list equation) : Prop :=
+    Definition memory_closed (M: memory value) (eqs: list equation) : Prop :=
       (forall i, find_inst i M <> None -> InMembers i (gather_insts eqs))
-      /\ forall x, find_val x M <> None -> In x (gather_mems eqs).
+      /\ forall x, find_val x M <> None -> In x (map fst (gather_mems eqs)).
 
     Definition memory_closed_n (M: memories) (eqs: list equation) : Prop :=
       forall n, memory_closed (M n) eqs.
@@ -152,7 +138,7 @@ Module Type NLMEMSEMANTICS
           msem_equation bk H M (EqFby x ck c0 le xrs)
 
     with msem_node:
-           ident -> stream (list value) -> memories -> stream (list value) -> Prop :=
+           ident -> stream (list svalue) -> memories -> stream (list svalue) -> Prop :=
            SNode:
              forall bk H f xss M yss n,
                bk = clock_of xss ->
@@ -177,7 +163,7 @@ Module Type NLMEMSEMANTICS
     Variable G: global.
 
     Variable P_equation: stream bool -> history -> memories -> equation -> Prop.
-    Variable P_node: ident -> stream (list value) -> memories -> stream (list value) -> Prop.
+    Variable P_node: ident -> stream (list svalue) -> memories -> stream (list svalue) -> Prop.
 
     Hypothesis EqDefCase:
       forall bk H M x ck xs ce,
@@ -228,9 +214,9 @@ Module Type NLMEMSEMANTICS
       : P_equation b H M e
     with msem_node_mult
            (f: ident)
-           (xss: stream (list value))
+           (xss: stream (list svalue))
            (M: memories)
-           (oss: stream (list value))
+           (oss: stream (list svalue))
            (Sem: msem_node G f xss M oss) {struct Sem}
          : P_node f xss M oss.
     Proof.
@@ -253,30 +239,26 @@ Module Type NLMEMSEMANTICS
 
   End msem_node_mult.
 
-  Definition msem_nodes (G: global) : Prop :=
-    Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
-
-
   (** ** Properties *)
 
   (** *** Environment cons-ing lemmas *)
 
   Lemma msem_node_cons:
-    forall n G f xs M ys,
-      Ordered_nodes (n :: G) ->
-      msem_node (n :: G) f xs M ys ->
+    forall n G f xs M ys enums,
+      Ordered_nodes (Global enums (n :: G)) ->
+      msem_node (Global enums (n :: G)) f xs M ys ->
       n.(n_name) <> f ->
-      msem_node G f xs M ys.
+      msem_node (Global enums G) f xs M ys.
   Proof.
     Hint Constructors msem_node msem_equation.
-    intros * Hord Hsem Hnf.
+    intros ?????? enums Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [ |????????????????????? Hsems|
                        |???????? Hf ????? IH]
         using msem_node_mult
       with (P_equation := fun bk H M eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
-                            msem_equation G bk H M eq);
+                            msem_equation (Global enums G) bk H M eq);
       eauto.
     - intro Hnin.
       econstructor; eauto.
@@ -284,54 +266,36 @@ Module Type NLMEMSEMANTICS
       eexists; split; eauto.
       apply IH; intro; apply Hnin; subst. constructor.
     - intro.
-      rewrite find_node_tl with (1:=Hnf) in Hf.
+      rewrite find_node_other with (1:=Hnf) in Hf.
       econstructor; eauto.
-      apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
+      apply find_node_other_not_Is_node_in with (2:=Hf) in Hord.
       apply Is_node_in_Forall in Hord.
       apply Forall_Forall with (1:=Hord) in IH.
       apply Forall_impl with (2:=IH).
       intuition.
   Qed.
 
-  Lemma find_node_other_name:
-    forall G f n n',
-      find_node f G = Some n' ->
-      Forall (fun n' => n.(n_name) <> n'.(n_name)) G ->
-      n.(n_name) <> f.
-  Proof.
-    intros G f n n' Hfind Hnin Hnf.
-    rewrite Hnf in Hnin.
-    pose proof (find_node_name _ _ _ Hfind).
-    apply find_node_split in Hfind.
-    destruct Hfind as [bG [aG Hge]].
-    rewrite Hge in Hnin.
-    apply Forall_app in Hnin.
-    destruct Hnin as [H' Hfg]; clear H'.
-    inversion_clear Hfg.
-    now take (f<>_) and apply it.
-  Qed.
-
   Lemma msem_cons2:
-    forall n G,
-      Ordered_nodes G ->
+    forall n G enums,
+      Ordered_nodes (Global enums G) ->
       Forall (fun n' => n.(n_name) <> n'.(n_name)) G ->
       (forall f xv M yv,
-          msem_node G f xv M yv ->
-          msem_node (n :: G) f xv M yv)
+          msem_node (Global enums G) f xv M yv ->
+          msem_node (Global enums (n :: G)) f xv M yv)
       /\
       (forall bk R M eq,
-          msem_equation G bk R M eq ->
+          msem_equation (Global enums G) bk R M eq ->
           ~Is_node_in_eq n.(n_name) eq ->
-          msem_equation (n::G) bk R M eq).
+          msem_equation (Global enums (n::G)) bk R M eq).
   Proof.
-    intros n G OG Fn.
+    intros n G enums OG Fn.
     apply msem_node_equation_ind; try (now intros; econstructor; eauto).
     - intros. econstructor; eauto. intro k.
       take (forall k, exists Mr, _) and specialize (it k);
         destruct it as (Mk & ? & ? & ?).
       exists Mk. split; auto.
     - intros.
-      take (find_node f G = Some _) and rename it into Ff.
+      take (find_node f _ = Some _) and rename it into Ff.
       econstructor; eauto.
       + rewrite <-find_node_other in Ff; eauto.
         apply find_node_In in Ff as (? & Ff).
@@ -344,27 +308,28 @@ Module Type NLMEMSEMANTICS
   Qed.
 
   Lemma msem_node_cons2:
-    forall n G f xs M ys,
-      Ordered_nodes G ->
-      msem_node G f xs M ys ->
+    forall n G f xs M ys enums,
+      Ordered_nodes (Global enums G) ->
+      msem_node (Global enums G) f xs M ys ->
       Forall (fun n' => n_name n <> n_name n') G ->
-      msem_node (n :: G) f xs M ys.
+      msem_node (Global enums (n :: G)) f xs M ys.
   Proof. intros; apply msem_cons2; auto. Qed.
 
   Lemma msem_equations_cons:
-    forall G bk H M eqs n,
-      Ordered_nodes (n :: G) ->
+    forall G bk H M eqs n enums,
+      Ordered_nodes (Global enums (n :: G)) ->
       ~Is_node_in n.(n_name) eqs ->
-      (Forall (msem_equation G bk H M) eqs <->
-       Forall (msem_equation (n :: G) bk H M) eqs).
+      (Forall (msem_equation (Global enums G) bk H M) eqs <->
+       Forall (msem_equation (Global enums (n :: G)) bk H M) eqs).
   Proof.
     intros * Hord Hnini.
     induction eqs as [|eq eqs IH]; [now constructor|].
     apply not_Is_node_in_cons in Hnini as [Hnini Hninis].
     split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
       apply IH in Heqs; auto; constructor; auto.
-    - inv Hord.
-      destruct Heq as [|????????????????????? Hsems|]; eauto.
+    - inversion_clear Hord as [|?? []].
+      destruct Heq as [|????????????????????? Hsems|];
+        eauto using msem_node_cons2.
       econstructor; eauto.
       intro k; destruct (Hsems k) as (?&?&?).
       eexists; split; eauto using msem_node_cons2.
@@ -376,29 +341,9 @@ Module Type NLMEMSEMANTICS
       eexists; split; eauto using msem_node_cons.
   Qed.
 
-  Lemma find_node_msem_node:
-    forall G f,
-      msem_nodes G ->
-      find_node f G <> None ->
-      exists xs M ys,
-        msem_node G f xs M ys.
-  Proof.
-    intros G f Hnds Hfind.
-    apply find_node_Exists in Hfind.
-    apply Exists_exists in Hfind.
-    destruct Hfind as [nd [Hin Hf]].
-    unfold msem_nodes in Hnds.
-    rewrite Forall_forall in Hnds.
-    apply Hnds in Hin.
-    destruct Hin as [xs [M [ys Hmsem]]].
-    exists xs, M, ys.
-    rewrite Hf in *.
-    exact Hmsem.
-  Qed.
-
   (** *** VelusMemory management *)
 
-  Definition add_val_n (y: ident) (ms: stream val) (M: memories): memories :=
+  Definition add_val_n (y: ident) (ms: stream value) (M: memories): memories :=
     fun n => add_val y (ms n) (M n).
 
   (* Lemma mfby_add_val_n: *)
@@ -652,7 +597,7 @@ dataflow memory for which the non-standard semantics holds true.
     Qed.
 
     Lemma memory_closed_empty:
-      memory_closed_n (fun _ : nat => empty_memory val) [].
+      memory_closed_n (fun _ : nat => empty_memory _) [].
     Proof.
       constructor; simpl.
       - setoid_rewrite find_inst_gempty; congruence.
@@ -683,33 +628,25 @@ dataflow memory for which the non-standard semantics holds true.
       sem_node G f xs ys ->
       exists M, msem_node G f xs M ys.
   Proof.
-    induction G as [|node].
+    intros (enums & G); induction G as [|node].
     inversion 2;
-      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Hfind ??? Heqs].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hfind.
-    simpl in Hfind.
-    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+    apply option_map_inv in Hfind as ((?&?)& Hfind &?); simpl in *; subst.
+    eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl; eauto.
     - assert (Hord':=Hord).
-      inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
+      inversion Hord as [|? ? [Hnneqs Hnn]]; subst.
       inv Hfind.
       eapply Forall_sem_equation_global_tl in Heqs; eauto.
-      assert (forall f xs ys,
-                 sem_node G f xs ys ->
-                 exists M, msem_node G f xs M ys) as IHG'
-          by auto.
-      assert (exists M1, Forall (msem_equation G (clock_of xs) H M1) n.(n_eqs)
-                    /\ memory_closed_n M1 n.(n_eqs))
-        as (M1 & Hmsem &?)
-          by (eapply sem_msem_eqs; eauto; apply NoDup_defs_node).
-      exists M1.
+      eapply sem_msem_eqs in Heqs as (M & ?&?); eauto using NoDup_defs_node.
+      exists M.
       econstructor; eauto.
       rewrite <-msem_equations_cons; eauto.
-    - apply ident_eqb_neq in Hnf.
-      apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
+    - apply sem_node_cons with (1:=Hord) in Hsem; auto.
       inv Hord.
       eapply IHG in Hsem as (M &?); eauto.
       exists M.
@@ -742,7 +679,7 @@ dataflow memory for which the non-standard semantics holds true.
       specialize (Values1 x); specialize (Values2 x).
       destruct (Env.find x (values (M1 0))) eqn: Find1;
         destruct (Env.find x (values (M2 0))) eqn: Find2; auto.
-      + assert (In x (gather_mems eqs)) as Hin by (apply Values1; congruence).
+      + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values1; congruence).
         clear Values1 Values2.
         induction eqs as [|[]]; simpl in Hin; try contradiction;
           inv Nodup;
@@ -752,7 +689,7 @@ dataflow memory for which the non-standard semantics holds true.
         inversion_clear Heq1 as [| |????????????????? (Find1'&?)];
           inversion_clear Heq2 as [| |????????????????? (Find2'&?)];
           unfold find_val in *; congruence.
-      + assert (In x (gather_mems eqs)) as Hin by (apply Values1; congruence).
+      + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values1; congruence).
         clear Values1 Values2.
         induction eqs as [|[]]; simpl in Hin; try contradiction;
           inv Nodup;
@@ -762,7 +699,7 @@ dataflow memory for which the non-standard semantics holds true.
         inversion_clear Heq1 as [| |????????????????? (Find1'&?)];
           inversion_clear Heq2 as [| |????????????????? (Find2'&?)];
           unfold find_val in *; congruence.
-      + assert (In x (gather_mems eqs)) as Hin by (apply Values2; congruence).
+      + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values2; congruence).
         clear Values1 Values2.
         induction eqs as [|[]]; simpl in Hin; try contradiction;
           inv Nodup;
@@ -826,27 +763,26 @@ dataflow memory for which the non-standard semantics holds true.
       msem_node G f xss2 M2 yss2 ->
       M1 0 ≋ M2 0.
   Proof.
-    induction G as [|node].
+    intros (enums & G); induction G as [|node].
     inversion 2;
-      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem1 Hsem2.
     assert (Hsem1' := Hsem1);  assert (Hsem2' := Hsem2).
     inversion_clear Hsem1' as [??????? Clock1 Hfind1 Ins1 ?? Heqs1];
       inversion_clear Hsem2' as [??????? Clock2 Hfind2 Ins2 ?? Heqs2].
     rewrite Hfind2 in Hfind1; inv Hfind1.
-    pose proof Hord; inv Hord.
+    inversion Hord as [|?? []]; subst.
     pose proof Hfind2.
-    simpl in Hfind2.
-    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+    apply option_map_inv in Hfind2 as ((?&?)& Hfind2 &?); simpl in *; subst.
+    eapply find_unit_cons in Hfind2 as [[E Hfind2]|[E Hfind2]]; simpl; eauto.
     - inv Hfind2.
-      assert (~ Is_node_in n.(n_name) n.(n_eqs))
-        by (eapply find_node_not_Is_node_in with (G:=n::G); eauto).
+      assert (~ Is_node_in node.(n_name) node.(n_eqs))
+        by (eapply find_node_not_Is_node_in with (G := Global enums (node::G)); eauto).
       eapply msem_equations_cons in Heqs1; eauto.
       eapply msem_equations_cons in Heqs2; eauto.
       eapply msem_eqs_same_initial_memory; eauto.
       apply NoDup_defs_node.
-    - assert (n_name node <> f) by now apply ident_eqb_neq.
-      eapply msem_node_cons in Hsem1; eapply msem_node_cons in Hsem2; eauto.
+    - eapply msem_node_cons in Hsem1; eapply msem_node_cons in Hsem2; eauto.
   Qed.
 
   (** Absent Until *)
@@ -876,9 +812,9 @@ dataflow memory for which the non-standard semantics holds true.
       destruct Mfby as (Init & Spec); auto.
     specialize (Spec n).
     destruct (find_val x (M n)); try contradiction.
-    rewrite Abs in Spec; try omega.
+    rewrite Abs in Spec; try lia.
     destruct (rs n); destruct Spec as [->]; auto.
-    apply IHn; omega.
+    apply IHn; lia.
   Qed.
 
   Lemma msem_eqs_absent_until:
@@ -906,7 +842,7 @@ dataflow memory for which the non-standard semantics holds true.
       specialize (Values x); specialize (Values0 x).
       destruct (Env.find x (values (M n))) eqn: Find;
         destruct (Env.find x (values (M 0))) eqn: Find0; auto.
-      + assert (In x (gather_mems eqs)) as Hin by (apply Values; congruence).
+      + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values; congruence).
         clear Values Values0.
         induction eqs as [|[]]; simpl in Hin; try contradiction;
           inv Nodup;
@@ -918,7 +854,7 @@ dataflow memory for which the non-standard semantics holds true.
         intros k ?; specialize (Sem k). inv Sem; auto.
         rewrite Absbk in *; auto.
         exfalso; eapply not_subrate_clock; eauto.
-      + assert (In x (gather_mems eqs)) as Hin by (apply Values; congruence).
+      + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values; congruence).
         clear Values Values0.
         induction eqs as [|[]]; simpl in Hin; try contradiction;
           inv Nodup;
@@ -927,7 +863,7 @@ dataflow memory for which the non-standard semantics holds true.
         inversion_clear Heq as [| |???????????? Sem ???? Mfby].
         pose proof Mfby as Mfby'; destruct Mfby'.
         eapply mfbyreset_absent_until in Mfby; unfold find_val in *; eauto; try congruence.
-      + assert (In x (gather_mems eqs)) as Hin by (apply Values0; congruence).
+      + assert (In x (map fst (gather_mems eqs))) as Hin by (apply Values0; congruence).
         clear Values Values0.
         induction eqs as [|[]]; simpl in Hin; try contradiction;
           inv Nodup;
@@ -998,9 +934,9 @@ dataflow memory for which the non-standard semantics holds true.
       (forall n, n < n0 -> absent_list (xss n)) ->
       forall n, n <= n0 -> M n ≋ M 0.
   Proof.
-    induction G as [|node].
+    intros ? (?& G); induction G as [|node].
     inversion 2;
-      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem Abs n Spec.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Clock Hfind Ins ?? Heqs].
@@ -1012,14 +948,13 @@ dataflow memory for which the non-standard semantics holds true.
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inv Hord.
     pose proof Hfind.
-    simpl in Hfind.
-    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+    apply option_map_inv in Hfind as ((?&?)& Hfind &?); simpl in *; subst.
+    eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl; eauto.
     - inv Hfind.
       eapply msem_equations_cons in Heqs; eauto.
       eapply msem_eqs_absent_until; eauto.
       apply NoDup_defs_node.
     - eapply msem_node_cons in Hsem; eauto.
-      now apply ident_eqb_neq.
   Qed.
 
 
@@ -1137,21 +1072,22 @@ End NLMEMSEMANTICS.
 Module NLMemSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX           Op)
-       (CESyn : CESYNTAX                Op)
-       (Syn   : NLSYNTAX            Ids Op       CESyn)
-       (Str   : INDEXEDSTREAMS          Op OpAux)
-       (Ord   : NLORDERED           Ids Op       CESyn Syn)
-       (CESem : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Sem   : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Mem   : MEMORIES            Ids Op       CESyn Syn)
-       (IsD   : ISDEFINED           Ids Op       CESyn Syn                 Mem)
-       (IsV   : ISVARIABLE          Ids Op       CESyn Syn                 Mem IsD)
-       (NoD   : NODUP               Ids Op       CESyn Syn                 Mem IsD IsV)
-       (CEClo : CECLOCKING          Ids Op       CESyn)
-       (Clo   : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEClo)
-       (CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem        CEClo)
-       (CloSem   : NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clo CECloSem)
-<: NLMEMSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD IsV NoD CEClo Clo CECloSem CloSem.
-  Include NLMEMSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD IsV NoD CEClo Clo CECloSem CloSem.
+       (OpAux : OPERATORS_AUX       Ids Op)
+       (Cks   : CLOCKS              Ids Op OpAux)
+       (CESyn : CESYNTAX            Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX            Ids Op OpAux Cks CESyn)
+       (Str   : INDEXEDSTREAMS      Ids Op OpAux Cks)
+       (Ord   : NLORDERED           Ids Op OpAux Cks CESyn Syn)
+       (CESem : CESEMANTICS         Ids Op OpAux Cks CESyn     Str)
+       (Sem   : NLINDEXEDSEMANTICS  Ids Op OpAux Cks CESyn Syn Str Ord CESem)
+       (Mem   : MEMORIES            Ids Op OpAux Cks CESyn Syn)
+       (IsD   : ISDEFINED           Ids Op OpAux Cks CESyn Syn                 Mem)
+       (IsV   : ISVARIABLE          Ids Op OpAux Cks CESyn Syn                 Mem IsD)
+       (NoD   : NODUP               Ids Op OpAux Cks CESyn Syn                 Mem IsD IsV)
+       (CEClo : CECLOCKING          Ids Op OpAux Cks CESyn)
+       (Clo   : NLCLOCKING          Ids Op OpAux Cks CESyn Syn     Ord         Mem IsD CEClo)
+       (CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn     Str     CESem                     CEClo)
+       (CloSem   : NLCLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clo CECloSem)
+<: NLMEMSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem Sem Mem IsD IsV NoD CEClo Clo CECloSem CloSem.
+  Include NLMEMSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem Sem Mem IsD IsV NoD CEClo Clo CECloSem CloSem.
 End NLMemSemanticsFun.

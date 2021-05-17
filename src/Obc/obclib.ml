@@ -13,20 +13,22 @@
 open Format
 open Veluscommon
 
-type ident = ClockDefs.ident
+type ident = Common.ident
 let extern_atom = Camlcoq.extern_atom
 
 module type SYNTAX =
   sig
     type typ
-    type const
+    type cconst
+    type enumtag
     type unop
     type binop
 
     type exp =
     | Var   of ident * typ
     | State of ident * typ
-    | Const of const
+    | Enum  of enumtag * typ
+    | Const of cconst
     | Unop  of unop  * exp * typ
     | Binop of binop * exp * exp * typ
     | Valid of ident * typ
@@ -34,7 +36,7 @@ module type SYNTAX =
     type stmt =
     | Assign   of ident * exp
     | AssignSt of ident * exp
-    | Ifte     of exp * stmt * stmt
+    | Switch   of exp * stmt option list * stmt
     | Comp     of stmt * stmt
     | Call     of ident list * ident * ident * ident * exp list
     | Skip
@@ -50,7 +52,10 @@ module type SYNTAX =
                        c_objs : (ident * ident) list;
                        c_methods : coq_method list }
 
-    type program = coq_class list
+    type program = {
+      enums: (ident * Datatypes.nat) list;
+      classes: coq_class list
+    }
   end
 
 module SyncFun (Obc: SYNTAX)
@@ -154,17 +159,19 @@ module SyncFun (Obc: SYNTAX)
 
  end
 
-module PrintFun (Obc: SYNTAX)
-                (PrintOps : PRINT_OPS with type typ   = Obc.typ
-                                       and type const = Obc.const
-                                       and type unop  = Obc.unop
-                                       and type binop = Obc.binop) :
-  sig
+module PrintFun
+    (Ops: PRINT_OPS)
+    (Obc: SYNTAX with type typ     = Ops.typ
+                  and type cconst  = Ops.cconst
+                  and type enumtag = Ops.enumtag
+                  and type unop    = Ops.unop
+                  and type binop   = Ops.binop) :
+sig
     val print_expr : formatter -> Obc.exp -> unit
     val print_stmt : formatter -> Obc.stmt -> unit
     val print_method  : Format.formatter -> Obc.coq_method -> unit
     val print_class   : Format.formatter -> Obc.coq_class -> unit
-    val print_program : Format.formatter -> Obc.coq_class list -> unit
+    val print_program : Format.formatter -> Obc.program -> unit
   end
   =
   struct
@@ -173,8 +180,9 @@ module PrintFun (Obc: SYNTAX)
       | Obc.Var _   -> (16, NA)
       | Obc.State _ -> (16, NA)
       | Obc.Const _ -> (16, NA)
-      | Obc.Unop (op, _, _)     -> PrintOps.prec_unop op
-      | Obc.Binop (op, _, _, _) -> PrintOps.prec_binop op
+      | Obc.Enum _ -> (16, NA)
+      | Obc.Unop (op, _, _)     -> Ops.prec_unop op
+      | Obc.Binop (op, _, _, _) -> Ops.prec_binop op
       | Obc.Valid _ -> (16, NA)
 
     let rec expr prec p e =
@@ -192,11 +200,13 @@ module PrintFun (Obc: SYNTAX)
       | Obc.State (id, _) ->
           fprintf p "state(%s)" (extern_atom id)
       | Obc.Const c ->
-          PrintOps.print_const p c
+          Ops.print_cconst p c
+      | Obc.Enum (c, _) ->
+          Ops.print_enumtag p c
       | Obc.Unop (op, e, ty) ->
-          PrintOps.print_unop p op ty (expr prec') e
+          Ops.print_unop p op ty (expr prec') e
       | Obc.Binop (op, e1, e2, ty) ->
-          PrintOps.print_binop p op ty (expr prec1) e1 (expr prec2) e2
+          Ops.print_binop p op ty (expr prec1) e1 (expr prec2) e2
       | Obc.Valid (id, _) ->
           fprintf p "[%s]" (extern_atom id)
       end;
@@ -216,16 +226,15 @@ module PrintFun (Obc: SYNTAX)
       match s with
       | Obc.Assign (id, e) ->
           fprintf p "@[<hv 2>%s :=@ %a@]" (extern_atom id)
-                                                    print_expr e
+            print_expr e
       | Obc.AssignSt (id, e) ->
           fprintf p "@[<hv 2>state(%s) :=@ %a@]" (extern_atom id)
-                                                           print_expr e
-      | Obc.Ifte (e, s1, s2) ->
-          fprintf p
-            "@[<v 2>if %a {@ %a@;<0 -2>} else {@ %a@;<0 -2>}@]"
             print_expr e
-            print_stmt s1
-            print_stmt s2
+      | Obc.Switch (e, ss, default) ->
+          fprintf p
+            "@[<v 2>switch %a {%a@]@;}"
+            print_expr e
+            (Ops.print_branches print_stmt) (ss, Some default)
       | Obc.Comp (s1, s2) ->
           fprintf p "%a;@ %a" print_stmt s1 print_stmt s2
       | Obc.Call ([], cls, i, m, es) ->
@@ -252,7 +261,7 @@ module PrintFun (Obc: SYNTAX)
     let print_decls =
       print_semicol_list
         (fun p (id, ty) ->
-          fprintf p "%a@ : %a" print_ident id PrintOps.print_typ ty)
+          fprintf p "%a@ : %a" print_ident id Ops.print_typ ty)
 
     let print_method p { Obc.m_name = name;
                          Obc.m_in   = inputs;
@@ -291,7 +300,7 @@ module PrintFun (Obc: SYNTAX)
         p objs;
       print_decl_list
         (fun p (id, ty) ->
-          fprintf p "@[<h>state %a@ : %a@]" print_ident id PrintOps.print_typ ty)
+          fprintf p "@[<h>state %a@ : %a@]" print_ident id Ops.print_typ ty)
         p mems;
       fprintf p "@;";
       print_methods p true meths;
@@ -299,6 +308,6 @@ module PrintFun (Obc: SYNTAX)
 
     let print_program p prog =
       fprintf p "@[<v 0>";
-      List.iter (fprintf p "%a@;@;" print_class) prog;
+      List.iter (fprintf p "%a@;@;" print_class) prog.Obc.classes;
       fprintf p "@]@."
   end

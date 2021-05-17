@@ -29,18 +29,19 @@ constraints in the NLustre semantic model.
 Module Type NLCLOCKINGSEMANTICS
        (Import Ids      : IDS)
        (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX           Op)
-       (Import CESyn    : CESYNTAX                Op)
-       (Import Syn      : NLSYNTAX            Ids Op       CESyn)
-       (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
-       (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
-       (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
-       (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem           CEClo).
+       (Import OpAux    : OPERATORS_AUX       Ids Op)
+       (Import Cks      : CLOCKS              Ids Op OpAux)
+       (Import CESyn    : CESYNTAX            Ids Op OpAux Cks)
+       (Import Syn      : NLSYNTAX            Ids Op OpAux Cks CESyn)
+       (Import Str      : INDEXEDSTREAMS      Ids Op OpAux Cks)
+       (Import Ord      : NLORDERED           Ids Op OpAux Cks CESyn Syn)
+       (Import CESem    : CESEMANTICS         Ids Op OpAux Cks CESyn     Str)
+       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux Cks CESyn Syn Str Ord CESem)
+       (Import Mem      : MEMORIES            Ids Op OpAux Cks CESyn Syn)
+       (Import IsD      : ISDEFINED           Ids Op OpAux Cks CESyn Syn                 Mem)
+       (Import CEClo    : CECLOCKING          Ids Op OpAux Cks CESyn)
+       (Import Clkg     : NLCLOCKING          Ids Op OpAux Cks CESyn Syn     Ord         Mem IsD CEClo)
+       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn     Str     CESem           CEClo).
 
   Lemma sem_clocked_var_eq:
     forall G bk H vars x ck eq,
@@ -125,7 +126,7 @@ Module Type NLCLOCKINGSEMANTICS
       apply NoDupMembers_det with (2:=Hin) in Hin'; eauto; subst yck'.
       specialize (Hscv' n); setoid_rewrite Forall_map in Hscv'.
       eapply Forall_forall in Hscv'; eauto; simpl in Hscv'.
-      apply wc_find_node with (1:=WCG) in Hfind as (G'' & G' & HG' & Hfind).
+      destruct G; apply wc_find_node with (1:=WCG) in Hfind as (G'' & G' & HG' & Hfind).
       destruct Hfind as (WCi & WCo & WCv & WCeqs).
       assert (In (x', xck) (idck (node'.(n_in) ++ node'.(n_out)))) as Hxin'
         by (rewrite idck_app, in_app; right;
@@ -162,7 +163,7 @@ Module Type NLCLOCKINGSEMANTICS
       apply Is_defined_in_In in Hxin as (eq & Heqin & Hxeq).
       eapply Forall_forall in IH; eauto.
         (* as (Hsem & IH). *)
-      apply wc_find_node with (1:=WCG) in Find'
+      destruct G; apply wc_find_node with (1:=WCG) in Find'
         as (G'' & G' & HG & (WCi & WCo & WCv & WCeqs)).
       eapply Forall_forall in WCeqs; eauto.
       assert (NoDupMembers (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
@@ -228,20 +229,21 @@ Module Type NLCLOCKINGSEMANTICS
 End NLCLOCKINGSEMANTICS.
 
 Module NLClockingSemanticsFun
-       (Import Ids      : IDS)
-       (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX           Op)
-       (Import CESyn    : CESYNTAX                Op)
-       (Import Syn      : NLSYNTAX            Ids Op       CESyn)
-       (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
-       (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
-       (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
-       (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem           CEClo)
-<: NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clkg CECloSem.
-  Include NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clkg CECloSem.
+       (Ids      : IDS)
+       (Op       : OPERATORS)
+       (OpAux    : OPERATORS_AUX       Ids Op)
+       (Cks      : CLOCKS              Ids Op OpAux)
+       (CESyn    : CESYNTAX            Ids Op OpAux Cks)
+       (Syn      : NLSYNTAX            Ids Op OpAux Cks CESyn)
+       (Str      : INDEXEDSTREAMS      Ids Op OpAux Cks)
+       (Ord      : NLORDERED           Ids Op OpAux Cks CESyn Syn)
+       (CESem    : CESEMANTICS         Ids Op OpAux Cks CESyn     Str)
+       (Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux Cks CESyn Syn Str Ord CESem)
+       (Mem      : MEMORIES            Ids Op OpAux Cks CESyn Syn)
+       (IsD      : ISDEFINED           Ids Op OpAux Cks CESyn Syn                 Mem)
+       (CEClo    : CECLOCKING          Ids Op OpAux Cks CESyn)
+       (Clkg     : NLCLOCKING          Ids Op OpAux Cks CESyn Syn     Ord         Mem IsD CEClo)
+       (CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn     Str     CESem           CEClo)
+<: NLCLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clkg CECloSem.
+  Include NLCLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem Sem Mem IsD CEClo Clkg CECloSem.
 End NLClockingSemanticsFun.

@@ -17,10 +17,11 @@ From Velus Require Import CoreExpr.CESemantics.
 Module Type CEINTERPRETER
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import Cks   : CLOCKS          Ids Op OpAux)
+       (Import CESyn : CESYNTAX        Ids Op OpAux Cks)
+       (Import Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CESem : CESEMANTICS Ids Op OpAux Cks CESyn Str).
 
   (** ** Instantaneous semantics *)
 
@@ -29,22 +30,21 @@ Module Type CEINTERPRETER
     Variable base : bool.
     Variable R: env.
 
-    Definition interp_vars_instant (xs: list ident): list value :=
+    Definition interp_vars_instant (xs: list ident): list svalue :=
       map (interp_var_instant R) xs.
 
-     Fixpoint interp_exp_instant (e: exp): value :=
+     Fixpoint interp_exp_instant (e: exp): svalue :=
       match e with
       | Econst c =>
-        if base then present (sem_const c) else absent
+        if base then present (Vscalar (sem_cconst c)) else absent
+      | Eenum x _ =>
+        if base then present (Venum x) else absent
       | Evar x _ =>
         interp_var_instant R x
       | Ewhen e x b =>
         match interp_var_instant R x, interp_exp_instant e with
-        | present xv, present ev =>
-          match val_to_bool xv with
-          | Some b' => if b ==b b' then present ev else absent
-          | None => absent
-          end
+        | present (Venum b'), present ev =>
+          if b ==b b' then present ev else absent
         | _, _ => absent
         end
       | Eunop op e _ =>
@@ -67,47 +67,43 @@ Module Type CEINTERPRETER
         end
       end.
 
-    Definition interp_exps_instant (les: list exp): list value :=
+    Definition interp_exps_instant (les: list exp): list svalue :=
       map interp_exp_instant les.
 
-    Fixpoint interp_cexp_instant (e: cexp): value :=
+    Fixpoint interp_cexp_instant (e: cexp): svalue :=
       match e with
-      | Emerge x t f =>
-        match interp_var_instant R x, interp_cexp_instant t, interp_cexp_instant f with
-        | present xv, present tv, absent =>
-          if xv ==b true_val then present tv else absent
-        | present xv, absent, present fv =>
-          if xv ==b false_val then present fv else absent
-        | _, _, _ => absent
+      | Emerge (x, _) es _ =>
+        match interp_var_instant R x with
+        | present (Venum c) =>
+          or_default absent (nth_error (map interp_cexp_instant es) c)
+        | _ => absent
         end
 
-      | Eite b t f =>
-        match interp_exp_instant b, interp_cexp_instant t, interp_cexp_instant f with
-        | present bv, present tv, present fv =>
-          match val_to_bool bv with
-          | Some b' => present (if b' then tv else fv)
-          | None => absent
-          end
-        | _, _, _ => absent
+      | Ecase b es d =>
+        match interp_exp_instant b with
+        | present (Venum c) =>
+          or_default absent (nth_error (map interp_cexp_instant es) c)
+        | _ => absent
         end
 
       | Eexp e =>
         interp_exp_instant e
       end.
 
+    Definition interp_cexps_instant (ces: list cexp): list svalue :=
+      map interp_cexp_instant ces.
+
     Ltac rw_exp_helper :=
       repeat match goal with
-             | _: sem_var_instant R ?x ?v |- context[interp_var_instant ?R ?x] =>
-               erewrite <-(interp_var_instant_sound R x v); eauto; simpl
-             | H: val_to_bool ?x = _ |- context[val_to_bool ?x] =>
-               rewrite H
+             | _: sem_var_instant R ?x ?v |- context[interp_var_instant R ?x] =>
+               erewrite <-interp_var_instant_complete; eauto; simpl
              | H: sem_unop ?op ?c ?t = _ |- context[sem_unop ?op ?c ?t] =>
                rewrite H
              | H: sem_binop ?op ?c1 ?t1 ?c2 ?t2 = _ |- context[sem_binop ?op ?c1 ?t1 ?c2 ?t2] =>
                rewrite H
           end.
 
-    Lemma interp_vars_instant_sound:
+    Lemma interp_vars_instant_complete:
       forall xs vs,
         sem_vars_instant R xs vs ->
         vs = interp_vars_instant xs.
@@ -116,7 +112,7 @@ Module Type CEINTERPRETER
       induction 1; auto; simpl; rw_exp_helper; f_equal; auto.
     Qed.
 
-    Lemma interp_exp_instant_sound:
+    Lemma interp_exp_instant_complete:
       forall e v,
         sem_exp_instant base R e v ->
         v = interp_exp_instant e.
@@ -125,71 +121,95 @@ Module Type CEINTERPRETER
         try rewrite <-IHsem_exp_instant;
         try rewrite <-IHsem_exp_instant1;
         try rewrite <-IHsem_exp_instant2;
-        rw_exp_helper; auto;
-          destruct b; auto.
+        rw_exp_helper; auto.
+      - now rewrite equiv_decb_refl.
+      - take (_ <> _) and apply not_equiv_decb_equiv in it; now setoid_rewrite it.
     Qed.
 
-    Lemma interp_exps_instant_sound:
+    Lemma interp_exps_instant_complete:
       forall es vs,
         sem_exps_instant base R es vs ->
         vs = interp_exps_instant es.
     Proof.
       induction 1; simpl; auto.
       f_equal; auto.
-      now apply interp_exp_instant_sound.
+      now apply interp_exp_instant_complete.
     Qed.
 
     Ltac rw_cexp_helper :=
       repeat (rw_exp_helper;
               repeat match goal with
                      | _: sem_exp_instant base R ?e ?v |- context[interp_exp_instant ?e] =>
-                       erewrite <-(interp_exp_instant_sound e v); eauto; simpl
+                       erewrite <-(interp_exp_instant_complete e v); eauto; simpl
                      end).
 
-    Lemma interp_cexp_instant_sound:
+
+    Lemma interp_cexp_instant_complete:
       forall e v,
         sem_cexp_instant base R e v ->
         v = interp_cexp_instant e.
     Proof.
-      induction 1; simpl;
+      induction 1 using sem_cexp_instant_ind_2; simpl;
         try rewrite <-IHsem_cexp_instant;
         try rewrite <-IHsem_cexp_instant1;
         try rewrite <-IHsem_cexp_instant2;
         rw_cexp_helper;
-        try rewrite equiv_decb_refl; auto;
-          destruct b; auto.
+        try rewrite equiv_decb_refl; auto.
+      - subst.
+        rewrite map_app; simpl.
+        rewrite nth_error_app2; try rewrite map_length; auto.
+        rewrite Nat.sub_diag; auto.
+      - clear H0.
+        rewrite map_nth_error'.
+        take (nth_error _ _ = _) and apply nth_error_split in it as (vs1 & vs2 & ? & ?); subst.
+        take (Forall2 _ _ _) and apply Forall2_app_inv_r in it as (es1 & es2' & Hes1 & Hes2' & ?); subst.
+        inversion_clear Hes2' as [|???? Hc Hes2].
+        erewrite <-Forall2_length; eauto.
+        rewrite nth_error_app2; eauto.
+        rewrite Nat.sub_diag; simpl.
+        destruct x; simpl in *; auto.
     Qed.
 
-    Definition interp_annotated_instant {A} (interp: A -> value) (ck: clock) (a: A): value :=
+    Lemma interp_cexps_instant_complete:
+      forall es vs,
+        Forall2 (sem_cexp_instant base R) es vs ->
+        vs = interp_cexps_instant es.
+    Proof.
+      induction 1; simpl; auto.
+      f_equal; auto.
+      now apply interp_cexp_instant_complete.
+    Qed.
+
+    Definition interp_annotated_instant {A} (interp: A -> svalue) (ck: clock) (a: A): svalue :=
       if interp_clock_instant base R ck then
         interp a
       else
         absent.
 
-    Definition interp_caexp_instant (ck: clock) (ce: cexp) : value :=
+    Definition interp_caexp_instant (ck: clock) (ce: cexp) : svalue :=
       interp_annotated_instant (interp_cexp_instant) ck ce.
 
-    Lemma interp_caexp_instant_sound:
+    Lemma interp_caexp_instant_complete:
       forall ck e v,
         sem_caexp_instant base R ck e v ->
         v = interp_caexp_instant ck e.
     Proof.
       unfold interp_caexp_instant, interp_annotated_instant.
-      induction 1; erewrite <-interp_clock_instant_sound; eauto; simpl; auto.
-      apply interp_cexp_instant_sound; auto.
+      induction 1; erewrite <-interp_clock_instant_complete; eauto; simpl; auto.
+      apply interp_cexp_instant_complete; auto.
     Qed.
 
-    Definition interp_aexp_instant (ck: clock) (e: exp) : value :=
+    Definition interp_aexp_instant (ck: clock) (e: exp) : svalue :=
       interp_annotated_instant (interp_exp_instant) ck e.
 
-    Lemma interp_aexp_instant_sound:
+    Lemma interp_aexp_instant_complete:
       forall ck e v,
         sem_aexp_instant base R ck e v ->
         v = interp_aexp_instant ck e.
     Proof.
       unfold interp_aexp_instant, interp_annotated_instant.
-      induction 1; erewrite <-interp_clock_instant_sound; eauto; simpl; auto.
-      apply interp_exp_instant_sound; auto.
+      induction 1; erewrite <-interp_clock_instant_complete; eauto; simpl; auto.
+      apply interp_exp_instant_complete; auto.
     Qed.
 
   End InstantInterpreter.
@@ -201,19 +221,19 @@ Module Type CEINTERPRETER
     Variable bk : stream bool.
     Variable H: history.
 
-    Definition interp_vars (xs: list ident): stream (list value) :=
+    Definition interp_vars (xs: list ident): stream (list svalue) :=
       lift_interp' H interp_vars_instant xs.
 
-    Definition interp_exp (e: exp): stream value :=
+    Definition interp_exp (e: exp): stream svalue :=
       lift_interp bk H interp_exp_instant e.
 
-    Definition interp_exps (e: list exp): stream (list value) :=
+    Definition interp_exps (e: list exp): stream (list svalue) :=
       lift_interp bk H interp_exps_instant e.
 
-    Definition interp_exps' (e: list exp): list (stream value) :=
+    Definition interp_exps' (e: list exp): list (stream svalue) :=
       map interp_exp e.
 
-    Lemma interp_exps'_sound:
+    Lemma interp_exps'_complete:
       forall es ess,
         sem_exps bk H es ess ->
         Forall2 (sem_exp bk H) es (interp_exps' es).
@@ -222,7 +242,7 @@ Module Type CEINTERPRETER
       constructor.
       - intro n; specialize (Sem n); inv Sem.
         unfold interp_exp, lift_interp.
-        erewrite <-interp_exp_instant_sound; eauto.
+        erewrite <-interp_exp_instant_complete; eauto.
       - eapply IHes.
         intro n; specialize (Sem n); inv Sem.
         instantiate (1 := fun n => tl (ess n)).
@@ -230,69 +250,92 @@ Module Type CEINTERPRETER
         rewrite <-H2; simpl; auto.
     Qed.
 
-    Definition interp_cexp (e: cexp): stream value :=
+    Definition interp_cexp (e: cexp): stream svalue :=
       lift_interp bk H interp_cexp_instant e.
 
-    Definition interp_caexp (ck: clock) (e: cexp): stream value :=
+    Definition interp_cexps (e: list cexp): stream (list svalue) :=
+      lift_interp bk H interp_cexps_instant e.
+
+    Definition interp_cexps' (e: list cexp): list (stream svalue) :=
+      map interp_cexp e.
+
+    Lemma interp_cexps'_complete:
+      forall es ess,
+        (forall n, Forall2 (sem_cexp_instant (bk n) (H n)) es (ess n)) ->
+        Forall2 (sem_cexp bk H) es (interp_cexps' es).
+    Proof.
+      induction es; intros * Sem; simpl; auto.
+      constructor.
+      - intro n; specialize (Sem n); inv Sem.
+        unfold interp_cexp, lift_interp.
+        erewrite <-interp_cexp_instant_complete; eauto.
+      - eapply IHes.
+        intro n; specialize (Sem n); inv Sem.
+        instantiate (1 := fun n => tl (ess n)).
+        simpl.
+        rewrite <-H2; simpl; auto.
+    Qed.
+
+    Definition interp_caexp (ck: clock) (e: cexp): stream svalue :=
       lift_interp bk H (fun base R => interp_caexp_instant base R ck) e.
 
-    Definition interp_aexp (ck: clock) (e: exp): stream value :=
+    Definition interp_aexp (ck: clock) (e: exp): stream svalue :=
       lift_interp bk H (fun base R => interp_aexp_instant base R ck) e.
 
-    Corollary interp_vars_sound:
+    Corollary interp_vars_complete:
       forall xs vss,
         sem_vars H xs vss ->
         vss ≈ interp_vars xs.
     Proof.
-      intros; eapply lift'_sound; eauto;
-        apply interp_vars_instant_sound.
+      intros; eapply lift'_complete; eauto;
+        apply interp_vars_instant_complete.
     Qed.
 
-    Corollary interp_exp_sound:
+    Corollary interp_exp_complete:
       forall e vs,
         sem_exp bk H e vs ->
         vs ≈ interp_exp e.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_exp_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_exp_instant_complete.
     Qed.
 
-    Corollary interp_exps_sound:
+    Corollary interp_exps_complete:
       forall es vss,
         sem_exps bk H es vss ->
         vss ≈ interp_exps es.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_exps_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_exps_instant_complete.
     Qed.
 
-    Corollary interp_cexp_sound:
+    Corollary interp_cexp_complete:
       forall e vs,
         sem_cexp bk H e vs ->
         vs ≈ interp_cexp e.
     Proof.
-      intros; eapply lift_sound; eauto;
-        apply interp_cexp_instant_sound.
+      intros; eapply lift_complete; eauto;
+        apply interp_cexp_instant_complete.
     Qed.
 
-    Corollary interp_aexp_sound:
+    Corollary interp_aexp_complete:
       forall e ck vs,
         sem_aexp bk H ck e vs ->
         vs ≈ interp_aexp ck e.
     Proof.
-      intros; eapply lift_sound; eauto.
-      intros; apply interp_aexp_instant_sound; auto.
+      intros; eapply lift_complete; eauto.
+      intros; apply interp_aexp_instant_complete; auto.
     Qed.
 
-    Corollary interp_caexp_sound:
+    Corollary interp_caexp_complete:
       forall e ck vs,
         sem_caexp bk H ck e vs ->
         vs ≈ interp_caexp ck e.
     Proof.
-      intros; eapply lift_sound; eauto.
-      intros; apply interp_caexp_instant_sound; auto.
+      intros; eapply lift_complete; eauto.
+      intros; apply interp_caexp_instant_complete; auto.
     Qed.
-    (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value := *)
+    (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> svalue) (ck: clock) (a: A): stream svalue := *)
     (*   lift (fun base R => interp_annotated_instant base R interp_instant ck) a. *)
 
   End LiftInterpreter.
@@ -300,12 +343,13 @@ Module Type CEINTERPRETER
 End CEINTERPRETER.
 
 Module CEInterpreterFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str)
-       <: CEINTERPRETER Ids Op OpAux CESyn Str CESem.
-  Include CEINTERPRETER Ids Op OpAux CESyn Str CESem.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (Cks   : CLOCKS          Ids Op OpAux)
+       (CESyn : CESYNTAX        Ids Op OpAux Cks)
+       (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CESem : CESEMANTICS Ids Op OpAux Cks CESyn Str)
+       <: CEINTERPRETER Ids Op OpAux Cks CESyn Str CESem.
+  Include CEINTERPRETER Ids Op OpAux Cks CESyn Str CESem.
 End CEInterpreterFun.

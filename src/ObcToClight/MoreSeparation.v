@@ -725,6 +725,13 @@ Qed.
 
 Definition sepfalse := pure False.
 
+Lemma sepconj_sepfalse:
+  forall m P,
+    ~ m |= sepfalse ** P.
+Proof.
+  simpl; intros ?? []; contradiction.
+Qed.
+
 Lemma decidable_footprint_sepfalse:
   decidable_footprint sepfalse.
 Proof.

@@ -1,8 +1,9 @@
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
-From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import CoreExpr.CESyntax CoreExpr.CETyping.
 From Velus Require Import Clocks.
-From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.NLSyntax NLustre.NLOrdered NLustre.NLTyping.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -11,8 +12,13 @@ Open Scope list_scope.
 Module Type NLNORMALARGS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : NLSYNTAX Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS    Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import CETyp : CETYPING  Ids Op OpAux Cks CESyn)
+       (Import Syn   : NLSYNTAX  Ids Op OpAux Cks CESyn)
+       (Import Ord   : NLORDERED Ids Op OpAux Cks CESyn Syn)
+       (Import Typ   : NLTYPING  Ids Op OpAux Cks CESyn Syn Ord CETyp).
 
 (** The [normal_args] predicate defines a normalization condition on
       node arguments -- those that are not on the base clock can only
@@ -64,36 +70,108 @@ Module Type NLNORMALARGS
   Definition normal_args_node (G: global) (n: node) : Prop :=
     Forall (normal_args_eq G) n.(n_eqs).
 
-  Fixpoint normal_args (G: list node) : Prop :=
-    match G with
-    | [] => True
-    | n :: G' => normal_args_node G n /\ normal_args G'
-    end.
+  Definition normal_args (G: global) :=
+    Forall' (fun ns => normal_args_node (Global G.(enums) ns)) G.(nodes).
 
-  (* Lemma normal_args_node_cons: *)
-  (*   forall node G, *)
-  (*     normal_args_node (node :: G) node -> *)
-  (*     ~ Is_node_in node.(n_name) node.(n_eqs) -> *)
-  (*     normal_args_node G node. *)
-  (* Proof. *)
-  (*   intros node G Hnarg Hord. *)
-  (*   apply Forall_forall. *)
-  (*   intros eq Hin. *)
-  (*   destruct eq as [|ys ck f les|]; eauto using normal_args_eq. *)
-  (*   apply In_Forall with (2:=Hin) in Hnarg. *)
-  (*   inversion_clear Hnarg as [|? ? ? ? ? Hfind Hnargs|]. *)
-  (*   apply find_node_other in Hfind; *)
-  (*     eauto using normal_args_eq. *)
-  (*   apply Is_node_in_Forall, In_Forall with (2:=Hin) in Hord. *)
-  (*   intro; subst; auto using Is_node_in_eq. *)
-  (* Qed. *)
+  Lemma normal_args_node_cons:
+    forall node G enums,
+      normal_args_node (Global enums (node :: G)) node ->
+      ~ Is_node_in node.(n_name) node.(n_eqs) ->
+      normal_args_node (Global enums G) node.
+  Proof.
+    intros node G enums Hnarg Hord.
+    apply Forall_forall.
+    intros eq Hin.
+    destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
+    eapply Forall_forall in Hnarg; eauto.
+    inversion_clear Hnarg as [|? ? ? ? ? ? Hfind Hnargs|].
+    apply find_node_other in Hfind; eauto using normal_args_eq.
+    rewrite Is_node_in_Forall in Hord.
+    eapply Forall_forall in Hord; eauto.
+    intro; subst; auto using Is_node_in_eq.
+  Qed.
+
+  Lemma normal_args_node_cons':
+    forall node G enums,
+      normal_args_node (Global enums G) node ->
+      ~ Is_node_in node.(n_name) node.(n_eqs) ->
+      normal_args_node (Global enums (node :: G)) node.
+  Proof.
+    intros node G enums Hnarg Hord.
+    apply Forall_forall.
+    intros eq Hin.
+    destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
+    eapply Forall_forall in Hnarg; eauto.
+    inversion_clear Hnarg as [|? ? ? ? ? ? Hfind Hnargs|].
+    rewrite <-find_node_other in Hfind; eauto using normal_args_eq.
+    rewrite Is_node_in_Forall in Hord.
+    eapply Forall_forall in Hord; eauto.
+    intro; subst; auto using Is_node_in_eq.
+  Qed.
+
+  Lemma normal_args_node_cons'':
+    forall n G enums,
+      normal_args_node (Global enums G) n ->
+      wt_node (Global enums G) n ->
+      Forall (fun n' => ~(n.(n_name) = n'.(n_name))) G ->
+      normal_args_node (Global enums (n :: G)) n.
+  Proof.
+    intros n G enums Hnarg (WTn&?) FA.
+    eapply Forall_not_find_node_None in FA.
+    apply normal_args_node_cons'; auto.
+    unfold wt_node in WTn.
+    apply Is_node_in_Forall.
+    apply Forall_impl_In with (2:=WTn).
+    intros eq Ieq WTeq.
+    inversion 1; subst.
+    inversion WTeq; subst;
+      match goal with H1:find_node _ _ = _, H2:find_node _ _ = _ |- _ =>
+                      rewrite H1 in H2; clear H1 end; discriminate.
+  Qed.
+
+  Lemma normal_args_eq_enums_cons:
+    forall ns enums e eq,
+      normal_args_eq (Global enums ns) eq ->
+      normal_args_eq (Global (e :: enums) ns) eq.
+  Proof.
+    induction 1; eauto using normal_args_eq.
+    econstructor; eauto.
+    now rewrite find_node_enums_cons.
+  Qed.
+
+  Corollary normal_args_node_enums_cons:
+    forall ns enums e n,
+      normal_args_node (Global enums ns) n ->
+      normal_args_node (Global (e :: enums) ns) n.
+  Proof.
+    unfold normal_args_node; intros * NA.
+    apply Forall_forall; intros; eapply Forall_forall in NA; eauto.
+    now apply normal_args_eq_enums_cons.
+  Qed.
+
+  Corollary normal_args_enums_cons:
+    forall enums ns e,
+      normal_args (Global enums ns) ->
+      normal_args (Global (e :: enums) ns).
+  Proof.
+    unfold normal_args.
+    induction ns; simpl; intros * NA; inv NA; constructor.
+    - now apply normal_args_node_enums_cons.
+    - apply IHns; auto.
+  Qed.
+
 End NLNORMALARGS.
 
 Module NLNormalArgsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : NLSYNTAX Ids Op CESyn)
-<: NLNORMALARGS Ids Op CESyn Syn.
-  Include NLNORMALARGS Ids Op CESyn Syn.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS    Ids Op OpAux)
+       (CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (CETyp : CETYPING  Ids Op OpAux Cks CESyn)
+       (Syn   : NLSYNTAX  Ids Op OpAux Cks CESyn)
+       (Ord   : NLORDERED Ids Op OpAux Cks CESyn Syn)
+       (Typ   : NLTYPING  Ids Op OpAux Cks CESyn Syn Ord CETyp)
+<: NLNORMALARGS Ids Op OpAux Cks CESyn CETyp Syn Ord Typ.
+  Include NLNORMALARGS Ids Op OpAux Cks CESyn CETyp Syn Ord Typ.
 End NLNormalArgsFun.

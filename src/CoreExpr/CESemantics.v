@@ -17,9 +17,10 @@ From Velus Require Import IndexedStreams.
 Module Type CESEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX  Op)
-       (Import Syn   : CESYNTAX       Op)
-       (Import Str   : INDEXEDSTREAMS Op OpAux).
+       (Import OpAux : OPERATORS_AUX  Ids Op)
+       (Import Cks   : CLOCKS         Ids Op OpAux)
+       (Import Syn   : CESYNTAX       Ids Op OpAux Cks)
+       (Import Str   : INDEXEDSTREAMS Ids Op OpAux Cks).
 
   (** ** Environment and history *)
 
@@ -31,7 +32,7 @@ environment.
 
    *)
 
-  Definition env := Env.t value.
+  Definition env := Env.t svalue.
   Definition history := stream env.
 
   (** ** Instantaneous semantics *)
@@ -41,7 +42,7 @@ environment.
     Variable base: bool.
     Variable R: env.
 
-    Definition sem_vars_instant (xs: list ident) (vs: list value) : Prop :=
+    Definition sem_vars_instant (xs: list ident) (vs: list svalue) : Prop :=
       Forall2 (sem_var_instant R) xs vs.
 
     Definition sem_clocked_var_instant (x: ident) (ck: clock) : Prop :=
@@ -51,94 +52,156 @@ environment.
     Definition sem_clocked_vars_instant (xs: list (ident * clock)) : Prop :=
       Forall (fun xc => sem_clocked_var_instant (fst xc) (snd xc)) xs.
 
-    Inductive sem_exp_instant: exp -> value -> Prop:=
+    Inductive sem_exp_instant: exp -> svalue -> Prop:=
     | Sconst:
         forall c v,
-          v = (if base then present (sem_const c) else absent) ->
+          v = (if base then present (Vscalar (sem_cconst c)) else absent) ->
           sem_exp_instant (Econst c) v
+    | Senum:
+        forall x v ty,
+          v = (if base then present (Venum x) else absent) ->
+          sem_exp_instant (Eenum x ty) v
     | Svar:
         forall x v ty,
           sem_var_instant R x v ->
           sem_exp_instant (Evar x ty) v
     | Swhen_eq:
-        forall s x sc xc b,
-          sem_var_instant R x (present xc) ->
+        forall s x sc b,
+          sem_var_instant R x (present (Venum b)) ->
           sem_exp_instant s (present sc) ->
-          val_to_bool xc = Some b ->
           sem_exp_instant (Ewhen s x b) (present sc)
     | Swhen_abs1:
-        forall s x sc xc b,
-          sem_var_instant R x (present xc) ->
-          val_to_bool xc = Some b ->
+        forall s x sc b b',
+          sem_var_instant R x (present (Venum b')) ->
+          b <> b' ->
           sem_exp_instant s (present sc) ->
-          sem_exp_instant (Ewhen s x (negb b)) absent
+          sem_exp_instant (Ewhen s x b) absent
     | Swhen_abs:
         forall s x b,
           sem_var_instant R x absent ->
           sem_exp_instant s absent ->
           sem_exp_instant (Ewhen s x b) absent
     | Sunop_eq:
-        forall le op c c' ty,
-          sem_exp_instant le (present c) ->
-          sem_unop op c (typeof le) = Some c' ->
-          sem_exp_instant (Eunop op le ty) (present c')
+        forall le op v v' ty,
+          sem_exp_instant le (present v) ->
+          sem_unop op v (typeof le) = Some v' ->
+          sem_exp_instant (Eunop op le ty) (present v')
     | Sunop_abs:
         forall le op ty,
           sem_exp_instant le absent ->
           sem_exp_instant (Eunop op le ty) absent
     | Sbinop_eq:
-        forall le1 le2 op c1 c2 c' ty,
-          sem_exp_instant le1 (present c1) ->
-          sem_exp_instant le2 (present c2) ->
-          sem_binop op c1 (typeof le1) c2 (typeof le2) = Some c' ->
-          sem_exp_instant (Ebinop op le1 le2 ty) (present c')
+        forall le1 le2 op v1 v2 v' ty,
+          sem_exp_instant le1 (present v1) ->
+          sem_exp_instant le2 (present v2) ->
+          sem_binop op v1 (typeof le1) v2 (typeof le2) = Some v' ->
+          sem_exp_instant (Ebinop op le1 le2 ty) (present v')
     | Sbinop_abs:
         forall le1 le2 op ty,
           sem_exp_instant le1 absent ->
           sem_exp_instant le2 absent ->
           sem_exp_instant (Ebinop op le1 le2 ty) absent.
 
-    Definition sem_exps_instant (les: list exp) (vs: list value) :=
+    Definition sem_exps_instant (les: list exp) (vs: list svalue) :=
       Forall2 sem_exp_instant les vs.
 
-    Inductive sem_cexp_instant: cexp -> value -> Prop :=
-    | Smerge_true:
-        forall x t f c,
-          sem_var_instant R x (present true_val) ->
-          sem_cexp_instant t (present c) ->
-          sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x t f) (present c)
-    | Smerge_false:
-        forall x t f c,
-          sem_var_instant R x (present false_val) ->
-          sem_cexp_instant t absent ->
-          sem_cexp_instant f (present c) ->
-          sem_cexp_instant (Emerge x t f) (present c)
+    Inductive sem_cexp_instant: cexp -> svalue -> Prop :=
+    | Smerge_pres:
+        forall x tx es ty b es1 e es2 c,
+          sem_var_instant R x (present (Venum b)) ->
+          es = es1 ++ e :: es2 ->
+          length es1 = b ->
+          sem_cexp_instant e (present c) ->
+          Forall (fun e => sem_cexp_instant e absent) (es1 ++ es2) ->
+          sem_cexp_instant (Emerge (x, tx) es ty) (present c)
     | Smerge_abs:
-        forall x t f,
+        forall x tx es ty,
           sem_var_instant R x absent ->
-          sem_cexp_instant t absent ->
-          sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x t f) absent
-    | Site_eq:
-        forall x t f c b ct cf,
-          sem_exp_instant x (present c) ->
-          sem_cexp_instant t (present ct) ->
-          sem_cexp_instant f (present cf) ->
-          val_to_bool c = Some b ->
-          sem_cexp_instant (Eite x t f) (if b then present ct else present cf)
-    | Site_abs:
-        forall b t f,
-          sem_exp_instant b absent ->
-          sem_cexp_instant t absent ->
-          sem_cexp_instant f absent ->
-          sem_cexp_instant (Eite b t f) absent
+          Forall (fun e => sem_cexp_instant e absent) es ->
+          sem_cexp_instant (Emerge (x, tx) es ty) absent
+    | Scase_pres:
+        forall e es t b vs c,
+          sem_exp_instant e (present (Venum b)) ->
+          Forall2 (fun e v => sem_cexp_instant e (present v)) es vs ->
+          nth_error vs b = Some c ->
+          sem_cexp_instant (Ecase e es t) (present c)
+    | Scase_abs:
+        forall e es t,
+          sem_exp_instant e absent ->
+          Forall (fun e => sem_cexp_instant e absent) es ->
+          sem_cexp_instant (Ecase e es t) absent
     | Sexp:
         forall e v,
           sem_exp_instant e v ->
           sem_cexp_instant (Eexp e) v.
 
   End InstantSemantics.
+
+  Section sem_cexp_instant_ind_2.
+
+    Variable base: bool.
+    Variable R: env.
+
+    Variable P : cexp -> svalue -> Prop.
+
+    Hypothesis merge_presCase:
+      forall x tx es ty b es1 e es2 c,
+        sem_var_instant R x (present (Venum b)) ->
+        es = es1 ++ e :: es2 ->
+        length es1 = b ->
+        sem_cexp_instant base R e (present c) ->
+        P e (present c) ->
+        Forall (fun e => sem_cexp_instant base R e absent) (es1 ++ es2) ->
+        Forall (fun e => P e absent) (es1 ++ es2) ->
+        P (Emerge (x, tx) es ty) (present c).
+
+    Hypothesis merge_absCase:
+      forall x tx es ty,
+        sem_var_instant R x absent ->
+        Forall (fun e => sem_cexp_instant base R e absent) es ->
+        Forall (fun e => P e absent) es ->
+        P (Emerge (x, tx) es ty) absent.
+
+    Hypothesis case_presCase:
+      forall e es t b vs c,
+        sem_exp_instant base R e (present (Venum b)) ->
+        Forall2 (fun e v => sem_cexp_instant base R e (present v)) es vs ->
+        Forall2 (fun e v => P e (present v)) es vs ->
+        nth_error vs b = Some c ->
+        P (Ecase e es t) (present c).
+
+    Hypothesis case_absCase:
+      forall e es t,
+        sem_exp_instant base R e absent ->
+        Forall (fun e => sem_cexp_instant base R e absent) es ->
+        Forall (fun e => P e absent) es ->
+        P (Ecase e es t) absent.
+
+    Hypothesis expCase:
+      forall e v,
+        sem_exp_instant base R e v ->
+        P (Eexp e) v.
+
+    Fixpoint sem_cexp_instant_ind_2
+             (ce: cexp) (v: svalue)
+             (Sem: sem_cexp_instant base R ce v) {struct Sem}
+      : P ce v.
+    Proof.
+      inv Sem.
+      - eapply merge_presCase; eauto.
+        clear - H3 sem_cexp_instant_ind_2.
+        induction H3; constructor; auto.
+      - apply merge_absCase; auto.
+        induction H0; constructor; auto.
+      - eapply case_presCase; eauto.
+        take (nth_error _ _ = _) and clear it.
+        induction H0; constructor; auto.
+      - apply case_absCase; auto.
+        induction H0; constructor; auto.
+      - apply expCase; auto.
+    Defined.
+
+  End sem_cexp_instant_ind_2.
 
   Hint Extern 4 (sem_exps_instant _ _ nil nil) => apply Forall2_nil.
 
@@ -148,8 +211,8 @@ environment.
     Variable R: env.
 
     Inductive sem_annotated_instant {A}
-              (sem_instant: bool -> env -> A -> value -> Prop)
-      : clock -> A -> value -> Prop :=
+              (sem_instant: bool -> env -> A -> svalue -> Prop)
+      : clock -> A -> svalue -> Prop :=
     | Stick:
         forall ck a c,
           sem_instant base R a (present c) ->
@@ -173,7 +236,7 @@ environment.
     Variable bk : stream bool.
     Variable H : history.
 
-    Definition sem_vars (x: list ident) (xs: stream (list value)): Prop :=
+    Definition sem_vars (x: list ident) (xs: stream (list svalue)): Prop :=
       lift' H sem_vars_instant x xs.
 
     Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
@@ -182,26 +245,26 @@ environment.
     Definition sem_clocked_vars (xs: list (ident * clock)) : Prop :=
       forall n, sem_clocked_vars_instant (bk n) (H n) xs.
 
-    Definition sem_aexp ck (e: exp) (xs: stream value): Prop :=
+    Definition sem_aexp ck (e: exp) (xs: stream svalue): Prop :=
       lift bk H (fun base R => sem_aexp_instant base R ck) e xs.
 
-    Definition sem_exp (e: exp) (xs: stream value): Prop :=
+    Definition sem_exp (e: exp) (xs: stream svalue): Prop :=
       lift bk H sem_exp_instant e xs.
 
-    Definition sem_exps (e: list exp) (xs: stream (list value)): Prop :=
+    Definition sem_exps (e: list exp) (xs: stream (list svalue)): Prop :=
       lift bk H sem_exps_instant e xs.
 
-    Definition sem_caexp ck (c: cexp) (xs: stream value): Prop :=
+    Definition sem_caexp ck (c: cexp) (xs: stream svalue): Prop :=
       lift bk H (fun base R => sem_caexp_instant base R ck) c xs.
 
-    Definition sem_cexp (c: cexp) (xs: stream value): Prop :=
+    Definition sem_cexp (c: cexp) (xs: stream svalue): Prop :=
       lift bk H sem_cexp_instant c xs.
 
   End LiftSemantics.
 
   (** ** Time-dependent semantics *)
 
-  Definition clock_of_instant (vs: list value) : bool :=
+  Definition clock_of_instant (vs: list svalue) : bool :=
     existsb (fun v => v <>b absent) vs.
 
   Lemma clock_of_instant_false:
@@ -224,11 +287,11 @@ environment.
     - rewrite Bool.orb_true_iff, Exists_cons, IHxs, <-not_absent_bool; reflexivity.
   Qed.
 
-  Definition clock_of (xss: stream (list value)): stream bool :=
+  Definition clock_of (xss: stream (list svalue)): stream bool :=
     fun n => clock_of_instant (xss n).
 
-  Definition bools_of (vs: stream value) (rs: stream bool) :=
-    forall n, value_to_bool (vs n) = Some (rs n).
+  (* Definition bools_of (vs: stream svalue) (rs: stream bool) := *)
+  (*   forall n, svalue_to_bool (vs n) = Some (rs n). *)
 
   (** Morphisms properties *)
 
@@ -370,51 +433,51 @@ environment.
         end.
       - (* Econst *)
         do 2 inversion_clear 1; destruct base; congruence.
+      - (* Eenum *)
+        do 2 inversion_clear 1; destruct base; congruence.
       - (* Ewhen *)
         intros v1 v2 Hsem1 Hsem2.
         inversion Hsem1; inversion Hsem2; subst;
-          repeat progress match goal with
-                          | H1:sem_exp_instant ?b ?R ?e ?v1,
-                               H2:sem_exp_instant ?b ?R ?e ?v2 |- _ =>
-                            apply IHe with (1:=H1) in H2
-                          | H1:sem_var_instant ?R ?i ?v1,
-                               H2:sem_var_instant ?R ?i ?v2 |- _ =>
-                            apply sem_var_instant_det with (1:=H1) in H2
-                          | H1:sem_unop _ _ _ = Some ?v1,
-                               H2:sem_unop _ _ _ = Some ?v2 |- _ =>
-                            rewrite H1 in H2; injection H2; intro; subst
-                          | Hp:present _ = present _ |- _ =>
-                            injection Hp; intro; subst
-                          | H1:val_to_bool _ = Some _,
-                               H2:val_to_bool _ = Some (negb _) |- _ =>
-                            rewrite H2 in H1; exfalso; injection H1;
-                              now apply Bool.no_fixpoint_negb
-                          end; subst; try easy.
+          repeat match goal with
+                 | H1:sem_exp_instant ?b ?R ?e ?v1,
+                      H2:sem_exp_instant ?b ?R ?e ?v2 |- _ =>
+                   apply IHe with (1:=H1) in H2
+                 | H1:sem_var_instant ?R ?i ?v1,
+                      H2:sem_var_instant ?R ?i ?v2 |- _ =>
+                   apply sem_var_instant_det with (1:=H1) in H2
+                 | H1:sem_unop _ _ _ = Some ?v1,
+                      H2:sem_unop _ _ _ = Some ?v2 |- _ =>
+                   rewrite H1 in H2; injection H2; intro; subst
+                 | Hp:present _ = present _ |- _ =>
+                   injection Hp; intro; subst
+                 end; subst; try easy.
       - (* Eunop *)
         intros v1 v2 Hsem1 Hsem2.
         inversion_clear Hsem1; inversion_clear Hsem2;
-          repeat progress match goal with
-                          | H1:sem_exp_instant _ _ e _, H2:sem_exp_instant _ _ e _ |- _ =>
-                            apply IHe with (1:=H1) in H2; inversion H2; subst
-                          | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
-                            rewrite H1 in H2; injection H2; intro; subst
-                          | H1:sem_exp_instant _ _ _ (present _),
-                               H2:sem_exp_instant _ _ _ absent |- _ =>
-                            apply IHe with (1:=H1) in H2
-                          end; try easy.
+          repeat match goal with
+                 | H1:sem_exp_instant _ _ e _, H2:sem_exp_instant _ _ e _ |- _ =>
+                   apply IHe with (1:=H1) in H2; inversion H2; subst
+                 | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
+                   rewrite H1 in H2; injection H2; intro; subst
+                 | H1:sem_exp_instant _ _ _ (present _),
+                      H2:sem_exp_instant _ _ _ absent |- _ =>
+                   apply IHe with (1:=H1) in H2
+                 | H1: typeof ?e = _, H2: typeof ?e = _ |- _ => rewrite H1 in H2; inv H2
+                 end; congruence.
       - (* Ebinop *)
         intros v1 v2 Hsem1 Hsem2.
         inversion_clear Hsem1; inversion_clear Hsem2;
-          repeat progress match goal with
-                          | H1:sem_exp_instant _ _ e1 _, H2:sem_exp_instant _ _ e1 _ |- _ =>
-                            apply IHe1 with (1:=H1) in H2
-                          | H1:sem_exp_instant _ _ e2 _, H2:sem_exp_instant _ _ e2 _ |- _ =>
-                            apply IHe2 with (1:=H1) in H2
-                          | H1:sem_binop _ _ _ _ _ = Some ?v1,
-                               H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
-                            rewrite H1 in H2; injection H2; intro; subst
-                          | H:present _ = present _ |- _ => injection H; intro; subst
-                          end; subst; try easy.
+          repeat match goal with
+                 | H1:sem_exp_instant _ _ e1 _, H2:sem_exp_instant _ _ e1 _ |- _ =>
+                   apply IHe1 with (1:=H1) in H2
+                 | H1:sem_exp_instant _ _ e2 _, H2:sem_exp_instant _ _ e2 _ |- _ =>
+                   apply IHe2 with (1:=H1) in H2
+                 | H1:sem_binop _ _ _ _ _ = Some ?v1,
+                      H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
+                   rewrite H1 in H2; injection H2; intro; subst
+                 | H:present _ = present _ |- _ => inv H
+                 | H1: typeof ?e = _, H2: typeof ?e = _ |- _ => rewrite H1 in H2; inv H2
+                 end; subst; congruence.
     Qed.
 
     Lemma sem_aexp_instant_det:
@@ -443,59 +506,67 @@ environment.
       intros les cs1 cs2. apply Forall2_det. apply sem_exp_instant_det.
     Qed.
 
-    Lemma sem_cexp_instant_det:
-      forall e v1 v2,
-        sem_cexp_instant base R e v1
-        -> sem_cexp_instant base R e v2
-        -> v1 = v2.
-    Proof.
-      induction e;
-        do 2 inversion_clear 1;
-        try repeat progress match goal with
-                            | H1: sem_cexp_instant ?bk ?R ?e ?l,
-                                  H2: sem_cexp_instant ?bk ?R ?e ?r |- _ =>
-                              apply IHe1 with (1:=H1) in H2
-                                                         || apply IHe2 with (1:=H1) in H2;
-                                injection H2; intro; subst
-                            | H1: sem_var_instant ?R ?i (present true_val),
-                                  H2: sem_var_instant ?R ?i (present false_val) |- _ =>
-                              apply sem_var_instant_det with (1:=H1) in H2;
-                                exfalso; injection H2; now apply true_not_false_val
-                            | H1: sem_exp_instant ?bk ?R ?l ?v1,
-                                  H2: sem_exp_instant ?bk ?R ?l ?v2 |- _ =>
-                              apply sem_exp_instant_det with (1:=H1) in H2;
-                                discriminate || injection H2; intro; subst
-                            | H1: sem_var_instant ?R ?i (present _),
-                                  H2: sem_var_instant ?R ?i absent |- _ =>
-                              apply sem_var_instant_det with (1:=H1) in H2; discriminate
-                            | H1: val_to_bool _ = Some _,
-                                  H2:val_to_bool _ = Some _ |- _ =>
-                              rewrite H1 in H2; injection H2; intro; subst
-                            end; auto.
-      eapply sem_exp_instant_det; eassumption.
-    Qed.
-
-    Lemma sem_caexp_instant_det:
-      forall ck e v1 v2,
-        sem_caexp_instant base R ck e v1
-        -> sem_caexp_instant base R ck e v2
-        -> v1 = v2.
-    Proof.
-      intros until v2.
-      do 2 inversion_clear 1;
-        match goal with
-        | H1: sem_cexp_instant _ _ _ _,
-              H2: sem_cexp_instant _ _ _ _ |- _ =>
-          eapply sem_cexp_instant_det; eassumption
-        | H1:sem_clock_instant _ _ _ ?T,
-             H2:sem_clock_instant _ _ _ ?F |- _ =>
-          let H := fresh in
-          assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
-            try discriminate H
-        end; congruence.
-    Qed.
-
   End InstantDeterminism.
+
+  (* Strangely, the below lemma proof does not typecheck in the section... *)
+  Lemma sem_cexp_instant_det:
+    forall base R e v1,
+      sem_cexp_instant base R e v1 ->
+      forall v2,
+        sem_cexp_instant base R e v2 ->
+        v1 = v2.
+  Proof.
+    induction 1 using sem_cexp_instant_ind_2;
+      inversion_clear 1;
+      try repeat progress match goal with
+                          | H1: sem_cexp_instant ?bk ?R ?e ?l,
+                                H2: sem_cexp_instant ?bk ?R ?e ?r |- _ =>
+                            assert (l = r) as E by auto; inv E; clear H1 H2
+                          | H1: sem_var_instant ?R ?i (present _),
+                                H2: sem_var_instant ?R ?i (present _) |- _ =>
+                            apply sem_var_instant_det with (1:=H1) in H2; inv H2
+                          | H1: sem_exp_instant ?bk ?R ?l ?v1,
+                                H2: sem_exp_instant ?bk ?R ?l ?v2 |- _ =>
+                            apply sem_exp_instant_det with (1:=H1) in H2;
+                              discriminate || injection H2; intro; subst
+                          | H1: sem_var_instant ?R ?i (present _),
+                                H2: sem_var_instant ?R ?i absent |- _ =>
+                            apply sem_var_instant_det with (1:=H1) in H2; discriminate
+                          | H: ?l ++ _ :: _ = ?l' ++ _ :: _, H': length ?l = length ?l' |- _ =>
+                            apply app_inv with (2 := H') in H as (?&E); inv E
+                          end; auto.
+    - assert (vs0 = vs).
+      { repeat (take (nth_error _ _ = _) and clear it).
+        revert dependent vs0.
+        induction H0; intros; inv H1; inv H5; auto.
+        f_equal; auto.
+        assert (present y = present y0) as E by auto; inv E; auto.
+      }
+      subst.
+      match goal with H: nth_error _ _ = _, H': nth_error _ _ = _ |- _ => rewrite H in H'; inv H' end.
+      auto.
+    - eapply sem_exp_instant_det; eassumption.
+  Qed.
+
+  Lemma sem_caexp_instant_det:
+    forall base R ck e v1 v2,
+      sem_caexp_instant base R ck e v1
+      -> sem_caexp_instant base R ck e v2
+      -> v1 = v2.
+  Proof.
+    intros until v2.
+    do 2 inversion_clear 1;
+         match goal with
+         | H1: sem_cexp_instant _ _ _ _,
+               H2: sem_cexp_instant _ _ _ _ |- _ =>
+           eapply sem_cexp_instant_det; eassumption
+         | H1:sem_clock_instant _ _ _ ?T,
+              H2:sem_clock_instant _ _ _ ?F |- _ =>
+           let H := fresh in
+           assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
+             try discriminate H
+         end; congruence.
+  Qed.
 
   (** *** Lifted semantics *)
 
@@ -632,9 +703,10 @@ End CESEMANTICS.
 Module CESemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX  Op)
-       (Syn   : CESYNTAX       Op)
-       (Str   : INDEXEDSTREAMS Op OpAux)
-  <: CESEMANTICS Ids Op OpAux Syn Str.
-  Include CESEMANTICS Ids Op OpAux Syn Str.
+       (OpAux : OPERATORS_AUX  Ids Op)
+       (Cks   : CLOCKS         Ids Op OpAux)
+       (Syn   : CESYNTAX       Ids Op OpAux Cks)
+       (Str   : INDEXEDSTREAMS Ids Op OpAux Cks)
+  <: CESEMANTICS Ids Op OpAux Cks Syn Str.
+  Include CESEMANTICS Ids Op OpAux Cks Syn Str.
 End CESemanticsFun.

@@ -13,8 +13,10 @@ Open Scope list_scope.
 Module Type STCISNEXT
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn).
 
   Inductive Is_next_in_tc: ident -> trconstr -> Prop :=
   | NextTcNext:
@@ -35,7 +37,7 @@ Module Type STCISNEXT
 
   Lemma next_of_In:
     forall x tc,
-      Is_next_in_tc x tc <-> In x (nexts_of [tc]).
+      Is_next_in_tc x tc <-> In x (map fst (nexts_of [tc])).
   Proof.
     destruct tc; simpl; split; intros H; inv H; auto using Is_next_in_tc.
     inv H0.
@@ -43,7 +45,7 @@ Module Type STCISNEXT
 
   Lemma nexts_of_In:
     forall x tcs,
-      Is_next_in x tcs <-> In x (nexts_of tcs).
+      Is_next_in x tcs <-> In x (map fst (nexts_of tcs)).
   Proof.
     induction tcs as [|[]]; simpl.
     - now setoid_rewrite Exists_nil.
@@ -113,7 +115,7 @@ Module Type STCISNEXT
     pose proof (s_nodup s) as Nodup.
     eapply (NoDup_app_In x) in Nodup.
     - apply nexts_of_In in Hnext.
-      rewrite <-s_nexts_in_tcs in Hnext.
+      rewrite <-s_nexts_in_tcs_fst in Hnext.
       apply Nodup; rewrite app_assoc, in_app; auto.
     - apply fst_InMembers; auto.
   Qed.
@@ -133,8 +135,10 @@ End STCISNEXT.
 Module StcIsNextFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX          Op)
-       (Syn   : STCSYNTAX     Ids Op CESyn)
-<: STCISNEXT Ids Op CESyn Syn.
-  Include STCISNEXT Ids Op CESyn Syn.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX     Ids Op OpAux Cks CESyn)
+<: STCISNEXT Ids Op OpAux Cks CESyn Syn.
+  Include STCISNEXT Ids Op OpAux Cks CESyn Syn.
 End StcIsNextFun.

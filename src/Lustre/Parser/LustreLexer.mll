@@ -33,11 +33,12 @@ let () =
     [
       ("assert",   fun loc ->  ASSERT   loc);
       ("and",      fun loc ->  AND      loc);
-      ("bool",     fun loc ->  BOOL     loc);
+      (* ("bool",     fun loc ->  BOOL     (makeident "bool", loc)); *)
+      ("case",     fun loc ->  CASE     loc);
       ("double",   fun loc ->  FLOAT64  loc); (* LEGACY *)
       ("else",     fun loc ->  ELSE     loc);
       ("every",    fun loc ->  EVERY    loc);
-      ("false",    fun loc ->  FALSE    loc);
+      ("false",    fun loc ->  ENUM_NAME (makeident "False", loc));
       ("fby",      fun loc ->  FBY      loc);
       ("float",    fun loc ->  FLOAT32  loc); (* LEGACY *)
       ("float32",  fun loc ->  FLOAT32  loc);
@@ -59,6 +60,7 @@ let () =
       ("mod",      fun loc ->  MOD      loc);
       ("node",     fun loc ->  NODE     loc);
       ("not",      fun loc ->  NOT      loc);
+      ("of",       fun loc ->  OF       loc);
       ("on",       fun loc ->  ON       loc);
       ("onot",     fun loc ->  ONOT     loc);
       ("or",       fun loc ->  OR       loc);
@@ -68,7 +70,8 @@ let () =
       ("returns",  fun loc ->  RETURNS  loc);
       ("tel",      fun loc ->  TEL      loc);
       ("then",     fun loc ->  THEN     loc);
-      ("true",     fun loc ->  TRUE     loc);
+      ("true",     fun loc ->  ENUM_NAME (makeident "True", loc));
+      ("type",     fun loc ->  TYPE     loc);
       ("uint",     fun loc ->  UINT32   loc); (* LEGACY *)
       ("uint16",   fun loc ->  UINT16   loc);
       ("uint32",   fun loc ->  UINT32   loc);
@@ -151,7 +154,8 @@ let convert_escape = function
 (* Identifiers *)
 let digit = ['0'-'9']
 let hexadecimal_digit = ['0'-'9' 'A'-'F' 'a'-'f']
-let nondigit = ['_' 'a'-'z' 'A'-'Z']
+let lnondigit = ['_' 'a'-'z']
+let unondigit = ['A'-'Z']
 
 let hex_quad = hexadecimal_digit hexadecimal_digit
                  hexadecimal_digit hexadecimal_digit
@@ -159,14 +163,19 @@ let universal_character_name =
     "\\u" (hex_quad as n)
   | "\\U" (hex_quad hex_quad as n)
 
+let lidentifier_nondigit =
+    lnondigit
+let uidentifier_nondigit =
+    unondigit
 let identifier_nondigit =
-    nondigit
+    lnondigit|unondigit
 (*| universal_character_name*)
 (*| '$'*) (* NB: We cannot accept identifiers that contains '$'
                  since we use '$' as a separator in the names of
                  Clight identifiers in target code. *)
 
-let identifier = identifier_nondigit (identifier_nondigit|digit)*
+let lidentifier = lidentifier_nondigit (identifier_nondigit|digit)*
+let uidentifier = uidentifier_nondigit (identifier_nondigit|digit)*
 
 (* Whitespaces *)
 let whitespace_char_no_newline = [' ' '\t' '\012' '\r']
@@ -297,10 +306,12 @@ rule initial = parse
   | ";"                           { SEMICOLON (currentLoc lexbuf) }
   | ","                           { COMMA (currentLoc lexbuf) }
   | "."                           { DOT (currentLoc lexbuf) }
+  | "|"                           { BAR (currentLoc lexbuf) }
   | "->"                          { RARROW (currentLoc lexbuf) }
-  | identifier as id              {
+  | lidentifier as id             {
       try Hashtbl.find lexicon id (currentLoc lexbuf)
       with Not_found -> VAR_NAME (makeident id, currentLoc lexbuf) }
+  | uidentifier as id             { ENUM_NAME (makeident id, currentLoc lexbuf) }
   | eof                           { EOF (currentLoc lexbuf) }
   | _ as c                        { fatal_error lexbuf "invalid symbol %C" c }
 

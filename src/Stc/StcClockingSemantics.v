@@ -1,5 +1,6 @@
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
@@ -32,21 +33,22 @@ constraints in the NLustre semantic model.
 Module Type STCCLOCKINGSEMANTICS
        (Import Ids      : IDS)
        (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX           Op)
-       (Import CESyn    : CESYNTAX                Op)
-       (Import Syn      : STCSYNTAX           Ids Op       CESyn)
-       (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Reset    : STCISRESET           Ids Op       CESyn Syn)
-       (Import Next     : STCISNEXT           Ids Op       CESyn Syn)
-       (Import Var      : STCISVARIABLE       Ids Op       CESyn Syn)
-       (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Next)
-       (Import Syst     : STCISSYSTEM         Ids Op       CESyn Syn)
-       (Import Ord      : STCORDERED          Ids Op       CESyn Syn Syst)
-       (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn               Str)
-       (Import Sem      : STCSEMANTICS        Ids Op OpAux CESyn Syn Syst Ord Str CESem)
-       (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Reset Var Syst Ord CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem             CEClo).
+       (Import OpAux    : OPERATORS_AUX       Ids Op)
+       (Import Cks      : CLOCKS              Ids Op OpAux)
+       (Import CESyn    : CESYNTAX            Ids Op OpAux Cks)
+       (Import Syn      : STCSYNTAX           Ids Op OpAux Cks CESyn)
+       (Import Str      : INDEXEDSTREAMS      Ids Op OpAux Cks)
+       (Import Reset    : STCISRESET          Ids Op OpAux Cks CESyn Syn)
+       (Import Next     : STCISNEXT           Ids Op OpAux Cks CESyn Syn)
+       (Import Var      : STCISVARIABLE       Ids Op OpAux Cks CESyn Syn)
+       (Import Def      : STCISDEFINED        Ids Op OpAux Cks CESyn Syn Var Next)
+       (Import Syst     : STCISSYSTEM         Ids Op OpAux Cks CESyn Syn)
+       (Import Ord      : STCORDERED          Ids Op OpAux Cks CESyn Syn Syst)
+       (Import CESem    : CESEMANTICS         Ids Op OpAux Cks CESyn               Str)
+       (Import Sem      : STCSEMANTICS        Ids Op OpAux Cks CESyn Syn Syst Ord Str CESem)
+       (Import CEClo    : CECLOCKING          Ids Op OpAux Cks CESyn)
+       (Import Clkg     : STCCLOCKING         Ids Op OpAux Cks CESyn Syn Reset Var Syst Ord CEClo)
+       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Str CESem              CEClo).
 
   Lemma sem_clocked_var_instant_tc:
     forall P base R S I S' vars x ck tc,
@@ -146,6 +148,8 @@ Module Type STCCLOCKINGSEMANTICS
 
     - (* systems *)
       rename H2 into Find'; rename H4 into Hins'; rename H5 into Houts'.
+      assert (enums P = enums P')
+        by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
       rewrite Find' in Find; inv Find.
       apply Forall_forall; unfold idck.
       intros (x, xck) Hxin.
@@ -153,7 +157,7 @@ Module Type STCCLOCKINGSEMANTICS
       apply in_map with (f:=fst), system_output_defined_in_tcs in Hxin.
       apply Is_defined_in_In in Hxin as (tc & Htcin & Hxtc).
       eapply Forall_forall in IH; eauto.
-      pose proof Find' as Find; apply find_system_app in Find as (?&?&?); subst.
+      pose proof Find' as Find; apply find_unit_spec in Find as (?&?&?&?); subst.
       apply wc_find_system with (1:=WCP) in Find' as (WCi & WCo & WCv & WCtcs).
       eapply Forall_forall in WCtcs; eauto.
       assert (NoDupMembers (idck (s_in s ++ s_vars s ++ s_out s) ++ idck (s_nexts s)))
@@ -176,7 +180,7 @@ Module Type STCCLOCKINGSEMANTICS
       (* * split; intuition; eauto; try by_sem_det. *)
         * split; intuition; eauto; try by_sem_det.
           -- eapply Hnd in Hvs.
-             eapply clock_vars_to_sem_clock_instant with (Hn' := R) in H2; eauto; try by_sem_det.
+             eapply clock_vars_to_sem_clock_instant with (Hn' := R) in Hins'; eauto; try by_sem_det.
              eapply in_app; eauto.
           -- eapply clock_vars_to_sem_clock_instant; eauto.
              ++ eapply in_app; eauto.
@@ -189,9 +193,11 @@ Module Type STCCLOCKINGSEMANTICS
           -- eapply Hnd in Hvs''.
              eapply clock_vars_to_sem_clock_instant with (Hn' := R0) in Hvs''; eauto; try by_sem_det.
              eapply in_app; eauto.
-      + apply wc_trconstr_program_app; auto.
+      + destruct P; simpl in *; subst.
+        apply wc_trconstr_program_app; auto.
         apply wc_trconstr_program_cons; auto.
-        apply Ordered_systems_append in Ord; auto.
+        * apply Ordered_systems_append in Ord; auto.
+        * destruct P'; auto.
       + rewrite in_app; left; apply In_idck_exists.
         exists xty; rewrite 2 in_app; auto.
   Qed.
@@ -222,23 +228,24 @@ Module Type STCCLOCKINGSEMANTICS
 End STCCLOCKINGSEMANTICS.
 
 Module StcClockingSemanticsFun
-       (Import Ids      : IDS)
-       (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX           Op)
-       (Import CESyn    : CESYNTAX                Op)
-       (Import Syn      : STCSYNTAX           Ids Op       CESyn)
-       (Import Str      : INDEXEDSTREAMS          Op OpAux)
-       (Import Reset    : STCISRESET           Ids Op       CESyn Syn)
-       (Import Next     : STCISNEXT           Ids Op       CESyn Syn)
-       (Import Var      : STCISVARIABLE       Ids Op       CESyn Syn)
-       (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Next)
-       (Import Syst     : STCISSYSTEM         Ids Op       CESyn Syn)
-       (Import Ord      : STCORDERED          Ids Op       CESyn Syn Syst)
-       (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn               Str)
-       (Import Sem      : STCSEMANTICS        Ids Op OpAux CESyn Syn Syst Ord Str CESem)
-       (Import CEClo    : CECLOCKING          Ids Op       CESyn)
-       (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Reset Var Syst Ord CEClo)
-       (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem                  CEClo)
-<: STCCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Reset Next Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
-  Include STCCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Reset Next Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
+       (Ids      : IDS)
+       (Op       : OPERATORS)
+       (OpAux    : OPERATORS_AUX       Ids Op)
+       (Cks      : CLOCKS              Ids Op OpAux)
+       (CESyn    : CESYNTAX            Ids Op OpAux Cks)
+       (Syn      : STCSYNTAX           Ids Op OpAux Cks CESyn)
+       (Str      : INDEXEDSTREAMS      Ids Op OpAux Cks)
+       (Reset    : STCISRESET          Ids Op OpAux Cks CESyn Syn)
+       (Next     : STCISNEXT           Ids Op OpAux Cks CESyn Syn)
+       (Var      : STCISVARIABLE       Ids Op OpAux Cks CESyn Syn)
+       (Def      : STCISDEFINED        Ids Op OpAux Cks CESyn Syn Var Next)
+       (Syst     : STCISSYSTEM         Ids Op OpAux Cks CESyn Syn)
+       (Ord      : STCORDERED          Ids Op OpAux Cks CESyn Syn Syst)
+       (CESem    : CESEMANTICS         Ids Op OpAux Cks CESyn               Str)
+       (Sem      : STCSEMANTICS        Ids Op OpAux Cks CESyn Syn Syst Ord Str CESem)
+       (CEClo    : CECLOCKING          Ids Op OpAux Cks CESyn)
+       (Clkg     : STCCLOCKING         Ids Op OpAux Cks CESyn Syn Reset Var Syst Ord CEClo)
+       (CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Str CESem              CEClo)
+<: STCCLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Syn Str Reset Next Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
+  Include STCCLOCKINGSEMANTICS Ids Op OpAux Cks CESyn Syn Str Reset Next Var Def Syst Ord CESem Sem CEClo Clkg CECloSem.
 End StcClockingSemanticsFun.

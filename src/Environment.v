@@ -797,19 +797,6 @@ Module Env.
                    end; f_equal; try rewrite rleaf; auto.
     Qed.
 
-    Lemma adds_opt_mono:
-      forall x (env: t A) ys rvos,
-        In x env ->
-        Forall (fun x => ~(x = None)) rvos ->
-        In x (adds_opt ys rvos env).
-    Proof.
-      induction ys; destruct rvos; auto.
-      intros Hin Hnone; inversion_clear Hnone.
-      destruct o; simpl.
-      - apply Props.P.F.add_in_iff; eauto.
-      - congruence.
-    Qed.
-
     Global Instance find_Proper (R : relation A) `{Equivalence A R}:
       Proper (eq ==> Env.Equiv R ==> orel R) (@Env.find A).
     Proof.
@@ -1371,6 +1358,19 @@ Module Env.
   Hint Extern 4 (In ?x (add ?y ?v ?env)) => apply In_add2.
   Hint Extern 4 (refines _ ?x ?x) => reflexivity.
   Hint Immediate eq_Transitive.
+
+  Lemma adds_opt_mono {A: Type}:
+    forall x (env: t A) ys rvos,
+      In x env ->
+      In x (adds_opt ys rvos env).
+  Proof.
+    induction ys as [|y]; destruct rvos; auto.
+    intros Hin.
+    destruct o.
+    - rewrite adds_opt_cons_cons.
+      apply In_add2; auto.
+    - rewrite adds_opt_cons_cons_None; auto.
+  Qed.
 
   Section EnvDom.
 

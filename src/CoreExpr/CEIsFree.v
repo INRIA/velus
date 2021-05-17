@@ -15,7 +15,9 @@ used in the term [t].
 Module Type CEISFREE
        (Ids         : IDS)
        (Op          : OPERATORS)
-       (Import Syn  : CESYNTAX Op).
+       (OpAux       : OPERATORS_AUX Ids Op)
+       (Import Cks  : CLOCKS        Ids Op OpAux)
+       (Import Syn  : CESYNTAX      Ids Op OpAux Cks).
 
   (* Warning: induction scheme is not strong enough. *)
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
@@ -47,26 +49,17 @@ Module Type CEISFREE
       Is_free_in_aexps x ck les.
 
   Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
-  | FreeEmerge_cond: forall i t f,
-      Is_free_in_cexp i (Emerge i t f)
-  | FreeEmerge_true: forall i t f x,
-      Is_free_in_cexp x t ->
-      Is_free_in_cexp x (Emerge i t f)
-  | FreeEmerge_false: forall i t f x,
-      Is_free_in_cexp x f ->
-      Is_free_in_cexp x (Emerge i t f)
-  (* | FreeEite: forall x b t f,  *)
-  (*     Is_free_in_exp x b \/ Is_free_in_cexp x t \/ Is_free_in_cexp x f -> *)
-  (*     Is_free_in_cexp x (Eite b t f) *)
-  | FreeEite_cond: forall x b t f,
+  | FreeEmerge_cond: forall i ti l ty,
+      Is_free_in_cexp i (Emerge (i, ti) l ty)
+  | FreeEmerge_branches: forall i l ty x,
+      Exists (Is_free_in_cexp x) l ->
+      Is_free_in_cexp x (Emerge i l ty)
+  | FreeEcase_cond: forall x b l ty,
       Is_free_in_exp x b ->
-      Is_free_in_cexp x (Eite b t f)
-  | FreeEite_true: forall x b t f,
-      Is_free_in_cexp x t ->
-      Is_free_in_cexp x (Eite b t f)
-  | FreeEite_false: forall x b t f,
-      Is_free_in_cexp x f ->
-      Is_free_in_cexp x (Eite b t f)
+      Is_free_in_cexp x (Ecase b l ty)
+  | FreeEcase_branches: forall x b l t,
+      Exists (Is_free_in_cexp x) l ->
+      Is_free_in_cexp x (Ecase b l t)
   | FreeEexp: forall e x,
       Is_free_in_exp x e ->
       Is_free_in_cexp x (Eexp e).
@@ -142,6 +135,7 @@ Module Type CEISFREE
   Fixpoint free_in_exp (e: exp) (fvs: PS.t) : PS.t :=
     match e with
     | Econst _ => fvs
+    | Eenum _ _ => fvs
     | Evar x _ => PS.add x fvs
     | Ewhen e x _ => free_in_exp e (PS.add x fvs)
     | Eunop _ e _ => free_in_exp e fvs
@@ -156,9 +150,9 @@ Module Type CEISFREE
 
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with
-    | Emerge i t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
-    | Eite b t f => free_in_cexp f (free_in_cexp t (free_in_exp b fvs))
-    | Eexp e => free_in_exp e fvs
+    | Emerge (i, _) l _ => fold_left (fun fvs e => free_in_cexp e fvs) l (PS.add i fvs)
+    | Ecase b l _       => fold_left (fun fvs e => free_in_cexp e fvs) l (free_in_exp b fvs)
+    | Eexp e            => free_in_exp e fvs
     end.
 
   Definition free_in_caexp (ck: clock)(ce: cexp) (fvs: PS.t) : PS.t :=
@@ -307,13 +301,62 @@ Module Type CEISFREE
              apply PS.add_spec in H
            end.
 
+  Lemma In_fold_left_free_in_cexp_aux:
+    forall l x m,
+      Forall (fun e =>
+                forall x m,
+                  PS.In x (free_in_cexp e m) <-> PS.In x (free_in_cexp e PS.empty) \/ PS.In x m) l ->
+      PS.In x (fold_left (fun fvs e => free_in_cexp e fvs) l m) <->
+      (PS.In x (fold_left (fun fvs e => free_in_cexp e fvs) l PS.empty)
+       \/ PS.In x m).
+  Proof.
+    induction l as [|e]; simpl; inversion_clear 1 as [|?? He].
+    - rewrite PSF.empty_iff; tauto.
+    - rewrite IHl; auto.
+      rewrite (IHl _ (free_in_cexp e PS.empty)); auto.
+      rewrite He, or_assoc; reflexivity.
+  Qed.
+
+  Lemma In_free_in_cexp:
+    forall e x m,
+      PS.In x (free_in_cexp e m) <-> PS.In x (free_in_cexp e PS.empty) \/ PS.In x m.
+  Proof.
+    induction e using cexp_ind2; simpl; intros.
+    - destruct x as (x, _); rewrite In_fold_left_free_in_cexp_aux; auto.
+      rewrite (In_fold_left_free_in_cexp_aux _ _ (PS.add x PS.empty)); auto.
+      rewrite ? PS.add_spec, ? or_assoc, PSF.empty_iff; tauto.
+    - rewrite In_fold_left_free_in_cexp_aux; auto.
+      symmetry; rewrite (In_fold_left_free_in_cexp_aux _ _ (free_in_exp c PS.empty)); auto.
+      rewrite ? free_in_exp_spec, ? or_assoc, PSF.empty_iff; tauto.
+    - rewrite 2 free_in_exp_spec, PSF.empty_iff; tauto.
+  Qed.
+
+  Corollary In_fold_left_free_in_cexp:
+    forall l x m,
+      PS.In x (fold_left (fun fvs e => free_in_cexp e fvs) l m) <->
+      (PS.In x (fold_left (fun fvs e => free_in_cexp e fvs) l PS.empty)
+       \/ PS.In x m).
+  Proof.
+    intros; apply In_fold_left_free_in_cexp_aux.
+    apply Forall_forall; intros; apply In_free_in_cexp.
+  Qed.
+
+  (* Corollary In_fold_left_or_default_free_in_cexp: *)
+  (*   forall l x m e, *)
+  (*     PS.In x (fold_left (fun fvs oe => free_in_cexp (or_default e oe) fvs) l m) <-> *)
+  (*     (PS.In x (fold_left (fun fvs oe => free_in_cexp (or_default e oe) fvs) l PS.empty) *)
+  (*      \/ PS.In x m). *)
+  (* Proof. *)
+  (*   intros; apply In_fold_left_or_default_free_in_cexp_aux. *)
+  (*   apply Forall_forall; intros; apply In_free_in_cexp. *)
+  (* Qed. *)
+
   Lemma free_in_cexp_spec:
-    forall x e m, PS.In x (free_in_cexp e m)
+    forall e x m, PS.In x (free_in_cexp e m)
                   <-> Is_free_in_cexp x e \/ PS.In x m.
   Proof.
-    intro x;
-      induction e;
-      intro m; simpl; split; intro H0;
+    induction e using cexp_ind2;
+      intros; simpl; split; intro H0;
         destruct_Is_free;
         subst; auto;
           try rewrite IHe2, IHe1;
@@ -323,6 +366,59 @@ Module Type CEISFREE
           | |- _ => idtac
           end;
           intuition.
+    - induction l as [|e]; destruct x; simpl in *.
+      + apply PS.add_spec in H0 as []; subst; auto.
+      + apply In_fold_left_free_in_cexp in H0 as [|Hin].
+        * inv H.
+          destruct IHl as [Free|]; auto.
+          -- apply In_fold_left_free_in_cexp; auto.
+          -- inv Free; left; constructor.
+             right; auto.
+        * apply In_free_in_cexp in Hin as [Hin|Hin].
+          -- inversion_clear H as [|?? He].
+             apply He in Hin.
+             rewrite PSF.empty_iff in Hin; destruct Hin; try contradiction.
+             left; constructor; left; auto.
+          -- apply PS.add_spec in Hin as []; subst; auto.
+    - induction l as [|e]; simpl in *.
+      + apply PS.add_spec; auto.
+      + apply In_fold_left_free_in_cexp.
+        inversion_clear H as [|?? He Hl].
+        apply IHl, In_fold_left_free_in_cexp in Hl as [|Hin]; auto.
+        rewrite In_free_in_cexp; auto.
+    - take (Exists _ _) and eapply Forall_Exists in it; eauto.
+      apply Exists_exists in it as (e & Hin & He & Free).
+      apply In_split in Hin as (l1 & l2 & E); subst.
+      rewrite fold_left_app; simpl.
+      rewrite 2 In_fold_left_free_in_cexp, In_free_in_cexp, He; auto.
+    - apply In_fold_left_free_in_cexp.
+      right; apply PSF.add_2; auto.
+    - induction l as [|e]; simpl in *.
+      + apply free_in_exp_spec in H0 as []; subst; auto.
+      + apply In_fold_left_free_in_cexp in H0 as [|Hin].
+        * inv H.
+          destruct IHl as [Free|]; auto.
+          -- apply In_fold_left_free_in_cexp; auto.
+          -- inv Free; constructor; auto.
+        * apply In_free_in_cexp in Hin as [Hin|Hin].
+          -- inversion_clear H as [|?? He].
+             apply He in Hin.
+             rewrite PSF.empty_iff in Hin; destruct Hin; try contradiction.
+             left; constructor; left; auto.
+          -- apply free_in_exp_spec in Hin as []; subst; auto.
+    - induction l as [|e']; simpl in *.
+      + apply free_in_exp_spec; auto.
+      + apply In_fold_left_free_in_cexp.
+        inversion_clear H as [|?? He Hl].
+        apply IHl, In_fold_left_free_in_cexp in Hl as [|Hin]; auto.
+        rewrite In_free_in_cexp; auto.
+    - take (Exists _ _) and eapply Forall_Exists in it; eauto.
+      apply Exists_exists in it as (e' & Hin & He & Free).
+      apply In_split in Hin as (l1 & l2 & E); subst.
+      rewrite fold_left_app; simpl.
+      rewrite 2 In_fold_left_free_in_cexp, In_free_in_cexp, He; auto.
+    - apply In_fold_left_free_in_cexp.
+      right; apply free_in_exp_spec; auto.
   Qed.
 
   Lemma free_in_cexp_spec':
@@ -360,7 +456,9 @@ End CEISFREE.
 Module CEIsFreeFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (Syn  : CESYNTAX Op)
-       <: CEISFREE Ids Op Syn.
-  Include CEISFREE Ids Op Syn.
+       (OpAux: OPERATORS_AUX Ids Op)
+       (Cks  : CLOCKS        Ids Op OpAux)
+       (Syn  : CESYNTAX      Ids Op OpAux Cks)
+       <: CEISFREE Ids Op OpAux Cks Syn.
+  Include CEISFREE Ids Op OpAux Cks Syn.
 End CEIsFreeFun.

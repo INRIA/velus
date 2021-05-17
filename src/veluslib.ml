@@ -13,6 +13,9 @@ let reaction_counter = Camlcoq.intern_string "$reaction"
 let fuse_obc = ref true
 let do_fusion () = !fuse_obc
 
+let normalize_switches = ref true
+let do_normalize_switches () = !normalize_switches
+
 let do_sync () = !sync_destination <> None
 
 (* try to automatically constants in "when"s? *)
@@ -22,14 +25,16 @@ let do_add_when_to_constants () = !add_when_to_constants
 let expose = ref false
 let do_expose () = !expose
 
-let get_main_class decls =
+let get_main_class prog =
   try
     let open Interface.Obc.Syn in
     match !main_node with
     | Some s ->
-        let nm = Camlcoq.intern_string s in
-        List.find (fun c->c.c_name = nm) decls
-    | None -> List.hd decls
+      begin match find_class (Camlcoq.intern_string s) prog with
+        | Some (n, _) -> n
+        | None -> raise Not_found
+      end
+    | None -> List.hd prog.classes
   with _ ->
     (Printf.eprintf "main class not found"; exit 1)
 
@@ -80,7 +85,8 @@ let print_sync_if prog =
 
 let print_obc_if prog =
   print_sync_if prog;
-  print_if obc_destination Interfacelib.PrintObc.print_program (List.rev prog)
+  print_if obc_destination Interfacelib.PrintObc.print_program
+    (Interface.Obc.Syn.rev_prog prog)
 
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in

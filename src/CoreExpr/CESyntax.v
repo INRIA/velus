@@ -1,33 +1,77 @@
 From Velus Require Import Common.
 From Velus Require Import Operators.
+From Velus Require Import Clocks.
 
 (** * The core dataflow expresion syntax *)
 
-Module Type CESYNTAX (Import Op: OPERATORS).
+Module Type CESYNTAX
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import OpAux: OPERATORS_AUX Ids Op)
+       (Import Cks  : CLOCKS        Ids Op OpAux).
 
   (** ** Expressions *)
 
   Inductive exp : Type :=
-  | Econst : const -> exp
+  | Econst : cconst -> exp
+  | Eenum  : enumtag -> type -> exp
   | Evar   : ident -> type -> exp
-  | Ewhen  : exp -> ident -> bool -> exp
+  | Ewhen  : exp -> ident -> enumtag -> exp
   | Eunop  : unop -> exp -> type -> exp
   | Ebinop : binop -> exp -> exp -> type -> exp.
 
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
-  | Emerge : ident -> cexp -> cexp -> cexp
-  | Eite   : exp -> cexp -> cexp -> cexp
+  | Emerge : ident * type -> list cexp -> type -> cexp
+  | Ecase  : exp -> list cexp -> type -> cexp
   | Eexp   : exp -> cexp.
+
+  Section cexp_ind2.
+
+    Variable P : cexp -> Prop.
+
+    Hypothesis MergeCase:
+      forall x l t,
+        List.Forall P l ->
+        P (Emerge x l t).
+
+    Hypothesis CaseCase:
+      forall c l t,
+        List.Forall P l ->
+        P (Ecase c l t).
+
+    Hypothesis ExpCase:
+      forall e,
+        P (Eexp e).
+
+    Fixpoint cexp_ind2 (e : cexp) : P e.
+    Proof.
+      destruct e.
+      - apply MergeCase.
+        induction l; auto.
+      - apply CaseCase.
+        induction l; auto.
+      - apply ExpCase.
+    Defined.
+
+  End cexp_ind2.
 
   Fixpoint typeof (le: exp): type :=
     match le with
-    | Econst c => type_const c
+    | Econst c => Tprimitive (ctype_cconst c)
+    | Eenum _ ty
     | Evar _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e
+    end.
+
+  Fixpoint typeofc (ce: cexp): type :=
+    match ce with
+    | Emerge _ _ ty
+    | Ecase _ _ ty => ty
+    | Eexp e        => typeof e
     end.
 
   (** Predicate used in [normal_args] in NLustre and Stc. *)
@@ -36,7 +80,7 @@ Module Type CESYNTAX (Import Op: OPERATORS).
     | Cbase => True
     | Con ck' _ _ =>
       match e with
-      | Econst _ | Evar _ _ => True
+      | Econst _ | Eenum _ _ | Evar _ _ => True
       | Ewhen e' _ _ => noops_exp ck' e'
       | _ => False
       end
@@ -44,6 +88,10 @@ Module Type CESYNTAX (Import Op: OPERATORS).
 
 End CESYNTAX.
 
-Module CESyntaxFun (Op: OPERATORS) <: CESYNTAX Op.
-  Include CESYNTAX Op.
+Module CESyntaxFun
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (OpAux: OPERATORS_AUX Ids Op)
+       (Cks  : CLOCKS        Ids Op OpAux) <: CESYNTAX Ids Op OpAux Cks.
+  Include CESYNTAX Ids Op OpAux Cks.
 End CESyntaxFun.

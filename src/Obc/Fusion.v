@@ -1,6 +1,7 @@
 From Coq Require Import FSets.FMapPositive.
 From Coq Require Import PArith.
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Obc.ObcSyntax.
 From Velus Require Import Obc.ObcSemantics.
@@ -21,20 +22,29 @@ From Coq Require Import Setoid.
 Module Type FUSION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
+       (Import OpAux : OPERATORS_AUX Ids Op)
        (Import SynObc: OBCSYNTAX     Ids Op OpAux)
+       (Import ComTyp: COMMONTYPING  Ids Op OpAux)
        (Import SemObc: OBCSEMANTICS  Ids Op OpAux SynObc)
-       (Import InvObc: OBCINVARIANTS Ids Op OpAux SynObc SemObc)
-       (Import TypObc: OBCTYPING     Ids Op OpAux SynObc SemObc)
-       (Import Equ   : EQUIV         Ids Op OpAux SynObc SemObc TypObc).
+       (Import InvObc: OBCINVARIANTS Ids Op OpAux SynObc        SemObc)
+       (Import TypObc: OBCTYPING     Ids Op OpAux SynObc ComTyp SemObc)
+       (Import Equ   : EQUIV         Ids Op OpAux SynObc ComTyp SemObc TypObc).
 
   (** ** Fusion functions *)
 
+  Definition option_map2_defaults {A B C} (f: A -> B -> C) (da: A) (db: B) (oa: option A) (ob: option B) : option C :=
+    match oa, ob with
+    | Some a, Some b => Some (f a b)
+    | Some a, None   => Some (f a db)
+    | None, Some b   => Some (f da b)
+    | None, None     => None
+    end.
+
   Fixpoint zip s1 s2 : stmt :=
     match s1, s2 with
-    | Ifte e1 t1 f1, Ifte e2 t2 f2 =>
-      if equiv_decb e1 e2
-      then Ifte e1 (zip t1 t2) (zip f1 f2)
+    | Switch e1 ss1 d1, Switch e2 ss2 d2 =>
+      if e1 ==b e2
+      then Switch e1 (CommonList.map2 (option_map2_defaults zip d1 d2) ss1 ss2) (zip d1 d2)
       else Comp s1 s2
     | Skip, s => s
     | s,    Skip => s
@@ -97,50 +107,22 @@ Module Type FUSION
     now rewrite map_m_name_fuse_methods.
   Qed.
 
+  Program Instance fuse_class_transform_unit: TransformUnit class class :=
+    { transform_unit := fuse_class }.
+  Next Obligation.
+    unfold fuse_class; cases.
+  Defined.
+
+  Program Instance fuse_class_transform_state_unit: TransformStateUnit class class.
+  Next Obligation.
+    unfold fuse_class; cases.
+  Defined.
+
   (** ** Basic lemmas around [fuse_class] and [fuse_method]. *)
 
-  Lemma fuse_class_name:
+  Lemma fuse_class_c_name:
     forall c, (fuse_class c).(c_name) = c.(c_name).
   Proof. destruct c; auto. Qed.
-
-  Lemma fuse_method_name:
-    forall m, (fuse_method m).(m_name) = m.(m_name).
-  Proof. destruct m; auto. Qed.
-
-  Lemma fuse_method_in:
-    forall m, (fuse_method m).(m_in) = m.(m_in).
-  Proof. destruct m; auto. Qed.
-
-  Lemma fuse_method_out:
-    forall m, (fuse_method m).(m_out) = m.(m_out).
-  Proof. destruct m; auto. Qed.
-
-  Lemma fuse_find_class:
-    forall p id c p',
-      find_class id p = Some (c, p') ->
-      find_class id (map fuse_class p) = Some (fuse_class c, map fuse_class p').
-  Proof.
-    induction p as [|c']; simpl; intros * Find; try discriminate.
-    rewrite fuse_class_name.
-    destruct (ident_eqb (c_name c') id); auto.
-    inv Find; auto.
-  Qed.
-
-  Lemma fuse_find_method:
-    forall id c m,
-      find_method id (fuse_class c).(c_methods) = Some m ->
-      exists m', m = fuse_method m'
-                 /\ find_method id c.(c_methods) = Some m'.
-  Proof.
-    intros * Find.
-    destruct c as [? ? ? meths ? Nodup]; simpl in *.
-    induction meths as [|m']; simpl in *; try discriminate.
-    inv Nodup; auto.
-    rewrite fuse_method_name in Find.
-    destruct (ident_eqb (m_name m') id); auto.
-    inv Find.
-    exists m'; auto.
-  Qed.
 
   Lemma fuse_class_c_objs:
     forall c,
@@ -156,25 +138,49 @@ Module Type FUSION
     unfold fuse_class. destruct c; auto.
   Qed.
 
-  Lemma fuse_class_c_name:
-    forall c,
-      (fuse_class c).(c_name) = c.(c_name).
-  Proof.
-    unfold fuse_class. destruct c; auto.
-  Qed.
-
   Lemma fuse_method_m_name:
-    forall m,
-      (fuse_method m).(m_name) = m.(m_name).
-  Proof.
-    unfold fuse_method; destruct m; auto.
-  Qed.
+    forall m, (fuse_method m).(m_name) = m.(m_name).
+  Proof. destruct m; auto. Qed.
+
+  Lemma fuse_method_in:
+    forall m, (fuse_method m).(m_in) = m.(m_in).
+  Proof. destruct m; auto. Qed.
+
+  Lemma fuse_method_out:
+    forall m, (fuse_method m).(m_out) = m.(m_out).
+  Proof. destruct m; auto. Qed.
 
   Lemma fuse_method_body:
     forall fm,
       (fuse_method fm).(m_body) = fuse fm.(m_body).
   Proof.
     now destruct fm.
+  Qed.
+
+  Definition fuse_program : program -> program := transform_units.
+
+  Lemma fuse_find_class:
+    forall p id c p',
+      find_class id p = Some (c, p') ->
+      find_class id (fuse_program p) = Some (fuse_class c, fuse_program p').
+  Proof.
+    intros * Find; apply find_unit_transform_units_forward in Find; auto.
+  Qed.
+
+  Lemma fuse_find_method:
+    forall id c m,
+      find_method id (fuse_class c).(c_methods) = Some m ->
+      exists m', m = fuse_method m'
+                 /\ find_method id c.(c_methods) = Some m'.
+  Proof.
+    intros * Find.
+    destruct c as [? ? ? meths ? Nodup]; simpl in *.
+    induction meths as [|m']; simpl in *; try discriminate.
+    inv Nodup; auto.
+    rewrite fuse_method_m_name in Find.
+    destruct (ident_eqb (m_name m') id); auto.
+    inv Find.
+    exists m'; auto.
   Qed.
 
   Lemma map_fuse_class_c_name:
@@ -238,11 +244,10 @@ Module Type FUSION
       Fusible (Assign x e)
   | IFAssignSt: forall x e,
       Fusible (AssignSt x e)
-  | IFIfte: forall e s1 s2,
-      Fusible s1 ->
-      Fusible s2 ->
-      (forall x, Is_free_in_exp x e -> ~Can_write_in x s1 /\ ~Can_write_in x s2) ->
-      Fusible (Ifte e s1 s2)
+  | IFSwitch: forall e ss d,
+      Forall (fun s => Fusible (or_default d s)) ss ->
+      (forall x, Is_free_in_exp x e -> Forall (fun s => ~ Can_write_in x (or_default d s)) ss) ->
+      Fusible (Switch e ss d)
   | IFStep_ap: forall xs cls i f es,
       Fusible (Call xs cls i f es)
   | IFComp: forall s1 s2,
@@ -254,6 +259,9 @@ Module Type FUSION
 
   Definition ClassFusible (c: class) : Prop :=
     Forall (fun m=> Fusible m.(m_body)) c.(c_methods).
+
+  Definition ProgramFusible (p: program) : Prop :=
+    Forall ClassFusible p.(classes).
 
   Lemma Fusible_fold_left_shift:
     forall A f (xs : list A) iacc,
@@ -282,153 +290,40 @@ Module Type FUSION
                       end.
   Qed.
 
-  Lemma Can_write_in_zip:
-    forall s1 s2 x,
-      (Can_write_in x s1 \/ Can_write_in x s2)
-      <-> Can_write_in x (zip s1 s2).
-  Proof.
-    Hint Constructors Can_write_in.
-    induction s1, s2; simpl;
-      repeat progress
-             match goal with
-             | H:Can_write_in _ (Comp _ _) |- _ => inversion H; subst; clear H
-             | H:Can_write_in _ (Ifte _ _ _) |- _ => inversion H; subst; clear H
-             | H:Can_write_in _ Skip |- _ => now inversion H
-             | H:Can_write_in _ _ \/ Can_write_in _ _ |- _ => destruct H
-             | |- context [equiv_decb ?e1 ?e2] =>
-               destruct (equiv_decb e1 e2) eqn:Heq
-             | |- Can_write_in _ (Ifte _ _ _) =>
-               (apply CWIIfteTrue; apply IHs1_1; now intuition)
-               || (apply CWIIfteFalse; apply IHs1_2; now intuition)
-             | H:Can_write_in _ (zip _ _) |- _ =>
-               apply IHs1_1 in H || apply IHs1_2 in H
-             | |- Can_write_in _ (Comp _ (zip _ _)) =>
-               now (apply CWIComp2; apply IHs1_2; intuition)
-             | _ => intuition
-             end.
-  Qed.
-
-  Corollary Cannot_write_in_zip:
-    forall s1 s2 x,
-      (~Can_write_in x s1 /\ ~Can_write_in x s2)
-      <-> ~Can_write_in x (zip s1 s2).
-  Proof.
-    intros s1 s2 x.
-    split; intro HH.
-    - intro Hcan; apply Can_write_in_zip in Hcan; intuition.
-    - split; intro Hcan; apply HH; apply Can_write_in_zip; intuition.
-  Qed.
-
-  Lemma Can_write_in_var_zip:
-    forall s1 s2 x,
-      (Can_write_in_var x s1 \/ Can_write_in_var x s2)
-      <-> Can_write_in_var x (zip s1 s2).
-  Proof.
-    Hint Constructors Can_write_in_var.
-    induction s1, s2; simpl;
-      repeat progress
-             match goal with
-             | H:Can_write_in_var _ (Comp _ _) |- _ => inversion H; subst; clear H
-             | H:Can_write_in_var _ (Ifte _ _ _) |- _ => inversion H; subst; clear H
-             | H:Can_write_in_var _ Skip |- _ => now inversion H
-             | H:Can_write_in_var _ _ \/ Can_write_in_var _ _ |- _ => destruct H
-             | |- context [equiv_decb ?e1 ?e2] =>
-               destruct (equiv_decb e1 e2) eqn:Heq
-             | |- Can_write_in_var _ (Ifte _ _ _) =>
-               (apply CWIVIfteTrue; apply IHs1_1; now intuition)
-               || (apply CWIVIfteFalse; apply IHs1_2; now intuition)
-             | H:Can_write_in_var _ (zip _ _) |- _ =>
-               apply IHs1_1 in H || apply IHs1_2 in H
-             | |- Can_write_in_var _ (Comp _ (zip _ _)) =>
-               now (apply CWIVComp2; apply IHs1_2; intuition)
-             | _ => intuition
-             end.
-  Qed.
-
-  Corollary Cannot_write_in_var_zip:
-    forall s1 s2 x,
-      (~Can_write_in_var x s1 /\ ~Can_write_in_var x s2)
-      <-> ~Can_write_in_var x (zip s1 s2).
-  Proof.
-    intros s1 s2 x.
-    split; intro HH.
-    - intro Hcan; apply Can_write_in_var_zip in Hcan; intuition.
-    - split; intro Hcan; apply HH; apply Can_write_in_var_zip; intuition.
-  Qed.
-
-  Lemma lift_Ifte:
-    forall e s1 s2 t1 t2,
-      (forall x, Is_free_in_exp x e
-            -> (~Can_write_in x s1 /\ ~Can_write_in x s2))
-      -> stmt_eval_eq (Comp (Ifte e s1 s2) (Ifte e t1 t2))
-                      (Ifte e (Comp s1 t1) (Comp s2 t2)).
+  Lemma lift_Switch:
+    forall e ss d1 tt d2,
+      (forall x, Is_free_in_exp x e -> Forall (fun s => ~ Can_write_in x (or_default d1 s)) ss) ->
+      stmt_eval_eq (Comp (Switch e ss d1) (Switch e tt d2))
+                   (Switch e (CommonList.map2 (option_map2_defaults Comp d1 d2) ss tt) (Comp d1 d2)).
   Proof.
     Hint Constructors stmt_eval.
-    intros e s1 s2 t1 t2 Hfw prog menv env menv' env'.
+    intros * Hfw prog menv env menv' env'.
     split; intro Hstmt.
     - inversion_clear Hstmt as [| | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
-      inversion_clear Hs as   [| | | |? ? ? ? ? bs ? ? ? ? Hx1 Hse Hss|];
-        inversion_clear Ht as [| | | |? ? ? ? ? bt ? ? ? ? Hx3 Hte Hts|];
-        destruct bs; destruct bt; econstructor; try eassumption;
-          repeat progress match goal with
-          | H:val_to_bool _ = Some true |- _ => apply val_to_bool_true' in H
-          | H:val_to_bool _ = Some false |- _ => apply val_to_bool_false' in H
-          end; subst; eauto.
-      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
-        apply exp_eval_det with (1:=Hx3) in Hx1.
-        exfalso; apply true_not_false_val. injection Hx1; auto.
-      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
-        apply exp_eval_det with (1:=Hx3) in Hx1.
-        exfalso; apply true_not_false_val. injection Hx1; auto.
+      inversion_clear Hs as   [| | | |? ? ? ? ? ? ? ? ? ? Hx1 Nths Hss|];
+        inversion_clear Ht as [| | | |? ? ? ? ? ? ? ? ? ? Hx3 Ntht Hts|].
+      econstructor; eauto.
+      + apply cannot_write_exp_eval with (3:=Hss) in Hx1.
+        * apply exp_eval_det with (1:=Hx3) in Hx1.
+          inv Hx1.
+          pose proof (conj Nths Ntht) as Nth.
+          apply combine_nth_error in Nth.
+          rewrite map2_combine.
+          apply map_nth_error with (f := fun '(a, b) => option_map2_defaults Comp d1 d2 a b); eauto.
+        * cannot_write.
+          eapply nth_error_In, Forall_forall in Nths; eauto.
+          contradiction.
+      + simpl; unfold option_map2_defaults; cases; simpl in *; eauto.
     - inversion_clear Hstmt as [| | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
-      destruct b; assert (Hv':=Hv);
-        [apply val_to_bool_true' in Hv'
-        |apply val_to_bool_false' in Hv']; subst;
-          inversion_clear Hs as [| | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ];
-          apply Icomp with (me1:=menv'') (ve1:=env'');
-          eauto.
-      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
-        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
-      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
-        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
-  Qed.
-
-  Lemma zip_free_write:
-    forall s1 s2,
-      Fusible s1
-      -> Fusible s2
-      -> Fusible (zip s1 s2).
-  Proof.
-    Hint Constructors Fusible Can_write_in.
-    induction s1, s2;
-      intros Hfree1 Hfree2;
-      inversion_clear Hfree1;
-      simpl;
-      try now intuition.
-    match goal with
-    | |- context [equiv_decb ?e1 ?e2] => destruct (equiv_decb e1 e2) eqn:Heq
-    end; [|intuition].
-    rewrite equiv_decb_equiv in Heq.
-    rewrite <-Heq in *.
-    inversion_clear Hfree2;
-      constructor;
-      repeat progress
-             match goal with
-             | H1:Fusible ?s1,
-                 H2:Fusible ?s2,
-                 Hi:context [Fusible (zip _ _)]
-               |- Fusible (zip ?s1 ?s2)
-               => apply Hi with (1:=H1) (2:=H2)
-             | |- forall x, Is_free_in_exp x ?e -> _
-               => intros x Hfree
-             | H1:context [Is_free_in_exp _ ?e -> _ /\ _],
-                  H2:Is_free_in_exp _ ?e |- _
-               => specialize (H1 _ H2)
-             | |- _ /\ _ => split
-             | |- ~Can_write_in _ (zip _ _)
-               => apply Cannot_write_in_zip; intuition
-             | _ => idtac
-             end.
+      rewrite map2_combine in Hv.
+      apply map_nth_error_inv in Hv as ((s1 & s2) & Nth & ?); subst.
+      apply combine_nth_error in Nth as (Nth1 &?).
+      unfold option_map2_defaults in Hs;
+        cases; simpl in *; inv Hs; do 2 (econstructor; eauto);
+        eapply cannot_write_exp_eval; eauto;
+          cannot_write;
+          eapply nth_error_In, Forall_forall in Nth1; eauto;
+            contradiction.
   Qed.
 
   Lemma zip_Comp':
@@ -436,7 +331,7 @@ Module Type FUSION
       Fusible s1 ->
       stmt_eval_eq (zip s1 s2) (Comp s1 s2).
   Proof.
-    induction s1, s2;
+    induction s1 using stmt_ind2; destruct s2;
       try rewrite stmt_eval_eq_Comp_Skip1;
       try rewrite stmt_eval_eq_Comp_Skip2;
       try reflexivity;
@@ -453,359 +348,643 @@ Module Type FUSION
                |- context [zip ?s1 ?s2]
                => rewrite IH with (1:=H)
              end;
-      try (rewrite lift_Ifte; [|assumption]);
+      try (rewrite lift_Switch; [|assumption]);
       try rewrite Comp_assoc;
-      reflexivity.
+      try reflexivity.
+    intros p me ve me' ve'.
+    rewrite 2 map2_combine.
+    split; inversion_clear 1.
+    - take (nth_error _ _ = _) and apply map_nth_error_inv in it as ((os1 & os2) & Hin & ?); subst.
+      pose proof Hin.
+      apply combine_nth_error in Hin as (Hin1 & Hin2).
+      apply nth_error_In in Hin1.
+      do 2 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      rename it into IH.
+      take (stmt_eval _ _ _ _ _) and unfold option_map2_defaults in it.
+      cases; simpl in *; take (stmt_eval _ _ _ _ _) and apply IH in it; auto;
+        econstructor; eauto; try erewrite map_nth_error; eauto.
+    - take (nth_error _ _ = _) and apply map_nth_error_inv in it as ((os1 & os2) & Hin & ?); subst.
+      pose proof Hin.
+      apply combine_nth_error in Hin as (Hin1 & Hin2).
+      apply nth_error_In in Hin1.
+      do 2 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      rename it into IH.
+      take (stmt_eval _ _ _ _ _) and unfold option_map2_defaults in it.
+      cases; simpl in *; take (stmt_eval _ _ _ _ _) and apply IH in it; auto;
+        econstructor; eauto; try erewrite map_nth_error; eauto.
   Qed.
 
-  Lemma fuse'_Comp:
-    forall s2 s1,
-      Fusible s1 ->
-      Fusible s2 ->
-      stmt_eval_eq (fuse' s1 s2) (Comp s1 s2).
-  Proof.
-    Hint Constructors Fusible.
-    induction s2;
-      intros s1 Hifte1 Hifte2; simpl;
-        try now (rewrite zip_Comp'; intuition).
-    rewrite Comp_assoc.
-    inversion_clear Hifte2.
-    rewrite IHs2_2; auto.
-    - intros prog menv env menv' env'.
-      rewrite zip_Comp'; auto.
-      reflexivity.
-    - apply zip_free_write; auto.
-  Qed.
+  Section CannotWriteZip.
 
-  Corollary fuse_Comp:
-    forall s,
-      Fusible s ->
-      stmt_eval_eq (fuse s) s.
-  Proof.
-    intros s Hfree prog menv env menv' env'.
-    destruct s; simpl; try reflexivity.
-    inversion_clear Hfree.
-    now apply fuse'_Comp.
-  Qed.
+    Variables (p: program)
+              (insts: list (ident * ident))
+              (Γm: list (ident * type))
+              (Γv: list (ident * type)).
+
+    Lemma Can_write_in_zip:
+      forall s1 s2 x,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        (Can_write_in x s1 \/ Can_write_in x s2)
+        <-> Can_write_in x (zip s1 s2).
+    Proof.
+      Hint Constructors Can_write_in wt_stmt.
+      induction s1 using stmt_ind2; destruct s2; simpl; inversion_clear 1; inversion_clear 1;
+        repeat progress
+               match goal with
+               | H:Can_write_in _ (Comp _ _) |- _ => inversion H; subst; clear H
+               | H:Can_write_in _ (Switch _ _ _) |- _ => inversion H; subst; clear H
+               | H:Can_write_in _ Skip |- _ => now inversion H
+               | |- context [equiv_decb ?e1 ?e2] =>
+                 destruct (equiv_decb e1 e2) eqn:Heq
+               | H:Can_write_in _ (zip _ _) |- _ =>
+                 (apply IHs1_1 in H || apply IHs1_2 in H); eauto
+               | |- Can_write_in _ (Comp _ (zip _ _)) =>
+                 now (apply CWIComp2; apply IHs1_2; eauto; intuition)
+               | _ => intuition eauto
+               end.
+      - constructor.
+        rewrite map2_combine, Exists_map, Exists_exists.
+        take (Exists _ _) and apply Exists_exists in it as (d1 & Hin & Can).
+        rewrite equiv_decb_equiv in Heq.
+        assert (e = e0 ); auto; subst.
+        match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
+        assert (length l = length ss) by congruence.
+        repeat take (Forall _ ss) and eapply Forall_forall in it; eauto.
+        eapply length_in_left_combine with (l' := l) in Hin as (s & Hin); eauto.
+        eexists; split; eauto.
+        pose proof Hin as Hin'; apply in_combine_r in Hin; apply in_combine_l in Hin'.
+        destruct d1, s; simpl in *; apply it; auto.
+      - constructor.
+        rewrite map2_combine, Exists_map, Exists_exists.
+        take (Exists _ _) and apply Exists_exists in it as (d2 & Hin & Can).
+        rewrite equiv_decb_equiv in Heq.
+        assert (e = e0 ); auto; subst.
+        match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
+        assert (length l = length ss) by congruence.
+        pose proof Hin as Hin'.
+        eapply length_in_right_combine with (l0 := ss) in Hin as (s & Hin); eauto.
+        eexists; split; eauto.
+        apply in_combine_l in Hin.
+        repeat take (Forall _ ss) and eapply Forall_forall in it; eauto.
+        destruct d2, s; apply it; auto;
+          eapply Forall_forall in Hin'; eauto; simpl in Hin'; auto.
+      - take (Exists _ _) and apply Exists_exists in it as (s & Hin & Can).
+        rewrite map2_combine, in_map_iff in Hin; destruct Hin as ((os1 & os2) & E & Hin); subst.
+        pose proof Hin as Hin'.
+        apply in_combine_l in Hin.
+        apply in_combine_r in Hin'.
+        repeat take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in it.
+        unfold option_map2_defaults in Can.
+        cases; simpl in *; apply it in Can as [|]; auto;
+          ((now left; constructor; apply Exists_exists; eauto) ||
+           (now right; constructor; apply Exists_exists; eauto)).
+    Qed.
+
+    Corollary Cannot_write_in_zip:
+      forall s1 s2 x,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        (~Can_write_in x s1 /\ ~Can_write_in x s2)
+        <-> ~Can_write_in x (zip s1 s2).
+    Proof.
+      intros s1 s2 x.
+      split; intro HH.
+      - intro Hcan; eapply Can_write_in_zip in Hcan; intuition.
+      - split; intro Hcan; apply HH; apply Can_write_in_zip; intuition.
+    Qed.
+
+    Lemma Can_write_in_var_zip:
+      forall s1 s2 x,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        (Can_write_in_var x s1 \/ Can_write_in_var x s2)
+        <-> Can_write_in_var x (zip s1 s2).
+    Proof.
+      Hint Constructors Can_write_in_var wt_stmt.
+      induction s1 using stmt_ind2; destruct s2; simpl; inversion_clear 1; inversion_clear 1;
+        repeat progress
+               match goal with
+               | H:Can_write_in_var _ (Comp _ _) |- _ => inversion H; subst; clear H
+               | H:Can_write_in_var _ (Switch _ _ _) |- _ => inversion H; subst; clear H
+               | H:Can_write_in_var _ Skip |- _ => now inversion H
+               | |- context [equiv_decb ?e1 ?e2] =>
+                 destruct (equiv_decb e1 e2) eqn:Heq
+               | H:Can_write_in_var _ (zip _ _) |- _ =>
+                 (apply IHs1_1 in H || apply IHs1_2 in H); eauto
+               | |- Can_write_in_var _ (Comp _ (zip _ _)) =>
+                 now (apply CWIVComp2; apply IHs1_2; eauto; intuition)
+               | _ => intuition eauto
+               end.
+      - constructor.
+        rewrite map2_combine, Exists_map, Exists_exists.
+        take (Exists _ _) and apply Exists_exists in it as (d1 & Hin & Can).
+        rewrite equiv_decb_equiv in Heq.
+        assert (e = e0 ); auto; subst.
+        match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
+        assert (length l = length ss) by congruence.
+        repeat take (Forall _ ss) and eapply Forall_forall in it; eauto.
+        eapply length_in_left_combine with (l' := l) in Hin as (s & Hin); eauto.
+        eexists; split; eauto.
+        pose proof Hin as Hin'; apply in_combine_r in Hin; apply in_combine_l in Hin'.
+        destruct d1, s; simpl in *; apply it; auto.
+      - constructor.
+        rewrite map2_combine, Exists_map, Exists_exists.
+        take (Exists _ _) and apply Exists_exists in it as (d2 & Hin & Can).
+        rewrite equiv_decb_equiv in Heq.
+        assert (e = e0 ); auto; subst.
+        match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
+        assert (length l = length ss) by congruence.
+        pose proof Hin as Hin'.
+        eapply length_in_right_combine with (l0 := ss) in Hin as (s & Hin); eauto.
+        eexists; split; eauto.
+        apply in_combine_l in Hin.
+        repeat take (Forall _ ss) and eapply Forall_forall in it; eauto.
+        destruct d2, s; apply it; auto;
+          eapply Forall_forall in Hin'; eauto; simpl in Hin'; auto.
+      - take (Exists _ _) and apply Exists_exists in it as (s & Hin & Can).
+        rewrite map2_combine, in_map_iff in Hin; destruct Hin as ((os1 & os2) & E & Hin); subst.
+        pose proof Hin as Hin'.
+        apply in_combine_l in Hin.
+        apply in_combine_r in Hin'.
+        repeat take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in it.
+        unfold option_map2_defaults in Can.
+        cases; simpl in *; apply it in Can as [|]; auto;
+          ((now left; constructor; apply Exists_exists; eauto) ||
+           (now right; constructor; apply Exists_exists; eauto)).
+    Qed.
+
+    Corollary Cannot_write_in_var_zip:
+      forall s1 s2 x,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        (~Can_write_in_var x s1 /\ ~Can_write_in_var x s2)
+        <-> ~Can_write_in_var x (zip s1 s2).
+    Proof.
+      intros s1 s2 x.
+      split; intro HH.
+      - intro Hcan; eapply Can_write_in_var_zip in Hcan; intuition.
+      - split; intro Hcan; apply HH; apply Can_write_in_var_zip; intuition.
+    Qed.
+
+    Lemma zip_free_write:
+      forall s1 s2,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        Fusible s1 ->
+        Fusible s2 ->
+        Fusible (zip s1 s2).
+    Proof.
+      Hint Constructors Fusible Can_write_in wt_stmt.
+      induction s1 using stmt_ind2; destruct s2;
+        intros WTs1 WTs2 Hfree1 Hfree2; inv WTs1; inv WTs2;
+          inversion_clear Hfree1; inversion_clear Hfree2;
+            simpl;
+            try now intuition eauto.
+      destruct (e ==b e0) eqn: E; eauto.
+      rewrite equiv_decb_equiv in E.
+      assert (e = e0) by auto; subst.
+      rewrite map2_combine.
+      constructor.
+      - apply Forall_map, Forall_forall.
+        intros (s & s') Hin.
+        pose proof Hin as Hin'.
+        eapply in_combine_l in Hin.
+        eapply in_combine_r in Hin'.
+        repeat (take (Forall _ ss) and apply Forall_forall with (2 := Hin) in it).
+        rename it into IH.
+        repeat (take (Forall _ _) and apply Forall_forall with (2 := Hin') in it).
+        unfold option_map2_defaults.
+        cases; simpl in *; auto.
+      - intros * Free.
+        do 2 (take (forall x, Is_free_in_exp x _ -> _) and (specialize (it x Free))).
+        apply Forall_map, Forall_forall.
+        intros (s & s') Hin.
+        pose proof Hin as Hin'.
+        eapply in_combine_l in Hin.
+        eapply in_combine_r in Hin'.
+        repeat (take (Forall _ ss) and apply Forall_forall with (2 := Hin) in it).
+        rename it into IH.
+        repeat (take (Forall _ _) and apply Forall_forall with (2 := Hin') in it).
+        unfold option_map2_defaults.
+        cases; simpl in *; rewrite <-Cannot_write_in_zip; eauto.
+    Qed.
+
+    Lemma wt_stmt_zip:
+      forall s1 s2,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        wt_stmt p insts Γm Γv (zip s1 s2).
+    Proof.
+      Hint Constructors wt_stmt.
+      induction s1 using stmt_ind2'; destruct s2; simpl; inversion_clear 1; inversion_clear 1; eauto.
+      cases_eqn E; eauto.
+      rewrite equiv_decb_equiv in E; assert (e = e0) by auto; subst.
+      match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
+      assert (length ss = length l) as E' by congruence.
+      rewrite map2_combine.
+      econstructor; eauto.
+      - rewrite map_length, combine_length.
+        rewrite E', Min.min_idempotent; auto.
+      - intros * Hin; apply in_map_iff in Hin as ((os1, os2) & Eq & Hin).
+        pose proof Hin as Hin'; apply in_combine_l in Hin; apply in_combine_r in Hin'.
+        take (Forall _ ss) and apply Forall_forall with (2 := Hin) in it; eauto.
+        destruct os1, os2; simpl in *; inv Eq; eauto.
+    Qed.
+
+    Lemma Can_write_in_fuse':
+      forall s1 s2 x,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        Can_write_in x (Comp s1 s2) <-> Can_write_in x (fuse' s1 s2).
+    Proof.
+      intros s1 s2; revert s1; induction s2; simpl; intros;
+        try setoid_rewrite <-Can_write_in_zip;
+        try setoid_rewrite Can_write_in_Comp;
+        try reflexivity; auto.
+      take (wt_stmt _ _ _ _ (Comp _ _)) and inv it.
+      setoid_rewrite <-IHs2_2; auto.
+      - setoid_rewrite Can_write_in_Comp.
+        setoid_rewrite <-Can_write_in_zip; auto.
+        intuition.
+      - apply wt_stmt_zip; auto.
+    Qed.
+
+    Corollary Can_write_in_fuse:
+      forall s x,
+        wt_stmt p insts Γm Γv s ->
+        Can_write_in x s <-> Can_write_in x (fuse s).
+    Proof.
+      destruct s; simpl; try reflexivity.
+      inversion_clear 1; apply Can_write_in_fuse'; auto.
+    Qed.
+
+    Lemma fuse'_Comp:
+      forall s2 s1,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        Fusible s1 ->
+        Fusible s2 ->
+        stmt_eval_eq (fuse' s1 s2) (Comp s1 s2).
+    Proof.
+      Hint Constructors Fusible.
+      induction s2 using stmt_ind2;
+        intros s1 WTs1 WTs2 Fus1 Fus2; simpl; inv WTs2;
+          try now (rewrite zip_Comp'; intuition).
+      rewrite Comp_assoc.
+      inversion_clear Fus2.
+      rewrite IHs2_2; auto.
+      - intros prog menv env menv' env'.
+        rewrite zip_Comp'; auto.
+        reflexivity.
+      - apply wt_stmt_zip; auto.
+      - apply zip_free_write; auto.
+    Qed.
+
+    Corollary fuse_Comp:
+      forall s,
+        wt_stmt p insts Γm Γv s ->
+        Fusible s ->
+        stmt_eval_eq (fuse s) s.
+    Proof.
+      intros s WT Hfree prog menv env menv' env'.
+      destruct s; simpl; try reflexivity.
+      inversion_clear Hfree; inv WT.
+      apply fuse'_Comp; auto.
+    Qed.
+
+    (* TODO: factorize proof *)
+    Lemma No_Overwrites_zip:
+      forall s1 s2,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        No_Overwrites (Comp s1 s2) ->
+        No_Overwrites (zip s1 s2).
+    Proof.
+      induction s1 using stmt_ind2; destruct s2; inversion_clear 1; inversion_clear 1;
+        intros Hno; inv Hno; simpl; eauto; repeat (take (No_Overwrites (_ _)) and inv it).
+      - destruct (e ==b e0); auto.
+        constructor.
+        rewrite map2_combine; apply Forall_map, Forall_forall; intros (os1, os2) Hin.
+        pose proof Hin as Hin'; apply in_combine_l in Hin; apply in_combine_r in Hin'.
+        repeat (take (Forall _ ss) and eapply Forall_forall with (2:=Hin) in it).
+        repeat (take (Forall _ _) and eapply Forall_forall with (2:=Hin') in it).
+        match goal with H: (forall x: ident, _), H': (forall x: ident, _) |- _ =>
+                        rename H into Cannot1; rename H' into Cannot2 end.
+        unfold option_map2_defaults;
+          cases; simpl in *; apply it1; auto;
+            constructor; auto; intros x Can_s Can_t;
+              ((now eapply Cannot1; constructor; apply Exists_exists; eauto) ||
+               (now eapply Cannot2; constructor; apply Exists_exists; eauto)).
+      - constructor; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          * eapply H7; eauto.
+          * eapply H5; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          * eapply H7; eauto.
+          * eapply H5; eauto.
+        + eapply IHs1_2; eauto.
+          constructor; auto.
+          intros x Can1 Can2; eapply H5; eauto.
+      - constructor; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          * eapply H7; eauto.
+          * eapply H5; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          * eapply H7; eauto.
+          * eapply H5; eauto.
+        + eapply IHs1_2; eauto.
+          constructor; auto.
+          intros x Can1 Can2; eapply H5; eauto.
+      - constructor; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          * eapply H12; eauto.
+          * eapply H9; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          * eapply H12; eauto.
+          * eapply H9; eauto.
+        + eapply IHs1_2; eauto.
+          constructor; auto.
+          intros x Can1 Can2; eapply H9; eauto.
+      - constructor; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          * eapply H12; eauto.
+          * eapply H5; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          * eapply H12; eauto.
+          * eapply H5; eauto.
+        + eapply IHs1_2; eauto.
+          constructor; auto.
+          intros x Can1 Can2; eapply H5; eauto.
+      - constructor; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          * eapply H13; eauto.
+          * eapply H10; eauto.
+        + intros x Can1 Can2.
+          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          * eapply H13; eauto.
+          * eapply H10; eauto.
+        + eapply IHs1_2; eauto.
+          constructor; auto.
+          intros x Can1 Can2; eapply H10; eauto.
+    Qed.
+
+    Lemma No_Overwrites_fuse':
+      forall s1 s2,
+        wt_stmt p insts Γm Γv s1 ->
+        wt_stmt p insts Γm Γv s2 ->
+        No_Overwrites (Comp s1 s2) ->
+        No_Overwrites (fuse' s1 s2).
+    Proof.
+      intros s1 s2; revert s1; induction s2; simpl; inversion_clear 2; inversion_clear 1;
+        try apply No_Overwrites_zip; eauto using wt_stmt.
+      match goal with H:No_Overwrites (Comp _ _) |- _ => inv H end.
+      apply IHs2_2; auto.
+      - now apply wt_stmt_zip.
+      - constructor; auto.
+        + intros x Hcw.
+          apply Can_write_in_var_zip in Hcw as [Hcw|Hcw]; auto.
+          match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
+          apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
+        + intros x Hcw; apply Cannot_write_in_var_zip; auto.
+        + apply No_Overwrites_zip; auto.
+          constructor; auto. intros x Hcw.
+          match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
+          apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
+    Qed.
+
+    Corollary No_Overwrites_fuse:
+      forall s,
+        wt_stmt p insts Γm Γv s ->
+        No_Overwrites s ->
+        No_Overwrites (fuse s).
+    Proof.
+      destruct s; intros WT Hnoo; auto; inv WT.
+      now apply No_Overwrites_fuse'.
+    Qed.
+
+  End CannotWriteZip.
 
   Lemma fuse_call:
     forall p n me me' f xss rs,
-      Forall ClassFusible p ->
+      wt_program p ->
+      ProgramFusible p ->
       stmt_call_eval p me n f xss me' rs ->
-      stmt_call_eval (map fuse_class p) me n f xss me' rs.
+      stmt_call_eval (fuse_program p) me n f xss me' rs.
   Proof.
     cut ((forall p me ve stmt e',
              stmt_eval p me ve stmt e' ->
-             Forall ClassFusible p ->
-             stmt_eval (map fuse_class p) me ve stmt e')
+             wt_program p ->
+             ProgramFusible p ->
+             stmt_eval (fuse_program p) me ve stmt e')
          /\ (forall p me clsid f vs me' rvs,
                 stmt_call_eval p me clsid f vs me' rvs ->
-                Forall ClassFusible p ->
-                stmt_call_eval (map fuse_class p) me clsid f vs me' rvs)).
+                wt_program p ->
+                ProgramFusible p ->
+                stmt_call_eval (fuse_program p) me clsid f vs me' rvs)).
     now destruct 1 as (Hf1 & Hf2); intros; apply Hf2; auto.
     apply stmt_eval_call_ind; intros; eauto using stmt_eval.
-    pose proof (find_class_In _ _ _ _ H) as Hinp.
-    pose proof (find_method_In _ _ _ H0) as Hinc.
-    pose proof (find_class_app _ _ _ _ H) as Hprog'.
-    apply fuse_find_class in H.
-    apply fuse_find_method' in H0.
+    take (find_class _ _ = _) and rename it into Find.
+    take (find_method _ _ = _) and rename it into Findm.
+    take (wt_program _) and rename it into WTp.
+    take (ProgramFusible _) and rename it into Fusp.
+    take (wt_program _ -> _) and rename it into IH.
+    pose proof (find_unit_In _ _ _ _ Find) as [? Hinp].
+    pose proof (find_method_In _ _ _ Findm) as Hinc.
+    pose proof (find_unit_spec _ _ _ _ Find) as (?& Hprog').
+    pose proof (wt_program_find_unit _ _ _ _ _ WTp Find) as (WTc & WTp').
+    pose proof (wt_class_find_method _ _ _ _ WTc Findm) as (WTm & Henums).
+    apply fuse_find_class in Find.
+    apply fuse_find_method' in Findm.
     econstructor; eauto.
-    now rewrite fuse_method_in.
-    2:now rewrite fuse_method_out; eassumption.
-    rewrite fuse_method_in.
-    apply Forall_forall with (1:=H5) in Hinp.
-    apply Forall_forall with (1:=Hinp) in Hinc.
-    rewrite fuse_method_body.
-    rewrite fuse_Comp with (1:=Hinc).
-    apply H3.
-    destruct Hprog' as (cls'' & Hprog & Hfind).
-    rewrite Hprog in H5.
-    apply Forall_app in H5.
-    rewrite Forall_cons2 in H5.
-    intuition.
+    - now rewrite fuse_method_in.
+    - rewrite fuse_method_in.
+      apply Forall_forall with (1:=Fusp) in Hinp.
+      apply Forall_forall with (1:=Hinp) in Hinc.
+      rewrite fuse_method_body.
+      rewrite fuse_Comp with (2:=Hinc); eauto.
+      destruct Hprog' as (cls'' & Hprog & Hfind).
+      unfold ProgramFusible in Fusp; setoid_rewrite Hprog in Fusp.
+      apply Forall_app in Fusp.
+      rewrite Forall_cons2 in Fusp.
+      apply IH; intuition.
+    - now rewrite fuse_method_out; eassumption.
   Qed.
 
   Corollary fuse_loop_call:
     forall f c ins outs prog me,
-      Forall ClassFusible prog ->
+      wt_program prog ->
+      ProgramFusible prog ->
       loop_call prog c f ins outs 0 me ->
-      loop_call (map fuse_class prog) c f ins outs 0 me.
+      loop_call (fuse_program prog) c f ins outs 0 me.
   Proof.
     intros ?????; generalize 0%nat.
     cofix COINDHYP.
-    intros n me HCF Hdo.
+    intros n me WT HCF Hdo.
     destruct Hdo.
     econstructor; eauto using fuse_call.
   Qed.
 
   (** ** Fusion preserves well-typing. *)
 
-  Lemma wt_stmt_map_fuse_class:
-    forall p objs mems vars body,
-      wt_stmt p objs mems vars body ->
-      wt_stmt (map fuse_class p) objs mems vars body.
+  Lemma wt_exp_fuse_program:
+    forall p Γm Γv e,
+      wt_exp p Γm Γv e ->
+      wt_exp (fuse_program p) Γm Γv e.
   Proof.
-    induction body; inversion_clear 1; eauto using wt_stmt.
-    eapply wt_Call
-    with (cls:=fuse_class cls) (p':=map fuse_class p') (fm:=fuse_method fm);
-      auto; try (now destruct fm; auto).
-    erewrite fuse_find_class; eauto.
-    now apply fuse_find_method'.
+    induction e; inversion_clear 1; eauto using wt_exp.
   Qed.
 
-  Lemma wt_stmt_zip:
-    forall p objs mems vars s1 s2,
-      wt_stmt p objs mems vars s1 ->
-      wt_stmt p objs mems vars s2 ->
-      wt_stmt p objs mems vars (zip s1 s2).
+  Lemma wt_stmt_fuse_program:
+    forall p insts Γm Γv s,
+      wt_stmt p insts Γm Γv s ->
+      wt_stmt (fuse_program p) insts Γm Γv s.
   Proof.
-    induction s1, s2; simpl; repeat inversion_clear 1; eauto using wt_stmt.
-    destruct (exp_dec e e0) as [He|Hne].
-    - rewrite He, equiv_decb_refl; eauto using wt_stmt.
-    - apply not_equiv_decb_equiv in Hne. rewrite Hne. eauto using wt_stmt.
+    induction s using stmt_ind2'; inversion_clear 1; eauto using wt_exp_fuse_program, wt_stmt.
+    - econstructor; eauto using wt_exp_fuse_program.
+      intros * Hin.
+      take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in *; eauto.
+    - eapply wt_Call
+        with (cls:=fuse_class cls) (p':=fuse_program p') (fm:=fuse_method fm);
+        auto; try (now destruct fm; auto).
+      + erewrite fuse_find_class; eauto.
+      + now apply fuse_find_method'.
+      + apply Forall_forall; intros * Hin.
+        take (Forall _ _) and eapply Forall_forall in it; eauto using wt_exp_fuse_program.
   Qed.
 
-  Lemma zip_wt:
-    forall p insts mems vars s1 s2,
-      wt_stmt p insts mems vars s1 ->
-      wt_stmt p insts mems vars s2 ->
-      wt_stmt p insts mems vars (zip s1 s2).
-  Proof.
-    induction s1, s2; simpl;
-      try match goal with |- context [if ?e1 ==b ?e2 then _ else _] =>
-                          destruct (equiv_decb e1 e2) end;
-      auto with obctyping;
-      inversion_clear 1;
-      try inversion_clear 2;
-      auto with obctyping.
-    inversion_clear 1.
-    auto with obctyping.
-  Qed.
-
-  Lemma fuse_wt:
-    forall p insts mems vars s,
-      wt_stmt p insts mems vars s ->
-      wt_stmt p insts mems vars (fuse s).
+  Lemma wt_stmt_fuse:
+    forall p insts Γm Γv s,
+      wt_stmt p insts Γm Γv s ->
+      wt_stmt p insts Γm Γv (fuse s).
   Proof.
     intros * WTs.
     destruct s; auto; simpl; inv WTs.
     match goal with H1:wt_stmt _ _ _ _ s1, H2:wt_stmt _ _ _ _ s2 |- _ =>
                     revert s2 s1 H1 H2 end.
-    induction s2; simpl; auto using zip_wt.
+    induction s2; simpl; auto using wt_stmt_zip.
     intros s2 WTs1 WTcomp.
     inv WTcomp.
     apply IHs2_2; auto.
-    apply zip_wt; auto.
+    apply wt_stmt_zip; auto.
+  Qed.
+
+  Lemma meth_vars_fuse_method:
+    forall m,
+      meth_vars (fuse_method m) = meth_vars m.
+  Proof.
+    destruct m; simpl; auto.
   Qed.
 
   Lemma fuse_wt_program:
-    forall G,
-      wt_program G ->
-      wt_program (map fuse_class G).
+    forall p,
+      wt_program p ->
+      wt_program (fuse_program p).
   Proof.
-    intros * WTG.
-    induction G as [|c p]; simpl;
-      inversion_clear WTG as [|? ? Wtc Wtp Nodup]; constructor; auto.
-    - inversion_clear Wtc as (Hos & Hms).
-      constructor.
-      + rewrite fuse_class_c_objs.
-        apply Forall_impl_In with (2:=Hos).
-        intros ic Hin Hfind.
-        apply not_None_is_Some in Hfind.
-        destruct Hfind as ((cls & p') & Hfind).
-        rewrite fuse_find_class with (1:=Hfind).
-        discriminate.
-      + destruct c; simpl in *.
-        clear Nodup c_nodup0 c_nodupm0 Hos IHp Wtp.
-        induction c_methods0 as [|m ms]; simpl; auto using Forall_nil.
-        apply Forall_cons2 in Hms.
-        destruct Hms as (WTm & WTms).
-        apply Forall_cons; auto. clear IHms WTms.
-        unfold wt_method in *.
-        destruct m; unfold meth_vars in *; simpl in *.
-        clear m_nodupvars0 m_good0.
-        apply wt_stmt_map_fuse_class.
-        destruct m_body0; simpl; inv WTm; eauto using wt_stmt.
-        revert m_body0_1 H1.
-        induction m_body0_2; simpl; eauto using wt_stmt_zip.
-        intros s1 WT1. inv H2.
-        eauto using wt_stmt_zip.
-    - simpl.
-      now rewrite Forall_map; setoid_rewrite fuse_class_c_name.
+    intros * WT.
+    eapply transform_units_wt_program in WT; eauto; simpl.
+    inversion_clear 1 as (Hos & Hms).
+    constructor.
+    - rewrite fuse_class_c_objs.
+      apply Forall_impl_In with (2:=Hos).
+      intros ic Hin Hfind.
+      apply not_None_is_Some in Hfind.
+      destruct Hfind as ((cls & p') & Hfind).
+      apply fuse_find_class in Hfind; unfold fuse_program in Hfind; simpl in *.
+      setoid_rewrite Hfind.
+      discriminate.
+    - destruct u; simpl in *.
+      clear c_nodup0 c_nodupm0 Hos.
+      induction c_methods0 as [|m ms]; simpl; auto using Forall_nil.
+      apply Forall_cons2 in Hms.
+      destruct Hms as ((WTm & Henums) & WTms).
+      apply Forall_cons; auto. clear IHms WTms.
+      split; rewrite meth_vars_fuse_method; auto.
+      destruct m; simpl in *.
+      apply wt_stmt_fuse; eauto.
+      apply wt_stmt_fuse_program in WTm; auto.
   Qed.
 
-  Lemma fuse_wt_mem:
+  Lemma fuse_wt_memory:
     forall me p c,
-      wt_mem me p c ->
-      wt_mem me (map fuse_class p) (fuse_class c).
+      wt_memory me p c.(c_mems) c.(c_objs) ->
+      wt_memory me (fuse_program p) (fuse_class c).(c_mems) (fuse_class c).(c_objs).
   Proof.
-    intros * Hwt_mem.
-    induction Hwt_mem
-              using wt_mem_ind_mult
-    with (P := fun me p cl Hwt => wt_mem me (map fuse_class p) (fuse_class cl))
-         (Pinst := fun me p oc Hwt_inst => wt_mem_inst me (map fuse_class p) oc).
-    - constructor.
-      + rewrite fuse_class_c_mems; auto.
-      + rewrite fuse_class_c_objs.
-        eapply Forall_forall; intros oc Hin.
-        eapply Forall_forall in H as [? ?]; eauto.
-    - now constructor.
-    - simpl in *.
-      econstructor 2; eauto.
-      apply fuse_find_class. eauto.
+    intros * WT.
+    pose proof transform_units_wt_memory' as Spec; simpl in Spec.
+    apply Spec in WT; auto.
   Qed.
 
   (** ** Fusion preserves [Can_write_in]. *)
 
-  Lemma Can_write_in_fuse':
-    forall s1 s2 x,
-      Can_write_in x (Comp s1 s2) <-> Can_write_in x (fuse' s1 s2).
-  Proof.
-    intros s1 s2; revert s1; induction s2; simpl;
-      try setoid_rewrite <-Can_write_in_zip;
-      try setoid_rewrite Can_write_in_Comp;
-      try reflexivity.
-    setoid_rewrite <-IHs2_2.
-    setoid_rewrite Can_write_in_Comp.
-    setoid_rewrite <-Can_write_in_zip.
-    intuition.
-  Qed.
-
-  Lemma Can_write_in_fuse:
-    forall s x,
-      Can_write_in x s <-> Can_write_in x (fuse s).
-  Proof.
-    destruct s; simpl; try reflexivity.
-    apply Can_write_in_fuse'.
-  Qed.
-
-  Corollary fuse_cannot_write_inputs:
+  Lemma fuse_cannot_write_inputs:
     forall p,
+      wt_program p ->
       Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m))) p ->
       Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m)))
-                     (map fuse_class p).
+                     (fuse_program p).
   Proof.
-    intros * HH.
+    intros * WTp HH.
     apply Forall_forall; intros * Hin;
       apply Forall_forall; intros * Hin';
         apply Forall_forall; intros ? Hin''.
-    apply in_map_iff in Hin as (c &?&?); subst.
+    apply in_map_iff in Hin as (c &?& Hin); subst.
+    edestruct In_find_unit as (?& Find); eauto using wt_program_nodup_classes.
+    eapply wt_program_find_unit in Find as (WTc & ?); eauto; destruct WTc as (?& WTms).
     eapply Forall_forall in HH; eauto.
     destruct c; simpl in *.
     apply in_map_iff in Hin' as (m &?&?); subst.
     eapply Forall_forall in HH; eauto.
+    eapply Forall_forall in WTms as (?&?); eauto.
     destruct m; simpl in *.
     eapply Forall_forall in HH; eauto.
-    now rewrite <-Can_write_in_fuse.
+    rewrite <-Can_write_in_fuse; eauto.
   Qed.
 
   (** ** Fusion preserves [No_Overwrites]. *)
 
-  Lemma No_Overwrites_zip:
-    forall s1 s2,
-      No_Overwrites (Comp s1 s2) ->
-      No_Overwrites (zip s1 s2).
-  Proof.
-    induction s1; destruct s2; intros Hno; inv Hno; simpl; auto;
-      repeat (match goal with
-        | |- context [ ?e1 ==b ?e2 ] => destruct (e1 ==b e2)
-        | |- No_Overwrites (Ifte _ _ _) => constructor
-        | |- No_Overwrites (Comp _ _) => constructor
-        | |- No_Overwrites (zip _ _) => apply IHs1_1 || apply IHs1_2
-        | |- ~Can_write_in_var _ (zip _ _) => apply Cannot_write_in_var_zip; auto
-        | |- _ /\ _ => split
-        | Hfa:(forall x, Can_write_in_var x (Assign ?y ?e) -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x (Assign ?y ?e) |- _ =>
-          specialize (Hfa x Hcw)
-        | Hfa:(forall x, Can_write_in_var x (AssignSt ?y ?e) -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x (AssignSt ?y ?e) |- _ =>
-          specialize (Hfa x Hcw)
-        | Hfa:(forall x, Can_write_in_var x (Ifte ?e ?s1 ?s2) -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x ?s2 |- _ =>
-          specialize (Hfa x (CWIVIfteFalse x e s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in_var x (Ifte ?e ?s1 ?s2) -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x ?s1 |- _ =>
-          specialize (Hfa x (CWIVIfteTrue x e s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in_var x (Comp ?s1 ?s2) -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x ?s1 |- _ =>
-          specialize (Hfa x (CWIVComp1 x s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in_var x (Comp ?s1 ?s2) -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x ?s2 |- _ =>
-          specialize (Hfa x (CWIVComp2 x s1 s2 Hcw))
-        | Hfa:(forall x, Can_write_in_var x (Call ?xs ?f ?o ?m ?es)
-                         -> ~Can_write_in_var x _),
-              Hcw:Can_write_in_var ?x (Call ?xs ?f ?o ?m ?es) |- _ =>
-          specialize (Hfa x Hcw)
-        | H:~Can_write_in_var ?x (Ifte ?e ?s1 ?s2) |- _ =>
-          apply cannot_write_in_Ifte in H as (? & ?); auto
-        | H:No_Overwrites (Ifte _ _ _) |- _ => inversion_clear H
-        | H:No_Overwrites (Comp _ _) |- _ => inversion_clear H
-        | H:Can_write_in_var ?x (Ifte _ _ _) |- _ => inversion_clear H
-        | H:Can_write_in_var ?x (Comp _ _) |- _ => inversion_clear H
-        | H:Can_write_in_var ?x (zip _ _) |- _ =>
-          apply Can_write_in_var_zip in H as [?|?]
-              end; intros; auto).
-  Qed.
-
-  Lemma No_Overwrites_fuse':
-    forall s1 s2,
-      No_Overwrites (Comp s1 s2) ->
-      No_Overwrites (fuse' s1 s2).
-  Proof.
-    intros s1 s2; revert s1; induction s2; simpl; inversion_clear 1;
-      try apply No_Overwrites_zip; auto.
-    match goal with H:No_Overwrites (Comp _ _) |- _ => inv H end.
-    apply IHs2_2; constructor; auto.
-    - intros x Hcw.
-      apply Can_write_in_var_zip in Hcw as [Hcw|Hcw]; auto.
-      match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
-      apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
-    - intros x Hcw; apply Cannot_write_in_var_zip; auto.
-    - apply No_Overwrites_zip.
-      constructor; auto. intros x Hcw.
-      match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
-      apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
-  Qed.
-
-  Lemma No_Overwrites_fuse:
-    forall s,
-      No_Overwrites s ->
-      No_Overwrites (fuse s).
-  Proof.
-    destruct s; intros Hnoo; auto.
-    now apply No_Overwrites_fuse'.
-  Qed.
-
-  Corollary fuse_No_Overwrites:
+  Lemma fuse_No_Overwrites:
     forall p,
+      wt_program p ->
       Forall_methods (fun m => No_Overwrites (m_body m)) p ->
-      Forall_methods (fun m => No_Overwrites (m_body m)) (map fuse_class p).
+      Forall_methods (fun m => No_Overwrites (m_body m)) (fuse_program p).
   Proof.
-    intros * HH.
+    intros * WTp HH.
     apply Forall_forall; intros * Hin;
       apply Forall_forall; intros * Hin'.
     apply in_map_iff in Hin as (c &?&?); subst.
+    edestruct In_find_unit as (?& Find); eauto using wt_program_nodup_classes.
+    eapply wt_program_find_unit in Find as (WTc & ?); eauto; destruct WTc as (?& WTms).
     eapply Forall_forall in HH; eauto.
     destruct c; simpl in *.
     apply in_map_iff in Hin' as (m &?& Hin'); subst.
     eapply Forall_forall with (2 := Hin') in HH; eauto.
+    eapply Forall_forall in WTms as (?&?); eauto.
     destruct m; simpl in *.
-    now apply No_Overwrites_fuse.
+    eapply No_Overwrites_fuse; eauto.
   Qed.
 
 End FUSION.
 
 Module FusionFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX     Op)
-       (Import SynObc: OBCSYNTAX     Ids Op OpAux)
-       (Import SemObc: OBCSEMANTICS  Ids Op OpAux SynObc)
-       (Import InvObc: OBCINVARIANTS Ids Op OpAux SynObc SemObc)
-       (Import TypObc: OBCTYPING     Ids Op OpAux SynObc SemObc)
-       (Import Equ   : EQUIV         Ids Op OpAux SynObc SemObc TypObc)
-       <: FUSION Ids Op OpAux SynObc SemObc InvObc TypObc Equ.
-
-  Include FUSION Ids Op OpAux SynObc SemObc InvObc TypObc Equ.
-
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Ids Op)
+       (SynObc: OBCSYNTAX     Ids Op OpAux)
+       (ComTyp: COMMONTYPING  Ids Op OpAux)
+       (SemObc: OBCSEMANTICS  Ids Op OpAux SynObc)
+       (InvObc: OBCINVARIANTS Ids Op OpAux SynObc         SemObc)
+       (TypObc: OBCTYPING     Ids Op OpAux SynObc ComTyp SemObc)
+       (Equ   : EQUIV         Ids Op OpAux SynObc ComTyp SemObc TypObc)
+       <: FUSION Ids Op OpAux SynObc ComTyp SemObc InvObc TypObc Equ.
+  Include FUSION Ids Op OpAux SynObc ComTyp SemObc InvObc TypObc Equ.
 End FusionFun.

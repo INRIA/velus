@@ -20,9 +20,11 @@ variables in the right-hand side of the equation. In particular, if
 Module Type ISFREE
        (Ids          : IDS)
        (Op           : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : NLSYNTAX Ids Op CESyn)
-       (Import CEIsF : CEISFREE Ids Op CESyn).
+       (OpAux        : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn)
+       (Import CEIsF : CEISFREE Ids  Op OpAux Cks CESyn).
 
   Inductive Is_free_in_eq : ident -> equation -> Prop :=
   | FreeEqDef:
@@ -99,9 +101,11 @@ End ISFREE.
 Module IsFreeFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : NLSYNTAX Ids Op CESyn)
-       (CEIsF : CEISFREE Ids Op CESyn)
-       <: ISFREE Ids Op CESyn Syn CEIsF.
-  Include ISFREE Ids Op CESyn Syn CEIsF.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX Ids  Op OpAux Cks CESyn)
+       (CEIsF : CEISFREE Ids  Op OpAux Cks CESyn)
+       <: ISFREE Ids Op OpAux Cks CESyn Syn CEIsF.
+  Include ISFREE Ids Op OpAux Cks CESyn Syn CEIsF.
 End IsFreeFun.

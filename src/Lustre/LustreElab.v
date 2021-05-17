@@ -1,5 +1,5 @@
 From Coq Require Import String.
-From Coq Require Import Omega.
+From Coq Require Import Sorting.Mergesort.
 
 From Velus Require Import Common.CompCertLib.
 From Velus Require Instantiator.
@@ -12,10 +12,11 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
 Module Import Syn := Instantiator.L.Syn.
-(* Module Import Defs := Instantiator.NL.IsD. *)
 
+Import Interface.
 Import Interface.Op.
 Import Interface.OpAux.
+Import Interface.Cks.
 Import Instantiator.L.Typ.
 Import Instantiator.L.Clo.
 
@@ -108,34 +109,15 @@ Local Ltac NamedDestructCases :=
          | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
          end.
 
-Definition elab_constant (loc: astloc) (c: LustreAst.constant) : constant :=
-  match c with
-  | CONST_BOOL false  => Cint Integers.Int.zero Ctypes.IBool Ctypes.Signed
-  | CONST_BOOL true   => Cint Integers.Int.one Ctypes.IBool Ctypes.Signed
-  | CONST_INT s       => elab_const_int (cabsloc_of_astloc loc) s
-  | CONST_FLOAT fi    => elab_const_float (cabs_floatinfo fi)
-  | CONST_CHAR wide l => elab_const_char (cabsloc_of_astloc loc) wide l
-  end.
-
-Definition Is_interface_map (G: global)
-           (nenv: Env.t (list (ident * (type * clock))
-                        * list (ident * (type * clock)))) : Prop :=
-  (forall f tcin tcout,
-      Env.find f nenv = Some (tcin, tcout) ->
-      (exists n, find_node f G = Some n
-                 /\ Forall2 eq n.(n_in) tcin
-                 /\ Forall2 eq n.(n_out) tcout))
-  /\ (forall f, Env.find f nenv = None -> Forall (fun n=> f <> n.(n_name)) G).
-
-Lemma Is_interface_map_empty:
-  Is_interface_map [] (Env.empty _).
-Proof.
-  split; setoid_rewrite Env.gempty; intros; try discriminate; auto.
-Qed.
-
 Definition msg_of_types (ty ty': type) : errmsg :=
   MSG "expected '" :: MSG (string_of_type ty)
       :: MSG "' but got '" :: MSG (string_of_type ty') :: msg "'".
+
+Definition msg_of_enum_type (ty: type) : errmsg :=
+  MSG "enumerated type expected but got '" :: MSG (string_of_type ty) :: msg "'".
+
+Definition msg_of_primitive_type (ty: type) : errmsg :=
+  MSG "primitive type expected but got '" :: MSG (string_of_type ty) :: msg "'".
 
 (* Used for unification *)
 Inductive sident :=
@@ -145,7 +127,7 @@ Inductive sident :=
 Inductive sclock :=
 | Sbase : sclock
 | Svar : ident -> sclock
-| Son : sclock -> sident -> bool -> sclock.
+| Son : sclock -> sident -> (type * enumtag) -> sclock.
 
 Definition sident_eq (id1 id2 : sident) : bool :=
   match id1, id2 with
@@ -246,7 +228,7 @@ Fixpoint sclk' (ck : sclock) : clock :=
   | Son ck' (Vidx x) b => Con (sclk' ck') x b
   end.
 
-Definition nsclock := (sclock * option sident).
+Definition nsclock := (sclock * option sident)%type.
 Definition stripname (nck : nsclock) := (fst nck).
 
 Definition ann : Type := (type * nsclock)%type.
@@ -255,7 +237,8 @@ Definition lann : Type := (list type * nsclock)%type.
 (** elaboration exp : annotations use sclock *)
 Inductive eexp : Type :=
 (* constant have a sclock in order to later add whens *)
-| Econst : const -> sclock -> eexp
+| Econst : cconst -> sclock -> eexp
+| Eenum : enumtag -> type -> sclock -> eexp
 | Evar   : ident -> ann -> eexp
 | Eunop  : unop -> eexp -> ann -> eexp
 | Ebinop : binop -> eexp -> eexp -> ann -> eexp
@@ -263,31 +246,109 @@ Inductive eexp : Type :=
 | Efby   : list eexp -> list eexp -> list eexp -> list ann -> eexp
 | Earrow : list eexp -> list eexp -> list eexp -> list ann -> eexp
 
-| Ewhen  : list eexp -> ident -> bool -> lann -> eexp
-| Emerge : ident -> list eexp -> list eexp -> lann -> eexp
-| Eite   : eexp -> list eexp -> list eexp -> lann -> eexp
+| Ewhen  : list eexp -> ident -> enumtag -> lann -> eexp
+| Emerge : (ident * type) -> list (list eexp) -> lann -> eexp
+| Ecase  : eexp -> list (list eexp) -> lann -> eexp
 
 | Eapp   : ident -> list eexp -> list eexp -> list ann -> eexp.
 
-Fixpoint msg_of_clock (ck: clock) : errmsg :=
-  match ck with
-  | Cbase          => msg "."
-  | Con ck x true  => msg_of_clock ck ++ MSG " on " :: CTX x :: nil
-  | Con ck x false => msg_of_clock ck ++ MSG " onot " :: CTX x :: nil
-  end.
+Section eexp_ind2.
+
+  Variable P : eexp -> Prop.
+
+  Hypothesis EconstCase:
+    forall c ck,
+      P (Econst c ck).
+
+  Hypothesis EenumCase:
+    forall k ty ck,
+      P (Eenum k ty ck).
+
+  Hypothesis EvarCase:
+    forall x a,
+      P (Evar x a).
+
+  Hypothesis EunopCase:
+    forall op e a,
+      P e ->
+      P (Eunop op e a).
+
+  Hypothesis EbinopCase:
+    forall op e1 e2 a,
+      P e1 ->
+      P e2 ->
+      P (Ebinop op e1 e2 a).
+
+  Hypothesis EfbyCase:
+    forall e0s es er a,
+      Forall P e0s ->
+      Forall P es ->
+      Forall P er ->
+      P (Efby e0s es er a).
+
+  Hypothesis EarrowCase:
+    forall e0s es er a,
+      Forall P e0s ->
+      Forall P es ->
+      Forall P er ->
+      P (Earrow e0s es er a).
+
+  Hypothesis EwhenCase:
+    forall es x b a,
+      Forall P es ->
+      P (Ewhen es x b a).
+
+  Hypothesis EmergeCase:
+    forall x es a,
+      Forall (Forall P) es ->
+      P (Emerge x es a).
+
+  Hypothesis EcaseCase:
+    forall e es a,
+      P e ->
+      Forall (Forall P) es ->
+      P (Ecase e es a).
+
+  Hypothesis EappCase:
+    forall f es er a,
+      Forall P es ->
+      Forall P er ->
+      P (Eapp f es er a).
+
+  Local Ltac SolveForall :=
+    match goal with
+    | |- Forall ?P ?l => induction l; auto
+    | _ => idtac
+    end.
+
+  Fixpoint eexp_ind2 (e: eexp) : P e.
+  Proof.
+    destruct e.
+    - apply EconstCase; auto.
+    - apply EenumCase; auto.
+    - apply EvarCase; auto.
+    - apply EunopCase; auto.
+    - apply EbinopCase; auto.
+    - apply EfbyCase; SolveForall; auto.
+    - apply EarrowCase; SolveForall; auto.
+    - apply EwhenCase; SolveForall.
+    - apply EmergeCase; SolveForall.
+      constructor; auto. SolveForall.
+    - apply EcaseCase; SolveForall; auto.
+      constructor; auto. SolveForall.
+    - apply EappCase; SolveForall; auto.
+  Qed.
+
+End eexp_ind2.
+
+Inductive const_annot :=
+| ConstA: cconst -> const_annot
+| EnumA: enumtag -> (ident * nat) -> const_annot.
 
 Definition msg_of_sident (id : sident) : errmsg :=
   match id with
   | Vnm x => CTX x :: nil
   | Vidx x => MSG "?c" :: POS x :: nil
-  end.
-
-Fixpoint msg_of_sclock (ck: sclock) : errmsg :=
-  match ck with
-  | Sbase          => msg "."
-  | Svar x         => CTX x :: nil
-  | Son ck id true  => msg_of_sclock ck ++ MSG " on " :: msg_of_sident id
-  | Son ck id false => msg_of_sclock ck ++ MSG " onot " :: msg_of_sident id
   end.
 
 Fixpoint msg_ident_list (xs: list ident) :=
@@ -296,10 +357,6 @@ Fixpoint msg_ident_list (xs: list ident) :=
   | [x] => [CTX x]
   | x::xs => CTX x :: MSG ", " :: msg_ident_list xs
   end.
-
-Definition msg_of_clocks (ck ck': clock) : errmsg :=
-  MSG "expected '" :: msg_of_clock ck
-      ++ MSG "' but got '" :: msg_of_clock ck' ++ msg "'".
 
 (** A completely ad-hoc monad, used only for elaboration :) *)
 Section ElabMonad.
@@ -327,8 +384,11 @@ Section ElabMonad.
   Definition error (msg : errmsg) : Elab A :=
     fun st => Error msg.
 
+  Definition err_loc' (loc: astloc) (m: errmsg) :=
+    MSG (string_of_astloc loc) :: MSG ":" :: m.
+
   Definition err_loc (loc: astloc) (m: errmsg) : Elab A :=
-    error (MSG (string_of_astloc loc) :: MSG ":" :: m).
+    error (err_loc' loc m).
 
   Definition fresh_ident : Elab ident :=
     fun '(n, sub1, sub2) =>
@@ -372,28 +432,6 @@ Section ElabMonad.
 
   Definition subst_ident (id : ident) : Elab (option sident) :=
     fun st => let '(_, _, sub2) := st in OK (Env.find id sub2, st).
-
-  (** Add a new association to the substitution *)
-  Definition add_to_clock_subst (id : ident) (sck : sclock) : Elab unit :=
-    fun '(nid, sub1, sub2) =>
-      let sub1' := Env.map (subst_in_sclock id sck) sub1 in
-      match Env.find id sub1' with
-      | Some sck' => if sck' ==b sck then OK (tt, (nid, sub1', sub2))
-                    else Error (MSG "Imcompatibility in subst : " :: msg_of_sclock sck ++ MSG " and "
-                                    :: msg_of_sclock sck' ++ nil)
-      | None => OK (tt, (nid, Env.add id sck sub1', sub2))
-      end.
-
-  Definition add_to_ident_subst (id : ident) (id' : sident) : Elab unit :=
-    fun '(nid, sub1, sub2) =>
-      let sub1 := Env.map (subst_ident_in_sclock id id') sub1 in
-      let sub2' := Env.map (subst_in_sident id id') sub2 in
-      match Env.find id sub2' with
-      | Some id'' => if id'' ==b id' then OK (tt, (nid, sub1, sub2'))
-                    else Error (MSG "Imcompatibility in subst : " :: msg_of_sident id'
-                                    ++ MSG " and " :: msg_of_sident id'')
-      | None => OK (tt, (nid, sub1, Env.add id id' sub2'))
-      end.
 
   Lemma bind_inv {B} : forall (x : Elab A) (f : A -> Elab B) res st,
       (bind x f) st = OK res ->
@@ -456,6 +494,50 @@ End mmap2.
 
 Section ElabSclock.
 
+  Variable tenv : Env.t (list ident).
+
+  Definition msg_of_enumtag (t: ident) (c: enumtag) : errcode :=
+    match Env.find t tenv with
+    | Some cs =>
+      match nth_error cs c with
+      | Some c => CTX c
+      | None => MSG ""
+      end
+    | None => MSG ""
+    end.
+
+  Fixpoint msg_of_sclock (ck: sclock) : errmsg :=
+    match ck with
+    | Sbase          => msg "."
+    | Svar x         => CTX x :: nil
+    | Son ck id (Tenum (t, _), c) =>
+      msg_of_sclock ck ++ MSG " on " :: msg_of_enumtag t c
+                    :: MSG "(" :: msg_of_sident id ++ MSG ")" :: nil
+    | _ => msg ""
+    end.
+
+  (** Add a new association to the substitution *)
+  Definition add_to_clock_subst (id : ident) (sck : sclock) : Elab unit :=
+    fun '(nid, sub1, sub2) =>
+      let sub1' := Env.map (subst_in_sclock id sck) sub1 in
+      match Env.find id sub1' with
+      | Some sck' => if sck' ==b sck then OK (tt, (nid, sub1', sub2))
+                    else Error (MSG "Imcompatibility in subst : " :: msg_of_sclock sck ++ MSG " and "
+                                    :: msg_of_sclock sck' ++ nil)
+      | None => OK (tt, (nid, Env.add id sck sub1', sub2))
+      end.
+
+  Definition add_to_ident_subst (id : ident) (id' : sident) : Elab unit :=
+    fun '(nid, sub1, sub2) =>
+      let sub1 := Env.map (subst_ident_in_sclock id id') sub1 in
+      let sub2' := Env.map (subst_in_sident id id') sub2 in
+      match Env.find id sub2' with
+      | Some id'' => if id'' ==b id' then OK (tt, (nid, sub1, sub2'))
+                    else Error (MSG "Imcompatibility in subst : " :: msg_of_sident id'
+                                    ++ MSG " and " :: msg_of_sident id'')
+      | None => OK (tt, (nid, sub1, Env.add id id' sub2'))
+      end.
+
   (** Apply the current substitution to an ident *)
   Definition update_sident (sid : sident) : Elab sident :=
     match sid with
@@ -517,10 +599,12 @@ Section ElabSclock.
        | ck, Svar x =>
          do ck <- update_sclock ck;
          add_to_clock_subst x ck
-       | Son ck1 id1 true, Son ck2 id2 true
-       | Son ck1 id1 false, Son ck2 id2 false =>
-         do _ <- aux ck1 ck2;
-         unify_sident loc id1 id2
+       | Son ck1 id1 (ty1, k1), Son ck2 id2 (ty2, k2) =>
+         if (k1 =? k2) && (ty1 ==b ty2) then
+           do _ <- aux ck1 ck2;
+           unify_sident loc id1 id2
+         else err_loc loc (MSG "Clock unification error : " :: msg_of_sclock ck1 ++ MSG ", " ::
+                               msg_of_sclock ck2)
        | _, _ => err_loc loc (MSG "Clock unification error : " :: msg_of_sclock ck1 ++ MSG ", " ::
                                  msg_of_sclock ck2)
        end) ck1 ck2.
@@ -536,13 +620,35 @@ Section ElabSclock.
 
 End ElabSclock.
 
+Module BranchesOrder <: Orders.TotalLeBool'.
+
+  Definition t : Type := (nat * (list (eexp * astloc)))%type.
+
+  Definition leb (s1 s2 : t) : bool := ((fst s1) <=? (fst s2)).
+
+  Lemma leb_total:
+    forall s1 s2,
+      leb s1 s2 = true \/ leb s2 s1 = true.
+  Proof.
+    destruct s1 as (n1 & a1), s2 as (n2 & a2).
+    unfold leb; simpl.
+    setoid_rewrite OrdersEx.Nat_as_OT.leb_compare.
+    destruct (n1 ?= n2) eqn:Hn; auto.
+    apply Nat.compare_gt_iff in Hn.
+    apply Nat.compare_lt_iff in Hn.
+    rewrite Hn; auto.
+  Qed.
+
+End BranchesOrder.
+Module BranchesSort := Sort BranchesOrder.
+
 Section ElabExpressions.
 
   (* Map variable names to their types and clocks. *)
   Variable env : Env.t (type * clock).
 
-  (* Preceding dataflow program. *)
-  Variable G : global.
+  (* Map type names to their constructors *)
+  Variable tenv: Env.t (list ident).
 
   (* Map node names to input and output types and clocks. *)
   Variable nenv : Env.t (list (ident * (type * clock))
@@ -560,14 +666,75 @@ Section ElabExpressions.
     if xty ==b ty then ret tt
     else err_loc loc (CTX x :: MSG ": " :: msg_of_types xty ty).
 
-  Definition assert_type (loc: astloc) (xty ty: type) : Elab unit :=
-    if xty ==b ty then ret tt else err_loc loc (msg_of_types xty ty).
+  Definition assert_type (loc: astloc) (x: ident) (xty ty: type) : Elab unit :=
+    if xty ==b ty then ret tt
+    else err_loc loc (CTX x :: MSG ": " :: msg_of_types xty ty).
+
+  Definition assert_type' (loc: astloc) (xty ty: type) : Elab unit :=
+    if xty ==b ty then ret tt
+    else err_loc loc (msg_of_types xty ty).
+
+  Definition assert_enum_type (loc: astloc) (x: ident) (xty: type) : Elab (ident * nat) :=
+    match xty with
+    | Tenum tn => ret tn
+    | _ => err_loc loc (CTX x :: MSG ": " :: msg_of_enum_type xty)
+    end.
+
+  Definition assert_enum_type' (loc: astloc) (ty: type) : Elab (ident * nat) :=
+    match ty with
+    | Tenum tn => ret tn
+    | _ => err_loc loc (msg_of_enum_type ty)
+    end.
+
+  Definition assert_primitive_type' (loc: astloc) (ty: type) : Elab unit :=
+    match ty with
+    | Tprimitive _ => ret tt
+    | Tenum tn => err_loc loc (msg_of_primitive_type ty)
+    end.
 
   Definition find_node_interface (loc: astloc) (f: ident)
     : Elab (list (ident * (type * clock)) * list (ident * (type * clock))) :=
     match Env.find f nenv with
     | None => err_loc loc (MSG "node " :: CTX f :: msg " not found.")
     | Some tcs => ret tcs
+    end.
+
+  Definition enum_to_enumtag (loc: astloc) (ty: ident) (c: ident) (cs: list ident) : option (enumtag * nat) :=
+    let (t, n) := fold_left
+                    (fun (acc: option enumtag * nat) c' =>
+                       let (t, n) := acc in
+                       let t := match t with
+                                | None => if c' ==b c then Some n else None
+                                | Some t => Some t
+                                end
+                       in (t, n + 1)) cs (None, 0)
+    in match t with
+       | Some t => Some (t, n)
+       | None => None
+       end.
+
+  Definition elab_enum (loc: astloc) (c: ident) : Elab (enumtag * (ident * nat)) :=
+    let r := Env.fold (fun ty cs r => match r with
+                                   | None =>
+                                     match enum_to_enumtag loc ty c cs with
+                                     | None => None
+                                     | Some (t, n) => Some (t, (ty, n))
+                                     end
+                                   | Some x => Some x
+                                   end) tenv None
+    in match r with
+       | Some r => ret r
+       | None => err_loc loc (MSG "constructor " :: CTX c :: msg " not declared.")
+       end.
+
+  Definition elab_constant (loc: astloc) (c: LustreAst.constant) : Elab const_annot :=
+    match c with
+    | CONST_ENUM c =>
+      do (c, tn) <- elab_enum loc c;
+      ret (EnumA c tn)
+    | CONST_INT s       => ret (ConstA (elab_const_int (cabsloc_of_astloc loc) s))
+    | CONST_FLOAT fi    => ret (ConstA (elab_const_float (cabs_floatinfo fi)))
+    | CONST_CHAR wide l => ret (ConstA (elab_const_char (cabsloc_of_astloc loc) wide l))
     end.
 
   Definition elab_unop (op: unary_operator) : unop :=
@@ -600,31 +767,48 @@ Section ElabExpressions.
     end.
 
   Definition find_type_unop (loc: astloc) (op: unop) (ty: type) : Elab type :=
-    match type_unop' op ty with
+    match type_unop op ty with
     | None => err_loc loc (msg "wrong operator argument type")
     | Some ty' => ret ty'
     end.
 
   Definition find_type_binop (loc: astloc) (op: binop)
              (ty1 ty2: type) : Elab type :=
-    match type_binop' op ty1 ty2 with
+    match type_binop op ty1 ty2 with
     | None => err_loc loc (msg "wrong operator argument type")
     | Some ty' => ret ty'
     end.
 
-  Definition elab_type (ty: type_name) : type' :=
+  Definition enum_bound (loc: astloc) (ty: ident) : Elab nat :=
+    match Env.find ty tenv with
+    | None => err_loc loc (MSG "enumerated type " :: CTX ty :: msg " not declared.")
+    | Some cs => let n := length cs in
+                if 0 <? n then ret n
+                else err_loc loc (MSG "empty enumerated type " :: CTX ty :: msg " .")
+    end.
+
+  Definition elab_type (loc: astloc) (ty: LustreAst.type_name) : Elab type :=
     match ty with
-    | Tint8    => Tint Ctypes.I8  Ctypes.Signed
-    | Tuint8   => Tint Ctypes.I8  Ctypes.Unsigned
-    | Tint16   => Tint Ctypes.I16 Ctypes.Signed
-    | Tuint16  => Tint Ctypes.I16 Ctypes.Unsigned
-    | Tint32   => Tint Ctypes.I32 Ctypes.Signed
-    | Tuint32  => Tint Ctypes.I32 Ctypes.Unsigned
-    | Tint64   => Tlong Ctypes.Signed
-    | Tuint64  => Tlong Ctypes.Unsigned
-    | Tfloat32 => Tfloat Ctypes.F32
-    | Tfloat64 => Tfloat Ctypes.F64
-    | Tbool    => Tint Ctypes.IBool Ctypes.Signed
+    | Tint8    => ret (Tprimitive (Tint Ctypes.I8  Ctypes.Signed))
+    | Tuint8   => ret (Tprimitive (Tint Ctypes.I8  Ctypes.Unsigned))
+    | Tint16   => ret (Tprimitive (Tint Ctypes.I16 Ctypes.Signed))
+    | Tuint16  => ret (Tprimitive (Tint Ctypes.I16 Ctypes.Unsigned))
+    | Tint32   => ret (Tprimitive (Tint Ctypes.I32 Ctypes.Signed))
+    | Tuint32  => ret (Tprimitive (Tint Ctypes.I32 Ctypes.Unsigned))
+    | Tint64   => ret (Tprimitive (Tlong Ctypes.Signed))
+    | Tuint64  => ret (Tprimitive (Tlong Ctypes.Unsigned))
+    | Tfloat32 => ret (Tprimitive (Tfloat Ctypes.F32))
+    | Tfloat64 => ret (Tprimitive (Tfloat Ctypes.F64))
+    | Tenum_name t =>
+      do n <- enum_bound loc t;
+      ret (Tenum (t, n))
+    end.
+
+  Definition elab_primitive_type (loc: astloc)  (ty: LustreAst.type_name) : Elab ctype :=
+    do ty <- elab_type loc ty;
+    match ty with
+    | Tprimitive t => ret t
+    | Tenum _ => err_loc loc (msg "primitive type expected")
     end.
 
   Definition err_not_singleton {A} (loc: astloc) : Elab A :=
@@ -632,7 +816,8 @@ Section ElabExpressions.
 
   Definition single_annot (loc: astloc) (e: eexp) : Elab (type * sclock) :=
     match e with
-    | Econst c clock => ret (type_const c, clock)
+    | Econst c ck => ret (Tprimitive (ctype_cconst c), ck)
+    | Eenum _ ty ck => ret (ty, ck)
     | Eapp _ _ _ [(ty, nck)]
     | Evar _ (ty, nck)
     | Eunop _ _ (ty, nck)
@@ -640,21 +825,22 @@ Section ElabExpressions.
     | Ewhen _ _ _ ([ty], nck)
     | Efby _ _ _ [(ty, nck)]
     | Earrow _ _ _ [(ty, nck)]
-    | Emerge _ _ _ ([ty], nck)
-    | Eite _ _ _ ([ty], nck) => ret (ty, stripname nck)
+    | Emerge _ _ ([ty], nck)
+    | Ecase _ _ ([ty], nck) => ret (ty, stripname nck)
     | _ => err_not_singleton loc
     end.
 
   Fixpoint lannot (el : eexp * astloc) : list ((type * sclock) * astloc) :=
     let (e, loc) := el in
     match e with
-    | Econst c clock => [((type_const c, clock), loc)]
+    | Econst c ck => [((Tprimitive (ctype_cconst c), ck), loc)]
+    | Eenum _ ty ck => [((ty, ck), loc)]
     | Evar _ (ty, nck)
     | Eunop _ _ (ty, nck)
     | Ebinop _ _ _ (ty, nck) => [((ty, stripname nck), loc)]
     | Ewhen _ _ _ (tys, nck)
-    | Emerge _ _ _ (tys, nck)
-    | Eite _ _ _ (tys, nck) =>
+    | Emerge _ _ (tys, nck)
+    | Ecase _ _ (tys, nck) =>
       let ck := stripname nck in
       map (fun ty=> ((ty, ck), loc)) tys
     | Efby _ _ _ anns
@@ -669,13 +855,14 @@ Section ElabExpressions.
   Definition lnannot (el : eexp * astloc) : list ((type * nsclock) * astloc) :=
     let (e, loc) := el in
     match e with
-    | Econst c clock => [((type_const c, (clock, None)), loc)]
+    | Econst c ck => [((Tprimitive (ctype_cconst c), (ck, None)), loc)]
+    | Eenum _ ty ck => [((ty, (ck, None)), loc)]
     | Evar _ (ty, nck)
     | Eunop _ _ (ty, nck)
     | Ebinop _ _ _ (ty, nck) => [((ty, nck), loc)]
     | Ewhen _ _ _ (tys, nck)
-    | Emerge _ _ _ (tys, nck)
-    | Eite _ _ _ (tys, nck) =>
+    | Emerge _ _ (tys, nck)
+    | Ecase _ _ (tys, nck) =>
       map (fun ty=> ((ty, nck), loc)) tys
     | Efby _ _ _ anns
     | Earrow _ _ _ anns
@@ -683,7 +870,10 @@ Section ElabExpressions.
     end.
 
   Definition lannots_ty {A B} (tcl : list ((type * A) * B)) : list type :=
-    map (fun x=>fst (fst x)) tcl.
+    map (fun x=> fst (fst x)) tcl.
+
+  Definition lannots_ck {A B} (tcl : list ((A * sclock) * B)) : list sclock :=
+    map (fun x => snd (fst x)) tcl.
 
   Definition lnannots (els : list (eexp * astloc))
     : list ((type * nsclock) * astloc) := flat_map lnannot els.
@@ -701,20 +891,18 @@ Section ElabExpressions.
     | [] => ret tt
     | an::ans' =>
       let '((ty, ck), loc) := an in
-      do _ <- unify_sclock loc ck lck;
+      do _ <- unify_sclock tenv loc ck lck;
       unify_same_clock lck ans'
     end.
 
-  Fixpoint unify_paired_types (gloc: astloc) (ck1 ck2: sclock)
+  Fixpoint unify_paired_types (gloc: astloc)
            (ants anfs: list ((type * sclock) * astloc)) : Elab unit :=
     match ants, anfs with
     | [], [] => ret tt
     | ant::ants', anf::anfs' =>
       let '((tty, tck), tloc) := ant in
       let '((fty, fck), floc) := anf in
-      do _ <- unify_sclock tloc tck ck1;
-      do _ <- unify_sclock floc fck ck2;
-      if tty ==b fty then unify_paired_types gloc ck1 ck2 ants' anfs'
+      if tty ==b fty then unify_paired_types gloc ants' anfs'
       else err_loc gloc (MSG "expression at "
                              :: MSG (string_of_astloc tloc)
                              :: MSG " has type '" :: MSG (string_of_type tty)
@@ -732,7 +920,7 @@ Section ElabExpressions.
     | ant::ants', anf::anfs' =>
       let '((tty, (tck, _)), tloc) := ant in
       let '((fty, (fck, _)), floc) := anf in
-      do _ <- unify_sclock tloc tck fck;
+      do _ <- unify_sclock tenv tloc tck fck;
       if tty ==b fty then unify_paired_clock_types gloc ants' anfs'
       else err_loc gloc (MSG "expression at "
                              :: MSG (string_of_astloc tloc)
@@ -773,7 +961,7 @@ Section ElabExpressions.
 
   Definition unify_nclock' (loc : astloc) (nck1 : nsclock) (nck2 : nsclock) : Elab unit :=
     let '(ck1, id1) := nck1 in let '(ck2, id2) := nck2 in
-    do _ <- unify_sclock loc ck1 ck2;
+    do _ <- unify_sclock tenv loc ck1 ck2;
     match id1, id2 with
     | Some id1, Some id2 =>
       unify_sident loc id1 id2
@@ -789,7 +977,7 @@ Section ElabExpressions.
     | _, nil => err_loc gloc (msg "not enough arguments")
 
     | (ty, nck)::iface', ((ty', nck'), loc)::args' =>
-      do _ <- assert_type loc ty' ty;
+      do _ <- assert_type' loc ty' ty;
       do _ <- unify_nclock' loc nck' nck;
       unify_inputs gloc iface' args'
     end.
@@ -799,18 +987,57 @@ Section ElabExpressions.
 
   Definition assert_reset_type '(er, loc) :=
     do (erty, _) <- single_annot loc er;
-    assert_type loc erty bool_type.
+    assert_type' loc erty bool_type.
 
   (* Elaborate an expression. *)
+
+  Definition check_duplicates (loc: astloc) (cs: list enumtag) : Elab unit :=
+    if length (nodup Nat.eq_dec cs) ==b length cs
+    then ret tt
+    else err_loc loc (msg "duplicate branch").
+
+  Definition check_exhaustivity (loc: astloc) (n: nat) (cs: list enumtag) : Elab unit :=
+    if length cs ==b n
+    then ret tt
+    else err_loc loc (msg "non-exhaustive pattern matching").
+
+  Definition hd_branch {A : Type} loc (xs : list A) : Elab A :=
+      match xs with
+      | hd::_ => ret hd
+      | [] => err_loc loc (msg "no branch")
+      end.
+
+  Definition elab_branches (loc: astloc) (tn: ident * nat)
+             (elab_exp: LustreAst.expression -> Elab (eexp * astloc))
+             (f_ck: enumtag -> sclock)
+             (aes: list (ident * list LustreAst.expression)) :
+    Elab (list (list (eexp * astloc)) * list type) :=
+    do aes <- mmap (fun '(c, ae) =>
+                     do (c, tn') <- elab_enum loc c;
+                     do _ <- assert_type' loc (Tenum tn) (Tenum tn');
+                     do e <- mmap elab_exp ae;
+                     do _ <- unify_same_clock (f_ck c) (lannots e);
+                     ret (c, e)) aes;
+    let es := fst (split aes) in
+    do _ <- check_duplicates loc es;
+    do _ <- check_exhaustivity loc (snd tn) es;
+    do e0 <- hd_branch loc aes;
+    let anns0 := lannots (snd e0) in
+    do _ <- mmap (fun '(_, ae) =>
+                   unify_paired_types loc anns0 (lannots ae)
+                ) aes;
+    ret (map snd (BranchesSort.sort aes), lannots_ty anns0).
 
   Fixpoint elab_exp (is_top : bool) (ae: expression) {struct ae} : Elab (eexp * astloc) :=
     let elab_exp := elab_exp false in
     match ae with
     | CONSTANT ac loc =>
       do x <- fresh_ident;
-      let c := elab_constant loc ac in
-      let ty := type_const c in
-      ret (Econst c (Svar x), loc)
+      do c <- elab_constant loc ac;
+      match c with
+      | ConstA c => ret (Econst c (Svar x), loc)
+      | EnumA tag ty => ret (Eenum tag (Tenum ty) (Svar x), loc)
+      end
 
     | VARIABLE x loc =>
       do (ty, ck) <- find_var loc x;
@@ -825,10 +1052,11 @@ Section ElabExpressions.
     | UNARY _ _ loc => err_not_singleton loc
 
     | CAST aty' [ae'] loc =>
-      let ty' := elab_type aty' in
+      do ty' <- elab_primitive_type loc aty';
       do (e, loc') <- elab_exp ae';
-      do (_, sck) <- single_annot loc' e;
-      ret (Eunop (CastOp ty') e (ty', (sck, None)), loc)
+      do (ty, sck) <- single_annot loc' e;
+      do _ <- assert_primitive_type' loc' ty;
+      ret (Eunop (CastOp ty') e (Tprimitive ty', (sck, None)), loc)
     | CAST _ _ loc => err_not_singleton loc
 
     | BINARY aop [ae1] [ae2] loc =>
@@ -838,7 +1066,7 @@ Section ElabExpressions.
       do (e2, loc2) <- elab_exp ae2;
       do (ty2, sck2) <- single_annot loc2 e2;
       do ty' <- find_type_binop loc op ty1 ty2;
-      do _ <- unify_sclock loc sck1 sck2;
+      do _ <- unify_sclock tenv loc sck1 sck2;
       ret (Ebinop op e1 e2 (ty', (sck1, None)), loc)
     | BINARY _ _ _ loc => err_not_singleton loc
 
@@ -862,38 +1090,30 @@ Section ElabExpressions.
       do _ <- mmap assert_reset_type er;
       ret (Earrow (map fst e0s) (map fst es) (map fst er) ans0, loc)
 
-    | WHEN aes' x b loc =>
+    | WHEN aes' x c loc =>
       do (xty, xck) <- find_var loc x;
-      do _ <- assert_id_type loc x xty bool_type;
+      do (c, tn') <- elab_enum loc c;
       do eas' <- mmap elab_exp aes';
       let ans' := lannots eas' in
       do _ <- unify_same_clock xck ans';
-      ret (Ewhen (map fst eas') x b
-                 (lannots_ty ans', (Son xck (Vnm x) b, None)), loc)
+      ret (Ewhen (map fst eas') x c
+                 (lannots_ty ans', (Son xck (Vnm x) (Tenum tn', c), None)), loc)
 
-    | MERGE x aets aefs loc =>
+    | MERGE x aes loc =>
       do (xty, sck) <- find_var loc x;
-      let tck := Son sck (Vnm x) true in
-      let fck := Son sck (Vnm x) false in
-      do _ <- assert_id_type loc x xty bool_type;
-      do eats <- mmap elab_exp aets;
-      let ants := lannots eats in
-      do eafs <- mmap elab_exp aefs;
-      do _ <- unify_paired_types loc tck fck ants (lannots eafs);
-      ret (Emerge x (map fst eats) (map fst eafs)
-                  (lannots_ty ants, (sck, None)), loc)
+      do tn <- assert_enum_type loc x xty;
+      do (eas, tys) <- elab_branches loc tn elab_exp (fun c => Son sck (Vnm x) (xty, c)) aes;
+      ret (Emerge (x, Tenum tn) (map (map fst) eas)
+                  (tys, (sck, None)), loc)
 
-    | IFTE [ae] aets aefs loc =>
+    | CASE [ae] aes loc =>
       do (e, eloc) <- elab_exp ae;
       do (ety, eck) <- single_annot eloc e;
-      do _ <- assert_type eloc ety bool_type;
-      do eats <- mmap elab_exp aets;
-      let ants := lannots eats in
-      do eafs <- mmap elab_exp aefs;
-      do _ <- unify_paired_types loc eck eck ants (lannots eafs);
-      ret (Eite e (map fst eats) (map fst eafs)
-                (lannots_ty ants, (eck, None)), loc)
-    | IFTE _ _ _ loc => err_not_singleton loc
+      do tn <- assert_enum_type' loc ety;
+      do (eas, tys) <- elab_branches loc tn elab_exp (fun _ => eck) aes;
+      ret (Ecase e (map (map fst) eas)
+                (tys, (eck, None)), loc)
+    | CASE _ _ loc => err_not_singleton loc
 
     | APP f aes aer loc =>
       (* node interface *)
@@ -943,9 +1163,9 @@ Section ElabExpressions.
   Fixpoint add_whens (e: Syn.exp) (tys: list type) (ck: clock) : Elab Syn.exp :=
     match ck with
     | Cbase => ret e
-    | Con ck' x b =>
+    | Con ck' x (_, k) =>
       do e' <- add_whens e tys ck';
-      if Env.mem x env then ret (Syn.Ewhen [e'] x b (tys, (ck, None)))
+      if Env.mem x env then ret (Syn.Ewhen [e'] x k (tys, (ck, None)))
       else error (MSG "Clock variable " :: CTX x :: MSG " escapes its scope" :: nil)
     end.
 
@@ -953,9 +1173,13 @@ Section ElabExpressions.
     let freeze_exps := mmap freeze_exp in
     match e with
     | Econst c ck =>
-      let ty := type_const c in
+      let ty := ctype_cconst c in
       do ck' <- freeze_clock ck;
-      add_whens (Syn.Econst c) [ty] ck'
+      add_whens (Syn.Econst c) [Tprimitive ty] ck'
+
+    | Eenum k ty ck =>
+      do ck' <- freeze_clock ck;
+      add_whens (Syn.Eenum k ty) [ty] ck'
 
     | Evar x ann =>
       do ann' <- freeze_ann ann;
@@ -991,18 +1215,16 @@ Section ElabExpressions.
       do nck <- freeze_nclock nck;
       ret (Syn.Ewhen es ckid b (tys, nck))
 
-    | Emerge ckid ets efs (tys, nck) =>
-      do ets <- freeze_exps ets;
-      do efs <- freeze_exps efs;
+    | Emerge ckid es (tys, nck) =>
+      do es <- mmap freeze_exps es;
       do nck <- freeze_nclock nck;
-      ret (Syn.Emerge ckid ets efs (tys, nck))
+      ret (Syn.Emerge ckid es (tys, nck))
 
-    | Eite e ets efs (tys, nck) =>
+    | Ecase e es (tys, nck) =>
       do e <- freeze_exp e;
-      do ets <- freeze_exps ets;
-      do efs <- freeze_exps efs;
+      do es <- mmap freeze_exps es;
       do nck <- freeze_nclock nck;
-      ret (Syn.Eite e ets efs (tys, nck))
+      ret (Syn.Ecase e es (tys, nck))
 
     | Eapp f es er anns =>
       do es <- freeze_exps es;
@@ -1019,7 +1241,7 @@ Section ElabExpressions.
     | x::xs', ((ty, ck), loc)::anns' =>
       do (xty, xck) <- find_var loc x;
       do _ <- assert_id_type loc x xty ty;
-      do _ <- unify_nclock loc x xck ck;
+      do _ <- unify_nclock tenv loc x xck ck;
       unify_pat gloc xs' anns'
     | nil, _ => err_loc gloc (msg "too few variables on lhs of equation.")
     | _, nil => err_loc gloc (msg "too many variables on lhs of equation.")
@@ -1036,6 +1258,9 @@ End ElabExpressions.
 
 Section ElabDeclaration.
 
+  (* Map type names to their constructors *)
+  Variable tenv: Env.t (list ident).
+
   (* Map node names to input and output types and clocks. *)
   Variable nenv : Env.t (list (ident * (type * clock))
                         * list (ident * (type * clock))).
@@ -1048,11 +1273,12 @@ Section ElabDeclaration.
            (pck: LustreAst.clock) (ck: clock) : Elab unit :=
     match pck, ck with
     | BASE, Cbase => ret tt
-    | ON pck' py pb, Con ck' y b =>
-      if py ==b y
-      then if pb ==b b
-           then assert_preclock loc x pck' ck'
-           else err_incoherent_clock loc x
+    | ON pck' py pc, Con ck' y (_, c) =>
+      if py ==b y then
+        do (c', tn) <- elab_enum tenv loc pc;
+        if c' ==b c
+        then assert_preclock loc x pck' ck'
+        else err_incoherent_clock loc x
       else err_incoherent_clock loc x
     | _, _ => err_incoherent_clock loc x
     end.
@@ -1071,30 +1297,36 @@ Section ElabDeclaration.
         | FULLCK BASE =>
           if Env.mem x env
           then err_loc loc (CTX x :: msg " is declared more than once")
-          else elab_var_decls_pass
-                 (Env.add x (elab_type sty, Cbase) env, notdone) vds
+          else
+            do ty <- elab_type tenv loc sty;
+            elab_var_decls_pass (Env.add x (ty, Cbase) env, notdone) vds
 
-        | FULLCK (ON cy' y b) =>
+        | FULLCK (ON cy' y c) =>
           match Env.find y env with
           | None => elab_var_decls_pass (env, vd :: notdone) vds
           | Some (yt, cy) =>
             if Env.mem x env
             then err_loc loc (CTX x :: msg " is declared more than once")
-            else do _ <- assert_id_type loc y yt bool_type;
+            else do _ <- assert_enum_type loc y yt;
                  do _ <- assert_preclock loc x cy' cy;
-                 elab_var_decls_pass
-                   (Env.add x (elab_type sty, Con cy y b) env, notdone) vds
+                 do (c', tn') <- elab_enum tenv loc c;
+                 do _ <- assert_id_type loc y yt (Tenum tn');
+                 do ty <- elab_type tenv loc sty;
+                 elab_var_decls_pass (Env.add x (ty, Con cy y (yt, c')) env, notdone) vds
           end
 
-        | WHENCK y b =>
+        | WHENCK y c =>
           match Env.find y env with
           | None => elab_var_decls_pass (env, vd :: notdone) vds
           | Some (yt, cy) =>
             if Env.mem x env
             then err_loc loc (CTX x :: msg " is declared more than once")
-            else do _ <- assert_id_type loc y yt bool_type;
+            else do _ <- assert_enum_type loc y yt;
+                 do (c', tn') <- elab_enum tenv loc c;
+                 do _ <- assert_id_type loc y yt (Tenum tn');
+                 do ty <- elab_type tenv loc sty;
                  elab_var_decls_pass
-                   (Env.add x (elab_type sty, Con cy y b) env, notdone) vds
+                   (Env.add x (ty, Con cy y (yt, c')) env, notdone) vds
           end
         end
     end.
@@ -1208,8 +1440,6 @@ Section ElabDeclaration.
     apply is_atom_spec; auto.
   Qed.
 
-  (** *** The anons are prefixed by `elab` *)
-
   Ltac monadInv :=
     simpl in *;
     unfold err_not_singleton, err_loc, error in *;
@@ -1233,7 +1463,127 @@ Section ElabDeclaration.
   Local Ltac destruct_to_singl l :=
     destruct l; [|destruct l]; auto.
 
-  Definition elab_prefs := PS.singleton elab.
+  (** *** freeze_* functions dont modify the state *)
+
+  Fact update_sclock_st_id : forall sck1 sck2 st1 st2,
+      update_sclock sck1 st1 = OK (sck2, st2) ->
+      st2 = st1.
+  Proof.
+    induction sck1; intros * Hfreeze; repeat monadInv.
+    - reflexivity.
+    - unfold subst_clock in Hbind; repeat monadInv.
+      destruct x; repeat monadInv.
+      1,2:destruct st1 as ((?&?)&?); repeat monadInv; auto.
+    - eapply IHsck1 in Hbind; subst.
+      unfold update_sident in Hbind1.
+      destruct s; repeat monadInv; auto.
+      unfold subst_ident in Hbind.
+      destruct x0; repeat monadInv.
+      1,2:destruct st1 as ((?&?)&?); repeat monadInv; auto.
+  Qed.
+
+  Fact freeze_clock_st_id : forall ck1 ck2 st1 st2,
+      freeze_clock ck1 st1 = OK (ck2, st2) ->
+      st2 = st1.
+  Proof.
+    unfold freeze_clock.
+    intros * Hfreeze. repeat monadInv.
+    eapply update_sclock_st_id; eauto.
+  Qed.
+
+  Fact freeze_nclock_st_id : forall nck1 nck2 st1 st2,
+      freeze_nclock nck1 st1 = OK (nck2, st2) ->
+      st2 = st1.
+  Proof.
+    unfold freeze_nclock, freeze_ident, update_sident, subst_ident.
+    intros (?&[|]) * Hfreeze; repeat monadInv.
+    - eapply freeze_clock_st_id in Hbind; subst.
+      destruct s0; repeat monadInv; auto.
+      destruct st1 as ((?&?)&?), x2, (Env.find _ _); repeat monadInv; auto.
+    - eapply freeze_clock_st_id; eauto.
+  Qed.
+
+  Corollary freeze_ann_st_id : forall ann1 ann2 st1 st2,
+      freeze_ann ann1 st1 = OK (ann2, st2) ->
+      st2 = st1.
+  Proof.
+    unfold freeze_ann.
+    intros (?&?) * Hfreeze; repeat monadInv.
+    eapply freeze_nclock_st_id; eauto.
+  Qed.
+
+  Fact mmap_st_id {A B} : forall (f : A -> Elab B) xs ys st1 st2,
+      Forall (fun x => forall y st1 st2, f x st1 = OK (y, st2) -> st2 = st1) xs ->
+      mmap f xs st1 = OK (ys, st2) -> st2 = st1.
+  Proof.
+    induction xs; intros * Hf Hmap; repeat monadInv; auto.
+    inv Hf.
+    apply IHxs in Hbind1; auto.
+    apply H1 in Hbind; auto. congruence.
+  Qed.
+
+  Lemma add_whens_st_id : forall env tys ck e e' st1 st2,
+      add_whens env e tys ck st1 = OK (e', st2) ->
+      st2 = st1.
+  Proof.
+    induction ck as [|??? (?&?)]; intros * Hadds; repeat monadInv; auto.
+    eapply IHck in Hbind; subst.
+    destruct (Env.mem _ _); repeat monadInv; auto.
+  Qed.
+
+  Lemma freeze_exp_st_id : forall env e e' st1 st2,
+      freeze_exp env e st1 = OK (e', st2) ->
+      st2 = st1.
+  Proof.
+    induction e using eexp_ind2; intros * Hfree; simpl in *; repeat monadInv.
+    - (* const *)
+      eapply freeze_clock_st_id in Hbind; subst.
+      eapply add_whens_st_id; eauto.
+    - (* enum *)
+      eapply freeze_clock_st_id in Hbind; subst.
+      eapply add_whens_st_id; eauto.
+    - (* var *)
+      eapply freeze_ann_st_id; eauto.
+    - (* unop *)
+      eapply IHe in Hbind; subst.
+      eapply freeze_ann_st_id; eauto.
+    - (* binop *)
+      eapply IHe1 in Hbind; eapply IHe2 in Hbind1; subst.
+      eapply freeze_ann_st_id; eauto.
+    - (* fby *)
+      eapply mmap_st_id in Hbind2; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
+      eapply mmap_st_id in Hbind; eauto.
+      eapply mmap_st_id in Hbind1; eauto.
+      eapply mmap_st_id in Hbind0; eauto. subst; auto.
+    - (* arrow *)
+      eapply mmap_st_id in Hbind2; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
+      eapply mmap_st_id in Hbind; eauto.
+      eapply mmap_st_id in Hbind1; eauto.
+      eapply mmap_st_id in Hbind0; eauto. subst; auto.
+    - (* when *)
+      destruct a; repeat monadInv.
+      eapply mmap_st_id in Hbind; eauto.
+      eapply freeze_nclock_st_id in Hbind1. subst; auto.
+    - (* merge *)
+      destruct a; repeat monadInv.
+      eapply mmap_st_id in Hbind; eauto.
+      2:{ eapply Forall_impl; [|eauto]. intros * ? * Hmap.
+          eapply mmap_st_id in Hmap; eauto. }
+      apply freeze_nclock_st_id in Hbind1. subst; auto.
+    - (* case *)
+      destruct a; repeat monadInv.
+      apply IHe in Hbind.
+      eapply mmap_st_id in Hbind1; eauto.
+      2:{ eapply Forall_impl; [|eauto]. intros * ? * Hmap.
+          eapply mmap_st_id in Hmap; eauto. }
+      apply freeze_nclock_st_id in Hbind0. subst; auto.
+    - (* app *)
+      eapply mmap_st_id in Hbind0; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
+      eapply mmap_st_id in Hbind; eauto.
+      eapply mmap_st_id in Hbind1; eauto. subst; auto.
+  Qed.
+
+  (** *** The anons are prefixed by `elab` *)
 
   Fact instantiating_subst_AtomOrGensym' : forall {typ} (xs : list (ident * typ)) sub st1 st2,
     mmap (fun '(x, ty) => do x' <- fresh_ident; ret (x, x')) xs st1 = OK (sub, st2) ->
@@ -1272,13 +1622,13 @@ Section ElabDeclaration.
     eapply instantiating_subst_AtomOrGensym in Hsub; eauto.
   Qed.
 
-  Fact fresh_ins_AtomOrGensym' : forall G vars vars' es es' es'' st1 st2 st3 st4,
+  Fact fresh_ins_AtomOrGensym' : forall env tenv nenv env' es es' es'' st1 st2 st3 st4,
       Forall
         (fun e => forall e' loc e'' st1 st2 st3 st4,
-             elab_exp G vars false e st1 = OK (e', loc, st2) ->
-             freeze_exp vars' e' st3 = OK (e'', st4) -> Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e''))) es ->
-      mmap (elab_exp G vars false) es st1 = OK (es', st2) ->
-      mmap (freeze_exp vars') (map fst es') st3 = OK (es'', st4) ->
+             elab_exp env tenv nenv false e st1 = OK (e', loc, st2) ->
+             freeze_exp env' e' st3 = OK (e'', st4) -> Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e''))) es ->
+      mmap (elab_exp env tenv nenv false) es st1 = OK (es', st2) ->
+      mmap (freeze_exp env') (map fst es') st3 = OK (es'', st4) ->
       Forall (AtomOrGensym elab_prefs) (map fst (fresh_ins es'')).
   Proof.
     induction es; intros * Hf Helab Hfreeze;
@@ -1287,9 +1637,77 @@ Section ElabDeclaration.
     destruct x. eapply H1; eauto.
   Qed.
 
-  Lemma fresh_in_AtomOrGensym : forall G vars vars' e e' loc e'' st1 st2 st3 st4,
-      elab_exp G vars false e st1 = OK ((e', loc), st2) ->
-      freeze_exp vars' e' st3 = OK (e'', st4) ->
+  Fact mmap_Permutation {A B} : forall (f: A -> Elab B) xs xs' ys st1 st2,
+      (forall x y st1 st2, f x st1 = OK (y, st2) -> st2 = st1) ->
+      Permutation xs xs' ->
+      mmap f xs st1 = OK (ys, st2) ->
+      exists ys' st2' ,
+        Permutation ys ys' /\
+        mmap f xs' st1 = OK (ys', st2').
+  Proof.
+    intros * Hf Hperm. revert ys st1 st2.
+    induction Hperm; intros * Hmap; simpl in Hmap; repeat monadInv.
+    - exists [], st2; auto.
+    - eapply IHHperm in Hbind1 as (?&?&Hperm'&Hmap').
+      exists (x0::x3), x4. split; auto.
+      unfold bind.
+      erewrite Hbind, Hmap'; auto.
+    - do 2 eexists. split. eapply perm_swap.
+      unfold bind. (* erewrite Hbind, Hbind0. *)
+      assert (x1 = st1) by (eapply Hf in Hbind; eauto); subst.
+      assert (x4 = st1) by (eapply Hf in Hbind0; eauto); subst.
+      rewrite Hbind0, Hbind, Hbind1; simpl.
+      unfold ret; eauto.
+    - eapply IHHperm1 in Hmap as (?&?&Hperm'&Hmap').
+      eapply IHHperm2 in Hmap' as (?&?&Hperm''&Hmap'').
+      do 2 eexists. split; [|eauto].
+      etransitivity; eauto.
+  Qed.
+
+  Fact fresh_ins_brs_AtomOrGensym : forall env tenv nenv env' loc id f_ck es es' tys es'' st1 st2 st3 st4,
+      Forall
+        (fun e =>
+           Forall
+             (fun e0 =>
+                forall e' loc e'' st1 st2 st3 st4,
+                  elab_exp env tenv nenv false e0 st1 = OK (e', loc, st2) ->
+                  freeze_exp env' e' st3 = OK (e'', st4) -> Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e'')))
+             (snd e)) es ->
+      elab_branches tenv loc id (elab_exp env tenv nenv false) f_ck es st1 = OK (es', tys, st2) ->
+      mmap (mmap (freeze_exp env')) (map (map fst) es') st3 = OK (es'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (flat_map (flat_map fresh_in) es'')).
+  Proof.
+    unfold elab_branches.
+    intros * Hf Helab Hfreeze.
+    assert (exists es'' st2',
+              (mmap
+                 (fun '(c, ae) =>
+                    do (c0, tn')<- elab_enum tenv0 loc c;
+                    do _ <- assert_type' loc (Tenum id) (Tenum tn');
+                    do e <- mmap (elab_exp env tenv0 nenv0 false) ae;
+                    do _ <- unify_same_clock tenv0 (f_ck c0) (lannots e); ret (c0, e)) es st1
+               = OK (es'', st2')
+              /\ Permutation (map snd es'') es')) as (es'''&st2'&Helab'&Hperm).
+    { clear - Helab. repeat monadInv.
+      unfold bind in *.
+      setoid_rewrite Hbind. do 2 eexists; unfold ret; split; eauto.
+      apply Permutation_map, BranchesSort.Permuted_sort. }
+    eapply mmap_Permutation in Hfreeze as (?&st4'&Hperm'&Hfreeze').
+    3:eapply Permutation_map; symmetry; eauto.
+    2:{ intros * Hmap. eapply mmap_st_id in Hmap; eauto.
+        eapply Forall_forall; intros. eapply freeze_exp_st_id; eauto. }
+    rewrite Hperm'.
+    clear Helab st2 st4 tys es'' es' Hperm Hperm'.
+    revert st1 st2' st3 st4' x es''' Hf Helab' Hfreeze'.
+    induction es as [|(?&?)]; intros * Hf Helab Hfreeze;
+      inv Hf; repeat monadInv; unfold fresh_ins; simpl in *; auto.
+    rewrite map_app. apply Forall_app; split; eauto.
+    eapply fresh_ins_AtomOrGensym'; eauto.
+  Qed.
+
+  Lemma fresh_in_AtomOrGensym : forall env tenv nenv env' e e' loc e'' st1 st2 st3 st4,
+      elab_exp env tenv nenv false e st1 = OK ((e', loc), st2) ->
+      freeze_exp env' e' st3 = OK (e'', st4) ->
       Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e'')).
   Proof.
     induction e using expression_ind2; intros * Helab Hfreeze; simpl in *.
@@ -1301,12 +1719,11 @@ Section ElabDeclaration.
       destruct_to_singl es2; repeat monadInv.
       apply Forall_singl in H. apply Forall_singl in H0.
       rewrite map_app, Forall_app. eauto.
-    - (* ite *)
+    - (* case *)
       destruct_to_singl es; repeat monadInv.
-      apply Forall_singl in H.
-      repeat rewrite map_app, Forall_app. repeat split; eauto.
-      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
-      + eapply fresh_ins_AtomOrGensym' in H1; eauto.
+      rewrite map_app. apply Forall_app; split.
+      + inv H. eapply H3 in Hbind; eauto.
+      + eapply fresh_ins_brs_AtomOrGensym; eauto.
     - (* cast *)
       destruct_to_singl es; repeat monadInv.
       apply Forall_singl in H. eauto.
@@ -1317,11 +1734,15 @@ Section ElabDeclaration.
       + eapply fresh_ins_AtomOrGensym' in H0; eauto.
       + eapply anon_streams_AtomOrGensym; eauto.
     - (* constant *)
-      repeat monadInv.
-      clear - Hbind1. revert loc e'' x1 st4 Hbind1.
-      induction x0; intros; simpl in *; repeat monadInv; auto.
-      destruct (Env.mem _ _); repeat monadInv.
-      eapply IHx0 in Hbind. rewrite app_nil_r; auto.
+      repeat monadInv. destruct x1; simpl in *; repeat monadInv.
+      + clear - Hbind2. revert e'' x2 st4 Hbind2.
+        induction x1 as [|??? (?&?)]; intros; simpl in *; repeat monadInv; auto.
+        destruct (Env.mem _ _); repeat monadInv.
+        eapply IHx1 in Hbind. rewrite app_nil_r; auto.
+      + clear - Hbind2. revert e'' x2 st4 Hbind2.
+        induction x1 as [|??? (?&?)]; intros; simpl in *; repeat monadInv; auto.
+        destruct (Env.mem _ _); repeat monadInv.
+        eapply IHx1 in Hbind. rewrite app_nil_r; auto.
     - (* var *)
       repeat monadInv; auto.
     - (* fby *)
@@ -1341,14 +1762,12 @@ Section ElabDeclaration.
       eapply fresh_ins_AtomOrGensym'; eauto.
     - (* merge *)
       repeat monadInv.
-      rewrite map_app, Forall_app; split.
-      + eapply fresh_ins_AtomOrGensym' in H; eauto.
-      + eapply fresh_ins_AtomOrGensym' in H0; eauto.
+      eapply fresh_ins_brs_AtomOrGensym; eauto.
   Qed.
 
-  Corollary fresh_ins_AtomOrGensym : forall G vars vars' es es' es'' st1 st2 st3 st4,
-      mmap (elab_exp G vars false) es st1 = OK (es', st2) ->
-      mmap (freeze_exp vars') (map fst es') st3 = OK (es'', st4) ->
+  Corollary fresh_ins_AtomOrGensym : forall env tenv nenv env' es es' es'' st1 st2 st3 st4,
+      mmap (elab_exp env tenv nenv false) es st1 = OK (es', st2) ->
+      mmap (freeze_exp env') (map fst es') st3 = OK (es'', st4) ->
       Forall (AtomOrGensym elab_prefs) (map fst (fresh_ins es'')).
   Proof.
     intros * Helab Hfreeze.
@@ -1358,21 +1777,26 @@ Section ElabDeclaration.
   Qed.
   Hint Resolve fresh_in_AtomOrGensym fresh_ins_AtomOrGensym.
 
-  Lemma anon_in_AtomOrGensym : forall G vars vars' e e' loc e'' st1 st2 st3 st4,
-      elab_exp G vars true e st1 = OK ((e', loc), st2) ->
-      freeze_exp vars' e' st3 = OK (e'', st4) ->
+  Lemma anon_in_AtomOrGensym : forall env tenv nenv env' e e' loc e'' st1 st2 st3 st4,
+      elab_exp env tenv nenv true e st1 = OK ((e', loc), st2) ->
+      freeze_exp env' e' st3 = OK (e'', st4) ->
       Forall (AtomOrGensym elab_prefs) (map fst (anon_in e'')).
   Proof.
-    destruct e; intros * Helab Hfreeze; simpl in *.
+    destruct e; intros * Helab Hfreeze.
     - (* unop *)
       destruct_to_singl l; repeat monadInv; eauto.
     - (* binop *)
       destruct_to_singl l; repeat monadInv.
       destruct_to_singl l0; repeat monadInv.
       rewrite map_app, Forall_app. eauto.
-    - (* ite *)
+    - (* case *)
       destruct_to_singl l; repeat monadInv.
-      repeat rewrite map_app, Forall_app. repeat split; eauto.
+      rewrite map_app. apply Forall_app; split.
+      + eapply fresh_in_AtomOrGensym in Hbind; eauto.
+      + eapply fresh_ins_brs_AtomOrGensym in Hbind2; eauto.
+        do 2 (eapply Forall_forall; intros).
+        eapply fresh_in_AtomOrGensym; eauto.
+      (* repeat rewrite map_app, Forall_app. repeat split; eauto. *)
     - (* cast *)
       destruct_to_singl l; repeat monadInv; eauto.
     - (* app *)
@@ -1380,11 +1804,15 @@ Section ElabDeclaration.
       rewrite map_app, Forall_app; repeat split; eauto.
     - (* constant *)
       eapply Forall_incl; [|eapply incl_map, anon_in_fresh_in].
-      repeat monadInv.
-      clear - Hbind1. revert loc e'' x1 st4 Hbind1.
-      induction x0; intros; simpl in *; repeat monadInv; auto.
-      destruct (Env.mem _ _); repeat monadInv.
-      eapply IHx0 in Hbind. rewrite app_nil_r; auto.
+      repeat monadInv. destruct x1; simpl in *; repeat monadInv.
+      + clear - Hbind2. revert e'' x2 st4 Hbind2.
+        induction x1 as [|??? (?&?)]; intros; simpl in *; repeat monadInv; auto.
+        destruct (Env.mem _ _); repeat monadInv.
+        eapply IHx1 in Hbind. rewrite app_nil_r; auto.
+      + clear - Hbind2. revert e'' x2 st4 Hbind2.
+        induction x1 as [|??? (?&?)]; intros; simpl in *; repeat monadInv; auto.
+        destruct (Env.mem _ _); repeat monadInv.
+        eapply IHx1 in Hbind. rewrite app_nil_r; auto.
     - (* var *)
       repeat monadInv; auto.
     - (* fby *)
@@ -1398,14 +1826,14 @@ Section ElabDeclaration.
       eapply fresh_ins_AtomOrGensym; eauto.
     - (* merge *)
       repeat monadInv.
-      rewrite map_app, Forall_app; split.
-      + eapply fresh_ins_AtomOrGensym in Hbind4; eauto.
-      + eapply fresh_ins_AtomOrGensym in Hbind6; eauto.
+      eapply fresh_ins_brs_AtomOrGensym in Hbind0; eauto.
+      do 2 (eapply Forall_forall; intros).
+      eapply fresh_in_AtomOrGensym; eauto.
   Qed.
 
-  Corollary anon_ins_AtomOrGensym : forall G vars vars' es es' es'' st1 st2 st3 st4,
-      mmap (elab_exp G vars true) es st1 = OK (es', st2) ->
-      mmap (freeze_exp vars') (map fst es') st3 = OK (es'', st4) ->
+  Corollary anon_ins_AtomOrGensym : forall env tenv nenv env' es es' es'' st1 st2 st3 st4,
+      mmap (elab_exp env tenv nenv true) es st1 = OK (es', st2) ->
+      mmap (freeze_exp env') (map fst es') st3 = OK (es'', st4) ->
       Forall (AtomOrGensym elab_prefs) (map fst (anon_ins es'')).
   Proof.
     induction es; intros * Helab Hfreeze; repeat monadInv; auto.
@@ -1415,18 +1843,18 @@ Section ElabDeclaration.
     - eapply IHes; eauto.
   Qed.
 
-  Lemma anon_in_eq_AtomOrGensym : forall G vars eq st eq' st',
-    elab_equation G vars eq st = OK (eq', st') ->
+  Lemma anon_in_eq_AtomOrGensym : forall env tenv nenv eq st eq' st' ,
+    elab_equation env tenv nenv eq st = OK (eq', st') ->
     Forall (AtomOrGensym elab_prefs) (map fst (anon_in_eq eq')).
   Proof.
-    intros ?? ((xs&es)&loc) * Helab; unfold anon_in_eq; simpl in *.
+    intros ??? ((xs&es)&loc) * Helab; unfold anon_in_eq; simpl in *.
     repeat monadInv; simpl.
     eapply anon_ins_AtomOrGensym; eauto.
   Qed.
 
-  Corollary anon_in_eqs_AtomOrGensym : forall G vars eqs st eqs' st',
-    mmap (elab_equation G vars) eqs st = OK (eqs', st') ->
-    Forall (AtomOrGensym elab_prefs) (map fst (anon_in_eqs eqs')).
+  Corollary anon_in_eqs_AtomOrGensym : forall env tenv nenv eqs st eqs' st' ,
+      mmap (elab_equation env tenv nenv) eqs st = OK (eqs', st') ->
+      Forall (AtomOrGensym elab_prefs) (map fst (anon_in_eqs eqs')).
   Proof.
     induction eqs; intros * Hmmap;
       simpl in *; repeat monadInv; unfold anon_in_eqs; simpl; auto.
@@ -1441,43 +1869,41 @@ Section ElabDeclaration.
       | H:_ = bind _ _ _ |- _ => symmetry in H
       end;
       repeat monadInv;
-      repeat progress
-             match goal with
-             | x:unit |- _ => destruct x
-             | H:(if ?b then _ else _) _ = _ |- _ =>
-               let Hb := fresh "Hb" in
-               destruct b eqn:Hb; try discriminate
-             | H:ret _ _ = OK _ |- _ => unfold ret in H; inv H
-             end.
+      repeat (progress
+                match goal with
+                | x:unit |- _ => destruct x
+                | H:(if ?b then _ else _) _ = _ |- _ =>
+                  let Hb := fresh "Hb" in
+                  (destruct b eqn:Hb; try discriminate)
+                | H:ret _ _ = OK _ |- _ => unfold ret in H; inv H
+              end).
 
-  Program Definition elab_declaration (decl: declaration) : res {n | n_prefixes n = elab_prefs} :=
-    match decl with
-      NODE name hasstate inputs outputs locals equations loc =>
-      match (do env_in  <- elab_var_decls loc (Env.empty _) inputs;
-             do env_out <- elab_var_decls loc env_in outputs;
-             do env     <- elab_var_decls loc env_out locals;
-             do xin     <- mmap (annotate env_in) inputs;
-             do xout    <- mmap (annotate env_out) outputs;
-             do xvar    <- mmap (annotate env) locals;
-             do eqs     <- mmap (elab_equation env nenv) equations;
-             (* TODO better error messages *)
-             do _       <- check_nodupanon loc xin xvar xout eqs;
-             do _       <- check_defined loc (nameset (nameset PS.empty xvar) xout) eqs;
-             do _       <- check_atom loc name;
-             do _       <- mmap (check_atom loc) (map fst (xin ++ xvar ++ xout));
-             if (length xin ==b O) || (length xout ==b O)
-             then err_loc loc (msg "not enough inputs or outputs")
-             else ret (xin, xout, xvar, eqs)) init_state with
-      | Error e => Error e
-      | OK ((xin, xout, xvar, eqs), ((nfui, _), _)) =>
-        OK (exist _ {| n_name     := name;
-                       n_hasstate := hasstate;
-                       n_in       := xin;
-                       n_out      := xout;
-                       n_vars     := xvar;
-                       n_eqs      := eqs;
-                       n_prefixes := elab_prefs |} _)
-      end
+  Program Definition elab_declaration_node
+          (name: ident) (has_state: bool) (inputs outputs locals: var_decls)
+          (equations: list LustreAst.equation) (loc: astloc) : res (@node elab_prefs) :=
+    match (do env_in  <- elab_var_decls loc (Env.empty _) inputs;
+           do env_out <- elab_var_decls loc env_in outputs;
+           do env     <- elab_var_decls loc env_out locals;
+           do xin     <- mmap (annotate env_in) inputs;
+           do xout    <- mmap (annotate env_out) outputs;
+           do xvar    <- mmap (annotate env) locals;
+           do eqs     <- mmap (elab_equation env tenv nenv) equations;
+           (* TODO better error messages *)
+           do _       <- check_nodupanon loc xin xvar xout eqs;
+           do _       <- check_defined loc (nameset (nameset PS.empty xvar) xout) eqs;
+           do _       <- check_atom loc name;
+           do _       <- mmap (check_atom loc) (map fst (xin ++ xvar ++ xout));
+           if (length xin ==b O) || (length xout ==b O)
+           then err_loc loc (msg "not enough inputs or outputs")
+           else ret (xin, xout, xvar, eqs)) init_state with
+    | Error e => Error e
+    | OK ((xin, xout, xvar, eqs), ((nfui, _), _)) =>
+      OK {| n_name     := name;
+            n_hasstate := has_state;
+            n_in       := xin;
+            n_out      := xout;
+            n_vars     := xvar;
+            n_eqs      := eqs |}
     end.
   Next Obligation.
     (* 0 < length xin *)
@@ -1524,39 +1950,50 @@ Section ElabDeclaration.
     - eapply check_atom_spec; eauto.
   Qed.
 
+  Program Definition elab_declaration_type
+          (name: ident) (constructors: list ident) (loc: astloc) : res (ident * nat) :=
+    OK (name, length constructors).
+
 End ElabDeclaration.
 
 Section ElabDeclarations.
   Open Scope error_monad_scope.
 
   Fixpoint elab_declarations'
-        (G: global) (nenv: Env.t (list (ident * (type * clock))
-                                  * list (ident * (type * clock))))
-        (decls: list declaration) : res global :=
+           (G: global)
+           (tenv: Env.t (list ident))
+           (nenv: Env.t (list (ident * (type * clock)) * list (ident * (type * clock))))
+           (decls: list declaration) : res global :=
   match decls with
   | [] => OK G
-  | d :: ds =>
-    do n <- elab_declaration nenv d;
-    let n := proj1_sig n in
-    elab_declarations' (n :: G) (Env.add n.(n_name) (n.(n_in), n.(n_out)) nenv) ds
+  | NODE name has_state inputs outputs locals equations loc :: ds =>
+    do n <- elab_declaration_node tenv nenv name has_state inputs outputs locals equations loc;
+    if Env.mem (n_name n) nenv
+    then Error (err_loc' loc (MSG "deplicate definition for " :: CTX name :: nil))
+    else elab_declarations' (Global G.(enums) (n :: G.(nodes)))
+                          tenv (Env.add n.(n_name) (n.(n_in), n.(n_out)) nenv) ds
+  | TYPE name constructors loc :: ds =>
+    do t <- elab_declaration_type name constructors loc;
+    if Env.mem name tenv
+    then Error (err_loc' loc (MSG "duplicate definition for " :: CTX name :: nil))
+    else elab_declarations' (Global (t :: G.(enums)) G.(nodes))
+                          (Env.add name constructors tenv) nenv ds
   end.
-
-  Fact elab_declarations'_prefixes : forall decls accG accE G,
-      Forall (fun n => n_prefixes n = elab_prefs) accG ->
-      elab_declarations' accG accE decls = OK G ->
-      Forall (fun n => n_prefixes n = elab_prefs) G.
-  Proof.
-    induction decls; intros * Hacc Helab; simpl in *; monadInv Helab; auto.
-    eapply IHdecls in EQ0; eauto.
-    constructor; auto.
-    destruct x as (n&Hprefs); simpl; auto.
-  Qed.
 
   Import Instantiator.L.
 
+  Definition bool_enums :=
+    [(bool_id, 2)].
+
+  Definition bool_tenv :=
+    Env.add bool_id
+            [false_id; true_id] (* order is important *)
+            (Env.empty _).
+
+
   Program Definition elab_declarations (decls: list declaration) :
-    res {G | wt_global G /\ wc_global G /\ Forall (fun n => n_prefixes n = elab_prefs) G} :=
-    match elab_declarations' [] (Env.empty _) decls with
+    res {G | wt_global G /\ wc_global G } :=
+    match elab_declarations' (Global bool_enums []) bool_tenv (Env.empty _) decls with
     | OK G =>
       match Typ.check_global G, Clo.check_global G with
       | true, true => OK (exist _ G _)
@@ -1570,7 +2007,6 @@ Section ElabDeclarations.
     symmetry in Hwt, Hwc, Helab.
     apply Typ.check_global_correct in Hwt.
     apply Clo.check_global_correct in Hwc.
-    repeat split; auto.
-    eapply elab_declarations'_prefixes; eauto.
+    split; auto.
   Qed.
 End ElabDeclarations.

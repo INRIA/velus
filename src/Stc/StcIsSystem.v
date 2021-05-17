@@ -11,8 +11,10 @@ Open Scope list_scope.
 Module Type STCISSYSTEM
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS    Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn).
 
   Inductive Is_system_in_tc : ident -> trconstr -> Prop :=
   | Is_system_inTcStep:
@@ -69,8 +71,10 @@ End STCISSYSTEM.
 Module StcIsSystemFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX      Op)
-       (Syn   : STCSYNTAX Ids Op CESyn)
-<: STCISSYSTEM Ids Op CESyn Syn.
-  Include STCISSYSTEM Ids Op CESyn Syn.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS    Ids Op OpAux)
+       (CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+<: STCISSYSTEM Ids Op OpAux Cks CESyn Syn.
+  Include STCISSYSTEM Ids Op OpAux Cks CESyn Syn.
 End StcIsSystemFun.

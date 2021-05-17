@@ -875,9 +875,9 @@ Qed.
  *)
 
 Definition TopoOrder {v a} (g : AcyGraph v a) (xs : list ident) :=
-  ForallTail (fun x xs => ~In x xs
-                       /\ is_vertex g x
-                       /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
+  Forall' (fun xs x => ~In x xs
+                    /\ is_vertex g x
+                    /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
 Hint Unfold TopoOrder.
 
 Lemma TopoOrder_weaken : forall {v a} (g : AcyGraph v a) xs,
@@ -946,7 +946,7 @@ Qed.
 
 (** x is located before y in l *)
 Definition Before (x y : ident) l :=
-  ForallTail (fun x' xs => x' = y -> In x xs) l.
+  Forall' (fun xs x' => x' = y -> In x xs) l.
 
 Lemma Before_middle : forall xs1 xs2 x y,
     x <> y ->

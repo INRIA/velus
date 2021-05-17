@@ -10,14 +10,17 @@ From Coq Require Import Program.Tactics.
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
+From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoindStreams.
 
 Module Type INDEXEDTOCOIND
+       (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import IStr  : INDEXEDSTREAMS Op OpAux)
-       (Import CStr  : COINDSTREAMS Op OpAux).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS Ids Op OpAux)
+       (Import IStr  : INDEXEDSTREAMS Ids Op OpAux Cks)
+       (Import CStr  : COINDSTREAMS Ids Op OpAux Cks).
 
   (** * BASIC CORRESPONDENCES *)
 
@@ -41,22 +44,22 @@ Module Type INDEXEDTOCOIND
 
   (** Build the indexed stream corresponding to the [i]th elements of
         the input stream of lists. *)
-  Definition streams_nth (k: nat) (xss: stream (list value)): stream value :=
+  Definition streams_nth (k: nat) (xss: stream (list svalue)): stream svalue :=
     fun n => nth k (xss n) absent.
 
   (** Build a coinductive Stream extracting the [i]th element of the list
         obtained at each instant [n]. *)
-  Definition nth_tr_streams_from (n: nat) (xss: stream (list value)) (k: nat)
-    : Stream value :=
+  Definition nth_tr_streams_from (n: nat) (xss: stream (list svalue)) (k: nat)
+    : Stream svalue :=
     tr_stream_from n (streams_nth k xss).
 
   (** Translate an indexed stream of list into a list of coinductive Streams
         using the two previous functions. *)
-  Definition tr_streams_from (n: nat) (xss: stream (list value))
-    : list (Stream value) :=
+  Definition tr_streams_from (n: nat) (xss: stream (list svalue))
+    : list (Stream svalue) :=
     seq_streams (nth_tr_streams_from n xss) (length (xss n)).
 
-  Definition tr_streams: stream (list value) -> list (Stream value) :=
+  Definition tr_streams: stream (list svalue) -> list (Stream svalue) :=
     tr_streams_from 0.
 
   Ltac unfold_tr_streams :=
@@ -169,7 +172,7 @@ Module Type INDEXEDTOCOIND
   Lemma tr_streams_from_tl:
     forall n xss,
       wf_streams xss ->
-      List.map (@tl value) (tr_streams_from n xss) = tr_streams_from (S n) xss.
+      List.map (@tl _) (tr_streams_from n xss) = tr_streams_from (S n) xss.
   Proof.
     intros * Len.
     apply Forall2_eq, Forall2_forall2.
@@ -257,107 +260,103 @@ Module Type INDEXEDTOCOIND
   (** This tactic automatically uses the interpretor to give a witness stream. *)
   Ltac interp_str b H x Sem :=
     let Sem_x := fresh "Sem_" x in
-    let sol sem interp sound :=
+    let sol sem interp complete :=
         assert (sem b H x (interp b H x)) as Sem_x
             by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                unfold interp, lift_interp; inv Sem; erewrite <-sound; eauto)
+                unfold interp, lift_interp; inv Sem; erewrite <-complete; eauto)
     in
-    let sol' sem interp sound :=
+    let sol' sem interp complete :=
         assert (sem H x (interp H x)) as Sem_x
             by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
-                unfold interp, lift_interp'; inv Sem; erewrite <-sound; eauto)
+                unfold interp, lift_interp'; inv Sem; erewrite <-complete; eauto)
     in
     match type of x with
-    | ident => sol' IStr.sem_var interp_var interp_var_instant_sound
-    | clock => sol IStr.sem_clock interp_clock interp_clock_instant_sound
+    | ident => sol' IStr.sem_var interp_var interp_var_instant_complete
+    | clock => sol IStr.sem_clock interp_clock interp_clock_instant_complete
     end.
 
   (** An inversion principle for [sem_clock] which also uses the interpretor. *)
-  Lemma sem_clock_inv:
-    forall H b bs ck x k,
-      IStr.sem_clock b H (Con ck x k) bs ->
-      exists bs' xs,
-        IStr.sem_clock b H ck bs'
-        /\ IStr.sem_var H x xs
-        /\
-        (forall n,
-            (exists c,
-                bs' n = true
-                /\ xs n = present c
-                /\ val_to_bool c = Some k
-                /\ bs n = true)
-            \/
-            (bs' n = false
-             /\ xs n = absent
-             /\ bs n = false)
-            \/
-            (exists c,
-                bs' n = true
-                /\ xs n = present c
-                /\ val_to_bool c = Some (negb k)
-                /\ bs n = false)
-        ).
-  Proof.
-    intros * Sem.
-    interp_str b H ck Sem.
-    interp_str b H x Sem.
-    do 2 eexists; intuition; eauto.
-       specialize (Sem_ck n); specialize (Sem_x n); specialize (Sem n); inv Sem.
-       - left; exists c; repeat split; auto; intuition sem_det.
-       - right; left; repeat split; auto; intuition sem_det.
-       - right; right; exists c; intuition; try sem_det.
-         now rewrite Bool.negb_involutive.
-  Qed.
+    Lemma sem_clock_inv:
+      forall H b bs ck x t k,
+        IStr.sem_clock b H (Con ck x (t, k)) bs ->
+        exists bs' xs,
+          IStr.sem_clock b H ck bs'
+          /\ IStr.sem_var H x xs
+          /\
+          (forall n,
+              (bs' n = true
+               /\ xs n = present (Venum k)
+               /\ bs n = true)
+              \/
+              (bs' n = false
+               /\ xs n = absent
+               /\ bs n = false)
+              \/
+              (exists k',
+                  bs' n = true
+                  /\ xs n = present (Venum k')
+                  /\ k <> k'
+                  /\ bs n = false)).
+    Proof.
+      intros * Sem.
+      interp_str b H ck Sem.
+      interp_str b H x Sem.
+      do 2 eexists; intuition; eauto.
+      specialize (Sem_ck n); specialize (Sem_x n); specialize (Sem n); inv Sem.
+      - left; repeat split; auto; intuition IStr.sem_det.
+      - right; left; repeat split; auto; intuition IStr.sem_det.
+      - right; right; exists b'; intuition; try IStr.sem_det.
+    Qed.
 
-  (** We can then deduce the correspondence lemma for [sem_clock].
+    (** We can then deduce the correspondence lemma for [sem_clock].
         We go by induction on the clock [ck] then we use the above inversion
         lemma. *)
-  Corollary sem_clock_impl_from:
-    forall H b ck bs,
-      IStr.sem_clock b H ck bs ->
-      forall n, sem_clock (tr_history_from n H) (tr_stream_from n b) ck
-                     (tr_stream_from n bs).
-  Proof.
-    induction ck; intros * Sem n.
-    - constructor.
-      revert Sem n; cofix CoFix; intros.
-      rewrite init_from_n; rewrite (init_from_n bs).
-      constructor; simpl; auto.
-      specialize (Sem n); now inv Sem.
-    - apply sem_clock_inv in Sem as (bs' & xs & Sem_bs' & Sem_xs & Spec).
-      revert Spec n; cofix CoFix; intros.
-      rewrite (init_from_n bs).
-      apply IHck with (n:=n) in Sem_bs';
-        rewrite (init_from_n bs') in Sem_bs'.
-      apply (sem_var_impl_from n) in Sem_xs;
-        rewrite (init_from_n xs) in Sem_xs.
-      destruct (Spec n) as [|[]]; destruct_conjs;
-        repeat match goal with H:_ n = _ |- _ => rewrite H in *; clear H end.
-      + econstructor; eauto.
-        rewrite init_from_tl, tr_history_from_tl; auto.
-      + econstructor; eauto.
-        rewrite init_from_tl, tr_history_from_tl; auto.
-      + rewrite <-(Bool.negb_involutive b0).
-        eapply Son_abs2; eauto.
-        rewrite init_from_tl, tr_history_from_tl; auto.
-        rewrite Bool.negb_involutive; auto.
-  Qed.
-  Hint Resolve sem_clock_impl_from.
+    Corollary sem_clock_impl_from:
+      forall H b ck bs,
+        IStr.sem_clock b H ck bs ->
+        forall n, CStr.sem_clock (tr_history_from n H) (tr_stream_from n b) ck
+                            (tr_stream_from n bs).
+    Proof.
+      induction ck; intros * Sem n.
+      - constructor.
+        revert Sem n; cofix CoFix; intros.
+        rewrite init_from_n; rewrite (init_from_n bs).
+        constructor; simpl; auto.
+        specialize (Sem n); now inv Sem.
+      - destruct p. apply sem_clock_inv in Sem as (bs' & xs & Sem_bs' & Sem_xs & Spec).
+        revert Spec n; cofix CoFix; intros.
+        rewrite (init_from_n bs).
+        apply IHck with (n:=n) in Sem_bs';
+          rewrite (init_from_n bs') in Sem_bs'.
+        apply (sem_var_impl_from n) in Sem_xs;
+          rewrite (init_from_n xs) in Sem_xs.
+        destruct (Spec n) as [|[]]; destruct_conjs;
+          repeat match goal with H:_ n = _ |- _ => rewrite H in *; clear H end.
+        + econstructor; eauto.
+          rewrite init_from_tl, tr_history_from_tl; auto.
+        + econstructor; eauto.
+          rewrite init_from_tl, tr_history_from_tl; auto.
+        + eapply CStr.Son_abs2; eauto.
+          rewrite init_from_tl, tr_history_from_tl; auto.
+    Qed.
+    Hint Resolve sem_clock_impl_from.
 
-  Corollary sem_clock_impl:
-    forall H b ck bs,
-      IStr.sem_clock b H ck bs ->
-      sem_clock (tr_history H) (tr_stream b) ck (tr_stream bs).
-  Proof. intros; apply sem_clock_impl_from; auto. Qed.
-  Hint Resolve sem_clock_impl.
+    Corollary sem_clock_impl:
+      forall H b ck bs,
+        IStr.sem_clock b H ck bs ->
+        CStr.sem_clock (tr_history H) (tr_stream b) ck (tr_stream bs).
+    Proof. intros; apply sem_clock_impl_from; auto. Qed.
+    Hint Resolve sem_clock_impl.
 
 End INDEXEDTOCOIND.
 
 Module IndexedToCoindFun
+       (Ids     : IDS)
        (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX          Op)
-       (IStr    : INDEXEDSTREAMS         Op OpAux)
-       (CStr    : COINDSTREAMS           Op OpAux)
-<: INDEXEDTOCOIND Op OpAux IStr CStr.
-  Include INDEXEDTOCOIND Op OpAux IStr CStr.
+       (OpAux   : OPERATORS_AUX          Ids Op)
+       (Cks     : CLOCKS                 Ids Op OpAux)
+       (IStr    : INDEXEDSTREAMS         Ids Op OpAux Cks)
+       (CStr    : COINDSTREAMS           Ids Op OpAux Cks)
+<: INDEXEDTOCOIND Ids Op OpAux Cks IStr CStr.
+  Include INDEXEDTOCOIND Ids Op OpAux Cks IStr CStr.
 End IndexedToCoindFun.

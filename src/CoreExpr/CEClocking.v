@@ -3,6 +3,7 @@ From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import Environment.
 
 From Coq Require Import List.
 From Coq Require Import Morphisms.
@@ -13,7 +14,9 @@ From Coq Require Import Permutation.
 Module Type CECLOCKING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import Syn  : CESYNTAX Op).
+       (Import OpAux: OPERATORS_AUX Ids Op)
+       (Import Cks  : CLOCKS        Ids Op OpAux)
+       (Import Syn  : CESYNTAX      Ids Op OpAux Cks).
 
   Inductive SameVar : option ident -> exp -> Prop :=
   | SVNone: forall e,
@@ -29,15 +32,18 @@ Module Type CECLOCKING
     | Cconst:
         forall c,
           wc_exp (Econst c) Cbase
+    | Cenum:
+        forall x ty,
+          wc_exp (Eenum x ty) Cbase
     | Cvar:
         forall x ck ty,
           In (x, ck) vars ->
           wc_exp (Evar x ty) ck
     | Cwhen:
-        forall e x b ck,
+        forall e x t b ck,
           wc_exp e ck ->
           In (x, ck) vars ->
-          wc_exp (Ewhen e x b) (Con ck x b)
+          wc_exp (Ewhen e x b) (Con ck x (t, b))
     | Cunop:
         forall op e ck ty,
           wc_exp e ck ->
@@ -50,17 +56,17 @@ Module Type CECLOCKING
 
     Inductive wc_cexp : cexp -> clock -> Prop :=
     | Cmerge:
-        forall x t f ck,
+        forall x tx l ty ck,
           In (x, ck) vars ->
-          wc_cexp t (Con ck x true) ->
-          wc_cexp f (Con ck x false) ->
-          wc_cexp (Emerge x t f) ck
-    | Cite:
-        forall b t f ck,
-          wc_exp b ck ->
-          wc_cexp t ck ->
-          wc_cexp f ck ->
-          wc_cexp (Eite b t f) ck
+          l <> nil ->
+          Forall2 (fun i e => wc_cexp e (Con ck x (tx, i))) (seq 0 (length l)) l ->
+          wc_cexp (Emerge (x, tx) l ty) ck
+    | Ccase:
+        forall c l ty ck,
+          wc_exp c ck ->
+          l <> nil ->
+          Forall (fun e => wc_cexp e ck) l ->
+          wc_cexp (Ecase c l ty) ck
     | Cexp:
         forall e ck,
           wc_exp e ck ->
@@ -76,12 +82,13 @@ Module Type CECLOCKING
       wc_exp vars le ck ->
       wc_clock vars ck.
   Proof.
-    induction le as [| |le IH | |] (* using exp_ind2 *).
+    induction le as [| | |le IH| |] (* using exp_ind2 *).
     - inversion_clear 2; now constructor.
-    - intros ck Hwc; inversion_clear 1 as [|? ? ? Hcv| | |].
+    - inversion_clear 2; now constructor.
+    - intros ck Hwc; inversion_clear 1 as [| |? ? ? Hcv| | |].
       apply wc_env_var with (1:=Hwc) (2:=Hcv).
     - intros ck Hwc.
-      inversion_clear 1 as [| |? ? ? ck' Hle Hcv | |].
+      inversion_clear 1 as [| | |???? ck' Hle Hcv | |].
       constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
     - intros ck Hwc; inversion_clear 1; auto.
     - intros ck Hwc; inversion_clear 1; auto.
@@ -93,13 +100,18 @@ Module Type CECLOCKING
       wc_cexp vars ce ck ->
       wc_clock vars ck.
   Proof.
-    induction ce as [i ce1 IH1 ce2 IH2| |].
+    induction ce as [? ces ? IHces|? ces ? IHces|] using cexp_ind2.
     - intros ck Hwc.
-      inversion_clear 1 as [? ? ? ? Hcv Hct Hcf| |].
-      apply IH1 with (1:=Hwc) in Hct.
-      inversion_clear Hct; assumption.
-    - intros ck Hwc; inversion_clear 1 as [|? ? ? ? Hl H1 H2|].
-      now apply IHce1.
+      inversion_clear 1 as [????? Hcv ? Hcs| |].
+      destruct ces as [|e]; try contradiction.
+      inversion_clear Hcs as [|???? Hc]; inversion_clear IHces as [|?? IHce].
+      apply IHce with (1:=Hwc) in Hc.
+      inversion_clear Hc; assumption.
+    - intros ck Hwc.
+      inversion_clear 1 as [|???? Hcv ? Hcs|].
+      destruct ces as [|e]; try contradiction.
+      inversion_clear Hcs as [|?? Hc]; inversion_clear IHces as [|?? IHce].
+      apply IHce with (1:=Hwc) in Hc; auto.
     - intros ck Hwc; inversion_clear 1 as [| |? ? Hck].
       apply wc_clock_exp with (1:=Hwc) (2:=Hck).
   Qed.
@@ -130,20 +142,49 @@ Module Type CECLOCKING
     intros env' env Henv e' e He ck' ck Hck.
     rewrite He, Hck; clear He Hck e' ck'.
     revert ck.
-    induction e;
+    induction e using cexp_ind2;
       split; inversion_clear 1;
+        try (
         (rewrite Henv in * || rewrite <-Henv in *);
          constructor; auto;
          now (rewrite <-IHe1 || rewrite IHe1
-              || rewrite <-IHe2 || rewrite IHe2).
+              || rewrite <-IHe2 || rewrite IHe2)).
+        - rewrite Henv in *.
+          constructor; auto.
+          take (_ <> nil) and clear it.
+          revert dependent l; intro.
+          generalize 0.
+          induction l; simpl; intros * IH H; auto.
+          inv H; inversion_clear IH as [|?? H'].
+          constructor; auto.
+          apply H'; auto.
+        - rewrite <-Henv in *.
+          constructor; auto.
+          take (_ <> nil) and clear it.
+          revert dependent l; intro.
+          generalize 0.
+          induction l; simpl; intros * IH H; auto.
+          inv H; inversion_clear IH as [|?? H'].
+          constructor; auto.
+          apply H'; auto.
+        - rewrite Henv in *.
+          constructor; auto.
+          eapply Forall_impl_In; [|eauto]. intros.
+          eapply Forall_forall in H; eauto. apply H; auto.
+        - rewrite <-Henv in *.
+          constructor; auto.
+          eapply Forall_impl_In; [|eauto]. intros.
+          eapply Forall_forall in H; eauto. apply H; auto.
   Qed.
 
 End CECLOCKING.
 
 Module CEClockingFun
-       (Import Ids  : IDS)
-       (Import Op   : OPERATORS)
-       (Import Syn  : CESYNTAX Op)
-  <: CECLOCKING Ids Op Syn.
-  Include CECLOCKING Ids Op Syn.
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (OpAux: OPERATORS_AUX Ids Op)
+       (Cks  : CLOCKS        Ids Op OpAux)
+       (Syn  : CESYNTAX      Ids Op OpAux Cks)
+  <: CECLOCKING Ids Op OpAux Cks Syn.
+  Include CECLOCKING Ids Op OpAux Cks Syn.
 End CEClockingFun.

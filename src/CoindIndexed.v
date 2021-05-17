@@ -10,18 +10,21 @@ From Coq Require Import Program.Tactics.
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
+From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoindStreams.
 From Velus Require Import CoindToIndexed IndexedToCoind.
 
 Module Type COINDINDEXED
+       (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import CStr  : COINDSTREAMS Op OpAux)
-       (Import IStr  : INDEXEDSTREAMS Op OpAux).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS Ids Op OpAux)
+       (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
+       (Import IStr  : INDEXEDSTREAMS Ids Op OpAux Cks).
 
-  Module Export CIStr := CoindToIndexedFun Op OpAux CStr IStr.
-  Module Export ICStr := IndexedToCoindFun Op OpAux IStr CStr.
+  Module Export CIStr := CoindToIndexedFun Ids Op OpAux Cks CStr IStr.
+  Module Export ICStr := IndexedToCoindFun Ids Op OpAux Cks IStr CStr.
 
   Fact tr_stream_eqst {A} : forall (x : Stream A),
       ICStr.tr_stream (tr_Stream x) ≡ x.
@@ -34,7 +37,7 @@ Module Type COINDINDEXED
   Qed.
 
   Fact tr_history_equiv: forall H,
-      Env.Equiv (@EqSt value) (ICStr.tr_history (CIStr.tr_history H)) H.
+      Env.Equiv (@EqSt _) (ICStr.tr_history (CIStr.tr_history H)) H.
   Proof.
     intros H.
     unfold CIStr.tr_history, ICStr.tr_history, ICStr.tr_history_from.
@@ -61,10 +64,12 @@ Module Type COINDINDEXED
 End COINDINDEXED.
 
 Module CoindIndexedFun
+       (Ids     : IDS)
        (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX          Op)
-       (CStr    : COINDSTREAMS           Op OpAux)
-       (IStr    : INDEXEDSTREAMS         Op OpAux)
-<: COINDINDEXED Op OpAux CStr IStr.
-  Include COINDINDEXED Op OpAux CStr IStr.
+       (OpAux   : OPERATORS_AUX          Ids Op)
+       (Cks     : CLOCKS                 Ids Op OpAux)
+       (CStr    : COINDSTREAMS           Ids Op OpAux Cks)
+       (IStr    : INDEXEDSTREAMS         Ids Op OpAux Cks)
+<: COINDINDEXED Ids Op OpAux Cks CStr IStr.
+  Include COINDINDEXED Ids Op OpAux Cks CStr IStr.
 End CoindIndexedFun.

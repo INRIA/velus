@@ -11,6 +11,7 @@ From compcert Require Import lib.Coqlib.
 From compcert Require Import lib.Integers.
 
 From Velus Require Import Common.
+From Velus Require Import Common.CommonTyping.
 From Velus Require Import Common.CompCertLib.
 From Velus Require Import Ident.
 From Velus Require Import Environment.
@@ -20,12 +21,15 @@ From Coq Require Import List.
 Import List.ListNotations.
 From Coq Require Import ZArith.BinInt.
 
-From Coq Require Import Program.Tactics.
+(* From Coq Require Import Program.Tactics. *)
 
 From Velus Require Import ObcToClight.MoreSeparation.
 From Velus Require Import ObcToClight.Generation.
 From Velus Require Import ObcToClight.GenerationProperties.
 From Velus Require Import ObcToClight.Interface.
+
+Import OpAux.
+Import ComTyp.
 
 Import Obc.Syn.
 Import Obc.Sem.
@@ -35,17 +39,11 @@ Open Scope list.
 Open Scope sep_scope.
 Open Scope Z.
 
-Definition match_value (ov: option val) (v: val) : Prop :=
-  match ov with
-  | None => True
-  | Some v' => v = v'
-  end.
+Definition match_value (ov: option value) (v: cvalue) :=
+  or_default_with True (fun v' => v = value_to_cvalue v') ov.
 
 Definition match_var (ve: venv) (le: temp_env) (x: ident) : Prop :=
-  match le ! x with
-  | Some v => match_value (Env.find x ve) v
-  | None => False
-  end.
+  or_default_with False (match_value (Env.find x ve)) (le ! x).
 
 Section Staterep.
   Variable ge : composite_env.
@@ -53,34 +51,79 @@ Section Staterep.
   Definition staterep_mems (cls: class) (me: menv) (b: block) (ofs: Z) '((x, ty): ident * type) :=
     match field_offset ge x (make_members cls) with
     | Errors.OK d =>
-	    contains_w (type_chunk ty) b (ofs + d) (match_value (find_val x me))
+	    contains_w (type_to_chunk ty) b (ofs + d) (match_value (find_val x me))
     | Errors.Error _ => sepfalse
     end.
 
-  Fixpoint staterep
-           (p: program) (clsnm: ident) (me: menv) (b: block) (ofs: Z): massert :=
-    match p with
-    | nil => sepfalse
-    | cls :: p' =>
-      if ident_eqb clsnm cls.(c_name)
-      then
-        sepall (staterep_mems cls me b ofs) cls.(c_mems)
-        **
-        sepall (fun '((i, c): ident * ident) =>
-                  match field_offset ge i (make_members cls) with
-                  | Errors.OK d =>
-                    staterep p' c (instance_match i me) b (ofs + d)
-                  | Errors.Error _ => sepfalse
-                  end) cls.(c_objs)
-      else staterep p' clsnm me b ofs
-    end.
+  Definition find_class_dec (f: ident) (p: program) : option { cl_p' | find_class f p = Some cl_p'}.
+  Proof.
+    destruct (find_class f p) as [[c p']|].
+    - left; exists (c, p'); auto.
+    - right.
+  Defined.
 
-  Definition staterep_objs (p: program) (cls: class) (me: menv) (b: block) (ofs: Z) '((i, c): ident * ident) : massert :=
+  Lemma find_class_dec_spec_None:
+    forall f p,
+      find_class_dec f p = None <-> find_class f p = None.
+  Proof.
+    intros.
+    unfold find_class_dec.
+    destruct (find_class f p) as [[]|]; split; auto; discriminate.
+  Qed.
+
+  Definition staterep
+             (p: program) (clsnm: ident) (me: menv) (b: block) (ofs: Z): massert.
+  Proof.
+    refine (@Wf.Fix _ (fun x y => ltsuffix_prog (fst x) (fst y)) _ (fun _ => massert)
+                    (fun '(p, (clsnm, me, ofs)) staterep =>
+                       match find_class_dec clsnm p with
+                       | None => sepfalse
+                       | Some (exist cl_p' E) =>
+                         let (cl ,p') := cl_p' in
+                         sepall (staterep_mems cl me b ofs) cl.(c_mems)
+                         **
+                         sepall (fun '((i, c): ident * ident) =>
+                                   match field_offset ge i (make_members cl) with
+                                   | Errors.OK d =>
+                                     staterep (snd cl_p', (c, instance_match i me, ofs + d)) _
+                                   | Errors.Error _ => sepfalse
+                                   end) cl.(c_objs)
+                       end) (p, (clsnm, me, ofs))).
+    - pose proof ltsuffix_prog_wf as WF.
+      eapply Wf.measure_wf in WF; eauto.
+    - destruct cl_p'; simpl; eapply find_unit_ltsuffix_prog; eauto.
+  Defined.
+
+  Definition staterep_objs
+             (p: program) (cls: class) (me: menv) (b: block) (ofs: Z) '((i, c): ident * ident) : massert :=
     match field_offset ge i (make_members cls) with
     | Errors.OK d =>
       staterep p c (instance_match i me) b (ofs + d)
     | Errors.Error _ => sepfalse
     end.
+
+  Lemma staterep_def:
+    forall p clsnm me b ofs,
+      staterep p clsnm me b ofs =
+      or_default_with sepfalse
+                      (fun '(cl, p') =>
+                         sepall (staterep_mems cl me b ofs) cl.(c_mems)
+                         ** sepall (staterep_objs p' cl me b ofs) cl.(c_objs))
+                      (find_class clsnm p).
+  Proof.
+    intros; unfold or_default_with, staterep_objs, staterep at 1.
+    rewrite Fix_eq.
+    - pose proof (find_class_dec_spec_None clsnm p) as E.
+      destruct (find_class_dec clsnm p) as [[[] ->]|].
+      + f_equal.
+      + destruct E as [->]; auto.
+    - intros (p' &(( clsnm' & me')& ofs')) ???.
+      destruct (find_class_dec clsnm' p') as [[[]]|]; auto.
+      f_equal.
+      induction (c_objs c) as [|[]]; simpl; auto.
+      f_equal; auto.
+      cases.
+  Qed.
 
   Lemma staterep_objs_not_in:
     forall objs p cls me i me_i b ofs,
@@ -95,79 +138,40 @@ Section Staterep.
     unfold instance_match; rewrite find_inst_gso; auto.
   Qed.
 
-  Lemma staterep_cons:
-    forall cls prog clsnm me b ofs,
-      clsnm = cls.(c_name) ->
-      staterep (cls :: prog) clsnm me b ofs <-*->
-      sepall (staterep_mems cls me b ofs) cls.(c_mems)
-      ** sepall (staterep_objs prog cls me b ofs) cls.(c_objs).
+  Lemma staterep_chained_in_objs:
+    forall p f cl p' i g me b ofs,
+      wt_program p ->
+      find_class f p = Some (cl, p') ->
+      In (i, g) cl.(c_objs) ->
+      staterep p' g me b ofs <-*-> staterep p g me b ofs.
   Proof.
-    intros * Hnm.
-    apply ident_eqb_eq in Hnm.
-    simpl; rewrite Hnm; reflexivity.
-  Qed.
-
-  Lemma staterep_skip_cons:
-    forall cls prog clsnm me b ofs,
-      clsnm <> cls.(c_name) ->
-      staterep (cls :: prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
-  Proof.
-    intros * Hnm.
-    apply ident_eqb_neq in Hnm.
-    simpl; rewrite Hnm; reflexivity.
-  Qed.
-
-  Lemma staterep_skip_app:
-    forall clsnm prog oprog me b ofs,
-      find_class clsnm oprog = None ->
-      staterep (oprog ++ prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
-  Proof.
-    intros * Hnin.
-    induction oprog as [|cls oprog IH].
-    - rewrite app_nil_l. reflexivity.
-    - apply find_class_none in Hnin; destruct Hnin.
-      rewrite <-app_comm_cons.
-      rewrite staterep_skip_cons; auto.
-  Qed.
-
-  Remark staterep_skip:
-    forall c clsnm prog prog' me b ofs,
-      find_class clsnm prog = Some (c, prog') ->
-      staterep prog clsnm me b ofs <-*->
-      staterep (c :: prog') clsnm me b ofs.
-  Proof.
-    intros * Find.
-    pose proof (find_class_app _ _ _ _ Find) as (? & Hprog & FindNone).
-    rewrite Hprog.
-    rewrite staterep_skip_app; auto.
+    intros * WTp Find Hin.
+    rewrite 2 staterep_def.
+    erewrite wt_program_find_class_chained_in_objs; eauto.
   Qed.
 
   Lemma decidable_footprint_staterep:
     forall p clsnm me b ofs,
       decidable_footprint (staterep p clsnm me b ofs).
   Proof.
-    induction p as [|cls p' IH]; [now auto|].
-    intros; simpl.
-    destruct (ident_eqb clsnm (c_name cls));
-      [|now apply IH].
+    induction p using program_ind.
+    setoid_rewrite staterep_def; intros.
+    destruct (find_class clsnm p) as [[]|] eqn: Find; simpl; auto.
     apply decidable_footprint_sepconj;
       apply decidable_footprint_sepall;
-      (intro x; destruct x as [x ty]; simpl;
-       destruct (field_offset ge x (make_members cls))); auto.
+      intros (x,?); simpl; cases; eauto.
   Qed.
 
   Lemma footprint_perm_staterep:
     forall p clsnm me b ofs b' lo hi,
       footprint_perm_w (staterep p clsnm me b ofs) b' lo hi.
   Proof.
-    induction p as [|cls p' IH]; [now auto|].
-    intros; simpl.
-    destruct (ident_eqb clsnm (c_name cls));
-      [|now apply IH].
+    induction p using program_ind.
+    setoid_rewrite staterep_def; intros.
+    destruct (find_class clsnm p) as [[]|] eqn: Find; simpl; auto.
     apply footprint_perm_sepconj;
       apply footprint_perm_sepall;
-      (intro x; destruct x as [x ty]; simpl;
-       destruct (field_offset ge x (make_members cls))); auto.
+      intros (x,?); simpl; cases; eauto.
   Qed.
 
   Hint Resolve decidable_footprint_staterep footprint_perm_staterep.
@@ -283,7 +287,7 @@ Section StateRepProperties.
     destruct (make_members_co _ _ _ Hfc)
       as (cls_co & Hg & Hsu & Hmem & Hattr & Hndup).
     rewrite <-Hmem in *.
-    eapply find_class_chained with (1:=WTp) (2:=Hfc) in Hfc'.
+    eapply wt_program_find_unit_chained with (1:=WTp) (2:=Hfc) in Hfc'.
     destruct (make_members_co _ _ _ Hfc')
       as (cls'_co & Hg' & Hsu' & Hmem' & Hattr' & Hndup').
     rewrite <-Hmem' in *.
@@ -339,89 +343,73 @@ Section StateRepProperties.
 
     (* Setup an induction on prog. *)
     revert clsnm Hfind.
-    remember prog as prog1.
-    assert (WTp' := WTp).
-    rewrite Heqprog1 in make_members_co, WTp.
-    assert (suffix prog1 prog) as Hsub
-        by now rewrite Heqprog1.
-    clear (* TRANSL *) Heqprog1.
-    induction prog1 as [|cls prog' IH]; intros clsnm Hfind lo Halign.
-    now apply not_None_is_Some in Hfind; destruct Hfind; discriminate.
-    inversion_clear WTp' as [|? ? WTc WTp'' Hnodup]; subst.
+    induction prog as [? IH] using program_ind; intros ??? Halign.
+    apply not_None_is_Some in Hfind as ((cls', prog'') & Hfind).
 
-    (* Staterep looks for the named class: found now or later? *)
-    destruct (ident_eqb cls.(c_name) clsnm) eqn:Hclsnm.
+    (* Exploit make_members_co for the named class. *)
+    destruct (make_members_co _ _ _ Hfind)
+      as (co & Hg & Hsu & Hmem & Hattr & Hndup & ?).
 
-    - (* Exploit make_members_co for the named class. *)
-      apply not_None_is_Some in Hfind.
-      destruct Hfind as ((cls', prog'') & Hfind).
-      assert (find_class clsnm prog = Some (cls', prog'')) as Hprog
-          by apply find_class_sub_same with (1:=Hfind) (2:=WTp) (3:=Hsub).
-      destruct (make_members_co _ _ _ Hprog)
-        as (co & Hg & Hsu & Hmem & Hattr & Hndup & ?).
+    (* Develop some facts about member alignment. *)
+    pose proof (co_members_alignof _ _ (gcenv_consistent _ _ Hg) Hattr)
+      as Hcoal.
+    rewrite Hmem in Hcoal. unfold make_members in Hcoal.
+    apply Forall_app in Hcoal as [Hcoal1 Hcoal2].
+    simpl in Halign. rewrite Hg, align_noattr in Halign.
+    assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
 
-      (* find_class succeeds for clsnm (deliberately after previous step). *)
-      simpl in Hfind. rewrite Hclsnm in Hfind.
-      injection Hfind; intros He1 He2; rewrite <-He1, <-He2 in *.
-      clear Hfind He1 He2.
-
-      (* Develop some facts about member alignment. *)
-      pose proof (co_members_alignof _ _ (gcenv_consistent _ _ Hg) Hattr)
-        as Hcoal.
-      rewrite Hmem in Hcoal. unfold make_members in Hcoal.
-      apply Forall_app in Hcoal. destruct Hcoal as [Hcoal1 Hcoal2].
-      simpl in Halign. rewrite Hg, align_noattr in Halign.
-      assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
-
-      (* Massage the goal into two parallel parts: for locals and instances. *)
-      simpl. unfold staterep_mems.
-      rewrite ident_eqb_sym in Hclsnm.
-      rewrite Hclsnm, Hg, <-Hmem.
-      rewrite split_range_fields
+    (* Massage the goal into two parallel parts: for locals and instances. *)
+    rewrite staterep_def, Hfind; simpl.
+    unfold staterep_mems, staterep_objs.
+    rewrite Hg, <-Hmem.
+    rewrite split_range_fields
       with (1:=gcenv_consistent) (2:=Hg) (3:=Hsu) (4:=Hndup).
-      rewrite Hmem at 2. unfold make_members.
-      rewrite sepall_app.
+    rewrite Hmem at 2. unfold make_members.
+    rewrite sepall_app.
+    apply sep_imp'.
+
+    - (* Divide up the memory sub-block for cls.(c_mems). *)
+      pose proof (field_translate_mem_type _ _ _ _ Hfind) as Htype.
+      clear Hcoal2.
+      induction cls'.(c_mems) as [|(x, ty) ms]; auto; simpl.
+      apply Forall_cons2 in Hcoal1 as [Hcoal1 Hcoal2].
+      apply sep_imp'; auto with datatypes.
+      destruct (field_offset gcenv x (co_members co)) eqn:Hfo; auto.
+      setoid_rewrite Env.gempty.
+      rewrite sizeof_translate_type_chunk; eauto.
+      apply range_contains'; auto with mem.
+      apply field_offset_aligned with (ty:=translate_type ty) in Hfo.
+      + apply Z.divide_add_r; eauto.
+      + rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
+
+    - (* Divide up the memory sub-block for cls.(c_objs). *)
+      pose proof (field_translate_obj_type _ _ _ _ Hfind) as Htype.
+      rewrite <-Hmem in Htype.
+      edestruct wt_program_find_unit as [WTc WTp']; eauto.
+      destruct WTc as [Ho Hm]; clear Hm.
+      induction cls'.(c_objs) as [|[i c] os]; auto; simpl.
       apply sep_imp'.
-
-      + (* Divide up the memory sub-block for cls.(c_mems). *)
-        pose proof (field_translate_mem_type _ _ _ _ Hprog) as Htype.
-        clear Hcoal2.
-        induction cls.(c_mems) as [|m ms]; auto.
-        apply Forall_cons2 in Hcoal1.
-        destruct Hcoal1 as [Hcoal1 Hcoal2].
-        apply sep_imp'; auto with datatypes.
-        destruct m; simpl.
-        destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
-        setoid_rewrite Env.gempty.
-        rewrite sizeof_translate_chunk; eauto.
-        apply range_contains'; auto with mem.
-        apply field_offset_aligned with (ty:=cltype t) in Hfo.
-        apply Z.divide_add_r; eauto.
-        rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
-
-      + (* Divide up the memory sub-block for cls.(c_objs). *)
-        pose proof (field_translate_obj_type _ _ _ _ Hprog) as Htype.
-        rewrite <-Hmem in Htype.
-        destruct WTc as [Ho Hm]; clear Hm.
-        induction cls.(c_objs) as [|o os]; auto.
-        simpl. apply sep_imp'.
-        2:now inv Ho; apply Forall_cons2 in Hcoal2; intuition.
-        apply Forall_forall with (x:=o) in Ho; auto with datatypes.
-        destruct o as [o c].
-        apply Forall_cons2 in Hcoal2.
-        destruct Hcoal2 as [Hcoal2 Hcoal3].
-        specialize (Htype o c (in_eq _ _)).
-        clear IHos Hcoal1 Hcoal3 os.
+      + inversion_clear Ho as [|?? Hfind'].
+        apply Forall_cons2 in Hcoal2 as [Hcoal2 Hcoal3].
+        specialize (Htype i c (in_eq _ _)).
         simpl in *.
-        destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
+        destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
         rewrite instance_match_empty.
-        specialize (IH WTp'' (suffix_cons _ _ _ Hsub) c Ho (lo + z)%Z).
-        apply not_None_is_Some in Ho.
-        destruct Ho as ((c' & prog''') & Ho).
-        assert (find_class c prog = Some (c', prog''')) as Hcin'
-            by apply find_class_sub_same with (1:=Ho) (2:=WTp)
-                                              (3:=suffix_cons _ _ _ Hsub).
-        destruct (make_members_co _ _ _ Hcin')
+        assert (forall clsnm cls prog',
+                    find_class clsnm prog'' = Some (cls, prog') ->
+                    exists co : composite,
+                      gcenv ! clsnm = Some co /\
+                      co_su co = Struct /\
+                      co_members co = make_members cls /\
+                      attr_alignas (co_attr co) = None /\
+                      NoDupMembers (co_members co) /\
+                      co_sizeof co <= Ptrofs.max_unsigned) as make_members_co'.
+        { intros; eapply make_members_co.
+          eapply wt_program_find_unit_chained; eauto.
+        }
+        specialize (IH _ _ _ Hfind make_members_co' WTp' _ Hfind' (lo + z)).
+        apply not_None_is_Some in Hfind' as ((c' & prog''') & Hfind').
+        destruct (make_members_co' _ _ _ Hfind')
           as (co' & Hg' & Hsu' & Hmem' & Hattr' & Hnodup').
         rewrite Hg', align_noattr in *.
         apply IH.
@@ -430,14 +418,10 @@ Section StateRepProperties.
         apply Z.divide_trans with (2:=Hfo).
         simpl. rewrite Hg', align_noattr.
         apply Z.divide_refl.
-    - simpl in Hfind.
-      rewrite Hclsnm in Hfind.
-      specialize (IH WTp'' (suffix_cons _ _ _ Hsub) clsnm Hfind lo Halign).
-      rewrite ident_eqb_sym in Hclsnm.
-      apply ident_eqb_neq in Hclsnm.
-      rewrite staterep_skip_cons with (1:=Hclsnm).
-      apply IH.
+      + now inv Ho; apply Forall_cons2 in Hcoal2; intuition.
   Qed.
+
+  Opaque sepconj.
 
   Lemma staterep_deref_mem:
     forall clsnm c prog prog' m me b ofs x ty d v P,
@@ -446,15 +430,12 @@ Section StateRepProperties.
       In (x, ty) c.(c_mems) ->
       find_val x me = Some v ->
       field_offset gcenv x (make_members c) = Errors.OK d ->
-      Clight.deref_loc (cltype ty) m b (Ptrofs.repr (ofs + d)) v.
+      Clight.deref_loc (translate_type ty) m b (Ptrofs.repr (ofs + d)) (value_to_cvalue v).
   Proof.
     intros * Find Hm Hin Hv Hoff.
-    rewrite staterep_skip in Hm; eauto.
-    apply sep_proj1 in Hm.
-    simpl in Hm. erewrite find_class_name, ident_eqb_refl in Hm; eauto.
-    apply sep_proj1 in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
+    rewrite staterep_def, Find in Hm; simpl in Hm.
+    do 2 apply sep_proj1 in Hm.
+    apply sepall_in in Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
     apply sep_proj1 in Hm. clear ws xs.
     unfold staterep_mems in Hm.
@@ -476,19 +457,17 @@ Section StateRepProperties.
            /\ 0 <= ofs + d <= Ptrofs.max_unsigned.
   Proof.
     intros * Find Hm Hin.
-    rewrite staterep_skip in Hm; eauto.
-    Opaque sepconj. simpl in Hm. Transparent sepconj.
-    erewrite find_class_name, ident_eqb_refl in Hm; eauto.
+    rewrite staterep_def, Find in Hm; simpl in Hm.
     do 2 apply sep_proj1 in Hm.
-    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
+    apply sepall_in in Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
     apply sep_proj1 in Hm.
     clear ws xs.
     unfold staterep_mems in Hm.
     destruct (field_offset gcenv x (make_members cls)).
-    + exists z; split; auto.
+    - exists z; split; auto.
       eapply contains_no_overflow; eauto.
-    + contradict Hm.
+    - contradict Hm.
   Qed.
 
   Lemma staterep_extract:
@@ -507,35 +486,24 @@ Section StateRepProperties.
   Proof.
     clear make_members_co.
     intros * WT Find.
-    pose proof Find as Fcid; apply find_class_name in Fcid; subst.
-    rewrite staterep_skip, staterep_cons, sep_assoc; eauto.
-    split.
+    rewrite staterep_def, Find; simpl.
+    rewrite sep_assoc; split.
     - intros (Hin & Hmem).
+      pose proof Hin.
       apply sepall_in in Hin as (objs & objs' & E & Hp).
       rewrite Hp, sep_assoc, sep_swap in Hmem.
       unfold staterep_objs at 1 in Hmem.
-      destruct (field_offset gcenv i (make_members c)) as [d|].
-      + exists objs, objs', d; intuition.
-        assert (In (i, c') (c_objs c))
-          by (rewrite E, in_app; right; apply in_eq).
-        apply find_class_app in Find as (prog''&?&Find); subst.
-        assert (find_class c' prog'' = None)
-          by (eapply wt_program_not_class_in; eauto).
-        assert (c' <> c_name c)
-          by (eapply wt_program_not_same_name; eauto; eapply wt_program_app; eauto).
-        rewrite staterep_skip_app, staterep_skip_cons; auto.
-        eapply sep_imp with (1 := Hmem); auto.
-        repeat apply sep_imp'; auto.
-        apply sepall_weakenp; intros (i' & c'') Hin'; unfold staterep_objs.
-        cases.
-        assert (In (i', c'') (c_objs c))
+      destruct (field_offset gcenv i (make_members c)) as [d|];
+        [|apply sepconj_sepfalse in Hmem; contradiction].
+      exists objs, objs', d; intuition.
+      erewrite <-staterep_chained_in_objs; eauto.
+      eapply sep_imp; eauto.
+      repeat apply sep_imp'; auto.
+      apply sepall_weakenp; intros (i' & c'') Hin'; unfold staterep_objs.
+      cases.
+      assert (In (i', c'') (c_objs c)) as Hin
           by (rewrite E, in_app, in_cns; rewrite in_app in Hin'; tauto).
-        assert (find_class c'' prog'' = None)
-          by (eapply wt_program_not_class_in; eauto).
-        assert (c'' <> c_name c)
-          by (eapply wt_program_not_same_name; eauto; eapply wt_program_app; eauto).
-        rewrite staterep_skip_app, staterep_skip_cons; auto.
-      + destruct Hmem; contradiction.
+      erewrite staterep_chained_in_objs; eauto.
     - intros (objs & objs' & d & E & Hofs & Hmem).
       split.
       + rewrite E; apply in_app; right; left; auto.
@@ -544,23 +512,14 @@ Section StateRepProperties.
         rewrite Hofs; auto.
         assert (In (i, c') (c_objs c))
           by (rewrite E, in_app; right; apply in_eq).
-        apply find_class_app in Find as (prog''&?&Find); subst.
-        assert (find_class c' prog'' = None)
-          by (eapply wt_program_not_class_in; eauto).
-        assert (c' <> c_name c)
-          by (eapply wt_program_not_same_name; eauto; eapply wt_program_app; eauto).
-        rewrite staterep_skip_app, staterep_skip_cons in Hmem; auto.
-        eapply sep_imp with (1 := Hmem); auto.
+        erewrite staterep_chained_in_objs; eauto.
+        eapply sep_imp; eauto.
         repeat apply sep_imp'; auto.
         apply sepall_weakenp; intros (i' & c'') Hin'; unfold staterep_objs.
         cases.
-        assert (In (i', c'') (c_objs c))
-          by (rewrite E, in_app, in_cns; rewrite in_app in Hin'; tauto).
-        assert (find_class c'' prog'' = None)
-          by (eapply wt_program_not_class_in; eauto).
-        assert (c'' <> c_name c)
-          by (eapply wt_program_not_same_name; eauto; eapply wt_program_app; eauto).
-        rewrite staterep_skip_app, staterep_skip_cons; auto.
+        assert (In (i', c'') (c_objs c)) as Hin
+            by (rewrite E, in_app, in_cns; rewrite in_app in Hin'; tauto).
+        erewrite <-staterep_chained_in_objs; eauto.
   Qed.
 
 End StateRepProperties.
@@ -585,7 +544,7 @@ Section Fieldsrep.
       In (x, ty) flds ->
       Env.find x ve = Some v ->
       field_offset ge x flds = Errors.OK d ->
-      Clight.deref_loc ty m b (Ptrofs.repr d) v.
+      Clight.deref_loc ty m b (Ptrofs.repr d) (value_to_cvalue v).
   Proof.
     intros * Hm Hin Hv Hoff.
     unfold fieldsrep in Hm.
@@ -743,7 +702,7 @@ Section Fieldsrep.
           now simpl; rewrite Env.gempty.
           intros vs Hnm. simpl.
           apply NotInMembers_cons in Hnm as (Hnm & Hne).
-          destruct vs; simpl; try rewrite Env.gempty; auto.
+          destruct vs; simpl; try rewrite Env.gempty; simpl; auto.
           specialize (IHxs vs Hnm).
           destruct o; simpl; auto.
           rewrite Env.gso; auto.
@@ -1082,7 +1041,8 @@ Qed.
 
 Lemma varsrep_add:
   forall f ve le x v,
-    varsrep f ve le -*> varsrep f (Env.add x v ve) (PTree.set x v le).
+    varsrep f ve le -*>
+    varsrep f (Env.add x v ve) (PTree.set x (value_to_cvalue v) le).
 Proof.
   intros.
   unfold varsrep.
@@ -1107,7 +1067,8 @@ Qed.
 Lemma varsrep_add':
   forall f ve le x v y v',
     ~ InMembers y (m_in f ++ m_vars f) ->
-    varsrep f ve le -*> varsrep f (Env.add x v ve) (PTree.set x v (PTree.set y v' le)).
+    varsrep f ve le -*>
+    varsrep f (Env.add x v ve) (PTree.set x (value_to_cvalue v) (PTree.set y v' le)).
 Proof.
   intros * Notin.
   transitivity (varsrep f ve (PTree.set y v' le)).
@@ -1128,7 +1089,8 @@ Lemma varsrep_add'':
   forall f ve le x v y v',
     ~ InMembers y (m_in f ++ m_vars f) ->
     x <> y ->
-    varsrep f (Env.add x v ve) le -*> varsrep f (Env.add x v ve) (PTree.set y v' le).
+    varsrep f (Env.add x v ve) le -*>
+    varsrep f (Env.add x v ve) (PTree.set y v' le).
 Proof.
   intros * Notin ?.
   unfold varsrep.
@@ -1360,9 +1322,9 @@ Section MatchStates.
                                         ge ! (prefix_fun callerid ownerid) = Some outco ->
                                         map translate_param caller.(m_out) = outco.(co_members)).
 
-    Variable (v : val) (x : ident) (ty : type).
+    Variable (v : value) (x : ident) (ty : type).
 
-    Hypothesis (WTv : wt_val v ty).
+    Hypothesis (WTv : wt_value v ty).
 
     Lemma outputrep_assign_gt1_mem:
       In (x, ty) caller.(m_out) ->
@@ -1371,7 +1333,7 @@ Section MatchStates.
       exists m' b co d,
         outb_co = Some (b, co)
         /\ field_offset ge x (co_members co) = Errors.OK d
-        /\ Clight.assign_loc ge (cltype ty) m b (Ptrofs.repr d) v m'
+        /\ Clight.assign_loc ge (translate_type ty) m b (Ptrofs.repr d) (value_to_cvalue v) m'
         /\ m' |= outputrep owner caller (Env.add x v ve) le outb_co ** P.
     Proof.
       intros * Hin Len Hmem.
@@ -1388,18 +1350,18 @@ Section MatchStates.
       rewrite Heq in Hrep; simpl in *.
       destruct (field_offset ge x (co_members co)) as [d|] eqn: Hofs; rewrite sep_assoc in Hrep;
         try (destruct Hrep; contradiction).
-      rewrite cltype_access_by_value in Hrep.
-      eapply Separation.storev_rule' with (v:=v) in Hrep as (m' & ? & Hrep); eauto with mem.
+      rewrite translate_type_access_by_value in Hrep.
+      eapply Separation.storev_rule' with (v:=value_to_cvalue v) in Hrep
+        as (m' & ? & Hrep); eauto with mem.
       exists m', b, co, d; intuition; eauto using assign_loc.
       rewrite outputrep_notnil; auto.
       erewrite find_class_name, find_method_name; eauto.
       exists b, co; split; intuition.
       unfold fieldsrep, fieldrep.
-      rewrite Heq, Hofs, cltype_access_by_value, sep_assoc.
+      rewrite Heq, Hofs, translate_type_access_by_value, sep_assoc.
       eapply sep_imp; eauto.
       - unfold hasvalue, match_value; simpl.
-        rewrite Env.gss.
-        now rewrite <-wt_val_load_result.
+        rewrite Env.gss, <-wt_value_load_result; auto.
       - apply sep_imp'; auto.
         do 2 apply NoDupMembers_app_r in Nodup.
         rewrite fst_NoDupMembers, <-translate_param_fst, <-fst_NoDupMembers in Nodup; auto.
@@ -1417,7 +1379,7 @@ Section MatchStates.
     Lemma outputrep_assign_singleton_mem:
       m_out caller = [(x, ty)] ->
       outputrep owner caller ve le outb_co -*>
-      outputrep owner caller (Env.add x v ve) (PTree.set x v le) outb_co.
+      outputrep owner caller (Env.add x v ve) (PTree.set x (value_to_cvalue v) le) outb_co.
     Proof.
       intros Eq.
       unfold outputrep, case_out; rewrite Eq.
@@ -1428,7 +1390,7 @@ Section MatchStates.
       ~ InMembers x (m_out caller) ->
       In (x, ty) (meth_vars caller) ->
       m |= outputrep owner caller ve le outb_co ** P ->
-      m |= outputrep owner caller (Env.add x v ve) (PTree.set x v le) outb_co ** P.
+      m |= outputrep owner caller (Env.add x v ve) (PTree.set x (value_to_cvalue v) le) outb_co ** P.
     Proof.
       intros * Hnin Hin Hmem.
       eapply sep_imp; eauto.
@@ -1455,7 +1417,8 @@ Section MatchStates.
       In (x, ty) owner.(c_mems) ->
       exists m' d,
         field_offset ge x (make_members owner) = Errors.OK d
-        /\ Clight.assign_loc ge (cltype ty) m sb (Ptrofs.repr (Ptrofs.unsigned sofs + d)) v m'
+        /\ Clight.assign_loc ge (translate_type ty) m sb
+                            (Ptrofs.repr (Ptrofs.unsigned sofs + d)) (value_to_cvalue v) m'
         /\ m' |= match_states prog owner caller (add_val x v me, ve) (e, le) sb sofs outb_co
                 ** P.
     Proof.
@@ -1465,25 +1428,24 @@ Section MatchStates.
 
       (* get the updated memory *)
       pose proof Hin.
+      rewrite staterep_def, Findcl in Hmem; simpl in Hmem.
       apply sepall_in in Hin as [ws [ys [Hys Heq]]].
-      rewrite staterep_skip in Hmem; eauto.
-      simpl staterep in Hmem; erewrite find_class_name in Hmem; eauto.
       unfold staterep_mems in Hmem.
-      rewrite ident_eqb_refl, Heq in Hmem.
+      rewrite Heq in Hmem.
       destruct (field_offset ge x (make_members owner)) as [d|] eqn: Hofs; rewrite 2 sep_assoc in Hmem;
         try (destruct Hmem; contradiction).
-      eapply Separation.storev_rule' with (v:=v) in Hmem as (m' & ? & Hmem);
+      eapply Separation.storev_rule' with (v := value_to_cvalue v) in Hmem as (m' & ? & Hmem);
         eauto with mem.
       exists m', d; intuition; eauto using assign_loc.
       apply match_states_conj; intuition; eauto.
-      erewrite find_class_name, staterep_skip; eauto.
-      simpl staterep.
+      erewrite find_class_name; eauto.
+      rewrite staterep_def, Findcl; simpl.
       unfold staterep_mems.
-      erewrite find_class_name, ident_eqb_refl, Heq, Hofs, 2 sep_assoc; eauto.
+      erewrite Heq, Hofs, 2 sep_assoc; eauto.
       eapply sep_imp; eauto.
       - unfold hasvalue'.
         rewrite find_val_gss.
-        now rewrite <-wt_val_load_result.
+        now rewrite <-wt_value_load_result.
       - repeat apply sep_imp'; auto.
         pose proof (c_nodupmems owner) as Nodup.
         rewrite Hys in Nodup.
@@ -1525,9 +1487,10 @@ Section FunctionEntry.
       length xs = length vs ->
       exists le',
         bind_parameter_temps ((s, ts) :: (o, to) :: xs)
-                             (sptr :: optr :: vs)
+                             (sptr :: optr :: map value_to_cvalue vs)
                              (create_undef_temps ys) = Some le'
-        /\ Forall (match_var (Env.adds (map fst xs) vs vempty) le') (map fst (xs ++ ys)).
+        /\ Forall (match_var (Env.adds (map fst xs) vs vempty) le')
+                 (map fst (xs ++ ys)).
   Proof.
     unfold match_var.
     induction xs as [|(x, ty)]; destruct vs;
@@ -1562,27 +1525,26 @@ Section FunctionEntry.
       + eapply NotInMembers_cons; eauto.
       + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
         assert (x <> o) by (intro; subst; apply Noo; apply inmembers_eq).
-        exists (PTree.set x v le'); split.
-        * rewrite bind_parameter_temps_comm; auto.
+        exists (PTree.set x (value_to_cvalue v) le'); split.
+        * simpl map; rewrite bind_parameter_temps_comm; auto.
           apply bind_parameter_temps_cons; auto.
           simpl; intros [|[|]]; auto.
-        *{ rewrite <-app_comm_cons.
-           constructor.
-           - rewrite PTree.gss.
-             unfold match_value; simpl; rewrite Env.find_gsss; auto.
+        * rewrite <-app_comm_cons.
+          constructor.
+          -- rewrite PTree.gss.
+             unfold match_value; simpl; rewrite Env.find_gsss; simpl; auto.
              now rewrite <-fst_InMembers.
-           - eapply Forall_impl_In; eauto; simpl.
+          -- eapply Forall_impl_In; eauto; simpl.
              intros x' Hin MV.
-             destruct (ident_eqb x' x) eqn: E.
-             + rewrite ident_eqb_eq in E; subst x'.
-               rewrite PTree.gss; unfold match_value; simpl; rewrite Env.find_gsss; auto.
-               now rewrite <-fst_InMembers.
-             + rewrite ident_eqb_neq in E.
-               rewrite PTree.gso; auto.
-               destruct le' ! x'; try contradiction.
-               unfold match_value in *; simpl.
-               rewrite Env.find_gsso; auto.
-         }
+             destruct (ident_eq_dec x' x).
+             ++ subst x'.
+                rewrite PTree.gss; unfold match_value; simpl; rewrite Env.find_gsss; simpl; auto.
+                now rewrite <-fst_InMembers.
+             ++ rewrite PTree.gso; auto.
+                unfold or_default_with.
+                cases_eqn E; setoid_rewrite E in MV; simpl in *; try contradiction.
+                unfold match_value in *; simpl.
+                rewrite Env.find_gsso; auto; simpl; auto.
   Qed.
 
   Remark bind_parameter_temps_exists_noout:
@@ -1593,7 +1555,7 @@ Section FunctionEntry.
       length xs = length vs ->
       exists le',
         bind_parameter_temps ((s, ts) :: xs)
-                             (sptr :: vs)
+                             (sptr :: map value_to_cvalue vs)
                              (create_undef_temps ys) = Some le'
         /\ Forall (match_var (Env.adds (map fst xs) vs vempty) le') (map fst (xs ++ ys)).
   Proof.
@@ -1605,7 +1567,7 @@ Section FunctionEntry.
       induction ys as [|(y, t)]; simpl; auto.
       assert (y <> s) by (intro; subst; apply Nos'; apply inmembers_eq).
       constructor.
-      + rewrite Env.gempty, PTree.gso, PTree.gss; auto.
+      + rewrite Env.gempty, PTree.gso, PTree.gss; simpl; auto.
       + apply NotInMembers_cons in Nos'; destruct Nos' as [Nos'].
         specialize (IHys Nos').
         eapply Forall_impl_In; eauto; simpl.
@@ -1623,29 +1585,27 @@ Section FunctionEntry.
         as (le' & Bind & ?); eauto.
       + eapply NotInMembers_cons; eauto.
       + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
-        exists (PTree.set x v le'); split.
-        * rewrite bind_parameter_temps_comm_noout; auto.
+        exists (PTree.set x (value_to_cvalue v) le'); split.
+        * simpl map; rewrite bind_parameter_temps_comm_noout; auto.
           apply bind_parameter_temps_cons; auto.
           simpl; intros [|]; auto.
-        *{ rewrite <-app_comm_cons.
-           constructor.
-           - rewrite PTree.gss.
+        * rewrite <-app_comm_cons.
+          constructor.
+          -- rewrite PTree.gss.
              simpl.
-             unfold match_value; rewrite Env.find_gsss; auto.
+             unfold match_value; rewrite Env.find_gsss; simpl; auto.
              rewrite <-fst_InMembers; auto.
-           - eapply Forall_impl_In; eauto; simpl.
+          -- eapply Forall_impl_In; eauto; simpl.
              intros x' Hin MV.
-             destruct (ident_eqb x' x) eqn: E.
-             + rewrite ident_eqb_eq in E; subst x'.
-               rewrite PTree.gss; unfold match_value; simpl.
-               rewrite Env.find_gsss; auto.
-               rewrite <-fst_InMembers; auto.
-             + rewrite ident_eqb_neq in E.
-               rewrite PTree.gso.
-               destruct le' ! x'; try contradiction.
-               unfold match_value; simpl; rewrite Env.find_gsso; auto.
-               auto.
-         }
+             destruct (ident_eq_dec x' x).
+             ++ subst x'.
+                rewrite PTree.gss; unfold match_value; simpl.
+                rewrite Env.find_gsss; simpl; auto.
+                rewrite <-fst_InMembers; auto.
+             ++ rewrite PTree.gso; auto.
+                unfold or_default_with.
+                cases_eqn E; setoid_rewrite E in MV; simpl in *; try contradiction.
+                unfold match_value; simpl; rewrite Env.find_gsso; auto.
   Qed.
 
   Remark alloc_mem_vars:
@@ -1747,17 +1707,18 @@ Section FunctionEntry.
 
   Lemma function_entry_match_states:
     forall cid c prog' fid f fd me vs,
+      let vs' := map value_to_cvalue vs in
       method_spec c f prog fd ->
       find_class cid prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      wt_mem me prog c ->
-      Forall2 (fun v xt => wt_val v (snd xt)) vs (m_in f) ->
+      wt_memory me prog c.(c_mems) c.(c_objs) ->
+      Forall2 (fun v xt => wt_value v (snd xt)) vs (m_in f) ->
       case_out f
                (forall m sb sofs P,
                    bounded_struct_of_class gcenv c sofs ->
                    m |= staterep gcenv prog cid me sb (Ptrofs.unsigned sofs) ** P ->
                    exists e_f le_f m_f,
-                     function_entry2 tge fd (Vptr sb sofs :: vs) m e_f le_f m_f
+                     function_entry2 tge fd (Vptr sb sofs :: vs') m e_f le_f m_f
                      /\ m_f |= match_states gcenv prog c f (me, Env.adds (map fst f.(m_in)) vs vempty) (e_f, le_f) sb sofs None
                               ** P)
                (fun _ _ =>
@@ -1765,7 +1726,7 @@ Section FunctionEntry.
                     bounded_struct_of_class gcenv c sofs ->
                     m |= staterep gcenv prog cid me sb (Ptrofs.unsigned sofs) ** P ->
                     exists e_f le_f m_f,
-                      function_entry2 tge fd (Vptr sb sofs :: vs) m e_f le_f m_f
+                      function_entry2 tge fd (Vptr sb sofs :: vs') m e_f le_f m_f
                       /\ m_f |= match_states gcenv prog c f (me, Env.adds (map fst f.(m_in)) vs vempty) (e_f, le_f) sb sofs None
                                ** P)
                (fun _ =>
@@ -1776,7 +1737,7 @@ Section FunctionEntry.
                         ** P ->
                    gcenv ! (prefix_fun fid cid) = Some instco ->
                    exists e_f le_f m_f,
-                     function_entry2 tge fd (Vptr sb sofs :: var_ptr instb :: vs) m e_f le_f m_f
+                     function_entry2 tge fd (Vptr sb sofs :: var_ptr instb :: vs') m e_f le_f m_f
                      /\ m_f |= match_states gcenv prog c f (me, Env.adds (map fst f.(m_in)) vs vempty) (e_f, le_f) sb sofs
                                 (Some (instb, instco))
                               ** P).
@@ -1784,7 +1745,7 @@ Section FunctionEntry.
     intros * Spec Findcl Findmth WTmem WTvs.
 
     assert (NoDupMembers (make_out_vars (instance_methods f)))
-      by (eapply NoDupMembers_make_out_vars; eauto; eapply wt_program_find_class; eauto).
+      by (eapply NoDupMembers_make_out_vars; eauto; eapply wt_program_find_unit; eauto).
     assert (Forall (fun xt => sizeof tge (snd xt) <= Ptrofs.max_unsigned /\ wf_struct gcenv xt)
                    (make_out_vars (instance_methods f)))
       by (eapply instance_methods_caract; eauto).
@@ -1808,7 +1769,7 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
                                            (prefix obc2c self) (type_of_inst_p (c_name c))
-                                           (make_out_temps (instance_methods_temp (rev prog) f)
+                                           (make_out_temps (instance_methods_temp (rev_prog prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars); eauto.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
@@ -1817,10 +1778,10 @@ Section FunctionEntry.
 
       exists e_f, le_f, m_f; split.
       + constructor; auto; try congruence.
+        rewrite T_f; auto.
       + apply match_states_conj; intuition; eauto using m_nodupvars.
-        erewrite find_class_name; eauto.
-        rewrite sep_swap, outputrep_nil, <-sepemp_left, sep_swap, sep_swap23,
-        sep_swap34, sep_swap23, sep_swap; auto.
+        erewrite find_class_name, sep_swap, outputrep_nil, <-sepemp_left, sep_swap, sep_swap23,
+        sep_swap34, sep_swap23, sep_swap; eauto.
         apply sep_pure; split; auto.
         repeat rewrite map_app in *.
         repeat rewrite translate_param_fst in Vars.
@@ -1840,7 +1801,7 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
                                            (prefix obc2c self) (type_of_inst_p (c_name c))
-                                           ((a, cltype ta) :: make_out_temps (instance_methods_temp (rev prog) f)
+                                           ((a, translate_type ta) :: make_out_temps (instance_methods_temp (rev_prog prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars);
         eauto; try eapply NotInMembers_cons; eauto.
@@ -1849,10 +1810,10 @@ Section FunctionEntry.
       setoid_rewrite <-P_f in Bind.
 
       exists e_f, le_f, m_f; split.
-      + constructor; auto; congruence.
+      + constructor; auto; try congruence.
+        rewrite T_f; auto.
       + apply match_states_conj; intuition; eauto using m_nodupvars.
-        erewrite find_class_name; eauto.
-        rewrite sep_swap, outputrep_singleton, sep_swap, sep_swap23,
+        erewrite find_class_name, sep_swap, outputrep_singleton, sep_swap, sep_swap23,
         sep_swap34, sep_swap23, sep_swap; eauto.
         repeat rewrite map_app, map_cons, map_app in *.
         repeat rewrite translate_param_fst in Vars.
@@ -1874,7 +1835,7 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists (map translate_param f.(m_in)) (prefix obc2c self) (type_of_inst_p (c_name c))
                                      (prefix obc2c out) (type_of_inst_p (prefix_fun (m_name f) (c_name c)))
-                                     (make_out_temps (instance_methods_temp (rev prog) f)
+                                     (make_out_temps (instance_methods_temp (rev_prog prog) f)
                                                      ++ map translate_param f.(m_vars))
                                      vs (Vptr sb sofs) (var_ptr instb)) as (le_f & Bind & Vars); eauto.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs) /\ le_f ! (prefix obc2c out) = Some (var_ptr instb)) as (?&?)
@@ -1884,8 +1845,7 @@ Section FunctionEntry.
       exists e_f, le_f, m_f; split.
       + constructor; auto; congruence.
       + apply match_states_conj; intuition; eauto using m_nodupvars.
-        erewrite find_class_name; eauto.
-        rewrite sep_swap, outputrep_notnil; auto.
+        erewrite find_class_name, sep_swap, outputrep_notnil; eauto.
         erewrite find_class_name, find_method_name; eauto.
         exists instb, instco; intuition; auto.
         rewrite sep_swap23, sep_swap, sep_swap34, sep_swap23, sep_swap34,
@@ -1897,7 +1857,7 @@ Section FunctionEntry.
           rewrite Forall_app; tauto.
         * eapply sep_imp; eauto.
           repeat apply sep_imp'; auto.
-          rewrite fieldsrep_nodup; eauto.
+          apply fieldsrep_nodup; eauto.
           erewrite <-output_match; eauto.
           rewrite translate_param_fst.
           eapply NoDup_app_weaken.
@@ -1975,7 +1935,7 @@ Section MainProgram.
       eauto using well_initialized.
 
     pose proof TRANSL as Trans.
-    inv_trans Trans as En Estep Ereset with structs funs E.
+    inv_trans Trans as En Estep Ereset Eenums with structs funs E.
 
     exists m'.
     edestruct find_self as (sb & find_step); eauto.

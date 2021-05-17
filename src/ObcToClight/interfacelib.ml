@@ -28,45 +28,60 @@ module ClightTypeFormats
   struct
     type typ = Interface.Op.coq_type
 
-    let type_decl ty =
+    let rec type_decl ty =
       let open Interface.Op in
+      let open Interface.OpAux in
       match ty with
-      | Tint (sz, sg) -> PrintCsyntax.name_inttype sz sg
-      | Tlong sg      -> PrintCsyntax.name_longtype sg
-      | Tfloat sz     -> PrintCsyntax.name_floattype sz
+      | Tprimitive ty ->
+        begin match ty with
+          | Tint (sz, sg) -> PrintCsyntax.name_inttype sz sg
+          | Tlong sg      -> PrintCsyntax.name_longtype sg
+          | Tfloat sz     -> PrintCsyntax.name_floattype sz
+        end
+      | Tenum (_, n) -> type_decl (Tprimitive (enumtag_ctype n))
 
-    let type_printf ty =
+    let rec type_printf ty =
       let open Ctypes in
       let open Interface.Op in
+      let open Interface.OpAux in
       match ty with
-      | Tint (I8, Signed)    -> "%hhd"
-      | Tint (I8, Unsigned)  -> "%hhu"
-      | Tint (I16, Signed)   -> "%hd"
-      | Tint (I16, Unsigned) -> "%hu"
-      | Tint (I32, Signed)   -> "%d"
-      | Tint (I32, Unsigned) -> "%u"
-      | Tint (IBool, _)      -> "%d"
-      | Tlong Signed         -> "%lld"
-      | Tlong Unsigned       -> "%llu"
-      | Tfloat F32           -> "%e"
-      | Tfloat F64           -> "%e"
+      | Tprimitive ty ->
+        begin match ty with
+          | Tint (I8, Signed)    -> "%hhd"
+          | Tint (I8, Unsigned)  -> "%hhu"
+          | Tint (I16, Signed)   -> "%hd"
+          | Tint (I16, Unsigned) -> "%hu"
+          | Tint (I32, Signed)   -> "%d"
+          | Tint (I32, Unsigned) -> "%u"
+          | Tint (IBool, _)      -> "%d"
+          | Tlong Signed         -> "%lld"
+          | Tlong Unsigned       -> "%llu"
+          | Tfloat F32           -> "%e"
+          | Tfloat F64           -> "%e"
+        end
+      | Tenum (_, n) -> type_decl (Tprimitive (enumtag_ctype n))
 
-    let type_scanf ty =
+    let rec type_scanf ty =
       let open Ctypes in
       let open Interface.Op in
+      let open Interface.OpAux in
       match ty with
-      | Tint (I8, Signed)    -> "%hhd"
-      | Tint (I8, Unsigned)  -> "%hhu"
-      | Tint (I16, Signed)   -> "%hd"
-      | Tint (I16, Unsigned) -> "%hu"
-      | Tint (I32, Signed)   -> "%d"
-      | Tint (I32, Unsigned) -> "%u"
-      | Tint (IBool, _)      -> "%hhu"    (* nonstandard: CompCert stores
-                                                          bools in 1-byte *)
-      | Tlong Signed         -> "%lld"
-      | Tlong Unsigned       -> "%llu"
-      | Tfloat F32           -> "%f"
-      | Tfloat F64           -> "%lf"
+      | Tprimitive ty ->
+        begin match ty with
+          | Tint (I8, Signed)    -> "%hhd"
+          | Tint (I8, Unsigned)  -> "%hhu"
+          | Tint (I16, Signed)   -> "%hd"
+          | Tint (I16, Unsigned) -> "%hu"
+          | Tint (I32, Signed)   -> "%d"
+          | Tint (I32, Unsigned) -> "%u"
+          | Tint (IBool, _)      -> "%hhu"    (* nonstandard: CompCert stores
+                                                              bools in 1-byte *)
+          | Tlong Signed         -> "%lld"
+          | Tlong Unsigned       -> "%llu"
+          | Tfloat F32           -> "%f"
+          | Tfloat F64           -> "%lf"
+        end
+      | Tenum (_, n) -> type_scanf (Tprimitive (enumtag_ctype n))
 
   end
 
@@ -102,20 +117,24 @@ module LustreOpNames =
   end
 
 module PrintClightOpsFun (OpNames : sig
-    val name_unop  : Interface.Op.coq_type -> Cop.unary_operation -> string
-    val name_binop : Interface.Op.coq_type -> Cop.binary_operation -> string
+    val name_unop  : Interface.Op.ctype -> Cop.unary_operation -> string
+    val name_binop : Interface.Op.ctype -> Cop.binary_operation -> string
   end) =
   struct
     module Ops = Interface.Op
+    module OpAux = Interface.OpAux
 
-    type typ   = Ops.coq_type
-    type const = Ops.const
-    type unop  = Ops.unop
-    type binop = Ops.binop
+    type typ     = Ops.coq_type
+    type cconst  = Ops.cconst
+    type const   = Ops.const
+    type unop    = Ops.unop
+    type binop   = Ops.binop
+    type enumtag = Ops.enumtag
 
-    let print_typ p ty = Ops.string_of_type ty |> fmt_coqstring p
+    let print_typ' p ty = Ops.string_of_ctype ty |> fmt_coqstring p
+    let print_typ p ty = Interface.string_of_type ty |> fmt_coqstring p
 
-    let print_const p c =
+    let print_cconst p c =
       match c with
       | Ops.Cint (n, Ctypes.I32, Ctypes.Unsigned) ->
           fprintf p "%luU"   (camlint_of_coqint n)
@@ -131,16 +150,26 @@ module PrintClightOpsFun (OpNames : sig
           fprintf p "%LdLL"  (camlint64_of_coqint n)
 
     let print_unop p uop ty print_exp e =
-      match uop with
-      | Ops.UnaryOp op ->
+      match uop, ty with
+      | Ops.UnaryOp op, Ops.Tprimitive ty ->
           fprintf p "%s %a" (OpNames.name_unop ty op) print_exp e
-      | Ops.CastOp ty ->
-          fprintf p "(%a : %a)" print_exp e print_typ ty
+      | Ops.UnaryOp op, Ops.Tenum (_, n) ->
+          fprintf p "%s %a" (OpNames.name_unop (Ops.enumtag_ctype n) op) print_exp e
+      | Ops.CastOp ty, _ ->
+          fprintf p "(%a : %a)" print_exp e print_typ' ty
 
     let print_binop p op ty print_exp1 e1 print_exp2 e2 =
-      fprintf p "%a@ %s %a" print_exp1 e1
-                            (OpNames.name_binop ty op)
-                            print_exp2 e2
+      match ty with
+      | Ops.Tprimitive ty ->
+        fprintf p "%a@ %s %a"
+          print_exp1 e1
+          (OpNames.name_binop ty op)
+          print_exp2 e2
+      | Ops.Tenum (_, n) ->
+        fprintf p "%a@ %s %a"
+          print_exp1 e1
+          (OpNames.name_binop (Ops.enumtag_ctype n) op)
+          print_exp2 e2
 
     let prec_unop op = (15, RtoL)
     let prec_binop =
@@ -153,57 +182,84 @@ module PrintClightOpsFun (OpNames : sig
         | Oand            -> ( 8, LtoR)
         | Oxor            -> ( 7, LtoR)
         | Oor             -> ( 6, LtoR)
+
+    let print_enumtag p c =
+      fprintf p "%d" (Nat.to_int c)
+
+    let print_const p c =
+      match c with
+      | Ops.Const c -> print_cconst p c
+      | Ops.Enum c -> print_enumtag p c
+
+    let print_branches pp_br p (brs, default) =
+      let _, has_default = List.fold_left (fun (n, has_def) o ->
+          let n' = n+1 in
+          match o with
+          | Some b ->
+            fprintf p "@;| %d => @[<hv 0>%a@]" n pp_br b;
+            (n', has_def)
+          | None ->
+            fprintf p "@;| %d => _" n;
+            (n', true)) (0, false) brs
+      in
+      match has_default, default with
+      | true, Some d ->
+              fprintf p "@;| default => @[<hv 0>%a@]" pp_br d
+      | _ -> ()
+
   end
 
-module Basics = struct
-  type typ   = Interface.Op.coq_type
-  type const = Interface.Op.const
-  type unop  = Interface.Op.unop
-  type binop = Interface.Op.binop
-end
+(* module Basics = struct
+ *   type typ   = Interface.OpAux.coq_type
+ *   type const = Interface.Op.const
+ *   type unop  = Interface.Op.unop
+ *   type binop = Interface.Op.binop
+ * end *)
 
-module PrintOps = PrintClightOpsFun (LustreOpNames)
+module Ops = PrintClightOpsFun (LustreOpNames)
 
 module PrintLustre = Lustrelib.PrintFun
+    (Ops)
     (struct
-      include ClockDefs
+      include Ops
+      include Interface.Cks
       include Instantiator.L.Syn
       include Basics
     end)
-    (PrintOps)
 
 module CE = struct
-  include Basics
-  include ClockDefs
+  include Ops
+  include Interface.Cks
   include Instantiator.CE.Syn
 end
 
 module PrintNLustre = Nlustrelib.PrintFun
+    (Ops)
     (CE)
     (struct
       include CE
       include Instantiator.NL.Syn
     end)
-    (PrintOps)
 
 module PrintStc = Stclib.PrintFun
+    (Ops)
     (CE)
     (struct
       include CE
       include Instantiator.Stc.Syn
     end)
-    (PrintOps)
 
 module PrintObc = Obclib.PrintFun
+  (Ops)
   (struct
-    include Basics
+    (* include Basics *)
+    include Ops
     include Interface.Obc.Syn
    end)
-  (PrintOps)
 
 module SyncFun = Obclib.SyncFun
   (struct
-    include Basics
+    include Ops
     include Interface.Obc.Syn
    end)
   (ClightTypeFormats)

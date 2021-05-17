@@ -769,9 +769,9 @@ Module Fresh(Ids : IDS).
       | |- context c [ret _ _] =>
         rewrite ret_spec
       | |- bind _ _ _ = (_, _) =>
-        rewrite bind_spec
+        rewrite bind_spec; repeat esplit
       | |- bind2 _ _ _ = (_, _) =>
-        rewrite bind2_spec
+        rewrite bind2_spec; repeat esplit
       end.
   End Tactics.
 
@@ -786,22 +786,22 @@ Module Fresh(Ids : IDS).
         (at level 200, X ident, Y ident, A at level 100, B at level 200): fresh_monad_scope.
   End Notations.
 
-  Section map_bind.
+  Section mmap.
     Import Tactics Notations.
     Open Scope fresh_monad_scope.
     Context {A A1 B : Type}.
     Variable k : A -> Fresh A1 B.
 
-    Fixpoint map_bind a :=
+    Fixpoint mmap a :=
       match a with
       | nil => ret nil
       | hd::tl => do a1 <- k hd;
-                do a1s <- map_bind tl;
+                do a1s <- mmap tl;
                 ret (a1::a1s)
       end.
 
-    Fact map_bind_values : forall a st a1s st',
-        map_bind a st = (a1s, st') ->
+    Fact mmap_values : forall a st a1s st',
+        mmap a st = (a1s, st') ->
         Forall2 (fun a a1 => exists st'', exists st''', k a st'' = (a1, st''')) a a1s.
     Proof.
       induction a; intros st a1s st' Hfold; simpl in *; repeat inv_bind.
@@ -810,8 +810,8 @@ Module Fresh(Ids : IDS).
         constructor; eauto.
     Qed.
 
-    Fact map_bind_st_valid : forall a a1s st st' pref aft,
-        map_bind a st = (a1s, st') ->
+    Fact mmap_st_valid : forall a a1s st st' pref aft,
+        mmap a st = (a1s, st') ->
         Forall (fun a => forall a1 st st',
                     k a st = (a1, st') ->
                     st_valid_after st pref aft ->
@@ -824,8 +824,8 @@ Module Fresh(Ids : IDS).
       inv Hforall. eapply IHa; eauto.
     Qed.
 
-    Fact map_bind_st_follows : forall a a1s st st',
-        map_bind a st = (a1s, st') ->
+    Fact mmap_st_follows : forall a a1s st st',
+        mmap a st = (a1s, st') ->
         Forall (fun a => forall a1 st st', k a st = (a1, st') -> st_follows st st') a ->
         st_follows st st'.
     Proof.
@@ -835,24 +835,24 @@ Module Fresh(Ids : IDS).
       - inv Hforall.
         etransitivity; eauto.
     Qed.
-  End map_bind.
+  End mmap.
 
-  Section map_bind2.
+  Section mmap2.
     Import Tactics Notations.
     Open Scope fresh_monad_scope.
     Context {A A1 A2 B : Type}.
     Variable k : A -> Fresh (A1 * A2) B.
 
-    Fixpoint map_bind2 a :=
+    Fixpoint mmap2 a :=
       match a with
       | nil => ret (nil, nil)
       | hd::tl => do (a1, a2) <- k hd;
-                do (a1s, a2s) <- map_bind2 tl;
+                do (a1s, a2s) <- mmap2 tl;
                 ret (a1::a1s, a2::a2s)
       end.
 
-    Fact map_bind2_values : forall a st a1s a2s st',
-        map_bind2 a st = (a1s, a2s, st') ->
+    Fact mmap2_values : forall a st a1s a2s st',
+        mmap2 a st = (a1s, a2s, st') ->
         Forall3 (fun a a1 a2 => exists st'', exists st''', k a st'' = (a1, a2, st''')) a a1s a2s.
     Proof.
       induction a; intros st a1s a2s st' Hfold; simpl in *; repeat inv_bind.
@@ -861,8 +861,8 @@ Module Fresh(Ids : IDS).
         constructor; eauto.
     Qed.
 
-    Fact map_bind2_st_valid : forall a a1s a2s st st' pref aft,
-        map_bind2 a st = (a1s, a2s, st') ->
+    Fact mmap2_st_valid : forall a a1s a2s st st' pref aft,
+        mmap2 a st = (a1s, a2s, st') ->
         Forall (fun a => forall a1 a2 st st',
                     k a st = (a1, a2, st') ->
                     st_valid_after st pref aft ->
@@ -875,8 +875,8 @@ Module Fresh(Ids : IDS).
       inv Hforall. eapply IHa; eauto.
     Qed.
 
-    Fact map_bind2_st_valid_reuse : forall a a1s a2s st st' pref aft reprefs reu,
-        map_bind2 a st = (a1s, a2s, st') ->
+    Fact mmap2_st_valid_reuse : forall a a1s a2s st st' pref aft reprefs reu,
+        mmap2 a st = (a1s, a2s, st') ->
         Forall (fun a => forall a1 a2 st st',
                     k a st = (a1, a2, st') ->
                     st_valid_reuse st pref aft reprefs reu ->
@@ -889,8 +889,8 @@ Module Fresh(Ids : IDS).
       inv Hforall. eapply IHa; eauto.
     Qed.
 
-    Fact map_bind2_st_follows : forall a a1s a2s st st',
-        map_bind2 a st = (a1s, a2s, st') ->
+    Fact mmap2_st_follows : forall a a1s a2s st st',
+        mmap2 a st = (a1s, a2s, st') ->
         Forall (fun a => forall a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') a ->
         st_follows st st'.
     Proof.
@@ -900,7 +900,15 @@ Module Fresh(Ids : IDS).
       - inv Hforall.
         etransitivity; eauto.
     Qed.
-  End map_bind2.
+
+    Fact mmap2_length_1 : forall a st a1s a2s st',
+        mmap2 a st = (a1s, a2s, st') ->
+        length a1s = length a.
+    Proof.
+      induction a; intros * Map; simpl in Map;
+        repeat inv_bind; simpl; f_equal; eauto.
+    Qed.
+  End mmap2.
 
   Hint Resolve fresh_ident_st_valid.
   Hint Resolve fresh_ident_st_valid_reuse.
@@ -908,6 +916,6 @@ Module Fresh(Ids : IDS).
   Hint Resolve reuse_ident_st_valid_reuse.
   Hint Resolve reuse_ident_st_follows.
   Hint Resolve st_follows_incl.
-  Hint Resolve map_bind2_st_valid.
-  Hint Resolve map_bind2_st_follows.
+  Hint Resolve mmap2_st_valid.
+  Hint Resolve mmap2_st_follows.
 End Fresh.

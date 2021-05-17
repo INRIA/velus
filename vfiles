@@ -1,8 +1,7 @@
-src/ClockDefs.v
-src/Clocks.v
 src/Environment.v
 src/Ident.v
 src/Operators.v
+src/Clocks.v
 src/VelusMemory.v
 src/IndexedStreams.v
 src/CoindStreams.v
@@ -15,6 +14,8 @@ src/Common/CommonPS.v
 src/Common/CommonTactics.v
 src/Common/CommonStreams.v
 src/Common/Common.v
+src/Common/CommonProgram.v
+src/Common/CommonTyping.v
 src/Common/CompCertLib.v
 src/AcyGraph.v
 
@@ -38,13 +39,13 @@ src/Lustre/Normalization/NTyping.v
 src/Lustre/Normalization/NClocking.v
 src/Lustre/Normalization/NCausality.v
 src/Lustre/Normalization/Correctness.v
-src/Lustre/Normalization/Idempotence.v
 src/Lustre/Normalization/LNormalization.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
 src/CoreExpr/CEClocking.v
 src/CoreExpr/CETyping.v
+src/CoreExpr/CETypingSemantics.v
 src/CoreExpr/CEIsFree.v
 src/CoreExpr/CEProperties.v
 src/CoreExpr/CEClockingSemantics.v
@@ -84,6 +85,9 @@ src/Stc/StcClocking.v
 src/Stc/StcIsFree.v
 src/Stc/StcSyntax.v
 src/Stc/StcWellDefined.v
+src/Stc/StcSchedulingValidator.v
+src/Stc/StcMemoryCorres.v
+src/Stc/StcTypingSemantics.v
 src/Stc/Stc.v
 
 src/Obc/ObcSyntax.v
@@ -91,6 +95,7 @@ src/Obc/ObcTyping.v
 src/Obc/ObcAddDefaults.v
 src/Obc/ObcSemantics.v
 src/Obc/Fusion.v
+src/Obc/ObcSwitchesNormalization.v
 src/Obc/Equiv.v
 src/Obc/ObcInvariants.v
 src/Obc/Obc.v
@@ -113,7 +118,6 @@ src/NLustreToStc/Translation.v
 src/StcToObc/Stc2ObcTyping.v
 src/StcToObc/Correctness.v
 src/StcToObc/Stc2ObcInvariants.v
-src/StcToObc/StcMemoryCorres.v
 src/StcToObc/Translation.v
 
 src/ObcToClight/SepInvariant.v
@@ -127,5 +131,6 @@ src/Traces.v
 src/ClightToAsm.v
 
 src/Instantiator.v
+src/Velus.v
 src/NLCorrectness.v
 src/VelusCorrectness.v

@@ -7,6 +7,7 @@ From Coq Require Import Morphisms.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -27,14 +28,15 @@ From Velus Require Import CoreExpr.CESemantics.
 Module Type NLINDEXEDSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Syn   : NLSYNTAX    Ids Op       CESyn)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import Ord   : NLORDERED   Ids Op       CESyn Syn)
-       (Import CESem : CESEMANTICS Ids Op OpAux CESyn      Str).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import Cks   : CLOCKS      Ids Op OpAux)
+       (Import CESyn : CESYNTAX    Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX    Ids Op OpAux Cks CESyn)
+       (Import Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import Ord   : NLORDERED   Ids Op OpAux Cks CESyn Syn)
+       (Import CESem : CESEMANTICS Ids Op OpAux Cks CESyn      Str).
 
-  Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
+  Fixpoint hold (v0: value) (xs: stream svalue) (n: nat) : value :=
     match n with
     | 0   => v0
     | S m => match xs m with
@@ -43,14 +45,14 @@ Module Type NLINDEXEDSEMANTICS
             end
     end.
 
-  Definition fby (v0: val) (xs: stream value) : stream value :=
+  Definition fby (v0: value) (xs: stream svalue) : stream svalue :=
     fun n =>
       match xs n with
       | absent => absent
       | _      => present (hold v0 xs n)
       end.
 
-  Fixpoint doreset (xs: stream value) (rs: stream bool) (n : nat) : bool :=
+  Fixpoint doreset (xs: stream svalue) (rs: stream bool) (n : nat) : bool :=
     if rs n then true
     else match n with
          | 0 => false
@@ -60,7 +62,7 @@ Module Type NLINDEXEDSEMANTICS
                  end
          end.
 
-  Definition reset (v0: val) (xs: stream value) (rs: stream bool) : stream value :=
+  Definition reset (v0: value) (xs: stream svalue) (rs: stream bool) : stream svalue :=
     fun n =>
       match xs n with
       | absent => absent
@@ -172,58 +174,73 @@ Module Type NLINDEXEDSEMANTICS
     erewrite doreset_shift'; eauto.
   Qed.
 
+  Definition bools_of (vs: stream svalue) (rs: stream bool) :=
+    forall n, (vs n = absent /\ rs n = false) \/ (exists c', vs n = present (Venum c') /\ rs n = (c' ==b true_tag)).
+
   Definition bools_ofs (vs : list vstream) (rs : cstream) :=
     exists rss, Forall2 bools_of vs rss /\
            (forall n, rs n = existsb (fun rs => rs n) rss).
 
-  Lemma bools_ofs_value_to_bool:
+  Lemma bools_ofs_svalue_to_bool:
     forall ys rs n,
       bools_ofs ys rs ->
-      Forall (fun y => exists r, value_to_bool (y n) = Some r) ys.
+      Forall (fun y => exists r, svalue_to_bool (y n) = Some r) ys.
   Proof.
     intros * (rss&Bools&_).
     induction Bools; simpl in *; constructor; auto.
-    specialize (H n); eauto.
+    specialize (H n) as [(?&?)|(?&?&?)]; subst; eauto.
+    - erewrite H; simpl; eauto.
+    - erewrite H; simpl; eauto.
   Qed.
 
-  Lemma bools_ofs_value_to_bool_true:
+  Lemma bools_ofs_svalue_to_bool_true:
     forall ys rs n,
     bools_ofs ys rs ->
-    rs n = true <-> Exists (fun y => value_to_bool (y n) = Some true) ys.
+    rs n = true <-> Exists (fun y => svalue_to_bool (y n) = Some true) ys.
   Proof.
     intros * (?&B1&B2).
     split; intros Rs.
     - rewrite B2 in Rs. clear B2.
       eapply Exists_existsb with (P:=fun x => x n = true) in Rs; intuition.
       induction B1; simpl in *; inv Rs; auto.
-      left. congruence.
+      left. specialize (H n) as [(?&?)|(?&?&Hy)]; try congruence.
+      rewrite Hy in H1.
+      rewrite H; simpl. congruence.
     - rewrite B2. clear B2.
       eapply Exists_existsb with (P:=fun x => x n = true); intuition.
       induction B1; simpl in *; inv Rs; auto.
-      rewrite H in H1. inv H1; auto.
+      left. specialize (H n) as [(?&?)|(?&?&Hy)].
+      1,2:rewrite H in H1; simpl in *; try congruence.
   Qed.
 
-  Lemma bools_ofs_value_to_bool_false:
+  Lemma bools_ofs_svalue_to_bool_false:
     forall ys rs n,
     bools_ofs ys rs ->
-    rs n = false <-> Forall (fun y => value_to_bool (y n) = Some false) ys.
+    rs n = false <-> Forall (fun y => svalue_to_bool (y n) = Some false) ys.
   Proof.
     intros * (?&B1&B2).
     split; intros Rs.
     - rewrite B2 in Rs. clear B2.
       apply existsb_Forall, forallb_Forall in Rs.
       induction B1; simpl in *; inv Rs; constructor; auto.
-      rewrite H. destruct (y n); simpl in *; auto. congruence.
+      specialize (H n) as [(?&?)|(?&?&Hy)]; try congruence.
+      1,2:rewrite H; simpl; auto.
+      rewrite Bool.negb_true_iff in H2.
+      congruence.
     - rewrite B2. clear B2.
-      apply existsb_Forall, forallb_Forall.
-      induction B1; simpl in *; inv Rs; constructor; auto.
-      rewrite H in H2. inv H2. rewrite H1; auto.
+      eapply existsb_Forall, forallb_Forall.
+      induction B1; simpl in *; inv Rs; auto.
+      econstructor; eauto.
+      specialize (H n) as [(?&Hy)|(?&?&Hy)].
+      1,2:rewrite Hy; simpl in *; auto.
+      rewrite H in H2; simpl in *. inv H2.
+      rewrite H1; auto.
   Qed.
 
   (** ** Another formulation for the resetable fby.
          For the sem -> msem proof, it is simpler to have the fby and reset integrated *)
 
-  Fixpoint holdreset (v0 : val) (xs : stream value) (rs : stream bool) (n : nat) :=
+  Fixpoint holdreset (v0 : value) (xs : stream svalue) (rs : stream bool) (n : nat) :=
     match n with
     | 0   => v0
     | S m => match rs m, xs m with
@@ -233,7 +250,7 @@ Module Type NLINDEXEDSEMANTICS
             end
       end.
 
-  Definition fbyreset (v0: val) (xs: stream value) (rs : stream bool) : stream value :=
+  Definition fbyreset (v0: value) (xs: stream svalue) (rs : stream bool) : stream svalue :=
     fun n =>
       match rs n, xs n with
       | _, absent => absent
@@ -283,8 +300,7 @@ Module Type NLINDEXEDSEMANTICS
           xs = reset (sem_const c0) (fby (sem_const c0) ls) rs ->
           sem_equation bk H (EqFby x ck c0 le xrs)
 
-
-    with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
+    with sem_node: ident -> stream (list svalue) -> stream (list svalue) -> Prop :=
          | SNode:
              forall bk H f xss yss n,
                bk = clock_of xss ->
@@ -295,8 +311,8 @@ Module Type NLINDEXEDSEMANTICS
                Forall (sem_equation bk H) n.(n_eqs) ->
                sem_node f xss yss.
 
-    Definition sem_nodes : Prop :=
-      Forall (fun no => exists xs ys, sem_node no.(n_name) xs ys) G.
+    (* Definition sem_nodes : Prop := *)
+    (*   Forall (fun no => exists xs ys, sem_node no.(n_name) xs ys) G. *)
 
   End NodeSemantics.
 
@@ -328,7 +344,7 @@ Module Type NLINDEXEDSEMANTICS
 
         The [clockof] clause in [xs = f(es)] is sufficient to give
         this property. In other words, a constraint explicitly linking
-        stream values to clock values is not needed in this case.
+        stream svalues to clock svalues is not needed in this case.
 
      3. The [sem_clocked_vars] clause in [sem_node] requires that the
         streams passed as node arguments align with the instantiated
@@ -337,7 +353,7 @@ Module Type NLINDEXEDSEMANTICS
         This is done to make possible the assertion, critical in
         [is_step_correct], that all arguments on the base clock of an
         application are present when that clock is true (and thus that
-        the compiled expressions calculate the correct value). I.e., to
+        the compiled expressions calculate the correct svalue). I.e., to
         link the static clocks to dynamic facts.
 
         NB: Every in-built 'assumption' like this is a risk since it does
@@ -356,8 +372,8 @@ Module Type NLINDEXEDSEMANTICS
 
         a. Proof of clock alignment
 
-           Show that the clock true/false values and stream present/absent
-           values align as a consequence of the definitions without
+           Show that the clock true/false svalues and stream present/absent
+           svalues align as a consequence of the definitions without
            adding additional constraints.
 
            The required reasoning seems to be related to, and may be as
@@ -394,7 +410,7 @@ enough: it does not support the internal fixpoint introduced by
     Variable G: global.
 
     Variable P_equation: stream bool -> history -> equation -> Prop.
-    Variable P_node: ident -> stream (list value) -> stream (list value) -> Prop.
+    Variable P_node: ident -> stream (list svalue) -> stream (list svalue) -> Prop.
 
     Hypothesis EqDefCase:
       forall bk H x xs ck ce,
@@ -439,7 +455,7 @@ enough: it does not support the internal fixpoint introduced by
             (Sem: sem_equation G b H e) {struct Sem}
       : P_equation b H e
     with sem_node_mult
-           (f: ident) (xss oss: stream (list value))
+           (f: ident) (xss oss: stream (list svalue))
            (Sem: sem_node G f xss oss) {struct Sem}
          : P_node f xss oss.
     Proof.
@@ -482,13 +498,13 @@ enough: it does not support the internal fixpoint introduced by
   (** ** Properties of the [global] environment *)
 
   Lemma sem_node_cons:
-    forall node G f xs ys,
-      Ordered_nodes (node::G)
-      -> sem_node (node::G) f xs ys
+    forall node G enums f xs ys,
+      Ordered_nodes (Global enums (node::G))
+      -> sem_node (Global enums (node::G)) f xs ys
       -> node.(n_name) <> f
-      -> sem_node G f xs ys.
+      -> sem_node (Global enums G) f xs ys.
   Proof.
-    intros node G f xs ys Hord Hsem Hnf.
+    intros node G enums f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
@@ -496,7 +512,7 @@ enough: it does not support the internal fixpoint introduced by
                      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation G bk H eq).
+                                      -> sem_equation (Global enums G) bk H eq).
     - econstructor; eassumption.
     - intro Hnin.
       eapply SEqApp; eauto.
@@ -504,42 +520,22 @@ enough: it does not support the internal fixpoint introduced by
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro; eapply SEqFby; eassumption.
     - intro.
-      rewrite find_node_tl with (1:=Hnf) in Hf.
+      rewrite find_node_other with (1:=Hnf) in Hf.
       eapply SNode; eauto.
       assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n)) as IHeqs
         by (eapply Is_node_in_Forall; try eassumption;
-            eapply find_node_later_not_Is_node_in; try eassumption).
+            eapply find_node_other_not_Is_node_in; try eassumption).
       clear Heqs; induction n.(n_eqs); inv IH; inv IHeqs; eauto.
   Qed.
 
-  Lemma find_node_find_again:
-    forall G f n g,
-      Ordered_nodes G
-      -> find_node f G = Some n
-      -> Is_node_in g n.(n_eqs)
-      -> Exists (fun nd => g = nd.(n_name)) G.
-  Proof.
-    intros G f n g Hord Hfind Hini.
-    apply find_node_split in Hfind.
-    destruct Hfind as [bG [aG Hfind]].
-    rewrite Hfind in *.
-    clear Hfind.
-    apply Ordered_nodes_append in Hord.
-    apply Exists_app.
-    constructor 2.
-    inversion_clear Hord as [|? ? ? HH H0]; clear H0.
-    apply HH in Hini; clear HH.
-    intuition.
-  Qed.
-
   Lemma sem_equation_global_tl:
-    forall bk nd G H eq,
-      Ordered_nodes (nd::G) ->
+    forall bk nd G H eq enums,
+      Ordered_nodes (Global enums (nd::G)) ->
       ~ Is_node_in_eq nd.(n_name) eq ->
-      sem_equation (nd::G) bk H eq ->
-      sem_equation G bk H eq.
+      sem_equation (Global enums (nd::G)) bk H eq ->
+      sem_equation (Global enums G) bk H eq.
   Proof.
-    intros bk nd G H eq Hord Hnini Hsem.
+    intros bk nd G H eq enums Hord Hnini Hsem.
     destruct eq; inversion Hsem; subst; eauto using sem_equation.
     - econstructor; eauto.
       intro k; eapply sem_node_cons; eauto.
@@ -547,91 +543,18 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
   Lemma Forall_sem_equation_global_tl:
-    forall bk nd G H eqs,
-      Ordered_nodes (nd::G)
+    forall bk nd G H eqs enums,
+      Ordered_nodes (Global enums (nd::G))
       -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (nd::G) bk H) eqs
-      -> Forall (sem_equation G bk H) eqs.
+      -> Forall (sem_equation (Global enums (nd::G)) bk H) eqs
+      -> Forall (sem_equation (Global enums G) bk H) eqs.
   Proof.
-    intros bk nd G H eqs Hord Hnini.
+    intros bk nd G H eqs enums Hord Hnini.
     apply Forall_impl_In.
     intros eq Hin Hsem.
     eapply sem_equation_global_tl; eauto.
     apply Is_node_in_Forall in Hnini.
     apply Forall_forall with (1:=Hnini) (2:=Hin).
-  Qed.
-
-  Lemma sem_node_cons2:
-    forall nd G f xs ys,
-      Ordered_nodes G
-      -> sem_node G f xs ys
-      -> Forall (fun nd' : node => n_name nd <> n_name nd') G
-      -> sem_node (nd::G) f xs ys.
-  Proof.
-    Hint Constructors sem_equation.
-    intros nd G f xs ys Hord Hsem Hnin.
-    assert (Hnin':=Hnin).
-    revert Hnin'.
-    induction Hsem as [
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
-                     |
-                     | bk H f xs ys n Hbk Hfind Hxs Hys ? Heqs IH]
-                        using sem_node_mult
-      with (P_equation := fun bk H eq =>
-                            ~Is_node_in_eq nd.(n_name) eq
-                            -> sem_equation (nd::G) bk H eq);
-      try eauto; try intro HH.
-    - econstructor; eauto.
-      intro k; specialize (Hnodes k); destruct Hnodes; auto.
-    - clear HH.
-      assert (nd.(n_name) <> f) as Hnf.
-      { intro Hnf.
-        rewrite Hnf in *.
-        pose proof Hfind as Hfind'.
-        apply find_node_split in Hfind.
-        destruct Hfind as [bG [aG Hge]].
-        rewrite Hge in Hnin.
-        apply Forall_app in Hnin.
-        destruct Hnin as [? Hfg].
-        inversion_clear Hfg.
-        match goal with H:f<>_ |- False => apply H end.
-        erewrite find_node_name; eauto.
-      }
-      apply find_node_other with (2:=Hfind) in Hnf.
-      econstructor; eauto.
-      clear Heqs Hxs Hys.
-      rename IH into Heqs.
-      assert (forall g, Is_node_in g n.(n_eqs)
-                   -> Exists (fun nd=> g = nd.(n_name)) G)
-        as Hniex by
-            (intros g Hini;
-             eapply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini; eauto).
-      assert (Forall
-                (fun eq=> forall g,
-                     Is_node_in_eq g eq
-                     -> Exists (fun nd=> g = nd.(n_name)) G) n.(n_eqs)) as HH.
-      {
-        clear Hfind Heqs Hnf.
-        induction n.(n_eqs) as [|eq eqs IH]; [now constructor|].
-        constructor.
-        - intros g Hini.
-          apply Hniex.
-          constructor 1; apply Hini.
-        - apply IH.
-          intros g Hini; apply Hniex.
-          constructor 2; apply Hini.
-      }
-      apply Forall_Forall with (1:=HH) in Heqs.
-      apply Forall_impl with (2:=Heqs).
-      intros eq IH.
-      destruct IH as [Hsem IH1].
-      apply IH1.
-      intro Hini.
-      apply Hsem in Hini.
-      apply Forall_Exists with (1:=Hnin) in Hini.
-      apply Exists_exists in Hini.
-      destruct Hini as [nd' [Hin [Hneq Heq]]].
-      intuition.
   Qed.
 
   Lemma sem_equations_permutation:
@@ -675,12 +598,13 @@ End NLINDEXEDSEMANTICS.
 Module NLIndexedSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (CESyn : CESYNTAX        Op)
-       (Syn   : NLSYNTAX    Ids Op       CESyn)
-       (Str   : INDEXEDSTREAMS  Op OpAux)
-       (Ord   : NLORDERED   Ids Op       CESyn Syn)
-       (CESem : CESEMANTICS Ids Op OpAux CESyn      Str)
-<: NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
-  Include NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (Cks   : CLOCKS      Ids Op OpAux)
+       (CESyn : CESYNTAX    Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX    Ids Op OpAux Cks CESyn)
+       (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Ord   : NLORDERED   Ids Op OpAux Cks CESyn Syn)
+       (CESem : CESEMANTICS Ids Op OpAux Cks CESyn      Str)
+<: NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem.
+  Include NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem.
 End NLIndexedSemanticsFun.

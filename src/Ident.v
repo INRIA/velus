@@ -67,6 +67,10 @@ Qed.
 Definition sep: ascii := "$"%char.
 
 Module Export Ids <: IDS.
+  Definition bool_id := str_to_pos "bool".
+  Definition true_id := str_to_pos "True".
+  Definition false_id := str_to_pos "False".
+
   Definition self := str_to_pos "self".
   Definition out := str_to_pos "out".
   Definition temp := str_to_pos "temp".
@@ -90,6 +94,10 @@ Module Export Ids <: IDS.
     | |- ?x1 <> ?x2 =>
       intros Heq; apply str_to_pos_injective in Heq; inv Heq
     end.
+
+  Definition elab_prefs := PS.singleton elab.
+  Definition norm1_prefs := PS.add norm1 elab_prefs.
+  Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
   Definition gensym_prefs := [elab; norm1; norm2].
 

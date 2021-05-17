@@ -7,6 +7,7 @@ From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
@@ -22,15 +23,16 @@ From Velus Require Import CoreExpr.CESemantics.
 Module Type STCSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import CESyn : CESYNTAX        Op)
-       (Import Syn   : STCSYNTAX   Ids Op       CESyn)
-       (Import Syst  : STCISSYSTEM Ids Op       CESyn Syn)
-       (Import Ord   : STCORDERED  Ids Op       CESyn Syn Syst)
-       (Import Str   : INDEXEDSTREAMS  Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
+       (Import OpAux : OPERATORS_AUX   Ids Op)
+       (Import Cks   : CLOCKS      Ids Op OpAux)
+       (Import CESyn : CESYNTAX    Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
+       (Import Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn)
+       (Import Ord   : STCORDERED  Ids Op OpAux Cks CESyn Syn Syst)
+       (Import Str   : INDEXEDSTREAMS Ids Op OpAux Cks)
+       (Import CESem : CESEMANTICS Ids Op OpAux Cks CESyn Str).
 
-  Definition state := memory val.
+  Definition state := memory value.
 
   Definition state_closed_nexts (nexts: list ident) (S: state) : Prop :=
     forall x, find_val x S <> None -> In x nexts.
@@ -54,8 +56,8 @@ Module Type STCSEMANTICS
            /\ state_closed P g Si.
 
   Definition reset_nexts (s: system) (S0: state) : Prop :=
-    forall x c ck,
-      In (x, (c, ck)) s.(s_nexts) ->
+    forall x c t ck,
+      In (x, (c, t, ck)) s.(s_nexts) ->
       find_val x S0 = Some (sem_const c).
 
   Inductive initial_state: program -> ident -> state -> Prop :=
@@ -81,11 +83,11 @@ Module Type STCSEMANTICS
           sem_var_instant R x v ->
           sem_trconstr base R S I S' (TcDef x ck ce)
     | STcReset:
-        forall base R S I S' x ckr c0 r c,
+        forall base R S I S' x ckr ty c0 r c,
           find_val x S = Some c ->
           sem_clock_instant base R ckr r ->
           (if r then find_val x I = Some (sem_const c0) else True) ->
-          sem_trconstr base R S I S' (TcReset x ckr c0)
+          sem_trconstr base R S I S' (TcReset x ckr ty c0)
     | STcNext:
         forall base R S I S' x ck e ckrs c v',
           (Forall (fun ckr => sem_clock_instant base R ckr false) ckrs -> find_val x S = Some c) ->
@@ -111,7 +113,7 @@ Module Type STCSEMANTICS
           find_inst i S' = Some Si' ->
           sem_trconstr base R S I S' (TcStep i ys ck ckrs f es)
 
-    with sem_system: ident -> state -> list value -> list value -> state -> Prop :=
+    with sem_system: ident -> state -> list svalue -> list svalue -> state -> Prop :=
            SSystem:
              forall f s P' S I S' R xs ys,
                find_system f P = Some (s, P') ->
@@ -130,7 +132,7 @@ Module Type STCSEMANTICS
     Variable P: program.
 
     Variable P_trconstr: bool -> env -> state -> state -> state -> trconstr -> Prop.
-    Variable P_system: ident -> state -> list value -> list value -> state -> Prop.
+    Variable P_system: ident -> state -> list svalue -> list svalue -> state -> Prop.
 
     Hypothesis TcDefCase:
       forall base R S I S' x v ck ce,
@@ -139,11 +141,11 @@ Module Type STCSEMANTICS
         P_trconstr base R S I S' (TcDef x ck ce).
 
     Hypothesis TcResetCase:
-      forall base R S I S' x ckr c0 r c,
+      forall base R S I S' x ckr ty c0 r c,
         find_val x S = Some c ->
         sem_clock_instant base R ckr r ->
         (if r then find_val x I = Some (sem_const c0) else True) ->
-        P_trconstr base R S I S' (TcReset x ckr c0).
+        P_trconstr base R S I S' (TcReset x ckr ty c0).
 
     Hypothesis TcNextCase:
       forall base R S I S' x ck e ckrs c v',
@@ -191,7 +193,7 @@ Module Type STCSEMANTICS
              (Sem: sem_trconstr P base R S I S' e) {struct Sem}
       : P_trconstr base R S I S' e
     with sem_system_mult
-           (f: ident) (S: state) (xs ys: list value) (S': state)
+           (f: ident) (S: state) (xs ys: list svalue) (S': state)
            (Sem: sem_system P f S xs ys S') {struct Sem}
          : P_system f S xs ys S'.
     Proof.
@@ -206,7 +208,7 @@ Module Type STCSEMANTICS
 
   End sem_system_mult.
 
-  CoInductive loop: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop :=
+  CoInductive loop: program -> ident -> stream (list svalue) -> stream (list svalue) -> state -> nat -> Prop :=
     loop_intro:
       forall P f xss yss Sn Sn' n,
         sem_system P f Sn (xss n) (yss n) Sn' ->
@@ -215,7 +217,7 @@ Module Type STCSEMANTICS
 
   Section LoopCoind.
 
-    Variable R: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop.
+    Variable R: program -> ident -> stream (list svalue) -> stream (list svalue) -> state -> nat -> Prop.
 
     Hypothesis Loop:
       forall P f xss yss Sn n,
@@ -239,7 +241,7 @@ Module Type STCSEMANTICS
       with signature equal_memory ==> Basics.impl
         as reset_nexts_equal_memory.
   Proof.
-    intros * E Rst ??? Hin.
+    intros * E Rst ???? Hin.
     rewrite <-E; apply Rst in Hin; auto.
   Qed.
 
@@ -374,10 +376,10 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma initial_state_other:
-    forall S0 s P f,
+    forall S0 s P enums f,
       s_name s <> f ->
-      (initial_state P f S0 <->
-      initial_state (s :: P) f S0).
+      (initial_state (Program enums P) f S0 <->
+      initial_state (Program enums (s :: P)) f S0).
   Proof.
     split; inversion_clear 1 as [????? Find]; econstructor; eauto.
     - rewrite find_system_other; eauto.
@@ -413,11 +415,21 @@ Module Type STCSEMANTICS
       setoid_rewrite find_val_add_inst; auto.
   Qed.
 
+  Lemma state_closed_insts_InMembers:
+    forall P subs S s Ss,
+      state_closed_insts P subs S ->
+      find_inst s S = Some Ss ->
+      InMembers s subs.
+  Proof.
+    intros * Closed Sub; apply Closed in Sub as (?&?&?).
+    eapply In_InMembers; eauto.
+  Qed.
+
   Lemma state_closed_other:
-    forall S s P f,
+    forall S s P f enums,
       s_name s <> f ->
-      (state_closed P f S <->
-      state_closed (s :: P) f S).
+      (state_closed (Program enums P) f S <->
+      state_closed (Program enums (s :: P)) f S).
   Proof.
     split; inversion_clear 1 as [????? Find]; econstructor; eauto.
     - rewrite find_system_other; eauto.
@@ -432,14 +444,16 @@ Module Type STCSEMANTICS
       state_closed P g S ->
       state_closed P' g S.
   Proof.
-    intros * Ord Find Hin Closed; inversion_clear Closed as [????? Find'].
+    intros ?? (enms & P) * Ord Find Hin Closed; inversion_clear Closed as [????? Find'].
     econstructor; eauto.
-    apply find_system_app in Find as (?&?&?); subst.
+    assert (enms = enums P') as Enums
+        by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
+    apply find_unit_spec in Find as (?&?& E &?); simpl in E; subst.
     apply Ordered_systems_split in Ord.
     eapply Forall_forall in Ord as (FindNone & Neq &?&?&?); eauto; simpl in *.
-    rewrite find_system_app', FindNone in Find'.
-    simpl in Find'; destruct (ident_eqb (s_name s) g) eqn:Eq; auto.
-    apply ident_eqb_eq in Eq; congruence.
+    setoid_rewrite find_unit_app in Find'; simpl in *; eauto.
+    setoid_rewrite FindNone in Find'.
+    eapply find_unit_cons in Find' as [[]|[]]; simpl in *; eauto; auto; contradiction.
   Qed.
 
   Lemma state_closed_insts_find_system_other:
@@ -456,33 +470,34 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma state_closed_insts_cons:
-    forall I s P,
-      Ordered_systems (s :: P) ->
-      state_closed_insts P s.(s_subs) I ->
-      state_closed_insts (s :: P) s.(s_subs) I.
+    forall I s P enums,
+      Ordered_systems (Program enums (s :: P)) ->
+      state_closed_insts (Program enums P) s.(s_subs) I ->
+      state_closed_insts (Program enums (s :: P)) s.(s_subs) I.
   Proof.
-    intros * Ord Closed; inversion_clear Ord as [|??? Systems].
-    intros ?? Find; apply Closed in Find as (g &?&?).
+    intros * Ord Closed; inversion_clear Ord as [|?? [Spec ?]].
+    intros ?? Find; apply Closed in Find as (g & Hin &?).
     exists g; split; auto.
     apply state_closed_other; auto.
-    eapply Forall_forall in Systems as (?&?); eauto; auto.
+    apply in_map with (f := snd) in Hin.
+    apply Spec in Hin; intuition.
   Qed.
 
   Lemma sem_system_cons:
-    forall P s f xs S S' ys,
-      Ordered_systems (s :: P) ->
-      sem_system (s :: P) f xs S S' ys ->
+    forall P enums s f xs S S' ys,
+      Ordered_systems (Program enums (s :: P)) ->
+      sem_system (Program enums (s :: P)) f xs S S' ys ->
       s.(s_name) <> f ->
-      sem_system P f xs S S' ys.
+      sem_system (Program enums P) f xs S S' ys.
   Proof.
-    intros * Hord Hsem Hnf.
+    intros ? enums * Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [| | | |?????????????????????? IH|
                        ????????? Hf ???? Closed ClosedI Closed' IH]
                         using sem_system_mult
       with (P_trconstr := fun bk H S I S' tc =>
                             ~Is_system_in_tc s.(s_name) tc ->
-                            sem_trconstr P bk H S I S' tc);
+                            sem_trconstr (Program enums P) bk H S I S' tc);
       eauto using sem_trconstr.
     - intro Hnin; econstructor; eauto.
       destruct r; eauto.
@@ -495,7 +510,7 @@ Module Type STCSEMANTICS
       rewrite find_system_other in Hf; auto.
       rewrite <-state_closed_other in Closed, ClosedI, Closed'; auto.
       eapply SSystem with (I := I); eauto.
-      eapply find_system_later_not_Is_system_in in Hord; eauto.
+      eapply find_system_other_not_Is_system_in in Hord; eauto.
       apply Forall_forall; intros.
       eapply Forall_forall in IH; eauto.
       apply IH.
@@ -504,31 +519,31 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma sem_system_cons2:
-    forall s P f xs S S' ys,
-      Ordered_systems (s :: P) ->
-      sem_system P f xs S S' ys ->
-      sem_system (s :: P) f xs S S' ys.
+    forall s P enums f xs S S' ys,
+      Ordered_systems (Program enums (s :: P)) ->
+      sem_system (Program enums P) f xs S S' ys ->
+      sem_system (Program enums (s :: P)) f xs S S' ys.
   Proof.
-    intros * Hord Hsem.
+    intros ?? enums * Hord Hsem.
     induction Hsem as [| | | | |
                        ????????? Hfind ???? Closed ClosedI Closed' IHtcs] using sem_system_mult
       with (P_trconstr := fun bk H S I S' tc =>
                             ~Is_system_in_tc s.(s_name) tc ->
-                            sem_trconstr (s :: P) bk H S I S' tc);
+                            sem_trconstr (Program enums (s :: P)) bk H S I S' tc);
       eauto using sem_trconstr.
     - intros Notin; econstructor; eauto.
       destruct r; eauto.
       apply initial_state_other; auto.
       intro E; apply Notin; rewrite E; constructor.
-    - pose proof Hfind as Hfind'; apply find_system_app in Hfind' as (?& E & FindNone).
+    - pose proof Hfind as Hfind'; apply find_unit_spec in Hfind' as (?&?& E & FindNone); simpl in *.
       pose proof Hord as Hord'; rewrite E, app_comm_cons in Hord';
         apply Ordered_systems_split in Hord'.
-      inversion_clear Hord as [|???? Hnin].
+      pose proof Hord.
+      inversion_clear Hord as [|?? [? Hnin]].
       assert (s.(s_name) <> f) as Hnf.
       { intro Hnf.
         rewrite Hnf in *.
-        pose proof (find_system_name _ _ _ _ Hfind).
-        apply find_system_app in Hfind as (?& Hp &?); subst.
+        apply find_unit_spec in Hfind as (?&?& Hp &?); simpl in *; subst.
         apply Forall_app in Hnin.
         destruct Hnin as [H' Hfg]; clear H'.
         inv Hfg; congruence.
@@ -542,16 +557,16 @@ Module Type STCSEMANTICS
         rewrite Forall_forall in Hord'.
         pose proof (s_subs_in_tcs s) as SystemsIn.
         intro.
-        eapply find_system_later_not_Is_system_in; eauto using Ordered_systems.
+        eapply find_system_other_not_Is_system_in; eauto.
         apply Exists_exists; eauto.
   Qed.
 
   Lemma sem_trconstrs_cons:
-    forall P bk H S I S' tcs s,
-      Ordered_systems (s :: P) ->
+    forall P enums bk H S I S' tcs s,
+      Ordered_systems (Program enums (s :: P)) ->
       ~ Is_system_in s.(s_name) tcs ->
-      (Forall (sem_trconstr P bk H S I S') tcs <->
-       Forall (sem_trconstr (s :: P) bk H S I S') tcs).
+      (Forall (sem_trconstr (Program enums P) bk H S I S') tcs <->
+       Forall (sem_trconstr (Program enums (s :: P)) bk H S I S') tcs).
   Proof.
     intros * Hord Hnini.
     induction tcs as [|tc tcs IH]; [now constructor|].
@@ -591,16 +606,16 @@ Module Type STCSEMANTICS
     unfold state_closed_nexts, reset_nexts, find_val in *.
     destruct (Env.find x (values S)) eqn: E, (Env.find x (values S')) eqn: E'; auto.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
-      apply Spec, fst_InMembers, InMembers_In in E1 as ((? & ?) & Hin).
+      apply Spec, fst_InMembers, InMembers_In in E1 as (((? & ?) & ?) & Hin).
       pose proof Hin as Hin'.
       apply Rst in Hin; apply Rst' in Hin'.
       congruence.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
-      apply Spec, fst_InMembers, InMembers_In in E1 as ((? & ?)& Hin).
+      apply Spec, fst_InMembers, InMembers_In in E1 as (((? & ?) & ?) & Hin).
       apply Rst' in Hin.
       congruence.
     - assert (Env.find x (values S') <> None) as E1 by (apply not_None_is_Some; eauto).
-      apply Spec', fst_InMembers, InMembers_In in E1 as ((? & ?)& Hin).
+      apply Spec', fst_InMembers, InMembers_In in E1 as (((? & ?) & ?) & Hin).
       apply Rst in Hin.
       congruence.
   Qed.
@@ -754,8 +769,8 @@ Module Type STCSEMANTICS
         sem_system P f S xs ys S' ->
         absent_list xs ->
         S' ≋ S) ->
-    state_closed_nexts (nexts_of tcs) S ->
-    state_closed_nexts (nexts_of tcs) S' ->
+    state_closed_nexts (map fst (nexts_of tcs)) S ->
+    state_closed_nexts (map fst (nexts_of tcs)) S' ->
     state_closed_insts P (steps_of tcs) S ->
     state_closed_insts P (steps_of tcs) S' ->
     reset_clocks_have_sem false R tcs ->
@@ -772,7 +787,7 @@ Module Type STCSEMANTICS
       specialize (Nexts x); specialize (Nexts' x).
       destruct (Env.find x (values S)) eqn: Find;
         destruct (Env.find x (values S')) eqn: Find'; auto.
-      + assert (In x (nexts_of tcs)) as Hin by (apply Nexts'; congruence).
+      + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts'; congruence).
         clear Nexts Nexts'.
         induction tcs as [|[]]; simpl in Hin; try contradiction;
           assert (Resets':=Resets); apply reset_clocks_have_sem_cons in Resets';
@@ -785,7 +800,7 @@ Module Type STCSEMANTICS
         eapply Forall_impl; [|eapply Resets]. 2:left; auto.
         intros ? (?&Clock).
         assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
-      + assert (In x (nexts_of tcs)) as Hin by (apply Nexts; congruence).
+      + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts; congruence).
         clear Nexts'.
         induction tcs as [|[]]; simpl in Hin; try contradiction;
           assert (Resets':=Resets); apply reset_clocks_have_sem_cons in Resets';
@@ -795,7 +810,7 @@ Module Type STCSEMANTICS
         inversion Exp as [???? Clock|];
           [contradict Clock; apply not_subrate_clock|]; subst.
         rewrite <-Find, <-Find', ClockR; try congruence.
-      + assert (In x (nexts_of tcs)) as Hin by (apply Nexts'; congruence).
+      + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts'; congruence).
         clear Nexts Nexts'.
         induction tcs as [|[]]; simpl in Hin; try contradiction;
           assert (Resets':=Resets); apply reset_clocks_have_sem_cons in Resets';
@@ -883,15 +898,15 @@ Module Type STCSEMANTICS
       absent_list xs ->
       absent_list ys /\ S' ≋ S.
   Proof.
-    intros * Ord Sem Abs.
+    intros (enumsP & P) * Ord Sem Abs.
     revert dependent xs; revert f S S' ys.
     induction P as [|system]; intros;
       inversion_clear Sem as [????????? Find Ins ?? Htcs Closed ClosedI Closed'];
       try now inv Find.
-    pose proof Find; simpl in Find.
-    destruct (ident_eqb (s_name system) f) eqn: Eq.
+    pose proof Find.
+    eapply find_unit_cons in Find as [[E Find]|[E Find]]; simpl; eauto.
     - inv Find.
-      assert ( ~ Is_system_in (s_name s) (s_tcs s))
+      assert ( ~ Is_system_in (s_name system) (s_tcs system))
         by (eapply find_system_not_Is_system_in; eauto).
       apply sem_trconstrs_cons in Htcs; auto.
       assert (clock_of_instant xs = false) as E by (apply clock_of_instant_false; auto);
@@ -912,19 +927,18 @@ Module Type STCSEMANTICS
                  H: find_system ?b ?P = _, H': find_system ?b ?P = _ |- _ =>
                  rewrite H in H'; inv H'
                end.
-        rewrite s_nexts_in_tcs in Nexts, Nexts', NextsI.
+        rewrite s_nexts_in_tcs_fst in Nexts, Nexts', NextsI.
         setoid_rewrite s_subs_steps_of in Insts;
           setoid_rewrite s_subs_steps_of in Insts'.
         eapply sem_trconstrs_absent_states in Htcs; eauto.
         * intros; eapply IHP; eauto.
         * eapply sem_trconstrs_reset_clocks; eauto using s_reset_consistency.
         * eapply sem_trconstrs_ireset_clocks; eauto using s_ireset_consistency.
-    - inv Ord; eapply IHP; eauto.
-      apply ident_eqb_neq in Eq.
+    - pose proof Ord; inv Ord; eapply IHP; eauto.
       rewrite <-state_closed_other in Closed, ClosedI, Closed'; eauto.
       eapply SSystem with (I := I); eauto.
-      apply sem_trconstrs_cons in Htcs; eauto using Ordered_systems.
-      eapply find_system_later_not_Is_system_in; eauto using Ordered_systems.
+      apply sem_trconstrs_cons in Htcs; eauto.
+      eapply find_system_other_not_Is_system_in; eauto.
   Qed.
 
   Lemma state_closed_nexts_empty:
@@ -964,7 +978,7 @@ Module Type STCSEMANTICS
   Proof.
     inversion_clear 1 as [????????? Find ??? Htcs]; intros Find' Hin.
     rewrite Find in Find'; inv Find'.
-    rewrite s_nexts_in_tcs in Hin.
+    rewrite s_nexts_in_tcs_fst in Hin.
     assert (forall ckrs ck, Next_with_reset_in x ckrs (s_tcs s) -> In ck ckrs -> find_val x S <> None) as NextReset.
     { clear Hin. intros * Hnext Hin.
       apply s_reset_consistency in Hnext. rewrite Hnext in Hin. clear Hnext.
@@ -991,7 +1005,7 @@ Module Type STCSEMANTICS
       intros; eapply NextReset; eauto. right; auto.
   Qed.
 
-  Module Import StcIsNext := StcIsNextFun Ids Op CESyn Syn.
+  Module Import StcIsNext := StcIsNextFun Ids Op OpAux Cks CESyn Syn.
 
   Lemma sem_system_find_valI:
     forall P s b R S I S' x v,
@@ -1001,7 +1015,7 @@ Module Type STCSEMANTICS
       find_val x I = Some v.
   Proof.
     intros * Sem Hin Var.
-    rewrite s_nexts_in_tcs, <-nexts_of_In in Hin.
+    rewrite s_nexts_in_tcs_fst, <-nexts_of_In in Hin.
     eapply Exists_exists in Hin as (?&Hin&Next). inv Next.
     eapply Forall_forall in Sem; eauto. inv Sem.
     eapply sem_var_instant_det in Var; [|eauto].
@@ -1013,13 +1027,14 @@ End STCSEMANTICS.
 Module StcSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (CESyn : CESYNTAX        Op)
-       (Syn   : STCSYNTAX   Ids Op       CESyn)
-       (Syst  : STCISSYSTEM Ids Op       CESyn Syn)
-       (Ord   : STCORDERED  Ids Op       CESyn Syn Syst)
-       (Str   : INDEXEDSTREAMS  Op OpAux)
-       (CESem : CESEMANTICS Ids Op OpAux CESyn Str)
-<: STCSEMANTICS Ids Op OpAux CESyn Syn Syst Ord Str CESem.
-  Include STCSEMANTICS Ids Op OpAux CESyn Syn Syst Ord Str CESem.
+       (OpAux : OPERATORS_AUX   Ids Op)
+       (Cks   : CLOCKS      Ids Op OpAux)
+       (CESyn : CESYNTAX    Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX   Ids Op OpAux Cks CESyn)
+       (Syst  : STCISSYSTEM Ids Op OpAux Cks CESyn Syn)
+       (Ord   : STCORDERED  Ids Op OpAux Cks CESyn Syn Syst)
+       (Str   : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CESem : CESEMANTICS Ids Op OpAux Cks CESyn Str)
+<: STCSEMANTICS Ids Op OpAux Cks CESyn Syn Syst Ord Str CESem.
+  Include STCSEMANTICS Ids Op OpAux Cks CESyn Syn Syst Ord Str CESem.
 End StcSemanticsFun.

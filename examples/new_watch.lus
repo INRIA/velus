@@ -107,11 +107,11 @@ var seconds, minutes, hours, day, day_in_week,
     month_inc, p_month, month, nday : uint;
 let
   seconds = ((time : uint) land 0xff) + 1;
-  minutes = (((time : uint) lsr  8) land 0xff) + (seconds = 60);
-  hours   = (((time : uint) lsr 16) land 0xff) + (minutes = 60);
+  minutes = (((time : uint) lsr  8) land 0xff) + (if seconds = 60 then 1 else 0);
+  hours   = (((time : uint) lsr 16) land 0xff) + (if minutes = 60 then 1 else 0);
 
-  day         = (((time lsr 32) : uint) land 0xff) + (hours = 24);
-  day_in_week = (((time lsr 40) : uint) land 0xff) + (hours = 24);
+  day         = (((time lsr 32) : uint) land 0xff) + (if hours = 24 then 1 else 0);
+  day_in_week = (((time lsr 40) : uint) land 0xff) + (if hours = 24 then 1 else 0);
 
   p_month   = ((time lsr 48) : uint) land 0xff;
   month_inc = if day < 29 then 0u
@@ -166,16 +166,16 @@ let
   minutes = if position = 3 -- in set minutes mode
             then p_minutes
             else if position = 2 -- set 10 minutes mode
-            then (p_minutes / 10) + ((p_minutes + (seconds = 60)) mod 10)
-            else p_minutes + (seconds = 60);
+            then (p_minutes / 10) + ((p_minutes + (if seconds = 60 then 1 else 0)) mod 10)
+            else p_minutes + (if seconds = 60 then 1 else 0);
 
   hours   = (((time : uint) lsr 16) land 0xff)
-            + (position > 3 and minutes = 60);
+            + (if (position > 3 and minutes = 60) then 1 else 0);
 
   day         = (((time lsr 32) : uint) land 0xff)
-                + (position > 5 and hours = 24);
+                + (if (position > 5 and hours = 24) then 1 else 0);
   day_in_week = (((time lsr 40) : uint) land 0xff)
-                + (position > 5 and hours = 24);
+                + (if (position > 5 and hours = 24) then 1 else 0);
 
   p_month = (((time lsr 48) : uint) land 0xff);
   month_inc = if position > 6 or day < 29 then 0u
@@ -267,9 +267,9 @@ returns (newtime: uint32);
 var hsecs, seconds, minutes, hours : uint;
 let
   hsecs = ((time land 0xff) + 10);
-  seconds = ((time lsr  8) land 0xff) + (hsecs >= 100);
-  minutes = ((time lsr 16) land 0xff) + (seconds >= 60);
-  hours   = ((time lsr 24) land 0xff) + (minutes >= 60);
+  seconds = ((time lsr  8) land 0xff) + (if hsecs >= 100 then 1 else 0);
+  minutes = ((time lsr 16) land 0xff) + (if seconds >= 60 then 1 else 0);
+  hours   = ((time lsr 24) land 0xff) + (if minutes >= 60 then 1 else 0);
   newtime = (hsecs mod 100)
             lor ((seconds mod 60) lsl  8)
             lor ((minutes mod 60) lsl 16)
@@ -409,10 +409,10 @@ node status (alarm_is_set, chime_is_set,
              stopwatch_running, stopwatch_lapping : bool)
 returns (status: uint8);
 let
-  status = ((alarm_is_set
-             lor (chime_is_set lsl 1)
-             lor (stopwatch_running lsl 2)
-             lor (stopwatch_lapping lsl 3)) : uint8);
+  status = (((if alarm_is_set then 1 else 0)
+             lor ((if chime_is_set then 1 else 0) lsl 1)
+             lor ((if stopwatch_running then 1 else 0) lsl 2)
+             lor ((if stopwatch_lapping then 1 else 0) lsl 3)) : uint8);
 tel
 
 node labels (mode_is_watch, mode_is_stopwatch, mode_is_alarm,
@@ -422,7 +422,7 @@ let
   labels = (0 : uint64);
 tel
 
---utilitaires
+-- --utilitaires
 
 node two_vstates(vinit,set,vreset: bool) returns (vstate: bool);
 -- implements a flip-flop, with vinitial vstate "vinit". the vstate changes from 
@@ -882,4 +882,3 @@ let
                 -- converts the time unit (assumed to be the 1/10
                 -- sec.) into the second
 tel;
-

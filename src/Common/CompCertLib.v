@@ -178,6 +178,34 @@ Definition mfoldl {A B: Type} (f: A -> B -> res A) : A -> list B -> res A :=
                     mfoldl s' xs'
     end.
 
+Section IterError.
+
+  Context {A: Type}.
+  Variable f: A -> res unit.
+
+  Definition iter_error: list A -> res unit :=
+    mfoldl (fun _ a => f a) tt.
+
+  Lemma iter_error_ok:
+    forall l,
+      iter_error l = OK tt <->
+      Forall (fun a => f a = OK tt) l.
+  Proof.
+    unfold iter_error.
+    induction l; simpl.
+    - intuition.
+    - split; intros H.
+      + monadInv H.
+        take (unit) and destruct it.
+        constructor; auto.
+        apply IHl; auto.
+      + inversion_clear H as [|?? E].
+        rewrite E; simpl.
+        apply IHl; auto.
+  Qed.
+
+End IterError.
+
 Lemma OK_OK:
   forall {A} (x: A) y,
     OK x = OK y <-> x = y.

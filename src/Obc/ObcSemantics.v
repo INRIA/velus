@@ -5,6 +5,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import VelusMemory.
@@ -23,14 +24,14 @@ From Velus Require Import Obc.ObcSyntax.
 Module Type OBCSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
+       (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Syn   : OBCSYNTAX Ids Op OpAux).
 
-  Definition menv := memory val.
-  Definition venv := env val.
+  Definition menv := memory value.
+  Definition venv := env value.
 
   Definition mempty: menv := empty_memory _.
-  Definition vempty: venv := Env.empty val.
+  Definition vempty: venv := Env.empty _.
 
   Definition instance_match (i: ident) (me: menv) : menv :=
     match find_inst i me with
@@ -72,7 +73,7 @@ Module Type OBCSEMANTICS
      the statement of invariants between Obc and Clight where [None] is
      used to signal a "don't care" on variable values. *)
 
-  Inductive exp_eval (me: menv) (ve: venv): exp -> option val -> Prop :=
+  Inductive exp_eval (me: menv) (ve: venv): exp -> option value -> Prop :=
   | evar:
       forall x ty,
         exp_eval me ve (Var x ty) (Env.find x ve)
@@ -82,18 +83,21 @@ Module Type OBCSEMANTICS
         exp_eval me ve (State x ty) (Some v)
   | econst:
       forall c,
-        exp_eval me ve (Const c) (Some (sem_const c))
+        exp_eval me ve (Const c) (Some (Vscalar (sem_cconst c)))
+  | eenum:
+      forall x ty,
+        exp_eval me ve (Enum x ty) (Some (Venum x))
   | eunop :
-      forall op e c v ty,
-        exp_eval me ve e (Some c) ->
-        sem_unop op c (typeof e) = Some v ->
-        exp_eval me ve (Unop op e ty) (Some v)
+      forall op e v v' ty,
+        exp_eval me ve e (Some v) ->
+        sem_unop op v (typeof e) = Some v' ->
+        exp_eval me ve (Unop op e ty) (Some v')
   | ebinop :
-      forall op e1 e2 c1 c2 v ty,
-        exp_eval me ve e1 (Some c1) ->
-        exp_eval me ve e2 (Some c2) ->
-        sem_binop op c1 (typeof e1) c2 (typeof e2) = Some v ->
-        exp_eval me ve (Binop op e1 e2 ty) (Some v)
+      forall op e1 e2 v1 v2 v' ty,
+        exp_eval me ve e1 (Some v1) ->
+        exp_eval me ve e2 (Some v2) ->
+        sem_binop op v1 (typeof e1) v2 (typeof e2) = Some v' ->
+        exp_eval me ve (Binop op e1 e2 ty) (Some v')
   | evalid:
       forall x v ty,
         Env.find x ve = Some v ->
@@ -119,18 +123,18 @@ Module Type OBCSEMANTICS
         stmt_eval prog me ve a1 (me1, ve1) ->
         stmt_eval prog me1 ve1 a2 (me2, ve2) ->
         stmt_eval prog me ve (Comp a1 a2) (me2, ve2)
-  | Iifte:
-      forall prog me ve cond v b ifTrue ifFalse ve' me',
-        exp_eval me ve cond (Some v) ->
-        val_to_bool v = Some b ->
-        stmt_eval prog me ve (if b then ifTrue else ifFalse) (me', ve') ->
-        stmt_eval prog me ve (Ifte cond ifTrue ifFalse) (me', ve')
+  | Iswitch:
+      forall prog me ve cond branches default c s me' ve',
+        exp_eval me ve cond (Some (Venum c)) ->
+        nth_error branches c = Some s ->
+        stmt_eval prog me ve (or_default default s) (me', ve') ->
+        stmt_eval prog me ve (Switch cond branches default) (me', ve')
   | Iskip:
       forall prog me ve,
         stmt_eval prog me ve Skip (me, ve)
 
-  with stmt_call_eval : program -> menv -> ident -> ident -> list (option val)
-                        -> menv -> list (option val) -> Prop :=
+  with stmt_call_eval : program -> menv -> ident -> ident -> list (option value)
+                        -> menv -> list (option value) -> Prop :=
   | Iecall:
       forall prog me clsid f fm vos prog' me' ve' cls rvos,
         find_class clsid prog = Some(cls, prog') ->
@@ -141,11 +145,82 @@ Module Type OBCSEMANTICS
         Forall2 (fun x => eq (Env.find x ve')) (map fst fm.(m_out)) rvos ->
         stmt_call_eval prog me clsid f vos me' rvos.
 
-  Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
-  with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
-  Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
+  Section stmt_eval_call_eval_ind.
 
-  CoInductive loop_call (prog: program) (clsid f: ident) (ins outs: nat -> list (option val)): nat -> menv -> Prop :=
+    Variable P_stmt : program -> menv -> venv -> stmt -> menv * venv -> Prop.
+    Variable P_call : program -> menv -> ident -> ident -> list (option value)
+                        -> menv -> list (option value) -> Prop.
+
+    Hypothesis assignCase:
+      forall prog me ve x e v,
+        exp_eval me ve e (Some v) ->
+        P_stmt prog me ve (Assign x e) (me, Env.add x v ve).
+
+    Hypothesis assignstCase:
+      forall prog me ve x e v,
+        exp_eval me ve e (Some v) ->
+        P_stmt prog me ve (AssignSt x e) (add_val x v me, ve).
+
+    Hypothesis callCase:
+      forall prog me ve es vos clsid o f ys ome' rvos,
+        Forall2 (exp_eval me ve) es vos ->
+        stmt_call_eval prog (instance_match o me) clsid f vos ome' rvos ->
+        P_call prog (instance_match o me) clsid f vos ome' rvos ->
+        P_stmt prog me ve (Call ys clsid o f es) (add_inst o ome' me, Env.adds_opt ys rvos ve).
+
+    Hypothesis compCase:
+      forall prog me ve a1 a2 ve1 me1 ve2 me2,
+        stmt_eval prog me ve a1 (me1, ve1) ->
+        P_stmt prog me ve a1 (me1, ve1) ->
+        stmt_eval prog me1 ve1 a2 (me2, ve2) ->
+        P_stmt prog me1 ve1 a2 (me2, ve2) ->
+        P_stmt prog me ve (Comp a1 a2) (me2, ve2).
+
+    Hypothesis switchCase:
+      forall prog me ve cond branches default c s me' ve',
+        exp_eval me ve cond (Some (Venum c)) ->
+        nth_error branches c = Some s ->
+        P_stmt prog me ve (or_default default s) (me', ve') ->
+        P_stmt prog me ve (Switch cond branches default) (me', ve').
+
+    Hypothesis skipCase:
+      forall prog me ve,
+        P_stmt prog me ve Skip (me, ve).
+
+    Hypothesis Call:
+      forall prog me clsid f fm vos prog' me' ve' cls rvos,
+        find_class clsid prog = Some(cls, prog') ->
+        find_method f cls.(c_methods) = Some fm ->
+        length vos = length fm.(m_in) ->
+        stmt_eval prog' me (Env.adds_opt (map fst fm.(m_in)) vos vempty) fm.(m_body) (me', ve') ->
+        P_stmt prog' me (Env.adds_opt (map fst fm.(m_in)) vos vempty) fm.(m_body) (me', ve') ->
+        Forall2 (fun x => eq (Env.find x ve')) (map fst fm.(m_out)) rvos ->
+        P_call prog me clsid f vos me' rvos.
+
+    Fixpoint stmt_eval_ind_2
+            (prog: program) (me: menv) (ve: venv) (s: stmt) (meve': menv * venv)
+            (Sem: stmt_eval prog me ve s meve') {struct Sem}
+      : P_stmt prog me ve s meve'
+    with stmt_call_eval_ind_2
+           (prog: program) (me: menv) (c f: ident) (xs: list (option value)) (me': menv) (ys: list (option value))
+           (Sem: stmt_call_eval prog me c f xs me' ys) {struct Sem}
+         : P_call prog me c f xs me' ys.
+    Proof.
+      - inv Sem.
+        + apply assignCase; auto.
+        + apply assignstCase; auto.
+        + eapply callCase; eauto.
+        + eapply compCase; eauto.
+        + eapply switchCase; eauto.
+        + apply skipCase.
+      - inv Sem; eapply Call; eauto.
+    Defined.
+
+    Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
+
+  End stmt_eval_call_eval_ind.
+
+  CoInductive loop_call (prog: program) (clsid f: ident) (ins outs: nat -> list (option value)): nat -> menv -> Prop :=
     Step:
       forall n me me',
       stmt_call_eval prog me clsid f (ins n) me' (outs n) ->
@@ -154,7 +229,7 @@ Module Type OBCSEMANTICS
 
   Section LoopCallCoind.
 
-    Variable R: program -> ident -> ident -> (nat -> list (option val)) -> (nat -> list (option val)) -> nat -> menv -> Prop.
+    Variable R: program -> ident -> ident -> (nat -> list (option value)) -> (nat -> list (option value)) -> nat -> menv -> Prop.
 
     Hypothesis LoopCase:
       forall prog clsid f ins outs n me,
@@ -196,20 +271,12 @@ Module Type OBCSEMANTICS
       exp_eval me ve e v2 ->
       v1 = v2.
   Proof.
-    induction e (* using exp_ind2 *);
-    intros v1 v2 H1 H2;
-    inversion H1 as [xa va tya Hv1|xa va tya Hv1|xa va Hv1
-                     |opa ea ca va tya IHa Hv1
-                     |opa e1a e2a c1a c2a va tya IH1a IH2a Hv1|? va ? Hv1];
-    inversion H2 as [xb vb tyb Hv2|xb vb tyb Hv2|xb vb Hv2
-                     |opb eb cb vb tyb IHb Hv2
-                     |opb e1b e2b c1b c2b vb tyb IH1b IH2b Hv2|? vb ? Hv2];
-    try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2); subst; auto.
-    - assert (Some ca = Some cb) as HH by (apply IHe; auto).
-      inv HH. now rewrite Hv1 in Hv2.
-    - assert (Some c1a = Some c1b) as HH1 by (apply IHe1; auto).
-      assert (Some c2a = Some c2b) as HH2 by (apply IHe2; auto).
-      inv HH1. inv HH2. now rewrite Hv1 in Hv2.
+    induction e; intros * H1 H2; inv H1; inv H2; try congruence.
+    - assert (Some v = Some v0) as E by auto; inv E.
+      congruence.
+    - assert (Some v1 = Some v0) as E by auto; inv E.
+      assert (Some v4 = Some v3) as E by auto; inv E.
+      congruence.
   Qed.
 
   Lemma exps_eval_det:
@@ -267,18 +334,15 @@ Module Type OBCSEMANTICS
         H: stmt_eval _ ?me ?ve ?s ?mv1, H': stmt_eval _ ?me ?ve ?s ?mv2 |- _ =>
         let E := fresh in assert (mv1 = mv2) as E; eauto; inv E
       end; eauto.
-    - (* Ifte *)
-      match goal with H:stmt_eval _ _ _ (Ifte _ _ _) _ |- _ => inv H end.
+    - take (stmt_eval _ _ _ (Switch _ _ _) _) and inv it.
       match goal with
         H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
-        eapply exp_eval_det in H; eauto; subst
+        eapply exp_eval_det in H; eauto; inv H
       end.
-      match goal with H: _ = _ |- _ => inv H end.
       match goal with
-        H: val_to_bool ?v = _, H': val_to_bool ?v = _ |- _ =>
+        H: nth_error _ _ = _, H': nth_error _ _ = _ |- _ =>
         rewrite H in H'; inv H'
-      end.
-      cases; eauto.
+      end; auto.
     - (* Skip *)
       now match goal with H:stmt_eval _ _ _ _ _ |- _ => inv H end.
     - (* stmt_call_eval *)
@@ -408,12 +472,12 @@ Proof.
     intros me ve x v' e v Hfree.
     split; intro Heval.
     - revert v Hfree Heval.
-      induction e; intros v Hfree Heval; inv Heval;
+      induction e; intros ? Hfree Heval; inv Heval;
         try not_free; eauto using exp_eval.
       + erewrite <-Env.gso; eauto; constructor.
       + now constructor; rewrite Env.gso.
     - revert v Hfree Heval.
-      induction e; intros v Hfree Heval; inv Heval;
+      induction e; intros ? Hfree Heval; inv Heval;
         try not_free; eauto using exp_eval.
       + rewrite Env.gso; auto; constructor.
       + constructor; erewrite <-Env.gso; eauto.
@@ -486,29 +550,29 @@ Proof.
       forall x, find_val x me <> None ->
                 find_val x me' <> None.
   Proof.
-    induction s; inversion_clear 1; subst; auto; intros x Hmfind.
-    - destruct (ident_eq_dec x i).
-      now subst; setoid_rewrite find_val_gss.
-      now setoid_rewrite find_val_gso.
-    - destruct b;
-      match goal with H:stmt_eval _ _ _ _ _ |- _ =>
-        apply IHs1 with (x:=x) in H || apply IHs2 with (x:=x) in H end;
-      auto.
-    - match goal with H:stmt_eval _ _ _ s1 _ |- _ => eapply IHs1 in H end;
-      match goal with H:stmt_eval _ _ _ s2 _ |- _ => eapply IHs2 in H end; eauto.
+    intros * Sem.
+    (* trick to perform the induction *)
+    change me' with (fst (me', ve')).
+    revert Sem; generalize (me', ve').
+    induction 1 using stmt_eval_ind_2
+      with (P_call := fun prog me c f xs me' ys => True);
+      subst; simpl; auto; intros y Hmfind.
+    destruct (ident_eq_dec y x).
+    - now subst; setoid_rewrite find_val_gss.
+    - now setoid_rewrite find_val_gso.
   Qed.
 
   Lemma stmt_call_eval_cons:
-    forall prog c' c me f vs me' rvs,
+    forall prog c' c me f vs me' rvs enums,
       c_name c <> c' ->
-      (stmt_call_eval (c :: prog) me c' f vs me' rvs
-       <-> stmt_call_eval prog me c' f vs me' rvs).
+      (stmt_call_eval (Program enums (c :: prog)) me c' f vs me' rvs
+       <-> stmt_call_eval (Program enums prog) me c' f vs me' rvs).
   Proof.
-    intros * Neq; rewrite <-ident_eqb_neq in Neq; split; intros Sem.
+    intros * Neq; split; intros Sem.
     - inversion_clear Sem as [??????????? Find].
-      simpl in Find; rewrite Neq in Find; eauto using stmt_call_eval.
+      eapply find_unit_cons in Find as [[]|[? Find]]; simpl in *; eauto using stmt_call_eval; congruence.
     - inv Sem; econstructor; eauto.
-      simpl; rewrite Neq; auto.
+      eapply find_unit_cons; simpl; eauto.
   Qed.
 
   Ltac chase_skip :=
@@ -521,7 +585,7 @@ End OBCSEMANTICS.
 Module ObcSemanticsFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
+       (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Syn   : OBCSYNTAX Ids Op OpAux) <: OBCSEMANTICS Ids Op OpAux Syn.
   Include OBCSEMANTICS Ids Op OpAux Syn.
 End ObcSemanticsFun.

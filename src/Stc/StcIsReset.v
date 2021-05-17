@@ -11,8 +11,10 @@ Open Scope list_scope.
 Module Type STCISRESET
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn).
 
   Lemma not_Is_reset_in_cons:
     forall x ck tc tcs,
@@ -65,7 +67,7 @@ Module Type STCISRESET
 
   Definition is_reset_in_tc_b (x: ident) (ck: clock) (tc: trconstr) : bool :=
     match tc with
-    | TcReset y ck' _ => ident_eqb x y && clock_eq ck ck'
+    | TcReset y ck' _ _ => ident_eqb x y && clock_eq ck ck'
     | _ => false
     end.
 
@@ -103,8 +105,8 @@ Module Type STCISRESET
   Qed.
 
   Lemma not_Is_reset_in_tc_TcReset:
-    forall y x ck ro,
-      ~ (exists ck', Is_reset_in_tc y ck' (TcReset x ck ro)) -> x <> y.
+    forall y x ck ty ro,
+      ~ (exists ck', Is_reset_in_tc y ck' (TcReset x ck ty ro)) -> x <> y.
   Proof.
     intros * NIsReset E; subst; apply NIsReset; eauto using Is_reset_in_tc.
   Qed.
@@ -119,7 +121,7 @@ Module Type STCISRESET
     eapply (NoDup_app_In x) in Nodup.
     - assert (In x (resets_of (s_tcs s))) as Hreset' by (apply resets_of_In; eauto).
       apply s_reset_incl in Hreset'.
-      rewrite <-s_nexts_in_tcs in Hreset'.
+      rewrite <-s_nexts_in_tcs_fst in Hreset'.
       apply Nodup; rewrite app_assoc, in_app; auto.
     - apply fst_InMembers; auto.
   Qed.
@@ -129,8 +131,10 @@ End STCISRESET.
 Module StcIsResetFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX      Op)
-       (Syn   : STCSYNTAX Ids Op CESyn)
-<: STCISRESET Ids Op CESyn Syn.
-  Include STCISRESET Ids Op CESyn Syn.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+<: STCISRESET Ids Op OpAux Cks CESyn Syn.
+  Include STCISRESET Ids Op OpAux Cks CESyn Syn.
 End StcIsResetFun.

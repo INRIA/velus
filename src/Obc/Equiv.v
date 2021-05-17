@@ -1,6 +1,7 @@
 From Coq Require Import FSets.FMapPositive.
 From Coq Require Import PArith.
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Obc.ObcSyntax.
@@ -25,10 +26,11 @@ programs.
 Module Type EQUIV
        (Ids          : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX    Op)
-       (Import Syn   : OBCSYNTAX    Ids Op OpAux)
-       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn)
-       (Import Typ   : OBCTYPING    Ids Op OpAux Syn Sem).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Syn   : OBCSYNTAX     Ids Op OpAux)
+       (Import ComTyp: COMMONTYPING  Ids Op OpAux)
+       (Import Sem   : OBCSEMANTICS  Ids Op OpAux Syn)
+       (Import Typ   : OBCTYPING     Ids Op OpAux Syn  ComTyp Sem).
 
   Definition stmt_eval_eq s1 s2: Prop :=
     forall prog menv env menv' env',
@@ -105,31 +107,23 @@ Module Type EQUIV
     inversion_clear 1; now chase_skip.
   Qed.
 
-  Instance stmt_eval_eq_Ifte_Proper:
-    Proper (eq ==> stmt_eval_eq ==> stmt_eval_eq ==> stmt_eval_eq) Ifte.
+  Instance stmt_eval_eq_Switch_Proper:
+    Proper (eq ==> Forall2 (orel stmt_eval_eq) ==> stmt_eval_eq ==> stmt_eval_eq) Switch.
   Proof.
-    intros e e' Heeq s s' Hseq t t' Hteq prog menv env menv' env'.
+    intros e e' Heeq ss ss' Hsseq d d' Hd prog menv env menv' env'.
     rewrite <-Heeq.
-    split; inversion_clear 1;
-      destruct b;
-      try match goal with
-          | H: exp_eval _ _ _ _ |- _ => apply Iifte with (1:=H)
-          | H: stmt_eval _ _ _ _ _ |- _ =>
-            (rewrite <-Hseq in H
-             || rewrite <-Hteq in H
-             || rewrite Hseq in H
-                                || rewrite Hteq in H)
-          end;
-      try match goal with
-          | H:val_to_bool ?v = Some true |- _ =>
-            apply val_to_bool_true' in H
-          | H:val_to_bool ?v = Some false |- _ =>
-            apply val_to_bool_false' in H
-          end; subst;
-        econstructor; try eassumption;
-          try apply val_to_bool_true;
-          try apply val_to_bool_false';
-          easy.
+    split; inversion_clear 1.
+    - edestruct (@nth_error_Forall2 (option stmt)) as (?& Nth & Sem); eauto.
+      econstructor; eauto.
+      inversion Sem as [|?? Sem']; subst; simpl in *.
+      + now apply Hd.
+      + now apply Sem'.
+    - rewrite Forall2_swap_args in Hsseq.
+      edestruct (@nth_error_Forall2 (option stmt)) as (?& Nth & Sem); eauto; simpl in Sem.
+      econstructor; eauto.
+      inversion Sem as [|?? Sem']; subst; simpl in *.
+      + now apply Hd.
+      + now apply Sem'.
   Qed.
 
   (** A refinement relation for Obc.
@@ -144,7 +138,7 @@ Module Type EQUIV
       exp_eval menv' env1 e (Some v).
   Proof.
     intros menv' env1 env2.
-    induction e; intros v Henv; inversion 1; subst; eauto using exp_eval.
+    induction e; intros ? Henv; inversion 1; subst; eauto using exp_eval.
     - take (Env.find _ _ = Some _) and (rewrite it; apply Henv in it as (v' & -> & <-));
         eauto using exp_eval.
     - take (Env.find _ _ = Some _) and apply Henv in it as (v' & -> & ?);
@@ -206,30 +200,40 @@ Module Type EQUIV
         find_method f c1.(c_methods) = Some m1
         /\ method_refines prog1 prog2 (P f) m1 m2.
 
+  Definition ltsuffix2_prog := rr ltsuffix_prog ltsuffix_prog.
+
+  Lemma ltsuffix2_prog_wf: well_founded ltsuffix2_prog.
+  Proof.
+    apply rr_wf; apply ltsuffix_prog_wf.
+  Qed.
+
   Definition program_refines
              (P : ident -> ident -> list (ident * type)
-                  -> Env.t val -> Env.t val -> Prop)
+                  -> Env.t value -> Env.t value -> Prop)
              (prog1 prog2 : program) : Prop :=
-    (PFix ltsuffix2_wf
+    (PFix ltsuffix2_prog_wf
           (fun (progs : program * program)
                (program_refines :
                   (forall (progs' : program * program),
-                      ltsuffix2 progs' progs -> Prop)) =>
+                      ltsuffix2_prog progs' progs -> Prop)) =>
+             (fst progs).(enums) = (snd progs).(enums)
+             /\
              forall n c2 prog2'
-                    (Hf2: find_class n (snd progs) = Some (c2, prog2')),
+               (Hf2: find_class n (snd progs) = Some (c2, prog2')),
              exists (c1 : class) (prog1' : program)
-                    (Hf1: find_class n (fst progs) = Some (c1, prog1')),
+               (Hf1: find_class n (fst progs) = Some (c1, prog1')),
                class_refines prog1' prog2' (P n) c1 c2
                /\ program_refines (prog1', prog2')
-                                  (conj (find_class_ltsuffix n (fst progs) c1 prog1' Hf1)
-                                        (find_class_ltsuffix n (snd progs) c2 prog2' Hf2))
+                                 (conj (find_unit_ltsuffix_prog n (fst progs) c1 prog1' Hf1)
+                                       (find_unit_ltsuffix_prog n (snd progs) c2 prog2' Hf2))
     )) (prog1, prog2).
 
   Lemma program_refines_def:
     forall (P : ident -> ident -> list (ident * type)
-                -> Env.t val -> Env.t val -> Prop) prog1 prog2,
+                -> Env.t value -> Env.t value -> Prop) prog1 prog2,
       program_refines P prog1 prog2 <->
-      (forall n c2 prog2',
+      (prog1.(enums) = prog2.(enums)
+       /\ forall n c2 prog2',
           find_class n prog2 = Some (c2, prog2') ->
           exists (c1 : class) (prog1' : program),
             find_class n prog1 = Some (c1, prog1')
@@ -239,72 +243,60 @@ Module Type EQUIV
     intros.
     unfold program_refines at 1.
     rewrite PFix_eq.
-    - split; intros HH n c2 prog2' Hfind;
+    - split; intros (?& HH); split; auto;
+        intros n c2 prog2' Hfind;
         destruct (HH n c2 prog2' Hfind) as (c1' & prog1' & Hfind' & Hcr & Hfix);
         eauto.
     - intros * H. now setoid_rewrite H.
   Qed.
 
+
   Lemma program_refines_by_class':
     forall (Pc : class -> class -> Prop) P p1 p2,
       wt_program p2 ->
+      p1.(enums) = p2.(enums) ->
       Forall2 (fun c1 c2 => forall p1' p2',
                    wt_program p2' ->
                    wt_class p2' c2 ->
                    program_refines P p1' p2' ->
-                   Forall2 Pc p1' p2' ->
+                   Forall2 Pc p1'.(classes) p2'.(classes) ->
                    Pc c1 c2 ->
                    c1.(c_name) = c2.(c_name)
-                   /\ class_refines p1' p2' (P c1.(c_name)) c1 c2) p1 p2 ->
-      Forall2 Pc p1 p2 ->
+                   /\ class_refines p1' p2' (P c1.(c_name)) c1 c2) p1.(classes) p2.(classes) ->
+      Forall2 Pc p1.(classes) p2.(classes) ->
       program_refines P p1 p2.
   Proof.
-    intros Pc P p1 p2 WTp Hfa.
+    intros Pc P p1 p2 WTp Enums Hfa Hclasses.
+    rewrite program_refines_def; split; auto.
+    unfold find_class.
     pose proof (Forall2_length _ _ _ Hfa) as Hlen.
-    revert WTp Hfa.
-    pattern p1, p2.
-    apply forall2_right; auto.
-    now intros; rewrite program_refines_def; inversion 1.
+    revert WTp Hfa Hclasses.
+    destruct p1 as (es1 & cls1), p2 as (es2 & cls2); simpl in *.
+    pattern cls1, cls2.
+    apply forall2_right; auto; try discriminate.
     clear Hlen. intros c1 c2 p1' p2' Hfa' WTp2' Hpr' Hpc'.
     inversion_clear Hpr' as [|? ? ? ? Hcr' Hpr].
     inversion_clear Hpc' as [|? ? ? ? Hpc Hpcs].
-    inversion_clear WTp2' as [|? ? WTc WTp Hnodup].
-    apply Hfa' in Hpr; auto. clear Hfa'.
-    destruct (Hcr' _ _ WTp WTc Hpr Hpcs Hpc) as [Hcn Hcr].
-    rewrite program_refines_def.
-    intros n c2' p2'' Hfind2.
-    simpl in Hfind2.
-    destruct (ident_eqb c2.(c_name) n) eqn:Heq.
-    - inv Hfind2. apply ident_eqb_eq in Heq.
-      rewrite <-Heq, <-Hcn.
-      simpl. setoid_rewrite ident_eqb_refl. eauto.
-    - rewrite program_refines_def in Hpr.
-      destruct (Hpr _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
-      exists c1', p1'''. simpl.
-      setoid_rewrite Hcn. setoid_rewrite Heq. auto.
+    inversion_clear WTp2' as [|?? [WTc Hnodup] WTp].
+    assert (program_refines P (Program es1 p1') (Program es2 p2')) as Hpr'
+        by (rewrite program_refines_def; eauto).
+    clear Hfa'.
+    simpl in *.
+    edestruct Hcr' as [Hcn Hcr]; eauto.
+    - unfold wt_program, CommonTyping.wt_program; simpl; auto.
+    - (* rewrite program_refines_def. *)
+      intros n c2' p2'' Hfind2.
+      eapply find_unit_cons in Hfind2 as [[E Hfind2]|[E Hfind2]];
+        unfold find_unit; simpl in *; eauto.
+      + inv Hfind2.
+        rewrite <-Hcn.
+        destruct (ident_eq_dec (c_name c1) (c_name c1)); eauto; contradiction.
+      + apply program_refines_def in Hpr' as (?& Hpr').
+        destruct (Hpr' _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
+        exists c1', p1'''.
+        rewrite Hcn.
+        destruct (ident_eq_dec (c_name c2) n); try congruence; intuition.
   Qed.
-
-  (* TODO: Try an alternative definition of program_refines based on
-           [stmt_call_eval]?
-
-           Advantages:
-           - simplicity
-           - ability to add a precondition on input arguments
-             (but maybe the only interesting precondition is that
-              all the input arguments are not None, unless the
-              predicate is also over the class name, method name,
-              and input names).
-
-           Disadvantages:
-           - harder to work with since it's less syntactic?
-
-        P vos1 vos2 ->
-        stmt_call_eval p2 omenv clsid f vos2 omenv' rvos2 ->
-        exists rvos1,
-          stmt_call_eval p1 omenv clsid f vos1 omenv' rvos1
-          /\ Forall2 (fun rv1 rv2 => forall v, rv2 = Some v => rv1 = Some v)
-                     rvos1 rvos2
-   *)
 
   Lemma stmt_refines_strengthen:
     forall P Q p1 p2 s1 s2,
@@ -370,6 +362,19 @@ Module Type EQUIV
       eapply HP; eauto. now rewrite <-Hvos, Hlvos.
   Qed.
 
+  Lemma wt_exp_program_refines:
+    forall P p1 p2 mems vars e,
+      program_refines P p1 p2 ->
+      wt_exp p2 mems vars e ->
+      wt_exp p1 mems vars e.
+  Proof.
+    intros * Hpr WTe.
+    induction e; inv WTe; eauto using wt_exp.
+    apply program_refines_def in Hpr as (E & ?).
+    take (In _ _) and rewrite <-E in it.
+    econstructor; eauto.
+  Qed.
+
   Lemma wt_stmt_program_refines:
     forall P p1 p2 insts mems vars s,
       program_refines P p1 p2 ->
@@ -377,25 +382,40 @@ Module Type EQUIV
       wt_stmt p1 insts mems vars s.
   Proof.
     intros * Hpr WTs.
-    induction s; inv WTs; eauto using wt_stmt.
-    rewrite program_refines_def in Hpr.
-    match goal with H:find_class _ _ = _ |- _ =>
-      apply Hpr in H as (c & p1' & Hfindc & Hcr & Hpr') end.
-    match goal with H:find_method _ _ = _ |- _ =>
-      apply Hcr in H as (m' & Hfindm & (Hmi & Hmo & Hmr)) end.
-    rewrite <-Hmi, <-Hmo in *.
-    econstructor; eauto.
+    induction s using stmt_ind2'; inv WTs; eauto using wt_stmt, wt_exp_program_refines.
+    - econstructor; eauto using wt_exp_program_refines.
+      + now apply program_refines_def in Hpr as (-> & ?).
+      + intros.
+        take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in *; auto.
+    - pose proof Hpr; apply program_refines_def in Hpr as (? & Hpr).
+      match goal with H:find_class _ _ = _ |- _ =>
+                      apply Hpr in H as (c1 & p1' & Hfindc & Hcr & Hpr') end.
+      match goal with H:find_method _ _ = _ |- _ =>
+                      apply Hcr in H as (m' & Hfindm & (Hmi & Hmo & Hmr)) end.
+      rewrite <-Hmi, <-Hmo in *.
+      econstructor; eauto.
+      apply Forall_forall; intros * Hin.
+      take (Forall _ es) and eapply Forall_forall in it; eauto using wt_exp_program_refines.
+  Qed.
+
+  Lemma program_refines_enums:
+    forall P p1 p2,
+      program_refines P p1 p2 ->
+      enums p1 = enums p2.
+  Proof.
+    setoid_rewrite program_refines_def; intuition.
   Qed.
 
 End EQUIV.
 
 Module EquivFun
-       (Ids          : IDS)
-       (Op           : OPERATORS)
-       (Import OpAux : OPERATORS_AUX    Op)
-       (Import Syn   : OBCSYNTAX    Ids Op OpAux)
-       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn)
-       (Import Typ   : OBCTYPING    Ids Op OpAux Syn Sem)
-  <: EQUIV Ids Op OpAux Syn Sem Typ.
-  Include EQUIV Ids Op OpAux Syn Sem Typ.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Syn   : OBCSYNTAX     Ids Op OpAux)
+       (ComTyp: COMMONTYPING  Ids Op OpAux)
+       (Sem   : OBCSEMANTICS  Ids Op OpAux Syn)
+       (Typ   : OBCTYPING     Ids Op OpAux Syn  ComTyp Sem)
+  <: EQUIV Ids Op OpAux Syn ComTyp Sem Typ.
+  Include EQUIV Ids Op OpAux Syn ComTyp Sem Typ.
 End EquivFun.

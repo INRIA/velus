@@ -8,11 +8,13 @@ From compcert Require Import common.Errors.
 From compcert Require Import lib.Maps.
 
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Common.CompCertLib.
 From Velus Require Import Environment.
 From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Ident.
 
+Import OpAux.
 Import Obc.Syn.
 Import Obc.Typ.
 
@@ -40,13 +42,16 @@ Definition deref_field (id cls x: ident) (xty: Ctypes.type): Clight.expr :=
   let ty_ptr := pointer_of ty_deref in
   Clight.Efield (Clight.Ederef (Clight.Etempvar id ty_ptr) ty_deref) x xty.
 
-Definition translate_const (c: const): Clight.expr :=
+Definition translate_const (c: cconst): Clight.expr :=
   (match c with
   | Cint i sz sg => Clight.Econst_int (Cop.cast_int_int sz sg i)
   | Clong l _ => Clight.Econst_long l
   | Cfloat f => Clight.Econst_float f
   | Csingle s => Clight.Econst_single s
-  end) (cltype (type_const c)).
+  end) (cltype (ctype_cconst c)).
+
+Definition translate_enum (c: enumtag) (n: nat): Clight.expr :=
+  Clight.Econst_int (enumtag_to_int c) (enumtag_cltype n).
 
 Definition translate_unop (op: unop): Clight.expr -> Ctypes.type -> Clight.expr :=
   match op with
@@ -57,11 +62,14 @@ Definition translate_unop (op: unop): Clight.expr -> Ctypes.type -> Clight.expr 
 Definition translate_binop (op: binop): Clight.expr -> Clight.expr -> Ctypes.type -> Clight.expr :=
   Clight.Ebinop op.
 
+Definition cl_zero: Clight.expr :=
+  Clight.Econst_int Int.zero Ctypes.type_int32s.
+
 Section Translate.
   Variable (prog: program) (owner: class) (caller: method).
 
   Definition translate_var (x: ident) (ty: type): Clight.expr :=
-    let ty := cltype ty in
+    let ty := translate_type ty in
     match caller.(m_out) with
     | [] | [_] => Clight.Etempvar x ty
     | xs =>
@@ -79,24 +87,25 @@ Section Translate.
     | Valid x ty =>
       translate_var x ty
     | State x ty =>
-      deref_field (prefix obc2c self) owner.(c_name) x (cltype ty)
+      deref_field (prefix obc2c self) owner.(c_name) x (translate_type ty)
     | Const c =>
       translate_const c
+    | Enum c (Tprimitive _) =>   (* impossible case *)
+      cl_zero
+    | Enum c (Tenum (_, n)) =>
+      translate_enum c n
     | Unop op e ty =>
-      translate_unop op (translate_exp e) (cltype ty)
+      translate_unop op (translate_exp e) (translate_type ty)
     | Binop op e1 e2 ty =>
-      translate_binop op (translate_exp e1) (translate_exp e2) (cltype ty)
+      translate_binop op (translate_exp e1) (translate_exp e2) (translate_type ty)
     end.
 
-  Fixpoint list_type_to_typelist (tys: list Ctypes.type): Ctypes.typelist :=
-    match tys with
-    | [] => Ctypes.Tnil
-    | ty :: tys => Ctypes.Tcons ty (list_type_to_typelist tys)
-    end.
+  Definition list_type_to_typelist : list Ctypes.type -> Ctypes.typelist :=
+    fold_right (Ctypes.Tcons) Ctypes.Tnil.
 
   Definition funcall (y: option ident) (f: ident) (tret: option Ctypes.type) (args: list Clight.expr) : Clight.statement :=
     let tys := map Clight.typeof args in
-    let tret := match tret with Some t => t | None => Ctypes.Tvoid end in
+    let tret := or_default Ctypes.Tvoid tret in
     let sig := Ctypes.Tfunction (list_type_to_typelist tys) tret AST.cc_default in
     Clight.Scall y (Clight.Evar f sig) args.
 
@@ -114,12 +123,12 @@ Section Translate.
     Clight.Eaddrof (deref_field (prefix obc2c self) owner.(c_name) obj (type_of_inst cls)) (type_of_inst_p cls).
 
   Definition funcall_assign (ys: list ident) (obj: ident) (tyout: Ctypes.type) (outs: list (ident * type)) : Clight.statement :=
-    fold_right
-      (fun '(y, (y', ty)) s =>
-         let ty := cltype ty in
+    fold_left2
+      (fun s y '(y', ty) =>
+         let ty := translate_type ty in
          let assign_out := assign y ty (Clight.Efield (Clight.Evar obj tyout) y' ty) in
-         Clight.Ssequence assign_out s
-      ) Clight.Sskip (combine ys outs).
+         Clight.Ssequence s assign_out)
+      ys outs Clight.Sskip.
 
   Definition binded_funcall (ys: list ident) (cls obj f: ident) (args: list Clight.expr) : Clight.statement :=
     match find_class cls prog with
@@ -132,7 +141,7 @@ Section Translate.
           funcall None (prefix_fun f cls) None args
         | [y], [(y', t)] =>
           let args := ptr_obj cls obj :: args in
-          let c_t := cltype t in
+          let c_t := translate_type t in
           Clight.Ssequence
             (funcall (Some (prefix_temp f y')) (prefix_fun f cls) (Some c_t) args)
             (assign y c_t (Clight.Etempvar (prefix_temp f y') c_t))
@@ -149,16 +158,35 @@ Section Translate.
     | None => Clight.Sskip
     end.
 
-  Definition translate_param '((y, t): ident * type): ident * Ctypes.type := (y, cltype t).
+  Definition translate_param '((y, t): ident * type): ident * Ctypes.type := (y, translate_type t).
 
-  Fixpoint translate_stmt (s: stmt) : Clight.statement :=
+  Definition make_labeled_statements_aux
+             (ls: Clight.labeled_statements) (z: Z)
+    : list (option Clight.statement) -> Clight.labeled_statements * Z :=
+    fold_right (fun os '(ls, z) =>
+                 (or_default_with ls
+                                  (fun s => Clight.LScons (Some z)
+                                                       (Clight.Ssequence s Clight.Sbreak) ls)
+                                  os,
+                  Z.pred z))
+               (ls, z).
+
+  Definition make_labeled_statements
+             (ss: list (option Clight.statement)) (default: Clight.statement): Clight.labeled_statements :=
+    fst (make_labeled_statements_aux
+           (Clight.LScons None default Clight.LSnil)
+           (Z.of_nat (pred (length ss))) ss).
+
+  Program Fixpoint translate_stmt (s: stmt): Clight.statement :=
     match s with
     | Assign x e =>
-      assign x (cltype (typeof e)) (translate_exp e)
+      assign x (translate_type (typeof e)) (translate_exp e)
     | AssignSt x e =>
-      Clight.Sassign (deref_field (prefix obc2c self) owner.(c_name) x (cltype (typeof e))) (translate_exp e)
-    | Ifte e s1 s2 =>
-      Clight.Sifthenelse (translate_exp e) (translate_stmt s1) (translate_stmt s2)
+      Clight.Sassign (deref_field (prefix obc2c self) owner.(c_name) x (translate_type (typeof e))) (translate_exp e)
+    | Switch e branches default =>
+      Clight.Sswitch (translate_exp e)
+                     (make_labeled_statements (map (option_map translate_stmt) branches)
+                                              (translate_stmt default))
     | Comp s1 s2 =>
       Clight.Ssequence (translate_stmt s1) (translate_stmt s2)
     | Call ys cls o f es =>
@@ -170,8 +198,6 @@ End Translate.
 
 Definition return_with (s: Clight.statement) (e: option Clight.expr): Clight.statement :=
   Clight.Ssequence s (Clight.Sreturn e).
-Definition cl_zero: Clight.expr :=
-  Clight.Econst_int Int.zero Ctypes.type_int32s.
 
 Definition fundef
            (ins vars temps: list (ident * Ctypes.type))
@@ -180,11 +206,12 @@ Definition fundef
   let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
   @AST.Gfun Clight.fundef Ctypes.type (Ctypes.Internal f).
 
-
-Fixpoint rec_instance_methods (s: stmt) (m: M.t ident): M.t ident :=
+Fixpoint rec_instance_methods (m: M.t ident) (s: stmt) : M.t ident :=
   match s with
-  | Ifte _ s1 s2
-  | Comp s1 s2 => rec_instance_methods s2 (rec_instance_methods s1 m)
+  | Switch _ branches default =>
+    fold_left (fun m => or_default_with m (rec_instance_methods m))
+              branches (rec_instance_methods m default)
+  | Comp s1 s2 => rec_instance_methods (rec_instance_methods m s1) s2
   | Call ys cls o f _ =>
     match ys with
     | [] | [_] => m
@@ -194,7 +221,7 @@ Fixpoint rec_instance_methods (s: stmt) (m: M.t ident): M.t ident :=
   end.
 
 Definition instance_methods (m: method): M.t ident :=
-  rec_instance_methods m.(m_body) (@M.empty ident).
+  rec_instance_methods (M.empty _) m.(m_body).
 
 Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
   map (fun ofc =>
@@ -202,10 +229,12 @@ Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
          (prefix_out f o, type_of_inst (prefix_fun f cid))
       ) (M.elements out_vars).
 
-Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: Env.t type): Env.t type :=
+Fixpoint rec_instance_methods_temp (prog: program) (m: Env.t type) (s: stmt) : Env.t type :=
   match s with
-  | Ifte _ s1 s2
-  | Comp s1 s2 => rec_instance_methods_temp prog s2 (rec_instance_methods_temp prog s1 m)
+  | Switch _ branches default =>
+    fold_left (fun m => or_default_with m (rec_instance_methods_temp prog m))
+              branches (rec_instance_methods_temp prog m default)
+  | Comp s1 s2 => rec_instance_methods_temp prog (rec_instance_methods_temp prog m s1) s2
   | Call ys cls o f _ =>
     match find_class cls prog with
     | Some (c, _) =>
@@ -223,14 +252,14 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: Env.t type): En
   end.
 
 Definition instance_methods_temp (prog: program) (m: method): Env.t type :=
-  rec_instance_methods_temp prog m.(m_body) (Env.empty _).
+  rec_instance_methods_temp prog (Env.empty _) m.(m_body).
 
 Definition make_out_temps (out_temps: Env.t type): list (ident * Ctypes.type) :=
   map translate_param (Env.elements out_temps).
 
 Definition make_in_arg (arg: ident * type): Clight.expr :=
   let (x, ty) := arg in
-  Clight.Etempvar x (cltype ty).
+  Clight.Etempvar x (translate_type ty).
 
 Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
@@ -248,7 +277,7 @@ Definition translate_method (prog: program) (c: class) (m: method)
     fundef args out_vars (out_temps ++ vars) Ctypes.Tvoid (return_with body None)
   | [(y, t) as yt] =>
     let args := self :: ins in
-    let c_t := cltype t in
+    let c_t := translate_type t in
     fundef args out_vars (translate_param yt :: out_temps ++ vars) c_t (return_with body (Some (make_in_arg yt)))
   | _ :: _ =>
     let args := self :: out :: ins in
@@ -293,47 +322,40 @@ Definition translate_class (prog: program) (c: class)
   let out_structs := make_out c in
   (class_struct :: out_structs, methods).
 
-Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
-  let (x, ty) := bind in
-  (prefix_glob x, cltype ty).
-
 Definition load_in (ins: list (ident * type)): Clight.statement :=
-  fold_right
-    (fun (xt: ident * type) s =>
-       let (x, t) := xt in
-       let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
+  fold_left
+    (fun s '(x, t) =>
+       let typtr := Ctypes.Tpointer (translate_type t) Ctypes.noattr in
        let load :=
-           Clight.Sbuiltin (Some x) (AST.EF_vload (type_chunk t))
+           Clight.Sbuiltin (Some x) (AST.EF_vload (type_to_chunk t))
                            (Ctypes.Tcons typtr Ctypes.Tnil)
-                           [Clight.Eaddrof (Clight.Evar (prefix_glob x) (cltype t)) typtr] in
-       Clight.Ssequence load s) Clight.Sskip ins.
+                           [Clight.Eaddrof (Clight.Evar (prefix_glob x) (translate_type t)) typtr] in
+       Clight.Ssequence s load)
+    ins Clight.Sskip.
 
-Definition write_multiple_outs (node: ident) (outs: list (ident * type))
-  : Clight.statement :=
+Definition write_multiple_outs (node: ident) (outs: list (ident * type)) : Clight.statement :=
   let out_struct := prefix out step in
   let t_struct := type_of_inst (prefix_fun step node) in
-  fold_right
-    (fun (xt: ident * type) s =>
-       let (x, t) := xt in
-       let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
+  fold_left
+    (fun s '(x, t) =>
+       let typtr := Ctypes.Tpointer (translate_type t) Ctypes.noattr in
        let write :=
-           Clight.Sbuiltin None (AST.EF_vstore (type_chunk t))
-                           (Ctypes.Tcons typtr (Ctypes.Tcons (cltype t) Ctypes.Tnil))
-                           [Clight.Eaddrof (Clight.Evar (prefix_glob x) (cltype t)) typtr;
-                              Clight.Efield (Clight.Evar out_struct t_struct) x (cltype t)] in
-       Clight.Ssequence write s
-    ) Clight.Sskip outs.
+           Clight.Sbuiltin None (AST.EF_vstore (type_to_chunk t))
+                           (Ctypes.Tcons typtr (Ctypes.Tcons (translate_type t) Ctypes.Tnil))
+                           [Clight.Eaddrof (Clight.Evar (prefix_glob x) (translate_type t)) typtr;
+                              Clight.Efield (Clight.Evar out_struct t_struct) x (translate_type t)] in
+       Clight.Ssequence s write)
+    outs Clight.Sskip.
 
-Definition write_out (node: ident) (outs: list (ident * type))
-  : Clight.statement :=
+Definition write_out (node: ident) (outs: list (ident * type)) : Clight.statement :=
   match outs with
   | [] => Clight.Sskip
   | [(x, t)] =>
-    let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
-    Clight.Sbuiltin None (AST.EF_vstore (type_chunk t))
-                    (Ctypes.Tcons typtr (Ctypes.Tcons (cltype t) Ctypes.Tnil))
-                    [Clight.Eaddrof (Clight.Evar (prefix_glob x) (cltype t)) typtr;
-                       (Clight.Etempvar x (cltype t))]
+    let typtr := Ctypes.Tpointer (translate_type t) Ctypes.noattr in
+    Clight.Sbuiltin None (AST.EF_vstore (type_to_chunk t))
+                    (Ctypes.Tcons typtr (Ctypes.Tcons (translate_type t) Ctypes.Tnil))
+                    [Clight.Eaddrof (Clight.Evar (prefix_glob x) (translate_type t)) typtr;
+                       (Clight.Etempvar x (translate_type t))]
   | outs => write_multiple_outs node outs
   end.
 
@@ -349,7 +371,7 @@ Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident 
     funcall None (prefix_fun step node) None args
   | [(y, t)] =>
     let args := p_self :: args in
-    funcall (Some y) (prefix_fun step node) (Some (cltype t)) args
+    funcall (Some y) (prefix_fun step node) (Some (translate_type t)) args
   | _ =>
     let out_struct := prefix out step in
     let t_struct := type_of_inst (prefix_fun step node) in
@@ -418,24 +440,18 @@ Proof.
   - right. exact msg.
 Defined.
 
-Definition check_size (env: Ctypes.composite_env) (id: AST.ident) :=
+Definition check_size_co (env: Ctypes.composite_env) (id: AST.ident) :=
   match env ! id with
   | Some co =>
-      if (Ctypes.co_sizeof co) <=? Ptrofs.max_unsigned
+      if Ctypes.co_sizeof co <=? Ptrofs.max_unsigned
       then OK tt
       else Error [MSG "ObcToClight: structure is too big: '"; CTX id; MSG "'." ]
   | None =>
       Error [MSG "ObcToClight: structure is undefined: '"; CTX id; MSG "'." ]
   end.
 
-Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composite_definition)
-  : res unit :=
-  match types with
-  | nil => OK tt
-  | Ctypes.Composite id _ _ _ :: types =>
-      do _ <- check_size env id;
-      check_size_env env types
-  end.
+Definition check_size_env (env: Ctypes.composite_env) : list Ctypes.composite_definition -> res unit :=
+  iter_error (fun co => match co with Ctypes.Composite id _ _ _ => check_size_co env id end).
 
 Definition make_program'
            (types: list Ctypes.composite_definition)
@@ -457,6 +473,18 @@ Definition make_program'
   | Error msg => Error msg
   end.
 
+Definition check_size_enum '((x, n): ident * nat) : res unit :=
+  if Z.of_nat n <=? Int.max_unsigned
+  then OK tt
+  else Error [MSG "ObcToClight: enum type is too big: '"; CTX x; MSG "'." ].
+
+Definition check_size_enums (prog: program) : res unit :=
+  iter_error check_size_enum prog.(enums).
+
+Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
+  let (x, ty) := bind in
+  (prefix_glob x, translate_type ty).
+
 Definition translate (do_sync: bool) (all_public: bool)
                      (main_node: ident) (prog: program): res Clight.program :=
   match find_class main_node prog with
@@ -465,13 +493,14 @@ Definition translate (do_sync: bool) (all_public: bool)
     | Some m =>
       match find_method reset c.(c_methods) with
       | Some _ =>
+        do _ <- check_size_enums prog;
         let f := prefix_glob (prefix self main_id) in
         let f_gvar := (f, type_of_inst main_node) in
         let ins := map glob_bind m.(m_in) in
         let outs := map glob_bind m.(m_out) in
         (* revert the declarations ! *)
-        let prog := rev prog in
-        let cs := map (translate_class prog) prog in
+        let prog := rev_prog prog in
+        let cs := map (translate_class prog) prog.(classes) in
         let (structs, funs) := split cs in
         let main_proved := (main_proved_id, make_main false main_node m) in
         let entry_point := (main_id, make_entry_point do_sync) in

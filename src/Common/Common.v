@@ -2,6 +2,7 @@ From Coq Require Import FSets.FMapPositive.
 From Coq Require Import FSets.FMapFacts.
 From Coq Require Import List.
 From Coq Require Import Sorting.Permutation.
+From Coq Require Import ZArith.BinInt.
 
 From Coq Require Import Setoid.
 From Coq Require Import Relations RelationPairs.
@@ -16,9 +17,31 @@ From Velus Require Export Common.CommonTactics.
 From Velus Require Export Common.CommonList.
 From Velus Require Export Common.CommonStreams.
 From Velus Require Export Common.CommonPS.
-From Velus Require Export ClockDefs.
+From Coq Require Export PeanoNat.
+From Coq Require Export Lia.
 
 Open Scope list.
+
+(** * Common definitions *)
+
+(** ** Finite sets and finite maps *)
+
+(** These modules are used to manipulate identifiers. *)
+
+Definition ident := positive.
+
+Module PS := Coq.MSets.MSetPositive.PositiveSet.
+Module PSP := MSetProperties.WPropertiesOn Pos PS.
+Module PSF := MSetFacts.Facts PS.
+Module PSE := MSetEqProperties.WEqPropertiesOn Pos PS.
+Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
+
+Definition ident_eq_dec := Pos.eq_dec.
+Definition ident_eqb := Pos.eqb.
+
+Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
+
+Implicit Type i j: ident.
 
 (** ** Properties *)
 
@@ -149,6 +172,10 @@ Proof.
 Qed.
 
 Module Type IDS.
+  Parameter bool_id : ident.
+  Parameter true_id : ident.
+  Parameter false_id : ident.
+
   Parameter self : ident.
   Parameter out  : ident.
   Parameter temp : ident.
@@ -160,6 +187,11 @@ Module Type IDS.
   Parameter norm1 : ident.
   Parameter norm2 : ident.
   Parameter obc2c : ident.
+
+  (** Incremental prefix sets *)
+  Definition elab_prefs := PS.singleton elab.
+  Definition norm1_prefs := PS.add norm1 elab_prefs.
+  Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
   Definition gensym_prefs := [elab; norm1; norm2].
   Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
@@ -314,6 +346,17 @@ Proof.
   induction 2; intuition.
 Qed.
 
+Lemma forallb_forall2b_equiv_decb :
+  forall {A R} `{EqDec A R} (xs : list (list A)) (ys : list A),
+    forallb (fun xs => forall2b equiv_decb xs ys) xs = true ->
+    Forall (fun xs => Forall2 R xs ys) xs.
+Proof.
+  intros * FA. apply forallb_Forall in FA.
+  eapply Forall_impl; [|eauto].
+  intros ? FA2.
+  eapply forall2b_Forall2_equiv_decb; eauto.
+Qed.
+
 (** *** About Coq stdlib *)
 
 Lemma pos_le_plus1:
@@ -362,8 +405,15 @@ Proof.
   - discriminate.
 Qed.
 
-Section IsNoneSome.
+Lemma Nat2Z_inj_pow:
+  forall m n,
+    Z.of_nat (n ^ m) = Zpower.Zpower_nat (Z.of_nat n) m.
+Proof.
+  induction m; simpl; intro; auto.
+  rewrite Znat.Nat2Z.inj_mul, IHm; auto.
+Qed.
 
+Section IsNoneSome.
   Context {A : Type}.
 
   Fixpoint isNone (o : option A) : bool :=
@@ -601,18 +651,23 @@ Section OptionLists.
 
   Context {A B : Type}.
 
-  Definition omap (f : A -> option B) (xs : list A) : option (list B) :=
-    List.fold_right (fun x ys => match f x, ys with
-                              | Some y, Some ys => Some (y :: ys)
-                              | _, _ => None
-                              end) (Some []) xs.
+  Definition omap (f : A -> option B) : list A -> option (list B) :=
+    fold_right (fun x ys => match f x, ys with
+                            | Some y, Some ys => Some (y :: ys)
+                            | _, _ => None
+                            end) (Some []).
 
-  Definition ofold_right (f : A -> B -> option B) (acc : option B) (xs : list A)
-    : option B :=
+  Definition ofold_right (f : A -> B -> option B) : option B -> list A -> option B :=
     fold_right (fun x acc => match acc with
                           | Some acc => f x acc
                           | None => None
-                          end) acc xs.
+                          end).
+
+  Definition ofold_left (f : B -> A -> option B) : list A -> option B -> option B :=
+    fold_left (fun acc x => match acc with
+                            | Some acc => f acc x
+                            | None => None
+                            end).
 
   Lemma ofold_right_none_none:
     forall (f : A -> B -> option B) xs, ofold_right f None xs = None.
@@ -621,6 +676,13 @@ Section OptionLists.
   Qed.
 
 End OptionLists.
+
+
+Definition or_default {A} (d: A) (o: option A) : A :=
+  match o with Some a => a | None => d end.
+
+Definition or_default_with {A B} (d: B) (f: A -> B) (o: option A) : B :=
+  match o with Some a => f a | None => d end.
 
 (** Lift relations into the option type *)
 
@@ -652,10 +714,12 @@ Section ORel.
   Qed.
 
   Global Instance orel_equiv `{Equivalence A R} : Equivalence orel.
-  Proof (Build_Equivalence orel orel_refl orel_sym orel_trans).
+  Proof. exact (Build_Equivalence orel orel_refl orel_sym orel_trans).
+  Qed.
 
   Global Instance orel_preord `{PreOrder A R} : PreOrder orel.
-  Proof (Build_PreOrder orel orel_refl orel_trans).
+  Proof. exact (Build_PreOrder orel orel_refl orel_trans).
+  Qed.
 
   Global Instance orel_Some_Proper: Proper (R ==> orel) Some.
   Proof.
@@ -801,6 +865,45 @@ Section ORelB.
   Qed.
 
 End ORelB.
+
+(** Lift relations between elements of different types into the option type *)
+
+Section ORel2.
+
+  Context {A B : Type}
+          (R : A -> B -> Prop).
+
+  Inductive orel2 : option A -> option B -> Prop :=
+  | Orel2n : orel2 None None
+  | Orel2s : forall sx sy,
+      R sx sy ->
+      orel2 (Some sx) (Some sy).
+
+  Lemma orel2_inversion:
+    forall x y, orel2 (Some x) (Some y) <-> R x y.
+  Proof.
+    split.
+    - now inversion 1.
+    - intro Rxy. eauto using orel2.
+  Qed.
+
+End ORel2.
+
+Lemma option_map_inv:
+  forall {A B} (f: A -> B) oa b,
+    option_map f oa = Some b ->
+    exists a, oa = Some a /\ b = f a.
+Proof.
+  unfold option_map; intros * E.
+  cases; inv E; eauto.
+Qed.
+
+Lemma option_map_None:
+  forall {A B} (f: A -> B) oa,
+    option_map f oa = None <-> oa = None.
+Proof.
+  unfold option_map; intros; cases; intuition; discriminate.
+Qed.
 
 (** The option monad *)
 

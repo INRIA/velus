@@ -1,5 +1,6 @@
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -25,40 +26,42 @@ wrt. its clock annotations.
 Module Type NLCLOCKING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX       Op)
-       (Import Syn   : NLSYNTAX   Ids Op CESyn)
-       (Import Ord   : NLORDERED  Ids Op CESyn Syn)
-       (Import Mem   : MEMORIES   Ids Op CESyn Syn)
-       (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
-       (Import CEClo : CECLOCKING Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX  Ids Op)
+       (Import Cks   : CLOCKS         Ids Op OpAux)
+       (Import CESyn : CESYNTAX       Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX   Ids Op OpAux Cks CESyn)
+       (Import Ord   : NLORDERED  Ids Op OpAux Cks CESyn Syn)
+       (Import Mem   : MEMORIES   Ids Op OpAux Cks CESyn Syn)
+       (Import IsD   : ISDEFINED  Ids Op OpAux Cks CESyn Syn Mem)
+       (Import CEClo : CECLOCKING Ids Op OpAux Cks CESyn).
 
-  Inductive wc_equation (G: global) (vars: list (ident * clock)): equation -> Prop :=
+  Inductive wc_equation (G: global) (Ω: list (ident * clock)): equation -> Prop :=
   | CEqDef:
       forall x ck ce,
-        In (x, ck) vars ->
-        wc_cexp vars ce ck ->
-        wc_equation G vars (EqDef x ck ce)
+        In (x, ck) Ω ->
+        wc_cexp Ω ce ck ->
+        wc_equation G Ω (EqDef x ck ce)
   | CEqApp:
       forall xs ck f les xrs n sub,
         find_node f G = Some n ->
         Forall2 (fun '(x, (_, xck)) le =>
                    SameVar (sub x) le
-                   /\ exists lck, wc_exp vars le lck
+                   /\ exists lck, wc_exp Ω le lck
                             /\ instck ck sub xck = Some lck)
                 n.(n_in) les ->
         Forall2 (fun '(y, (_, yck)) x =>
                    sub y = Some x
-                   /\ exists xck, In (x, xck) vars
+                   /\ exists xck, In (x, xck) Ω
                             /\ instck ck sub yck = Some xck)
                 n.(n_out) xs ->
-        Forall (fun xr => In xr vars) xrs ->
-        wc_equation G vars (EqApp xs ck f les xrs)
+        Forall (fun xr => In xr Ω) xrs ->
+        wc_equation G Ω (EqApp xs ck f les xrs)
   | CEqFby:
       forall x ck v0 le xrs,
-        In (x, ck) vars ->
-        wc_exp vars le ck ->
-        Forall (fun xr => In xr vars) xrs ->
-        wc_equation G vars (EqFby x ck v0 le xrs).
+        In (x, ck) Ω ->
+        wc_exp Ω le ck ->
+        Forall (fun xr => In xr Ω) xrs ->
+        wc_equation G Ω (EqFby x ck v0 le xrs).
 
   Definition wc_node (G: global) (n: node) : Prop :=
     wc_env (idck (n.(n_in))) /\
@@ -67,13 +70,8 @@ Module Type NLCLOCKING
     Forall (wc_equation G (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
            n.(n_eqs).
 
-  Inductive wc_global : global -> Prop :=
-  | wc_global_nil:
-      wc_global nil
-  | wc_global_cons: forall n ns,
-      wc_global ns ->
-      wc_node ns n ->
-      wc_global (n::ns).
+  Definition wc_global (G: global) :=
+    Forall' (fun ns => wc_node (Global G.(enums) ns)) G.(nodes).
 
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
@@ -83,7 +81,7 @@ Module Type NLCLOCKING
   | HcEqFby: forall x v0 ck le r,
       Has_clock_eq ck (EqFby x ck v0 le r).
 
-  Hint Constructors wc_clock wc_exp wc_cexp wc_equation wc_global : nlclocking.
+  Hint Constructors wc_clock wc_exp wc_cexp wc_equation : nlclocking.
   Hint Unfold wc_env wc_node : nlclocking.
   Hint Resolve Forall_nil : nlclocking.
 
@@ -121,53 +119,53 @@ Module Type NLCLOCKING
   Qed.
 
   Lemma wc_global_app_weaken:
-    forall G G',
-      wc_global (G' ++ G) ->
-      wc_global G.
+    forall G G' enums,
+      wc_global (Global enums (G' ++ G)) ->
+      wc_global (Global enums G).
   Proof.
     induction G'; auto.
     inversion_clear 1. auto.
   Qed.
 
   Lemma wc_find_node:
-    forall G f node,
-      wc_global G ->
-      find_node f G = Some node ->
+    forall G f node enums,
+      wc_global (Global enums G) ->
+      find_node f (Global enums G) = Some node ->
       exists G'' G',
-        G = G'' ++ node :: G' /\ wc_node G' node.
+        G = G'' ++ node :: G'
+        /\ wc_node (Global enums G') node.
   Proof.
     intros * WCG Hfind.
-    apply find_node_split in Hfind as (G'' & G' & HG).
+    apply find_node_split in Hfind as (G'' & G' & HG); simpl in HG.
     rewrite HG in *.
     apply wc_global_app_weaken in WCG.
     inversion_clear WCG. eauto.
   Qed.
 
   Lemma wc_equation_global_cons:
-    forall vars nd G eq,
-      Ordered_nodes (nd :: G) ->
-      wc_equation G vars eq ->
-      wc_equation (nd :: G) vars eq.
+    forall Ω nd G eq enums,
+      Ordered_nodes (Global enums (nd :: G)) ->
+      wc_equation (Global enums G) Ω eq ->
+      wc_equation (Global enums (nd :: G)) Ω eq.
   Proof.
     intros * OnG WCnG.
-    inversion_clear OnG as [|? ? OG ? HndG].
+    inversion_clear OnG as [|? ? [? HndG] OG].
     inversion_clear WCnG; eauto using wc_equation.
     econstructor; eauto.
-    simpl. destruct (ident_eqb nd.(n_name) f) eqn:Hf; auto.
-    apply ident_eqb_eq in Hf.
-    rewrite Hf in *.
-    assert (find_node f G <> None) as Hfind by congruence.
+    unfold find_node, option_map, find_unit; simpl.
+    destruct (ident_eq_dec (n_name nd) f); auto.
+    assert (find_node f (Global enums0 G) <> None) as Hfind by congruence.
     apply find_node_Exists in Hfind.
     apply decidable_Exists_not_Forall in Hfind.
-    - contradiction.
+    - subst; contradiction.
     - auto using decidable_eq_ident.
   Qed.
 
   Lemma wc_equation_global_app:
-    forall vars G' G eq,
-      Ordered_nodes (G' ++ G) ->
-      wc_equation G vars eq ->
-      wc_equation (G' ++ G) vars eq.
+    forall Ω G' G eq enums,
+      Ordered_nodes (Global enums (G' ++ G)) ->
+      wc_equation (Global enums G) Ω eq ->
+      wc_equation (Global enums (G' ++ G)) Ω eq.
   Proof.
     induction G'; auto.
     simpl. intros * OG WCeq.
@@ -175,29 +173,36 @@ Module Type NLCLOCKING
     inv OG. auto.
   Qed.
 
-  Lemma wc_find_node':
-    forall G f node,
-      Ordered_nodes G ->
-      wc_global G ->
-      find_node f G = Some node ->
-      wc_node G node.
+  Lemma wc_equation_enums_cons:
+    forall ns enums e Ω eq,
+      wc_equation (Global enums ns) Ω eq ->
+      wc_equation (Global (e :: enums) ns) Ω eq.
   Proof.
-    intros * OG WCG Hfind.
-    induction G as [|n' G IH]. discriminate.
-    simpl in *.
-    destruct (ident_eqb n'.(n_name) f) eqn:Heq.
-    - inv Hfind. inversion_clear WCG as [|? ? WCG' (WCi & WCo & WCv & WCeqs)].
-      constructor; repeat (try split; auto).
-      apply Forall_impl_In with (2:=WCeqs).
-      intros. apply wc_equation_global_cons; auto.
-    - assert (OG' := OG).
-      inversion_clear OG as [|? ? OG'' ? ?].
-      inversion_clear WCG as [|? ? WCG'].
-      specialize (IH OG'' WCG' Hfind).
-      destruct IH as (WCi & WCo & WCv & WCeqs).
-      repeat (try split; auto).
-      apply Forall_impl_In with (2:=WCeqs).
-      intros. apply wc_equation_global_cons; auto.
+    induction 1; eauto using wc_equation.
+    econstructor; eauto.
+    now rewrite find_node_enums_cons.
+  Qed.
+
+  Corollary wc_node_enums_cons:
+    forall ns enums e n,
+      wc_node (Global enums ns) n ->
+      wc_node (Global (e :: enums) ns) n.
+  Proof.
+    unfold wc_node; intuition.
+    apply Forall_forall; intros;
+      take (Forall _ _) and eapply Forall_forall in it; eauto.
+    now apply wc_equation_enums_cons.
+  Qed.
+
+  Corollary wc_global_enums_cons:
+    forall enums ns e,
+      wc_global (Global enums ns) ->
+      wc_global (Global (e :: enums) ns).
+  Proof.
+    unfold wc_global.
+    induction ns; simpl; intros * WC; inv WC; constructor.
+    - now apply wc_node_enums_cons.
+    - apply IHns; auto.
   Qed.
 
   (** Properties *)
@@ -206,13 +211,13 @@ Module Type NLCLOCKING
 
     (** We work under a (valid) clocking environment *)
     Variable G : global.
-    Variable vars : list (ident * clock).
-    Variable Hnd : NoDupMembers vars.
-    Variable Hwc : wc_env vars.
+    Variable Ω : list (ident * clock).
+    Variable Hnd : NoDupMembers Ω.
+    Variable Hwc : wc_env Ω.
 
     Lemma wc_equation_not_Is_free_in_clock:
       forall eq x ck,
-        wc_equation G vars eq
+        wc_equation G Ω eq
         -> Is_defined_in_eq x eq
         -> Has_clock_eq ck eq
         -> ~Is_free_in_clock x ck.
@@ -282,7 +287,7 @@ Module Type NLCLOCKING
 
     Corollary wc_EqDef_not_Is_free_in_clock:
       forall x ce ck,
-        wc_equation G vars (EqDef x ck ce)
+        wc_equation G Ω (EqDef x ck ce)
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x ce ck Hwce Hwt.
@@ -292,7 +297,7 @@ Module Type NLCLOCKING
 
     Corollary wc_EqApp_not_Is_free_in_clock:
       forall xs f le r ck,
-        wc_equation G vars (EqApp xs ck f le r)
+        wc_equation G Ω (EqApp xs ck f le r)
         -> forall x, List.In x xs -> ~Is_free_in_clock x ck.
     Proof.
       intros x f le ck Hwce Hwt y Hinx.
@@ -302,7 +307,7 @@ Module Type NLCLOCKING
 
     Corollary wc_EqFby_not_Is_free_in_clock:
       forall x v0 le ck r,
-        wc_equation G vars (EqFby x ck v0 le r)
+        wc_equation G Ω (EqFby x ck v0 le r)
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x v0 le ck Hwce Hwt.
@@ -315,14 +320,16 @@ Module Type NLCLOCKING
 End NLCLOCKING.
 
 Module NLClockingFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX       Op)
-       (Import Syn   : NLSYNTAX   Ids Op CESyn)
-       (Import Ord   : NLORDERED  Ids Op CESyn Syn)
-       (Import Mem   : MEMORIES   Ids Op CESyn Syn)
-       (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
-       (Import CEClo : CECLOCKING Ids Op CESyn)
-  <: NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEClo.
-  Include NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEClo.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX  Ids Op)
+       (Cks   : CLOCKS         Ids Op OpAux)
+       (CESyn : CESYNTAX       Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX   Ids Op OpAux Cks CESyn)
+       (Ord   : NLORDERED  Ids Op OpAux Cks CESyn Syn)
+       (Mem   : MEMORIES   Ids Op OpAux Cks CESyn Syn)
+       (IsD   : ISDEFINED  Ids Op OpAux Cks CESyn Syn Mem)
+       (CEClo : CECLOCKING Ids Op OpAux Cks CESyn)
+  <: NLCLOCKING Ids Op OpAux Cks CESyn Syn Ord Mem IsD CEClo.
+  Include NLCLOCKING Ids Op OpAux Cks CESyn Syn Ord Mem IsD CEClo.
 End NLClockingFun.

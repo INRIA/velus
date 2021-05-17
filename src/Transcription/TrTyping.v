@@ -27,26 +27,27 @@ Open Scope error_monad_scope.
 Module Type TRTYPING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (L           : LSYNTAX  Ids Op)
-       (LT          : LTYPING  Ids Op L)
-       (FNS         : UNNESTING Ids Op OpAux L)
-       (Import CE   : CESYNTAX     Op)
-       (CET         : CETYPING Ids Op CE)
-       (NL          : NLSYNTAX Ids Op CE)
-       (Ord         : NLORDERED Ids Op CE     NL)
-       (NLT         : NLTYPING  Ids Op CE NL Ord CET)
-       (Import TR   : TR Ids Op OpAux L CE NL).
+       (Import OpAux: OPERATORS_AUX Ids Op)
+       (Import Cks  : CLOCKS Ids Op OpAux)
+       (L           : LSYNTAX  Ids Op OpAux Cks)
+       (LT          : LTYPING  Ids Op OpAux Cks L)
+       (FNS         : UNNESTING Ids Op OpAux Cks L)
+       (Import CE   : CESYNTAX Ids Op OpAux Cks)
+       (CET         : CETYPING Ids Op OpAux Cks CE)
+       (NL          : NLSYNTAX Ids Op OpAux Cks CE)
+       (Ord         : NLORDERED Ids Op OpAux Cks CE     NL)
+       (NLT         : NLTYPING  Ids Op OpAux Cks CE NL Ord CET)
+       (Import TR   : TR Ids Op OpAux Cks L CE NL).
 
   Lemma wt_clock_l_ce :
-    forall vars ck,
-      LT.wt_clock vars ck -> CET.wt_clock vars ck.
+    forall enums vars ck,
+      LT.wt_clock enums vars ck -> CET.wt_clock enums vars ck.
   Proof.
     induction ck; intros * H; inv H; constructor; eauto.
   Qed.
 
-  Lemma typeof_lexp :
-    forall G vars e e' ty,
+  Lemma typeof_lexp {prefs} :
+    forall (G: @L.global prefs) vars e e' ty,
       to_lexp e = OK e' ->
       LT.wt_exp G vars e ->
       L.typeof e = [ty] ->
@@ -64,12 +65,12 @@ Module Type TRTYPING
       eauto.
   Qed.
 
-  Lemma typeofc_cexp :
-    forall G vars e e' ty,
+  Lemma typeofc_cexp {prefs} :
+    forall (G: @L.global prefs) vars e e' ty,
       to_cexp e = OK e' ->
       LT.wt_exp G vars e ->
       L.typeof e = [ty] ->
-      CET.typeofc e' = ty.
+      CE.typeofc e' = ty.
   Proof.
     intros * Htr Hwt Hty. revert dependent e'. revert dependent ty.
     induction e using L.exp_ind2; intros; inv Htr; inv Hty; simpl; auto.
@@ -81,39 +82,54 @@ Module Type TRTYPING
       rewrite app_nil_r in Ht.
       take ([_] = [_]) and inv it.
       simpl_Foralls. eauto using typeof_lexp.
-    - cases. monadInv H2. simpl_Foralls. inv Hwt.
-      simpl in *. take ([_] = [_]) and inv it.
-      rewrite app_nil_r in *. simpl_Foralls. eauto.
-    - cases. monadInv H2. simpl_Foralls. inv Hwt.
-      simpl in *. take ([_] = [_]) and inv it.
-      rewrite app_nil_r in *. simpl_Foralls. eauto.
+    - cases. monadInv H1. inv H2; auto.
+    - cases; monadInv H1; inv H2; simpl; auto.
   Qed.
 
-  Lemma wt_lexp :
-    forall G vars e e',
+  Lemma wt_constant {prefs} :
+    forall (G: @L.global prefs) vars e ty c,
+      to_constant e = OK c ->
+      LT.wt_exp G vars e ->
+      L.typeof e = [ty] ->
+      wt_const G.(L.enums) c ty.
+  Proof.
+    intros * Htr Hwt Hty.
+    induction e using L.exp_ind2; intros; inv Htr; inv Hwt;
+      simpl in *.
+    - inv Hty. constructor.
+    - inv Hty. constructor; auto.
+    - cases_eqn H1; subst.
+      simpl in Hty. rewrite app_nil_r in Hty.
+      apply Forall_singl in H8. apply Forall_singl in H; auto.
+  Qed.
+
+  Lemma wt_lexp {prefs} :
+    forall (G: @L.global prefs) vars e e',
       to_lexp e = OK e' ->
       LT.wt_exp G vars e ->
-      CET.wt_exp vars e'.
+      CET.wt_exp G.(L.enums) vars e'.
   Proof.
     intros * Htr Hwt. revert dependent e'.
     induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt.
+    - inv Htr. now constructor.
     - inv Htr. now constructor.
     - monadInv Htr. constructor; eauto. eapply typeof_lexp in EQ as ->; eauto.
     - monadInv Htr. constructor; eauto.
       eapply typeof_lexp in EQ as ->; eauto.
       eapply typeof_lexp in EQ1 as ->; eauto.
-    - inv Htr. cases. monadInv H1. inv H. inv H4. constructor; auto.
+    - inv Htr. cases. monadInv H1. inv H. inv H7. econstructor; eauto.
   Qed.
 
-  Lemma wt_cexp :
-    forall G vars e e',
+  Lemma wt_cexp {prefs} :
+    forall (G: @L.global prefs) vars e e',
       to_cexp e = OK e' ->
       LT.wt_exp G vars e ->
-      CET.wt_cexp vars e'.
+      CET.wt_cexp G.(L.enums) vars e'.
   Proof.
     intros * Htr Hwt. revert dependent e'.
     induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt.
     - inv Htr. now constructor.
+    - inv Htr. constructor; eauto.
     - monadInv Htr. constructor; eauto.
     - monadInv Htr. monadInv EQ. constructor.
       constructor; eauto using wt_lexp.
@@ -123,142 +139,104 @@ Module Type TRTYPING
       eapply typeof_lexp in EQ0 as ->; eauto.
       eapply typeof_lexp in EQ as ->; eauto.
     - monadInv Htr. cases. monadInv EQ.
-      constructor. simpl_Foralls. constructor; eauto using wt_lexp.
-    - inv Htr. cases_eqn Hb. monadInv H2. simpl_Foralls.
+      constructor. simpl_Foralls. econstructor; eauto using wt_lexp.
+    - inv Htr. cases_eqn Hb. monadInv H1.
       constructor; eauto.
-      do 2 take (L.typesof _ = _) and inv it.
-      rewrite app_nil_r in *.
-      erewrite 2 typeofc_cexp; eauto.
-    - inv Htr. cases_eqn Hb. monadInv H2. simpl_Foralls.
-      constructor; eauto using wt_lexp, typeof_lexp.
-      do 2 take (L.typesof _ = _) and inv it.
-      rewrite app_nil_r in *.
-      erewrite 2 typeofc_cexp; eauto.
+      + erewrite mmap_length; eauto.
+      + clear - H7 H8 EQ. revert dependent x.
+        induction es; intros; monadInv EQ; inv H7; inv H8; constructor; auto.
+        cases_eqn EQ0; subst. inv H1. simpl in H3; rewrite app_nil_r in H3.
+        eapply typeofc_cexp in EQ0; eauto.
+      + clear - H H7 EQ. revert dependent x.
+        induction es; intros; monadInv EQ; inv H; inv H7; constructor; auto.
+        cases_eqn EQ0; inv H1; inv H2; auto.
+    - inv Htr. destruct nck as (?&?), tys as [|? [|]]; monadInv H1.
+      econstructor; eauto.
+      + eapply wt_lexp in EQ; eauto.
+      + eapply typeof_lexp in EQ; eauto.
+      + erewrite mmap_length; eauto.
+      + clear - H8 H9 EQ1. revert dependent x0.
+        induction es; intros; monadInv EQ1; inv H8; inv H9; constructor; auto.
+        cases_eqn EQ; subst. inv H1. simpl in H3; rewrite app_nil_r in H3.
+        eapply typeofc_cexp in EQ; eauto.
+      + clear - H H8 EQ1. revert dependent x0.
+        induction es; intros; monadInv EQ1; inv H; inv H8; constructor; auto.
+        cases_eqn EQ; inv H1; inv H2; auto.
   Qed.
 
-  Lemma ty_lexp :
-    forall G env e e',
+  Lemma ty_lexp {prefs} :
+    forall (G: @L.global prefs) env e e',
       LT.wt_exp G env e ->
       to_lexp e = OK e' ->
       L.typeof e = [CE.typeof e'].
   Proof.
     induction e using L.exp_ind2; intros * Hwt Htr; inv Htr.
     - now simpl.
+    - now simpl.
     - destruct a. inv H0. now simpl.
     - destruct a. simpl. monadInv H0. now simpl.
     - destruct a. monadInv H0. now simpl.
-    - cases. inv H. simpl. inv Hwt. inv H8. inv H6. monadInv H1.
-      unfold L.typesof. unfold flat_map. simpl. rewrite app_nil_r.
-      now apply H3.
+    - cases. inv H. simpl. inv Hwt. inv H10. inv H5. monadInv H1.
+      unfold L.typesof. unfold flat_map. simpl. rewrite app_nil_r in H11.
+      eapply H3 in H2; eauto. congruence.
   Qed.
 
-  Lemma typeof_const :
-    forall G vars e e' ty,
-      to_constant e = OK e' ->
-      LT.wt_exp G vars e ->
-      L.typeof e = [ty] ->
-      type_const e' = ty.
+  Lemma wt_clock_of_suffix : forall enums vars lck cbase,
+      LT.wt_clock enums vars cbase ->
+      Forall (fun '(x, (ty, n)) => exists tn, ty = Tenum tn /\ In tn enums /\ In (x, ty) vars /\ n < snd tn) lck ->
+      LT.wt_clock enums vars (clock_of_suffix lck cbase).
   Proof.
-    induction e using L.exp_ind2; inversion 1; simpl; intros Hwt Hty.
-    - now inv Hty.
-    - cases. simpl_Foralls. inv H0. inv Hwt. simpl in Hty.
-      rewrite app_nil_r in *. simpl_Foralls. eauto.
+    induction lck as [|(?&?&?)]; intros * Hbase Hlck; simpl; auto.
+    inversion_clear Hlck as [|(?&?) ? Htn]; destruct Htn as ((?&?)&?&Henums&Hvars&Hinf); subst.
+    eapply IHlck; eauto. constructor; auto.
   Qed.
 
-  Lemma wt_clock_free:
-    forall vars ck,
-      (forall i, Is_free_in_clock i ck ->
-            In (i, bool_type) vars) <->
-      LT.wt_clock vars ck.
+  Lemma wt_suffix_of_clock : forall enums vars ck,
+      LT.wt_clock enums vars ck ->
+      Forall
+        (fun '(x, (ty, n)) => exists tn, ty = Tenum tn /\ In tn enums /\ In (x, ty) vars /\ n < snd tn)
+        (suffix_of_clock ck []).
   Proof.
-    split.
-    - intros * H. induction ck; constructor.
-      + apply H. constructor.
-      + apply IHck. intros. apply H. now constructor.
-    - intros * Hwt i Hfr. induction Hfr. now inv Hwt.
-      inv Hwt. inv Hfr; eauto.
+    intros *.
+    assert (Forall (fun '(x, (ty, n)) => exists tn , ty = Tenum tn /\ In tn enums /\ In (x, ty) vars /\ n < snd tn)
+                   (@nil (ident * (type * enumtag))))
+      as Hsuf by auto.
+    revert Hsuf. generalize (@nil (ident * (type * enumtag))).
+    induction ck; intros * Hsuf Hwt; inv Hwt; simpl.
+    - assumption.
+    - apply IHck; auto. constructor; eauto.
   Qed.
 
-  Lemma free_suffix_of_clock :
-    forall x ck,
-      InMembers x (suffix_of_clock ck []) ->
-      Is_free_in_clock x ck.
+  Lemma incl_common_suffix :
+    forall sfx1 sfx2,
+    incl (common_suffix sfx1 sfx2) sfx1.
   Proof.
-    induction ck; simpl. tauto.
-    intro Hmem.
-    setoid_rewrite <- app_nil_l in Hmem at 2.
-    rewrite suffix_of_clock_app, InMembers_app in Hmem. destruct Hmem.
-    - constructor; auto.
-    - simpl in H. intuition. subst. constructor.
-  Qed.
-
-  Lemma free_clock_of_suffix :
-    forall i ck sfx,
-      Is_free_in_clock i (clock_of_suffix sfx ck) ->
-      Is_free_in_clock i ck \/ InMembers i sfx.
-  Proof.
-    intros * Hfr. revert dependent ck.
-    induction sfx as [| []]; simpl; auto. intros.
-    specialize (IHsfx _ Hfr) as [Hd|]; auto.
-    inv Hd; auto.
-  Qed.
-
-  Lemma in_common_suffix :
-    forall x sfx1 sfx2,
-    InMembers x (common_suffix sfx1 sfx2) ->
-    InMembers x sfx1.
-  Proof.
-    intros * Hmem.
+    intros * ? Hmem.
     revert dependent sfx2. induction sfx1 as [|[]]; simpl; intros; auto.
     cases. inv Hmem; eauto.
   Qed.
 
-  Lemma split_fold :
-    forall i sfx sfxs,
-    InMembers i (fold_left common_suffix sfxs sfx) ->
-    InMembers i sfx \/ Exists (InMembers i) sfxs.
-  Proof.
-    intros * Hmem. revert dependent sfx.
-    induction sfxs; simpl; intros * Hmem; auto.
-    specialize (IHsfxs _ Hmem) as []; eauto using in_common_suffix.
-  Qed.
-
-  Lemma free_find_base_clock :
-    forall i lck,
-      Is_free_in_clock i (find_base_clock lck) ->
-      Exists (Is_free_in_clock i) lck.
-  Proof.
-    intros * Hfr.
-    unfold find_base_clock in Hfr. cases. induction lck; simpl in *.
-    - rewrite clock_of_suffix_of_clock in Hfr. now constructor.
-    - apply free_clock_of_suffix in Hfr as [Hfr | Hfr]; try inv Hfr.
-      rewrite <- fold_left_map in Hfr, IHlck.
-      apply split_fold in Hfr as [Hfr|Hfr];
-        eauto using free_suffix_of_clock, in_common_suffix.
-      right. right.
-      apply Exists_exists in Hfr as (?& Hin &?).
-      apply in_map_iff in Hin as (?&?&?). subst.
-      eapply Exists_exists; eauto using free_suffix_of_clock.
-  Qed.
-
   Lemma wt_find_base_clock :
-    forall vars lck,
-    Forall (LT.wt_clock vars) lck ->
-    LT.wt_clock vars (find_base_clock lck).
+    forall enums vars lck,
+    Forall (LT.wt_clock enums vars) lck ->
+    LT.wt_clock enums vars (find_base_clock lck).
   Proof.
-    intros * Hwt.
-    apply wt_clock_free. intros ? Hfr.
-    apply free_find_base_clock in Hfr.
-    apply Exists_exists in Hfr as (?& Hin & Hfr).
-    eapply Forall_forall in Hin; eauto.
-    eapply wt_clock_free in Hin; eauto.
+    unfold find_base_clock.
+    destruct lck; intros * Hwt; inv Hwt; simpl. constructor.
+    eapply wt_clock_of_suffix. constructor.
+    specialize (wt_suffix_of_clock _ _ _ H1).
+    generalize (suffix_of_clock c []).
+    induction lck; intros * Hsuff; simpl; auto.
+    inv H2. eapply IHlck; eauto.
+    specialize (wt_suffix_of_clock _ _ _ H3) as Hsuff'.
+    eapply Forall_incl; [|eapply incl_common_suffix; eauto]; eauto.
   Qed.
 
-  Lemma wt_clockof :
-    forall G vars e,
+  Lemma wt_clockof {prefs} :
+    forall (G: @L.global prefs) vars e,
       FNS.normalized_cexp e ->
       LT.wt_exp G vars e ->
-      Forall (LT.wt_clock vars) (L.clockof e).
+      Forall (LT.wt_clock G.(L.enums) vars) (L.clockof e).
   Proof.
     intros * Hnormed Hwt.
     eapply LT.wt_exp_clockof in Hwt.
@@ -267,29 +245,35 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_equation :
-    forall G P Hprefs env envo vars e e',
-      to_global G Hprefs = OK P ->
+    forall G P env envo vars e e',
+      to_global G = OK P ->
       to_equation env envo e = OK e' ->
-      (forall i ck, find_clock env i = OK ck -> LT.wt_clock vars ck) ->
+      LT.wt_global G ->
+      (forall i ck, find_clock env i = OK ck -> LT.wt_clock P.(NL.enums) vars ck) ->
       NoDup (fst e) ->
       FNS.unnested_equation G e ->
       LT.wt_equation G vars e ->
       NLT.wt_equation P vars e'.
   Proof.
-    intros ?????? [xs [|? []]] e' Hg Htr Henvs Hdup Hnormed (Hwt & Hf2);
+    intros ????? [xs [|? []]] e' Hg Htr HwtG Henvs Hdup Hnormed (Hwt & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *.
     - cases. monadInv Htr. inv Hf2. constructor; eauto using wt_clock_l_ce.
+    - cases. monadInv Htr. inv Hf2. apply Forall_singl in Hwt. inv Hwt.
+      repeat constructor; eauto using wt_clock_l_ce.
+      erewrite to_global_enums; eauto.
+    - cases. monadInv Htr. inv Hf2.
+      constructor; eauto using wt_clock_l_ce. inversion_clear Hwt as [|?? Wt].
+      inv Wt. repeat constructor. assumption.
     - cases. monadInv Htr. inv Hf2. monadInv EQ1. monadInv EQ0.
       constructor; eauto using wt_clock_l_ce. inversion_clear Hwt as [|?? Wt].
-      inv Wt. constructor. constructor. assumption.
-    - cases. monadInv Htr. inv Hf2. monadInv EQ1. monadInv EQ0.
-      constructor; eauto using wt_clock_l_ce. inversion_clear Hwt as [|?? Wt].
-      inv Wt. constructor. constructor; eauto using wt_lexp.
+      inv Wt. constructor. erewrite to_global_enums; eauto.
+      constructor; eauto using wt_lexp.
       eapply typeof_lexp in EQ1 as ->; eauto.
     - cases. monadInv Htr. inv Hf2. monadInv EQ1. monadInv EQ0.
       constructor; eauto using wt_clock_l_ce. inversion_clear Hwt as [|?? Wt].
-      inv Wt. constructor. constructor; eauto using wt_lexp.
+      inv Wt. constructor. erewrite to_global_enums; eauto.
+      constructor; eauto using wt_lexp.
       eapply typeof_lexp in EQ1 as ->; eauto.
       eapply typeof_lexp in EQ0 as ->; eauto.
     - remember (vars_of l1) as varsl1.
@@ -298,19 +282,22 @@ Module Type TRTYPING
       simpl_Foralls. take (LT.wt_exp _ _ _) and inv it. simpl_Foralls.
       simpl in *. rewrite app_nil_r in *.
       constructor; eauto.
-      + erewrite typeof_const; eauto. congruence.
-      + erewrite typeof_const; eauto. erewrite typeof_lexp with (ty:=y); eauto.
-        1,2:congruence.
+      + erewrite typeof_lexp with (ty:=y); eauto.
+        congruence.
+      + rewrite <-H2 in H8. erewrite typeof_lexp; eauto.
+        rewrite <-H2 in H9.
+        erewrite to_global_enums; eauto. eapply wt_constant; eauto.
       + eapply Henvs in EQ0. eapply wt_clock_l_ce; eauto.
-      + eapply wt_lexp; eauto.
+      + erewrite to_global_enums; eauto. eapply wt_lexp; eauto.
       + eapply Forall_map. eapply Forall2_ignore1 in Heqvarsl1.
         eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?&?); subst.
         eapply Forall_forall in H7; eauto. eapply Forall_forall in H10; eauto.
-        simpl in *. inv H10. inv H7; auto.
+        simpl in *. inv H10. inv H7; split; auto.
+        erewrite to_global_enums; eauto. inv HwtG; auto.
       + eapply Forall_map. eapply Forall2_ignore1 in Heqvarsl1.
         eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?&?); subst.
         eapply Forall_forall in H7; eauto. eapply Forall_forall in H10; eauto.
-        simpl in *. inv H10. inv H7; inv H12; auto using wt_clock_l_ce.
+        simpl in *. inv H10. inv H7; inv H12; erewrite to_global_enums; eauto using wt_clock_l_ce.
     - cases; monadInv Htr; monadInv EQ1; try discriminate.
     - cases; monadInv Htr; monadInv EQ1; try discriminate.
       monadInv EQ0.
@@ -319,48 +306,40 @@ Module Type TRTYPING
       rewrite app_nil_r in Ht.
       constructor; eauto using wt_clock_l_ce; simpl in *.
       + eapply typeof_lexp in EQ1 as ->; eauto.
-      + constructor. constructor; eauto using wt_lexp.
+      + constructor. erewrite to_global_enums; eauto.
+        econstructor; eauto using wt_lexp.
     - cases; monadInv Htr; monadInv EQ1; try discriminate.
       constructor; eauto using wt_clock_l_ce.
-      + rewrite app_nil_r in *. simpl in *. simpl_Foralls. inv H1.
-        simpl_Foralls.
-        do 2 take (L.typesof _ = _) and inv it.
-        rewrite app_nil_r in *.
-        erewrite typeofc_cexp; eauto.
-      + simpl_Foralls. take (LT.wt_exp _ _ _ ) and inv it. simpl_Foralls.
-        constructor; eauto using wt_cexp.
-        do 2 take (L.typesof _ = _) and inv it.
-        rewrite app_nil_r in *.
-        erewrite 2 typeofc_cexp; eauto.
-    - cases; monadInv Htr; monadInv EQ1; try discriminate. simpl_Foralls.
-      take (LT.wt_exp _ _ _) and inv it. simpl_Foralls.
+      + simpl_Foralls; auto.
+      + simpl_Foralls. erewrite to_global_enums; eauto.
+        eapply wt_cexp in H1; simpl; eauto.
+        rewrite EQ0; simpl; auto.
+    - destruct xs as [|? [|]], l0 as ([|? [|]]&?); monadInv Htr. simpl_Foralls.
       constructor; eauto using wt_clock_l_ce; simpl in *.
-      + rewrite app_nil_r in *.
-        erewrite typeofc_cexp; eauto.
-      + constructor; eauto using wt_cexp, wt_lexp.
-        erewrite typeof_lexp; eauto.
-        rewrite app_nil_r in *.
-        erewrite 2 typeofc_cexp; eauto.
+      + simpl_Foralls. eapply typeofc_cexp in H1; eauto.
+        2:simpl; eauto. congruence.
+      + simpl_Foralls. erewrite to_global_enums; eauto.
+        eapply wt_cexp in H1; simpl; eauto.
     - rewrite app_nil_r in Hf2.
       simpl_Foralls.
       take (LT.wt_exp _ _ _) and inv it;
-        eapply find_node_global in Hg as (?&?&?&?); eauto.
+        assert (Hg':=Hg); eapply find_node_global in Hg' as (?&?&?); eauto.
       monadInv Htr.
       destruct (vars_of l0) eqn:Vars; monadInv EQ0.
       eapply vars_of_spec in Vars.
       apply mmap_inversion in EQ.
-      econstructor; simpl; eauto.
+      econstructor; simpl; eauto; try erewrite to_global_enums; eauto.
       + erewrite <- (to_node_out n); eauto. rewrite Forall2_map_2 in Hf2.
         apply Forall2_forall. split.
         2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
-            congruence. }
-          intros ? (?&(?&?)) Hin.
+            rewrite it; auto. }
+        intros ? (?&(?&?)) Hin.
         eapply Forall2_chain_In in Hin; eauto.
         now destruct Hin as (?&?& <-).
       + erewrite <- (to_node_in n); eauto.
         clear - H3 H6 EQ.
         remember (L.n_in n). clear Heql0. revert dependent l0.
-        revert dependent x1.
+        revert dependent x0.
         induction l; intros; inv EQ; auto.
         inv H6; auto.
         simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
@@ -373,13 +352,14 @@ Module Type TRTYPING
         inv H3. inv H12. apply Forall_app.
         split; auto.
         apply wt_clockof in H5; auto.
-      + clear H5 H6 H9 Hnormed. revert dependent l. induction x1; intros; auto.
+      + clear H5 H6 H9 Hnormed. revert dependent l. induction x0; intros; auto.
         inv EQ. simpl_Foralls.
         constructor; eauto using wt_lexp.
       + eapply Forall_map. eapply Forall2_ignore1 in Vars.
         eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?&?); subst.
         eapply Forall_forall in H4; eauto. eapply Forall_forall in H8; eauto.
-        simpl in *. inv H8. inv H4; auto.
+        simpl in *. inv H8. inv H4; split; auto.
+        destruct HwtG as (?&_); auto.
       + eapply Forall_map. eapply Forall2_ignore1 in Vars.
         eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?&?); subst.
         eapply Forall_forall in H4; eauto. eapply Forall_forall in H8; eauto.
@@ -387,35 +367,36 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_clock_app :
-    forall ck l l',
-      LT.wt_clock l ck -> LT.wt_clock (l ++ l') ck.
+    forall enums ck l l',
+      LT.wt_clock enums l ck -> LT.wt_clock enums (l ++ l') ck.
   Proof.
     intros * Hwt.
-    induction ck; auto with ltyping.
-    constructor; inv Hwt; eauto using in_or_app.
+    eapply LT.wt_clock_incl; eauto.
+    apply incl_appl, incl_refl.
   Qed.
 
   Lemma wt_node :
-    forall G P n n' Hpref Hprefs,
-      to_node n Hpref = OK n' ->
-      to_global G Hprefs = OK P ->
+    forall G P n n',
+      to_node n = OK n' ->
+      to_global G = OK P ->
       FNS.unnested_node G n ->
+      LT.wt_global G ->
       LT.wt_node G n ->
       NLT.wt_node P n'.
   Proof.
-    intros * Htr Hg Hnormed (Wti& Wto & Wtv & Hwt).
+    intros * Htr Hg Hnormed HwtG (Wti& Wto & Wtv & Wte & Hwt).
     tonodeInv Htr. unfold NLT.wt_node. simpl.
-    pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
-    revert dependent x.
-    unfold FNS.unnested_node in Hnormed.
-    induction (L.n_eqs n); intros; monadInv Hmmap.
-    - now take (Coqlib.list_forall2 _ _ _) and inv it.
-    - take (Coqlib.list_forall2 _ _ _) and inv it.
-      inv Hwt. inv Hnormed. apply mmap_cons3 in Hmmap as [].
+    split.
+    - pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
+      revert dependent x.
+      unfold FNS.unnested_node in Hnormed.
+      induction (L.n_eqs n); intros; monadInv Hmmap; auto.
+      inv Hwt. inv Hnormed.
       simpl in Hdup. apply NoDup_app'_iff in Hdup as (?&?&?).
       constructor; auto. eapply wt_equation; eauto.
 
       intros i ck Hfind.
+      erewrite to_global_enums; eauto.
       unfold find_clock in Hfind.
       cases_eqn Hfind. inv Hfind.
       apply Env.find_env_from_list' in Hfind0 as [Hin|[? Hfind]].
@@ -430,21 +411,35 @@ Module Type TRTYPING
       simpl in Wt. setoid_rewrite Permutation_app_comm at 2.
       eapply wt_clock_app in Wt; eauto. unfold idty.
       rewrite app_assoc, map_app. eauto.
+    - erewrite to_global_enums; eauto.
+      clear - Wte. intros * Hin.
+      rewrite Forall_map in Wte. eapply Forall_forall in Wte; eauto.
+      destruct Wte; auto.
   Qed.
 
   Lemma wt_transcription :
-    forall G P Hprefs,
+    forall G P,
       FNS.unnested_global G ->
       LT.wt_global G ->
-      to_global G Hprefs = OK P ->
+      to_global G = OK P ->
       NLT.wt_global P.
   Proof.
-    induction G as [| n]. inversion 3. constructor.
-    intros * Hnormed Hwt Htr. monadInv Htr.
-    inversion_clear Hwt as [|???? Hf ]. inv Hnormed.
-    constructor; eauto using wt_node.
-    erewrite (to_node_name n x) in Hf; eauto.
-    clear - Hf EQ1. eapply to_global_names; eauto.
+    intros (?&nds) ? Hnormed (Hbool&Hwt). revert P.
+    induction nds as [| n]. inversion 1. constructor.
+    intros * Htr. monadInv Htr. monadInv EQ.
+    inversion_clear Hwt as [|?? (Hwt'&Hnames) Hf ].
+    inversion_clear Hnormed as [|?? (Hnormed'&?) ].
+    constructor; simpl in *.
+    - split.
+      + eapply wt_node; eauto. 2:constructor; auto.
+        unfold to_global; simpl; rewrite EQ; simpl; auto.
+      + erewrite to_node_name in Hnames; eauto.
+        replace x1 with (NL.Global enums x1).(NL.nodes) by auto.
+        eapply to_global_names with (G:=L.Global enums nds); eauto.
+        unfold to_global; simpl; rewrite EQ; simpl; auto.
+    - eapply IHnds in H0; eauto.
+      2:unfold to_global; simpl; erewrite EQ; simpl; auto.
+      auto.
   Qed.
 
 End TRTYPING.
@@ -452,16 +447,17 @@ End TRTYPING.
 Module TrTypingFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (OpAux: OPERATORS_AUX Op)
-       (L    : LSYNTAX  Ids Op)
-       (LT   : LTYPING  Ids Op L)
-       (FN   : UNNESTING Ids Op OpAux L)
-       (CE   : CESYNTAX     Op)
-       (CET  : CETYPING Ids Op CE)
-       (NL   : NLSYNTAX Ids Op CE)
-       (Ord  : NLORDERED Ids Op CE     NL)
-       (NLT  : NLTYPING  Ids Op CE NL Ord CET)
-       (TR   : TR Ids Op OpAux L CE NL)
-<: TRTYPING Ids Op OpAux L LT FN CE CET NL Ord NLT TR.
-  Include TRTYPING Ids Op OpAux L LT FN CE CET NL Ord NLT TR.
+       (OpAux: OPERATORS_AUX Ids Op)
+       (Cks  : CLOCKS Ids Op OpAux)
+       (L    : LSYNTAX  Ids Op OpAux Cks)
+       (LT   : LTYPING  Ids Op OpAux Cks L)
+       (FNS  : UNNESTING Ids Op OpAux Cks L)
+       (CE   : CESYNTAX Ids Op OpAux Cks)
+       (CET  : CETYPING Ids Op OpAux Cks CE)
+       (NL   : NLSYNTAX Ids Op OpAux Cks CE)
+       (Ord  : NLORDERED Ids Op OpAux Cks CE     NL)
+       (NLT  : NLTYPING  Ids Op OpAux Cks CE NL Ord CET)
+       (TR   : TR Ids Op OpAux Cks L CE NL)
+<: TRTYPING Ids Op OpAux Cks L LT FNS CE CET NL Ord NLT TR.
+  Include TRTYPING Ids Op OpAux Cks L LT FNS CE CET NL Ord NLT TR.
 End TrTypingFun.

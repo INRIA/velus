@@ -9,6 +9,7 @@ From Coq Require Import Morphisms.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import CommonList.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
@@ -22,12 +23,13 @@ From Velus Require Import CoindStreams.
 Module Type LSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : LSYNTAX   Ids Op)
-       (Import Lord  : LORDERED   Ids Op Syn)
-       (Import Str   : COINDSTREAMS   Op OpAux).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import Syn   : LSYNTAX       Ids Op OpAux Cks)
+       (Import Lord  : LORDERED      Ids Op OpAux Cks Syn)
+       (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
 
-  CoInductive fby1 : option val -> Stream value -> Stream value -> Stream bool -> Stream value -> Prop :=
+  CoInductive fby1 : option value -> Stream svalue -> Stream svalue -> Stream bool -> Stream svalue -> Prop :=
   | FbyRA: (* Reset while absent *)
       forall v xs ys rs zs,
         fby1 None xs ys rs zs ->
@@ -51,7 +53,7 @@ Module Type LSEMANTICS
 
   Definition fby := fby1 None.
 
-  CoInductive arrow1: bool -> Stream value -> Stream value -> Stream bool -> Stream value -> Prop :=
+  CoInductive arrow1: bool -> Stream svalue -> Stream svalue -> Stream bool -> Stream svalue -> Prop :=
   | ArrowRA:
       forall b xs ys rs zs,
       arrow1 true xs ys rs zs ->
@@ -76,15 +78,20 @@ Module Type LSEMANTICS
   Definition arrow := arrow1 true.
 
   Section NodeSemantics.
-
-    Variable G : global.
+    Context {prefs : PS.t}.
+    Variable G : @global prefs.
 
     Inductive sem_exp
-      : history -> Stream bool -> exp -> list (Stream value) -> Prop :=
+      : history -> Stream bool -> exp -> list (Stream svalue) -> Prop :=
     | Sconst:
         forall H b c cs,
           cs ≡ const b c ->
           sem_exp H b (Econst c) [cs]
+
+    | Senum:
+        forall H b k ty es,
+          es ≡ enum b k ->
+          sem_exp H b (Eenum k ty) [es]
 
     | Svar:
         forall H b x s ann,
@@ -133,20 +140,18 @@ Module Type LSEMANTICS
           sem_exp H b (Ewhen es x k lann) os
 
     | Smerge:
-        forall H b x s ets efs lann ts fs os,
+        forall H b x tx s es lann vs os,
           sem_var H x s ->
-          Forall2 (sem_exp H b) ets ts ->
-          Forall2 (sem_exp H b) efs fs ->
-          Forall3 (merge s) (concat ts) (concat fs) os ->
-          sem_exp H b (Emerge x ets efs lann) os
+          Forall2 (Forall2 (sem_exp H b)) es vs ->
+          Forall2Transpose (merge s) (List.map (@concat _) vs) os ->
+          sem_exp H b (Emerge (x, tx) es lann) os
 
-    | Site:
-        forall H b e s ets efs lann ts fs os,
+    | Scase:
+        forall H b e s es lann vs os,
           sem_exp H b e [s] ->
-          Forall2 (sem_exp H b) ets ts ->
-          Forall2 (sem_exp H b) efs fs ->
-          Forall3 (ite s) (concat ts) (concat fs) os ->
-          sem_exp H b (Eite e ets efs lann) os
+          Forall2 (Forall2 (sem_exp H b)) es vs ->
+          Forall2Transpose (case s) (List.map (@concat _) vs) os ->
+          sem_exp H b (Ecase e es lann) os
 
     | Sapp:
         forall H b f es er lann ss os rs bs,
@@ -163,7 +168,7 @@ Module Type LSEMANTICS
                Forall2 (sem_var H) xs (concat ss) ->
                sem_equation H b (xs, es)
 
-    with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
+    with sem_node: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop :=
       Snode:
         forall f ss os n H b,
           find_node f G = Some n ->
@@ -175,24 +180,25 @@ Module Type LSEMANTICS
 
   End NodeSemantics.
 
-  Definition sem_nodes (G: global) : Prop :=
-    Forall (fun n => exists xs ys, sem_node G n.(n_name) xs ys) G.
-
-  (* TODO: tidy up file *)
-
   (** Custom induction schemes *)
 
   Section sem_exp_ind2.
-    Variable G : global.
+    Context (prefs : PS.t).
+    Variable G : @global prefs.
 
-    Variable P_exp : history -> Stream bool -> exp -> list (Stream value) -> Prop.
+    Variable P_exp : history -> Stream bool -> exp -> list (Stream svalue) -> Prop.
     Variable P_equation : history -> Stream bool -> equation -> Prop.
-    Variable P_node : ident -> list (Stream value) -> list (Stream value) -> Prop.
+    Variable P_node : ident -> list (Stream svalue) -> list (Stream svalue) -> Prop.
 
     Hypothesis ConstCase:
       forall H b c cs,
         cs ≡ const b c ->
         P_exp H b (Econst c) [cs].
+
+    Hypothesis EnumCase:
+      forall H b k ty es,
+        es ≡ enum b k ->
+        P_exp H b (Eenum k ty) [es].
 
     Hypothesis VarCase:
       forall H b x s ann,
@@ -251,25 +257,21 @@ Module Type LSEMANTICS
         P_exp H b (Ewhen es x k lann) os.
 
     Hypothesis MergeCase:
-      forall H b x s ets efs lann ts fs os,
+      forall H b x tx s es lann vs os,
         sem_var H x s ->
-        Forall2 (sem_exp G H b) ets ts ->
-        Forall2 (P_exp H b) ets ts ->
-        Forall2 (sem_exp G H b) efs fs ->
-        Forall2 (P_exp H b) efs fs ->
-        Forall3 (merge s) (concat ts) (concat fs) os ->
-        P_exp H b (Emerge x ets efs lann) os.
+        Forall2 (Forall2 (sem_exp G H b)) es vs ->
+        Forall2 (Forall2 (P_exp H b)) es vs ->
+        Forall2Transpose (merge s) (List.map (@concat _) vs) os ->
+        P_exp H b (Emerge (x, tx) es lann) os.
 
-    Hypothesis IteCase:
-      forall H b e s ets efs lann ts fs os,
+    Hypothesis CaseCase:
+      forall H b e s es lann vs os,
         sem_exp G H b e [s] ->
         P_exp H b e [s] ->
-        Forall2 (sem_exp G H b) ets ts ->
-        Forall2 (P_exp H b) ets ts ->
-        Forall2 (sem_exp G H b) efs fs ->
-        Forall2 (P_exp H b) efs fs ->
-        Forall3 (ite s) (concat ts) (concat fs) os ->
-        P_exp H b (Eite e ets efs lann) os.
+        Forall2 (Forall2 (sem_exp G H b)) es vs ->
+        Forall2 (Forall2 (P_exp H b)) es vs ->
+        Forall2Transpose (case s) (List.map (@concat _) vs) os ->
+        P_exp H b (Ecase e es lann) os.
 
     Hypothesis AppCase:
       forall H b f es er lann ss os sr bs,
@@ -309,7 +311,7 @@ Module Type LSEMANTICS
       end.
 
     Fixpoint sem_exp_ind2
-             (H: history) (b: Stream bool) (e: exp) (ss: list (Stream value))
+             (H: history) (b: Stream bool) (e: exp) (ss: list (Stream svalue))
              (Sem: sem_exp G H b e ss)
              {struct Sem}
       : P_exp H b e ss
@@ -319,21 +321,24 @@ Module Type LSEMANTICS
            {struct Sem}
          : P_equation H b e
     with sem_node_ind2
-           (f: ident) (ss os: list (Stream value))
+           (f: ident) (ss os: list (Stream svalue))
            (Sem: sem_node G f ss os)
            {struct Sem}
          : P_node f ss os.
     Proof.
       - destruct Sem.
         + apply ConstCase; eauto.
+        + apply EnumCase; eauto.
         + apply VarCase; auto.
         + eapply UnopCase; eauto.
         + eapply BinopCase; eauto.
         + eapply FbyCase; eauto; clear H3 H4; SolveForall.
         + eapply ArrowCase; eauto; clear H3 H4; SolveForall.
         + eapply WhenCase; eauto; clear H2; SolveForall.
-        + eapply MergeCase; eauto; clear H3; SolveForall.
-        + eapply IteCase; eauto; clear H2; SolveForall.
+        + eapply MergeCase; eauto; clear H2; SolveForall.
+          constructor; auto. SolveForall.
+        + eapply CaseCase; eauto; clear H1; SolveForall.
+          constructor; auto. SolveForall.
         + eapply AppCase; eauto; clear H2 H3; SolveForall.
       - destruct Sem.
         eapply Equation with (ss:=ss); eauto; clear H1; SolveForall.
@@ -346,21 +351,21 @@ Module Type LSEMANTICS
 
   (** ** Properties of the [global] environment *)
 
-  Lemma sem_node_cons:
-    forall node G f xs ys,
-      Ordered_nodes (node::G)
-      -> sem_node (node::G) f xs ys
-      -> node.(n_name) <> f
-      -> sem_node G f xs ys.
+  Lemma sem_node_cons {prefs} :
+    forall (nd : @node prefs) nds enums f xs ys,
+      Ordered_nodes (Global enums (nd::nds))
+      -> sem_node (Global enums (nd::nds)) f xs ys
+      -> nd.(n_name) <> f
+      -> sem_node (Global enums nds) f xs ys.
   Proof.
-    intros node G f xs ys Hord Hsem Hnf.
+    intros * Hord Hsem Hnf.
     revert Hnf.
     induction Hsem using sem_node_ind2
-      with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation G bk H eq)
-           (P_exp := fun H bk e ss => ~ Is_node_in_exp node.(n_name) e
-                                   -> sem_exp G H bk e ss);
-      try (now econstructor; eauto).
+      with (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
+                                      -> sem_equation (Global enums0 nds) bk H eq)
+           (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
+                                   -> sem_exp (Global enums0 nds) H bk e ss);
+      try (now econstructor; eauto); intros.
     - econstructor; eauto. apply IHHsem.
       intro. destruct H3. constructor. auto.
     - econstructor; eauto.
@@ -380,15 +385,17 @@ Module Type LSEMANTICS
       apply H4; constructor. apply Exists_exists; eauto.
     - econstructor; eauto;
         (eapply Forall2_impl_In; [|eauto]; intros;
-         eapply H9; intro; apply H6;
-         constructor);
-        [left|right]; apply Exists_exists; eauto.
+         eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H10; intro; apply H4;
+         constructor;
+         do 2 (apply Exists_exists; repeat esplit; eauto)).
     - econstructor; eauto.
       eapply IHHsem.
-      2,3:(eapply Forall2_impl_In; [|eauto]; intros; eapply H9).
-      1-3:(intro; apply H6; constructor).
-      1:left; auto. 1:right;left. 2:right;right.
-      1,2:apply Exists_exists; eauto.
+      2:(eapply Forall2_impl_In; [|eauto]; intros;
+         eapply Forall2_impl_In; [|eauto]; intros; eapply H10).
+      1-2:(intro; apply H4; constructor; auto).
+      right.
+      1:do 2 (apply Exists_exists; repeat esplit; eauto).
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
@@ -403,8 +410,7 @@ Module Type LSEMANTICS
       constructor. apply H0. intro. destruct H3. now constructor.
       apply IHForall2. intro. destruct H3. unfold Is_node_in_eq.
       simpl. rewrite Exists_cons. right. auto.
-    - intro.
-      rewrite find_node_tl with (1:=Hnf) in H0.
+    - rewrite find_node_other with (1:=Hnf) in H0.
       eapply Snode; eauto.
       clear H3.
       eapply Forall_impl_In with (2:=H4).
@@ -415,20 +421,20 @@ Module Type LSEMANTICS
       auto.
   Qed.
 
-  Lemma sem_node_cons':
-    forall node G f xs ys,
-      Ordered_nodes (node::G)
-      -> sem_node G f xs ys
-      -> node.(n_name) <> f
-      -> sem_node (node::G) f xs ys.
+  Lemma sem_node_cons' {prefs} :
+    forall (nd : @node prefs) nds enums f xs ys,
+      Ordered_nodes (Global enums (nd::nds))
+      -> sem_node (Global enums nds) f xs ys
+      -> nd.(n_name) <> f
+      -> sem_node (Global enums (nd::nds)) f xs ys.
   Proof.
-    intros node G f xs ys Hord Hsem.
+    intros * Hord Hsem.
     induction Hsem using sem_node_ind2
-      with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation (node::G) bk H eq)
-           (P_exp := fun H bk e ss => ~ Is_node_in_exp node.(n_name) e
-                                   -> sem_exp (node::G) H bk e ss);
-      try (now econstructor; eauto).
+      with (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
+                                      -> sem_equation (Global enums0 (nd::nds)) bk H eq)
+           (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
+                                   -> sem_exp (Global enums0 (nd::nds)) H bk e ss);
+      try (now econstructor; eauto); intros.
     - econstructor; eauto. apply IHHsem.
       intro. destruct H3. constructor. auto.
     - econstructor; eauto.
@@ -446,17 +452,19 @@ Module Type LSEMANTICS
       eapply Forall2_impl_In; [|eauto]; intros.
       apply H7; intro contra.
       apply H4; constructor. apply Exists_exists; eauto.
-    - econstructor; eauto;
+   - econstructor; eauto;
         (eapply Forall2_impl_In; [|eauto]; intros;
-         eapply H9; intro; apply H6;
-         constructor);
-        [left|right]; apply Exists_exists; eauto.
+         eapply Forall2_impl_In; [|eauto]; intros;
+         eapply H10; intro; apply H4;
+         constructor;
+         do 2 (apply Exists_exists; repeat esplit; eauto)).
     - econstructor; eauto.
       eapply IHHsem.
-      2,3:(eapply Forall2_impl_In; [|eauto]; intros; eapply H9).
-      1-3:(intro; apply H6; constructor).
-      1:left; auto. 1:right;left. 2:right;right.
-      1,2:apply Exists_exists; eauto.
+      2:(eapply Forall2_impl_In; [|eauto]; intros;
+         eapply Forall2_impl_In; [|eauto]; intros; eapply H10).
+      1-2:(intro; apply H4; constructor; auto).
+      right.
+      1:do 2 (apply Exists_exists; repeat esplit; eauto).
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
@@ -471,10 +479,8 @@ Module Type LSEMANTICS
       constructor. apply H0. intro. destruct H3. now constructor.
       apply IHForall2. intro. destruct H3. unfold Is_node_in_eq.
       simpl. rewrite Exists_cons. right. auto.
-    - intro Hnf.
-      econstructor; eauto.
-      + simpl.
-        rewrite <- ident_eqb_neq in Hnf. rewrite Hnf; auto.
+    - econstructor; eauto.
+      + erewrite <-find_node_other in H0; eauto.
       + eapply Forall_impl_In; [| eauto].
         intros a HIn Hsem; simpl in Hsem.
         apply Hsem.
@@ -484,10 +490,10 @@ Module Type LSEMANTICS
         exists a; auto.
   Qed.
 
-  Corollary sem_node_cons_iff : forall n G f xs ys,
-      Ordered_nodes (n::G) ->
+  Corollary sem_node_cons_iff {prefs} : forall (n : @node prefs) nds enums f xs ys,
+      Ordered_nodes (Global enums (n::nds)) ->
       n_name n <> f ->
-      sem_node G f xs ys <-> sem_node (n::G) f xs ys.
+      sem_node (Global enums nds) f xs ys <-> sem_node (Global enums (n::nds)) f xs ys.
   Proof.
     intros * Hord Hname.
     split; intros Hsem.
@@ -495,12 +501,12 @@ Module Type LSEMANTICS
     - eapply sem_node_cons; eauto.
   Qed.
 
-  Lemma sem_equation_global_tl:
-    forall nd G H b eq,
-      Ordered_nodes (nd :: G) ->
+  Lemma sem_equation_global_tl {prefs} :
+    forall (nd : @node prefs) nds enums H b eq,
+      Ordered_nodes (Global enums (nd :: nds)) ->
       ~ Is_node_in_eq nd.(n_name) eq ->
-      sem_equation (nd :: G) H b eq ->
-      sem_equation G H b eq.
+      sem_equation (Global enums (nd :: nds)) H b eq ->
+      sem_equation (Global enums nds) H b eq.
   Proof.
     destruct eq as [ xs es ]. intros * Hord Hnin Hsem. inv Hsem.
 
@@ -561,19 +567,19 @@ Module Type LSEMANTICS
       inv H0. apply H4; eauto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
-      clear H5 H1 H10 H13 H14. induction H12; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
-      inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
-      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H8 H11.
+      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      do 2 (eapply Forall_forall in H0; eauto).
+      eapply H0; eauto.
+      contradict Hnin. inv Hnin; [left|right]; auto. constructor.
+      do 2 (eapply Exists_exists; repeat esplit; eauto).
     - econstructor; eauto. eapply IHx; eauto. SolveNin Hnin.
-      clear H5 H1 H10 H13 H14. induction H12; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
-      inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
-      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H8 H11.
+      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      do 2 (eapply Forall_forall in H0; eauto).
+      eapply H0; eauto.
+      contradict Hnin. inv Hnin; [left|right]; auto. constructor; right.
+      do 2 (eapply Exists_exists; repeat esplit; eauto).
     - econstructor; eauto.
       + clear H1 H12 H14. induction H10; auto. constructor.
         inv H0. apply H4; auto. SolveNin Hnin.
@@ -594,14 +600,14 @@ Module Type LSEMANTICS
       rewrite Exists_cons. right. auto.
   Qed.
 
-  Corollary Forall_sem_equation_global_tl:
-    forall nd G b H eqs,
-      Ordered_nodes (nd :: G)
+  Corollary Forall_sem_equation_global_tl {prefs}:
+    forall (nd : @node prefs) nds enums b H eqs,
+      Ordered_nodes (Global enums (nd :: nds))
       -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (nd :: G) H b) eqs
-      -> Forall (sem_equation G H b) eqs.
+      -> Forall (sem_equation (Global enums (nd :: nds)) H b) eqs
+      -> Forall (sem_equation (Global enums nds) H b) eqs.
   Proof.
-    intros nd G H b eqs Hord Hnini.
+    intros * Hord Hnini.
     apply Forall_impl_In.
     intros eq Hin Hsem.
     eapply sem_equation_global_tl; eauto.
@@ -609,12 +615,12 @@ Module Type LSEMANTICS
     apply Forall_forall with (1:=Hnini) (2:=Hin).
   Qed.
 
-  Lemma sem_equation_global_tl':
-    forall nd G H b eq,
-      Ordered_nodes (nd :: G) ->
+  Lemma sem_equation_global_tl' {prefs}:
+    forall (nd : @node prefs) nds enums H b eq,
+      Ordered_nodes (Global enums (nd :: nds)) ->
       ~ Is_node_in_eq nd.(n_name) eq ->
-      sem_equation G H b eq ->
-      sem_equation (nd :: G) H b eq.
+      sem_equation (Global enums nds) H b eq ->
+      sem_equation (Global enums (nd :: nds)) H b eq.
   Proof.
     destruct eq as [ xs es ]. intros * Hord Hnin Hsem. inv Hsem.
 
@@ -654,19 +660,19 @@ Module Type LSEMANTICS
       inv H0. apply H4; eauto. SolveNin Hnin.
       inv H0. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor; eauto.
-      clear H5 H1 H10 H13 H14. induction H12; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
-      inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
-      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H8 H11.
+      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      do 2 (eapply Forall_forall in H0; eauto).
+      eapply H0; eauto.
+      contradict Hnin. inv Hnin; [left|right]; auto. constructor.
+      do 2 (eapply Exists_exists; repeat esplit; eauto).
     - econstructor; eauto. eapply IHx; eauto. SolveNin Hnin.
-      clear H5 H1 H10 H13 H14. induction H12; auto. constructor.
-      inv H0. apply H4; auto. SolveNin Hnin.
-      inv H0. apply IHForall2; eauto. SolveNin Hnin.
-      clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
-      inv H1. apply H4; auto. SolveNin Hnin.
-      inv H1. apply IHForall2; eauto. SolveNin Hnin.
+      clear H5 H8 H11.
+      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      do 2 (eapply Forall_forall in H0; eauto).
+      eapply H0; eauto.
+      contradict Hnin. inv Hnin; [left|right]; auto. constructor; right.
+      do 2 (eapply Exists_exists; repeat esplit; eauto).
     - econstructor; eauto.
       + clear H1 H12 H14. induction H10; auto. constructor.
         inv H0. apply H4; auto. SolveNin Hnin.
@@ -687,14 +693,14 @@ Module Type LSEMANTICS
       rewrite Exists_cons. right. auto.
   Qed.
 
-  Corollary Forall_sem_equation_global_tl':
-    forall nd G b H eqs,
-      Ordered_nodes (nd :: G)
+  Corollary Forall_sem_equation_global_tl' {prefs}:
+    forall (nd : @node prefs) nds enums b H eqs,
+      Ordered_nodes (Global enums (nd :: nds))
       -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation G H b) eqs
-      -> Forall (sem_equation (nd :: G) H b) eqs.
+      -> Forall (sem_equation (Global enums nds) H b) eqs
+      -> Forall (sem_equation (Global enums (nd :: nds)) H b) eqs.
   Proof.
-    intros nd G H b eqs Hord Hnini.
+    intros * Hord Hnini.
     apply Forall_impl_In.
     intros eq Hin Hsem.
     eapply sem_equation_global_tl'; eauto.
@@ -703,7 +709,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism v : (fby1 v)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt bool ==> @EqSt svalue ==> Basics.impl
         as fby1_EqSt.
   Proof.
     revert v.
@@ -716,7 +722,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism : fby
-      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt bool ==> @EqSt svalue ==> Basics.impl
         as fby_EqSt.
   Proof.
     intros * Exs * Eys * Ers * Ezs H.
@@ -724,7 +730,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism b : (arrow1 b)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt bool ==> @EqSt svalue ==> Basics.impl
         as arrow1_EqSt.
   Proof.
     revert b.
@@ -737,7 +743,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism : arrow
-      with signature @EqSt value ==> @EqSt value ==> @EqSt bool ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt bool ==> @EqSt svalue ==> Basics.impl
         as arrow_EqSt.
   Proof.
     intros * Exs * Eys * Ers * Ezs H.
@@ -745,7 +751,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism k : (when k)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as when_EqSt.
   Proof.
     revert k.
@@ -755,42 +761,54 @@ Module Type LSEMANTICS
       inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
         try discriminate.
     + constructor; eapply Cofix; eauto.
-    + constructor. eapply Cofix; eauto. congruence.
-    + inv H3. inv H5. inv H. econstructor. eapply Cofix; eauto. congruence.
+    + inv H. inv H3. inv H5. constructor; auto. eapply Cofix; eauto.
+    + inv H. inv H2. inv H4. econstructor. eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism : merge
-      with signature @EqSt value ==> @EqSt value ==>
-                           @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
         as merge_EqSt.
   Proof.
     cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys zs zs' Ezs H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]], zs' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; inv Ezs; simpl in *;
+    intros cs cs' Ecs xs xs' Exs zs zs' Ezs H.
+    destruct cs' as [[]], zs' as [[]];
+      inv H; inv Ecs; inv Ezs; simpl in *;
         try discriminate.
-    + constructor; eapply Cofix; eauto.
-    + inv H. inv H4. inv H6. constructor. eapply Cofix; eauto.
-    + inv H. inv H2. inv H6. constructor. eapply Cofix; eauto.
+    - constructor.
+      + eapply Cofix; eauto. apply map_st_EqSt; auto.
+        intros * Eq. rewrite Eq. reflexivity.
+      + eapply Forall_EqSt; eauto.
+        intros ?? Heq ?. rewrite <-Heq; auto.
+    - inv H. inv H4. econstructor; eauto.
+      + eapply Cofix; eauto. apply map_st_EqSt; auto.
+        intros * Eq. rewrite Eq. reflexivity.
+      + rewrite <-Exs; eauto.
   Qed.
 
-  Add Parametric Morphism : ite
-      with signature @EqSt value ==> @EqSt value ==>
-                           @EqSt value ==> @EqSt value ==> Basics.impl
-        as ite_EqSt.
+  Add Parametric Morphism : case
+      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
+        as case_EqSt.
   Proof.
     cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys zs zs' Ezs H.
-    destruct cs' as [[]], xs' as [[]], ys' as [[]], zs' as [[]];
-      inv H; inv Ecs; inv Exs; inv Eys; inv Ezs; simpl in *;
+    intros cs cs' Ecs xs xs' Exs zs zs' Ezs H.
+    destruct cs' as [[]], zs' as [[]];
+      inv H; inv Ecs; inv Ezs; simpl in *;
         try discriminate.
-    + constructor; eapply Cofix; eauto.
-    + inv H. inv H2. inv H6. constructor; auto. eapply Cofix; eauto.
-    + inv H. inv H4. inv H6. constructor; auto. eapply Cofix; eauto.
+    - constructor.
+      + eapply Cofix; eauto. apply map_st_EqSt; auto.
+        intros * Eq. rewrite Eq. reflexivity.
+      + eapply Forall_EqSt; eauto.
+        intros ?? Heq ?. rewrite <-Heq; auto.
+    - inv H. inv H4. econstructor; eauto.
+      + eapply Cofix; eauto. apply map_st_EqSt; auto.
+        intros * Eq. rewrite Eq. reflexivity.
+      + eapply Forall_EqSt; eauto.
+        intros ?? Heq ?. rewrite <-Heq; auto.
+      + rewrite <-Exs; eauto.
   Qed.
 
   Add Parametric Morphism op t : (lift1 op t)
-      with signature @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as lift1_EqSt.
   Proof.
     cofix Cofix.
@@ -804,7 +822,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism op t1 t2 : (lift2 op t1 t2)
-      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as lift2_EqSt.
   Proof.
     cofix Cofix.
@@ -818,7 +836,7 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism : const
-      with signature @EqSt bool ==> eq ==> @EqSt value
+      with signature @EqSt bool ==> eq ==> @EqSt svalue
         as const_EqSt.
   Proof.
     cofix Cofix; intros b b' Eb.
@@ -826,8 +844,17 @@ Module Type LSEMANTICS
       constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
 
+  Add Parametric Morphism : enum
+      with signature @EqSt bool ==> eq ==> @EqSt svalue
+        as enum_EqSt.
+  Proof.
+    cofix Cofix; intros b b' Eb.
+    unfold_Stv b; unfold_Stv b';
+      constructor; inv Eb; simpl in *; try discriminate; auto.
+  Qed.
+
   Add Parametric Morphism H : (sem_var H)
-      with signature eq ==> @EqSt value ==> Basics.impl
+      with signature eq ==> @EqSt svalue ==> Basics.impl
         as sem_var_EqSt.
   Proof.
     intros x xs xs' E; intro Sem; inv Sem.
@@ -835,8 +862,8 @@ Module Type LSEMANTICS
     transitivity xs; auto; symmetry; auto.
   Qed.
 
-  Add Parametric Morphism G H : (sem_exp G H)
-      with signature @EqSt bool ==> eq ==> @EqSts value ==> Basics.impl
+  Add Parametric Morphism {prefs} (G : @global prefs) H : (sem_exp G H)
+      with signature @EqSt bool ==> eq ==> @EqSts svalue ==> Basics.impl
         as sem_exp_morph.
   Proof.
     intros b b' Eb e xs xs' Exs Sem.
@@ -844,6 +871,8 @@ Module Type LSEMANTICS
                               (P_equation := fun H b e => True)
                               (P_node := fun i xs ys => forall ys', EqSts ys ys' -> sem_node G i xs ys');
     auto; intros.
+    - inv Exs; take (Forall2 _ _ _) and inv it.
+      econstructor; rewrite <-Eb; etransitivity; eauto; now symmetry.
     - inv Exs; take (Forall2 _ _ _) and inv it.
       econstructor; rewrite <-Eb; etransitivity; eauto; now symmetry.
     - inv Exs; take (Forall2 _ _ _) and inv it.
@@ -880,18 +909,14 @@ Module Type LSEMANTICS
         intros * ?? Hs; apply Hs; auto; reflexivity.
       + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
-      + eapply Forall2_impl_In; [|apply H2].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H4].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall3_EqSt; eauto. solve_proper.
+      + do 2 (eapply Forall2_impl_In; [|eauto]; intros); simpl in *.
+        eapply H9; eauto. reflexivity.
+      + eapply Forall2Transpose_EqSt; eauto. solve_proper.
     - econstructor; eauto.
       + eapply IHSem; eauto. reflexivity.
-      + eapply Forall2_impl_In; [|apply H1].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H3].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall3_EqSt; eauto. solve_proper.
+      + do 2 (eapply Forall2_impl_In; [|eauto]; intros); simpl in *.
+        eapply H8; eauto. reflexivity.
+      + eapply Forall2Transpose_EqSt; eauto. solve_proper.
     - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H1].
         intros * ?? Hs; apply Hs; auto; reflexivity.
@@ -906,7 +931,7 @@ Module Type LSEMANTICS
       eapply Forall2_EqSt; eauto. solve_proper.
   Qed.
 
-  Add Parametric Morphism G H : (sem_equation G H)
+  Add Parametric Morphism {prefs} (G : @global prefs) H : (sem_equation G H)
       with signature @EqSt bool ==> eq ==> Basics.impl
         as sem_equation_morph.
   Proof.
@@ -916,8 +941,8 @@ Module Type LSEMANTICS
     now rewrite <- Exss.
   Qed.
 
-  Add Parametric Morphism G : (sem_node G)
-      with signature eq ==> @EqSts value ==> @EqSts value ==> Basics.impl
+  Add Parametric Morphism {prefs} (G : @global prefs) : (sem_node G)
+      with signature eq ==> @EqSts svalue ==> @EqSts svalue ==> Basics.impl
         as mod_sem_node_morph.
   Proof.
     unfold Basics.impl; intros f xss xss' Exss yss yss' Eyss Sem.
@@ -965,13 +990,14 @@ Module Type LSEMANTICS
   Qed.
 
   Hint Resolve nth_In.
-  Fact sem_exp_refines : forall G b e H H' v,
+  Fact sem_exp_refines {prefs} : forall (G : @global prefs) b e H H' v,
       Env.refines eq H H' ->
       sem_exp G H b e v ->
       sem_exp G H' b e v.
   Proof with eauto.
     induction e using exp_ind2; intros Hi Hi' v Href Hsem; inv Hsem.
     - (* const *) constructor...
+    - (* enum *) constructor...
     - (* var *)
       constructor. eapply sem_var_refines...
     - (* unop *) econstructor...
@@ -984,15 +1010,19 @@ Module Type LSEMANTICS
       econstructor; eauto; repeat rewrite_Forall_forall...
       eapply sem_var_refines...
     - (* merge *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
+      econstructor; eauto.
       eapply sem_var_refines...
+      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      do 2 (eapply Forall_forall in H; eauto).
     - (* ite *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
+      econstructor; eauto.
+      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      do 2 (eapply Forall_forall in H; eauto).
     - (* app *)
       econstructor; eauto; repeat rewrite_Forall_forall...
   Qed.
 
-  Fact sem_equation_refines : forall G H H' b equ,
+  Fact sem_equation_refines {prefs} : forall (G : @global prefs) H H' b equ,
       Env.refines eq H H' ->
       sem_equation G H b equ ->
       sem_equation G H' b equ.
@@ -1010,6 +1040,7 @@ Module Type LSEMANTICS
   (** ** Semantic refinement relation between nodes *)
 
   Section sem_ref.
+    Context {prefs1 prefs2 : PS.t}.
 
     (** We develop a notion of refinement over globals :
         [node_sem_refines G G' f] means that if [f] exists and has a given semantic in [G],
@@ -1017,20 +1048,20 @@ Module Type LSEMANTICS
         This is just a shorthand definition, but is useful when proving the correctness
         of transformation passes over the Lustre AST.
      *)
-    Definition node_sem_refines G G' f : Prop :=
+    Definition node_sem_refines (G : @global prefs1) (G' : @global prefs2) f : Prop :=
       (forall ins outs, (sem_node G f ins outs) -> (sem_node G' f ins outs)).
 
-    Fact node_sem_refines_refl : forall G f, node_sem_refines G G f.
-    Proof. intros G f ins outs. auto. Qed.
+    (* Fact node_sem_refines_refl : forall G f, node_sem_refines G G f. *)
+    (* Proof. intros G f ins outs. auto. Qed. *)
 
-    Fact node_sem_refines_trans : forall G1 G2 G3 f,
-        node_sem_refines G1 G2 f ->
-        node_sem_refines G2 G3 f ->
-        node_sem_refines G1 G3 f.
-    Proof.
-      intros G1 G2 G3 f H1 H2 ins outs Hsem.
-      auto.
-    Qed.
+    (* Fact node_sem_refines_trans : forall G1 G2 G3 f, *)
+    (*     node_sem_refines G1 G2 f -> *)
+    (*     node_sem_refines G2 G3 f -> *)
+    (*     node_sem_refines G1 G3 f. *)
+    (* Proof. *)
+    (*   intros G1 G2 G3 f H1 H2 ins outs Hsem. *)
+    (*   auto. *)
+    (* Qed. *)
 
     Definition global_sem_refines G G' : Prop :=
       forall f, node_sem_refines G G' f.
@@ -1043,9 +1074,19 @@ Module Type LSEMANTICS
     Proof with eauto.
       induction e using exp_ind2; intros vs Heq Hsem; inv Hsem;
         econstructor...
-      1-13:repeat rewrite_Forall_forall...
-      - (* app (reset) *)
-        intros k. specialize (H13 k).
+      1-7:repeat rewrite_Forall_forall...
+      - (* merge *)
+        do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+        do 2 (eapply Forall_forall in H0; eauto).
+      - (* case *)
+        do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+        do 2 (eapply Forall_forall in H0; eauto).
+      (* app *)
+      - eapply Forall2_impl_In; [|eauto]; intros.
+        eapply Forall_forall in H0; eauto.
+      - eapply Forall2_impl_In; [|eauto]; intros.
+        eapply Forall_forall in H1; eauto.
+      - intros k. specialize (H13 k).
         specialize (Heq f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) vs)).
         auto.
     Qed.
@@ -1062,34 +1103,34 @@ Module Type LSEMANTICS
       intros. eapply sem_ref_sem_exp; eauto.
     Qed.
 
-    Fact global_sem_ref_nil :
-      global_sem_refines [] [].
+    Fact global_sem_ref_nil : forall enums,
+      global_sem_refines (Global enums []) (Global enums []).
     Proof.
-      intros f ins outs Hsem. assumption.
+      intros * f ins outs Hsem.
+      exfalso. inv Hsem.
+      unfold find_node in H0; simpl in H0. inv H0.
     Qed.
 
-    Fact global_sem_ref_cons : forall G G' n n' f,
-        Ordered_nodes (n::G) ->
-        Ordered_nodes (n'::G') ->
+    Fact global_sem_ref_cons : forall enums nds nds' n n' f,
+        Ordered_nodes (Global enums (n::nds)) ->
+        Ordered_nodes (Global enums (n'::nds')) ->
         n_name n = f ->
         n_name n' = f ->
-        global_sem_refines G G' ->
-        node_sem_refines (n::G) (n'::G') f ->
-        global_sem_refines (n::G) (n'::G').
+        global_sem_refines (Global enums nds) (Global enums nds') ->
+        node_sem_refines (Global enums (n::nds)) (Global enums (n'::nds')) f ->
+        global_sem_refines (Global enums (n::nds)) (Global enums (n'::nds')).
     Proof with eauto.
-      intros G G' n n' f Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
+      intros * Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
       inv Hsem.
       simpl in H0.
-      destruct (ident_eqb (n_name n) f0) eqn:Heq.
+      destruct (ident_eq_dec (n_name n) f0); subst.
       + specialize (Hnode ins outs).
         inv H0.
-        rewrite ident_eqb_eq in Heq; subst.
         eapply Hnode.
-        eapply Snode with (n:=n0)...
-        simpl. rewrite ident_eqb_refl...
-      + rewrite ident_eqb_neq in Heq.
-        apply sem_node_cons'...
+        eapply Snode with (n1:=n0)...
+      + apply sem_node_cons'...
         specialize (Hglob f0 ins outs). apply Hglob.
+        rewrite find_node_other in H0; eauto.
         econstructor...
         rewrite Forall_forall in *. intros.
         eapply sem_equation_global_tl...
@@ -1101,148 +1142,156 @@ Module Type LSEMANTICS
 
   End sem_ref.
 
-  (** The number of streams generated by an expression [e] equals [numstreams e] *)
-  Fact sem_exp_numstreams : forall G H b e v,
-      wl_exp G e ->
-      sem_exp G H b e v ->
-      length v = numstreams e.
-  Proof with eauto.
-    induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
-    - (* fby *)
-      repeat rewrite_Forall_forall.
-      rewrite <- H13, <- H16.
-      unfold annots; rewrite flat_map_concat_map.
-      apply concat_length_eq.
-      rewrite Forall2_map_2.
-      rewrite_Forall_forall.
-      rewrite length_annot_numstreams. eapply H0.
-      + apply nth_In; congruence.
-      + apply H7. apply nth_In; congruence.
-      + eapply H10... congruence.
-    - (* arrow (reset) *)
-      repeat rewrite_Forall_forall.
-      rewrite <- H13, <- H16.
-      unfold annots; rewrite flat_map_concat_map.
-      apply concat_length_eq.
-      rewrite Forall2_map_2.
-      rewrite_Forall_forall.
-      rewrite length_annot_numstreams. eapply H0.
-      + apply nth_In; congruence.
-      + apply H7. apply nth_In; congruence.
-      + eapply H10... congruence.
-    - (* when *)
-      repeat rewrite_Forall_forall.
-      rewrite <- H1. rewrite <- H7.
-      unfold annots; rewrite flat_map_concat_map.
-      apply concat_length_eq.
-      rewrite Forall2_map_2.
-      rewrite_Forall_forall.
-      rewrite length_annot_numstreams. eapply H0; [| |eauto].
-      + apply nth_In; congruence.
-      + apply H4. apply nth_In; congruence.
-      + eapply H5... congruence.
-    - (* merge *)
-      repeat rewrite_Forall_forall.
-      rewrite <- H10. rewrite <- H11.
-      unfold annots; rewrite flat_map_concat_map.
-      apply concat_length_eq.
-      rewrite Forall2_map_2.
-      rewrite_Forall_forall.
-      rewrite length_annot_numstreams. eapply H0; [| |eauto].
-      + apply nth_In; congruence.
-      + apply H7. apply nth_In; congruence.
-      + eapply H5... congruence.
-    - (* ite *)
-      repeat rewrite_Forall_forall.
-      rewrite <- H11. rewrite <- H15.
-      unfold annots; rewrite flat_map_concat_map.
-      apply concat_length_eq.
-      rewrite Forall2_map_2.
-      rewrite_Forall_forall.
-      rewrite length_annot_numstreams. eapply H0; [| |eauto].
-      + apply nth_In; congruence.
-      + apply H7. apply nth_In; congruence.
-      + eapply H5... congruence.
-    - (* app (reset) *)
-      specialize (H13 0). inv H13.
-      repeat rewrite_Forall_forall.
-      rewrite H3 in H14; inv H14.
-      unfold idents in H5.
-      repeat rewrite map_length in *. congruence.
-  Qed.
+  Section props.
+    Context {prefs : PS.t}.
+    Variable (G : @global prefs).
 
-  Corollary sem_exps_numstreams : forall G H b es vs,
-      Forall (wl_exp G) es ->
-      Forall2 (sem_exp G H b) es vs ->
-      length (concat vs) = length (annots es).
-  Proof.
-    intros G H b es vs Hwt Hsem.
-    assert (Forall2 (fun v e => length v = numstreams e) vs es) as Hf.
-    { repeat rewrite_Forall_forall.
-      eapply sem_exp_numstreams.
-      + eapply Hwt. eapply nth_In. congruence.
-      + eapply H1; eauto. congruence. }
-    clear Hwt Hsem.
-    induction Hf; simpl.
-    - reflexivity.
-    - repeat rewrite app_length.
-      f_equal; auto.
-      rewrite length_annot_numstreams. assumption.
-  Qed.
+    (** The number of streams generated by an expression [e] equals [numstreams e] *)
 
-  (** When we have the semantic for the equations of a node,
+    Fact sem_exp_numstreams : forall H b e v,
+        wl_exp G e ->
+        sem_exp G H b e v ->
+        length v = numstreams e.
+    Proof with eauto.
+      induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
+      - (* fby *)
+        repeat rewrite_Forall_forall.
+        rewrite <- H13, <- H16.
+        unfold annots; rewrite flat_map_concat_map.
+        apply concat_length_eq.
+        rewrite Forall2_map_2.
+        rewrite_Forall_forall.
+        rewrite length_annot_numstreams. eapply H0.
+        + apply nth_In; congruence.
+        + apply H7. apply nth_In; congruence.
+        + eapply H10... congruence.
+      - (* arrow (reset) *)
+        repeat rewrite_Forall_forall.
+        rewrite <- H13, <- H16.
+        unfold annots; rewrite flat_map_concat_map.
+        apply concat_length_eq.
+        rewrite Forall2_map_2.
+        rewrite_Forall_forall.
+        rewrite length_annot_numstreams. eapply H0.
+        + apply nth_In; congruence.
+        + apply H7. apply nth_In; congruence.
+        + eapply H10... congruence.
+      - (* when *)
+        repeat rewrite_Forall_forall.
+        rewrite <- H1. rewrite <- H7.
+        unfold annots; rewrite flat_map_concat_map.
+        apply concat_length_eq.
+        rewrite Forall2_map_2.
+        rewrite_Forall_forall.
+        rewrite length_annot_numstreams. eapply H0; [| |eauto].
+        + apply nth_In; congruence.
+        + apply H4. apply nth_In; congruence.
+        + eapply H5... congruence.
+      - (* merge *)
+        eapply Forall2Transpose_length in H10; rewrite Forall_map in H10.
+        eapply Forall2_ignore2 in H9.
+        destruct es; try congruence.
+        inv H0. inv H6. inv H8. inv H9. destruct H8 as (?&Hin&Hsem).
+        eapply Forall_forall in H10; eauto. rewrite <-H10, <-H6.
+        unfold annots; rewrite flat_map_concat_map.
+        apply concat_length_eq.
+        rewrite Forall2_map_2, Forall2_swap_args.
+        eapply Forall2_impl_In; [|eauto]. intros.
+        rewrite length_annot_numstreams.
+        eapply Forall_forall in H3; [|eauto]. eapply Forall_forall in H2; [|eauto]. eauto.
+      - (* case *)
+        eapply Forall2Transpose_length in H10; rewrite Forall_map in H10.
+        eapply Forall2_ignore2 in H9.
+        destruct es; try congruence.
+        inv H0. inv H9. inv H11. inv H12. destruct H2 as (?&Hin&Hsem).
+        eapply Forall_forall in H10; eauto. rewrite <-H10, <-H11.
+        unfold annots; rewrite flat_map_concat_map.
+        apply concat_length_eq.
+        rewrite Forall2_map_2, Forall2_swap_args.
+        eapply Forall2_impl_In; [|eauto]. intros.
+        rewrite length_annot_numstreams.
+        eapply Forall_forall in H3; [|eauto]. eapply Forall_forall in H9; [|eauto]. eauto.
+      - (* app (reset) *)
+        specialize (H13 0). inv H13.
+        repeat rewrite_Forall_forall.
+        rewrite H3 in H14; inv H14.
+        unfold idents in H5.
+        repeat rewrite map_length in *. congruence.
+    Qed.
+
+    Corollary sem_exps_numstreams : forall H b es vs,
+        Forall (wl_exp G) es ->
+        Forall2 (sem_exp G H b) es vs ->
+        length (concat vs) = length (annots es).
+    Proof.
+      intros * Hwt Hsem.
+      assert (Forall2 (fun v e => length v = numstreams e) vs es) as Hf.
+      { repeat rewrite_Forall_forall.
+        eapply sem_exp_numstreams.
+        + eapply Hwt. eapply nth_In. congruence.
+        + eapply H1; eauto. congruence. }
+      clear Hwt Hsem.
+      induction Hf; simpl.
+      - reflexivity.
+      - repeat rewrite app_length.
+        f_equal; auto.
+        rewrite length_annot_numstreams. assumption.
+    Qed.
+
+    (** When we have the semantic for the equations of a node,
       we have a semantic for the internal variables, as well as the outputs *)
-  Lemma sem_node_sem_vars : forall G H b vars eqs outs,
-      Permutation (vars_defined eqs) (vars ++ outs) ->
-      Forall (sem_equation G H b) eqs ->
-      exists vs, Forall2 (sem_var H) vars vs.
-  Proof.
-    induction vars; intros * Hperm Hf.
-    - exists []; constructor.
-    - specialize (IHvars eqs (a::outs)); simpl in *.
-      rewrite Permutation_middle in Hperm.
-      specialize (IHvars Hperm Hf) as [vs Hsem].
-      symmetry in Hperm. eapply Permutation_in with (x:= a) in Hperm.
-      2: eapply in_or_app; right; left; auto.
-      unfold vars_defined in Hperm.
-      rewrite flat_map_concat_map, in_concat in Hperm; destruct Hperm as [l [Hin Hin']].
-      apply in_map_iff in Hin' as [l' [? Hin']]; subst.
-      eapply Forall_forall in Hin'; eauto. inv Hin'; simpl in Hin.
-      eapply Forall2_in_left in Hin as [v [_ Hsem']]; [|eauto].
-      exists (v::vs). constructor; auto.
-  Qed.
+    Lemma sem_node_sem_vars : forall H b vars eqs outs,
+        Permutation (vars_defined eqs) (vars ++ outs) ->
+        Forall (sem_equation G H b) eqs ->
+        exists vs, Forall2 (sem_var H) vars vs.
+    Proof.
+      induction vars; intros * Hperm Hf.
+      - exists []; constructor.
+      - specialize (IHvars eqs (a::outs)); simpl in *.
+        rewrite Permutation_middle in Hperm.
+        specialize (IHvars Hperm Hf) as [vs Hsem].
+        symmetry in Hperm. eapply Permutation_in with (x:= a) in Hperm.
+        2: eapply in_or_app; right; left; auto.
+        unfold vars_defined in Hperm.
+        rewrite flat_map_concat_map, in_concat in Hperm; destruct Hperm as [l [Hin Hin']].
+        apply in_map_iff in Hin' as [l' [? Hin']]; subst.
+        eapply Forall_forall in Hin'; eauto. inv Hin'; simpl in Hin.
+        eapply Forall2_in_left in Hin as [v [_ Hsem']]; [|eauto].
+        exists (v::vs). constructor; auto.
+    Qed.
 
-  Lemma sem_node_sem_outs : forall G H b outs eqs vars,
-      Permutation (vars_defined eqs) (vars ++ outs) ->
-      Forall (sem_equation G H b) eqs ->
-      exists vs, Forall2 (sem_var H) outs vs.
-  Proof.
-    induction outs; intros * Hperm Hf.
-    - exists []; constructor.
-    - specialize (IHouts eqs (a::vars)); simpl in *.
-      rewrite Permutation_middle in IHouts.
-      specialize (IHouts Hperm Hf) as [vs Hsem].
-      symmetry in Hperm. eapply Permutation_in with (x:= a) in Hperm.
-      2: eapply in_or_app; right; left; auto.
-      unfold vars_defined in Hperm.
-      rewrite flat_map_concat_map, in_concat in Hperm; destruct Hperm as [l [Hin Hin']].
-      apply in_map_iff in Hin' as [l' [? Hin']]; subst.
-      eapply Forall_forall in Hin'; eauto. inv Hin'; simpl in Hin.
-      eapply Forall2_in_left in Hin as [v [_ Hsem']]; [|eauto].
-      exists (v::vs). constructor; auto.
-  Qed.
+    Lemma sem_node_sem_outs : forall H b outs eqs vars,
+        Permutation (vars_defined eqs) (vars ++ outs) ->
+        Forall (sem_equation G H b) eqs ->
+        exists vs, Forall2 (sem_var H) outs vs.
+    Proof.
+      induction outs; intros * Hperm Hf.
+      - exists []; constructor.
+      - specialize (IHouts eqs (a::vars)); simpl in *.
+        rewrite Permutation_middle in IHouts.
+        specialize (IHouts Hperm Hf) as [vs Hsem].
+        symmetry in Hperm. eapply Permutation_in with (x:= a) in Hperm.
+        2: eapply in_or_app; right; left; auto.
+        unfold vars_defined in Hperm.
+        rewrite flat_map_concat_map, in_concat in Hperm; destruct Hperm as [l [Hin Hin']].
+        apply in_map_iff in Hin' as [l' [? Hin']]; subst.
+        eapply Forall_forall in Hin'; eauto. inv Hin'; simpl in Hin.
+        eapply Forall2_in_left in Hin as [v [_ Hsem']]; [|eauto].
+        exists (v::vs). constructor; auto.
+    Qed.
 
-  Corollary sem_node_sem_vars_outs : forall G H b vars outs eqs,
-      Permutation (vars_defined eqs) (idents (vars ++ outs)) ->
-      Forall (sem_equation G H b) eqs ->
-      (exists vs, Forall2 (sem_var H) (idents vars) vs) /\
-      (exists os, Forall2 (sem_var H) (idents outs) os).
-  Proof.
-    intros * Hperm Hf.
-    unfold idents in *; rewrite map_app in *; split.
-    - eapply sem_node_sem_vars; eauto.
-    - eapply sem_node_sem_outs; eauto.
-  Qed.
+    Corollary sem_node_sem_vars_outs : forall H b vars outs eqs,
+        Permutation (vars_defined eqs) (idents (vars ++ outs)) ->
+        Forall (sem_equation G H b) eqs ->
+        (exists vs, Forall2 (sem_var H) (idents vars) vs) /\
+        (exists os, Forall2 (sem_var H) (idents outs) os).
+    Proof.
+      intros * Hperm Hf.
+      unfold idents in *; rewrite map_app in *; split.
+      - eapply sem_node_sem_vars; eauto.
+      - eapply sem_node_sem_outs; eauto.
+    Qed.
+  End props.
 
   (** *** Alignement properties *)
 
@@ -1361,10 +1410,11 @@ End LSEMANTICS.
 Module LSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Syn   : LSYNTAX   Ids Op)
-       (Lord  : LORDERED  Ids Op Syn)
-       (Str   : COINDSTREAMS  Op OpAux)
-<: LSEMANTICS Ids Op OpAux Syn Lord Str.
-  Include LSEMANTICS Ids Op OpAux Syn Lord Str.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (Syn   : LSYNTAX       Ids Op OpAux Cks)
+       (Lord  : LORDERED      Ids Op OpAux Cks Syn)
+       (Str   : COINDSTREAMS  Ids Op OpAux Cks)
+<: LSEMANTICS Ids Op OpAux Cks Syn Lord Str.
+  Include LSEMANTICS Ids Op OpAux Cks Syn Lord Str.
 End LSemanticsFun.

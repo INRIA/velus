@@ -1,4 +1,5 @@
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -22,58 +23,61 @@ From Coq Require Import Morphisms.
 Module Type STCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : STCSYNTAX Ids Op CESyn)
-       (Import CETyp : CETYPING  Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS    Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+       (Import CETyp : CETYPING  Ids Op OpAux Cks CESyn).
 
-  Inductive wt_trconstr (P: program) (vars: list (ident * type)) (resets: list (ident * type)): trconstr -> Prop :=
+  Inductive wt_trconstr (P: program) (Γv: list (ident * type)) (Γm: list (ident * type)): trconstr -> Prop :=
   | wt_TcDef:
       forall x ck e,
-        In (x, typeofc e) vars ->
-        wt_clock (vars ++ resets) ck ->
-        wt_cexp (vars ++ resets) e ->
-        wt_trconstr P vars resets (TcDef x ck e)
-  | wt_TcReset:
-      forall x ckr c0,
-        In (x, type_const c0) resets ->
-        wt_clock (vars ++ resets) ckr ->
-        wt_trconstr P vars resets (TcReset x ckr c0)
+        In (x, typeofc e) Γv ->
+        wt_clock P.(enums) (Γv ++ Γm) ck ->
+        wt_cexp P.(enums) (Γv ++ Γm) e ->
+        wt_trconstr P Γv Γm (TcDef x ck e)
+  | wt_TcResetConst:
+      forall x ckr ty c0,
+        In (x, ty) Γm ->
+        wt_const P.(enums) c0 ty ->
+        wt_clock P.(enums) (Γv ++ Γm) ckr ->
+        wt_trconstr P Γv Γm (TcReset x ckr ty c0)
   | wt_TcNext:
       forall x ck ckrs e,
-        In (x, typeof e) resets ->
-        wt_clock (vars ++ resets) ck ->
-        wt_exp (vars ++ resets) e ->
-        wt_trconstr P vars resets (TcNext x ck ckrs e)
+        In (x, typeof e) Γm ->
+        wt_clock P.(enums) (Γv ++ Γm) ck ->
+        wt_exp P.(enums) (Γv ++ Γm) e ->
+        wt_trconstr P Γv Γm (TcNext x ck ckrs e)
   | wt_TcIReset:
       forall s ck f i P',
         find_system f P = Some (s, P') ->
-        wt_clock (vars ++ resets) ck ->
-        wt_trconstr P vars resets (TcInstReset i ck f)
-  | wt_TcStep:
-      forall s xs ck ckrs f es i P',
+        wt_clock P.(enums) (Γv ++ Γm) ck ->
+        wt_trconstr P Γv Γm (TcInstReset i ck f)
+  | wt_TcCall:
+      forall s xs ck rst f es i P',
         find_system f P = Some (s, P') ->
-        Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs s.(s_out) ->
+        Forall2 (fun x '(_, (t, _)) => In (x, t) Γv) xs s.(s_out) ->
         Forall2 (fun e '(_, (t, _)) => typeof e = t) es s.(s_in) ->
-        wt_clock (vars ++ resets) ck ->
-        Forall (wt_exp (vars ++ resets)) es ->
-        wt_trconstr P vars resets (TcStep i xs ck ckrs f es).
+        wt_clock P.(enums) (Γv ++ Γm) ck ->
+        Forall (wt_exp P.(enums) (Γv ++ Γm)) es ->
+        wt_trconstr P Γv Γm (TcStep i xs ck rst f es).
+
+  Definition wt_nexts (P: program) : list (ident * (const * type * clock)) -> Prop :=
+    Forall (fun '(_, (c, t, _)) => wt_const P.(enums) c t).
 
   Definition wt_system (P: program) (s: system) : Prop :=
-    Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
-                        (map (fun x => (fst x, type_const (fst (snd x)))) s.(s_nexts)))
-           s.(s_tcs).
+        Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
+                            (mems_of_nexts s.(s_nexts)))
+               s.(s_tcs)
+        /\ wt_nexts P s.(s_nexts)
+        /\ forall x tn,
+            In (x, Tenum tn) (idty (s_in s ++ s_vars s ++ s_out s)) ->
+            In tn P.(enums)
+            /\ 0 < snd tn.
 
-  Inductive wt_program : program -> Prop :=
-  | wtg_nil:
-      wt_program []
-  | wtg_cons:
-      forall s P,
-        wt_program P ->
-        wt_system P s ->
-        Forall (fun s' => s.(s_name) <> s'.(s_name))%type P ->
-        wt_program (s :: P).
+  Definition wt_program := CommonTyping.wt_program wt_system.
 
-  Hint Constructors wt_clock wt_exp wt_cexp wt_trconstr wt_program.
+  Hint Constructors wt_clock wt_exp wt_cexp wt_trconstr.
 
   Instance wt_trconstr_Proper:
     Proper (@eq program ==> @Permutation.Permutation (ident * type)
@@ -94,14 +98,17 @@ Module Type STCTYPING
           intros ? (?&(?&?)); rewrite Henv in *; auto.
   Qed.
 
+
 End STCTYPING.
 
 Module StcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : STCSYNTAX Ids Op CESyn)
-       (CETyp : CETYPING Ids Op CESyn)
-       <: STCTYPING Ids Op CESyn Syn CETyp.
-  Include STCTYPING Ids Op CESyn Syn CETyp.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS    Ids Op OpAux)
+       (CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX Ids Op OpAux Cks CESyn)
+       (CETyp : CETYPING  Ids Op OpAux Cks CESyn)
+       <: STCTYPING Ids Op OpAux Cks CESyn Syn CETyp.
+  Include STCTYPING Ids Op OpAux Cks CESyn Syn CETyp.
 End StcTypingFun.

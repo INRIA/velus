@@ -2,12 +2,14 @@ From Velus Require Import Stc.
 From Velus Require Import Obc.
 
 From Velus Require Import StcToObc.Translation.
-From Velus Require Import StcToObc.StcMemoryCorres.
+From Velus Require Import StcToObc.Stc2ObcTyping.
 
 From Velus Require Import VelusMemory.
 From Velus Require Import Common.
+From Velus Require Import CommonTyping.
 From Velus Require Import Environment.
 
+From Coq Require Import Lia.
 From Coq Require Import List.
 Import List.ListNotations.
 From Coq Require Import Setoid Morphisms.
@@ -16,17 +18,19 @@ Open Scope nat.
 Open Scope list.
 
 Module Type CORRECTNESS
-       (Import Ids    : IDS)
-       (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX       Op)
-       (Import Str    : INDEXEDSTREAMS      Op OpAux)
-       (Import CE     : COREEXPR        Ids Op OpAux Str)
-       (Import Stc    : STC             Ids Op OpAux Str CE)
-       (Import Obc    : OBC             Ids Op OpAux)
-       (Import Trans  : TRANSLATION     Ids Op OpAux     CE.Syn Stc.Syn Obc.Syn)
-       (Import Corres : STCMEMORYCORRES Ids Op OpAux Str CE.Syn Stc.Syn Stc.Reset Stc.Next).
+       (Import Ids      : IDS)
+       (Import Op       : OPERATORS)
+       (Import OpAux    : OPERATORS_AUX   Ids Op)
+       (Import ComTyp   : COMMONTYPING    Ids Op OpAux)
+       (Import Cks      : CLOCKS          Ids Op OpAux)
+       (Import Str      : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (Import CE       : COREEXPR        Ids Op OpAux ComTyp Cks Str)
+       (Import Stc      : STC             Ids Op OpAux ComTyp Cks Str CE)
+       (Import Obc      : OBC             Ids Op OpAux ComTyp)
+       (Import Trans    : TRANSLATION     Ids Op OpAux Cks CE.Syn Stc.Syn Obc.Syn)
+       (Import TransTyp : STC2OBCTYPING   Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans).
 
-  Inductive eq_if_present: value -> option val -> Prop :=
+  Inductive eq_if_present: svalue -> option value -> Prop :=
   | EqP:
       forall v,
         eq_if_present (present v) (Some v)
@@ -35,7 +39,7 @@ Module Type CORRECTNESS
         eq_if_present absent v.
   Hint Constructors eq_if_present.
 
-  Definition value_to_option (v: value) : option val :=
+  Definition value_to_option (v: svalue) : option value :=
     match v with
     | absent => None
     | present c => Some c
@@ -95,11 +99,10 @@ Module Type CORRECTNESS
   | IsCbase:
       Is_present_in mems me ve Cbase
   | IsCon:
-      forall ck x v b,
+      forall ck x b t,
         Is_present_in mems me ve ck ->
-        exp_eval me ve (tovar mems (x, bool_type)) (Some v) ->
-        val_to_bool v = Some b ->
-        Is_present_in mems me ve (Con ck x b).
+        exp_eval me ve (tovar mems (x, t)) (Some (Venum b)) ->
+        Is_present_in mems me ve (Con ck x (t, b)).
 
   Inductive Is_absent_in (mems: PS.t) (me: menv) (ve: venv): clock -> Prop :=
   | IsAbs1:
@@ -107,76 +110,15 @@ Module Type CORRECTNESS
         Is_absent_in mems me ve ck ->
         Is_absent_in mems me ve (Con ck x v)
   | IsAbs2:
-      forall ck x v b,
+      forall ck x b b' t,
         Is_present_in mems me ve ck ->
-        exp_eval me ve (tovar mems (x, bool_type)) (Some v) ->
-        val_to_bool v = Some b ->
-        Is_absent_in mems me ve (Con ck x (negb b)).
+        exp_eval me ve (tovar mems (x, t)) (Some (Venum b')) ->
+        b' <> b ->
+        Is_absent_in mems me ve (Con ck x (t, b)).
 
   Hint Constructors Is_present_in Is_absent_in.
 
-  Lemma stmt_eval_Control_fwd:
-    forall prog me ve mems ck s me' ve',
-      stmt_eval prog me ve (Control mems ck s) (me', ve') ->
-      (Is_present_in mems me ve ck
-       /\ stmt_eval prog me ve s (me', ve'))
-      \/
-      (Is_absent_in mems me ve ck
-       /\ me' = me /\ ve' = ve).
-  Proof.
-    intros * StEval.
-    revert dependent s.
-    induction ck; intuition.
-    simpl in *; cases; apply IHck in StEval as [[Hp Hs]|[Hp [Hmenv Henv]]];
-      intuition; inv Hs.
-    - cases; intuition; eauto.
-      chase_skip.
-      assert (true = negb false) as -> by reflexivity;
-        eauto.
-    - cases; intuition; eauto.
-      chase_skip.
-      assert (false = negb true) as -> by reflexivity;
-        eauto.
-  Qed.
-
-  (* Conjunction required for simultaneous induction. *)
-  Fact stmt_eval_Control:
-    forall prog mems me ve ck s,
-      (Is_absent_in mems me ve ck ->
-       stmt_eval prog me ve (Control mems ck s) (me, ve))
-      /\
-      (forall me' ve',
-          Is_present_in mems me ve ck ->
-          stmt_eval prog me ve s (me', ve') ->
-          stmt_eval prog me ve (Control mems ck s) (me', ve')).
-  Proof.
-    Hint Constructors stmt_eval.
-    intros; revert s; induction ck; split; auto.
-    - inversion 1.
-    - inversion_clear 1 as [??? Hp|???? Hp]; simpl;
-        cases; apply IHck with (1 := Hp); eauto.
-    - inversion_clear 1 as [|???? Hp]; simpl; intros;
-        cases; apply IHck with (1 := Hp); eauto.
-  Qed.
-
-  (** If the clock is absent, then the controlled statement evaluates as
-  a [Skip].  *)
-
-  Lemma stmt_eval_Control_absent:
-    forall prog mems me ve ck s,
-      Is_absent_in mems me ve ck ->
-      stmt_eval prog me ve (Control mems ck s) (me, ve).
-  Proof. apply stmt_eval_Control. Qed.
-
-  (** If the clock is present, then the controlled statement evaluates
-  as the underlying one.  *)
-
-  Lemma stmt_eval_Control_present:
-    forall prog mems me ve ck s me' ve',
-      Is_present_in mems me ve ck ->
-      stmt_eval prog me ve s (me', ve') ->
-      stmt_eval prog me ve (Control mems ck s) (me', ve').
-  Proof. apply stmt_eval_Control. Qed.
+  Arguments tovar: simpl never.
 
   Section ExprClock.
 
@@ -194,7 +136,10 @@ Module Type CORRECTNESS
       induction e; inversion_clear 1; simpl; intros; auto.
       - match goal with H: _ = _ |- _ => inv H end.
         econstructor; congruence.
-      - split_env_assumption; cases; try rewrite eq_if_present_present in *;
+      - match goal with H: _ = _ |- _ => inv H end.
+        econstructor; congruence.
+      - unfold tovar.
+        split_env_assumption; cases; try rewrite eq_if_present_present in *;
           eauto using exp_eval.
         take (Env.find _ _ = _) and rewrite <-it; constructor.
       - econstructor; eauto; now rewrite typeof_correct.
@@ -203,7 +148,7 @@ Module Type CORRECTNESS
     Hint Resolve exp_correct.
 
     Lemma arg_correct:
-      forall me ve mems cvars ck e c,
+      forall me ve cvars ck e c,
         exp_eval me ve (translate_exp mems e) (Some c) ->
         exp_eval me ve (translate_arg mems cvars ck e) (Some c).
     Proof.
@@ -211,7 +156,8 @@ Module Type CORRECTNESS
       unfold translate_arg.
       unfold var_on_base_clock.
       destruct e; auto; simpl in *.
-      destruct (PS.mem i mems0); simpl; auto.
+      unfold tovar in *.
+      destruct (PS.mem i mems); simpl; auto.
       inv Heval; cases.
       take (Env.find _ _ = _) and rewrite it; constructor; auto.
     Qed.
@@ -223,34 +169,40 @@ Module Type CORRECTNESS
         equiv_env (fun x => Is_free_in_cexp x e) R mems me ve ->
         stmt_eval prog me ve (translate_cexp mems x e) (me, Env.add x c ve).
     Proof.
-      induction e;
-        inversion 1 as [???? Hvar|???? Hvar| | | |];
+      induction e using cexp_ind2;
+        inversion 1 as [????????? Hvar|???? Hvar| | |];
         subst; simpl; intros; eauto using stmt_eval.
       - split_env_assumption.
         econstructor; eauto.
-        + unfold bool_var, tovar; cases; try rewrite eq_if_present_present in Hvar;
+        + unfold tovar; cases; try rewrite eq_if_present_present in Hvar;
             eauto using exp_eval.
           rewrite <-Hvar; constructor.
-        + apply val_to_bool_true.
-        + simpl; auto.
-      - split_env_assumption.
+        + erewrite map_nth_error; eauto.
+          rewrite nth_error_app3; eauto.
+        + apply Forall_app in H as [? H]; inversion_clear H as [|?? IH].
+          simpl; apply IH; auto.
+          weaken_equiv_env with (constructor; apply Exists_app; auto).
+      - take (Forall2 _ _ _) and apply Forall2_swap_args in it.
+        edestruct (@nth_error_Forall2 value) as (?&?&?); eauto.
         econstructor; eauto.
-        + unfold bool_var, tovar; cases; try rewrite eq_if_present_present in Hvar;
-            eauto using exp_eval.
-          rewrite <-Hvar; constructor.
-        + apply val_to_bool_false.
-        + simpl; auto.
-      - econstructor; eauto; cases.
+        + erewrite map_nth_error; eauto.
+        + simpl in *.
+          take (nth_error _ _ = _) and eapply nth_error_In in it.
+          pose proof it as Hin.
+          eapply Forall_forall in it; eauto; simpl in *.
+          destruct x0; simpl in *; apply it; auto;
+            weaken_equiv_env with (intros; eapply FreeEcase_branches, Exists_exists; eauto).
     Qed.
     Hint Resolve cexp_correct.
 
     Lemma clock_correct_true:
-      forall base ck,
+      forall enums Γ base ck,
+        wt_clock enums Γ ck ->
         equiv_env (fun x => Is_free_in_clock x ck) R mems me ve ->
         sem_clock_instant base R ck true ->
         Is_present_in mems me ve ck.
     Proof.
-      induction ck; eauto.
+      induction 1; eauto.
       inversion_clear 2; subst.
       econstructor; eauto.
       unfold tovar; split_env_assumption.
@@ -259,12 +211,13 @@ Module Type CORRECTNESS
     Qed.
 
     Lemma clock_correct_false:
-      forall ck,
+      forall enums Γ ck,
+        wt_clock enums Γ ck ->
         equiv_env (fun x => Is_free_in_clock x ck) R mems me ve ->
         sem_clock_instant true R ck false ->
         Is_absent_in mems me ve ck.
     Proof.
-      induction ck as [|?? x]; [now inversion 2|].
+      induction 1; [now inversion 2|].
       intro Henv.
       inversion_clear 1; auto.
       econstructor 2; eauto.
@@ -274,33 +227,133 @@ Module Type CORRECTNESS
         take (Env.find _ _ = _) and rewrite <-it; auto.
     Qed.
 
-    Variable ck: clock.
+  End ExprClock.
+
+  Lemma stmt_eval_Control_fwd:
+    forall prog enums Γ me ve mems ck s me' ve',
+      wt_clock enums Γ ck ->
+      stmt_eval prog me ve (Control mems ck s) (me', ve') ->
+      (Is_present_in mems me ve ck
+       /\ stmt_eval prog me ve s (me', ve'))
+      \/
+      (Is_absent_in mems me ve ck
+       /\ me' = me /\ ve' = ve).
+  Proof.
+    intros * WT StEval.
+    revert dependent s.
+    induction WT; intuition.
+    destruct tn.
+    simpl in *; apply IHWT in StEval as [[Hp Hs]|[Hp [Hmenv Henv]]];
+      intuition; inv Hs.
+    take (nth_error _ _ = _) and rewrite nth_error_skip_branches_with in it.
+    cases; inv it; simpl in *.
+    chase_skip; eauto.
+  Qed.
+
+  Section StmtEvalControl.
+
+    Variables (prog  : program)
+              (enums : list (ident * nat))
+              (Γ     : list (ident * type))
+              (insts : list (ident * ident))
+              (Γm    : list (ident * type))
+              (Γv    : list (ident * type))
+              (mems  : PS.t)
+              (me    : menv)
+              (ve    : venv)
+              (ck    : clock)
+              (s     : stmt).
+
+    Hypotheses (EnumsSpec   : enums = prog.(Obc.Syn.enums))
+               (TypeEnvSpec : type_env_spec Γ Γm Γv mems)
+               (WTmenv      : wt_env (values me) Γm)
+               (WTvenv      : wt_env ve Γv)
+               (WTck        : wt_clock enums Γ ck)
+               (WTs         : wt_stmt prog insts Γm Γv s).
+
+    (* Conjunction required for simultaneous induction. *)
+    Fact stmt_eval_Control:
+      (Is_absent_in mems me ve ck ->
+       stmt_eval prog me ve (Control mems ck s) (me, ve))
+      /\
+      (forall me' ve',
+          Is_present_in mems me ve ck ->
+          stmt_eval prog me ve s (me', ve') ->
+          stmt_eval prog me ve (Control mems ck s) (me', ve')).
+    Proof.
+      Hint Constructors stmt_eval.
+      (* intros * WTck WTs; *)
+      revert dependent s; clear s WTs.
+      induction ck; split; auto.
+      - inversion 1.
+      - pose proof (Control_wt _ _ _ _ _ _ EnumsSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
+        inv WTck; destruct tn.
+        inversion_clear 1 as [??? Hp|????? Hp]; simpl in *;
+          eapply Control_wt_inv in WTcontrol; eauto;
+            eapply IHc in Hp; eauto; simpl in *.
+        econstructor; eauto.
+        + rewrite nth_error_skip_branches_with.
+          inv WTcontrol.
+          take (wt_exp _ _ _ _) and eapply pres_sem_exp in it; eauto.
+          rewrite typeof_tovar in it; inv it; simpl in *.
+          destruct (Compare_dec.le_lt_dec n b'); try lia.
+          destruct (Nat.eq_dec b' c0); try contradiction; eauto.
+        + eauto.
+      - pose proof (Control_wt _ _ _ _ _ _ EnumsSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
+        inv WTck; destruct tn.
+        inversion_clear 1 as [|???? Hp]; simpl in *; intros.
+        eapply Control_wt_inv in WTcontrol; eauto;
+          eapply IHc in Hp; eauto; simpl in *.
+        econstructor; eauto.
+        + rewrite nth_error_skip_branches_with.
+          destruct (Compare_dec.le_lt_dec n c0); try lia.
+          destruct (Nat.eq_dec c0 c0); try contradiction; eauto.
+        + eauto.
+    Qed.
+
+    (** If the clock is absent, then the controlled statement evaluates as
+  a [Skip].  *)
+
+    Corollary stmt_eval_Control_absent:
+      Is_absent_in mems me ve ck ->
+      stmt_eval prog me ve (Control mems ck s) (me, ve).
+    Proof. apply stmt_eval_Control. Qed.
+
+    (** If the clock is present, then the controlled statement evaluates
+  as the underlying one.  *)
+
+    Corollary stmt_eval_Control_present:
+      forall me' ve',
+        Is_present_in mems me ve ck ->
+        stmt_eval prog me ve s (me', ve') ->
+        stmt_eval prog me ve (Control mems ck s) (me', ve').
+    Proof. apply stmt_eval_Control. Qed.
+
+    Variable (R : env).
     Hypothesis Equiv: equiv_env (fun x => Is_free_in_clock x ck) R mems me ve.
 
     Corollary stmt_eval_Control_absent':
-      forall prog s,
-        sem_clock_instant true R ck false ->
-        stmt_eval prog me ve (Control mems ck s) (me, ve).
+      sem_clock_instant true R ck false ->
+      stmt_eval prog me ve (Control mems ck s) (me, ve).
     Proof.
       intros; eapply stmt_eval_Control_absent, clock_correct_false; eauto.
     Qed.
 
     Corollary stmt_eval_Control_present':
-      forall base prog s me' ve',
+      forall base me' ve',
         sem_clock_instant base R ck true ->
         stmt_eval prog me ve s (me', ve') ->
         stmt_eval prog me ve (Control mems ck s) (me', ve').
     Proof.
-      intros; apply stmt_eval_Control_present; auto.
-      eapply clock_correct_true; eauto.
+      intros; eapply stmt_eval_Control_present; auto; eapply clock_correct_true; eauto.
     Qed.
 
-  End ExprClock.
+  End StmtEvalControl.
 
   (** Reset correctness *)
 
-  Definition add_mems (mems: list (ident * (const * clock))) (me: menv) : menv :=
-    Mem (fold_left (fun vs xc => Env.add (fst xc) (sem_const (fst (snd xc))) vs) mems (values me))
+  Definition add_mems (mems: list (ident * (const * type * clock))) (me: menv) : menv :=
+    Mem (fold_left (fun vs '(x, (c, t, ck)) => Env.add x (sem_const c) vs) mems (values me))
         (instances me).
 
   Lemma find_inst_add_mems:
@@ -309,8 +362,8 @@ Module Type CORRECTNESS
   Proof. reflexivity. Qed.
 
   Lemma add_mems_cons:
-    forall x c ck xs me,
-      add_mems ((x, (c, ck)) :: xs) me = add_mems xs (add_val x (sem_const c) me).
+    forall x c t ck xs me,
+      add_mems ((x, (c, t, ck)) :: xs) me = add_mems xs (add_val x (sem_const c) me).
   Proof. reflexivity. Qed.
 
   Lemma add_mems_nil:
@@ -319,25 +372,25 @@ Module Type CORRECTNESS
   Proof. destruct me; reflexivity. Qed.
 
   Lemma add_mems_gss:
-    forall x c ck xs me,
+    forall x c t ck xs me,
       ~ InMembers x xs ->
-      find_val x (add_mems ((x, (c, ck)) :: xs) me) = Some (sem_const c).
+      find_val x (add_mems ((x, (c, t, ck)) :: xs) me) = Some (sem_const c).
   Proof.
     intros * Notin; rewrite add_mems_cons.
-    revert me; induction xs as [|(?,(? & ?))]; intros.
+    revert me; induction xs as [|(?,((? & ?)& ?))]; intros.
     - now rewrite add_mems_nil, find_val_gss.
     - apply NotInMembers_cons in Notin as (? & ?).
       rewrite add_mems_cons, add_val_comm; auto.
   Qed.
 
   Lemma find_val_add_mems_in:
-    forall x c ck xs me,
+    forall x c t ck xs me,
       NoDupMembers xs ->
-      In (x, (c, ck)) xs ->
+      In (x, (c, t, ck)) xs ->
       find_val x (add_mems xs me) = Some (sem_const c).
   Proof.
     intros * Nodup Hin.
-    revert me; induction xs as [|(?,(? & ?))]; intros.
+    revert me; induction xs as [|(?,((? & ?)&?))]; intros.
     - inversion Hin.
     - inv Nodup.
       destruct Hin as [E|?].
@@ -349,19 +402,19 @@ Module Type CORRECTNESS
   Lemma find_val_add_mems_inv:
     forall x xs me v,
       find_val x (add_mems xs me) = Some v ->
-      (NoDupMembers xs -> InMembers x xs -> exists c ck, v = sem_const c /\ In (x, (c, ck)) xs)
+      (NoDupMembers xs -> InMembers x xs -> exists c t ck, v = sem_const c /\ In (x, (c, t, ck)) xs)
       /\
       (~ InMembers x xs -> find_val x me = Some v).
   Proof.
     intros * Find; split; [intros * Nodup Hin|intros * Hin].
-    - revert dependent me; induction xs as [|(x', (c, ck))]; intros;
+    - revert dependent me; induction xs as [|(x', ((c, t), ck))]; intros;
         inv Hin; inv Nodup.
       + rewrite add_mems_gss in Find; auto; inv Find.
-        exists c, ck; intuition.
+        exists c, t, ck; intuition.
       + rewrite add_mems_cons in Find.
-        edestruct IHxs as (?&?&?&?); eauto.
-        do 2 eexists; intuition; eauto; right; eauto.
-    - revert dependent me; induction xs as [|(x', (c', ck'))]; intros.
+        edestruct IHxs as (?&?&?&?&?); eauto.
+        do 3 eexists; intuition; eauto; right; eauto.
+    - revert dependent me; induction xs as [|(x', ((c', t'), ck'))]; intros.
       + now rewrite add_mems_nil in Find.
       + rewrite add_mems_cons in Find.
         apply NotInMembers_cons in Hin as (? & ?).
@@ -374,11 +427,11 @@ Module Type CORRECTNESS
       stmt_eval prog me ve (reset_mems mems) (add_mems mems me, ve).
   Proof.
     unfold reset_mems.
-    induction mems as [|(x, (c, ck))]; simpl; intros.
+    induction mems as [|(x, ((c, t), ck))]; simpl; intros.
     - rewrite add_mems_nil; eauto using stmt_eval.
     - rewrite stmt_eval_fold_left_lift; setoid_rewrite stmt_eval_eq_Comp_Skip1.
-      do 2 eexists; split; eauto using stmt_eval, exp_eval.
-      rewrite add_mems_cons; auto.
+      cases; do 2 eexists; split; eauto using stmt_eval, exp_eval;
+        rewrite add_mems_cons; auto.
   Qed.
 
   Lemma translate_reset_comp:
@@ -472,9 +525,9 @@ Module Type CORRECTNESS
       /\ rvs = [].
   Proof.
     intros * Find Rst.
-    apply find_system_translate in Find as (?&?& Find &?&?); subst.
+    apply find_unit_transform_units_forward in Find.
     inversion_clear Rst as [??????????? Find' Find_m ? StEval Ret].
-    rewrite Find in Find'; inv Find'.
+    setoid_rewrite Find in Find'; inv Find'.
     rewrite exists_reset_method in Find_m; inv Find_m; simpl in *.
     inv Ret; intuition.
     rewrite Env.adds_opt_nil_nil in StEval.
@@ -661,16 +714,16 @@ Module Type CORRECTNESS
       exists me',
         stmt_call_eval (translate P) me f reset [] me' [].
   Proof.
-    induction P as [|system]; try now inversion 2.
+    intros (?& P); induction P as [|system]; try now inversion 2.
     intros * Ord Find.
     pose proof Find as Find';
-      apply find_system_translate in Find' as (?&?& Find' &?&?); subst.
-    simpl in Find; destruct (ident_eqb (s_name system) f) eqn: E.
+      apply find_unit_transform_units_forward in Find'.
+    eapply find_unit_cons in Find as [[E Find]|[E Find]]; simpl in *; eauto.
     - inv Find.
       edestruct reset_insts_exists; eauto using Ordered_systems.
       + inv Ord; eauto.
       + eapply Ordered_systems_find_In_systems; eauto.
-        simpl; now rewrite ident_eqb_refl.
+        eapply find_unit_cons; simpl; eauto.
       + eexists; econstructor; eauto.
         * apply exists_reset_method.
         * simpl; auto.
@@ -678,10 +731,9 @@ Module Type CORRECTNESS
           apply translate_reset_comp; split; eauto.
           apply reset_mems_spec.
         * simpl; auto.
-    - simpl; inv Ord.
+    - unfold translate; simpl; inv Ord.
       edestruct IHP; eauto.
       eexists; rewrite stmt_call_eval_cons; eauto.
-      apply ident_eqb_neq in E; auto.
   Qed.
 
  Theorem reset_spec:
@@ -752,10 +804,13 @@ Module Type CORRECTNESS
   Qed.
 
   Definition correct_system (P: Stc.Syn.program) (f: ident) : Prop :=
-    forall S xs ys S' me ins,
+    forall S xs ys S' me ins s P',
       sem_system P f S xs ys S' ->
+      find_system f P = Some (s, P') ->
       Forall2 eq_if_present xs ins ->
       Exists (fun v => v <> absent) xs ->
+      wt_memory S P' (mems_of_nexts (s_nexts s)) (s_subs s) ->
+      Forall2 (fun xt vo => wt_option_value vo (fst (snd xt))) (s_in s) ins ->
       me ≋ S ->
       exists me',
         stmt_call_eval (translate P) me f step ins me' (map value_to_option ys)
@@ -778,8 +833,9 @@ Module Type CORRECTNESS
       exists v, exp_eval me ve (translate_exp mems e) v.
   Proof.
     induction e; simpl;
-      intros v nck ck lck Hcm EqEnv Hnoo Hwc Hinst Hbck He Hlck Hmems; eauto.
+      intros v1 nck ck lck Hcm EqEnv Hnoo Hwc Hinst Hbck He Hlck Hmems; eauto.
     - (* Variables always evaluate (even if it is to None) *)
+      unfold tovar.
       destruct (PS.mem i mems) eqn:Himems; eauto.
       rewrite PS.mem_spec in Himems.
       apply Hmems in Himems.
@@ -876,7 +932,7 @@ Module Type CORRECTNESS
         match goal with H:context [sub ?i] |- _ =>
                         destruct (sub i) eqn:Hisub; try discriminate end.
         injection Hinst; intro; subst lck.
-        inversion_clear WClck as [|? ? ? Hicks| | |].
+        inversion_clear WClck as [| |? ? ? Hicks| | |].
         simpl in Hv'; destruct (PS.mem i0 mems) eqn: E.
         * unfold translate_arg, var_on_base_clock; simpl; rewrite E; simpl; auto.
         *{ apply Hcvars in Hicks.
@@ -887,86 +943,219 @@ Module Type CORRECTNESS
     - exists (Some c); simpl; split; eauto using arg_correct, exp_correct.
   Qed.
 
-  Lemma reset_or_not_reset_dec :
-    forall P b R S I S' x tcs,
-      Forall (sem_trconstr P b R S I S') tcs ->
-      (forall ck, Is_reset_in x ck tcs -> sem_clock_instant b R ck false) \/
-      (exists ck, Is_reset_in x ck tcs /\ sem_clock_instant b R ck true).
+  Lemma stmt_eval_translate_cexp_menv_inv:
+    forall prog me ve mems x me' ve' e,
+      stmt_eval prog me ve (translate_cexp mems x e) (me', ve') ->
+      me' = me.
   Proof.
-    induction tcs; intros * Sems; inv Sems.
-    - left. intros ? Hin. inv Hin.
-    - specialize (IHtcs H2) as [NotReset|(ck&Reset&Clock)].
-      + inv H1.
-        1-5:setoid_rewrite Is_reset_in_reflect; simpl.
-        2:destruct (ident_eqb x x0); simpl.
-        2:setoid_rewrite Bool.orb_true_iff; setoid_rewrite clock_eq_spec.
-        1-6:setoid_rewrite <-Is_reset_in_reflect; auto.
-        destruct r; eauto.
-        left. intros ck' [?|?]; subst; eauto.
-      + right. exists ck; split; auto. right; auto.
+    induction e using cexp_ind2; simpl; inversion_clear 1; auto;
+      take (nth_error _ _ = _) and apply map_nth_error_inv in it as (oe & Hin & ?);
+      eauto; subst; eapply nth_error_In, Forall_forall in Hin; eauto; auto.
   Qed.
 
-  Lemma ireset_or_not_ireset_dec :
-    forall P b R S I S' i tcs,
-      Forall (sem_trconstr P b R S I S') tcs ->
-      (forall ck, Is_ireset_in i ck tcs -> sem_clock_instant b R ck false) \/
-      (exists ck, Is_ireset_in i ck tcs /\ sem_clock_instant b R ck true).
+  Lemma stmt_eval_translate_cexp_venv_inv:
+    forall prog me ve mems x me' ve' e,
+      stmt_eval prog me ve (translate_cexp mems x e) (me', ve') ->
+      exists c, ve' = Env.add x c ve.
   Proof.
-    induction tcs; intros * Sems; inv Sems.
-    - left. intros ? Hin. inv Hin.
-    - specialize (IHtcs H2) as [NotReset|(ck&Reset&Clock)].
-      + inv H1.
-        1-5:setoid_rewrite Is_ireset_in_reflect; simpl.
-        4:destruct (ident_eqb i i0); simpl.
-        4:setoid_rewrite Bool.orb_true_iff; setoid_rewrite clock_eq_spec.
-        1-6:setoid_rewrite <-Is_ireset_in_reflect; auto.
-        destruct r; eauto.
-        left. intros ck' [?|?]; subst; eauto.
-      + right. exists ck; split; auto. right; auto.
+    induction e using cexp_ind2; simpl; inversion_clear 1; eauto;
+      take (nth_error _ _ = _) and apply map_nth_error_inv in it as (oe & Hin & ?);
+      eauto; subst; eapply nth_error_In, Forall_forall in Hin; eauto; auto.
   Qed.
 
-  Lemma trconstr_cons_correct:
-    forall tc tcs P R S I S' me ve inputs mems icks clkvars,
-      correct_program P ->
-      sem_trconstr P true R S I S' tc ->
-      Forall (sem_trconstr P true R S I S') tcs ->
-      wc_trconstr P icks tc ->
-      normal_args_tc P tc ->
-      Ordered_systems P ->
-      Is_well_sch inputs mems (tc :: tcs) ->
-      NoDup (inputs ++ variables (tc :: tcs)) ->
-      NoDupMembers (steps_of (tc :: tcs)) ->
-      reset_consistency (tc :: tcs) ->
-      ireset_consistency (tc :: tcs) ->
-      reset_clocks_have_sem true R (tc :: tcs) ->
-      ireset_clocks_have_sem true R (tc :: tcs) ->
-      (forall i f Si, In (i, f) (iresets_of (tc :: tcs)) -> find_inst i S = Some Si -> state_closed P f Si) ->
-      (forall i f Ii, In (i, f) (iresets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
-      Memory_Corres R tcs S I S' me ->
-      equiv_env (fun x => Is_free_in_tc x tc) R mems me ve ->
-      sem_clocked_vars_instant true R icks ->
-      (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
-      (forall x, PS.In x mems -> find_val x me <> None) ->
-      (forall x, ~ In x inputs -> ~ Is_variable_in x tcs -> Env.find x ve = None) ->
-      exists me' ve',
-        stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve')
-        /\ Memory_Corres R (tc :: tcs) S I S' me'
-        /\ forall x v,
-            Is_variable_in_tc x tc ->
-            sem_var_instant R x v ->
-            Env.find x ve' = value_to_option v.
+  Lemma not_Is_defined_in_tc_stmt_eval_menv_inv:
+    forall tc x P Γv Γm me ve mems clkvars me' ve',
+      wt_trconstr P Γv Γm tc ->
+      ~ (exists ck, Is_reset_in_tc x ck tc) ->
+      ~ Is_next_in_tc x tc ->
+      stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve') ->
+      find_val x me' = find_val x me.
   Proof.
-    intros * IH Sem Sems Hwc Hnormal Ord Wsch Vars Calls Resets StepReset ResetCks IResetCks
-                Closed TransClosed Corres Equiv Hcm Hcvars Hmems Hve.
+    destruct tc; simpl; intros ?????????? WT NIsReset NIsNext StEval;
+      inv WT; try (take (wt_const _ _ _) and inv it);
+        eapply stmt_eval_Control_fwd in StEval; eauto;
+          destruct StEval as [(?& StEval)|(?&?&?)]; try congruence.
+    - now apply stmt_eval_translate_cexp_menv_inv in StEval as ->.
+    - inv StEval.
+      apply not_Is_reset_in_tc_TcReset in NIsReset.
+      rewrite find_val_gso; auto.
+    - inv StEval.
+      apply not_Is_reset_in_tc_TcReset in NIsReset.
+      rewrite find_val_gso; auto.
+    - inv StEval.
+      apply not_Is_next_in_tc_TcNext in NIsNext.
+      rewrite find_val_gso; auto.
+    - inv StEval; apply find_val_add_inst.
+    - inv StEval; apply find_val_add_inst.
+  Qed.
+
+  Corollary not_Is_defined_in_stmt_eval_menv_inv:
+    forall tcs x P Γv Γm me ve mems clkvars me' ve',
+      Forall (wt_trconstr P Γv Γm) tcs ->
+      ~ (exists ck, Is_reset_in x ck tcs) ->
+      ~ Is_next_in x tcs ->
+      stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve') ->
+      find_val x me' = find_val x me.
+  Proof.
+    unfold translate_tcs.
+    induction tcs as [|tc]; simpl; intros ?????????? WT NIsReset NIsNext StEval.
+    - now inv StEval.
+    - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
+        rewrite stmt_eval_eq_Comp_Skip2 in Hcomp.
+      apply not_Is_reset_in_cons' in NIsReset as (?& Spec).
+      apply not_Is_next_in_cons in NIsNext as (?& Next).
+      inv WT. eapply IHtcs with (me' := me'') in Spec; eauto.
+      rewrite <-Spec.
+      eapply not_Is_defined_in_tc_stmt_eval_menv_inv; eauto.
+  Qed.
+
+  Lemma not_Is_defined_in_tc_stmt_eval_venv_inv:
+    forall tc x P Γv Γm me ve mems clkvars me' ve',
+      wt_trconstr P Γv Γm tc ->
+      ~ Is_variable_in_tc x tc ->
+      stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve') ->
+      Env.find x ve' = Env.find x ve.
+  Proof.
+    intros * WT Hnd Heval.
+    destruct tc; simpl in Heval; inv WT;
+      try (take (wt_const _ _ _) and inv it);
+      eapply stmt_eval_Control_fwd in Heval; eauto;
+        destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
+        subst; auto.
+    - apply stmt_eval_translate_cexp_venv_inv in Heval as (?&?); subst.
+      rewrite Env.gso; auto.
+      intro; subst; apply Hnd; constructor.
+    - inv Heval; auto.
+    - inv Heval; auto.
+    - inv Heval; auto.
+    - inv Heval; auto.
+    - inv Heval.
+      rewrite Env.find_In_gsso_opt; auto.
+      intro; apply Hnd; constructor; auto.
+  Qed.
+
+  Corollary not_Is_defined_in_stmt_eval_venv_inv:
+    forall tcs x P Γv Γm me ve mems clkvars me' ve',
+      Forall (wt_trconstr P Γv Γm) tcs ->
+      ~ Is_variable_in x tcs ->
+      stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve') ->
+      Env.find x ve' = Env.find x ve.
+  Proof.
+    unfold translate_tcs.
+    induction tcs as [|tc]; simpl; intros ?????????? WT NIsDef StEval; inv WT.
+    - now inv StEval.
+    - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
+        rewrite stmt_eval_eq_Comp_Skip2 in Hcomp.
+      apply not_Is_variable_in_cons in NIsDef as (?& Spec).
+      eapply IHtcs with (ve' := ve'') in Spec; eauto.
+      rewrite <-Spec.
+      eapply not_Is_defined_in_tc_stmt_eval_venv_inv; eauto.
+  Qed.
+
+  (* Lemma sem_trconstrs_is_init_in: *)
+  (*   forall tcs P base R S I S' x v, *)
+  (*     Forall (sem_trconstr P base R S I S') tcs -> *)
+  (*     Is_init_in x tcs -> *)
+  (*     sem_var_instant R x (present v) -> *)
+  (*     find_val x S = Some v. *)
+  (* Proof. *)
+  (*   induction tcs; inversion_clear 1 as [|?? Sem]; *)
+  (*     inversion_clear 1 as [?? Init|]; eauto; intros. *)
+  (*   inv Init; inv Sem. *)
+  (*   cases; congruence. *)
+  (* Qed. *)
+
+  Lemma not_Is_variable_in_tc_stmt_eval_env_inv:
+    forall prog P Γv Γm x tc me ve mems clkvars me' ve',
+      wt_trconstr P Γv Γm tc ->
+      ~ Is_variable_in_tc x tc ->
+      stmt_eval prog me ve (translate_tc mems clkvars tc) (me', ve') ->
+      Env.find x ve' = Env.find x ve.
+  Proof.
+    intros * WT Hnd Heval.
+    destruct tc; simpl in Heval; inv WT;
+      try (take (wt_const _ _ _) and inv it);
+      eapply stmt_eval_Control_fwd in Heval; eauto;
+        destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
+        subst; auto.
+    - apply stmt_eval_translate_cexp_venv_inv in Heval as (?&?); subst.
+      rewrite Env.gso; auto.
+      intro; subst; apply Hnd; constructor.
+    - inv Heval; auto.
+    - inv Heval; auto.
+    - inv Heval; auto.
+    - inv Heval.
+      rewrite Env.adds_opt_nil_l; auto.
+    - inv Heval.
+      rewrite Env.find_In_gsso_opt; auto.
+      intro; apply Hnd; constructor; auto.
+  Qed.
+
+  Section Trconstr.
+
+    Variables (Γv   : list (ident * type))
+              (Γm   : list (ident * type))
+              (Γv'  : list (ident * type))
+              (Γm'  : list (ident * type))
+              (mems : PS.t).
+
+    Hypotheses (TypeEnvSpec : type_env_spec (Γv ++ Γm) Γm' Γv' mems).
+
+    Lemma trconstr_cons_correct:
+      forall tc tcs P R S I S' inputs Ω clkvars insts me ve,
+        correct_program P ->
+        Stc.Typ.wt_program P ->
+        sem_trconstr P true R S I S' tc ->
+        Forall (sem_trconstr P true R S I S') tcs ->
+        wc_trconstr P Ω tc ->
+        wt_trconstr P Γv Γm tc ->
+        trconstr_mems_spec mems tc ->
+        trconstr_insts_spec insts tc ->
+        normal_args_tc P tc ->
+        Ordered_systems P ->
+        Is_well_sch inputs mems (tc :: tcs) ->
+        NoDup (inputs ++ variables (tc :: tcs)) ->
+        NoDupMembers (steps_of (tc :: tcs)) ->
+        reset_consistency (tc :: tcs) ->
+        ireset_consistency (tc :: tcs) ->
+        reset_clocks_have_sem true R (tc :: tcs) ->
+        ireset_clocks_have_sem true R (tc :: tcs) ->
+        (forall i f Si, In (i, f) (iresets_of (tc :: tcs)) -> find_inst i S = Some Si -> state_closed P f Si) ->
+        (forall i f Ii, In (i, f) (iresets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
+        Memory_Corres R true tcs S I S' me ->
+        equiv_env (fun x => Is_free_in_tc x tc) R mems me ve ->
+        wt_memory me (translate P) Γm' insts ->
+        wt_memory S P Γm' insts ->
+        wt_env ve Γv' ->
+        sem_clocked_vars_instant true R Ω ->
+        (forall x ck, In (x, ck) Ω -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
+        (forall x, PS.In x mems -> find_val x me <> None) ->
+        (forall x, ~ In x inputs -> ~ Is_variable_in x tcs -> Env.find x ve = None) ->
+        exists me' ve',
+          stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve')
+          /\ Memory_Corres R true (tc :: tcs) S I S' me'
+          /\ forall x v,
+              Is_variable_in_tc x tc ->
+              sem_var_instant R x v ->
+              Env.find x ve' = value_to_option v.
+    Proof.
+    intros * IH WTP Sem Sems Hwc Hwt Spec_m Spec_i Hnormal Ord Wsch Vars Calls Resets StepReset ResetCks IResetCks
+                Closed TransClosed Corres Equiv WTmenv WTS WTvenv Hcm Hcvars Hmems Hve.
+    assert (NoDup (variables_tc tc))
+      by (rewrite Permutation.Permutation_app_comm in Vars;
+          simpl in Vars; do 2 apply NoDup_app_weaken in Vars; auto).
+    pose proof Hwt as Hwt'; eapply translate_tc_wt with (clkvars := clkvars) in Hwt'; eauto.
     inversion Sem as [????????? Hexp Hvar|
                       ?????????? Find Hvar FindI|
                       ????????????? Hexp|
                       ??????????? FindI Init|
                       ??????????????? ClockR Find_I Hexps Hck Hsystem Hvars];
-      subst; simpl.
+      subst; simpl in *; inv Hwt;
+        try (take (wt_const _ _ _) and inv it);
+        eapply Control_wt_inv in Hwt'; eauto.
 
     - (* TcDef *)
-      inv Hexp; exists me; eexists; split;
+      inv WTmenv; inv Hexp; exists me; eexists; split;
         try solve [eapply stmt_eval_Control_absent'; eauto; auto].
       + eapply stmt_eval_Control_present'; eauto; auto.
         eapply cexp_correct; eauto.
@@ -987,7 +1176,16 @@ Module Type CORRECTNESS
           intro; apply Hnin, in_app; auto.
 
     - (* TcReset *)
-      destruct r; do 2 eexists; (split; [|split]); eauto;
+      inv WTmenv; destruct r; do 2 eexists; (split; [|split]); eauto;
+        try solve [inversion 1].
+      + eapply stmt_eval_Control_present'; eauto using stmt_eval, exp_correct.
+        intuition.
+      + eapply Memory_Corres_Reset_present; eauto.
+        eapply Is_well_sch_Reset_Next; eauto.
+      + eapply stmt_eval_Control_absent'; eauto using stmt_eval, exp_correct.
+        intuition.
+      + eapply Memory_Corres_Reset_absent; eauto.
+    - inv WTmenv; destruct r; do 2 eexists; (split; [|split]); eauto;
         try solve [inversion 1].
       + eapply stmt_eval_Control_present'; eauto using stmt_eval, exp_correct.
         intuition.
@@ -998,7 +1196,7 @@ Module Type CORRECTNESS
       + eapply Memory_Corres_Reset_absent; eauto.
 
     - (* TcNext *)
-      inv Hexp; eexists; exists ve; split;
+      inv WTmenv; inv Hexp; eexists; exists ve; split;
         try solve [eapply stmt_eval_Control_absent'; eauto; auto].
       + eapply stmt_eval_Control_present';
           eauto using stmt_eval, exp_correct; auto.
@@ -1009,7 +1207,7 @@ Module Type CORRECTNESS
         eapply ResetCks. left; eauto.
 
     - (* TcInstReset *)
-      destruct r.
+      inv WTmenv; destruct r.
       + pose proof Init.
         inversion_clear Init as [????? Find Rst].
         edestruct reset_spec as (me' &?&?& SpecInit); eauto.
@@ -1022,7 +1220,7 @@ Module Type CORRECTNESS
                 unfold instance_match in *.
                 destruct (find_inst i me) eqn: E.
                 * assert (~Is_step_in i tcs) as NStep.
-                  { inv Wsch. eauto using Is_ireset_in_tc. }
+                  { inversion_clear Wsch as [|?? (?&?&?)]; eauto using Is_ireset_in_tc. }
                   assert (state_corres i S me \/ state_corres i I me) as Scorres.
                   { eapply ireset_or_not_ireset_dec with (i:=i) in Sems as [NotReset|Reset].
                     - left. eapply Corres; eauto.
@@ -1034,8 +1232,7 @@ Module Type CORRECTNESS
                   -- eapply Closed; simpl; eauto.
                   -- eapply TransClosed; simpl; eauto.
                 * eapply state_closed_empty; eauto.
-              + eapply TransClosed; eauto; simpl; auto.
-            - eapply Is_well_sch_Reset_Step; eauto.
+            - eapply Is_well_sch_IReset_Step; eauto.
          }
         * inversion 1.
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
@@ -1055,7 +1252,7 @@ Module Type CORRECTNESS
               by (eapply TcStep_check_args_translate_arg; eauto).
         unfold correct_program, correct_system in IH.
         eapply IH in Hsystem as (me' &?&?); eauto.
-        *{ do 2 eexists; split.
+        *{ inv WTmenv. do 2 eexists; split.
            - eapply stmt_eval_Control_present'; eauto; auto.
              econstructor; eauto.
            - split.
@@ -1063,24 +1260,62 @@ Module Type CORRECTNESS
              + inversion_clear 1; intros Hvar.
                simpl in Vars; apply NoDup_swap in Vars.
                eapply value_to_option_adds_opt; eauto.
-               * apply NoDup_app_weaken in Vars; auto.
-               * apply Forall_forall; intros y Hin.
-                 assert (~ In y inputs) by
-                     (rewrite app_assoc in Vars; apply NoDup_app_weaken in Vars;
-                      eapply NoDup_app_In; eauto).
-                 assert (~Is_variable_in y tcs).
-                 { rewrite Permutation_swap in Vars; apply NoDup_app_r in Vars.
-                   rewrite Is_variable_in_variables.
-                   eapply NoDup_app_In; eauto. }
-                 apply Hve; auto.
+               apply Forall_forall; intros y Hin.
+               assert (~ In y inputs) by
+                   (rewrite app_assoc in Vars; apply NoDup_app_weaken in Vars;
+                    eapply NoDup_app_In; eauto).
+               assert (~Is_variable_in y tcs).
+               { rewrite Permutation_swap in Vars; apply NoDup_app_r in Vars.
+                 rewrite Is_variable_in_variables.
+                 eapply NoDup_app_In; eauto. }
+               apply Hve; auto.
          }
-        *{ unfold instance_match.
+        * inv Spec_i.
+          assert (~Is_step_in i tcs) as NotStep.
+          { inv Calls. rewrite Step_in_steps_of; auto. }
+          eapply ireset_or_not_ireset_dec in Sems as [NotReset|Reset].
+          -- pose proof (conj NotStep NotReset) as Cor. eapply Corres in Cor.
+             assert (exists Ii', Ii' ≋ Ii /\ find_inst i S = Some Ii') as (? & <- &?).
+             { apply orel_find_inst_Some, ClockR.
+               eapply Forall_forall; intros ? Hin; eapply NotReset.
+               eapply StepReset in Hin; eauto. 2:left; eauto. inv Hin; auto. inv H4. }
+             inversion_clear WTS as [????? WTinsts].
+             eapply Forall_forall in WTinsts; eauto.
+             inv WTinsts; try congruence.
+             match goal with H: find_inst i S = _, H': find_inst i S = _ |- _ => rewrite H in H'; inv H' end.
+             match goal with H: find_system _ _ = _, H': find_unit _ _ = _ |- _ => setoid_rewrite H in H'; inv H' end; auto.
+          -- pose proof (conj NotStep Reset) as Cor. eapply Corres in Cor.
+             unfold state_corres in Cor.
+             rewrite Find_I in Cor; symmetry in Cor.
+             assert (exists Ii', Ii' ≋ Ii /\ find_inst i me = Some Ii') as (? & <- &?)
+                 by (apply orel_find_inst_Some; auto).
+             inversion_clear WTmenv as [????? WTinsts].
+             eapply Forall_forall in WTinsts; eauto.
+             inv WTinsts; try congruence.
+             match goal with H: find_inst i me = _, H': find_inst i me = _ |- _ => rewrite H in H'; inv H' end.
+             take (find_unit _ _ = _) and eapply find_unit_transform_units_backward in it as (?&?& Find &?&?); subst.
+             match goal with H: find_system _ _ = _, H': find_unit _ _ = _ |- _ => setoid_rewrite H in H'; inv H' end; auto.
+             (* TODO: why do I need to instantiate this theorem like that? *)
+             pose proof (@transform_units_wt_memory' system class _ _ _ _ _ _ _ _) as Spec.
+             apply Spec; auto.
+        * inv WTmenv; eapply pres_sem_expos with (Γm := Γm') in Hievals; eauto.
+          -- take (Forall2 _ _ (s_in _)) and rename it into Eexps.
+             apply Forall2_map_1, Forall2_swap_args in Hievals.
+             apply Forall2_trans_ex with (2 := Eexps) in Hievals.
+             clear - Hievals; induction Hievals as [|? (?&(?&?))?? (?&?& WT &?)]; subst; simpl; constructor; auto.
+             now rewrite typeof_arg_correct in WT.
+          -- take (Forall _ es) and rename it into WTexps.
+             apply Forall_map, Forall_forall; intros * Hin.
+             eapply Forall_forall in WTexps; eauto.
+             assert (Stc.Syn.enums P = enums (translate P)) by auto.
+             eapply translate_arg_wt in WTexps; eauto.
+        *{ inv WTmenv; unfold instance_match.
            assert (~Is_step_in i tcs) as NStep.
            { rewrite steps_of_In, <-fst_InMembers.
              simpl in Calls. inv Calls; auto. }
            assert (Step_with_ireset_in i ckrs (TcStep i ys ck ckrs f es :: tcs)) as SpecStep by (left; constructor).
            apply StepReset in SpecStep.
-           apply Corres.reset_or_not_reset_dec in ClockR1 as [NotReset|Reset].
+           apply reset_or_not_reset_dec' in ClockR1 as [NotReset|Reset].
            - assert (state_corres i S me) as Corres'.
              + eapply Corres; split; eauto.
                intros ? Res.
@@ -1091,11 +1326,12 @@ Module Type CORRECTNESS
            - assert (state_corres i I me) as Corres'.
              + eapply Corres; split; eauto.
                eapply Exists_exists in Reset as (?&Hin&?).
-               rewrite SpecStep in Hin. inv Hin. inv H3. eauto.
+               rewrite SpecStep in Hin. inv Hin. inv H7. eauto.
              + unfold state_corres in Corres'. rewrite Find_I in Corres'; auto.
                inv Corres'; symmetry; auto.
          }
-      + assert (absent_list xs) by (apply clock_of_instant_false; auto).
+      + inv WTmenv.
+        assert (absent_list xs) by (apply clock_of_instant_false; auto).
         apply sem_system_absent in Hsystem as (? & ?); auto.
         exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
         split; eauto using Memory_Corres_Step_absent.
@@ -1112,289 +1348,191 @@ Module Type CORRECTNESS
         * apply NoDup_app_r in Vars.
           rewrite Is_variable_in_variables.
           eapply NoDup_app_In; eauto.
-  Qed.
+    Qed.
 
-  Lemma stmt_eval_translate_cexp_menv_inv:
-    forall prog me ve mems x me' ve' e,
-      stmt_eval prog me ve (translate_cexp mems x e) (me', ve') ->
-      me' = me.
-  Proof.
-    induction e; simpl; inversion_clear 1; auto; cases.
-  Qed.
+    Hypotheses (Hndupm : NoDupMembers Γm')
+               (Hndupv : NoDupMembers Γv').
 
-  Lemma stmt_eval_translate_cexp_venv_inv:
-    forall prog me ve mems x me' ve' e,
-      stmt_eval prog me ve (translate_cexp mems x e) (me', ve') ->
-      exists c, ve' = Env.add x c ve.
-  Proof.
-    induction e; inversion_clear 1; cases; eauto.
-  Qed.
-
-  Lemma not_Is_defined_in_tc_stmt_eval_menv_inv:
-    forall tc x P me ve mems clkvars me' ve',
-      ~ (exists ck, Is_reset_in_tc x ck tc) ->
-      ~ Is_next_in_tc x tc ->
-      stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve') ->
-      find_val x me' = find_val x me.
-  Proof.
-    destruct tc; simpl; intros ? ? ? ? ? ? ? ? NIsReset NIsNext StEval;
-      try destruct o as [(?&?)|];
-      try apply stmt_eval_Control_fwd in StEval;
-      try destruct StEval as [(?& StEval)|(?&?&?)]; try congruence.
-    - now apply stmt_eval_translate_cexp_menv_inv in StEval as ->.
-    - inv StEval.
-      apply not_Is_reset_in_tc_TcReset in NIsReset.
-      rewrite find_val_gso; auto.
-    - inv StEval.
-      apply not_Is_next_in_tc_TcNext in NIsNext.
-      rewrite find_val_gso; auto.
-    - inv StEval; apply find_val_add_inst.
-    - inv StEval; apply find_val_add_inst.
-  Qed.
-
-  Corollary not_Is_defined_in_stmt_eval_menv_inv:
-    forall tcs x P me ve mems clkvars me' ve',
-      ~ (exists ck, Is_reset_in x ck tcs) ->
-      ~ Is_next_in x tcs ->
-      stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve') ->
-      find_val x me' = find_val x me.
-  Proof.
-    unfold translate_tcs.
-    induction tcs as [|tc]; simpl; intros ? ? ? ? ? ? ? ? NIsReset NIsNext StEval.
-    - now inv StEval.
-    - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
-        rewrite stmt_eval_eq_Comp_Skip2 in Hcomp.
-      apply not_Is_reset_in_cons' in NIsReset as (?& Spec).
-      apply not_Is_next_in_cons in NIsNext as (?& Next).
-      eapply IHtcs with (me' := me'') in Spec; eauto.
-      rewrite <-Spec.
-      eapply not_Is_defined_in_tc_stmt_eval_menv_inv; eauto.
-  Qed.
-
-  Lemma not_Is_variable_in_tc_stmt_eval_venv_inv:
-    forall prog x tc me ve mems clkvars me' ve',
-      ~ Is_variable_in_tc x tc ->
-      stmt_eval prog me ve (translate_tc mems clkvars tc) (me', ve') ->
-      Env.find x ve' = Env.find x ve.
-  Proof.
-    intros * Hnd Heval.
-    destruct tc; simpl in Heval;
-      try destruct o as [(?&?)|];
-      try apply stmt_eval_Control_fwd in Heval;
-      try destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
-      subst; auto.
-    - apply stmt_eval_translate_cexp_venv_inv in Heval as (?&?); subst.
-      rewrite Env.gso; auto.
-      intro; subst; apply Hnd; constructor.
-    - inv Heval; auto.
-    - inv Heval; auto.
-    - inv Heval; auto.
-    - inv Heval.
-      rewrite Env.find_In_gsso_opt; auto.
-      intro; apply Hnd; constructor; auto.
-  Qed.
-
-  Corollary not_Is_variable_in_stmt_eval_venv_inv:
-    forall tcs x P me ve mems clkvars me' ve',
-      ~ Is_variable_in x tcs ->
-      stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve') ->
-      Env.find x ve' = Env.find x ve.
-  Proof.
-    unfold translate_tcs.
-    induction tcs as [|tc]; simpl; intros ? ? ? ? ? ? ? ? NIsDef StEval.
-    - now inv StEval.
-    - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
-        rewrite stmt_eval_eq_Comp_Skip2 in Hcomp.
-      apply not_Is_variable_in_cons in NIsDef as (?& Spec).
-      eapply IHtcs with (ve' := ve'') in Spec; eauto.
-      rewrite <-Spec.
-      eapply not_Is_variable_in_tc_stmt_eval_venv_inv; eauto.
-  Qed.
-
-  Lemma value_corres_equal_memory:
-    forall x S me,
-      S ≋ me ->
-      value_corres x S me.
-  Proof.
-    intros * E; unfold value_corres; now rewrite E.
-  Qed.
-
-  Lemma state_corres_equal_memory:
-    forall s S me,
-      S ≋ me ->
-      state_corres s S me.
-  Proof.
-    intros * E; unfold state_corres; now rewrite E.
-  Qed.
-
-  Lemma Memory_Corres_empty_equal_memory:
-    forall R S I S' me,
-      S ≋ me ->
-      Memory_Corres R [] S I S' me.
-  Proof.
-    split.
-    - repeat split.
-      + intros _. now apply value_corres_equal_memory; auto.
-      + intros (_&(?&Reset&_)). inv Reset.
-      + intros Next. inv Next.
-    - repeat split.
-      + intros _. now apply state_corres_equal_memory.
-      + intros (_&(?&Res&_)). inv Res.
-      + intros Step. inv Step.
-  Qed.
-
-  Lemma trconstrs_app_correct:
-    forall tcs' tcs P R S I S' me ve inputs mems clkvars icks,
-      let alltcs := tcs ++ tcs' in
-      correct_program P ->
-      Forall (sem_trconstr P true R S I S') alltcs ->
-      Forall (wc_trconstr P icks) alltcs ->
-      Forall (normal_args_tc P) alltcs ->
-      sem_clocked_vars_instant true R icks ->
-      (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
-      (forall x, PS.In x mems -> find_val x me <> None) ->
-      (forall x v, PS.In x mems -> sem_var_instant R x (present v) -> find_val x I = Some v) ->
-      Ordered_systems P ->
-      Is_well_sch inputs mems alltcs ->
-      NoDup (inputs ++ variables alltcs) ->
-      NoDupMembers (steps_of alltcs) ->
-      reset_consistency alltcs ->
-      ireset_consistency alltcs ->
-      reset_clocks_have_sem true R alltcs ->
-      ireset_clocks_have_sem true R alltcs ->
-      (forall i f Si, In (i, f) (iresets_of alltcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
-      (forall i f Ii, In (i, f) (iresets_of alltcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
-      (forall x, PS.In x mems -> Is_next_in x alltcs) ->
-      (forall x, In x inputs -> ~ Is_variable_in x alltcs) ->
-      (forall x c,
-          In x inputs ->
-          sem_var_instant R x (present c) ->
-          Env.find x ve = Some c) ->
-      (forall x, Env.find x ve <> None -> In x inputs) ->
-      me ≋ S ->
-      exists me' ve',
-        stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs') (me', ve')
-        /\ Memory_Corres R tcs' S I S' me'
-        /\ forall x v,
-            Is_variable_in x tcs' ->
-            sem_var_instant R x v ->
-            Env.find x ve' = value_to_option v.
-  Proof.
-    induction tcs' as [|tc]; simpl;
-      intros ? ? ? ? ? ? ? ? ? ? ? ? ?
-             Htcs Hwc Hnormal Hcm Hcvars Hmems HmemsI Ord Wsch Vars Calls NextReset StepReset ResetCks IResetCks
-             Closed TransClosed SpecMem SpecInput EquivInput EquivInput' Corres.
-    - exists me, ve. split; eauto using stmt_eval; split; auto.
-      + now apply Memory_Corres_empty_equal_memory.
-      + inversion 1.
-    - pose proof Wsch as Wsch'; apply Is_well_sch_app in Wsch'.
-      pose proof Vars as Vars'; rewrite variables_app in Vars'.
-      rewrite NoDup_swap, Permutation.Permutation_app_comm in Vars';
-        apply NoDup_app_weaken in Vars'.
-      pose proof Calls as Calls'; rewrite steps_of_app in Calls'.
-      rewrite Permutation.Permutation_app_comm in Calls';
-        apply NoDupMembers_app_l in Calls'.
-      pose proof NextReset as NextReset'; eapply reset_consistency_app in NextReset'; eauto.
-      pose proof StepReset as StepReset'; eapply ireset_consistency_app in StepReset'; eauto.
-      pose proof ResetCks as ResetCks'; eapply reset_clocks_have_sem_app in ResetCks'; eauto.
-      pose proof IResetCks as IResetCks'; eapply ireset_clocks_have_sem_app in IResetCks'; eauto.
-      pose proof Htcs as Htcs'; apply Forall_app_weaken in Htcs'; inv Htcs'.
-      pose proof Hwc as Hwc'; apply Forall_app_weaken in Hwc'; inv Hwc'.
-      pose proof Hnormal as Hnormal'; apply Forall_app_weaken in Hnormal'; inv Hnormal'.
-      rewrite List_shift_first in Wsch, Vars, Calls, NextReset, StepReset, ResetCks, IResetCks,
-                                  Htcs, SpecInput, SpecMem, Closed, TransClosed, Hwc, Hnormal.
-      edestruct IHtcs' with (ve := ve) (me := me) as (me' & ve' &?&?& Env); eauto.
-      edestruct trconstr_cons_correct with (ve := ve') (me := me') as (me'' & ve'' &?&?&?);
-        eauto using Is_well_sch.
-      + intros; eapply Closed; eauto.
-        rewrite <-List_shift_first, iresets_of_app, in_app; auto.
-      + intros; eapply TransClosed; eauto.
-        rewrite <-List_shift_first, iresets_of_app, in_app; auto.
-      + intros x v Free Hvar.
-        inversion_clear Wsch' as [|??? FreeSpec ResetSpec _].
-        assert (Free':=Free). apply FreeSpec in Free.
-        cases_eqn E.
-        *{ destruct v; simpl; auto.
-           eapply PSF.mem_2 in E; eauto.
-           specialize (HmemsI _ _ E Hvar).
-           specialize (SpecMem _ E).
-           eapply reset_or_not_reset_dec with (x:=x) in H3 as [NotReset|Reset].
-           - assert (value_corres x S me') as Corres' by (eapply H1; eauto).
-             rewrite <-Corres'.
-             eapply Exists_exists in SpecMem as (?&Hin&Next); inv Next.
-             eapply Forall_forall in Htcs; [|eauto].
-             inversion_clear Htcs as [| |??????????? Find FindI _ _ _| |].
-             rewrite Find, <-FindI, HmemsI; auto.
-             eapply Forall_forall. intros ? Hin'. eapply NotReset.
-             assert (Next_with_reset_in x ckrs ((tcs ++ [tc]) ++ tcs')) as NextReset''.
-             { eapply Exists_exists. eexists; split; eauto. }
-             eapply NextReset in NextReset''. rewrite NextReset'' in Hin'.
-             apply Exists_app' in Hin' as [Hin'|?]; auto.
-             exfalso. eapply Is_well_sch_free_Reset in Free'; eauto.
-           - assert (value_corres x I me') as Corres' by (eapply H1; eauto).
-             rewrite <-Corres', HmemsI; auto.
+    Lemma trconstrs_app_correct:
+      forall tcs' tcs P R S I S' inputs Ω clkvars insts me ve,
+        let alltcs := tcs ++ tcs' in
+        correct_program P ->
+        NoDupMembers insts ->
+        Stc.Typ.wt_program P ->
+        Forall (sem_trconstr P true R S I S') alltcs ->
+        Forall (wc_trconstr P Ω) alltcs ->
+        Forall (wt_trconstr P Γv Γm) alltcs ->
+        Forall (trconstr_mems_spec mems) alltcs ->
+        Forall (trconstr_insts_spec insts) alltcs ->
+        Forall (normal_args_tc P) alltcs ->
+        sem_clocked_vars_instant true R Ω ->
+        (forall x ck, In (x, ck) Ω -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
+        (forall x, PS.In x mems -> find_val x me <> None) ->
+        (forall x v, PS.In x mems -> sem_var_instant R x (present v) -> find_val x I = Some v) ->
+        Ordered_systems P ->
+        Is_well_sch inputs mems alltcs ->
+        NoDup (inputs ++ variables alltcs) ->
+        NoDupMembers (steps_of alltcs) ->
+        reset_consistency alltcs ->
+        ireset_consistency alltcs ->
+        reset_clocks_have_sem true R alltcs ->
+        ireset_clocks_have_sem true R alltcs ->
+        (forall i f Si, In (i, f) (iresets_of alltcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
+        (forall i f Ii, In (i, f) (iresets_of alltcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
+        (forall x, PS.In x mems -> Is_next_in x alltcs) ->
+        (forall x, In x inputs -> ~ Is_variable_in x alltcs) ->
+        (forall x c,
+            In x inputs ->
+            sem_var_instant R x (present c) ->
+            Env.find x ve = Some c) ->
+        (forall x, Env.find x ve <> None -> In x inputs) ->
+        wt_memory me (translate P) Γm' insts ->
+        wt_env ve Γv' ->
+        me ≋ S ->
+        exists me' ve',
+          stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs') (me', ve')
+          /\ Memory_Corres R true tcs' S I S' me'
+          /\ forall x v,
+              Is_variable_in x tcs' ->
+              sem_var_instant R x v ->
+              Env.find x ve' = value_to_option v.
+    Proof.
+      induction tcs' as [|tc]; simpl;
+        intros ?????????????
+               Hndupi WT Htcs Hwc Hwt Spec_m Spec_i Hnormal Hcm Hcvars Hmems HmemsI Ord Wsch Vars Steps
+               NextReset StepReset ResetCks IResetCks
+               Closed TransClosed SpecMem SpecInput EquivInput EquivInput' WTm WTe Corres.
+      - exists me, ve. split; eauto using stmt_eval; split; auto.
+        + now apply Memory_Corres_empty_equal_memory.
+        + inversion 1.
+      - pose proof Wsch as Wsch'; apply Forall'_app_r in Wsch'.
+        pose proof Vars as Vars'; rewrite variables_app in Vars'.
+        rewrite NoDup_swap, Permutation.Permutation_app_comm in Vars';
+          apply NoDup_app_weaken in Vars'.
+        pose proof Steps as Steps'; rewrite steps_of_app in Steps'.
+        rewrite Permutation.Permutation_app_comm in Steps';
+          apply NoDupMembers_app_l in Steps'.
+        pose proof NextReset as NextReset'; eapply reset_consistency_app in NextReset'; eauto.
+        pose proof StepReset as StepReset'; eapply ireset_consistency_app in StepReset'; eauto.
+        pose proof ResetCks as ResetCks'; eapply reset_clocks_have_sem_app in ResetCks'; eauto.
+        pose proof IResetCks as IResetCks'; eapply ireset_clocks_have_sem_app in IResetCks'; eauto.
+        pose proof Htcs as Htcs'; apply Forall_app_weaken in Htcs'; inv Htcs'.
+        pose proof Hwc as Hwc'; apply Forall_app_weaken in Hwc'; inv Hwc'.
+        pose proof Hwt as Hwt'; apply Forall_app_weaken in Hwt'; inv Hwt'.
+        pose proof Spec_m as Spec_m'; apply Forall_app_weaken in Spec_m'; inv Spec_m'.
+        pose proof Spec_i as Spec_i'; apply Forall_app_weaken in Spec_i'; inv Spec_i'.
+        pose proof Hnormal as Hnormal'; apply Forall_app_weaken in Hnormal'; inv Hnormal'.
+        rewrite List_shift_first in Wsch, Vars, Steps, NextReset, StepReset, ResetCks, IResetCks,
+                                    Htcs, SpecMem, SpecInput,
+                                    Closed, TransClosed, Hwc, Hwt, Spec_m, Spec_i, Hnormal.
+        edestruct IHtcs' with (insts:=insts) as (me' & ve' &?&?& Env); eauto.
+        take (stmt_eval _ _ _ _ _) and pose proof it as StmtEval.
+        eapply pres_sem_stmt with (mems := Γm') (insts := insts) (Γv := Γv') in StmtEval as (WTmem & ?); eauto.
+        + edestruct trconstr_cons_correct with (ve := ve') (me := me') as (me'' & ve'' &?&?&?); eauto.
+          * intros; eapply Closed; eauto.
+            rewrite <-List_shift_first, iresets_of_app, in_app; auto.
+          * intros; eapply TransClosed; eauto.
+            rewrite <-List_shift_first, iresets_of_app, in_app; auto.
+          * intros x v Free Hvar.
+            inversion_clear Wsch' as [|?? (FreeSpec&ResetSpec&_)].
+            assert (Free':=Free). apply FreeSpec in Free.
+            cases_eqn E.
+            { destruct v; simpl; auto.
+              eapply PSF.mem_2 in E; eauto.
+              specialize (HmemsI _ _ E Hvar).
+              specialize (SpecMem _ E).
+              eapply reset_or_not_reset_dec with (x:=x) in H3 as [NotReset|Reset].
+              - assert (value_corres x S me') as Corres' by (eapply H1; eauto).
+                rewrite <-Corres'.
+                eapply Exists_exists in SpecMem as (?&Hin&Next); inv Next.
+                eapply Forall_forall in Htcs; [|eauto].
+                inversion_clear Htcs as [| |??????????? Find FindI _ _ _| |].
+                rewrite Find, <-FindI, HmemsI; auto.
+                eapply Forall_forall. intros ? Hin'. eapply NotReset.
+                assert (Next_with_reset_in x ckrs ((tcs ++ [tc]) ++ tcs')) as NextReset''.
+                { eapply Exists_exists. eexists; split; eauto. }
+                eapply NextReset in NextReset''. rewrite NextReset'' in Hin'.
+                apply Exists_app' in Hin' as [Hin'|?]; auto.
+                exfalso. eapply Is_well_sch_free_Reset in Free'; eauto.
+              - assert (value_corres x I me') as Corres' by (eapply H1; eauto).
+                rewrite <-Corres', HmemsI; auto.
          }
-        * destruct Free as [IsVar|].
-          -- eapply Env in IsVar; eauto.
-             destruct v; simpl; auto.
-             rewrite IsVar; simpl; auto.
-          -- assert (~ Is_variable_in x tcs')
+            { destruct Free as [IsVar|].
+          - eapply Env in IsVar; eauto.
+            destruct v; simpl; auto.
+            rewrite IsVar; simpl; auto.
+          - assert (~ Is_variable_in x tcs')
               by (intro; eapply SpecInput, Exists_app; eauto).
-             erewrite not_Is_variable_in_stmt_eval_venv_inv; eauto.
-             destruct v; simpl; auto.
-             assert (Env.find x ve = Some v) as ->; auto.
-      + intros; eapply stmt_eval_find_val_mono; eauto.
-      + intros * Hnin ?; erewrite not_Is_variable_in_stmt_eval_venv_inv; eauto.
-        apply not_Some_is_None; intros * E.
-        apply Hnin, EquivInput', not_None_is_Some; eauto.
-      + exists me'', ve''; split; [|split]; auto.
-        * unfold translate_tcs; simpl.
-          rewrite stmt_eval_fold_left_shift; setoid_rewrite stmt_eval_eq_Comp_Skip2; eauto.
-        * intros x v IsVar Hvar.
-          destruct (Is_variable_in_tc_dec x tc) as [|Nvar]; auto.
-          erewrite not_Is_variable_in_tc_stmt_eval_venv_inv; eauto.
-          inv IsVar; auto.
-          contradiction.
-  Qed.
+            erewrite not_Is_defined_in_stmt_eval_venv_inv; eauto.
+            destruct v; simpl; auto.
+            assert (Env.find x ve = Some v) as ->; auto. }
+          * rewrite <-Corres.
+            apply transform_units_wt_memory; auto.
+          * intros; eapply stmt_eval_find_val_mono; eauto.
+          * intros * Hnin ?; erewrite not_Is_defined_in_stmt_eval_venv_inv; eauto.
+            apply not_Some_is_None; intros * E.
+            apply Hnin, EquivInput', not_None_is_Some; eauto.
+          * exists me'', ve''; split; [|split]; auto.
+            -- unfold translate_tcs; simpl.
+               rewrite stmt_eval_fold_left_shift; setoid_rewrite stmt_eval_eq_Comp_Skip2; eauto.
+            -- intros x v IsVar Hvar.
+               destruct (Is_variable_in_tc_dec x tc) as [|Nvar]; auto.
+               erewrite not_Is_variable_in_tc_stmt_eval_env_inv; eauto.
+               inv IsVar; auto.
+               contradiction.
+        + now apply translate_wt.
+        + eapply translate_tcs_wt; eauto.
+          unfold variables in *; simpl in *.
+          rewrite app_assoc, Permutation.Permutation_app_comm in Vars'; apply NoDup_app_weaken in Vars'; auto.
+    Qed.
 
-  Corollary trconstrs_correct:
-    forall tcs P R S I S' me ve inputs mems clkvars icks,
-      correct_program P ->
-      Forall (sem_trconstr P true R S I S') tcs ->
-      Forall (wc_trconstr P icks) tcs ->
-      Forall (normal_args_tc P) tcs ->
-      sem_clocked_vars_instant true R icks ->
-      (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
-      (forall x, PS.In x mems -> find_val x me <> None) ->
-      (forall x v, PS.In x mems -> sem_var_instant R x (present v) -> find_val x I = Some v) ->
-      Ordered_systems P ->
-      Is_well_sch inputs mems tcs ->
-      NoDup (inputs ++ variables tcs) ->
-      NoDupMembers (steps_of tcs) ->
-      reset_consistency tcs ->
-      ireset_consistency tcs ->
-      reset_clocks_have_sem true R tcs ->
-      ireset_clocks_have_sem true R tcs ->
-      (forall i f Si, In (i, f) (iresets_of tcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
-      (forall i f Ii, In (i, f) (iresets_of tcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
-      (forall x, PS.In x mems -> Is_next_in x tcs) ->
-      (forall x, In x inputs -> ~ Is_variable_in x tcs) ->
-      (forall x c,
-          In x inputs ->
-          sem_var_instant R x (present c) ->
-          Env.find x ve = Some c) ->
-      (forall x, Env.find x ve <> None -> In x inputs) ->
-      me ≋ S ->
-      exists me' ve',
-        stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve')
-        /\ Memory_Corres R tcs S I S' me'
-        /\ forall x v,
-            Is_variable_in x tcs ->
-            sem_var_instant R x v ->
-            Env.find x ve' = value_to_option v.
-  Proof.
-    intros; eapply trconstrs_app_correct with (tcs := []); eauto.
-  Qed.
+    Corollary trconstrs_correct:
+      forall tcs P R S I S' inputs Ω clkvars insts me ve,
+        correct_program P ->
+        NoDupMembers insts ->
+        Stc.Typ.wt_program P ->
+        Forall (sem_trconstr P true R S I S') tcs ->
+        Forall (wc_trconstr P Ω) tcs ->
+        Forall (wt_trconstr P Γv Γm) tcs ->
+        Forall (trconstr_mems_spec mems) tcs ->
+        Forall (trconstr_insts_spec insts) tcs ->
+        Forall (normal_args_tc P) tcs ->
+        sem_clocked_vars_instant true R Ω ->
+        (forall x ck, In (x, ck) Ω -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
+        (forall x, PS.In x mems -> find_val x me <> None) ->
+        (forall x v, PS.In x mems -> sem_var_instant R x (present v) -> find_val x I = Some v) ->
+        Ordered_systems P ->
+        (forall i f Si, In (i, f) (iresets_of tcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
+        (forall i f Ii, In (i, f) (iresets_of tcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
+        Is_well_sch inputs mems tcs ->
+        NoDup (inputs ++ variables tcs) ->
+        NoDupMembers (steps_of tcs) ->
+        reset_consistency tcs ->
+        ireset_consistency tcs ->
+        reset_clocks_have_sem true R tcs ->
+        ireset_clocks_have_sem true R tcs ->
+        (forall x, PS.In x mems -> Is_next_in x tcs) ->
+        (forall x, In x inputs -> ~ Is_variable_in x tcs) ->
+        (forall x c,
+            In x inputs ->
+            sem_var_instant R x (present c) ->
+            Env.find x ve = Some c) ->
+        (forall x, Env.find x ve <> None -> In x inputs) ->
+        wt_memory me (translate P) Γm' insts ->
+        wt_env ve Γv' ->
+        me ≋ S ->
+        exists me' ve',
+          stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve')
+          /\ Memory_Corres R true tcs S I S' me'
+          /\ forall x v,
+              Is_variable_in x tcs ->
+              sem_var_instant R x v ->
+              Env.find x ve' = value_to_option v.
+    Proof.
+      intros; eapply trconstrs_app_correct with (insts:=insts) (tcs := []); eauto.
+    Qed.
+
+  End Trconstr.
 
   Lemma state_closed_insts_InMembers:
     forall P subs S s Ss,
@@ -1406,149 +1544,94 @@ Module Type CORRECTNESS
     eapply In_InMembers; eauto.
   Qed.
 
- Lemma Memory_Corres_equal_memory:
-    forall P tcs R S I S' me resets subs,
-      Forall (sem_trconstr P true R S I S') tcs ->
-      Memory_Corres R tcs S I S' me ->
-      state_closed_nexts resets S ->
-      state_closed_insts P subs S ->
-      state_closed_nexts resets S' ->
-      state_closed_insts P subs S' ->
-      (forall x, In x resets <-> Is_next_in x tcs) ->
-      (forall x ck, Is_reset_in x ck tcs -> In x resets) ->
-      (forall i, InMembers i subs <-> Is_step_in i tcs) ->
-      (forall i ck, Is_ireset_in i ck tcs -> Is_step_in i tcs) ->
-      me ≋ S'.
-  Proof.
-    intros * Sems (Resets & Insts) ResetClosed InstsClosed ResetClosed' InstsClosed'
-           SpecNext ResetNext SpecStep ResetStep.
-    split.
-    - intro x; destruct (Is_next_in_dec x tcs) as [Next|NNext].
-      + apply Resets in Next; auto.
-      + assert (find_val x S = None).
-        { apply not_Some_is_None; intros * Find;
-            apply NNext, SpecNext, ResetClosed.
-          apply not_None_is_Some; eauto.
-        }
-        assert (find_val x S' = None) as E'.
-        { apply not_Some_is_None; intros * Find;
-            apply NNext, SpecNext, ResetClosed'.
-          apply not_None_is_Some; eauto.
-        }
-        unfold value_corres, find_val in *.
-        assert (~exists ck, Is_reset_in x ck tcs) as NReset.
-        { intros (?&contra). apply ResetNext in contra. rewrite SpecNext in contra; auto. }
-        rewrite E', <-H. symmetry.
-        apply Resets; split; auto.
-        intros ? Reset. contradict NReset; eauto.
-    - split.
-      + setoid_rewrite Env.In_find; intro i.
-        destruct (Is_step_in_dec i tcs) as [Step|Nstep].
-        * apply Insts in Step.
-          unfold state_corres, find_inst in Step.
-          split; intros (?& Find); rewrite Find in Step.
-          -- apply orel_find_inst_Some in Step as (?&?&?); eauto.
-          -- symmetry in Step; apply orel_find_inst_Some in Step as (?&?&?); eauto.
-        * eapply ireset_or_not_ireset_dec with (i:=i) in Sems as [NotReset|(?&Rst&Clock)].
-          -- assert (state_corres i S me) as Corres
-                by (apply Insts; auto).
-             assert (find_inst i S = None).
-             { apply not_Some_is_None; intros * Find.
-               apply Nstep, SpecStep.
-               eapply state_closed_insts_InMembers in InstsClosed; eauto.
-             }
-             assert (find_inst i S' = None) as E'.
-             { apply not_Some_is_None; intros * Find.
-               apply Nstep, SpecStep.
-               eapply state_closed_insts_InMembers in InstsClosed'; eauto.
-             }
-             assert (find_inst i me = None) as E.
-             { apply not_Some_is_None; intros * Find.
-               unfold state_corres in Corres; rewrite Find in Corres.
-               apply orel_find_inst_Some in Corres as (?&?&?).
-               congruence.
-             }
-             setoid_rewrite E'; setoid_rewrite E; reflexivity.
-          -- apply ResetStep in Rst; contradiction.
-      + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
-        intros i me_i Si' Find Find'.
-        destruct (Is_step_in_dec i tcs) as [Step|Nstep].
-        * apply Insts in Step.
-          unfold state_corres, find_inst in Step.
-          rewrite Find, Find' in Step.
-          inv Step; symmetry; auto.
-        * eapply ireset_or_not_ireset_dec with (i:=i) in Sems as [NotReset|(?&Rst&Clock)].
-          -- exfalso.
-             apply Nstep, SpecStep.
-             eapply state_closed_insts_InMembers in InstsClosed'; eauto.
-          -- apply ResetStep in Rst; contradiction.
-  Qed.
-
   Theorem correctness:
     forall P f,
       Well_defined P ->
       wc_program P ->
+      Stc.Typ.wt_program P ->
       correct_system P f.
   Proof.
-    induction P as [|system]; unfold correct_system;
-      intros b (Ord & WSCH & NormalArgs) WC ?????? Sem Tcs Spec E;
+    intros (enums & P); induction P as [|system]; unfold correct_system;
+      intros b (Ord & WSCH & NormalArgs) WC WT ???????? Sem Find Tcs Spec WTS WTins E;
       pose proof Sem;
-      inversion_clear Sem as [????????? Find ? Outs Hscv Htcs Closed TransClosed Closed'];
+      inversion_clear Sem as [????????? Find' ? Outs Hscv Htcs Closed TransClosed Closed'];
       try now inv Find.
+    rewrite Find in Find'; inv Find'.
     pose proof Find as Find'.
-    simpl in Find.
-    pose proof Ord.
-    inv Ord; inv WSCH; destruct NormalArgs as (Hnormal&?);
-      inversion_clear WC as [|??? WCb].
-    assert (Well_defined P) by (split; auto).
-    assert (correct_program P) by (unfold correct_program; intros; auto).
+    pose proof Ord as Ord'.
+    inv Ord'; inversion WSCH;
+      inversion_clear NormalArgs as [|?? Hnormal];
+      inversion_clear WC as [|?? WCb];
+      inversion WT as [|?? [WTb]]; simpl in *; subst.
+    assert (Well_defined (Stc.Syn.Program enums P)) by (split; auto).
+    assert (correct_program (Stc.Syn.Program enums P)) by (unfold correct_program; intros; auto).
     destruct WCb as (?&?&?& WCtcs); rewrite 2 idck_app, <-2 app_assoc in WCtcs.
-    destruct (ident_eqb (s_name system) b) eqn: Eq.
+    destruct WTb as (WTtcs &?).
+    eapply find_unit_cons in Find as [[E' Find]|[E' Find]]; simpl in *; eauto.
     - inv Find.
       assert (clock_of_instant xs = true) as Clock by now apply clock_of_instant_true.
       rewrite Clock in Htcs.
-      assert (~ Is_system_in (s_name s) (s_tcs s))
-        by (eapply find_system_not_Is_system_in; eauto).
-      apply normal_args_system_cons in Hnormal; auto.
+      assert (~ Is_system_in (s_name system) (s_tcs system)) as Notin
+        by (eapply find_system_not_Is_system_in with (2 := Find'); eauto).
+      assert (Forall (fun oc => snd oc <> s_name system) (s_subs system)).
+      { apply Forall_forall; intros * Hin; apply in_map with (f := snd) in Hin.
+        intro E'; rewrite E' in Hin.
+        rewrite steps_iresets_of_Is_system_in, map_app, in_app_comm,
+        <-incl_in_app, <-s_subs_steps_of in Notin; try contradiction.
+        apply incl_map, s_ireset_incl.
+      }
       apply sem_trconstrs_cons in Htcs; auto.
+      pose proof (s_type_env_spec system) as TypeEnvSpec.
+      pose proof (s_trconstr_insts_spec system) as Spec_i.
       edestruct trconstrs_correct
-        with (ve := Env.adds_opt (map fst (m_in (step_method s))) ins vempty)
-             (clkvars := Env.adds_with snd s.(s_out)
-                           (Env.adds_with snd s.(s_vars)
-                             (Env.from_list_with snd s.(s_in))))
+        with (1 := TypeEnvSpec)
+             (11 := Spec_i)
+             (me := me)
+             (ve := Env.adds_opt (map fst (m_in (step_method system))) ins vempty)
+             (clkvars := Env.adds_with snd system.(s_out)
+                           (Env.adds_with snd system.(s_vars)
+                             (Env.from_list_with snd system.(s_in))))
         as (me' & ve' &?&?& Equiv); eauto.
+      + pose proof (s_nodup_nexts system) as N; clear - N.
+        induction N; simpl; constructor; auto.
+        rewrite fst_InMembers.
+        intro Hin; apply in_map_iff in Hin as ((?&?)&E& Hin); simpl in *; subst.
+        apply in_map_iff in Hin as ((x&((c&t')&ck))&E&?); simpl in *; inv E.
+        take (~ InMembers _ _) and apply it.
+        apply fst_InMembers.
+        change a with (fst (a, (c, t, ck))); now apply in_map.
+      + rewrite <-2 idty_app, NoDupMembers_idty.
+        apply s_nodup_vars.
+      + apply s_nodup_subs.
       + apply Forall_forall.
-        intros (x, ck) Hxin.
+        intros (y, ck) Hxin.
         apply in_app in Hxin as [Hxin|Hxin].
         * rewrite <-Clock; eapply Forall_forall in Hscv; eauto.
-        *{ eapply sem_clocked_var_instant_tcs with (P := P') (tcs := s_tcs s); eauto.
-           - apply fst_NoDupMembers; rewrite 3 map_app, 4 map_fst_idck.
+        * eapply sem_clocked_var_instant_tcs with (4 := Htcs); eauto.
+          -- apply fst_NoDupMembers; rewrite 3 map_app, 4 map_fst_idck.
              apply s_nodup.
-           - rewrite s_defined, <-s_vars_out_in_tcs, <-s_nexts_in_tcs,
+          -- rewrite s_defined, <-s_vars_out_in_tcs, <-s_nexts_in_tcs, mems_of_nexts_fst,
              <-app_assoc, 2 map_app, 3 map_fst_idck; auto.
-         }
-      + intros * Hin Hnin.
+      + intros y ? Hin Hnin.
         rewrite ps_from_list_In in Hnin.
-        pose proof (s_nodup s) as Nodup.
+        pose proof (s_nodup system) as Nodup.
         rewrite 3 in_app in Hin; destruct Hin as [Hin|[Hin|[Hin|Hin]]];
           apply In_idck_exists in Hin as (?&?).
-        *{ apply (NoDup_app_In x) in Nodup.
-           - unfold Env.from_list_with.
+        * apply (NoDup_app_In y) in Nodup.
+          -- unfold Env.from_list_with.
              rewrite 2 Env.gsso_with.
-             + erewrite Env.In_find_adds_with; eauto; simpl; auto.
-               do 2 eapply NoDupMembers_app_l; rewrite <-app_assoc; apply s_nodup_vars.
-             + intros Hin; apply Nodup, in_app; left; apply fst_InMembers; auto.
-             + intros Hin; apply Nodup; rewrite 2 in_app; right; left; apply fst_InMembers; auto.
-           - apply in_map_iff; eexists; (intuition eauto); auto.
-         }
-        *{ rewrite Permutation.Permutation_app_comm in Nodup.
-           apply NoDup_app_weaken, (NoDup_app_In x) in Nodup.
-           - rewrite Env.gsso_with.
-             + erewrite Env.In_find_adds_with; eauto; simpl; auto.
-               eapply NoDupMembers_app_l; eapply NoDupMembers_app_r; apply s_nodup_vars.
-             + intros Hin; apply Nodup, in_app; left; apply fst_InMembers; auto.
-           - apply in_map_iff; eexists; (intuition eauto); auto.
-         }
+             ++ erewrite Env.In_find_adds_with; eauto; simpl; auto.
+                do 2 eapply NoDupMembers_app_l; rewrite <-app_assoc; apply s_nodup_vars.
+             ++ intros Hin; apply Nodup, in_app; left; apply fst_InMembers; auto.
+             ++ intros Hin; apply Nodup; rewrite 2 in_app; right; left; apply fst_InMembers; auto.
+          -- apply in_map_iff; eexists; (intuition eauto); auto.
+        * rewrite Permutation.Permutation_app_comm in Nodup.
+          apply NoDup_app_weaken, (NoDup_app_In y) in Nodup.
+          -- rewrite Env.gsso_with.
+             ++ erewrite Env.In_find_adds_with; eauto; simpl; auto.
+                eapply NoDupMembers_app_l; eapply NoDupMembers_app_r; apply s_nodup_vars.
+             ++ intros Hin; apply Nodup, in_app; left; apply fst_InMembers; auto.
+          -- apply in_map_iff; eexists; (intuition eauto); auto.
         * erewrite Env.In_find_adds_with; eauto; simpl; auto.
           do 2 eapply NoDupMembers_app_r; apply s_nodup_vars.
         * exfalso; apply Hnin, in_map_iff; eexists; (intuition eauto); auto.
@@ -1556,13 +1639,6 @@ Module Type CORRECTNESS
         rewrite E; eapply sem_system_find_val; eauto.
       + setoid_rewrite ps_from_list_In; intros.
         eapply sem_system_find_valI; eauto.
-      + rewrite <-s_vars_out_in_tcs, <-2 map_app, <-fst_NoDupMembers.
-        apply s_nodup_vars.
-      + rewrite <-s_subs_steps_of. apply s_nodup_subs.
-      + apply s_reset_consistency.
-      + apply s_ireset_consistency.
-      + eapply sem_trconstrs_reset_clocks; eauto using s_reset_consistency.
-      + eapply sem_trconstrs_ireset_clocks; eauto using s_ireset_consistency.
       + inversion_clear Closed as [????? Find ? Insts]; rewrite Find in Find'; inv Find'.
         intros ? b' ? Hin Sub.
         apply Insts in Sub as (b'' &?&?).
@@ -1579,7 +1655,14 @@ Module Type CORRECTNESS
         assert (b' = b'') as ->; auto.
         eapply NoDupMembers_det in Hin; eauto.
         apply s_nodup_subs.
-      + intro. now rewrite ps_from_list_In, s_nexts_in_tcs, nexts_of_In.
+      + rewrite <-s_vars_out_in_tcs, <-2 map_app, <-fst_NoDupMembers.
+        apply s_nodup_vars.
+      + rewrite <-s_subs_steps_of. apply s_nodup_subs.
+      + apply s_reset_consistency.
+      + apply s_ireset_consistency.
+      + eapply sem_trconstrs_reset_clocks; eauto using s_reset_consistency.
+      + eapply sem_trconstrs_ireset_clocks; eauto using s_ireset_consistency.
+      + intro. now rewrite ps_from_list_In, s_nexts_in_tcs_fst, nexts_of_In.
       + intros; apply s_ins_not_var, fst_InMembers; auto.
       + simpl; intros; eapply eq_if_present_adds_opt; eauto; rewrite map_fst_idty; auto.
       + simpl; rewrite map_fst_idty; intros * Find.
@@ -1587,52 +1670,73 @@ Module Type CORRECTNESS
         * rewrite Env.gempty in Find; destruct Find as [Hin|]; try discriminate.
           eapply in_combine_l; eauto.
         * transitivity (length xs); eapply Forall2_length; eauto.
+      + rewrite E; simpl in *.
+        now apply transform_units_wt_memory in WTS.
+      + eapply wt_env_adds_opt.
+        * rewrite <-2 idty_app, NoDupMembers_idty.
+          apply s_nodup_vars.
+        * apply fst_NoDupMembers, m_nodupin.
+        * apply wt_env_empty.
+        * unfold step_method; simpl.
+          apply Forall2_map_1, Forall2_same, Forall_forall.
+          intros (x, t) Hin; simpl.
+          apply in_app; auto.
+        * unfold idty; apply Forall2_swap_args, Forall2_map_1; auto.
       + exists me'; split.
-        *{ apply find_system_translate in Find' as (?&?&?&?&?); subst.
-           econstructor; eauto.
-           - apply exists_step_method.
-           - simpl; transitivity (length xs).
-             + symmetry; eapply Forall2_length; eauto.
-             + rewrite length_idty, <-map_length with (f := fst);
-                 symmetry; eapply Forall2_length; eauto.
-           - simpl; eauto.
-           - simpl; rewrite map_fst_idty.
+        * apply find_unit_transform_units_forward in Find'.
+          econstructor; eauto.
+          -- apply exists_step_method.
+          -- simpl; transitivity (length xs).
+             ++ symmetry; eapply Forall2_length; eauto.
+             ++ rewrite length_idty, <-map_length with (f := fst);
+                  symmetry; eapply Forall2_length; eauto.
+          -- simpl; eauto.
+          -- simpl; rewrite map_fst_idty.
              clear - Outs Equiv.
              rewrite Forall2_map_2.
              eapply Forall2_impl_In; eauto; intros.
              apply Equiv; auto.
              apply Is_variable_in_variables.
              rewrite <-s_vars_out_in_tcs, in_app; auto.
-         }
-         *{ inv Closed; inv Closed';
+        * inv Closed; inv Closed';
             repeat match goal with
                      H: find_system ?b ?P = _, H': find_system ?b ?P = _ |- _ =>
                      rewrite H in H'; inv H'
                    end.
-            eapply Memory_Corres_equal_memory; eauto.
-            - intro; now rewrite s_nexts_in_tcs, nexts_of_In.
+          { eapply Memory_Corres_equal_memory; eauto.
+            - intro; now rewrite s_nexts_in_tcs_fst, nexts_of_In.
             - intros ?? Reset.
-              rewrite s_nexts_in_tcs. apply s_reset_incl, resets_of_In; eauto.
+              rewrite s_nexts_in_tcs_fst. apply s_reset_incl, resets_of_In; eauto.
             - intro. now rewrite fst_InMembers, s_subs_steps_of, steps_of_In.
             - intros * Rst. eapply steps_of_In, incl_map. eapply s_ireset_incl.
               eapply iresets_of_In; eauto.
           }
-    - apply sem_trconstrs_cons in Htcs; auto.
-      + apply ident_eqb_neq in Eq.
-        apply state_closed_other in Closed;
+    - pose proof Ord; eapply find_unit_other_not_Is_called_in in Ord; simpl; eauto; simpl; eauto.
+      apply sem_trconstrs_cons in Htcs; auto.
+      + apply state_closed_other in Closed;
           apply state_closed_other in TransClosed;
           apply state_closed_other in Closed'; auto.
+        assert (Forall (fun oc => snd oc <> s_name system) (s_subs s0)).
+        { apply Forall_forall; intros * Hin; apply in_map with (f := snd) in Hin.
+          intro E''; rewrite E'' in Hin; contradiction.
+        }
         edestruct IHP as (me' &?&?); eauto using sem_system.
         exists me'; split; auto.
         apply stmt_call_eval_cons; auto.
-      + eapply find_system_later_not_Is_system_in; eauto.
+      + rewrite steps_iresets_of_Is_system_in, map_app,
+        Permutation.Permutation_app_comm, <- incl_in_app, <- s_subs_steps_of; auto.
+        apply incl_map, s_ireset_incl.
   Qed.
 
   Corollary correctness_loop_call:
-    forall P f xss yss ins S0,
+    forall P f s P' xss yss ins S0,
       Well_defined P ->
       wc_program P ->
+      Stc.Typ.wt_program P ->
       initial_state P f S0 ->
+      find_system f P = Some (s, P') ->
+      wt_memory S0 P' (mems_of_nexts (s_nexts s)) (s_subs s) ->
+      (forall n, Forall2 (fun xt vo => wt_option_value vo (fst (snd xt))) (s_in s) (ins n)) ->
       loop P f xss yss S0 0 ->
       (forall n, Forall2 eq_if_present (xss n) (ins n)) ->
       (forall n, Exists (fun v => v <> absent) (xss n)) ->
@@ -1641,7 +1745,7 @@ Module Type CORRECTNESS
         /\ loop_call (translate P) f step ins (fun n => map value_to_option (yss n)) 0 me0
         /\ me0 ≋ S0.
   Proof.
-    intros * Wdef WC Init Loop Spec Clock.
+    intros * Wdef WC WT Init Find WTS0 WTins Loop Spec Clock.
     pose proof Loop as Loop'; inversion_clear Loop' as [??????? Sem].
     inv Sem.
     assert (Ordered_systems P) as Ord by apply Wdef.
@@ -1650,27 +1754,36 @@ Module Type CORRECTNESS
         by (eapply initial_state_det; eauto;
             eapply Closed, state_closed_empty; eauto).
     exists me'; split; [|split]; auto.
-    clear - Loop Wdef WC Eq Spec Clock.
-    revert Loop Eq; revert me' S0.
+    clear - Find Loop Wdef WC WT WTS0 WTins Eq Spec Clock.
+    revert Loop Eq; revert dependent S0; revert me'.
     generalize 0.
     cofix COFIX; intros.
     inversion_clear Loop as [??????? Sem].
-    eapply correctness in Sem as (?&?&?); eauto.
-    econstructor; eauto.
+    pose proof Wdef; destruct Wdef as (?&?&?).
+    edestruct sem_system_wt; eauto.
+    - clear - WTins Spec.
+      specialize (WTins n); specialize (Spec n).
+      apply Forall2_swap_args in Spec; apply Forall2_trans_ex with (2 := Spec) in WTins; clear Spec.
+      induction WTins as [|???? (?&?&WT&E)]; constructor; auto.
+      inv E; simpl; auto.
+    - eapply correctness in Sem as (?&?&?); eauto.
+      econstructor; eauto.
   Qed.
 
 End CORRECTNESS.
 
 Module CorrectnessFun
-       (Ids    : IDS)
-       (Op     : OPERATORS)
-       (OpAux  : OPERATORS_AUX       Op)
-       (Str    : INDEXEDSTREAMS      Op OpAux)
-       (CE     : COREEXPR        Ids Op OpAux Str)
-       (Stc    : STC             Ids Op OpAux Str CE)
-       (Obc    : OBC             Ids Op OpAux)
-       (Trans  : TRANSLATION     Ids Op OpAux     CE.Syn Stc.Syn Obc.Syn)
-       (Corres : STCMEMORYCORRES Ids Op OpAux Str CE.Syn Stc.Syn Stc.Reset Stc.Next)
-<: CORRECTNESS Ids Op OpAux Str CE Stc Obc Trans Corres.
-  Include CORRECTNESS Ids Op OpAux Str CE Stc Obc Trans Corres.
+       (Ids      : IDS)
+       (Op       : OPERATORS)
+       (OpAux    : OPERATORS_AUX   Ids Op)
+       (ComTyp   : COMMONTYPING    Ids Op OpAux)
+       (Cks      : CLOCKS          Ids Op OpAux)
+       (Str      : INDEXEDSTREAMS  Ids Op OpAux Cks)
+       (CE       : COREEXPR        Ids Op OpAux ComTyp Cks Str)
+       (Stc      : STC             Ids Op OpAux ComTyp Cks Str CE)
+       (Obc      : OBC             Ids Op OpAux ComTyp)
+       (Trans    : TRANSLATION     Ids Op OpAux Cks     CE.Syn Stc.Syn Obc.Syn)
+       (TransTyp : STC2OBCTYPING   Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans)
+<: CORRECTNESS Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans TransTyp.
+  Include CORRECTNESS Ids Op OpAux ComTyp Cks Str CE Stc Obc Trans TransTyp.
 End CorrectnessFun.

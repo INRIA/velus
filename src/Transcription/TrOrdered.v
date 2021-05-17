@@ -27,17 +27,18 @@ Open Scope error_monad_scope.
 Module Type TRORDERED
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import OpAux: OPERATORS_AUX        Op)
-       (L           : LSYNTAX          Ids Op)
-       (Lord        : LORDERED         Ids Op       L)
-       (Import CE   : CESYNTAX             Op)
-       (NL          : NLSYNTAX         Ids Op              CE)
-       (Ord         : NLORDERED        Ids Op              CE NL)
-       (Import TR   : TR               Ids Op OpAux L      CE NL).
+       (Import OpAux: OPERATORS_AUX    Ids Op)
+       (Import Cks  : CLOCKS           Ids Op OpAux)
+       (L           : LSYNTAX          Ids Op OpAux Cks)
+       (Lord        : LORDERED         Ids Op OpAux Cks L)
+       (Import CE   : CESYNTAX         Ids Op OpAux Cks)
+       (NL          : NLSYNTAX         Ids Op OpAux Cks    CE)
+       (Ord         : NLORDERED        Ids Op OpAux Cks    CE NL)
+       (Import TR   : TR               Ids Op OpAux Cks L  CE NL).
 
   Lemma inin_l_nl :
-    forall f n n' Hpref,
-      to_node n Hpref = OK n' ->
+    forall f n n',
+      to_node n = OK n' ->
       Ord.Is_node_in f (NL.n_eqs n') ->
       Lord.Is_node_in f (L.n_eqs n).
   Proof.
@@ -59,41 +60,52 @@ Module Type TRORDERED
   Qed.
 
   Lemma ninin_l_nl :
-    forall f n n' Hpref,
-      to_node n Hpref = OK n' ->
+    forall f n n',
+      to_node n = OK n' ->
       ~ Lord.Is_node_in f (L.n_eqs n) ->
       ~ Ord.Is_node_in f (NL.n_eqs n').
   Proof.
     intros. intro. destruct H0. eapply inin_l_nl; eauto.
   Qed.
 
-  Fact to_global_names : forall name G G' Hprefs,
-      Exists (fun n => (name = L.n_name n)%type) G ->
-      to_global G Hprefs = OK G' ->
-      Exists (fun n => (name = NL.n_name n)%type) G'.
+  Fact to_global_names' : forall name G G',
+      Forall (fun n => (name <> L.n_name n)%type) G.(L.nodes) ->
+      to_global G = OK G' ->
+      Forall (fun n => (name <> NL.n_name n)%type) G'.(NL.nodes).
   Proof.
-    induction G; intros * Hnames Htog; inv Hnames; monadInv Htog; eauto.
-    left. eapply to_node_name; eauto.
+    intros ? (enms&nds) ? Hnames Htog. monadInv Htog.
+    revert dependent x.
+    induction nds; intros; monadInv EQ; simpl; inv Hnames; constructor.
+    - erewrite <-to_node_name; eauto.
+    - eapply IHnds in EQ; eauto.
   Qed.
 
   Lemma ord_l_nl :
-    forall G P Hprefs,
-      to_global G Hprefs = OK P ->
+    forall G P,
+      to_global G = OK P ->
       Lord.Ordered_nodes G ->
       Ord.Ordered_nodes P.
   Proof.
-    intros * Htr Hord.
-    revert dependent P.
-    induction Hord; intros; monadInv Htr; constructor; eauto.
+    intros (?&nds) ? Htr Hord. monadInv Htr.
+    revert dependent x.
+    unfold Lord.Ordered_nodes, CommonProgram.Ordered_program in Hord; simpl in Hord.
+    induction Hord as [|?? (?&?)]; intros; monadInv EQ. constructor; eauto.
+    constructor; [constructor|]; auto.
     - intros f Hin.
-      assert (Lord.Is_node_in f (L.n_eqs nd)) as Hfin.
-      eapply inin_l_nl; eauto.
-      apply H in Hfin. destruct Hfin as [ Hf Hnds ].
-      split.
-      + apply to_node_name in EQ. now rewrite <- EQ.
-      + eapply to_global_names; eauto.
-    - apply to_node_name in EQ. rewrite <- EQ.
-      eapply TR.to_global_names; eauto.
+      assert (Lord.Is_node_in f (L.n_eqs x)) as Hfin.
+      { eapply inin_l_nl; eauto. }
+      apply H in Hfin as (?&(?&?&?)). split; auto.
+      + erewrite <-to_node_name; eauto.
+      + assert (L.find_node f {| L.enums := enums; L.nodes := l |} = Some x0) as Hfind'.
+        { unfold L.find_node. rewrite H2; auto. }
+        eapply find_node_global in Hfind' as (?&?&?). 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
+        unfold NL.find_node in H3. apply option_map_inv in H3 as ((?&?)&?&?); subst.
+        erewrite CommonProgram.find_unit_later; eauto. 1-2:simpl; auto.
+        apply CommonProgram.equiv_program_refl.
+    - replace l with {| L.enums := enums; L.nodes := l |}.(L.nodes) in H0 by eauto.
+      eapply to_global_names' in H0. 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
+      simpl in H0. erewrite to_node_name in H0; eauto.
+    - eapply IHHord in EQ; eauto.
   Qed.
 
 End TRORDERED.
@@ -101,13 +113,14 @@ End TRORDERED.
 Module TrOrderedFun
        (Ids : IDS)
        (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (LSyn : LSYNTAX Ids Op)
-       (LOrd : LORDERED Ids Op LSyn)
-       (CE : CESYNTAX Op)
-       (NL : NLSYNTAX Ids Op CE)
-       (Ord : NLORDERED Ids Op CE NL)
-       (TR : TR Ids Op OpAux LSyn CE NL)
-       <: TRORDERED Ids Op OpAux LSyn LOrd CE NL Ord TR.
-  Include TRORDERED Ids Op OpAux LSyn LOrd CE NL Ord TR.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks : CLOCKS Ids Op OpAux)
+       (LSyn : LSYNTAX Ids Op OpAux Cks)
+       (LOrd : LORDERED Ids Op OpAux Cks LSyn)
+       (CE : CESYNTAX Ids Op OpAux Cks)
+       (NL : NLSYNTAX Ids Op OpAux Cks CE)
+       (Ord : NLORDERED Ids Op OpAux Cks CE NL)
+       (TR : TR Ids Op OpAux Cks LSyn CE NL)
+       <: TRORDERED Ids Op OpAux Cks LSyn LOrd CE NL Ord TR.
+  Include TRORDERED Ids Op OpAux Cks LSyn LOrd CE NL Ord TR.
 End TrOrderedFun.

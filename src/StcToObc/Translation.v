@@ -1,4 +1,5 @@
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
@@ -9,6 +10,7 @@ From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Obc.ObcSyntax.
 
 From Coq Require Import List.
+From Coq Require Import Lia.
 Import List.ListNotations.
 From Coq Require Import Morphisms.
 
@@ -19,9 +21,10 @@ Open Scope list.
 Module Type TRANSLATION
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX Op)
-       (Import CESyn  : CESYNTAX      Op)
-       (Import SynStc : STCSYNTAX Ids Op       CESyn)
+       (Import OpAux  : OPERATORS_AUX Ids Op)
+       (Import Cks    : CLOCKS    Ids Op OpAux)
+       (Import CESyn  : CESYNTAX  Ids Op OpAux Cks)
+       (Import SynStc : STCSYNTAX Ids Op OpAux Cks CESyn)
        (Import SynObc : OBCSYNTAX Ids Op OpAux).
 
   Section Translate.
@@ -33,18 +36,26 @@ Module Type TRANSLATION
       let (x, ty) := xt in
       if PS.mem x memories then State x ty else Var x ty.
 
-    Definition bool_var (x: ident) : exp := tovar (x, bool_type).
+    Fixpoint skip_branches_with_aux (acc: list (option stmt)) (n i: enumtag) (s: stmt): list (option stmt) :=
+      match n with
+      | 0 => acc
+      | S n => skip_branches_with_aux ((if n ==b i then Some s else None) :: acc) n i s
+      end.
+
+    Definition skip_branches_with := skip_branches_with_aux [].
 
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
-      | Cbase          => s
-      | Con ck x true  => Control ck (Ifte (bool_var x) s Skip)
-      | Con ck x false => Control ck (Ifte (bool_var x) Skip s)
+      | Cbase      => s
+      | Con ck x (Tenum (t, n), c) =>
+        Control ck (Switch (tovar (x, Tenum (t, n))) (skip_branches_with n c s) Skip)
+      | _ => Skip
       end.
 
     Fixpoint translate_exp (e: CESyn.exp) : exp :=
       match e with
       | Econst c           => Const c
+      | Eenum c ty         => Enum c ty
       | Evar x ty          => tovar (x, ty)
       | Ewhen e c x        => translate_exp e
       | Eunop op e ty      => Unop op (translate_exp e) ty
@@ -53,20 +64,20 @@ Module Type TRANSLATION
 
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
-      | Emerge y t f =>
-        Ifte (bool_var y) (translate_cexp x t) (translate_cexp x f)
-      | Eite b t f =>
-        Ifte (translate_exp b) (translate_cexp x t) (translate_cexp x f)
+      | Emerge yt es _ =>
+        Switch (tovar yt) (map (fun e => Some (translate_cexp x e)) es) Skip
+      | Ecase b es d =>
+        Switch (translate_exp b) (map (fun e => Some (translate_cexp x e)) es) Skip
       | Eexp l =>
         Assign x (translate_exp l)
       end.
 
     Definition var_on_base_clock (ck: clock) (x: ident) : bool :=
       negb (PS.mem x memories)
-           && match Env.find x clkvars with
-              | Some ck' => clock_eq ck ck'
-              | None => false
-              end.
+      && match Env.find x clkvars with
+         | Some ck' => clock_eq ck ck'
+         | None => false
+         end.
 
     Definition translate_arg (ck: clock) (e : CESyn.exp) : exp :=
       match e with
@@ -81,8 +92,10 @@ Module Type TRANSLATION
       match tc with
       | TcDef x ck ce =>
         Control ck (translate_cexp x ce)
-      | TcReset x ckr c0 =>
+      | TcReset x ckr _ (Op.Const c0) =>
         Control ckr (AssignSt x (Const c0))
+      | TcReset x ckr ty (Op.Enum t) =>
+        Control ckr (AssignSt x (Enum t ty))
       | TcNext x ck _ le =>
         Control ck (AssignSt x (translate_exp le))
       | TcStep s xs ck rst f es =>
@@ -91,8 +104,8 @@ Module Type TRANSLATION
         Control ck (Call [] f s reset [])
       end.
 
-  (*   (** Remark: tcs ordered in reverse order of execution for coherence with *)
-  (*      [Is_well_sch]. *) *)
+    (*   (** Remark: tcs ordered in reverse order of execution for coherence with *)
+     (*      [Is_well_sch]. *) *)
 
     Definition translate_tcs (tcs: list trconstr) : stmt :=
       fold_left (fun i tc => Comp (translate_tc tc) i) tcs Skip.
@@ -102,9 +115,13 @@ Module Type TRANSLATION
   Program Definition step_method (s: system) : method :=
     let memids := map fst s.(s_nexts) in
     let mems := ps_from_list memids in
+    let typvars := Env.adds_with fst s.(s_out)
+                                         (Env.adds_with fst s.(s_vars)
+                                                                (Env.from_list_with fst s.(s_in)))
+    in
     let clkvars := Env.adds_with snd s.(s_out)
-                    (Env.adds_with snd s.(s_vars)
-                      (Env.from_list_with snd s.(s_in)))
+                                         (Env.adds_with snd s.(s_vars)
+                                                                (Env.from_list_with snd s.(s_in)))
     in
     {| m_name := step;
        m_in   := idty s.(s_in);
@@ -122,11 +139,18 @@ Module Type TRANSLATION
     - apply step_atom.
   Qed.
 
-  Definition reset_mems (mems: list (ident * (const * clock))) : stmt :=
-    fold_left (fun s xc => Comp s (AssignSt (fst xc) (Const (fst (snd xc))))) mems Skip.
+  (* TODO: I don't know why tuple pattern version won't be considered "convertible" by Coq.
+           It make me wanna finish chicken species. *)
+  Definition reset_mems (inits: list (ident * (const * type * clock))) : stmt :=
+    fold_left (fun s init =>
+                 Comp s (AssignSt (fst init) (match fst (fst (snd init)) with
+                                     | Op.Const c => Const c
+                                     | Op.Enum c  => Enum c (snd (fst (snd init)))
+                                     end)))
+              inits Skip.
 
   Definition reset_insts (insts: list (ident * ident)) : stmt :=
-    fold_left (fun s xf => Comp s (Call [] (snd xf) (fst xf) reset [])) insts Skip.
+    fold_left (fun s inst => Comp s (Call [] (snd inst) (fst inst) reset [])) insts Skip.
 
   Definition translate_reset (b: system) : stmt :=
     Comp (reset_mems b.(s_nexts)) (reset_insts b.(s_subs)).
@@ -147,7 +171,7 @@ Module Type TRANSLATION
 
   Program Definition translate_system (b: system) : class :=
     {| c_name    := b.(s_name);
-       c_mems    := map (fun xc => (fst xc, type_const (fst (snd xc)))) b.(s_nexts);
+       c_mems    := map (fun xc => (fst xc, snd (fst (snd xc)))) b.(s_nexts);
        c_objs    := b.(s_subs);
        c_methods := [ step_method b; reset_method b ]
     |}.
@@ -164,8 +188,10 @@ Module Type TRANSLATION
     split; auto.
   Qed.
 
-  Definition translate (P: SynStc.program) : program :=
-    map translate_system P.
+  Program Instance translate_system_transform_unit: TransformUnit system class :=
+    { transform_unit := translate_system }.
+
+  Program Instance translate_transform_state_unit: TransformStateUnit system class.
 
   Lemma exists_step_method:
     forall s,
@@ -206,71 +232,103 @@ Module Type TRANSLATION
     inversion 1; auto.
   Qed.
 
-  Lemma find_class_translate:
-    forall f P cls P',
-      find_class f (translate P) = Some (cls, P') ->
-      exists s P',
-        find_system f P = Some (s, P')
-        /\ cls = translate_system s.
+  Program Instance program_program_without_units : TransformProgramWithoutUnits SynStc.program program :=
+    { transform_program_without_units := fun p => Program p.(SynStc.enums) [] }.
+
+  Definition translate: SynStc.program -> program := transform_units.
+
+  Fact skip_branches_with_aux_app:
+    forall n i s acc,
+      skip_branches_with_aux acc n i s = skip_branches_with n i s ++ acc.
   Proof.
-    induction P as [|s P]; [now inversion 1|].
-    intros * Hfind; simpl in Hfind.
-    destruct (equiv_dec s.(s_name) f) as [Heq|Hneq].
-    - rewrite Heq, ident_eqb_refl in Hfind.
-      inv Hfind.
-      exists s, P. split; auto.
-      simpl. now rewrite Heq, ident_eqb_refl.
-    - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
-      apply IHP in Hfind as (s' & P'' & Hfind & Hcls).
-      exists s', P''. simpl. rewrite Hneq. auto.
+    unfold skip_branches_with.
+    induction n; intros; simpl; auto.
+    rewrite IHn, cons_is_app; symmetry; rewrite IHn.
+    now rewrite app_assoc.
   Qed.
 
-  Lemma find_system_translate:
-    forall f P s P',
-      find_system f P = Some (s, P') ->
-      exists cls prog',
-        find_class f (translate P) = Some (cls, prog')
-        /\ cls = translate_system s
-        /\ prog' = translate P'.
+  Fact skip_branches_with_0:
+    forall i s,
+      skip_branches_with 0 i s = [].
+  Proof. reflexivity. Qed.
+
+  Fact skip_branches_with_S:
+    forall n i s,
+      skip_branches_with (S n) i s =
+      skip_branches_with n i s ++ [if n ==b i then Some s else None].
   Proof.
-    induction P as [|s' P]; [now inversion 1|].
-    intros * Hfind; simpl in Hfind.
-    destruct (equiv_dec s'.(s_name) f) as [Heq|Hneq].
-    - rewrite Heq, ident_eqb_refl in Hfind.
-      injection Hfind; intros; subst s P'.
-      exists (translate_system s'), (translate P).
-      split; [|split]; auto.
-      simpl. now rewrite Heq, ident_eqb_refl.
-    - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
-      apply IHP in Hfind as (cls & prog' & Hfind & Hcls).
-      exists cls, prog'. split; auto. simpl. now rewrite Hneq.
+    intros; unfold skip_branches_with at 1; simpl.
+    now rewrite skip_branches_with_aux_app.
   Qed.
 
-  Lemma typeof_correct:
-    forall mems e,
-      typeof (translate_exp mems e) = CESyn.typeof e.
+  Fact skip_branches_with_length:
+    forall n i s,
+      length (skip_branches_with n i s) = n.
   Proof.
-    induction e; intros; simpl; auto; cases.
+    induction n; intros; simpl; auto.
+    rewrite skip_branches_with_S, app_length, IHn; simpl; lia.
   Qed.
 
-  Corollary typeof_arg_correct:
-    forall mems clkvars ck e,
-      typeof (translate_arg mems clkvars ck e) = CESyn.typeof e.
+  Fact nth_error_skip_branches_with:
+    forall n i j s,
+      nth_error (skip_branches_with n i s) j =
+      if Compare_dec.le_lt_dec n j then None
+      else Some (if Nat.eq_dec j i then Some s else None).
   Proof.
-    unfold translate_arg; intros.
-    cases; simpl; cases.
-    apply typeof_correct.
+    induction n; intros.
+    - unfold skip_branches_with; simpl.
+      apply nth_error_nil.
+    - destruct (Compare_dec.le_lt_dec (S n) j) as [|LT].
+      + apply nth_error_None.
+        now rewrite skip_branches_with_length.
+      + rewrite skip_branches_with_S.
+        apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in LT as [|].
+        * rewrite nth_error_app1.
+          -- rewrite IHn.
+             destruct (Compare_dec.le_lt_dec n j); auto; lia.
+          -- now rewrite skip_branches_with_length.
+        * subst; rewrite nth_error_app2; rewrite skip_branches_with_length; auto.
+          rewrite Nat.sub_diag; simpl; auto.
+          destruct (Nat.eq_dec n i) as [|Neq]; subst.
+          -- now rewrite equiv_decb_refl.
+          -- apply not_equiv_decb_equiv in Neq; now rewrite Neq.
+  Qed.
+
+  Fact skip_branches_with_In:
+    forall n i s,
+      i < n ->
+      In (Some s) (skip_branches_with n i s).
+  Proof.
+    induction n; intros * Lt; try lia.
+    rewrite skip_branches_with_S.
+    apply Lt.lt_n_Sm_le, Compare_dec.le_lt_eq_dec in Lt as [|].
+    - apply in_app; auto.
+    - subst; apply in_app; rewrite equiv_decb_refl; right; constructor; auto.
+  Qed.
+
+  Lemma skip_branches_with_In_det:
+    forall n e s s',
+      In (Some s') (skip_branches_with n e s) ->
+      s' = s.
+  Proof.
+    induction n; intros * Hin.
+    - rewrite skip_branches_with_0 in Hin; contradiction.
+    - rewrite skip_branches_with_S in Hin.
+      apply in_app in Hin as [|Hin]; eauto.
+      inv Hin; try contradiction.
+      cases.
   Qed.
 
 End TRANSLATION.
 
 Module TranslationFun
-       (Import Ids    : IDS)
-       (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX Op)
-       (Import CESyn  : CESYNTAX      Op)
-       (Import SynStc : STCSYNTAX Ids Op       CESyn)
-       (Import SynObc : OBCSYNTAX Ids Op OpAux)
-       <: TRANSLATION Ids Op OpAux CESyn SynStc SynObc.
-  Include TRANSLATION Ids Op OpAux CESyn SynStc SynObc.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX Ids Op)
+       (Cks    : CLOCKS    Ids Op OpAux)
+       (CESyn  : CESYNTAX  Ids Op OpAux Cks)
+       (SynStc : STCSYNTAX Ids Op OpAux Cks CESyn)
+       (SynObc : OBCSYNTAX Ids Op OpAux)
+<: TRANSLATION Ids Op OpAux Cks CESyn SynStc SynObc.
+  Include TRANSLATION Ids Op OpAux Cks CESyn SynStc SynObc.
 End TranslationFun.

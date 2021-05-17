@@ -20,15 +20,18 @@ let set_main_node s =
   Veluslib.main_node := Some s
 
 let get_main_node decls =
-  let rec last_decl ds =
+  let rec last_decl last ds =
     match ds with
-    | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
-    | [LustreAst.NODE (n, _, _, _, _, _, _)] -> n
-    | _::ds -> last_decl ds
+    | [] -> last
+    | LustreAst.NODE (n, _, _, _, _, _, _) :: ds -> last_decl (Some n) ds
+    | _ :: ds -> last_decl last ds
   in
   match !Veluslib.main_node with
   | Some s -> intern_string s
-  | None   -> last_decl decls
+  | None   -> begin match last_decl None decls with
+      | Some s -> s
+      | None   -> Printf.fprintf stderr "no nodes found\n"; exit 1
+    end
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
@@ -104,7 +107,7 @@ let compile source_name filename =
   let ast = parse toks in
   let main_node = get_main_node ast in
   match Compiler.apply_partial
-          (VelusCorrectness.compile ast main_node)
+          (Velus.compile ast main_node)
           Asmexpand.expand_program with
   | Error errmsg ->
     Format.eprintf "%a@." Driveraux.print_error errmsg; exit 1
@@ -144,6 +147,7 @@ let speclist = [
   "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
                                    " Show result clocks of nested applications";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
+  "-nonormswitches", Arg.Clear Veluslib.normalize_switches, " Skip Obc switches normalization";
   "-noaddwhens", Arg.Clear Veluslib.add_when_to_constants,
                                 " Do not automatically add 'when' to constants";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
@@ -154,7 +158,7 @@ let usage_msg =
     Configuration.arch Configuration.system Configuration.abi
 
 let _ =
-  Machine.config:=
+  Machine.config :=
     begin match Configuration.arch with
     | "powerpc" -> if Configuration.model = "e5500" || Configuration.model = "ppc64"
                    then if Configuration.abi = "linux" then Machine.ppc_32_r64_linux_bigendian

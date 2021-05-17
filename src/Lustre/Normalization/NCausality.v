@@ -19,11 +19,12 @@ From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normal
 Module Type NCAUSALITY
        (Import Ids : IDS)
        (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Import Syn : LSYNTAX Ids Op)
-       (Import Cau : LCAUSALITY Ids Op Syn)
-       (Import Clo : LCLOCKING Ids Op Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Syn Cau).
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks : CLOCKS Ids Op OpAux)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks)
+       (Import Cau : LCAUSALITY Ids Op OpAux Cks Syn)
+       (Import Clo : LCLOCKING Ids Op OpAux Cks Syn)
+       (Import Norm : NORMALIZATION Ids Op OpAux Cks Syn Cau).
 
   Import Fresh Tactics.
 
@@ -57,7 +58,7 @@ Module Type NCAUSALITY
   Definition st_inits (st : fresh_st (Op.type * clock * option PS.t)) :=
     map_filter (fun '(x, (ty, ck, xr)) => match xr with
                                        | None => None
-                                       | Some xr => if (ty ==b Op.bool_type) then Some (x, (ck, xr))
+                                       | Some xr => if (ty ==b OpAux.bool_velus_type) then Some (x, (ck, xr))
                                                    else None
                                        end) (st_anns st).
 
@@ -97,7 +98,7 @@ Module Type NCAUSALITY
     eapply option_map_inv_None in Hfind.
     eapply find_none in Hfind; eauto.
     destruct x as (?&(?&?)&[?|]); simpl in *; try congruence.
-    destruct (t ==b Op.bool_type); inv Heq.
+    destruct (t ==b OpAux.bool_velus_type); inv Heq.
     rewrite PSF.equal_1 in Hfind. 2:symmetry; eauto.
     rewrite equiv_decb_refl in Hfind; simpl.
     simpl in Hfind; congruence.
@@ -114,7 +115,7 @@ Module Type NCAUSALITY
   Qed.
 
   Fact fresh_ident_true_st_inits : forall pref st st' ck id xr,
-      fresh_ident pref ((Op.bool_type, ck), (Some xr)) st = (id, st') ->
+      fresh_ident pref ((OpAux.bool_velus_type, ck), (Some xr)) st = (id, st') ->
       st_inits st' = (id, (ck, xr))::st_inits st.
   Proof.
     intros * Hfresh.
@@ -138,11 +139,21 @@ Module Type NCAUSALITY
 
   Hint Constructors Is_free_in_clock.
 
-  Fact add_whens_Is_free_left : forall ck ty c,
+  Fact add_whens_const_Is_free_left : forall ck ty c,
       forall x, Is_free_left x 0 (add_whens (Econst c) ty ck) ->
            Is_free_in_clock x ck.
   Proof.
-    induction ck; intros * Hfree; inv Hfree; simpl in *.
+    induction ck as [|? ? ? (?&?)]; intros * Hfree; inv Hfree; simpl in *.
+    destruct H1 as [[_ ?]|?]; subst; auto.
+    - inv H; eauto.
+      rewrite add_whens_numstreams in H3; auto. inv H3.
+  Qed.
+
+  Fact add_whens_enum_Is_free_left : forall ck ty k,
+      forall x, Is_free_left x 0 (add_whens (Eenum k ty) ty ck) ->
+           Is_free_in_clock x ck.
+  Proof.
+    induction ck as [|? ? ? (?&?)]; intros * Hfree; inv Hfree; simpl in *.
     destruct H1 as [[_ ?]|?]; subst; auto.
     - inv H; eauto.
       rewrite add_whens_numstreams in H3; auto. inv H3.
@@ -167,7 +178,7 @@ Module Type NCAUSALITY
     intros * Hin.
     unfold st_inits, st_clocks in *.
     eapply map_filter_In' in Hin as ((?&(?&?)&[?|])&In&Eq); try congruence.
-    destruct (t ==b Op.bool_type); inv Eq.
+    destruct (t ==b OpAux.bool_velus_type); inv Eq.
     repeat simpl_In. exists t. simpl_In. exists (Some xr); auto.
   Qed.
 
@@ -177,7 +188,7 @@ Module Type NCAUSALITY
     intros st ? Hin.
     unfold st_inits, st_ids in *. repeat simpl_In.
     eapply map_filter_In' in H0 as ((?&(?&?)&[?|])&In&Eq); try congruence.
-    destruct (t0 ==b Op.bool_type); inv Eq.
+    destruct (t0 ==b OpAux.bool_velus_type); inv Eq.
     eexists; split; eauto; simpl; auto.
   Qed.
 
@@ -385,7 +396,7 @@ Module Type NCAUSALITY
       (forall x, Is_free_left x 0 e -> Is_free_in_clock x ck \/ PS.In x xr) ->
       ~In (ck, xr) (map snd (st_inits st)) ->
       PS.For_all (fun xr => exists ckr, In (xr, ckr) vars) xr ->
-      fresh_ident norm2 (Op.bool_type, ck, Some xr) st = (x, st') ->
+      fresh_ident norm2 (OpAux.bool_velus_type, ck, Some xr) st = (x, st') ->
       causal_inv vars (([x], [e])::eqs) st'.
   Proof.
     intros * (Hnd&Hvalid&v&a&g&(Hv&Ha)&Hinits) Hwc Hfree Hnin Hxr Hfresh.
@@ -489,7 +500,7 @@ Module Type NCAUSALITY
       + intros ? Hfree; simpl.
         inv Hfree.
         destruct H1 as [H1|(?&?)].
-        left; inv H1; [|inv H4]; eapply add_whens_Is_free_left; eauto.
+        left; inv H1; [|inv H4]; eapply add_whens_enum_Is_free_left; eauto.
         right. eapply ps_of_list_In.
         rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&In&?). inv H0.
         eapply in_map with (f:=fst) in In; eauto.
@@ -567,8 +578,8 @@ Module Type NCAUSALITY
       eapply Hnck, In_InMembers; eauto.
   Qed.
 
-  Lemma causal_inv_insert_eq :
-    forall G vars st st' x x' ty ck e e1 e2 eqs,
+  Lemma causal_inv_insert_eq {prefs} :
+    forall (G: @global prefs) vars st st' x x' ty ck e e1 e2 eqs,
       wl_exp G e2 ->
       In (x, ck) vars ->
       ~InMembers x (st_inits st) ->
@@ -652,7 +663,7 @@ Module Type NCAUSALITY
         specialize (Hnth xH) as (Hlen&Hnth).
         apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
         right; left. split; auto.
-        rewrite PS.union_spec, collect_free_left_spec; eauto.
+        erewrite PS.union_spec, collect_free_left_spec; eauto.
       + left. apply Ha. left. right; auto.
       + destruct Hdep as (ck'&Hin&Hfree).
         unfold st_clocks in Hin. erewrite fresh_ident_anns in Hin; eauto; simpl in Hin.
@@ -676,8 +687,8 @@ Module Type NCAUSALITY
         rewrite ps_of_list_In, map_app, st_clocks_st_ids in contra; auto.
   Qed.
 
-  Lemma causal_inv_insert_eq_with_xinit :
-    forall G vars st st' x x' xinit ty ck xr e e1 e2 eqs,
+  Lemma causal_inv_insert_eq_with_xinit {prefs} :
+    forall (G: @global prefs) vars st st' x x' xinit ty ck xr e e1 e2 eqs,
       wl_exp G e2 ->
       In (x, ck) vars ->
       ~InMembers x (st_inits st) ->
@@ -793,7 +804,7 @@ Module Type NCAUSALITY
         specialize (Hnth xH) as (Hlen&Hnth).
         apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
         left. right; left. split; auto.
-        rewrite PS.union_spec, collect_free_left_spec; eauto.
+        erewrite PS.union_spec, collect_free_left_spec; eauto.
       + left. left. apply Ha. left. right; auto.
       + destruct Hdep as (ck'&Hin&Hfree).
         unfold st_clocks in Hin. erewrite fresh_ident_anns in Hin; eauto; simpl in Hin.
@@ -820,7 +831,7 @@ Module Type NCAUSALITY
         rewrite ps_of_list_In, map_app, st_clocks_st_ids in contra; auto.
   Qed.
 
-  Fact fby_equation_causal : forall G vars to_cut eq eqs eqs' st st',
+  Fact fby_equation_causal {prefs} : forall (G: @global prefs) vars to_cut eq eqs eqs' st st',
       Forall (unnested_equation G) (eq::eqs) ->
       wc_env vars ->
       wc_equation G vars eq ->
@@ -858,7 +869,8 @@ Module Type NCAUSALITY
         inv Hwc.
         1,2:repeat (constructor; eauto); simpl.
         1,3:apply add_whens_wl; auto.
-        1,2:rewrite app_nil_r, length_annot_numstreams, add_whens_numstreams; simpl; auto.
+        1,2:destruct ty; simpl; auto.
+        rewrite app_nil_r, length_annot_numstreams, add_whens_numstreams; destruct ty; simpl; auto.
       + destruct H as (Hndup&Hvalid&_).
         destruct Hwc as (_&_&Hin'). apply Forall2_singl in Hin'.
         apply Facts.st_valid_after_NoDupMembers in Hvalid; auto.
@@ -874,12 +886,15 @@ Module Type NCAUSALITY
         eapply Forall_forall in Hr as (?&?&Eq); eauto; simpl in *.
         destruct Eq; subst. eapply Exists_exists. repeat esplit; eauto.
       + intros ? Hf. inv Hf.
-        destruct H5 as [(_&Hf)|[Hf|Hf]]; auto 10.
+        destruct H5 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
         * inv Hf. right. right. split; auto.
-        * inv Hf; inv H7; auto.
+        * inv H4; inv H8; auto.
+        * apply Exists_singl in H4; auto.
       + intros ? Hf. inv Hf.
         destruct H5 as [Free|(_&Free)]; inv Free. 2:inv H7.
-        apply add_whens_Is_free_left in H7; auto.
+        destruct ty; simpl in *;
+          [apply add_whens_const_Is_free_left in H7; auto|
+           apply add_whens_enum_Is_free_left in H7; auto].
       + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc. inv Hwc.
         eapply Forall2_ignore1 in Hr. eapply Forall_impl; [|eapply Hr].
         intros (?&?&?) (?&?&?&?); subst.
@@ -907,8 +922,9 @@ Module Type NCAUSALITY
         eapply Forall_forall in Hr as (?&?&Eq); eauto; simpl in *.
         destruct Eq; subst. eapply Exists_exists. repeat esplit; eauto.
       + intros ? Hf. inv Hf.
-        destruct H4 as [(_&Hf)|[Hf|Hf]]; auto 10.
-        inv Hf; auto.
+        destruct H4 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
+        * inv Hf; auto.
+        * apply Exists_singl in H3; auto.
       + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc. inv Hwc.
         eapply Forall2_ignore1 in Hr. eapply Forall_impl; [|eapply Hr].
         intros (?&?&?) (?&?&?&?); subst.
@@ -916,8 +932,8 @@ Module Type NCAUSALITY
     - rewrite Permutation_app_comm; auto.
   Qed.
 
-  Fact fby_equations_causal' :
-    forall G vars to_cut eqs ceqs eqs' st st',
+  Fact fby_equations_causal' {prefs} :
+    forall (G: @global prefs) vars to_cut eqs ceqs eqs' st st',
       wc_env vars ->
       Forall (unnested_equation G) (ceqs++eqs) ->
       Forall (wc_equation G vars) eqs ->
@@ -940,8 +956,8 @@ Module Type NCAUSALITY
     - unfold fby_equations; repeat inv_bind; repeat eexists; eauto; inv_bind; auto.
   Qed.
 
-  Corollary fby_equations_causal :
-    forall G vars to_cut eqs eqs' st st',
+  Corollary fby_equations_causal {prefs} :
+    forall (G: @global prefs) vars to_cut eqs eqs' st st',
       wc_env vars ->
       Forall (unnested_equation G) eqs ->
       Forall (wc_equation G vars) eqs ->
@@ -971,19 +987,20 @@ Module Type NCAUSALITY
       + rewrite map_app; simpl. reflexivity.
   Qed.
 
-  Lemma normfby_node_causal : forall G n to_cut Hunt Hpref,
+  Lemma normfby_node_causal : forall G n,
+      unnested_node G n ->
       wc_global G ->
       wc_node G n ->
       node_causal n ->
-      node_causal (normfby_node G to_cut n Hunt Hpref).
+      node_causal (normfby_node n).
   Proof.
-    intros * HwcG Hwc Hcaus.
+    intros * Hun HwcG Hwc Hcaus.
     destruct Hcaus as (v&a&g&Hg).
     unfold node_causal, graph_of_node in *. simpl.
-    remember (fby_equations _ _ _) as res. symmetry in Heqres. destruct res as [eqs' st'].
-    eapply fby_equations_causal in Heqres; eauto; simpl in *.
+    destruct (fby_equations _ _ _) as (eqs'&st') eqn:Hres.
+    eapply fby_equations_causal in Hres. 2-5:eauto.
     3:destruct Hwc as (_&_&_&?); eauto.
-    - destruct Heqres as (?&?&?&?&g''&(Ha&Hv)&_).
+    - destruct Hres as (?&?&?&?&g''&(Ha&Hv)&_).
       eexists. eexists. exists g''.
       repeat rewrite idck_app. repeat rewrite <- app_assoc.
       rewrite (Permutation_app_comm (idck (idty (st_anns st'))) (idck (n_out n))).
@@ -1000,21 +1017,22 @@ Module Type NCAUSALITY
         apply node_NoDup.
       + eapply norm2_not_in_norm1_prefs.
       + pose proof (n_good n) as (Good&_).
-        rewrite <- Hpref.
         eapply Forall_incl; eauto.
         rewrite map_fst_idck.
         apply incl_map, incl_appr', incl_appr', incl_appl, incl_refl.
   Qed.
 
-  Lemma normfby_global_causal : forall G Hunt Hprefs,
+  Lemma normfby_global_causal : forall G,
+      unnested_global G ->
       wc_global G ->
-      Forall node_causal G ->
-      Forall node_causal (normfby_global G Hunt Hprefs).
+      Forall node_causal (nodes G) ->
+      Forall node_causal (nodes (normfby_global G)).
   Proof.
-    induction G; intros * Hwc Hcaus; auto.
-    inv Hwc. inv Hcaus.
+    unfold unnested_global, wc_global, CommonTyping.wt_program, CommonProgram.units.
+    intros (?&nds). induction nds; intros * Hun Hwc Hcaus; simpl; auto.
+    inversion_clear Hun as [|?? (?&?)]. inversion_clear Hwc as [|?? (?&?)]. inv Hcaus.
     constructor; eauto.
-    eapply normfby_node_causal; eauto.
+    eapply normfby_node_causal; simpl; eauto.
   Qed.
 
 End NCAUSALITY.
@@ -1022,11 +1040,12 @@ End NCAUSALITY.
 Module NCausalityFun
        (Ids : IDS)
        (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Syn : LSYNTAX Ids Op)
-       (Cau : LCAUSALITY Ids Op Syn)
-       (Clo : LCLOCKING Ids Op Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Syn Cau)
-       <: NCAUSALITY Ids Op OpAux Syn Cau Clo Norm.
-  Include NCAUSALITY Ids Op OpAux Syn Cau Clo Norm.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks : CLOCKS Ids Op OpAux)
+       (Syn : LSYNTAX Ids Op OpAux Cks)
+       (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
+       (Clo : LCLOCKING Ids Op OpAux Cks Syn)
+       (Norm : NORMALIZATION Ids Op OpAux Cks Syn Cau)
+       <: NCAUSALITY Ids Op OpAux Cks Syn Cau Clo Norm.
+  Include NCAUSALITY Ids Op OpAux Cks Syn Cau Clo Norm.
 End NCausalityFun.

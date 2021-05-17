@@ -17,7 +17,7 @@ open BinNums
 open BinPos
 open FMapPositive
 
-type ident = ClockDefs.ident
+type ident = Common.ident
 type idents = ident list
 
 let extern_atom = Camlcoq.extern_atom
@@ -25,13 +25,14 @@ let extern_atom = Camlcoq.extern_atom
 module type SYNTAX =
   sig
     type typ
-    type const
+    type cconst
     type unop
     type binop
+    type enumtag
 
     type clock =
     | Cbase
-    | Con of clock * ident * bool
+    | Con of clock * ident * (typ * enumtag)
 
     type nclock = clock * ident option
 
@@ -39,15 +40,16 @@ module type SYNTAX =
     type lann = typ list * nclock
 
     type exp =
-    | Econst of const
+    | Econst of cconst
+    | Eenum of enumtag * typ
     | Evar   of ident * ann
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
     | Efby   of exp list * exp list * exp list * ann list
     | Earrow of exp list * exp list * exp list * ann list
-    | Ewhen  of exp list * ident * bool * lann
-    | Emerge of ident * exp list * exp list * lann
-    | Eite   of exp * exp list * exp list * lann
+    | Ewhen  of exp list * ident * enumtag * lann
+    | Emerge of (ident * typ) * exp list list * lann
+    | Ecase  of exp * exp list list * lann
     | Eapp   of ident * exp list * exp list * ann list
 
     type equation = idents * exp list
@@ -59,17 +61,21 @@ module type SYNTAX =
           n_out      : (ident * (typ * clock)) list;
           n_vars     : (ident * (typ * clock)) list;
           n_eqs      : equation list;
-          n_prefixes : MSetPositive.PositiveSet.t;
         }
 
-    type global = node list
+    type global = {
+      enums: (ident * Datatypes.nat) list;
+      nodes: node list
+    }
   end
 
-module PrintFun (L: SYNTAX)
-                (PrintOps : PRINT_OPS with type typ   = L.typ
-                                       and type const = L.const
-                                       and type unop  = L.unop
-                                       and type binop = L.binop) :
+module PrintFun
+    (PrintOps: PRINT_OPS)
+    (L: SYNTAX with type typ     = PrintOps.typ
+                and type cconst  = PrintOps.cconst
+                and type unop    = PrintOps.unop
+                and type binop   = PrintOps.binop
+                and type enumtag = PrintOps.enumtag) :
   sig
     val print_fullclocks : bool ref
     val print_appclocks  : bool ref
@@ -86,6 +92,7 @@ module PrintFun (L: SYNTAX)
 
     let precedence = function
       | L.Econst _ -> (16, NA)
+      | L.Eenum _ -> (16, NA)
       | L.Evar _   -> (16, NA)
       | L.Eunop  (op, _, _)    -> PrintOps.prec_unop op
       | L.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
@@ -93,7 +100,7 @@ module PrintFun (L: SYNTAX)
       | L.Earrow _ -> (14, RtoL)
       | L.Ewhen _  -> (12, LtoR) (* precedence of + - *)
       | L.Emerge _ -> ( 5, LtoR) (* precedence of lor - 1 *)
-      | L.Eite _   -> ( 5, LtoR)
+      | L.Ecase _   -> ( 5, LtoR)
       | L.Eapp _   -> ( 4, NA)
 
     let print_ident p i = pp_print_string p (extern_atom i)
@@ -101,11 +108,11 @@ module PrintFun (L: SYNTAX)
     let rec print_clock p ck =
       match ck with
       | L.Cbase -> fprintf p "."
-      | L.Con (ck', x, b) ->
-          fprintf p "%a %s %a"
-            print_clock ck'
-            (if b then "on" else "onot")
-            print_ident x
+      | L.Con (ck', x, (_, c)) ->
+        fprintf p "%a on (%a=%a)"
+          print_clock ck'
+          print_ident x
+          PrintOps.print_enumtag c
 
     let print_nclock p = function
       | (ck, None) -> print_clock p ck
@@ -134,7 +141,9 @@ module PrintFun (L: SYNTAX)
       else fprintf p "@[<hov 2>";
       begin match e with
       | L.Econst c ->
-        PrintOps.print_const p c
+        PrintOps.print_cconst p c
+      | L.Eenum (c, _) ->
+        PrintOps.print_enumtag p c
       | L.Evar (id, _) ->
         print_ident p id
       | L.Eunop  (op, e, (ty, _)) ->
@@ -149,21 +158,19 @@ module PrintFun (L: SYNTAX)
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Earrow (e0s, es, er, _) ->
         fprintf p "reset@ %a ->@ %a every@ %a" (exp_list prec1) e0s (exp_list prec2) es (exp_list prec') er
-      | L.Ewhen (e, x, v, _) ->
-        fprintf p "%a when%s %a"
+      | L.Ewhen (e, x, c, _) ->
+        fprintf p "%a when (%a=%a)"
           (exp_list prec') e
-          (if v then "" else " not")
           print_ident x
-      | L.Emerge (id, e1s, e2s, _) ->
-        fprintf p "merge %a@ (true -> %a)@ (false -> %a)"
+          PrintOps.print_enumtag c
+      | L.Emerge ((id, _), es, _) ->
+        fprintf p "merge %a@ %a"
           print_ident id
-          exp_enclosed_list e1s
-          exp_enclosed_list e2s
-      | L.Eite (e, e1s, e2s, _) ->
-        fprintf p "if %a@ then %a@ else %a"
+          (PrintOps.print_branches exp_enclosed_list) (List.map (fun ce -> Some ce)es, None)
+      | L.Ecase (e, es, _) ->
+        fprintf p "case %a@ %a"
           (exp 16) e
-          (exp_list 16) e1s
-          (exp_list 16) e2s
+          (PrintOps.print_branches exp_enclosed_list) (List.map (fun ce -> Some ce)es, None)
       | L.Eapp (f, es, [], anns) ->
         if !print_appclocks
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
@@ -205,12 +212,12 @@ module PrintFun (L: SYNTAX)
     let print_clock_decl p ck =
       match ck with
       | L.Cbase -> ()
-      | L.Con (ck', x, b) ->
-          if !print_fullclocks
-          then fprintf p " :: @[<hov 3>%a@]" print_clock ck
-          else fprintf p " when%s %a"
-              (if b then "" else " not")
-              print_ident x
+      | L.Con (ck', x, (_, c)) ->
+        if !print_fullclocks
+        then fprintf p " :: @[<hov 3>%a@]" print_clock ck
+        else fprintf p " when (%a=%a)"
+            print_ident x
+            PrintOps.print_enumtag c
 
     let print_decl p (id, (ty, ck)) =
       fprintf p "%a@ : %a%a"
@@ -260,5 +267,5 @@ module PrintFun (L: SYNTAX)
     let print_global p prog =
       fprintf p "@[<v 0>%a@]@."
         (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_node)
-        (List.rev prog)
+        (List.rev prog.L.nodes)
   end

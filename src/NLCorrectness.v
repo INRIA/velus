@@ -1,12 +1,5 @@
 (** The old correctness lemma, starting from NLustre *)
 
-From Velus Require Import Common.
-From Velus Require Import Ident.
-From Velus Require Import CoindStreams.
-From Velus Require Import ObcToClight.Generation.
-From Velus Require Import Traces.
-From Velus Require Import ClightToAsm.
-
 From compcert Require Import common.Errors.
 From compcert Require Import common.Events.
 From compcert Require Import common.Behaviors.
@@ -15,8 +8,17 @@ From compcert Require Import cfrontend.ClightBigstep.
 From compcert Require Import lib.Integers.
 From compcert Require Import driver.Compiler.
 
+From Velus Require Import Common.
+From Velus Require Import CommonTyping.
+From Velus Require Import Ident.
+From Velus Require Import CoindStreams.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import Traces.
+From Velus Require Import ClightToAsm.
+From Velus Require Import ObcToClight.Correctness.
 From Velus Require Import Interface.
 From Velus Require Import Instantiator.
+From Velus Require Import Velus.
 Import Stc.Syn.
 Import NL.
 Import Obc.Syn.
@@ -24,6 +26,8 @@ Import Obc.Sem.
 Import Obc.Typ.
 Import Obc.Equ.
 Import Obc.Def.
+Import Obc.Fus.
+Import Obc.SwN.
 Import Fusion.
 Import Stc2ObcInvariants.
 Import IStr.
@@ -31,43 +35,13 @@ Import CStr.
 Import CIStr.
 Import OpAux.
 Import Op.
-From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Lustre.LustreElab.
 
 From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
-From Coq Require Import Omega.
 
 Open Scope error_monad_scope.
 Open Scope stream_scope.
-
-Parameter schedule      : ident -> list trconstr -> list positive.
-Parameter print_nlustre : global -> unit.
-Parameter print_stc     : Stc.Syn.program -> unit.
-Parameter print_sch     : Stc.Syn.program -> unit.
-Parameter print_obc     : Obc.Syn.program -> unit.
-Parameter do_fusion     : unit -> bool.
-Parameter do_sync       : unit -> bool.
-Parameter do_expose     : unit -> bool.
-
-Module ExternalSchedule.
-  Definition schedule := schedule.
-End ExternalSchedule.
-
-Module Scheduler := Stc.Scheduler ExternalSchedule.
-
-Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
-  do _ <- r;
-    let args := map fst s.(s_in) in
-    let mems := ps_from_list (map fst s.(s_nexts)) in
-    if Stc.Wdef.well_sch mems args s.(s_tcs)
-    then OK tt
-    else Error (MSG "system " :: CTX s.(s_name) :: MSG " is not well scheduled." :: nil).
-
-Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
-  do _ <- fold_left is_well_sch_system P (OK tt);
-    OK P.
 
 Lemma is_well_sch_error:
   forall G e,
@@ -78,48 +52,17 @@ Qed.
 
 Lemma is_well_sch_program:
   forall P,
-    fold_left is_well_sch_system P (OK tt) = OK tt ->
+    fold_left is_well_sch_system P.(Stc.Syn.systems) (OK tt) = OK tt ->
     Stc.Wdef.Well_scheduled P.
 Proof.
   unfold Stc.Wdef.Well_scheduled.
-  induction P as [|s]; simpl.
-  - constructor.
-  - intro Fold.
-    destruct (Stc.Wdef.well_sch (ps_from_list (map fst (Stc.Syn.s_nexts s)))
-                               (map fst (Stc.Syn.s_in s)) (Stc.Syn.s_tcs s)) eqn: E.
-    + apply Stc.Wdef.Is_well_sch_by_refl in E.
-      constructor; auto.
-    + rewrite is_well_sch_error in Fold; discriminate.
+  intro; induction (Stc.Syn.systems P) as [|s]; simpl; auto.
+  intro Fold.
+  cases_eqn E.
+  - apply Stc.SchV.Is_well_sch_by_refl in E.
+    constructor; auto.
+  - rewrite is_well_sch_error in Fold; discriminate.
 Qed.
-
-Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
-  is_well_sch (Scheduler.schedule P).
-
-Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
-  OK g
-     @@ print print_nlustre
-     @@ NL2Stc.translate
-     @@ print print_stc
-     @@@ schedule_program
-     @@ print print_sch
-     @@ Stc2Obc.translate
-     @@ total_if do_fusion (map Obc.Fus.fuse_class)
-     @@ add_defaults
-     @@ print print_obc
-     @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
-
-Axiom add_builtins: Clight.program -> Clight.program.
-Axiom add_builtins_spec:
-  forall B p,
-    (forall t, B <> Goes_wrong t) ->
-    program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
-
-Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
-  OK g
-     @@@ nl_to_cl main_node
-     @@ print print_Clight
-     @@ add_builtins
-     @@@ transf_clight2_program.
 
 Section ForallStr.
   Context {A: Type}.
@@ -150,15 +93,15 @@ Section ForallStr.
   Qed.
 End ForallStr.
 
-Definition wt_streams: list (Stream val) -> list (ident * type) -> Prop :=
-  Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s).
+Definition wt_streams: list (Stream value) -> list (ident * type) -> Prop :=
+  Forall2 (fun s xt => Forall_Str (fun v => wt_value v (snd xt)) s).
 
 Lemma wt_streams_spec:
   forall vss xts,
     wt_streams vss xts <->
-    forall n, wt_vals (tr_Streams vss n) xts.
+    forall n, wt_values (tr_Streams vss n) xts.
 Proof.
-  unfold wt_vals.
+  unfold wt_values.
   split.
   - intros * WTs n; revert dependent vss; induction n; intros.
     + rewrite tr_Streams_hd.
@@ -183,8 +126,8 @@ Section WtStream.
 
   Variable G: global.
   Variable main: ident.
-  Variable ins: list (Stream val).
-  Variable outs: list (Stream val).
+  Variable ins: list (Stream value).
+  Variable outs: list (Stream value).
 
   Definition wt_ins :=
     forall node,
@@ -198,41 +141,67 @@ Section WtStream.
 
 End WtStream.
 
+Lemma node_in_out_not_nil:
+  forall n,
+    n.(n_in) <> [] \/ n.(n_out) <> [].
+Proof.
+  intro; left; apply node_in_not_nil.
+Qed.
+
 Hint Resolve
-     Obc.Fus.fuse_wt_program
-     Obc.Fus.fuse_call
-     Obc.Fus.fuse_wt_mem
-     Obc.Fus.fuse_loop_call
-(*      NL2StcTyping.translate_wt *)
-(*      Scheduler.scheduler_wt_program *)
-     (*      Stc2ObcTyping.translate_wt *)
+     fuse_wt_program
+     fuse_call
+     normalize_switches_call
+     fuse_wt_memory
+     normalize_switches_wt_memory
+     fuse_loop_call
+     normalize_switches_loop_call
      wt_add_defaults_class
-     wt_mem_add_defaults
+     normalize_switches_wt_program
+     wt_memory_add_defaults
      stmt_call_eval_add_defaults
      loop_call_add_defaults
-     ClassFusible_translate
+     ProgramFusible_translate
      Scheduler.scheduler_wc_program
      NL2StcClocking.translate_wc
+     Scheduler.scheduler_wt_program
+     NL2StcTyping.translate_wt
+     Stc2ObcTyping.translate_wt
      No_Naked_Vars_add_defaults_class
-     Obc.Fus.fuse_No_Overwrites
+     fuse_No_Overwrites
+     normalize_switches_No_Overwrites
      translate_No_Overwrites
-     Obc.Fus.fuse_cannot_write_inputs
+     fuse_cannot_write_inputs
      translate_cannot_write_inputs
-.
+     normalize_switches_cannot_write_inputs
+     wt_add_defaults_class
+     wt_memory_add_defaults
+     stmt_call_eval_add_defaults
+     loop_call_add_defaults
+     ProgramFusible_translate
+     Scheduler.scheduler_wc_program
+     NL2StcClocking.translate_wc
+     Scheduler.scheduler_wt_program
+     NL2StcTyping.translate_wt
+     Stc2ObcTyping.translate_wt
+     No_Naked_Vars_add_defaults_class
+     translate_No_Overwrites
+     translate_cannot_write_inputs
+     node_in_out_not_nil.
 
 (** The trace of a NLustre node *)
 Section NLTrace.
 
-  Variable (node: node) (ins outs: list (Stream val)).
+  Variable (node: node) (ins outs: list (Stream value)).
 
   Hypothesis Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [].
   Hypothesis Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in).
   Hypothesis Len_outs    : Datatypes.length outs = Datatypes.length node.(n_out).
 
   Program Definition trace_node (n: nat): traceinf :=
-    traceinf_of_traceinf' (mk_trace (tr_Streams ins) (tr_Streams outs)
-                                    (idty node.(n_in)) (idty node.(n_out))
-                                    _ _ _ n).
+    mk_trace (tr_Streams ins) (tr_Streams outs)
+             (idty node.(n_in)) (idty node.(n_out))
+             _ _ _ n.
   Next Obligation.
     destruct Spec_in_out.
     - left; intro E; apply map_eq_nil in E; auto.
@@ -271,7 +240,7 @@ Section NLTrace.
 End NLTrace.
 
 (** A bisimulation relation between a declared node's trace and a given trace *)
-Inductive bisim_IO (G: global) (f: ident) (ins outs: list (Stream val)): traceinf -> Prop :=
+Inductive bisim_IO (G: global) (f: ident) (ins outs: list (Stream value)): traceinf -> Prop :=
   IOStep:
     forall T node
       (Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [])
@@ -282,9 +251,10 @@ Inductive bisim_IO (G: global) (f: ident) (ins outs: list (Stream val)): tracein
       bisim_IO G f ins outs T.
 
 (** streams of present values *)
-Definition pstr (xss: stream (list val)) : stream (list value) :=
+Definition pstr (xss: stream (list value)) : stream (list svalue) :=
   fun n => map present (xss n).
-Definition pStr: list (Stream val) -> list (Stream value) := map (Streams.map present).
+Definition pStr: list (Stream value) -> list (Stream svalue) :=
+  map (Streams.map present).
 
 Lemma tr_Streams_pStr:
   forall xss,
@@ -305,6 +275,26 @@ Proof.
   rewrite map_map; auto.
 Qed.
 
+Lemma find_node_find_system:
+  forall G f n,
+    find_node f G = Some n ->
+      exists P,
+        Stc.Syn.find_system f (NL2Stc.translate G) = Some (NL2Stc.translate_node n, P).
+Proof.
+  intros * Find.
+  unfold find_node in Find; apply option_map_inv in Find as ((node, ?)& Find & E).
+  simpl in E; subst node.
+  apply find_unit_transform_units_forward in Find; eauto.
+Qed.
+
+Lemma find_system_find_class:
+  forall P f s P',
+    Stc.Syn.find_system f P = Some (s, P') ->
+    Obc.Syn.find_class f (Stc2Obc.translate P) = Some (Stc2Obc.translate_system s, Stc2Obc.translate P').
+Proof.
+  intros * Find; eapply find_unit_transform_units_forward in Find; auto.
+Qed.
+
 (** Correctness from NLustre to Clight *)
 Lemma behavior_nl_to_cl:
   forall G P main ins outs,
@@ -318,29 +308,30 @@ Lemma behavior_nl_to_cl:
          /\ bisim_IO G main ins outs T.
 Proof.
   intros * Hwc Hwt Hwti Hnorm Hsem COMP.
-  unfold nl_to_cl in COMP.
+  unfold nl_to_cl, schedule_program in COMP.
   simpl in COMP; repeat rewrite print_identity in COMP.
 
   (* well-scheduled Stc program *)
-  destruct (schedule_program (NL2Stc.translate G)) eqn: Sch;
+  destruct (is_well_sch (Scheduler.schedule (NL2Stc.translate G))) eqn: Sch;
     simpl in COMP; try discriminate.
-  unfold schedule_program, is_well_sch in Sch; simpl in Sch.
-  destruct (fold_left is_well_sch_system (Scheduler.schedule (NL2Stc.translate G))
-                      (OK tt)) eqn: Wsch; simpl in *; try discriminate; destruct u.
+  unfold is_well_sch in Sch.
+  destruct (fold_left is_well_sch_system (Stc.Syn.systems (Scheduler.schedule (NL2Stc.translate G)))
+                      (OK tt)) eqn: Wsch; try discriminate; destruct u.
   inv Sch.
   apply is_well_sch_program in Wsch.
 
   (* a main Stc system exists *)
   repeat rewrite print_identity in COMP.
-  pose proof COMP as COMP'.
+  (* pose proof COMP as COMP'. *)
   assert (exists n, find_node main G = Some n) as (main_node & Find)
       by (inv Hsem; eauto).
   pose proof Find as Find_node.
-  apply NL2Stc.find_node_translate in Find as (bl & P' & Find& ?); subst.
+  apply find_node_find_system in Find as (P' & Find).
   apply Scheduler.scheduler_find_system in Find.
+  pose proof Find as Find_system.
 
   (* a main Obc class exists *)
-  apply Stc2Obc.find_system_translate in Find as (?&?& Find &?&?); subst.
+  apply find_system_find_class in Find.
 
   (* Coinductive NLustre to nat->values *)
   assert (Ordered_nodes G) by (eapply wt_global_Ordered_nodes; eauto).
@@ -373,12 +364,31 @@ Proof.
     by (unfold pstr; intros; clear; induction (ins' n); constructor; simpl; auto).
   assert (forall n, Exists (fun v => v <> absent) (pstr ins' n))
          by (unfold pstr; intros; specialize (Length n);
-             destruct (ins' n); simpl in *; try omega;
+             destruct (ins' n); simpl in *; try lia;
              constructor; discriminate).
 
+  assert (ComTyp.wt_memory (M 0) (Scheduler.schedule P')
+                           (Stc.Syn.mems_of_nexts (Stc.Syn.s_nexts (Scheduler.schedule_system (NL2Stc.translate_node main_node))))
+                           (Stc.Syn.s_subs (Scheduler.schedule_system (NL2Stc.translate_node main_node))))
+    by (take (Stc.Sem.initial_state _ _ _) and apply Scheduler.scheduler_initial_state in it;
+        eapply Stc.TypSem.initial_state_wt_memory with (2 := it); eauto).
+  assert (forall n,
+             Forall2
+               (fun xt vo =>
+                  wt_option_value vo (fst (snd xt)))
+               (Stc.Syn.s_in (Scheduler.schedule_system (NL2Stc.translate_node main_node)))
+               (map Some (ins' n))).
+  { subst ins'; simpl.
+    apply Hwti in Find_node; clear - Find_node.
+    rewrite wt_streams_spec in Find_node.
+    intro n; specialize (Find_node n).
+    setoid_rewrite Forall2_map_2 in Find_node.
+    induction Find_node; simpl; auto.
+  }
+
   (* Stc loop to Obc loop *)
-  apply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins' n))
-    in Hsem as (me0 & Rst & Hsem &?); auto.
+  eapply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins' n))
+    in Hsem as (me0 & Rst & Hsem &?); eauto.
   setoid_rewrite value_to_option_pstr in Hsem.
 
   (* aliases *)
@@ -386,7 +396,8 @@ Proof.
     set (sch_tr_G := Scheduler.schedule tr_G) in *;
     set (tr_sch_tr_G := Stc2Obc.translate sch_tr_G) in *;
     set (tr_main_node := NL2Stc.translate_node main_node) in *;
-    set (sch_tr_main_node := Scheduler.schedule_system tr_main_node) in *.
+    set (sch_tr_main_node := Scheduler.schedule_system tr_main_node) in *;
+    set (main_class := Stc2Obc.translate_system sch_tr_main_node) in *.
 
   (* Obc methods step and reset *)
   pose proof (Stc2Obc.exists_reset_method sch_tr_main_node) as Find_reset.
@@ -395,13 +406,11 @@ Proof.
     set (m_reset := Stc2Obc.reset_method sch_tr_main_node) in *.
 
   (* well-typing *)
-  assert (wt_program tr_sch_tr_G)
-    by (apply Stc2ObcTyping.translate_wt, Scheduler.scheduler_wt_program,
-        NL2StcTyping.translate_wt; auto).
-  assert (wt_mem me0 (Stc2Obc.translate (Scheduler.schedule P'))
-                 (Stc2Obc.translate_system sch_tr_main_node))
-    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?);
-        eauto; simpl; constructor).
+  assert (Stc.Typ.wt_program sch_tr_G) by (subst sch_tr_G tr_G; auto).
+  assert (wt_program tr_sch_tr_G) by (subst tr_sch_tr_G; auto).
+  assert (ComTyp.wt_memory me0 (Stc2Obc.translate (Scheduler.schedule P'))
+                           (c_mems main_class) (c_objs main_class))
+    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?); eauto; simpl; auto).
   assert (wt_outs G main outs) as Hwto.
   { unfold wt_outs.
     intros * Find_node'; rewrite Find_node' in Find_node; inv Find_node.
@@ -415,107 +424,122 @@ Proof.
   }
 
   (* IO specs *)
-  assert (n_in main_node <> [] \/ n_out main_node <> []) as Step_in_out_spec'.
-  { left. pose proof (n_ingt0 main_node) as Hin.
-    intro E; rewrite E in Hin; simpl in Hin; omega.
-  }
-  assert (m_in m_step <> nil \/ m_out m_step <> nil) as Step_in_out_spec.
-  { erewrite Stc2Obc.find_method_stepm_in, Stc2Obc.find_method_stepm_out; eauto.
-    simpl; destruct Step_in_out_spec'.
-    - left; intro E; apply map_eq_nil in E; intuition.
-    - right; intro E; apply map_eq_nil in E; intuition.
-  }
-  assert (forall n, wt_vals (ins' n) (m_in m_step)) as Hwt_in
+  (* and assert some equalities between classes and methods *)
+  assert (forall n, wt_values (ins' n) (m_in m_step)) as Hwt_in
       by (erewrite Stc2Obc.find_method_stepm_in; eauto;
           apply wt_streams_spec, Hwti; auto).
-  assert (forall n, wt_vals (outs' n) (m_out m_step)) as Hwt_out
+  assert (forall n, wt_values (outs' n) (m_out m_step)) as Hwt_out
       by (erewrite Stc2Obc.find_method_stepm_out; eauto;
           apply wt_streams_spec, Hwto; auto).
-  assert (m_in m_step = idty main_node.(n_in)) as Ein by auto.
-  assert (m_out m_step = idty main_node.(n_out)) as Eout by auto.
-  assert (Datatypes.length ins = Datatypes.length (n_in main_node)) as Len_ins.
-  { transitivity (Datatypes.length (idty main_node.(n_in))); try apply map_length.
-    rewrite <-Ein.
-    specialize (Hwt_in 0); unfold ins' in Hwt_in; setoid_rewrite Forall2_map_1 in Hwt_in.
-    eapply Forall2_length; eauto.
+
+  set (obc_p := add_defaults
+                  (total_if do_norm_switches normalize_switches
+                            (total_if do_fusion fuse_program tr_sch_tr_G))) in *.
+  set (obc_p' := add_defaults
+                   (total_if do_norm_switches normalize_switches
+                             (total_if do_fusion fuse_program
+                                       (Stc2Obc.translate (Scheduler.schedule P'))))) in *.
+  set (main_class' := GenerationProperties.c_main main obc_p P (do_sync tt) (do_expose tt) COMP) in *.
+  set (main_step' := GenerationProperties.main_step main obc_p P (do_sync tt) (do_expose tt) COMP) in *.
+
+  assert (obc_p' =
+          GenerationProperties.prog_main main
+                                         (add_defaults (total_if do_norm_switches normalize_switches
+                                                                 (total_if do_fusion fuse_program tr_sch_tr_G)))
+                                         P (do_sync tt) (do_expose tt) COMP
+          /\ main_class' =
+            add_defaults_class
+              (total_if do_norm_switches normalize_class
+                        (total_if do_fusion fuse_class main_class))) as [Eq_prog Eq_main].
+  { pose proof (GenerationProperties.find_main_class _ _ _ _ _ COMP) as Find'.
+    subst obc_p main_class'; unfold total_if in *.
+    destruct (do_fusion tt), (do_norm_switches tt).
+    - apply fuse_find_class, normalize_switches_find_class, find_class_add_defaults_class in Find.
+      rewrite Find' in Find; injection Find; intros -> ->; split; auto.
+    - apply fuse_find_class, find_class_add_defaults_class in Find.
+      rewrite Find' in Find; injection Find; intros -> ->; auto.
+    - apply normalize_switches_find_class, find_class_add_defaults_class in Find.
+      rewrite Find' in Find; injection Find; intros -> ->; auto.
+    - apply find_class_add_defaults_class in Find.
+      rewrite Find' in Find; injection Find; intros -> ->; auto.
   }
-  assert (Datatypes.length outs = Datatypes.length (n_out main_node)) as Len_outs.
- { transitivity (Datatypes.length (idty main_node.(n_out))); try apply map_length.
-    rewrite <-Eout.
-    specialize (Hwt_out 0); unfold outs' in Hwt_out; setoid_rewrite Forall2_map_1 in Hwt_out.
-    eapply Forall2_length; eauto.
+  assert (main_step' =
+          add_defaults_method
+            (total_if do_norm_switches normalize_method
+                      (total_if do_fusion fuse_method m_step))) as Eq_step.
+  { pose proof (GenerationProperties.find_main_step _ _ _ _ _ COMP) as Find_step'.
+    subst obc_p main_class main_class' main_step'; unfold total_if in *.
+    rewrite Eq_main, add_defaults_class_find_method in Find_step'.
+    apply option_map_inv in Find_step' as (?& Find_step' &?).
+    destruct (do_fusion tt), (do_norm_switches tt).
+    - apply fuse_find_method', normalize_switches_find_method in Find_step.
+      rewrite Find_step' in Find_step; inv Find_step; auto.
+    - apply fuse_find_method' in Find_step.
+      rewrite Find_step' in Find_step; inv Find_step; auto.
+    - apply normalize_switches_find_method in Find_step.
+      rewrite Find_step' in Find_step; inv Find_step; auto.
+    - rewrite Find_step' in Find_step; inv Find_step; auto.
   }
+  assert (forall n, wt_values (ins' n) (m_in main_step')) as WTins.
+  { intro; specialize (Hwt_in n).
+    subst main_step'.
+    rewrite Eq_step; unfold total_if; cases.
+  }
+  assert (forall n, wt_values (outs' n) (m_out main_step')) as WTouts.
+  { intro; specialize (Hwt_out n).
+    subst main_step'.
+    rewrite Eq_step; unfold total_if; cases.
+  }
+  assert (n_in main_node <> [] \/ n_out main_node <> []) as Node_in_out_spec by apply node_in_out_not_nil.
+  assert (m_in main_step' <> nil \/ m_out main_step' <> nil) as Step_in_out_spec.
+  { rewrite Eq_step.
+    assert (idty (n_in main_node) <> [] \/ idty (n_out main_node) <> [])
+      by (destruct Node_in_out_spec as [Neq|Neq];
+          ((now left; intro; eapply Neq, map_eq_nil; eauto)
+           || (right; intro; eapply Neq, map_eq_nil; eauto))).
+    unfold total_if; cases; simpl.
+  }
+  assert (wt_program (total_if do_norm_switches normalize_switches
+                               (total_if do_fusion fuse_program tr_sch_tr_G)))
+    by (unfold total_if; cases).
 
-  (* proceed to monadic compilation to Clight *)
-  unfold Generation.translate in COMP.
-  unfold total_if in *.
-  destruct (do_fusion tt); clear COMP.
+  eexists; split.
 
-  (* activated Fusion optimization *)
-  - (* assert some equalities between classes and methods *)
-    Opaque add_defaults_class Obc.Fus.fuse_class Obc.Fus.fuse_method.
-    pose proof (GenerationProperties.find_main_class _ _ _ _ _ COMP') as Find'.
-    apply Obc.Fus.fuse_find_class, find_class_add_defaults_class in Find.
-    rewrite Find in Find'; injection Find'; intros Eq_prog Eq_main.
+  - eapply correctness with (TRANSL := COMP) (me0 := me0)
+                            (WTins := WTins) (WTouts := WTouts)
+                            (Step_in_out_spec := Step_in_out_spec);
+      subst obc_p; eauto.
+    + intros ??????? Call; eapply stmt_call_eval_add_defaults_class_not_None
+                             with (3 := Call); eauto.
+    + change [] with (map Some (@nil value)); eauto.
+      apply stmt_call_eval_add_defaults; auto;
+        subst tr_sch_tr_G sch_tr_G tr_G;
+        unfold total_if; cases; eauto 6.
+    + apply loop_call_add_defaults; auto;
+        subst tr_sch_tr_G sch_tr_G tr_G;
+        unfold total_if; cases; eauto 6.
+    + subst main_class' obc_p'; rewrite Eq_main, <-Eq_prog.
+      apply wt_memory_add_defaults;
+        unfold total_if; cases; eauto.
 
-    pose proof (GenerationProperties.find_main_step _ _ _ _ _ COMP') as Find_step'.
-    rewrite <-Eq_main in Find_step'; rewrite add_defaults_class_find_method in Find_step'.
-    apply Obc.Fus.fuse_find_method' in Find_step.
-    rewrite Find_step in Find_step'; simpl option_map in Find_step'; injection Find_step'; intros Eq_step.
-    clear Find Find' Find_step Find_step'.
+  - assert (m_in m_step = idty main_node.(n_in)) as Ein by auto.
+    assert (m_out m_step = idty main_node.(n_out)) as Eout by auto.
+    assert (length ins = length (n_in main_node)) as Len_ins.
+    { transitivity (length (idty main_node.(n_in))); try apply map_length.
+      rewrite <-Ein.
+      specialize (Hwt_in 0); unfold ins' in Hwt_in; setoid_rewrite Forall2_map_1 in Hwt_in.
+      eapply Forall2_length; eauto.
+    }
+    assert (length outs = length (n_out main_node)) as Len_outs.
+    { transitivity (length (idty main_node.(n_out))); try apply map_length.
+      rewrite <-Eout.
+      specialize (Hwt_out 0); unfold outs' in Hwt_out; setoid_rewrite Forall2_map_1 in Hwt_out.
+      eapply Forall2_length; eauto.
+    }
 
-    rewrite <-Obc.Fus.fuse_method_in, <-add_defaults_method_m_in, Eq_step in Step_in_out_spec, Hwt_in, Ein;
-      rewrite <-Obc.Fus.fuse_method_out, <-add_defaults_method_m_out, Eq_step in Step_in_out_spec, Hwt_out, Eout.
-
-    assert (Forall_methods (fun m => Obc.Inv.No_Overwrites (m_body m)) (map Obc.Fus.fuse_class tr_sch_tr_G))
-           by (apply Obc.Fus.fuse_No_Overwrites, translate_No_Overwrites; auto).
-    assert (Forall_methods
-              (fun m => Forall (fun x => ~ Obc.Inv.Can_write_in x (m_body m)) (map fst (m_in m)))
-              (map Obc.Fus.fuse_class tr_sch_tr_G))
-      by (apply Obc.Fus.fuse_cannot_write_inputs, translate_cannot_write_inputs).
-    econstructor; split.
-    + assert (Forall Obc.Fus.ClassFusible tr_sch_tr_G)
-        by (apply ClassFusible_translate; auto;
-            apply Scheduler.scheduler_wc_program; eauto;
-            apply NL2StcClocking.translate_wc; auto).
-      eapply correctness with (TRANSL := COMP') (me0 := me0)
-                              (WTins := Hwt_in) (WTouts := Hwt_out)
-                              (Step_in_out_spec := Step_in_out_spec); eauto.
-      * intros ??????? Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
-      * change [] with (map Some (@nil val)); eauto.
-      * rewrite <-Eq_prog, <-Eq_main; eauto.
-    + apply IOStep with (Spec_in_out := Step_in_out_spec') (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
-      apply trace_inf_sim_step_node; auto.
-
-  (* activated Fusion optimization *)
-  - (* assert some equalities between classes and methods *)
-    pose proof (GenerationProperties.find_main_class _ _ _ _ _ COMP') as Find'.
-    apply find_class_add_defaults_class in Find.
-    rewrite Find in Find'; injection Find'; intros Eq_prog Eq_main.
-
-    Opaque add_defaults_method.
-    pose proof (GenerationProperties.find_main_step _ _ _ _ _ COMP') as Find_step'.
-    rewrite <-Eq_main in Find_step'; rewrite add_defaults_class_find_method in Find_step'.
-    rewrite Find_step in Find_step'; simpl option_map in Find_step'; injection Find_step'; intros Eq_step.
-
-    rewrite <-add_defaults_method_m_in, Eq_step in Step_in_out_spec, Hwt_in, Ein;
-      rewrite <-add_defaults_method_m_out, Eq_step in Step_in_out_spec, Hwt_out, Eout.
-
-    assert (Forall_methods (fun m => Obc.Inv.No_Overwrites (m_body m)) tr_sch_tr_G)
-      by (apply translate_No_Overwrites; auto).
-    assert (Forall_methods
-              (fun m => Forall (fun x => ~ Obc.Inv.Can_write_in x (m_body m)) (map fst (m_in m)))
-              tr_sch_tr_G)
-           by (apply translate_cannot_write_inputs).
-    econstructor; split.
-    + eapply correctness with (TRANSL := COMP') (me0 := me0)
-                              (WTins := Hwt_in) (WTouts := Hwt_out)
-                              (Step_in_out_spec := Step_in_out_spec); eauto.
-      * intros ??????? Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
-      * change [] with (map Some (@nil val)); eauto.
-      * rewrite <-Eq_prog, <-Eq_main; eauto.
-    + apply IOStep with (Spec_in_out := Step_in_out_spec') (Len_ins := Len_ins) (Len_outs := Len_outs); auto.
-      apply trace_inf_sim_step_node; auto.
+    eapply IOStep with (Len_ins := Len_ins) (Len_outs := Len_outs) (Spec_in_out := Node_in_out_spec); auto.
+    apply trace_inf_sim_step_node; auto;
+      subst main_step'; rewrite Eq_step; unfold total_if; cases.
 Qed.
 
 (** Correctness from NLustre to ASM  *)

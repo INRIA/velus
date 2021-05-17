@@ -14,10 +14,12 @@ Open Scope list_scope.
 Module Type STCISDEFINED
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX          Op)
-       (Import Syn   : STCSYNTAX     Ids Op CESyn)
-       (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Import Next  : STCISNEXT     Ids Op CESyn Syn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS        Ids Op OpAux)
+       (Import CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Import Syn   : STCSYNTAX     Ids Op OpAux Cks CESyn)
+       (Import Var   : STCISVARIABLE Ids Op OpAux Cks CESyn Syn)
+       (Import Next  : STCISNEXT     Ids Op OpAux Cks CESyn Syn).
 
   Inductive Is_defined_in_tc: ident -> trconstr -> Prop :=
   | DefTcDef:
@@ -97,7 +99,7 @@ Module Type STCISDEFINED
         apply Nodup; rewrite app_assoc, in_app.
       + apply Is_variable_in_variables in Var; rewrite <-s_vars_out_in_tcs in Var;
           auto.
-      + apply nexts_of_In in Next; rewrite <-s_nexts_in_tcs in Next; auto.
+      + apply nexts_of_In in Next; rewrite <-s_nexts_in_tcs_fst in Next; auto.
     - apply fst_InMembers; auto.
   Qed.
 
@@ -132,7 +134,7 @@ Module Type STCISDEFINED
     | TcNext x _ _ _
     | TcDef x _ _ => [x]
     | TcStep _ xs _ _ _ _ => xs
-    | TcReset _ _ _
+    | TcReset _ _ _ _
     | TcInstReset _ _ _ => []
     end.
 
@@ -188,7 +190,7 @@ Module Type STCISDEFINED
 
   Lemma s_defined:
     forall s,
-      Permutation.Permutation (defined (s_tcs s)) (variables (s_tcs s) ++ nexts_of (s_tcs s)).
+      Permutation.Permutation (defined (s_tcs s)) (variables (s_tcs s) ++ map fst (nexts_of (s_tcs s))).
   Proof.
     unfold defined, variables; intro;
       induction (s_tcs s) as [|[]]; simpl; auto.
@@ -201,7 +203,7 @@ Module Type STCISDEFINED
   Proof.
     intros; eapply Permutation.Permutation_NoDup.
     - apply Permutation.Permutation_sym, s_defined.
-    - rewrite <-s_nexts_in_tcs, <-s_vars_out_in_tcs.
+    - rewrite <-s_nexts_in_tcs_fst, <-s_vars_out_in_tcs.
       rewrite <-app_assoc.
       eapply NoDup_app_weaken.
       rewrite Permutation.Permutation_app_comm.
@@ -209,7 +211,7 @@ Module Type STCISDEFINED
   Qed.
 
   Lemma incl_defined_nexts:
-    forall tcs, incl (nexts_of tcs) (defined tcs).
+    forall tcs, incl (map fst (nexts_of tcs)) (defined tcs).
   Proof.
     induction tcs; intros ? Hin; simpl in *; [inv Hin|].
     apply in_app.
@@ -220,11 +222,12 @@ Module Type STCISDEFINED
   Lemma nodup_defined_nodup_nexts:
     forall tcs, NoDup (defined tcs) -> NoDup (nexts_of tcs).
   Proof.
-    induction tcs; intros; simpl in *; auto.
+    induction tcs; intros; simpl in *. constructor.
     destruct a; simpl in *; auto.
     - inv H; auto.
     - inv H; constructor; auto.
       intro Hin. apply H2, incl_defined_nexts; auto.
+      eapply in_map_iff. exists (i, typeof e); eauto.
     - apply NoDup_app_r in H; auto.
   Qed.
 
@@ -244,10 +247,12 @@ End STCISDEFINED.
 Module StcIsDefinedFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX          Op)
-       (Syn   : STCSYNTAX     Ids Op CESyn)
-       (Var   : STCISVARIABLE Ids Op CESyn Syn)
-       (Next  : STCISNEXT     Ids Op CESyn Syn)
-<: STCISDEFINED Ids Op CESyn Syn Var Next.
-  Include STCISDEFINED Ids Op CESyn Syn Var Next.
+       (OpAux : OPERATORS_AUX Ids Op)
+       (Cks   : CLOCKS        Ids Op OpAux)
+       (CESyn : CESYNTAX      Ids Op OpAux Cks)
+       (Syn   : STCSYNTAX     Ids Op OpAux Cks CESyn)
+       (Var   : STCISVARIABLE Ids Op OpAux Cks CESyn Syn)
+       (Next  : STCISNEXT     Ids Op OpAux Cks CESyn Syn)
+<: STCISDEFINED Ids Op OpAux Cks CESyn Syn Var Next.
+  Include STCISDEFINED Ids Op OpAux Cks CESyn Syn Var Next.
 End StcIsDefinedFun.

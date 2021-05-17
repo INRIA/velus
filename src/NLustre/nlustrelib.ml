@@ -17,16 +17,18 @@ open BinNums
 open BinPos
 open FMapPositive
 
-type ident = ClockDefs.ident
+type ident = Common.ident
 type idents = ident list
 
 module type SYNTAX =
   sig
     type clock
     type typ
+    type cconst
     type const
     type exp
     type cexp
+    type enumtag
 
     type equation =
     | EqDef of ident * clock * cexp
@@ -40,20 +42,26 @@ module type SYNTAX =
       n_vars : (ident * (typ * clock)) list;
       n_eqs  : equation list }
 
-    type global = node list
+    type global = {
+      enums: (ident * Datatypes.nat) list;
+      nodes: node list
+    }
   end
 
 module PrintFun
-    (CE: Coreexprlib.SYNTAX)
-    (NL: SYNTAX with type clock = CE.clock
-                 and type typ   = CE.typ
-                 and type const = CE.const
-                 and type exp   = CE.exp
-                 and type cexp  = CE.cexp)
-    (PrintOps: PRINT_OPS with type typ   = CE.typ
-                          and type const = CE.const
-                          and type unop  = CE.unop
-                          and type binop = CE.binop) :
+    (Ops: PRINT_OPS)
+    (CE : Coreexprlib.SYNTAX with type typ     = Ops.typ
+                              and type cconst  = Ops.cconst
+                              and type unop    = Ops.unop
+                              and type binop   = Ops.binop
+                              and type enumtag = Ops.enumtag)
+    (NL : SYNTAX with type clock   = CE.clock
+                  and type typ     = Ops.typ
+                  and type cconst  = Ops.cconst
+                  and type const   = Ops.const
+                  and type exp     = CE.exp
+                  and type cexp    = CE.cexp
+                  and type enumtag = Ops.enumtag) :
   sig
     val print_equation   : formatter -> NL.equation -> unit
     val print_node       : Format.formatter -> NL.node -> unit
@@ -63,7 +71,7 @@ module PrintFun
   =
   struct
 
-    include Coreexprlib.PrintFun (CE) (PrintOps)
+    include Coreexprlib.PrintFun (CE) (Ops)
 
     let rec print_equation p eq =
       match eq with
@@ -85,12 +93,12 @@ module PrintFun
       | NL.EqFby (x, ck, v0, e, []) ->
           fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
             print_ident x
-            PrintOps.print_const v0
+            Ops.print_const v0
             print_exp e
       | NL.EqFby (x, ck, v0, e, ckrs) ->
         fprintf p "@[<hov 2>%a =@ reset %a fby@ %a every %a;@]"
           print_ident x
-          PrintOps.print_const v0
+          Ops.print_const v0
           print_exp e
           (print_comma_list print_ident) (List.map fst ckrs)
 
@@ -119,5 +127,5 @@ module PrintFun
     let print_global p prog =
       fprintf p "@[<v 0>%a@]@."
         (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_node)
-        (List.rev prog)
+        (List.rev prog.NL.nodes)
   end

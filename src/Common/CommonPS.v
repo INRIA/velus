@@ -12,7 +12,6 @@ From Coq Require MSets.MSets.
 From Coq Require Export PArith.
 From Coq Require Import Classes.EquivDec.
 
-From Velus Require Import ClockDefs.
 From Velus Require Import Common.CommonTactics.
 From Velus Require Import Common.CommonList.
 
@@ -24,6 +23,7 @@ Module PSF := MSetFacts.Facts PS.
 Module PSE := MSetEqProperties.WEqPropertiesOn Pos PS.
 Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
 
+Definition ident := Pos.t.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 

@@ -1,4 +1,6 @@
 From Velus Require Import Common.
+From Velus Require Import CommonProgram.
+From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -24,66 +26,55 @@ From Coq Require Import Morphisms.
 Module Type NLTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX      Op)
-       (Import Syn   : NLSYNTAX  Ids Op CESyn)
-       (Import Ord   : NLORDERED Ids Op CESyn Syn)
-       (Import CETyp : CETYPING  Ids Op CESyn).
+       (Import OpAux : OPERATORS_AUX Ids Op)
+       (Import Cks   : CLOCKS    Ids Op OpAux)
+       (Import CESyn : CESYNTAX  Ids Op OpAux Cks)
+       (Import Syn   : NLSYNTAX  Ids Op OpAux Cks CESyn)
+       (Import Ord   : NLORDERED Ids Op OpAux Cks CESyn Syn)
+       (Import CETyp : CETYPING  Ids Op OpAux Cks CESyn).
 
-  Inductive wt_equation (G: global) (vars: list (ident * type)): equation -> Prop :=
+  Inductive wt_equation (G: global) (Γ: list (ident * type)):
+    equation -> Prop :=
   | wt_EqDef: forall x ck e,
-      In (x, typeofc e) vars ->
-      wt_clock vars ck ->
-      wt_cexp vars e ->
-      wt_equation G vars (EqDef x ck e)
+      In (x, typeofc e) Γ ->
+      wt_clock G.(enums) Γ ck ->
+      wt_cexp G.(enums) Γ e ->
+      wt_equation G Γ (EqDef x ck e)
   | wt_EqApp: forall n xs ck f es xrs,
       find_node f G = Some n ->
-      Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs n.(n_out) ->
+      Forall2 (fun x '(_, (t, _)) => In (x, t) Γ) xs n.(n_out) ->
       Forall2 (fun e '(_, (t, _)) => typeof e = t) es n.(n_in) ->
-      wt_clock vars ck ->
-      Forall (wt_exp vars) es ->
-      Forall (fun xr => In (xr, Op.bool_type) vars) (map fst xrs) ->
-      Forall (wt_clock vars) (map snd xrs) ->
-      wt_equation G vars (EqApp xs ck f es xrs)
+      wt_clock G.(enums) Γ ck ->
+      Forall (wt_exp G.(enums) Γ) es ->
+      Forall (fun xr => In (bool_id, 2) G.(enums) /\ In (xr, OpAux.bool_velus_type) Γ) (map fst xrs) ->
+      Forall (wt_clock G.(enums) Γ) (map snd xrs) ->
+      wt_equation G Γ (EqApp xs ck f es xrs)
   | wt_EqFby: forall x ck c0 e xrs,
-      In (x, type_const c0) vars ->
-      typeof e = type_const c0 ->
-      wt_clock vars ck ->
-      wt_exp vars e ->
-      Forall (fun xr => In (xr, Op.bool_type) vars) (map fst xrs) ->
-      Forall (wt_clock vars) (map snd xrs) ->
-      wt_equation G vars (EqFby x ck c0 e xrs).
+      In (x, typeof e) Γ ->
+      wt_const G.(enums) c0 (typeof e) ->
+      wt_clock G.(enums) Γ ck ->
+      wt_exp G.(enums) Γ e ->
+      Forall (fun xr => In (bool_id, 2) G.(enums) /\ In (xr, OpAux.bool_velus_type) Γ) (map fst xrs) ->
+      Forall (wt_clock G.(enums) Γ) (map snd xrs) ->
+      wt_equation G Γ (EqFby x ck c0 e xrs).
 
   Definition wt_node (G: global) (n: node) : Prop
     := Forall (wt_equation G (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
-              n.(n_eqs).
+              n.(n_eqs)
+       /\ forall x tn,
+          In (x, Tenum tn) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
+          In tn G.(enums)
+          /\ 0 < snd tn.
 
-  Inductive wt_global : global -> Prop :=
-  | wtg_nil:
-      wt_global []
-  | wtg_cons: forall n ns,
-      wt_global ns ->
-      wt_node ns n ->
-      Forall (fun n'=> n.(n_name) <> n'.(n_name))%type ns ->
-      wt_global (n::ns).
+  (* TODO: replace Welldef_global; except for the Is_well_sch component.
+           Notably, typing arguments replace the ~Is_node_in and
+           Is_node_in/find_node components. The no duplicate names
+           component is replicated exactly. *)
 
-  Hint Constructors wt_clock wt_exp wt_cexp wt_equation wt_global : nltyping.
+  Definition wt_global :=
+    wt_program wt_node.
 
-  Lemma wt_global_NoDup:
-    forall g,
-      wt_global g ->
-      NoDup (map n_name g).
-  Proof.
-    induction g; eauto using NoDup.
-    intro WTg. simpl. constructor.
-    2:apply IHg; now inv WTg.
-    intro Hin.
-    inversion_clear WTg as [|? ? ? WTn Hn].
-    change (Forall (fun n' => (fun i=> a.(n_name) <> i :> ident) n'.(n_name)) g)
-      in Hn.
-    apply Forall_map in Hn.
-    apply Forall_forall with (1:=Hn) in Hin.
-    now contradiction Hin.
-  Qed.
+  Hint Constructors wt_clock wt_exp wt_cexp wt_equation : nltyping.
 
   Instance wt_equation_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * type)
@@ -101,7 +92,7 @@ Module Type NLTYPING
           | H:Forall _ ?x |- Forall _ ?x =>
             apply Forall_impl_In with (2:=H) end.
       intros ? (?&(?&?)); rewrite Henv in *; auto.
-      1-4:intros; rewrite Henv in *; auto.
+      1-6:intros; rewrite Henv in *; auto.
     - inv WTeq; rewrite <-Henv in *; eauto;
         econstructor; eauto;
           match goal with
@@ -110,7 +101,7 @@ Module Type NLTYPING
           | H:Forall _ ?x |- Forall _ ?x =>
             apply Forall_impl_In with (2:=H) end.
       intros ? (?&(?&?)); rewrite Henv in *; auto.
-      1-4:intros; rewrite Henv in *; auto.
+      1-6:intros; rewrite Henv in *; auto.
   Qed.
 
   Lemma wt_global_Ordered_nodes:
@@ -118,17 +109,55 @@ Module Type NLTYPING
       wt_global G ->
       Ordered_nodes G.
   Proof.
-    induction G as [|n G]; intros * WT; auto using Ordered_nodes.
-    inv WT.
-    constructor; auto.
-    intros *  Hni.
+    intros; eapply wt_program_Ordered_program; eauto.
+    intros * (WT&?) Hni.
     eapply Forall_Exists, Exists_exists in Hni as (eq & Hin & WTeq & Hni); eauto.
+    apply not_None_is_Some.
     inv Hni; inv WTeq;
-      assert (Exists (fun n' => f = n_name n') G) as Hn
-        by (apply find_node_Exists, not_None_is_Some; eauto);
-      split; auto; intro; subst;
-        eapply Forall_Exists, Exists_exists in Hn as (?&?&?&?); eauto;
-          contradiction.
+      take (find_node _ _ = _) and apply option_map_inv in it as ((?&?)&?&?);
+      eauto.
+  Qed.
+
+  Lemma wt_equation_enums_cons:
+    forall ns enums e Γ eq,
+      wt_equation (Global enums ns) Γ eq ->
+      wt_equation (Global (e :: enums) ns) Γ eq.
+  Proof.
+    induction 1; eauto using wt_equation, wt_clock_enums_cons, wt_cexp_enums_cons, wt_exp_enums_cons.
+    - econstructor; eauto using wt_clock_enums_cons.
+      + now rewrite find_node_enums_cons.
+      + eapply Forall_impl; [|eauto]; eauto using wt_exp_enums_cons.
+      + eapply Forall_impl; [|eauto]; intros ? (?&?); simpl in *; eauto using wt_exp_enums_cons.
+      + eapply Forall_impl; [|eauto]; eauto using wt_clock_enums_cons.
+    - econstructor; eauto using wt_clock_enums_cons, wt_exp_enums_cons.
+      + simpl in *. inv H0; constructor; auto using in_cons.
+      + eapply Forall_impl; [|eauto]; intros ? (?&?); simpl in *; eauto using wt_exp_enums_cons.
+      + eapply Forall_impl; [|eauto]; eauto using wt_clock_enums_cons.
+  Qed.
+
+  Corollary wt_node_enums_cons:
+    forall ns enums e n,
+      wt_node (Global enums ns) n ->
+      wt_node (Global (e :: enums) ns) n.
+  Proof.
+    unfold wt_node; intros * (WT & Enums); split.
+    - apply Forall_forall; intros;
+        take (Forall _ _) and eapply Forall_forall in it; eauto.
+      now apply wt_equation_enums_cons.
+    - intros * Hin; apply Enums in Hin as (?&?); split; auto.
+      now right.
+  Qed.
+
+  Corollary wt_global_enums_cons:
+    forall enums ns e,
+      wt_global (Global enums ns) ->
+      wt_global (Global (e :: enums) ns).
+  Proof.
+    unfold wt_global, wt_program.
+    induction ns; simpl; intros * WT; inv WT; constructor.
+    - take (_ /\ _) and destruct it as (WT & ?); split; auto.
+      now apply wt_node_enums_cons.
+    - apply IHns; auto.
   Qed.
 
 End NLTYPING.
@@ -136,10 +165,12 @@ End NLTYPING.
 Module NLTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX       Op)
-       (Syn   : NLSYNTAX   Ids Op CESyn)
-       (Ord   : NLORDERED  Ids Op CESyn Syn)
-       (CETyp : CETYPING   Ids Op CESyn)
-       <: NLTYPING Ids Op CESyn Syn Ord CETyp.
-  Include NLTYPING Ids Op CESyn Syn Ord CETyp.
+       (OpAux : OPERATORS_AUX  Ids Op)
+       (Cks   : CLOCKS     Ids Op OpAux)
+       (CESyn : CESYNTAX   Ids Op OpAux Cks)
+       (Syn   : NLSYNTAX   Ids Op OpAux Cks CESyn)
+       (Ord   : NLORDERED  Ids Op OpAux Cks CESyn Syn)
+       (CETyp : CETYPING   Ids Op OpAux Cks CESyn)
+       <: NLTYPING Ids Op OpAux Cks CESyn Syn Ord CETyp.
+  Include NLTYPING Ids Op OpAux Cks CESyn Syn Ord CETyp.
 End NLTypingFun.

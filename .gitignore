@@ -1,5 +1,6 @@
 # Object files, in general
 *.vo
+*.vio
 *.vo.aux
 *.aux
 *.glob
@@ -12,10 +13,12 @@
 *.cmxa
 *.cmti
 *.cmt
+**/.lia.cache
 
 # Emacs saves
 *~
 
+*.lia.cache
 *.v.d
 _build
 *.native

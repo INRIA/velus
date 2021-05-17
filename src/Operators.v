@@ -1,193 +1,162 @@
+From Coq Require Import PeanoNat.
 From Velus Require Import Common.
+From Coq Require Export Classes.EquivDec.
 
 Module Type OPERATORS.
 
-  (* Types *)
+  (* Concrete types and values *)
 
-  Parameter val : Type.
-  Parameter type : Type.
-  Parameter const : Type.
+  Parameter cvalue : Type.
+  Parameter ctype  : Type.
+  Parameter cconst : Type.
+
+  (* Enums *)
+
+  Definition enumtag := nat.
+
+  (* Axiom enumtag_of_cvalue: cvalue -> enumtag. *)
+  (* Axiom cvalue_of_enumtag: enumtag -> cvalue. *)
+  (* Axiom enumtag_ctype: ctype. *)
+
+  (* Axiom enumtag_of_cvalue_lte: *)
+  (*   forall n, enumtag_of_cvalue (cvalue_of_enumtag n) <= n. *)
+
+  (* Vélus types and values *)
+
+  Inductive value :=
+  | Vscalar : cvalue -> value
+  | Venum   : enumtag -> value.
+
+  Inductive type :=
+  | Tprimitive : ctype -> type
+  | Tenum      : ident * nat -> type.
+
+  Inductive const :=
+  | Const: cconst -> const
+  | Enum : enumtag -> const.
 
   (* Constants *)
 
-  Parameter type_const : const -> type.
-  Parameter sem_const  : const -> val.
-  Parameter init_type  : type -> const.
-
-  (* Booleans *)
-
-  Parameter true_val  : val.
-  Parameter false_val : val.
-  Conjecture true_not_false_val : true_val <> false_val.
-
-  Parameter bool_type : type.
-
-  Parameter true_const : const.
-  Parameter false_const : const.
-  Conjecture sem_true_const : sem_const true_const = true_val.
-  Conjecture sem_false_const : sem_const false_const = false_val.
-  Conjecture type_true_const : type_const true_const = bool_type.
-  Conjecture type_false_const : type_const false_const = bool_type.
+  Parameter ctype_cconst : cconst -> ctype.
+  Parameter sem_cconst  : cconst -> cvalue.
+  Parameter init_ctype  : ctype -> cconst.
 
   (* Operations *)
 
   Parameter unop  : Type.
   Parameter binop : Type.
 
-  Parameter sem_unop  : unop -> val -> type -> option val.
-  Parameter sem_binop : binop -> val -> type -> val -> type -> option val.
+  Parameter sem_unop  : unop -> value -> type -> option value.
+  Parameter sem_binop : binop -> value -> type -> value -> type -> option value.
 
   (* Typing *)
 
   Parameter type_unop  : unop -> type -> option type.
   Parameter type_binop : binop -> type -> type -> option type.
 
-  Parameter wt_val : val -> type -> Prop.
+  Parameter wt_cvalue : cvalue -> ctype -> Prop.
 
-  Conjecture wt_val_bool :
-    forall v, (v = true_val \/ v = false_val) <-> wt_val v bool_type.
+  Axiom wt_cvalue_cconst : forall c, wt_cvalue (sem_cconst c) (ctype_cconst c).
 
-  Conjecture wt_val_const : forall c, wt_val (sem_const c) (type_const c).
+  Axiom wt_init_ctype : forall ty, wt_cvalue (sem_cconst (init_ctype ty)) ty.
+  Axiom ctype_init_ctype : forall ty, ctype_cconst (init_ctype ty) = ty.
 
-  Conjecture wt_init_type : forall ty, wt_val (sem_const (init_type ty)) ty.
-  Conjecture type_init_type : forall ty, type_const (init_type ty) = ty.
+  Inductive wt_value: value -> type -> Prop :=
+    | WTVScalarPrimitive: forall v t,
+        wt_cvalue v t ->
+        wt_value (Vscalar v) (Tprimitive t)
+    | WTVEnum: forall v tn,
+        v < snd tn ->
+        wt_value (Venum v) (Tenum tn).
 
   Conjecture pres_sem_unop:
     forall op ty1 ty v1 v,
       type_unop op ty1 = Some ty ->
       sem_unop op v1 ty1 = Some v ->
-      wt_val v1 ty1 ->
-      wt_val v ty.
+      wt_value v1 ty1 ->
+      wt_value v ty.
 
   Conjecture pres_sem_binop:
     forall op ty1 ty2 ty v1 v2 v,
       type_binop op ty1 ty2 = Some ty ->
       sem_binop op v1 ty1 v2 ty2 = Some v ->
-      wt_val v1 ty1 ->
-      wt_val v2 ty2 ->
-      wt_val v ty.
+      wt_value v1 ty1 ->
+      wt_value v2 ty2 ->
+      wt_value v ty.
 
   (* Decidability of elements *)
 
-  Conjecture val_dec   : forall v1  v2  : val,    {v1 = v2}  +  {v1 <> v2}.
-  Conjecture type_dec  : forall t1  t2  : type,   {t1 = t2}  +  {t1 <> t2}.
-  Conjecture const_dec : forall c1  c2  : const,  {c1 = c2}  +  {c1 <> c2}.
-  Conjecture unop_dec  : forall op1 op2 : unop,  {op1 = op2} + {op1 <> op2}.
-  Conjecture binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
+  Axiom cvalue_dec   : forall v1  v2  : cvalue,    {v1 = v2}  +  {v1 <> v2}.
+  Axiom ctype_dec  : forall t1  t2  : ctype,   {t1 = t2}  +  {t1 <> t2}.
+  Axiom cconst_dec : forall c1  c2  : cconst,  {c1 = c2}  +  {c1 <> c2}.
+  Axiom unop_dec  : forall op1 op2 : unop,  {op1 = op2} + {op1 <> op2}.
+  Axiom binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
 
 End OPERATORS.
 
-From Coq Require Export Classes.EquivDec.
-
-Module Type OPERATORS_AUX (Import Ops : OPERATORS).
+Module Type OPERATORS_AUX
+       (Import Ids : IDS)
+       (Import Ops : OPERATORS).
   Close Scope equiv_scope.
 
-  Instance: EqDec val   eq := { equiv_dec := val_dec   }.
-  Instance: EqDec type  eq := { equiv_dec := type_dec  }.
-  Instance: EqDec const eq := { equiv_dec := const_dec }.
-  Instance: EqDec unop  eq := { equiv_dec := unop_dec  }.
-  Instance: EqDec binop eq := { equiv_dec := binop_dec }.
+  Instance: EqDec cvalue eq := { equiv_dec := cvalue_dec }.
+  Instance: EqDec ctype  eq := { equiv_dec := ctype_dec  }.
+  Instance: EqDec cconst eq := { equiv_dec := cconst_dec }.
+  Instance: EqDec unop   eq := { equiv_dec := unop_dec   }.
+  Instance: EqDec binop  eq := { equiv_dec := binop_dec  }.
 
-  Lemma wt_val_true:
-    wt_val true_val bool_type.
+  Definition false_tag : enumtag := 0.
+  Definition true_tag : enumtag := 1.
+
+  Lemma enumtag_eqb_eq : forall (x y : enumtag),
+      (x ==b y) = true <-> x = y.
   Proof.
-    apply wt_val_bool; auto.
+    setoid_rewrite equiv_decb_equiv. reflexivity.
   Qed.
 
-  Lemma wt_val_false:
-    wt_val false_val bool_type.
+  Lemma enumtag_eqb_neq : forall (x y : enumtag),
+      (x ==b y) = false <-> x <> y.
   Proof.
-    apply wt_val_bool; auto.
+    setoid_rewrite <-Bool.not_true_iff_false.
+    setoid_rewrite equiv_decb_equiv. reflexivity.
   Qed.
 
-  Definition val_to_bool (v: val) : option bool :=
-    if equiv_decb v true_val then Some true
-    else if equiv_decb v false_val then Some false
-         else None.
-
-  Lemma val_to_bool_true:
-    val_to_bool true_val = Some true.
+  Lemma value_dec:
+    forall v1 v2 : value,
+      {v1 = v2} + {v1 <> v2}.
   Proof.
-    unfold val_to_bool. now rewrite equiv_decb_refl.
+    repeat  decide equality.
+    apply cvalue_dec.
   Qed.
 
-  Lemma val_to_bool_false:
-    val_to_bool false_val = Some false.
-  Proof.
-    unfold val_to_bool.
-    assert (equiv_decb false_val true_val = false) as Hne.
-    apply not_equiv_decb_equiv.
-    now intro HH; apply true_not_false_val; rewrite HH.
-    now rewrite Hne, equiv_decb_refl.
-  Qed.
-
-  Lemma val_to_bool_true':
-    forall v,
-      val_to_bool v = Some true <-> v = true_val.
-  Proof.
-    intro; split; intro HH.
-    2:now subst; apply val_to_bool_true.
-    destruct (equiv_dec v true_val); [assumption|].
-    apply not_equiv_decb_equiv in c.
-    unfold val_to_bool in HH; rewrite c in HH.
-    now destruct (equiv_decb v false_val).
-  Qed.
-
-  Lemma val_to_bool_false':
-    forall v,
-      val_to_bool v = Some false <-> v = false_val.
-  Proof.
-    intro; split; intro HH.
-    2:now subst; apply val_to_bool_false.
-    destruct (equiv_dec v false_val); [assumption|].
-    apply not_equiv_decb_equiv in c.
-    unfold val_to_bool in HH; rewrite c in HH.
-    now destruct (equiv_decb v true_val).
-  Qed.
-
-  Lemma wt_val_to_bool:
-    forall v,
-      wt_val v bool_type ->
-      exists b, val_to_bool v = Some b.
-  Proof.
-    intros v WT.
-    apply wt_val_bool in WT as [WT|WT]; subst;
-      eauto using val_to_bool_true, val_to_bool_false.
-  Qed.
-
-  Definition val_of_bool (b : bool) : val :=
-    match b with
-    | true => true_val
-    | false => false_val
+  Definition sem_const (c0: const) : value :=
+    match c0 with
+    | Const c0 => Vscalar (sem_cconst c0)
+    | Enum c   => Venum c
     end.
 
-  Definition wt_vals vs (xts: list (ident * type))
-    := List.Forall2 (fun v xt => wt_val v (snd xt)) vs xts.
 
-  Definition wt_valo (vo: option val) (ty: type) : Prop :=
-    match vo with
-    | None => True
-    | Some v => wt_val v ty
-    end.
+  Definition bool_velus_type := Tenum (bool_id, 2).
+
+  Definition type_dec (t1 t2: type) : {t1 = t2} + {t1 <> t2}.
+    repeat decide equality.
+    apply ctype_dec.
+  Defined.
+
+  Instance: EqDec type eq := { equiv_dec := type_dec }.
 
   (** A synchronous [value] is either an absence or a present constant *)
 
-  Inductive value :=
+  Inductive svalue :=
   | absent
-  | present (v: val).
-  Implicit Type v : value.
+  | present (v: value).
 
-  Definition value_dec (v1 v2: value) : {v1 = v2} + {v1 <> v2}.
-    decide equality. apply val_dec.
+  Definition svalue_dec (v1 v2: svalue) : {v1 = v2} + {v1 <> v2}.
+    repeat decide equality.
+    apply cvalue_dec.
   Defined.
 
-  Definition value_to_bool (v: value) : option bool :=
-    match v with
-    | present x => val_to_bool x
-    | absent => Some false
-    end.
-
-  Instance: EqDec value eq := { equiv_dec := value_dec }.
+  Instance: EqDec svalue eq := { equiv_dec := svalue_dec }.
 
   Lemma not_absent_bool:
     forall x, x <> absent <-> x <>b absent = true.
@@ -201,37 +170,76 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
       apply not_equiv_decb_equiv in Hx; auto.
   Qed.
 
-  Lemma neg_eq_value:
-    forall (x y: value),
+  Lemma neg_eq_svalue:
+    forall (x y: svalue),
       negb (x <>b y) = (x ==b y).
   Proof.
     unfold nequiv_decb; setoid_rewrite Bool.negb_involutive; auto.
   Qed.
 
-  Lemma value_eqb_eq:
-    forall (x y: value), x ==b y = true <-> x = y.
+  Lemma svalue_eqb_eq:
+    forall (x y: svalue), x ==b y = true <-> x = y.
   Proof.
     setoid_rewrite equiv_decb_equiv; reflexivity.
   Qed.
 
-  Lemma decidable_eq_value:
-    forall (x y: value),
+  Lemma decidable_eq_svalue:
+    forall (x y: svalue),
       Decidable.decidable (x = y).
   Proof.
     intros; unfold Decidable.decidable.
-    setoid_rewrite <-value_eqb_eq.
+    setoid_rewrite <-svalue_eqb_eq.
     destruct (x ==b y); auto.
   Qed.
 
+  Inductive wt_const (enums: list (ident * nat)): const -> type -> Prop :=
+  | WTCConst: forall c,
+      wt_const enums (Const c) (Tprimitive (ctype_cconst c))
+  | WTCEnum: forall c tn,
+      List.In tn enums ->
+      c < snd tn ->
+      wt_const enums (Enum c) (Tenum tn).
 
-  Lemma type_eqb_eq:
-    forall (x y: type), x ==b y = true <-> x = y.
+  Definition wt_values vs (xts: list (ident * type))
+    := List.Forall2 (fun v xt => wt_value v (snd xt)) vs xts.
+
+  Lemma wt_value_const:
+    forall enums c t,
+      wt_const enums c t ->
+      wt_value (sem_const c) t.
   Proof.
-    setoid_rewrite equiv_decb_equiv; reflexivity.
+    inversion 1; subst; constructor; auto.
+    apply wt_cvalue_cconst.
   Qed.
+
+  Definition wt_option_value (vo: option value) (ty: type) : Prop :=
+    match vo with
+    | None => True
+    | Some v => wt_value v ty
+    end.
+
+  Definition value_to_bool (v : value) :=
+    match v with
+    | Venum tag => Some (tag ==b true_tag)
+    | _ => None
+    end.
+
+  Definition svalue_to_bool (v : svalue) :=
+    match v with
+    | absent => Some false
+    | present v => value_to_bool v
+    end.
+
+  Definition wt_svalue (v: svalue) (ty: type) : Prop :=
+    match v with
+    | absent => True
+    | present v => wt_value v ty
+    end.
 
 End OPERATORS_AUX.
 
-Module OperatorsAux (Import Ops : OPERATORS) <: OPERATORS_AUX Ops.
-  Include OPERATORS_AUX Ops.
+Module OperatorsAux
+       (Import Ids : IDS)
+       (Import Ops : OPERATORS) <: OPERATORS_AUX Ids Ops.
+  Include OPERATORS_AUX Ids Ops.
 End OperatorsAux.

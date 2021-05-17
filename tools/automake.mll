@@ -91,6 +91,8 @@ rule scan = parse
                        [rm_mls; "rm -f " ^ stamp] else [];
       ["depend"], ["$(VFILES)"], ["@echo \"Analyzing Coq dependencies\"";
                                   "$(COQDEP) $(COQLIBS) $^ > .depend"];
+      ["check-admitted"], ["$(VFILES)"], ["@grep -w 'Admitted' $^ ||\
+                                           echo \"Nothing admitted.\""];
       ["src/%.vo"; "$(DOCDIR)/%.glob"], ["src/%.v"],
       ["@echo \"COQC src/$*.v\"";
        "$(COQC) -dump-glob $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
