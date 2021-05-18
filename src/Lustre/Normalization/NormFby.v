@@ -803,7 +803,6 @@ Module Type NORMFBY
   Program Definition normfby_node G (to_cut : PS.t) (n : node)
           (Hunt : unnested_node G n)
           (Hpref : n_prefixes n = norm1_prefs) : node :=
-    let anon := anon_in_eqs (n_eqs n) in
     let eqs := fby_equations (PS.union to_cut (ps_from_list (map fst (n_out n)))) (n_eqs n) init_st in
     let nvars := idty (st_anns (snd eqs)) in
     {| n_name := n_name n;

@@ -2733,7 +2733,6 @@ Module Type UNNESTING
   Program Definition unnest_node G (n : node)
           (Hwl : wl_node G n)
           (Hpref : n_prefixes n = elab_prefs) : node :=
-    let anon := anon_in_eqs (n_eqs n) in
     let eqs := unnest_equations' G (n_eqs n) init_st in
     let nvars := (st_anns (snd (proj1_sig eqs))) in
     {| n_name := (n_name n);
