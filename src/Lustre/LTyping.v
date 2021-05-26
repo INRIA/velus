@@ -137,16 +137,18 @@ Module Type LTYPING
         wt_nclock G.(enums) Γ nck ->
         wt_exp (Emerge (x, Tenum tn) es (tys, nck))
 
-    | wt_Ecase: forall e es tn tys nck,
+    | wt_Ecase: forall e brs d tn tys nck,
         wt_exp e ->
         typeof e = [Tenum tn] ->
         In tn G.(enums) ->
-        snd tn = length es ->
-        es <> nil ->
-        Forall (Forall wt_exp) es ->
-        Forall (fun es => typesof es = tys) es ->
+        snd tn = length brs ->
+        brs <> nil ->
+        (forall es, In (Some es) brs -> Forall wt_exp es) ->
+        (forall es, In (Some es) brs -> typesof es = tys) ->
+        Forall wt_exp d ->
+        typesof d = tys ->
         wt_nclock G.(enums) Γ nck ->
-        wt_exp (Ecase e es (tys, nck))
+        wt_exp (Ecase e brs d (tys, nck))
 
     | wt_Eapp: forall f es er anns n,
         Forall wt_exp es ->
@@ -280,18 +282,21 @@ Module Type LTYPING
         P (Emerge (x, Tenum tn) es (tys, nck)).
 
     Hypothesis EcaseCase:
-      forall e es tn tys nck,
+      forall e brs d tn tys nck,
         wt_exp G Γ e ->
         P e ->
         typeof e = [Tenum tn] ->
         In tn G.(enums) ->
-        snd tn = length es ->
-        es <> nil ->
-        Forall (Forall (wt_exp G Γ)) es ->
-        Forall (Forall P) es ->
-        Forall (fun es => typesof es = tys) es ->
+        snd tn = length brs ->
+        brs <> nil ->
+        (forall es, In (Some es) brs -> Forall (wt_exp G Γ) es) ->
+        (forall es, In (Some es) brs -> Forall P es) ->
+        (forall es, In (Some es) brs -> typesof es = tys) ->
+        Forall (wt_exp G Γ) d ->
+        Forall P d ->
+        typesof d = tys ->
         wt_nclock G.(enums) Γ nck ->
-        P (Ecase e es (tys, nck)).
+        P (Ecase e brs d (tys, nck)).
 
     Hypothesis EappCase:
       forall f es er anns n,
@@ -324,9 +329,11 @@ Module Type LTYPING
         induction H3; constructor; auto.
         induction H1; auto.
       - eapply EcaseCase; eauto.
-        clear H2 H3 H5.
-        induction H4; constructor; auto.
-        induction H2; auto.
+        + clear H2 H3 H5.
+          intros ? Hin. specialize (H4 _ Hin). clear Hin.
+          induction H4; constructor; auto.
+        + clear H7.
+          induction H6; constructor; auto.
       - eapply EappCase; eauto.
         + clear H2 H5. induction H; eauto.
         + clear H4. induction H0; eauto.
@@ -778,22 +785,23 @@ Module Type LTYPING
         | _ => None
         end
 
-      | Emerge (x, Tenum (xt, n)) es (tys, nck) =>
-        do tss <- omap (fun es => oconcat (map check_exp es)) es;
+      | Emerge (x, Tenum (xt, n)) brs (tys, nck) =>
+        do tss <- omap (fun es => oconcat (map check_exp es)) brs;
         if check_var x (Tenum (xt, n)) && check_enum (Tenum (xt, n))
-           && (length es ==b n) && (length es <>b 0)
+           && (length brs ==b n) && (length brs <>b 0)
            && (forallb (fun ts => forall2b equiv_decb ts tys) tss)
            && (check_nclock eenv venv nck)
         then Some tys else None
 
-      | Ecase e es (tys, nck) =>
-        do tss <- omap (fun es => oconcat (map check_exp es)) es;
+      | Ecase e brs d (tys, nck) =>
+        do tss <- omap (or_default_with (Some tys) (fun es => oconcat (map check_exp es))) brs;
+        do tds <- oconcat (map check_exp d);
         do xt <- assert_singleton (check_exp e);
         match xt with
         | Tenum (xt, n) =>
           if check_enum (Tenum (xt, n))
-             && (length es ==b n) && (length es <>b 0)
-             && (forallb (fun ts => (forall2b equiv_decb ts tys)) tss)
+             && (length brs ==b n) && (length brs <>b 0)
+             && (forallb (fun ts => (forall2b equiv_decb ts tys)) (tds::tss))
              && (check_nclock eenv venv nck)
           then Some tys else None
         | _ => None
@@ -962,6 +970,37 @@ Module Type LTYPING
         rewrite app_assoc in ND. apply NoDupMembers_app_l in ND; auto.
     Qed.
 
+    Lemma omap_concat_map_check_exp'':
+      forall {f} ess dty tys,
+        (forall es e tys,
+            In (Some es) ess ->
+            In e es ->
+            NoDupMembers (Env.elements venv++idty (fresh_in e)) ->
+            f e = Some tys ->
+            wt_exp G (Env.elements venv) e /\ typeof e = tys) ->
+        NoDupMembers (Env.elements venv++idty (flat_map (or_default_with [] fresh_ins) ess)) ->
+        omap (or_default_with (Some dty) (fun es => oconcat (map f es))) ess = Some tys ->
+        Forall (LiftO True (Forall (wt_exp G (Env.elements venv)))) ess
+        /\ Forall2 (fun es tys => LiftO True (fun es => typesof es = tys) es) ess tys.
+    Proof.
+      induction ess as [|es ess IH]; intros * WTf ND CE. now inv CE; auto.
+      simpl in CE.
+      destruct es; simpl in *.
+      - destruct (oconcat (map _ l)) eqn:Ce; [|now omonadInv CE].
+        destruct (omap _ _) as [tes|] eqn:CE''; [|now omonadInv CE].
+        omonadInv CE. simpl.
+        eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes.
+        specialize (IH dty tes) as (? & ?); eauto using in_cons.
+        + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
+          rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND; auto.
+        + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
+          rewrite app_assoc in ND. apply NoDupMembers_app_l in ND; auto.
+      - destruct (omap _ _) as [tes|] eqn:CE'; [|now omonadInv CE].
+        omonadInv CE. simpl.
+        specialize (IH dty tes) as (? & ?); eauto using in_cons.
+        split; constructor; simpl; auto.
+    Qed.
+
     Lemma check_reset_correct :
       forall tys,
         check_reset tys = true ->
@@ -1119,24 +1158,33 @@ Module Type LTYPING
         contradict H3; subst; simpl.
         apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
       - (* Ecase *)
-        take (check_exp _ = Some _) and apply IHe in it as (? & ?).
-        take (Forall _ es) and (repeat setoid_rewrite Forall_forall in it).
+        rename es into brs; subst.
+        take (check_exp _ = Some _) and apply IHe in it as (? & ?). 2:repeat ndup_l ND.
+        take (Forall _ d) and (repeat setoid_rewrite Forall_forall in it).
+        eapply oconcat_map_check_exp' in OE1 as (? & ?)...
+        2:{ ndup_simpl. rewrite (Permutation_swap (Env.elements _)) in ND.
+            apply NoDupMembers_app_r in ND. ndup_r ND. }
+        take (Forall _ brs) and (repeat setoid_rewrite Forall_forall in it).
         take (omap _ _ = Some _) and
-             apply omap_concat_map_check_exp' in it as (? & ?); eauto.
-        assert (Forall (fun es => typesof es = tys) es); eauto.
-        { clear - H2 H6. induction H6; inv H2; constructor; auto.
+             apply omap_concat_map_check_exp'' in it as (? & ?); eauto.
+        assert (forall es, In (Some es) brs -> typesof es = tys); eauto.
+        { clear - H4 H8. eapply Forall2_ignore2 in H8.
+          intros ? Hin. rewrite Forall_forall in *.
+          specialize (H8 _ Hin) as (?&Hin'&Hty); simpl in *. rewrite Hty.
+          specialize (H4 _ Hin') as Heq.
           apply Forall2_eq; auto. }
-        + apply check_enum_correct' in H0 as (?&?).
+        + apply check_enum_correct' in H1 as (?&?).
           econstructor; eauto. econstructor; eauto.
-          contradict H3; subst; simpl.
-          apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
+          * contradict H5; subst; simpl.
+            apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
+          * intros ? Hin. eapply Forall_forall in H; eauto.
+            simpl in H; auto.
+        + intros * Hin ???. specialize (it1 _ Hin). simpl in it1.
+          eapply Forall_forall in it1; eauto.
         + ndup_simpl.
-          rewrite Permutation.Permutation_app_comm in ND.
-          repeat rewrite <- app_assoc in ND.
+          rewrite (Permutation_swap (Env.elements _)) in ND.
           apply NoDupMembers_app_r in ND.
-          rewrite Permutation.Permutation_app_comm in ND. assumption.
-        + ndup_simpl.
-          rewrite app_assoc in ND. apply NoDupMembers_app_l in ND; auto.
+          ndup_l ND.
       - (* Eapp *)
         take (Forall _ es) and rewrite Forall_forall in it.
         take (Forall _ er) and rewrite Forall_forall in it.
@@ -1424,10 +1472,10 @@ Module Type LTYPING
     Proof with eauto.
       induction e using exp_ind2; intros Hwt; inv Hwt...
       1-9:econstructor; try (destruct Heq as (Henums&_); erewrite <-Henums)...
-      1-10:rewrite Forall_forall in *...
+      1-11:rewrite Forall_forall in *...
       - intros ? Hin. specialize (H7 _ Hin). specialize (H _ Hin).
         rewrite Forall_forall in *...
-      - intros ? Hin. specialize (H8 _ Hin). specialize (H _ Hin).
+      - intros ? Hin. specialize (H10 _ Hin). specialize (H _ Hin); simpl in H.
         rewrite Forall_forall in *...
       - (* app *)
         assert (Forall (wt_exp G2 vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
@@ -1511,13 +1559,15 @@ Module Type LTYPING
         rewrite typesof_annots, map_length...
     - (* case *)
       constructor...
-      + rewrite <- length_typeof_numstreams, H4...
+      + rewrite <- length_typeof_numstreams, H6...
       + rewrite Forall_forall in *...
-        intros ? Hin. specialize (H _ Hin). specialize (H8 _ Hin).
+        intros ? Hin. specialize (H _ Hin); simpl in H. specialize (H10 _ Hin).
         rewrite Forall_forall in *...
       + rewrite Forall_forall in *...
-        intros. erewrite <- H9; eauto.
+        intros. erewrite <- H11; eauto.
         rewrite typesof_annots, map_length...
+      + rewrite Forall_forall in *...
+      + symmetry. apply length_typesof_annots.
     - (* app *)
       econstructor...
       + rewrite Forall_forall in *...
@@ -1609,10 +1659,9 @@ Module Type LTYPING
         rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
         rewrite Forall_forall in H10, H0. eapply Forall_forall; eauto.
       - (* case *)
-        inv H; try congruence. inv H8. inv H9.
         unfold typesof.
         rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
-        rewrite Forall_forall in H11, H0. eapply Forall_forall; eauto.
+        rewrite Forall_forall in H12, H0. eapply Forall_forall; eauto.
       - (* app *)
         eapply wt_find_node in H7 as (?&Hwtn&Heq); eauto.
         destruct Hwtn as (_&_&_&Henums&_).

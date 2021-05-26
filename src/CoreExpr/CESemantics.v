@@ -120,16 +120,16 @@ environment.
           Forall (fun e => sem_cexp_instant e absent) es ->
           sem_cexp_instant (Emerge (x, tx) es ty) absent
     | Scase_pres:
-        forall e es t b vs c,
+        forall e es d b vs c,
           sem_exp_instant e (present (Venum b)) ->
-          Forall2 (fun e v => sem_cexp_instant e (present v)) es vs ->
+          Forall2 (fun e v => sem_cexp_instant (or_default d e) (present v)) es vs ->
           nth_error vs b = Some c ->
-          sem_cexp_instant (Ecase e es t) (present c)
+          sem_cexp_instant (Ecase e es d) (present c)
     | Scase_abs:
-        forall e es t,
+        forall e es d,
           sem_exp_instant e absent ->
-          Forall (fun e => sem_cexp_instant e absent) es ->
-          sem_cexp_instant (Ecase e es t) absent
+          Forall (fun e => sem_cexp_instant (or_default d e) absent) es ->
+          sem_cexp_instant (Ecase e es d) absent
     | Sexp:
         forall e v,
           sem_exp_instant e v ->
@@ -163,19 +163,19 @@ environment.
         P (Emerge (x, tx) es ty) absent.
 
     Hypothesis case_presCase:
-      forall e es t b vs c,
+      forall e es d b vs c,
         sem_exp_instant base R e (present (Venum b)) ->
-        Forall2 (fun e v => sem_cexp_instant base R e (present v)) es vs ->
-        Forall2 (fun e v => P e (present v)) es vs ->
+        Forall2 (fun e v => sem_cexp_instant base R (or_default d e) (present v)) es vs ->
+        Forall2 (fun e v => P (or_default d e) (present v)) es vs ->
         nth_error vs b = Some c ->
-        P (Ecase e es t) (present c).
+        P (Ecase e es d) (present c).
 
     Hypothesis case_absCase:
-      forall e es t,
+      forall e es d,
         sem_exp_instant base R e absent ->
-        Forall (fun e => sem_cexp_instant base R e absent) es ->
-        Forall (fun e => P e absent) es ->
-        P (Ecase e es t) absent.
+        Forall (fun e => sem_cexp_instant base R (or_default d e) absent) es ->
+        Forall (fun e => P (or_default d e) absent) es ->
+        P (Ecase e es d) absent.
 
     Hypothesis expCase:
       forall e v,

@@ -82,7 +82,8 @@ Module Type CEINTERPRETER
       | Ecase b es d =>
         match interp_exp_instant b with
         | present (Venum c) =>
-          or_default absent (nth_error (map interp_cexp_instant es) c)
+          or_default_with absent (or_default (interp_cexp_instant d))
+                          (nth_error (map (option_map interp_cexp_instant) es) c)
         | _ => absent
         end
 
@@ -92,6 +93,9 @@ Module Type CEINTERPRETER
 
     Definition interp_cexps_instant (ces: list cexp): list svalue :=
       map interp_cexp_instant ces.
+
+    Definition interp_ocexps_instant (e: cexp) (oces: list (option cexp)): list svalue :=
+      map (fun oe => interp_cexp_instant (or_default e oe)) oces.
 
     Ltac rw_exp_helper :=
       repeat match goal with
@@ -174,6 +178,16 @@ Module Type CEINTERPRETER
       forall es vs,
         Forall2 (sem_cexp_instant base R) es vs ->
         vs = interp_cexps_instant es.
+    Proof.
+      induction 1; simpl; auto.
+      f_equal; auto.
+      now apply interp_cexp_instant_complete.
+    Qed.
+
+    Lemma interp_ocexps_instant_complete:
+      forall es vs e,
+        Forall2 (fun oe => sem_cexp_instant base R (or_default e oe)) es vs ->
+        vs = interp_ocexps_instant e es.
     Proof.
       induction 1; simpl; auto.
       f_equal; auto.
@@ -268,6 +282,32 @@ Module Type CEINTERPRETER
       constructor.
       - intro n; specialize (Sem n); inv Sem.
         unfold interp_cexp, lift_interp.
+        erewrite <-interp_cexp_instant_complete; eauto.
+      - eapply IHes.
+        intro n; specialize (Sem n); inv Sem.
+        instantiate (1 := fun n => tl (ess n)).
+        simpl.
+        rewrite <-H2; simpl; auto.
+    Qed.
+
+    Definition interp_ocexp (e: cexp) (oe: option cexp): stream svalue :=
+      lift_interp bk H (fun b R oe => interp_cexp_instant b R (or_default e oe)) oe.
+
+    Definition interp_ocexps (e: cexp) (es: list (option cexp)): stream (list svalue) :=
+      lift_interp bk H (fun b R => interp_ocexps_instant b R e) es.
+
+    Definition interp_ocexps' (e: cexp) (es: list (option cexp)): list (stream svalue) :=
+      map (interp_ocexp e) es.
+
+    Lemma interp_ocexps'_complete:
+      forall es ess e,
+        (forall n, Forall2 (fun oe => sem_cexp_instant (bk n) (H n) (or_default e oe)) es (ess n)) ->
+        Forall2 (fun oe => sem_cexp bk H (or_default e oe)) es (interp_ocexps' e es).
+    Proof.
+      induction es; intros * Sem; simpl; auto.
+      constructor.
+      - intro n; specialize (Sem n); inv Sem.
+        unfold interp_ocexp, lift_interp.
         erewrite <-interp_cexp_instant_complete; eauto.
       - eapply IHes.
         intro n; specialize (Sem n); inv Sem.

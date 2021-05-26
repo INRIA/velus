@@ -888,8 +888,10 @@ Module Type NCAUSALITY
       + intros ? Hf. inv Hf.
         destruct H5 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
         * inv Hf. right. right. split; auto.
-        * inv H4; inv H8; auto.
-        * apply Exists_singl in H4; auto.
+        * inversion_clear H3 as [?? (?&Heq&?)|?? [?? (?&Heq&Hex)|?? [|]]]; try inv Heq.
+          inversion_clear Hex as [???? Hfree|???? [|]].
+          right; left. constructor; auto.
+        * inversion_clear H3 as [???? Hfree|???? [|]]. inv Hfree; auto.
       + intros ? Hf. inv Hf.
         destruct H5 as [Free|(_&Free)]; inv Free. 2:inv H7.
         destruct ty; simpl in *;
@@ -924,7 +926,9 @@ Module Type NCAUSALITY
       + intros ? Hf. inv Hf.
         destruct H4 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
         * inv Hf; auto.
-        * apply Exists_singl in H3; auto.
+        * inversion_clear H2 as [?? (?&Heq&?)|?? [?? (?&Heq&Hex)|?? [|]]]; try inv Heq.
+          inversion_clear Hex as [???? Hfree|???? [|]].
+          left. constructor; auto.
       + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc. inv Hwc.
         eapply Forall2_ignore1 in Hr. eapply Forall_impl; [|eapply Hr].
         intros (?&?&?) (?&?&?&?); subst.

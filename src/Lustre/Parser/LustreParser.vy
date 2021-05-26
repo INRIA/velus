@@ -42,7 +42,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
 %token<LustreAst.astloc> HASH
 %token<LustreAst.astloc> BAR
-%token<LustreAst.astloc> RARROW
+%token<LustreAst.astloc> RARROW UNDERSCORE
 %token<LustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
 %token<LustreAst.astloc> IFTE THEN ELSE CASE OF
 
@@ -68,6 +68,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
     logical_OR_expression arrow_expression expression
 %type<list Common.ident> constructor_list
 %type<list (Common.ident * list LustreAst.expression)> branch_list
+%type<list (Common.ident * list LustreAst.expression) * list LustreAst.expression> branch_list_with_default
 %type<LustreAst.constant * LustreAst.astloc> enum
 (* %type<LustreAst.constant * LustreAst.astloc> bool_constant *)
 %type<LustreAst.constant * LustreAst.astloc> constant
@@ -191,7 +192,7 @@ unary_expression:
  	       (map (fun e =>
                 LustreAst.CASE [e]
                  [(Ident.Ids.true_id, [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc]);
-                  (Ident.Ids.false_id, [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc])] loc)
+                  (Ident.Ids.false_id, [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc])] [] loc)
               args)]
  	    [LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc]
  	   loc]
@@ -337,14 +338,22 @@ branch_list:
 | LPAREN c=ENUM_NAME RARROW expr=expression RPAREN bs=branch_list
     { (fst c, expr) :: bs }
 
+branch_list_with_default:
+| LPAREN UNDERSCORE RARROW expr=expression RPAREN
+    { [], expr }
+| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN
+    { [(fst c, expr)], [] }
+| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN bs=branch_list_with_default
+    { (fst c, expr) :: (fst bs), (snd bs) }
+
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
 expression:
 | expr=arrow_expression
     { expr }
 | loc=IFTE expr1=expression THEN expr2=expression ELSE expr3=expression
-    { [LustreAst.CASE expr1 [(true_id, expr2); (false_id, expr3)] loc] }
-| loc=CASE expr=expression OF bs=branch_list
-    { [LustreAst.CASE expr bs loc] }
+    { [LustreAst.CASE expr1 [(true_id, expr2); (false_id, expr3)] [] loc] }
+| loc=CASE expr=expression OF brs=branch_list_with_default
+    { [LustreAst.CASE expr (fst brs) (snd brs) loc] }
 | loc=MERGE LPAREN id=VAR_NAME SEMICOLON expr1=expression SEMICOLON expr2=expression RPAREN
     { [LustreAst.MERGE (fst id) [(true_id, expr1); (false_id, expr2)] loc] }
 | loc=MERGE id=VAR_NAME bs=branch_list

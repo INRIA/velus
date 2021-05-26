@@ -110,16 +110,16 @@ Module Type CETYPINGSEMANTICS
       apply In_fold_left_free_in_cexp; rewrite free_in_cexp_spec, <-free_in_cexp_spec'; auto.
     - take (nth_error _ _ = _) and apply nth_error_In in it.
       take (Forall2 _ _ _) and eapply Forall2_in_right in it as (oe & Hin & IH); eauto.
-      assert (typeofc oe = t) as <-
-          by (eapply Forall_forall in H8; eauto).
-      assert (wt_cexp enums Γ oe) by (eapply Forall_forall in H9; eauto).
+      assert (typeofc (or_default d oe) = typeofc d) as <-
+          by (destruct oe; simpl in *; auto).
+      assert (wt_cexp enums Γ (or_default d oe)) by (destruct oe; simpl in *; auto).
       apply in_split in Hin as (?&?&?); subst.
       apply IH; auto.
       apply Forall_filter; apply Forall_filter in WT.
       apply Forall_forall; intros; eapply Forall_forall in WT; eauto.
       apply WT.
       rewrite fold_left_app; simpl.
-      apply In_fold_left_free_in_cexp; rewrite free_in_cexp_spec, <-free_in_cexp_spec'; auto.
+      apply In_fold_left_or_default_free_in_cexp; rewrite free_in_cexp_spec, <-free_in_cexp_spec'; auto.
   Qed.
   Hint Resolve sem_cexp_instant_wt.
 

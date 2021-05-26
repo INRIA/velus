@@ -308,6 +308,7 @@ rule initial = parse
   | "."                           { DOT (currentLoc lexbuf) }
   | "|"                           { BAR (currentLoc lexbuf) }
   | "->"                          { RARROW (currentLoc lexbuf) }
+  | "_"                           { UNDERSCORE (currentLoc lexbuf) }
   | lidentifier as id             {
       try Hashtbl.find lexicon id (currentLoc lexbuf)
       with Not_found -> VAR_NAME (makeident id, currentLoc lexbuf) }

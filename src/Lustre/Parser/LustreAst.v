@@ -80,7 +80,7 @@ Inductive expression :=
 | UNARY    : unary_operator -> list expression -> astloc -> expression
 | BINARY   : binary_operator -> list expression -> list expression -> astloc
              -> expression
-| CASE     : list expression -> list (ident * list expression) -> astloc
+| CASE     : list expression -> list (ident * list expression) -> list expression -> astloc
              -> expression
 | CAST     : type_name -> list expression -> astloc -> expression
 | APP      : ident -> list expression -> list expression -> astloc -> expression
@@ -95,7 +95,7 @@ Definition expression_loc (e: expression) : astloc :=
   match e with
   | UNARY _ _ l => l
   | BINARY _ _ _ l => l
-  | CASE _ _ l => l
+  | CASE _ _ _ l => l
   | CAST _ _ l => l
   | APP _ _ _ l => l
   | CONSTANT _ l => l
@@ -141,10 +141,11 @@ Section expression_ind2.
       P (BINARY b es1 es2 a).
 
   Hypothesis CASECase:
-    forall es brs a,
+    forall es brs d a,
       Forall P es ->
       Forall (fun e => Forall P (snd e)) brs ->
-      P (CASE es brs a).
+      Forall P d ->
+      P (CASE es brs d a).
 
   Hypothesis CASTCase:
     forall t es a,

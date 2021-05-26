@@ -258,7 +258,10 @@ module SchedulerFun
       let go_exp = add_exp_deps add_dep in
       let rec go = function
         | Emerge ((x, _), ces, _) -> add_dep x; List.iter go ces
-        | Ecase (e, ces, _) -> go_exp e; List.iter go ces
+        | Ecase (e, ces, d) ->
+          go_exp e;
+          List.iter (function Some e -> go e | None -> ()) ces;
+          go d
         | Eexp e         -> go_exp e
       in go
 

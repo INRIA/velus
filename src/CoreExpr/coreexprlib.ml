@@ -44,7 +44,7 @@ sig
 
   type cexp =
     | Emerge of (ident * typ) * cexp list * typ
-    | Ecase of exp * cexp list * typ
+    | Ecase of exp * cexp option list * cexp
     | Eexp of exp
 
 end
@@ -128,10 +128,10 @@ struct
         fprintf p "@[<v>merge %a%a@]"
           print_ident id
           (PrintOps.print_branches (cexp 16)) (List.map (fun ce -> Some ce) ces, None)
-      | CE.Ecase (e, ces, _) ->
+      | CE.Ecase (e, ces, d) ->
         fprintf p "@[<v>case %a%a@]"
           (exp prec') e
-          (PrintOps.print_branches (cexp 16)) (List.map (fun ce -> Some ce)ces, None)
+          (PrintOps.print_branches (cexp 16)) (ces, Some d)
       | CE.Eexp e ->
         exp (prec' + 1) p e
     end;

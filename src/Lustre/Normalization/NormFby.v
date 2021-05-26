@@ -80,13 +80,13 @@ Module Type NORMFBY
     do (initid, eqs) <- init_var_for_clock ck xr;
     do px <- fresh_ident norm2 ((ty, ck), None);
     ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid)))
-               [[Evar px (ty, (ck, Some px))]; [e0]] ([ty], (ck, name)),
+               [None; Some [e0]] [Evar px (ty, (ck, Some px))] ([ty], (ck, name)),
          ([px], [Efby [add_whens (init_type ty) ty ck] [e] [] [ann]])::eqs).
 
   Definition arrow_iteexp (e0 : exp) (e : exp) (xr : list (ident * nclock)) (ann : ann) : FreshAnn (exp * list equation) :=
     let '(ty, (ck, name)) := ann in
     do (initid, eqs) <- init_var_for_clock ck xr;
-    ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid))) [[e]; [e0]]
+    ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid))) [None; Some [e0]] [e]
               ([ty], (ck, name)), eqs).
 
   Definition vars_of (es : list exp) :=
@@ -583,6 +583,8 @@ Module Type NORMFBY
     constructor; auto; simpl.
     - congruence.
     - repeat constructor; simpl.
+      intros ? [Heq|[Heq|Heq]]; inv Heq; auto.
+    - intros ? [Heq|[Heq|Heq]]; inv Heq; simpl.
       rewrite app_nil_r, length_annot_numstreams; auto.
   Qed.
 
@@ -628,6 +630,7 @@ Module Type NORMFBY
     unfold arrow_iteexp in Hfby; repeat inv_bind.
     repeat constructor; auto; simpl.
     congruence.
+    1,2:intros ? [Heq|[Heq|Heq]]; inv Heq; simpl; auto.
     1,2:rewrite app_nil_r, length_annot_numstreams; auto.
   Qed.
 
@@ -785,8 +788,10 @@ Module Type NORMFBY
     - assert (H':=H). eapply fby_iteexp_unnested_eq in H'.
       constructor; eauto.
       repeat inv_bind. repeat constructor; eauto.
+      1,2:intros ? Heq; inv Heq. exists x0; split; auto.
       1-3:(clear - Hunt; inv Hunt; eauto; inv H0; inv H).
     - repeat inv_bind. repeat constructor; auto.
+      1,2:intros ? Heq; inv Heq. exists x0; split; auto.
       3:eapply init_var_for_clock_unnested_eq in H; eauto.
       1-2:(clear - Hunt; inv Hunt; eauto; inv H0; inv H).
   Qed.
@@ -807,7 +812,9 @@ Module Type NORMFBY
         destruct PS.mem eqn:Hmem; [|apply PSE.mem_4 in Hmem]|]; repeat inv_bind).
       3:destruct (vars_of _) eqn:Vars; repeat inv_bind.
       1-3:repeat constructor; eauto.
+      2,3:intros ? Heq; inv Heq.
       + eapply fresh_ident_nIn'; eauto.
+      + exists e0; auto.
       + eapply fresh_ident_nIn' in H3; eauto.
         eapply init_var_for_clock_st_valid; eauto.
       + apply add_whens_is_constant; destruct t; simpl; auto.
@@ -816,6 +823,7 @@ Module Type NORMFBY
     - (* arrow *)
       destruct ann0 as (?&?&?), (vars_of er) eqn:Vars; repeat inv_bind.
       + repeat constructor; eauto.
+        1-2:intros ? Heq; inv Heq. exists e0; auto.
         eapply init_var_for_clock_normalized_eq; eauto.
       + apply vars_of_Some in H1 as (?&?). congruence.
     - (* cexp *)
@@ -904,7 +912,7 @@ Module Type NORMFBY
       + destruct (vars_of l1) eqn:Hvars; repeat inv_bind; simpl; repeat rewrite app_nil_r; try reflexivity.
         destruct a as (?&?&?); repeat inv_bind.
         unfold anon_in_eq; simpl; repeat rewrite app_nil_r; rewrite app_assoc.
-        rewrite (Permutation_app_comm (fresh_in e0)). apply Permutation_app_head.
+        apply Permutation_app_head.
         eapply vars_of_no_fresh in Hvars; setoid_rewrite Hvars.
         erewrite init_var_for_clock_no_anon; eauto.
     - destruct e; repeat inv_bind; simpl; repeat rewrite app_nil_r; try reflexivity.

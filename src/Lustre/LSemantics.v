@@ -147,11 +147,13 @@ Module Type LSEMANTICS
           sem_exp H b (Emerge (x, tx) es lann) os
 
     | Scase:
-        forall H b e s es lann vs os,
+        forall H b e s es d lann vs vd os,
           sem_exp H b e [s] ->
-          Forall2 (Forall2 (sem_exp H b)) es vs ->
+          Forall2 (fun oes vs => forall es, oes = Some es -> Forall2 (sem_exp H b) es vs) es vs ->
+          Forall2 (fun oes vs => oes = None -> Forall2 EqSts vs vd) es vs ->
+          Forall2 (sem_exp H b) d vd ->
           Forall2Transpose (case s) (List.map (@concat _) vs) os ->
-          sem_exp H b (Ecase e es lann) os
+          sem_exp H b (Ecase e es d lann) os
 
     | Sapp:
         forall H b f es er lann ss os rs bs,
@@ -265,13 +267,16 @@ Module Type LSEMANTICS
         P_exp H b (Emerge (x, tx) es lann) os.
 
     Hypothesis CaseCase:
-      forall H b e s es lann vs os,
+      forall H b e s es d lann vs vd os,
         sem_exp G H b e [s] ->
         P_exp H b e [s] ->
-        Forall2 (Forall2 (sem_exp G H b)) es vs ->
-        Forall2 (Forall2 (P_exp H b)) es vs ->
+        Forall2 (fun oes vs => forall es, oes = Some es -> Forall2 (sem_exp G H b) es vs) es vs ->
+        Forall2 (fun oes vs => forall es, oes = Some es -> Forall2 (P_exp H b) es vs) es vs ->
+        Forall2 (fun oes vs => oes = None -> Forall2 EqSts vs vd) es vs ->
+        Forall2 (sem_exp G H b) d vd ->
+        Forall2 (P_exp H b) d vd ->
         Forall2Transpose (case s) (List.map (@concat _) vs) os ->
-        P_exp H b (Ecase e es lann) os.
+        P_exp H b (Ecase e es d lann) os.
 
     Hypothesis AppCase:
       forall H b f es er lann ss os sr bs,
@@ -337,8 +342,12 @@ Module Type LSEMANTICS
         + eapply WhenCase; eauto; clear H2; SolveForall.
         + eapply MergeCase; eauto; clear H2; SolveForall.
           constructor; auto. SolveForall.
-        + eapply CaseCase; eauto; clear H1; SolveForall.
-          constructor; auto. SolveForall.
+        + eapply CaseCase; eauto.
+          * clear - sem_exp_ind2 H0.
+            SolveForall. constructor; auto.
+            intros; subst. specialize (H0 _ eq_refl). SolveForall.
+          * clear - sem_exp_ind2 H2.
+            SolveForall.
         + eapply AppCase; eauto; clear H2 H3; SolveForall.
       - destruct Sem.
         eapply Equation with (ss:=ss); eauto; clear H1; SolveForall.
@@ -391,11 +400,13 @@ Module Type LSEMANTICS
          do 2 (apply Exists_exists; repeat esplit; eauto)).
     - econstructor; eauto.
       eapply IHHsem.
-      2:(eapply Forall2_impl_In; [|eauto]; intros;
-         eapply Forall2_impl_In; [|eauto]; intros; eapply H10).
-      1-2:(intro; apply H4; constructor; auto).
-      right.
-      1:do 2 (apply Exists_exists; repeat esplit; eauto).
+      2:(clear H3; do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst);
+         apply H12).
+      3:eapply Forall2_impl_In; [|eauto]; intros; apply H10.
+      1-3:(intro; apply H7; constructor; auto; right).
+      + left. eapply Exists_exists. exists (Some es0).
+        repeat esplit; eauto. eapply Exists_exists; eauto.
+      + right. eapply Exists_exists; eauto.
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
@@ -460,11 +471,13 @@ Module Type LSEMANTICS
          do 2 (apply Exists_exists; repeat esplit; eauto)).
     - econstructor; eauto.
       eapply IHHsem.
-      2:(eapply Forall2_impl_In; [|eauto]; intros;
-         eapply Forall2_impl_In; [|eauto]; intros; eapply H10).
-      1-2:(intro; apply H4; constructor; auto).
-      right.
-      1:do 2 (apply Exists_exists; repeat esplit; eauto).
+      2:(clear H3; do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst);
+         apply H12).
+      3:eapply Forall2_impl_In; [|eauto]; intros; apply H10.
+      1-3:(intro; apply H7; constructor; auto; right).
+      + left. eapply Exists_exists. exists (Some es0).
+        repeat esplit; eauto. eapply Exists_exists; eauto.
+      + right. eapply Exists_exists; eauto.
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
@@ -574,12 +587,16 @@ Module Type LSEMANTICS
       contradict Hnin. inv Hnin; [left|right]; auto. constructor.
       do 2 (eapply Exists_exists; repeat esplit; eauto).
     - econstructor; eauto. eapply IHx; eauto. SolveNin Hnin.
-      clear H5 H8 H11.
-      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
-      do 2 (eapply Forall_forall in H0; eauto).
-      eapply H0; eauto.
-      contradict Hnin. inv Hnin; [left|right]; auto. constructor; right.
-      do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + clear H13. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
+        do 2 (eapply Forall_forall in H0; eauto; simpl in * ).
+        eapply H0; eauto.
+        contradict Hnin. inv Hnin; [left|right]; auto. constructor; right; left.
+        do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + eapply Forall2_impl_In; [|eauto]; intros.
+        eapply Forall_forall in H1; eauto.
+        eapply H1; eauto.
+        contradict Hnin. inv Hnin; [left|right]; auto. constructor; right; right.
+        eapply Exists_exists; repeat esplit; eauto.
     - econstructor; eauto.
       + clear H1 H12 H14. induction H10; auto. constructor.
         inv H0. apply H4; auto. SolveNin Hnin.
@@ -667,12 +684,16 @@ Module Type LSEMANTICS
       contradict Hnin. inv Hnin; [left|right]; auto. constructor.
       do 2 (eapply Exists_exists; repeat esplit; eauto).
     - econstructor; eauto. eapply IHx; eauto. SolveNin Hnin.
-      clear H5 H8 H11.
-      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
-      do 2 (eapply Forall_forall in H0; eauto).
-      eapply H0; eauto.
-      contradict Hnin. inv Hnin; [left|right]; auto. constructor; right.
-      do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + clear H13. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
+        do 2 (eapply Forall_forall in H0; eauto; simpl in * ).
+        eapply H0; eauto.
+        contradict Hnin. inv Hnin; [left|right]; auto. constructor; right; left.
+        do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + eapply Forall2_impl_In; [|eauto]; intros.
+        eapply Forall_forall in H1; eauto.
+        eapply H1; eauto.
+        contradict Hnin. inv Hnin; [left|right]; auto. constructor; right; right.
+        eapply Exists_exists; repeat esplit; eauto.
     - econstructor; eauto.
       + clear H1 H12 H14. induction H10; auto. constructor.
         inv H0. apply H4; auto. SolveNin Hnin.
@@ -914,7 +935,9 @@ Module Type LSEMANTICS
       + eapply Forall2Transpose_EqSt; eauto. solve_proper.
     - econstructor; eauto.
       + eapply IHSem; eauto. reflexivity.
-      + do 2 (eapply Forall2_impl_In; [|eauto]; intros); simpl in *.
+      + clear H2. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
+        eapply H10; eauto. reflexivity.
+      + eapply Forall2_impl_In; [|eauto]; intros.
         eapply H8; eauto. reflexivity.
       + eapply Forall2Transpose_EqSt; eauto. solve_proper.
     - econstructor; eauto.
@@ -1016,8 +1039,10 @@ Module Type LSEMANTICS
       do 2 (eapply Forall_forall in H; eauto).
     - (* ite *)
       econstructor; eauto.
-      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
-      do 2 (eapply Forall_forall in H; eauto).
+      + clear H11. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
+        do 2 (eapply Forall_forall in H; eauto; simpl in * ).
+      + eapply Forall2_impl_In; [|eauto]; intros.
+        eapply Forall_forall in H0; eauto.
     - (* app *)
       econstructor; eauto; repeat rewrite_Forall_forall...
   Qed.
@@ -1035,7 +1060,6 @@ Module Type LSEMANTICS
     + eapply Forall2_impl_In; [| eauto].
       intros. eapply sem_var_refines...
   Qed.
-
 
   (** ** Semantic refinement relation between nodes *)
 
@@ -1079,8 +1103,10 @@ Module Type LSEMANTICS
         do 2 (eapply Forall2_impl_In; [|eauto]; intros).
         do 2 (eapply Forall_forall in H0; eauto).
       - (* case *)
-        do 2 (eapply Forall2_impl_In; [|eauto]; intros).
-        do 2 (eapply Forall_forall in H0; eauto).
+        clear H12. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
+        do 2 (eapply Forall_forall in H0; eauto; simpl in * ).
+      - eapply Forall2_impl_In; [|eauto]; intros.
+        eapply Forall_forall in H1; [|eauto]; eauto.
       (* app *)
       - eapply Forall2_impl_In; [|eauto]; intros.
         eapply Forall_forall in H0; eauto.
@@ -1200,17 +1226,28 @@ Module Type LSEMANTICS
         rewrite length_annot_numstreams.
         eapply Forall_forall in H3; [|eauto]. eapply Forall_forall in H2; [|eauto]. eauto.
       - (* case *)
-        eapply Forall2Transpose_length in H10; rewrite Forall_map in H10.
-        eapply Forall2_ignore2 in H9.
-        destruct es; try congruence.
-        inv H0. inv H9. inv H11. inv H12. destruct H2 as (?&Hin&Hsem).
-        eapply Forall_forall in H10; eauto. rewrite <-H10, <-H11.
-        unfold annots; rewrite flat_map_concat_map.
-        apply concat_length_eq.
-        rewrite Forall2_map_2, Forall2_swap_args.
-        eapply Forall2_impl_In; [|eauto]. intros.
-        rewrite length_annot_numstreams.
-        eapply Forall_forall in H3; [|eauto]. eapply Forall_forall in H9; [|eauto]. eauto.
+        eapply Forall2Transpose_length in H14; rewrite Forall_map in H14.
+        eapply Forall2_ignore2 in H10.
+        destruct es as [|[|]]; try congruence.
+        + inv H0. inv H10. destruct H3 as (?&Hin&Hsem). simpl in *.
+          eapply Forall_forall in H14; eauto.
+          erewrite <-H14, <-H16; eauto with datatypes. simpl in *.
+          unfold annots; rewrite flat_map_concat_map.
+          apply concat_length_eq.
+          rewrite Forall2_map_2, Forall2_swap_args.
+          eapply Forall2_impl_In; [|eauto]. intros.
+          rewrite length_annot_numstreams.
+          eapply Forall_forall in H4; [|eauto]. eapply Forall_forall in H15; eauto.
+        + inv H12. inv H14. specialize (H4 eq_refl).
+          rewrite <-H5, <-H18.
+          unfold annots; rewrite flat_map_concat_map.
+          apply concat_length_eq.
+          rewrite Forall2_map_2, Forall2_swap_args.
+          clear - H4 H1 H13 H17.
+          revert y H4.
+          induction H13; intros; inv H4; inv H1; inv H17; constructor; auto.
+          rewrite length_annot_numstreams.
+          eapply H4; eauto. rewrite H6; auto.
       - (* app (reset) *)
         specialize (H13 0). inv H13.
         repeat rewrite_Forall_forall.

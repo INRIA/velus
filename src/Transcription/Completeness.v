@@ -94,12 +94,16 @@ Module Type COMPLETENESS
       inv H1. eapply H3 in Hnormed as (?&Htoc).
       erewrite Htoc; simpl; eauto.
     - (* case *)
-      eapply to_lexp_complete in H2 as (?&Htol).
+      eapply to_lexp_complete in H4 as (?&Htol).
       simpl; destruct cl; erewrite Htol; simpl.
+      apply Forall_singl in H0. eapply H0 in H7 as (?&Htoc).
+      rewrite Htoc; simpl.
       eapply Forall_Forall in H; eauto. clear - H.
-      induction H as [|?? ((?&?&Hnormed)&H1)]; subst; simpl; eauto.
+      induction H as [|?? (Hnormed&H1)]; subst; simpl; eauto.
       destruct IHForall as (?&EQ); monadInv EQ.
       erewrite EQ0; clear EQ0.
+      destruct x1; simpl in *; eauto.
+      specialize (Hnormed _ eq_refl) as (?&?&Hnormed); subst; eauto.
       inv H1. eapply H3 in Hnormed as (?&Htoc).
       erewrite Htoc; simpl; eauto.
   Qed.

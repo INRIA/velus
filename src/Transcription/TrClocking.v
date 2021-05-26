@@ -126,20 +126,27 @@ Module Type TRCLOCKING
         cases_eqn EQ0. apply Forall_singl in H2. apply Forall_singl in H1. subst.
         eapply H2 in EQ0 as (?&?&?); eauto.
         simpl in H6. rewrite H in H6; simpl in H6. inv H6; auto.
-    - cases. monadInv Hto.
+    - cases. monadInv Hto. fold to_cexp in *.
       simpl. unfold L.clock_of_nclock, stripname. simpl. esplit; split; eauto.
       inv Hwc. simpl_Foralls. constructor; simpl; auto.
       + eapply wc_lexp in EQ as (?&?&?); eauto.
-        rewrite H0 in H6. inv H6. auto.
+        rewrite H0 in H8. inv H8. auto.
       + eapply mmap_length in EQ1.
         destruct es, x0; simpl in *; try congruence.
-      + clear - H H8 H9 EQ1. revert dependent x0.
-        induction es; intros; inv H; inv H8; inv H9; monadInv EQ1; simpl; auto.
-        constructor; eauto.
-        clear - EQ H1 H5 H2.
-        cases_eqn EQ0. apply Forall_singl in H2. apply Forall_singl in H1. subst.
-        eapply H2 in EQ as (?&?&?); eauto.
-        simpl in H5. rewrite H in H5; simpl in H5. inv H5; auto.
+      + eapply H4 in H3 as (?&?&?); eauto.
+        simpl in *. rewrite app_nil_r in *.
+        destruct (L.clockof e0) as [|? [|]]; simpl in *; try congruence.
+        inv H0; inv H14; auto.
+      + clear - H H10 H11 H12 EQ1. revert dependent x0.
+        induction es; intros; inv H; monadInv EQ1; simpl; auto; inv H0.
+        * cases; monadInv EQ.
+          apply Forall_singl in H3. eapply H3 in EQ0 as (?&?&?); eauto.
+          2:eapply Forall_forall in H10; eauto with datatypes.
+          specialize (H11 [e0]). specialize (H12 [e0]). simpl in *.
+          rewrite app_nil_r in *.
+          destruct (L.clockof e0) as [|? [|]]; simpl in *; try congruence.
+          inv H. specialize (H11 (or_introl _ eq_refl)). inv H11; auto.
+        * eapply IHes; eauto.
   Qed.
 
   (* correctness of substition extension *)

@@ -110,7 +110,7 @@ Module Type TR
     | L.Earrow _ _ _ _
     | L.Ewhen _ _ _ _
     | L.Emerge _ _ _
-    | L.Ecase _ _ _
+    | L.Ecase _ _ _ _
     | L.Eapp _ _ _ _    => Error (msg "expression not normalized")
     end.
 
@@ -143,16 +143,18 @@ Module Type TR
                             end) es;
       OK (CE.Emerge x ces ty)
 
-    | L.Ecase e es ([ty], (ck, _)) =>
+    | L.Ecase e es [d] ([ty], (ck, _)) =>
       do le <- to_lexp e;
       do ces <- mmap (fun es => match es with
-                            | [e] => to_cexp e
+                            | Some [e] => do e' <- to_cexp e; OK (Some e')
+                            | None => OK None
                             | _ => Error (msg "control expression not normalized")
                             end) es;
-      OK (CE.Ecase le ces ty)
+      do d' <- to_cexp d;
+      OK (CE.Ecase le ces d')
 
     | L.Emerge _ _ _
-    | L.Ecase _ _ _
+    | L.Ecase _ _ _ _
     | L.Efby _ _ _ _
     | L.Earrow _ _ _ _
     | L.Eapp _ _ _ _    => Error (msg "control expression not normalized")

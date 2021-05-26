@@ -59,95 +59,206 @@ Module Type CORRECTNESS
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord).
 
   Lemma sem_lexp_step {prefs} :
-    forall (G: @L.global prefs) H b e e' v s,
+    forall (G: @L.global prefs) H b e e' s,
       to_lexp e = OK e' ->
-      LS.sem_exp G H b e [v ⋅ s] ->
-      LS.sem_exp G (history_tl H) (Streams.tl b) e [s].
+      LS.sem_exp G H b e s ->
+      LS.sem_exp G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem; inv Htr.
-    - inv Hsem. symmetry in H5.
-      destruct v;
-        [ apply const_inv1 in H5; destruct H5 as [ b' [ Hs Hb ] ]
-        | apply const_inv2 in H5; destruct H5 as (b' & Hs & Hb & Hc) ];
-      rewrite Hs; rewrite Hb; simpl; econstructor; reflexivity.
-    - inv Hsem. constructor.
-      inv H4; simpl in *; auto.
-    - inv Hsem. inv H5.  destruct xs'.
+    - inv Hsem; inv H4.
+      simpl in *. constructor; auto.
+    - inv Hsem; simpl. inv H6.
+      simpl in *. constructor; auto.
+    - inv Hsem. destruct a. monadInv H1. inv H7; destruct xs'.
       econstructor. econstructor.
-      eapply env_maps_tl; eauto. inv H3; simpl in *. assumption.
+      eapply env_maps_tl; eauto. inv H2; simpl in *. assumption.
     - inv Hsem. destruct a. monadInv H1. destruct s0.
+      eapply IHe0 in H7; eauto; simpl in *.
       econstructor; eauto. inv H10; auto.
     - inv Hsem. destruct a. monadInv H1. destruct s1, s2.
+      eapply IHe0_1 in H6; eauto. eapply IHe0_2 in H9; eauto.
       econstructor; eauto. inv H13; auto.
-    - destruct es; inv H2.
-      destruct es; inv H3.
-      inv H0.
-      destruct a. destruct l; inv H2.
-      destruct l; try now inv H1. monadInv H1.
-      clear H5.
-      inv Hsem. inv H11. inv H5. destruct s0, x1.
-      inv H9. inv H7. simpl in H0. rewrite app_nil_r in H0. subst.
+    - cases; monadInv H2.
+      apply Forall_singl in H0.
+      inv Hsem. inv H9; inv H5.
+      simpl in *; rewrite app_nil_r in *.
+      eapply H0 in H3; eauto.
+      destruct s0.
       econstructor.
       + econstructor; eauto.
       + eapply sem_var_step. eassumption.
-      + econstructor; eauto. inv H3; eauto.
+      + simpl; rewrite app_nil_r.
+        rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto]; intros ?? _ _ ?.
+        inv H1; eauto.
   Qed.
 
+  (* Lemma sem_lexp_step {prefs} : *)
+  (*   forall (G: @L.global prefs) H b e e' v s, *)
+  (*     to_lexp e = OK e' -> *)
+  (*     LS.sem_exp G H b e [v ⋅ s] -> *)
+  (*     LS.sem_exp G (history_tl H) (Streams.tl b) e [s]. *)
+  (* Proof. *)
+  (*   einduction e using L.exp_ind2; intros * Htr Hsem; inv Htr. *)
+  (*   - inv Hsem. symmetry in H5. *)
+  (*     destruct v; *)
+  (*       [ apply const_inv1 in H5; destruct H5 as [ b' [ Hs Hb ] ] *)
+  (*       | apply const_inv2 in H5; destruct H5 as (b' & Hs & Hb & Hc) ]; *)
+  (*     rewrite Hs; rewrite Hb; simpl; econstructor; reflexivity. *)
+  (*   - inv Hsem. constructor. *)
+  (*     inv H4; simpl in *; auto. *)
+  (*   - inv Hsem. inv H5.  destruct xs'. *)
+  (*     econstructor. econstructor. *)
+  (*     eapply env_maps_tl; eauto. inv H3; simpl in *. assumption. *)
+  (*   - inv Hsem. destruct a. monadInv H1. destruct s0. *)
+  (*     econstructor; eauto. inv H10; auto. *)
+  (*   - inv Hsem. destruct a. monadInv H1. destruct s1, s2. *)
+  (*     econstructor; eauto. inv H13; auto. *)
+  (*   - destruct es; inv H2. *)
+  (*     destruct es; inv H3. *)
+  (*     inv H0. *)
+  (*     destruct a. destruct l; inv H2. *)
+  (*     destruct l; try now inv H1. monadInv H1. *)
+  (*     clear H5. *)
+  (*     inv Hsem. inv H11. inv H5. destruct s0, x1. *)
+  (*     inv H9. inv H7. simpl in H0. rewrite app_nil_r in H0. subst. *)
+  (*     econstructor. *)
+  (*     + econstructor; eauto. *)
+  (*     + eapply sem_var_step. eassumption. *)
+  (*     + econstructor; eauto. inv H3; eauto. *)
+  (* Qed. *)
+
   Lemma sem_cexp_step {prefs} :
-    forall (G: @L.global prefs) H b e e' v s,
+    forall (G: @L.global prefs) H b e e' s,
       to_cexp e = OK e' ->
-      LS.sem_exp G H b e [v ⋅ s] ->
-      LS.sem_exp G (history_tl H) (Streams.tl b) e [s].
+      LS.sem_exp G H b e s ->
+      LS.sem_exp G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem;
       (now inv Htr) || (unfold to_cexp in Htr;
                        try (monadInv Htr; eapply sem_lexp_step; simpl; eauto)).
-    1,2:destruct a as ([|? [|]]&?&?); monadInv Htr; fold to_cexp in *.
-    - inv Hsem; inv H10; inv H6.
-      destruct s0.
+    - (* merge *)
+      destruct a as ([|? [|]]&?&?); monadInv Htr; fold to_cexp in *.
+      inv Hsem. destruct s0.
       eapply LS.Smerge with (vs0:=map (map (map (fun x => Streams.tl x))) vs); eauto.
       + eapply sem_var_step; eauto.
-      + clear - EQ H0 H1 H3 H9. rewrite Forall2_map_2.
-        revert dependent vs. revert dependent x0. revert dependent hd1.
-        induction es; intros; inv H9; inv H0; inv H1; inv H3;
+      + clear - EQ H0 H9. rewrite Forall2_map_2.
+        revert dependent vs. revert dependent x0.
+        induction es; intros; inv H9; inv H0;
           monadInv EQ;
           constructor; eauto.
-        clear EQ IHes H7 H8 H9 H11.
-        cases. inv H6; inv H7. inv H5; inv H8. simpl in *; rewrite app_nil_r in *.
-        destruct y1 as [|? [|]]; simpl in *; inv H4; inv H2. destruct y0.
-        eapply H3 in EQ0; eauto.
-      + inv H5; repeat econstructor; eauto.
-        1,3:(rewrite map_map, Forall2_map_1, Forall2_map_2;
-             rewrite Forall2_map_1 in H3;
-             eapply Forall2_impl_In; [|eauto]; intros; simpl in *;
-             rewrite <-concat_map; destruct (concat a); simpl in *; now inv H5).
-        1,2:(rewrite 2 map_map, Forall_map;
-             rewrite map_map, Forall_map in H1;
-             eapply Forall_impl; [|eauto]; intros; simpl in *;
-             rewrite <-concat_map; destruct (concat a); simpl in *; try rewrite H2; auto).
-    - inv Hsem; inv H10; inv H6.
-      destruct s0.
-      eapply LS.Scase with (vs0:=map (map (map (fun x => Streams.tl x))) vs); eauto.
-      + eapply sem_lexp_step; eauto.
-      + clear - EQ1 H0 H1 H3 H9. rewrite Forall2_map_2.
-        revert dependent vs. revert dependent x0. revert dependent hd1.
-        induction es; intros; inv H9; inv H0; inv H1; inv H3;
+        clear EQ IHes H6.
+        cases. apply Forall_singl in H4. inv H3; inv H7. simpl.
+        repeat constructor; eauto.
+      + rewrite map_map.
+        replace (map (fun x => concat (map (map (fun x2 => Streams.tl x2)) x)) vs)
+          with (map (map (@Streams.tl _)) (map (@concat _) vs)).
+        2:{ rewrite map_map. eapply map_ext; intros.
+            rewrite concat_map; auto. }
+        rewrite Forall2Transpose_map_1, Forall2Transpose_map_2.
+        eapply Forall2Transpose_impl; eauto.
+        intros ?? Hmerge. inv Hmerge; eauto.
+    - (* case *)
+      destruct a as ([|? [|]]&?&?); cases; monadInv Htr; fold to_cexp in *.
+      inv Hsem. destruct s0.
+      eapply LS.Scase with (vs0:=map (map (map (fun x => Streams.tl x))) vs)
+                           (vd0:=(map (map (fun x => Streams.tl x)) vd)); eauto.
+      + eapply sem_lexp_step in H7; eauto.
+      + clear - EQ1 H0 H10. rewrite Forall2_map_2.
+        revert dependent vs. revert dependent x0.
+        induction es; intros; inv H0; inv H10;
           monadInv EQ1;
           constructor; eauto.
-        clear EQ1 IHes H7 H8 H9 H11.
-        cases. inv H6; inv H7. inv H5; inv H8. simpl in *; rewrite app_nil_r in *.
-        destruct y1 as [|? [|]]; simpl in *; inv H4; inv H2. destruct y0.
-        eapply H3 in EQ; eauto.
-      + inv H5; repeat econstructor; eauto.
-        1,3:(rewrite map_map, Forall2_map_1, Forall2_map_2;
-             rewrite Forall2_map_1 in H3;
-             eapply Forall2_impl_In; [|eauto]; intros; simpl in *;
-             rewrite <-concat_map; destruct (concat a); simpl in *; now inv H5).
-        1,2:(rewrite 2 map_map, Forall_map;
-             rewrite map_map, Forall_map in H1;
-             eapply Forall_impl; [|eauto]; intros; simpl in *;
-             rewrite <-concat_map; destruct (concat a); simpl in *; try rewrite H2; auto).
+        clear EQ1 IHes H4 H6.
+        cases; monadInv EQ; intros ? Heq; inv Heq.
+        apply Forall_singl in H3. specialize (H2 _ eq_refl).
+        inv H2; inv H6. simpl. repeat constructor; eauto.
+      + clear - H12. rewrite Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto]; intros ?? _ _ ? ?; subst.
+        rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto]; intros.
+        eapply map_st_EqSt; eauto.
+        intros ?? Heq. rewrite Heq. reflexivity.
+      + clear - H1 H13 EQ0. inv H13; inv H5.
+        simpl. repeat constructor.
+        apply Forall_singl in H1; eauto.
+      + rewrite map_map.
+        replace (map (fun x => concat (map (map (fun x2 => Streams.tl x2)) x)) vs)
+          with (map (map (@Streams.tl _)) (map (@concat _) vs)).
+        2:{ rewrite map_map. eapply map_ext; intros.
+            rewrite concat_map; auto. }
+        rewrite Forall2Transpose_map_1, Forall2Transpose_map_2.
+        eapply Forall2Transpose_impl; eauto.
+        intros ?? Hcase. inv Hcase; eauto.
   Qed.
+
+  (* Lemma sem_cexp_step {prefs} : *)
+  (*   forall (G: @L.global prefs) H b e e' v s, *)
+  (*     to_cexp e = OK e' -> *)
+  (*     LS.sem_exp G H b e [v ⋅ s] -> *)
+  (*     LS.sem_exp G (history_tl H) (Streams.tl b) e [s]. *)
+  (* Proof. *)
+  (*   einduction e using L.exp_ind2; intros * Htr Hsem; *)
+  (*     (now inv Htr) || (unfold to_cexp in Htr; *)
+  (*                      try (monadInv Htr; eapply sem_lexp_step; simpl; eauto)). *)
+  (*   - (* merge *) *)
+  (*     destruct a as ([|? [|]]&?&?); monadInv Htr; fold to_cexp in *. *)
+  (*     inv Hsem; inv H10; inv H6. *)
+  (*     destruct s0. *)
+  (*     eapply LS.Smerge with (vs0:=map (map (map (fun x => Streams.tl x))) vs); eauto. *)
+  (*     + eapply sem_var_step; eauto. *)
+  (*     + clear - EQ H0 H1 H3 H9. rewrite Forall2_map_2. *)
+  (*       revert dependent vs. revert dependent x0. revert dependent hd1. *)
+  (*       induction es; intros; inv H9; inv H0; inv H1; inv H3; *)
+  (*         monadInv EQ; *)
+  (*         constructor; eauto. *)
+  (*       clear EQ IHes H7 H8 H9 H11. *)
+  (*       cases. inv H6; inv H7. inv H5; inv H8. simpl in *; rewrite app_nil_r in *. *)
+  (*       destruct y1 as [|? [|]]; simpl in *; inv H4; inv H2. destruct y0. *)
+  (*       eapply H3 in EQ0; eauto. *)
+  (*     + inv H5; repeat econstructor; eauto. *)
+  (*       1,3:(rewrite map_map, Forall2_map_1, Forall2_map_2; *)
+  (*            rewrite Forall2_map_1 in H3; *)
+  (*            eapply Forall2_impl_In; [|eauto]; intros; simpl in *; *)
+  (*            rewrite <-concat_map; destruct (concat a); simpl in *; now inv H5). *)
+  (*       1,2:(rewrite 2 map_map, Forall_map; *)
+  (*            rewrite map_map, Forall_map in H1; *)
+  (*            eapply Forall_impl; [|eauto]; intros; simpl in *; *)
+  (*            rewrite <-concat_map; destruct (concat a); simpl in *; try rewrite H2; auto). *)
+  (*   - (* case *) *)
+  (*     destruct a as ([|? [|]]&?&?); cases; monadInv Htr; fold to_cexp in *. *)
+  (*     inv Hsem. inv H13; inv H6. inv H14; inv H9. *)
+  (*     destruct s0. *)
+  (*     eapply LS.Scase with (vs0:=map (map (map (fun x => Streams.tl x))) vs) (vd:=[map (fun x => Streams.tl x) y]); eauto. *)
+  (*     + eapply sem_lexp_step; eauto. *)
+  (*     + clear - EQ1 H0 H2 H5 H10. rewrite Forall2_map_2. *)
+  (*       revert dependent vs. revert dependent x0. revert dependent hd1. *)
+  (*       induction es; intros; inv H0; inv H10; inv H2; inv H5; *)
+  (*         monadInv EQ1; *)
+  (*         constructor; eauto. *)
+  (*       clear EQ1 IHes H8 H9 H11. *)
+  (*       cases; monadInv EQ; intros ? Heq; inv Heq. *)
+  (*       apply Forall_singl in H4. specialize (H3 _ eq_refl). *)
+  (*       inv H3; inv H9. simpl in *. repeat constructor. *)
+  (*       destruct y1 as [|? [|]]; simpl in *; inv H2; inv H7. *)
+  (*       destruct y0. eapply H4 in EQ0; eauto. *)
+  (*     + clear - H12. rewrite Forall2_map_2. *)
+  (*       eapply Forall2_impl_In; [|eauto]; intros ?? _ _ ? ?; subst. *)
+  (*       specialize (H eq_refl). inv H; inv H4. *)
+  (*       simpl. repeat constructor; auto. eapply map_st_EqSt; eauto. *)
+  (*       intros ?? Heq. rewrite Heq. reflexivity. *)
+  (*     + clear - H1 H7 EQ0. repeat constructor. *)
+  (*       apply Forall_singl in H1. admit. *)
+  (*     + inv H8; repeat econstructor; eauto. *)
+  (*       1,3:(rewrite map_map, Forall2_map_1, Forall2_map_2; *)
+  (*            rewrite Forall2_map_1 in H5; *)
+  (*            eapply Forall2_impl_In; [|eauto]; intros; simpl in *; *)
+  (*            rewrite <-concat_map; destruct (concat a); simpl in *; now inv H8). *)
+  (*       1,2:(rewrite 2 map_map, Forall_map; *)
+  (*            rewrite map_map, Forall_map in H2; *)
+  (*            eapply Forall_impl; [|eauto]; intros; simpl in *; *)
+  (*            rewrite <-concat_map; destruct (concat a); simpl in *; try rewrite H3; auto). *)
+  (* Qed. *)
 
   Lemma ty_lexp {prefs} :
     forall (G: @L.global prefs) env e e',
@@ -228,9 +339,9 @@ Module Type CORRECTNESS
       (now inv Htr) || (unfold to_cexp in Htr;
                        try (monadInv Htr; econstructor;
                             eapply sem_exp_lexp; eauto));
-      destruct a as (?&?&?); destruct l as [|? [|]]; try monadInv Htr;
-        fold to_cexp in *.
-    - inv Hsem; inv H10; inv H6.
+      cases; monadInv Htr; fold to_cexp in *.
+    - (* merge *)
+      inv Hsem; inv H10; inv H6.
       rewrite Forall2_map_1 in H3. rewrite map_map, Forall_map in H1.
       inv Hwt.
       econstructor; eauto.
@@ -243,20 +354,31 @@ Module Type CORRECTNESS
       simpl in *; rewrite app_nil_r in *.
       destruct y1 as [|? [|]]; simpl in *; inv H9; inv H3.
       inv H5. inv H7. auto.
-    - inv Hsem; inv H10; inv H6.
-      rewrite Forall2_map_1 in H3. rewrite map_map, Forall_map in H1.
+    - (* case *)
+      inv Hsem. apply Forall_singl in H1.
+      inv H13; inv H6. inv H14; inv H9.
+      rewrite Forall2_map_1 in H5. rewrite map_map, Forall_map in H2.
       inv Hwt.
       econstructor; eauto.
       + eapply sem_exp_lexp in EQ; eauto.
-      + clear - H0 H1 H3 H9 H15 EQ1.
-        revert vs hd1 x0 H1 H3 H9 EQ1.
-        induction es; intros; inv H15; inv H0; simpl in *; monadInv EQ1;
-          inv H9; inv H3; inv H1; constructor; eauto.
-        clear EQ1 IHes H6 H8 H10 H11 H12.
-        cases_eqn EQ0. inv H4; inv H8.
-        simpl in *; rewrite app_nil_r in *.
-        destruct y1 as [|? [|]]; simpl in *; inv H9; inv H3.
-        inv H5. inv H7. auto.
+      + apply Forall_singl in H21. rename H21 into Hwtd.
+        rename H1 into Hd. rename H4 into Hsemd.
+        clear - H0 Hd Hwtd Hsemd H2 H5 H10 H12 H19 EQ0 EQ1.
+        revert vs hd1 x0 H0 H2 H5 H10 H12 H19 EQ1.
+        induction es; intros; inv H0; simpl in *; monadInv EQ1;
+          inv H10; inv H12; inv H5; inv H2; constructor; eauto.
+        clear EQ1 IHes H6 H8 H10.
+        cases; monadInv EQ; simpl in *.
+        * apply Forall_singl in H4; eauto.
+          specialize (H3 _ eq_refl). inv H3; inv H8; simpl in *; rewrite app_nil_r in *; auto.
+          destruct y2 as [|? [|]]; inv H7; inv H5.
+          eapply H4 in H2; eauto.
+          eapply Forall_forall in H19; eauto with datatypes.
+        * eapply Hd; eauto.
+          specialize (H9 eq_refl). inv H9; inv H8.
+          simpl in *; rewrite app_nil_r in *.
+          destruct x as [|? [|]]; simpl in *; inv H7; inv H5.
+          inv H6; inv H7. rewrite H2; auto.
   Qed.
 
   Lemma sem_lexp_step2: forall H b e v s,
@@ -464,6 +586,8 @@ Module Type CORRECTNESS
     assert (Hsem':=Hsem). eapply sem_exp_cexp in Hsem'; [|eauto|eauto].
     unfold_Stv s; rewrite unfold_Stream in Hsc; simpl in Hsc;
       econstructor; eauto; eapply Cofix; eauto using sc_step, sem_cexp_step.
+    - eapply sem_cexp_step in Hsem; eauto.
+    - eapply sem_cexp_step in Hsem; eauto.
   Qed.
 
   Lemma sem_lexp_laexp :

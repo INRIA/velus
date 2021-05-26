@@ -40,6 +40,7 @@ Module Type STC2OBCINVARIANTS
       apply in_map_iff in Hin as (oe &?&Hin); subst.
       eapply Forall_forall in Hin; eauto; simpl in *.
       eapply Hin; eauto.
+      destruct oe; simpl in *; auto.
   Qed.
 
   Lemma Is_free_in_tovar:
@@ -89,10 +90,11 @@ Module Type STC2OBCINVARIANTS
           apply Hin; intro; apply Hfree;
             apply FreeEcase_branches;
             apply Exists_exists; eauto.
-      + intros * Hfree'; apply Forall_map, Forall_forall; intros * Hin.
-        apply not_Can_write_in_translate_cexp.
-        apply Is_free_translate_exp in Hfree'.
-        intro; subst; apply Hfree; constructor; auto.
+      + intros * Hfree'; apply Forall_map, Forall_forall; intros oe Hin.
+        destruct oe; simpl in *;
+          apply not_Can_write_in_translate_cexp;
+          apply Is_free_translate_exp in Hfree';
+          intro; subst; apply Hfree; constructor; auto.
   Qed.
 
   Lemma Fusible_Control:

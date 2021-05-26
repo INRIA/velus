@@ -316,6 +316,8 @@ Module Type CEPROPERTIES
       repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
     - take (Exists _ _) and apply Exists_exists in it as (ce & Hin & Free).
       repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      apply it; auto.
+      destruct ce; auto.
   Qed.
 
   Lemma Is_free_in_wt_aexp:

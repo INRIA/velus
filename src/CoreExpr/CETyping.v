@@ -67,14 +67,15 @@ Module Type CETYPING
         Forall (fun e => typeofc e = ty) l ->
         Forall wt_cexp l ->
         wt_cexp (Emerge (x, Tenum tn) l ty)
-    | wt_Ecase: forall e l ty tn,
+    | wt_Ecase: forall e l d tn,
         wt_exp e ->
         typeof e = Tenum tn ->
         In tn enums ->
         snd tn = length l ->
-        Forall (fun e => typeofc e = ty) l ->
-        Forall wt_cexp l ->
-        wt_cexp (Ecase e l ty)
+        (forall e, In (Some e) l -> typeofc e = typeofc d) ->
+        wt_cexp d ->
+        (forall e, In (Some e) l -> wt_cexp e) ->
+        wt_cexp (Ecase e l d)
     | wt_Eexp: forall e,
         wt_exp e ->
         wt_cexp (Eexp e).
@@ -150,7 +151,7 @@ Module Type CETYPING
   Proof.
     intros enums' enums Henums env' env Henv e' e He.
     rewrite He; clear He.
-    induction e using cexp_ind2; try destruct IHe1, IHe2;
+    induction e using cexp_ind2'; try destruct IHe1, IHe2;
       split; inversion_clear 1; try rewrite Henv in *; try rewrite Henums in *;
         econstructor; eauto; try rewrite Henv in *; try rewrite Henums in *; eauto.
     - apply Forall_forall; intros * Hin.
@@ -159,11 +160,13 @@ Module Type CETYPING
     - apply Forall_forall; intros * Hin.
       do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
       apply it; auto.
-    - apply Forall_forall; intros * Hin.
-      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+    - now apply IHe.
+    - intros * Hin.
+      take (Forall _ _) and eapply Forall_forall in it; eauto.
       apply it; auto.
-    - apply Forall_forall; intros * Hin.
-      do 3 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+    - now apply IHe.
+    - intros * Hin.
+      take (Forall _ _) and eapply Forall_forall in it; eauto.
       apply it; auto.
   Qed.
 
@@ -194,7 +197,7 @@ Module Type CETYPING
       wt_cexp enums Γ ce ->
       wt_cexp (e :: enums) Γ ce.
   Proof.
-    induction ce using cexp_ind2; intros * WT; inv WT;
+    induction ce using cexp_ind2'; intros * WT; inv WT;
       eauto using wt_cexp, wt_exp_enums_cons.
     - econstructor; eauto.
       + now right.
@@ -202,8 +205,8 @@ Module Type CETYPING
         repeat take (Forall _ _) and eapply Forall_forall in it; eauto.
     - econstructor; eauto using wt_exp_enums_cons.
       + now right.
-      + apply Forall_forall; intros.
-        repeat take (Forall _ _) and eapply Forall_forall in it; eauto.
+      + intros.
+        take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in it; auto.
   Qed.
 
 End CETYPING.

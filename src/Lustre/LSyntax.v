@@ -48,7 +48,7 @@ Module Type LSYNTAX
   | Earrow : list exp -> list exp -> list exp -> list ann -> exp
   | Ewhen  : list exp -> ident -> enumtag -> lann -> exp
   | Emerge : ident * type -> list (list exp) -> lann -> exp
-  | Ecase  : exp -> list (list exp) -> lann -> exp
+  | Ecase  : exp -> list (option (list exp)) -> list exp -> lann -> exp
   | Eapp   : ident -> list exp -> list exp -> list ann -> exp.
 
   Implicit Type e: exp.
@@ -72,7 +72,7 @@ Module Type LSYNTAX
     | Ebinop _ _ _ _ => 1
     | Ewhen _ _ _  (tys, _)
     | Emerge _ _ (tys, _)
-    | Ecase _ _   (tys, _) => length tys
+    | Ecase _ _ _ (tys, _) => length tys
     end.
 
   (* Annotation (homogenized). *)
@@ -89,7 +89,7 @@ Module Type LSYNTAX
     | Ebinop _ _ _ ann => [ann]
     | Ewhen _ _ _  (tys, ck)
     | Emerge _ _ (tys, ck)
-    | Ecase _ _   (tys, ck) => map (fun ty=> (ty, ck)) tys
+    | Ecase _ _ _ (tys, ck) => map (fun ty=> (ty, ck)) tys
     end.
 
   Definition annots (es: list exp): list (type * nclock) :=
@@ -107,7 +107,7 @@ Module Type LSYNTAX
     | Ebinop _ _ _ ann => [fst ann]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
-    | Ecase _ _ anns => fst anns
+    | Ecase _ _ _ anns => fst anns
     end.
 
   Definition typesof (es: list exp): list type :=
@@ -129,7 +129,7 @@ Module Type LSYNTAX
     | Ebinop _ _ _ ann => [clock_of_nclock ann]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
-    | Ecase _ _ anns => map (fun _ => clock_of_nclock anns) (fst anns)
+    | Ecase _ _ _ anns => map (fun _ => clock_of_nclock anns) (fst anns)
     end.
 
   Definition clocksof (es: list exp): list clock :=
@@ -146,7 +146,7 @@ Module Type LSYNTAX
     | Ebinop _ _ _ ann => [snd ann]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
-    | Ecase _ _ anns => map (fun _ => snd anns) (fst anns)
+    | Ecase _ _ _ anns => map (fun _ => snd anns) (fst anns)
     end.
 
   Definition nclocksof (es: list exp): list nclock :=
@@ -173,7 +173,7 @@ Module Type LSYNTAX
       fresh_ins e0s ++ fresh_ins es ++ fresh_ins er
     | Ewhen es _ _ _ => fresh_ins es
     | Emerge _ es _ => flat_map fresh_ins es
-    | Ecase e es _ => fresh_in e ++ flat_map fresh_ins es
+    | Ecase e es d _ => fresh_in e ++ flat_map (or_default_with [] fresh_ins) es ++ fresh_ins d
     | Eapp _ es er anns => fresh_ins es ++ fresh_ins er ++ anon_streams anns
     end.
 
@@ -349,10 +349,11 @@ Module Type LSYNTAX
         P (Emerge x es a).
 
     Hypothesis EcaseCase:
-      forall e es a,
+      forall e es d a,
         P e ->
-        Forall (Forall P) es ->
-        P (Ecase e es a).
+        Forall (LiftO True (Forall P)) es ->
+        Forall P d ->
+        P (Ecase e es d a).
 
     Hypothesis EappCase:
       forall f es er a,
@@ -379,8 +380,9 @@ Module Type LSYNTAX
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
         constructor; auto. SolveForall.
-      - apply EcaseCase; SolveForall; auto.
-        constructor; auto. SolveForall.
+      - apply EcaseCase; auto. 2:SolveForall.
+        SolveForall. constructor; auto.
+        destruct a; simpl. SolveForall. constructor.
       - apply EappCase; SolveForall; auto.
     Qed.
 
@@ -394,7 +396,7 @@ Module Type LSYNTAX
     destruct e; simpl; auto.
     - destruct l0. apply map_length.
     - destruct l0. apply map_length.
-    - destruct l0. apply map_length.
+    - destruct l1. apply map_length.
   Qed.
 
   (** typesof *)
@@ -409,7 +411,7 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       rewrite map_map; simpl.
       symmetry. apply map_id.
-    - destruct l0; simpl.
+    - destruct l1; simpl.
       rewrite map_map; simpl.
       symmetry. apply map_id.
   Qed.
@@ -465,7 +467,7 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
-    - destruct l0; simpl.
+    - destruct l1; simpl.
       repeat rewrite map_map.
       reflexivity.
     - rewrite map_map. reflexivity.
@@ -533,7 +535,7 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
-    - destruct l0; simpl.
+    - destruct l1; simpl.
       repeat rewrite map_map.
       reflexivity.
   Qed.
@@ -796,13 +798,15 @@ Module Type LSYNTAX
       Forall (Forall (wl_exp G)) es ->
       Forall (fun es => length (annots es) = length tys) es ->
       wl_exp G (Emerge x es (tys, nck))
-  | wl_Ecase : forall G e es tys nck,
+  | wl_Ecase : forall G e brs d tys nck,
       wl_exp G e ->
       numstreams e = 1 ->
-      es <> nil ->
-      Forall (Forall (wl_exp G)) es ->
-      Forall (fun es => length (annots es) = length tys) es ->
-      wl_exp G (Ecase e es (tys, nck))
+      brs <> nil ->
+      (forall es, In (Some es) brs -> Forall (wl_exp G) es) ->
+      (forall es, In (Some es) brs -> length (annots es) = length tys) ->
+      Forall (wl_exp G) d ->
+      length (annots d) = length tys ->
+      wl_exp G (Ecase e brs d (tys, nck))
   | wl_Eapp : forall G f n es er anns,
       Forall (wl_exp G) es ->
       Forall (wl_exp G) er ->

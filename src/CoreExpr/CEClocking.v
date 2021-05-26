@@ -62,11 +62,12 @@ Module Type CECLOCKING
           Forall2 (fun i e => wc_cexp e (Con ck x (tx, i))) (seq 0 (length l)) l ->
           wc_cexp (Emerge (x, tx) l ty) ck
     | Ccase:
-        forall c l ty ck,
+        forall c l d ck,
           wc_exp c ck ->
           l <> nil ->
-          Forall (fun e => wc_cexp e ck) l ->
-          wc_cexp (Ecase c l ty) ck
+          wc_cexp d ck ->
+          (forall e, In (Some e) l -> wc_cexp e ck) ->
+          wc_cexp (Ecase c l d) ck
     | Cexp:
         forall e ck,
           wc_exp e ck ->
@@ -100,18 +101,14 @@ Module Type CECLOCKING
       wc_cexp vars ce ck ->
       wc_clock vars ck.
   Proof.
-    induction ce as [? ces ? IHces|? ces ? IHces|] using cexp_ind2.
+    induction ce as [? ces ? IHces|? ces ? IHces|] using cexp_ind2'.
     - intros ck Hwc.
       inversion_clear 1 as [????? Hcv ? Hcs| |].
       destruct ces as [|e]; try contradiction.
       inversion_clear Hcs as [|???? Hc]; inversion_clear IHces as [|?? IHce].
       apply IHce with (1:=Hwc) in Hc.
       inversion_clear Hc; assumption.
-    - intros ck Hwc.
-      inversion_clear 1 as [|???? Hcv ? Hcs|].
-      destruct ces as [|e]; try contradiction.
-      inversion_clear Hcs as [|?? Hc]; inversion_clear IHces as [|?? IHce].
-      apply IHce with (1:=Hwc) in Hc; auto.
+    - intros ck Hwc; inversion_clear 1; auto.
     - intros ck Hwc; inversion_clear 1 as [| |? ? Hck].
       apply wc_clock_exp with (1:=Hwc) (2:=Hck).
   Qed.
@@ -142,7 +139,7 @@ Module Type CECLOCKING
     intros env' env Henv e' e He ck' ck Hck.
     rewrite He, Hck; clear He Hck e' ck'.
     revert ck.
-    induction e using cexp_ind2;
+    induction e using cexp_ind2';
       split; inversion_clear 1;
         try (
         (rewrite Henv in * || rewrite <-Henv in *);
@@ -169,12 +166,16 @@ Module Type CECLOCKING
           apply H'; auto.
         - rewrite Henv in *.
           constructor; auto.
-          eapply Forall_impl_In; [|eauto]. intros.
-          eapply Forall_forall in H; eauto. apply H; auto.
+          + now apply IHe.
+          + intros * Hin;
+              repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+            apply it; auto.
         - rewrite <-Henv in *.
           constructor; auto.
-          eapply Forall_impl_In; [|eauto]. intros.
-          eapply Forall_forall in H; eauto. apply H; auto.
+          + now apply IHe.
+          + intros * Hin;
+              repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+            apply it; auto.
   Qed.
 
 End CECLOCKING.

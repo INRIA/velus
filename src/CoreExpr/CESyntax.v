@@ -24,7 +24,7 @@ Module Type CESYNTAX
 
   Inductive cexp : Type :=
   | Emerge : ident * type -> list cexp -> type -> cexp
-  | Ecase  : exp -> list cexp -> type -> cexp
+  | Ecase  : exp -> list (option cexp) -> cexp -> cexp
   | Eexp   : exp -> cexp.
 
   Section cexp_ind2.
@@ -37,9 +37,9 @@ Module Type CESYNTAX
         P (Emerge x l t).
 
     Hypothesis CaseCase:
-      forall c l t,
-        List.Forall P l ->
-        P (Ecase c l t).
+      forall c l d,
+        List.Forall (fun oce => P (or_default d oce)) l ->
+        P (Ecase c l d).
 
     Hypothesis ExpCase:
       forall e,
@@ -51,11 +51,42 @@ Module Type CESYNTAX
       - apply MergeCase.
         induction l; auto.
       - apply CaseCase.
-        induction l; auto.
+        induction l as [|[|]]; auto.
       - apply ExpCase.
     Defined.
 
   End cexp_ind2.
+
+  Section cexp_ind2'.
+
+    Variable P : cexp -> Prop.
+
+    Hypothesis MergeCase:
+      forall x l t,
+        List.Forall P l ->
+        P (Emerge x l t).
+
+    Hypothesis CaseCase:
+      forall c l d,
+        P d ->
+        List.Forall (or_default_with True P) l ->
+        P (Ecase c l d).
+
+    Hypothesis ExpCase:
+      forall e,
+        P (Eexp e).
+
+    Fixpoint cexp_ind2' (e : cexp) : P e.
+    Proof.
+      destruct e.
+      - apply MergeCase.
+        induction l; auto.
+      - apply CaseCase; auto.
+        induction l as [|[|]]; constructor; simpl; auto.
+      - apply ExpCase.
+    Defined.
+
+  End cexp_ind2'.
 
   Fixpoint typeof (le: exp): type :=
     match le with
@@ -69,8 +100,8 @@ Module Type CESYNTAX
 
   Fixpoint typeofc (ce: cexp): type :=
     match ce with
-    | Emerge _ _ ty
-    | Ecase _ _ ty => ty
+    | Emerge _ _ ty => ty
+    | Ecase _ _ e   => typeofc e
     | Eexp e        => typeof e
     end.
 

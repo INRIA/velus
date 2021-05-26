@@ -248,7 +248,7 @@ Inductive eexp : Type :=
 
 | Ewhen  : list eexp -> ident -> enumtag -> lann -> eexp
 | Emerge : (ident * type) -> list (list eexp) -> lann -> eexp
-| Ecase  : eexp -> list (list eexp) -> lann -> eexp
+| Ecase  : eexp -> list (option (list eexp)) -> list eexp -> lann -> eexp
 
 | Eapp   : ident -> list eexp -> list eexp -> list ann -> eexp.
 
@@ -304,10 +304,11 @@ Section eexp_ind2.
       P (Emerge x es a).
 
   Hypothesis EcaseCase:
-    forall e es a,
+    forall e es d a,
       P e ->
-      Forall (Forall P) es ->
-      P (Ecase e es a).
+      Forall (LiftO True (Forall P)) es ->
+      Forall P d ->
+      P (Ecase e es d a).
 
   Hypothesis EappCase:
     forall f es er a,
@@ -335,7 +336,8 @@ Section eexp_ind2.
     - apply EmergeCase; SolveForall.
       constructor; auto. SolveForall.
     - apply EcaseCase; SolveForall; auto.
-      constructor; auto. SolveForall.
+      constructor; auto. destruct a; simpl; auto.
+      SolveForall.
     - apply EappCase; SolveForall; auto.
   Qed.
 
@@ -356,6 +358,12 @@ Fixpoint msg_ident_list (xs: list ident) :=
   | [] => []
   | [x] => [CTX x]
   | x::xs => CTX x :: MSG ", " :: msg_ident_list xs
+  end.
+
+Definition init_type (ty : type) (ck : sclock) :=
+  match ty with
+  | Tprimitive cty => Econst (Op.init_ctype cty) ck
+  | Tenum _ => Eenum 0 ty ck
   end.
 
 (** A completely ad-hoc monad, used only for elaboration :) *)
@@ -624,7 +632,9 @@ Module BranchesOrder <: Orders.TotalLeBool'.
 
   Definition t : Type := (nat * (list (eexp * astloc)))%type.
 
-  Definition leb (s1 s2 : t) : bool := ((fst s1) <=? (fst s2)).
+  (* The arguments are inversed to put the list in the reverse order
+       expected. *)
+  Definition leb (s1 s2 : t) : bool := ((fst s2) <=? (fst s1)).
 
   Lemma leb_total:
     forall s1 s2,
@@ -826,7 +836,7 @@ Section ElabExpressions.
     | Efby _ _ _ [(ty, nck)]
     | Earrow _ _ _ [(ty, nck)]
     | Emerge _ _ ([ty], nck)
-    | Ecase _ _ ([ty], nck) => ret (ty, stripname nck)
+    | Ecase _ _ _ ([ty], nck) => ret (ty, stripname nck)
     | _ => err_not_singleton loc
     end.
 
@@ -840,7 +850,7 @@ Section ElabExpressions.
     | Ebinop _ _ _ (ty, nck) => [((ty, stripname nck), loc)]
     | Ewhen _ _ _ (tys, nck)
     | Emerge _ _ (tys, nck)
-    | Ecase _ _ (tys, nck) =>
+    | Ecase _ _ _ (tys, nck) =>
       let ck := stripname nck in
       map (fun ty=> ((ty, ck), loc)) tys
     | Efby _ _ _ anns
@@ -862,7 +872,7 @@ Section ElabExpressions.
     | Ebinop _ _ _ (ty, nck) => [((ty, nck), loc)]
     | Ewhen _ _ _ (tys, nck)
     | Emerge _ _ (tys, nck)
-    | Ecase _ _ (tys, nck) =>
+    | Ecase _ _ _ (tys, nck) =>
       map (fun ty=> ((ty, nck), loc)) tys
     | Efby _ _ _ anns
     | Earrow _ _ _ anns
@@ -1007,11 +1017,23 @@ Section ElabExpressions.
       | [] => err_loc loc (msg "no branch")
       end.
 
-  Definition elab_branches (loc: astloc) (tn: ident * nat)
+  Fixpoint complete_branches k (brs : list (nat * list (eexp * astloc))) : list (option (list eexp)) :=
+    match k with
+    | 0 => map (fun '(_, e) => Some (map fst e)) brs
+    | (S k) =>
+      match brs with
+      | [] => None::(complete_branches k brs)
+      | (tag, es)::tl => if (tag =? k) then (Some (map fst es))::(complete_branches k tl)
+                       else None::(complete_branches k brs)
+      end
+    end.
+
+  Definition elab_branches {A} (loc: astloc) (tn: ident * nat) (exhaustive : bool)
              (elab_exp: LustreAst.expression -> Elab (eexp * astloc))
              (f_ck: enumtag -> sclock)
+             (f_brs: list (nat * list (eexp * astloc)) -> list A)
              (aes: list (ident * list LustreAst.expression)) :
-    Elab (list (list (eexp * astloc)) * list type) :=
+    Elab (list A * list (type * sclock * astloc)) :=
     do aes <- mmap (fun '(c, ae) =>
                      do (c, tn') <- elab_enum loc c;
                      do _ <- assert_type' loc (Tenum tn) (Tenum tn');
@@ -1020,13 +1042,14 @@ Section ElabExpressions.
                      ret (c, e)) aes;
     let es := fst (split aes) in
     do _ <- check_duplicates loc es;
-    do _ <- check_exhaustivity loc (snd tn) es;
+    do _ <- if exhaustive then check_exhaustivity loc (snd tn) es else ret tt;
     do e0 <- hd_branch loc aes;
     let anns0 := lannots (snd e0) in
     do _ <- mmap (fun '(_, ae) =>
                    unify_paired_types loc anns0 (lannots ae)
                 ) aes;
-    ret (map snd (BranchesSort.sort aes), lannots_ty anns0).
+    let aes := List.rev (f_brs (BranchesSort.sort aes)) in
+    ret (aes, anns0).
 
   Fixpoint elab_exp (is_top : bool) (ae: expression) {struct ae} : Elab (eexp * astloc) :=
     let elab_exp := elab_exp false in
@@ -1102,18 +1125,32 @@ Section ElabExpressions.
     | MERGE x aes loc =>
       do (xty, sck) <- find_var loc x;
       do tn <- assert_enum_type loc x xty;
-      do (eas, tys) <- elab_branches loc tn elab_exp (fun c => Son sck (Vnm x) (xty, c)) aes;
-      ret (Emerge (x, Tenum tn) (map (map fst) eas)
-                  (tys, (sck, None)), loc)
+      do (eas, tys) <- elab_branches loc tn true elab_exp (fun c => Son sck (Vnm x) (xty, c))
+                                    (List.map (fun '(_, e) => List.map fst e))
+                                    aes;
+      ret (Emerge (x, Tenum tn) eas (lannots_ty tys, (sck, None)), loc)
 
-    | CASE [ae] aes loc =>
+    | CASE [ae] aes [] loc =>
       do (e, eloc) <- elab_exp ae;
       do (ety, eck) <- single_annot eloc e;
       do tn <- assert_enum_type' loc ety;
-      do (eas, tys) <- elab_branches loc tn elab_exp (fun _ => eck) aes;
-      ret (Ecase e (map (map fst) eas)
-                (tys, (eck, None)), loc)
-    | CASE _ _ loc => err_not_singleton loc
+      do (eas, anns) <- elab_branches loc tn true elab_exp (fun _ => eck)
+                                    (List.map (fun '(_, e) => Some (List.map fst e)))
+                                    aes;
+      let tys := lannots_ty anns in
+      ret (Ecase e eas (map (fun ty => init_type ty eck) tys) (tys, (eck, None)), loc)
+    | CASE [ae] aes des loc =>
+      do (e, eloc) <- elab_exp ae;
+      do (ety, eck) <- single_annot eloc e;
+      do tn <- assert_enum_type' loc ety;
+      do (eas, anns) <- elab_branches loc tn false elab_exp (fun _ => eck)
+                                    (complete_branches (snd tn))
+                                    aes;
+      do deas <- mmap elab_exp des;
+      do _ <- unify_paired_types loc anns (lannots deas);
+      let tys := lannots_ty anns in
+      ret (Ecase e eas (map fst deas) (tys, (eck, None)), loc)
+    | CASE _ _ _ loc => err_not_singleton loc
 
     | APP f aes aer loc =>
       (* node interface *)
@@ -1220,11 +1257,12 @@ Section ElabExpressions.
       do nck <- freeze_nclock nck;
       ret (Syn.Emerge ckid es (tys, nck))
 
-    | Ecase e es (tys, nck) =>
+    | Ecase e es d (tys, nck) =>
       do e <- freeze_exp e;
-      do es <- mmap freeze_exps es;
+      do es <- mmap (or_default_with (ret None) (fun es => do es <- freeze_exps es; ret (Some es))) es;
+      do d <- freeze_exps d;
       do nck <- freeze_nclock nck;
-      ret (Syn.Ecase e es (tys, nck))
+      ret (Syn.Ecase e es d (tys, nck))
 
     | Eapp f es er anns =>
       do es <- freeze_exps es;
@@ -1575,8 +1613,10 @@ Section ElabDeclaration.
       apply IHe in Hbind.
       eapply mmap_st_id in Hbind1; eauto.
       2:{ eapply Forall_impl; [|eauto]. intros * ? * Hmap.
-          eapply mmap_st_id in Hmap; eauto. }
-      apply freeze_nclock_st_id in Hbind0. subst; auto.
+          destruct a; repeat monadInv; auto.
+          eapply mmap_st_id in Hbind3; eauto. }
+      eapply mmap_st_id in Hbind0; eauto.
+      apply freeze_nclock_st_id in Hbind2. subst; auto.
     - (* app *)
       eapply mmap_st_id in Hbind0; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
       eapply mmap_st_id in Hbind; eauto.
@@ -1664,7 +1704,8 @@ Section ElabDeclaration.
       etransitivity; eauto.
   Qed.
 
-  Fact fresh_ins_brs_AtomOrGensym : forall env tenv nenv env' loc id f_ck es es' tys es'' st1 st2 st3 st4,
+  Fact fresh_ins_brs_AtomOrGensym1 :
+    forall env tenv nenv env' loc id exhaustive f_ck es es' tys es'' st1 st2 st3 st4,
       Forall
         (fun e =>
            Forall
@@ -1673,8 +1714,8 @@ Section ElabDeclaration.
                   elab_exp env tenv nenv false e0 st1 = OK (e', loc, st2) ->
                   freeze_exp env' e' st3 = OK (e'', st4) -> Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e'')))
              (snd e)) es ->
-      elab_branches tenv loc id (elab_exp env tenv nenv false) f_ck es st1 = OK (es', tys, st2) ->
-      mmap (mmap (freeze_exp env')) (map (map fst) es') st3 = OK (es'', st4) ->
+      elab_branches tenv loc id exhaustive (elab_exp env tenv nenv false) f_ck (map (fun '(_, e) => map fst e)) es st1 = OK (es', tys, st2) ->
+      mmap (mmap (freeze_exp env')) es' st3 = OK (es'', st4) ->
       Forall (AtomOrGensym elab_prefs) (map fst (flat_map (flat_map fresh_in) es'')).
   Proof.
     unfold elab_branches.
@@ -1687,13 +1728,14 @@ Section ElabDeclaration.
                     do e <- mmap (elab_exp env tenv0 nenv0 false) ae;
                     do _ <- unify_same_clock tenv0 (f_ck c0) (lannots e); ret (c0, e)) es st1
                = OK (es'', st2')
-              /\ Permutation (map snd es'') es')) as (es'''&st2'&Helab'&Hperm).
+              /\ Permutation (map (fun '(_, es) => map fst es) es'') es')) as (es'''&st2'&Helab'&Hperm).
     { clear - Helab. repeat monadInv.
       unfold bind in *.
       setoid_rewrite Hbind. do 2 eexists; unfold ret; split; eauto.
+      rewrite <-Permutation_rev.
       apply Permutation_map, BranchesSort.Permuted_sort. }
     eapply mmap_Permutation in Hfreeze as (?&st4'&Hperm'&Hfreeze').
-    3:eapply Permutation_map; symmetry; eauto.
+    3:symmetry in Hperm; eauto.
     2:{ intros * Hmap. eapply mmap_st_id in Hmap; eauto.
         eapply Forall_forall; intros. eapply freeze_exp_st_id; eauto. }
     rewrite Hperm'.
@@ -1703,6 +1745,91 @@ Section ElabDeclaration.
       inv Hf; repeat monadInv; unfold fresh_ins; simpl in *; auto.
     rewrite map_app. apply Forall_app; split; eauto.
     eapply fresh_ins_AtomOrGensym'; eauto.
+  Qed.
+
+  Fact fresh_ins_brs_AtomOrGensym2 :
+    forall env tenv nenv env' loc id exhaustive f_ck f_brs es es' tys es'' st1 st2 st3 st4,
+      Forall
+        (fun e =>
+           Forall
+             (fun e0 =>
+                forall e' loc e'' st1 st2 st3 st4,
+                  elab_exp env tenv nenv false e0 st1 = OK (e', loc, st2) ->
+                  freeze_exp env' e' st3 = OK (e'', st4) -> Forall (AtomOrGensym elab_prefs) (map fst (fresh_in e'')))
+             (snd e)) es ->
+      (forall xs, Permutation (map_filter (fun x => x) (f_brs xs))
+                         (map_filter (fun x => x) (map (fun '(_, e) => Some (map fst e)) xs))) ->
+      elab_branches tenv loc id exhaustive (elab_exp env tenv nenv false) f_ck f_brs es st1 = OK (es', tys, st2) ->
+      mmap
+        (or_default_with (ret None) (fun es : list eexp => do es0 <- mmap (freeze_exp env') es; ret (Some es0)))
+        es' st3 = OK (es'', st4) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (flat_map (or_default_with [] (flat_map fresh_in)) es'')).
+  Proof.
+    unfold elab_branches.
+    intros * Hf Hfbrs Helab Hfreeze.
+    assert (exists es'' st2',
+              (mmap
+                 (fun '(c, ae) =>
+                    do (c0, tn')<- elab_enum tenv0 loc c;
+                    do _ <- assert_type' loc (Tenum id) (Tenum tn');
+                    do e <- mmap (elab_exp env tenv0 nenv0 false) ae;
+                    do _ <- unify_same_clock tenv0 (f_ck c0) (lannots e); ret (c0, e)) es st1
+               = OK (es'', st2')
+               /\ Permutation (map_filter (fun x => x) (map (fun '(_, e) => Some (map fst e)) es''))
+                             (map_filter (fun x => x) es')))
+      as (es'''&st2'&Helab'&Hperm).
+    { clear - Hfbrs Helab. repeat monadInv.
+      unfold bind in *.
+      setoid_rewrite Hbind. do 2 eexists; unfold ret; split; eauto.
+      rewrite <-Permutation_rev, Hfbrs.
+      apply Permutation_map_filter_Proper; auto.
+      apply Permutation_map, BranchesSort.Permuted_sort. }
+    assert (mmap (mmap (freeze_exp env')) (map_filter (fun x => x) es') st3 = OK (map_filter (fun x => x) es'', st4))
+      as Hfreeze'.
+    { clear - Hfreeze. revert es'' st3 st4 Hfreeze.
+      induction es' as [|[|]]; intros; repeat monadInv; auto.
+      unfold bind; simpl. erewrite Hbind0, IHes'; eauto.
+      auto. } clear Hfreeze.
+    eapply mmap_Permutation in Hfreeze' as (?&st4'&Hperm'&Hfreeze').
+    3:(symmetry in Hperm; eauto).
+    2:{ intros * Hmap.
+        eapply mmap_st_id in Hmap; eauto.
+        eapply Forall_forall; intros. eapply freeze_exp_st_id; eauto. }
+    replace (flat_map (or_default_with [] (flat_map fresh_in)) es'')
+      with (flat_map fresh_ins (map_filter (fun x => x) es'')).
+    2:{ clear - es''.
+        induction es'' as [|[|]]; simpl; f_equal; auto. }
+    rewrite Hperm'.
+    clear Helab st2 st4 tys es'' es' Hperm Hperm'.
+    revert st1 st2' st3 st4' x es''' Hf Helab' Hfreeze'.
+    induction es as [|(?&?)]; intros * Hf Helab Hfreeze;
+      inv Hf; repeat monadInv; unfold fresh_ins; simpl in *; auto.
+    rewrite map_app. apply Forall_app; split; eauto.
+    eapply fresh_ins_AtomOrGensym'; eauto.
+  Qed.
+
+  Lemma complete_branches_Perm : forall k xs,
+      Permutation (map_filter (fun x => x) (complete_branches k xs))
+                  (map_filter (fun x => x) (map (fun '(_, e1) => Some (map fst e1)) xs)).
+  Proof.
+    induction k; intros; simpl in *; auto.
+    destruct xs as [|(?&?)]; simpl.
+    - clear - k.
+      induction k; simpl; auto.
+    - destruct (n =? k); simpl; auto.
+      rewrite IHk; auto.
+  Qed.
+
+  Fact freeze_init_type_AtomOrGensym : forall env' tys ck es' st1 st2,
+      mmap (freeze_exp env') (map (fun ty : type => init_type ty ck) tys) st1 = OK (es', st2) ->
+      Forall (AtomOrGensym elab_prefs) (map fst (fresh_ins es')).
+  Proof.
+    induction tys; intros * Hmap; repeat monadInv; auto.
+    rewrite map_app, Forall_app. split; eauto.
+    destruct a; simpl in Hbind; repeat monadInv.
+    1-2:clear - Hbind2; revert x x0 x3 Hbind2.
+    1,2:induction x2 as [|??? (?&?)]; intros; repeat monadInv; eauto.
+    1,2:destruct Env.mem; repeat monadInv; rewrite app_nil_r; eauto.
   Qed.
 
   Lemma fresh_in_AtomOrGensym : forall env tenv nenv env' e e' loc e'' st1 st2 st3 st4,
@@ -1720,10 +1847,16 @@ Section ElabDeclaration.
       apply Forall_singl in H. apply Forall_singl in H0.
       rewrite map_app, Forall_app. eauto.
     - (* case *)
-      destruct_to_singl es; repeat monadInv.
-      rewrite map_app. apply Forall_app; split.
-      + inv H. eapply H3 in Hbind; eauto.
-      + eapply fresh_ins_brs_AtomOrGensym; eauto.
+      cases; repeat monadInv;
+        repeat rewrite map_app, Forall_app; repeat split.
+      + inv H. eapply H4 in Hbind; eauto.
+      + eapply fresh_ins_brs_AtomOrGensym2; eauto.
+      + eapply freeze_init_type_AtomOrGensym in Hbind4; eauto.
+      + inv H. eapply H4 in Hbind; eauto.
+      + eapply fresh_ins_brs_AtomOrGensym2 in Hbind2; eauto.
+        eapply complete_branches_Perm.
+      + inv H1. destruct x13. eapply H4 in Hbind5; eauto.
+      + inv H1. eapply fresh_ins_AtomOrGensym' in Hbind3; eauto.
     - (* cast *)
       destruct_to_singl es; repeat monadInv.
       apply Forall_singl in H. eauto.
@@ -1762,7 +1895,7 @@ Section ElabDeclaration.
       eapply fresh_ins_AtomOrGensym'; eauto.
     - (* merge *)
       repeat monadInv.
-      eapply fresh_ins_brs_AtomOrGensym; eauto.
+      eapply fresh_ins_brs_AtomOrGensym1; eauto.
   Qed.
 
   Corollary fresh_ins_AtomOrGensym : forall env tenv nenv env' es es' es'' st1 st2 st3 st4,
@@ -1790,13 +1923,20 @@ Section ElabDeclaration.
       destruct_to_singl l0; repeat monadInv.
       rewrite map_app, Forall_app. eauto.
     - (* case *)
-      destruct_to_singl l; repeat monadInv.
-      rewrite map_app. apply Forall_app; split.
+      simpl in Helab.
+      cases; repeat monadInv;
+        repeat rewrite map_app, Forall_app; repeat split.
       + eapply fresh_in_AtomOrGensym in Hbind; eauto.
-      + eapply fresh_ins_brs_AtomOrGensym in Hbind2; eauto.
-        do 2 (eapply Forall_forall; intros).
-        eapply fresh_in_AtomOrGensym; eauto.
-      (* repeat rewrite map_app, Forall_app. repeat split; eauto. *)
+      + eapply fresh_ins_brs_AtomOrGensym2 in Hbind2; eauto.
+        do 2 (eapply Forall_forall; intros). eapply fresh_in_AtomOrGensym; eauto.
+      + eapply freeze_init_type_AtomOrGensym in Hbind4; eauto.
+      + eapply fresh_in_AtomOrGensym in Hbind; eauto.
+      + eapply fresh_ins_brs_AtomOrGensym2 in Hbind2; eauto.
+        do 2 (eapply Forall_forall; intros). eapply fresh_in_AtomOrGensym; eauto.
+        eapply complete_branches_Perm.
+      + destruct x13. eapply fresh_in_AtomOrGensym; eauto.
+      + eapply fresh_ins_AtomOrGensym' in Hbind3; eauto.
+        eapply Forall_forall; intros. eapply fresh_in_AtomOrGensym; eauto.
     - (* cast *)
       destruct_to_singl l; repeat monadInv; eauto.
     - (* app *)
@@ -1826,7 +1966,7 @@ Section ElabDeclaration.
       eapply fresh_ins_AtomOrGensym; eauto.
     - (* merge *)
       repeat monadInv.
-      eapply fresh_ins_brs_AtomOrGensym in Hbind0; eauto.
+      eapply fresh_ins_brs_AtomOrGensym1 in Hbind0; eauto.
       do 2 (eapply Forall_forall; intros).
       eapply fresh_in_AtomOrGensym; eauto.
   Qed.

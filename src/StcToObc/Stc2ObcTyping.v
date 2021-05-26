@@ -135,7 +135,7 @@ Module Type STC2OBCTYPING
         In (x, typeofc e) Γv ->
         wt_stmt p insts Γm Γv (translate_cexp memset x e).
     Proof.
-      induction e using cexp_ind2; simpl; intros WTe Hv; inversion WTe.
+      induction e using cexp_ind2'; simpl; intros WTe Hv; inversion WTe.
       - subst; unfold tovar.
         FromMemset; econstructor; simpl; eauto using wt_exp, wt_stmt; try rewrite map_length; auto;
           intros * Hin; apply in_map_iff in Hin as (? & E & Hin); inv E;
@@ -145,8 +145,11 @@ Module Type STC2OBCTYPING
         econstructor; eauto using wt_stmt.
         + now rewrite typeof_correct.
         + now rewrite map_length.
-        + intros * Hin; apply in_map_iff in Hin as (? & E & Hin); inv E;
-            repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; simpl in *; auto.
+        + intros * Hin; apply in_map_iff in Hin as (? & E & Hin);
+            apply option_map_inv in E as (?&?&?); subst;
+              repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; simpl in *; auto.
+          apply it; auto.
+          take (forall e, _ -> typeofc e = _) and rewrite it; auto.
       - constructor; auto.
         now rewrite typeof_correct.
     Qed.

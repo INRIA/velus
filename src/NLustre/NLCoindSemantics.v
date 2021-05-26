@@ -88,11 +88,11 @@ Module Type NLCOINDSEMANTICS
         merge xs ess os ->
         sem_cexp H b (Emerge (x, tx) es ty) os
   | Scase:
-      forall H b e es t xs ess os,
+      forall H b e es d xs ess os,
         sem_exp H b e xs ->
-        Forall2 (fun e => sem_cexp H b e) es ess ->
+        Forall2 (fun oe => sem_cexp H b (or_default d oe)) es ess ->
         case xs ess os ->
-        sem_cexp H b (Ecase e es t) os
+        sem_cexp H b (Ecase e es d) os
   | Sexp:
       forall H b e es,
         sem_exp H b e es ->
@@ -111,12 +111,12 @@ Module Type NLCOINDSEMANTICS
         P_cexp H b (Emerge (x, tx) es ty) os.
 
     Hypothesis CaseCase:
-      forall H b e es t xs ess os,
+      forall H b e es d xs ess os,
         sem_exp H b e xs ->
-        Forall2 (fun e => sem_cexp H b e) es ess ->
-        Forall2 (fun e => P_cexp H b e) es ess ->
+        Forall2 (fun oe => sem_cexp H b (or_default d oe)) es ess ->
+        Forall2 (fun oe => P_cexp H b (or_default d oe)) es ess ->
         case xs ess os ->
-        P_cexp H b (Ecase e es t) os.
+        P_cexp H b (Ecase e es d) os.
 
     Hypothesis ExpCase:
       forall H b e es,

@@ -67,7 +67,7 @@ Module Type TRANSLATION
       | Emerge yt es _ =>
         Switch (tovar yt) (map (fun e => Some (translate_cexp x e)) es) Skip
       | Ecase b es d =>
-        Switch (translate_exp b) (map (fun e => Some (translate_cexp x e)) es) Skip
+        Switch (translate_exp b) (map (option_map (translate_cexp x)) es) (translate_cexp x d)
       | Eexp l =>
         Assign x (translate_exp l)
       end.

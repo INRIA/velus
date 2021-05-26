@@ -505,12 +505,28 @@ Module Type NLINDEXEDTOCOIND
         erewrite <-interp_cexp_instant_complete; eauto.
     Qed.
 
+    (** An inversion principle for lists of [option cexp]. *)
+    Lemma sem_ocexps_inv:
+      forall H b es ess e,
+        (forall n, Forall2 (fun oe => CESem.sem_cexp_instant (b n) (H n) (or_default e oe)) es (ess n)) ->
+        exists ess',
+          Forall2 (fun oe => CESem.sem_cexp b H (or_default e oe)) es ess'
+          /\ forall n, ess n = List.map (fun es => es n) ess'.
+    Proof.
+      intros * Sem.
+      exists (interp_ocexps' b H e es); split.
+      - eapply interp_ocexps'_complete; eauto.
+      - intro n; specialize (Sem n); induction Sem; simpl; auto.
+        f_equal; auto.
+        unfold interp_cexp; now apply interp_cexp_instant_complete.
+    Qed.
+
     Lemma case_inv:
       forall H b e l d os,
         CESem.sem_cexp b H (Ecase e l d) os ->
         exists xs ess,
           CESem.sem_exp b H e xs
-          /\ Forall2 (fun e => CESem.sem_cexp b H e) l ess
+          /\ Forall2 (fun oe => CESem.sem_cexp b H (or_default d oe)) l ess
           /\
           (forall n,
               (Forall (fun xs => xs n <> absent) ess
@@ -526,22 +542,22 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       interp_str b H e Sem.
-      assert (forall n, Forall2 (fun e => CESem.sem_cexp_instant (b n) (H n) e)
-                                l (interp_cexps b H l n)) as Seml.
+      assert (forall n, Forall2 (fun oe => CESem.sem_cexp_instant (b n) (H n) (or_default d oe))
+                                l (interp_ocexps b H d l n)) as Seml.
       { intro n; specialize (Sem n); inv Sem.
-        - assert (Forall2 (fun e v => CESem.sem_cexp_instant (b n) (H n) e v)
+        - assert (Forall2 (fun e v => CESem.sem_cexp_instant (b n) (H n) (or_default d e) v)
                           l (List.map present vs)) by now apply Forall2_map_2.
-          unfold interp_cexps, lift_interp.
-          erewrite <-interp_cexps_instant_complete; eauto.
+          unfold interp_ocexps, lift_interp.
+          erewrite <-interp_ocexps_instant_complete; eauto.
         - take (Forall _ _) and clear - it; induction it; simpl; constructor; auto.
           erewrite <-interp_cexp_instant_complete; eauto.
       }
-      apply sem_cexps_inv in Seml as (ess' & Sem_l & E).
+      apply sem_ocexps_inv in Seml as (ess' & Sem_l & E).
       do 2 eexists; split; eauto; split; eauto.
       intro; specialize (Sem_e n); specialize (Sem n); inv Sem.
       - left.
         specialize (E n).
-        unfold interp_cexps, lift_interp, interp_cexps_instant in E.
+        unfold interp_ocexps, lift_interp, interp_ocexps_instant in E.
         rewrite ? map_app in E; simpl in E.
         split.
         + revert dependent ess'.

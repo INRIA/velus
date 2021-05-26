@@ -951,6 +951,7 @@ Module Type CORRECTNESS
     induction e using cexp_ind2; simpl; inversion_clear 1; auto;
       take (nth_error _ _ = _) and apply map_nth_error_inv in it as (oe & Hin & ?);
       eauto; subst; eapply nth_error_In, Forall_forall in Hin; eauto; auto.
+    destruct oe; simpl in *; auto.
   Qed.
 
   Lemma stmt_eval_translate_cexp_venv_inv:
@@ -961,6 +962,7 @@ Module Type CORRECTNESS
     induction e using cexp_ind2; simpl; inversion_clear 1; eauto;
       take (nth_error _ _ = _) and apply map_nth_error_inv in it as (oe & Hin & ?);
       eauto; subst; eapply nth_error_In, Forall_forall in Hin; eauto; auto.
+    destruct oe; simpl in *; auto.
   Qed.
 
   Lemma not_Is_defined_in_tc_stmt_eval_menv_inv:

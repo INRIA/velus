@@ -83,7 +83,9 @@ Module Type TRTYPING
       take ([_] = [_]) and inv it.
       simpl_Foralls. eauto using typeof_lexp.
     - cases. monadInv H1. inv H2; auto.
-    - cases; monadInv H1; inv H2; simpl; auto.
+    - cases; monadInv H2. inv H3; simpl; auto.
+      inv H0. inv Hwt; simpl in *. rewrite app_nil_r in *.
+      inv H14; eauto.
   Qed.
 
   Lemma wt_constant {prefs} :
@@ -150,18 +152,27 @@ Module Type TRTYPING
       + clear - H H7 EQ. revert dependent x.
         induction es; intros; monadInv EQ; inv H; inv H7; constructor; auto.
         cases_eqn EQ0; inv H1; inv H2; auto.
-    - inv Htr. destruct nck as (?&?), tys as [|? [|]]; monadInv H1.
+    - inv Htr. cases_eqn H2; simpl in *; rewrite app_nil_r in *; subst. monadInv H2.
+      apply Forall_singl in H12. apply Forall_singl in H0.
       econstructor; eauto.
       + eapply wt_lexp in EQ; eauto.
       + eapply typeof_lexp in EQ; eauto.
       + erewrite mmap_length; eauto.
-      + clear - H8 H9 EQ1. revert dependent x0.
-        induction es; intros; monadInv EQ1; inv H8; inv H9; constructor; auto.
-        cases_eqn EQ; subst. inv H1. simpl in H3; rewrite app_nil_r in H3.
-        eapply typeofc_cexp in EQ; eauto.
-      + clear - H H8 EQ1. revert dependent x0.
-        induction es; intros; monadInv EQ1; inv H; inv H8; constructor; auto.
-        cases_eqn EQ; inv H1; inv H2; auto.
+      + eapply typeofc_cexp in EQ0; eauto; subst.
+        clear - H H4 H10 H11 EQ1. revert dependent x0.
+        induction es; intros; monadInv EQ1; inv H; inv H0.
+        * cases_eqn EQ; subst. monadInv EQ.
+          eapply typeofc_cexp in EQ0; eauto.
+          -- eapply Forall_forall in H10; eauto with datatypes.
+          -- erewrite <- H11; eauto with datatypes.
+             simpl; now rewrite app_nil_r.
+        * eapply IHes in EQ1; eauto.
+      + clear - H H10 EQ1. revert dependent x0.
+        induction es; intros; monadInv EQ1; inv H; inv H0; auto.
+        * cases_eqn EQ; subst. monadInv EQ.
+          apply Forall_singl in H3. eapply H3; eauto.
+          eapply Forall_forall in H10; eauto with datatypes.
+        * eapply IHes; eauto.
   Qed.
 
   Lemma ty_lexp {prefs} :
@@ -314,7 +325,7 @@ Module Type TRTYPING
       + simpl_Foralls. erewrite to_global_enums; eauto.
         eapply wt_cexp in H1; simpl; eauto.
         rewrite EQ0; simpl; auto.
-    - destruct xs as [|? [|]], l0 as ([|? [|]]&?); monadInv Htr. simpl_Foralls.
+    - destruct xs as [|? [|]], l1 as ([|? [|]]&?), l0 as [|? [|]]; monadInv Htr. simpl_Foralls.
       constructor; eauto using wt_clock_l_ce; simpl in *.
       + simpl_Foralls. eapply typeofc_cexp in H1; eauto.
         2:simpl; eauto. congruence.
