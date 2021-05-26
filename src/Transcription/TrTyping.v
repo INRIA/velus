@@ -146,11 +146,11 @@ Module Type TRTYPING
       constructor; eauto.
       + erewrite mmap_length; eauto.
       + clear - H7 H8 EQ. revert dependent x.
-        induction es; intros; monadInv EQ; inv H7; inv H8; constructor; auto.
+        induction es; intros; simpl in *; monadInv EQ; inv H7; inv H8; constructor; auto.
         cases_eqn EQ0; subst. inv H1. simpl in H3; rewrite app_nil_r in H3.
         eapply typeofc_cexp in EQ0; eauto.
       + clear - H H7 EQ. revert dependent x.
-        induction es; intros; monadInv EQ; inv H; inv H7; constructor; auto.
+        induction es; intros; simpl in *; monadInv EQ; inv H; inv H7; constructor; auto.
         cases_eqn EQ0; inv H1; inv H2; auto.
     - inv Htr. cases_eqn H2; simpl in *; rewrite app_nil_r in *; subst. monadInv H2.
       apply Forall_singl in H12. apply Forall_singl in H0.
@@ -160,7 +160,7 @@ Module Type TRTYPING
       + erewrite mmap_length; eauto.
       + eapply typeofc_cexp in EQ0; eauto; subst.
         clear - H H4 H10 H11 EQ1. revert dependent x0.
-        induction es; intros; monadInv EQ1; inv H; inv H0.
+        induction es; intros; simpl in *; monadInv EQ1; inv H; inv H0.
         * cases_eqn EQ; subst. monadInv EQ.
           eapply typeofc_cexp in EQ0; eauto.
           -- eapply Forall_forall in H10; eauto with datatypes.
@@ -168,7 +168,7 @@ Module Type TRTYPING
              simpl; now rewrite app_nil_r.
         * eapply IHes in EQ1; eauto.
       + clear - H H10 EQ1. revert dependent x0.
-        induction es; intros; monadInv EQ1; inv H; inv H0; auto.
+        induction es; intros; simpl in *; monadInv EQ1; inv H; inv H0; auto.
         * cases_eqn EQ; subst. monadInv EQ.
           apply Forall_singl in H3. eapply H3; eauto.
           eapply Forall_forall in H10; eauto with datatypes.
@@ -188,7 +188,7 @@ Module Type TRTYPING
     - destruct a. simpl. monadInv H0. now simpl.
     - destruct a. monadInv H0. now simpl.
     - cases. inv H. simpl. inv Hwt. inv H10. inv H5. monadInv H1.
-      unfold L.typesof. unfold flat_map. simpl. rewrite app_nil_r in H11.
+      unfold L.typesof. unfold flat_map. simpl in *. rewrite app_nil_r in H11.
       eapply H3 in H2; eauto. congruence.
   Qed.
 
@@ -273,7 +273,7 @@ Module Type TRTYPING
     - cases. monadInv Htr. inv Hf2. apply Forall_singl in Hwt. inv Hwt.
       repeat constructor; eauto using wt_clock_l_ce.
       erewrite to_global_enums; eauto.
-    - cases. monadInv Htr. inv Hf2.
+    - cases. monadInv Htr. monadInv EQ1. monadInv EQ0. inv Hf2.
       constructor; eauto using wt_clock_l_ce. inversion_clear Hwt as [|?? Wt].
       inv Wt. repeat constructor. assumption.
     - cases. monadInv Htr. inv Hf2. monadInv EQ1. monadInv EQ0.
@@ -325,7 +325,7 @@ Module Type TRTYPING
       + simpl_Foralls. erewrite to_global_enums; eauto.
         eapply wt_cexp in H1; simpl; eauto.
         rewrite EQ0; simpl; auto.
-    - destruct xs as [|? [|]], l1 as ([|? [|]]&?), l0 as [|? [|]]; monadInv Htr. simpl_Foralls.
+    - cases; monadInv Htr. 1,2,4,5:monadInv EQ1. simpl_Foralls.
       constructor; eauto using wt_clock_l_ce; simpl in *.
       + simpl_Foralls. eapply typeofc_cexp in H1; eauto.
         2:simpl; eauto. congruence.
@@ -401,7 +401,7 @@ Module Type TRTYPING
     - pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
       revert dependent x.
       unfold FNS.unnested_node in Hnormed.
-      induction (L.n_eqs n); intros; monadInv Hmmap; auto.
+      induction (L.n_eqs n); intros; simpl in *; monadInv Hmmap; auto.
       inv Hwt. inv Hnormed.
       simpl in Hdup. apply NoDup_app'_iff in Hdup as (?&?&?).
       constructor; auto. eapply wt_equation; eauto.
@@ -437,7 +437,7 @@ Module Type TRTYPING
   Proof.
     intros (?&nds) ? Hnormed (Hbool&Hwt). revert P.
     induction nds as [| n]. inversion 1. constructor.
-    intros * Htr. monadInv Htr. monadInv EQ.
+    intros * Htr; simpl in *. monadInv Htr. simpl in *. monadInv EQ.
     inversion_clear Hwt as [|?? (Hwt'&Hnames) Hf ].
     inversion_clear Hnormed as [|?? (Hnormed'&?) ].
     constructor; simpl in *.

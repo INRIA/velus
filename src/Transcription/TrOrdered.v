@@ -75,7 +75,7 @@ Module Type TRORDERED
   Proof.
     intros ? (enms&nds) ? Hnames Htog. monadInv Htog.
     revert dependent x.
-    induction nds; intros; monadInv EQ; simpl; inv Hnames; constructor.
+    induction nds; intros; simpl in *; monadInv EQ; simpl; inv Hnames; constructor.
     - erewrite <-to_node_name; eauto.
     - eapply IHnds in EQ; eauto.
   Qed.
@@ -89,8 +89,8 @@ Module Type TRORDERED
     intros (?&nds) ? Htr Hord. monadInv Htr.
     revert dependent x.
     unfold Lord.Ordered_nodes, CommonProgram.Ordered_program in Hord; simpl in Hord.
-    induction Hord as [|?? (?&?)]; intros; monadInv EQ. constructor; eauto.
-    constructor; [constructor|]; auto.
+    induction Hord as [|?? (?&?)]; intros; simpl in *; monadInv EQ; constructor; eauto.
+    constructor.
     - intros f Hin.
       assert (Lord.Is_node_in f (L.n_eqs x)) as Hfin.
       { eapply inin_l_nl; eauto. }

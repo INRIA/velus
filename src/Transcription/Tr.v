@@ -30,70 +30,6 @@ Module Type TR
        (Import CE   : CESYNTAX Ids Op OpAux Cks)
        (NL          : NLSYNTAX Ids Op OpAux Cks CE).
 
-  (* We have to define mmap in a section to make the termination-checker happy *)
-  Section mmap.
-    Context {A B : Type}.
-    Variable (f : A -> res B).
-
-    Fixpoint mmap (l: list A) {struct l} : res (list B) :=
-      match l with
-      | nil => OK nil
-      | hd :: tl => do hd' <- f hd; do tl' <- mmap tl; OK (hd' :: tl')
-      end.
-
-    Remark mmap_inversion:
-      forall (l: list A) (l': list B),
-        mmap l = OK l' ->
-        Forall2 (fun x y => f x = OK y) l l'.
-    Proof.
-      induction l; simpl; intros.
-      inversion_clear H. constructor.
-      destruct (bind_inversion _ _ H) as [hd' [P Q]].
-      destruct (bind_inversion _ _ Q) as [tl' [R S]].
-      inversion_clear S.
-      constructor. auto. auto.
-    Qed.
-
-    Remark mmap_length: forall l l',
-        mmap l = OK l' ->
-        length l' = length l.
-    Proof.
-      induction l; intros * Map; simpl in *; monadInv Map; auto.
-      simpl. f_equal; auto.
-    Qed.
-  End mmap.
-
-  (* And so we need to rewrite monadInv... *)
-
-  Ltac monadInv1 H :=
-    match type of H with
-    | (mmap ?F ?L = OK ?M) =>
-      generalize (mmap_inversion F L _ H); intro
-    | _ => Errors.monadInv1 H
-    end.
-
-  Ltac monadInv H :=
-    simpl in *;
-    monadInv1 H ||
-              match type of H with
-              | (?F _ _ _ _ _ _ _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ _ _ _ _ _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ _ _ _ _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ _ _ _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ _ _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              | (?F _ = OK _) =>
-                ((progress simpl in H) || unfold F in H); monadInv1 H
-              end.
-
   Fixpoint to_lexp (e : L.exp) : res CE.exp :=
     match e with
     | L.Econst c                 => OK (CE.Econst c)
@@ -113,18 +49,6 @@ Module Type TR
     | L.Ecase _ _ _ _
     | L.Eapp _ _ _ _    => Error (msg "expression not normalized")
     end.
-
-  (* Definition init_type ty := *)
-  (*   match ty with *)
-  (*   | Tprimitive cty => Econst (init_ctype cty) *)
-  (*   | Tenum tn => Eenum 0 (Tenum tn) *)
-  (*   end. *)
-
-  (* Fixpoint add_whens (e : CE.exp) (ty : type) (ck : clock) := *)
-  (*   match ck with *)
-  (*   | Cbase => e *)
-  (*   | Con ck' ckid (_, b) => CE.Ewhen (add_whens e ty ck') ckid b *)
-  (*   end. *)
 
   Fixpoint to_cexp (e : L.exp) : res CE.cexp :=
     match e with
@@ -329,6 +253,14 @@ Module Type TR
     right. auto.
   Defined.
 
+  Remark mmap_length:
+    forall {A B : Type} (f: A -> res B) l l',
+      mmap f l = OK l' ->
+      length l' = length l.
+  Proof.
+    induction l; simpl; intros * Hmap; monadInv Hmap; simpl; auto.
+  Qed.
+
   Unset Program Cases.
   Program Definition to_node (n : @L.node norm2_prefs) : res NL.node :=
     let envo := Env.from_list n.(L.n_out) in
@@ -381,7 +313,7 @@ Module Type TR
     apply mmap_cons2 in Heqr.
     destruct Heqr as (eq'' & leq'' & Heqs' & Htoeq' & Hmmap').
     inv Heqs'.
-    simpl. destruct (NL.is_fby eq') eqn:?.
+    simpl. destruct (NL.is_fby leq) eqn:?.
     - unfold NL.vars_defined, flat_map. simpl. rewrite in_app.
       intro Hi. destruct Hi.
       + unfold to_equation in Htoeq. destruct eq''.
@@ -393,8 +325,8 @@ Module Type TR
         eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
         destruct n. simpl. assert (Hnodup := n_nodup).
         apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; auto.
-      + apply IHForall2; auto.
-    - apply IHForall2; eauto.
+      + apply IHlist_forall2; auto.
+    - apply IHlist_forall2; eauto.
   Qed.
 
   Next Obligation.
@@ -893,10 +825,10 @@ Module Type TR
   Proof.
     unfold to_global.
     intros ? (enms&nds).
-    induction nds; intros * Hnames Htog; inv Hnames; monadInv Htog; simpl; auto.
-    monadInv EQ. constructor; auto.
+    induction nds; intros * Hnames Htog; inv Hnames; monadInv Htog;
+      simpl in EQ; monadInv EQ; constructor; simpl; auto.
     - erewrite to_node_name in H1; eauto.
-    - eapply IHnds in H2; eauto. 2:rewrite EQ; simpl; eauto.
+    - eapply IHnds in H2; eauto. 2:simpl; rewrite EQ; simpl; eauto.
       simpl in H2; auto.
   Qed.
 

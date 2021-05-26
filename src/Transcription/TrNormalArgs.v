@@ -47,7 +47,7 @@ Module Type TRNORMALARGS
   Corollary to_lexps_noops_exps : forall cks es es',
     Forall normalized_lexp es ->
     Forall2 Unnesting.noops_exp cks es ->
-    mmap to_lexp es = OK es' ->
+    Errors.mmap to_lexp es = OK es' ->
     Forall2 noops_exp cks es'.
   Proof.
     intros * Hnormed Hnoops. revert es'.
@@ -102,7 +102,7 @@ Module Type TRNORMALARGS
   Proof.
     intros (?&nds) ? Hnormed Htog. monadInv Htog.
     revert dependent x.
-    induction nds; intros * Htog; monadInv Htog; inv Hnormed;
+    induction nds; intros * Htog; simpl in *; monadInv Htog; inv Hnormed;
       constructor; simpl; auto.
     - destruct H1.
       eapply to_node_normal_args; eauto.

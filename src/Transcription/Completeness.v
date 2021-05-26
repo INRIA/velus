@@ -63,7 +63,7 @@ Module Type COMPLETENESS
 
   Corollary mmap_to_lexp_complete : forall es,
       Forall normalized_lexp es ->
-      exists es', mmap to_lexp es = OK es'.
+      exists es', Errors.mmap to_lexp es = OK es'.
   Proof with eauto.
     intros es Hf.
     induction Hf.
@@ -140,7 +140,7 @@ Module Type COMPLETENESS
       Forall (normalized_equation G out) eqs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined eqs) ->
       (forall x e, envo x = Error e -> PS.In x out) ->
-      exists eqs', mmap (to_equation env envo) eqs = OK eqs'.
+      exists eqs', Errors.mmap (to_equation env envo) eqs = OK eqs'.
   Proof.
     induction eqs; intros * Hnorm Hfind Henvo; simpl.
     - eexists; eauto.

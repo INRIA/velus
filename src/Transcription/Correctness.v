@@ -145,7 +145,7 @@ Module Type CORRECTNESS
       + clear - EQ H0 H9. rewrite Forall2_map_2.
         revert dependent vs. revert dependent x0.
         induction es; intros; inv H9; inv H0;
-          monadInv EQ;
+          simpl in *; monadInv EQ;
           constructor; eauto.
         clear EQ IHes H6.
         cases. apply Forall_singl in H4. inv H3; inv H7. simpl.
@@ -167,7 +167,7 @@ Module Type CORRECTNESS
       + clear - EQ1 H0 H10. rewrite Forall2_map_2.
         revert dependent vs. revert dependent x0.
         induction es; intros; inv H0; inv H10;
-          monadInv EQ1;
+          simpl in *; monadInv EQ1;
           constructor; eauto.
         clear EQ1 IHes H4 H6.
         cases; monadInv EQ; intros ? Heq; inv Heq.
@@ -192,74 +192,6 @@ Module Type CORRECTNESS
         intros ?? Hcase. inv Hcase; eauto.
   Qed.
 
-  (* Lemma sem_cexp_step {prefs} : *)
-  (*   forall (G: @L.global prefs) H b e e' v s, *)
-  (*     to_cexp e = OK e' -> *)
-  (*     LS.sem_exp G H b e [v ⋅ s] -> *)
-  (*     LS.sem_exp G (history_tl H) (Streams.tl b) e [s]. *)
-  (* Proof. *)
-  (*   einduction e using L.exp_ind2; intros * Htr Hsem; *)
-  (*     (now inv Htr) || (unfold to_cexp in Htr; *)
-  (*                      try (monadInv Htr; eapply sem_lexp_step; simpl; eauto)). *)
-  (*   - (* merge *) *)
-  (*     destruct a as ([|? [|]]&?&?); monadInv Htr; fold to_cexp in *. *)
-  (*     inv Hsem; inv H10; inv H6. *)
-  (*     destruct s0. *)
-  (*     eapply LS.Smerge with (vs0:=map (map (map (fun x => Streams.tl x))) vs); eauto. *)
-  (*     + eapply sem_var_step; eauto. *)
-  (*     + clear - EQ H0 H1 H3 H9. rewrite Forall2_map_2. *)
-  (*       revert dependent vs. revert dependent x0. revert dependent hd1. *)
-  (*       induction es; intros; inv H9; inv H0; inv H1; inv H3; *)
-  (*         monadInv EQ; *)
-  (*         constructor; eauto. *)
-  (*       clear EQ IHes H7 H8 H9 H11. *)
-  (*       cases. inv H6; inv H7. inv H5; inv H8. simpl in *; rewrite app_nil_r in *. *)
-  (*       destruct y1 as [|? [|]]; simpl in *; inv H4; inv H2. destruct y0. *)
-  (*       eapply H3 in EQ0; eauto. *)
-  (*     + inv H5; repeat econstructor; eauto. *)
-  (*       1,3:(rewrite map_map, Forall2_map_1, Forall2_map_2; *)
-  (*            rewrite Forall2_map_1 in H3; *)
-  (*            eapply Forall2_impl_In; [|eauto]; intros; simpl in *; *)
-  (*            rewrite <-concat_map; destruct (concat a); simpl in *; now inv H5). *)
-  (*       1,2:(rewrite 2 map_map, Forall_map; *)
-  (*            rewrite map_map, Forall_map in H1; *)
-  (*            eapply Forall_impl; [|eauto]; intros; simpl in *; *)
-  (*            rewrite <-concat_map; destruct (concat a); simpl in *; try rewrite H2; auto). *)
-  (*   - (* case *) *)
-  (*     destruct a as ([|? [|]]&?&?); cases; monadInv Htr; fold to_cexp in *. *)
-  (*     inv Hsem. inv H13; inv H6. inv H14; inv H9. *)
-  (*     destruct s0. *)
-  (*     eapply LS.Scase with (vs0:=map (map (map (fun x => Streams.tl x))) vs) (vd:=[map (fun x => Streams.tl x) y]); eauto. *)
-  (*     + eapply sem_lexp_step; eauto. *)
-  (*     + clear - EQ1 H0 H2 H5 H10. rewrite Forall2_map_2. *)
-  (*       revert dependent vs. revert dependent x0. revert dependent hd1. *)
-  (*       induction es; intros; inv H0; inv H10; inv H2; inv H5; *)
-  (*         monadInv EQ1; *)
-  (*         constructor; eauto. *)
-  (*       clear EQ1 IHes H8 H9 H11. *)
-  (*       cases; monadInv EQ; intros ? Heq; inv Heq. *)
-  (*       apply Forall_singl in H4. specialize (H3 _ eq_refl). *)
-  (*       inv H3; inv H9. simpl in *. repeat constructor. *)
-  (*       destruct y1 as [|? [|]]; simpl in *; inv H2; inv H7. *)
-  (*       destruct y0. eapply H4 in EQ0; eauto. *)
-  (*     + clear - H12. rewrite Forall2_map_2. *)
-  (*       eapply Forall2_impl_In; [|eauto]; intros ?? _ _ ? ?; subst. *)
-  (*       specialize (H eq_refl). inv H; inv H4. *)
-  (*       simpl. repeat constructor; auto. eapply map_st_EqSt; eauto. *)
-  (*       intros ?? Heq. rewrite Heq. reflexivity. *)
-  (*     + clear - H1 H7 EQ0. repeat constructor. *)
-  (*       apply Forall_singl in H1. admit. *)
-  (*     + inv H8; repeat econstructor; eauto. *)
-  (*       1,3:(rewrite map_map, Forall2_map_1, Forall2_map_2; *)
-  (*            rewrite Forall2_map_1 in H5; *)
-  (*            eapply Forall2_impl_In; [|eauto]; intros; simpl in *; *)
-  (*            rewrite <-concat_map; destruct (concat a); simpl in *; now inv H8). *)
-  (*       1,2:(rewrite 2 map_map, Forall_map; *)
-  (*            rewrite map_map, Forall_map in H2; *)
-  (*            eapply Forall_impl; [|eauto]; intros; simpl in *; *)
-  (*            rewrite <-concat_map; destruct (concat a); simpl in *; try rewrite H3; auto). *)
-  (* Qed. *)
-
   Lemma ty_lexp {prefs} :
     forall (G: @L.global prefs) env e e',
       LT.wt_exp G env e ->
@@ -272,7 +204,7 @@ Module Type CORRECTNESS
     - destruct a. inv H0. now simpl.
     - destruct a. simpl. monadInv H0. now simpl.
     - destruct a. monadInv H0. now simpl.
-    - cases. inv H. simpl. inv Hwt. inv H10. inv H5. monadInv H1.
+    - cases. inv H. simpl. inv Hwt. inv H10. inv H5. simpl in *. monadInv H1.
       unfold L.typesof. unfold flat_map. simpl. rewrite app_nil_r in H11.
       eapply H3 in H2; eauto. congruence.
   Qed.
@@ -926,7 +858,7 @@ Module Type CORRECTNESS
       assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
       eapply LS.Forall_sem_equation_global_tl in Heqs; eauto.
-      assert (Htr':=Htr). monadInv Htr'. monadInv EQ.
+      assert (Htr':=Htr). monadInv Htr'; simpl in *; monadInv EQ.
       assert (forall f ins outs,
                  LS.sem_node (L.Global enms nds) f ins outs ->
                  LCS.sem_clock_inputs (L.Global enms nds) f ins ->
@@ -952,7 +884,7 @@ Module Type CORRECTNESS
     - eapply LS.sem_node_cons in Hsem; auto.
       eapply LCS.sem_clock_inputs_cons in Hscin; auto.
       assert (Htr' := Htr).
-      monadInv Htr. monadInv EQ.
+      monadInv Htr. simpl in *. monadInv EQ.
       rewrite cons_is_app in Hord.
       assert (Lord.Ordered_nodes {| L.enums := enms; L.nodes := nds |}) as Hord'.
       { eapply Lord.Ordered_nodes_append in Hord; eauto.

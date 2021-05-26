@@ -120,7 +120,7 @@ Module Type TRCLOCKING
       + eapply mmap_length in EQ.
         destruct es, x0; simpl in *; try congruence.
       + clear - H7 H H6 EQ. revert H7. generalize 0 as i. revert dependent x0.
-        induction es; intros; inv H; inv H6; inv H7; monadInv EQ; simpl; auto.
+        induction es; intros; inv H; inv H6; inv H7; simpl in *; monadInv EQ; simpl; auto.
         constructor; eauto.
         clear - EQ0 H1 H6 H2.
         cases_eqn EQ0. apply Forall_singl in H2. apply Forall_singl in H1. subst.
@@ -138,7 +138,7 @@ Module Type TRCLOCKING
         destruct (L.clockof e0) as [|? [|]]; simpl in *; try congruence.
         inv H0; inv H14; auto.
       + clear - H H10 H11 H12 EQ1. revert dependent x0.
-        induction es; intros; inv H; monadInv EQ1; simpl; auto; inv H0.
+        induction es; intros; inv H; simpl in *; monadInv EQ1; simpl; auto; inv H0.
         * cases; monadInv EQ.
           apply Forall_singl in H3. eapply H3 in EQ0 as (?&?&?); eauto.
           2:eapply Forall_forall in H10; eauto with datatypes.
@@ -240,13 +240,13 @@ Module Type TRCLOCKING
       constructor; auto.
       rewrite app_nil_r in *.
       take (Forall (eq _) _) and rewrite Heq in it. now inv it.
-    - cases; try monadInv Htr.
+    - cases; simpl in *; try monadInv Htr.
       constructor; eauto using envs_eq_in.
       eapply wc_cexp in H1 as (?&?&?); simpl; eauto.
       simpl in H. inv H.
       apply Forall2_singl in Hf2. eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; auto.
-    - cases; try monadInv Htr.
+    - cases; simpl in *; try monadInv Htr.
       constructor; eauto using envs_eq_in.
       eapply wc_cexp in H1 as (?&?&?); simpl; eauto.
       simpl in H. inv H.
@@ -381,7 +381,7 @@ Module Type TRCLOCKING
   Proof.
     intros (?&nds).
     induction nds as [| n]. inversion 2. constructor.
-    intros * Hwt Htr. monadInv Htr. monadInv EQ.
+    intros * Hwt Htr. monadInv Htr; simpl in *; monadInv EQ.
     inversion_clear Hwt as [|?? (?&?) Hf ].
     constructor; simpl.
     - eapply wc_node; eauto; simpl; auto.
