@@ -82,6 +82,8 @@ let print_line sl cl pl dl ol fo =
   if not (!spec_only  || !code_only) then printf " %8d" pl;
   if not (!proof_only || !spec_only || !code_only) then printf " %8d" dl;
   if not (!proof_only || !spec_only || !code_only) then printf " %8d" ol;
+  if not (!proof_only || !spec_only || !code_only) then
+    printf " %8d" (sl + cl + pl + dl + ol);
   (match fo with Some f -> printf " %s" f | _ -> ());
   if !percentage then begin
     let s = sl + cl + pl in
@@ -385,7 +387,7 @@ let rec parse = function
 let _ =
   let files = parse (List.tl (Array.to_list Sys.argv)) in
   if not (!spec_only || !proof_only || !code_only) then
-    printf "     spec     code    proof comments    other\n";
+    printf "     spec     code    proof comments    other    total\n";
   let files =
     (* process .mli files and keep only .v files *)
     List.filter_map
