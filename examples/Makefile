@@ -34,7 +34,7 @@ bar := |
 ARCH_FLAGS=-mfloat-abi=hard -march=armv7-a -mfpu=vfpv3-d16
 
 VELUS=../velus
-VELUS_OPT=-dobc -dclight -lib
+VELUS_OPT=-dlustre -dnlustre -dobc -dclight -lib
 
 COMPCERT=$(realpath ../CompCert)
 CCOMP=$(COMPCERT)/ccomp

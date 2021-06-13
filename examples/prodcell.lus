@@ -1,16 +1,14 @@
 (*
-    production cell in lustre
-    1995 leszek holenderski
+    Production Cell in Lustre
+    1995 Leszek Holenderski
 
-    published in "formal development of reactive systems", claus lewerentz and
-    thomas lindner (eds.), springer-verlag, lncs 891, 1995.
+    Published in "Formal Development of Reactive Systems", Claus Lewerentz and
+    Thomas Lindner (eds.), Springer-Verlag, LNCS 891, 1995.
  *)
 
 node redge (signal: bool) returns (r: bool);
-var nps : bool;
 let
-  nps = (true fby not signal);
-  r = signal and nps;
+  r = signal -> (signal and (false fby (not signal)));
 tel;
 
 node fedge (signal: bool) returns (f: bool);
@@ -18,40 +16,31 @@ let
   f = redge(not signal);
 tel;
 
-node sustain (von, voff: bool) returns (s: bool);
-var ps : bool;
+node sustain (son, off: bool) returns (s: bool);
 let
-  ps = false fby s;
-  s = von or (not voff and ps);
+  s = son -> (if son then true else if off then false else (false fby s));
 tel;
 
 node after (e1, e2: bool) returns (a: bool);
-  var e2_since_last_e1:bool;
-      e2_since_last_e1_2: bool;
+  var e2_since_last_e1: bool;
 let
   a = e1 and e2_since_last_e1;
-  e2_since_last_e1_2 = false fby (not e1 and e2_since_last_e1);
-  e2_since_last_e1 = e2 or e2_since_last_e1_2;
+  e2_since_last_e1 = e2 ->
+    (if e2 then true else if (false fby e1) then false else (false fby e2_since_last_e1));
 tel;
 
-node movingitem
-  (maysafelymove, trytomove1, trytomove2: bool)
+node movingitem (maysafelymove, trytomove1, trytomove2: bool)
 returns
   (start1, start2, stop: bool);
 var
   maymove1, maymove2: bool;
-  stop1, stop2, start1_2, start2_2: bool;
 let
   maymove1 = trytomove1 and maysafelymove;
   maymove2 = trytomove2 and maysafelymove;
 
-  start1_2 = true fby not trytomove2;
-  start1 = redge(maymove1 and start1_2);
-  start2_2 = true fby not trytomove1;
-  start2 = redge(maymove2 and start2_2);
-  stop1 = fedge(maymove1);
-  stop2 = fedge(maymove2);
-  stop = stop1 or stop2;
+  start1 = redge(maymove1 and (true fby (not trytomove2)));
+  start2 = redge(maymove2 and (true fby (not trytomove1)));
+  stop = fedge(maymove1) or fedge(maymove2);
 tel;
 
 node press
@@ -65,20 +54,13 @@ var
   arm1outofpress, arm2outofpress, armsoutofpress,
   arm1cannotcollidewithpress, arm2cannotcollidewithpress,
   up, down, stopped: bool;
-  sustain1, sustain2, stopped_1, p_pstop: bool;
-  after_1, after_2, up_1, up_2: bool;
 let
   (pup, pdn, pstop) = movingitem(true, up, down);
 
-  after_1 = after(armsoutofpress, rput1);
-  after_2 = after(armsoutofpress, rget2);
-  up_1 = sustain(after_1, ptop);
-  up_2 = sustain(after_2, pmid);
-  up = up_1 or up_2;
-  p_pstop = false fby pstop;
-  down = sustain(ptop and p_pstop, pbot);
-  stopped_1 = sustain(pup or pdn, pstop);
-  stopped = not stopped_1;
+  up = sustain(after(armsoutofpress, rput1), ptop) or
+       sustain(after(armsoutofpress, rget2), pmid);
+  down = sustain(false -> ptop and (false fby pstop), pbot);
+  stopped = not sustain(pup or pdn, pstop);
 
   armsoutofpress = arm1outofpress and arm2outofpress;
   arm1outofpress = not nearpress1 or outpress1;
@@ -88,10 +70,8 @@ let
   arm1maypasspress = arm1outofpress or arm1cannotcollidewithpress;
   arm2maypasspress = arm2outofpress or arm2cannotcollidewithpress;
 
-  sustain1 = sustain(pbot, pmid);
-  sustain2 = sustain(pmid, pbot);
   arm1cannotcollidewithpress = stopped and (pmid or ptop) or
-    sustain1 or sustain2;
+    sustain(pbot, pmid) or sustain(pmid, pbot);
   arm2cannotcollidewithpress = stopped and (pbot or ptop);
 tel;
 
@@ -103,19 +83,16 @@ returns
   (rleft, rright, rstop: bool);
 var
   left, right, beforefirstrput1: bool;
-  vinit, left_1, left_2, left_3, left_4: bool;
 let
   (rleft, rright, rstop) = movingitem(armsmaypasspress, left, right);
 
-  left_1 = sustain(rget1, topress2);
-  left_2 = sustain(rput2, topress1);
-  left_3 = sustain(rget2, todbelt);
-  left_4 = sustain(rget1, topress1);
-  left = left_1 or left_2 or left_3 or left_4 and beforefirstrput1;
-  right = sustain(vinit or rput1, totable);
+  left = sustain(rget1, topress2) or
+         sustain(rput2, topress1) or
+         sustain(rget2, todbelt) or
+         sustain(rget1, topress1) and beforefirstrput1;
+  right = sustain(true -> rput1, totable);
 
-  vinit = true fby false;
-  beforefirstrput1 = sustain(vinit and not rput1, rput1);
+  beforefirstrput1 = sustain((not rput1) -> false, rput1);
 tel;
 
 node rgrips
@@ -124,11 +101,8 @@ node rgrips
    ttop, pbot, pmid: bool)
 returns
   (rget1, rput1, rget2, rput2: bool);
-var
-  p_rput1 : bool;
 let
-  p_rput1 = true fby rput1;
-  rget1 = after(overtable and totable and ttop, p_rput1);
+  rget1 = after(overtable and totable and ttop, true fby rput1);
   rput1 = after(inpress1 and topress1 and pmid, rget1);
   rget2 = after(inpress2 and topress2 and pbot, rput1);
   rput2 = after(overdbelt and todbelt, rget2);
@@ -141,22 +115,17 @@ returns
 var
   maymove1, maymove2: bool;
   start1, start2, stop, moving: bool;
-  stop_1, stop_2, pn_try1, pn_try2: bool;
 let
   maymove1 = trytomove1 and maysafelymove;
   maymove2 = trytomove2 and maysafelymove;
   moving = sustain(start1 or start2, stop);
 
-  pn_try2 = true fby not trytomove2;
-  start1 = redge(maymove1 and pn_try2);
-  pn_try1 = true fby not trytomove1;
-  start2 = redge(maymove2 and pn_try1);
-  stop_1 = fedge(maymove1);
-  stop_2 = fedge(maymove2);
-  stop = stop_1 or stop_2;
+  start1 = redge(maymove1 and (true fby (not trytomove2)));
+  start2 = redge(maymove2 and (true fby (not trytomove1)));
+  stop = fedge(maymove1) or fedge(maymove2);
 
   assert #(redge(trytomove1), redge(trytomove2));
   prop = #(start1, start2, stop) and
-         ((moving and maysafelymove) or not moving);
+         (if moving then maysafelymove else true);
 tel;
 

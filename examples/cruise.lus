@@ -35,13 +35,13 @@ node cruisecontrol (onn, off, resume : bool; speed : real;
 returns (cruisespeed, throttlecmd : real);
 var braking, accelerator  : bool;
     between : bool when not st_interrupt;
-    r_1, nr_1, pre_nr_1 : bool when st_on;
+    r_1, nr_1 : bool when st_on;
     r_2, nr_2 : bool;
     regul_on : real when not st_standby;
     cruise_speed : real when not st_interrupt;
     throttlecmd_2, cruisespeed_2 : real when st_on;
     pre_cruisespeed : real;
-    st_interrupt, ns_1, pre_ns_1 : bool when st_on;
+    st_interrupt, ns_1 : bool when st_on;
     r, st_standby, ns, pre_ns : bool when not st_interrupt;
     st_on, ns_2 : bool;
 let
@@ -112,13 +112,11 @@ let
       then (false when st_on when not st_interrupt) else pre_ns;
   r_2 = false fby nr_2;
 
-  st_interrupt = if (r_2 when st_on) then (false when st_on) else pre_ns_1;
+  st_interrupt = if (r_2 when st_on) then (false when st_on) else (false fby ns_1);
   ns_1 = merge st_interrupt
                (true -> not ((resume when st_on) when st_interrupt))
                (false -> not ((braking when st_on) when not st_interrupt));
-  pre_ns_1 = false fby ns_1;
-  r_1  = if (r_2 when st_on) then (false when st_on) else pre_nr_1;
-  pre_nr_1 = false fby nr_1;
+  r_1  = if (r_2 when st_on) then (false when st_on) else (false fby nr_1);
   nr_1 = merge st_interrupt
                (true -> (resume when st_on) when st_interrupt)
                (false -> (braking when st_on) when not st_interrupt);
@@ -127,15 +125,13 @@ tel
 (* make an interface for continuous inputs *)
 node button(vvinit, vstep : real; key_present, key_up : bool)
 returns (o : real);
-var last_o : real; first : bool;
+var last_o : real;
 let
-  first = true fby false;
   last_o = 0.0 fby o;
   o = if key_present then
         (if key_up then last_o + vstep
                    else last_o - vstep)
-      else if first then vvinit
-      else last_o;
+      else vvinit -> last_o;
 tel
 
 (* make the interface for manual testing *)
@@ -143,8 +139,7 @@ tel
 node interface(key : int)
 returns (onn, off, set, resume, quickaccel, quickdecel : bool;
          speed, accel, brake : real);
-var vvinit, speed_present, speed_up : bool;
-    pre_speed : real;
+var speed_present, speed_up : bool;
 let
   onn = (key = 111); -- 'o'
   off = (key = 102); -- 'f'
@@ -158,10 +153,8 @@ let
 
   brake = if key = 98 then 1.0 else 0.0; -- 'b'
 
-  vvinit = true fby false;
   speed = button(0.0, 2.0, speed_present, speed_up);
-  pre_speed = 0.0 fby speed;
-  accel = if vvinit then 0.0 else speed - pre_speed;
+  accel = 0.0 -> speed - (0.0 fby speed);
 tel
 
 node cruise (key : int)

@@ -1,7 +1,9 @@
 *.obc
 *.s
 *.light.c
+*.parsed.lus
 *.sn.lus
+*.n.lus
 *.bkp
 *.wcet
 *.epci
