@@ -206,13 +206,13 @@ Section NLTrace.
     destruct Spec_in_out.
     - left; intro E; apply map_eq_nil in E; auto.
     - right; intro E; apply map_eq_nil in E; auto.
-  Qed.
+  Defined.
   Next Obligation.
     unfold tr_Streams, idty; rewrite 2 map_length; auto.
-  Qed.
+  Defined.
   Next Obligation.
     unfold tr_Streams, idty; rewrite 2 map_length; auto.
-  Qed.
+  Defined.
 
   (** Simply link the trace of a Lustre node with the trace of an Obc step method with the same parameters *)
   Lemma trace_inf_sim_step_node:
@@ -311,6 +311,42 @@ Proof.
   unfold nl_to_cl, schedule_program in COMP.
   simpl in COMP; repeat rewrite print_identity in COMP.
 
+  (* Coinductive NLustre to nat->values *)
+  assert (Ordered_nodes G) as Hord by (eapply wt_global_Ordered_nodes; eauto).
+  apply implies in Hsem.
+  rewrite 2 tr_Streams_pStr in Hsem.
+
+  (* remove duplicate registers optimization *)
+  remember (total_if do_dupregrem remove_dup_regs G) as G'.
+  assert (wt_global G') as Hwt'.
+  { subst; unfold total_if; destruct (do_dupregrem tt); auto.
+    eapply remove_dup_regs_wt; eauto. }
+  assert (wt_ins G' main ins) as Hwti'.
+  { subst; unfold total_if; destruct (do_dupregrem tt); auto.
+    clear - Hwti. unfold wt_ins in *; intros n Hnode.
+    eapply find_node_remove_dup_regs_backward in Hnode as (?&Hfind&Hnode); subst.
+    simpl. eapply Hwti; eauto. }
+  assert (wc_global G') as Hwc'.
+  { subst; unfold total_if; destruct (do_dupregrem tt); auto.
+    eapply remove_dup_regs_wc; eauto. }
+  assert (normal_args G') as Hnorm'.
+  { subst; unfold total_if. destruct (do_dupregrem tt); auto.
+    apply remove_dup_regs_normal_args; auto. }
+  assert (sem_node G' main (pstr (tr_Streams ins)) (pstr (tr_Streams outs))) as Hsem'.
+  { subst; unfold total_if. destruct (do_dupregrem tt); auto.
+    apply remove_dup_regs_sem; auto. }
+  assert (forall T, bisim_IO G main ins outs T <-> bisim_IO G' main ins outs T) as Hbisim.
+  { subst; unfold total_if; destruct (do_dupregrem tt). 2:reflexivity.
+    clear - G. split; intros * Hbis; inv Hbis.
+    - eapply find_node_remove_dup_regs_forward in H.
+      econstructor; eauto.
+    - eapply find_node_remove_dup_regs_backward in H as (?&Hfind&?); subst.
+      econstructor; eauto.
+  }
+  setoid_rewrite Hbisim.
+  clear Hord Hwc Hwt Hwti Hnorm Hsem Hbisim HeqG' G.
+  rename G' into G, Hwti' into Hwti, Hsem' into Hsem.
+
   (* well-scheduled Stc program *)
   destruct (is_well_sch (Scheduler.schedule (NL2Stc.translate G))) eqn: Sch;
     simpl in COMP; try discriminate.
@@ -333,11 +369,6 @@ Proof.
   (* a main Obc class exists *)
   apply find_system_find_class in Find.
 
-  (* Coinductive NLustre to nat->values *)
-  assert (Ordered_nodes G) by (eapply wt_global_Ordered_nodes; eauto).
-  apply implies in Hsem.
-  rewrite 2 tr_Streams_pStr in Hsem.
-
   set (ins' := tr_Streams ins) in *;
     set (outs' := tr_Streams outs) in *.
   assert (forall n, 0 < length (ins' n)) as Length.
@@ -349,6 +380,7 @@ Proof.
   }
 
   (* NLustre to Nlustre with memory *)
+  assert (Ordered_nodes G) as Hord by (eapply wt_global_Ordered_nodes; eauto).
   apply sem_msem_node in Hsem as (M & Hsem); auto.
 
   (* NLustre with memory to Stc loop *)

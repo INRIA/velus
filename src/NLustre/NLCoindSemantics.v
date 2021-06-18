@@ -393,7 +393,7 @@ Module Type NLCOINDSEMANTICS
         eapply find_node_In in Hfind as (?&?); simpl in *.
         eapply Forall_forall in Hnin; [|eauto]. congruence. }
       econstructor; eauto.
-      now apply find_node_other; auto.
+      rewrite find_node_other; auto.
       apply Forall_impl_In with (2:=IH).
       intros eq Hin HH. apply HH; clear HH.
       destruct eq; try inversion 1; subst.

@@ -4,6 +4,7 @@ Open Scope list_scope.
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
+From Coq Require Import Logic.FunctionalExtensionality.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
@@ -177,9 +178,49 @@ Module Type NLINDEXEDSEMANTICS
   Definition bools_of (vs: stream svalue) (rs: stream bool) :=
     forall n, (vs n = absent /\ rs n = false) \/ (exists c', vs n = present (Venum c') /\ rs n = (c' ==b true_tag)).
 
+  Lemma bools_of_det : forall vs rs rs',
+      bools_of vs rs ->
+      bools_of vs rs' ->
+      rs' = rs.
+  Proof.
+    intros * Hb1 Hb2.
+    extensionality n.
+    specialize (Hb1 n) as [(?&?)|(?&?&?)]; specialize (Hb2 n) as [(?&?)|(?&?&?)]; congruence.
+  Qed.
+
   Definition bools_ofs (vs : list vstream) (rs : cstream) :=
     exists rss, Forall2 bools_of vs rss /\
            (forall n, rs n = existsb (fun rs => rs n) rss).
+
+  Instance bools_ofs_SameElements_Proper:
+    Proper (SameElements eq ==> eq ==> Basics.impl)
+           bools_ofs.
+  Proof.
+    intros xs xs' Eq bs bs' ? (rs&Bools&Disj); subst.
+    eapply @Forall2_SameElements_1 with (eqB:=eq) in Bools as (rs'&Perm'&Bools'); eauto.
+    1-3:eauto using eq_str_rel_Reflexive.
+    econstructor; esplit. eauto.
+    - intros. rewrite Disj. eapply existsb_SameElements_morph; eauto.
+      intros ?? Heq; subst; eauto.
+    - intros; subst; eauto.
+    - intros. eapply bools_of_det; eauto.
+  Qed.
+
+  Lemma bools_ofs_det : forall vss rs rs',
+      bools_ofs vss rs ->
+      bools_ofs vss rs' ->
+      rs' = rs.
+  Proof.
+    intros * (?&Hb1&Hd1) (?&Hb2&Hd2).
+    extensionality n.
+    rewrite Hd1, Hd2.
+    assert (x0 = x); subst; auto.
+    clear - Hb1 Hb2.
+    rewrite Forall2_swap_args in Hb1. eapply Forall2_trans_ex in Hb2; eauto.
+    clear - Hb2.
+    induction Hb2 as [|???? (?&_&H1&H2)]; auto.
+    eapply bools_of_det in H1; eauto. congruence.
+  Qed.
 
   Lemma bools_ofs_svalue_to_bool:
     forall ys rs n,
@@ -528,6 +569,38 @@ enough: it does not support the internal fixpoint introduced by
       clear Heqs; induction n.(n_eqs); inv IH; inv IHeqs; eauto.
   Qed.
 
+  Lemma sem_node_cons':
+    forall node G enums f xs ys,
+      Ordered_nodes (Global enums (node::G))
+      -> sem_node (Global enums G) f xs ys
+      -> node.(n_name) <> f
+      -> sem_node (Global enums (node::G)) f xs ys.
+  Proof.
+    intros node G enums f xs ys Hord Hsem Hnf.
+    revert Hnf.
+    induction Hsem as [
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+                     |
+                     | bk H f xs ys n Hbk Hf ??? Heqs IH]
+                        using sem_node_mult
+      with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
+                                      -> sem_equation (Global enums (node::G)) bk H eq).
+    - econstructor; eassumption.
+    - intro Hnin.
+      eapply SEqApp; eauto.
+      intro k; specialize (Hnodes k); destruct Hnodes as (?&IH).
+      apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
+    - intro; eapply SEqFby; eassumption.
+    - intro; subst.
+      econstructor; auto.
+      rewrite find_node_other; eauto.
+      1-4:eauto.
+      assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n)) as IHeqs
+        by (eapply Is_node_in_Forall; try eassumption;
+            eapply find_node_other_not_Is_node_in; try eassumption).
+      clear Heqs; induction n.(n_eqs); inv IH; inv IHeqs; eauto.
+  Qed.
+
   Lemma sem_equation_global_tl:
     forall bk nd G H eq enums,
       Ordered_nodes (Global enums (nd::G)) ->
@@ -553,6 +626,35 @@ enough: it does not support the internal fixpoint introduced by
     apply Forall_impl_In.
     intros eq Hin Hsem.
     eapply sem_equation_global_tl; eauto.
+    apply Is_node_in_Forall in Hnini.
+    apply Forall_forall with (1:=Hnini) (2:=Hin).
+  Qed.
+
+  Lemma sem_equation_global_tl':
+    forall bk nd G H eq enums,
+      Ordered_nodes (Global enums (nd::G)) ->
+      ~ Is_node_in_eq nd.(n_name) eq ->
+      sem_equation (Global enums G) bk H eq ->
+      sem_equation (Global enums (nd::G)) bk H eq.
+  Proof.
+    intros bk nd G H eq enums Hord Hnini Hsem.
+    destruct eq; inversion Hsem; subst; eauto using sem_equation.
+    - econstructor; eauto.
+      intro k; eapply sem_node_cons'; eauto.
+      intro HH; rewrite HH in *; auto using Is_node_in_eq.
+  Qed.
+
+  Lemma Forall_sem_equation_global_tl':
+    forall bk nd G H eqs enums,
+      Ordered_nodes (Global enums (nd::G))
+      -> ~ Is_node_in nd.(n_name) eqs
+      -> Forall (sem_equation (Global enums G) bk H) eqs
+      -> Forall (sem_equation (Global enums (nd::G)) bk H) eqs.
+  Proof.
+    intros bk nd G H eqs enums Hord Hnini.
+    apply Forall_impl_In.
+    intros eq Hin Hsem.
+    eapply sem_equation_global_tl'; eauto.
     apply Is_node_in_Forall in Hnini.
     apply Forall_forall with (1:=Hnini) (2:=Hin).
   Qed.

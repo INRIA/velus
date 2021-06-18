@@ -2285,6 +2285,32 @@ Module Env.
         intro contra. apply in_app_iff in contra as [?|?]; auto.
     Qed.
 
+    Lemma union_In : forall x e1 e2,
+        In x (union e1 e2) <-> In x e1 \/ In x e2.
+    Proof.
+      intros *.
+      repeat rewrite In_find.
+      destruct (find x e1) eqn:Hf1, (find x e2) eqn:Hf2, (find x (union e1 e2)) eqn:Hf;
+        (split; [intros (?&Heq); inv Heq|intros [(?&Heq)|(?&Heq)]; inv Heq]); eauto.
+      1-5:exfalso.
+      1-4:eapply union_find_None in Hf as (?&?); congruence.
+      assert (find x (union e1 e2) = None); try congruence.
+      rewrite union_find_None; auto.
+    Qed.
+
+    Corollary union_mem : forall x e1 e2,
+        mem x (union e1 e2) = mem x e1 || mem x e2.
+    Proof.
+      intros *.
+      destruct (mem _ _) eqn:Hmem; symmetry.
+      - rewrite Bool.orb_true_iff.
+        repeat rewrite <-Props.P.F.mem_in_iff in *.
+        apply union_In; auto.
+      - rewrite Bool.orb_false_iff.
+        repeat rewrite <-Props.P.F.not_mem_in_iff in *.
+        apply Decidable.not_or. rewrite <-union_In; auto.
+    Qed.
+
   End union.
 
   Section diff.

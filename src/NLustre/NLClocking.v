@@ -317,6 +317,68 @@ Module Type NLCLOCKING
 
   End Well_clocked.
 
+  Lemma global_iface_eq_wc_eq : forall G1 G2 vars eq,
+      global_iface_eq G1 G2 ->
+      wc_equation G1 vars eq ->
+      wc_equation G2 vars eq.
+  Proof.
+    intros * Heq Hwc.
+    destruct Heq as (Henums&Heq).
+    inv Hwc; try constructor; eauto; try congruence.
+    specialize (Heq f). rewrite H in Heq. inv Heq.
+    destruct H5 as (?&?&?).
+    symmetry in H4. eapply CEqApp with (sub:=sub); eauto; try congruence.
+  Qed.
+
+  Section incl.
+    Variable (G : global).
+    Variable (vars vars' : list (ident * clock)).
+    Hypothesis Hincl : incl vars vars'.
+
+    Fact wc_clock_incl : forall ck,
+      wc_clock vars ck ->
+      wc_clock vars' ck.
+    Proof.
+      intros * Hwc.
+      induction Hwc.
+      - constructor.
+      - constructor; auto.
+    Qed.
+    Local Hint Resolve wc_clock_incl.
+
+    Lemma wc_exp_incl : forall e ck,
+        wc_exp vars e ck ->
+        wc_exp vars' e ck.
+    Proof.
+      induction e; intros * Hwc; inv Hwc; econstructor; eauto.
+    Qed.
+    Local Hint Resolve wc_exp_incl.
+
+    Lemma wc_cexp_incl : forall e ck,
+        wc_cexp vars e ck ->
+        wc_cexp vars' e ck.
+    Proof.
+      induction e using cexp_ind2'; intros * Hwc; inv Hwc; econstructor; eauto.
+      - eapply Forall2_impl_In; [|eapply H6]; intros.
+        eapply Forall_forall in H; eauto.
+      - intros. eapply Forall_forall in H; eauto.
+        simpl in *; eauto.
+    Qed.
+    Local Hint Resolve wc_cexp_incl.
+
+    Lemma wc_equation_incl : forall equ,
+        wc_equation G vars equ ->
+        wc_equation G vars' equ.
+    Proof.
+      intros [| |] Hwc; inv Hwc; econstructor; eauto.
+      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto.
+      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto.
+      - eapply Forall_impl; [|eauto]; eauto.
+      - eapply Forall_impl; [|eauto]; eauto.
+    Qed.
+
+  End incl.
+
 End NLCLOCKING.
 
 Module NLClockingFun

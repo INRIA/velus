@@ -53,90 +53,6 @@ Module Type NCAUSALITY
 
   (** ** Causality of the second phase of normalization *)
 
-  (** *** Recover info about the init equations in the state *)
-
-  Definition st_inits (st : fresh_st (Op.type * clock * option PS.t)) :=
-    map_filter (fun '(x, (ty, ck, xr)) => match xr with
-                                       | None => None
-                                       | Some xr => if (ty ==b OpAux.bool_velus_type) then Some (x, (ck, xr))
-                                                   else None
-                                       end) (st_anns st).
-
-  Fact st_follows_inits_incl : forall st st',
-      st_follows st st' ->
-      incl (st_inits st) (st_inits st').
-  Proof.
-    intros * Hfollows.
-    eapply st_follows_incl in Hfollows.
-    unfold st_inits, idck, idty.
-    apply incl_map_filter; auto.
-  Qed.
-
-  Fact st_inits_find_Some : forall st ck xr x,
-      find_init_var ck xr st = Some x ->
-      exists xr', PS.Equal xr' xr /\ In (x, (ck, xr')) (st_inits st).
-  Proof.
-    intros * Hfind.
-    apply option_map_inv_Some in Hfind as ((?&(?&?)&?)&(Hfind&?)); subst; simpl.
-    apply find_some in Hfind as [Hin Heq]. destruct o as [xr'|]; inv Heq.
-    repeat rewrite Bool.andb_true_iff in H0.
-    destruct H0 as ((Hck&?)&?); subst.
-    eapply PSF.equal_2 in H0.
-    exists xr'. symmetry in H0. split; auto.
-    unfold st_inits. eapply map_filter_In; eauto. simpl.
-    setoid_rewrite H; auto.
-    rewrite clock_eqb_eq in Hck; subst; auto.
-  Qed.
-
-  Fact st_inits_find_None : forall st ck xr,
-      find_init_var ck xr st = None ->
-      forall xr', PS.Equal xr' xr -> ~In (ck, xr') (map snd (st_inits st)).
-  Proof.
-    intros * Hfind ? Eq.
-    intro contra. unfold st_inits in contra. repeat simpl_In. inv H.
-    apply map_filter_In' in H0 as (?&Hin&Heq).
-    eapply option_map_inv_None in Hfind.
-    eapply find_none in Hfind; eauto.
-    destruct x as (?&(?&?)&[?|]); simpl in *; try congruence.
-    destruct (t ==b OpAux.bool_velus_type); inv Heq.
-    rewrite PSF.equal_1 in Hfind. 2:symmetry; eauto.
-    rewrite equiv_decb_refl in Hfind; simpl.
-    simpl in Hfind; congruence.
-  Qed.
-
-  Fact fresh_ident_false_st_inits : forall pref st st' a id,
-      fresh_ident pref (a, None) st = (id, st') ->
-      st_inits st' = st_inits st.
-  Proof.
-    intros * Hfresh.
-    unfold st_inits. destruct a as [ty ck].
-    apply fresh_ident_anns in Hfresh. rewrite Hfresh.
-    simpl; auto.
-  Qed.
-
-  Fact fresh_ident_true_st_inits : forall pref st st' ck id xr,
-      fresh_ident pref ((OpAux.bool_velus_type, ck), (Some xr)) st = (id, st') ->
-      st_inits st' = (id, (ck, xr))::st_inits st.
-  Proof.
-    intros * Hfresh.
-    unfold st_inits.
-    apply fresh_ident_anns in Hfresh. rewrite Hfresh.
-    simpl. rewrite equiv_decb_refl; auto.
-  Qed.
-
-  Fact init_var_for_clock_In_st_inits : forall ck xr x eqs' st st',
-      init_var_for_clock ck xr st = (x, eqs', st') ->
-      exists xr', PS.Equal xr' (PSP.of_list (map fst xr)) /\
-             In (x, (ck, xr')) (st_inits st').
-  Proof.
-    intros * Hinit.
-    eapply init_var_for_clock_In in Hinit as (xr'&Eq&?).
-    exists xr'. split; eauto.
-    unfold st_inits.
-    eapply map_filter_In; eauto; simpl.
-    rewrite equiv_decb_refl; auto.
-  Qed.
-
   Hint Constructors Is_free_in_clock.
 
   Fact add_whens_const_Is_free_left : forall ck ty c,
@@ -159,8 +75,8 @@ Module Type NCAUSALITY
       rewrite add_whens_numstreams in H3; auto. inv H3.
   Qed.
 
-  Definition st_clocks (st : fresh_st (Op.type * clock * option PS.t)) :=
-    idck (idty (st_anns st)).
+  Definition st_clocks (st : fresh_st (Op.type * clock)) :=
+    idck (st_anns st).
 
   Fact st_clocks_st_ids : forall st,
       map fst (st_clocks st) = st_ids st.
@@ -168,28 +84,7 @@ Module Type NCAUSALITY
     intros *.
     unfold st_clocks, st_ids, idty, idck.
     repeat rewrite map_map. apply map_ext.
-    intros (?&(?&?)&?); auto.
-  Qed.
-
-  Fact st_inits_incl_st_clocks : forall st x ck xr,
-      In (x, (ck, xr)) (st_inits st) ->
-      In (x, ck) (st_clocks st).
-  Proof.
-    intros * Hin.
-    unfold st_inits, st_clocks in *.
-    eapply map_filter_In' in Hin as ((?&(?&?)&[?|])&In&Eq); try congruence.
-    destruct (t ==b OpAux.bool_velus_type); inv Eq.
-    repeat simpl_In. exists t. simpl_In. exists (Some xr); auto.
-  Qed.
-
-  Corollary st_inits_incl_st_ids : forall st,
-      incl (map fst (st_inits st)) (st_ids st).
-  Proof.
-    intros st ? Hin.
-    unfold st_inits, st_ids in *. repeat simpl_In.
-    eapply map_filter_In' in H0 as ((?&(?&?)&[?|])&In&Eq); try congruence.
-    destruct (t0 ==b OpAux.bool_velus_type); inv Eq.
-    eexists; split; eauto; simpl; auto.
+    intros (?&?&?); auto.
   Qed.
 
   (** A variable is used to calculate a clock, either directly or indirectly *)
@@ -337,30 +232,24 @@ Module Type NCAUSALITY
       eapply is_trans_arc_is_vertex with (g0:=g) in H0 as (?&?); eauto.
   Qed.
 
-  (** *** Causality invariant
-      We add an invariant to our causality hypothesis:
-      Variables marked as init variables only depend on the variables of their clocks
-      This is necessary so that we can add arcs using them later on
-   *)
+  (** *** Causality invariant *)
 
   Definition causal_inv vars eqs st :=
     NoDupMembers vars /\
     st_valid_after st norm2 (PSP.of_list (map fst vars)) /\
     exists v a (g : AcyGraph v a),
-      graph_of_eqs (vars ++ st_clocks st) eqs g /\
-      Forall (fun '(y, (ck, xr)) => forall x, is_trans_arc g x y ->
-                                      used_in_clock g x ck \/ used_in_reset g x xr) (st_inits st).
+      graph_of_eqs (vars ++ st_clocks st) eqs g.
 
   Instance causal_inv_Proper:
-    Proper (@Permutation (ident * clock) ==> @Permutation equation ==> @eq (fresh_st (Op.type * clock * option PS.t)) ==> @Basics.impl)
+    Proper (@Permutation (ident * clock) ==> @Permutation equation ==> @eq (fresh_st (Op.type * clock)) ==> @Basics.impl)
            causal_inv.
   Proof.
-    intros ? ? Hp1 ? ? Hp2 ? st Heq (Hnd&Hvalid&v&a&g&?&?); subst.
+    intros ? ? Hp1 ? ? Hp2 ? st Heq (Hnd&Hvalid&v&a&g&?); subst.
     repeat split.
     - rewrite <- Hp1. assumption.
     - rewrite <- ps_from_list_ps_of_list in *. rewrite <- Hp1. assumption.
-    - exists v. exists a. exists g. split; auto.
-      rewrite <- Hp1, <- Hp2. assumption.
+    - exists v. exists a. exists g.
+      now rewrite <- Hp1, <- Hp2.
   Qed.
 
   Fact graph_of_eqs_ck_causal_inv : forall {v a} vars eqs (g : AcyGraph v a),
@@ -375,9 +264,8 @@ Module Type NCAUSALITY
     - eapply init_st_valid; eauto.
       intros ? Hin. rewrite ps_of_list_In in Hin.
       eapply Forall_forall in H; eauto.
-    - exists v, a, g. split; auto.
-      + unfold st_clocks; rewrite init_st_anns, app_nil_r; auto.
-      + unfold st_inits; rewrite init_st_anns; simpl; auto.
+    - exists v, a, g.
+      unfold st_clocks; rewrite init_st_anns, app_nil_r; auto.
   Qed.
 
   Fact vars_defined_In : forall x xs es eqs,
@@ -394,12 +282,11 @@ Module Type NCAUSALITY
       causal_inv vars eqs st ->
       wc_clock (vars++st_clocks st) ck ->
       (forall x, Is_free_left x 0 e -> Is_free_in_clock x ck \/ PS.In x xr) ->
-      ~In (ck, xr) (map snd (st_inits st)) ->
       PS.For_all (fun xr => exists ckr, In (xr, ckr) vars) xr ->
-      fresh_ident norm2 (OpAux.bool_velus_type, ck, Some xr) st = (x, st') ->
+      fresh_ident norm2 (OpAux.bool_velus_type, ck) st = (x, st') ->
       causal_inv vars (([x], [e])::eqs) st'.
   Proof.
-    intros * (Hnd&Hvalid&v&a&g&(Hv&Ha)&Hinits) Hwc Hfree Hnin Hxr Hfresh.
+    intros * (Hnd&Hvalid&v&a&g&(Hv&Ha)) Hwc Hfree Hxr Hfresh.
     repeat constructor; auto. eapply fresh_ident_st_valid in Hfresh; eauto.
 
     assert (~PS.In x v) as Hnv.
@@ -427,7 +314,7 @@ Module Type NCAUSALITY
           eapply Hxr in Hin as (?&?).
           eapply ps_of_list_In, in_app_iff, or_introl, fst_InMembers, In_InMembers; eauto.
     }
-    eexists. eexists. exists g'. split; [split|].
+    eexists. eexists. exists g'. split.
 
     - (* vertices *)
       unfold vertices; simpl. rewrite Hv.
@@ -455,30 +342,6 @@ Module Type NCAUSALITY
         rewrite <- Permutation_middle in Hin. inv Hin. 2:(left; apply Ha; right; eauto).
         inv H. right; split; auto.
         rewrite PS.union_spec, collect_free_clock_spec; auto.
-
-    - (* st_inits *)
-      erewrite fresh_ident_true_st_inits; eauto.
-      constructor; auto.
-      + intros y Ha'.
-        eapply add_after_has_trans_arc3 in Ha' as [Hin|(?&Hin&Ha')]; eauto.
-        1,2:rewrite PS.union_spec, collect_free_clock_spec in Hin; destruct Hin as [Hin|Hin]; auto.
-        * left; left; auto.
-        * right. econstructor; eauto.
-        * left. right. eexists; split; eauto.
-          apply add_after_spec2; auto.
-        * right. econstructor; split; eauto.
-          right. eapply add_after_spec2; auto.
-      + eapply Forall_impl_In; [|eauto].
-        intros (?&(?&?)) Hin Ha' ? Ha''.
-        apply add_after_spec2 in Ha'' as [?|[(_&?)|[(_&Ha'')|[(_&?)|(_&Ha'')]]]]; subst.
-        2-5:exfalso.
-        3,5:eapply is_trans_arc_is_vertex with (g0:=g) in Ha'' as (?&?); eauto.
-        2,3:(eapply Facts.fresh_ident_nIn; eauto;
-             apply st_inits_incl_st_ids; eapply in_map with (f:=fst) in Hin; eauto).
-        eapply Ha' in H as [?|?]; [left|right].
-        * eapply used_in_clock_add_after; eauto.
-        * eapply used_in_reset_add_after; eauto.
-        Unshelve. 1,2:auto.
   Qed.
 
   Fact init_var_for_clock_causal_inv :
@@ -491,117 +354,44 @@ Module Type NCAUSALITY
   Proof.
     intros * Hwc Hwcr Hinv Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct (find_init_var _ _ _) eqn:Hfind.
-    - inv Hinit; rewrite app_nil_r; auto.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      rewrite Permutation_app_comm; simpl.
-      eapply causal_inv_add_init; simpl. 1,6:eauto.
-      eapply wc_clock_incl; eauto; eapply incl_appl; reflexivity.
-      + intros ? Hfree; simpl.
-        inv Hfree.
-        destruct H1 as [H1|(?&?)].
-        left; inv H1; [|inv H4]; eapply add_whens_enum_Is_free_left; eauto.
-        right. eapply ps_of_list_In.
-        rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&In&?). inv H0.
-        eapply in_map with (f:=fst) in In; eauto.
-      + eapply st_inits_find_None in Hfind; eauto. reflexivity.
-      + intros ? In. apply ps_of_list_In in In. simpl_In. destruct x1 as (?&?&?).
-        eapply Forall_forall in Hwcr; eauto; simpl in *; eauto.
-  Qed.
-
-  Lemma causal_inv_replace_eq : forall vars st x xinit ck xr e e' eqs,
-      In (x, ck) (vars ++ st_clocks st) ->
-      ~InMembers x (st_inits st) ->
-      In (xinit, (ck, xr)) (st_inits st) ->
-      PS.For_all (fun xr => Is_free_left xr 0 e) xr ->
-      numstreams e = 1 ->
-      causal_inv vars (([x], [e]) :: eqs) st ->
-      (forall y, Is_free_left y 0 e' -> (Is_free_left y 0 e \/ y = xinit)) ->
-      causal_inv vars (([x], [e']) :: eqs) st.
-  Proof.
-    intros * Hck Hnck Hinit Hxr Hnum (?&?&v&a&g&(Hv&Ha)&?) Hfree.
-    repeat split; auto.
-
-    (* We can build a new graph where x depends on xinit *)
-    assert (AcyGraph v (add_arc xinit x a)) as g'.
-    { econstructor; eauto.
-      - intro contra; subst.
-        eapply Hnck, In_InMembers; eauto.
-      - rewrite Hv, ps_of_list_In, in_map_iff.
-        exists (xinit, ck); split; auto.
-        apply in_app_iff; right.
-        eapply st_inits_incl_st_clocks; eauto.
-      - rewrite Hv, ps_of_list_In, in_map_iff.
-        exists (x, ck); auto.
-      - intro contra.
-        eapply Forall_forall in H1; eauto; simpl in *.
-        eapply H1 in contra as [[?|(?&?&?)]|?].
-        + eapply is_trans_arc_Irreflexive with (g0:=g); eauto.
-          left. eapply Ha.
-          right. eauto.
-        + eapply is_trans_arc_Asymmetric; eauto.
-          left. eapply Ha. right; eauto.
-        + destruct H2 as (?&?&[?|?]); subst.
-          * eapply Hxr in H2.
-            eapply is_trans_arc_Irreflexive with (g0:=g) (x:=x0); eauto.
-            left. eapply Ha.
-            left. left. exists 0; simpl; repeat split; auto.
-            left; auto. rewrite Hnum; auto.
-          * eapply is_trans_arc_Asymmetric; eauto.
-            left. eapply Ha.
-            left. left. exists 0; simpl; repeat split; auto.
-            left; auto. rewrite Hnum; auto.
-    }
-    eexists; eexists. exists g'. split; [split|]; auto.
-
-    (* All the arcs are here *)
-    - intros ? ? [Hdep|Hdep]; [inv Hdep|].
-      1-3:unfold is_arc; rewrite add_arc_spec. 2,3:left.
-      + destruct H3 as (?&Hnth&Hfree'); simpl in *.
-        rewrite nth_error_length_nth in Hnth.
-        specialize (Hnth xH) as (Hlen&Hnth).
-        apply Nat.lt_1_r in Hlen; subst.
-        inv Hfree'; [|inv H6].
-        apply Hfree in H6 as [Hfree'|?]; subst; clear Hfree.
-        * left. apply Ha. left. left.
-          exists 0. repeat split; auto.
-          left; auto. rewrite Hnum; auto.
-        * eapply Forall_forall in H1; eauto.
-      + apply Ha. left; right; auto.
-      + apply Ha. right; auto.
-
-    (* And it preserves the invariant *)
-    - eapply Forall_impl_In; [|eauto].
-      intros (?&(?&?)) Hin Ha' ? Ha''.
-      eapply used_in_clock_reset_add_arc; eauto.
-      intros ?; subst.
-      eapply Hnck, In_InMembers; eauto.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    rewrite Permutation_app_comm; simpl.
+    eapply causal_inv_add_init; simpl. 1,5:eauto.
+    eapply wc_clock_incl; eauto; eapply incl_appl; reflexivity.
+    - intros ? Hfree; simpl.
+      inv Hfree.
+      destruct H1 as [H1|(?&?)].
+      left; inv H1; [|inv H4]; eapply add_whens_enum_Is_free_left; eauto.
+      right. eapply ps_of_list_In.
+      rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&In&?). inv H0.
+      eapply in_map with (f:=fst) in In; eauto.
+    - intros ? In. apply ps_of_list_In in In. simpl_In. destruct x1 as (?&?&?).
+      eapply Forall_forall in Hwcr; eauto; simpl in *; eauto.
   Qed.
 
   Lemma causal_inv_insert_eq {prefs} :
     forall (G: @global prefs) vars st st' x x' ty ck e e1 e2 eqs,
       wl_exp G e2 ->
-      In (x, ck) vars ->
-      ~InMembers x (st_inits st) ->
+      In (x, ck) (vars++st_clocks st) ->
       numstreams e = 1 ->
-      fresh_ident norm2 (ty, ck, None) st = (x', st') ->
+      fresh_ident norm2 (ty, ck) st = (x', st') ->
       causal_inv vars (([x], [e]) :: eqs) st ->
-      (forall y, Is_free_left y 0 e1 -> (y = x' \/ Is_free_left y 0 e)) ->
-      (forall y, Is_free_left y 0 e2 -> Is_free_left y 0 e) ->
+      (forall y, Is_free_left y 0 e1 -> (y = x' \/ Is_free_left y 0 e \/ Is_free_in_clock y ck)) ->
+      (forall y, Is_free_left y 0 e2 -> Is_free_left y 0 e \/ Is_free_in_clock y ck) ->
       causal_inv vars (([x], [e1]) :: ([x'], [e2]) :: eqs) st'.
   Proof.
-    intros * Hwl Hck Hnck Hnum Hfresh (?&?&v&a&g&(Hv&Ha)&Hinits) Hf1 Hf2.
+    intros * Hwl Hck Hnum Hfresh (?&?&v&a&g&(Hv&Ha)) Hf1 Hf2.
     repeat split; eauto.
 
     (* if y is in e2, then its in e, so x depends on it *)
     assert (forall y, Is_free_left y 0 e2 \/ Is_free_in_clock y ck -> is_arc g y x) as Hax.
     { intros y [Hfree|Hfree].
-      - eapply Hf2 in Hfree.
-        apply Ha. left. left.
-        exists 0. repeat split; auto. left; auto.
-        rewrite Hnum; auto.
+      - eapply Hf2 in Hfree as [Hfree|Hfree].
+        + apply Ha. left. left.
+          exists 0. repeat split; auto. left; auto.
+          rewrite Hnum; auto.
+        + apply Ha. right. eauto.
       - apply Ha. right. exists ck; split; auto.
-        apply in_or_app; auto.
     }
 
     (* We can build a new graph where x depends on x' *)
@@ -612,7 +402,7 @@ Module Type NCAUSALITY
         erewrite PS.union_spec, collect_free_left_spec, collect_free_clock_spec in Hin; eauto.
         apply Hax, is_arc_is_vertex in Hin as (?&?); auto.
       - unfold is_vertex. rewrite Hv.
-        rewrite ps_of_list_In, map_app. apply in_or_app; left.
+        rewrite ps_of_list_In.
         rewrite in_map_iff. exists (x, ck); auto.
       - intros ? Hin.
         erewrite PS.union_spec, collect_free_left_spec, collect_free_clock_spec in Hin; eauto.
@@ -637,7 +427,7 @@ Module Type NCAUSALITY
       eapply Hnin2. exists x0. split; auto.
     }
 
-    eexists. eexists. exists g'. split; [split|]; auto.
+    eexists. eexists. exists g'. split.
 
     - (* vertices *)
       unfold vertices; simpl. rewrite Hv.
@@ -654,10 +444,11 @@ Module Type NCAUSALITY
         rewrite nth_error_length_nth in Hnth.
         specialize (Hnth xH) as (Hlen&Hnth).
         apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
-        apply Hf1 in H6 as [?|?]; subst; auto 10.
-        left. apply Ha. left. left.
-        exists 0. repeat split; auto. left; auto.
-        rewrite Hnum; auto.
+        apply Hf1 in H6 as [?|[?|?]]; subst; simpl; auto 10.
+        * left. apply Ha. left. left.
+          exists 0. repeat split; auto. left; auto.
+          rewrite Hnum; auto.
+        * left. apply Ha. right; eauto.
       + destruct H3 as (?&Hnth&?); simpl in *.
         rewrite nth_error_length_nth in Hnth.
         specialize (Hnth xH) as (Hlen&Hnth).
@@ -671,164 +462,6 @@ Module Type NCAUSALITY
         2:(left; apply Ha; right; eauto).
         inv H1. right. left. split; auto.
         rewrite PS.union_spec, collect_free_clock_spec; auto.
-
-    - (* the new arcs preserve the invariant *)
-      erewrite fresh_ident_false_st_inits; eauto.
-      eapply Forall_impl_In; [|eauto].
-      intros (?&(?&?)) Hin Ha' ? Ha''.
-      eapply used_in_clock_reset_add_between; eauto.
-      1-3:intro contra; subst.
-      + eapply Hnck, In_InMembers; eauto.
-      + eapply Facts.fresh_ident_nIn in Hfresh; eauto.
-        apply Hfresh, st_inits_incl_st_ids.
-        rewrite in_map_iff. exists (x', (c, t)); auto.
-      + unfold is_vertex in contra. rewrite Hv in contra.
-        eapply Facts.fresh_ident_nIn'' in Hfresh; eauto.
-        rewrite ps_of_list_In, map_app, st_clocks_st_ids in contra; auto.
-  Qed.
-
-  Lemma causal_inv_insert_eq_with_xinit {prefs} :
-    forall (G: @global prefs) vars st st' x x' xinit ty ck xr e e1 e2 eqs,
-      wl_exp G e2 ->
-      In (x, ck) vars ->
-      ~InMembers x (st_inits st) ->
-      In (xinit, (ck, xr)) (st_inits st) ->
-      PS.For_all (fun xr => Is_free_left xr 0 e) xr ->
-      numstreams e = 1 ->
-      fresh_ident norm2 (ty, ck, None) st = (x', st') ->
-      causal_inv vars (([x], [e]) :: eqs) st ->
-      (forall y, Is_free_left y 0 e1 -> (y = x' \/ Is_free_left y 0 e \/ y = xinit)) ->
-      (forall y, Is_free_left y 0 e2 -> Is_free_in_clock y ck) ->
-      causal_inv vars (([x], [e1]) :: ([x'], [e2]) :: eqs) st'.
-  Proof.
-    intros * Hwl Hck Hnck Hinit Hxr Hnum Hfresh (?&?&v&a&g&(Hv&Ha)&Hinits) Hf1 Hf2.
-    repeat split; eauto.
-
-    (* if y is in e2, then its in e, so x depends on it *)
-    assert (forall y, Is_free_left y 0 e2 \/ Is_free_in_clock y ck -> is_arc g y x) as Hax.
-    { intros y [Hfree|Hfree]; [apply Hf2 in Hfree|].
-      1,2:apply Ha; right; exists ck; split; [apply in_or_app|]; auto.
-    }
-
-    (* We can build a new graph where x depends on x' *)
-    remember (PS.union (nth 0 (collect_free_left e2) PS.empty) (collect_free_clock ck)) as preds.
-    assert (AcyGraph (PS.add x' v) (add_between preds x' x a)) as g'.
-    { eapply add_between_AcyGraph with (g0:=g); subst; eauto.
-      - intros ? Hin.
-        erewrite PS.union_spec, collect_free_left_spec, collect_free_clock_spec in Hin; eauto.
-        apply Hax, is_arc_is_vertex in Hin as (?&?); auto.
-      - unfold is_vertex. rewrite Hv.
-        rewrite ps_of_list_In, map_app. apply in_or_app; left.
-        rewrite in_map_iff. exists (x, ck); auto.
-      - intros ? Hin.
-        erewrite PS.union_spec, collect_free_left_spec, collect_free_clock_spec in Hin; eauto.
-      - intro contra. apply Hv, ps_of_list_In in contra.
-        eapply Facts.fresh_ident_nIn'' in Hfresh; eauto.
-        apply Hfresh. rewrite <- st_clocks_st_ids, <- map_app; auto.
-    }
-
-    assert (~ PS.In x preds) as Hnin1.
-    { intro contra; subst.
-      erewrite PS.union_spec, collect_free_left_spec, collect_free_clock_spec in contra; eauto.
-      eapply Hax, has_arc_irrefl in contra; eauto.
-    }
-    assert (~ PS.Exists (fun p : PS.elt => has_trans_arc a x p) preds) as Hnin2.
-    { intros (?&Hin&Ha''); subst.
-      erewrite PS.union_spec, collect_free_left_spec, collect_free_clock_spec in Hin; eauto.
-      eapply Hax in Hin. eapply is_trans_arc_Asymmetric with (g0:=g) in Ha''; eauto.
-      eapply Ha''. left; eauto.
-    }
-    assert (~ PS.Exists (fun p : PS.elt => has_arc a x p) preds) as Hnin3.
-    { intros (x0&Hin&Ha''); subst.
-      eapply Hnin2. exists x0. split; auto.
-    }
-
-    (* Also x must depend on xinit *)
-    assert (AcyGraph (PS.add x' v) (add_arc xinit x (add_between preds x' x a))) as g''.
-    { eapply AGadda; eauto.
-      - intro contra; subst.
-        eapply Hnck, In_InMembers; eauto.
-      - apply PSF.add_2.
-        rewrite Hv, ps_of_list_In, in_map_iff.
-        exists (xinit, ck); split; auto.
-        apply in_app_iff; right.
-        eapply st_inits_incl_st_clocks; eauto.
-      - apply PSF.add_2.
-        rewrite Hv, ps_of_list_In, in_map_iff.
-        exists (x, ck); split; [|apply in_or_app]; auto.
-      - intro contra.
-        assert (has_trans_arc a x xinit) as contra'.
-        { rewrite add_between_spec2 in contra; eauto.
-          repeat destruct_conj_disj; auto.
-          1-8:exfalso; auto.
-          1,2:apply In_InMembers in Hinit; auto.
-        } clear contra.
-        eapply Forall_forall in Hinits; eauto; simpl in *.
-        eapply Hinits in contra' as [[?|(?&?&?)]|(?&?&[?|?])]; subst.
-        + eapply has_arc_irrefl; eauto.
-          eapply add_between_spec; eauto. left. eapply Ha.
-          right. exists ck. split; eauto. apply in_or_app; auto.
-        + eapply is_trans_arc_Asymmetric; eauto.
-          left. eapply Ha. right. exists ck; split; eauto. apply in_or_app; auto.
-        + eapply is_arc_Irreflexive, Ha.
-          left. left. exists 0; simpl; repeat split; auto.
-          left; auto. rewrite Hnum; auto.
-        + eapply is_trans_arc_Asymmetric; eauto.
-          left. eapply Ha.
-          left. left. exists 0; simpl; repeat split; auto.
-          left; auto. rewrite Hnum; auto.
-    }
-    eexists; eexists. exists g''. split; [split|]; auto.
-
-    - (* vertices *)
-      unfold vertices; simpl. rewrite Hv.
-      repeat rewrite <- ps_from_list_ps_of_list.
-      rewrite add_ps_from_list_cons, map_app, map_app, Permutation_middle.
-      apply fresh_ident_anns in Hfresh.
-      unfold st_clocks. rewrite Hfresh. reflexivity.
-
-    - (* arcs (add the equation) *)
-      intros * Hdep.
-      unfold is_arc. rewrite add_arc_spec. repeat rewrite add_between_spec; eauto.
-      destruct Hdep as [Hdep|Hdep]; [inv Hdep;[|inv H2]|].
-      + destruct H2 as (?&Hnth&?); simpl in *.
-        rewrite nth_error_length_nth in Hnth.
-        specialize (Hnth xH) as (Hlen&Hnth).
-        apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
-        apply Hf1 in H6 as [?|[?|?]]; subst; auto 10.
-        left. left. apply Ha. left. left.
-        exists 0. repeat split; auto. left; auto.
-        rewrite Hnum; auto.
-      + destruct H3 as (?&Hnth&?); simpl in *.
-        rewrite nth_error_length_nth in Hnth.
-        specialize (Hnth xH) as (Hlen&Hnth).
-        apply Nat.lt_1_r in Hlen; subst. inv H1; [|inv H6].
-        left. right; left. split; auto.
-        erewrite PS.union_spec, collect_free_left_spec; eauto.
-      + left. left. apply Ha. left. right; auto.
-      + destruct Hdep as (ck'&Hin&Hfree).
-        unfold st_clocks in Hin. erewrite fresh_ident_anns in Hin; eauto; simpl in Hin.
-        rewrite <- Permutation_middle in Hin. inv Hin.
-        2:(left; left; apply Ha; right; eauto).
-        inv H1. left. right. left. split; auto.
-        rewrite PS.union_spec, collect_free_clock_spec; auto.
-
-    - (* the new arcs preserve the invariant *)
-      erewrite fresh_ident_false_st_inits; eauto.
-      eapply Forall_impl_In; [|eauto].
-      intros (?&(?&?)) Hin Ha' ? Ha''.
-      eapply used_in_clock_reset_add_arc with (g0:=g'); eauto.
-      1:intros contra; subst; eapply Hnck, In_InMembers; eauto.
-      clear Ha''. intros ? Ha''.
-      eapply used_in_clock_reset_add_between; eauto.
-      1-3:intro contra; subst.
-      + eapply Hnck, In_InMembers; eauto.
-      + eapply Facts.fresh_ident_nIn in Hfresh; eauto.
-        apply Hfresh, st_inits_incl_st_ids.
-        rewrite in_map_iff. exists (x', (c, t)); auto.
-      + unfold is_vertex in contra. rewrite Hv in contra.
-        eapply Facts.fresh_ident_nIn'' in Hfresh; eauto.
-        rewrite ps_of_list_In, map_app, st_clocks_st_ids in contra; auto.
   Qed.
 
   Fact fby_equation_causal {prefs} : forall (G: @global prefs) vars to_cut eq eqs eqs' st st',
@@ -843,96 +476,83 @@ Module Type NCAUSALITY
     inv_fby_equation Hfby to_cut eq; try destruct x3 as (ty&ck&name).
     - destruct PS.mem; repeat inv_bind.
       1,2:rewrite Permutation_app_comm; simpl; auto.
-      eapply causal_inv_insert_eq; eauto. 4:simpl; auto.
+      eapply causal_inv_insert_eq; eauto. 3:simpl; auto.
       + destruct Hwc as (Hwc&_&_); apply Forall_singl in Hwc; eauto.
       + destruct Hwc as (_&_&Hwc). apply Forall2_singl in Hwc; auto.
-      + destruct Hinv as (Hndup&Hvalid&_).
-        destruct Hwc as (_&_&Hin). apply Forall2_singl in Hin.
-        apply Facts.st_valid_after_NoDupMembers in Hvalid; auto.
-        intro contra. apply InMembers_In in contra as (?&contra).
-        destruct x4. apply st_inits_incl_st_clocks in contra.
-        rewrite <- st_clocks_st_ids, <- map_app in Hvalid.
-        apply In_InMembers in Hin. apply In_InMembers in contra.
-        rewrite <- fst_NoDupMembers in Hvalid. eapply NoDupMembers_app_InMembers in Hvalid; eauto.
+        apply in_or_app; left; auto.
       + intros ? Hfree. inv Hfree. left; auto.
     - repeat inv_bind.
-      assert (Hinit:=H). eapply init_var_for_clock_causal_inv in H; eauto.
-      2:{ destruct Hwc as (_&_&Hwc). apply Forall2_singl in Hwc.
-          eapply wc_env_var; eauto. }
-      simpl in *. rewrite <- Permutation_middle, <- (Permutation_middle eqs).
-      assert (In (x, ck) vars) as Hin.
+      unfold init_var_for_clock in *. destruct (fresh_ident _ _) eqn:Hfresh; repeat inv_bind.
+      simpl in *.
+      rewrite <- Permutation_middle, <-(Permutation_middle eqs), <-(Permutation_middle eqs), app_nil_r; simpl.
+      assert (In (x, ck) (vars)) as Hin.
       { destruct Hwc as (_&_&Hwc). apply Forall2_singl in Hwc; auto. }
-      assert (Hinit':=Hinit). eapply init_var_for_clock_In_st_inits in Hinit' as (?&?&?); eauto.
-      eapply causal_inv_insert_eq_with_xinit; eauto. 4:auto.
-      + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc.
-        apply wc_exp_wl_exp in Hwc.
-        inv Hwc.
-        1,2:repeat (constructor; eauto); simpl.
-        1,3:apply add_whens_wl; auto.
-        1,2:destruct ty; simpl; auto.
-        rewrite app_nil_r, length_annot_numstreams, add_whens_numstreams; destruct ty; simpl; auto.
-      + destruct H as (Hndup&Hvalid&_).
-        destruct Hwc as (_&_&Hin'). apply Forall2_singl in Hin'.
-        apply Facts.st_valid_after_NoDupMembers in Hvalid; auto.
-        intro contra. apply InMembers_In in contra as (?&contra).
-        destruct x6. eapply st_inits_incl_st_clocks in contra.
-        rewrite <- st_clocks_st_ids, <- map_app in Hvalid.
-        apply In_InMembers in Hin'. apply In_InMembers in contra.
-        rewrite <- fst_NoDupMembers in Hvalid. eapply NoDupMembers_app_InMembers in Hvalid; eauto.
-      + intros ? In.
-        rewrite H1, ps_of_list_In in In.
-        constructor. right. split; auto.
-        eapply Forall2_ignore1 in Hr. simpl_In. destruct x10.
-        eapply Forall_forall in Hr as (?&?&Eq); eauto; simpl in *.
-        destruct Eq; subst. eapply Exists_exists. repeat esplit; eauto.
-      + intros ? Hf. inv Hf.
-        destruct H5 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
-        * inv Hf. right. right. split; auto.
-        * inversion_clear H3 as [?? (?&Heq&?)|?? [?? (?&Heq&Hex)|?? [|]]]; try inv Heq.
-          inversion_clear Hex as [???? Hfree|???? [|]].
-          right; left. constructor; auto.
-        * inversion_clear H3 as [???? Hfree|???? [|]]. inv Hfree; auto.
-      + intros ? Hf. inv Hf.
-        destruct H5 as [Free|(_&Free)]; inv Free. 2:inv H7.
-        destruct ty; simpl in *;
-          [apply add_whens_const_Is_free_left in H7; auto|
-           apply add_whens_enum_Is_free_left in H7; auto].
-      + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc. inv Hwc.
-        eapply Forall2_ignore1 in Hr. eapply Forall_impl; [|eapply Hr].
-        intros (?&?&?) (?&?&?&?); subst.
-        eapply Forall_forall in H7; [|eauto]. inv H7; auto.
+      eapply causal_inv_insert_eq
+        with (e1:=Ecase (Evar x3 (OpAux.bool_velus_type, (ck, Some x3))) [None; Some [x0]]
+                       [Efby [add_whens (init_type ty) ty ck] [x1] [] [(ty, (ck, name))]]
+                       ([ty], (ck, name)))
+             (G0:=G)in Hinv.
+      eapply causal_inv_insert_eq with (G0:=G); eauto. 1-11:simpl; eauto.
+      2,6:apply in_or_app; auto.
+      1,4:repeat constructor; simpl; auto.
+      1,5,6:apply add_whens_wl; auto.
+      1,2,4:destruct ck as [|?? (?&?)], ty; simpl; auto.
+      4,5:destruct ck as [|?? (?&?)]; simpl; auto.
+      3,4:rewrite Forall_map; eapply Forall_forall; intros (?&?) ?; auto.
+      + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc. inv Hwc. inv H5; eauto.
+      + inv Hunt. inv H2. 2:(inv H1; inv H).
+        rewrite app_nil_r, length_annot_numstreams. apply normalized_lexp_numstreams; auto.
+      + intros ? Hfree; simpl.
+        inv Hfree.
+        destruct H2 as [(?&Hfree)|[Hfree|Hfree]].
+        * right; left. inv Hfree. constructor; auto.
+        * right; left. constructor. right; left; auto.
+        * inv Hfree; inv H4; auto.
+      + intros ? Hfree. inv Hfree. destruct H2 as [Hfree|(_&Hfree)]; inv Hfree. 2:inv H4.
+        destruct ty; simpl in *; eauto using add_whens_const_Is_free_left, add_whens_enum_Is_free_left.
+      + intros ? Hfree; simpl.
+        inv Hfree. destruct H2 as [(?&Hfree)|[Hfree|Hfree]].
+        * inv Hfree; auto.
+        * inv Hfree. destruct H1 as (?&?&?); try congruence.
+          apply Exists_singl in H1 as (?&Heq&?); inv Heq. inv H; [|inv H5].
+          right; left; auto.
+        * inv Hfree; inv H4; auto.
+          destruct H2 as [Hfree|(?&Hfree)]; inv Hfree.
+          2:inv H5.
+          destruct ty; simpl in *; eauto using add_whens_const_Is_free_left, add_whens_enum_Is_free_left.
+      + intros ? Hfree; simpl.
+        inv Hfree.
+        destruct H2 as [Hfree|(?&Hfree)].
+        * inv Hfree; [|inv H4]. eapply add_whens_enum_Is_free_left in H4; eauto.
+        * rewrite Exists_map in Hfree. eapply Exists_exists in Hfree as ((?&?)&In&Hfree). inv Hfree.
+          left. constructor. right. split; auto.
+          eapply Forall2_ignore1, Forall_forall in Hr as (?&?&Hex); eauto. destruct Hex as (?&?); subst.
+          eapply Exists_exists; eauto.
     - repeat inv_bind.
-      assert (Hinit:=H). eapply init_var_for_clock_causal_inv in H; eauto.
-      2:{ destruct Hwc as (_&_&Hwc). apply Forall2_singl in Hwc.
-          eapply wc_env_var; eauto. }
-      simpl in *. rewrite <- Permutation_middle.
-      assert (In (x, ck) vars) as Hin.
-      { destruct Hwc as (_&_&Hwc). apply Forall2_singl in Hwc; auto. }
-      assert (Hinit':=Hinit). eapply init_var_for_clock_In_st_inits in Hinit' as (?&?&?); eauto.
-      eapply causal_inv_replace_eq; eauto. 4:auto.
-      + apply in_or_app; eauto.
-      + intro contra. eapply fst_InMembers in contra. apply st_inits_incl_st_ids in contra.
-        apply in_map with (f:=fst) in Hin.
-        destruct H as (Hnd&Hvalid&_); eauto.
-        eapply init_var_for_clock_In_st_inits in Hinit; eauto.
-        apply Facts.st_valid_after_NoDupMembers in Hvalid; eauto.
-        eapply NoDup_app_In in Hvalid; eauto.
-      + intros ? In.
-        rewrite H0, ps_of_list_In in In.
-        constructor. right. right. split; auto.
-        eapply Forall2_ignore1 in Hr. simpl_In. destruct x8.
-        eapply Forall_forall in Hr as (?&?&Eq); eauto; simpl in *.
-        destruct Eq; subst. eapply Exists_exists. repeat esplit; eauto.
+      unfold init_var_for_clock in H.
+      destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
+      simpl in *. rewrite <- Permutation_middle, <- (Permutation_middle eqs). rewrite app_nil_r.
+      eapply causal_inv_insert_eq with (G0:=G); eauto. 3:auto.
+      + repeat constructor; simpl; eauto.
+        1-2:eapply add_whens_wl; eauto.
+        2-3:destruct ck as [|?? (?&?)]; simpl; auto.
+        1,2:rewrite Forall_map; eapply Forall_forall; intros (?&?) ?; auto.
+      + destruct Hwc as (_&_&Hwc). apply Forall2_singl in Hwc; auto.
+        apply in_or_app; left; auto.
       + intros ? Hf. inv Hf.
-        destruct H4 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
+        destruct H1 as [(_&Hf)|Hf]; [|inv Hf]; auto 10.
         * inv Hf; auto.
-        * inversion_clear H2 as [?? (?&Heq&?)|?? [?? (?&Heq&Hex)|?? [|]]]; try inv Heq.
+        * inversion_clear H as [?? (?&Heq&?)|?? [?? (?&Heq&Hex)|?? [|]]]; try inv Heq.
           inversion_clear Hex as [???? Hfree|???? [|]].
-          left. constructor; auto.
-      + destruct Hwc as (Hwc&_). apply Forall_singl in Hwc. inv Hwc.
-        eapply Forall2_ignore1 in Hr. eapply Forall_impl; [|eapply Hr].
-        intros (?&?&?) (?&?&?&?); subst.
-        eapply Forall_forall in H6; [|eauto]. inv H6; auto.
+          right. constructor; auto.
+      + intros ? Hfree; simpl.
+        inv Hfree.
+        destruct H1 as [H1|(?&?)].
+        * inv H1; [|inv H4]. eapply add_whens_enum_Is_free_left in H4; eauto.
+        * rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&In&?). inv H0.
+          left. constructor. do 2 right. split; auto.
+          eapply Forall2_ignore1, Forall_forall in Hr as (?&?&Hex); eauto. destruct Hex as (?&?); subst.
+          eapply Exists_exists; eauto.
     - rewrite Permutation_app_comm; auto.
   Qed.
 
@@ -1004,10 +624,10 @@ Module Type NCAUSALITY
     destruct (fby_equations _ _ _) as (eqs'&st') eqn:Hres.
     eapply fby_equations_causal in Hres. 2-5:eauto.
     3:destruct Hwc as (_&_&_&?); eauto.
-    - destruct Hres as (?&?&?&?&g''&(Ha&Hv)&_).
+    - destruct Hres as (?&?&?&?&g''&(Ha&Hv)).
       eexists. eexists. exists g''.
       repeat rewrite idck_app. repeat rewrite <- app_assoc.
-      rewrite (Permutation_app_comm (idck (idty (st_anns st'))) (idck (n_out n))).
+      rewrite (Permutation_app_comm (idck (st_anns st')) (idck (n_out n))).
       repeat rewrite <- idck_app. split.
       + rewrite Ha. unfold st_clocks.
         rewrite <- idck_app. repeat rewrite <- app_assoc. reflexivity.

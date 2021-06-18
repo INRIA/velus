@@ -2304,52 +2304,18 @@ Module Type CORRECTNESS
 
     (** *** Additional stuff *)
 
-    Definition st_vars (st : fresh_st (type * clock * option PS.t)) : list (ident * (type * clock)) :=
-      idty (st_anns st).
-
-    Fact st_ids_st_vars : forall st,
-        st_ids st = map fst (st_vars st).
-    Proof.
-      intros. unfold st_ids, st_vars, idty.
-      rewrite map_map; simpl.
-      apply map_ext. intros [? [[? ?] ?]]; auto.
-    Qed.
-
-    Fact st_tys'_st_vars : forall st,
-        st_tys' st = idty (st_vars st).
-    Proof.
-      intros. unfold st_tys', st_vars, idty.
-      repeat rewrite map_map.
-      apply map_ext. intros [? [[? ?] ?]]; auto.
-    Qed.
-
-    Fact st_clocks'_st_vars : forall st,
-        st_clocks' st = idck (st_vars st).
-    Proof.
-      intros. unfold st_clocks', idck, st_vars, idty.
-      repeat rewrite map_map.
-      apply map_ext. intros [? [[? ?] ?]]; auto.
-    Qed.
-
-    Fact st_follows_vars_incl : forall st st',
-        st_follows st st' ->
-        incl (st_vars st) (st_vars st').
-    Proof.
-      intros.
-      unfold st_vars. apply incl_map, st_follows_incl, H.
-    Qed.
-
     Import NormFby.
 
-    Fact st_valid_after_NoDupMembers : forall st vars,
+    Fact st_valid_after_NoDupMembers {A} : forall st (vars : list (ident * A)),
         NoDupMembers vars ->
         st_valid_after st (PSP.of_list (map fst vars)) ->
-        NoDupMembers (vars++st_vars st).
+        NoDupMembers (vars++st_anns st).
     Proof.
       intros * Hndup Hvalid.
       eapply st_valid_NoDup in Hvalid.
       rewrite ps_of_list_ps_to_list_Perm in Hvalid. 2:rewrite <- fst_NoDupMembers; auto.
-      rewrite Permutation_app_comm, st_ids_st_vars, <- map_app, <- fst_NoDupMembers in Hvalid; auto.
+      unfold st_ids in Hvalid.
+      rewrite Permutation_app_comm, <- map_app, <- fst_NoDupMembers in Hvalid; auto.
     Qed.
 
     Fact fresh_ident_refines' {B V} : forall vars H H' a id (v : V) (st st' : fresh_st B),
@@ -2378,48 +2344,18 @@ Module Type CORRECTNESS
 
     (** *** Relation between state and history *)
 
-    Definition init_eqs_valids bs H (st : fresh_st (Op.type * clock * option PS.t)) :=
-      Forall (fun '(id, (ck, xr)) =>
-                (exists bs' rs rs',
-                    sem_clock H bs ck bs' /\
-                    Forall2 (sem_var H) (PSP.to_list xr) rs /\
-                    bools_ofs rs rs' /\
-                    sem_var H id (init_stream bs' rs'))) (st_inits st).
-
     Definition hist_st (vars : list (ident * clock)) b H st :=
       Env.dom H (map fst vars++st_ids st) /\
-      init_eqs_valids b H st /\
-      LCS.sc_var_inv' (vars++st_clocks' st) H b.
-
-    Fact fresh_ident_init_eqs : forall vars b ty ck id v H st st',
-        st_valid_after st (PSP.of_list vars) ->
-        Env.dom H (vars ++ st_ids st) ->
-        fresh_ident norm2 ((ty, ck), None) st = (id, st') ->
-        init_eqs_valids b H st ->
-        init_eqs_valids b (Env.add id v H) st'.
-    Proof with auto.
-      intros * Hvalid Hdom Hfresh Hinits.
-      assert (~In id (st_ids st)) as Hnin by (eapply Facts.fresh_ident_nIn in Hfresh; eauto).
-      assert (Env.refines eq H (Env.add id v H)) as Href.
-      { eapply fresh_ident_refines' in Hfresh; eauto. }
-      eapply fresh_ident_false_st_inits in Hfresh.
-      unfold init_eqs_valids in *. rewrite Hfresh.
-      solve_forall. destruct H1 as (bs'&rs&rs'&?&?&?&?).
-      exists bs' ; exists rs; exists rs' ; repeat split; eauto.
-      - eapply LCS.sem_clock_refines; eauto.
-      - solve_forall.
-        eapply sem_var_refines; eauto.
-      - eapply sem_var_refines; eauto.
-    Qed.
+      LCS.sc_var_inv' (vars++st_clocks st) H b.
 
     Fact fresh_ident_hist_st : forall vars b ty ck id v H st st',
         st_valid_after st (PSP.of_list (map fst vars)) ->
         sem_clock H b ck (abstract_clock v) ->
-        fresh_ident norm2 ((ty, ck), None) st = (id, st') ->
+        fresh_ident norm2 (ty, ck) st = (id, st') ->
         hist_st vars b H st ->
         hist_st vars b (Env.add id v H) st'.
     Proof with auto.
-      intros * Hvalid Hsem Hfresh [H1 [H2 H3]].
+      intros * Hvalid Hsem Hfresh [H1 H2].
       assert (~In id (st_ids st)) as Hnin by (eapply Facts.fresh_ident_nIn in Hfresh; eauto).
       assert (st_valid_after st' (PSP.of_list (map fst vars))) as Hvalid2 by eauto.
       assert (Hfresh':=Hfresh). apply fresh_ident_anns in Hfresh'.
@@ -2427,8 +2363,7 @@ Module Type CORRECTNESS
       { eapply fresh_ident_refines' in Hfresh; eauto. }
       repeat split.
       - eapply fresh_ident_dom; eauto.
-      - eapply fresh_ident_init_eqs in Hfresh; eassumption.
-      - unfold st_clocks', LCS.sc_var_inv' in *.
+      - unfold st_clocks, LCS.sc_var_inv' in *.
         rewrite Hfresh'; simpl.
         rewrite <- Permutation_middle. constructor.
         + exists v; split.
@@ -2559,47 +2494,15 @@ Module Type CORRECTNESS
     Proof with eauto.
       intros * Hsemc Hr Hbools Hvalid Histst Hinit.
       unfold init_var_for_clock in Hinit.
-      destruct find_init_var eqn:Hfind.
-      - (* We already introduced such an equation previously.
-         We will use the hist_st invariant to get some information back about it *)
-        inv Hinit.
-        exists H. repeat (split; eauto).
-        destruct Histst as [_ [Hvalids _]]. unfold init_eqs_valids in Hvalids.
-        rewrite Forall_forall in Hvalids.
-        eapply st_inits_find_Some in Hfind as (?&Eq&Hfind).
-        apply Hvalids in Hfind as (bs''&rs''&rs'''&?&?&?&?); subst.
-      eapply sem_clock_det in Hsemc; eauto. rewrite <- Hsemc; auto.
-      eapply ps_equal_Forall2_bools in Eq; eauto.
-      rewrite <-Eq. assumption.
-    - (* We need to introduce a new init equation to the history and state,
-         and prove its properties *)
-      clear Hfind.
       destruct (fresh_ident _ _) eqn:Hident. repeat inv_bind.
       assert (st_valid_after st' (PSP.of_list (map fst vars))) as Hvalid1 by eauto.
       remember (Env.add x (init_stream bs' rs') H) as H'.
       assert (Env.refines eq H H') as Href1 by (destruct Histst; eapply fresh_ident_refines' in Hident; eauto).
       assert (hist_st vars bs H' st') as Histst1.
-      { destruct Histst as [H1 [H2 H3]].
+      { destruct Histst as [H1 H2].
         repeat split.
         - eapply fresh_ident_dom in Hident...
-        - unfold init_eqs_valids in *.
-          erewrite fresh_ident_true_st_inits...
-          constructor.
-          + eapply Forall2_bools in Hr as (rs''&?&?); eauto.
-            exists bs'. exists rs''. exists rs'. repeat split...
-            * eapply LCS.sem_clock_refines; eauto.
-            * solve_forall.
-              eapply sem_var_refines; eauto.
-            * rewrite HeqH'. econstructor. eapply Env.add_1.
-              1,2:reflexivity.
-          + solve_forall.
-            destruct H2 as [bs'' [rs'' [rs''' [? [? [? ?]]]]]].
-            exists bs''. exists rs''. exists rs'''. repeat split; eauto.
-            * eapply LCS.sem_clock_refines; eauto.
-            * solve_forall.
-              eapply sem_var_refines; eauto.
-            * eapply sem_var_refines; eauto.
-        - unfold st_clocks', LCS.sc_var_inv' in *.
+        - unfold st_clocks, LCS.sc_var_inv' in *.
           erewrite fresh_ident_anns; simpl; eauto.
           rewrite <- Permutation_middle; constructor; simpl.
           + exists (init_stream bs' rs'). split.
@@ -2651,13 +2554,13 @@ Module Type CORRECTNESS
 
     Fact fby_iteexp_sem : forall vars bs H e0 e xr ty nck y0 y rs r z e' eqs' st st' ,
         NoDupMembers vars ->
-        wc_env (idck vars++st_clocks' st) ->
+        wc_env (idck vars++st_clocks st) ->
         normalized_lexp e0 ->
         normalized_lexp e ->
         clockof e0 = [fst nck] ->
-        wt_exp G1 (idty vars++st_tys' st) e0 ->
-        wc_exp G1 (idck vars++st_clocks' st) e0 ->
-        wc_exp G1 (idck vars++st_clocks' st) e ->
+        wt_exp G1 (idty vars++st_tys st) e0 ->
+        wc_exp G1 (idck vars++st_clocks st) e0 ->
+        wc_exp G1 (idck vars++st_clocks st) e ->
         sem_exp G1 H bs e0 [y0] ->
         sem_exp G1 H bs e [y] ->
         Forall2 (sem_var H) (map fst xr) rs ->
@@ -2677,10 +2580,10 @@ Module Type CORRECTNESS
       assert (st_follows st st') as Hfollows by (eapply fby_iteexp_st_follows; eauto).
       destruct nck as [ck ?]; simpl in *.
       unfold fby_iteexp in Hiteexp; repeat inv_bind.
-      assert (Hsck:=Hnormed0). eapply sc_lexp with (env:=vars++st_vars st) in Hsck...
+      assert (Hsck:=Hnormed0). eapply sc_lexp with (env:=vars++st_anns st) in Hsck...
       3,6:rewrite idck_app... 4:rewrite idty_app...
       2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
-      2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
+      2:{ destruct Histst as [_ ?]. rewrite idck_app; auto. }
       eapply init_var_for_clock_sem in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
       2:rewrite map_fst_idck...
       remember (abstract_clock y0) as bs'.
@@ -2702,12 +2605,12 @@ Module Type CORRECTNESS
         + econstructor. eapply sem_var_refines...
         + intros ? Heq; inv Heq.
         + intros ? Heq; inv Heq. repeat constructor.
-          eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks' st')...
-          * rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+          eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks st')...
+          * unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
             eapply st_valid_after_NoDupMembers, fresh_ident_st_valid; eauto.
             now rewrite map_fst_idck in Hvalid1.
-          * unfold st_clocks' in *. repeat solve_incl.
-          * destruct Histst2 as (_&_&?); auto.
+          * unfold st_clocks in *. repeat solve_incl.
+          * destruct Histst2 as (_&?); auto.
           * eapply sem_exp_refines; [| eauto]; etransitivity...
         + constructor; [|constructor]; auto; intros; try congruence.
           constructor; auto. constructor; auto. reflexivity.
@@ -2722,12 +2625,12 @@ Module Type CORRECTNESS
                eapply LCS.sem_clock_refines; [|eauto]. etransitivity...
             -- rewrite <-const_val_enum. eapply add_whens_enum_sem_exp.
                eapply LCS.sem_clock_refines; [|eauto]. etransitivity...
-          * eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks' st')...
-            -- rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+          * eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks st')...
+            -- unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
                eapply st_valid_after_NoDupMembers, fresh_ident_st_valid; eauto.
                now rewrite map_fst_idck in Hvalid1.
-            -- unfold st_clocks' in *. repeat solve_incl.
-            -- destruct Histst2 as (_&_&?); auto.
+            -- unfold st_clocks in *. repeat solve_incl.
+            -- destruct Histst2 as (_&?); auto.
             -- eapply sem_exp_refines; [| eauto]; etransitivity...
           * eapply bools_ofs_empty.
           * rewrite Heqy'.
@@ -2741,13 +2644,13 @@ Module Type CORRECTNESS
 
     Fact arrow_iteexp_sem : forall vars bs H e0 e xr ty nck y0 y rs r z e' eqs' st st',
         NoDupMembers vars ->
-        wc_env (idck vars++st_clocks' st) ->
+        wc_env (idck vars++st_clocks st) ->
         normalized_lexp e0 ->
         normalized_lexp e ->
         clockof e0 = [fst nck] ->
-        wt_exp G1 (idty vars++st_tys' st) e0 ->
-        wc_exp G1 (idck vars++st_clocks' st) e0 ->
-        wc_exp G1 (idck vars++st_clocks' st) e ->
+        wt_exp G1 (idty vars++st_tys st) e0 ->
+        wc_exp G1 (idck vars++st_clocks st) e0 ->
+        wc_exp G1 (idck vars++st_clocks st) e ->
         sem_exp G1 H bs e0 [y0] ->
         sem_exp G1 H bs e [y] ->
         Forall2 (sem_var H) (map fst xr) rs ->
@@ -2767,10 +2670,10 @@ Module Type CORRECTNESS
       assert (st_follows st st') as Hfollows by (eapply arrow_iteexp_st_follows; eauto).
       destruct nck as [ck ?]; simpl in *.
       unfold arrow_iteexp in Hiteexp. repeat inv_bind.
-      assert (Hsc0:=Hnormed0). eapply sc_lexp with (env:=vars++st_vars st) in Hsc0...
+      assert (Hsc0:=Hnormed0). eapply sc_lexp with (env:=vars++st_anns st) in Hsc0...
       3,6:rewrite idck_app... 4:rewrite idty_app...
       2:{ eapply st_valid_after_NoDupMembers in Hvalid... }
-      2:{ destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars; auto. }
+      2:{ destruct Histst as (_&?). rewrite idck_app; auto. }
 
       eapply init_var_for_clock_sem in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
       2:rewrite map_fst_idck...
@@ -2781,22 +2684,22 @@ Module Type CORRECTNESS
         * econstructor; eauto.
         * intros ? Heq; inv Heq.
         * intros ? Heq; inv Heq. repeat constructor.
-         eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks' st')...
-          -- rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+         eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks st')...
+          -- unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
              eapply st_valid_after_NoDupMembers; eauto.
              now rewrite map_fst_idck in Hvalid1.
-          -- unfold st_clocks' in *. repeat solve_incl.
-          -- destruct Histst1 as (_&_&?); auto.
+          -- unfold st_clocks in *. repeat solve_incl.
+          -- destruct Histst1 as (_&?); auto.
          -- eapply sem_exp_refines...
         * do 2 (constructor; auto). 2:intros Heq; inv Heq.
           constructor; auto. reflexivity.
         * constructor; auto.
-          eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks' st')...
-          -- rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+          eapply sc_ref_sem_exp with (vars:=idck vars++st_clocks st')...
+          -- unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
              eapply st_valid_after_NoDupMembers; eauto.
              now rewrite map_fst_idck in Hvalid1.
-          -- unfold st_clocks' in *. repeat solve_incl.
-          -- destruct Histst1 as (_&_&?); auto.
+          -- unfold st_clocks in *. repeat solve_incl.
+          -- destruct Histst1 as (_&?); auto.
           -- eapply sem_exp_refines...
         * subst. repeat econstructor. eapply arrow_init_stream_case...
           left. apply ac_aligned.
@@ -2821,10 +2724,10 @@ Module Type CORRECTNESS
 
     Fact fby_equation_sem : forall vars bs H to_cut equ eqs' st st' ,
         NoDupMembers vars ->
-        wc_env (idck vars++st_clocks' st) ->
+        wc_env (idck vars++st_clocks st) ->
         unnested_equation G1 equ ->
-        wt_equation G1 (idty vars++st_tys' st) equ ->
-        wc_equation G1 (idck vars++st_clocks' st) equ ->
+        wt_equation G1 (idty vars++st_tys st) equ ->
+        wc_equation G1 (idck vars++st_clocks st) equ ->
         sem_equation G1 H bs equ ->
         st_valid_after st (PSP.of_list (map fst vars)) ->
         hist_st (idck vars) bs H st ->
@@ -2856,13 +2759,13 @@ Module Type CORRECTNESS
           { eapply fresh_ident_hist_st in H0...
             + rewrite HeqH'...
             + rewrite map_fst_idck...
-            + eapply fby_equation_sc_exp with (vars:=vars++st_vars st) (e0:=x0)...
+            + eapply fby_equation_sc_exp with (vars:=vars++st_anns st) (e0:=x0)...
               * eapply st_valid_after_NoDupMembers in Hvalid...
-              * rewrite idck_app; eauto.
+              * rewrite idck_app...
               * clear - Hunt. inv Hunt; auto. inv H0; inv H.
-              * rewrite idty_app. rewrite st_tys'_st_vars in *; auto.
-              * rewrite idck_app. rewrite st_clocks'_st_vars in *; auto.
-              * destruct Histst as [_ [_ ?]]. rewrite idck_app, <- st_clocks'_st_vars...
+              * rewrite idty_app...
+              * rewrite idck_app...
+              * destruct Histst as [_ ?]. rewrite idck_app...
           }
           exists H'. repeat (split; eauto).
           repeat constructor; auto.
@@ -2871,11 +2774,11 @@ Module Type CORRECTNESS
             rewrite HeqH'. econstructor. eapply Env.add_1. 1,2:reflexivity.
           * eapply Seq with (ss:=[[y0]]); simpl; repeat constructor.
             { eapply LCS.sem_exp_anon_sem_exp.
-              destruct Histst1 as (_&_&?); eauto.
-              eapply LCS.sc_ref_sem_exp with (vars0:=idck vars++st_clocks' st'); eauto.
-              - rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+              destruct Histst1 as (_&?); eauto.
+              eapply LCS.sc_ref_sem_exp with (vars0:=idck vars++st_clocks st'); eauto.
+              - unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
                 eapply st_valid_after_NoDupMembers; eauto.
-              - unfold st_clocks' in *. repeat solve_incl.
+              - unfold st_clocks in *. repeat solve_incl.
               - econstructor. 4:eauto. 1,2:econstructor; eauto.
                 4:simpl; repeat rewrite app_nil_r; econstructor; eauto. 4:econstructor.
                 1,2:eapply normalized_lexp_sem_sem_anon; eauto. 2,4:eapply sem_exp_refines; eauto.
@@ -2893,9 +2796,9 @@ Module Type CORRECTNESS
           { eapply unnested_equation_sem_sem_anon in Hsem; eauto.
             eapply LCS.sem_equation_anon_sem_equation.
             eapply LCS.sc_ref_sem_equation; eauto.
-            - rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+            - unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
               eapply st_valid_after_NoDupMembers; eauto.
-            - destruct Histst as (?&?&?); auto.
+            - destruct Histst as (?&?); auto.
           }
       - (* fby *)
         destruct Hwt as [Hwt _]. apply Forall_singl in Hwt. inv Hwt. apply Forall_singl in H5.
@@ -2949,18 +2852,18 @@ Module Type CORRECTNESS
         { eapply unnested_equation_sem_sem_anon in Hsem; eauto.
             eapply LCS.sem_equation_anon_sem_equation.
             eapply LCS.sc_ref_sem_equation; eauto.
-            - rewrite st_clocks'_st_vars, <-idck_app, NoDupMembers_idck.
+            - unfold st_clocks. rewrite <-idck_app, NoDupMembers_idck.
               eapply st_valid_after_NoDupMembers; eauto.
-            - destruct Histst as (?&?&?); auto.
+            - destruct Histst as (?&?); auto.
         }
     Qed.
 
     Fact fby_equations_sem : forall vars bs to_cut eqs eqs' H st st' ,
         NoDupMembers vars ->
-        wc_env (idck vars++st_clocks' st) ->
+        wc_env (idck vars++st_clocks st) ->
         Forall (unnested_equation G1) eqs ->
-        Forall (wt_equation G1 (idty vars++st_tys' st)) eqs ->
-        Forall (wc_equation G1 (idck vars++st_clocks' st)) eqs ->
+        Forall (wt_equation G1 (idty vars++st_tys st)) eqs ->
+        Forall (wc_equation G1 (idck vars++st_clocks st)) eqs ->
         Forall (sem_equation G1 H bs) eqs ->
         st_valid_after st (PSP.of_list (map fst vars)) ->
         hist_st (idck vars) bs H st ->
@@ -2977,21 +2880,17 @@ Module Type CORRECTNESS
           repeat eexists; eauto. repeat inv_bind; auto. }
         inv Hunt. inv Hwt. inv Hwc. inv Hsem.
         assert (st_follows st x1) as Hfollows by (eapply fby_equation_st_follows in H0; eauto).
-        assert (wc_env (idck vars ++ st_clocks' x1)) as Hwenv1.
+        assert (wc_env (idck vars ++ st_clocks x1)) as Hwenv1.
         { eapply fby_equation_wc_eq in H0 as [_ ?]... }
         eapply fby_equation_sem in H0 as [H' [Href1 [Hvalid1 [Hhistst1 Hsem1]]]]. 2-11:eauto.
         assert (Forall (sem_equation G1 H' bs) eqs) as Hsem'.
         { solve_forall. eapply sem_equation_refines... } clear H11.
         eapply IHeqs in Hnorm as [H'' [Href Hsem2]]. 2-11:eauto.
         2,3:solve_forall; repeat solve_incl.
-        + exists H''. split.
-          * etransitivity...
-          * simpl. apply Forall_app; split; eauto.
-            solve_forall. eapply sem_equation_refines...
-        + repeat rewrite st_tys'_st_vars. solve_incl.
-          eapply st_follows_vars_incl...
-        + repeat rewrite st_clocks'_st_vars. solve_incl.
-          eapply st_follows_vars_incl...
+        exists H''. split.
+        + etransitivity...
+        + simpl. apply Forall_app; split; eauto.
+          solve_forall. eapply sem_equation_refines...
     Qed.
 
     Fact init_st_hist_st {prefs} : forall b H (n: @node prefs),
@@ -3004,9 +2903,7 @@ Module Type CORRECTNESS
       - unfold st_ids.
         rewrite init_st_anns; simpl.
         rewrite app_nil_r, map_fst_idck. assumption.
-      - unfold init_eqs_valids, st_inits.
-        rewrite init_st_anns. constructor.
-      - unfold st_clocks'. rewrite init_st_anns; simpl.
+      - unfold st_clocks. rewrite init_st_anns; simpl.
         rewrite app_nil_r. assumption.
     Qed.
 
@@ -3029,13 +2926,13 @@ Module Type CORRECTNESS
         repeat rewrite <- app_assoc in Hndup. repeat rewrite <- map_app in Hndup... }
       eapply fby_equations_sem with (vars:=(n_in n++n_vars n++n_out n)) (eqs:=n_eqs n) (st:=init_st)...
       7: simpl; rewrite <- surjective_pairing; subst; reflexivity.
-      3:rewrite st_tys'_st_vars. 2,4:rewrite st_clocks'_st_vars.
-      2,3,4:unfold st_vars; rewrite init_st_anns, app_nil_r.
+      1-6:unfold st_tys, st_clocks.
+      2,3,4:rewrite init_st_anns, app_nil_r.
       - rewrite fst_NoDupMembers...
       - destruct Hwc as [_ [_ [? _]]].
         rewrite (Permutation_app_comm (n_vars _))...
-      - destruct Hwc as [_ [_ [_ ?]]]...
       - destruct Hwt as [_ [_ [_ [_ ?]]]]...
+      - destruct Hwc as [_ [_ [_ ?]]]...
       - eapply init_st_valid.
         + eapply norm2_not_in_norm1_prefs.
         + rewrite PS_For_all_Forall, ps_of_list_ps_to_list_Perm...

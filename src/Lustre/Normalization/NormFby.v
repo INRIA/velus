@@ -24,10 +24,6 @@ Module Type NORMFBY
   Import Fresh Fresh.Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
-  (** Fresh ident generation keeping type annotations;
-      also retaining if the var is an init var or not *)
-  Definition FreshAnn A := Fresh A ((type * clock) * (option PS.t)).
-
   (** Add some whens on top of an expression *)
   Fixpoint add_whens (e : exp) (ty : type) (cl : clock) :=
     match cl with
@@ -37,29 +33,14 @@ Module Type NORMFBY
 
   Open Scope bool_scope.
 
-  Definition find_init_var (ck : clock) (xr : PS.t) st :=
-    option_map
-      fst
-      (find (fun '(_, ((ty, ck'), xr')) =>
-               match xr' with
-               | None => false
-               | Some xr' =>
-                 (ck' ==b ck) && (ty ==b bool_velus_type) && (PS.equal xr xr')
-               end)
-            (st_anns st)).
-
   (** Generate an init equation for a given clock `cl`; if the init equation for `cl` already exists,
       just return the variable *)
   Definition init_var_for_clock (ck : clock) xr : FreshAnn (ident * list equation) :=
-    let xr' := PSP.of_list (map fst xr) in
-    fun st => match (find_init_var ck xr' st) with
-           | Some x => ((x, []), st)
-           | None => let (x, st') := fresh_ident norm2 ((OpAux.bool_velus_type, ck), (Some xr')) st in
-                    ((x, [([x], [Efby [add_whens (Eenum 1 bool_velus_type) bool_velus_type ck]
-                                      [add_whens (Eenum 0 bool_velus_type) bool_velus_type ck]
-                                      (map (fun '(x, ck) => Evar x (bool_velus_type, ck)) xr)
-                                      [(bool_velus_type, (ck, None))]])]), st')
-           end.
+    fun st => let (x, st') := fresh_ident norm2 (OpAux.bool_velus_type, ck) st in
+           ((x, [([x], [Efby [add_whens (Eenum 1 bool_velus_type) bool_velus_type ck]
+                             [add_whens (Eenum 0 bool_velus_type) bool_velus_type ck]
+                             (map (fun '(x, ck) => Evar x (bool_velus_type, ck)) xr)
+                             [(bool_velus_type, (ck, None))]])]), st').
 
   Fixpoint is_constant (e : exp) : bool :=
     match e with
@@ -78,7 +59,7 @@ Module Type NORMFBY
   Definition fby_iteexp (e0 : exp) (e : exp) (xr : list (ident * nclock)) (ann : ann) : FreshAnn (exp * list equation) :=
     let '(ty, (ck, name)) := ann in
     do (initid, eqs) <- init_var_for_clock ck xr;
-    do px <- fresh_ident norm2 ((ty, ck), None);
+    do px <- fresh_ident norm2 (ty, ck);
     ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid)))
                [None; Some [e0]] [Evar px (ty, (ck, Some px))] ([ty], (ck, name)),
          ([px], [Efby [add_whens (init_type ty) ty ck] [e] [] [ann]])::eqs).
@@ -101,7 +82,7 @@ Module Type NORMFBY
       let '(ty, (ck, _)) := ann in
       if is_constant e0 then
         if PS.mem x to_cut then
-          do x' <- fresh_ident norm2 ((ty, ck), None);
+          do x' <- fresh_ident norm2 (ty, ck);
           ret [([x], [Evar x' ann]); ([x'], [Efby [e0] [e] er [ann]])]
         else ret [eq]
       else
@@ -162,7 +143,7 @@ Module Type NORMFBY
           fby_equation to_cut (xs, es) =
           (let '(ty, (ck, _)) := ann in
            if PS.mem x to_cut then
-             do x' <- fresh_ident norm2 ((ty, ck), None);
+             do x' <- fresh_ident norm2 (ty, ck);
              ret [([x], [Evar x' ann]); ([x'], es)]
            else ret [(xs, es)]))
       \/ (exists x e0 e er ann xr,
@@ -224,10 +205,8 @@ Module Type NORMFBY
     intros * Hinit Hvalid.
     unfold init_var_for_clock in Hinit.
     repeat inv_bind.
-    destruct (find_init_var _ _ _).
-    - inv Hinit. assumption.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      eapply fresh_ident_st_valid in Hfresh; eauto.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    eapply fresh_ident_st_valid in Hfresh; eauto.
   Qed.
   Hint Resolve init_var_for_clock_st_valid.
 
@@ -288,10 +267,8 @@ Module Type NORMFBY
     intros * Hinit.
     unfold init_var_for_clock in Hinit.
     repeat inv_bind.
-    destruct (find_init_var _ _ _).
-    - inv Hinit. reflexivity.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      apply fresh_ident_st_follows in Hfresh. auto.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    apply fresh_ident_st_follows in Hfresh. auto.
   Qed.
   Hint Resolve init_var_for_clock_st_follows.
 
@@ -347,11 +324,9 @@ Module Type NORMFBY
   Proof.
     intros * Hinit.
     unfold init_var_for_clock in Hinit. repeat inv_bind.
-    destruct (find_init_var _ _ _).
-    - inv Hinit. reflexivity.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      apply fresh_ident_vars_perm in Hfresh.
-      simpl. assumption.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    apply fresh_ident_vars_perm in Hfresh.
+    simpl. assumption.
   Qed.
 
   Fact fby_iteexp_vars_perm : forall e0 e er ann e' eqs' st st',
@@ -429,22 +404,12 @@ Module Type NORMFBY
 
   Fact init_var_for_clock_In : forall ck xr id eqs' st st',
       init_var_for_clock ck xr st = (id, eqs', st') ->
-      exists xr', PS.Equal xr' (PSP.of_list (map fst xr)) /\
-             In (id, (bool_velus_type, ck, Some xr')) (st_anns st').
+      In (id, (bool_velus_type, ck)) (st_anns st').
   Proof.
     intros * Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct (find_init_var _ _ _) eqn:Hfind.
-    - inv Hinit.
-      apply option_map_inv_Some in Hfind as ((?&(?&?)&?)&(Hfind&?)); subst; simpl.
-      eapply find_some in Hfind as [Hin H].
-      destruct o; inv H.
-      repeat rewrite Bool.andb_true_iff in H1. destruct H1 as ((Hck&Hty)&Hxr); subst.
-      rewrite equiv_decb_equiv in Hty; inv Hty. rewrite clock_eqb_eq in Hck; subst.
-      eapply PSF.equal_2 in Hxr. symmetry in Hxr. eauto.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      eapply fresh_ident_In in Hfresh; eauto.
-      eexists; split; eauto. reflexivity.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    eapply fresh_ident_In in Hfresh; eauto.
   Qed.
 
   (** ** Specification of a normalized node *)
@@ -550,13 +515,11 @@ Module Type NORMFBY
   Proof.
     intros * Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct (find_init_var _ _ _).
-    - inv Hinit; auto.
-    - destruct (fresh_ident _ _). inv Hinit.
-      repeat constructor; simpl.
-      1,2:apply add_whens_wl; auto.
-      2,3:simpl; rewrite app_nil_r, length_annot_numstreams; apply add_whens_numstreams; auto.
-      1,2:rewrite Forall_map; eapply Forall_forall; intros (?&?) ?; eauto.
+    destruct (fresh_ident _ _). inv Hinit.
+    repeat constructor; simpl.
+    1,2:apply add_whens_wl; auto.
+    2,3:simpl; rewrite app_nil_r, length_annot_numstreams; apply add_whens_numstreams; auto.
+    1,2:rewrite Forall_map; eapply Forall_forall; intros (?&?) ?; eauto.
   Qed.
 
   Fact fby_iteexp_numstreams : forall e0 e er a e' eqs' st st',
@@ -720,12 +683,10 @@ Module Type NORMFBY
   Proof.
     intros * Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct (find_init_var _ _ _).
-    - inv Hinit. constructor.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      repeat constructor.
-      1-2:eapply add_whens_normalized_lexp; eauto.
-      rewrite Forall_map. apply Forall_forall. intros (?&?) ?; eauto.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    repeat constructor.
+    1-2:eapply add_whens_normalized_lexp; eauto.
+    rewrite Forall_map. apply Forall_forall. intros (?&?) ?; eauto.
   Qed.
 
   Fact init_var_for_clock_normalized_eq {prefs} : forall (G : @global prefs) ck xr id eqs' out st st',
@@ -735,14 +696,12 @@ Module Type NORMFBY
   Proof.
     intros * Hvalid Hinit.
     unfold init_var_for_clock in Hinit.
-    destruct (find_init_var _ _ _).
-    - inv Hinit. constructor.
-    - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-      repeat constructor.
-      + eapply fresh_ident_nIn' in Hfresh; eauto.
-      + apply add_whens_is_constant; auto.
-      + apply add_whens_normalized_lexp; auto.
-      + rewrite Forall_map. apply Forall_forall. intros (?&?) ?; eauto.
+    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+    repeat constructor.
+    + eapply fresh_ident_nIn' in Hfresh; eauto.
+    + apply add_whens_is_constant; auto.
+    + apply add_whens_normalized_lexp; auto.
+    + rewrite Forall_map. apply Forall_forall. intros (?&?) ?; eauto.
   Qed.
 
   Fact fby_iteexp_unnested_eq {prefs} : forall (G : @global prefs) e0 e xr a e' eqs' st st',
@@ -880,7 +839,6 @@ Module Type NORMFBY
       anon_in_eqs eqs' = [].
   Proof.
     unfold init_var_for_clock. intros * Hinit.
-    destruct find_init_var; repeat inv_bind; auto.
     destruct fresh_ident; repeat inv_bind; simpl.
     unfold anon_in_eq; simpl.
     repeat rewrite app_nil_r.
@@ -963,7 +921,7 @@ Module Type NORMFBY
 
   Program Definition normfby_node (* (to_cut : PS.t) *) (n : @node norm1_prefs) : @node norm2_prefs :=
     let eqs := fby_equations (ps_from_list (map fst (n_out n))) (n_eqs n) init_st in
-    let nvars := idty (st_anns (snd eqs)) in
+    let nvars := st_anns (snd eqs) in
     {| n_name := n_name n;
        n_hasstate := n_hasstate n;
        n_in := n_in n;
@@ -977,7 +935,7 @@ Module Type NORMFBY
     remember (fby_equations _ _ _) as eqs. destruct eqs as [eqs st']. symmetry in Heqeqs.
     specialize (n_defd n) as Hperm.
     apply fby_equations_vars_perm in Heqeqs; simpl.
-    rewrite Permutation_app_comm, app_assoc, map_app, (Permutation_app_comm (n_out n)), <- Hperm, map_fst_idty.
+    rewrite Permutation_app_comm, app_assoc, map_app, (Permutation_app_comm (n_out n)), <- Hperm.
     rewrite <- Heqeqs. unfold st_ids. rewrite init_st_anns, app_nil_r; auto.
   Qed.
   Next Obligation.
@@ -994,7 +952,7 @@ Module Type NORMFBY
           rewrite ps_of_list_ps_to_list in Hin; eauto. }
     rewrite ps_of_list_ps_to_list_Perm in Heqeqs; auto. 2:rewrite <-fst_NoDupMembers; apply n_nodup.
     rewrite <- app_assoc, fst_NoDupMembers. repeat rewrite map_app in *.
-    unfold st_ids in Heqeqs. rewrite map_fst_idty, (app_assoc (map _ (n_vars _))), (Permutation_app_comm (map _ (n_vars _))),
+    unfold st_ids in Heqeqs. rewrite (app_assoc (map _ (n_vars _))), (Permutation_app_comm (map _ (n_vars _))),
                              <- app_assoc, app_assoc, (Permutation_app_comm (map _ (n_in _))), <- app_assoc; auto.
   Qed.
   Next Obligation.
@@ -1018,7 +976,6 @@ Module Type NORMFBY
     unfold norm2_prefs.
     repeat split; auto using AtomOrGensym_add.
     eapply st_valid_prefixed in Hvalid.
-    rewrite map_fst_idty. auto.
     eapply Forall_impl; [|eauto]. intros ? (?&?); subst.
     right. exists norm2. eauto using PSF.add_1.
   Qed.

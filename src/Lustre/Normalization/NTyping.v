@@ -154,7 +154,6 @@ Module Type NTYPING
   (** ** A few additional tactics *)
 
   Definition st_tys (st : fresh_st (Op.type * clock)) := idty (st_anns st).
-  Definition st_tys' (st : fresh_st ((Op.type * clock) * option PS.t)) := idty (idty (st_anns st)).
 
   Fact st_anns_tys_In : forall st id ty,
       In (id, ty) (st_tys st) <-> (exists cl, In (id, (ty, cl)) (st_anns st)).
@@ -237,8 +236,6 @@ Module Type NTYPING
       eapply st_follows_incl; repeat solve_st_follows
     | |- incl (st_tys ?st1) (st_tys _) =>
       eapply st_follows_tys_incl; repeat solve_st_follows
-    | |- incl (st_tys' ?st1) (st_tys' _) =>
-      unfold st_tys', idty; do 2 eapply incl_map; eapply st_follows_incl; repeat solve_st_follows
     | H : incl ?l1 ?l2 |- incl (idty ?l1) (idty ?l2) =>
       eapply incl_map; eauto
     | H : In ?x ?l1 |- In ?x ?l2 =>
@@ -1155,8 +1152,6 @@ Module Type NTYPING
 
     Definition st_clocks (st : fresh_st (Op.type * clock)) : list clock :=
       map (fun '(_, (_, cl)) => cl) (st_anns st).
-    Definition st_clocks' (st : fresh_st (Op.type * clock * option PS.t)) : list clock :=
-      map (fun '(_, (_, cl, _)) => cl) (st_anns st).
 
     Fact fresh_ident_wt_clock : forall enums pref vars ty cl id st st',
         Forall (wt_clock enums vars) (st_clocks st) ->
@@ -1919,47 +1914,44 @@ Module Type NTYPING
     Qed.
 
     Fact init_var_for_clock_wt_eq : forall vars ck xr id eqs' st st' ,
-        wt_clock G1.(enums) (vars++st_tys' st) ck ->
-        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys' st) /\ wt_nclock G1.(enums) (vars++st_tys' st) ckr) xr ->
+        wt_clock G1.(enums) (vars++st_tys st) ck ->
+        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys st) /\ wt_nclock G1.(enums) (vars++st_tys st) ckr) xr ->
         init_var_for_clock ck xr st = (id, eqs', st') ->
-        Forall (wt_equation G2 (vars++st_tys' st')) eqs'.
+        Forall (wt_equation G2 (vars++st_tys st')) eqs'.
     Proof with eauto.
       intros * Hck Hckr Hinit.
       unfold init_var_for_clock in Hinit.
-      destruct (find_init_var _ _ _) eqn:Hfind.
-      - inv Hinit. constructor.
-      - destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-        repeat constructor; simpl; repeat rewrite app_nil_r; auto.
-        1,2:eapply add_whens_wt_exp; [| | |eauto]; eauto.
-        1,3:constructor; simpl; auto.
-        4,5:eapply add_whens_typeof; simpl; auto.
-        1,2,5:repeat solve_incl.
-        + rewrite Forall_map. eapply Forall_impl; [|eauto].
-          intros (?&?) (In&WtC). constructor; repeat solve_incl.
-        + rewrite Forall_map. eapply Forall_forall. intros (?&?) _; auto.
-        + eapply fresh_ident_In in Hfresh.
-          eapply in_or_app; right; unfold st_tys', idty; rewrite map_map; simpl_In;
-            eexists; split; eauto; eauto.
+      destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
+      repeat constructor; simpl; repeat rewrite app_nil_r; auto.
+      1,2:eapply add_whens_wt_exp; [| | |eauto]; eauto.
+      1,3:constructor; simpl; auto.
+      4,5:eapply add_whens_typeof; simpl; auto.
+      1,2,5:repeat solve_incl.
+      - rewrite Forall_map. eapply Forall_impl; [|eauto].
+        intros (?&?) (In&WtC). constructor; repeat solve_incl.
+      - rewrite Forall_map. eapply Forall_forall. intros (?&?) _; auto.
+      - eapply fresh_ident_In in Hfresh.
+        eapply in_or_app; right; unfold st_tys, idty; simpl_In;
+          eexists; split; eauto; eauto.
     Qed.
 
     Fact fby_iteexp_wt_exp : forall vars e0 e xr ty ck name e' eqs' st st' ,
-        wt_clock G1.(enums) (vars++st_tys' st) ck ->
-        wt_exp G1 (vars++st_tys' st) e0 ->
-        wt_exp G1 (vars++st_tys' st) e ->
+        wt_clock G1.(enums) (vars++st_tys st) ck ->
+        wt_exp G1 (vars++st_tys st) e0 ->
+        wt_exp G1 (vars++st_tys st) e ->
         typeof e0 = [ty] ->
         typeof e = [ty] ->
-        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys' st) /\ wt_nclock G1.(enums) (vars++st_tys' st) ckr) xr ->
+        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys st) /\ wt_nclock G1.(enums) (vars++st_tys st) ckr) xr ->
         fby_iteexp e0 e xr (ty, (ck, name)) st = (e', eqs', st') ->
-        wt_exp G2 (vars++st_tys' st') e'.
+        wt_exp G2 (vars++st_tys st') e'.
     Proof.
       intros * Hwtc Hwt1 Hwt2 Hty1 Hty2 Hr Hfby.
       unfold fby_iteexp in Hfby; repeat inv_bind.
       repeat econstructor; simpl in *; try rewrite app_nil_r; auto.
       2,5,6,7,8,9:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
-      - apply init_var_for_clock_In in H as (?&Eq&In).
-        apply in_or_app, or_intror; unfold st_tys', idty.
+      - apply init_var_for_clock_In in H as In.
+        apply in_or_app, or_intror; unfold st_tys, idty.
         simpl_In; exists (x, (OpAux.bool_velus_type, ck)); split; auto.
-        simpl_In; exists (x, (OpAux.bool_velus_type, ck, Some x3)); split; auto.
         repeat solve_incl.
       - intros ? [Heq|[Heq|Heq]]; inv Heq.
         constructor; auto.
@@ -1967,9 +1959,8 @@ Module Type NTYPING
       - intros ? [Heq|[Heq|Heq]]; inv Heq.
         simpl; rewrite app_nil_r; auto.
       - apply fresh_ident_In in H0.
-        apply in_or_app, or_intror; unfold st_tys', idty.
+        apply in_or_app, or_intror; unfold st_tys, idty.
         simpl_In; exists (x2, (ty, ck)); split; auto.
-        simpl_In; exists (x2, (ty, ck, None)); split; auto.
       - destruct Hiface as (Henums&_). congruence.
       - congruence.
     Qed.
@@ -1978,18 +1969,18 @@ Module Type NTYPING
 
     Fact fby_iteexp_wt_eq : forall vars e0 e xr ty ck name e' eqs' st st' ,
         Forall (wt_enum G1) (map snd vars) ->
-        wt_clock G1.(enums) (vars++st_tys' st) ck ->
+        wt_clock G1.(enums) (vars++st_tys st) ck ->
         wt_exp G1 vars e0 ->
         wt_exp G1 vars e ->
         typeof e0 = [ty] ->
         typeof e = [ty] ->
-        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys' st) /\ wt_nclock G1.(enums) (vars++st_tys' st) ckr) xr ->
+        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys st) /\ wt_nclock G1.(enums) (vars++st_tys st) ckr) xr ->
         fby_iteexp e0 e xr (ty, (ck, name)) st = (e', eqs', st') ->
-        Forall (wt_equation G2 (vars++st_tys' st')) eqs'.
+        Forall (wt_equation G2 (vars++st_tys st')) eqs'.
     Proof.
       intros * Henums Hwtc Hwt1 Hwt2 Hty1 Hty2 Hr Hfby.
       unfold fby_iteexp in Hfby; repeat inv_bind; auto.
-      assert (wt_clock G1.(enums) (vars ++ st_tys' st') ck) as Hwtck'.
+      assert (wt_clock G1.(enums) (vars ++ st_tys st') ck) as Hwtck'.
       { repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows. }
       constructor.
       - repeat constructor; simpl; try rewrite app_nil_r; eauto.
@@ -2004,18 +1995,17 @@ Module Type NTYPING
         + eapply add_whens_typeof.
           destruct ty; simpl; auto. now rewrite Op.ctype_init_ctype.
         + apply fresh_ident_In in H0.
-          apply in_or_app, or_intror. unfold st_tys', idty.
+          apply in_or_app, or_intror. unfold st_tys, idty.
           simpl_In. exists (x2, (ty, ck)); split; auto.
-          simpl_In. exists (x2, (ty, ck, None)); split; auto.
       - eapply init_var_for_clock_wt_eq with (vars:=vars) in H; eauto.
         solve_forall; repeat solve_incl.
     Qed.
 
     Fact arrow_iteexp_wt_eq : forall vars e0 e xr ty ck name e' eqs' st st' ,
-        wt_clock G1.(enums) (vars++st_tys' st) ck ->
-        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys' st) /\ wt_nclock G1.(enums) (vars++st_tys' st) ckr) xr ->
+        wt_clock G1.(enums) (vars++st_tys st) ck ->
+        Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars++st_tys st) /\ wt_nclock G1.(enums) (vars++st_tys st) ckr) xr ->
         arrow_iteexp e0 e xr (ty, (ck, name)) st = (e', eqs', st') ->
-        Forall (wt_equation G2 (vars++st_tys' st')) eqs'.
+        Forall (wt_equation G2 (vars++st_tys st')) eqs'.
     Proof.
       intros * Hwtc Hr Hfby.
       unfold arrow_iteexp in Hfby. repeat inv_bind.
@@ -2026,7 +2016,7 @@ Module Type NTYPING
         Forall (wt_enum G1) (map snd vars) ->
         wt_equation G1 vars eq ->
         fby_equation to_cut eq st = (eqs', st') ->
-        Forall (wt_equation G2 (vars++st_tys' st')) eqs'.
+        Forall (wt_equation G2 (vars++st_tys st')) eqs'.
     Proof.
       intros * Henums Hwt Hfby.
       inv_fby_equation Hfby to_cut eq.
@@ -2038,12 +2028,10 @@ Module Type NTYPING
         repeat (constructor; auto).
         2,3,4,5,7:repeat solve_incl.
         + apply fresh_ident_In in H. apply in_or_app, or_intror.
-          unfold st_tys', idty. repeat simpl_In. exists (x3, (t, c)); split; auto.
-          repeat simpl_In. exists (x3, (t, c, None)); auto.
+          unfold st_tys, idty. repeat simpl_In. exists (x3, (t, c)); split; auto.
         + solve_forall; repeat solve_incl.
         + apply fresh_ident_In in H. apply in_or_app, or_intror.
-          unfold st_tys', idty. repeat simpl_In. exists (x3, (t, c)); split; auto.
-          repeat simpl_In. exists (x3, (t, c, None)); auto.
+          unfold st_tys, idty. repeat simpl_In. exists (x3, (t, c)); split; auto.
         + destruct Hwt. constructor; eauto.
           eapply iface_eq_wt_equation; eauto.
           constructor; auto. solve_forall; repeat solve_incl.
@@ -2056,7 +2044,7 @@ Module Type NTYPING
         simpl in *; rewrite app_nil_r in *.
         apply Forall_singl in H4; apply Forall_singl in H5.
         apply Forall_singl in H10; inv H10.
-        assert (Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars ++ st_tys' st) /\ wt_nclock G1.(enums) (vars ++ st_tys' st) ckr) x4) as Hx4.
+        assert (Forall (fun '(xr, ckr) => In (xr, OpAux.bool_velus_type) (vars ++ st_tys st) /\ wt_nclock G1.(enums) (vars ++ st_tys st) ckr) x4) as Hx4.
         { apply Forall2_ignore1 in Hr. eapply Forall_impl; [|eauto].
           intros (?&?) (?&?&?&?); subst.
           eapply Forall_forall in H6; eauto.
@@ -2081,15 +2069,15 @@ Module Type NTYPING
         repeat (econstructor; auto); try congruence.
         2,6,8,11:repeat solve_incl.
         5:simpl; rewrite app_nil_r; auto.
-        + eapply init_var_for_clock_In in H as (ps&?&?).
-          apply in_or_app, or_intror. unfold st_tys', idty. rewrite map_map.
-          simpl_In. exists (x3, (OpAux.bool_velus_type, ck, Some ps)); auto.
+        + eapply init_var_for_clock_In in H.
+          apply in_or_app, or_intror. unfold st_tys, idty.
+          simpl_In. exists (x3, (OpAux.bool_velus_type, ck)); auto.
         + destruct Hiface as (?&_). congruence.
         + intros ? [Heq|[Heq|Heq]]; inv Heq. constructor; auto.
           repeat solve_incl.
         + intros ? [Heq|[Heq|Heq]]; inv Heq.
           simpl; rewrite app_nil_r; auto.
-        + assert (incl vars (vars ++ st_tys' st')) by repeat solve_incl; eauto.
+        + assert (incl vars (vars ++ st_tys st')) by repeat solve_incl; eauto.
         + eauto.
         + apply Forall2_ignore1 in Hr. eapply Forall_impl; [|eauto].
           intros (?&?) (?&?&?&?); subst.
@@ -2105,7 +2093,7 @@ Module Type NTYPING
         Forall (wt_enum G1) (map snd vars) ->
         Forall (wt_equation G1 vars) eqs ->
         fby_equations to_cut eqs st = (eqs', st') ->
-        Forall (wt_equation G2 (vars++st_tys' st')) eqs'.
+        Forall (wt_equation G2 (vars++st_tys st')) eqs'.
     Proof.
       induction eqs; intros * Henums Hwt Hfby;
         unfold fby_equations in *; repeat inv_bind; simpl; auto.
@@ -2119,52 +2107,39 @@ Module Type NTYPING
 
     (** wt_clock *)
 
-    Fact fresh_ident_wt_clock' : forall pref enums vars ty cl b id st st' ,
-        Forall (wt_clock enums vars) (st_clocks' st) ->
-        wt_clock enums vars cl ->
-        fresh_ident pref (ty, cl, b) st = (id, st') ->
-        Forall (wt_clock enums vars) (st_clocks' st').
-    Proof.
-      intros * Hclocks Hwt Hfresh.
-      apply fresh_ident_anns in Hfresh.
-      unfold st_clocks' in *. rewrite Hfresh; simpl.
-      constructor; auto.
-    Qed.
-
     Fact init_var_for_clock_wt_clock : forall enums vars ck er x eqs' st st' ,
-        wt_clock enums (vars++st_tys' st) ck ->
-        Forall (wt_clock enums (vars ++ st_tys' st)) (st_clocks' st) ->
+        wt_clock enums (vars++st_tys st) ck ->
+        Forall (wt_clock enums (vars ++ st_tys st)) (st_clocks st) ->
         init_var_for_clock ck er st = (x, eqs', st') ->
-        Forall (wt_clock enums (vars ++ st_tys' st')) (st_clocks' st').
+        Forall (wt_clock enums (vars ++ st_tys st')) (st_clocks st').
     Proof.
       intros * Hwtc1 Hwtc2 Hfby.
-      unfold init_var_for_clock in Hfby. destruct (find_init_var _ _ _) eqn:Hfind.
-      - inv Hfby. auto.
-      - destruct (fresh_ident _ _) eqn:Hfresh.
-        inv Hfby.
-        eapply fresh_ident_wt_clock' in Hfresh; eauto. solve_forall. 1,2:repeat solve_incl.
+      unfold init_var_for_clock in Hfby.
+      destruct (fresh_ident _ _) eqn:Hfresh.
+      inv Hfby.
+      eapply fresh_ident_wt_clock in Hfresh; eauto. solve_forall. 1,2:repeat solve_incl.
     Qed.
 
     Fact fby_iteexp_wt_clock : forall enums vars e0 e er ty ck name e' eqs' st st' ,
-        wt_clock enums (vars++st_tys' st) ck ->
-        Forall (wt_clock enums (vars ++ st_tys' st)) (st_clocks' st) ->
+        wt_clock enums (vars++st_tys st) ck ->
+        Forall (wt_clock enums (vars ++ st_tys st)) (st_clocks st) ->
         fby_iteexp e0 e er (ty, (ck, name)) st = (e', eqs', st') ->
-        Forall (wt_clock enums (vars ++ st_tys' st')) (st_clocks' st').
+        Forall (wt_clock enums (vars ++ st_tys st')) (st_clocks st').
     Proof.
       intros * Hwtc1 Hwtc2 Hfby.
       unfold fby_iteexp in Hfby; repeat inv_bind; auto.
       assert (st_follows st x1) as Hfollows1 by (eapply init_var_for_clock_st_follows in H; eauto).
       assert (st_follows x1 st') as Hfollows2 by eauto.
-      eapply fresh_ident_wt_clock' in H0; eauto. 2:repeat solve_incl.
+      eapply fresh_ident_wt_clock in H0; eauto. 2:repeat solve_incl.
       eapply init_var_for_clock_wt_clock in H; eauto.
       solve_forall; repeat solve_incl.
     Qed.
 
     Fact arrow_iteexp_wt_clock : forall enums vars e0 e er ty ck name e' eqs' st st' ,
-        wt_clock enums (vars++st_tys' st) ck ->
-        Forall (wt_clock enums (vars ++ st_tys' st)) (st_clocks' st) ->
+        wt_clock enums (vars++st_tys st) ck ->
+        Forall (wt_clock enums (vars ++ st_tys st)) (st_clocks st) ->
         arrow_iteexp e0 e er (ty, (ck, name)) st = (e', eqs', st') ->
-        Forall (wt_clock enums (vars ++ st_tys' st')) (st_clocks' st').
+        Forall (wt_clock enums (vars ++ st_tys st')) (st_clocks st').
     Proof.
       intros * Hwtc1 Hwtc2 Hfby.
       unfold arrow_iteexp in Hfby. repeat inv_bind.
@@ -2172,10 +2147,10 @@ Module Type NTYPING
     Qed.
 
     Fact fby_equation_wt_clock : forall vars to_cut eq eqs' st st' ,
-        wt_equation G1 (vars++st_tys' st) eq ->
-        Forall (wt_clock G2.(enums) (vars ++ st_tys' st)) (st_clocks' st) ->
+        wt_equation G1 (vars++st_tys st) eq ->
+        Forall (wt_clock G2.(enums) (vars ++ st_tys st)) (st_clocks st) ->
         fby_equation to_cut eq st = (eqs', st') ->
-        Forall (wt_clock G2.(enums) (vars ++ st_tys' st')) (st_clocks' st').
+        Forall (wt_clock G2.(enums) (vars ++ st_tys st')) (st_clocks st').
     Proof.
       intros * Hwt Hwtck Hfby.
       inv_fby_equation Hfby to_cut eq; destruct x3 as (ty&ck&name).
@@ -2183,7 +2158,7 @@ Module Type NTYPING
         destruct PS.mem; repeat inv_bind; auto.
         destruct Hwt as [Hwt _]. apply Forall_singl in Hwt.
         inv Hwt. apply Forall_singl in H10; inv H10.
-        eapply fresh_ident_wt_clock' in H; eauto.
+        eapply fresh_ident_wt_clock in H; eauto.
         1:solve_forall. 1,2:repeat solve_incl.
       - (* fby *)
         eapply fby_iteexp_wt_clock in H; eauto.
@@ -2197,10 +2172,10 @@ Module Type NTYPING
     Qed.
 
     Corollary fby_equations_wt_clock : forall vars to_cut eqs eqs' st st' ,
-        Forall (wt_equation G1 (vars++st_tys' st)) eqs ->
-        Forall (wt_clock G2.(enums) (vars ++ st_tys' st)) (st_clocks' st) ->
+        Forall (wt_equation G1 (vars++st_tys st)) eqs ->
+        Forall (wt_clock G2.(enums) (vars ++ st_tys st)) (st_clocks st) ->
         fby_equations to_cut eqs st = (eqs', st') ->
-        Forall (wt_clock G2.(enums) (vars ++ st_tys' st')) (st_clocks' st').
+        Forall (wt_clock G2.(enums) (vars ++ st_tys st')) (st_clocks st').
     Proof.
       induction eqs; intros * Hwt Hwtck Hfby;
         unfold fby_equations in *; repeat inv_bind; simpl; auto.
@@ -2213,26 +2188,25 @@ Module Type NTYPING
 
     (** wt_enum *)
 
-    Lemma fresh_ident_wt_enum' : forall vars pref ty ck xr id st st',
+    Lemma fresh_ident_wt_enum' : forall vars pref ty ck id st st',
         wt_enum G2 ty ->
-        Forall (wt_enum G2) (map snd (vars++st_tys' st)) ->
-        fresh_ident pref (ty, ck, xr) st = (id, st') ->
-        Forall (wt_enum G2) (map snd (vars++st_tys' st')).
+        Forall (wt_enum G2) (map snd (vars++st_tys st)) ->
+        fresh_ident pref (ty, ck) st = (id, st') ->
+        Forall (wt_enum G2) (map snd (vars++st_tys st')).
     Proof.
-      unfold st_tys'.
+      unfold st_tys.
       intros * Hty Henums Hfresh.
       apply Ker.fresh_ident_anns in Hfresh. rewrite Hfresh; simpl.
       rewrite <-Permutation.Permutation_middle; simpl; eauto.
     Qed.
 
     Fact init_var_for_clock_wt_enum : forall vars ck er x eqs' st st' ,
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st)) ->
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st)) ->
         init_var_for_clock ck er st = (x, eqs', st') ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st')).
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st')).
     Proof.
       intros * Hwtc2 Hfby.
       unfold init_var_for_clock in Hfby.
-      destruct (find_init_var _ _ _) eqn:Hfind; repeat inv_bind; auto.
       destruct (fresh_ident _ _) eqn:Hfresh.
       inv Hfby.
       eapply fresh_ident_wt_enum' in Hfresh; eauto.
@@ -2242,9 +2216,9 @@ Module Type NTYPING
 
     Fact fby_iteexp_wt_enum : forall vars e0 e er ty ck name e' eqs' st st' ,
         wt_enum G2 ty ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st)) ->
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st)) ->
         fby_iteexp e0 e er (ty, (ck, name)) st = (e', eqs', st') ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st')).
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st')).
     Proof.
       intros * Hwt1 Hwt2 Hfby.
       unfold fby_iteexp in Hfby; repeat inv_bind; auto.
@@ -2256,9 +2230,9 @@ Module Type NTYPING
 
     Fact arrow_iteexp_wt_enum : forall vars e0 e er ty ck name e' eqs' st st' ,
         wt_enum G2 ty ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st)) ->
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st)) ->
         arrow_iteexp e0 e er (ty, (ck, name)) st = (e', eqs', st') ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st')).
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st')).
     Proof.
       intros * Hwtc1 Hwtc2 Hfby.
       unfold arrow_iteexp in Hfby. repeat inv_bind.
@@ -2268,10 +2242,10 @@ Module Type NTYPING
     Hypothesis HwtG2 : wt_global G2.
 
     Fact fby_equation_wt_enum : forall vars to_cut eq eqs' st st' ,
-        wt_equation G1 (vars++st_tys' st) eq ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st)) ->
+        wt_equation G1 (vars++st_tys st) eq ->
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st)) ->
         fby_equation to_cut eq st = (eqs', st') ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st')).
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st')).
     Proof.
       intros * Hwt Hwtck Hfby.
       inv_fby_equation Hfby to_cut eq; destruct x3 as (ty&ck&name).
@@ -2297,10 +2271,10 @@ Module Type NTYPING
     Qed.
 
     Corollary fby_equations_wt_enum : forall vars to_cut eqs eqs' st st' ,
-        Forall (wt_equation G1 (vars++st_tys' st)) eqs ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st)) ->
+        Forall (wt_equation G1 (vars++st_tys st)) eqs ->
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st)) ->
         fby_equations to_cut eqs st = (eqs', st') ->
-        Forall (wt_enum G2) (map snd (vars ++ st_tys' st')).
+        Forall (wt_enum G2) (map snd (vars ++ st_tys st')).
     Proof.
       induction eqs; intros * Hwt Hwtck Hfby;
         unfold fby_equations in *; repeat inv_bind; simpl; auto.
@@ -2327,27 +2301,27 @@ Module Type NTYPING
           do 2 solve_incl. repeat rewrite map_app. repeat solve_incl.
         + destruct (fby_equations _ _ _) as [eqs' st'] eqn:Heqres.
           eapply fby_equations_wt_clock in Heqres; eauto.
-          * simpl. unfold st_clocks' in Heqres.
+          * simpl. unfold st_clocks in Heqres.
             unfold idty. solve_forall; simpl.
             repeat solve_incl.
             repeat rewrite map_app, app_assoc.
             eapply incl_appr'. reflexivity.
-          * unfold st_clocks'. unfold st_tys'. rewrite init_st_anns, app_nil_r.
+          * unfold st_clocks. unfold st_tys. rewrite init_st_anns, app_nil_r.
             repeat rewrite <- app_assoc. repeat rewrite <- map_app.
             solve_forall; repeat solve_incl. apply incl_map, incl_appr'. rewrite Permutation.Permutation_app_comm; auto.
-          * unfold st_clocks'. rewrite init_st_anns; simpl; constructor.
+          * unfold st_clocks. rewrite init_st_anns; simpl; constructor.
       - destruct (fby_equations _ _ _) as (eqs'&st') eqn:Heqres.
-        repeat rewrite <-app_assoc. rewrite (Permutation.Permutation_app_comm (idty (st_anns st'))).
-        repeat rewrite app_assoc. rewrite (idty_app _ (idty (st_anns _))). repeat rewrite <-app_assoc.
+        repeat rewrite <-app_assoc. rewrite (Permutation.Permutation_app_comm (st_anns st')).
+        repeat rewrite app_assoc. rewrite (idty_app _ (st_anns _)). repeat rewrite <-app_assoc.
         eapply fby_equations_wt_enum in Heqres; eauto.
-        + unfold st_tys'. rewrite init_st_anns, app_nil_r.
+        + unfold st_tys. rewrite init_st_anns, app_nil_r.
           solve_forall; repeat solve_incl.
-        + unfold st_tys'. rewrite init_st_anns, app_nil_r.
+        + unfold st_tys. rewrite init_st_anns, app_nil_r.
           solve_forall. eapply iface_eq_wt_enum; eauto.
       - destruct (fby_equations _ _ _) as [eqs' st'] eqn:Heqres.
         eapply fby_equations_wt_eq with (vars:=(idty (n_in n ++ n_vars n ++ n_out n))) in Heqres; eauto.
         solve_forall; solve_incl.
-        unfold st_tys'; repeat rewrite <- idty_app. apply incl_map.
+        unfold st_tys; repeat rewrite <- idty_app. apply incl_map.
         repeat rewrite <- app_assoc. apply incl_appr', incl_appr'.
         rewrite Permutation.Permutation_app_comm. reflexivity.
     Qed.

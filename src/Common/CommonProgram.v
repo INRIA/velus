@@ -152,6 +152,15 @@ Section Program.
     now rewrite update_idempotent.
   Qed.
 
+  Lemma find_unit_now: forall p u us,
+      units p = u :: us ->
+      find_unit (name u) p = Some (u, update p us).
+  Proof.
+    intros * Hunits.
+    unfold find_unit. rewrite Hunits; simpl.
+    destruct (ident_eq_dec _ _); try congruence.
+  Qed.
+
   Lemma find_unit_later:
     forall f p us p',
       equiv_program p p' ->

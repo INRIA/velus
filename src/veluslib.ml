@@ -10,6 +10,9 @@ let sync_destination = ref (None : string option)
 let main_node = ref (None : string option)
 let reaction_counter = Camlcoq.intern_string "$reaction"
 
+let dupregrem = ref true
+let do_dupregrem () = !dupregrem
+
 let fuse_obc = ref true
 let do_fusion () = !fuse_obc
 

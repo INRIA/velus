@@ -414,6 +414,36 @@ Section Extra.
     simpl; destruct (p x); simpl; rewrite IHxs; auto.
   Qed.
 
+  Lemma filter_ext:
+    forall (p1 p2:A -> bool) xs,
+      (forall x, p1 x = p2 x) ->
+      filter p1 xs = filter p2 xs.
+  Proof.
+    intros * Hp.
+    induction xs; simpl; auto.
+    rewrite <-Hp, IHxs. reflexivity.
+  Qed.
+
+  Lemma filter_filter: forall (p1 p2:A -> bool) xs,
+      filter p2 (filter p1 xs) = filter (fun x => andb (p1 x) (p2 x)) xs.
+  Proof.
+    induction xs; intros; simpl; auto.
+    destruct (p1 a); simpl; auto.
+    destruct (p2 a); simpl; auto. f_equal; auto.
+  Qed.
+
+  Corollary filter_filter':
+    forall (p1 p2:A -> bool) xs,
+      (forall x, p1 x = false -> p2 x = false) ->
+      filter p2 (filter p1 xs) = filter p2 xs.
+  Proof.
+    intros.
+    rewrite filter_filter.
+    eapply filter_ext; intros.
+    destruct (p1 x) eqn:Hp1; simpl; auto.
+    rewrite H; auto.
+  Qed.
+
   Lemma Forall_filter:
     forall P p (l: list A),
       Forall P (filter p l) <-> Forall (fun x => p x = true -> P x) l.
@@ -4092,6 +4122,18 @@ Section InMembers.
 
 End InMembers.
 
+Lemma nodupmembers_filter {A B} :
+  forall f (l: list (A * B)),
+    NoDupMembers l -> NoDupMembers (filter f l).
+Proof.
+  intros * Hnd.
+  induction Hnd; simpl; auto. constructor.
+  destruct (f (a, b)); auto.
+  constructor; auto.
+  contradict H.
+  apply filter_InMembers in H as (?&?&_); eauto using In_InMembers.
+Qed.
+
 Fact find_some' : forall {A} (xs : list (positive * A)) x v ,
     NoDupMembers xs ->
     In (x, v) xs ->
@@ -4320,10 +4362,16 @@ Section SameElements.
 End SameElements.
 Hint Constructors SameElements.
 
-Global Instance SameElements_sym {A} : Symmetric (SameElements (@eq A)).
+Global Instance SameElements_sym' {A} {eqA : A -> A -> Prop}
+  (Hsym : Symmetric eqA): Symmetric (SameElements eqA).
 Proof.
   intros ?? Same. induction Same; eauto.
   symmetry in H. eauto.
+Qed.
+
+Global Instance SameElements_sym {A} : Symmetric (SameElements (@eq A)).
+Proof.
+  intros ?? Same. eapply SameElements_sym'; eauto.
 Qed.
 
 Section Forall2_SameElements_1.
@@ -4381,6 +4429,44 @@ Section Forall2_SameElements_1.
       eapply IHSame2 in Hf' as (l2''&?&Hf''); eauto.
   Qed.
 End Forall2_SameElements_1.
+
+Add Parametric Morphism {A} {eqA : A -> A -> Prop} (P: A -> Prop)
+  (P_compat : Proper (eqA ==> Basics.impl) P): (Exists P)
+    with signature SameElements eqA ==> Basics.impl
+      as Exists_SameElements_morph.
+Proof.
+  intros * Hsame Hex.
+  induction Hsame; inv Hex; auto.
+  - left. rewrite <-H; auto.
+  - apply InA_alt in H as (?&?&Hin); subst.
+    eapply Exists_exists; do 2 esplit; eauto.
+    rewrite <-H; auto.
+  - rewrite <-H; auto.
+  - rewrite <-H; auto.
+Qed.
+
+Add Parametric Morphism {A} {eqA : A -> A -> Prop} (p: A -> bool)
+  (P_compat : Proper (eqA ==> eq) p): (existsb p)
+    with signature SameElements eqA ==> eq
+      as existsb_SameElements_morph.
+Proof.
+  intros * Hsame.
+  induction Hsame; simpl; auto.
+  - rewrite H, IHHsame; auto.
+  - destruct (p x) eqn:Hx; simpl; auto.
+    symmetry. rewrite existsb_exists.
+    apply InA_alt in H as (?&?&Hin).
+    do 2 esplit; eauto. rewrite <-H; auto.
+  - destruct (p x) eqn:Hx; simpl; auto.
+    rewrite existsb_exists.
+    apply InA_alt in H as (?&?&Hin).
+    do 2 esplit; eauto. rewrite <-H; auto.
+  - destruct (existsb p l') eqn:Hex.
+    2:rewrite <-Bool.not_true_iff_false in *.
+    1,2:rewrite <-Exists_existsb with (P:=fun x => p x = true) in *. 2,3,5,6:reflexivity.
+    1,2:rewrite H; auto.
+  - congruence.
+Qed.
 
 (** Tactics wellfoundedness and termination *)
 

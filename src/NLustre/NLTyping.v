@@ -160,6 +160,72 @@ Module Type NLTYPING
     - apply IHns; auto.
   Qed.
 
+  Section incl.
+    Variable (G : global).
+    Variable (vars vars' : list (ident * type)).
+    Hypothesis Hincl : incl vars vars'.
+
+    Fact wt_clock_incl : forall ck,
+      wt_clock G.(enums) vars ck ->
+      wt_clock G.(enums) vars' ck.
+    Proof.
+      intros * Hwt.
+      induction Hwt.
+      - constructor.
+      - constructor; auto.
+    Qed.
+    Local Hint Resolve wt_clock_incl.
+
+    Lemma wt_exp_incl : forall e,
+        wt_exp G.(enums) vars e ->
+        wt_exp G.(enums) vars' e.
+    Proof.
+      induction e; intros Hwt; inv Hwt; econstructor; eauto.
+    Qed.
+    Local Hint Resolve wt_exp_incl.
+
+    Lemma wt_cexp_incl : forall e,
+        wt_cexp G.(enums) vars e ->
+        wt_cexp G.(enums) vars' e.
+    Proof.
+      induction e using cexp_ind2'; intros Hwt; inv Hwt; econstructor; eauto.
+      - eapply Forall_impl_In; [|eapply H7]; intros.
+        eapply Forall_forall in H; eauto.
+      - intros. eapply Forall_forall in H; eauto.
+        simpl in *; eauto.
+    Qed.
+    Local Hint Resolve wt_cexp_incl.
+
+    Lemma wt_equation_incl : forall equ,
+        wt_equation G vars equ ->
+        wt_equation G vars' equ.
+    Proof.
+      intros [| |] Hwt; inv Hwt; econstructor; eauto.
+      - eapply Forall2_impl_In; eauto. intros ? (?&?&?); eauto.
+      - eapply Forall_impl; [|eauto]; eauto.
+      - eapply Forall_impl; [|eauto]; intros ? (?&?); eauto.
+      - eapply Forall_impl; [|eauto]; eauto.
+      - eapply Forall_impl; [|eauto]; intros ? (?&?); eauto.
+      - eapply Forall_impl; [|eauto]; eauto.
+    Qed.
+
+  End incl.
+
+  Lemma global_iface_eq_wt_eq : forall G1 G2 vars eq,
+      global_iface_eq G1 G2 ->
+      wt_equation G1 vars eq ->
+      wt_equation G2 vars eq.
+  Proof.
+    intros * Heq Hwt.
+    destruct Heq as (Henums&Heq).
+    inv Hwt; try constructor; eauto; try congruence.
+    2:eapply Forall_impl; eauto; intros; congruence.
+    specialize (Heq f). rewrite H in Heq. inv Heq.
+    destruct H8 as (?&?&?).
+    symmetry in H7. econstructor; eauto; try congruence.
+    eapply Forall_impl; eauto; intros; congruence.
+  Qed.
+
 End NLTYPING.
 
 Module NLTypingFun

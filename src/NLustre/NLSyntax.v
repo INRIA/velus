@@ -104,12 +104,11 @@ Module Type NLSYNTAX
   Qed.
 
   Lemma find_node_other:
-    forall f node G node' enums,
+    forall f node G enums,
       node.(n_name) <> f ->
-      (find_node f (Global enums (node::G)) = Some node'
-       <-> find_node f (Global enums G)  = Some node').
+      find_node f (Global enums (node::G)) = find_node f (Global enums G).
   Proof.
-    unfold find_node, option_map; intros ???? enums ?.
+    unfold find_node, option_map; intros ??? enums Hneq.
     erewrite find_unit_other with (p' := Global enums G);
       simpl; eauto; try reflexivity.
     unfold equiv_program; reflexivity.
@@ -349,6 +348,108 @@ Module Type NLSYNTAX
     - inv Hnodup; constructor; auto.
       apply NotInMembers_NotIn; auto.
       intros Hin; apply InMembers_gather_mems_In_vars_defined in Hin; contradiction.
+  Qed.
+
+  (** Interface equivalence between nodes *)
+
+  Section interface_eq.
+    (** Nodes are equivalent if their interface are equivalent,
+        that is if they have the same identifier and the same
+        input/output types *)
+    Definition node_iface_eq (n1 n2 : node) :=
+      n1.(n_name) = n2.(n_name) /\
+      n1.(n_in) = n2.(n_in) /\
+      n1.(n_out) = n2.(n_out).
+
+    (** Globals are equivalent if they contain equivalent nodes *)
+    Definition global_iface_eq (G1 G2 : global) : Prop :=
+      enums G1 = enums G2 /\
+      forall f, orel2 node_iface_eq (find_node f G1) (find_node f G2).
+
+    Lemma global_iface_eq_nil : forall enums,
+        global_iface_eq (Global enums []) (Global enums []).
+    Proof.
+      unfold global_iface_eq, find_node.
+      constructor; auto.
+      intros *; simpl. constructor.
+    Qed.
+
+    Lemma global_iface_eq_cons : forall enums nds nds' n n',
+        global_iface_eq (Global enums nds) (Global enums nds') ->
+        n.(n_name) = n'.(n_name) ->
+        n.(n_in) = n'.(n_in) ->
+        n.(n_out) = n'.(n_out) ->
+        global_iface_eq (Global enums (n::nds)) (Global enums (n'::nds')).
+    Proof.
+      intros * (?&Heq) Hname Hin Hout.
+      constructor; auto. intros ?.
+      destruct (Pos.eq_dec (n_name n) f); subst.
+      - simpl. repeat rewrite find_node_now; auto.
+        repeat constructor; auto.
+      - repeat rewrite find_node_other; auto.
+        congruence.
+    Qed.
+
+    Lemma global_iface_eq_find : forall G G' f n,
+        global_iface_eq G G' ->
+        find_node f G = Some n ->
+        exists n', (find_node f G' = Some n' /\
+               node_iface_eq n n').
+    Proof.
+      intros G G' f n (_&Hglob) Hfind.
+      specialize (Hglob f).
+      inv Hglob; try congruence.
+      rewrite Hfind in H. inv H.
+      exists sy. auto.
+    Qed.
+
+  End interface_eq.
+
+  Instance node_iface_eq_refl : Reflexive node_iface_eq.
+  Proof.
+    intros n. repeat split.
+  Qed.
+
+  Instance node_iface_eq_sym : Symmetric node_iface_eq.
+  Proof.
+    intros ?? (?&?&?).
+    constructor; auto.
+  Qed.
+
+  Instance node_iface_eq_trans : Transitive node_iface_eq.
+  Proof.
+    intros n1 n2 n3 H12 H23.
+    destruct H12 as [? [? ?]].
+    destruct H23 as [? [? ?]].
+    repeat split; etransitivity; eauto.
+  Qed.
+
+  Instance global_eq_refl : Reflexive global_iface_eq.
+  Proof.
+    intros G. split; intros; try reflexivity.
+    destruct (find_node f G); constructor.
+    apply node_iface_eq_refl.
+  Qed.
+
+  Instance global_iface_eq_sym : Symmetric global_iface_eq.
+  Proof.
+    intros ?? H12.
+    inv H12. constructor; auto.
+    intros f. specialize (H0 f).
+    inv H0; constructor; auto.
+    apply node_iface_eq_sym; auto.
+  Qed.
+
+  Fact global_iface_eq_trans : Transitive global_iface_eq.
+  Proof.
+    intros n1 n2 n3 H12 H23.
+    destruct H12 as [? H12].
+    destruct H23 as [? H23].
+    split; try congruence.
+    intros f. specialize (H12 f). specialize (H23 f).
+    inv H12; inv H23; try congruence; constructor.
+    rewrite <-H2 in H4. inv H4.
+    eapply node_iface_eq_trans; eauto.
   Qed.
 
 End NLSYNTAX.

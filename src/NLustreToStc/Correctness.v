@@ -240,7 +240,7 @@ Module Type CORRECTNESS
   Proof.
     induction M as [? IH] using memory_ind'.
     split; inversion_clear 1 as [???? Find ? Insts].
-    - apply find_node_other in Find; auto.
+    - rewrite find_node_other in Find; auto.
       econstructor; eauto.
       intros * Find'; pose proof Find';
         apply Insts in Find' as (?& Hin & Closed).
@@ -249,7 +249,7 @@ Module Type CORRECTNESS
       apply In_snd_gather_eqs_Is_node_in in Hin.
       intro; subst; contradict Hin.
       eapply find_node_other_not_Is_node_in; eauto.
-    - pose proof Find; eapply find_node_other in Find; eauto.
+    - pose proof Find; erewrite <-find_node_other in Find; eauto.
       econstructor; eauto.
       intros * Find'; pose proof Find';
         apply Insts in Find' as (?& Hin & Closed).

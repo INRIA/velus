@@ -297,7 +297,7 @@ Module Type NLMEMSEMANTICS
     - intros.
       take (find_node f _ = Some _) and rename it into Ff.
       econstructor; eauto.
-      + rewrite <-find_node_other in Ff; eauto.
+      + erewrite <-find_node_other in Ff; eauto.
         apply find_node_In in Ff as (? & Ff).
         rewrite Forall_forall in Fn. specialize (Fn _ Ff). now subst.
       + apply find_node_not_Is_node_in_eq with (g:=n.(n_name)) in Ff; auto.

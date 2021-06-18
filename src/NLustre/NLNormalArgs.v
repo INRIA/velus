@@ -85,7 +85,7 @@ Module Type NLNORMALARGS
     destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
     eapply Forall_forall in Hnarg; eauto.
     inversion_clear Hnarg as [|? ? ? ? ? ? Hfind Hnargs|].
-    apply find_node_other in Hfind; eauto using normal_args_eq.
+    rewrite find_node_other in Hfind; eauto using normal_args_eq.
     rewrite Is_node_in_Forall in Hord.
     eapply Forall_forall in Hord; eauto.
     intro; subst; auto using Is_node_in_eq.
@@ -103,7 +103,7 @@ Module Type NLNORMALARGS
     destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
     eapply Forall_forall in Hnarg; eauto.
     inversion_clear Hnarg as [|? ? ? ? ? ? Hfind Hnargs|].
-    rewrite <-find_node_other in Hfind; eauto using normal_args_eq.
+    erewrite <-find_node_other in Hfind; eauto using normal_args_eq.
     rewrite Is_node_in_Forall in Hord.
     eapply Forall_forall in Hord; eauto.
     intro; subst; auto using Is_node_in_eq.
@@ -158,6 +158,19 @@ Module Type NLNORMALARGS
     induction ns; simpl; intros * NA; inv NA; constructor.
     - now apply normal_args_node_enums_cons.
     - apply IHns; auto.
+  Qed.
+
+  Lemma global_iface_eq_normal_args_eq : forall G1 G2 eq,
+      global_iface_eq G1 G2 ->
+      normal_args_eq G1 eq ->
+      normal_args_eq G2 eq.
+  Proof.
+    intros * Heq Hnormed.
+    inv Hnormed; try constructor.
+    destruct Heq as (_&Heq).
+    specialize (Heq f). rewrite H in Heq. inv Heq.
+    symmetry in H2. econstructor; eauto.
+    destruct H3 as (?&?&?). congruence.
   Qed.
 
 End NLNORMALARGS.
