@@ -41,6 +41,10 @@ Parameter do_norm_switches : unit -> bool.
 Parameter do_sync       : unit -> bool.
 Parameter do_expose     : unit -> bool.
 
+Definition is_causal (G: @global elab_prefs) : res (@global elab_prefs) :=
+  do _ <- check_causality G;
+  OK G.
+
 Module ExternalSchedule.
   Definition schedule := schedule.
 End ExternalSchedule.
@@ -65,7 +69,8 @@ Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
 Definition l_to_nl (G : @global elab_prefs) : res NL.Syn.global :=
   OK G
      @@ print print_lustre
-     @@@ normalize_global
+     @@@ is_causal
+     @@ normalize_global
      @@@ TR.Tr.to_global.
 
 Definition nl_to_cl (main_node: ident) (g: NL.Syn.global) : res Clight.program :=

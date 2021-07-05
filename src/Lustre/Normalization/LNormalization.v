@@ -15,16 +15,15 @@ Module Type LNORMALIZATION
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (CStr : COINDSTREAMS Ids Op OpAux Cks)
-       (IStr : INDEXEDSTREAMS Ids Op OpAux Cks)
        (Syn : LSYNTAX Ids Op OpAux Cks)
        (Typ : LTYPING Ids Op OpAux Cks Syn)
        (Clo : LCLOCKING Ids Op OpAux Cks Syn)
        (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
        (Ord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr IStr Sem).
+       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem).
   Declare Module Export Norm : NORMALIZATION Ids Op OpAux Cks Syn Cau.
-  Declare Module Export Correct : CORRECTNESS Ids Op OpAux Cks CStr IStr Syn Cau Typ Clo Ord Sem ClSem Norm.
+  Declare Module Export Correct : CORRECTNESS Ids Op OpAux Cks CStr Syn Cau Typ Clo Ord Sem ClSem Norm.
   (* Declare Module Export Idempotence : IDEMPOTENCE Ids Op OpAux Syn Cau Norm. *)
 End LNORMALIZATION.
 
@@ -34,16 +33,15 @@ Module LNormalizationFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (CStr : COINDSTREAMS Ids Op OpAux Cks)
-       (IStr : INDEXEDSTREAMS Ids Op OpAux Cks)
        (Syn : LSYNTAX Ids Op OpAux Cks)
        (Typ : LTYPING Ids Op OpAux Cks Syn)
        (Clo : LCLOCKING Ids Op OpAux Cks Syn)
        (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
        (Ord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr IStr Sem)
-       <: LNORMALIZATION Ids Op OpAux Cks CStr IStr Syn Typ Clo Cau Ord Sem ClSem.
+       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem)
+       <: LNORMALIZATION Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem ClSem.
   Module Export Norm := NormalizationFun Ids Op OpAux Cks Syn Cau.
-  Module Export Correct := CorrectnessFun Ids Op OpAux Cks CStr IStr Syn Cau Typ Clo Ord Sem ClSem Norm.
+  Module Export Correct := CorrectnessFun Ids Op OpAux Cks CStr Syn Cau Typ Clo Ord Sem ClSem Norm.
   (* Module Export Idempotence := IdempotenceFun Ids Op OpAux Syn Cau Norm. *)
 End LNormalizationFun.

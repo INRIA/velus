@@ -168,15 +168,16 @@ Module Type TRCLOCKING
   Qed.
 
   Lemma wc_equation :
-    forall G P env envo vars e e',
+    forall G P env envo xr vars e e',
       to_global G = OK P ->
-      to_equation env envo e = OK e' ->
+      to_equation env envo xr e = OK e' ->
       envs_eq env vars ->
+      Forall (fun xr => In xr vars) xr ->
       LC.wc_global G ->
       LC.wc_equation G vars e ->
       NLC.wc_equation P vars e'.
   Proof.
-    intros ????? [xs [|? []]] e' Hg Htr Henvs Hwcg (Hwc & Hlift & Hf2);
+    intros ?????? [xs [|? []]] e' Hg Htr Henvs Hxr Hwcg (Hwc & Hlift & Hf2);
       try (inv Htr; cases; discriminate).
     destruct e; simpl in *; simpl_Foralls; try monadInv Htr.
     - constructor; eauto using envs_eq_in.
@@ -215,20 +216,16 @@ Module Type TRCLOCKING
       eapply envs_eq_find in Henvs; eauto.
       pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->.
       repeat constructor; congruence.
-    - destruct (vars_of l1) eqn:Vars. eapply vars_of_spec in Vars.
-      1,2:cases; try monadInv Htr.
+    - cases; try monadInv Htr.
       constructor; eauto using envs_eq_in.
-      + take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
-        eapply wc_lexp in EQ2 as (?& Heq &?); eauto.
-        take (Forall2 eq _ _) and rewrite Forall2_eq in it.
-        unfold L.clocksof in it. simpl in *. rewrite app_nil_r in *.
-        rewrite Heq in it. rewrite it in *.
-        eapply envs_eq_find in Henvs; eauto.
-        pose proof (find_clock_det _ _ _ _ EQ0 Henvs) as ->.
-        congruence.
-      + eapply Forall2_ignore1 in Vars.
-        eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?&?); subst.
-        inv H1. eapply Forall_forall in H7; eauto. inv H7; auto.
+      take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
+      eapply wc_lexp in EQ2 as (?& Heq &?); eauto.
+      take (Forall2 eq _ _) and rewrite Forall2_eq in it.
+      unfold L.clocksof in it. simpl in *. rewrite app_nil_r in *.
+      rewrite Heq in it. rewrite it in *.
+      eapply envs_eq_find in Henvs; eauto.
+      pose proof (find_clock_det _ _ _ _ EQ0 Henvs) as ->.
+      congruence.
     - cases; try monadInv Htr; monadInv EQ1; monadInv EQ0.
     - cases; try monadInv Htr; monadInv EQ1; monadInv EQ0.
       constructor; eauto using envs_eq_in. constructor.
@@ -347,9 +344,29 @@ Module Type TRCLOCKING
           destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
           esplit; split; eauto.
           eauto using instck_sub_ext.
-      + eapply Forall2_ignore1 in Vars.
+      + eapply Forall_app; split; eauto.
+        eapply Forall2_ignore1 in Vars.
         eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?&?); subst.
         eapply Forall_forall in Wcer; eauto. inv Wcer; auto.
+  Qed.
+
+  Lemma wc_block_to_equation :
+    forall G P env envo d xr vars e',
+      to_global G = OK P ->
+      block_to_equation env envo xr d = OK e' ->
+      envs_eq env vars ->
+      Forall (fun xr => In xr vars) xr ->
+      LC.wc_global G ->
+      LC.wc_block G vars d ->
+      NLC.wc_equation P vars e'.
+  Proof.
+    induction d using L.block_ind2; intros * Hg Htr Henvs Hxr Hwcg Hwc;
+      inv Hwc; simpl in *.
+    - eapply wc_equation in Htr; eauto.
+    - cases. apply Forall_singl in H. apply Forall_singl in H2.
+      eapply H; eauto.
+      constructor; auto.
+      inv H3; auto.
   Qed.
 
   Lemma wc_node :
@@ -367,10 +384,10 @@ Module Type TRCLOCKING
     inversion Hwc as (?&?&?& WCeq). repeat (split; try tauto).
     now setoid_rewrite  Permutation_app_comm at 2.
     unfold to_node in Htn. cases. inv Htn. simpl.
-    revert dependent x. induction (L.n_eqs n) as [| e]; intros * Hmmap.
+    revert dependent x. induction (L.n_blocks n) as [| e]; intros * Hmmap.
     now inv Hmmap. inv WCeq.
     apply mmap_cons in Hmmap as (e' & es & -> & Htoeq & Hmmap).
-    constructor; eauto using wc_equation, envs_eq_node.
+    constructor; eauto using wc_block_to_equation, envs_eq_node.
   Qed.
 
   Lemma wc_transcription :

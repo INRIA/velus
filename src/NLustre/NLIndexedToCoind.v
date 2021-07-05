@@ -50,8 +50,6 @@ Module Type NLINDEXEDTOCOIND
 
   Section Global.
 
-    Variable G : global.
-
     (** * SEMANTICS CORRESPONDENCE *)
 
     (** ** Variables *)
@@ -623,7 +621,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       unfold tr_stream, tr_stream_from, CIStr.tr_Stream.
       intros x n.
-      rewrite ICStr.init_from_nth, Nat.add_0_r.
+      rewrite init_from_nth, Nat.add_0_r.
       reflexivity.
     Qed.
 
@@ -825,7 +823,7 @@ Module Type NLINDEXEDTOCOIND
       forall k (r: stream bool) xss,
         wf_streams xss ->
         EqSts (tr_streams (IStr.mask k r xss))
-              (List.map (CStr.mask k (tr_stream r)) (tr_streams xss)).
+              (List.map (CStr.maskv k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros * Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
@@ -842,7 +840,7 @@ Module Type NLINDEXEDTOCOIND
         unfold CStr.mask, IStr.mask.
         apply ntheq_eqst; intro m.
         unfold nth_tr_streams_from.
-        rewrite init_from_nth, mask_nth, init_from_nth.
+        rewrite init_from_nth, maskv_nth, init_from_nth.
         unfold CStr.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
         assert ((if r 0 then IStr.count r 0 - 1 else IStr.count r 0) = 0) as E
@@ -987,7 +985,7 @@ Module Type NLINDEXEDTOCOIND
     (** The final theorem stating the correspondence for nodes applications.
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
     Hint Constructors CoInd.sem_equation.
-    Theorem implies:
+    Theorem implies G:
       forall f xss oss,
         Indexed.sem_node G f xss oss ->
         CoInd.sem_node G f (tr_streams xss) (tr_streams oss).
@@ -1032,3 +1030,22 @@ Module Type NLINDEXEDTOCOIND
   End Global.
 
 End NLINDEXEDTOCOIND.
+
+Module NLIndexedToCoindFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX      Ids Op)
+       (Cks     : CLOCKS             Ids Op OpAux)
+       (CESyn   : CESYNTAX           Ids Op OpAux Cks)
+       (Syn     : NLSYNTAX           Ids Op OpAux Cks CESyn)
+       (IStr    : INDEXEDSTREAMS     Ids Op OpAux Cks)
+       (CStr    : COINDSTREAMS       Ids Op OpAux Cks)
+       (ICStr   : INDEXEDTOCOIND     Ids Op OpAux Cks           IStr CStr)
+       (Ord     : NLORDERED          Ids Op OpAux Cks CESyn Syn)
+       (CESem   : CESEMANTICS        Ids Op OpAux Cks CESyn     IStr)
+       (Indexed : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn IStr Ord CESem)
+       (Interp  : CEINTERPRETER      Ids Op OpAux Cks CESyn     IStr     CESem)
+       (CoInd   : NLCOINDSEMANTICS   Ids Op OpAux Cks CESyn Syn CStr Ord)
+<: NLINDEXEDTOCOIND Ids Op OpAux Cks CESyn Syn IStr CStr ICStr Ord CESem Indexed Interp CoInd.
+  Include NLINDEXEDTOCOIND Ids Op OpAux Cks CESyn Syn IStr CStr ICStr Ord CESem Indexed Interp CoInd.
+End NLIndexedToCoindFun.

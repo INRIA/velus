@@ -14,7 +14,7 @@ Module CE := CoreExprFun Ids Op OpAux ComTyp Cks IStr.
 
 From Velus Require Import Lustre.
 
-Module L := LustreFun Ids Op OpAux Cks CStr IStr.
+Module L := LustreFun Ids Op OpAux Cks CStr.
 
 From Velus Require Import NLustre.
 

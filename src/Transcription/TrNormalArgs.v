@@ -56,10 +56,10 @@ Module Type TRNORMALARGS
     eapply to_lexp_noops_exp; eauto.
   Qed.
 
-  Lemma to_equation_normal_args : forall G G' to_cut env envo eq eq',
+  Lemma to_equation_normal_args : forall G G' to_cut env envo xr eq eq',
     to_global G = OK G' ->
     normalized_equation G to_cut eq ->
-    to_equation env envo eq = OK eq' ->
+    to_equation env envo xr eq = OK eq' ->
     normal_args_eq G' eq'.
   Proof.
     intros * Htog Hnormed Htoeq.
@@ -71,11 +71,25 @@ Module Type TRNORMALARGS
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
     - (* fby *)
-      destruct (vars_of _); monadInv Htoeq.
+      monadInv Htoeq.
       constructor.
     - (* cexp *)
       inv H. 3:inv H0.
       1-8:monadInv Htoeq; constructor.
+  Qed.
+
+  Lemma block_to_equation_normal_args : forall G G' to_cut env envo d xr eq',
+      to_global G = OK G' ->
+      normalized_block G to_cut d ->
+      block_to_equation env envo xr d = OK eq' ->
+      normal_args_eq G' eq'.
+  Proof.
+    intros * Htog Hnormed Htoeq. revert dependent xr.
+    induction Hnormed; intros; simpl in *.
+    - (* eq *)
+      eapply to_equation_normal_args in Htoeq; eauto.
+    - (* reset *)
+      cases; eauto.
   Qed.
 
   Lemma to_node_normal_args : forall G G' n n',
@@ -86,13 +100,13 @@ Module Type TRNORMALARGS
   Proof.
     unfold normal_args_node, to_node.
     intros * Htog Hnormed Hton.
-    destruct mmap_to_equation as [(?&?)|]; try congruence.
+    destruct mmap_block_to_equation as [(?&?)|]; try congruence.
     inv Hton; simpl.
     unfold normalized_node in Hnormed.
     revert x e Hnormed.
-    induction (n_eqs n); intros x Htoeq Hnormed; simpl in *; monadInv Htoeq; auto.
+    induction (n_blocks n); intros x Htoeq Hnormed; simpl in *; monadInv Htoeq; auto.
     inv Hnormed. constructor; auto.
-    eapply to_equation_normal_args; eauto.
+    eapply block_to_equation_normal_args; eauto.
   Qed.
 
   Theorem to_global_normal_args : forall G G',

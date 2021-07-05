@@ -86,7 +86,8 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.var_decls (* Reverse order *)> parameter_list oparameter_list
 %type<list Common.ident> pattern
 %type<LustreAst.equation> equation
-%type<list LustreAst.equation> equations
+%type<LustreAst.block> block
+%type<list LustreAst.block> blocks
 %type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
@@ -218,9 +219,7 @@ fby_expression:
 | expr=cast_expression
     { expr }
 | v0=cast_expression loc=FBY expr=fby_expression
-    { [LustreAst.FBY v0 expr [] loc] }
-| RESET v0=cast_expression loc=FBY expr=fby_expression EVERY er=fby_expression
-    { [LustreAst.FBY v0 expr er loc] }
+    { [LustreAst.FBY v0 expr loc] }
 
 (* 6.5.5 *)
 multiplicative_expression:
@@ -328,9 +327,7 @@ arrow_expression:
 | expr=logical_OR_expression
     { expr }
 | e0=logical_OR_expression loc=RARROW e1=arrow_expression
-    { [LustreAst.ARROW e0 e1 [] loc] }
-| RESET e0=logical_OR_expression loc=RARROW e1=arrow_expression EVERY er=arrow_expression
-    { [LustreAst.ARROW e0 e1 er loc] }
+    { [LustreAst.ARROW e0 e1 loc] }
 
 branch_list:
 | LPAREN c=ENUM_NAME RARROW expr=expression RPAREN
@@ -468,13 +465,19 @@ equation:
 | LPAREN pat=pattern RPAREN loc=EQ exp=expression SEMICOLON
     { (rev pat, exp, loc) }
 
-equations:
+block:
+| eq=equation
+   { LustreAst.BEQ eq } 
+| RESET bck=blocks loc=EVERY er=expression SEMICOLON
+   { LustreAst.BRESET bck er loc }
+
+blocks:
 | /* empty */
     { [] }
-| eqs=equations eq=equation
-    { eq::eqs }
-| eqs=equations ASSERT expression SEMICOLON
-    { eqs (* ignore assert statements for now *) }
+| bcks=blocks bck=block
+    { bck::bcks }
+| bcks=blocks ASSERT expression SEMICOLON
+    { bcks (* ignore assert statements for now *) }
 
 optsemicolon:
 | /* empty */
@@ -504,9 +507,9 @@ declaration:
 | is_node=node_or_function id=VAR_NAME
   LPAREN iparams=oparameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=oparameter_list RPAREN optsemicolon
-  locals=local_decl_list LET eqns=equations TEL optsemicolon
+  locals=local_decl_list LET bcks=blocks TEL optsemicolon
     { LustreAst.NODE
-        (fst id) (fst is_node) iparams oparams locals eqns (snd is_node) }
+        (fst id) (fst is_node) iparams oparams locals bcks (snd is_node) }
 | loc=TYPE id=VAR_NAME EQ optbar cs=constructor_list
     { LustreAst.TYPE (fst id) cs loc }
 

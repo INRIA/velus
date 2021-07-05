@@ -1,0 +1,14 @@
+node fby_reset(r : bool) returns (x : int);
+let 
+  reset
+    x = 0 fby (x + 1);
+  every r;
+tel
+  
+node arrow_reset(x : int) returns (y : int; t : bool);
+let 
+  reset 
+    y = x -> 0;
+    t = x <> 0;
+  every (true fby false);
+tel

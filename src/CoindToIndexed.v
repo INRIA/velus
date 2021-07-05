@@ -141,7 +141,7 @@ Module Type COINDTOINDEXED
     Qed.
 
     Fact tr_history_find_orel_mask : forall H H' rs k x x',
-        orel (fun v1 v2 => EqSt (CStr.mask k rs v1) v2) (Env.find x H) (Env.find x' H') ->
+        orel (fun v1 v2 => EqSt (CStr.maskv k rs v1) v2) (Env.find x H) (Env.find x' H') ->
         (forall n, orel (fun v1 v2 => (if (CStr.count rs) # n =? k then v1 else absent) = v2) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
     Proof.
       intros * Horel n.
@@ -149,11 +149,11 @@ Module Type COINDTOINDEXED
       repeat rewrite Env.Props.P.F.map_o.
       inv Horel; simpl; auto.
       constructor; auto.
-      rewrite <- H2, mask_nth. reflexivity.
+      rewrite <- H2, maskv_nth. reflexivity.
     Qed.
 
-    Fact tr_history_find_orel_mask' : forall H H' rs k x x',
-        orel (fun v1 v2 => EqSt v1 (CStr.mask k rs v2)) (Env.find x H) (Env.find x' H') ->
+    Fact tr_history_find_orel_unmask : forall H H' rs k x x',
+        orel (fun v1 v2 => EqSt v1 (CStr.maskv k rs v2)) (Env.find x H) (Env.find x' H') ->
         (forall n, orel (fun v1 v2 => (v1 = if (CStr.count rs) # n =? k then v2 else absent)) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
     Proof.
       intros * Horel n.
@@ -161,7 +161,7 @@ Module Type COINDTOINDEXED
       repeat rewrite Env.Props.P.F.map_o.
       inv Horel; simpl; auto.
       constructor; auto.
-      rewrite H2, mask_nth. reflexivity.
+      rewrite H2, maskv_nth. reflexivity.
     Qed.
 
     Fact tr_Stream_ac : forall xs n,

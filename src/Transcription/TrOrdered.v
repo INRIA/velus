@@ -40,29 +40,34 @@ Module Type TRORDERED
     forall f n n',
       to_node n = OK n' ->
       Ord.Is_node_in f (NL.n_eqs n') ->
-      Lord.Is_node_in f (L.n_eqs n).
+      Lord.Is_node_in f (L.n_blocks n).
   Proof.
     intros * Htr Hord.
     destruct n'. simpl in Hord.
     tonodeInv Htr.
     clear - Hord Hmmap. revert dependent n_eqs.
-    induction (L.n_eqs n); intros. inv Hmmap. inv Hord.
+    induction (L.n_blocks n); intros. inv Hmmap. inv Hord.
     apply mmap_cons in Hmmap.
     destruct Hmmap as (eq' & l' & Hneqs & Hteq & Hmmap); subst.
     inversion_clear Hord as [ ? ? Hord' |].
-    - econstructor.
-      destruct eq' as [| i ck x le |]; inv Hord'.
-      destruct a as [ xs [|]]. inv Hteq.
-      destruct l1; [ idtac | inv Hteq; cases ].
-      destruct e; inv Hteq; cases; monadInv H0;
-        econstructor; apply Lord.INEapp2.
+    - econstructor. clear IHl Hmmap.
+      revert dependent eq'. generalize (@nil (ident * clock)) as xr.
+      induction a using L.block_ind2; intros; simpl in *.
+      + destruct eq' as [| i ck x le |]; inv Hord'.
+        destruct eq as [ xs [|]]. inv Hteq.
+        destruct l1; [ idtac | inv Hteq; cases ].
+        destruct e; inv Hteq; cases; monadInv H0.
+        do 2 econstructor; apply Lord.INEapp2.
+      + cases. apply Forall_singl in H.
+        eapply H in Hteq; eauto.
+        constructor. auto.
     - apply Exists_cons_tl. eapply IHl; eauto.
   Qed.
 
   Lemma ninin_l_nl :
     forall f n n',
       to_node n = OK n' ->
-      ~ Lord.Is_node_in f (L.n_eqs n) ->
+      ~ Lord.Is_node_in f (L.n_blocks n) ->
       ~ Ord.Is_node_in f (NL.n_eqs n').
   Proof.
     intros. intro. destruct H0. eapply inin_l_nl; eauto.
@@ -92,7 +97,7 @@ Module Type TRORDERED
     induction Hord as [|?? (?&?)]; intros; simpl in *; monadInv EQ; constructor; eauto.
     constructor.
     - intros f Hin.
-      assert (Lord.Is_node_in f (L.n_eqs x)) as Hfin.
+      assert (Lord.Is_node_in f (L.n_blocks x)) as Hfin.
       { eapply inin_l_nl; eauto. }
       apply H in Hfin as (?&(?&?&?)). split; auto.
       + erewrite <-to_node_name; eauto.

@@ -25,28 +25,22 @@ Module Type NORMALIZATION
   Module Export NormFby := NormFbyFun Ids Op OpAux Cks Syn Unnesting.
 
   Definition normalize_global G :=
-    let G' := unnest_global G in
-    do _ <- check_causality G';
-    OK (normfby_global G').
+    normfby_global (unnest_global G).
 
-  Lemma normalize_global_iface_eq : forall G G',
-      normalize_global G = OK G' ->
-      global_iface_eq G G'.
+  Lemma normalize_global_iface_eq : forall G,
+      global_iface_eq G (normalize_global G).
   Proof.
-    intros * Hnorm.
-    unfold normalize_global in Hnorm. monadInv Hnorm.
+    intros *.
+    unfold normalize_global.
     eapply global_iface_eq_trans.
     eapply unnest_global_eq. eapply normfby_global_eq.
   Qed.
 
-  Theorem normalize_global_normalized_global : forall G G',
+  Theorem normalize_global_normalized_global : forall G,
       wl_global G ->
-      normalize_global G = OK G' ->
-      normalized_global G'.
+      normalized_global (normalize_global G).
   Proof.
-    intros G * Hwl Hnorm.
-    unfold normalize_global in Hnorm.
-    destruct check_causality in Hnorm; inv Hnorm.
+    intros G * Hwl.
     eapply normfby_global_normalized_global.
     eapply unnest_global_unnested_global; auto.
   Qed.

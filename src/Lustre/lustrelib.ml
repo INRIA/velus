@@ -45,8 +45,8 @@ module type SYNTAX =
     | Evar   of ident * ann
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
-    | Efby   of exp list * exp list * exp list * ann list
-    | Earrow of exp list * exp list * exp list * ann list
+    | Efby   of exp list * exp list * ann list
+    | Earrow of exp list * exp list * ann list
     | Ewhen  of exp list * ident * enumtag * lann
     | Emerge of (ident * typ) * exp list list * lann
     | Ecase  of exp * exp list option list * exp list * lann
@@ -54,13 +54,17 @@ module type SYNTAX =
 
     type equation = idents * exp list
 
+    type block =
+    | Beq of equation
+    | Breset of block list * exp
+
     type node = {
           n_name     : ident;
           n_hasstate : bool;
           n_in       : (ident * (typ * clock)) list;
           n_out      : (ident * (typ * clock)) list;
           n_vars     : (ident * (typ * clock)) list;
-          n_eqs      : equation list;
+          n_blocks   : block list;
         }
 
     type global = {
@@ -150,14 +154,10 @@ module PrintFun
         PrintOps.print_unop p op ty (exp prec') e
       | L.Ebinop (op, e1, e2, (ty, _)) ->
         PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
-      | L.Efby (e0s, es, [], _) ->
+      | L.Efby (e0s, es, _) ->
         fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
-      | L.Efby (e0s, es, er, _) ->
-        fprintf p "reset@ %a fby@ %a every@ %a" (exp_list prec1) e0s (exp_list prec2) es (exp_list prec') er
-      | L.Earrow (e0s, es, [], _) ->
+      | L.Earrow (e0s, es, _) ->
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
-      | L.Earrow (e0s, es, er, _) ->
-        fprintf p "reset@ %a ->@ %a every@ %a" (exp_list prec1) e0s (exp_list prec2) es (exp_list prec') er
       | L.Ewhen (e, x, c, _) ->
         fprintf p "%a when (%a=%a)"
           (exp_list prec') e
@@ -237,6 +237,14 @@ module PrintFun
       fprintf p "@[<hov 2>%a =@ %a;@]"
         print_pattern xs (exp_list 0) es
 
+    let rec print_block p bck =
+      match bck with
+      | L.Beq eq -> print_equation p eq
+      | L.Breset (bcks, er) ->
+        fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a;"
+          (pp_print_list print_block) bcks
+          print_exp er
+
     let print_semicol_list_as name px p xs =
     if List.length xs > 0 then
       fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
@@ -248,7 +256,7 @@ module PrintFun
                        L.n_in       = inputs;
                        L.n_out      = outputs;
                        L.n_vars     = locals;
-                       L.n_eqs      = eqs } =
+                       L.n_blocks   = bcks } =
       fprintf p "@[<v>\
                  @[<hov 0>\
                  @[<h>%s %a (%a)@]@;\
@@ -262,7 +270,7 @@ module PrintFun
         print_decl_list inputs
         print_decl_list outputs
         (print_semicol_list_as "var" print_decl) locals
-        (pp_print_list print_equation) (List.rev eqs)
+        (pp_print_list print_block) (List.rev bcks)
 
     let print_global p prog =
       fprintf p "@[<v 0>%a@]@."

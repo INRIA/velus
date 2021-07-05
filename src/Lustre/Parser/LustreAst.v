@@ -86,8 +86,8 @@ Inductive expression :=
 | APP      : ident -> list expression -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
-| FBY      : list expression -> list expression -> list expression -> astloc -> expression
-| ARROW    : list expression -> list expression -> list expression -> astloc -> expression
+| FBY      : list expression -> list expression -> astloc -> expression
+| ARROW    : list expression -> list expression -> astloc -> expression
 | WHEN     : list expression -> ident -> ident -> astloc -> expression
 | MERGE    : ident -> list (ident * list expression) -> astloc -> expression.
 
@@ -100,8 +100,8 @@ Definition expression_loc (e: expression) : astloc :=
   | APP _ _ _ l => l
   | CONSTANT _ l => l
   | VARIABLE _ l => l
-  | FBY _ _ _ l => l
-  | ARROW _ _ _ l => l
+  | FBY _ _ l => l
+  | ARROW _ _ l => l
   | WHEN _ _ _ l => l
   | MERGE _ _ l => l
   end.
@@ -110,10 +110,14 @@ Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
 
 Definition equation : Type := (list ident * list expression * astloc)%type.
 
+Inductive block :=
+| BEQ      : equation -> block
+| BRESET   : list block -> list expression -> astloc -> block.
+
 Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
 | NODE : ident -> bool -> var_decls -> var_decls -> var_decls
-         -> list equation -> astloc -> declaration
+         -> list block -> astloc -> declaration
 | TYPE : ident -> list ident -> astloc -> declaration.
 
 Definition declaration_loc (d: declaration) : astloc :=
@@ -167,18 +171,16 @@ Section expression_ind2.
       P (VARIABLE x a).
 
   Hypothesis FBYCase:
-    forall e0s es er a,
+    forall e0s es a,
       Forall P e0s ->
       Forall P es ->
-      Forall P er ->
-      P (FBY e0s es er a).
+      P (FBY e0s es a).
 
   Hypothesis ARROWCase:
-    forall e0s es er a,
+    forall e0s es a,
       Forall P e0s ->
       Forall P es ->
-      Forall P er ->
-      P (ARROW e0s es er a).
+      P (ARROW e0s es a).
 
   Hypothesis WHENCase:
     forall es x b a,
@@ -217,3 +219,22 @@ Section expression_ind2.
   Qed.
 
 End expression_ind2.
+
+Section block_ind2.
+  Variable P : block -> Prop.
+
+  Hypothesis EQCase : forall equ,
+    P (BEQ equ).
+
+  Hypothesis RESETCase : forall bcks er loc,
+      Forall P bcks ->
+      P (BRESET bcks er loc).
+
+  Fixpoint block_ind2 (bck: block) : P bck.
+  Proof.
+    destruct bck.
+    - apply EQCase; auto.
+    - apply RESETCase.
+      induction l; auto.
+  Qed.
+End block_ind2.

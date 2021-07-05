@@ -295,6 +295,74 @@ environment.
 
   (** Morphisms properties *)
 
+  Add Parametric Morphism : sem_exp_instant
+      with signature @eq _ ==> Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+        as sem_exp_instant_morph.
+  Proof.
+    intros b H H' EH x.
+    induction x; intros * Hsem; inv Hsem.
+    4:eapply Swhen_eq; eauto.
+    6:eapply Swhen_abs1; eauto.
+    8:eapply Swhen_abs; eauto.
+    1-3,10-13:econstructor; eauto.
+    1,8,10,12:rewrite <-EH; eauto.
+    1-9:try eapply IHx; eauto.
+    1-4:try eapply IHx1; eauto.
+    1-2:eapply IHx2; eauto.
+  Qed.
+
+  Add Parametric Morphism : sem_cexp_instant
+      with signature @eq _ ==> Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+        as sem_cexp_instant_morph.
+  Proof.
+    intros b H H' EH x.
+    induction x using cexp_ind2; intros * Hsem; inv Hsem.
+    1:eapply Smerge_pres; eauto.
+    4:eapply Smerge_abs; eauto.
+    6:eapply Scase_pres; eauto.
+    8:eapply Scase_abs; eauto.
+    10:econstructor.
+    1,4,6,8,10:erewrite <-EH; eauto.
+    - eapply Forall_forall in H0. eapply H0; eauto.
+      auto with datatypes.
+    - eapply Forall_impl_In; [|eauto]. intros ? Hin Hsem.
+      eapply Forall_forall in H0. eapply H0; eauto.
+      apply in_app in Hin as [?|?]; auto with datatypes.
+    - rewrite Forall_forall in *. intros ? Hin.
+      eapply H0; eauto.
+    - eapply Forall2_impl_In; [|eauto]. intros.
+      eapply Forall_forall in H0; eauto. eapply H0; eauto.
+    - rewrite Forall_forall in *. intros. eapply H0; eauto.
+  Qed.
+
+  Add Parametric Morphism A sem
+    (sem_compat: Proper (eq ==> Env.Equiv eq ==> eq ==> eq ==> Basics.impl) sem)
+    : (fun b e => @sem_annotated_instant b e A sem)
+      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
+        as sem_annotated_instant_morph.
+  Proof.
+    intros b H H' EH ck e v Sem.
+    inv Sem; constructor; auto.
+    1,3:rewrite <-EH; auto.
+    1,2:rewrite <-EH; auto.
+  Qed.
+
+  Add Parametric Morphism : sem_aexp_instant
+      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
+        as sem_aexp_instant_morph.
+  Proof.
+    intros; eapply sem_annotated_instant_morph; eauto.
+    solve_proper.
+  Qed.
+
+  Add Parametric Morphism : sem_caexp_instant
+      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
+        as sem_caexp_morph.
+  Proof.
+    intros; eapply sem_annotated_instant_morph; eauto.
+    solve_proper.
+  Qed.
+
   Add Parametric Morphism A B H sem e: (fun b xs => @lift b H A B sem e xs)
       with signature eq_str ==> @eq_str B ==> Basics.impl
         as lift_eq_str.

@@ -555,6 +555,30 @@ environment.
 
   End InstantSemantics.
 
+  Add Parametric Morphism : sem_var_instant
+      with signature Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+        as sem_var_instant_morph.
+  Proof.
+    intros H H' EH x v Hvar.
+    eapply Env.Equiv_orel in EH. rewrite Hvar in EH. inv EH.
+    symmetry in H1. eapply H1.
+  Qed.
+
+  Add Parametric Morphism : sem_clock_instant
+      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> Basics.impl
+        as sem_clock_instant_morph.
+  Proof.
+    intros b H H' EH ck. revert b.
+    induction ck; intros b b' Sem; inv Sem.
+    - constructor; auto.
+    - apply Son; auto. apply IHck; auto.
+      rewrite <-EH; auto.
+    - apply Son_abs1; auto. apply IHck; auto.
+      rewrite <-EH; auto.
+    - eapply Son_abs2; eauto. apply IHck; auto.
+      rewrite <-EH; auto.
+  Qed.
+
   Fact sem_clock_instant_true_inv : forall b H ck,
       sem_clock_instant b H ck true ->
       b = true.

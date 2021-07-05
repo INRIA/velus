@@ -136,23 +136,23 @@ Inductive bisim_IO {prefs} (G: @global prefs) (f: ident) (ins outs: list (Stream
 
 Hint Resolve
      normalize_global_normalized_global normalized_global_unnested_global
-     normalize_global_causal
      Typing.normalize_global_wt
      Clocking.normalize_global_wc
      normalize_global_sem
-     normalize_global_sem_clock_inputs.
+     check_causality_correct.
 
 Local Ltac unfold_l_to_nl Hltonl :=
   unfold l_to_nl in Hltonl; simpl in Hltonl;
   rewrite print_identity in Hltonl;
-  destruct normalize_global as [|] eqn:Hnorm; simpl in Hltonl; [|inv Hltonl].
+  destruct (is_causal _) eqn:Hcaus; simpl in Hltonl; [|inv Hltonl];
+  monadInv Hcaus.
 
 (** Correctness from Lustre to NLustre *)
 Lemma behavior_l_to_nl:
   forall G G' main ins outs,
     wt_global G ->
     wc_global G ->
-    sem_node G main ins outs ->
+    Sem.sem_node G main ins outs ->
     wc_ins G main ins ->
     l_to_nl G = OK G' ->
     CoindSem.sem_node G' main ins outs.
@@ -160,6 +160,8 @@ Proof.
   intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
   eapply TR.Correctness.sem_l_nl in Hltonl; eauto.
+  eapply normalize_global_sem; eauto.
+  eapply sem_node_sem_node_ck; eauto.
 Qed.
 
 Fact l_to_nl_find_node : forall G G' f n,
@@ -170,8 +172,8 @@ Fact l_to_nl_find_node : forall G G' f n,
 Proof.
   intros g * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
-  eapply normalize_global_iface_eq in Hnorm.
   eapply global_iface_eq_find in Hfind as (n'&Hfind&(_&_&Hin&Hout)); eauto.
+  2:eapply normalize_global_iface_eq.
   eapply TR.Tr.find_node_global in Hfind as (n''&Hfind&Htonode); eauto.
   exists n''. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
@@ -188,9 +190,9 @@ Fact l_to_nl_find_node' : forall G G' f n',
 Proof.
   intros G * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
-  eapply normalize_global_iface_eq in Hnorm. eapply global_iface_eq_sym in Hnorm.
   eapply TR.Tr.find_node_global' in Hfind as (n''&Hfind&Htonode); eauto.
   eapply global_iface_eq_find in Hfind as (n&Hfind&(_&_&Hin&Hout)); eauto.
+  2:eapply global_iface_eq_sym, normalize_global_iface_eq.
   exists n. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
     now rewrite <-Htonode.
@@ -215,7 +217,7 @@ Theorem behavior_asm:
     elab_declarations D = OK (exist _ G Gp) ->
     wt_ins G main ins ->
     wc_ins G main (pStr ins) ->
-    sem_node G main (pStr ins) (pStr outs) ->
+    Sem.sem_node G main (pStr ins) (pStr outs) ->
     compile D main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.

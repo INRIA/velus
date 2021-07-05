@@ -96,7 +96,7 @@ module PrintFun
             Ops.print_const v0
             print_exp e
       | NL.EqFby (x, ck, v0, e, ckrs) ->
-        fprintf p "@[<hov 2>%a =@ reset %a fby@ %a every %a;@]"
+        fprintf p "@[<hov 2>%a =@ reset (%a fby@ %a) every %a;@]"
           print_ident x
           Ops.print_const v0
           print_exp e

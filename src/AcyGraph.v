@@ -1148,7 +1148,7 @@ Definition add_between preds x y a :=
 Lemma add_between_AcyGraph : forall {v a} (g : AcyGraph v a) x preds succ,
     PS.For_all (is_vertex g) preds ->
     is_vertex g succ ->
-    PS.For_all (fun p => is_arc g p succ) preds ->
+    PS.For_all (fun p => is_trans_arc g p succ) preds ->
     ~is_vertex g x ->
     AcyGraph (PS.add x v) (add_between preds x succ a).
 Proof.
@@ -1164,11 +1164,10 @@ Proof.
   - apply PSF.add_2; auto.
   - intro contra.
     apply add_after_spec2 in contra as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; auto.
-    + eapply Harcs, has_arc_irrefl in H; eauto.
+    + eapply Harcs, is_trans_arc_Irreflexive in H; eauto.
     + eapply is_trans_arc_Irreflexive in H0; eauto.
     + destruct H as (p&Hin&Ha). apply Harcs in Hin.
-      eapply is_trans_arc_Asymmetric with (g0:=g) in Ha.
-      eapply Ha. left; eauto.
+      eapply is_trans_arc_Asymmetric with (g0:=g) in Ha; eauto.
     + eapply is_trans_arc_Irreflexive in H0; eauto.
 Qed.
 

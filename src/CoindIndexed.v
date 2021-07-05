@@ -32,7 +32,7 @@ Module Type COINDINDEXED
     unfold ICStr.tr_stream, ICStr.tr_stream_from, tr_Stream.
     intros x.
     apply ntheq_eqst; intros n.
-    rewrite ICStr.init_from_nth, Nat.add_0_r.
+    rewrite init_from_nth, Nat.add_0_r.
     reflexivity.
   Qed.
 
@@ -46,7 +46,19 @@ Module Type COINDINDEXED
     - unfold Env.MapsTo in H0. rewrite Env.gmapi in H0.
       apply option_map_inv_Some in H0 as [v [Hfind Hinit]]; subst.
       apply ntheq_eqst. intros n.
-      rewrite ICStr.init_from_nth, Nat.add_0_r, Env.Props.P.F.map_o, H1; simpl; auto.
+      rewrite init_from_nth, Nat.add_0_r, Env.Props.P.F.map_o, H1; simpl; auto.
+  Qed.
+
+  Lemma sem_var_equiv : forall H x v,
+      CStr.sem_var H x v <->
+      IStr.sem_var (CIStr.tr_history H) x (tr_Stream v).
+  Proof.
+    intros; split.
+    - apply CIStr.sem_var_impl.
+    - intros Hsem.
+      apply ICStr.sem_var_impl in Hsem.
+      rewrite tr_stream_eqst in Hsem. rewrite tr_history_equiv in Hsem.
+      assumption.
   Qed.
 
   Lemma sem_clock_equiv : forall H b ck bs,

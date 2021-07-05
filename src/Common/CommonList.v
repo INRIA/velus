@@ -1653,6 +1653,15 @@ Section ForallExists.
 
   Context {A: Type}.
 
+  Fact Forall_eq {B} : forall (l1 : list A) (b : B) (l2 : list B),
+      Forall (eq b) l2 ->
+      length l1 = length l2 ->
+      l2 = map (fun _ => b) l1.
+  Proof.
+    induction l1; intros * Heq Hlen; destruct l2; simpl in *; try congruence.
+    inv Heq. f_equal; auto.
+  Qed.
+
   Lemma Forall_map:
     forall {B} P (f: A -> B) xs,
       Forall P (map f xs) <-> Forall (fun x => P (f x)) xs.

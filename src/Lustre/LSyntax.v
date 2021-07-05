@@ -44,8 +44,8 @@ Module Type LSYNTAX
   | Evar   : ident -> ann -> exp
   | Eunop  : unop -> exp -> ann -> exp
   | Ebinop : binop -> exp -> exp -> ann -> exp
-  | Efby   : list exp -> list exp -> list exp -> list ann -> exp
-  | Earrow : list exp -> list exp -> list exp -> list ann -> exp
+  | Efby   : list exp -> list exp -> list ann -> exp
+  | Earrow : list exp -> list exp -> list ann -> exp
   | Ewhen  : list exp -> ident -> enumtag -> lann -> exp
   | Emerge : ident * type -> list (list exp) -> lann -> exp
   | Ecase  : exp -> list (option (list exp)) -> list exp -> lann -> exp
@@ -59,13 +59,19 @@ Module Type LSYNTAX
 
   Implicit Type eqn: equation.
 
+  (** ** Blocks *)
+
+  Inductive block : Type :=
+  | Beq : equation -> block
+  | Breset : list block -> exp -> block.
+
   (** ** Node *)
 
   Fixpoint numstreams (e: exp) : nat :=
     match e with
     | Econst _ | Eenum _ _ => 1
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns => length anns
     | Evar _ _
     | Eunop _ _ _
@@ -81,8 +87,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => [(Tprimitive (ctype_cconst c), (Cbase, None))]
     | Eenum _ ty => [(ty, (Cbase, None))]
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns => anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -99,8 +105,8 @@ Module Type LSYNTAX
     match e with
     | Econst c => [Tprimitive (ctype_cconst c)]
     | Eenum _ ty => [ty]
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns => map fst anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -121,8 +127,8 @@ Module Type LSYNTAX
   Fixpoint clockof (e: exp): list clock :=
     match e with
     | Econst _ | Eenum _ _ => [Cbase]
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns => map clock_of_nclock anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -138,8 +144,8 @@ Module Type LSYNTAX
   Fixpoint nclockof (e: exp): list nclock :=
     match e with
     | Econst _ | Eenum _ _ => [(Cbase, None)]
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
     | Eunop _ _ ann
@@ -152,8 +158,11 @@ Module Type LSYNTAX
   Definition nclocksof (es: list exp): list nclock :=
     flat_map nclockof es.
 
-  Definition vars_defined (eqs: list equation) : list ident :=
-    flat_map fst eqs.
+  Fixpoint vars_defined (d : block) :=
+    match d with
+    | Beq eq => fst eq
+    | Breset blocks _ => flat_map vars_defined blocks
+    end.
 
   Definition anon_streams (anns : list ann) :=
     map_filter (fun '(ty, (cl, name)) => match name with
@@ -168,9 +177,9 @@ Module Type LSYNTAX
     | Evar _ _ => []
     | Eunop _ e _ => fresh_in e
     | Ebinop _ e1 e2 _ => fresh_in e1 ++ fresh_in e2
-    | Efby e0s es er _
-    | Earrow e0s es er _ =>
-      fresh_ins e0s ++ fresh_ins es ++ fresh_ins er
+    | Efby e0s es _
+    | Earrow e0s es _ =>
+      fresh_ins e0s ++ fresh_ins es
     | Ewhen es _ _ _ => fresh_ins es
     | Emerge _ es _ => flat_map fresh_ins es
     | Ecase e es d _ => fresh_in e ++ flat_map (or_default_with [] fresh_ins) es ++ fresh_ins d
@@ -192,9 +201,11 @@ Module Type LSYNTAX
   Definition anon_in_eq (eq : equation) : list (ident * (type * clock)) :=
     anon_ins (snd eq).
 
-  Definition anon_in_eqs (eqs : list equation) : list (ident * (type * clock)) :=
-    flat_map anon_in_eq eqs.
-
+  Fixpoint anon_in_block (d : block) : list (ident * (type * clock)) :=
+    match d with
+    | Beq eq => anon_in_eq eq
+    | Breset blocks er => (flat_map anon_in_block blocks)++(fresh_in er)
+    end.
 
   Record node {prefs : PS.t} : Type :=
     mk_node {
@@ -203,14 +214,15 @@ Module Type LSYNTAX
         n_in       : list (ident * (type * clock));
         n_out      : list (ident * (type * clock));
         n_vars     : list (ident * (type * clock));
-        n_eqs      : list equation;
+        n_blocks   : list block;
 
         n_ingt0    : 0 < length n_in;
         n_outgt0   : 0 < length n_out;
-        n_defd     : Permutation (vars_defined n_eqs)
+        n_defd     : Permutation (flat_map vars_defined n_blocks)
                                  (map fst (n_vars ++ n_out));
-        n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out ++ anon_in_eqs n_eqs);
-        n_good     :  Forall (AtomOrGensym prefs) (map fst (n_in ++ n_vars ++ n_out ++ anon_in_eqs n_eqs)) /\ atom n_name
+        n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out ++ flat_map anon_in_block n_blocks);
+        n_good     : Forall (AtomOrGensym prefs) (map fst (n_in ++ n_vars ++ n_out ++ flat_map anon_in_block n_blocks))
+                     /\ atom n_name
       }.
 
   Instance node_unit {prefs} : ProgramUnit (@node prefs) :=
@@ -325,18 +337,16 @@ Module Type LSYNTAX
         P (Ebinop op e1 e2 a).
 
     Hypothesis EfbyCase:
-      forall e0s es er a,
+      forall e0s es a,
         Forall P e0s ->
         Forall P es ->
-        Forall P er ->
-        P (Efby e0s es er a).
+        P (Efby e0s es a).
 
     Hypothesis EarrowCase:
-      forall e0s es er a,
+      forall e0s es a,
         Forall P e0s ->
         Forall P es ->
-        Forall P er ->
-        P (Earrow e0s es er a).
+        P (Earrow e0s es a).
 
     Hypothesis EwhenCase:
       forall es x b a,
@@ -387,6 +397,28 @@ Module Type LSYNTAX
     Qed.
 
   End exp_ind2.
+
+  Section block_ind2.
+
+    Variable P : block -> Prop.
+
+    Hypothesis BeqCase:
+      forall eq,
+        P (Beq eq).
+
+    Hypothesis BresetCase:
+      forall blocks er,
+        Forall P blocks ->
+        P (Breset blocks er).
+
+    Fixpoint block_ind2 (d: block) : P d.
+    Proof.
+      destruct d.
+      - apply BeqCase; auto.
+      - apply BresetCase; induction l; auto.
+    Qed.
+
+  End block_ind2.
 
   (** annots *)
 
@@ -773,22 +805,18 @@ Module Type LSYNTAX
       numstreams e1 = 1 ->
       numstreams e2 = 1 ->
       wl_exp G (Ebinop op e1 e2 a)
-  | wl_Efby : forall G e0s es er anns,
+  | wl_Efby : forall G e0s es anns,
       Forall (wl_exp G) e0s ->
       Forall (wl_exp G) es ->
-      Forall (wl_exp G) er ->
       length (annots e0s) = length anns ->
       length (annots es) = length anns ->
-      Forall (fun e => numstreams e = 1) er ->
-      wl_exp G (Efby e0s es er anns)
-  | wl_Earrow : forall G e0s es er anns,
+      wl_exp G (Efby e0s es anns)
+  | wl_Earrow : forall G e0s es anns,
       Forall (wl_exp G) e0s ->
       Forall (wl_exp G) es ->
-      Forall (wl_exp G) er ->
       length (annots e0s) = length anns ->
       length (annots es) = length anns ->
-      Forall (fun e => numstreams e = 1) er ->
-      wl_exp G (Earrow e0s es er anns)
+      wl_exp G (Earrow e0s es anns)
   | wl_Ewhen : forall G es x b tys nck,
       Forall (wl_exp G) es ->
       length (annots es) = length tys ->
@@ -820,8 +848,18 @@ Module Type LSYNTAX
     let (xs, es) := eq in
     Forall (wl_exp G) es /\ length xs = length (annots es).
 
+  Inductive wl_block {prefs} (G : @global prefs) : block -> Prop :=
+  | wl_Beq : forall eq,
+      wl_equation G eq ->
+      wl_block G (Beq eq)
+  | wl_Breset : forall blocks er,
+      Forall (wl_block G) blocks ->
+      wl_exp G er ->
+      numstreams er = 1 ->
+      wl_block G (Breset blocks er).
+
   Definition wl_node {prefs} (G : @global prefs) (n : @node prefs) :=
-    Forall (wl_equation G) (n_eqs n).
+    Forall (wl_block G) (n_blocks n).
 
   Definition wl_global {prefs} : @global prefs -> Prop :=
     wt_program wl_node.
@@ -848,16 +886,6 @@ Module Type LSYNTAX
     apply incl_concat_map; auto.
   Qed.
 
-  Fact anon_in_eq_incl : forall eq eqs,
-      In eq eqs ->
-      incl (anon_in_eq eq) (anon_in_eqs eqs).
-  Proof.
-    intros e es Hin.
-    unfold anon_in_eqs.
-    rewrite flat_map_concat_map.
-    apply incl_concat_map; auto.
-  Qed.
-
   Fact InMembers_fresh_in : forall x e es,
       In e es ->
       InMembers x (fresh_in e) ->
@@ -878,14 +906,16 @@ Module Type LSYNTAX
     rewrite fst_InMembers in *. eauto.
   Qed.
 
-  Fact InMembers_anon_in_eq : forall x eq eqs,
-      In eq eqs ->
-      InMembers x (anon_in_eq eq) ->
-      InMembers x (anon_in_eqs eqs).
+  Fact InMembers_anon_in_block : forall x d blocks,
+      In d blocks ->
+      InMembers x (anon_in_block d) ->
+      InMembers x (flat_map anon_in_block blocks).
   Proof.
     intros * Hin Hinm.
-    eapply anon_in_eq_incl, incl_map with (f:=fst) in Hin.
-    rewrite fst_InMembers in *. eauto.
+    rewrite fst_InMembers in *.
+    eapply incl_map; eauto.
+    rewrite flat_map_concat_map.
+    apply incl_concat_map; auto.
   Qed.
 
   Fact Ino_In_anon_streams : forall x anns,
@@ -953,31 +983,31 @@ Module Type LSYNTAX
       eapply InMembers_anon_in in contra; eauto.
   Qed.
 
-  Fact NoDupMembers_anon_in_eq : forall eq eqs,
-      In eq eqs ->
-      NoDupMembers (anon_in_eqs eqs) ->
-      NoDupMembers (anon_in_eq eq).
+  Fact NoDupMembers_anon_in_block : forall d blocks,
+      In d blocks ->
+      NoDupMembers (flat_map anon_in_block blocks) ->
+      NoDupMembers (anon_in_block d).
   Proof.
     intros * Hin Hndup.
     unfold fresh_ins in *.
-    induction eqs; inv Hin; simpl in Hndup.
+    induction blocks; inv Hin; simpl in Hndup.
     - apply NoDupMembers_app_l in Hndup; auto.
     - apply NoDupMembers_app_r in Hndup; auto.
   Qed.
 
-  Corollary NoDupMembers_anon_in_eq' : forall vars eq eqs,
-      In eq eqs ->
-      NoDupMembers (vars ++ anon_in_eqs eqs) ->
-      NoDupMembers (vars ++ anon_in_eq eq).
+  Corollary NoDupMembers_anon_in_block' : forall vars d blocks,
+      In d blocks ->
+      NoDupMembers (vars ++ flat_map anon_in_block blocks) ->
+      NoDupMembers (vars ++ anon_in_block d).
   Proof.
     intros * Hin Hndup.
     apply NoDupMembers_app.
     - apply NoDupMembers_app_l in Hndup; auto.
     - apply NoDupMembers_app_r in Hndup; auto.
-      eapply NoDupMembers_anon_in_eq; eauto.
+      eapply NoDupMembers_anon_in_block; eauto.
     - intros x HIn contra.
       eapply NoDupMembers_app_InMembers in Hndup; eauto.
-      eapply InMembers_anon_in_eq in contra; eauto.
+      eapply InMembers_anon_in_block in contra; eauto.
   Qed.
 
   (** *** Additional properties *)
@@ -993,7 +1023,7 @@ Module Type LSYNTAX
   Qed.
 
   Lemma in_vars_defined_NoDup {prefs} : forall (n : @node prefs),
-      NoDup (map fst (n_in n) ++ vars_defined (n_eqs n)).
+      NoDup (map fst (n_in n) ++ flat_map vars_defined (n_blocks n)).
   Proof.
     intros n.
     destruct n; simpl. clear - n_nodup0 n_defd0.
@@ -1002,27 +1032,27 @@ Module Type LSYNTAX
   Qed.
 
   Corollary NoDup_vars_defined_n_eqs {prefs} : forall (n : @node prefs),
-      NoDup (vars_defined n.(n_eqs)).
+      NoDup (flat_map vars_defined (n_blocks n)).
   Proof.
     intros n.
     specialize (in_vars_defined_NoDup n) as Hnd.
     apply NoDup_app_r in Hnd; auto.
   Qed.
 
-  Instance vars_defined_Proper:
-    Proper (@Permutation equation ==> @Permutation ident)
-           vars_defined.
-  Proof.
-    intros eqs eqs' Hperm; subst.
-    unfold vars_defined. rewrite Hperm. reflexivity.
-  Qed.
+  (* Instance vars_defined_Proper: *)
+  (*   Proper (@Permutation block ==> @Permutation ident) *)
+  (*          vars_defined. *)
+  (* Proof. *)
+  (*   intros eqs eqs' Hperm; subst. *)
+  (*   unfold vars_defined. rewrite Hperm. reflexivity. *)
+  (* Qed. *)
 
-  Fact vars_defined_app : forall eqs1 eqs2,
-      vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2.
-  Proof.
-    intros.
-    unfold vars_defined. rewrite flat_map_app; auto.
-  Qed.
+  (* Fact vars_defined_app : forall eqs1 eqs2, *)
+  (*     vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   unfold vars_defined. rewrite flat_map_app; auto. *)
+  (* Qed. *)
 End LSYNTAX.
 
 Module LSyntaxFun

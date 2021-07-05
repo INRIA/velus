@@ -42,8 +42,8 @@ Module Type TR
                                     OK (CE.Ebinop op le1 le2 ty)
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                     OK (CE.Ewhen le x b)
-    | L.Efby _ _ _ _
-    | L.Earrow _ _ _ _
+    | L.Efby _ _ _
+    | L.Earrow _ _ _
     | L.Ewhen _ _ _ _
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
@@ -79,8 +79,8 @@ Module Type TR
 
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
-    | L.Efby _ _ _ _
-    | L.Earrow _ _ _ _
+    | L.Efby _ _ _
+    | L.Earrow _ _ _
     | L.Eapp _ _ _ _    => Error (msg "control expression not normalized")
     end.
 
@@ -137,7 +137,7 @@ Module Type TR
                 end) es.
 
   Definition to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
-                         (eq : L.equation) : res NL.equation :=
+                         (xr : list (ident * clock)) (eq : L.equation) : res NL.equation :=
     let (xs, es) := eq in
     match es with
     | [e] =>
@@ -145,20 +145,17 @@ Module Type TR
       | L.Eapp f es r _ =>
         do les <- mmap to_lexp es;
         match (vars_of r) with
-        | Some xr => OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les xr)
+        | Some xr' => OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les (xr++xr'))
         | _ => Error (msg "reset equation not normalized")
         end
-      | L.Efby [e0] [e] r _ =>
+      | L.Efby [e0] [e] _ =>
         match xs with
         | [x] =>
           do _  <- envo x;
           do c0 <- to_constant e0;
           do ck <- find_clock env x;
           do le <- to_lexp e;
-          match (vars_of r) with
-          | Some xr => OK (NL.EqFby x ck c0 le xr)
-          | _ => Error (msg "fby equation not normalized")
-          end
+          OK (NL.EqFby x ck c0 le xr)
         | _ => Error (msg "fby equation not normalized")
         end
       | _ =>
@@ -171,6 +168,16 @@ Module Type TR
         end
       end
     | _ => Error (msg "equation not normalized")
+    end.
+
+  Fixpoint block_to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
+           (xr : list (ident * clock)) (d : L.block) : res NL.equation :=
+    match d with
+    | L.Beq eq =>
+      to_equation env envo xr eq
+    | L.Breset [block] (L.Evar x (_, (ck, _))) =>
+      block_to_equation env envo ((x, ck)::xr) block
+    | _ => Error (msg "block not normalized")
     end.
 
   Lemma find_clock_in_env :
@@ -202,10 +209,10 @@ Module Type TR
   Qed.
 
   Lemma ok_fst_defined eq eq' :
-    forall env envo,
-      to_equation env envo eq = OK eq' -> fst eq = NL.var_defined eq'.
+    forall env envo xr,
+      to_equation env envo xr eq = OK eq' -> fst eq = NL.var_defined eq'.
   Proof.
-    intros env envo Htoeq.
+    intros * Htoeq.
     unfold to_equation in Htoeq.
     cases; monadInv Htoeq; inv EQ; simpl; auto.
   Qed.
@@ -245,10 +252,10 @@ Module Type TR
     induction l; simpl; intros; monadInv H; auto.
   Qed.
 
-  Definition mmap_to_equation {prefs} env envo (n : @L.node prefs) :
-    res { neqs | mmap (to_equation env envo) n.(L.n_eqs) = OK neqs }.
+  Definition mmap_block_to_equation {prefs} env envo (n : @L.node prefs) :
+    res { neqs | mmap (block_to_equation env envo []) n.(L.n_blocks) = OK neqs }.
   Proof.
-    destruct (mmap (to_equation env envo) n.(L.n_eqs)).
+    destruct (mmap (block_to_equation env envo []) n.(L.n_blocks)).
     left. eauto.
     right. auto.
   Defined.
@@ -269,7 +276,7 @@ Module Type TR
         fun x => if Env.mem x envo
               then Error (msg "output variable defined as a fby")
               else OK tt in
-    match mmap_to_equation env is_not_out n (* return _ *) with
+    match mmap_block_to_equation env is_not_out n (* return _ *) with
     | OK (exist neqs P) =>
       OK {|
           NL.n_name     := n.(L.n_name);
@@ -292,12 +299,19 @@ Module Type TR
   Next Obligation.
     clear H0 H.
     monadInv1 P.
-    assert (NL.vars_defined neqs = L.vars_defined (L.n_eqs n)). clear P.
-    { revert H. revert neqs. induction (L.n_eqs n); simpl.
+    assert (NL.vars_defined neqs = flat_map L.vars_defined (L.n_blocks n)). clear P.
+    { revert H. revert neqs. induction (L.n_blocks n); simpl.
     - intros neqs Htr. inv Htr. auto.
     - intros neqs Htoeq. inv Htoeq.
       apply IHl in H3. simpl.
-      apply ok_fst_defined in H1. rewrite H3. now rewrite <- H1.
+      f_equal; auto.
+      clear - H1.
+      revert H1. generalize (@nil (ident * clock)) as xr.
+      induction a using L.block_ind2; intros; simpl in *.
+      + apply ok_fst_defined in H1; auto.
+      + cases; simpl. rewrite app_nil_r.
+        apply Forall_singl in H.
+        eauto.
     }
     rewrite H0.
     exact (L.n_defd n).
@@ -316,15 +330,20 @@ Module Type TR
     simpl. destruct (NL.is_fby leq) eqn:?.
     - unfold NL.vars_defined, flat_map. simpl. rewrite in_app.
       intro Hi. destruct Hi.
-      + unfold to_equation in Htoeq. destruct eq''.
-        cases_eqn E; monadInv1 Htoeq; inv Heqb.
-        simpl in H0. destruct H0; auto. subst. inv EQ.
-        apply Env.Props.P.F.not_mem_in_iff in E8. apply E8.
-        rewrite in_map_iff in Hin.
-        destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
-        eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
-        destruct n. simpl. assert (Hnodup := n_nodup).
-        apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; auto.
+      + clear - Htoeq Heqb H0 Hin.
+        revert Htoeq. generalize (@nil (ident * clock)).
+        induction eq'' using L.block_ind2; intros; simpl in *.
+        * unfold to_equation in Htoeq. destruct eq.
+          cases_eqn E; monadInv1 Htoeq; inv Heqb.
+          simpl in H0. destruct H0; auto. subst. inv EQ.
+          apply Env.Props.P.F.not_mem_in_iff in E8. apply E8.
+          rewrite in_map_iff in Hin.
+          destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
+          eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
+          destruct n. simpl. assert (Hnodup := n_nodup).
+          apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; auto.
+        * cases. apply Forall_singl in H.
+          eapply H; eauto.
       + apply IHlist_forall2; auto.
     - apply IHlist_forall2; eauto.
   Qed.
@@ -358,7 +377,7 @@ Module Type TR
       let Hs := fresh in
       let Hmmap := fresh "Hmmap" in
       unfold to_node in H;
-      destruct(mmap_to_equation
+      destruct(mmap_block_to_equation
                (Env.adds' (L.n_vars n)
                 (Env.adds' (L.n_in n)
                  (Env.from_list (L.n_out n))))

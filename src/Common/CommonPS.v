@@ -359,6 +359,20 @@ Proof.
   simpl; rewrite Heq'; reflexivity.
 Qed.
 
+Add Parametric Morphism : ps_adds
+    with signature @Permutation _ ==> eq ==> PS.eq
+      as ps_adds_morph.
+Proof.
+  intros * Hperm.
+  induction Hperm; intros; simpl; auto.
+  - reflexivity.
+  - eapply ps_adds_Proper.
+    unfold PS.eq, PS.Equal. intros.
+    repeat rewrite PSF.add_iff.
+    split; intros [?|[?|?]]; auto.
+  - etransitivity; eauto.
+Qed.
+
 Lemma add_ps_from_list_cons:
   forall xs x,
     PS.eq (PS.add x (ps_from_list xs))
@@ -540,6 +554,14 @@ Proof.
   intros xs x. rewrite ps_adds_spec, PSP.of_list_1; split.
   -intros [Hin|Hin]; auto. now apply not_In_empty in Hin.
   - intro Hin. apply SetoidList.InA_alt in Hin as (y & Hy & Hin); subst; auto.
+Qed.
+
+Lemma ps_adds_of_list_app:
+  forall xs ys,
+    PS.Equal (ps_adds xs (PSP.of_list ys)) (PSP.of_list (xs ++ ys)).
+Proof.
+  intros *.
+  now rewrite <-ps_adds_of_list, <-ps_adds_app, ps_adds_of_list.
 Qed.
 
 Corollary ps_from_list_ps_of_list : forall xs,

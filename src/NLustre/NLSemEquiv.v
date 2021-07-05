@@ -129,7 +129,7 @@ Module Type NLSEMEQUIV
         rewrite <-Length; lia.
       + rewrite CIStr.ICStr.nth_seq_streams; try (rewrite <-Length; lia).
         unfold CIStr.ICStr.nth_tr_streams_from.
-        rewrite CIStr.ICStr.init_from_nth.
+        rewrite init_from_nth.
         unfold CIStr.ICStr.streams_nth.
         symmetry; eapply H0; eauto.
         rewrite <-plus_n_O; eauto.

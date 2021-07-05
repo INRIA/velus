@@ -26,10 +26,6 @@ Module Type INDEXEDTOCOIND
 
   (** ** Definitions  *)
 
-  (** A generic function to build a coinductive Stream. *)
-  CoFixpoint init_from {A} (n: nat) (f: nat -> A) : Stream A :=
-    f n ⋅ init_from (S n) f.
-
   (** Translate an indexed stream into a coinductive Stream.
         The [n]th element of the result Stream is the result of the application
         of the input stream on [n]. *)
@@ -90,14 +86,6 @@ Module Type INDEXEDTOCOIND
 
   (** ** Properties  *)
 
-  (** A basic definition-rewriting lemma.  *)
-  Lemma init_from_n:
-    forall {A} (f: nat -> A) n,
-      init_from n f = f n ⋅ init_from (S n) f.
-  Proof.
-    intros; now rewrite unfold_Stream at 1.
-  Qed.
-
   (** [init_from] is compatible wrt to extensional equality. *)
   Add Parametric Morphism A : (@init_from A)
       with signature eq ==> eq_str ==> @EqSt A
@@ -106,33 +94,6 @@ Module Type INDEXEDTOCOIND
     cofix Cofix. intros x xs xs' E.
     rewrite init_from_n; rewrite (init_from_n xs').
     constructor; simpl; auto.
-  Qed.
-
-  (** The [m]th element of the built stream, starting from [n],
-        is the result of the application of [f] at [(m+n)]. *)
-  Lemma init_from_nth:
-    forall {A} m n (f: nat -> A),
-      (init_from n f) # m = f (m + n).
-  Proof.
-    unfold Str_nth; induction m; intros; simpl; auto.
-    now rewrite IHm, <-plus_n_Sm.
-  Qed.
-
-  (** Taking the tail of a built Stream from [n] is building it from [S n]. *)
-  Lemma init_from_tl:
-    forall {A} n (f: nat -> A),
-      tl (init_from n f) = init_from (S n) f.
-  Proof.
-    intros; rewrite init_from_n; auto.
-  Qed.
-
-  (** A generalization for multiple tails. *)
-  Lemma init_from_nth_tl:
-    forall {A} n m (f: nat -> A),
-      Str_nth_tl n (init_from m f) = init_from (n + m) f.
-  Proof.
-    induction n; intros; simpl; auto.
-    now rewrite IHn, Nat.add_succ_r.
   Qed.
 
   (** The length of the range-built list of Streams is simply the difference *)

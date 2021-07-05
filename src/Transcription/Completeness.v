@@ -108,23 +108,22 @@ Module Type COMPLETENESS
       erewrite Htoc; simpl; eauto.
   Qed.
 
-  Fact to_equation_complete {prefs} : forall (G: @global prefs) xs es out env envo,
+  Fact to_equation_complete {prefs} : forall (G: @global prefs) out env envo xr xs es,
       normalized_equation G out (xs, es) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
-      exists eq', to_equation env envo (xs, es) = OK eq'.
+      exists eq', to_equation env envo xr (xs, es) = OK eq'.
   Proof with eauto.
     intros * Hnorm Hfind Henvo.
     inv Hnorm.
     - apply mmap_to_lexp_complete in H1 as [es' Hes'].
       apply vars_of_Some in H5 as (?&Vars).
       eexists; simpl. rewrite Hes', Vars; simpl...
-    - apply to_constant_complete in H2 as [e0' He0'].
+    - apply to_constant_complete in H3 as [e0' He0'].
       apply to_lexp_complete in H4 as [e' He'].
       inv Hfind. destruct H2 as [? Hck].
-      eapply vars_of_Some in H5 as (?&Vars).
       eexists; simpl.
-      rewrite He0', He', Hck, Vars; simpl...
+      rewrite He0', He', Hck; simpl...
       specialize (Henvo x).
       destruct (envo x); simpl...
       exfalso...
@@ -136,32 +135,37 @@ Module Type COMPLETENESS
       inv He'.
   Qed.
 
-  Corollary mmap_to_equation_complete {prefs} : forall (G: @global prefs) eqs out env envo,
-      Forall (normalized_equation G out) eqs ->
-      Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined eqs) ->
+  Fact block_to_equation_complete {prefs} : forall (G: @global prefs) out env envo d xr,
+      normalized_block G out d ->
+      Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined d) ->
       (forall x e, envo x = Error e -> PS.In x out) ->
-      exists eqs', Errors.mmap (to_equation env envo) eqs = OK eqs'.
-  Proof.
-    induction eqs; intros * Hnorm Hfind Henvo; simpl.
-    - eexists; eauto.
-    - inv Hnorm. destruct a.
-      simpl in Hfind. rewrite Forall_app in Hfind. destruct Hfind as [Hfind1 Hfind2].
-      specialize (to_equation_complete _ _ _ _ _ _ H1 Hfind1 Henvo) as [eq' Heq'].
-      eapply IHeqs in H2; eauto. destruct H2 as [eqs' Heqs'].
-      rewrite Heqs'; rewrite Heq'; eexists; simpl; eauto.
+      exists eq', block_to_equation env envo xr d = OK eq'.
+  Proof with eauto.
+    intros * Hnorm Hfind Henvo. revert xr.
+    induction Hnorm; intros; simpl.
+    - destruct eq. eapply to_equation_complete in H; eauto.
+    - destruct ann0 as (?&?&?).
+      simpl in Hfind; rewrite app_nil_r in Hfind.
+      eapply IHHnorm; eauto.
   Qed.
 
-  Corollary mmap_to_equation_complete' {prefs} : forall (G: @global prefs) (n: @node prefs) out env envo,
-      Forall (normalized_equation G out) (n_eqs n) ->
-      Forall (fun x => exists cl, find_clock env x = OK cl) (vars_defined (n_eqs n)) ->
+  Corollary mmap_block_to_equation_complete {prefs} : forall (G: @global prefs) (n: @node prefs) out env envo,
+      Forall (normalized_block G out) (n_blocks n) ->
+      Forall (fun x => exists cl, find_clock env x = OK cl) (flat_map vars_defined (n_blocks n)) ->
       (forall x e, envo x = Error e -> PS.In x out) ->
-      exists eqs', mmap_to_equation env envo n = OK eqs'.
+      exists eqs', mmap_block_to_equation env envo n = OK eqs'.
   Proof.
     intros * Hnorm Hfind Henvo.
-    eapply mmap_to_equation_complete in Hnorm; eauto.
-    destruct Hnorm as [eqs' Heqs'].
-    exists (exist (fun neqs : list NL.equation => _) eqs' Heqs').
-    unfold mmap_to_equation. rewrite Heqs'. reflexivity.
+    assert (exists eqs', Errors.mmap (block_to_equation env envo nil) (n_blocks n) = OK eqs') as (?&Hmmap).
+    { revert dependent n. intros n; generalize (n_blocks n); clear n.
+      intros blocks; induction blocks; intros; simpl in *; eauto.
+      inv Hnorm. apply Forall_app in Hfind as (?&?).
+      eapply block_to_equation_complete in H1 as (?&Heqs1); eauto.
+      eapply IHblocks in H2 as (?&Heqs2); eauto.
+      erewrite Heqs1, Heqs2; simpl; eauto.
+    }
+    unfold mmap_block_to_equation.
+    erewrite Hmmap; eauto.
   Qed.
 
   Lemma to_node_complete : forall (G: @global norm2_prefs) n,
@@ -170,7 +174,7 @@ Module Type COMPLETENESS
   Proof.
     intros * Hnorm.
     unfold to_node.
-    edestruct (mmap_to_equation_complete' G n) as [[? ?] H].
+    edestruct (mmap_block_to_equation_complete G n) as [[? ?] H].
     4: (rewrite H; eauto).
     - unfold normalized_node in Hnorm. eassumption.
     - specialize (n_defd n) as Hperm.
@@ -203,12 +207,11 @@ Module Type COMPLETENESS
       erewrite EQ; simpl; eauto.
   Qed.
 
-  Theorem normalize_global_complete : forall G G',
+  Theorem normalize_global_complete : forall G,
       wl_global G ->
-      normalize_global G = OK G' ->
-      exists G'', to_global G' = OK G''.
+      exists G'', to_global (normalize_global G) = OK G''.
   Proof.
-    intros * Hwl Hnorm.
+    intros * Hwl.
     eapply to_global_complete.
     eapply normalize_global_normalized_global; eauto.
   Qed.

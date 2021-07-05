@@ -1,7 +1,0 @@
-node fby_reset(r : bool) returns (x : int);
-let x = reset 0 fby (x + 1) every r;
-tel
-  
-node arrow_reset(x : int) returns (y : int);
-let y = reset x -> 0 every (true fby false);
-tel

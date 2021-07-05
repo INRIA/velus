@@ -243,8 +243,8 @@ Inductive eexp : Type :=
 | Eunop  : unop -> eexp -> ann -> eexp
 | Ebinop : binop -> eexp -> eexp -> ann -> eexp
 
-| Efby   : list eexp -> list eexp -> list eexp -> list ann -> eexp
-| Earrow : list eexp -> list eexp -> list eexp -> list ann -> eexp
+| Efby   : list eexp -> list eexp -> list ann -> eexp
+| Earrow : list eexp -> list eexp -> list ann -> eexp
 
 | Ewhen  : list eexp -> ident -> enumtag -> lann -> eexp
 | Emerge : (ident * type) -> list (list eexp) -> lann -> eexp
@@ -280,18 +280,16 @@ Section eexp_ind2.
       P (Ebinop op e1 e2 a).
 
   Hypothesis EfbyCase:
-    forall e0s es er a,
+    forall e0s es a,
       Forall P e0s ->
       Forall P es ->
-      Forall P er ->
-      P (Efby e0s es er a).
+      P (Efby e0s es a).
 
   Hypothesis EarrowCase:
-    forall e0s es er a,
+    forall e0s es a,
       Forall P e0s ->
       Forall P es ->
-      Forall P er ->
-      P (Earrow e0s es er a).
+      P (Earrow e0s es a).
 
   Hypothesis EwhenCase:
     forall es x b a,
@@ -833,8 +831,8 @@ Section ElabExpressions.
     | Eunop _ _ (ty, nck)
     | Ebinop _ _ _ (ty, nck)
     | Ewhen _ _ _ ([ty], nck)
-    | Efby _ _ _ [(ty, nck)]
-    | Earrow _ _ _ [(ty, nck)]
+    | Efby _ _ [(ty, nck)]
+    | Earrow _ _ [(ty, nck)]
     | Emerge _ _ ([ty], nck)
     | Ecase _ _ _ ([ty], nck) => ret (ty, stripname nck)
     | _ => err_not_singleton loc
@@ -853,8 +851,8 @@ Section ElabExpressions.
     | Ecase _ _ _ (tys, nck) =>
       let ck := stripname nck in
       map (fun ty=> ((ty, ck), loc)) tys
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns =>
       map (fun tc => ((fst tc, stripname (snd tc)), loc)) anns
     end.
@@ -874,8 +872,8 @@ Section ElabExpressions.
     | Emerge _ _ (tys, nck)
     | Ecase _ _ _ (tys, nck) =>
       map (fun ty=> ((ty, nck), loc)) tys
-    | Efby _ _ _ anns
-    | Earrow _ _ _ anns
+    | Efby _ _ anns
+    | Earrow _ _ anns
     | Eapp _ _ _ anns => map (fun tc => (tc, loc)) anns
     end.
 
@@ -1093,25 +1091,21 @@ Section ElabExpressions.
       ret (Ebinop op e1 e2 (ty', (sck1, None)), loc)
     | BINARY _ _ _ loc => err_not_singleton loc
 
-    | FBY ae0s aes aer loc =>
+    | FBY ae0s aes loc =>
       do e0s <- mmap elab_exp ae0s;
       do es <- mmap elab_exp aes;
       let ans0 := lnannots e0s in
       do _ <- unify_paired_clock_types loc ans0 (lnannots es);
       do ans0 <- mmap update_ann (map discardname ans0);
-      do er <- mmap elab_exp aer;
-      do _ <- mmap assert_reset_type er;
-      ret (Efby (map fst e0s) (map fst es) (map fst er) ans0, loc)
+      ret (Efby (map fst e0s) (map fst es) ans0, loc)
 
-    | ARROW ae0s aes aer loc =>
+    | ARROW ae0s aes loc =>
       do e0s <- mmap elab_exp ae0s;
       do es <- mmap elab_exp aes;
       let ans0 := lnannots e0s in
       do _ <- unify_paired_clock_types loc ans0 (lnannots es);
       do ans0 <- mmap update_ann (map discardname ans0);
-      do er <- mmap elab_exp aer;
-      do _ <- mmap assert_reset_type er;
-      ret (Earrow (map fst e0s) (map fst es) (map fst er) ans0, loc)
+      ret (Earrow (map fst e0s) (map fst es) ans0, loc)
 
     | WHEN aes' x c loc =>
       do (xty, xck) <- find_var loc x;
@@ -1233,19 +1227,17 @@ Section ElabExpressions.
       do ann' <- freeze_ann ann;
       ret (Syn.Ebinop binop e1' e2' ann')
 
-    | Efby e0s es er anns =>
+    | Efby e0s es anns =>
       do e0s <- freeze_exps e0s;
       do es <- freeze_exps es;
-      do er <- freeze_exps er;
       do anns <- mmap freeze_ann anns;
-      ret (Syn.Efby e0s es er anns)
+      ret (Syn.Efby e0s es anns)
 
-    | Earrow e0s es er anns =>
+    | Earrow e0s es anns =>
       do e0s <- freeze_exps e0s;
       do es <- freeze_exps es;
-      do er <- freeze_exps er;
       do anns <- mmap freeze_ann anns;
-      ret (Syn.Earrow e0s es er anns)
+      ret (Syn.Earrow e0s es anns)
 
     | Ewhen es ckid b (tys, nck) =>
       do es <- freeze_exps es;
@@ -1291,6 +1283,20 @@ Section ElabExpressions.
     do _ <- unify_pat loc xs (lnannots es');
     do es' <- mmap freeze_exp (List.map fst es');
     ret (xs, es').
+
+  Fixpoint elab_block (ab : LustreAst.block) : Elab Syn.block :=
+    match ab with
+    | BEQ aeq =>
+      do eq <- elab_equation aeq;
+      ret (Beq eq)
+    | BRESET abcks [aer] _ =>
+      do bcks <- mmap elab_block abcks;
+      do (er, loc) <- elab_exp false aer;
+      do _ <- assert_reset_type (er, loc);
+      do er <- freeze_exp er;
+      ret (Breset bcks er)
+    | BRESET bcks _ loc => err_not_singleton loc
+    end.
 
 End ElabExpressions.
 
@@ -1422,8 +1428,8 @@ Section ElabDeclaration.
       intuition.
   Qed.
 
-  Definition check_defined (loc: astloc) (defd: PS.t) (eqs: list equation) : Elab unit :=
-    let defd' := vars_defined eqs in
+  Definition check_defined (loc: astloc) (defd: PS.t) (bcks: list block) : Elab unit :=
+    let defd' := flat_map vars_defined bcks in
     if check_nodup defd' then
       let defd' := ps_from_list defd' in
       if PS.equal defd defd' then ret tt
@@ -1431,10 +1437,10 @@ Section ElabDeclaration.
     else err_loc loc (msg "Duplicate in vars defined").
 
   Lemma check_defined_spec:
-    forall eqs loc defd st st',
-      check_defined loc defd eqs st = OK (tt, st') ->
-      (forall x, In x (vars_defined eqs) <-> PS.In x defd)
-      /\ NoDup (vars_defined eqs).
+    forall bcks loc defd st st',
+      check_defined loc defd bcks st = OK (tt, st') ->
+      (forall x, In x (flat_map vars_defined bcks) <-> PS.In x defd)
+      /\ NoDup (flat_map vars_defined bcks).
   Proof.
     intros * Hcheck.
     unfold check_defined in Hcheck.
@@ -1447,14 +1453,14 @@ Section ElabDeclaration.
     rewrite ps_from_list_In. reflexivity.
   Qed.
 
-  Definition check_nodupanon loc (xin xvar xout : list (ident * (type * clock))) (eqs : list equation) :=
-    if check_nodup (Syn.idents (xin++xvar++xout++anon_in_eqs eqs))
+  Definition check_nodupanon loc (xin xvar xout : list (ident * (type * clock))) (bcks : list block) :=
+    if check_nodup (Syn.idents (xin++xvar++xout++flat_map anon_in_block bcks))
     then ret tt
     else err_loc loc (msg "Duplicate in input, vars and outputs of node").
 
-  Lemma check_nodupanon_spec : forall loc xin xvar xout eqs st st',
-      check_nodupanon loc xin xvar xout eqs st = OK (tt, st') ->
-      NoDupMembers (xin ++ xvar ++ xout ++ anon_in_eqs eqs).
+  Lemma check_nodupanon_spec : forall loc xin xvar xout bcks st st',
+      check_nodupanon loc xin xvar xout bcks st = OK (tt, st') ->
+      NoDupMembers (xin ++ xvar ++ xout ++ flat_map anon_in_block bcks).
   Proof.
     intros * Hcheck.
     unfold check_nodupanon in Hcheck.
@@ -1589,15 +1595,13 @@ Section ElabDeclaration.
       eapply IHe1 in Hbind; eapply IHe2 in Hbind1; subst.
       eapply freeze_ann_st_id; eauto.
     - (* fby *)
-      eapply mmap_st_id in Hbind2; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
+      eapply mmap_st_id in Hbind0; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
       eapply mmap_st_id in Hbind; eauto.
-      eapply mmap_st_id in Hbind1; eauto.
-      eapply mmap_st_id in Hbind0; eauto. subst; auto.
+      eapply mmap_st_id in Hbind1; eauto. subst; auto.
     - (* arrow *)
-      eapply mmap_st_id in Hbind2; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
+      eapply mmap_st_id in Hbind0; subst. 2:eapply Forall_forall; eauto using freeze_ann_st_id.
       eapply mmap_st_id in Hbind; eauto.
-      eapply mmap_st_id in Hbind1; eauto.
-      eapply mmap_st_id in Hbind0; eauto. subst; auto.
+      eapply mmap_st_id in Hbind1; eauto. subst; auto.
     - (* when *)
       destruct a; repeat monadInv.
       eapply mmap_st_id in Hbind; eauto.
@@ -1883,13 +1887,11 @@ Section ElabDeclaration.
       repeat rewrite map_app, Forall_app; repeat split; simpl; auto.
       + eapply fresh_ins_AtomOrGensym' in H; eauto.
       + eapply fresh_ins_AtomOrGensym' in H0; eauto.
-      + eapply fresh_ins_AtomOrGensym' in H1; eauto.
     - (* arrow *)
       repeat monadInv.
       repeat rewrite map_app, Forall_app; repeat split; simpl; auto.
       + eapply fresh_ins_AtomOrGensym' in H; eauto.
       + eapply fresh_ins_AtomOrGensym' in H0; eauto.
-      + eapply fresh_ins_AtomOrGensym' in H1; eauto.
     - (* when *)
       repeat monadInv.
       eapply fresh_ins_AtomOrGensym'; eauto.
@@ -1992,15 +1994,30 @@ Section ElabDeclaration.
     eapply anon_ins_AtomOrGensym; eauto.
   Qed.
 
-  Corollary anon_in_eqs_AtomOrGensym : forall env tenv nenv eqs st eqs' st' ,
-      mmap (elab_equation env tenv nenv) eqs st = OK (eqs', st') ->
-      Forall (AtomOrGensym elab_prefs) (map fst (anon_in_eqs eqs')).
+  Lemma anon_in_block_AtomOrGensym : forall env tenv nenv bck st bcks' st' ,
+      elab_block env tenv nenv bck st = OK (bcks', st') ->
+      Forall (AtomOrGensym elab_prefs) (map fst (anon_in_block bcks')).
   Proof.
-    induction eqs; intros * Hmmap;
-      simpl in *; repeat monadInv; unfold anon_in_eqs; simpl; auto.
-    rewrite map_app, Forall_app; split; auto.
+    induction bck using LustreAst.block_ind2; intros * Helab;
+      simpl in Helab; cases; repeat monadInv.
     - eapply anon_in_eq_AtomOrGensym; eauto.
-    - eapply IHeqs; eauto.
+    - rewrite map_app, Forall_app. split.
+      + clear - H Hbind.
+        revert st x x0 H Hbind.
+        induction bcks; intros; inv H; repeat monadInv; auto.
+        rewrite map_app, Forall_app; split; eauto.
+      + eapply fresh_in_AtomOrGensym in Hbind1; eauto.
+  Qed.
+
+  Corollary anon_in_blocks_AtomOrGensym : forall env tenv nenv bcks st bcks' st' ,
+      mmap (elab_block env tenv nenv) bcks st = OK (bcks', st') ->
+      Forall (AtomOrGensym elab_prefs) (map fst (flat_map anon_in_block bcks')).
+  Proof.
+    induction bcks; intros * Hmmap;
+      simpl in *; repeat monadInv; simpl; auto.
+    rewrite map_app, Forall_app; split; auto.
+    - eapply anon_in_block_AtomOrGensym; eauto.
+    - eapply IHbcks; eauto.
   Qed.
 
   Local Obligation Tactic :=
@@ -2020,22 +2037,22 @@ Section ElabDeclaration.
 
   Program Definition elab_declaration_node
           (name: ident) (has_state: bool) (inputs outputs locals: var_decls)
-          (equations: list LustreAst.equation) (loc: astloc) : res (@node elab_prefs) :=
+          (bcks: list LustreAst.block) (loc: astloc) : res (@node elab_prefs) :=
     match (do env_in  <- elab_var_decls loc (Env.empty _) inputs;
            do env_out <- elab_var_decls loc env_in outputs;
            do env     <- elab_var_decls loc env_out locals;
            do xin     <- mmap (annotate env_in) inputs;
            do xout    <- mmap (annotate env_out) outputs;
            do xvar    <- mmap (annotate env) locals;
-           do eqs     <- mmap (elab_equation env tenv nenv) equations;
+           do bcks    <- mmap (elab_block env tenv nenv) bcks;
            (* TODO better error messages *)
-           do _       <- check_nodupanon loc xin xvar xout eqs;
-           do _       <- check_defined loc (nameset (nameset PS.empty xvar) xout) eqs;
+           do _       <- check_nodupanon loc xin xvar xout bcks;
+           do _       <- check_defined loc (nameset (nameset PS.empty xvar) xout) bcks;
            do _       <- check_atom loc name;
            do _       <- mmap (check_atom loc) (map fst (xin ++ xvar ++ xout));
            if (length xin ==b O) || (length xout ==b O)
            then err_loc loc (msg "not enough inputs or outputs")
-           else ret (xin, xout, xvar, eqs)) init_state with
+           else ret (xin, xout, xvar, bcks)) init_state with
     | Error e => Error e
     | OK ((xin, xout, xvar, eqs), ((nfui, _), _)) =>
       OK {| n_name     := name;
@@ -2043,7 +2060,7 @@ Section ElabDeclaration.
             n_in       := xin;
             n_out      := xout;
             n_vars     := xvar;
-            n_eqs      := eqs |}
+            n_blocks   := eqs |}
     end.
   Next Obligation.
     (* 0 < length xin *)
@@ -2078,7 +2095,8 @@ Section ElabDeclaration.
   Qed.
   Next Obligation.
     (* Forall AtomNotReserved (xin ++ xvar ++ xout) /\ atom name *)
-    replace (map fst (xin ++ xvar ++ xout ++ anon_in_eqs eqs)) with ((map fst (xin ++ xvar ++ xout) ++ map fst (anon_in_eqs eqs))).
+    replace (map fst (xin ++ xvar ++ xout ++ flat_map anon_in_block eqs))
+      with ((map fst (xin ++ xvar ++ xout) ++ map fst (flat_map anon_in_block eqs))).
     2:{ repeat rewrite map_app; repeat rewrite <- app_assoc; auto. }
     rewrite Forall_app. repeat split.
     - clear - Hbind5 Hbind9.
@@ -2086,7 +2104,7 @@ Section ElabDeclaration.
       induction (xin ++ xvar ++ xout); intros; simpl in *; auto.
       repeat monadInv. destruct a as (?&?). constructor; eauto.
       eapply check_atom_spec in Hbind; left; auto.
-    - eapply anon_in_eqs_AtomOrGensym; eauto.
+    - eapply anon_in_blocks_AtomOrGensym; eauto.
     - eapply check_atom_spec; eauto.
   Qed.
 

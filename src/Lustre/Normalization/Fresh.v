@@ -703,6 +703,22 @@ Module Fresh(Ids : IDS).
         assumption.
       Qed.
 
+      Fact fresh_ident_reuse_nIn' : forall pref (b : B) id st st' aft reprefs reusable,
+          st_valid_reuse st pref aft reprefs reusable ->
+          fresh_ident pref b st = (id, st') ->
+          ~PS.In id reusable.
+      Proof.
+        intros * Hvalid Hfresh.
+        eapply fresh_ident_st_valid_reuse in Hvalid; eauto.
+        apply st_valid_reuse_NoDup in Hvalid.
+        apply fresh_ident_vars_perm in Hfresh.
+        unfold st_ids in *.
+        rewrite <- Hfresh in Hvalid. inv Hvalid.
+        contradict H1.
+        repeat rewrite in_app_iff. do 2 right.
+        eapply In_PS_elements; eauto.
+      Qed.
+
       Fact fresh_ident_nIn' : forall pref (b : B) id st st' aft,
           st_valid_after st pref aft ->
           fresh_ident pref b st = (id, st') ->

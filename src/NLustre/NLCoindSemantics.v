@@ -160,17 +160,9 @@ Module Type NLCOINDSEMANTICS
   CoFixpoint reset1 (v0: value) (xs: Stream svalue) (rs: Stream bool) (doreset : bool) : Stream svalue :=
     match xs, rs, doreset with
     | absent ⋅ xs, false ⋅ rs, false => absent ⋅ (reset1 v0 xs rs false)
-    | absent ⋅ xs, true ⋅ rs, _
-    | absent ⋅ xs, _ ⋅ rs, true => absent ⋅ (reset1 v0 xs rs true)
+    | absent ⋅ xs, _ ⋅ rs, _ => absent ⋅ (reset1 v0 xs rs true)
     | present x ⋅ xs, false ⋅ rs, false => present x ⋅ (reset1 v0 xs rs false)
-    | present x ⋅ xs, true ⋅ rs, _
-    | present x ⋅ xs, _ ⋅ rs, true => present v0 ⋅ (reset1 v0 xs rs false)
-    end.
-
-  CoFixpoint fby (v0: value) (xs: Stream svalue) : Stream svalue :=
-    match xs with
-    | absent    ⋅ xs => absent     ⋅ fby v0 xs
-    | present x ⋅ xs => present v0 ⋅ fby x xs
+    | present x ⋅ xs, _ ⋅ rs, _ => present v0 ⋅ (reset1 v0 xs rs false)
     end.
 
   Definition reset (v0: value) (xs: Stream svalue) (rs: Stream bool) : Stream svalue :=
@@ -275,7 +267,7 @@ Module Type NLCOINDSEMANTICS
           sem_clock H b ck (clocks_of ess) ->
           Forall2 (sem_var H) (List.map fst xrs) ys ->
           bools_ofs ys rs ->
-          (forall k, sem_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
+          (forall k, sem_node f (List.map (maskv k rs) ess) (List.map (maskv k rs) oss)) ->
           Forall2 (sem_var H) xs oss ->
           sem_equation H b (EqApp xs ck f es xrs)
     | SeqFby:
@@ -319,8 +311,8 @@ Module Type NLCOINDSEMANTICS
         sem_clock H b ck (clocks_of ess) ->
         Forall2 (sem_var H) (List.map fst xrs) ys ->
         bools_ofs ys rs ->
-        (forall k, sem_node G f (List.map (mask k rs) ess) (List.map (mask k rs) oss)
-              /\ P_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
+        (forall k, sem_node G f (List.map (maskv k rs) ess) (List.map (maskv k rs) oss)
+              /\ P_node f (List.map (maskv k rs) ess) (List.map (maskv k rs) oss)) ->
         Forall2 (sem_var H) xs oss ->
         P_equation H b (EqApp xs ck f es xrs).
 
@@ -387,8 +379,7 @@ Module Type NLCOINDSEMANTICS
       try eauto using sem_equation; try intro Hb.
     - econstructor; eauto. intro k.
       take (forall k, _ /\ _) and specialize (it k) as []. auto.
-    -
-      assert (nd.(n_name) <> f) as Hnf.
+    - assert (nd.(n_name) <> f) as Hnf.
       { intro Hnf; subst.
         eapply find_node_In in Hfind as (?&?); simpl in *.
         eapply Forall_forall in Hnin; [|eauto]. congruence. }
@@ -427,13 +418,15 @@ Module Type NLCOINDSEMANTICS
     intros. apply sem_node_cons2; eauto.
   Qed.
 
-  Add Parametric Morphism H : (sem_var H)
-      with signature eq ==> @EqSt svalue ==> Basics.impl
+  Add Parametric Morphism : sem_var
+      with signature Env.Equiv (@EqSt _) ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_var_EqSt.
   Proof.
-    intros x xs xs' E; intro Sem; inv Sem.
+    intros H H' EH x xs xs' E; intro Sem; inv Sem.
+    eapply Env.Equiv_orel in EH. rewrite H1 in EH. inv EH. symmetry in H3.
     econstructor; eauto.
-    transitivity xs; auto; symmetry; auto.
+    transitivity xs; symmetry; auto.
+    transitivity xs'0; symmetry; auto.
   Qed.
 
   Add Parametric Morphism : merge
@@ -562,11 +555,11 @@ Module Type NLCOINDSEMANTICS
       constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
 
-  Add Parametric Morphism H : (sem_exp H)
-      with signature @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
+  Add Parametric Morphism : sem_exp
+      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_exp_morph.
   Proof.
-    intros b b' Eb e xs xs' Exs Sem.
+    intros H H' EH b b' Eb e xs xs' Exs Sem.
     revert b' xs' Eb Exs; induction Sem.
     - intros. constructor.
       rewrite <-Eb.
@@ -580,6 +573,7 @@ Module Type NLCOINDSEMANTICS
       eapply sem_var_EqSt; eauto.
     - econstructor; eauto.
       apply IHSem; auto; try reflexivity.
+      erewrite <-EH; eauto.
       now rewrite <-Exs.
     - econstructor; eauto.
       + apply IHSem; auto; reflexivity.
@@ -590,14 +584,15 @@ Module Type NLCOINDSEMANTICS
       + now rewrite <-Exs.
   Qed.
 
-  Add Parametric Morphism H : (sem_cexp H)
-      with signature @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
+  Add Parametric Morphism : sem_cexp
+      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_cexp_morph.
   Proof.
-    intros b b' Eb e xs xs' Exs Sem.
+    intros H H' EH b b' Eb e xs xs' Exs Sem.
     revert b' xs' Eb Exs; revert dependent xs;
       induction e using cexp_ind2; intros; inv Sem.
     - econstructor; eauto.
+      + erewrite <-EH; eauto.
       + instantiate (1 := ess).
         take (merge _ _ _) and clear it.
         revert dependent ess; induction l; inversion_clear 1;
@@ -605,7 +600,7 @@ Module Type NLCOINDSEMANTICS
         take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.
       + now rewrite <-Exs.
     - econstructor; eauto.
-      + rewrite <-Eb; eauto.
+      + rewrite <-EH, <-Eb; eauto.
       + instantiate (1 := ess).
         take (case _ _ _) and clear it.
         revert dependent ess; induction l; inversion_clear 1;
@@ -613,39 +608,41 @@ Module Type NLCOINDSEMANTICS
         take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.
       + now rewrite <-Exs.
     - constructor.
-      now rewrite <-Eb, <-Exs.
+      now rewrite <-EH, <-Eb, <-Exs.
   Qed.
 
-  Add Parametric Morphism A sem H
-    (sem_compat: Proper (eq ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl) sem)
-    : (@sem_annot A sem H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+  Add Parametric Morphism A sem
+    (sem_compat: Proper (Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl) sem)
+    : (@sem_annot A sem)
+      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_annot_morph.
   Proof.
-    revert H sem_compat; cofix Cofix.
-    intros H HH b b' Eb ck e xs xs' Exs Sem.
+    revert sem_compat; cofix Cofix.
+    intros sem_compat H H' EH b b' Eb ck e xs xs' Exs Sem.
     inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et];
       try discriminate.
     - econstructor.
-      + simpl in *; now rewrite <-Eh, <-Et, <-Eb.
-      + rewrite <-Eb; eauto.
+      + simpl in *; now rewrite <-EH, <-Eh, <-Et, <-Eb.
+      + rewrite <-EH, <-Eb; eauto.
       + inv Eb; eapply Cofix; eauto.
+        eapply history_tl_Equiv; eauto.
     - econstructor.
-      + simpl in *; now rewrite <-Et, <-Eb.
-      + rewrite <-Eb; eauto.
+      + simpl in *; now rewrite <-EH, <-Et, <-Eb.
+      + rewrite <-EH, <-Eb; eauto.
       + inv Eb; eapply Cofix; eauto.
+        eapply history_tl_Equiv; eauto.
   Qed.
 
-  Add Parametric Morphism H : (sem_aexp H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+  Add Parametric Morphism : sem_aexp
+      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_aexp_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.
     solve_proper.
   Qed.
 
-  Add Parametric Morphism H : (sem_caexp H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+  Add Parametric Morphism : sem_caexp
+      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_caexp_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.

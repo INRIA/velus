@@ -387,6 +387,14 @@ Module Env.
         adds List.nil vs e = e.
     Proof. simpl; auto. Qed.
 
+    Lemma adds_cons:
+      forall xs vs x (a: A) m,
+        adds (x :: xs) (a :: vs) m = adds xs vs (add x a m).
+    Proof.
+      intros *.
+      unfold adds; simpl. reflexivity.
+    Qed.
+
     Lemma adds'_cons:
       forall xvs x (a: A) m,
         ~ InMembers x xvs ->
@@ -1337,6 +1345,19 @@ Module Env.
     Qed.
   End RefinesAdds.
 
+  Lemma refines_map : forall {V1 V2} {eq1 : V1 -> V1 -> Prop} {eq2 : V2 -> V2 -> Prop} (f : V1 -> V2) H1 H2,
+      (forall x y, eq1 x y -> eq2 (f x) (f y)) ->
+      Env.refines eq1 H1 H2 ->
+      Env.refines eq2 (map f H1) (map f H2).
+  Proof.
+    intros * Hf Href ?? Hfind1.
+    rewrite Props.P.F.map_o in *.
+    eapply option_map_inv in Hfind1 as (?&Hfind1&?); subst.
+    eapply Href in Hfind1 as (?&?&Hfind1); subst.
+    rewrite Hfind1; simpl. exists (f x1).
+    split; auto.
+  Qed.
+
   Lemma In_add1 {A : Type}:
     forall x (v : A) env,
       In x (add x v env).
@@ -1557,6 +1578,15 @@ Module Env.
     - rewrite Props.P.F.remove_in_iff, D, filter_In.
       split; intros (H1 & H2); split; auto.
       now apply nequiv_decb_true.
+  Qed.
+
+  Lemma dom_map : forall {V1 V2} (f : V1 -> V2) xs H,
+      dom (Env.map f H) xs <-> dom H xs.
+  Proof.
+    intros *; split; intros Hdom;
+      eapply dom_intro; intros x.
+    1,2:erewrite <-dom_use; eauto.
+    1,2:erewrite Props.P.F.map_in_iff; reflexivity.
   Qed.
 
   Section DomAdds.
@@ -1848,6 +1878,21 @@ Module Env.
     Qed.
   End EnvRestrict.
 
+  Lemma restrict_map : forall {V1 V2} (f : V1 -> V2) xs H,
+      Env.Equal (Env.restrict (Env.map f H) xs) (Env.map f (Env.restrict H xs)).
+  Proof.
+    induction xs; intros *; simpl.
+    - intros x. erewrite Props.P.F.map_o.
+      rewrite 2 Props.P.F.empty_o; auto.
+    - erewrite Props.P.F.map_o.
+      destruct (find a H); simpl; auto.
+      intros x. rewrite Props.P.F.map_o.
+      destruct (ident_eq_dec x a); subst.
+      + rewrite 2 PositiveMap.gss; auto.
+      + rewrite 2 PositiveMap.gso; auto.
+        rewrite IHxs, Props.P.F.map_o; auto.
+  Qed.
+
   Section adds_opt'.
     Import List.ListNotations.
     Definition adds_opt' {A : Type} (xos: list (option positive))
@@ -2133,10 +2178,24 @@ Module Env.
         destruct contra. congruence.
     Qed.
 
+    Variable R : A -> A -> Prop.
+    Hypothesis Hequiv: Equivalence R.
+
     Lemma union_find1 : forall m1 m2 x y,
         find x m1 = Some y ->
         find x m2 = Some y ->
         find x (union m1 m2) = Some y.
+    Proof.
+      intros * Hf1 Hf2.
+      eapply In_find_adds'; eauto.
+      + apply NoDupMembers_elements.
+      + apply PositiveMap.elements_correct; auto.
+    Qed.
+
+    Lemma union_find1' : forall m1 m2 x y1 y2,
+        find x m1 = Some y1 ->
+        find x m2 = Some y2 ->
+        find x (union m1 m2) = Some y2.
     Proof.
       intros * Hf1 Hf2.
       eapply In_find_adds'; eauto.
@@ -2178,25 +2237,25 @@ Module Env.
     Qed.
 
     Lemma union_refines1 : forall m m',
-        refines eq m m' ->
-        refines eq m (union m m').
+        refines R m m' ->
+        refines R m (union m m').
     Proof.
       intros * Href ? ? Hfind.
       specialize (Href _ _ Hfind) as (v'&?&?); subst.
       exists v'. split; auto.
-      apply union_find1; auto.
+      eapply union_find1'; eauto.
     Qed.
 
     Lemma union_refines2 : forall m m1 m2,
-        refines eq m m1 ->
-        refines eq m m2 ->
-        refines eq m (union m1 m2).
+        refines R m m1 ->
+        refines R m m2 ->
+        refines R m (union m1 m2).
     Proof.
       intros * Href1 Href2 ? ? Hfind.
-      specialize (Href1 _ _ Hfind) as (v'&?&?); subst.
-      specialize (Href2 _ _ Hfind) as (v&?&?); subst.
-      exists v. split; auto.
-      apply union_find1; auto.
+      specialize (Href1 _ _ Hfind) as (v1&?&?); subst.
+      specialize (Href2 _ _ Hfind) as (v2&?&?); subst.
+      exists v2. split; auto.
+      eapply union_find1'; eauto.
     Qed.
 
     Lemma union_dom : forall m1 m2 xs ys zs,
@@ -2238,23 +2297,23 @@ Module Env.
         dom m xs ->
         dom m1 (xs ++ ys) ->
         dom m2 (xs ++ zs) ->
-        refines eq m m1 ->
-        refines eq m m2 ->
-        refines eq m1 (union m1 m2).
+        refines R m m1 ->
+        refines R m m2 ->
+        refines R m1 (union m1 m2).
     Proof.
       intros * Hnd Hd Hd1 Hd2 Hr1 Hr2 ? ? Hfind.
-      exists v; split; auto.
       destruct (Env.find x m) eqn:Hfind'.
       - specialize (Hr1 _ _ Hfind') as (?&?&Hfind''); subst.
         rewrite Hfind'' in Hfind. inv Hfind.
-        specialize (Hr2 _ _ Hfind') as (?&?&?); subst.
-        apply union_find1; auto.
+        specialize (Hr2 _ _ Hfind') as (v2&?&?); subst.
+        exists v2. split. 2:eapply union_find1'; eauto.
+        etransitivity; eauto. symmetry; auto.
       - (* x ∈ zs /\ x ∉ xs *)
         eapply dom_In_nIn in Hd1 as (Hnin&Hin); eauto.
         2:apply find_In in Hfind; eauto.
         2:erewrite <- Props.P.F.not_find_in_iff in Hfind'; eauto.
         eapply NoDup_app_In in Hnd; eauto.
-        eapply union_find2; eauto.
+        exists v. split; try reflexivity. eapply union_find2; eauto.
         eapply find_not_In_dom; eauto.
         intro contra. apply in_app_iff in contra as [?|?]; auto.
     Qed.
@@ -2264,23 +2323,23 @@ Module Env.
         dom m xs ->
         dom m1 (xs ++ ys) ->
         dom m2 (xs ++ zs) ->
-        refines eq m m1 ->
-        refines eq m m2 ->
-        refines eq m2 (union m1 m2).
+        refines R m m1 ->
+        refines R m m2 ->
+        refines R m2 (union m1 m2).
     Proof.
       intros * Hnd Hd Hd1 Hd2 Hr1 Hr2 ? ? Hfind.
-      exists v; split; auto.
       destruct (Env.find x m) eqn:Hfind'.
       - specialize (Hr2 _ _ Hfind') as (?&?&Hfind''); subst.
         rewrite Hfind'' in Hfind. inv Hfind.
         specialize (Hr1 _ _ Hfind') as (?&?&?); subst.
-        apply union_find1; auto.
+        exists v. split. 2:eapply union_find1'; eauto.
+        reflexivity.
       - (* x ∈ ys /\ x ∉ xs *)
         eapply dom_In_nIn in Hd2 as (Hnin&Hin); eauto.
         2:apply find_In in Hfind; eauto.
         2:erewrite <- Props.P.F.not_find_in_iff in Hfind'; eauto.
         rewrite Permutation.Permutation_app_comm in Hnd. eapply NoDup_app_In in Hnd; eauto.
-        eapply union_find3; eauto.
+        exists v. split; try reflexivity. eapply union_find3; eauto.
         eapply find_not_In_dom; eauto.
         intro contra. apply in_app_iff in contra as [?|?]; auto.
     Qed.

@@ -465,13 +465,13 @@ Module Type NLCOINDTOINDEXED
     (** State the correspondence for [mask]. *)
     Lemma mask_impl:
       forall k r xss,
-        tr_Streams (List.map (CStr.mask k r) xss)
+        tr_Streams (List.map (CStr.maskv k r) xss)
         ≈ IStr.mask k (tr_Stream r) (tr_Streams xss).
     Proof.
       induction xss as [|xs];
         simpl; intros * n; unfold IStr.mask in *.
       - destruct (k =? IStr.count (tr_Stream r) n); auto.
-      - simpl; unfold tr_Stream at 1; rewrite mask_nth.
+      - simpl; unfold tr_Stream at 1; rewrite maskv_nth.
         rewrite IHxss; simpl.
         rewrite <-count_impl, Nat.eqb_sym.
         unfold tr_Stream; cases.
