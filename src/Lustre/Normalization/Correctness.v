@@ -30,11 +30,11 @@ Module Type CORRECTNESS
        (Import Ord : LORDERED Ids Op OpAux Cks Syn)
        (Import Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
        (Import LCS : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Cl LCA Ord CStr Sem)
-       (Import Norm : NORMALIZATION Ids Op OpAux Cks Syn LCA).
+       (Import Norm : NORMALIZATION Ids Op OpAux Cks Syn).
 
   Import Fresh Tactics Unnesting.
-  Module Import Typing := NTypingFun Ids Op OpAux Cks Syn LCA Ty Norm.
-  Module Import Clocking := NClockingFun Ids Op OpAux Cks Syn LCA Cl Norm.
+  Module Import Typing := NTypingFun Ids Op OpAux Cks Syn Ty Norm.
+  Module Import Clocking := NClockingFun Ids Op OpAux Cks Syn Cl Norm.
   Import List.
 
   CoFixpoint default_stream : Stream svalue :=
@@ -3040,7 +3040,7 @@ Module CorrectnessFun
        (Lord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Lord CStr)
        (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo LCA Lord CStr Sem)
-       (Norm : NORMALIZATION Ids Op OpAux Cks Syn LCA)
+       (Norm : NORMALIZATION Ids Op OpAux Cks Syn)
        <: CORRECTNESS Ids Op OpAux Cks CStr Syn LCA Ty Clo Lord Sem LClockSem Norm.
   Include CORRECTNESS Ids Op OpAux Cks CStr Syn LCA Ty Clo Lord Sem LClockSem Norm.
 End CorrectnessFun.

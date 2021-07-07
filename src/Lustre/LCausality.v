@@ -96,16 +96,12 @@ Module Type LCAUSALITY
       Is_free_left y 0 er ->
       depends_on x y (Breset blocks er).
 
-  Definition depends_on_ck vars (blocks : list block) (x y : ident) :=
-    Exists (depends_on x y) blocks \/
-    (exists ck, In (x, ck) vars /\ Is_free_in_clock y ck).
-
   Definition graph_of_blocks {v a} vars blocks (g : AcyGraph v a) : Prop :=
-    PS.Equal (vertices g) (PSP.of_list (map fst vars)) /\
-    (forall x y, depends_on_ck vars blocks x y -> is_arc g y x).
+    PS.Equal (vertices g) (PSP.of_list vars) /\
+    (forall x y, Exists (depends_on x y) blocks -> is_arc g y x).
 
   Definition graph_of_node {prefs v a} (n : @node prefs) (g : AcyGraph v a) : Prop :=
-    graph_of_blocks (idck (n_in n ++ n_vars n ++ n_out n)) (n_blocks n) g.
+    graph_of_blocks (idents (n_in n ++ n_vars n ++ n_out n)) (n_blocks n) g.
 
   Definition node_causal {prefs} (n : @node prefs) :=
     exists {v a} (g : AcyGraph v a), graph_of_node n g.
@@ -119,10 +115,7 @@ Module Type LCAUSALITY
     - rewrite <- ps_from_list_ps_of_list in *.
       rewrite <- Hp1; auto.
     - intros * Hdep. apply Ha.
-      destruct Hdep as [?|(ck&?&?)].
-      + left. rewrite Hp2; auto.
-      + right. exists ck; split; auto.
-        rewrite Hp1; auto.
+      rewrite Hp2; auto.
   Qed.
 
   Fact Is_free_left_list_length' : forall es x k,
@@ -286,14 +279,7 @@ Module Type LCAUSALITY
 
   Definition build_graph {prefs} (n : @node prefs) : Env.t PS.t :=
     let vo := flat_map collect_depends_on (n_blocks n) in
-    let env := Env.from_list (vo ++ (map (fun '(x, _) => (x, PS.empty)) (n_in n))) in
-    Env.mapi (fun x deps =>
-                match List.find (fun xtc => (fst xtc =? x)%positive)
-                                (n_in n ++ n_vars n ++ n_out n)
-                with
-                | Some (_, (_, ck)) => PS.union deps (collect_free_clock ck)
-                | None => deps
-                end) env.
+    Env.from_list (vo ++ (map (fun '(x, _) => (x, PS.empty)) (n_in n))).
 
   Open Scope error_monad_scope.
 
@@ -786,7 +772,6 @@ Module Type LCAUSALITY
   Proof.
     intros * Hwl. unfold idents, build_graph.
     eapply Env.dom_intro. intros x.
-    rewrite Env.Props.P.F.mapi_in_iff.
     rewrite Env.In_from_list, fst_InMembers.
     repeat rewrite map_app. repeat rewrite map_map.
     rewrite Permutation_app_comm.
@@ -809,47 +794,32 @@ Module Type LCAUSALITY
 
   Lemma build_graph_find {prefs} : forall (G: @global prefs) n x y,
       wl_node G n ->
-      depends_on_ck (idck (n_in n ++ n_vars n ++ n_out n)) (n_blocks n) x y ->
+      Exists (depends_on x y) (n_blocks n) ->
       exists ys, (Env.find x (build_graph n)) = Some ys /\ PS.In y ys.
   Proof.
     intros * Hwl Hdep.
     specialize (build_graph_dom G n Hwl) as Hdom.
     eapply Env.dom_use with (x0:=x) in Hdom.
     rewrite Env.In_find in Hdom. symmetry in Hdom.
-    destruct Hdep as [Hdep|(ck&Hin&Hfree)].
-    - apply Exists_exists in Hdep as (?&Hin&Hdep).
-      eapply collect_depends_on_spec in Hdep as (?&Hx&Hy).
-      2:eapply Forall_forall in Hwl; eauto.
-      assert (In x (map fst (n_in n ++ n_vars n ++ n_out n))) as Hin'.
-      { rewrite map_app. apply in_or_app; right.
-        rewrite <- n_defd. erewrite <-flat_map_collect_depends_on_vars_defined; eauto.
-        eapply in_map_iff. exists (x, x1). split; auto.
-        apply in_flat_map'. eapply Exists_exists; eauto. }
-      apply Hdom in Hin' as (?&Hfind). clear Hdom.
-      eexists; split; eauto.
-      unfold build_graph in Hfind.
-      rewrite FMapPositive.PositiveMap.gmapi in Hfind.
-      apply option_map_inv_Some in Hfind as (?&Hfind&?).
-      erewrite Env.find_In_from_list with (v:=x1) in Hfind. inv Hfind.
-      + destruct find as [(?&?&?)|]. apply PSF.union_2. 1,2:auto.
-      + apply in_or_app; left. rewrite in_flat_map.
-        eexists; split; eauto; simpl.
-      + rewrite fst_NoDupMembers, map_app.
-        erewrite flat_map_collect_depends_on_vars_defined; eauto.
-        rewrite map_map. erewrite map_ext with (g:=fst). 2:intros (?&?&?); auto.
-        rewrite Permutation_app_comm, n_defd, <- map_app.
-        apply node_NoDup.
-    - apply In_idck_exists in Hin as (ty&Hin).
-      assert (In x (map fst (n_in n ++ n_vars n ++ n_out n))) as Hin'.
-      { rewrite in_map_iff. exists (x, (ty, ck)); split; auto. }
-      apply Hdom in Hin' as (?&Hfind).
-      eexists; split; eauto.
-      unfold build_graph in Hfind.
-      rewrite FMapPositive.PositiveMap.gmapi in Hfind.
-      apply option_map_inv_Some in Hfind as (?&Hfind&?).
-      erewrite find_some' in H; eauto; simpl in *; subst.
-      2:apply fst_NoDupMembers, node_NoDup.
-      apply PSF.union_3. rewrite collect_free_clock_spec; auto.
+     apply Exists_exists in Hdep as (?&Hin&Hdep).
+     eapply collect_depends_on_spec in Hdep as (?&Hx&Hy).
+     2:eapply Forall_forall in Hwl; eauto.
+     assert (In x (map fst (n_in n ++ n_vars n ++ n_out n))) as Hin'.
+     { rewrite map_app. apply in_or_app; right.
+       rewrite <- n_defd. erewrite <-flat_map_collect_depends_on_vars_defined; eauto.
+       eapply in_map_iff. exists (x, x1). split; auto.
+       apply in_flat_map'. eapply Exists_exists; eauto. }
+     apply Hdom in Hin' as (?&Hfind). clear Hdom.
+     eexists; split; eauto.
+     unfold build_graph in Hfind.
+     erewrite Env.find_In_from_list with (v:=x1) in Hfind. inv Hfind; auto.
+    + apply in_or_app; left. rewrite in_flat_map.
+      eexists; split; eauto; simpl.
+    + rewrite fst_NoDupMembers, map_app.
+      erewrite flat_map_collect_depends_on_vars_defined; eauto.
+      rewrite map_map. erewrite map_ext with (g:=fst). 2:intros (?&?&?); auto.
+      rewrite Permutation_app_comm, n_defd, <- map_app.
+      apply node_NoDup.
   Qed.
 
   (** We prove that the [check_node_causality] function only succeeds if
@@ -869,7 +839,7 @@ Module Type LCAUSALITY
     exists t. exists a. exists Graph. split.
     - intros x. rewrite <- Hv.
       apply build_graph_dom in Hwl.
-      rewrite Env.Props.P.F.map_in_iff, (Hwl x), <- ps_from_list_ps_of_list, ps_from_list_In, map_fst_idck.
+      rewrite Env.Props.P.F.map_in_iff, (Hwl x), <- ps_from_list_ps_of_list, ps_from_list_In.
       reflexivity.
     - intros x y Hdep.
       apply Ha.
@@ -1112,7 +1082,8 @@ Module Type LCAUSALITY
       { rewrite Hv in Heq.
         repeat rewrite <- ps_from_list_ps_of_list in Heq.
         intros ? Hin. rewrite <- ps_from_list_In in *.
-        rewrite <- Heq, map_fst_idck, map_app in Hin.
+        unfold idents in *.
+        rewrite <- Heq, map_app in Hin.
         rewrite n_defd. assumption. }
       clear Heq.
       induction xs'; auto.
@@ -1125,9 +1096,7 @@ Module Type LCAUSALITY
       - (* a is in the vars defined *)
         eapply Hdep; eauto; clear Hdep. intros ? Hdep'.
         eapply TopoOrder_inv in Hpre; eauto.
-        + eapply Forall_forall in Hpre; eauto.
-        + intros * Hdep. eapply Ha.
-          left; auto.
+        eapply Forall_forall in Hpre; eauto.
     Qed.
 
     Corollary node_causal_ind :
@@ -1140,7 +1109,7 @@ Module Type LCAUSALITY
       assert (Hvars:=Hcaus). eapply causal_ind in Hvars; eauto.
       destruct Hcaus as (Heq&_).
       rewrite <- PS_For_all_Forall in Hvars.
-      rewrite <- PS_For_all_Forall', ps_from_list_ps_of_list, <- map_fst_idck, <- Heq; auto.
+      rewrite <- PS_For_all_Forall', ps_from_list_ps_of_list, <- Heq; auto.
     Qed.
 
   End exp_causal_ind.

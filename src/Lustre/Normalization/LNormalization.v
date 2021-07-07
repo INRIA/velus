@@ -22,7 +22,7 @@ Module Type LNORMALIZATION
        (Ord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
        (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem).
-  Declare Module Export Norm : NORMALIZATION Ids Op OpAux Cks Syn Cau.
+  Declare Module Export Norm : NORMALIZATION Ids Op OpAux Cks Syn.
   Declare Module Export Correct : CORRECTNESS Ids Op OpAux Cks CStr Syn Cau Typ Clo Ord Sem ClSem Norm.
   (* Declare Module Export Idempotence : IDEMPOTENCE Ids Op OpAux Syn Cau Norm. *)
 End LNORMALIZATION.
@@ -41,7 +41,7 @@ Module LNormalizationFun
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
        (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem)
        <: LNORMALIZATION Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem ClSem.
-  Module Export Norm := NormalizationFun Ids Op OpAux Cks Syn Cau.
+  Module Export Norm := NormalizationFun Ids Op OpAux Cks Syn.
   Module Export Correct := CorrectnessFun Ids Op OpAux Cks CStr Syn Cau Typ Clo Ord Sem ClSem Norm.
   (* Module Export Idempotence := IdempotenceFun Ids Op OpAux Syn Cau Norm. *)
 End LNormalizationFun.

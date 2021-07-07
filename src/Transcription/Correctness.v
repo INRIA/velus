@@ -63,7 +63,7 @@ Module Type CORRECTNESS
        (Import Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS          : LSEMANTICS       Ids Op OpAux Cks L Lord       Str)
        (Import LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks L LC LCA Lord Str LS)
-       (LN          : NORMALIZATION    Ids Op OpAux Cks L    LCA)
+       (LN          : NORMALIZATION    Ids Op OpAux Cks L)
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord).
 
   Lemma sem_lexp_step {prefs} :
@@ -1461,7 +1461,7 @@ Module CorrectnessFun
        (Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS   : LSEMANTICS       Ids Op OpAux Cks L Lord       Str)
        (LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks L LC LCA Lord Str LS)
-       (LN   : NORMALIZATION    Ids Op OpAux Cks L    LCA)
+       (LN   : NORMALIZATION    Ids Op OpAux Cks L)
        (NLSC : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord)
 <: CORRECTNESS Ids Op OpAux Cks L CE NL TR LT LC LCA Ord Lord Str LS LCS LN NLSC.
   Include CORRECTNESS Ids Op OpAux Cks L CE NL TR LT LC LCA Ord Lord Str LS LCS LN NLSC.

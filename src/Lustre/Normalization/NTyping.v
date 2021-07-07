@@ -3,7 +3,7 @@ From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
 From Coq Require Import List. Import List.ListNotations. Open Scope list_scope.
-From Velus Require Import Lustre.LSyntax Lustre.LCausality Lustre.LTyping.
+From Velus Require Import Lustre.LSyntax Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Fresh Lustre.Normalization.Normalization.
 
 (** * Preservation of Typing through Normalization *)
@@ -14,9 +14,8 @@ Module Type NTYPING
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import Syn : LSYNTAX Ids Op OpAux Cks)
-       (Caus : LCAUSALITY Ids Op OpAux Cks Syn)
        (Import Typ : LTYPING Ids Op OpAux Cks Syn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Cks Syn Caus).
+       (Import Norm : NORMALIZATION Ids Op OpAux Cks Syn).
   Import Fresh Facts Tactics.
 
   (** ** Preservation of typeof *)
@@ -2422,9 +2421,8 @@ Module NTypingFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (Syn : LSYNTAX Ids Op OpAux Cks)
-       (Caus : LCAUSALITY Ids Op OpAux Cks Syn)
        (Typ : LTYPING Ids Op OpAux Cks Syn)
-       (Norm : NORMALIZATION Ids Op OpAux Cks Syn Caus)
-       <: NTYPING Ids Op OpAux Cks Syn Caus Typ Norm.
-  Include NTYPING Ids Op OpAux Cks Syn Caus Typ Norm.
+       (Norm : NORMALIZATION Ids Op OpAux Cks Syn)
+       <: NTYPING Ids Op OpAux Cks Syn Typ Norm.
+  Include NTYPING Ids Op OpAux Cks Syn Typ Norm.
 End NTypingFun.

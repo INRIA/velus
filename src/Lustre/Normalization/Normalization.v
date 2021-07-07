@@ -7,7 +7,7 @@ From compcert Require Import common.Errors.
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import Lustre.LSyntax Lustre.LCausality.
+From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.Normalization.Fresh.
 From Velus Require Import Lustre.Normalization.Unnesting Lustre.Normalization.NormFby.
 
@@ -18,8 +18,7 @@ Module Type NORMALIZATION
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks)
-       (Import Caus : LCAUSALITY Ids Op OpAux Cks Syn).
+       (Import Syn : LSYNTAX Ids Op OpAux Cks).
 
   Module Export Unnesting := UnnestingFun Ids Op OpAux Cks Syn.
   Module Export NormFby := NormFbyFun Ids Op OpAux Cks Syn Unnesting.
@@ -53,7 +52,6 @@ Module NormalizationFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (Syn : LSYNTAX Ids Op OpAux Cks)
-       (Caus : LCAUSALITY Ids Op OpAux Cks Syn)
-       <: NORMALIZATION Ids Op OpAux Cks Syn Caus.
-  Include NORMALIZATION Ids Op OpAux Cks Syn Caus.
+       <: NORMALIZATION Ids Op OpAux Cks Syn.
+  Include NORMALIZATION Ids Op OpAux Cks Syn.
 End NormalizationFun.

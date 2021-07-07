@@ -7,7 +7,6 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
 From Velus Require Import Lustre.LSyntax.
-From Velus Require Import Lustre.LCausality.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.Normalization.Normalization.
 
@@ -22,8 +21,7 @@ Module Type TRNORMALARGS
        (Import Cks   : CLOCKS Ids Op OpAux)
        (Import LSyn  : LSYNTAX Ids Op OpAux Cks)
        (LOrd         : LORDERED Ids Op OpAux Cks LSyn)
-       (Import LCau  : LCAUSALITY Ids Op OpAux Cks LSyn)
-       (Import Norm  : NORMALIZATION Ids Op OpAux Cks LSyn LCau)
+       (Import Norm  : NORMALIZATION Ids Op OpAux Cks LSyn)
        (Import CE    : CESYNTAX Ids Op OpAux Cks)
        (CETyp        : CETYPING Ids Op OpAux Cks CE)
        (NL           : NLSYNTAX Ids Op OpAux Cks CE)
@@ -133,8 +131,7 @@ Module TrNormalArgsFun
        (Cks   : CLOCKS Ids Op OpAux)
        (LSyn  : LSYNTAX Ids Op OpAux Cks)
        (LOrd  : LORDERED Ids Op OpAux Cks LSyn)
-       (LCau  : LCAUSALITY Ids Op OpAux Cks LSyn)
-       (Norm  : NORMALIZATION Ids Op OpAux Cks LSyn LCau)
+       (Norm  : NORMALIZATION Ids Op OpAux Cks LSyn)
        (CE    : CESYNTAX Ids Op OpAux Cks)
        (CETyp : CETYPING Ids Op OpAux Cks CE)
        (NL    : NLSYNTAX Ids Op OpAux Cks CE)
@@ -142,6 +139,6 @@ Module TrNormalArgsFun
        (Typ   : NLTYPING Ids Op OpAux Cks CE NL Ord CETyp)
        (NLNA  : NLNORMALARGS Ids Op OpAux Cks CE CETyp NL Ord Typ)
        (TR    : TR Ids Op OpAux Cks LSyn CE NL)
-       <: TRNORMALARGS Ids Op OpAux Cks LSyn LOrd LCau Norm CE CETyp NL Ord Typ NLNA TR.
-  Include TRNORMALARGS Ids Op OpAux Cks LSyn LOrd LCau Norm CE CETyp NL Ord Typ NLNA TR.
+       <: TRNORMALARGS Ids Op OpAux Cks LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
+  Include TRNORMALARGS Ids Op OpAux Cks LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
 End TrNormalArgsFun.

@@ -7,7 +7,6 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
 From Velus Require Import Lustre.LSyntax.
-From Velus Require Import Lustre.LCausality.
 From Velus Require Import Lustre.Normalization.Normalization.
 
 From Velus Require Import CoreExpr.CESyntax.
@@ -20,8 +19,7 @@ Module Type COMPLETENESS
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import LSyn : LSYNTAX Ids Op OpAux Cks)
-       (Import LCau : LCAUSALITY Ids Op OpAux Cks LSyn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Cks LSyn LCau)
+       (Import Norm : NORMALIZATION Ids Op OpAux Cks LSyn)
        (Import CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
        (Import TR : TR Ids Op OpAux Cks LSyn CE NL).
@@ -223,11 +221,10 @@ Module CompletenessFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (LSyn : LSYNTAX Ids Op OpAux Cks)
-       (LCau : LCAUSALITY Ids Op OpAux Cks LSyn)
-       (Norm : NORMALIZATION Ids Op OpAux Cks LSyn LCau)
+       (Norm : NORMALIZATION Ids Op OpAux Cks LSyn)
        (CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
        (TR : TR Ids Op OpAux Cks LSyn CE NL)
-       <: COMPLETENESS Ids Op OpAux Cks LSyn LCau Norm CE NL TR.
-  Include COMPLETENESS Ids Op OpAux Cks LSyn LCau Norm CE NL TR.
+       <: COMPLETENESS Ids Op OpAux Cks LSyn Norm CE NL TR.
+  Include COMPLETENESS Ids Op OpAux Cks LSyn Norm CE NL TR.
 End CompletenessFun.
