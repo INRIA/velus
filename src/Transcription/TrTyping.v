@@ -46,8 +46,8 @@ Module Type TRTYPING
     induction ck; intros * H; inv H; constructor; eauto.
   Qed.
 
-  Lemma typeof_lexp {prefs} :
-    forall (G: @L.global prefs) vars e e' ty,
+  Lemma typeof_lexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e e' ty,
       to_lexp e = OK e' ->
       LT.wt_exp G vars e ->
       L.typeof e = [ty] ->
@@ -65,8 +65,8 @@ Module Type TRTYPING
       eauto.
   Qed.
 
-  Lemma typeofc_cexp {prefs} :
-    forall (G: @L.global prefs) vars e e' ty,
+  Lemma typeofc_cexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e e' ty,
       to_cexp e = OK e' ->
       LT.wt_exp G vars e ->
       L.typeof e = [ty] ->
@@ -88,8 +88,8 @@ Module Type TRTYPING
       inv H14; eauto.
   Qed.
 
-  Lemma wt_constant {prefs} :
-    forall (G: @L.global prefs) vars e ty c,
+  Lemma wt_constant {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e ty c,
       to_constant e = OK c ->
       LT.wt_exp G vars e ->
       L.typeof e = [ty] ->
@@ -105,8 +105,8 @@ Module Type TRTYPING
       apply Forall_singl in H8. apply Forall_singl in H; auto.
   Qed.
 
-  Lemma wt_lexp {prefs} :
-    forall (G: @L.global prefs) vars e e',
+  Lemma wt_lexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e e',
       to_lexp e = OK e' ->
       LT.wt_exp G vars e ->
       CET.wt_exp G.(L.enums) vars e'.
@@ -122,8 +122,8 @@ Module Type TRTYPING
     - inv Htr. cases. monadInv H1. inv H. inv H7. econstructor; eauto.
   Qed.
 
-  Lemma wt_cexp {prefs} :
-    forall (G: @L.global prefs) vars e e',
+  Lemma wt_cexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e e',
       to_cexp e = OK e' ->
       LT.wt_exp G vars e ->
       CET.wt_cexp G.(L.enums) vars e'.
@@ -175,8 +175,8 @@ Module Type TRTYPING
         * eapply IHes; eauto.
   Qed.
 
-  Lemma ty_lexp {prefs} :
-    forall (G: @L.global prefs) env e e',
+  Lemma ty_lexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) env e e',
       LT.wt_exp G env e ->
       to_lexp e = OK e' ->
       L.typeof e = [CE.typeof e'].
@@ -243,8 +243,8 @@ Module Type TRTYPING
     eapply Forall_incl; [|eapply incl_common_suffix; eauto]; eauto.
   Qed.
 
-  Lemma wt_clockof {prefs} :
-    forall (G: @L.global prefs) vars e,
+  Lemma wt_clockof {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e,
       FNS.normalized_cexp e ->
       LT.wt_exp G vars e ->
       Forall (LT.wt_clock G.(L.enums) vars) (L.clockof e).
@@ -335,21 +335,21 @@ Module Type TRTYPING
       eapply vars_of_spec in Vars.
       apply mmap_inversion in EQ.
       econstructor; simpl; eauto; try erewrite to_global_enums; eauto.
-      + erewrite <- (to_node_out n); eauto. rewrite Forall2_map_2 in Hf2.
+      + erewrite <- (to_node_out n); eauto. rewrite Forall2_map_2 in Hf2. setoid_rewrite Forall2_map_2.
         apply Forall2_forall. split.
         2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
             rewrite it; auto. }
-        intros ? (?&(?&?)) Hin.
+        intros ? (?&((?&?)&?)) Hin.
         eapply Forall2_chain_In in Hin; eauto.
         now destruct Hin as (?&?& <-).
       + erewrite <- (to_node_in n); eauto.
-        clear - H3 H6 EQ.
+        clear - H3 H6 EQ. setoid_rewrite Forall2_map_2.
         remember (L.n_in n). clear Heql0. revert dependent l0.
         revert dependent x0.
         induction l; intros; inv EQ; auto.
         inv H6; auto.
         simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
-        rewrite H1 in H6. inv H6.
+        rewrite H1 in H6. inv H6. destruct y as (?&((?&?)&?)).
         constructor; eauto.
       + apply wt_clock_l_ce, wt_find_base_clock.
         inv Hnormed; [|inv H2; inv H1].
@@ -378,24 +378,25 @@ Module Type TRTYPING
   Qed.
 
   Lemma wt_block_to_equation :
-    forall G P env envo d xr vars e',
+    forall G P env envo d xr vars e' xs,
       to_global G = OK P ->
       block_to_equation env envo xr d = OK e' ->
       LT.wt_global G ->
       (forall i ck, find_clock env i = OK ck -> LT.wt_clock P.(NL.enums) vars ck) ->
       Forall (fun xr0 => In (xr0, bool_velus_type) vars) (map fst xr) ->
       Forall (LT.wt_clock (L.enums G) vars) (map snd xr) ->
-      NoDup (L.vars_defined d) ->
       FNS.unnested_block G d ->
+      L.VarsDefined d xs ->
+      NoDup xs ->
       LT.wt_block G vars d ->
       NLT.wt_equation P vars e'.
   Proof.
-    induction d using L.block_ind2; intros * Hg Htr HwtG Henvs Hxr Hckr Hdup Hnormed Hwt;
-      inv Hnormed; inv Hwt; simpl in *.
+    induction d using L.block_ind2; intros * Hg Htr HwtG Henvs Hxr Hckr Hnormed Hvars Hdup Hwt;
+      inv Hnormed; inv Hvars; inv Hwt; simpl in *.
     - eapply wt_equation in Htr; eauto.
     - cases. apply Forall_singl in H. apply Forall_singl in H3.
-      inv H5. inv H4. inv H7.
-      rewrite app_nil_r in Hdup.
+      inv H6. inv H7. inv H9. inv H4; inv H9.
+      simpl in Hdup; rewrite app_nil_r in Hdup.
       eapply H in Htr; eauto.
       1,2:constructor; auto.
   Qed.
@@ -418,37 +419,49 @@ Module Type TRTYPING
       LT.wt_node G n ->
       NLT.wt_node P n'.
   Proof.
-    intros * Htr Hg Hnormed HwtG (Wti& Wto & Wtv & Wte & Hwt).
+    intros * Htr Hg Hnormed HwtG (Wti& Wto & Wte & Hwt).
     tonodeInv Htr. unfold NLT.wt_node. simpl.
+    pose proof (L.n_defd n) as (?&Hvars&Hperm). pose proof (L.n_nodup n) as (Hnd1&Hnd2).
+    inversion_clear Hnormed as [??? Hblk Hnormed']. rewrite Hblk in *.
+    assert (Forall (fun blk => exists xs, L.VarsDefined blk xs /\ NoDup xs) blks) as Hvars'. 2:clear Hnd1 Hnd2 Hvars Hperm.
+    { clear - Hnd1 Hnd2 Hvars Hperm.
+      inv Hvars. inv Hnd2. eapply Forall2_ignore2 in H1.
+      rewrite Forall_forall in *; intros. edestruct H1 as (?&?&Hvars); eauto.
+      do 2 esplit; eauto.
+      eapply NoDup_concat; eauto. rewrite <-H3, Hperm.
+      apply NoDup_app'.
+      - apply fst_NoDupMembers; auto.
+      - apply NoDupMembers_app_l in Hnd1. rewrite NoDupMembers_idty, fst_NoDupMembers in Hnd1.
+        solve_NoDup_app.
+      - eapply Forall_forall; intros * Hinm. eapply fst_InMembers, H6 in Hinm.
+        contradict Hinm. rewrite map_app, 2 in_app_iff; auto.
+    }
+    monadInv Hmmap.
     split.
-    - pose proof (L.NoDup_vars_defined_n_eqs n) as Hdup.
-      revert dependent x.
-      unfold FNS.unnested_node in Hnormed.
-      induction (L.n_blocks n); intros; simpl in *; monadInv Hmmap; auto.
-      inv Hwt. inv Hnormed.
-      simpl in Hdup. apply NoDup_app'_iff in Hdup as (?&?&?).
-      constructor; auto. eapply wt_block_to_equation; eauto; simpl; auto.
-
-      intros i ck Hfind.
-      erewrite to_global_enums; eauto.
-      unfold find_clock in Hfind.
-      cases_eqn Hfind. inv Hfind.
-      apply Env.find_env_from_list' in Hfind0 as [Hin|[? Hfind]].
-      pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
-      simpl in Wt. now setoid_rewrite Permutation_app_comm in Wt at 2.
-      apply Env.find_env_from_list' in Hfind as [Hin|[? Hfind]].
-      pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
-      simpl in Wt. unfold idty. rewrite map_app.
-      eapply wt_clock_app in Wt; eauto.
-      apply Env.from_list_find_In in Hfind as Hin.
-      pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
-      simpl in Wt. setoid_rewrite Permutation_app_comm at 2.
-      eapply wt_clock_app in Wt; eauto. unfold idty.
-      rewrite app_assoc, map_app. eauto.
+    - inv Hwt.
+      eapply mmap_inversion in EQ.
+      eapply envs_eq_node in Hblk.
+      induction EQ; inv Hnormed'; inv H1; inv Hvars'; constructor; auto.
+      destruct H2 as (?&?&?).
+      eapply wt_block_to_equation; eauto; simpl; auto.
+      + intros ?? Hfind.
+        eapply envs_eq_find' in Hfind; eauto.
+        erewrite to_global_enums; eauto.
+        clear - Wti Wto H3 Hfind.
+        rewrite (Permutation_app_comm (idty l)), app_assoc, <-idty_app.
+        repeat rewrite idty_app, idck_app, in_app_iff in Hfind.
+        destruct Hfind as [Hin|[Hin|Hin]]; eapply In_idck_exists in Hin as (?&Hin); eapply In_idty_exists in Hin as (?&Hin);
+          eapply Forall_forall in Hin; eauto; simpl in *.
+        1-3:unfold idty in *; eapply LT.wt_clock_incl; eauto; solve_incl_app.
+      + eapply LT.wt_block_incl; [|eauto].
+        rewrite 4 idty_app, <-app_assoc. apply incl_appr'. rewrite Permutation_app_comm. reflexivity.
     - erewrite to_global_enums; eauto.
-      clear - Wte. intros * Hin.
-      rewrite Forall_map in Wte. eapply Forall_forall in Wte; eauto.
-      destruct Wte; auto.
+      clear - Wte Hwt. inv Hwt. intros * Hin.
+      rewrite Forall_map in Wte, H4.
+      rewrite 2 idty_app, Forall_app, 2 Forall_forall in Wte. rewrite Forall_forall in H4.
+      repeat rewrite idty_app, in_app_iff in Hin. destruct Hin as [Hin|[Hin|Hin]].
+      1,3:eapply Wte in Hin as (?&?); auto.
+      eapply H4 in Hin as (?&?); auto.
   Qed.
 
   Lemma wt_transcription :

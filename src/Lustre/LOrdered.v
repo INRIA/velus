@@ -65,52 +65,39 @@ Module Type LORDERED
       Is_node_in_block f (Beq eq)
   | INBreset : forall blocks er,
       Exists (Is_node_in_block f) blocks \/ Is_node_in_exp f er ->
-      Is_node_in_block f (Breset blocks er).
+      Is_node_in_block f (Breset blocks er)
+  | INBlocal : forall locs blocks,
+      Exists (Is_node_in_block f) blocks ->
+      Is_node_in_block f (Blocal locs blocks).
 
-  Definition Is_node_in (f: ident) (blocks: list block) : Prop :=
-    List.Exists (Is_node_in_block f) blocks.
+  (* TODO remove *)
+  (* Definition Is_node_in (f: ident) (blocks: list block) : Prop := *)
+  (*   List.Exists (Is_node_in_block f) blocks. *)
 
-  Definition Ordered_nodes {prefs} : @global prefs -> Prop :=
-    Ordered_program (fun f nd => Is_node_in f nd.(n_blocks)).
+  Definition Ordered_nodes {PSyn prefs} : @global PSyn prefs -> Prop :=
+    Ordered_program (fun f nd => Is_node_in_block f nd.(n_block)).
 
   (** ** Properties of [Is_node_in] *)
 
-  Section Is_node_Properties.
+  (* TODO remove *)
+  (* Section Is_node_Properties. *)
 
-    Lemma not_Is_node_in_cons:
-      forall n block blocks,
-        ~ Is_node_in n (block::blocks) <-> ~Is_node_in_block n block /\ ~Is_node_in n blocks.
-    Proof.
-      intros n block blocks.
-      split; intro HH.
-      - split; intro; apply HH; unfold Is_node_in; intuition.
-      - destruct HH; inversion_clear 1; intuition.
-    Qed.
+  (*   Lemma Is_node_in_Forall: *)
+  (*     forall n blocks, *)
+  (*       ~Is_node_in n blocks <-> List.Forall (fun block => ~Is_node_in_block n block) blocks. *)
+  (*   Proof. *)
+  (*     intros n blocks. unfold Is_node_in. *)
+  (*     symmetry. apply Forall_Exists_neg. *)
+  (*   Qed. *)
 
-    Lemma Is_node_in_Forall:
-      forall n blocks,
-        ~Is_node_in n blocks <-> List.Forall (fun block => ~Is_node_in_block n block) blocks.
-    Proof.
-      intros n blocks. unfold Is_node_in.
-      symmetry. apply Forall_Exists_neg.
-    Qed.
-
-    Lemma Is_node_in_app: forall n blocks1 blocks2,
-        Is_node_in n (blocks1++blocks2) <-> (Is_node_in n blocks1 \/ Is_node_in n blocks2).
-    Proof.
-      intros n blocks1 blocks2.
-      unfold Is_node_in.
-      apply Exists_app'.
-    Qed.
-
-  End Is_node_Properties.
+  (* End Is_node_Properties. *)
 
   (** ** Properties of [Ordered_nodes] *)
 
   Section Ordered_nodes_Properties.
 
-    Lemma Ordered_nodes_append {prefs}:
-      forall (G G': @global prefs),
+    Lemma Ordered_nodes_append {PSyn prefs}:
+      forall (G G': @global PSyn prefs),
         suffix G G'
         -> Ordered_nodes G'
         -> Ordered_nodes G.
@@ -120,11 +107,11 @@ Module Type LORDERED
       eapply program_equiv_rel_Symmetric; eauto.
     Qed.
 
-    Lemma find_node_later_not_Is_node_in {prefs}:
-      forall f enums (nd: @node prefs) nds nd',
+    Lemma find_node_later_not_Is_node_in {PSyn prefs}:
+      forall f enums (nd: @node PSyn prefs) nds nd',
         Ordered_nodes (Global enums (nd::nds))
         -> find_node f (Global enums nds) = Some nd'
-        -> ~Is_node_in nd.(n_name) nd'.(n_blocks).
+        -> ~Is_node_in_block nd.(n_name) nd'.(n_block).
     Proof.
       intros * Hord Hfind Hini.
       eapply option_map_inv in Hfind as ((?&?)&(Hfind&?)); subst.
@@ -132,11 +119,11 @@ Module Type LORDERED
       apply Forall_singl in Hfind; auto.
     Qed.
 
-    Lemma find_node_not_Is_node_in {prefs}:
-      forall f (nd: @node prefs) G,
+    Lemma find_node_not_Is_node_in {PSyn prefs}:
+      forall f (nd: @node PSyn prefs) G,
         Ordered_nodes G
         -> find_node f G = Some nd
-        -> ~Is_node_in nd.(n_name) nd.(n_blocks).
+        -> ~Is_node_in_block nd.(n_name) nd.(n_block).
     Proof.
       intros f nd G Hord Hfind.
       apply option_map_inv in Hfind as ((?&?)&(?&?)); subst.
@@ -150,7 +137,7 @@ Module Type LORDERED
   (** Actually, any wt or wc program is also ordered :)
       We can use the wl predicates + hypothesis that there is no duplication in the node names *)
 
-  Lemma wl_exp_Is_node_in_exp {prefs} : forall (G: @global prefs) e f,
+  Lemma wl_exp_Is_node_in_exp {PSyn prefs} : forall (G: @global PSyn prefs) e f,
       wl_exp G e ->
       Is_node_in_exp f e ->
       In f (map n_name (nodes G)).
@@ -186,7 +173,7 @@ Module Type LORDERED
       rewrite in_map_iff; eauto.
   Qed.
 
-  Lemma wl_equation_Is_node_in_eq {prefs} : forall (G: @global prefs) eq f,
+  Lemma wl_equation_Is_node_in_eq {PSyn prefs} : forall (G: @global PSyn prefs) eq f,
       wl_equation G eq ->
       Is_node_in_eq f eq ->
       In f (map n_name (nodes G)).
@@ -199,7 +186,7 @@ Module Type LORDERED
     eapply wl_exp_Is_node_in_exp; eauto.
   Qed.
 
-  Lemma wl_equation_Is_node_in_block {prefs} : forall (G: @global prefs) d f,
+  Lemma wl_equation_Is_node_in_block {PSyn prefs} : forall (G: @global PSyn prefs) d f,
       wl_block G d ->
       Is_node_in_block f d ->
       In f (map n_name (nodes G)).
@@ -213,22 +200,23 @@ Module Type LORDERED
         eapply Forall_Exists in Hisin; eauto.
         eapply Exists_exists in Hisin as (?&_&(?&?)&?); eauto.
       + eapply wl_exp_Is_node_in_exp; eauto.
+    - inv Hwl. inv Hin.
+      eapply Forall_Forall in H; eauto.
+      eapply Forall_Exists in H; eauto.
+      eapply Exists_exists in H as (?&_&(?&?)&?); eauto.
   Qed.
 
-  Lemma wl_node_Is_node_in {prefs} : forall (G: @global prefs) n f,
+  Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,
       wl_node G n ->
-      Is_node_in f (n_blocks n) ->
+      Is_node_in_block f (n_block n) ->
       In f (map n_name (nodes G)).
   Proof.
     intros * Hwl Hisin.
     unfold wl_node in Hwl.
-    unfold Is_node_in in Hisin.
-    eapply Forall_Exists in Hisin; eauto.
-    eapply Exists_exists in Hisin as [? [_ [? ?]]].
     eapply wl_equation_Is_node_in_block; eauto.
   Qed.
 
-  Lemma wl_global_Ordered_nodes {prefs} : forall (G: @global prefs),
+  Lemma wl_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),
       wl_global G ->
       Ordered_nodes G.
   Proof.

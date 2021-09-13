@@ -66,8 +66,8 @@ Module Type CORRECTNESS
        (LN          : NORMALIZATION    Ids Op OpAux Cks L)
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord).
 
-  Lemma sem_lexp_step {prefs} :
-    forall (G: @L.global prefs) H b e e' s,
+  Lemma sem_lexp_step {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) H b e e' s,
       to_lexp e = OK e' ->
       LS.sem_exp G H b e s ->
       LS.sem_exp G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
@@ -101,8 +101,8 @@ Module Type CORRECTNESS
         inv H1; eauto.
   Qed.
 
-  Lemma sem_cexp_step {prefs} :
-    forall (G: @L.global prefs) H b e e' s,
+  Lemma sem_cexp_step {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) H b e e' s,
       to_cexp e = OK e' ->
       LS.sem_exp G H b e s ->
       LS.sem_exp G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
@@ -165,8 +165,8 @@ Module Type CORRECTNESS
         intros ?? Hcase. inv Hcase; eauto.
   Qed.
 
-  Lemma ty_lexp {prefs} :
-    forall (G: @L.global prefs) env e e',
+  Lemma ty_lexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) env e e',
       LT.wt_exp G env e ->
       to_lexp e = OK e' ->
       L.typeof e = [CE.typeof e'].
@@ -182,8 +182,8 @@ Module Type CORRECTNESS
       eapply H3 in H2; eauto. congruence.
   Qed.
 
-  Lemma sem_exp_lexp {prefs} :
-    forall (G : @L.global prefs) env H b e e' s,
+  Lemma sem_exp_lexp {PSyn prefs} :
+    forall (G : @L.global PSyn prefs) env H b e e' s,
       LT.wt_exp G env e ->
       to_lexp e = OK e' ->
       LS.sem_exp G H b e [s] ->
@@ -203,10 +203,10 @@ Module Type CORRECTNESS
       econstructor; eauto.
   Qed.
 
-  Lemma sem_lexp_single {prefs} :
+  Lemma sem_lexp_single {PSyn prefs} :
     forall e e' G H b ss,
       to_lexp e = OK e' ->
-      LS.sem_exp (G: @L.global prefs) H b e ss ->
+      LS.sem_exp (G: @L.global PSyn prefs) H b e ss ->
       exists s, ss = [s].
   Proof.
     induction e using L.exp_ind2; intros * Htr Hsem; inv Htr;
@@ -216,8 +216,8 @@ Module Type CORRECTNESS
     eauto.
   Qed.
 
-  Lemma sem_exps_lexps {prefs} :
-    forall (G: @L.global prefs) H b tenv es les ss,
+  Lemma sem_exps_lexps {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) H b tenv es les ss,
       mmap to_lexp es = OK les ->
       Forall (LT.wt_exp G tenv) es ->
       Forall2 (LS.sem_exp G H b) es ss ->
@@ -233,8 +233,8 @@ Module Type CORRECTNESS
     eapply sem_exp_lexp in Htolexp; eauto. now constructor.
   Qed.
 
-  Lemma sem_exp_cexp {prefs} :
-    forall (G: @L.global prefs) env H b e e' s,
+  Lemma sem_exp_cexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) env H b e e' s,
       LT.wt_exp G env e ->
       to_cexp e = OK e' ->
       LS.sem_exp G H b e [s] ->
@@ -435,8 +435,8 @@ Module Type CORRECTNESS
         inv Hgt.
   Qed.
 
-  Lemma sem_const_exp {prefs} :
-    forall (G: @L.global prefs) H b e c c' xs,
+  Lemma sem_const_exp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) H b e c c' xs,
       to_constant e = OK c ->
       LS.sem_exp G H b e [present c' ⋅ xs] ->
       c' = sem_const c.
@@ -518,8 +518,8 @@ Module Type CORRECTNESS
     1:destruct (bs' # n); congruence.
   Qed.
 
-  Lemma to_constant_sem {prefs} :
-    forall (G: @L.global prefs) cenv H b e ck b' c cs,
+  Lemma to_constant_sem {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) cenv H b e ck b' c cs,
       L.clockof e = [ck] ->
       LC.wc_exp G cenv e ->
       to_constant e = OK c ->
@@ -551,8 +551,8 @@ Module Type CORRECTNESS
       eapply sem_clock_const; eauto. eapply Hsck.
   Qed.
 
-  Lemma sem_exp_caexp {prefs} :
-    forall (G: @L.global prefs) H b env e e' s ck,
+  Lemma sem_exp_caexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) H b env e e' s ck,
       LT.wt_exp G env e ->
       to_cexp e = OK e' ->
       LS.sem_exp G H b e [s] ->
@@ -677,10 +677,10 @@ Module Type CORRECTNESS
     rewrite <-LCS.history_mask_count; eauto.
   Qed.
 
-  Lemma sem_toeq_normalized {prefs} :
-    forall (G: @L.global prefs) P cenv x e ck e' r H b,
+  Lemma sem_toeq_normalized {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) P cenv x e ck e' r H b,
       LC.wc_global G ->
-      LCS.sc_var_inv (idck cenv) H b ->
+      LCS.sc_vars (idck cenv) H b ->
       LN.Unnesting.normalized_cexp e ->
       LT.wt_exp G (idty cenv) e ->
       LC.wc_exp G (idck cenv) e ->
@@ -701,7 +701,7 @@ Module Type CORRECTNESS
     eapply sem_var_det in Hvar; eauto. rewrite Heq, Hvar in H6.
     eapply sem_exp_caexp; eauto using LCS.sem_exp_ck_sem_exp.
     eapply LCS.sc_exp in H6; eauto.
-    2:eapply LCS.sc_var_inv_mask; eauto.
+    2:eapply LCS.sc_vars_mask; eauto.
     rewrite Hck in H6. simpl in H6. inv H6; auto.
   Qed.
 
@@ -745,7 +745,7 @@ Module Type CORRECTNESS
         destruct (_ =? _); auto. congruence.
   Qed.
 
-  Lemma sem_normalized_lexp_mask_inv {prefs}: forall (G: @L.global prefs) r k H b e v,
+  Lemma sem_normalized_lexp_mask_inv {PSyn prefs}: forall (G: @L.global PSyn prefs) r k H b e v,
       LN.Unnesting.normalized_lexp e ->
       LS.sem_exp G (mask_hist k r H) (maskb k r b) e v ->
       exists v', EqSts v [maskv k r v'].
@@ -817,7 +817,7 @@ Module Type CORRECTNESS
         specialize (Hf k). inv Hf; eauto.
   Qed.
 
-  Lemma sem_normalized_lexp_det {prefs} : forall (G: @L.global prefs) H b e vs1 vs2,
+  Lemma sem_normalized_lexp_det {PSyn prefs} : forall (G: @L.global PSyn prefs) H b e vs1 vs2,
       LN.Unnesting.normalized_lexp e ->
       LS.sem_exp G H b e vs1 ->
       LS.sem_exp G H b e vs2 ->
@@ -1036,8 +1036,8 @@ Module Type CORRECTNESS
     destruct (Env.find x H); simpl; constructor; eauto.
   Qed.
 
-  Lemma sem_toeq {prefs} :
-    forall cenv out (G: @L.global prefs) H P env envo xr rs r eq eq' b,
+  Lemma sem_toeq {PSyn prefs} :
+    forall cenv out (G: @L.global PSyn prefs) H P env envo xr rs r eq eq' b,
       LN.NormFby.normalized_equation G out eq ->
       LT.wt_equation G (idty cenv) eq ->
       LC.wc_equation G (idck cenv) eq ->
@@ -1046,7 +1046,7 @@ Module Type CORRECTNESS
       (forall f xs ys,
           LCS.sem_node_ck G f xs ys ->
           NLSC.sem_node P f xs ys) ->
-      LCS.sc_var_inv (idck cenv) H b ->
+      LCS.sc_vars (idck cenv) H b ->
       Forall (fun xr => In xr (idck cenv)) xr ->
       to_equation env envo xr eq = OK eq' ->
       Forall2 (sem_var H) (map fst xr) rs ->
@@ -1109,7 +1109,7 @@ Module Type CORRECTNESS
         { erewrite envs_eq_find in EQ0; eauto. inv EQ0; eauto. }
         assert (sem_clock (mask_hist k r H) (maskb k r b) ck (abstract_clock y1)) as Hck.
         { inv Hnormed. 2:inv H4; inv H0.
-          eapply LCS.sc_exp in H10; eauto using LCS.sc_var_inv_mask.
+          eapply LCS.sc_exp in H10; eauto using LCS.sc_vars_mask.
           apply LN.Unnesting.normalized_lexp_numstreams in H27. rewrite <- L.length_clockof_numstreams in H27.
           singleton_length.
           apply Forall2_singl in H10; subst.
@@ -1207,14 +1207,14 @@ Module Type CORRECTNESS
         simpl_Foralls.
         take (LC.wc_exp _ _ _) and inversion_clear it
           as [| | | | | | | | | | |????? bck sub Wce ?? WIi WIo Wcr].
-        eapply LCS.sc_exps in Hse as Hsc; eauto using LCS.sc_var_inv_mask.
+        eapply LCS.sc_exps in Hse as Hsc; eauto using LCS.sc_vars_mask.
         take (L.find_node _ _ = Some n) and
              pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?)).
         assert (find_base_clock (L.clocksof l) = bck) as ->.
         {
           apply find_base_clock_bck.
           + rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
-            unfold idck. rewrite map_length. exact (L.n_ingt0 n).
+            unfold idck. rewrite map_length, length_idty. exact (L.n_ingt0 n).
           + apply LC.WellInstantiated_parent in WIi.
             rewrite L.clocksof_nclocksof, Forall_map.
             eapply Forall_impl; eauto. now simpl.
@@ -1222,7 +1222,7 @@ Module Type CORRECTNESS
         eapply LCS.sc_parent with (ck := bck) in Hsc; eauto.
         { rewrite <-concat_map, clocks_of_mask in Hsc; auto. }
         { rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
-          unfold idck. rewrite map_length. exact (L.n_ingt0 n). }
+          unfold idck. rewrite map_length, length_idty. exact (L.n_ingt0 n). }
         { apply LC.WellInstantiated_parent in WIi.
           rewrite L.clocksof_nclocksof, Forall_map.
           eapply Forall_impl; eauto. now simpl. }
@@ -1252,7 +1252,7 @@ Module Type CORRECTNESS
         }
         eapply NLSC.mod_sem_node_morph_Proper. reflexivity.
         3:(eapply Hsemnode; eauto).
-        * specialize (Hse k1). clear - Hnormed' Hmask Hse H9 Hbs Hdisj.
+        * specialize (Hse k1). clear - Hwcg Hnormed' Hmask Hse H9 Hbs Hdisj.
           assert (EqSts (concat ss) (map (maskv k1 r) (concat ess))) as Heq.
           { rewrite Forall2_swap_args in H9. eapply Forall2_trans_ex in Hse; eauto.
             unfold EqSts. rewrite Forall2_map_2. rewrite Forall2_map_2 in Hse.
@@ -1278,8 +1278,8 @@ Module Type CORRECTNESS
           rewrite Hmask, Heq', Hbs, Hdisj. reflexivity.
   Qed.
 
-  Lemma sem_blocktoeq {prefs} :
-    forall cenv out (G: @L.global prefs) H P env envo bck xr rs r eqs' b,
+  Lemma sem_blocktoeq {PSyn prefs} :
+    forall cenv out (G: @L.global PSyn prefs) H P env envo bck xr rs r eqs' b,
       LN.NormFby.normalized_block G out bck ->
       LT.wt_block G (idty cenv) bck ->
       LC.wc_block G (idck cenv) bck ->
@@ -1288,7 +1288,7 @@ Module Type CORRECTNESS
       (forall f xs ys,
           LCS.sem_node_ck G f xs ys ->
           NLSC.sem_node P f xs ys) ->
-      LCS.sc_var_inv (idck cenv) H b ->
+      LCS.sc_vars (idck cenv) H b ->
       Forall (fun xr0 => In xr0 (idck cenv)) xr ->
       block_to_equation env envo xr bck = OK eqs' ->
       Forall2 (sem_var H) (map fst xr) rs ->
@@ -1320,7 +1320,7 @@ Module Type CORRECTNESS
       }
       inversion_clear Hbools as (?&Hbools'&Hdisj).
       eapply H4 in Heqs; simpl; eauto; clear H4. 1,2:econstructor; auto.
-      + inv H8; auto.
+      + inv H9; auto.
       + econstructor.
         constructor; eauto. reflexivity.
       + intros k. rewrite disj_str_cons.
@@ -1334,8 +1334,8 @@ Module Type CORRECTNESS
         now rewrite H13 in H2.
   Qed.
 
-  Lemma sem_blockstoeqs {prefs} :
-    forall cenv out (G: @L.global prefs) H P env envo bcks eqs' b,
+  Lemma sem_blockstoeqs {PSyn prefs} :
+    forall cenv out (G: @L.global PSyn prefs) H P env envo bcks eqs' b,
       Forall (LN.NormFby.normalized_block G out) bcks ->
       Forall (LT.wt_block G (idty cenv)) bcks ->
       Forall (LC.wc_block G (idck cenv)) bcks ->
@@ -1344,7 +1344,7 @@ Module Type CORRECTNESS
       (forall f xs ys,
           LCS.sem_node_ck G f xs ys ->
           NLSC.sem_node P f xs ys) ->
-      LCS.sc_var_inv (idck cenv) H b ->
+      LCS.sc_vars (idck cenv) H b ->
       mmap (block_to_equation env envo []) bcks = OK eqs' ->
       Forall (LCS.sem_block_ck G H b) bcks ->
       Forall (NLSC.sem_equation P H b) eqs'.
@@ -1360,15 +1360,15 @@ Module Type CORRECTNESS
         eapply LCS.sem_block_absent; eauto.
   Qed.
 
-  Lemma inputs_clocked_vars {prefs} :
-    forall (n: @L.node prefs) H ins,
-      LCS.sc_var_inv (idck (L.n_in n ++ L.n_vars n ++ L.n_out n)) H (clocks_of ins) ->
-      NLSC.sem_clocked_vars H (clocks_of ins) (idck (L.n_in n)).
+  Lemma inputs_clocked_vars {PSyn prefs} :
+    forall (n: @L.node PSyn prefs) H ins,
+      LCS.sc_vars (idck (idty (L.n_in n ++ L.n_out n))) H (clocks_of ins) ->
+      NLSC.sem_clocked_vars H (clocks_of ins) (idck (idty (L.n_in n))).
   Proof.
     intros * Hsc.
-    unfold LCS.sc_var_inv in Hsc.
-    eapply Forall_map, Forall_app in Hsc as (Hsc&_).
-    eapply Forall_map, Forall_forall. intros (?&?&?) Hin; simpl.
+    unfold LCS.sc_vars in Hsc.
+    eapply Forall_map, Forall_map, Forall_app in Hsc as (Hsc&_).
+    eapply Forall_map, Forall_map, Forall_forall. intros (?&?&?) Hin; simpl.
     eapply Forall_forall in Hsc as (?&Hvar&Hck); eauto; simpl in *.
     constructor; intros; eauto.
     eapply sem_var_det in Hvar; eauto. rewrite <-Hvar in Hck.
@@ -1392,37 +1392,62 @@ Module Type CORRECTNESS
     intros * Hnormed Hord Hwt Hwc Htr Hsem.
     destruct Hwt as (Hbool&Hwt).
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Hblocks Hbk (_&Hsc)].
+    inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Hblocks Hbk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    inversion_clear Hnormed as [|?? (?&?)].
+    inversion_clear Hnormed as [|?? ([??? Hblk Hblks]&?)].
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
     - rewrite L.find_node_now in Hfind; eauto. inv Hfind.
       assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnnblocks Hnn].
-      eapply LCS.sem_blocks_ck_cons in Hblocks; eauto.
+      eapply LCS.sem_block_ck_cons in Hblocks; eauto.
       assert (Htr':=Htr). monadInv Htr'; simpl in *; monadInv EQ.
       assert (forall f ins outs,
                  LCS.sem_node_ck (L.Global enms nds) f ins outs ->
                  NLSC.sem_node (NL.Global enms x4) f ins outs) as IHnds'.
       { intros. eapply IHnds; eauto. constructor; auto.
         unfold to_global; simpl. rewrite EQ; auto. }
-      take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4 & Hwt5).
-      take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3 & Hwc4).
-      econstructor; simpl.
+      take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
+      take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
+      pose proof (L.n_nodup n) as (Hnd1&Hnd2).
+      rewrite Hblk in *. inv Hnd2. inv Hblocks.
+      assert (Env.refines (@EqSt _) H H') as Href.
+      { rewrite map_app, map_fst_idty in Hdom.
+        eapply LCS.local_hist_dom_refines; eauto; simpl in *. rewrite app_nil_r.
+        intros ? [Hinm1|Hinm1] Hinm2.
+        - eapply H11 in Hinm1; eauto using in_or_app.
+        - eapply NoDupMembers_app_InMembers in Hnd1; eauto.
+          eapply Hnd1, InMembers_incl; eauto using L.local_anons_in_block_incl.
+          rewrite InMembers_idty, fst_InMembers; auto.
+      }
+      eapply NLSC.SNode with (H:=H'); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
-      + erewrite <- to_node_in; eauto.
-      + erewrite <- to_node_out; eauto.
+      + erewrite <- to_node_in, map_fst_idty; eauto.
+        eapply Forall2_impl_In; [|eauto]; intros. eapply LS.sem_var_refines; eauto.
+      + erewrite <- to_node_out, map_fst_idty; eauto.
+        eapply Forall2_impl_In; [|eauto]; intros. eapply LS.sem_var_refines; eauto.
       + erewrite <- to_node_in; eauto.
         eapply inputs_clocked_vars; eauto.
-      + apply NLSC.sem_equation_cons2; auto.
-        * eapply ord_l_nl; eauto.
-        * assert (Hton := EQ0). tonodeInv EQ0; simpl in *.
-          eapply sem_blockstoeqs; eauto. apply envs_eq_node.
-        * assert (Htrn' := EQ0).
-          apply to_node_name in EQ0. rewrite <- EQ0.
-          eapply ninin_l_nl; eauto.
+        eapply sc_vars_refines; eauto.
+      + apply NLSC.sem_equation_cons2; eauto using ord_l_nl.
+        2:{ assert (Htrn' := EQ0).
+            apply to_node_name in EQ0. rewrite <- EQ0.
+            eapply ninin_l_nl; eauto. congruence. }
+        tonodeInv EQ0; simpl in *.
+        eapply sem_blockstoeqs. 5:eapply envs_eq_node. 1-9:eauto.
+        * inv Hwt4. eapply Forall_impl; [|eauto]; intros.
+          eapply LT.wt_block_incl; [|eauto].
+          rewrite (Permutation_app_comm locs).
+          repeat rewrite idty_app. now rewrite app_assoc.
+        * inv Hwc3. eapply Forall_impl; [|eauto]; intros.
+          eapply LC.wc_block_incl; [|eauto].
+          rewrite (Permutation_app_comm locs).
+          repeat rewrite idty_app. repeat rewrite idck_app. now rewrite app_assoc.
+        * unfold sc_vars. rewrite (Permutation_app_comm locs), app_assoc, idty_app, idck_app.
+          apply Forall_app; split; auto.
+          eapply sc_vars_refines; eauto.
+        * clear Htr. rewrite Hblk in Hmmap. monadInv Hmmap; eauto.
     - eapply LCS.sem_node_ck_cons in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.

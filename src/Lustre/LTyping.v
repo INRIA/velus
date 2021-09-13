@@ -55,9 +55,10 @@ Module Type LTYPING
 
   (** ** Expressions and equations *)
   Section WellTyped.
+    Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
 
-    Variable G     : @global prefs.
+    Variable G     : @global PSyn prefs.
     Variable Γ     : list (ident * type).
 
     Definition wt_enum ty : Prop :=
@@ -150,8 +151,8 @@ Module Type LTYPING
         Forall wt_exp es ->
         Forall wt_exp er ->
         find_node f G = Some n ->
-        Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in) ->
-        Forall2 (fun a '(_, (t, _)) => fst a = t) anns n.(n_out) ->
+        Forall2 (fun et '(_, (t, _, _)) => et = t) (typesof es) n.(n_in) ->
+        Forall2 (fun a '(_, (t, _, _)) => fst a = t) anns n.(n_out) ->
         Forall (fun e => typeof e = [bool_velus_type]) er ->
         Forall (fun a => wt_nclock G.(enums) (Γ++(idty (fresh_ins es++anon_streams anns))) (snd a)) anns ->
         wt_exp (Eapp f es er anns).
@@ -161,29 +162,33 @@ Module Type LTYPING
       Forall wt_exp es
       /\ Forall2 (fun x ty=> In (x, ty) Γ) xs (typesof es).
 
-    Inductive wt_block : block -> Prop :=
-    | wt_Beq: forall eq,
-        wt_equation eq ->
-        wt_block (Beq eq)
-    | wt_Breset: forall blocks er,
-        Forall wt_block blocks ->
-        wt_exp er ->
-        typeof er = [bool_velus_type] ->
-        wt_block (Breset blocks er).
-
   End WellTyped.
 
-  Definition wt_clocks enums (Γ : list (ident * (type * clock))) : list (ident * (type * clock)) -> Prop :=
-    Forall (fun '(_, (_, ck)) => wt_clock enums (idty Γ) ck).
+  Definition wt_clocks enums (Γ : list (ident * type)) : list (ident * (type * clock * ident)) -> Prop :=
+    Forall (fun '(_, (_, ck, _)) => wt_clock enums Γ ck).
 
-  Definition wt_node {prefs} (G: @global prefs) (n: @node prefs) : Prop
-    :=    wt_clocks G.(enums) n.(n_in) n.(n_in)
-       /\ wt_clocks G.(enums) (n.(n_in) ++ n.(n_out)) n.(n_out)
-       /\ wt_clocks G.(enums) (n.(n_in) ++ n.(n_out) ++ n.(n_vars)) n.(n_vars)
-       /\ Forall (wt_enum G) (map snd (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
-       /\ Forall (wt_block G (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out)))) n.(n_blocks).
+  Inductive wt_block {PSyn prefs} (G: @global PSyn prefs) : list (ident * type) -> block -> Prop :=
+  | wt_Beq: forall env eq,
+      wt_equation G env eq ->
+      wt_block G env (Beq eq)
+  | wt_Breset: forall env blocks er,
+      Forall (wt_block G env) blocks ->
+      wt_exp G env er ->
+      typeof er = [bool_velus_type] ->
+      wt_block G env (Breset blocks er)
+  | wt_Blocal: forall env locs blocks,
+      Forall (wt_block G (env ++ idty (idty locs))) blocks ->
+      wt_clocks G.(enums) (env ++ idty (idty locs)) locs ->
+      Forall (wt_enum G) (map snd (idty (idty locs))) ->
+      wt_block G env (Blocal locs blocks).
 
-  Definition wt_global {prefs} (G: @global prefs) : Prop :=
+  Definition wt_node {PSyn prefs} (G: @global PSyn prefs) (n: @node PSyn prefs) : Prop
+    :=    wt_clocks G.(enums) (idty (idty n.(n_in))) n.(n_in)
+       /\ wt_clocks G.(enums) (idty (idty (n.(n_in) ++ n.(n_out)))) n.(n_out)
+       /\ Forall (wt_enum G) (map snd (idty (idty (n.(n_in) ++ n.(n_out)))))
+       /\ wt_block G (idty (idty (n.(n_in) ++ n.(n_out)))) n.(n_block).
+
+  Definition wt_global {PSyn prefs} (G: @global PSyn prefs) : Prop :=
     In (bool_id, 2) G.(enums) /\
     wt_program wt_node G.
 
@@ -191,9 +196,10 @@ Module Type LTYPING
   Hint Unfold wt_equation : ltyping.
 
   Section wt_exp_ind2.
+    Context (PSyn : block -> Prop).
     Context (prefs : PS.t).
 
-    Variable (G : @global prefs).
+    Variable (G : @global PSyn prefs).
     Variable Γ : list (ident * type).
     Variable P : exp -> Prop.
 
@@ -305,8 +311,8 @@ Module Type LTYPING
         Forall P es ->
         Forall P er ->
         find_node f G = Some n ->
-        Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in) ->
-        Forall2 (fun a '(_, (t, _)) => fst a = t) anns n.(n_out) ->
+        Forall2 (fun et '(_, (t, _, _)) => et = t) (typesof es) n.(n_in) ->
+        Forall2 (fun a '(_, (t, _, _)) => fst a = t) anns n.(n_out) ->
         Forall (fun e => typeof e = [bool_velus_type]) er ->
         Forall (fun a => wt_nclock G.(enums) (Γ++(idty (fresh_ins es++anon_streams anns))) (snd a)) anns ->
         P (Eapp f es er anns).
@@ -339,8 +345,8 @@ Module Type LTYPING
 
   End wt_exp_ind2.
 
-  Lemma wt_global_NoDup {prefs}:
-    forall (g : @global prefs),
+  Lemma wt_global_NoDup {PSyn prefs}:
+    forall (g : @global PSyn prefs),
       wt_global g ->
       NoDup (map name (nodes g)).
   Proof.
@@ -348,8 +354,8 @@ Module Type LTYPING
     eapply wt_program_NoDup in Wt; eauto.
   Qed.
 
-  Lemma wt_find_node {prefs}:
-    forall (G : @global prefs) f n,
+  Lemma wt_find_node {PSyn prefs}:
+    forall (G : @global PSyn prefs) f n,
       wt_global G ->
       find_node f G = Some n ->
       exists G', wt_node G' n /\ enums G' = enums G.
@@ -422,8 +428,8 @@ Module Type LTYPING
     rewrite Same in H0; auto.
   Qed.
 
-  Instance wt_exp_Proper {prefs}:
-    Proper (@eq (@global prefs) ==> @Permutation.Permutation (ident * type)
+  Instance wt_exp_Proper {PSyn prefs}:
+    Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * type)
                 ==> @eq exp ==> iff)
            wt_exp.
   Proof.
@@ -442,16 +448,16 @@ Module Type LTYPING
       econstructor; eauto.
   Qed.
 
-  Instance wt_exp_pointwise_Proper {prefs}:
-    Proper (@eq (@global prefs) ==> @Permutation.Permutation (ident * type)
+  Instance wt_exp_pointwise_Proper {PSyn prefs}:
+    Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * type)
                                      ==> pointwise_relation exp iff) wt_exp.
   Proof.
     intros G G' HG env' env Henv e.
     now rewrite HG, Henv.
   Qed.
 
-  Instance wt_equation_Proper {prefs}:
-    Proper (@eq (@global prefs) ==> @Permutation.Permutation (ident * type)
+  Instance wt_equation_Proper {PSyn prefs}:
+    Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * type)
                 ==> @eq equation ==> iff)
            wt_equation.
   Proof.
@@ -499,7 +505,7 @@ Module Type LTYPING
     Qed.
     Local Hint Resolve wt_nclock_incl.
 
-    Lemma wt_exp_incl {prefs} : forall (G: @global prefs) vars vars' e,
+    Lemma wt_exp_incl {PSyn prefs} : forall (G: @global PSyn prefs) vars vars' e,
         incl vars vars' ->
         wt_exp G vars e ->
         wt_exp G vars' e.
@@ -515,7 +521,7 @@ Module Type LTYPING
       eapply incl_appl'; eauto.
     Qed.
 
-    Lemma wt_equation_incl {prefs} : forall (G: @global prefs) vars vars' eq,
+    Lemma wt_equation_incl {PSyn prefs} : forall (G: @global PSyn prefs) vars vars' eq,
         incl vars vars' ->
         wt_equation G vars eq ->
         wt_equation G vars' eq.
@@ -529,7 +535,7 @@ Module Type LTYPING
         intros; simpl in H1. eauto.
     Qed.
 
-    Lemma wt_block_incl {prefs} : forall (G: @global prefs) vars vars' d,
+    Lemma wt_block_incl {PSyn prefs} : forall (G: @global PSyn prefs) d vars vars',
         incl vars vars' ->
         wt_block G vars d ->
         wt_block G vars' d .
@@ -539,13 +545,18 @@ Module Type LTYPING
       - econstructor; eauto using wt_exp_incl.
         eapply Forall_Forall in H; eauto. clear H2.
         eapply Forall_impl; [|eauto]; intros ? (?&?); eauto.
+      - constructor; auto.
+        + rewrite Forall_forall in *; intros.
+          eapply H; eauto using incl_appl'.
+        + eapply Forall_impl; [|eauto]; intros (?&(?&?)&?) ?.
+          eapply wt_clock_incl; [|eauto]; auto using incl_appl'.
     Qed.
 
   End incl.
 
   Local Hint Resolve wt_clock_incl incl_appl incl_refl.
-  Lemma wt_exp_clockof {prefs}:
-    forall (G: @global prefs) env e,
+  Lemma wt_exp_clockof {PSyn prefs}:
+    forall (G: @global PSyn prefs) env e,
       wt_exp G env e ->
       Forall (wt_clock G.(enums) (env++idty (fresh_in e))) (clockof e).
   Proof.
@@ -649,10 +660,22 @@ Module Type LTYPING
   Qed.
   Local Hint Resolve check_nclock_correct.
 
+  Ltac solve_ndup :=
+    unfold fresh_ins, idty in *; simpl in *; solve_NoDupMembers_app.
+  (*   unfold idty in *; repeat rewrite map_app in *. *)
+  (* Ltac ndup_l H := *)
+  (*   ndup_simpl; *)
+  (*   rewrite app_assoc in H; apply NoDupMembers_app_l in H; auto. *)
+  (* Ltac ndup_r H := *)
+  (*   ndup_simpl; *)
+  (*   rewrite Permutation_swap in H; *)
+  (*   apply NoDupMembers_app_r in H ; auto. *)
+
   Section ValidateExpression.
+    Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
 
-    Variable G : @global prefs.
+    Variable G : @global PSyn prefs.
     Variable eenv : Env.t nat.
     Variable venv : Env.t type.
 
@@ -755,8 +778,8 @@ Module Type LTYPING
         do n <- find_node f G;
         do ts <- oconcat (map check_exp es);
         do tr <- omap check_exp er;
-        if (forall2b (fun et '(_, (t, _)) => et ==b t) ts n.(n_in))
-             && (forall2b (fun '(ot, oc) '(_, (t, _)) =>
+        if (forall2b (fun et '(_, (t, _, _)) => et ==b t) ts n.(n_in))
+             && (forall2b (fun '(ot, oc) '(_, (t, _, _)) =>
                              check_nclock eenv (Env.adds' (idty (fresh_ins es++anon_streams anns)) venv) oc
                              && (ot ==b t)) anns n.(n_out))
              && check_reset tr
@@ -772,8 +795,8 @@ Module Type LTYPING
         do n <- find_node f G;
         do ts <- oconcat (map check_exp es);
         do tr <- omap check_exp er;
-        if (forall2b (fun et '(_, (t, _)) => et ==b t) ts n.(n_in))
-             && (forall2b (fun '(ot, oc) '(_, (t, _)) =>
+        if (forall2b (fun et '(_, (t, _, _)) => et ==b t) ts n.(n_in))
+             && (forall2b (fun '(ot, oc) '(_, (t, _, _)) =>
                              check_nclock eenv (Env.adds' (idty (fresh_ins es)) venv) oc
                              && (ot ==b t)) anns n.(n_out))
              && check_reset tr
@@ -787,17 +810,6 @@ Module Type LTYPING
       match oconcat (map check_rhs es) with
       | None => false
       | Some tys => forall2b check_var xs tys
-      end.
-
-    Fixpoint check_block (d : block) : bool :=
-      match d with
-      | Beq eq => check_equation eq
-      | Breset blocks er =>
-        forallb check_block blocks &&
-        match check_exp er with
-        | Some [tyr] => tyr ==b bool_velus_type
-        | _ => false
-        end
       end.
 
     Lemma check_var_correct:
@@ -912,17 +924,13 @@ Module Type LTYPING
         omap (fun es => oconcat (map f es)) ess = Some tys ->
         Forall (Forall (wt_exp G (Env.elements venv))) ess
         /\ Forall2 (fun es tys => typesof es = tys) ess tys.
-    Proof.
+    Proof with try solve_ndup.
       induction ess as [|es ess IH]; intros tys WTf ND CE. now inv CE; auto.
       simpl in CE. destruct (oconcat (map f es)) eqn:Ce; [|now omonadInv CE].
-      eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes.
-      destruct (omap _ _) as [tes|]; [|now omonadInv CE].
+      eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes...
+      destruct (omap _ _) as [tes|]; [|now omonadInv CE]...
       omonadInv CE. simpl.
-      specialize (IH tes) as (? & ?); eauto using in_cons.
-      + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
-        rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND; auto.
-      + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
-        rewrite app_assoc in ND. apply NoDupMembers_app_l in ND; auto.
+      specialize (IH tes) as (? & ?); eauto using in_cons...
     Qed.
 
     Lemma omap_concat_map_check_exp'':
@@ -937,19 +945,15 @@ Module Type LTYPING
         omap (or_default_with (Some dty) (fun es => oconcat (map f es))) ess = Some tys ->
         Forall (LiftO True (Forall (wt_exp G (Env.elements venv)))) ess
         /\ Forall2 (fun es tys => LiftO True (fun es => typesof es = tys) es) ess tys.
-    Proof.
+    Proof with try solve_ndup.
       induction ess as [|es ess IH]; intros * WTf ND CE. now inv CE; auto.
       simpl in CE.
       destruct es; simpl in *.
       - destruct (oconcat (map _ l)) eqn:Ce; [|now omonadInv CE].
         destruct (omap _ _) as [tes|] eqn:CE''; [|now omonadInv CE].
         omonadInv CE. simpl.
-        eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes.
-        specialize (IH dty tes) as (? & ?); eauto using in_cons.
-        + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
-          rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND; auto.
-        + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
-          rewrite app_assoc in ND. apply NoDupMembers_app_l in ND; auto.
+        eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes...
+        specialize (IH dty tes) as (? & ?); eauto using in_cons...
       - destruct (omap _ _) as [tes|] eqn:CE'; [|now omonadInv CE].
         omonadInv CE. simpl.
         specialize (IH dty tes) as (? & ?); eauto using in_cons.
@@ -980,18 +984,13 @@ Module Type LTYPING
         omap f es = Some tys ->
         Forall (wt_exp G (Env.elements venv)) es
         /\ Forall2 (fun e ty => typeof e = ty) es tys.
-    Proof.
+    Proof with try solve_ndup.
       induction es as [|e es IH]; intros tys WTf ND CE. now inv CE; auto.
       simpl in CE. destruct (f e) eqn:Ce; [|now omonadInv CE].
       destruct (omap f es) as [tes|]; [|now omonadInv CE].
       omonadInv CE. simpl.
-      apply WTf in Ce as (Ce1 & ?); auto with datatypes.
-      destruct (IH tes) as (? & ?); auto.
-      intros * Ies ND' Fe. apply WTf in Fe; auto with datatypes.
-      + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
-        rewrite Permutation_swap in ND. apply NoDupMembers_app_r in ND; auto.
-      + unfold fresh_ins, idty in *; simpl in *. rewrite map_app in *.
-        rewrite app_assoc in ND. apply NoDupMembers_app_l in ND; auto.
+      apply WTf in Ce as (Ce1 & ?); auto with datatypes...
+      destruct (IH tes) as (? & ?); auto with datatypes...
     Qed.
 
     Import Permutation.
@@ -1048,39 +1047,25 @@ Module Type LTYPING
                | H:forall2b _ _ _ = true |- _ => apply forall2b_Forall2 in H
                end...
 
-      Ltac ndup_simpl :=
-        unfold idty in *; repeat rewrite map_app in *.
-      Ltac ndup_l H :=
-        ndup_simpl;
-        rewrite app_assoc in H; apply NoDupMembers_app_l in H; auto.
-      Ltac ndup_r H :=
-        ndup_simpl;
-        rewrite Permutation_swap in H;
-        apply NoDupMembers_app_r in H ; auto.
-
       - (* Eenum *)
         eapply check_enum_correct' in H as (?&?)...
       - (* Eunop *)
         apply IHe in OE0 as (? & ?)...
       - (* Ebinop *)
-        assert (NoDupMembers (Env.elements venv ++ idty (fresh_in e1))) as ND1 by ndup_l ND.
-        assert (NoDupMembers (Env.elements venv ++ idty (fresh_in e2))) as ND2 by ndup_r ND.
-        apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?)...
+        apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?)... 1-3:solve_ndup.
       - (* Efby *)
         take (Forall _ e0s) and rewrite Forall_forall in it.
         take (Forall _ es) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?)...
-        2:ndup_l ND.
         apply oconcat_map_check_exp' in OE1 as (? & ?)...
-        2:ndup_r ND.
+        2,3:solve_ndup.
         repeat constructor; eauto. 1,2:congruence.
       - (* Earrow *)
         take (Forall _ e0s) and rewrite Forall_forall in it.
         take (Forall _ es) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?)...
-        2:ndup_l ND.
         apply oconcat_map_check_exp' in OE1 as (? & ?)...
-        2:ndup_r ND.
+        2,3:solve_ndup.
         repeat constructor; eauto. 1,2:congruence.
       - (* Ewhen *)
         subst. take (Forall _ es) and rewrite Forall_forall in it.
@@ -1100,11 +1085,9 @@ Module Type LTYPING
         apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
       - (* Ecase *)
         rename es into brs; subst.
-        take (check_exp _ = Some _) and apply IHe in it as (? & ?). 2:repeat ndup_l ND.
+        take (check_exp _ = Some _) and apply IHe in it as (? & ?). 2:solve_ndup.
         take (Forall _ d) and (repeat setoid_rewrite Forall_forall in it).
-        eapply oconcat_map_check_exp' in OE1 as (? & ?)...
-        2:{ ndup_simpl. rewrite (Permutation_swap (Env.elements _)) in ND.
-            apply NoDupMembers_app_r in ND. ndup_r ND. }
+        eapply oconcat_map_check_exp' in OE1 as (? & ?)... 2:solve_ndup.
         take (Forall _ brs) and (repeat setoid_rewrite Forall_forall in it).
         take (omap _ _ = Some _) and
              apply omap_concat_map_check_exp'' in it as (? & ?); eauto.
@@ -1122,48 +1105,32 @@ Module Type LTYPING
             simpl in H; auto.
         + intros * Hin ???. specialize (it1 _ Hin). simpl in it1.
           eapply Forall_forall in it1; eauto.
-        + ndup_simpl.
-          rewrite (Permutation_swap (Env.elements _)) in ND.
-          apply NoDupMembers_app_r in ND.
-          ndup_l ND.
+        + solve_ndup.
       - (* Eapp *)
         take (Forall _ es) and rewrite Forall_forall in it.
         take (Forall _ er) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
-             apply oconcat_map_check_exp' in it as (? & ?); auto.
-        2: { ndup_simpl.
-             rewrite app_assoc in ND.
-             apply NoDupMembers_app_l in ND.
-             assumption. }
+             apply oconcat_map_check_exp' in it as (? & ?); auto. 2:solve_ndup.
         take (omap check_exp _ = Some _) and
-             apply omap_check_exp' in it as (? & ?); auto.
-        2: { ndup_simpl.
-             rewrite Permutation_swap, app_assoc in ND.
-             apply NoDupMembers_app_l in ND.
-             assumption. }
+             apply omap_check_exp' in it as (? & ?); auto. 2:solve_ndup.
         split; auto. subst.
-        assert (Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in)).
+        assert (Forall2 (fun et '(_, (t, _, _)) => et = t) (typesof es) n.(n_in)).
         { take (Forall2 _ (typesof es) n.(n_in))
                and apply Forall2_impl_In with (2:=it).
-          intros ? (? & (? & ?)) ? ? EQ.
+          intros ? (? & ((?&?)&?)) ? ? EQ.
           now rewrite equiv_decb_equiv in EQ. }
-        assert (Forall2 (fun ann '(_, (t, _)) => fst ann = t) a n.(n_out)).
+        assert (Forall2 (fun ann '(_, (t, _, _)) => fst ann = t) a n.(n_out)).
         { take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
-          intros (? & ?) (? & (? & ?)) ? ? EQ.
+          intros (? & ?) (? & ((?&?)&?)) ? ? EQ.
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
           now rewrite equiv_decb_equiv in EQ2. }
         assert (Forall (fun ann => wt_nclock G.(enums) ((Env.elements venv)++idty (fresh_ins es++anon_streams a)) (snd ann)) a).
         { repeat take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
           apply Forall_impl_In with (2:=it).
-          intros (? & ?) ? ((? & (? & ?)) & (? & EQ)); simpl.
+          intros (? & ?) ? ((? & ((?&?)&?)) & (? & EQ)); simpl.
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
           apply check_nclock_correct in EQ1. rewrite Henums, Env.elements_adds in EQ1; auto.
-          ndup_simpl.
-          rewrite app_assoc in ND.
-          rewrite Permutation_app_comm in ND.
-          rewrite <- app_assoc in ND. apply NoDupMembers_app_r in ND.
-          rewrite Permutation_app_comm in ND.
-          rewrite <- app_assoc in ND; auto.
+          solve_ndup.
         }
         econstructor; eauto; simpl in *;
           clear it; cases_eqn E; subst.
@@ -1227,30 +1194,24 @@ Module Type LTYPING
 
       simpl in ND.
       take (oconcat (map check_exp _) = Some _) and
-           apply oconcat_map_check_exp in it as (? & ?); auto.
-      2: { ndup_simpl...
-           rewrite app_assoc in ND.
-           apply NoDupMembers_app_l in ND... }
+           apply oconcat_map_check_exp in it as (? & ?); auto. 2:solve_ndup.
       take (omap check_exp _ = Some _) and
-             apply omap_check_exp in it as (? & ?); auto.
-        2: { ndup_simpl.
-             rewrite Permutation_swap in ND.
-             apply NoDupMembers_app_r in ND... }
+             apply omap_check_exp in it as (? & ?); auto. 2:solve_ndup.
       subst.
-      assert (Forall2 (fun et '(_, (t, _)) => et = t) (typesof l) n.(n_in)).
+      assert (Forall2 (fun et '(_, (t, _, _)) => et = t) (typesof l) n.(n_in)).
         { take (Forall2 _ (typesof l) n.(n_in))
                and apply Forall2_impl_In with (2:=it).
-          intros ? (? & (? & ?)) ? ? EQ.
+          intros ? (? & ((?&?)&?)) ? ? EQ.
           now rewrite equiv_decb_equiv in EQ. }
-        assert (Forall2 (fun ann '(_, (t, _)) => fst ann = t) l1 n.(n_out)).
+        assert (Forall2 (fun ann '(_, (t, _, _)) => fst ann = t) l1 n.(n_out)).
         { take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
-          intros (? & ?) (? & (? & ?)) ? ? EQ.
+          intros (? & ?) (? & ((?&?)&?)) ? ? EQ.
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
           now rewrite equiv_decb_equiv in EQ2. }
         assert (Forall (fun a => wt_nclock G.(enums) (Env.elements venv ++ idty (fresh_ins l++anon_streams l1)) (snd a)) l1).
         { repeat take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
           apply Forall_impl_In with (2:=it).
-          intros (? & ?) ? ((? & (? & ?)) & (? & EQ)); simpl.
+          intros (? & ?) ? ((? & ((?&?)&?)) & (? & EQ)); simpl.
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
           unfold idty in *; rewrite map_app in *.
           apply check_nclock_correct in EQ1. rewrite Henums, Env.elements_adds in EQ1; auto.
@@ -1301,39 +1262,107 @@ Module Type LTYPING
       unfold anon_in_eq in ND; auto.
     Qed.
 
-    Lemma check_block_correct : forall d,
-        NoDupMembers (Env.elements venv++(idty (anon_in_block d))) ->
-        check_block d = true ->
-        wt_block G (Env.elements venv) d.
+  End ValidateExpression.
+
+  Section ValidateBlock.
+    Context {PSyn : block -> Prop}.
+    Context {prefs : PS.t}.
+    Variable (G : @global PSyn prefs).
+
+    Variable (eenv : Env.t nat).
+    Hypothesis Henums : incl (Env.elements eenv) G.(enums).
+
+    Fixpoint check_block (venv : Env.t type) (d : block) : bool :=
+      match d with
+      | Beq eq => check_equation G eenv venv eq
+      | Breset blocks er =>
+        forallb (check_block venv) blocks &&
+        match check_exp G eenv venv er with
+        | Some [tyr] => tyr ==b bool_velus_type
+        | _ => false
+        end
+      | Blocal locs blocks =>
+        let env' := Env.union venv (Env.from_list (idty (idty locs))) in
+        forallb (check_block env') blocks &&
+        forallb (check_clock eenv env') (map (fun '(_, (_, ck, _)) => ck) locs) &&
+        forallb (check_enum eenv) (map snd (idty (idty locs)))
+      end.
+
+    Hint Constructors wt_block.
+
+    Import Permutation.
+
+    Lemma check_block_correct : forall blk venv,
+        NoDupMembers (Env.elements venv++idty (anon_in_block blk)) ->
+        NoDupLocals (map fst (Env.elements venv)++map fst (anon_in_block blk)) blk ->
+        check_block venv blk = true ->
+        wt_block G (Env.elements venv) blk.
     Proof.
-      induction d using block_ind2; intros * ND CD; simpl in *.
+      induction blk using block_ind2; intros * ND1 ND2 CD; inv ND2; simpl in *.
       - eapply check_equation_correct in CD; eauto.
       - eapply Bool.andb_true_iff in CD as (CDs&CE).
         eapply forallb_Forall in CDs.
         destruct check_exp eqn:CE'; try congruence.
-        eapply check_exp_correct in CE' as (Wte&Tye). 2:ndup_r ND.
+        eapply check_exp_correct in CE' as (Wte&Tye); eauto. 2:solve_ndup.
         econstructor; eauto.
-        + ndup_l ND. clear - H ND CDs.
+        + clear - H ND1 H2 CDs.
           eapply Forall_Forall in H; eauto. clear CDs.
-          induction H as [|?? (?&?)]; simpl in *; constructor; auto.
-          * now ndup_l ND.
-          * now ndup_r ND.
+          induction H as [|?? (?&?)]; simpl in *; inv H2; constructor; auto.
+          * apply H0; eauto. solve_ndup.
+            eapply NoDupLocals_incl; [|eauto]. solve_incl_app.
+          * apply IHForall; eauto. solve_ndup.
+            eapply Forall_impl; [|eapply H6]; intros.
+            eapply NoDupLocals_incl; [|eauto]. solve_incl_app.
         + cases.
           rewrite equiv_decb_equiv in CE; inv CE.
           assumption.
+      - repeat rewrite Bool.andb_true_iff in CD. destruct CD as ((CB&CC)&CE).
+        apply forallb_Forall in CB. apply forallb_Forall in CC. apply forallb_Forall in CE.
+        assert (NoDupMembers (idty (idty locs))) as Hnd1.
+        { eapply NoDupMembers_idty, NoDupMembers_idty; eauto. }
+        assert (forall x0, Env.In x0 venv -> ~ Env.In x0 (Env.from_list (idty (idty locs)))) as Hnd2.
+        { intros ? Hin1 Hin2. eapply Env.In_Members in Hin1.
+          eapply Env.In_from_list in Hin2. rewrite 2 InMembers_idty in Hin2.
+          eapply H5; eauto. eapply in_app_iff, or_introl. eapply fst_InMembers; eauto. }
+        constructor.
+        + eapply Forall_Forall in H; [|eapply CB]. clear CB.
+          induction H as [|?? (?&?)]; inv H2; simpl in *; constructor; auto.
+          * eapply H0 in H. eapply wt_block_incl; [|eauto].
+            1-3:rewrite Env.elements_union; try rewrite Env.elements_from_list; auto.
+            -- rewrite idty_app in ND1.
+              rewrite <-app_assoc, Permutation_swap. apply NoDupMembers_app; auto. solve_NoDupMembers_app.
+              intros ? Hinm. rewrite 2 InMembers_idty in Hinm.
+              apply H5 in Hinm. contradict Hinm.
+              rewrite fst_InMembers, map_app, map_fst_idty in Hinm. rewrite map_app.
+              repeat rewrite in_app_iff in *. destruct Hinm; auto.
+            -- eapply NoDupLocals_incl; [|eauto]. repeat rewrite map_app. repeat rewrite map_fst_idty.
+               repeat rewrite <-app_assoc. rewrite (Permutation_app_comm (map fst locs)). solve_incl_app.
+          * apply IHForall; eauto.
+            -- rewrite idty_app in ND1. solve_NoDupMembers_app.
+            -- eapply Forall_impl; [|eapply H8]; intros.
+               eapply NoDupLocals_incl; [|eauto]. repeat rewrite map_app. repeat rewrite map_fst_idty.
+               solve_incl_app.
+            -- intros ? Hinm. eapply H5 in Hinm. contradict Hinm.
+               rewrite map_app. repeat rewrite in_app_iff in *. destruct Hinm; auto.
+        + rewrite Forall_map in CC. eapply Forall_impl; eauto; intros (?&(?&?)&?) Hc.
+          eapply check_clock_correct in Hc.
+          rewrite Env.elements_union in Hc; try rewrite Env.elements_from_list in Hc; eauto.
+          rewrite Henums in Hc; auto.
+        + eapply Forall_impl; [|eauto]; intros ? Henum.
+          eapply check_enum_correct; eauto.
     Qed.
-
-  End ValidateExpression.
+  End ValidateBlock.
 
   Section ValidateGlobal.
-    Definition check_node {prefs} (G : @global prefs) eenv (n : @node prefs) :=
-      forallb (check_clock eenv (Env.from_list (idty (n_in n)))) (List.map (fun '(_, (_, ck)) => ck) (n_in n)) &&
-      forallb (check_clock eenv (Env.from_list (idty (n_in n ++ n_out n)))) (List.map (fun '(_, (_, ck)) => ck) (n_out n)) &&
-      forallb (check_clock eenv (Env.from_list (idty (n_in n ++ n_out n ++ n_vars n)))) (List.map (fun '(_, (_, ck)) => ck) (n_vars n)) &&
-      forallb (check_enum eenv) (map snd (idty (n_in n ++ n_vars n ++ n_out n))) &&
-      forallb (check_block G eenv (Env.from_list (idty (n_in n ++ n_vars n ++ n_out n)))) (n_blocks n).
+    Definition check_node {PSyn prefs} (G : @global PSyn prefs) eenv (n : @node PSyn prefs) :=
+      let ins := idty (idty (n_in n)) in
+      let insouts := idty (idty (n_in n ++ n_out n)) in
+      forallb (check_clock eenv (Env.from_list ins)) (List.map (fun '(_, (_, ck, _)) => ck) (n_in n)) &&
+      forallb (check_clock eenv (Env.from_list insouts)) (List.map (fun '(_, (_, ck, _)) => ck) (n_out n)) &&
+      forallb (check_enum eenv) (map snd insouts) &&
+      check_block G eenv (Env.from_list insouts) (n_block n).
 
-    Definition check_global {prefs} (G : @global prefs) :=
+    Definition check_global {PSyn prefs} (G : @global PSyn prefs) :=
       let eenv := Env.from_list G.(enums) in
       check_enum eenv (Tenum (bool_id, 2)) &&
       check_nodup (List.map n_name G.(nodes)) &&
@@ -1342,41 +1371,33 @@ Module Type LTYPING
                     | hd::tl => check_node (update G tl) eenv hd && aux tl
                     end) G.(nodes).
 
-    Lemma check_node_correct {prefs} : forall (G: @global prefs) eenv n,
+    Lemma check_node_correct {PSyn prefs} : forall (G: @global PSyn prefs) eenv n,
         incl (Env.elements eenv) G.(enums) ->
         check_node G eenv n = true ->
         wt_node G n.
     Proof.
       intros * Hincl Hcheck.
-      specialize (n_nodup n) as Hndup.
+      specialize (n_nodup n) as (Hdndup1&_).
       unfold check_node in Hcheck.
-      repeat rewrite Bool.andb_true_iff in Hcheck. destruct Hcheck as [[[[Hc1 Hc2] Hc3] Hc4] Hc5].
-      rewrite forallb_Forall, Forall_map in Hc1, Hc2, Hc3.
-      rewrite forallb_Forall in Hc4. rewrite forallb_Forall in Hc5.
-      split; [|split; [|split; [|split]]].
-      1-3:(eapply Forall_impl; eauto;
-           intros [_ [_ ?]] Hck;
+      repeat rewrite Bool.andb_true_iff in Hcheck. destruct Hcheck as [[[Hc1 Hc2] Hc3] Hc4].
+      rewrite forallb_Forall, Forall_map in Hc1, Hc2.
+      rewrite forallb_Forall in Hc3.
+      split; [|split; [|split]].
+      1-2:(eapply Forall_impl; eauto;
+           intros [_ [[_ ?] ?]] Hck;
            eapply check_clock_correct in Hck; rewrite Hincl in Hck;
            eapply wt_clock_incl; [|eauto]; eapply Env.elements_from_list_incl).
       - eapply Forall_impl; [|eauto].
         intros. eapply check_enum_correct; eauto.
-      - eapply Forall_impl_In in Hc5; eauto. intros ? Hin Hwt.
-        eapply check_block_correct in Hwt; auto.
+      - eapply check_block_correct in Hc4; auto.
+        2,3:rewrite Env.elements_from_list.
+        3,5:rewrite 2 NoDupMembers_idty; apply fst_NoDupMembers, node_NoDup.
         + eapply wt_block_incl; [|eauto]. eapply Env.elements_from_list_incl.
-        + apply NoDupMembers_app.
-          * apply Env.NoDupMembers_elements.
-          * rewrite NoDupMembers_idty.
-            repeat apply NoDupMembers_app_r in Hndup.
-            eapply NoDupMembers_anon_in_block; eauto.
-          * intros x Hin' contra.
-            rewrite <- Env.In_Members, Env.In_from_list in Hin'.
-            rewrite InMembers_idty in Hin', contra.
-            repeat rewrite app_assoc in Hndup. repeat rewrite app_assoc in Hin'.
-            eapply NoDupMembers_app_InMembers in Hndup; eauto.
-            eapply Hndup, InMembers_anon_in_block; eauto.
+        + rewrite <-idty_app, NoDupMembers_idty. apply n_nodup.
+        + rewrite 2 map_fst_idty. apply n_nodup.
     Qed.
 
-    Lemma check_global_correct {prefs} : forall (G: @global prefs),
+    Lemma check_global_correct {PSyn prefs} : forall (G: @global PSyn prefs),
         check_global G = true ->
         wt_global G.
     Proof.
@@ -1396,9 +1417,10 @@ Module Type LTYPING
   End ValidateGlobal.
 
   Section interface_eq.
+    Context {PSyn1 PSyn2 : block -> Prop}.
     Context {prefs1 prefs2 : PS.t}.
-    Variable G1 : @global prefs1.
-    Variable G2 : @global prefs2.
+    Variable G1 : @global PSyn1 prefs1.
+    Variable G2 : @global PSyn2 prefs2.
 
     Hypothesis Heq : global_iface_eq G1 G2.
 
@@ -1469,7 +1491,7 @@ Module Type LTYPING
       + assumption.
     Qed.
 
-    Fact iface_eq_wt_block : forall vars d,
+    Fact iface_eq_wt_block : forall d vars,
         wt_block G1 vars d ->
         wt_block G2 vars d.
     Proof.
@@ -1477,6 +1499,10 @@ Module Type LTYPING
       - constructor; auto using iface_eq_wt_equation.
       - constructor; auto using iface_eq_wt_exp.
         rewrite Forall_forall in *; eauto.
+      - constructor.
+        1,3:rewrite Forall_forall in *; eauto.
+        eapply Forall_impl; [|eauto]; intros (?&(?&?)&?) Hwt.
+        apply iface_eq_wt_clock; auto.
     Qed.
 
   End interface_eq.
@@ -1485,7 +1511,7 @@ Module Type LTYPING
 
   Hint Constructors wl_exp wl_block.
 
-  Fact wt_exp_wl_exp {prefs} : forall (G: @global prefs) vars e,
+  Fact wt_exp_wl_exp {PSyn prefs} : forall (G: @global PSyn prefs) vars e,
       wt_exp G vars e ->
       wl_exp G e.
   Proof with eauto.
@@ -1547,13 +1573,13 @@ Module Type LTYPING
   Qed.
   Hint Resolve wt_exp_wl_exp.
 
-  Corollary Forall_wt_exp_wl_exp {prefs} : forall (G: @global prefs) vars es,
+  Corollary Forall_wt_exp_wl_exp {PSyn prefs} : forall (G: @global PSyn prefs) vars es,
       Forall (wt_exp G vars) es ->
       Forall (wl_exp G) es.
   Proof. intros. rewrite Forall_forall in *; eauto. Qed.
   Hint Resolve Forall_wt_exp_wl_exp.
 
-  Fact wt_equation_wl_equation {prefs} : forall (G: @global prefs) vars equ,
+  Fact wt_equation_wl_equation {PSyn prefs} : forall (G: @global PSyn prefs) vars equ,
       wt_equation G vars equ ->
       wl_equation G equ.
   Proof with eauto.
@@ -1565,29 +1591,30 @@ Module Type LTYPING
   Qed.
   Hint Resolve wt_equation_wl_equation.
 
-  Fact wt_block_wl_block {prefs} : forall (G: @global prefs) vars d,
+  Fact wt_block_wl_block {PSyn prefs} : forall (G: @global PSyn prefs) d vars,
       wt_block G vars d ->
       wl_block G d.
   Proof.
     induction d using block_ind2; intros * Wt; inv Wt; eauto.
-    econstructor; eauto.
-    - eapply Forall_Forall in H; eauto. clear H2.
-      eapply Forall_impl; [|eauto]. intros ? (?&?); auto.
-    - now rewrite <-length_typeof_numstreams, H4.
+    - econstructor; eauto.
+      + eapply Forall_Forall in H; eauto. clear H2.
+        eapply Forall_impl; [|eauto]. intros ? (?&?); eauto.
+      + now rewrite <-length_typeof_numstreams, H5.
+    - econstructor; eauto.
+      rewrite Forall_forall in *; eauto.
   Qed.
   Hint Resolve wt_block_wl_block.
 
-  Fact wt_node_wl_node {prefs} : forall (G: @global prefs) n,
+  Fact wt_node_wl_node {PSyn prefs} : forall (G: @global PSyn prefs) n,
       wt_node G n ->
       wl_node G n.
   Proof with eauto.
-    intros G n [_ [_ [_ [_ Hwt]]]].
-    unfold wl_node.
-    rewrite Forall_forall in *...
+    intros G n [_ [_ [_ Hwt]]].
+    unfold wl_node...
   Qed.
   Hint Resolve wt_node_wl_node.
 
-  Fact wt_global_wl_global {prefs} : forall (G: @global prefs),
+  Fact wt_global_wl_global {PSyn prefs} : forall (G: @global PSyn prefs),
       wt_global G ->
       wl_global G.
   Proof with eauto.
@@ -1600,8 +1627,9 @@ Module Type LTYPING
 
   (** *** If an expression is well-typed, all the enums appearing inside are well-typed *)
   Section wt_enum.
+    Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
-    Variable G : @global prefs.
+    Variable G : @global PSyn prefs.
 
     Hypothesis HwtG : wt_global G.
 
@@ -1644,12 +1672,12 @@ Module Type LTYPING
         rewrite Forall_forall in H12, H0. eapply Forall_forall; eauto.
       - (* app *)
         eapply wt_find_node in H7 as (?&Hwtn&Heq); eauto.
-        destruct Hwtn as (_&_&_&Henums&_).
+        destruct Hwtn as (_&_&Henums&_).
         unfold idty in Henums. repeat rewrite Forall_map in Henums.
-        repeat rewrite Forall_app in Henums. destruct Henums as (_&_&Henums).
+        repeat rewrite Forall_app in Henums. destruct Henums as (_&Henums).
         rewrite Forall_map.
         eapply Forall2_ignore2 in H9.
-        eapply Forall_impl; [|eapply H9]. intros (?&?) ((?&?&?)&?&?); subst.
+        eapply Forall_impl; [|eapply H9]. intros (?&?) ((?&(?&?)&?)&?&?); subst.
         eapply Forall_forall in Henums; eauto. simpl in *.
         destruct t; simpl in *; auto.
         rewrite <-Heq; auto.

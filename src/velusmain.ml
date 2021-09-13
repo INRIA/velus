@@ -8,6 +8,7 @@ open Ctypes
 
 let print_c = ref false
 let write_lustre = ref false
+let write_nolocal = ref false
 let write_nlustre = ref false
 let write_stc = ref false
 let write_sch = ref false
@@ -23,7 +24,7 @@ let get_main_node decls =
   let rec last_decl last ds =
     match ds with
     | [] -> last
-    | LustreAst.NODE (n, _, _, _, _, _, _) :: ds -> last_decl (Some n) ds
+    | LustreAst.NODE (n, _, _, _, _, _) :: ds -> last_decl (Some n) ds
     | _ :: ds -> last_decl last ds
   in
   match !Veluslib.main_node with
@@ -89,6 +90,8 @@ let parse toks =
 let compile source_name filename =
   if !write_lustre
   then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
+  if !write_nolocal
+  then Veluslib.nolocal_destination := Some (filename ^ ".nolocal.lus");
   if !write_nlustre
   then Veluslib.nlustre_destination := Some (filename ^ ".n.lus");
   if !write_stc
@@ -135,6 +138,7 @@ let speclist = [
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dlustre", Arg.Set write_lustre,
                                " Save the parsed Lustre in <source>.parsed.lus";
+  "-dnolocal", Arg.Set write_nolocal, "Save Lustre without local blocks in <source>.nolocal.lus";
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <source>.n.lus";
   "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";

@@ -68,6 +68,7 @@ Module Type TRNORMALARGS
       econstructor; eauto.
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
+      unfold idty; erewrite map_map, map_ext; eauto. intros (?&((?&?)&?)); auto.
     - (* fby *)
       monadInv Htoeq.
       constructor.
@@ -96,14 +97,12 @@ Module Type TRNORMALARGS
     to_node n = OK n' ->
     normal_args_node G' n'.
   Proof.
-    unfold normal_args_node, to_node.
+    unfold normal_args_node.
     intros * Htog Hnormed Hton.
-    destruct mmap_block_to_equation as [(?&?)|]; try congruence.
-    inv Hton; simpl.
-    unfold normalized_node in Hnormed.
-    revert x e Hnormed.
-    induction (n_blocks n); intros x Htoeq Hnormed; simpl in *; monadInv Htoeq; auto.
-    inv Hnormed. constructor; auto.
+    tonodeInv Hton; simpl in *.
+    inversion_clear Hnormed as [??? Hblk Hnorm]. rewrite Hblk in Hmmap. monadInv Hmmap.
+    eapply mmap_inversion in EQ. clear Hblk.
+    induction EQ; inv Hnorm; constructor; auto.
     eapply block_to_equation_normal_args; eauto.
   Qed.
 

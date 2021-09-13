@@ -75,14 +75,17 @@ let prefix pre x =
 (** Generation of a fresh identifier.
     Countrary to prefix, we dont get the prefixed ident from the table :
     it's just a number.
+    If a hint is passed, it will be inserted in the identifier
     There are two properties to verify:
-    - prefixed pre (gensym pre x)
-    - pre <> pre' \/ x <> x' -> gensym pre id <> gensym pre' id'
+    - ~atom (gensym pre hint x)
+    - pre <> pre' \/ x <> x' -> gensym pre hint id <> gensym pre' hint' id'
 *)
-let gensym pre x =
+let gensym pre hint x =
   let open Camlcoq in
   let pres = extern_atom pre in
   (* pre should be an atom to guarantee injectivity *)
   if String.contains pres '$'
   then invalid_arg "gensym: the prefix should be an atom";
-  intern_string (pres^"$"^(string_of_int (P.to_int x)))
+  match hint with
+  | None -> intern_string (pres^"$"^string_of_int (P.to_int x))
+  | Some hint -> intern_string (pres^"$"^extern_atom hint^"$"^string_of_int (P.to_int x))

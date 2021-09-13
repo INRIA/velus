@@ -83,6 +83,7 @@ Module Export Ids <: IDS.
   Definition reset := str_to_pos "reset".
   Definition glob := str_to_pos "glob".
   Definition elab := str_to_pos "elab".
+  Definition local := str_to_pos "local".
   Definition norm1 := str_to_pos "norm1".
   Definition norm2 := str_to_pos "norm2".
   Definition obc2c := str_to_pos "obc2c".
@@ -96,17 +97,18 @@ Module Export Ids <: IDS.
     end.
 
   Definition elab_prefs := PS.singleton elab.
-  Definition norm1_prefs := PS.add norm1 elab_prefs.
+  Definition local_prefs := PS.add local elab_prefs.
+  Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
-  Definition gensym_prefs := [elab; norm1; norm2].
+  Definition gensym_prefs := [elab; local; norm1; norm2].
 
   Lemma gensym_prefs_NoDup : NoDup gensym_prefs.
   Proof.
     unfold gensym_prefs.
     repeat constructor; auto.
-    1,2:repeat rewrite not_in_cons; repeat split; auto.
-    1-3:prove_str_to_pos_neq.
+    1-3:repeat rewrite not_in_cons; repeat split; auto.
+    1-6:prove_str_to_pos_neq.
   Qed.
 
   Lemma self_not_out: self <> out.
@@ -199,6 +201,8 @@ Module Export Ids <: IDS.
   Proof. prove_atom. Qed.
 
   Lemma elab_atom: atom elab.
+  Proof. prove_atom. Qed.
+  Lemma local_atom: atom local.
   Proof. prove_atom. Qed.
   Lemma norm1_atom: atom norm1.
   Proof. prove_atom. Qed.
@@ -355,20 +359,20 @@ Module Export Ids <: IDS.
 
   (** *** Name generation with fresh identifiers *)
 
-  Axiom gensym : ident -> ident -> ident.
+  Axiom gensym : ident -> option ident -> ident -> ident.
 
   Axiom gensym_not_atom:
-    forall pref x,
-      ~atom (gensym pref x).
+    forall pref hint x,
+      ~atom (gensym pref hint x).
 
   Axiom gensym_injective':
-    forall pref id pref' id',
+    forall pref hint id pref' hint' id',
       pref <> pref' \/ id <> id' ->
-      gensym pref id <> gensym pref' id'.
+      gensym pref hint id <> gensym pref' hint' id'.
 
   Corollary gensym_injective:
-    forall pref id pref' id',
-      gensym pref id = gensym pref' id' ->
+    forall pref hint id pref' hint' id',
+      gensym pref hint id = gensym pref' hint' id' ->
       pref = pref' /\ id = id'.
   Proof.
     intros * Heq.
@@ -377,16 +381,16 @@ Module Export Ids <: IDS.
   Qed.
 
   Definition AtomOrGensym (prefs : PS.t) (id : ident) :=
-    atom id \/ PS.Exists (fun pre => exists n, id = gensym pre n) prefs.
+    atom id \/ PS.Exists (fun pre => exists n hint, id = gensym pre hint n) prefs.
 
   Axiom prefix_gensym_injective':
-    forall pref id pref' id',
+    forall pref id pref' hint' id',
       pref <> pref' ->
-      prefix pref id <> gensym pref' id'.
+      prefix pref id <> gensym pref' hint' id'.
 
   Corollary prefix_gensym_injective:
-    forall pref id pref' id',
-      prefix pref id = gensym pref' id' ->
+    forall pref id pref' hint' id',
+      prefix pref id = gensym pref' hint' id' ->
       pref = pref'.
   Proof.
     intros * Heq.

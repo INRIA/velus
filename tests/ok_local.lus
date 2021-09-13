@@ -1,0 +1,17 @@
+node f(x : int) returns (z : bool)
+var y : int;
+let
+  var t : int;
+  let
+    -- x -> t -> y
+    t = x fby (t + 1);
+    y = t;
+  tel;
+  var t : int;
+  let
+    -- y -> t -> z
+    t = y + 1;
+    z = t > 0;
+  tel
+  -- x --> y --> z
+tel

@@ -188,24 +188,19 @@ Module Type TR
     intros * H. unfold find_clock. now rewrite H.
   Qed.
 
-  Lemma find_clock_out {prefs} : forall (n : @L.node prefs) x ty ck,
-      In (x, (ty, ck)) (L.n_out n) ->
-      find_clock
-        (Env.adds' (L.n_vars n)
-                   (Env.adds' (L.n_in n) (Env.from_list (L.n_out n)))
+  Lemma find_clock_out {PSyn prefs} : forall (n : @L.node PSyn prefs) x ty ck,
+      In (x, (ty, ck)) (idty (L.n_out n)) ->
+      find_clock (Env.adds' (idty (L.n_in n)) (Env.from_list (idty (L.n_out n)))
         ) x = OK ck.
   Proof.
     intros * Hin.
     unfold Env.from_list. eapply find_clock_in_env.
     apply In_InMembers in Hin as Hinm.
-    pose proof (L.n_nodup n) as Hnodup.
-    rewrite 2 Env.gsso'. apply Env.In_find_adds'; eauto.
-    - eapply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; eauto.
+    pose proof (L.n_nodup n) as (Hnodup&_).
+    rewrite Env.gsso'. apply Env.In_find_adds'; eauto.
+    - rewrite idty_app in Hnodup. now apply NoDupMembers_app_l, NoDupMembers_app_r in Hnodup.
     - eapply NoDupMembers_app_InMembers_l; eauto.
-      repeat rewrite InMembers_app; auto.
-    - eapply NoDupMembers_app_r in Hnodup.
-      eapply NoDupMembers_app_InMembers_l; eauto.
-      rewrite InMembers_app; auto.
+      rewrite idty_app in Hnodup. now apply NoDupMembers_app_l in Hnodup.
   Qed.
 
   Lemma ok_fst_defined eq eq' :
@@ -252,11 +247,18 @@ Module Type TR
     induction l; simpl; intros; monadInv H; auto.
   Qed.
 
-  Definition mmap_block_to_equation {prefs} env envo (n : @L.node prefs) :
-    res { neqs | mmap (block_to_equation env envo []) n.(L.n_blocks) = OK neqs }.
+  Definition mmap_block_to_equation {PSyn prefs} env envo (n: @L.node PSyn prefs) :
+    res { neqs | match n.(L.n_block) with
+                 | L.Blocal locs blks =>
+                   do neqs <- mmap (block_to_equation (Env.adds' (idty locs) env) envo []) blks;
+                   OK (locs, neqs)
+                 | _ => Error (msg "node not normalized")
+                 end = OK neqs }.
   Proof.
-    destruct (mmap (block_to_equation env envo []) n.(L.n_blocks)).
-    left. eauto.
+    destruct (L.n_block n); simpl.
+    1,2:right; exact (msg "node not normalized").
+    destruct (mmap (block_to_equation (Env.adds' (idty l) env) envo []) l0).
+    left. simpl. eauto.
     right. auto.
   Defined.
 
@@ -269,21 +271,21 @@ Module Type TR
   Qed.
 
   Unset Program Cases.
-  Program Definition to_node (n : @L.node norm2_prefs) : res NL.node :=
-    let envo := Env.from_list n.(L.n_out) in
-    let env := Env.adds' n.(L.n_vars) (Env.adds' n.(L.n_in) envo) in
+  Program Definition to_node (n : @L.node L.nolocal_top_block norm2_prefs) : res NL.node :=
+    let envo := Env.from_list (idty n.(L.n_out)) in
+    let env := Env.adds' (idty n.(L.n_in)) envo in
     let is_not_out :=
         fun x => if Env.mem x envo
               then Error (msg "output variable defined as a fby")
               else OK tt in
-    match mmap_block_to_equation env is_not_out n (* return _ *) with
-    | OK (exist neqs P) =>
+    match mmap_block_to_equation env is_not_out n with
+    | OK (exist res P) =>
       OK {|
           NL.n_name     := n.(L.n_name);
-          NL.n_in       := n.(L.n_in);
-          NL.n_out      := n.(L.n_out);
-          NL.n_vars     := n.(L.n_vars);
-          NL.n_eqs      := neqs;
+          NL.n_in       := idty n.(L.n_in);
+          NL.n_out      := idty n.(L.n_out);
+          NL.n_vars     := idty (fst res);
+          NL.n_eqs      := snd res;
 
           NL.n_ingt0    := L.n_ingt0 n;
           NL.n_outgt0   := L.n_outgt0 n;
@@ -295,76 +297,97 @@ Module Type TR
     | Error e => Error e
     end.
 
+  Next Obligation. now rewrite length_idty. Qed.
+  Next Obligation. now rewrite length_idty. Qed.
   (* NL.n_defd obligation *)
   Next Obligation.
-    clear H0 H.
+    rewrite <-idty_app, map_fst_idty.
+    clear H0. rename l into vars. rename l0 into neqs.
+    pose proof (L.n_nodup n) as (_&Hnd).
+    pose proof (L.n_defd n) as (?&Hvars&Hperm).
+    cases. rename l0 into blks.
     monadInv1 P.
-    assert (NL.vars_defined neqs = flat_map L.vars_defined (L.n_blocks n)). clear P.
-    { revert H. revert neqs. induction (L.n_blocks n); simpl.
-    - intros neqs Htr. inv Htr. auto.
-    - intros neqs Htoeq. inv Htoeq.
-      apply IHl in H3. simpl.
-      f_equal; auto.
-      clear - H1.
-      revert H1. generalize (@nil (ident * clock)) as xr.
-      induction a using L.block_ind2; intros; simpl in *.
-      + apply ok_fst_defined in H1; auto.
-      + cases; simpl. rewrite app_nil_r.
-        apply Forall_singl in H.
-        eauto.
+    assert (NL.vars_defined neqs = flat_map L.vars_defined blks).
+    { revert neqs EQ. clear Hvars Hperm Hnd. induction blks; simpl.
+      - intros neqs Htr. inv Htr. auto.
+      - intros neqs Htoeq. monadInv Htoeq.
+        apply IHblks in EQ1. simpl.
+        f_equal; auto.
+        clear - EQ.
+        revert EQ. generalize (@nil (ident * clock)) as xr.
+        induction a using L.block_ind2; intros; simpl in *.
+        + apply ok_fst_defined in EQ; auto.
+        + cases; simpl. rewrite app_nil_r.
+          apply Forall_singl in H.
+          eauto.
+        + congruence.
     }
-    rewrite H0.
-    exact (L.n_defd n).
+    simpl. rewrite H.
+    inv Hvars. rewrite Hperm in H4.
+    rewrite map_app, H4. symmetry.
+    apply L.VarsDefined_flat_map_vars_defined; auto.
+    inv Hnd. eapply Forall_impl; [|eauto]; intros.
+    eapply L.NoDupLocals_incl; [|eauto].
+    rewrite <-H4, Permutation_app_comm. solve_incl_app.
   Qed.
 
   (* NL.n_vout obligation *)
   Next Obligation.
-    clear H H1. rename H0 into Hin. rename P into Heqr.
-
-    monadInv Heqr. induction H as [| eq eq' leq leq' Htoeq ].
+    clear H1. rename H0 into Hin. rename l into vars. rename l0 into neqs.
+    cases. rename l0 into blks.
+    monadInv P.
+    eapply mmap_inversion in EQ.
+    induction EQ as [| eq eq' leq leq' Htoeq ].
     intro Hbad. inv Hbad.
-    assert (Hmmap := Heqr).
-    apply mmap_cons2 in Heqr.
-    destruct Heqr as (eq'' & leq'' & Heqs' & Htoeq' & Hmmap').
-    inv Heqs'.
-    simpl. destruct (NL.is_fby leq) eqn:?.
-    - unfold NL.vars_defined, flat_map. simpl. rewrite in_app.
-      intro Hi. destruct Hi.
-      + clear - Htoeq Heqb H0 Hin.
-        revert Htoeq. generalize (@nil (ident * clock)).
-        induction eq'' using L.block_ind2; intros; simpl in *.
-        * unfold to_equation in Htoeq. destruct eq.
-          cases_eqn E; monadInv1 Htoeq; inv Heqb.
-          simpl in H0. destruct H0; auto. subst. inv EQ.
-          apply Env.Props.P.F.not_mem_in_iff in E8. apply E8.
-          rewrite in_map_iff in Hin.
-          destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
-          eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
-          destruct n. simpl. assert (Hnodup := n_nodup).
-          apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup; auto.
-        * cases. apply Forall_singl in H.
-          eapply H; eauto.
-      + apply IHlist_forall2; auto.
-    - apply IHlist_forall2; eauto.
+    simpl. destruct (NL.is_fby leq) eqn:?; auto.
+    unfold NL.vars_defined, flat_map. simpl. rewrite in_app.
+    intro Hi. destruct Hi.
+    - clear - Htoeq Heqb H Hin.
+      revert Htoeq. generalize (@nil (ident * clock)).
+      induction eq using L.block_ind2; intros; simpl in *.
+      + unfold to_equation in Htoeq. destruct eq.
+        cases_eqn E; monadInv1 Htoeq; inv Heqb.
+        simpl in H. destruct H; auto. subst. inv EQ.
+        apply Env.Props.P.F.not_mem_in_iff in E8. apply E8.
+        rewrite in_map_iff in Hin.
+        destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
+        eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
+        destruct n. simpl. pose proof n_nodup as (Hnodup&_).
+        rewrite idty_app in Hnodup. apply NoDupMembers_app_l, NoDupMembers_app_r in Hnodup; auto.
+      + cases. apply Forall_singl in H0.
+        eapply H0; eauto.
+      + congruence.
+    - eapply IHEQ; eauto.
   Qed.
 
   Next Obligation.
-    specialize (L.n_nodup n) as Hndup.
-    repeat rewrite app_assoc in *. apply NoDupMembers_app_l in Hndup; auto.
+    clear H0. rename l into vars.
+    pose proof (L.n_nodup n) as (Hndup1&Hndup2).
+    cases. rename l3 into blks. monadInv P.
+    apply NoDupMembers_app_l in Hndup1. inv Hndup2.
+    rewrite (Permutation_app_comm (idty vars)), app_assoc, <-idty_app.
+    apply NoDupMembers_app; eauto.
+    - rewrite NoDupMembers_idty; auto.
+    - intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1, Hinm2.
+      eapply H4; eauto.
+      now apply in_app_iff, or_introl, fst_InMembers.
   Qed.
 
   (* NL.n_good obligation *)
   Next Obligation.
-    pose proof (L.n_good n) as (Hgood&Hat).
+    clear H0. rename l into vars.
+    pose proof (L.n_good n) as (Hgood1&Hgood2&Hat).
     split; auto.
-    repeat rewrite map_app in *.
-    eapply Forall_impl; [|eapply Forall_incl; eauto].
-    - intros * [?|(pref&?&?&?)]; subst; [left|right]; auto.
-      exists pref. eauto.
-      unfold norm2_prefs, norm1_prefs, elab_prefs in H1.
-      repeat rewrite PSF.add_iff in *. rewrite PS.singleton_spec in *.
-      destruct H1 as [?|[?|?]]; subst; split; eauto.
-    - apply incl_appr', incl_appr', incl_appl, incl_refl.
+    cases. monadInv P.
+    rewrite (Permutation_app_comm (idty vars)), app_assoc, <-idty_app, map_app, 2 map_fst_idty.
+    apply Forall_app in Hgood1 as (Hgood1&_). inv Hgood2.
+    apply Forall_app. split; auto.
+    1,2:(eapply Forall_impl; [|eauto]; intros * [?|(pref&Hpref&?&?&?)];
+         subst; [left|right]; auto;
+         exists pref; eauto;
+         unfold norm2_prefs, norm1_prefs, local_prefs, elab_prefs in Hpref;
+         repeat rewrite PSF.add_iff in *; rewrite PS.singleton_spec in *;
+         destruct Hpref as [?|[?|[?|?]]]; subst; split; eauto).
   Qed.
 
   Definition to_global (G : L.global) :=
@@ -378,18 +401,17 @@ Module Type TR
       let Hmmap := fresh "Hmmap" in
       unfold to_node in H;
       destruct(mmap_block_to_equation
-               (Env.adds' (L.n_vars n)
-                (Env.adds' (L.n_in n)
-                 (Env.from_list (L.n_out n))))
+                 (Env.adds' (idty (L.n_in n))
+                            (Env.from_list (idty (L.n_out n))))
             (fun x : Env.key =>
-             if Env.mem x (Env.from_list (L.n_out n))
+             if Env.mem x (Env.from_list (idty (L.n_out n)))
              then Error (msg "output variable defined as a fby")
              else OK tt) n)
       as [ Hs | Hs ];
-      try (destruct Hs as (? & Hmmap)); inv H
+      try (destruct Hs as ((?&?) & Hmmap)); inv H
     end.
 
-  Lemma find_node_In {prefs} : forall f (G: @L.global prefs) n,
+  Lemma find_node_In {PSyn prefs} : forall f (G: @L.global PSyn prefs) n,
       L.find_node f G = Some n -> In n G.(L.nodes).
   Proof.
     intros * Hfind. unfold L.find_node in Hfind.
@@ -404,22 +426,22 @@ Module Type TR
   Qed.
 
   Lemma to_node_in n n' :
-    to_node n = OK n' -> L.n_in n = NL.n_in n'.
+    to_node n = OK n' -> idty (L.n_in n) = NL.n_in n'.
   Proof.
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
   Lemma to_node_out n n' :
-    to_node n = OK n' -> L.n_out n = NL.n_out n'.
+    to_node n = OK n' -> idty (L.n_out n) = NL.n_out n'.
   Proof.
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
-  Lemma to_node_vars n n' :
-    to_node n = OK n' -> L.n_vars n = NL.n_vars n'.
-  Proof.
-    intro Htr. tonodeInv Htr. now simpl.
-  Qed.
+  (* Lemma to_node_vars n n' : *)
+  (*   to_node n = OK n' -> L.n_vars n = NL.n_vars n'. *)
+  (* Proof. *)
+  (*   intro Htr. tonodeInv Htr. now simpl. *)
+  (* Qed. *)
 
   Lemma find_node_global (G: L.global) (P: NL.global) (f: ident) (n: L.node) :
     to_global G = OK P ->
@@ -548,26 +570,25 @@ Module Type TR
         right. unfold envs_eq in Heq. rewrite Heq. eauto.
     Qed.
 
-    Lemma envs_eq_node {prefs} (n : @L.node prefs) :
+    Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs blks :
+      L.n_block n = L.Blocal locs blks ->
       envs_eq
-        (Env.adds' (L.n_vars n)
-                   (Env.adds' (L.n_in n)
-                              (Env.from_list (L.n_out n))))
-        (idck (L.n_in n ++ L.n_vars n ++ L.n_out n)).
+        (Env.adds' (idty locs)
+                   (Env.adds' (idty (L.n_in n))
+                              (Env.from_list (idty (L.n_out n)))))
+        (idck (idty (L.n_in n ++ locs ++ L.n_out n))).
     Proof.
-      rewrite envs_eq_app_comm.
+      intros Hblk.
+      pose proof (L.n_nodup n) as (Hnd1&Hnd2). rewrite Hblk in *; clear Hblk.
+      apply NoDupMembers_app_l in Hnd1. rewrite idty_app in Hnd1. inv Hnd2.
+      rewrite 2 idty_app, envs_eq_app_comm.
       rewrite <- app_assoc.
-      apply env_eq_env_adds'. rewrite app_assoc.
-      rewrite Permutation_app_comm. specialize (L.n_nodup n) as Hnd.
-      repeat rewrite app_assoc in *. apply NoDupMembers_app_l in Hnd; auto.
-      rewrite envs_eq_app_comm.
-      apply env_eq_env_adds'. assert (Hnodup := L.n_nodup n).
-      repeat rewrite app_assoc in Hnodup. apply NoDupMembers_app_l in Hnodup. rewrite <- app_assoc in Hnodup.
-      rewrite Permutation_app_comm in Hnodup.
-      rewrite <- app_assoc in Hnodup. apply NoDupMembers_app_r in Hnodup.
-      now rewrite Permutation_app_comm.
-      apply env_eq_env_from_list. assert (Hnodup := L.n_nodup n).
-      now apply NoDupMembers_app_r, NoDupMembers_app_r, NoDupMembers_app_l in Hnodup.
+      apply env_eq_env_adds'.
+      2:rewrite envs_eq_app_comm; apply env_eq_env_adds', env_eq_env_from_list; eauto using NoDupMembers_app_r.
+      rewrite (Permutation_app_comm (_ (L.n_out _))).
+      apply NoDupMembers_app; eauto using NoDupMembers_app_l. apply NoDupMembers_idty; auto.
+      intros ? Hinm. rewrite <-idty_app, InMembers_idty, fst_InMembers. rewrite InMembers_idty in Hinm.
+      setoid_rewrite in_app_iff in H4. eapply proj1, not_or', H4; eauto.
     Qed.
 
   End Envs_eq.

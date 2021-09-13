@@ -82,6 +82,21 @@ Module Env.
       eapply xmapi_ext; intuition.
     Qed.
 
+    Lemma map_Equiv {B} {Ra: A -> A -> Prop} {Rb: B -> B -> Prop} : forall (f : A -> B) (m1 m2: t A),
+        (forall x y, Ra x y -> Rb (f x) (f y)) ->
+        Env.Equiv Ra m1 m2 ->
+        Env.Equiv Rb (Env.map f m1) (Env.map f m2).
+    Proof.
+      intros * Hf (HIn&Hfind).
+      split.
+      - intros. now rewrite 2 Props.P.F.map_in_iff.
+      - unfold MapsTo in *. intros * Hfind1 Hfind2.
+        rewrite Props.P.F.map_o in *.
+        destruct (Env.find k m1) eqn:Hfind1'; inv Hfind1.
+        destruct (Env.find k m2) eqn:Hfind2'; inv Hfind2.
+        eapply Hf; eauto.
+    Qed.
+
     (* fold_left is preferred over fold_right when used in executable code,
        when fold_right is easier to work with in proofs *)
     Definition adds_with {B} (f: B -> A) (xs: list (positive * B)) (m: t A) : t A :=
@@ -358,6 +373,32 @@ Module Env.
         + rewrite Env.gso; auto.
     Qed.
 
+    Lemma find_gsss'_irrelevant:
+      forall x a xvs m1 m2,
+        InMembers x xvs ->
+        find x (adds' xvs m1) = Some a ->
+        find x (adds' xvs m2) = Some a.
+    Proof.
+      induction xvs as [|(?&?)]; intros * Hin Hfind; simpl in *.
+      - inv Hin.
+      - destruct Hin, (ident_eq_dec k x), (InMembers_dec x xvs ident_eq_dec);
+          try congruence; subst; eauto.
+        setoid_rewrite find_gsss' in Hfind; eauto.
+        setoid_rewrite find_gsss'; eauto.
+    Qed.
+
+    Corollary find_gsss'_empty:
+      forall x a xvs m,
+        find x (adds' xvs (Env.empty _)) = Some a ->
+        find x (adds' xvs m) = Some a.
+    Proof.
+      intros * Hfind.
+      eapply find_gsss'_irrelevant; eauto.
+      eapply find_adds'_In in Hfind as [Hin|Hin].
+      + eapply In_InMembers; eauto.
+      + rewrite PositiveMap.gempty in Hin. congruence.
+    Qed.
+
     Corollary In_adds_spec:
       forall x xs vs (m: t A),
         length xs = length vs ->
@@ -461,6 +502,18 @@ Module Env.
       intros * Hin.
       apply elements_complete in Hin.
       apply In_find; eauto.
+    Qed.
+
+    Lemma NoDup_snd_elements : forall env x1 x2 (y : A),
+        NoDup (List.map snd (elements env)) ->
+        find x1 env = Some y ->
+        find x2 env = Some y ->
+        x1 = x2.
+    Proof.
+      intros * Hnd Hfind1 Hfind2.
+      apply elements_correct in Hfind1.
+      apply elements_correct in Hfind2.
+      eapply NoDup_snd_det; eauto.
     Qed.
 
     Lemma Equiv_orel {R : relation A} :
@@ -623,6 +676,14 @@ Module Env.
         rewrite <- Permutation.Permutation_middle in *.
         apply IHxs in Hndup.
         etransitivity; eauto.
+    Qed.
+
+    Corollary elements_from_list: forall xs,
+        NoDupMembers xs ->
+        Permutation.Permutation (elements (from_list xs)) xs.
+    Proof.
+      intros * Hnd. unfold from_list.
+      rewrite elements_adds. 1,2:rewrite Props.P.elements_empty; auto.
     Qed.
 
     Lemma Equiv_empty:
@@ -1240,6 +1301,15 @@ Module Env.
       auto using refines_add_both.
     Qed.
 
+    Lemma refines_elements : forall env1 env2,
+        refines env1 env2 ->
+        incl (List.map fst (elements env1)) (List.map fst (elements env2)).
+    Proof.
+      intros * Href ? Hin.
+      rewrite <-fst_InMembers, <-In_Members in *.
+      eapply In_refines; eauto.
+    Qed.
+
   End EnvRefines.
 
   Existing Instance env_refines_preorder.
@@ -1294,10 +1364,14 @@ Module Env.
 
   Section RefinesAdds.
     Context {V : Type}.
+    Variable (R : V -> V -> Prop).
 
-    Fact refines_adds' : forall (xs : list (ident * V)) H H',
-        refines eq H H' ->
-        refines eq (adds' xs H) (adds' xs H').
+    Hypothesis R_refl : Reflexive R.
+    Hypothesis R_trans : Transitive R.
+
+    Fact refines_adds'_aux : forall (xs : list (ident * V)) H H',
+        refines R H H' ->
+        refines R (adds' xs H) (adds' xs H').
     Proof.
       induction xs; intros H H' Href; simpl.
       - assumption.
@@ -1306,19 +1380,26 @@ Module Env.
         apply refines_add_both; auto.
     Qed.
 
-    Lemma refines_adds : forall ids (vs : list V) H,
-        Forall (fun id => ~In id H) ids ->
-        refines eq H (adds ids vs H).
+    Lemma refines_adds' : forall (xs : list (ident * V)) H,
+        Forall (fun id => ~In id H) (List.map fst xs) ->
+        refines R H (adds' xs H).
     Proof.
-      induction ids; intros vs H Hnin; inv Hnin.
-      - unfold adds. reflexivity.
-      - unfold adds in *.
-        destruct vs; simpl.
-        + reflexivity.
-        + etransitivity.
-          * apply IHids; auto.
-          * eapply refines_adds'.
-            apply refines_add; auto.
+      induction xs as [|(?&?)]; intros * Hnin; inv Hnin; simpl.
+      - eapply refines_refl; eauto.
+      - eapply refines_trans. eauto.
+        + eapply IHxs; eauto.
+        + eapply refines_adds'_aux.
+          eapply refines_add; auto.
+    Qed.
+
+    Corollary refines_adds : forall ids (vs : list V) H,
+        Forall (fun id => ~In id H) ids ->
+        refines R H (adds ids vs H).
+    Proof.
+      intros * Hf.
+      unfold adds. eapply refines_adds'.
+      revert vs.
+      induction Hf; intros [|]; simpl; auto.
     Qed.
 
     Lemma refines_adds_opt:
@@ -1530,6 +1611,35 @@ Module Env.
     - setoid_rewrite gso; auto.
   Qed.
 
+  Add Parametric Morphism {A} : (@adds' A)
+      with signature (eq ==> Equiv eq ==> Equiv eq)
+        as adds'_Equiv.
+  Proof.
+    intros xs; induction xs as [|(?&?)]; intros * Heq; simpl; auto.
+    apply IHxs. rewrite Heq. reflexivity.
+  Qed.
+
+  Import Permutation.
+
+  Lemma adds'_Perm {A} : forall (xs ys : list (ident * A)) m,
+      NoDupMembers xs ->
+      Permutation xs ys ->
+      Env.Equiv eq (adds' xs m) (adds' ys m).
+  Proof.
+    intros * Hnd Hperm. revert m.
+    induction Hperm; intros *; simpl; eauto.
+    - reflexivity.
+    - inv Hnd. apply IHHperm; auto.
+    - inv Hnd. inv H2.
+      apply adds'_Equiv; auto.
+      rewrite add_comm. reflexivity.
+      contradict H1; subst.
+      left; auto.
+    - etransitivity; eauto.
+      eapply IHHperm2.
+      now rewrite <-Hperm1.
+  Qed.
+
   Add Parametric Morphism {A} : (@dom A)
       with signature (eq ==> same_elements ==> iff)
         as dom_same_elements.
@@ -1671,17 +1781,36 @@ Module Env.
       intros x Ix. now apply Env.Props.P.F.empty_in_iff in Ix.
     Qed.
 
-    Lemma dom_ub_app:
+    Lemma dom_ub_incl: forall H xs ys,
+        incl xs ys ->
+        dom_ub H xs ->
+        dom_ub H ys.
+    Proof.
+      intros * Hincl Hd ? Hin.
+      eapply Hincl, Hd; eauto.
+    Qed.
+
+    Corollary dom_ub_app:
       forall H xs ys,
         dom_ub H xs ->
         dom_ub H (xs ++ ys).
     Proof.
-      intros H xs ys DH x Ix.
-      apply DH in Ix. apply in_or_app. auto.
+      intros * DH.
+      eapply dom_ub_incl; eauto.
+      eapply incl_appl, incl_refl; auto.
     Qed.
 
     Global Opaque dom_ub.
   End EnvDomUpperBound.
+
+  Lemma dom_ub_map : forall {V1 V2} (f : V1 -> V2) xs H,
+      dom_ub (Env.map f H) xs <-> dom_ub H xs.
+  Proof.
+    intros *; split; intros Hdom;
+      eapply dom_ub_intro; intros x Hin.
+    1,2:eapply dom_ub_use; [eauto|].
+    1,2:erewrite Props.P.F.map_in_iff in *; auto.
+  Qed.
 
   Lemma refines_dom_ub_dom:
     forall {A R} (H H' : Env.t A) d,
@@ -1788,6 +1917,14 @@ Module Env.
       inv Iy; auto using In_add1, In_add2.
     Qed.
 
+    Lemma dom_lb_incl: forall H xs ys,
+        incl xs ys ->
+        dom_lb H ys ->
+        dom_lb H xs.
+    Proof.
+      intros * Hincl Hlb ? Hin; auto.
+    Qed.
+
     Lemma dom_lb_app:
       forall H xs ys,
         dom_lb H (xs ++ ys) ->
@@ -1795,6 +1932,43 @@ Module Env.
     Proof.
       intros H xs ys DH x Ix.
       apply DH, in_or_app. auto.
+    Qed.
+
+    Lemma dom_lb_refines:
+      forall R H H' xs,
+        Env.refines R H H' ->
+        dom_lb H xs ->
+        dom_lb H' xs.
+    Proof.
+      intros * Href Hdom ? Hin.
+      eapply In_refines; eauto.
+    Qed.
+
+    Lemma dom_lb_map:
+      forall f H xs,
+        dom_lb H xs <->
+        dom_lb (map f H) xs.
+    Proof.
+      intros *; split; intros * Hdom ? Hin.
+      - apply Props.P.F.map_in_iff; auto.
+      - erewrite <-Props.P.F.map_in_iff; eauto.
+    Qed.
+
+    Lemma dom_lb_app': forall H xs ys,
+        dom_lb H xs ->
+        dom_lb H ys ->
+        dom_lb H (xs ++ ys).
+    Proof.
+      intros * Hd1 Hd2 ? Hin.
+      apply in_app_or in Hin as [Hin|Hin]; auto.
+    Qed.
+
+    Corollary dom_lb_concat: forall H xss,
+        Forall (dom_lb H) xss ->
+        dom_lb H (concat xss).
+    Proof.
+      intros * Hf.
+      induction Hf; simpl; auto using dom_lb_nil, dom_lb_app'.
     Qed.
 
     Global Opaque dom_lb.
@@ -1826,14 +2000,57 @@ Module Env.
                                  | Some v => add id v H'
                                  end) (empty V) xs.
 
-    Lemma restrict_dom_ub : forall xs (H : Env.t V),
+    Lemma restrict_In_iff : forall xs H x,
+        In x (restrict H xs) <-> In x H /\ List.In x xs.
+    Proof.
+      induction xs; intros; simpl.
+      - split; [intros Hemp|intros (_&Hf); inv Hf].
+        eapply Props.P.F.empty_in_iff in Hemp. inv Hemp.
+      - destruct (find a H) eqn:Hfind; simpl.
+        + rewrite Props.P.F.add_in_iff, IHxs.
+          split; [intros [|(?&?)]|intros (?&[|])]; subst; auto.
+          split; auto. econstructor; eauto.
+        + rewrite IHxs.
+          split; [intros (?&?)|intros (?&[|])]; subst; auto.
+          exfalso. eapply Props.P.F.not_find_in_iff; eauto.
+    Qed.
+
+    Corollary restrict_dom_ub : forall xs (H : Env.t V),
         dom_ub (restrict H xs) xs.
     Proof.
-      induction xs; intro H; simpl.
-      - apply dom_ub_empty.
-      - destruct (find a H); simpl.
-        + apply dom_ub_add; auto.
-        + apply dom_ub_cons; auto.
+      intros.
+      eapply dom_ub_intro; intros.
+      eapply restrict_In_iff; eauto.
+    Qed.
+
+    Corollary restrict_In : forall xs (H : Env.t V) x,
+        In x (restrict H xs) -> List.In x xs.
+    Proof.
+      intros * Hres.
+      eapply dom_ub_use; eauto using restrict_dom_ub.
+    Qed.
+
+    Corollary dom_lb_restrict_dom : forall xs (H : Env.t V),
+        dom_lb H xs ->
+        dom (restrict H xs) xs.
+    Proof.
+      intros * Hdom.
+      eapply dom_intro; intros.
+      rewrite restrict_In_iff.
+      split; [intros (?&?)|intros]; auto.
+      split; auto.
+      eapply Env.dom_lb_use; eauto.
+    Qed.
+
+    Corollary dom_lb_restrict_dom_lb : forall xs ys (H : Env.t V),
+        incl ys xs ->
+        dom_lb H ys ->
+        dom_lb (restrict H xs) ys.
+    Proof.
+      intros * Hincl Hdom1.
+      eapply dom_lb_intro; intros * Hin.
+      apply restrict_In_iff. split; eauto.
+      eapply Env.dom_lb_use; eauto.
     Qed.
 
     Lemma restrict_refines : forall R xs (H : Env.t V),
@@ -1846,18 +2063,6 @@ Module Env.
       - destruct (find a H) eqn:Hfind; simpl.
         + eapply refines_add_left; eauto.
         + eauto.
-    Qed.
-
-    Lemma dom_lb_restrict_dom : forall xs (H : Env.t V),
-        dom_lb H xs ->
-        dom (restrict H xs) xs.
-    Proof.
-      induction xs; intros H Hdom; simpl.
-      - apply dom_empty.
-      - rewrite dom_lb_cons in Hdom; destruct Hdom.
-        rewrite In_find in H0. destruct H0 as [v H0].
-        rewrite H0.
-        apply dom_add_cons. auto.
     Qed.
 
     Lemma restrict_find : forall xs (H : Env.t V) id v,
@@ -1875,6 +2080,26 @@ Module Env.
           apply gss.
         + rewrite Pos.eqb_neq in Heq.
           rewrite <- H0. apply gso. auto.
+    Qed.
+
+    Fact restrict_find_inv : forall xs H id v,
+        find id (restrict H xs) = Some v ->
+        List.In id xs /\ find id H = Some v.
+    Proof.
+      intros * Hvar; split.
+      - pose proof (restrict_dom_ub xs H) as Hdom.
+        eapply dom_ub_use in Hdom; eauto.
+        inv Hvar. econstructor; eauto.
+      - eapply restrict_refines in Hvar as (?&?&?); eauto; subst; auto.
+    Qed.
+
+    Corollary restrict_find_None : forall xs H id,
+        find id H = None ->
+        find id (restrict H xs) = None.
+    Proof.
+      intros * Hfind.
+      destruct (find _ (restrict _ _)) eqn:Hfind'; auto.
+      eapply restrict_find_inv in Hfind' as (?&?). congruence.
     Qed.
   End EnvRestrict.
 
@@ -2227,6 +2452,16 @@ Module Env.
       + apply PositiveMap.elements_correct; auto.
     Qed.
 
+    Corollary union_find3' : forall m1 m2 x y,
+        find x m2 = Some y ->
+        find x (union m1 m2) = Some y.
+    Proof.
+      intros * Hfind2.
+      destruct (find x m1) eqn:Hfind1.
+      - eapply union_find1'; eauto.
+      - eapply union_find3; eauto.
+    Qed.
+
     Lemma union_find4 : forall m1 m2 x y,
         find x (union m1 m2) = Some y ->
         find x m1 = Some y \/ find x m2 = Some y.
@@ -2234,6 +2469,19 @@ Module Env.
       intros * Hf.
       eapply find_adds'_In in Hf as [?|?]; eauto.
       eapply PositiveMap.elements_complete in H; eauto.
+    Qed.
+
+    Lemma union_find4' : forall m1 m2 x y,
+        find x (union m1 m2) = Some y ->
+        (find x m1 = Some y /\ find x m2 = None) \/ find x m2 = Some y.
+    Proof.
+      intros * Hfind.
+      destruct (find x m2) eqn:Hfind2.
+      - erewrite union_find3' in Hfind; eauto.
+      - left; split; auto. destruct (find x m1) eqn:Hfind1.
+        + erewrite union_find2 in Hfind; eauto.
+        + symmetry. rewrite <-Hfind.
+          eapply union_find_None; eauto.
     Qed.
 
     Lemma union_refines1 : forall m m',
@@ -2258,7 +2506,7 @@ Module Env.
       eapply union_find1'; eauto.
     Qed.
 
-    Lemma union_dom : forall m1 m2 xs ys zs,
+    Lemma union_dom' : forall m1 m2 xs ys zs,
         dom m1 (xs ++ ys) ->
         dom m2 (xs ++ zs) ->
         dom (union m1 m2) (xs ++ ys ++ zs).
@@ -2344,6 +2592,14 @@ Module Env.
         intro contra. apply in_app_iff in contra as [?|?]; auto.
     Qed.
 
+    Lemma union_refines4' : forall m1 m2,
+        refines R m2 (union m1 m2).
+    Proof.
+      intros * ?? Hfind.
+      eapply union_find3' in Hfind; eauto.
+      do 2 esplit; eauto. reflexivity.
+    Qed.
+
     Lemma union_In : forall x e1 e2,
         In x (union e1 e2) <-> In x e1 \/ In x e2.
     Proof.
@@ -2355,6 +2611,39 @@ Module Env.
       1-4:eapply union_find_None in Hf as (?&?); congruence.
       assert (find x (union e1 e2) = None); try congruence.
       rewrite union_find_None; auto.
+    Qed.
+
+    Corollary union_dom : forall m1 m2 xs ys,
+        dom m1 xs ->
+        dom m2 ys ->
+        dom (union m1 m2) (xs ++ ys).
+    Proof.
+      intros * Hd1 Hd2.
+      eapply dom_intro; intros.
+      eapply Env.dom_use in Hd1. eapply Env.dom_use in Hd2.
+      now rewrite union_In, in_app_iff, Hd1, Hd2.
+    Qed.
+
+    Lemma union_dom_lb : forall m1 m2 xs ys,
+        dom_lb m1 xs ->
+        dom_lb m2 ys ->
+        dom_lb (union m1 m2) (xs ++ ys).
+    Proof.
+      intros * Hd1 Hd2.
+      eapply dom_lb_intro; intros ? Hin.
+      rewrite union_In.
+      apply in_app_iff in Hin as [Hin|Hin]; [left|right].
+      1,2:eapply Env.dom_lb_use; eauto.
+    Qed.
+
+    Lemma union_dom_lb2 : forall m1 m2 xs,
+        dom_lb m2 xs ->
+        dom_lb (union m1 m2) xs.
+    Proof.
+      intros * Hd1.
+      eapply dom_lb_intro; intros ? Hin.
+      rewrite union_In.
+      right. eapply Env.dom_lb_use; eauto.
     Qed.
 
     Corollary union_mem : forall x e1 e2,
@@ -2370,7 +2659,94 @@ Module Env.
         apply Decidable.not_or. rewrite <-union_In; auto.
     Qed.
 
+    Lemma elements_union : forall e1 e2,
+        (forall x, Env.In x e1 -> ~Env.In x e2) ->
+        Permutation.Permutation (elements (union e1 e2)) (elements e1 ++ elements e2).
+    Proof.
+      intros * Hnd. eapply elements_adds; eauto.
+      eapply NoDupMembers_app; eauto using NoDupMembers_elements.
+      intros * Hin. eapply In_Members, Hnd in Hin.
+      contradict Hin. eapply In_Members; eauto.
+    Qed.
+
   End union.
+
+  Add Parametric Morphism {A} (R : A -> A -> Prop) : union
+      with signature Env.Equiv R ==> Env.Equiv R ==> Env.Equiv R
+        as union_Equiv.
+  Proof.
+    intros * (Hk1&Hv1) * (Hk2&Hv2).
+    constructor; intros *.
+    - now rewrite 2 union_In, Hk1, Hk2.
+    - intros Hfind1 Hfind2; unfold MapsTo in *.
+      destruct (Env.find k x0) eqn:Hfind3.
+      + erewrite union_find3' in Hfind1; eauto. inv Hfind1.
+        eapply Hv2; eauto.
+        assert (In k x0) as Hin by (econstructor; eauto).
+        apply Hk2 in Hin as (?&Hfind4). unfold MapsTo in *.
+        erewrite union_find3' in Hfind2; eauto.
+        congruence.
+      + destruct (Env.find k x) eqn:Hfind4.
+        * erewrite union_find2 in Hfind1; eauto. inv Hfind1.
+          eapply Hv1; eauto.
+          assert (~In k x0) as Hnin by (intros (?&?); congruence).
+          rewrite Hk2 in Hnin.
+          assert (find k y0 = None) as Hfind5.
+          { destruct (find k y0) eqn:Hfind; auto.
+            contradict Hnin. econstructor; eauto. }
+          assert (In k x) as Hin by (econstructor; eauto).
+          apply Hk1 in Hin as (?&Hfind6). unfold MapsTo in *.
+          erewrite union_find2 in Hfind2; eauto.
+          congruence.
+        * assert (find k (union x x0) = None); try congruence.
+          eapply union_find_None; eauto.
+  Qed.
+
+  Section union_fuse.
+    Context {A : Type}.
+
+    Variable fuse : A -> A -> A.
+
+    Definition union_fuse (m1 m2 : t A) :=
+      Env.fold (fun x a1 m2 => add x (or_default_with a1 (fuse a1) (Env.find x m2)) m2) m1 m2.
+
+    Lemma union_fuse_spec : forall m1 m2 x,
+        find x (union_fuse m1 m2) =
+        match (find x m1), (find x m2) with
+        | Some y1, Some y2 => Some (fuse y1 y2)
+        | Some y1, None => Some y1
+        | None, Some y2 => Some y2
+        | None, None => None
+        end.
+    Proof.
+      intros *. unfold union_fuse. revert x.
+      eapply Props.P.fold_rec.
+      - intros ? Hemp ?.
+        destruct (find x m) eqn:Hfind1.
+        + exfalso. apply Hemp in Hfind1; auto.
+        + destruct (find x m2); auto.
+      - intros * Hfind1 Hnin Hadd Hrec ?.
+        rewrite Hadd.
+        destruct (ident_eq_dec x k); subst.
+        + rewrite 2 Env.gss; simpl.
+          rewrite Hrec; clear Hrec.
+          destruct (find k m') eqn:Hfind2.
+          { exfalso. apply Hnin. econstructor; eauto. }
+          destruct (find k m2); simpl; auto.
+        + repeat rewrite Env.gso; simpl; auto.
+    Qed.
+
+    Corollary union_fuse_In : forall m1 m2 x,
+        In x (union_fuse m1 m2) <-> In x m1 \/ In x m2.
+    Proof.
+      intros *. repeat rewrite Props.P.F.in_find_iff.
+      rewrite union_fuse_spec.
+      destruct (find x m1), (find x m2); simpl.
+      1-4:(split; [intros| intros [|]]; try congruence).
+      1,2:left; congruence. right; congruence.
+    Qed.
+
+  End union_fuse.
 
   Section diff.
     Context {V : Type}.

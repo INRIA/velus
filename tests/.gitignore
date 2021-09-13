@@ -1,4 +1,5 @@
 *.parsed.lus
+*.nolocal.lus
 *.n.lus
 *.stc
 *.obc

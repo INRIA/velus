@@ -42,9 +42,9 @@ Open Scope error_monad_scope.
 Open Scope stream_scope.
 
 Section WtStream.
-  Context {prefs : PS.t}.
+  Context {PSyn : block -> Prop} {prefs : PS.t}.
 
-  Variable G: @global prefs.
+  Variable G: @global PSyn prefs.
   Variable main: ident.
   Variable ins: list (Stream value).
   Variable outs: list (Stream value).
@@ -52,22 +52,22 @@ Section WtStream.
   Definition wt_ins :=
     forall node,
       find_node main G = Some node ->
-      wt_streams ins (idty node.(n_in)).
+      wt_streams ins (idty (idty node.(n_in))).
 
   Definition wt_outs :=
     forall node,
       find_node main G = Some node ->
-      wt_streams outs (idty node.(n_out)).
+      wt_streams outs (idty (idty node.(n_out))).
 
 End WtStream.
 
-Definition wc_ins {prefs} (G: @global prefs) main ins := sem_clock_inputs G main ins.
+Definition wc_ins {PSyn prefs} (G: @global PSyn prefs) main ins := sem_clock_inputs G main ins.
 
 (** The trace of a Lustre node *)
 Section LTrace.
-  Context {prefs : PS.t}.
+  Context {PSyn : block -> Prop} {prefs : PS.t}.
 
-  Variable (node: @node prefs) (ins outs: list (Stream value)).
+  Variable (node: @node PSyn prefs) (ins outs: list (Stream value)).
 
   Hypothesis Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [].
   Hypothesis Len_ins     : Datatypes.length ins = Datatypes.length node.(n_in).
@@ -75,25 +75,25 @@ Section LTrace.
 
   Program Definition trace_node (n: nat): traceinf :=
     mk_trace (tr_Streams ins) (tr_Streams outs)
-             (idty node.(n_in)) (idty node.(n_out))
+             (idty (idty node.(n_in))) (idty (idty node.(n_out)))
              _ _ _ n.
   Next Obligation.
     destruct Spec_in_out.
-    - left; intro E; apply map_eq_nil in E; auto.
-    - right; intro E; apply map_eq_nil in E; auto.
+    - left; intro E; apply map_eq_nil, map_eq_nil in E; auto.
+    - right; intro E; apply map_eq_nil, map_eq_nil in E; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 2 map_length; auto.
+    unfold tr_Streams, idty; rewrite 3 map_length; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 2 map_length; auto.
+    unfold tr_Streams, idty; rewrite 3 map_length; auto.
   Qed.
 
   (** Simply link the trace of a Lustre node with the trace of an NLustre node with the same parameters *)
   Lemma trace_inf_sim_node:
     forall n n' Spec_in_out_n' Len_ins_n' Len_outs_n',
-      idty (NL.Syn.n_in n') = idty (n_in node) ->
-      idty (NL.Syn.n_out n') = idty (n_out node) ->
+      idty (NL.Syn.n_in n') = idty (idty (n_in node)) ->
+      idty (NL.Syn.n_out n') = idty (idty (n_out node)) ->
       traceinf_sim (NLCorrectness.trace_node n' ins outs Spec_in_out_n' Len_ins_n' Len_outs_n' n)
                    (trace_node n).
   Proof.
@@ -101,9 +101,9 @@ Section LTrace.
     apply traceinf_sim'_sim.
     revert n; cofix COFIX; intro.
     rewrite unfold_mk_trace.
-    rewrite unfold_mk_trace with (xs := idty (n_in node)).
+    rewrite unfold_mk_trace with (xs := idty (idty (n_in node))).
     simpl.
-    replace (load_events (tr_Streams ins n) (idty (n_in node)) ** store_events (tr_Streams outs n) (idty (n_out node)))
+    replace (load_events (tr_Streams ins n) (idty (idty (n_in node))) ** store_events (tr_Streams outs n) (idty (idty (n_out node))))
       with (load_events (tr_Streams ins n) (idty (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idty (NL.Syn.n_out n')));
       try congruence.
     constructor.
@@ -124,7 +124,7 @@ Section LTrace.
 End LTrace.
 
 (** A bisimulation relation between a declared node's trace and a given trace *)
-Inductive bisim_IO {prefs} (G: @global prefs) (f: ident) (ins outs: list (Stream value)): traceinf -> Prop :=
+Inductive bisim_IO {PSyn prefs} (G: @global PSyn prefs) (f: ident) (ins outs: list (Stream value)): traceinf -> Prop :=
   IOStep:
     forall T node
       (Spec_in_out : node.(n_in) <> [] \/ node.(n_out) <> [])
@@ -135,6 +135,7 @@ Inductive bisim_IO {prefs} (G: @global prefs) (f: ident) (ins outs: list (Stream
       bisim_IO G f ins outs T.
 
 Hint Resolve
+     inlinelocal_global_wt inlinelocal_global_wc inlinelocal_global_sem
      normalize_global_normalized_global normalized_global_unnested_global
      Typing.normalize_global_wt
      Clocking.normalize_global_wc
@@ -143,8 +144,9 @@ Hint Resolve
 
 Local Ltac unfold_l_to_nl Hltonl :=
   unfold l_to_nl in Hltonl; simpl in Hltonl;
-  rewrite print_identity in Hltonl;
+  repeat rewrite print_identity in Hltonl;
   destruct (is_causal _) eqn:Hcaus; simpl in Hltonl; [|inv Hltonl];
+  repeat rewrite print_identity in Hltonl;
   monadInv Hcaus.
 
 (** Correctness from Lustre to NLustre *)
@@ -160,7 +162,7 @@ Proof.
   intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
   eapply TR.Correctness.sem_l_nl in Hltonl; eauto.
-  eapply normalize_global_sem; eauto.
+  eapply normalize_global_sem, inlinelocal_global_sem; eauto.
   eapply sem_node_sem_node_ck; eauto.
 Qed.
 
@@ -168,12 +170,12 @@ Fact l_to_nl_find_node : forall G G' f n,
     find_node f G = Some n ->
     l_to_nl G = OK G' ->
     exists n', NL.Syn.find_node f G' = Some n' /\
-          NL.Syn.n_in n' = n_in n /\ NL.Syn.n_out n' = n_out n.
+          NL.Syn.n_in n' = idty (n_in n) /\ NL.Syn.n_out n' = idty (n_out n).
 Proof.
   intros g * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
   eapply global_iface_eq_find in Hfind as (n'&Hfind&(_&_&Hin&Hout)); eauto.
-  2:eapply normalize_global_iface_eq.
+  2:{ eapply global_iface_eq_trans. eapply inlinelocal_global_iface_eq. eapply normalize_global_iface_eq. }
   eapply TR.Tr.find_node_global in Hfind as (n''&Hfind&Htonode); eauto.
   exists n''. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
@@ -186,18 +188,18 @@ Fact l_to_nl_find_node' : forall G G' f n',
     NL.Syn.find_node f G' = Some n' ->
     l_to_nl G = OK G' ->
     exists n, find_node f G = Some n /\
-         NL.Syn.n_in n' = n_in n /\ NL.Syn.n_out n' = n_out n.
+         NL.Syn.n_in n' = idty (n_in n) /\ NL.Syn.n_out n' = idty (n_out n).
 Proof.
   intros G * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
   eapply TR.Tr.find_node_global' in Hfind as (n''&Hfind&Htonode); eauto.
   eapply global_iface_eq_find in Hfind as (n&Hfind&(_&_&Hin&Hout)); eauto.
-  2:eapply global_iface_eq_sym, normalize_global_iface_eq.
+  2:{ eapply global_iface_eq_sym, global_iface_eq_trans. eapply inlinelocal_global_iface_eq. eapply normalize_global_iface_eq. }
   exists n. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
-    now rewrite <-Htonode.
+    congruence.
   - eapply TR.Tr.to_node_out in Htonode; eauto.
-    now rewrite <-Htonode.
+    congruence.
 Qed.
 
 (** The ultimate lemma states that, if
@@ -236,8 +238,10 @@ Proof.
     { specialize (n_ingt0 x) as Hlt.
       intro contra. rewrite contra in Hlt; simpl in Hlt.
       eapply Lt.lt_irrefl; eauto. }
-    assert (Datatypes.length ins = Datatypes.length (n_in x)) as Hlenin by congruence.
-    assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout by congruence.
+    assert (Datatypes.length ins = Datatypes.length (n_in x)) as Hlenin
+        by (rewrite <-length_idty; congruence).
+    assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout
+        by (rewrite <-length_idty; congruence).
     eapply IOStep with (Spec_in_out0:=or_introl Hnnul)
                        (Len_ins0:=Hlenin) (Len_outs0:=Hlenout); eauto.
     eapply traceinf_sim_trans; eauto.

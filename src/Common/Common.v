@@ -184,16 +184,18 @@ Module Type IDS.
   Parameter reset : ident.
 
   Parameter elab : ident.
+  Parameter local : ident.
   Parameter norm1 : ident.
   Parameter norm2 : ident.
   Parameter obc2c : ident.
 
   (** Incremental prefix sets *)
   Definition elab_prefs := PS.singleton elab.
-  Definition norm1_prefs := PS.add norm1 elab_prefs.
+  Definition local_prefs := PS.add local elab_prefs.
+  Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
-  Definition gensym_prefs := [elab; norm1; norm2].
+  Definition gensym_prefs := [elab; local; norm1; norm2].
   Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
 
   Parameter default : ident.
@@ -209,6 +211,7 @@ Module Type IDS.
   Conjecture step_atom : atom step.
   Conjecture reset_atom : atom reset.
   Conjecture elab_atom : atom elab.
+  Conjecture local_atom : atom local.
   Conjecture norm1_atom : atom norm1.
   Conjecture norm2_atom : atom norm2.
   Conjecture obc2c_atom : atom obc2c.
@@ -228,19 +231,19 @@ Module Type IDS.
 
   (** *** Name generation with fresh identifiers *)
 
-  Parameter gensym : ident -> ident -> ident.
+  Parameter gensym : ident -> (option ident) -> ident -> ident.
 
   Conjecture gensym_not_atom:
-    forall pref x,
-      ~atom (gensym pref x).
+    forall pref hint x,
+      ~atom (gensym pref hint x).
 
   Conjecture gensym_injective:
-    forall pref x pref' x',
-      gensym pref x = gensym pref' x' ->
+    forall pref hint x pref' hint' x',
+      gensym pref hint x = gensym pref' hint' x' ->
       pref = pref' /\ x = x'.
 
   Definition AtomOrGensym (prefs : PS.t) (id : ident) :=
-    atom id \/ PS.Exists (fun pre => exists n, id = gensym pre n) prefs.
+    atom id \/ PS.Exists (fun pre => exists n hint, id = gensym pre hint n) prefs.
 
 End IDS.
 

@@ -61,8 +61,8 @@ Module Type TRCLOCKING
     unfold find_clock. intros. cases. congruence.
   Qed.
 
-  Lemma wc_lexp {prefs} :
-    forall (G: @L.global prefs) vars e e',
+  Lemma wc_lexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e e',
       to_lexp e = OK e' ->
       LC.wc_exp G vars e ->
       (exists ck,
@@ -101,8 +101,8 @@ Module Type TRCLOCKING
     now constructor.
   Qed.
 
-  Lemma wc_cexp {prefs} :
-    forall (G: @L.global prefs) vars e e',
+  Lemma wc_cexp {PSyn prefs} :
+    forall (G: @L.global PSyn prefs) vars e e',
       to_cexp e = OK e' ->
       LC.wc_exp G vars e ->
       (exists ck,
@@ -258,7 +258,7 @@ Module Type TRCLOCKING
                    pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?));
               apply find_base_clock_bck;
               [rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto;
-               unfold idck; rewrite map_length; exact (L.n_ingt0 n)
+               unfold idck; rewrite map_length, length_idty; exact (L.n_ingt0 n)
               | apply LC.WellInstantiated_parent in WIi;
                 rewrite L.clocksof_nclocksof, Forall_map;
                 eapply Forall_impl; eauto; now simpl]).
@@ -274,14 +274,14 @@ Module Type TRCLOCKING
         (* inputs *)
         erewrite <- (to_node_in n n'); eauto.
         apply mmap_inversion in EQ.
-        pose proof (L.n_nodup n) as Hdup.
+        pose proof (L.n_nodup n) as (Hdup&_).
         remember (L.n_in n) as ins. clear Heqins.
         revert dependent ins.
         revert dependent x.
         induction l as [| e].
         { intros. inv EQ. simpl in WIi. inv WIi.
-          take ([] = _) and apply symmetry, map_eq_nil in it.
-          now subst. }
+          take ([] = _) and apply symmetry, map_eq_nil, map_eq_nil in it.
+          subst; simpl; auto. }
         intros le Htr ins WIi.
         inv Htr. simpl in WIi.
         take (Forall _ (e::_)) and inv it.
@@ -293,6 +293,7 @@ Module Type TRCLOCKING
         unfold idck in Hmap.
         apply symmetry, map_cons'' in Hmap as ((?&(?&?))&?&?&?&?). subst.
         unfold LC.WellInstantiated in Wi. destruct Wi; simpl in *.
+        destruct ins as [|(?&?&?)]; simpl in *; inv H2.
         constructor; eauto.
         2:{ eapply IHl; eauto. now apply nodupmembers_cons in Hdup. }
         split; simpl; eauto.
@@ -304,9 +305,9 @@ Module Type TRCLOCKING
             rewrite <- In_InMembers_combine. unfold L.idents. intro Hin'.
             apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
             eapply Hin, In_InMembers.
-            repeat rewrite in_app_iff. right; right; left; eauto.
+            rewrite idty_app. repeat rewrite in_app_iff. left; right. eapply in_map_iff; do 2 esplit; eauto; auto.
             apply Forall2_length in Hf2. apply Forall2_length in WIo.
-            unfold L.idents, idck in *. repeat rewrite map_length in *.
+            unfold L.idents, idck in *. repeat rewrite map_length in *. rewrite length_idty in WIo.
             congruence.
         }
         simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
@@ -330,11 +331,11 @@ Module Type TRCLOCKING
           rewrite Hsub in Heq. rewrite <- Heq in Hl. simpl in Hl.
           now subst.
           unfold L.idents. apply assoc_ident_true.
-          2:{ rewrite combine_map_fst, in_map_iff.
+          2:{ rewrite <-map_fst_idty, combine_map_fst, in_map_iff.
               esplit; split; eauto. now simpl. }
           apply NoDup_NoDupMembers_combine.
-          pose proof (L.n_nodup n) as Hdup.
-          rewrite fst_NoDupMembers in Hdup. repeat rewrite map_app in Hdup.
+          pose proof (L.n_nodup n) as (Hdup&_).
+          rewrite fst_NoDupMembers, map_app, map_fst_idty in Hdup. repeat rewrite map_app in Hdup.
           eauto using NoDup_app_l, NoDup_app_r.
         * rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
           apply Forall2_swap_args in Hf2.
@@ -366,7 +367,8 @@ Module Type TRCLOCKING
     - cases. apply Forall_singl in H. apply Forall_singl in H2.
       eapply H; eauto.
       constructor; auto.
-      inv H3; auto.
+      inv H4; auto.
+    - inv Htr.
   Qed.
 
   Lemma wc_node :
@@ -378,16 +380,23 @@ Module Type TRCLOCKING
       NLC.wc_node P n'.
   Proof.
     intros * Htn Hwcg Htg Hwc.
-    unfold NLC.wc_node.
-    erewrite <- (to_node_in n n'), <- (to_node_out n n'), <- (to_node_vars n n');
-      eauto.
-    inversion Hwc as (?&?&?& WCeq). repeat (split; try tauto).
-    now setoid_rewrite  Permutation_app_comm at 2.
-    unfold to_node in Htn. cases. inv Htn. simpl.
-    revert dependent x. induction (L.n_blocks n) as [| e]; intros * Hmmap.
-    now inv Hmmap. inv WCeq.
-    apply mmap_cons in Hmmap as (e' & es & -> & Htoeq & Hmmap).
-    constructor; eauto using wc_block_to_equation, envs_eq_node.
+    tonodeInv Htn. unfold NLC.wc_node. simpl.
+    inversion Hwc as (WCi&WCo&WCeq). rewrite idty_app in WCo.
+    cases_eqn Hblk. eapply envs_eq_node in Hblk.
+    monadInv Hmmap.
+    repeat (split; try tauto).
+    - inv WCeq. rewrite Forall_map in H3.
+      rewrite (Permutation_app_comm (idty l)), app_assoc, idck_app. apply Forall_app; split; auto.
+      1,2:(eapply Forall_impl; [|eauto]; simpl in *; intros;
+           eapply LC.wc_clock_incl; eauto; unfold idty, idck;
+           repeat rewrite map_app; repeat rewrite map_map; solve_incl_app).
+    - inv WCeq.
+      eapply mmap_inversion in EQ.
+      induction EQ; inv H2; constructor; eauto.
+      eapply wc_block_to_equation; eauto.
+      + repeat rewrite <-idty_app; eauto.
+      + rewrite (Permutation_app_comm (idty l)).
+        now rewrite app_assoc, idck_app, <-idty_app.
   Qed.
 
   Lemma wc_transcription :

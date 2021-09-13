@@ -682,9 +682,9 @@ Lemma AtomOrGensym_inv : forall prefs pref x,
     AtomOrGensym (PSP.of_list prefs) (prefix pref x) ->
     In pref prefs.
 Proof.
-  intros * [?|(?&?&?&?)].
+  intros * [?|(?&?&?&?&Heq)].
   - exfalso. eapply prefix_not_atom; eauto.
-  - eapply prefix_gensym_injective in H0; subst.
+  - eapply prefix_gensym_injective in Heq; subst.
     rewrite ps_of_list_In in H; auto.
 Qed.
 

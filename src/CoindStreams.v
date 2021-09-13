@@ -2101,6 +2101,17 @@ Module Type COINDSTREAMS
     eapply env_maps_tl; eauto. now inv H2.
   Qed.
 
+  Lemma sem_var_step_inv :
+    forall H x s,
+      sem_var (history_tl H) x s ->
+      exists v, sem_var H x (v ⋅ s).
+  Proof.
+    intros * Hsem.
+    inv Hsem. unfold Env.MapsTo, history_tl in *.
+    rewrite Env.Props.P.F.map_o in H1. eapply option_map_inv in H1 as ((v&s')&Hfind&Heq); subst; simpl in *.
+    exists v. econstructor; eauto. constructor; auto.
+  Qed.
+
   Lemma sem_var_step_nl :
     forall H x v s,
       sem_var H x (v ⋅ s) -> sem_var (history_tl H) x s.

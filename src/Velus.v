@@ -30,7 +30,8 @@ Open Scope error_monad_scope.
 Open Scope stream_scope.
 
 Parameter schedule      : ident -> list trconstr -> list positive.
-Parameter print_lustre  : @global elab_prefs -> unit.
+Parameter print_lustre  : @global (fun _ => True) elab_prefs -> unit.
+Parameter print_nolocal : @global nolocal_top_block local_prefs -> unit.
 Parameter print_nlustre : NL.Syn.global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
@@ -41,7 +42,7 @@ Parameter do_norm_switches : unit -> bool.
 Parameter do_sync       : unit -> bool.
 Parameter do_expose     : unit -> bool.
 
-Definition is_causal (G: @global elab_prefs) : res (@global elab_prefs) :=
+Definition is_causal (G: @global (fun _ => True) elab_prefs) : res (@global _ elab_prefs) :=
   do _ <- check_causality G;
   OK G.
 
@@ -66,10 +67,12 @@ Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
 Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
 
-Definition l_to_nl (G : @global elab_prefs) : res NL.Syn.global :=
+Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global :=
   OK G
      @@ print print_lustre
      @@@ is_causal
+     @@ inlinelocal_global
+     @@ print print_nolocal
      @@ normalize_global
      @@@ TR.Tr.to_global.
 

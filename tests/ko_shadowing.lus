@@ -1,0 +1,9 @@
+node f(x : bool) returns (y : int when x)
+let
+  y = 1 when x;
+  var x : bool; z : int when x;
+  let
+    x = false;
+    z = y;
+  tel;
+tel

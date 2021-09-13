@@ -468,16 +468,18 @@ equation:
 block:
 | eq=equation
    { LustreAst.BEQ eq } 
-| RESET bck=blocks loc=EVERY er=expression SEMICOLON
-   { LustreAst.BRESET bck er loc }
+| RESET blks=blocks loc=EVERY er=expression SEMICOLON
+   { LustreAst.BRESET blks er loc }
+| locals=local_decl_list loc=LET blks=blocks TEL optsemicolon
+    { LustreAst.BLOCAL locals blks loc }
 
 blocks:
 | /* empty */
     { [] }
-| bcks=blocks bck=block
-    { bck::bcks }
-| bcks=blocks ASSERT expression SEMICOLON
-    { bcks (* ignore assert statements for now *) }
+| blks=blocks blk=block
+    { blk::blks }
+| blks=blocks ASSERT expression SEMICOLON
+    { blks (* ignore assert statements for now *) }
 
 optsemicolon:
 | /* empty */
@@ -507,9 +509,9 @@ declaration:
 | is_node=node_or_function id=VAR_NAME
   LPAREN iparams=oparameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=oparameter_list RPAREN optsemicolon
-  locals=local_decl_list LET bcks=blocks TEL optsemicolon
+  locals=local_decl_list loc=LET blks=blocks TEL optsemicolon
     { LustreAst.NODE
-        (fst id) (fst is_node) iparams oparams locals bcks (snd is_node) }
+        (fst id) (fst is_node) iparams oparams (LustreAst.BLOCAL locals blks loc) (snd is_node) }
 | loc=TYPE id=VAR_NAME EQ optbar cs=constructor_list
     { LustreAst.TYPE (fst id) cs loc }
 

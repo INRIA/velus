@@ -112,17 +112,18 @@ Definition equation : Type := (list ident * list expression * astloc)%type.
 
 Inductive block :=
 | BEQ      : equation -> block
-| BRESET   : list block -> list expression -> astloc -> block.
+| BRESET   : list block -> list expression -> astloc -> block
+| BLOCAL   : var_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
-| NODE : ident -> bool -> var_decls -> var_decls -> var_decls
-         -> list block -> astloc -> declaration
+| NODE : ident -> bool -> var_decls -> var_decls
+         -> block -> astloc -> declaration
 | TYPE : ident -> list ident -> astloc -> declaration.
 
 Definition declaration_loc (d: declaration) : astloc :=
   match d with
-  | NODE name has_state inputs outputs locals eqs loc => loc
+  | NODE name has_state inputs outputs eqs loc => loc
   | TYPE name constructors loc => loc
   end.
 
@@ -226,15 +227,21 @@ Section block_ind2.
   Hypothesis EQCase : forall equ,
     P (BEQ equ).
 
-  Hypothesis RESETCase : forall bcks er loc,
-      Forall P bcks ->
-      P (BRESET bcks er loc).
+  Hypothesis RESETCase : forall blks er loc,
+      Forall P blks ->
+      P (BRESET blks er loc).
+
+  Hypothesis LOCALCase : forall locs blks loc,
+      Forall P blks ->
+      P (BLOCAL locs blks loc).
 
   Fixpoint block_ind2 (bck: block) : P bck.
   Proof.
     destruct bck.
     - apply EQCase; auto.
     - apply RESETCase.
+      induction l; auto.
+    - apply LOCALCase.
       induction l; auto.
   Qed.
 End block_ind2.

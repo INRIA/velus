@@ -8,6 +8,7 @@ src/CoindStreams.v
 src/IndexedToCoind.v
 src/CoindToIndexed.v
 src/CoindIndexed.v
+src/Fresh.v
 
 src/Common/CommonList.v
 src/Common/CommonPS.v
@@ -32,7 +33,12 @@ src/Lustre/LSemDeterminism.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
-src/Lustre/Normalization/Fresh.v
+src/Lustre/InlineLocal/InlineLocal.v
+src/Lustre/InlineLocal/ILTyping.v
+src/Lustre/InlineLocal/ILClocking.v
+src/Lustre/InlineLocal/ILCorrectness.v
+src/Lustre/InlineLocal/LInlineLocal.v
+
 src/Lustre/Normalization/Unnesting.v
 src/Lustre/Normalization/NormFby.v
 src/Lustre/Normalization/Normalization.v

@@ -57,14 +57,14 @@ module type SYNTAX =
     type block =
     | Beq of equation
     | Breset of block list * exp
+    | Blocal of (ident * ((typ * clock) * ident)) list * block list
 
     type node = {
           n_name     : ident;
           n_hasstate : bool;
-          n_in       : (ident * (typ * clock)) list;
-          n_out      : (ident * (typ * clock)) list;
-          n_vars     : (ident * (typ * clock)) list;
-          n_blocks   : block list;
+          n_in       : (ident * ((typ * clock) * ident)) list;
+          n_out      : (ident * ((typ * clock) * ident)) list;
+          n_block    : block;
         }
 
     type global = {
@@ -219,7 +219,7 @@ module PrintFun
             print_ident x
             PrintOps.print_enumtag c
 
-    let print_decl p (id, (ty, ck)) =
+    let print_decl p (id, ((ty, ck), _)) =
       fprintf p "%a@ : %a%a"
         print_ident id
         PrintOps.print_typ ty
@@ -237,40 +237,40 @@ module PrintFun
       fprintf p "@[<hov 2>%a =@ %a;@]"
         print_pattern xs (exp_list 0) es
 
-    let rec print_block p bck =
-      match bck with
-      | L.Beq eq -> print_equation p eq
-      | L.Breset (bcks, er) ->
-        fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a;"
-          (pp_print_list print_block) bcks
-          print_exp er
-
     let print_semicol_list_as name px p xs =
     if List.length xs > 0 then
       fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
         name
         (print_semicol_list px) xs
 
+    let rec print_block p bck =
+      match bck with
+      | L.Beq eq -> print_equation p eq
+      | L.Breset (blks, er) ->
+        fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a;"
+          (pp_print_list print_block) (List.rev blks)
+          print_exp er
+      | L.Blocal (locals, blks) ->
+        fprintf p "%a@[<v 2>let@;%a@;<0 -2>@]tel"
+          (print_semicol_list_as "var" print_decl) locals
+          (pp_print_list print_block) (List.rev blks)
+
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;
                        L.n_in       = inputs;
                        L.n_out      = outputs;
-                       L.n_vars     = locals;
-                       L.n_blocks   = bcks } =
+                       L.n_block    = blk } =
       fprintf p "@[<v>\
                  @[<hov 0>\
                  @[<h>%s %a (%a)@]@;\
                  @[<h>returns (%a)@]@;\
                  @]@;\
-                 %a\
-                 @[<v 2>let@;%a@;<0 -2>@]\
-                 tel@]"
+                 %a@]"
         (if hasstate then "node" else "fun")
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        (print_semicol_list_as "var" print_decl) locals
-        (pp_print_list print_block) (List.rev bcks)
+        print_block blk
 
     let print_global p prog =
       fprintf p "@[<v 0>%a@]@."

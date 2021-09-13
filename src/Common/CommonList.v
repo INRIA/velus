@@ -497,6 +497,24 @@ Section Extra.
     intro H; inv H; auto.
   Qed.
 
+  Lemma filter_nil : forall p (xs : list A),
+      Forall (fun x => p x = false) xs ->
+      filter p xs = [].
+  Proof.
+    intros * Hf.
+    induction Hf; intros *; simpl; auto.
+    rewrite H; auto.
+  Qed.
+
+  Lemma filter_idem : forall p (xs : list A),
+      Forall (fun x => p x = true) xs ->
+      filter p xs = xs.
+  Proof.
+    intros * Hf.
+    induction Hf; intros *; simpl; auto.
+    rewrite H. f_equal; auto.
+  Qed.
+
   Lemma Forall_not_In_singleton:
     forall (x: A) ys,
       ~ In x ys ->
@@ -846,6 +864,15 @@ Section Incl.
       apply filter_In; auto.
   Qed.
 
+  Lemma incl_concat : forall (x : list A) xs,
+      In x xs ->
+      incl x (concat xs).
+  Proof.
+    induction xs; intros * Hin; simpl in *; inv Hin.
+    - apply incl_appl, incl_refl.
+    - apply incl_appr; auto.
+  Qed.
+
   Lemma incl_concat_map {B} : forall (f : A -> list B) x xs,
       In x xs ->
       incl (f x) (concat (map f xs)).
@@ -1094,6 +1121,37 @@ Section Nodup.
     eapply NoDup_Permutation_ter; eauto.
   Qed.
 
+  Lemma NoDup_snd_det {B} : forall (x : A) (t t' : B) (xs : list (B * A)),
+      NoDup (map snd xs) ->
+      In (t, x) xs ->
+      In (t', x) xs ->
+      t = t'.
+  Proof.
+    induction xs; intros H Hin Hin'.
+    - contradict Hin.
+    - inversion Hin; inversion Hin'; subst.
+      + inversion H1; auto.
+      + inversion H; subst.
+        inversion Hin'.
+        * inversion H0; auto.
+        * exfalso. apply H3. eapply in_map_iff. exists (t', x); eauto.
+      + inversion H; subst.
+        inversion Hin.
+        * inversion H1; auto.
+        * exfalso. apply H3. eapply in_map_iff. exists (t, x); eauto.
+      + apply IHxs; auto.
+        destruct a; simpl in *. rewrite NoDup_cons' in H; tauto.
+  Qed.
+
+  Lemma NoDup_concat : forall (xss : list (list A)) xs,
+      In xs xss ->
+      NoDup (concat xss) ->
+      NoDup xs.
+  Proof.
+    induction xss; intros * Hin Hnd; simpl in *; inv Hin.
+    - apply NoDup_app_l in Hnd; auto.
+    - apply NoDup_app_r in Hnd; eauto.
+  Qed.
 End Nodup.
 
 Lemma concat_length:
@@ -4129,6 +4187,25 @@ Section InMembers.
     - intros (b & ?&?); eapply In_InMembers, filter_In; eauto.
   Qed.
 
+  Fact inmembers_flat_map {C} : forall (f : C -> list (A * B)) (l : list C) (y : A),
+      InMembers y (flat_map f l) <-> Exists (fun x => InMembers y (f x)) l.
+  Proof.
+    intros *; split; intros Hin; induction l;
+      simpl in *; try rewrite InMembers_app in *.
+    - inv Hin.
+    - destruct Hin; auto.
+    - inv Hin.
+    - inv Hin; auto.
+  Qed.
+
+  Fact NoDupMembers_flat_map {C} : forall (f : C -> list (A * B)) (l : list C),
+      NoDupMembers (flat_map f l) ->
+      Forall (fun x => NoDupMembers (f x)) l.
+  Proof.
+    induction l; intros * Hnd; simpl in *;
+      constructor; eauto using NoDupMembers_app_l, NoDupMembers_app_r.
+  Qed.
+
 End InMembers.
 
 Lemma nodupmembers_filter {A B} :
@@ -5062,3 +5139,91 @@ Section nth_error.
       now apply nth_error_nth'.
   Qed.
 End nth_error.
+
+(* Tactics for solving incl / NoDup / NoDupMembers obligations *)
+
+Ltac simpl_app :=
+  repeat rewrite map_app in *;
+  repeat rewrite <-app_assoc in *.
+
+(** Solves a goal of the form incl xss yss, where yss is of the form xs1 ++ xs2 ++ xs3 ++ ...
+    and xs is also a concatenation of a subset of xsk, in the same order.
+ *)
+Ltac solve_incl_app :=
+  simpl_app; eauto using incl_nil, incl_refl;
+  match goal with
+  | |- incl [] _ => now apply incl_nil
+  | |- incl ?xs ?xs => now apply incl_refl
+  | |- incl ?xs (?xs ++ _) => now apply incl_appl, incl_refl
+  | |- incl (?xs ++ _) (?xs ++ _) =>
+    apply incl_appr'; solve_incl_app
+  | |- incl _ (?xs2 ++ _) =>
+    apply incl_appr; solve_incl_app
+  | _ => idtac
+  end.
+
+Lemma NoDup_incl_app {A : Type} : forall (xs ys zs : list A),
+    incl zs ys ->
+    (NoDup ys -> NoDup zs) ->
+    NoDup (xs ++ ys) ->
+    NoDup (xs ++ zs).
+Proof.
+  intros * Hincl Hnd1 Hnd2.
+  apply NoDup_app'; eauto using NoDup_app_l, NoDup_app_r.
+  eapply Forall_forall; intros ? Hin1 Hin2.
+  eapply NoDup_app_In in Hnd2; eauto.
+Qed.
+
+Ltac solve_NoDup_app :=
+  simpl_app;
+  match goal with
+  | |- NoDup [] => now constructor
+  | Hnd:NoDup ?xs |- NoDup ?xs => assumption
+  | Hnd:NoDup (?xs1++?ys1) |- NoDup ?xs1 =>
+    now eapply NoDup_app_l, Hnd
+  | Hnd:NoDup (?xs1++?ys1) |- NoDup (?xs1++_) =>
+    eapply NoDup_incl_app with (ys:=ys1);
+    [| |eauto]; [now solve_incl_app|clear Hnd; intros; solve_NoDup_app]
+  | Hnd:NoDup (_++_) |- NoDup _ =>
+    eapply NoDup_app_r in Hnd; solve_NoDup_app
+  end.
+
+Lemma NoDupMembers_incl_app (A B : Type) : forall (xs ys zs : list (A * B)),
+    incl zs ys ->
+    (NoDupMembers ys -> NoDupMembers zs) ->
+    NoDupMembers (xs ++ ys) ->
+    NoDupMembers (xs ++ zs).
+Proof.
+  intros * Hincl Hnd1 Hnd2.
+  apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r.
+  intros ? Hin1 Hin2.
+  eapply NoDupMembers_app_InMembers in Hnd2; eauto using InMembers_incl.
+Qed.
+
+Ltac solve_NoDupMembers_app :=
+  simpl_app;
+  match goal with
+  | |- NoDupMembers [] => now constructor
+  | Hnd:NoDupMembers ?xs |- NoDupMembers ?xs => assumption
+  | Hnd:NoDupMembers (?xs1++?ys1) |- NoDupMembers ?xs1 =>
+    now eapply NoDupMembers_app_l, Hnd
+  | Hnd:NoDupMembers (?xs1++?ys1) |- NoDupMembers (?xs1++_) =>
+    eapply NoDupMembers_incl_app with (ys:=ys1);
+    [| |eauto]; [now solve_incl_app|clear Hnd; intros; solve_NoDupMembers_app]
+  | Hnd:NoDupMembers (_++_) |- NoDupMembers _ =>
+    eapply NoDupMembers_app_r in Hnd; solve_NoDupMembers_app
+  end.
+
+Ltac solve_Permutation_app :=
+  simpl_app;
+  match goal with
+  | |- Permutation ?xs ?xs => apply Permutation_refl
+  | |- Permutation (?xs ++ _) (?xs ++ _) => apply Permutation_app_head; solve_Permutation_app
+  | |- Permutation (?xs ++ ?ys) _ => rewrite (Permutation_app_comm xs ys); solve_Permutation_app
+  end.
+
+Example solve_Perm_app {A} : forall (l1 l2 l3 l4 l5 l6 l7 : list A),
+    Permutation (l1 ++ l2 ++ l3 ++ l4 ++ l5 ++ l6 ++ l7) (l2 ++ (l3 ++ l5) ++ l4 ++ l1 ++ (l7 ++ l6)).
+Proof.
+  intros. solve_Permutation_app.
+Qed.

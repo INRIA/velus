@@ -36,7 +36,7 @@ Module Type LSYNTAX
   Definition ann : Type := (type * nclock)%type.
   Definition lann : Type := (list type * nclock)%type.
 
-  Definition idents xs := List.map (@fst ident (type * clock)) xs.
+  Definition idents xs := List.map (@fst ident (type * clock * ident)) xs.
 
   Inductive exp : Type :=
   | Econst : cconst -> exp
@@ -63,7 +63,8 @@ Module Type LSYNTAX
 
   Inductive block : Type :=
   | Beq : equation -> block
-  | Breset : list block -> exp -> block.
+  | Breset : list block -> exp -> block
+  | Blocal : list (ident * (type * clock * ident)) -> list block -> block.
 
   (** ** Node *)
 
@@ -162,7 +163,20 @@ Module Type LSYNTAX
     match d with
     | Beq eq => fst eq
     | Breset blocks _ => flat_map vars_defined blocks
+    | Blocal locals blocks =>
+      List.filter (fun x => negb (mem_assoc_ident x locals))
+                  (flat_map vars_defined blocks)
     end.
+
+  Inductive VarsDefined : block -> list ident -> Prop :=
+  | LVDeq : forall eq, VarsDefined (Beq eq) (fst eq)
+  | LVDreset : forall blocks er xs,
+      Forall2 VarsDefined blocks xs ->
+      VarsDefined (Breset blocks er) (concat xs)
+  | LVDlocal : forall locs blocks xs ys,
+      Forall2 VarsDefined blocks xs ->
+      Permutation (map fst locs ++ ys) (concat xs) ->
+      VarsDefined (Blocal locs blocks) ys.
 
   Definition anon_streams (anns : list ann) :=
     map_filter (fun '(ty, (cl, name)) => match name with
@@ -201,50 +215,90 @@ Module Type LSYNTAX
   Definition anon_in_eq (eq : equation) : list (ident * (type * clock)) :=
     anon_ins (snd eq).
 
-  Fixpoint anon_in_block (d : block) : list (ident * (type * clock)) :=
+  Fixpoint local_anon_in_block (d : block) : list (ident * (type * clock)) :=
     match d with
     | Beq eq => anon_in_eq eq
-    | Breset blocks er => (flat_map anon_in_block blocks)++(fresh_in er)
+    | Breset blks er => (flat_map local_anon_in_block blks)++(fresh_in er)
+    | Blocal _ _ => []
     end.
 
-  Record node {prefs : PS.t} : Type :=
+  Fixpoint anon_in_block (blk : block) : list (ident * (type * clock)) :=
+    match blk with
+    | Beq eq => anon_in_eq eq
+    | Breset blks er => (flat_map anon_in_block blks)++(fresh_in er)
+    | Blocal _ blks => flat_map anon_in_block blks
+    end.
+
+  Fixpoint locals (d : block) : list (ident * (type * clock * ident)) :=
+    match d with
+    | Beq _ => []
+    | Breset blocks _ => flat_map locals blocks
+    | Blocal loc blocks => loc ++ (flat_map locals blocks)
+    end.
+
+  (** Shadowing is prohibited *)
+  Inductive NoDupLocals : list ident -> block -> Prop :=
+  | NDLeq : forall env eq, NoDupLocals env (Beq eq)
+  | NDLreset : forall env blocks er,
+      Forall (NoDupLocals env) blocks ->
+      NoDupLocals env (Breset blocks er)
+  | NDLlocal : forall env locs blocks,
+      Forall (NoDupLocals (env++map fst locs)) blocks ->
+      NoDupMembers locs ->
+      (forall x, InMembers x locs -> ~In x env) ->
+      NoDupLocals env (Blocal locs blocks).
+
+  Inductive GoodLocals (prefs : PS.t) : block -> Prop :=
+  | GoodEq : forall eq,
+      GoodLocals prefs (Beq eq)
+  | GoodReset : forall blks er,
+      Forall (GoodLocals prefs) blks ->
+      GoodLocals prefs (Breset blks er)
+  | GoodLocal : forall locs blks,
+      Forall (AtomOrGensym prefs) (map fst locs) ->
+      Forall (GoodLocals prefs) blks ->
+      GoodLocals prefs (Blocal locs blks).
+
+  Record node {PSyn : block -> Prop} {prefs : PS.t} : Type :=
     mk_node {
         n_name     : ident;
         n_hasstate : bool;
-        n_in       : list (ident * (type * clock));
-        n_out      : list (ident * (type * clock));
-        n_vars     : list (ident * (type * clock));
-        n_blocks   : list block;
+        n_in       : list (ident * (type * clock * ident));
+        n_out      : list (ident * (type * clock * ident));
+        n_block    : block;
 
         n_ingt0    : 0 < length n_in;
         n_outgt0   : 0 < length n_out;
-        n_defd     : Permutation (flat_map vars_defined n_blocks)
-                                 (map fst (n_vars ++ n_out));
-        n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out ++ flat_map anon_in_block n_blocks);
-        n_good     : Forall (AtomOrGensym prefs) (map fst (n_in ++ n_vars ++ n_out ++ flat_map anon_in_block n_blocks))
-                     /\ atom n_name
+        n_defd     : exists xs, VarsDefined n_block xs /\ Permutation xs (map fst n_out);
+        n_nodup    : NoDupMembers (idty (n_in ++ n_out) ++ anon_in_block n_block) /\
+                     NoDupLocals (map fst (n_in ++ n_out) ++ map fst (anon_in_block n_block)) n_block;
+        n_good     : Forall (AtomOrGensym prefs) (map fst (n_in ++ n_out) ++ map fst (anon_in_block n_block))
+                     /\ GoodLocals prefs n_block
+                     /\ atom n_name;
+        n_syn      : PSyn n_block;
       }.
 
-  Instance node_unit {prefs} : ProgramUnit (@node prefs) :=
+  Instance node_unit {PSyn prefs} : ProgramUnit (@node PSyn prefs) :=
     { name := n_name; }.
 
   (** ** Program *)
 
-  Record global {prefs} :=
+  Record global {PSyn prefs} :=
     Global {
         enums : list (ident * nat);
-        nodes : list (@node prefs);
+        nodes : list (@node PSyn prefs);
       }.
-  Arguments Global {_}.
+  Arguments Global {_ _}.
 
-  Program Instance global_program {prefs} : Program (@node prefs) global :=
+  Program Instance global_program {PSyn prefs} : Program (@node PSyn prefs) global :=
     { units := nodes;
       update := fun g => Global g.(enums) }.
 
   Section find_node.
+    Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
 
-    Definition find_node (f: ident) (G: @global prefs) :=
+    Definition find_node (f: ident) (G: @global PSyn prefs) :=
       option_map fst (find_unit f G).
 
     Lemma find_node_Exists:
@@ -276,7 +330,7 @@ Module Type LSYNTAX
       now intros ?.
     Qed.
 
-    Lemma find_node_cons f (a : @node prefs) enums nds n :
+    Lemma find_node_cons f (a : @node PSyn prefs) enums nds n :
       find_node f (Global enums (a :: nds)) = Some n ->
       (f = n_name a /\ a = n) \/
       (f <> n_name a /\ find_node f (Global enums nds) = Some n).
@@ -291,7 +345,7 @@ Module Type LSYNTAX
 
   End find_node.
 
-  Lemma equiv_program_enums {prefs} : forall (G G' : @global prefs),
+  Lemma equiv_program_enums {PSyn prefs} : forall (G G' : @global PSyn prefs),
       equiv_program G G' ->
       enums G = enums G'.
   Proof.
@@ -299,7 +353,7 @@ Module Type LSYNTAX
     specialize (Heq []); inv Heq; auto.
   Qed.
 
-  Corollary suffix_enums {prefs} : forall (G G' : @global prefs),
+  Corollary suffix_enums {PSyn prefs} : forall (G G' : @global PSyn prefs),
       suffix G G' ->
       enums G = enums G'.
   Proof.
@@ -411,11 +465,17 @@ Module Type LSYNTAX
         Forall P blocks ->
         P (Breset blocks er).
 
+    Hypothesis BlocalCase:
+      forall locs blocks,
+        Forall P blocks ->
+        P (Blocal locs blocks).
+
     Fixpoint block_ind2 (d: block) : P d.
     Proof.
       destruct d.
       - apply BeqCase; auto.
       - apply BresetCase; induction l; auto.
+      - apply BlocalCase; induction l0; auto.
     Qed.
 
   End block_ind2.
@@ -673,19 +733,20 @@ Module Type LSYNTAX
   (** Interface equivalence between nodes *)
 
   Section interface_eq.
+    Context {PSyn1 PSyn2 : block -> Prop}.
     Context {prefs1 prefs2 : PS.t}.
 
     (** Nodes are equivalent if their interface are equivalent,
         that is if they have the same identifier and the same
         input/output types *)
-    Definition node_iface_eq (n : @node prefs1) (n' : @node prefs2) : Prop :=
+    Definition node_iface_eq (n : @node PSyn1 prefs1) (n' : @node PSyn2 prefs2) : Prop :=
       n.(n_name) = n'.(n_name) /\
       n.(n_hasstate) = n'.(n_hasstate) /\
       n.(n_in) = n'.(n_in) /\
       n.(n_out) = n'.(n_out).
 
     (** Globals are equivalent if they contain equivalent nodes *)
-    Definition global_iface_eq (G : @global prefs1) (G' : @global prefs2) : Prop :=
+    Definition global_iface_eq (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) : Prop :=
       enums G = enums G' /\
       forall f, orel2 node_iface_eq (find_node f G) (find_node f G').
 
@@ -729,12 +790,12 @@ Module Type LSYNTAX
 
   End interface_eq.
 
-  Fact node_iface_eq_refl {prefs} : Reflexive (@node_iface_eq prefs prefs).
+  Fact node_iface_eq_refl {PSyn prefs} : Reflexive (@node_iface_eq PSyn _ prefs _).
   Proof.
     intros n. repeat split.
   Qed.
 
-  Fact node_iface_eq_sym {p1 p2} : forall (n1 : @node p1) (n2 : @node p2),
+  Fact node_iface_eq_sym {P1 P2 p1 p2} : forall (n1 : @node P1 p1) (n2 : @node P2 p2),
       node_iface_eq n1 n2 ->
       node_iface_eq n2 n1.
   Proof.
@@ -742,7 +803,7 @@ Module Type LSYNTAX
     constructor; auto.
   Qed.
 
-  Fact node_iface_eq_trans {p1 p2 p3} : forall (n1 : @node p1) (n2 : @node p2) (n3 : @node p3),
+  Fact node_iface_eq_trans {P1 P2 P3 p1 p2 p3} : forall (n1 : @node P1 p1) (n2 : @node P2 p2) (n3 : @node P3 p3),
       node_iface_eq n1 n2 ->
       node_iface_eq n2 n3 ->
       node_iface_eq n1 n3.
@@ -753,14 +814,14 @@ Module Type LSYNTAX
     repeat split; etransitivity; eauto.
   Qed.
 
-  Fact global_eq_refl {prefs} : Reflexive (@global_iface_eq prefs prefs).
+  Fact global_eq_refl {PSyn prefs} : Reflexive (@global_iface_eq PSyn _ prefs _).
   Proof.
     intros G. split; intros; try reflexivity.
     destruct (find_node f G); constructor.
     apply node_iface_eq_refl.
   Qed.
 
-  Fact global_iface_eq_sym {p1 p2} : forall (G1 : @global p1) (G2 : @global p2),
+  Fact global_iface_eq_sym {P1 P2 p1 p2} : forall (G1 : @global P1 p1) (G2 : @global P2 p2),
       global_iface_eq G1 G2 ->
       global_iface_eq G2 G1.
   Proof.
@@ -771,7 +832,7 @@ Module Type LSYNTAX
     apply node_iface_eq_sym; auto.
   Qed.
 
-  Fact global_iface_eq_trans {p1 p2 p3} : forall (n1 : @global p1) (n2 : @global p2) (n3 : @global p3),
+  Fact global_iface_eq_trans {P1 P2 P3 p1 p2 p3} : forall (n1 : @global P1 p1) (n2 : @global P2 p2) (n3 : @global P3 p3),
       global_iface_eq n1 n2 ->
       global_iface_eq n2 n3 ->
       global_iface_eq n1 n3.
@@ -788,7 +849,7 @@ Module Type LSYNTAX
 
   (** ** Property of length in expressions; is implied by wc and wt *)
 
-  Inductive wl_exp {prefs} : (@global prefs) -> exp -> Prop :=
+  Inductive wl_exp {PSyn prefs} : (@global PSyn prefs) -> exp -> Prop :=
   | wl_Const : forall G c,
       wl_exp G (Econst c)
   | wl_Enum : forall G k ty,
@@ -844,11 +905,11 @@ Module Type LSYNTAX
       length anns = length (n_out n) ->
       wl_exp G (Eapp f es er anns).
 
-  Definition wl_equation {prefs} (G : @global prefs) (eq : equation) :=
+  Definition wl_equation {PSyn prefs} (G : @global PSyn prefs) (eq : equation) :=
     let (xs, es) := eq in
     Forall (wl_exp G) es /\ length xs = length (annots es).
 
-  Inductive wl_block {prefs} (G : @global prefs) : block -> Prop :=
+  Inductive wl_block {PSyn prefs} (G : @global PSyn prefs) : block -> Prop :=
   | wl_Beq : forall eq,
       wl_equation G eq ->
       wl_block G (Beq eq)
@@ -856,13 +917,139 @@ Module Type LSYNTAX
       Forall (wl_block G) blocks ->
       wl_exp G er ->
       numstreams er = 1 ->
-      wl_block G (Breset blocks er).
+      wl_block G (Breset blocks er)
+  | wl_Blocal : forall locs blocks,
+      Forall (wl_block G) blocks ->
+      wl_block G (Blocal locs blocks).
 
-  Definition wl_node {prefs} (G : @global prefs) (n : @node prefs) :=
-    Forall (wl_block G) (n_blocks n).
+  Definition wl_node {PSyn prefs} (G : @global PSyn prefs) (n : @node PSyn prefs) :=
+    wl_block G (n_block n).
 
-  Definition wl_global {prefs} : @global prefs -> Prop :=
+  Definition wl_global {PSyn prefs} : @global PSyn prefs -> Prop :=
     wt_program wl_node.
+
+  (** ** Limiting the variables appearing in expression, equation or block to an environnement *)
+
+  Inductive wx_exp (vars : list ident) : exp -> Prop :=
+  | wx_Const : forall c,
+      wx_exp vars (Econst c)
+  | wx_Enum : forall k ty,
+      wx_exp vars (Eenum k ty)
+  | wx_Evar : forall x a,
+      In x vars ->
+      wx_exp vars (Evar x a)
+  | wx_Eunop : forall op e a,
+      wx_exp vars e ->
+      wx_exp vars (Eunop op e a)
+  | wx_Ebinop : forall op e1 e2 a,
+      wx_exp vars e1 ->
+      wx_exp vars e2 ->
+      wx_exp vars (Ebinop op e1 e2 a)
+  | wx_Efby : forall e0s es anns,
+      Forall (wx_exp vars) e0s ->
+      Forall (wx_exp vars) es ->
+      wx_exp vars (Efby e0s es anns)
+  | wx_Earrow : forall e0s es anns,
+      Forall (wx_exp vars) e0s ->
+      Forall (wx_exp vars) es ->
+      wx_exp vars (Earrow e0s es anns)
+  | wx_Ewhen : forall es x b tys nck,
+      In x vars ->
+      Forall (wx_exp vars) es ->
+      wx_exp vars (Ewhen es x b (tys, nck))
+  | wx_Emerge : forall x tx es tys nck,
+      In x vars ->
+      Forall (Forall (wx_exp vars)) es ->
+      wx_exp vars (Emerge (x, tx) es (tys, nck))
+  | wx_Ecase : forall e brs d tys nck,
+      wx_exp vars e ->
+      (forall es, In (Some es) brs -> Forall (wx_exp vars) es) ->
+      Forall (wx_exp vars) d ->
+      wx_exp vars (Ecase e brs d (tys, nck))
+  | wx_Eapp : forall f es er anns,
+      Forall (wx_exp vars) es ->
+      Forall (wx_exp vars) er ->
+      wx_exp vars (Eapp f es er anns).
+
+  Definition wx_equation vars (eq : equation) :=
+    let (xs, es) := eq in
+    Forall (wx_exp vars) es /\ incl xs vars.
+
+  Inductive wx_block : list ident -> block -> Prop :=
+  | wx_Beq : forall vars eq,
+      wx_equation vars eq ->
+      wx_block vars (Beq eq)
+  | wx_Breset : forall vars blks er,
+      Forall (wx_block vars) blks ->
+      wx_exp vars er ->
+      wx_block vars (Breset blks er)
+  | wx_Blocal : forall vars locs blks,
+      Forall (wx_block (vars++map fst locs)) blks ->
+      wx_block vars (Blocal locs blks).
+
+  Definition wx_node {PSyn prefs} (n : @node PSyn prefs) :=
+    wx_block (map fst (n_in n ++ n_out n)) (n_block n).
+
+  Definition wx_global {PSyn prefs} (G: @global PSyn prefs) : Prop :=
+    Forall wx_node (nodes G).
+
+  Section wx_incl.
+
+    Hint Constructors wx_exp wx_block.
+
+    Lemma wx_exp_incl : forall env env' e,
+      incl env env' ->
+      wx_exp env e ->
+      wx_exp env' e.
+    Proof.
+      induction e using exp_ind2; intros * Hincl Hwx; inv Hwx; auto.
+      - (* fby *)
+        constructor; rewrite Forall_forall in *; eauto.
+      - (* arrow *)
+        constructor; rewrite Forall_forall in *; eauto.
+      - (* when *)
+        constructor; rewrite Forall_forall in *; eauto.
+      - (* merge *)
+        constructor; rewrite Forall_forall in *; eauto.
+        intros ? Hin. specialize (H _ Hin). specialize (H4 _ Hin).
+        rewrite Forall_forall in *; eauto.
+      - (* case *)
+        constructor; rewrite Forall_forall in *; eauto.
+        intros ? Hin. specialize (H _ Hin). specialize (H6 _ Hin). simpl in *.
+        rewrite Forall_forall in *; eauto.
+      - (* app *)
+        constructor; rewrite Forall_forall in *; eauto.
+    Qed.
+
+    Lemma wx_equation_incl : forall env env' equ,
+        incl env env' ->
+        wx_equation env equ ->
+        wx_equation env' equ.
+    Proof.
+      intros ?? (xs&es) Hincl (Hes&Hxs).
+      split.
+      - rewrite Forall_forall in *. intros.
+        eapply wx_exp_incl; eauto.
+      - etransitivity; eauto.
+    Qed.
+
+    Lemma wx_block_incl : forall env env' blk,
+        incl env env' ->
+        wx_block env blk ->
+        wx_block env' blk.
+    Proof.
+      intros *. revert env env'.
+      induction blk using block_ind2; intros * Hincl Hwx; inv Hwx.
+      - (* equation *)
+        constructor. eapply wx_equation_incl; eauto.
+      - (* reset *)
+        constructor; rewrite Forall_forall in *; eauto.
+        eapply wx_exp_incl; eauto.
+      - (* local *)
+        constructor; rewrite Forall_forall in *; intros.
+        eapply H; eauto using incl_appl'.
+    Qed.
+  End wx_incl.
 
   (** *** fresh_in, anon_in properties *)
 
@@ -935,10 +1122,7 @@ Module Type LSYNTAX
       NoDupMembers (fresh_in e).
   Proof.
     intros * Hin Hndup.
-    unfold fresh_ins in *.
-    induction es; inv Hin; simpl in Hndup.
-    - apply NoDupMembers_app_l in Hndup; auto.
-    - apply NoDupMembers_app_r in Hndup; auto.
+    eapply NoDupMembers_flat_map, Forall_forall in Hndup; eauto.
   Qed.
 
   Corollary NoDupMembers_fresh_in' : forall vars e es,
@@ -962,10 +1146,7 @@ Module Type LSYNTAX
       NoDupMembers (anon_in e).
   Proof.
     intros * Hin Hndup.
-    unfold anon_ins in *.
-    induction es; inv Hin; simpl in Hndup.
-    - apply NoDupMembers_app_l in Hndup; auto.
-    - apply NoDupMembers_app_r in Hndup; auto.
+    eapply NoDupMembers_flat_map, Forall_forall in Hndup; eauto.
   Qed.
 
   Corollary NoDupMembers_anon_in' : forall vars e es,
@@ -989,10 +1170,7 @@ Module Type LSYNTAX
       NoDupMembers (anon_in_block d).
   Proof.
     intros * Hin Hndup.
-    unfold fresh_ins in *.
-    induction blocks; inv Hin; simpl in Hndup.
-    - apply NoDupMembers_app_l in Hndup; auto.
-    - apply NoDupMembers_app_r in Hndup; auto.
+    eapply NoDupMembers_flat_map, Forall_forall in Hndup; eauto.
   Qed.
 
   Corollary NoDupMembers_anon_in_block' : forall vars d blocks,
@@ -1012,47 +1190,280 @@ Module Type LSYNTAX
 
   (** *** Additional properties *)
 
-  Lemma node_NoDup {prefs} : forall (n : @node prefs),
-      NoDup (map fst (n_in n ++ n_vars n ++ n_out n)).
+  Lemma NoDupLocals_incl : forall blk xs xs',
+      incl xs xs' ->
+      NoDupLocals xs' blk ->
+      NoDupLocals xs blk.
+  Proof.
+    induction blk using block_ind2; intros * Hincl Hnd; inv Hnd.
+    - (* eq *)
+      constructor.
+    - (* reset *)
+      constructor.
+      rewrite Forall_forall in *; eauto.
+    - (* local *)
+      constructor; auto.
+      + rewrite Forall_forall in *; intros; eauto.
+        eapply H; eauto using incl_appl'.
+      + intros * Hin. contradict H5; eauto.
+  Qed.
+
+  Corollary node_NoDupLocals {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDupLocals (map fst (n_in n ++ n_out n)) (n_block n).
+  Proof.
+    intros *.
+    pose proof (n_nodup n) as (_&Hnd).
+    eapply NoDupLocals_incl; eauto.
+    solve_incl_app.
+  Qed.
+
+  Add Parametric Morphism : NoDupLocals
+      with signature @Permutation _ ==> eq ==> Basics.impl
+        as NoDupLocals_Permutation.
+  Proof.
+    intros * Hperm ? Hnd.
+    eapply NoDupLocals_incl; eauto.
+    rewrite Hperm. reflexivity.
+  Qed.
+
+  Lemma NoDupLocals_incl' prefs npref : forall blk xs ys,
+      ~PS.In npref prefs ->
+      GoodLocals prefs blk ->
+      (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
+      NoDupLocals xs blk ->
+      NoDupLocals ys blk.
+  Proof.
+    induction blk using block_ind2;
+      intros * Hnin Hgood Hin Hnd; inv Hgood; inv Hnd.
+    - (* equation *) constructor.
+    - (* reset *)
+      constructor. rewrite Forall_forall in *; eauto.
+    - (* local *)
+      constructor; auto.
+      + rewrite Forall_forall in *. intros ? Hblk.
+        eapply H; [eauto|eauto|eauto| |eauto].
+        intros ? Hx. rewrite in_app_iff in *. destruct Hx as [Hx|Hx]; auto.
+        apply Hin in Hx as [?|?]; auto.
+      + intros ? Hinm. specialize (H7 _ Hinm) as Hx.
+        contradict Hx. apply Hin in Hx as [?|(?&?&Hpref)]; auto; subst. exfalso.
+        eapply Forall_forall in H2. 2:(rewrite <- fst_InMembers; eauto).
+        inv H2.
+        * apply gensym_not_atom in H0; auto.
+        * destruct H0 as (?&Hpsin&?&?&Heq).
+          eapply gensym_injective in Heq as (?&?); subst. contradiction.
+  Qed.
+
+  Lemma node_NoDup {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDup (map fst (n_in n ++ n_out n)).
   Proof.
     intros n.
     rewrite <- fst_NoDupMembers.
-    specialize (n_nodup n) as Hnd.
+    specialize (n_nodup n) as (Hnd&_).
     repeat rewrite app_assoc in *.
     apply NoDupMembers_app_l in Hnd; auto.
+    now rewrite NoDupMembers_idty in Hnd.
   Qed.
 
-  Lemma in_vars_defined_NoDup {prefs} : forall (n : @node prefs),
-      NoDup (map fst (n_in n) ++ flat_map vars_defined (n_blocks n)).
+  Lemma AtomOrGensym_add : forall pref prefs xs,
+      Forall (AtomOrGensym prefs) xs ->
+      Forall (AtomOrGensym (PS.add pref prefs)) xs.
   Proof.
-    intros n.
-    destruct n; simpl. clear - n_nodup0 n_defd0.
-    rewrite n_defd0. rewrite <- map_app, <- fst_NoDupMembers.
-    repeat rewrite app_assoc in *. apply NoDupMembers_app_l in n_nodup0; auto.
+    intros * Hat.
+    eapply Forall_impl; [|eauto].
+    intros ? [?|(pref'&?&?)]; [left|right]; subst; auto.
+    exists pref'. auto using PSF.add_2.
   Qed.
 
-  Corollary NoDup_vars_defined_n_eqs {prefs} : forall (n : @node prefs),
-      NoDup (flat_map vars_defined (n_blocks n)).
+  Lemma GoodLocals_add : forall p prefs blk,
+      GoodLocals prefs blk ->
+      GoodLocals (PS.add p prefs) blk.
   Proof.
-    intros n.
-    specialize (in_vars_defined_NoDup n) as Hnd.
-    apply NoDup_app_r in Hnd; auto.
+    induction blk using block_ind2; intros * Hgood; inv Hgood.
+    - (* equation *)
+      constructor; eauto using AtomOrGensym_add.
+    - (* reset *)
+      constructor; eauto using AtomOrGensym_add.
+      rewrite Forall_forall in *; eauto.
+    - (* locals *)
+      constructor; eauto using AtomOrGensym_add.
+      rewrite Forall_forall in *; eauto.
   Qed.
 
-  (* Instance vars_defined_Proper: *)
-  (*   Proper (@Permutation block ==> @Permutation ident) *)
-  (*          vars_defined. *)
-  (* Proof. *)
-  (*   intros eqs eqs' Hperm; subst. *)
-  (*   unfold vars_defined. rewrite Hperm. reflexivity. *)
-  (* Qed. *)
+  Lemma VarsDefined_vars_defined : forall blk xs,
+      NoDupLocals xs blk ->
+      VarsDefined blk xs ->
+      Permutation xs (vars_defined blk).
+  Proof.
+    induction blk using block_ind2; intros * Hnd Hvars; inv Hnd; inv Hvars; simpl in *.
+    - (* equation *)
+      reflexivity.
+    - (* reset *)
+      induction H4; inv H; inv H2; simpl in *; auto.
+      apply Permutation_app; [eapply H5|eapply IHForall2]; eauto.
+      2:eapply Forall_impl; [|eauto]; intros.
+      1,2:(eapply NoDupLocals_incl; [|eauto]; solve_incl_app).
+    - (* local *)
+      assert (Permutation (concat xs0) (flat_map vars_defined blocks)) as Hperm.
+      { rewrite Permutation_app_comm in H7.
+        assert (Forall (NoDupLocals (concat xs0)) blocks) as Hnd.
+        { eapply Forall_impl; [|eauto]. intros.
+          rewrite <-H7. eapply NoDupLocals_incl; [|eauto]; solve_incl_app. }
+        clear - H Hnd H3.
+        induction H3; inv H; inv Hnd; simpl in *; auto.
+        apply Permutation_app; [eapply H4|eapply IHForall2]; eauto.
+        2:eapply Forall_impl; [|eauto]; intros.
+        1,2:(eapply NoDupLocals_incl; [|eauto]; solve_incl_app).
+      }
+      rewrite <-Hperm, <-H7, <-filter_app, filter_nil, filter_idem; auto.
+      + eapply Forall_forall; intros ? Hin.
+        eapply Bool.negb_true_iff.
+        destruct (mem_assoc_ident x locs) eqn:Hmem; auto.
+        exfalso. eapply mem_assoc_ident_true in Hmem as (ty&Hin').
+        eapply H5; eauto using In_InMembers.
+      + eapply Forall_forall; intros ? Hin.
+        apply fst_InMembers, InMembers_In in Hin as (?&?).
+        eapply Bool.negb_false_iff; simpl.
+        destruct (mem_assoc_ident x locs) eqn:Hmem; auto.
+        exfalso. eapply mem_assoc_ident_false in Hmem; eauto.
+  Qed.
 
-  (* Fact vars_defined_app : forall eqs1 eqs2, *)
-  (*     vars_defined (eqs1++eqs2) = vars_defined eqs1 ++ vars_defined eqs2. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold vars_defined. rewrite flat_map_app; auto. *)
-  (* Qed. *)
+  Corollary VarsDefined_flat_map_vars_defined : forall blks xs,
+      Forall (NoDupLocals (concat xs)) blks ->
+      Forall2 VarsDefined blks xs ->
+      Permutation (concat xs) (flat_map vars_defined blks).
+  Proof.
+    intros * Hnd Hvars.
+    induction Hvars; inv Hnd; simpl in *; auto.
+    apply Permutation_app; [eapply VarsDefined_vars_defined|eapply IHHvars]; eauto.
+    2:eapply Forall_impl; [|eauto]; intros.
+    1,2:(eapply NoDupLocals_incl; [|eauto]; solve_incl_app).
+  Qed.
+
+  Lemma vars_defined_Perm {PSyn prefs} : forall (n : @node PSyn prefs),
+      Permutation (vars_defined (n_block n)) (map fst (n_out n)).
+  Proof.
+    intros n. destruct n; simpl. clear - n_nodup0 n_defd0.
+    destruct n_defd0 as (?&Hvars&Hperm). destruct n_nodup0 as (_&Hnd).
+    rewrite <-Hperm. symmetry. eapply VarsDefined_vars_defined; eauto.
+    eapply NoDupLocals_incl; [|eauto].
+    rewrite Hperm. solve_incl_app.
+  Qed.
+
+  Lemma local_anon_in_block_incl : forall blk,
+      incl (local_anon_in_block blk) (anon_in_block blk).
+  Proof.
+    induction blk using block_ind2; simpl.
+    - (* equation *)
+      reflexivity.
+    - (* reset *)
+      apply incl_app; [apply incl_appl|apply incl_appr; reflexivity].
+      intros ??. apply in_flat_map in H0 as (?&?&?).
+      rewrite Forall_forall in *.
+      apply in_flat_map; do 2 esplit; eauto.
+      eapply H; eauto.
+    - (* local *)
+      apply incl_nil'.
+  Qed.
+
+  Corollary local_anons_in_block_incl : forall blks,
+      incl (flat_map local_anon_in_block blks) (flat_map anon_in_block blks).
+  Proof.
+    intros ?? Hin. apply in_flat_map in Hin as (?&?&?).
+    apply in_flat_map; do 2 esplit; eauto.
+    eapply local_anon_in_block_incl; eauto.
+  Qed.
+
+  Fact local_anons_in_block_NoDupMembers' : forall blks,
+      Forall (fun blk : block => NoDupMembers (anon_in_block blk) -> NoDupMembers (local_anon_in_block blk)) blks ->
+      NoDupMembers (flat_map anon_in_block blks) ->
+      NoDupMembers (flat_map local_anon_in_block blks).
+  Proof.
+    intros * Hf Hnd.
+    induction blks; inv Hf; simpl in *; auto.
+    apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r.
+    intros ? Hin contra.
+    eapply InMembers_incl in Hin; eauto using local_anon_in_block_incl.
+    eapply InMembers_incl in contra; eauto using local_anons_in_block_incl.
+    eapply NoDupMembers_app_InMembers in Hnd; eauto.
+  Qed.
+
+  Lemma local_anon_in_block_NoDupMembers : forall blk,
+      NoDupMembers (anon_in_block blk) ->
+      NoDupMembers (local_anon_in_block blk).
+  Proof.
+    induction blk using block_ind2; intros * Hnd; simpl in *; auto.
+    - (* reset *)
+      eapply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, local_anons_in_block_NoDupMembers'.
+      intros ? Hinm.
+      eapply NoDupMembers_app_InMembers in Hnd; eauto using InMembers_incl, local_anons_in_block_incl.
+    - (* locals *)
+      constructor.
+  Qed.
+
+  Corollary local_anons_in_block_NoDupMembers : forall blks,
+      NoDupMembers (flat_map anon_in_block blks) ->
+      NoDupMembers (flat_map local_anon_in_block blks).
+  Proof.
+    intros * Hnd.
+    eapply local_anons_in_block_NoDupMembers'; eauto.
+    eapply Forall_forall; intros; eauto using local_anon_in_block_NoDupMembers.
+  Qed.
+
+  Lemma GoodLocals_locals prefs : forall blk,
+      GoodLocals prefs blk ->
+      Forall (AtomOrGensym prefs) (map fst (locals blk)).
+  Proof.
+    induction blk using block_ind2; intros * Hgood; inv Hgood; simpl; auto.
+    - (* reset *)
+      rewrite flat_map_concat_map, concat_map.
+      eapply Forall_concat, Forall_map, Forall_map.
+      rewrite Forall_forall in *; eauto.
+    - (* locals *)
+      rewrite map_app, Forall_app; split; auto.
+      rewrite flat_map_concat_map, concat_map.
+      eapply Forall_concat, Forall_map, Forall_map.
+      rewrite Forall_forall in *; eauto.
+  Qed.
+
+  (** ** Specifications of some subset of the language *)
+
+  (** *** Without local blocks *)
+
+  Inductive nolocal_block : block -> Prop :=
+  | NLeq : forall eq, nolocal_block (Beq eq)
+  | NLreset : forall blks er,
+      Forall nolocal_block blks ->
+      nolocal_block (Breset blks er).
+
+  Inductive nolocal_top_block : block -> Prop :=
+  | NLnode : forall locs blks,
+      Forall nolocal_block blks ->
+      nolocal_top_block (Blocal locs blks).
+
+  Lemma nolocal_block_local_anon_idem : forall blk,
+      nolocal_block blk ->
+      local_anon_in_block blk = anon_in_block blk.
+  Proof.
+    induction blk using block_ind2; intros * Hnl; inv Hnl; simpl.
+    - (* equation *)
+      reflexivity.
+    - f_equal; auto.
+      rewrite 2 flat_map_concat_map. f_equal.
+      eapply map_ext_in; intros.
+      rewrite Forall_forall in *; eauto.
+  Qed.
+
+  Corollary nolocal_block_local_anons_idem : forall blks,
+      Forall nolocal_block blks ->
+      flat_map local_anon_in_block blks = flat_map anon_in_block blks.
+  Proof.
+    intros * Hnl.
+    rewrite 2 flat_map_concat_map. f_equal.
+    eapply map_ext_in; intros.
+    rewrite Forall_forall in *.
+    eapply nolocal_block_local_anon_idem; eauto.
+  Qed.
+
 End LSYNTAX.
 
 Module LSyntaxFun

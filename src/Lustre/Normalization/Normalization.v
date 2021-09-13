@@ -8,7 +8,6 @@ From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
-From Velus Require Import Lustre.Normalization.Fresh.
 From Velus Require Import Lustre.Normalization.Unnesting Lustre.Normalization.NormFby.
 
 (** * Complete Normalization *)
