@@ -57,63 +57,63 @@ Module Type DUPREGREM
               | _ => (regs, sub)
               end) eqs ([], Env.empty _)).
 
-  Section substitute.
+  Section rename.
     Variable (sub : Env.t ident).
 
-    Definition subst_in_var (x : ident) :=
+    Definition rename_in_var (x : ident) :=
       match Env.find x sub with
       | Some x' => x'
       | None => x
       end.
 
-    Fixpoint subst_in_clock (ck : clock) :=
+    Fixpoint rename_in_clock (ck : clock) :=
       match ck with
       | Cbase => Cbase
-      | Con ck' x t => Con (subst_in_clock ck') (subst_in_var x) t
+      | Con ck' x t => Con (rename_in_clock ck') (rename_in_var x) t
       end.
 
-    Fixpoint subst_in_exp (e : exp) :=
+    Fixpoint rename_in_exp (e : exp) :=
       match e with
       | Econst _ | Eenum _ _ => e
-      | Evar x ty => Evar (subst_in_var x) ty
-      | Ewhen e x t => Ewhen (subst_in_exp e) (subst_in_var x) t
-      | Eunop op e1 ty => Eunop op (subst_in_exp e1) ty
-      | Ebinop op e1 e2 ty => Ebinop op (subst_in_exp e1) (subst_in_exp e2) ty
+      | Evar x ty => Evar (rename_in_var x) ty
+      | Ewhen e x t => Ewhen (rename_in_exp e) (rename_in_var x) t
+      | Eunop op e1 ty => Eunop op (rename_in_exp e1) ty
+      | Ebinop op e1 e2 ty => Ebinop op (rename_in_exp e1) (rename_in_exp e2) ty
       end.
 
-    Fixpoint subst_in_cexp (e : cexp) :=
+    Fixpoint rename_in_cexp (e : cexp) :=
       match e with
       | Emerge (x, te) ces ty =>
-        Emerge (subst_in_var x, te) (List.map subst_in_cexp ces) ty
+        Emerge (rename_in_var x, te) (List.map rename_in_cexp ces) ty
       | Ecase e ces d =>
-        Ecase (subst_in_exp e) (map (option_map subst_in_cexp) ces) (subst_in_cexp d)
-      | Eexp e => Eexp (subst_in_exp e)
+        Ecase (rename_in_exp e) (map (option_map rename_in_cexp) ces) (rename_in_cexp d)
+      | Eexp e => Eexp (rename_in_exp e)
       end.
 
-    Definition subst_in_reset :=
-      map (fun '(xr, ckr) => (subst_in_var xr, subst_in_clock ckr)).
+    Definition rename_in_reset :=
+      map (fun '(xr, ckr) => (rename_in_var xr, rename_in_clock ckr)).
 
-    Definition subst_in_equation (equ : equation) :=
+    Definition rename_in_equation (equ : equation) :=
       match equ with
-      | EqDef x ck ce => EqDef x (subst_in_clock ck) (subst_in_cexp ce)
+      | EqDef x ck ce => EqDef x (rename_in_clock ck) (rename_in_cexp ce)
       | EqApp xs ck f es xr =>
-        EqApp xs (subst_in_clock ck) f (map subst_in_exp es) (subst_in_reset xr)
+        EqApp xs (rename_in_clock ck) f (map rename_in_exp es) (rename_in_reset xr)
       | EqFby x ck c0 e xr =>
-        EqFby x (subst_in_clock ck) c0 (subst_in_exp e) (subst_in_reset xr)
+        EqFby x (rename_in_clock ck) c0 (rename_in_exp e) (rename_in_reset xr)
       end.
 
     Definition subst_and_filter_vars (vars : list (ident * (type * clock))) :=
       let vars' := List.filter (fun '(x, _) => negb (Env.mem x sub)) vars in
-      List.map (fun '(x, (ty, ck)) => (x, (ty, subst_in_clock ck))) vars'.
+      List.map (fun '(x, (ty, ck)) => (x, (ty, rename_in_clock ck))) vars'.
 
     Definition subst_and_filter_equations (eqs : list equation) :=
       let eqs' := List.filter (fun eq => match eq with
                                       | EqFby x _ _ _ _ => negb (Env.mem x sub)
                                       | _ => true
                                       end) eqs in
-      List.map subst_in_equation eqs'.
+      List.map rename_in_equation eqs'.
 
-  End substitute.
+  End rename.
 
   Definition remove_dup_regs_eqs_once (vars : list (ident * (type * clock))) (eqs : list equation) :=
     let sub' := find_duplicates eqs in
@@ -131,16 +131,16 @@ Module Type DUPREGREM
 
   (** ** Properties *)
 
-  Lemma subst_in_exp_typeof : forall sub e,
-      typeof (subst_in_exp sub e) = typeof e.
+  Lemma rename_in_exp_typeof : forall sub e,
+      typeof (rename_in_exp sub e) = typeof e.
   Proof.
     induction e; intros; simpl; auto.
   Qed.
 
-  Lemma subst_in_cexp_typeofc : forall sub e,
-      typeofc (subst_in_cexp sub e) = typeofc e.
+  Lemma rename_in_cexp_typeofc : forall sub e,
+      typeofc (rename_in_cexp sub e) = typeofc e.
   Proof.
-    induction e; intros; simpl; auto using subst_in_exp_typeof.
+    induction e; intros; simpl; auto using rename_in_exp_typeof.
     destruct p; auto.
   Qed.
 

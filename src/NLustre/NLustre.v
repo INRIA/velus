@@ -14,11 +14,7 @@ From Velus Require Export NLustre.NLClocking.
 From Velus Require Export NLustre.NLClockingSemantics.
 From Velus Require Export NLustre.NLTyping.
 From Velus Require Export NLustre.NLNormalArgs.
-From Velus Require Export NLustre.DupRegRem.DupRegRem.
-From Velus Require Export NLustre.DupRegRem.DRRTyping.
-From Velus Require Export NLustre.DupRegRem.DRRClocking.
-From Velus Require Export NLustre.DupRegRem.DRRNormalArgs.
-From Velus Require Export NLustre.DupRegRem.DRRCorrectness.
+From Velus Require Export NLustre.DupRegRem.DRR.
 From Velus Require Export CoindStreams.
 From Velus Require Import CoindToIndexed.
 
@@ -50,11 +46,7 @@ Module Type NLUSTRE
   Declare Module Export CloSem     : NLCLOCKINGSEMANTICS  Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.Clo Clo CE.CloSem.
   Declare Module Export MemSem     : NLMEMSEMANTICS       Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV NoD CE.Clo Clo CE.CloSem CloSem.
 
-  Declare Module Export DupRegRem  : DUPREGREM            Ids Op OpAux Cks CE.Syn Syn.
-  Declare Module Export DRRTyp     : DRRTYPING            Ids Op OpAux Cks CE.Syn CE.Typ Syn Ord Typ DupRegRem.
-  Declare Module Export DRRClo     : DRRCLOCKING          Ids Op OpAux Cks CE.Syn CE.Clo Syn Ord Mem IsD Clo DupRegRem.
-  Declare Module Export DRRNorm    : DRRNORMALARGS        Ids Op OpAux Cks CE.Syn CE.Typ Syn Ord Typ Norm DupRegRem.
-  Declare Module Export DRRCor     : DRRCORRECTNESS       Ids Op OpAux Cks IStr CE.Syn CE.Sem Syn Ord Sem DupRegRem.
+  Declare Module Export DRR        : DRR                  Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
 End NLUSTRE.
 
 Module NLustreFun
@@ -84,9 +76,5 @@ Module NLustreFun
   Module Export CloSem     := NLClockingSemanticsFun  Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.Clo Clo CE.CloSem.
   Module Export MemSem     := NLMemSemanticsFun       Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV NoD CE.Clo Clo CE.CloSem CloSem.
 
-  Module Export DupRegRem  := DupRegRemFun            Ids Op OpAux Cks CE.Syn Syn.
-  Module Export DRRTyp     := DrrTypingFun            Ids Op OpAux Cks CE.Syn CE.Typ Syn Ord Typ DupRegRem.
-  Module Export DRRClo     := DrrClockingFun          Ids Op OpAux Cks CE.Syn CE.Clo Syn Ord Mem IsD Clo DupRegRem.
-  Module Export DRRNorm    := DrrNormalArgsFun        Ids Op OpAux Cks CE.Syn CE.Typ Syn Ord Typ Norm DupRegRem.
-  Module Export DRRCor     := DrrCorrectnessFun       Ids Op OpAux Cks IStr CE.Syn CE.Sem Syn Ord Sem DupRegRem.
+  Module Export DRR        := DRRFun                  Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
 End NLustreFun.

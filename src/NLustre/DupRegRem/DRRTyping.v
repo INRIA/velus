@@ -27,7 +27,7 @@ Module Type DRRTYPING
        (Import Typ   : NLTYPING        Ids Op OpAux Cks CESyn Syn Ord CETyp)
        (Import DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn).
 
-  Section substitute.
+  Section rename.
     Variable sub : Env.t ident.
 
     Variable inouts : list (ident * type).
@@ -43,50 +43,50 @@ Module Type DRRTYPING
         In (x, ty) (inouts ++ vars) ->
         In (x, ty) (inouts ++ vars').
 
-    Lemma subst_in_var_wt : forall x ty,
+    Lemma rename_in_var_wt : forall x ty,
         In (x, ty) (inouts++vars) ->
-        In (subst_in_var sub x, ty) (inouts++vars').
+        In (rename_in_var sub x, ty) (inouts++vars').
     Proof.
       intros * Hin.
-      unfold subst_in_var.
+      unfold rename_in_var.
       destruct (Env.find _ _) eqn:Hfind; eauto.
     Qed.
 
     Variable (G : global).
 
-    Lemma subst_in_clock_wt : forall ck,
+    Lemma rename_in_clock_wt : forall ck,
         wt_clock G.(enums) (inouts++vars) ck ->
-        wt_clock G.(enums) (inouts++vars') (subst_in_clock sub ck).
+        wt_clock G.(enums) (inouts++vars') (rename_in_clock sub ck).
     Proof.
       induction ck; intros * Hwt; inv Hwt; auto.
-      simpl. constructor; auto using subst_in_var_wt.
+      simpl. constructor; auto using rename_in_var_wt.
     Qed.
 
-    Lemma subst_in_exp_wt : forall e,
+    Lemma rename_in_exp_wt : forall e,
         wt_exp G.(enums) (inouts++vars) e ->
-        wt_exp G.(enums) (inouts++vars') (subst_in_exp sub e).
+        wt_exp G.(enums) (inouts++vars') (rename_in_exp sub e).
     Proof.
       intros * Hwt; induction Hwt;
-        simpl; econstructor; eauto using subst_in_var_wt.
-      1,2:repeat rewrite subst_in_exp_typeof; auto.
+        simpl; econstructor; eauto using rename_in_var_wt.
+      1,2:repeat rewrite rename_in_exp_typeof; auto.
     Qed.
 
-    Lemma subst_in_cexp_wt : forall e,
+    Lemma rename_in_cexp_wt : forall e,
         wt_cexp G.(enums) (inouts++vars) e ->
-        wt_cexp G.(enums) (inouts++vars') (subst_in_cexp sub e).
+        wt_cexp G.(enums) (inouts++vars') (rename_in_cexp sub e).
     Proof.
       induction e using cexp_ind2'; intros * Hwt; inv Hwt;
-        simpl; econstructor; eauto using subst_in_var_wt, subst_in_exp_wt.
+        simpl; econstructor; eauto using rename_in_var_wt, rename_in_exp_wt.
       1,5:rewrite map_length; auto.
       - rewrite Forall_map. eapply Forall_impl; [|eapply H6]; intros.
-        rewrite subst_in_cexp_typeofc; auto.
+        rewrite rename_in_cexp_typeofc; auto.
       - rewrite Forall_map. eapply Forall_impl_In; [|eapply H7]; intros.
         eapply Forall_forall in H; eauto.
-      - rewrite subst_in_exp_typeof; eauto.
+      - rewrite rename_in_exp_typeof; eauto.
       - intros.
         eapply in_map_iff in H0 as (?&Hsome&Hin).
         eapply option_map_inv in Hsome as (?&?&?); subst.
-        rewrite 2 subst_in_cexp_typeofc; auto.
+        rewrite 2 rename_in_cexp_typeofc; auto.
       - intros.
         eapply in_map_iff in H0 as (?&Hsome&Hin).
         eapply option_map_inv in Hsome as (?&?&?); subst.
@@ -94,41 +94,41 @@ Module Type DRRTYPING
         simpl in H; eauto.
     Qed.
 
-    Hint Resolve subst_in_var_wt subst_in_clock_wt subst_in_exp_wt subst_in_cexp_wt.
+    Hint Resolve rename_in_var_wt rename_in_clock_wt rename_in_exp_wt rename_in_cexp_wt.
 
-    Lemma subst_in_equation_wt : forall equ,
+    Lemma rename_in_equation_wt : forall equ,
         (forall x, In x (var_defined equ) -> Env.find x sub = None) ->
         wt_equation G (inouts++vars) equ ->
-        wt_equation G (inouts++vars') (subst_in_equation sub equ).
+        wt_equation G (inouts++vars') (rename_in_equation sub equ).
     Proof.
       intros * Hdef Hwt; inv Hwt; simpl in *.
       - constructor; auto.
-        rewrite subst_in_cexp_typeofc; auto.
+        rewrite rename_in_cexp_typeofc; auto.
       - econstructor; eauto.
         + eapply Forall2_impl_In; [|eauto]; intros ? (?&?&?) ? _ ?; auto.
         + rewrite Forall2_map_1.
           eapply Forall2_impl_In; [|eauto]; intros ? (?&?&?) _ _ Hty.
-          rewrite subst_in_exp_typeof; auto.
+          rewrite rename_in_exp_typeof; auto.
         + rewrite Forall_map.
           eapply Forall_impl_In; [|eapply H3]; intros; auto.
-        + rewrite Forall_map in *. unfold subst_in_reset.
+        + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) (?&?).
           simpl in *; eauto.
-        + rewrite Forall_map in *. unfold subst_in_reset.
+        + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H5]; intros (?&?) ?.
           simpl in *; auto.
       - constructor; auto.
-        + rewrite subst_in_exp_typeof; auto.
-        + rewrite subst_in_exp_typeof; auto.
-        + rewrite Forall_map in *. unfold subst_in_reset.
+        + rewrite rename_in_exp_typeof; auto.
+        + rewrite rename_in_exp_typeof; auto.
+        + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) (?&?).
           simpl in *; eauto.
-        + rewrite Forall_map in *. unfold subst_in_reset.
+        + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) ?.
           simpl in *; auto.
     Qed.
 
-  End substitute.
+  End rename.
 
   Lemma remove_dup_regs_once_wt : forall G inouts vars eqs,
       NoDupMembers (inouts++idty vars) ->
@@ -143,7 +143,7 @@ Module Type DRRTYPING
     unfold subst_and_filter_equations.
     rewrite Forall_map, Forall_filter. eapply Forall_impl_In; eauto.
     intros ? Hineq Hwt' Hfilter.
-    eapply subst_in_equation_wt; [| | |eauto].
+    eapply rename_in_equation_wt; [| | |eauto].
     - intros * Hfind Hin.
       assert (~InMembers x inouts) as Hnx.
       { apply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_&_).
@@ -165,7 +165,7 @@ Module Type DRRTYPING
       eapply In_idty_exists in Hin1 as (?&Hin1).
       eapply In_idty_exists in Hin2 as (ck&Hin2).
       eapply NoDupMembers_det in Hin; eauto. 2:eapply NoDupMembers_app_r, NoDupMembers_idty in Hndv; eauto.
-      inv Hin. exists (subst_in_clock (find_duplicates eqs) ck); simpl.
+      inv Hin. exists (rename_in_clock (find_duplicates eqs) ck); simpl.
       unfold subst_and_filter_vars.
       erewrite in_map_iff. exists (y, (typeof x3, ck)); split; auto.
       eapply filter_In; split; auto.
@@ -175,7 +175,7 @@ Module Type DRRTYPING
       rewrite in_app_iff in *. destruct Hin as [Hin|Hin]; auto.
       right.
       rewrite In_idty_exists in *. destruct Hin as (ck&Hin).
-      exists (subst_in_clock (find_duplicates eqs) ck).
+      exists (rename_in_clock (find_duplicates eqs) ck).
       apply in_map_iff. exists (x, (ty, ck)); split; auto.
       apply filter_In; split; auto.
       rewrite Env.mem_find, Hfind; auto.

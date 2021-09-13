@@ -62,7 +62,7 @@ Module Type DRRCORRECTNESS
 
   (** ** Preservation of semantics *)
 
-  Section substitute_instant.
+  Section rename_instant.
 
     Variable (sub : Env.t ident).
     Variable (base : bool).
@@ -74,10 +74,10 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_var_instant : forall x v,
         sem_var_instant R x v <->
-        sem_var_instant R (subst_in_var sub x) v.
+        sem_var_instant R (rename_in_var sub x) v.
     Proof.
       intros *.
-      unfold subst_in_var, sem_var_instant.
+      unfold rename_in_var, sem_var_instant.
       destruct (Env.find x sub) eqn:Hfind; try reflexivity.
       apply Hsub in Hfind. now rewrite Hfind.
     Qed.
@@ -85,7 +85,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_clock_instant : forall ck v,
         sem_clock_instant base R ck v <->
-        sem_clock_instant base R (subst_in_clock sub ck) v.
+        sem_clock_instant base R (rename_in_clock sub ck) v.
     Proof.
       split; revert v.
       1,2:induction ck; intros * Hsem; simpl in *; inv Hsem.
@@ -100,7 +100,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_clocked_var_instant : forall x ck,
         sem_clocked_var_instant base R x ck ->
-        sem_clocked_var_instant base R (subst_in_var sub x) (subst_in_clock sub ck).
+        sem_clocked_var_instant base R (rename_in_var sub x) (rename_in_clock sub ck).
     Proof.
       intros * Hsem; inv Hsem.
       rewrite subst_sem_clock_instant in *.
@@ -110,9 +110,9 @@ Module Type DRRCORRECTNESS
 
     Corollary subst_sem_clocked_vars_instant : forall xcks,
         sem_clocked_vars_instant base R xcks ->
-        sem_clocked_vars_instant base R (subst_in_reset sub xcks).
+        sem_clocked_vars_instant base R (rename_in_reset sub xcks).
     Proof.
-      unfold subst_in_reset, sem_clocked_vars_instant.
+      unfold rename_in_reset, sem_clocked_vars_instant.
       intros * Hsem.
       rewrite Forall_map.
       eapply Forall_impl; [|eauto]; intros (?&?) ?.
@@ -121,7 +121,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_exp_instant : forall e v,
         sem_exp_instant base R e v ->
-        sem_exp_instant base R (subst_in_exp sub e) v.
+        sem_exp_instant base R (rename_in_exp sub e) v.
     Proof.
       induction e; intros * Hsem; simpl; auto.
       - (* var *)
@@ -136,16 +136,16 @@ Module Type DRRCORRECTNESS
           rewrite <-subst_sem_var_instant; auto.
       - (* unop *)
         inv Hsem; econstructor; eauto.
-        rewrite subst_in_exp_typeof; auto.
+        rewrite rename_in_exp_typeof; auto.
       - (* binop *)
         inv Hsem; econstructor; eauto.
-        rewrite 2 subst_in_exp_typeof; auto.
+        rewrite 2 rename_in_exp_typeof; auto.
     Qed.
     Hint Resolve subst_sem_exp_instant.
 
     Corollary subst_sem_aexp_instant : forall ck e v,
         sem_aexp_instant base R ck e v ->
-        sem_aexp_instant base R (subst_in_clock sub ck) (subst_in_exp sub e) v.
+        sem_aexp_instant base R (rename_in_clock sub ck) (rename_in_exp sub e) v.
     Proof.
       intros * Hsem; inv Hsem.
       1,2:constructor; auto; rewrite <-subst_sem_clock_instant; auto.
@@ -153,7 +153,7 @@ Module Type DRRCORRECTNESS
 
     Corollary subst_sem_exps_instant : forall es vs,
         sem_exps_instant base R es vs ->
-        sem_exps_instant base R (map (subst_in_exp sub) es) vs.
+        sem_exps_instant base R (map (rename_in_exp sub) es) vs.
     Proof.
       unfold sem_exps_instant.
       intros * Hsem.
@@ -163,7 +163,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_cexp_instant : forall e v,
         sem_cexp_instant base R e v ->
-        sem_cexp_instant base R (subst_in_cexp sub e) v.
+        sem_cexp_instant base R (rename_in_cexp sub e) v.
     Proof.
       induction e using cexp_ind2'; intros * Hsem; simpl; auto.
       - (* merge *)
@@ -195,15 +195,15 @@ Module Type DRRCORRECTNESS
 
     Corollary subst_sem_caexp_instant : forall ck e v,
         sem_caexp_instant base R ck e v ->
-        sem_caexp_instant base R (subst_in_clock sub ck) (subst_in_cexp sub e) v.
+        sem_caexp_instant base R (rename_in_clock sub ck) (rename_in_cexp sub e) v.
     Proof.
       intros * Hsem; inv Hsem.
       1,2:constructor; auto; rewrite <-subst_sem_clock_instant; auto.
     Qed.
 
-  End substitute_instant.
+  End rename_instant.
 
-  Section substitute.
+  Section rename.
     Variable (sub : Env.t ident).
 
     Variable (G : global).
@@ -216,7 +216,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_var : forall x vs,
         sem_var H x vs ->
-        sem_var H (subst_in_var sub x) vs.
+        sem_var H (rename_in_var sub x) vs.
     Proof.
       intros * Hsem ?.
       rewrite <-subst_sem_var_instant; eauto.
@@ -224,7 +224,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_clock : forall ck vs,
         sem_clock base H ck vs ->
-        sem_clock base H (subst_in_clock sub ck) vs.
+        sem_clock base H (rename_in_clock sub ck) vs.
     Proof.
       intros * Hsem ?.
       rewrite <-subst_sem_clock_instant; eauto.
@@ -232,7 +232,7 @@ Module Type DRRCORRECTNESS
 
     Lemma subst_sem_equation : forall equ,
         sem_equation G base H equ ->
-        sem_equation G base H (subst_in_equation sub equ).
+        sem_equation G base H (rename_in_equation sub equ).
     Proof.
       intros * Hsem; inv Hsem; simpl.
       - (* def *)
@@ -242,18 +242,18 @@ Module Type DRRCORRECTNESS
         econstructor; eauto using subst_sem_clock.
         + intros ?; eapply subst_sem_exps_instant; eauto.
         + rewrite Forall2_map_1 in *.
-          unfold subst_in_reset. rewrite Forall2_map_1.
+          unfold rename_in_reset. rewrite Forall2_map_1.
           eapply Forall2_impl_In; [|eauto]; intros (?&?) ? _ _ ?; eauto using subst_sem_var.
       - (* fby *)
         econstructor; eauto.
         + intros ?; eapply subst_sem_aexp_instant; eauto.
         + rewrite Forall2_map_1 in *.
-          unfold subst_in_reset. rewrite Forall2_map_1.
+          unfold rename_in_reset. rewrite Forall2_map_1.
           eapply Forall2_impl_In; [|eauto]; intros (?&?) ? _ _ ?; eauto using subst_sem_var.
         + intros ?. eapply subst_sem_clocked_vars_instant; eauto.
     Qed.
 
-  End substitute.
+  End rename.
 
   Section remove_dup_regs_eqs.
     Variable (G1 G2 : global).

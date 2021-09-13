@@ -31,22 +31,22 @@ Module Type DRRNORMALARGS
        (Import Norm  : NLNORMALARGS    Ids Op OpAux Cks CESyn CETyp Syn Ord Typ)
        (Import DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn).
 
-  Lemma subst_in_exp_noops_exp : forall sub e ck,
+  Lemma rename_in_exp_noops_exp : forall sub e ck,
     noops_exp ck e ->
-    noops_exp ck (subst_in_exp sub e).
+    noops_exp ck (rename_in_exp sub e).
   Proof.
     induction e; intros * Hnormed; simpl; auto.
     1-4:destruct ck; simpl in *; auto.
   Qed.
 
-  Lemma subst_in_equation_normal_args : forall G sub equ,
+  Lemma rename_in_equation_normal_args : forall G sub equ,
     normal_args_eq G equ ->
-    normal_args_eq G (subst_in_equation sub equ).
+    normal_args_eq G (rename_in_equation sub equ).
   Proof.
     intros * Hnorm; inv Hnorm; simpl;
       econstructor; eauto.
     rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros.
-    apply subst_in_exp_noops_exp; auto.
+    apply rename_in_exp_noops_exp; auto.
   Qed.
 
   Lemma remove_dup_regs_normal_args_eqs : forall G sub eqs,
@@ -59,7 +59,7 @@ Module Type DRRNORMALARGS
     inv e. unfold subst_and_filter_equations.
     rewrite Forall_map, Forall_filter.
     eapply Forall_impl; eauto; intros * Hn _.
-    eapply subst_in_equation_normal_args; eauto.
+    eapply rename_in_equation_normal_args; eauto.
   Qed.
 
   Lemma remove_dup_regs_normal_args_node : forall G n,

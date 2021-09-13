@@ -31,7 +31,7 @@ Module Type DRRCLOCKING
        (Import Clo   : NLCLOCKING      Ids Op OpAux Cks CESyn Syn Ord Mem IsD CEClo)
        (Import DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn).
 
-  Section substitute.
+  Section rename.
     Variable sub : Env.t ident.
 
     Variable inouts : list (ident * clock).
@@ -40,46 +40,46 @@ Module Type DRRCLOCKING
     Hypothesis Hsub : forall x y ck,
         Env.find x sub = Some y ->
         In (x, ck) (inouts ++ vars) ->
-        In (y, subst_in_clock sub ck) (inouts ++ vars').
+        In (y, rename_in_clock sub ck) (inouts ++ vars').
 
     Hypothesis Hnsub : forall x ck,
         Env.find x sub = None ->
         In (x, ck) (inouts ++ vars) ->
-        In (x, subst_in_clock sub ck) (inouts ++ vars').
+        In (x, rename_in_clock sub ck) (inouts ++ vars').
 
-    Lemma subst_in_var_wc : forall x ck,
+    Lemma rename_in_var_wc : forall x ck,
         In (x, ck) (inouts ++ vars) ->
-        In (subst_in_var sub x, subst_in_clock sub ck) (inouts ++ vars').
+        In (rename_in_var sub x, rename_in_clock sub ck) (inouts ++ vars').
     Proof.
       intros * Hin.
-      unfold subst_in_var.
+      unfold rename_in_var.
       destruct (Env.find _ _) eqn:Hfind; eauto.
     Qed.
 
     Variable (G : global).
 
-    Lemma subst_in_clock_wc : forall ck,
+    Lemma rename_in_clock_wc : forall ck,
         wc_clock (inouts ++ vars) ck ->
-        wc_clock (inouts ++ vars') (subst_in_clock sub ck).
+        wc_clock (inouts ++ vars') (rename_in_clock sub ck).
     Proof.
       induction ck; intros * Hwc; inv Hwc; auto.
-      simpl. constructor; eauto using subst_in_var_wc.
+      simpl. constructor; eauto using rename_in_var_wc.
     Qed.
 
-    Lemma subst_in_exp_wc : forall e ck,
+    Lemma rename_in_exp_wc : forall e ck,
         wc_exp (inouts ++ vars) e ck ->
-        wc_exp (inouts ++ vars') (subst_in_exp sub e) (subst_in_clock sub ck).
+        wc_exp (inouts ++ vars') (rename_in_exp sub e) (rename_in_clock sub ck).
     Proof.
       intros * Hwc; induction Hwc;
-        simpl; econstructor; eauto using subst_in_var_wc.
+        simpl; econstructor; eauto using rename_in_var_wc.
     Qed.
 
-    Lemma subst_in_cexp_wc : forall e ck,
+    Lemma rename_in_cexp_wc : forall e ck,
         wc_cexp (inouts ++ vars) e ck ->
-        wc_cexp (inouts ++ vars') (subst_in_cexp sub e) (subst_in_clock sub ck).
+        wc_cexp (inouts ++ vars') (rename_in_cexp sub e) (rename_in_clock sub ck).
     Proof.
       induction e using cexp_ind2'; intros * Hwc; inv Hwc;
-        simpl; econstructor; eauto using subst_in_var_wc, subst_in_exp_wc.
+        simpl; econstructor; eauto using rename_in_var_wc, rename_in_exp_wc.
       - contradict H5.
         eapply map_eq_nil; eauto.
       - rewrite map_length, Forall2_map_2.
@@ -94,10 +94,10 @@ Module Type DRRCLOCKING
         eapply H in H7; eauto.
     Qed.
 
-    Lemma instck_subst_in_clock : forall ck sub0 bck ck',
+    Lemma instck_rename_in_clock : forall ck sub0 bck ck',
       instck bck sub0 ck = Some ck' ->
-      instck (subst_in_clock sub bck) (fun x => option_map (fun x1 => subst_in_var sub x1) (sub0 x)) ck =
-      Some (subst_in_clock sub ck').
+      instck (rename_in_clock sub bck) (fun x => option_map (fun x1 => rename_in_var sub x1) (sub0 x)) ck =
+      Some (rename_in_clock sub ck').
     Proof.
       induction ck; intros * Hinst1; simpl in *.
       - inv Hinst1; auto.
@@ -106,33 +106,33 @@ Module Type DRRCLOCKING
         destruct (sub0 i); inv Hinst1; simpl. reflexivity.
     Qed.
 
-    Hint Resolve subst_in_var_wc subst_in_clock_wc subst_in_exp_wc subst_in_cexp_wc.
+    Hint Resolve rename_in_var_wc rename_in_clock_wc rename_in_exp_wc rename_in_cexp_wc.
 
-    Lemma subst_in_equation_wc : forall equ,
+    Lemma rename_in_equation_wc : forall equ,
         (forall x, In x (var_defined equ) -> Env.find x sub = None) ->
         wc_equation G (inouts ++ vars) equ ->
-        wc_equation G (inouts ++ vars') (subst_in_equation sub equ).
+        wc_equation G (inouts ++ vars') (rename_in_equation sub equ).
     Proof.
       intros * Hdef Hwc; inv Hwc; simpl in *.
       - constructor; eauto.
-      - eapply CEqApp with (sub:=fun x => option_map (fun x => subst_in_var sub x) (sub0 x)) (* ? *); eauto.
+      - eapply CEqApp with (sub:=fun x => option_map (fun x => rename_in_var sub x) (sub0 x)) (* ? *); eauto.
         + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? _ _ (?&?&?&?).
           repeat (esplit; eauto).
           * inv H3; simpl; constructor.
-          * apply instck_subst_in_clock; auto.
+          * apply instck_rename_in_clock; auto.
         + eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? _ Hin2 (?&?&?&?).
           repeat (esplit; eauto).
           * rewrite H3; simpl.
-            unfold subst_in_var. rewrite Hdef; eauto.
-          * eapply instck_subst_in_clock; eauto.
-        + unfold subst_in_reset.
+            unfold rename_in_var. rewrite Hdef; eauto.
+          * eapply instck_rename_in_clock; eauto.
+        + unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?; eauto.
       - constructor; auto.
-        unfold subst_in_reset.
+        unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?; eauto.
     Qed.
 
-  End substitute.
+  End rename.
 
   Lemma remove_dup_regs_once_wc : forall G inouts vars eqs,
       NoDupMembers (inouts ++ idck vars) ->
@@ -148,7 +148,7 @@ Module Type DRRCLOCKING
     unfold subst_and_filter_equations.
     rewrite Forall_map, Forall_filter. eapply Forall_impl_In; eauto.
     intros ? Hineq Hwc' Hfilter.
-    eapply subst_in_equation_wc; [| | |eauto].
+    eapply rename_in_equation_wc; [| | |eauto].
     - intros * Hfind Hin.
       assert (~InMembers x inouts) as Hnx.
       { apply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_&_).
@@ -183,12 +183,12 @@ Module Type DRRCLOCKING
           eapply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_).
           eapply Hinouts; eauto. simpl; auto.
         }
-        assert (subst_in_clock (find_duplicates eqs) ck = ck); repeat rewrite H; auto.
+        assert (rename_in_clock (find_duplicates eqs) ck = ck); repeat rewrite H; auto.
         eapply wc_env_var in Hin; eauto.
         clear - Hin Hwinouts Hninouts.
         induction Hin; simpl; auto.
         f_equal; auto.
-        unfold subst_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
+        unfold rename_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
         apply Env.find_In, Hninouts in Hfind.
         exfalso; eauto using In_InMembers.
       + right.
@@ -226,7 +226,7 @@ Module Type DRRCLOCKING
       unfold idck in *.
       rewrite Forall_map in *. eapply Forall_map, Forall_filter.
       eapply Forall_impl_In; [|eauto]. intros (?&?&?) ? Hwc Hmem; simpl in *.
-      eapply subst_in_clock_wc; eauto; intros * Hfind Hin.
+      eapply rename_in_clock_wc; eauto; intros * Hfind Hin.
       + assert (~InMembers x inouts) as Hnx.
         { apply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_&_).
           eapply Hinouts in Hin1; eauto. simpl; auto. }
@@ -247,7 +247,7 @@ Module Type DRRCLOCKING
         eapply In_idck_exists in Hin1 as (?&Hin1).
         eapply In_idck_exists in Hin2 as (ty&Hin2).
         eapply NoDupMembers_det in Hin; eauto. inv Hin. 2:eapply NoDupMembers_app_r, NoDupMembers_idck in Hndv; eauto.
-        exists (y, (ty, subst_in_clock (find_duplicates eqs) ck)); simpl; split; auto.
+        exists (y, (ty, rename_in_clock (find_duplicates eqs) ck)); simpl; split; auto.
         apply in_map_iff. exists (y, (ty, ck)); split; auto.
         eapply filter_In; split; auto.
         eapply find_duplicates_irrefl in Hfind'; eauto.
@@ -259,17 +259,17 @@ Module Type DRRCLOCKING
             eapply find_duplicates_spec in Hfind as (?&?&?&?&?&Hin1&_).
             eapply Hinouts; eauto. simpl; auto.
           }
-          assert (subst_in_clock (find_duplicates eqs) ck = ck) as Hck; repeat rewrite Hck; auto.
+          assert (rename_in_clock (find_duplicates eqs) ck = ck) as Hck; repeat rewrite Hck; auto.
           eapply wc_env_var in Hin; eauto.
           clear - Hin Hwc1 Hninouts.
           induction Hin; simpl; auto.
           f_equal; auto.
-          unfold subst_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
+          unfold rename_in_var. destruct (Env.find _ _) eqn:Hfind; auto.
           apply Env.find_In, Hninouts in Hfind.
           exfalso; eauto using In_InMembers.
         * right.
           rewrite in_map_iff in *. destruct Hin as ((x0&ty0&ck0)&Heq&Hin); inv Heq; simpl in *.
-          exists (x, (ty0, subst_in_clock (find_duplicates eqs) ck)); simpl; split; auto.
+          exists (x, (ty0, rename_in_clock (find_duplicates eqs) ck)); simpl; split; auto.
           apply in_map_iff. exists (x, (ty0, ck)); split; auto.
           apply filter_In; split; auto.
           rewrite Env.mem_find, Hfind; auto.
