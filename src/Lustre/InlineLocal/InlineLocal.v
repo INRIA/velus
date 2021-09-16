@@ -238,7 +238,6 @@ Module Type INLINELOCAL
       ret [Breset (concat blks') (rename_in_exp sub er)]
     | Blocal locs blks =>
       let locs' := map (fun '(x, (ty, ck)) => (x, (ty, (rename_in_clock sub ck)))) (idty locs) in
-      let anons' := flat_map anon_in_block blks in
       do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
       do blks' <- mmap (inlinelocal_block sub') blks;

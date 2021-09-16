@@ -166,23 +166,6 @@ Module Type ILCORRECTNESS
       eapply Hsub, sem_var_mask in Hv; eauto. rewrite Heq; eauto.
     Qed.
 
-    (* Lemma rename_in_block_sem : forall blk bs H H', *)
-    (*     (forall x y vs, Env.find x sub = Some y -> sem_var H x vs -> sem_var H' y vs) -> *)
-    (*     (forall x vs, Env.find x sub = None -> sem_var H x vs -> sem_var H' x vs) -> *)
-    (*     nolocal_block blk -> *)
-    (*     sem_block_ck G H bs blk -> *)
-    (*     sem_block_ck G H' bs (rename_in_block sub blk). *)
-    (* Proof. *)
-    (*   induction blk using block_ind2; intros * Hsub Hnsub Hnl Hsem; inv Hnl; inv Hsem; simpl. *)
-    (*   - (* equation *) *)
-    (*     constructor. eapply rename_in_equation_sem; eauto. *)
-    (*   - (* reset *) *)
-    (*     econstructor; eauto using rename_in_exp_sem. *)
-    (*     intros k. specialize (H9 k). *)
-    (*     rewrite Forall_map. rewrite Forall_forall in *; intros. *)
-    (*     eapply H; [eauto| | |eauto|eauto]; eauto using mask_hist_sub, mask_hist_nsub. *)
-    (* Qed. *)
-
   End rename.
 
   Import Fresh Facts Tactics.
@@ -220,16 +203,6 @@ Module Type ILCORRECTNESS
           intros Hinm. eapply Hdisj; eauto.
           econstructor; eauto.
     Qed.
-
-    (* Fact sem_var_gsso' : forall H xs x vs, *)
-    (*     ~InMembers x xs -> *)
-    (*     sem_var H x vs -> *)
-    (*     sem_var (Env.adds' xs H) x vs. *)
-    (* Proof. *)
-    (*   intros * Hnin Hv. inv Hv. *)
-    (*   econstructor; [|eauto]. *)
-    (*   unfold Env.MapsTo in *. erewrite Env.gsso'; eauto. *)
-    (* Qed. *)
 
     Lemma sem_var_union : forall Hi1 Hi2 x vs,
         sem_var (Env.union Hi1 Hi2) x vs ->
@@ -469,6 +442,17 @@ Module Type ILCORRECTNESS
           eapply Forall_impl; [|eauto]; intros...
     Qed.
 
+    (** Central correctness lemma                                              *)
+    (* - vars : not renamed (in + out of the node)
+       - vars' : renamed (local vars already encountered)
+       - panons : anonyms already handled
+       - Hi1 : history before renaming.
+         Contains all the variables and all the anonyms
+       - Hi2 : history after renaming.
+         Does not contain the anonyms of the current block, therefore
+         it doesn't give a semantic to the current block.
+       - Hi3 : refines Hi2 by adding the anonyms of the current block
+     *)
     Lemma inlinelocal_block_sem vars : forall blk sub vars' panons blks' st st' bs Hi1 Hi2,
         (forall x, InMembers x vars \/ InMembers x (anon_in_block blk) -> ~InMembers x vars') ->
         (forall x, Env.In x sub <-> InMembers x vars') ->
@@ -484,10 +468,8 @@ Module Type ILCORRECTNESS
         Env.dom_lb Hi1 (map fst (local_anon_in_block blk)) ->
         Env.dom_ub Hi1 (map fst (vars++vars'++panons++local_anon_in_block blk)) ->
         sem_block_ck G1 Hi1 bs blk ->
-        (* sc_vars (idck (local_anon_in_block blk)) Hi1 bs -> *)
         Env.dom Hi2 (map fst (vars++panons) ++ st_ids st) ->
         sc_vars (idck (vars++panons++st_anns st)) Hi2 bs ->
-        (* hist_st (idck (vars++local_anon_in_block blk)) bs Hi2 st -> *)
         st_valid_after st local PS.empty ->
         inlinelocal_block sub blk st = (blks', st') ->
         exists Hi3,

@@ -70,27 +70,8 @@ Module Type LORDERED
       Exists (Is_node_in_block f) blocks ->
       Is_node_in_block f (Blocal locs blocks).
 
-  (* TODO remove *)
-  (* Definition Is_node_in (f: ident) (blocks: list block) : Prop := *)
-  (*   List.Exists (Is_node_in_block f) blocks. *)
-
   Definition Ordered_nodes {PSyn prefs} : @global PSyn prefs -> Prop :=
     Ordered_program (fun f nd => Is_node_in_block f nd.(n_block)).
-
-  (** ** Properties of [Is_node_in] *)
-
-  (* TODO remove *)
-  (* Section Is_node_Properties. *)
-
-  (*   Lemma Is_node_in_Forall: *)
-  (*     forall n blocks, *)
-  (*       ~Is_node_in n blocks <-> List.Forall (fun block => ~Is_node_in_block n block) blocks. *)
-  (*   Proof. *)
-  (*     intros n blocks. unfold Is_node_in. *)
-  (*     symmetry. apply Forall_Exists_neg. *)
-  (*   Qed. *)
-
-  (* End Is_node_Properties. *)
 
   (** ** Properties of [Ordered_nodes] *)
 
