@@ -6,9 +6,10 @@ correctness of a formally verified Lustre compiler
 This file contains instructions for (i) using the compiler from (ii) a local 
 opam installation.
 
-The `doc/` subdirectory contains a file [index.html](doc/index.html) that 
-links the definitions in the EMSOFT 2021 article to the corresponding parts 
-of the Coq source files.
+The `doc/` subdirectory contains a file 
+[index.html](https://velus.inria.fr/emsoft2021/) that links the definitions 
+in the EMSOFT 2021 article to the corresponding parts of the Coq source 
+files.
 
 The `examples/` subdirectory contains a file [readme.md](examples/readme.md) 
 presenting several example programs that can be used to test the compiler.
