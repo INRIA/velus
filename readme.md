@@ -6,10 +6,12 @@ correctness of a formally verified Lustre compiler
 This file contains instructions for (i) using the compiler from (ii) a local 
 opam installation.
 
-The `doc/` subdirectory contains a file `index.html` that links the definitions in the EMSOFT 2021 submission to the corresponding parts of the Coq source files.
+The `doc/` subdirectory contains a file [index.html](doc/index.html) that 
+links the definitions in the EMSOFT 2021 article to the corresponding parts 
+of the Coq source files.
 
-The `examples/` subdirectory contains another readme file presenting several
-example programs that can be used to test the compiler.
+The `examples/` subdirectory contains a file [readme.md](examples/readme.md) 
+presenting several example programs that can be used to test the compiler.
 
 The `pre` operator used in many Lustre programs is not yet treated.
 An uninitialized delay `pre e` must be replaced by an initialized one `0 fby e`.
@@ -83,3 +85,4 @@ To check the proofs and build Vélus:
 
 The configuration script uses the same options as CompCert's, except one
 additional `-compcertdir` option to specify the CompCert directory.
+
