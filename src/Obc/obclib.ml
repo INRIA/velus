@@ -234,7 +234,9 @@ sig
           fprintf p
             "@[<v 2>switch %a {%a@]@;}"
             print_expr e
-            (Ops.print_branches print_stmt) (ss, Some default)
+            (Ops.print_branches print_stmt)
+            (List.mapi (fun i e -> (string_of_int i, e)) ss,
+             if List.exists Option.is_none ss then Some default else None)
       | Obc.Comp (s1, s2) ->
           fprintf p "%a;@ %a" print_stmt s1 print_stmt s2
       | Obc.Call ([], cls, i, m, es) ->

@@ -60,13 +60,13 @@ Module Type NORMFBY
     do (initid, eqs) <- init_var_for_clock ck;
     do px <- fresh_ident norm2 None (ty, ck);
     ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid)))
-               [Some [Evar px (ty, (ck, Some px))]; None] [e0] ([ty], (ck, name)),
+               [(1, [e0]); (0, [Evar px (ty, (ck, Some px))])] None ([ty], (ck, name)),
          ([px], [Efby [add_whens (init_type ty) ty ck] [e] [ann]])::eqs).
 
   Definition arrow_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
     let '(ty, (ck, name)) := ann in
     do (initid, eqs) <- init_var_for_clock ck;
-    ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid))) [Some [e]; None] [e0]
+    ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid))) [(1, [e0]); (0, [e])] None
               ([ty], (ck, name)), eqs).
 
   Definition normfby_equation (to_cut : PS.t) (eq : equation) : FreshAnn (list equation) :=
@@ -570,12 +570,11 @@ Module Type NORMFBY
     destruct a as [ty [ck name]].
     unfold fby_iteexp in Hfby.
     repeat inv_bind.
-    constructor; auto; simpl.
+    repeat constructor; auto; simpl.
     - congruence.
-    - repeat constructor; simpl.
-      intros ? [Heq|[Heq|Heq]]; inv Heq; auto.
-    - intros ? [Heq|[Heq|Heq]]; inv Heq; auto.
     - rewrite app_nil_r, length_annot_numstreams; auto.
+    - intros ??; congruence.
+    - intros ??; congruence.
   Qed.
 
   Fact fby_iteexp_wl_eq {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
@@ -620,8 +619,8 @@ Module Type NORMFBY
     unfold arrow_iteexp in Hfby; repeat inv_bind.
     repeat constructor; auto; simpl.
     congruence.
-    1,2:intros ? [Heq|[Heq|Heq]]; inv Heq; simpl; auto.
     1,2:rewrite app_nil_r, length_annot_numstreams; auto.
+    1,2:intros ??; congruence.
   Qed.
 
   Fact arrow_iteexp_wl_eq {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
@@ -772,12 +771,14 @@ Module Type NORMFBY
     - assert (H':=H). eapply fby_iteexp_unnested_eq in H'.
       constructor; eauto.
       repeat inv_bind. repeat constructor; eauto.
-      1,2:intros ? Heq; inv Heq. eexists; split; eauto.
+      1,2:repeat esplit; eauto.
+      2:intros ??; congruence.
       1-3:(clear - Hunt; inv Hunt; eauto; inv H0; inv H).
     - repeat inv_bind. repeat constructor; auto.
-      1,2:intros ? Heq; inv Heq. exists x1; split; auto.
-      3:eapply init_var_for_clock_unnested_eq in H; eauto.
+      1,2:repeat esplit; eauto.
+      3:intros ??; congruence.
       1-2:(clear - Hunt; inv Hunt; eauto; inv H0; inv H).
+      eapply init_var_for_clock_unnested_eq in H; eauto.
   Qed.
 
   Fact normfby_block_unnested_block {PSyn prefs} : forall (G : @global PSyn prefs) to_cut bck bcks' st st',
@@ -811,9 +812,9 @@ Module Type NORMFBY
        [apply is_constant_normalized_constant in Hconst;
         destruct PS.mem eqn:Hmem; [|apply PSE.mem_4 in Hmem]|]; repeat inv_bind).
       1-3:repeat constructor; eauto.
-      2,3:intros ? Heq; inv Heq.
+      2,3:repeat esplit; eauto.
       + eapply fresh_ident_nIn'; eauto.
-      + eexists; split; eauto.
+      + intros ??; congruence.
       + eapply fresh_ident_nIn' in H2; eauto.
         eapply init_var_for_clock_st_valid; eauto.
       + apply add_whens_is_constant; destruct t; simpl; auto.
@@ -821,7 +822,8 @@ Module Type NORMFBY
     - (* arrow *)
       destruct ann0 as (?&?&?) eqn:Vars; repeat inv_bind.
       repeat constructor; eauto.
-      1-2:intros ? Heq; inv Heq. exists e; auto.
+      1-2:repeat esplit; eauto.
+      intros ??; congruence.
       eapply init_var_for_clock_normalized_eq; eauto.
     - (* cexp *)
       inv H; repeat inv_bind; auto.

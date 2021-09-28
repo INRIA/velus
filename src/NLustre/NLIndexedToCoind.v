@@ -674,15 +674,36 @@ Module Type NLINDEXEDTOCOIND
           take (Forall _ _) and rename it into IH.
           induction Hess; simpl; constructor; inv IH; auto.
         + apply merge_spec.
-          intro m; specialize (Spec (m + n)); destruct Spec;
-            destruct_conjs; subst; repeat rewrite init_from_nth.
-          * right; do 5 eexists; intuition eauto.
-            -- rewrite map_app; simpl; reflexivity.
-            -- now rewrite map_length.
-            -- rewrite init_from_nth; auto.
-            -- rewrite <-map_app; apply Forall_map; setoid_rewrite init_from_nth; auto.
+          intro m; specialize (Spec (m + n));
+            destruct Spec as [(?&?&?&?&?&Hxs&Happ&Hlen&Hpres&Habs&Hes)|
+                              (Hxs&Habs&Hes)];
+            subst; repeat rewrite init_from_nth.
+          * right; do 2 eexists; intuition eauto.
+            -- eapply Exists_exists. exists (length x1, tr_stream_from n x2); repeat split; auto.
+               2:rewrite init_from_nth; auto.
+               eapply In_combine_seq.
+               rewrite map_nth_error', nth_error_app3; auto.
+            -- eapply Forall_forall; intros (?&?) Hin Hlen.
+               eapply In_combine_seq in Hin.
+               rewrite map_nth_error' in Hin. apply option_map_inv in Hin as (?&Hin&?); subst.
+               rewrite init_from_nth.
+               eapply Forall_app in Habs as (?&?).
+               destruct (Nat.lt_decidable e (length x1)) as [Hlt|Hge].
+               2:(apply Compare_dec.not_lt in Hge;
+                  destruct (Nat.lt_decidable (length x1) e) as [Hle|Hgt]).
+               ++ rewrite nth_error_app1 in Hin; auto.
+                  eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *; auto.
+               ++ rewrite nth_error_app2 in Hin. 2:lia.
+                  destruct (e - length x1) eqn:Hl; try lia; simpl in *.
+                  eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *; auto.
+               ++ apply Compare_dec.not_lt in Hgt. exfalso.
+                  apply Hlen, Nat.le_antisymm; auto.
           * left; intuition eauto.
-            apply Forall_map; setoid_rewrite init_from_nth; auto.
+            eapply Forall_forall; intros (?&?) Hin.
+            eapply In_combine_seq in Hin.
+            rewrite map_nth_error' in Hin. apply option_map_inv in Hin as (?&Hin&?); subst.
+            eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *.
+            rewrite init_from_nth; auto.
 
       - apply case_inv in Sem as (xs & ess & ? & Hess & Spec).
         econstructor; eauto.
@@ -691,14 +712,26 @@ Module Type NLINDEXEDTOCOIND
           take (Forall _ _) and rename it into IH.
           induction Hess; simpl; constructor; inv IH; auto.
         + apply case_spec.
-          intro m; specialize (Spec (m + n)); destruct Spec;
-            destruct_conjs; subst; repeat rewrite init_from_nth.
-          * right; do 3 eexists; intuition eauto.
-            -- rewrite Forall_map; setoid_rewrite init_from_nth; auto.
-            -- erewrite map_nth_error; eauto; reflexivity.
-            -- rewrite init_from_nth; auto.
-          * left; intuition eauto.
-            apply Forall_map; setoid_rewrite init_from_nth; auto.
+          intro m; specialize (Spec (m + n));
+            destruct Spec as [(?&?&?&?&Hxs&Hsome&Hpres&Hes)|
+                              (Hxs&Habs&Hes)];
+            subst; repeat rewrite init_from_nth.
+          * right; left; do 2 eexists; intuition eauto; simpl; auto.
+            -- eapply Forall_forall; intros (?&?) Hin.
+               eapply In_combine_seq in Hin.
+               rewrite map_nth_error' in Hin. apply option_map_inv in Hin as (?&Hin&?); subst.
+               eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *.
+               rewrite init_from_nth; auto.
+            -- eapply Exists_exists. exists (x, tr_stream_from n x1); repeat split; auto.
+               2:rewrite init_from_nth; auto.
+               eapply In_combine_seq.
+               rewrite map_nth_error', Hsome; auto.
+          * left; intuition eauto; simpl; auto.
+            eapply Forall_forall; intros (?&?) Hin.
+            eapply In_combine_seq in Hin.
+            rewrite map_nth_error' in Hin. apply option_map_inv in Hin as (?&Hin&?); subst.
+            eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *.
+            rewrite init_from_nth; auto.
 
       - apply exp_inv in Sem; constructor; auto.
     Qed.

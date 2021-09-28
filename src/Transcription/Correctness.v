@@ -62,7 +62,7 @@ Module Type CORRECTNESS
        (Lord        : LORDERED         Ids Op OpAux Cks L)
        (Import Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS          : LSEMANTICS       Ids Op OpAux Cks L Lord       Str)
-       (Import LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks L LC LCA Lord Str LS)
+       (Import LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks L LT LC LCA Lord Str LS)
        (LN          : NORMALIZATION    Ids Op OpAux Cks L)
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord).
 
@@ -113,56 +113,50 @@ Module Type CORRECTNESS
     - (* merge *)
       destruct a as ([|? [|]]&?&?); monadInv Htr; fold to_cexp in *.
       inv Hsem. destruct s0.
-      eapply LS.Smerge with (vs0:=map (map (map (fun x => Streams.tl x))) vs); eauto.
+      eapply LS.Smerge with (vs0:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs); eauto.
       + eapply sem_var_step; eauto.
-      + clear - EQ H0 H9. rewrite Forall2_map_2.
-        revert dependent vs. revert dependent x0.
-        induction es; intros; inv H9; inv H0;
-          simpl in *; monadInv EQ;
-          constructor; eauto.
-        clear EQ IHes H6.
-        cases. apply Forall_singl in H4. inv H3; inv H7. simpl.
-        repeat constructor; eauto.
-      + rewrite map_map.
-        replace (map (fun x => concat (map (map (fun x2 => Streams.tl x2)) x)) vs)
-          with (map (map (@Streams.tl _)) (map (@concat _) vs)).
-        2:{ rewrite map_map. eapply map_ext; intros.
-            rewrite concat_map; auto. }
-        rewrite Forall2Transpose_map_1, Forall2Transpose_map_2.
-        eapply Forall2Transpose_impl; eauto.
-        intros ?? Hmerge. inv Hmerge; eauto.
+      + clear - EQ H0 H9. eapply LS.Forall2Brs_map_2.
+        eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        eapply mmap_inversion, Coqlib.list_forall2_in_left in EQ as ((?&?)&?&Htr); eauto.
+        cases. monadInv Htr. simpl in *. destruct Hin2 as [|[]]; subst.
+        eapply Forall_forall in H0; eauto; simpl in *. inv H0; eauto.
+      + rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto]; intros ?? _ _ Hmerge.
+        inv Hmerge; eauto.
     - (* case *)
       destruct a as ([|? [|]]&?&?); cases; monadInv Htr; fold to_cexp in *.
-      inv Hsem. destruct s0.
-      eapply LS.Scase with (vs0:=map (map (map (fun x => Streams.tl x))) vs)
-                           (vd0:=(map (map (fun x => Streams.tl x)) vd)); eauto.
-      + eapply sem_lexp_step in H7; eauto.
-      + clear - EQ1 H0 H10. rewrite Forall2_map_2.
-        revert dependent vs. revert dependent x0.
-        induction es; intros; inv H0; inv H10;
-          simpl in *; monadInv EQ1;
-          constructor; eauto.
-        clear EQ1 IHes H4 H6.
-        cases; monadInv EQ; intros ? Heq; inv Heq.
-        apply Forall_singl in H3. specialize (H2 _ eq_refl).
-        inv H2; inv H6. simpl. repeat constructor; eauto.
-      + clear - H12. rewrite Forall2_map_2.
-        eapply Forall2_impl_In; [|eauto]; intros ?? _ _ ? ?; subst.
-        rewrite Forall2_map_1, Forall2_map_2.
-        eapply Forall2_impl_In; [|eauto]; intros.
-        eapply map_st_EqSt; eauto.
-        intros ?? Heq. rewrite Heq. reflexivity.
-      + clear - H1 H13 EQ0. inv H13; inv H5.
-        simpl. repeat constructor.
-        apply Forall_singl in H1; eauto.
-      + rewrite map_map.
-        replace (map (fun x => concat (map (map (fun x2 => Streams.tl x2)) x)) vs)
-          with (map (map (@Streams.tl _)) (map (@concat _) vs)).
-        2:{ rewrite map_map. eapply map_ext; intros.
-            rewrite concat_map; auto. }
-        rewrite Forall2Transpose_map_1, Forall2Transpose_map_2.
-        eapply Forall2Transpose_impl; eauto.
-        intros ?? Hcase. inv Hcase; eauto.
+      + inv Hsem. destruct s0.
+        eapply LS.ScaseDefault with (vs0:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs)
+                                    (vd0:=(map (map (fun x => Streams.tl x)) vd)).
+        * eapply sem_lexp_step in H7; eauto.
+        * simpl. inv H10; inv H6.
+          constructor; auto. inv H5; auto.
+        * eapply LS.Forall2Brs_map_2.
+          eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+          eapply Exists_exists in Hin as (?&Hin1&Hin2).
+          eapply mmap_inversion, Coqlib.list_forall2_in_left in EQ1 as ((?&?)&?&Htr); eauto.
+          cases. monadInv Htr. simpl in *. destruct Hin2 as [|[]]; subst.
+          eapply Forall_forall in H0; eauto; simpl in *. inv H0; eauto.
+        * simpl in *. inv H13; inv H6. simpl.
+          apply Forall_singl in H1. eauto.
+        * rewrite Forall3_map_1, <-concat_map, 2 Forall3_map_2, Forall3_map_3.
+          rewrite Forall3_map_2 in H14.
+          eapply Forall3_impl_In; [|eauto]; intros ??? _ _ _ Hcase.
+          inv Hcase; auto.
+      + inv Hsem. destruct s0.
+        eapply LS.ScaseTotal with (vs0:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs).
+        * eapply sem_lexp_step in H10; eauto.
+        * eapply LS.Forall2Brs_map_2.
+          eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+          eapply Exists_exists in Hin as (?&Hin1&Hin2).
+          eapply mmap_inversion, Coqlib.list_forall2_in_left in EQ1 as ((?&?)&?&Htr); eauto.
+          cases. monadInv Htr. simpl in *. destruct Hin2 as [|[]]; subst.
+          eapply Forall_forall in H0; eauto; simpl in *. inv H0; eauto.
+        * rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3.
+          rewrite Forall3_map_2 in H12.
+          eapply Forall3_impl_In; [|eauto]; intros ??? _ _ _ Hcase.
+          inv Hcase; auto.
   Qed.
 
   Lemma ty_lexp {PSyn prefs} :
@@ -233,6 +227,267 @@ Module Type CORRECTNESS
     eapply sem_exp_lexp in Htolexp; eauto. now constructor.
   Qed.
 
+  Lemma sem_exp_controls {PSyn prefs} (G: @L.global PSyn prefs) env0 : forall H b es es' vs,
+    Forall (fun es =>
+              Forall (fun e => forall e' s,
+                          LT.wt_exp G env0 e ->
+                          to_cexp e = OK e' ->
+                          LS.sem_exp G H b e [s] -> NLSC.sem_cexp H b e' s)
+                     (snd es)) es ->
+    Forall (fun es => Forall (LT.wt_exp G env0) (snd es)) es ->
+    LS.Forall2Brs (LS.sem_exp G H b) es [vs] ->
+    mmap
+      (fun pat =>
+         match pat with
+         | (i, []) => Error (msg "control expression not normalized")
+         | (i, [e]) => do ce <- to_cexp e; OK (i, ce)
+         | (i, e :: _ :: _) => Error (msg "control expression not normalized")
+         end) es = OK es' ->
+    Forall2 (NLSC.sem_cexp H b) (map snd es') (map snd vs).
+  Proof.
+    induction es; intros * Hf Hwt Hsem Hmmap;
+      inv Hf; inv Hwt; inv Hsem; simpl in *; monadInv Hmmap.
+    - apply Forall_singl in H0; subst; simpl; auto.
+    - cases. monadInv EQ. inv H6; inv H11; simpl in *; rewrite app_nil_r in *.
+      inv H9; inv H12.
+      eapply IHes in H3. 2,3,4:eauto.
+      apply Forall_singl in H2. apply Forall_singl in H4.
+      constructor; eauto.
+  Qed.
+
+  Lemma merge_Permutation : forall c vs vs' s,
+      Permutation vs vs' ->
+      merge c vs s ->
+      merge c vs' s.
+  Proof.
+    intros * Hperm Hmerge.
+    rewrite merge_spec in *. intros n.
+    specialize (Hmerge n) as [(Hc&Hf&Hs)|(?&?&Hc&Hpres&Habs&Hs)].
+    - left. repeat split; auto.
+      now rewrite <-Hperm.
+    - right. repeat esplit; eauto.
+      1,2:now rewrite <-Hperm.
+  Qed.
+
+  Lemma case_Permutation : forall c vs vs' vd s,
+      Permutation vs vs' ->
+      case c vs vd s ->
+      case c vs' vd s.
+  Proof.
+    intros * Hperm Hcase.
+    rewrite case_spec in *. intros n.
+    specialize (Hcase n) as [(Hc&Hf&Hd&Hs)|[(?&?&Hc&Habs&Hpres&Hd&Hs)|(?&?&Hc&Habs&Hneq&Hd&Hs)]].
+    - left. repeat split; auto.
+      now rewrite <-Hperm.
+    - right; left. repeat esplit; eauto.
+      1,2:now rewrite <-Hperm.
+    - right; right. repeat esplit; eauto.
+      1,2:now rewrite <-Hperm.
+  Qed.
+
+  Lemma case_complete : forall tx c vs vs' vd s,
+      wt_streams [c] [Tenum (tx, (length vs'))] ->
+      map fst vs' = seq 0 (length vs') ->
+      (forall i v, In (i, v) vs' <-> In (i, v) vs \/ (i < length vs' /\ ~InMembers i vs /\ v = vd)) ->
+      case c vs (Some vd) s ->
+      case c vs' None s.
+  Proof.
+    intros * Hwt Hfst Heq Hcase.
+    rewrite case_spec in *. intros n.
+    specialize (Hcase n) as [(Hc&Hf&Hd&Hs)|[(?&?&Hc&Habs&Hpres&Hd&Hs)|(?&?&Hc&Habs&Hneq&Hd&Hs)]]; simpl in *.
+    - left. repeat split; auto.
+      eapply Forall_forall; intros (?&?) Hin.
+      eapply Heq in Hin as [Hin|(?&Hnin&?)]; subst; simpl in *; auto.
+      eapply Forall_forall in Hf; eauto. auto.
+    - right; left. repeat esplit; eauto.
+      + eapply Forall_forall; intros (?&?) Hin.
+        eapply Heq in Hin as [Hin|(?&Hnin&?)]; subst; simpl in *; auto.
+        eapply Forall_forall in Habs; eauto. auto.
+      + eapply Exists_exists in Hpres as ((?&?)&Hin&?&Hpres); subst.
+        eapply Exists_exists. do 2 esplit; eauto. eapply Heq; eauto.
+        simpl; auto.
+    - right; left. repeat esplit; eauto.
+      + eapply Forall_forall; intros (?&?) Hin.
+        eapply Heq in Hin as [Hin|(?&Hnin&?)]; subst; simpl in *; auto.
+        * eapply Forall_forall in Habs; eauto. auto.
+        * congruence.
+      + eapply Forall2_singl, SForall_forall in Hwt. rewrite Hc in Hwt; inv Hwt; simpl in *.
+        assert (Hnth:=H1). eapply nth_In with (d:=(0, Streams.const absent)) in Hnth.
+        rewrite combine_fst_snd in Hnth at 1. rewrite Hfst, combine_nth, seq_nth in Hnth; auto; simpl in *.
+        2:rewrite seq_length, map_length; auto.
+        apply Exists_exists. do 2 esplit; eauto; simpl. split; auto.
+        eapply Heq in Hnth as [Hin|(?&Hnin&?)]; subst; auto.
+        eapply Forall_forall in Hneq; eauto; simpl in *. congruence.
+  Qed.
+
+  Lemma Forall2_Permutation_1_fst {A B C} : forall (P : (A * B) -> (A * C) -> Prop) l1 l1' l2,
+      Permutation l1 l1' ->
+      Forall2 P l1 l2 ->
+      map fst l1 = map fst l2 ->
+      exists l2', Permutation l2 l2' /\ Forall2 P l1' l2' /\ map fst l1' = map fst l2'.
+  Proof.
+    intros P l1 l1' l2 Hperm Hf Heq. revert l2 Hf Heq.
+    induction Hperm; intros l2 Hf Heq; simpl in *.
+    - inv Hf. exists []; auto.
+    - inv Hf; simpl in *. inv Heq.
+      apply IHHperm in H3 as (l2'&Hperm'&Hf'&Heq'); auto.
+      exists (y::l2'). repeat split; simpl; auto.
+      f_equal; auto.
+    - inv Hf. inv H3. simpl in *. inv Heq.
+      exists (y1::y0::l'0). repeat split; simpl; auto.
+      repeat constructor. repeat f_equal; auto.
+    - eapply IHHperm1 in Hf; eauto. destruct Hf as (l2'&Hperm'&Hf'&Heq').
+      eapply IHHperm2 in Hf'; eauto. destruct Hf' as (l2''&Hperm''&Hf''&Heq'').
+      exists l2''. split; auto. etransitivity; eauto.
+  Qed.
+
+  (** Simpler than an existential : build the list explicitely *)
+  Fixpoint complete_sem (s : list enumtag) (brs : list (enumtag * Stream svalue)) (d : Stream svalue) : list (enumtag * Stream svalue) :=
+    match s with
+    | [] => brs
+    | k::s =>
+      match brs with
+      | [] => (k, d)::(complete_sem s brs d)
+      | (tag, e)::tl => if (tag =? k) then (tag, e)::(complete_sem s tl d)
+                      else (k, d)::(complete_sem s brs d)
+      end
+    end.
+
+  Lemma complete_sem_fst : forall n es d,
+      NoDupMembers es ->
+      Sorted.StronglySorted le (map fst es) ->
+      incl (map fst es) (seq 0 n) ->
+      map fst (complete_sem (seq 0 n) es d) = (seq 0 n).
+  Proof.
+    intros n. generalize 0 as start.
+    induction n; intros * Hnd Hsort Hincl; simpl in *.
+    - apply incl_nil, map_eq_nil in Hincl; subst; auto.
+    - destruct es as [|(?&?)]; inv Hnd; inv Hsort; simpl in *; auto.
+      + f_equal; eapply IHn; simpl; eauto using incl_nil'.
+      + destruct (n0 =? start) eqn:Hn; simpl.
+        * eapply Nat.eqb_eq in Hn; subst.
+          f_equal; auto.
+          eapply IHn; eauto.
+          apply incl_cons' in Hincl as (?&Hincl).
+          intros ? Hin. assert (Hin':=Hin). apply Hincl in Hin'; inv Hin'; auto.
+          exfalso. now apply H1, fst_InMembers.
+        * eapply Nat.eqb_neq in Hn.
+          f_equal; auto.
+          eapply IHn; simpl. 1,2:constructor; simpl in *; eauto.
+          apply incl_cons' in Hincl as (?&Hincl).
+          apply incl_cons.
+          -- inv H; auto. congruence.
+          -- intros ? Hin. assert (Hin':=Hin). apply Hincl in Hin'; inv Hin'; auto.
+             exfalso.
+             eapply Forall_forall in H4; eauto.
+             inv H; try congruence.
+             eapply in_seq in H0 as (Hle1&Hle2). lia.
+  Qed.
+
+  Corollary complete_sem_length : forall n ys d,
+      NoDupMembers ys ->
+      Sorted.StronglySorted le (map fst ys) ->
+      incl (map fst ys) (seq 0 n) ->
+      length (complete_sem (seq 0 n) ys d) = n.
+  Proof.
+    intros * Hnd Hs Hincl.
+    erewrite <-map_length, complete_sem_fst, seq_length; eauto.
+  Qed.
+
+  Lemma complete_branches_sem H b : forall n es d ys vd,
+      map fst ys = map fst es ->
+      Forall2 (fun e y => NLSC.sem_cexp H b (snd e) (snd y)) es ys ->
+      NLSC.sem_cexp H b d vd ->
+      Forall2 (fun oe => NLSC.sem_cexp H b (or_default d oe)) (map snd (complete_branches (seq 0 n) es)) (map snd (complete_sem (seq 0 n) ys vd)).
+  Proof.
+    intros n. generalize 0 as start.
+    induction n; intros * Hfst Hses Hsd; simpl in *.
+    - rewrite 2 Forall2_map_1, Forall2_map_2.
+      eapply Forall2_impl_In; [|eauto]; intros (?&?) ? _ _ ?; simpl; auto.
+    - inv Hses; simpl.
+      + constructor; auto.
+      + destruct x, y; simpl in *; inv Hfst.
+        destruct (e =? start); simpl; constructor; eauto.
+        eapply IHn; eauto. simpl; f_equal; auto.
+  Qed.
+
+  Lemma complete_sem_In : forall n ys d i v,
+      NoDupMembers ys ->
+      Sorted.StronglySorted le (map fst ys) ->
+      incl (map fst ys) (seq 0 n) ->
+      In (i, v) (complete_sem (seq 0 n) ys d) <-> In (i, v) ys \/ (In i (seq 0 n) /\ ~InMembers i ys /\ v = d).
+  Proof.
+    intros n. generalize 0 as start.
+    induction n; intros * Hnd Hsorted Hincl;
+      (split; [intros Hin|intros [Hin|(Hlt&Hnin&Heq)]]); simpl in *; subst; auto.
+    - lia.
+    - destruct ys as [|(?&?)]; simpl in *.
+      + destruct Hin as [Heq|Hin]. inv Heq; auto.
+        eapply IHn in Hin; eauto; simpl in *; auto using incl_nil'. intuition.
+      + destruct (n0 =? start) eqn:Heq; simpl; inv Hin; eauto.
+        * apply Nat.eqb_eq in Heq; subst.
+          inv Hnd; inv Hsorted. eapply IHn in H as [?|(?&?&?)]; subst; eauto.
+          -- right. repeat split; auto. apply and_not_or; split; auto.
+             intro contra; subst. eapply in_seq in H. lia.
+          -- eapply incl_cons' in Hincl as (?&Hincl).
+             intros ? Hin. assert (Hin':=Hin). eapply Hincl in Hin'; inv Hin'; auto.
+             exfalso. apply H2, fst_InMembers; auto.
+        * apply Nat.eqb_neq in Heq.
+          apply incl_cons' in Hincl as (Hincl1&Hincl2). inv Hincl1; try congruence.
+          inv H. right. repeat split; auto. apply and_not_or; split; auto.
+          intro contra. apply fst_InMembers in contra.
+          inv Hsorted. eapply Forall_forall in H3; eauto.
+          eapply in_seq in H0. lia.
+        * apply Nat.eqb_neq in Heq.
+          apply incl_cons' in Hincl as (Hincl1&Hincl2). inv Hincl1; try congruence.
+          eapply IHn in H as [?|(?&?&?)]; eauto; simpl; auto.
+          intros ? [|Hin]; subst; auto.
+          assert (Hin':=Hin). eapply Hincl2 in Hin'; inv Hin'; auto.
+          exfalso. inv Hnd; inv Hsorted.
+          eapply Forall_forall in H7; eauto. eapply in_seq in H0. lia.
+    - destruct ys as [|(?&?)]; [inv Hin|]; simpl in *.
+      destruct (n0 =? start) eqn:Heq; simpl; inv Hin; eauto.
+      + apply Nat.eqb_eq in Heq; subst. inv Hnd; inv Hsorted.
+        right. eapply IHn; eauto.
+        eapply incl_cons' in Hincl as (?&Hincl).
+        intros ? Hin. assert (Hin':=Hin). eapply Hincl in Hin'; inv Hin'; auto.
+        exfalso. apply H2, fst_InMembers; auto.
+      + apply Nat.eqb_neq in Heq.
+        inv H; auto. right. eapply IHn; eauto; simpl; auto.
+        apply incl_cons' in Hincl as (Hincl1&Hincl2). inv Hincl1; try congruence.
+        intros ? [|Hin]; subst; auto.
+        assert (Hin':=Hin). eapply Hincl2 in Hin'; inv Hin'; auto.
+        exfalso. inv Hnd; inv Hsorted.
+        eapply Forall_forall in H5; eauto. eapply in_seq in H. lia.
+      + apply Nat.eqb_neq in Heq.
+        right. eapply IHn; eauto; simpl; auto.
+        apply incl_cons' in Hincl as (Hincl1&Hincl2). inv Hincl1; try congruence.
+        intros ? [|Hin]; subst; auto.
+        assert (Hin':=Hin). eapply Hincl2 in Hin'; inv Hin'; auto.
+        exfalso. inv Hnd; inv Hsorted.
+        eapply Forall_forall in H6; eauto. eapply in_seq in H0. lia.
+    - destruct ys as [|(?&?)]; simpl in *.
+      + destruct Hlt as [|Hseq]; subst; auto.
+        right. eapply IHn; eauto using incl_nil'.
+      + apply not_or_and in Hnin as (Hn1&Hn2).
+        destruct (n0 =? start) eqn:Heq; simpl in *.
+        * apply Nat.eqb_eq in Heq; subst.
+          destruct Hlt as [|Hseq]; subst; try congruence.
+          right. inv Hnd. inv Hsorted. eapply IHn; eauto.
+          apply incl_cons' in Hincl as (?&Hincl).
+          intros ? Hin. assert (Hin':=Hin). eapply Hincl in Hin'; inv Hin'; auto.
+          exfalso. apply H1, fst_InMembers; auto.
+        * apply Nat.eqb_neq in Heq.
+          destruct Hlt as [|Hseq]; subst; auto.
+          right. eapply IHn; eauto; simpl.
+          -- apply incl_cons' in Hincl as (Hincl1&Hincl2). inv Hincl1; try congruence.
+             intros ? [|Hin]; subst; auto.
+             assert (Hin':=Hin). eapply Hincl2 in Hin'; inv Hin'; auto.
+             exfalso. inv Hnd; inv Hsorted.
+             eapply Forall_forall in H5; eauto. eapply in_seq in H. lia.
+          -- right. repeat split; auto using and_not_or.
+  Qed.
+
   Lemma sem_exp_cexp {PSyn prefs} :
     forall (G: @L.global PSyn prefs) env H b e e' s,
       LT.wt_exp G env e ->
@@ -244,46 +499,83 @@ Module Type CORRECTNESS
       (now inv Htr) || (unfold to_cexp in Htr;
                        try (monadInv Htr; econstructor;
                             eapply sem_exp_lexp; eauto));
-      cases; monadInv Htr; fold to_cexp in *.
+      cases_eqn Eq; monadInv Htr; fold to_cexp in *.
     - (* merge *)
-      inv Hsem; inv H10; inv H6.
-      rewrite Forall2_map_1 in H3. rewrite map_map, Forall_map in H1.
+      inv Hsem; inv H10; inv H5.
       inv Hwt.
+      eapply sem_exp_controls in H0; eauto. eapply to_controls_fst in EQ.
+      eapply LS.Forall2Brs_fst, Forall_singl in H9.
+      rewrite Forall2_map_1, Forall2_map_2 in H0.
+      eapply Forall2_Permutation_1_fst in H0 as (s'&Hperm&Hf&Heq).
+      2:eapply BranchesSort.Permuted_sort.
+      2:congruence.
       econstructor; eauto.
-      clear - H0 H1 H3 H9 H15 EQ.
-      revert vs hd1 x0 H1 H3 H9 EQ.
-      induction es; intros; inv H15; inv H0; simpl in *; monadInv EQ;
-        inv H9; inv H3; inv H1; constructor; eauto.
-      clear EQ IHes H6 H8 H10 H11 H12.
-      cases_eqn EQ0. inv H4; inv H8.
-      simpl in *; rewrite app_nil_r in *.
-      destruct y1 as [|? [|]]; simpl in *; inv H9; inv H3.
-      inv H5. inv H7. auto.
-    - (* case *)
-      inv Hsem. apply Forall_singl in H1.
-      inv H13; inv H6. inv H14; inv H9.
-      rewrite Forall2_map_1 in H5. rewrite map_map, Forall_map in H2.
+      + eapply Forall2_map_1, Forall2_map_2; eauto.
+      + replace (seq 0 (Datatypes.length (map snd s'))) with (map fst s').
+        2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
+            eapply Permutation_seq_eq.
+            erewrite <-BranchesSort.Permuted_sort, <-map_length, 2 EQ, H11, seq_length. reflexivity.
+            eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+            1,2:intros ?? Heqb. lia. apply Nat.leb_le in Heqb; auto.
+        }
+        erewrite <-combine_fst_snd.
+        eapply merge_Permutation; [|eauto]; eauto.
+    - (* case (default) *)
+      inv Hsem. inv H13; inv H6. simpl in *; rewrite app_nil_r in *.
+      rewrite Forall3_map_2 in H14. inv H14; inv H9.
+      inv Hwt. apply Forall_singl in H20. simpl in *; rewrite app_nil_r in *.
+      eapply sem_exp_lexp in H7; eauto.
+      eapply sem_exp_controls in H0; eauto. eapply to_controls_fst in EQ1.
+      eapply LS.Forall2Brs_fst, Forall_singl in H12.
+      rewrite Forall2_map_1, Forall2_map_2 in H0.
+      eapply Forall2_Permutation_1_fst in H0 as (s'&Hperm&Hf&Heq).
+      2:eapply BranchesSort.Permuted_sort.
+      2:congruence.
+      apply Forall_singl in H1. eapply H1 in H4; eauto.
+      rewrite Eq6 in H10. rewrite Eq6 in H13; inv H13.
+      assert (NoDupMembers s') as Hnd'.
+      { rewrite fst_NoDupMembers, <-Hperm, H12, <-fst_NoDupMembers; auto. }
+      assert (Sorted.StronglySorted le (map fst s')) as Hsorted'.
+      { rewrite <-Heq.
+        eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+        - intros ?????; lia.
+        - intros ?? Hle. eapply Nat.leb_le in Hle; auto.
+      }
+      assert (incl (map fst s') (seq 0 n0)) as Hincl'.
+      { rewrite <-Hperm, H12; auto. }
+      econstructor; eauto.
+      + eapply complete_branches_sem; eauto.
+      + eapply case_complete, case_Permutation; eauto.
+        * rewrite combine_length, seq_length, Nat.min_id, map_length, complete_sem_length; eauto.
+        * rewrite combine_map_fst', combine_length, seq_length, Nat.min_id; eauto.
+          rewrite seq_length; eauto.
+        * intros ??. rewrite map_length, complete_sem_length; eauto.
+          erewrite <-complete_sem_fst, <-combine_fst_snd at 1; eauto.
+          rewrite complete_sem_In; eauto.
+          rewrite combine_length, map_length, complete_sem_length, seq_length, Nat.min_id; eauto. rewrite in_seq.
+          split; intros [|(Hlt&?&?)]; subst; auto. 1,2:right; repeat split; auto. 1,2:lia.
+    - (* case (total) *)
+      inv Hsem; simpl in *. inv H12; inv H8.
       inv Hwt.
+      eapply sem_exp_lexp in H10; eauto.
+      eapply sem_exp_controls in H0; eauto. eapply to_controls_fst in EQ1.
+      eapply LS.Forall2Brs_fst, Forall_singl in H11.
+      rewrite Forall2_map_1, Forall2_map_2 in H0.
+      eapply Forall2_Permutation_1_fst in H0 as (s'&Hperm&Hf&Heq).
+      2:eapply BranchesSort.Permuted_sort.
+      2:congruence.
       econstructor; eauto.
-      + eapply sem_exp_lexp in EQ; eauto.
-      + apply Forall_singl in H21. rename H21 into Hwtd.
-        rename H1 into Hd. rename H4 into Hsemd.
-        clear - H0 Hd Hwtd Hsemd H2 H5 H10 H12 H19 EQ0 EQ1.
-        revert vs hd1 x0 H0 H2 H5 H10 H12 H19 EQ1.
-        induction es; intros; inv H0; simpl in *; monadInv EQ1;
-          inv H10; inv H12; inv H5; inv H2; constructor; eauto.
-        clear EQ1 IHes H6 H8 H10.
-        cases; monadInv EQ; simpl in *.
-        * apply Forall_singl in H4; eauto.
-          specialize (H3 _ eq_refl). inv H3; inv H8; simpl in *; rewrite app_nil_r in *; auto.
-          destruct y2 as [|? [|]]; inv H7; inv H5.
-          eapply H4 in H2; eauto.
-          eapply Forall_forall in H19; eauto with datatypes.
-        * eapply Hd; eauto.
-          specialize (H9 eq_refl). inv H9; inv H8.
-          simpl in *; rewrite app_nil_r in *.
-          destruct x as [|? [|]]; simpl in *; inv H7; inv H5.
-          inv H6; inv H7. rewrite H2; auto.
+      + eapply Forall2_map_1, Forall2_map_2; eauto.
+        eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&?) _ _ ?; simpl; eauto.
+      + replace (seq 0 (Datatypes.length (map snd s'))) with (map fst s').
+        2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
+            eapply Permutation_seq_eq.
+            erewrite <-BranchesSort.Permuted_sort, <-map_length, 2 EQ1, H12, seq_length. reflexivity.
+            eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+            1,2:intros ?? Heqb. lia. apply Nat.leb_le in Heqb; auto.
+        }
+        erewrite <-combine_fst_snd.
+        eapply case_Permutation; [|eauto]; eauto.
   Qed.
 
   Lemma sem_lexp_step2: forall H b e v s,
@@ -1485,7 +1777,7 @@ Module CorrectnessFun
        (Lord : LORDERED         Ids Op OpAux Cks L)
        (Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS   : LSEMANTICS       Ids Op OpAux Cks L Lord       Str)
-       (LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks L LC LCA Lord Str LS)
+       (LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks L LT LC LCA Lord Str LS)
        (LN   : NORMALIZATION    Ids Op OpAux Cks L)
        (NLSC : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord)
 <: CORRECTNESS Ids Op OpAux Cks L CE NL TR LT LC LCA Ord Lord Str LS LCS LN NLSC.

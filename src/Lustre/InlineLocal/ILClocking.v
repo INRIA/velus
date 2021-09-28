@@ -120,31 +120,35 @@ Module Type ILCLOCKING
       - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
       - now rewrite map_length.
       - contradict H4. apply map_eq_nil in H4; auto.
-      - rewrite Forall_map. rewrite Forall_forall in *; intros * Hin. rewrite Forall_map.
+      - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
         specialize (H _ Hin). specialize (H5 _ Hin).
         rewrite Forall_forall in *; eauto.
-      - rewrite Forall2_map_2, map_length.
-        eapply Forall2_impl_In; [|eauto]; intros; simpl in *.
+      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
         rewrite rename_in_exp_clocksof, Forall_map.
+        eapply Forall_forall in H6; eauto; simpl in H6.
         eapply Forall_impl; [|eauto]; intros; subst; auto.
-      - rewrite Forall_map. eapply Forall_impl; [|eapply H7]; eauto; intros.
+      - rewrite Forall_map. eapply Forall_impl; [|eapply H7]; eauto; intros (?&?) ?; simpl in *.
         now rewrite rename_in_exp_clocksof, map_length.
       - now rewrite H6.
       - contradict H7. apply map_eq_nil in H7; auto.
-      - intros. apply in_map_iff in H1 as (?&Hopt&Hin). apply option_map_inv in Hopt as (?&?&?); subst.
-        eapply Forall_forall in H; eauto; simpl in *.
-        specialize (H8 _ Hin).
+      - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
+        specialize (H _ Hin). specialize (H8 _ Hin).
+        rewrite Forall_forall in *; eauto.
+      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
+        rewrite rename_in_exp_clocksof, Forall_map.
+        eapply Forall_forall in H9; eauto; simpl in H9.
+        eapply Forall_impl; [|eauto]; intros; subst; auto.
+      - rewrite Forall_map. eapply Forall_impl; [|eapply H10]; eauto; intros (?&?) ?; simpl in *.
+        now rewrite rename_in_exp_clocksof, map_length.
+      - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
+        specialize (H11 _ eq_refl).
         rewrite Forall_map. rewrite Forall_forall in *; eauto.
-      - intros. apply in_map_iff in H1 as (?&Hopt&Hin). apply option_map_inv in Hopt as (?&?&?); subst.
-        eapply Forall_forall in H; eauto; simpl in *.
-        specialize (H9 _ Hin).
-        rewrite rename_in_exp_clocksof, Forall_map. rewrite Forall_forall in *; intros.
-        erewrite H9; eauto.
-      - intros. apply in_map_iff in H1 as (?&Hopt&Hin). apply option_map_inv in Hopt as (?&?&?); subst.
-        eapply Forall_forall in H; eauto; simpl in *.
-        rewrite rename_in_exp_clocksof, map_length; eauto.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
-      - now rewrite map_length.
+      - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
+        specialize (H12 _ eq_refl).
+        rewrite rename_in_exp_clocksof, Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
+      - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
+        specialize (H13 _ eq_refl).
+        now rewrite rename_in_exp_clocksof, map_length.
       - rewrite rename_in_exp_nclocksof, Forall2_map_2.
         eapply Forall2_impl_In; [|eauto]; intros.
         eapply rename_in_nclock_WellInstantiated; eauto.

@@ -138,29 +138,38 @@ Module Type ILTYPING
       Proof.
         intros * Hwc; induction e using exp_ind2; inv Hwc; simpl;
           econstructor; eauto using rename_in_var_wt, rename_in_nclock_wt.
-        1-32:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-        1-24:try rewrite rename_in_exp_typeof; simpl; auto.
-        1-20:try rewrite rename_in_exp_typesof; simpl; auto.
-        1-20:try rewrite map_map; eauto.
+        1-38:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
+        1-31:try rewrite rename_in_exp_typeof; simpl; auto.
+        1-26:try rewrite rename_in_exp_typesof; simpl; auto.
+        1-23:try rewrite map_map; eauto.
         - rewrite Forall_map in *.
           eapply Forall_impl; [|eauto]; intros; simpl in *; eauto using rename_in_nclock_wt.
         - rewrite Forall_map in *.
           eapply Forall_impl; [|eauto]; intros; simpl in *; eauto using rename_in_nclock_wt.
-        - now rewrite map_length.
+        - erewrite map_ext; eauto. intros (?&?); auto.
         - contradict H6. apply map_eq_nil in H6; auto.
-        - rewrite Forall_map. rewrite Forall_forall in *; intros * Hin. rewrite Forall_map.
+        - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
           specialize (H _ Hin). specialize (H7 _ Hin).
           rewrite Forall_forall in *; eauto.
-        - rewrite Forall_map. rewrite Forall_forall in *; intros * Hin. rewrite rename_in_exp_typesof; auto.
-        - now rewrite map_length.
+        - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl.
+          rewrite rename_in_exp_typesof. eapply H8 in Hin; eauto.
+        - erewrite map_ext; eauto. intros (?&?); auto.
         - contradict H9. apply map_eq_nil in H9; auto.
-        - intros. apply in_map_iff in H1 as (?&Hopt&Hin). apply option_map_inv in Hopt as (?&?&?); subst.
-          eapply Forall_forall in H; eauto; simpl in *.
-          specialize (H10 _ Hin).
-          rewrite Forall_map. rewrite Forall_forall in *; eauto.
-        - intros. apply in_map_iff in H1 as (?&Hopt&Hin). apply option_map_inv in Hopt as (?&?&?); subst.
-          eapply Forall_forall in H; eauto; simpl in *.
-          rewrite rename_in_exp_typesof; eauto.
+        - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
+          specialize (H _ Hin). specialize (H10 _ Hin).
+          rewrite Forall_forall in *; eauto.
+        - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl.
+          rewrite rename_in_exp_typesof. eapply H11 in Hin; eauto.
+        - erewrite map_ext; eauto. intros (?&?); auto.
+        - erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; auto.
+          intros (?&?); auto.
+        - contradict H9. apply map_eq_nil in H9; auto.
+        - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
+          specialize (H _ Hin). specialize (H11 _ Hin).
+          rewrite Forall_forall in *; eauto.
+        - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl.
+          rewrite rename_in_exp_typesof. eapply H12 in Hin; eauto.
+        - simpl in *. rewrite Forall_map, Forall_forall in *; eauto.
         - rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&(?&?)&?) ???; subst; auto.
         - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; simpl in *.
           rewrite rename_in_exp_typeof; auto.

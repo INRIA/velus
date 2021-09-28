@@ -70,6 +70,22 @@ Module Type LSEMANTICS
     Context {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
+    (** Inductive property on the branches of a merge / case *)
+    Section Forall2Brs.
+      Variable P : exp -> list (Stream svalue) -> Prop.
+
+      Inductive Forall2Brs : list (enumtag * list exp) -> list (list (enumtag * Stream svalue)) -> Prop :=
+      | F2Tnil : forall vs,
+          Forall (fun vs => vs = []) vs ->
+          Forall2Brs [] vs
+      | F2Tcons : forall c es brs vs1 vs2 vs3,
+          Forall2 P es vs1 ->
+          Forall2Brs brs vs2 ->
+          Forall3 (fun v1 vs2 vs3 => vs3 = (c, v1)::vs2) (concat vs1) vs2 vs3 ->
+          Forall2Brs ((c, es)::brs) vs3.
+
+    End Forall2Brs.
+
     Inductive sem_exp
       : history -> Stream bool -> exp -> list (Stream svalue) -> Prop :=
     | Sconst:
@@ -127,18 +143,51 @@ Module Type LSEMANTICS
     | Smerge:
         forall H b x tx s es lann vs os,
           sem_var H x s ->
-          Forall2 (Forall2 (sem_exp H b)) es vs ->
-          Forall2Transpose (merge s) (List.map (@concat _) vs) os ->
+          Forall2Brs (sem_exp H b) es vs ->
+          Forall2 (merge s) vs os ->
           sem_exp H b (Emerge (x, tx) es lann) os
 
-    | Scase:
+    | ScaseTotal:
+        forall H b e s es tys ck vs os,
+          sem_exp H b e [s] ->
+          Forall2Brs (sem_exp H b) es vs ->
+          Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
+          sem_exp H b (Ecase e es None (tys, ck)) os
+
+    (** In the default case, we need to ensure that the values taken by the condition stream
+        still corresponds to the constructors;
+        otherwise, we could not prove that the NLustre program has a semantics.
+        For instance, consider the program
+
+        type t = A | B | C
+
+        case e of
+        | A -> 1
+        | B -> 2
+        | _ -> 42
+
+        its normalized form (in NLustre) is
+
+        case e of [Some 1;Some 2;None] 42
+
+        If the condition `e` takes the value `3`, then the first program has a semantics
+        (we take the default branch) but not the NLustre program (see NLCoindSemantics.v).
+
+        We could prove that the stream produced by `e` being well-typed is a
+        property of any well-typed, causal program, but the proof would be as
+        hard as the alignment proof (see LClockSemantics.v).
+        Instead we take this as an hypothesis, that will have to be filled when
+        proving the existence of the semantics. This would be necessary to establish
+        the semantics of operators anyway, so this shouldn't add any cost.
+     *)
+    | ScaseDefault:
         forall H b e s es d lann vs vd os,
           sem_exp H b e [s] ->
-          Forall2 (fun oes vs => forall es, oes = Some es -> Forall2 (sem_exp H b) es vs) es vs ->
-          Forall2 (fun oes vs => oes = None -> Forall2 EqSts vs vd) es vs ->
+          wt_streams [s] (typeof e) ->
+          Forall2Brs (sem_exp H b) es vs ->
           Forall2 (sem_exp H b) d vd ->
-          Forall2Transpose (case s) (List.map (@concat _) vs) os ->
-          sem_exp H b (Ecase e es d lann) os
+          Forall3 (case s) vs (List.map Some (concat vd)) os ->
+          sem_exp H b (Ecase e es (Some d) lann) os
 
     | Sapp:
         forall H b f es er lann ss os rs bs,
@@ -259,22 +308,31 @@ Module Type LSEMANTICS
     Hypothesis MergeCase:
       forall H b x tx s es lann vs os,
         sem_var H x s ->
-        Forall2 (Forall2 (sem_exp G H b)) es vs ->
-        Forall2 (Forall2 (P_exp H b)) es vs ->
-        Forall2Transpose (merge s) (List.map (@concat _) vs) os ->
+        Forall2Brs (sem_exp G H b) es vs ->
+        Forall2Brs (P_exp H b) es vs ->
+        Forall2 (merge s) vs os ->
         P_exp H b (Emerge (x, tx) es lann) os.
 
-    Hypothesis CaseCase:
+    Hypothesis CaseTotalCase:
+      forall H b e s es tys ck vs os,
+        sem_exp G H b e [s] ->
+        P_exp H b e [s] ->
+        Forall2Brs (sem_exp G H b) es vs ->
+        Forall2Brs (P_exp H b) es vs ->
+        Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
+        P_exp H b (Ecase e es None (tys, ck)) os.
+
+    Hypothesis CaseDefaultCase:
       forall H b e s es d lann vs vd os,
         sem_exp G H b e [s] ->
         P_exp H b e [s] ->
-        Forall2 (fun oes vs => forall es, oes = Some es -> Forall2 (sem_exp G H b) es vs) es vs ->
-        Forall2 (fun oes vs => forall es, oes = Some es -> Forall2 (P_exp H b) es vs) es vs ->
-        Forall2 (fun oes vs => oes = None -> Forall2 EqSts vs vd) es vs ->
+        wt_streams [s] (typeof e) ->
+        Forall2Brs (sem_exp G H b) es vs ->
+        Forall2Brs (P_exp H b) es vs ->
         Forall2 (sem_exp G H b) d vd ->
         Forall2 (P_exp H b) d vd ->
-        Forall2Transpose (case s) (List.map (@concat _) vs) os ->
-        P_exp H b (Ecase e es d lann) os.
+        Forall3 (case s) vs (List.map Some (concat vd)) os ->
+        P_exp H b (Ecase e es (Some d) lann) os.
 
     Hypothesis AppCase:
       forall H b f es er lann ss os sr bs,
@@ -366,11 +424,12 @@ Module Type LSEMANTICS
         + eapply ArrowCase; eauto; clear H2; SolveForall.
         + eapply WhenCase; eauto; clear H2; SolveForall.
         + eapply MergeCase; eauto; clear H2; SolveForall.
-          constructor; auto. SolveForall.
-        + eapply CaseCase; eauto.
-          * clear - sem_exp_ind2 H0.
-            SolveForall. constructor; auto.
-            intros; subst. specialize (H0 _ eq_refl). SolveForall.
+          induction H1; econstructor; eauto. clear IHForall2Brs H3. SolveForall.
+        + eapply CaseTotalCase; eauto; clear H1.
+          induction H0; econstructor; eauto. clear IHForall2Brs H2. SolveForall.
+        + eapply CaseDefaultCase; eauto.
+          * clear - sem_exp_ind2 H1.
+            induction H1; econstructor; eauto. clear IHForall2Brs H2. SolveForall.
           * clear - sem_exp_ind2 H2.
             SolveForall.
         + eapply AppCase; eauto; clear H2 H3; SolveForall.
@@ -388,7 +447,89 @@ Module Type LSEMANTICS
 
   End sem_exp_ind2.
 
-  (** ** Properties of the [global] environment *)
+  (** ** Properties of Forall2Brs *)
+
+  Lemma Forall2Brs_impl_In (P1 P2 : _ -> _ -> Prop) : forall es vs,
+      (forall x y, List.Exists (fun es => In x (snd es)) es -> P1 x y -> P2 x y) ->
+      Forall2Brs P1 es vs ->
+      Forall2Brs P2 es vs.
+  Proof.
+    intros * HP Hf.
+    induction Hf; econstructor; eauto.
+    eapply Forall2_impl_In; [|eauto]; intros ?? Hin1 Hin2 HP1.
+    eapply HP; eauto.
+  Qed.
+
+  Lemma Forall2Brs_fst P : forall es vs,
+      Forall2Brs P es vs ->
+      Forall (fun vs => List.map fst vs = List.map fst es) vs.
+  Proof.
+    intros * Hf.
+    induction Hf; simpl.
+    - eapply Forall_impl; [|eauto]; intros; simpl in *; subst; auto.
+    - eapply Forall3_ignore1 in H0.
+      clear - H0 IHHf.
+      induction H0; inv IHHf; constructor; eauto.
+      destruct H; subst; simpl. f_equal; auto.
+  Qed.
+
+  Lemma Forall2Brs_length1 (P : _ -> _ -> Prop) : forall es vs,
+      Forall (fun es => Forall (fun e => forall v, P e v -> length v = numstreams e) (snd es)) es ->
+      Forall2Brs P es vs ->
+      Forall (fun es => length (annots (snd es)) = length vs) es.
+  Proof.
+    intros * Hf Hf2.
+    induction Hf2; inv Hf; simpl in *; constructor; simpl.
+    - apply Forall3_length in H0 as (?&?).
+      rewrite <-H1, <-H0.
+      unfold annots. rewrite flat_map_concat_map. eapply concat_length_eq.
+      rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros.
+      eapply Forall_forall in H3; eauto.
+      rewrite length_annot_numstreams, H3; eauto.
+    - eapply Forall_impl; [|eapply IHHf2; eauto]; intros (?&?) Hlen; simpl in *.
+      rewrite Hlen. apply Forall3_length in H0 as (?&?); auto.
+  Qed.
+
+  Lemma Forall2Brs_length2 (P : _ -> _ -> Prop) : forall es vs,
+      Forall2Brs P es vs ->
+      Forall (fun vs => length vs = length es) vs.
+  Proof.
+    intros * Hf.
+    induction Hf; simpl in *.
+    - eapply Forall_impl; [|eauto]; intros; simpl in *; subst; auto.
+    - clear - H0 IHHf.
+      eapply Forall3_ignore1 in H0.
+      induction H0; inv IHHf; constructor; auto.
+      destruct H as (?&?); subst; simpl. f_equal; auto.
+  Qed.
+
+  Lemma Forall2Brs_map_1 (P : _ -> _ -> Prop) f : forall es vs,
+      Forall2Brs (fun e => P (f e)) es vs <->
+      Forall2Brs P (List.map (fun '(i, es) => (i, List.map f es)) es) vs.
+  Proof.
+    induction es; split; intros * Hf; inv Hf; simpl. 1,2:constructor; auto.
+    - econstructor; eauto.
+      rewrite Forall2_map_1; auto.
+      rewrite <-IHes; eauto.
+    - destruct a; inv H. econstructor; eauto.
+      erewrite <-Forall2_map_1; auto.
+      rewrite IHes; eauto.
+  Qed.
+
+  Lemma Forall2Brs_map_2 (P : _ -> _ -> Prop) f : forall es vs,
+      Forall2Brs (fun e vs => P e (List.map f vs)) es vs ->
+      Forall2Brs P es (List.map (List.map (fun '(i, v) => (i, f v))) vs).
+  Proof.
+    induction es; intros * Hf; inv Hf; simpl.
+    - constructor. rewrite Forall_map.
+      eapply Forall_impl; [|eauto]; intros; simpl in *; subst; auto.
+    - econstructor; eauto.
+      + eapply Forall2_map_2; eauto.
+      + rewrite <-concat_map, Forall3_map_1, Forall3_map_2, Forall3_map_3.
+        eapply Forall3_impl_In; [|eauto]; intros; simpl in *; subst; auto.
+  Qed.
+
+  (** ** properties of the [global] environment *)
 
   Lemma sem_block_cons {PSyn prefs} :
     forall (nd : @node PSyn prefs) nds enums bck H bk,
@@ -426,21 +567,29 @@ Module Type LSEMANTICS
       eapply Forall2_impl_In; [|eauto]; intros.
       apply H7; intro contra.
       apply H4; constructor. apply Exists_exists; eauto.
-    - econstructor; eauto;
-        (eapply Forall2_impl_In; [|eauto]; intros;
-         eapply Forall2_impl_In; [|eauto]; intros;
-         eapply H10; intro; apply H4;
-         constructor;
-         do 2 (apply Exists_exists; repeat esplit; eauto)).
     - econstructor; eauto.
-      eapply IHHsem.
-      2:(clear H3; do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst);
-         apply H12).
-      3:eapply Forall2_impl_In; [|eauto]; intros; apply H10.
-      1-3:(intro; apply H7; constructor; auto; right).
-      + left. eapply Exists_exists. exists (Some es0).
-        repeat esplit; eauto. eapply Exists_exists; eauto.
-      + right. eapply Exists_exists; eauto.
+      eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+      eapply Exists_exists in Hin as (?&Hin1&Hin2).
+      eapply Hs. contradict H4.
+      econstructor. do 2 (eapply Exists_exists; repeat esplit; eauto).
+    - econstructor; eauto.
+      + eapply IHHsem. contradict H4.
+        econstructor; eauto.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        eapply Hs. contradict H4.
+        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+    - econstructor; eauto.
+      + eapply IHHsem. contradict H7.
+        econstructor; eauto.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        eapply Hs. contradict H7.
+        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + eapply Forall2_impl_In; [|eauto]; intros ?? Hin1 Hin2 Hs.
+        eapply Hs. contradict H7.
+        econstructor; do 2 right. repeat esplit; eauto.
+        eapply Exists_exists; eauto.
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
@@ -527,21 +676,29 @@ Module Type LSEMANTICS
       eapply Forall2_impl_In; [|eauto]; intros.
       apply H7; intro contra.
       apply H4; constructor. apply Exists_exists; eauto.
-    - econstructor; eauto;
-        (eapply Forall2_impl_In; [|eauto]; intros;
-         eapply Forall2_impl_In; [|eauto]; intros;
-         eapply H10; intro; apply H4;
-         constructor;
-         do 2 (apply Exists_exists; repeat esplit; eauto)).
     - econstructor; eauto.
-      eapply IHHsem.
-      2:(clear H3; do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst);
-         apply H12).
-      3:eapply Forall2_impl_In; [|eauto]; intros; apply H10.
-      1-3:(intro; apply H7; constructor; auto; right).
-      + left. eapply Exists_exists. exists (Some es0).
-        repeat esplit; eauto. eapply Exists_exists; eauto.
-      + right. eapply Exists_exists; eauto.
+      eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+      eapply Exists_exists in Hin as (?&Hin1&Hin2).
+      eapply Hs. contradict H4.
+      econstructor. do 2 (eapply Exists_exists; repeat esplit; eauto).
+    - econstructor; eauto.
+      + eapply IHHsem. contradict H4.
+        econstructor; eauto.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        eapply Hs. contradict H4.
+        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+    - econstructor; eauto.
+      + eapply IHHsem. contradict H7.
+        econstructor; eauto.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        eapply Hs. contradict H7.
+        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + eapply Forall2_impl_In; [|eauto]; intros ?? Hin1 Hin2 Hs.
+        eapply Hs. contradict H7.
+        econstructor; do 2 right. repeat esplit; eauto.
+        eapply Exists_exists; eauto.
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
@@ -663,48 +820,6 @@ Module Type LSEMANTICS
     + inv H. inv H2. inv H4. econstructor. eapply Cofix; eauto.
   Qed.
 
-  Add Parametric Morphism : merge
-      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
-        as merge_EqSt.
-  Proof.
-    cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs zs zs' Ezs H.
-    destruct cs' as [[]], zs' as [[]];
-      inv H; inv Ecs; inv Ezs; simpl in *;
-        try discriminate.
-    - constructor.
-      + eapply Cofix; eauto. apply map_st_EqSt; auto.
-        intros * Eq. rewrite Eq. reflexivity.
-      + eapply Forall_EqSt; eauto.
-        intros ?? Heq ?. rewrite <-Heq; auto.
-    - inv H. inv H4. econstructor; eauto.
-      + eapply Cofix; eauto. apply map_st_EqSt; auto.
-        intros * Eq. rewrite Eq. reflexivity.
-      + rewrite <-Exs; eauto.
-  Qed.
-
-  Add Parametric Morphism : case
-      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
-        as case_EqSt.
-  Proof.
-    cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs zs zs' Ezs H.
-    destruct cs' as [[]], zs' as [[]];
-      inv H; inv Ecs; inv Ezs; simpl in *;
-        try discriminate.
-    - constructor.
-      + eapply Cofix; eauto. apply map_st_EqSt; auto.
-        intros * Eq. rewrite Eq. reflexivity.
-      + eapply Forall_EqSt; eauto.
-        intros ?? Heq ?. rewrite <-Heq; auto.
-    - inv H. inv H4. econstructor; eauto.
-      + eapply Cofix; eauto. apply map_st_EqSt; auto.
-        intros * Eq. rewrite Eq. reflexivity.
-      + eapply Forall_EqSt; eauto.
-        intros ?? Heq ?. rewrite <-Heq; auto.
-      + rewrite <-Exs; eauto.
-  Qed.
-
   Add Parametric Morphism op t : (lift1 op t)
       with signature @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as lift1_EqSt.
@@ -806,16 +921,25 @@ Module Type LSEMANTICS
       + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
       + rewrite <-EH; eauto.
-      + do 2 (eapply Forall2_impl_In; [|eauto]; intros); simpl in *.
-        eapply H9; eauto. reflexivity.
-      + eapply Forall2Transpose_EqSt; eauto. solve_proper.
+      + instantiate (1:=vs).
+        eapply Forall2Brs_impl_In; [|eapply H2]; intros ?? _ Hs.
+        eapply Hs; eauto. reflexivity.
+      + rewrite <-Exs; auto.
     - econstructor; eauto.
       + eapply IHSem; eauto. reflexivity.
-      + clear H2. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
-        eapply H10; eauto. reflexivity.
-      + eapply Forall2_impl_In; [|eauto]; intros.
-        eapply H8; eauto. reflexivity.
-      + eapply Forall2Transpose_EqSt; eauto. solve_proper.
+      + instantiate (1:=vs).
+        eapply Forall2Brs_impl_In; [|eapply H1]; intros ?? _ Hs.
+        eapply Hs; eauto. reflexivity.
+      + eapply Forall3_EqSt_Proper; eauto. solve_proper.
+    - econstructor; eauto.
+      + eapply IHSem; eauto. reflexivity.
+      + instantiate (1:=vs).
+        eapply Forall2Brs_impl_In; [|eapply H2]; intros ?? _ Hs.
+        eapply Hs; eauto. reflexivity.
+      + instantiate (1:=vd).
+        eapply Forall2_impl_In; [|apply H4]; intros ?? _ _ Hs.
+        eapply Hs; eauto. reflexivity.
+      + eapply Forall3_EqSt_Proper; eauto. solve_proper.
     - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H1].
         intros * ?? Hs; apply Hs; auto; reflexivity.
@@ -944,13 +1068,20 @@ Module Type LSEMANTICS
     - (* merge *)
       econstructor; eauto.
       eapply sem_var_refines...
-      do 2 (eapply Forall2_impl_In; [|eauto]; intros).
+      eapply Forall2Brs_impl_In; [|eauto]. intros ?? Hin Hs.
+      eapply Exists_exists in Hin as (?&Hin1&Hin2).
       do 2 (eapply Forall_forall in H; eauto).
-    - (* ite *)
+    - (* case *)
       econstructor; eauto.
-      + clear H11. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
-        do 2 (eapply Forall_forall in H; eauto; simpl in * ).
-      + eapply Forall2_impl_In; [|eauto]; intros.
+      eapply Forall2Brs_impl_In; [|eauto]. intros ?? Hin Hs.
+      eapply Exists_exists in Hin as (?&Hin1&Hin2).
+      do 2 (eapply Forall_forall in H; eauto).
+    - (* case *)
+      econstructor; eauto; simpl in *.
+      + eapply Forall2Brs_impl_In; [|eauto]. intros ?? Hin Hs.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        do 2 (eapply Forall_forall in H; eauto).
+      + eapply Forall2_impl_In; [|eapply H12]; intros.
         eapply Forall_forall in H0; eauto.
     - (* app *)
       econstructor; eauto; repeat rewrite_Forall_forall...
@@ -1012,8 +1143,6 @@ Module Type LSEMANTICS
       intros ?? Hv Hnin. eapply sem_var_refines; eauto.
   Qed.
 
-  (** ** Semantic refinement relation between nodes *)
-
   Section props.
     Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
@@ -1061,41 +1190,27 @@ Module Type LSEMANTICS
         + apply H4. apply nth_In; congruence.
         + eapply H5... congruence.
       - (* merge *)
-        eapply Forall2Transpose_length in H10; rewrite Forall_map in H10.
-        eapply Forall2_ignore2 in H9.
-        destruct es; try congruence.
-        inv H0. inv H6. inv H8. inv H9. destruct H8 as (?&Hin&Hsem).
-        eapply Forall_forall in H10; eauto. rewrite <-H10, <-H6.
-        unfold annots; rewrite flat_map_concat_map.
-        apply concat_length_eq.
-        rewrite Forall2_map_2, Forall2_swap_args.
-        eapply Forall2_impl_In; [|eauto]. intros.
-        rewrite length_annot_numstreams.
-        eapply Forall_forall in H3; [|eauto]. eapply Forall_forall in H2; [|eauto]. eauto.
+        eapply Forall2Brs_length1 in H9; eauto.
+        2:{ eapply Forall_impl_In; [|eapply H0]; intros (?&?) ??; simpl in *.
+            eapply Forall_impl_In; [|eauto]; intros; simpl in *. eapply H4; eauto.
+            do 2 (eapply Forall_forall in H6; eauto; intros). }
+        destruct es as [|(?&?)]; try congruence.
+        inv H9. inv H6. inv H8. apply Forall2_length in H10. congruence.
       - (* case *)
-        eapply Forall2Transpose_length in H14; rewrite Forall_map in H14.
-        eapply Forall2_ignore2 in H10.
-        destruct es as [|[|]]; try congruence.
-        + inv H0. inv H10. destruct H3 as (?&Hin&Hsem). simpl in *.
-          eapply Forall_forall in H14; eauto.
-          erewrite <-H14, <-H16; eauto with datatypes. simpl in *.
-          unfold annots; rewrite flat_map_concat_map.
-          apply concat_length_eq.
-          rewrite Forall2_map_2, Forall2_swap_args.
-          eapply Forall2_impl_In; [|eauto]. intros.
-          rewrite length_annot_numstreams.
-          eapply Forall_forall in H4; [|eauto]. eapply Forall_forall in H15; eauto.
-        + inv H12. inv H14. specialize (H4 eq_refl).
-          rewrite <-H5, <-H18.
-          unfold annots; rewrite flat_map_concat_map.
-          apply concat_length_eq.
-          rewrite Forall2_map_2, Forall2_swap_args.
-          clear - H4 H1 H13 H17.
-          revert y H4.
-          induction H13; intros; inv H4; inv H1; inv H17; constructor; auto.
-          rewrite length_annot_numstreams.
-          eapply H4; eauto. rewrite H6; auto.
-      - (* app (reset) *)
+        eapply Forall2Brs_length1 in H11; eauto.
+        2:{ eapply Forall_impl_In; [|eapply H0]; intros (?&?) ??; simpl in *.
+            eapply Forall_impl_In; [|eauto]; intros; simpl in *. eapply H5; eauto.
+            do 2 (eapply Forall_forall in H14; eauto; intros). }
+        destruct es as [|(?&?)]; try congruence.
+        inv H11. inv H14. inv H15. apply Forall3_length in H12 as (?&?). congruence.
+      - (* case *)
+        eapply Forall2Brs_length1 in H12; eauto.
+        2:{ eapply Forall_impl_In; [|eapply H0]; intros (?&?) ??; simpl in *.
+            eapply Forall_impl_In; [|eauto]; intros; simpl in *. eapply H5; eauto.
+            do 2 (eapply Forall_forall in H15; eauto; intros). }
+        destruct es as [|(?&?)]; try congruence.
+        inv H12. inv H15. inv H16. apply Forall3_length in H14 as (?&?). congruence.
+      - (* app  *)
         specialize (H13 0). inv H13.
         repeat rewrite_Forall_forall.
         rewrite H3 in H14; inv H14.
@@ -1246,15 +1361,24 @@ Module Type LSEMANTICS
     - (* merge *)
       econstructor...
       + eapply sem_var_restrict...
-      + do 2 (eapply Forall2_impl_In; [|eauto]; intros).
-        do 2 (eapply Forall_forall in H5; eauto).
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
         do 2 (eapply Forall_forall in H0; eauto).
+        do 2 (eapply Forall_forall in H5; eauto).
     - (* case *)
       econstructor...
-      + clear H15. do 2 (eapply Forall2_impl_In; [|eauto]; intros; subst).
-        do 2 (eapply Forall_forall in H0; eauto; simpl in * ).
-        eapply Forall_forall in H7; eauto.
-      + eapply Forall2_impl_In; [|eauto]; intros; subst.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        do 2 (eapply Forall_forall in H0; eauto).
+        do 2 (eapply Forall_forall in H7; eauto).
+    - (* case (default) *)
+      econstructor...
+      + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+        eapply Exists_exists in Hin as (?&Hin1&Hin2).
+        do 2 (eapply Forall_forall in H0; eauto).
+        do 2 (eapply Forall_forall in H7; eauto).
+      + simpl in *. specialize (H8 _ eq_refl).
+        eapply Forall2_impl_In; [|eauto]; intros.
         eapply Forall_forall in H1; eauto.
         eapply Forall_forall in H8; eauto.
     - (* app *)

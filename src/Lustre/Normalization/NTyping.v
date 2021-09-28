@@ -11,7 +11,7 @@ From Velus Require Import Lustre.Normalization.Normalization.
 
 Module Type NTYPING
        (Import Ids : IDS)
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import Syn : LSYNTAX Ids Op OpAux Cks)
@@ -68,37 +68,38 @@ Module Type NTYPING
     rewrite typeof_annot, H1; auto.
   Qed.
 
-  Corollary mmap2_mmap2_unnest_exp_typesof : forall G is_control tys es es' eqs' st st',
-      Forall (Forall (wl_exp G)) es ->
-      Forall (fun es => typesof es = tys) es ->
-      mmap2 (fun es => bind2 (mmap2 (unnest_exp G is_control) es) (fun es' eqs' => ret (concat es', concat eqs'))) es st = (es', eqs', st') ->
-      Forall (fun es0 => Forall2 (fun e ty => typeof e = [ty]) es0 tys) es'.
+  Corollary mmap2_mmap2_unnest_exp_typesof : forall G is_control tys (es : list (enumtag * list exp)) es' eqs' st st',
+      Forall (fun es => Forall (wl_exp G) (snd es)) es ->
+      Forall (fun es => typesof (snd es) = tys) es ->
+      mmap2 (fun '(i, es) => bind2 (mmap2 (unnest_exp G is_control) es)
+                                  (fun es' eqs' => ret (i, concat es', concat eqs'))) es st = (es', eqs', st') ->
+      Forall (fun es0 => Forall2 (fun e ty => typeof e = [ty]) (snd es0) tys) es'.
   Proof.
     intros * Hwl Htys Hmap.
     eapply mmap2_values in Hmap.
     induction Hmap; inv Hwl; inv Htys; constructor; auto.
-    destruct H as (?&?&?); repeat inv_bind.
+    destruct x, y, H as (?&?&?); repeat inv_bind.
     eapply mmap2_unnest_exp_typesof'' in H; eauto.
   Qed.
 
-  Corollary mmap2_mmap2_unnest_exp_typesof' : forall G is_control tys es es' eqs' st st',
-      Forall (LiftO True (Forall (wl_exp G))) es ->
-      Forall (LiftO True (fun es => typesof es = tys)) es ->
-      mmap2
-        (or_default_with
-           (ret (None, []))
-           (fun es => bind2
-                     (bind2 (mmap2 (unnest_exp G is_control) es) (fun es0 eqs => ret (concat es0, concat eqs)))
-                     (fun es' eqs'  => ret (Some es', eqs')))) es st = (es', eqs', st') ->
-      Forall (LiftO True (fun es0 => Forall2 (fun e ty => typeof e = [ty]) es0 tys)) es'.
-  Proof.
-    intros * Hwl Htys Hmap.
-    eapply mmap2_values in Hmap.
-    induction Hmap; inv Hwl; inv Htys; constructor; auto.
-    destruct H as (?&?&?); repeat inv_bind.
-    destruct x; simpl in *; repeat inv_bind; simpl; auto.
-    eapply mmap2_unnest_exp_typesof'' in H; eauto.
-  Qed.
+  (* Corollary mmap2_mmap2_unnest_exp_typesof' : forall G is_control tys es es' eqs' st st', *)
+  (*     Forall (LiftO True (Forall (wl_exp G))) es -> *)
+  (*     Forall (LiftO True (fun es => typesof es = tys)) es -> *)
+  (*     mmap2 *)
+  (*       (or_default_with *)
+  (*          (ret (None, [])) *)
+  (*          (fun es => bind2 *)
+  (*                    (bind2 (mmap2 (unnest_exp G is_control) es) (fun es0 eqs => ret (concat es0, concat eqs))) *)
+  (*                    (fun es' eqs'  => ret (Some es', eqs')))) es st = (es', eqs', st') -> *)
+  (*     Forall (LiftO True (fun es0 => Forall2 (fun e ty => typeof e = [ty]) es0 tys)) es'. *)
+  (* Proof. *)
+  (*   intros * Hwl Htys Hmap. *)
+  (*   eapply mmap2_values in Hmap. *)
+  (*   induction Hmap; inv Hwl; inv Htys; constructor; auto. *)
+  (*   destruct H as (?&?&?); repeat inv_bind. *)
+  (*   destruct x; simpl in *; repeat inv_bind; simpl; auto. *)
+  (*   eapply mmap2_unnest_exp_typesof'' in H; eauto. *)
+  (* Qed. *)
 
   Corollary mmap2_unnest_exp_typesof :
     forall G is_control es es' eqs' st st',
@@ -416,75 +417,107 @@ Module Type NTYPING
       rewrite app_nil_r; auto.
     Qed.
 
+    Import Permutation.
+
     Fact unnest_merge_wt_exp : forall vars ckid ty n es tys ck,
         In (ty, n) G2.(enums) ->
         In (ckid, Op.Tenum (ty, n)) vars ->
-        length es = n ->
+        Permutation (map fst es) (seq 0 n) ->
         es <> [] ->
         wt_nclock G2.(enums) vars ck ->
-        Forall (Forall (wt_exp G2 vars)) es ->
-        Forall (fun es => Forall2 (fun e ty => typeof e = [ty]) es tys) es ->
+        Forall (fun es => Forall (wt_exp G2 vars) (snd es)) es ->
+        Forall (fun es => Forall2 (fun e ty => typeof e = [ty]) (snd es) tys) es ->
         Forall (wt_exp G2 vars) (unnest_merge (ckid, Op.Tenum (ty, n)) es tys ck).
     Proof with eauto.
-      intros *; revert es. induction tys; intros * InE InV Len Hnnil Hwtck Hwt Htys; simpl; constructor.
+      intros *; revert es. induction tys; intros * InE InV Perm Hnnil Hwtck Hwt Htys; simpl; constructor.
       - constructor; auto; try rewrite Forall_map.
-        + now rewrite map_length.
+        + erewrite map_map, map_ext; eauto. intros (?&?); auto.
         + contradict Hnnil. apply map_eq_nil in Hnnil; auto.
         + clear - Htys Hwt.
-          rewrite Forall_forall in *; intros ? Hin.
-          specialize (Hwt _ Hin). specialize (Htys _ Hin). inv Htys; inv Hwt; simpl.
+          rewrite Forall_forall in *; intros (?&?) Hin.
+          specialize (Hwt _ Hin). specialize (Htys _ Hin). simpl in *. inv Htys; inv Hwt; simpl.
           constructor; auto.
         + clear - Htys.
-          eapply Forall_impl; [|eauto]; intros.
-          inv H; simpl. now rewrite app_nil_r.
+          eapply Forall_impl; [|eauto]; intros (?&?) ?.
+          inv H; simpl in *; subst; simpl. now rewrite app_nil_r.
       - eapply IHtys; eauto; try rewrite Forall_map.
-        + now rewrite map_length.
+        + erewrite map_map, map_ext; eauto. intros (?&?); auto.
         + contradict Hnnil. apply map_eq_nil in Hnnil; auto.
-        + clear - Hwt. eapply Forall_impl; [|eauto]; intros.
-          destruct a; simpl; inv H; auto.
-        + clear - Htys. eapply Forall_impl; [|eauto]; simpl in *; intros.
-          destruct a0; simpl; inv H; auto.
+        + clear - Hwt. eapply Forall_impl; [|eauto]; intros (?&?) ?; simpl in *.
+          inv H; simpl; auto.
+        + clear - Htys. eapply Forall_impl; [|eauto]; intros (?&?) ?; simpl in *.
+          inv H; auto.
     Qed.
 
-    Fact unnest_case_wt_exp : forall vars e ty n es d tys ck,
+    Fact unnest_case_Total_wt_exp : forall vars e ty n es tys ck,
         wt_exp G2 vars e ->
         typeof e = [Op.Tenum (ty, n)] ->
         In (ty, n) G2.(enums) ->
-        length es = n ->
+        Permutation (map fst es) (seq 0 n) ->
         es <> [] ->
         wt_nclock G2.(enums) vars ck ->
-        Forall (LiftO True (Forall (wt_exp G2 vars))) es ->
-        Forall (LiftO True (fun es => Forall2 (fun e ty => typeof e = [ty]) es tys)) es ->
-        Forall (wt_exp G2 vars) d ->
-        Forall2 (fun e ty => typeof e = [ty]) d tys ->
-        Forall (wt_exp G2 vars) (unnest_case e es d tys ck).
+        Forall (fun es => Forall (wt_exp G2 vars) (snd es)) es ->
+        Forall (fun es => Forall2 (fun e ty => typeof e = [ty]) (snd es) tys) es ->
+        Forall (wt_exp G2 vars) (unnest_case e es None tys ck).
     Proof with eauto.
-      intros *; revert es d.
-      induction tys; intros * Wt1 Ty1 InE Len Hnnil Hwtck Wt2 Ty2 Wt3 Ty3; simpl; constructor.
+      intros *; revert es. induction tys; intros * WtE TypE InE Perm Hnnil Hwtck Hwt Htys; simpl; constructor.
       - econstructor; eauto; try rewrite Forall_map.
-        + now rewrite map_length.
+        + erewrite map_map, map_ext; eauto. intros (?&?); auto.
         + contradict Hnnil. apply map_eq_nil in Hnnil; auto.
-        + clear - Wt2 Ty2. intros ? Hin.
-          eapply in_map_iff in Hin as (?&Hopt&Hin).
-          eapply Forall_forall in Wt2; eauto. eapply Forall_forall in Ty2; eauto.
-          eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
-          inv Ty2; inv Wt2; simpl; auto.
-        + clear - Ty2. intros ? Hin.
-          eapply in_map_iff in Hin as (?&Hopt&Hin).
-          eapply Forall_forall in Ty2; eauto.
-          eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
-          inv Ty2; simpl. rewrite H2; auto.
-        + inv Ty3; inv Wt3; simpl; auto.
-        + inv Ty3; simpl. rewrite app_nil_r; auto.
+        + clear - Htys Hwt.
+          rewrite Forall_forall in *; intros (?&?) Hin.
+          specialize (Hwt _ Hin). specialize (Htys _ Hin). simpl in *. inv Htys; inv Hwt; simpl.
+          constructor; auto.
+        + clear - Htys.
+          eapply Forall_impl; [|eauto]; intros (?&?) ?.
+          inv H; simpl in *; subst; simpl. now rewrite app_nil_r.
       - eapply IHtys; eauto; try rewrite Forall_map.
-        + now rewrite map_length.
+        + erewrite map_map, map_ext; eauto. intros (?&?); auto.
         + contradict Hnnil. apply map_eq_nil in Hnnil; auto.
-        + clear - Wt2. eapply Forall_impl; [|eauto]; intros.
-          destruct a; simpl; inv H; simpl; auto.
-        + clear - Ty2. eapply Forall_impl; [|eauto]; simpl in *; intros.
-          destruct a0; simpl; inv H; auto.
-        + inv Wt3; simpl; auto.
-        + inv Ty3; simpl; auto.
+        + clear - Hwt. eapply Forall_impl; [|eauto]; intros (?&?) ?; simpl in *.
+          inv H; simpl; auto.
+        + clear - Htys. eapply Forall_impl; [|eauto]; intros (?&?) ?; simpl in *.
+          inv H; auto.
+    Qed.
+
+    Fact unnest_case_Default_wt_exp : forall vars e ty n es d tys ck,
+        wt_exp G2 vars e ->
+        typeof e = [Op.Tenum (ty, n)] ->
+        In (ty, n) G2.(enums) ->
+        incl (map fst es) (seq 0 n) ->
+        NoDupMembers es ->
+        es <> [] ->
+        wt_nclock G2.(enums) vars ck ->
+        Forall (fun es => Forall (wt_exp G2 vars) (snd es)) es ->
+        Forall (fun es => Forall2 (fun e ty => typeof e = [ty]) (snd es) tys) es ->
+        Forall (wt_exp G2 vars) d ->
+        Forall2 (fun d ty => typeof d = [ty]) d tys ->
+        Forall (wt_exp G2 vars) (unnest_case e es (Some d) tys ck).
+    Proof with eauto.
+      intros *; revert es d. induction tys; intros * WtE TypE InE Incl NoDup Hnnil Hwtck Hwt Htys Hwd Htyd; simpl; constructor.
+      - eapply wt_EcaseDefault; eauto; try rewrite Forall_map.
+        + erewrite map_map, map_ext; eauto. intros (?&?); auto.
+        + erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto. intros (?&?); auto.
+        + contradict Hnnil. apply map_eq_nil in Hnnil; auto.
+        + clear - Htys Hwt.
+          rewrite Forall_forall in *; intros (?&?) Hin.
+          specialize (Hwt _ Hin). specialize (Htys _ Hin). simpl in *. inv Htys; inv Hwt; simpl.
+          constructor; auto.
+        + clear - Htys.
+          eapply Forall_impl; [|eauto]; intros (?&?) ?.
+          inv H; simpl in *; subst; simpl. now rewrite app_nil_r.
+        + inv Htyd; inv Hwd; auto.
+        + inv Htyd; simpl. now rewrite app_nil_r.
+      - eapply IHtys; eauto; try rewrite Forall_map.
+        + erewrite map_map, map_ext; eauto. intros (?&?); auto.
+        + erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto. intros (?&?); auto.
+        + contradict Hnnil. apply map_eq_nil in Hnnil; auto.
+        + clear - Hwt. eapply Forall_impl; [|eauto]; intros (?&?) ?; simpl in *.
+          inv H; simpl; auto.
+        + clear - Htys. eapply Forall_impl; [|eauto]; intros (?&?) ?; simpl in *.
+          inv H; auto.
+        + inv Htyd; inv Hwd; auto.
+        + inv Htyd; auto.
     Qed.
 
     Lemma unnest_noops_exps_wt : forall vars cks es es' eqs' st st' ,
@@ -553,29 +586,26 @@ Module Type NTYPING
     Qed.
 
     Fact mmap2_wt' {A B} :
-      forall vars (k : A -> Fresh (option (list exp) * list equation) B) a es' eqs' st st',
+      forall vars (k : A -> Fresh (enumtag * list exp * list equation) B) a es' eqs' st st',
         mmap2 k a st = (es', eqs', st') ->
         (forall st st' a es eqs', k a st = (es, eqs', st') -> st_follows st st') ->
-        Forall (fun a => forall es' eqs' st0 st0',
-                    k a st0 = (es', eqs', st0') ->
+        Forall (fun a => forall n es' eqs' st0 st0',
+                    k a st0 = (n, es', eqs', st0') ->
                     st_follows st st0 ->
                     st_follows st0' st' ->
-                    LiftO True (Forall (wt_exp G2 vars)) es' /\
+                    Forall (wt_exp G2 vars) es' /\
                     Forall (wt_equation G2 vars) eqs') a ->
-        Forall (LiftO True (Forall (wt_exp G2 vars))) es' /\
+        Forall (wt_exp G2 vars) (concat (map snd es')) /\
         Forall (wt_equation G2 vars) (concat eqs').
-    Proof.
+    Proof with eauto.
       intros vars k a.
       induction a; intros es' a2s st st' Hmap Hfollows Hforall;
-        repeat inv_bind.
-      - simpl; auto.
-      - simpl. repeat rewrite Forall_app.
-        inv Hforall. assert (Hk:=H). eapply H3 in H as [Hwt1 Hwt1'].
-        2:reflexivity.
-        2:eapply mmap2_st_follows; eauto; solve_forall.
-        eapply IHa in H0 as [Hwt2 Hwt2']; eauto.
-        solve_forall. eapply H1; eauto.
-        etransitivity; eauto.
+        repeat inv_bind; simpl; auto.
+      inv Hforall.
+      assert (H':=H). destruct x. eapply H3 in H' as [Hwc1 Hwc1']... 2,3:repeat solve_st_follows.
+      eapply IHa in H0 as [Hwc2 Hwc2']...
+      2:{ solve_forall. eapply H2 in H4... etransitivity... }
+      repeat rewrite Forall_app. repeat split; eauto.
     Qed.
 
     Import Permutation.
@@ -670,6 +700,15 @@ Module Type NTYPING
 
     Hint Resolve iface_eq_wt_enum.
 
+    Fact unnest_controls_fst : forall (es : list (enumtag * list exp)) es' eqs' st st',
+        mmap2 (fun '(i, es) => bind2 (mmap2 (unnest_exp G1 true) es)
+                                  (fun es' eqs' => ret (i, concat es', concat eqs'))) es st = (es', eqs', st') ->
+        map fst es' = map fst es.
+    Proof.
+      induction es as [|(?&?)]; intros * Hmmap;
+        repeat inv_bind; simpl; f_equal; eauto.
+    Qed.
+
     Lemma unnest_exp_wt : forall vars e is_control es' eqs' st st',
         wt_exp G1 (vars++st_tys st) e ->
         unnest_exp G1 is_control e st = (es', eqs', st') ->
@@ -684,7 +723,7 @@ Module Type NTYPING
           [split|]; try solve_forall; repeat solve_incl
         end.
 
-      induction e using exp_ind2; intros * Hwt Hnorm; simpl in *. 11:inv Hwt.
+      induction e using exp_ind2; intros * Hwt Hnorm; simpl in *. 4-11:inv Hwt.
       - (* const *)
         repeat inv_bind...
       - (* enum *)
@@ -693,7 +732,7 @@ Module Type NTYPING
         repeat inv_bind.
         repeat constructor...
       - (* unop *)
-        inv Hwt. repeat inv_bind.
+        repeat inv_bind.
         assert (length x = numstreams e) as Hlen by eauto.
         rewrite <- length_typeof_numstreams, H3 in Hlen; simpl in Hlen.
         singleton_length.
@@ -704,7 +743,7 @@ Module Type NTYPING
           rewrite app_nil_r, H3 in Hnorm...
         + repeat solve_incl.
       - (* binop *)
-        inv Hwt. repeat inv_bind.
+        repeat inv_bind.
         assert (length x = numstreams e1) as Hlen1 by eauto.
         rewrite <- length_typeof_numstreams, H5 in Hlen1; simpl in Hlen1.
         assert (length x2 = numstreams e2) as Hlen2 by eauto.
@@ -723,7 +762,6 @@ Module Type NTYPING
           solve_forall. repeat solve_incl.
       - (* fby *)
         repeat inv_bind.
-        inv Hwt.
         assert (Hnorm1:=H1). eapply mmap2_wt with (vars0:=vars++st_tys x1) in H1 as [Hwt1 Hwt1']...
         assert (Hnorm2:=H2). eapply mmap2_wt with (vars0:=vars++st_tys x4) in H2 as [Hwt2 Hwt2']...
         2,3:solve_mmap2.
@@ -758,7 +796,6 @@ Module Type NTYPING
           apply in_or_app, or_intror, H3. unfold idty; simpl_In. exists (i, (ty, ck)); auto.
       - (* arrow *)
         repeat inv_bind.
-        inv Hwt.
         assert (Hnorm1:=H1). eapply mmap2_wt with (vars0:=vars++st_tys x1) in H1 as [Hwt1 Hwt1']...
         assert (Hnorm2:=H2). eapply mmap2_wt with (vars0:=vars++st_tys x4) in H2 as [Hwt2 Hwt2']...
         2,3:solve_mmap2.
@@ -792,7 +829,7 @@ Module Type NTYPING
           constructor; auto. eapply idents_for_anns_incl_ty in H3.
           apply in_or_app, or_intror, H3. unfold idty; simpl_In. exists (i, (ty, ck)); auto.
       - (* when *)
-        inv Hwt. destruct tn. repeat inv_bind.
+        destruct tn. repeat inv_bind.
         assert (Hnorm:=H0). eapply mmap2_wt with (vars0:=vars++st_tys st') in H0 as [Hwt1 Hwt1']; eauto.
         2:solve_mmap2.
         split; eauto.
@@ -802,9 +839,9 @@ Module Type NTYPING
         + repeat solve_incl.
         + eapply mmap2_unnest_exp_typesof'' in Hnorm; eauto.
       - (* merge *)
-        inv Hwt. destruct tn. repeat inv_bind.
-        assert (Hnorm1:=H0). eapply mmap2_wt with (vars0:=vars++st_tys x2) in H0 as [Hwt1 Hwt1']; eauto.
-        2:(intros; repeat solve_st_follows).
+        destruct tn. repeat inv_bind.
+        assert (Hnorm1:=H0). eapply mmap2_wt' with (vars0:=vars++st_tys x2) in H0 as [Hwt1 Hwt1']; eauto.
+        2:(intros; destruct a; repeat solve_st_follows).
         2:{ solve_forall. repeat inv_bind. eapply mmap2_wt in H7; eauto.
             solve_mmap2. }
         remember (unnest_merge _ _ _ _) as merges.
@@ -812,11 +849,12 @@ Module Type NTYPING
         { subst. apply unnest_merge_wt_exp; auto.
           - destruct Hiface as (Heq&_); rewrite <-Heq; auto.
           - assert (incl (vars ++ st_tys st) (vars ++ st_tys x2)) by repeat solve_incl; eauto.
-          - apply mmap2_length_1 in Hnorm1...
+          - erewrite unnest_controls_fst; eauto.
           - apply mmap2_length_1 in Hnorm1.
-            intro contra; subst. destruct es; simpl in *; congruence.
+            intro contra; subst. destruct es; simpl in *; try congruence.
+            exfalso; eauto.
           - repeat solve_incl.
-          - eapply Forall_concat; eauto.
+          - eapply Forall_concat in Hwt1; rewrite Forall_map in Hwt1; eauto.
           - eapply mmap2_mmap2_unnest_exp_typesof in Hnorm1...
             solve_forall.
         }
@@ -833,70 +871,110 @@ Module Type NTYPING
           eapply Forall2_ignore1' with (xs:=x3) in Hwt'.
           2:{ subst. apply idents_for_anns_length in H0. rewrite map_length in H0.
               rewrite unnest_merge_length... }
-          apply mk_equations_Forall; solve_forall.
+          apply mk_equations_Forall; solve_forall; destruct a; simpl in *.
           repeat constructor... 1:repeat solve_incl.
-          destruct a; simpl in *.
-          rewrite typeof_annot, H5, app_nil_r; simpl.
+          rewrite typeof_annot, H7, app_nil_r; simpl.
           constructor; auto.
           assert (In (i0, t) (idty x3)).
-          { unfold idty. rewrite in_map_iff. exists (i0, (t, n)); eauto. }
+          { unfold idty. rewrite in_map_iff. exists (i0, (t, n0)); eauto. }
           eapply idents_for_anns_incl_ty in H0.
           eapply in_or_app, or_intror...
-      - (* case *)
-        inv Hwt. destruct tn. repeat inv_bind.
-        assert (st_follows x1 x4) as Hfollows.
-        { repeat solve_st_follows. destruct a; repeat solve_st_follows. }
-        assert (Hnorm0:=H1). eapply IHe in H1 as [Hwt0 Hwt0']; eauto.
-        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars0:=vars++st_tys x4) in H2 as [Hwt1 Hwt1']; eauto.
+      - (* case (total) *)
+        destruct tn. repeat inv_bind.
+        assert (Hnorm0:=H1). eapply IHe in H1 as (Hwt1&Hwt1'); eauto.
+        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars0:=vars++st_tys x7) in H2 as (Hwt2&Hwt2'); eauto.
         2:(intros; destruct a; repeat solve_st_follows).
-        2:{ solve_forall. destruct a; repeat inv_bind; simpl; auto.
-            eapply mmap2_wt in H8; eauto. solve_forall. solve_mmap2.
-            eapply Forall_forall in H10; eauto. repeat solve_incl. }
-        assert (Hnorm2:=H3). eapply mmap2_wt with (vars0:=vars++st_tys x7) in H3 as [Hwt2 Hwt2']; eauto.
-        2:solve_mmap2.
+        2:{ solve_forall. repeat inv_bind. eapply mmap2_wt in H3; eauto.
+            solve_mmap2. }
         remember (unnest_case _ _ _ _ _) as cases.
         assert (Forall (wt_exp G2 (vars++st_tys x7)) cases) as Hwt'.
-        { subst.
-          assert (Hnorm0':=Hnorm0). eapply unnest_exp_length in Hnorm0'...
+        { assert (Hnorm0':=Hnorm0). eapply unnest_exp_length in Hnorm0'...
           rewrite <-length_typeof_numstreams, H6 in Hnorm0'; simpl in Hnorm0'.
-          singleton_length. apply Forall_singl in Hwt0.
-          eapply unnest_case_wt_exp; eauto.
+          singleton_length. apply Forall_singl in Hwt1.
+          subst. eapply unnest_case_Total_wt_exp; auto.
           - repeat solve_incl.
-          - eapply unnest_exp_typeof in Hnorm0; eauto; simpl in Hnorm0; rewrite app_nil_r in Hnorm0.
-            eapply mmap2_length_1 in Hnorm1...
-            rewrite Hnorm0, H6, Hnorm1; eauto.
-          - destruct Hiface as (Heq&_); rewrite <-Heq.
-            eapply mmap2_length_1 in Hnorm1... congruence.
-          - eapply mmap2_length_1 in Hnorm1.
-            intro contra; subst. destruct es; simpl in *; congruence.
+          - eapply unnest_exp_typeof in Hnorm0; eauto; simpl in *; rewrite app_nil_r in *.
+            rewrite Hnorm0; eauto.
+          - destruct Hiface as (Heq&_); rewrite <-Heq; auto.
+          - erewrite unnest_controls_fst; eauto.
+          - apply mmap2_length_1 in Hnorm1.
+            intro contra; subst. destruct es; simpl in *; try congruence.
+            exfalso; eauto.
           - repeat solve_incl.
-          - solve_forall. destruct a; simpl in *; auto.
-            solve_forall; repeat solve_incl.
-          - eapply mmap2_mmap2_unnest_exp_typesof' in Hnorm1...
-            + eapply Forall_forall. intros [|] Hin; simpl; eauto.
-            + eapply Forall_forall. intros [|] Hin; simpl; eauto.
-          - eapply mmap2_unnest_exp_typesof'' in Hnorm2...
+          - eapply Forall_concat in Hwt2; rewrite Forall_map in Hwt2; eauto.
+          - eapply mmap2_mmap2_unnest_exp_typesof in Hnorm1...
+            solve_forall.
         }
-        destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split.
-        1-4,7-9:solve_forall; repeat solve_incl.
+        destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split; auto.
+        1,4,5:solve_forall; repeat solve_incl.
         + specialize (idents_for_anns_incl_ty _ _ _ _ H1) as Hincl.
           apply idents_for_anns_wt with (vars:=vars) in H1...
           rewrite Forall_forall; intros.
           repeat simpl_In. inv H2... repeat solve_incl.
         + remember (unnest_case _ _ _ _ _) as cases.
-          assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x5) cases) as Htys.
+          assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x4) cases) as Htys.
           { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
             subst; eapply unnest_case_annot; eauto. } rewrite Forall2_map_1 in Htys.
-          eapply Forall2_ignore1' with (xs:=x5) in Hwt'.
+          eapply Forall2_ignore1' with (xs:=x4) in Hwt'.
           2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
               rewrite unnest_case_length... }
-          apply mk_equations_Forall; solve_forall.
+          apply mk_equations_Forall; solve_forall; destruct a; simpl in *.
           repeat constructor... 1:repeat solve_incl.
-          destruct a; simpl in *.
           rewrite typeof_annot, H4, app_nil_r; simpl.
           constructor; auto.
-          assert (In (i0, t) (idty x5)).
-          { unfold idty. rewrite in_map_iff. exists (i0, (t, n)); eauto. }
+          assert (In (i0, t) (idty x4)).
+          { unfold idty. rewrite in_map_iff. exists (i0, (t, n0)); eauto. }
+          eapply idents_for_anns_incl_ty in H1.
+          eapply in_or_app, or_intror...
+      - (* case (default) *)
+        destruct tn. repeat inv_bind.
+        assert (Hnorm0:=H1). eapply IHe in H1 as (Hwt1&Hwt1')...
+        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars0:=vars++st_tys x7) in H2 as (Hwt2&Hwt2')...
+        2:(intros; destruct a; repeat solve_st_follows).
+        2:{ solve_forall. repeat inv_bind. eapply mmap2_wt in H11...
+            solve_mmap2. }
+        assert (Hnorm2:=H3). eapply mmap2_wt with (vars0:=vars++st_tys x7) in H3 as (Hwt3&Hwt3')...
+        2:solve_mmap2.
+        remember (unnest_case _ _ _ _ _) as cases.
+        assert (Forall (wt_exp G2 (vars++st_tys x7)) cases) as Hwt'.
+        { assert (Hnorm0':=Hnorm0). eapply unnest_exp_length in Hnorm0'...
+          rewrite <-length_typeof_numstreams, H6 in Hnorm0'; simpl in Hnorm0'.
+          singleton_length. apply Forall_singl in Hwt1.
+          subst. eapply unnest_case_Default_wt_exp; auto.
+          - repeat solve_incl.
+          - eapply unnest_exp_typeof in Hnorm0; eauto; simpl in *; rewrite app_nil_r in *.
+            rewrite Hnorm0; eauto.
+          - destruct Hiface as (Heq&_); rewrite <-Heq; auto.
+          - erewrite unnest_controls_fst; eauto.
+          - erewrite fst_NoDupMembers, unnest_controls_fst, <-fst_NoDupMembers; eauto.
+          - apply mmap2_length_1 in Hnorm1.
+            intro contra; subst. destruct es; simpl in *; try congruence.
+            exfalso; eauto.
+          - repeat solve_incl.
+          - eapply Forall_concat in Hwt2; rewrite Forall_map in Hwt2; eauto.
+          - eapply mmap2_mmap2_unnest_exp_typesof in Hnorm1...
+            solve_forall.
+          - eapply mmap2_unnest_exp_typesof'' in Hnorm2; eauto.
+        }
+        destruct is_control; repeat inv_bind; repeat rewrite Forall_app; repeat split; auto.
+        1,4-6:solve_forall; repeat solve_incl.
+        + specialize (idents_for_anns_incl_ty _ _ _ _ H1) as Hincl.
+          apply idents_for_anns_wt with (vars:=vars) in H1...
+          rewrite Forall_forall; intros.
+          repeat simpl_In. inv H2... repeat solve_incl.
+        + remember (unnest_case _ _ _ _ _) as cases.
+          assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x6) cases) as Htys.
+          { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
+            subst; eapply unnest_case_annot; eauto. } rewrite Forall2_map_1 in Htys.
+          eapply Forall2_ignore1' with (xs:=x6) in Hwt'.
+          2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
+              rewrite unnest_case_length... }
+          apply mk_equations_Forall; solve_forall; destruct a; simpl in *.
+          repeat constructor... 1:repeat solve_incl.
+          rewrite typeof_annot, H4, app_nil_r; simpl.
+          constructor; auto.
+          assert (In (i0, t) (idty x6)).
+          { unfold idty. rewrite in_map_iff. exists (i0, (t, n0)); eauto. }
           eapply idents_for_anns_incl_ty in H1.
           eapply in_or_app, or_intror...
       - (* app *)
@@ -1340,61 +1418,60 @@ Module Type NTYPING
         unnest_exp G1 is_control e st = (es', eqs', st') ->
         Forall (wt_clock G2.(enums) (vars++st_tys st')) (st_clocks st').
     Proof with eauto.
-      induction e using exp_ind2; intros is_control es' eqs' st st' Hwt Hclocks Hnorm; repeat inv_bind.
-      11:inv Hwt.
+      induction e using exp_ind2; intros is_control es' eqs' st st' Hwt Hclocks Hnorm;
+        repeat inv_bind; inv Hwt; eauto.
       Ltac solve_mmap2' :=
         solve_forall;
         match goal with
         | Hnorm : unnest_exp _ _ _ _ = _, Hf : forall (_ : bool), _ |- Forall _ ?l =>
           eapply Hf in Hnorm; eauto
         end; repeat solve_incl.
-      - (* const *) inv Hwt; eauto.
-      - (* enum *) inv Hwt; eauto.
-      - (* var *) inv Hwt; eauto.
-      - (* unop *) inv Hwt; eauto.
       - (* binop *)
-        inv Hwt; eapply IHe2 in H0...
+        eapply IHe2 in H0...
         repeat solve_incl.
       - (* fby *)
-        inv Hwt.
         assert (st_follows x4 st') as Hfollows by repeat solve_st_follows.
         assert (Hnorm:=H1). eapply mmap2_wt_clock in H1... 2:solve_mmap2'.
         assert (Hnorm1:=H2). eapply mmap2_wt_clock in H2... 2:solve_mmap2'.
         eapply idents_for_anns_wt_clock in H3... 2:solve_forall; repeat solve_incl.
         solve_forall; repeat solve_incl.
       - (* arrow *)
-        inv Hwt.
         assert (st_follows x4 st') as Hfollows by repeat solve_st_follows.
         assert (Hnorm:=H1). eapply mmap2_wt_clock in H1... 2:solve_mmap2'.
         assert (Hnorm1:=H2). eapply mmap2_wt_clock in H2... 2:solve_mmap2'.
         eapply idents_for_anns_wt_clock in H3... 2:solve_forall; repeat solve_incl.
         solve_forall; repeat solve_incl.
       - (* when *)
-        inv Hwt; repeat inv_bind.
+        repeat inv_bind.
         eapply mmap2_wt_clock in H0...
         rewrite Forall_forall in *; intros...
         eapply H in H3... eapply H7 in H1... repeat solve_incl.
       - (* merge *)
-        inv Hwt; repeat inv_bind.
-        assert (Hnorm1:=H0). eapply mmap2_wt_clock in H0... 2:(intros; repeat solve_st_follows).
+        repeat inv_bind.
+        assert (Hnorm1:=H0). eapply mmap2_wt_clock in H0... 2:(intros; destruct a; repeat solve_st_follows).
         2:{ solve_forall; repeat inv_bind. eapply mmap2_wt_clock in H8... solve_mmap2'. }
         destruct is_control; repeat inv_bind...
         eapply idents_for_anns_wt_clock in H1...
         2:{ rewrite map_map; simpl. solve_forall; repeat solve_incl. }
         solve_forall; repeat solve_incl.
-      - (* case *)
-        inv Hwt; repeat inv_bind.
+      - (* case (total) *)
+        repeat inv_bind.
         assert (Hnorm0:=H1). eapply IHe in H1...
         assert (Hnorm1:=H2). eapply mmap2_wt_clock in H2... 2:(intros; destruct a; repeat solve_st_follows).
-        2:{ solve_forall; destruct a; repeat inv_bind; auto.
-            eapply mmap2_wt_clock in H8... solve_mmap2'.
-            eapply Forall_forall in H10... repeat solve_incl. }
-        assert (Hnorm2:=H3). eapply mmap2_wt_clock in H3...
-        2:{ solve_mmap2'. destruct a0; repeat solve_st_follows. }
+        2:{ solve_forall; repeat inv_bind. eapply mmap2_wt_clock in H11... solve_mmap2'. }
+        destruct is_control; repeat inv_bind...
+        eapply idents_for_anns_wt_clock in H3...
+        2:{ rewrite map_map; simpl. solve_forall; repeat solve_incl. }
+        solve_forall; repeat solve_incl.
+      - (* case (default) *)
+        repeat inv_bind.
+        assert (Hnorm0:=H1). eapply IHe in H1...
+        assert (Hnorm1:=H2). eapply mmap2_wt_clock in H2... 2:(intros; destruct a; repeat solve_st_follows).
+        2:{ solve_forall; repeat inv_bind. eapply mmap2_wt_clock in H13... solve_mmap2'. }
+        assert (Hnorm2:=H3). eapply mmap2_wt_clock in H3... 2:solve_mmap2'.
         destruct is_control; repeat inv_bind...
         eapply idents_for_anns_wt_clock in H4...
-        2:{ rewrite map_map; simpl. solve_forall; repeat solve_incl.
-            destruct a; repeat solve_st_follows. }
+        2:{ rewrite map_map; simpl. solve_forall; repeat solve_incl. }
         solve_forall; repeat solve_incl.
       - (* app *)
         assert (st_follows x4 x7) as Hfollows by repeat solve_st_follows.
@@ -1708,8 +1785,8 @@ Module Type NTYPING
       - (* when *)
         eapply mmap2_wt_enum in H0; eauto. solve_mmap2'.
       - (* merge *)
-        assert (Map:=H0). eapply mmap2_wt_enum in H0; eauto.
-        2:intros; repeat solve_st_follows.
+        assert (Hnorm1:=H0). eapply mmap2_wt_enum in H0; eauto.
+        2:(intros; destruct a; repeat solve_st_follows).
         2:{ solve_forall. repeat inv_bind. eapply mmap2_wt_enum in H8; eauto.
             solve_mmap2'. }
         destruct is_control; repeat inv_bind; eauto.
@@ -1717,20 +1794,29 @@ Module Type NTYPING
         rewrite map_map, map_id; simpl.
         inv H8; simpl in *; subst; try congruence.
         inv H7. eapply wt_exps_wt_enum; eauto. solve_forall; repeat solve_incl.
-      - (* case *)
-        assert (Hnorm:=H1). eapply IHe in Hnorm; eauto.
-        assert (Map:=H2). eapply mmap2_wt_enum in H2; eauto.
-        2:intros; destruct a; repeat solve_st_follows.
-        2:{ solve_forall; destruct a; repeat inv_bind; auto.
-            eapply mmap2_wt_enum in H8; eauto. solve_mmap2'.
-        eapply Forall_forall in H10; eauto. repeat solve_incl. }
-        assert (MapD:=H3). eapply mmap2_wt_enum in H3; eauto.
-        2:{ solve_mmap2'. destruct a0; repeat solve_st_follows. }
+      - (* case (total) *)
+        assert (Hnorm0:=H1). eapply IHe in H1; eauto.
+        assert (Hnorm1:=H2). eapply mmap2_wt_enum in H2; eauto.
+        2:(intros; destruct a; repeat solve_st_follows).
+        2:{ solve_forall. repeat inv_bind. eapply mmap2_wt_enum in H11; eauto.
+            solve_mmap2'. }
         destruct is_control; repeat inv_bind; eauto.
         eapply idents_for_anns_wt_enum; eauto.
         rewrite map_map, map_id; simpl.
-        eapply wt_exps_wt_enum; eauto.
-        solve_forall; repeat solve_incl; destruct a0; repeat solve_st_follows.
+        inv H11; simpl in *; subst; try congruence.
+        inv H10. eapply wt_exps_wt_enum; eauto. solve_forall; repeat solve_incl.
+      - (* case (default) *)
+        assert (Hnorm0:=H1). eapply IHe in H1; eauto.
+        assert (Hnorm1:=H2). eapply mmap2_wt_enum in H2; eauto.
+        2:(intros; destruct a; repeat solve_st_follows).
+        2:{ solve_forall. repeat inv_bind. eapply mmap2_wt_enum in H13; eauto.
+            solve_mmap2'. }
+        assert (Hnorm2:=H3). eapply mmap2_wt_enum in H3; eauto. 2:solve_mmap2'.
+        destruct is_control; repeat inv_bind; eauto.
+        eapply idents_for_anns_wt_enum; eauto.
+        rewrite map_map, map_id; simpl.
+        inv H12; simpl in *; subst; try congruence.
+        inv H11. eapply wt_exps_wt_enum; eauto. solve_forall; repeat solve_incl.
       - (* app *)
         eapply idents_for_anns'_wt_enum in H4; eauto.
         + eapply wt_find_node in H7 as (G'&(_&_&Henums'&_)&Heq); eauto.
@@ -1978,18 +2064,34 @@ Module Type NTYPING
       intros * Hwtc Hwt1 Hwt2 Hty1 Hty2 Hfby.
       unfold fby_iteexp in Hfby; repeat inv_bind.
       repeat econstructor; simpl in *; try rewrite app_nil_r; auto.
-      2,5,6,7,8,9:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
+      2,5,6,7,8:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
       - apply init_var_for_clock_In in H as In.
         apply in_or_app, or_intror; unfold st_tys, idty.
         simpl_In; exists (x, (OpAux.bool_velus_type, ck)); split; auto.
         repeat solve_incl.
-      - intros ? [Heq|[Heq|Heq]]; inv Heq.
-        repeat constructor; auto.
-        2:repeat solve_incl.
-        apply fresh_ident_In in H0.
+      - apply fresh_ident_In in H0.
         apply in_or_app, or_intror; unfold st_tys, idty.
         simpl_In; exists (x2, (ty, ck)); split; auto.
-      - intros ? [Heq|[Heq|Heq]]; inv Heq; auto.
+      - destruct Hiface as (Henums&_). congruence.
+      - congruence.
+    Qed.
+
+    Fact arrow_iteexp_wt_exp : forall vars e0 e ty ck name e' eqs' st st' ,
+        wt_clock G1.(enums) (vars++st_tys st) ck ->
+        wt_exp G1 (vars++st_tys st) e0 ->
+        wt_exp G1 (vars++st_tys st) e ->
+        typeof e0 = [ty] ->
+        typeof e = [ty] ->
+        arrow_iteexp e0 e (ty, (ck, name)) st = (e', eqs', st') ->
+        wt_exp G2 (vars++st_tys st') e'.
+    Proof.
+      intros * Hwtc Hwt1 Hwt2 Hty1 Hty2 Hfby.
+      unfold arrow_iteexp in Hfby; repeat inv_bind.
+      repeat econstructor; simpl in *; try rewrite app_nil_r; auto.
+      2,5,6,7:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
+      - apply init_var_for_clock_In in H as In.
+        apply in_or_app, or_intror; unfold st_tys, idty.
+        simpl_In; exists (x, (OpAux.bool_velus_type, ck)); split; auto.
       - destruct Hiface as (Henums&_). congruence.
       - congruence.
     Qed.
@@ -2083,22 +2185,13 @@ Module Type NTYPING
         simpl in *; rewrite app_nil_r in *.
         apply Forall_singl in H3; apply Forall_singl in H4.
         apply Forall_singl in H7; inv H7.
-        assert (Hwte:=H). eapply arrow_iteexp_wt_eq with (vars:=vars) in Hwte; eauto.
+        assert (Hwte:=H). eapply arrow_iteexp_wt_exp with (vars:=vars) in Hwte; eauto. 2-4:repeat solve_incl.
+        assert (Hwteq:=H). eapply arrow_iteexp_wt_eq with (vars:=vars) in Hwteq; eauto. 2:repeat solve_incl.
         assert (st_follows st st') as Hfollows.
         { repeat inv_bind. eapply init_var_for_clock_st_follows; eauto. }
         repeat inv_bind.
         repeat (econstructor; auto); try congruence.
-        2,6,8,10:repeat solve_incl.
-        5:simpl; rewrite app_nil_r; auto.
-        + eapply init_var_for_clock_In in H.
-          apply in_or_app, or_intror. unfold st_tys, idty.
-          simpl_In. exists (x2, (OpAux.bool_velus_type, ck)); auto.
-        + destruct Hiface as (?&_). congruence.
-        + intros ? [Heq|[Heq|Heq]]; inv Heq. constructor; auto.
-          repeat solve_incl.
-        + intros ? [Heq|[Heq|Heq]]; inv Heq.
-          simpl; rewrite app_nil_r; auto.
-        + assert (incl vars (vars ++ st_tys st')) by repeat solve_incl; eauto.
+        apply in_or_app; auto.
       - destruct Hwt. constructor; auto. constructor; auto.
         solve_forall. repeat solve_incl.
         solve_forall. apply in_app_iff; auto.

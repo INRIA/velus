@@ -85,13 +85,13 @@ Module Type NLCOINDSEMANTICS
       forall H b x tx es ty xs ess os,
         sem_var H x xs ->
         Forall2 (sem_cexp H b) es ess ->
-        merge xs ess os ->
+        merge xs (combine (seq 0 (length ess)) ess) os ->
         sem_cexp H b (Emerge (x, tx) es ty) os
   | Scase:
       forall H b e es d xs ess os,
         sem_exp H b e xs ->
         Forall2 (fun oe => sem_cexp H b (or_default d oe)) es ess ->
-        case xs ess os ->
+        case xs (combine (seq 0 (length ess)) ess) None os ->
         sem_cexp H b (Ecase e es d) os
   | Sexp:
       forall H b e es,
@@ -107,7 +107,7 @@ Module Type NLCOINDSEMANTICS
         sem_var H x xs ->
         Forall2 (sem_cexp H b) es ess ->
         Forall2 (P_cexp H b) es ess ->
-        merge xs ess os ->
+        merge xs (combine (seq 0 (length ess)) ess) os ->
         P_cexp H b (Emerge (x, tx) es ty) os.
 
     Hypothesis CaseCase:
@@ -115,7 +115,7 @@ Module Type NLCOINDSEMANTICS
         sem_exp H b e xs ->
         Forall2 (fun oe => sem_cexp H b (or_default d oe)) es ess ->
         Forall2 (fun oe => P_cexp H b (or_default d oe)) es ess ->
-        case xs ess os ->
+        case xs (combine (seq 0 (length ess)) ess) None os ->
         P_cexp H b (Ecase e es d) os.
 
     Hypothesis ExpCase:
@@ -133,7 +133,7 @@ Module Type NLCOINDSEMANTICS
         take (merge _ _ _) and clear it.
         take (Forall2 _ _ _) and induction it; constructor; auto.
       - eapply CaseCase; eauto.
-        take (case _ _ _) and clear it.
+        take (case _ _ _ _) and clear it.
         take (Forall2 _ _ _) and induction it; constructor; auto.
     Qed.
 
@@ -429,56 +429,6 @@ Module Type NLCOINDSEMANTICS
     transitivity xs'0; symmetry; auto.
   Qed.
 
-  Add Parametric Morphism : merge
-      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
-        as merge_EqSt.
-  Proof.
-    cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
-    destruct cs' as [[]], ys' as [[]];
-      inv H; inv Ecs; inv Eys; simpl in *;
-        try discriminate.
-    - constructor.
-      + eapply Cofix; eauto.
-        apply map_st_EqSt; auto. (* TODO: why rewrite does not work? *)
-        intros * ->; reflexivity.
-      + eapply Forall_EqSt; eauto. (* DITTO *)
-        solve_proper.
-    - repeat take (_ = _) and inv it.
-      econstructor; eauto.
-      + eapply Cofix; eauto.
-        apply map_st_EqSt; auto.
-        intros * ->; reflexivity.
-      + rewrite <-Exs; eauto.
-  Qed.
-
-  Add Parametric Morphism : case
-      with signature @EqSt svalue ==> @EqSts svalue ==> @EqSt svalue ==> Basics.impl
-        as case_EqSt.
-  Proof.
-    cofix Cofix.
-    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
-    destruct cs' as [[]], ys' as [[]];
-      inv H; inv Ecs; inv Eys; simpl in *;
-        try discriminate.
-    - constructor.
-      + eapply Cofix; eauto.
-        apply map_st_EqSt; auto. (* TODO: why rewrite does not work? *)
-        intros * ->; reflexivity.
-      + eapply Forall_EqSt; eauto. (* DITTO *)
-        solve_proper.
-    - repeat take (_ = _) and inv it.
-      econstructor; eauto.
-      + eapply Cofix; eauto.
-        apply map_st_EqSt; auto.
-        intros * ->; reflexivity.
-      + eapply Forall_EqSt; eauto.
-        solve_proper.
-      + assert (orel (@EqSt svalue) (nth_error xs c) (nth_error xs' c))
-          by (apply nth_error_EqSt; auto).
-        take (orel _ _ _) and rewrite <-it; eauto.
-  Qed.
-
   Add Parametric Morphism k : (when k)
       with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
         as when_EqSt.
@@ -602,7 +552,7 @@ Module Type NLCOINDSEMANTICS
     - econstructor; eauto.
       + rewrite <-EH, <-Eb; eauto.
       + instantiate (1 := ess).
-        take (case _ _ _) and clear it.
+        take (case _ _ _ _) and clear it.
         revert dependent ess; induction l; inversion_clear 1;
           constructor; take (Forall _ _) and inv it; auto.
         take (forall xs, sem_cexp _ _ _ _ -> _) and eapply it; eauto; reflexivity.

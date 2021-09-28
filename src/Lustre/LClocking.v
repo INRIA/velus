@@ -177,22 +177,22 @@ Module Type LCLOCKING
     | wc_Emerge: forall x tx es tys ck,
         In (x, ck) vars ->
         es <> nil ->
-        Forall (Forall wc_exp) es ->
-        Forall2 (fun i es => Forall (eq (Con ck x (tx, i))) (clocksof es)) (seq 0 (length es)) es ->
-        Forall (fun es => length tys = length (clocksof es)) es ->
+        Forall (fun es => Forall wc_exp (snd es)) es ->
+        Forall (fun '(i, es) => Forall (eq (Con ck x (tx, i))) (clocksof es)) es ->
+        Forall (fun es => length tys = length (clocksof (snd es))) es ->
         wc_exp (Emerge (x, tx) es (tys, (ck, None)))
 
-    | wc_Ecase: forall e brs d tys ck,
+    | wc_Ecase: forall e es d tys ck,
         wc_exp e ->
         clockof e = [ck] ->
-        brs <> nil ->
-        (forall es, In (Some es) brs -> Forall wc_exp es) ->
-        (forall es, In (Some es) brs -> Forall (eq ck) (clocksof es)) ->
-        (forall es, In (Some es) brs -> length tys = length (clocksof es)) ->
-        Forall wc_exp d ->
-        Forall (eq ck) (clocksof d) ->
-        length tys = length (clocksof d) ->
-        wc_exp (Ecase e brs d (tys, (ck, None)))
+        es <> nil ->
+        Forall (fun es => Forall wc_exp (snd es)) es ->
+        Forall (fun es => Forall (eq ck) (clocksof (snd es))) es ->
+        Forall (fun es => length tys = length (clocksof (snd es))) es ->
+        (forall d0, d = Some d0 -> Forall wc_exp d0) ->
+        (forall d0, d = Some d0 -> Forall (eq ck) (clocksof d0)) ->
+        (forall d0, d = Some d0 -> length tys = length (clocksof d0)) ->
+        wc_exp (Ecase e es d (tys, (ck, None)))
 
     | wc_Eapp: forall f es er anns n bck sub,
         Forall wc_exp es ->
@@ -315,27 +315,27 @@ Module Type LCLOCKING
       forall x tx es tys ck,
         In (x, ck) vars ->
         es <> nil ->
-        Forall (Forall (wc_exp G vars)) es ->
-        Forall (Forall P) es ->
-        Forall2 (fun i es => Forall (eq (Con ck x (tx, i))) (clocksof es)) (seq 0 (length es)) es ->
-        Forall (fun es => length tys = length (clocksof es)) es ->
+        Forall (fun es => Forall (wc_exp G vars) (snd es)) es ->
+        Forall (fun es => Forall P (snd es)) es ->
+        Forall (fun '(i, es) => Forall (eq (Con ck x (tx, i))) (clocksof es)) es ->
+        Forall (fun es => length tys = length (clocksof (snd es))) es ->
         P (Emerge (x, tx) es (tys, (ck, None))).
 
     Hypothesis EcaseCase:
-      forall e brs d tys ck,
+      forall e es d tys ck,
         wc_exp G vars e ->
         P e ->
         clockof e = [ck] ->
-        brs <> nil ->
-        (forall es, In (Some es) brs -> Forall (wc_exp G vars) es) ->
-        (forall es, In (Some es) brs -> Forall P es) ->
-        (forall es, In (Some es) brs -> Forall (eq ck) (clocksof es)) ->
-        (forall es, In (Some es) brs -> length tys = length (clocksof es)) ->
-        Forall (wc_exp G vars) d ->
-        Forall P d ->
-        Forall (eq ck) (clocksof d) ->
-        length tys = length (clocksof d) ->
-        P (Ecase e brs d (tys, (ck, None))).
+        es <> nil ->
+        Forall (fun es => Forall (wc_exp G vars) (snd es)) es ->
+        Forall (fun es => Forall P (snd es)) es ->
+        Forall (fun es => Forall (eq ck) (clocksof (snd es))) es ->
+        Forall (fun es => length tys = length (clocksof (snd es))) es ->
+        (forall d0, d = Some d0 -> Forall (wc_exp G vars) d0) ->
+        (forall d0, d = Some d0 -> Forall P d0) ->
+        (forall d0, d = Some d0 -> Forall (eq ck) (clocksof d0)) ->
+        (forall d0, d = Some d0 -> length tys = length (clocksof d0)) ->
+        P (Ecase e es d (tys, (ck, None))).
 
     Hypothesis EappCase:
       forall f es er anns n bck sub,
@@ -364,9 +364,10 @@ Module Type LCLOCKING
         clear H0 H2 H3. induction H1; constructor; auto.
         induction H0; auto.
       - apply EcaseCase; auto.
-        + clear H1 H3 H4. intros ? Hin. specialize (H2 _ Hin). clear Hin.
-          induction H2; constructor; auto.
-        + clear H6 H7. induction H5; auto.
+        + clear H1 H3 H4. induction H2; constructor; auto.
+          induction H1; auto.
+        + intros; subst. clear H6 H7. specialize (H5 _ eq_refl).
+          induction H5; auto.
       - eapply EappCase; eauto.
         + clear H2 H3. induction H; eauto.
         + clear H4. induction H0; eauto.
@@ -557,6 +558,8 @@ Module Type LCLOCKING
       - specialize (H _ Hin). specialize (H5 _ Hin). rewrite Forall_forall in *; eauto.
       - specialize (H _ Hin); simpl in H. specialize (H8 _ Hin).
         rewrite Forall_forall in *; eauto.
+      - intros; subst; simpl in *. specialize (H11 _ eq_refl).
+        rewrite Forall_forall in *; eauto.
     Qed.
 
     Lemma wc_equation_incl : forall vars vars' eq,
@@ -615,9 +618,9 @@ Module Type LCLOCKING
       | _ => false
       end.
 
-    Definition check_merge_clocks {A} (x : ident) (tx : type) (ck : clock) (ncs : list (list nclock)) (n : nat) (tys : list A) : bool :=
-      forall2b (fun i ncs => forallb (fun ck' => stripname ck' ==b (Con ck x (tx, i))) ncs
-                          && (length ncs ==b length tys)) (seq 0 n) ncs.
+    Definition check_merge_clocks {A} (x : ident) (tx : type) (ck : clock) (ncs : list (enumtag * list nclock)) (n : nat) (tys : list A) : bool :=
+      forallb (fun '(i, ncs) => forallb (fun ck' => stripname ck' ==b (Con ck x (tx, i))) ncs
+                             && (length ncs ==b length tys)) ncs.
 
     Definition check_case_clocks {A} (ck : clock) (ncs : list (list nclock)) (tys : list A) : bool :=
       forallb (fun ncs => forallb (fun ck' => stripname ck' ==b ck) ncs
@@ -728,18 +731,19 @@ Module Type LCLOCKING
         end
 
       | Emerge (x, tx) es (tys, (ck, None)) =>
-        do ncs <- omap (fun es => oconcat (map check_exp es)) es;
+        do ncs <- omap (fun es => oconcat (map check_exp (snd es))) es;
         let nc' := (ck, None) in
-        if check_var x ck && check_merge_clocks x tx ck ncs (length es) tys
+        if check_var x ck && check_merge_clocks x tx ck (combine (map fst es) ncs) (length es) tys
            && (length es <>b 0)
         then Some (map (fun _ => nc') tys) else None
 
       | Ecase e brs d (tys, (ck, None)) =>
-        do nds <- oconcat (map check_exp d);
-        do ncs <- omap (or_default_with (Some nds) (fun es => oconcat (map check_exp es))) brs;
+        (* do nds <- oconcat (map check_exp d); *)
+        do nds <- or_default_with (Some []) (fun d => do nds <- oconcat (map check_exp d); Some [nds]) d;
+        do ncs <- omap (fun es => oconcat (map check_exp (snd es))) brs;
         do (ce, _) <- assert_singleton (check_exp e);
         let nc' := (ck, None) in
-        if (ce ==b ck) && check_case_clocks ck (nds::ncs) tys
+        if (ce ==b ck) && check_case_clocks ck (nds++ncs) tys
            && (length brs <>b 0)
         then Some (map (fun _ => nc') tys) else None
 
@@ -809,20 +813,16 @@ Module Type LCLOCKING
     Lemma check_merge_clocks_correct:
       forall {A} x tx ck ncs n (tys : list A),
         check_merge_clocks x tx ck ncs n tys = true ->
-        Forall2 (fun i => Forall (fun ck' => Con ck x (tx, i) = stripname ck')) (seq 0 n) ncs /\
-        Forall (fun ncs => length ncs = length tys) ncs.
+        Forall (fun '(i, ncs) => Forall (fun ck' => Con ck x (tx, i) = stripname ck') ncs) ncs /\
+        Forall (fun '(_, ncs) => length ncs = length tys) ncs.
     Proof.
       intros * CM; unfold check_merge_clocks in CM.
-      rewrite forall2b_Forall2 in CM.
-      setoid_rewrite Bool.andb_true_iff in CM.
-      setoid_rewrite forallb_Forall in CM.
-      split.
-      - eapply Forall2_impl_In; [|eauto]. intros ?? _ _ (H&_); simpl in *.
-        eapply Forall_impl; [|eauto]. intros (?&?) Heq; simpl in *.
+      rewrite forallb_Forall in CM.
+      split; (eapply Forall_impl; [|eauto]); intros (?&?) CM';
+        rewrite Bool.andb_true_iff, forallb_Forall in CM'; destruct CM' as (CM1&CM2).
+      - eapply Forall_impl; [|eauto]. intros (?&?) Heq; simpl in *.
         rewrite equiv_decb_equiv in Heq. inv Heq; auto.
-      - eapply Forall2_ignore1 in CM.
-        eapply Forall_impl; [|eauto]. intros ? (?&_&_&Hlen).
-        rewrite equiv_decb_equiv in Hlen; inv Hlen; auto.
+      - rewrite equiv_decb_equiv in CM2; inv CM2; auto.
     Qed.
 
     Lemma check_case_clocks_correct:
@@ -863,46 +863,22 @@ Module Type LCLOCKING
     Qed.
 
     Lemma omap_concat_map_check_exp':
-      forall {f} ess ncks,
+      forall {f} (ess : list (enumtag * _)) ncks,
         (forall es e ncks,
             In es ess ->
-            In e es ->
+            In e (snd es) ->
             f e = Some ncks ->
             wc_exp G (Env.elements venv) e /\ nclockof e = ncks) ->
-        omap (fun es => oconcat (map f es)) ess = Some ncks ->
-        Forall (Forall (wc_exp G (Env.elements venv))) ess
-        /\ Forall2 (fun es ncks => nclocksof es = ncks) ess ncks.
+        omap (fun es => oconcat (map f (snd es))) ess = Some ncks ->
+        Forall (fun es => Forall (wc_exp G (Env.elements venv)) (snd es)) ess
+        /\ Forall2 (fun es ncks => nclocksof (snd es) = ncks) ess ncks.
     Proof.
       induction ess as [|es ess IH]; intros ncks WTf CE. now inv CE; auto.
-      simpl in CE. destruct (oconcat (map f es)) eqn:Ce; [|now omonadInv CE].
+      simpl in CE. destruct (oconcat (map f (snd es))) eqn:Ce; [|now omonadInv CE].
       eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes.
       destruct (omap _ _) as [tes|]; [|now omonadInv CE].
       omonadInv CE. simpl.
       specialize (IH tes) as (? & ?); eauto using in_cons.
-    Qed.
-
-    Lemma omap_concat_map_check_exp'':
-      forall {f} nds ess ncks,
-        (forall es e ncks,
-            In (Some es) ess ->
-            In e es ->
-            f e = Some ncks ->
-            wc_exp G (Env.elements venv) e /\ nclockof e = ncks) ->
-        omap (or_default_with (Some nds) (fun es => oconcat (map f es))) ess = Some ncks ->
-        Forall (LiftO True (Forall (wc_exp G (Env.elements venv)))) ess
-        /\ Forall2 (fun es ncks => LiftO True (fun es => nclocksof es = ncks) es) ess ncks.
-    Proof.
-      induction ess as [|es ess IH]; intros ncks WTf CE. now inv CE; auto.
-      destruct es; simpl in *.
-      - destruct (oconcat (map _ l)) eqn:Ce; [|now omonadInv CE].
-        destruct (omap _ _) as [tes|] eqn:CE''; [|now omonadInv CE].
-        omonadInv CE. simpl.
-        eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes.
-        specialize (IH tes) as (? & ?); eauto using in_cons.
-      - destruct (omap _ _) as [tes|] eqn:CE'; [|now omonadInv CE].
-        omonadInv CE. simpl.
-        specialize (IH tes) as (? & ?); eauto using in_cons.
-        split; constructor; simpl; auto.
     Qed.
 
     Lemma omap_check_exp':
@@ -1124,54 +1100,60 @@ Module Type LCLOCKING
       - (* Emerge *)
         take (Forall _ es) and (repeat setoid_rewrite Forall_forall in it).
         take (omap _ _ = Some _) and
-             apply omap_concat_map_check_exp' in it as (? & ?); eauto.
+             apply omap_concat_map_check_exp' in it as (Hwc & Heq); eauto.
         take (check_merge_clocks _ _ _ _ _ _ = true) and
-             apply check_merge_clocks_correct in it as (? & ?).
+             apply check_merge_clocks_correct in it as (Hf1 & Hf2).
+        eapply Forall2_combine'' in Hf1. eapply Forall2_combine'' in Hf2.
+        2,3:(rewrite map_length; eapply Forall2_length in Heq; eauto).
         split; eauto. econstructor; eauto.
         + contradict H1; subst; simpl. apply Bool.not_true_iff_false.
           apply nequiv_decb_false, equiv_decb_equiv. constructor.
-        + eapply Forall2_swap_args, Forall2_trans_ex in H3; eauto.
-          eapply Forall2_impl_In; [|eauto]. intros ?? _ _ (?&_&Hf&?); subst.
-          rewrite clocksof_nclocksof, Forall_map.
+        + rewrite Forall2_map_1 in Hf1. eapply Forall2_Forall2 in Hf1; [|eapply Heq].
+          eapply Forall2_ignore2 in Hf1. eapply Forall_impl; [|eauto]. intros (?&?) (?&_&Hck&?); simpl in *.
+          rewrite clocksof_nclocksof, Hck, Forall_map.
           assumption.
-        + clear - H3 H4.
-          induction H3; inv H4; constructor; auto.
-          rewrite clocksof_nclocksof, map_length; auto.
+        + rewrite Forall2_map_1 in Hf2. eapply Forall2_Forall2 in Hf2; [|eapply Heq].
+          eapply Forall2_ignore2 in Hf2. eapply Forall_impl; [|eauto]. intros (?&?) (?&_&Hlen&?); simpl in *.
+          rewrite clocksof_nclocksof, Hlen, map_length; auto.
       - (* Ecase *)
         take (Forall _ _) and (repeat setoid_rewrite Forall_forall in it).
-        take (oconcat (map check_exp _) = Some _) and
-             apply oconcat_map_check_exp' in it as (? & ?); eauto.
         take (omap _ _ = Some _) and
-             apply omap_concat_map_check_exp'' in it as (? & ?); eauto.
+             apply omap_concat_map_check_exp' in it as (Hwces & Hckes); eauto.
+        (* take (oconcat (map check_exp _) = Some _) and *)
+        (*      apply oconcat_map_check_exp' in it as (? & ?); eauto. *)
         take (check_case_clocks _ _ _ = true) and
-             apply check_case_clocks_correct in it as (? & ?).
-        eapply forallb_Forall in H3.
-        eapply IHe in AS as (? & ?); auto.
+             apply check_case_clocks_correct in it as (Hf1 & Hf2).
+        apply Forall_app in Hf1 as (Hd1&Hes1). apply Forall_app in Hf2 as (Hd2&Hes2).
+        (* eapply forallb_Forall in H3. *)
+        eapply IHe in AS as (? & Hcke); auto.
         split; eauto. econstructor; eauto.
-        + now rewrite clockof_nclockof, H10.
+        + now rewrite clockof_nclockof, Hcke.
         + contradict H2; subst; simpl. apply Bool.not_true_iff_false.
           apply nequiv_decb_false, equiv_decb_equiv. constructor.
-        + intros. eapply Forall_forall in H5; eauto. simpl in H5; auto.
-        + intros. clear - H4 H6 H11.
-          eapply Forall2_ignore2 in H6.
-          eapply Forall_forall in H6 as (?&?&?); eauto; simpl in *.
-          eapply Forall_forall in H4; eauto.
-          rewrite clocksof_nclocksof, Forall_map.
-          congruence.
-        + intros. clear - H8 H6 H11.
-          eapply Forall2_ignore2 in H6.
-          eapply Forall_forall in H6 as (?&?&?); eauto; simpl in *.
-          eapply Forall_forall in H8; eauto.
-          rewrite clocksof_nclocksof, map_length.
-          congruence.
-        + rewrite clocksof_nclocksof, H1.
-          rewrite Forall_map. eapply Forall_impl; [|eauto].
-          intros ? Heq; simpl in *.
-          rewrite equiv_decb_equiv in Heq; inv Heq; auto.
-        + rewrite clocksof_nclocksof, map_length. congruence.
-        + intros ??? Hin1 Hin2 Hce.
-          eapply Forall_forall in H; eauto; simpl in H.
-          eapply Forall_forall in H; eauto.
+        + eapply Forall2_ignore2 in Hckes.
+          eapply Forall_impl; [|eapply Hckes]; intros (?&?) (?&?&Hck).
+          rewrite clocksof_nclocksof, Hck, Forall_map.
+          eapply Forall_forall in Hes1; eauto.
+        + eapply Forall2_ignore2 in Hckes.
+          eapply Forall_impl; [|eapply Hckes]; intros (?&?) (?&?&Hck).
+          rewrite clocksof_nclocksof, Hck, map_length.
+          eapply Forall_forall in Hes2; eauto.
+        + intros; subst; simpl in *. destruct (oconcat (map _ _)) eqn:OE1; simpl in *; omonadInv OE0.
+          take (oconcat (map check_exp _) = Some _) and
+             apply oconcat_map_check_exp' in it as (? & ?); eauto.
+          intros; eapply Forall_forall in H0; eauto.
+        + intros; subst; simpl in *. destruct (oconcat (map _ _)) eqn:OE1; simpl in *; omonadInv OE0.
+          take (oconcat (map check_exp _) = Some _) and
+             apply oconcat_map_check_exp' in it as (? & ?); eauto.
+          2:intros; eapply Forall_forall in H0; eauto.
+          rewrite clocksof_nclocksof, H3, Forall_map.
+          now apply Forall_singl in Hd1.
+        + intros; subst; simpl in *. destruct (oconcat (map _ _)) eqn:OE1; simpl in *; omonadInv OE0.
+          take (oconcat (map check_exp _) = Some _) and
+             apply oconcat_map_check_exp' in it as (? & ?); eauto.
+          2:intros; eapply Forall_forall in H0; eauto.
+          rewrite clocksof_nclocksof, H3, map_length.
+          now apply Forall_singl in Hd2.
       - (* Eapp *)
         repeat take (Forall _ _) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
@@ -2041,18 +2023,18 @@ Module Type LCLOCKING
       destruct (clocksof es); simpl in *; try congruence.
       inv H6. destruct H1; subst...
     - (* merge *)
-      destruct es; [simpl in *; auto|]; try congruence.
-      inv H. inv H5. simpl in H6; inv H6.
+      destruct es as [|(?&?)]; [simpl in *; auto; exfalso; auto|].
+      inv H. inv H5. inv H6.
       assert (Forall (wc_clock (vars++idck (fresh_ins l))) (clocksof l)) as Hwc.
       { Forall_clocksof.
         specialize (H2 _ Hin (H1 _ Hin)). rewrite Forall_forall in *; intros.
         eapply wc_clock_incl; eauto. eapply incl_appr', incl_map, fresh_in_incl, Hin.
       } clear H2.
       eapply Forall_Forall in H10...
-      inv H7. destruct (clocksof l).
-      1:destruct tys; simpl in *; auto; try congruence.
-      rewrite Forall_map. eapply Forall_forall; intros ? _.
-      inv H10. destruct H6; subst. inv H.
+      inv H7. simpl in *. destruct (clocksof l).
+      1:{ destruct tys; simpl in *; auto; try congruence. }
+      rewrite Forall_map. eapply Forall_forall; intros ? Hin.
+      inv Hwc. inv H5. inv H7.
       eapply wc_clock_incl... apply incl_appr', incl_map, incl_appl, incl_refl.
     - (* case *)
       apply IHe in H5. rewrite H6 in H5. apply Forall_singl in H5.
@@ -2233,6 +2215,8 @@ Module Type LCLOCKING
         rewrite Forall_forall in *...
       - intros ? Hin. specialize (H8 _ Hin). specialize (H _ Hin); simpl in H.
         rewrite Forall_forall in *...
+      - intros ??; subst; simpl in *. specialize (H11 _ eq_refl).
+        rewrite Forall_forall in *...
       - (* app *)
         assert (Forall (wc_exp G2 vars) es) as Hwt by (rewrite Forall_forall in *; eauto).
         assert (Forall (wc_exp G2 vars) er) as Hwt' by (rewrite Forall_forall in *; eauto).
@@ -2327,8 +2311,11 @@ Module Type LCLOCKING
       + rewrite Forall_forall in *...
         intros. erewrite H10; eauto.
         rewrite clocksof_annots, map_length, map_length...
-      + rewrite Forall_forall in *...
-      + rewrite clocksof_annots, map_length, map_length in H13...
+      + intros ??; subst; simpl in *.
+        specialize (H11 _ eq_refl). rewrite Forall_forall in *...
+      + intros ??; subst; simpl in *.
+        specialize (H13 _ eq_refl).
+        rewrite clocksof_annots, map_length, map_length in H13...
     - (* app *)
       econstructor...
       + rewrite Forall_forall in *...
@@ -2426,7 +2413,8 @@ Module Type LCLOCKING
       + rewrite Forall_forall in *...
         intros ? Hin. specialize (H _ Hin); simpl in H. specialize (H8 _ Hin).
         rewrite Forall_forall in *...
-      + rewrite Forall_forall in *...
+      + intros ??; subst; simpl in *.
+        specialize (H11 _ eq_refl). rewrite Forall_forall in *...
     - (* app *)
       econstructor...
       + rewrite Forall_forall in *...

@@ -8,13 +8,15 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
 From Velus Require Import Lustre.LSyntax.
+From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Normalization.
+From Velus Require Import Lustre.Normalization.NTyping.
 
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import Transcription.Tr.
 
-Require Import Program.Equality.
+From Coq Require Import Program.Equality.
 
 Module Type COMPLETENESS
        (Import Ids : IDS)
@@ -22,6 +24,7 @@ Module Type COMPLETENESS
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import LSyn : LSYNTAX Ids Op OpAux Cks)
+       (Import LT : LTYPING Ids Op OpAux Cks LSyn)
        (Import Norm : NORMALIZATION Ids Op OpAux Cks LSyn)
        (Import CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
@@ -75,11 +78,23 @@ Module Type COMPLETENESS
       rewrite He'; rewrite Hes'. simpl...
   Qed.
 
-  Fact to_cexp_complete : forall e,
+  Fact to_lexp_normalized : forall e e',
+      to_lexp e = OK e' ->
+      normalized_lexp e.
+  Proof.
+    induction e using exp_ind2; intros * Htr;
+      simpl in *; cases; monadInv Htr.
+    - constructor; eauto.
+    - constructor; eauto.
+    - apply Forall_singl in H. constructor; eauto.
+  Qed.
+
+  Fact to_cexp_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall e,
+      wt_exp G vars e ->
       normalized_cexp e ->
       exists e', to_cexp e = OK e'.
   Proof with eauto.
-    intros e Hnorm.
+    intros e Hwt Hnorm.
     induction e using exp_ind2; inv Hnorm;
       try solve [eapply to_lexp_complete in H as [e' He'];
                  exists (Eexp e'); unfold to_cexp; rewrite He'; simpl; eauto];
@@ -88,35 +103,50 @@ Module Type COMPLETENESS
       eapply to_lexp_complete in H0 as [e' He'].
       exists (Eexp e'). unfold to_cexp. rewrite He'; simpl...
     - (* merge *)
-      eapply Forall_Forall in H; eauto. clear - H.
-      induction H as [|?? ((?&?&Hnormed)&H1)]; subst; simpl; eauto.
-      destruct IHForall as (?&EQ); monadInv EQ.
+      inv Hwt. clear - H H1 H9.
+      induction es; inv H; inv H1; inv H9; simpl; eauto.
+      destruct a, H2 as (?&?&Hnormed); simpl in *; subst; auto.
+      destruct IHes as (?&EQ); auto. monadInv EQ.
       erewrite EQ0; clear EQ0.
-      inv H1. eapply H3 in Hnormed as (?&Htoc).
+      apply Forall_singl in H1. apply Forall_singl in H3.
+      eapply H3 in Hnormed as (?&Htoc); auto.
       erewrite Htoc; simpl; eauto.
     - (* case *)
       eapply to_lexp_complete in H4 as (?&Htol).
       simpl; destruct cl; erewrite Htol; simpl.
-      apply Forall_singl in H0. eapply H0 in H7 as (?&Htoc).
-      rewrite Htoc; simpl.
-      eapply Forall_Forall in H; eauto. clear - H.
-      induction H as [|?? (Hnormed&H1)]; subst; simpl; eauto.
-      destruct IHForall as (?&EQ); monadInv EQ.
-      erewrite EQ0; clear EQ0.
-      destruct x1; simpl in *; eauto.
-      specialize (Hnormed _ eq_refl) as (?&?&Hnormed); subst; eauto.
-      inv H1. eapply H3 in Hnormed as (?&Htoc).
-      erewrite Htoc; simpl; eauto.
+      assert (exists es', Errors.mmap
+                       (fun pat =>
+                          match pat with
+                          | (i, nil) => Error (msg "control expression not normalized")
+                          | (i, e0 :: nil) => do ce <- to_cexp e0; OK (i, ce)
+                          | (i, e0 :: _ :: _) => Error (msg "control expression not normalized")
+                          end) es = OK es') as (?&Htoces).
+      { assert (Forall (fun es => Forall (wt_exp G vars) (snd es)) es) as Hwt' by (inv Hwt; auto).
+        clear - H Hwt' H6.
+        induction es; inv H; inv Hwt'; inv H6; simpl; eauto.
+        destruct a, H5 as (?&?&Hnormed); simpl in *; subst; auto.
+        destruct IHes as (?&EQ); auto.
+        erewrite EQ; clear EQ.
+        apply Forall_singl in H1. apply Forall_singl in H2.
+        eapply H2 in Hnormed as (?&Htoc); auto.
+        erewrite Htoc; simpl; eauto. }
+      rewrite Htoces; simpl.
+      inv Hwt; simpl in *; eauto.
+      specialize (H7 _ eq_refl) as (?&Heq&?); inv Heq.
+      apply Forall_singl in H16.
+      apply Forall_singl in H0 as (?&Htod); auto.
+      rewrite Htod, H9. destruct tn; simpl; eauto.
   Qed.
 
-  Fact to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) out env envo xr xs es,
+  Fact to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo xr xs es,
+      wt_equation G vars (xs, es) ->
       normalized_equation G out (xs, es) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
       exists eq', to_equation env envo xr (xs, es) = OK eq'.
   Proof with eauto.
-    intros * Hnorm Hfind Henvo.
-    inv Hnorm.
+    intros * Hwt Hnorm Hfind Henvo.
+    inv Hnorm. inv Hwt.
     - apply mmap_to_lexp_complete in H1 as [es' Hes'].
       apply vars_of_Some in H5 as (?&Vars).
       eexists; simpl. rewrite Hes', Vars; simpl...
@@ -128,7 +158,8 @@ Module Type COMPLETENESS
       specialize (Henvo x).
       destruct (envo x); simpl...
       exfalso...
-    - specialize (to_cexp_complete _ H1) as [e' He'].
+    - inv Hwt. inv H.
+      eapply to_cexp_complete in H1 as (?&He'); eauto.
       inv Hfind. destruct H2 as [cl Hcl].
       eexists; simpl.
       destruct e; try (rewrite Hcl; rewrite He'; simpl; eauto).
@@ -136,30 +167,32 @@ Module Type COMPLETENESS
       inv He'.
   Qed.
 
-  Fact block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) out env envo d xs xr,
-      normalized_block G out d ->
-      VarsDefined d xs ->
+  Fact block_to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo blk xs xr,
+      wt_block G vars blk ->
+      normalized_block G out blk ->
+      VarsDefined blk xs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
-      exists eq', block_to_equation env envo xr d = OK eq'.
+      exists eq', block_to_equation env envo xr blk = OK eq'.
   Proof with eauto.
-    intros * Hnorm Hvars Hfind Henvo. revert xr xs Hvars Hfind.
-    induction Hnorm; intros * Hvars Hfind; inv Hvars; simpl.
+    intros * Hwt Hnorm Hvars Hfind Henvo. revert xr xs Hvars Hfind.
+    induction Hnorm; intros * Hvars Hfind; inv Hwt; inv Hvars; simpl.
     - destruct eq. eapply to_equation_complete in H; eauto.
     - destruct ann0 as (?&?&?).
-      inv H2; inv H4.
+      inv H1. inv H5; inv H8.
       simpl in Hfind; rewrite app_nil_r in Hfind.
       eapply IHHnorm; eauto.
   Qed.
 
   Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
       n_block n = Blocal locs blks ->
+      wt_node G n ->
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (map fst (n_out n)) ->
       (forall x e, envo x = Error e -> PS.In x (ps_from_list (map fst (n_out n)))) ->
       exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty locs) env) envo nil) blks = OK eqs'.
   Proof.
-    intros * Hblk Hnormed Hfind Henvo.
+    intros * Hblk Hwtn Hnormed Hfind Henvo.
     pose proof (n_defd n) as (?&Hvars&Hperm). rewrite Hblk in Hvars. inv Hvars.
     assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty locs) env) x = OK cl) (concat xs)) as Hfind'.
     { rewrite <-H3, Hperm.
@@ -172,21 +205,23 @@ Module Type COMPLETENESS
         cases_eqn Hfind; subst; eauto.
         eapply Env.find_adds'_nIn in Hfind2 as (?&?). congruence.
     }
+    destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt.
     clear Hblk Hperm H3.
     induction H1; intros; simpl in *; eauto.
-    inv Hnormed. apply Forall_app in Hfind' as (?&?). simpl in *.
-    eapply block_to_equation_complete in H3 as (?&Heqs1); eauto.
-    eapply IHForall2 in H4 as (?&Heqs2); eauto.
+    inv Hnormed. inv H2. apply Forall_app in Hfind' as (?&?). simpl in *.
+    eapply block_to_equation_complete in H4 as (?&Heqs1); eauto.
+    eapply IHForall2 in H9 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
   Open Scope string_scope.
 
   Lemma to_node_complete : forall (G: @global nolocal_top_block norm2_prefs) n,
+      wt_node G n ->
       normalized_node G n ->
       exists n', to_node n = OK n'.
   Proof.
-    intros * Hnorm. inversion_clear Hnorm as [??? Hblk Hnormed].
+    intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk Hnormed].
     unfold to_node.
     edestruct (mmap_block_to_equation_complete G n)
               with (env:=Env.adds' (idty (n_in n)) (Env.from_list (idty (n_out n))))
@@ -213,25 +248,31 @@ Module Type COMPLETENESS
   Qed.
 
   Lemma to_global_complete : forall G,
+      wt_global G ->
       normalized_global G ->
       exists G', to_global G = OK G'.
   Proof.
-    intros (?&nds).
-    induction nds; intros * Hnormed; inversion_clear Hnormed as [|?? (Hnormed'&_)].
+    intros (?&nds) (_&Hwt). revert Hwt.
+    induction nds; intros * Hwt Hnormed;
+      inversion_clear Hnormed as [|?? (Hnormed'&_)];
+      inversion_clear Hwt as [|?? (?&?)]; simpl in *.
     - exists (NL.Global enums0 nil). reflexivity.
     - unfold to_global; simpl.
-      eapply to_node_complete in Hnormed' as (hd'&Hton). erewrite Hton; clear Hton; simpl.
-      eapply IHnds in H as (tl'&HtoG).
+      eapply to_node_complete in Hnormed' as (hd'&Hton); auto.
+      erewrite Hton; clear Hton; simpl.
+      eapply IHnds in H as (tl'&HtoG); auto.
       monadInv HtoG; simpl in *.
       erewrite EQ; simpl; eauto.
   Qed.
 
+  Module NTyping := NTypingFun Ids Op OpAux Cks LSyn LT Norm.
+
   Theorem normalize_global_complete : forall G,
-      wl_global G ->
+      wt_global G ->
       exists G'', to_global (normalize_global G) = OK G''.
   Proof.
-    intros * Hwl.
-    eapply to_global_complete.
+    intros * Hwt.
+    eapply to_global_complete; eauto using NTyping.normalize_global_wt.
     eapply normalize_global_normalized_global; eauto.
   Qed.
 End COMPLETENESS.
@@ -242,10 +283,11 @@ Module CompletenessFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (LSyn : LSYNTAX Ids Op OpAux Cks)
+       (LT : LTYPING Ids Op OpAux Cks LSyn)
        (Norm : NORMALIZATION Ids Op OpAux Cks LSyn)
        (CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
        (TR : TR Ids Op OpAux Cks LSyn CE NL)
-       <: COMPLETENESS Ids Op OpAux Cks LSyn Norm CE NL TR.
-  Include COMPLETENESS Ids Op OpAux Cks LSyn Norm CE NL TR.
+       <: COMPLETENESS Ids Op OpAux Cks LSyn LT Norm CE NL TR.
+  Include COMPLETENESS Ids Op OpAux Cks LSyn LT Norm CE NL TR.
 End CompletenessFun.

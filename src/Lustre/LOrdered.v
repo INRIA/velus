@@ -43,12 +43,12 @@ Module Type LORDERED
       Exists (Is_node_in_exp f) le ->
       Is_node_in_exp f (Ewhen le x b la)
   | INEmerge: forall f x es la,
-      Exists (Exists (Is_node_in_exp f)) es ->
+      Exists (fun es => Exists (Is_node_in_exp f) (snd es)) es ->
       Is_node_in_exp f (Emerge x es la)
   | INEcase: forall f e es d la,
       Is_node_in_exp f e
-      \/ Exists (fun oes => exists es, oes = Some es /\ Exists (Is_node_in_exp f) es) es
-      \/ Exists (Is_node_in_exp f) d ->
+      \/ Exists (fun es => Exists (Is_node_in_exp f) (snd es)) es
+      \/ (exists d0, d = Some d0 /\ Exists (Is_node_in_exp f) d0) ->
       Is_node_in_exp f (Ecase e es d la)
   | INEapp1: forall f g le ler a,
       Exists (Is_node_in_exp f) le \/
@@ -141,12 +141,11 @@ Module Type LORDERED
       eapply Forall_Exists, Exists_exists in H2 as (?&?&He&?); eauto; simpl in *.
       destruct He. Forall_Exists.
     - (* case *)
-      destruct H3 as [Hex|[Hex|Hex]]; auto.
-      + eapply Exists_exists in Hex as (?&Hin&(?&?&?)); subst; eauto.
-        eapply Forall_forall in H; eauto; simpl in H.
-        eapply Forall_Exists, Exists_exists in H as (?&?&He&?); eauto; simpl in *.
-        eapply He; eauto. eapply Forall_forall in H9; eauto.
-      + Forall_Exists.
+      destruct H3 as [Hex|[Hex|(?&?&Hex)]]; subst; simpl in *; auto.
+      + eapply Forall_Forall in H; [|eapply H9]; clear H9.
+        eapply Forall_Exists, Exists_exists in Hex as (?&?&He&?); eauto; simpl in *.
+        destruct He. Forall_Exists.
+      + specialize (H11 _ eq_refl). Forall_Exists.
     - (* app1 *) clear H8. destruct H3; Forall_Exists.
     - (* app2 *) assert (find_node f0 G <> None) as Hfind.
       { intro contra. congruence. }

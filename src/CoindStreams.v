@@ -207,20 +207,6 @@ Module Type COINDSTREAMS
   Qed.
 
   Add Parametric Morphism
-      A B (P : list A -> (Stream B) -> Prop) xs
-      (P_compat: Proper (eq ==> @EqSt B ==> Basics.impl) P)
-    : (@Forall2Transpose A (Stream B) P xs)
-      with signature @EqSts B ==> Basics.impl
-        as Forall2Transpose_EqSt.
-  Proof.
-    intros x y Exy Hxy.
-    revert x y xs Exy Hxy;
-      induction x; intros * Exy H; inv H; inv Exy; eauto.
-    econstructor; eauto.
-    now rewrite <-H1.
-  Qed.
-
-  Add Parametric Morphism
       A B
     : (@List.map (Stream A) (Stream B))
       with signature (fun (f f': Stream A -> Stream B) => forall xs xs', xs ≡ xs' -> f xs ≡ f' xs') ==> @EqSts A ==> @EqSts B
@@ -495,33 +481,115 @@ Module Type COINDSTREAMS
         when c (present x ⋅ xs) (present (Venum c) ⋅ cs) (present x ⋅ rs).
 
   CoInductive merge
-    : Stream svalue -> list (Stream svalue) -> Stream svalue -> Prop :=
+    : Stream svalue -> list (enumtag * Stream svalue) -> Stream svalue -> Prop :=
   | MergeA:
       forall xs ess rs,
-        merge xs (List.map (@tl svalue) ess) rs ->
-        Forall (fun es => hd es = absent) ess ->
+        merge xs (List.map (fun '(i, es) => (i, tl es)) ess) rs ->
+        Forall (fun es => hd (snd es) = absent) ess ->
         merge (absent ⋅ xs) ess (absent ⋅ rs)
   | MergeP:
-      forall c xs ess rs ess1 v es ess2,
-        merge xs (List.map (@tl svalue) ess) rs ->
-        EqSts ess (ess1 ++ (present v ⋅ es) :: ess2) ->
-        length ess1 = c ->
-        Forall (fun es => hd es = absent) (ess1 ++ ess2) ->
+      forall c xs ess rs v,
+        merge xs (List.map (fun '(i, es) => (i, tl es)) ess) rs ->
+        (* Forall (fun '(i, es) => if i = c then hd es = present v *)
+        (*                      else hd es = absent) ess -> *)
+        List.Exists (fun '(i, es) => i = c /\ hd es = present v) ess ->
+        Forall (fun '(i, es) => i <> c -> hd es = absent) ess ->
         merge (present (Venum c) ⋅ xs) ess (present v ⋅ rs).
 
   CoInductive case
-    : Stream svalue -> list (Stream svalue) -> Stream svalue -> Prop :=
+    : Stream svalue -> list (enumtag * Stream svalue) -> option (Stream svalue) -> Stream svalue -> Prop :=
   | CaseA:
-      forall xs ess rs,
-        case xs (List.map (@tl svalue) ess) rs ->
-        Forall (fun es => hd es = absent) ess ->
-        case (absent ⋅ xs) ess (absent ⋅ rs)
+      forall xs ess d rs,
+        case xs (List.map (fun '(i, es) => (i, tl es)) ess) (option_map (@tl _) d) rs ->
+        Forall (fun es => hd (snd es) = absent) ess ->
+        LiftO True (fun d => hd d = absent) d ->
+        case (absent ⋅ xs) ess d (absent ⋅ rs)
   | CaseP:
-      forall c xs ess rs v es,
-        case xs (List.map (@tl svalue) ess) rs ->
-        Forall (fun es => hd es <> absent) ess ->
-        orel (@EqSt _) (nth_error ess c) (Some (present v ⋅ es)) ->
-        case (present (Venum c) ⋅ xs) ess (present v ⋅ rs).
+      forall c xs ess d rs v,
+        case xs (List.map (fun '(i, es) => (i, tl es)) ess) (option_map (@tl _) d) rs ->
+        Forall (fun es => hd (snd es) <> absent) ess ->
+        LiftO True (fun d => hd d <> absent) d ->
+        List.Exists (fun '(i, es) => i = c /\ hd es = present v) ess ->
+        case (present (Venum c) ⋅ xs) ess d (present v ⋅ rs)
+  | CasePDef:
+      forall c xs ess d rs vd,
+        case xs (List.map (fun '(i, es) => (i, tl es)) ess) (Some d) rs ->
+        Forall (fun es => hd (snd es) <> absent) ess ->
+        Forall (fun es => (fst es) <> c) ess ->
+        case (present (Venum c) ⋅ xs) ess (Some (present vd ⋅ d)) (present vd ⋅ rs).
+
+  Add Parametric Morphism : merge
+      with signature @EqSt svalue ==> eq ==> @EqSt svalue ==> Basics.impl
+        as merge_EqSt.
+  Proof.
+    cofix Cofix.
+    intros cs cs' Ecs xs ys ys' Eys H.
+    destruct cs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Eys; simpl in *;
+        try discriminate.
+    - constructor; auto.
+      eapply Cofix; eauto.
+    - repeat take (_ = _) and inv it.
+      econstructor; eauto.
+      eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism : case
+      with signature @EqSt svalue ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+        as case_EqSt.
+  Proof.
+    cofix Cofix.
+    intros cs cs' Ecs xs d ys ys' Eys H.
+    destruct cs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Eys; simpl in *;
+        try discriminate.
+    - constructor; auto.
+      eapply Cofix; eauto.
+    - repeat take (_ = _) and inv it.
+      econstructor; eauto.
+      eapply Cofix; eauto.
+    - repeat take (_ = _) and inv it.
+      eapply CasePDef; eauto.
+      eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism : case
+      with signature eq ==> Forall2 (fun xs1 xs2 => eq (fst xs1) (fst xs2) /\ EqSt (snd xs1) (snd xs2)) ==> eq ==> eq ==> Basics.impl
+        as case_EqStS.
+  Proof.
+    cofix Cofix.
+    intros cs xs1 xs2 Exs d ys H.
+    inv H; simpl in *; try discriminate.
+    - constructor; auto.
+      eapply Cofix; eauto.
+      + rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto];
+          intros (?&?&?) (?&?&?) _ _ (?&?&?); simpl in *; subst; auto.
+      + clear - Exs H1. induction Exs; inv H1; constructor; eauto.
+        destruct x as (?&?&?), y as (?&?&?); simpl in *.
+        destruct H as (?&?&?); simpl in *; congruence.
+    - econstructor; eauto.
+      eapply Cofix; eauto.
+      + rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto];
+          intros (?&?&?) (?&?&?) _ _ (?&?&?); simpl in *; subst; auto.
+      + clear - Exs H1. induction Exs; inv H1; constructor; eauto.
+        destruct x as (?&?&?), y as (?&?&?); simpl in *.
+        destruct H as (?&?&?); simpl in *; congruence.
+      + clear - Exs H3. induction Exs; inv H3; destruct x as (?&?&?), y as (?&?&?).
+        destruct H as (?&?&?), H1 as (?&?); simpl in *; subst; auto. right; eauto.
+    - eapply CasePDef; eauto.
+      eapply Cofix; eauto.
+      + rewrite Forall2_map_1, Forall2_map_2.
+        eapply Forall2_impl_In; [|eauto];
+          intros (?&?&?) (?&?&?) _ _ (?&?&?); simpl in *; subst; auto.
+      + clear - Exs H1. induction Exs; inv H1; constructor; eauto.
+        destruct x as (?&?&?), y as (?&?&?); simpl in *.
+        destruct H as (?&?&?); simpl in *; congruence.
+      + clear - Exs H2. induction Exs; inv H2; constructor; eauto.
+        destruct x as (?&?&?), y as (?&?&?); simpl in *.
+        destruct H as (?&?&?); simpl in *; congruence.
+  Qed.
 
   CoFixpoint clocks_of (ss: list (Stream svalue)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ⋅ clocks_of (List.map (@tl svalue) ss).
@@ -1681,15 +1749,13 @@ Module Type COINDSTREAMS
       merge xs ess rs <->
       (forall n,
           (xs # n = absent
-           /\ Forall (fun es => es # n = absent) ess
+           /\ Forall (fun es => (snd es) # n = absent) ess
            /\ rs # n = absent)
           \/
-          (exists c ess1 es ess2 v,
+          (exists c v,
               xs # n = present (Venum c)
-              /\ EqSts ess (ess1 ++ es :: ess2)
-              /\ length ess1 = c
-              /\ es # n = present v
-              /\ Forall (fun es => es # n = absent) (ess1 ++ ess2)
+              /\ List.Exists (fun '(i, es) => i = c /\ es # n = present v) ess
+              /\ Forall (fun '(i, es) => i <> c -> es # n = absent) ess
               /\ rs # n = present v)).
   Proof.
     split.
@@ -1697,169 +1763,207 @@ Module Type COINDSTREAMS
       revert dependent xs; revert ess rs.
       induction n; intros.
       + inv H; intuition.
-        right; do 5 eexists; intuition; eauto.
+        right; do 2 eexists; intuition; eauto.
       + inv H; repeat rewrite Str_nth_S.
         * take (Forall _ _) and clear it.
-          take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+          take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?)].
           -- left; intuition.
              take (Forall _ _) and apply Forall_map in it.
              apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
              simpl in Hin; auto.
-          -- take (EqSts _ _) and apply map_app_inv in it as (ess1 & ess2' & E & Hess1 & Hess2').
-             symmetry in Hess2'; apply map_cons_inv in Hess2' as (es & ess2 & Hess2' & ?& Hess2).
-             subst ess2'; setoid_rewrite E; subst.
-             right; do 5 eexists. split; eauto; split; try reflexivity.
-             intuition; eauto.
-             ++ rewrite Hess1, map_length; auto.
-             ++ match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H'; auto end.
-             ++ take (Forall _ _) and eapply Forall_EqSt in it.
-                3: { rewrite Hess1, Hess2; reflexivity. }
-                ** take (Forall _ _) and rewrite <-map_app in it; apply Forall_map in it.
-                   apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-                ** solve_proper.
-        * take (Forall _ _) and clear it.
-          take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+          -- right. repeat esplit; eauto.
+             ++ rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ rewrite Forall_map in H1. eapply Forall_impl; [|eauto]; intros (?&?) ??.
+                rewrite Str_nth_S_tl; auto.
+        * take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?)].
           -- left; intuition.
-             take (Forall _ _) and apply Forall_map in it.
-             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
-             simpl in Hin; auto.
-          -- take (EqSts (List.map _ _) _) and apply map_app_inv in it as (ess1' & ess2'' & E & Hess1 & Hess2').
-             symmetry in Hess2'; apply map_cons_inv in Hess2' as (es' & ess2' & Hess2' & ?& Hess2).
-             subst ess2''; setoid_rewrite E; subst.
-             right; do 5 eexists. split; eauto; split; try reflexivity.
-             intuition; eauto.
-             ++ rewrite Hess1, map_length; auto.
-             ++ match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H'; auto end.
-             ++ take (Forall _ _) and eapply Forall_EqSt in it.
-                3: { rewrite Hess1, Hess2; reflexivity. }
-                ** take (Forall _ _) and rewrite <-map_app in it; apply Forall_map in it.
-                   apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-                ** solve_proper.
-
+             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+             rewrite Str_nth_S_tl; auto.
+          -- right. repeat esplit; eauto.
+             ++ rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ rewrite Forall_map in H3. eapply Forall_impl; [|eapply H3]; intros (?&?) ??.
+                rewrite Str_nth_S_tl; auto.
     - revert xs ess rs; cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv rs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
-             destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)];
+             destruct H as [(?&?&?)|(?&?&?&?&?&?)];
              discriminate).
       + constructor.
         * cofix_step CoFix H.
-          destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+          destruct H as [(?&?&?)|(?&?&?&?&?&?)].
           -- left; intuition.
              apply Forall_map, Forall_forall; intros (?&?) Hin;
                eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-          -- subst; right; do 5 eexists. split; eauto; split.
-             ++ etransitivity.
-                ** apply map_st_EqSt; eauto.
-                   intros * ->; reflexivity.
-                ** rewrite map_app; simpl; reflexivity.
-             ++ intuition; eauto.
-                ** rewrite map_length; auto.
-                ** rewrite <-map_app; apply Forall_map, Forall_forall; intros (?&?) Hin;
-                     eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)]; try discriminate.
+          -- subst; right; do 2 eexists. repeat split; eauto.
+             ++ rewrite Exists_map. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H1]; intros (?&?) ??.
+                rewrite <-Str_nth_S_tl; auto.
+        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?)]; try discriminate.
           apply Forall_forall; intros (?&?) Hin;
             eapply Forall_forall in Hin; eauto; simpl in *; auto.
-      + destruct (H 0) as [(?&?&?)|(?&?& (?&?) &?&?& E & ?&? & E' & ? & E'')]; try discriminate.
-        rewrite Str_nth_0 in E, E', E''; inv E; inv E''.
+      + destruct (H 0) as [(?&?&?)|(?&?& Hc & E & E' & Hr)]; try discriminate.
+        inv Hc. inv Hr.
         econstructor; eauto.
         cofix_step CoFix H.
-        destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?&?&?&?)].
+        destruct H as [(?&?&?)|(?&?&?&?&?&?)].
         -- left; intuition.
-           apply Forall_map, Forall_forall; intros (?&?) Hin;
-             eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-        -- take (EqSts _ (_ ++ (present _ ⋅ _) :: _)) and clear it.
-           right; do 5 eexists. split; eauto; split.
-           ++ etransitivity.
-              ** apply map_st_EqSt; eauto.
-                 intros * ->; reflexivity.
-              ** rewrite map_app; simpl; reflexivity.
-           ++ intuition; eauto.
-              ** rewrite map_length; auto.
-              ** rewrite <-map_app.
-                 apply Forall_map, Forall_forall; intros (?&?) Hin;
-                   eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+           apply Forall_map, Forall_forall; intros (?&?) Hin.
+           eapply Forall_forall in H0; eauto; simpl in Hin; auto.
+        -- right; do 2 eexists. repeat split; eauto.
+             ++ rewrite Exists_map. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H1]; intros (?&?) ??.
+                rewrite <-Str_nth_S_tl; auto.
   Qed.
 
   Lemma case_spec:
-    forall xs ess rs,
-      case xs ess rs <->
+    forall xs ess d rs,
+      case xs ess d rs <->
       (forall n,
           (xs # n = absent
-           /\ Forall (fun es => es # n = absent) ess
+           /\ Forall (fun es => (snd es) # n = absent) ess
+           /\ LiftO True (fun d => d # n = absent) d
            /\ rs # n = absent)
           \/
-          (exists c es v,
+          (exists c v,
               xs # n = present (Venum c)
-              /\ Forall (fun es => es # n <> absent) ess
-              /\ orel (@EqSt _) (nth_error ess c) (Some es)
-              /\ es # n = present v
+              /\ Forall (fun es => (snd es) # n <> absent) ess
+              /\ List.Exists (fun '(i, es) => i = c /\ es # n = present v) ess
+              /\ LiftO True (fun d => d # n <> absent) d
+              /\ rs # n = present v
+          )
+          \/
+          (exists c v,
+              xs # n = present (Venum c)
+              /\ Forall (fun es => (snd es) # n <> absent) ess
+              /\ Forall (fun es => (fst es) <> c) ess
+              /\ LiftO False (fun d => d # n = present v) d
               /\ rs # n = present v)).
   Proof.
     split.
     - intros * H n.
-      revert dependent xs; revert ess rs.
+      revert dependent xs; revert ess d rs.
       induction n; intros.
       + inv H; intuition.
-        right; do 3 eexists; intuition; eauto.
+        * right; left. repeat esplit; eauto.
+        * right; right. repeat esplit; eauto.
       + inv H; repeat rewrite Str_nth_S.
-        * take (Forall _ _) and clear it.
-          take (case _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+        * take (case _ _ _ _) and apply IHn in it as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             take (Forall _ _) and apply Forall_map in it.
-             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
-             simpl in Hin; auto.
-          -- take (orel _ _ _) and apply map_nth_error_orel' in it as (e &?&?).
-             match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H' end.
-             right; do 3 eexists; intuition; eauto.
-             take (Forall _ _) and apply Forall_map in it.
-             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-        * take (Forall _ _) and clear it.
-          take (case _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+             rewrite Str_nth_S_tl; auto.
+             destruct d; simpl in *; auto.
+          -- right; left. repeat esplit; eauto.
+             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+                rewrite Str_nth_S_tl; auto.
+             ++ rewrite Exists_map in H3. eapply Exists_exists in H3 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ destruct d; simpl in *; auto.
+          -- right; right. repeat esplit; eauto.
+             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+                rewrite Str_nth_S_tl; auto.
+             ++ rewrite Forall_map in H3. eapply Forall_impl; [|eapply H3]; intros (?&?) ?.
+                auto.
+             ++ destruct d; simpl in *; eauto.
+        * take (case _ _ _ _) and apply IHn in it as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             take (Forall _ _) and apply Forall_map in it.
-             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
-             simpl in Hin; auto.
-          -- take (orel _ (nth_error (List.map _ _) _) _) and apply map_nth_error_orel' in it as (e &?&?).
-             match goal with H: ?x ≡ _, H': ?x # _ = _ |- _ => rewrite H in H' end.
-             right; do 3 eexists; intuition; eauto.
-             take (Forall _ _) and apply Forall_map in it.
-             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-    - revert xs ess rs; cofix CoFix; intros * H.
+             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+             rewrite Str_nth_S_tl; auto.
+             destruct d; simpl in *; auto.
+          -- right; left. repeat esplit; eauto.
+             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+                rewrite Str_nth_S_tl; auto.
+             ++ rewrite Exists_map in H4. eapply Exists_exists in H4 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ destruct d; simpl in *; auto.
+          -- right; right. repeat esplit; eauto.
+             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+                rewrite Str_nth_S_tl; auto.
+             ++ rewrite Forall_map in H4. eapply Forall_impl; [|eapply H4]; intros (?&?) ?.
+                auto.
+             ++ destruct d; simpl in *; eauto.
+        * take (case _ _ _ _) and apply IHn in it as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
+          -- left; intuition.
+             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+             rewrite Str_nth_S_tl; auto.
+          -- right; left. repeat esplit; eauto.
+             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?; simpl.
+                rewrite Str_nth_S_tl; auto.
+             ++ rewrite Exists_map in H3. eapply Exists_exists in H3 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+          -- right; right. repeat esplit; eauto.
+             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+                rewrite Str_nth_S_tl; auto.
+             ++ rewrite Forall_map in H3. eapply Forall_impl; [|eapply H3]; intros (?&?) ?.
+                auto.
+    - revert xs ess d rs; cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv rs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
-             destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?)];
+             destruct H as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]];
              discriminate).
       + constructor.
         * cofix_step CoFix H.
-          destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+          destruct H as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
              apply Forall_map, Forall_forall; intros (?&?) Hin;
                eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-          -- take (orel _ _ _) and eapply map_nth_error_orel in it.
-             ++ right; do 3 eexists; intuition; eauto.
-                apply Forall_map, Forall_forall; intros (?&?) Hin;
-                  eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-             ++ intros * ->; reflexivity.
-        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?&?&?)]; try discriminate.
+             destruct d; auto.
+          -- subst; right; left. repeat esplit; eauto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros (?&?) ?; simpl.
+                rewrite <-Str_nth_S_tl; auto.
+             ++ rewrite Exists_map. eapply Exists_exists in H1 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ destruct d; simpl in *; auto.
+          -- subst; right; right. repeat esplit; eauto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros (?&?) ?; simpl.
+                rewrite <-Str_nth_S_tl; auto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H1]; intros (?&?) ?; simpl.
+                auto.
+             ++ destruct d; simpl in *; eauto.
+        * destruct (H 0) as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]]; try discriminate.
           apply Forall_forall; intros (?&?) Hin;
             eapply Forall_forall in Hin; eauto; simpl in *; auto.
-      + destruct (H 0) as [(?&?&?)|(?& (?&?) &?& E & Abs &? & E' & E'')]; try discriminate.
-        rewrite Str_nth_0 in E, E', E''; inv E; inv E''.
-        clear Abs.
-        econstructor; eauto.
-        * cofix_step CoFix H.
-          destruct H as [(?&?&?)|(?&?&?&?&?&?&?&?)].
+        * destruct (H 0) as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]]; try discriminate.
+          destruct d; auto.
+      + destruct (H 0) as [(?&?&?&?)|[(?&?&Hc&?&?&?&Hr)|(?&?&Hc&?&?&Hd&Hr)]]; try discriminate.
+        1,2:inv Hc; inv Hr.
+        * econstructor; eauto.
+          cofix_step CoFix H.
+          destruct H as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             apply Forall_map, Forall_forall; intros (?&?) Hin;
-               eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-          -- take (orel _ (nth_error _ x1) _) and eapply map_nth_error_orel in it.
-             ++ right; do 3 eexists; intuition; eauto.
-                apply Forall_map, Forall_forall; intros (?&?) Hin;
-                  eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
-             ++ intros * ->; reflexivity.
-        * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?&?&?)]; try discriminate.
-          apply Forall_forall; intros (?&?) Hin;
-            eapply Forall_forall in Hin; eauto; simpl in *; auto.
+             eapply Forall_map, Forall_impl; [|eapply H3]; intros (?&?) ?; auto.
+             destruct d; auto.
+          -- subst; right; left. repeat esplit; eauto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) ?; simpl.
+                rewrite <-Str_nth_S_tl; auto.
+             ++ rewrite Exists_map. eapply Exists_exists in H4 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+             ++ destruct d; simpl in *; auto.
+          -- subst; right; right. repeat esplit; eauto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) ?; simpl.
+                rewrite <-Str_nth_S_tl; auto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) ?; simpl.
+                auto.
+             ++ destruct d; simpl in *; eauto.
+        * destruct d as [(?&?)|]; simpl in *; try rewrite Str_nth_0_hd in Hd; simpl in *; inv Hd.
+          eapply CasePDef; eauto.
+          cofix_step CoFix H.
+          destruct H as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
+          -- left; intuition.
+             eapply Forall_map, Forall_impl; [|eapply H2]; intros (?&?) ?; auto.
+          -- subst; right; left. repeat esplit; eauto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H2]; intros (?&?) ?; simpl.
+                rewrite <-Str_nth_S_tl; auto.
+             ++ rewrite Exists_map. eapply Exists_exists in H3 as ((?&?)&?&?&?); subst.
+                eapply Exists_exists; repeat (esplit; eauto).
+          -- subst; right; right. repeat esplit; eauto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H2]; intros (?&?) ?; simpl.
+                rewrite <-Str_nth_S_tl; auto.
+             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) ?; simpl.
+                auto.
   Qed.
 
   (* Remark mask_const_absent: *)
@@ -2589,15 +2693,15 @@ Module Type COINDSTREAMS
   Qed.
 
   Lemma ac_case:
-    forall cs vs ss,
-      case cs vs ss ->
+    forall cs vs d ss,
+      case cs vs d ss ->
       abstract_clock cs ≡ abstract_clock ss.
   Proof.
     cofix Cofix.
     intros * Hcase.
     unfold_Stv cs;
       inv Hcase; simpl in *; constructor; simpl; auto.
-    1,2:eapply Cofix; eauto.
+    1,2,3:eapply Cofix; eauto.
   Qed.
 
   Lemma ac_lift1 :
@@ -2779,6 +2883,9 @@ Module Type COINDSTREAMS
     eapply Hslow in Hfind.
     eapply slower_mask; eauto.
   Qed.
+
+  Definition wt_streams: list (Stream svalue) -> list type -> Prop :=
+    Forall2 (fun s ty => SForall (fun v => wt_svalue v ty) s).
 
 End COINDSTREAMS.
 

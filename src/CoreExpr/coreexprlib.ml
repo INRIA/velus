@@ -127,11 +127,13 @@ struct
       | CE.Emerge ((id, _), ces, _) ->
         fprintf p "@[<v>merge %a%a@]"
           print_ident id
-          (PrintOps.print_branches (cexp 16)) (List.map (fun ce -> Some ce) ces, None)
+          (PrintOps.print_branches (cexp 16)) (List.mapi (fun i ce -> (string_of_int i, Some ce)) ces, None)
       | CE.Ecase (e, ces, d) ->
-        fprintf p "@[<v>case %a%a@]"
+        fprintf p "@[<v>case %a of%a@]"
           (exp prec') e
-          (PrintOps.print_branches (cexp 16)) (ces, Some d)
+          (PrintOps.print_branches (cexp 16))
+          (List.mapi (fun i ce -> (string_of_int i, ce)) ces,
+           if List.exists Option.is_none ces then Some d else None)
       | CE.Eexp e ->
         exp (prec' + 1) p e
     end;

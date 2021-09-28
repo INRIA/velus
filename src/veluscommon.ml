@@ -25,7 +25,7 @@ module type PRINT_OPS =
                             -> (Format.formatter -> 'a -> unit) -> 'a
                             -> unit
     val print_branches    : (Format.formatter -> 'a -> unit) -> Format.formatter
-                            -> 'a option list * 'a option -> unit
+                            -> (string * 'a option) list * 'a option -> unit
 
     val prec_unop   : unop  -> int * associativity
     val prec_binop  : binop -> int * associativity

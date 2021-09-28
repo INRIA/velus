@@ -22,7 +22,7 @@ Module Type LINLINELOCAL
        (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
        (Ord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem).
+       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem).
   Declare Module Export IL : INLINELOCAL Ids Op OpAux Cks Syn.
   Declare Module Export Typing : ILTYPING Ids Op OpAux Cks Syn Typ IL.
   Declare Module Export Clocking : ILCLOCKING Ids Op OpAux Cks Syn Clo IL.
@@ -41,7 +41,7 @@ Module LInlineLocalFun
        (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
        (Ord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem)
+       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem)
        <: LINLINELOCAL Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem ClSem.
   Module Export IL := InlineLocalFun Ids Op OpAux Cks Syn.
   Module Export Typing := ILTypingFun Ids Op OpAux Cks Syn Typ IL.

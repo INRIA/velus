@@ -64,37 +64,8 @@ Proof.
   - rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
-Section ForallStr.
-  Context {A: Type}.
-  Variable P: A -> Prop.
-  CoInductive Forall_Str: Stream A -> Prop :=
-  Always:
-    forall x xs,
-      P x ->
-      Forall_Str xs ->
-      Forall_Str (x ⋅ xs).
-
-  Lemma Forall_Str_nth:
-    forall s,
-      Forall_Str s <-> (forall n, P (s # n)).
-  Proof.
-    split.
-    - intros H n.
-      revert dependent s; induction n; intros.
-      + inv H; rewrite Str_nth_0; auto.
-      + destruct s; rewrite Str_nth_S.
-        inv H; auto.
-    - revert s; cofix CoFix; intros * H.
-      destruct s.
-      constructor.
-      + specialize (H 0); rewrite Str_nth_0 in H; auto.
-      + apply CoFix.
-        intro n; specialize (H (S n)); rewrite Str_nth_S in H; auto.
-  Qed.
-End ForallStr.
-
 Definition wt_streams: list (Stream value) -> list (ident * type) -> Prop :=
-  Forall2 (fun s xt => Forall_Str (fun v => wt_value v (snd xt)) s).
+  Forall2 (fun s xt => SForall (fun v => wt_value v (snd xt)) s).
 
 Lemma wt_streams_spec:
   forall vss xts,
@@ -118,7 +89,7 @@ Proof.
     revert dependent vss.
     induction xts, vss; intros; try now (specialize (WTs 0); simpl in WTs; inv WTs).
     constructor; auto.
-    + rewrite Forall_Str_nth; intro n; specialize (WTs n); inv WTs; auto.
+    + rewrite SForall_forall; intro n; specialize (WTs n); inv WTs; auto.
     + apply IHxts; intro n; specialize (WTs n); inv WTs; auto.
 Qed.
 

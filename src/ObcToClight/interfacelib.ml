@@ -192,19 +192,16 @@ module PrintClightOpsFun (OpNames : sig
       | Ops.Enum c -> print_enumtag p c
 
     let print_branches pp_br p (brs, default) =
-      let _, has_default = List.fold_left (fun (n, has_def) o ->
-          let n' = n+1 in
+      List.iter (fun (n, o) ->
           match o with
           | Some b ->
-            fprintf p "@;| %d => @[<hv 0>%a@]" n pp_br b;
-            (n', has_def)
+            fprintf p "@;| %s => @[<hv 0>%a@]" n pp_br b
           | None ->
-            fprintf p "@;| %d => _" n;
-            (n', true)) (0, false) brs
-      in
-      match has_default, default with
-      | true, Some d ->
-              fprintf p "@;| default => @[<hv 0>%a@]" pp_br d
+            fprintf p "@;| %s => _" n
+        ) brs;
+      match default with
+      | Some d ->
+        fprintf p "@;| default => @[<hv 0>%a@]" pp_br d
       | _ -> ()
 
   end

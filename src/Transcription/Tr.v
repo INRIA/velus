@@ -9,6 +9,7 @@ From Velus Require Import NLustre.NLSyntax.
 From Coq Require Import Omega.
 From Coq Require Import Permutation.
 From Coq Require Import String.
+From Coq Require Import Sorting.Mergesort.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -50,6 +51,58 @@ Module Type TR
     | L.Eapp _ _ _ _    => Error (msg "expression not normalized")
     end.
 
+  (** In NLustre, `case` and `merge` branches have to be sorted in constructor order.
+      That is not the case in Lustre.
+      We sort the branches during Transcription
+   *)
+  Module BranchesOrder <: Orders.TotalLeBool'.
+
+    Definition t : Type := (enumtag * cexp).
+
+    Definition leb (s1 s2 : t) : bool := ((fst s1) <=? (fst s2)).
+
+    Lemma leb_total:
+      forall s1 s2,
+        leb s1 s2 = true \/ leb s2 s1 = true.
+    Proof.
+      destruct s1 as (n1 & a1), s2 as (n2 & a2).
+      unfold leb; simpl.
+      setoid_rewrite OrdersEx.Nat_as_OT.leb_compare.
+      destruct (n1 ?= n2) eqn:Hn; auto.
+      apply Nat.compare_gt_iff in Hn.
+      apply Nat.compare_lt_iff in Hn.
+      rewrite Hn; auto.
+    Qed.
+
+  End BranchesOrder.
+  Module BranchesSort := Sort BranchesOrder.
+
+  (** For total `case` (without a default branch) we need to add a well-typed and well-clocked default branch.
+      The branch will never be read, so we don't care about it's semantics. *)
+  Definition init_type (ty : type) :=
+    match ty with
+    | Tprimitive cty => Econst (Op.init_ctype cty)
+    | Tenum _ => Eenum 0 ty
+    end.
+
+  Fixpoint add_whens (e: CE.exp) (ty: type) (ck: clock) : CE.exp :=
+    match ck with
+    | Cbase => e
+    | Con ck' x (_, k) => Ewhen (add_whens e ty ck') x k
+    end.
+
+  (** For partial `case`, we add the missing branches *)
+  Fixpoint complete_branches (s : list enumtag) (brs : list (enumtag * cexp)) : list (enumtag * option cexp) :=
+    match s with
+    | [] => map (fun '(i, e) => (i, Some e)) brs
+    | k::s =>
+      match brs with
+      | [] => (k, None)::(complete_branches s brs)
+      | (tag, e)::tl => if (tag =? k) then (tag, Some e)::(complete_branches s tl)
+                      else (k, None)::(complete_branches s brs)
+      end
+    end.
+
   Fixpoint to_cexp (e : L.exp) : res CE.cexp :=
     match e with
     | L.Econst _
@@ -61,21 +114,35 @@ Module Type TR
                                          OK (CE.Eexp le)
 
     | L.Emerge x es ([ty], ck) =>
-      do ces <- mmap (fun es => match es with
-                            | [e] => to_cexp e
+      do ces <- mmap (fun '(i, es) => match es with
+                            | [e] => do ce <- to_cexp e; OK (i, ce)
                             | _ => Error (msg "control expression not normalized")
                             end) es;
-      OK (CE.Emerge x ces ty)
+      let ces := BranchesSort.sort ces in
+      OK (CE.Emerge x (map snd ces) ty)
 
-    | L.Ecase e es [d] ([ty], (ck, _)) =>
+    | L.Ecase e es None ([ty], (ck, _)) =>
       do le <- to_lexp e;
-      do ces <- mmap (fun es => match es with
-                            | Some [e] => do e' <- to_cexp e; OK (Some e')
-                            | None => OK None
+      do ces <- mmap (fun '(i, es) => match es with
+                            | [e] => do ce <- to_cexp e; OK (i, ce)
+                            | _ => Error (msg "control expression not normalized")
+                            end) es;
+      let ces := map (fun '(i, es) => Some es) (BranchesSort.sort ces) in
+      OK (CE.Ecase le ces (Eexp (add_whens (init_type ty) ty ck)))
+    | L.Ecase e es (Some [d]) ([_], (ck, _)) =>
+      do le <- to_lexp e;
+      do ces <- mmap (fun '(i, es) => match es with
+                            | [e] => do ce <- to_cexp e; OK (i, ce)
                             | _ => Error (msg "control expression not normalized")
                             end) es;
       do d' <- to_cexp d;
-      OK (CE.Ecase le ces d')
+      let ty := L.typeof e in
+      match ty with
+      | [Tenum (_, tn)] =>
+        let ces := (complete_branches (seq 0 tn) (BranchesSort.sort ces)) in
+        OK (CE.Ecase le (map snd ces) d')
+      | _ => Error (msg "type error : expected enumerated type for condition")
+      end
 
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
@@ -916,6 +983,96 @@ Module Type TR
       | H: Forall2 _ _ [_] |- _ => inv H
       | H: Forall2 _ _ [] |- _ => inv H
       end.
+
+  Fact to_controls_fst {A} errmsg : forall (es : list (A * _)) es',
+      mmap (fun '(i, es) => match es with
+                            | [e] => do ce <- to_cexp e; OK (i, ce)
+                            | _ => Error errmsg
+                         end) es = OK es' ->
+      map fst es' = map fst es.
+  Proof.
+    unfold mmap.
+    induction es; intros * Hmap; monadInv1 Hmap; auto.
+    cases_eqn EQ. monadInv EQ. simpl.
+    f_equal; auto.
+  Qed.
+
+  (** *** Some sorting properties *)
+
+  Fact Permutation_seq_eq : forall n xs,
+      Permutation xs (seq 0 n) ->
+      Sorted.StronglySorted le xs ->
+      xs = seq 0 n.
+  Proof.
+    intros n xs.
+    assert (Forall (fun x => 0 <= x) xs) as Hf.
+    { eapply Forall_forall; intros. lia. }
+    revert xs Hf.
+    generalize 0 as start.
+    induction n; intros * Hf Hperm Hs; simpl in *.
+    - apply Permutation_sym, Permutation_nil in Hperm; subst; auto.
+    - destruct xs. 1:apply Permutation_nil in Hperm; congruence.
+      inv Hf. inv Hs.
+      assert (n0 = start); subst.
+      { assert (In start (n0::xs)) as Hin by (rewrite Hperm; auto with datatypes).
+        inv Hin; auto.
+        eapply Forall_forall in H4; eauto. lia. }
+      f_equal.
+      apply Permutation_cons_inv in Hperm; auto.
+      eapply IHn; eauto.
+      rewrite Forall_forall in *; intros * Hin.
+      rewrite Hperm, in_seq in Hin. lia.
+  Qed.
+
+  (** *** Some properties of complete_branches *)
+
+  Lemma complete_branches_In : forall k e n es,
+      In (k, Some e) (complete_branches n es) ->
+      In (k, e) es.
+  Proof.
+    induction n; intros * Hin; simpl in *.
+    - eapply in_map_iff in Hin as ((?&?)&Heq&?); inv Heq; auto.
+    - destruct es as [|(?&?)]; simpl in *.
+      + destruct Hin; eauto. inv H.
+        eapply IHn in H; eauto.
+      + destruct (e0 =? a); inv Hin; eauto.
+        * inv H; eauto.
+        * inv H.
+        * eapply IHn in H; eauto.
+  Qed.
+
+  Lemma complete_branches_fst : forall n es,
+      NoDupMembers es ->
+      Sorted.StronglySorted (fun es1 es2 => le (fst es1) (fst es2)) es ->
+      incl (map fst es) (seq 0 n) ->
+      map fst (complete_branches (seq 0 n) es) = (seq 0 n).
+  Proof.
+    Hint Constructors NoDupMembers Sorted.StronglySorted.
+    intros n. generalize 0 as start.
+    induction n; intros * Hnd Hsort Hincl; simpl in *.
+    - apply incl_nil, map_eq_nil in Hincl; subst; auto.
+    - destruct es as [|(?&?)]; inv Hnd; inv Hsort; simpl in *; auto.
+      + f_equal; eauto using incl_nil'.
+      + destruct (n0 =? start) eqn:Hn; simpl.
+        * eapply Nat.eqb_eq in Hn; subst.
+          f_equal; auto.
+          eapply IHn; eauto.
+          apply incl_cons' in Hincl as (?&Hincl).
+          intros ? Hin. assert (Hin':=Hin). apply Hincl in Hin'; inv Hin'; auto.
+          exfalso. now apply H1, fst_InMembers.
+        * eapply Nat.eqb_neq in Hn.
+          f_equal; auto.
+          eapply IHn; simpl. 1,2:constructor; simpl in *; eauto.
+          apply incl_cons' in Hincl as (?&Hincl).
+          apply incl_cons.
+          -- inv H; auto. congruence.
+          -- intros ? Hin. assert (Hin':=Hin). apply Hincl in Hin'; inv Hin'; auto.
+             exfalso.
+             eapply in_map_iff in Hin as (?&?&Hin); subst.
+             eapply Forall_forall in H4; eauto.
+             inv H; try congruence.
+             eapply in_seq in H0 as (Hle1&Hle2). lia.
+  Qed.
 
 End TR.
 

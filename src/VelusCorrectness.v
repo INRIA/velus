@@ -52,12 +52,12 @@ Section WtStream.
   Definition wt_ins :=
     forall node,
       find_node main G = Some node ->
-      wt_streams ins (idty (idty node.(n_in))).
+      NLCorrectness.wt_streams ins (idty (idty node.(n_in))).
 
   Definition wt_outs :=
     forall node,
       find_node main G = Some node ->
-      wt_streams outs (idty (idty node.(n_out))).
+      NLCorrectness.wt_streams outs (idty (idty node.(n_out))).
 
 End WtStream.
 

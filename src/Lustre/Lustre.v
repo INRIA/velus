@@ -26,8 +26,8 @@ Module Type LUSTRE
   Declare Module Export Ord: LORDERED   Ids Op OpAux Cks Syn.
   Declare Module Export Cau: LCAUSALITY Ids Op OpAux Cks Syn.
   Declare Module Export Sem: LSEMANTICS Ids Op OpAux Cks Syn Ord CStr.
-  Declare Module Export SemDet : LSEMDETERMINISM Ids Op OpAux Cks Syn Cau Ord CStr Sem.
-  Declare Module Export CkSem: LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem.
+  Declare Module Export SemDet : LSEMDETERMINISM Ids Op OpAux Cks Syn Typ Cau Ord CStr Sem.
+  Declare Module Export CkSem: LCLOCKSEMANTICS Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem.
 
   Declare Module Export InlineLocal: LINLINELOCAL Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
   Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
@@ -46,8 +46,8 @@ Module LustreFun
   Module Export Ord:= LOrderedFun     Ids Op OpAux Cks Syn.
   Module Export Cau:= LCausalityFun   Ids Op OpAux Cks Syn.
   Module Export Sem := LSemanticsFun  Ids Op OpAux Cks Syn Ord CStr.
-  Module Export SemDet := LSemDeterminismFun Ids Op OpAux Cks Syn Cau Ord CStr Sem.
-  Module Export CkSem := LClockSemanticsFun Ids Op OpAux Cks Syn Clo Cau Ord CStr Sem.
+  Module Export SemDet := LSemDeterminismFun Ids Op OpAux Cks Syn Typ Cau Ord CStr Sem.
+  Module Export CkSem := LClockSemanticsFun Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem.
 
   Module Export InlineLocal := LInlineLocalFun Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
   Module Export Norm := LNormalizationFun Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.

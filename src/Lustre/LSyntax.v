@@ -47,8 +47,8 @@ Module Type LSYNTAX
   | Efby   : list exp -> list exp -> list ann -> exp
   | Earrow : list exp -> list exp -> list ann -> exp
   | Ewhen  : list exp -> ident -> enumtag -> lann -> exp
-  | Emerge : ident * type -> list (list exp) -> lann -> exp
-  | Ecase  : exp -> list (option (list exp)) -> list exp -> lann -> exp
+  | Emerge : ident * type -> list (enumtag * list exp) -> lann -> exp
+  | Ecase  : exp -> list (enumtag * list exp) -> option (list exp) -> lann -> exp
   | Eapp   : ident -> list exp -> list exp -> list ann -> exp.
 
   Implicit Type e: exp.
@@ -195,8 +195,8 @@ Module Type LSYNTAX
     | Earrow e0s es _ =>
       fresh_ins e0s ++ fresh_ins es
     | Ewhen es _ _ _ => fresh_ins es
-    | Emerge _ es _ => flat_map fresh_ins es
-    | Ecase e es d _ => fresh_in e ++ flat_map (or_default_with [] fresh_ins) es ++ fresh_ins d
+    | Emerge _ es _ => flat_map (fun es => fresh_ins (snd es)) es
+    | Ecase e es d _ => fresh_in e ++ flat_map (fun es => fresh_ins (snd es)) es ++ or_default_with [] fresh_ins d
     | Eapp _ es er anns => fresh_ins es ++ fresh_ins er ++ anon_streams anns
     end.
 
@@ -409,14 +409,14 @@ Module Type LSYNTAX
 
     Hypothesis EmergeCase:
       forall x es a,
-        Forall (Forall P) es ->
+        Forall (fun es => Forall P (snd es)) es ->
         P (Emerge x es a).
 
     Hypothesis EcaseCase:
       forall e es d a,
         P e ->
-        Forall (LiftO True (Forall P)) es ->
-        Forall P d ->
+        Forall (fun es => Forall P (snd es)) es ->
+        LiftO True (Forall P) d ->
         P (Ecase e es d a).
 
     Hypothesis EappCase:
@@ -444,9 +444,9 @@ Module Type LSYNTAX
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
         constructor; auto. SolveForall.
-      - apply EcaseCase; auto. 2:SolveForall.
-        SolveForall. constructor; auto.
-        destruct a; simpl. SolveForall. constructor.
+      - apply EcaseCase; auto.
+        + SolveForall. constructor; auto. SolveForall.
+        + destruct o; simpl; auto. SolveForall.
       - apply EappCase; SolveForall; auto.
     Qed.
 
@@ -488,7 +488,7 @@ Module Type LSYNTAX
     destruct e; simpl; auto.
     - destruct l0. apply map_length.
     - destruct l0. apply map_length.
-    - destruct l1. apply map_length.
+    - destruct l0. apply map_length.
   Qed.
 
   (** typesof *)
@@ -503,7 +503,7 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       rewrite map_map; simpl.
       symmetry. apply map_id.
-    - destruct l1; simpl.
+    - destruct l0; simpl.
       rewrite map_map; simpl.
       symmetry. apply map_id.
   Qed.
@@ -559,7 +559,7 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
-    - destruct l1; simpl.
+    - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
     - rewrite map_map. reflexivity.
@@ -627,7 +627,7 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
-    - destruct l1; simpl.
+    - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
   Qed.
@@ -884,18 +884,18 @@ Module Type LSYNTAX
       wl_exp G (Ewhen es x b (tys, nck))
   | wl_Emerge : forall G x es tys nck,
       es <> nil ->
-      Forall (Forall (wl_exp G)) es ->
-      Forall (fun es => length (annots es) = length tys) es ->
+      Forall (fun es => Forall (wl_exp G) (snd es)) es ->
+      Forall (fun es => length (annots (snd es)) = length tys) es ->
       wl_exp G (Emerge x es (tys, nck))
-  | wl_Ecase : forall G e brs d tys nck,
+  | wl_Ecase : forall G e es d tys nck,
       wl_exp G e ->
       numstreams e = 1 ->
-      brs <> nil ->
-      (forall es, In (Some es) brs -> Forall (wl_exp G) es) ->
-      (forall es, In (Some es) brs -> length (annots es) = length tys) ->
-      Forall (wl_exp G) d ->
-      length (annots d) = length tys ->
-      wl_exp G (Ecase e brs d (tys, nck))
+      es <> nil ->
+      Forall (fun es => Forall (wl_exp G) (snd es)) es ->
+      Forall (fun es => length (annots (snd es)) = length tys) es ->
+      (forall d0, d = Some d0 -> Forall (wl_exp G) d0) ->
+      (forall d0, d = Some d0 -> length (annots d0) = length tys) ->
+      wl_exp G (Ecase e es d (tys, nck))
   | wl_Eapp : forall G f n es er anns,
       Forall (wl_exp G) es ->
       Forall (wl_exp G) er ->
@@ -959,13 +959,13 @@ Module Type LSYNTAX
       wx_exp vars (Ewhen es x b (tys, nck))
   | wx_Emerge : forall x tx es tys nck,
       In x vars ->
-      Forall (Forall (wx_exp vars)) es ->
+      Forall (fun es => Forall (wx_exp vars) (snd es)) es ->
       wx_exp vars (Emerge (x, tx) es (tys, nck))
-  | wx_Ecase : forall e brs d tys nck,
+  | wx_Ecase : forall e es d tys nck,
       wx_exp vars e ->
-      (forall es, In (Some es) brs -> Forall (wx_exp vars) es) ->
-      Forall (wx_exp vars) d ->
-      wx_exp vars (Ecase e brs d (tys, nck))
+      Forall (fun es => Forall (wx_exp vars) (snd es)) es ->
+      (forall d0, d = Some d0 -> Forall (wx_exp vars) d0) ->
+      wx_exp vars (Ecase e es d (tys, nck))
   | wx_Eapp : forall f es er anns,
       Forall (wx_exp vars) es ->
       Forall (wx_exp vars) er ->
@@ -1014,9 +1014,13 @@ Module Type LSYNTAX
         intros ? Hin. specialize (H _ Hin). specialize (H4 _ Hin).
         rewrite Forall_forall in *; eauto.
       - (* case *)
-        constructor; rewrite Forall_forall in *; eauto.
-        intros ? Hin. specialize (H _ Hin). specialize (H6 _ Hin). simpl in *.
-        rewrite Forall_forall in *; eauto.
+        constructor; eauto.
+        + eapply Forall_impl_In; [|eauto]; intros (?&?) ??.
+          eapply Forall_impl_In; [|eauto]; intros.
+          do 2 (eapply Forall_forall in H; eauto).
+        + intros ??; subst; simpl in *.
+          eapply Forall_impl_In; [|eauto]; intros.
+          eapply Forall_forall in H7; eauto.
       - (* app *)
         constructor; rewrite Forall_forall in *; eauto.
     Qed.

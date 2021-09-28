@@ -8,6 +8,7 @@ From Coq Require Import Classes.EquivDec.
 From Coq Require Import PeanoNat.
 From Coq Require Import BinPos.
 From Coq Require Import Lia.
+From Coq Require Import Sorting.
 
 From Velus Require Import CommonTactics.
 
@@ -3253,23 +3254,40 @@ Section Forall3.
   Lemma Forall3_ignore23:
     forall xs ys zs,
       Forall3 xs ys zs ->
-      Forall (fun x => exists y z, R x y z) xs.
+      Forall (fun x => exists y z, In y ys /\ In z zs /\ R x y z) xs.
   Proof.
     induction 1; eauto.
+    constructor; eauto with datatypes.
+    eapply Forall_impl; [|eauto]; intros ? (?&?&?&?&?);
+      repeat esplit; eauto; eauto with datatypes.
   Qed.
 
   Lemma Forall3_ignore13:
     forall xs ys zs,
       Forall3 xs ys zs ->
-      Forall (fun y => exists x z, R x y z) ys.
+      Forall (fun y => exists x z, In x xs /\ In z zs /\ R x y z) ys.
   Proof.
     induction 1; eauto.
+    constructor; eauto with datatypes.
+    eapply Forall_impl; [|eauto]; intros ? (?&?&?&?&?);
+      repeat esplit; eauto; eauto with datatypes.
   Qed.
 
   Lemma Forall3_ignore12:
     forall xs ys zs,
       Forall3 xs ys zs ->
-      Forall (fun z => exists x y, R x y z) zs.
+      Forall (fun z => exists x y, In x xs /\ In y ys /\ R x y z) zs.
+  Proof.
+    induction 1; eauto.
+    constructor; eauto with datatypes.
+    eapply Forall_impl; [|eauto]; intros ? (?&?&?&?&?);
+      repeat esplit; eauto; eauto with datatypes.
+  Qed.
+
+  Lemma Forall3_ignore1:
+    forall xs ys zs,
+      Forall3 xs ys zs ->
+      Forall2 (fun y z => exists x, R x y z) ys zs.
   Proof.
     induction 1; eauto.
   Qed.
@@ -3288,6 +3306,22 @@ Section Forall3.
       Forall2 (fun x y => exists z, R x y z) xs ys.
   Proof.
     induction 1; eauto.
+  Qed.
+
+  Lemma Forall3_app_inv_1:
+    forall xs1 xs2 ys zs,
+      Forall3 (xs1++xs2) ys zs ->
+      exists ys1 ys2 zs1 zs2,
+        ys = ys1 ++ ys2 /\ zs = zs1 ++ zs2 /\
+        Forall3 xs1 ys1 zs1 /\
+        Forall3 xs2 ys2 zs2.
+  Proof.
+    induction xs1; intros * Hf; simpl in *.
+    - exists [], ys, [], zs; simpl.
+      repeat split; auto. constructor.
+    - inv Hf. apply IHxs1 in H4 as (ys1&ys2&zs1&zs2&?&?&?&?); subst.
+      exists (y::ys1), ys2, (z::zs1), zs2; simpl.
+      repeat split; auto. constructor; auto.
   Qed.
 End Forall3.
 
@@ -3448,111 +3482,6 @@ Global Instance Forall3_Proper {A B C}:
 Proof.
   intros P Q HPQ ? xs Pxs ? ys Pys ? zs Pzs; subst.
   split. now rewrite HPQ. now rewrite <-HPQ.
-Qed.
-
-Section Forall2Transpose.
-  Context {A B : Type}.
-  Context (P : list A -> B -> Prop).
-
-  Inductive Forall2Transpose : list (list A) -> list B -> Prop :=
-  | F2Tnil : forall l1,
-      Forall (fun x => x = []) l1 ->
-      Forall2Transpose l1 []
-  | F2Tcons : forall l1 hd1 hd2 tl2,
-      Forall2 (fun l hd => hd_error l = Some hd) l1 hd1 ->
-      P hd1 hd2 ->
-      Forall2Transpose (List.map (@tl _) l1) tl2 ->
-      Forall2Transpose l1 (hd2::tl2).
-
-  Lemma Forall2Transpose_length : forall l1 l2,
-      Forall2Transpose l1 l2 ->
-      Forall (fun l1 => length l1 = length l2) l1.
-  Proof.
-    intros l1 l2. revert l1. induction l2; intros * HF; inv HF.
-    - eapply Forall_impl; [|eauto].
-      intros; simpl in *; subst; auto.
-    - eapply IHl2 in H4.
-      rewrite Forall_map in H4.
-      eapply Forall_impl_In; [|eauto].
-      intros ? Hin Hlen; simpl in *. rewrite <-Hlen.
-      eapply Forall2_ignore2 in H1.
-      eapply Forall_forall in H1 as (?&_&Hhd); eauto.
-      destruct a0; simpl in *; congruence.
-  Qed.
-
-  Lemma Forall2Transpose_nth : forall l1 l2,
-      Forall2Transpose l1 l2 ->
-      (forall k d1 d2, k < length l2 -> P (map (fun l => nth k l d1) l1) (nth k l2 d2)).
-  Proof.
-    intros l1 l2. revert l1.
-    induction l2; intros * Hf * Hlen; simpl in *; inv Hf.
-    - inv Hlen.
-    - destruct k.
-      + replace (map (fun l => nth 0 l d1) l1) with hd1; auto.
-        clear - H1. induction H1; simpl; auto.
-        f_equal; auto. destruct x; simpl in *; congruence.
-      + apply Lt.lt_S_n in Hlen.
-        eapply IHl2 in H4; eauto.
-        rewrite map_map in H4.
-        replace (map (fun x => nth (S k) x d1) l1) with (map (fun x => nth k (tl x) d1) l1); eauto.
-        eapply map_ext_in. intros ? Hin.
-        eapply Forall2_ignore2, Forall_forall in H1 as (?&_&Hhd); eauto.
-        destruct a0; simpl in *; congruence.
-  Qed.
-End Forall2Transpose.
-Hint Constructors Forall2Transpose.
-
-Lemma Forall2Transpose_impl {A B} : forall (P Q : list A -> B -> Prop) l1 l2,
-    (forall x y, P x y -> Q x y) ->
-    Forall2Transpose P l1 l2 ->
-    Forall2Transpose Q l1 l2.
-Proof.
-  intros *. revert l1.
-  induction l2; intros * Hpq F2T; inv F2T; econstructor; eauto.
-Qed.
-
-Lemma Forall2Transpose_map_1 {A B C} : forall (P : list A -> B -> Prop) (f : C -> A) (l1 : list (list C)) l2,
-    Forall2Transpose P (map (map f) l1) l2 <->
-    Forall2Transpose (fun x y => P (map f x) y) l1 l2.
-Proof.
-  intros *. revert l1.
-  induction l2; split; intros * F2T; simpl in *; inv F2T; eauto.
-  - constructor.
-    rewrite Forall_map in H. eapply Forall_impl; [|eauto].
-    intros ? Hmap. eapply map_eq_nil in Hmap; eauto.
-  - constructor.
-    rewrite Forall_map. eapply Forall_impl; [|eauto].
-    now intros; simpl in *; subst.
-  - assert (exists hd1', hd1 = map f hd1' /\
-                    Forall2 (fun (l : list C) (hd : C) => hd_error l = Some hd) l1 hd1') as (hd1'&?&?); subst.
-    { clear - H1. rewrite Forall2_map_1 in H1. induction H1.
-      + exists []; auto.
-      + destruct IHForall2 as (hd1'&?&?); subst.
-        destruct x; inv H. exists (c::hd1'); auto. }
-    econstructor; eauto.
-    rewrite <-IHl2.
-    replace (map (map f) (map (@tl _) l1)) with (map (@tl _) (map (map f) l1)); auto.
-    { repeat rewrite map_map.
-      eapply map_ext. intros. destruct a0; auto. }
-  - econstructor; eauto.
-    + rewrite Forall2_map_1, Forall2_map_2.
-      eapply Forall2_impl_In; [|eauto].
-      intros ?? _ _ Hhd; simpl in *.
-      destruct a0; inv Hhd; auto.
-    + replace (map (@tl _) (map (map f) l1)) with (map (map f) (map (@tl _) l1)).
-      2:{ repeat rewrite map_map.
-          eapply map_ext. intros. destruct a0; auto. }
-      rewrite IHl2; auto.
-Qed.
-
-Lemma Forall2Transpose_map_2 {A B C} : forall (P : list A -> B -> Prop) (f : C -> B) l1 l2,
-    Forall2Transpose P l1 (map f l2) <->
-    Forall2Transpose (fun x y => P x (f y)) l1 l2.
-Proof.
-  intros *. revert l1.
-  induction l2; split; intros * F2T; inv F2T; simpl; econstructor; eauto.
-  - rewrite <-IHl2; auto.
-  - rewrite IHl2; auto.
 Qed.
 
 Section InMembers.
@@ -4807,6 +4736,27 @@ Section minmax.
   Qed.
 End minmax.
 
+Lemma Sorted_impl {A} : forall (R1 R2 : A -> A -> Prop) xs,
+    (forall x y, R1 x y -> R2 x y) ->
+    Sorted R1 xs ->
+    Sorted R2 xs.
+Proof.
+  intros * HR HS.
+  induction HS; constructor; auto.
+  inv H; constructor; auto.
+Qed.
+
+Lemma Sorted_map {A B} : forall (f : A -> B) (R : B -> B -> Prop) xs,
+    Sorted R (map f xs) <->
+    Sorted (fun x y => R (f x) (f y)) xs.
+Proof.
+  induction xs; simpl; split; intros HS; inv HS; auto.
+  - constructor. rewrite <-IHxs; auto.
+    destruct xs; simpl in *; inv H2; auto.
+  - constructor. rewrite IHxs; auto.
+    destruct xs; simpl in *; inv H2; auto.
+Qed.
+
 Ltac singleton_length :=
   simpl in *;
   let Hsingl := fresh "Hsingl" in
@@ -5139,6 +5089,22 @@ Section nth_error.
       now apply nth_error_nth'.
   Qed.
 End nth_error.
+
+Corollary In_combine_seq {A} : forall (xs : list A) k x,
+    In (k, x) (combine (seq 0 (length xs)) xs) <->
+    nth_error xs k = Some x.
+Proof.
+  intros *.
+  rewrite In_combine_nth_error.
+  split; [intros (?&Hnth1&Hnth2)|intros Hnth].
+  - eapply nth_error_nth with (d:=0) in Hnth1.
+    rewrite seq_nth in Hnth1; simpl in Hnth1; subst; auto.
+    eapply nth_error_Some; intro contra; congruence.
+  - exists k; split; auto.
+    assert (k < length xs) as Hlen by (eapply nth_error_Some; intro contra; congruence).
+    erewrite nth_error_nth' with (d:=0). 2:now rewrite seq_length.
+    rewrite seq_nth; auto.
+Qed.
 
 (* Tactics for solving incl / NoDup / NoDupMembers obligations *)
 

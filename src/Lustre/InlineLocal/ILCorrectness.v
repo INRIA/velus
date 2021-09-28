@@ -23,7 +23,7 @@ Module Type ILCORRECTNESS
        (Import Cl : LCLOCKING Ids Op OpAux Cks Syn)
        (Import Ord : LORDERED Ids Op OpAux Cks Syn)
        (Import Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (Import LCS : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Cl LCA Ord CStr Sem)
+       (Import LCS : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Ty Cl LCA Ord CStr Sem)
        (Import IL  : INLINELOCAL Ids Op OpAux Cks Syn).
 
   Module Typing := ILTypingFun Ids Op OpAux Cks Syn Ty IL.
@@ -103,22 +103,21 @@ Module Type ILCORRECTNESS
           sem_exp_ck G H' bs (rename_in_exp sub e) vss.
       Proof.
         induction e using exp_ind2; intros * Hsem; inv Hsem; simpl.
-        1-11:econstructor; eauto using rename_in_var_sem.
+        1-12:econstructor; eauto using rename_in_var_sem.
         1-3:rewrite Typing.rename_in_exp_typeof; auto.
-        1-6,9-11:(rewrite Forall2_map_1; eapply Forall2_impl_In; [|eauto]; intros; eauto;
-                  rewrite Forall_forall in *; eauto).
-        - (* merge *)
-          rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros.
-          specialize (H0 _ H1). rewrite Forall_forall in *; eauto.
-        - (* case *)
-          rewrite Forall2_map_1. eapply Forall2_impl_In; [|eapply H10]; intros.
-          destruct a0; simpl in *; inv H5.
-          specialize (H4 _ eq_refl).
-          rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros.
-          eapply Forall_forall in H0; eauto; simpl in *.
-          rewrite Forall_forall in *; eauto.
-        - rewrite Forall2_map_1. eapply Forall2_impl_In; [|eapply H12]; intros.
-          destruct a0; simpl in *; inv H5; eauto.
+        1-5,10-12:(simpl in *;
+                   rewrite Forall2_map_1; eapply Forall2_impl_In; [|eauto]; intros; eauto;
+                   rewrite Forall_forall in *; eauto).
+        - rewrite <-Forall2Brs_map_1. eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+          eapply Exists_exists in Hin as (?&Hin1&Hin2).
+          repeat (eapply Forall_forall in H0; eauto).
+        - rewrite <-Forall2Brs_map_1. eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+          eapply Exists_exists in Hin as (?&Hin1&Hin2).
+          repeat (eapply Forall_forall in H0; eauto).
+        - rewrite Typing.rename_in_exp_typeof; auto.
+        - rewrite <-Forall2Brs_map_1. eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
+          eapply Exists_exists in Hin as (?&Hin1&Hin2).
+          repeat (eapply Forall_forall in H0; eauto).
         - (* app *)
           unfold clocked_app in *.
           rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros (?&(?&[|])) ??? Hck; simpl in *; auto.
@@ -1074,7 +1073,7 @@ Module ILCorrectnessFun
        (Clo : LCLOCKING Ids Op OpAux Cks Syn)
        (Lord : LORDERED Ids Op OpAux Cks Syn)
        (Sem : LSEMANTICS Ids Op OpAux Cks Syn Lord CStr)
-       (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Clo LCA Lord CStr Sem)
+       (LClockSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Ty Clo LCA Lord CStr Sem)
        (IL  : INLINELOCAL Ids Op OpAux Cks Syn)
        <: ILCORRECTNESS Ids Op OpAux Cks CStr Syn LCA Ty Clo Lord Sem LClockSem IL.
   Include ILCORRECTNESS Ids Op OpAux Cks CStr Syn LCA Ty Clo Lord Sem LClockSem IL.

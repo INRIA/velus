@@ -49,9 +49,9 @@ Module Type INLINELOCAL
       | Efby e0s e1s anns => Efby (map rename_in_exp e0s) (map rename_in_exp e1s) (map rename_in_ann anns)
       | Earrow e0s e1s anns => Earrow (map rename_in_exp e0s) (map rename_in_exp e1s) (map rename_in_ann anns)
       | Ewhen es x t ann => Ewhen (map rename_in_exp es) (rename_in_var x) t (rename_in_ann ann)
-      | Emerge (x, ty) es ann => Emerge (rename_in_var x, ty) (map (map rename_in_exp) es) (rename_in_ann ann)
+      | Emerge (x, ty) es ann => Emerge (rename_in_var x, ty) (map (fun '(i, es) => (i, map rename_in_exp es)) es) (rename_in_ann ann)
       | Ecase e es d ann =>
-        Ecase (rename_in_exp e) (map (option_map (map rename_in_exp)) es) (map rename_in_exp d) (rename_in_ann ann)
+        Ecase (rename_in_exp e) (map (fun '(i, es) => (i, map rename_in_exp es)) es) (option_map (map rename_in_exp) d) (rename_in_ann ann)
       | Eapp f es er ann => Eapp f (map rename_in_exp es) (map rename_in_exp er) (map rename_in_ann ann)
       end.
 
@@ -88,16 +88,20 @@ Module Type INLINELOCAL
       induction e using exp_ind2; simpl; auto. 5:destruct x; simpl.
       1-7:repeat rewrite map_app; try f_equal; auto.
       1-9:repeat rewrite flat_map_concat_map; repeat rewrite concat_map; repeat f_equal; auto using rename_in_ann_anon_streams.
-      1-10:repeat rewrite map_map; eapply map_ext_in; intros * Hin; try rewrite Forall_forall in *; eauto.
+      1-10:repeat rewrite map_map; try (eapply map_ext_in; intros * Hin; try rewrite Forall_forall in *; eauto).
       - (* merge *)
-        specialize (H _ Hin). rewrite Forall_forall in *.
+        specialize (H _ Hin). rewrite Forall_forall in *. destruct a0; simpl.
         rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
         f_equal. eapply map_ext_in; intros; auto.
       - (* case *)
-        specialize (H _ Hin). destruct a0; simpl in *; auto.
-        rewrite Forall_forall in *.
+        specialize (H _ Hin). rewrite Forall_forall in *. destruct a0; simpl.
         rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
         f_equal. eapply map_ext_in; intros; auto.
+      - (* case (default) *)
+        destruct d; simpl in *; auto.
+        rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
+        f_equal. eapply map_ext_in; intros; auto.
+        eapply Forall_forall in H0; eauto.
     Qed.
 
     Corollary rename_in_exp_fresh_ins : forall es,

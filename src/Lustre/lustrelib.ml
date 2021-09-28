@@ -13,6 +13,7 @@
 open Format
 open Veluscommon
 
+open Datatypes
 open BinNums
 open BinPos
 open FMapPositive
@@ -48,8 +49,8 @@ module type SYNTAX =
     | Efby   of exp list * exp list * ann list
     | Earrow of exp list * exp list * ann list
     | Ewhen  of exp list * ident * enumtag * lann
-    | Emerge of (ident * typ) * exp list list * lann
-    | Ecase  of exp * exp list option list * exp list * lann
+    | Emerge of (ident * typ) * (enumtag * exp list) list * lann
+    | Ecase  of exp * (enumtag * exp list) list * exp list option * lann
     | Eapp   of ident * exp list * exp list * ann list
 
     type equation = idents * exp list
@@ -166,11 +167,13 @@ module PrintFun
       | L.Emerge ((id, _), es, _) ->
         fprintf p "merge %a@ %a"
           print_ident id
-          (PrintOps.print_branches exp_enclosed_list) (List.map (fun ce -> Some ce)es, None)
+          (PrintOps.print_branches exp_enclosed_list)
+          (List.map (fun (i, ce) -> (asprintf "%a" PrintOps.print_enumtag i, Some ce)) es, None)
       | L.Ecase (e, es, d, _) ->
-        fprintf p "case %a@ %a"
+        fprintf p "case %a@ of@ %a"
           (exp 16) e
-          (PrintOps.print_branches exp_enclosed_list) (es, Some d)
+          (PrintOps.print_branches exp_enclosed_list)
+          (List.map (fun (i, ce) -> (asprintf "%a" PrintOps.print_enumtag i, Some ce)) es, d)
       | L.Eapp (f, es, [], anns) ->
         if !print_appclocks
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"

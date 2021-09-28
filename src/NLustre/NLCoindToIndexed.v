@@ -267,53 +267,75 @@ Module Type NLCOINDTOINDEXED
         rewrite merge_spec in Hmerge.
         destruct (Hmerge n)
           as [(Hxs & Habs & Hos)
-             |(? & ? & ? & ? & ? & Hxs & Heq & Hlength & Hes & Habs & Hos)]; clear Hmerge;
+             |(? & ? & Hxs & Hpres & Habs & Hos)]; clear Hmerge;
           rewrite Hos; rewrite Hxs in Hvar.
         + constructor; auto.
           clear - IH Habs.
-          induction IH as [|???? He]; inversion_clear Habs as [|?? Hy]; constructor; auto.
-          specialize (He n); simpl in He; rewrite Hy in He; auto.
-        + apply Forall2_trans_ex with (2:=Heq) in IH.
-          apply Forall2_app_inv_r in IH as (es1 & es2 & IH1 & IH2 & ?); subst.
-          inversion_clear IH2 as [|e ? es2' ? (v & Hin & He & Hv) IH2'].
-          specialize (He n); simpl in He.
-          rewrite Hv, Hes in He.
+          eapply Forall2_ignore2, Forall_impl in IH; eauto.
+          intros ? (?&Hin&He). specialize (He n); simpl in He.
+          eapply length_in_right_combine with (l:=seq 0 (length ess)) in Hin as (?&Hin).
+          2:now rewrite seq_length.
+          eapply Forall_forall in Hin; eauto; simpl in *. now rewrite <-Hin.
+        + assert (length ess = length es) as Hlen by (apply Forall2_length in IH; auto).
+          eapply Exists_exists in Hpres as ((k&?)&Hin&?&?); subst.
+          eapply In_combine_seq in Hin as Hnth1.
+          assert (IH':=IH). eapply Forall2_swap_args, nth_error_Forall2 in IH' as (?&Hnth2&He); eauto.
+          specialize (He n); simpl in *.
+          assert (Hnth2':=Hnth2). eapply nth_error_split in Hnth2' as (es1&es2&?&Hles1).
           econstructor; eauto.
-          * eapply Forall2_length; eauto.
-          * apply Forall2_app with (2 := IH2') in IH1; clear IH2'.
-            clear - IH1 Habs.
-          induction IH1 as [|???? (v & Hin & He & Hv)]; inversion_clear Habs as [|?? Hy]; constructor; auto.
-          specialize (He n); simpl in He; rewrite Hv, Hy in He; auto.
+          * congruence.
+          * eapply Forall_forall; intros ? Hin'.
+            assert (exists k', nth_error es k' = Some x3 /\ k' <> x0) as (k'&Hnth3&Hneq).
+            { apply in_app_iff in Hin' as [Hin'|Hin'];
+                eapply In_nth_error in Hin' as (k'&Hnth).
+              - exists k'; subst.
+                assert (k' < length es1) by (eapply nth_error_Some; intros ?; congruence).
+                rewrite nth_error_app1; auto. split; auto. lia.
+              - exists (S (length es1 + k')); subst.
+                split; try lia.
+                rewrite nth_error_app2, Nat.sub_succ_l; simpl. 2,3:lia.
+                replace (length es1 + k' - length es1) with k' by lia; auto.
+            }
+            eapply nth_error_Forall2 in IH as (?&Hnth4&He'); eauto. specialize (He' n); simpl in *.
+            eapply In_combine_seq in Hnth4.
+            eapply Forall_forall in Habs; [|eapply Hnth4]; simpl in *.
+            rewrite <-Habs; auto.
 
       - eapply sem_exp_impl in He; unfold tr_Stream in He.
         specialize (He n); simpl in *.
         rewrite case_spec in Hcase.
         destruct (Hcase n)
-          as [(Hxs & Habs & Hos)
-             |(? & ? & ? & Hxs & Habs & Hnth & Hes & Hos)]; clear Hcase;
+          as [(Hxs & Habs & _ & Hos)
+             |[(? & ? & Hxs & Habs & Heq & _ & Hos)
+              |(? & ? & Hxs & ? & ? & [] & Hos)]]; clear Hcase; simpl in *;
           rewrite Hos; rewrite Hxs in He.
-        * constructor; auto.
+        + constructor; auto.
           clear - IH Habs.
-          induction IH as [|???? He]; inversion_clear Habs as [|?? Hy]; constructor; auto.
-          specialize (He n); simpl in He; rewrite Hy in He; auto.
-        * inv Hnth; take (_ = nth_error _ _) and symmetry in it; rename it into Hnth; take (_ ≡ _) and rename it into Heq.
+          eapply Forall2_ignore2, Forall_impl in IH; eauto.
+          intros ? (?&Hin&He). specialize (He n); simpl in He.
+          eapply length_in_right_combine with (l:=seq 0 (length ess)) in Hin as (?&Hin).
+          2:now rewrite seq_length.
+          eapply Forall_forall in Hin; eauto; simpl in *. now rewrite <-Hin.
+        + assert (length ess = length es) as Hlen by (apply Forall2_length in IH; auto).
           assert (exists vs, Forall2 (fun es v => es # n = present v) ess vs) as (vs & Hpres).
-          { clear - Habs; induction Habs as [|e es He]; eauto.
+          { clear - Habs. eapply Forall_impl with (Q:=fun '(_, es) => es # n <> absent), Forall2_combine'' in Habs.
+            2:now rewrite seq_length. 2:(intros (?&?) ?; simpl; eauto).
+            induction Habs as [|???? He]; eauto.
             apply not_absent_present in He as (v & ?).
             destruct IHHabs as (vs & ?).
             exists (v :: vs); constructor; auto.
-          }
-          apply Forall2_trans_ex with (2 := Hpres) in IH.
-          econstructor; eauto.
-          -- instantiate (1 := vs).
-             clear - IH. induction IH as [|???? (v & Hin & He & Hy)]; constructor; auto.
-             specialize (He n); simpl in He; rewrite Hy in He; auto.
-          -- apply nth_error_split in Hnth as (ess1 & ess2 & ? & ?); subst.
-             apply Forall2_app_inv_l in Hpres as (vs1 & vs2 & Hpres1 & Hpres2 & ?); subst.
-             inversion_clear Hpres2 as [|???? Hsx].
-             erewrite Forall2_length; eauto.
-             rewrite nth_error_app3; auto.
-             rewrite Heq, Hes in Hsx; inv Hsx; auto.
+          } clear Habs.
+          eapply Exists_exists in Heq as ((k&?)&Hin&?&?); subst.
+          eapply In_combine_seq in Hin as Hnth1.
+          assert (IH':=IH). eapply Forall2_swap_args, nth_error_Forall2 in IH' as (?&Hnth2&He1); eauto.
+          specialize (He1 n); simpl in *.
+          assert (Hnth2':=Hnth2). eapply nth_error_split in Hnth2' as (es1&es2&?&Hles1).
+          eapply CESem.Scase_pres with (vs:=vs); eauto.
+          * eapply Forall2_trans_ex in Hpres; eauto.
+            eapply Forall2_impl_In; [|eauto]; intros ?? _ _ (?&?&He2&?).
+            specialize (He2 n); simpl in *. congruence.
+          * eapply nth_error_Forall2 in Hpres as (?&Hnth3&?); eauto.
+            congruence.
 
       - apply sem_exp_impl in He; unfold tr_Stream in *; auto.
     Qed.
