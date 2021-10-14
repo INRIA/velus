@@ -185,13 +185,25 @@ Module Type NCLOCKING
     destruct (is_constant e0); repeat inv_bind; reflexivity.
   Qed.
 
-  Fact unnest_fby_clockof : forall anns e0s es,
+  Fact unnest_fby_clocksof : forall anns e0s es,
       length e0s = length anns ->
       length es = length anns ->
       clocksof (unnest_fby e0s es anns) = List.map clock_of_nclock anns.
   Proof.
     intros * Hlen1 Hlen2.
     rewrite clocksof_annots, unnest_fby_annot, map_map; auto.
+  Qed.
+
+  Fact unnest_merge_clocksof : forall tys x tx es nck,
+      clocksof (unnest_merge (x, tx) es tys nck) = List.map (fun _ => (fst nck)) tys.
+  Proof.
+    induction tys; intros *; simpl in *; f_equal; eauto.
+  Qed.
+
+  Fact unnest_case_clocksof : forall tys c es d nck,
+      clocksof (unnest_case c es d tys nck) = List.map (fun _ => (fst nck)) tys.
+  Proof.
+    induction tys; intros *; simpl in *; f_equal; eauto.
   Qed.
 
   Fact unnest_rhs_clockof: forall G vars e es' eqs' st st',

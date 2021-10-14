@@ -992,7 +992,7 @@ Module Type CORRECTNESS
     eapply sem_var_mask_inv in H3 as (?&Hvar'&Heq).
     eapply sem_var_det in Hvar; eauto. rewrite Heq, Hvar in H6.
     eapply sem_exp_caexp; eauto using LCS.sem_exp_ck_sem_exp.
-    eapply LCS.sc_exp in H6; eauto.
+    eapply NCor.sc_cexp in H6; eauto.
     2:eapply LCS.sc_vars_mask; eauto.
     rewrite Hck in H6. simpl in H6. inv H6; auto.
   Qed.
@@ -1401,7 +1401,7 @@ Module Type CORRECTNESS
         { erewrite envs_eq_find in EQ0; eauto. inv EQ0; eauto. }
         assert (sem_clock (mask_hist k r H) (maskb k r b) ck (abstract_clock y1)) as Hck.
         { inv Hnormed. 2:inv H4; inv H0.
-          eapply LCS.sc_exp in H10; eauto using LCS.sc_vars_mask.
+          eapply NCor.sc_lexp in H10; eauto using LCS.sc_vars_mask.
           apply LN.Unnesting.normalized_lexp_numstreams in H27. rewrite <- L.length_clockof_numstreams in H27.
           singleton_length.
           apply Forall2_singl in H10; subst.
@@ -1450,7 +1450,7 @@ Module Type CORRECTNESS
           rewrite <-Heq; auto. }
         intros k. specialize (Hsem k). inv Hsem. simpl_Foralls.
         inv H5. simpl_Foralls.
-        eapply Forall2_ignore2, Forall_forall in H10 as (?&?&?); eauto.
+        eapply Forall2_ignore2, Forall_forall in H12 as (?&?&?); eauto.
         eapply Forall_forall in Hnormed'; eauto.
         eapply sem_normalized_lexp_mask_inv in Hnormed' as (?&Heq); eauto using LCS.sem_exp_ck_sem_exp.
         rewrite Heq in H2; eauto.
@@ -1462,10 +1462,10 @@ Module Type CORRECTNESS
       { clear - Vars Hsem.
         eapply Forall_Forall2; rewrite Forall_map; eapply Forall_forall; intros (?&?) Hin.
         specialize (Hsem 0). inv Hsem. simpl_Foralls.
-        inv H2. eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H10].
+        inv H2. eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H11].
         eapply Forall2_ignore1, Forall_forall in Vars as (?&?&?&?&Hs&Hx); eauto.
         destruct Hx as (?&?&?); subst. inv Hs.
-        eapply sem_var_mask_inv in H8 as (?&?&?); eauto.
+        eapply sem_var_mask_inv in H7 as (?&?&?); eauto.
       }
       assert (exists sr', Forall2 bools_of vr' sr') as (sr'&Hbools2).
       { clear - Vars Hsem Hvr.
@@ -1477,7 +1477,7 @@ Module Type CORRECTNESS
         rewrite Forall2_map_1 in Hvr. eapply Forall2_ignore1, Forall_forall in Hvr as ((?&?)&Hin'&Hvar); eauto.
         specialize (Hsem k). inv Hsem. simpl_Foralls.
         inv H2. inversion H12 as (?&Hbools'&_).
-        eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H10].
+        eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H11].
         eapply Forall2_ignore1, Forall_forall in Vars as (?&?&?&?&Hs&Hx); eauto.
         destruct Hx as (?&?&?); subst. inv Hs.
         eapply sem_var_mask with (r:=r) (k:=k) in Hvar.
@@ -1499,7 +1499,7 @@ Module Type CORRECTNESS
         simpl_Foralls.
         take (LC.wc_exp _ _ _) and inversion_clear it
           as [| | | | | | | | | | |????? bck sub Wce ?? WIi WIo Wcr].
-        eapply LCS.sc_exps in Hse as Hsc; eauto using LCS.sc_vars_mask.
+        eapply NCor.sc_lexps in Hse as Hsc; eauto using LCS.sc_vars_mask.
         take (L.find_node _ _ = Some n) and
              pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?)).
         assert (find_base_clock (L.clocksof l) = bck) as ->.
@@ -1533,8 +1533,8 @@ Module Type CORRECTNESS
               eapply Forall2_trans_ex in Hbools2; [|eapply Heq].
               eapply Forall2_impl_In; [|eauto]. intros ?? _ _ (?&?&Heq'&?).
               rewrite Heq'; auto. eapply bools_of_mask; eauto. }
-          clear - Hvr Hbools2 H12 Vars.
-          eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H12].
+          clear - Hvr Hbools2 H13 Vars.
+          eapply Forall2_trans_ex in Vars; [|eapply Forall2_swap_args, H13].
           unfold EqSts in *.
           rewrite Forall2_map_1 in Hvr. rewrite Forall2_map_2. unfold EqSts.
           eapply Forall2_trans_ex in Hvr; [|eapply Vars]. clear - Hvr.
@@ -1544,9 +1544,9 @@ Module Type CORRECTNESS
         }
         eapply NLSC.mod_sem_node_morph_Proper. reflexivity.
         3:(eapply Hsemnode; eauto).
-        * specialize (Hse k1). clear - Hwcg Hnormed' Hmask Hse H9 Hbs Hdisj.
+        * specialize (Hse k1). clear - Hwcg Hnormed' Hmask Hse H11 Hbs Hdisj.
           assert (EqSts (concat ss) (map (maskv k1 r) (concat ess))) as Heq.
-          { rewrite Forall2_swap_args in H9. eapply Forall2_trans_ex in Hse; eauto.
+          { rewrite Forall2_swap_args in H11. eapply Forall2_trans_ex in Hse; eauto.
             unfold EqSts. rewrite Forall2_map_2. rewrite Forall2_map_2 in Hse.
             eapply Forall2_concat, Forall2_impl_In; [|eauto]. intros ?? _ _ (?&Hin&?&?).
             rewrite <-Forall2_map_2.
@@ -1705,13 +1705,10 @@ Module Type CORRECTNESS
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
       rewrite Hblk in *. inv Hnd2. inv Hblocks.
       assert (Env.refines (@EqSt _) H H') as Href.
-      { rewrite map_app, map_fst_idty in Hdom.
-        eapply LCS.local_hist_dom_refines; eauto; simpl in *. rewrite app_nil_r.
-        intros ? [Hinm1|Hinm1] Hinm2.
-        - eapply H11 in Hinm1; eauto using in_or_app.
-        - eapply NoDupMembers_app_InMembers in Hnd1; eauto.
-          eapply Hnd1, InMembers_incl; eauto using L.local_anons_in_block_incl.
-          rewrite InMembers_idty, fst_InMembers; auto.
+      { rewrite map_fst_idty in Hdom.
+        eapply LCS.local_hist_dom_refines. 3,4:eauto. 1,2:eauto.
+        intros ? Hinm1 Hinm2.
+        eapply H11 in Hinm1; eauto using in_or_app.
       }
       eapply NLSC.SNode with (H:=H'); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
