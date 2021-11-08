@@ -121,7 +121,7 @@ Module Type TR
       let ces := BranchesSort.sort ces in
       OK (CE.Emerge x (map snd ces) ty)
 
-    | L.Ecase e es None ([ty], (ck, _)) =>
+    | L.Ecase e es None ([ty], ck) =>
       do le <- to_lexp e;
       do ces <- mmap (fun '(i, es) => match es with
                             | [e] => do ce <- to_cexp e; OK (i, ce)
@@ -129,7 +129,7 @@ Module Type TR
                             end) es;
       let ces := map (fun '(i, es) => Some es) (BranchesSort.sort ces) in
       OK (CE.Ecase le ces (Eexp (add_whens (init_type ty) ty ck)))
-    | L.Ecase e es (Some [d]) ([_], (ck, _)) =>
+    | L.Ecase e es (Some [d]) ([_], ck) =>
       do le <- to_lexp e;
       do ces <- mmap (fun '(i, es) => match es with
                             | [e] => do ce <- to_cexp e; OK (i, ce)
@@ -199,7 +199,7 @@ Module Type TR
 
   Definition vars_of (es : list L.exp) :=
     omap (fun e => match e with
-                | L.Evar x (_, (ck, _)) => Some (x, ck)
+                | L.Evar x (_, ck) => Some (x, ck)
                 | _ => None
                 end) es.
 
@@ -242,7 +242,7 @@ Module Type TR
     match d with
     | L.Beq eq =>
       to_equation env envo xr eq
-    | L.Breset [block] (L.Evar x (_, (ck, _))) =>
+    | L.Breset [block] (L.Evar x (_, ck)) =>
       block_to_equation env envo ((x, ck)::xr) block
     | _ => Error (msg "block not normalized")
     end.
@@ -265,9 +265,8 @@ Module Type TR
     apply In_InMembers in Hin as Hinm.
     pose proof (L.n_nodup n) as (Hnodup&_).
     rewrite Env.gsso'. apply Env.In_find_adds'; eauto.
-    - rewrite idty_app in Hnodup. now apply NoDupMembers_app_l, NoDupMembers_app_r in Hnodup.
-    - eapply NoDupMembers_app_InMembers_l; eauto.
-      rewrite idty_app in Hnodup. now apply NoDupMembers_app_l in Hnodup.
+    - rewrite NoDupMembers_idty. now apply NoDupMembers_app_r in Hnodup.
+    - rewrite InMembers_idty in *. eapply NoDupMembers_app_InMembers_l; eauto.
   Qed.
 
   Lemma ok_fst_defined eq eq' :
@@ -420,7 +419,7 @@ Module Type TR
         destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
         eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
         destruct n. simpl. pose proof n_nodup as (Hnodup&_).
-        rewrite idty_app in Hnodup. apply NoDupMembers_app_l, NoDupMembers_app_r in Hnodup; auto.
+        rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
       + cases. apply Forall_singl in H0.
         eapply H0; eauto.
       + congruence.
@@ -431,13 +430,14 @@ Module Type TR
     clear H0. rename l into vars.
     pose proof (L.n_nodup n) as (Hndup1&Hndup2).
     cases. rename l3 into blks. monadInv P.
-    apply NoDupMembers_app_l in Hndup1. inv Hndup2.
+    inv Hndup2.
     rewrite (Permutation_app_comm (idty vars)), app_assoc, <-idty_app.
     apply NoDupMembers_app; eauto.
     - rewrite NoDupMembers_idty; auto.
+    - rewrite NoDupMembers_idty; auto.
     - intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1, Hinm2.
       eapply H4; eauto.
-      now apply in_app_iff, or_introl, fst_InMembers.
+      now apply fst_InMembers.
   Qed.
 
   (* NL.n_good obligation *)
@@ -447,7 +447,7 @@ Module Type TR
     split; auto.
     cases. monadInv P.
     rewrite (Permutation_app_comm (idty vars)), app_assoc, <-idty_app, map_app, 2 map_fst_idty.
-    apply Forall_app in Hgood1 as (Hgood1&_). inv Hgood2.
+    inv Hgood2.
     apply Forall_app. split; auto.
     1,2:(eapply Forall_impl; [|eauto]; intros * [?|(pref&Hpref&?&?&?)];
          subst; [left|right]; auto;
@@ -647,15 +647,14 @@ Module Type TR
     Proof.
       intros Hblk.
       pose proof (L.n_nodup n) as (Hnd1&Hnd2). rewrite Hblk in *; clear Hblk.
-      apply NoDupMembers_app_l in Hnd1. rewrite idty_app in Hnd1. inv Hnd2.
+      inv Hnd2.
       rewrite 2 idty_app, envs_eq_app_comm.
       rewrite <- app_assoc.
       apply env_eq_env_adds'.
-      2:rewrite envs_eq_app_comm; apply env_eq_env_adds', env_eq_env_from_list; eauto using NoDupMembers_app_r.
-      rewrite (Permutation_app_comm (_ (L.n_out _))).
-      apply NoDupMembers_app; eauto using NoDupMembers_app_l. apply NoDupMembers_idty; auto.
-      intros ? Hinm. rewrite <-idty_app, InMembers_idty, fst_InMembers. rewrite InMembers_idty in Hinm.
-      setoid_rewrite in_app_iff in H4. eapply proj1, not_or', H4; eauto.
+      2:rewrite envs_eq_app_comm; apply env_eq_env_adds', env_eq_env_from_list.
+      1-3:repeat rewrite <-idty_app; repeat rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
+      rewrite (Permutation_app_comm (L.n_out _)).
+      apply NoDupMembers_app; eauto using NoDupMembers_app_l. intros. rewrite fst_InMembers; eauto.
     Qed.
 
   End Envs_eq.
@@ -949,15 +948,15 @@ Module Type TR
 
   Fact vars_of_spec: forall es xr,
       vars_of es = Some xr <->
-      Forall2 (fun e '(x, ck) => exists ty n, e = L.Evar x (ty, (ck, n))) es xr.
+      Forall2 (fun e '(x, ck) => exists ty, e = L.Evar x (ty, ck)) es xr.
   Proof.
     induction es; intros *; simpl in *; split; intros H.
     - inv H; auto.
     - inv H; auto.
     - destruct a; inv H.
-      destruct a as (?&?&?). cases; inv H1.
+      destruct a as (?&?). cases; inv H1.
       constructor; eauto. eapply IHes; eauto.
-    - inv H. destruct y, H2 as (?&?&?); subst.
+    - inv H. destruct y, H2 as (?&?); subst.
       eapply IHes in H4. rewrite H4; auto.
   Qed.
 
@@ -968,7 +967,7 @@ Module Type TR
     induction es; intros F; inv F.
     - exists []; auto.
     - eapply IHes in H2 as (xr&?).
-      destruct H1 as (?&(?&?&?)&?); subst.
+      destruct H1 as (?&(?&?)&?); subst.
       simpl. setoid_rewrite H. eauto.
   Qed.
 

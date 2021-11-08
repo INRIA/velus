@@ -18,21 +18,33 @@ returns (y: bool);
 var u: bool when w;
     v: bool when w;
     w: bool when x;
+    z1: bool when x; y1: bool when z1;
+    z2: bool when w; y2: bool when z2;
 let
   y = merge(x; w; false);
   (* The correct form is:
         w = g(f(true when x, z, false when x when z), x);
 
      This example tests whether the compiler infers the missing
-     "when" across node applications. *)
-  w = g(f(true, z, false), x);
+     "when" across node applications.
+
+     The nested form is not available, as we have simplified the
+     clock system of the language to remove anonymous clock variables.
+ *)
+  (y1, z1) = f(true, z, false);
+  w = g(y1, z1, x);
 
   u = true when w;
   (* The correct form is:
         v = g(f(true when x when w, u, false when x when w when u), x);
 
      This example tests whether the compiler infers the missing
-     "when" across node applications. *)
-  v = g(f(true, u, false), w);
+     "when" across node applications.
+
+     The nested form is not available, as we have simplified the
+     clock system of the language to remove anonymous clock variables.
+ *)
+  (y2, z2) = f(true, u, false);
+  v = g(y2, z2, w);
 tel
 

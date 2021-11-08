@@ -51,14 +51,6 @@ Module Type ILTYPING
       - constructor; eauto using rename_in_var_wt.
     Qed.
 
-    Lemma rename_in_nclock_wt : forall enums ck,
-        wt_nclock enums vars ck ->
-        wt_nclock enums vars' (rename_in_nclock sub ck).
-    Proof.
-      intros * Hwt. inv Hwt.
-      constructor; auto using rename_in_clock_wt.
-    Qed.
-
   End rename_in_clock.
 
   Lemma rename_in_sub : forall x y (ty : Op.type) sub xs,
@@ -137,15 +129,15 @@ Module Type ILTYPING
           wt_exp G vars' (rename_in_exp sub e).
       Proof.
         intros * Hwc; induction e using exp_ind2; inv Hwc; simpl;
-          econstructor; eauto using rename_in_var_wt, rename_in_nclock_wt.
+          econstructor; eauto using rename_in_var_wt, rename_in_clock_wt.
         1-38:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
         1-31:try rewrite rename_in_exp_typeof; simpl; auto.
         1-26:try rewrite rename_in_exp_typesof; simpl; auto.
         1-23:try rewrite map_map; eauto.
         - rewrite Forall_map in *.
-          eapply Forall_impl; [|eauto]; intros; simpl in *; eauto using rename_in_nclock_wt.
+          eapply Forall_impl; [|eauto]; intros; simpl in *; eauto using rename_in_clock_wt.
         - rewrite Forall_map in *.
-          eapply Forall_impl; [|eauto]; intros; simpl in *; eauto using rename_in_nclock_wt.
+          eapply Forall_impl; [|eauto]; intros; simpl in *; eauto using rename_in_clock_wt.
         - erewrite map_ext; eauto. intros (?&?); auto.
         - contradict H6. apply map_eq_nil in H6; auto.
         - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
@@ -174,12 +166,7 @@ Module Type ILTYPING
         - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; simpl in *.
           rewrite rename_in_exp_typeof; auto.
         - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; simpl in *.
-          rewrite rename_in_ann_anon_streams, rename_in_exp_fresh_ins, <-map_app.
-          eapply rename_in_nclock_wt; [| |eauto].
-          + intros ??? Hfind Hin. rewrite in_app_iff in *.
-            destruct Hin; eauto using rename_in_var_wt, rename_in_sub.
-          + intros ?? Hfind Hin. rewrite in_app_iff in *.
-            destruct Hin; eauto using rename_in_var_wt, rename_in_nsub.
+          eapply rename_in_clock_wt; eauto.
       Qed.
 
       Lemma rename_in_equation_wt : forall eq,

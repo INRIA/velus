@@ -35,10 +35,8 @@ module type SYNTAX =
     | Cbase
     | Con of clock * ident * (typ * enumtag)
 
-    type nclock = clock * ident option
-
-    type ann = typ * nclock
-    type lann = typ list * nclock
+    type ann = typ * clock
+    type lann = typ list * clock
 
     type exp =
     | Econst of cconst
@@ -119,15 +117,8 @@ module PrintFun
           print_ident x
           PrintOps.print_enumtag c
 
-    let print_nclock p = function
-      | (ck, None) -> print_clock p ck
-      | (ck, Some cid) ->
-         fprintf p "(%a : @[<hov 2>%a@])"
-           print_ident cid
-           print_clock ck
-
-    let print_ncks =
-      pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_nclock
+    let print_cks =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_clock
 
     let print_comma_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") p
@@ -179,7 +170,7 @@ module PrintFun
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
             print_ident f
             exp_arg_list es
-            print_ncks (List.map snd anns)
+            print_cks (List.map snd anns)
         else fprintf p "%a%a"
             print_ident f
             exp_arg_list es
@@ -189,7 +180,7 @@ module PrintFun
             print_ident f
             (exp_list prec') er
             exp_arg_list es
-            print_ncks (List.map snd anns)
+            print_cks (List.map snd anns)
         else fprintf p "(restart@ %a@ every@ %a)%a"
             print_ident f
             (exp_list prec') er

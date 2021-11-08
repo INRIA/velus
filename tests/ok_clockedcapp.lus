@@ -16,13 +16,19 @@ tel
 node h(x: bool)
 returns (y: bool);
 var w: bool when x;
+    z1: bool when x; y1: bool when z1;
 let
   y = merge(x; w; false);
   (* The correct form is:
         w = g(f(true when x), x);
      
      This example tests whether the compiler infers the missing
-     "when" across node applications. *)
-  w = g(f(true), x);
+     "when" across node applications.
+
+     The nested form is not available, as we have simplified the
+     clock system of the language to remove anonymous clock variables.
+ *)
+  (y1, z1) = f(true);
+  w = g(y1, z1, x);
 tel
 

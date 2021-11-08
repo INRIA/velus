@@ -2238,6 +2238,15 @@ Section SkipnDropn.
       simpl. apply IHxs. lia.
   Qed.
 
+  Lemma skipn_all2 : forall n (xs: list A),
+      length xs <= n ->
+      skipn n xs = [].
+  Proof.
+    induction n; intros * Hlen; destruct xs; simpl in *; auto.
+    - lia.
+    - apply IHn. lia.
+  Qed.
+
 End SkipnDropn.
 
 Section Combine.
@@ -3432,9 +3441,27 @@ Proof.
   induction Hf1; inv Hf2; constructor; auto.
 Qed.
 
+Lemma Forall3_combine2 {A B C} : forall (P : A -> B -> C -> Prop) ys xs zs,
+    length ys = length zs ->
+    Forall2 (fun x '(y, z) => P x y z) xs (combine ys zs) ->
+    Forall3 P xs ys zs.
+Proof.
+  induction ys; intros * Hlen Hf;
+    destruct zs; simpl in *; try congruence;
+      inv Hf; constructor; auto.
+Qed.
+
 Lemma Forall3_combine'1 {A B C} : forall (P : (A * B) -> C -> Prop) xs ys zs,
     Forall3 (fun x y z => P (x, y) z) xs ys zs ->
     Forall2 P (combine xs ys) zs.
+Proof.
+  intros * Hf.
+  induction Hf; simpl; constructor; auto.
+Qed.
+
+Lemma Forall3_combine'2 {A B C} : forall (P : A -> (B * C) -> Prop) xs ys zs,
+    Forall3 (fun x y z => P x (y, z)) xs ys zs ->
+    Forall2 P xs (combine ys zs).
 Proof.
   intros * Hf.
   induction Hf; simpl; constructor; auto.
@@ -5104,6 +5131,37 @@ Proof.
     assert (k < length xs) as Hlen by (eapply nth_error_Some; intro contra; congruence).
     erewrite nth_error_nth' with (d:=0). 2:now rewrite seq_length.
     rewrite seq_nth; auto.
+Qed.
+
+Fact in_app_map_flat_map {A B C} : forall (f : C -> B) (g : A -> list C) x xs y ys,
+    In y ys ->
+    In x (xs ++ map f (g y)) ->
+    In x (xs ++ map f (flat_map g ys)).
+Proof.
+  intros * Hin1 Hin2.
+  rewrite in_app_iff in *.
+  destruct Hin2 as [Hin2|Hin2]; auto.
+  right.
+  eapply incl_map; [|eauto]. intros ??.
+  eapply in_flat_map; eauto.
+Qed.
+
+Fact nodup_app_map_flat_map {A B C} : forall (f : C -> B) (g : A -> list C) xs y ys,
+    In y ys ->
+    NoDup (xs ++ map f (flat_map g ys)) ->
+    NoDup (xs ++ map f (g y)).
+Proof.
+  intros * Hin Hnd.
+  apply NoDup_app'.
+  - apply NoDup_app_l in Hnd; auto.
+  - apply NoDup_app_r in Hnd.
+    induction ys; inv Hin; simpl in *; rewrite map_app in *.
+    + apply NoDup_app_l in Hnd; auto.
+    + apply NoDup_app_r in Hnd; auto.
+  - eapply Forall_forall; intros * Hin1 Hin2.
+    eapply NoDup_app_In in Hnd; eauto. eapply Hnd.
+    eapply incl_map; [|eauto]. intros ??.
+    eapply in_flat_map; eauto.
 Qed.
 
 (* Tactics for solving incl / NoDup / NoDupMembers obligations *)

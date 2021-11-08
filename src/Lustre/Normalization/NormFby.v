@@ -28,7 +28,7 @@ Module Type NORMFBY
   Fixpoint add_whens (e : exp) (ty : type) (cl : clock) :=
     match cl with
     | Cbase => e
-    | Con cl' ckid (_, b) => Ewhen [(add_whens e ty cl')] ckid b ([ty], (cl, None))
+    | Con cl' ckid (_, b) => Ewhen [(add_whens e ty cl')] ckid b ([ty], cl)
     end.
 
   Open Scope bool_scope.
@@ -39,7 +39,7 @@ Module Type NORMFBY
     fun st => let (x, st') := fresh_ident norm2 None ((OpAux.bool_velus_type, ck)) st in
            ((x, [([x], [Efby [add_whens (Eenum 1 bool_velus_type) bool_velus_type ck]
                              [add_whens (Eenum 0 bool_velus_type) bool_velus_type ck]
-                             [(bool_velus_type, (ck, None))]])]), st').
+                             [(bool_velus_type, ck)]])]), st').
 
   Fixpoint is_constant (e : exp) : bool :=
     match e with
@@ -56,23 +56,23 @@ Module Type NORMFBY
 
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
   Definition fby_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
-    let '(ty, (ck, name)) := ann in
+    let '(ty, ck) := ann in
     do (initid, eqs) <- init_var_for_clock ck;
     do px <- fresh_ident norm2 None (ty, ck);
-    ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid)))
-               [(1, [e0]); (0, [Evar px (ty, (ck, Some px))])] None ([ty], (ck, name)),
+    ret (Ecase (Evar initid (bool_velus_type, ck))
+               [(1, [e0]); (0, [Evar px (ty, ck)])] None ([ty], ck),
          ([px], [Efby [add_whens (init_type ty) ty ck] [e] [ann]])::eqs).
 
   Definition arrow_iteexp (e0 : exp) (e : exp) (ann : ann) : FreshAnn (exp * list equation) :=
-    let '(ty, (ck, name)) := ann in
+    let '(ty, ck) := ann in
     do (initid, eqs) <- init_var_for_clock ck;
-    ret (Ecase (Evar initid (bool_velus_type, (ck, Some initid))) [(1, [e0]); (0, [e])] None
-              ([ty], (ck, name)), eqs).
+    ret (Ecase (Evar initid (bool_velus_type, ck)) [(1, [e0]); (0, [e])] None
+              ([ty], ck), eqs).
 
   Definition normfby_equation (to_cut : PS.t) (eq : equation) : FreshAnn (list equation) :=
     match eq with
     | ([x], [Efby [e0] [e] [ann]]) =>
-      let '(ty, (ck, _)) := ann in
+      let '(ty, ck) := ann in
       if is_constant e0 then
         if PS.mem x to_cut then
           do x' <- fresh_ident norm2 None (ty, ck);
@@ -112,7 +112,7 @@ Module Type NORMFBY
           es = [Efby [e0] [e] [ann]] /\
           is_constant e0 = true /\
           normfby_equation to_cut (xs, es) =
-          (let '(ty, (ck, _)) := ann in
+          (let '(ty, ck) := ann in
            if PS.mem x to_cut then
              do x' <- fresh_ident norm2 None (ty, ck);
              ret [([x], [Evar x' ann]); ([x'], es)]
@@ -140,12 +140,12 @@ Module Type NORMFBY
     destruct e; auto.
     1,2:destruct_to_singl l; destruct_to_singl l0; destruct_to_singl l1; simpl.
     - (* fby *)
-      destruct a as [ty [ck name]].
+      destruct a as [ty ck].
       destruct (is_constant e) eqn:Hconst; simpl.
       + left. repeat eexists; eauto.
       + right; left. repeat eexists; eauto.
     - (* arrow *)
-      destruct a as [ty [ck name]]. right; right; left.
+      destruct a as [ty ck]. right; right; left.
       repeat eexists; eauto.
   Qed.
 
@@ -181,7 +181,7 @@ Module Type NORMFBY
       st_valid_after st aft ->
       st_valid_after st' aft.
   Proof with eauto.
-    intros e0 e [ty [ck name]] e' eqs' st st' aft Hfby Hvalid.
+    intros e0 e [ty ck] e' eqs' st st' aft Hfby Hvalid.
     unfold fby_iteexp in Hfby.
     repeat inv_bind;
       eapply fresh_ident_st_valid, init_var_for_clock_st_valid; eauto.
@@ -193,7 +193,7 @@ Module Type NORMFBY
       st_valid_after st aft ->
       st_valid_after st' aft.
   Proof with eauto.
-    intros e0 e [ty [ck name]] e' eqs' st st' aft Hfby Hvalid.
+    intros e0 e [ty ck] e' eqs' st st' aft Hfby Hvalid.
     unfold arrow_iteexp in Hfby.
     repeat inv_bind...
   Qed.
@@ -206,7 +206,7 @@ Module Type NORMFBY
   Proof.
     intros * Hfby Hvalid.
     inv_normfby_equation Hfby to_cut eq.
-    - destruct x2 as [ty [ck name]]; repeat inv_bind.
+    - destruct x2 as [ty ck]; repeat inv_bind.
       destruct (PS.mem _ _); repeat inv_bind; auto.
       eapply fresh_ident_st_valid; eauto.
     - eapply fby_iteexp_st_valid; eauto.
@@ -254,7 +254,7 @@ Module Type NORMFBY
       fby_iteexp e0 e ann st = (res, st') ->
       st_follows st st'.
   Proof.
-    intros e0 e [ty [ck name]] res st st' Hfby.
+    intros e0 e [ty ck] res st st' Hfby.
     unfold fby_iteexp in Hfby; repeat inv_bind.
     etransitivity; eauto.
   Qed.
@@ -264,7 +264,7 @@ Module Type NORMFBY
       arrow_iteexp e0 e ann st = (res, st') ->
       st_follows st st'.
   Proof.
-    intros e0 e [ty [ck name]] res st st' Hfby.
+    intros e0 e [ty ck] res st st' Hfby.
     unfold arrow_iteexp in Hfby.
     repeat inv_bind; eauto.
   Qed.
@@ -276,7 +276,7 @@ Module Type NORMFBY
   Proof.
     intros * Hfby.
     inv_normfby_equation Hfby to_cut eq.
-    - destruct x2 as [ty [ck name]].
+    - destruct x2 as [ty ck].
       destruct (PS.mem _ _); repeat inv_bind.
       1,2:repeat solve_st_follows.
     - eapply fby_iteexp_st_follows; eauto.
@@ -322,7 +322,7 @@ Module Type NORMFBY
       fby_iteexp e0 e ann st = (e', eqs', st') ->
       Permutation (flat_map fst eqs'++st_ids st) (st_ids st').
   Proof.
-    intros ? ? [ty [ck name]] ? ? ? ? Hfby.
+    intros ? ? [ty ck] ? ? ? ? Hfby.
     unfold fby_iteexp in Hfby. repeat inv_bind.
     eapply init_var_for_clock_vars_perm in H; eauto.
     eapply fresh_ident_vars_perm in H0.
@@ -334,7 +334,7 @@ Module Type NORMFBY
       arrow_iteexp e0 e ann st = (e', eqs', st') ->
       Permutation (flat_map fst eqs'++st_ids st) (st_ids st').
   Proof.
-    intros ? ? [ty [ck name]] ? ? ? ? Hfby.
+    intros ? ? [ty ck] ? ? ? ? Hfby.
     unfold arrow_iteexp in Hfby. repeat inv_bind.
     eapply init_var_for_clock_vars_perm in H; eauto.
   Qed.
@@ -345,7 +345,7 @@ Module Type NORMFBY
   Proof.
     intros * Hfby.
     inv_normfby_equation Hfby to_cut eq.
-    destruct x2 as [ty [ck name]]; repeat inv_bind.
+    destruct x2 as [ty ck]; repeat inv_bind.
     - destruct PS.mem; repeat inv_bind; simpl; auto.
       eapply fresh_ident_vars_perm in H.
       apply perm_skip; auto.
@@ -395,7 +395,7 @@ Module Type NORMFBY
       fby_iteexp e0 e ann st = (es', eqs', st') ->
       annot es' = [ann].
   Proof.
-    intros e0 e [ty [cl n]] es' eqs' st st' Hfby.
+    intros e0 e [ty cl] es' eqs' st st' Hfby.
     unfold fby_iteexp in Hfby.
     repeat inv_bind; reflexivity.
   Qed.
@@ -404,7 +404,7 @@ Module Type NORMFBY
       arrow_iteexp e0 e ann st = (es', eqs', st') ->
       annot es' = [ann].
   Proof.
-    intros e0 e [ty [cl n]] es' eqs' st st' Hfby.
+    intros e0 e [ty cl] es' eqs' st st' Hfby.
     unfold arrow_iteexp in Hfby.
     repeat inv_bind; reflexivity.
   Qed.
@@ -553,7 +553,7 @@ Module Type NORMFBY
       fby_iteexp e0 e a st = (e', eqs', st') ->
       numstreams e' = 1.
   Proof.
-    intros * Hfby. destruct a as [ty [ck name]].
+    intros * Hfby. destruct a as [ty ck].
     unfold fby_iteexp in Hfby.
     repeat inv_bind; simpl; auto.
   Qed.
@@ -567,7 +567,7 @@ Module Type NORMFBY
       wl_exp G e'.
   Proof.
     intros * Hwl1 Hwl2 Hn1 Hn2 Hfby.
-    destruct a as [ty [ck name]].
+    destruct a as [ty ck].
     unfold fby_iteexp in Hfby.
     repeat inv_bind.
     repeat constructor; auto; simpl.
@@ -586,7 +586,7 @@ Module Type NORMFBY
       Forall (wl_equation G) eqs'.
   Proof.
     intros * Hwl1 Hwl2 Hn1 Hn2 Hfby.
-    destruct a as [ty [ck name]].
+    destruct a as [ty ck].
     unfold fby_iteexp in Hfby.
     repeat inv_bind; auto.
     repeat constructor; simpl; auto.
@@ -602,7 +602,7 @@ Module Type NORMFBY
       arrow_iteexp e0 e a st = (e', eqs', st') ->
       numstreams e' = 1.
   Proof.
-    intros * Hfby. destruct a as [ty [ck name]].
+    intros * Hfby. destruct a as [ty ck].
     unfold arrow_iteexp in Hfby.
     repeat inv_bind. reflexivity.
   Qed.
@@ -615,7 +615,7 @@ Module Type NORMFBY
       arrow_iteexp e0 e a st = (e', eqs', st') ->
       wl_exp G e'.
   Proof.
-    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby. destruct a as [ty [ck name]].
+    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby. destruct a as [ty ck].
     unfold arrow_iteexp in Hfby; repeat inv_bind.
     repeat constructor; auto; simpl.
     congruence.
@@ -632,7 +632,7 @@ Module Type NORMFBY
       Forall (wl_equation G) eqs'.
   Proof.
     intros * Hwl1 Hwl2 Hn1 Hn2 Hfby.
-    destruct a as [ty [ck name]].
+    destruct a as [ty ck].
     unfold arrow_iteexp in Hfby; repeat inv_bind.
     eapply init_var_for_clock_wl in H; eauto.
   Qed.
@@ -644,7 +644,7 @@ Module Type NORMFBY
   Proof.
     intros * Hwl Hfby.
     inv_normfby_equation Hfby to_cut eq.
-    - destruct x2 as [ty [ck name]].
+    - destruct x2 as [ty ck].
       destruct PS.mem; repeat inv_bind; auto.
       destruct Hwl as [Hwl _]; inv Hwl; repeat (constructor; auto).
     - destruct Hwl as [Hwl _]. apply Forall_singl in Hwl.
@@ -734,7 +734,7 @@ Module Type NORMFBY
       fby_iteexp e0 e a st = (e', eqs', st') ->
       Forall (unnested_equation G) eqs'.
   Proof.
-    intros * Hnormed1 Hnormed2 Hfby. destruct a as [ty [ck name]].
+    intros * Hnormed1 Hnormed2 Hfby. destruct a as [ty ck].
     unfold fby_iteexp in Hfby.
     repeat inv_bind; auto.
     repeat constructor; auto.
@@ -748,7 +748,7 @@ Module Type NORMFBY
       fby_iteexp e0 e a st = (e', eqs', st') ->
       Forall (normalized_equation G out) eqs'.
   Proof.
-    intros G e0 e [ty [ck name]] * Hvalid He Hfby.
+    intros G e0 e [ty ck] * Hvalid He Hfby.
     unfold fby_iteexp in Hfby.
     repeat inv_bind; constructor.
     - assert (st_valid_after x1 out0) as Hvalid' by eauto.
@@ -765,7 +765,7 @@ Module Type NORMFBY
   Proof.
     intros * Hunt Hfby.
     inv_normfby_equation Hfby to_cut eq;
-      try destruct x2 as [ty [ck name]].
+      try destruct x2 as [ty ck].
     - destruct PS.mem; repeat inv_bind; auto.
       inv Hunt; constructor; auto.
     - assert (H':=H). eapply fby_iteexp_unnested_eq in H'.
@@ -808,7 +808,7 @@ Module Type NORMFBY
     inv Hunt; simpl in *; repeat inv_bind; eauto.
     1:destruct_to_singl xs; repeat inv_bind; eauto.
     - (* fby *)
-      (destruct ann0 as (?&?&?); destruct (is_constant e0) eqn:Hconst;
+      (destruct ann0 as (?&?); destruct (is_constant e0) eqn:Hconst;
        [apply is_constant_normalized_constant in Hconst;
         destruct PS.mem eqn:Hmem; [|apply PSE.mem_4 in Hmem]|]; repeat inv_bind).
       1-3:repeat constructor; eauto.
@@ -820,7 +820,7 @@ Module Type NORMFBY
       + apply add_whens_is_constant; destruct t; simpl; auto.
       + eapply init_var_for_clock_normalized_eq; eauto.
     - (* arrow *)
-      destruct ann0 as (?&?&?) eqn:Vars; repeat inv_bind.
+      destruct ann0 as (?&?) eqn:Vars; repeat inv_bind.
       repeat constructor; eauto.
       1-2:repeat esplit; eauto.
       intros ??; congruence.
@@ -860,89 +860,6 @@ Module Type NORMFBY
     - eapply normfby_block_normalized_block in H; eauto.
     - eapply IHblocks with (st:=x1) (st':=st'); eauto. 1:eapply normfby_block_st_valid; eauto.
       unfold normfby_blocks; repeat inv_bind; eauto.
-  Qed.
-
-  (** ** No anonymous names in a normalized node *)
-
-  Fact is_constant_no_fresh : forall e,
-      normalized_constant e ->
-      fresh_in e = [].
-  Proof with eauto.
-    intros e Hconst.
-    induction Hconst; simpl...
-    rewrite IHHconst...
-  Qed.
-
-  Lemma add_whens_no_fresh : forall e ty ck,
-      fresh_in (add_whens e ty ck) = fresh_in e.
-  Proof.
-    induction ck as [|??? (?&?)]; simpl; auto.
-    rewrite app_nil_r; auto.
-  Qed.
-
-  Lemma init_var_for_clock_no_anon : forall ck xinit eqs' st st' ,
-      init_var_for_clock ck st = (xinit, eqs', st') ->
-      flat_map anon_in_eq eqs' = [].
-  Proof.
-    unfold init_var_for_clock. intros * Hinit.
-    destruct fresh_ident; repeat inv_bind; simpl.
-    unfold anon_in_eq; simpl.
-    repeat rewrite app_nil_r.
-    repeat rewrite add_whens_no_fresh; simpl.
-    reflexivity.
-  Qed.
-
-  Lemma normfby_equation_anon : forall to_cut equ eqs' st st' ,
-      normfby_equation to_cut equ st = (eqs', st') ->
-      Permutation (flat_map anon_in_eq eqs') (anon_in_eq equ).
-  Proof.
-    unfold normfby_equation, fby_iteexp, arrow_iteexp.
-    intros ? (?&?) * Hfby.
-    cases; repeat inv_bind; simpl; repeat rewrite app_nil_r; try reflexivity.
-    - unfold anon_in_eq; simpl; repeat rewrite app_nil_r.
-      apply Permutation_app_head.
-      rewrite add_whens_no_fresh.
-      replace (fresh_in (init_type t)) with (@nil (ident * (type * clock))) by (destruct t; simpl; auto).
-      erewrite init_var_for_clock_no_anon, app_nil_r; eauto.
-    - unfold anon_in_eq; simpl; repeat rewrite app_nil_r.
-      erewrite init_var_for_clock_no_anon, app_nil_r; eauto using Permutation_app_comm.
-  Qed.
-
-  Lemma normfby_block_anon : forall to_cut d blocks' st st' ,
-      normfby_block to_cut d st = (blocks', st') ->
-      Permutation (flat_map anon_in_block blocks') (anon_in_block d).
-  Proof.
-    induction d using block_ind2; intros * Hfby; simpl in Hfby;
-      cases; repeat inv_bind; simpl; repeat rewrite app_nil_r; try reflexivity.
-    - erewrite <-normfby_equation_anon; eauto.
-      clear - x. induction x; simpl; auto using Permutation_app_head.
-    - apply Forall_singl in H. erewrite <-H; [|eauto].
-      clear - x. induction x; simpl; auto.
-      repeat rewrite app_nil_r. apply Permutation_app_head; auto.
-  Qed.
-
-  Corollary normfby_blocks_anon : forall to_cut blocks blocks' st st',
-      normfby_blocks to_cut blocks st = (blocks', st') ->
-      Permutation (flat_map anon_in_block blocks') (flat_map anon_in_block blocks).
-  Proof.
-    unfold normfby_blocks.
-    induction blocks; intros * Hfby; repeat inv_bind; simpl in *; auto.
-    eapply normfby_block_anon in H.
-    rewrite <-flat_map_app, H, IHblocks; auto.
-    repeat inv_bind; eauto.
-  Qed.
-
-  Lemma normfby_blocks_no_anon {PSyn prefs} : forall (G : @global PSyn prefs) out to_cut blocks blocks' st st',
-      st_valid_after st out ->
-      Forall (unnested_block G) blocks ->
-      PS.Subset out to_cut ->
-      normfby_blocks to_cut blocks st = (blocks', st') ->
-      flat_map anon_in_block blocks' = [].
-  Proof.
-    intros * Hweak Hunt Hsub Hfby.
-    eapply normfby_blocks_normalized_block in Hfby; eauto.
-    eapply unnested_blocks_no_anon.
-    solve_forall. eapply normalized_block_unnested_block; eauto.
   Qed.
 
   Lemma normfby_block_GoodLocals to_cut : forall prefs blk blk' st st',
@@ -1061,7 +978,6 @@ Module Type NORMFBY
     - rewrite <- ps_from_list_ps_of_list, PS_For_all_Forall'.
       pose proof (n_good n) as (Good1&Good2&_); eauto. rewrite Hn in Good2. inv Good2.
       rewrite app_assoc, map_app, Forall_app.
-      rewrite Forall_app in Good1. destruct Good1.
       split; auto.
   Qed.
 
@@ -1097,8 +1013,7 @@ Module Type NORMFBY
     pose proof (n_nodup n) as (Hndup&Hndl).
     destruct (n_block n) as [| |locs blks] eqn:Hblk; eauto.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
-    repeat rewrite app_nil_r. split; simpl in *.
-    { rewrite normfby_blocks_anon; eauto. }
+    repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. rewrite fst_NoDupMembers in H3.
     assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
     { eapply normfby_blocks_st_valid; eauto.
@@ -1106,7 +1021,6 @@ Module Type NORMFBY
     }
     assert (Hvalid':=Hvalid). eapply st_valid_after_NoDupMembers in Hvalid.
     2:{ rewrite app_assoc. apply NoDupMembers_app; auto.
-        - rewrite <-NoDupMembers_idty; eauto using NoDupMembers_app_l.
         - rewrite fst_NoDupMembers; auto.
         - intros * Hinm Hinl. rewrite fst_InMembers in Hinm. eapply H4; eauto using in_or_app.
     }
@@ -1119,12 +1033,11 @@ Module Type NORMFBY
       assert (Forall (fun id => exists x hint, id = gensym norm2 hint x) (st_ids st')) as Hids.
       { eapply st_valid_prefixed; eauto. }
       intros ? Hin. repeat rewrite map_app in *. repeat rewrite in_app_iff in *. destruct Hin as [[?|Hin]|[Hin|Hin]]; auto.
-      + erewrite normfby_blocks_anon in Hin; eauto.
-      + rewrite map_map in Hin. eapply Forall_forall in Hids; eauto.
+      rewrite map_map in Hin. eapply Forall_forall in Hids; eauto.
     - rewrite fst_NoDupMembers, map_app, map_map.
       solve_NoDup_app.
     - rewrite app_assoc, map_app, <-app_assoc in Hvalid.
-      setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'; rewrite normfby_blocks_anon in Hin'; eauto.
+      setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'; eauto.
       + eapply H4; eauto.
       + rewrite fst_InMembers, map_map in Hinm.
         eapply st_valid_prefixed, Forall_forall in Hvalid' as (?&?&?); eauto; subst.
@@ -1136,25 +1049,23 @@ Module Type NORMFBY
   Qed.
   Next Obligation.
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
-    - destruct (n_block n); eauto using AtomOrGensym_add.
-      simpl in *. erewrite normfby_blocks_anon; eauto using surjective_pairing, AtomOrGensym_add.
-    - destruct (n_block n) as [| |locs blks] eqn:Hblk; eauto using GoodLocals_add.
-      destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
-      assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
-      { specialize (n_nodup n) as (Hndup&Hndl).
-        rewrite Hblk in Hndl; simpl in Hndl. inv Hndl. rewrite fst_NoDupMembers in H3.
-        eapply normfby_blocks_st_valid; eauto.
-        eapply normfby_node_init_st_valid; eauto.
-      }
-      inv Hgood2.
-      constructor.
-      + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using AtomOrGensym_add.
-        eapply st_valid_prefixed in Hvalid; auto; simpl.
-        erewrite map_map, map_ext with (g:=fst); [eauto|]. 2:intros (?&?&?); auto.
-        eapply Forall_impl; [|eauto]. intros ? (?&?); subst. right.
-        do 2 esplit; eauto. now apply PSF.add_1.
-      + eapply normfby_blocks_GoodLocals in H2; eauto.
-        rewrite Forall_forall in *; eauto using GoodLocals_add.
+    destruct (n_block n) as [| |locs blks] eqn:Hblk; eauto using GoodLocals_add.
+    destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
+    { specialize (n_nodup n) as (Hndup&Hndl).
+      rewrite Hblk in Hndl; simpl in Hndl. inv Hndl. rewrite fst_NoDupMembers in H3.
+      eapply normfby_blocks_st_valid; eauto.
+      eapply normfby_node_init_st_valid; eauto.
+    }
+    inv Hgood2.
+    constructor.
+    + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using AtomOrGensym_add.
+      eapply st_valid_prefixed in Hvalid; auto; simpl.
+      erewrite map_map, map_ext with (g:=fst); [eauto|]. 2:intros (?&?&?); auto.
+      eapply Forall_impl; [|eauto]. intros ? (?&?); subst. right.
+      do 2 esplit; eauto. now apply PSF.add_1.
+    + eapply normfby_blocks_GoodLocals in H2; eauto.
+      rewrite Forall_forall in *; eauto using GoodLocals_add.
   Qed.
   Next Obligation.
     pose proof (n_syn n) as Hsyn. inv Hsyn.
@@ -1245,7 +1156,7 @@ Module Type NORMFBY
         eapply Forall_incl; eauto.
         intros ? Hin.
         rewrite ps_from_list_ps_of_list, ps_of_list_ps_to_list in Hin.
-        rewrite map_app, 2 in_app_iff; auto. }
+        rewrite map_app, in_app_iff; auto. }
   Qed.
 
   Fact normfby_global_normalized_global : forall G,

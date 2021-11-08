@@ -113,7 +113,7 @@ Module Type COMPLETENESS
       erewrite Htoc; simpl; eauto.
     - (* case *)
       eapply to_lexp_complete in H4 as (?&Htol).
-      simpl; destruct cl; erewrite Htol; simpl.
+      simpl; erewrite Htol; simpl.
       assert (exists es', Errors.mmap
                        (fun pat =>
                           match pat with
@@ -178,7 +178,7 @@ Module Type COMPLETENESS
     intros * Hwt Hnorm Hvars Hfind Henvo. revert xr xs Hvars Hfind.
     induction Hnorm; intros * Hvars Hfind; inv Hwt; inv Hvars; simpl.
     - destruct eq. eapply to_equation_complete in H; eauto.
-    - destruct ann0 as (?&?&?).
+    - destruct ann0 as (?&?).
       inv H1. inv H5; inv H8.
       simpl in Hfind; rewrite app_nil_r in Hfind.
       eapply IHHnorm; eauto.
@@ -237,9 +237,9 @@ Module Type COMPLETENESS
       eapply in_app_weak, in_app_comm in Hin.
       exists ck; simpl. eapply envs_eq_find.
       2:erewrite In_idck_exists; eexists; erewrite In_idty_exists; eauto.
-      pose proof (n_nodup n) as (Hnd&_). apply NoDupMembers_app_l in Hnd. rewrite idty_app in Hnd.
+      pose proof (n_nodup n) as (Hnd&_).
       rewrite idty_app. eapply env_eq_env_adds', env_eq_env_from_list; auto.
-      apply NoDupMembers_app_r in Hnd; auto.
+      rewrite <-idty_app. 1,2:rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
     - intros x e Hmem; simpl in Hmem.
       rewrite <-map_fst_idty, ps_from_list_In.
       rewrite <- fst_InMembers. rewrite <- Env.In_from_list.

@@ -54,27 +54,6 @@ Module Type FRESHKERNEL
         Forall (fun x => exists n hint, x = gensym prefix hint n) (st_ids st).
   End validity.
 
-  (** Sometimes we need to reuse allready existing identifiers.
-      [st_valid_reuse st prefix aft reprefs reusable] means that
-      the state only contains idents prefixed by either [prefix] or [reprefs].
-      These idents are distinct from [aft] and [reusable], but the ones in
-      [reusable] can also by reused by the function [reuse_ident] (see below)
-      while preserving this invariant *)
-  Section validity_reuse.
-    Context {B : Type}.
-    Parameter st_valid_reuse : fresh_st B -> ident -> PS.t -> PS.t -> PS.t -> Prop.
-    Conjecture st_valid_reuse_NoDup : forall st prefix aft reprefs reusable,
-        st_valid_reuse st prefix aft reprefs reusable ->
-        NoDup (st_ids st++PSP.to_list aft++PSP.to_list reusable).
-    Conjecture st_valid_reuse_PSSubset : forall st prefix aft reprefs re1 re2,
-        PS.Subset re2 re1 ->
-        st_valid_reuse st prefix aft reprefs re1 ->
-        st_valid_reuse st prefix aft reprefs re2.
-    Conjecture st_valid_reuse_AtomOrGensym : forall st prefix aft reprefs reu,
-        st_valid_reuse st prefix aft reprefs reu ->
-        Forall (AtomOrGensym (PS.add prefix reprefs)) (st_ids st).
-  End validity_reuse.
-
   (** [st_follows] forms an inclusion relation over the contents of the states.
       We show below that every primimitive Fresh operation produces a new state
       that follows the previous one *)
@@ -101,12 +80,6 @@ Module Type FRESHKERNEL
         ~PS.In prefix aftprefs ->
         PS.For_all (AtomOrGensym aftprefs) aft ->
         st_valid_after init_st prefix aft.
-    Conjecture init_st_valid_reuse : forall prefix aft reprefs reusable,
-        NoDup (PSP.to_list aft++PSP.to_list reusable) ->
-        ~PS.In prefix reprefs ->
-        PS.For_all (AtomOrGensym reprefs) aft ->
-        PS.For_all (AtomOrGensym reprefs) reusable ->
-        st_valid_reuse init_st prefix aft reprefs reusable.
   End init.
 
   (** The central function for fresh identifier generation,
@@ -126,10 +99,6 @@ Module Type FRESHKERNEL
         fresh_ident pref hint b st = (id, st') ->
         st_valid_after st pref aft ->
         st_valid_after st' pref aft.
-    Conjecture fresh_ident_st_valid_reuse : forall pref hint b id st st' aft reprefs reusable,
-        fresh_ident pref hint b st = (id, st') ->
-        st_valid_reuse st pref aft reprefs reusable ->
-        st_valid_reuse st' pref aft reprefs reusable.
     Conjecture fresh_ident_st_follows : forall pref hint b id st st',
         fresh_ident pref hint b st = (id, st') ->
         st_follows st st'.
@@ -138,28 +107,6 @@ Module Type FRESHKERNEL
         fresh_ident pref hint b st = (id, st') ->
         exists n hint, id = gensym pref hint n.
   End fresh_ident.
-
-  (** As stated above, it is also possible to reuse already existing identifiers,
-      that is adding it to the state.
-      [reuse_ident x d] adds [x] into the state, associated with [d].
-      If this function is used, only the [st_valid_reuse] property can be preserved *)
-  Section reuse_ident.
-    Context {B : Type}.
-    Parameter reuse_ident : ident -> B -> Fresh unit B.
-
-    Conjecture reuse_ident_anns : forall b id st st',
-        reuse_ident id b st = (tt, st') ->
-        st_anns st' = (id, b)::(st_anns st).
-
-    Conjecture reuse_ident_st_valid_reuse : forall b id st st' pref aft reprefs reusable,
-        ~PS.In id reusable ->
-        reuse_ident id b st = (tt, st') ->
-        st_valid_reuse st pref aft reprefs (PS.add id reusable) ->
-        st_valid_reuse st' pref aft reprefs reusable.
-    Conjecture reuse_ident_st_follows : forall b id st st',
-        reuse_ident id b st = (tt, st') ->
-        st_follows st st'.
-  End reuse_ident.
 
   (** Generate some fresh identifiers for alpha-renaming purposes.
       Also rename inside the provided annotations using the rename function passed.
@@ -309,67 +256,6 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
     Qed.
   End validity.
 
-  Section validity_reuse.
-    Context {B : Type}.
-    Definition st_valid_reuse (st : fresh_st B) pref (aft : PS.t) reprefs (reusable : PS.t) : Prop :=
-      let '(n, l) := st in
-      NoDupMembers l /\
-      Forall (AtomOrGensym (PS.add pref reprefs)) (map fst l) /\
-      Forall (fun id => forall x hint, id = gensym pref hint x -> Pos.lt x n) (map fst l) /\
-      NoDup (PSP.to_list aft++PSP.to_list reusable) /\
-      PS.For_all (AtomOrGensym reprefs) aft /\
-      Forall (fun id => ~PS.In id aft) (map fst l) /\
-      ~PS.In pref reprefs /\
-      PS.For_all (AtomOrGensym reprefs) reusable /\
-      Forall (fun id => ~PS.In id reusable) (map fst l).
-
-    Fact st_valid_reuse_NoDup : forall st pref aft reprefs reusable,
-        st_valid_reuse st pref aft reprefs reusable ->
-        NoDup (st_ids st++PSP.to_list aft++PSP.to_list reusable).
-    Proof.
-      intros [? ?] * (?&?&?&?&?&Hn1&?&?&Hn2).
-      apply NoDup_app'; auto.
-      - apply fst_NoDupMembers; auto.
-      - eapply Forall_forall.
-        intros ? Hin. rewrite not_In_app.
-        repeat rewrite In_PS_elements. split.
-        + eapply Forall_forall in Hn1; eauto.
-        + eapply Forall_forall in Hn2; eauto.
-    Qed.
-
-    Fact st_valid_reuse_nIn : forall st pref aft reprefs reusable,
-        st_valid_reuse st pref aft reprefs reusable ->
-        PS.For_all (fun x => ~In x (st_ids st)) reusable.
-    Proof.
-      intros [? ?] * (?&?&?&?&?&?&?&?&Hn2).
-      intros ? Hin1 Hin2.
-      eapply Forall_forall in Hn2; eauto.
-    Qed.
-
-    Fact st_valid_reuse_PSSubset: forall st pref aft reprefs re1 re2,
-        PS.Subset re2 re1 ->
-        st_valid_reuse st pref aft reprefs re1 ->
-        st_valid_reuse st pref aft reprefs re2.
-    Proof.
-      intros [n l] * Hsub (?&?&?&?&?&?&?&?&Hn2).
-      repeat (split; auto).
-      - eapply NoDup_app'; eauto using NoDup_app_l, PS_elements_NoDup.
-        eapply Forall_forall; intros * Hin.
-        eapply NoDup_app_In in H2; eauto. contradict H2.
-        eapply In_PS_elements. eapply In_PS_elements in H2. eauto.
-      - intros ? Hin; eauto.
-      - eapply Forall_impl; [|eapply Hn2]; intros ? Hnin; simpl in *.
-        contradict Hnin; eauto.
-    Qed.
-
-    Fact st_valid_reuse_AtomOrGensym : forall st pref aft reprefs reu,
-        st_valid_reuse st pref aft reprefs reu ->
-        Forall (AtomOrGensym (PS.add pref reprefs)) (st_ids st).
-    Proof.
-      intros [n l] * (?&?&?&?&?&?&?&?&?); auto.
-    Qed.
-  End validity_reuse.
-
   Section follows.
     Context {B : Type}.
 
@@ -409,18 +295,6 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       intros * Hnin Hprefs.
       unfold init_st.
       repeat (constructor; simpl; eauto).
-    Qed.
-
-    Fact init_st_valid_reuse : forall pref aft reprefs reusable,
-        NoDup (PSP.to_list aft++PSP.to_list reusable) ->
-        ~PS.In pref reprefs ->
-        PS.For_all (AtomOrGensym reprefs) aft ->
-        PS.For_all (AtomOrGensym reprefs) reusable ->
-        st_valid_reuse init_st pref aft reprefs reusable.
-    Proof.
-      intros * Hnd Hpre1 Hpre2 Hpre3. unfold init_st.
-      repeat split; simpl; auto.
-      constructor.
     Qed.
   End init.
 
@@ -462,36 +336,6 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
         etransitivity; eauto. apply Pos.lt_succ_diag_r.
     Qed.
 
-    Fact fresh_ident_st_valid_reuse : forall pref hint b id st st' aft reprefs reusable,
-        fresh_ident pref hint b st = (id, st') ->
-        st_valid_reuse st pref aft reprefs reusable ->
-        st_valid_reuse st' pref aft reprefs reusable.
-    Proof.
-      intros ???? [n l] [n' l'] * Hfresh (Hv1&Hv2&Hv3&Hv4&Hv5&Hv6&Hv7&Hv8&Hv9).
-      simpl in Hfresh; inv Hfresh.
-      repeat split; simpl; auto. 1-5:constructor; auto; simpl.
-      - rewrite fst_InMembers.
-        intro Hin. eapply Forall_forall in Hv3; eauto.
-        eapply Pos.lt_irrefl; eauto.
-      - right. exists pref. split; eauto.
-        apply PSF.add_1; auto.
-      - intros * Hgen.
-        apply gensym_injective in Hgen as (_&Heq); subst.
-        apply Pos.lt_succ_diag_r.
-      - eapply Forall_impl; [|eapply Hv3].
-        intros ? Hgen * Heq; subst.
-        specialize (Hgen _ _ eq_refl).
-        etransitivity; eauto. apply Pos.lt_succ_diag_r.
-      - intro contra. eapply Hv5 in contra as [?|(?&?&?&?&Heq)].
-        + eapply gensym_not_atom; eauto.
-        + apply gensym_injective in Heq as (?&?); subst.
-          congruence.
-      - intro contra. apply Hv8 in contra as [?|(?&?&?&?&Heq)].
-        + eapply gensym_not_atom; eauto.
-        + apply gensym_injective in Heq as (?&?); subst.
-          congruence.
-    Qed.
-
     Fact fresh_ident_st_follows :
       forall pref hint (b : B) id st st',
         fresh_ident pref hint b st = (id, st') ->
@@ -510,69 +354,6 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       intros ???? (?&?) ? Hfresh. inv Hfresh; eauto.
     Qed.
   End fresh_ident.
-
-  Section reuse_ident.
-    Context {B : Type}.
-
-    Definition reuse_ident (id : ident) (b : B) : Fresh unit B :=
-      fun '(n, l) => (tt, (n, (id, b)::l)).
-
-    Fact reuse_ident_anns : forall b id st st',
-        reuse_ident id b st = (tt, st') ->
-        st_anns st' = (id, b)::(st_anns st).
-    Proof.
-      intros b id [n l] [n' l'] H.
-      unfold reuse_ident in H.
-      inv H. reflexivity.
-    Qed.
-
-    Fact reuse_ident_st_valid_reuse : forall b id st st' pref aft reprefs reusable,
-        ~PS.In id reusable ->
-        reuse_ident id b st = (tt, st') ->
-        st_valid_reuse st pref aft reprefs (PS.add id reusable) ->
-        st_valid_reuse st' pref aft reprefs reusable.
-    Proof with eauto.
-      intros ?? [n l] [n' l'] ???? Hnin Hreuse (Hv1&Hv2&Hv3&Hv4&Hv5&Hv6&Hv7&Hv8&Hv9).
-      unfold reuse_ident in Hreuse. inv Hreuse.
-      repeat split... 1,2,3,5,7:constructor; auto; simpl in *.
-      - rewrite fst_InMembers.
-        intro contra. eapply Forall_forall in Hv9; [|eauto].
-        apply Hv9. apply PSF.add_1; auto.
-      - apply PS_For_all_add in Hv8 as ([?|(?&?&?)]&_); auto.
-        left; auto.
-        right; auto. eexists; split; eauto.
-        apply PSF.add_2; auto.
-      - intros * Heq; subst. exfalso.
-        apply PS_For_all_add in Hv8 as ([?|(?&?&?&?&?)]&_); auto.
-        + eapply gensym_not_atom; eauto.
-        + apply gensym_injective in H0 as (?&?); subst; auto.
-      - intro Hin.
-        eapply NoDup_app_In in Hv4; eauto.
-        1,2:rewrite In_PS_elements in *; eauto.
-        apply Hv4, PSF.add_1; auto.
-      - eapply Forall_impl; [|eapply Hv9].
-        intros ? Hnin' contra. apply Hnin'.
-        apply PSF.add_2; auto.
-      - rewrite NoDup_app'_iff in *. destruct Hv4 as (?&?&?).
-        repeat split; auto.
-        + apply PS_elements_NoDup.
-        + eapply Forall_impl; [|eauto].
-          intros ? Hnin' Hin. apply Hnin'.
-          rewrite In_PS_elements in *. apply PSF.add_2; auto.
-      - intros ? Hin. apply Hv8.
-        apply PSF.add_2; auto.
-    Qed.
-
-    Fact reuse_ident_st_follows : forall b id st st',
-        reuse_ident id b st = (tt, st') ->
-        st_follows st st'.
-    Proof.
-      intros b id [n l] [n' l'] Hreuse.
-      unfold reuse_ident in Hreuse. inv Hreuse.
-      unfold st_follows; simpl.
-      apply incl_tl. reflexivity.
-    Qed.
-  End reuse_ident.
 
   Section fresh_idents_rename.
     Context {B : Type}.
@@ -860,14 +641,6 @@ Module Fresh(Ids : IDS).
     Global Instance st_follows_Reflexive : Reflexive (@st_follows B) := st_follows_refl.
     Global Instance st_follows_Transitive : Transitive (@st_follows B) := st_follows_trans.
 
-    Global Add Parametric Morphism st pref aft reprefs : (@st_valid_reuse B st pref aft reprefs)
-        with signature @PS.eq ==> Basics.impl
-          as st_valid_reuse_PSeq_Proper.
-    Proof.
-      intros. intro Hv.
-      eapply st_valid_reuse_PSSubset; eauto. rewrite H; reflexivity.
-    Qed.
-
     Global Instance st_valid_after_Proper :
       Proper (@eq (@fresh_st B) ==> @eq ident ==> PS.Equal ==> @Basics.impl)
              st_valid_after.
@@ -932,49 +705,6 @@ Module Fresh(Ids : IDS).
       Qed.
     End st_valid_after.
 
-    Section st_valid_reuse.
-      Context {B : Type}.
-
-      Fact st_valid_reuse_PSeq : forall (st : fresh_st B) prefix aft reprefs re1 re2,
-        PS.eq re1 re2 ->
-        st_valid_reuse st prefix aft reprefs re1 ->
-        st_valid_reuse st prefix aft reprefs re2.
-      Proof.
-        intros * Heq Hvalid.
-        eapply st_valid_reuse_PSSubset; eauto.
-        rewrite Heq. reflexivity.
-      Qed.
-
-      Fact st_valid_reuse_nIn : forall (st : fresh_st B) pref aft reprefs reusable,
-          st_valid_reuse st pref aft reprefs reusable ->
-          PS.For_all (fun x => ~In x (st_ids st)) reusable.
-      Proof.
-        intros * Hvalid.
-        apply st_valid_reuse_NoDup in Hvalid.
-        rewrite Permutation_app_comm, <- app_assoc, Permutation_swap in Hvalid.
-        rewrite PS_For_all_Forall, Forall_forall. intros x Hin.
-        eapply NoDup_app_In in Hvalid; eauto.
-        intro contra. apply Hvalid, in_or_app; auto.
-      Qed.
-
-      Fact st_valid_reuse_NoDupMembers {C} : forall (st : fresh_st B) pref (vars : list (ident * C)) reprefs reusable,
-          NoDupMembers vars ->
-          st_valid_reuse st pref (PSP.of_list (map fst vars)) reprefs reusable ->
-          NoDup (map fst vars ++ st_ids st).
-      Proof.
-        intros * Hndup Hvalid.
-        eapply st_valid_reuse_NoDup in Hvalid.
-        rewrite app_assoc in Hvalid. apply NoDup_app_l in Hvalid.
-        rewrite Permutation_app_comm in Hvalid.
-        rewrite NoDup_app'_iff in *. destruct Hvalid as (?&?&?).
-        repeat split; auto.
-        - apply fst_NoDupMembers; auto.
-        - eapply Forall_forall. intros ? ?.
-          eapply Forall_forall in H1; eauto.
-          rewrite ps_of_list_ps_to_list. assumption.
-      Qed.
-    End st_valid_reuse.
-
     Section fresh_ident.
       Context {B : Type}.
 
@@ -1019,36 +749,6 @@ Module Fresh(Ids : IDS).
         assumption.
       Qed.
 
-      Fact fresh_ident_reuse_nIn : forall pref hint (b : B) id st st' aft reprefs reusable,
-          st_valid_reuse st pref aft reprefs reusable ->
-          fresh_ident pref hint b st = (id, st') ->
-          ~List.In id (st_ids st).
-      Proof.
-        intros * Hvalid Hfresh.
-        eapply fresh_ident_st_valid_reuse in Hvalid; eauto.
-        apply st_valid_reuse_NoDup in Hvalid. apply NoDup_app_weaken in Hvalid.
-        apply fresh_ident_vars_perm in Hfresh.
-        unfold st_ids in *.
-        rewrite <- Hfresh in Hvalid. inv Hvalid.
-        assumption.
-      Qed.
-
-      Fact fresh_ident_reuse_nIn' : forall pref hint (b : B) id st st' aft reprefs reusable,
-          st_valid_reuse st pref aft reprefs reusable ->
-          fresh_ident pref hint b st = (id, st') ->
-          ~PS.In id reusable.
-      Proof.
-        intros * Hvalid Hfresh.
-        eapply fresh_ident_st_valid_reuse in Hvalid; eauto.
-        apply st_valid_reuse_NoDup in Hvalid.
-        apply fresh_ident_vars_perm in Hfresh.
-        unfold st_ids in *.
-        rewrite <- Hfresh in Hvalid. inv Hvalid.
-        contradict H1.
-        repeat rewrite in_app_iff. do 2 right.
-        eapply In_PS_elements; eauto.
-      Qed.
-
       Fact fresh_ident_nIn' : forall pref hint (b : B) id st st' aft,
           st_valid_after st pref aft ->
           fresh_ident pref hint b st = (id, st') ->
@@ -1077,27 +777,6 @@ Module Fresh(Ids : IDS).
       Qed.
 
     End fresh_ident.
-
-    Section reuse_ident.
-      Context {B : Type}.
-
-      Fact reuse_ident_In : forall (b : B) id st st',
-          reuse_ident id b st = (tt, st') ->
-          In (id, b) (st_anns st').
-      Proof.
-        intros. apply reuse_ident_anns in H.
-        rewrite H. constructor. reflexivity.
-      Qed.
-
-      Fact reuse_ident_vars_perm : forall (b : B) id st st',
-          reuse_ident id b st = (tt, st') ->
-          Permutation (id::(st_ids st)) (st_ids st').
-      Proof.
-        intros. apply reuse_ident_anns in H.
-        unfold st_ids in *. rewrite H.
-        reflexivity.
-      Qed.
-    End reuse_ident.
 
     Section fresh_idents_rename.
       Context {B : Type}.
@@ -1236,20 +915,6 @@ Module Fresh(Ids : IDS).
       inv Hforall. eapply IHa; eauto.
     Qed.
 
-    Fact mmap2_st_valid_reuse : forall a a1s a2s st st' pref aft reprefs reu,
-        mmap2 a st = (a1s, a2s, st') ->
-        Forall (fun a => forall a1 a2 st st',
-                    k a st = (a1, a2, st') ->
-                    st_valid_reuse st pref aft reprefs reu ->
-                    st_valid_reuse st' pref aft reprefs reu) a ->
-        st_valid_reuse st pref aft reprefs reu ->
-        st_valid_reuse st' pref aft reprefs reu.
-    Proof.
-      induction a; intros * Hmap Hforall Hvalid;
-        simpl in *; repeat inv_bind; auto.
-      inv Hforall. eapply IHa; eauto.
-    Qed.
-
     Fact mmap2_st_follows : forall a a1s a2s st st',
         mmap2 a st = (a1s, a2s, st') ->
         Forall (fun a => forall a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') a ->
@@ -1272,10 +937,7 @@ Module Fresh(Ids : IDS).
   End mmap2.
 
   Hint Resolve fresh_ident_st_valid.
-  Hint Resolve fresh_ident_st_valid_reuse.
   Hint Resolve fresh_ident_st_follows.
-  Hint Resolve reuse_ident_st_valid_reuse.
-  Hint Resolve reuse_ident_st_follows.
   Hint Resolve st_follows_incl.
   Hint Resolve mmap2_st_valid.
   Hint Resolve mmap2_st_follows.

@@ -17,4 +17,3 @@ returns (w, x : bool);
 let
   (w, x) = kom(a, b, mok(a, b, c));
 tel
-

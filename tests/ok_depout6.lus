@@ -15,7 +15,15 @@ tel
 
 node main(b: bool)
 returns (w: bool; x: bool when w)
+var y1 : bool; z1 : bool when y1;
+    x2 : bool; y2 : bool when x2;
+    x3 : bool; y3 : bool when x3;
+    x4 : bool; y4 : bool when x4;
 let
-    (w, x) = g(g(g(g(f(b)))));
+    (y1, z1) = f(b);
+    (x2, y2) = g(y1, z1);
+    (x3, y3) = g(x2, y2);
+    (x4, y4) = g(x3, y3);
+    (w, x) = g(x4, y4);
 tel
 

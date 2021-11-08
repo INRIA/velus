@@ -33,8 +33,8 @@ Module Type LSYNTAX
    *)
 
   (* Type and clock annotations *)
-  Definition ann : Type := (type * nclock)%type.
-  Definition lann : Type := (list type * nclock)%type.
+  Definition ann : Type := (type * clock)%type.
+  Definition lann : Type := (list type * clock)%type.
 
   Definition idents xs := List.map (@fst ident (type * clock * ident)) xs.
 
@@ -84,10 +84,10 @@ Module Type LSYNTAX
 
   (* Annotation (homogenized). *)
 
-  Fixpoint annot (e: exp): list (type * nclock) :=
+  Fixpoint annot (e: exp): list (type * clock) :=
     match e with
-    | Econst c => [(Tprimitive (ctype_cconst c), (Cbase, None))]
-    | Eenum _ ty => [(ty, (Cbase, None))]
+    | Econst c => [(Tprimitive (ctype_cconst c), Cbase)]
+    | Eenum _ ty => [(ty, Cbase)]
     | Efby _ _ anns
     | Earrow _ _ anns
     | Eapp _ _ _ anns => anns
@@ -99,7 +99,7 @@ Module Type LSYNTAX
     | Ecase _ _ _ (tys, ck) => map (fun ty=> (ty, ck)) tys
     end.
 
-  Definition annots (es: list exp): list (type * nclock) :=
+  Definition annots (es: list exp): list (type * clock) :=
     flat_map annot es.
 
   Fixpoint typeof (e: exp): list type :=
@@ -120,23 +120,18 @@ Module Type LSYNTAX
   Definition typesof (es: list exp): list type :=
     flat_map typeof es.
 
-  Definition clock_of_nclock {A} (ann: A * nclock): clock := stripname (snd ann).
-  Definition stream_name {A} (ann: A * nclock) : option ident := snd (snd ann).
-
-  Definition unnamed_stream {A} (ann: A * nclock): Prop := snd (snd ann) = None.
-
   Fixpoint clockof (e: exp): list clock :=
     match e with
     | Econst _ | Eenum _ _ => [Cbase]
     | Efby _ _ anns
     | Earrow _ _ anns
-    | Eapp _ _ _ anns => map clock_of_nclock anns
+    | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
     | Eunop _ _ ann
-    | Ebinop _ _ _ ann => [clock_of_nclock ann]
+    | Ebinop _ _ _ ann => [snd ann]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
-    | Ecase _ _ _ anns => map (fun _ => clock_of_nclock anns) (fst anns)
+    | Ecase _ _ _ anns => map (fun _ => snd anns) (fst anns)
     end.
 
   Definition clocksof (es: list exp): list clock :=
@@ -147,13 +142,13 @@ Module Type LSYNTAX
     | Econst _ | Eenum _ _ => [(Cbase, None)]
     | Efby _ _ anns
     | Earrow _ _ anns
-    | Eapp _ _ _ anns => map snd anns
-    | Evar _ ann
+    | Eapp _ _ _ anns => map (fun ann => (snd ann, None)) anns
+    | Evar x ann => [(snd ann, Some x)]
     | Eunop _ _ ann
-    | Ebinop _ _ _ ann => [snd ann]
+    | Ebinop _ _ _ ann => [(snd ann, None)]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
-    | Ecase _ _ _ anns => map (fun _ => snd anns) (fst anns)
+    | Ecase _ _ _ anns => map (fun _ => (snd anns, None)) (fst anns)
     end.
 
   Definition nclocksof (es: list exp): list nclock :=
@@ -177,57 +172,6 @@ Module Type LSYNTAX
       Forall2 VarsDefined blocks xs ->
       Permutation (map fst locs ++ ys) (concat xs) ->
       VarsDefined (Blocal locs blocks) ys.
-
-  Definition anon_streams (anns : list ann) :=
-    map_filter (fun '(ty, (cl, name)) => match name with
-                                      | None => None
-                                      | Some x => Some (x, (ty, cl))
-                                      end) anns.
-
-  Fixpoint fresh_in (e : exp) : list (ident * (type * clock)) :=
-    let fresh_ins := flat_map fresh_in in
-    match e with
-    | Econst _ | Eenum _ _ => []
-    | Evar _ _ => []
-    | Eunop _ e _ => fresh_in e
-    | Ebinop _ e1 e2 _ => fresh_in e1 ++ fresh_in e2
-    | Efby e0s es _
-    | Earrow e0s es _ =>
-      fresh_ins e0s ++ fresh_ins es
-    | Ewhen es _ _ _ => fresh_ins es
-    | Emerge _ es _ => flat_map (fun es => fresh_ins (snd es)) es
-    | Ecase e es d _ => fresh_in e ++ flat_map (fun es => fresh_ins (snd es)) es ++ or_default_with [] fresh_ins d
-    | Eapp _ es er anns => fresh_ins es ++ fresh_ins er ++ anon_streams anns
-    end.
-
-  Definition fresh_ins (es : list exp) : list (ident * (type * clock)) :=
-    flat_map fresh_in es.
-
-  Definition anon_in (e : exp) : list (ident * (type * clock)) :=
-    match e with
-    | Eapp _ es er _ => fresh_ins es++fresh_ins er
-    | e => fresh_in e
-    end.
-
-  Definition anon_ins (es : list exp) : list (ident * (type * clock)) :=
-    flat_map anon_in es.
-
-  Definition anon_in_eq (eq : equation) : list (ident * (type * clock)) :=
-    anon_ins (snd eq).
-
-  Fixpoint local_anon_in_block (d : block) : list (ident * (type * clock)) :=
-    match d with
-    | Beq eq => anon_in_eq eq
-    | Breset blks er => (flat_map local_anon_in_block blks)++(fresh_in er)
-    | Blocal _ _ => []
-    end.
-
-  Fixpoint anon_in_block (blk : block) : list (ident * (type * clock)) :=
-    match blk with
-    | Beq eq => anon_in_eq eq
-    | Breset blks er => (flat_map anon_in_block blks)++(fresh_in er)
-    | Blocal _ blks => flat_map anon_in_block blks
-    end.
 
   Fixpoint locals (d : block) : list (ident * (type * clock * ident)) :=
     match d with
@@ -270,9 +214,9 @@ Module Type LSYNTAX
         n_ingt0    : 0 < length n_in;
         n_outgt0   : 0 < length n_out;
         n_defd     : exists xs, VarsDefined n_block xs /\ Permutation xs (map fst n_out);
-        n_nodup    : NoDupMembers (idty (n_in ++ n_out) ++ anon_in_block n_block) /\
-                     NoDupLocals (map fst (n_in ++ n_out) ++ map fst (anon_in_block n_block)) n_block;
-        n_good     : Forall (AtomOrGensym prefs) (map fst (n_in ++ n_out) ++ map fst (anon_in_block n_block))
+        n_nodup    : NoDupMembers (n_in ++ n_out) /\
+                     NoDupLocals (map fst (n_in ++ n_out)) n_block;
+        n_good     : Forall (AtomOrGensym prefs) (map fst (n_in ++ n_out))
                      /\ GoodLocals prefs n_block
                      /\ atom n_name;
         n_syn      : PSyn n_block;
@@ -548,11 +492,9 @@ Module Type LSYNTAX
   (** clocksof *)
 
   Fact clockof_annot : forall e,
-      clockof e = map fst (map snd (annot e)).
+      clockof e = map snd (annot e).
   Proof.
-    destruct e; simpl; try unfold clock_of_nclock, stripname; simpl; try reflexivity.
-    - rewrite map_map. reflexivity.
-    - rewrite map_map. reflexivity.
+    destruct e; simpl; try reflexivity.
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
@@ -562,7 +504,6 @@ Module Type LSYNTAX
     - destruct l0; simpl.
       repeat rewrite map_map.
       reflexivity.
-    - rewrite map_map. reflexivity.
   Qed.
 
   Corollary length_clockof_numstreams : forall e,
@@ -575,7 +516,7 @@ Module Type LSYNTAX
   Qed.
 
   Fact clocksof_annots : forall es,
-      clocksof es = map fst (map snd (annots es)).
+      clocksof es = map snd (annots es).
   Proof.
     induction es; simpl.
     - reflexivity.
@@ -587,7 +528,7 @@ Module Type LSYNTAX
       length (clocksof es) = length (annots es).
   Proof.
     intros es.
-    rewrite clocksof_annots. rewrite map_map.
+    rewrite clocksof_annots.
     apply map_length.
   Qed.
 
@@ -618,31 +559,23 @@ Module Type LSYNTAX
   (** nclockof and nclocksof *)
 
   Fact nclockof_annot : forall e,
-      nclockof e = map snd (annot e).
+      map fst (nclockof e) = map snd (annot e).
   Proof.
     destruct e; simpl; try reflexivity.
-    - destruct l0; simpl.
-      repeat rewrite map_map.
-      reflexivity.
-    - destruct l0; simpl.
-      repeat rewrite map_map.
-      reflexivity.
-    - destruct l0; simpl.
-      repeat rewrite map_map.
-      reflexivity.
+    3-5:destruct l0; simpl.
+    1-6:repeat rewrite map_map; simpl; auto.
   Qed.
 
   Corollary length_nclockof_numstreams : forall e,
       length (nclockof e) = numstreams e.
   Proof.
     intros.
-    rewrite nclockof_annot.
-    repeat rewrite map_length.
+    erewrite <-map_length, nclockof_annot, map_length.
     apply length_annot_numstreams.
   Qed.
 
   Fact nclocksof_annots : forall es,
-      nclocksof es = map snd (annots es).
+      map fst (nclocksof es) = map snd (annots es).
   Proof.
     induction es; simpl.
     - reflexivity.
@@ -654,15 +587,14 @@ Module Type LSYNTAX
       length (nclocksof es) = length (annots es).
   Proof.
     intros es.
-    rewrite nclocksof_annots.
-    apply map_length.
+    erewrite <-map_length, nclocksof_annots, map_length. auto.
   Qed.
 
   Lemma clockof_nclockof:
     forall e,
       clockof e = map stripname (nclockof e).
   Proof.
-    destruct e; simpl; unfold clock_of_nclock; try rewrite map_map; auto.
+    destruct e; simpl; try rewrite map_map; auto.
   Qed.
 
   Lemma nclockof_length :
@@ -699,35 +631,6 @@ Module Type LSYNTAX
     intros * Hin. apply in_map_iff in Hin as (?&?&Hin).
     apply In_nclocksof in Hin as (e&?&?).
     exists e. split; auto. apply in_map_iff; eauto.
-  Qed.
-
-  (** fresh_in and anon_in specification and properties *)
-
-  Lemma anon_in_fresh_in : forall e,
-      incl (anon_in e) (fresh_in e).
-  Proof.
-    destruct e; simpl; try reflexivity.
-    rewrite app_assoc; apply incl_appl; reflexivity.
-  Qed.
-
-  Corollary anon_ins_fresh_ins : forall es,
-      incl (anon_ins es) (fresh_ins es).
-  Proof.
-    intros.
-    unfold anon_ins, fresh_ins.
-    induction es; simpl.
-    - reflexivity.
-    - apply incl_app; [apply incl_appl|apply incl_appr]; auto using anon_in_fresh_in.
-  Qed.
-
-  Lemma fresh_ins_nil:
-    forall e es,
-      fresh_ins (e::es) = [] ->
-      fresh_in e = [].
-  Proof.
-    intros e es Hfresh.
-    unfold fresh_ins in Hfresh; simpl in Hfresh.
-    apply app_eq_nil in Hfresh as [? _]; auto.
   Qed.
 
   (** Interface equivalence between nodes *)
@@ -1055,143 +958,6 @@ Module Type LSYNTAX
     Qed.
   End wx_incl.
 
-  (** *** fresh_in, anon_in properties *)
-
-  Fact fresh_in_incl : forall e es,
-      In e es ->
-      incl (fresh_in e) (fresh_ins es).
-  Proof.
-    intros e es Hin.
-    unfold fresh_ins.
-    rewrite flat_map_concat_map.
-    apply incl_concat_map; auto.
-  Qed.
-
-  Fact anon_in_incl : forall e es,
-      In e es ->
-      incl (anon_in e) (anon_ins es).
-  Proof.
-    intros e es Hin.
-    unfold anon_ins.
-    rewrite flat_map_concat_map.
-    apply incl_concat_map; auto.
-  Qed.
-
-  Fact InMembers_fresh_in : forall x e es,
-      In e es ->
-      InMembers x (fresh_in e) ->
-      InMembers x (fresh_ins es).
-  Proof.
-    intros * Hin Hinm.
-    eapply fresh_in_incl, incl_map with (f:=fst) in Hin.
-    rewrite fst_InMembers in *. eauto.
-  Qed.
-
-  Fact InMembers_anon_in : forall x e es,
-      In e es ->
-      InMembers x (anon_in e) ->
-      InMembers x (anon_ins es).
-  Proof.
-    intros * Hin Hinm.
-    eapply anon_in_incl, incl_map with (f:=fst) in Hin.
-    rewrite fst_InMembers in *. eauto.
-  Qed.
-
-  Fact InMembers_anon_in_block : forall x d blocks,
-      In d blocks ->
-      InMembers x (anon_in_block d) ->
-      InMembers x (flat_map anon_in_block blocks).
-  Proof.
-    intros * Hin Hinm.
-    rewrite fst_InMembers in *.
-    eapply incl_map; eauto.
-    rewrite flat_map_concat_map.
-    apply incl_concat_map; auto.
-  Qed.
-
-  Fact Ino_In_anon_streams : forall x anns,
-      Ino x (map (fun x => snd (snd x)) anns) ->
-      InMembers x (anon_streams anns).
-  Proof.
-    intros x anns H.
-    rewrite Ino_In, in_map_iff in H; destruct H as [[? [? ?]] [? ?]]; simpl in *; subst.
-    rewrite fst_InMembers, in_map_iff.
-    exists (x, (t, c)); split; auto.
-    eapply map_filter_In; eauto.
-  Qed.
-
-  Fact NoDupMembers_fresh_in : forall e es,
-      In e es ->
-      NoDupMembers (fresh_ins es) ->
-      NoDupMembers (fresh_in e).
-  Proof.
-    intros * Hin Hndup.
-    eapply NoDupMembers_flat_map, Forall_forall in Hndup; eauto.
-  Qed.
-
-  Corollary NoDupMembers_fresh_in' : forall vars e es,
-      In e es ->
-      NoDupMembers (vars ++ fresh_ins es) ->
-      NoDupMembers (vars ++ fresh_in e).
-  Proof.
-    intros * Hin Hndup.
-    apply NoDupMembers_app.
-    - apply NoDupMembers_app_l in Hndup; auto.
-    - apply NoDupMembers_app_r in Hndup; auto.
-      eapply NoDupMembers_fresh_in; eauto.
-    - intros x HIn contra.
-      eapply NoDupMembers_app_InMembers in Hndup; eauto.
-      eapply InMembers_fresh_in in contra; eauto.
-  Qed.
-
-  Fact NoDupMembers_anon_in : forall e es,
-      In e es ->
-      NoDupMembers (anon_ins es) ->
-      NoDupMembers (anon_in e).
-  Proof.
-    intros * Hin Hndup.
-    eapply NoDupMembers_flat_map, Forall_forall in Hndup; eauto.
-  Qed.
-
-  Corollary NoDupMembers_anon_in' : forall vars e es,
-      In e es ->
-      NoDupMembers (vars ++ anon_ins es) ->
-      NoDupMembers (vars ++ anon_in e).
-  Proof.
-    intros * Hin Hndup.
-    apply NoDupMembers_app.
-    - apply NoDupMembers_app_l in Hndup; auto.
-    - apply NoDupMembers_app_r in Hndup; auto.
-      eapply NoDupMembers_anon_in; eauto.
-    - intros x HIn contra.
-      eapply NoDupMembers_app_InMembers in Hndup; eauto.
-      eapply InMembers_anon_in in contra; eauto.
-  Qed.
-
-  Fact NoDupMembers_anon_in_block : forall d blocks,
-      In d blocks ->
-      NoDupMembers (flat_map anon_in_block blocks) ->
-      NoDupMembers (anon_in_block d).
-  Proof.
-    intros * Hin Hndup.
-    eapply NoDupMembers_flat_map, Forall_forall in Hndup; eauto.
-  Qed.
-
-  Corollary NoDupMembers_anon_in_block' : forall vars d blocks,
-      In d blocks ->
-      NoDupMembers (vars ++ flat_map anon_in_block blocks) ->
-      NoDupMembers (vars ++ anon_in_block d).
-  Proof.
-    intros * Hin Hndup.
-    apply NoDupMembers_app.
-    - apply NoDupMembers_app_l in Hndup; auto.
-    - apply NoDupMembers_app_r in Hndup; auto.
-      eapply NoDupMembers_anon_in_block; eauto.
-    - intros x HIn contra.
-      eapply NoDupMembers_app_InMembers in Hndup; eauto.
-      eapply InMembers_anon_in_block in contra; eauto.
-  Qed.
-
   (** *** Additional properties *)
 
   Lemma NoDupLocals_incl : forall blk xs xs',
@@ -1262,10 +1028,7 @@ Module Type LSYNTAX
   Proof.
     intros n.
     rewrite <- fst_NoDupMembers.
-    specialize (n_nodup n) as (Hnd&_).
-    repeat rewrite app_assoc in *.
-    apply NoDupMembers_app_l in Hnd; auto.
-    now rewrite NoDupMembers_idty in Hnd.
+    apply n_nodup.
   Qed.
 
   Lemma AtomOrGensym_add : forall pref prefs xs,
@@ -1353,66 +1116,6 @@ Module Type LSYNTAX
     rewrite Hperm. solve_incl_app.
   Qed.
 
-  Lemma local_anon_in_block_incl : forall blk,
-      incl (local_anon_in_block blk) (anon_in_block blk).
-  Proof.
-    induction blk using block_ind2; simpl.
-    - (* equation *)
-      reflexivity.
-    - (* reset *)
-      apply incl_app; [apply incl_appl|apply incl_appr; reflexivity].
-      intros ??. apply in_flat_map in H0 as (?&?&?).
-      rewrite Forall_forall in *.
-      apply in_flat_map; do 2 esplit; eauto.
-      eapply H; eauto.
-    - (* local *)
-      apply incl_nil'.
-  Qed.
-
-  Corollary local_anons_in_block_incl : forall blks,
-      incl (flat_map local_anon_in_block blks) (flat_map anon_in_block blks).
-  Proof.
-    intros ?? Hin. apply in_flat_map in Hin as (?&?&?).
-    apply in_flat_map; do 2 esplit; eauto.
-    eapply local_anon_in_block_incl; eauto.
-  Qed.
-
-  Fact local_anons_in_block_NoDupMembers' : forall blks,
-      Forall (fun blk : block => NoDupMembers (anon_in_block blk) -> NoDupMembers (local_anon_in_block blk)) blks ->
-      NoDupMembers (flat_map anon_in_block blks) ->
-      NoDupMembers (flat_map local_anon_in_block blks).
-  Proof.
-    intros * Hf Hnd.
-    induction blks; inv Hf; simpl in *; auto.
-    apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r.
-    intros ? Hin contra.
-    eapply InMembers_incl in Hin; eauto using local_anon_in_block_incl.
-    eapply InMembers_incl in contra; eauto using local_anons_in_block_incl.
-    eapply NoDupMembers_app_InMembers in Hnd; eauto.
-  Qed.
-
-  Lemma local_anon_in_block_NoDupMembers : forall blk,
-      NoDupMembers (anon_in_block blk) ->
-      NoDupMembers (local_anon_in_block blk).
-  Proof.
-    induction blk using block_ind2; intros * Hnd; simpl in *; auto.
-    - (* reset *)
-      eapply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, local_anons_in_block_NoDupMembers'.
-      intros ? Hinm.
-      eapply NoDupMembers_app_InMembers in Hnd; eauto using InMembers_incl, local_anons_in_block_incl.
-    - (* locals *)
-      constructor.
-  Qed.
-
-  Corollary local_anons_in_block_NoDupMembers : forall blks,
-      NoDupMembers (flat_map anon_in_block blks) ->
-      NoDupMembers (flat_map local_anon_in_block blks).
-  Proof.
-    intros * Hnd.
-    eapply local_anons_in_block_NoDupMembers'; eauto.
-    eapply Forall_forall; intros; eauto using local_anon_in_block_NoDupMembers.
-  Qed.
-
   Lemma GoodLocals_locals prefs : forall blk,
       GoodLocals prefs blk ->
       Forall (AtomOrGensym prefs) (map fst (locals blk)).
@@ -1443,30 +1146,6 @@ Module Type LSYNTAX
   | NLnode : forall locs blks,
       Forall nolocal_block blks ->
       nolocal_top_block (Blocal locs blks).
-
-  Lemma nolocal_block_local_anon_idem : forall blk,
-      nolocal_block blk ->
-      local_anon_in_block blk = anon_in_block blk.
-  Proof.
-    induction blk using block_ind2; intros * Hnl; inv Hnl; simpl.
-    - (* equation *)
-      reflexivity.
-    - f_equal; auto.
-      rewrite 2 flat_map_concat_map. f_equal.
-      eapply map_ext_in; intros.
-      rewrite Forall_forall in *; eauto.
-  Qed.
-
-  Corollary nolocal_block_local_anons_idem : forall blks,
-      Forall nolocal_block blks ->
-      flat_map local_anon_in_block blks = flat_map anon_in_block blks.
-  Proof.
-    intros * Hnl.
-    rewrite 2 flat_map_concat_map. f_equal.
-    eapply map_ext_in; intros.
-    rewrite Forall_forall in *.
-    eapply nolocal_block_local_anon_idem; eauto.
-  Qed.
 
 End LSYNTAX.
 

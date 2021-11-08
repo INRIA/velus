@@ -37,8 +37,8 @@ Module Type INLINELOCAL
     Definition rename_in_nclock (nck : nclock) :=
       (rename_in_clock (fst nck), option_map rename_in_var (snd nck)).
 
-    Definition rename_in_ann {A} (ann : (A * nclock)) :=
-      (fst ann, rename_in_nclock (snd ann)).
+    Definition rename_in_ann {A} (ann : (A * clock)) :=
+      (fst ann, rename_in_clock (snd ann)).
 
     Fixpoint rename_in_exp (e : exp) :=
       match e with
@@ -63,75 +63,15 @@ Module Type INLINELOCAL
 
     (** *** Properties *)
 
-    Lemma rename_in_ann_clock {A} : forall (ann : (A * nclock)),
-        clock_of_nclock (rename_in_ann ann) = rename_in_clock (clock_of_nclock ann).
+    Lemma rename_in_ann_clock {A} : forall (ann : (A * clock)),
+        snd (rename_in_ann ann) = rename_in_clock (snd ann).
     Proof. reflexivity. Qed.
 
-    Corollary map_rename_in_ann_clock {A} : forall (anns : list (A * nclock)),
-        map clock_of_nclock (map rename_in_ann anns) = map rename_in_clock (map clock_of_nclock anns).
+    Corollary map_rename_in_ann_clock {A} : forall (anns : list (A * clock)),
+        map snd (map rename_in_ann anns) = map rename_in_clock (map snd anns).
     Proof.
       induction anns; simpl; auto.
       f_equal; auto.
-    Qed.
-
-    Lemma rename_in_ann_anon_streams : forall anns,
-        anon_streams (map rename_in_ann anns) =
-        map (fun '(x, (ty, ck)) => (rename_in_var x, (ty, rename_in_clock ck))) (anon_streams anns).
-    Proof.
-      induction anns as [|(?&?&[|])]; simpl; f_equal; auto.
-    Qed.
-
-    Lemma rename_in_exp_fresh_in : forall e,
-        fresh_in (rename_in_exp e) =
-        map (fun '(x, (ty, ck)) => (rename_in_var x, (ty, rename_in_clock ck))) (fresh_in e).
-    Proof.
-      induction e using exp_ind2; simpl; auto. 5:destruct x; simpl.
-      1-7:repeat rewrite map_app; try f_equal; auto.
-      1-9:repeat rewrite flat_map_concat_map; repeat rewrite concat_map; repeat f_equal; auto using rename_in_ann_anon_streams.
-      1-10:repeat rewrite map_map; try (eapply map_ext_in; intros * Hin; try rewrite Forall_forall in *; eauto).
-      - (* merge *)
-        specialize (H _ Hin). rewrite Forall_forall in *. destruct a0; simpl.
-        rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-        f_equal. eapply map_ext_in; intros; auto.
-      - (* case *)
-        specialize (H _ Hin). rewrite Forall_forall in *. destruct a0; simpl.
-        rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-        f_equal. eapply map_ext_in; intros; auto.
-      - (* case (default) *)
-        destruct d; simpl in *; auto.
-        rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-        f_equal. eapply map_ext_in; intros; auto.
-        eapply Forall_forall in H0; eauto.
-    Qed.
-
-    Corollary rename_in_exp_fresh_ins : forall es,
-        fresh_ins (map rename_in_exp es) =
-        map (fun '(x, (ty, ck)) => (rename_in_var x, (ty, rename_in_clock ck))) (fresh_ins es).
-    Proof.
-      intros. unfold fresh_ins.
-      rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-      f_equal. eapply map_ext; intros.
-      eapply rename_in_exp_fresh_in.
-    Qed.
-
-    Lemma rename_in_exp_anon_in : forall e,
-        anon_in (rename_in_exp e) =
-        map (fun '(x, (ty, ck)) => (rename_in_var x, (ty, rename_in_clock ck))) (anon_in e).
-    Proof.
-      intros []; try destruct p; try eapply rename_in_exp_fresh_in.
-      simpl.
-      rewrite map_app. f_equal; apply rename_in_exp_fresh_ins.
-    Qed.
-
-    Lemma rename_in_equation_anon_in : forall eq,
-        anon_in_eq (rename_in_equation eq) =
-        map (fun '(x, (ty, ck)) => (rename_in_var x, (ty, rename_in_clock ck))) (anon_in_eq eq).
-    Proof.
-      unfold anon_in_eq, anon_ins.
-      intros (?&?); simpl.
-      rewrite 2 flat_map_concat_map, concat_map, 2 map_map.
-      f_equal. eapply map_ext; intros.
-      eapply rename_in_exp_anon_in.
     Qed.
 
   End rename.
@@ -337,90 +277,6 @@ Module Type INLINELOCAL
       rewrite Hsub; auto.
     - eapply IHxs; intros.
       eapply Hsub. right; auto.
-  Qed.
-
-  Fact mmap_inlinelocal_block_anon' : forall blks sub blks' st st',
-      Forall
-        (fun blk => forall sub blks' st st',
-         (forall x : ident, InMembers x (anon_in_block blk) -> ~ Env.In x sub) ->
-         NoDupLocals (map fst (anon_in_block blk)) blk ->
-         inlinelocal_block sub blk st = (blks', st') ->
-         map fst (flat_map anon_in_block blks') = map fst (anon_in_block blk)) blks ->
-      (forall x, InMembers x (flat_map anon_in_block blks) -> ~ Env.In x sub) ->
-      Forall (NoDupLocals (map fst (flat_map anon_in_block blks))) blks ->
-      mmap (inlinelocal_block sub) blks st = (blks', st') ->
-      map fst (flat_map anon_in_block (concat blks')) = map fst (flat_map anon_in_block blks).
-  Proof.
-    induction blks; intros * Hf Hsub Hnd Hmap;
-      inv Hf; inv Hnd; repeat inv_bind; auto; simpl.
-    rewrite <-flat_map_app, 2 map_app.
-    f_equal.
-    - eapply H1; eauto.
-      intros ? Hinm. eapply Hsub, InMembers_incl; eauto.
-      2:eapply NoDupLocals_incl; [|eauto].
-      1,2:solve_incl_app.
-    - eapply IHblks; eauto.
-      intros ? Hinm. eapply Hsub, InMembers_incl; eauto.
-      2:eapply Forall_impl; [|eauto]; intros; eapply NoDupLocals_incl; [|eauto].
-      1,2:solve_incl_app.
-  Qed.
-
-  Lemma inlinelocal_block_anon : forall blk sub blks' st st',
-      (forall x, InMembers x (anon_in_block blk) -> ~Env.In x sub) ->
-      NoDupLocals (map fst (anon_in_block blk)) blk ->
-      inlinelocal_block sub blk st = (blks', st') ->
-      map fst (flat_map anon_in_block blks') = map fst (anon_in_block blk).
-  Proof.
-    induction blk using block_ind2;
-      intros * Hsub Hnl Hdl; inv Hnl; repeat inv_bind.
-    - (* equation *)
-      simpl. rewrite app_nil_r, rename_in_equation_anon_in.
-      rewrite not_in_sub_same; auto.
-    - (* reset *)
-      simpl. rewrite app_nil_r, 2 map_app. f_equal.
-      + eapply mmap_inlinelocal_block_anon'; eauto.
-        intros ? Hinm. eapply Hsub, InMembers_incl; eauto.
-        2:eapply Forall_impl; [|eauto]; intros; eapply NoDupLocals_incl; [|eauto].
-        1,2:solve_incl_app.
-      + rewrite rename_in_exp_fresh_in.
-        rewrite not_in_sub_same; auto.
-        intros ? Hinm. eapply Hsub. rewrite InMembers_app; auto.
-    - (* local *)
-      eapply mmap_inlinelocal_block_anon' in H1; eauto.
-      2:eapply Forall_impl; [|eauto]; intros; eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
-      intros ? Hinm.
-      rewrite Env.union_In, not_or'; split; eauto.
-      intro contra.
-      eapply fresh_idents_rename_sub1 in contra; eauto.
-      erewrite fst_InMembers, map_map, map_ext, map_fst_idty in contra.
-      2:intros (?&?&?); auto.
-      eapply H5; eauto. 1,2:try rewrite fst_InMembers; eauto; try rewrite <-fst_InMembers; eauto.
-  Qed.
-
-  Corollary mmap_inlinelocal_block_anon : forall blks sub blks' st st',
-      (forall x, InMembers x (flat_map anon_in_block blks) -> ~ Env.In x sub) ->
-      Forall (NoDupLocals (map fst (flat_map anon_in_block blks))) blks ->
-      mmap (inlinelocal_block sub) blks st = (blks', st') ->
-      map fst (flat_map anon_in_block (concat blks')) = map fst (flat_map anon_in_block blks).
-  Proof.
-    intros. eapply mmap_inlinelocal_block_anon'; eauto.
-    eapply Forall_forall; intros.
-    eapply inlinelocal_block_anon; eauto.
-  Qed.
-
-  Lemma inlinelocal_topblock_anon : forall blk blks' vars st st',
-      NoDupLocals (map fst (anon_in_block blk)) blk ->
-      inlinelocal_topblock blk st = (blks', vars, st') ->
-      map fst (flat_map anon_in_block blks') = map fst (anon_in_block blk).
-  Proof.
-    Opaque inlinelocal_block.
-    destruct blk; intros * Hnd Hil; repeat inv_bind.
-    1,2:eapply inlinelocal_block_anon in H; eauto.
-    3:inv Hnd; eapply mmap_inlinelocal_block_anon; eauto.
-    1-3:intros; rewrite Env.Props.P.F.empty_in_iff; eauto.
-    eapply Forall_impl; [|eauto]; intros.
-    eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
-    Transparent inlinelocal_block.
   Qed.
 
   (** ** Wellformedness properties *)
@@ -720,20 +576,13 @@ Module Type INLINELOCAL
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     repeat rewrite app_nil_r.
     destruct (inlinelocal_topblock _ _) as ((?&?)&st') eqn:Hdl. simpl.
-    assert (map fst (flat_map anon_in_block l) = map fst (anon_in_block (n_block n))) as Hanon.
-    { eapply inlinelocal_topblock_anon; eauto.
-      eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
-    assert (st_valid_after st' (PSP.of_list (map fst (idty (n_in n ++ n_out n) ++ anon_in_block (n_block n))))).
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n)))).
     { eapply inlinelocal_topblock_st_valid_after, init_st_valid; eauto using local_not_in_elab_prefs.
       rewrite <-ps_from_list_ps_of_list.
-      apply PS_For_all_Forall'.
-      now rewrite map_app, map_fst_idty.
+      apply PS_For_all_Forall'. auto.
     }
-    split; eauto. 2:econstructor; eauto.
-    - rewrite fst_NoDupMembers, map_app in *.
-      rewrite Hanon; auto.
-    - rewrite Hanon.
-      eapply inlinelocal_topblock_NoDupLocals; eauto.
+    split; eauto. constructor; eauto.
+    - eapply inlinelocal_topblock_NoDupLocals; eauto.
     - assert (Hvalid:=H). eapply st_valid_NoDup, NoDup_app_l in H.
       apply NoDupMembers_app.
       + eapply inlinelocal_topblock_NoDupMembers; eauto.
@@ -743,10 +592,8 @@ Module Type INLINELOCAL
         eapply st_valid_after_AtomOrGensym_nIn in Hinm2; eauto using local_not_in_elab_prefs.
         eapply Forall_forall; [|eapply Hinm1]. eapply Forall_incl, incl_map, inlinelocal_topblock_incl; eauto.
         eapply GoodLocals_locals; eauto.
-    - setoid_rewrite Hanon.
-      intros ? Hinm contra.
+    - intros ? Hinm contra.
       eapply st_valid_after_NoDupMembers in H; eauto.
-      rewrite map_app, map_fst_idty in H.
       eapply NoDup_app_In in H; eauto using in_or_app.
       erewrite InMembers_app, 2 fst_InMembers, map_map, map_ext in Hinm; destruct Hinm as [Hinm|]; eauto.
       eapply inlinelocal_topblock_nIn; eauto. eapply fst_InMembers; eauto.
@@ -754,11 +601,7 @@ Module Type INLINELOCAL
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hdl.
-    assert (map fst (flat_map anon_in_block l) = map fst (anon_in_block (n_block n))) as Hanon.
-    { eapply inlinelocal_topblock_anon; eauto.
-      eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
-    simpl. rewrite Hanon.
+    destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hdl. simpl.
     repeat split; eauto using AtomOrGensym_add.
     constructor.
     - assert (Hil:=Hdl). eapply inlinelocal_topblock_st_valid_after, st_valid_prefixed in Hdl.

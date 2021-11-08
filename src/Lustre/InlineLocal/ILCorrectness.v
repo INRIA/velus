@@ -306,7 +306,6 @@ Module Type ILCORRECTNESS
 
     Hint Resolve sem_block_refines.
     Hint Resolve InMembers_incl.
-    Hint Resolve local_anon_in_block_incl local_anons_in_block_incl.
     Hint Resolve <- fst_InMembers InMembers_idck InMembers_idty.
     Hint Resolve -> fst_InMembers InMembers_idck InMembers_idty.
     Hint Resolve in_or_app In_InMembers.
@@ -785,9 +784,9 @@ Module Type ILCORRECTNESS
             unfold idck, idty. repeat rewrite map_app. repeat rewrite map_map. repeat rewrite <-app_assoc. simpl.
             solve_incl_app.
         + simpl. constructor; simpl; auto.
-        + eapply NoDupMembers_app_l; eauto.
-        + rewrite map_fst_idty. eapply NoDupLocals_incl; eauto. solve_incl_app.
-        + rewrite map_fst_idty. eapply Forall_incl; eauto. solve_incl_app.
+        + eapply NoDupMembers_idty; auto.
+        + rewrite map_fst_idty; auto.
+        + rewrite map_fst_idty; auto.
         + destruct Hwc as (?&?&?); auto.
         + destruct Hwc as (?&?&?), G1; auto.
         + unfold st_ids; rewrite init_st_anns, app_nil_r...

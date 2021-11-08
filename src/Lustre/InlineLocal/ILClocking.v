@@ -84,20 +84,35 @@ Module Type ILCLOCKING
       rewrite map_app. f_equal; auto using rename_in_exp_nclockof.
     Qed.
 
-    Lemma rename_in_nclock_WellInstantiated : forall bck sub0 sub xck nck,
+    Lemma rename_in_clock_instck : forall sub1 sub0 bck ck ck',
+        instck bck sub0 ck = Some ck' ->
+        instck (rename_in_clock sub1 bck) (fun x0 => option_map (rename_in_var sub1) (sub0 x0)) ck = Some (rename_in_clock sub1 ck').
+    Proof.
+      induction ck; intros * Hinst; simpl in *.
+      - inv Hinst; auto.
+      - cases_eqn Heq; inv Hinst; simpl in *.
+        + inv Heq2; simpl.
+          specialize (IHck _ eq_refl). now inv IHck.
+        + congruence.
+        + specialize (IHck _ eq_refl). congruence.
+    Qed.
+
+    Lemma rename_in_nclock_WellInstantiated1 : forall bck sub0 sub xck nck,
         WellInstantiated bck sub0 xck nck ->
         WellInstantiated (rename_in_clock sub bck) (fun x => option_map (rename_in_var sub) (sub0 x)) xck (rename_in_nclock sub nck).
     Proof.
       intros ??? (x&ck) (ck'&name) (Hw1&Hw2). split; simpl in *.
       - rewrite Hw1. destruct name; simpl; auto.
-      - clear Hw1. revert ck' Hw2.
-        induction ck; intros * Hw2; simpl in *.
-        + inv Hw2; auto.
-        + cases_eqn Heq; inv Hw2; simpl in *.
-          * inv Heq2; simpl.
-            specialize (IHck _ eq_refl). now inv IHck.
-          * congruence.
-          * specialize (IHck _ eq_refl). congruence.
+      - apply rename_in_clock_instck; auto.
+    Qed.
+
+    Lemma rename_in_nclock_WellInstantiated2 : forall bck sub0 sub xck ck,
+        WellInstantiated bck sub0 xck (ck, None) ->
+        WellInstantiated (rename_in_clock sub bck) (fun x => option_map (rename_in_var sub) (sub0 x)) xck (rename_in_clock sub ck, None).
+    Proof.
+      intros ??? (x&ck) ck' (Hw1&Hw2). split; simpl in *.
+      - rewrite Hw1. reflexivity.
+      - apply rename_in_clock_instck; auto.
     Qed.
 
     Lemma rename_in_exp_wc : forall e,
@@ -106,18 +121,15 @@ Module Type ILCLOCKING
     Proof.
       intros * Hwc; induction e using exp_ind2; inv Hwc; simpl;
         econstructor; eauto using rename_in_var_wc.
-      1-34:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-      1-26:try rewrite rename_in_exp_clockof; simpl.
-      1-26:try rewrite rename_in_exp_clocksof; simpl.
-      1-26:try (rewrite map_rename_in_ann_clock; rewrite Forall2_eq in *; congruence).
+      1-31:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
+      1-24:try rewrite rename_in_exp_clockof; simpl.
+      1-24:try rewrite rename_in_exp_clocksof; simpl.
+      1-24:try (rewrite map_rename_in_ann_clock; rewrite Forall2_eq in *; congruence).
       - now rewrite H3.
       - now rewrite H5.
       - now rewrite H6.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&(?&?)) Hun.
+      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ? Hun.
         inv Hun; simpl in *; subst. constructor.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&(?&?)) Hun.
-        inv Hun; simpl in *; subst. constructor.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
       - now rewrite map_length.
       - contradict H4. apply map_eq_nil in H4; auto.
       - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
@@ -151,10 +163,10 @@ Module Type ILCLOCKING
         now rewrite rename_in_exp_clocksof, map_length.
       - rewrite rename_in_exp_nclocksof, Forall2_map_2.
         eapply Forall2_impl_In; [|eauto]; intros.
-        eapply rename_in_nclock_WellInstantiated; eauto.
+        eapply rename_in_nclock_WellInstantiated1; eauto.
       - rewrite 2 Forall2_map_2. rewrite Forall2_map_2 in H9.
-        eapply Forall2_impl_In; [|eauto]; intros.
-        eapply rename_in_nclock_WellInstantiated; eauto.
+        eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&?) _ _ ?; simpl in *.
+        eapply rename_in_nclock_WellInstantiated2; eauto.
       - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ? (?&Hck).
         rewrite rename_in_exp_clockof, Hck; simpl; eauto.
     Qed.
@@ -163,14 +175,29 @@ Module Type ILCLOCKING
         wc_equation G vars eq ->
         wc_equation G vars' (rename_in_equation sub eq).
     Proof.
-      intros (?&?) (Hwc1&Hwc2&Hwc3).
-      repeat split.
-      - rewrite Forall_map.
-        eapply Forall_impl; [|eauto]; intros; eauto using rename_in_exp_wc.
-      - rewrite rename_in_exp_nclocksof, Forall2_map_1, Forall2_map_2.
-        eapply Forall2_impl_In; [|eauto]; intros ? (?&[|]) ???; simpl in *; subst; auto.
-      - rewrite rename_in_exp_clocksof, Forall2_map_1, Forall2_map_2.
-        eapply Forall2_impl_In; [|eauto]; intros; eauto using rename_in_var_wc.
+      intros (?&?) Hwc. inv Hwc; simpl.
+      - (* app *)
+        econstructor; eauto.
+        + rewrite Forall_map.
+          eapply Forall_impl; [|eauto]; intros; eauto using rename_in_exp_wc.
+        + rewrite Forall_map.
+          eapply Forall_impl; [|eapply H2]; intros; eauto using rename_in_exp_wc.
+        + rewrite rename_in_exp_nclocksof, Forall2_map_2.
+          eapply Forall2_impl_In; [|eauto]; intros.
+          eapply rename_in_nclock_WellInstantiated1; eauto.
+        + rewrite 2 Forall3_map_2, Forall3_map_3. rewrite Forall3_map_2 in H5.
+          eapply Forall3_impl_In; [|eauto]; intros (?&?) (?&?) ? _ _ _ ?; simpl.
+          eapply rename_in_nclock_WellInstantiated1 in H; eauto. eapply H.
+        + rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ? (?&Hck).
+          rewrite rename_in_exp_clockof, Hck; simpl; eauto.
+        + rewrite Forall2_map_1, 2 Forall2_map_2. rewrite Forall2_map_2 in H7.
+          eapply Forall2_impl_In; [|eauto]; intros. eapply rename_in_var_wc; eauto.
+      - (* general case *)
+        econstructor; eauto.
+        + rewrite Forall_map.
+          eapply Forall_impl; [|eauto]; intros; eauto using rename_in_exp_wc.
+        + rewrite rename_in_exp_clocksof, Forall2_map_1, Forall2_map_2.
+          eapply Forall2_impl_In; [|eauto]; intros; eauto using rename_in_var_wc.
     Qed.
 
   End rename.

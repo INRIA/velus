@@ -1045,6 +1045,33 @@ Module Type LSEMANTICS
     etransitivity; eauto.
   Qed.
 
+  Lemma sem_var_refines_inv : forall env Hi1 Hi2 x vs,
+      In x env ->
+      Env.dom_lb Hi1 env ->
+      (forall vs, sem_var Hi1 x vs -> sem_var Hi2 x vs) ->
+      sem_var Hi2 x vs ->
+      sem_var Hi1 x vs.
+  Proof.
+    intros * Hin Hdom Href Hvar.
+    eapply Env.dom_lb_use in Hdom as (vs'&Hfind); eauto.
+    assert (sem_var Hi1 x vs') as Hvar' by (econstructor; eauto; reflexivity).
+    specialize (Href _ Hvar').
+    eapply sem_var_det in Href; eauto.
+    now rewrite Href.
+  Qed.
+
+  Lemma sem_var_refines' : forall env Hi1 Hi2 x vs,
+      In x env ->
+      Env.dom_lb Hi1 env ->
+      Env.refines (@EqSt _) Hi1 Hi2 ->
+      sem_var Hi2 x vs ->
+      sem_var Hi1 x vs.
+  Proof.
+    intros * Hin Hdom Href Hvar.
+    eapply sem_var_refines_inv in Hvar; eauto.
+    intros. eapply sem_var_refines; eauto.
+  Qed.
+
   Hint Resolve nth_In.
   Fact sem_exp_refines {PSyn prefs} : forall (G : @global PSyn prefs) b e H H' v,
       Env.refines (@EqSt _) H H' ->

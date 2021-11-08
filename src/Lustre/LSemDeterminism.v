@@ -897,37 +897,6 @@ Module Type LSEMDETERMINISM
     intros k. eapply Hdet; eauto using sem_var_mask.
   Qed.
 
-  Fact in_app_map_flat_map {A B C} : forall (f : C -> B) (g : A -> list C) x xs y ys,
-      In y ys ->
-      In x (xs ++ map f (g y)) ->
-      In x (xs ++ map f (flat_map g ys)).
-  Proof.
-    intros * Hin1 Hin2.
-    rewrite in_app_iff in *.
-    destruct Hin2 as [Hin2|Hin2]; auto.
-    right.
-    eapply incl_map; [|eauto]. intros ??.
-    eapply in_flat_map; eauto.
-  Qed.
-
-  Fact nodup_app_map_flat_map {A B C} : forall (f : C -> B) (g : A -> list C) xs y ys,
-      In y ys ->
-      NoDup (xs ++ map f (flat_map g ys)) ->
-      NoDup (xs ++ map f (g y)).
-  Proof.
-    intros * Hin Hnd.
-    apply NoDup_app'.
-    - apply NoDup_app_l in Hnd; auto.
-    - apply NoDup_app_r in Hnd.
-      induction ys; inv Hin; simpl in *; rewrite map_app in *.
-      + apply NoDup_app_l in Hnd; auto.
-      + apply NoDup_app_r in Hnd; auto.
-    - eapply Forall_forall; intros * Hin1 Hin2.
-      eapply NoDup_app_In in Hnd; eauto. eapply Hnd.
-      eapply incl_map; [|eauto]. intros ??.
-      eapply in_flat_map; eauto.
-  Qed.
-
   Section sem_block_det.
     Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
@@ -1061,33 +1030,6 @@ Module Type LSEMDETERMINISM
         econstructor; eauto.
         1-2:rewrite Forall_forall in *; intros * Hin; eauto.
         rewrite <-Hperm; auto.
-    Qed.
-
-    Lemma sem_var_refines_inv : forall env Hi1 Hi2 x vs,
-        In x env ->
-        Env.dom_lb Hi1 env ->
-        (forall vs, sem_var Hi1 x vs -> sem_var Hi2 x vs) ->
-        sem_var Hi2 x vs ->
-        sem_var Hi1 x vs.
-    Proof.
-      intros * Hin Hdom Href Hvar.
-      eapply Env.dom_lb_use in Hdom as (vs'&Hfind); eauto.
-      assert (sem_var Hi1 x vs') as Hvar' by (econstructor; eauto; reflexivity).
-      specialize (Href _ Hvar').
-      eapply sem_var_det in Href; eauto.
-      now rewrite Href.
-    Qed.
-
-    Lemma sem_var_refines' : forall env Hi1 Hi2 x vs,
-        In x env ->
-        Env.dom_lb Hi1 env ->
-        Env.refines (@EqSt _) Hi1 Hi2 ->
-        sem_var Hi2 x vs ->
-        sem_var Hi1 x vs.
-    Proof.
-      intros * Hin Hdom Href Hvar.
-      eapply sem_var_refines_inv in Hvar; eauto.
-      intros. eapply sem_var_refines; eauto.
     Qed.
 
     Lemma det_block_S : forall n envS blk env xs Hi1 Hi2 bs1 bs2 y cy,

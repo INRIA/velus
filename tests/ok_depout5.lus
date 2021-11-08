@@ -15,7 +15,9 @@ tel
 
 node main(b: bool)
 returns (w: bool; x: bool when w);
+var y1 : bool; z1 : bool when y1;
 let
-    (w, x) = g(f(b));
+    (y1, z1) = f(b);
+    (w, x) = g(y1, z1);
 tel
 

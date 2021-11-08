@@ -59,7 +59,7 @@ module ClightTypeFormats
           | Tfloat F32           -> "%e"
           | Tfloat F64           -> "%e"
         end
-      | Tenum (_, n) -> type_decl (Tprimitive (enumtag_ctype n))
+      | Tenum (_, n) -> type_printf (Tprimitive (enumtag_ctype n))
 
     let rec type_scanf ty =
       let open Ctypes in
