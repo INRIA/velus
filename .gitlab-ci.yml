@@ -1,0 +1,10 @@
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+build-job:
+  stage: build
+  script:
+    - echo "Hello"
+    - ./configure ia32-linux
+    - make -C CompCert -j
+    - make -j
