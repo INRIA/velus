@@ -64,6 +64,7 @@ Module Type LSYNTAX
   Inductive block : Type :=
   | Beq : equation -> block
   | Breset : list block -> exp -> block
+  | Bswitch : exp -> list (enumtag * list block) -> block
   | Blocal : list (ident * (type * clock * ident)) -> list block -> block.
 
   (** ** Node *)
@@ -154,20 +155,46 @@ Module Type LSYNTAX
   Definition nclocksof (es: list exp): list nclock :=
     flat_map nclockof es.
 
+  (** ** Variables defined by a block *)
+
+  (** `x ` is defined by `blk` *)
+  Inductive Is_defined_in (x : ident) : block -> Prop :=
+  | DefEq : forall xs es,
+      In x xs ->
+      Is_defined_in x (Beq (xs, es))
+  | DefReset : forall blks er,
+      Exists (Is_defined_in x) blks ->
+      Is_defined_in x (Breset blks er)
+  | DefSwitch : forall ec branches,
+      Exists (fun blks => Exists (Is_defined_in x) (snd blks)) branches ->
+      Is_defined_in x (Bswitch ec branches)
+  | DefLocal : forall locs blks,
+      Exists (Is_defined_in x) blks ->
+      ~InMembers x locs ->
+      Is_defined_in x (Blocal locs blks).
+
+  (** Compute the variables defined by a block *)
   Fixpoint vars_defined (d : block) :=
     match d with
-    | Beq eq => fst eq
-    | Breset blocks _ => flat_map vars_defined blocks
+    | Beq eq => ps_from_list (fst eq)
+    | Breset blocks _ => PSUnion (map vars_defined blocks)
+    | Bswitch _ branches =>
+      PSUnion (map (fun blks => PSUnion (map vars_defined (snd blks))) branches)
     | Blocal locals blocks =>
-      List.filter (fun x => negb (mem_assoc_ident x locals))
-                  (flat_map vars_defined blocks)
+      PS.filter (fun x => negb (mem_assoc_ident x locals))
+                (PSUnion (map vars_defined blocks))
     end.
 
+  (** Check that the variables defined by `blk` are indeed `xs` *)
   Inductive VarsDefined : block -> list ident -> Prop :=
   | LVDeq : forall eq, VarsDefined (Beq eq) (fst eq)
   | LVDreset : forall blocks er xs,
       Forall2 VarsDefined blocks xs ->
       VarsDefined (Breset blocks er) (concat xs)
+  | LVDswitch : forall ec branches ys,
+      branches <> [] ->
+      Forall (fun blks => exists xs, Forall2 VarsDefined (snd blks) xs /\ Permutation (concat xs) ys) branches ->
+      VarsDefined (Bswitch ec branches) ys
   | LVDlocal : forall locs blocks xs ys,
       Forall2 VarsDefined blocks xs ->
       Permutation (map fst locs ++ ys) (concat xs) ->
@@ -177,20 +204,27 @@ Module Type LSYNTAX
     match d with
     | Beq _ => []
     | Breset blocks _ => flat_map locals blocks
+    | Bswitch _ branches => flat_map (fun blks => flat_map locals (snd blks)) branches
     | Blocal loc blocks => loc ++ (flat_map locals blocks)
     end.
 
-  (** Shadowing is prohibited *)
+  (** ** Shadowing is prohibited *)
+
   Inductive NoDupLocals : list ident -> block -> Prop :=
   | NDLeq : forall env eq, NoDupLocals env (Beq eq)
   | NDLreset : forall env blocks er,
       Forall (NoDupLocals env) blocks ->
       NoDupLocals env (Breset blocks er)
+  | NDLswitch : forall env ec branches,
+      Forall (fun blks => Forall (NoDupLocals env) (snd blks)) branches ->
+      NoDupLocals env (Bswitch ec branches)
   | NDLlocal : forall env locs blocks,
       Forall (NoDupLocals (env++map fst locs)) blocks ->
       NoDupMembers locs ->
       (forall x, InMembers x locs -> ~In x env) ->
       NoDupLocals env (Blocal locs blocks).
+
+  (** ** All the locals must be well-formed *)
 
   Inductive GoodLocals (prefs : PS.t) : block -> Prop :=
   | GoodEq : forall eq,
@@ -198,6 +232,9 @@ Module Type LSYNTAX
   | GoodReset : forall blks er,
       Forall (GoodLocals prefs) blks ->
       GoodLocals prefs (Breset blks er)
+  | GoodSwitch : forall ec branches,
+      Forall (fun blks => Forall (GoodLocals prefs) (snd blks)) branches ->
+      GoodLocals prefs (Bswitch ec branches)
   | GoodLocal : forall locs blks,
       Forall (AtomOrGensym prefs) (map fst locs) ->
       Forall (GoodLocals prefs) blks ->
@@ -409,6 +446,11 @@ Module Type LSYNTAX
         Forall P blocks ->
         P (Breset blocks er).
 
+    Hypothesis BswitchCase:
+      forall ec branches,
+        Forall (fun blks => Forall P (snd blks)) branches ->
+        P (Bswitch ec branches).
+
     Hypothesis BlocalCase:
       forall locs blocks,
         Forall P blocks ->
@@ -419,6 +461,7 @@ Module Type LSYNTAX
       destruct d.
       - apply BeqCase; auto.
       - apply BresetCase; induction l; auto.
+      - apply BswitchCase; induction l; constructor; auto. induction (snd a); auto.
       - apply BlocalCase; induction l0; auto.
     Qed.
 
@@ -821,6 +864,12 @@ Module Type LSYNTAX
       wl_exp G er ->
       numstreams er = 1 ->
       wl_block G (Breset blocks er)
+  | wl_Bswitch : forall ec branches,
+      wl_exp G ec ->
+      numstreams ec = 1 ->
+      branches <> nil ->
+      Forall (fun blks => Forall (wl_block G) (snd blks)) branches ->
+      wl_block G (Bswitch ec branches)
   | wl_Blocal : forall locs blocks,
       Forall (wl_block G) blocks ->
       wl_block G (Blocal locs blocks).
@@ -886,6 +935,10 @@ Module Type LSYNTAX
       Forall (wx_block vars) blks ->
       wx_exp vars er ->
       wx_block vars (Breset blks er)
+  | wc_Bswitch : forall vars ec branches,
+      wx_exp vars ec ->
+      Forall (fun blks => Forall (wx_block vars) (snd blks)) branches ->
+      wx_block vars (Bswitch ec branches)
   | wx_Blocal : forall vars locs blks,
       Forall (wx_block (vars++map fst locs)) blks ->
       wx_block vars (Blocal locs blks).
@@ -952,6 +1005,11 @@ Module Type LSYNTAX
       - (* reset *)
         constructor; rewrite Forall_forall in *; eauto.
         eapply wx_exp_incl; eauto.
+      - (* switch *)
+        constructor.
+        + eapply wx_exp_incl; eauto.
+        + do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros); eauto.
+          do 2 (eapply Forall_forall in H; eauto).
       - (* local *)
         constructor; rewrite Forall_forall in *; intros.
         eapply H; eauto using incl_appl'.
@@ -971,6 +1029,10 @@ Module Type LSYNTAX
     - (* reset *)
       constructor.
       rewrite Forall_forall in *; eauto.
+    - (* switch *)
+      constructor.
+      do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros).
+      do 2 (eapply Forall_forall in H; eauto).
     - (* local *)
       constructor; auto.
       + rewrite Forall_forall in *; intros; eauto.
@@ -996,6 +1058,42 @@ Module Type LSYNTAX
     rewrite Hperm. reflexivity.
   Qed.
 
+  Lemma NoDupLocals_enrich : forall blk xs xs',
+      (forall x, In x xs' -> ~InMembers x (locals blk)) ->
+      NoDupLocals xs blk ->
+      NoDupLocals (xs++xs') blk.
+  Proof.
+    induction blk using block_ind2; intros * Hnd1 Hnd2;
+      inv Hnd2; simpl in *.
+    - (* equation *)
+      constructor.
+    - (* reset *)
+      constructor.
+      eapply Forall_forall; intros.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it; eauto.
+      intros ? Hin Hinm. eapply Hnd1; eauto.
+      apply inmembers_flat_map, Exists_exists; eauto.
+    - (* switch *)
+      constructor.
+      do 2 (eapply Forall_forall; intros).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it; eauto.
+      intros ? Hin Hinm. eapply Hnd1; eauto.
+      do 2 (apply inmembers_flat_map, Exists_exists; do 2 esplit; eauto).
+    - (* local *)
+      constructor; auto.
+      + eapply Forall_forall; intros.
+        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+        rewrite <-app_assoc, (Permutation_app_comm xs'), app_assoc.
+        eapply it; eauto.
+        intros ? Hin Hinm1. eapply Hnd1; eauto.
+        apply InMembers_app, or_intror. apply inmembers_flat_map, Exists_exists; eauto.
+      + intros ? Hinm Hin. apply in_app_iff in Hin as [Hin|Hin].
+        * eapply H5; eauto.
+        * eapply Hnd1; eauto. apply InMembers_app; auto.
+  Qed.
+
   Lemma NoDupLocals_incl' prefs npref : forall blk xs ys,
       ~PS.In npref prefs ->
       GoodLocals prefs blk ->
@@ -1008,6 +1106,11 @@ Module Type LSYNTAX
     - (* equation *) constructor.
     - (* reset *)
       constructor. rewrite Forall_forall in *; eauto.
+    - (* switch *)
+      constructor.
+      do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros).
+      do 2 (eapply Forall_forall in H; eauto).
+      do 2 (eapply Forall_forall in H1; eauto).
     - (* local *)
       constructor; auto.
       + rewrite Forall_forall in *. intros ? Hblk.
@@ -1051,69 +1154,13 @@ Module Type LSYNTAX
     - (* reset *)
       constructor; eauto using AtomOrGensym_add.
       rewrite Forall_forall in *; eauto.
+    - (* switch *)
+      constructor; eauto using AtomOrGensym_add.
+      do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros).
+      do 2 (eapply Forall_forall in H; eauto).
     - (* locals *)
       constructor; eauto using AtomOrGensym_add.
       rewrite Forall_forall in *; eauto.
-  Qed.
-
-  Lemma VarsDefined_vars_defined : forall blk xs,
-      NoDupLocals xs blk ->
-      VarsDefined blk xs ->
-      Permutation xs (vars_defined blk).
-  Proof.
-    induction blk using block_ind2; intros * Hnd Hvars; inv Hnd; inv Hvars; simpl in *.
-    - (* equation *)
-      reflexivity.
-    - (* reset *)
-      induction H4; inv H; inv H2; simpl in *; auto.
-      apply Permutation_app; [eapply H5|eapply IHForall2]; eauto.
-      2:eapply Forall_impl; [|eauto]; intros.
-      1,2:(eapply NoDupLocals_incl; [|eauto]; solve_incl_app).
-    - (* local *)
-      assert (Permutation (concat xs0) (flat_map vars_defined blocks)) as Hperm.
-      { rewrite Permutation_app_comm in H7.
-        assert (Forall (NoDupLocals (concat xs0)) blocks) as Hnd.
-        { eapply Forall_impl; [|eauto]. intros.
-          rewrite <-H7. eapply NoDupLocals_incl; [|eauto]; solve_incl_app. }
-        clear - H Hnd H3.
-        induction H3; inv H; inv Hnd; simpl in *; auto.
-        apply Permutation_app; [eapply H4|eapply IHForall2]; eauto.
-        2:eapply Forall_impl; [|eauto]; intros.
-        1,2:(eapply NoDupLocals_incl; [|eauto]; solve_incl_app).
-      }
-      rewrite <-Hperm, <-H7, <-filter_app, filter_nil, filter_idem; auto.
-      + eapply Forall_forall; intros ? Hin.
-        eapply Bool.negb_true_iff.
-        destruct (mem_assoc_ident x locs) eqn:Hmem; auto.
-        exfalso. eapply mem_assoc_ident_true in Hmem as (ty&Hin').
-        eapply H5; eauto using In_InMembers.
-      + eapply Forall_forall; intros ? Hin.
-        apply fst_InMembers, InMembers_In in Hin as (?&?).
-        eapply Bool.negb_false_iff; simpl.
-        destruct (mem_assoc_ident x locs) eqn:Hmem; auto.
-        exfalso. eapply mem_assoc_ident_false in Hmem; eauto.
-  Qed.
-
-  Corollary VarsDefined_flat_map_vars_defined : forall blks xs,
-      Forall (NoDupLocals (concat xs)) blks ->
-      Forall2 VarsDefined blks xs ->
-      Permutation (concat xs) (flat_map vars_defined blks).
-  Proof.
-    intros * Hnd Hvars.
-    induction Hvars; inv Hnd; simpl in *; auto.
-    apply Permutation_app; [eapply VarsDefined_vars_defined|eapply IHHvars]; eauto.
-    2:eapply Forall_impl; [|eauto]; intros.
-    1,2:(eapply NoDupLocals_incl; [|eauto]; solve_incl_app).
-  Qed.
-
-  Lemma vars_defined_Perm {PSyn prefs} : forall (n : @node PSyn prefs),
-      Permutation (vars_defined (n_block n)) (map fst (n_out n)).
-  Proof.
-    intros n. destruct n; simpl. clear - n_nodup0 n_defd0.
-    destruct n_defd0 as (?&Hvars&Hperm). destruct n_nodup0 as (_&Hnd).
-    rewrite <-Hperm. symmetry. eapply VarsDefined_vars_defined; eauto.
-    eapply NoDupLocals_incl; [|eauto].
-    rewrite Hperm. solve_incl_app.
   Qed.
 
   Lemma GoodLocals_locals prefs : forall blk,
@@ -1125,6 +1172,12 @@ Module Type LSYNTAX
       rewrite flat_map_concat_map, concat_map.
       eapply Forall_concat, Forall_map, Forall_map.
       rewrite Forall_forall in *; eauto.
+    - (* switch *)
+      rewrite flat_map_concat_map, Forall_map.
+      apply Forall_concat, Forall_map, Forall_forall; intros (?&?) Hin.
+      rewrite flat_map_concat_map. apply Forall_concat, Forall_map, Forall_forall; intros.
+      do 2 (eapply Forall_forall in H; eauto). do 2 (eapply Forall_forall in H1; eauto).
+      eapply Forall_map; eauto.
     - (* locals *)
       rewrite map_app, Forall_app; split; auto.
       rewrite flat_map_concat_map, concat_map.
@@ -1146,6 +1199,198 @@ Module Type LSYNTAX
   | NLnode : forall locs blks,
       Forall nolocal_block blks ->
       nolocal_top_block (Blocal locs blks).
+
+  (** *** Without switches *)
+
+  Inductive noswitch_block : block -> Prop :=
+  | NSeq : forall eq, noswitch_block (Beq eq)
+  | NSreset : forall blks er,
+      Forall noswitch_block blks ->
+      noswitch_block (Breset blks er)
+  | NSlocal : forall locs blks,
+      Forall noswitch_block blks ->
+      noswitch_block (Blocal locs blks).
+
+  (** *** Some more properties *)
+
+  Lemma VarsDefined_Is_defined : forall blk xs x,
+      NoDupLocals xs blk ->
+      VarsDefined blk xs ->
+      In x xs ->
+      Is_defined_in x blk.
+  Proof.
+    induction blk using block_ind2; intros * Hnd Hvars Hin; inv Hnd; inv Hvars.
+    - (* equation *)
+      destruct eq. constructor; auto.
+    - (* reset *)
+      constructor.
+      eapply in_concat in Hin as (?&Hin1&Hin2).
+      eapply Forall2_ignore1, Forall_forall in H4 as (?&?&?); eauto.
+      eapply Exists_exists; do 2 esplit; eauto.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it. 2,3:eauto.
+      eapply NoDupLocals_incl; [|eauto]; auto using incl_concat.
+    - (* switch *)
+      constructor.
+      inv H; try congruence. inv H2. inv H5. clear H1 H7 H8.
+      destruct H4 as (?&Hvars&Hperm).
+      left.
+      rewrite <-Hperm in Hin. eapply in_concat in Hin as (?&Hin1&Hin2).
+      eapply Forall2_ignore1, Forall_forall in Hvars as (?&?&?); eauto.
+      eapply Exists_exists; do 2 esplit; eauto.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it. 2,3:eauto.
+      eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; auto using incl_concat.
+    - (* local *)
+      econstructor.
+      2:{ intros contra. eapply H5; eauto. }
+      assert (In x (concat xs0)) as Hin' by (rewrite <-H7; auto using in_or_app).
+      apply in_concat in Hin' as (?&Hin1&Hin2).
+      eapply Forall2_ignore1, Forall_forall in H3 as (?&?&?); eauto.
+      eapply Exists_exists; do 2 esplit; eauto.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it. 2,3:eauto.
+      eapply NoDupLocals_incl; [|eauto].
+      rewrite Permutation_app_comm, H7; auto using incl_concat.
+  Qed.
+
+  Corollary Forall_VarsDefined_Is_defined : forall blks xs x,
+      Forall (NoDupLocals (concat xs)) blks ->
+      Forall2 (VarsDefined) blks xs ->
+      In x (concat xs) ->
+      Exists (Is_defined_in x) blks.
+  Proof.
+    intros * Hnd Hvars Hin.
+    apply in_concat in Hin as (?&Hin1&Hin2).
+    eapply Forall2_ignore1, Forall_forall in Hvars as (?&?&?); eauto.
+    eapply Forall_forall in Hnd; eauto.
+    eapply Exists_exists; do 2 esplit; eauto.
+    eapply VarsDefined_Is_defined in H0; eauto.
+    eapply NoDupLocals_incl; [|eauto]. apply incl_concat; auto.
+  Qed.
+
+  Lemma VarsDefined_Is_defined' : forall blk xs x,
+      NoDupLocals xs blk ->
+      VarsDefined blk xs ->
+      Is_defined_in x blk ->
+      In x xs.
+  Proof.
+    induction blk using block_ind2; intros * Hnd Hvars Hin; inv Hnd; inv Hvars; inv Hin.
+    - (* equation *)
+      auto.
+    - (* reset *)
+      eapply Exists_exists in H1 as (?&Hin1&Hin2).
+      eapply Forall2_ignore2, Forall_forall in H4 as (?&?&?); eauto.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply in_concat. repeat esplit; eauto.
+      eapply it. 2,3:eauto.
+      eapply NoDupLocals_incl; [|eauto]; auto using incl_concat.
+    - (* switch *)
+      rename H1 into Hdef. repeat (eapply Exists_exists in Hdef as (?&?&Hdef)).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      destruct it0 as (?&Hvars&Hperm).
+      eapply Forall2_ignore2, Forall_forall in Hvars as (?&?&Hvars); eauto.
+      rewrite <-Hperm. eapply in_concat. repeat esplit; eauto.
+      eapply it; eauto.
+      eapply NoDupLocals_incl; [|eauto].
+      rewrite <-Hperm; auto using incl_concat.
+    - (* local *)
+      eapply Exists_exists in H6 as (?&Hin1&Hin2).
+      eapply Forall2_ignore2, Forall_forall in H3 as (?&?&?); eauto.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it in H1; eauto.
+      2:{ eapply NoDupLocals_incl; [|eauto].
+          rewrite Permutation_app_comm, H7; auto using incl_concat. }
+      assert (In x (concat xs0)) as Hin by (eapply in_concat; eauto).
+      rewrite <-H7, in_app_iff in Hin. destruct Hin; auto.
+      exfalso. apply H8, fst_InMembers; auto.
+  Qed.
+
+  Lemma Is_defined_in_wx_In : forall blk env x,
+      wx_block env blk ->
+      Is_defined_in x blk ->
+      In x env.
+  Proof.
+    induction blk using block_ind2; intros * Hwx Hdef; inv Hwx; inv Hdef.
+    - (* equation *)
+      destruct H1; auto.
+    - (* reset *)
+      eapply Exists_exists in H1 as (?&?&?).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+    - (* switch *)
+      rename H1 into Hdef.
+      repeat (eapply Exists_exists in Hdef as (?&?&Hdef)).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+    - (* local *)
+      eapply Exists_exists in H3 as (?&?&?).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it, in_app_iff in it0 as [|]; eauto.
+      exfalso. apply H4, fst_InMembers; auto.
+  Qed.
+
+  Corollary Exists_Is_defined_in_wx_In : forall blks env x,
+      Forall (wx_block env) blks ->
+      Exists (Is_defined_in x) blks ->
+      In x env.
+  Proof.
+    intros * Hf Hex.
+    eapply Exists_exists in Hex as (?&?&?).
+    eapply Forall_forall in Hf; eauto using Is_defined_in_wx_In.
+  Qed.
+
+  Lemma Is_defined_in_vars_defined : forall x blk,
+      Is_defined_in x blk ->
+      PS.In x (vars_defined blk).
+  Proof.
+    induction blk using block_ind2; intros * Hin; simpl in *.
+    - (* equation *)
+      inv Hin; auto.
+      now rewrite ps_from_list_In.
+    - (* reset *)
+      inv Hin. apply Exists_exists in H1 as (?&?&?).
+      eapply In_In_PSUnion; eauto. 2:eapply in_map_iff; eauto.
+      take (Forall _ _) and eapply Forall_forall in it; eauto.
+    - (* switch *)
+      inv Hin. rename H1 into Hin. do 2 (apply Exists_exists in Hin as (?&?&Hin)).
+      do 2 (eapply In_In_PSUnion; [|eapply in_map_iff; eauto]).
+      do 2 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+    - (* local *)
+      inv Hin.
+      eapply PSF.filter_3. intros ???; subst; auto.
+      + apply Exists_exists in H2 as (?&?&?).
+        eapply In_In_PSUnion; eauto. 2:eapply in_map_iff; eauto.
+        take (Forall _ _) and eapply Forall_forall in it; eauto.
+      + eapply Bool.negb_true_iff.
+        eapply Bool.not_true_iff_false. intro contra.
+        apply H3.
+        eapply mem_assoc_ident_true in contra as ((?&?)&?); eauto using In_InMembers.
+  Qed.
+
+  Lemma vars_defined_Is_defined_in : forall x blk,
+      PS.In x (vars_defined blk) ->
+      Is_defined_in x blk.
+  Proof.
+    induction blk using block_ind2; intros * Hin; simpl in *.
+    - (* equation *)
+      destruct eq. rewrite ps_from_list_In in Hin.
+      now constructor.
+    - (* reset *)
+      apply PSUnion_In_In in Hin as (?&Hin1&Hin2). eapply in_map_iff in Hin1 as (?&?&?); subst.
+      eapply Forall_forall in H; eauto.
+      constructor. eapply Exists_exists; eauto.
+    - (* switch *)
+      apply PSUnion_In_In in Hin as (?&Hin1&Hin2). eapply in_map_iff in Hin1 as (?&?&?); subst.
+      apply PSUnion_In_In in Hin2 as (?&Hin2&Hin3). eapply in_map_iff in Hin2 as (?&?&?); subst.
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      constructor. do 2 (eapply Exists_exists; do 2 esplit; eauto).
+    - (* local *)
+      eapply PS.filter_spec in Hin as (Hin&Hassoc). 2:intros ?? Heq; inv Heq; auto.
+      apply PSUnion_In_In in Hin as (?&Hin1&Hin2). eapply in_map_iff in Hin1 as (?&?&?); subst.
+      eapply Forall_forall in H; eauto.
+      econstructor. eapply Exists_exists; eauto.
+      intros contra. eapply InMembers_In in contra as (?&?).
+      eapply Bool.negb_true_iff, mem_assoc_ident_false in Hassoc; eauto.
+  Qed.
 
 End LSYNTAX.
 

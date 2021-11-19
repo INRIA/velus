@@ -1,0 +1,11 @@
+type t = A
+
+node f(w : t) returns (y : int)
+let
+  switch w
+  | A -> var t : int :: . on A(w);
+         let t = 4;
+             y = merge w (A -> t);
+         tel
+  end
+tel

@@ -1,0 +1,19 @@
+type t = A | B | C
+
+node f(x : t) returns (y : int);
+let
+  switch x
+  | A -> y = 1;
+  | B -> y = 2;
+  | C -> y = 3;
+  end
+tel
+
+node g(x : t) returns (y : int; z : bool);
+let
+  switch x
+  | A -> z = false; y = 2;
+  | B -> y = 2; z = true;
+  | C -> y = 3; z = true;
+  end
+tel

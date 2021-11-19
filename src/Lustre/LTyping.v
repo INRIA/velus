@@ -180,11 +180,22 @@ Module Type LTYPING
   | wt_Beq: forall env eq,
       wt_equation G env eq ->
       wt_block G env (Beq eq)
+
   | wt_Breset: forall env blocks er,
       Forall (wt_block G env) blocks ->
       wt_exp G env er ->
       typeof er = [bool_velus_type] ->
       wt_block G env (Breset blocks er)
+
+  | wt_Bswitch : forall env ec branches tn,
+      wt_exp G env ec ->
+      typeof ec = [Tenum tn] ->
+      In tn G.(enums) ->
+      Permutation (map fst branches) (seq 0 (snd tn)) ->
+      branches <> nil ->
+      Forall (fun blks => Forall (wt_block G env) (snd blks)) branches ->
+      wt_block G env (Bswitch ec branches)
+
   | wt_Blocal: forall env locs blocks,
       Forall (wt_block G (env ++ idty (idty locs))) blocks ->
       wt_clocks G.(enums) (env ++ idty (idty locs)) locs ->
@@ -551,6 +562,10 @@ Module Type LTYPING
       - econstructor; eauto using wt_exp_incl.
         eapply Forall_Forall in H; eauto. clear H2.
         eapply Forall_impl; [|eauto]; intros ? (?&?); eauto.
+      - econstructor; eauto using wt_exp_incl.
+        + do 2 (eapply Forall_forall; try intros (?&?); intros).
+          do 2 (eapply Forall_forall in H; eauto).
+          do 2 (eapply Forall_forall in H8; eauto).
       - constructor; auto.
         + rewrite Forall_forall in *; intros.
           eapply H; eauto using incl_appl'.
@@ -797,7 +812,7 @@ Module Type LTYPING
       | Emerge (x, Tenum (xt, n)) es (tys, nck) =>
         do tss <- omap (fun es => oconcat (map check_exp (snd es))) es;
         if check_var x (Tenum (xt, n)) && check_enum (Tenum (xt, n))
-           && (check_perm_seq (map fst es) n) && (length es <>b 0)
+           && (check_perm_seq (map fst es) n) && (negb (is_nil es))
            && (forallb (fun ts => forall2b equiv_decb ts tys) tss)
            && (check_clock eenv venv nck)
         then Some tys else None
@@ -809,7 +824,7 @@ Module Type LTYPING
         match xt with
         | Tenum (xt, n) =>
           if check_enum (Tenum (xt, n))
-             && (check_perm_seq (map fst brs) n) && (length brs <>b 0)
+             && (check_perm_seq (map fst brs) n) && (negb (is_nil brs))
              && (forallb (fun ts => (forall2b equiv_decb ts tys)) tss)
              && (check_clock eenv venv nck)
           then Some tys else None
@@ -823,7 +838,7 @@ Module Type LTYPING
         match xt with
         | Tenum (xt, n) =>
           if check_enum (Tenum (xt, n))
-             && (check_nodup_nat (map fst brs)) && (forallb (fun i => i <? n) (map fst brs)) && (length brs <>b 0)
+             && (check_nodup_nat (map fst brs)) && (forallb (fun i => i <? n) (map fst brs)) && (negb (is_nil brs))
              && (forallb (fun ts => (forall2b equiv_decb ts tys)) (tds::tss))
              && (check_clock eenv venv nck)
           then Some tys else None
@@ -965,33 +980,6 @@ Module Type LTYPING
       specialize (IH tes) as (? & ?); eauto using in_cons...
     Qed.
 
-    (* Lemma omap_concat_map_check_exp'': *)
-    (*   forall {f} ess dty tys, *)
-    (*     (forall es e tys, *)
-    (*         In (Some es) ess -> *)
-    (*         In e es -> *)
-    (*         NoDupMembers (Env.elements venv++idty (fresh_in e)) -> *)
-    (*         f e = Some tys -> *)
-    (*         wt_exp G (Env.elements venv) e /\ typeof e = tys) -> *)
-    (*     NoDupMembers (Env.elements venv++idty (flat_map (or_default_with [] fresh_ins) ess)) -> *)
-    (*     omap (or_default_with (Some dty) (fun es => oconcat (map f es))) ess = Some tys -> *)
-    (*     Forall (LiftO True (Forall (wt_exp G (Env.elements venv)))) ess *)
-    (*     /\ Forall2 (fun es tys => LiftO True (fun es => typesof es = tys) es) ess tys. *)
-    (* Proof with try solve_ndup. *)
-    (*   induction ess as [|es ess IH]; intros * WTf ND CE. now inv CE; auto. *)
-    (*   simpl in CE. *)
-    (*   destruct es; simpl in *. *)
-    (*   - destruct (oconcat (map _ l)) eqn:Ce; [|now omonadInv CE]. *)
-    (*     destruct (omap _ _) as [tes|] eqn:CE''; [|now omonadInv CE]. *)
-    (*     omonadInv CE. simpl. *)
-    (*     eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes... *)
-    (*     specialize (IH dty tes) as (? & ?); eauto using in_cons... *)
-    (*   - destruct (omap _ _) as [tes|] eqn:CE'; [|now omonadInv CE]. *)
-    (*     omonadInv CE. simpl. *)
-    (*     specialize (IH dty tes) as (? & ?); eauto using in_cons. *)
-    (*     split; constructor; simpl; auto. *)
-    (* Qed. *)
-
     Lemma check_reset_correct :
       forall tys,
         check_reset tys = true ->
@@ -1106,8 +1094,7 @@ Module Type LTYPING
         econstructor; eauto. econstructor; eauto.
         + eapply check_enum_correct' in H5 as (?&?)...
         + eapply check_perm_seq_spec in H4...
-        + contradict H3; subst; simpl.
-          apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
+        + contradict H3; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hty.
           eapply Forall_impl; [|eapply Hty]; intros (?&?) (?&Hin&Hty').
           eapply Forall_forall in H2; eauto. rewrite Forall2_eq in H2; subst; auto.
@@ -1124,8 +1111,7 @@ Module Type LTYPING
           eapply forallb_Forall, Forall_forall in H6; eauto. eapply Nat.ltb_lt in H6.
           eapply in_seq. split; simpl; lia.
         + eapply check_nodup_nat_NoDup, fst_NoDupMembers in H7...
-        + contradict H5; subst; simpl.
-          apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
+        + contradict H5; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hty.
           eapply Forall_impl; [|eapply Hty]; intros (?&?) (?&Hin&Hty').
           eapply Forall_forall in H4; eauto. rewrite Forall2_eq in H4; subst; auto.
@@ -1138,8 +1124,7 @@ Module Type LTYPING
         do 2 econstructor; eauto.
         + apply check_enum_correct' in H1 as (?&?)...
         + eapply check_perm_seq_spec in H5...
-        + contradict H4; subst; simpl.
-          apply Bool.not_true_iff_false, nequiv_decb_false, equiv_decb_equiv. constructor.
+        + contradict H4; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hty.
           eapply Forall_impl; [|eapply Hty]; intros (?&?) (?&Hin&Hty').
           eapply Forall_forall in H3; eauto. rewrite Forall2_eq in H3; subst; auto.
@@ -1232,6 +1217,15 @@ Module Type LTYPING
         | Some [tyr] => tyr ==b bool_velus_type
         | _ => false
         end
+      | Bswitch ec brs =>
+        match assert_singleton (check_exp G eenv venv ec) with
+        | Some (Tenum (xt, n)) =>
+          check_enum eenv (Tenum (xt, n)) &&
+          check_perm_seq (map fst brs) n &&
+          (negb (is_nil brs)) &&
+          forallb (fun blks => forallb (check_block venv) (snd blks)) brs
+        | _ => false
+        end
       | Blocal locs blocks =>
         let env' := Env.union venv (Env.from_list (idty (idty locs))) in
         forallb (check_block env') blocks &&
@@ -1240,8 +1234,9 @@ Module Type LTYPING
       end.
 
     Hint Constructors wt_block.
-
     Import Permutation.
+
+    Opaque check_enum.
 
     Lemma check_block_correct : forall blk venv,
         NoDupMembers (Env.elements venv) ->
@@ -1250,8 +1245,10 @@ Module Type LTYPING
         wt_block G (Env.elements venv) blk.
     Proof.
       induction blk using block_ind2; intros * ND1 ND2 CD; inv ND2; simpl in *.
-      - eapply check_equation_correct in CD; eauto.
-      - eapply Bool.andb_true_iff in CD as (CDs&CE).
+      - (* equation *)
+        eapply check_equation_correct in CD; eauto.
+      - (* reset *)
+        eapply Bool.andb_true_iff in CD as (CDs&CE).
         eapply forallb_Forall in CDs.
         destruct check_exp eqn:CE'; try congruence.
         eapply check_exp_correct in CE' as (Wte&Tye); eauto.
@@ -1262,7 +1259,20 @@ Module Type LTYPING
         + cases.
           rewrite equiv_decb_equiv in CE; inv CE.
           assumption.
-      - repeat rewrite Bool.andb_true_iff in CD. destruct CD as ((CB&CC)&CE).
+      - (* switch *)
+        cases_eqn EQ; subst.
+        apply assert_singleton_spec, check_exp_correct in EQ as (Hwt1&Hty1); auto.
+        repeat rewrite Bool.andb_true_iff in CD. destruct CD as (((CE&CP)&CL)&CBrs).
+        eapply check_enum_correct in CE as (?&?); simpl in *; eauto.
+        econstructor; eauto.
+        + eapply check_perm_seq_spec; eauto.
+        + contradict CL; subst; simpl in *. auto.
+        + eapply forallb_Forall in CBrs. eapply Forall_impl_In; [|eapply CBrs]; intros (?&?) Hin Hf.
+          eapply forallb_Forall in Hf. eapply Forall_impl_In; [|eauto]; intros; simpl in *.
+          do 2 (eapply Forall_forall in H; eauto).
+          do 2 (eapply Forall_forall in H2; eauto).
+      - (* local *)
+        repeat rewrite Bool.andb_true_iff in CD. destruct CD as ((CB&CC)&CE).
         apply forallb_Forall in CB. apply forallb_Forall in CC. apply forallb_Forall in CE.
         assert (NoDupMembers (idty (idty locs))) as Hnd1.
         { eapply NoDupMembers_idty, NoDupMembers_idty; eauto. }
@@ -1431,6 +1441,11 @@ Module Type LTYPING
       - constructor; auto using iface_eq_wt_equation.
       - constructor; auto using iface_eq_wt_exp.
         rewrite Forall_forall in *; eauto.
+      - econstructor; eauto using iface_eq_wt_exp.
+        + destruct Heq. congruence.
+        + do 2 (eapply Forall_forall; try intros (?&?); intros).
+          do 2 (eapply Forall_forall in H; eauto).
+          do 2 (eapply Forall_forall in H8; eauto).
       - constructor.
         1,3:rewrite Forall_forall in *; eauto.
         eapply Forall_impl; [|eauto]; intros (?&(?&?)&?) Hwt.
@@ -1545,6 +1560,11 @@ Module Type LTYPING
       + eapply Forall_Forall in H; eauto. clear H2.
         eapply Forall_impl; [|eauto]. intros ? (?&?); eauto.
       + now rewrite <-length_typeof_numstreams, H5.
+    - econstructor; eauto.
+      + rewrite <-length_typeof_numstreams, H3; auto.
+      + do 2 (eapply Forall_forall; try intros (?&?); intros).
+        do 2 (eapply Forall_forall in H; eauto).
+        do 2 (eapply Forall_forall in H8; eauto).
     - econstructor; eauto.
       rewrite Forall_forall in *; eauto.
   Qed.
@@ -1718,9 +1738,12 @@ Module Type LTYPING
       wx_block (map fst vars) blk.
   Proof.
     induction blk using block_ind2; intros * Wt; inv Wt; eauto.
-    1-3:econstructor; eauto.
-    1,2:rewrite Forall_forall in *; intros; eauto.
-    rewrite <-map_fst_idty, <-map_fst_idty, <-map_app; eauto.
+    1-4:econstructor; eauto.
+    1,3:rewrite Forall_forall in *; intros; eauto.
+    - rewrite <-map_fst_idty, <-map_fst_idty, <-map_app; eauto.
+    - do 2 (eapply Forall_forall; try intros (?&?); intros).
+      do 2 (eapply Forall_forall in H; eauto).
+      do 2 (eapply Forall_forall in H8; eauto).
   Qed.
   Hint Resolve wt_block_wx_block.
 

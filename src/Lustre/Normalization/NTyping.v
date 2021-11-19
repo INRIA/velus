@@ -1087,10 +1087,8 @@ Module Type NTYPING
             clear - H6 H. solve_forall; repeat solve_incl.
         + rewrite Forall_map.
           eapply Forall_impl; [|eauto]; intros; constructor; auto.
-      - repeat (constructor; auto).
-        + solve_forall. eapply iface_eq_wt_block; eauto.
-        + eapply Forall_impl; [|eauto]. intros (?&(?&?)&?) ?. eapply iface_eq_wt_clock; eauto.
-        + solve_forall.
+      - constructor; auto. eapply iface_eq_wt_block; eauto. econstructor; eauto.
+      - constructor; auto. eapply iface_eq_wt_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_wt_block : forall vars blocks blocks' st st' ,
@@ -1408,7 +1406,7 @@ Module Type NTYPING
         Forall (wt_clock G2.(enums) (vars++st_tys st')) (st_clocks st').
     Proof.
       induction d using block_ind2; intros * Hwt Hcks Hnorm; inv Hwt;
-        repeat inv_bind.
+        repeat inv_bind; auto.
       - eapply unnest_equation_wt_clock; eauto.
       - assert (Forall (wt_clock G2.(enums) (vars ++ st_tys x0)) (st_clocks x0)) as Hcks'.
         { clear - Hcks H H0 H2. revert st x x0 H Hcks H0 H2.
@@ -1418,7 +1416,6 @@ Module Type NTYPING
         eapply unnest_reset_wt_clock in H1; eauto.
         2:repeat solve_incl.
         intros; eapply unnest_exp_wt_clock in H6; eauto. repeat solve_incl.
-      - solve_forall.
     Qed.
 
     Corollary unnest_blocks_wt_clock : forall vars blocks blocks' st st' ,
@@ -1714,7 +1711,7 @@ Module Type NTYPING
         Forall (wt_enum G2) (map snd (vars++st_tys st')).
     Proof.
       induction d using block_ind2; intros * Hwt Henums Hnorm;
-        inv Hwt; repeat inv_bind.
+        inv Hwt; repeat inv_bind; auto.
       - eapply unnest_equation_wt_enum; eauto.
       - assert (Forall (wt_enum G2) (map snd (vars ++ st_tys x0))) as Henums'.
         { clear - H H0 H2 Henums.
@@ -1726,7 +1723,6 @@ Module Type NTYPING
         eapply unnest_reset_wt_enum in H1; eauto.
         intros. eapply unnest_exp_wt_enum in H6; eauto.
         1,2:repeat solve_incl.
-      - solve_forall.
     Qed.
 
     Corollary unnest_blocks_wt_enum : forall vars blocks blocks' st st' ,
@@ -2015,9 +2011,8 @@ Module Type NTYPING
         apply Forall_singl in H. apply H in H0; eauto.
         rewrite Forall_map. solve_forall.
         constructor; auto. repeat solve_incl.
-      - (* locals *)
-        repeat inv_bind. constructor; auto.
-        repeat solve_incl.
+      - repeat inv_bind. constructor; auto. repeat solve_incl.
+      - repeat inv_bind. constructor; auto. repeat solve_incl.
     Qed.
 
     Corollary normfby_blocks_wt : forall vars to_cut blocks blocks' st st' ,
@@ -2117,8 +2112,8 @@ Module Type NTYPING
         cases; repeat inv_bind; auto.
         inv Hwt. apply Forall_singl in H3.
         apply Forall_singl in H; eauto.
-      - (* locals *)
-        repeat inv_bind; auto.
+      - repeat inv_bind; auto.
+      - repeat inv_bind; auto.
     Qed.
 
     Corollary normfby_blocks_wt_clock : forall vars to_cut blocks blocks' st st' ,
@@ -2234,8 +2229,8 @@ Module Type NTYPING
         simpl in Hnorm. cases; repeat inv_bind; auto.
         inv Hwt. apply Forall_singl in H3.
         apply Forall_singl in H; eauto.
-      - (* locals *)
-        repeat inv_bind; auto.
+      - repeat inv_bind; auto.
+      - repeat inv_bind; auto.
     Qed.
 
     Corollary normfby_blocks_wt_enum : forall vars to_cut blocks blocks' st st' ,

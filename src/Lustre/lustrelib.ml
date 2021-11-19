@@ -56,6 +56,7 @@ module type SYNTAX =
     type block =
     | Beq of equation
     | Breset of block list * exp
+    | Bswitch of exp * (enumtag * block list) list
     | Blocal of (ident * ((typ * clock) * ident)) list * block list
 
     type node = {
@@ -124,7 +125,7 @@ module PrintFun
       pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") p
 
     let print_semicol_list p =
-      pp_print_list ~pp_sep:(fun p () -> fprintf p ";@ ") p
+      pp_print_list ~pp_sep:(fun p () -> fprintf p ";@;") p
 
     let rec exp prec p e =
       let (prec', assoc) = precedence e in
@@ -228,7 +229,7 @@ module PrintFun
                  (print_comma_list print_ident) xs
 
     let rec print_equation p (xs, es) =
-      fprintf p "@[<hov 2>%a =@ %a;@]"
+      fprintf p "@[<hov 2>%a =@ %a@]"
         print_pattern xs (exp_list 0) es
 
     let print_semicol_list_as name px p xs =
@@ -241,13 +242,18 @@ module PrintFun
       match bck with
       | L.Beq eq -> print_equation p eq
       | L.Breset (blks, er) ->
-        fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a;"
-          (pp_print_list print_block) (List.rev blks)
+        fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a"
+          (print_semicol_list print_block) blks
           print_exp er
+      | L.Bswitch (ec, brs) ->
+        fprintf p "@[<v 0>@[<h 2>switch@;%a@]%a@]@;end"
+          print_exp ec
+          (PrintOps.print_branches (print_semicol_list print_block))
+          (List.map (fun (i, blks) -> (asprintf "%a" PrintOps.print_enumtag i, Some blks)) brs, None)
       | L.Blocal (locals, blks) ->
         fprintf p "%a@[<v 2>let@;%a@;<0 -2>@]tel"
           (print_semicol_list_as "var" print_decl) locals
-          (pp_print_list print_block) (List.rev blks)
+          (print_semicol_list print_block) blks
 
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;

@@ -25,7 +25,7 @@ Module Type CORRECTNESS
        (Import OpAux : OPERATORS_AUX   Ids Op)
        (Import ComTyp: COMMONTYPING    Ids Op OpAux)
        (Import Cks   : CLOCKS          Ids Op OpAux)
-       (Import CStr  : COINDSTREAMS    Ids Op OpAux Cks)
+       (       CStr  : COINDSTREAMS    Ids Op OpAux Cks)
        (Import IStr  : INDEXEDSTREAMS  Ids Op OpAux Cks)
        (Import CIStr : COINDTOINDEXED  Ids Op OpAux        Cks CStr IStr)
        (Import CE    : COREEXPR        Ids Op OpAux ComTyp Cks      IStr)

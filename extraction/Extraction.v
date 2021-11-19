@@ -147,12 +147,10 @@ Extract Constant Cabs.char_code => "int64".
 (* Extract Constant LustreElab.do_add_when_to_constants => *)
 (*     "Veluslib.do_add_when_to_constants". *)
 
-Extract Constant Velus.print_lustre =>
-  "Veluslib.print_lustre_if".
-Extract Constant Velus.print_nolocal =>
-  "Veluslib.print_nolocal_if".
-Extract Constant Velus.print_nlustre =>
-  "Veluslib.print_nlustre_if".
+Extract Constant Velus.print_lustre => "Veluslib.print_lustre_if".
+Extract Constant Velus.print_noswitch => "Veluslib.print_noswitch_if".
+Extract Constant Velus.print_nolocal => "Veluslib.print_nolocal_if".
+Extract Constant Velus.print_nlustre => "Veluslib.print_nlustre_if".
 Extract Constant Velus.print_stc => "Veluslib.print_stc_if".
 Extract Constant Velus.print_sch => "Veluslib.print_sch_if".
 Extract Constant Velus.print_obc => "Veluslib.print_obc_if".

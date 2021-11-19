@@ -118,8 +118,6 @@ Module Type UNNESTING
     | |- context c [typesof ?es] => unfold typesof
     | H : context c [clocksof ?es] |- _ => unfold clocksof in H
     | |- context c [clocksof ?es] => unfold clocksof
-    | H : context c [vars_defined ?es] |- _ => unfold vars_defined in H
-    | |- context c [vars_defined ?es] => unfold vars_defined
     (* flat_map, map_map, map_app, concat_app *)
     | H: context c [flat_map ?f ?l] |- _ => rewrite flat_map_concat_map in H
     | |- context c [flat_map ?f ?l] => rewrite flat_map_concat_map
@@ -856,11 +854,10 @@ Module Type UNNESTING
       st_follows st st'.
   Proof.
     induction bck using block_ind2; intros * Hun;
-      repeat inv_bind; eauto.
+      repeat inv_bind; eauto; try reflexivity.
     - eapply mmap_st_follows in H0; eauto.
       eapply unnest_reset_st_follows' in H1; eauto.
       etransitivity; eauto.
-    - reflexivity.
   Qed.
   Hint Resolve unnest_block_st_follows.
 
@@ -1007,25 +1004,6 @@ Module Type UNNESTING
     eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&?) Hin _ (?&?&?&?); repeat inv_bind.
     eapply Forall_forall in Hwl; eauto; simpl in *; eauto.
   Qed.
-
-  (* Corollary mmap2_mmap2_unnest_exp_length' : forall G is_control es es' eqs' st st', *)
-  (*   Forall (LiftO True (Forall (wl_exp G))) es -> *)
-  (*   mmap2 *)
-  (*       (or_default_with *)
-  (*          (ret (None, [])) *)
-  (*          (fun es => bind2 *)
-  (*                    (bind2 (mmap2 (unnest_exp G is_control) es) (fun es0 eqs => ret (concat es0, concat eqs))) *)
-  (*                    (fun es' eqs'  => ret (Some es', eqs')))) es st = (es', eqs', st') -> *)
-  (*   Forall2 (fun oes oes' => forall es', oes' = Some es' -> exists es, oes = Some es /\ length es' = length (annots es)) es es'. *)
-  (* Proof. *)
-  (*   intros * Hwl Hmap. *)
-  (*   eapply mmap2_values in Hmap. eapply Forall3_ignore3 in Hmap. *)
-  (*   eapply Forall2_impl_In; [|eauto]; intros ?? Hin _ (?&?&?&?) ??; subst; repeat inv_bind. *)
-  (*   destruct a; repeat inv_bind. *)
-  (*   repeat esplit. *)
-  (*   eapply Forall_forall in Hwl; eauto. *)
-  (*   simpl in *; eauto. *)
-  (* Qed. *)
 
   Corollary unnest_exps_length : forall G es es' eqs' st st',
       Forall (wl_exp G) es ->
@@ -1688,6 +1666,9 @@ Module Type UNNESTING
         * eapply Forall_forall; intros. constructor.
       + rewrite <-H1, Permutation_swap, <-Hperm1, Permutation_swap.
         now rewrite concat_app, <-app_assoc, flat_map_concat_map.
+    - exists [xs]. split; try constructor; auto.
+      + econstructor; eauto.
+      + simpl; rewrite app_nil_r; auto.
     - exists [xs]. split; try constructor; auto.
       + econstructor; eauto.
       + simpl; rewrite app_nil_r; auto.
@@ -2484,8 +2465,8 @@ Module Type UNNESTING
         rewrite Forall_map, Forall_forall. intros ? Hin. constructor.
         eapply Forall_forall in Hgood; eauto.
       + rewrite Forall_map, Forall_forall. intros ? Hin. constructor.
-    - (* locals *)
-      do 2 (constructor; auto).
+    - do 2 (constructor; auto).
+    - do 2 (constructor; auto).
   Qed.
 
   Corollary unnest_blocks_GoodLocals G : forall prefs blks blks' st st',
@@ -2529,6 +2510,7 @@ Module Type UNNESTING
       + eapply mmap_NoDupLocals in H; eauto.
         eapply Forall_impl; [|eauto]; intros. constructor; auto.
       + eapply Forall_forall; intros. constructor.
+    - constructor; auto.
     - constructor; auto.
   Qed.
 
@@ -2583,15 +2565,11 @@ Module Type UNNESTING
   Lemma norm1_not_in_local_prefs :
     ~PS.In norm1 local_prefs.
   Proof.
-    unfold local_prefs, elab_prefs.
-    rewrite PSF.add_iff, PSF.singleton_iff.
+    unfold local_prefs, switch_prefs, elab_prefs.
+    rewrite 2 PSF.add_iff, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
-    intros [contra|contra]; subst; rewrite contra in Hnd.
-    1,2:repeat rewrite NoDup_cons_iff in Hnd.
-    - destruct Hnd as (_&Hnin&_).
-      apply Hnin. left; auto.
-    - destruct Hnd as (Hnin&_).
-      apply Hnin. right; left; auto.
+    repeat rewrite NoDup_cons_iff in Hnd. destruct Hnd as (Hnin1&Hnin2&Hnin3&Hnin4&_).
+    intros [contra|[contra|contra]]; subst; rewrite contra in *; eauto with datatypes.
   Qed.
 
   Lemma unnest_node_init_st_valid {A PSyn} : forall (n: @node PSyn local_prefs) locs blks,

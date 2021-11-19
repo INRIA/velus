@@ -1512,9 +1512,12 @@ Module Type NCLOCKING
             clear - H6 H. solve_forall. 1,2:repeat solve_incl.
         + rewrite Forall_map.
           eapply Forall_impl; [|eauto]; intros; constructor; auto.
+      - (* switch *)
+        constructor; auto.
+        eapply iface_eq_wc_block; eauto. econstructor; eauto.
       - (* locals *)
-        repeat constructor; eauto.
-        solve_forall; eauto using iface_eq_wc_block.
+        constructor; eauto.
+        eapply iface_eq_wc_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_wc : forall vars blocks blocks' st st',
@@ -2188,8 +2191,8 @@ Module Type NCLOCKING
         econstructor; simpl; eauto.
         eapply iface_eq_wc_exp; eauto. repeat solve_incl.
         eapply normfby_block_st_follows; eauto.
-      - (* local *)
-        split; auto. constructor; eauto using iface_eq_wc_block.
+      - split; auto. constructor; eauto using iface_eq_wc_block.
+      - split; auto. constructor; eauto using iface_eq_wc_block.
     Qed.
 
     Corollary normfby_blocks_wc : forall vars to_cut blocks blocks' st st' ,

@@ -142,11 +142,21 @@ Module Type LCLOCKING
   | wc_Beq : forall env eq,
       wc_equation G env eq ->
       wc_block G env (Beq eq)
+
   | wc_Breset : forall env blocks er ck,
       Forall (wc_block G env) blocks ->
       wc_exp G env er ->
       clockof er = [ck] ->
       wc_block G env (Breset blocks er)
+
+  | wc_Bswitch : forall env env' ec branches ck,
+      wc_exp G env ec ->
+      clockof ec = [ck] ->
+      branches <> nil ->
+      (forall x ck', In (x, ck') env' -> In (x, ck) env /\ ck' = Cbase) ->
+      Forall (fun blks => Forall (wc_block G env') (snd blks)) branches ->
+      wc_block G env (Bswitch ec branches)
+
   | wc_Blocal : forall env locs blocks,
       Forall (wc_block G (env ++ idck (idty locs))) blocks ->
       Forall (wc_clock (env ++ idck (idty locs))) (map snd (idck (idty locs))) ->
@@ -376,12 +386,10 @@ Module Type LCLOCKING
     intros G1 G2 HG env1 env2 Henv d1 d2 Heq; subst. revert env1 env2 Henv.
     induction d2 using block_ind2; split; intros * Hwc; inv Hwc;
       econstructor; eauto.
-    1,4:rewrite <-Henv; auto.
-    1,4:rewrite Henv; auto.
-    1-6:repeat rewrite Forall_forall in *; intros.
-    1-6:try rewrite <- H; eauto. 3:rewrite <-Henv; auto. 4:rewrite Henv; auto.
-    symmetry; auto.
-    1,2:eapply Permutation_app_tail; eauto. symmetry; auto.
+    1,4,7:rewrite <-Henv; auto.
+    1,4,6:rewrite Henv; auto.
+    1-8:rewrite Forall_forall in *; eauto; intros.
+    1-8:try rewrite <- H; eauto. 1-7:try rewrite <-Henv; auto. 1,2:rewrite Henv; auto.
   Qed.
 
   Instance wc_block_pointwise_Proper {PSyn prefs}:
@@ -457,12 +465,12 @@ Module Type LCLOCKING
     Context {prefs : PS.t}.
     Variable (G : @global PSyn prefs).
 
-    Fact wc_clock_incl : forall vars vars' cl,
+    Fact wc_clock_incl : forall vars vars' ck,
       incl vars vars' ->
-      wc_clock vars cl ->
-      wc_clock vars' cl.
+      wc_clock vars ck ->
+      wc_clock vars' ck.
     Proof.
-      intros vars vars' cl Hincl Hwc.
+      intros vars vars' ck Hincl Hwc.
       induction Hwc; auto.
     Qed.
 
@@ -501,6 +509,8 @@ Module Type LCLOCKING
       - constructor. eauto using wc_equation_incl.
       - econstructor; eauto using wc_exp_incl.
         rewrite Forall_forall in *; intros; eauto.
+      - econstructor. 1-6:eauto using wc_exp_incl.
+        intros. edestruct H6; eauto.
       - constructor.
         1,2:rewrite Forall_forall in *; intros; eauto using incl_appl'.
         eapply wc_clock_incl; eauto using incl_appl'.
@@ -636,7 +646,7 @@ Module Type LCLOCKING
       | Emerge (x, tx) es (tys, ck) =>
         do ncs <- omap (fun es => oconcat (map check_exp (snd es))) es;
         if check_var x ck && check_merge_clocks x tx ck (combine (map fst es) ncs) (length es) tys
-           && (length es <>b 0)
+           && (negb (is_nil es))
         then Some (map (fun _ => ck) tys) else None
 
       | Ecase e brs d (tys, ck) =>
@@ -644,7 +654,7 @@ Module Type LCLOCKING
         do ncs <- omap (fun es => oconcat (map check_exp (snd es))) brs;
         do ce <- assert_singleton (check_exp e);
         if (ce ==b ck) && check_case_clocks ck (nds++ncs) tys
-           && (length brs <>b 0)
+           && (negb (is_nil brs))
         then Some (map (fun _ => ck) tys) else None
 
       | Eapp f es er anns =>
@@ -1052,8 +1062,7 @@ Module Type LCLOCKING
         eapply Forall2_combine'' in Hf1. eapply Forall2_combine'' in Hf2.
         2,3:(rewrite map_length; eapply Forall2_length in Heq; eauto).
         split; eauto. econstructor; eauto.
-        + contradict H1; subst; simpl. apply Bool.not_true_iff_false.
-          apply nequiv_decb_false, equiv_decb_equiv. constructor.
+        + contradict H1; subst; simpl. auto.
         + rewrite Forall2_map_1 in Hf1. eapply Forall2_Forall2 in Hf1; [|eapply Heq].
           eapply Forall2_ignore2 in Hf1. eapply Forall_impl; [|eauto]. intros (?&?) (?&_&Hck&?); simpl in *; subst.
           assumption.
@@ -1072,8 +1081,7 @@ Module Type LCLOCKING
         (* eapply forallb_Forall in H3. *)
         eapply IHe in OE2 as (? & Hcke); auto.
         split; eauto. econstructor; eauto.
-        + contradict H2; subst; simpl. apply Bool.not_true_iff_false.
-          apply nequiv_decb_false, equiv_decb_equiv. constructor.
+        + contradict H2; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hckes.
           eapply Forall_impl; [|eapply Hckes]; intros (?&?) (?&?&Hck); subst.
           eapply Forall_forall in Hes1; eauto.
@@ -1304,13 +1312,22 @@ Module Type LCLOCKING
     Context {prefs : PS.t}.
     Variable (G : @global PSyn prefs).
 
-    Fixpoint check_block (venv : Env.t clock) (d : block) : bool :=
-      match d with
+    Fixpoint check_block (venv : Env.t clock) (blk : block) : bool :=
+      match blk with
       | Beq eq => check_equation G venv eq
       | Breset blocks er =>
         forallb (check_block venv) blocks &&
         match check_exp G venv er with
         | Some [ck] => true
+        | _ => false
+        end
+      | Bswitch ec branches =>
+        negb (is_nil branches) &&
+        match check_exp G venv ec with
+        | Some [ck] =>
+          let venv' := Env.Props.P.filter (fun x ck' => (ck' ==b ck)) venv in
+          let venv' := Env.map (fun _ => Cbase) venv' in
+          forallb (fun blks => forallb (check_block venv') (snd blks)) branches
         | _ => false
         end
       | Blocal locs blocks =>
@@ -1328,14 +1345,47 @@ Module Type LCLOCKING
         wc_block G (Env.elements venv) blk.
     Proof.
       induction blk using block_ind2; intros * ND CE; simpl in *; inv ND.
-      - econstructor. eapply check_equation_correct; eauto.
-      - apply Bool.andb_true_iff in CE as (CDs&CE).
+      - (* equation *)
+        econstructor. eapply check_equation_correct; eauto.
+      - (* reset *)
+        apply Bool.andb_true_iff in CE as (CDs&CE).
         cases_eqn CEr; subst.
         eapply check_exp_correct in CEr as (?&Hnck).
-        econstructor; eauto.
-        eapply forallb_Forall in CDs.
-        rewrite Forall_forall in *; intros; eauto.
-      - apply Bool.andb_true_iff in CE as (CB&CC).
+        econstructor; auto.
+        + eapply forallb_Forall in CDs.
+          rewrite Forall_forall in *; intros; eauto.
+        + eauto.
+      - (* switch *)
+        apply Bool.andb_true_iff in CE as (CNnil&CE).
+        cases_eqn CE; subst.
+        eapply check_exp_correct in CE0 as (?&Hck).
+        remember (Env.Props.P.filter _ _) as venv'.
+        assert (incl (Env.elements venv') (Env.elements venv)) as Hincl.
+        { subst. intros (?&?) Hin.
+          apply Env.elements_correct.
+          apply Env.elements_complete, Env.Props.P.filter_iff in Hin as (?&?); auto.
+          intros ??????; subst; auto. }
+        econstructor. 1-6:eauto.
+        3:{ eapply forallb_Forall in CE. do 2 (eapply Forall_forall; intros).
+            repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
+            eapply forallb_Forall in it1.
+            repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+            eapply it2. 2:eauto.
+            eapply NoDupLocals_incl; eauto using incl_map.
+            etransitivity; [|eapply incl_map; eauto].
+            eapply Env.refines_elements with (R:= fun _ _ => True). intros ?? Hfind.
+            rewrite Env.Props.P.F.map_o in Hfind. eapply option_map_inv in Hfind as (?&Hfind&?); eauto.
+        }
+        + contradict CNnil; subst; simpl in *. auto.
+        + subst. intros ?? Hin.
+          eapply Env.elements_complete in Hin. rewrite Env.Props.P.F.map_o in Hin.
+          apply option_map_inv in Hin as (?&?&?); subst. split; auto.
+          apply Env.Props.P.filter_iff in H1 as (?&Heq); auto.
+          2:{ intros ??????; subst; auto. }
+          apply clock_eqb_eq in Heq; subst.
+          apply Env.elements_correct; auto.
+      - (* local *)
+        apply Bool.andb_true_iff in CE as (CB&CC).
         apply forallb_Forall in CB. apply forallb_Forall in CC.
         constructor.
         1,2:rewrite Forall_forall in *; intros.
@@ -2221,6 +2271,9 @@ Module Type LCLOCKING
       - constructor; auto using iface_eq_wc_equation.
       - econstructor; eauto using iface_eq_wc_exp.
         rewrite Forall_forall in *; eauto.
+      - econstructor; eauto using iface_eq_wc_exp.
+        do 2 (eapply Forall_forall; intros).
+        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
       - econstructor; eauto.
         rewrite Forall_forall in *; eauto.
     Qed.
@@ -2329,9 +2382,12 @@ Module Type LCLOCKING
       wl_block G d.
   Proof.
     induction d using block_ind2; intros * Wc; inv Wc; eauto.
-    1,2:econstructor; eauto.
+    1-3:econstructor; eauto.
     - rewrite Forall_forall in *; intros; eauto.
     - now rewrite <-length_clockof_numstreams, H5.
+    - now rewrite <-length_clockof_numstreams, H3.
+    - do 2 (eapply Forall_forall; intros).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
     - rewrite Forall_forall in *; intros; eauto.
   Qed.
   Hint Resolve wc_block_wl_block.
@@ -2420,9 +2476,15 @@ Module Type LCLOCKING
       wx_block (map fst vars) blk.
   Proof.
     induction blk using block_ind2; intros * Wc; inv Wc; eauto.
-    1-3:econstructor; eauto.
-    1,2:rewrite Forall_forall in *; intros; eauto.
-    rewrite <-map_fst_idty, <-map_fst_idck, <-map_app; eauto.
+    1-4:econstructor; eauto.
+    1,3:rewrite Forall_forall in *; intros; eauto.
+    - rewrite <-map_fst_idty, <-map_fst_idck, <-map_app; eauto.
+    - do 2 (eapply Forall_forall; intros).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply wx_block_incl; eauto using incl_map.
+      intros ? Hin. eapply in_map_iff in Hin as ((?&?)&?&Hin); subst.
+      eapply H6 in Hin as (Hin&?); subst.
+      eapply in_map_iff; do 2 esplit; [|eauto]. eauto.
   Qed.
   Hint Resolve wc_block_wx_block.
 
@@ -2446,6 +2508,36 @@ Module Type LCLOCKING
     destruct H...
   Qed.
   Hint Resolve wc_global_wx_global.
+
+  (** Additional properties *)
+
+  Lemma wc_block_Is_defined_in {PSyn prefs} (G: @global PSyn prefs) : forall blk env x,
+      wc_block G env blk ->
+      Is_defined_in x blk ->
+      InMembers x env.
+  Proof.
+    induction blk using block_ind2; intros * Hwc Hdef; inv Hwc; inv Hdef.
+    - (* equation *)
+      inv H1; auto.
+      + rename H9 into Hwc.
+        eapply Forall2_ignore2, Forall_forall in Hwc as (?&_&Hin); eauto using In_InMembers.
+      + rename H4 into Hwc.
+        eapply Forall2_ignore2, Forall_forall in Hwc as (?&_&Hin); eauto using In_InMembers.
+    - (* reset *)
+      eapply Exists_exists in H1 as (?&Hin1&Hdef).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+    - (* switch *)
+      rename H1 into Hdef. do 2 (eapply Exists_exists in Hdef as (?&?&Hdef)).
+      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      eapply it in it0; eauto.
+      eapply InMembers_In in it0 as (?&Hin). eapply H6 in Hin as (Hin&_); eauto using In_InMembers.
+    - (* local *)
+      eapply Exists_exists in H2 as (?&Hin1&Hdef).
+      repeat (take (Forall _ blocks) and eapply Forall_forall in it; eauto).
+      eapply it in it0; eauto.
+      apply InMembers_app in it0 as [|Hin]; auto.
+      exfalso. rewrite InMembers_idck, InMembers_idty in Hin. eauto.
+  Qed.
 
 End LCLOCKING.
 

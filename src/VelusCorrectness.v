@@ -135,6 +135,7 @@ Inductive bisim_IO {PSyn prefs} (G: @global PSyn prefs) (f: ident) (ins outs: li
       bisim_IO G f ins outs T.
 
 Hint Resolve
+     switch_global_wt switch_global_wc
      inlinelocal_global_wt inlinelocal_global_wc inlinelocal_global_sem
      normalize_global_normalized_global normalized_global_unnested_global
      Typing.normalize_global_wt
@@ -162,7 +163,7 @@ Proof.
   intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
   eapply TR.Correctness.sem_l_nl in Hltonl; eauto.
-  eapply normalize_global_sem, inlinelocal_global_sem; eauto.
+  eapply normalize_global_sem, inlinelocal_global_sem, switch_global_sem; eauto.
   eapply sem_node_sem_node_ck; eauto.
 Qed.
 
@@ -175,7 +176,8 @@ Proof.
   intros g * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
   eapply global_iface_eq_find in Hfind as (n'&Hfind&(_&_&Hin&Hout)); eauto.
-  2:{ eapply global_iface_eq_trans. eapply inlinelocal_global_iface_eq. eapply normalize_global_iface_eq. }
+  2:{ eapply global_iface_eq_trans, global_iface_eq_trans.
+      eapply switch_global_iface_eq. eapply inlinelocal_global_iface_eq. eapply normalize_global_iface_eq. }
   eapply TR.Tr.find_node_global in Hfind as (n''&Hfind&Htonode); eauto.
   exists n''. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
@@ -194,7 +196,8 @@ Proof.
   unfold_l_to_nl Hltonl.
   eapply TR.Tr.find_node_global' in Hfind as (n''&Hfind&Htonode); eauto.
   eapply global_iface_eq_find in Hfind as (n&Hfind&(_&_&Hin&Hout)); eauto.
-  2:{ eapply global_iface_eq_sym, global_iface_eq_trans. eapply inlinelocal_global_iface_eq. eapply normalize_global_iface_eq. }
+  2:{ eapply global_iface_eq_sym, global_iface_eq_trans, global_iface_eq_trans.
+      eapply switch_global_iface_eq. eapply inlinelocal_global_iface_eq. eapply normalize_global_iface_eq. }
   exists n. repeat split; auto.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
     congruence.

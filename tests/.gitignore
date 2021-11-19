@@ -1,4 +1,5 @@
 *.parsed.lus
+*.noswitch.lus
 *.nolocal.lus
 *.n.lus
 *.stc

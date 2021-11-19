@@ -2,6 +2,8 @@
 *.s
 *.light.c
 *.parsed.lus
+*.noswitch.lus
+*.nolocal.lus
 *.sn.lus
 *.n.lus
 *.bkp

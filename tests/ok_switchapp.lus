@@ -1,0 +1,19 @@
+node f(x : bool; y : int when x) returns (z : bool)
+let
+    z = x;
+tel
+
+node g(z : bool) returns (t : bool)
+let
+    t = not z;
+tel
+
+node h(x : bool) returns (y : int)
+var t : int when x;
+let
+    t = 42 fby (t + 1);
+    switch g(f(x, t))
+    | True -> y = 12;
+    | False -> y = 21;
+    end
+tel

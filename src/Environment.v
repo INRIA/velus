@@ -1800,6 +1800,16 @@ Module Env.
       eapply incl_appl, incl_refl; auto.
     Qed.
 
+    Global Add Parametric Morphism (E : relation V) `{Equivalence _ E} : dom_ub
+        with signature (Equiv E ==> @Permutation ident ==> iff)
+          as dom_ub_Equiv_Permutation.
+    Proof.
+      intros env1 env2 EE xs1 xs2 Pxs. unfold dom_ub.
+      setoid_rewrite EE.
+      split; intros ?? HH;
+        (rewrite Pxs||rewrite <-Pxs); eauto.
+    Qed.
+
     Global Opaque dom_ub.
   End EnvDomUpperBound.
 
@@ -1988,8 +1998,18 @@ Module Env.
     now apply dom_ub_use with (1:=Max) in Ix.
     now apply dom_lb_use with (1:=Min) in Ix.
   Qed.
-
   Hint Resolve dom_lb_ub_dom.
+
+  Lemma adds'_dom_ub : forall {A} (H : t A) d xs,
+      dom_ub H d ->
+      dom_ub (Env.adds' xs H) (d ++ List.map fst xs).
+  Proof.
+    intros * Hdom.
+    apply dom_ub_intro; intros ? Hin.
+    apply In_adds_spec' in Hin as [|].
+    - apply in_or_app, or_intror. now apply fst_InMembers.
+    - eapply dom_ub_use with (x0:=x) in Hdom; eauto using in_or_app.
+  Qed.
 
   Section EnvRestrict.
     Context {V : Type}.
@@ -2021,6 +2041,16 @@ Module Env.
       intros.
       eapply dom_ub_intro; intros.
       eapply restrict_In_iff; eauto.
+    Qed.
+
+    Corollary restrict_dom_ub' : forall xs ys (H : Env.t V),
+        dom_ub H ys ->
+        dom_ub (restrict H xs) ys.
+    Proof.
+      intros * Hdom.
+      apply Env.dom_ub_intro; intros ? Hin.
+      apply restrict_In_iff in Hin as (Hin&_).
+      eapply Env.dom_ub_use in Hdom; eauto.
     Qed.
 
     Corollary restrict_In : forall xs (H : Env.t V) x,
@@ -2100,6 +2130,17 @@ Module Env.
       intros * Hfind.
       destruct (find _ (restrict _ _)) eqn:Hfind'; auto.
       eapply restrict_find_inv in Hfind' as (?&?). congruence.
+    Qed.
+
+    Lemma incl_restrict_refines : forall R xs ys (H : Env.t V),
+        Reflexive R ->
+        incl xs ys ->
+        refines R (restrict H xs) (restrict H ys).
+    Proof.
+      intros * Hrefl Hincl ? v Hfind.
+      exists v. split; auto.
+      apply restrict_find_inv in Hfind as (?&?).
+      apply restrict_find; auto.
     Qed.
   End EnvRestrict.
 
@@ -2644,6 +2685,18 @@ Module Env.
       eapply dom_lb_intro; intros ? Hin.
       rewrite union_In.
       right. eapply Env.dom_lb_use; eauto.
+    Qed.
+
+    Lemma union_dom_ub : forall m1 m2 xs ys,
+        dom_ub m1 xs ->
+        dom_ub m2 ys ->
+        dom_ub (union m1 m2) (xs ++ ys).
+    Proof.
+      intros * Hd1 Hd2.
+      eapply dom_ub_intro; intros ? Hin.
+      rewrite union_In in Hin. apply in_app_iff.
+      destruct Hin as [Hin|Hin]; [left|right].
+      1,2:eapply Env.dom_ub_use; eauto.
     Qed.
 
     Corollary union_mem : forall x e1 e2,

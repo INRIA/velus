@@ -322,7 +322,7 @@ Module Type TR
                  end = OK neqs }.
   Proof.
     destruct (L.n_block n); simpl.
-    1,2:right; exact (msg "node not normalized").
+    1-3:right; exact (msg "node not normalized").
     destruct (mmap (block_to_equation (Env.adds' (idty l) env) envo []) l0).
     left. simpl. eauto.
     right. auto.
@@ -370,31 +370,27 @@ Module Type TR
     rewrite <-idty_app, map_fst_idty.
     clear H0. rename l into vars. rename l0 into neqs.
     pose proof (L.n_nodup n) as (_&Hnd).
-    pose proof (L.n_defd n) as (?&Hvars&Hperm).
-    cases. rename l0 into blks.
-    monadInv1 P.
-    assert (NL.vars_defined neqs = flat_map L.vars_defined blks).
-    { revert neqs EQ. clear Hvars Hperm Hnd. induction blks; simpl.
+    pose proof (L.n_defd n) as (vd&Hvars&Hperm).
+    pose proof (L.n_syn n) as Hsyn.
+    cases. rename l0 into blks. inv Hsyn.
+    monadInv1 P. inv Hvars.
+    assert (NL.vars_defined neqs = concat xs).
+    { revert neqs EQ. clear - H0 H2. induction H2; inv H0; simpl.
       - intros neqs Htr. inv Htr. auto.
       - intros neqs Htoeq. monadInv Htoeq.
-        apply IHblks in EQ1. simpl.
+        apply IHForall2 in EQ1; auto. simpl.
         f_equal; auto.
-        clear - EQ.
-        revert EQ. generalize (@nil (ident * clock)) as xr.
-        induction a using L.block_ind2; intros; simpl in *.
+        clear - H H4 EQ.
+        revert EQ y H. generalize (@nil (ident * clock)) as xr.
+        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H4; inv Hvd; try congruence.
         + apply ok_fst_defined in EQ; auto.
-        + cases; simpl. rewrite app_nil_r.
-          apply Forall_singl in H.
-          eauto.
-        + congruence.
+        + cases; simpl.
+          repeat (take (Forall _ [_]) and apply Forall_singl in it).
+          inv H4; inv H3. simpl; rewrite app_nil_r.
+          eapply it; eauto.
     }
     simpl. rewrite H.
-    inv Hvars. rewrite Hperm in H4.
-    rewrite map_app, H4. symmetry.
-    apply L.VarsDefined_flat_map_vars_defined; auto.
-    inv Hnd. eapply Forall_impl; [|eauto]; intros.
-    eapply L.NoDupLocals_incl; [|eauto].
-    rewrite <-H4, Permutation_app_comm. solve_incl_app.
+    rewrite <-H4, map_app, Hperm. reflexivity.
   Qed.
 
   (* NL.n_vout obligation *)
@@ -410,7 +406,7 @@ Module Type TR
     intro Hi. destruct Hi.
     - clear - Htoeq Heqb H Hin.
       revert Htoeq. generalize (@nil (ident * clock)).
-      induction eq using L.block_ind2; intros; simpl in *.
+      induction eq using L.block_ind2; intros; simpl in *; try congruence.
       + unfold to_equation in Htoeq. destruct eq.
         cases_eqn E; monadInv1 Htoeq; inv Heqb.
         simpl in H. destruct H; auto. subst. inv EQ.
@@ -422,7 +418,6 @@ Module Type TR
         rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
       + cases. apply Forall_singl in H0.
         eapply H0; eauto.
-      + congruence.
     - eapply IHEQ; eauto.
   Qed.
 
@@ -452,9 +447,9 @@ Module Type TR
     1,2:(eapply Forall_impl; [|eauto]; intros * [?|(pref&Hpref&?&?&?)];
          subst; [left|right]; auto;
          exists pref; eauto;
-         unfold norm2_prefs, norm1_prefs, local_prefs, elab_prefs in Hpref;
+         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, elab_prefs in Hpref;
          repeat rewrite PSF.add_iff in *; rewrite PS.singleton_spec in *;
-         destruct Hpref as [?|[?|[?|?]]]; subst; split; eauto).
+         destruct Hpref as [|[|[|[|]]]]; subst; split; eauto 10).
   Qed.
 
   Definition to_global (G : L.global) :=

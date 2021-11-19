@@ -57,6 +57,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %token<LustreAst.astloc> ASSERT
 
 %token<LustreAst.astloc> RESET RESTART EVERY
+%token<LustreAst.astloc> SWITCH END
 
 %token<LustreAst.astloc> EOF
 
@@ -88,6 +89,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.equation> equation
 %type<LustreAst.block> block
 %type<list LustreAst.block> blocks
+%type<list (Common.ident * list LustreAst.block)> switch_branch_list
 %type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
@@ -460,25 +462,35 @@ pattern:
     { fst id::pat }
 
 equation:
-| pat=pattern loc=EQ exp=expression SEMICOLON
+| pat=pattern loc=EQ exp=expression
     { (rev pat, exp, loc) }
-| LPAREN pat=pattern RPAREN loc=EQ exp=expression SEMICOLON
+| LPAREN pat=pattern RPAREN loc=EQ exp=expression
     { (rev pat, exp, loc) }
+
+switch_branch_list:
+| BAR c=ENUM_NAME RARROW blk=blocks
+    { [(fst c, blk)] }
+| BAR c=ENUM_NAME RARROW blk=blocks bs=switch_branch_list
+    { (fst c, blk) :: bs }
 
 block:
 | eq=equation
    { LustreAst.BEQ eq } 
-| RESET blks=blocks loc=EVERY er=expression SEMICOLON
+| RESET blks=blocks loc=EVERY er=expression
    { LustreAst.BRESET blks er loc }
-| locals=local_decl_list loc=LET blks=blocks TEL optsemicolon
-    { LustreAst.BLOCAL locals blks loc }
+| loc=SWITCH ec=expression brs=switch_branch_list END
+   { LustreAst.BSWITCH ec brs loc }
+| locals=local_decl_list loc=LET blks=blocks TEL
+   { LustreAst.BLOCAL locals blks loc }
 
 blocks:
 | /* empty */
     { [] }
-| blks=blocks blk=block
+| blk=block
+    { [blk] }
+| blk=block SEMICOLON blks=blocks
     { blk::blks }
-| blks=blocks ASSERT expression SEMICOLON
+|  ASSERT expression SEMICOLON blks=blocks
     { blks (* ignore assert statements for now *) }
 
 optsemicolon:

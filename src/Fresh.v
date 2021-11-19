@@ -875,6 +875,14 @@ Module Fresh(Ids : IDS).
       - inv Hforall.
         etransitivity; eauto.
     Qed.
+
+    Fact mmap_length : forall a1s a2s st st',
+        mmap a1s st = (a2s, st') ->
+        length a2s = length a1s.
+    Proof.
+      induction a1s; intros * Hmap; repeat inv_bind; simpl in *; auto.
+      f_equal; eauto.
+    Qed.
   End mmap.
 
   Section mmap2.

@@ -37,6 +37,7 @@ let () =
       ("case",     fun loc ->  CASE     loc);
       ("double",   fun loc ->  FLOAT64  loc); (* LEGACY *)
       ("else",     fun loc ->  ELSE     loc);
+      ("end",      fun loc ->  END      loc);
       ("every",    fun loc ->  EVERY    loc);
       ("false",    fun loc ->  ENUM_NAME (makeident "False", loc));
       ("fby",      fun loc ->  FBY      loc);
@@ -68,6 +69,7 @@ let () =
       ("reset",    fun loc ->  RESET    loc);
       ("restart",  fun loc ->  RESTART  loc);
       ("returns",  fun loc ->  RETURNS  loc);
+      ("switch",   fun loc ->  SWITCH   loc);
       ("tel",      fun loc ->  TEL      loc);
       ("then",     fun loc ->  THEN     loc);
       ("true",     fun loc ->  ENUM_NAME (makeident "True", loc));

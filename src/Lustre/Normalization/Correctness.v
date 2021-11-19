@@ -1819,10 +1819,12 @@ Module Type CORRECTNESS
             eapply sem_block_refines; [|eauto]. eapply refines_mask; eauto.
           * eapply Forall_impl; eauto; intros.
             constructor; auto.
-      - (* local *)
-        exists H0. repeat (esplit; eauto).
-        constructor; auto. econstructor; eauto.
-        solve_forall. eapply sem_ref_sem_block; eauto.
+      - exists H0. repeat (esplit; eauto).
+        + constructor; auto. econstructor; eauto.
+          solve_forall. solve_forall. eapply sem_ref_sem_block; eauto.
+      - exists H0. repeat (esplit; eauto).
+        + constructor; auto. econstructor; eauto.
+          solve_forall. solve_forall. eapply sem_ref_sem_block; eauto.
     Qed.
 
     Corollary unnest_blocks_sem : forall vars b blocks H blocks' st st',
@@ -2270,28 +2272,6 @@ Module Type CORRECTNESS
         + eapply LCS.sc_vars_refines with (H:=H); eauto.
     Qed.
 
-    Lemma sem_clock_when_const : forall H bs bs' bs'' cs ck id x tx c,
-        sem_clock H bs ck bs' ->
-        sem_clock H bs (Con ck id (tx, x)) bs'' ->
-        sem_var H id cs ->
-        when x (const bs' c) cs (const bs'' c).
-    Proof.
-      intros * Hcl1 Hcl2 Hvar.
-      rewrite when_spec. intros n.
-      rewrite sem_clock_equiv in Hcl1, Hcl2.
-      apply CIStr.sem_var_impl in Hvar.
-      specialize (Hcl1 n). specialize (Hcl2 n). specialize (Hvar n).
-      unfold tr_Stream in *; simpl in *.
-      inv Hcl2; (eapply IStr.sem_var_instant_det in Hvar; eauto;
-                 eapply IStr.sem_clock_instant_det in Hcl1; eauto).
-      - right. right.
-        exists (Vscalar (sem_cconst c)). repeat split; auto using const_true.
-      - left.
-        repeat split; auto using const_false.
-      - right. left.
-        exists (Vscalar (sem_cconst c)). exists b'. repeat split; eauto using const_true, const_false.
-    Qed.
-
     Corollary add_whens_const_sem_exp : forall H b ck ty b' c,
         sem_clock H b ck b' ->
         sem_exp_ck G2 H b (add_whens (Econst c) ty ck) [const b' c].
@@ -2301,28 +2281,6 @@ Module Type CORRECTNESS
       1,2,3: (eapply Swhen; eauto; simpl;
               repeat constructor; try eapply IHck; eauto;
               repeat constructor; eapply sem_clock_when_const; eauto).
-    Qed.
-
-    Lemma sem_clock_when_enum : forall H bs bs' bs'' cs ck id x tx c,
-        sem_clock H bs ck bs' ->
-        sem_clock H bs (Con ck id (tx, x)) bs'' ->
-        sem_var H id cs ->
-        when x (enum bs' c) cs (enum bs'' c).
-    Proof.
-      intros * Hcl1 Hcl2 Hvar.
-      rewrite when_spec. intros n.
-      rewrite sem_clock_equiv in Hcl1, Hcl2.
-      apply CIStr.sem_var_impl in Hvar.
-      specialize (Hcl1 n). specialize (Hcl2 n). specialize (Hvar n).
-      unfold tr_Stream in *; simpl in *.
-      inv Hcl2; (eapply IStr.sem_var_instant_det in Hvar; eauto;
-                 eapply IStr.sem_clock_instant_det in Hcl1; eauto).
-      - right. right.
-        exists (Venum c). repeat split; auto using enum_true.
-      - left.
-        repeat split; auto using enum_false.
-      - right. left.
-        exists (Venum c). exists b'. repeat split; eauto using enum_true, enum_false.
     Qed.
 
     Corollary add_whens_enum_sem_exp : forall H b ck ty b' c,

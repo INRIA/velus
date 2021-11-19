@@ -9,6 +9,7 @@ From Velus Require Export Lustre.LCausality.
 From Velus Require Export Lustre.LSemantics.
 From Velus Require Export Lustre.LSemDeterminism.
 From Velus Require Export Lustre.LClockSemantics.
+From Velus Require Export Lustre.ClockSwitch.LClockSwitch.
 From Velus Require Export Lustre.InlineLocal.LInlineLocal.
 From Velus Require Export Lustre.Normalization.LNormalization.
 
@@ -29,6 +30,7 @@ Module Type LUSTRE
   Declare Module Export SemDet : LSEMDETERMINISM Ids Op OpAux Cks Syn Typ Cau Ord CStr Sem.
   Declare Module Export CkSem: LCLOCKSEMANTICS Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem.
 
+  Declare Module Export ClockSwitch: LCLOCKSWITCH Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
   Declare Module Export InlineLocal: LINLINELOCAL Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
   Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
 End LUSTRE.
@@ -49,6 +51,7 @@ Module LustreFun
   Module Export SemDet := LSemDeterminismFun Ids Op OpAux Cks Syn Typ Cau Ord CStr Sem.
   Module Export CkSem := LClockSemanticsFun Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem.
 
+  Module Export ClockSwitch := LClockSwitchFun Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
   Module Export InlineLocal := LInlineLocalFun Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
   Module Export Norm := LNormalizationFun Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem CkSem.
 End LustreFun.

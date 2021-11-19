@@ -47,23 +47,26 @@ GCC_FLAGS=-O1 $(GCC_NOINLINING) $(ARCH_FLAGS)
 
 OWCET_FLAGS=--script trivial
 
-EXAMPLES= avgvelocity.lus \
-	  count.lus \
-		rer.lus \
-	  cruise.lus \
-	  emsoft03.lus \
-	  emsoft05.lus \
-	  halbwachs.lus \
-	  kind_functionalChain.lus \
-	  landing_gear.lus \
-	  minus.lus \
-	  pip_ex.lus \
-	  prodcell.lus \
-	  tracker.lus \
-	  ums_verif.lus \
-	  cocospec_mono_system.lus \
-	  new_watch.lus \
-		stopwatch.lus
+EXAMPLES = \
+	avgvelocity.lus \
+	count.lus \
+	rer.lus \
+	cruise.lus \
+	emsoft03.lus \
+	emsoft05.lus \
+	halbwachs.lus \
+	kind_functionalChain.lus \
+	landing_gear.lus \
+	minus.lus \
+	pip_ex.lus \
+	prodcell.lus \
+	tracker.lus \
+	ums_verif.lus \
+	cocospec_mono_system.lus \
+	new_watch.lus \
+	stopwatch.lus \
+	abro.lus \
+	colors.lus
 
 ## Main targets
 

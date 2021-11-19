@@ -31,6 +31,7 @@ Open Scope stream_scope.
 
 Parameter schedule      : ident -> list trconstr -> list positive.
 Parameter print_lustre  : @global (fun _ => True) elab_prefs -> unit.
+Parameter print_noswitch : @global noswitch_block switch_prefs -> unit.
 Parameter print_nolocal : @global nolocal_top_block local_prefs -> unit.
 Parameter print_nlustre : NL.Syn.global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
@@ -71,6 +72,8 @@ Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global 
   OK G
      @@ print print_lustre
      @@@ is_causal
+     @@ switch_global
+     @@ print print_noswitch
      @@ inlinelocal_global
      @@ print print_nolocal
      @@ normalize_global

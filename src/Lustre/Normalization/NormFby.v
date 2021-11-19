@@ -377,6 +377,9 @@ Module Type NORMFBY
     - exists [xs]. split; try constructor; auto.
       + econstructor; eauto.
       + simpl; rewrite app_nil_r; auto.
+    - exists [xs]. split; try constructor; auto.
+      + econstructor; eauto.
+      + simpl; rewrite app_nil_r; auto.
   Qed.
 
   Corollary normfby_blocks_vars_perm : forall G blks blks' xs st st',
@@ -874,8 +877,8 @@ Module Type NORMFBY
       simpl in Hun. cases; repeat inv_bind; repeat (constructor; auto).
       apply Forall_singl in H. apply Forall_singl in H1.
       rewrite Forall_map. eapply Forall_impl; [|eauto]. intros ??. constructor; auto.
-    - (* locals *)
-      do 2 (constructor; auto).
+    - do 2 (constructor; auto).
+    - do 2 (constructor; auto).
   Qed.
 
   Corollary normfby_blocks_GoodLocals to_cut : forall prefs blks blks' st st',
@@ -954,14 +957,11 @@ Module Type NORMFBY
   Lemma norm2_not_in_norm1_prefs :
     ~PS.In norm2 norm1_prefs.
   Proof.
-    unfold norm1_prefs, local_prefs, elab_prefs.
-    rewrite 2 PSF.add_iff, PSF.singleton_iff.
+    unfold norm1_prefs, local_prefs, switch_prefs, elab_prefs.
+    rewrite 3 PSF.add_iff, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
-    repeat rewrite NoDup_cons_iff in Hnd. destruct Hnd as (Hnin1&Hnin2&Hnin3&_).
-    intros [contra|[contra|contra]]; rewrite contra in *.
-    + apply Hnin3; left; auto.
-    + apply Hnin2; right; left; auto.
-    + apply Hnin1; right; right; left; auto.
+    repeat rewrite NoDup_cons_iff in Hnd. destruct Hnd as (Hnin1&Hnin2&Hnin3&Hnin4&_).
+    intros [contra|[contra|[contra|contra]]]; rewrite contra in *; eauto with datatypes.
   Qed.
 
   Lemma normfby_node_init_st_valid {A} : forall (n: @node nolocal_top_block norm1_prefs) locs blks,
@@ -1011,7 +1011,7 @@ Module Type NORMFBY
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood&_).
     pose proof (n_nodup n) as (Hndup&Hndl).
-    destruct (n_block n) as [| |locs blks] eqn:Hblk; eauto.
+    destruct (n_block n) as [| | |locs blks] eqn:Hblk; eauto.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. rewrite fst_NoDupMembers in H3.
@@ -1049,7 +1049,7 @@ Module Type NORMFBY
   Qed.
   Next Obligation.
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
-    destruct (n_block n) as [| |locs blks] eqn:Hblk; eauto using GoodLocals_add.
+    destruct (n_block n) as [| | |locs blks] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
     assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
     { specialize (n_nodup n) as (Hndup&Hndl).

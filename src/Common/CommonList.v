@@ -644,7 +644,51 @@ Section Extra.
     - exists a, l. inversion H; auto.
   Qed.
 
+  Lemma Forall2_map_eq {B} : forall (f : A -> B) l1 l2,
+      Forall2 (fun x y => f x = f y) l1 l2 ->
+      map f l1 = map f l2.
+  Proof.
+    intros * Hf.
+    induction Hf; simpl; f_equal; auto.
+  Qed.
+
+  Lemma Permutation_concat : forall (l1 l2 : list (list A)),
+      Forall2 (fun x y => Permutation x y) l1 l2 ->
+      Permutation (concat l1) (concat l2).
+  Proof.
+    intros * Hf.
+    induction Hf; simpl; auto.
+    apply Permutation_app; auto.
+  Qed.
+
+  Lemma incl_concat' : forall (l1 l2 : list (list A)),
+      Forall2 (fun x y => incl x y) l1 l2 ->
+      incl (concat l1) (concat l2).
+  Proof.
+    intros * Hf.
+    induction Hf; simpl.
+    - apply incl_refl.
+    - apply incl_app; eauto using incl_appl, incl_appr.
+  Qed.
+
 End Extra.
+
+Section is_nil.
+  Context {A : Type}.
+
+  Definition is_nil (l : list A) :=
+    match l with
+    | [] => true
+    | _ => false
+    end.
+
+  Lemma is_nil_spec : forall l,
+      is_nil l = true <-> l = [].
+  Proof.
+    intros []; split; intros Hl; simpl in *; auto; congruence.
+  Qed.
+
+End is_nil.
 
 Section RevTR.
 
@@ -3296,9 +3340,11 @@ Section Forall3.
   Lemma Forall3_ignore1:
     forall xs ys zs,
       Forall3 xs ys zs ->
-      Forall2 (fun y z => exists x, R x y z) ys zs.
+      Forall2 (fun y z => exists x, In x xs /\ R x y z) ys zs.
   Proof.
     induction 1; eauto.
+    constructor; eauto with datatypes.
+    eapply Forall2_impl_In; [|eauto]; intros ?? _ _ (?&?&?); eauto with datatypes.
   Qed.
 
   Lemma Forall3_ignore2:
@@ -4141,6 +4187,15 @@ Section InMembers.
     - intro Hin; apply InMembers_In in Hin as (b&Hin).
       apply filter_In in Hin; eauto.
     - intros (b & ?&?); eapply In_InMembers, filter_In; eauto.
+  Qed.
+
+  Corollary filter_InMembers':
+    forall p x (l: list (A * B)),
+      InMembers x (filter p l) -> InMembers x l.
+  Proof.
+    intros * Hinm.
+    eapply filter_InMembers in Hinm as (?&Hin&_).
+    eapply In_InMembers; eauto.
   Qed.
 
   Fact inmembers_flat_map {C} : forall (f : C -> list (A * B)) (l : list C) (y : A),
@@ -5049,6 +5104,14 @@ Section Partition.
     induction Hpart; auto.
   Qed.
 
+  Lemma Partition_Forall2 : forall xs xs1 xs2,
+      Partition xs xs1 xs2 ->
+      Forall (fun x => ~P x) xs2.
+  Proof.
+    intros * Hpart.
+    induction Hpart; auto.
+  Qed.
+
   Lemma dec_Partition : forall xs,
       (forall x, (P x) \/ (~ P x)) ->
       exists xs1 xs2, Partition xs xs1 xs2.
@@ -5162,6 +5225,16 @@ Proof.
     eapply NoDup_app_In in Hnd; eauto. eapply Hnd.
     eapply incl_map; [|eauto]. intros ??.
     eapply in_flat_map; eauto.
+Qed.
+
+Fact nodupmembers_app_map_flat_map {A B C D} : forall (f : B -> (C * D)) (g : A -> list B) xs y ys,
+    In y ys ->
+    NoDupMembers (xs ++ map f (flat_map g ys)) ->
+    NoDupMembers (xs ++ map f (g y)).
+Proof.
+  intros * Hin Hnd.
+  rewrite fst_NoDupMembers, map_app, map_map in *.
+  eapply nodup_app_map_flat_map; eauto.
 Qed.
 
 (* Tactics for solving incl / NoDup / NoDupMembers obligations *)

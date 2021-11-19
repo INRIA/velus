@@ -66,6 +66,9 @@ Module Type LORDERED
   | INBreset : forall blocks er,
       Exists (Is_node_in_block f) blocks \/ Is_node_in_exp f er ->
       Is_node_in_block f (Breset blocks er)
+  | INBswitch : forall ec branches,
+      Is_node_in_exp f ec \/ Exists (fun blks => Exists (Is_node_in_block f) (snd blks)) branches ->
+      Is_node_in_block f (Bswitch ec branches)
   | INBlocal : forall locs blocks,
       Exists (Is_node_in_block f) blocks ->
       Is_node_in_block f (Blocal locs blocks).
@@ -180,6 +183,12 @@ Module Type LORDERED
         eapply Forall_Exists in Hisin; eauto.
         eapply Exists_exists in Hisin as (?&_&(?&?)&?); eauto.
       + eapply wl_exp_Is_node_in_exp; eauto.
+    - inv Hwl. inv Hin.
+      destruct H1 as [Hisin|Hisin].
+      + eapply wl_exp_Is_node_in_exp; eauto.
+      + do 2 (eapply Exists_exists in Hisin as (?&?&Hisin)).
+        do 2 (eapply Forall_forall in H; eauto).
+        do 2 (eapply Forall_forall in H5; eauto).
     - inv Hwl. inv Hin.
       eapply Forall_Forall in H; eauto.
       eapply Forall_Exists in H; eauto.

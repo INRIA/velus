@@ -455,6 +455,7 @@ Module Type TRCLOCKING
         constructor; auto.
         inv H7; auto.
       - inv Htr.
+      - inv Htr.
     Qed.
 
     Lemma wc_node :

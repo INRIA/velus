@@ -216,8 +216,9 @@ Module Type ILTYPING
                   (forall x, InMembers x vars -> ~InMembers x vars') ->
                   (forall x, Env.In x sub <-> InMembers x vars') ->
                   (forall x y ty, Env.find x sub = Some y -> In (x, ty) vars' -> In (y, ty) (idty (st_anns st))) ->
+                  noswitch_block blk ->
                   NoDupLocals (map fst vars++map fst vars') blk ->
-                  GoodLocals elab_prefs blk ->
+                  GoodLocals switch_prefs blk ->
                   wt_block G (vars++vars') blk ->
                   Forall (wt_clock (enums G) (vars ++ idty (st_anns st))) (map snd (idck (st_anns st))) ->
                   st_valid_after st local PS.empty ->
@@ -227,8 +228,9 @@ Module Type ILTYPING
       (forall x, InMembers x vars -> ~InMembers x vars') ->
       (forall x, Env.In x sub <-> InMembers x vars') ->
       (forall x y ty, Env.find x sub = Some y -> In (x, ty) vars' -> In (y, ty) (idty (st_anns st))) ->
+      Forall noswitch_block blks ->
       Forall (NoDupLocals (map fst vars++map fst vars')) blks ->
-      Forall (GoodLocals elab_prefs) blks ->
+      Forall (GoodLocals switch_prefs) blks ->
       Forall (wt_block G (vars++vars')) blks ->
       Forall (wt_clock (enums G) (vars ++ idty (st_anns st))) (map snd (idck (st_anns st))) ->
       st_valid_after st local PS.empty ->
@@ -236,8 +238,8 @@ Module Type ILTYPING
       Forall (wt_block G (vars ++ idty (st_anns st'))) (concat blks') /\
       Forall (wt_clock (enums G) (vars ++ idty (st_anns st'))) (map snd (idck (st_anns st'))).
   Proof.
-    induction blks; intros * Hf Hnin Hsubin Hsub Hnd Hgood Hwt Hwtc Hvalid Hmmap;
-      inv Hf; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind; simpl; auto.
+    induction blks; intros * Hf Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hvalid Hmmap;
+      inv Hf; inv Hns; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind; simpl; auto.
     assert (Hdl:=H). eapply H1 in H as (?&?); eauto.
     assert (Hmap:=H0). eapply IHblks in H0 as (?&?); eauto.
     2:{ intros * Hfind Hin.
@@ -254,8 +256,9 @@ Module Type ILTYPING
       (forall x, InMembers x vars -> ~InMembers x vars') ->
       (forall x, Env.In x sub <-> InMembers x vars') ->
       (forall x y ty, Env.find x sub = Some y -> In (x, ty) vars' -> In (y, ty) (idty (st_anns st))) ->
+      noswitch_block blk ->
       NoDupLocals (map fst vars++map fst vars') blk ->
-      GoodLocals elab_prefs blk ->
+      GoodLocals switch_prefs blk ->
       wt_block G (vars++vars') blk ->
       Forall (wt_clock G.(enums) (vars++idty (st_anns st))) (map snd (idck (st_anns st))) ->
       st_valid_after st local PS.empty ->
@@ -263,8 +266,8 @@ Module Type ILTYPING
       Forall (wt_block G (vars++idty (st_anns st'))) blks' /\
       Forall (wt_clock G.(enums) (vars++idty (st_anns st'))) (map snd (idck (st_anns st'))).
   Proof.
-    induction blk using block_ind2; intros * Hnin Hsubin Hsub Hgood Hnd Hwt Hwtc Hvalid Hdl;
-      inv Hnd; inv Hgood; inv Hwt; repeat inv_bind.
+    induction blk using block_ind2; intros * Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hvalid Hdl;
+      inv Hns; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind.
     - (* equation *)
       split; auto.
       do 2 constructor; auto.
@@ -280,54 +283,10 @@ Module Type ILTYPING
       + now rewrite rename_in_exp_typeof.
       + eapply mmap_inlinelocal_block_wt; eauto.
     - (* local *)
-      eapply mmap_inlinelocal_block_wt in H1. 1,2,6-9:eauto.
-      2:rewrite <-app_assoc in H5; eauto.
-      + rewrite map_app, 2 map_fst_idty, app_assoc; auto.
-      + erewrite fresh_idents_rename_anns; [|eauto].
-        rewrite idty_app, idck_app, map_app.
-        apply Forall_app; split.
-        * assert (Hfresh:=H0). eapply fresh_idents_rename_ids in H0. rewrite H0.
-          2:{ unfold idty. erewrite fst_NoDupMembers, 2 map_map, map_ext, <-fst_NoDupMembers; auto.
-              intros (?&(?&?)&?); auto. }
-          unfold wt_clocks in H7.
-          unfold idck at 1, idty at 4. repeat rewrite map_map; rewrite Forall_map.
-          eapply Forall_impl; [|eauto]. intros (?&(?&?)&?) Hwt; simpl.
-          eapply rename_in_clock_wt, rename_in_clock_wt with (vars':=vars++idty (idty locs)++idty (st_anns st)). 5:eauto.
-          4:{ intros ?? Hfind Hin. repeat rewrite in_app_iff in *. destruct Hin as [[|Hin]|]; auto.
-              eapply In_InMembers, Hsubin in Hin as (?&?). congruence. }
-          3:{ intros ??? Hfind Hin. repeat rewrite in_app_iff in *. destruct Hin as [[Hin|]|Hin]; eauto.
-              - exfalso. eapply In_InMembers, Hnin in Hin.
-                eapply Hin, Hsubin. econstructor; eauto.
-              - exfalso. eapply In_InMembers in Hin. rewrite 2 InMembers_idty in Hin.
-                eapply H7; eauto.
-                eapply in_or_app, or_intror, fst_InMembers.
-                eapply Hsubin. econstructor; eauto. }
-          2:{ intros ?? Hfind Hin. repeat rewrite in_app_iff in *. destruct Hin as [|[Hin|]]; auto.
-              right; left. unfold idty at 1.
-              do 2 eapply In_idty_exists in Hin as (?&Hin).
-              unfold idty. repeat rewrite map_map. eapply in_map_iff. do 2 esplit; [|eauto].
-              simpl. rewrite Hfind; auto. }
-          { intros ??? Hfind Hin.
-            eapply fresh_idents_rename_sub1 in Hfresh. 2:econstructor; eauto.
-            erewrite fst_InMembers, map_map, map_ext, map_fst_idty, <-fst_InMembers in Hfresh.
-            2:intros (?&?&?); auto.
-            repeat rewrite in_app_iff in *. destruct Hin as [Hin|[Hin|Hin]]; auto.
-            - exfalso. eapply In_InMembers, fst_InMembers in Hin.
-              eapply H7, in_or_app, or_introl; eauto.
-            - right; left.
-              do 2 eapply In_idty_exists in Hin as (?&Hin).
-              unfold idty. repeat rewrite map_map. eapply in_map_iff. do 2 esplit; [|eauto].
-              simpl. rewrite Hfind; auto.
-            - exfalso. eapply In_InMembers in Hin. rewrite InMembers_idty, fst_InMembers in Hin.
-              rewrite fst_InMembers in Hfresh.
-              eapply st_valid_after_AtomOrGensym_nIn in Hin; eauto using local_not_in_elab_prefs.
-              eapply Forall_forall in H2; eauto.
-          }
-        * eapply Forall_impl; [|eauto]; intros.
-          eapply wt_clock_incl; [|eauto]; solve_incl_app.
+      eapply mmap_inlinelocal_block_wt with (vars'0:=vars'++idty (idty locs)) in H. 1,11:eauto. 4-9:eauto.
       + intros ? Hin. rewrite InMembers_app, not_or', 2 InMembers_idty.
         split; auto. intro contra.
-        eapply H7; eauto. apply in_or_app, or_introl, fst_InMembers; auto.
+        eapply H6; eauto. apply in_or_app, or_introl, fst_InMembers; auto.
       + intros. rewrite Env.union_In, InMembers_app, Hsubin.
         apply or_iff_compat_l.
         rewrite 2 InMembers_idty.
@@ -344,7 +303,7 @@ Module Type ILTYPING
         * assert (Env.find x3 x0 = None) as Hone.
           { eapply In_InMembers in Hin. rewrite fst_InMembers in Hin.
             destruct (Env.find x3 x0) eqn:Hfind'; eauto.
-            exfalso. eapply H7; eauto using in_or_app. eapply fst_InMembers.
+            exfalso. eapply H6; eauto using in_or_app. eapply fst_InMembers.
             eapply fresh_idents_rename_sub1 in H0. 2:econstructor; eauto.
             erewrite fst_InMembers, map_map, map_ext, map_fst_idty in H0; eauto.
             intros (?&?&?); auto. }
@@ -364,12 +323,57 @@ Module Type ILTYPING
           unfold idty. rewrite 3 map_map. eapply in_map_iff.
           do 2 esplit; eauto. simpl.
           rewrite Hmap; auto.
+      + rewrite map_app, 2 map_fst_idty, app_assoc; auto.
+      + rewrite <-app_assoc in H8; auto.
+      + erewrite fresh_idents_rename_anns; [|eauto].
+        rewrite idty_app, idck_app, map_app.
+        apply Forall_app; split.
+        * assert (Hfresh:=H0). eapply fresh_idents_rename_ids in H0. rewrite H0.
+          2:{ unfold idty. erewrite fst_NoDupMembers, 2 map_map, map_ext, <-fst_NoDupMembers; auto.
+              intros (?&(?&?)&?); auto. }
+          unfold wt_clocks in H10.
+          unfold idck at 1, idty at 4. repeat rewrite map_map; rewrite Forall_map.
+          eapply Forall_impl; [|eauto]. intros (?&(?&?)&?) Hwt; simpl.
+          eapply rename_in_clock_wt, rename_in_clock_wt with (vars':=vars++idty (idty locs)++idty (st_anns st)). 5:eauto.
+          4:{ intros ?? Hfind Hin. repeat rewrite in_app_iff in *. destruct Hin as [[|Hin]|]; auto.
+              eapply In_InMembers, Hsubin in Hin as (?&?). congruence. }
+          3:{ intros ??? Hfind Hin. repeat rewrite in_app_iff in *. destruct Hin as [[Hin|]|Hin]; eauto.
+              - exfalso. eapply In_InMembers, Hnin in Hin.
+                eapply Hin, Hsubin. econstructor; eauto.
+              - exfalso. eapply In_InMembers in Hin. rewrite 2 InMembers_idty in Hin.
+                eapply H6; eauto.
+                eapply in_or_app, or_intror, fst_InMembers.
+                eapply Hsubin. econstructor; eauto. }
+          2:{ intros ?? Hfind Hin. repeat rewrite in_app_iff in *. destruct Hin as [|[Hin|]]; auto.
+              right; left. unfold idty at 1.
+              do 2 eapply In_idty_exists in Hin as (?&Hin).
+              unfold idty. repeat rewrite map_map. eapply in_map_iff. do 2 esplit; [|eauto].
+              simpl. rewrite Hfind; auto. }
+          { intros ??? Hfind Hin.
+            eapply fresh_idents_rename_sub1 in Hfresh. 2:econstructor; eauto.
+            erewrite fst_InMembers, map_map, map_ext, map_fst_idty, <-fst_InMembers in Hfresh.
+            2:intros (?&?&?); auto.
+            repeat rewrite in_app_iff in *. destruct Hin as [Hin|[Hin|Hin]]; auto.
+            - exfalso. eapply In_InMembers, fst_InMembers in Hin.
+              eapply H6, in_or_app, or_introl; eauto.
+            - right; left.
+              do 2 eapply In_idty_exists in Hin as (?&Hin).
+              unfold idty. repeat rewrite map_map. eapply in_map_iff. do 2 esplit; [|eauto].
+              simpl. rewrite Hfind; auto.
+            - exfalso. eapply In_InMembers in Hin. rewrite InMembers_idty, fst_InMembers in Hin.
+              rewrite fst_InMembers in Hfresh.
+              eapply st_valid_after_AtomOrGensym_nIn in Hin; eauto using local_not_in_switch_prefs.
+              eapply Forall_forall in H4; eauto.
+          }
+        * eapply Forall_impl; [|eauto]; intros.
+          eapply wt_clock_incl; [|eauto]; solve_incl_app.
       + eapply fresh_idents_rename_st_valid; eauto.
   Qed.
 
   Lemma inlinelocal_topblock_wt {PSyn prefs} (G: @global PSyn prefs) vars : forall blk blks' locs' st st',
+      noswitch_block blk ->
       NoDupLocals (map fst vars) blk ->
-      GoodLocals elab_prefs blk ->
+      GoodLocals switch_prefs blk ->
       wt_block G vars blk ->
       Forall (wt_clock G.(enums) (vars++idty (st_anns st))) (map snd (idck (st_anns st))) ->
       st_valid_after st local PS.empty ->
@@ -378,7 +382,7 @@ Module Type ILTYPING
       Forall (wt_clock G.(enums) (vars++idty (idty locs')++idty (st_anns st'))) (map snd (idck (idty locs'++st_anns st'))).
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hnd Hgood Hwt Hwtc Hvalid Hil; repeat inv_bind; simpl.
+    destruct blk; intros * Hns Hnd Hgood Hwt Hwtc Hvalid Hil; repeat inv_bind; simpl. 3:inv Hns.
     1,2:eapply inlinelocal_block_wt with (vars':=[]); try rewrite app_nil_r; eauto.
     5:inv Hnd; inv Hgood; inv Hwt;
       eapply mmap_inlinelocal_block_wt with (vars':=[]) in H as (Hwt1&Hwt2); try rewrite app_nil_r; eauto.
@@ -390,6 +394,7 @@ Module Type ILTYPING
       eapply Forall_impl; [|eauto]; intros (?&(?&?)&?) ?.
       eapply wt_clock_incl; [|eauto]. solve_incl_app.
     - eapply Forall_forall; intros; eauto using inlinelocal_block_wt.
+    - inv Hns; auto.
     - rewrite map_app, 2 map_fst_idty; auto.
     - eapply Forall_impl; [|eauto]; intros.
       eapply wt_clock_incl; [|eauto]. solve_incl_app.
@@ -448,7 +453,7 @@ Module Type ILTYPING
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hnd Hwt Hwte Hil; repeat inv_bind; simpl.
-    1,2:eapply inlinelocal_block_wt_enum; eauto.
+    1,2,3:eapply inlinelocal_block_wt_enum; eauto.
     inv Hwt. inv Hnd.
     repeat setoid_rewrite map_app. rewrite Forall_app. split; auto.
     eapply mmap_inlinelocal_block_wt_enum in H; eauto.
@@ -458,7 +463,7 @@ Module Type ILTYPING
 
   (** Typing of the node *)
 
-  Lemma inlinelocal_node_wt {PSyn} : forall G1 G2 (n : @node PSyn _),
+  Lemma inlinelocal_node_wt : forall G1 G2 (n : @node _ _),
       global_iface_eq G1 G2 ->
       wt_node G1 n ->
       wt_node G2 (inlinelocal_node n).
@@ -466,6 +471,7 @@ Module Type ILTYPING
     intros * Hiface (Hwt1&Hwt2&Hwt3&Hwt4).
     pose proof (n_nodup n) as (_&Hnd2).
     pose proof (n_good n) as (_&Hgood&_).
+    pose proof (n_syn n) as Hsyn.
     repeat constructor; simpl; eauto.
     1,2:destruct Hiface as (Heq&_); rewrite <-Heq; auto.
     eapply Forall_impl; [|eauto]; intros; eauto using iface_eq_wt_enum.
@@ -479,7 +485,7 @@ Module Type ILTYPING
       + rewrite 2 map_fst_idty.
         eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
       + rewrite init_st_anns; simpl; auto.
-      + eapply init_st_valid; eauto using local_not_in_elab_prefs, PS_For_all_empty.
+      + eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
     - (* clocks *)
       eapply inlinelocal_topblock_wt with (vars:=idty (idty (n_in n ++ n_out n))) in Hdl as (?&?); try rewrite app_nil_r; simpl; eauto.
       + repeat rewrite idty_app in *. rewrite idck_app, map_app, Forall_app in H0. repeat setoid_rewrite Forall_map in H0. destruct H0 as (Hck1&Hck2).
@@ -490,7 +496,7 @@ Module Type ILTYPING
       + rewrite 2 map_fst_idty.
         eapply NoDupLocals_incl; [|eauto]; solve_incl_app.
       + rewrite init_st_anns; simpl; auto.
-      + eapply init_st_valid; eauto using local_not_in_elab_prefs, PS_For_all_empty.
+      + eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
     - (* enums *)
       eapply inlinelocal_topblock_wt_enum in Hdl; eauto.
       2:{ rewrite init_st_anns; simpl; auto. }

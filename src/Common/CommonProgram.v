@@ -180,7 +180,6 @@ Section Program.
       + now rewrite units_of_update.
   Qed.
 
-  (* TODO: remove? *)
   Lemma find_unit_other:
     forall f u p p',
       equiv_program p p' ->

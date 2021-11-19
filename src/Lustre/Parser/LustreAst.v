@@ -113,6 +113,7 @@ Definition equation : Type := (list ident * list expression * astloc)%type.
 Inductive block :=
 | BEQ      : equation -> block
 | BRESET   : list block -> list expression -> astloc -> block
+| BSWITCH  : list expression -> list (ident * list block) -> astloc -> block
 | BLOCAL   : var_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
@@ -231,6 +232,10 @@ Section block_ind2.
       Forall P blks ->
       P (BRESET blks er loc).
 
+  Hypothesis SWITCHCase : forall ec branches loc,
+      Forall (fun blks => Forall P (snd blks)) branches ->
+      P (BSWITCH ec branches loc).
+
   Hypothesis LOCALCase : forall locs blks loc,
       Forall P blks ->
       P (BLOCAL locs blks loc).
@@ -241,6 +246,9 @@ Section block_ind2.
     - apply EQCase; auto.
     - apply RESETCase.
       induction l; auto.
+    - apply SWITCHCase.
+      induction l0 as [|(?&?)]; constructor; eauto; simpl.
+      induction l0; auto.
     - apply LOCALCase.
       induction l; auto.
   Qed.

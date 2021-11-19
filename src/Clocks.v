@@ -559,6 +559,27 @@ Module Type CLOCKS
         specialize (IHck c x x' eq_refl H1 Hsub). now constructor.
   Qed.
 
+  (** ** Checking parent relation *)
+
+  Fixpoint is_clock_parent ck1 ck2 :=
+    match ck2 with
+    | Cbase => false
+    | Con ck2' _ _ =>
+      (ck1 ==b ck2') || (is_clock_parent ck1 ck2')
+    end.
+
+  Lemma is_clock_parent_spec : forall ck1 ck2,
+      is_clock_parent ck1 ck2 = true <-> clock_parent ck1 ck2.
+  Proof.
+    split; intros Hck; induction ck2; simpl in *; try congruence.
+    - apply Bool.orb_true_iff in Hck as [Heq|Hck]; auto.
+      apply clock_eqb_eq in Heq; subst.
+      constructor.
+    - inv Hck.
+    - apply Bool.orb_true_iff. inv Hck; auto.
+      left. apply equiv_decb_refl.
+  Qed.
+
 End CLOCKS.
 
 Module ClocksFun

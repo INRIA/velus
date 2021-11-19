@@ -1,0 +1,10 @@
+type t = A | B
+
+(* y should be on the same clock as x *)
+node f(b : bool; x : t) returns (y : int when b);
+let
+  switch x
+  | A -> y = 1;
+  | B -> y = 2;
+  end
+tel

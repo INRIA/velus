@@ -2,6 +2,7 @@
 (* Functions called from within the proof, e.g., VelusCorrectness *)
 
 let lustre_destination = ref (None : string option)
+let noswitch_destination = ref (None : string option)
 let nolocal_destination = ref (None : string option)
 let nlustre_destination = ref (None : string option)
 let stc_destination = ref (None : string option)
@@ -59,6 +60,9 @@ let print_if flag print prog =
 
 let print_lustre_if =
   print_if lustre_destination Interfacelib.PrintLustre.print_global
+
+let print_noswitch_if =
+  print_if noswitch_destination Interfacelib.PrintLustre.print_global
 
 let print_nolocal_if =
   print_if nolocal_destination Interfacelib.PrintLustre.print_global

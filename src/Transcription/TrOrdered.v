@@ -52,7 +52,8 @@ Module Type TRORDERED
     inversion_clear Hord as [ ? ? Hord' |].
     - econstructor. clear IHl1 Hmmap.
       revert dependent eq'. generalize (@nil (ident * clock)) as xr.
-      induction a using L.block_ind2; intros; simpl in *.
+      induction a using L.block_ind2; intros; simpl in *;
+        try solve [monadInv Hteq].
       + destruct eq' as [| i ck x le |]; inv Hord'.
         destruct eq as [ xs [|]]. inv Hteq.
         destruct l2; [ idtac | inv Hteq; cases ].
@@ -61,7 +62,6 @@ Module Type TRORDERED
       + cases. apply Forall_singl in H.
         eapply H in Hteq; eauto.
         constructor. auto.
-      + monadInv Hteq.
     - apply Exists_cons_tl. eapply IHl1; eauto.
   Qed.
 
