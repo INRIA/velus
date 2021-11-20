@@ -14,7 +14,7 @@ From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLIndexedSemantics.
-From Velus Require Import NLustre.DupRegRem.DupRegRem.
+From Velus Require Import NLustre.DupRegRem.DRR.
 
 Module Type DRRCORRECTNESS
        (Import Ids   : IDS)
@@ -27,7 +27,7 @@ Module Type DRRCORRECTNESS
        (Import Syn   : NLSYNTAX           Ids Op OpAux Cks CESyn)
        (Import Ord   : NLORDERED          Ids Op OpAux Cks CESyn Syn)
        (Import Sem   : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem)
-       (Import DRR   : DUPREGREM          Ids Op OpAux Cks CESyn Syn).
+       (Import DRR   : DRR                Ids Op OpAux Cks CESyn Syn).
 
   (** ** Preservation of Ordered_nodes *)
 
@@ -383,7 +383,7 @@ Module DrrCorrectnessFun
        (Syn   : NLSYNTAX           Ids Op OpAux Cks CESyn)
        (Ord   : NLORDERED          Ids Op OpAux Cks CESyn Syn)
        (Sem   : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn Str Ord CESem)
-       (DRR   : DUPREGREM          Ids Op OpAux Cks CESyn Syn)
+       (DRR   : DRR                Ids Op OpAux Cks CESyn Syn)
 <: DRRCORRECTNESS Ids Op OpAux Cks Str CESyn CESem Syn Ord Sem DRR.
   Include DRRCORRECTNESS Ids Op OpAux Cks Str CESyn CESem Syn Ord Sem DRR.
 End DrrCorrectnessFun.

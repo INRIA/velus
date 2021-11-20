@@ -15,7 +15,7 @@ From Velus Require Import NLustre.Memories.
 From Velus Require Import NLustre.IsDefined.
 From Velus Require Import NLustre.NLClocking.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import NLustre.DupRegRem.DupRegRem.
+From Velus Require Import NLustre.DupRegRem.DRR.
 
 Module Type DRRCLOCKING
        (Import Ids   : IDS)
@@ -29,7 +29,7 @@ Module Type DRRCLOCKING
        (Import Mem   : MEMORIES        Ids Op OpAux Cks CESyn Syn)
        (Import IsD   : ISDEFINED       Ids Op OpAux Cks CESyn Syn Mem)
        (Import Clo   : NLCLOCKING      Ids Op OpAux Cks CESyn Syn Ord Mem IsD CEClo)
-       (Import DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn).
+       (Import DRR   : DRR             Ids Op OpAux Cks CESyn Syn).
 
   Section rename.
     Variable sub : Env.t ident.
@@ -370,7 +370,7 @@ Module DrrClockingFun
        (Mem   : MEMORIES        Ids Op OpAux Cks CESyn Syn)
        (IsD   : ISDEFINED       Ids Op OpAux Cks CESyn Syn Mem)
        (Clo   : NLCLOCKING      Ids Op OpAux Cks CESyn Syn Ord Mem IsD CEClo)
-       (DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn)
+       (DRR   : DRR             Ids Op OpAux Cks CESyn Syn)
   <: DRRCLOCKING Ids Op OpAux Cks CESyn CEClo Syn Ord Mem IsD Clo DRR.
   Include DRRCLOCKING Ids Op OpAux Cks CESyn CEClo Syn Ord Mem IsD Clo DRR.
 End DrrClockingFun.

@@ -13,7 +13,7 @@ From Velus Require Import CoreExpr.CETyping.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLTyping.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import NLustre.DupRegRem.DupRegRem.
+From Velus Require Import NLustre.DupRegRem.DRR.
 
 Module Type DRRTYPING
        (Import Ids   : IDS)
@@ -25,7 +25,7 @@ Module Type DRRTYPING
        (Import Syn   : NLSYNTAX        Ids Op OpAux Cks CESyn)
        (Import Ord   : NLORDERED       Ids Op OpAux Cks CESyn Syn)
        (Import Typ   : NLTYPING        Ids Op OpAux Cks CESyn Syn Ord CETyp)
-       (Import DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn).
+       (Import DRR   : DRR             Ids Op OpAux Cks CESyn Syn).
 
   Section rename.
     Variable sub : Env.t ident.
@@ -288,7 +288,7 @@ Module DrrTypingFun
        (Syn   : NLSYNTAX        Ids Op OpAux Cks CESyn)
        (Ord   : NLORDERED       Ids Op OpAux Cks CESyn Syn)
        (Typ   : NLTYPING        Ids Op OpAux Cks CESyn Syn Ord CETyp)
-       (DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn)
+       (DRR   : DRR             Ids Op OpAux Cks CESyn Syn)
   <: DRRTYPING Ids Op OpAux Cks CESyn CETyp Syn Ord Typ DRR.
   Include DRRTYPING Ids Op OpAux Cks CESyn CETyp Syn Ord Typ DRR.
 End DrrTypingFun.

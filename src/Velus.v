@@ -81,7 +81,7 @@ Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global 
 
 Definition nl_to_cl (main_node: ident) (g: NL.Syn.global) : res Clight.program :=
   OK g
-     @@ total_if do_dupregrem NL.DRR.DupRegRem.remove_dup_regs
+     @@ total_if do_dupregrem NL.DRR.DRR.remove_dup_regs
      @@ print print_nlustre
      @@ NL2Stc.translate
      @@ print print_stc

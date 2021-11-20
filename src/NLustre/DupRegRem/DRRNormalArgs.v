@@ -14,7 +14,7 @@ From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLTyping.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLNormalArgs.
-From Velus Require Import NLustre.DupRegRem.DupRegRem.
+From Velus Require Import NLustre.DupRegRem.DRR.
 
 (** Remove duplicate registers in an NLustre program *)
 
@@ -29,7 +29,7 @@ Module Type DRRNORMALARGS
        (Import Ord   : NLORDERED       Ids Op OpAux Cks CESyn Syn)
        (Import Typ   : NLTYPING        Ids Op OpAux Cks CESyn Syn Ord CETyp)
        (Import Norm  : NLNORMALARGS    Ids Op OpAux Cks CESyn CETyp Syn Ord Typ)
-       (Import DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn).
+       (Import DRR   : DRR             Ids Op OpAux Cks CESyn Syn).
 
   Lemma rename_in_exp_noops_exp : forall sub e ck,
     noops_exp ck e ->
@@ -96,7 +96,7 @@ Module DrrNormalArgsFun
        (Ord   : NLORDERED       Ids Op OpAux Cks CESyn Syn)
        (Typ   : NLTYPING        Ids Op OpAux Cks CESyn Syn Ord CETyp)
        (Norm  : NLNORMALARGS    Ids Op OpAux Cks CESyn CETyp Syn Ord Typ)
-       (DRR   : DUPREGREM       Ids Op OpAux Cks CESyn Syn)
+       (DRR   : DRR             Ids Op OpAux Cks CESyn Syn)
   <: DRRNORMALARGS Ids Op OpAux Cks CESyn CETyp Syn Ord Typ Norm DRR.
   Include DRRNORMALARGS Ids Op OpAux Cks CESyn CETyp Syn Ord Typ Norm DRR.
 End DrrNormalArgsFun.

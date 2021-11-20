@@ -14,7 +14,7 @@ From Velus Require Export NLustre.NLClocking.
 From Velus Require Export NLustre.NLClockingSemantics.
 From Velus Require Export NLustre.NLTyping.
 From Velus Require Export NLustre.NLNormalArgs.
-From Velus Require Export NLustre.DupRegRem.DRR.
+From Velus Require Export NLustre.DupRegRem.DupRegRem.
 From Velus Require Export CoindStreams.
 From Velus Require Import CoindToIndexed.
 
@@ -46,7 +46,7 @@ Module Type NLUSTRE
   Declare Module Export CloSem     : NLCLOCKINGSEMANTICS  Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.Clo Clo CE.CloSem.
   Declare Module Export MemSem     : NLMEMSEMANTICS       Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV NoD CE.Clo Clo CE.CloSem CloSem.
 
-  Declare Module Export DRR        : DRR                  Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
+  Declare Module Export DRR        : DUPREGREM            Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
 End NLUSTRE.
 
 Module NLustreFun
@@ -76,5 +76,5 @@ Module NLustreFun
   Module Export CloSem     := NLClockingSemanticsFun  Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD CE.Clo Clo CE.CloSem.
   Module Export MemSem     := NLMemSemanticsFun       Ids Op OpAux Cks CE.Syn Syn IStr Ord CE.Sem Sem Mem IsD IsV NoD CE.Clo Clo CE.CloSem CloSem.
 
-  Module Export DRR        := DRRFun                  Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
+  Module Export DRR        := DupRegRemFun            Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
 End NLustreFun.
