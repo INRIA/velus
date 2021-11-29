@@ -162,6 +162,7 @@ Module Type CEPROPERTIES
         induction vs; intros; (take (Forall2 _ _ _) and inv it); constructor;
           take (Forall _ (_ :: _)) and inversion_clear it as [|?? He].
         * apply He; auto.
+          intros ? Hfree. destruct x; simpl in *; eauto 8.
         * apply IHvs; auto.
           inversion_clear 1; apply RRx; auto.
       + take (sem_exp_instant _ _ _ _) and eapply (sem_exp_instant_switch_env _ R') in it; eauto.
@@ -171,6 +172,7 @@ Module Type CEPROPERTIES
         repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
         apply it; auto.
         intros * Free.
+        destruct x; simpl in *; eauto.
         apply RRx, FreeEcase_branches, Exists_exists; eauto.
       + take (sem_exp_instant _ _ _ _) and eapply (sem_exp_instant_switch_env _ R) in it; eauto.
         econstructor; eauto.
@@ -178,7 +180,8 @@ Module Type CEPROPERTIES
         revert dependent l.
         induction vs; intros; (take (Forall2 _ _ _) and inv it); constructor;
           take (Forall _ (_ :: _)) and inversion_clear it as [|?? He].
-        * apply He; auto.
+        * apply He; auto. intros ??.
+          destruct x; simpl in *; eauto 8.
         * apply IHvs; auto.
           inversion_clear 1; apply RRx; auto.
       + take (sem_exp_instant _ _ _ _) and eapply (sem_exp_instant_switch_env _ R) in it; eauto.
@@ -187,6 +190,7 @@ Module Type CEPROPERTIES
         repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
         apply it; auto.
         intros * Free.
+        destruct x; simpl in *; eauto.
         apply RRx, FreeEcase_branches, Exists_exists; eauto.
 
     - (* Eexp *)
@@ -310,14 +314,14 @@ Module Type CEPROPERTIES
       wt_cexp tenv (idty xs) e ->
       InMembers x xs.
   Proof.
-    induction e using cexp_ind2; inversion_clear 1; inversion_clear 1; auto;
+    induction e using cexp_ind2'; inversion_clear 1; inversion_clear 1; auto;
       eauto using Is_free_in_wt_exp, idty_InMembers.
     - take (Exists _ _) and apply Exists_exists in it as (ce & Hin & Free).
       repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
     - take (Exists _ _) and apply Exists_exists in it as (ce & Hin & Free).
       repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      destruct Free as (?&?&?); subst.
       apply it; auto.
-      destruct ce; auto.
   Qed.
 
   Lemma Is_free_in_wt_aexp:

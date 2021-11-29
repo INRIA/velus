@@ -119,7 +119,10 @@ Module Type CETYPINGSEMANTICS
       apply Forall_forall; intros; eapply Forall_forall in WT; eauto.
       apply WT.
       rewrite fold_left_app; simpl.
-      apply In_fold_left_or_default_free_in_cexp; rewrite free_in_cexp_spec, <-free_in_cexp_spec'; auto.
+      apply In_free_in_cexp in H3. rewrite free_in_cexp_spec in H3. destruct H3 as [[Hfree|]|].
+      2,3:exfalso; eapply not_In_empty; eauto.
+      apply In_free_in_cexp; rewrite In_fold_left_or_default_free_in_cexp, free_in_cexp_spec.
+      destruct oe; simpl in *; auto. right; right. rewrite free_in_cexp_spec; auto.
   Qed.
   Hint Resolve sem_cexp_instant_wt.
 

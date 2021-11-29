@@ -140,8 +140,8 @@ let speclist = [
   "-sync", Arg.Set write_sync, " Generate sync() in <source>.sync.c";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <source>.parsed.lus";
-  "-dnoswitch", Arg.Set write_noswitch, "Save Lustre without switch blocks in <source>.noswitch.lus";
-  "-dnolocal", Arg.Set write_nolocal, "Save Lustre without local blocks in <source>.nolocal.lus";
+  "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <source>.noswitch.lus";
+  "-dnolocal", Arg.Set write_nolocal, " Save Lustre without local blocks in <source>.nolocal.lus";
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <source>.n.lus";
   "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";
@@ -153,11 +153,10 @@ let speclist = [
                                          " Print 'full' clocks in declarations";
   "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
                                    " Show result clocks of nested applications";
+  "-nodce", Arg.Clear Veluslib.dce, " Skip dead code elimination";
   "-noremovedupregs", Arg.Clear Veluslib.dupregrem, " Skip duplicate register removal";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
   "-nonormswitches", Arg.Clear Veluslib.normalize_switches, " Skip Obc switches normalization";
-  "-noaddwhens", Arg.Clear Veluslib.add_when_to_constants,
-                                " Do not automatically add 'when' to constants";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
 ]
 

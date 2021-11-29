@@ -12,6 +12,9 @@ let sync_destination = ref (None : string option)
 let main_node = ref (None : string option)
 let reaction_counter = Camlcoq.intern_string "$reaction"
 
+let dce = ref true
+let do_dce () = !dce
+
 let dupregrem = ref true
 let do_dupregrem () = !dupregrem
 
@@ -22,10 +25,6 @@ let normalize_switches = ref true
 let do_normalize_switches () = !normalize_switches
 
 let do_sync () = !sync_destination <> None
-
-(* try to automatically constants in "when"s? *)
-let add_when_to_constants = ref true
-let do_add_when_to_constants () = !add_when_to_constants
 
 let expose = ref false
 let do_expose () = !expose

@@ -37,6 +37,7 @@ Parameter print_nlustre : NL.Syn.global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
+Parameter do_dce        : unit -> bool.
 Parameter do_dupregrem  : unit -> bool.
 Parameter do_fusion     : unit -> bool.
 Parameter do_norm_switches : unit -> bool.
@@ -81,6 +82,7 @@ Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global 
 
 Definition nl_to_cl (main_node: ident) (g: NL.Syn.global) : res Clight.program :=
   OK g
+     @@ total_if do_dce NL.DCE.DCE.dce_global
      @@ total_if do_dupregrem NL.DRR.DRR.remove_dup_regs
      @@ print print_nlustre
      @@ NL2Stc.translate

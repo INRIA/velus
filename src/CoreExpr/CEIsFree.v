@@ -58,7 +58,10 @@ Module Type CEISFREE
       Is_free_in_exp x b ->
       Is_free_in_cexp x (Ecase b l ty)
   | FreeEcase_branches: forall x b l d,
-      Exists (fun os => Is_free_in_cexp x (or_default d os)) l ->
+      Exists (fun os => exists e, os = Some e /\ Is_free_in_cexp x e) l ->
+      Is_free_in_cexp x (Ecase b l d)
+  | FreeEcase_default : forall x b l d,
+      Is_free_in_cexp x d ->
       Is_free_in_cexp x (Ecase b l d)
   | FreeEexp: forall e x,
       Is_free_in_exp x e ->
@@ -151,7 +154,8 @@ Module Type CEISFREE
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with
     | Emerge (i, _) l _ => fold_left (fun fvs e => free_in_cexp e fvs) l (PS.add i fvs)
-    | Ecase b l d       => fold_left (fun fvs e => free_in_cexp (or_default d e) fvs) l (free_in_exp b fvs)
+    | Ecase b l d       =>
+      free_in_cexp d (fold_left (fun fvs => or_default_with fvs (fun e => free_in_cexp e fvs)) l (free_in_exp b fvs))
     | Eexp e            => free_in_exp e fvs
     end.
 
@@ -287,6 +291,9 @@ Module Type CEISFREE
            | H: Is_free_in_cexp _ (Emerge _ _ _) |- _ =>
              inversion H; subst; clear H
 
+           | H: Is_free_in_cexp _ (Ecase _ _ _) |- _ =>
+             inversion H; subst; clear H
+
            | H: Is_free_in_cexp _ (Eexp _) |- _ =>
              inversion H; subst; clear H
 
@@ -318,34 +325,36 @@ Module Type CEISFREE
   Qed.
 
   Lemma In_fold_left_or_default_free_in_cexp_aux:
-    forall l x m e,
+    forall l x m,
       Forall
-        (fun oce =>
-           forall x m,
-             PS.In x (free_in_cexp (or_default e oce) m) <->
-             PS.In x (free_in_cexp (or_default e oce) PS.empty) \/ PS.In x m) l ->
-      PS.In x (fold_left (fun fvs oe => free_in_cexp (or_default e oe) fvs) l m) <->
-      (PS.In x (fold_left (fun fvs oe => free_in_cexp (or_default e oe) fvs) l PS.empty)
+        (or_default_with True
+           (fun e : cexp =>
+            forall (x : positive) (m : PS.t),
+            PS.In x (free_in_cexp e m) <-> PS.In x (free_in_cexp e PS.empty) \/ PS.In x m)) l ->
+      PS.In x (fold_left (fun fvs => or_default_with fvs (fun e0 : cexp => free_in_cexp e0 fvs)) l m) <->
+      (PS.In x (fold_left (fun fvs => or_default_with fvs (fun e0 : cexp => free_in_cexp e0 fvs)) l PS.empty)
        \/ PS.In x m).
   Proof.
     induction l as [|e]; simpl; inversion_clear 1 as [|?? He].
     - rewrite PSF.empty_iff; tauto.
     - rewrite IHl; auto.
       symmetry; rewrite IHl; auto.
-      symmetry; rewrite He; tauto.
+      destruct e; simpl in *.
+      + symmetry; rewrite He; tauto.
+      + rewrite PSF.empty_iff. tauto.
   Qed.
 
   Lemma In_free_in_cexp:
     forall e x m,
       PS.In x (free_in_cexp e m) <-> PS.In x (free_in_cexp e PS.empty) \/ PS.In x m.
   Proof.
-    induction e using cexp_ind2; simpl; intros.
+    induction e using cexp_ind2'; simpl; intros.
     - destruct x as (x, _); rewrite In_fold_left_free_in_cexp_aux; auto.
       rewrite (In_fold_left_free_in_cexp_aux _ _ (PS.add x PS.empty)); auto.
       rewrite ? PS.add_spec, ? or_assoc, PSF.empty_iff; tauto.
-    - rewrite In_fold_left_or_default_free_in_cexp_aux; auto.
-      symmetry; rewrite In_fold_left_or_default_free_in_cexp_aux; auto.
-      rewrite 2 free_in_exp_spec, PSF.empty_iff; tauto.
+    - rewrite IHe, In_fold_left_or_default_free_in_cexp_aux, free_in_exp_spec; auto.
+      symmetry. rewrite IHe, In_fold_left_or_default_free_in_cexp_aux; auto.
+      rewrite free_in_exp_spec. repeat rewrite PSF.empty_iff. tauto.
     - rewrite 2 free_in_exp_spec, PSF.empty_iff; tauto.
   Qed.
 
@@ -360,29 +369,25 @@ Module Type CEISFREE
   Qed.
 
   Corollary In_fold_left_or_default_free_in_cexp:
-    forall l x m e,
-      PS.In x (fold_left (fun fvs oe => free_in_cexp (or_default e oe) fvs) l m) <->
-      (PS.In x (fold_left (fun fvs oe => free_in_cexp (or_default e oe) fvs) l PS.empty)
+    forall l x m,
+      PS.In x (fold_left (fun fvs => or_default_with fvs (fun e0 : cexp => free_in_cexp e0 fvs)) l m) <->
+      (PS.In x (fold_left (fun fvs => or_default_with fvs (fun e0 : cexp => free_in_cexp e0 fvs)) l PS.empty)
        \/ PS.In x m).
   Proof.
     intros; apply In_fold_left_or_default_free_in_cexp_aux.
-    apply Forall_forall; intros; apply In_free_in_cexp.
+    apply Forall_forall; intros. destruct x0; simpl; auto. apply In_free_in_cexp.
   Qed.
 
   Lemma free_in_cexp_spec:
     forall e x m, PS.In x (free_in_cexp e m)
                   <-> Is_free_in_cexp x e \/ PS.In x m.
   Proof.
-    induction e using cexp_ind2;
+    induction e using cexp_ind2';
       intros; simpl; split; intro H0;
         destruct_Is_free;
         subst; auto;
           try rewrite IHe2, IHe1;
           try rewrite free_in_exp_spec;
-          match goal with
-          | H:Is_free_in_cexp _ _ |- _ => inversion_clear H
-          | |- _ => idtac
-          end;
           intuition.
     - induction l as [|e]; destruct x; simpl in *.
       + apply PS.add_spec in H0 as []; subst; auto.
@@ -411,35 +416,24 @@ Module Type CEISFREE
       rewrite 2 In_fold_left_free_in_cexp, In_free_in_cexp, He; auto.
     - apply In_fold_left_free_in_cexp.
       right; apply PSF.add_2; auto.
-    - induction l as [|e']; simpl in *.
+    - apply In_fold_left_or_default_free_in_cexp in H0 as [Hin|].
+      + left. apply FreeEcase_branches.
+        induction l as [|e']; simpl in *; inv H. apply not_In_empty in Hin; inv Hin.
+        apply In_fold_left_or_default_free_in_cexp in Hin as [|Hin].
+        * right. eapply IHl; eauto.
+        * destruct e'; simpl in *; try (solve [inv Hin]).
+          left. repeat esplit; eauto. apply H2 in Hin as [|Hin]; auto.
+          apply not_In_empty in Hin; inv Hin.
       + apply free_in_exp_spec in H0 as []; auto.
-      + apply In_fold_left_or_default_free_in_cexp in H0 as [|Hin].
-        * inv H.
-          destruct IHl as [Free|]; auto.
-          -- apply In_fold_left_or_default_free_in_cexp; auto.
-          -- inv Free; left.
-             ++ constructor; auto.
-             ++ apply FreeEcase_branches.
-                right; auto.
-        * apply In_free_in_cexp in Hin as [Hin|Hin].
-          -- inversion_clear H as [|?? He].
-             apply He in Hin.
-             rewrite PSF.empty_iff in Hin; destruct Hin; try contradiction.
-             left; constructor; left; auto.
-          -- apply free_in_exp_spec in Hin as []; auto.
-    - induction l as [|e']; simpl in *.
-      + apply free_in_exp_spec; auto.
-      + apply In_fold_left_or_default_free_in_cexp.
-        inversion_clear H as [|?? He Hl].
-        apply IHl, In_fold_left_or_default_free_in_cexp in Hl as [|Hin]; auto.
-        rewrite In_free_in_cexp; auto.
-    - take (Exists _ _) and eapply Forall_Exists in it; eauto.
-      apply Exists_exists in it as (e' & Hin & He & Free).
-      apply In_split in Hin as (l1 & l2 & E); subst.
-      rewrite fold_left_app; simpl.
-      rewrite 2 In_fold_left_or_default_free_in_cexp, In_free_in_cexp, He; auto.
-    - apply In_fold_left_or_default_free_in_cexp.
-      right; apply free_in_exp_spec; auto.
+    - rewrite In_free_in_cexp, In_fold_left_or_default_free_in_cexp. do 2 right.
+      apply free_in_exp_spec; auto.
+    - rewrite In_free_in_cexp, In_fold_left_or_default_free_in_cexp. right; left.
+      induction l as [|e']; simpl in *.
+      + inv H3.
+      + rewrite In_fold_left_or_default_free_in_cexp. inv H; inv H3; eauto.
+        right. destruct H0 as (?&?&?); subst; simpl in *. eapply H2; eauto.
+    - rewrite In_free_in_cexp. left. apply IHe; auto.
+    - rewrite In_free_in_cexp, In_fold_left_or_default_free_in_cexp, free_in_exp_spec. auto.
   Qed.
 
   Lemma free_in_cexp_spec':

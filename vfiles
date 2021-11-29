@@ -83,6 +83,13 @@ src/NLustre/NoDup.v
 src/NLustre/NLClockingSemantics.v
 src/NLustre/NLustre.v
 
+src/NLustre/DeadCodeElim/DCE.v
+src/NLustre/DeadCodeElim/DCETyping.v
+src/NLustre/DeadCodeElim/DCEClocking.v
+src/NLustre/DeadCodeElim/DCENormalArgs.v
+src/NLustre/DeadCodeElim/DCECorrectness.v
+src/NLustre/DeadCodeElim/DeadCodeElim.v
+
 src/NLustre/DupRegRem/DRR.v
 src/NLustre/DupRegRem/DRRTyping.v
 src/NLustre/DupRegRem/DRRClocking.v

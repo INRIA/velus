@@ -1,0 +1,46 @@
+node dead(x : bool) returns (y : int)
+var z : int;
+let
+    y = if x then 0 else 1;
+    z = 1;
+tel
+
+node notdead(x : bool) returns (y : int)
+var z : int;
+let
+    y = if x then 0 else z;
+    z = 1;
+tel
+
+node self(x : bool) returns (y : int)
+var z : int;
+let
+    y = if x then 0 else 1;
+    z = 0 fby (z + 1);
+tel
+
+node cyclic(x : bool) returns (y : int)
+var t1, t2 : int;
+let
+    t1 = 0 fby t2;
+    t2 = 0 fby t1;
+    y = 1;
+tel
+
+node f(x : bool) returns (y, z : int)
+let
+    (y, z) = (0, 0);
+tel
+
+node app_dead(x : bool) returns (y : int)
+var t1, t2 : int;
+let
+    (t1, t2) = f(x);
+    y = 0;
+tel
+
+node app_onedead(x : bool) returns (y : int)
+var t : int;
+let
+    (t, y) = f(x)
+tel

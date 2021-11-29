@@ -71,7 +71,7 @@ Module Type STC2OBCINVARIANTS
       Fusible (translate_cexp mems x e).
   Proof.
     intros * Hfree.
-    induction e using cexp_ind2; eauto using Fusible.
+    induction e using cexp_ind2'; eauto using Fusible.
     - destruct x0.
       simpl; constructor.
       + apply Forall_map, Forall_forall; intros * Hin.
@@ -86,10 +86,10 @@ Module Type STC2OBCINVARIANTS
     - simpl; constructor.
       + apply Forall_map, Forall_forall; intros oe Hin.
         pose proof Hin; eapply Forall_forall in Hin; eauto; simpl in *.
-        destruct oe; simpl in *;
-          apply Hin; intro; apply Hfree;
-            apply FreeEcase_branches;
-            apply Exists_exists; eauto.
+        destruct oe; simpl in *; eauto.
+        apply Hin; intro; apply Hfree;
+          apply FreeEcase_branches;
+          apply Exists_exists; eauto.
       + intros * Hfree'; apply Forall_map, Forall_forall; intros oe Hin.
         destruct oe; simpl in *;
           apply not_Can_write_in_translate_cexp;
