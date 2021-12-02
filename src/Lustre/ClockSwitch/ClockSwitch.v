@@ -73,14 +73,12 @@ Module Type CLOCKSWITCH
         map snd (map subclock_ann anns) = map subclock_clock (map snd anns).
     Proof.
       induction anns; simpl; auto.
-      f_equal; auto.
     Qed.
 
     Lemma map_subclock_ann_type {A} : forall (anns : list (A * clock)),
         map fst (map subclock_ann anns) = map fst anns.
     Proof.
       induction anns; simpl; auto.
-      f_equal; auto.
     Qed.
 
   End subclock.
@@ -610,7 +608,7 @@ Module Type CLOCKSWITCH
   Proof.
     unfold cond_eq. intros * Hst.
     cases; repeat inv_bind; eauto using fresh_ident_st_follows.
-    1,2:reflexivity.
+    reflexivity.
   Qed.
 
   Lemma new_idents_st_follows : forall ck xc tx k ids nids st st',
@@ -886,7 +884,7 @@ Module Type CLOCKSWITCH
   Proof.
     unfold cond_eq. intros * Hcond.
     cases; repeat inv_bind; simpl; auto.
-    1-13:try take (fresh_ident _ _ _ _ = _) and eapply fresh_ident_prefixed in it as (?&?&?); subst.
+    1-10:try take (fresh_ident _ _ _ _ = _) and eapply fresh_ident_prefixed in it as (?&?&?); subst.
     1-10:constructor; auto; right; do 2 esplit; eauto; apply PSF.add_1; auto.
   Qed.
 
@@ -1031,10 +1029,10 @@ Module Type CLOCKSWITCH
     eapply switch_noswitch; eauto.
   Qed.
 
-  Program Instance switch_node_transform_unit: TransformUnit node node :=
+  Global Program Instance switch_node_transform_unit: TransformUnit node node :=
     { transform_unit := switch_node }.
 
-  Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global (fun _ => True) elab_prefs) (@global noswitch_block switch_prefs) :=
+  Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global (fun _ => True) elab_prefs) (@global noswitch_block switch_prefs) :=
     { transform_program_without_units := fun g => Global g.(enums) [] }.
 
   Definition switch_global : @global (fun _ => True) elab_prefs -> @global noswitch_block switch_prefs :=

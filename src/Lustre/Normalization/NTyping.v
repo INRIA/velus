@@ -1,4 +1,3 @@
-Require Import Omega.
 From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
@@ -664,8 +663,8 @@ Module Type NTYPING
         + assert (Forall (wt_exp G2 (vars++st_tys st')) (unnest_fby (concat x2) (concat x6) a)) as Hwcfby.
           { eapply unnest_fby_wt_exp...
             1-3:solve_forall; repeat solve_incl.
-            + eapply mmap2_unnest_exp_typesof'' in Hnorm1... 1,2:congruence.
-            + eapply mmap2_unnest_exp_typesof'' in Hnorm2... 1,2:congruence. }
+            + eapply mmap2_unnest_exp_typesof'' in Hnorm1... congruence.
+            + eapply mmap2_unnest_exp_typesof'' in Hnorm2... congruence. }
           remember (unnest_fby _ _ _) as fby.
           assert (length (concat x2) = length a) as Hlen1.
           { eapply mmap2_unnest_exp_length in Hnorm1...
@@ -698,8 +697,8 @@ Module Type NTYPING
         + assert (Forall (wt_exp G2 (vars++st_tys st')) (unnest_arrow (concat x2) (concat x6) a)) as Hwcfby.
           { eapply unnest_arrow_wt_exp...
             1-3:solve_forall; repeat solve_incl.
-            + eapply mmap2_unnest_exp_typesof'' in Hnorm1... 1,2:congruence.
-            + eapply mmap2_unnest_exp_typesof'' in Hnorm2... 1,2:congruence. }
+            + eapply mmap2_unnest_exp_typesof'' in Hnorm1... congruence.
+            + eapply mmap2_unnest_exp_typesof'' in Hnorm2... congruence. }
           remember (unnest_arrow _ _ _) as fby.
           assert (length (concat x2) = length a) as Hlen1.
           { eapply mmap2_unnest_exp_length in Hnorm1...
@@ -948,25 +947,25 @@ Module Type NTYPING
         assert (Hnorm1:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']...
         assert (Hnorm2:=H0). eapply unnest_exps_wt with (vars:=vars) in H0 as [Hwt2 Hwt2']...
         2:solve_forall; repeat solve_incl.
-        repeat rewrite Forall_app; repeat split... 2,3:solve_forall; repeat solve_incl.
+        repeat rewrite Forall_app; repeat split... 2:solve_forall; repeat solve_incl.
         eapply unnest_fby_wt_exp; eauto.
         1-2:solve_forall; repeat solve_incl.
         + unfold unnest_exps in Hnorm1; repeat inv_bind.
-          eapply mmap2_unnest_exp_typesof'' in H... 1,2:congruence.
+          eapply mmap2_unnest_exp_typesof'' in H... congruence.
         + unfold unnest_exps in Hnorm2; repeat inv_bind.
-          eapply mmap2_unnest_exp_typesof'' in H... 1,2:congruence.
+          eapply mmap2_unnest_exp_typesof'' in H... congruence.
       - (* arrow *)
         repeat inv_bind.
         assert (Hnorm1:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']...
         assert (Hnorm2:=H0). eapply unnest_exps_wt with (vars:=vars) in H0 as [Hwt2 Hwt2']...
         2:solve_forall; repeat solve_incl.
-        repeat rewrite Forall_app; repeat split... 2,3:solve_forall; repeat solve_incl.
+        repeat rewrite Forall_app; repeat split... 2:solve_forall; repeat solve_incl.
         eapply unnest_arrow_wt_exp; eauto.
         1-2:solve_forall; repeat solve_incl.
         + unfold unnest_exps in Hnorm1; repeat inv_bind.
-          eapply mmap2_unnest_exp_typesof'' in H... 1,2:congruence.
+          eapply mmap2_unnest_exp_typesof'' in H... congruence.
         + unfold unnest_exps in Hnorm2; repeat inv_bind.
-          eapply mmap2_unnest_exp_typesof'' in H... 1,2:congruence.
+          eapply mmap2_unnest_exp_typesof'' in H... congruence.
       - (* app *)
         repeat inv_bind.
         assert (st_follows st x4) as Hfollows1 by repeat solve_st_follows.
@@ -1037,26 +1036,26 @@ Module Type NTYPING
         * rewrite app_length in H.
           rewrite firstn_length. rewrite H.
           rewrite length_typeof_numstreams.
-          apply Nat.min_l. omega.
+          apply Nat.min_l. lia.
         * rewrite firstn_length in H2.
           rewrite PeanoNat.Nat.min_glb_lt_iff in H2; destruct H2 as [Hlen1 Hlen2].
           specialize (H1 a0 b _ _ _ Hlen2 eq_refl eq_refl).
           rewrite app_nth1 in H1. 2: rewrite length_typeof_numstreams...
-          rewrite nth_firstn_1. 2,3:eauto.
+          rewrite nth_firstn_1. 2:eauto.
           rewrite in_app_iff in *. destruct H1; auto.
           right. eapply st_follows_tys_incl...
       + inv Hwt. apply IHx...
         repeat rewrite_Forall_forall.
         * rewrite app_length in H.
           rewrite skipn_length. rewrite H.
-          rewrite length_typeof_numstreams. omega.
+          rewrite length_typeof_numstreams. lia.
         * rewrite skipn_length in H2.
           rewrite nth_skipn.
-          assert (n + numstreams a < length xs) as Hlen by omega.
+          assert (n + numstreams a < length xs) as Hlen by lia.
           specialize (H1 a0 b _ _ _ Hlen eq_refl eq_refl).
-          rewrite app_nth2 in H1. 2: rewrite length_typeof_numstreams; omega.
+          rewrite app_nth2 in H1. 2: rewrite length_typeof_numstreams; lia.
           rewrite length_typeof_numstreams in H1.
-          replace (n + numstreams a - numstreams a) with n in H1 by omega...
+          replace (n + numstreams a - numstreams a) with n in H1 by lia...
     Qed.
 
     Lemma unnest_block_wt : forall vars d blocks' st st',
@@ -1950,7 +1949,7 @@ Module Type NTYPING
         inv Hwt. apply Forall_singl in H4. apply Forall_singl in H3.
         apply Forall_singl in H7.
         repeat (constructor; auto).
-        1-9:repeat solve_incl.
+        1-8:repeat solve_incl.
         + apply fresh_ident_In in H. apply in_or_app, or_intror.
           unfold st_tys, idty. repeat simpl_In. exists (x2, (t, c)); split; auto.
         + apply fresh_ident_In in H. apply in_or_app, or_intror.

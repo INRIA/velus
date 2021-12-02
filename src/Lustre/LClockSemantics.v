@@ -2,7 +2,6 @@ From Coq Require Import Streams.
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-From Coq Require Import Omega.
 
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Setoid.
@@ -172,6 +171,8 @@ Module Type LCLOCKSEMANTICS
     rewrite H2, H4; reflexivity.
   Qed.
 
+  Import List.
+
   Lemma sem_clock_same_find : forall H H' vars ck bs bs',
       wc_clock vars ck ->
       Forall (fun x => orel (EqSt (A:=svalue)) (Env.find x H') (Env.find x H)) (map fst vars) ->
@@ -203,8 +204,6 @@ Module Type LCLOCKSEMANTICS
   Local Ltac simpl_ndup Hnd :=
     simpl in *;
     try rewrite app_nil_r in Hnd; repeat rewrite map_app.
-  Local Ltac ndup_l H := rewrite app_assoc in H; apply NoDup_app_l in H; auto.
-  Local Ltac ndup_r H := rewrite Permutation_swap in H; apply NoDup_app_r in H; auto.
 
   (** ** Clocked semantics *)
   (** We add an alignment predicate to the node case of the semantics, which checks that
@@ -920,7 +919,7 @@ Module Type LCLOCKSEMANTICS
       assert (In x (xs ++ map fst ys)) as Hin' by (apply in_or_app; auto).
       eapply Env.dom_use in Hin'; eauto. destruct Hin' as (v'&Hfind2).
       assert (sem_var H' x v') as Hvar' by (econstructor; eauto; reflexivity).
-      eapply Hinv in Hvar'. inv Hvar'. 2,3:(intro contra; eapply Hnd; eauto).
+      eapply Hinv in Hvar'. inv Hvar'. 2:(intro contra; eapply Hnd; eauto).
       rewrite H1 in Hfind; inv Hfind.
       do 2 eexists; eauto. now symmetry.
     Qed.
@@ -1561,7 +1560,6 @@ Module Type LCLOCKSEMANTICS
     forall l, idents l = map fst (idck l).
   Proof.
     unfold idents, idck. induction l; simpl; auto.
-    f_equal. auto.
   Qed.
 
   Ltac simpl_Foralls :=
@@ -2037,8 +2035,8 @@ Module Type LCLOCKSEMANTICS
         inv Hwt; inv Hwc; inv Hck1; inv Hck2; inv Hsem; inv Hp; simpl.
       1:{ eapply Forall_forall in H0; [|eapply nth_In]; eauto.
           rewrite H0; auto. }
-      eapply P_exps_sc_exp_inv in H12 as Heq1. 4:eauto. 2-4:eauto.
-      eapply IHes in H14 as Heq2. 7:eauto. 2-7:eauto.
+      eapply P_exps_sc_exp_inv in H12 as Heq1. 4:eauto. 2-3:eauto.
+      eapply IHes in H14 as Heq2. 7:eauto. 2-6:eauto.
       2,3:(eapply Forall3_length in H13 as (Hlen1&Hlen2); rewrite Hlen2; auto).
       clear - Hlen H6 H8 H13 Heq1 Heq2.
       eapply Forall3_forall3 in H13 as (?&?&?).
@@ -2327,7 +2325,7 @@ Module Type LCLOCKSEMANTICS
         intros k'.
         specialize (H24 k'). inv H24. rewrite H1 in H6; inv H6.
         exists H0. repeat split; eauto.
-        eapply sc_inside_mask in WcIn. 3-6:eauto. 2:eauto.
+        eapply sc_inside_mask in WcIn. 3-5:eauto. 2:eauto.
         eapply Hscnodes in H1; eauto. econstructor; eauto.
     Qed.
 
@@ -2435,7 +2433,7 @@ Module Type LCLOCKSEMANTICS
           intros k'.
           specialize (H28 k'). inv H28. rewrite H3 in H6; inv H6.
           exists H2. repeat split; eauto.
-          eapply sc_inside_mask in WcIn. 3-6:eauto. 2:eauto.
+          eapply sc_inside_mask in WcIn. 3-5:eauto. 2:eauto.
           eapply Hscnodes in Wcn; eauto. econstructor; eauto.
       - assert (nth k (clocksof es) Cbase = ck); subst; auto.
         { eapply Forall2_forall2 in H5 as [_ HIn'].
@@ -2490,13 +2488,6 @@ Module Type LCLOCKSEMANTICS
           * eapply CoFix. 3,4:eauto. eapply history_tl_refines; eauto.
             setoid_rewrite <-Env.dom_lb_map; eauto.
     Qed.
-
-    Ltac ndup_l H :=
-      rewrite app_assoc in H;
-      apply NoDupMembers_app_l in H; auto.
-    Ltac ndup_r H :=
-      rewrite Permutation_swap in H;
-      apply NoDupMembers_app_r in H; auto.
 
     (** ** more `mask` properties *)
 
@@ -3973,7 +3964,7 @@ Module Type LCLOCKSEMANTICS
       rewrite Forall2_map_2, flat_map_concat_map.
       apply Forall2_concat. rewrite Forall2_map_1.
       eapply Forall2_impl_In; [|eauto]; intros.
-      eapply sc_exp'' in H2; eauto. 2-4:eapply Forall_forall; eauto.
+      eapply sc_exp'' in H2; eauto. 2-3:eapply Forall_forall; eauto.
       rewrite Forall2_map_2 in H2; eauto.
     Qed.
   End sc_inv.
@@ -4223,7 +4214,7 @@ Module Type LCLOCKSEMANTICS
         { rewrite <-4 map_fst_idty. apply incl_map; auto. }
         econstructor; eauto.
         + assert (Hsem2:=H9).
-          eapply sem_exp_sem_exp_ck with (env:=envck) in Hsem2. 4:eauto using sc_vars_refines. 1-6:eauto using Sem.sem_exp_refines.
+          eapply sem_exp_sem_exp_ck with (env:=envck) in Hsem2. 4:eauto using sc_vars_refines. 1-5:eauto using Sem.sem_exp_refines.
           rewrite idcaus_app in Hnd3. solve_NoDup_app.
         + intros k.
           eapply sem_blocks_sem_blocks_ck with (envck:=envck) (envty:=envty) (H:=mask_hist k r H0) in H; eauto.
@@ -4257,7 +4248,7 @@ Module Type LCLOCKSEMANTICS
 
         econstructor; eauto.
         + assert (Hsem2:=H15).
-          eapply sem_exp_sem_exp_ck in Hsem2. 4:eauto using sc_vars_refines. 1-6:eauto using Sem.sem_exp_refines.
+          eapply sem_exp_sem_exp_ck in Hsem2. 4:eauto using sc_vars_refines. 1-5:eauto using Sem.sem_exp_refines.
           rewrite idcaus_app in Hnd3. solve_NoDup_app.
         + eapply Forall_forall; intros.
           repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
@@ -4846,6 +4837,7 @@ Module Type LCLOCKSEMANTICS
       + setoid_rewrite <-sem_node_ck_cons_iff...
         eapply Hglob.
         setoid_rewrite sem_node_ck_cons_iff...
+        congruence.
     Qed.
 
   End sem_ref.

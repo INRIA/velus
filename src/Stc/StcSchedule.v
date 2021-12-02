@@ -100,7 +100,6 @@ Module Type STCSCHEDULE
       induction l, l'; simpl;
         try (now inversion_clear 1; auto).
       intros * HH; cases_eqn Hoc; inv HH.
-      erewrite IHl; eauto.
     Qed.
 
     Lemma ocombine_length:

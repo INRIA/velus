@@ -98,7 +98,7 @@ let print_obc_if prog =
   print_if obc_destination Interfacelib.PrintObc.print_program
     (Interface.Obc.Syn.rev_prog prog)
 
-let add_builtin p (name, (out, ins, b)) =
+let add_builtin p (name, (out, ins, _)) =
   let env = Env.empty in
   let id = Camlcoq.intern_string name in
   let id' = Camlcoq.coqstring_of_camlstring name in
@@ -109,7 +109,6 @@ let add_builtin p (name, (out, ins, b)) =
   let ef =
     if name = "malloc" then AST.EF_malloc else
     if name = "free" then AST.EF_free else
-    if Str.string_match C2C.re_runtime name 0 then AST.EF_runtime(id', sg) else
     if Str.string_match C2C.re_builtin name 0
     && List.mem_assoc name C2C.builtins.builtin_functions
     then AST.EF_builtin(id', sg)
@@ -118,4 +117,5 @@ let add_builtin p (name, (out, ins, b)) =
   { p with Ctypes.prog_defs = decl :: p.Ctypes.prog_defs }
 
 let add_builtins p =
-  List.fold_left add_builtin p C2C.builtins_generic.builtin_functions
+  let p = List.fold_left add_builtin p (C2C.builtins_generic.builtin_functions) in
+  { p with Ctypes.prog_defs = C2C.add_helper_functions p.prog_defs }

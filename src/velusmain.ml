@@ -84,7 +84,7 @@ let reparse toks =
 let parse toks =
   Diagnostics.reset();
   match LustreParser.translation_unit_file (Camlcoq.Nat.of_int 10000) toks with
-  | LustreParser.MenhirLibParser.Inter.Fail_pr -> (reparse toks; exit 1)
+  | LustreParser.MenhirLibParser.Inter.Fail_pr_full _ -> (reparse toks; exit 1)
   | LustreParser.MenhirLibParser.Inter.Timeout_pr -> assert false
   | LustreParser.MenhirLibParser.Inter.Parsed_pr (ast, _) -> ast
 
@@ -181,7 +181,7 @@ let _ =
                      Machine.x86_64
                    else
                      if Configuration.abi = "macosx"
-                     then Machine.x86_32_macosx
+                     then Machine.x86_32_macos
                      else if Configuration.system = "bsd"
                      then Machine.x86_32_bsd
                      else Machine.x86_32

@@ -501,10 +501,10 @@ Module Type TRANSLATION
       apply in_map, in_app; auto.
   Qed.
 
-  Program Instance translate_node_transform_unit: TransformUnit node SynStc.system :=
+  Global Program Instance translate_node_transform_unit: TransformUnit node SynStc.system :=
     { transform_unit := translate_node }.
 
-  Program Instance global_program_without_units : TransformProgramWithoutUnits global SynStc.program :=
+  Global Program Instance global_program_without_units : TransformProgramWithoutUnits global SynStc.program :=
     { transform_program_without_units := fun g => SynStc.Program g.(enums) [] }.
 
   Definition translate : global -> SynStc.program := transform_units.

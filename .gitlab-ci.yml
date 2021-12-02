@@ -3,6 +3,8 @@ variables:
 
 build-job:
   stage: build
+  only:
+    - basile-thesis
   script:
     - echo "Hello"
     - ./configure ia32-linux

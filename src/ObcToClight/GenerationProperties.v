@@ -125,7 +125,6 @@ Remark translate_param_fst:
 Proof.
   intro; rewrite map_map.
   induction xs as [|(x, t)]; simpl; auto.
-  now rewrite IHxs.
 Qed.
 
 Remark translate_obj_fst:
@@ -133,11 +132,10 @@ Remark translate_obj_fst:
 Proof.
   intro; rewrite map_map.
   induction objs as [|(o, k)]; simpl; auto.
-  now rewrite IHobjs.
 Qed.
 
-Lemma NoDupMembers_make_members:
-  forall c, NoDupMembers (make_members c).
+Lemma NoDupMembers_make_members : forall c,
+    NoDupMembers (map (fun '(y, t) => (y, translate_type t)) (c_mems c) ++ map translate_obj (c_objs c)).
 Proof.
   intro; unfold make_members.
   pose proof (c_nodup c) as Nodup.
@@ -147,13 +145,20 @@ Proof.
 Qed.
 Hint Resolve NoDupMembers_make_members.
 
+Corollary NoDupMembers_make_members' : forall c,
+    NoDup (map name_member (make_members c)).
+Proof.
+  intro. unfold make_members.
+  rewrite mk_members_names, <-fst_NoDupMembers; eauto.
+Qed.
+Hint Resolve NoDupMembers_make_members'.
+
 Lemma glob_bind_vardef_fst:
   forall xs env volatile,
     map fst (map (vardef env volatile) (map glob_bind xs)) =
     map (fun xt => prefix_glob (fst xt)) xs.
 Proof.
   induction xs as [|(x, t)]; simpl; intros; auto.
-  now rewrite IHxs.
 Qed.
 
 Lemma NoDup_prefix_glob:
@@ -503,14 +508,14 @@ Proof.
     rewrite in_map_iff; intros ((y, d) & E & Hin).
     simpl in E; subst.
     apply in_concat in Hin; destruct Hin as (l' & Hin' & Hin).
-    rewrite in_map_iff in Hin; destruct Hin as (c' & E & Hin); subst l'.
-    rewrite in_map_iff in Hin'; destruct Hin' as (m' & E & Hin').
+    apply in_map_iff in Hin' as (c' & E & Hin'); subst l'.
+    apply in_map_iff in Hin as (m' & E & Hin).
     unfold translate_method in E; inversion E as [[Eq E']]; clear E E'.
     pose proof (c_good c); pose proof (c_good c').
     apply prefix_fun_injective in Eq; try tauto.
     destruct Eq as [Eq].
-    apply in_rev in Hin.
-    eapply Forall_forall in Hin; eauto.
+    apply in_rev in Hin'.
+    eapply Forall_forall in Hin'; eauto.
     congruence.
 Qed.
 
@@ -1168,8 +1173,9 @@ Definition wf_struct (ge: composite_env) '((x, t): ident * Ctypes.type) : Prop :
     t = Tstruct id noattr
     /\ ge ! id = Some co
     /\ co_su co = Struct
-    /\ NoDupMembers (co_members co)
-    /\ forall x' t', In (x', t') (co_members co) ->
+    /\ (exists flds, co_members co = mk_members flds)
+    /\ NoDup (map name_member (co_members co))
+    /\ forall x' t', In (Member_plain x' t') (co_members co) ->
                exists chunk, access_mode t' = By_value chunk
                         /\ (Memdata.align_chunk chunk | alignof ge t').
 
@@ -1483,7 +1489,7 @@ Section TranslateOk.
         /\ co_su co = Struct
         /\ co_members co = make_members owner
         /\ attr_alignas (co_attr co) = None
-        /\ NoDupMembers (co_members co)
+        /\ NoDup (map name_member (co_members co))
         /\ co.(co_sizeof) <= Ptrofs.max_unsigned.
     Proof.
       inv_trans TRANSL with structs funs E.
@@ -1504,7 +1510,7 @@ Section TranslateOk.
       edestruct build_composite_env_charact as (co & Hco & Hmembers & Hattr & ?); eauto.
       exists co; repeat split; auto.
       - rewrite Hattr; auto.
-      - rewrite Hmembers. apply NoDupMembers_make_members.
+      - rewrite Hmembers. apply NoDupMembers_make_members'.
       - eapply check_size_env_spec, Forall_forall in SIZE; eauto; simpl in SIZE.
         unfold check_size_co in SIZE; rewrite Hco in SIZE.
         cases_eqn Le.
@@ -1522,9 +1528,9 @@ Section TranslateOk.
           exists co,
             gcenv ! (prefix_fun callerid ownerid) = Some co
             /\ co.(co_su) = Struct
-            /\ co.(co_members) = map translate_param caller.(m_out)
+            /\ co.(co_members) = mk_members (map translate_param caller.(m_out))
             /\ co.(co_attr) = noattr
-            /\ NoDupMembers (co_members co)
+            /\ NoDup (map name_member (co_members co))
             /\ co.(co_sizeof) <= Ptrofs.max_unsigned.
         Proof.
           inv_trans TRANSL with structs funs E.
@@ -1532,7 +1538,7 @@ Section TranslateOk.
           assert (In (Composite
                         (prefix_fun callerid ownerid)
                         Struct
-                        (map translate_param caller.(m_out))
+                        (mk_members (map translate_param caller.(m_out)))
                         noattr) (concat structs)).
           { unfold translate_class in E.
             apply split_map in E.
@@ -1562,7 +1568,7 @@ Section TranslateOk.
           }
           edestruct build_composite_env_charact as (co & Hco & Hmembers & ? & ?); eauto.
           exists co; repeat (split; auto).
-          - rewrite Hmembers, fst_NoDupMembers, translate_param_fst, <- fst_NoDupMembers.
+          - rewrite Hmembers. rewrite mk_members_names, translate_param_fst, <-fst_NoDupMembers.
             apply (m_nodupout caller).
           - eapply check_size_env_spec, Forall_forall in SIZE; eauto; simpl in SIZE.
             unfold check_size_co in SIZE; rewrite Hco in SIZE.
@@ -1573,7 +1579,7 @@ Section TranslateOk.
         Remark output_match:
           forall outco,
             gcenv ! (prefix_fun callerid ownerid) = Some outco ->
-            map translate_param caller.(m_out) = outco.(co_members).
+            mk_members (map translate_param caller.(m_out)) = outco.(co_members).
         Proof.
           intros * Houtco.
           edestruct global_out_struct as (outco' & Houtco' & Eq); eauto.
@@ -1855,11 +1861,11 @@ Section TranslateOk.
     * simpl; change (prog_comp_env tprog) with gcenv.
       setoid_rewrite Hco; auto.
     * exists (prefix_fun (m_name callee) (c_name c)), co.
-      repeat split; auto.
+      repeat split; eauto.
       rewrite Hmembers.
       intros * Hinxt; unfold translate_param in Hinxt.
-      apply in_map_iff in Hinxt;
-        destruct Hinxt as ((x, t) & Eq & Hinxt); inv Eq; eauto.
+      apply in_map_iff in Hinxt as ((x, t) & Eq & Hinxt); inv Eq; eauto.
+      apply in_map_iff in Hinxt as ((x, t) & Eq & Hinxt); inv Eq; eauto.
   Qed.
 
   Lemma find_main_class_sig: {c_prog_main | find_class main_node prog = Some c_prog_main}.

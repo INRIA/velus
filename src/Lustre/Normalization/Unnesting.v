@@ -1,7 +1,6 @@
 From Coq Require Import List Sorting.Permutation.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Omega.
 
 From Coq Require Import Setoid Morphisms.
 
@@ -1026,9 +1025,9 @@ Module Type UNNESTING
       destruct e; unfold unnest_rhs in Hnorm;
         try (solve [right; eapply unnest_exp_length; eauto]);
         try (destruct o); repeat inv_bind; auto.
-    1,2,3,4,5:right; inv Hwt;
+    1,2:right; inv Hwt;
       eapply unnest_exps_length in H; eauto.
-    1,2,3,4:eapply unnest_exps_length in H0; eauto.
+    1,2:eapply unnest_exps_length in H0; eauto.
     eapply unnest_fby_length; eauto; congruence.
     eapply unnest_arrow_length; eauto; congruence.
   Qed.
@@ -1189,7 +1188,6 @@ Module Type UNNESTING
       remember (concat x0) as l0.
       clear x0 H H2 H5 Heql0. revert l0 Hlen.
       induction tys; intros l0 Hlen; destruct l0; simpl in *; try congruence; auto.
-      f_equal; auto.
     - (* merge *)
       destruct is_control; repeat inv_bind.
       + specialize (unnest_merge_annot p x tys nck) as Hf.
@@ -1330,14 +1328,14 @@ Module Type UNNESTING
       try (solve [eapply unnest_exp_annot in Hnorm; eauto]).
     - (* fby *)
       repeat inv_bind. inv Hwt.
-      1,2:eapply unnest_fby_annot; eauto.
-      1,3:eapply unnest_exps_length in H; eauto; congruence.
-      1,2:eapply unnest_exps_length in H0; eauto; congruence.
+      eapply unnest_fby_annot; eauto.
+      eapply unnest_exps_length in H; eauto; congruence.
+      eapply unnest_exps_length in H0; eauto; congruence.
     - (* arrow *)
       repeat inv_bind. inv Hwt.
-      1,2:eapply unnest_arrow_annot; eauto.
-      1,3:eapply unnest_exps_length in H; eauto; congruence.
-      1,2:eapply unnest_exps_length in H0; eauto; congruence.
+      eapply unnest_arrow_annot; eauto.
+      eapply unnest_exps_length in H; eauto; congruence.
+      eapply unnest_exps_length in H0; eauto; congruence.
     - (* app *)
       repeat inv_bind; simpl; rewrite app_nil_r; reflexivity.
   Qed.
@@ -2397,16 +2395,16 @@ Module Type UNNESTING
       induction H; intros xs Hlen; simpl in *; try constructor.
       + destruct xs; simpl in *; auto. congruence.
       + inv H...
-        1,2:destruct xs; simpl in *; try omega; constructor...
+        1,2:destruct xs; simpl in *; try lia; constructor...
         simpl in Hlen. rewrite app_length in Hlen.
         rewrite length_annot_numstreams in Hlen.
         specialize (normalized_cexp_numstreams _ H1) as Hlen'.
         rewrite Hlen' in *. simpl.
-        destruct xs... simpl in Hlen. omega.
+        destruct xs... simpl in Hlen. lia.
       + eapply IHForall.
         rewrite skipn_length.
         rewrite Hlen. simpl. rewrite app_length.
-        rewrite length_annot_numstreams. omega.
+        rewrite length_annot_numstreams. lia.
     - eapply unnest_rhss_unnested_eq in H; eauto.
   Qed.
 

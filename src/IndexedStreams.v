@@ -157,7 +157,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
       all_absent (map f l) = all_absent l.
   Proof.
     unfold all_absent; induction l; intros; simpl; auto.
-    f_equal; auto.
   Qed.
 
   Lemma present_list_spec:
@@ -386,7 +385,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
         by now (unfold all_absent; rewrite map_length).
     clear Wf; revert Length; generalize (xss n) as l, (all_absent (xss 0)) as l'.
     induction l, l'; inversion 1; simpl; auto.
-    f_equal; auto.
   Qed.
 
   Lemma absent_list_mask:

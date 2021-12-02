@@ -104,7 +104,7 @@ Module Type STCCLOCKING
   Hint Unfold wc_env wc_system.
   Hint Resolve Forall_nil.
 
-  Instance wc_trconstr_Proper:
+  Global Instance wc_trconstr_Proper:
     Proper (@eq program ==> @Permutation (ident * clock) ==> @eq trconstr ==> iff)
            wc_trconstr.
   Proof.

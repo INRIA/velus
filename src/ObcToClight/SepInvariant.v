@@ -51,7 +51,7 @@ Section Staterep.
   Definition staterep_mems (cls: class) (me: menv) (b: block) (ofs: Z) '((x, ty): ident * type) :=
     match field_offset ge x (make_members cls) with
     | Errors.OK d =>
-	    contains_w (type_to_chunk ty) b (ofs + d) (match_value (find_val x me))
+	    contains_w (type_to_chunk ty) b (ofs + fst d) (match_value (find_val x me))
     | Errors.Error _ => sepfalse
     end.
 
@@ -78,14 +78,14 @@ Section Staterep.
                     (fun '(p, (clsnm, me, ofs)) staterep =>
                        match find_class_dec clsnm p with
                        | None => sepfalse
-                       | Some (exist cl_p' E) =>
+                       | Some (exist _ cl_p' E) =>
                          let (cl ,p') := cl_p' in
                          sepall (staterep_mems cl me b ofs) cl.(c_mems)
                          **
                          sepall (fun '((i, c): ident * ident) =>
                                    match field_offset ge i (make_members cl) with
                                    | Errors.OK d =>
-                                     staterep (snd cl_p', (c, instance_match i me, ofs + d)) _
+                                     staterep (snd cl_p', (c, instance_match i me, ofs + fst d)) _
                                    | Errors.Error _ => sepfalse
                                    end) cl.(c_objs)
                        end) (p, (clsnm, me, ofs))).
@@ -98,7 +98,7 @@ Section Staterep.
              (p: program) (cls: class) (me: menv) (b: block) (ofs: Z) '((i, c): ident * ident) : massert :=
     match field_offset ge i (make_members cls) with
     | Errors.OK d =>
-      staterep p c (instance_match i me) b (ofs + d)
+      staterep p c (instance_match i me) b (ofs + fst d)
     | Errors.Error _ => sepfalse
     end.
 
@@ -187,12 +187,12 @@ Section StructInBounds.
   Hypothesis env_consistent: composite_env_consistent env.
 
   Definition struct_in_bounds (min max ofs: Z) (flds: Ctypes.members) :=
-    min <= ofs /\ ofs + sizeof_struct env 0 flds <= max.
+    min <= ofs /\ ofs + sizeof_struct env flds <= max.
 
   Lemma struct_in_bounds_sizeof:
     forall id co,
       env!id = Some co ->
-      struct_in_bounds 0 (sizeof_struct env 0 (co_members co)) 0 (co_members co).
+      struct_in_bounds 0 (sizeof_struct env (co_members co)) 0 (co_members co).
   Proof.
     intros. unfold struct_in_bounds. auto with zarith.
   Qed.
@@ -209,16 +209,18 @@ Section StructInBounds.
 
   Lemma struct_in_bounds_field:
     forall min max ofs flds id d,
-      struct_in_bounds min max ofs flds ->
-      field_offset env id flds = Errors.OK d ->
-      min <= ofs + d <= max.
+      struct_in_bounds min max ofs (mk_members flds) ->
+      field_offset env id (mk_members flds) = Errors.OK d ->
+      min <= ofs + fst d <= max.
   Proof.
     unfold struct_in_bounds.
     intros * (Hmin & Hmax) Hfo.
-    destruct (field_offset_type _ _ _ _ Hfo) as (ty & Hft).
+    destruct (field_offset_type _ _ _ _ Hfo) as (ty & Hft). destruct d.
+    pose proof (field_offset_mk_members _ _ _ _ _ Hfo); subst.
     destruct (field_offset_in_range _ _ _ _ _ Hfo Hft) as (H0d & Hsize).
-    split; auto with zarith.
-    apply Z.le_trans with (2:=Hmax).
+    simpl in *.
+    split; auto; try lia.
+    etransitivity; eauto.
     apply Z.add_le_mono; auto with zarith.
     apply Z.le_trans with (2:=Hsize).
     rewrite Zplus_0_r_reverse at 1.
@@ -227,18 +229,19 @@ Section StructInBounds.
 
   Lemma struct_in_struct_in_bounds:
     forall min max ofs flds id sid d co a,
-      struct_in_bounds min max ofs flds ->
-      field_offset env id flds = Errors.OK d ->
-      field_type id flds = Errors.OK (Tstruct sid a) ->
+      struct_in_bounds min max ofs (mk_members flds) ->
+      field_offset env id (mk_members flds) = Errors.OK d ->
+      field_type id (mk_members flds) = Errors.OK (Tstruct sid a) ->
       env!sid = Some co ->
       co_su co = Struct ->
-      struct_in_bounds min max (ofs + d) (co_members co).
+      struct_in_bounds min max (ofs + fst d) (co_members co).
   Proof.
     unfold struct_in_bounds.
-    intros * (Hmin & Hmax) Hfo Hft Henv Hsu.
+    intros * (Hmin & Hmax) Hfo Hft Henv Hsu. destruct d.
+    pose proof (field_offset_mk_members _ _ _ _ _ Hfo); subst.
     apply field_offset_in_range with (1:=Hfo) in Hft.
     destruct Hft as (Hd0 & Hsizeof).
-    split; auto with zarith.
+    simpl in *. split; try lia.
     apply Zplus_le_compat_l with (p:=ofs) in Hsizeof.
     apply Z.le_trans with (1:=Hsizeof) in Hmax.
     apply Z.le_trans with (2:=Hmax).
@@ -268,7 +271,7 @@ Section StateRepProperties.
              /\ co_su co = Struct
              /\ co_members co = make_members cls
              /\ attr_alignas (co_attr co) = None
-             /\ NoDupMembers (co_members co)
+             /\ NoDup (map name_member (co_members co))
              /\ co.(co_sizeof) <= Ptrofs.max_unsigned).
 
   Lemma struct_in_struct_in_bounds':
@@ -279,7 +282,7 @@ Section StateRepProperties.
       In (o, c) cls.(c_objs) ->
       find_class c prog' = Some (cls', prog'') ->
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d
-           /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
+           /\ struct_in_bounds gcenv min max (ofs + fst d) (make_members cls').
   Proof.
     intros * WTp Hfc Hsb Hin Hfc'.
     destruct (c_objs_field_offset gcenv _ _ _ Hin) as (d & Hfo).
@@ -290,10 +293,10 @@ Section StateRepProperties.
     eapply wt_program_find_unit_chained with (1:=WTp) (2:=Hfc) in Hfc'.
     destruct (make_members_co _ _ _ Hfc')
       as (cls'_co & Hg' & Hsu' & Hmem' & Hattr' & Hndup').
-    rewrite <-Hmem' in *.
-    pose proof (field_offset_type _ _ _ _ Hfo) as Hty.
-    destruct Hty as (ty & Hty).
+    rewrite <-Hmem' in *. destruct d.
+    pose proof (field_offset_type _ _ _ _ Hfo) as (ty & Hty).
     eapply struct_in_struct_in_bounds with (a:=noattr); eauto.
+    2:setoid_rewrite <-Hmem; eauto. rewrite Hmem in Hsb; auto.
     clear make_members_co.
     (* Show that the field_type is a Tstruct *)
     pose proof cls.(c_nodup) as Hnodup.
@@ -351,10 +354,10 @@ Section StateRepProperties.
       as (co & Hg & Hsu & Hmem & Hattr & Hndup & ?).
 
     (* Develop some facts about member alignment. *)
-    pose proof (co_members_alignof _ _ (gcenv_consistent _ _ Hg) Hattr)
+    pose proof (co_members_alignof _ _ _ Hmem (gcenv_consistent _ _ Hg) Hattr)
       as Hcoal.
     rewrite Hmem in Hcoal. unfold make_members in Hcoal.
-    apply Forall_app in Hcoal as [Hcoal1 Hcoal2].
+    apply Forall_map, Forall_app in Hcoal as [Hcoal1 Hcoal2].
     simpl in Halign. rewrite Hg, align_noattr in Halign.
     assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
 
@@ -362,63 +365,59 @@ Section StateRepProperties.
     rewrite staterep_def, Hfind; simpl.
     unfold staterep_mems, staterep_objs.
     rewrite Hg, <-Hmem.
-    rewrite split_range_fields
-      with (1:=gcenv_consistent) (2:=Hg) (3:=Hsu) (4:=Hndup).
-    rewrite Hmem at 2. unfold make_members.
+    erewrite split_range_fields. 2-6:eauto.
     rewrite sepall_app.
     apply sep_imp'.
 
     - (* Divide up the memory sub-block for cls.(c_mems). *)
       pose proof (field_translate_mem_type _ _ _ _ Hfind) as Htype.
-      clear Hcoal2.
-      induction cls'.(c_mems) as [|(x, ty) ms]; auto; simpl.
-      apply Forall_cons2 in Hcoal1 as [Hcoal1 Hcoal2].
-      apply sep_imp'; auto with datatypes.
-      destruct (field_offset gcenv x (co_members co)) eqn:Hfo; auto.
+      rewrite Hmem; unfold make_members.
+      rewrite sepall_map. apply sepall_weakenp.
+      intros (?&?) Hin; simpl.
+      destruct (field_offset gcenv _ _) eqn:Hfo; auto.
       setoid_rewrite Env.gempty.
       rewrite sizeof_translate_type_chunk; eauto.
-      apply range_contains'; auto with mem.
-      apply field_offset_aligned with (ty:=translate_type ty) in Hfo.
-      + apply Z.divide_add_r; eauto.
-      + rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
+      apply range_contains'; auto with mem. destruct p0.
+      eapply field_offset_aligned' in Hfo; eauto.
+      apply Z.divide_add_r; eauto.
+      rewrite Forall_map in Hcoal1. eapply Forall_forall in Hcoal1; eauto; simpl in *.
+      etransitivity; eauto.
 
     - (* Divide up the memory sub-block for cls.(c_objs). *)
       pose proof (field_translate_obj_type _ _ _ _ Hfind) as Htype.
       rewrite <-Hmem in Htype.
       edestruct wt_program_find_unit as [WTc WTp']; eauto.
       destruct WTc as [Ho Hm]; clear Hm.
-      induction cls'.(c_objs) as [|[i c] os]; auto; simpl.
-      apply sep_imp'.
-      + inversion_clear Ho as [|?? Hfind'].
-        apply Forall_cons2 in Hcoal2 as [Hcoal2 Hcoal3].
-        specialize (Htype i c (in_eq _ _)).
-        simpl in *.
-        destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
-        rewrite instance_match_empty.
-        assert (forall clsnm cls prog',
-                    find_class clsnm prog'' = Some (cls, prog') ->
-                    exists co : composite,
-                      gcenv ! clsnm = Some co /\
-                      co_su co = Struct /\
-                      co_members co = make_members cls /\
-                      attr_alignas (co_attr co) = None /\
-                      NoDupMembers (co_members co) /\
-                      co_sizeof co <= Ptrofs.max_unsigned) as make_members_co'.
-        { intros; eapply make_members_co.
-          eapply wt_program_find_unit_chained; eauto.
-        }
-        specialize (IH _ _ _ Hfind make_members_co' WTp' _ Hfind' (lo + z)).
-        apply not_None_is_Some in Hfind' as ((c' & prog''') & Hfind').
-        destruct (make_members_co' _ _ _ Hfind')
-          as (co' & Hg' & Hsu' & Hmem' & Hattr' & Hnodup').
-        rewrite Hg', align_noattr in *.
-        apply IH.
-        apply Z.divide_add_r; eauto.
-        eapply field_offset_aligned in Hfo; eauto.
-        apply Z.divide_trans with (2:=Hfo).
-        simpl. rewrite Hg', align_noattr.
-        apply Z.divide_refl.
-      + now inv Ho; apply Forall_cons2 in Hcoal2; intuition.
+      rewrite Hmem; unfold make_members.
+      rewrite sepall_map. apply sepall_weakenp.
+      intros (?&?) Hin; simpl.
+      destruct (field_offset gcenv _ _) eqn:Hfo; auto.
+      rewrite instance_match_empty.
+      specialize (Htype i i0 Hin).
+      assert (forall clsnm cls prog',
+                 find_class clsnm prog'' = Some (cls, prog') ->
+                 exists co : composite,
+                   gcenv ! clsnm = Some co /\
+                     co_su co = Struct /\
+                     co_members co = make_members cls /\
+                     attr_alignas (co_attr co) = None /\
+                     NoDup (map name_member (co_members co)) /\
+                     co_sizeof co <= Ptrofs.max_unsigned) as make_members_co'.
+      { intros; eapply make_members_co.
+        eapply wt_program_find_unit_chained; eauto.
+      }
+      eapply Forall_forall in Ho; eauto.
+      assert (Hfind':=Ho). apply not_None_is_Some in Hfind' as ((c' & prog''') & Hfind').
+      destruct (make_members_co' _ _ _ Hfind')
+        as (co' & Hg' & Hsu' & Hmem' & Hattr' & Hnodup').
+      simpl in *. rewrite Hg'.
+      eapply IH with (lo:=lo + fst p0) in make_members_co'; eauto.
+      rewrite Hg' in make_members_co'; eauto.
+      rewrite Forall_map in Hcoal2. eapply Forall_forall in Hcoal2; eauto; simpl in *.
+      apply Z.divide_add_r; eauto.
+      destruct p0. eapply field_offset_aligned' in Hfo; eauto. 2:rewrite Hmem in Htype; eauto.
+      simpl in *.
+      rewrite Hg', align_noattr in *; auto.
   Qed.
 
   Opaque sepconj.
@@ -430,7 +429,7 @@ Section StateRepProperties.
       In (x, ty) c.(c_mems) ->
       find_val x me = Some v ->
       field_offset gcenv x (make_members c) = Errors.OK d ->
-      Clight.deref_loc (translate_type ty) m b (Ptrofs.repr (ofs + d)) (value_to_cvalue v).
+      Clight.deref_loc (translate_type ty) m b (Ptrofs.repr (ofs + fst d)) Full (value_to_cvalue v).
   Proof.
     intros * Find Hm Hin Hv Hoff.
     rewrite staterep_def, Find in Hm; simpl in Hm.
@@ -454,7 +453,7 @@ Section StateRepProperties.
       m |= staterep gcenv prog c me b ofs ** P ->
       In (x, ty) (c_mems cls) ->
       exists d, field_offset gcenv x (make_members cls) = Errors.OK d
-           /\ 0 <= ofs + d <= Ptrofs.max_unsigned.
+           /\ 0 <= ofs + fst d <= Ptrofs.max_unsigned.
   Proof.
     intros * Find Hm Hin.
     rewrite staterep_def, Find in Hm; simpl in Hm.
@@ -465,7 +464,7 @@ Section StateRepProperties.
     clear ws xs.
     unfold staterep_mems in Hm.
     destruct (field_offset gcenv x (make_members cls)).
-    - exists z; split; auto.
+    - exists p; split; auto.
       eapply contains_no_overflow; eauto.
     - contradict Hm.
   Qed.
@@ -479,7 +478,7 @@ Section StateRepProperties.
       <-> exists objs objs' d,
           c.(c_objs) = objs ++ (i, c') :: objs'
           /\ field_offset gcenv i (make_members c) = Errors.OK d
-          /\ m |= staterep gcenv prog c' (instance_match i me) b (ofs + d)
+          /\ m |= staterep gcenv prog c' (instance_match i me) b (ofs + fst d)
                   ** sepall (staterep_mems gcenv c me b ofs) c.(c_mems)
                   ** sepall (staterep_objs gcenv prog c me b ofs) (objs ++ objs')
                   ** P.
@@ -531,20 +530,20 @@ Section Fieldsrep.
   Definition fieldrep (ve: venv) (flds: members) (b: block) '((x, ty) : ident * Ctypes.type) : massert :=
     match field_offset ge x flds, access_mode ty with
     | Errors.OK d, By_value chunk =>
-      contains chunk b d (match_value (Env.find x ve))
+      contains chunk b (fst d) (match_value (Env.find x ve))
     | _, _ => sepfalse
     end.
 
-  Definition fieldsrep (ve: venv) (flds: members) (b: block) : massert :=
-    sepall (fieldrep ve flds b) flds.
+  Definition fieldsrep (ve: venv) (ms : members) (b: block) : massert :=
+    sepall (fun m => fieldrep ve ms b (name_member m, type_member m)) ms.
 
   Lemma fieldsrep_deref_mem:
     forall m ve flds b x ty d v P,
       m |= fieldsrep ve flds b ** P ->
-      In (x, ty) flds ->
+      In (Member_plain x ty) flds ->
       Env.find x ve = Some v ->
       field_offset ge x flds = Errors.OK d ->
-      Clight.deref_loc ty m b (Ptrofs.repr d) (value_to_cvalue v).
+      Clight.deref_loc ty m b (Ptrofs.repr (fst d)) Full (value_to_cvalue v).
   Proof.
     intros * Hm Hin Hv Hoff.
     unfold fieldsrep in Hm.
@@ -552,7 +551,7 @@ Section Fieldsrep.
     destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
     do 2 apply sep_proj1 in Hm. clear ws xs.
-    unfold fieldrep in Hm; rewrite Hoff in Hm. clear Hoff.
+    unfold fieldrep in Hm; simpl in Hm; rewrite Hoff in Hm. clear Hoff.
     destruct (access_mode ty) eqn:Haccess; try contradiction.
     apply loadv_rule in Hm; auto with mem.
     destruct Hm as [v' [Hloadv Hmatch]].
@@ -568,10 +567,10 @@ Section Fieldsrep.
   Proof.
     intros. apply footprint_perm_sepall.
     intros x b'' lo' hi'.
-    destruct x as [x ty]; unfold fieldrep.
-    destruct (field_offset ge x flds).
+    unfold fieldrep.
+    destruct (field_offset ge (name_member x) flds).
     2:now apply footprint_perm_sepfalse.
-    destruct (access_mode ty);
+    destruct (access_mode (type_member x));
       try apply footprint_perm_sepfalse.
     apply footprint_perm_contains.
   Qed.
@@ -581,10 +580,10 @@ Section Fieldsrep.
       decidable_footprint (fieldsrep ve flds b).
   Proof.
     intros. apply decidable_footprint_sepall.
-    intro x; destruct x as [x ty]; unfold fieldrep.
-    destruct (field_offset ge x flds).
+    intro m; unfold fieldrep.
+    destruct (field_offset ge (name_member m) flds).
     2:now apply decidable_footprint_sepfalse.
-    destruct (access_mode ty);
+    destruct (access_mode (type_member m));
       try apply decidable_footprint_sepfalse.
     apply decidable_footprint_contains.
   Qed.
@@ -595,17 +594,17 @@ Section Fieldsrep.
       (forall x ty, In (x, ty) flds ->
                exists chunk, access_mode ty = By_value chunk
                         /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      sepall (field_range ge flds b 0) flds <-*-> fieldsrep vempty flds b.
+      sepall (field_range ge flds b 0) flds <-*-> fieldsrep vempty (mk_members flds) b.
   Proof.
     intros * Hndups Hchunk.
     unfold fieldsrep.
+    unfold mk_members. rewrite sepall_map.
     apply sepall_swapp.
-    intros fld Hin.
-    destruct fld as [x ty].
-    unfold field_range', fieldrep.
-    destruct (field_offset ge x flds) eqn:Hoff.
+    intros (x&ty) Hin.
+    unfold mk_members, field_range', fieldrep. simpl.
+    destruct (field_offset ge x _) as [(?&?)|] eqn:Hoff.
     2:reflexivity.
-    apply field_offset_aligned with (ty:=ty) in Hoff.
+    apply field_offset_aligned' with (ty:=ty) in Hoff.
     2:apply in_field_type with (1:=Hndups) (2:=Hin).
     destruct (Hchunk _ _ Hin) as [chunk [Haccess Halign]].
     rewrite Haccess.
@@ -616,27 +615,30 @@ Section Fieldsrep.
       now apply Z.divide_trans with (1:=Halign) (2:=Hoff).
       erewrite <-sizeof_by_value with (1:=Haccess); eauto.
     - simpl. now rewrite sizeof_by_value with (1:=Haccess).
-    - rewrite Env.gempty, sizeof_by_value with (1:=Haccess), Z.add_0_l.
+    - simpl. rewrite sizeof_by_value with (1:=Haccess); eauto.
       intros. now apply contains_range' in H.
       (* NB: requires "new" definition of contains *)
     - simpl. now rewrite sizeof_by_value with (1:=Haccess).
   Qed.
 
   Lemma fieldsrep_empty:
-    forall nm co b,
+    forall nm co flds b,
       ge!nm = Some co ->
       co_su co = Struct ->
-      NoDupMembers (co_members co) ->
-      (forall x ty, In (x, ty) (co_members co) ->
+      co_members co = mk_members flds ->
+      NoDup (map name_member (co_members co)) ->
+      (forall x ty, In (Member_plain x ty) (co_members co) ->
                exists chunk, access_mode ty = By_value chunk
                         /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
       range b 0 (co_sizeof co) -*> fieldsrep vempty (co_members co) b.
   Proof.
-    intros * Hco Hstruct Hndups Hchunk.
+    intros * Hco Hstruct Hmem Hndups Hchunk.
     rewrite split_range_fields
-    with (1:=ge_consistent) (2:=Hco) (3:=Hstruct) (4:=Hndups).
-    rewrite fieldsrep_empty' with (1:=Hndups) (2:=Hchunk).
-    reflexivity.
+    with (1:=ge_consistent) (2:=Hco) (3:=Hstruct) (4:=Hmem) (5:=Hndups).
+    erewrite Hmem, fieldsrep_empty'. reflexivity.
+    - rewrite Hmem, mk_members_names, <-fst_NoDupMembers in Hndups; auto.
+    - intros. eapply Hchunk.
+      rewrite Hmem. eapply in_map_iff; do 2 esplit; eauto. auto.
   Qed.
 
   Lemma fieldsrep_any_empty:
@@ -645,107 +647,64 @@ Section Fieldsrep.
   Proof.
     intros flds ve b.
     apply sepall_weakenp.
-    intros f Hin.
-    destruct f as [x ty]; unfold fieldrep.
-    destruct (field_offset ge x flds); try reflexivity.
-    destruct (access_mode ty); try reflexivity.
+    intros f Hin. unfold fieldrep.
+    destruct (field_offset ge (name_member f) flds); try reflexivity.
+    destruct (access_mode (type_member f)); try reflexivity.
     apply contains_imp.
     intros. now rewrite Env.gempty.
   Qed.
 
   Lemma fieldsrep_nodup:
     forall (xs: list (ident * type)) vs flds ve ob,
-      NoDup (map fst xs ++ map fst flds) ->
+      NoDup (map fst xs ++ map name_member flds) ->
       fieldsrep ve flds ob <-*-> fieldsrep (Env.adds (map fst xs) vs ve) flds ob.
   Proof.
     intros * Nodup.
     unfold fieldsrep.
     apply sepall_swapp.
-    intros (x, t) Hin; unfold fieldrep.
-    destruct (field_offset ge x flds); auto.
-    destruct (access_mode t); auto.
-    assert (~In x (map fst xs)) as Hnxs
-        by (rewrite Permutation.Permutation_app_comm in Nodup;
-            apply in_map with (f := fst) in Hin;
-            eapply NoDup_app_In in Nodup; eauto).
+    intros ? Hin; unfold fieldrep.
+    destruct (field_offset ge (name_member x) flds); auto.
+    destruct (access_mode (type_member x)); auto.
+    assert (~In (name_member x) (map fst xs)) as Hnxs.
+    { rewrite Permutation.Permutation_app_comm in Nodup.
+      eapply NoDup_app_In in Nodup; eauto. eapply in_map_iff; eauto. }
     rewrite Env.gsso; auto.
-  Qed.
-
-  Lemma fieldsrep_findvars:
-    forall ve xs vs b,
-      Forall2 (fun x v => Env.find x ve = v) (map fst xs) vs ->
-      fieldsrep ve xs b -*> fieldsrep (Env.adds_opt (map fst xs) vs vempty) xs b.
-  Proof.
-    unfold Env.adds_opt; simpl.
-    intros * Findvars.
-    unfold fieldsrep.
-    apply sepall_weakenp.
-    intros (x, t) Hin; unfold fieldrep.
-    destruct (field_offset ge x xs); auto.
-    destruct (access_mode t); auto.
-    apply contains_imp.
-    apply In_InMembers in Hin.
-    intros v Hmv.
-    revert vs Findvars.
-    induction xs as [|(x', t')], vs; simpl; intro Findvars;
-      try (now inversion Hin).
-    inversion_clear Findvars as [|? ? ? ? Find Findvars'].
-    unfold match_value.
-    destruct (ident_eqb x x') eqn: E.
-    - apply ident_eqb_eq in E; subst x'.
-      destruct o.
-      + rewrite Env.gss; auto.
-        rewrite Find in Hmv; auto.
-      + destruct (InMembers_dec x xs AST.ident_eq) as [Hin'|Hni].
-        * specialize (IHxs Hin' _ Findvars'). unfold match_value; auto.
-        * revert Hni. clear. revert vs. induction xs.
-          now simpl; rewrite Env.gempty.
-          intros vs Hnm. simpl.
-          apply NotInMembers_cons in Hnm as (Hnm & Hne).
-          destruct vs; simpl; try rewrite Env.gempty; simpl; auto.
-          specialize (IHxs vs Hnm).
-          destruct o; simpl; auto.
-          rewrite Env.gso; auto.
-    - apply ident_eqb_neq in E.
-      destruct Hin as [Eq|?].
-      + inv Eq; now contradict E.
-      + destruct o.
-        * rewrite Env.gso; auto.
-          apply IHxs; auto.
-        * apply IHxs; auto.
   Qed.
 
   Lemma fieldsrep_field_offset:
     forall m ve flds b P,
-      m |= fieldsrep ve flds b ** P ->
+      m |= fieldsrep ve (mk_members flds) b ** P ->
       forall x ty,
         In (x, ty) flds ->
-        exists d, field_offset ge x flds = Errors.OK d
-             /\ 0 <= d <= Ptrofs.max_unsigned.
+        exists d, field_offset ge x (mk_members flds) = Errors.OK d
+             /\ 0 <= fst d <= Ptrofs.max_unsigned.
   Proof.
     intros * Hm ? ? Hin.
     unfold fieldsrep in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
+    assert (In (Member_plain x ty) (mk_members flds)) as Hin'.
+    { eapply in_map_iff; do 2 esplit; eauto. auto. }
+    apply sepall_in in Hin' as [ws [xs [Hsplit Hin']]].
+    rewrite Hin' in Hm. clear Hsplit Hin'.
     do 2 apply sep_proj1 in Hm. clear ws xs; unfold fieldrep in *.
-    destruct (field_offset ge x flds), (access_mode ty);
+    simpl in Hm.
+    destruct (field_offset ge x (mk_members flds)), (access_mode ty);
       try now contradict Hm.
-    exists z; split; auto.
+    exists p; split; auto.
     eapply contains_no_overflow; eauto.
   Qed.
 
   Lemma fieldsrep_add:
     forall outb ve x v flds,
       ~ InMembers x flds ->
-      fieldsrep ve flds outb -*>
-      fieldsrep (Env.add x v ve) flds outb.
+      fieldsrep ve (mk_members flds) outb -*>
+      fieldsrep (Env.add x v ve) (mk_members flds) outb.
   Proof.
     intros * Hnin; unfold fieldsrep, fieldrep.
     rewrite sepall_swapp; eauto.
-    intros (x', t') Hx'.
+    intros ? Hx'; simpl.
     rewrite Env.gso; auto.
-    apply In_InMembers in Hx'.
+    apply in_map_iff in Hx' as ((?&?)&?&Hin); subst; simpl in *.
+    eapply In_InMembers in Hin.
     intro Hxx'; subst x.
     contradiction.
   Qed.
@@ -882,6 +841,7 @@ Section SubRep.
 
   Hint Resolve decidable_footprint_subrep_inst decidable_subrep footprint_perm_subrep_inst.
 
+  (* TODO what context *)
   Lemma range_wand_equiv:
     forall e,
       composite_env_consistent ge ->
@@ -900,7 +860,7 @@ Section SubRep.
       now rewrite <-sepemp_right.
     - inversion_clear Forall as [|? ? Hidco Forall']; subst;
         rename Forall' into Forall.
-      destruct Hidco as (id & co & Ht & Hco & ? & ? & ?); simpl in Ht.
+      destruct Hidco as (id & co & Ht & Hco & ? & (?&?) & Hnd & Hchunk); simpl in Ht.
       inversion_clear Nodup as [|? ? ? Notin Nodup'].
       unfold fieldsrep_of.
       rewrite Ht, Hco.
@@ -925,7 +885,7 @@ Section SubRep.
           by (change (x', t') with (drop_block (x', (b', t'))); apply in_map; auto).
         eapply Forall_forall in Forall; eauto.
         simpl in Forall.
-        destruct Forall as (id' & co' & Ht' & Hco' & ? & ? & ?).
+        destruct Forall as (id' & co' & Ht' & Hco' & ? & (?&?) & ? & ?).
         unfold fieldsrep_of.
         rewrite Ht', Hco'. simpl.
         rewrite Hco'.
@@ -1320,7 +1280,7 @@ Section MatchStates.
                (Findmth     : find_method callerid owner.(c_methods) = Some caller)
                (OutputMatch : forall outco , (1 < length (m_out caller))%nat ->
                                         ge ! (prefix_fun callerid ownerid) = Some outco ->
-                                        map translate_param caller.(m_out) = outco.(co_members)).
+                                        mk_members (map translate_param caller.(m_out)) = outco.(co_members)).
 
     Variable (v : value) (x : ident) (ty : type).
 
@@ -1333,45 +1293,45 @@ Section MatchStates.
       exists m' b co d,
         outb_co = Some (b, co)
         /\ field_offset ge x (co_members co) = Errors.OK d
-        /\ Clight.assign_loc ge (translate_type ty) m b (Ptrofs.repr d) (value_to_cvalue v) m'
+        /\ Clight.assign_loc ge (translate_type ty) m b (Ptrofs.repr (fst d)) Full (value_to_cvalue v) m'
         /\ m' |= outputrep owner caller (Env.add x v ve) le outb_co ** P.
     Proof.
       intros * Hin Len Hmem.
       apply outputrep_notnil in Hmem as (b & co & Hout & Hrep &?& Hco); auto.
       erewrite find_class_name, find_method_name in Hco; eauto.
       apply in_map with (f:=translate_param) in Hin.
-      erewrite OutputMatch in Hin; eauto.
       pose proof (m_nodupvars caller) as Nodup.
 
       (* get the updated memory *)
       apply sepall_in in Hin as [ws [ys [Hys Heq]]].
       unfold fieldsrep in Hrep.
       Local Opaque sepconj match_states.
-      rewrite Heq in Hrep; simpl in *.
-      destruct (field_offset ge x (co_members co)) as [d|] eqn: Hofs; rewrite sep_assoc in Hrep;
+      rewrite <-OutputMatch in Hrep; eauto. unfold mk_members in Hrep. rewrite sepall_map, Heq in Hrep; simpl in *.
+      destruct (field_offset ge x _) as [d|] eqn: Hofs; rewrite sep_assoc in Hrep;
         try (destruct Hrep; contradiction).
       rewrite translate_type_access_by_value in Hrep.
       eapply Separation.storev_rule' with (v:=value_to_cvalue v) in Hrep
         as (m' & ? & Hrep); eauto with mem.
       exists m', b, co, d; intuition; eauto using assign_loc.
+      rewrite <-OutputMatch; eauto.
       rewrite outputrep_notnil; auto.
       erewrite find_class_name, find_method_name; eauto.
       exists b, co; split; intuition.
       unfold fieldsrep, fieldrep.
-      rewrite Heq, Hofs, translate_type_access_by_value, sep_assoc.
+      rewrite <-OutputMatch; eauto. unfold mk_members. rewrite sepall_map, Heq; simpl. rewrite Hofs, translate_type_access_by_value, sep_assoc.
       eapply sep_imp; eauto.
       - unfold hasvalue, match_value; simpl.
         rewrite Env.gss, <-wt_value_load_result; auto.
       - apply sep_imp'; auto.
         do 2 apply NoDupMembers_app_r in Nodup.
         rewrite fst_NoDupMembers, <-translate_param_fst, <-fst_NoDupMembers in Nodup; auto.
-        erewrite OutputMatch, Hys in Nodup; auto.
+        erewrite Hys in Nodup; auto.
         apply NoDupMembers_app_cons in Nodup.
         destruct Nodup as (Notin & Nodup).
         rewrite sepall_swapp; eauto.
         intros (x' & t') Hin.
         rewrite Env.gso; auto.
-        intro; subst x'.
+        simpl; intro; subst x'.
         apply Notin.
         eapply In_InMembers; eauto.
     Qed.
@@ -1406,8 +1366,8 @@ Section MatchStates.
           intro; subst; eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto.
         + rewrite 2 sep_assoc, 2 sep_pure in Hmem.
           destruct Hmem as (?&?&?).
+          erewrite <-OutputMatch; eauto; try (simpl; lia).
           eapply fieldsrep_add; eauto.
-          erewrite <-OutputMatch; eauto; try (simpl; omega).
           rewrite InMembers_translate_param_idem; auto.
     Qed.
 
@@ -1418,7 +1378,7 @@ Section MatchStates.
       exists m' d,
         field_offset ge x (make_members owner) = Errors.OK d
         /\ Clight.assign_loc ge (translate_type ty) m sb
-                            (Ptrofs.repr (Ptrofs.unsigned sofs + d)) (value_to_cvalue v) m'
+                            (Ptrofs.repr (Ptrofs.unsigned sofs + fst d)) Full (value_to_cvalue v) m'
         /\ m' |= match_states prog owner caller (add_val x v me, ve) (e, le) sb sofs outb_co
                 ** P.
     Proof.
@@ -1626,9 +1586,9 @@ Section FunctionEntry.
       erewrite alloc_implies; eauto.
       rewrite sep_assoc, sep_swap.
       eapply IHvars; eauto.
-      eapply alloc_rule; eauto; try omega.
+      eapply alloc_rule; eauto; try lia.
       etransitivity; eauto.
-      unfold Ptrofs.max_unsigned; omega.
+      unfold Ptrofs.max_unsigned; lia.
   Qed.
 
   Lemma alloc_result:
@@ -1823,7 +1783,7 @@ Section FunctionEntry.
 
     (* multiple outputs *)
     - assert (1 < Datatypes.length (m_out f))%nat
-        by (rewrite Hout; simpl; omega).
+        by (rewrite Hout; simpl; lia).
 
       assert (prefix obc2c self <> prefix obc2c out) as Hnso
           by (apply prefix_injective'; right; prove_str_to_pos_neq).
@@ -1859,7 +1819,7 @@ Section FunctionEntry.
           repeat apply sep_imp'; auto.
           apply fieldsrep_nodup; eauto.
           erewrite <-output_match; eauto.
-          rewrite translate_param_fst.
+          rewrite mk_members_names, translate_param_fst.
           eapply NoDup_app_weaken.
           rewrite Permutation.Permutation_app_comm, NoDup_swap, <-2 map_app.
           apply fst_NoDupMembers, m_nodupvars.
@@ -1900,7 +1860,7 @@ Section MainProgram.
     subst main_step main_f.
     simpl; unfold case_out.
     destruct_list (m_out (GenerationProperties.main_step _ _ _ _ _ TRANSL)) as (?,?) (?,?) ? : Out;
-      try (simpl in Len; omega).
+      try (simpl in Len; lia).
 
     (* get the allocated memory *)
     destruct (Mem.alloc m 0 (sizeof tge (type_of_inst (prefix_fun step main_node))))
@@ -1916,13 +1876,14 @@ Section MainProgram.
     - repeat (econstructor; eauto).
     - assert (sizeof tge (type_of_inst (prefix_fun step main_node)) <= Ptrofs.modulus)
         by (simpl; setoid_rewrite Hsco; transitivity Ptrofs.max_unsigned;
-            auto; unfold Ptrofs.max_unsigned; omega).
+            auto; unfold Ptrofs.max_unsigned; lia).
       eapply alloc_rule in AllocStep; eauto; try reflexivity.
       eapply sep_imp; eauto.
       simpl; setoid_rewrite Hsco; eapply fieldsrep_empty; eauto.
       + eapply Consistent; eauto.
       + rewrite Hms; eauto.
-        intros * Hin; apply in_map_iff in Hin as ((?&?)& E' &?); inversion E'; eauto.
+        intros * Hin; apply in_map_iff in Hin as ((?&?)& E' & Hin); inv E'.
+        apply in_map_iff in Hin as ((?&?)& E' &?); inversion E'; eauto.
   Qed.
 
   Lemma init_mem:
@@ -1954,7 +1915,7 @@ Section MainProgram.
     setoid_rewrite find_step in Hgrange.
     rewrite <-Zplus_0_r_reverse in Hgrange.
     rewrite Zmax_left in Hgrange;
-      [|destruct (ce ! main_node); try omega; apply co_sizeof_pos].
+      [|destruct (ce ! main_node); try lia; apply co_sizeof_pos].
     apply sep_proj1 in Hgrange.
     rewrite sepemp_right in *.
     eapply sep_imp; eauto.
@@ -1972,7 +1933,7 @@ Section MainProgram.
       subst gcenv tge.
       rewrite <-Htprog in Find_main; simpl in Find_main.
       rewrite Find_main.
-      transitivity Ptrofs.max_unsigned; auto; unfold Ptrofs.max_unsigned; omega.
+      transitivity Ptrofs.max_unsigned; auto; unfold Ptrofs.max_unsigned; lia.
   Qed.
 
 End MainProgram.

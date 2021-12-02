@@ -1,7 +1,6 @@
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Omega.
 
 From Velus Require Import Common.
 From Velus Require Import Operators Environment.
@@ -245,7 +244,6 @@ Module Type NCLOCKING
   Proof.
     unfold unnest_when.
     induction es; intros * Hl; destruct tys; simpl in *; try congruence; auto.
-    f_equal; auto.
   Qed.
 
   Fact unnest_merge_nclocksof : forall tx tys es ck,
@@ -253,7 +251,6 @@ Module Type NCLOCKING
   Proof.
     unfold unnest_merge.
     induction tys; intros; simpl in *; auto.
-    f_equal; auto.
   Qed.
 
   Fact unnest_case_nclocksof : forall e tys es d ck,
@@ -261,7 +258,6 @@ Module Type NCLOCKING
   Proof.
     unfold unnest_case.
     induction tys; intros; simpl in *; auto.
-    f_equal; auto.
   Qed.
 
   Lemma idents_for_anns_nclocksof : forall anns ids st st',
@@ -2207,7 +2203,7 @@ Module Type NCLOCKING
       inv Hunt. inv Hwc.
       assert (normfby_blocks to_cut blocks x1 = (concat x2, st')) as Hnorm.
       { unfold normfby_blocks. repeat inv_bind; eauto. }
-      assert (H':=H). eapply normfby_block_wc in H as [Hwc' Henv']; auto. 2,3,4:eauto.
+      assert (H':=H). eapply normfby_block_wc in H as [Hwc' Henv']; auto. 2,3:eauto.
       apply IHblocks in Hnorm as [Hwc'' Henv'']; auto.
       2:solve_forall; repeat solve_incl; eapply normfby_block_st_follows in H'; eauto.
       rewrite Forall_app; repeat split; eauto.

@@ -192,7 +192,7 @@ Module Type NLINDEXEDSEMANTICS
     exists rss, Forall2 bools_of vs rss /\
            (forall n, rs n = existsb (fun rs => rs n) rss).
 
-  Instance bools_ofs_SameElements_Proper:
+  Global Instance bools_ofs_SameElements_Proper:
     Proper (SameElements eq ==> eq ==> Basics.impl)
            bools_ofs.
   Proof.
@@ -219,7 +219,7 @@ Module Type NLINDEXEDSEMANTICS
     rewrite Forall2_swap_args in Hb1. eapply Forall2_trans_ex in Hb2; eauto.
     clear - Hb2.
     induction Hb2 as [|???? (?&_&H1&H2)]; auto.
-    eapply bools_of_det in H1; eauto. congruence.
+    eapply bools_of_det in H1; eauto.
   Qed.
 
   Lemma bools_ofs_svalue_to_bool:

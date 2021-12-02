@@ -48,8 +48,7 @@ Module Type ISFREE
 
   (** * Decision procedure *)
 
-
-  Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
+  Definition free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
     match eq with
     | EqDef _ ck cae      => free_in_caexp ck cae fvs
     | EqApp _ ck f laes xrs =>

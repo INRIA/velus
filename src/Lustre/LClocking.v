@@ -333,10 +333,9 @@ Module Type LCLOCKING
     induction xs as [|x xs IH]. reflexivity.
     destruct x; simpl; auto.
     destruct o; simpl; auto.
-    now setoid_rewrite IH.
   Qed.
 
-  Instance wc_exp_Proper {PSyn prefs}:
+  Global Instance wc_exp_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * clock)
                 ==> @eq exp ==> iff)
            wc_exp.
@@ -358,7 +357,7 @@ Module Type LCLOCKING
   (*   now rewrite Henv, HG. *)
   (* Qed. *)
 
-  Instance wc_equation_Proper {PSyn prefs}:
+  Global Instance wc_equation_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * clock)
                 ==> @eq equation ==> iff)
            wc_equation.
@@ -378,7 +377,7 @@ Module Type LCLOCKING
   (*   intros G1 G2 HG env1 env2 Henv eq; subst. now rewrite Henv. *)
   (* Qed. *)
 
-  Instance wc_block_Proper {PSyn prefs}:
+  Global Instance wc_block_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * clock)
                 ==> @eq block ==> iff)
            wc_block.
@@ -392,7 +391,7 @@ Module Type LCLOCKING
     1-8:try rewrite <- H; eauto. 1-7:try rewrite <-Henv; auto. 1,2:rewrite Henv; auto.
   Qed.
 
-  Instance wc_block_pointwise_Proper {PSyn prefs}:
+  Global Instance wc_block_pointwise_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * clock)
                 ==> pointwise_relation _ iff)
            wc_block.
@@ -509,7 +508,7 @@ Module Type LCLOCKING
       - constructor. eauto using wc_equation_incl.
       - econstructor; eauto using wc_exp_incl.
         rewrite Forall_forall in *; intros; eauto.
-      - econstructor. 1-6:eauto using wc_exp_incl.
+      - econstructor. 1-5:eauto using wc_exp_incl.
         intros. edestruct H6; eauto.
       - constructor.
         1,2:rewrite Forall_forall in *; intros; eauto using incl_appl'.
@@ -1365,7 +1364,7 @@ Module Type LCLOCKING
           apply Env.elements_correct.
           apply Env.elements_complete, Env.Props.P.filter_iff in Hin as (?&?); auto.
           intros ??????; subst; auto. }
-        econstructor. 1-6:eauto.
+        econstructor. 1-5:eauto.
         3:{ eapply forallb_Forall in CE. do 2 (eapply Forall_forall; intros).
             repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
             eapply forallb_Forall in it1.
@@ -1465,7 +1464,7 @@ Module Type LCLOCKING
       apply check_nodup_correct in Hndup.
       unfold wc_global, wt_program, units; simpl.
       induction (nodes G); constructor; inv Hndup.
-      1-3:simpl in Hcheck; apply Bool.andb_true_iff in Hcheck as [Hc1 Hc2]; auto.
+      1-2:simpl in Hcheck; apply Bool.andb_true_iff in Hcheck as [Hc1 Hc2]; auto.
       split.
       - apply check_node_correct in Hc1; auto using Env.elements_from_list_incl.
       - apply Forall_forall. intros ? Hin contra.
@@ -1744,7 +1743,7 @@ Module Type LCLOCKING
     - rewrite <- Hperm; auto.
   Qed.
 
-  Instance only_depends_on_Proper:
+  Global Instance only_depends_on_Proper:
     Proper (@Permutation.Permutation ident ==> @eq clock ==> iff)
            only_depends_on.
   Proof.
@@ -1834,7 +1833,7 @@ Module Type LCLOCKING
     eapply Forall_incl; eauto.
   Qed.
 
-  Instance preserving_sub_Proper:
+  Global Instance preserving_sub_Proper:
     Proper (@eq clock ==> @eq (ident -> option ident)
                 ==> @Permutation (ident * clock) ==> @Permutation (ident * clock) ==> @Permutation ident
                 ==> iff)
@@ -2100,7 +2099,7 @@ Module Type LCLOCKING
     intros G vars es HwG Hwenv Hwc.
     unfold clocksof, nclocksof in *.
     rewrite flat_map_concat_map in *.
-    rewrite <-Forall_concat, Forall_map.
+    rewrite Forall_concat, Forall_map.
     rewrite Forall_forall in *; intros.
     eapply wc_exp_clockof; eauto.
   Qed.

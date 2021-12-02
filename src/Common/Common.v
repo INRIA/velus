@@ -39,7 +39,7 @@ Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 
-Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
+Global Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
 
@@ -422,10 +422,10 @@ Qed.
 Section IsNoneSome.
   Context {A : Type}.
 
-  Fixpoint isNone (o : option A) : bool :=
+  Definition isNone (o : option A) : bool :=
     match o with None => true | Some _ => false end.
 
-  Fixpoint isSome (o : option A) : bool :=
+  Definition isSome (o : option A) : bool :=
     match o with None => false | Some _ => true end.
 
   Lemma isSome_true:
@@ -768,7 +768,7 @@ Proof.
   now intros A R RR x y Exy; subst.
 Qed.
 
-Instance orel_option_map_Proper
+Global Instance orel_option_map_Proper
          {A B} (RA : relation A) (RB : relation B) `{Equivalence B RB}:
   Proper ((RA ==> RB) ==> orel RA ==> orel RB) (@option_map A B).
 Proof.
@@ -778,7 +778,7 @@ Proof.
   now rewrite Ef.
 Qed.
 
-Instance orel_option_map_pointwise_Proper
+Global Instance orel_option_map_pointwise_Proper
          {A B} (RA : relation A) (RB : relation B)
          `{Equivalence B RB}:
   Proper (pointwise_relation A RB ==> eq ==> orel RB) (@option_map A B).
@@ -789,7 +789,7 @@ Proof.
   rewrite Hf. reflexivity.
 Qed.
 
-Instance orel_subrelation {A} (R1 R2 : relation A) `{subrelation A R1 R2}:
+Global Instance orel_subrelation {A} (R1 R2 : relation A) `{subrelation A R1 R2}:
   subrelation (orel R1) (orel R2).
 Proof.
   intros xo yo Ro.
@@ -809,7 +809,7 @@ Proof.
   constructor; auto.
 Qed.
 
-Instance orel_subrelation_Proper {A}:
+Global Instance orel_subrelation_Proper {A}:
   Proper (@subrelation A ==> eq ==> eq ==> Basics.impl) orel.
 Proof.
   intros R2 R1 HR ox2 ox1 ORx oy2 oy1 ORy HH; subst.
@@ -817,7 +817,7 @@ Proof.
   take (R2 _ _) and apply HR in it. now constructor.
 Qed.
 
-Instance orel_equivalence_Proper {A}:
+Global Instance orel_equivalence_Proper {A}:
   Proper (@relation_equivalence A ==> eq ==> eq ==> iff) orel.
 Proof.
   intros R2 R1 HR ox2 ox1 ORx oy2 oy1 ORy; subst.
@@ -825,7 +825,7 @@ Proof.
   split; intro HH. now setoid_rewrite <-HR1. now setoid_rewrite <-HR2.
 Qed.
 
-Instance orel_EqDec {A R} `{EqDec A R} : EqDec (option A) (orel R) :=
+Global Program Instance orel_EqDec {A R} `{EqDec A R} : EqDec (option A) (orel R) :=
   { equiv_dec := fun xo yo =>
                    match xo, yo with
                    | None, None => left _
@@ -835,14 +835,19 @@ Instance orel_EqDec {A R} `{EqDec A R} : EqDec (option A) (orel R) :=
                                       end
                    | _, _ => right _
                    end }.
-Proof.
-  - now take (x === y) and rewrite it.
-  - intro HH. take (x =/= y) and apply it. unfold equiv in HH.
-    now rewrite orel_inversion in HH.
-  - inversion 1.
-  - inversion 1.
-  - reflexivity.
-Qed.
+Next Obligation. constructor; auto. Qed.
+Next Obligation. inv H0; auto. Qed.
+Next Obligation. inv H1; eauto. eapply H0; eauto. Qed.
+Next Obligation. split. intros ?? (?&?); congruence. intros (?&?); congruence. Qed.
+Next Obligation. split. intros ?? (?&?); congruence. intros (?&?); congruence. Qed.
+(* Proof. *)
+(*   - now take (x === y) and rewrite it. *)
+(*   - intro HH. take (x =/= y) and apply it. unfold equiv in HH. *)
+(*     now rewrite orel_inversion in HH. *)
+(*   - inversion 1. *)
+(*   - inversion 1. *)
+(*   - reflexivity. *)
+(* Qed. *)
 
 (** Lift boolean relations into the option type *)
 
@@ -931,12 +936,14 @@ Definition obind2 {A B C: Type} (f: option (A * B)) (g: A -> B -> option C) : op
   | None => None
   end.
 
+Declare Scope option_monad_scope.
+
 Notation "'do' X <- A ; B" := (obind A (fun X => B))
-                                (at level 200, X ident, A at level 100, B at level 200)
+                                (at level 200, X name, A at level 100, B at level 200)
                               : option_monad_scope.
 
 Notation "'do' ( X , Y ) <- A ; B" := (obind2 A (fun X Y => B))
-                                        (at level 200, X ident, Y ident, A at level 100, B at level 200)
+                                        (at level 200, X name, Y name, A at level 100, B at level 200)
                                       : option_monad_scope.
 
 Remark obind_inversion:

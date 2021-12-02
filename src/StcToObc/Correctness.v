@@ -720,7 +720,7 @@ Module Type CORRECTNESS
       apply find_unit_transform_units_forward in Find'.
     eapply find_unit_cons in Find as [[E Find]|[E Find]]; simpl in *; eauto.
     - inv Find.
-      edestruct reset_insts_exists; eauto using Ordered_systems.
+      edestruct reset_insts_exists; eauto.
       + inv Ord; eauto.
       + eapply Ordered_systems_find_In_systems; eauto.
         eapply find_unit_cons; simpl; eauto.

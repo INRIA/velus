@@ -69,7 +69,6 @@ Module Type INLINELOCAL
         map snd (map rename_in_ann anns) = map rename_in_clock (map snd anns).
     Proof.
       induction anns; simpl; auto.
-      f_equal; auto.
     Qed.
 
   End rename.
@@ -618,10 +617,10 @@ Module Type INLINELOCAL
     eapply inlinelocal_topblock_nolocal; eauto.
   Qed.
 
-  Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch_block switch_prefs) node :=
+  Global Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch_block switch_prefs) node :=
     { transform_unit := inlinelocal_node }.
 
-  Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch_block switch_prefs) (@global nolocal_top_block local_prefs) :=
+  Global Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch_block switch_prefs) (@global nolocal_top_block local_prefs) :=
     { transform_program_without_units := fun g => Global g.(enums) [] }.
 
   Definition inlinelocal_global : @global noswitch_block switch_prefs -> @global nolocal_top_block local_prefs :=

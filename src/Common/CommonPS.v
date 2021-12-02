@@ -27,7 +27,7 @@ Definition ident := Pos.t.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 
-Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
+Global Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
 
@@ -158,7 +158,7 @@ Proof.
   split; intro HH.
   - apply Forall_forall.
     intros x Hin. apply HH.
-    apply PSF.elements_iff; auto.
+    apply PSF.elements_iff, InA_alt; eauto.
   - intros x Hin.
     rewrite Forall_forall in HH; apply HH.
     apply PSF.elements_iff, SetoidList.InA_alt in Hin.
@@ -244,7 +244,7 @@ Proof.
   apply PS_In_Forall with (2:=HS) in HP; auto.
 Qed.
 
-Instance PS_For_all_Equals_Proper:
+Global Instance PS_For_all_Equals_Proper:
   Proper (pointwise_relation positive iff ==> PS.Equal ==> iff) PS.For_all.
 Proof.
   intros P Q Hpw S T Heq.
@@ -290,6 +290,7 @@ Proof.
   - apply NoDup_NoDupA, PS.elements_spec2w.
   - constructor; [|now apply NoDup_NoDupA, PS.elements_spec2w].
     setoid_rewrite PSF.elements_iff in Hnin; auto.
+    contradict Hnin; eauto using In_InA.
   - clear. intro z.
     setoid_rewrite In_PS_elements.
     setoid_rewrite PS.add_spec.
@@ -347,10 +348,10 @@ Proof.
   - rewrite IHxs. rewrite PS.add_spec. intuition.
 Qed.
 
-Instance eq_equiv : Equivalence PS.eq.
+Global Instance eq_equiv : Equivalence PS.eq.
 Proof. firstorder. Qed.
 
-Instance ps_adds_Proper (xs: list ident) :
+Global Instance ps_adds_Proper (xs: list ident) :
   Proper (PS.eq ==> PS.eq) (ps_adds xs).
 Proof.
   induction xs as [|x xs IH]; intros S S' Heq; [exact Heq|].
@@ -425,7 +426,7 @@ Proof.
     + rewrite <-IHxs in Hin; rewrite <-add_ps_from_list_cons, PS.add_spec; intuition.
 Qed.
 
-Instance ps_from_list_Permutation:
+Global Instance ps_from_list_Permutation:
   Proper (@Permutation.Permutation ident ==> fun xs xs' => forall x, PS.In x xs -> PS.In x xs')
          ps_from_list.
 Proof.
@@ -434,7 +435,7 @@ Proof.
   now rewrite <-E.
 Qed.
 
-Instance ps_from_list_Proper:
+Global Instance ps_from_list_Proper:
   Proper (@Permutation ident ==> PS.Equal) ps_from_list.
 Proof.
   intros ? ? Hperm ?.
@@ -552,7 +553,7 @@ Lemma ps_adds_of_list:
     PS.Equal (ps_adds xs PS.empty) (PSP.of_list xs).
 Proof.
   intros xs x. rewrite ps_adds_spec, PSP.of_list_1; split.
-  -intros [Hin|Hin]; auto. now apply not_In_empty in Hin.
+  - intros [Hin|Hin]; auto. apply In_InA; eauto. now apply not_In_empty in Hin.
   - intro Hin. apply SetoidList.InA_alt in Hin as (y & Hy & Hin); subst; auto.
 Qed.
 
@@ -614,7 +615,7 @@ Proof.
           apply PSP.add_equal, ps_of_list_In; auto. }
       assert (In a (PS.elements (PSP.of_list xs))) as Hin'.
       { apply In_PS_elements, ps_of_list_In; auto. }
-      eapply SE_trans; eauto.
+      eapply SE_trans, SE_dup1; eauto using In_InA.
     + eapply SE_trans.
       2:{ eapply SE_perm; symmetry; eapply Permutation_elements_add; eauto.
           rewrite ps_of_list_In; auto. }
@@ -628,7 +629,7 @@ Inductive DisjointSetList : list PS.t -> Prop :=
     Forall (fun t => PS.Empty (PS.inter s t)) ss ->
     DisjointSetList (s :: ss).
 
-Instance DisjointSetList_Proper:
+Global Instance DisjointSetList_Proper:
   Proper (@Permutation.Permutation PS.t ==> iff) DisjointSetList.
 Proof.
   intros s' s Es.
@@ -652,7 +653,7 @@ Qed.
 Definition PSUnion (xs : list PS.t) : PS.t :=
   List.fold_left PS.union xs PS.empty.
 
-Instance fold_left_PS_Proper:
+Global Instance fold_left_PS_Proper:
   Proper ((PS.Equal ==> PS.Equal ==> PS.Equal) ==> eq ==> PS.Equal ==> PS.Equal)
          (@fold_left PS.t PS.t).
 Proof.
@@ -662,7 +663,7 @@ Proof.
   apply Efg in ES. now apply ES.
 Qed.
 
-Instance PSUnion_Proper:
+Global Instance PSUnion_Proper:
   Proper (@Permutation.Permutation PS.t ==> PS.Equal) PSUnion.
 Proof.
   unfold PSUnion. intros xs ys EE. generalize (PS.empty).
@@ -674,7 +675,7 @@ Proof.
   - now setoid_rewrite IHEE1; setoid_rewrite IHEE2.
 Qed.
 
-Instance PSUnion_eqlistA_Proper:
+Global Instance PSUnion_eqlistA_Proper:
   Proper (SetoidList.eqlistA PS.Equal ==> PS.Equal) PSUnion.
 Proof.
   unfold PSUnion. intros xs ys EE. generalize (PS.empty).

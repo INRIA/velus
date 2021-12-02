@@ -38,10 +38,11 @@ done
 # Configure CompCert and extract relevant values into Makefile.config
 (cd "$compcertdir" &&
  ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
- $standard_headers $clightgen $target)
+     $standard_headers $clightgen $target \
+     -use-external-Flocq -use-external-MenhirLib)
 if [ -f "$compcertdir"/Makefile.config ]; then
-    export "$(grep ARCH < "$compcertdir"/Makefile.config)"
-    export "$(grep BITSIZE < "$compcertdir"/Makefile.config)"
+    export "$(grep ARCH= < "$compcertdir"/Makefile.config)"
+    export "$(grep BITSIZE= < "$compcertdir"/Makefile.config)"
 fi
 
 printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config

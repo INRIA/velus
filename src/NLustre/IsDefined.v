@@ -154,7 +154,7 @@ Module Type ISDEFINED
 
   (** ** Decision procedures: *)
 
-  Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
+  Definition defined_eq (defs: PS.t) (eq: equation) : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x defs
     | EqApp xs _ _ _ _ => ps_adds xs defs

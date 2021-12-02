@@ -4,7 +4,6 @@ Open Scope list_scope.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 From Coq Require Import NPeano.
-From Coq Require Import Omega.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.

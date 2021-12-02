@@ -237,8 +237,6 @@ Module Type STCISDEFINED
   Proof.
     unfold defined.
     induction tcs as [|[]]; simpl; intros; auto.
-    - f_equal; auto.
-    - f_equal; auto.
     - rewrite <-app_assoc; f_equal; auto.
   Qed.
 

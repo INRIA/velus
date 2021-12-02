@@ -1019,7 +1019,7 @@ Module Env.
   End Equiv.
 
 
-  Existing Instance Equivalence_Equiv.
+  Global Existing Instance Equivalence_Equiv.
 
   (** Refinement of Environments *)
 
@@ -1034,7 +1034,7 @@ Module Env.
       forall x v, Env.find x env1 = Some v ->
              exists v', R v v' /\ Env.find x env2 = Some v'.
 
-    Global Typeclasses Opaque refines.
+    Typeclasses Opaque refines.
 
     Lemma refines_empty:
       forall env, refines (empty A) env.
@@ -1312,8 +1312,8 @@ Module Env.
 
   End EnvRefines.
 
-  Existing Instance env_refines_preorder.
-  Existing Instance Equivalence_Equiv.
+  Global Existing Instance env_refines_preorder.
+  Global Existing Instance Equivalence_Equiv.
 
   Hint Immediate refines_empty.
   Hint Extern 4 (refines _ (add ?x _ _) (add ?x _ _)) => apply refines_add.
@@ -1734,14 +1734,14 @@ Module Env.
         Env.MapsTo (nth n ids d) (nth n vs d') (Env.adds ids vs H).
     Proof.
       induction ids; intros vs H n d d' Hlen Hn Hndup.
-      - unfold adds; simpl in *; try omega.
+      - unfold adds; simpl in *; try lia.
       - destruct vs; simpl in *; try congruence.
         inv Hndup.
         destruct n.
         + unfold MapsTo in *.
           apply find_gsss; auto.
         + eapply IHids; eauto.
-          omega.
+          lia.
     Qed.
   End DomAdds.
 
@@ -2902,6 +2902,8 @@ Module Env.
   End find_pred.
 
   (** Notations *)
+
+  Declare Scope env_scope.
 
   Module Notations.
     Notation "e1 ≈ e2" :=  (Equal e1 e2)

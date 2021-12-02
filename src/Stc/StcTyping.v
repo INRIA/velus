@@ -79,7 +79,7 @@ Module Type STCTYPING
 
   Hint Constructors wt_clock wt_exp wt_cexp wt_trconstr.
 
-  Instance wt_trconstr_Proper:
+  Global Instance wt_trconstr_Proper:
     Proper (@eq program ==> @Permutation.Permutation (ident * type)
                 ==> @Permutation.Permutation (ident * type)
                 ==> @eq trconstr ==> iff)

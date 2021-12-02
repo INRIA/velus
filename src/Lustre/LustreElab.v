@@ -146,7 +146,7 @@ Proof.
   1,2,3,4:rewrite ident_eqb_eq in *; congruence.
 Qed.
 
-Instance sident_EqDec : EqDec sident eq.
+Local Instance sident_EqDec : EqDec sident eq.
 Proof.
   intros id1 id2. compute.
   pose proof (sident_eq_spec id1 id2) as Heq.
@@ -199,7 +199,7 @@ Proof.
     now apply equiv_decb_equiv.
 Qed.
 
-Instance sclock_EqDec : EqDec sclock eq.
+Local Instance sclock_EqDec : EqDec sclock eq.
 Proof.
   intros ck1 ck2. compute.
   pose proof (sclock_eq_spec ck1 ck2) as Heq.
@@ -458,11 +458,11 @@ Module ElabNotations.
 
   Notation "'do' X <- A ; B" :=
     (bind A (fun X => B))
-      (at level 200, X ident, A at level 100, B at level 200).
+      (at level 200, X name, A at level 100, B at level 200).
 
   Notation "'do' ( X , Y ) <- A ; B" :=
     (bind2 A (fun X Y => B))
-      (at level 200, X ident, Y ident, A at level 100, B at level 200).
+      (at level 200, X name, Y name, A at level 100, B at level 200).
 
 End ElabNotations.
 
@@ -812,7 +812,7 @@ Section ElabExpressions.
     | _ => err_not_singleton loc
     end.
 
-  Fixpoint lannot (el : eexp * astloc) : list ((type * sclock) * astloc) :=
+  Definition lannot (el : eexp * astloc) : list ((type * sclock) * astloc) :=
     let (e, loc) := el in
     match e with
     | Econst c ck => [((Tprimitive (ctype_cconst c), ck), loc)]

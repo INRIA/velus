@@ -147,7 +147,7 @@ Module Type LCAUSALITY
 
   Definition node_causal {PSyn prefs} (n : @node PSyn prefs) :=
     NoDup (map snd (idcaus (n_in n ++ n_out n ++ locals (n_block n)))) /\
-    exists {v a} (g : AcyGraph v a), graph_of_node n g.
+    exists v a (g : AcyGraph v a), graph_of_node n g.
 
   (* Some properties *)
 
@@ -1681,7 +1681,7 @@ Module Type LCAUSALITY
         k < numstreams e ->
         P_exp e k.
     Proof.
-      Ltac solve_forall es :=
+      Local Ltac solve_forall' es :=
         match goal with
         | Hwl: Forall (wl_exp _) es, Hwx: Forall (wx_exp _) es, Hind : forall e k, wl_exp _ e -> _ |- _ =>
           clear - Hind Hwl Hwx;
@@ -1710,16 +1710,16 @@ Module Type LCAUSALITY
       - (* fby *)
         eapply EfbyCase; eauto.
         + eapply Pexp_Pexps; eauto. 2:congruence.
-          solve_forall l.
+          solve_forall' l.
       - (* arrow *)
         eapply EarrowCase; eauto.
         1,2:eapply Pexp_Pexps; eauto; try congruence.
-        solve_forall l. solve_forall l0.
+        solve_forall' l. solve_forall' l0.
       - (* when *)
         apply in_map_iff in H1 as ((x&cx)&?&?); subst.
         eapply EwhenCase; eauto.
         eapply Pexp_Pexps; eauto. 2:congruence.
-        solve_forall l.
+        solve_forall' l.
       - (* merge *)
         apply in_map_iff in H1 as ((?&?)&?&?); subst.
         eapply EmergeCase; eauto.
@@ -1746,12 +1746,12 @@ Module Type LCAUSALITY
       - (* app *)
         apply EappCase; auto.
         + intros k' Hk'. eapply Pexp_Pexps; eauto.
-          * solve_forall l.
+          * solve_forall' l.
           * intros ? Hfree'. eapply Hfree.
             constructor; eauto.
             eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.
         + intros k' Hk'. eapply Pexp_Pexps; eauto.
-          * solve_forall l0.
+          * solve_forall' l0.
           * intros ? Hfree'. eapply Hfree.
             constructor; eauto.
             eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.

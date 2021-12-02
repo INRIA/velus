@@ -7,7 +7,6 @@ From Coq Require Import RelationClasses.
 Import Coq.Relations.Relation_Operators.
 From Coq Require Import Arith.Arith.
 From Coq Require Import Setoid.
-From Coq Require Import Omega.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
@@ -686,7 +685,7 @@ Section Dfs.
                      progress_in_graph := Hprog |}) as Hbg.
     simpl in *.
     rewrite PSP.add_cardinal_2 with (1:=Hnin) in *.
-    omega.
+    lia.
   Qed.
 
   Definition visited (p : PS.t) (v : PS.t) : Prop :=

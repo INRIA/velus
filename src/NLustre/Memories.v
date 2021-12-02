@@ -67,7 +67,7 @@ Module Type MEMORIES
           rewrite PS.add_spec; auto.
   Qed.
 
-  Instance List_fold_left_memory_eq_Proper (eqs: list equation) :
+  Global Instance List_fold_left_memory_eq_Proper (eqs: list equation) :
     Proper (PS.eq ==> PS.eq) (fold_left memory_eq eqs).
   Proof.
     induction eqs as [|[]]; intros * ?? E; simpl; auto.
@@ -224,7 +224,7 @@ Module Type MEMORIES
     }
 
     rewrite <-Hfout; clear Hfout.
-    rewrite filter_app, filter_mem_fst, <-n_defd.
+    rewrite <-filter_app, filter_mem_fst, <-n_defd.
     remember (memories n.(n_eqs)) as mems.
     set (P:=fun eqs eq=> In eq eqs ->
                       forall x, In x (var_defined eq) ->
@@ -268,7 +268,7 @@ Module Type MEMORIES
       }
 
       unfold vars_defined; unfold var_defined; simpl.
-      now rewrite <- filter_app, IHeqs, Pfilter.
+      now rewrite filter_app, IHeqs, Pfilter.
 
     + (* Case: EqFby *)
       unfold vars_defined;
@@ -309,7 +309,7 @@ Module Type MEMORIES
     }
 
     rewrite <-Hfout; clear Hfout.
-    rewrite filter_app, notb_filter_mem_fst, <-n_defd.
+    rewrite <-filter_app, notb_filter_mem_fst, <-n_defd.
     remember (memories n.(n_eqs)) as mems.
     set (P := fun eqs eq =>  In eq eqs ->
                           forall x, In x (var_defined eq) ->
@@ -348,7 +348,7 @@ Module Type MEMORIES
         apply Hmem_in. now constructor 2.
       }
 
-      rewrite <-filter_app; setoid_rewrite Hfilter.
+      rewrite filter_app; setoid_rewrite Hfilter.
       apply Permutation_app_head; auto.
 
     + rewrite Peq; eauto.

@@ -97,13 +97,13 @@ Module Type OBCSWITCHESNORMALIZATION
     now rewrite map_m_name_normalize_method.
   Qed.
 
-  Program Instance normalize_class_transform_unit: TransformUnit class class :=
+  Global Program Instance normalize_class_transform_unit: TransformUnit class class :=
     { transform_unit := normalize_class }.
   Next Obligation.
     unfold normalize_class; cases.
   Defined.
 
-  Program Instance normalize_class_transform_state_unit: TransformStateUnit class class.
+  Global Program Instance normalize_class_transform_state_unit: TransformStateUnit class class.
   Next Obligation.
     unfold normalize_class; cases.
   Defined.
@@ -181,7 +181,7 @@ Module Type OBCSWITCHESNORMALIZATION
                    now rewrite length_removelast_cons.
                 ** take (stmt_eval _ _ _ _ _) and rewrite <-map_cons in it.
                    change None with (option_map normalize_stmt None) in it.
-                   rewrite map_last in it.
+                   rewrite CommonList.map_last in it.
                    assert (In (last (o :: ss) None) (o :: ss)) by apply last_In_cons.
                    repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
                    destruct (last (o :: ss) None); simpl in *; try contradiction.
@@ -208,7 +208,7 @@ Module Type OBCSWITCHESNORMALIZATION
              ++ simpl.
                 rewrite <-map_cons.
                 change None with (option_map normalize_stmt None).
-                rewrite map_last.
+                rewrite CommonList.map_last.
                 destruct (last (o :: ss) None); simpl in *; try contradiction.
                 now apply it.
           -- contradict Nth.
@@ -358,7 +358,7 @@ Module Type OBCSWITCHESNORMALIZATION
         * Transparent last.
           simpl; auto.
         * change None with (option_map normalize_stmt None).
-          rewrite <-map_cons, map_last.
+          rewrite <-map_cons, CommonList.map_last.
           pose proof (last_In_cons ss o None) as Hin.
           pose proof Hin.
           eapply Forall_forall in Hin; eauto.
@@ -465,7 +465,7 @@ Module Type OBCSWITCHESNORMALIZATION
           -- exists None; split; simpl.
              ++ apply in_app; auto using in_eq.
              ++ change None with (option_map normalize_stmt None).
-                rewrite <-map_cons, map_last.
+                rewrite <-map_cons, CommonList.map_last.
                 inv Hin; try contradiction.
                 destruct (last (o :: ss) None); try contradiction; simpl in *; auto.
       + unfold normalize_switch.
@@ -505,7 +505,7 @@ Module Type OBCSWITCHESNORMALIZATION
                 eexists; split.
                 ** apply in_app; auto using in_eq.
                 ** change None with (option_map normalize_stmt None) in CW.
-                   rewrite <-map_cons, map_last in CW.
+                   rewrite <-map_cons, CommonList.map_last in CW.
                    destruct (last (o :: ss) None); simpl in *; try contradiction.
                    take (forall x, _ <-> _) and now apply it.
     - intro; rewrite 2 Can_write_in_Comp, IHs1, IHs2; reflexivity.
@@ -546,7 +546,7 @@ Module Type OBCSWITCHESNORMALIZATION
           -- exists None; split; simpl.
              ++ apply in_app; auto using in_eq.
              ++ change None with (option_map normalize_stmt None).
-                rewrite <-map_cons, map_last.
+                rewrite <-map_cons, CommonList.map_last.
                 inv Hin; try contradiction.
                 destruct (last (o :: ss) None); try contradiction; simpl in *; auto.
       + unfold normalize_switch.
@@ -586,7 +586,7 @@ Module Type OBCSWITCHESNORMALIZATION
                 eexists; split.
                 ** apply in_app; auto using in_eq.
                 ** change None with (option_map normalize_stmt None) in CW.
-                   rewrite <-map_cons, map_last in CW.
+                   rewrite <-map_cons, CommonList.map_last in CW.
                    destruct (last (o :: ss) None); simpl in *; try contradiction.
                    take (forall x, _ <-> _) and now apply it.
     - intro; rewrite 2 Can_write_in_var_Comp, IHs1, IHs2; reflexivity.
@@ -647,7 +647,7 @@ Module Type OBCSWITCHESNORMALIZATION
         * constructor; auto.
           simpl.
           change None with (option_map normalize_stmt None).
-          rewrite <-map_cons, map_last.
+          rewrite <-map_cons, CommonList.map_last.
           repeat (take (Forall _ [_]) and inv it).
           destruct (last (o :: ss) None); simpl in *; auto.
     - constructor; auto; setoid_rewrite <- Can_write_in_var_normalize_stmt; auto.

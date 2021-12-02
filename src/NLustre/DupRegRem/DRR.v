@@ -38,8 +38,8 @@ Module Type DRR
     apply EqDec_instance_4.
   Defined.
 
-  Instance: EqDec const eq := { equiv_dec := const_dec }.
-  Instance: EqDec exp eq := { equiv_dec := exp_dec }.
+  Global Instance: EqDec const eq := { equiv_dec := const_dec }.
+  Global Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
   Definition find_duplicates (eqs : list equation) : Env.t ident :=
     snd (fold_left
@@ -443,7 +443,7 @@ Module Type DRR
     replace (map fst (filter (fun '(k, _) => negb (Env.mem k sub)) vars))
             with (filter (fun k => negb (Env.mem k sub)) (map fst vars)).
     2:{ clear - vars. induction vars as [|(?&?)]; simpl; auto.
-        destruct (negb _); simpl; auto. f_equal; auto. }
+        destruct (negb _); simpl; auto. }
     generalize (map fst vars); clear vars; intros vars.
     replace (filter (fun k => negb (Env.mem k sub)) vars ++ outs)
       with (filter (fun k => negb (Env.mem k sub)) (vars ++ outs)).

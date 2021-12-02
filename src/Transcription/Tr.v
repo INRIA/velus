@@ -6,7 +6,6 @@ From Velus Require Import Lustre.LSyntax.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 
-From Coq Require Import Omega.
 From Coq Require Import Permutation.
 From Coq Require Import String.
 From Coq Require Import Sorting.Mergesort.
@@ -345,7 +344,7 @@ Module Type TR
               then Error (msg "output variable defined as a fby")
               else OK tt in
     match mmap_block_to_equation env is_not_out n with
-    | OK (exist res P) =>
+    | OK (exist _ res P) =>
       OK {|
           NL.n_name     := n.(L.n_name);
           NL.n_in       := idty n.(L.n_in);
@@ -696,7 +695,7 @@ Module Type TR
         common_suffix (l ++ l1) (l ++ l2) = l ++ common_suffix l1 l2.
     Proof.
       induction l; simpl; auto.
-      intros. cases_eqn HH. now f_equal.
+      intros. cases_eqn HH.
       now rewrite equiv_decb_refl, Pos.eqb_refl in HH0.
     Qed.
 
@@ -707,7 +706,7 @@ Module Type TR
     Proof.
       induction l1; simpl; intros * Hlen.
       - inv Hlen.
-      - cases_eqn HH. f_equal. apply IHl1. simpl in Hlen. omega.
+      - cases_eqn HH. f_equal. apply IHl1. simpl in Hlen. lia.
     Qed.
 
     Lemma clock_parent_length :
@@ -718,7 +717,7 @@ Module Type TR
       induction 1; simpl;
         setoid_rewrite <- app_nil_l at 4;
         setoid_rewrite suffix_of_clock_app;
-        rewrite app_length; simpl; omega.
+        rewrite app_length; simpl; lia.
     Qed.
 
     Lemma parent_common_suffix :
@@ -794,7 +793,6 @@ Module Type TR
       induction l2; simpl; intros.
       - inv Hp; auto. inv H1; auto.
       - inv Hp; auto. specialize (IHl2 _ H1) as []; auto.
-        right. now f_equal.
     Qed.
 
     Lemma suffix_of_clock_Con:

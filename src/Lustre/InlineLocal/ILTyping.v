@@ -1,7 +1,6 @@
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Omega.
 
 From Velus Require Import Common.
 From Velus Require Import Operators Environment.

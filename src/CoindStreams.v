@@ -368,18 +368,18 @@ Module Type COINDSTREAMS
 
   Hint Constructors EqStN.
 
-  Instance EqStN_refl {A} n : Reflexive (@EqStN A n).
+  Global Instance EqStN_refl {A} n : Reflexive (@EqStN A n).
   Proof.
     intros ?. apply EqStN_EqSt.
     reflexivity.
   Qed.
 
-  Instance EqStN_sym {A} n : Symmetric (@EqStN A n).
+  Global Instance EqStN_sym {A} n : Symmetric (@EqStN A n).
   Proof.
     induction n; intros ?? Heq; inv Heq; auto.
   Qed.
 
-  Instance EqStN_trans {A} n : Transitive (@EqStN A n).
+  Global Instance EqStN_trans {A} n : Transitive (@EqStN A n).
   Proof.
     induction n; intros ??? Heq1 Heq2; inv Heq1; inv Heq2; eauto.
   Qed.
@@ -1096,7 +1096,7 @@ Module Type COINDSTREAMS
         bools_of vs bs ->
         bools_of (absent ⋅ vs) (false ⋅ bs).
 
-  Instance bools_of_Proper:
+  Global Instance bools_of_Proper:
     Proper (@EqSt svalue ==> @EqSt bool ==> Basics.impl)
            bools_of.
   Proof.
@@ -1210,7 +1210,7 @@ Module Type COINDSTREAMS
       induction xs; simpl; auto.
   Qed.
 
-  Instance bools_ofs_Proper:
+  Global Instance bools_ofs_Proper:
     Proper (@EqSts svalue ==> @EqSt bool ==> Basics.impl)
            bools_ofs.
   Proof.
@@ -1237,7 +1237,7 @@ Module Type COINDSTREAMS
     eapply bools_of_det in H1; eauto. erewrite H1, IHxs; eauto.
   Qed.
 
-  Instance disj_str_SameElements_Proper:
+  Global Instance disj_str_SameElements_Proper:
     Proper (SameElements (@EqSt bool) ==> @EqSt bool) disj_str.
   Proof.
     intros ?? Eq.
@@ -1262,7 +1262,7 @@ Module Type COINDSTREAMS
     - congruence.
   Qed.
 
-  Instance bools_ofs_SameElements_Proper:
+  Global Instance bools_ofs_SameElements_Proper:
     Proper (SameElements (@EqSt svalue) ==> eq ==> Basics.impl)
            bools_ofs.
   Proof.
@@ -1855,7 +1855,7 @@ Module Type COINDSTREAMS
         aligned vs bs ->
         aligned (absent ⋅ vs) (false ⋅ bs).
 
-  Instance aligned_Proper:
+  Global Instance aligned_Proper:
     Proper (@EqSt _ ==> @EqSt bool ==> iff)
            aligned.
   Proof.
@@ -2821,7 +2821,7 @@ Module Type COINDSTREAMS
     intros * Hslow.
     eapply ntheq_eqst; intros.
     rewrite maskv_nth.
-    1-2:destruct (_ =? _) eqn:Hcount; try congruence.
+    destruct (_ =? _) eqn:Hcount; try congruence.
     eapply slower_nth with (n:=n) in Hslow; auto.
     rewrite maskb_nth, Hcount; auto.
   Qed.

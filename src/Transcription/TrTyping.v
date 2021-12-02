@@ -214,7 +214,7 @@ Module Type TRTYPING
           rewrite complete_branches_fst, seq_length; auto.
           * rewrite <-BranchesSort.Permuted_sort.
             erewrite fst_NoDupMembers, to_controls_fst, <-fst_NoDupMembers; eauto.
-          * eapply Sorted.Sorted_StronglySorted, Sorted_impl, BranchesSort.LocallySorted_sort.
+          * eapply Sorted.Sorted_StronglySorted, Sorted_impl, BranchesSort.Sorted_sort.
             intros (?&?) (?&?) (?&?) ??. lia.
             intros (?&?) (?&?) Ht; simpl in *. inv Ht.
             apply Nat.leb_le; auto.

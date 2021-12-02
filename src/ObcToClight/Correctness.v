@@ -246,7 +246,7 @@ Section PRESERVATION.
           forall ve1 le1 m1 P1,
             m1 |= outputrep gcenv owner caller ve1 le1 outb_co ** P1 ->
             exists outb outco d,
-              eval_lvalue tge e le1 m1 out_ind_field outb (Ptrofs.repr d)
+              eval_lvalue tge e le1 m1 out_ind_field outb (Ptrofs.repr (fst d)) Full
               /\ outb_co = Some (outb, outco)
               /\ field_offset gcenv x (co_members outco) = Errors.OK d.
         Proof.
@@ -255,14 +255,16 @@ Section PRESERVATION.
           apply in_map with (f:=translate_param) in Hin.
           subst out_ind_field.
           erewrite find_class_name, find_method_name in *; eauto.
-          erewrite output_match in Hin; eauto.
+          erewrite <-output_match in *; eauto.
           edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
-          exists outb, outco, d; split; auto.
-          rewrite <- Ptrofs.add_zero_l.
+          exists outb, outco, d; split; auto. 2:erewrite <-output_match; eauto.
+          destruct d; simpl. rewrite <- (Ptrofs.add_zero_l (Ptrofs.repr z)).
           eapply eval_Efield_struct; eauto.
           - eapply eval_Elvalue; eauto.
             now apply deref_loc_copy.
           - simpl; unfold type_of_inst; eauto.
+          - erewrite <-output_match; eauto.
+            pose proof (field_offset_mk_members _ _ _ _ _ Hoffset); subst; auto.
         Qed.
 
         Corollary eval_out_field:
@@ -279,8 +281,7 @@ Section PRESERVATION.
           rewrite E in E'; inv E'.
           eapply fieldsrep_deref_mem; eauto.
           erewrite <-output_match; eauto.
-          rewrite in_map_iff.
-          exists (x, ty); split; auto.
+          repeat (eapply in_map_iff; do 2 esplit; eauto). auto.
         Qed.
 
       End OutField.
@@ -351,21 +352,22 @@ Section PRESERVATION.
 
         Lemma evall_self_field:
           exists d,
-            eval_lvalue tge e le m self_ind_field sb (Ptrofs.add sofs (Ptrofs.repr d))
+            eval_lvalue tge e le m self_ind_field sb (Ptrofs.add sofs (Ptrofs.repr (fst d))) Full
             /\ field_offset gcenv x (make_members owner) = Errors.OK d
-            /\ 0 <= d <= Ptrofs.max_unsigned.
+            /\ 0 <= (fst d) <= Ptrofs.max_unsigned.
         Proof.
           apply match_states_conj in Hmem as (Hmem &?&?&?&?).
           intros.
           pose proof (find_class_name _ _ _ _ Findowner); subst.
           edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto.
           edestruct staterep_field_offset as (d & ? & ?); eauto.
-          exists d; split; [|split]; auto.
+          exists d; destruct d; split; [|split]; auto.
           - eapply eval_Efield_struct; eauto.
             + eapply eval_Elvalue; eauto.
               now apply deref_loc_copy.
             + simpl; unfold type_of_inst; eauto.
-            + now rewrite Eq.
+            + pose proof (field_offset_mk_members _ _ _ _ _ H6); subst; auto.
+              now rewrite Eq.
           - split.
             + eapply field_offset_in_range'; eauto.
             + assert (0 <= Ptrofs.unsigned sofs) by eauto; lia.
@@ -381,8 +383,9 @@ Section PRESERVATION.
           apply match_states_conj in Hmem as (Hmem &?).
           eapply eval_Elvalue; eauto.
           erewrite find_class_name in Hmem; eauto.
-          eapply staterep_deref_mem; eauto.
-          rewrite Ptrofs.unsigned_repr; auto.
+          subst self_ind_field; simpl.
+          eapply staterep_deref_mem in H1; eauto.
+          rewrite Ptrofs.add_unsigned, Ptrofs.unsigned_repr; auto.
         Qed.
 
         (** &self->o : appears only as an additional parameter of funcalls *)
@@ -390,9 +393,9 @@ Section PRESERVATION.
           forall o c',
             In (o, c') (c_objs owner) ->
             exists d,
-              eval_expr tge e le m (ptr_obj owner c' o) (Vptr sb (Ptrofs.add sofs (Ptrofs.repr d)))
+              eval_expr tge e le m (ptr_obj owner c' o) (Vptr sb (Ptrofs.add sofs (Ptrofs.repr (fst d))))
               /\ field_offset gcenv o (make_members owner) = Errors.OK d
-              /\ 0 <= Ptrofs.unsigned sofs + d <= Ptrofs.max_unsigned.
+              /\ 0 <= Ptrofs.unsigned sofs + (fst d) <= Ptrofs.max_unsigned.
         Proof.
           apply match_states_conj in Hmem as (Hmem &?&?&?&?); clear Hmem.
           intros * Hin.
@@ -404,17 +407,18 @@ Section PRESERVATION.
           apply not_None_is_Some in Find.
           destruct Find as [(?, ?)]; eauto.
           edestruct struct_in_struct_in_bounds' as (d & ? & Struct); eauto.
-          exists d; split; [|split]; auto.
+          exists d; destruct d; split; [|split]; auto.
           + apply eval_Eaddrof.
             eapply eval_Efield_struct; eauto.
             * eapply eval_Elvalue; eauto.
               now apply deref_loc_copy.
             * simpl; unfold type_of_inst; eauto.
-            * now rewrite Eq.
+            * subst tge. rewrite Eq.
+              pose proof (field_offset_mk_members _ _ _ _ _ H11); subst; auto.
           + destruct Struct.
             split; try lia.
-            apply (Z.le_le_add_le 0 (sizeof_struct (Clight.globalenv tprog) 0 (make_members c))); try lia.
-            apply sizeof_struct_incr.
+            apply (Z.le_le_add_le 0 (sizeof_struct (Clight.globalenv tprog) (make_members c))); try lia.
+            apply sizeof_struct_pos.
         Qed.
 
       End SelfField.
@@ -654,15 +658,18 @@ Section PRESERVATION.
       Proof.
         clear Hmem Findcaller Findowner; intros * Hmem Hin ?.
         apply in_map with (f:=translate_param) in Hin.
-        erewrite output_match in Hin; eauto.
-        edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
+        erewrite <-output_match in *; eauto.
+        edestruct fieldsrep_field_offset as ((?&?) & Hoffset & ?); eauto.
         eapply eval_Elvalue; eauto.
         - eapply eval_Efield_struct; eauto.
           + eapply eval_Elvalue; eauto.
             now apply deref_loc_copy.
           + simpl; unfold type_of_inst; eauto.
-        - eapply fieldsrep_deref_mem; eauto.
-          rewrite Ptrofs.unsigned_zero, Ptrofs.unsigned_repr; auto.
+          + erewrite <-output_match; eauto.
+        - subst inst_field; simpl.
+          pose proof (field_offset_mk_members _ _ _ _ _ Hoffset); subst.
+          eapply fieldsrep_deref_mem in Hoffset; eauto. 2:eapply in_map_iff; do 2 esplit; eauto; simpl; auto.
+          rewrite Ptrofs.add_zero_l. auto.
       Qed.
 
 
@@ -869,12 +876,12 @@ Section PRESERVATION.
 
       (* get the &self->o parameter *)
       edestruct eval_self_inst as (d & ?& Hofs &?); eauto.
-      assert (Cop.sem_cast (Vptr sb (Ptrofs.add sofs (Ptrofs.repr d)))
+      assert (Cop.sem_cast (Vptr sb (Ptrofs.add sofs (Ptrofs.repr (fst d))))
                            (type_of_inst_p cid) (type_of_inst_p cid) m
-              = Some (Vptr sb (Ptrofs.add sofs (Ptrofs.repr d)))) by auto.
+              = Some (Vptr sb (Ptrofs.add sofs (Ptrofs.repr (fst d))))) by auto.
       apply match_states_conj in Hmem as (Hmem & ?&?&?&?).
       (* the sub-structure is well-sized *)
-      assert (bounded_struct_of_class tge c (Ptrofs.repr (Ptrofs.unsigned sofs + d))).
+      assert (bounded_struct_of_class tge c (Ptrofs.repr (Ptrofs.unsigned sofs + fst d))).
       { unfold bounded_struct_of_class.
         edestruct make_members_co as (?&?&?& <- &?); eauto.
         rewrite Ptrofs.unsigned_repr; auto.
@@ -890,12 +897,12 @@ Section PRESERVATION.
       clear Hmem; rename Hmem' into Hmem.
       erewrite <-(find_class_name cid) in Hmem; eauto.
       rewrite Hofs' in Hofs; inv Hofs.
-      rewrite <- (Ptrofs.unsigned_repr (Ptrofs.unsigned sofs + d)) in Hmem; auto.
-      assert (0 <= d <= Ptrofs.max_unsigned).
+      rewrite <- (Ptrofs.unsigned_repr (Ptrofs.unsigned sofs + fst d)) in Hmem; auto.
+      assert (0 <= fst d <= Ptrofs.max_unsigned).
       { assert (0 <= Ptrofs.unsigned sofs) by eauto.
         split; try lia.
         edestruct field_offset_type; eauto.
-        eapply field_offset_rec_in_range; eauto.
+        destruct d. eapply field_offset_in_range'; eauto.
       }
       assert (~ InMembers o (objs ++ objs'))
         by (eapply NoDupMembers_app_cons; setoid_rewrite <-E; apply c_nodupobjs).
@@ -916,7 +923,7 @@ Section PRESERVATION.
         clear Hmem.
         erewrite find_class_name in Hmem'; eauto.
         eapply method_spec_eq with (2 := Spec_f) in Spec_f'; eauto; subst.
-        rewrite <- (Ptrofs.unsigned_repr d), <- Ptrofs.add_unsigned in EvalF; eauto.
+        rewrite <- (Ptrofs.unsigned_repr (fst d)), <- Ptrofs.add_unsigned in EvalF; eauto.
 
         exists m', le; split.
         + unfold funcall.
@@ -940,7 +947,7 @@ Section PRESERVATION.
         erewrite find_class_name in Hmem'; eauto.
         inv Erv.
         eapply method_spec_eq with (2 := Spec_f) in Spec_f'; eauto; subst.
-        rewrite <- (Ptrofs.unsigned_repr d), <- Ptrofs.add_unsigned in EvalF; eauto.
+        rewrite <- (Ptrofs.unsigned_repr (fst d)), <- Ptrofs.add_unsigned in EvalF; eauto.
 
         (* get the only assignment after the call *)
         rewrite sep_swap34, sep_swap23, sep_swap,
@@ -1015,7 +1022,7 @@ Section PRESERVATION.
         erewrite find_class_name in Hmem'; eauto.
         clear Hmem.
         eapply method_spec_eq with (2 := Spec_f) in Spec_f'; eauto; subst.
-        rewrite <- (Ptrofs.unsigned_repr d), <- Ptrofs.add_unsigned in EvalF; eauto.
+        rewrite <- (Ptrofs.unsigned_repr (fst d)), <- Ptrofs.add_unsigned in EvalF; eauto.
 
         (* get the multiple assignments after the call *)
         assert (1 < Datatypes.length (m_out callee))%nat by (rewrite Hout; simpl; lia).
@@ -1177,7 +1184,7 @@ Section PRESERVATION.
         unfold instance_match.
         inversion_clear WTinsts as [???? Find|??????? Find Findcl'];
           rewrite Find; auto.
-        rewrite Findcl in Findcl'; inv Findcl'; auto.
+        setoid_rewrite Findcl in Findcl'; inv Findcl'; auto.
       }
       eapply pres_sem_stmt_call in Ev' as (?& WTrvos); eauto.
       rewrite Forall2_map_1 in WTrvos.

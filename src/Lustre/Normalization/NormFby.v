@@ -1,7 +1,6 @@
 From Coq Require Import List Sorting.Permutation.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Omega.
 
 From Velus Require Import Common Environment.
 From Velus Require Import CommonTyping.
@@ -135,7 +134,7 @@ Module Type NORMFBY
     intros *.
     destruct_to_singl xs. destruct_to_singl es.
     2: { repeat right; simpl. destruct e; auto.
-         1,2,3:(destruct_to_singl l; destruct_to_singl l0; destruct_to_singl l1).
+         1,2:(destruct_to_singl l; destruct_to_singl l0; destruct_to_singl l1).
     }
     destruct e; auto.
     1,2:destruct_to_singl l; destruct_to_singl l0; destruct_to_singl l1; simpl.
@@ -1073,10 +1072,10 @@ Module Type NORMFBY
     eapply normfby_blocks_nolocal; eauto using surjective_pairing.
   Qed.
 
-  Program Instance normfby_node_transform_unit: TransformUnit node node :=
+  Global Program Instance normfby_node_transform_unit: TransformUnit node node :=
     { transform_unit := normfby_node }.
 
-  Program Instance normfby_global_without_units : TransformProgramWithoutUnits (@global nolocal_top_block norm1_prefs) (@global nolocal_top_block norm2_prefs) :=
+  Global Program Instance normfby_global_without_units : TransformProgramWithoutUnits (@global nolocal_top_block norm1_prefs) (@global nolocal_top_block norm2_prefs) :=
     { transform_program_without_units := fun g => Global g.(enums) [] }.
 
   Definition normfby_global : @global nolocal_top_block norm1_prefs -> @global nolocal_top_block norm2_prefs := transform_units.

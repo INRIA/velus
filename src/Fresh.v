@@ -433,7 +433,6 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
     Proof.
       intros * Hf.
       induction Hf as [|(?&?) ((?&?)&?) ?? (?&?&_)]; subst; simpl; auto.
-      f_equal; auto.
     Qed.
 
     Lemma fresh_idents_rename_ids : forall pref ids frename ids' sub st st',
@@ -589,7 +588,7 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       unfold fresh_idents_rename, st_follows.
       intros ????? (?&?) (?&?) Hfresh.
       cases_eqn Hfold; inv Hfresh.
-      apply incl_appr. 1,2:apply incl_refl.
+      apply incl_appr, incl_refl.
     Qed.
   End fresh_idents_rename.
 
@@ -816,14 +815,16 @@ Module Fresh(Ids : IDS).
   End Tactics.
 
   Module Notations.
+    Declare Scope fresh_monad_scope.
+
     (** [do] notation, inspired by CompCert's error monad *)
     Notation "'do' X <- A ; B" :=
       (bind A (fun X => B))
-        (at level 200, X ident, A at level 100, B at level 200): fresh_monad_scope.
+        (at level 200, X name, A at level 100, B at level 200): fresh_monad_scope.
 
     Notation "'do' ( X , Y ) <- A ; B" :=
       (bind2 A (fun X Y => B))
-        (at level 200, X ident, Y ident, A at level 100, B at level 200): fresh_monad_scope.
+        (at level 200, X name, Y name, A at level 100, B at level 200): fresh_monad_scope.
   End Notations.
 
   Section mmap.

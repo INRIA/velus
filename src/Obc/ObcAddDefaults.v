@@ -143,7 +143,7 @@ Module Type OBCADDDEFAULTS
       remember (rev (PS.elements W)) as ws.
       assert (forall x, x ∈ W <-> In x ws) as HinW.
       { intro y; subst ws. rewrite <-in_rev, PSF.elements_iff.
-        split; intro HH; auto. apply SetoidList.InA_alt in HH.
+        split; intro HH; auto using SetoidList.In_InA. apply SetoidList.InA_alt in HH.
         destruct HH as (? & ? & ?); subst; eauto. }
       setoid_rewrite <-Heqws; rewrite HinW; clear Heqws HinW W.
       induction ws as [|w ws IH]; auto.
@@ -195,7 +195,7 @@ Module Type OBCADDDEFAULTS
       remember (rev (PS.elements W)) as ws.
       assert (forall x, x ∈ W <-> In x ws) as HinW.
       { intro x; subst ws. rewrite <-in_rev, PSF.elements_iff.
-        split; intro HH; auto. apply SetoidList.InA_alt in HH.
+        split; intro HH; auto using SetoidList.In_InA. apply SetoidList.InA_alt in HH.
         destruct HH as (? & ? & ?); subst; eauto. }
       setoid_rewrite HinW. setoid_rewrite <-Heqws.
       clear Heqws HinW W.
@@ -227,7 +227,7 @@ Module Type OBCADDDEFAULTS
       remember (rev (PS.elements W)) as ws.
       assert (forall x, x ∈ W <-> In x ws) as HinW.
       { intro x; subst ws. rewrite <-in_rev, PSF.elements_iff.
-        split; intro HH; auto. apply SetoidList.InA_alt in HH.
+        split; intro HH; auto using SetoidList.In_InA. apply SetoidList.InA_alt in HH.
         destruct HH as (? & ? & ?); subst; eauto. }
       setoid_rewrite PS_For_all_Forall.
       setoid_rewrite (Permutation.Permutation_rev (PS.elements W)) at 1 3.
@@ -425,8 +425,8 @@ Module Type OBCADDDEFAULTS
               intro; PS_split; intros []; contradiction.
             - setoid_rewrite <-fold_left_rev_right in Hadd.
               inversion_clear IH as [|?? IHos IH'].
-              setoid_rewrite Forall_rev in IH'.
-              setoid_rewrite Exists_rev; simpl.
+              apply Forall_rev in IH'.
+              setoid_rewrite CommonList.Exists_rev; simpl.
               revert dependent r; revert s a ss'.
               induction (rev ss'') as [|os']; simpl in *; intros.
               + destruct os as [s'|]; simpl in *.
@@ -497,7 +497,7 @@ Module Type OBCADDDEFAULTS
             - inv Hadd; constructor.
             - setoid_rewrite <-fold_left_rev_right in Hadd.
               inversion_clear IH as [|?? IHos IH'].
-              setoid_rewrite Forall_rev in IH'.
+              setoid_rewrite CommonList.Forall_rev in IH'.
               setoid_rewrite Forall2_rev; simpl.
               revert dependent ss'; revert r s a.
               induction (rev ss'') as [|os']; simpl in *; intros.
@@ -584,7 +584,7 @@ Module Type OBCADDDEFAULTS
               inv Hadd; reflexivity.
             - setoid_rewrite <-fold_left_rev_right in Hadd.
               inversion_clear IH as [|?? IHos IH'].
-              rewrite Forall_rev in *; simpl.
+              rewrite CommonList.Forall_rev in *; simpl.
               revert dependent ss'; revert dependent s; revert r a.
               induction (rev ss'') as [|os']; simpl in *; intros; auto.
               + destruct os as [s'|]; simpl in *.
@@ -747,7 +747,7 @@ Module Type OBCADDDEFAULTS
               - simpl in *; inv Hadd; repeat split; auto using PS_For_all_empty.
               - setoid_rewrite <-fold_left_rev_right in Hadd.
                 inversion_clear IHss as [|?? IHos IH'].
-                rewrite Forall_rev in *.
+                rewrite CommonList.Forall_rev in *.
                 simpl in *.
                 revert dependent ss'; revert dependent s; revert r a.
                 induction (rev ss'') as [|os']; simpl in *; intros; auto.
@@ -858,7 +858,7 @@ Module Type OBCADDDEFAULTS
                 reflexivity.
               - setoid_rewrite <-fold_left_rev_right in Hadd.
                 inversion_clear IH as [|?? IHos IH'].
-                rewrite Forall_rev in *; simpl in *.
+                rewrite CommonList.Forall_rev in *; simpl in *.
                 revert dependent ss'; revert dependent s; revert dependent r; revert a.
                 induction (rev ss'') as [|os']; simpl in *; intros; auto.
                 + destruct os as [s'|]; simpl in *.
@@ -1012,7 +1012,7 @@ Module Type OBCADDDEFAULTS
                 reflexivity.
               - setoid_rewrite <-fold_left_rev_right in Hadd.
                 inversion_clear IH as [|?? IHos IH'].
-                rewrite Forall_rev in NOOss, WTss, IH'.
+                rewrite CommonList.Forall_rev in NOOss, WTss, IH'.
                 rewrite Forall2_rev; simpl in *.
                 revert dependent ss'; revert dependent s; revert dependent r; revert a.
                 induction (rev ss'') as [|os']; simpl in *; intros; auto.
@@ -1219,13 +1219,13 @@ Module Type OBCADDDEFAULTS
     rewrite map_map. now setoid_rewrite add_defaults_method_m_name.
   Qed.
 
-  Instance add_default_class_transform_unit: TransformUnit class class :=
+  Global Program Instance add_default_class_transform_unit: TransformUnit class class :=
     { transform_unit := add_defaults_class }.
-  Proof.
+  Next Obligation.
     intros; unfold add_defaults_class; cases.
   Defined.
 
-  Program Instance add_default_class_transform_state_unit: TransformStateUnit class class.
+  Global Program Instance add_default_class_transform_state_unit: TransformStateUnit class class.
   Next Obligation.
     unfold add_defaults_class; cases.
   Defined.
@@ -2247,7 +2247,7 @@ Module Type OBCADDDEFAULTS
 
     Import Basics.
 
-    Instance in1_notin2_Proper1:
+    Global Instance in1_notin2_Proper1:
       Proper (PS.Equal ==> PS.Equal ==> Env.refines eq ==> Env.refines eq --> impl)
              in1_notin2.
     Proof.
@@ -2259,7 +2259,7 @@ Module Type OBCADDDEFAULTS
         setoid_rewrite Henv1' in HH2; auto.
     Qed.
 
-    Instance in1_notin2_Proper2:
+    Global Instance in1_notin2_Proper2:
       Proper (PS.Equal ==> PS.Equal ==> eq ==> eq ==> iff) in1_notin2.
     Proof.
       intros S1 S2 HS12 T1 T2 HT12 ve0 ve0' Henv0 ve1 ve1' Henv1'; subst.
@@ -2369,8 +2369,8 @@ Module Type OBCADDDEFAULTS
           remember (((st1 ∩ rq) \ w1) ∪ ((st2 ∩ rq) \ w2)) as w.
           setoid_rewrite (simplify_write_sets w w1 w2 _ _ _ _ _ Heqw1 Heqw2 Heqw) in Hpre.
 
-          assert (PS.For_all (fun x => ~Env.In x ve0) w) as Hwenv0
-              by (intros ??; apply Hpre; intuition).
+          assert (PS.For_all (fun x => ~Env.In x ve0) w) as Hwenv0.
+          { intros ??. apply Hpre. repeat rewrite PSF.union_iff; auto. }
           assert (PS.For_all (fun x => InMembers x vars) w) as Hwim
               by (now subst w; apply PS_For_all_union;
                   apply PS_For_all_diff, PS_For_all_inter).
@@ -2378,8 +2378,8 @@ Module Type OBCADDDEFAULTS
             as (ve1' & Henv1' & Heval1' & Hmono1 & Hin1').
 
           assert (PS.For_all (fun x => ~Env.In x ve0) w1
-                  /\ PS.For_all (fun x => ~Env.In x ve0) w2) as (Hwenv1 & Hwenv2)
-              by (split; intros ??; apply Hpre; intuition).
+                  /\ PS.For_all (fun x => ~Env.In x ve0) w2) as (Hwenv1 & Hwenv2).
+          { split; intros ??; apply Hpre; repeat rewrite PSF.union_iff; auto. }
           assert (PS.For_all (fun x => InMembers x vars) w1
                   /\ PS.For_all (fun x => InMembers x vars) w2) as (Hwim1 & Hwim2)
               by (subst w1 w2; split; apply PS_For_all_diff, PS_For_all_inter; auto).
@@ -2397,7 +2397,7 @@ Module Type OBCADDDEFAULTS
               + apply (Hmono21 x).
                 destruct (PSP.In_dec x w) as [Hw|Hnw].
                 * now apply PS_In_Forall with (1:=Hin1') (2:=Hw).
-                * apply (Hmono1 x); apply Hpre1; intuition.
+                * apply (Hmono1 x); apply Hpre1. intuition.
             - intros; apply Hpre2; PS_split; tauto.
           }
           assert (in1_notin2 rq2 (st2 ∪ al2) ve22' ve0).
@@ -2408,7 +2408,7 @@ Module Type OBCADDDEFAULTS
               + apply (Hmono22 x).
                 destruct (PSP.In_dec x w) as [Hw|Hnw].
                 * now apply PS_In_Forall with (1:=Hin1') (2:=Hw).
-                * apply (Hmono1 x); apply Hpre1; intuition.
+                * apply (Hmono1 x); apply Hpre1. intuition.
             - intros; apply Hpre2; PS_split; tauto.
           }
 

@@ -244,7 +244,7 @@ Lemma mmapacc_plus_shift:
     mmapacc plus f m1 xs = OK (n - m2) /\ m2 <= n.
 Proof.
   induction xs as [|x xs IH]; intros m1 m2 n Hm; simpl in *; monadInv Hm.
-  now subst; rewrite OK_OK; omega.
+  now subst; rewrite OK_OK; lia.
   rewrite EQ. simpl.
   rewrite Plus.plus_comm, Plus.plus_assoc, (Plus.plus_comm x0 m1) in EQ0.
   apply IH in EQ0. auto.
@@ -262,7 +262,7 @@ Module DoNotation.
 
   Notation "'do' ( X , ( Y , Z ) ) <- A ; B" :=
     (bind22 A (fun X Y Z => B))
-      (at level 200, X ident, Y ident, Z ident, A at level 100, B at level 200)
+      (at level 200, X name, Y name, Z name, A at level 100, B at level 200)
     : error_monad_scope.
 
 End DoNotation.
@@ -330,7 +330,7 @@ Proof.
   unfold Int.wordsize, Ptrofs.wordsize.
   unfold Wordsize_32.wordsize, Wordsize_Ptrofs.wordsize.
   destruct Archi.ptr64; [|reflexivity].
-  simpl. omega.
+  simpl. lia.
 Qed.
 
 Lemma type_eq_refl:
@@ -341,28 +341,35 @@ Proof.
   destruct (type_eq t t) as [|Neq]; congruence.
 Qed.
 
-Remark field_offset_rec_in_range':
-  forall gcenv flds x ofs pos,
-    field_offset_rec gcenv x flds pos = Errors.OK ofs ->
-    pos <= ofs.
+Definition mk_members (flds : list (AST.ident * type)) : members :=
+  List.map (fun '(x, ty) => Member_plain x ty) flds.
+
+Lemma mk_members_names : forall flds,
+    map name_member (mk_members flds) = map fst flds.
 Proof.
-  induction flds as [|[i t]]; simpl; intros.
-  - discriminate.
-  - destruct (AST.ident_eq x i); intros.
-    + inv H. apply align_le. apply alignof_pos.
-    + specialize (IHflds _ _ _ H). eapply Z.le_trans; eauto.
-      apply Z.le_trans with (align pos (alignof gcenv t)).
-      * apply align_le. apply alignof_pos.
-      * generalize (sizeof_pos gcenv t). omega.
+  intros.
+  unfold mk_members.
+  rewrite map_map. eapply map_ext; eauto.
+  intros (?&?); auto.
 Qed.
 
-Corollary field_offset_in_range':
-  forall gcenv flds x ofs,
-    field_offset gcenv x flds = Errors.OK ofs ->
-    0 <= ofs.
+Remark field_offset_rec_mk_members : forall env id flds k ofs bf,
+    field_offset_rec env id (mk_members flds) k = OK (ofs, bf) ->
+    bf = Full.
 Proof.
-  unfold field_offset; intros.
-  eapply field_offset_rec_in_range'; eauto.
+  induction flds as [|(?&?)]; simpl; intros * Hf.
+  - discriminate.
+  - destruct (AST.ident_eq _ _); simpl; subst.
+    + inv Hf; auto.
+    + eapply IHflds; eauto.
+Qed.
+
+Corollary field_offset_mk_members : forall env id flds ofs bf,
+    field_offset env id (mk_members flds) = OK (ofs, bf) ->
+    bf = Full.
+Proof.
+  intros * Hf.
+  apply field_offset_rec_mk_members in Hf; auto.
 Qed.
 
 Lemma two_power_nat_le_divides:
@@ -396,27 +403,30 @@ Proof.
 Qed.
 
 Lemma co_members_alignof:
-  forall env co,
+  forall env co flds,
+    co_members co = mk_members flds ->
     composite_consistent env co ->
     attr_alignas (co_attr co) = None ->
-    Forall (fun x => (alignof env (snd x) | co_alignof co)) (co_members co).
+    Forall (fun x => (alignof env (type_member x) | co_alignof co)) (co_members co).
 Proof.
-  intros env co Henv Hattr.
-  rewrite co_consistent_alignof with (1:=Henv).
+  intros * Hmk Henv Hattr.
+  rewrite co_consistent_alignof with (1:=Henv). clear Henv.
   unfold align_attr.
-  rewrite Hattr; clear Hattr.
-  induction (co_members co) as [|m ms IH]; [now trivial|].
-  destruct (alignof_composite_two_p env ms) as [n Hms].
+  rewrite Hmk, Hattr. clear Hmk.
+  induction flds as [|(?&?) flds IH]; simpl; auto.
+  (* induction (co_members co) as [|a ms IH]; [now trivial|]. *)
+  destruct (alignof_composite_two_p env (mk_members flds)) as [n Hms].
   simpl. rewrite Hms in *; clear Hms.
-  destruct m as [x ty].
-  destruct (alignof_two_p env ty) as [m Hty].
+  (* destruct m as [x ty]. *)
+  destruct (alignof_two_p env t) as [m Hty].
   rewrite Hty.
   constructor.
-  - simpl. rewrite Hty. now apply two_power_nat_max.
+  - simpl. rewrite Hty.
+    now apply two_power_nat_max.
   - apply Forall_impl with (2:=IH).
-    destruct a as [x' ty']. simpl.
-    intro HH. apply Z.divide_trans with (1:=HH).
-    rewrite Z.max_comm. apply two_power_nat_max.
+    intros a HH. apply Z.divide_trans with (1:=HH).
+    rewrite Z.max_comm.
+    apply two_power_nat_max.
 Qed.
 
 Lemma align_noattr:
@@ -428,8 +438,8 @@ Qed.
 Lemma in_field_type:
   forall xs x ty,
     NoDupMembers xs ->
-    In (x, ty) xs ->
-    field_type x xs = Errors.OK ty.
+    In (x,ty) xs ->
+    field_type x (mk_members xs) = Errors.OK ty.
 Proof.
   intros xs x ty Hndup Hin.
   induction xs as [|x' xs IH]; [now inversion Hin|].
@@ -446,28 +456,45 @@ Proof.
 Qed.
 
 Lemma field_offset_type:
-  forall ge id flds d,
-    field_offset ge id flds = Errors.OK d ->
-    exists ty, field_type id flds = Errors.OK ty.
+  forall ge id ms d,
+    field_offset ge id ms = Errors.OK d ->
+    exists ty, field_type id ms = Errors.OK ty.
 Proof.
   unfold field_offset.
   intros until d.
-  cut (forall ofs, field_offset_rec ge id flds ofs = Errors.OK d ->
-              exists ty, field_type id flds = Errors.OK ty); eauto.
-  induction flds as [|(id', ty') flds IH]; intros ofs Hfo; [now inv Hfo|].
-  simpl.
-  destruct (ident_eq_dec id id') as [He|Hne].
-  - rewrite He, peq_true. now exists ty'.
-  - simpl in Hfo.
-    rewrite peq_false in *; auto.
-    destruct (IH _ Hfo) as (ty & Hft).
-    exists ty; assumption.
+  cut (forall ofs, field_offset_rec ge id ms ofs = Errors.OK d ->
+              exists ty, field_type id ms = Errors.OK ty); eauto.
+  induction ms as [|? flds IH]; intros ofs Hfo; [now inv Hfo|].
+  simpl in *.
+  destruct (AST.ident_eq id (name_member a)) as [He|Hne]; eauto.
+Qed.
+
+Remark field_offset_aligned':
+  forall gcenv id flds ofs ty bf,
+    field_offset gcenv id (mk_members flds) = OK (ofs, bf) ->
+    field_type id (mk_members flds) = OK ty ->
+    (alignof gcenv ty | ofs).
+Proof.
+  intros.
+  assert (bf = Full) by (eapply field_offset_mk_members; eauto); subst.
+  eapply field_offset_aligned; eauto.
+Qed.
+
+Remark field_offset_in_range':
+  forall gcenv flds x ofs bf,
+    field_offset gcenv x (mk_members flds) = Errors.OK (ofs,bf) ->
+    0 <= ofs.
+Proof.
+  intros * Hfield.
+  assert (bf = Full) by (eapply field_offset_mk_members; eauto); subst.
+  destruct (field_offset_type _ _ _ _ Hfield) as (?&Hty).
+  eapply field_offset_in_range in Hfield as (?&_); eauto.
 Qed.
 
 Lemma field_type_skip_app:
   forall x ws xs,
     ~InMembers x ws ->
-    field_type x (ws ++ xs) = field_type x xs.
+    field_type x (mk_members (ws ++ xs)) = field_type x (mk_members xs).
 Proof.
   induction ws as [|w ws IH]; auto.
   intros xs Hnin.
@@ -488,13 +515,30 @@ Proof.
 Qed.
 Hint Resolve sizeof_by_value.
 
+Lemma sizeof_struct_pos:
+  forall env ms,
+    0 <= sizeof_struct env ms.
+Proof.
+  unfold sizeof_struct; intros.
+  unfold bytes_of_bits.
+  assert (0 <= bitsizeof_struct env 0 ms).
+  2:{ apply Z.div_pos; lia. }
+  apply bitsizeof_struct_incr.
+Qed.
+
 Lemma set_comm:
   forall {A} x x' (v v': A) m,
     x <> x' ->
     PTree.set x v (PTree.set x' v' m) = PTree.set x' v' (PTree.set x v m).
 Proof.
-  induction x, x', m; simpl; intro Neq;
-    ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
+  intros * Neq.
+  apply PTree.extensionality.
+  intro p.
+  destruct (Pos.eq_dec p x); subst.
+  now rewrite PTree.gss, PTree.gso, PTree.gss.
+  destruct (Pos.eq_dec p x'); subst.
+  now rewrite PTree.gss, PTree.gso, PTree.gss.
+  now rewrite 4 PTree.gso.
 Qed.
 
 (* Remark bind_parameter_temps_cons: *)
@@ -922,7 +966,6 @@ Remark map_fst_drop_block:
     map fst (map drop_block elems) = map fst elems.
 Proof.
   induction elems as [|(x, (b, t))]; simpl; auto.
-  now f_equal.
 Qed.
 
 Program Definition empty_co: composite :=

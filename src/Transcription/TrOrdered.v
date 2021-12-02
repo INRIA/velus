@@ -15,7 +15,6 @@ From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
 From Coq Require Import Permutation.
-From Coq Require Import Omega.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 

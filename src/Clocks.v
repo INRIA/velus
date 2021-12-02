@@ -85,7 +85,7 @@ Module Type CLOCKS
       split; apply equiv_decb_refl.
   Qed.
 
-  Instance clock_EqDec : EqDec clock eq.
+  Global Instance clock_EqDec : EqDec clock eq.
   Proof.
     intros ck1 ck2. compute.
     pose proof (clock_eq_spec ck1 ck2) as Heq.
@@ -110,7 +110,7 @@ Module Type CLOCKS
       rewrite clock_eqb_eq in Hec. congruence.
   Qed.
 
-  Instance nclock_EqDec : EqDec nclock eq.
+  Global Instance nclock_EqDec : EqDec nclock eq.
   Proof.
     eapply prod_eqdec.
     - eapply clock_EqDec.
@@ -203,7 +203,7 @@ Module Type CLOCKS
     assumption.
   Qed.
 
-  Instance wc_clock_Proper:
+  Global Instance wc_clock_Proper:
     Proper (@Permutation (ident * clock) ==> @eq clock ==> iff) wc_clock.
   Proof.
     intros env' env Henv ck' ck Hck.
@@ -216,7 +216,7 @@ Module Type CLOCKS
         auto using wc_clock.
   Qed.
 
-  Instance wc_env_Proper:
+  Global Instance wc_env_Proper:
     Proper (@Permutation (ident * clock) ==> iff) wc_env.
   Proof.
     intros env' env Henv.
@@ -279,7 +279,7 @@ Module Type CLOCKS
     inversion_clear H12; auto.
   Qed.
 
-  Instance clock_parent_Transitive: Transitive clock_parent.
+  Global Instance clock_parent_Transitive: Transitive clock_parent.
   Proof clock_parent_trans.
 
   Lemma clock_parent_Cbase:

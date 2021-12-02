@@ -524,7 +524,7 @@ Section Extra.
     induction ys; auto; simpl; intros; constructor; auto; intros [|]; auto.
   Qed.
 
-  Global Add Parametric Morphism {A} : (@length A)
+  Global Add Parametric Morphism : (@length A)
       with signature @Permutation.Permutation A ==> eq
         as length_permutation.
   Proof.
@@ -1728,7 +1728,7 @@ Section Pointwise.
       + now rewrite IHHperm1, <-Hsame, IHHperm2.
   Qed.
 
-  Global Instance Permutation_map_Proper2 {A B}:
+  Global Instance Permutation_map_Proper2 {B}:
     Proper (pointwise_relation A eq ==> Permutation.Permutation (A:=A)
                                ==> (Permutation.Permutation (A:=B)))
            (@map A B).
@@ -3098,7 +3098,8 @@ Section Forall2.
 
 End Forall2.
 
-Hint Resolve (proj2 (Forall2_eq _ _)).
+Hint Resolve -> Forall2_eq.
+Hint Resolve <- Forall2_eq.
 
 Lemma length_in_left_combine:
   forall {A B} (l: list A) (l': list B) x,
@@ -4247,7 +4248,7 @@ Section OptionLists.
 
   Context {A : Type}.
 
-  Fixpoint LiftO (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
+  Definition LiftO (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
     match x with None => d | Some x => P x end.
 
   Fixpoint Ino (a : A) (l : list (option A)) : Prop :=
@@ -4582,6 +4583,8 @@ Section LL.
     intro len; revert ls.
     unfold ll. induction len; intros ls Hlen; constructor;
                  try apply Le.le_n_0_eq in Hlen; intuition.
+    - lia.
+    - eapply IHlen; lia.
   Defined.
 
   Theorem ll_wf:
@@ -5085,7 +5088,6 @@ Section Partition.
       xs = xs2.
   Proof.
     induction xs; intros * Hpart; inv Hpart; auto.
-    f_equal; auto.
   Qed.
 
   Lemma Partition_Permutation : forall xs xs1 xs2,

@@ -408,7 +408,7 @@ Module Type NLMEMSEMANTICS
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem; eauto.
-    1,2:apply not_Is_defined_in_eq_EqFby in Hnd.
+    apply not_Is_defined_in_eq_EqFby in Hnd.
     eapply SEqFby; eauto.
   Qed.
 
@@ -797,9 +797,9 @@ dataflow memory for which the non-standard semantics holds true.
   (*     destruct Mfby as (Init & Spec); auto. *)
   (*   specialize (Spec n). *)
   (*   destruct (find_val x (M n)); try contradiction. *)
-  (*   rewrite Abs in Spec; try omega. *)
+  (*   rewrite Abs in Spec; try lia. *)
   (*   destruct Spec as [->]. *)
-  (*   apply IHn; omega. *)
+  (*   apply IHn; lia. *)
   (* Qed. *)
 
   Lemma mfbyreset_absent_until:

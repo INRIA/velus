@@ -97,7 +97,7 @@ Module Type CEPROPERTIES
         * apply He; auto.
           intros * Free.
           apply RRx; constructor.
-          apply Exists_app; left; auto.
+          apply Exists_app; auto.
         * apply Forall_app; split; apply Forall_forall; intros * Hin.
           -- repeat (take (Forall _ es1) and eapply Forall_forall in it; eauto).
              apply it; auto.
@@ -109,7 +109,7 @@ Module Type CEPROPERTIES
              apply it1; auto.
              intros * Free.
              apply RRx; constructor.
-             apply Exists_app; right; auto.
+             apply Exists_app; right; right; auto.
              apply Exists_exists; eauto.
       + take (sem_var_instant _ _ _) and eapply (sem_var_instant_switch_env _ R') in it; eauto.
         econstructor; eauto.
@@ -128,7 +128,7 @@ Module Type CEPROPERTIES
         * apply He; auto.
           intros * Free.
           apply RRx; constructor.
-          apply Exists_app; left; auto.
+          apply Exists_app; auto.
         * apply Forall_app; split; apply Forall_forall; intros * Hin.
           -- repeat (take (Forall _ es1) and eapply Forall_forall in it; eauto).
              apply it; auto.
@@ -140,7 +140,7 @@ Module Type CEPROPERTIES
              apply it1; auto.
              intros * Free.
              apply RRx; constructor.
-             apply Exists_app; right; auto.
+             apply Exists_app; right; right.
              apply Exists_exists; eauto.
       + take (sem_var_instant _ _ _) and eapply (sem_var_instant_switch_env _ R) in it; eauto.
         2: { rewrite RRx; auto. }

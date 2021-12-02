@@ -188,10 +188,10 @@ Module Type TRANSLATION
     split; auto.
   Qed.
 
-  Program Instance translate_system_transform_unit: TransformUnit system class :=
+  Global Program Instance translate_system_transform_unit: TransformUnit system class :=
     { transform_unit := translate_system }.
 
-  Program Instance translate_transform_state_unit: TransformStateUnit system class.
+  Global Program Instance translate_transform_state_unit: TransformStateUnit system class.
 
   Lemma exists_step_method:
     forall s,
@@ -232,7 +232,7 @@ Module Type TRANSLATION
     inversion 1; auto.
   Qed.
 
-  Program Instance program_program_without_units : TransformProgramWithoutUnits SynStc.program program :=
+  Global Program Instance program_program_without_units : TransformProgramWithoutUnits SynStc.program program :=
     { transform_program_without_units := fun p => Program p.(SynStc.enums) [] }.
 
   Definition translate: SynStc.program -> program := transform_units.

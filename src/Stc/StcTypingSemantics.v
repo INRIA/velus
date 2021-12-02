@@ -397,7 +397,7 @@ Module Type STCTYPINGSEMANTICS
         pose proof Specinsts as Specinsts'; rewrite insts_of_app in Specinsts'; apply incl_app' in Specinsts' as [].
         pose proof Ndpvars as Ndpvars'.
         unfold variables in Ndpvars'.
-        rewrite <-flat_map_app in Ndpvars'.
+        rewrite flat_map_app in Ndpvars'.
         apply NoDup_app'_iff in Ndpvars' as (?& Ndpvars' &?); simpl in Ndpvars'.
         rewrite Permutation.Permutation_app_comm in Ndpvars'.
         apply NoDup_app'_iff in Ndpvars' as (?&?& Ndpvars').

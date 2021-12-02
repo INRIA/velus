@@ -165,7 +165,7 @@ Module Type ISVARIABLE
 
   (** * Decision procedure *)
 
-  Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
+  Definition variable_eq (vars: PS.t) (eq: equation) : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x vars
     | EqApp xs _ _ _ _ => ps_adds xs vars

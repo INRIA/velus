@@ -99,11 +99,11 @@ Module Type OPERATORS_AUX
        (Import Ops : OPERATORS).
   Close Scope equiv_scope.
 
-  Instance: EqDec cvalue eq := { equiv_dec := cvalue_dec }.
-  Instance: EqDec ctype  eq := { equiv_dec := ctype_dec  }.
-  Instance: EqDec cconst eq := { equiv_dec := cconst_dec }.
-  Instance: EqDec unop   eq := { equiv_dec := unop_dec   }.
-  Instance: EqDec binop  eq := { equiv_dec := binop_dec  }.
+  Global Instance: EqDec cvalue eq := { equiv_dec := cvalue_dec }.
+  Global Instance: EqDec ctype  eq := { equiv_dec := ctype_dec  }.
+  Global Instance: EqDec cconst eq := { equiv_dec := cconst_dec }.
+  Global Instance: EqDec unop   eq := { equiv_dec := unop_dec   }.
+  Global Instance: EqDec binop  eq := { equiv_dec := binop_dec  }.
 
   Definition false_tag : enumtag := 0.
   Definition true_tag : enumtag := 1.
@@ -143,7 +143,7 @@ Module Type OPERATORS_AUX
     apply ctype_dec.
   Defined.
 
-  Instance: EqDec type eq := { equiv_dec := type_dec }.
+  Global Instance: EqDec type eq := { equiv_dec := type_dec }.
 
   (** A synchronous [value] is either an absence or a present constant *)
 
@@ -156,7 +156,7 @@ Module Type OPERATORS_AUX
     apply cvalue_dec.
   Defined.
 
-  Instance: EqDec svalue eq := { equiv_dec := svalue_dec }.
+  Global Instance: EqDec svalue eq := { equiv_dec := svalue_dec }.
 
   Lemma not_absent_bool:
     forall x, x <> absent <-> x <>b absent = true.

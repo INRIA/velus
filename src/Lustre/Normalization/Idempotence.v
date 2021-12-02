@@ -1,7 +1,6 @@
 From Coq Require Import List Sorting.Permutation.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Omega.
 Require Import ProofIrrelevance.
 
 From Velus Require Import Common.

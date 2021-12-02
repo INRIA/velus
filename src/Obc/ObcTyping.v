@@ -116,7 +116,7 @@ Module Type OBCTYPING
 
   Hint Constructors wt_exp wt_stmt: obctyping.
 
-  Instance wt_exp_Proper:
+  Global Instance wt_exp_Proper:
     Proper (@eq program
                 ==> @Permutation.Permutation (ident * type)
                 ==> @Permutation.Permutation (ident * type)
@@ -130,7 +130,7 @@ Module Type OBCTYPING
       auto with obctyping.
   Qed.
 
-  Instance wt_stmt_Proper:
+  Global Instance wt_stmt_Proper:
     Proper (@eq program
                 ==> @Permutation.Permutation (ident * ident)
                 ==> @Permutation.Permutation (ident * type)
@@ -808,7 +808,7 @@ Module Type OBCTYPING
     eapply find_unit_cons in Find as [[E Find]|[]]; simpl in *; eauto.
     - inv Find.
       assert (find_unit (c_name c') (Program enums (rev prog)) = None) as E
-          by (apply find_unit_None; simpl; now rewrite <-Forall_rev).
+          by (apply find_unit_None; simpl; apply Forall_rev; auto).
       setoid_rewrite E.
       unfold find_unit; simpl.
       destruct (ident_eq_dec (c_name c') (c_name c')); try contradiction; eauto.

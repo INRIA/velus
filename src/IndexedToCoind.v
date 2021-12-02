@@ -4,7 +4,6 @@ Open Scope list_scope.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 From Coq Require Import NPeano.
-From Coq Require Import Omega.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.
@@ -115,8 +114,8 @@ Module Type INDEXEDTOCOIND
   Proof.
     unfold seq_streams; intros.
     rewrite map_nth' with (d':=0); simpl.
-    - rewrite seq_nth; auto; omega.
-    - rewrite seq_length; omega.
+    - rewrite seq_nth; auto; lia.
+    - rewrite seq_length; lia.
   Qed.
 
   Corollary nth_tr_streams_from_nth:
@@ -142,9 +141,9 @@ Module Type INDEXEDTOCOIND
     - intros * Hlen E1 E2; rewrite <-E1, <-E2.
       rewrite map_nth' with (d':=a); auto.
       rewrite seq_streams_length in Hlen.
-      rewrite 2 nth_seq_streams; try omega.
+      rewrite 2 nth_seq_streams; try lia.
       + reflexivity.
-      + rewrite (Len n); omega.
+      + rewrite (Len n); lia.
   Qed.
 
   Lemma tr_streams_from_length:
@@ -152,7 +151,7 @@ Module Type INDEXEDTOCOIND
       length (tr_streams_from n xss) = length (xss n).
   Proof.
     unfold_tr_streams; intros.
-    rewrite seq_streams_length; simpl; omega.
+    rewrite seq_streams_length; simpl; lia.
   Qed.
 
   (** If at instant [n], a property is true for all elements of the list *)

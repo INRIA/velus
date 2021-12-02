@@ -1,5 +1,7 @@
 # Object files, in general
 *.vo
+*.vok
+*.vos
 *.vio
 *.vo.aux
 *.aux

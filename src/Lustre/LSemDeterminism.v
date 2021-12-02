@@ -1122,7 +1122,7 @@ Module Type LSEMDETERMINISM
         + eapply Pexp_Pexps.
           * eapply Forall_forall; intros.
             inv H1. eapply det_exp_S; eauto.
-            1,2:eapply Forall_forall; eauto.
+            eapply Forall_forall; eauto.
           * intros ? Hfree. eapply HSn; eauto using Is_free_left_list_In_snd.
             constructor. repeat esplit; eauto.
             rewrite <-Hnth. eapply nth_error_nth'; eauto.
@@ -1267,8 +1267,8 @@ Module Type LSEMDETERMINISM
         { intro contra. eapply H5; eauto. }
         assert (NoDupLocals x x0).
         { rewrite Forall_forall in *. eapply NoDupLocals_incl; eauto.
-          intros x' ?; eapply in_concat' with (x1:=x') in Hin2; eauto.
-          rewrite <-H7 in Hin2. repeat rewrite in_app_iff in *. destruct Hin2; auto.
+          intros x' ?; eapply in_concat' with (x1:=x') in Hin1; eauto.
+          rewrite <-H7 in Hin1. repeat rewrite in_app_iff in *. destruct Hin1; auto.
         }
         eapply Hdet'; eauto using in_or_app.
         rewrite idcaus_app; eauto using in_or_app.

@@ -124,7 +124,7 @@ Proof.
   exploit Events.external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Clight.Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
-  red; simpl; intros. inv H; simpl; try omega.
+  red; simpl; intros. inv H; simpl; try lia.
   eapply Events.external_call_trace_length; eauto.
   eapply Events.external_call_trace_length; eauto.
 Qed.

@@ -83,7 +83,7 @@ Module Type CSTYPING
       1-40:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
       1-32:try rewrite subclock_exp_typeof.
       1-32:try rewrite subclock_exp_typesof.
-      1-32:try (rewrite map_subclock_ann_clock; auto). 1-32:try (rewrite map_subclock_ann_type; auto). 1-32:auto.
+      1-32:try (rewrite map_subclock_ann_clock; auto). 1-32:try (rewrite map_subclock_ann_type; auto). 1-28:auto.
       - apply add_whens_wt; auto.
       - apply add_whens_wt; auto.
       - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst; auto using subclock_clock_wt.
@@ -151,7 +151,7 @@ Module Type CSTYPING
       intros * Hwt Hck Hcond; destruct e; repeat inv_bind.
       3:destruct a; repeat inv_bind; auto.
       1-10:constructor; auto; rewrite Permutation_app_comm; simpl.
-      1-11:(constructor; [constructor; auto; eapply wt_exp_incl; eauto; eauto with datatypes|]).
+      1-10:(constructor; [constructor; auto; eapply wt_exp_incl; eauto; eauto with datatypes|]).
       1-10:take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
     Qed.
 

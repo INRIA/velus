@@ -85,7 +85,7 @@ Module Type NLCLOCKING
   Hint Unfold wc_env wc_node : nlclocking.
   Hint Resolve Forall_nil : nlclocking.
 
-  Instance wc_equation_Proper:
+  Global Instance wc_equation_Proper:
     Proper (@eq global ==> @Permutation (ident * clock) ==> @eq equation ==> iff)
            wc_equation.
   Proof.

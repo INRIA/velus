@@ -69,7 +69,7 @@ Module Type LSYNTAX
 
   (** ** Node *)
 
-  Fixpoint numstreams (e: exp) : nat :=
+  Definition numstreams (e: exp) : nat :=
     match e with
     | Econst _ | Eenum _ _ => 1
     | Efby _ _ anns
@@ -85,7 +85,7 @@ Module Type LSYNTAX
 
   (* Annotation (homogenized). *)
 
-  Fixpoint annot (e: exp): list (type * clock) :=
+  Definition annot (e: exp): list (type * clock) :=
     match e with
     | Econst c => [(Tprimitive (ctype_cconst c), Cbase)]
     | Eenum _ ty => [(ty, Cbase)]
@@ -103,7 +103,7 @@ Module Type LSYNTAX
   Definition annots (es: list exp): list (type * clock) :=
     flat_map annot es.
 
-  Fixpoint typeof (e: exp): list type :=
+  Definition typeof (e: exp): list type :=
     match e with
     | Econst c => [Tprimitive (ctype_cconst c)]
     | Eenum _ ty => [ty]
@@ -121,7 +121,7 @@ Module Type LSYNTAX
   Definition typesof (es: list exp): list type :=
     flat_map typeof es.
 
-  Fixpoint clockof (e: exp): list clock :=
+  Definition clockof (e: exp): list clock :=
     match e with
     | Econst _ | Eenum _ _ => [Cbase]
     | Efby _ _ anns
@@ -138,7 +138,7 @@ Module Type LSYNTAX
   Definition clocksof (es: list exp): list clock :=
     flat_map clockof es.
 
-  Fixpoint nclockof (e: exp): list nclock :=
+  Definition nclockof (e: exp): list nclock :=
     match e with
     | Econst _ | Eenum _ _ => [(Cbase, None)]
     | Efby _ _ anns
@@ -259,7 +259,7 @@ Module Type LSYNTAX
         n_syn      : PSyn n_block;
       }.
 
-  Instance node_unit {PSyn prefs} : ProgramUnit (@node PSyn prefs) :=
+  Global Instance node_unit {PSyn prefs} : ProgramUnit (@node PSyn prefs) :=
     { name := n_name; }.
 
   (** ** Program *)
@@ -271,7 +271,7 @@ Module Type LSYNTAX
       }.
   Arguments Global {_ _}.
 
-  Program Instance global_program {PSyn prefs} : Program (@node PSyn prefs) global :=
+  Global Program Instance global_program {PSyn prefs} : Program (@node PSyn prefs) global :=
     { units := nodes;
       update := fun g => Global g.(enums) }.
 

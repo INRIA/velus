@@ -150,12 +150,12 @@ Module Type STCSYNTAX
                              /\ atom s_name
       }.
 
-  Instance system_state_unit: ProgramStateUnit system type :=
+  Global Instance system_unit: ProgramUnit system :=
+    { name := s_name; }.
+
+  Global Instance system_state_unit: ProgramStateUnit system type :=
     { state_variables := fun s => map (fun x => (fst x, snd (fst (snd x)))) (s_nexts s);
       instance_variables := s_subs }.
-  Proof.
-    exact {| name := s_name |}.
-  Defined.
 
   Lemma s_nexts_in_tcs_fst:
     forall s,
@@ -234,7 +234,7 @@ Module Type STCSYNTAX
                         systems : list system
                       }.
 
-  Program Instance program_program: CommonProgram.Program system program :=
+  Global Program Instance program_program: CommonProgram.Program system program :=
     { units := systems;
       update := fun p => Program p.(enums) }.
 
@@ -381,7 +381,6 @@ Module Type STCSYNTAX
   Proof.
     unfold variables.
     induction tcs as [|[]]; simpl; intros; auto.
-    - f_equal; auto.
     - rewrite <-app_assoc; f_equal; auto.
   Qed.
 
@@ -391,7 +390,6 @@ Module Type STCSYNTAX
   Proof.
     unfold steps_of.
     induction tcs as [|[]]; simpl; intros; auto.
-    f_equal; auto.
   Qed.
 
   Lemma nexts_of_app:

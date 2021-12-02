@@ -163,7 +163,7 @@ Section EqualVelusMemory.
 
 End EqualVelusMemory.
 
-Existing Instance equal_memory_rel.
+Global Existing Instance equal_memory_rel.
 Hint Immediate equal_memory_rel_Reflexive.
 Hint Immediate equal_memory_rel_Transitive.
 

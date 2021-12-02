@@ -62,7 +62,7 @@ Module Type EQUIV
       transitivity proved by stmt_eval_eq_trans
         as stmt_eval_equiv.
 
-  Instance stmt_eval_eq_Proper:
+  Global Instance stmt_eval_eq_Proper:
     Proper (eq ==> eq ==> eq ==> stmt_eval_eq ==> eq ==> iff) stmt_eval.
   Proof.
     intros prog' prog HR1 menv' menv HR2 env' env HR3 s1 s2 Heq r' r HR4;
@@ -70,7 +70,7 @@ Module Type EQUIV
     now apply Heq.
   Qed.
 
-  Instance stmt_eval_eq_Comp_Proper:
+  Global Instance stmt_eval_eq_Comp_Proper:
     Proper (stmt_eval_eq ==> stmt_eval_eq ==> stmt_eval_eq) Comp.
   Proof.
     intros s s' Hseq t t' Hteq prog menv env menv' env'.
@@ -107,7 +107,7 @@ Module Type EQUIV
     inversion_clear 1; now chase_skip.
   Qed.
 
-  Instance stmt_eval_eq_Switch_Proper:
+  Global Instance stmt_eval_eq_Switch_Proper:
     Proper (eq ==> Forall2 (orel stmt_eval_eq) ==> stmt_eval_eq ==> stmt_eval_eq) Switch.
   Proof.
     intros e e' Heeq ss ss' Hsseq d d' Hd prog menv env menv' env'.
@@ -308,7 +308,7 @@ Module Type EQUIV
     eapply Hr in Heval; eauto.
   Qed.
 
-  Instance stmt_refines_Proper:
+  Global Instance stmt_refines_Proper:
     Proper (eq ==> eq ==>
                pointwise_relation _
                (pointwise_relation _ (Basics.flip Basics.impl))

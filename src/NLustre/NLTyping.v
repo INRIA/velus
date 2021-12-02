@@ -76,7 +76,7 @@ Module Type NLTYPING
 
   Hint Constructors wt_clock wt_exp wt_cexp wt_equation : nltyping.
 
-  Instance wt_equation_Proper:
+  Global Instance wt_equation_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * type)
                 ==> @eq equation ==> iff)
            wt_equation.
@@ -92,7 +92,7 @@ Module Type NLTYPING
           | H:Forall _ ?x |- Forall _ ?x =>
             apply Forall_impl_In with (2:=H) end.
       intros ? (?&(?&?)); rewrite Henv in *; auto.
-      1-6:intros; rewrite Henv in *; auto.
+      1-4:intros; rewrite Henv in *; auto.
     - inv WTeq; rewrite <-Henv in *; eauto;
         econstructor; eauto;
           match goal with
@@ -101,7 +101,7 @@ Module Type NLTYPING
           | H:Forall _ ?x |- Forall _ ?x =>
             apply Forall_impl_In with (2:=H) end.
       intros ? (?&(?&?)); rewrite Henv in *; auto.
-      1-6:intros; rewrite Henv in *; auto.
+      1-4:intros; rewrite Henv in *; auto.
   Qed.
 
   Lemma wt_global_Ordered_nodes:

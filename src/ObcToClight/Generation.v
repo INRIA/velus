@@ -293,7 +293,7 @@ Definition translate_obj (obj: ident * ident): (ident * Ctypes.type) :=
   (o, type_of_inst c).
 
 Definition make_members (c: class): Ctypes.members :=
-  map translate_param c.(c_mems) ++ map translate_obj c.(c_objs).
+  mk_members (map translate_param c.(c_mems) ++ map translate_obj c.(c_objs)).
 
 Definition make_struct (c: class): Ctypes.composite_definition :=
   Ctypes.Composite c.(c_name) Ctypes.Struct (make_members c) Ctypes.noattr.
@@ -302,7 +302,7 @@ Definition translate_out (c: class) (m: method): Ctypes.composite_definition :=
   Ctypes.Composite
     (prefix_fun m.(m_name) c.(c_name))
     Ctypes.Struct
-    (map translate_param m.(m_out))
+    (mk_members (map translate_param m.(m_out)))
     Ctypes.noattr.
 
 Definition filter_out: list Ctypes.composite_definition -> list Ctypes.composite_definition :=
@@ -460,7 +460,7 @@ Definition make_program'
            (public: list ident)
            (main: ident) : res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
-  | OK (exist ce P) =>
+  | OK (exist _ ce P) =>
     do _ <- check_size_env ce types;
       OK {| Ctypes.prog_defs := map (vardef ce false) gvars ++
                                 map (vardef ce true) gvars_vol ++

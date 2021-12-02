@@ -30,7 +30,6 @@ From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
 From Coq Require Import Permutation.
-From Coq Require Import Omega.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 
@@ -332,10 +331,9 @@ Module Type CORRECTNESS
     - inv Hf; simpl in *. inv Heq.
       apply IHHperm in H3 as (l2'&Hperm'&Hf'&Heq'); auto.
       exists (y::l2'). repeat split; simpl; auto.
-      f_equal; auto.
     - inv Hf. inv H3. simpl in *. inv Heq.
       exists (y1::y0::l'0). repeat split; simpl; auto.
-      repeat constructor. repeat f_equal; auto.
+      repeat constructor.
     - eapply IHHperm1 in Hf; eauto. destruct Hf as (l2'&Hperm'&Hf'&Heq').
       eapply IHHperm2 in Hf'; eauto. destruct Hf' as (l2''&Hperm''&Hf''&Heq'').
       exists l2''. split; auto. etransitivity; eauto.
@@ -515,7 +513,7 @@ Module Type CORRECTNESS
         2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
             eapply Permutation_seq_eq.
             erewrite <-BranchesSort.Permuted_sort, <-map_length, 2 EQ, H11, seq_length. reflexivity.
-            eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+            eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
             1,2:intros ?? Heqb. lia. apply Nat.leb_le in Heqb; auto.
         }
         erewrite <-combine_fst_snd.
@@ -537,7 +535,7 @@ Module Type CORRECTNESS
       { rewrite fst_NoDupMembers, <-Hperm, H12, <-fst_NoDupMembers; auto. }
       assert (Sorted.StronglySorted le (map fst s')) as Hsorted'.
       { rewrite <-Heq.
-        eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+        eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
         - intros ?????; lia.
         - intros ?? Hle. eapply Nat.leb_le in Hle; auto.
       }
@@ -571,7 +569,7 @@ Module Type CORRECTNESS
         2:{ eapply Forall2_length in Hf. rewrite <-Heq, map_length, <-Hf.
             eapply Permutation_seq_eq.
             erewrite <-BranchesSort.Permuted_sort, <-map_length, 2 EQ1, H12, seq_length. reflexivity.
-            eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+            eapply Sorted.Sorted_StronglySorted, Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
             1,2:intros ?? Heqb. lia. apply Nat.leb_le in Heqb; auto.
         }
         erewrite <-combine_fst_snd.
@@ -1226,7 +1224,7 @@ Module Type CORRECTNESS
       + specialize (Hcount 0).
         unfold_Stv r; rewrite Str_nth_0_hd in *; simpl in *; lia.
       + unfold_Stv r; rewrite Str_nth_S_tl; simpl.
-        * rewrite count_S_nth'. eapply lt_n_S.
+        * rewrite count_S_nth'. eapply Lt.lt_n_S.
           destruct k'; simpl in *.
           -- exfalso. apply (Hcount 0); auto.
           -- eapply IHn; eauto; intros.
@@ -1243,7 +1241,7 @@ Module Type CORRECTNESS
     intros.
     destruct (count_ex_dec (disj_str [r1;r2]) k) as [(n&Heq)|].
     - exists ((count (maskb ((count r2) # n) r2 r1)) # n), ((count r2) # n); intros; subst.
-      destruct (le_gt_dec n n0) as [Hle|Hgt]. apply le_lt_or_eq in Hle as [Hlt|Heq]; subst; auto.
+      destruct (Compare_dec.le_gt_dec n n0) as [Hle|Hgt]. apply Lt.le_lt_or_eq in Hle as [Hlt|Heq]; subst; auto.
       + split; [intros|intros (Hr1&Hr2)].
         * symmetry in H.
           split; symmetry.
@@ -1265,7 +1263,7 @@ Module Type CORRECTNESS
           rewrite <-Hr2k, maskb_nth, Nat.eqb_refl in Hr1.
           rewrite disj_str_spec; simpl. rewrite Hr1, Hr2; auto.
       + split; auto.
-      + apply gt_not_le, Nat.nle_gt in Hgt.
+      + apply Gt.gt_not_le, Nat.nle_gt in Hgt.
         split; [intros|intros (Hr1&Hr2)].
         * split.
           -- rewrite count_eq_false in *; auto.
@@ -1298,8 +1296,8 @@ Module Type CORRECTNESS
 
   Lemma mask_disj : forall k r1 r2,
       exists k1 k2,
-        forall {A} (absent: A) xs, mask absent k (disj_str [r1;r2]) xs ≡
-                                   mask absent k1 (maskb k2 r2 r1) (mask absent k2 r2 xs).
+        forall A (absent: A) xs, mask absent k (disj_str [r1;r2]) xs ≡
+                            mask absent k1 (maskb k2 r2 r1) (mask absent k2 r2 xs).
   Proof.
     intros.
     specialize (count_disj_count k r1 r2) as (k1&k2&Hk).

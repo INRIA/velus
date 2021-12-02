@@ -3,8 +3,6 @@ Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Import Setoid Morphisms.
 
-Require Import Omega.
-
 From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
@@ -393,7 +391,7 @@ Module Type CORRECTNESS
       repeat rewrite_Forall_forall. solve_length.
       repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
       destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
-      econstructor... 1-2:econstructor...
+      econstructor... econstructor...
       Unshelve. 1-2:exact default_stream.
     Qed.
 
@@ -410,7 +408,7 @@ Module Type CORRECTNESS
       repeat rewrite_Forall_forall. 1:solve_length.
       repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
       destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
-      econstructor... 1-2:econstructor...
+      econstructor... econstructor...
       Unshelve. 1-2:exact default_stream.
     Qed.
 
@@ -867,7 +865,7 @@ Module Type CORRECTNESS
       * clear - Hsemvars. solve_forall.
         * repeat rewrite Forall_app. repeat split.
           apply mk_equations_Forall.
-          2-4:(solve_forall; repeat (eapply sem_equation_refines; eauto)).
+          2-3:(solve_forall; repeat (eapply sem_equation_refines; eauto)).
           clear - Hsemvars Hsemf.
           remember (unnest_fby _ _ _) as fby. clear Heqfby.
           simpl_forall.
@@ -940,7 +938,7 @@ Module Type CORRECTNESS
       * clear - Hsemvars. solve_forall.
         * repeat rewrite Forall_app. repeat split.
           apply mk_equations_Forall.
-          2-4:(solve_forall; repeat (eapply sem_equation_refines; eauto)).
+          2-3:(solve_forall; repeat (eapply sem_equation_refines; eauto)).
           clear - Hsemvars Hsemf.
           remember (unnest_arrow _ _ _) as arrow. clear Heqarrow.
           simpl_forall.
@@ -1362,7 +1360,7 @@ Module Type CORRECTNESS
           * eapply Forall2_length in Hl1; solve_length.
           * eapply Forall2_length in Hl2; solve_length.
         + repeat rewrite Forall_app. repeat split...
-          1,2:solve_forall; (eapply sem_equation_refines; [|eauto]; etransitivity; eauto).
+          solve_forall; (eapply sem_equation_refines; [|eauto]; etransitivity; eauto).
       - (* arrow *)
         inversion_clear Hwt as [| | | | | |??? Hwc1 Hwc2 Hl1 Hl2| | | |].
         inversion_clear Hsem as [| | | | | |???????? Hsem1 Hsem2 Fby| | | | |].
@@ -1386,7 +1384,7 @@ Module Type CORRECTNESS
           * eapply Forall2_length in Hl1; solve_length.
           * eapply Forall2_length in Hl2; solve_length.
         + repeat rewrite Forall_app. repeat split...
-          1,2:solve_forall; (eapply sem_equation_refines; [|eauto]; etransitivity; eauto).
+          solve_forall; (eapply sem_equation_refines; [|eauto]; etransitivity; eauto).
       - (* app *)
         unfold unnest_exps in H0.
         repeat inv_bind.
@@ -1503,7 +1501,7 @@ Module Type CORRECTNESS
         { eapply sem_exp_ck_sem_exp, sem_exp_numstreams in H0... }
         constructor.
         + rewrite firstn_app, Hnumstreams, firstn_all, Nat.sub_diag, firstn_O, app_nil_r...
-        + rewrite skipn_app...
+        + rewrite CommonList.skipn_app...
     Qed.
 
     Fact combine_for_numstreams_length {V} : forall es (vs : list V),
@@ -1557,7 +1555,7 @@ Module Type CORRECTNESS
            nth n' v2s d2 = nth n0 v2 d2).
     Proof with eauto.
       induction es; intros v1s v2s n n0 e v1 v2 d1 d2 de1 de2 Hlen1 Hlen2 Hn Hn0 Hnth1 Hnth2;
-        simpl in *; try omega.
+        simpl in *; try lia.
       rewrite app_length in *. rewrite length_annot_numstreams in *.
       destruct n.
       - inv Hnth1; inv Hnth2.
@@ -1565,16 +1563,16 @@ Module Type CORRECTNESS
         exists n0. repeat split...
         + rewrite nth_firstn_1...
         + rewrite nth_firstn_1...
-      - apply lt_S_n in Hn.
+      - apply Lt.lt_S_n in Hn.
         eapply IHes in Hn. 4,5,6:eauto.
         + destruct Hn as [n' [Hlen' [Hnth1' Hnth2']]].
           exists (n'+(numstreams a)).
           repeat split.
-          * rewrite skipn_length in Hlen'. omega.
+          * rewrite skipn_length in Hlen'. lia.
           * rewrite nth_skipn in Hnth1'...
           * rewrite nth_skipn in Hnth2'...
-        + rewrite skipn_length. omega.
-        + rewrite skipn_length. omega.
+        + rewrite skipn_length. lia.
+        + rewrite skipn_length. lia.
     Qed.
 
     Fact unnest_equation_sem : forall vars H b equ eqs' st st',
@@ -2108,7 +2106,7 @@ Module Type CORRECTNESS
     Definition init_stream bs :=
       sfby true_val (enum bs 0).
 
-    Instance init_stream_Proper:
+    Global Instance init_stream_Proper:
       Proper (@EqSt bool ==> @EqSt svalue) init_stream.
     Proof.
       intros bs bs' Heq1.
@@ -2629,10 +2627,10 @@ Module Type CORRECTNESS
           repeat eexists; eauto. repeat inv_bind; auto. }
         inv Hunt. inv Hwc. inv Hsem.
         assert (st_follows st x1) as Hfollows by (eapply normfby_block_st_follows in H0; eauto).
-        eapply normfby_block_sem in H0 as [H' [Href1 [Hvalid1 [Hhistst1 Hsem1]]]]. 2-11:eauto.
+        eapply normfby_block_sem in H0 as [H' [Href1 [Hvalid1 [Hhistst1 Hsem1]]]]. 2-6:eauto.
         assert (Forall (sem_block_ck G1 H' bs) blocks) as Hsem'.
         { solve_forall. eapply sem_block_refines... } clear H9.
-        eapply IHblocks in Hnorm as (H''&Href&Hdom&Hsem2). 2-11:eauto.
+        eapply IHblocks in Hnorm as (H''&Href&Hdom&Hsem2). 2-6:eauto.
         2:solve_forall; repeat solve_incl.
         + exists H''. split;[|split]...
           * etransitivity...

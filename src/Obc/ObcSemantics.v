@@ -364,7 +364,6 @@ Module Type OBCSEMANTICS
         H: Forall2 _ ?xs _, H': Forall2 _ ?xs ?ys |- _ =>
         clear - H H'; revert dependent ys; induction H; intros; inv H'; auto
       end.
-      f_equal; auto; congruence.
   Qed.
 
   Lemma stmt_eval_det:

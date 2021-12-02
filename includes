@@ -3,6 +3,5 @@ common
 backend
 cfrontend
 driver
-flocq
-exportclight
+export
 cparser

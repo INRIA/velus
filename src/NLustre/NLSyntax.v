@@ -74,7 +74,7 @@ Module Type NLSYNTAX
         n_good   : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst (n_in ++ n_vars ++ n_out)) /\ atom n_name
       }.
 
-  Instance node_unit: ProgramUnit node :=
+  Global Instance node_unit: ProgramUnit node :=
     { name := n_name; }.
 
   (** ** Program *)
@@ -84,7 +84,7 @@ Module Type NLSYNTAX
                        nodes : list node
                      }.
 
-  Program Instance global_program: Program node global :=
+  Global Program Instance global_program: Program node global :=
     { units := nodes;
       update := fun g => Global g.(enums) }.
 
@@ -405,18 +405,18 @@ Module Type NLSYNTAX
 
   End interface_eq.
 
-  Instance node_iface_eq_refl : Reflexive node_iface_eq.
+  Global Instance node_iface_eq_refl : Reflexive node_iface_eq.
   Proof.
     intros n. repeat split.
   Qed.
 
-  Instance node_iface_eq_sym : Symmetric node_iface_eq.
+  Global Instance node_iface_eq_sym : Symmetric node_iface_eq.
   Proof.
     intros ?? (?&?&?).
     constructor; auto.
   Qed.
 
-  Instance node_iface_eq_trans : Transitive node_iface_eq.
+  Global Instance node_iface_eq_trans : Transitive node_iface_eq.
   Proof.
     intros n1 n2 n3 H12 H23.
     destruct H12 as [? [? ?]].
@@ -424,14 +424,14 @@ Module Type NLSYNTAX
     repeat split; etransitivity; eauto.
   Qed.
 
-  Instance global_eq_refl : Reflexive global_iface_eq.
+  Global Instance global_eq_refl : Reflexive global_iface_eq.
   Proof.
     intros G. split; intros; try reflexivity.
     destruct (find_node f G); constructor.
     apply node_iface_eq_refl.
   Qed.
 
-  Instance global_iface_eq_sym : Symmetric global_iface_eq.
+  Global Instance global_iface_eq_sym : Symmetric global_iface_eq.
   Proof.
     intros ?? H12.
     inv H12. constructor; auto.

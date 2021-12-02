@@ -420,7 +420,7 @@ Module Type LTYPING
     auto with ltyping datatypes.
   Qed.
 
-  Instance wt_clock_Proper enums:
+  Global Instance wt_clock_Proper enums:
     Proper (@Permutation.Permutation (ident * type) ==> @eq clock ==> iff)
            (wt_clock enums).
   Proof.
@@ -434,14 +434,14 @@ Module Type LTYPING
         auto with ltyping.
   Qed.
 
-  Instance wt_clock_enums_Proper :
+  Global Instance wt_clock_enums_Proper :
     Proper (@incl _ ==> @eq _ ==> @eq _ ==> Basics.impl) wt_clock.
   Proof.
     intros ?? Same ??? ? ck ? Wt; subst.
     induction ck; inversion_clear Wt; subst; repeat constructor; auto.
   Qed.
 
-  Instance wt_clock_pointwise_Proper enums :
+  Global Instance wt_clock_pointwise_Proper enums :
     Proper (@Permutation.Permutation (ident * type)
                                      ==> pointwise_relation clock iff)
            (wt_clock enums).
@@ -450,14 +450,14 @@ Module Type LTYPING
     now rewrite Henv.
   Qed.
 
-  Instance wt_clock_incl_Proper :
+  Global Instance wt_clock_incl_Proper :
     Proper (@incl _ ==> @eq _ ==> @eq _ ==> Basics.impl) wt_clock.
   Proof.
     intros ?? Same ??? ? ck ? Wt; subst.
     rewrite Same in Wt; auto.
   Qed.
 
-  Instance wt_exp_Proper {PSyn prefs}:
+  Global Instance wt_exp_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * type)
                 ==> @eq exp ==> iff)
            wt_exp.
@@ -477,7 +477,7 @@ Module Type LTYPING
       econstructor; eauto.
   Qed.
 
-  Instance wt_exp_pointwise_Proper {PSyn prefs}:
+  Global Instance wt_exp_pointwise_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * type)
                                      ==> pointwise_relation exp iff) wt_exp.
   Proof.
@@ -485,7 +485,7 @@ Module Type LTYPING
     now rewrite HG, Henv.
   Qed.
 
-  Instance wt_equation_Proper {PSyn prefs}:
+  Global Instance wt_equation_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * type)
                 ==> @eq equation ==> iff)
            wt_equation.
@@ -723,7 +723,7 @@ Module Type LTYPING
     apply check_nodup_sorted_NoDup in Hc; eauto.
     - now rewrite <-SortNat.Permuted_sort in Hc.
     - apply Sorted_StronglySorted. intros ?????. eapply Nat.le_trans; eauto.
-      eapply Sorted_impl, SortNat.LocallySorted_sort.
+      eapply Sorted_impl, SortNat.Sorted_sort.
       intros ?? Hle; simpl in *. inv Hle.
       apply Nat.leb_le; auto.
   Qed.
@@ -1097,7 +1097,7 @@ Module Type LTYPING
         + contradict H3; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hty.
           eapply Forall_impl; [|eapply Hty]; intros (?&?) (?&Hin&Hty').
-          eapply Forall_forall in H2; eauto. rewrite Forall2_eq in H2; subst; auto.
+          eapply Forall_forall in H2; eauto. simpl in *; congruence.
       - (* Ecase *)
         take (check_exp _ = Some _) and apply IHe in it as (? & ?).
         take (Forall _ es) and (repeat setoid_rewrite Forall_forall in it).
@@ -1114,7 +1114,7 @@ Module Type LTYPING
         + contradict H5; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hty.
           eapply Forall_impl; [|eapply Hty]; intros (?&?) (?&Hin&Hty').
-          eapply Forall_forall in H4; eauto. rewrite Forall2_eq in H4; subst; auto.
+          eapply Forall_forall in H4; eauto. simpl in *; congruence.
         + congruence.
       - (* Ecase *)
         take (check_exp _ = Some _) and apply IHe in it as (? & ?).
@@ -1127,7 +1127,7 @@ Module Type LTYPING
         + contradict H4; subst; simpl. auto.
         + eapply Forall2_ignore2 in Hty.
           eapply Forall_impl; [|eapply Hty]; intros (?&?) (?&Hin&Hty').
-          eapply Forall_forall in H3; eauto. rewrite Forall2_eq in H3; subst; auto.
+          eapply Forall_forall in H3; eauto. simpl in *; congruence.
       - (* Eapp *)
         take (Forall _ es) and rewrite Forall_forall in it.
         take (Forall _ er) and rewrite Forall_forall in it.
@@ -1355,7 +1355,7 @@ Module Type LTYPING
       apply check_nodup_correct in Hndup.
       unfold wt_global, wt_program, units; simpl. split; auto.
       induction (nodes G); constructor; inv Hndup.
-      1-3:simpl in Hcheck; apply Bool.andb_true_iff in Hcheck as [Hc1 Hc2]; auto.
+      1-2:simpl in Hcheck; apply Bool.andb_true_iff in Hcheck as [Hc1 Hc2]; auto.
       split.
       - apply check_node_correct in Hc1; auto using Env.elements_from_list_incl.
       - apply Forall_forall. intros ? Hin contra.
@@ -1396,7 +1396,7 @@ Module Type LTYPING
     Proof with eauto.
       induction e using exp_ind2; intros Hwt; inv Hwt...
       1-10:econstructor; try (destruct Heq as (Henums&_); erewrite <-Henums)...
-      1-12:rewrite Forall_forall in *...
+      1-10:rewrite Forall_forall in *...
       - intros ? Hin. specialize (H7 _ Hin). specialize (H _ Hin).
         rewrite Forall_forall in *...
       - intros ? Hin. specialize (H10 _ Hin). specialize (H _ Hin); simpl in H.
@@ -1616,31 +1616,31 @@ Module Type LTYPING
       - (* binop *) constructor; auto.
       - (* fby *)
         rewrite <-H7. unfold typesof.
-        rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
+        rewrite flat_map_concat_map, Forall_concat, Forall_map.
         rewrite Forall_forall in H4, H. eapply Forall_forall; eauto.
       - (* arrow *)
         rewrite <-H7. unfold typesof.
-        rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
+        rewrite flat_map_concat_map, Forall_concat, Forall_map.
         rewrite Forall_forall in H4, H. eapply Forall_forall; eauto.
       - (* when *)
         unfold typesof.
-        rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
+        rewrite flat_map_concat_map, Forall_concat, Forall_map.
         rewrite Forall_forall in H7, H. eapply Forall_forall; eauto.
       - (* merge *)
         inv H; try solve [exfalso; eauto]. inv H7. inv H8.
         unfold typesof.
-        rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
+        rewrite flat_map_concat_map, Forall_concat, Forall_map.
         rewrite Forall_forall in H10, H0. eapply Forall_forall; eauto.
       - (* case *)
         inv H11; try congruence.
         unfold typesof.
-        rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
+        rewrite flat_map_concat_map, Forall_concat, Forall_map.
         inv H. inv H10. rewrite Forall_forall in *; intros. eapply H4; eauto.
         eapply Forall_forall; eauto.
       - (* case (default) *)
         simpl in *.
         unfold typesof.
-        rewrite flat_map_concat_map, <-Forall_concat, Forall_map.
+        rewrite flat_map_concat_map, Forall_concat, Forall_map.
         eapply Forall_impl_In; [|eapply H0]; intros.
         eapply H2; eauto. rewrite Forall_forall in *; eauto.
       - (* app *)

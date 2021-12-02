@@ -95,7 +95,7 @@ Module Type CETYPING
     eauto with datatypes.
   Qed.
 
-  Instance wt_clock_Proper:
+  Global Instance wt_clock_Proper:
     Proper (@Permutation.Permutation (ident * nat) ==>
             @Permutation.Permutation (ident * type) ==>
             @eq clock ==> iff)
@@ -112,7 +112,7 @@ Module Type CETYPING
         eauto.
   Qed.
 
-  Instance wt_exp_Proper:
+  Global Instance wt_exp_Proper:
     Proper (@Permutation.Permutation (ident * nat) ==>
             @Permutation.Permutation (ident * type) ==>
             @eq exp ==> iff)
@@ -133,7 +133,7 @@ Module Type CETYPING
             now rewrite Henums.
   Qed.
 
-  Instance wt_exp_pointwise_Proper:
+  Global Instance wt_exp_pointwise_Proper:
     Proper (@Permutation.Permutation (ident * nat) ==>
             @Permutation.Permutation (ident * type) ==>
             pointwise_relation exp iff)
@@ -143,7 +143,7 @@ Module Type CETYPING
     now rewrite Henv, Henums.
   Qed.
 
-  Instance wt_cexp_Proper:
+  Global Instance wt_cexp_Proper:
     Proper (@Permutation.Permutation (ident * nat) ==>
             @Permutation.Permutation (ident * type) ==>
             @eq cexp ==> iff)

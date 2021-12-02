@@ -3,8 +3,6 @@ Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Import Setoid Morphisms.
 
-Require Import Omega.
-
 From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
@@ -618,7 +616,7 @@ Module Type CSCORRECTNESS
           * eapply sc_vars_refines; eauto.
             unfold idck, idty. repeat rewrite map_map. erewrite map_ext; eauto. intros (?&?&?); auto.
           * clear - Hsc2. unfold sc_vars in *.
-            do 2 apply Forall_map. rewrite flat_map_concat_map in *. rewrite <-Forall_concat, Forall_map in Hsc2.
+            do 2 apply Forall_map. rewrite flat_map_concat_map in *. rewrite Forall_concat, Forall_map in Hsc2.
             eapply Forall_concat, Forall_map, Forall_impl; [|eauto]; intros (((?&?)&?)&?) Hf.
             rewrite Forall_map in Hf. eapply Forall_map, Forall_impl; [|eauto]; intros ((?&?)&(?&?)) ?; auto.
         + apply Forall_map, Forall_forall; intros (?&?&?) Hin.

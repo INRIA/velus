@@ -27,7 +27,7 @@ Module Type OBCSYNTAX
   | Binop : binop -> exp -> exp -> type -> exp  (* binary operator *)
   | Valid : ident -> type -> exp.                         (* valid value assertion *)
 
-  Fixpoint typeof (e: exp): type :=
+  Definition typeof (e: exp): type :=
     match e with
     | Const c => Tprimitive (ctype_cconst c)
     | Var _ ty
@@ -244,12 +244,12 @@ Module Type OBCSYNTAX
         c_good    : Forall (AtomOrGensym (PSP.of_list gensym_prefs)) (map fst c_objs) /\ atom c_name
       }.
 
-  Instance system_state_unit: ProgramStateUnit class type :=
+  Global Instance system_unit: ProgramUnit class :=
+    { name := c_name; }.
+
+  Global Instance system_state_unit: ProgramStateUnit class type :=
     { state_variables := c_mems;
       instance_variables := c_objs }.
-  Proof.
-    exact {| name := c_name |}.
-  Defined.
 
   Lemma c_nodupmems:
     forall c, NoDupMembers (c_mems c).
@@ -276,11 +276,11 @@ Module Type OBCSYNTAX
         classes : list class;
       }.
 
-  Program Instance program_program: CommonProgram.Program class program :=
+  Global Program Instance program_program: CommonProgram.Program class program :=
     { units := classes;
       update := fun p => Program p.(enums) }.
 
-  Program Instance program_program_without_units : TransformProgramWithoutUnits program program :=
+  Global Program Instance program_program_without_units : TransformProgramWithoutUnits program program :=
     { transform_program_without_units := fun p => Program p.(enums) [] }.
 
   Fixpoint find_method (f: ident) (ms: list method) : option method :=
@@ -551,7 +551,7 @@ Module Type OBCSYNTAX
       try apply equiv_dec.
   Qed.
 
-  Instance: EqDec exp eq := { equiv_dec := exp_dec }.
+  Global Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
   Definition rev_prog (p: program) : program :=
     Program p.(enums) (rev_tr p.(classes)).

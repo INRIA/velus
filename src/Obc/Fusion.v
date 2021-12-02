@@ -107,13 +107,13 @@ Module Type FUSION
     now rewrite map_m_name_fuse_methods.
   Qed.
 
-  Program Instance fuse_class_transform_unit: TransformUnit class class :=
+  Global Program Instance fuse_class_transform_unit: TransformUnit class class :=
     { transform_unit := fuse_class }.
   Next Obligation.
     unfold fuse_class; cases.
   Defined.
 
-  Program Instance fuse_class_transform_state_unit: TransformStateUnit class class.
+  Global Program Instance fuse_class_transform_state_unit: TransformStateUnit class class.
   Next Obligation.
     unfold fuse_class; cases.
   Defined.

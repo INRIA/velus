@@ -168,8 +168,8 @@ Module Type CORRECTNESS
         unfold add_val_n; rewrite find_val_gso; auto.
         intro E; eapply Notin1; rewrite E. exists ckr. do 2 constructor.
       + econstructor; eauto.
-        1,2:unfold add_val_n; rewrite find_val_gso; auto.
-        1,2:intro E; eapply Notin2; rewrite E; do 2 constructor.
+        unfold add_val_n; rewrite find_val_gso; auto.
+        intro E; eapply Notin2; rewrite E; do 2 constructor.
     - apply IHtcs.
       + intro n'; specialize (Sem n'); inv Sem; auto.
       + contradict Notin1. destruct Notin1 as (ck&Notin1).
@@ -434,7 +434,7 @@ Module Type CORRECTNESS
       apply H3; eauto.
     - right. apply IHVars; auto.
     - left. specialize (H0 n).
-      inv H2. 1,2:eapply sem_var_instant_det in H0; [|eauto]; try congruence.
+      inv H2. eapply sem_var_instant_det in H0; [|eauto]; try congruence.
       rewrite <- H0; auto.
     - right. apply IHVars; auto.
   Qed.

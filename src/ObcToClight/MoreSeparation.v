@@ -40,10 +40,8 @@ Lemma pure_imp:
     (pure P -*> pure Q) <-> (P -> Q).
 Proof.
   split; intro Imp.
-  - eapply Imp.
+  - apply Imp with (m:=Memory.Mem.empty).
   - split; auto.
-  Grab Existential Variables.
-  exact Memory.Mem.empty.
 Qed.
 
 Lemma pure_eqv:
@@ -105,7 +103,7 @@ Infix "-*" := sepwand (at level 65, right associativity) : sep_scope.
 Definition decidable_footprint (P: massert) : Prop :=
   forall b ofs, Decidable.decidable (m_footprint P b ofs).
 
-Instance decidable_footprint_Proper:
+Global Instance decidable_footprint_Proper:
   Proper (massert_eqv ==> iff) decidable_footprint.
 Proof.
   intros P Q HPQ.
@@ -237,7 +235,7 @@ Proof.
   apply Mem.unchanged_on_refl.
 Qed.
 
-Instance wand_footprint_massert_imp_Proper:
+Global Instance wand_footprint_massert_imp_Proper:
   Proper (massert_imp ==> massert_imp --> eq ==> eq ==> Basics.impl)
          wand_footprint.
 Proof.
@@ -247,7 +245,7 @@ Proof.
   now rewrite HPQ, HRS.
 Qed.
 
-Instance wand_footprint_massert_eqv_Proper:
+Global Instance wand_footprint_massert_eqv_Proper:
   Proper (massert_eqv ==> massert_eqv ==> eq ==> eq ==> iff) wand_footprint.
 Proof.
   intros P Q HPQ R S HRS b' b Hbeq ofs' ofs Hoeq.
@@ -256,7 +254,7 @@ Proof.
   rewrite HPQ, HRS. reflexivity.
 Qed.
 
-Instance sepwand_massert_Proper:
+Global Instance sepwand_massert_Proper:
   Proper (massert_eqv ==> massert_eqv ==> massert_eqv) sepwand.
 Proof.
   intros P Q HPQ R S HRS.
@@ -521,7 +519,7 @@ Qed.
 Definition subseteq_footprint (P Q: massert) :=
   (forall b ofs, m_footprint P b ofs -> m_footprint Q b ofs).
 
-Instance subseteq_footprint_footprint_Proper:
+Global Instance subseteq_footprint_footprint_Proper:
   Proper (subseteq_footprint ==> eq ==> eq ==> Basics.impl) m_footprint.
 Proof.
   intros P Q Hsub b b' Heqb ofs ofs' Heqofs HP.
@@ -547,7 +545,7 @@ Add Parametric Relation: massert subseteq_footprint
     transitivity proved by subseteq_footprint_trans
       as subseteq_footprint_rel.
 
-Instance subseteq_footprint_massert_imp_Proper:
+Global Instance subseteq_footprint_massert_imp_Proper:
   Proper (massert_imp ==> massert_imp --> Basics.impl) subseteq_footprint.
 Proof.
   intros P Q HPQ R S HSR HPsR b ofs HfQ.
@@ -556,7 +554,7 @@ Proof.
   now apply HSR in HPsR.
 Qed.
 
-Instance subseteq_footprint_massert_eqv_Proper:
+Global Instance subseteq_footprint_massert_eqv_Proper:
   Proper (massert_eqv ==> massert_eqv ==> iff) subseteq_footprint.
 Proof.
   intros P Q HPQ R S HSR.
@@ -1015,9 +1013,17 @@ Section Sepall.
 
 End Sepall.
 
+Lemma sepall_map {A B} :
+  forall (P : B -> _) f (xs : list A),
+    sepall P (map f xs) <-*-> sepall (fun x => P (f x)) xs.
+Proof.
+  induction xs; simpl; try reflexivity.
+  apply sepconj_eqv; auto.
+Qed.
+
 Hint Resolve decidable_footprint_sepall footprint_perm_sepall.
 
-Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
+Global Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
   Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
          sepall.
 Proof.
@@ -1035,6 +1041,56 @@ Proof.
   - now rewrite IHHperm2.
 Qed.
 
+Remark bitsizeof_pos : forall env ty,
+    0 <= bitsizeof env ty.
+Proof.
+  intros.
+  unfold bitsizeof.
+  pose proof (sizeof_pos env ty).
+  lia.
+Qed.
+
+Remark bitalignof_pos : forall env ty,
+    bitalignof env ty > 0.
+Proof.
+  intros *.
+  unfold bitalignof.
+  pose proof (alignof_pos env ty).
+  lia.
+Qed.
+
+Fact bytes_of_bits_le_incr : forall x y,
+    x <= y ->
+    bytes_of_bits x <= bytes_of_bits y.
+Proof.
+  intros * Hy. unfold bytes_of_bits.
+  apply Z_div_le; lia.
+Qed.
+
+
+Fact bytes_of_bits_div : forall x,
+    (8 | x) ->
+    bytes_of_bits x = x / 8.
+Proof.
+  unfold bytes_of_bits.
+  intros * Hdiv. destruct Hdiv as (c&?); subst; simpl.
+  rewrite Z_div_plus_full_l; try lia.
+  rewrite Z.add_0_r, Z_div_mult; auto. lia.
+Qed.
+
+Lemma range'_sub : forall p b lo hi lo' hi',
+    lo' <= hi' ->
+    lo' >= lo ->
+    hi' <= hi ->
+    range' p b lo hi -*> range' p b lo' hi'.
+Proof.
+  intros * Hle Hlo Hhi.
+  rewrite range_split', range_split' at 1.
+  rewrite sep_comm, 2 sep_drop. eauto.
+  split; try lia.
+  split; try lia.
+Qed.
+
 (* * * * * * * * Ranges * * * * * * * * * * * * * * *)
 
 Section SplitRange.
@@ -1049,8 +1105,8 @@ Section SplitRange.
   Definition field_range' (p: permission) (flds: list (AST.ident * type))
              (b: block) (lo: Z) (fld: AST.ident * type) : massert :=
     let (id, ty) := fld in
-    match field_offset env id flds with
-      | Errors.OK ofs  => range' p b (lo + ofs) (lo + ofs + sizeof env ty)
+    match field_offset env id (mk_members flds) with
+      | Errors.OK ofs  => range' p b (lo + fst ofs) (lo + fst ofs + sizeof env ty)
       | Errors.Error _ => sepfalse
     end.
 
@@ -1061,7 +1117,7 @@ Section SplitRange.
     intros.
     apply decidable_footprint_sepall.
     intro fld. destruct fld as [x ty].
-    simpl. destruct (field_offset env x flds); auto.
+    simpl. destruct (field_offset env x _); auto.
   Qed.
 
   Lemma footprint_perm_field_range:
@@ -1070,59 +1126,66 @@ Section SplitRange.
   Proof.
     intros p flds b pos x b' lo hi.
     destruct x as [x ty].
-    simpl. destruct (field_offset env x flds); auto.
+    simpl. destruct (field_offset env x _); auto.
   Qed.
 
   Lemma split_range_fields':
     forall p b lo flds,
       NoDupMembers flds ->
-      massert_imp (range' p b lo (lo + sizeof_struct env 0 flds))
-                  (sepall (field_range' p flds b lo) flds).
+      (range' p b lo (lo + sizeof_struct env (mk_members flds)))
+        -*> (sepall (field_range' p flds b lo) flds).
   Proof.
     intros p b lo flds Hndup.
+    unfold sizeof_struct.
     cut (forall cur,
+            (8 | cur) ->
             massert_imp
-              (range' p b (lo + cur)
-                       (lo + sizeof_struct env cur flds))
+              (range' p b (lo + bytes_of_bits cur)
+                       (lo + bytes_of_bits (bitsizeof_struct env cur (mk_members flds))))
               (sepall (fun fld : AST.ident * type =>
                          let (id0, ty) := fld in
-                         match field_offset_rec env id0 flds cur with
+                         match field_offset_rec env id0 (mk_members flds) cur with
                          | Errors.OK ofs =>
-                             range' p b (lo + ofs) (lo + ofs + sizeof env ty)
+                             range' p b (lo + fst ofs) (lo + fst ofs + sizeof env ty)
                          | Errors.Error _ => sepfalse
                          end) flds)).
     - intro HH.
       specialize HH with 0. rewrite Z.add_0_r in HH.
-      apply HH.
-    - induction flds as [|x xs IH]; [now constructor|].
-      destruct x as [id' ty'].
-      apply nodupmembers_cons in Hndup.
-      destruct Hndup as [Hnin Hndup].
+      apply HH. eexists 0; lia.
+    - induction flds as [|[id' ty'] xs IH]; [now constructor|].
+      apply nodupmembers_cons in Hndup as [Hnin Hndup].
       specialize (IH Hndup).
-      intro cur.
+      intros cur Hdiv.
       Opaque sepconj. simpl.
-      rewrite peq_true.
+      rewrite peq_true; simpl.
       erewrite sepall_swapp.
-      + rewrite range_split'
-        with (mid:=lo + (align cur (alignof env ty') + sizeof env ty')).
-        * apply sep_imp'.
-          2:now apply IH.
-          rewrite range_split'
-          with (mid:=lo + align cur (alignof env ty')).
-          rewrite sep_drop. rewrite Z.add_assoc. reflexivity.
-          split.
-          now apply Z.add_le_mono_l; apply align_le; apply alignof_pos.
-          apply Z.add_le_mono_l.
-          rewrite <-Z.add_0_r at 1. apply Z.add_le_mono_l.
-          apply Z.ge_le. apply sizeof_pos.
+      + rewrite range_split'.
+        * assert (8 | align cur (bitalignof env ty') + bitsizeof env ty') as Hdiv'.
+          { apply Z.divide_add_r.
+            - etransitivity. 2:apply align_divides; auto using bitalignof_pos.
+              unfold bitalignof. eexists; eauto.
+            - unfold bitsizeof. eexists; eauto.
+          }
+          apply sep_imp'; eauto.
+          apply range'_sub.
+          -- rewrite <-Z.add_assoc. apply Z.add_le_mono_l.
+             rewrite <- Z.add_0_r at 1. apply Z.add_le_mono; auto. reflexivity.
+             pose proof (sizeof_pos env ty'). lia.
+          -- apply Z.le_ge, Z.add_le_mono_l.
+             rewrite bytes_of_bits_div; auto.
+             apply Z.div_le_mono, align_le; auto using bitalignof_pos; lia.
+          -- repeat rewrite <-Z.add_assoc. apply Z.add_le_mono_l.
+             rewrite bytes_of_bits_div; auto.
+             unfold bitsizeof.
+             rewrite Z_div_plus; lia.
         * split.
-          2:now apply Z.add_le_mono_l; apply sizeof_struct_incr.
-          apply Z.add_le_mono_l.
-          rewrite <-Z.add_0_r at 1. apply Z.add_le_mono.
-          apply align_le. apply alignof_pos.
-          apply Z.ge_le. apply sizeof_pos.
-      + intros fld Hin.
-        destruct fld.
+          -- apply Z.add_le_mono_l, bytes_of_bits_le_incr.
+             rewrite <- Z.add_0_r at 1. apply Z.add_le_mono; auto using bitsizeof_pos.
+             apply align_le; auto using bitalignof_pos.
+          -- apply Z.add_le_mono_l, bytes_of_bits_le_incr.
+             etransitivity. 2:apply bitsizeof_struct_incr.
+             reflexivity.
+      + intros (?&?) Hin.
         rewrite peq_false.
         reflexivity.
         intro Heq; subst.
@@ -1131,25 +1194,28 @@ Section SplitRange.
   Qed.
 
   Lemma split_range_fields:
-    forall p b lo,
-      NoDupMembers (co_members co) ->
+    forall p b flds lo,
+      co_members co = mk_members flds ->
+      NoDup (map name_member (co_members co)) ->
       massert_imp (range' p b lo (lo + co_sizeof co))
-                  (sepall (field_range' p (co_members co) b lo) (co_members co)).
+                  (sepall (field_range' p flds b lo) flds).
   Proof.
-    intros p b lo Hndup.
-    apply Henv in Hco.
-    rewrite (co_consistent_sizeof _ _ Hco).
-    rewrite (co_consistent_alignof _ _ Hco).
+    intros * Hmem Hndup.
+    assert (Hco':=Hco). apply Henv in Hco'.
+    rewrite (co_consistent_sizeof _ _ Hco').
+    rewrite (co_consistent_alignof _ _ Hco').
     rewrite Hstruct.
     simpl.
     rewrite range_split'
-    with (mid:=lo + sizeof_struct env 0 (co_members co)).
-    + rewrite split_range_fields' with (1:=Hndup).
+      with (mid:=lo + sizeof_struct env (co_members co)).
+    + rewrite Hmem in *.
+      erewrite split_range_fields'.
+      2:{ now rewrite mk_members_names, <-fst_NoDupMembers in Hndup. }
       now rewrite sep_comm, sep_drop.
     + split.
       * rewrite <-Z.add_0_r at 1.
         apply Z.add_le_mono_l.
-        apply sizeof_struct_incr.
+        apply sizeof_struct_pos.
       * apply Z.add_le_mono_l.
         apply align_le.
         apply alignof_composite_pos.
@@ -1220,9 +1286,9 @@ Section Galloc.
         apply Genv.init_mem_characterization_2 with (2:=Hinit) in Hfd.
         destruct Hfd as (Hperm & Hperm').
         repeat constructor.
-        * omega.
+        * lia.
         * rewrite Z.one_succ; apply Zlt_le_succ, Z.gt_lt, two_power_nat_pos.
-        * intros * HH. assert (i = 0) by omega.
+        * intros * HH. assert (i = 0) by lia.
           subst. now apply Mem.perm_cur.
       + (* g = Gvar v *)
         apply Genv.find_var_info_iff in Hfd.

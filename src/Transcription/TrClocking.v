@@ -173,7 +173,7 @@ Module Type TRCLOCKING
                 erewrite H12. replace (Datatypes.length es) with (snd tn); auto.
                 erewrite <-map_length, H12, seq_length; auto.
               - apply Sorted.Sorted_StronglySorted. intros ?????; lia.
-                eapply Sorted_map, Sorted_impl, BranchesSort.LocallySorted_sort.
+                eapply Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
                 intros * Hleb. apply Nat.leb_le in Hleb; auto.
           }
           apply Forall2_combine''. 1:now rewrite 2 map_length.

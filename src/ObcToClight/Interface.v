@@ -878,7 +878,7 @@ Module Export Op <: OPERATORS.
   (*     (* Search Z.testbit false.  *) *)
   (*     destruct (Z.odd x); simpl. Search (Z.testbit (-1) _). *)
   (*     rewrite Z.testbit_0_l, Z.testbit_neg_r. auto. *)
-  (*     destruct (zlt i n0); omega. *)
+  (*     destruct (zlt i n0); lia. *)
   (* Qed. *)
   (* Remark Zdecomp: *)
   (*   forall x, x = Int.Zshiftin (Z.odd x) (Z.div2 x). *)
@@ -938,7 +938,7 @@ Module Export Op <: OPERATORS.
   (*   apply Int.eqmod_sub. *)
   (*   apply Int.eqmod_Zzero_ext; lia. *)
   (*   exists (if Z.testbit x (n - 1) then 1 else 0). destruct (Z.testbit x (n - 1)); ring. *)
-  (*   apply eqmod_refl2; omega. *)
+  (*   apply eqmod_refl2; lia. *)
   (* Qed. *)
 
   Definition memory_chunk_of_enumtag (n: nat) : AST.memory_chunk :=

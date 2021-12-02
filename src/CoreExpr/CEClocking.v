@@ -116,7 +116,7 @@ Module Type CECLOCKING
   Hint Constructors wc_clock wc_exp wc_cexp : nlclocking.
   Hint Resolve Forall_nil : nlclocking.
 
-  Instance wc_exp_Proper:
+  Global Instance wc_exp_Proper:
     Proper (@Permutation (ident * clock) ==> @eq exp ==> @eq clock ==> iff)
            wc_exp.
   Proof.
@@ -132,7 +132,7 @@ Module Type CECLOCKING
         auto with nlclocking.
   Qed.
 
-  Instance wc_cexp_Proper:
+  Global Instance wc_cexp_Proper:
     Proper (@Permutation (ident * clock) ==> @eq cexp ==> @eq clock ==> iff)
            wc_cexp.
   Proof.

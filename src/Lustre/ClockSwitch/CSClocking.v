@@ -110,9 +110,9 @@ Module Type CSCLOCKING
       induction e using exp_ind2; intros * Hwc; inv Hwc; simpl in *.
       3-11:econstructor; simpl in *; eauto using rename_var_wc.
       1-33:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-      1-33:try rewrite subclock_exp_clockof.
-      1-33:try rewrite subclock_exp_clocksof.
-      1-33:try (rewrite map_subclock_ann_clock; rewrite Forall2_eq in *; congruence).
+      1-26:try rewrite subclock_exp_clockof.
+      1-26:try rewrite subclock_exp_clocksof.
+      1-26:try (rewrite map_subclock_ann_clock; rewrite Forall2_eq in *; congruence).
       - apply add_whens_wc; auto.
       - apply add_whens_wc; auto.
       - take (clockof e = [_]) and rewrite it; auto.
@@ -211,7 +211,7 @@ Module Type CSCLOCKING
       intros * Hwc Hck Hcond; destruct e; repeat inv_bind.
       3:destruct a; repeat inv_bind; auto.
       1-10:constructor; auto; rewrite Permutation_app_comm; simpl.
-      1-11:(constructor; [constructor; auto; eapply wc_exp_incl; eauto; eauto with datatypes|]).
+      1-10:(constructor; [constructor; auto; eapply wc_exp_incl; eauto; eauto with datatypes|]).
       1-10:simpl; try rewrite app_nil_r.
       1-10:take (_ = [_]) and rewrite it; eauto.
     Qed.
