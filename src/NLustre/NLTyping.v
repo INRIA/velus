@@ -74,7 +74,7 @@ Module Type NLTYPING
   Definition wt_global :=
     wt_program wt_node.
 
-  Hint Constructors wt_clock wt_exp wt_cexp wt_equation : nltyping.
+  Global Hint Constructors wt_clock wt_exp wt_cexp wt_equation : nltyping.
 
   Global Instance wt_equation_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * type)
@@ -174,7 +174,7 @@ Module Type NLTYPING
       - constructor.
       - constructor; auto.
     Qed.
-    Local Hint Resolve wt_clock_incl.
+    Local Hint Resolve wt_clock_incl : nltyping.
 
     Lemma wt_exp_incl : forall e,
         wt_exp G.(enums) vars e ->
@@ -182,31 +182,31 @@ Module Type NLTYPING
     Proof.
       induction e; intros Hwt; inv Hwt; econstructor; eauto.
     Qed.
-    Local Hint Resolve wt_exp_incl.
+    Local Hint Resolve wt_exp_incl : nltyping.
 
     Lemma wt_cexp_incl : forall e,
         wt_cexp G.(enums) vars e ->
         wt_cexp G.(enums) vars' e.
     Proof.
-      induction e using cexp_ind2'; intros Hwt; inv Hwt; econstructor; eauto.
+      induction e using cexp_ind2'; intros Hwt; inv Hwt; econstructor; eauto with nltyping.
       - eapply Forall_impl_In; [|eapply H7]; intros.
         eapply Forall_forall in H; eauto.
       - intros. eapply Forall_forall in H; eauto.
         simpl in *; eauto.
     Qed.
-    Local Hint Resolve wt_cexp_incl.
+    Local Hint Resolve wt_cexp_incl : nltyping.
 
     Lemma wt_equation_incl : forall equ,
         wt_equation G vars equ ->
         wt_equation G vars' equ.
-    Proof.
-      intros [| |] Hwt; inv Hwt; econstructor; eauto.
-      - eapply Forall2_impl_In; eauto. intros ? (?&?&?); eauto.
-      - eapply Forall_impl; [|eauto]; eauto.
-      - eapply Forall_impl; [|eauto]; intros ? (?&?); eauto.
-      - eapply Forall_impl; [|eauto]; eauto.
-      - eapply Forall_impl; [|eauto]; intros ? (?&?); eauto.
-      - eapply Forall_impl; [|eauto]; eauto.
+    Proof with eauto with nltyping.
+      intros [| |] Hwt; inv Hwt; econstructor...
+      - eapply Forall2_impl_In; eauto. intros ? (?&?&?)...
+      - eapply Forall_impl; [|eauto]...
+      - eapply Forall_impl; [|eauto]; intros ? (?&?)...
+      - eapply Forall_impl; [|eauto]...
+      - eapply Forall_impl; [|eauto]; intros ? (?&?)...
+      - eapply Forall_impl; [|eauto]...
     Qed.
 
   End incl.

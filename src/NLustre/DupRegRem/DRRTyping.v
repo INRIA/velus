@@ -51,6 +51,7 @@ Module Type DRRTYPING
       unfold rename_in_var.
       destruct (Env.find _ _) eqn:Hfind; eauto.
     Qed.
+    Local Hint Resolve rename_in_var_wt : nltyping.
 
     Variable (G : global).
 
@@ -58,8 +59,8 @@ Module Type DRRTYPING
         wt_clock G.(enums) (inouts++vars) ck ->
         wt_clock G.(enums) (inouts++vars') (rename_in_clock sub ck).
     Proof.
-      induction ck; intros * Hwt; inv Hwt; auto.
-      simpl. constructor; auto using rename_in_var_wt.
+      induction ck; intros * Hwt; inv Hwt; auto with nltyping.
+      simpl. constructor; eauto with nltyping.
     Qed.
 
     Lemma rename_in_exp_wt : forall e,
@@ -67,7 +68,7 @@ Module Type DRRTYPING
         wt_exp G.(enums) (inouts++vars') (rename_in_exp sub e).
     Proof.
       intros * Hwt; induction Hwt;
-        simpl; econstructor; eauto using rename_in_var_wt.
+        simpl; econstructor; eauto with nltyping.
       1,2:repeat rewrite rename_in_exp_typeof; auto.
     Qed.
 
@@ -94,38 +95,38 @@ Module Type DRRTYPING
         simpl in H; eauto.
     Qed.
 
-    Hint Resolve rename_in_var_wt rename_in_clock_wt rename_in_exp_wt rename_in_cexp_wt.
+    Local Hint Resolve rename_in_var_wt rename_in_clock_wt rename_in_exp_wt rename_in_cexp_wt : nltyping.
 
     Lemma rename_in_equation_wt : forall equ,
         (forall x, In x (var_defined equ) -> Env.find x sub = None) ->
         wt_equation G (inouts++vars) equ ->
         wt_equation G (inouts++vars') (rename_in_equation sub equ).
-    Proof.
+    Proof with eauto with nltyping.
       intros * Hdef Hwt; inv Hwt; simpl in *.
-      - constructor; auto.
+      - constructor...
         rewrite rename_in_cexp_typeofc; auto.
-      - econstructor; eauto.
+      - econstructor...
         + eapply Forall2_impl_In; [|eauto]; intros ? (?&?&?) ? _ ?; auto.
         + rewrite Forall2_map_1.
           eapply Forall2_impl_In; [|eauto]; intros ? (?&?&?) _ _ Hty.
           rewrite rename_in_exp_typeof; auto.
         + rewrite Forall_map.
-          eapply Forall_impl_In; [|eapply H3]; intros; auto.
+          eapply Forall_impl_In; [|eapply H3]; intros...
         + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) (?&?).
-          simpl in *; eauto.
+          simpl in *...
         + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H5]; intros (?&?) ?.
-          simpl in *; auto.
-      - constructor; auto.
+          simpl in *...
+      - constructor...
         + rewrite rename_in_exp_typeof; auto.
         + rewrite rename_in_exp_typeof; auto.
         + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) (?&?).
-          simpl in *; eauto.
+          simpl in *...
         + rewrite Forall_map in *. unfold rename_in_reset.
           rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) ?.
-          simpl in *; auto.
+          simpl in *...
     Qed.
 
   End rename.

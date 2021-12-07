@@ -82,7 +82,8 @@ Module Type CETYPING
 
   End WellTyped.
 
-  Hint Constructors wt_clock wt_exp wt_cexp.
+  Global Hint Constructors wt_clock : typing ltyping nltyping stctyping.
+  Global Hint Constructors wt_exp wt_cexp : nltyping stctyping.
 
   Lemma wt_clock_add:
     forall x v enums Γ ck,
@@ -90,9 +91,9 @@ Module Type CETYPING
       wt_clock enums Γ ck ->
       wt_clock enums ((x, v) :: Γ) ck.
   Proof.
-    induction ck; auto.
+    induction ck; auto with nltyping.
     inversion 2.
-    eauto with datatypes.
+    eauto with nltyping datatypes.
   Qed.
 
   Global Instance wt_clock_Proper:
@@ -104,7 +105,7 @@ Module Type CETYPING
     intros enums' enums Henums env' env Henv ck' ck Hck.
     rewrite Hck; clear Hck ck'.
     induction ck.
-    - split; auto.
+    - split; auto with nltyping.
     - destruct IHck.
       split; inversion_clear 1; econstructor;
         try rewrite Henv in *;
@@ -126,7 +127,7 @@ Module Type CETYPING
         inversion_clear 1;
         ((rewrite Henv in *; try rewrite Henums in *)
         || (rewrite <-Henv in *; try rewrite <-Henums in *) || idtac);
-         eauto.
+         eauto with nltyping.
           - econstructor; eauto.
             now rewrite <-Henums.
           - econstructor; eauto.

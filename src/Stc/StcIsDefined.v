@@ -33,6 +33,8 @@ Module Type STCISDEFINED
         In x xs ->
         Is_defined_in_tc x (TcStep i xs ck rst f es).
 
+  Global Hint Constructors Is_defined_in_tc : stcdef.
+
   Definition Is_defined_in (x: ident) (tcs: list trconstr) : Prop :=
     Exists (Is_defined_in_tc x) tcs.
 
@@ -84,8 +86,10 @@ Module Type STCISDEFINED
       Is_variable_in_tc x tc ->
       Is_defined_in_tc x tc.
   Proof.
-    destruct tc; inversion_clear 1; auto using Is_defined_in_tc.
+    destruct tc; inversion_clear 1; auto with stcdef.
   Qed.
+
+  Global Hint Resolve Is_variable_in_Is_defined_in Is_next_in_Is_defined_in Is_variable_in_tc_Is_defined_in_tc : stcdef.
 
   Lemma s_ins_not_def:
     forall s x,
@@ -236,7 +240,7 @@ Module Type STCISDEFINED
       defined (tcs ++ tcs') = defined tcs ++ defined tcs'.
   Proof.
     unfold defined.
-    induction tcs as [|[]]; simpl; intros; auto.
+    induction tcs as [|[]]; simpl; intros; auto with datatypes.
     - rewrite <-app_assoc; f_equal; auto.
   Qed.
 

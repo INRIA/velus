@@ -35,19 +35,20 @@ Module Type OBCINVARIANTS
       Can_write_in x s2 ->
       Can_write_in x (Comp s1 s2).
 
+  Global Hint Constructors Can_write_in : obcinv.
+
   Lemma cannot_write_in_Switch:
     forall x e ss d,
       ~ Can_write_in x (Switch e ss d)
       <->
       Forall (fun s => ~ Can_write_in x (or_default d s)) ss.
   Proof.
-    Hint Constructors Can_write_in.
     intros; split; intro H.
-    - induction ss; constructor; auto.
+    - induction ss; constructor; auto with obcinv.
       apply IHss; intro W; apply H.
       inv W; constructor. now right.
     - induction ss; intro HH; inv HH; inv H; take (Exists _ _) and inv it; eauto.
-      apply IHss; auto.
+      apply IHss; auto with obcinv.
   Qed.
 
   Lemma Can_write_in_Comp:
@@ -56,7 +57,7 @@ Module Type OBCINVARIANTS
   Proof.
     split; intros HH.
     - inversion_clear HH; auto.
-    - destruct HH; auto.
+    - destruct HH; auto with obcinv.
   Qed.
 
   Lemma cannot_write_in_Comp:
@@ -65,7 +66,6 @@ Module Type OBCINVARIANTS
       <->
       ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
   Proof.
-    Hint Constructors Can_write_in.
     intros; split; intro; try (intro HH; inversion_clear HH); intuition.
   Qed.
 
@@ -82,6 +82,8 @@ Module Type OBCINVARIANTS
            | _ => now intuition
            end.
 
+  Local Hint Constructors Is_free_in_exp : obcinv.
+
   Lemma cannot_write_exp_eval:
     forall prog s me ve me' ve' e v,
       (forall x, Is_free_in_exp x e -> ~ Can_write_in x s)
@@ -89,14 +91,13 @@ Module Type OBCINVARIANTS
       -> stmt_eval prog me ve s (me', ve')
       -> exp_eval me' ve' e v.
   Proof.
-    Hint Constructors Is_free_in_exp Can_write_in exp_eval.
     induction s using stmt_ind2; intros me ve me' ve' e' v Hfree Hexp Hstmt.
     - inv Hstmt.
       rewrite <-exp_eval_extend_venv; auto.
-      intro Habs. apply (Hfree x); eauto.
+      intro Habs. apply (Hfree x); eauto with obcinv.
     - inv Hstmt.
       eapply exp_eval_extend_menv; eauto.
-      intro Habs. apply (Hfree x); auto.
+      intro Habs. apply (Hfree x); auto with obcinv.
     - inv Hstmt.
       take (nth_error _ _ = _) and eapply nth_error_In in it as Hin.
       pose proof Hin as Hin'; eapply Forall_forall in Hin'; eauto; simpl in Hin'.
@@ -116,7 +117,7 @@ Module Type OBCINVARIANTS
       apply exp_eval_extend_menv_by_obj.
       rewrite exp_eval_adds_opt_extend_venv; auto.
       intros x Hin Hfree'. apply Hfree in Hfree'.
-      auto.
+      auto with obcinv.
     - now inv Hstmt.
   Qed.
 
@@ -124,7 +125,7 @@ Module Type OBCINVARIANTS
     forall e ss d x,
       Can_write_in x (Switch e ss d) <-> (Exists (fun s => Can_write_in x (or_default d s)) ss).
   Proof.
-    split; [inversion_clear 1|intros [HH|HH]]; auto.
+    split; [inversion_clear 1|intros [HH|HH]]; auto with obcinv.
   Qed.
 
   (** ** Determine whether an Obc command can modify a variable . *)
@@ -144,7 +145,7 @@ Module Type OBCINVARIANTS
   | CWIVComp2: forall x s1 s2,
       Can_write_in_var x s2 ->
       Can_write_in_var x (Comp s1 s2).
-  Hint Constructors Can_write_in_var.
+  Global Hint Constructors Can_write_in_var : obcinv.
 
   Lemma Can_write_in_var_Can_write_in : forall x stmt,
       Can_write_in_var x stmt ->
@@ -156,13 +157,13 @@ Module Type OBCINVARIANTS
     eapply Forall_Exists in H2; eauto.
     eapply Exists_Exists; [|eauto]. intros ? (?&?); auto.
   Qed.
-  Hint Resolve Can_write_in_var_Can_write_in.
+  Global Hint Resolve Can_write_in_var_Can_write_in : obcinv.
 
   Lemma Can_write_in_var_Switch:
     forall e ss d x,
       Can_write_in_var x (Switch e ss d) <-> (Exists (fun s => Can_write_in_var x (or_default d s)) ss).
   Proof.
-    split; [inversion_clear 1|intros [HH|HH]]; auto.
+    split; [inversion_clear 1|intros [HH|HH]]; auto with obcinv.
   Qed.
 
   Lemma cannot_write_in_var_Switch:
@@ -179,7 +180,7 @@ Module Type OBCINVARIANTS
   Proof.
     split; intros HH.
     - inversion_clear HH; auto.
-    - destruct HH; auto.
+    - destruct HH; auto with obcinv.
   Qed.
 
   Lemma cannot_write_in_var_Comp:
@@ -188,7 +189,6 @@ Module Type OBCINVARIANTS
       <->
       ~ Can_write_in_var x s1 /\ ~ Can_write_in_var x s2.
   Proof.
-    Hint Constructors Can_write_in.
     intros; split; intro; try (intro HH; inversion_clear HH); intuition.
   Qed.
 
@@ -213,13 +213,13 @@ Module Type OBCINVARIANTS
   | NoOSkip:
       No_Overwrites Skip.
 
-  Hint Constructors No_Overwrites.
+  Global Hint Constructors No_Overwrites : obcinv.
 
   Lemma cannot_write_in_var_No_Overwrites:
     forall s,
       (forall x, ~Can_write_in_var x s) -> No_Overwrites s.
   Proof.
-    induction s using stmt_ind2; auto; intro HH.
+    induction s using stmt_ind2; auto with obcinv; intro HH.
     - setoid_rewrite cannot_write_in_var_Switch in HH.
       constructor; apply Forall_forall; intros.
       eapply Forall_forall in H; eauto.
@@ -251,7 +251,7 @@ Module Type OBCINVARIANTS
   | NNVSkip:
       No_Naked_Vars Skip.
 
-  Hint Constructors No_Naked_Vars.
+  Global Hint Constructors No_Naked_Vars : obcinv.
 
   Lemma stmt_eval_mono:
     forall p s me ve me' ve',
@@ -259,7 +259,7 @@ Module Type OBCINVARIANTS
       forall x, Env.In x ve -> Env.In x ve'.
   Proof.
     induction s using stmt_ind2; intros * Heval ??; inv Heval;
-      eauto using Env.adds_opt_mono.
+      eauto using Env.adds_opt_mono with env obcinv.
     take (nth_error _ _ = _) and apply nth_error_In in it.
     do 2 take (Forall _ _) and eapply Forall_forall in it; eauto.
   Qed.

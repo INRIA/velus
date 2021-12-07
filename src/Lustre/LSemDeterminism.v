@@ -82,8 +82,8 @@ Module Type LSEMDETERMINISM
     Proof.
       induction es; intros * Hwt Hp Hsem1 Hsem2;
         inv Hwt; inv Hsem1; inv Hsem2; simpl. inv Hp.
-      assert (length y = numstreams a) as Hlen1 by (eapply sem_exp_numstreams; eauto).
-      assert (length y0 = numstreams a) as Hlen2 by (eapply sem_exp_numstreams; eauto).
+      assert (length y = numstreams a) as Hlen1 by (eapply sem_exp_numstreams; eauto with ltyping).
+      assert (length y0 = numstreams a) as Hlen2 by (eapply sem_exp_numstreams; eauto with ltyping).
       inv Hp.
       - (* now *)
         rewrite 2 app_nth1; try congruence.
@@ -113,8 +113,8 @@ Module Type LSEMDETERMINISM
       eapply IHes in H11 as Heq2. 3-5:eauto.
       2:{ eapply Forall3_length in H8 as (?&?). congruence. }
       assert (length (concat vs1) = length (concat vs0)) as Hlen0.
-      { eapply sem_exps_numstreams in H5; eauto.
-        eapply sem_exps_numstreams in H9; eauto. congruence. }
+      { eapply sem_exps_numstreams in H5; eauto with ltyping.
+        eapply sem_exps_numstreams in H9; eauto with ltyping. congruence. }
       clear - Hlen Hlen0 H8 H12 Heq1 Heq2.
       eapply Forall3_forall3 in H8 as (?&?&?).
       eapply Forall3_forall3 in H12 as (?&?&?).
@@ -133,9 +133,9 @@ Module Type LSEMDETERMINISM
     Proof.
       intros * Hwt Hk Hsem1 Hsem2.
       assert (length (concat ss1) = length (annots es)) as Hlen1.
-      { eapply sem_exps_numstreams; eauto. }
+      { eapply sem_exps_numstreams; eauto with ltyping. }
       assert (length (concat ss2) = length (annots es)) as Hlen2.
-      { eapply sem_exps_numstreams; eauto. }
+      { eapply sem_exps_numstreams; eauto with ltyping. }
       eapply Forall2_forall2; split. congruence.
       intros * Hn ? ?; subst.
       erewrite nth_indep with (d:=a) (d':=def_stream); auto.
@@ -180,7 +180,7 @@ Module Type LSEMDETERMINISM
         the conclusion and hypotheses.
     *)
 
-    Hint Constructors EqStN.
+    Hint Constructors EqStN : core.
 
     Lemma const_detn : forall n bs1 bs2 c,
         EqStN n bs1 bs2 ->
@@ -536,7 +536,7 @@ Module Type LSEMDETERMINISM
         eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
         2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
             2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
-            2,3:do 2 (eapply Forall_forall in H7; eauto).
+            2,3:do 2 (eapply Forall_forall in H7; eauto with ltyping).
             inv Hse1; inv Hse2; try congruence. exfalso; auto.
         }
         eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
@@ -554,7 +554,7 @@ Module Type LSEMDETERMINISM
         eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
         2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
             2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
-            2,3:do 2 (eapply Forall_forall in H10; eauto).
+            2,3:do 2 (eapply Forall_forall in H10; eauto with ltyping).
             inv Hse1; inv Hse2; try congruence. exfalso; auto.
         }
         eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
@@ -574,7 +574,7 @@ Module Type LSEMDETERMINISM
         eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
         2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
             2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
-            2,3:do 2 (eapply Forall_forall in H11; eauto).
+            2,3:do 2 (eapply Forall_forall in H11; eauto with ltyping).
             inv Hse1; inv Hse2; try congruence. exfalso; auto.
         }
         eapply det_exps_n' in Hd2; eauto.
@@ -679,7 +679,7 @@ Module Type LSEMDETERMINISM
     Proof.
       intros * Hn Hwt Hnum Hbs HSn.
       eapply exp_causal_ind
-        with (P_exp:=det_exp_inv (S n) Hi1 Hi2 bs1 bs2); eauto.
+        with (P_exp:=det_exp_inv (S n) Hi1 Hi2 bs1 bs2); eauto with ltyping.
       1-11:clear Hwt HSn.
       - (* const *)
         intros ??? Hwt Hs1 Hs2. inv Hs1. inv Hs2. simpl.
@@ -711,11 +711,11 @@ Module Type LSEMDETERMINISM
         eapply P_exps_det_exp_inv in He0s; eauto.
         eapply det_exps_n in Hse22; eauto using EqStN_weaken.
         assert (length (concat s0ss) = length ann0) as Hlen1.
-        { eapply sem_exps_numstreams in Hse11; eauto.
+        { eapply sem_exps_numstreams in Hse11; eauto with ltyping.
           rewrite <-length_typesof_annots, H5, map_length in Hse11.
           assumption. }
         assert (length (concat s0ss0) = length ann0) as Hlen2.
-        { eapply sem_exps_numstreams in Hse21; eauto.
+        { eapply sem_exps_numstreams in Hse21; eauto with ltyping.
           rewrite <-length_typesof_annots, H5, map_length in Hse21.
           assumption. }
         eapply fby_det_Sn; eauto.
@@ -732,11 +732,11 @@ Module Type LSEMDETERMINISM
         eapply P_exps_det_exp_inv in He0s; eauto.
         eapply P_exps_det_exp_inv in He1s; eauto.
         assert (length (concat s0ss) = length ann0) as Hlen1.
-        { eapply sem_exps_numstreams in Hse11; eauto.
+        { eapply sem_exps_numstreams in Hse11; eauto with ltyping.
           rewrite <-length_typesof_annots, H5, map_length in Hse11.
           assumption. }
         assert (length (concat s0ss0) = length ann0) as Hlen2.
-        { eapply sem_exps_numstreams in Hse21; eauto.
+        { eapply sem_exps_numstreams in Hse21; eauto with ltyping.
           rewrite <-length_typesof_annots, H5, map_length in Hse21.
           assumption. }
         eapply arrow_detn. eapply He0s. eapply He1s.
@@ -751,10 +751,10 @@ Module Type LSEMDETERMINISM
         eapply Hvar in Hsv2; eauto.
         eapply P_exps_det_exp_inv in Hes; eauto.
         assert (length (concat ss) = length (typesof es)) as Hlen1.
-        { eapply sem_exps_numstreams in Hse1; eauto.
+        { eapply sem_exps_numstreams in Hse1; eauto with ltyping.
           now rewrite <-length_typesof_annots in Hse1. }
         assert (length (concat ss0) = length (typesof es)) as Hlen2.
-        { eapply sem_exps_numstreams in Hse2; eauto.
+        { eapply sem_exps_numstreams in Hse2; eauto with ltyping.
           now rewrite <-length_typesof_annots in Hse2. }
         clear - Hk Hlen1 Hlen2 Hsv2 Hes Hwhen1 Hwhen2.
         repeat rewrite_Forall_forall.
@@ -766,9 +766,9 @@ Module Type LSEMDETERMINISM
       - (* merge *)
         intros ?????? Hk Hin Hvar Hes ?? Hwt Hs1 Hs2. assert (Hwt':=Hwt). inv Hwt'. simpl in *.
         assert (length ss1 = length tys) as Hlen1.
-        { eapply sem_exp_numstreams in Hs1; eauto. }
+        { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
         assert (length ss2 = length tys) as Hlen2.
-        { eapply sem_exp_numstreams in Hs2; eauto. }
+        { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
         inversion_clear Hs1 as [| | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
         inversion_clear Hs2 as [| | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
         eapply Hvar in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2).
@@ -787,9 +787,9 @@ Module Type LSEMDETERMINISM
         intros ????? Hk Hse Hvar Hes ?? Hwt Hs1 Hs2. assert (Hwt':=Hwt). inv Hwt'; simpl in *.
         + (* total *)
           assert (length ss1 = length tys) as Hlen1.
-          { eapply sem_exp_numstreams in Hs1; eauto. }
+          { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
           assert (length ss2 = length tys) as Hlen2.
-          { eapply sem_exp_numstreams in Hs2; eauto. }
+          { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
           inversion_clear Hs1 as [| | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
           inversion_clear Hs2 as [| | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
           eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
@@ -808,9 +808,9 @@ Module Type LSEMDETERMINISM
             erewrite map_nth with (d:=bool_velus_type) in Hnth1. inv Hnth1.
         + (* default *)
           assert (length ss1 = length (typesof d0)) as Hlen1.
-          { eapply sem_exp_numstreams in Hs1; eauto. }
+          { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
           assert (length ss2 = length (typesof d0)) as Hlen2.
-          { eapply sem_exp_numstreams in Hs2; eauto. }
+          { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
           inversion_clear Hs1 as [| | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
           inversion_clear Hs2 as [| | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
           eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
@@ -848,7 +848,7 @@ Module Type LSEMDETERMINISM
         eapply EqStNs_unmask; eauto. intros.
         eapply HdetG. 2,3:eauto.
         eapply EqStNs_mask; eauto.
-      - rewrite map_fst_idcaus, <-2 map_fst_idty; eauto.
+      - rewrite map_fst_idcaus, <-2 map_fst_idty; eauto with ltyping.
     Qed.
 
     Hypothesis Hnd : NoDup (map snd (idcaus env)).
@@ -983,8 +983,8 @@ Module Type LSEMDETERMINISM
       - (* locals *)
         econstructor; eauto.
         + rewrite Forall_forall in *; eauto.
-        + eapply Forall_forall; intros * _ ??????; auto.
-        + eapply Forall_forall; intros * _ ??????; auto.
+        + eapply Forall_forall; intros * _ ??????; auto with coindstreams.
+        + eapply Forall_forall; intros * _ ??????; auto with coindstreams.
     Qed.
 
     (* Go from n to n + 1 :) *)
@@ -1060,7 +1060,7 @@ Module Type LSEMDETERMINISM
         rewrite Forall_forall in *; eauto.
     Qed.
 
-    Hint Resolve sem_block_det_sem_block1 sem_block_det_sem_block2.
+    Hint Resolve sem_block_det_sem_block1 sem_block_det_sem_block2 : ldet.
 
     Lemma det_var_inv_incl : forall env env' n Hi1 Hi2 x,
         incl env env' ->
@@ -1273,7 +1273,7 @@ Module Type LSEMDETERMINISM
         eapply Hdet'; eauto using in_or_app.
         rewrite idcaus_app; eauto using in_or_app.
         1,2:(eapply sem_var_refines_inv; [| | |eauto]; intros; eauto).
-        1,2:rewrite Forall_forall in *; eapply sem_block_dom_lb; eauto.
+        1,2:rewrite Forall_forall in *; eapply sem_block_dom_lb; eauto with ldet.
     Qed.
 
     Lemma sem_block_det_cons_nIn : forall n envS x blk Hi1 Hi2 bs1 bs2,
@@ -1629,9 +1629,9 @@ Module Type LSEMDETERMINISM
     destruct (ident_eq_dec (n_name nd) f); subst.
     - assert (Hfind2:=Hfind1). rewrite find_node_now in Hfind2; auto; inv Hfind2.
       assert (~ Is_node_in_block (n_name n1) (n_block n1)) as Hnin.
-      { eapply find_node_not_Is_node_in; eauto using wl_global_Ordered_nodes. }
-      eapply sem_block_cons in Hbcks1; eauto using wl_global_Ordered_nodes.
-      eapply sem_block_cons in Hbcks2; eauto using wl_global_Ordered_nodes.
+      { eapply find_node_not_Is_node_in; eauto using wl_global_Ordered_nodes with ltyping. }
+      eapply sem_block_cons in Hbcks1; eauto using wl_global_Ordered_nodes with ltyping.
+      eapply sem_block_cons in Hbcks2; eauto using wl_global_Ordered_nodes with ltyping.
 
       assert (Forall (det_var_inv (n_in n1 ++ n_out n1) n H H0) (map snd (idcaus (n_in n1)))) as Hins.
       { eapply node_causal_NoDup in H1 as Hnd.
@@ -1662,8 +1662,8 @@ Module Type LSEMDETERMINISM
     - rewrite find_node_other in Hfind1; auto.
       eapply IHnds; eauto. inv Hwt; inv H4; split; auto.
       1,2:econstructor; eauto.
-      1,2:eapply sem_block_cons; eauto using wl_global_Ordered_nodes.
-      1,2:eapply find_node_later_not_Is_node_in; eauto using wl_global_Ordered_nodes.
+      1,2:eapply sem_block_cons; eauto using wl_global_Ordered_nodes with ltyping.
+      1,2:eapply find_node_later_not_Is_node_in; eauto using wl_global_Ordered_nodes with ltyping.
   Qed.
 
   Theorem det_global {PSyn prefs} : forall (G: @global PSyn prefs) f ins outs1 outs2,

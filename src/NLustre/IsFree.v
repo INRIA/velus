@@ -42,9 +42,9 @@ Module Type ISFREE
         Exists (fun '(xr, ckr) => xr = i \/ Is_free_in_clock i ckr) xrs ->
         Is_free_in_eq i (EqFby x ck v le xrs).
 
-  Hint Constructors Is_free_in_clock Is_free_in_exp
+  Global Hint Constructors Is_free_in_clock Is_free_in_exp
        Is_free_in_aexp Is_free_in_aexps Is_free_in_cexp
-       Is_free_in_caexp Is_free_in_eq.
+       Is_free_in_caexp Is_free_in_eq : nlfree.
 
   (** * Decision procedure *)
 
@@ -99,7 +99,7 @@ Module Type ISFREE
               | |- context [PS.In _ (PS.add _ _)] => rewrite PS.add_spec
               | |- context [PS.In _ (fold_left _ _ _)] => rewrite free_in_fold_left_spec
               | H:_ \/ _ |- _ => destruct H
-              end; eauto).
+              end; eauto with nlfree).
 
     destruct eq; split; intro H; aux; simpl in *.
   Qed.

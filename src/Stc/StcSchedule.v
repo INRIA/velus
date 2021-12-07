@@ -99,7 +99,7 @@ Module Type STCSCHEDULE
     Proof.
       induction l, l'; simpl;
         try (now inversion_clear 1; auto).
-      intros * HH; cases_eqn Hoc; inv HH.
+      intros * HH; cases_eqn Hoc; inv HH; auto with datatypes.
     Qed.
 
     Lemma ocombine_length:
@@ -321,11 +321,11 @@ Module Type STCSCHEDULE
       wt_trconstr (schedule P) vars resets tc.
   Proof.
     intros (?& P); induction P as [|b].
-    - destruct tc; inversion_clear 1; eauto.
-    - destruct tc; inversion_clear 1; eauto;
+    - destruct tc; inversion_clear 1; eauto with stctyping.
+    - destruct tc; inversion_clear 1; eauto with stctyping;
         match goal with H:find_system _ _ = _ |- _ =>
                         apply scheduler_find_system in H end;
-        eauto using wt_trconstr.
+        eauto with stctyping.
   Qed.
 
   Lemma scheduler_wt_system:
@@ -405,7 +405,7 @@ Module Type STCSCHEDULE
     apply Insts in Hin as (?&?&?).
     eexists; intuition; eauto.
   Qed.
-  Hint Resolve scheduler_initial_state.
+  Global Hint Resolve scheduler_initial_state : stcsem.
 
   Lemma scheduler_state_closed:
     forall S P f,
@@ -420,7 +420,7 @@ Module Type STCSCHEDULE
     apply Insts in Hin as (?&?&?).
     eexists; intuition; eauto.
   Qed.
-  Hint Resolve scheduler_state_closed.
+  Global Hint Resolve scheduler_state_closed : stcsem.
 
   Theorem scheduler_sem_system:
     forall P f xs S S' ys,
@@ -433,11 +433,12 @@ Module Type STCSCHEDULE
                               sem_trconstr (schedule P) base R S I S' tc);
       eauto using sem_trconstr.
     - econstructor; eauto.
-      cases; eauto.
+      cases; eauto with stcsem.
     - match goal with H: find_system _ _ = _ |- _ => apply scheduler_find_system in H end.
-      eapply SSystem with (I := I); eauto; simpl.
-      rewrite schedule_tcs_permutation; eauto.
+      eapply SSystem with (I := I); eauto with stcsem; simpl.
+      rewrite schedule_tcs_permutation; eauto with stcsem.
   Qed.
+  Global Hint Resolve scheduler_sem_system : stcsem.
 
   Corollary scheduler_loop:
     forall n P f xss yss S,
@@ -445,8 +446,7 @@ Module Type STCSCHEDULE
       loop (schedule P) f xss yss S n.
   Proof.
     cofix COFIX; inversion_clear 1.
-    econstructor; eauto.
-    apply scheduler_sem_system; eauto.
+    econstructor; eauto with stcsem.
   Qed.
 
   Lemma scheduler_ordered:

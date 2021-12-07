@@ -119,7 +119,7 @@ Proof.
   intro; left; apply node_in_not_nil.
 Qed.
 
-Hint Resolve
+Local Hint Resolve
      fuse_wt_program
      fuse_call
      normalize_switches_call
@@ -158,7 +158,7 @@ Hint Resolve
      No_Naked_Vars_add_defaults_class
      translate_No_Overwrites
      translate_cannot_write_inputs
-     node_in_out_not_nil.
+     node_in_out_not_nil : core.
 
 (** The trace of a NLustre node *)
 Section NLTrace.
@@ -395,7 +395,7 @@ Proof.
   apply Scheduler.scheduler_loop in Hsem; auto.
 
   assert (forall n, Forall2 Stc2ObcCorr.eq_if_present (pstr ins' n) (map Some (ins' n)))
-    by (unfold pstr; intros; clear; induction (ins' n); constructor; simpl; auto).
+    by (unfold pstr; intros; clear; induction (ins' n); constructor; simpl; auto with obcsem).
   assert (forall n, Exists (fun v => v <> absent) (pstr ins' n))
          by (unfold pstr; intros; specialize (Length n);
              destruct (ins' n); simpl in *; try lia;
@@ -422,7 +422,7 @@ Proof.
 
   (* Stc loop to Obc loop *)
   eapply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins' n))
-    in Hsem as (me0 & Rst & Hsem &?); eauto.
+    in Hsem as (me0 & Rst & Hsem &?); eauto with stcsem.
   setoid_rewrite value_to_option_pstr in Hsem.
 
   (* aliases *)
@@ -444,7 +444,7 @@ Proof.
   assert (wt_program tr_sch_tr_G) by (subst tr_sch_tr_G; auto).
   assert (ComTyp.wt_memory me0 (Stc2Obc.translate (Scheduler.schedule P'))
                            (c_mems main_class) (c_objs main_class))
-    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?); eauto; simpl; auto).
+    by (eapply pres_sem_stmt_call with (f := Ids.reset) in Find as (? & ?); eauto; simpl; auto with typing).
   assert (wt_outs G main outs) as Hwto.
   { unfold wt_outs.
     intros * Find_node'; rewrite Find_node' in Find_node; inv Find_node.

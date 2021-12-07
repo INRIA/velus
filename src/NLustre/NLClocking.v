@@ -81,9 +81,9 @@ Module Type NLCLOCKING
   | HcEqFby: forall x v0 ck le r,
       Has_clock_eq ck (EqFby x ck v0 le r).
 
-  Hint Constructors wc_clock wc_exp wc_cexp wc_equation : nlclocking.
-  Hint Unfold wc_env wc_node : nlclocking.
-  Hint Resolve Forall_nil : nlclocking.
+  Global Hint Constructors wc_clock wc_exp wc_cexp wc_equation Has_clock_eq : nlclocking.
+  Global Hint Unfold wc_env wc_node : nlclocking.
+  Global Hint Resolve Forall_nil : datatypes.
 
   Global Instance wc_equation_Proper:
     Proper (@eq global ==> @Permutation (ident * clock) ==> @eq equation ==> iff)
@@ -291,8 +291,7 @@ Module Type NLCLOCKING
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x ce ck Hwce Hwt.
-      now eapply wc_equation_not_Is_free_in_clock;
-        eauto using Has_clock_eq.
+      eapply wc_equation_not_Is_free_in_clock; eauto with nldef nlclocking.
     Qed.
 
     Corollary wc_EqApp_not_Is_free_in_clock:
@@ -301,8 +300,7 @@ Module Type NLCLOCKING
         -> forall x, List.In x xs -> ~Is_free_in_clock x ck.
     Proof.
       intros x f le ck Hwce Hwt y Hinx.
-      now eapply wc_equation_not_Is_free_in_clock;
-        eauto using Is_defined_in_eq, Has_clock_eq.
+      eapply wc_equation_not_Is_free_in_clock; eauto with nldef nlclocking.
     Qed.
 
     Corollary wc_EqFby_not_Is_free_in_clock:
@@ -311,8 +309,7 @@ Module Type NLCLOCKING
         -> ~Is_free_in_clock x ck.
     Proof.
       intros x v0 le ck Hwce Hwt.
-      now eapply wc_equation_not_Is_free_in_clock;
-        eauto using Has_clock_eq.
+      eapply wc_equation_not_Is_free_in_clock; eauto with nldef nlclocking.
     Qed.
 
   End Well_clocked.
@@ -344,7 +341,7 @@ Module Type NLCLOCKING
       - constructor.
       - constructor; auto.
     Qed.
-    Local Hint Resolve wc_clock_incl.
+    Local Hint Resolve wc_clock_incl : nlclocking.
 
     Lemma wc_exp_incl : forall e ck,
         wc_exp vars e ck ->
@@ -352,27 +349,27 @@ Module Type NLCLOCKING
     Proof.
       induction e; intros * Hwc; inv Hwc; econstructor; eauto.
     Qed.
-    Local Hint Resolve wc_exp_incl.
+    Local Hint Resolve wc_exp_incl : nlclocking.
 
     Lemma wc_cexp_incl : forall e ck,
         wc_cexp vars e ck ->
         wc_cexp vars' e ck.
     Proof.
-      induction e using cexp_ind2'; intros * Hwc; inv Hwc; econstructor; eauto.
+      induction e using cexp_ind2'; intros * Hwc; inv Hwc; econstructor; eauto with nlclocking.
       - eapply Forall2_impl_In; [|eapply H6]; intros.
         eapply Forall_forall in H; eauto.
-      - intros. eapply Forall_forall in H; eauto.
+      - intros. eapply Forall_forall in H; eauto with nlclocking.
         simpl in *; eauto.
     Qed.
-    Local Hint Resolve wc_cexp_incl.
+    Local Hint Resolve wc_cexp_incl : nlclocking.
 
     Lemma wc_equation_incl : forall equ,
         wc_equation G vars equ ->
         wc_equation G vars' equ.
     Proof.
-      intros [| |] Hwc; inv Hwc; econstructor; eauto.
-      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto.
-      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto.
+      intros [| |] Hwc; inv Hwc; econstructor; eauto with nlclocking.
+      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto with nlclocking.
+      - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto with nlclocking.
       - eapply Forall_impl; [|eauto]; eauto.
       - eapply Forall_impl; [|eauto]; eauto.
     Qed.

@@ -123,9 +123,10 @@ Module Type TRTYPING
         CET.wt_exp G.(L.enums) vars e'.
     Proof.
       intros * Htr Hwt. revert dependent e'.
-      induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt.
+      induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt; eauto with clocks nltyping.
       - inv Htr. now constructor.
       - inv Htr. now constructor.
+      - monadInv Htr. constructor; eauto.
       - monadInv Htr. constructor; eauto. eapply typeof_lexp in EQ as ->; eauto.
       - monadInv Htr. constructor; eauto.
         eapply typeof_lexp in EQ as ->; eauto.
@@ -152,19 +153,10 @@ Module Type TRTYPING
         CET.wt_cexp G.(L.enums) vars e'.
     Proof.
       intros * Htr Hwvars Hwt. revert dependent e'.
-      induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt.
-      - inv Htr. now constructor.
-      - inv Htr. constructor; eauto.
-      - monadInv Htr. constructor; eauto.
-      - monadInv Htr. monadInv EQ. constructor.
-        constructor; eauto using wt_lexp.
-        eapply typeof_lexp in EQ0 as ->; eauto.
-      - monadInv Htr. monadInv EQ. constructor.
-        constructor; eauto using wt_lexp.
-        eapply typeof_lexp in EQ0 as ->; eauto.
-        eapply typeof_lexp in EQ as ->; eauto.
-      - monadInv Htr. cases. monadInv EQ.
-        constructor. simpl_Foralls. econstructor; eauto using wt_lexp.
+      Opaque to_lexp.
+      induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt; simpl in *; try monadInv Htr.
+      1-6:eapply wt_lexp in EQ; eauto with nltyping. 1-6:econstructor; eauto.
+      Transparent to_lexp.
       - inv Htr. cases_eqn Hb. monadInv H1.
         constructor; eauto.
         + erewrite map_length, <-Permutation_length; eauto using BranchesSort.Permuted_sort.
@@ -392,7 +384,7 @@ Module Type TRTYPING
           * eapply Forall_map. eapply Forall2_ignore1 in Eq.
             eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?); subst.
             eapply Forall_forall in H4; eauto. eapply Forall_forall in H8; eauto.
-            simpl in *. inv H4; inv H13; auto using wt_clock_l_ce.
+            simpl in *. inv H4; auto using wt_clock_l_ce with clocks.
     Qed.
 
     Lemma wt_block_to_equation :

@@ -259,7 +259,7 @@ Module Type STCSEMANTICS
       apply Spec in Hin as (?& Sub &?).
       pose (Sub' := Sub).
       apply orel_eq in Sub'.
-      setoid_rewrite (@eq_subrelation _ equal_memory) in Sub'; auto.
+      setoid_rewrite (@eq_subrelation _ equal_memory) in Sub'; auto with memory.
       setoid_rewrite E in Sub'.
       apply orel_find_inst_Some in Sub' as (v' & Hv' & ->).
       symmetry in Hv'. eauto.
@@ -285,7 +285,7 @@ Module Type STCSEMANTICS
     - now setoid_rewrite <-E.
     - intros * Sub.
       apply orel_eq in Sub.
-      setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto.
+      setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto with memory.
       setoid_rewrite <-E in Sub.
       apply orel_find_inst_Some in Sub as (S & HS & Sub').
       specialize (Insts _ _ Sub') as (b' & ? & ?). eauto.
@@ -326,7 +326,7 @@ Module Type STCSEMANTICS
       + rewrite <-E'; eauto.
     - intros * E EI E'.
       apply orel_eq in Find;
-        setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto.
+        setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto with memory.
       rewrite EI in Find.
       apply Env.orel_find_Some in Find as (Is' & Eq & Find').
       destruct r.
@@ -334,11 +334,11 @@ Module Type STCSEMANTICS
       + econstructor; eauto; simpl.
     - intros * E EI E'.
       apply orel_eq in Find;
-        setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto.
+        setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto with memory.
       rewrite EI in Find.
       apply Env.orel_find_Some in Find as (? & Eq & ?).
       apply orel_eq in Sub;
-        setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto.
+        setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto with memory.
       rewrite E' in Sub.
       apply orel_find_inst_Some in Sub as (? & Eq' & ?).
       symmetry in Eq, Eq'.
@@ -797,7 +797,7 @@ Module Type STCSEMANTICS
         inversion Exp as [???? Clock|];
           [contradict Clock; apply not_subrate_clock|]; subst.
         rewrite <-Find, <-Find', ClockR; try congruence.
-        eapply Forall_impl; [|eapply Resets]. 2:left; auto.
+        eapply Forall_impl; [|eapply Resets]. 2:left; auto with stcsyntax.
         intros ? (?&Clock).
         assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
       + assert (In x (map fst (nexts_of tcs))) as Hin by (apply Nexts; congruence).
@@ -820,7 +820,7 @@ Module Type STCSEMANTICS
         inversion Exp as [???? Clock|];
           [contradict Clock; apply not_subrate_clock|]; subst.
         rewrite <-Find, <-Find', ClockR; try congruence.
-        eapply Forall_impl; [|eapply Resets]. 2:left; eauto.
+        eapply Forall_impl; [|eapply Resets]. 2:left; eauto with stcsyntax.
         intros ? (?&Clock).
         assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
 
@@ -837,7 +837,7 @@ Module Type STCSEMANTICS
            destruct (find_inst s S) eqn:Hfind; eauto.
            assert (None ⌈≋⌉ Some Ii) as contra. 2:inv contra.
            apply ClockR.
-           eapply Forall_impl; [|eapply IResets]. 2:eapply Exists_exists; eexists; split; eauto.
+           eapply Forall_impl; [|eapply IResets]. 2:eapply Exists_exists; eexists; split; eauto with stcsyntax.
            intros ? (?&Clock).
            assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
          }
@@ -857,7 +857,7 @@ Module Type STCSEMANTICS
         assert (absent_list xs) by (eapply clock_of_instant_false, not_subrate_clock_impl; eauto).
         apply IH in SemSystem; auto.
         assert (Env.find s (instances S) ⌈≋⌉ Some Ii) as FindI.
-        { apply ClockR. eapply Forall_impl; [|eapply IResets]. 2:eapply Exists_exists; eexists; split; eauto.
+        { apply ClockR. eapply Forall_impl; [|eapply IResets]. 2:eapply Exists_exists; eexists; split; eauto with stcsyntax.
           intros ? (?&Clock).
           assert (Clock':=Clock). apply not_subrate_clock_impl in Clock; subst; auto.
         } clear ClockR.
@@ -1000,7 +1000,7 @@ Module Type STCSEMANTICS
       + assert (Next_with_reset_in x l (TcNext x c l e :: l0)) as Next by (left; constructor).
         eapply Exists_exists in Reset as (?&Hin&_).
         eapply NextReset in Next; eauto.
-      + left; eauto.
+      + left; eauto with stcsyntax.
     - apply IHHtcs; auto.
       intros; eapply NextReset; eauto. right; auto.
   Qed.

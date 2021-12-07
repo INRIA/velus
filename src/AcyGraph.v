@@ -144,14 +144,14 @@ Proof.
 Qed.
 
 Definition has_trans_arc a := clos_trans_n1 _ (has_arc a).
-Hint Constructors clos_trans_n1.
-Hint Unfold has_trans_arc.
+Global Hint Constructors clos_trans_n1 : acygraph.
+Global Hint Unfold has_trans_arc : acygraph.
 
 Global Instance has_trans_arc_Transitive : forall a,
     Transitive (has_trans_arc a).
 Proof.
   intros ? ??? Ha1 Ha2.
-  induction Ha2; eauto.
+  induction Ha2; eauto with acygraph.
 Qed.
 
 Lemma nhas_trans_arc_empty : forall x y,
@@ -178,7 +178,7 @@ Proof.
   - eapply tn1_trans; eauto.
     rewrite add_arc_spec; eauto.
 Qed.
-Hint Resolve add_arc_has_trans_arc1 add_arc_has_trans_arc2.
+Global Hint Resolve add_arc_has_trans_arc1 add_arc_has_trans_arc2 : acygraph.
 
 Lemma add_arc_spec2 : forall a x y x' y',
     has_trans_arc (add_arc x y a) x' y' <->
@@ -190,15 +190,14 @@ Lemma add_arc_spec2 : forall a x y x' y',
 Proof.
   intros *; split; intros Ha.
   - induction Ha; try rewrite add_arc_spec in *.
-    + destruct H as [?|(?&?)]; subst; auto.
+    + destruct H as [?|(?&?)]; subst; auto with acygraph.
     + destruct H as [?|(?&?)];
         destruct IHHa as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]];
-        subst; eauto 10.
-  - destruct Ha as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto.
-    + etransitivity; eauto.
-    + etransitivity; eauto.
-    + etransitivity; eauto.
-      etransitivity; eauto.
+        subst; eauto 10 with acygraph.
+  - destruct Ha as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto with acygraph.
+    + etransitivity; eauto with acygraph.
+    + etransitivity; eauto with acygraph.
+    + repeat (etransitivity; eauto with acygraph).
 Qed.
 
 (** ** Acyclic graph *)
@@ -218,7 +217,7 @@ Inductive AcyGraph : V_set -> A_set -> Prop :=
     (* ~has_arc a x y -> *)
     ~has_trans_arc a y x ->
     AcyGraph v (add_arc x y a).
-Hint Constructors AcyGraph.
+Global Hint Constructors AcyGraph : acygraph.
 
 Definition vertices {v a} (g : AcyGraph v a) : V_set := v.
 Definition arcs {v a} (g : AcyGraph v a) : A_set := a.
@@ -261,7 +260,7 @@ Lemma has_arc_trans : forall a x y z,
     has_arc a y z ->
     has_trans_arc a x z.
 Proof.
-  intros * Ha1 Ha2; eauto.
+  intros * Ha1 Ha2; eauto with acygraph.
 Qed.
 
 Global Instance is_trans_arc_Transitive {v a} (g : AcyGraph v a) :
@@ -312,7 +311,7 @@ Corollary has_arc_asym : forall v a,
     Asymmetric (has_arc a).
 Proof.
   intros * g ?? Ha1 Ha2.
-  eapply is_trans_arc_Asymmetric with (g0:=g); unfold is_trans_arc; eauto.
+  eapply is_trans_arc_Asymmetric with (g0:=g); unfold is_trans_arc; eauto with acygraph.
 Qed.
 
 Global Instance is_arc_Asymmetric {v a} (g : AcyGraph v a) :
@@ -514,13 +513,13 @@ Lemma add_after_spec2 : forall a preds y x' y',
 Proof.
   intros *; split; intros Ha.
   - induction Ha; rewrite add_after_spec in *.
-    + destruct H as [?|(?&?)]; subst; auto.
+    + destruct H as [?|(?&?)]; subst; auto with acygraph.
     + destruct H as [?|(?&?)];
         destruct IHHa as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]];
-        subst; eauto 10.
+        subst; eauto 10 with acygraph.
       do 3 right. left. split; auto.
       eexists; eauto.
-  - destruct Ha as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto.
+  - destruct Ha as [?|[(?&?)|[(?&?)|[(?&?)|(?&?)]]]]; subst; eauto with acygraph.
     + eapply add_after_has_trans_arc2; eauto.
     + left. rewrite add_after_spec; auto.
     + eapply add_after_has_trans_arc2 in H0.
@@ -596,7 +595,7 @@ Proof.
   { intros ? Hin contra.
     specialize (is_trans_arc_is_vertex Hacy) as (?&?); eauto.
   }
-  eapply add_after_AcyGraph; eauto.
+  eapply add_after_AcyGraph; eauto with acygraph.
   - apply PSF.add_1; auto.
   - intros ? Hin. apply Hpreds in Hin.
     apply PSF.add_2; auto.
@@ -700,7 +699,7 @@ Section Dfs.
     exists PS.empty.
     repeat split; auto using not_In_empty.
     exists empty_arc_set.
-    repeat split; auto using not_In_empty.
+    repeat split; auto using not_In_empty with acygraph.
     intros * Hin. now apply not_In_empty in Hin.
   Defined.
   Extraction Inline none_visited.
@@ -782,7 +781,7 @@ Section Dfs.
       apply P1. now apply PSF.add_2.
     - destruct P2 as (a & P2 & P3).
       exists (add_after (PSP.of_list zs) x a); split.
-      + apply add_after_AcyGraph; auto using PSF.add_1.
+      + apply add_after_AcyGraph; auto using PSF.add_1 with acygraph.
         * rewrite ps_of_list_In. intro contra.
           eapply Forall_forall in Hzs; eauto.
           eapply P1; eauto using PSF.add_1.
@@ -877,7 +876,7 @@ Definition TopoOrder {v a} (g : AcyGraph v a) (xs : list ident) :=
   Forall' (fun xs x => ~In x xs
                     /\ is_vertex g x
                     /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
-Hint Unfold TopoOrder.
+Global Hint Unfold TopoOrder : acygraph.
 
 Lemma TopoOrder_weaken : forall {v a} (g : AcyGraph v a) xs,
     TopoOrder g xs ->
@@ -916,7 +915,7 @@ Fact TopoOrder_AGaddv : forall {v a} (g : AcyGraph v a) x xs,
     TopoOrder g xs ->
     TopoOrder (AGaddv v a x g) xs.
 Proof.
-  induction xs; intros * Hpre; inv Hpre; auto.
+  induction xs; intros * Hpre; inv Hpre; auto with acygraph datatypes.
   destruct H1 as (?&?&?).
   specialize (IHxs H2).
   repeat constructor; auto.
@@ -957,7 +956,7 @@ Proof.
   - constructor; [|constructor].
     + intros _. left; auto.
     + intros contra; subst. congruence.
-    + induction xs2; auto.
+    + induction xs2; auto with datatypes.
       apply not_in_cons in Hnin2 as (Hneq'&Hnin2).
       constructor; auto.
       intros contra; subst. congruence.
@@ -1057,7 +1056,7 @@ Proof.
       rewrite Hperm, <- app_assoc in H.
       apply not_In_app in H as (?&?).
       apply Before_middle; auto.
-  - exists (y::xs). repeat split; auto.
+  - exists (y::xs). repeat split; auto with acygraph datatypes.
     constructor; auto.
     clear - Hnin.
     induction xs; [constructor|].
@@ -1079,7 +1078,7 @@ Lemma TopoOrder_AGadda : forall {v a} (g : AcyGraph v a) xs x y Hneq Hin1 Hin2 H
     TopoOrder g xs ->
     TopoOrder (AGadda _ _ x y g Hneq Hin1 Hin2 Hna) xs.
 Proof.
-  induction xs; intros * Hbef Hpre; auto.
+  induction xs; intros * Hbef Hpre; auto with acygraph datatypes.
   inv Hbef. inversion_clear Hpre as [|?? (?&?&?) Hf].
   constructor. 2:eapply IHxs; eauto.
   repeat split; auto.
@@ -1105,7 +1104,7 @@ Proof.
   fix has_TopoOrder 3.
   intros *.
   destruct g.
-  - exists []; simpl. split; auto.
+  - exists []; simpl. split; auto with acygraph datatypes.
     reflexivity.
   - specialize (has_TopoOrder _ _ g) as (xs&Heq&Hp).
     destruct (PSP.In_dec x v).
@@ -1219,16 +1218,16 @@ Proof.
   intros * Hnin1 Hnin2 Hacy.
   assert (~PS.Exists (fun p => has_arc a y p) preds) as Hnin3.
   { intros (x0&Hin&contra).
-    apply Hnin2. exists x0; auto. }
+    apply Hnin2. exists x0; auto with acygraph. }
   split; intros; unfold PS.Exists in *.
   - induction H.
     + eapply add_between_spec in H; eauto.
-      repeat destruct_conj_disj; eauto 10.
+      repeat destruct_conj_disj; eauto 10 with acygraph.
     + clear H0. eapply add_between_spec in H; eauto.
-      repeat destruct_conj_disj; eauto 16.
+      repeat destruct_conj_disj; eauto 16 with acygraph.
       * exfalso; auto.
       * exfalso; eauto.
-  - repeat destruct_conj_disj; eauto 15.
+  - repeat destruct_conj_disj; eauto 15 with acygraph.
     + eapply add_between_has_trans_arc2; eauto.
     + left. rewrite add_between_spec; eauto.
     + etransitivity. 2:apply add_arc_has_trans_arc1.

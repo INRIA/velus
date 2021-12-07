@@ -46,7 +46,7 @@ Module Type STCSYNTAX
   | Next_with_reset_in_tc_intro:
       forall s ck ckrs es,
         Next_with_reset_in_tc s ckrs (TcNext s ck ckrs es).
-  Hint Constructors Next_with_reset_in_tc.
+  Global Hint Constructors Next_with_reset_in_tc : stcsyntax.
 
   Definition Next_with_reset_in (s: ident) (ckrs: list clock) (tcs: list trconstr) : Prop :=
     Exists (Next_with_reset_in_tc s ckrs) tcs.
@@ -74,7 +74,7 @@ Module Type STCSYNTAX
     Step_with_ireset_in_tc_intro:
       forall s ys ck ckrs f es,
         Step_with_ireset_in_tc s ckrs (TcStep s ys ck ckrs f es).
-  Hint Constructors Step_with_ireset_in_tc.
+  Global Hint Constructors Step_with_ireset_in_tc : stcsyntax.
 
   Definition Step_with_ireset_in (s: ident) (ckrs: list clock) (tcs: list trconstr) : Prop :=
     Exists (Step_with_ireset_in_tc s ckrs) tcs.
@@ -380,7 +380,7 @@ Module Type STCSYNTAX
       variables (tcs ++ tcs') = variables tcs ++ variables tcs'.
   Proof.
     unfold variables.
-    induction tcs as [|[]]; simpl; intros; auto.
+    induction tcs as [|[]]; simpl; intros; auto with datatypes.
     - rewrite <-app_assoc; f_equal; auto.
   Qed.
 
@@ -389,7 +389,7 @@ Module Type STCSYNTAX
       steps_of (tcs ++ tcs') = steps_of tcs ++ steps_of tcs'.
   Proof.
     unfold steps_of.
-    induction tcs as [|[]]; simpl; intros; auto.
+    induction tcs as [|[]]; simpl; intros; auto with datatypes.
   Qed.
 
   Lemma nexts_of_app:

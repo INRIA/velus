@@ -211,7 +211,7 @@ Module Type COMMONTYPING
   Definition wt_env (e: env) (Γ: tenv) :=
     Forall (wt_env_value e) Γ.
 
-  Hint Unfold wt_env.
+  Global Hint Unfold wt_env : typing.
 
   Lemma wt_env_empty:
     forall Γ,
@@ -220,7 +220,7 @@ Module Type COMMONTYPING
     induction Γ as [|(?&?)]; constructor; auto.
     unfold wt_env_value; rewrite Env.gempty; auto.
   Qed.
-  Hint Resolve wt_env_empty.
+  Global Hint Resolve wt_env_empty : typing.
 
   Lemma env_find_wt_value:
     forall Γ e x ty v,
@@ -234,6 +234,7 @@ Module Type COMMONTYPING
     unfold wt_env_value in Hin.
     now rewrite Hfind in Hin.
   Qed.
+  Global Hint Resolve env_find_wt_value : typing.
 
   Lemma wt_env_value_add:
     forall e v x y ty,
@@ -280,7 +281,7 @@ Module Type COMMONTYPING
       apply NotInMembers_NotIn with (b:=t) in Hnin.
       contradiction.
   Qed.
-  Hint Resolve wt_env_add.
+  Global Hint Resolve wt_env_add : typing.
 
   Lemma wt_env_value_remove:
     forall env x y ty,
@@ -299,13 +300,13 @@ Module Type COMMONTYPING
       wt_env env Γv ->
       wt_env (Env.remove x env) Γv.
   Proof.
-    induction Γv as [|(y, yt) Γv]; auto.
+    induction Γv as [|(y, yt) Γv]; auto with typing.
     setoid_rewrite Forall_cons2.
     destruct 1 as (Hy & HΓv).
     split; [|now apply IHΓv].
     now apply wt_env_value_remove.
   Qed.
-  Hint Resolve wt_env_remove.
+  Global Hint Resolve wt_env_remove : typing.
 
   Lemma wt_env_adds_opt:
     forall Γv env ys outs rvs,
@@ -325,11 +326,11 @@ Module Type COMMONTYPING
       inv Length; inv Nodup; inv Hin; inv WTv; auto.
     destruct o.
     - rewrite Env.adds_opt_cons_cons'; auto.
-      eapply IHys; eauto.
+      eapply IHys; eauto with typing.
     - rewrite Env.adds_opt_cons_cons_None; auto.
-      eapply IHys; eauto.
+      eapply IHys; eauto with typing.
   Qed.
-  Hint Resolve wt_env_adds_opt.
+  Global Hint Resolve wt_env_adds_opt : typing.
 
   Section WTMemory.
 
@@ -406,13 +407,12 @@ Module Type COMMONTYPING
       forall p mems insts,
         wt_memory (empty_memory _) p mems insts.
     Proof.
-      constructor; simpl; auto.
+      constructor; simpl; auto with typing.
       induction insts as [|(?, ?)]; auto.
       apply Forall_cons; auto.
       apply wt_inst_empty.
       apply find_inst_gempty.
     Qed.
-    Hint Resolve wt_memory_empty.
 
     Lemma wt_memory_mems_cons:
       forall M p mems insts x t,
@@ -423,7 +423,7 @@ Module Type COMMONTYPING
       - inversion_clear 1 as [???? WTmems]; inv WTmems.
         intuition; constructor; auto.
       - intros [? WT]; inv WT.
-        constructor; auto.
+        constructor; auto with typing.
     Qed.
 
     Lemma wt_memory_insts_cons:
@@ -463,8 +463,7 @@ Module Type COMMONTYPING
         eapply wt_inst_add_val.
         eapply Forall_forall in Hin; eauto.
     Qed.
-    Hint Resolve wt_memory_add_val.
- 
+
     Lemma wt_inst_add_inst_neq:
       forall p i f j Mj M,
         wt_inst M p (i, f) ->
@@ -507,7 +506,6 @@ Module Type COMMONTYPING
         eapply wt_inst_add_inst_eq; eauto.
       - apply wt_inst_add_inst_neq; auto.
     Qed.
-    Hint Resolve wt_memory_add_inst.
 
     Lemma wt_inst_suffix:
       forall p p' mem oc wt_unit,
@@ -521,7 +519,6 @@ Module Type COMMONTYPING
       - eright; eauto.
         eapply find_unit_suffix_same; eauto.
     Qed.
-    Hint Resolve wt_inst_suffix.
 
     Lemma wt_memory_suffix:
       forall p p' mems insts mem wt_unit,
@@ -533,7 +530,7 @@ Module Type COMMONTYPING
       induction 1 as [????? WTmem_inst]; intros * Sub.
       constructor; auto.
       induction insts as [|(o, c)]; inv WTmem_inst; auto.
-      constructor; eauto.
+      constructor; eauto using wt_inst_suffix.
     Qed.
 
     Lemma wt_memory_chained:
@@ -547,7 +544,6 @@ Module Type COMMONTYPING
       eapply wt_memory_suffix; eauto.
       eapply find_unit_suffix; eauto.
     Qed.
-    Hint Resolve wt_memory_chained.
 
     Lemma wt_memory_other:
       forall M p u us mems insts,
@@ -598,9 +594,9 @@ Module Type COMMONTYPING
 
   End WTMemory.
 
-  Hint Resolve wt_env_empty wt_env_add wt_env_remove wt_env_adds_opt
-       wt_memory_empty wt_memory_add_val wt_memory_add_inst
-       wt_memory_chained.
+  Global Hint Resolve wt_env_empty wt_env_add wt_env_remove wt_env_adds_opt
+         wt_memory_empty wt_memory_add_val wt_memory_add_inst
+         wt_memory_chained : typing.
 
   Section TransfoWT.
 

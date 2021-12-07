@@ -155,8 +155,6 @@ Module Type TRANSLATION
   Definition translate_reset (b: system) : stmt :=
     Comp (reset_mems b.(s_nexts)) (reset_insts b.(s_subs)).
 
-  Hint Constructors NoDupMembers.
-
   Program Definition reset_method (b: system) : method :=
     {| m_name := reset;
        m_in   := [];
@@ -164,6 +162,7 @@ Module Type TRANSLATION
        m_out  := [];
        m_body := translate_reset b
     |}.
+  Next Obligation. constructor. Qed.
   Next Obligation.
      split; auto.
      apply reset_atom.

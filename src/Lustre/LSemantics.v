@@ -1172,12 +1172,11 @@ Module Type LSEMANTICS
     eapply Env.dom_lb_use in Hdom; eauto.
   Qed.
 
-  Hint Resolve nth_In.
   Fact sem_exp_refines {PSyn prefs} : forall (G : @global PSyn prefs) b e H H' v,
       Env.refines (@EqSt _) H H' ->
       sem_exp G H b e v ->
       sem_exp G H' b e v.
-  Proof with eauto.
+  Proof with eauto with datatypes.
     induction e using exp_ind2; intros Hi Hi' v Href Hsem; inv Hsem.
     - (* const *) constructor...
     - (* enum *) constructor...
@@ -1430,8 +1429,6 @@ Module Type LSEMANTICS
     apply Env.restrict_find; auto.
   Qed.
 
-  Hint Resolve EqStrel EqStrel_Reflexive EqStrel_Transitive.
-
   Fact sem_var_restrict_inv : forall vars H id v,
       sem_var (Env.restrict H vars) id v ->
       In id vars /\ sem_var H id v.
@@ -1441,7 +1438,8 @@ Module Type LSEMANTICS
       eapply Env.dom_ub_use in Hdom; eauto.
       inv Hvar. econstructor; eauto.
     - eapply sem_var_refines; [|eauto].
-      eapply Env.restrict_refines; eauto.
+      eapply Env.restrict_refines;
+        auto using EqStrel_Transitive, EqStrel_Reflexive.
   Qed.
 
   (* Lemma sem_clock_restrict : forall vars ck H bs bs', *)
@@ -1459,7 +1457,7 @@ Module Type LSEMANTICS
       wx_exp vars e ->
       sem_exp G H b e vs ->
       sem_exp G (Env.restrict H vars) b e vs.
-  Proof with eauto.
+  Proof with eauto with datatypes.
     induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem.
     - (* const *) constructor...
     - (* enum *) constructor...
@@ -1514,7 +1512,7 @@ Module Type LSEMANTICS
       wx_equation vars eq ->
       sem_equation G H b eq ->
       sem_equation G (Env.restrict H vars) b eq.
-  Proof with eauto.
+  Proof with eauto with datatypes.
     intros G vars H b [xs es] Hwc Hsem.
     destruct Hwc as (?&?). inv Hsem.
     econstructor.

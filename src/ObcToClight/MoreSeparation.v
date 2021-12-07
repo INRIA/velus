@@ -125,7 +125,7 @@ Proof.
   simpl; intuition.
 Qed.
 
-Hint Resolve decidable_footprint_sepconj.
+Global Hint Resolve decidable_footprint_sepconj : sep.
 
 Lemma decidable_ident_eq:
   forall (b b': AST.ident), Decidable.decidable (b = b').
@@ -147,7 +147,7 @@ Proof.
   apply Z.lt_decidable.
 Qed.
 
-Hint Resolve decidable_footprint_range.
+Global Hint Resolve decidable_footprint_range : sep.
 
 Lemma decidable_footprint_contains:
   forall {f} chunk b ofs spec,
@@ -162,7 +162,7 @@ Proof.
   apply Z.lt_decidable.
 Qed.
 
-Hint Resolve decidable_footprint_contains.
+Global Hint Resolve decidable_footprint_contains : sep.
 
 Lemma sep_unwand:
   forall P Q,
@@ -476,9 +476,9 @@ Proof.
   now apply Hperm.
 Qed.
 
-Hint Resolve footprint_perm_sepconj
+Global Hint Resolve footprint_perm_sepconj
              footprint_perm_range
-             footprint_perm_contains.
+             footprint_perm_contains : sep.
 
 Lemma range_imp_with_wand:
   forall p P b lo hi,
@@ -639,7 +639,7 @@ Lemma sepemp_trivial:
 Proof.
   split.
 Qed.
-Hint Resolve sepemp_trivial.
+Global Hint Resolve sepemp_trivial : sep.
 
 Lemma sepemp_right:
   forall P,
@@ -704,7 +704,7 @@ Proof.
   intros lo hi m. inversion 2.
 Qed.
 
-Hint Resolve decidable_footprint_sepemp footprint_perm_sepemp.
+Global Hint Resolve decidable_footprint_sepemp footprint_perm_sepemp : sep.
 
 Lemma empty_range:
   forall {f} b lo hi,
@@ -743,7 +743,7 @@ Proof.
   intros p b lo hi m Hm. inversion Hm.
 Qed.
 
-Hint Resolve decidable_footprint_sepfalse footprint_perm_sepfalse.
+Global Hint Resolve decidable_footprint_sepfalse footprint_perm_sepfalse : sep.
 
 Section MassertPredEqv.
   Context {A: Type}.
@@ -949,7 +949,7 @@ Section Sepall.
     - apply IH with (1:=Hfp).
   Qed.
 
-  Hint Resolve decidable_footprint_sepall footprint_perm_sepall.
+  Hint Resolve decidable_footprint_sepall footprint_perm_sepall : sep.
 
   Lemma sepall_unwand:
   forall xs P Q,
@@ -997,14 +997,14 @@ Section Sepall.
       + rewrite sep_swap23 in Hm.
         rewrite <-sep_assoc in Hm.
         rewrite sep_unwand in Hm; [|now auto].
-        rewrite sep_unwand in Hm; [|now auto].
+        rewrite sep_unwand in Hm; [|now auto with sep].
         apply Hm.
       + apply Hsub.
       + apply subseteq_footprint_sepall.
         intros.
         apply Hsub.
     - intros b ofs Hf.
-      rewrite sep_unwand; [|now auto].
+      rewrite sep_unwand; [|now auto with sep].
       rewrite <-sep_assoc, sep_unwand; [|now auto].
       destruct Hf as [Hfp|Hf].
       + now rewrite subseteq_footprint_sepall with (q:=q) in Hfp.
@@ -1021,7 +1021,7 @@ Proof.
   apply sepconj_eqv; auto.
 Qed.
 
-Hint Resolve decidable_footprint_sepall footprint_perm_sepall.
+Global Hint Resolve decidable_footprint_sepall footprint_perm_sepall : sep.
 
 Global Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
   Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
@@ -1117,7 +1117,7 @@ Section SplitRange.
     intros.
     apply decidable_footprint_sepall.
     intro fld. destruct fld as [x ty].
-    simpl. destruct (field_offset env x _); auto.
+    simpl. destruct (field_offset env x _); auto with sep.
   Qed.
 
   Lemma footprint_perm_field_range:
@@ -1126,7 +1126,7 @@ Section SplitRange.
   Proof.
     intros p flds b pos x b' lo hi.
     destruct x as [x ty].
-    simpl. destruct (field_offset env x _); auto.
+    simpl. destruct (field_offset env x _); auto with sep.
   Qed.
 
   Lemma split_range_fields':
@@ -1263,7 +1263,7 @@ Section Galloc.
     assert (exists ps', p.(prog_defs) = ps' ++ ps) as Hps
         by (exists nil; auto).
     clear Hps'.
-    induction ps; auto.
+    induction ps; auto with sep.
     destruct a as (id, g).
     destruct Hps as (ps' & Hps).
     assert (m0 |= sepall grange ps) as IH

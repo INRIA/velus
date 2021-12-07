@@ -358,7 +358,6 @@ Section Program.
       econstructor; auto using equiv_program_refl.
       now rewrite app_nil_l.
     Qed.
-    Hint Resolve suffix_refl.
 
     Global Add Parametric Relation: Prog suffix
         reflexivity proved by suffix_refl
@@ -534,8 +533,6 @@ Section Program.
 
 End Program.
 
-Hint Resolve suffix_refl.
-
 Section Transformation.
 
   Class TransformUnit (U U': Type) `{ProgramUnit U} `{ProgramUnit U'} :=
@@ -637,3 +634,7 @@ Section Transformation.
   End Program.
 
 End Transformation.
+
+Global Hint Resolve suffix_refl suffix_cons : program.
+Global Hint Resolve find_unit_transform_units_backward find_unit_transform_units_forward
+       transform_units_Ordered_program : program.

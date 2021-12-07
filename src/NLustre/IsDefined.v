@@ -50,7 +50,7 @@ Module Type ISDEFINED
 
   (** ** Properties *)
 
-  Hint Constructors Is_defined_in_eq.
+  Global Hint Constructors Is_defined_in_eq : nldef.
 
   Lemma not_Is_defined_in_eq_EqDef:
     forall x i ck ce,
@@ -58,7 +58,7 @@ Module Type ISDEFINED
   Proof.
     intros x i ck ce H0 xeqi.
     rewrite xeqi in H0.
-    assert (Is_defined_in_eq i (EqDef i ck ce)) by auto.
+    assert (Is_defined_in_eq i (EqDef i ck ce)) by auto with nldef.
     contradiction.
   Qed.
 
@@ -67,7 +67,7 @@ Module Type ISDEFINED
       ~ Is_defined_in_eq x (EqApp ys ck f le r) -> ~ List.In x ys.
   Proof.
     intros * H. intro.
-    exfalso. apply H. auto.
+    exfalso. apply H; auto with nldef.
   Qed.
 
   Lemma Is_defined_in_EqApp:
@@ -86,7 +86,7 @@ Module Type ISDEFINED
   Proof.
     intros x i ck v0 le r H0 xeqi.
     rewrite xeqi in H0.
-    assert (Is_defined_in_eq i (EqFby i ck v0 le r)) by auto.
+    assert (Is_defined_in_eq i (EqFby i ck v0 le r)) by auto with nldef.
     contradiction.
   Qed.
 

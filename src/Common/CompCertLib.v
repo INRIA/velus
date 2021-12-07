@@ -513,7 +513,7 @@ Proof.
     [destruct i, s, a|destruct s, a|destruct f, a|];
     injection 1; intros; subst; reflexivity.
 Qed.
-Hint Resolve sizeof_by_value.
+Global Hint Resolve sizeof_by_value : compcert.
 
 Lemma sizeof_struct_pos:
   forall env ms,
@@ -965,7 +965,7 @@ Remark map_fst_drop_block:
   forall elems,
     map fst (map drop_block elems) = map fst elems.
 Proof.
-  induction elems as [|(x, (b, t))]; simpl; auto.
+  induction elems as [|(x, (b, t))]; simpl; auto with datatypes.
 Qed.
 
 Program Definition empty_co: composite :=

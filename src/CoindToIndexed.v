@@ -135,8 +135,8 @@ Module Type COINDTOINDEXED
       intros * Horel n.
       unfold tr_history, tr_Stream.
       repeat rewrite Env.Props.P.F.map_o.
-      inv Horel; simpl; auto.
-      rewrite H2; auto.
+      inv Horel; simpl; auto with datatypes.
+      rewrite H2; auto with datatypes.
     Qed.
 
     Fact tr_history_find_orel_mask : forall H H' rs k x x',
@@ -146,7 +146,7 @@ Module Type COINDTOINDEXED
       intros * Horel n.
       unfold tr_history, tr_Stream.
       repeat rewrite Env.Props.P.F.map_o.
-      inv Horel; simpl; auto.
+      inv Horel; simpl; auto with datatypes.
       constructor; auto.
       rewrite <- H2, maskv_nth. reflexivity.
     Qed.
@@ -158,7 +158,7 @@ Module Type COINDTOINDEXED
       intros * Horel n.
       unfold tr_history, tr_Stream.
       repeat rewrite Env.Props.P.F.map_o.
-      inv Horel; simpl; auto.
+      inv Horel; simpl; auto with datatypes.
       constructor; auto.
       rewrite H2, maskv_nth. reflexivity.
     Qed.
@@ -185,7 +185,7 @@ Module Type COINDTOINDEXED
       unfold tr_history, Env.map.
       rewrite Env.gmapi, Find', E; simpl; auto.
     Qed.
-    Hint Resolve sem_var_impl.
+    Global Hint Resolve sem_var_impl : coindstreams indexedstreams nlsem.
 
     (** ** Semantics of clocks *)
 
@@ -193,7 +193,6 @@ Module Type COINDTOINDEXED
         with added complexity as [sem_clock] depends on [H] and [b].
         We go by induction on the clock [ck] then by induction on [n] and
         inversion of the coinductive hypothesis as before. *)
-    Hint Constructors IStr.sem_clock_instant.
     Lemma sem_clock_index:
       forall n H b ck bs,
         CStr.sem_clock H b ck bs ->
@@ -242,7 +241,7 @@ Module Type COINDTOINDEXED
                 rewrite tr_Stream_0 in Hvar.
             do 4 eexists; intuition; eauto.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto; rew_0.
+              subst; eauto with indexedstreams; rew_0.
             rewrite E, tr_Stream_0; constructor.
           * right; right; left.
             apply sem_var_impl in Hvar;
@@ -250,7 +249,7 @@ Module Type COINDTOINDEXED
                 rewrite tr_Stream_0 in Hvar.
             do 3 eexists; intuition.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto; rew_0.
+              subst; eauto with indexedstreams; rew_0.
             rewrite E, tr_Stream_0; constructor.
           * right; right; right.
             apply sem_var_impl in Hvar;
@@ -258,7 +257,7 @@ Module Type COINDTOINDEXED
                 rewrite tr_Stream_0 in Hvar.
             do 5 eexists; intuition; eauto.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto; rew_0.
+              subst; eauto with indexedstreams; rew_0.
             rewrite E, tr_Stream_0; constructor.
         + inversion_clear Indexed; rewrite <-tr_Stream_tl, tr_history_tl; eauto.
     Qed.
@@ -273,9 +272,9 @@ Module Type COINDTOINDEXED
       apply (sem_clock_index n) in Indexed. destruct Indexed as [|[|[|]]];
                                               destruct_conjs;
         match goal with H: tr_Stream _ _ = _ |- _ => rewrite H end;
-        subst; eauto.
+        subst; eauto with indexedstreams.
     Qed.
-    Hint Resolve sem_clock_impl.
+    Global Hint Resolve sem_clock_impl : indexedstreams coindstreams nlsem.
 
 End COINDTOINDEXED.
 

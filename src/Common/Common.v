@@ -752,13 +752,13 @@ Section ORel.
 End ORel.
 
 Arguments orel {A}%type R%signature.
-Hint Extern 4 (orel _ None None) => now constructor.
-Hint Extern 5 (orel _ ?x ?x) => reflexivity.
+Global Hint Constructors orel : datatypes.
+Global Hint Extern 5 (orel _ ?x ?x) => reflexivity : datatypes.
 
 Lemma orel_eq {A : Type} :
   forall x y, orel (@eq A) x y <-> x = y.
 Proof.
-  intros x y. destruct x, y; split; intro HH; try discriminate; inv HH; auto.
+  intros x y. destruct x, y; split; intro HH; try discriminate; inv HH; auto with datatypes.
 Qed.
 
 Lemma orel_eq_weaken:
@@ -773,9 +773,7 @@ Global Instance orel_option_map_Proper
   Proper ((RA ==> RB) ==> orel RA ==> orel RB) (@option_map A B).
 Proof.
   intros f' f Ef oa' oa Eoa.
-  destruct oa'; destruct oa; simpl; inv Eoa; auto.
-  take (RA _ _) and specialize (Ef _ _ it).
-  now rewrite Ef.
+  destruct oa'; destruct oa; simpl; inv Eoa; auto with datatypes.
 Qed.
 
 Global Instance orel_option_map_pointwise_Proper
@@ -813,8 +811,7 @@ Global Instance orel_subrelation_Proper {A}:
   Proper (@subrelation A ==> eq ==> eq ==> Basics.impl) orel.
 Proof.
   intros R2 R1 HR ox2 ox1 ORx oy2 oy1 ORy HH; subst.
-  destruct ox1, oy1; inv HH; auto.
-  take (R2 _ _) and apply HR in it. now constructor.
+  destruct ox1, oy1; inv HH; auto with datatypes.
 Qed.
 
 Global Instance orel_equivalence_Proper {A}:
@@ -836,18 +833,11 @@ Global Program Instance orel_EqDec {A R} `{EqDec A R} : EqDec (option A) (orel R
                    | _, _ => right _
                    end }.
 Next Obligation. constructor; auto. Qed.
+Next Obligation. constructor; auto. Qed.
 Next Obligation. inv H0; auto. Qed.
 Next Obligation. inv H1; eauto. eapply H0; eauto. Qed.
 Next Obligation. split. intros ?? (?&?); congruence. intros (?&?); congruence. Qed.
 Next Obligation. split. intros ?? (?&?); congruence. intros (?&?); congruence. Qed.
-(* Proof. *)
-(*   - now take (x === y) and rewrite it. *)
-(*   - intro HH. take (x =/= y) and apply it. unfold equiv in HH. *)
-(*     now rewrite orel_inversion in HH. *)
-(*   - inversion 1. *)
-(*   - inversion 1. *)
-(*   - reflexivity. *)
-(* Qed. *)
 
 (** Lift boolean relations into the option type *)
 
@@ -1093,7 +1083,7 @@ Section OptionReasoning.
       orel RB (obind oa1 f1) (obind oa2 f2).
   Proof.
     intros * Ha Hf.
-    destruct oa1 as [a1|]; inv Ha; simpl; auto.
+    destruct oa1 as [a1|]; inv Ha; simpl; auto with datatypes.
   Qed.
 
   Lemma orel_obind_intro_eq:
@@ -1135,7 +1125,7 @@ Section OptionReasoning.
     inversion HH as [|q' q'' Rq Ms]; subst; clear HH.
     symmetry in Ms. apply obind_inversion in Ms as (p & -> & Hg).
     apply (orel_eq_weaken RB) in Hg.
-    setoid_rewrite Rq in Hg. exists p; split; auto.
+    setoid_rewrite Rq in Hg. exists p; split; auto with datatypes.
   Qed.
   Global Arguments orel_obind_inversion RA%signature {_} {RB}%signature {_ _ _}.
 
@@ -1157,7 +1147,7 @@ Section OptionReasoning.
     revert xs2 RAxs; induction xs1; intros xs2; inversion 1; subst; auto.
     inv RAxs. simpl.
     take (SetoidList.eqlistA _ _ _) and specialize (IHxs1 _ it).
-    destruct (ofold_right f1 a1 xs1); inv IHxs1; auto.
+    destruct (ofold_right f1 a1 xs1); inv IHxs1; auto with datatypes.
     now apply Ef.
   Qed.
 
@@ -1168,9 +1158,8 @@ Section OptionReasoning.
     intros f' f Ef xs' xs Exs.
     induction Exs; simpl. now constructor.
     take (RA x x') and pose proof (Ef _ _ it) as Efx.
-    destruct (f' x); inv Efx; auto.
-    destruct (omap f' l); inv IHExs; auto.
-    constructor; auto.
+    destruct (f' x); inv Efx; auto with datatypes.
+    destruct (omap f' l); inv IHExs; auto with datatypes.
   Qed.
 
   Global Instance omap_Proper_pointwise (RA: relation A):
@@ -1179,9 +1168,8 @@ Section OptionReasoning.
   Proof.
     intros f' f Ef xs' xs Exs; subst.
     induction xs. now constructor.
-    simpl. specialize (Ef a). destruct (f' a); inv Ef; auto.
-    destruct (omap f' xs); inv IHxs; auto.
-    constructor. auto.
+    simpl. specialize (Ef a). destruct (f' a); inv Ef; auto with datatypes.
+    destruct (omap f' xs); inv IHxs; auto with datatypes.
   Qed.
 
   Lemma orel_omap:
@@ -1192,8 +1180,8 @@ Section OptionReasoning.
     intros f g xs HH.
     induction xs; simpl. now rewrite orel_inversion.
     specialize (HH a).
-    destruct (f a); inv HH; auto.
-    destruct (omap f xs); inv IHxs; auto.
+    destruct (f a); inv HH; auto with datatypes.
+    destruct (omap f xs); inv IHxs; auto with datatypes.
   Qed.
 
   Lemma orel_omap_eqlistA (RB : relation B) :
@@ -1204,9 +1192,8 @@ Section OptionReasoning.
     intros f g xs HH.
     induction xs; simpl. now rewrite orel_inversion.
     specialize (HH a).
-    destruct (f a); inv HH; auto.
-    destruct (omap f xs); inv IHxs; auto.
-    constructor. auto.
+    destruct (f a); inv HH; auto with datatypes.
+    destruct (omap f xs); inv IHxs; auto with datatypes.
   Qed.
 
   Lemma orel_option_map (RB :relation B):
@@ -1215,8 +1202,7 @@ Section OptionReasoning.
       orel RB (option_map f x) (option_map g x).
   Proof.
     intros f g x HH.
-    destruct x; simpl; auto.
-    constructor. auto.
+    destruct x; simpl; auto with datatypes.
   Qed.
 
   (* Helper lemma for rewriting modulo an equivalence at the head of an [obind]

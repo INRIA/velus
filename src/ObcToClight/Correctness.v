@@ -44,10 +44,10 @@ Import ComTyp.
 Open Scope list_scope.
 Open Scope sep_scope.
 Open Scope Z.
-Hint Constructors Clight.eval_lvalue Clight.eval_expr.
-Hint Resolve  Clight.assign_loc_value.
+Local Hint Constructors Clight.eval_lvalue Clight.eval_expr : clight.
+Local Hint Resolve  Clight.assign_loc_value : clight.
 
-Hint Resolve Z.divide_refl.
+Local Hint Resolve Z.divide_refl : zarith.
 
 (*****************************************************************)
 (** simple occurence predicate                                  **)
@@ -63,7 +63,7 @@ Inductive occurs_in: stmt -> stmt -> Prop :=
 | occurs_comp: forall s s1 s2,
     occurs_in s s1 \/ occurs_in s s2 ->
     occurs_in s (Comp s1 s2).
-Hint Resolve occurs_refl.
+Local Hint Resolve occurs_refl : obcinv.
 
 Remark occurs_in_switch:
   forall e ss d s,
@@ -74,7 +74,7 @@ Proof.
   apply Forall_forall.
   induction s using stmt_ind2; inversion_clear Occurs as [| |??? [Occ|Occ]];
     intros os Hin.
-  - constructor; apply Exists_exists; eauto.
+  - constructor; apply Exists_exists; eauto with obcinv.
   - constructor.
     take (Exists _ _) and apply Exists_exists in it as (os' & Hin' & Occ).
     apply Exists_exists; exists os'; split; auto.
@@ -93,7 +93,8 @@ Remark occurs_in_comp:
 Proof.
   intros * Occurs.
   induction s using stmt_ind2; inversion_clear Occurs as [| |??? [Occ|Occ]];
-    split; constructor; ((left; now apply IHs1) || (right; now apply IHs2) || idtac).
+    split; constructor; ((left; now apply IHs1) || (right; now apply IHs2) || idtac);
+    auto with obcinv.
   - take (Exists _ _) and apply Exists_exists in it as (os & Hin & Occ).
     apply Exists_exists; exists os; split; auto.
     eapply Forall_forall in Hin; eauto; simpl in Hin.
@@ -102,10 +103,8 @@ Proof.
     apply Exists_exists; exists os; split; auto.
     eapply Forall_forall in Hin; eauto; simpl in Hin.
     destruct Hin; auto.
-  - left; auto.
-  - right; auto.
 Qed.
-Hint Resolve occurs_in_switch occurs_in_comp.
+Local Hint Resolve occurs_in_switch occurs_in_comp : obcinv.
 
 Lemma occurs_in_wt:
   forall s s' p insts mems vars,
@@ -188,7 +187,7 @@ Section PRESERVATION.
 
   Opaque sepconj.
 
-  Hint Constructors wt_stmt.
+  Hint Constructors wt_stmt : clight.
 
   Section MatchStates.
 
@@ -260,7 +259,7 @@ Section PRESERVATION.
           exists outb, outco, d; split; auto. 2:erewrite <-output_match; eauto.
           destruct d; simpl. rewrite <- (Ptrofs.add_zero_l (Ptrofs.repr z)).
           eapply eval_Efield_struct; eauto.
-          - eapply eval_Elvalue; eauto.
+          - eapply eval_Elvalue; eauto with clight.
             now apply deref_loc_copy.
           - simpl; unfold type_of_inst; eauto.
           - erewrite <-output_match; eauto.
@@ -363,14 +362,14 @@ Section PRESERVATION.
           edestruct staterep_field_offset as (d & ? & ?); eauto.
           exists d; destruct d; split; [|split]; auto.
           - eapply eval_Efield_struct; eauto.
-            + eapply eval_Elvalue; eauto.
+            + eapply eval_Elvalue; eauto with clight.
               now apply deref_loc_copy.
             + simpl; unfold type_of_inst; eauto.
             + pose proof (field_offset_mk_members _ _ _ _ _ H6); subst; auto.
               now rewrite Eq.
           - split.
             + eapply field_offset_in_range'; eauto.
-            + assert (0 <= Ptrofs.unsigned sofs) by eauto; lia.
+            + assert (0 <= Ptrofs.unsigned sofs) by eauto with clight; lia.
         Qed.
 
         Corollary eval_self_field:
@@ -406,11 +405,11 @@ Section PRESERVATION.
           eapply Forall_forall in Find; eauto; simpl in Find.
           apply not_None_is_Some in Find.
           destruct Find as [(?, ?)]; eauto.
-          edestruct struct_in_struct_in_bounds' as (d & ? & Struct); eauto.
+          edestruct struct_in_struct_in_bounds' as (d & ? & Struct); eauto with clight.
           exists d; destruct d; split; [|split]; auto.
           + apply eval_Eaddrof.
             eapply eval_Efield_struct; eauto.
-            * eapply eval_Elvalue; eauto.
+            * eapply eval_Elvalue; eauto with clight.
               now apply deref_loc_copy.
             * simpl; unfold type_of_inst; eauto.
             * subst tge. rewrite Eq.
@@ -445,7 +444,7 @@ Section PRESERVATION.
 
         (* Unop op e ty : "op e" *)
         - take (wt_exp _ _ _ _) and pose proof it as WTv;
-            eapply pres_sem_exp' in WTv; eauto.
+            eapply pres_sem_exp' in WTv; eauto with clight.
           destruct op; simpl in *; econstructor; eauto;
             erewrite type_pres; eauto.
           + inv WTv; simpl in *; take (_ = typeof _) and rewrite <-it in *.
@@ -467,7 +466,7 @@ Section PRESERVATION.
         (* Binop op e1 e2 : "e1 op e2" *)
         - take (wt_exp _ _ _ ex1) and pose proof it as WTv1;
             take (wt_exp _ _ _ ex2) and pose proof it as WTv2;
-            eapply pres_sem_exp' in WTv1; eapply pres_sem_exp' in WTv2; eauto.
+            eapply pres_sem_exp' in WTv1; eapply pres_sem_exp' in WTv2; eauto with clight.
           simpl in *. unfold translate_binop.
           econstructor; eauto.
           erewrite 2 type_pres; eauto.
@@ -509,17 +508,17 @@ Section PRESERVATION.
                                (list_type_to_typelist (map Clight.typeof es'))
                                (map value_to_cvalue vs).
       Proof.
-        Hint Constructors Clight.eval_exprlist.
+        Hint Constructors Clight.eval_exprlist : clight.
         intros * WF EV; subst es'.
         induction EV; inv WF; simpl; try rewrite list_type_to_typelist_cons; econstructor;
           ((eapply expr_correct; eauto)
-           || (erewrite type_pres; eauto; apply sem_cast_same'; eauto)
+           || (erewrite type_pres; eauto; apply sem_cast_same'; eauto with obctyping clight)
            || auto).
       Qed.
 
     End ExprCorrectness.
 
-    Hint Resolve exprs_correct.
+    Hint Resolve exprs_correct : clight.
 
     Section AssignCorrectness.
 
@@ -552,7 +551,7 @@ Section PRESERVATION.
       Proof.
         clear Hmem; intros * Hmem Ev.
         assert (x <> prefix obc2c self).
-        { intro; subst. eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto. }
+        { intro; subst. eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto with ident. }
         destruct (mem_assoc_ident x caller.(m_out)) eqn:E.
 
         (* x is a caller output *)
@@ -582,7 +581,7 @@ Section PRESERVATION.
               rewrite Hco in Hco'; inv Hco'. simpl in Hofs.
               change (prog_comp_env tprog) with gcenv in Hofs; rewrite Hofs in Hofs'; inv Hofs'.
               econstructor; eauto; simpl.
-              rewrite Teq; eauto.
+              rewrite Teq; eauto with clight.
             * eapply sep_imp; eauto.
               rewrite varsrep_corres_out; eauto.
 
@@ -612,7 +611,7 @@ Section PRESERVATION.
         rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23 in Hmem.
         edestruct exec_assign as (m' & le' & ?&?&?); eauto.
         exists m', le'; intuition.
-        apply match_states_conj; intuition; eauto using m_nodupvars.
+        apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
         rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23; auto.
       Qed.
 
@@ -662,7 +661,7 @@ Section PRESERVATION.
         edestruct fieldsrep_field_offset as ((?&?) & Hoffset & ?); eauto.
         eapply eval_Elvalue; eauto.
         - eapply eval_Efield_struct; eauto.
-          + eapply eval_Elvalue; eauto.
+          + eapply eval_Elvalue; eauto with clight.
             now apply deref_loc_copy.
           + simpl; unfold type_of_inst; eauto.
           + erewrite <-output_match; eauto.
@@ -899,7 +898,7 @@ Section PRESERVATION.
       rewrite Hofs' in Hofs; inv Hofs.
       rewrite <- (Ptrofs.unsigned_repr (Ptrofs.unsigned sofs + fst d)) in Hmem; auto.
       assert (0 <= fst d <= Ptrofs.max_unsigned).
-      { assert (0 <= Ptrofs.unsigned sofs) by eauto.
+      { assert (0 <= Ptrofs.unsigned sofs) by eauto with clight.
         split; try lia.
         edestruct field_offset_type; eauto.
         destruct d. eapply field_offset_in_range'; eauto.
@@ -930,7 +929,7 @@ Section PRESERVATION.
           change le with (set_opttemp None Vundef le).
           econstructor; simpl; eauto using eval_exprlist.
         + rewrite Env.adds_opt_nil_l.
-          apply match_states_conj; intuition; eauto.
+          apply match_states_conj; intuition; eauto with obctyping.
           erewrite find_class_name; eauto.
           eapply staterep_extract; eauto.
           exists objs, objs', d; intuition; eauto.
@@ -968,7 +967,7 @@ Section PRESERVATION.
             specialize (m_good caller) as (Hvars&_). rewrite Forall_map in Hvars.
             repeat rewrite Forall_app in Hvars. destruct Hvars as (?&?&?).
             eapply Forall_forall in Hin'. 2:rewrite Forall_app in *; eauto.
-            eapply AtomOrGensym_inv in Hin'; eauto.
+            eapply AtomOrGensym_inv in Hin'; eauto with ident.
         }
         clear Hmem'.
 
@@ -980,7 +979,7 @@ Section PRESERVATION.
             with (set_opttemp (Some (prefix_temp fid a)) (value_to_cvalue rv) le).
           econstructor; simpl; eauto using eval_exprlist.
         + simpl map; rewrite Env.adds_opt_cons_cons, Env.adds_opt_nil_l.
-          apply match_states_conj; intuition; eauto using m_nodupvars.
+          apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
           * erewrite find_class_name; eauto.
             eapply staterep_extract; eauto.
             exists objs, objs', d; intuition; eauto.
@@ -1040,7 +1039,7 @@ Section PRESERVATION.
           change le with (set_opttemp None Vundef le).
           econstructor; simpl; eauto; rewrite ? list_type_to_typelist_cons;
             eauto using eval_exprlist.
-        + apply match_states_conj; intuition; eauto using m_nodupvars.
+        + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
           erewrite find_class_name; eauto.
           eapply staterep_extract; eauto.
           exists objs, objs', d; intuition; eauto.
@@ -1131,7 +1130,7 @@ Section PRESERVATION.
                vos = map Some vs ->
                rvos = map Some rvs ->
                call_spec c f vs rvs me me')).
-    { intros (Hstmt & Hcall); split; eauto.
+    { intros (Hstmt & Hcall); split; eauto with obcsem.
       intros * ???? Occurs ?.
       eapply (Hstmt p me ve s (me', ve')); eauto.
       - eapply occurs_in_No_Naked_Vars with (2 := Occurs); eauto.
@@ -1150,17 +1149,17 @@ Section PRESERVATION.
       try inv NoNaked; simpl.
 
     (* x = e *)
-    - eapply exec_assign_match_states; eauto using expr_correct.
+    - eapply exec_assign_match_states; eauto using expr_correct with obctyping clight.
 
     (* state(x) = e  *)
     - edestruct evall_self_field as (?&?& Hofs' &?); eauto.
       take (In _ (c_mems owner))
            and edestruct match_states_assign_state_mem with (4 := it)
-        as (m' & ? & Hofs & ? & Hmem'); eauto.
+        as (m' & ? & Hofs & ? & Hmem'); eauto with obctyping clight.
       rewrite Hofs in Hofs'; inv Hofs'.
       exists m', le; intuition.
-      econstructor; eauto using expr_correct; simpl.
-      + erewrite type_pres; eauto.
+      econstructor; eauto using expr_correct with obctyping; simpl.
+      + erewrite type_pres; eauto with obctyping clight.
       + rewrite Ptrofs.add_unsigned, Ptrofs.unsigned_repr; auto.
 
     (* xs = (i : c).f(es) *)
@@ -1172,7 +1171,7 @@ Section PRESERVATION.
           by (eapply not_None_is_Some_Forall; auto).
       assert (exists rvs, rvos = map Some rvs) as (rvs &?)
           by (eapply not_None_is_Some_Forall; eauto).
-      assert (Forall2 (fun vo xt => wt_option_value vo (snd xt)) vos (m_in fm)) as WTvs by eauto.
+      assert (Forall2 (fun vo xt => wt_option_value vo (snd xt)) vos (m_in fm)) as WTvs by eauto with obctyping clight.
       subst.
       rewrite Forall2_map_1 in WTvs; simpl in WTvs.
       pose proof Ev as Ev'.
@@ -1183,16 +1182,16 @@ Section PRESERVATION.
         eapply Forall_forall in WTinsts; eauto.
         unfold instance_match.
         inversion_clear WTinsts as [???? Find|??????? Find Findcl'];
-          rewrite Find; auto.
+          rewrite Find; auto with typing.
         setoid_rewrite Findcl in Findcl'; inv Findcl'; auto.
       }
-      eapply pres_sem_stmt_call in Ev' as (?& WTrvos); eauto.
+      eapply pres_sem_stmt_call in Ev' as (?& WTrvos); eauto with obctyping clight.
       rewrite Forall2_map_1 in WTrvos.
       take (Forall2 (exp_eval _ _) _ _) and rewrite Forall2_map_2 in it.
       inversion_clear Ev as [??????????? Findcl' Findmth' ?? Hrvs].
       setoid_rewrite Findcl in Findcl'; inv Findcl'; rewrite Findmth in Findmth'; inv Findmth'.
       rewrite Forall2_map_1, Forall2_map_2 in Hrvs.
-      eapply exec_binded_funcall; eauto using exprs_correct.
+      eapply exec_binded_funcall; eauto using exprs_correct with obctyping.
       + intro; eapply occurs_in_instance_methods; eauto.
         * eapply wt_class_find_method; eauto.
           eapply wt_program_find_unit; eauto.
@@ -1223,12 +1222,12 @@ Section PRESERVATION.
       assert (Cop.sem_switch_arg (value_to_cvalue (Venum c))
                                  (Clight.typeof (translate_exp owner caller cond)) =
               Some (Int.unsigned (Int.repr (Z.of_nat c))))
-        by (erewrite type_pres; eauto; take (typeof _ = _) and rewrite it; eauto).
+        by (erewrite type_pres; eauto; take (typeof _ = _) and rewrite it; eauto with clight).
       apply map_nth_error with (f := option_map (translate_stmt (rev_prog prog) owner caller)) in Nth'.
       assert (0 <= Z.of_nat c <= Int.max_unsigned).
       { split; try lia.
         assert (wt_value (Venum c) (Tenum tn)) as WTv
-          by (take (_ = Tenum tn) and rewrite <-it; eauto).
+          by (take (_ = Tenum tn) and rewrite <-it; eauto with obctyping clight).
         inv WTv.
         assert (enums prog = enums prog') as E
             by (apply find_unit_equiv_program in Findowner; specialize (Findowner []); inv Findowner; auto).
@@ -1240,14 +1239,14 @@ Section PRESERVATION.
       }
       destruct s; simpl in *.
       + change Out_normal with (outcome_switch Out_break).
-        econstructor; eauto using expr_correct.
+        econstructor; eauto using expr_correct with obctyping.
         rewrite Int.unsigned_repr; auto.
         change E0 with (Eapp E0 E0).
         eapply select_branch_Some in Nth' as [? ->].
         apply exec_Sseq_2; eauto using exec_stmt.
         discriminate.
       + change Out_normal with (outcome_switch Out_normal).
-        econstructor; eauto using expr_correct.
+        econstructor; eauto using expr_correct with obctyping.
         rewrite Int.unsigned_repr; auto.
         change E0 with (Eapp E0 E0).
         eapply select_branch_None in Nth' as ->; eauto using exec_stmt.
@@ -1280,7 +1279,7 @@ Section PRESERVATION.
 
       (* prepare the entry state *)
       pose proof Mspec as Entry;
-        eapply function_entry_match_states with (me := me) in Entry; eauto.
+        eapply function_entry_match_states with (me := me) in Entry; eauto with typing.
       assert (fn_body fd = return_with (translate_stmt (rev_prog prog) cls fm (m_body fm))
                                        (case_out fm
                                                  None
@@ -1304,7 +1303,7 @@ Section PRESERVATION.
           clear Hmem;
 
           (* get the state after evaluating the body *)
-          edestruct IH as (m' & le' & ? & Hm'); eauto;
+          edestruct IH as (m' & le' & ? & Hm'); eauto with obcinv;
             clear Hm_f;
 
             (* free the environment *)
@@ -1339,7 +1338,7 @@ Section PRESERVATION.
           -- rewrite Body.
              change E0 with (Eapp E0 E0).
              eapply exec_Sseq_1; eauto using exec_stmt, eval_expr.
-          -- rewrite Return; simpl; auto.
+          -- rewrite Return; simpl; auto with clight.
         * erewrite find_class_name in Hm''; eauto.
           now apply sep_drop2 in Hm''.
 
@@ -1371,7 +1370,7 @@ Section PRESERVATION.
       wt_memory me prog' c.(c_mems) c.(c_objs) ->
       call_spec c f vs rvs me me'.
   Proof.
-    intros; eapply mutual_correctness; eauto.
+    intros; eapply mutual_correctness; eauto with program typing.
   Qed.
 
   (*****************************************************************)
@@ -1390,14 +1389,14 @@ Section PRESERVATION.
     find_main_step _ _ _ _ _ TRANSL.
   Definition find_main_reset: find_method reset c_main.(c_methods) = Some main_reset :=
     find_main_reset _ _ _ _ _ TRANSL.
-  Hint Resolve find_main_class find_main_step find_main_reset.
+  Hint Resolve find_main_class find_main_step find_main_reset : clight.
 
   Lemma bounded_main_class:
     bounded_struct_of_class tge c_main Ptrofs.zero.
   Proof.
     unfold bounded_struct_of_class; rewrite Ptrofs.unsigned_zero; split; try reflexivity.
     simpl.
-    edestruct make_members_co as (co &?& Kind & <- &?&?& Size); eauto.
+    edestruct make_members_co as (co &?& Kind & <- &?&?& Size); eauto with clight.
     erewrite co_consistent_sizeof in Size; try eapply Consistent; eauto.
     rewrite Kind in Size. simpl in Size.
     etransitivity; eauto.
@@ -1405,14 +1404,14 @@ Section PRESERVATION.
     destruct (co_alignof_two_p co) as (?&->).
     apply two_power_nat_pos.
   Qed.
-  Hint Resolve bounded_main_class.
+  Hint Resolve bounded_main_class : clight.
 
   Lemma reset_correct:
     forall me0,
       stmt_call_eval prog mempty main_node reset [] me0 [] ->
       call_spec c_main main_reset [] [] mempty me0.
   Proof.
-    intros * Sem; eapply stmt_call_correctness; eauto.
+    intros * Sem; eapply stmt_call_correctness; eauto with typing clight.
     inversion_clear Sem as [??????????? Findcl Findmth Len].
     rewrite find_main_class in Findcl; inv Findcl;
       rewrite find_main_reset in Findmth; inv Findmth.
@@ -1427,7 +1426,7 @@ Section PRESERVATION.
       wt_memory me prog_main c_main.(c_mems) c_main.(c_objs) ->
       call_spec c_main main_step vs rvs me me'.
   Proof.
-    intros * Sem; eapply stmt_call_correctness; eauto.
+    intros * Sem; eapply stmt_call_correctness; eauto with clight.
   Qed.
 
   Let le_main    := create_undef_temps main_f.(fn_temps).
@@ -1771,9 +1770,9 @@ Section PRESERVATION.
       intros (b, t') Hget.
       apply He in Hget; unfold out_step in Hget.
       unfold prefix_fun in Hget.
-      apply prefix_injective in Hget as (?&?); auto.
+      apply prefix_injective in Hget as (?&?); auto with ident.
     Qed.
-    Hint Resolve out_step_env_no_prefix_fun.
+    Hint Resolve out_step_env_no_prefix_fun : clight.
 
     Let step_name := Evar (prefix_fun step main_node).
     Let self_addr := Eaddrof (Evar (prefix_glob (prefix self main_id)) (type_of_inst main_node))
@@ -1791,7 +1790,7 @@ Section PRESERVATION.
       apply eval_Evar_global; eauto.
       apply out_step_env_no_prefix_glob; auto; apply self_valid.
     Qed.
-    Hint Resolve eval_expr_self.
+    Hint Resolve eval_expr_self : clight.
 
     Hypothesis Hwt_ins  : forall n, wt_values (ins n) main_step.(m_in).
     Hypothesis Hwt_outs : forall n, wt_values (outs n) main_step.(m_out).
@@ -1818,14 +1817,14 @@ Section PRESERVATION.
       edestruct exec_read with (le := le_n) (m := m_n) as (le1 & ?&?&?); eauto.
 
       (* get the function *)
-      edestruct methods_corres with (4 := find_main_step) as (ptr_step & f & Get_s & Get_f & ?); eauto.
+      edestruct methods_corres with (4 := find_main_step) as (ptr_step & f & Get_s & Get_f & ?); eauto with clight.
       assert (f = step_f) by (eapply method_spec_eq; eauto); subst f.
 
       (* evaluate the lvalue function name *)
       assert (forall targs tres cc,
                  eval_expr tge e le1 m_n (step_name (Tfunction targs tres cc)) (var_ptr ptr_step)).
       { intros; eapply eval_Elvalue.
-        - apply eval_Evar_global; eauto.
+        - apply eval_Evar_global; eauto with clight.
         - apply deref_loc_reference; auto.
       }
 
@@ -1846,7 +1845,7 @@ Section PRESERVATION.
           inversion_clear Hdef;
           simpl in *;
           eauto using eval_exprlist.
-        eapply eval_Econs; eauto.
+        eapply eval_Econs; eauto with clight.
         now apply sem_cast_same'.
       }
 
@@ -1864,29 +1863,29 @@ Section PRESERVATION.
         destruct_list main_step.(m_out) as (?, ?) ? ? : Out;
           unfold case_out in EvalStep; rewrite Out in EvalStep.
         - eexists; split; auto.
-          eapply exec_Scall; simpl; eauto; simpl; eauto using eval_exprlist.
+          eapply exec_Scall; simpl; eauto; simpl; eauto using eval_exprlist with clight.
           unfold type_of_function.
           destruct StepSpec as (P_f & R_f & CC_f &?).
           rewrite P_f, R_f, CC_f; unfold case_out; rewrite Out; simpl.
           rewrite type_of_params_make_in_arg; auto.
-          erewrite find_class_name; eauto.
+          erewrite find_class_name; eauto with clight.
         - destruct EvalStep as (? & E & ?); rewrite E.
           eexists; split.
-          + eapply exec_Scall; simpl; eauto; simpl; eauto using eval_exprlist.
+          + eapply exec_Scall; simpl; eauto; simpl; eauto using eval_exprlist with clight.
             unfold type_of_function.
             destruct StepSpec as (P_f & R_f & CC_f &?).
             rewrite P_f, R_f, CC_f; unfold case_out; rewrite Out; simpl.
             rewrite type_of_params_make_in_arg; auto.
-            erewrite find_class_name; eauto.
+            erewrite find_class_name; eauto with clight.
           + simpl; apply PTree.gss.
         - destruct EvalStep as (?&?&?&?&?&?&?).
           eexists; split; auto.
-          eapply exec_Scall; simpl; eauto; simpl; eauto 7 using eval_exprlist.
+          eapply exec_Scall; simpl; eauto; simpl; eauto 7 using eval_exprlist with clight.
           unfold type_of_function.
           destruct StepSpec as (P_f & R_f & CC_f &?).
           rewrite P_f, R_f, CC_f; unfold case_out; rewrite Out; simpl.
           rewrite type_of_params_make_in_arg; auto.
-          erewrite find_class_name, find_method_name; eauto.
+          erewrite find_class_name, find_method_name; eauto with clight.
           unfold type_of_inst_p; auto.
       }
 
@@ -1957,7 +1956,7 @@ Section PRESERVATION.
         apply reset_correct in ResetCall'.
         unfold call_spec, case_out in ResetCall'.
         rewrite reset_no_output in ResetCall'.
-        erewrite find_class_name in ResetCall'; eauto.
+        erewrite find_class_name in ResetCall'; eauto with clight.
         rewrite <- Ptrofs.unsigned_zero in Hm_main.
 
         (* prepare the coinduction relation in advance *)
@@ -1992,18 +1991,18 @@ Section PRESERVATION.
             |destruct Spec as (? & step_b' & step_co' & Dostep & Hwt & ? & ? & Hm_n)];
             destruct Dostep as [? me_n me_Sn EvalStep dostep];
             assert (wt_memory me_Sn prog_main c_main.(c_mems) c_main.(c_objs))
-              by (eapply pres_sem_stmt_call with (f := step); eauto;
+              by (eapply pres_sem_stmt_call with (f := step); eauto with clight;
                   rewrite Forall2_map_1; simpl; apply Hwt_ins);
 
             (* step correctness *)
-            eapply step_correct in EvalStep; auto;
+            eapply step_correct in EvalStep; auto with clight;
               unfold call_spec, case_out in EvalStep;
-              rewrite Hout in EvalStep; erewrite find_class_name in EvalStep; eauto;
+              rewrite Hout in EvalStep; erewrite find_class_name in EvalStep; eauto with clight;
                 rewrite sepemp_right, <- Ptrofs.unsigned_zero in Hm_n; try rewrite sep_assoc in Hm_n;
                   [eapply EvalStep in Hm_n as (m_Sn & step_f' & ? & ? & Hm_Sn)
                   |eapply EvalStep in Hm_n as (m_Sn & step_f' & ? & ? & ? & ? & Hm_Sn)
                   |eapply EvalStep in Hm_n as (ve_f & m_Sn & step_f' & ? & ? & ? & Hm_Sn)]; auto;
-                    try erewrite find_method_name; eauto;
+                    try erewrite find_method_name; eauto with clight;
                       assert (step_f = step_f') by (eapply method_spec_eq; eauto); subst step_f'.
 
           - exists m_Sn; split; eauto.
@@ -2026,7 +2025,7 @@ Section PRESERVATION.
           [destruct Hm_main as (step_b & step_co & ? & ? & Hm_main');
            clear Hm_main; rename Hm_main' into Hm_main
           |rewrite sepemp_right in Hm_main];
-          eapply ResetCall' in Hm_main as (m0 & reset_f' & ? & ? & Hm0); auto;
+          eapply ResetCall' in Hm_main as (m0 & reset_f' & ? & ? & Hm0); auto with clight;
             assert (reset_f = reset_f') by (eapply method_spec_eq; eauto); subst reset_f';
               exists m0; split; auto;
 
@@ -2054,24 +2053,24 @@ Section PRESERVATION.
         exists m0; split; auto.
 
         (* get the function *)
-        edestruct methods_corres with (4 := find_main_reset) as (ptr_reset & f & Get_s & Get_f & ?); eauto.
+        edestruct methods_corres with (4 := find_main_reset) as (ptr_reset & f & Get_s & Get_f & ?); eauto with clight.
         assert (f = reset_f) by (eapply method_spec_eq; eauto); subst f.
 
         (* evaluate the lvalue function name *)
         assert (forall targs tres cc,
                    eval_expr tge e le_main m_main (reset_name (Tfunction targs tres cc)) (var_ptr ptr_reset)).
         { intros; eapply eval_Elvalue.
-          - apply eval_Evar_global; eauto.
+          - apply eval_Evar_global; eauto with clight.
           - apply deref_loc_reference; auto.
         }
 
         change le_main with (set_opttemp None Vundef le_main).
         eapply exec_Scall; eauto; simpl;
-          try rewrite list_type_to_typelist_cons; eauto using eval_exprlist.
+          try rewrite list_type_to_typelist_cons; eauto using eval_exprlist with clight.
         unfold type_of_function.
         destruct ResetSpec as (-> & -> & -> &?); unfold case_out;
           rewrite reset_no_output, reset_no_input;
-          erewrite find_class_name; eauto; simpl; auto.
+          erewrite find_class_name; eauto with clight; simpl; auto.
       Qed.
 
 
@@ -2213,8 +2212,8 @@ Section PRESERVATION.
   Proof.
     intros.
     (* get the reset and step functions *)
-    edestruct methods_corres with (callerid := reset) as (?&?&?&?&?); eauto.
-    edestruct methods_corres with (callerid := step) as (?&?&?&?&?); eauto.
+    edestruct methods_corres with (callerid := reset) as (?&?&?&?&?); eauto with clight.
+    edestruct methods_corres with (callerid := step) as (?&?&?&?&?); eauto with clight.
 
     (* get the self state *)
     edestruct find_self as (?& FindSelf); eauto.

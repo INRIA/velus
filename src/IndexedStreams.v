@@ -156,7 +156,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
     forall A B (l: list A) (f: A -> B),
       all_absent (map f l) = all_absent l.
   Proof.
-    unfold all_absent; induction l; intros; simpl; auto.
+    unfold all_absent; induction l; intros; simpl; auto with datatypes.
   Qed.
 
   Lemma present_list_spec:
@@ -384,7 +384,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
     assert (length (all_absent (xss 0)) = length (xss n)) as Length
         by now (unfold all_absent; rewrite map_length).
     clear Wf; revert Length; generalize (xss n) as l, (all_absent (xss 0)) as l'.
-    induction l, l'; inversion 1; simpl; auto.
+    induction l, l'; inversion 1; simpl; auto with datatypes.
   Qed.
 
   Lemma absent_list_mask:
@@ -553,6 +553,8 @@ environment.
 
   End InstantSemantics.
 
+  Global Hint Constructors sem_clock_instant : indexedstreams.
+
   Add Parametric Morphism : sem_var_instant
       with signature Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
         as sem_var_instant_morph.
@@ -593,11 +595,9 @@ environment.
     Definition lift {A B} (sem: bool -> env -> A -> B -> Prop)
                x (ys: stream B): Prop :=
       forall n, sem (bk n) (H n) x (ys n).
-    Hint Unfold lift.
 
     Definition lift' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
       forall n, sem (H n) x (ys n).
-    Hint Unfold lift'.
 
     Definition sem_var (x: ident) (xs: stream svalue): Prop :=
       lift' sem_var_instant x xs.
@@ -606,6 +606,8 @@ environment.
       lift sem_clock_instant ck xs.
 
   End LiftSemantics.
+
+  Global Hint Unfold lift lift' : indexedstreams.
 
   (** ** Determinism of the semantics *)
 

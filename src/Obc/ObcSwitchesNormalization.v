@@ -152,7 +152,7 @@ Module Type OBCSWITCHESNORMALIZATION
         destruct os; simpl in *; constructor; auto.
       + etransitivity.
         2: { apply stmt_eval_eq_Switch_Proper; eauto.
-             apply Forall2_same, Forall_forall; auto.
+             apply Forall2_same, Forall_forall; auto with datatypes.
         }
         apply has_default_branch_false in E.
         pose proof (normalize_branches_spec (map (Datatypes.option_map normalize_stmt) ss)) as Norm.

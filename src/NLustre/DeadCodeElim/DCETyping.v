@@ -107,7 +107,7 @@ Module Type DCETYPING
         wt_clock G1.(enums) vars ck ->
         wt_clock G2.(enums) vars' ck.
     Proof.
-      induction ck; intros * Hincl Hwt; inv Hwt; constructor; auto.
+      induction ck; intros * Hincl Hwt; inv Hwt; constructor; auto with nlfree.
       destruct HG. congruence.
     Qed.
 
@@ -115,47 +115,49 @@ Module Type DCETYPING
         (forall x ty, In (x, ty) vars -> Is_free_in_exp x e -> In (x, ty) vars') ->
         wt_exp G1.(enums) vars e ->
         wt_exp G2.(enums) vars' e.
-    Proof.
-      induction e; intros * Hincl Hwt; inv Hwt; auto.
-      - constructor; auto. destruct HG; congruence.
-      - econstructor; eauto. destruct HG; congruence.
-      - econstructor; eauto.
+    Proof with eauto with nltyping nlfree.
+      induction e; intros * Hincl Hwt; inv Hwt...
+      - constructor... destruct HG; congruence.
+      - econstructor... destruct HG; congruence.
+      - econstructor...
     Qed.
+    Local Hint Resolve wt_clock_restrict wt_exp_restrict : nltyping.
 
     Lemma wt_cexp_restrict : forall vars vars' e,
         (forall x ty, In (x, ty) vars -> Is_free_in_cexp x e -> In (x, ty) vars') ->
         wt_cexp G1.(enums) vars e ->
         wt_cexp G2.(enums) vars' e.
-    Proof.
-      induction e using cexp_ind2'; intros * Hincl Hwt; inv Hwt; eauto using wt_exp_restrict.
-      - econstructor; eauto.
+    Proof with eauto with nltyping nlfree.
+      induction e using cexp_ind2'; intros * Hincl Hwt; inv Hwt...
+      - econstructor...
         + destruct HG; congruence.
         + rewrite Forall_forall in *; intros.
           eapply H; eauto.
           intros. eapply Hincl; eauto. constructor. eapply Exists_exists; eauto.
-      - econstructor; eauto using wt_exp_restrict.
+      - econstructor...
         + destruct HG; congruence.
         + intros ? Hin. eapply Forall_forall in H; eauto; simpl in *.
           eapply H; eauto. intros. eapply Hincl; eauto.
           eapply FreeEcase_branches. apply Exists_exists. do 2 esplit; eauto.
     Qed.
+    Local Hint Resolve wt_cexp_restrict : nltyping.
 
     Lemma wt_equation_restrict : forall vars vars' eq,
         (forall x ty, In (x, ty) vars -> Is_defined_in_eq x eq \/ Is_free_in_eq x eq -> In (x, ty) vars') ->
         wt_equation G1 vars eq ->
         wt_equation G2 vars' eq.
-    Proof.
+    Proof with eauto with nltyping nlfree nldef.
       intros * Hincl Hwt. inv Hwt.
-      - econstructor; eauto.
-        + eapply wt_clock_restrict with (vars:=vars); eauto.
-        + eapply wt_cexp_restrict with (vars:=vars); eauto.
+      - econstructor...
+        + eapply wt_clock_restrict with (vars:=vars)...
+        + eapply wt_cexp_restrict with (vars:=vars)...
       - destruct HG as (?&Hf). specialize (Hf f). rewrite H in Hf; inv Hf. destruct H9 as (Hname&Hin&Hout).
-        econstructor; eauto.
+        econstructor...
         + rewrite <-Hout. eapply Forall2_impl_In; [|eauto].
-          intros ? (?&?&?) Hin1 Hin2 ?; simpl in *; eauto.
+          intros ? (?&?&?) Hin1 Hin2 ?; simpl in *...
         + rewrite <-Hin. eapply Forall2_impl_In; [|eauto].
-          intros ? (?&?&?) Hin1 Hin2 ?; simpl in *; eauto.
-        + eapply wt_clock_restrict with (vars:=vars); eauto 8.
+          intros ? (?&?&?) Hin1 Hin2 ?; simpl in *...
+        + eapply wt_clock_restrict with (vars:=vars); eauto 8 with nlfree.
         + rewrite Forall_forall in *; intros.
           eapply wt_exp_restrict with (vars:=vars); eauto.
           intros. eapply Hincl; eauto.
@@ -172,10 +174,10 @@ Module Type DCETYPING
           intros. eapply Hincl; eauto.
           right; constructor; right.
           eapply Exists_exists; do 2 esplit; eauto. simpl; auto.
-      - econstructor; eauto.
+      - econstructor...
         + destruct HG; congruence.
-        + eapply wt_clock_restrict with (vars:=vars); eauto 8.
-        + eapply wt_exp_restrict with (vars:=vars); eauto 8.
+        + eapply wt_clock_restrict with (vars:=vars); eauto 8 with nlfree.
+        + eapply wt_exp_restrict with (vars:=vars); eauto 8 with nlfree.
         + eapply Forall_impl_In; [|eauto]; intros ? Hin' (?&?).
           split.
           * destruct HG; congruence.
@@ -207,7 +209,7 @@ Module Type DCETYPING
     Proof.
       intros * Hwt.
       eapply Forall_impl; [|eauto]; intros ? Hwt'.
-      inv Hwt'; eauto.
+      inv Hwt'; eauto with nldef.
       esplit. eapply Is_defined_in_EqApp with (d:=xH).
       pose proof (n_outgt0 n) as Hgt.
       apply Forall2_length in H0. congruence.

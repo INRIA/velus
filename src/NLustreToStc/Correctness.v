@@ -335,7 +335,7 @@ Module Type CORRECTNESS
       assert (~ Is_node_in (n_name node) (n_eqs n0))
         by (eapply find_node_other_not_Is_node_in; eauto).
       apply msem_equations_cons in Heqs; auto.
-      apply memory_closed_rec_n_other; auto; inv Ord; eauto.
+      apply memory_closed_rec_n_other; auto; inv Ord; eauto with nlsem.
   Qed.
 
   Lemma memory_closed_rec_state_closed:

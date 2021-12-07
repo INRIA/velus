@@ -72,7 +72,7 @@ Module Type LCAUSALITY
       Is_free_left_list cenv cx (k - numstreams e) es ->
       Is_free_left_list cenv cx k (e::es).
 
-  Hint Constructors Is_free_left Is_free_left_list.
+  Local Hint Constructors Is_free_left Is_free_left_list : lcaus.
 
   Definition idcaus {A B} (l : list (ident * (A * B * ident))) : list (ident * ident) :=
     map (fun '(x, (_, _, cx)) => (x, cx)) l.
@@ -292,13 +292,13 @@ Module Type LCAUSALITY
     eapply Is_free_left_In_snd in Hfree; eauto.
   Qed.
 
-  Hint Constructors Is_defined_in.
+  Local Hint Constructors Is_defined_in : lcaus.
 
   Lemma depends_on_Is_defined_in : forall blk env cy cx,
       depends_on env cx cy blk ->
       Is_defined_in env cx blk.
   Proof.
-    induction blk using block_ind2; intros * Hdep; inv Hdep; eauto.
+    induction blk using block_ind2; intros * Hdep; inv Hdep; eauto with lcaus.
     - (* equation *)
       destruct H0 as (?&?&Hnth&Hin&_).
       econstructor; eauto.
@@ -616,7 +616,7 @@ Module Type LCAUSALITY
       eapply Forall_forall in Num; eauto. rewrite length_annot_numstreams, Num in Ex.
       apply PeanoNat.Nat.lt_1_r; auto.
     Qed.
-    Hint Resolve Exists_Exists_Is_free.
+    Local Hint Resolve Exists_Exists_Is_free : lcaus.
 
     Fact assemble_brs_free_left_list_spec: forall x k pss (tys : list type),
         Forall (fun ps => length ps = length tys) pss ->
@@ -677,7 +677,7 @@ Module Type LCAUSALITY
         wx_exp (map fst cenv) e ->
         PS.In x (List.nth k (collect_free_left cenv' e) PS.empty) <->
         Is_free_left cenv x k e.
-    Proof.
+    Proof with eauto with lcaus.
       induction e using exp_ind2;
         (intros * Hwl Hwx;
          specialize (Is_free_left_length G cenv _ x k Hwl) as Hlen1;
@@ -703,8 +703,8 @@ Module Type LCAUSALITY
       - (* unop *)
         rewrite IHe; eauto.
         split; intros.
-        + assert (Hk:=H). eapply Is_free_left_length in Hk; eauto.
-          rewrite H4 in Hk. apply PeanoNat.Nat.lt_1_r in Hk; subst; auto.
+        + assert (Hk:=H). eapply Is_free_left_length in Hk...
+          rewrite H4 in Hk. apply PeanoNat.Nat.lt_1_r in Hk; subst...
         + inv H. auto.
       - (* binop *)
         erewrite <- collect_free_left_length with (cenv0:=cenv') in H6, H7; eauto.
@@ -720,7 +720,7 @@ Module Type LCAUSALITY
       - (* fby *)
         split; intros.
         + specialize (ps_In_k_lt _ _ _ H1) as Hk.
-          eapply collect_free_left_list_spec' in H1; eauto.
+          eapply collect_free_left_list_spec' in H1...
         + erewrite <- collect_free_left_list_length with (cenv0:=cenv') in H7, H8; eauto.
           eapply collect_free_left_list_spec'; eauto.
           inv H1; auto.
@@ -730,7 +730,7 @@ Module Type LCAUSALITY
           erewrite map_nth' with (d':=(PS.empty, PS.empty)) in H1; eauto.
           rewrite combine_nth in H1.
           2:(repeat setoid_rewrite collect_free_left_list_length; eauto; rewrite H7, H8; auto).
-          repeat rewrite PS.union_spec in H1. destruct H1 as [Hin|Hin]; eapply collect_free_left_list_spec' in Hin; eauto.
+          repeat rewrite PS.union_spec in H1. destruct H1 as [Hin|Hin]; eapply collect_free_left_list_spec' in Hin...
         + erewrite <- collect_free_left_list_length in H7, H8; eauto.
           erewrite map_nth' with (d':=(PS.empty, PS.empty)).
           2:(erewrite <- map_length, Hlen2; eauto).
@@ -832,7 +832,7 @@ Module Type LCAUSALITY
           erewrite map_nth' in H1; eauto. 2:exact (Tenum (xH, 0), Cbase).
           constructor; auto.
           apply PSUnion_In_app in H1 as [?|?].
-          * right. eapply psunion_collect_free_list_spec' in H1 as (k'&Ex); eauto.
+          * right. eapply psunion_collect_free_list_spec' in H1 as (k'&Ex)...
           * left. erewrite <- psunion_collect_free_list_spec'; eauto.
         + inv H1. erewrite map_nth'; eauto. 2:exact (Tenum (xH, 0), Cbase).
           rewrite PSUnion_In_app.
@@ -1156,7 +1156,7 @@ Module Type LCAUSALITY
       + rewrite map_app, map_fst_idcaus; eauto.
   Qed.
 
-  Hint Constructors Is_defined_in.
+  Local Hint Constructors Is_defined_in : lcaus.
 
   Lemma Is_defined_in_Is_defined_in : forall x cx blk cenv,
       (* NoDup (map snd (cenv ++ idcaus (locals blk))) -> *)
@@ -1604,14 +1604,12 @@ Module Type LCAUSALITY
       induction es; intros * Hf Hfree Hk; inv Hf; simpl in *. inv Hk.
       destruct (Nat.ltb k (numstreams a)) eqn:Hltb.
       - rewrite PeanoNat.Nat.ltb_lt in Hltb.
-        constructor; eauto.
+        constructor; eauto with lcaus.
       - eapply PeanoNat.Nat.ltb_ge in Hltb.
         eapply P_exps_later; eauto.
-        eapply IHes; eauto.
+        eapply IHes; eauto with lcaus.
         rewrite app_length, length_annot_numstreams in Hk.
-        apply PeanoNat.Nat.sub_add in Hltb.
-        rewrite PeanoNat.Nat.add_comm in Hltb.
-        rewrite <- Hltb, <- PeanoNat.Nat.add_lt_mono_l in Hk; auto.
+        lia.
     Qed.
 
     Hypothesis EconstCase : forall c,
@@ -1680,7 +1678,7 @@ Module Type LCAUSALITY
         (forall x, Is_free_left cenv x k e -> P_var x) ->
         k < numstreams e ->
         P_exp e k.
-    Proof.
+    Proof with eauto with lcaus.
       Local Ltac solve_forall' es :=
         match goal with
         | Hwl: Forall (wl_exp _) es, Hwx: Forall (wx_exp _) es, Hind : forall e k, wl_exp _ e -> _ |- _ =>
@@ -1698,32 +1696,32 @@ Module Type LCAUSALITY
       - (* var *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         eapply in_map_iff in H0 as ((x&cx)&?&?); subst.
-        eapply EvarCase, Hfree; eauto.
+        eapply EvarCase, Hfree...
       - (* unop *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         apply EunopCase.
-        eapply exp_causal_ind; eauto. rewrite H4; auto.
+        eapply exp_causal_ind... rewrite H4; auto.
       - (* binop *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         apply EbinopCase.
-        1,2:eapply exp_causal_ind; eauto. rewrite H6; auto. rewrite H7; auto.
+        1,2:eapply exp_causal_ind... rewrite H6; auto. rewrite H7; auto.
       - (* fby *)
         eapply EfbyCase; eauto.
-        + eapply Pexp_Pexps; eauto. 2:congruence.
+        + eapply Pexp_Pexps... 2:congruence.
           solve_forall' l.
       - (* arrow *)
         eapply EarrowCase; eauto.
-        1,2:eapply Pexp_Pexps; eauto; try congruence.
+        1,2:eapply Pexp_Pexps; auto with lcaus; try congruence.
         solve_forall' l. solve_forall' l0.
       - (* when *)
         apply in_map_iff in H1 as ((x&cx)&?&?); subst.
-        eapply EwhenCase; eauto.
-        eapply Pexp_Pexps; eauto. 2:congruence.
+        eapply EwhenCase...
+        eapply Pexp_Pexps... 2:congruence.
         solve_forall' l.
       - (* merge *)
         apply in_map_iff in H1 as ((?&?)&?&?); subst.
-        eapply EmergeCase; eauto.
-        assert (forall x, Exists (fun es => Is_free_left_list cenv x k (snd es)) l -> P_var x) as Hfree' by auto.
+        eapply EmergeCase...
+        assert (forall x, Exists (fun es => Is_free_left_list cenv x k (snd es)) l -> P_var x) as Hfree' by auto with lcaus.
         clear Hfree H3.
         induction l; inv H4; inv H5; inv H7; constructor; auto.
         eapply Pexp_Pexps; eauto. 2:congruence.
@@ -1731,8 +1729,8 @@ Module Type LCAUSALITY
         destruct a. induction l; inv H2; inv H5; constructor; auto.
       - (* case *)
         apply EcaseCase; eauto.
-        + eapply exp_causal_ind; eauto. rewrite H4; auto.
-        + assert (forall x, Exists (fun es => Is_free_left_list cenv x k (snd es)) l -> P_var x) as Hfree' by auto.
+        + eapply exp_causal_ind... rewrite H4; auto.
+        + assert (forall x, Exists (fun es => Is_free_left_list cenv x k (snd es)) l -> P_var x) as Hfree' by auto with lcaus.
           clear Hfree H5.
           induction l; inv H7; inv H8; inv H12; constructor; auto.
           eapply Pexp_Pexps; eauto. 2:congruence.

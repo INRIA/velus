@@ -39,37 +39,36 @@ Module Type NLCOINDTOINDEXED
        (Indexed      : NLINDEXEDSEMANTICS Ids Op OpAux Cks CESyn Syn IStr Ord CESem)
        (CoInd        : NLCOINDSEMANTICS   Ids Op OpAux Cks CESyn Syn CStr Ord).
 
+  (** * SEMANTICS CORRESPONDENCE *)
+
+  (** ** Variables *)
+
+  Corollary sem_vars_impl:
+    forall H xs xss,
+      Forall2 (sem_var H) xs xss ->
+      CESem.sem_vars (tr_history H) xs (tr_Streams xss).
+  Proof.
+    unfold CESem.sem_vars, IStr.lift'.
+    induction 1 as [|? ? ? ? Find];
+      simpl; intro; constructor; auto.
+    - apply sem_var_impl; auto.
+    - apply IHForall2.
+  Qed.
+  Global Hint Resolve sem_vars_impl : indexedstreams coindstreams.
+
   Section Global.
 
     Variable G : global.
-
-    (** * SEMANTICS CORRESPONDENCE *)
-
-    (** ** Variables *)
-
-    Corollary sem_vars_impl:
-      forall H xs xss,
-      Forall2 (sem_var H) xs xss ->
-      CESem.sem_vars (tr_history H) xs (tr_Streams xss).
-    Proof.
-      unfold CESem.sem_vars, IStr.lift'.
-      induction 1 as [|? ? ? ? Find];
-        simpl; intro; constructor; auto.
-      - apply sem_var_impl; auto.
-      - apply IHForall2.
-    Qed.
-    Hint Resolve sem_vars_impl.
 
     (** ** Semantics of exps *)
 
     (** State the correspondence for [exp].
         Goes by induction on the coinductive semantics of [exp]. *)
-    Hint Constructors CESem.sem_exp_instant.
     Lemma sem_exp_impl:
       forall H b e es,
         CoInd.sem_exp H b e es ->
         CESem.sem_exp (tr_Stream b) (tr_history H) e (tr_Stream es).
-    Proof.
+    Proof with eauto with nlsem.
       unfold tr_Stream.
       induction 1 as [? ? ? ? Hconst
                      |? ? ? ? ? Henum
@@ -78,10 +77,10 @@ Module Type NLCOINDTOINDEXED
                      |? ? ? ? ? ? ? ? ? Hlift1
                      |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - rewrite const_spec in Hconst; rewrite Hconst.
-        destruct (tr_Stream b n); eauto.
+        destruct (tr_Stream b n)...
       - rewrite enum_spec in Henum; rewrite Henum.
-        destruct (tr_Stream b n); eauto.
-      - apply sem_var_impl in Hvar; eauto.
+        destruct (tr_Stream b n)...
+      - apply sem_var_impl in Hvar...
       - specialize (IHsem_exp n).
         apply sem_var_impl in Hvar;
           unfold tr_Stream, IStr.sem_var, IStr.lift in Hvar.
@@ -91,19 +90,17 @@ Module Type NLCOINDTOINDEXED
           as [(Hes & Hxs & Hos)
              |[(? & ? & Hes & Hxs & ? & Hos)
               |(? & Hes & Hxs & Hos)]];
-          rewrite Hos; rewrite Hes in IHsem_exp; rewrite Hxs in Hvar;
-            eauto.
+          rewrite Hos; rewrite Hes in IHsem_exp; rewrite Hxs in Hvar...
       - specialize (IHsem_exp n); simpl in IHsem_exp.
         rewrite lift1_spec in Hlift1; destruct (Hlift1 n)
           as [(Hes & Hos)|(?&?& Hes & ? & Hos)];
-          rewrite Hos; rewrite Hes in IHsem_exp; eauto.
+          rewrite Hos; rewrite Hes in IHsem_exp...
       - specialize (IHsem_exp1 n); specialize (IHsem_exp2 n); simpl in *.
         rewrite lift2_spec in Hlift2; destruct (Hlift2 n)
           as [(Hes1 & Hes2 & Hos)|(?&?&?& Hes1 & Hes2 &?& Hos)];
-          rewrite Hos; rewrite Hes1 in IHsem_exp1; rewrite Hes2 in IHsem_exp2;
-            eauto.
+          rewrite Hos; rewrite Hes1 in IHsem_exp1; rewrite Hes2 in IHsem_exp2...
     Qed.
-    Hint Resolve sem_exp_impl.
+    Hint Resolve sem_exp_impl : nlsem.
 
     Corollary sem_exps_impl:
       forall H b es ess,
@@ -114,7 +111,7 @@ Module Type NLCOINDTOINDEXED
       - apply sem_exp_impl; auto.
       - apply IHForall2.
     Qed.
-    Hint Resolve sem_exps_impl.
+    Hint Resolve sem_exps_impl : nlsem.
 
     (** Give an indexed specification for annotated [exp], using the previous
         lemma. *)
@@ -160,7 +157,7 @@ Module Type NLCOINDTOINDEXED
         destruct Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
         rewrite Hes; constructor; auto.
     Qed.
-    Hint Resolve sem_aexp_impl.
+    Hint Resolve sem_aexp_impl : nlsem.
 
     (** [fby] is not a predicate but a function, so we directly state the
         correspondence.  *)
@@ -251,7 +248,6 @@ Module Type NLCOINDTOINDEXED
 
     (** State the correspondence for [cexp].
         Goes by induction on the coinductive semantics of [cexp]. *)
-    Hint Constructors CESem.sem_cexp_instant.
     Lemma sem_cexp_impl:
       forall H b e es,
         CoInd.sem_cexp H b e es ->
@@ -337,9 +333,9 @@ Module Type NLCOINDTOINDEXED
           * eapply nth_error_Forall2 in Hpres as (?&Hnth3&?); eauto.
             congruence.
 
-      - apply sem_exp_impl in He; unfold tr_Stream in *; auto.
+      - apply sem_exp_impl in He; unfold tr_Stream in *; auto with nlsem.
     Qed.
-    Hint Resolve sem_cexp_impl.
+    Hint Resolve sem_cexp_impl : nlsem.
 
     (** Give an indexed specification for annotated [cexp], using the previous
         lemma.  *)
@@ -384,7 +380,7 @@ Module Type NLCOINDTOINDEXED
         as [(? & ? & Hes)|(? & ? & ? & Hes)];
         rewrite Hes; constructor; auto.
     Qed.
-    Hint Resolve sem_caexp_impl.
+    Hint Resolve sem_caexp_impl : nlsem.
 
     (** * RESET CORRESPONDENCE  *)
 
@@ -516,7 +512,7 @@ Module Type NLCOINDTOINDEXED
       - rewrite unfold_Stream at 1; simpl.
         rewrite tr_Stream_S, <-tr_Streams_tl; auto.
     Qed.
-    Hint Resolve tr_clocks_of.
+    Hint Resolve tr_clocks_of : indexedstreams.
 
     (** Give an indexed specification for Streams synchronization. *)
     Lemma aligned_index:
@@ -578,11 +574,10 @@ Module Type NLCOINDTOINDEXED
       eapply sem_clocked_var_impl; eauto.
       eapply Forall_forall in Sem; eauto; auto.
     Qed.
-    Hint Resolve sem_clocked_vars_impl.
+    Hint Resolve sem_clocked_vars_impl : nlsem.
 
     (** The final theorem stating the correspondence for nodes applications.
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
-    Hint Constructors Indexed.sem_equation.
     Theorem implies:
       forall f xss yss,
         CoInd.sem_node G f xss yss ->
@@ -593,9 +588,9 @@ Module Type NLCOINDTOINDEXED
           (P_equation := fun H b e =>
                            CoInd.sem_equation G H b e ->
                            Indexed.sem_equation G (tr_Stream b) (tr_history H) e);
-        eauto.
+        eauto with nlsem indexedstreams.
 
-      - econstructor; eauto.
+      - econstructor; eauto with indexedstreams nlsem.
         3:apply bools_ofs_impl; eauto.
         + intro; rewrite tr_clocks_of; auto.
           apply sem_clock_impl; auto.
@@ -605,14 +600,14 @@ Module Type NLCOINDTOINDEXED
         + intro k; destruct (IH k).
           now rewrite <- 2 mask_impl.
 
-      - econstructor; auto; subst; eauto.
+      - econstructor; auto; subst; eauto with nlsem.
         3:apply bools_ofs_impl; eauto.
-        + rewrite <-reset_fby_impl; auto.
+        + rewrite <-reset_fby_impl; auto with indexedstreams.
         + rewrite Forall2_map_2.
           eapply Forall2_impl_In; [|eauto].
           intros. eapply sem_var_impl; eauto.
 
-      - econstructor; eauto.
+      - econstructor; eauto with indexedstreams.
         + intro; rewrite tr_clocks_of; auto.
           eapply sem_clocked_vars_impl; auto.
           rewrite map_fst_idck; eauto.

@@ -25,6 +25,8 @@ Module Type STCISVARIABLE
         In x xs ->
         Is_variable_in_tc x (TcStep i xs ck rst f es).
 
+  Global Hint Constructors Is_variable_in_tc : stcdef.
+
   Definition Is_variable_in (x: ident) (tcs: list trconstr) : Prop :=
     Exists (Is_variable_in_tc x) tcs.
 

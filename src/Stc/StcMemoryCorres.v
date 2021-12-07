@@ -503,10 +503,10 @@ Module Type STCMEMORYCORRES
         inversion_clear Rst as [?? Rst'|].
         + inv Rst'.
           setoid_rewrite find_inst_gss.
-          rewrite E; apply orel_eq_weaken; auto.
+          rewrite E; apply orel_eq_weaken; auto with memory.
         + destruct (ident_eq_dec s0 s).
           * subst; rewrite find_inst_gss.
-            rewrite E; apply orel_eq_weaken; auto.
+            rewrite E; apply orel_eq_weaken; auto with memory.
           * assert (~ Is_step_in s0 tcs) by (intro; apply Nstep; right; auto).
             rewrite find_inst_gso; auto.
             apply (proj1 (proj2 (Insts s0))); eauto.
@@ -594,9 +594,9 @@ Module Type STCMEMORYCORRES
         unfold state_corres.
         inversion_clear Nstep as [?? Step|].
         + inv Step.
-          rewrite find_inst_gss, Find', Eq; auto.
+          rewrite find_inst_gss, Find', Eq. reflexivity.
         + destruct (ident_eq_dec s s0); subst.
-          * rewrite find_inst_gss, Find', Eq; auto.
+          * rewrite find_inst_gss, Find', Eq. reflexivity.
           * rewrite find_inst_gso; auto.
             apply Insts; auto.
     Qed.

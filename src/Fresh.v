@@ -432,7 +432,7 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
         map fst (map fst iids) = map fst ids.
     Proof.
       intros * Hf.
-      induction Hf as [|(?&?) ((?&?)&?) ?? (?&?&_)]; subst; simpl; auto.
+      induction Hf as [|(?&?) ((?&?)&?) ?? (?&?&_)]; subst; simpl; auto with datatypes.
     Qed.
 
     Lemma fresh_idents_rename_ids : forall pref ids frename ids' sub st st',
@@ -945,9 +945,9 @@ Module Fresh(Ids : IDS).
     Qed.
   End mmap2.
 
-  Hint Resolve fresh_ident_st_valid.
-  Hint Resolve fresh_ident_st_follows.
-  Hint Resolve st_follows_incl.
-  Hint Resolve mmap2_st_valid.
-  Hint Resolve mmap2_st_follows.
+  Global Hint Resolve fresh_ident_st_valid : fresh.
+  Global Hint Resolve fresh_ident_st_follows : fresh.
+  Global Hint Resolve st_follows_incl : fresh.
+  Global Hint Resolve mmap2_st_valid : fresh.
+  Global Hint Resolve mmap2_st_follows : fresh.
 End Fresh.

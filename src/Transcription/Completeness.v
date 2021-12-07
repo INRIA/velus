@@ -83,9 +83,7 @@ Module Type COMPLETENESS
       normalized_lexp e.
   Proof.
     induction e using exp_ind2; intros * Htr;
-      simpl in *; cases; monadInv Htr.
-    - constructor; eauto.
-    - constructor; eauto.
+      simpl in *; cases; monadInv Htr; eauto with norm.
     - apply Forall_singl in H. constructor; eauto.
   Qed.
 
@@ -273,7 +271,7 @@ Module Type COMPLETENESS
   Proof.
     intros * Hwt.
     eapply to_global_complete; eauto using NTyping.normalize_global_wt.
-    eapply normalize_global_normalized_global; eauto.
+    eapply normalize_global_normalized_global; eauto with ltyping.
   Qed.
 End COMPLETENESS.
 

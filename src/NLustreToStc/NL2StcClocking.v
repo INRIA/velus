@@ -37,7 +37,7 @@ Module Type NL2STCCLOCKING
       Forall (wc_trconstr (translate G) vars) (translate_eqn eq).
   Proof.
     inversion_clear 2 as [|??????? Find Ins Outs|];
-      simpl; auto using Forall_cons.
+      simpl; auto using Forall_cons with stcclocking.
     apply option_map_inv in Find as ((?&?)& Find &?); simpl in *; subst.
     apply find_unit_transform_units_forward in Find.
     cases.
@@ -48,7 +48,7 @@ Module Type NL2STCCLOCKING
         eapply Forall_forall in H1; eauto.
         do 2 (econstructor; eauto).
         eapply wc_env_var; eauto.
-    - constructor; eauto.
+    - constructor; eauto with stcclocking.
       rewrite map_map, Forall_map.
       eapply Forall_forall. intros (?&?) ?.
       eapply Forall_forall in H3; eauto.

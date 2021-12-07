@@ -219,7 +219,7 @@ Module Type NLINDEXEDSEMANTICS
     rewrite Forall2_swap_args in Hb1. eapply Forall2_trans_ex in Hb2; eauto.
     clear - Hb2.
     induction Hb2 as [|???? (?&_&H1&H2)]; auto.
-    eapply bools_of_det in H1; eauto.
+    eapply bools_of_det in H1; eauto with datatypes.
   Qed.
 
   Lemma bools_ofs_svalue_to_bool:
@@ -356,6 +356,8 @@ Module Type NLINDEXEDSEMANTICS
     (*   Forall (fun no => exists xs ys, sem_node no.(n_name) xs ys) G. *)
 
   End NodeSemantics.
+
+  Global Hint Constructors sem_equation : nlsem.
 
   (* The integration of (static) clocks into the (dynamic) semantics:
 

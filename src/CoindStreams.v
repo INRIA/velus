@@ -276,7 +276,7 @@ Module Type COINDSTREAMS
     induction l; simpl; intros * E.
     - rewrite nth_error_nil in E; inv E.
     - destruct n; simpl in *; eauto.
-      inv E; exists a; split; auto.
+      inv E; exists a; split; auto with datatypes.
       symmetry; auto.
   Qed.
 
@@ -312,8 +312,6 @@ Module Type COINDSTREAMS
         EqStN n xs1 xs2 ->
         EqStN (S n) (x1 ⋅ xs1) (x2 ⋅ xs2).
 
-    Hint Constructors EqStN.
-
     Lemma EqStN_spec : forall n xs1 xs2,
         (EqStN n xs1 xs2) <->
         (forall k, k < n -> xs1 # k = xs2 # k).
@@ -325,7 +323,7 @@ Module Type COINDSTREAMS
         + repeat rewrite Str_nth_S_tl. inv Heq; simpl.
           eapply IHk; eauto. lia.
       - revert xs1 xs2 Heq.
-        induction n; intros; auto.
+        induction n; intros; auto using EqStN.
         unfold_St xs1. unfold_St xs2. constructor.
         + specialize (Heq 0). apply Heq; lia.
         + apply IHn; intros.
@@ -362,11 +360,11 @@ Module Type COINDSTREAMS
         EqStN (S n) xs1 xs2 ->
         EqStN n xs1 xs2.
     Proof.
-      induction n; intros * Heq; inv Heq; eauto.
+      induction n; intros * Heq; inv Heq; eauto using EqStN.
     Qed.
   End EqStN.
 
-  Hint Constructors EqStN.
+  Global Hint Constructors EqStN : coindstreams.
 
   Global Instance EqStN_refl {A} n : Reflexive (@EqStN A n).
   Proof.
@@ -376,12 +374,12 @@ Module Type COINDSTREAMS
 
   Global Instance EqStN_sym {A} n : Symmetric (@EqStN A n).
   Proof.
-    induction n; intros ?? Heq; inv Heq; auto.
+    induction n; intros ?? Heq; inv Heq; auto with coindstreams.
   Qed.
 
   Global Instance EqStN_trans {A} n : Transitive (@EqStN A n).
   Proof.
-    induction n; intros ??? Heq1 Heq2; inv Heq1; inv Heq2; eauto.
+    induction n; intros ??? Heq1 Heq2; inv Heq1; inv Heq2; eauto with coindstreams.
   Qed.
 
   Add Parametric Morphism A n : (@EqStN A n)
@@ -1607,11 +1605,11 @@ Module Type COINDSTREAMS
       Forall2 (EqStN n) xs1 xs2 ->
       EqStN n (clocks_of xs1) (clocks_of xs2).
   Proof.
-    induction n; intros * Heq; auto.
+    induction n; intros * Heq; auto with coindstreams.
     rewrite (unfold_Stream (clocks_of xs1)), (unfold_Stream (clocks_of xs2)); simpl.
     constructor; auto.
     - clear - Heq. induction Heq; simpl; auto.
-      f_equal; auto. now inv H.
+      f_equal; auto. inv H; auto.
     - eapply IHn.
       rewrite Forall2_map_1, Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros.
       inv H1; auto.
@@ -2342,14 +2340,12 @@ Module Type COINDSTREAMS
     rewrite Nat.eqb_refl in Heq; auto.
   Qed.
 
-  Hint Constructors EqStN.
-
   Lemma EqStN_mask {A} (absent : A) : forall n rs1 rs2 xs1 xs2,
       EqStN n rs1 rs2 ->
       EqStN n xs1 xs2 ->
       forall k, EqStN n (mask absent k rs1 xs1) (mask absent k rs2 xs2).
   Proof.
-    induction n; intros * Heq1 Heq2 k; auto.
+    induction n; intros * Heq1 Heq2 k; auto with coindstreams.
     inv Heq1; inv Heq2; repeat rewrite mask_Cons.
     destruct k as [|[|]], x2; try (solve [constructor; auto]).
     reflexivity.
@@ -2366,12 +2362,14 @@ Module Type COINDSTREAMS
     eapply EqStN_mask; eauto.
   Qed.
 
+  Global Hint Resolve EqStN_mask EqStNs_mask : coindstreams.
+
   Lemma EqStN_unmask {A} (absent : A) : forall n rs1 rs2 xs1 xs2,
       EqStN n rs1 rs2 ->
       (forall k, EqStN n (mask absent k rs1 xs1) (mask absent k rs2 xs2)) ->
       EqStN n xs1 xs2.
   Proof.
-    induction n; intros * Heq1 Heq2; auto.
+    induction n; intros * Heq1 Heq2; auto with coindstreams.
     inv Heq1. unfold_St xs1; unfold_St xs2.
     repeat setoid_rewrite mask_Cons in Heq2.
     constructor.
@@ -2397,6 +2395,8 @@ Module Type COINDSTREAMS
       intros k. specialize (Heq2 k).
       eapply Forall2_forall2 in Heq2 as (_&Heq2); eauto.
   Qed.
+
+  Global Hint Resolve EqStN_unmask EqStNs_unmask : coindstreams.
 
   Lemma mask_false_0 {A} (absent: A) : forall xs,
       mask absent 0 (Streams.const false) xs ≡ xs.
@@ -2505,7 +2505,7 @@ Module Type COINDSTREAMS
     eapply HP; eauto.
     eapply Env.Equiv_orel; intros.
     unfold mask_hist. rewrite 2 Env.Props.P.F.map_o, Env.gmapi.
-    destruct (Env.find x (f 0)) eqn:H0, (Env.find x (f k)) eqn:Hk; simpl; auto.
+    destruct (Env.find x (f 0)) eqn:H0, (Env.find x (f k)) eqn:Hk; simpl; auto with datatypes.
     - constructor.
       eapply ntheq_eqst. intros n.
       repeat rewrite maskv_nth.
@@ -2847,6 +2847,8 @@ Module Type COINDSTREAMS
     congruence.
   Qed.
 
+  Global Hint Resolve ac_slower : coindstreams.
+
   (** *** filter and friends *)
 
   (* does not constrain the input history enough in the case of an absence *)
@@ -2956,7 +2958,7 @@ Module Type COINDSTREAMS
       EqStN n xs1 xs2 ->
       forall c, EqStN n (filter absent c sc1 xs1) (filter absent c sc2 xs2).
   Proof.
-    induction n; intros * Heq1 Heq2 k; auto.
+    induction n; intros * Heq1 Heq2 k; auto with coindstreams.
     inv Heq1; inv Heq2; repeat rewrite filter_Cons.
     destruct k as [|[|]], x2; try (solve [constructor; auto]).
   Qed.

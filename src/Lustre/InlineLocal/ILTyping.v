@@ -208,7 +208,7 @@ Module Type ILTYPING
     congruence.
   Qed.
 
-  Hint Resolve In_sub1 In_sub2.
+  Global Hint Resolve In_sub1 In_sub2 : ltyping.
 
   Fact mmap_inlinelocal_block_wt {PSyn prefs} (G: @global PSyn prefs) sub vars vars' : forall blks blks' st st',
       Forall (fun blk => forall sub vars' blks' st st',
@@ -242,13 +242,13 @@ Module Type ILTYPING
     assert (Hdl:=H). eapply H1 in H as (?&?); eauto.
     assert (Hmap:=H0). eapply IHblks in H0 as (?&?); eauto.
     2:{ intros * Hfind Hin.
-        eapply incl_map; [|eauto]. eapply st_follows_incl; eauto. }
+        eapply incl_map; [|eauto]. eapply st_follows_incl; eauto with fresh. }
     2:eapply inlinelocal_block_st_valid_after; eauto.
     constructor; auto.
     apply Forall_app. split; eauto.
     eapply Forall_impl; [|eauto]; intros.
     eapply wt_block_incl; [|eauto]. eapply incl_appr', incl_map, st_follows_incl, mmap_st_follows; eauto.
-    eapply Forall_forall; eauto.
+    eapply Forall_forall; eauto with fresh.
   Qed.
 
   Lemma inlinelocal_block_wt {PSyn prefs} (G: @global PSyn prefs) vars : forall blk sub vars' blks' st st',
@@ -270,7 +270,7 @@ Module Type ILTYPING
     - (* equation *)
       split; auto.
       do 2 constructor; auto.
-      eapply rename_in_equation_wt; [| |eauto]; eauto using in_or_app.
+      eapply rename_in_equation_wt; [| |eauto]; eauto using in_or_app with ltyping.
     - (* reset *)
       repeat constructor; auto.
       + eapply mmap_inlinelocal_block_wt; eauto.
@@ -278,7 +278,7 @@ Module Type ILTYPING
         eapply In_sub1; eauto. 2:eapply In_sub2; eauto.
         1,2:(intros; eapply incl_map; [|eauto];
              eapply st_follows_incl, mmap_st_follows; eauto;
-             eapply Forall_forall; eauto).
+             eapply Forall_forall; eauto with fresh).
       + now rewrite rename_in_exp_typeof.
       + eapply mmap_inlinelocal_block_wt; eauto.
     - (* local *)

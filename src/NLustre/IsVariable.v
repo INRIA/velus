@@ -42,20 +42,21 @@ Module Type ISVARIABLE
   Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
 
+  Global Hint Constructors Is_variable_in_eq : nldef.
+
   (** ** Properties *)
 
   Lemma not_Is_variable_in_EqDef:
     forall x ck y e,
       ~ Is_variable_in_eq x (EqDef y ck e) -> x <> y.
   Proof.
-    Hint Constructors Is_variable_in_eq.
-    intros ** Hxy. subst x. auto.
+    intros ** Hxy. subst x. auto with nldef.
   Qed.
 
   Lemma not_Is_variable_in_EqApp:
     forall x ys ck f e r,
       ~ Is_variable_in_eq x (EqApp ys ck f e r) -> ~ List.In x ys.
-  Proof. eauto using Is_variable_in_eq. Qed.
+  Proof. eauto with nldef. Qed.
 
 
   Lemma Is_variable_in_eq_Is_defined_in_eq:
@@ -63,7 +64,7 @@ Module Type ISVARIABLE
       Is_variable_in_eq x eq
       -> Is_defined_in_eq x eq.
   Proof.
-    destruct eq; inversion_clear 1; auto using Is_defined_in_eq.
+    destruct eq; inversion_clear 1; auto with nldef.
   Qed.
 
   Lemma Is_variable_in_Is_defined_in:
@@ -77,10 +78,11 @@ Module Type ISVARIABLE
     now constructor.
   Qed.
 
+  Global Hint Resolve Is_variable_in_eq_Is_defined_in_eq Is_variable_in_Is_defined_in : nldef.
+
   Lemma not_Is_defined_in_eq_not_Is_variable_in_eq:
     forall x eq, ~Is_defined_in_eq x eq -> ~Is_variable_in_eq x eq.
   Proof.
-    Hint Constructors Is_defined_in_eq.
     intros x eq Hnidi.
     destruct eq; inversion 1; subst; intuition.
   Qed.
@@ -88,17 +90,15 @@ Module Type ISVARIABLE
   Lemma not_Is_defined_in_not_Is_variable_in:
     forall x eqs, ~Is_defined_in x eqs -> ~Is_variable_in x eqs.
   Proof.
-    Hint Constructors Is_defined_in_eq.
     induction eqs as [|eq].
     - intro H; contradict H; inversion H.
     - intros Hndef Hvar.
       inv Hvar;
       eapply Hndef.
-      + constructor; now apply Is_variable_in_eq_Is_defined_in_eq.
+      + constructor; auto with nldef.
       + constructor 2;
             now apply Exists_exists in H0 as (eq' & ? & ?);
-                apply Exists_exists; exists eq'; split; auto;
-                apply Is_variable_in_eq_Is_defined_in_eq.
+                apply Exists_exists; exists eq'; split; auto with nldef.
   Qed.
 
   Lemma Is_variable_in_var_defined:
@@ -121,7 +121,7 @@ Module Type ISVARIABLE
       + unfold vars_defined in HH;
         apply in_app in HH.
         destruct HH as [HH|HH].
-        * subst; constructor; auto using Is_variable_in_eq.
+        * subst; constructor; auto with nldef.
         * apply IHeqs in HH. now constructor 2.
       + apply IHeqs in HH. now constructor 2.
   Qed.
@@ -224,11 +224,11 @@ Module Type ISVARIABLE
   Proof.
     intros x eq.
     destruct eq as [y cae|ys f lae|y v0 lae].
-    - destruct (ident_eq_dec x y); subst; auto.
-      right. inversion 1; subst; auto.
-    - destruct (in_dec ident_eq_dec x ys); auto.
-      right. inversion 1; subst; auto.
-    - right. inversion 1; subst; auto.
+    - destruct (ident_eq_dec x y); subst; auto with nldef.
+      right. inversion 1; subst; auto with nldef.
+    - destruct (in_dec ident_eq_dec x ys); auto with nldef.
+      right. inversion 1; subst; auto with nldef.
+    - right. inversion 1; subst; auto with nldef.
   Qed.
 
   Lemma Is_variable_in_cons:

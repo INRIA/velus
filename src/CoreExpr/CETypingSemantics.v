@@ -45,7 +45,7 @@ Module Type CETYPINGSEMANTICS
   Definition wt_synchronous_env (R: env) :=
     Forall (wt_env_svalue R).
 
-  Hint Constructors wt_value.
+  Global Hint Constructors wt_value : typing.
 
   Lemma sem_exp_instant_wt:
     forall base R e v enums Γ,
@@ -58,7 +58,7 @@ Module Type CETYPINGSEMANTICS
     - subst; cases; simpl; auto.
       constructor.
       apply wt_cvalue_cconst.
-    - subst; cases; simpl; auto.
+    - subst; cases; simpl; auto with typing.
     - eapply Forall_forall in WT; eauto.
       + instantiate (1 := (x, ty)) in WT.
         unfold wt_env_svalue, sem_var_instant in *.
@@ -80,7 +80,8 @@ Module Type CETYPINGSEMANTICS
         apply Forall_forall; intros; eapply Forall_forall in WT; eauto.
         apply WT, free_in_exp_spec; rewrite <-free_in_exp_spec'; auto.
   Qed.
-  Hint Resolve sem_exp_instant_wt.
+
+  Global Hint Resolve sem_exp_instant_wt : nltyping stctyping nlsem stcsem.
 
   Corollary sem_aexp_instant_wt:
     forall base R e ck v enums Γ,
@@ -89,7 +90,7 @@ Module Type CETYPINGSEMANTICS
       wt_synchronous_env R (filter (fun xt => PS.mem (fst xt) (free_in_exp e PS.empty)) Γ) ->
       wt_svalue v (typeof e).
   Proof.
-    inversion_clear 1; intros; eauto.
+    inversion_clear 1; intros; eauto with nltyping.
   Qed.
 
   Lemma sem_cexp_instant_wt:
@@ -99,7 +100,7 @@ Module Type CETYPINGSEMANTICS
       wt_synchronous_env R (filter (fun xt => PS.mem (fst xt) (free_in_cexp e PS.empty)) Γ) ->
       wt_svalue v (typeofc e).
   Proof.
-    induction 1 using sem_cexp_instant_ind_2; inversion_clear 1; intros WT; simpl in *; eauto.
+    induction 1 using sem_cexp_instant_ind_2; inversion_clear 1; intros WT; simpl in *; eauto with nltyping.
     - subst.
       do 2 (take (Forall _ (_ ++ _)) and apply Forall_app_weaken in it; inv it); auto.
       apply IHsem_cexp_instant; auto.
@@ -122,9 +123,9 @@ Module Type CETYPINGSEMANTICS
       apply In_free_in_cexp in H3. rewrite free_in_cexp_spec in H3. destruct H3 as [[Hfree|]|].
       2,3:exfalso; eapply not_In_empty; eauto.
       apply In_free_in_cexp; rewrite In_fold_left_or_default_free_in_cexp, free_in_cexp_spec.
-      destruct oe; simpl in *; auto. right; right. rewrite free_in_cexp_spec; auto.
+      destruct oe; simpl in *; auto. right; right. rewrite free_in_cexp_spec; auto with nltyping.
   Qed.
-  Hint Resolve sem_cexp_instant_wt.
+  Global Hint Resolve sem_cexp_instant_wt : nltyping stctyping nlsem stcsem.
 
   Corollary sem_caexp_instant_wt:
     forall base R e ck v enums Γ,
@@ -133,7 +134,7 @@ Module Type CETYPINGSEMANTICS
       wt_synchronous_env R (filter (fun xt => PS.mem (fst xt) (free_in_cexp e PS.empty)) Γ) ->
       wt_svalue v (typeofc e).
   Proof.
-    inversion_clear 1; intros; eauto.
+    inversion_clear 1; intros; eauto with nltyping.
   Qed.
 
 End CETYPINGSEMANTICS.

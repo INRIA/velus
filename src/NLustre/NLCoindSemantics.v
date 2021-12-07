@@ -292,6 +292,8 @@ Module Type NLCOINDSEMANTICS
 
   End NodeSemantics.
 
+  Global Hint Constructors sem_equation : nlsem.
+
   Section SemInd.
 
     Variable G: global.

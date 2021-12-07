@@ -100,26 +100,25 @@ Module Type STCCLOCKING
       forall s xs ck ckrs f es,
         Has_clock_tc ck (TcStep s xs ck ckrs f es).
 
-  Hint Constructors wc_clock wc_exp wc_cexp wc_trconstr.
-  Hint Unfold wc_env wc_system.
-  Hint Resolve Forall_nil.
+  Global Hint Constructors wc_clock wc_exp wc_cexp wc_trconstr : stcclocking.
+  Global Hint Unfold wc_env wc_system : stcclocking.
 
   Global Instance wc_trconstr_Proper:
     Proper (@eq program ==> @Permutation (ident * clock) ==> @eq trconstr ==> iff)
            wc_trconstr.
-  Proof.
+  Proof with eauto with stcclocking.
     intros ??? env1 env2 Henv eq1 eq2 Htc; subst.
     split; intro WTtc.
-    - inv WTtc; try rewrite Henv in *; eauto.
-      econstructor; eauto.
+    - inv WTtc; try rewrite Henv in *...
+      econstructor...
       + eapply Forall2_impl_In; eauto.
         intros (?&(?&?)) ??? (?&?&?).
         rewrite Henv in *; eauto.
       + eapply Forall2_impl_In; eauto.
         intros (?&(?&?)) ??? (?&?&?).
         rewrite Henv in *; eauto.
-    - inv WTtc; try rewrite <-Henv in *; eauto with nlclocking.
-      econstructor; eauto.
+    - inv WTtc; try rewrite <-Henv in *...
+      econstructor...
       + eapply Forall2_impl_In; eauto.
         intros (?&(?&?)) ??? (?&?&?).
         rewrite <-Henv in *; eauto.

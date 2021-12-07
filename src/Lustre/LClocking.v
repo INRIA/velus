@@ -172,8 +172,8 @@ Module Type LCLOCKING
 
   (** ** Basic properties of clocking *)
 
-  Hint Constructors wc_exp wc_equation wc_block : lclocking.
-  Hint Unfold wc_node wc_global wc_env : lclocking.
+  Global Hint Constructors wc_exp wc_equation wc_block : lclocking.
+  Global Hint Unfold wc_node wc_global wc_env : lclocking.
 
   Section wc_exp_ind2.
     Context (PSyn : block -> Prop).
@@ -470,7 +470,7 @@ Module Type LCLOCKING
       wc_clock vars' ck.
     Proof.
       intros vars vars' ck Hincl Hwc.
-      induction Hwc; auto.
+      induction Hwc; auto with clocks.
     Qed.
 
     Lemma wc_exp_incl : forall vars vars' e,
@@ -519,7 +519,7 @@ Module Type LCLOCKING
 
   (** ** Validation *)
 
-  Hint Extern 2 (In _ (idck _)) => apply In_idck_exists.
+  (* Local Hint Extern 2 (In _ (idck _)) => apply In_idck_exists : ltyping. *)
 
   Section ValidateExpression.
     Context {PSyn : block -> Prop}.
@@ -979,13 +979,13 @@ Module Type LCLOCKING
       destruct a as [|? [|??]]; try congruence; eauto.
     Qed.
 
-    Local Hint Constructors wc_exp.
+    Local Hint Constructors wc_exp : lclocking.
     Lemma check_exp_correct:
       forall e ncks,
         check_exp e = Some ncks ->
         wc_exp G (Env.elements venv) e
         /\ clockof e = ncks.
-    Proof.
+    Proof with eauto with lclocking.
       induction e using exp_ind2; simpl; intros ncks CE;
       repeat progress
                match goal with
@@ -1022,26 +1022,21 @@ Module Type LCLOCKING
                | H:obind2 (assert_singleton ?ce) _ = Some _ |- _ =>
                  destruct (assert_singleton ce) as [(ck, n)|] eqn:AS;
                    try discriminate; simpl in H
-               end.
-      - (* Econst *) eauto.
-      - (* Eenum *) eauto.
-      - (* Evar *) eauto.
+               end; eauto...
       - (* Eunop *)
-        apply IHe in OE0 as (? & ?).
-        eauto.
+        apply IHe in OE0 as (? & ?)...
       - (* Ebinop *)
-        apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?).
-        eauto.
+        apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?)...
       - (* Efby *)
         repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
         apply oconcat_map_check_exp' in OE1 as (? & ?); auto. subst.
-        split; eauto.
+        split...
       - (* Earrow *)
         repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
         apply oconcat_map_check_exp' in OE1 as (? & ?); auto. subst.
-        split; eauto.
+        split...
       - (* Ewhen *)
         take (Forall _ es) and rewrite Forall_forall in it.
         take (oconcat (map check_exp _) = Some _) and
@@ -1300,7 +1295,7 @@ Module Type LCLOCKING
       check_clock xenv ck = true ->
       wc_clock (Env.elements xenv) ck.
   Proof.
-    induction ck; intros Hcheck; simpl; auto.
+    induction ck; intros Hcheck; simpl; auto with clocks.
     apply Bool.andb_true_iff in Hcheck as [Hc1 Hc2].
     constructor; auto.
     rewrite check_var_correct in Hc1; auto.
@@ -2120,11 +2115,11 @@ Module Type LCLOCKING
 
     Hypothesis Heq : global_iface_eq G1 G2.
 
-    Hint Constructors wc_exp.
+    Hint Constructors wc_exp : lclocking.
     Fact iface_eq_wc_exp : forall vars e,
         wc_exp G1 vars e ->
         wc_exp G2 vars e.
-    Proof with eauto.
+    Proof with eauto with lclocking.
       induction e using exp_ind2; intros Hwc; inv Hwc...
       1-5:econstructor; try (destruct Heq; erewrite <-equiv_program_enums)...
       1-8:rewrite Forall_forall in *...
@@ -2199,13 +2194,13 @@ Module Type LCLOCKING
 
   (** ** wc implies wl *)
 
-  Hint Constructors wl_exp wl_block.
+  Local Hint Constructors wl_exp wl_block : lclocking.
 
   Fact wc_exp_wl_exp {PSyn prefs} : forall (G: @global PSyn prefs) vars e,
       wc_exp G vars e ->
       wl_exp G e.
-  Proof with eauto.
-    induction e using exp_ind2; intro Hwt; inv Hwt; auto.
+  Proof with eauto with lclocking.
+    induction e using exp_ind2; intro Hwt; inv Hwt...
     - (* unop *)
       constructor...
       rewrite <- length_clockof_numstreams. rewrite H3. reflexivity.
@@ -2257,21 +2252,21 @@ Module Type LCLOCKING
       + apply Forall2_length in H9.
         rewrite length_idck, length_idty, map_length in H9...
   Qed.
-  Hint Resolve wc_exp_wl_exp.
+  Global Hint Resolve wc_exp_wl_exp : lclocking.
 
   Corollary Forall_wc_exp_wl_exp {PSyn prefs} : forall (G: @global PSyn prefs) vars es,
       Forall (wc_exp G vars) es ->
       Forall (wl_exp G) es.
-  Proof. intros. rewrite Forall_forall in *; eauto. Qed.
-  Hint Resolve Forall_wc_exp_wl_exp.
+  Proof. intros. rewrite Forall_forall in *; eauto with lclocking. Qed.
+  Global Hint Resolve Forall_wc_exp_wl_exp : lclocking.
 
   Fact wc_equation_wl_equation {PSyn prefs} : forall (G: @global PSyn prefs) vars equ,
       wc_equation G vars equ ->
       wl_equation G equ.
-  Proof with eauto.
+  Proof with eauto with lclocking.
     intros G vars [xs es] Heq.
-    inv Heq; econstructor; simpl; eauto.
-    - repeat econstructor; eauto.
+    inv Heq; econstructor; simpl...
+    - repeat econstructor...
       + eapply Forall_impl; [|eauto]. intros ? (?&Ck).
         rewrite <- length_clockof_numstreams, Ck...
       + apply Forall2_length in H4.
@@ -2281,14 +2276,14 @@ Module Type LCLOCKING
     - rewrite app_nil_r. apply Forall2_length in H7. now rewrite map_length in H7.
     - apply Forall2_length in H2. now rewrite length_clocksof_annots in H2.
   Qed.
-  Hint Resolve wc_equation_wl_equation.
+  Global Hint Resolve wc_equation_wl_equation : lclocking.
 
   Fact wc_block_wl_block {PSyn prefs} : forall (G: @global PSyn prefs) d vars,
       wc_block G vars d ->
       wl_block G d.
   Proof.
-    induction d using block_ind2; intros * Wc; inv Wc; eauto.
-    1-3:econstructor; eauto.
+    induction d using block_ind2; intros * Wc; inv Wc; eauto with lclocking.
+    1-3:econstructor; eauto with lclocking.
     - rewrite Forall_forall in *; intros; eauto.
     - now rewrite <-length_clockof_numstreams, H5.
     - now rewrite <-length_clockof_numstreams, H3.
@@ -2296,37 +2291,37 @@ Module Type LCLOCKING
       repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
     - rewrite Forall_forall in *; intros; eauto.
   Qed.
-  Hint Resolve wc_block_wl_block.
+  Global Hint Resolve wc_block_wl_block : lclocking.
 
   Fact wc_node_wl_node {PSyn prefs} : forall (G: @global PSyn prefs) n,
       wc_node G n ->
       wl_node G n.
-  Proof with eauto.
+  Proof with eauto with lclocking.
     intros G n [_ [_ Hwc]].
     unfold wl_node...
   Qed.
-  Hint Resolve wc_node_wl_node.
+  Global Hint Resolve wc_node_wl_node : lclocking.
 
   Fact wc_global_wl_global {PSyn prefs} : forall (G: @global PSyn prefs),
       wc_global G ->
       wl_global G.
-  Proof with eauto.
+  Proof with eauto with lclocking.
     intros G Hwt.
     unfold wc_global, wl_global, wt_program in *.
     induction Hwt; constructor...
     destruct H...
   Qed.
-  Hint Resolve wc_global_wl_global.
+  Global Hint Resolve wc_global_wl_global : lclocking.
 
   (** ** wc implies wx *)
 
-  Hint Constructors wx_exp wl_block.
+  Global Hint Constructors wx_exp wl_block : lclocking.
 
   Fact wc_exp_wx_exp {PSyn prefs} (G: @global PSyn prefs) : forall vars e,
       wc_exp G vars e ->
       wx_exp (map fst vars) e.
-  Proof with eauto.
-    induction e using exp_ind2; intro Hwt; inv Hwt; auto.
+  Proof with eauto with lclocking.
+    induction e using exp_ind2; intro Hwt; inv Hwt...
     - (* var *)
       constructor...
       eapply in_map_iff. now do 2 esplit; eauto.
@@ -2355,19 +2350,19 @@ Module Type LCLOCKING
       + rewrite Forall_forall in *...
       + rewrite Forall_forall in *...
   Qed.
-  Hint Resolve wc_exp_wx_exp.
+  Global Hint Resolve wc_exp_wx_exp : lclocking.
 
   Corollary Forall_wc_exp_wx_exp {PSyn prefs} (G: @global PSyn prefs) : forall vars es,
       Forall (wc_exp G vars) es ->
       Forall (wx_exp (map fst vars)) es.
-  Proof. intros. rewrite Forall_forall in *; eauto. Qed.
-  Hint Resolve Forall_wc_exp_wx_exp.
+  Proof. intros. rewrite Forall_forall in *; eauto with lclocking. Qed.
+  Global Hint Resolve Forall_wc_exp_wx_exp : lclocking.
 
   Fact wc_equation_wx_equation {PSyn prefs} (G: @global PSyn prefs) : forall vars equ,
       wc_equation G vars equ ->
       wx_equation (map fst vars) equ.
-  Proof with eauto.
-    intros vars [xs es] Heq. inv Heq; repeat constructor; eauto.
+  Proof with eauto with lclocking.
+    intros vars [xs es] Heq. inv Heq; repeat constructor...
     + intros ? Hin.
       eapply Forall2_ignore2, Forall_forall in H7 as (?&_&Hin'); eauto.
       eapply in_map_iff. now do 2 esplit; eauto.
@@ -2375,14 +2370,14 @@ Module Type LCLOCKING
       eapply Forall2_ignore2, Forall_forall in H2 as (?&_&Hin'); eauto.
       eapply in_map_iff. now do 2 esplit; eauto.
   Qed.
-  Hint Resolve wc_equation_wx_equation.
+  Global Hint Resolve wc_equation_wx_equation : lclocking.
 
   Fact wc_block_wx_block {PSyn prefs} (G: @global PSyn prefs) : forall blk vars,
       wc_block G vars blk ->
       wx_block (map fst vars) blk.
   Proof.
     induction blk using block_ind2; intros * Wc; inv Wc; eauto.
-    1-4:econstructor; eauto.
+    1-4:econstructor; eauto with lclocking.
     1,3:rewrite Forall_forall in *; intros; eauto.
     - rewrite <-map_fst_idty, <-map_fst_idck, <-map_app; eauto.
     - do 2 (eapply Forall_forall; intros).
@@ -2392,28 +2387,28 @@ Module Type LCLOCKING
       eapply H6 in Hin as (Hin&?); subst.
       eapply in_map_iff; do 2 esplit; [|eauto]. eauto.
   Qed.
-  Hint Resolve wc_block_wx_block.
+  Global Hint Resolve wc_block_wx_block : lclocking.
 
   Fact wc_node_wx_node {PSyn prefs} : forall (G: @global PSyn prefs) n,
       wc_node G n ->
       wx_node n.
-  Proof with eauto.
+  Proof with eauto with lclocking.
     intros G n [_ [_ Hwc]].
     unfold wx_node.
     rewrite <-map_fst_idty, <-map_fst_idck...
   Qed.
-  Hint Resolve wc_node_wx_node.
+  Global Hint Resolve wc_node_wx_node : lclocking.
 
   Fact wc_global_wx_global {PSyn prefs} : forall (G: @global PSyn prefs),
       wc_global G ->
       wx_global G.
-  Proof with eauto.
+  Proof with eauto with lclocking.
     intros G Hwc.
     unfold wc_global, wx_global, wt_program, units in *; simpl in *.
     induction Hwc...
     destruct H...
   Qed.
-  Hint Resolve wc_global_wx_global.
+  Global Hint Resolve wc_global_wx_global : lclocking.
 
   (** Additional properties *)
 

@@ -361,7 +361,7 @@ Module Type CORRECTNESS
     induction n; intros * Hnd Hsort Hincl; simpl in *.
     - apply incl_nil, map_eq_nil in Hincl; subst; auto.
     - destruct es as [|(?&?)]; inv Hnd; inv Hsort; simpl in *; auto.
-      + f_equal; eapply IHn; simpl; eauto using incl_nil'.
+      + f_equal; eapply IHn; simpl; eauto using incl_nil', Sorted.StronglySorted with datatypes.
       + destruct (n0 =? start) eqn:Hn; simpl.
         * eapply Nat.eqb_eq in Hn; subst.
           f_equal; auto.
@@ -868,8 +868,6 @@ Module Type CORRECTNESS
       econstructor; eauto; eapply Cofix;
         eauto using sc_step, sem_lexp_step2.
   Qed.
-
-  Hint Resolve  envs_eq_find'.
 
   Module CES := CESemanticsFun Ids Op OpAux Cks CE IStr.
   Module CEI := CEInterpreterFun Ids Op OpAux Cks CE IStr CES.

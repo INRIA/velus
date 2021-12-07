@@ -222,7 +222,7 @@ Module Type STCTYPINGSEMANTICS
           unfold sem_var_instant in Hvar; rewrite Hvar; simpl.
           destruct v'; simpl; auto.
           assert (Forall (fun ckr : clock => exists r : bool, sem_clock_instant base R ckr r) ckrs) as Ckr.
-          { eapply ResetCks; left; eauto. }
+          { eapply ResetCks; left; eauto with stcsyntax. }
           eapply reset_or_not_reset_dec' in Ckr as [Reset|NotReset].
           * inversion_clear WTS as [???? WTmems].
             apply incl_cons' in Specmems as [].
@@ -253,7 +253,7 @@ Module Type STCTYPINGSEMANTICS
                assert (Is_free_in_tc y' (TcNext x ck ckrs e)) as Free' by now do 2 constructor.
                now apply WTfree.
           * eapply Memory_Corres_Next_absent; eauto; try congruence.
-            eapply ResetCks; left; eauto.
+            eapply ResetCks; left; eauto with stcsyntax.
           * assumption.
 
       - split.
@@ -291,7 +291,7 @@ Module Type STCTYPINGSEMANTICS
                apply sem_system_absent in Hsystem as (? & ?); auto.
                exists M; split; auto.
                eapply Memory_Corres_Step_absent; eauto.
-               eapply IResetCks; left; eauto.
+               eapply IResetCks; left; eauto with stcsyntax.
         + apply Forall2_swap_args in Hexps.
           take (Forall2 _ _ (s_in _)) and rename it into Eexps.
           eapply Forall2_trans_ex with (2 := Eexps) in Hexps; eauto.
@@ -309,7 +309,7 @@ Module Type STCTYPINGSEMANTICS
         + eapply wt_memory_chained; eauto.
           assert (In (i, f) insts) by (apply Specinsts; now left).
           assert (Forall (fun ckr : clock => exists r : bool, sem_clock_instant base R ckr r) ckrs) as Ckr.
-          { eapply IResetCks; left; eauto. }
+          { eapply IResetCks; left; eauto with stcsyntax. }
           eapply reset_or_not_reset_dec' in Ckr as [NotReset|Reset].
           (* destruct rst. *)
           * assert (exists Ii', Ii' ≋ Ii /\ find_inst i S = Some Ii') as (? & <- &?)
@@ -462,7 +462,7 @@ Module Type STCTYPINGSEMANTICS
              eapply Exists_exists in Next as (?&Hin'&Next). inv Next.
              assert (Forall (fun ckr : clock => exists r : bool, sem_clock_instant base R ckr r) ckrs) as Ckr.
              { eapply ResetCks. eapply Exists_app'; left.
-               eapply Exists_exists; eauto. }
+               eapply Exists_exists; eauto with stcsyntax. }
              eapply reset_or_not_reset_dec' in Ckr as [Reset|NotReset].
              ++ eapply Forall_app in Semtcs as (Semtcs&_).
                 eapply Forall_forall in Semtcs; eauto. inv Semtcs.
@@ -474,7 +474,7 @@ Module Type STCTYPINGSEMANTICS
                 { split; auto.
                   - eapply Exists_exists in NotReset as (?&?&?); repeat esplit; eauto.
                     eapply NextReset in H12; eauto.
-                    2:eapply Exists_app'; left; eapply Exists_exists; eauto.
+                    2:eapply Exists_app'; left; eapply Exists_exists; eauto with stcsyntax.
                     apply Exists_app' in H12 as [?|?]; auto.
                     exfalso.
                     eapply Is_well_sch_free_Reset in Free'; eauto.

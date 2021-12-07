@@ -151,7 +151,7 @@ Module Type OBCSYNTAX
       }.
 
   Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
-  Hint Resolve m_nodupvars.
+  Global Hint Resolve m_nodupvars : obcsyntax.
 
   Lemma m_nodupout:
     forall f, NoDupMembers (m_out f).

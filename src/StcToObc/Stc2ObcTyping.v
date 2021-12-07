@@ -113,7 +113,7 @@ Module Type STC2OBCTYPING
       - econstructor; eauto; now rewrite typeof_correct.
       - econstructor; eauto; now rewrite 2 typeof_correct.
     Qed.
-    Hint Resolve translate_exp_wt.
+    Local Hint Resolve translate_exp_wt : obctyping.
 
     Corollary translate_arg_wt:
       forall e clkvars ck,
@@ -127,7 +127,7 @@ Module Type STC2OBCTYPING
       destruct (PS.mem i memset); simpl; eauto using wt_exp.
       cases; eauto using wt_exp.
     Qed.
-    Hint Resolve translate_arg_wt.
+    Local Hint Resolve translate_arg_wt : obctyping.
 
     Lemma translate_cexp_wt:
       forall insts x e,
@@ -150,7 +150,7 @@ Module Type STC2OBCTYPING
               repeat (take (Forall _ _) and eapply Forall_forall in it; eauto); subst; simpl in *; auto.
           apply it; auto.
           take (forall e, _ -> typeofc e = _) and rewrite it; auto.
-      - constructor; auto.
+      - constructor; auto with obctyping.
         now rewrite typeof_correct.
     Qed.
 
@@ -190,7 +190,7 @@ Module Type STC2OBCTYPING
     Qed.
 
   End Expressions.
-  Hint Resolve translate_exp_wt translate_cexp_wt Control_wt.
+  Local Hint Resolve translate_exp_wt translate_cexp_wt Control_wt : obctyping.
 
   Inductive trconstr_mems_spec (mems: PS.t) : trconstr -> Prop :=
   | tmsDef: forall x ck e,
@@ -246,7 +246,7 @@ Module Type STC2OBCTYPING
         apply TypeEnvSpec in Hin.
         now rewrite PSF.mem_1 in Hin.
       + econstructor; eauto.
-    - constructor; eauto.
+    - constructor; eauto with obctyping.
       rewrite typeof_correct.
       assert (In (x, CE.Syn.typeof e) (Γv ++ Γm)) as Hin by (apply in_app; auto).
       apply TypeEnvSpec in Hin.
@@ -328,7 +328,7 @@ Module Type STC2OBCTYPING
       apply Is_variable_in_variables, Exists_exists;
         eauto using Is_variable_in_tc.
   Qed.
-  Hint Resolve s_trconstr_mems_spec.
+  Local Hint Resolve s_trconstr_mems_spec : obctyping.
 
   Lemma s_trconstr_insts_spec:
     forall s,
@@ -347,7 +347,7 @@ Module Type STC2OBCTYPING
       inv Hin; simpl; auto.
       cases; right; auto.
   Qed.
-  Hint Resolve s_trconstr_insts_spec.
+  Local Hint Resolve s_trconstr_insts_spec : obctyping.
 
   Lemma s_type_env_spec:
     forall s,
@@ -386,13 +386,13 @@ Module Type STC2OBCTYPING
   Proof.
     unfold wt_system, wt_method; intros * (WT &?& Henums); simpl.
     split.
-    - eapply translate_tcs_wt; eauto using s_nodup_variables.
+    - eapply translate_tcs_wt; eauto using s_nodup_variables with obctyping.
       unfold meth_vars, step_method; simpl.
       apply s_type_env_spec.
     - unfold meth_vars, step_method; simpl.
       do 2 setoid_rewrite <-idty_app; auto.
   Qed.
-  Hint Resolve step_wt.
+  Local Hint Resolve step_wt : obctyping.
 
   Lemma reset_mems_wt:
     forall P insts Γm inits,
@@ -401,13 +401,13 @@ Module Type STC2OBCTYPING
       wt_stmt (translate P) insts Γm [] (reset_mems inits).
   Proof.
     unfold reset_mems; intros * Spec WT.
-    induction inits as [|(x, ((c, t), ck))]; simpl; eauto using wt_stmt;
+    induction inits as [|(x, ((c, t), ck))]; simpl; eauto with obctyping;
       inversion_clear WT as [|?? WTc].
     rewrite wt_stmt_fold_left_lift; split; auto.
     - apply IHinits; auto.
       intros; eapply Spec; right; eauto.
-    - constructor; eauto using wt_stmt.
-      cases; inv WTc; constructor; eauto using wt_exp;
+    - constructor; eauto with obctyping.
+      cases; inv WTc; constructor; eauto with obctyping;
         eapply Spec; left; eauto.
   Qed.
 
@@ -423,7 +423,7 @@ Module Type STC2OBCTYPING
         rewrite wt_stmt_fold_left_lift; split; auto.
     - apply wt_stmt_fold_left_lift in WT as (?& WT');
         rewrite wt_stmt_fold_left_lift; split; auto.
-      inversion_clear WT' as [| | |?? WT| |]; inv WT; eauto using wt_stmt.
+      inversion_clear WT' as [| | |?? WT| |]; inv WT; eauto with obctyping.
   Qed.
 
   Lemma reset_insts_wt:
@@ -437,10 +437,10 @@ Module Type STC2OBCTYPING
     rewrite s_subs_steps_of in Spec.
     unfold reset_insts.
     induction (s_tcs s) as [|[] tcs]; simpl in *;
-      inversion_clear WT as [|?? WTtc]; eauto using wt_stmt.
+      inversion_clear WT as [|?? WTtc]; eauto with obctyping.
     apply incl_cons' in Spec as (? & ?).
     rewrite wt_stmt_fold_left_lift; split; auto.
-    constructor; eauto using wt_stmt.
+    constructor; eauto with obctyping.
     inversion_clear WTtc as [| | | |???????? Find].
     apply find_unit_transform_units_forward in Find.
     econstructor; eauto.
@@ -469,7 +469,7 @@ Module Type STC2OBCTYPING
     - apply reset_insts_wt; try now constructor.
       apply incl_refl.
   Qed.
-  Hint Resolve reset_wt.
+  Local Hint Resolve reset_wt : obctyping.
 
   Lemma translate_system_wt:
     forall P s,
@@ -477,21 +477,20 @@ Module Type STC2OBCTYPING
       wt_class (translate P) (translate_system s).
   Proof.
     unfold wt_system; intros * WT; pose proof WT as WT'; destruct WT as (WT&?).
-    constructor; simpl; eauto using Forall_cons.
+    constructor; simpl; eauto using Forall_cons with obctyping.
     rewrite s_subs_steps_of.
     induction (s_tcs s) as [|[]]; simpl; inversion_clear WT as [|?? WTtc]; auto;
-      constructor; simpl; auto.
+      constructor; simpl; auto with obctyping.
     inversion_clear WTtc as [| | | |???????? Find].
     apply find_unit_transform_units_forward in Find; setoid_rewrite Find; discriminate.
   Qed.
-  Hint Resolve translate_system_wt.
 
   Theorem translate_wt:
     forall P,
       Stc.Typ.wt_program P ->
       wt_program (translate P).
   Proof.
-    intros; eapply transform_units_wt_program; eauto.
+    intros; eapply transform_units_wt_program; eauto using translate_system_wt.
   Qed.
 
 End STC2OBCTYPING.

@@ -21,7 +21,6 @@ rule scan = parse
     "COQDEP=\"$(COQBIN)coqdep\" ";
     "COQFLAGS=-q $(COQLIBS) $(OTHERFLAGS)";
     "COQC=\"$(COQBIN)coqc\"";
-    "COQWARNINGS=-w -implicit-core-hint-db -w -deprecated-hint-without-locality";
     "COQEXEC=\"$(COQBIN)coqtop\" $(COQFLAGS) -batch -load-vernac-source"
   ]
 
@@ -96,7 +95,7 @@ rule scan = parse
                                            echo \"Nothing admitted.\""];
       ["src/%.vo"; "$(DOCDIR)/%.glob"], ["src/%.v"],
       ["@echo \"COQC src/$*.v\"";
-       "$(COQC) -dump-glob $(COQWARNINGS) $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
+       "$(COQC) -dump-glob $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
       ["documentation"], ["$(GLOBFILES)"],
       ["cd src && " ^
        "coq2html -d ../$(DOCDIR)/html/ -base Velus -external ../../CompCert/doc/html compcert "^

@@ -77,7 +77,7 @@ Module Type STCTYPING
 
   Definition wt_program := CommonTyping.wt_program wt_system.
 
-  Hint Constructors wt_clock wt_exp wt_cexp wt_trconstr.
+  Global Hint Constructors wt_clock wt_trconstr : stctyping.
 
   Global Instance wt_trconstr_Proper:
     Proper (@eq program ==> @Permutation.Permutation (ident * type)

@@ -567,7 +567,7 @@ Module Type CLOCKSWITCH
     eapply fresh_ident_st_valid; eauto.
   Qed.
 
-  Hint Resolve cond_eq_st_valid new_idents_st_valid.
+  Global Hint Resolve cond_eq_st_valid new_idents_st_valid : fresh.
 
   Lemma switch_block_st_valid : forall blk env bck sub blk' st st' aft,
       st_valid_after st switch aft ->
@@ -585,7 +585,7 @@ Module Type CLOCKSWITCH
       eapply cond_eq_st_valid in H0; eauto.
       assert (Hmap:=H1). eapply mmap_st_valid in H1; eauto.
       2:{ eapply Forall_forall; intros (?&?) ? (((?&?)&?)&?) ????.
-          repeat inv_bind. eauto.
+          repeat inv_bind. eauto with fresh.
       }
       eapply mmap2_st_valid in H2; eauto.
       eapply mmap2_values, Forall3_ignore3 in H2.
@@ -621,7 +621,7 @@ Module Type CLOCKSWITCH
     eapply fresh_ident_st_follows; eauto.
   Qed.
 
-  Hint Resolve cond_eq_st_follows new_idents_st_follows.
+  Global Hint Resolve cond_eq_st_follows new_idents_st_follows : fresh.
 
   Lemma switch_block_st_follows : forall blk env bck sub blk' st st',
       switch_block env bck sub blk st = (blk', st') ->
@@ -636,10 +636,10 @@ Module Type CLOCKSWITCH
     - (* switch *)
       destruct (partition _ _) as (defs&frees).
       repeat inv_bind; destruct x; repeat inv_bind.
-      etransitivity; eauto.
-      etransitivity. eapply mmap_st_follows in H1; eauto.
+      etransitivity; eauto with fresh.
+      etransitivity. eapply mmap_st_follows in H1; eauto with fresh.
       { eapply Forall_forall; intros (?&?) ? (((?&?)&?)&?) ???. repeat inv_bind.
-        etransitivity; eauto. }
+        etransitivity; eauto with fresh. }
       eapply mmap2_st_follows in H2; eauto.
       eapply mmap2_values, Forall3_ignore3 in H2.
       2:{ eapply mmap_length in H1; eauto. }
@@ -654,8 +654,6 @@ Module Type CLOCKSWITCH
   Qed.
 
   (** *** NoDup *)
-
-  Hint Constructors NoDupLocals.
 
   Fact switch_blocks_NoDupLocals' : forall blks xs env bck sub blks' st st' aft,
       Forall
@@ -746,7 +744,7 @@ Module Type CLOCKSWITCH
       NoDupLocals xs blk'.
   Proof.
     induction blk using block_ind2; intros * Hnd1 Hnd2 Hat1 Hgood Hvalid Hswi;
-      inv Hgood; inv Hnd2; repeat inv_bind; simpl in *; auto.
+      inv Hgood; inv Hnd2; repeat inv_bind; simpl in *; auto using NoDupLocals.
 
     - (* reset *)
       constructor.
@@ -759,7 +757,7 @@ Module Type CLOCKSWITCH
       simpl. repeat rewrite <-flat_map_app. repeat rewrite map_app.
       assert (st_valid_after x2 switch aft) as Hvalid'.
       { eapply mmap_st_valid, cond_eq_st_valid; eauto.
-        eapply Forall_forall; intros (?&?) _ (((?&?)&?)&?) ????. repeat inv_bind. eauto. }
+        eapply Forall_forall; intros (?&?) _ (((?&?)&?)&?) ????. repeat inv_bind. eauto with fresh. }
 
       remember (xs ++ map fst l ++
                    map fst
@@ -783,7 +781,7 @@ Module Type CLOCKSWITCH
       + assert (st_follows x1 x2) as Hfollows.
         { eapply mmap_st_follows in H1; eauto.
           eapply Forall_forall; intros (?&?) ? (((?&?)&?)&?) ???. repeat inv_bind.
-          etransitivity; eauto. }
+          etransitivity; eauto with fresh. }
 
         assert (Forall (fun blks => Forall (NoDupLocals xs') (snd blks)) branches) as Hnd2'.
         { subst. clear - Hgood Hnd2 H0 H1 H2 Hvalid'. do 2 (eapply Forall_forall; intros).
@@ -801,7 +799,7 @@ Module Type CLOCKSWITCH
         { subst. apply Forall_app; split; auto.
           1,2:apply Forall_forall; intros ? Hin.
           - eapply Forall_forall in Hat1 as [|]; eauto.
-            right. do 2 (eapply incl_map; eauto).
+            right. (eapply incl_map; [|eauto with datatypes]). eapply st_follows_incl; etransitivity; eauto with fresh.
           - right. erewrite new_idents_st_ids', cond_eq_st_ids; eauto.
             rewrite <-app_assoc. apply in_app_iff; auto.
         }

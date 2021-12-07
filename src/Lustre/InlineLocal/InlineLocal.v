@@ -68,7 +68,7 @@ Module Type INLINELOCAL
     Corollary map_rename_in_ann_clock {A} : forall (anns : list (A * clock)),
         map snd (map rename_in_ann anns) = map rename_in_clock (map snd anns).
     Proof.
-      induction anns; simpl; auto.
+      induction anns; simpl; auto with datatypes.
     Qed.
 
   End rename.
@@ -258,15 +258,13 @@ Module Type INLINELOCAL
     Transparent inlinelocal_block.
   Qed.
 
-  Hint Resolve inlinelocal_block_st_follows.
+  Global Hint Resolve inlinelocal_block_st_follows : fresh.
 
   (** ** Wellformedness properties *)
 
   (** *** VarsDefined *)
 
   Import Permutation.
-
-  Hint Constructors VarsDefined.
 
   Fact mmap_vars_perm : forall (f : _ -> block -> FreshAnn (list block)) blks sub blks' xs st st',
       Forall
@@ -305,11 +303,11 @@ Module Type INLINELOCAL
       inv Hns; inv Hvars; inv Hnd; repeat inv_bind.
     - (* equation *)
       destruct eq.
-      repeat esplit; simpl; auto.
+      repeat esplit; simpl; eauto using VarsDefined with datatypes.
       simpl. now rewrite <-app_assoc.
     - (* reset *)
       eapply mmap_vars_perm in H0 as (ys1&Hvars1&Hperm1); eauto.
-      do 2 esplit; eauto.
+      do 2 esplit; eauto using VarsDefined.
       simpl. now rewrite <-app_assoc.
     - (* local *)
       eapply mmap_vars_perm in H1 as (ys1&Hvars1&Hperm1); eauto.

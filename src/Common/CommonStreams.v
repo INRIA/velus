@@ -3,6 +3,7 @@ From Coq Require Import Streams.
 
 (** Additional streams utilities *)
 
+Declare Scope stream_scope.
 Delimit Scope stream_scope with Stream.
 Infix "⋅" := Cons (at level 60, right associativity) : stream_scope.
 Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.

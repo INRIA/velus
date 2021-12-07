@@ -37,7 +37,7 @@ Module Type CORRECTNESS
   | EqA:
       forall v,
         eq_if_present absent v.
-  Hint Constructors eq_if_present.
+  Global Hint Constructors eq_if_present : obcsem.
 
   Definition value_to_option (v: svalue) : option value :=
     match v with
@@ -72,9 +72,9 @@ Module Type CORRECTNESS
     weaken_equiv_env_with tac.
 
   Tactic Notation "weaken_equiv_env" :=
-    weaken_equiv_env with now (constructor; auto).
+    weaken_equiv_env with now (constructor; auto with stcfree).
 
-  Hint Extern 4 (equiv_env _ _ _ _ _) => weaken_equiv_env.
+  Global Hint Extern 4 (equiv_env _ _ _ _ _) => weaken_equiv_env : obcsem stcfree.
 
   Lemma eq_if_present_present:
     forall vo c,
@@ -82,7 +82,7 @@ Module Type CORRECTNESS
   Proof.
     simpl; split.
     - now inversion 1.
-    - intros ->; auto.
+    - intros ->; auto with obcsem.
   Qed.
 
   Ltac split_env_assumption :=
@@ -116,7 +116,7 @@ Module Type CORRECTNESS
         b' <> b ->
         Is_absent_in mems me ve (Con ck x (t, b)).
 
-  Hint Constructors Is_present_in Is_absent_in.
+  Global Hint Constructors Is_present_in Is_absent_in : obcsem.
 
   Arguments tovar: simpl never.
 
@@ -133,7 +133,7 @@ Module Type CORRECTNESS
         equiv_env (fun x => CE.IsF.Is_free_in_exp x e) R mems me ve ->
         exp_eval me ve (translate_exp mems e) (Some c).
     Proof.
-      induction e; inversion_clear 1; simpl; intros; auto.
+      induction e; inversion_clear 1; simpl; intros; auto with obcsem.
       - match goal with H: _ = _ |- _ => inv H end.
         econstructor; congruence.
       - match goal with H: _ = _ |- _ => inv H end.
@@ -142,10 +142,10 @@ Module Type CORRECTNESS
         split_env_assumption; cases; try rewrite eq_if_present_present in *;
           eauto using exp_eval.
         take (Env.find _ _ = _) and rewrite <-it; constructor.
-      - econstructor; eauto; now rewrite typeof_correct.
-      - econstructor; eauto; now rewrite 2 typeof_correct.
+      - econstructor; eauto with obcsem; now rewrite typeof_correct.
+      - econstructor; eauto with obcsem; now rewrite 2 typeof_correct.
     Qed.
-    Hint Resolve exp_correct.
+    Hint Resolve exp_correct : obcsem.
 
     Lemma arg_correct:
       forall me ve cvars ck e c,
@@ -158,10 +158,10 @@ Module Type CORRECTNESS
       destruct e; auto; simpl in *.
       unfold tovar in *.
       destruct (PS.mem i mems); simpl; auto.
-      inv Heval; cases.
-      take (Env.find _ _ = _) and rewrite it; constructor; auto.
+      inv Heval; cases; auto with obcsem.
+      take (Env.find _ _ = _) and rewrite it; constructor; auto with obcsem.
     Qed.
-    Hint Resolve arg_correct.
+    Hint Resolve arg_correct : obcsem.
 
     Lemma cexp_correct:
       forall e c prog x,
@@ -171,7 +171,7 @@ Module Type CORRECTNESS
     Proof.
       induction e using cexp_ind2;
         inversion 1 as [????????? Hvar|???? Hvar| | |];
-        subst; simpl; intros; eauto using stmt_eval.
+        subst; simpl; intros; eauto with obcsem.
       - split_env_assumption.
         econstructor; eauto.
         + unfold tovar; cases; try rewrite eq_if_present_present in Hvar;
@@ -184,16 +184,16 @@ Module Type CORRECTNESS
           weaken_equiv_env with (constructor; apply Exists_app; auto).
       - take (Forall2 _ _ _) and apply Forall2_swap_args in it.
         edestruct (@nth_error_Forall2 value) as (?&?&?); eauto.
-        econstructor; eauto.
+        econstructor; eauto with obcsem.
         + erewrite map_nth_error; eauto.
         + simpl in *.
           take (nth_error _ _ = _) and eapply nth_error_In in it.
           pose proof it as Hin.
           eapply Forall_forall in it; eauto; simpl in *.
-          destruct x0; simpl in *; apply it; auto;
+          destruct x0; simpl in *; apply it; auto with stcfree obcsem;
             weaken_equiv_env with (intros; eapply FreeEcase_branches, Exists_exists; eauto).
     Qed.
-    Hint Resolve cexp_correct.
+    Hint Resolve cexp_correct : obcsem.
 
     Lemma clock_correct_true:
       forall enums Γ base ck,
@@ -202,12 +202,12 @@ Module Type CORRECTNESS
         sem_clock_instant base R ck true ->
         Is_present_in mems me ve ck.
     Proof.
-      induction 1; eauto.
+      induction 1; eauto with obcsem.
       inversion_clear 2; subst.
-      econstructor; eauto.
+      econstructor; eauto with obcsem.
       unfold tovar; split_env_assumption.
-      cases; try rewrite eq_if_present_present in *; eauto using exp_eval.
-      take (Env.find _ _ = _) and rewrite <-it; auto.
+      cases; try rewrite eq_if_present_present in *; eauto with obcsem.
+      take (Env.find _ _ = _) and rewrite <-it; auto with obcsem.
     Qed.
 
     Lemma clock_correct_false:
@@ -219,12 +219,12 @@ Module Type CORRECTNESS
     Proof.
       induction 1; [now inversion 2|].
       intro Henv.
-      inversion_clear 1; auto.
+      inversion_clear 1; auto with obcsem.
       econstructor 2; eauto.
-      - eapply clock_correct_true; eauto.
+      - eapply clock_correct_true; eauto with obcsem.
       - unfold tovar; split_env_assumption.
-        cases; try rewrite eq_if_present_present in *; eauto using exp_eval.
-        take (Env.find _ _ = _) and rewrite <-it; auto.
+        cases; try rewrite eq_if_present_present in *; eauto with obcsem.
+        take (Env.find _ _ = _) and rewrite <-it; auto with obcsem.
     Qed.
 
   End ExprClock.
@@ -246,8 +246,8 @@ Module Type CORRECTNESS
     simpl in *; apply IHWT in StEval as [[Hp Hs]|[Hp [Hmenv Henv]]];
       intuition; inv Hs.
     take (nth_error _ _ = _) and rewrite nth_error_skip_branches_with in it.
-    cases; inv it; simpl in *.
-    chase_skip; eauto.
+    cases; inv it; simpl in *; auto with obcsem.
+    chase_skip; eauto with obcsem.
   Qed.
 
   Section StmtEvalControl.
@@ -281,8 +281,6 @@ Module Type CORRECTNESS
           stmt_eval prog me ve s (me', ve') ->
           stmt_eval prog me ve (Control mems ck s) (me', ve')).
     Proof.
-      Hint Constructors stmt_eval.
-      (* intros * WTck WTs; *)
       revert dependent s; clear s WTs.
       induction ck; split; auto.
       - inversion 1.
@@ -298,7 +296,7 @@ Module Type CORRECTNESS
           rewrite typeof_tovar in it; inv it; simpl in *.
           destruct (Compare_dec.le_lt_dec n b'); try lia.
           destruct (Nat.eq_dec b' c0); try contradiction; eauto.
-        + eauto.
+        + eauto with obcsem.
       - pose proof (Control_wt _ _ _ _ _ _ EnumsSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
         inv WTck; destruct tn.
         inversion_clear 1 as [|???? Hp]; simpl in *; intros.
@@ -702,7 +700,7 @@ Module Type CORRECTNESS
     eapply IH in Find as (?&?).
     edestruct IHl; eauto 7.
     do 3 eexists; split; eauto.
-    econstructor; eauto.
+    econstructor; eauto with obcsem.
     change ve with (Env.adds_opt [] [] ve).
     econstructor; eauto.
   Qed.
@@ -833,13 +831,13 @@ Module Type CORRECTNESS
       exists v, exp_eval me ve (translate_exp mems e) v.
   Proof.
     induction e; simpl;
-      intros v1 nck ck lck Hcm EqEnv Hnoo Hwc Hinst Hbck He Hlck Hmems; eauto.
+      intros v1 nck ck lck Hcm EqEnv Hnoo Hwc Hinst Hbck He Hlck Hmems; eauto with obcsem.
     - (* Variables always evaluate (even if it is to None) *)
       unfold tovar.
-      destruct (PS.mem i mems) eqn:Himems; eauto.
+      destruct (PS.mem i mems) eqn:Himems; eauto with obcsem.
       rewrite PS.mem_spec in Himems.
       apply Hmems in Himems.
-      apply not_None_is_Some in Himems as (v' & Hv'); eauto.
+      apply not_None_is_Some in Himems as (v' & Hv'); eauto with obcsem.
     - (* The reasoning around sampled expressions (e when i b) is slightly tricker... *)
       destruct lck.
       now inv Hwc (* lck cannot be Cbase if (e when i b) is well clocked. *).
@@ -864,17 +862,17 @@ Module Type CORRECTNESS
         inv Hwc. inv Hinst. inv Hlck.
         * (* Con lck i0 b0 = false because lck = false,
              the goal follows form the induction hypothesis. *)
-          now inv He; eauto.
+          now inv He; eauto with obcsem.
         * (* Con lck i0 b0 = false but its clock lck = true.
              The sampled expression e must thus be present, in which
              case we know that the translation calculates the same value. *)
           inv He; try match goal with
                         H:sem_exp_instant _ _ e (present _) |- _ =>
-                        eapply exp_correct in H; eauto end.
+                        eapply exp_correct in H; eauto with obcsem end.
           (* an absent value would contradict the fact that clock lck = true *)
           match goal with Hle:sem_exp_instant _ _ e absent,
                               Hck:sem_clock_instant _ _ lck true |- _ =>
-            apply clock_match_instant_exp_contradiction with (1:=Hcm) (3:=Hle) in Hck; auto
+            apply clock_match_instant_exp_contradiction with (1:=Hcm) (3:=Hle) in Hck; eauto with obcsem
           end. intuition.
     - (* Unary operators: cannot be slower than the node base clock *)
       destruct nck.
@@ -924,7 +922,7 @@ Module Type CORRECTNESS
       apply sem_exp_instant_det with (1:=Hsem) in Hsem'; subst v.
     - eapply noops_exp_exp_eval in Hnorm as (v' & Hv'); eauto.
       simpl; exists v'; eauto.
-      split; destruct le; eauto using exp_eval.
+      split; destruct le; eauto with obcsem.
       destruct xck.
       + inv Hinst. now apply sem_clock_instant_det with (1:=Hcksem) in Hcksem'.
       + simpl in Hinst.
@@ -940,7 +938,7 @@ Module Type CORRECTNESS
              now rewrite instck_subclock_not_clock_eq with (1:=Hck).
            - apply PSE.MP.Dec.F.not_mem_iff; auto.
          }
-    - exists (Some c); simpl; split; eauto using arg_correct, exp_correct.
+    - exists (Some c); simpl; split; eauto using arg_correct, exp_correct with obcsem.
   Qed.
 
   Lemma stmt_eval_translate_cexp_menv_inv:
@@ -1158,9 +1156,9 @@ Module Type CORRECTNESS
 
     - (* TcDef *)
       inv WTmenv; inv Hexp; exists me; eexists; split;
-        try solve [eapply stmt_eval_Control_absent'; eauto; auto].
-      + eapply stmt_eval_Control_present'; eauto; auto.
-        eapply cexp_correct; eauto.
+        try solve [eapply stmt_eval_Control_absent'; eauto; auto with obcsem].
+      + eapply stmt_eval_Control_present'; eauto; auto with obcsem.
+        eapply cexp_correct; eauto with obcsem.
       + split.
         * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
@@ -1180,8 +1178,8 @@ Module Type CORRECTNESS
     - (* TcReset *)
       inv WTmenv; destruct r; do 2 eexists; (split; [|split]); eauto;
         try solve [inversion 1].
-      + eapply stmt_eval_Control_present'; eauto using stmt_eval, exp_correct.
-        intuition.
+      + eapply stmt_eval_Control_present'; eauto with obcsem;
+        intuition. econstructor; eauto with obcsem.
       + eapply Memory_Corres_Reset_present; eauto.
         eapply Is_well_sch_Reset_Next; eauto.
       + eapply stmt_eval_Control_absent'; eauto using stmt_eval, exp_correct.
@@ -1190,7 +1188,7 @@ Module Type CORRECTNESS
     - inv WTmenv; destruct r; do 2 eexists; (split; [|split]); eauto;
         try solve [inversion 1].
       + eapply stmt_eval_Control_present'; eauto using stmt_eval, exp_correct.
-        intuition.
+        intuition. constructor; eauto with obcsem.
       + eapply Memory_Corres_Reset_present; eauto.
         eapply Is_well_sch_Reset_Next; eauto.
       + eapply stmt_eval_Control_absent'; eauto using stmt_eval, exp_correct.
@@ -1199,14 +1197,15 @@ Module Type CORRECTNESS
 
     - (* TcNext *)
       inv WTmenv; inv Hexp; eexists; exists ve; split;
-        try solve [eapply stmt_eval_Control_absent'; eauto; auto].
+        try solve [eapply stmt_eval_Control_absent'; eauto; auto with obcsem].
       + eapply stmt_eval_Control_present';
-          eauto using stmt_eval, exp_correct; auto.
+          eauto with obcsem; eauto with obcsem.
+        econstructor; eauto 8 with obcsem. eapply exp_correct; eauto with obcsem.
       + split; try inversion 1.
         apply Memory_Corres_Next_present; auto.
       + split; try inversion 1.
         eapply Memory_Corres_Next_absent; auto.
-        eapply ResetCks. left; eauto.
+        eapply ResetCks. left; eauto with stcsyntax.
 
     - (* TcInstReset *)
       inv WTmenv; destruct r.
@@ -1214,7 +1213,7 @@ Module Type CORRECTNESS
         inversion_clear Init as [????? Find Rst].
         edestruct reset_spec as (me' &?&?& SpecInit); eauto.
         do 2 eexists; split; [|split].
-        * eapply stmt_eval_Control_present'; eauto; auto.
+        * eapply stmt_eval_Control_present'; eauto; auto with obcsem.
           econstructor; eauto.
         * { eapply Memory_Corres_InstReset_present; eauto.
             - eapply initial_state_det; eauto.
@@ -1237,13 +1236,13 @@ Module Type CORRECTNESS
             - eapply Is_well_sch_IReset_Step; eauto.
          }
         * inversion 1.
-      + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
+      + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto with obcsem.
         split; try inversion 1.
         eapply Memory_Corres_InstReset_absent; eauto.
 
     - (* TcStep *)
       assert (Forall (fun ckr : clock => exists r : bool, sem_clock_instant true R ckr r) ckrs) as ClockR1.
-      { eapply IResetCks. left; eauto. }
+      { eapply IResetCks. left; eauto with stcsyntax. }
       destruct (clock_of_instant xs) eqn: E.
       + assert (Exists (fun v => v <> absent) xs) by (apply clock_of_instant_true; auto).
         assert (exists vos,
@@ -1251,11 +1250,11 @@ Module Type CORRECTNESS
                    /\ Forall2 (exp_eval me ve)
                              (map (translate_arg mems clkvars ck) es) vos)
             as (ivals & Hivals & Hievals)
-              by (eapply TcStep_check_args_translate_arg; eauto).
+              by (eapply TcStep_check_args_translate_arg; eauto with obcsem).
         unfold correct_program, correct_system in IH.
         eapply IH in Hsystem as (me' &?&?); eauto.
         *{ inv WTmenv. do 2 eexists; split.
-           - eapply stmt_eval_Control_present'; eauto; auto.
+           - eapply stmt_eval_Control_present'; eauto; auto with obcsem.
              econstructor; eauto.
            - split.
              + eapply Memory_Corres_Step_present; eauto.
@@ -1280,7 +1279,7 @@ Module Type CORRECTNESS
              assert (exists Ii', Ii' ≋ Ii /\ find_inst i S = Some Ii') as (? & <- &?).
              { apply orel_find_inst_Some, ClockR.
                eapply Forall_forall; intros ? Hin; eapply NotReset.
-               eapply StepReset in Hin; eauto. 2:left; eauto. inv Hin; auto. inv H4. }
+               eapply StepReset in Hin; eauto. 2:left; eauto with stcsyntax. inv Hin; auto. inv H4. }
              inversion_clear WTS as [????? WTinsts].
              eapply Forall_forall in WTinsts; eauto.
              inv WTinsts; try congruence.
@@ -1335,7 +1334,7 @@ Module Type CORRECTNESS
       + inv WTmenv.
         assert (absent_list xs) by (apply clock_of_instant_false; auto).
         apply sem_system_absent in Hsystem as (? & ?); auto.
-        exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
+        exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto with obcsem.
         split; eauto using Memory_Corres_Step_absent.
         inversion_clear 1; intros Hvar.
         eapply Forall2_in_left in Hvars as (v' & Hin &?); eauto.
@@ -1440,7 +1439,7 @@ Module Type CORRECTNESS
             assert (Free':=Free). apply FreeSpec in Free.
             cases_eqn E.
             { destruct v; simpl; auto.
-              eapply PSF.mem_2 in E; eauto.
+              eapply PSF.mem_2 in E; eauto with obcsem.
               specialize (HmemsI _ _ E Hvar).
               specialize (SpecMem _ E).
               eapply reset_or_not_reset_dec with (x:=x) in H3 as [NotReset|Reset].
@@ -1449,25 +1448,25 @@ Module Type CORRECTNESS
                 eapply Exists_exists in SpecMem as (?&Hin&Next); inv Next.
                 eapply Forall_forall in Htcs; [|eauto].
                 inversion_clear Htcs as [| |??????????? Find FindI _ _ _| |].
-                rewrite Find, <-FindI, HmemsI; auto.
+                rewrite Find, <-FindI, HmemsI; auto with obcsem.
                 eapply Forall_forall. intros ? Hin'. eapply NotReset.
                 assert (Next_with_reset_in x ckrs ((tcs ++ [tc]) ++ tcs')) as NextReset''.
-                { eapply Exists_exists. eexists; split; eauto. }
+                { eapply Exists_exists. eexists; split; eauto with stcsyntax. }
                 eapply NextReset in NextReset''. rewrite NextReset'' in Hin'.
                 apply Exists_app' in Hin' as [Hin'|?]; auto.
                 exfalso. eapply Is_well_sch_free_Reset in Free'; eauto.
               - assert (value_corres x I me') as Corres' by (eapply H1; eauto).
-                rewrite <-Corres', HmemsI; auto.
+                rewrite <-Corres', HmemsI; auto with obcsem.
          }
             { destruct Free as [IsVar|].
           - eapply Env in IsVar; eauto.
-            destruct v; simpl; auto.
-            rewrite IsVar; simpl; auto.
+            destruct v; simpl; auto with obcsem.
+            rewrite IsVar; simpl; auto with obcsem.
           - assert (~ Is_variable_in x tcs')
               by (intro; eapply SpecInput, Exists_app; eauto).
             erewrite not_Is_defined_in_stmt_eval_venv_inv; eauto.
-            destruct v; simpl; auto.
-            assert (Env.find x ve = Some v) as ->; auto. }
+            destruct v; simpl; auto with obcsem.
+            assert (Env.find x ve = Some v) as ->; auto with obcsem. }
           * rewrite <-Corres.
             apply transform_units_wt_memory; auto.
           * intros; eapply stmt_eval_find_val_mono; eauto.
@@ -1593,7 +1592,7 @@ Module Type CORRECTNESS
              (clkvars := Env.adds_with snd system.(s_out)
                            (Env.adds_with snd system.(s_vars)
                              (Env.from_list_with snd system.(s_in))))
-        as (me' & ve' &?&?& Equiv); eauto.
+        as (me' & ve' &?&?& Equiv); eauto with stcsyntax stcsem.
       + pose proof (s_nodup_nexts system) as N; clear - N.
         induction N; simpl; constructor; auto.
         rewrite fst_InMembers.
@@ -1605,6 +1604,7 @@ Module Type CORRECTNESS
       + rewrite <-2 idty_app, NoDupMembers_idty.
         apply s_nodup_vars.
       + apply s_nodup_subs.
+      + apply s_trconstr_mems_spec.
       + apply Forall_forall.
         intros (y, ck) Hxin.
         apply in_app in Hxin as [Hxin|Hxin].
@@ -1762,7 +1762,7 @@ Module Type CORRECTNESS
     cofix COFIX; intros.
     inversion_clear Loop as [??????? Sem].
     pose proof Wdef; destruct Wdef as (?&?&?).
-    edestruct sem_system_wt; eauto.
+    edestruct sem_system_wt; eauto with typing.
     - clear - WTins Spec.
       specialize (WTins n); specialize (Spec n).
       apply Forall2_swap_args in Spec; apply Forall2_trans_ex with (2 := Spec) in WTins; clear Spec.

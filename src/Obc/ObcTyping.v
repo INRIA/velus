@@ -112,9 +112,9 @@ Module Type OBCTYPING
     := (Forall (fun ocls=> find_class (snd ocls) p <> None) cls.(c_objs))
        /\ Forall (wt_method p cls.(c_objs) cls.(c_mems)) cls.(c_methods).
 
-  Definition wt_program := CommonTyping.wt_program wt_class.
+  Global Definition wt_program := CommonTyping.wt_program wt_class.
 
-  Hint Constructors wt_exp wt_stmt: obctyping.
+  Global Hint Constructors wt_exp wt_stmt: obctyping.
 
   Global Instance wt_exp_Proper:
     Proper (@eq program
@@ -225,7 +225,7 @@ Module Type OBCTYPING
         by (take (find_class _ _ = _) and apply find_unit_equiv_program in it;
             specialize (it []); inv it; auto); auto.
   Qed.
-  Hint Resolve wt_exp_chained.
+  Global Hint Resolve wt_exp_chained : obctyping.
 
   Corollary wt_exps_chained:
     forall es f p cl p' mems insts,
@@ -233,9 +233,9 @@ Module Type OBCTYPING
     Forall (wt_exp p' mems insts) es ->
     Forall (wt_exp p mems insts) es.
   Proof.
-    induction 2; constructor; eauto.
+    induction 2; constructor; eauto with obctyping.
   Qed.
-  Hint Resolve wt_exps_chained.
+  Global Hint Resolve wt_exps_chained : obctyping.
 
   Lemma pres_sem_exp:
     forall p Γm Γv me ve e v,
@@ -272,7 +272,7 @@ Module Type OBCTYPING
     inv WT_mem.
     eapply pres_sem_exp with (Γv:=Γv); eauto.
   Qed.
-  Hint Resolve pres_sem_exp'.
+  Global Hint Resolve pres_sem_exp' : obctyping obcsem.
 
   Lemma pres_sem_expo:
     forall prog Γm Γv me ve e vo,
@@ -282,8 +282,7 @@ Module Type OBCTYPING
       exp_eval me ve e vo ->
       wt_option_value vo (typeof e).
   Proof.
-    intros. destruct vo; simpl;
-              eauto using pres_sem_exp.
+    intros. destruct vo; simpl; eauto using pres_sem_exp.
   Qed.
 
   Lemma pres_sem_expo':
@@ -293,9 +292,9 @@ Module Type OBCTYPING
       exp_eval me ve e vo ->
       wt_option_value vo (typeof e).
   Proof.
-    intros. destruct vo; simpl; eauto.
+    intros. destruct vo; simpl; eauto with obctyping.
   Qed.
-  Hint Resolve pres_sem_expo'.
+  Global Hint Resolve pres_sem_expo' : obctyping obcsem.
 
   Lemma pres_sem_expos:
     forall prog Γm Γv me ve es vos,
@@ -323,9 +322,9 @@ Module Type OBCTYPING
     intros. simpl in *.
     match goal with Hf:Forall _ ?xs, Hi: In _ ?xs |- _ =>
       apply Forall_forall with (1:=Hf) in Hi end.
-    eapply pres_sem_expo'; eauto.
+    eauto with obctyping.
   Qed.
-  Hint Resolve pres_sem_expos'.
+  Global Hint Resolve pres_sem_expos' : obctyping obcsem.
 
   Corollary wt_state_add:
     forall prog me ve c Γv x v t,
@@ -335,9 +334,9 @@ Module Type OBCTYPING
       wt_value v t ->
       wt_state prog me (Env.add x v ve) c Γv.
   Proof.
-    intros * (?&?) ???; split; eauto.
+    intros * (?&?) ???; split; eauto with typing.
   Qed.
-  Hint Resolve wt_state_add.
+  Global Hint Resolve wt_state_add : obctyping obcsem.
 
   Corollary wt_state_adds:
     forall xs prog me ve c Γv vs (xts: list (ident * type)),
@@ -349,9 +348,9 @@ Module Type OBCTYPING
       wt_state prog me (Env.adds xs vs ve) c Γv.
   Proof.
     induction xs; inversion 3; inversion 1; inversion 1; subst; auto.
-    rewrite Env.adds_cons_cons; eauto.
+    rewrite Env.adds_cons_cons; eauto with obctyping.
   Qed.
-  Hint Resolve wt_state_adds.
+  Global Hint Resolve wt_state_adds : obctyping obcsem.
 
   Corollary wt_state_adds_opt:
     forall xs prog me ve c Γv vs (xts: list (ident * type)),
@@ -362,9 +361,9 @@ Module Type OBCTYPING
       Forall2 (fun rv xt => wt_value rv (snd xt)) vs xts ->
       wt_state prog me (Env.adds_opt xs (map Some vs) ve) c Γv.
   Proof.
-    intros; rewrite Env.adds_opt_is_adds; eauto.
+    intros; rewrite Env.adds_opt_is_adds; eauto with obctyping.
   Qed.
-  Hint Resolve wt_state_adds_opt.
+  Global Hint Resolve wt_state_adds_opt : obctyping.
 
   Corollary wt_state_add_val:
      forall prog me ve c Γv x v t,
@@ -376,7 +375,7 @@ Module Type OBCTYPING
     intros * (?&?) ??; split; eauto.
     eapply wt_memory_add_val; eauto using c_nodupmems.
   Qed.
-  Hint Resolve wt_state_add_val.
+  Global Hint Resolve wt_state_add_val : obctyping.
 
   Corollary wt_state_add_inst:
      forall prog me ve c c' prog' Γv x me_x c_x,
@@ -389,7 +388,7 @@ Module Type OBCTYPING
     intros * (?&?) ??; split; eauto.
     eapply wt_memory_add_inst; eauto using c_nodupobjs.
   Qed.
-  Hint Resolve wt_state_add_inst.
+  Global Hint Resolve wt_state_add_inst : obctyping.
 
   Lemma wt_params:
     forall vos xs es,
@@ -402,7 +401,7 @@ Module Type OBCTYPING
     constructor; eauto.
     now rewrite <- E.
   Qed.
-  Hint Resolve wt_params.
+  Global Hint Resolve wt_params : obctyping.
 
   Lemma wt_env_params:
     forall vos callee,
@@ -415,7 +414,7 @@ Module Type OBCTYPING
     pose proof (m_nodupvars callee) as Nodup.
     split.
     - apply NoDupMembers_app_l in Nodup.
-      apply wt_env_adds_opt with (outs:=m_in callee); eauto.
+      apply wt_env_adds_opt with (outs:=m_in callee); eauto with typing.
       + now apply fst_NoDupMembers.
       + clear; induction (m_in callee) as [|(?, ?)]; simpl; auto.
         constructor; auto.
@@ -438,7 +437,7 @@ Module Type OBCTYPING
       unfold wt_env_value; simpl.
       rewrite Env.find_In_gsso_opt, Env.gempty; auto.
   Qed.
-  Hint Resolve wt_env_params.
+  Global Hint Resolve wt_env_params : obctyping.
 
   Lemma wt_env_params_exprs:
     forall vos callee es,
@@ -449,7 +448,7 @@ Module Type OBCTYPING
     intros * Wt Eq.
     eapply wt_env_params, wt_params; eauto.
   Qed.
-  Hint Resolve wt_env_params_exprs.
+  Global Hint Resolve wt_env_params_exprs : obctyping.
 
   Lemma pres_sem_stmt':
     (forall p me ve stmt e',
@@ -480,7 +479,7 @@ Module Type OBCTYPING
       intros * Hexp mems insts Γv Hndup Hndupm Hndupi WTp WTm WTe WTstmt.
       split; auto.
       inv WTstmt. inversion_clear WTm as [???? WTmv WTmi].
-      eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; eauto.
+      eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; eauto with typing.
 
     - (* assign state *)
       intros * Hexp mems insts Γv Hndup Hndupm Hndupi WTp WTm WTe WTstmt.
@@ -498,7 +497,7 @@ Module Type OBCTYPING
       intros p * Hevals Hcall IH
              mems insts Γv Hndups Hndupm Hndupi WTp WTm WTe WTstmt.
       inv WTstmt.
-      edestruct IH; eauto; clear IH; simpl.
+      edestruct IH; eauto with typing; clear IH; simpl.
       + (* Instance memory is well-typed before execution. *)
         unfold instance_match; destruct (find_inst o me) eqn:Hmfind; auto using wt_memory_empty.
         inversion_clear WTm as [???? WTv WTi].
@@ -521,7 +520,7 @@ Module Type OBCTYPING
         apply in_combine_r in Hxy.
         match goal with H:Forall _ es |- _ =>
           apply Forall_forall with (1:=H) in Hxy end.
-        eapply pres_sem_expo in Hxy; eauto; inv WTm; auto.
+        eapply pres_sem_expo in Hxy; eauto; inv WTm; auto with obctyping.
 
     - (* sequential composition *)
       intros p menv env s1 s2
@@ -550,7 +549,7 @@ Module Type OBCTYPING
         injection Hfindm'; intros; subst fm''; clear Hfindm'.
       destruct (wt_program_find_unit _ _ _ _ _ WTp Hfindc) as (WTc & WTp').
       edestruct IH with (Γv := meth_vars fm) (5 := WTmem);
-        eauto using m_nodupvars, c_nodupmems, c_nodupobjs.
+        eauto using m_nodupvars, c_nodupmems, c_nodupobjs with obctyping.
       + (* In a well-typed class, method bodies are well-typed. *)
         apply wt_class_find_method with (1:=WTc) (2:=Hfindm).
       + split; auto.
@@ -735,7 +734,7 @@ Module Type OBCTYPING
       eapply wt_exp_suffix; eauto.
   Qed.
 
-  Hint Constructors suffix.
+  Global Hint Constructors suffix : program.
 
   Lemma stmt_call_eval_suffix:
     forall p p' me clsid f vs ome rvs,
@@ -749,7 +748,7 @@ Module Type OBCTYPING
     econstructor; eauto.
     eapply find_unit_suffix_same; eauto.
   Qed.
-  Hint Resolve stmt_call_eval_suffix.
+  Global Hint Resolve stmt_call_eval_suffix : obcsem.
 
   Lemma stmt_eval_suffix:
     forall p p' me ve s S,
@@ -759,9 +758,9 @@ Module Type OBCTYPING
       stmt_eval p' me ve s S.
   Proof.
     intros * Ev ? ?.
-    induction Ev; econstructor; eauto.
+    induction Ev; econstructor; eauto with obcsem.
   Qed.
-  Hint Resolve stmt_eval_suffix.
+  Global Hint Resolve stmt_eval_suffix : obcsem.
 
   Lemma wt_mem_skip:
     forall p p' f c mem,
@@ -792,7 +791,7 @@ Module Type OBCTYPING
         destruct p'; simpl in *; subst; auto.
       + unfold wt_program, CommonTyping.wt_program in *; simpl in *; eauto.
   Qed.
-  Hint Resolve wt_mem_skip.
+  Global Hint Resolve wt_mem_skip : obcsem.
 
   Lemma find_class_rev:
     forall prog n c prog',

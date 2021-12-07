@@ -115,20 +115,20 @@ Module Export Ids <: IDS.
 
   Lemma self_not_out: self <> out.
   Proof. prove_str_to_pos_neq. Qed.
-  Hint Resolve self_not_out.
+  Global Hint Resolve self_not_out : ident.
 
   Lemma reset_not_step:
     reset <> step.
   Proof. prove_str_to_pos_neq. Qed.
-  Hint Resolve reset_not_step.
+  Global Hint Resolve reset_not_step : ident.
 
   Lemma fun_not_out: fun_id <> out.
   Proof. prove_str_to_pos_neq. Qed.
-  Hint Resolve fun_not_out.
+  Global Hint Resolve fun_not_out : ident.
 
   Lemma fun_not_glob: fun_id <> glob.
   Proof. prove_str_to_pos_neq. Qed.
-  Hint Resolve fun_not_glob.
+  Global Hint Resolve fun_not_glob : ident.
 
   Fact obc2c_not_in_gensym_prefs :
     ~In obc2c gensym_prefs.
@@ -137,7 +137,7 @@ Module Export Ids <: IDS.
     repeat rewrite not_in_cons.
     repeat split; auto; prove_str_to_pos_neq.
   Qed.
-  Hint Resolve obc2c_not_in_gensym_prefs.
+  Global Hint Resolve obc2c_not_in_gensym_prefs : ident.
 
   Fact self_not_in_gensym_prefs :
     ~In self gensym_prefs.
@@ -146,7 +146,7 @@ Module Export Ids <: IDS.
     repeat rewrite not_in_cons.
     repeat split; auto; prove_str_to_pos_neq.
   Qed.
-  Hint Resolve self_not_in_gensym_prefs.
+  Global Hint Resolve self_not_in_gensym_prefs : ident.
 
   Fact temp_not_in_gensym_prefs :
     ~In temp gensym_prefs.
@@ -155,7 +155,7 @@ Module Export Ids <: IDS.
     repeat rewrite not_in_cons.
     repeat split; auto; prove_str_to_pos_neq.
   Qed.
-  Hint Resolve temp_not_in_gensym_prefs.
+  Global Hint Resolve temp_not_in_gensym_prefs : ident.
 
   Definition atom x := ~In_str sep (pos_to_str x).
   Definition is_atom x := negb (mem_str sep (pos_to_str x)).
@@ -215,16 +215,16 @@ Module Export Ids <: IDS.
   Lemma obc2c_atom: atom obc2c.
   Proof. prove_atom. Qed.
 
-  Hint Resolve step_atom reset_atom fun_id_atom sync_id_atom
-       out_atom main_id_atom main_proved_id_atom main_sync_id_atom
-       self_atom glob_atom elab_atom norm1_atom norm2_atom obc2c_atom.
+  Global Hint Resolve step_atom reset_atom fun_id_atom sync_id_atom
+         out_atom main_id_atom main_proved_id_atom main_sync_id_atom
+         self_atom glob_atom elab_atom norm1_atom norm2_atom obc2c_atom : ident.
 
   Axiom prefix : ident -> ident -> ident.
 
   Axiom prefix_not_atom:
     forall pref id,
       ~atom (prefix pref id).
-  Hint Resolve prefix_not_atom.
+  Global Hint Resolve prefix_not_atom : ident.
 
   Axiom prefix_injective':
     forall pref id pref' id',
@@ -285,7 +285,7 @@ Module Export Ids <: IDS.
     unfold prefix_glob.
     intros * H.
     eapply prefix_not_atom.
-    rewrite H; eauto.
+    rewrite H; eauto with ident.
   Qed.
 
   Lemma main_proved_not_glob:
@@ -294,7 +294,7 @@ Module Export Ids <: IDS.
     unfold prefix_glob.
     intros * H.
     eapply prefix_not_atom.
-    rewrite H; eauto.
+    rewrite H; eauto with ident.
   Qed.
 
   Lemma sync_not_glob:
@@ -303,7 +303,7 @@ Module Export Ids <: IDS.
     unfold prefix_glob.
     intros * H.
     eapply prefix_not_atom.
-    rewrite H; eauto.
+    rewrite H; eauto with ident.
   Qed.
 
   Lemma main_sync_not_glob:
@@ -312,7 +312,7 @@ Module Export Ids <: IDS.
     unfold prefix_glob.
     intros * H.
     eapply prefix_not_atom.
-    rewrite H; eauto.
+    rewrite H; eauto with ident.
   Qed.
 
   Lemma self_not_glob:
@@ -321,7 +321,7 @@ Module Export Ids <: IDS.
     unfold prefix_glob.
     intros * H.
     eapply prefix_not_atom.
-    rewrite H; eauto.
+    rewrite H; eauto with ident.
   Qed.
 
   Lemma prefix_glob_injective:
@@ -330,7 +330,7 @@ Module Export Ids <: IDS.
       x = x'.
   Proof.
     intros * Hneq.
-    eapply prefix_injective; eauto.
+    eapply prefix_injective; eauto with ident.
   Qed.
 
   Lemma glob_not_in_prefixed:

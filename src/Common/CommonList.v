@@ -15,6 +15,8 @@ From Velus Require Import CommonTactics.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Global Hint Resolve nth_In : datatypes.
+
 Section map2.
   Context {A B C: Type}.
   Variable f: A -> B -> C.
@@ -141,7 +143,11 @@ Section Forall'.
   Qed.
 
 End Forall'.
-Hint Constructors Forall'.
+
+Global Hint Constructors Forall' : datatypes.
+Global Hint Constructors NoDup : datatypes.
+Global Hint Constructors Permutation : datatypes.
+Global Hint Resolve -> Exists_exists : datatypes.
 
 Section Extra.
 
@@ -988,9 +994,8 @@ Section Nodup.
       NoDup (xs ++ ys) ->
       NoDup xs.
   Proof.
-    Hint Constructors NoDup.
     intros * Hndup.
-    induction xs as [|x xs]; auto.
+    induction xs as [|x xs]. constructor.
     inversion_clear Hndup as [|? ? Hnin Hndup'].
     apply IHxs in Hndup'.
     constructor; auto.
@@ -1019,7 +1024,7 @@ Section Nodup.
   Proof.
     induction ws; simpl; split; intros * Nodup.
     - inv Nodup; auto.
-    - destruct Nodup; auto.
+    - destruct Nodup; auto with datatypes.
     - inversion Nodup as [|? ? Notin Nodup']; clear Nodup; subst.
       split.
       + intro H; destruct H.
@@ -1084,7 +1089,7 @@ Section Nodup.
       /\ Forall (fun x => ~ In x ws) xs).
   Proof.
   split.
-  - induction xs; auto.
+  - induction xs; auto with datatypes.
     rewrite <- app_comm_cons.
     intro H.
     inv H.
@@ -1605,11 +1610,10 @@ Section Permutation.
   Global Instance Permutation_filter_Proper (p:A->bool):
     Proper (@Permutation A ==> @Permutation A) (filter p).
   Proof.
-    Hint Constructors Permutation.
     intros xs ys Hperm.
     induction Hperm; simpl; auto.
     - destruct (p x); auto.
-    - destruct (p x); destruct (p y); auto.
+    - destruct (p x); destruct (p y); auto with datatypes.
     - now rewrite IHHperm1, IHHperm2.
   Qed.
 
@@ -1996,10 +2000,9 @@ Section ForallExists.
       Exists P (nth n xs d) -> Exists P (concat xs).
   Proof.
     intros xs n d Hlen Hex.
-    apply nth_In with (d:=d) in Hlen.
     rewrite Exists_concat.
     rewrite Exists_exists.
-    exists (nth n xs d); auto.
+    exists (nth n xs d); auto with datatypes.
   Qed.
 
   Lemma Exists_concat_nth' : forall xs d,
@@ -3098,8 +3101,8 @@ Section Forall2.
 
 End Forall2.
 
-Hint Resolve -> Forall2_eq.
-Hint Resolve <- Forall2_eq.
+Global Hint Resolve -> Forall2_eq : core.
+Global Hint Resolve <- Forall2_eq : core.
 
 Lemma length_in_left_combine:
   forall {A B} (l: list A) (l': list B) x,
@@ -4219,6 +4222,7 @@ Section InMembers.
   Qed.
 
 End InMembers.
+Global Hint Constructors NoDupMembers : datatypes.
 
 Lemma nodupmembers_filter {A B} :
   forall f (l: list (A * B)),
@@ -4456,15 +4460,14 @@ Section SameElements.
       SameElements l l' ->
       SameElements l' l'' ->
       SameElements l l''.
-  Hint Constructors SameElements.
 End SameElements.
-Hint Constructors SameElements.
+Global Hint Constructors SameElements : datatypes.
 
 Global Instance SameElements_sym' {A} {eqA : A -> A -> Prop}
   (Hsym : Symmetric eqA): Symmetric (SameElements eqA).
-Proof.
-  intros ?? Same. induction Same; eauto.
-  symmetry in H. eauto.
+Proof with eauto with datatypes.
+  intros ?? Same. induction Same...
+  symmetry in H...
 Qed.
 
 Global Instance SameElements_sym {A} : Symmetric (SameElements (@eq A)).
@@ -4510,21 +4513,21 @@ Section Forall2_SameElements_1.
       SameElements eqA l1 l1' ->
       Forall2 P l1 l2 ->
       exists l2' , SameElements eqB l2 l2' /\ Forall2 P l1' l2'.
-  Proof.
+  Proof with eauto with datatypes.
     intros * Same. revert l2.
     induction Same; intros l2 Hf.
-    - inv Hf. eauto.
+    - inv Hf...
     - inv Hf.
       eapply IHSame in H4 as (l2'&?&F').
-      exists (y::l2'); eauto.
+      exists (y::l2')...
     - inv Hf. assert (Hf:=H4).
-      eapply Forall2_inA_left in H4 as (?&?&?); eauto.
-      exists l'. split; auto.
-      eapply P_det in H1; eauto.
-    - eapply Forall2_inA_left in H as (?&Hin'&HP); eauto.
-    - eapply Forall2_Permutation_1 in H as (?&?&?); eauto.
+      eapply Forall2_inA_left in H4 as (?&?&?)...
+      exists l'; split...
+      eapply P_det in H1...
+    - eapply Forall2_inA_left in H as (?&Hin'&HP)...
+    - eapply Forall2_Permutation_1 in H as (?&?&?)...
     - eapply IHSame1 in Hf as (?&?&Hf').
-      eapply IHSame2 in Hf' as (l2''&?&Hf''); eauto.
+      eapply IHSame2 in Hf' as (l2''&?&Hf'')...
   Qed.
 End Forall2_SameElements_1.
 
@@ -5087,7 +5090,7 @@ Section Partition.
       Partition xs [] xs2 ->
       xs = xs2.
   Proof.
-    induction xs; intros * Hpart; inv Hpart; auto.
+    induction xs; intros * Hpart; inv Hpart; auto with datatypes.
   Qed.
 
   Lemma Partition_Permutation : forall xs xs1 xs2,
@@ -5126,16 +5129,16 @@ Section Partition.
       + exists xs1. exists (a::xs2). constructor; auto.
   Qed.
 End Partition.
-Hint Constructors Partition.
+Global Hint Constructors Partition : datatypes.
 
 Lemma Partition_ext {A} : forall (P Q : A -> Prop) xs xs1 xs2,
     (forall x, P x <-> Q x) ->
     Partition P xs xs1 xs2 ->
     Partition Q xs xs1 xs2.
-Proof.
-  induction xs; intros * Heq Hpart; inv Hpart; auto.
-  - rewrite Heq in H4. auto.
-  - rewrite Heq in H4. auto.
+Proof with auto with datatypes.
+  induction xs; intros * Heq Hpart; inv Hpart...
+  - rewrite Heq in H4...
+  - rewrite Heq in H4...
 Qed.
 
 Lemma partition_Partition {A} : forall (f : A -> bool) xs xs1 xs2,
@@ -5143,7 +5146,7 @@ Lemma partition_Partition {A} : forall (f : A -> bool) xs xs1 xs2,
     Partition (fun x => f x = true) xs xs1 xs2.
 Proof.
   induction xs; intros * Hpart; simpl in *.
-  - inv Hpart; auto.
+  - inv Hpart; auto with datatypes.
   - destruct (partition f xs) eqn:Hpart'.
     destruct (f a) eqn:Ha; inv Hpart; constructor; auto.
     rewrite Bool.not_true_iff_false; auto.

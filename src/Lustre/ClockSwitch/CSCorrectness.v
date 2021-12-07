@@ -219,11 +219,11 @@ Module Type CSCORRECTNESS
     Proof.
       intros * Hat Hst Hdom Hsem Hsemck Hcond.
       destruct e; simpl in *; repeat (take ann and destruct it); repeat inv_bind.
-      3:{ inv Hsem. exists Hi; repeat split; simpl; eauto.
+      3:{ inv Hsem. exists Hi; repeat split; simpl; eauto with env.
           + rewrite app_nil_r. apply Env.dom_elements.
           + constructor. }
       1-10:(assert (Env.refines (@EqSt _) Hi (Env.add x vs Hi)) as Href;
-            [eapply Env.refines_add; eauto; intros Henvin;
+            [eapply Env.refines_add; intros Henvin; try reflexivity;
              eapply Env.dom_ub_use, in_app_iff in Henvin as [Hin|Hin]; eauto;
              [eapply fresh_ident_prefixed in H as (?&?&?); subst;
               eapply Forall_forall in Hat; eauto; eapply contradict_AtomOrGensym in Hat; eauto using switch_not_in_elab_prefs
@@ -382,7 +382,7 @@ Module Type CSCORRECTNESS
         eapply Forall_forall; intros (?&?) ? (((?&?)&?)&?) ????; repeat inv_bind.
         do 2 (eapply new_idents_st_valid; [|eauto]; auto). }
       assert (Env.refines (EqSt (A:=svalue)) Hi' (Env.adds' (flat_map (fun '(k, _, nfrees, ndefs) => map (fun '(x, nx, _) => (nx, filterv k sc (or_default (Streams.const absent) (Env.find x Hi)))) (nfrees ++ ndefs)) xs) Hi')) as Href.
-      { apply Env.refines_adds'; auto.
+      { apply Env.refines_adds'; auto using EqStrel_Reflexive, EqStrel_Transitive.
         eapply new_idents_st_ids' in Hmmap.
         eapply Forall_forall; intros * Hin1 Hin2. eapply Env.dom_ub_use in Hin2; eauto.
         apply in_app_iff in Hin2 as [Hin2|Hin2].
@@ -569,7 +569,8 @@ Module Type CSCORRECTNESS
                         (filter (fun '(_, (_, ck')) => ck' ==b ck) l0 ++ l)) as Hsc'.
         { eapply Forall_forall; intros (?&?&?) Hin.
           rewrite Permutation_app_comm in Hincl1.
-          eapply Forall_forall in Hsc; eauto. simpl in *. destruct Hsc as (?&Hv&Hck).
+          eapply Forall_forall in Hsc; eauto. 2:eapply incl_map; eauto; eapply in_map_iff; eauto.
+          simpl in *. destruct Hsc as (?&Hv&Hck).
           do 2 esplit; eauto.
           assert (c = ck); subst. 2:eapply sem_clock_det; eauto.
           apply in_app_iff in Hin as [Hin|Hin].
@@ -586,7 +587,7 @@ Module Type CSCORRECTNESS
         }
 
         assert (Hcond:=H0). eapply cond_eq_sem in H0 as (Hi1&Href1&Hv1&Hsem1&Hdom1&Hdomub1&Hsc1); eauto using subclock_exp_sem.
-        assert (Hni:=H3). eapply new_idents_sem with (bs'0:=bs') in H3 as (Hi2&Href2&Hdom2&Hdomub2&Hv2&Hsc2); eauto.
+        assert (Hni:=H3). eapply new_idents_sem with (bs'0:=bs') in H3 as (Hi2&Href2&Hdom2&Hdomub2&Hv2&Hsc2); eauto with fresh.
         2:eapply sem_clock_refines; eauto.
         2:take (wt_streams [_] [_]) and inv it; auto.
 
@@ -711,7 +712,7 @@ Module Type CSCORRECTNESS
                erewrite <-map_ext, <-map_map, <-map_fst_idck. eapply sem_block_restrict; eauto.
                2:eapply Forall_forall in Hwc'; eauto.
                2:intros (?&?&?); auto.
-               eapply Forall_map, Forall_map, Forall_forall; intros (?&?&?) _; simpl; auto.
+               eapply Forall_map, Forall_map, Forall_forall; intros (?&?&?) _; simpl; auto with clocks.
            }
           *{ rewrite Forall_map. eapply Forall_forall; intros ((?&?)&?&?) Hin4.
              assert (InMembers i0 (filter (fun '(_, (_, ck')) => ck' ==b ck) l0)) as Hin.
@@ -751,7 +752,7 @@ Module Type CSCORRECTNESS
           destruct (InMembers_dec x0 locs ident_eq_dec).
           - exfalso. apply Env.find_In, Hsubin, fst_InMembers, Hincl in Hfind.
             eapply H5; eauto.
-          - eapply Sem.sem_var_refines; [|eapply Hsub]; eauto using Env.union_refines4'. }
+          - eapply Sem.sem_var_refines; [|eapply Hsub]; eauto. eauto using Env.union_refines4', EqStrel. }
         assert (forall x vs,
                    Env.find x sub = None -> sem_var H' x vs ->
                    sem_var (Env.union (Env.restrict H' (map fst locs)) Hi') x vs) as Hnsub'.
@@ -761,7 +762,7 @@ Module Type CSCORRECTNESS
              eapply Env.union_find2. eapply Env.restrict_find; eauto.
              + now rewrite <-fst_InMembers.
              + apply Env.Props.P.F.not_find_in_iff; eauto.
-           - eapply Sem.sem_var_refines; [|eapply Hnsub]; eauto using Env.union_refines4'. }
+           - eapply Sem.sem_var_refines; [|eapply Hnsub]; eauto using Env.union_refines4', EqStrel. }
 
         eapply Slocal with (H'0:=Env.union (Env.restrict H' (map fst locs)) Hi'); eauto.
         + intros ?? Hv1 Hnim.
@@ -783,7 +784,7 @@ Module Type CSCORRECTNESS
              - apply Env.Props.P.F.not_find_in_iff; eauto using In_InMembers.
            }
           *{ eapply subclock_clock_sem. 1,2,4:eauto.
-             eapply sem_clock_refines; [|eauto]; eauto using Env.union_refines4'.
+             eapply sem_clock_refines; [|eauto]; eauto using Env.union_refines4', EqStrel.
            }
         + eapply switch_blocks_sem' with (envty:=envty++idty (idty locs)) (Hi:=H') in H0; eauto.
           * intros ? Hin. apply InMembers_app; auto.
@@ -801,7 +802,7 @@ Module Type CSCORRECTNESS
             eapply sc_vars_refines; [|eauto]; eauto using local_hist_dom_ub_refines.
           * rewrite map_app, 2 map_fst_idty, (Permutation_app_comm (map fst envty)), <-app_assoc.
             apply Env.union_dom_ub; auto using Env.restrict_dom_ub.
-          * eapply sem_clock_refines; [|eauto]; eauto using Env.union_refines4'.
+          * eapply sem_clock_refines; [|eauto]; eauto using Env.union_refines4', EqStrel.
           * now rewrite map_app, 2 map_fst_idty.
           * now rewrite Permutation_app_comm, idck_app.
     Qed.
@@ -866,15 +867,14 @@ Module Type CSCORRECTNESS
       Ordered_nodes G.
   Proof.
     intros G Hwt.
-    apply wl_global_Ordered_nodes; auto.
+    apply wl_global_Ordered_nodes; auto using wc_global_wl_global.
   Qed.
-  Hint Resolve wc_global_Ordered_nodes.
 
   Lemma switch_global_refines : forall G,
       wt_global G ->
       wc_global G ->
       global_sem_refines G (switch_global G).
-  Proof with eauto.
+  Proof with eauto using wc_global_Ordered_nodes.
     intros (enms&nds) (_&Hwt). revert Hwt.
     induction nds; intros * Hwt Hwc; simpl.
     - apply global_sem_ref_nil.
@@ -901,7 +901,6 @@ Module Type CSCORRECTNESS
   Qed.
 
 End CSCORRECTNESS.
-
 
 Module CSCorrectnessFun
        (Ids   : IDS)

@@ -164,8 +164,8 @@ Section EqualVelusMemory.
 End EqualVelusMemory.
 
 Global Existing Instance equal_memory_rel.
-Hint Immediate equal_memory_rel_Reflexive.
-Hint Immediate equal_memory_rel_Transitive.
+Global Hint Immediate equal_memory_rel_Reflexive : memory.
+Global Hint Immediate equal_memory_rel_Transitive : memory.
 
 Add Parametric Morphism V: (@values V)
     with signature equal_memory ==> Env.Equal

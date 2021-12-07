@@ -152,6 +152,8 @@ Module Type NLMEMSEMANTICS
 
   End NodeSemantics.
 
+  Global Hint Constructors msem_node msem_equation : nlsem.
+
   (** ** Induction principle for [msem_equation] and [msem_node] *)
 
   (** The automagically-generated induction principle is not strong
@@ -250,7 +252,6 @@ Module Type NLMEMSEMANTICS
       n.(n_name) <> f ->
       msem_node (Global enums G) f xs M ys.
   Proof.
-    Hint Constructors msem_node msem_equation.
     intros ?????? enums Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [ |????????????????????? Hsems|
@@ -259,7 +260,7 @@ Module Type NLMEMSEMANTICS
       with (P_equation := fun bk H M eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
                             msem_equation (Global enums G) bk H M eq);
-      eauto.
+      eauto with nlsem.
     - intro Hnin.
       econstructor; eauto.
       intro k; destruct (Hsems k) as (?&?&?& IH).
@@ -315,6 +316,8 @@ Module Type NLMEMSEMANTICS
       msem_node (Global enums (n :: G)) f xs M ys.
   Proof. intros; apply msem_cons2; auto. Qed.
 
+  Local Hint Resolve msem_node_cons msem_cons2 msem_node_cons2 : nlsem.
+
   Lemma msem_equations_cons:
     forall G bk H M eqs n enums,
       Ordered_nodes (Global enums (n :: G)) ->
@@ -328,17 +331,16 @@ Module Type NLMEMSEMANTICS
     split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
       apply IH in Heqs; auto; constructor; auto.
     - inversion_clear Hord as [|?? []].
-      destruct Heq as [|????????????????????? Hsems|];
-        eauto using msem_node_cons2.
+      destruct Heq as [|????????????????????? Hsems|]; eauto with nlsem.
       econstructor; eauto.
       intro k; destruct (Hsems k) as (?&?&?).
-      eexists; split; eauto using msem_node_cons2.
-    - inversion Heq as [|????????????????????? Hsems|]; subst; eauto;
+      eexists; split; eauto with nlsem.
+    - inversion Heq as [|????????????????????? Hsems|]; subst; eauto with nlsem;
         assert (n.(n_name) <> f)
         by (intro HH; apply Hnini; rewrite HH; constructor).
       econstructor; eauto.
       intro k; destruct (Hsems k) as (?&?&?).
-      eexists; split; eauto using msem_node_cons.
+      eexists; split; eauto with nlsem.
   Qed.
 
   (** *** VelusMemory management *)
@@ -391,7 +393,7 @@ Module Type NLMEMSEMANTICS
     inversion 1; econstructor; eauto.
   Qed.
 
-  Hint Resolve mfbyreset_add_val_n mfbyreset_add_inst_n.
+  Local Hint Resolve mfbyreset_add_val_n mfbyreset_add_inst_n : nlsem.
 
   Lemma msem_equation_madd_val:
     forall G bk H M x ms eqs,
@@ -399,7 +401,6 @@ Module Type NLMEMSEMANTICS
       Forall (msem_equation G bk H M) eqs ->
       Forall (msem_equation G bk H (add_val_n x ms M)) eqs.
   Proof.
-    Hint Constructors msem_equation.
     intros * Hnd Hsem.
     induction eqs as [|eq eqs IH]; [now constructor|].
     apply not_Is_defined_in_cons in Hnd.
@@ -407,9 +408,8 @@ Module Type NLMEMSEMANTICS
     apply Forall_cons2 in Hsem.
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-    destruct Hsem; eauto.
-    apply not_Is_defined_in_eq_EqFby in Hnd.
-    eapply SEqFby; eauto.
+    destruct Hsem; eauto with nlsem.
+    apply not_Is_defined_in_eq_EqFby in Hnd; eauto with nlsem.
   Qed.
 
   Lemma msem_equation_madd_inst:
@@ -418,7 +418,6 @@ Module Type NLMEMSEMANTICS
       Forall (msem_equation G bk H M) eqs ->
       Forall (msem_equation G bk H (add_inst_n x Mx M)) eqs.
   Proof.
-    Hint Constructors msem_equation.
     intros * Hnd Hsem.
     induction eqs as [|eq eqs IH]; [now constructor|].
     apply not_Is_defined_in_cons in Hnd.
@@ -427,13 +426,13 @@ Module Type NLMEMSEMANTICS
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem as [|??? x' ?????????? Hsome|];
-      eauto;
+      eauto with nlsem;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
             unfold add_inst_n in *; intro;
             rewrite find_inst_gso; auto; intro; subst x; destruct xs;
             inv Hsome; apply Hnd; now constructor);
-      eauto.
+      eauto with nlsem.
   Qed.
 
   (** ** Fundamental theorem *)
@@ -544,8 +543,7 @@ dataflow memory for which the non-standard semantics holds true.
       inversion Heq as [|
                         ??????????? Hls Hxs ? Hy Hr Hsem|
                         ??????????? Hle Hvar Hr Hbools Hfby]; subst.
-      - exists M.
-        econstructor; eauto.
+      - exists M; eauto with nlsem.
 
       - pose proof Hsem as Hsem'.
         apply sem_msem_reset in Hsem as (Mx & Hmsem); auto.

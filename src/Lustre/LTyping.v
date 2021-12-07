@@ -212,8 +212,8 @@ Module Type LTYPING
     In (bool_id, 2) G.(enums) /\
     wt_program wt_node G.
 
-  Hint Constructors wt_clock wt_exp wt_block : ltyping.
-  Hint Unfold wt_equation : ltyping.
+  Global Hint Constructors wt_clock wt_exp wt_block : ltyping.
+  Global Hint Unfold wt_equation : ltyping.
 
   Section wt_exp_ind2.
     Context (PSyn : block -> Prop).
@@ -522,7 +522,7 @@ Module Type LTYPING
       - constructor.
       - constructor; auto.
     Qed.
-    Local Hint Resolve wt_clock_incl.
+    Local Hint Resolve wt_clock_incl : ltyping.
 
     Lemma wt_exp_incl {PSyn prefs} : forall (G: @global PSyn prefs) vars vars' e,
         incl vars vars' ->
@@ -531,11 +531,11 @@ Module Type LTYPING
     Proof.
       intros * Hincl Hwt.
       induction Hwt using wt_exp_ind2;
-        econstructor; eauto.
-      1-2:eapply Forall_impl; [| eauto]; intros; eauto.
+        econstructor; eauto with ltyping.
+      1-2:eapply Forall_impl; [| eauto]; intros; eauto with ltyping.
       (* app *)
       eapply Forall_impl; [| eauto].
-      intros; simpl in *; eauto.
+      intros; simpl in *; eauto with ltyping.
     Qed.
 
     Lemma wt_equation_incl {PSyn prefs} : forall (G: @global PSyn prefs) vars vars' eq,
@@ -575,7 +575,7 @@ Module Type LTYPING
 
   End incl.
 
-  Local Hint Resolve wt_clock_incl incl_appl incl_refl.
+  (* Local Hint Resolve wt_clock_incl incl_appl incl_refl : core. *)
   Lemma wt_exp_clockof {PSyn prefs}:
     forall (G: @global PSyn prefs) env e,
       wt_exp G env e ->
@@ -878,7 +878,7 @@ Module Type LTYPING
       - apply Env.elements_complete in HH as ->.
         apply equiv_decb_refl.
     Qed.
-    Local Hint Resolve check_var_correct.
+    (* Local Hint Resolve check_var_correct : ltyping. *)
 
     Lemma check_enum_correct':
       forall tx n,
@@ -892,7 +892,7 @@ Module Type LTYPING
       take (Env.find _ _ = Some _) and apply Env.elements_correct in it; eauto.
       apply Nat.ltb_lt in H2. auto.
     Qed.
-    Local Hint Resolve check_enum_correct'.
+    (* Local Hint Resolve check_enum_correct' : ltyping. *)
 
     Lemma check_enum_correct:
       forall ty,
@@ -906,7 +906,7 @@ Module Type LTYPING
       take (Env.find _ _ = Some _) and apply Env.elements_correct in it; eauto.
       apply Nat.ltb_lt in H2. auto.
     Qed.
-    Local Hint Resolve check_enum_correct.
+    (* Local Hint Resolve check_enum_correct : ltyping. *)
 
     Lemma check_paired_types2_correct:
       forall tys1 anns,
@@ -1012,13 +1012,13 @@ Module Type LTYPING
     Qed.
 
     Import Permutation.
-    Local Hint Constructors wt_exp wt_block.
+    Local Hint Constructors wt_exp wt_block : ltyping.
     Lemma check_exp_correct:
       forall e tys,
         check_exp e = Some tys ->
         wt_exp G (Env.elements venv) e
         /\ typeof e = tys.
-    Proof with eauto.
+    Proof with eauto with ltyping.
       induction e using exp_ind2; simpl; intros tys CE. 10:destruct d; simpl in *.
       1-12:repeat progress
                match goal with
@@ -1233,7 +1233,7 @@ Module Type LTYPING
         forallb (check_enum eenv) (map snd (idty (idty locs)))
       end.
 
-    Hint Constructors wt_block.
+    Hint Constructors wt_block : ltyping.
     Import Permutation.
 
     Opaque check_enum.
@@ -1246,7 +1246,7 @@ Module Type LTYPING
     Proof.
       induction blk using block_ind2; intros * ND1 ND2 CD; inv ND2; simpl in *.
       - (* equation *)
-        eapply check_equation_correct in CD; eauto.
+        eapply check_equation_correct in CD; eauto with ltyping.
       - (* reset *)
         eapply Bool.andb_true_iff in CD as (CDs&CE).
         eapply forallb_Forall in CDs.
@@ -1285,6 +1285,7 @@ Module Type LTYPING
           induction H as [|?? (?&?)]; inv H2; simpl in *; constructor; auto.
           eapply H0 in H. eapply wt_block_incl; [|eauto].
           1-3:rewrite Env.elements_union; try rewrite Env.elements_from_list; auto.
+          * auto using incl_appl, incl_refl.
           * apply NoDupMembers_app; auto.
             intros ? Hinm1 Hinm2. rewrite 2 InMembers_idty in Hinm2.
             apply H5 in Hinm2; eauto.
@@ -1387,13 +1388,13 @@ Module Type LTYPING
       intros [|] Henum; simpl in *; auto.
       congruence.
     Qed.
-    Hint Resolve iface_eq_wt_enum.
+    Hint Resolve iface_eq_wt_enum : ltyping.
 
-    Hint Constructors wt_exp.
+    Hint Constructors wt_exp : ltyping.
     Fact iface_eq_wt_exp : forall vars e,
         wt_exp G1 vars e ->
         wt_exp G2 vars e.
-    Proof with eauto.
+    Proof with eauto with ltyping.
       induction e using exp_ind2; intros Hwt; inv Hwt...
       1-10:econstructor; try (destruct Heq as (Henums&_); erewrite <-Henums)...
       1-10:rewrite Forall_forall in *...
@@ -1447,7 +1448,7 @@ Module Type LTYPING
           do 2 (eapply Forall_forall in H; eauto).
           do 2 (eapply Forall_forall in H8; eauto).
       - constructor.
-        1,3:rewrite Forall_forall in *; eauto.
+        1,3:rewrite Forall_forall in *; eauto with ltyping.
         eapply Forall_impl; [|eauto]; intros (?&(?&?)&?) Hwt.
         apply iface_eq_wt_clock; auto.
     Qed.
@@ -1456,13 +1457,13 @@ Module Type LTYPING
 
   (** *** wt implies wl *)
 
-  Hint Constructors wl_exp wl_block.
+  Local Hint Constructors wl_exp wl_block : ltyping.
 
   Fact wt_exp_wl_exp {PSyn prefs} : forall (G: @global PSyn prefs) vars e,
       wt_exp G vars e ->
       wl_exp G e.
   Proof with eauto.
-    induction e using exp_ind2; intro Hwt; inv Hwt; simpl in *; auto.
+    induction e using exp_ind2; intro Hwt; inv Hwt; simpl in *; auto with ltyping.
     - (* unop *)
       constructor...
       rewrite <- length_typeof_numstreams. rewrite H3. reflexivity.
@@ -1531,36 +1532,36 @@ Module Type LTYPING
       + apply Forall2_length in H8. rewrite typesof_annots, map_length in H8...
       + apply Forall2_length in H9...
   Qed.
-  Hint Resolve wt_exp_wl_exp.
+  Global Hint Resolve wt_exp_wl_exp : ltyping.
 
   Corollary Forall_wt_exp_wl_exp {PSyn prefs} : forall (G: @global PSyn prefs) vars es,
       Forall (wt_exp G vars) es ->
       Forall (wl_exp G) es.
-  Proof. intros. rewrite Forall_forall in *; eauto. Qed.
-  Hint Resolve Forall_wt_exp_wl_exp.
+  Proof. intros. rewrite Forall_forall in *; eauto with ltyping. Qed.
+  Global Hint Resolve Forall_wt_exp_wl_exp : ltyping.
 
   Fact wt_equation_wl_equation {PSyn prefs} : forall (G: @global PSyn prefs) vars equ,
       wt_equation G vars equ ->
       wl_equation G equ.
-  Proof with eauto.
+  Proof with eauto with ltyping.
     intros G vars [xs es] Hwt.
     inv Hwt. constructor.
     + rewrite Forall_forall in *...
     + apply Forall2_length in H0.
       rewrite typesof_annots, map_length in H0...
   Qed.
-  Hint Resolve wt_equation_wl_equation.
+  Global Hint Resolve wt_equation_wl_equation : ltyping.
 
   Fact wt_block_wl_block {PSyn prefs} : forall (G: @global PSyn prefs) d vars,
       wt_block G vars d ->
       wl_block G d.
   Proof.
-    induction d using block_ind2; intros * Wt; inv Wt; eauto.
-    - econstructor; eauto.
+    induction d using block_ind2; intros * Wt; inv Wt; eauto with ltyping.
+    - econstructor; eauto with ltyping.
       + eapply Forall_Forall in H; eauto. clear H2.
-        eapply Forall_impl; [|eauto]. intros ? (?&?); eauto.
+        eapply Forall_impl; [|eauto]. intros ? (?&?); eauto with ltyping.
       + now rewrite <-length_typeof_numstreams, H5.
-    - econstructor; eauto.
+    - econstructor; eauto with ltyping.
       + rewrite <-length_typeof_numstreams, H3; auto.
       + do 2 (eapply Forall_forall; try intros (?&?); intros).
         do 2 (eapply Forall_forall in H; eauto).
@@ -1568,27 +1569,27 @@ Module Type LTYPING
     - econstructor; eauto.
       rewrite Forall_forall in *; eauto.
   Qed.
-  Hint Resolve wt_block_wl_block.
+  Global Hint Resolve wt_block_wl_block : ltyping.
 
   Fact wt_node_wl_node {PSyn prefs} : forall (G: @global PSyn prefs) n,
       wt_node G n ->
       wl_node G n.
-  Proof with eauto.
+  Proof with eauto with ltyping.
     intros G n [_ [_ [_ Hwt]]].
     unfold wl_node...
   Qed.
-  Hint Resolve wt_node_wl_node.
+  Global Hint Resolve wt_node_wl_node : ltyping.
 
   Fact wt_global_wl_global {PSyn prefs} : forall (G: @global PSyn prefs),
       wt_global G ->
       wl_global G.
-  Proof with eauto.
+  Proof with eauto with ltyping.
     intros G (_&Hwt).
     unfold wl_global, wt_program in *.
     induction Hwt; constructor...
     destruct H...
   Qed.
-  Hint Resolve wt_global_wl_global.
+  Global Hint Resolve wt_global_wl_global : ltyping.
 
   (** *** If an expression is well-typed, all the enums appearing inside are well-typed *)
   Section wt_enum.
@@ -1671,13 +1672,13 @@ Module Type LTYPING
 
   (** ** wc implies wx *)
 
-  Hint Constructors wx_exp wl_block.
+  Global Hint Constructors wx_exp wl_block : ltyping.
 
   Fact wt_exp_wx_exp {PSyn prefs} (G: @global PSyn prefs) : forall vars e,
       wt_exp G vars e ->
       wx_exp (map fst vars) e.
-  Proof with eauto.
-    induction e using exp_ind2; intro Hwt; inv Hwt; auto.
+  Proof with eauto with ltyping.
+    induction e using exp_ind2; intro Hwt; inv Hwt...
     - (* var *)
       constructor...
       eapply in_map_iff. now do 2 esplit; eauto.
@@ -1712,18 +1713,18 @@ Module Type LTYPING
       + rewrite Forall_forall in *...
       + rewrite Forall_forall in *...
   Qed.
-  Hint Resolve wt_exp_wx_exp.
+  Global Hint Resolve wt_exp_wx_exp : ltyping.
 
   Corollary Forall_wt_exp_wx_exp {PSyn prefs} (G: @global PSyn prefs) : forall vars es,
       Forall (wt_exp G vars) es ->
       Forall (wx_exp (map fst vars)) es.
-  Proof. intros. rewrite Forall_forall in *; eauto. Qed.
-  Hint Resolve Forall_wt_exp_wx_exp.
+  Proof. intros. rewrite Forall_forall in *; eauto with ltyping. Qed.
+  Global Hint Resolve Forall_wt_exp_wx_exp : ltyping.
 
   Fact wt_equation_wx_equation {PSyn prefs} (G: @global PSyn prefs) : forall vars equ,
       wt_equation G vars equ ->
       wx_equation (map fst vars) equ.
-  Proof with eauto.
+  Proof with eauto with ltyping.
     intros vars [xs es] (Hwt1&Hwt2).
     constructor.
     + rewrite Forall_forall in *...
@@ -1731,42 +1732,42 @@ Module Type LTYPING
       eapply Forall2_ignore2, Forall_forall in Hwt2 as (?&_&Hin'); eauto.
       eapply in_map_iff. now do 2 esplit; eauto.
   Qed.
-  Hint Resolve wt_equation_wx_equation.
+  Global Hint Resolve wt_equation_wx_equation : ltyping.
 
   Fact wt_block_wx_block {PSyn prefs} (G: @global PSyn prefs) : forall blk vars,
       wt_block G vars blk ->
       wx_block (map fst vars) blk.
   Proof.
-    induction blk using block_ind2; intros * Wt; inv Wt; eauto.
-    1-4:econstructor; eauto.
+    induction blk using block_ind2; intros * Wt; inv Wt; eauto with ltyping.
+    1-4:econstructor; eauto with ltyping.
     1,3:rewrite Forall_forall in *; intros; eauto.
     - rewrite <-map_fst_idty, <-map_fst_idty, <-map_app; eauto.
     - do 2 (eapply Forall_forall; try intros (?&?); intros).
       do 2 (eapply Forall_forall in H; eauto).
       do 2 (eapply Forall_forall in H8; eauto).
   Qed.
-  Hint Resolve wt_block_wx_block.
+  Global Hint Resolve wt_block_wx_block : ltyping.
 
   Fact wt_node_wx_node {PSyn prefs} : forall (G: @global PSyn prefs) n,
       wt_node G n ->
       wx_node n.
-  Proof with eauto.
+  Proof with eauto with ltyping.
     intros G n (_&_&_&Hwt).
     unfold wx_node.
     rewrite <-map_fst_idty, <-map_fst_idty...
   Qed.
-  Hint Resolve wt_node_wx_node.
+  Global Hint Resolve wt_node_wx_node : ltyping.
 
   Fact wt_global_wx_global {PSyn prefs} : forall (G: @global PSyn prefs),
       wt_global G ->
       wx_global G.
-  Proof with eauto.
+  Proof with eauto with ltyping.
     intros G (?&Hwt).
     unfold wt_global, wx_global, wt_program, units in *; simpl in *.
     induction Hwt...
     destruct H0...
   Qed.
-  Hint Resolve wt_global_wx_global.
+  Global Hint Resolve wt_global_wx_global : ltyping.
 
   (** Other useful stuff *)
 

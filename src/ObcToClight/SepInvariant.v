@@ -156,10 +156,10 @@ Section Staterep.
   Proof.
     induction p using program_ind.
     setoid_rewrite staterep_def; intros.
-    destruct (find_class clsnm p) as [[]|] eqn: Find; simpl; auto.
+    destruct (find_class clsnm p) as [[]|] eqn: Find; simpl; auto with sep.
     apply decidable_footprint_sepconj;
       apply decidable_footprint_sepall;
-      intros (x,?); simpl; cases; eauto.
+      intros (x,?); simpl; cases; eauto with sep.
   Qed.
 
   Lemma footprint_perm_staterep:
@@ -168,13 +168,11 @@ Section Staterep.
   Proof.
     induction p using program_ind.
     setoid_rewrite staterep_def; intros.
-    destruct (find_class clsnm p) as [[]|] eqn: Find; simpl; auto.
+    destruct (find_class clsnm p) as [[]|] eqn: Find; simpl; auto with sep.
     apply footprint_perm_sepconj;
       apply footprint_perm_sepall;
-      intros (x,?); simpl; cases; eauto.
+      intros (x,?); simpl; cases; eauto with sep.
   Qed.
-
-  Hint Resolve decidable_footprint_staterep footprint_perm_staterep.
 
 End Staterep.
 
@@ -327,7 +325,7 @@ Section StateRepProperties.
       inv Hnodup; auto.
   Qed.
 
-  Hint Resolve Z.divide_trans.
+  Hint Resolve Z.divide_trans : zarith.
 
   Lemma range_staterep:
     forall b clsnm,
@@ -379,9 +377,9 @@ Section StateRepProperties.
       rewrite sizeof_translate_type_chunk; eauto.
       apply range_contains'; auto with mem. destruct p0.
       eapply field_offset_aligned' in Hfo; eauto.
-      apply Z.divide_add_r; eauto.
+      apply Z.divide_add_r; eauto using Z.divide_trans with clight.
       rewrite Forall_map in Hcoal1. eapply Forall_forall in Hcoal1; eauto; simpl in *.
-      etransitivity; eauto.
+      etransitivity; eauto with zarith clight.
 
     - (* Divide up the memory sub-block for cls.(c_objs). *)
       pose proof (field_translate_obj_type _ _ _ _ Hfind) as Htype.
@@ -414,10 +412,10 @@ Section StateRepProperties.
       eapply IH with (lo:=lo + fst p0) in make_members_co'; eauto.
       rewrite Hg' in make_members_co'; eauto.
       rewrite Forall_map in Hcoal2. eapply Forall_forall in Hcoal2; eauto; simpl in *.
-      apply Z.divide_add_r; eauto.
+      apply Z.divide_add_r; eauto using Z.divide_trans.
       destruct p0. eapply field_offset_aligned' in Hfo; eauto. 2:rewrite Hmem in Htype; eauto.
       simpl in *.
-      rewrite Hg', align_noattr in *; auto.
+      rewrite Hg', align_noattr in *; auto with zarith.
   Qed.
 
   Opaque sepconj.
@@ -444,7 +442,7 @@ Section StateRepProperties.
     unfold match_value in Hmatch.
     rewrite Hv in Hmatch; clear Hv.
     rewrite Hmatch in Hloadv; clear Hmatch.
-    apply Clight.deref_loc_value with (2:=Hloadv); auto.
+    apply Clight.deref_loc_value with (2:=Hloadv); auto with clight.
   Qed.
 
   Lemma staterep_field_offset:
@@ -711,7 +709,7 @@ Section Fieldsrep.
 
 End Fieldsrep.
 
-Hint Resolve footprint_perm_fieldsrep footprint_decidable_fieldsrep.
+Global Hint Resolve footprint_perm_fieldsrep footprint_decidable_fieldsrep : sep.
 
 Section SubRep.
 
@@ -795,8 +793,8 @@ Section SubRep.
     forall x, decidable_footprint (subrep_inst x).
   Proof.
     intros (x, (b, t)).
-    simpl; destruct t; auto.
-    unfold fieldsrep_of; now destruct ge ! i.
+    simpl; destruct t; auto with sep.
+    unfold fieldsrep_of; destruct ge ! i; auto with sep.
   Qed.
 
   Lemma decidable_subrep:
@@ -804,12 +802,12 @@ Section SubRep.
   Proof.
     intros.
     unfold subrep.
-    induction (make_out_vars (instance_methods f)) as [|(x, t)]; simpl; auto.
+    induction (make_out_vars (instance_methods f)) as [|(x, t)]; simpl; auto with sep.
     apply decidable_footprint_sepconj; auto.
-    destruct (e ! x) as [(b, t')|]; auto.
-    destruct t'; auto.
-    destruct (type_eq t (Tstruct i a)); auto.
-    unfold fieldsrep_of; now destruct (ge ! i).
+    destruct (e ! x) as [(b, t')|]; auto with sep.
+    destruct t'; auto with sep.
+    destruct (type_eq t (Tstruct i a)); auto with sep.
+    unfold fieldsrep_of; destruct (ge ! i); auto with sep.
   Qed.
 
   Remark footprint_perm_subrep_inst:
@@ -817,7 +815,8 @@ Section SubRep.
       footprint_perm (subrep_inst x) b lo hi.
   Proof.
     intros (x, (b, t)) b' lo hi.
-    simpl; destruct t; auto; unfold fieldsrep_of; now destruct ge ! i.
+    simpl; destruct t; auto with sep.
+    unfold fieldsrep_of; destruct ge ! i; auto with sep.
   Qed.
 
   Remark disjoint_footprint_range_inst:
@@ -839,9 +838,8 @@ Section SubRep.
         intro; apply Notin; now right.
   Qed.
 
-  Hint Resolve decidable_footprint_subrep_inst decidable_subrep footprint_perm_subrep_inst.
+  Hint Resolve decidable_footprint_subrep_inst decidable_subrep footprint_perm_subrep_inst : sep.
 
-  (* TODO what context *)
   Lemma range_wand_equiv:
     forall e,
       composite_env_consistent ge ->
@@ -854,9 +852,9 @@ Section SubRep.
     unfold subrep_range.
     intros * Consistent Forall Nodup.
     split.
-    2: now rewrite sep_unwand; auto.
+    2: now rewrite sep_unwand; auto with sep.
     induction (PTree.elements e) as [|(x, (b, t))]; simpl in *.
-    - rewrite <-hide_in_sepwand; auto.
+    - rewrite <-hide_in_sepwand; auto with sep.
       now rewrite <-sepemp_right.
     - inversion_clear Forall as [|? ? Hidco Forall']; subst;
         rename Forall' into Forall.
@@ -871,7 +869,7 @@ Section SubRep.
         apply sep_imp'; auto.
         rewrite sep_comm, sep_assoc, sep_swap.
         apply sep_imp'; auto.
-        rewrite <-range_imp_with_wand; auto.
+        rewrite <-range_imp_with_wand; auto with sep.
         simpl.
         rewrite Hco.
         eapply fieldsrep_empty; eauto.
@@ -1117,7 +1115,7 @@ Section MatchStates.
       pose proof (m_good_out f) as Good.
       assert (In (prefix_temp f' x, t) (m_out f)) as Hin.
       { rewrite Hout. left; auto. }
-      apply Good, AtomOrGensym_inv in Hin; auto.
+      apply Good, AtomOrGensym_inv in Hin; auto with ident.
     - cases.
       rewrite PTree.gso; eauto.
       eapply prefix_injective'. left. prove_str_to_pos_neq.
@@ -1182,7 +1180,7 @@ Section MatchStates.
   Proof.
     unfold bounded_struct_of_class, struct_in_bounds; tauto.
   Qed.
-  Hint Resolve bounded_struct_of_class_ge0.
+  Hint Resolve bounded_struct_of_class_ge0 : clight.
 
   Definition selfrep (p: program) (c: class) (me: menv) (le: Clight.temp_env) (sb: block) (sofs: ptrofs) : massert :=
     pure (le ! (prefix obc2c self) = Some (Vptr sb sofs))
@@ -1312,7 +1310,7 @@ Section MatchStates.
       rewrite translate_type_access_by_value in Hrep.
       eapply Separation.storev_rule' with (v:=value_to_cvalue v) in Hrep
         as (m' & ? & Hrep); eauto with mem.
-      exists m', b, co, d; intuition; eauto using assign_loc.
+      exists m', b, co, d; intuition; eauto using assign_loc with clight.
       rewrite <-OutputMatch; eauto.
       rewrite outputrep_notnil; auto.
       erewrite find_class_name, find_method_name; eauto.
@@ -1363,7 +1361,7 @@ Section MatchStates.
         repeat apply sep_imp'; auto.
         + apply pure_imp.
           rewrite PTree.gso; auto.
-          intro; subst; eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto.
+          intro; subst; eapply In_InMembers, m_AtomOrGensym, AtomOrGensym_inv in Hin; eauto with ident.
         + rewrite 2 sep_assoc, 2 sep_pure in Hmem.
           destruct Hmem as (?&?&?).
           erewrite <-OutputMatch; eauto; try (simpl; lia).
@@ -1396,8 +1394,8 @@ Section MatchStates.
         try (destruct Hmem; contradiction).
       eapply Separation.storev_rule' with (v := value_to_cvalue v) in Hmem as (m' & ? & Hmem);
         eauto with mem.
-      exists m', d; intuition; eauto using assign_loc.
-      apply match_states_conj; intuition; eauto.
+      exists m', d; intuition; eauto using assign_loc with clight.
+      apply match_states_conj; intuition; eauto with obctyping.
       erewrite find_class_name; eauto.
       rewrite staterep_def, Findcl; simpl.
       unfold staterep_mems.
@@ -1711,7 +1709,7 @@ Section FunctionEntry.
       by (eapply instance_methods_caract; eauto).
     assert (Datatypes.length (map translate_param (m_in f)) = Datatypes.length vs)
       by (symmetry; rewrite map_length; eapply Forall2_length; eauto).
-    assert (wt_state prog me vempty c (meth_vars f)) by (split; eauto).
+    assert (wt_state prog me vempty c (meth_vars f)) by (split; eauto with typing obctyping).
     assert (NoDup (map fst (m_in f))) by (apply fst_NoDupMembers, m_nodupin).
     assert (Forall2 (fun y xt => In (y, snd xt) (meth_vars f)) (map fst (m_in f)) (m_in f))
       by (apply Forall2_map_1, Forall2_same, Forall_forall; intros (x, t) Hin; simpl; apply in_app; auto).
@@ -1723,7 +1721,7 @@ Section FunctionEntry.
 
     (* no output *)
     - (* get the allocated environment and memory *)
-      edestruct alloc_result as (e_f & m_f &?&?&?); eauto.
+      edestruct alloc_result as (e_f & m_f &?&?&?); eauto with clight.
 
       (* get the temporaries *)
       edestruct
@@ -1731,15 +1729,15 @@ Section FunctionEntry.
                                            (prefix obc2c self) (type_of_inst_p (c_name c))
                                            (make_out_temps (instance_methods_temp (rev_prog prog) f)
                                                            ++ map translate_param (m_vars f))
-                                           vs (Vptr sb sofs)) as (le_f & Bind & Vars); eauto.
+                                           vs (Vptr sb sofs)) as (le_f & Bind & Vars); eauto with clight.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
-        by (eapply bind_parameter_temps_implies in Bind; eauto).
+        by (eapply bind_parameter_temps_implies in Bind; eauto with clight).
       setoid_rewrite <-P_f in Bind.
 
       exists e_f, le_f, m_f; split.
       + constructor; auto; try congruence.
         rewrite T_f; auto.
-      + apply match_states_conj; intuition; eauto using m_nodupvars.
+      + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_nil, <-sepemp_left, sep_swap, sep_swap23,
         sep_swap34, sep_swap23, sep_swap; eauto.
         apply sep_pure; split; auto.
@@ -1752,10 +1750,10 @@ Section FunctionEntry.
       { intro contra; subst.
         pose proof (m_good_out f) as Good. rewrite Hout in Good.
         assert (In (prefix obc2c self, ta) [(prefix obc2c self, ta)]) as Hin by (left; auto).
-        apply Good, AtomOrGensym_inv in Hin; auto. }
+        apply Good, AtomOrGensym_inv in Hin; auto with ident. }
 
       (* get the allocated environment and memory *)
-      edestruct alloc_result as (e_f & m_f &?&?&?); eauto.
+      edestruct alloc_result as (e_f & m_f &?&?&?); eauto with clight.
 
       (* get the temporaries (+ the local return temporary) *)
       edestruct
@@ -1764,15 +1762,15 @@ Section FunctionEntry.
                                            ((a, translate_type ta) :: make_out_temps (instance_methods_temp (rev_prog prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars);
-        eauto; try eapply NotInMembers_cons; eauto.
+        eauto with clight; try eapply NotInMembers_cons; eauto with clight.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
-        by (eapply bind_parameter_temps_implies in Bind; eauto).
+        by (eapply bind_parameter_temps_implies in Bind; eauto with clight).
       setoid_rewrite <-P_f in Bind.
 
       exists e_f, le_f, m_f; split.
       + constructor; auto; try congruence.
         rewrite T_f; auto.
-      + apply match_states_conj; intuition; eauto using m_nodupvars.
+      + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_singleton, sep_swap, sep_swap23,
         sep_swap34, sep_swap23, sep_swap; eauto.
         repeat rewrite map_app, map_cons, map_app in *.
@@ -1789,7 +1787,7 @@ Section FunctionEntry.
           by (apply prefix_injective'; right; prove_str_to_pos_neq).
 
       (* get the allocated environment and memory *)
-      edestruct alloc_result as (e_f & m_f &?&?&?); eauto.
+      edestruct alloc_result as (e_f & m_f &?&?&?); eauto with clight.
 
       (* get the temporaries *)
       edestruct
@@ -1797,14 +1795,14 @@ Section FunctionEntry.
                                      (prefix obc2c out) (type_of_inst_p (prefix_fun (m_name f) (c_name c)))
                                      (make_out_temps (instance_methods_temp (rev_prog prog) f)
                                                      ++ map translate_param f.(m_vars))
-                                     vs (Vptr sb sofs) (var_ptr instb)) as (le_f & Bind & Vars); eauto.
+                                     vs (Vptr sb sofs) (var_ptr instb)) as (le_f & Bind & Vars); eauto with clight.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs) /\ le_f ! (prefix obc2c out) = Some (var_ptr instb)) as (?&?)
-          by (eapply bind_parameter_temps_implies_two in Bind; eauto).
+          by (eapply bind_parameter_temps_implies_two in Bind; eauto with clight).
       setoid_rewrite <-P_f in Bind; setoid_rewrite <-T_f in Bind.
 
       exists e_f, le_f, m_f; split.
       + constructor; auto; congruence.
-      + apply match_states_conj; intuition; eauto using m_nodupvars.
+      + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_notnil; eauto.
         erewrite find_class_name, find_method_name; eauto.
         exists instb, instco; intuition; auto.
@@ -1883,7 +1881,7 @@ Section MainProgram.
       + eapply Consistent; eauto.
       + rewrite Hms; eauto.
         intros * Hin; apply in_map_iff in Hin as ((?&?)& E' & Hin); inv E'.
-        apply in_map_iff in Hin as ((?&?)& E' &?); inversion E'; eauto.
+        apply in_map_iff in Hin as ((?&?)& E' &?); inversion E'; eauto with clight.
   Qed.
 
   Lemma init_mem:
@@ -1938,4 +1936,4 @@ Section MainProgram.
 
 End MainProgram.
 
-Hint Resolve match_states_wt_state bounded_struct_of_class_ge0.
+Global Hint Resolve match_states_wt_state bounded_struct_of_class_ge0 : clight.

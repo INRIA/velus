@@ -75,9 +75,9 @@ Module Type CEISFREE
       Is_free_in_clock x ck ->
       Is_free_in_caexp x ck ce.
 
-  Hint Constructors Is_free_in_clock Is_free_in_exp
+  Global Hint Constructors Is_free_in_clock Is_free_in_exp
        Is_free_in_aexp Is_free_in_aexps Is_free_in_cexp
-       Is_free_in_caexp.
+       Is_free_in_caexp : nlfree stcfree.
 
   (** * Decision procedure *)
 
@@ -256,13 +256,13 @@ Module Type CEISFREE
       PS.In x (fold_left (fun fvs e => free_in_exp e fvs) l m) <->
       Exists (Is_free_in_exp x) l \/ PS.In x m.
   Proof.
-    Local Hint Constructors Exists.
+    Local Hint Constructors Exists : datatypes.
     intros x l. induction l; intro m; simpl.
     - intuition.
       match goal with H:Exists _ nil |- _ => inversion H end.
     - rewrite IHl. rewrite free_in_exp_spec.
       split; intros [H | H]; auto.
-      + destruct H as [H | H]; auto.
+      + destruct H as [H | H]; auto with datatypes.
       + inversion_clear H; auto.
   Qed.
 
@@ -273,7 +273,7 @@ Module Type CEISFREE
     intros x c l m. unfold free_in_aexps.
     rewrite free_in_fold_left_exp_spec.
     rewrite free_in_clock_spec.
-    split; intros [H | H]; auto; inversion H; auto.
+    split; intros [H | H]; auto; inversion H; auto with nlfree.
   Qed.
 
   Lemma free_in_aexps_spec':
@@ -381,7 +381,7 @@ Module Type CEISFREE
   Lemma free_in_cexp_spec:
     forall e x m, PS.In x (free_in_cexp e m)
                   <-> Is_free_in_cexp x e \/ PS.In x m.
-  Proof.
+  Proof with auto with nlfree.
     induction e using cexp_ind2';
       intros; simpl; split; intro H0;
         destruct_Is_free;
@@ -390,7 +390,7 @@ Module Type CEISFREE
           try rewrite free_in_exp_spec;
           intuition.
     - induction l as [|e]; destruct x; simpl in *.
-      + apply PS.add_spec in H0 as []; subst; auto.
+      + apply PS.add_spec in H0 as []; subst...
       + apply In_fold_left_free_in_cexp in H0 as [|Hin].
         * inv H.
           destruct IHl as [Free|]; auto.
@@ -402,7 +402,7 @@ Module Type CEISFREE
              apply He in Hin.
              rewrite PSF.empty_iff in Hin; destruct Hin; try contradiction.
              left; constructor; left; auto.
-          -- apply PS.add_spec in Hin as []; subst; auto.
+          -- apply PS.add_spec in Hin as []; subst...
     - induction l as [|e]; simpl in *.
       + apply PS.add_spec; auto.
       + apply In_fold_left_free_in_cexp.
@@ -424,7 +424,7 @@ Module Type CEISFREE
         * destruct e'; simpl in *; try (solve [inv Hin]).
           left. repeat esplit; eauto. apply H2 in Hin as [|Hin]; auto.
           apply not_In_empty in Hin; inv Hin.
-      + apply free_in_exp_spec in H0 as []; auto.
+      + apply free_in_exp_spec in H0 as []...
     - rewrite In_free_in_cexp, In_fold_left_or_default_free_in_cexp. do 2 right.
       apply free_in_exp_spec; auto.
     - rewrite In_free_in_cexp, In_fold_left_or_default_free_in_cexp. right; left.

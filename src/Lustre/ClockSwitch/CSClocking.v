@@ -101,20 +101,18 @@ Module Type CSCLOCKING
       - apply subclock_clock_instck; auto.
     Qed.
 
-    Hint Constructors wc_exp.
-
     Lemma subclock_exp_wc : forall e,
         wc_exp G vars e ->
         wc_exp G vars' (subclock_exp bck sub e).
-    Proof.
+    Proof with eauto with lclocking.
       induction e using exp_ind2; intros * Hwc; inv Hwc; simpl in *.
-      3-11:econstructor; simpl in *; eauto using rename_var_wc.
+      3-11:econstructor; simpl in *; eauto using rename_var_wc with lclocking.
       1-33:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
       1-26:try rewrite subclock_exp_clockof.
       1-26:try rewrite subclock_exp_clocksof.
       1-26:try (rewrite map_subclock_ann_clock; rewrite Forall2_eq in *; congruence).
-      - apply add_whens_wc; auto.
-      - apply add_whens_wc; auto.
+      - apply add_whens_wc...
+      - apply add_whens_wc...
       - take (clockof e = [_]) and rewrite it; auto.
       - take (clockof e1 = [_]) and rewrite it; auto.
       - take (clockof e2 = [_]) and rewrite it; auto.
@@ -448,7 +446,7 @@ Module Type CSCLOCKING
                eapply in_map_iff; do 2 esplit; eauto; auto.
              - erewrite fst_NoDupMembers, map_map, <-map_ext, <-fst_NoDupMembers; eauto. 2:intros (?&?&?); auto.
                now rewrite Permutation_app_comm.
-             - apply Forall_map, Forall_map, Forall_forall; intros (?&?&?) ?; simpl; auto.
+             - apply Forall_map, Forall_map, Forall_forall; intros (?&?&?) ?; simpl; auto with clocks.
              - constructor.
                + eapply wc_clock_incl; eauto. solve_incl_app.
                + rewrite app_assoc. apply in_or_app; auto.
@@ -578,7 +576,7 @@ Module Type CSCLOCKING
     intros * HwG Heq (Hwc1&Hwc2&Hwc3).
     repeat split; simpl; auto.
     eapply iface_eq_wc_block; eauto.
-    eapply switch_block_wc in Hwc3; eauto. 6:eapply surjective_pairing.
+    eapply switch_block_wc in Hwc3; eauto with clocks. 6:eapply surjective_pairing.
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
     - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
     - intros ?? _ Hin. rewrite subclock_clock_idem; auto.
@@ -591,7 +589,7 @@ Module Type CSCLOCKING
       wc_global (switch_global G).
   Proof.
     intros (enums&nds). unfold wc_global, CommonTyping.wt_program; simpl.
-    induction nds; intros * Hwc; simpl; inv Hwc; auto.
+    induction nds; intros * Hwc; simpl; inv Hwc; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wc; eauto.

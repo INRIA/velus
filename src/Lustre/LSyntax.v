@@ -951,7 +951,7 @@ Module Type LSYNTAX
 
   Section wx_incl.
 
-    Hint Constructors wx_exp wx_block.
+    Hint Constructors wx_exp wx_block : core.
 
     Lemma wx_exp_incl : forall env env' e,
       incl env env' ->

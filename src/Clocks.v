@@ -149,7 +149,7 @@ Module Type CLOCKS
         In (x, ck) vars ->
         wc_clock vars (Con ck x b).
 
-  Hint Constructors wc_clock : lclocking.
+  Global Hint Constructors wc_clock : clocks lclocking.
 
   Definition wc_env vars : Prop :=
     Forall (fun xck => wc_clock vars (snd xck)) vars.
@@ -243,16 +243,17 @@ Module Type CLOCKS
       clock_parent ck ck'
       -> clock_parent ck (Con ck' x b).
 
+  Global Hint Constructors clock_parent : clocks.
+
   Lemma clock_parent_parent':
     forall ck' ck i b,
       clock_parent (Con ck i b) ck'
       -> clock_parent ck ck'.
   Proof.
-    Hint Constructors clock_parent.
     induction ck' as [|? IH]; [now inversion 1|].
     intros ck i' b' Hcp.
-    inversion Hcp as [|? ? ? Hcp']; [now auto|].
-    apply IH in Hcp'; auto.
+    inversion Hcp as [|? ? ? Hcp']; [now auto with clocks|].
+    apply IH in Hcp'; auto with clocks.
   Qed.
 
   Lemma clock_parent_parent:
@@ -260,11 +261,10 @@ Module Type CLOCKS
       clock_parent (Con ck i b) ck'
       -> clock_parent ck (Con ck' i b).
   Proof.
-    Hint Constructors clock_parent.
     destruct ck'; [now inversion 1|].
     intros ck i' b' Hcp.
-    inversion Hcp as [|? ? ? Hcp']; [now auto|].
-    apply clock_parent_parent' in Hcp'; auto.
+    inversion Hcp as [|? ? ? Hcp']; [now auto with clocks|].
+    apply clock_parent_parent' in Hcp'; auto with clocks.
   Qed.
 
   Lemma clock_parent_trans:
@@ -332,7 +332,7 @@ Module Type CLOCKS
     - intros i' b' j  c.
       inversion 1 as [? ? Hck'|? ? ? Hp];
         [rewrite Hck' in IH; now constructor|].
-      apply IH in Hp; auto.
+      apply IH in Hp; auto with clocks.
   Qed.
 
   Lemma clock_parent_strict':
@@ -367,7 +367,6 @@ Module Type CLOCKS
       Is_free_in_clock x ck
       -> exists ck' b, ck = Con ck' x b \/ clock_parent (Con ck' x b) ck.
   Proof.
-    Hint Constructors clock_parent.
     induction ck as [|? IH]; [now inversion 1|].
     intro Hfree.
     inversion Hfree as [|? ? ? ? Hfree']; clear Hfree; subst.
@@ -375,7 +374,7 @@ Module Type CLOCKS
     - specialize (IH Hfree'); clear Hfree'.
       destruct IH as [ck' [b' Hcp]].
       exists ck', b'; right.
-      destruct Hcp as [Hcp|Hcp]; [rewrite Hcp| inversion Hcp]; now auto.
+      destruct Hcp as [Hcp|Hcp]; [rewrite Hcp| inversion Hcp]; now auto with clocks.
   Qed.
 
   Lemma Is_free_in_clock_parent: forall vars x ck ck',
@@ -400,9 +399,8 @@ Module Type CLOCKS
       -> wc_clock C ck'
       -> wc_clock C ck.
   Proof.
-    Hint Constructors wc_clock.
     induction ck' as [|ck' IH]; destruct ck as [|ck i' ty'];
-      try now (inversion 3 || auto).
+      try now (inversion 3 || auto with clocks); auto with clocks.
     intros Hwc Hp Hck.
     inversion Hp as [j c [HR1 HR2 HR3]|ck'' j c Hp' [HR1 HR2 HR3]].
     - rewrite <-HR1 in *; clear HR1 HR2 HR3.
@@ -424,7 +422,7 @@ Module Type CLOCKS
     destruct (sub i). 2:discriminate.
     specialize (IHck c eq_refl).
     inversion_clear Hi.
-    destruct IHck; subst; auto.
+    destruct IHck; subst; auto with clocks.
   Qed.
 
   Lemma instck_subclock_not_clock_eq:
@@ -500,8 +498,8 @@ Module Type CLOCKS
       wc_clock vars ck.
   Proof.
     induction ck; intros ck' Hnpar Hwc; constructor; inv Hwc.
-    - eapply IHck; eauto.
-    - destruct H3; eauto.
+    - eapply IHck; eauto with clocks.
+    - destruct H3; eauto with clocks.
       inv H.
       exfalso. apply Hnpar. constructor.
   Qed.
@@ -572,7 +570,7 @@ Module Type CLOCKS
       is_clock_parent ck1 ck2 = true <-> clock_parent ck1 ck2.
   Proof.
     split; intros Hck; induction ck2; simpl in *; try congruence.
-    - apply Bool.orb_true_iff in Hck as [Heq|Hck]; auto.
+    - apply Bool.orb_true_iff in Hck as [Heq|Hck]; auto with clocks.
       apply clock_eqb_eq in Heq; subst.
       constructor.
     - inv Hck.

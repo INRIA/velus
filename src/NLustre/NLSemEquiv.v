@@ -56,7 +56,7 @@ Module Type NLSEMEQUIV
     intros * n.
     destruct xss as (coind, idx, E); simpl.
     specialize (E n).
-    induction E; simpl; auto.
+    induction E; simpl; auto with datatypes.
   Qed.
 
   Lemma EqSts_iff:

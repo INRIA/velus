@@ -68,7 +68,7 @@ Module Type OBCADDDEFAULTS
     repeat match goal with
            | H:~(_ /\ _) |- _ => apply Decidable.not_and in H; [|now intuition]
            | H:~~_ |- _ => apply Decidable.not_not in H; [|now intuition]
-           | H: context [ ~~PS.In _ _ ] |- _ => setoid_rewrite not_not_in in H
+           | H: context [ ~~PS.In _ _ ] |- _ => rewrite not_not_in in H
            end.
 
   Lemma In_fold_left_inter:
@@ -116,7 +116,7 @@ Module Type OBCADDDEFAULTS
       induction ws as [|w ws IH']; simpl. reflexivity.
       unfold add_write.
       rewrite IH'.
-      destruct (type_of_var w) as [[]|]; split; intro HH; auto;
+      destruct (type_of_var w) as [[]|]; split; intro HH; auto with obcinv;
         inversion_clear HH; auto.
     Qed.
 
@@ -129,9 +129,9 @@ Module Type OBCADDDEFAULTS
       setoid_rewrite PSE.MP.fold_spec_right.
       remember (rev (PS.elements W)) as ws.
       setoid_rewrite <-Heqws. clear Heqws W.
-      induction ws as [|w ws IH]; auto.
+      induction ws as [|w ws IH]; auto with obcinv.
       simpl. unfold add_write at 1.
-      cases.
+      cases; auto with obcinv.
     Qed.
 
     Lemma Can_write_in_add_writes:
@@ -1096,14 +1096,16 @@ Module Type OBCADDDEFAULTS
                   with (2:=Hniw) in Henv.
                 apply IHws with (1:=Henv) (2:=Hniws) in Hmws
                   as (ve1' & Henv'' & Heval' & Hinin' & Hfa').
-                exists ve1'. repeat (try apply Forall_cons2; split; eauto using stmt_eval);
-                          intros; apply Hinin', Env.Props.P.F.add_in_iff; auto.
+                exists ve1'. repeat (try apply Forall_cons2; split; eauto).
+                repeat econstructor; eauto. 2:eauto with env.
+                intros; apply Hinin', Env.Props.P.F.add_in_iff; auto.
               - apply (Env.refines_add_right _ _ _ w (Venum 0))
                   with (2:=Hniw) in Henv.
                 apply IHws with (1:=Henv) (2:=Hniws) in Hmws
                   as (ve1' & Henv'' & Heval' & Hinin' & Hfa').
-                exists ve1'. repeat (try apply Forall_cons2; split; eauto using stmt_eval);
-                          intros; apply Hinin', Env.Props.P.F.add_in_iff; auto.
+                exists ve1'. repeat (try apply Forall_cons2; split; eauto).
+                repeat econstructor; eauto. 2:eauto with env.
+                intros; apply Hinin', Env.Props.P.F.add_in_iff; auto.
             Qed.
 
             Lemma add_defauts_switch_correct:
@@ -1403,13 +1405,13 @@ Module Type OBCADDDEFAULTS
       intros t rq rq' st al Hadd.
     - (* * Assign i e *)
       inv Hadd.
-      split; [now intuition|repeat split]; auto.
+      split; [now intuition|repeat split]; auto with obcinv.
       + intros y Hin. rewrite PS.union_spec.
         edestruct (equiv_dec y) as [He|Hne]; eauto using PSF.remove_2.
         now rewrite He, PS.singleton_spec; auto.
       + setoid_rewrite PS.union_spec.
         intros y [Hin|Hin]; try not_In_empty.
-        apply PSF.singleton_iff in Hin; subst; auto.
+        apply PSF.singleton_iff in Hin; subst; auto with obcinv.
 
     - (* * AssignSt i e *)
       inv Hadd.
@@ -1487,7 +1489,7 @@ Module Type OBCADDDEFAULTS
         * (* forall x, x ∈ (PS.union stimes always) -> Can_write_in_var x s *)
           intros x Hin.
           cut (x ∈ ((st1 ∪ al1) ∪ (st2 ∪ al2))).
-          now destruct E as [|[[]|[]]]; subst; rewrite PS.union_spec; destruct 1 as [HH|HH]; auto.
+          destruct E as [|[[]|[]]]; subst; rewrite PS.union_spec; destruct 1 as [HH|HH]; auto with obcinv.
           PS_split; repeat match goal with H: _ \/ _ |- _ => destruct H
                                       | H: _ /\ _ |- _ => destruct H
                                       | H:PS.In _ w1 |- _ => apply Hw1 in H
@@ -1520,7 +1522,7 @@ Module Type OBCADDDEFAULTS
       injection Hadd; clear Hadd; intros; subst al st rq' t.
       apply IHs1 in Hdefs1 as (H1A & H1B & H1C & H1E); clear IHs1.
       apply IHs2 in Hdefs2 as (H2A & H2B & H2C & H2E); clear IHs2.
-      repeat split; auto.
+      repeat split; auto with obcinv.
       + intro x. PS_split.
         destruct 1 as [[[? ?]|[? ?]] [?|?]]; try contradiction.
         now eapply H1A, PS.inter_spec; eauto.
@@ -1534,14 +1536,14 @@ Module Type OBCADDDEFAULTS
     - (* * Call ys clsid o f es *)
       simpl in Hadd.
       rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
-      inv Hadd. repeat split; auto.
+      inv Hadd. repeat split; auto with obcinv.
       + intros x Hin; rewrite PS.union_spec.
         destruct (In_dec ident_eq_dec x ys) as [Hys|Hnys]; [left|right].
         * now apply ps_of_list_In; auto.
         * apply In_snd_fold_right_add_valid, ps_removes_spec; auto.
       + setoid_rewrite PS.union_spec.
         intros x [Hin|Hin]; try not_In_empty.
-        apply ps_of_list_In in Hin; auto.
+        apply ps_of_list_In in Hin; auto with obcinv.
       + constructor. rewrite add_valid_add_valid', app_nil_r.
         rewrite Forall_map; auto. apply Forall_forall.
         intros e Hin y ty. destruct e; try discriminate.
@@ -1643,15 +1645,15 @@ Module Type OBCADDDEFAULTS
       specialize (IHs1 _ _ _ _ _ Hdefs1 x).
       specialize (IHs2 _ _ _ _ _ Hdefs2 x).
       split; inversion_clear 1.
-      + rewrite IHs1 in *; auto.
-      + rewrite IHs2 in *; auto.
-      + rewrite <-IHs1 in *; auto.
-      + rewrite <-IHs2 in *; auto.
+      + rewrite IHs1 in *; auto with obcinv.
+      + rewrite IHs2 in *; auto with obcinv.
+      + rewrite <-IHs1 in *; auto with obcinv.
+      + rewrite <-IHs2 in *; auto with obcinv.
 
     - (* * Call ys clsid o f es *)
       simpl; intros * Hadd x.
       rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
-      inv Hadd. split; inversion_clear 1; auto.
+      inv Hadd. split; inversion_clear 1; auto with obcinv.
 
     - (* * Skip *)
       now inversion_clear 1.
@@ -2811,12 +2813,12 @@ Module Type OBCADDDEFAULTS
           apply InMembers_app in Hin.
           destruct Hin as [Hin|]; auto.
           apply InMembers_Forall with (1:=Hncwin) in Hin.
-          exfalso; auto.
+          exfalso; auto with obcinv.
         + apply PS_In_Forall with (1:=Hval) in Hin.
           apply InMembers_app in Hin.
           destruct Hin as [Hin|]; auto.
           apply InMembers_Forall with (1:=Hncwin) in Hin.
-          exfalso; auto. }
+          exfalso; auto with obcinv. }
 
     eapply Hsr in Heval as (ve3' & Henv3' & Heval3'); eauto.
 

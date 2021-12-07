@@ -56,10 +56,10 @@ Module Type STC2OBCINVARIANTS
     forall x mems e,
       Is_free_in_exp x (translate_exp mems e) -> CE.IsF.Is_free_in_exp x e.
   Proof.
-    induction e; simpl; intro H; auto.
+    induction e; simpl; intro H; auto with stcfree.
     - inversion H.
     - inversion H.
-    - now apply Is_free_in_tovar in H; subst.
+    - apply Is_free_in_tovar in H; subst; auto with stcfree.
     - constructor; inversion H; auto.
     - constructor; inversion_clear H as [| | |????? [?|?]|]; subst;
         [left; auto | right; auto].
@@ -86,7 +86,7 @@ Module Type STC2OBCINVARIANTS
     - simpl; constructor.
       + apply Forall_map, Forall_forall; intros oe Hin.
         pose proof Hin; eapply Forall_forall in Hin; eauto; simpl in *.
-        destruct oe; simpl in *; eauto.
+        destruct oe; simpl in *; eauto with stcfree.
         apply Hin; intro; apply Hfree;
           apply FreeEcase_branches;
           apply Exists_exists; eauto.
@@ -105,9 +105,9 @@ Module Type STC2OBCINVARIANTS
   Proof.
     induction ck as [|ck IH i b]; [now intuition|].
     intros * Hxni Hfce; simpl.
-    cases; apply IH.
+    cases; auto using Fusible; apply IH.
     - intros j Hfree Hcw.
-      apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
+      apply Hxni with (x := j); [inversion_clear Hfree; eauto with stcfree|].
       inversion_clear Hcw as [| | | | |]; auto.
       take (Exists _ _) and apply Exists_exists in it as (os & Hin & Cw).
       destruct os; simpl in *; try now inv Cw.
@@ -117,9 +117,9 @@ Module Type STC2OBCINVARIANTS
         apply skip_branches_with_In_det in Hin; subst; auto.
       + intros * Hfree; apply Forall_forall; intros [|] Hin; simpl; try now inversion 1.
         apply skip_branches_with_In_det in Hin; subst.
-        inv Hfree; auto.
+        inv Hfree; auto with stcfree.
     - intros j Hfree Hcw.
-      apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
+      apply Hxni with (x := j); [inversion_clear Hfree; eauto with stcfree|].
       inversion_clear Hcw as [| | | | |]; auto.
       take (Exists _ _) and apply Exists_exists in it as (os & Hin & Cw).
       destruct os; simpl in *; try now inv Cw.
@@ -129,7 +129,7 @@ Module Type STC2OBCINVARIANTS
         apply skip_branches_with_In_det in Hin; subst; auto.
       + intros * Hfree; apply Forall_forall; intros [|] Hin; simpl; try now inversion 1.
         apply skip_branches_with_In_det in Hin; subst.
-        inv Hfree; auto.
+        inv Hfree; auto with stcfree.
   Qed.
 
   Lemma translate_tcs_Fusible:
@@ -165,7 +165,7 @@ Module Type STC2OBCINVARIANTS
             by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
         assert (forall i, Is_free_in_caexp i ck e -> y <> i) as Hfni.
         { intros i Hfree.
-          assert (Hfree': Is_free_in_tc i (TcDef y ck e)) by auto.
+          assert (Hfree': Is_free_in_tc i (TcDef y ck e)) by auto with stcfree.
           eapply HH in Hfree'.
           intro; subst.
           apply PSE.MP.Dec.F.not_mem_iff in Hnxm; rewrite Hnxm in Hfree'.
@@ -177,23 +177,23 @@ Module Type STC2OBCINVARIANTS
         }
         apply Fusible_Control.
         * intros; apply not_Can_write_in_translate_cexp.
-          eapply Hfni; auto.
+          eapply Hfni; auto with stcfree.
         * apply Fusible_translate_cexp.
-          intro; eapply Hfni; eauto.
-      + destruct c; apply Fusible_Control; auto.
+          intro; eapply Hfni; eauto with stcfree.
+      + destruct c; apply Fusible_Control; auto using Fusible.
         * intros x' Hfree CanWrite. inv CanWrite.
           specialize (HN _ _ (ResetTcReset _ _ _ _)) as (HN&_).
-          apply HN; left; auto.
+          apply HN; left; auto with stcfree.
         * intros x' Hfree CanWrite. inv CanWrite.
           specialize (HN _ _ (ResetTcReset _ _ _ _)) as (HN&_).
-          apply HN; left; auto.
-      + apply Fusible_Control; auto.
+          apply HN; left; auto with stcfree.
+      + apply Fusible_Control; auto using Fusible.
         assert (~Is_free_in_clock y ck) as Hnfree
             by (eapply wc_TcNext_not_Is_free_in_clock; eauto).
         inversion 2; subst;  contradiction.
-      + apply Fusible_Control; auto.
+      + apply Fusible_Control; auto using Fusible.
         inversion 2; contradiction.
-      + apply Fusible_Control; auto.
+      + apply Fusible_Control; auto using Fusible.
         intros y ? Hwrite.
         assert (In y xs) by now inv Hwrite.
         now eapply wc_TcStep_not_Is_free_in_clock; eauto.
@@ -204,22 +204,22 @@ Module Type STC2OBCINVARIANTS
       Fusible (reset_mems mems).
   Proof.
     intro; unfold reset_mems.
-    assert (Fusible Skip) as Hf by auto.
+    assert (Fusible Skip) as Hf by auto using Fusible.
     revert Hf; generalize Skip.
-    induction mems as [|(x, (c, ck))]; intros s Hf; simpl; auto.
+    induction mems as [|(x, (c, ck))]; intros s Hf; simpl; auto using Fusible.
   Qed.
-  Hint Resolve reset_mems_Fusible.
+  Local Hint Resolve reset_mems_Fusible : obcinv.
 
   Lemma reset_insts_Fusible:
     forall blocks,
       Fusible (reset_insts blocks).
   Proof.
     intro; unfold reset_insts.
-    assert (Fusible Skip) as Hf by auto.
+    assert (Fusible Skip) as Hf by constructor.
     revert Hf; generalize Skip.
-    induction blocks as [|(x, f)]; intros s Hf; simpl; auto.
+    induction blocks as [|(x, f)]; intros s Hf; simpl; auto using Fusible.
   Qed.
-  Hint Resolve reset_insts_Fusible.
+  Local Hint Resolve reset_insts_Fusible : obcinv.
 
   Lemma Is_next_in_not_Is_variable_in:
     forall s x,
@@ -247,9 +247,9 @@ Module Type STC2OBCINVARIANTS
       inversion_clear Wsch as [|??? Wsch'];
       simpl; constructor; auto; try now apply IHP.
     unfold ClassFusible; simpl.
-    repeat constructor; simpl; auto.
+    repeat constructor; simpl; auto with obcinv.
     assert (NoDup (defined (s_tcs s))) by apply s_nodup_defined.
-    eapply translate_tcs_Fusible; eauto.
+    eapply translate_tcs_Fusible; eauto with obcinv.
     - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
       rewrite 2 map_app, <-2 app_assoc.
       apply s_nodup.
@@ -434,7 +434,7 @@ Module Type STC2OBCINVARIANTS
       + apply Can_write_in_var_translate_tc_Is_variable_in_tc in Hcw.
         eapply Defs; eauto.
       + apply Hdcw in Hcw; auto. now constructor 2.
-    - constructor; auto.
+    - constructor; auto with obcinv.
       + intros ? Hdef.
         apply Can_write_in_var_translate_tc_Is_variable_in_tc in Hdef.
         apply Hdcw; left; auto.
@@ -445,7 +445,7 @@ Module Type STC2OBCINVARIANTS
           try destruct v0; inv H1;
             try (take (wt_const _ _ _) and inv it);
             try setoid_rewrite No_Overwrites_Control;
-          eauto using No_Overwrites_translate_cexp.
+          eauto using No_Overwrites_translate_cexp with obcinv.
     - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
         apply NoDup_app_weaken in Nodup; auto.
   Qed.
@@ -471,7 +471,7 @@ Module Type STC2OBCINVARIANTS
     revert NOS; generalize Skip.
     induction subs; simpl; auto.
     intros; apply IHsubs.
-    constructor; auto.
+    constructor; auto with obcinv.
     - inversion 2; contradiction.
     - inversion 1; contradiction.
   Qed.
@@ -487,7 +487,7 @@ Module Type STC2OBCINVARIANTS
     revert NOS CWIS; generalize Skip.
     induction resets as [|(x, (c0, ck))]; simpl; auto; inv Nodup.
     intros; apply IHresets; auto.
-    - constructor; auto.
+    - constructor; auto with obcinv.
       + inversion 2; subst; eapply CWIS; eauto.
       + inversion_clear 1; auto.
     - inversion_clear 2 as [| | | | |??? CWI];

@@ -134,14 +134,15 @@ Inductive bisim_IO {PSyn prefs} (G: @global PSyn prefs) (f: ident) (ins outs: li
       traceinf_sim T (trace_node node ins outs Spec_in_out Len_ins Len_outs 0) ->
       bisim_IO G f ins outs T.
 
-Hint Resolve
-     switch_global_wt switch_global_wc
-     inlinelocal_global_wt inlinelocal_global_wc inlinelocal_global_sem
-     normalize_global_normalized_global normalized_global_unnested_global
-     Typing.normalize_global_wt
-     Clocking.normalize_global_wc
-     normalize_global_sem
-     check_causality_correct.
+Local Hint Resolve
+      wc_global_Ordered_nodes
+      switch_global_wt switch_global_wc
+      inlinelocal_global_wt inlinelocal_global_wc inlinelocal_global_sem
+      normalize_global_normalized_global normalized_global_unnested_global
+      Typing.normalize_global_wt
+      Clocking.normalize_global_wc
+      normalize_global_sem
+      check_causality_correct : core.
 
 Local Ltac unfold_l_to_nl Hltonl :=
   unfold l_to_nl in Hltonl; simpl in Hltonl;
@@ -162,9 +163,9 @@ Lemma behavior_l_to_nl:
 Proof.
   intros G * Hwt Hwc Hsem Hwcins Hltonl.
   unfold_l_to_nl Hltonl.
-  eapply TR.Correctness.sem_l_nl in Hltonl; eauto.
+  eapply TR.Correctness.sem_l_nl in Hltonl; eauto with ltyping lclocking.
   eapply normalize_global_sem, inlinelocal_global_sem, switch_global_sem; eauto.
-  eapply sem_node_sem_node_ck; eauto.
+  eapply sem_node_sem_node_ck; eauto with ltyping.
 Qed.
 
 Fact l_to_nl_find_node : forall G G' f n,
@@ -259,6 +260,6 @@ Proof.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&_); eauto.
     eapply Hwti in Hfind'. rewrite Hin. eauto.
   - clear - Hwt Comp'. unfold_l_to_nl Comp'.
-    eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto.
+    eapply TR.NormalArgs.to_global_normal_args in Comp'; eauto with lclocking.
   - eapply behavior_l_to_nl in Comp'; eauto.
 Qed.

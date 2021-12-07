@@ -40,7 +40,7 @@ Module Type NL2STCTYPING
     inversion_clear 1 as [??? Hin|?????? Find|];
       intros * SpecVars SpecMems SpecVars'; simpl.
     - constructor; auto.
-      constructor; try rewrite SpecVars; auto.
+      constructor; try rewrite SpecVars; auto with nldef.
     - destruct xs; auto.
       apply option_map_inv in Find as ((?&?)& Find &?); simpl in *; subst.
       apply find_unit_transform_units_forward in Find.
@@ -49,7 +49,7 @@ Module Type NL2STCTYPING
         2,3:rewrite SpecVars; eauto using wt_clock.
         simpl; eapply Forall2_impl_In; eauto.
         intros ? (? & (?&?)) ? ? Hin.
-        apply SpecVars' in Hin; auto.
+        apply SpecVars' in Hin; auto with nldef.
       + rewrite map_map, Forall_map.
         apply Forall_forall. intros (?&?) Hin.
         econstructor; eauto.
@@ -233,14 +233,13 @@ Module Type NL2STCTYPING
       rewrite filter_fst_idty in Hin.
       apply in_filter in Hin; auto.
   Qed.
-  Hint Resolve translate_node_wt.
 
   Theorem translate_wt:
     forall G,
       wt_global G ->
       wt_program (translate G).
   Proof.
-    intros; eapply transform_units_wt_program; eauto.
+    intros; eapply transform_units_wt_program; eauto using translate_node_wt.
   Qed.
 
 End NL2STCTYPING.

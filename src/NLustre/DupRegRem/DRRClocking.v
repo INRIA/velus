@@ -62,8 +62,8 @@ Module Type DRRCLOCKING
         wc_clock (inouts ++ vars) ck ->
         wc_clock (inouts ++ vars') (rename_in_clock sub ck).
     Proof.
-      induction ck; intros * Hwc; inv Hwc; auto.
-      simpl. constructor; eauto using rename_in_var_wc.
+      induction ck; intros * Hwc; inv Hwc; auto with clocks.
+      simpl. constructor; eauto using rename_in_var_wc with clocks.
     Qed.
 
     Lemma rename_in_exp_wc : forall e ck,
@@ -106,18 +106,18 @@ Module Type DRRCLOCKING
         destruct (sub0 i); inv Hinst1; simpl. reflexivity.
     Qed.
 
-    Hint Resolve rename_in_var_wc rename_in_clock_wc rename_in_exp_wc rename_in_cexp_wc.
+    Local Hint Resolve rename_in_var_wc rename_in_clock_wc rename_in_exp_wc rename_in_cexp_wc : nlclocking.
 
     Lemma rename_in_equation_wc : forall equ,
         (forall x, In x (var_defined equ) -> Env.find x sub = None) ->
         wc_equation G (inouts ++ vars) equ ->
         wc_equation G (inouts ++ vars') (rename_in_equation sub equ).
-    Proof.
-      intros * Hdef Hwc; inv Hwc; simpl in *.
-      - constructor; eauto.
-      - eapply CEqApp with (sub:=fun x => option_map (fun x => rename_in_var sub x) (sub0 x)) (* ? *); eauto.
+    Proof with eauto with nlclocking.
+      intros * Hdef Hwc; inv Hwc; simpl in *...
+      - constructor...
+      - eapply CEqApp with (sub:=fun x => option_map (fun x => rename_in_var sub x) (sub0 x)) (* ? *)...
         + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? _ _ (?&?&?&?).
-          repeat (esplit; eauto).
+          repeat esplit...
           * inv H3; simpl; constructor.
           * apply instck_rename_in_clock; auto.
         + eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? _ Hin2 (?&?&?&?).
@@ -126,10 +126,10 @@ Module Type DRRCLOCKING
             unfold rename_in_var. rewrite Hdef; eauto.
           * eapply instck_rename_in_clock; eauto.
         + unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?; eauto.
-      - constructor; auto.
+          rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?...
+      - constructor...
         unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?; eauto.
+          rewrite Forall_map. eapply Forall_impl; [|eauto]; intros (?&?) ?...
     Qed.
 
   End rename.

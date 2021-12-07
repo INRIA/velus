@@ -766,23 +766,23 @@ Module Type TR
     Inductive prefix {A} : list A -> list A -> Prop :=
     | prefixNil: forall (l: list A), prefix nil l
     | prefixCons: forall (a: A)(l m:list A), prefix l m -> prefix (a::l) (a::m).
-    Hint Constructors prefix.
+    Hint Constructors prefix : datatypes.
 
     Lemma prefix_app:
       forall {A} (l l' : list A), prefix l (l ++ l').
     Proof.
-      induction l; simpl; auto.
+      induction l; simpl; auto with datatypes.
     Qed.
 
     Lemma prefix_app':
       forall {A} (l l1 l2 : list A), prefix l l1 -> prefix l (l1 ++ l2).
     Proof.
-      induction 1; simpl; auto.
+      induction 1; simpl; auto with datatypes.
     Qed.
 
     Lemma prefix_refl :
       forall {A} (l : list A), prefix l l.
-    Proof. induction l; auto. Qed.
+    Proof. induction l; auto with datatypes. Qed.
 
     Lemma prefix_app3 :
       forall {A} (l1 l2 : list A) e,
@@ -791,8 +791,8 @@ Module Type TR
     Proof.
       intros * Hp. revert dependent l1.
       induction l2; simpl; intros.
-      - inv Hp; auto. inv H1; auto.
-      - inv Hp; auto. specialize (IHl2 _ H1) as []; auto.
+      - inv Hp; auto with datatypes. inv H1; auto.
+      - inv Hp; auto with datatypes. specialize (IHl2 _ H1) as []; auto with datatypes.
     Qed.
 
     Lemma suffix_of_clock_Con:
@@ -842,7 +842,7 @@ Module Type TR
           setoid_rewrite <- app_nil_l in Hp at 4.
           rewrite suffix_of_clock_app in Hp.
           apply prefix_app3 in Hp as [Hp|Heq].
-          specialize (IHck _ Hp) as []; subst; auto.
+          specialize (IHck _ Hp) as []; subst; auto with clocks.
           rewrite <- suffix_of_clock_app in Heq.
           rewrite app_nil_l, <- suffix_of_clock_Con in Heq.
           apply suffix_of_clock_inj in Heq. subst. auto.
@@ -855,7 +855,7 @@ Module Type TR
         prefix p (common_suffix sfx1 sfx2).
     Proof.
       intros. revert dependent sfx2.
-      induction H as [|a]. auto. intros * Hp. simpl. destruct a.
+      induction H as [|a]. auto with datatypes. intros * Hp. simpl. destruct a.
       destruct sfx2. inv Hp. destruct p. inv Hp.
       rewrite equiv_decb_refl, Pos.eqb_refl. simpl. constructor. auto.
     Qed.
@@ -1039,12 +1039,11 @@ Module Type TR
       incl (map fst es) (seq 0 n) ->
       map fst (complete_branches (seq 0 n) es) = (seq 0 n).
   Proof.
-    Hint Constructors NoDupMembers Sorted.StronglySorted.
     intros n. generalize 0 as start.
     induction n; intros * Hnd Hsort Hincl; simpl in *.
     - apply incl_nil, map_eq_nil in Hincl; subst; auto.
     - destruct es as [|(?&?)]; inv Hnd; inv Hsort; simpl in *; auto.
-      + f_equal; eauto using incl_nil'.
+      + f_equal; eauto using incl_nil', Sorted.StronglySorted with datatypes.
       + destruct (n0 =? start) eqn:Hn; simpl.
         * eapply Nat.eqb_eq in Hn; subst.
           f_equal; auto.

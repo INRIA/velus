@@ -81,7 +81,7 @@ Module Type DRRCORRECTNESS
       destruct (Env.find x sub) eqn:Hfind; try reflexivity.
       apply Hsub in Hfind. now rewrite Hfind.
     Qed.
-    Hint Resolve subst_sem_var_instant.
+    Local Hint Resolve subst_sem_var_instant : nlsem.
 
     Lemma subst_sem_clock_instant : forall ck v,
         sem_clock_instant base R ck v <->
@@ -96,7 +96,7 @@ Module Type DRRCORRECTNESS
       1,3,5:rewrite <-subst_sem_var_instant; auto.
       1-3:apply subst_sem_var_instant; auto.
     Qed.
-    Hint Resolve subst_sem_clock_instant.
+    Local Hint Resolve subst_sem_clock_instant : nlsem.
 
     Lemma subst_sem_clocked_var_instant : forall x ck,
         sem_clocked_var_instant base R x ck ->
@@ -141,14 +141,14 @@ Module Type DRRCORRECTNESS
         inv Hsem; econstructor; eauto.
         rewrite 2 rename_in_exp_typeof; auto.
     Qed.
-    Hint Resolve subst_sem_exp_instant.
+    Local Hint Resolve subst_sem_exp_instant : nlsem.
 
     Corollary subst_sem_aexp_instant : forall ck e v,
         sem_aexp_instant base R ck e v ->
         sem_aexp_instant base R (rename_in_clock sub ck) (rename_in_exp sub e) v.
     Proof.
       intros * Hsem; inv Hsem.
-      1,2:constructor; auto; rewrite <-subst_sem_clock_instant; auto.
+      1,2:constructor; auto with nlsem; rewrite <-subst_sem_clock_instant; auto.
     Qed.
 
     Corollary subst_sem_exps_instant : forall es vs,
@@ -158,7 +158,7 @@ Module Type DRRCORRECTNESS
       unfold sem_exps_instant.
       intros * Hsem.
       rewrite Forall2_map_1.
-      eapply Forall2_impl_In; [|eauto]; intros; eauto.
+      eapply Forall2_impl_In; [|eauto]; intros; eauto with nlsem.
     Qed.
 
     Lemma subst_sem_cexp_instant : forall e v,
@@ -181,7 +181,7 @@ Module Type DRRCORRECTNESS
         + rewrite Forall_map.
           eapply Forall_impl_In; [|eapply H6]; intros. eapply Forall_forall in H; eauto.
       - (* case *)
-        inv Hsem; econstructor; eauto.
+        inv Hsem; econstructor; eauto with nlsem.
         + rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros.
           eapply Forall_forall in H; eauto.
           destruct a; simpl in *; auto.
@@ -189,16 +189,16 @@ Module Type DRRCORRECTNESS
           eapply Forall_forall in H; eauto.
           destruct a; simpl in *; eauto.
       - (* eexp *)
-        inv Hsem. constructor; auto.
+        inv Hsem. constructor; auto with nlsem.
     Qed.
-    Hint Resolve subst_sem_cexp_instant.
+    Local Hint Resolve subst_sem_cexp_instant : nlsem.
 
     Corollary subst_sem_caexp_instant : forall ck e v,
         sem_caexp_instant base R ck e v ->
         sem_caexp_instant base R (rename_in_clock sub ck) (rename_in_cexp sub e) v.
     Proof.
       intros * Hsem; inv Hsem.
-      1,2:constructor; auto; rewrite <-subst_sem_clock_instant; auto.
+      1,2:constructor; auto with nlsem; rewrite <-subst_sem_clock_instant; auto.
     Qed.
 
   End rename_instant.

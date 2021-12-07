@@ -46,8 +46,6 @@ Module Type OBCSEMANTICS
     now rewrite Env.gempty.
   Qed.
 
-  Hint Unfold vempty.
-
   (* Function call arguments either evaluate fully (i.e., to Some value), or
      they are undefined variables in [menv] or [env] (i.e., None). The idea
      is to distinguish a failed operator application, e.g., division by zero,
@@ -144,6 +142,8 @@ Module Type OBCSEMANTICS
                   fm.(m_body) (me', ve') ->
         Forall2 (fun x => eq (Env.find x ve')) (map fst fm.(m_out)) rvos ->
         stmt_call_eval prog me clsid f vos me' rvos.
+
+  Global Hint Constructors exp_eval stmt_eval stmt_call_eval : obcsem.
 
   Section stmt_eval_call_eval_ind.
 
@@ -362,7 +362,7 @@ Module Type OBCSEMANTICS
       intuition.
       match goal with
         H: Forall2 _ ?xs _, H': Forall2 _ ?xs ?ys |- _ =>
-        clear - H H'; revert dependent ys; induction H; intros; inv H'; auto
+        clear - H H'; revert dependent ys; induction H; intros; inv H'; auto with datatypes
       end.
   Qed.
 

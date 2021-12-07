@@ -137,6 +137,8 @@ environment.
 
   End InstantSemantics.
 
+  Global Hint Constructors sem_exp_instant sem_cexp_instant : nlsem stcsem.
+
   Section sem_cexp_instant_ind_2.
 
     Variable base: bool.
@@ -203,7 +205,7 @@ environment.
 
   End sem_cexp_instant_ind_2.
 
-  Hint Extern 4 (sem_exps_instant _ _ nil nil) => apply Forall2_nil.
+  Global Hint Extern 4 (sem_exps_instant _ _ nil nil) => apply Forall2_nil : nlsem stcsem.
 
   Section InstantAnnotatedSemantics.
 

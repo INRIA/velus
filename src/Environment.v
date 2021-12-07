@@ -968,7 +968,7 @@ Module Env.
       intros E12 E23 x. specialize (E12 x); specialize (E23 x).
       inv E12; inv E23; auto; try match goal with H1:_ = find x ?env,
                       H2:_ = find x ?env |- _ => rewrite <- H1 in H2 end;
-      try discriminate.
+      try discriminate; auto with datatypes.
       take (Some _ = Some _) and inversion it; subst.
       constructor. transitivity sy; auto.
     Qed.
@@ -976,8 +976,7 @@ Module Env.
     Global Instance Equiv_Symmetric `{Symmetric _ R} : Symmetric (Equiv R).
     Proof.
       intros env1 env2. setoid_rewrite Equiv_orel.
-      intros E x. specialize (E x). inv E; auto.
-      constructor; auto.
+      intros E x. specialize (E x). inv E; auto with datatypes.
     Qed.
 
     Global Add Parametric Relation `{Equivalence _ R} : (t A) (Equiv R)
@@ -1251,7 +1250,7 @@ Module Env.
       rewrite Props.P.F.Equal_Equiv, Equiv_orel.
       intro y. destruct (ident_eq_dec y x) as [|Nyx]; subst.
       - now rewrite gss, Fx.
-      - rewrite gso; eauto.
+      - rewrite gso; eauto with datatypes.
     Qed.
 
     Lemma refines_orel_find `{Reflexive _ R} `{Transitive _ R}:
@@ -1315,8 +1314,11 @@ Module Env.
   Global Existing Instance env_refines_preorder.
   Global Existing Instance Equivalence_Equiv.
 
-  Hint Immediate refines_empty.
-  Hint Extern 4 (refines _ (add ?x _ _) (add ?x _ _)) => apply refines_add.
+  Global Hint Immediate refines_empty : env.
+  Global Hint Extern 4 (refines _ (add ?x _ _) (add ?x _ _)) => apply refines_add : env.
+  Global Hint Resolve refines_refl refines_trans refines_add refines_add_both refines_add_right
+         refines_remove refines_remove_both refines_add_remove refines_orel_find
+         refines_find_add_left refines_find_add_right refines_add_left refines_elements : env.
 
   Lemma Equal_Equiv {A}:
     relation_equivalence Equal (Equiv (@eq A)).
@@ -1426,6 +1428,8 @@ Module Env.
     Qed.
   End RefinesAdds.
 
+  Global Hint Resolve refines_adds' refines_adds refines_adds_opt : env.
+
   Lemma refines_map : forall {V1 V2} {eq1 : V1 -> V1 -> Prop} {eq2 : V2 -> V2 -> Prop} (f : V1 -> V2) H1 H2,
       (forall x y, eq1 x y -> eq2 (f x) (f y)) ->
       Env.refines eq1 H1 H2 ->
@@ -1456,10 +1460,10 @@ Module Env.
     apply In_find. rewrite gso; auto.
   Qed.
 
-  Hint Immediate In_add1.
-  Hint Extern 4 (In ?x (add ?y ?v ?env)) => apply In_add2.
-  Hint Extern 4 (refines _ ?x ?x) => reflexivity.
-  Hint Immediate eq_Transitive.
+  Global Hint Immediate In_add1 : env.
+  Global Hint Extern 4 (In ?x (add ?y ?v ?env)) => apply In_add2 : env.
+  Global Hint Extern 4 (refines _ ?x ?x) => reflexivity : env.
+  Global Hint Immediate eq_Transitive : env.
 
   Lemma adds_opt_mono {A: Type}:
     forall x (env: t A) ys rvos,
@@ -1502,7 +1506,7 @@ Module Env.
       split; intro HH.
       - apply Props.P.F.add_in_iff in HH as [HH|HH]; subst.
         now constructor. apply ED in HH. now constructor 2.
-      - inv HH; auto. take (List.In _ xs) and apply ED in it; auto.
+      - inv HH; auto with env. take (List.In _ xs) and apply ED in it; auto with env.
     Qed.
 
     Lemma dom_empty:
@@ -1597,8 +1601,8 @@ Module Env.
     Global Opaque dom.
   End EnvDom.
 
-  Hint Extern 4 (dom ?env (?xs ++ nil)) => rewrite app_nil_r.
-  Hint Immediate dom_empty.
+  Global Hint Extern 4 (dom ?env (?xs ++ nil)) => rewrite app_nil_r : env.
+  Global Hint Immediate dom_empty : env.
 
   Add Parametric Morphism {A} (R: relation A) `{Equivalence _ R} : (@add A)
       with signature (eq ==> R ==> Equiv R ==> Equiv R)
@@ -1984,7 +1988,7 @@ Module Env.
     Global Opaque dom_lb.
   End EnvDomLowerBound.
 
-  Hint Resolve dom_lb_nil.
+  Global Hint Resolve dom_lb_nil : env.
 
   Lemma dom_lb_ub_dom:
     forall {A} (H : t A) d,
@@ -1998,7 +2002,7 @@ Module Env.
     now apply dom_ub_use with (1:=Max) in Ix.
     now apply dom_lb_use with (1:=Min) in Ix.
   Qed.
-  Hint Resolve dom_lb_ub_dom.
+  Global Hint Resolve dom_lb_ub_dom : env.
 
   Lemma adds'_dom_ub : forall {A} (H : t A) d xs,
       dom_ub H d ->
@@ -2120,7 +2124,7 @@ Module Env.
       - pose proof (restrict_dom_ub xs H) as Hdom.
         eapply dom_ub_use in Hdom; eauto.
         inv Hvar. econstructor; eauto.
-      - eapply restrict_refines in Hvar as (?&?&?); eauto; subst; auto.
+      - eapply restrict_refines in Hvar as (?&?&?); eauto with env; subst; auto.
     Qed.
 
     Corollary restrict_find_None : forall xs H id,
@@ -2243,8 +2247,8 @@ Module Env.
         destruct x; simpl.
         + do 2 rewrite adds_opt'_cons_Some.
              rewrite IH; auto.
-             + do 2 rewrite adds_opt'_cons_None.
-                  rewrite IH; auto.
+        + do 2 rewrite adds_opt'_cons_None.
+          rewrite IH; auto.
     Qed.
 
     Lemma adds_opt'_nil:

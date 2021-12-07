@@ -1666,7 +1666,7 @@ Section ElabDeclaration.
       eapply LVDlocal with (xs:=x).
       + clear - H H2 Hbind. revert st x x0 Hbind.
         induction H; intros * Hbind; inv H2; repeat monadInv; constructor; eauto.
-        * eapply H; eauto using NoDupLocals_incl.
+        eapply H; eauto using NoDupLocals_incl with datatypes.
       + eapply check_defined_local_spec; eauto.
         eapply fst_NoDupMembers; eauto.
   Qed.

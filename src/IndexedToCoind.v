@@ -215,7 +215,7 @@ Module Type INDEXEDTOCOIND
       IStr.sem_var H x xs ->
       sem_var (tr_history H) x (tr_stream xs).
   Proof. apply sem_var_impl_from. Qed.
-  Hint Resolve sem_var_impl_from sem_var_impl.
+  Global Hint Resolve sem_var_impl_from sem_var_impl : indexedstreams coindstreams nlsem.
 
   (** This tactic automatically uses the interpretor to give a witness stream. *)
   Ltac interp_str b H x Sem :=
@@ -299,14 +299,13 @@ Module Type INDEXEDTOCOIND
         + eapply CStr.Son_abs2; eauto.
           rewrite init_from_tl, tr_history_from_tl; auto.
     Qed.
-    Hint Resolve sem_clock_impl_from.
 
     Corollary sem_clock_impl:
       forall H b ck bs,
         IStr.sem_clock b H ck bs ->
         CStr.sem_clock (tr_history H) (tr_stream b) ck (tr_stream bs).
     Proof. intros; apply sem_clock_impl_from; auto. Qed.
-    Hint Resolve sem_clock_impl.
+    Global Hint Resolve sem_clock_impl_from sem_clock_impl : indexedstreams coindstreams nlsem.
 
 End INDEXEDTOCOIND.
 

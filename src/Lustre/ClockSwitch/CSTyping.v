@@ -58,6 +58,7 @@ Module Type CSTYPING
       induction ck; intros * Hwt; inv Hwt; simpl; auto.
       constructor; eauto using rename_var_wt.
     Qed.
+    Local Hint Resolve subclock_clock_wt : ltyping.
 
     Lemma add_whens_wt : forall e ty,
         typeof e = [ty] ->
@@ -72,22 +73,20 @@ Module Type CSTYPING
       - constructor; auto.
     Qed.
 
-    Hint Constructors wt_exp.
-
     Lemma subclock_exp_wt : forall e,
         wt_exp G vars e ->
         wt_exp G vars' (subclock_exp bck sub e).
-    Proof.
+    Proof with auto with ltyping.
       induction e using exp_ind2; intros * Hwt; inv Hwt; simpl in *.
       3-12:econstructor; simpl in *; eauto using rename_var_wt, subclock_clock_wt.
       1-40:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
       1-32:try rewrite subclock_exp_typeof.
       1-32:try rewrite subclock_exp_typesof.
       1-32:try (rewrite map_subclock_ann_clock; auto). 1-32:try (rewrite map_subclock_ann_type; auto). 1-28:auto.
-      - apply add_whens_wt; auto.
-      - apply add_whens_wt; auto.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst; auto using subclock_clock_wt.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst; auto using subclock_clock_wt.
+      - apply add_whens_wt...
+      - apply add_whens_wt...
+      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst...
+      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst...
       - erewrite map_map, map_ext; eauto. intros (?&?); auto.
       - contradict H6. apply map_eq_nil in H6; auto.
       - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
@@ -593,7 +592,7 @@ Module Type CSTYPING
   Proof.
     intros (enums&nds) (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
     constructor; auto.
-    induction nds; simpl; inv Hwt; auto.
+    induction nds; simpl; inv Hwt; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wt; eauto.

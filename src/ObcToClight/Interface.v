@@ -18,7 +18,7 @@ From Coq Require Import ZArith.BinInt.
 Open Scope bool_scope.
 (* Interface avec CompCert *)
 
-Hint Resolve Z.divide_refl.
+Global Hint Resolve Z.divide_refl : core.
 
 Definition empty_composite_env : Ctypes.composite_env := (Maps.PTree.empty _).
 
@@ -368,8 +368,8 @@ Module Export Op <: OPERATORS.
 
   Definition wt_cvalue : cvalue -> ctype -> Prop := wt_cvalue'.
 
-  Hint Unfold wt_cvalue.
-  Hint Constructors wt_cvalue'.
+  Global Hint Unfold wt_cvalue : typing.
+  Global Hint Constructors wt_cvalue' : typing.
 
   Lemma wt_cvalue_cconst:
     forall c, wt_cvalue (sem_cconst c) (ctype_cconst c).
@@ -501,7 +501,7 @@ Module Export Op <: OPERATORS.
     now contradiction (Hty s a).
   Qed.
 
-  Local Hint Resolve good_bool_not_bool.
+  Local Hint Resolve good_bool_not_bool : core.
 
   (* Opaque good_bool. *)
 
@@ -549,7 +549,7 @@ Module Export Op <: OPERATORS.
       wt_cvalue v ty.
   Proof.
     intros * Htcl Hcty Hnun Hnptr Hgb.
-    inv Hcty; inv Htcl; simpl in *; eauto;
+    inv Hcty; inv Htcl; simpl in *; eauto with typing;
       try contradiction; try discriminate.
     - constructor; auto.
       intros; subst; auto.
@@ -1470,7 +1470,7 @@ Module Export Op <: OPERATORS.
 
 End Op.
 
-Hint Resolve cltype_access_by_value cltype_align wt_cvalue_load_result sem_cast_same.
+Global Hint Resolve cltype_access_by_value cltype_align wt_cvalue_load_result sem_cast_same : core.
 
 Module OpAux := OperatorsAux Ids Op.
 Import OpAux.
@@ -1515,7 +1515,7 @@ Proof.
     apply Int.two_p_range.
     unfold Int.zwordsize; simpl; lia.
 Qed.
-Hint Resolve wt_value_load_result.
+Global Hint Resolve wt_value_load_result : typing.
 
 Lemma wt_value_not_vundef_nor_vptr:
   forall v ty,
@@ -1556,12 +1556,12 @@ Lemma sizeof_translate_type_chunk:
   forall gcenv ty,
     Ctypes.sizeof gcenv (translate_type ty) = Memdata.size_chunk (type_to_chunk ty).
 Proof.
-  destruct ty as [|(?&?)]; simpl; auto.
+  destruct ty as [|(?&?)]; simpl; auto using sizeof_cltype_chunk.
   destruct (intsize_memory_chunk_of_enumtag_spec n) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
     rewrite E, E'; simpl; auto.
 Qed.
 
-Hint Resolve translate_type_access_by_value translate_type_align.
+Global Hint Resolve translate_type_access_by_value translate_type_align : clight.
 
 Lemma translate_type_not_void:
   forall t,
@@ -1569,7 +1569,7 @@ Lemma translate_type_not_void:
 Proof.
   intros [[]|[]]; simpl; discriminate.
 Qed.
-Hint Resolve translate_type_not_void.
+Global Hint Resolve translate_type_not_void : clight.
 
 Lemma sem_binary_operation_any_cenv_mem':
   forall op v1 ty1 v2 ty2 M1 M2 cenv1 cenv2,
@@ -1617,7 +1617,7 @@ Proof.
     apply Int.two_p_range.
     unfold Int.zwordsize; simpl; lia.
 Qed.
-Hint Resolve sem_cast_same'.
+Global Hint Resolve sem_cast_same' : clight.
 
 Lemma sem_switch_arg_enum:
   forall c t,
@@ -1627,7 +1627,7 @@ Proof.
   intros ? (?&?).
   unfold Cop.sem_switch_arg; simpl; auto.
 Qed.
-Hint Resolve sem_switch_arg_enum.
+Global Hint Resolve sem_switch_arg_enum : clight.
 
 Definition string_of_type (ty: type) : String.string :=
   match ty with

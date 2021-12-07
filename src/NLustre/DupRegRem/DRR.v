@@ -443,7 +443,7 @@ Module Type DRR
     replace (map fst (filter (fun '(k, _) => negb (Env.mem k sub)) vars))
             with (filter (fun k => negb (Env.mem k sub)) (map fst vars)).
     2:{ clear - vars. induction vars as [|(?&?)]; simpl; auto.
-        destruct (negb _); simpl; auto. }
+        destruct (negb _); simpl; auto with datatypes. }
     generalize (map fst vars); clear vars; intros vars.
     replace (filter (fun k => negb (Env.mem k sub)) vars ++ outs)
       with (filter (fun k => negb (Env.mem k sub)) (vars ++ outs)).

@@ -206,7 +206,7 @@ Module Type STCSCHEDULINGVALIDATOR
       rewrite Htc.
       reflexivity.
     Qed.
-    Hint Resolve check_var_compat.
+    Local Hint Resolve check_var_compat : core.
 
     Lemma not_well_sch_vars_defs_spec:
       forall tcs args nexts vars tc,

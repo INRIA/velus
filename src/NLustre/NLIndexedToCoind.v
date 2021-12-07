@@ -139,7 +139,7 @@ Module Type NLINDEXEDTOCOIND
       CESem.sem_vars H xs xss ->
       Forall2 (sem_var (tr_history H)) xs (tr_streams xss).
     Proof. apply sem_vars_impl_from. Qed.
-    Hint Resolve sem_vars_impl_from sem_vars_impl.
+    Hint Resolve sem_vars_impl_from sem_vars_impl : nlsem.
 
     (** ** exp level synchronous operators inversion principles
 
@@ -277,7 +277,7 @@ Module Type NLINDEXEDTOCOIND
 
     (** State the correspondence for [exp].
         Goes by induction on [exp] and uses the previous inversion lemmas. *)
-    Hint Constructors when lift1 lift2.
+    Hint Constructors when lift1 lift2 : nlsem.
     Lemma sem_exp_impl_from:
       forall n H b e es,
         CESem.sem_exp b H e es ->
@@ -320,7 +320,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_exp b H e es ->
         CoInd.sem_exp (tr_history H) (tr_stream b) e (tr_stream es).
     Proof. apply sem_exp_impl_from. Qed.
-    Hint Resolve sem_exp_impl_from sem_exp_impl.
+    Hint Resolve sem_exp_impl_from sem_exp_impl : nlsem.
 
     (** An inversion principle for lists of [exp]. *)
     Lemma sem_exps_inv:
@@ -371,7 +371,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_exps b H es ess ->
         Forall2 (CoInd.sem_exp (tr_history H) (tr_stream b)) es (tr_streams ess).
     Proof. apply sem_exps_impl_from. Qed.
-    Hint Resolve sem_exps_impl_from sem_exps_impl.
+    Hint Resolve sem_exps_impl_from sem_exps_impl : nlsem.
 
     (** An inversion principle for annotated [exp]. *)
     Lemma sem_aexp_inv:
@@ -419,7 +419,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_aexp b H ck e es ->
         CoInd.sem_aexp (tr_history H) (tr_stream b) ck e (tr_stream es).
     Proof. apply sem_aexp_impl_from. Qed.
-    Hint Resolve sem_aexp_impl_from sem_aexp_impl.
+    Hint Resolve sem_aexp_impl_from sem_aexp_impl : nlsem.
 
     (** ** cexp level synchronous operators inversion principles *)
 
@@ -656,7 +656,7 @@ Module Type NLINDEXEDTOCOIND
 
     (** State the correspondence for [cexp].
         Goes by induction on [cexp] and uses the previous inversion lemmas. *)
-    Hint Constructors merge case.
+    Hint Constructors merge case : nlsem.
     Lemma sem_cexp_impl_from:
       forall n H b e es,
         CESem.sem_cexp b H e es ->
@@ -668,7 +668,7 @@ Module Type NLINDEXEDTOCOIND
       induction e using cexp_ind2; intros * Sem; unfold CESem.sem_cexp, IStr.lift in Sem.
 
       - destruct x; apply merge_inv in Sem as (xs & ess & ? & Hess & Spec).
-        econstructor; eauto.
+        econstructor; eauto with nlsem.
         + instantiate (1 := List.map (tr_stream_from n) ess).
           clear Spec.
           take (Forall _ _) and rename it into IH.
@@ -706,7 +706,7 @@ Module Type NLINDEXEDTOCOIND
             rewrite init_from_nth; auto.
 
       - apply case_inv in Sem as (xs & ess & ? & Hess & Spec).
-        econstructor; eauto.
+        econstructor; eauto with nlsem.
         + instantiate (1 := List.map (tr_stream_from n) ess).
           clear Spec.
           take (Forall _ _) and rename it into IH.
@@ -733,7 +733,7 @@ Module Type NLINDEXEDTOCOIND
             eapply nth_error_In, Forall_forall in Hin; [|eauto]; simpl in *.
             rewrite init_from_nth; auto.
 
-      - apply exp_inv in Sem; constructor; auto.
+      - apply exp_inv in Sem; constructor; auto with nlsem.
     Qed.
 
     Corollary sem_cexp_impl:
@@ -741,7 +741,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_cexp b H e es ->
         CoInd.sem_cexp (tr_history H) (tr_stream b) e (tr_stream es).
     Proof. apply sem_cexp_impl_from. Qed.
-    Hint Resolve sem_cexp_impl_from sem_cexp_impl.
+    Hint Resolve sem_cexp_impl_from sem_cexp_impl : nlsem.
 
     (** An inversion principle for annotated [cexp]. *)
     Lemma sem_caexp_inv:
@@ -788,7 +788,7 @@ Module Type NLINDEXEDTOCOIND
         CESem.sem_caexp b H ck e es ->
         CoInd.sem_caexp (tr_history H) (tr_stream b) ck e (tr_stream es).
     Proof. apply sem_caexp_impl_from. Qed.
-    Hint Resolve sem_caexp_impl_from sem_caexp_impl.
+    Hint Resolve sem_caexp_impl_from sem_caexp_impl : nlsem.
 
     (** * RESET CORRESPONDENCE  *)
 
@@ -1013,11 +1013,10 @@ Module Type NLINDEXEDTOCOIND
       intro n; specialize (Sem n).
       eapply Forall_forall in Sem; eauto.
     Qed.
-    Hint Resolve sem_clocked_vars_impl'.
+    Hint Resolve sem_clocked_vars_impl' : nlsem.
 
     (** The final theorem stating the correspondence for nodes applications.
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
-    Hint Constructors CoInd.sem_equation.
     Theorem implies G:
       forall f xss oss,
         Indexed.sem_node G f xss oss ->
@@ -1028,11 +1027,11 @@ Module Type NLINDEXEDTOCOIND
           (P_equation := fun b H e =>
                            Indexed.sem_equation G b H e ->
                            CoInd.sem_equation G (tr_history H) (tr_stream b) e);
-        eauto.
+        eauto with nlsem.
 
-      - econstructor; eauto.
+      - econstructor; eauto with nlsem.
         3:eapply bools_ofs_impl; eauto.
-        + rewrite tr_clocks_of; eauto.
+        + rewrite tr_clocks_of; eauto with nlsem.
           eapply wf_streams_mask.
           intro k; destruct (IH k) as (Sem &?).
           apply Indexed.sem_node_wf in Sem as (?&?); eauto.
@@ -1043,15 +1042,15 @@ Module Type NLINDEXEDTOCOIND
             eapply wf_streams_mask; intro n'; destruct (IH n') as (Sem &?);
               apply Indexed.sem_node_wf in Sem as (?&?); eauto.
 
-      - econstructor; eauto; subst.
+      - econstructor; eauto with nlsem; subst.
         2:eapply bools_ofs_impl; eauto.
         + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros.
           eapply sem_var_impl; eauto.
-        + rewrite <-reset_fby_impl; eauto.
+        + rewrite <-reset_fby_impl; eauto with nlsem.
 
       - subst.
         CESem.assert_const_length xss.
-        econstructor; eauto.
+        econstructor; eauto with nlsem.
         + rewrite tr_clocks_of; eauto.
           eapply sem_clocked_vars_impl; eauto.
           rewrite map_fst_idck; eauto.

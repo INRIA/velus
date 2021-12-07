@@ -257,6 +257,8 @@ Module Type FUSION
   | IFSkip:
       Fusible Skip.
 
+  Global Hint Constructors Fusible : obcinv.
+
   Definition ClassFusible (c: class) : Prop :=
     Forall (fun m=> Fusible m.(m_body)) c.(c_methods).
 
@@ -270,7 +272,6 @@ Module Type FUSION
       (Fusible (fold_left (fun i x => Comp (f x) i) xs Skip)
        /\ Fusible iacc).
   Proof.
-    Hint Constructors Fusible.
     induction xs as [|x xs IH]; [now intuition|].
     intros; split.
     - intro HH. simpl in HH. apply IH in HH.
@@ -296,7 +297,6 @@ Module Type FUSION
       stmt_eval_eq (Comp (Switch e ss d1) (Switch e tt d2))
                    (Switch e (CommonList.map2 (option_map2_defaults Comp d1 d2) ss tt) (Comp d1 d2)).
   Proof.
-    Hint Constructors stmt_eval.
     intros * Hfw prog menv env menv' env'.
     split; intro Hstmt.
     - inversion_clear Hstmt as [| | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
@@ -313,7 +313,7 @@ Module Type FUSION
         * cannot_write.
           eapply nth_error_In, Forall_forall in Nths; eauto.
           contradiction.
-      + simpl; unfold option_map2_defaults; cases; simpl in *; eauto.
+      + simpl; unfold option_map2_defaults; cases; simpl in *; eauto with obcsem.
     - inversion_clear Hstmt as [| | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
       rewrite map2_combine in Hv.
       apply map_nth_error_inv in Hv as ((s1 & s2) & Nth & ?); subst.
@@ -388,7 +388,6 @@ Module Type FUSION
         (Can_write_in x s1 \/ Can_write_in x s2)
         <-> Can_write_in x (zip s1 s2).
     Proof.
-      Hint Constructors Can_write_in wt_stmt.
       induction s1 using stmt_ind2; destruct s2; simpl; inversion_clear 1; inversion_clear 1;
         repeat progress
                match goal with
@@ -398,10 +397,10 @@ Module Type FUSION
                | |- context [equiv_decb ?e1 ?e2] =>
                  destruct (equiv_decb e1 e2) eqn:Heq
                | H:Can_write_in _ (zip _ _) |- _ =>
-                 (apply IHs1_1 in H || apply IHs1_2 in H); eauto
+                 (apply IHs1_1 in H || apply IHs1_2 in H); eauto with obctyping obcinv
                | |- Can_write_in _ (Comp _ (zip _ _)) =>
-                 now (apply CWIComp2; apply IHs1_2; eauto; intuition)
-               | _ => intuition eauto
+                 now (apply CWIComp2; apply IHs1_2; eauto with obctyping obcinv; intuition)
+               | _ => intuition eauto with obctyping obcinv
                end.
       - constructor.
         rewrite map2_combine, Exists_map, Exists_exists.
@@ -461,7 +460,6 @@ Module Type FUSION
         (Can_write_in_var x s1 \/ Can_write_in_var x s2)
         <-> Can_write_in_var x (zip s1 s2).
     Proof.
-      Hint Constructors Can_write_in_var wt_stmt.
       induction s1 using stmt_ind2; destruct s2; simpl; inversion_clear 1; inversion_clear 1;
         repeat progress
                match goal with
@@ -471,10 +469,10 @@ Module Type FUSION
                | |- context [equiv_decb ?e1 ?e2] =>
                  destruct (equiv_decb e1 e2) eqn:Heq
                | H:Can_write_in_var _ (zip _ _) |- _ =>
-                 (apply IHs1_1 in H || apply IHs1_2 in H); eauto
+                 (apply IHs1_1 in H || apply IHs1_2 in H); eauto with obctyping obcinv
                | |- Can_write_in_var _ (Comp _ (zip _ _)) =>
-                 now (apply CWIVComp2; apply IHs1_2; eauto; intuition)
-               | _ => intuition eauto
+                 now (apply CWIVComp2; apply IHs1_2; eauto with obctyping obcinv; intuition)
+               | _ => intuition eauto with obctyping obcinv
                end.
       - constructor.
         rewrite map2_combine, Exists_map, Exists_exists.
@@ -535,13 +533,12 @@ Module Type FUSION
         Fusible s2 ->
         Fusible (zip s1 s2).
     Proof.
-      Hint Constructors Fusible Can_write_in wt_stmt.
       induction s1 using stmt_ind2; destruct s2;
         intros WTs1 WTs2 Hfree1 Hfree2; inv WTs1; inv WTs2;
           inversion_clear Hfree1; inversion_clear Hfree2;
             simpl;
-            try now intuition eauto.
-      destruct (e ==b e0) eqn: E; eauto.
+            try now intuition eauto with obctyping obcinv.
+      destruct (e ==b e0) eqn: E; eauto with obcinv.
       rewrite equiv_decb_equiv in E.
       assert (e = e0) by auto; subst.
       rewrite map2_combine.
@@ -576,20 +573,19 @@ Module Type FUSION
         wt_stmt p insts Γm Γv s2 ->
         wt_stmt p insts Γm Γv (zip s1 s2).
     Proof.
-      Hint Constructors wt_stmt.
-      induction s1 using stmt_ind2'; destruct s2; simpl; inversion_clear 1; inversion_clear 1; eauto.
-      cases_eqn E; eauto.
+      induction s1 using stmt_ind2'; destruct s2; simpl; inversion_clear 1; inversion_clear 1; eauto with obctyping.
+      cases_eqn E; eauto with obctyping.
       rewrite equiv_decb_equiv in E; assert (e = e0) by auto; subst.
       match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
       assert (length ss = length l) as E' by congruence.
       rewrite map2_combine.
-      econstructor; eauto.
+      econstructor; eauto with obctyping.
       - rewrite map_length, combine_length.
         rewrite E', Min.min_idempotent; auto.
       - intros * Hin; apply in_map_iff in Hin as ((os1, os2) & Eq & Hin).
         pose proof Hin as Hin'; apply in_combine_l in Hin; apply in_combine_r in Hin'.
         take (Forall _ ss) and apply Forall_forall with (2 := Hin) in it; eauto.
-        destruct os1, os2; simpl in *; inv Eq; eauto.
+        destruct os1, os2; simpl in *; inv Eq; eauto with obctyping.
     Qed.
 
     Lemma Can_write_in_fuse':
@@ -627,7 +623,6 @@ Module Type FUSION
         Fusible s2 ->
         stmt_eval_eq (fuse' s1 s2) (Comp s1 s2).
     Proof.
-      Hint Constructors Fusible.
       induction s2 using stmt_ind2;
         intros s1 WTs1 WTs2 Fus1 Fus2; simpl; inv WTs2;
           try now (rewrite zip_Comp'; intuition).
@@ -660,10 +655,10 @@ Module Type FUSION
         wt_stmt p insts Γm Γv s2 ->
         No_Overwrites (Comp s1 s2) ->
         No_Overwrites (zip s1 s2).
-    Proof.
+    Proof with eauto with obctyping obcinv.
       induction s1 using stmt_ind2; destruct s2; inversion_clear 1; inversion_clear 1;
-        intros Hno; inv Hno; simpl; eauto; repeat (take (No_Overwrites (_ _)) and inv it).
-      - destruct (e ==b e0); auto.
+        intros Hno; inv Hno; simpl; eauto with obcinv; repeat (take (No_Overwrites (_ _)) and inv it).
+      - destruct (e ==b e0)...
         constructor.
         rewrite map2_combine; apply Forall_map, Forall_forall; intros (os1, os2) Hin.
         pose proof Hin as Hin'; apply in_combine_l in Hin; apply in_combine_r in Hin'.
@@ -676,66 +671,66 @@ Module Type FUSION
             constructor; auto; intros x Can_s Can_t;
               ((now eapply Cannot1; constructor; apply Exists_exists; eauto) ||
                (now eapply Cannot2; constructor; apply Exists_exists; eauto)).
-      - constructor; eauto.
+      - constructor...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          apply Can_write_in_var_zip in Can2 as [|]...
           * eapply H7; eauto.
-          * eapply H5; eauto.
+          * eapply H5...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          apply Can_write_in_var_zip in Can1 as [|]...
           * eapply H7; eauto.
-          * eapply H5; eauto.
-        + eapply IHs1_2; eauto.
-          constructor; auto.
-          intros x Can1 Can2; eapply H5; eauto.
-      - constructor; eauto.
+          * eapply H5...
+        + eapply IHs1_2...
+          constructor...
+          intros x Can1 Can2; eapply H5...
+      - constructor...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          apply Can_write_in_var_zip in Can2 as [|]...
           * eapply H7; eauto.
-          * eapply H5; eauto.
+          * eapply H5...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          apply Can_write_in_var_zip in Can1 as [|]...
           * eapply H7; eauto.
-          * eapply H5; eauto.
-        + eapply IHs1_2; eauto.
-          constructor; auto.
-          intros x Can1 Can2; eapply H5; eauto.
-      - constructor; eauto.
+          * eapply H5...
+        + eapply IHs1_2...
+          constructor...
+          intros x Can1 Can2; eapply H5...
+      - constructor...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          apply Can_write_in_var_zip in Can2 as [|]...
           * eapply H12; eauto.
-          * eapply H9; eauto.
+          * eapply H9...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          apply Can_write_in_var_zip in Can1 as [|]...
           * eapply H12; eauto.
-          * eapply H9; eauto.
-        + eapply IHs1_2; eauto.
-          constructor; auto.
-          intros x Can1 Can2; eapply H9; eauto.
-      - constructor; eauto.
+          * eapply H9...
+        + eapply IHs1_2...
+          constructor...
+          intros x Can1 Can2; eapply H9...
+      - constructor...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          apply Can_write_in_var_zip in Can2 as [|]...
           * eapply H12; eauto.
-          * eapply H5; eauto.
+          * eapply H5...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          apply Can_write_in_var_zip in Can1 as [|]...
           * eapply H12; eauto.
-          * eapply H5; eauto.
-        + eapply IHs1_2; eauto.
-          constructor; auto.
-          intros x Can1 Can2; eapply H5; eauto.
-      - constructor; eauto.
+          * eapply H5...
+        + eapply IHs1_2...
+          constructor...
+          intros x Can1 Can2; eapply H5...
+      - constructor...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can2 as [|]; eauto.
+          apply Can_write_in_var_zip in Can2 as [|]...
           * eapply H13; eauto.
-          * eapply H10; eauto.
+          * eapply H10...
         + intros x Can1 Can2.
-          apply Can_write_in_var_zip in Can1 as [|]; eauto.
+          apply Can_write_in_var_zip in Can1 as [|]...
           * eapply H13; eauto.
-          * eapply H10; eauto.
-        + eapply IHs1_2; eauto.
-          constructor; auto.
-          intros x Can1 Can2; eapply H10; eauto.
+          * eapply H10...
+        + eapply IHs1_2...
+          constructor...
+          intros x Can1 Can2; eapply H10...
     Qed.
 
     Lemma No_Overwrites_fuse':
@@ -746,20 +741,20 @@ Module Type FUSION
         No_Overwrites (fuse' s1 s2).
     Proof.
       intros s1 s2; revert s1; induction s2; simpl; inversion_clear 2; inversion_clear 1;
-        try apply No_Overwrites_zip; eauto using wt_stmt.
+        try apply No_Overwrites_zip; eauto with obctyping obcinv.
       match goal with H:No_Overwrites (Comp _ _) |- _ => inv H end.
-      apply IHs2_2; auto.
+      apply IHs2_2; auto with obctyping.
       - now apply wt_stmt_zip.
       - constructor; auto.
         + intros x Hcw.
           apply Can_write_in_var_zip in Hcw as [Hcw|Hcw]; auto.
           match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
           apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
-        + intros x Hcw; apply Cannot_write_in_var_zip; auto.
+        + intros x Hcw; apply Cannot_write_in_var_zip; auto with obcinv.
         + apply No_Overwrites_zip; auto.
-          constructor; auto. intros x Hcw.
+          constructor; auto with obcinv. intros x Hcw.
           match goal with H:forall x, Can_write_in_var x s1 -> _ |- _ => apply H in Hcw end.
-          apply cannot_write_in_var_Comp in Hcw as (? & ?); auto.
+          apply cannot_write_in_var_Comp in Hcw as (? & ?); auto with obcinv.
     Qed.
 
     Corollary No_Overwrites_fuse:

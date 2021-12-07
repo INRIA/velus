@@ -247,8 +247,6 @@ Module Type TRANSLATION
     intros. apply incl_map, iresets_of_incl.
   Qed.
 
-  Hint Resolve n_ingt0.
-
   Module Import StcIsReset := StcIsResetFun Ids Op OpAux Cks CESyn SynStc.
   Module Import StcIsNext := StcIsNextFun Ids Op OpAux Cks CESyn SynStc.
 
@@ -268,6 +266,7 @@ Module Type TRANSLATION
        SynStc.s_out   := n.(n_out);
        SynStc.s_tcs   := translate_eqns n.(n_eqs)
     |}.
+  Next Obligation. apply n_ingt0. Qed.
   Next Obligation.
     rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
     setoid_rewrite ps_from_list_gather_eqs_memories.

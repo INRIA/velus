@@ -113,8 +113,8 @@ Module Type CECLOCKING
       apply wc_clock_exp with (1:=Hwc) (2:=Hck).
   Qed.
 
-  Hint Constructors wc_clock wc_exp wc_cexp : nlclocking.
-  Hint Resolve Forall_nil : nlclocking.
+  Global Hint Constructors wc_clock wc_exp wc_cexp : nlclocking.
+  Global Hint Resolve Forall_nil : nlclocking.
 
   Global Instance wc_exp_Proper:
     Proper (@Permutation (ident * clock) ==> @eq exp ==> @eq clock ==> iff)
