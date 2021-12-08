@@ -38,8 +38,7 @@ done
 # Configure CompCert and extract relevant values into Makefile.config
 (cd "$compcertdir" &&
  ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
-     $standard_headers $clightgen $target \
-     -use-external-MenhirLib)
+     $standard_headers $clightgen $target)
 if [ -f "$compcertdir"/Makefile.config ]; then
     export "$(grep ARCH= < "$compcertdir"/Makefile.config)"
     export "$(grep BITSIZE= < "$compcertdir"/Makefile.config)"
@@ -59,5 +58,6 @@ printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
     fi;
     printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
     printf -- "-R \"%s\" Flocq\\n" "$compcertdir/flocq";
+    printf -- "-R \"%s\" MenhirLib\\n" "$compcertdir/MenhirLib";
     cat vfiles
 } >"$coqproject"

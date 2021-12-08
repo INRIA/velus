@@ -60,8 +60,8 @@ The compiler also accepts the options
 ## Local installation
 
 Vélus has been implemented in Coq.8.14.1. It includes a
-modified version of CompCert and depends on menhir.20210929
-and the corresponding version of coq-menhirlib.
+modified version of CompCert and depends on menhir >= 20190626.
+
 
 To build a self-contained installation for compiling and running
 Vélus, we recommend installing an ad-hoc
@@ -71,9 +71,7 @@ Vélus, we recommend installing an ad-hoc
     $ mkdir opam
     $ opam init --root=opam --compiler=4.13.1
     $ eval `opam config env --root=$VELUS_DIR/opam`
-    $ opam install ocamlbuild
-    $ opam repo add coq-released https://coq.inria.fr/opam/released
-    $ opam install -j4 coq.8.14.1 menhir.20211125 coq-menhirlib.20211125
+    $ opam install -j4 ocamlbuild coq.8.14.1 menhir
 
 To check the proofs and build Vélus:
 
