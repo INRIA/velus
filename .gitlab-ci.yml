@@ -1,6 +1,10 @@
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
+stages:
+  - build
+  - test
+
 build-job:
   stage: build
   only:
@@ -10,3 +14,15 @@ build-job:
     - ./configure ia32-linux
     - make -C CompCert -j
     - make -j
+
+test-job:
+  stage: test
+  only:
+    - basile-thesis
+  allow_failure:
+    exit_codes: 1
+  variables:
+    GIT_CLEAN_FLAGS: none
+  script:
+    - cd tests/
+    - ./runtests.sh
