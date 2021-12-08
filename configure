@@ -39,7 +39,7 @@ done
 (cd "$compcertdir" &&
  ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
      $standard_headers $clightgen $target \
-     -use-external-Flocq -use-external-MenhirLib)
+     -use-external-MenhirLib)
 if [ -f "$compcertdir"/Makefile.config ]; then
     export "$(grep ARCH= < "$compcertdir"/Makefile.config)"
     export "$(grep BITSIZE= < "$compcertdir"/Makefile.config)"
@@ -58,5 +58,6 @@ printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 	             "${ARCH}_${BITSIZE}";
     fi;
     printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
+    printf -- "-R \"%s\" Flocq\\n" "$compcertdir/flocq";
     cat vfiles
 } >"$coqproject"
