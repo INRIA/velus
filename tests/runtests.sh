@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 VELUS="../velus ${VELUSARGS}"
 
@@ -45,7 +45,7 @@ printf -- "--%bOK success: %d / %d%b\n" \
 printf -- "--%bKO success: %d / %d%b\n" \
     "${CBLUE}" "${KO_SUCCESS}" "${KO}" "${CDEF}"
 
-if [ $OK != $OK_SUCCESS || $KO != $KO_SUCCESS ]
+if [[ $OK != $OK_SUCCESS || $KO != $KO_SUCCESS ]]
 then
     exit 1
 fi

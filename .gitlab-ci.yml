@@ -22,7 +22,7 @@ test-job:
   allow_failure:
     exit_codes: 1
   variables:
-    GIT_CLEAN_FLAGS: none
+    GIT_STRATEGY: none
   script:
     - cd tests/
     - ./runtests.sh
