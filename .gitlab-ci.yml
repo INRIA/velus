@@ -7,22 +7,18 @@ stages:
 
 build-job:
   stage: build
-  only:
-    - basile-thesis
   script:
     - echo "Hello"
     - ./configure ia32-linux
     - make -C CompCert -j
     - make -j
+  artifacts:
+    paths:
+      - ./_build/
+      - ./velus
 
 test-job:
   stage: test
-  only:
-    - basile-thesis
-  allow_failure:
-    exit_codes: 1
-  variables:
-    GIT_STRATEGY: none
   script:
     - cd tests/
     - ./runtests.sh
