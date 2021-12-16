@@ -36,6 +36,17 @@ Ltac cases_in H :=
            destruct x; try solve [inv H; auto]
          end; auto.
 
+Create HintDb conjs.
+
+Ltac destruct_conjs :=
+  autounfold with conjs in *;
+  repeat
+    match goal with
+    | H: exists _, _ |- _ => destruct H
+    | H: _ /\ _ |- _ => destruct H
+    | x: _ * _ |- _ => destruct x
+    end; simpl in *.
+
 (* Tactics for manipulating hypotheses without renaming them.
    Lighter-weight (but less expressive) than match goal with.
 

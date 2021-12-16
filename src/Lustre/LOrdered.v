@@ -127,29 +127,19 @@ Module Type LORDERED
       In f (map n_name (nodes G)).
   Proof.
     intros * Hwl Hisin.
-    Local Ltac Forall_Exists :=
-      match goal with
-      | Hex : Exists _ ?es, Hwl : Forall (wl_exp ?G) ?Es, H: Forall (fun _ => _) ?es |- _ =>
-        eapply Forall_Forall in H; [|eapply Hwl]; clear Hwl;
-        eapply Forall_Exists, Exists_exists in H as [? [_ [[? ?] ?]]]; eauto
-      end.
     induction e using exp_ind2; inv Hwl; inv Hisin.
     - (* unop *) auto.
     - (* binop *) destruct H1; auto.
-    - (* fby *) destruct H3 as [?|?]; Forall_Exists.
-    - (* arrow *) destruct H3 as [?|?]; Forall_Exists.
-    - (* when *) Forall_Exists.
+    - (* fby *) destruct H3 as [?|?]; simpl_Exists; simpl_Forall; eauto.
+    - (* arrow *) destruct H3 as [?|?]; simpl_Exists; simpl_Forall; eauto.
+    - (* when *) simpl_Exists; simpl_Forall; eauto.
     - (* merge *)
-      eapply Forall_Forall in H; [|eapply H5]; clear H5.
-      eapply Forall_Exists, Exists_exists in H2 as (?&?&He&?); eauto; simpl in *.
-      destruct He. Forall_Exists.
+      simpl_Exists; simpl_Forall; eauto.
     - (* case *)
       destruct H3 as [Hex|[Hex|(?&?&Hex)]]; subst; simpl in *; auto.
-      + eapply Forall_Forall in H; [|eapply H9]; clear H9.
-        eapply Forall_Exists, Exists_exists in Hex as (?&?&He&?); eauto; simpl in *.
-        destruct He. Forall_Exists.
-      + specialize (H11 _ eq_refl). Forall_Exists.
-    - (* app1 *) clear H8. destruct H3; Forall_Exists.
+      + simpl_Exists; simpl_Forall; eauto.
+      + specialize (H11 _ eq_refl). simpl_Exists; simpl_Forall; eauto.
+    - (* app1 *) clear H8. destruct H3; simpl_Exists; simpl_Forall; eauto.
     - (* app2 *) assert (find_node f0 G <> None) as Hfind.
       { intro contra. congruence. }
       apply find_node_Exists, Exists_exists in Hfind as [? [Hin Hname]].
@@ -164,9 +154,7 @@ Module Type LORDERED
     intros ? [xs es] * Hwl Hisin.
     destruct Hwl as [Hwl _].
     unfold Is_node_in_eq in Hisin.
-    eapply Forall_Exists in Hisin; eauto.
-    eapply Exists_exists in Hisin as [? [_ [? ?]]].
-    eapply wl_exp_Is_node_in_exp; eauto.
+    simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
   Qed.
 
   Lemma wl_equation_Is_node_in_block {PSyn prefs} : forall (G: @global PSyn prefs) d f,
@@ -179,20 +167,14 @@ Module Type LORDERED
       eapply wl_equation_Is_node_in_eq; eauto.
     - inv Hwl. inv Hin.
       destruct H1 as [Hisin|Hisin].
-      + eapply Forall_Forall in H; eauto.
-        eapply Forall_Exists in Hisin; eauto.
-        eapply Exists_exists in Hisin as (?&_&(?&?)&?); eauto.
+      + simpl_Exists; simpl_Forall; eauto.
       + eapply wl_exp_Is_node_in_exp; eauto.
     - inv Hwl. inv Hin.
       destruct H1 as [Hisin|Hisin].
       + eapply wl_exp_Is_node_in_exp; eauto.
-      + do 2 (eapply Exists_exists in Hisin as (?&?&Hisin)).
-        do 2 (eapply Forall_forall in H; eauto).
-        do 2 (eapply Forall_forall in H5; eauto).
+      + simpl_Exists; simpl_Forall; eauto.
     - inv Hwl. inv Hin.
-      eapply Forall_Forall in H; eauto.
-      eapply Forall_Exists in H; eauto.
-      eapply Exists_exists in H as (?&_&(?&?)&?); eauto.
+      simpl_Exists; simpl_Forall; eauto.
   Qed.
 
   Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,
@@ -214,7 +196,7 @@ Module Type LORDERED
     intros * Wl' IsNodeIn.
     eapply wl_node_Is_node_in, in_map_iff in IsNodeIn as (?&Name&Hin); eauto.
     rewrite find_unit_Exists.
-    eapply Exists_exists; eauto.
+    solve_Exists.
   Qed.
 
 End LORDERED.

@@ -838,7 +838,7 @@ Proof.
     apply Pv'3 in Hx as (zs & Hx & Hsuc).
     apply Env.elements_correct in Hx.
     apply ps_adds_spec; left.
-    apply in_map_iff. exists (x, zs); auto.
+    solve_In.
   - revert Hfold.
     revert v'.
     generalize (none_visited graph) as acc.

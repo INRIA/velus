@@ -269,7 +269,6 @@ Module Type ISDEFINED
           (simpl in H; apply add_spec in H; destruct H;
            [ try rewrite H; left; constructor; auto
            | apply not_In_empty in H; contradiction]).
-
   Qed.
 
   Lemma Is_defined_in_vars_defined:

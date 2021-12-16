@@ -401,10 +401,7 @@ Module Type CSCLOCKING
             rewrite 2 in_app_iff. do 2 right.
             eapply new_idents_In with (ids1:=filter _ _) in H10; eauto.
             2:eapply InMembers_app, or_intror, In_InMembers; eauto.
-            eapply in_map_iff in H10 as (((?&?)&?&?)&Heq&Hin'); inv Heq.
-            repeat (eapply in_map_iff; do 2 esplit; eauto).
-            2:(eapply in_flat_map; do 2 esplit; eauto); simpl.
-            2:(eapply in_map_iff; do 2 esplit; eauto). simpl; auto.
+            solve_In.
         + eapply CS.mmap2_values in H6. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H1.
           2:{ eapply Forall3_length in H6 as (?&?); congruence. }
           2:{ eapply mmap_length in H1; eauto. }
@@ -426,24 +423,17 @@ Module Type CSCLOCKING
              - intros ? Hin. erewrite Env.In_from_list in Hin.
                erewrite Permutation_app_comm, fst_InMembers, map_map, map_ext, <-fst_InMembers; auto.
                intros (?&?&?); auto.
-             - intros ??? Hfind Hin.
-               do 2 (eapply in_map_iff in Hin as ((?&?&?)&Heq&Hin); inv Heq); simpl.
+             - intros ??? Hfind Hin. simpl_In.
                eapply new_idents_In with (ids1:=filter _ _) in H9; eauto.
                2:{ eapply Env.find_In, Env.In_from_list in Hfind; eauto. }
-               unfold rename_var in H9; eauto. rewrite Hfind in H9.
-               eapply in_map_iff in H9 as (((?&?)&?&?)&Heq&Hin'); inv Heq.
-               repeat rewrite in_app_iff. do 2 right.
-               repeat (eapply in_map_iff; do 2 esplit; eauto).
-               2:(eapply in_flat_map; do 2 esplit; eauto); simpl.
-               2:(eapply in_map_iff; do 2 esplit; eauto with datatypes). simpl; auto.
+               unfold rename_var in H9; eauto. rewrite Hfind in H9. simpl_In.
+               repeat rewrite in_app_iff. do 2 right. solve_In.
              - intros ?? Hfind Hin. exfalso.
                assert (Hnin:=Hfind). rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list in Hnin.
-               eapply Hnin.
-               do 2 (eapply in_map_iff in Hin as ((?&?&?)&Heq&Hin); inv Heq); simpl.
+               eapply Hnin. simpl_In.
                erewrite fst_InMembers, map_map, map_ext, map_app, 2 new_idents_old; eauto.
                2:intros ((?&?)&(?&?)); auto.
-               rewrite Permutation_app_comm, <-map_app.
-               eapply in_map_iff; do 2 esplit; eauto; auto.
+               rewrite Permutation_app_comm, <-map_app. solve_In.
              - erewrite fst_NoDupMembers, map_map, <-map_ext, <-fst_NoDupMembers; eauto. 2:intros (?&?&?); auto.
                now rewrite Permutation_app_comm.
              - apply Forall_map, Forall_map, Forall_forall; intros (?&?&?) ?; simpl; auto with clocks.
@@ -460,10 +450,10 @@ Module Type CSCLOCKING
                  intros (?&?&?); auto.
              - eapply Forall_impl; [|eapply it0]; intros.
                eapply wc_block_incl; eauto. intros (?&?) Hin.
-               eapply H7 in Hin as (Hin&?); subst. eapply in_map_iff in Hin as ((?&?&?)&Heq&?); inv Heq.
-               apply Partition_Permutation in Hpart. rewrite Hpart in H2.
-               repeat (eapply in_map_iff; do 2 esplit; eauto).
-               2:apply in_app_iff in H2 as [Hin|Hin]; eauto with datatypes.
+               eapply H7 in Hin as (Hin&?); subst. simpl_In.
+               apply Partition_Permutation in Hpart. rewrite Hpart in Hin0.
+               solve_In.
+               2:apply in_app_iff in Hin0 as [Hin|Hin]; eauto with datatypes.
                simpl; auto.
                apply in_or_app, or_intror, filter_In. split; auto.
                apply equiv_decb_refl.
@@ -475,14 +465,9 @@ Module Type CSCLOCKING
                eapply filter_In in Hin as (Hin&Hfilter).
                rewrite equiv_decb_equiv in Hfilter. inv Hfilter.
                apply Partition_Permutation in Hpart. rewrite Hpart, idck_app.
-               apply in_or_app, or_intror.
-               eapply in_map_iff; do 2 esplit; eauto. auto.
-             - rewrite 2 in_app_iff. do 2 right.
-               repeat (eapply in_map_iff; do 2 esplit; eauto).
-               2:(eapply in_flat_map; do 2 esplit; eauto); simpl.
-               2:(eapply in_map_iff; do 2 esplit; eauto with datatypes). simpl.
-               f_equal; auto.
-               eapply new_idents_In_inv_ck in H6; eauto.
+               apply in_or_app, or_intror. solve_In.
+             - rewrite 2 in_app_iff. do 2 right. solve_In; eauto with datatypes.
+               eapply new_idents_In_inv_ck in H6; eauto. subst; reflexivity.
              - rewrite app_assoc. apply in_or_app; auto.
            }
         + rewrite Forall_map.
@@ -526,8 +511,7 @@ Module Type CSCLOCKING
           * intros ?? Hfind Hin. rewrite idck_app in Hin.
             repeat rewrite in_app_iff in *. destruct Hin as [Hin|Hin]; eauto.
             right. clear - Hin. unfold idck, idty in *. repeat rewrite map_map in *.
-            eapply in_map_iff in Hin as ((?&(?&?)&?)&Heq&Hin); inv Heq.
-            eapply in_map_iff; do 2 esplit; eauto. reflexivity.
+            solve_In.
           * apply NoDupMembers_app; auto. now rewrite NoDupMembers_idty.
             intros ? Hinm1. rewrite InMembers_idty in Hinm1. rewrite fst_InMembers. auto.
           * rewrite idck_app.
@@ -546,14 +530,12 @@ Module Type CSCLOCKING
           eapply subclock_clock_wc; eauto.
           * intros ??? Hfind Hin. rewrite in_app_iff in *. repeat rewrite map_map in *; simpl in *.
             destruct Hin as [Hin|Hin]; eauto.
-            exfalso. eapply in_map_iff in Hin as ((?&(?&?)&?)&Heq&Hin); inv Heq.
+            exfalso. simpl_In.
             eapply Env.find_In, Hsubin, fst_InMembers, H5 in Hfind; eauto.
             eapply In_InMembers; eauto.
           * intros ?? Hfind Hin. rewrite in_app_iff in *. repeat rewrite map_map in *; simpl in *.
             destruct Hin as [Hin|Hin]; eauto.
-            right. clear - Hin.
-            eapply in_map_iff in Hin as ((?&(?&?)&?)&Heq&Hin); inv Heq.
-            eapply in_map_iff; do 2 esplit; eauto. reflexivity.
+            right. clear - Hin. solve_In.
           * eapply wc_clock_incl; eauto; repeat solve_incl_app.
     Qed.
 

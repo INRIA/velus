@@ -878,26 +878,18 @@ Module Type COINDSTREAMS
       + inv H; intuition.
         right; do 2 eexists; intuition; eauto.
       + inv H; repeat rewrite Str_nth_S.
-        * take (Forall _ _) and clear it.
-          take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?)].
-          -- left; intuition.
-             take (Forall _ _) and apply Forall_map in it.
-             apply Forall_forall; intros (?&?) Hin; eapply Forall_forall in Hin; eauto.
-             simpl in Hin; auto.
-          -- right. repeat esplit; eauto.
-             ++ rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
-             ++ rewrite Forall_map in H1. eapply Forall_impl; [|eauto]; intros (?&?) ??.
-                rewrite Str_nth_S_tl; auto.
         * take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?)].
           -- left; intuition.
-             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-             rewrite Str_nth_S_tl; auto.
+             simpl_Forall; eauto.
           -- right. repeat esplit; eauto.
-             ++ rewrite Exists_map in H0. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
-             ++ rewrite Forall_map in H3. eapply Forall_impl; [|eapply H3]; intros (?&?) ??.
-                rewrite Str_nth_S_tl; auto.
+             ++ solve_Exists.
+             ++ simpl_Forall; eauto.
+        * take (merge _ _ _) and apply IHn in it as [(?&?&?)|(?&?&?&?&?&?)].
+          -- left; intuition.
+             simpl_Forall; eauto.
+          -- right. repeat esplit; eauto.
+             ++ clear H1. solve_Exists.
+             ++ simpl_Forall; eauto.
     - revert xs ess rs; cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv rs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
@@ -907,29 +899,22 @@ Module Type COINDSTREAMS
         * cofix_step CoFix H.
           destruct H as [(?&?&?)|(?&?&?&?&?&?)].
           -- left; intuition.
-             apply Forall_map, Forall_forall; intros (?&?) Hin;
-               eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+             simpl_Forall; eauto.
           -- subst; right; do 2 eexists. repeat split; eauto.
-             ++ rewrite Exists_map. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H1]; intros (?&?) ??.
-                rewrite <-Str_nth_S_tl; auto.
+             ++ solve_Exists.
+             ++ simpl_Forall; eauto.
         * destruct (H 0) as [(?&?&?)|(?&?&?&?&?&?)]; try discriminate.
-          apply Forall_forall; intros (?&?) Hin;
-            eapply Forall_forall in Hin; eauto; simpl in *; auto.
+          simpl_Forall; eauto.
       + destruct (H 0) as [(?&?&?)|(?&?& Hc & E & E' & Hr)]; try discriminate.
         inv Hc. inv Hr.
         econstructor; eauto.
         cofix_step CoFix H.
         destruct H as [(?&?&?)|(?&?&?&?&?&?)].
         -- left; intuition.
-           apply Forall_map, Forall_forall; intros (?&?) Hin.
-           eapply Forall_forall in H0; eauto; simpl in Hin; auto.
+           simpl_Forall; eauto.
         -- right; do 2 eexists. repeat split; eauto.
-             ++ rewrite Exists_map. eapply Exists_exists in H0 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H1]; intros (?&?) ??.
-                rewrite <-Str_nth_S_tl; auto.
+           ++ clear E. solve_Exists.
+           ++ simpl_Forall; eauto.
   Qed.
 
   Lemma case_spec:
@@ -966,52 +951,30 @@ Module Type COINDSTREAMS
       + inv H; repeat rewrite Str_nth_S.
         * take (case _ _ _ _) and apply IHn in it as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-             rewrite Str_nth_S_tl; auto.
+             simpl_Forall. rewrite Str_nth_S_tl; auto.
              destruct d; simpl in *; auto.
-          -- right; left. repeat esplit; eauto.
-             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-                rewrite Str_nth_S_tl; auto.
-             ++ rewrite Exists_map in H3. eapply Exists_exists in H3 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
+          -- right; left. repeat esplit; eauto; simpl_Forall.
+             ++ rewrite Str_nth_S_tl; auto.
+             ++ solve_Exists.
              ++ destruct d; simpl in *; auto.
-          -- right; right. repeat esplit; eauto.
-             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-                rewrite Str_nth_S_tl; auto.
-             ++ rewrite Forall_map in H3. eapply Forall_impl; [|eapply H3]; intros (?&?) ?.
-                auto.
-             ++ destruct d; simpl in *; eauto.
+          -- right; right. repeat esplit; eauto; simpl_Forall; eauto.
+             destruct d; simpl in *; eauto.
         * take (case _ _ _ _) and apply IHn in it as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-             rewrite Str_nth_S_tl; auto.
+             simpl_Forall; eauto.
              destruct d; simpl in *; auto.
-          -- right; left. repeat esplit; eauto.
-             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-                rewrite Str_nth_S_tl; auto.
-             ++ rewrite Exists_map in H4. eapply Exists_exists in H4 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
+          -- right; left. repeat esplit; eauto; simpl_Forall; eauto.
+             ++ clear H3. solve_Exists.
              ++ destruct d; simpl in *; auto.
-          -- right; right. repeat esplit; eauto.
-             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-                rewrite Str_nth_S_tl; auto.
-             ++ rewrite Forall_map in H4. eapply Forall_impl; [|eapply H4]; intros (?&?) ?.
-                auto.
-             ++ destruct d; simpl in *; eauto.
+          -- right; right. repeat esplit; eauto; simpl_Forall; eauto.
+             destruct d; simpl in *; eauto.
         * take (case _ _ _ _) and apply IHn in it as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
+             simpl_Forall.
              rewrite Str_nth_S_tl; auto.
-          -- right; left. repeat esplit; eauto.
-             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?; simpl.
-                rewrite Str_nth_S_tl; auto.
-             ++ rewrite Exists_map in H3. eapply Exists_exists in H3 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
-          -- right; right. repeat esplit; eauto.
-             ++ rewrite Forall_map in H0. eapply Forall_impl; [|eapply H0]; intros (?&?) ?.
-                rewrite Str_nth_S_tl; auto.
-             ++ rewrite Forall_map in H3. eapply Forall_impl; [|eapply H3]; intros (?&?) ?.
-                auto.
+          -- right; left. repeat esplit; eauto; simpl_Forall; eauto.
+             solve_Exists.
+          -- right; right. repeat esplit; eauto; simpl_Forall; eauto.
     - revert xs ess d rs; cofix CoFix; intros * H.
       unfold_Stv xs; unfold_Stv rs;
         try (specialize (H 0); repeat rewrite Str_nth_0 in H;
@@ -1020,25 +983,18 @@ Module Type COINDSTREAMS
       + constructor.
         * cofix_step CoFix H.
           destruct H as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
-          -- left; intuition.
-             apply Forall_map, Forall_forall; intros (?&?) Hin;
-               eapply Forall_forall in Hin; eauto; simpl in Hin; auto.
+          -- left; intuition; simpl_Forall; eauto.
              destruct d; auto.
-          -- subst; right; left. repeat esplit; eauto.
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros (?&?) ?; simpl.
-                rewrite <-Str_nth_S_tl; auto.
-             ++ rewrite Exists_map. eapply Exists_exists in H1 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
+          -- subst; right; left. repeat esplit; eauto; simpl_Forall; eauto.
+             ++ solve_Exists.
              ++ destruct d; simpl in *; auto.
           -- subst; right; right. repeat esplit; eauto.
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros (?&?) ?; simpl.
-                rewrite <-Str_nth_S_tl; auto.
+             ++ simpl_Forall; auto.
              ++ rewrite Forall_map. eapply Forall_impl; [|eapply H1]; intros (?&?) ?; simpl.
                 auto.
              ++ destruct d; simpl in *; eauto.
         * destruct (H 0) as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]]; try discriminate.
-          apply Forall_forall; intros (?&?) Hin;
-            eapply Forall_forall in Hin; eauto; simpl in *; auto.
+          simpl_Forall; eauto.
         * destruct (H 0) as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]]; try discriminate.
           destruct d; auto.
       + destruct (H 0) as [(?&?&?&?)|[(?&?&Hc&?&?&?&Hr)|(?&?&Hc&?&?&Hd&Hr)]]; try discriminate.
@@ -1050,14 +1006,11 @@ Module Type COINDSTREAMS
              eapply Forall_map, Forall_impl; [|eapply H3]; intros (?&?) ?; auto.
              destruct d; auto.
           -- subst; right; left. repeat esplit; eauto.
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) ?; simpl.
-                rewrite <-Str_nth_S_tl; auto.
-             ++ rewrite Exists_map. eapply Exists_exists in H4 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
+             ++ simpl_Forall; eauto.
+             ++ clear H1. solve_Exists.
              ++ destruct d; simpl in *; auto.
           -- subst; right; right. repeat esplit; eauto.
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) ?; simpl.
-                rewrite <-Str_nth_S_tl; auto.
+             ++ simpl_Forall; eauto.
              ++ rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) ?; simpl.
                 auto.
              ++ destruct d; simpl in *; eauto.
@@ -1066,15 +1019,12 @@ Module Type COINDSTREAMS
           cofix_step CoFix H.
           destruct H as [(?&?&?&?)|[(?&?&?&?&?&?&?)|(?&?&?&?&?&?&?)]].
           -- left; intuition.
-             eapply Forall_map, Forall_impl; [|eapply H2]; intros (?&?) ?; auto.
+             simpl_Forall; eauto.
           -- subst; right; left. repeat esplit; eauto.
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H2]; intros (?&?) ?; simpl.
-                rewrite <-Str_nth_S_tl; auto.
-             ++ rewrite Exists_map. eapply Exists_exists in H3 as ((?&?)&?&?&?); subst.
-                eapply Exists_exists; repeat (esplit; eauto).
+             ++ simpl_Forall; eauto.
+             ++ solve_Exists.
           -- subst; right; right. repeat esplit; eauto.
-             ++ rewrite Forall_map. eapply Forall_impl; [|eapply H2]; intros (?&?) ?; simpl.
-                rewrite <-Str_nth_S_tl; auto.
+             ++ simpl_Forall; eauto.
              ++ rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) ?; simpl.
                 auto.
   Qed.

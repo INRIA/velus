@@ -159,12 +159,10 @@ Module Type NTYPING
   Proof.
     intros st id ty.
     split; intros; unfold st_tys, idty in *.
-    - repeat simpl_In; simpl in *.
-      inv H.
-      exists c. assumption.
-    - repeat simpl_In; simpl in *.
-      destruct H as [cl Hin].
-      exists (id, (ty, cl)); simpl; split; auto.
+    - simpl_In; simpl in *.
+      eauto.
+    - simpl_In; simpl in *.
+      destruct H. solve_In.
   Qed.
 
   Fact st_follows_tys_incl : forall st st',
@@ -186,8 +184,7 @@ Module Type NTYPING
     apply idents_for_anns_incl in Hids.
     intros [id ty] Hin.
     unfold st_tys, idty in *.
-    repeat simpl_In. inv H.
-    exists (id, (ty, c)); split; auto.
+    solve_In.
   Qed.
 
   Ltac solve_incl :=
@@ -554,7 +551,7 @@ Module Type NTYPING
           eapply fresh_ident_In in Hfresh.
           apply in_or_app; right.
           unfold st_tys, idty. simpl_In; eexists; split; eauto. simpl. f_equal.
-        + solve_forall; repeat solve_incl.
+        + eapply Forall_impl; [|eauto]; intros; repeat solve_incl.
     Qed.
 
     Corollary unnest_resets_wt : forall vars es es' eqs' st st' ,
@@ -676,12 +673,12 @@ Module Type NTYPING
           { eapply idents_for_anns_values in H3; subst.
             specialize (unnest_fby_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
             eapply Forall2_swap_args. solve_forall.
-            destruct a0 as [ty ck]; simpl in *. rewrite typeof_annot, H1; auto. }
+            rewrite typeof_annot, H1; auto. }
           eapply mk_equations_Forall; solve_forall.
           repeat constructor; eauto.
-          destruct a0 as [ty ck]; simpl in *. rewrite app_nil_r, H5.
+          rewrite app_nil_r, H5.
           constructor; auto. eapply idents_for_anns_incl_ty in H3.
-          apply in_or_app, or_intror, H3. unfold idty; simpl_In. exists (i, (ty, ck)); auto.
+          apply in_or_app, or_intror, H3. unfold idty; solve_In.
       - (* arrow *)
         repeat inv_bind.
         assert (Hnorm1:=H1). eapply mmap2_wt with (vars0:=vars++st_tys x1) in H1 as [Hwt1 Hwt1']...
@@ -710,12 +707,12 @@ Module Type NTYPING
           { eapply idents_for_anns_values in H3; subst.
             specialize (unnest_arrow_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
             eapply Forall2_swap_args. solve_forall.
-            destruct a0 as [ty ck]; simpl in *. rewrite typeof_annot, H1; auto. }
+            rewrite typeof_annot, H1; auto. }
           eapply mk_equations_Forall; solve_forall.
           repeat constructor; eauto.
-          destruct a0 as [ty ck]; simpl in *. rewrite app_nil_r, H5.
+          rewrite app_nil_r, H5.
           constructor; auto. eapply idents_for_anns_incl_ty in H3.
-          apply in_or_app, or_intror, H3. unfold idty; simpl_In. exists (i, (ty, ck)); auto.
+          apply in_or_app, or_intror, H3. unfold idty; solve_In.
       - (* when *)
         destruct tn. repeat inv_bind.
         assert (Hnorm:=H0). eapply mmap2_wt with (vars0:=vars++st_tys st') in H0 as [Hwt1 Hwt1']; eauto with norm.
@@ -751,7 +748,7 @@ Module Type NTYPING
         + specialize (idents_for_anns_incl_ty _ _ _ _ H0) as Hincl.
           apply idents_for_anns_wt with (vars:=vars) in H0...
           rewrite Forall_forall; intros.
-          repeat simpl_In. inv H1... repeat solve_incl.
+          simpl_In. repeat solve_incl.
         + remember (unnest_merge _ _ _ _) as merges.
           assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x3) merges) as Htys.
           { eapply idents_for_anns_values in H0. rewrite H0, Forall2_map_1.
@@ -759,12 +756,11 @@ Module Type NTYPING
           eapply Forall2_ignore1' with (xs:=x3) in Hwt'.
           2:{ subst. apply idents_for_anns_length in H0. rewrite map_length in H0.
               rewrite unnest_merge_length... }
-          apply mk_equations_Forall; solve_forall; destruct a; simpl in *.
+          apply mk_equations_Forall; solve_forall; simpl in *.
           repeat constructor... 1:repeat solve_incl.
           rewrite typeof_annot, H7, app_nil_r; simpl.
           constructor; auto.
-          assert (In (i0, t) (idty x3)).
-          { unfold idty. rewrite in_map_iff. exists (i0, (t, c)); eauto. }
+          assert (In (i0, t) (idty x3)) by solve_In.
           eapply idents_for_anns_incl_ty in H0.
           eapply in_or_app, or_intror...
       - (* case (total) *)
@@ -798,7 +794,7 @@ Module Type NTYPING
         + specialize (idents_for_anns_incl_ty _ _ _ _ H1) as Hincl.
           apply idents_for_anns_wt with (vars:=vars) in H1...
           rewrite Forall_forall; intros.
-          repeat simpl_In. inv H2... repeat solve_incl.
+          simpl_In. repeat solve_incl.
         + remember (unnest_case _ _ _ _ _) as cases.
           assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x4) cases) as Htys.
           { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
@@ -806,12 +802,11 @@ Module Type NTYPING
           eapply Forall2_ignore1' with (xs:=x4) in Hwt'.
           2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
               rewrite unnest_case_length... }
-          apply mk_equations_Forall; solve_forall; destruct a; simpl in *.
+          apply mk_equations_Forall; solve_forall.
           repeat constructor... 1:repeat solve_incl.
           rewrite typeof_annot, H4, app_nil_r; simpl.
           constructor; auto.
-          assert (In (i0, t) (idty x4)).
-          { unfold idty. rewrite in_map_iff. exists (i0, (t, c)); eauto. }
+          assert (In (i0, t) (idty x4)) by solve_In.
           eapply idents_for_anns_incl_ty in H1.
           eapply in_or_app, or_intror...
       - (* case (default) *)
@@ -849,7 +844,7 @@ Module Type NTYPING
         + specialize (idents_for_anns_incl_ty _ _ _ _ H1) as Hincl.
           apply idents_for_anns_wt with (vars:=vars) in H1...
           rewrite Forall_forall; intros.
-          repeat simpl_In. inv H2... repeat solve_incl.
+          simpl_In. repeat solve_incl.
         + remember (unnest_case _ _ _ _ _) as cases.
           assert (Forall2 (fun '(ty, _) e => annot e = [(ty, nck)]) (map snd x6) cases) as Htys.
           { eapply idents_for_anns_values in H1. rewrite H1, Forall2_map_1.
@@ -857,18 +852,16 @@ Module Type NTYPING
           eapply Forall2_ignore1' with (xs:=x6) in Hwt'.
           2:{ subst. apply idents_for_anns_length in H1. rewrite map_length in H1.
               rewrite unnest_case_length... }
-          apply mk_equations_Forall; solve_forall; destruct a; simpl in *.
+          apply mk_equations_Forall; solve_forall.
           repeat constructor... 1:repeat solve_incl.
           rewrite typeof_annot, H4, app_nil_r; simpl.
           constructor; auto.
-          assert (In (i0, t) (idty x6)).
-          { unfold idty. rewrite in_map_iff. exists (i0, (t, c)); eauto. }
+          assert (In (i0, t) (idty x6)) by solve_In.
           eapply idents_for_anns_incl_ty in H1.
           eapply in_or_app, or_intror...
       - (* app *)
         repeat inv_bind.
-        assert (st_follows x4 x7) as Hfollows by repeat solve_st_follows.
-        eapply unnest_resets_wt in H3 as [Hwt2 [Hwt2' Hwt2'']]; simpl...
+        assert (Hun:=H3). eapply unnest_resets_wt in H3 as [Hwt2 [Hwt2' Hwt2'']]; simpl...
         2,3:solve_forall. 2:eapply H13 in H6; eauto. 2,3:repeat solve_incl.
 
         assert (Hnorm:=H1). eapply mmap2_wt with (vars0:=vars++st_tys x1) in H1 as [Hwt1 Hwt1']...
@@ -883,7 +876,7 @@ Module Type NTYPING
         { eapply mmap2_unnest_exp_numstreams; eauto. }
 
         split; [|constructor]; repeat rewrite Forall_app; repeat split.
-        4,6:solve_forall; repeat solve_incl.
+        4,6:eapply Forall_impl; [|eauto]; intros; repeat solve_incl.
         + specialize (idents_for_anns_incl_ty _ _ _ _ H4) as Hincl.
           eapply idents_for_anns_wt with (vars:=vars) in H4... solve_forall; repeat solve_incl.
         + destruct Hiface as (_&Hiface'). specialize (Hiface' f).
@@ -901,10 +894,9 @@ Module Type NTYPING
         + simpl. rewrite app_nil_r.
           eapply idents_for_anns_incl_ty in H4.
           clear - H4. solve_forall; simpl.
-          apply in_or_app, or_intror, H4. unfold idty. simpl_In.
-          exists (i, a); auto.
-        + eapply unnest_noops_exps_wt in H2 as (?&?); eauto.
-          solve_forall; repeat solve_incl. idtac...
+          apply in_or_app, or_intror, H4. unfold idty. solve_In.
+        + assert (Hun2:=H2). eapply unnest_noops_exps_wt in H2 as (?&?); eauto.
+          eapply Forall_impl; [|eauto]; intros; repeat solve_incl. idtac...
     Qed.
 
     Corollary mmap2_unnest_exp_wt : forall vars is_control es es' eqs' st st' ,
@@ -1029,7 +1021,7 @@ Module Type NTYPING
       + inv H1; simpl; auto.
       + inv Hwt. repeat constructor...
         simpl. rewrite app_nil_r.
-        repeat rewrite_Forall_forall.
+        rewrite_Forall_forall.
         * rewrite app_length in H.
           rewrite firstn_length. rewrite H.
           rewrite length_typeof_numstreams.
@@ -1042,7 +1034,7 @@ Module Type NTYPING
           rewrite in_app_iff in *. destruct H1; auto.
           right. eapply st_follows_tys_incl...
       + inv Hwt. apply IHx...
-        repeat rewrite_Forall_forall.
+        rewrite_Forall_forall.
         * rewrite app_length in H.
           rewrite skipn_length. rewrite H.
           rewrite length_typeof_numstreams. lia.
@@ -1920,7 +1912,7 @@ Module Type NTYPING
           apply in_or_app, or_intror. unfold st_tys, idty.
           simpl_In. exists (x2, (ty, ck)); split; auto.
       - eapply init_var_for_clock_wt_eq with (vars:=vars) in H; eauto.
-        solve_forall; repeat solve_incl.
+        eapply Forall_impl; [|eauto]; intros; repeat solve_incl.
     Qed.
 
     Fact arrow_iteexp_wt_eq : forall vars e0 e ty ck e' eqs' st st' ,
@@ -1949,9 +1941,9 @@ Module Type NTYPING
         repeat (constructor; auto).
         1-8:repeat solve_incl.
         + apply fresh_ident_In in H. apply in_or_app, or_intror.
-          unfold st_tys, idty. repeat simpl_In. exists (x2, (t, c)); split; auto.
+          unfold st_tys, idty. simpl_In. exists (x2, (t, c)); split; auto.
         + apply fresh_ident_In in H. apply in_or_app, or_intror.
-          unfold st_tys, idty. repeat simpl_In. exists (x2, (t, c)); split; auto.
+          unfold st_tys, idty. simpl_In. exists (x2, (t, c)); split; auto.
         + destruct Hwt. constructor; eauto.
           eapply iface_eq_wt_equation; eauto.
           constructor; auto. solve_forall; repeat solve_incl.

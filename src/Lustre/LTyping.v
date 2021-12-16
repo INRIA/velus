@@ -1455,6 +1455,8 @@ Module Type LTYPING
 
   End interface_eq.
 
+  Global Hint Resolve iface_eq_wt_enum iface_eq_wt_clock iface_eq_wt_exp : ltyping.
+
   (** *** wt implies wl *)
 
   Local Hint Constructors wl_exp wl_block : ltyping.

@@ -5152,39 +5152,6 @@ Proof.
     rewrite Bool.not_true_iff_false; auto.
 Qed.
 
-Section nth_error.
-  (* TODO: delete after upgrade to latest Coq version *)
-  Lemma nth_error_nth {A} : forall (l : list A) (n : nat) (x d : A),
-      nth_error l n = Some x -> nth n l d = x.
-  Proof.
-    intros l n x d H.
-    apply nth_error_split in H. destruct H as [l1 [l2 [H H']]].
-    subst. rewrite app_nth2; [|auto].
-    rewrite PeanoNat.Nat.sub_diag. reflexivity.
-  Qed.
-
-  (* TODO: delete after upgrade to latest Coq version *)
-  Lemma nth_error_nth' {A} : forall (l : list A) (n : nat) (d : A),
-    n < length l -> nth_error l n = Some (nth n l d).
-  Proof.
-    intros l n d H.
-    apply (nth_split _ d) in H. destruct H as [l1 [l2 [H H']]].
-    subst. rewrite H. rewrite nth_error_app2; [|auto].
-    rewrite app_nth2; [| auto]. repeat (rewrite PeanoNat.Nat.sub_diag). reflexivity.
-  Qed.
-
-  Lemma nth_error_length_nth {A} : forall (l : list A) (n : nat) (x : A),
-      nth_error l n = Some x <-> (forall d, n < Datatypes.length l /\ nth n l d = x).
-  Proof.
-    split; intro H.
-    - split.
-      + apply nth_error_Some; rewrite H; discriminate.
-      + now apply nth_error_nth.
-    - specialize (H x) as (Hl&Hn). rewrite <-Hn.
-      now apply nth_error_nth'.
-  Qed.
-End nth_error.
-
 Corollary In_combine_seq {A} : forall (xs : list A) k x,
     In (k, x) (combine (seq 0 (length xs)) xs) <->
     nth_error xs k = Some x.
@@ -5241,6 +5208,111 @@ Proof.
   rewrite fst_NoDupMembers, map_app, map_map in *.
   eapply nodup_app_map_flat_map; eauto.
 Qed.
+
+(* Simplification tactics for In / Forall / Exists *)
+
+Local Ltac simpl_map_In H :=
+  let Hin := fresh "Hin" in
+  let Heq := fresh "Heq" in
+  apply in_map_iff in H as (?&Heq&Hin); destruct_conjs; inv Heq; subst.
+
+Ltac simpl_In :=
+  repeat
+    (match goal with
+     | H: In _ (map ?f _) |- _ => simpl_map_In H
+     | |- In _ (map ?f _) => rewrite in_map_iff
+     | H: In _ (flat_map ?f _) |- _ =>
+         let Hin1 := fresh "Hin" in
+         let Hin2 := fresh "Hinf" in
+         apply in_flat_map in H as (?&Hin1&Hin2)
+     | H:In _ (?f _) |- _ => autounfold with list in H; simpl_map_In H
+     | |- In _ (?f _) => progress (autounfold with list); simpl_In
+     end; simpl).
+
+Ltac solve_In :=
+  repeat
+    (simpl_In;
+     match goal with
+     | |- exists _, _ /\ In _ _ => do 2 esplit; eauto; try solve_In; auto; simpl
+     | |- In _ (flat_map _ _) => apply in_flat_map; do 2 esplit
+     | H: In _ (combine _ _) |- In _ _ =>
+         (eapply in_combine_l in H; now solve_In)||(eapply in_combine_r in H; now solve_In)
+     end;
+     eauto).
+
+Ltac simpl_Forall :=
+  repeat
+    (match goal with
+     | H: Forall _ [] |- _ => inv H
+     | H: Forall _ [_] |- _ => inv H
+     | H: Forall _ (_ :: _) |- _ => inv H
+     | |- Forall _ [] => constructor
+     | |- Forall _ [_] => constructor; auto
+
+     | H: Forall _ ?xs, Hin: In _ ?xs |- _ =>
+         eapply Forall_forall in H; [|eapply Hin]; simpl in *
+     | H: Forall _ ?xs |- Forall _ ?xs =>
+         eapply Forall_impl_In; [|eapply H]; intros
+     | H: Forall _ (map _ _) |- _ => rewrite Forall_map in H
+     | |- Forall _ (map _ _) => rewrite Forall_map
+     | |- Forall _ _ => apply Forall_forall; intros
+
+     (* | H: Forall _ _ |- _ => eapply Forall_forall in H; [|now solve_In] *)
+
+     | H: Forall2 _ [_] _ |- _ => inv H
+     | H: Forall2 _ [] _ |- _ => inv H
+     | H: Forall2 _ _ [_] |- _ => inv H
+     | H: Forall2 _ _ [] |- _ => inv H
+     | |- Forall2 _ [] [] => constructor
+     | |- Forall2 _ [_] [_] => constructor; auto
+
+     | H: Forall2 _ (map _ _) _ |- _ => rewrite Forall2_map_1 in H
+     | H: Forall2 _ _ (map _ _) |- _ => rewrite Forall2_map_2 in H
+     | |- Forall2 _ (map _ _) _ => rewrite Forall2_map_1
+     | |- Forall2 _ _ (map _ _) => rewrite Forall2_map_2
+     | H: Forall2 _ ?xs ?xs |- _ => rewrite <-Forall2_same in H
+     | |- Forall2 _ ?xs ?xs => rewrite <-Forall2_same
+
+     | H1: Forall2 _ ?xs ?ys, H2: Forall2 _ ?xs ?ys |- _ =>
+         eapply Forall2_Forall2 in H2; [|eapply H1]; clear H1
+
+     | H: Forall2 _ ?xs ?ys |- Forall2 _ ?xs ?ys =>
+         eapply Forall2_impl_In; [|eapply H]; intros
+     end; destruct_conjs).
+
+Ltac rewrite_Forall_forall :=
+  repeat
+    match goal with
+    | H : Forall _ _ |- _ =>
+        rewrite Forall_forall in H
+    | H : Forall2 _ _ _ |- _ =>
+        rewrite Forall2_forall2 in H; destruct H
+    | H : Forall3 _ _ _ _ |- _ =>
+        rewrite Forall3_forall3 in H; destruct H as [? [? ?]]
+    | |- Forall _ _ =>
+        rewrite Forall_forall; intros; subst
+    | |- Forall2 _ _ _ =>
+        rewrite Forall2_forall2; repeat split; auto; intros; subst
+    | |- Forall3 _ _ _ _ =>
+        rewrite Forall3_forall3; repeat split; auto; intros; subst
+    end.
+
+Ltac simpl_Exists :=
+  repeat
+    match goal with
+    | H: Exists _ (map _ _) |- _ => rewrite Exists_map in H
+    | |- Exists _ (map _ _) => rewrite Exists_map
+    | H: Exists _ _ |- _ =>
+        let Hin := fresh "Hin" in
+        apply Exists_exists in H as (?&Hin&H)
+    end; destruct_conjs.
+
+Ltac solve_Exists :=
+  simpl_Exists;
+  repeat
+    match goal with
+    | |- Exists _ _ => apply Exists_exists; do 2 esplit; [eauto|]
+    end; simpl; eauto.
 
 (* Tactics for solving incl / NoDup / NoDupMembers obligations *)
 

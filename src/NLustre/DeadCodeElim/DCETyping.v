@@ -61,11 +61,9 @@ Module Type DCETYPING
   Proof.
     induction e using cexp_ind2'; intros * Hwt Hfree;
       inv Hwt; inv Hfree; eauto using wt_exp_free, In_InMembers.
-    - eapply Exists_exists in H2 as (?&?&?).
-      repeat rewrite Forall_forall in *; eauto.
-    - eapply Exists_exists in H2 as (?&?&(?&?&?)); subst.
-      repeat rewrite Forall_forall in *; eauto.
-      specialize (H _ H0). simpl in *; eauto.
+    - simpl_Exists; simpl_Forall; eauto.
+    - simpl_Exists; simpl_Forall; eauto.
+      subst; simpl in *; eauto.
   Qed.
 
   Lemma wt_equation_def_free : forall G vars eq x,
@@ -82,20 +80,15 @@ Module Type DCETYPING
         destruct H5 as ((?&?&?)&?&?); simpl; eauto using In_InMembers.
       + inv Hfree. destruct H1 as [Hfree|Hex].
         * inv Hfree; eauto using wt_clock_free.
-          eapply Exists_exists in H as (?&?&?).
-          eapply Forall_forall in H8; eauto using wt_exp_free.
-        * eapply Exists_exists in Hex as ((?&?)&?&?); subst.
-          eapply Forall_forall in H9 as (?&?); [|eapply in_map_iff; do 2 esplit; eauto].
-          eapply Forall_forall in H10; [|eapply in_map_iff; do 2 esplit; eauto].
-          destruct H0; subst; eauto using In_InMembers, wt_clock_free.
+          simpl_Exists; simpl_Forall; eauto using wt_exp_free.
+        * simpl_Exists; simpl_Forall.
+          destruct Hex; subst; eauto using In_InMembers, wt_clock_free.
     - destruct Hdeff as [Hdef|Hfree].
       + inv Hdef; eauto using In_InMembers.
       + inv Hfree. destruct H1 as [Hfree|Hex].
         * inv Hfree; eauto using wt_clock_free, wt_exp_free.
-        * eapply Exists_exists in Hex as ((?&?)&?&?); subst.
-          eapply Forall_forall in H8 as (?&?); [|eapply in_map_iff; do 2 esplit; eauto].
-          eapply Forall_forall in H9; [|eapply in_map_iff; do 2 esplit; eauto].
-          destruct H0; subst; eauto using In_InMembers, wt_clock_free.
+        * simpl_Exists; simpl_Forall.
+          destruct Hex; subst; eauto using In_InMembers, wt_clock_free.
   Qed.
 
   Section wt_node.
@@ -133,12 +126,12 @@ Module Type DCETYPING
         + destruct HG; congruence.
         + rewrite Forall_forall in *; intros.
           eapply H; eauto.
-          intros. eapply Hincl; eauto. constructor. eapply Exists_exists; eauto.
+          intros. eapply Hincl; eauto. constructor. solve_Exists.
       - econstructor...
         + destruct HG; congruence.
         + intros ? Hin. eapply Forall_forall in H; eauto; simpl in *.
           eapply H; eauto. intros. eapply Hincl; eauto.
-          eapply FreeEcase_branches. apply Exists_exists. do 2 esplit; eauto.
+          eapply FreeEcase_branches. solve_Exists.
     Qed.
     Local Hint Resolve wt_cexp_restrict : nltyping.
 
@@ -162,18 +155,16 @@ Module Type DCETYPING
           eapply wt_exp_restrict with (vars:=vars); eauto.
           intros. eapply Hincl; eauto.
           right; constructor; left.
-          constructor. eapply Exists_exists; eauto.
+          constructor. solve_Exists.
         + eapply Forall_impl_In; [|eauto]; intros ? Hin' (?&?).
           split; try congruence.
           eapply Hincl; eauto. right; constructor.
-          eapply in_map_iff in Hin' as ((?&?)&?&?); subst.
-          right. eapply Exists_exists; do 2 esplit; eauto. simpl; auto.
-        + eapply Forall_impl_In; [|eauto]; intros ? Hin' ?.
-          eapply in_map_iff in Hin' as ((?&?)&?&?); subst.
+          simpl_In.
+          right. solve_Exists.
+        + eapply Forall_impl_In; [|eauto]; intros ? Hin' ?. simpl_In.
           eapply wt_clock_restrict with (vars:=vars); eauto.
           intros. eapply Hincl; eauto.
-          right; constructor; right.
-          eapply Exists_exists; do 2 esplit; eauto. simpl; auto.
+          right; constructor; right. solve_Exists.
       - econstructor...
         + destruct HG; congruence.
         + eapply wt_clock_restrict with (vars:=vars); eauto 8 with nlfree.
@@ -182,14 +173,12 @@ Module Type DCETYPING
           split.
           * destruct HG; congruence.
           * eapply Hincl; eauto. right; constructor.
-            eapply in_map_iff in Hin' as ((?&?)&?&?); subst.
-            right. eapply Exists_exists; do 2 esplit; eauto. simpl; auto.
-        + eapply Forall_impl_In; [|eauto]; intros ? Hin' ?.
-          eapply in_map_iff in Hin' as ((?&?)&?&?); subst.
+            simpl_In.
+            right. solve_Exists.
+        + eapply Forall_impl_In; [|eauto]; intros ? Hin' ?. simpl_In.
           eapply wt_clock_restrict with (vars:=vars); eauto.
           intros. eapply Hincl; eauto.
-          right; constructor; right.
-          eapply Exists_exists; do 2 esplit; eauto. simpl; auto.
+          right; constructor; right. solve_Exists.
     Qed.
 
     Corollary wt_equations_restrict : forall vars vars' eqs,
@@ -200,7 +189,7 @@ Module Type DCETYPING
       intros * Hincl Hwt.
       eapply Forall_impl_In; [|eauto]; intros.
       eapply wt_equation_restrict; [|eauto].
-      intros. eapply Hincl; eauto. eapply Exists_exists; eauto.
+      intros. eapply Hincl; eauto. solve_Exists.
     Qed.
 
     Lemma wt_equations_has_def : forall vars eqs,
@@ -238,8 +227,7 @@ Module Type DCETYPING
         + intros ?. rewrite fst_InMembers, <-n_defd.
           symmetry. apply Is_defined_in_vars_defined.
         + eapply wt_equations_has_def; eauto.
-        + intros ? Hdef. eapply Exists_exists in Hdef as (?&?&?).
-          eapply Forall_forall in Hwt1; eauto.
+        + intros ? Hdef. simpl_Exists; simpl_Forall.
           eapply InMembers_idty, wt_equation_def_free; eauto.
       - intros x tn Hin. specialize (Hwt2 x tn).
         repeat rewrite idty_app, in_app_iff in Hin, Hwt2.

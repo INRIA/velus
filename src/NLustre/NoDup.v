@@ -23,14 +23,6 @@ From Velus Require Import NLustre.Memories.
 
  *)
 
-(* TODO: the dispatch on all constructors seems rather unnecessary,
-this generically amounts to:
-
-<<
-  forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs
->>
- *)
-
 Module Type NODUP
        (Ids          : IDS)
        (Op           : OPERATORS)
@@ -44,21 +36,10 @@ Module Type NODUP
 
   Inductive NoDup_defs : list equation -> Prop :=
   | NDDNil: NoDup_defs nil
-  | NDDEqDef:
-      forall x ck e eqs,
-        NoDup_defs eqs ->
-        ~Is_defined_in x eqs ->
-        NoDup_defs (EqDef x ck e :: eqs)
-  | NDDEqApp:
-      forall xs ck f e r eqs,
-        NoDup_defs eqs ->
-        (forall x, In x xs -> ~Is_defined_in x eqs) ->
-        NoDup_defs (EqApp xs ck f e r :: eqs)
-  | NDDEqFby:
-      forall x ck v e r eqs,
-        NoDup_defs eqs ->
-        ~Is_defined_in x eqs ->
-        NoDup_defs (EqFby x ck v e r :: eqs).
+  | NDDCons: forall eq eqs,
+      NoDup_defs eqs ->
+      (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) ->
+      NoDup_defs (eq :: eqs).
 
   (** ** Properties *)
 
@@ -80,52 +61,16 @@ Module Type NODUP
 
     induction eqs as [ | eq eqs IHeqs ].
     - inv Hvar.
-    - assert (NoDup_defs eqs)
-        by now eapply NoDup_defs_cons; eauto.
-
-      unfold memories in *; simpl in *.
-      destruct eq; simpl in *;
-      match goal with
-      | _ : context[ EqFby _ _ _ _ ] |- _ =>
-        idtac
-      | _ =>
-        (* Case: eq ~ EqApp or eq ~ EqDef *)
-        (assert (Is_defined_in x eqs)
-          by now apply Is_defined_in_memories);
-        (assert (Is_variable_in x eqs)
-          by now inv Hvar; auto; exfalso; inv Hndd;
-            match goal with
-            | H: Is_variable_in_eq ?x (EqDef ?i _ _) |- _ => inv H
-            | H: Is_variable_in_eq ?x (EqApp ?i _ _ _ _) |- _ => inv H
-            end; firstorder);
-        now apply IHeqs
-      end.
-      (* Case: eq ~ EqFby *)
-      rewrite In_fold_left_memory_eq in Hinm.
-      destruct Hinm.
-      * assert (Is_defined_in x eqs)
-          by now apply Is_defined_in_memories.
-        assert (Is_variable_in x eqs)
-          by now inv Hvar; auto; exfalso; inv Hndd;
-            match goal with
-            | H: Is_variable_in_eq ?x (EqFby ?i _ _ _ _) |- _ => inv H
-            end.
-        now apply IHeqs.
-      * assert (x = i) as ->.
-        {
-          rewrite PSF.add_iff in H0.
-          destruct H0; auto.
-          exfalso; eapply not_In_empty; eauto.
-        }
-
-        assert (~ Is_variable_in i eqs)
-          by now apply not_Is_defined_in_not_Is_variable_in;
-          inv Hndd.
-
-        assert (~ Is_variable_in_eq i (EqFby i c c0 e l))
-          by now intro His_var; inv His_var.
-
-        now inv Hvar.
+    - unfold memories in *; simpl in *.
+      inv Hndd.
+      apply In_fold_left_memory_eq in Hinm as [Hinm|Hinm]; inv Hvar; eauto.
+      + apply In_fold_left_memory_eq_defined_eq, Is_defined_inP in Hinm.
+        take (forall x, _ -> ~ Is_defined_in x _) and
+             eapply it; eauto using Is_variable_in_eq_Is_defined_in_eq.
+      + take (Is_variable_in_eq _ _) and inv it; simpl in *; inv Hinm.
+      + apply In_memory_eq_In_defined_eq, Is_defined_in_eqP in Hinm.
+        take (forall x, _ -> ~ Is_defined_in x _) and
+             eapply it; eauto using Is_variable_in_Is_defined_in.
   Qed.
 
   Lemma NoDup_defs_NoDup_vars_defined:
@@ -137,26 +82,11 @@ Module Type NODUP
     induction eqs as [|eq eqs].
     - auto using NoDup_defs.
     - simpl. intro Hnodup.
-      apply NoDup_app'_iff in Hnodup.
-      destruct Hnodup as (Hnd1 & Hnd2 & Hni).
-      apply IHeqs in Hnd2.
-      destruct eq.
-      + constructor; auto.
-        simpl in *.
-        intro Hdef.
-        inv Hni. apply H1.
-        now apply Is_defined_in_vars_defined.
-      + constructor; auto.
-        intros x Hin Hdef.
-        simpl in *.
-        eapply Forall_forall in Hin; eauto.
-        apply Hin.
-        now apply Is_defined_in_vars_defined.
-      + constructor; auto.
-        simpl in *.
-        intro Hdef.
-        inv Hni. apply H1.
-        now apply Is_defined_in_vars_defined.
+      constructor; eauto using NoDup_app_r.
+      intros ? Hdef1 Hdef2.
+      eapply NoDup_app_In in Hnodup. eapply Hnodup.
+      + apply Is_defined_in_vars_defined; eauto.
+      + apply Is_defined_in_var_defined; eauto.
   Qed.
 
   Lemma NoDup_defs_node:

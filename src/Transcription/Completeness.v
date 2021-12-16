@@ -199,9 +199,9 @@ Module Type COMPLETENESS
         unfold find_clock. cases_eqn Hfind; eauto.
         eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
         rewrite InMembers_idty in Hinm. simpl in *. congruence.
-      - destruct H0 as (?&Hfind). unfold find_clock in *; simpl in *.
+      - unfold find_clock in *; simpl in *.
         cases_eqn Hfind; subst; eauto.
-        eapply Env.find_adds'_nIn in Hfind2 as (?&?). congruence.
+        eapply Env.find_adds'_nIn in Hfind1 as (?&?). congruence.
     }
     destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt.
     clear Hblk Hperm H3.

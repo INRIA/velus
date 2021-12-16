@@ -640,6 +640,8 @@ Section TypesAndClocks.
 
 End TypesAndClocks.
 
+Global Hint Unfold idty idck : list.
+
 Lemma In_of_list_InMembers:
   forall {A} x (xs : list (ident * A)),
     PS.In x (PSP.of_list (map fst xs)) <-> InMembers x xs.

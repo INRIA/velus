@@ -68,13 +68,6 @@ Module Type UNNESTING
         eapply Forall2_ignore1' with (xs:=l1) in H; try congruence
       end; simpl in *; auto.
 
-  Ltac destruct_conjs :=
-    repeat
-      match goal with
-      | H: _ /\ _ |- _ => destruct H
-      | x: _ * _ |- _ => destruct x
-      end.
-
   Ltac solve_forall :=
     simpl_forall;
     match goal with
@@ -90,21 +83,12 @@ Module Type UNNESTING
     end; destruct_conjs; eauto with norm.
 
   Ltac simpl_In :=
-    match goal with
-    | x : ?t1 * ?t2 |- _ =>
-      destruct x
-    | H : In (?x1, ?x2) (combine ?l1 ?l2) |- _ =>
-      specialize (in_combine_l _ _ _ _ H) as ?; apply in_combine_r in H
-    | H : In ?x (map ?f ?l) |- _ =>
-      rewrite in_map_iff in H; destruct H as [? [? ?]]; subst
-    | H : In ?x (idty ?l) |- _ =>
-      rewrite In_idty_exists in H; destruct H as (?&?); subst
-    | H : In ?x (idck ?l) |- _ =>
-      rewrite In_idck_exists in H; destruct H as (?&?); subst
-    | |- In ?x (map ?f ?l) => rewrite in_map_iff
-    | |- In ?x (idty ?l) => rewrite In_idty_exists
-    | |- In ?x (idck ?l) => rewrite In_idck_exists
-    end.
+    CommonList.simpl_In;
+    repeat
+      match goal with
+      | H : In (?x1, ?x2) (combine ?l1 ?l2) |- _ =>
+          specialize (in_combine_l _ _ _ _ H) as ?; apply in_combine_r in H
+      end.
 
   (** Simplify an expression with maps and other stuff... *)
   Ltac simpl_list :=
@@ -689,7 +673,7 @@ Module Type UNNESTING
     induction anns; intros ids st st' Hids; simpl in Hids; repeat inv_bind;
       unfold incl; intros ? Hin; simpl in *; try destruct Hin.
     destruct a as [ty cl]. repeat inv_bind.
-    repeat simpl_In. inv Hin. inv H1.
+    inv Hin.
     - apply fresh_ident_In in H.
       apply idents_for_anns_st_follows in H0.
       apply st_follows_incl in H0; auto.
@@ -871,22 +855,6 @@ Module Type UNNESTING
 
   (** ** Length of unnested expression *)
 
-  Ltac rewrite_Forall_forall :=
-    match goal with
-    | H : Forall _ _ |- _ =>
-      rewrite Forall_forall in H
-    | H : Forall2 _ _ _ |- _ =>
-      rewrite Forall2_forall2 in H; destruct H
-    | H : Forall3 _ _ _ _ |- _ =>
-      rewrite Forall3_forall3 in H; destruct H as [? [? ?]]
-    | |- Forall _ _ =>
-      rewrite Forall_forall; intros; subst
-    | |- Forall2 _ _ _ =>
-      rewrite Forall2_forall2; repeat split; auto; intros; subst
-    | |- Forall3 _ _ _ _ =>
-      rewrite Forall3_forall3; repeat split; auto; intros; subst
-    end.
-
   Fact mmap2_unnest_exp_length' : forall G is_control es es' eqs' st st',
       Forall2 (fun e es' => forall eqs' st st',
                    unnest_exp G is_control e st = (es', eqs', st') ->
@@ -962,7 +930,7 @@ Module Type UNNESTING
       eapply mmap2_unnest_exp_length' in H0.
       + solve_length.
       + eapply mmap2_values in H0.
-        repeat rewrite_Forall_forall...
+        rewrite_Forall_forall...
     - (* merge *)
       destruct is_control; repeat inv_bind.
       + apply unnest_merge_length.
@@ -985,7 +953,7 @@ Module Type UNNESTING
     intros * Hf Hmap.
     eapply mmap2_unnest_exp_length'; eauto.
     eapply mmap2_values in Hmap.
-    repeat rewrite_Forall_forall.
+    rewrite_Forall_forall.
     eapply unnest_exp_length; eauto with datatypes.
   Qed.
   Global Hint Resolve mmap2_unnest_exp_length : norm.
@@ -1042,7 +1010,7 @@ Module Type UNNESTING
     1,2,5,7,8:rewrite Forall_map; eapply Forall_forall; intros [? ?] ?; auto.
     1,2,3:(unfold unnest_when, unnest_merge, unnest_case;
            rewrite Forall_forall; intros ? Hin).
-    - repeat simpl_In. reflexivity.
+    - simpl_In. reflexivity.
     - clear - Hin. revert x Hin.
       induction l0; intros; simpl; inv Hin; eauto.
     - clear - Hin. revert Hin. revert x2 x5.
@@ -1518,7 +1486,7 @@ Module Type UNNESTING
       repeat rewrite <- flat_map_app; simpl.
       eapply idents_for_anns_vars_perm in H4.
       simpl; repeat inv_bind.
-      apply mmap2_vars_perm in H1. 2: (repeat rewrite_Forall_forall; eauto).
+      apply mmap2_vars_perm in H1. 2: (rewrite_Forall_forall; eauto).
       apply unnest_noops_exps_vars_perm in H2.
       rewrite <- H4, <- H3, <- H2, <- H1; simpl.
       repeat simpl_list.
@@ -1534,7 +1502,7 @@ Module Type UNNESTING
     unfold unnest_exps in Hnorm.
     repeat inv_bind.
     eapply mmap2_vars_perm...
-    repeat rewrite_Forall_forall.
+    rewrite_Forall_forall.
     eapply unnest_exp_vars_perm...
   Qed.
 
@@ -1582,7 +1550,7 @@ Module Type UNNESTING
     unfold unnest_rhss in Hnorm.
     repeat inv_bind.
     eapply mmap2_vars_perm in H; eauto.
-    repeat rewrite_Forall_forall.
+    rewrite_Forall_forall.
     eapply unnest_rhs_vars_perm; eauto.
   Qed.
 
@@ -1886,29 +1854,25 @@ Module Type UNNESTING
     - (* binop *)
       destruct a. constructor...
     - (* fby *)
-      simpl_forall.
-      repeat rewrite_Forall_forall.
-      repeat simpl_In. destruct a0...
+      simpl_Forall...
     - (* arrow *)
-      simpl_forall.
-      repeat rewrite_Forall_forall.
-      repeat simpl_In. destruct a0...
+      simpl_Forall...
     - (* when *)
       destruct a. repeat inv_bind. unfold unnest_when.
       apply mmap2_normalized_lexp' in H0...
-      repeat rewrite_Forall_forall.
-      repeat simpl_In...
+      rewrite_Forall_forall.
+      simpl_In...
     - (* merge *)
       destruct a. repeat inv_bind. unfold unnest_merge.
-      repeat rewrite_Forall_forall.
-      repeat simpl_In. destruct a...
+      rewrite_Forall_forall.
+      simpl_In...
     - (* case *)
       destruct a. repeat inv_bind. unfold unnest_case.
-      repeat rewrite_Forall_forall.
-      repeat simpl_In. destruct a...
+      rewrite_Forall_forall.
+      simpl_In...
     - (* app *)
-      repeat rewrite_Forall_forall.
-      repeat simpl_In. destruct a0...
+      rewrite_Forall_forall.
+      simpl_In...
   Qed.
   Global Hint Resolve unnest_exp_normalized_lexp : norm.
 
@@ -2029,15 +1993,13 @@ Module Type UNNESTING
       destruct a. constructor...
     - (* fby *)
       solve_forall.
-      repeat simpl_In. destruct a0...
     - (* arrow *)
       solve_forall.
-      repeat simpl_In. destruct a0...
     - (* when *)
       destruct a. repeat inv_bind. unfold unnest_when.
       apply mmap2_normalized_lexp in H0.
-      repeat rewrite_Forall_forall.
-      repeat simpl_In...
+      rewrite_Forall_forall.
+      simpl_In...
     - (* merge *)
       destruct a. repeat inv_bind.
       eapply unnest_merge_normalized_cexp...
@@ -2055,7 +2017,6 @@ Module Type UNNESTING
         eapply mmap2_normalized_cexp' in H3; [|solve_forall]; eauto.
     - (* app *)
       solve_forall.
-      repeat simpl_In. destruct a0...
   Qed.
   Global Hint Resolve unnest_exp_normalized_cexp : norm.
 
@@ -2180,9 +2141,9 @@ Module Type UNNESTING
           - apply mmap2_unnest_exp_length in H2; auto.
             congruence.
       }
-      unfold unnest_fby in Hfby; repeat simpl_In.
+      unfold unnest_fby in Hfby; simpl_In.
       econstructor.
-      eapply Forall_forall in H7...
+      eapply Forall_forall in H5...
       eapply Forall_forall in H4...
     - (* arrow *)
       repeat rewrite Forall_app; repeat split.
@@ -2197,9 +2158,9 @@ Module Type UNNESTING
           - apply mmap2_unnest_exp_length in H2; auto.
             congruence.
       }
-      unfold unnest_arrow in Harrow; repeat simpl_In.
+      unfold unnest_arrow in Harrow; simpl_In.
       econstructor.
-      eapply Forall_forall in H7...
+      eapply Forall_forall in H5...
       eapply Forall_forall in H4...
     - (* when *)
       inv Hwl. repeat inv_bind.
@@ -2293,7 +2254,7 @@ Module Type UNNESTING
       apply unnest_exps_normalized_lexp in H0.
       unfold unnest_fby.
       apply Forall_forall; intros * Hin.
-      repeat simpl_In.
+      simpl_In.
       constructor; eauto.
       + eapply Forall_forall in H; eauto.
       + eapply Forall_forall in H0; eauto.
@@ -2302,8 +2263,8 @@ Module Type UNNESTING
      apply unnest_exps_normalized_lexp in H.
      apply unnest_exps_normalized_lexp in H0.
      unfold unnest_arrow.
-     apply Forall_forall; intros * Hin.
-     repeat simpl_In.
+     simpl_Forall.
+     simpl_In.
      constructor; eauto.
      + eapply Forall_forall in H; eauto.
      + eapply Forall_forall in H0; eauto.

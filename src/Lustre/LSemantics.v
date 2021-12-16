@@ -580,45 +580,42 @@ Module Type LSEMANTICS
     - econstructor; eauto;
         (eapply Forall2_impl_In; [|eauto]; intros;
          eapply H8; intro; apply H5; constructor);
-        [left|right]; apply Exists_exists; eauto.
+        [left|right]; solve_Exists.
     - econstructor; eauto;
         (eapply Forall2_impl_In; [|eauto]; intros;
          eapply H8; intro; apply H5; constructor);
-        [left|right]; apply Exists_exists; eauto.
+        [left|right]; solve_Exists.
     - econstructor; eauto.
       eapply Forall2_impl_In; [|eauto]; intros.
       apply H7; intro contra.
-      apply H4; constructor. apply Exists_exists; eauto.
+      apply H4; constructor. solve_Exists.
     - econstructor; eauto.
       eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
-      eapply Exists_exists in Hin as (?&Hin1&Hin2).
       eapply Hs. contradict H4.
-      econstructor. do 2 (eapply Exists_exists; repeat esplit; eauto).
+      econstructor. solve_Exists.
     - econstructor; eauto.
       + eapply IHHsem. contradict H4.
         econstructor; eauto.
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
         eapply Hs. contradict H4.
-        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+        econstructor. right; left. solve_Exists.
     - econstructor; eauto.
       + eapply IHHsem. contradict H7.
         econstructor; eauto.
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
         eapply Hs. contradict H7.
-        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+        econstructor. right; left. solve_Exists.
       + eapply Forall2_impl_In; [|eauto]; intros ?? Hin1 Hin2 Hs.
         eapply Hs. contradict H7.
         econstructor; do 2 right. repeat esplit; eauto.
-        eapply Exists_exists; eauto.
+        solve_Exists.
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
         intros * ?? Sem. eapply Sem; intro. take (~ _) and apply it.
-        constructor; left. eapply Exists_exists; eauto.
+        constructor; left. solve_Exists.
       + eapply Forall2_impl_In in H3; eauto. intros * ?? Hi. simpl. apply Hi. intro.
-        take (~ _) and apply it. constructor. right. eapply Exists_exists; eauto.
+        take (~ _) and apply it. constructor. right. solve_Exists.
       + intro k. take (forall k, _ /\ _) and specialize (it k) as (? & Hk).
         apply Hk. intro Hn. subst. take (~ _) and apply it. eapply INEapp2.
     - econstructor; eauto.
@@ -635,19 +632,16 @@ Module Type LSEMANTICS
         eapply Forall_Forall in Hsem; eauto. clear Hsem'.
         eapply Forall_impl_In; [|eauto]; intros ? Hin (?&?).
         eapply H2. intro.
-        eapply H3. constructor; left.
-        eapply Exists_exists; eauto.
+        eapply H3. constructor; left. solve_Exists.
     - econstructor; eauto.
       + eapply IHHsem. contradict H5. constructor; auto.
-      + do 2 (eapply Forall_forall; intros).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        eapply it0; eauto. contradict H5.
-        constructor. right.
-        do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + simpl_Forall.
+        eapply H7; eauto. contradict H5.
+        constructor. right. solve_Exists.
     - econstructor; eauto.
-      rewrite Forall_forall in *; intros.
+      simpl_Forall.
       eapply H2; eauto.
-      contradict H3. constructor. eapply Exists_exists; eauto.
+      contradict H3. constructor. solve_Exists.
     - rewrite find_node_other with (1:=H4) in H0.
       eapply Snode; eauto.
       eapply IHHsem; eauto.
@@ -696,45 +690,42 @@ Module Type LSEMANTICS
     - econstructor; eauto;
         (eapply Forall2_impl_In; [|eauto]; intros;
          eapply H8; intro; apply H5; constructor);
-        [left|right]; apply Exists_exists; eauto.
+        [left|right]; solve_Exists.
     - econstructor; eauto;
         (eapply Forall2_impl_In; [|eauto]; intros;
          eapply H8; intro; apply H5; constructor);
-        [left|right]; apply Exists_exists; eauto.
+        [left|right]; solve_Exists.
     - econstructor; eauto.
       eapply Forall2_impl_In; [|eauto]; intros.
       apply H7; intro contra.
-      apply H4; constructor. apply Exists_exists; eauto.
+      apply H4; constructor. solve_Exists.
     - econstructor; eauto.
       eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
-      eapply Exists_exists in Hin as (?&Hin1&Hin2).
       eapply Hs. contradict H4.
-      econstructor. do 2 (eapply Exists_exists; repeat esplit; eauto).
+      econstructor. solve_Exists.
     - econstructor; eauto.
       + eapply IHHsem. contradict H4.
         econstructor; eauto.
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
         eapply Hs. contradict H4.
-        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+        econstructor. right; left. solve_Exists.
     - econstructor; eauto.
       + eapply IHHsem. contradict H7.
         econstructor; eauto.
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
         eapply Hs. contradict H7.
-        econstructor. right; left. do 2 (eapply Exists_exists; repeat esplit; eauto).
+        econstructor. right; left. solve_Exists.
       + eapply Forall2_impl_In; [|eauto]; intros ?? Hin1 Hin2 Hs.
         eapply Hs. contradict H7.
         econstructor; do 2 right. repeat esplit; eauto.
-        eapply Exists_exists; eauto.
+        solve_Exists.
     - inv Hord.
       econstructor; eauto.
       + eapply Forall2_impl_In in H1; [|eauto]; eauto.
         intros * ?? Sem. eapply Sem; intro. take (~ _) and apply it.
-        constructor; left. eapply Exists_exists; eauto.
+        constructor; left. solve_Exists.
       + eapply Forall2_impl_In in H3; eauto. intros * ?? Hi. simpl. apply Hi. intro.
-        take (~ _) and apply it. constructor. right. eapply Exists_exists; eauto.
+        take (~ _) and apply it. constructor. right. solve_Exists.
       + intro k. take (forall k, _ /\ _) and specialize (it k) as (? & Hk).
         apply Hk. intro Hn. subst. take (~ _) and apply it. eapply INEapp2.
     - econstructor; eauto.
@@ -751,19 +742,16 @@ Module Type LSEMANTICS
         eapply Forall_Forall in Hsem; eauto. clear Hsem'.
         eapply Forall_impl_In; [|eauto]; intros ? Hin (?&?).
         eapply H2. intro.
-        eapply H3. constructor; left.
-        eapply Exists_exists; eauto.
+        eapply H3. constructor; left. solve_Exists.
     - econstructor; eauto.
       + eapply IHHsem. contradict H5. constructor; auto.
-      + do 2 (eapply Forall_forall; intros).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        eapply it0; eauto. contradict H5.
-        constructor. right.
-        do 2 (eapply Exists_exists; repeat esplit; eauto).
+      + simpl_Forall.
+        eapply H7; eauto. contradict H5.
+        constructor. right. solve_Exists.
     - econstructor; eauto.
-      rewrite Forall_forall in *; intros.
+      simpl_Forall.
       eapply H2; eauto.
-      contradict H3. constructor. eapply Exists_exists; eauto.
+      contradict H3. constructor. solve_Exists.
     - econstructor; eauto.
       + erewrite find_node_other; eauto.
       + eapply IHHsem; eauto.
@@ -1022,9 +1010,8 @@ Module Type LSEMANTICS
         * now rewrite <-Eb.
     - econstructor; eauto.
       + now rewrite <-EH, <-Eb.
-      + do 2 (eapply Forall_forall; intros).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        eapply it0.
+      + simpl_Forall.
+        eapply H6.
         * now rewrite <-EH.
         * now rewrite <-Eb.
       + now rewrite <-EH.
@@ -1046,22 +1033,6 @@ Module Type LSEMANTICS
     + now rewrite <-Eyss.
     + now rewrite <-Exss.
   Qed.
-
-  Ltac rewrite_Forall_forall :=
-    match goal with
-    | H : Forall _ _ |- _ =>
-      rewrite Forall_forall in H
-    | H : Forall2 _ _ _ |- _ =>
-      rewrite Forall2_forall2 in H; destruct H
-    | H : Forall3 _ _ _ _ |- _ =>
-      rewrite Forall3_forall3 in H; destruct H as [? [? ?]]
-    | |- Forall _ _ =>
-      rewrite Forall_forall; intros; subst
-    | |- Forall2 _ _ _ =>
-      rewrite Forall2_forall2; repeat split; auto; intros; subst
-    | |- Forall3 _ _ _ _ =>
-      rewrite Forall3_forall3; repeat split; auto; intros; subst
-    end.
 
   Fact sem_var_In : forall H x vs,
       sem_var H x vs ->
@@ -1090,18 +1061,15 @@ Module Type LSEMANTICS
     - (* equation *)
       inv H4. eapply Forall2_ignore2, Forall_forall in H8 as (?&?&?); eauto using sem_var_In.
     - (* reset *)
-      eapply Exists_exists in H2 as (?&Hin1&?).
       specialize (H8 0).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it in it0; eauto. apply Env.map_2 in it0; auto.
+      simpl_Exists; simpl_Forall.
+      eapply H, Env.map_2 in H8; eauto.
     - (* switch *)
-      do 2 (eapply Exists_exists in H2 as (?&?&H2)).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it in it0; eauto. apply Env.map_2 in it0; auto.
+      simpl_Exists; simpl_Forall.
+      eapply H, Env.map_2 in H8; eauto.
     - (* local *)
-      eapply Exists_exists in H3 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it in it0; eauto. inv it0.
+      simpl_Exists; simpl_Forall.
+      eapply H in H7; eauto. inv H7.
       eapply sem_var_In, H6; eauto.
       econstructor; eauto. reflexivity.
   Qed.
@@ -1185,32 +1153,29 @@ Module Type LSEMANTICS
     - (* unop *) econstructor...
     - (* binop *) econstructor...
     - (* fby *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
+      econstructor; eauto; simpl_Forall...
     - (* arrow *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
+      econstructor; eauto; simpl_Forall...
     - (* when *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
+      econstructor; eauto; simpl_Forall...
       eapply sem_var_refines...
     - (* merge *)
       econstructor; eauto.
       eapply sem_var_refines...
       eapply Forall2Brs_impl_In; [|eauto]. intros ?? Hin Hs.
-      eapply Exists_exists in Hin as (?&Hin1&Hin2).
-      do 2 (eapply Forall_forall in H; eauto).
+      simpl_Exists; simpl_Forall; eauto.
     - (* case *)
       econstructor; eauto.
       eapply Forall2Brs_impl_In; [|eauto]. intros ?? Hin Hs.
-      eapply Exists_exists in Hin as (?&Hin1&Hin2).
-      do 2 (eapply Forall_forall in H; eauto).
+      simpl_Exists; simpl_Forall; eauto.
     - (* case *)
       econstructor; eauto; simpl in *.
       + eapply Forall2Brs_impl_In; [|eauto]. intros ?? Hin Hs.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
-        do 2 (eapply Forall_forall in H; eauto).
+        simpl_Exists; simpl_Forall; eauto.
       + eapply Forall2_impl_In; [|eapply H12]; intros.
-        eapply Forall_forall in H0; eauto.
+        simpl_Forall; eauto.
     - (* app *)
-      econstructor; eauto; repeat rewrite_Forall_forall...
+      econstructor; eauto; simpl_Forall...
   Qed.
 
   Fact sem_equation_refines {PSyn prefs} : forall (G : @global PSyn prefs) H H' b equ,
@@ -1244,9 +1209,8 @@ Module Type LSEMANTICS
       intros ?? Heq. rewrite Heq. reflexivity.
     - (* switch *)
       econstructor; eauto using sem_exp_refines.
-      + do 2 (eapply Forall_forall; intros).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        eapply it; [|eauto].
+      + simpl_Forall.
+        eapply H; [|eauto].
         eapply Env.refines_map; eauto.
         intros ?? Heq. rewrite Heq. reflexivity.
       + intros ?? Hdef Hmaps.
@@ -1274,65 +1238,49 @@ Module Type LSEMANTICS
     Proof with eauto.
       induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
       - (* fby *)
-        repeat rewrite_Forall_forall.
-        rewrite <- H9, <- H10.
+        take (Forall3 _ _ _ _) and eapply Forall3_length in it as (Hlen1&Hlen2).
+        rewrite <- H12, <-Hlen2.
         unfold annots; rewrite flat_map_concat_map.
         apply concat_length_eq.
-        rewrite Forall2_map_2.
-        rewrite_Forall_forall.
-        rewrite length_annot_numstreams. eapply H0.
-        + apply nth_In; congruence.
-        + apply H5. apply nth_In; congruence.
-        + eapply H6... congruence.
+        rewrite Forall2_map_2, Forall2_swap_args.
+        simpl_Forall.
+        rewrite length_annot_numstreams. eapply H1; eauto.
       - (* arrow *)
-        repeat rewrite_Forall_forall.
-        rewrite <- H9, <- H10.
+        take (Forall3 _ _ _ _) and eapply Forall3_length in it as (Hlen1&Hlen2).
+        rewrite <- H12, <-Hlen2.
         unfold annots; rewrite flat_map_concat_map.
         apply concat_length_eq.
-        rewrite Forall2_map_2.
-        rewrite_Forall_forall.
-        rewrite length_annot_numstreams. eapply H0.
-        + apply nth_In; congruence.
-        + apply H5. apply nth_In; congruence.
-        + eapply H6... congruence.
+        rewrite Forall2_map_2, Forall2_swap_args.
+        simpl_Forall.
+        rewrite length_annot_numstreams. eapply H1; eauto.
       - (* when *)
-        repeat rewrite_Forall_forall.
-        rewrite <- H1. rewrite <- H7.
+        take (Forall2 _ _ _) and eapply Forall2_length in it as Hlen1.
+        rewrite <-H7, <-Hlen1.
         unfold annots; rewrite flat_map_concat_map.
         apply concat_length_eq.
-        rewrite Forall2_map_2.
-        rewrite_Forall_forall.
-        rewrite length_annot_numstreams. eapply H0; [| |eauto].
-        + apply nth_In; congruence.
-        + apply H4. apply nth_In; congruence.
-        + eapply H5... congruence.
+        rewrite Forall2_map_2, Forall2_swap_args.
+        simpl_Forall.
+        rewrite length_annot_numstreams. eapply H0; eauto.
       - (* merge *)
-        eapply Forall2Brs_length1 in H9; eauto.
-        2:{ eapply Forall_impl_In; [|eapply H0]; intros (?&?) ??; simpl in *.
-            eapply Forall_impl_In; [|eauto]; intros; simpl in *. eapply H4; eauto.
-            do 2 (eapply Forall_forall in H6; eauto; intros). }
-        destruct es as [|(?&?)]; try congruence.
-        inv H9. inv H6. inv H8. apply Forall2_length in H10. congruence.
+        take (Forall2Brs _ _ _) and eapply Forall2Brs_length1 in it; eauto.
+        2:simpl_Forall; eauto.
+        destruct es as [|(?&?)]; try congruence. simpl_Forall.
+        take (Forall2 _ _ _) and apply Forall2_length in it. congruence.
       - (* case *)
-        eapply Forall2Brs_length1 in H11; eauto.
-        2:{ eapply Forall_impl_In; [|eapply H0]; intros (?&?) ??; simpl in *.
-            eapply Forall_impl_In; [|eauto]; intros; simpl in *. eapply H5; eauto.
-            do 2 (eapply Forall_forall in H14; eauto; intros). }
-        destruct es as [|(?&?)]; try congruence.
-        inv H11. inv H14. inv H15. apply Forall3_length in H12 as (?&?). congruence.
+        take (Forall2Brs _ _ _) and eapply Forall2Brs_length1 in it; eauto.
+        2:simpl_Forall; eauto.
+        destruct es as [|(?&?)]; try congruence. simpl_Forall.
+        take (Forall3 _ _ _ _) and apply Forall3_length in it as (?&?). congruence.
       - (* case *)
-        eapply Forall2Brs_length1 in H12; eauto.
-        2:{ eapply Forall_impl_In; [|eapply H0]; intros (?&?) ??; simpl in *.
-            eapply Forall_impl_In; [|eauto]; intros; simpl in *. eapply H5; eauto.
-            do 2 (eapply Forall_forall in H15; eauto; intros). }
-        destruct es as [|(?&?)]; try congruence.
-        inv H12. inv H15. inv H16. apply Forall3_length in H14 as (?&?). congruence.
+        take (Forall2Brs _ _ _) and eapply Forall2Brs_length1 in it; eauto.
+        2:simpl_Forall; eauto.
+        destruct es as [|(?&?)]; try congruence. simpl_Forall.
+        take (Forall3 _ _ _ _) and apply Forall3_length in it as (?&?). congruence.
       - (* app  *)
         specialize (H13 0). inv H13.
-        repeat rewrite_Forall_forall.
+        simpl_Forall. take (Forall2 _ _ v) and (apply Forall2_length in it).
         rewrite H3 in H14; inv H14.
-        unfold idents in H5.
-        repeat rewrite map_length in *. congruence.
+        repeat rewrite map_length in *. setoid_rewrite map_length in it. congruence.
     Qed.
 
     Corollary sem_exps_numstreams : forall H b es vs,
@@ -1342,10 +1290,8 @@ Module Type LSEMANTICS
     Proof.
       intros * Hwt Hsem.
       assert (Forall2 (fun v e => length v = numstreams e) vs es) as Hf.
-      { repeat rewrite_Forall_forall.
-        eapply sem_exp_numstreams.
-        + eapply Hwt. eapply nth_In. congruence.
-        + eapply H1; eauto. congruence. }
+      { rewrite Forall2_swap_args. simpl_Forall.
+        eapply sem_exp_numstreams; eauto. }
       clear Hwt Hsem.
       induction Hf; simpl.
       - reflexivity.
@@ -1373,7 +1319,7 @@ Module Type LSEMANTICS
       intros * Hf.
       eapply Forall2_ignore2 in Hf.
       eapply Env.dom_lb_intro; intros ? Hin.
-      eapply Forall_forall in Hf as (?&?&Hvar); eauto using sem_var_In.
+      simpl_Forall; eauto using sem_var_In.
     Qed.
 
     Fact sem_block_sem_var : forall blk x Hi bs,
@@ -1386,20 +1332,18 @@ Module Type LSEMANTICS
       - (* equation *)
         inv H4. eapply Forall2_ignore2, Forall_forall in H7 as (?&?&?); eauto.
       - (* reset *)
-        eapply Exists_exists in H1 as (?&Hin&?).
         specialize (H8 0).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        edestruct it as (?&Hvar); eauto.
+        simpl_Exists; simpl_Forall.
+        edestruct H as (?&Hvar); eauto.
         eapply sem_var_mask_inv in Hvar as (?&?&?); eauto.
       - (* switch *)
-        rename H1 into Hdef. do 2 (eapply Exists_exists in Hdef as (?&?&Hdef)).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        edestruct it as (?&Hvar); eauto.
+        rename H1 into Hdef.
+        simpl_Exists; simpl_Forall.
+        edestruct H as (?&Hvar); eauto.
         eapply sem_var_filter_inv in Hvar as (?&?&?); eauto.
       - (* local *)
-        eapply Exists_exists in H2 as (?&Hin&?).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        edestruct it as (?&?); eauto.
+        simpl_Exists; simpl_Forall.
+        edestruct H as (?&?); eauto.
     Qed.
 
     Corollary sem_block_dom_lb : forall blk xs H bs,
@@ -1442,17 +1386,6 @@ Module Type LSEMANTICS
         auto using EqStrel_Transitive, EqStrel_Reflexive.
   Qed.
 
-  (* Lemma sem_clock_restrict : forall vars ck H bs bs', *)
-  (*     wc_clock vars ck -> *)
-  (*     sem_clock H bs ck bs' -> *)
-  (*     sem_clock (Env.restrict H (map fst vars)) bs ck bs'. *)
-  (* Proof. *)
-  (*   intros * Hwc Hsem. *)
-  (*   eapply sem_clock_refines'; [eauto| |eauto]. *)
-  (*   intros ?? Hinm Hvar. *)
-  (*   eapply sem_var_restrict; eauto. apply fst_InMembers; auto. *)
-  (* Qed. *)
-
   Fact sem_exp_restrict {PSyn prefs} : forall (G : @global PSyn prefs) vars H b e vs,
       wx_exp vars e ->
       sem_exp G H b e vs ->
@@ -1469,43 +1402,34 @@ Module Type LSEMANTICS
       econstructor...
     - (* fby *)
       econstructor...
-      + repeat rewrite_Forall_forall. eapply H0...
-      + repeat rewrite_Forall_forall. eapply H1...
+      + simpl_Forall; eauto.
+      + simpl_Forall; eauto.
     - (* arrow *)
       econstructor...
-      + repeat rewrite_Forall_forall. eapply H0...
-      + repeat rewrite_Forall_forall. eapply H1...
+      + simpl_Forall; eauto.
+      + simpl_Forall; eauto.
     - (* when *)
       econstructor...
-      + repeat rewrite_Forall_forall. eapply H0...
+      + simpl_Forall; eauto.
       + eapply sem_var_restrict...
     - (* merge *)
       econstructor...
       + eapply sem_var_restrict...
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
-        do 2 (eapply Forall_forall in H0; eauto).
-        do 2 (eapply Forall_forall in H5; eauto).
+        simpl_Exists; simpl_Forall; eauto.
     - (* case *)
       econstructor...
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
-        do 2 (eapply Forall_forall in H0; eauto).
-        do 2 (eapply Forall_forall in H7; eauto).
+        simpl_Exists; simpl_Forall; eauto.
     - (* case (default) *)
       econstructor...
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2).
-        do 2 (eapply Forall_forall in H0; eauto).
-        do 2 (eapply Forall_forall in H7; eauto).
+        simpl_Exists; simpl_Forall; eauto.
       + simpl in *. specialize (H8 _ eq_refl).
-        eapply Forall2_impl_In; [|eauto]; intros.
-        eapply Forall_forall in H1; eauto.
-        eapply Forall_forall in H8; eauto.
+        simpl_Forall; eauto.
     - (* app *)
       econstructor...
-      1,2:repeat rewrite_Forall_forall.
-      eapply H0... eapply H1...
+      1,2:simpl_Forall; eauto.
   Qed.
 
   Lemma sem_equation_restrict {PSyn prefs} : forall (G : @global PSyn prefs) vars H b eq,
@@ -1515,10 +1439,10 @@ Module Type LSEMANTICS
   Proof with eauto with datatypes.
     intros G vars H b [xs es] Hwc Hsem.
     destruct Hwc as (?&?). inv Hsem.
-    econstructor.
-    + repeat rewrite_Forall_forall; eauto.
+    econstructor. instantiate (1:=ss).
+    + simpl_Forall; eauto.
       eapply sem_exp_restrict...
-    + repeat rewrite_Forall_forall.
+    + simpl_Forall; eauto.
       eapply sem_var_restrict...
   Qed.
 
@@ -1540,9 +1464,8 @@ Module Type LSEMANTICS
       reflexivity.
     - (* switch *)
       econstructor; eauto using sem_exp_restrict.
-      + do 2 (eapply Forall_forall; intros).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-        eapply sem_block_morph; try eapply it; eauto.
+      + simpl_Forall.
+        eapply sem_block_morph; try eapply H; eauto.
         now setoid_rewrite <-Env.restrict_map.
         reflexivity.
       + intros ?? Hdef Hmaps.
@@ -1554,7 +1477,7 @@ Module Type LSEMANTICS
         eapply sem_var_restrict; eauto.
         apply in_app_iff in Hin as [Hin|Hin]; auto.
         exfalso. apply Hnin, fst_InMembers; auto.
-      + rewrite Forall_forall in *; intros; eauto.
+      + simpl_Forall; eauto.
   Qed.
 
   (** ** Alignment *)

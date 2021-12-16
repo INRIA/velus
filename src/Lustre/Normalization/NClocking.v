@@ -82,7 +82,7 @@ Module Type NCLOCKING
     assert (Forall (fun e => exists y, In y (annots es) /\ (clockof e = [ck])) (concat es')) as Hf'.
     { eapply Forall2_ignore2. solve_forall.
       rewrite clockof_annot, H2; simpl in *. congruence. }
-    solve_forall. destruct H1 as [_ [_ ?]]; auto.
+    solve_forall.
   Qed.
 
   Corollary mmap2_mmap2_unnest_exp_clocksof1 : forall G vars is_control ck x tx es es' eqs' st st',
@@ -120,26 +120,6 @@ Module Type NCLOCKING
     rewrite Heq. f_equal.
     eapply Htys, Forall_forall in Hin1; eauto.
   Qed.
-
-  (* Corollary mmap2_mmap2_unnest_exp_clocksof3 : forall G vars is_control ck es es' eqs' st st', *)
-  (*     Forall (LiftO True (Forall (wc_exp G vars))) es -> *)
-  (*     Forall (LiftO True (fun es => Forall (eq ck) (clocksof es))) es -> *)
-  (*     mmap2 *)
-  (*       (or_default_with *)
-  (*          (ret (None, [])) *)
-  (*          (fun es => bind2 *)
-  (*                    (bind2 (mmap2 (unnest_exp G is_control) es) (fun es0 eqs => ret (concat es0, concat eqs))) *)
-  (*                    (fun es' eqs'  => ret (Some es', eqs')))) es st = (es', eqs', st') -> *)
-  (*     Forall (LiftO True (fun es => Forall (fun e => clockof e = [ck]) es)) es'. *)
-  (* Proof. *)
-  (*   intros * Hwl Htys Hmap. *)
-  (*   eapply mmap2_values in Hmap. *)
-  (*   eapply Forall3_ignore3 in Hmap. *)
-  (*   induction Hmap; inv Hwl; inv Htys; constructor; auto. *)
-  (*   destruct H as (?&?&?&?). repeat inv_bind. *)
-  (*   destruct x; repeat inv_bind; simpl; auto. *)
-  (*   eapply mmap2_unnest_exp_clocksof''' in H; eauto. *)
-  (* Qed. *)
 
   Corollary mmap2_unnest_exp_clocksof :
     forall G vars is_control es es' eqs' st st',
@@ -382,10 +362,7 @@ Module Type NCLOCKING
   Definition st_clocks (st : fresh_st (Op.type * clock)) :=
     idck (st_anns st).
 
-  Local Ltac In_st_clocks id t cl b :=
-    unfold st_clocks, idck, idty in *;
-    repeat simpl_In; exists (id, (t, cl)); split; auto;
-    simpl_In; exists (id, (t, cl, b)); eauto.
+  Global Hint Unfold st_clocks : list.
 
   Fact idents_for_anns_incl_clocks : forall anns ids st st',
     idents_for_anns anns st = (ids, st') ->
@@ -394,10 +371,7 @@ Module Type NCLOCKING
     intros anns ids st st' Hids.
     apply idents_for_anns_incl in Hids.
     intros [id cl] Hin.
-    repeat simpl_In. inv H.
-    specialize (Hids (id, (t, cl))).
-    assert (In (id, (t, cl)) (st_anns st')) by eauto.
-    In_st_clocks id t cl b.
+    solve_In.
   Qed.
 
   Fact st_follows_clocks_incl : forall st st',
@@ -498,8 +472,7 @@ Module Type NCLOCKING
       eapply fresh_ident_In in H.
       eapply idents_for_anns_st_follows in H0.
       eapply st_follows_incl in H; eauto.
-      eapply in_or_app. right.
-      In_st_clocks x t c false.
+      eapply in_or_app. right. solve_In.
     Qed.
 
     Fact mmap2_wc {A B} :
@@ -726,7 +699,6 @@ Module Type NCLOCKING
              apply in_or_app, or_intror;
              unfold st_clocks, idck; simpl_In;
              repeat eexists; eauto; auto).
-        + simpl_In. repeat eexists; eauto; auto.
     Qed.
 
     Fact unnest_resets_wc : forall vars es es' eqs' st st',
@@ -791,9 +763,9 @@ Module Type NCLOCKING
         * rewrite clockof_annot, Hsingl; simpl.
           constructor; auto.
           eapply fresh_ident_In in H.
-          eapply in_or_app. right. unfold st_clocks, idck. simpl_In. exists (x0, (t, c)).
-          split; auto.
-          eapply st_follows_incl in H; eauto. repeat solve_st_follows.
+          eapply in_or_app. right. solve_In.
+          2:eapply st_follows_incl in H; eauto; repeat solve_st_follows.
+          reflexivity.
     Qed.
 
     Hypothesis Hiface : global_iface_eq G1 G2.
@@ -920,11 +892,10 @@ Module Type NCLOCKING
           { eapply idents_for_anns_values in H3; subst.
             specialize (unnest_fby_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
             eapply Forall2_swap_args. solve_forall.
-            destruct a0 as [ty ck]; simpl in *. rewrite clockof_annot, H1; auto. }
+            rewrite clockof_annot, H1; auto. }
           eapply mk_equations_Forall. solve_forall.
           repeat constructor; eauto; simpl; rewrite app_nil_r.
-          * destruct a0 as [ty ck]; simpl in *.
-            rewrite H5. repeat constructor.
+          * rewrite H5. repeat constructor.
             eapply idents_for_anns_incl_clocks in H3.
             apply in_or_app, or_intror, H3. simpl_In. eexists; split; eauto. reflexivity.
       - (* arrow *)
@@ -958,10 +929,9 @@ Module Type NCLOCKING
           { eapply idents_for_anns_values in H3; subst.
             specialize (unnest_arrow_annot' _ _ _ Hlen1 Hlen2) as Hanns; eauto. clear - Hanns.
             eapply Forall2_swap_args. solve_forall.
-            destruct a0 as [ty ck]; simpl in *. rewrite clockof_annot, H1; auto. }
+            rewrite clockof_annot, H1; auto. }
           eapply mk_equations_Forall. solve_forall.
           repeat constructor; eauto; simpl; rewrite app_nil_r.
-          destruct a0 as [ty ck]; simpl in *.
           rewrite H5. repeat constructor.
           eapply idents_for_anns_incl_clocks in H3.
           apply in_or_app, or_intror, H3. simpl_In. eexists; split; eauto. reflexivity.
@@ -1005,11 +975,10 @@ Module Type NCLOCKING
           * rewrite H7; simpl. repeat constructor.
             assert (H':=H1). apply idents_for_anns_values in H'.
             apply idents_for_anns_incl_clocks in H1.
-            destruct a as [ty ck'].
             apply in_or_app; right. apply H1.
-            simpl_In. exists (i, (ty, ck')). split; auto.
-            assert (In (ty, ck') (map snd x3)) by (simpl_In; exists (i, (ty, ck')); auto).
-            rewrite H' in H9. simpl_In. inv H9; auto.
+            simpl_In. exists (i, (t, ck)). split; auto.
+            assert (In (t, c) (map snd x3)) by solve_In.
+            setoid_rewrite H' in H9. simpl_In; auto.
       - (* case *)
         inv Hwc; repeat inv_bind.
         assert (st_follows x1 x4) as Hfollows by repeat solve_st_follows.
@@ -1020,9 +989,6 @@ Module Type NCLOCKING
         2:(intros; repeat inv_bind; destruct a; repeat solve_st_follows).
         2:{ solve_forall; repeat inv_bind.
             eapply mmap2_wc with (vars0:=vars++st_clocks x4) in H9... solve_mmap2. }
-        (* assert (Hnorm2:=H3). eapply mmap2_wc with (vars0:=vars++st_clocks x7) in H3 as (?&?). *)
-        (* 2:intros; repeat solve_st_follows. *)
-        (* 2:{ solve_mmap2. } *)
         assert (length x = 1); try singleton_length.
         { eapply unnest_exp_length in Hnorm0...
           now rewrite Hnorm0, <-length_clockof_numstreams, H6. }
@@ -1069,11 +1035,10 @@ Module Type NCLOCKING
           * rewrite H10; simpl. repeat constructor.
             assert (H':=H4). apply idents_for_anns_values in H'.
             apply idents_for_anns_incl_clocks in H4.
-            destruct a as [ty ck'].
             apply in_or_app; right. apply H4.
-            simpl_In. exists (i, (ty, ck')). split; auto.
-            assert (In (ty, ck') (map snd x)) by (simpl_In; exists (i, (ty, ck')); auto).
-            rewrite H' in H16. simpl_In. inv H16; auto.
+            simpl_In. exists (i, (t, c)). split; auto.
+            assert (In (t, c) (map snd x)) as Hin' by solve_In.
+            setoid_rewrite H' in Hin'. simpl_In; auto.
       - (* app *)
         assert (st_follows x4 x7) as Hfollows by repeat solve_st_follows.
         eapply unnest_resets_wc in H3 as (Hck2&Hwt2&Hwt2'); eauto.

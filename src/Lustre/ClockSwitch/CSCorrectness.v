@@ -425,9 +425,9 @@ Module Type CSCORRECTNESS
         econstructor. 2:rewrite H4; reflexivity.
         unfold Env.MapsTo in *.
         erewrite Env.In_find_adds'; auto.
-        eapply in_flat_map; do 2 esplit; eauto; simpl.
+        solve_In; simpl.
         apply Env.from_list_find_In in Hfind. eapply in_map_iff in Hfind as (((?&?)&?&?)&Heq&Hfind); inv Heq.
-        eapply in_map_iff; do 2 esplit; eauto. simpl.
+        solve_In.
         rewrite H3; simpl; auto.
       - eapply Forall_forall; intros (?&?) Hin.
         assert (Hin':=Hin). eapply in_flat_map in Hin' as ((((?&?)&?)&?)&?&Hin').
@@ -443,8 +443,7 @@ Module Type CSCORRECTNESS
         exists (filterv e sc vs). split; auto.
         + inv Hv. unfold Env.MapsTo in *. econstructor. 2:rewrite H5; reflexivity.
           eapply Env.In_find_adds'; auto.
-          eapply in_flat_map; do 2 esplit; eauto; simpl.
-          eapply in_map_iff; do 2 esplit; eauto. simpl.
+          repeat (solve_In; simpl).
           rewrite H4; simpl; auto.
         + eapply sem_clock_refines; eauto. rewrite ac_filter.
           apply sem_clock_Con_filter; eauto.

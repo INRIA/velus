@@ -81,17 +81,13 @@ Module Type CEISFREE
 
   (** * Decision procedure *)
 
-  (* TODO: use auto for the proofs. *)
-
   Lemma Is_free_in_clock_disj:
     forall y ck x c, Is_free_in_clock y (Con ck x c)
                      <-> y = x \/ Is_free_in_clock y ck.
   Proof.
     intros y ck x c; split; intro HH.
-    inversion_clear HH; [left; reflexivity|right; assumption].
-    destruct HH as [HH|HH].
-    rewrite HH; constructor.
-    now constructor 2.
+    inversion_clear HH; auto.
+    destruct HH as [HH|HH]; subst; auto with nlfree.
   Qed.
 
   Lemma Is_free_in_when_disj:
@@ -100,7 +96,7 @@ Module Type CEISFREE
   Proof.
     intros y e x c; split; intro HH.
     inversion_clear HH; auto.
-    destruct HH as [HH|HH]; try rewrite HH; auto using Is_free_in_exp.
+    destruct HH as [HH|HH]; subst; auto with nlfree.
   Qed.
 
   Fixpoint free_in_clock_dec (ck : clock) (T: PS.t)
@@ -113,20 +109,15 @@ Module Type CEISFREE
           | exist _ S' HF => exist _ (PS.add x S') _
           end
         end).
-    - intro x; split; intro HH.
-      right; exact HH.
+    - intro x; split; intro HH; auto.
       destruct HH as [HH|HH]; [inversion HH|exact HH].
     - intro y; split; intro HH.
-      + rewrite PS.add_spec in HH.
-        destruct HH as [HH|HH].
-        rewrite HH; left; constructor.
-        apply HF in HH.
-        destruct HH as [HH|HH]; [left|right]; auto using Is_free_in_clock.
+      + apply PS.add_spec in HH as [|HH]; subst; auto with nlfree.
+        apply HF in HH as [|]; auto with nlfree.
       + rewrite Is_free_in_clock_disj in HH.
-        apply or_assoc in HH.
-        destruct HH as [HH|HH].
-        rewrite HH; apply PS.add_spec; left; reflexivity.
-        apply HF in HH; apply PS.add_spec; right; assumption.
+        apply or_assoc in HH. rewrite PS.add_spec.
+        destruct HH as [HH|HH]; subst; auto.
+        right. apply HF; auto.
   Defined.
 
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
@@ -169,13 +160,13 @@ Module Type CEISFREE
                    <-> Is_free_in_clock x ck \/ PS.In x m.
   Proof.
     induction ck.
-    - split; intuition;
-        (match goal with H:Is_free_in_clock _ Cbase |- _ => inversion H end).
+    - split; [intros|intros [Hck|]]; auto.
+      inv Hck.
     - split; intro H0.
-      + apply IHck in H0; destruct H0 as [H0|H0]; try apply PS.add_spec in H0;
-          intuition; subst; intuition.
-      + apply IHck; destruct H0 as [H0|H0]; inversion H0;
-          solve [right; apply PS.add_spec; intuition | intuition].
+      + apply IHck in H0; destruct H0 as [H0|H0]; auto with nlfree.
+        apply PS.add_spec in H0 as [|]; subst; auto with nlfree.
+      + apply IHck. rewrite PS.add_spec.
+        destruct H0 as [H0|H0]; inversion H0; subst; auto.
   Qed.
 
   Corollary free_in_clock_spec':
@@ -202,10 +193,10 @@ Module Type CEISFREE
       try inversion H0; subst;
         try apply PS.add_spec;
         solve [
-            intuition
-          | right; apply free_in_clock_spec; intuition
-          | apply PS.add_spec in H1; destruct H1; subst; intuition
-          | right; apply PS.add_spec; intuition ].
+            auto with nlfree
+          | right; apply free_in_clock_spec; auto
+          | apply PS.add_spec in H1; destruct H1; subst; auto with nlfree
+          | right; apply PS.add_spec; auto ].
     intro m.
     split; intro HH.
     - simpl in HH.
@@ -216,9 +207,9 @@ Module Type CEISFREE
       destruct HH as [HH|HH].
       + inversion_clear HH as [| | | |? ? ? ? ? Hf].
         apply IHe2.
-        destruct Hf as [HH|HH]; intuition.
-        right. apply IHe1; intuition.
-      + apply IHe2; right; apply IHe1; intuition.
+        destruct Hf as [HH|HH]; auto.
+        right. apply IHe1; auto.
+      + apply IHe2; right; apply IHe1; auto.
   Qed.
 
   Lemma free_in_exp_spec':
@@ -241,8 +232,7 @@ Module Type CEISFREE
          | |- PS.In _ (free_in_aexp _ _ _) => apply free_in_exp_spec
          | H:Is_free_in_aexp _ _ _ |- _ => inversion_clear H
          | |- context[PS.In _ (free_in_clock _ _)] => rewrite free_in_clock_spec
-         end);
-      intuition.
+         end); auto with nlfree.
   Qed.
 
   Lemma free_in_aexp_spec':
@@ -256,10 +246,8 @@ Module Type CEISFREE
       PS.In x (fold_left (fun fvs e => free_in_exp e fvs) l m) <->
       Exists (Is_free_in_exp x) l \/ PS.In x m.
   Proof.
-    Local Hint Constructors Exists : datatypes.
     intros x l. induction l; intro m; simpl.
-    - intuition.
-      match goal with H:Exists _ nil |- _ => inversion H end.
+    - split; [intros|intros [Hex|]]; auto. inv Hex.
     - rewrite IHl. rewrite free_in_exp_spec.
       split; intros [H | H]; auto.
       + destruct H as [H | H]; auto with datatypes.
@@ -388,7 +376,7 @@ Module Type CEISFREE
         subst; auto;
           try rewrite IHe2, IHe1;
           try rewrite free_in_exp_spec;
-          intuition.
+          auto with nlfree.
     - induction l as [|e]; destruct x; simpl in *.
       + apply PS.add_spec in H0 as []; subst...
       + apply In_fold_left_free_in_cexp in H0 as [|Hin].
@@ -409,12 +397,11 @@ Module Type CEISFREE
         inversion_clear H as [|?? He Hl].
         apply IHl, In_fold_left_free_in_cexp in Hl as [|Hin]; auto.
         rewrite In_free_in_cexp; auto.
-    - take (Exists _ _) and eapply Forall_Exists in it; eauto.
-      apply Exists_exists in it as (e & Hin & He & Free).
+    - simpl_Exists. simpl_Forall.
       apply In_split in Hin as (l1 & l2 & E); subst.
       rewrite fold_left_app; simpl.
-      rewrite 2 In_fold_left_free_in_cexp, In_free_in_cexp, He; auto.
-    - apply In_fold_left_free_in_cexp.
+      rewrite 2 In_fold_left_free_in_cexp, In_free_in_cexp, H; auto.
+    - destruct x. apply In_fold_left_free_in_cexp.
       right; apply PSF.add_2; auto.
     - apply In_fold_left_or_default_free_in_cexp in H0 as [Hin|].
       + left. apply FreeEcase_branches.
@@ -454,8 +441,8 @@ Module Type CEISFREE
                                        | apply free_in_clock_spec in H ]
            | |- context [free_in_caexp _ _ _] => apply free_in_cexp_spec
            | H:Is_free_in_caexp _ _ _ |- _ => inversion_clear H
-           | _ => solve [right; apply free_in_clock_spec; intuition
-                        | intuition]
+           | _ => solve [right; apply free_in_clock_spec; auto
+                        | auto with nlfree]
                        end).
   Qed.
 

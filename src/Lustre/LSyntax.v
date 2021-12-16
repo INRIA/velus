@@ -36,6 +36,8 @@ Module Type LSYNTAX
   Definition ann : Type := (type * clock)%type.
   Definition lann : Type := (list type * clock)%type.
 
+  Global Hint Unfold ann lann : conjs.
+
   Definition idents xs := List.map (@fst ident (type * clock * ident)) xs.
 
   Inductive exp : Type :=
@@ -199,6 +201,25 @@ Module Type LSYNTAX
       Forall2 VarsDefined blocks xs ->
       Permutation (map fst locs ++ ys) (concat xs) ->
       VarsDefined (Blocal locs blocks) ys.
+
+  Ltac inv_VarsDefined :=
+    repeat
+      match goal with
+      | H:Forall2 VarsDefined ?blks _, Hin: In _ ?blks |- _ =>
+          let xs := fresh "xs" in
+          let Hinxs := fresh "Hinxs" in
+          let Hdef := fresh "Hdef" in
+          eapply Forall2_ignore2, Forall_forall in H as (xs&Hinxs&Hdef); [|eapply Hin]
+      | H:Forall2 VarsDefined _ ?xs, Hin: In _ ?xs |- _ =>
+          let blk := fresh "blk" in
+          let Hinblks := fresh "Hinblks" in
+          let Hdef := fresh "Hdef" in
+          eapply Forall2_ignore1, Forall_forall in H as (blk&Hinblks&Hdef); [|eapply Hin]
+      | H:Forall (fun _ => exists _, Forall2 VarsDefined _ _ /\ Permutation _ _) ?brs, Hin: In _ ?brs |- _ =>
+          let Hvars := fresh "Hvars" in
+          let Hperm := fresh "Hperm" in
+          eapply Forall_forall in H as (?&Hvars&Hperm); [|eapply Hin]
+      end.
 
   Fixpoint locals (d : block) : list (ident * (type * clock * ident)) :=
     match d with
@@ -960,25 +981,21 @@ Module Type LSYNTAX
     Proof.
       induction e using exp_ind2; intros * Hincl Hwx; inv Hwx; auto.
       - (* fby *)
-        constructor; rewrite Forall_forall in *; eauto.
+        constructor; simpl_Forall; auto.
       - (* arrow *)
-        constructor; rewrite Forall_forall in *; eauto.
+        constructor; simpl_Forall; auto.
       - (* when *)
-        constructor; rewrite Forall_forall in *; eauto.
+        constructor; simpl_Forall; eauto.
       - (* merge *)
-        constructor; rewrite Forall_forall in *; eauto.
-        intros ? Hin. specialize (H _ Hin). specialize (H4 _ Hin).
-        rewrite Forall_forall in *; eauto.
+        constructor; simpl_Forall; eauto.
       - (* case *)
         constructor; eauto.
-        + eapply Forall_impl_In; [|eauto]; intros (?&?) ??.
-          eapply Forall_impl_In; [|eauto]; intros.
-          do 2 (eapply Forall_forall in H; eauto).
+        + simpl_Forall; eauto.
         + intros ??; subst; simpl in *.
-          eapply Forall_impl_In; [|eauto]; intros.
+          simpl_Forall; eauto.
           eapply Forall_forall in H7; eauto.
       - (* app *)
-        constructor; rewrite Forall_forall in *; eauto.
+        constructor; simpl_Forall; eauto.
     Qed.
 
     Lemma wx_equation_incl : forall env env' equ,
@@ -988,7 +1005,7 @@ Module Type LSYNTAX
     Proof.
       intros ?? (xs&es) Hincl (Hes&Hxs).
       split.
-      - rewrite Forall_forall in *. intros.
+      - simpl_Forall.
         eapply wx_exp_incl; eauto.
       - etransitivity; eauto.
     Qed.
@@ -1003,15 +1020,14 @@ Module Type LSYNTAX
       - (* equation *)
         constructor. eapply wx_equation_incl; eauto.
       - (* reset *)
-        constructor; rewrite Forall_forall in *; eauto.
+        constructor; simpl_Forall; eauto.
         eapply wx_exp_incl; eauto.
       - (* switch *)
         constructor.
         + eapply wx_exp_incl; eauto.
-        + do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros); eauto.
-          do 2 (eapply Forall_forall in H; eauto).
+        + simpl_Forall; eauto.
       - (* local *)
-        constructor; rewrite Forall_forall in *; intros.
+        constructor; simpl_Forall; eauto.
         eapply H; eauto using incl_appl'.
     Qed.
   End wx_incl.
@@ -1027,15 +1043,12 @@ Module Type LSYNTAX
     - (* eq *)
       constructor.
     - (* reset *)
-      constructor.
-      rewrite Forall_forall in *; eauto.
+      constructor. simpl_Forall; eauto.
     - (* switch *)
-      constructor.
-      do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros).
-      do 2 (eapply Forall_forall in H; eauto).
+      constructor. simpl_Forall; eauto.
     - (* local *)
       constructor; auto.
-      + rewrite Forall_forall in *; intros; eauto.
+      + simpl_Forall.
         eapply H; eauto using incl_appl'.
       + intros * Hin. contradict H5; eauto.
   Qed.
@@ -1069,26 +1082,22 @@ Module Type LSYNTAX
       constructor.
     - (* reset *)
       constructor.
-      eapply Forall_forall; intros.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it; eauto.
+      simpl_Forall.
+      eapply H; eauto.
       intros ? Hin Hinm. eapply Hnd1; eauto.
-      apply inmembers_flat_map, Exists_exists; eauto.
+      apply inmembers_flat_map; solve_Exists.
     - (* switch *)
-      constructor.
-      do 2 (eapply Forall_forall; intros).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it; eauto.
+      constructor. simpl_Forall.
+      eapply H; eauto.
       intros ? Hin Hinm. eapply Hnd1; eauto.
-      do 2 (apply inmembers_flat_map, Exists_exists; do 2 esplit; eauto).
+      do 2 (apply inmembers_flat_map; solve_Exists).
     - (* local *)
       constructor; auto.
-      + eapply Forall_forall; intros.
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      + simpl_Forall.
         rewrite <-app_assoc, (Permutation_app_comm xs'), app_assoc.
-        eapply it; eauto.
+        eapply H; eauto.
         intros ? Hin Hinm1. eapply Hnd1; eauto.
-        apply InMembers_app, or_intror. apply inmembers_flat_map, Exists_exists; eauto.
+        apply InMembers_app, or_intror. apply inmembers_flat_map; solve_Exists.
       + intros ? Hinm Hin. apply in_app_iff in Hin as [Hin|Hin].
         * eapply H5; eauto.
         * eapply Hnd1; eauto. apply InMembers_app; auto.
@@ -1105,16 +1114,13 @@ Module Type LSYNTAX
       intros * Hnin Hgood Hin Hnd; inv Hgood; inv Hnd.
     - (* equation *) constructor.
     - (* reset *)
-      constructor. rewrite Forall_forall in *; eauto.
+      constructor. simpl_Forall; eauto.
     - (* switch *)
-      constructor.
-      do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros).
-      do 2 (eapply Forall_forall in H; eauto).
-      do 2 (eapply Forall_forall in H1; eauto).
+      constructor. simpl_Forall; eauto.
     - (* local *)
       constructor; auto.
-      + rewrite Forall_forall in *. intros ? Hblk.
-        eapply H; [eauto|eauto|eauto| |eauto].
+      + simpl_Forall.
+        eapply H; [eauto|eauto| |eauto].
         intros ? Hx. rewrite in_app_iff in *. destruct Hx as [Hx|Hx]; auto.
         apply Hin in Hx as [?|?]; auto.
       + intros ? Hinm. specialize (H7 _ Hinm) as Hx.
@@ -1153,14 +1159,13 @@ Module Type LSYNTAX
       constructor; eauto using AtomOrGensym_add.
     - (* reset *)
       constructor; eauto using AtomOrGensym_add.
-      rewrite Forall_forall in *; eauto.
+      simpl_Forall; eauto.
     - (* switch *)
       constructor; eauto using AtomOrGensym_add.
-      do 2 (eapply Forall_impl_In; [|eauto]; try intros (?&?); intros).
-      do 2 (eapply Forall_forall in H; eauto).
+      simpl_Forall; eauto.
     - (* locals *)
       constructor; eauto using AtomOrGensym_add.
-      rewrite Forall_forall in *; eauto.
+      simpl_Forall; eauto.
   Qed.
 
   Lemma GoodLocals_locals prefs : forall blk,
@@ -1170,8 +1175,9 @@ Module Type LSYNTAX
     induction blk using block_ind2; intros * Hgood; inv Hgood; simpl; auto.
     - (* reset *)
       rewrite flat_map_concat_map, concat_map.
-      eapply Forall_concat, Forall_map, Forall_map.
-      rewrite Forall_forall in *; eauto.
+      eapply Forall_concat.
+      simpl_Forall; eauto.
+      eapply Forall_forall in H; eauto. solve_In.
     - (* switch *)
       rewrite flat_map_concat_map, Forall_map.
       apply Forall_concat, Forall_map, Forall_forall; intros (?&?) Hin.
@@ -1181,8 +1187,8 @@ Module Type LSYNTAX
     - (* locals *)
       rewrite map_app, Forall_app; split; auto.
       rewrite flat_map_concat_map, concat_map.
-      eapply Forall_concat, Forall_map, Forall_map.
-      rewrite Forall_forall in *; eauto.
+      eapply Forall_concat. simpl_Forall.
+      eapply Forall_forall in H; eauto. solve_In.
   Qed.
 
   (** ** Specifications of some subset of the language *)
@@ -1224,32 +1230,26 @@ Module Type LSYNTAX
       destruct eq. constructor; auto.
     - (* reset *)
       constructor.
-      eapply in_concat in Hin as (?&Hin1&Hin2).
-      eapply Forall2_ignore1, Forall_forall in H4 as (?&?&?); eauto.
-      eapply Exists_exists; do 2 esplit; eauto.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it. 2,3:eauto.
+      eapply in_concat in Hin as (?&Hin1&Hin2). inv_VarsDefined.
+      solve_Exists. simpl_Forall.
+      eapply H. 2,3:eauto.
       eapply NoDupLocals_incl; [|eauto]; auto using incl_concat.
     - (* switch *)
       constructor.
       inv H; try congruence. inv H2. inv H5. clear H1 H7 H8.
       destruct H4 as (?&Hvars&Hperm).
       left.
-      rewrite <-Hperm in Hin. eapply in_concat in Hin as (?&Hin1&Hin2).
-      eapply Forall2_ignore1, Forall_forall in Hvars as (?&?&?); eauto.
-      eapply Exists_exists; do 2 esplit; eauto.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it. 2,3:eauto.
+      rewrite <-Hperm in Hin. eapply in_concat in Hin as (?&Hin1&Hin2). inv_VarsDefined.
+      solve_Exists. simpl_Forall.
+      eapply H0. 2,3:eauto.
       eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; auto using incl_concat.
     - (* local *)
       econstructor.
       2:{ intros contra. eapply H5; eauto. }
       assert (In x (concat xs0)) as Hin' by (rewrite <-H7; auto using in_or_app).
-      apply in_concat in Hin' as (?&Hin1&Hin2).
-      eapply Forall2_ignore1, Forall_forall in H3 as (?&?&?); eauto.
-      eapply Exists_exists; do 2 esplit; eauto.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it. 2,3:eauto.
+      apply in_concat in Hin' as (?&Hin1&Hin2). inv_VarsDefined.
+      solve_Exists. simpl_Forall.
+      eapply H. 2,3:eauto.
       eapply NoDupLocals_incl; [|eauto].
       rewrite Permutation_app_comm, H7; auto using incl_concat.
   Qed.
@@ -1261,11 +1261,9 @@ Module Type LSYNTAX
       Exists (Is_defined_in x) blks.
   Proof.
     intros * Hnd Hvars Hin.
-    apply in_concat in Hin as (?&Hin1&Hin2).
-    eapply Forall2_ignore1, Forall_forall in Hvars as (?&?&?); eauto.
-    eapply Forall_forall in Hnd; eauto.
-    eapply Exists_exists; do 2 esplit; eauto.
-    eapply VarsDefined_Is_defined in H0; eauto.
+    apply in_concat in Hin as (?&Hin1&Hin2). inv_VarsDefined.
+    simpl_Forall. solve_Exists.
+    eapply VarsDefined_Is_defined in Hdef; eauto.
     eapply NoDupLocals_incl; [|eauto]. apply incl_concat; auto.
   Qed.
 
@@ -1279,30 +1277,24 @@ Module Type LSYNTAX
     - (* equation *)
       auto.
     - (* reset *)
-      eapply Exists_exists in H1 as (?&Hin1&Hin2).
-      eapply Forall2_ignore2, Forall_forall in H4 as (?&?&?); eauto.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      simpl_Exists. inv_VarsDefined. simpl_Forall.
       eapply in_concat. repeat esplit; eauto.
-      eapply it. 2,3:eauto.
+      eapply H. 2,3:eauto.
       eapply NoDupLocals_incl; [|eauto]; auto using incl_concat.
     - (* switch *)
-      rename H1 into Hdef. repeat (eapply Exists_exists in Hdef as (?&?&Hdef)).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      destruct it0 as (?&Hvars&Hperm).
-      eapply Forall2_ignore2, Forall_forall in Hvars as (?&?&Hvars); eauto.
-      rewrite <-Hperm. eapply in_concat. repeat esplit; eauto.
-      eapply it; eauto.
+      rename H1 into Hdef. simpl_Exists.
+      simpl_Forall. inv_VarsDefined.
+      take (Permutation _ _) and rewrite <-it. eapply in_concat. repeat esplit; eauto.
+      eapply H; eauto.
       eapply NoDupLocals_incl; [|eauto].
-      rewrite <-Hperm; auto using incl_concat.
+      take (Permutation _ _) and rewrite <-it; auto using incl_concat.
     - (* local *)
-      eapply Exists_exists in H6 as (?&Hin1&Hin2).
-      eapply Forall2_ignore2, Forall_forall in H3 as (?&?&?); eauto.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it in H1; eauto.
+      simpl_Exists. inv_VarsDefined. simpl_Forall.
+      eapply H in Hdef; eauto.
       2:{ eapply NoDupLocals_incl; [|eauto].
           rewrite Permutation_app_comm, H7; auto using incl_concat. }
-      assert (In x (concat xs0)) as Hin by (eapply in_concat; eauto).
-      rewrite <-H7, in_app_iff in Hin. destruct Hin; auto.
+      assert (In x (concat xs0)) as Hin' by (eapply in_concat; eauto).
+      rewrite <-H7, in_app_iff in Hin'. destruct Hin'; auto.
       exfalso. apply H8, fst_InMembers; auto.
   Qed.
 
@@ -1315,16 +1307,13 @@ Module Type LSYNTAX
     - (* equation *)
       destruct H1; auto.
     - (* reset *)
-      eapply Exists_exists in H1 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      simpl_Exists; simpl_Forall; eauto.
     - (* switch *)
       rename H1 into Hdef.
-      repeat (eapply Exists_exists in Hdef as (?&?&Hdef)).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      simpl_Exists; simpl_Forall; eauto.
     - (* local *)
-      eapply Exists_exists in H3 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it, in_app_iff in it0 as [|]; eauto.
+      simpl_Exists; simpl_Forall.
+      eapply H, in_app_iff in H2 as [|]; eauto.
       exfalso. apply H4, fst_InMembers; auto.
   Qed.
 
@@ -1334,8 +1323,7 @@ Module Type LSYNTAX
       In x env.
   Proof.
     intros * Hf Hex.
-    eapply Exists_exists in Hex as (?&?&?).
-    eapply Forall_forall in Hf; eauto using Is_defined_in_wx_In.
+    simpl_Exists; simpl_Forall; eauto using Is_defined_in_wx_In.
   Qed.
 
   Lemma Is_defined_in_vars_defined : forall x blk,
@@ -1347,19 +1335,19 @@ Module Type LSYNTAX
       inv Hin; auto.
       now rewrite ps_from_list_In.
     - (* reset *)
-      inv Hin. apply Exists_exists in H1 as (?&?&?).
+      inv Hin. simpl_Exists.
       eapply In_In_PSUnion; eauto. 2:eapply in_map_iff; eauto.
-      take (Forall _ _) and eapply Forall_forall in it; eauto.
+      simpl_Forall; eauto.
     - (* switch *)
-      inv Hin. rename H1 into Hin. do 2 (apply Exists_exists in Hin as (?&?&Hin)).
+      inv Hin. rename H1 into Hin. simpl_Exists.
       do 2 (eapply In_In_PSUnion; [|eapply in_map_iff; eauto]).
-      do 2 (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      simpl_Forall; eauto.
     - (* local *)
       inv Hin.
       eapply PSF.filter_3. intros ???; subst; auto.
-      + apply Exists_exists in H2 as (?&?&?).
+      + simpl_Exists.
         eapply In_In_PSUnion; eauto. 2:eapply in_map_iff; eauto.
-        take (Forall _ _) and eapply Forall_forall in it; eauto.
+        simpl_Forall; eauto.
       + eapply Bool.negb_true_iff.
         eapply Bool.not_true_iff_false. intro contra.
         apply H3.
@@ -1376,18 +1364,18 @@ Module Type LSYNTAX
       now constructor.
     - (* reset *)
       apply PSUnion_In_In in Hin as (?&Hin1&Hin2). eapply in_map_iff in Hin1 as (?&?&?); subst.
-      eapply Forall_forall in H; eauto.
-      constructor. eapply Exists_exists; eauto.
+      simpl_Forall.
+      constructor. solve_Exists.
     - (* switch *)
       apply PSUnion_In_In in Hin as (?&Hin1&Hin2). eapply in_map_iff in Hin1 as (?&?&?); subst.
       apply PSUnion_In_In in Hin2 as (?&Hin2&Hin3). eapply in_map_iff in Hin2 as (?&?&?); subst.
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      constructor. do 2 (eapply Exists_exists; do 2 esplit; eauto).
+      simpl_Forall.
+      constructor. solve_Exists.
     - (* local *)
       eapply PS.filter_spec in Hin as (Hin&Hassoc). 2:intros ?? Heq; inv Heq; auto.
       apply PSUnion_In_In in Hin as (?&Hin1&Hin2). eapply in_map_iff in Hin1 as (?&?&?); subst.
-      eapply Forall_forall in H; eauto.
-      econstructor. eapply Exists_exists; eauto.
+      simpl_Forall.
+      econstructor. solve_Exists.
       intros contra. eapply InMembers_In in contra as (?&?).
       eapply Bool.negb_true_iff, mem_assoc_ident_false in Hassoc; eauto.
   Qed.

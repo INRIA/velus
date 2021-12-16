@@ -61,13 +61,10 @@ Module Type DCECLOCKING
   Proof.
     induction e using cexp_ind2'; intros * Hwc Hfree;
       inv Hwc; inv Hfree; eauto using wc_exp_free, In_InMembers.
-    - eapply Exists_exists in H2 as (?&Hin&?).
-      eapply Forall2_ignore1 in H6.
-      repeat rewrite Forall_forall in *; eauto.
-      specialize (H6 _ Hin) as (?&?&?). eauto.
-    - eapply Exists_exists in H2 as (?&Hin&(?&?&?)); subst.
-      repeat rewrite Forall_forall in *; eauto.
-      specialize (H _ Hin). simpl in *; eauto.
+    - eapply Forall2_ignore1 in H6.
+      simpl_Exists; simpl_Forall; eauto.
+    - simpl_Exists; simpl_Forall; eauto.
+      subst; simpl in *; eauto.
   Qed.
 
   Lemma wc_equation_def_free : forall G vars eq x,
@@ -86,7 +83,7 @@ Module Type DCECLOCKING
         destruct H6 as ((?&?&?)&?&?&?&?&?); simpl; eauto using In_InMembers.
       + inv Hfree. destruct H1 as [Hfree|Hex].
         * inv Hfree; eauto.
-          -- eapply Exists_exists in H as (?&?&?).
+          -- simpl_Exists.
              eapply Forall2_ignore1, Forall_forall in H5 as ((?&?&?)&?&?&?&?&?); eauto using wc_exp_free.
           -- pose proof (node_in_not_nil n) as Hnnil.
              inv H5; try congruence. clear H0 H2.
@@ -94,18 +91,16 @@ Module Type DCECLOCKING
              apply wc_clock_exp in Hwc; eauto.
              apply instck_parent in Hinst as [|Hpar]; subst; eauto using wc_clock_free.
              eapply wc_clock_parent in Hpar; eauto using wc_clock_free.
-        * eapply Exists_exists in Hex as ((?&?)&?&?); subst.
-          eapply Forall_forall in H7; eauto.
-          destruct H0; subst; eauto using In_InMembers.
+        * simpl_Exists; simpl_Forall.
+          destruct Hex; subst; eauto using In_InMembers.
           eapply wc_clock_free; [|eauto]. eapply wc_env_var; eauto.
     - destruct Hdeff as [Hdef|Hfree].
       + inv Hdef; eauto using In_InMembers.
       + inv Hfree. destruct H1 as [Hfree|Hex].
         * inv Hfree; eauto using wc_exp_free.
           eapply wc_clock_exp in H5; eauto using wc_clock_free.
-        * eapply Exists_exists in Hex as ((?&?)&?&?); subst.
-          eapply Forall_forall in H6; eauto.
-          destruct H0; subst; eauto using In_InMembers.
+        * simpl_Exists; simpl_Forall.
+          destruct Hex; subst; eauto using In_InMembers.
           eapply wc_clock_free; [|eauto]. eapply wc_env_var; eauto.
   Qed.
 
@@ -142,11 +137,11 @@ Module Type DCECLOCKING
         + eapply Forall2_impl_In; [|eauto]; intros; simpl in *.
           rewrite Forall_forall in *; intros.
           eapply H; eauto.
-          intros. eapply Hincl; eauto. constructor. eapply Exists_exists; eauto.
+          intros. eapply Hincl; eauto. constructor. solve_Exists.
       - econstructor...
         intros ? Hin. eapply Forall_forall in H; eauto; simpl in *.
         eapply H; eauto. intros. eapply Hincl; eauto.
-        eapply FreeEcase_branches. apply Exists_exists. do 2 esplit; eauto.
+        eapply FreeEcase_branches. solve_Exists.
     Qed.
 
     Lemma wc_equation_restrict : forall vars vars' eq,
@@ -162,17 +157,17 @@ Module Type DCECLOCKING
         + rewrite <-Hin. eapply Forall2_impl_In; [|eauto].
           intros (?&?&?) ? Hin1 Hin2 (?&?&?&?); simpl in *; repeat esplit; eauto.
           eapply wc_exp_restrict with (vars:=vars); eauto.
-          intros. eapply Hincl; eauto. right. constructor; left. econstructor. eapply Exists_exists; eauto.
+          intros. eapply Hincl; eauto. right. constructor; left. econstructor. solve_Exists.
         + rewrite <-Hout. eapply Forall2_impl_In; [|eauto].
           intros (?&?&?) ? Hin1 Hin2 (?&?&?&?); simpl in *; repeat esplit...
         + eapply Forall_impl_In; [|eauto]; intros (?&?) Hin' ?.
           eapply Hincl; eauto. right. constructor; right.
-          eapply Exists_exists; repeat esplit; eauto. simpl; auto.
+          solve_Exists.
       - econstructor...
         + eapply wc_exp_restrict with (vars:=vars); eauto 8 with nlfree.
         + eapply Forall_impl_In; [|eauto]; intros (?&?) Hin' ?.
           eapply Hincl; eauto. right; constructor.
-          right. eapply Exists_exists; do 2 esplit; eauto. simpl; auto.
+          right. solve_Exists.
     Qed.
 
     Corollary wc_equations_restrict : forall vars vars' eqs,
@@ -183,7 +178,7 @@ Module Type DCECLOCKING
       intros * Hincl Hwc.
       eapply Forall_impl_In; [|eauto]; intros.
       eapply wc_equation_restrict; [|eauto].
-      intros. eapply Hincl; eauto. eapply Exists_exists; eauto.
+      intros. eapply Hincl; eauto. solve_Exists.
     Qed.
 
     Lemma wc_equations_has_def : forall vars eqs,
@@ -220,7 +215,7 @@ Module Type DCECLOCKING
         apply in_app_iff in Hin' as [Hin'|Hin'].
         + eapply Forall2_ignore2, Forall_forall in H0 as (?&?&Hv); eauto; simpl in *.
           destruct Hv as (Hv&_). rewrite Hsub' in Hv. inv Hv.
-          right. constructor. do 2 left. eapply Exists_exists; do 2 esplit...
+          right. constructor. do 2 left. solve_Exists...
         + eapply Forall2_ignore2, Forall_forall in Hf2 as (?&Hin1&Hv); eauto; simpl in *.
           destruct Hv as (Hsub1&_). rewrite Hsub1 in Hsub'; inv Hsub'...
       - (* fby *)
@@ -250,16 +245,15 @@ Module Type DCECLOCKING
         - intros ?. rewrite fst_InMembers, <-n_defd.
           symmetry. apply Is_defined_in_vars_defined.
         - eapply wc_equations_has_def; eauto.
-        - intros ? Hdef. eapply Exists_exists in Hdef as (?&?&?).
-          eapply Forall_forall in Hwc4; eauto.
+        - intros ? Hdef. simpl_Exists; simpl_Forall.
           eapply InMembers_idck, wc_equation_def_free; eauto.
         - eapply InMembers_In in Hinm as ((?&?)&?).
           eapply in_map_iff in Hin as ((?&?&?)&Heq&Hin); inv Heq.
         eapply NoDupMembers_det in Hin. 2:apply n_nodup.
         2:{ eapply incl_app; [| |eapply H]. solve_incl_app.
             apply incl_appr, incl_app; [apply incl_appl, incl_filter', incl_refl|solve_incl_app].
-        } inv Hin.
-        eapply in_map_iff; do 2 esplit; eauto. simpl; auto.
+        }
+        inv Hin. solve_In.
       }
       assert (Forall (wc_equation G2 (idck (n_in n ++ vars' ++ n_out n))) eqs') as Hwc'.
       { subst. eapply wc_equations_restrict; eauto.
@@ -286,7 +280,7 @@ Module Type DCECLOCKING
             - eapply NoDupMembers_app_r, n_nodup.
             - apply n_defd. }
           eapply Exists_exists in Hvd as (?&Hineq&Hdef).
-          eapply Exists_exists; do 2 esplit; eauto.
+          solve_Exists.
           eapply wc_equation_free_in_clock; eauto.
           2:(subst; eapply Forall_forall in Hwc'; eauto).
           * apply NoDupMembers_idck, dce_NoDupMembers_filter, n_nodup.

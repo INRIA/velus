@@ -657,7 +657,7 @@ Module Type CORRECTNESS
   Proof.
     destruct eq; inversion_clear 1; inversion_clear 1; econstructor; eauto.
     apply not_Is_defined_not_Is_sub_in_eqs.
-    assert (In x l) by (now apply hd_error_Some_In); auto.
+    assert (In x l) by (now apply hd_error_Some_In); auto with nldef.
   Qed.
 
   Lemma not_Is_defined_not_Is_reset_in_eqs:
@@ -720,8 +720,8 @@ Module Type CORRECTNESS
   Proof.
     destruct eq; inversion_clear 1; inversion_clear 1; econstructor; eauto.
     1-2:simpl in H0; destruct H0; subst; try contradiction.
-    - apply not_Is_defined_not_Is_reset_in_eqs; auto.
-    - apply not_Is_defined_not_Is_next_in_eqs; auto.
+    - apply not_Is_defined_not_Is_reset_in_eqs; auto with nldef.
+    - apply not_Is_defined_not_Is_next_in_eqs; auto with nldef.
   Qed.
 
   Lemma state_closed_insts_empty:

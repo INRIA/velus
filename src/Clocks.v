@@ -185,10 +185,7 @@ Module Type CLOCKS
     intros * Hnm Hwc Hwce.
     constructor.
     now apply wc_clock_add; auto.
-    apply Forall_forall.
-    destruct x0 as (x' & ck').
-    intro Hin.
-    apply Forall_forall with (1:=Hwce) in Hin.
+    unfold wc_env in *. simpl_Forall.
     apply wc_clock_add; auto.
   Qed.
 
@@ -222,16 +219,10 @@ Module Type CLOCKS
     intros env' env Henv.
     unfold wc_env.
     split; intro HH.
-    - apply Forall_forall.
-      intros x Hin.
-      rewrite <-Henv in Hin.
-      apply Forall_forall with (1:=HH) in Hin.
-      now rewrite Henv in Hin.
-    - apply Forall_forall.
-      intros x Hin.
-      rewrite Henv in Hin.
-      apply Forall_forall with (1:=HH) in Hin.
-      now rewrite <-Henv in Hin.
+    - rewrite <-Henv. simpl_Forall.
+      now rewrite <-Henv.
+    - rewrite Henv. simpl_Forall.
+      now rewrite Henv.
   Qed.
 
   (** ** Parent relation *)
@@ -489,7 +480,7 @@ Module Type CLOCKS
     intros [id' ck'] Hin' H; simpl in H.
     intro contra. apply H; clear H.
     eapply Is_free_in_clock_parent; eauto.
-    unfold wc_env in Hwc. rewrite Forall_forall in Hwc. eapply Hwc in Hin'; eauto.
+    unfold wc_env in Hwc. simpl_Forall; auto.
   Qed.
 
   Lemma wc_clock_nparent_remove : forall vars id ck ck',

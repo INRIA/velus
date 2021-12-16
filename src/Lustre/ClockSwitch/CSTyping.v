@@ -259,18 +259,17 @@ Module Type CSTYPING
         rewrite <-map_app, <-fst_NoDupMembers; auto.
         intros ((?&?)&?&?); auto. }
       eapply mmap_values, Forall2_ignore2 in Hni1.
-      eapply mmap_values, Forall2_ignore2 in Hni2.
-      apply in_map_iff in Hinm as ((?&?&?)&Heq&Hin); inv Heq.
+      eapply mmap_values, Forall2_ignore2 in Hni2. simpl_In.
       apply in_app_iff in Hin as [Hin|Hin]; eapply Forall_forall in Hin; eauto; simpl in *.
       1,2:destruct Hin as (((?&?)&?&?)&Hin&?&?&?); repeat inv_bind.
-      - eapply in_map_iff. do 2 esplit; eauto with datatypes; simpl.
+      - solve_In; eauto with datatypes.
         f_equal; auto.
         unfold rename_var. erewrite Env.find_In_from_list; eauto.
-        2:eapply in_map_iff; do 2 esplit; eauto with datatypes; auto. auto.
-      - eapply in_map_iff. do 2 esplit; eauto with datatypes; simpl.
+        2:solve_In; eauto with datatypes. 1,2:reflexivity.
+      - solve_In; eauto with datatypes.
         f_equal; auto.
         unfold rename_var. erewrite Env.find_In_from_list; eauto.
-        2:eapply in_map_iff; do 2 esplit; eauto with datatypes; auto. auto.
+        2:solve_In; eauto with datatypes. 1,2:reflexivity.
     Qed.
 
     Fact switch_blocks_wt' : forall bck sub envck envty envty' blks blks' st st',
@@ -367,8 +366,7 @@ Module Type CSTYPING
             inv Hdef. rename H11 into Hex. do 2 (eapply Exists_exists in Hex as (?&?&Hex)).
             eapply Hincl.
             apply Partition_Permutation in Hpart. rewrite Hpart.
-            rewrite idty_app, in_app_iff. left.
-            eapply in_map_iff; do 2 esplit; eauto. auto.
+            rewrite idty_app, in_app_iff. left. solve_In.
           * eapply wt_clock_incl; eauto. solve_incl_app.
           * apply mmap_length in H1. destruct x, branches; simpl in *; try congruence; auto.
           * rewrite <-H6.
@@ -381,12 +379,8 @@ Module Type CSTYPING
             rewrite Forall_map. eapply Forall_impl_In; [|eauto]; intros (((?&?)&?)&?) Hin2 ((?&?)&Hin3&?&?&?); repeat inv_bind.
             rewrite 2 in_app_iff. do 2 right.
             eapply new_idents_In with (ids1:=filter _ _) in H11; eauto.
-            2:{ rewrite idty_app, in_app_iff. right.
-                eapply in_map_iff; do 2 esplit; eauto. } simpl in *.
-            eapply in_map_iff in H11 as (((?&?)&?&?)&Heq&Hin'); inv Heq.
-            repeat (eapply in_map_iff; do 2 esplit; eauto).
-            2:(eapply in_flat_map; do 2 esplit; eauto); simpl.
-            2:(eapply in_map_iff; do 2 esplit; eauto). simpl; auto.
+            2:{ rewrite idty_app, in_app_iff. right. solve_In. } simpl in *.
+            solve_In.
         + eapply CS.mmap2_values in H7. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H1.
           2:{ eapply Forall3_length in H7 as (?&?); congruence. }
           2:{ eapply mmap_length in H1; eauto. }
@@ -412,20 +406,17 @@ Module Type CSTYPING
                assert (In (x4, ty) (idty (filter (fun '(_, (_, ck')) => ck' ==b ck) l0 ++ l))) as Hin'.
                { eapply Env.find_In, Env.In_from_list, Hinminv in Hfind; eauto.
                  eapply InMembers_In in Hfind as ((ty'&?)&?).
-                 eapply in_map_iff; do 2 esplit; eauto.
+                 solve_In.
                  assert (ty' = ty); subst; auto.
                  eapply NoDupMembers_det in Hin; eauto.
                  eapply Hincl.
                  apply Partition_Permutation in Hpart. rewrite Hpart.
-                 eapply in_map_iff; do 2 esplit; eauto.
+                 solve_In.
                  2:eapply in_app_iff in H as [|]; eauto using in_filter with datatypes. auto.
                }
                eapply new_idents_In with (ids1:=filter _ _) in H10; eauto. clear Hin'.
-               eapply in_map_iff in H10 as (((?&?)&?&?)&Heq&Hin'); inv Heq.
-               repeat rewrite in_app_iff. do 2 right.
-               repeat (eapply in_map_iff; do 2 esplit; eauto).
-               2:(eapply in_flat_map; do 2 esplit; eauto); simpl.
-               2:(eapply in_map_iff; do 2 esplit; eauto with datatypes). simpl; auto.
+               simpl_In.
+               repeat rewrite in_app_iff. do 2 right. solve_In.
                unfold rename_var. destruct (Env.find _ _); try congruence. rewrite Hfind; auto.
              - intros ?? Hin. apply in_or_app; auto.
              - etransitivity; [|eauto].
@@ -449,12 +440,8 @@ Module Type CSTYPING
                rewrite equiv_decb_equiv in Hfilter. inv Hfilter.
                eapply Hincl.
                apply Partition_Permutation in Hpart. rewrite Hpart, idty_app.
-               apply in_or_app, or_intror.
-               eapply in_map_iff; do 2 esplit; eauto. auto.
-             - rewrite 2 in_app_iff. do 2 right.
-               repeat (eapply in_map_iff; do 2 esplit; eauto).
-               2:(eapply in_flat_map; do 2 esplit; eauto); simpl.
-               2:(eapply in_map_iff; do 2 esplit; eauto with datatypes). simpl; auto.
+               apply in_or_app, or_intror. solve_In.
+             - rewrite 2 in_app_iff. do 2 right. solve_In; eauto with datatypes. reflexivity.
              - rewrite app_assoc. apply in_or_app; auto.
              - eapply In_InMembers, fst_InMembers in Hin2.
                rewrite H6 in Hin2. apply in_seq in Hin2 as (?&?); auto.
@@ -521,9 +508,7 @@ Module Type CSTYPING
             eapply incl_map; eauto. now rewrite map_fst_idty.
           * intros ?? Hin.
             repeat rewrite in_app_iff in *. destruct Hin as [Hin|Hin]; eauto.
-            right. clear - Hin. unfold idck, idty in *. repeat rewrite map_map in *.
-            eapply in_map_iff in Hin as ((?&(?&?)&?)&Heq&Hin); inv Heq.
-            eapply in_map_iff; do 2 esplit; eauto. reflexivity.
+            right. clear - Hin. solve_In.
           * rewrite idty_app, Permutation_app_comm.
             apply incl_app; [apply incl_appl; auto|solve_incl_app].
           * apply NoDupMembers_app; auto. now rewrite 2 NoDupMembers_idty.
@@ -542,16 +527,14 @@ Module Type CSTYPING
           eapply subclock_clock_wt with (vars:=envty++_); eauto.
           * intros ??? Hfind Hin. rewrite in_app_iff in *. repeat rewrite map_map in *; simpl in *.
             destruct Hin as [Hin|Hin]; eauto.
-            exfalso. eapply in_map_iff in Hin as ((?&(?&?)&?)&Heq&Hin); inv Heq.
+            exfalso. simpl_In.
             eapply Env.find_In, Hsubin, fst_InMembers in Hfind.
             eapply H5; eauto using In_InMembers.
             eapply incl_map; eauto. erewrite map_map, map_ext; eauto.
           * intros ?? Hfind Hin. rewrite in_app_iff in *. repeat rewrite map_map in *; simpl in *.
             destruct Hin as [Hin|Hin]; eauto.
-            right. clear - Hin.
-            eapply in_map_iff in Hin as ((?&(?&?)&?)&Heq&Hin); inv Heq.
-            eapply in_map_iff; do 2 esplit; eauto. reflexivity.
-          * eapply wt_clock_incl; eauto; repeat solve_incl_app.
+            right. clear - Hin. solve_In.
+          * eapply wt_clock_incl; eauto; solve_incl_app.
         + clear - H8. unfold idty in *.
           repeat rewrite map_map in *. erewrite map_ext; eauto. intros (?&((?&?)&?)); auto.
     Qed.

@@ -87,6 +87,8 @@ Module Type LCAUSALITY
     induction l1 as [|(?&(?&?)&?)]; intros; simpl; f_equal; auto.
   Qed.
 
+  Global Hint Unfold idcaus : list.
+
   Lemma InMembers_idcaus {A B} : forall x (xs : list (ident * (A * B * ident))),
       InMembers x (idcaus xs) <-> InMembers x xs.
   Proof.
@@ -237,8 +239,7 @@ Module Type LCAUSALITY
       In x (map snd cenv).
   Proof.
     induction e using exp_ind2; intros * Hfree; inv Hfree.
-    - (* var *)
-      eapply in_map_iff. exists (x, x0); eauto.
+    - (* var *) solve_In.
     - (* unop *)
       eauto.
     - (* binop *)
@@ -246,40 +247,38 @@ Module Type LCAUSALITY
     - (* fby *)
       rewrite Forall_forall in *.
       eapply Is_free_left_list_Exists in H3 as (?&Hex).
-      eapply Exists_exists in Hex as (?&?&?); eauto.
+      simpl_Exists; eauto.
     - (* arrow *)
       rewrite Forall_forall in *.
       destruct H3 as [Hex|Hex].
       1,2:(eapply Is_free_left_list_Exists in Hex as (?&Hex);
-           eapply Exists_exists in Hex as (?&?&?); eauto).
+           simpl_Exists; eauto).
     - (* when *)
       rewrite Forall_forall in *.
       destruct H2 as [(_&Hin)|Hex].
-      + eapply in_map_iff. exists (x, x0); eauto.
+      + solve_In.
       + eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        eapply Exists_exists in Hex as (?&?&?); eauto.
+        simpl_Exists; eauto.
     - (* merge *)
       repeat setoid_rewrite Forall_forall in H.
       destruct H2 as [(_&Hin)|Hex].
-      + eapply in_map_iff. exists (x1, x0); eauto.
+      + solve_In.
       + eapply Exists_exists in Hex as (?&?&Hex).
         eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        eapply Exists_exists in Hex as (?&?&?); eauto.
+        simpl_Exists; eauto.
     - (* case *)
       rewrite Forall_forall in *.
       destruct H3 as [(_&Hin)|[Hex|(?&?&Hex)]]; subst; simpl in *; eauto.
       + eapply Exists_exists in Hex as (?&Hin&Hex); subst.
         eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        eapply Exists_exists in Hex as (?&?&?); eauto.
+        simpl_Exists.
         eapply H, Forall_forall in Hin; eauto.
       + rewrite Forall_forall in *.
         eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        eapply Exists_exists in Hex as (?&?&?); eauto.
+        simpl_Exists; eauto.
     - (* app *)
       rewrite Forall_forall in *.
-      destruct H7 as [(?&Hex)|Hex].
-      + eapply Exists_exists in Hex as (?&?&?); eauto.
-      + eapply Exists_exists in Hex as (?&?&?); eauto.
+      destruct H7 as [(?&Hex)|Hex]; simpl_Exists; eauto.
   Qed.
 
   Corollary Is_free_left_list_In_snd cenv : forall es x k,
@@ -299,22 +298,11 @@ Module Type LCAUSALITY
       Is_defined_in env cx blk.
   Proof.
     induction blk using block_ind2; intros * Hdep; inv Hdep; eauto with lcaus.
+    2-4:simpl_Exists; simpl_Forall; econstructor; solve_Exists.
     - (* equation *)
       destruct H0 as (?&?&Hnth&Hin&_).
       econstructor; eauto.
       eapply nth_error_In; eauto.
-    - (* reset *)
-      eapply Exists_exists in H1 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      econstructor. eapply Exists_exists; eauto.
-    - (* switch *)
-      do 2 (eapply Exists_exists in H1 as (?&?&H1)).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      econstructor. repeat (eapply Exists_exists; do 2 esplit; eauto).
-    - (* local *)
-      eapply Exists_exists in H1 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      econstructor. eapply Exists_exists; eauto.
   Qed.
 
   (** ** Causality check *)
@@ -610,10 +598,10 @@ Module Type LCAUSALITY
       Exists (Is_free_left cenv x 0) es.
     Proof.
       intros * Wl Num Free.
-      eapply Exists_exists in Free as (?&In&Ex). eapply Exists_exists; do 2 esplit; eauto.
+      simpl_Exists; simpl_Forall.
       assert (k = 0) as Hk'; subst; eauto.
-      eapply Is_free_left_length in Ex. 2:eapply Forall_forall in Wl; eauto.
-      eapply Forall_forall in Num; eauto. rewrite length_annot_numstreams, Num in Ex.
+      take (Is_free_left _ _ _ _) and eapply Is_free_left_length in it; eauto. 2:solve_Exists.
+      rewrite length_annot_numstreams, Num in it.
       apply PeanoNat.Nat.lt_1_r; auto.
     Qed.
     Local Hint Resolve Exists_Exists_Is_free : lcaus.
@@ -650,8 +638,7 @@ Module Type LCAUSALITY
             2:{ rewrite combine_length.
                 destruct H. inv H.
                 - apply ps_In_k_lt in H1. now rewrite <-H2, Nat.min_id.
-                - eapply Exists_exists in H1 as (?&Hin&?).
-                  eapply Forall_forall in H3; eauto. apply ps_In_k_lt in H.
+                - simpl_Exists; simpl_Forall. apply ps_In_k_lt in H1.
                   now rewrite H2, Nat.min_id, <-H3.
                 - apply ps_In_k_lt in H. now rewrite H2, Nat.min_id.
             }
@@ -770,19 +757,14 @@ Module Type LCAUSALITY
             eapply collect_free_var_correct; eauto. eapply fst_InMembers; eauto.
           * rewrite assemble_brs_free_left_list_spec in Hfree; auto.
             constructor; right.
-            rewrite Exists_map in Hfree. eapply Exists_exists in Hfree as (?&Hin&Hfree).
-            eapply Exists_exists; repeat esplit; eauto.
-            eapply Forall_forall in H; eauto. eapply Forall_forall in H5; eauto. eapply Forall_forall in H8; eauto.
+            solve_Exists. simpl_Forall.
             eapply collect_free_left_list_spec'; eauto.
         + erewrite map_nth' with (d':=PS.empty).
           2:(erewrite <- map_length, Hlen2; eauto).
           apply PSF.add_iff.
           inv H0. destruct H7 as [(_&?)|Hfree]; subst; auto using collect_free_var_complete.
           right.
-          rewrite assemble_brs_free_left_list_spec, Exists_map; auto.
-          eapply Exists_exists in Hfree as (?&Hin&Hfree).
-          eapply Exists_exists; repeat esplit; eauto.
-          eapply Forall_forall in H; eauto. eapply Forall_forall in H5; eauto. eapply Forall_forall in H8; eauto.
+          rewrite assemble_brs_free_left_list_spec; auto. solve_Exists. simpl_Forall.
           eapply collect_free_left_list_spec'; eauto.
       - (* case *)
         (* assert (Datatypes.length (flat_map (collect_free_left cenv') d) = Datatypes.length ty) as Hlend. *)
@@ -810,9 +792,7 @@ Module Type LCAUSALITY
             -- exfalso. rewrite map_nth' with (d':=bool_velus_type) in H2. eapply not_In_empty; eauto.
                rewrite assemble_brs_free_left_list_length in Hk; auto.
           * constructor; right; left.
-            rewrite Exists_map in H2. eapply Exists_exists in H2 as ((?&?)&Hin&Hfree).
-            eapply Exists_exists; repeat esplit; eauto.
-            eapply Forall_forall in H; eauto. eapply Forall_forall in H9; eauto. eapply Forall_forall in H14; eauto.
+            solve_Exists. simpl_Forall.
             eapply collect_free_left_list_spec'; eauto.
         + erewrite map_nth' with (d':=PS.empty).
           2:(erewrite <- map_length, Hlen2; eauto).
@@ -820,10 +800,7 @@ Module Type LCAUSALITY
           inv H1. destruct H8 as [(_&Hfree)|[Hfree|(?&?&Hfree)]]; subst; simpl in *.
           2,3:right; rewrite assemble_brs_free_left_list_spec; auto.
           * left. rewrite IHe; auto.
-          * right. rewrite Exists_map; auto.
-            eapply Exists_exists in Hfree as (?&Hin&Hfree); subst.
-            eapply Exists_exists; repeat esplit; eauto.
-            eapply Forall_forall in H; eauto. eapply Forall_forall in H9; eauto. eapply Forall_forall in H14; eauto.
+          * right. solve_Exists. simpl_Forall.
             eapply collect_free_left_list_spec'; eauto.
           * left. eapply collect_free_left_list_spec'; eauto.
       - (* app *)
@@ -887,41 +864,26 @@ Module Type LCAUSALITY
       rewrite Env.In_from_list, fst_InMembers, combine_map_fst'.
       2:{ inv H0. erewrite map_length, collect_free_left_list_length; eauto. }
       split; intros Hin.
-      + eapply in_map_iff in Hin as (?&?&?). econstructor; eauto.
+      + simpl_In. econstructor; eauto.
         eapply collect_free_var_correct; eauto.
         destruct H2.
         eapply fst_InMembers; eauto.
       + inv Hin.
-        eapply in_map_iff. do 2 esplit; eauto.
-        eapply collect_free_var_complete; eauto.
+        eapply collect_free_var_complete in H4; eauto.
+        solve_In.
     - (* reset *)
       rewrite Env.Props.P.F.map_in_iff, unions_fuse_PS_In.
       split; intros Hin.
-      + constructor.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2); subst.
-        eapply in_map_iff in Hin1 as (?&?&Hin1); subst.
-        rewrite Forall_forall in *.
-        eapply Exists_exists; do 2 esplit; eauto. eapply H; eauto.
-      + inv Hin. eapply Exists_exists in H1 as (?&Hin1&Hin2).
-        eapply Exists_exists. setoid_rewrite in_map_iff.
-        do 2 esplit; eauto.
-        rewrite Forall_forall in *.
-        eapply H; eauto.
+      + constructor. solve_Exists. simpl_Forall. eapply H; eauto.
+      + inv Hin. solve_Exists. simpl_Forall. eapply H; eauto.
     - (* switch *)
       rewrite Env.Props.P.F.map_in_iff, unions_fuse_PS_In.
       split; intros Hin.
-      + constructor.
-        eapply Exists_exists in Hin as (?&Hin1&Hin2); subst. eapply in_map_iff in Hin1 as (?&?&Hin1); subst.
-        rewrite unions_fuse_PS_In in Hin2.
-        eapply Exists_exists in Hin2 as (?&Hin2&Hin3); subst. eapply in_map_iff in Hin2 as (?&?&Hin2); subst.
-        do 2 (eapply Exists_exists; do 2 esplit; eauto).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto). eapply it; eauto.
-      + inv Hin. eapply Exists_exists in H1 as (?&Hin1&Hin2). eapply Exists_exists in Hin2 as (?&Hin2&Hin3).
-        eapply Exists_exists. setoid_rewrite in_map_iff.
-        do 2 esplit. repeat esplit; eauto. rewrite unions_fuse_PS_In.
-        eapply Exists_exists. setoid_rewrite in_map_iff.
-        do 2 esplit. repeat esplit; eauto.
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto). eapply it; eauto.
+      + constructor. simpl_Exists.
+        take (Env.In _ _) and rewrite unions_fuse_PS_In in it. solve_Exists. simpl_Forall.
+        eapply H; eauto.
+      + inv Hin. solve_Exists. simpl_Forall.
+        rewrite unions_fuse_PS_In. solve_Exists. eapply H; eauto.
     - (* locals *)
       assert (NoDupMembers (cenv ++ idcaus locs)) as Hnd'.
       { apply NoDupMembers_app; auto.
@@ -940,16 +902,12 @@ Module Type LCAUSALITY
       }
       split; intros Hin.
       + constructor.
-        eapply unions_fuse_PS_In, Exists_exists in Hin as (?&Hin1&Hin2); subst.
-        eapply in_map_iff in Hin1 as (?&?&Hin1); subst.
-        rewrite Forall_forall in *.
-        eapply Exists_exists; do 2 esplit; eauto. eapply H; eauto.
+        eapply unions_fuse_PS_In in Hin. solve_Exists. simpl_Forall.
+        eapply H; eauto.
         * rewrite map_app, map_fst_idcaus; eauto.
         * rewrite map_app, map_fst_idcaus; eauto.
-      + inv Hin. eapply Exists_exists in H3 as (?&Hin1&Hin2).
-        eapply unions_fuse_PS_In, Exists_exists. setoid_rewrite in_map_iff.
-        do 2 esplit; eauto.
-        rewrite Forall_forall in *.
+      + inv Hin.
+        eapply unions_fuse_PS_In. solve_Exists. simpl_Forall.
         eapply H; eauto.
         * rewrite map_app, map_fst_idcaus; eauto.
         * rewrite map_app, map_fst_idcaus; eauto.
@@ -965,14 +923,9 @@ Module Type LCAUSALITY
   Proof.
     intros * Hnd Heq Hndl Hwl Hwx ?.
     split; intros Hin.
-    - eapply unions_fuse_PS_In, Exists_exists in Hin as (?&Hin1&Hin2); subst.
-        eapply in_map_iff in Hin1 as (?&?&Hin1); subst.
-        rewrite Forall_forall in *.
-        eapply Exists_exists; do 2 esplit; eauto. eapply collect_depends_on_dom; eauto.
-    - eapply Exists_exists in Hin as (?&Hin1&Hin2).
-      eapply unions_fuse_PS_In, Exists_exists. setoid_rewrite in_map_iff.
-      do 2 esplit; eauto.
-      rewrite Forall_forall in *.
+    - eapply unions_fuse_PS_In in Hin. solve_Exists. simpl_Forall.
+      eapply collect_depends_on_dom; eauto.
+    - eapply unions_fuse_PS_In. solve_Exists. simpl_Forall.
       eapply collect_depends_on_dom; eauto.
   Qed.
 
@@ -1008,8 +961,8 @@ Module Type LCAUSALITY
       unfold collect_free_var, Env.MapsTo in *. rewrite Hfind; simpl.
       constructor; eauto.
       contradict H3.
-      apply in_map_iff in H3 as (?&?&Hin).
-      eapply Forall_forall in H2 as (?&Hfind'); eauto. rewrite Hfind' in H; simpl in H; subst.
+      simpl_In.
+      eapply Forall_forall in H2 as (?&Hfind'); eauto. rewrite Hfind' in Hfind; simpl in Hfind; subst.
       eapply Env.NoDup_snd_elements with (x1:=a) (x2:=x0) in Hcenv'; eauto; subst; auto.
   Qed.
 
@@ -1047,12 +1000,11 @@ Module Type LCAUSALITY
         erewrite <-H3. eapply nth_error_Some; intro; congruence.
     - (* reset block (sub-blocks) *)
       rewrite Forall_forall in *.
-      eapply Exists_exists in H1 as (?&Hin&Hdep).
-      eapply Forall2_ignore2, Forall_forall in H3 as (xs'&?&?); eauto.
-      eapply H with (xs:=xs') in Hdep as (?&?&?); eauto.
+      eapply Exists_exists in H1 as (?&Hin&Hdep). inv_VarsDefined.
+      eapply H with (xs:=xs) in Hdep as (?&?&?); eauto.
       2:{ clear - Hin Hnd2. simpl in *.
           rewrite map_app in *. apply NoDup_app'; auto.
-          - apply NoDup_app_l in Hnd2; auto.
+          - solve_NoDup_app.
           - apply NoDup_app_r in Hnd2.
             rewrite flat_map_concat_map in Hnd2.
             induction blocks; simpl in *; inv Hin.
@@ -1065,7 +1017,7 @@ Module Type LCAUSALITY
       2:eapply NoDup_concat; eauto.
       2:{ eapply Forall_incl. rewrite Forall_forall; eauto.
           eapply incl_concat; eauto. }
-      eapply unions_fuse_Subset in H3 as (?&Hfind&Hsub). 2:eapply in_map_iff; eauto.
+      eapply unions_fuse_Subset in H0 as (?&Hfind&Hsub). 2:eapply in_map_iff; eauto.
       repeat esplit.
       + unfold Env.MapsTo. now rewrite Env.Props.P.F.map_o, Hfind.
       + eapply PSF.union_iff; eauto.
@@ -1080,17 +1032,15 @@ Module Type LCAUSALITY
     - (* switch (sub-blocks) *)
       setoid_rewrite Env.Props.P.F.map_mapsto_iff.
       eapply Exists_exists in H1 as (?&Hin1&Hdep). eapply Exists_exists in Hdep as (?&Hin2&Hdep).
-      repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
-      repeat (take (Forall _ (snd x0)) and eapply Forall_forall in it; eauto).
-      destruct it3 as (?&Hvars&Hperm). eapply Forall2_ignore2, Forall_forall in Hvars as (?&Hin3&Hvars); [|eauto].
-      eapply it4 in Hdep as (?&Hfind&?); eauto.
+      simpl_Forall. inv_VarsDefined.
+      eapply H in Hdep as (?&Hfind&?); eauto.
       2:{ simpl_app. unfold idcaus in *; rewrite map_map in *.
           do 2 (eapply nodup_app_map_flat_map in Hnd2; eauto). }
-      2:{ rewrite <-Hperm in Hndvars. eapply NoDup_concat; eauto. }
-      2:{ rewrite <-Hperm in Hvarsenv. eapply Forall_incl, incl_concat; eauto. }
+      2:{ take (Permutation _ _) and rewrite <-it in Hndvars. eapply NoDup_concat; eauto. }
+      2:{ take (Permutation _ _) and rewrite <-it in Hvarsenv. eapply Forall_incl, incl_concat; eauto. }
       eapply unions_fuse_Subset in Hfind as (?&Hfind&Hsub1). 2:eapply in_map_iff; eauto.
       eapply unions_fuse_Subset in Hfind as (?&Hfind&Hsub2).
-      2:eapply in_map_iff with (f:=fun x => unions_fuse (map (collect_depends_on cenv') (snd x))); repeat esplit; eauto.
+      2:eapply in_map_iff with (f:=fun x => unions_fuse (map (collect_depends_on cenv') (snd x))); repeat esplit; eauto; reflexivity.
       repeat esplit; eauto.
       eapply PSF.union_iff; eauto.
     - (* switch (condition) *)
@@ -1101,15 +1051,14 @@ Module Type LCAUSALITY
       { repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
         eapply unions_fuse_PS_In, Exists_exists. do 2 esplit.
         2:eapply flat_map_collect_depends_on_dom; eauto.
-        eapply in_map_iff; eauto.
+        solve_In.
       }
       eapply collect_free_left_spec in H12; eauto.
       repeat esplit; eauto. eapply PSF.union_iff; left; eauto.
     - (* local block *)
-      eapply Exists_exists in H5 as (?&Hin&Hdep).
-      eapply Forall2_ignore2, Forall_forall in H2 as (xs'&?&?); eauto.
+      eapply Exists_exists in H5 as (?&Hin&Hdep). inv_VarsDefined.
       rewrite Forall_forall in *.
-      eapply H with (xs:=xs') in Hdep as (?&Hinc&Hpsin); eauto.
+      eapply H with (xs:=xs1) in Hdep as (?&Hinc&Hpsin); eauto.
       + eapply unions_fuse_Subset in Hinc as (?&Hfind&Hsub). 2:eapply in_map_iff; eauto.
         repeat esplit.
         * unfold Env.MapsTo. now erewrite Hfind.
@@ -1168,18 +1117,15 @@ Module Type LCAUSALITY
     + (* equation *)
       econstructor; eauto.
     + (* reset *)
-      apply Exists_exists in H1 as (?&?&Hdef).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      constructor. apply Exists_exists; do 2 esplit; eauto.
+      simpl_Exists. simpl_Forall.
+      constructor. solve_Exists.
     + (* switch *)
-      rename H1 into Hdef. do 2 (apply Exists_exists in Hdef as (?&?&Hdef)).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      constructor. do 2 (apply Exists_exists; do 2 esplit; eauto).
+      simpl_Exists. simpl_Forall.
+      constructor. solve_Exists.
     + (* local *)
-      apply Exists_exists in H2 as (?&?&Hdef).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      constructor. apply Exists_exists; do 2 esplit; eauto.
-      eapply it; eauto using in_or_app.
+      simpl_Exists. simpl_Forall.
+      constructor. solve_Exists.
+      eapply H; eauto using in_or_app.
   Qed.
 
   Lemma Is_free_left_In env cenv : forall e k x cx,
@@ -1188,37 +1134,27 @@ Module Type LCAUSALITY
       wx_exp env e ->
       Is_free_left cenv cx k e ->
       In x env.
-  Proof.
+  Proof with simpl_Exists; simpl_Forall; eauto.
     induction e using exp_ind2; intros * Hnd Hin Hwx Hfree; inv Hwx; inv Hfree; eauto.
     - eapply NoDup_snd_det in Hin; eauto; subst; auto.
     - destruct H2; eauto.
-    - eapply Is_free_left_list_Exists in H4 as (?&Hfree). eapply Exists_exists in Hfree as (?&?&?).
-      repeat (take (Forall _ e0s) and eapply Forall_forall in it; eauto).
+    - eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
     - destruct H4 as [H4|H4].
-      + eapply Is_free_left_list_Exists in H4 as (?&Hfree). eapply Exists_exists in Hfree as (?&?&?).
-        repeat (take (Forall _ e0s) and eapply Forall_forall in it; eauto).
-      + eapply Is_free_left_list_Exists in H4 as (?&Hfree). eapply Exists_exists in Hfree as (?&?&?).
-        repeat (take (Forall _ es) and eapply Forall_forall in it; eauto).
+      + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
+      + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
     - destruct H3 as [(_&?)|H4].
       + eapply NoDup_snd_det in Hin; eauto; subst; auto.
-      + eapply Is_free_left_list_Exists in H4 as (?&Hfree). eapply Exists_exists in Hfree as (?&?&?).
-        repeat (take (Forall _ es) and eapply Forall_forall in it; eauto).
+      + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
     - destruct H3 as [(_&?)|Hfree].
       + eapply NoDup_snd_det in Hin; eauto; subst; auto.
-      + eapply Exists_exists in Hfree as (?&?&Hfree);
-          eapply Is_free_left_list_Exists in Hfree as (?&Hfree); eapply Exists_exists in Hfree as (?&?&Hfree).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      + simpl_Exists. eapply Is_free_left_list_Exists in Hfree as (?&Hfree)...
     - destruct H3 as [(_&?)|[Hfree|Hfree]]; eauto.
-      + eapply Exists_exists in Hfree as (?&?&Hfree);
-          eapply Is_free_left_list_Exists in Hfree as (?&Hfree); eapply Exists_exists in Hfree as (?&?&Hfree).
-        repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
+      + simpl_Exists. eapply Is_free_left_list_Exists in Hfree as (?&Hfree)...
       + destruct Hfree as (?&?&Hfree); subst.
         eapply Is_free_left_list_Exists in Hfree as (?&Hfree); eapply Exists_exists in Hfree as (?&?&Hfree).
         specialize (H7 _ eq_refl). simpl in *.
-        repeat (take (Forall _ x0) and eapply Forall_forall in it; eauto).
-    - destruct H9 as [(?&Hfree)|Hfree]; eapply Exists_exists in Hfree as (?&?&Hfree).
-      + repeat (take (Forall _ es) and eapply Forall_forall in it; eauto).
-      + repeat (take (Forall _ er) and eapply Forall_forall in it; eauto).
+        simpl_Forall; eauto.
+    - destruct H9 as [(?&Hfree)|Hfree]...
   Qed.
 
   Lemma depends_on_In : forall blk env cenv cy x cx,
@@ -1237,30 +1173,27 @@ Module Type LCAUSALITY
       eapply Is_free_left_In in H4; eauto using NoDup_app_l.
       eapply Forall_forall in H1; eauto.
     - (* reset *)
-      eapply Exists_exists in H1 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it; eauto.
-      + clear - Hnd H0.
+      simpl_Exists; simpl_Forall.
+      eapply H; eauto.
+      + clear - Hnd Hin0.
         unfold idcaus in *. rewrite map_app, map_map in *.
         eapply nodup_app_map_flat_map; eauto.
     - rewrite map_app in Hnd.
       eapply Is_free_left_In in H5; eauto using NoDup_app_l.
     - (* switch *)
-      rename H1 into Hdef. do 2 (eapply Exists_exists in Hdef as (?&?&Hdef)).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it; eauto.
-      + clear - Hnd H0 H1.
+      rename H1 into Hdef. simpl_Exists. simpl_Forall.
+      eapply H; eauto.
+      + clear - Hnd Hin0 Hin1.
         unfold idcaus in *. rewrite map_app, map_map in *.
-        do 2 (eapply nodup_app_map_flat_map; eauto). eapply in_map_iff; eauto.
+        do 2 (eapply nodup_app_map_flat_map; eauto). eapply in_map_iff with (f:=snd); do 2 esplit; eauto. auto.
         rewrite flat_map_concat_map in *. rewrite map_map; auto.
     - rewrite map_app in Hnd.
       eapply Is_free_left_In in H5; eauto using NoDup_app_l.
     - (* local *)
-      eapply Exists_exists in H1 as (?&?&?).
-      repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-      eapply it with (cenv:=cenv++idcaus locs), in_app_iff in it1 as [|]; eauto using in_or_app.
-      + exfalso. eapply H7. eapply fst_InMembers; eauto. eapply in_map_iff; do 2 esplit; eauto; auto.
-      + rewrite idcaus_app, app_assoc in Hnd. clear - Hnd H0.
+      simpl_Exists. simpl_Forall.
+      eapply H with (cenv:=cenv++idcaus locs), in_app_iff in H2 as [|]; eauto using in_or_app.
+      + exfalso. eapply H7. eapply fst_InMembers; eauto. solve_In.
+      + rewrite idcaus_app, app_assoc in Hnd. clear - Hnd Hin0.
         unfold idcaus in *. rewrite map_app, map_map in *.
         eapply nodup_app_map_flat_map; eauto.
       + rewrite map_app, map_fst_idcaus; auto.
@@ -1278,8 +1211,7 @@ Module Type LCAUSALITY
     destruct Henv as [Henv|[Henv|Henv]].
     + left. repeat esplit; eauto.
       1,2:apply in_or_app; auto.
-      right. apply in_map_iff in Henv as ((?&(?&?)&?)&Heq&?); inv Heq.
-      eapply in_map_iff. now do 2 eexists; eauto.
+      right. solve_In.
     + rewrite map_app, <-app_assoc in Hin. repeat rewrite in_app_iff in Hin.
       destruct Hin as [Hin|[Hin|[Hin|Hin]]].
       1,3:left; repeat esplit; eauto using in_or_app.
@@ -1287,9 +1219,8 @@ Module Type LCAUSALITY
       1,2:eapply Exists_exists; repeat esplit; eauto.
     + right. eapply Exists_exists in IHHvars as (?&?&?&?&?&?&?); eauto.
       eapply Exists_exists. repeat esplit; eauto.
-      1,2:apply in_or_app; auto.
-      right. apply in_map_iff in Henv as ((?&(?&?)&?)&Heq&?); inv Heq.
-      eapply in_map_iff. now do 2 eexists; eauto.
+      1,2:apply in_or_app; auto. right.
+      solve_In.
   Qed.
 
   Lemma In_Is_defined_in : forall x cx blk xs cenv cenv',
@@ -1307,9 +1238,7 @@ Module Type LCAUSALITY
     - (* reset *)
       constructor.
       eapply In_Is_defined_in_helper in H3 as Hin'; eauto.
-      eapply Exists_exists in Hin' as (?&?&Hin1&?&Hxs&Hvars&Hin2).
-      eapply Forall_forall in H; eauto.
-      eapply Exists_exists; eauto. do 2 eexists; eauto.
+      solve_Exists. simpl_Forall.
       eapply H; eauto. etransitivity; [|eauto]. apply incl_concat; auto.
     - (* switch *)
       constructor.
@@ -1323,30 +1252,22 @@ Module Type LCAUSALITY
           rewrite map_app in Hin. repeat rewrite in_app_iff in Hin.
           destruct Hin as [Hin|[Hin|Hin]].
           1,2:left; repeat esplit; eauto using in_or_app.
-          right.
-          eapply in_map_iff in Hin as (?&?&Hin); subst.
-          eapply in_flat_map in Hin as (?&Hin1&Hin2).
-          eapply Forall_forall in H0 as (?&?&?); eauto.
+          right. simpl_In. simpl_Forall.
           eapply Exists_exists. repeat esplit; eauto using in_or_app.
-          apply in_or_app, or_intror, in_map_iff; eauto.
-        - eapply in_map_iff in Henv as ((?&(?&?)&?)&Heq&Henv); inv Heq.
-          eapply in_flat_map in Henv as (?&Hbrs&Henv).
-          eapply Forall_forall in H4 as (?&?&?); eauto.
+          apply in_or_app, or_intror. solve_In.
+        - simpl_In. simpl_Forall.
           eapply Exists_exists; repeat esplit; eauto using in_or_app.
-          1,2:eapply in_or_app, or_intror, in_map_iff; repeat esplit; eauto; auto. } clear H4.
-      eapply Exists_exists in Hex as (?&?&?&?&?&?&?).
-      eapply In_Is_defined_in_helper, Exists_exists in H1 as (?&?&?&?&?&?&?); eauto. 2:rewrite H4; auto.
-      do 2 (eapply Exists_exists; do 2 esplit; eauto).
-      repeat (eapply Forall_forall in H; eauto). eapply H; eauto.
-      etransitivity; [|eauto]. rewrite <-H4. eapply incl_concat; eauto.
+          1,2:eapply in_or_app, or_intror; solve_In. } clear H4.
+      simpl_Exists.
+      eapply In_Is_defined_in_helper, Exists_exists in H1 as (?&?&?&?&?&?&?); eauto. 2:take (Permutation _ _) and rewrite it; auto.
+      solve_Exists. simpl_Forall.
+      eapply H; eauto.
+      etransitivity; [|eauto]. take (Permutation _ _) and rewrite <-it. eapply incl_concat; eauto.
     - (* locals *)
       rewrite map_app, app_assoc, (Permutation_app_comm xs), H4 in Hin.
       rewrite idcaus_app, app_assoc in Henv.
       eapply In_Is_defined_in_helper in H2 as Hin'; eauto.
-      constructor.
-      eapply Exists_exists in Hin' as (?&?&Hin1&?&Hxs&Hvars&Hin2).
-      eapply Forall_forall in H; eauto.
-      eapply Exists_exists; eauto. do 2 eexists; eauto.
+      constructor. solve_Exists. simpl_Forall.
       eapply H; eauto.
       + etransitivity; [eapply incl_concat; eauto|].
         rewrite <-H4. rewrite map_app, map_fst_idcaus, Permutation_app_comm.
@@ -1368,27 +1289,18 @@ Module Type LCAUSALITY
       exfalso.
       eapply Hnin, In_InMembers; eauto.
     - (* reset *)
-      eapply Exists_exists in H1 as (?&Hin&Hex).
-      constructor. eapply Exists_exists; eauto. do 2 eexists; eauto.
-      eapply Forall2_ignore2, Forall_forall in H4 as (?&Hin'&Hvars); eauto.
-      eapply Forall_forall in H2; eauto.
-      eapply Forall_forall in H; eauto. eapply H with (xs:=x1); eauto.
+      constructor. solve_Exists. inv_VarsDefined. simpl_Forall.
+      eapply H with (xs:=xs); eauto.
       intros ??. eapply Hnin. eapply in_concat' in H0; eauto.
     - (* switch *)
-      eapply Exists_exists in H1 as (?&Hin1&Hex). eapply Exists_exists in Hex as (?&Hin2&Hex).
-      constructor. do 2 (eapply Exists_exists; eauto; do 2 esplit; eauto).
-      repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto). destruct it0 as (?&?&Hperm).
-      eapply Forall2_ignore2, Forall_forall in H as (?&?&?); eauto.
-      repeat (take (Forall _ (snd x0)) and eapply Forall_forall in it; eauto).
-      eapply it0; eauto.
-      intros ? Hin. eapply Hnin. rewrite <-Hperm.
+      constructor. solve_Exists. simpl_Forall. inv_VarsDefined.
+      eapply H; eauto.
+      intros ? ?. eapply Hnin. take (Permutation _ _) and rewrite <-it.
       eapply incl_concat; eauto.
     - (* locals *)
-      erewrite <-app_assoc in H1. eapply Exists_exists in H1 as (?&Hin&Hex).
-      constructor. eapply Exists_exists; eauto. do 2 eexists; eauto.
-      eapply Forall2_ignore2, Forall_forall in H3 as (?&Hin'&Hvars); eauto.
-      eapply Forall_forall in H2; eauto.
-      eapply Forall_forall in H; eauto. eapply H with (xs:=x1); eauto.
+      erewrite <-app_assoc in H1.
+      constructor. solve_Exists. inv_VarsDefined. simpl_Forall.
+      eapply H with (xs:=xs1); eauto.
       1:eapply NoDupLocals_incl; eauto; solve_incl_app.
       intros ??. eapply in_concat' in H0; eauto. rewrite <-H7 in H0.
       apply in_app_or in H0 as [?|?]; eauto.
@@ -1404,27 +1316,22 @@ Module Type LCAUSALITY
     induction blk using block_ind2; intros * Hvars Hincl1 Hdef; simpl in *; inv Hvars; inv Hdef.
     - (* equation *)
       rewrite app_nil_r in *.
-      eapply in_map_iff. now do 2 esplit; eauto.
+      solve_In.
     - (* reset *)
-      eapply Exists_exists in H1 as (?&Hin&Hdef).
-      eapply Forall2_ignore2, Forall_forall in H3 as (?&?&Hvars); eauto.
-      eapply Forall_forall in H; eauto. eapply H with (xs:=x0) in Hdef; eauto.
+      simpl_Exists. inv_VarsDefined. simpl_Forall.
+      eapply H in Hdef; eauto.
       2:etransitivity; eauto using incl_concat.
       rewrite map_app, in_app_iff in *. destruct Hdef; auto.
-      right. eapply incl_map; eauto. eapply incl_map.
-      intros ??. eapply in_flat_map; eauto.
+      right. solve_In.
     - (* switch *)
-      eapply Exists_exists in H1 as (?&Hin1&Hex). eapply Exists_exists in Hex as (?&Hin2&Hex).
-      repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto). destruct it0 as (?&?&Hperm).
-      eapply Forall2_ignore2, Forall_forall in H as (?&?&?); eauto.
-      repeat (take (Forall _ (snd x)) and eapply Forall_forall in it; eauto).
-      eapply it in Hex; eauto. 2:etransitivity; [|eauto]; rewrite <-Hperm; eapply incl_concat; eauto.
+      simpl_Exists. inv_VarsDefined. simpl_Forall.
+      eapply H in Hdef; eauto.
+      2:etransitivity; [|eauto]; take (Permutation _ _) and rewrite <-it; eapply incl_concat; eauto.
       unfold idcaus in *. repeat rewrite map_app in *. rewrite map_map in *.
       eapply in_app_map_flat_map, in_app_map_flat_map; eauto.
     - (* locals *)
-      eapply Exists_exists in H1 as (?&Hin&Hdef); eauto.
-      eapply Forall2_ignore2, Forall_forall in H2 as (?&?&Hvars); eauto.
-      eapply Forall_forall in H; eauto. eapply H with (xs:=x0) in Hdef; eauto.
+      simpl_Exists. inv_VarsDefined. simpl_Forall.
+      eapply H in Hdef; eauto.
       2:{ etransitivity; eauto using incl_concat.
           rewrite <-H4. rewrite map_app, map_fst_idcaus, Permutation_app_comm.
           eapply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; auto.
@@ -1433,8 +1340,7 @@ Module Type LCAUSALITY
       repeat rewrite map_app in *.
       rewrite app_assoc.
       rewrite in_app_iff in *. destruct Hdef; auto.
-      right. eapply incl_map; eauto. eapply incl_map.
-      intros ??. eapply in_flat_map; eauto.
+      right. solve_In.
   Qed.
 
   Lemma build_graph_dom {PSyn prefs} : forall (G: @global PSyn prefs) n,
@@ -1472,13 +1378,6 @@ Module Type LCAUSALITY
       + rewrite map_fst_idcaus. reflexivity.
       + rewrite idcaus_app. solve_incl_app.
   Qed.
-
-  (* Lemma collect_depends_on_NoDup : forall cenv cenv' blk, *)
-  (*     Env.Equiv eq cenv' (Env.from_list cenv) -> *)
-  (*     Permutation (map fst (collect_depends_on cenv' blk)) (map snd (cenv ++ idcaus (locals blk))). *)
-  (* Proof. *)
-  (*   induction blk using block_ind2; intros * Henv; simpl. *)
-  (* Qed. *)
 
   Lemma build_graph_find {PSyn prefs} : forall (G: @global PSyn prefs) n x y,
       wl_node G n ->
@@ -1753,10 +1652,10 @@ Module Type LCAUSALITY
           * intros ? Hfree'. eapply Hfree.
             constructor; eauto.
             eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.
-            right; eapply Exists_exists in H as (?&Hin&Hfree1).
-            eapply Exists_exists. do 2 esplit; eauto.
-            eapply Forall_forall in H6; eauto. rewrite <-length_annot_numstreams in H6.
-            assert (Hfree2:=Hfree1). eapply Is_free_left_length in Hfree1; eauto. 2:rewrite Forall_forall in *; eauto.
+            right. solve_Exists. simpl_Forall.
+            rewrite <-length_annot_numstreams in H6.
+            take (Is_free_left _ _ _ _) and rename it into Hfree1.
+            assert (Hfree2:=Hfree1). eapply Is_free_left_length in Hfree1; eauto.
             rewrite H6 in Hfree1. destruct x0; auto. lia.
     Qed.
 

@@ -577,7 +577,7 @@ dataflow memory for which the non-standard semantics holds true.
               unfold add_inst_n; intro; now apply find_inst_gss.
           * inv NoDup.
             apply hd_error_Some_In in Hsome.
-            apply msem_equation_madd_inst; auto.
+            apply msem_equation_madd_inst; auto with nldef.
         + split; apply memory_closed_n_App; auto.
 
       - rewrite reset_fby_fbyreset in Hvar.
@@ -590,7 +590,7 @@ dataflow memory for which the non-standard semantics holds true.
               simpl; repeat rewrite find_val_gss; auto.
             destruct (rs n) eqn:Hrs, (ls n) eqn:Hls; auto.
           * inv NoDup.
-            apply msem_equation_madd_val; eauto.
+            apply msem_equation_madd_val; auto with nldef.
         + split; apply memory_closed_n_Fby; auto.
     Qed.
 

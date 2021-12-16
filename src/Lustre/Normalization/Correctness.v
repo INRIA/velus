@@ -63,7 +63,7 @@ Module Type CORRECTNESS
     apply in_app_or in contra. destruct contra.
     + eapply Facts.fresh_ident_In in Hfresh.
       assert (In id (st_ids st')).
-      { unfold st_ids, idty. repeat simpl_In; simpl in *.
+      { unfold st_ids, idty. simpl_In; simpl in *.
         exists (id, a); auto. }
       apply st_valid_NoDup in Hvalid'.
       eapply NoDup_app_In in Hvalid'; [|eauto].
@@ -153,7 +153,7 @@ Module Type CORRECTNESS
     { assert (st_valid_after st' (PSP.of_list vars)) by eauto with norm.
       apply idents_for_anns_incl_ids in Hids.
       solve_forall; simpl.
-      assert (In i (map fst ids)) by (simpl_In; exists (i, a); eauto).
+      assert (In i (map fst ids)) by solve_In.
       apply Hids in H2.
       intro contra.
       eapply st_valid_NoDup, NoDup_app_In in H0; [|eauto].
@@ -386,7 +386,7 @@ Module Type CORRECTNESS
     Proof with eauto with datatypes.
       intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
       unfold unnest_arrow.
-      repeat rewrite_Forall_forall. solve_length.
+      rewrite_Forall_forall. solve_length.
       repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
       destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
       econstructor... econstructor...
@@ -403,7 +403,7 @@ Module Type CORRECTNESS
     Proof with eauto with datatypes.
       intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
       unfold unnest_fby.
-      repeat rewrite_Forall_forall. 1:solve_length.
+      rewrite_Forall_forall. 1:solve_length.
       repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
       destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
       econstructor... econstructor...
@@ -419,7 +419,7 @@ Module Type CORRECTNESS
     Proof with eauto.
       intros * Hlen Hsem Hvar Hwhen.
       unfold unnest_when. simpl_forall.
-      repeat rewrite_Forall_forall. 1:congruence.
+      rewrite_Forall_forall. 1:congruence.
       eapply Swhen with (ss0:=[[nth n ss default_stream]])...
       - repeat constructor...
         eapply H1... congruence.
@@ -813,7 +813,7 @@ Module Type CORRECTNESS
         assert (H2':=H2). eapply mmap2_sem in H2... clear H.
         destruct H2 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1' Hsem1'']]]]]. apply Forall2_concat in Hsem1'.
 
-        assert (Forall2 (sem_exp_ck G1 H' b) es sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+        assert (Forall2 (sem_exp_ck G1 H' b) es sss) as Hsem' by (rewrite_Forall_forall; eapply sem_exp_refines; eauto).
         assert (length sss = length es) as Hlen2 by (eapply Forall2_length in Hsem2; eauto).
         assert (H3':=H3). eapply mmap2_sem in H3... clear H0.
         2:solve_forall; repeat solve_incl.
@@ -867,7 +867,7 @@ Module Type CORRECTNESS
           clear - Hsemvars Hsemf.
           remember (unnest_fby _ _ _) as fby. clear Heqfby.
           simpl_forall.
-          repeat rewrite_Forall_forall. congruence.
+          rewrite_Forall_forall. congruence.
           destruct (nth _ x5 _) eqn:Hnth1.
           econstructor.
           -- repeat constructor.
@@ -886,7 +886,7 @@ Module Type CORRECTNESS
         assert (H2':=H2). eapply mmap2_sem in H2... clear H.
         destruct H2 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1' Hsem1'']]]]]. apply Forall2_concat in Hsem1'.
 
-        assert (Forall2 (sem_exp_ck G1 H' b) es sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+        assert (Forall2 (sem_exp_ck G1 H' b) es sss) as Hsem' by (rewrite_Forall_forall; eapply sem_exp_refines; eauto).
         assert (length sss = length es) as Hlen2 by (eapply Forall2_length in Hsem2; eauto).
         assert (H3':=H3). eapply mmap2_sem in H3... clear H0.
         2:solve_forall; repeat solve_incl.
@@ -940,7 +940,7 @@ Module Type CORRECTNESS
           clear - Hsemvars Hsemf.
           remember (unnest_arrow _ _ _) as arrow. clear Heqarrow.
           simpl_forall.
-          repeat rewrite_Forall_forall. congruence.
+          rewrite_Forall_forall. congruence.
           destruct (nth _ x5 _) eqn:Hnth1.
           econstructor.
           -- repeat constructor.
@@ -1244,7 +1244,7 @@ Module Type CORRECTNESS
         2:{ eapply mmap2_unnest_exp_wc in Hun1 as (?&?); eauto. }
 
         assert (length rs = length er) as Hlen3 by (eapply Forall2_length in H21; eauto).
-        assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er [sr]) er rs) as Hsemr' by (repeat rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
+        assert (Forall2 (fun er sr => sem_exp_ck G1 H'' b er [sr]) er rs) as Hsemr' by (rewrite_Forall_forall; repeat (eapply sem_exp_refines; eauto)).
         assert (Hun3:=H4). eapply unnest_resets_sem in H4...
         2:(solve_forall; repeat solve_incl).
         2:{ eapply Forall_impl; [|eapply H15]; intros ? Hck. destruct Hck as (?&Hck).
@@ -1313,7 +1313,7 @@ Module Type CORRECTNESS
     Proof.
       intros * Hwt Hsem Hvalid Hhistst Hnorm.
       eapply mmap2_sem in Hnorm; eauto.
-      repeat rewrite_Forall_forall.
+      rewrite_Forall_forall.
       eapply unnest_exp_sem; eauto.
     Qed.
 
@@ -1344,7 +1344,7 @@ Module Type CORRECTNESS
 
         assert (Hun1:=H0). eapply unnest_exps_sem in H0... clear Hsem1.
         destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
-        assert (Forall2 (sem_exp_ck G1 H' b) l0 sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+        assert (Forall2 (sem_exp_ck G1 H' b) l0 sss) as Hsem' by (rewrite_Forall_forall; eapply sem_exp_refines; eauto).
 
         eapply unnest_exps_sem in H1... clear Hsem2.
         2:(solve_forall; repeat solve_incl).
@@ -1368,7 +1368,7 @@ Module Type CORRECTNESS
 
         assert (Hun1:=H0). eapply unnest_exps_sem in H0... clear Hsem1.
         destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
-        assert (Forall2 (sem_exp_ck G1 H' b) l0 sss) as Hsem' by (repeat rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+        assert (Forall2 (sem_exp_ck G1 H' b) l0 sss) as Hsem' by (rewrite_Forall_forall; eapply sem_exp_refines; eauto).
 
         eapply unnest_exps_sem in H1... clear Hsem2.
         2:(solve_forall; repeat solve_incl).
@@ -1404,8 +1404,8 @@ Module Type CORRECTNESS
             by (solve_forall; repeat (eapply sem_exp_refines; eauto)).
         assert (Hr:=H2). eapply unnest_resets_sem in H2...
         2:(solve_forall; repeat solve_incl).
-        2:{ solve_forall. destruct H1 as (?&Hck).
-            now rewrite <-length_clockof_numstreams, Hck. }
+        2:{ solve_forall.
+            now rewrite <-length_clockof_numstreams, H1. }
         2:{ solve_forall. eapply unnest_exp_sem in H13 as (H'''&?&?&?&Sem1&?)... inv Sem1...
             exists H'''. repeat (split; eauto). }
         destruct H2 as (H'''&Href3&Hvalid3&Hhistst3&Hsem3&Hsem3').
@@ -1612,8 +1612,8 @@ Module Type CORRECTNESS
             by (solve_forall; repeat (eapply sem_exp_refines; eauto)).
         assert (Hr:=H9). eapply unnest_resets_sem in H9...
         2:(solve_forall; repeat solve_incl).
-        2:{ solve_forall. destruct H1 as (?&Hck).
-            now rewrite <-length_clockof_numstreams, Hck. }
+        2:{ solve_forall.
+            now rewrite <-length_clockof_numstreams, H1. }
         2:{ solve_forall. eapply unnest_exp_sem in H15 as (H'''&?&?&?&Sem1&?)... inv Sem1...
             exists H'''. repeat (split; eauto). }
         destruct H9 as (H'''&Href3&Hvalid3&Hhistst3&Hsem3&Hsem3').
@@ -1644,11 +1644,10 @@ Module Type CORRECTNESS
         { eapply sem_exps_ck_sem_exps, sem_exps_numstreams in H7; eauto with lclocking. }
         assert (length xs = length (annots x)) as Hlen2.
         { rewrite Hannots, <-Hlen1.
-          repeat rewrite_Forall_forall. simpl_length. congruence. }
-        repeat rewrite_Forall_forall.
-        destruct x1. repeat simpl_In. inv H7.
-        assert (HIn := H8).
-        eapply In_nth with (d:=(hd_default [], [])) in H8. destruct H8 as [n [Hn Hnth]].
+          rewrite_Forall_forall. simpl_length. congruence. }
+        rewrite_Forall_forall.
+        destruct x1. simpl_In. assert (HIn:=Hin).
+        eapply In_nth with (d:=(hd_default [], [])) in Hin. destruct Hin as [n [Hn Hnth]].
         rewrite combine_for_numstreams_length in Hn; auto.
         rewrite <- (combine_for_numstreams_length _ (concat ss)) in Hn; try congruence.
         assert (HIn' := Hn).
@@ -1662,7 +1661,7 @@ Module Type CORRECTNESS
         apply Seq with (ss0:=[l0]).
         + repeat constructor...
         + simpl. rewrite app_nil_r.
-          repeat rewrite_Forall_forall.
+          rewrite_Forall_forall.
           * replace (length l) with (numstreams e0). replace (length l0) with (numstreams e0). reflexivity.
             { eapply Forall_forall in HIn'. 2:eapply combine_for_numstreams_numstreams; try congruence.
               eauto. }
@@ -2234,7 +2233,7 @@ Module Type CORRECTNESS
       apply in_app_or in contra. destruct contra.
       + eapply Facts.fresh_ident_In in Hfresh.
         assert (In id (st_ids st')).
-        { unfold st_ids, idty. repeat simpl_In; simpl in *.
+        { unfold st_ids, idty. simpl_In; simpl in *.
           exists (id, a); auto. }
         apply st_valid_NoDup in Hvalid'.
         eapply NoDup_app_In in Hvalid'; [|eauto].
