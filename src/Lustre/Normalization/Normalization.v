@@ -36,9 +36,10 @@ Module Type NORMALIZATION
 
   Theorem normalize_global_normalized_global : forall G,
       wl_global G ->
+      wx_global G ->
       normalized_global (normalize_global G).
   Proof.
-    intros G * Hwl.
+    intros G * Hwl Hwx.
     eapply normfby_global_normalized_global.
     eapply unnest_global_unnested_global; auto.
   Qed.

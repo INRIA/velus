@@ -36,6 +36,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | INT64 l      -> (LustreParser2.INT64      l, l)
   | INT8 l       -> (LustreParser2.INT8       l, l)
   | LAND l       -> (LustreParser2.LAND       l, l)
+  | LAST l       -> (LustreParser2.LAST       l, l)
   | LEQ l        -> (LustreParser2.LEQ        l, l)
   | LET l        -> (LustreParser2.LET        l, l)
   | LNOT l       -> (LustreParser2.LNOT       l, l)

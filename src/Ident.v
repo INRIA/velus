@@ -83,6 +83,7 @@ Module Export Ids <: IDS.
   Definition reset := str_to_pos "reset".
   Definition glob := str_to_pos "glob".
   Definition elab := str_to_pos "elab".
+  Definition last := str_to_pos "last".
   Definition switch := str_to_pos "swi".
   Definition local := str_to_pos "local".
   Definition norm1 := str_to_pos "norm1".
@@ -98,19 +99,20 @@ Module Export Ids <: IDS.
     end.
 
   Definition elab_prefs := PS.singleton elab.
-  Definition switch_prefs := PS.add switch elab_prefs.
+  Definition last_prefs := PS.add last elab_prefs.
+  Definition switch_prefs := PS.add switch last_prefs.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
-  Definition gensym_prefs := [elab; switch; local; norm1; norm2].
+  Definition gensym_prefs := [elab; last; switch; local; norm1; norm2].
 
   Lemma gensym_prefs_NoDup : NoDup gensym_prefs.
   Proof.
     unfold gensym_prefs.
     repeat constructor; auto.
-    1-4:repeat rewrite not_in_cons; repeat split; auto.
-    1-10:prove_str_to_pos_neq.
+    1-5:repeat rewrite not_in_cons; repeat split; auto.
+    1-15:prove_str_to_pos_neq.
   Qed.
 
   Lemma self_not_out: self <> out.
@@ -203,6 +205,8 @@ Module Export Ids <: IDS.
   Proof. prove_atom. Qed.
 
   Lemma elab_atom: atom elab.
+  Proof. prove_atom. Qed.
+  Lemma last_atom: atom last.
   Proof. prove_atom. Qed.
   Lemma switch_atom: atom switch.
   Proof. prove_atom. Qed.

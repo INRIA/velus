@@ -1,0 +1,21 @@
+node f(b : bool) returns (y : int)
+var last x : int = 0;
+let
+    x = last x;
+    y = x;
+tel
+
+(** Interestingly, x can be used to calculate last x *)
+node g(b : bool) returns (y : int)
+var last x : int = x;
+let
+    x = 0;
+    y = x;
+tel
+
+node h(b : bool) returns (y : int)
+var last x : int = z; last z : int = last x;
+let
+    (x, z) = (last z, 0);
+    y = x;
+tel

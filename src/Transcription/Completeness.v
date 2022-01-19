@@ -1,5 +1,6 @@
 From Coq Require Import String.
 From Coq Require Import List.
+Import List.ListNotations.
 
 From compcert Require Import common.Errors.
 From Velus Require Import Common.
@@ -88,7 +89,7 @@ Module Type COMPLETENESS
   Qed.
 
   Fact to_cexp_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall e,
-      wt_exp G vars e ->
+      wt_exp G vars [] e ->
       normalized_cexp e ->
       exists e', to_cexp e = OK e'.
   Proof with eauto.
@@ -119,7 +120,7 @@ Module Type COMPLETENESS
                           | (i, e0 :: nil) => do ce <- to_cexp e0; OK (i, ce)
                           | (i, e0 :: _ :: _) => Error (msg "control expression not normalized")
                           end) es = OK es') as (?&Htoces).
-      { assert (Forall (fun es => Forall (wt_exp G vars) (snd es)) es) as Hwt' by (inv Hwt; auto).
+      { assert (Forall (fun es => Forall (wt_exp G vars []) (snd es)) es) as Hwt' by (inv Hwt; auto).
         clear - H Hwt' H6.
         induction es; inv H; inv Hwt'; inv H6; simpl; eauto.
         destruct a, H5 as (?&?&Hnormed); simpl in *; subst; auto.
@@ -137,7 +138,7 @@ Module Type COMPLETENESS
   Qed.
 
   Fact to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo xr xs es,
-      wt_equation G vars (xs, es) ->
+      wt_equation G vars [] (xs, es) ->
       normalized_equation G out (xs, es) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
@@ -166,7 +167,7 @@ Module Type COMPLETENESS
   Qed.
 
   Fact block_to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo blk xs xr,
-      wt_block G vars blk ->
+      wt_block G vars [] blk ->
       normalized_block G out blk ->
       VarsDefined blk xs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
@@ -177,38 +178,40 @@ Module Type COMPLETENESS
     induction Hnorm; intros * Hvars Hfind; inv Hwt; inv Hvars; simpl.
     - destruct eq. eapply to_equation_complete in H; eauto.
     - destruct ann0 as (?&?).
-      inv H1. inv H5; inv H8.
+      inv H1. inv H3; inv H8.
       simpl in Hfind; rewrite app_nil_r in Hfind.
       eapply IHHnorm; eauto.
   Qed.
 
   Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
       n_block n = Blocal locs blks ->
+      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       wt_node G n ->
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (map fst (n_out n)) ->
       (forall x e, envo x = Error e -> PS.In x (ps_from_list (map fst (n_out n)))) ->
-      exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty locs) env) envo nil) blks = OK eqs'.
+      exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo nil) blks = OK eqs'.
   Proof.
-    intros * Hblk Hwtn Hnormed Hfind Henvo.
+    intros * Hblk Hlocs Hwtn Hnormed Hfind Henvo.
     pose proof (n_defd n) as (?&Hvars&Hperm). rewrite Hblk in Hvars. inv Hvars.
-    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty locs) env) x = OK cl) (concat xs)) as Hfind'.
+    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty (idty locs)) env) x = OK cl) (concat xs)) as Hfind'.
     { rewrite <-H3, Hperm.
       apply Forall_app; split; solve_forall.
       - eapply In_InMembers in H.
         unfold find_clock. cases_eqn Hfind; eauto.
         eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
-        rewrite InMembers_idty in Hinm. simpl in *. congruence.
+        rewrite 2 InMembers_idty in Hinm. simpl in *. congruence.
       - unfold find_clock in *; simpl in *.
         cases_eqn Hfind; subst; eauto.
         eapply Env.find_adds'_nIn in Hfind1 as (?&?). congruence.
     }
     destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt.
     clear Hblk Hperm H3.
+    rewrite map_filter_nil in H5. 2:simpl_Forall; subst; auto.
     induction H1; intros; simpl in *; eauto.
-    inv Hnormed. inv H2. apply Forall_app in Hfind' as (?&?). simpl in *.
-    eapply block_to_equation_complete in H4 as (?&Heqs1); eauto.
-    eapply IHForall2 in H9 as (?&Heqs2); eauto.
+    inv Hnormed. inv H5. apply Forall_app in Hfind' as (?&?). simpl in *.
+    eapply block_to_equation_complete in H3 as (?&Heqs1); eauto.
+    eapply IHForall2 in H4 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
@@ -226,7 +229,7 @@ Module Type COMPLETENESS
                    (envo := fun x => if Env.mem x (Env.from_list (idty (n_out n)))
                                   then Error (msg "output variable defined as a fby")
                                   else OK tt)
-      as [? H]; eauto.
+      as [? ?]; eauto.
     3:{ unfold mmap_block_to_equation. destruct n; simpl in *.
         dependent destruction n_block0; inv Hblk.
         cases_eqn Hmap; eauto. congruence. }

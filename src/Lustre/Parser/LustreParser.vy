@@ -51,7 +51,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %token<LustreAst.astloc> INT8 UINT8 INT16 UINT16 INT32 UINT32
   INT64 UINT64 FLOAT32 FLOAT64
 
-%token<LustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR FBY
+%token<LustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR LAST FBY
 %token<LustreAst.astloc> TYPE
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
@@ -76,14 +76,15 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<list LustreAst.expression> expression_list
 %type<LustreAst.unary_operator * LustreAst.astloc> unary_operator
 %type<LustreAst.var_decls> var_decl
-%type<LustreAst.var_decls> var_decl_list
-%type<LustreAst.var_decls> local_var_decl
 %type<list Common.ident (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
 %type<LustreAst.preclock> declared_clock
 %type<LustreAst.clock> clock
-%type<LustreAst.var_decls> local_decl
-%type<LustreAst.var_decls> local_decl_list
+%type<LustreAst.local_decls> last_var_decl
+%type<LustreAst.local_decls> var_decl_list
+%type<LustreAst.local_decls> local_var_decl
+%type<LustreAst.local_decls> local_decl
+%type<LustreAst.local_decls> local_decl_list
 %type<LustreAst.var_decls (* Reverse order *)> parameter_list oparameter_list
 %type<list Common.ident> pattern
 %type<LustreAst.equation> equation
@@ -153,6 +154,8 @@ constant:
 primary_expression:
 | var=VAR_NAME
     { [LustreAst.VARIABLE (fst var) (snd var)] }
+| LAST var=VAR_NAME
+    { [LustreAst.LAST (fst var) (snd var)] }
 | cst=constant
     { [LustreAst.CONSTANT (fst cst) (snd cst)] }
 | loc=LPAREN expr=expression_list RPAREN
@@ -366,12 +369,18 @@ expression:
 
 var_decl:
 | ids=identifier_list loc=COLON ty=type_name clk=declared_clock
-    { map (fun id=> (id, (fst ty, clk, loc))) (rev ids) }
+    { map (fun id => (id, (fst ty, clk, loc))) (rev ids) }
+
+last_var_decl:
+| vars=var_decl
+   { map (fun '(id, (ty, ck, loc)) => (id, (ty, ck, [], loc))) vars }
+| LAST id=VAR_NAME loc=COLON ty=type_name clk=declared_clock EQ e=expression
+   { [(fst id, (fst ty, clk, e, loc))] }
 
 var_decl_list:
-| vars=var_decl
+| vars=last_var_decl
     { vars }
-| vars_list=var_decl_list SEMICOLON vars=var_decl
+| vars_list=var_decl_list SEMICOLON vars=last_var_decl
     { vars_list ++ vars }
 
 local_var_decl:

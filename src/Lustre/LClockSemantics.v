@@ -57,91 +57,6 @@ Module Type LCLOCKSEMANTICS
         eapply history_nth_find_None; auto.
   Qed.
 
-  Lemma sem_clock_refines : forall H H' ck bs bs',
-      Env.refines (@EqSt _) H H' ->
-      sem_clock H bs ck bs' ->
-      sem_clock H' bs ck bs'.
-  Proof.
-    cofix CoFix; destruct ck; intros * Href Hsem.
-    - inv Hsem; constructor; auto.
-    - inv Hsem.
-      + econstructor; eauto.
-        * eapply sem_var_refines; eauto.
-        * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
-      + econstructor; eauto.
-        * eapply sem_var_refines; eauto.
-        * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
-      + eapply Son_abs2; eauto.
-        * eapply sem_var_refines; eauto.
-        * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
-  Qed.
-
-  Lemma sem_clock_refines' : forall vars H H' ck bs bs',
-      wc_clock vars ck ->
-      (forall x vs, InMembers x vars -> sem_var H x vs -> sem_var H' x vs) ->
-      sem_clock H bs ck bs' ->
-      sem_clock H' bs ck bs'.
-  Proof.
-    intros * Hwc Href Hsem.
-    rewrite sem_clock_equiv in *. intros n. specialize (Hsem n).
-    assert (forall x v, InMembers x vars ->
-                   IStr.sem_var_instant (CIStr.tr_history H n) x v ->
-                   IStr.sem_var_instant (CIStr.tr_history H' n) x v) as Href'.
-    { intros * Hinm Hvar. unfold IStr.sem_var_instant, CIStr.tr_history in *.
-      rewrite Env.Props.P.F.map_o in *.
-      eapply option_map_inv in Hvar as (?&Hfind&?); subst.
-      eapply Href in Hinm. 2:econstructor; eauto; reflexivity.
-      inv Hinm. rewrite H1; simpl. f_equal. now rewrite H2.
-    } clear Href.
-    revert bs bs' Hwc Hsem.
-    induction ck; intros * Hwc Hsem; inv Hwc.
-    - inv Hsem; constructor; auto.
-    - inv Hsem.
-      + econstructor; eauto.
-        * rewrite H6. eapply IHck; eauto. rewrite <-H6; auto.
-        * eapply Href'; eauto using In_InMembers.
-      + econstructor; eauto.
-        * rewrite H6. eapply IHck; eauto. rewrite <-H6; auto.
-        * eapply Href'; eauto using In_InMembers.
-      + eapply IStr.Son_abs2; eauto.
-        * specialize (IHck bs (Streams.const true)).
-          rewrite tr_Stream_const in IHck; auto.
-        * eapply Href'; eauto using In_InMembers.
-  Qed.
-
-  Lemma sem_clock_wt_refines' : forall enums vars H H' ck bs bs',
-      wt_clock enums vars ck ->
-      (forall x vs, InMembers x vars -> sem_var H x vs -> sem_var H' x vs) ->
-      sem_clock H bs ck bs' ->
-      sem_clock H' bs ck bs'.
-  Proof.
-    intros * Hwc Href Hsem.
-    rewrite sem_clock_equiv in *. intros n. specialize (Hsem n).
-    assert (forall x v, InMembers x vars ->
-                   IStr.sem_var_instant (CIStr.tr_history H n) x v ->
-                   IStr.sem_var_instant (CIStr.tr_history H' n) x v) as Href'.
-    { intros * Hinm Hvar. unfold IStr.sem_var_instant, CIStr.tr_history in *.
-      rewrite Env.Props.P.F.map_o in *.
-      eapply option_map_inv in Hvar as (?&Hfind&?); subst.
-      eapply Href in Hinm. 2:econstructor; eauto; reflexivity.
-      inv Hinm. rewrite H1; simpl. f_equal. now rewrite H2.
-    } clear Href.
-    revert bs bs' Hwc Hsem.
-    induction ck; intros * Hwc Hsem; inv Hwc.
-    - inv Hsem; constructor; auto.
-    - inv Hsem.
-      + econstructor; eauto.
-        * rewrite H9. eapply IHck; eauto. rewrite <-H9; auto.
-        * eapply Href'; eauto using In_InMembers.
-      + econstructor; eauto.
-        * rewrite H8. eapply IHck; eauto. rewrite <-H8; auto.
-        * eapply Href'; eauto using In_InMembers.
-      + eapply IStr.Son_abs2; eauto.
-        * specialize (IHck bs (Streams.const true)).
-          rewrite tr_Stream_const in IHck; auto.
-        * eapply Href'; eauto using In_InMembers.
-  Qed.
-
   Lemma history_tl_same_find : forall H H' vars,
       Forall (fun x => orel (EqSt (A:=svalue)) (Env.find x H) (Env.find x H')) vars ->
       Forall (fun x => orel (EqSt (A:=svalue)) (Env.find x (history_tl H)) (Env.find x (history_tl H'))) vars.
@@ -211,18 +126,19 @@ Module Type LCLOCKSEMANTICS
       contain the named and anonymous streams of the node.
    *)
   Section ClockedSemantics.
-    Definition sc_vars env H bs :=
-      Forall (fun '(x, ck) => exists xs, sem_var H x xs /\ sem_clock H bs ck (abstract_clock xs)) env.
+    Definition sc_vars Γ Γl H bs :=
+      Forall (fun '(x, ck) => exists xs, sem_var (fst H) x xs /\ sem_clock (fst H) bs ck (abstract_clock xs)) Γ /\
+      Forall (fun '(x, ck) => exists xs, sem_var (snd H) x xs /\ sem_clock (fst H) bs ck (abstract_clock xs)) Γl.
 
     Definition clocked_node H bs (env : list (ident * (type * clock))) :=
-      Env.dom H (map fst env) /\
-      sc_vars (idck env) H bs.
+      Env.dom (fst H) (map fst env) /\
+      sc_vars (idck env) [] H bs.
 
     Context {PSyn : block -> Prop}.
     Context {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
-    Inductive sem_exp_ck : history -> Stream bool -> exp -> list (Stream svalue) -> Prop :=
+    Inductive sem_exp_ck : Sem.history -> Stream bool -> exp -> list (Stream svalue) -> Prop :=
     | Sconst:
         forall H bs c cs,
           cs ≡ const bs c ->
@@ -235,8 +151,13 @@ Module Type LCLOCKSEMANTICS
 
     | Svar:
         forall H b x s ann,
-          sem_var H x s ->
+          sem_var (fst H) x s ->
           sem_exp_ck H b (Evar x ann) [s]
+
+    | Slast:
+      forall H b x s ann,
+        sem_var (snd H) x s ->
+        sem_exp_ck H b (Elast x ann) [s]
 
     | Sunop:
         forall H b e op ty s o ann,
@@ -271,13 +192,13 @@ Module Type LCLOCKSEMANTICS
     | Swhen:
         forall H b x s k es lann ss os,
           Forall2 (sem_exp_ck H b) es ss ->
-          sem_var H x s ->
+          sem_var (fst H) x s ->
           Forall2 (fun s' => when k s' s) (concat ss) os ->
           sem_exp_ck H b (Ewhen es x k lann) os
 
     | Smerge:
         forall H b x tx s es lann vs os,
-          sem_var H x s ->
+          sem_var (fst H) x s ->
           Forall2Brs (sem_exp_ck H b) es vs ->
           Forall2 (merge s) vs os ->
           sem_exp_ck H b (Emerge (x, tx) es lann) os
@@ -306,14 +227,14 @@ Module Type LCLOCKSEMANTICS
           (forall k, sem_node_ck f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)) ->
           sem_exp_ck H b (Eapp f es er lann) os
 
-    with sem_equation_ck: history -> Stream bool -> equation -> Prop :=
+    with sem_equation_ck: Sem.history -> Stream bool -> equation -> Prop :=
       Seq:
         forall H b xs es ss,
           Forall2 (sem_exp_ck H b) es ss ->
-          Forall2 (sem_var H) xs (concat ss) ->
+          Forall2 (sem_var (fst H)) xs (concat ss) ->
           sem_equation_ck H b (xs, es)
 
-    with sem_block_ck : history -> Stream bool -> block -> Prop :=
+    with sem_block_ck : Sem.history -> Stream bool -> block -> Prop :=
     | Sbeq:
         forall H b eq,
           sem_equation_ck H b eq ->
@@ -322,22 +243,34 @@ Module Type LCLOCKSEMANTICS
         forall H b blks er sr r,
           sem_exp_ck H b er [sr] ->
           bools_of sr r ->
-          (forall k, Forall (sem_block_ck (mask_hist k r H) (maskb k r b)) blks) ->
+          (forall k, Forall (sem_block_ck (Sem.mask_hist k r H) (maskb k r b)) blks) ->
           sem_block_ck H b (Breset blks er)
     | Sswitch:
         forall H b ec branches sc,
           sem_exp_ck H b ec [sc] ->
           wt_streams [sc] (typeof ec) ->
-          Forall (fun blks => Forall (sem_block_ck (filter_hist (fst blks) sc H) (filterb (fst blks) sc b)) (snd blks)) branches ->
-          slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) H (abstract_clock sc) ->
+          Forall (fun blks => Forall (sem_block_ck (Sem.filter_hist (fst blks) sc H) (filterb (fst blks) sc b)) (snd blks)) branches ->
+          slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) (fst H) (abstract_clock sc) ->
           sem_block_ck H b (Bswitch ec branches)
     | Slocal:
-        forall H H' b locs blks,
+        forall H Hl H' Hl' b locs blks,
           (forall x vs, sem_var H' x vs -> ~InMembers x locs -> sem_var H x vs) ->
           Env.dom H' (map fst (Env.elements H) ++ map fst locs) ->
-          sc_vars (idck (idty locs)) H' b ->
-          Forall (sem_block_ck H' b) blks ->
-          sem_block_ck H b (Blocal locs blks)
+
+          Env.refines (@EqSt _) Hl Hl' ->
+          (forall x ty ck cx e0 clx,
+              In (x, (ty, ck, cx, Some (e0, clx))) locs ->
+              exists vs0 vs1 vs,
+                sem_exp_ck (H', Hl') b e0 [vs0]
+                /\ sem_var H' x vs1
+                /\ fby vs0 vs1 vs
+                /\ sem_var Hl' x vs) ->
+
+          sc_vars (idck (idty (idty locs)))
+                  (map_filter (fun '(x, (_, ck, _, o)) => option_map (fun _ => (x, ck)) o) locs) (H', Hl') b ->
+
+          Forall (sem_block_ck (H', Hl') b) blks ->
+          sem_block_ck (H, Hl) b (Blocal locs blks)
 
     with sem_node_ck: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop :=
       Snode:
@@ -345,9 +278,9 @@ Module Type LCLOCKSEMANTICS
           find_node f G = Some n ->
           Forall2 (sem_var H) (idents n.(n_in)) ss ->
           Forall2 (sem_var H) (idents n.(n_out)) os ->
-          sem_block_ck H b n.(n_block) ->
+          sem_block_ck (H, Env.empty _) b n.(n_block) ->
           b = clocks_of ss ->
-          clocked_node H b (idty (n.(n_in) ++ n.(n_out))) ->
+          clocked_node (H, Env.empty _) b (idty (n.(n_in) ++ n.(n_out))) ->
           sem_node_ck f ss os.
 
     Hint Constructors sem_exp sem_equation : lcsem.
@@ -355,9 +288,9 @@ Module Type LCLOCKSEMANTICS
     (** Custom induction schemes *)
 
     Section sem_exp_ind2.
-      Variable P_exp : history -> Stream bool -> exp -> list (Stream svalue) -> Prop.
-      Variable P_equation : history -> Stream bool -> equation -> Prop.
-      Variable P_block : history -> Stream bool -> block -> Prop.
+      Variable P_exp : Sem.history -> Stream bool -> exp -> list (Stream svalue) -> Prop.
+      Variable P_equation : Sem.history -> Stream bool -> equation -> Prop.
+      Variable P_block : Sem.history -> Stream bool -> block -> Prop.
       Variable P_node : ident -> list (Stream svalue) -> list (Stream svalue) -> Prop.
 
       Hypothesis ConstCase:
@@ -372,8 +305,13 @@ Module Type LCLOCKSEMANTICS
 
       Hypothesis VarCase:
         forall H b x s ann,
-          sem_var H x s ->
+          sem_var (fst H) x s ->
           P_exp H b (Evar x ann) [s].
+
+      Hypothesis LastCase:
+        forall H b x s ann,
+          sem_var (snd H) x s ->
+          P_exp H b (Elast x ann) [s].
 
       Hypothesis UnopCase:
         forall H b e op ty s o ann,
@@ -416,13 +354,13 @@ Module Type LCLOCKSEMANTICS
         forall H b x s k es lann ss os,
           Forall2 (sem_exp_ck H b) es ss ->
           Forall2 (P_exp H b) es ss ->
-          sem_var H x s ->
+          sem_var (fst H) x s ->
           Forall2 (fun s' => when k s' s) (concat ss) os ->
           P_exp H b (Ewhen es x k lann) os.
 
       Hypothesis MergeCase:
         forall H b x tx s es lann vs os,
-          sem_var H x s ->
+          sem_var (fst H) x s ->
           Forall2Brs (sem_exp_ck H b) es vs ->
           Forall2Brs (P_exp H b) es vs ->
           Forall2 (merge s) vs os ->
@@ -464,7 +402,7 @@ Module Type LCLOCKSEMANTICS
         forall H b xs es ss,
           Forall2 (sem_exp_ck H b) es ss ->
           Forall2 (P_exp H b) es ss ->
-          Forall2 (sem_var H) xs (concat ss) ->
+          Forall2 (sem_var (fst H)) xs (concat ss) ->
           P_equation H b (xs, es).
 
       Hypothesis BeqCase:
@@ -478,8 +416,8 @@ Module Type LCLOCKSEMANTICS
           sem_exp_ck H b er [sr] ->
           P_exp H b er [sr] ->
           bools_of sr r ->
-          (forall k, Forall (sem_block_ck (mask_hist k r H) (maskb k r b)) blocks /\
-                Forall (P_block (mask_hist k r H) (maskb k r b)) blocks) ->
+          (forall k, Forall (sem_block_ck (Sem.mask_hist k r H) (maskb k r b)) blocks /\
+                Forall (P_block (Sem.mask_hist k r H) (maskb k r b)) blocks) ->
           P_block H b (Breset blocks er).
 
     Hypothesis BswitchCase:
@@ -487,29 +425,42 @@ Module Type LCLOCKSEMANTICS
         sem_exp_ck H b ec [sc] ->
         P_exp H b ec [sc] ->
         wt_streams [sc] (typeof ec) ->
-        Forall (fun blks => Forall (sem_block_ck (filter_hist (fst blks) sc H) (filterb (fst blks) sc b)) (snd blks)) branches ->
-        Forall (fun blks => Forall (P_block (filter_hist (fst blks) sc H) (filterb (fst blks) sc b)) (snd blks)) branches ->
-        slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) H (abstract_clock sc) ->
+        Forall (fun blks => Forall (sem_block_ck (Sem.filter_hist (fst blks) sc H) (filterb (fst blks) sc b)) (snd blks)) branches ->
+        Forall (fun blks => Forall (P_block (Sem.filter_hist (fst blks) sc H) (filterb (fst blks) sc b)) (snd blks)) branches ->
+        slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) (fst H) (abstract_clock sc) ->
         P_block H b (Bswitch ec branches).
 
       Hypothesis BlocalCase:
-        forall H H' b locs blks,
+        forall H Hl H' Hl' b locs blks,
           (forall x vs, sem_var H' x vs -> ~(InMembers x locs) -> sem_var H x vs) ->
           Env.dom H' (map fst (Env.elements H) ++ map fst locs) ->
-          sc_vars (idck (idty locs)) H' b ->
-          Forall (sem_block_ck H' b) blks ->
-          Forall (P_block H' b) blks ->
-          P_block H b (Blocal locs blks).
+
+          Env.refines (@EqSt _) Hl Hl' ->
+          (forall x ty ck cx e0 clx,
+              In (x, (ty, ck, cx, Some (e0, clx))) locs ->
+              exists vs0 vs1 vs,
+                sem_exp_ck (H', Hl') b e0 [vs0]
+                /\ P_exp (H', Hl') b e0 [vs0]
+                /\ sem_var H' x vs1
+                /\ fby vs0 vs1 vs
+                /\ sem_var Hl' x vs) ->
+
+          sc_vars (idck (idty (idty locs)))
+                  (map_filter (fun '(x, (_, ck, _, o)) => option_map (fun _ => (x, ck)) o) locs) (H', Hl') b ->
+
+          Forall (sem_block_ck (H', Hl') b) blks ->
+          Forall (P_block (H', Hl') b) blks ->
+          P_block (H, Hl) b (Blocal locs blks).
 
       Hypothesis Node:
         forall f ss os n H b,
           find_node f G = Some n ->
           Forall2 (sem_var H) (idents n.(n_in)) ss ->
           Forall2 (sem_var H) (idents n.(n_out)) os ->
-          sem_block_ck H b n.(n_block) ->
-          P_block H b n.(n_block) ->
+          sem_block_ck (H, Env.empty _) b n.(n_block) ->
+          P_block (H, Env.empty _) b n.(n_block) ->
           b = clocks_of ss ->
-          clocked_node H b (idty (n.(n_in) ++ n.(n_out))) ->
+          clocked_node (H, Env.empty _) b (idty (n.(n_in) ++ n.(n_out))) ->
           P_node f ss os.
 
       Local Ltac SolveForall :=
@@ -522,17 +473,17 @@ Module Type LCLOCKSEMANTICS
         end.
 
       Fixpoint sem_exp_ck_ind2
-               (H: history) (b: Stream bool) (e: exp) (ss: list (Stream svalue))
+               (H: Sem.history) (b: Stream bool) (e: exp) (ss: list (Stream svalue))
                (Sem: sem_exp_ck H b e ss)
                {struct Sem}
         : P_exp H b e ss
       with sem_equation_ck_ind2
-             (H: history) (b: Stream bool) (e: equation)
+             (H: Sem.history) (b: Stream bool) (e: equation)
              (Sem: sem_equation_ck H b e)
              {struct Sem}
            : P_equation H b e
       with sem_block_ck_ind2
-             (H: history) (b: Stream bool) (d: block)
+             (H: Sem.history) (b: Stream bool) (d: block)
              (Sem: sem_block_ck H b d)
              {struct Sem}
            : P_block H b d
@@ -546,6 +497,7 @@ Module Type LCLOCKSEMANTICS
           + apply ConstCase; eauto.
           + apply EnumCase; eauto.
           + apply VarCase; auto.
+          + apply LastCase; auto.
           + eapply UnopCase; eauto.
           + eapply BinopCase; eauto.
           + eapply FbyCase; eauto; clear H3; SolveForall.
@@ -569,7 +521,9 @@ Module Type LCLOCKSEMANTICS
             intros k. specialize (H3 k). split; eauto. SolveForall.
           + eapply BswitchCase; eauto. clear H4.
             SolveForall. constructor; auto. SolveForall.
-          + eapply BlocalCase; eauto. clear H1 H2. SolveForall.
+          + eapply BlocalCase; eauto. clear H1 H2. 2:SolveForall.
+            intros. edestruct H4 as (?&?&?&?&?&?&?); eauto.
+            do 3 esplit; eauto. repeat split; eauto.
         - inv Sem.
           eapply Node; eauto.
       Qed.
@@ -579,36 +533,38 @@ Module Type LCLOCKSEMANTICS
     Lemma sem_block_defined : forall blk H bs x,
         sem_block_ck H bs blk ->
         Syn.Is_defined_in x blk ->
-        Env.In x H.
+        Env.In x (fst H).
     Proof.
       induction blk using block_ind2; intros * Hsem Hdef; inv Hsem; inv Hdef.
       - (* equation *)
         inv H4. eapply Forall2_ignore2, Forall_forall in H8 as (?&?&?); eauto using sem_var_In.
       - (* reset *)
         simpl_Exists.
-        specialize (H8 0).
-        simpl_Forall; eauto using Env.map_2.
+        specialize (H8 0). simpl_Forall.
+        eapply H, Env.map_2 in H8; eauto.
       - (* switch *)
-        simpl_Exists; simpl_Forall; eauto using Env.map_2.
+        simpl_Exists; simpl_Forall.
+        eapply H, Env.map_2 in H8; eauto.
       - (* local *)
         simpl_Exists; simpl_Forall.
-        eapply H in H9; eauto. inv H9.
+        eapply H in H11; eauto. inv H11.
         eapply sem_var_In, H4; eauto.
         econstructor; eauto. reflexivity.
     Qed.
 
     Section sem_refines.
 
-      Fact sem_exp_refines : forall b e H H' v,
+      Fact sem_exp_refines : forall b e H H' Hl v,
         Env.refines (@EqSt _) H H' ->
-        sem_exp_ck H b e v ->
-        sem_exp_ck H' b e v.
+        sem_exp_ck (H, Hl) b e v ->
+        sem_exp_ck (H', Hl) b e v.
       Proof with eauto with datatypes.
-        induction e using exp_ind2; intros Hi Hi' v Href Hsem; inv Hsem.
+        induction e using exp_ind2; intros * Href Hsem; inv Hsem.
         - (* const *) constructor...
         - (* enum *) constructor...
         - (* var *)
           constructor. eapply sem_var_refines...
+        - (* last *) constructor...
         - (* unop *) econstructor...
         - (* binop *) econstructor...
         - (* fby *)
@@ -636,36 +592,31 @@ Module Type LCLOCKSEMANTICS
           econstructor; eauto. 1,2:simpl_Forall...
       Qed.
 
-      Fact sem_equation_refines : forall H H' b equ,
+      Fact sem_equation_refines : forall H H' Hl b equ,
           Env.refines (@EqSt _) H H' ->
-          sem_equation_ck H b equ ->
-          sem_equation_ck H' b equ.
+          sem_equation_ck (H, Hl) b equ ->
+          sem_equation_ck (H', Hl) b equ.
       Proof with eauto.
-        intros * Href Hsem.
-        destruct Hsem.
+        intros * Href Hsem. inv Hsem.
         econstructor. instantiate (1:=ss).
         + simpl_Forall; eauto using sem_exp_refines.
         + simpl_Forall; eauto using sem_var_refines.
       Qed.
 
-      Fact sc_vars_refines : forall env H H' b,
+      Fact sc_vars_refines : forall Γ Γl H H' Hl Hl' b,
           Env.refines (@EqSt _) H H' ->
-          sc_vars env H b ->
-          sc_vars env H' b.
+          Env.refines (@EqSt _) Hl Hl' ->
+          sc_vars Γ Γl (H, Hl) b ->
+          sc_vars Γ Γl (H', Hl') b.
       Proof.
-        intros * Href Hsc.
-        unfold sc_vars in *.
-        eapply Forall_impl; [|eauto].
-        intros (?&?) (?&Hvar&Hck).
-        exists x. split.
-        - eapply sem_var_refines; eauto.
-        - eapply sem_clock_refines; eauto.
+        intros * Href1 Href2 (Hsc1&Hsc2).
+        split; simpl_Forall; eauto using sem_var_refines, sem_clock_refines.
       Qed.
 
-      Lemma sem_block_refines : forall bck H H' bs,
+      Lemma sem_block_refines : forall bck H H' Hl bs,
           Env.refines (@EqSt _) H H' ->
-          sem_block_ck H bs bck ->
-          sem_block_ck H' bs bck.
+          sem_block_ck (H, Hl) bs bck ->
+          sem_block_ck (H', Hl) bs bck.
       Proof.
         induction bck using block_ind2; intros * Href Hsem;
           inv Hsem.
@@ -685,8 +636,8 @@ Module Type LCLOCKSEMANTICS
           + intros ?? Hdef Hmaps.
             unfold Env.MapsTo in *.
             assert (Env.In x H0) as (?&Hfind).
-            { eapply sem_block_defined; eauto. econstructor; eauto. }
-            assert (Hfind':=Hfind). eapply Href in Hfind' as (?&?&Hfind'). rewrite Hmaps in Hfind'; inv Hfind'.
+            { eapply sem_block_defined in Hdef; eauto. 2:econstructor; eauto. auto. }
+            assert (Hfind':=Hfind). eapply Href in Hfind' as (?&?&Hfind'). simpl in *. rewrite Hmaps in Hfind'; inv Hfind'.
             rewrite <-H1. eapply H9; eauto.
         - (* local *)
           assert (Env.refines (@EqSt _) H'0
@@ -700,11 +651,13 @@ Module Type LCLOCKSEMANTICS
             eapply sem_var_restrict_inv in Hvar as (_&Hvar). inv Hvar.
             eapply Env.union_find4' in H3 as [(Hfind1&Hfind2)|Hfind2].
             * econstructor; eauto.
-            * eapply sem_var_refines; eauto. eapply H4; eauto. econstructor; eauto.
+            * eapply sem_var_refines; eauto. eapply H6; eauto. econstructor; eauto.
           + eapply Env.dom_lb_restrict_dom, Env.union_dom_lb; eauto.
             * eapply Env.dom_dom_lb, Env.dom_elements.
             * eapply Env.dom_lb_incl, Env.dom_dom_lb; eauto. solve_incl_app.
-          + eapply sc_vars_refines; eauto.
+          + intros. edestruct  H10 as (?&?&?&?&?&?&?); eauto.
+            do 3 esplit. repeat split; eauto using sem_exp_refines, sem_var_refines.
+          + eapply sc_vars_refines. 3:eauto. 1,2:eauto; reflexivity.
           + simpl_Forall; eauto.
       Qed.
 
@@ -712,29 +665,20 @@ Module Type LCLOCKSEMANTICS
 
     Section sem_restrict.
 
-      Lemma sem_clock_restrict : forall vars ck H bs bs',
-        wc_clock vars ck ->
-        sem_clock H bs ck bs' ->
-        sem_clock (Env.restrict H (map fst vars)) bs ck bs'.
-      Proof.
-        intros * Hwc Hsem.
-        eapply sem_clock_refines'; [eauto| |eauto].
-        intros ?? Hinm Hvar.
-        eapply sem_var_restrict; eauto. apply fst_InMembers; auto.
-      Qed.
-
       Hypothesis HwcG : wc_global G.
 
-      Fact sem_exp_restrict : forall vars H b e vs,
-          wx_exp vars e ->
-          sem_exp_ck H b e vs ->
-          sem_exp_ck (Env.restrict H vars) b e vs.
+      Fact sem_exp_restrict : forall Γ Γl H Hl b e vs,
+          wx_exp Γ Γl e ->
+          sem_exp_ck (H, Hl) b e vs ->
+          sem_exp_ck (Env.restrict H Γ, Hl) b e vs.
       Proof with eauto with datatypes.
         induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem.
         - (* const *) constructor...
         - (* enum *) constructor...
         - (* var *)
           constructor. eapply sem_var_restrict...
+        - (* last *)
+          constructor...
         - (* unop *)
           econstructor...
         - (* binop *)
@@ -771,41 +715,43 @@ Module Type LCLOCKSEMANTICS
           1,2:simpl_Forall; eauto.
       Qed.
 
-      Lemma sem_equation_restrict : forall vars H b eq,
-          wx_equation vars eq ->
-          sem_equation_ck H b eq ->
-          sem_equation_ck (Env.restrict H vars) b eq.
+      Lemma sem_equation_restrict : forall Γ Γl H Hl b eq,
+          wx_equation Γ Γl eq ->
+          sem_equation_ck (H, Hl) b eq ->
+          sem_equation_ck (Env.restrict H Γ, Hl) b eq.
       Proof with eauto with datatypes.
-        intros vars H b [xs es] Hwc Hsem.
+        intros ????? [xs es] Hwc Hsem.
         destruct Hwc as (?&?). inv Hsem.
         econstructor. instantiate (1:=ss).
         + simpl_Forall; eauto using sem_exp_restrict.
         + simpl_Forall; eauto using sem_var_restrict.
       Qed.
 
-      Fact sc_vars_restrict : forall locs vars H' bs,
-          incl (map fst locs) (map fst vars) ->
-          Forall (wc_clock vars) (map snd locs) ->
-          sc_vars locs H' bs ->
-          sc_vars locs (Env.restrict H' (map fst vars)) bs.
+      Fact sc_vars_restrict : forall locs locsl Γ H Hl bs,
+          incl (map fst locs) (map fst Γ) ->
+          Forall (wc_clock Γ) (map snd locs) ->
+          Forall (wc_clock Γ) (map snd locsl) ->
+          sc_vars locs locsl (H, Hl) bs ->
+          sc_vars locs locsl (Env.restrict H (map fst Γ), Hl) bs.
       Proof.
-        intros * Hincl Hwc Hsc.
-        eapply Forall_impl_In; [|eauto]; intros (?&?) Hin (xs&Hv&Hck).
-        exists xs. split.
+        intros * Hincl Hwc1 Hwc2 (?&?).
+        split; auto; simpl_Forall; eexists; split; eauto.
         - eapply sem_var_restrict; [|eauto].
           eapply Hincl; solve_In.
         - eapply sem_clock_restrict; [|eauto].
-          eapply Forall_forall in Hwc; eauto.
-          solve_In.
+          apply wc_clock_wx_clock in Hwc1; auto.
+        - eapply sem_clock_restrict; [|eauto].
+          apply wc_clock_wx_clock in Hwc2; auto.
       Qed.
 
-      Lemma sem_block_restrict : forall blk vars H b,
-          wc_env vars ->
-          wc_block G vars blk ->
-          sem_block_ck H b blk ->
-          sem_block_ck (Env.restrict H (map fst vars)) b blk.
+      Lemma sem_block_restrict : forall blk Γ Γl H Hl b,
+          wc_env Γ ->
+          Forall (wc_clock Γ) (map snd Γl) ->
+          wc_block G Γ Γl blk ->
+          sem_block_ck (H, Hl) b blk ->
+          sem_block_ck (Env.restrict H (map fst Γ), Hl) b blk.
       Proof with eauto with lclocking.
-        induction blk using block_ind2; intros * Hwenv Hwc Hsem; inv Hwc; inv Hsem.
+        induction blk using block_ind2; intros * Hwenv1 Hwenv2 Hwc Hsem; inv Hwc; inv Hsem.
         - (* equation *)
           econstructor.
           eapply sem_equation_restrict...
@@ -815,22 +761,34 @@ Module Type LCLOCKSEMANTICS
           + intros k; specialize (H11 k).
             simpl_Forall.
             eapply sem_block_refines; try eapply H; eauto.
-            now setoid_rewrite <-Env.restrict_map.
+            * now setoid_rewrite <-Env.restrict_map.
+            * simpl_Forall; auto.
         - (* switch *)
           econstructor; eauto.
           + eapply sem_exp_restrict...
           + simpl_Forall.
-            eapply H in H2. 3:eauto.
+            eapply H in H14. 4:eauto.
             eapply sem_block_refines; [|eauto].
             * setoid_rewrite <-Env.restrict_map.
               intros ?? Hfind. eapply Env.restrict_find_inv in Hfind as (Hin&Hfind).
               do 2 esplit; try reflexivity. eapply Env.restrict_find; eauto.
-              simpl_In. edestruct H7 as (?&?); eauto. solve_In.
-            * eapply Forall_forall. intros (?&?) Hin. edestruct H7 as (?&?); eauto; subst.
+              simpl_In. edestruct H6 as (?&?); eauto. solve_In.
+            * eapply Forall_forall. intros (?&?) Hin. edestruct H6 as (?&?); eauto; subst.
+              constructor.
+            * simpl_Forall. edestruct H9 as (?&?); eauto; subst.
               constructor.
           + intros ?? Hdef Hfind. eapply Env.restrict_find_inv in Hfind as (?&?)...
         - (* locals *)
-          eapply Slocal with (H':=Env.restrict H' (map fst vars ++ map fst locs)).
+          assert (Forall (wc_clock (Γ ++ idck (idty (idty locs)))) (map snd (idck (idty (idty locs))))) as Hwenv1'.
+          { simpl_Forall. unfold idck, idty. erewrite 2 map_map, map_ext with (l:=locs); eauto.
+            intros; destruct_conjs; auto. }
+          assert (Forall (wc_clock (Γ ++ idck (idty (idty locs))))
+                         (map snd (map_filter (fun '(x, (_, ck, _, o)) => option_map (fun _ : exp * ident => (x, ck)) o) locs))) as Hwenv2'.
+          { simpl_Forall. simpl_In.
+            eapply Forall_forall in H8; solve_In; simpl in *.
+            unfold idck, idty. erewrite 2 map_map, map_ext with (l:=locs); eauto.
+            intros; destruct_conjs; auto. }
+          eapply Slocal with (H':=Env.restrict H' (map fst Γ ++ map fst locs)).
           + intros * Hsem Hnin.
             eapply sem_var_restrict_inv in Hsem as (Hin&Hsem).
             eapply sem_var_restrict; eauto.
@@ -842,19 +800,120 @@ Module Type LCLOCKSEMANTICS
             repeat rewrite <-Env.In_Members. rewrite Env.restrict_In_iff.
             repeat rewrite in_app_iff. repeat rewrite <-fst_InMembers.
             split; [intros ([|]&[|])|intros [(?&?)|]]; auto.
-          + rewrite <-map_fst_idty, <-map_fst_idck, <-map_app. eapply sc_vars_restrict; eauto.
-            repeat rewrite idck_app. solve_incl_app.
-          + rewrite Forall_forall in *; intros; eauto.
-            rewrite <-map_fst_idty, <-map_fst_idck, <-map_app.
+          + eauto.
+          + intros. edestruct H13 as (?&?&?&?&?&?&?); eauto. simpl_Forall.
+            do 3 esplit. repeat split; eauto.
+            * eapply sem_exp_restrict; eauto.
+              eapply wc_exp_wx_exp in H9. erewrite map_app, map_map, map_ext with (l:=locs) in H9; eauto.
+              intros; destruct_conjs; auto.
+            * eapply sem_var_restrict; eauto. apply in_or_app, or_intror; solve_In.
+          + rewrite <-2 map_fst_idty, <-map_fst_idck, <-map_app. eapply sc_vars_restrict; eauto.
+            solve_incl_app.
+          + simpl_Forall.
+            rewrite <-2 map_fst_idty, <-map_fst_idck, <-map_app.
             eapply H; eauto.
-            eapply Forall_app; split.
-            * eapply Forall_impl; [|eapply Hwenv]; intros (?&?) ?.
+            3:{ unfold idck, idty. erewrite 2 map_map, map_ext; eauto.
+                intros; destruct_conjs; auto. }
+            2:rewrite map_app. 1,2:eapply Forall_app; split.
+            * eapply Forall_impl; [|eapply Hwenv1]; intros (?&?) ?.
               eapply wc_clock_incl; [|eauto]; solve_incl_app.
-            * simpl_Forall. eapply H5; eauto.
-              solve_In.
+            * simpl_Forall; auto.
+            * simpl_Forall. eapply wc_clock_incl; [|eauto]; solve_incl_app.
+            * simpl_Forall; auto.
       Qed.
 
     End sem_restrict.
+
+    Section sem_change_lasts.
+
+      Fact sem_exp_change_lasts : forall Γ H Hl Hl' b e vs,
+          wx_exp Γ [] e ->
+          sem_exp_ck (H, Hl) b e vs ->
+          sem_exp_ck (H, Hl') b e vs.
+      Proof with eauto with datatypes.
+        induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem.
+        - (* const *) constructor...
+        - (* enum *) constructor...
+        - (* var *)
+          constructor...
+        - (* last *)
+          inv H1.
+        - (* unop *)
+          econstructor...
+        - (* binop *)
+          econstructor...
+        - (* fby *)
+          econstructor...
+          + simpl_Forall; eauto.
+          + simpl_Forall; eauto.
+        - (* arrow *)
+          econstructor...
+          + simpl_Forall; eauto.
+          + simpl_Forall; eauto.
+        - (* when *)
+          econstructor...
+          + simpl_Forall; eauto.
+        - (* merge *)
+          econstructor...
+          + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+            simpl_Exists; simpl_Forall; eauto.
+        - (* case *)
+          econstructor...
+          + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+            simpl_Exists; simpl_Forall; eauto.
+        - (* case (default) *)
+          econstructor...
+          + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
+            simpl_Exists; simpl_Forall; eauto.
+          + simpl in *. specialize (H8 _ eq_refl).
+            simpl_Forall; eauto.
+        - (* app *)
+          econstructor...
+          1,2:simpl_Forall; eauto.
+      Qed.
+
+      Lemma sem_equation_change_lasts : forall Γ H Hl Hl' b eq,
+          wx_equation Γ [] eq ->
+          sem_equation_ck (H, Hl) b eq ->
+          sem_equation_ck (H, Hl') b eq.
+      Proof with eauto with datatypes.
+        intros ????? [xs es] Hwc Hsem.
+        destruct Hwc as (?&?). inv Hsem.
+        econstructor. instantiate (1:=ss).
+        + simpl_Forall; eauto using sem_exp_change_lasts.
+        + simpl_Forall; eauto.
+      Qed.
+
+      Lemma sem_block_change_lasts : forall blk Γ H Hl Hl' b,
+          nolast_block blk ->
+          wx_block Γ [] blk ->
+          sem_block_ck (H, Hl) b blk ->
+          sem_block_ck (H, Hl') b blk.
+      Proof with eauto with lclocking.
+        induction blk using block_ind2; intros * Hnl Hwc Hsem; inv Hnl; inv Hwc; inv Hsem.
+        - (* equation *)
+          econstructor.
+          eapply sem_equation_change_lasts...
+        - (* reset *)
+          econstructor; eauto.
+          + eapply sem_exp_change_lasts...
+          + intros k; specialize (H11 k).
+            simpl_Forall. eapply H; eauto.
+        - (* switch *)
+          econstructor; eauto.
+          + eapply sem_exp_change_lasts...
+          + simpl_Forall. eapply H; eauto.
+        - (* locals *)
+          econstructor. 3:reflexivity. 1-5:eauto.
+          + intros. simpl_Forall. congruence.
+          + destruct H15. split; auto.
+            simpl_Forall. simpl_In. simpl_Forall; subst; simpl in *. congruence.
+          + simpl_Forall. eapply H; eauto. subst envl'.
+            rewrite map_filter_nil in H7; eauto.
+            simpl_Forall; subst; auto.
+      Qed.
+
+    End sem_change_lasts.
 
     Local Hint Constructors Sem.sem_exp Sem.sem_equation Sem.sem_block : lcsem.
 
@@ -932,15 +991,16 @@ Module Type LCLOCKSEMANTICS
 
   Local Hint Constructors sem_exp : lcsem.
 
-  Add Parametric Morphism env : (sc_vars env)
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> Basics.impl
+  Add Parametric Morphism env envl : (sc_vars env envl)
+      with signature history_equiv ==> @EqSt bool ==> Basics.impl
         as sc_vars_morph.
   Proof.
-    intros ?? Heq1 ?? Heq2 Hinv.
-    eapply Forall_impl; [|eauto]; intros (?&?) (xs&Hvar&Hck).
-    exists xs. split.
-    - rewrite <-Heq1; auto.
-    - rewrite <-Heq1, <-Heq2; auto.
+    intros ?? (EH1&EH2) ?? Heq2 (?&?).
+    split; simpl_Forall; do 2 esplit.
+    - rewrite <-EH1; eauto.
+    - rewrite <-EH1, <-Heq2; auto.
+    - rewrite <-EH2; eauto.
+    - rewrite <-EH1, <-Heq2; auto.
   Qed.
 
   Add Parametric Morphism : clocked_node
@@ -955,12 +1015,12 @@ Module Type LCLOCKSEMANTICS
   Local Hint Resolve clocked_node_morph_Proper : lcsem.
 
   Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_exp_ck G)
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSts svalue ==> Basics.impl
+      with signature history_equiv ==> @EqSt bool ==> eq ==> @EqSts svalue ==> Basics.impl
         as sem_exp_ck_morph.
   Proof.
     intros H H' EH b b' Eb e xs xs' Exs Hsem. revert H' b' xs' EH Eb Exs.
     eapply sem_exp_ck_ind2 with
-        (P_exp := fun H b e xs => forall H' b' xs', Env.Equiv (@EqSt _) H H' -> b ≡ b' -> EqSts xs xs' -> sem_exp_ck G H' b' e xs')
+        (P_exp := fun H b e xs => forall H' b' xs', history_equiv H H' -> b ≡ b' -> EqSts xs xs' -> sem_exp_ck G H' b' e xs')
         (P_equation := fun H b e => True)
         (P_block := fun H b d => True)
         (P_node := fun f xs ys => forall ys', EqSts ys ys' -> sem_node_ck G f xs ys');
@@ -970,7 +1030,9 @@ Module Type LCLOCKSEMANTICS
     - inv Exs; take (Forall2 _ _ _) and inv it.
       econstructor. rewrite <-H3; etransitivity; eauto; now symmetry.
     - inv Exs; take (Forall2 _ _ _) and inv it.
-      econstructor; now rewrite <-H2, <-H6.
+      constructor. destruct H2 as (EH&_). now rewrite <-EH, <-H6.
+    - inv Exs; take (Forall2 _ _ _) and inv it.
+      constructor. destruct H2 as (_&EH). now rewrite <-EH, <-H6.
     - inv Exs; take (Forall2 _ _ _) and inv it.
       econstructor; eauto.
       + apply H2; eauto; reflexivity.
@@ -995,10 +1057,10 @@ Module Type LCLOCKSEMANTICS
     - econstructor; eauto.
       + eapply Forall2_impl_In; [|apply H2].
         intros * ?? Hs; apply Hs; auto; reflexivity.
-      + rewrite <-H5; eauto.
+      + destruct H5 as (EH&_). rewrite <-EH; eauto.
       + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
-      + rewrite <-H5; eauto.
+      + destruct H5 as (EH&_). rewrite <-EH; eauto.
       + instantiate (1:=vs).
         eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse. eapply Hse; eauto. reflexivity.
       + rewrite <-Exs; auto.
@@ -1031,7 +1093,7 @@ Module Type LCLOCKSEMANTICS
   Qed.
 
   Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_equation_ck G)
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> Basics.impl
+      with signature history_equiv ==> @EqSt bool ==> eq ==> Basics.impl
         as sem_equation_ck_morph.
   Proof.
     unfold Basics.impl; intros H H' EH xs xs' Exss eq Hsem.
@@ -1039,16 +1101,16 @@ Module Type LCLOCKSEMANTICS
     - eapply Forall2_impl_In; [|eauto]; intros.
       eapply sem_exp_ck_morph; eauto. reflexivity.
     - eapply Forall2_impl_In; [|eauto]; intros.
-      now rewrite <-EH.
+      destruct EH as (EH&_). now rewrite <-EH.
   Qed.
 
   Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_block_ck G)
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> Basics.impl
+      with signature history_equiv ==> @EqSt bool ==> eq ==> Basics.impl
         as sem_block_ck_morph.
   Proof.
     unfold Basics.impl. intros H H' EH bs bs' Hbs b Hsem. revert H' bs' EH Hbs.
     eapply sem_block_ck_ind2
-      with (P_block := fun H bs b => forall H' bs', Env.Equiv (@EqSt _) H H' -> bs ≡ bs' -> sem_block_ck G H' bs' b)
+      with (P_block := fun H bs b => forall H' bs', history_equiv H H' -> bs ≡ bs' -> sem_block_ck G H' bs' b)
            (P_exp := fun _ _ _ _ => True)
            (P_equation := fun _ _ _ => True)
            (P_node := fun _ _ _ => True); intros; eauto.
@@ -1059,22 +1121,28 @@ Module Type LCLOCKSEMANTICS
         eapply Forall_Forall in Hsem1; eauto. clear Hsem1'.
         eapply Forall_impl; [|eauto].
         intros ? (?&?). eapply H4; eauto.
-        now rewrite <-H5.
-        now rewrite <-H6.
+        * destruct H5 as (EH1&EH2); split; unfold Sem.mask_hist. now rewrite <-EH1. now rewrite <-EH2.
+        * now rewrite <-H6.
     - econstructor; eauto.
       + eapply sem_exp_ck_morph; eauto. reflexivity.
       + simpl_Forall.
-        eapply H10; eauto.
-        now rewrite H7. now rewrite H8.
-      + now rewrite <-H7.
-    - eapply Slocal with (H'1:=H'); eauto.
-      + intros. rewrite <-H6; eauto.
+        eapply H5; eauto.
+        * destruct H7 as (EH1&EH2); split; unfold Sem.filter_hist. now rewrite <-EH1. now rewrite <-EH2.
+        * now rewrite H8.
+      + destruct H7 as (EH&_). now rewrite <-EH.
+    - destruct H'0. eapply Slocal with (H'0:=H'); eauto.
+      + intros. destruct H8 as (EH&_). rewrite <-EH; eauto.
       + eapply Env.dom_intro; intros. eapply Env.dom_use in H2.
         rewrite H2. rewrite 2 in_app_iff. apply or_iff_compat_r.
-        now rewrite <-2 fst_InMembers, <-2 Env.In_Members, H6.
-      + now rewrite <-H7.
+        destruct H8 as (EH&_).
+        now rewrite <-2 fst_InMembers, <-2 Env.In_Members, EH.
+      + destruct H8 as (_&EH). rewrite <-EH; eauto.
+      + intros * Hin. edestruct H4 as (?&?&?&?&?&?&?&?); eauto.
+        do 3 esplit; eauto. repeat split; eauto.
+        now rewrite <-H9.
+      + rewrite <-H9; eauto.
       + rewrite Forall_forall in *; intros; eauto.
-        eapply H5; eauto. reflexivity.
+        eapply H7; eauto. reflexivity.
   Qed.
 
   Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_node_ck G)
@@ -1113,8 +1181,8 @@ Module Type LCLOCKSEMANTICS
         (P_block := fun H bk d => ~Is_node_in_block nd.(n_name) d
                                -> sem_block_ck (Global enums0 nds) H bk d)
         (P_node := fun f ins outs => nd.(n_name) <> f
-                                  -> sem_node_ck (Global enums0 nds) f ins outs). 19:eauto.
-      1-18:eauto; intros; try (now econstructor; eauto).
+                                  -> sem_node_ck (Global enums0 nds) f ins outs). 20:eauto.
+      1-19:eauto; intros; try (now econstructor; eauto).
     - econstructor; eauto. apply H1.
       intro. destruct H4. constructor; auto.
     - econstructor; eauto.
@@ -1178,12 +1246,15 @@ Module Type LCLOCKSEMANTICS
     - econstructor; eauto.
       + eapply H1. contradict H6. constructor; auto.
       + simpl_Forall.
-        eapply H8; eauto. contradict H6.
+        eapply H4; eauto. contradict H6.
         constructor. right. solve_Exists.
     - econstructor; eauto.
-      rewrite Forall_forall in *; intros.
-      eapply H4; eauto.
-      contradict H5. constructor. solve_Exists.
+      + intros. edestruct H3 as (?&?&?&?&?&?&?&?); eauto.
+        do 3 esplit. repeat split; eauto.
+        eapply H10. contradict H7. constructor. left. solve_Exists.
+      + simpl_Forall.
+        eapply H6; eauto.
+        contradict H7. constructor. right. solve_Exists.
     - rewrite find_node_other with (1:=H7) in H0.
       eapply Snode; eauto.
       eapply H4; eauto.
@@ -1222,8 +1293,8 @@ Module Type LCLOCKSEMANTICS
         (P_block := fun H bk d => ~Is_node_in_block nd.(n_name) d
                                -> sem_block_ck (Global enums0 (nd::nds)) H bk d)
         (P_node := fun f ins outs => nd.(n_name) <> f
-                                  -> sem_node_ck (Global enums0 (nd::nds)) f ins outs). 19:eauto.
-      1-18:eauto; intros; try (now econstructor; eauto).
+                                  -> sem_node_ck (Global enums0 (nd::nds)) f ins outs). 20:eauto.
+      1-19:eauto; intros; try (now econstructor; eauto).
     - econstructor; eauto. apply H1.
       intro. destruct H4. constructor; auto.
     - econstructor; eauto.
@@ -1287,12 +1358,15 @@ Module Type LCLOCKSEMANTICS
     - econstructor; eauto.
       + eapply H1. contradict H6. constructor; auto.
       + simpl_Forall.
-        eapply H8; eauto. contradict H6.
+        eapply H4; eauto. contradict H6.
         constructor. right. solve_Exists.
     - econstructor; eauto.
-      rewrite Forall_forall in *; intros.
-      eapply H4; eauto.
-      contradict H5. constructor. solve_Exists.
+      + intros. edestruct H3 as (?&?&?&?&?&?&?&?); eauto.
+        do 3 esplit. repeat split; eauto.
+        eapply H10. contradict H7. constructor. left. solve_Exists.
+      + simpl_Forall.
+        eapply H6; eauto.
+        contradict H7. constructor. right. solve_Exists.
     - assert (~ Is_node_in_block (n_name nd) (n_block n)) as Hnin.
       { apply find_node_later_not_Is_node_in with (1:=Hord) in H0; auto. }
       rewrite <-find_node_other with (1:=H7) in H0.
@@ -1340,21 +1414,43 @@ Module Type LCLOCKSEMANTICS
       eapply sem_exp_ck_ind2 with
           (P_equation := fun H b eq => sem_equation G H b eq)
           (P_block := fun H b blk => sem_block G H b blk)
-          (P_node := fun f xs ys => sem_node G f xs ys). 19:eauto.
-      1-18:intros; econstructor; eauto.
+          (P_node := fun f xs ys => sem_node G f xs ys). 20:eauto.
+      1-19:intros; econstructor; eauto.
       1,2:intros k.
       - specialize (H6 k) as (?&?); auto.
       - specialize (H4 k) as (?&?); auto.
+      - intros. edestruct H4 as (?&?&?&?&?&?&?&?); eauto.
+        do 3 esplit. repeat split; eauto.
     Qed.
 
     Corollary sem_exps_ck_sem_exps : forall H b es vs,
-        wc_global G ->
         Forall2 (sem_exp_ck G H b) es vs ->
         Forall2 (sem_exp G H b) es vs.
     Proof.
       intros.
       eapply Forall2_impl_In; [|eauto]; intros.
       eapply sem_exp_ck_sem_exp; eauto.
+    Qed.
+
+    Lemma sem_block_ck_sem_block : forall blk Hi bs,
+        sem_block_ck G Hi bs blk ->
+        sem_block G Hi bs blk.
+    Proof.
+      induction blk using block_ind2; intros * Hsem; inv Hsem.
+      - (* equation *)
+        inv H3. constructor.
+        eapply Sem.Seq with (ss0:=ss); simpl_Forall; eauto using sem_exp_ck_sem_exp.
+      - (* reset *)
+        econstructor; eauto using sem_exp_ck_sem_exp.
+        intros. specialize (H7 k). simpl_Forall; eauto.
+      - (* switch *)
+        econstructor; eauto using sem_exp_ck_sem_exp.
+        simpl_Forall; eauto.
+      - (* local *)
+        econstructor; eauto.
+        + intros. edestruct H6 as (?&?&?&?&?&?&?); eauto.
+          do 3 esplit. repeat split; eauto using sem_exp_ck_sem_exp.
+        + simpl_Forall; eauto.
     Qed.
 
   End sem_ck_sem.
@@ -1690,8 +1786,8 @@ Module Type LCLOCKSEMANTICS
   Definition def_stream b := enum b 0.
 
   Lemma sc_outside_mask {PSyn1 PSyn2 prefs1 prefs2} :
-    forall (G : @global PSyn1 prefs1) H es b env ncks ss0 ss bck sub (n : @node PSyn2 prefs2) rs,
-      Forall (wc_exp G env) es ->
+    forall (G : @global PSyn1 prefs1) H es b Γ Γl ncks ss0 ss bck sub (n : @node PSyn2 prefs2) rs,
+      Forall (wc_exp G Γ Γl) es ->
       Forall2 (fun '(_, o1) s => LiftO True (fun x0 : ident => sem_var H x0 s) o1) (nclocksof es) (concat ss0) ->
       Forall2 (fun '(_, o) s => LiftO True (fun x0 => sem_var H x0 s) o) ncks ss ->
       wc_env (idck (idty (n_in n))) ->
@@ -1861,7 +1957,7 @@ Module Type LCLOCKSEMANTICS
       unfold idck, idty, idents in *.
       rewrite Forall2_map_1 in H3. rewrite Forall2_map_1, Forall2_map_1.
       eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? Hin1 Hin2 Hvar; simpl in *.
-      destruct H6 as (_&Hinv).
+      destruct H6 as (_&Hinv&_).
       eapply Forall_map, Forall_map, Forall_forall in Hinv as (?&Hvar'&Hck'); eauto using in_or_app.
       eapply sem_var_det in Hvar; eauto.
       rewrite <-Hvar; auto.
@@ -1898,60 +1994,73 @@ Module Type LCLOCKSEMANTICS
       eapply map_ext. intros (?&(?&?)&?); eauto.
     Qed.
 
-    Definition sc_var_inv (env : list (ident * (type * clock * ident))) (H : history) (b : Stream bool) : ident -> Prop :=
-      fun cx => forall x ck xs,
-          In (x, (ck, cx)) (idckcaus env) ->
-          sem_var H x xs ->
-          sem_clock H b ck (abstract_clock xs).
+    Definition sc_var_inv (Γ Γl : list (ident * (type * clock * ident))) (H : Sem.history) (b : Stream bool) : ident -> Prop :=
+      fun cx =>
+        (forall x ck xs,
+          In (x, (ck, cx)) (idckcaus Γ) ->
+          sem_var (fst H) x xs ->
+          sem_clock (fst H) b ck (abstract_clock xs))
+        /\ (forall x ck xs,
+              In (x, (ck, cx)) (idckcaus Γl) ->
+              sem_var (snd H) x xs ->
+              sem_clock (fst H) b ck (abstract_clock xs)).
 
-    Lemma sc_vars_sc_var_inv : forall env H b,
-        NoDupMembers env ->
-        NoDup (map snd (idcaus env)) ->
-        sc_vars (idck (idty env)) H b ->
-        Forall (sc_var_inv env H b) (map snd (idcaus env)).
+    Lemma sc_vars_sc_var_inv : forall Γ Γl H b,
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        sc_vars (idck (idty Γ)) (idck (idty Γl)) H b ->
+        Forall (sc_var_inv Γ Γl H b) (map snd (idcaus Γ) ++ map snd (idcaus Γl)).
     Proof.
-      intros * Hnd1 Hnd2 Hinv'.
-      unfold sc_vars in Hinv'. unfold idty, idck, idcaus in *.
-      repeat rewrite Forall_map in Hinv'. repeat rewrite Forall_map.
-      eapply Forall_impl_In; [|eauto].
-      intros (?&(?&?)&?) Hin (?&Hvar&Hck) ??? Hin' Hvar'; simpl in *.
-      simpl_In.
-      assert (x0 = i); subst.
-      { eapply NoDup_snd_det; eauto. 1,2:eapply in_map_iff; do 2 esplit.
-        2:eapply Hin0. 3:eapply Hin. 1,2:reflexivity. }
-      eapply sem_var_det in Hvar; eauto. rewrite Hvar.
-      assert (c = ck); subst; auto.
-      eapply NoDupMembers_det in Hnd1; [|eapply Hin|eapply Hin0].
-      now inv Hnd1.
+      intros * Hnd1 Hnd2 Hnd3 (Hinv1&Hinv2).
+      rewrite Forall_app.
+      unfold idty, idck, idcaus in *. simpl_Forall.
+      split; simpl_Forall; split; intros ??? Hin' Hvar'; simpl_In.
+      2,3:exfalso; eapply NoDup_app_In; eauto; solve_In.
+      - assert (x0 = i); subst.
+        { apply NoDup_app_l in Hnd3. eapply NoDup_snd_det; eauto.
+          solve_In. clear Hin; solve_In. }
+        eapply sem_var_det in H0; eauto. rewrite H0.
+        assert (c = ck); subst; auto.
+        eapply NoDupMembers_det in Hnd1; [|eapply Hin|eapply H].
+        now inv Hnd1.
+      - assert (x0 = i); subst.
+        { apply NoDup_app_r in Hnd3. eapply NoDup_snd_det; eauto.
+          solve_In. clear Hin; solve_In. }
+        eapply sem_var_det in H0; eauto. rewrite H0.
+        assert (c = ck); subst; auto.
+        eapply NoDupMembers_det in Hnd2; [|eapply Hin|eapply H].
+        now inv Hnd2.
     Qed.
 
-    Lemma sc_var_inv_sc_vars : forall env H b,
-        Forall (fun x => exists v, sem_var H x v) (map fst env) ->
-        Forall (sc_var_inv env H b) (map snd (idcaus env)) ->
-        sc_vars (idck (idty env)) H b.
+    Lemma sc_var_inv_sc_vars : forall Γ Γl H b,
+        Forall (fun x => exists v, sem_var (fst H) x v) (map fst Γ) ->
+        Forall (fun x => exists v, sem_var (snd H) x v) (map fst Γl) ->
+        Forall (sc_var_inv Γ Γl H b) (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        sc_vars (idck (idty Γ)) (idck (idty Γl)) H b.
     Proof.
-      intros * Hvars Hinv.
-      unfold sc_vars.
-      unfold idck, idty in *. repeat rewrite Forall_map in Hinv. rewrite Forall_map in Hvars.
-      repeat rewrite Forall_map. rewrite Forall_forall in *.
-      intros (?&(?&?)&?) Hin; simpl. edestruct Hvars as (?&Hvar); eauto. simpl in *.
-      do 2 eexists; eauto.
-      eapply Hinv; eauto. 1,2:repeat (eapply in_map_iff; do 2 esplit; eauto); auto.
+      intros * Hv1 Hv2 Hinv.
+      apply Forall_app in Hinv as (Hinv1&Hinv2).
+      unfold sc_vars, idck, idty, idcaus in *. split; simpl_Forall.
+      - destruct Hinv1 as (?&_). do 2 esplit; eauto.
+        eapply H1; eauto. solve_In.
+      - destruct Hinv2 as (_&?). do 2 esplit; eauto.
+        eapply H1; eauto. solve_In.
     Qed.
 
-    Definition sc_exp_inv (env : list (ident * (type * clock * ident))) envty (H : history) (b : Stream bool) : exp -> nat -> Prop :=
+    Definition sc_exp_inv (Γ Γl : list (ident * (type * clock * ident))) Γty Γtyl H b : exp -> nat -> Prop :=
       fun e k => forall ss,
-          wt_exp G envty e ->
-          wc_exp G (idck (idty env)) e ->
+          wt_exp G Γty Γtyl e ->
+          wc_exp G (idck (idty Γ)) (idck (idty Γl)) e ->
           Sem.sem_exp G H b e ss ->
-          sem_clock H b (nth k (clockof e) Cbase) (abstract_clock (nth k ss (def_stream b))).
+          sem_clock (fst H) b (nth k (clockof e) Cbase) (abstract_clock (nth k ss (def_stream b))).
 
-    Fact P_exps_sc_exp_inv : forall env envty H b es ss k,
-        Forall (wt_exp G envty) es ->
-        Forall (wc_exp G (idck (idty env))) es ->
+    Fact P_exps_sc_exp_inv : forall Γ Γl Γty Γtyl H b es ss k,
+        Forall (wt_exp G Γty Γtyl) es ->
+        Forall (wc_exp G (idck (idty Γ)) (idck (idty Γl))) es ->
         Forall2 (Sem.sem_exp G H b) es ss ->
-        P_exps (sc_exp_inv env envty H b) es k ->
-        sem_clock H b (nth k (clocksof es) Cbase) (abstract_clock (nth k (concat ss) (def_stream b))).
+        P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) es k ->
+        sem_clock (fst H) b (nth k (clocksof es) Cbase) (abstract_clock (nth k (concat ss) (def_stream b))).
     Proof.
       induction es; intros * Hwt Hwc Hsem Hp;
         inv Hwt; inv Hwc; inv Hsem; simpl. inv Hp.
@@ -1966,15 +2075,15 @@ Module Type LCLOCKSEMANTICS
         rewrite app_nth2. 1,2:rewrite Hlen; auto.
     Qed.
 
-    Fact Forall2Brs_sc_exp_inv1 : forall env envty H b ck x tx es k ss,
+    Fact Forall2Brs_sc_exp_inv1 : forall Γ Γl Γty Γtyl H b ck x tx es k ss,
         k < length ss ->
-        Forall (fun es => Forall (wt_exp G envty) (snd es)) es ->
-        Forall (fun es => Forall (wc_exp G (idck (idty env))) (snd es)) es ->
+        Forall (fun es => Forall (wt_exp G Γty Γtyl) (snd es)) es ->
+        Forall (fun es => Forall (wc_exp G (idck (idty Γ)) (idck (idty Γl))) (snd es)) es ->
         Forall (fun '(i, es0) => Forall (eq (Con ck x (tx, i))) (clocksof es0)) es ->
         Forall (fun es0 => length ss = length (clocksof (snd es0))) es ->
         Forall2Brs (Sem.sem_exp G H b) es ss ->
-        Forall (fun es => P_exps (sc_exp_inv env envty H b) (snd es) k) es ->
-        Forall (fun '(i, v) => sem_clock H b (Con ck x (tx, i)) (abstract_clock v)) (nth k ss []).
+        Forall (fun es => P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) (snd es) k) es ->
+        Forall (fun '(i, v) => sem_clock (fst H) b (Con ck x (tx, i)) (abstract_clock v)) (nth k ss []).
     Proof.
       induction es; intros * Hlen Hwt Hwc Hck1 Hck2 Hsem Hp;
         inv Hwt; inv Hwc; inv Hck1; inv Hck2; inv Hsem; inv Hp; simpl.
@@ -1991,12 +2100,12 @@ Module Type LCLOCKSEMANTICS
       erewrite <-H6 in Heq1; eauto.
     Qed.
 
-    Fact P_exps_sc_exp_inv_all : forall env envty H b es ss,
-        Forall (wt_exp G envty) es ->
-        Forall (wc_exp G (idck (idty env))) es ->
+    Fact P_exps_sc_exp_inv_all : forall Γ Γl Γty Γtyl H b es ss,
+        Forall (wt_exp G Γty Γtyl) es ->
+        Forall (wc_exp G (idck (idty Γ)) (idck (idty Γl))) es ->
         Forall2 (Sem.sem_exp G H b) es ss ->
-        (forall k, k < length (annots es) -> P_exps (sc_exp_inv env envty H b) es k) ->
-        Forall2 (sem_clock H b) (clocksof es) (map abstract_clock (concat ss)).
+        (forall k, k < length (annots es) -> P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) es k) ->
+        Forall2 (sem_clock (fst H) b) (clocksof es) (map abstract_clock (concat ss)).
     Proof.
       intros * Hwt Hwc Hsem Hk.
       assert (length (clocksof es) = length (concat ss)) as Hlen.
@@ -2010,59 +2119,73 @@ Module Type LCLOCKSEMANTICS
       eapply Hk. rewrite <- length_clocksof_annots; auto.
     Qed.
 
-    Lemma sc_exp_const : forall env envty H b c,
-        sc_exp_inv env envty H b (Econst c) 0.
+    Lemma sc_exp_const : forall Γ Γl Γty Γtyl H b c,
+        sc_exp_inv Γ Γl Γty Γtyl H b (Econst c) 0.
     Proof.
       intros * ? _ Hwc Hsem; inv Hsem.
       simpl. rewrite H4, ac_const.
       constructor. reflexivity.
     Qed.
 
-    Lemma sc_exp_enum : forall env envty H b k ty,
-        sc_exp_inv env envty H b (Eenum k ty) 0.
+    Lemma sc_exp_enum : forall Γ Γl Γty Γtyl H b k ty,
+        sc_exp_inv Γ Γl Γty Γtyl H b (Eenum k ty) 0.
     Proof.
       intros * ? _ Hwc Hsem; inv Hsem.
       simpl. rewrite H6, ac_enum.
       constructor. reflexivity.
     Qed.
 
-    Lemma sc_exp_var : forall env envty H b x cx ann,
-        NoDupMembers env ->
-        In (x, cx) (idcaus env) ->
-        sc_var_inv env H b cx ->
-        sc_exp_inv env envty H b (Evar x ann) 0.
+    Lemma sc_exp_var : forall Γ Γl Γty Γtyl H b x cx ann,
+        NoDupMembers Γ ->
+        In (x, cx) (idcaus Γ) ->
+        sc_var_inv Γ Γl H b cx ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Evar x ann) 0.
     Proof.
-      intros * Hnd(* 1 Hnd2 *) Hin Hvar ss _ Hwc Hsem; inv Hsem; simpl.
+      intros * Hnd(* 1 Hnd2 *) Hin (Hvar&_) ss _ Hwc Hsem; inv Hsem; simpl.
       eapply Hvar; [|eauto].
-      assert (In (x, snd ann0) (idck (idty env0))) as Hin' by (inv Hwc; auto).
+      assert (In (x, snd ann0) (idck (idty Γ))) as Hin' by (inv Hwc; auto).
       simpl_In.
       eapply NoDupMembers_det in Hin0; eauto. inv Hin0; auto.
       solve_In.
     Qed.
 
-    Lemma sc_exp_unop : forall env envty H b op e1 ann,
-        sc_exp_inv env envty H b e1 0 ->
-        sc_exp_inv env envty H b (Eunop op e1 ann) 0.
+    Lemma sc_exp_last : forall Γ Γl Γty Γtyl H b x cx ann,
+        NoDupMembers Γl ->
+        In (x, cx) (idcaus Γl) ->
+        sc_var_inv Γ Γl H b cx ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Elast x ann) 0.
+    Proof.
+      intros * Hnd(* 1 Hnd2 *) Hin (_&Hvar) ss _ Hwc Hsem; inv Hsem; simpl.
+      eapply Hvar; [|eauto].
+      assert (In (x, snd ann0) (idck (idty Γl))) as Hin' by (inv Hwc; auto).
+      simpl_In.
+      eapply NoDupMembers_det in Hin0; eauto. inv Hin0; auto.
+      solve_In.
+    Qed.
+
+    Lemma sc_exp_unop : forall Γ Γl Γty Γtyl H b op e1 ann,
+        sc_exp_inv Γ Γl Γty Γtyl H b e1 0 ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Eunop op e1 ann) 0.
     Proof.
       intros * He1 ss Hwt Hwc Hsem; inv Hwt; inv Hwc; inv Hsem; simpl.
       eapply He1 in H13; eauto. rewrite H10 in H13; simpl in H13.
       rewrite <- ac_lift1; eauto.
     Qed.
 
-    Lemma sc_exp_binop : forall env envty H b op e1 e2 ann,
-        sc_exp_inv env envty H b e1 0 ->
-        sc_exp_inv env envty H b e2 0 ->
-        sc_exp_inv env envty H b (Ebinop op e1 e2 ann) 0.
+    Lemma sc_exp_binop : forall Γ Γl Γty Γtyl H b op e1 e2 ann,
+        sc_exp_inv Γ Γl Γty Γtyl H b e1 0 ->
+        sc_exp_inv Γ Γl Γty Γtyl H b e2 0 ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Ebinop op e1 e2 ann) 0.
     Proof.
       intros * He1 He2 ss Hwt Hwc Hsem; inv Hwt; inv Hwc; inv Hsem; simpl.
       eapply He1 in H16; eauto. rewrite H14 in H16; simpl in H14.
       rewrite <- ac_lift2; eauto.
     Qed.
 
-    Lemma sc_exp_fby : forall env envty H b e0s es ann k,
+    Lemma sc_exp_fby : forall Γ Γl Γty Γtyl H b e0s es ann k,
         k < length ann ->
-        P_exps (sc_exp_inv env envty H b) e0s k ->
-        sc_exp_inv env envty H b (Efby e0s es ann) k.
+        P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) e0s k ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Efby e0s es ann) k.
     Proof.
       intros * Hk Hexps ss Hwt Hwc Hsem; simpl.
       inv Hwt. inv Hwc. inv Hsem.
@@ -2077,11 +2200,11 @@ Module Type LCLOCKSEMANTICS
       erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, map_length; eauto with ltyping.
     Qed.
 
-    Lemma sc_exp_arrow : forall env envty H b e0s es ann k,
+    Lemma sc_exp_arrow : forall Γ Γl Γty Γtyl H b e0s es ann k,
         k < length ann ->
-        P_exps (sc_exp_inv env envty H b) e0s k ->
-        P_exps (sc_exp_inv env envty H b) es k ->
-        sc_exp_inv env envty H b (Earrow e0s es ann) k.
+        P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) e0s k ->
+        P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) es k ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Earrow e0s es ann) k.
     Proof.
       intros * Hk He0s Hes ss Hwt Hwc Hsem; simpl.
       inv Hwt. inv Hwc. inv Hsem.
@@ -2096,13 +2219,13 @@ Module Type LCLOCKSEMANTICS
       erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, map_length; eauto with ltyping.
     Qed.
 
-    Lemma sc_exp_when : forall env envty H b es x cx b' ann k,
-        NoDupMembers env ->
+    Lemma sc_exp_when : forall Γ Γl Γty Γtyl H b es x cx b' ann k,
+        NoDupMembers Γ ->
         k < length (fst ann) ->
-        P_exps (sc_exp_inv env envty H b) es k ->
-        In (x, cx) (idcaus env) ->
-        sc_var_inv env H b cx ->
-        sc_exp_inv env envty H b (Ewhen es x b' ann) k.
+        P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) es k ->
+        In (x, cx) (idcaus Γ) ->
+        sc_var_inv Γ Γl H b cx ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Ewhen es x b' ann) k.
     Proof.
       intros * Hnd Hk Hes Hin Hvar ss Hwt Hwc Hsem; simpl.
       inv Hwt. inv Hwc. inv Hsem.
@@ -2121,13 +2244,13 @@ Module Type LCLOCKSEMANTICS
       symmetry. eapply sem_exps_numstreams; eauto with ltyping.
     Qed.
 
-    Lemma sc_exp_merge : forall env envty H b x cx tx es ann k,
-        NoDupMembers env ->
+    Lemma sc_exp_merge : forall Γ Γl Γty Γtyl H b x cx tx es ann k,
+        NoDupMembers Γ ->
         k < length (fst ann) ->
-        In (x, cx) (idcaus env) ->
-        sc_var_inv env H b cx ->
-        Forall (fun es => P_exps (sc_exp_inv env envty H b) (snd es) k) es ->
-        sc_exp_inv env envty H b (Emerge (x, tx) es ann) k.
+        In (x, cx) (idcaus Γ) ->
+        sc_var_inv Γ Γl H b cx ->
+        Forall (fun es => P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) (snd es) k) es ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Emerge (x, tx) es ann) k.
     Proof.
       intros * Hnd Hk Hin Hvar Hes ss Hwt Hwc Hsem; simpl.
       inv Hwt. inv Hwc. inv Hsem.
@@ -2150,12 +2273,12 @@ Module Type LCLOCKSEMANTICS
         rewrite map_nth' with (d':=bool_velus_type); eauto.
     Qed.
 
-    Lemma sc_exp_case : forall env envty H b e es d ann k,
+    Lemma sc_exp_case : forall Γ Γl Γty Γtyl H b e es d ann k,
         k < length (fst ann) ->
-        sc_exp_inv env envty H b e 0 ->
-        Forall (fun es => P_exps (sc_exp_inv env envty H b) (snd es) k) es ->
-        LiftO True (fun d => P_exps (sc_exp_inv env envty H b) d k) d ->
-        sc_exp_inv env envty H b (Ecase e es d ann) k.
+        sc_exp_inv Γ Γl Γty Γtyl H b e 0 ->
+        Forall (fun es => P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) (snd es) k) es ->
+        LiftO True (fun d => P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) d k) d ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Ecase e es d ann) k.
     Proof.
       intros * Hk He Hes Hd ss Hwt Hwc Hsem; simpl.
       inv Hwt; inv Hwc; inv Hsem.
@@ -2188,10 +2311,10 @@ Module Type LCLOCKSEMANTICS
     Qed.
 
     Lemma sem_exp_sem_var :
-      forall env H b e vs,
-        wc_exp G env e ->
+      forall Γ Γl H b e vs,
+        wc_exp G Γ Γl e ->
         sem_exp G H b e vs ->
-        Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var H x s) o) (nclockof e) vs.
+        Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclockof e) vs.
     Proof.
       intros * Hwc Hsem.
       assert (length vs = length (nclockof e)) as Hlen.
@@ -2223,21 +2346,21 @@ Module Type LCLOCKSEMANTICS
     Qed.
 
     Corollary sem_exps_sem_var :
-      forall env H b es vs,
-        Forall (wc_exp G env) es ->
+      forall Γ Γl H b es vs,
+        Forall (wc_exp G Γ Γl) es ->
         Forall2 (sem_exp G H b) es vs ->
-        Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var H x s) o) (nclocksof es) (concat vs).
+        Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclocksof es) (concat vs).
     Proof.
       induction es; intros * Hwc Hsem; inv Hwc; inv Hsem; simpl; auto.
       apply Forall2_app; auto.
       eapply sem_exp_sem_var; eauto.
     Qed.
 
-    Lemma sc_exp_app : forall env envty H b f es er ann k,
+    Lemma sc_exp_app : forall Γ Γl Γty Γtyl H b f es er ann k,
         wc_global G ->
         k < length ann ->
-        (forall k0 : nat, k0 < length (annots es) -> P_exps (sc_exp_inv env envty H b) es k0) ->
-        sc_exp_inv env envty H b (Eapp f es er ann) k.
+        (forall k0 : nat, k0 < length (annots es) -> P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) es k0) ->
+        sc_exp_inv Γ Γl Γty Γtyl H b (Eapp f es er ann) k.
     Proof.
       intros * HwcG Hlen Hk' ? Hwt Hwc Hsem; simpl.
 
@@ -2269,21 +2392,23 @@ Module Type LCLOCKSEMANTICS
         eapply Hscnodes in H1; eauto. econstructor; eauto.
     Qed.
 
-    Lemma sc_exp' : forall env envty H b e k,
-        NoDupMembers env ->
+    Lemma sc_exp' : forall Γ Γl Γty Γtyl H b e k,
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
         wc_global G ->
-        wt_exp G envty e ->
-        wc_exp G (idck (idty env)) e ->
+        wt_exp G Γty Γtyl e ->
+        wc_exp G (idck (idty Γ)) (idck (idty Γl)) e ->
         k < numstreams e ->
-        (forall cx, Is_free_left (idcaus env) cx k e -> sc_var_inv env H b cx) ->
-        sc_exp_inv env envty H b e k.
+        (forall cx, Is_free_left (idcaus Γ) (idcaus Γl) cx k e -> sc_var_inv Γ Γl H b cx) ->
+        sc_exp_inv Γ Γl Γty Γtyl H b e k.
     Proof.
-      intros * Hnd Hsc Hwt Hwc Hnum Hfree.
+      intros * Hnd1 Hnd2 Hsc Hwt Hwc Hnum Hfree.
       eapply exp_causal_ind
-             with (cenv:=idcaus env0) (P_exp:=sc_exp_inv _ _ H b); eauto with lclocking; intros.
+             with (cenv:=idcaus Γ) (P_exp:=sc_exp_inv _ _ _ _ H b); eauto with lclocking; intros.
       - apply sc_exp_const.
       - apply sc_exp_enum.
       - eapply sc_exp_var; eauto.
+      - eapply sc_exp_last; eauto.
       - apply sc_exp_unop; auto.
       - apply sc_exp_binop; auto.
       - apply sc_exp_fby; auto.
@@ -2292,25 +2417,28 @@ Module Type LCLOCKSEMANTICS
       - eapply sc_exp_merge; eauto.
       - apply sc_exp_case; auto.
       - eapply sc_exp_app; eauto.
-      - eapply wc_exp_wx_exp in Hwc. rewrite map_fst_idck, map_fst_idty in Hwc. now rewrite map_fst_idcaus.
+      - eapply wc_exp_wx_exp in Hwc. rewrite 2 map_fst_idck, 2 map_fst_idty in Hwc. now rewrite 2 map_fst_idcaus.
     Qed.
 
-    Lemma sc_exp_equation : forall env envty H b xs es k cx,
+    Lemma sc_exp_equation : forall Γ Γl Γty Γtyl H b xs es k cx,
         wc_global G ->
-        NoDup (map snd (idcaus env)) ->
-        NoDupMembers env ->
+        NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
         k < length xs ->
-        wt_equation G envty (xs, es) ->
-        wc_equation G (idck (idty env)) (xs, es) ->
+        wt_equation G Γty Γtyl (xs, es) ->
+        wc_equation G (idck (idty Γ)) (idck (idty Γl)) (xs, es) ->
         Sem.sem_equation G H b (xs, es) ->
-        (forall cx, Is_free_left_list (idcaus env) cx k es -> sc_var_inv env H b cx) ->
-        In (nth k xs xH, cx) (idcaus env) ->
-        sc_var_inv env H b cx.
+        (forall cx, Is_free_left_list (idcaus Γ) (idcaus Γl) cx k es -> sc_var_inv Γ Γl H b cx) ->
+        In (nth k xs xH, cx) (idcaus Γ) ->
+        sc_var_inv Γ Γl H b cx.
     Proof.
-      intros * HwcG Hnd1 Hnd2 Hk Hwt Hwc Hsem Hexps Hin ??? Hin' Hvar.
+      intros * HwcG Hnd1 Hnd2 Hnd3 Hk Hwt Hwc Hsem Hexps Hin. split; intros ??? Hin' Hvar.
+      2:{ exfalso. simpl_In.
+          eapply NoDup_app_In; eauto; solve_In. }
       inv Hwt. inv Hsem.
       assert (x = nth k xs xH).
-      { eapply NoDup_snd_det; eauto. rewrite <-idck_idckcaus.
+      { eapply NoDup_snd_det; eauto using NoDup_app_l.
         solve_In. } subst.
       assert (xs0 ≡ nth k (concat ss) (def_stream b)) as Hequiv.
       { eapply Forall2_forall2 in H8 as [_ Hvar'].
@@ -2378,7 +2506,7 @@ Module Type LCLOCKSEMANTICS
           eapply NoDupMembers_det in HIn'; eauto. eapply NoDupMembers_idck, NoDupMembers_idty; eauto.
           clear HIn'. solve_In.
         }
-        assert (P_exps (sc_exp_inv env0 envty H b) es k) as Hexps'.
+        assert (P_exps (sc_exp_inv Γ Γl Γty Γtyl H b) es k) as Hexps'.
         { eapply Pexp_Pexps; eauto.
           - simpl_Forall. eapply sc_exp'; eauto.
           - eapply Forall2_length in H1. rewrite length_typesof_annots in H1. congruence.
@@ -2525,25 +2653,29 @@ Module Type LCLOCKSEMANTICS
         repeat rewrite const_nth in IHck. auto.
     Qed.
 
-    Lemma sc_var_inv_mask : forall env H b x r k,
-        sc_var_inv env H b x ->
-        sc_var_inv env (mask_hist k r H) (maskb k r b) x.
+    Lemma sc_var_inv_mask : forall Γ Γl H b x r k,
+        sc_var_inv Γ Γl H b x ->
+        sc_var_inv Γ Γl (Sem.mask_hist k r H) (maskb k r b) x.
     Proof.
-      intros * Hinv ??? Hin Hvar.
-      eapply sem_var_mask_inv in Hvar as (?&Hvar&Heq).
-      rewrite Heq, ac_mask.
-      eapply sem_clock_mask.
-      eapply Hinv; eauto.
+      intros * Hinv.
+      split; intros ??? Hin Hvar;
+        [destruct Hinv as (Hinv&_)|destruct Hinv as (_&Hinv)];
+        eapply sem_var_mask_inv in Hvar as (?&Hvar&Heq);
+        rewrite Heq, ac_mask;
+        eapply sem_clock_mask;
+        eapply Hinv; eauto.
     Qed.
 
-    Lemma sc_var_inv_unmask : forall env H b x r,
-      (forall k : nat, sc_var_inv env (mask_hist k r H) (maskb k r b) x) ->
-      sc_var_inv env H b x.
+    Lemma sc_var_inv_unmask : forall Γ Γl H b x r,
+      (forall k : nat, sc_var_inv Γ Γl (Sem.mask_hist k r H) (maskb k r b) x) ->
+      sc_var_inv Γ Γl H b x.
     Proof.
-      intros * Hinv ??? Hin Hvar.
-      eapply sem_clock_unmask with (r:=r). intros k.
-      rewrite <-ac_mask. eapply Hinv; eauto.
-      eapply sem_var_mask; eauto.
+      intros * Hinv. split; intros ??? Hin Hvar.
+      1,2:(eapply sem_clock_unmask with (r:=r); intros k;
+           specialize (Hinv k)).
+      destruct Hinv as (Hinv&_). 2:destruct Hinv as (_&Hinv).
+      1,2:(rewrite <-ac_mask; eapply Hinv; eauto;
+           eapply sem_var_mask; eauto).
     Qed.
 
     (** ** more `filter` properties *)
@@ -2574,28 +2706,54 @@ Module Type LCLOCKSEMANTICS
         rewrite ac_nth, Heqsc in Hsemck. apply IStr.sem_clock_instant_true_inv in Hsemck; auto.
       Qed.
 
+    (* Lemma sc_var_inv_filter : forall Γ Γl H b x r k, *)
+    (*     sc_var_inv Γ Γl H b x -> *)
+    (*     sc_var_inv (map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) Γ) *)
+    (*                (map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) Γl) *)
+    (*                (Sem.filter_hist k r H) (filterb k r b) x. *)
+    (* Proof. *)
+    (*   intros * Hinv. *)
+    (*   split; intros ??? Hin Hvar; *)
+    (*     [destruct Hinv as (Hinv&_)|destruct Hinv as (_&Hinv)]; *)
+    (*     eapply sem_var_filter_inv in Hvar as (?&Hvar&Heq); *)
+    (*     rewrite Heq, ac_filter; simpl_In. *)
+    (*     eapply sem_clock_filter. *)
+    (*     eapply Hinv; eauto. *)
+    (* Qed. *)
+
     Section sem_block_ck'.
 
-      Inductive sem_block_ck' (envP : list ident) : history -> Stream bool -> block -> Prop :=
+      Inductive sem_block_ck' (envP : list ident) : Sem.history -> Stream bool -> block -> Prop :=
       | Sckbeq : forall Hi bs eq,
           sem_equation G Hi bs eq ->
           sem_block_ck' envP Hi bs (Beq eq)
       | Sckreset : forall Hi bs blocks er sr r,
           sem_exp G Hi bs er [sr] ->
           bools_of sr r ->
-          (forall k, Forall (sem_block_ck' envP (mask_hist k r Hi) (maskb k r bs)) blocks) ->
+          (forall k, Forall (sem_block_ck' envP (Sem.mask_hist k r Hi) (maskb k r bs)) blocks) ->
           sem_block_ck' envP Hi bs (Breset blocks er)
       | Sckswitch : forall Hi bs ec branches sc,
           sem_exp G Hi bs ec [sc] ->
           wt_streams [sc] (typeof ec) ->
-          Forall (fun blks => Forall (sem_block_ck' envP (filter_hist (fst blks) sc Hi) (filterb (fst blks) sc bs)) (snd blks)) branches ->
-          slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) Hi (abstract_clock sc) ->
+          Forall (fun blks => Forall (sem_block_ck' envP (Sem.filter_hist (fst blks) sc Hi) (filterb (fst blks) sc bs)) (snd blks)) branches ->
+          slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) (fst Hi) (abstract_clock sc) ->
           sem_block_ck' envP Hi bs (Bswitch ec branches)
-      | Scklocal : forall Hi bs locs blocks Hl,
-          (forall x vs, sem_var Hl x vs -> ~(InMembers x locs) -> sem_var Hi x vs) ->
-          Forall (sem_block_ck' envP Hl bs) blocks ->
-          Forall (fun x => sc_var_inv locs (Env.union Hi Hl) bs x) envP ->
-          sem_block_ck' envP Hi bs (Blocal locs blocks).
+      | Scklocal : forall Hi Hl Hi' Hl' bs locs blocks,
+          (forall x vs, sem_var Hi' x vs -> ~(InMembers x locs) -> sem_var Hi x vs) ->
+          Env.refines (@EqSt _) Hl Hl' ->
+          (forall x ty ck cx e0 clx,
+              In (x, (ty, ck, cx, Some (e0, clx))) locs ->
+              exists vs0 vs1 vs,
+                sem_exp G (Hi', Hl') bs e0 [vs0]
+                /\ sem_var Hi' x vs1
+                /\ fby vs0 vs1 vs
+                /\ sem_var Hl' x vs) ->
+          Forall (sem_block_ck' envP (Hi', Hl') bs) blocks ->
+
+          Forall (fun x => sc_var_inv (idty locs)
+                                   (map_filter (fun '(x, (ty, ck, _, o)) => (option_map (fun '(_, cx) => (x, (ty, ck, cx))) o)) locs)
+                                   (Env.union Hi Hi', Hl') bs x) envP ->
+          sem_block_ck' envP (Hi, Hl) bs (Blocal locs blocks).
 
       Lemma sem_block_sem_block_ck' : forall blk Hi bs,
           sem_block G Hi bs blk ->
@@ -2612,7 +2770,7 @@ Module Type LCLOCKSEMANTICS
           econstructor; eauto.
           simpl_Forall; eauto.
         - (* locals *)
-          eapply Scklocal with (Hl:=H'); eauto.
+          econstructor; eauto.
           simpl_Forall; eauto.
       Qed.
 
@@ -2631,7 +2789,7 @@ Module Type LCLOCKSEMANTICS
           econstructor; eauto.
           simpl_Forall; eauto.
         - (* locals *)
-          eapply Sem.Slocal with (H':=Hl); eauto.
+          econstructor; eauto.
           simpl_Forall; eauto.
       Qed.
 
@@ -2658,43 +2816,45 @@ Module Type LCLOCKSEMANTICS
       Qed.
 
       Global Add Parametric Morphism envP : (sem_block_ck' envP)
-          with signature (Env.Equiv (@EqSt _) ==> eq ==> eq ==> Basics.impl)
+          with signature (history_equiv ==> eq ==> eq ==> Basics.impl)
             as sem_block_ck'_Equiv.
       Proof.
         intros Hi1 Hi2 HH bs blk. revert Hi1 Hi2 HH bs.
         induction blk using block_ind2; intros * HH * Hsem; inv Hsem.
         - (* equation *)
-          constructor. eapply Sem.sem_equation_refines; [|eauto].
-          now rewrite HH.
+          constructor. now rewrite <-HH.
         - (* reset *)
           econstructor; eauto.
-          + eapply Sem.sem_exp_refines; [|eauto]. now rewrite HH.
+          + now rewrite <-HH.
           + intros k. specialize (H6 k).
             simpl_Forall; eauto.
             eapply H; eauto.
-            eapply Env.map_Equiv; eauto.
-            intros ?? Heq. now rewrite Heq.
+            destruct HH as (HH1&HH2); split; unfold Sem.mask_hist.
+            now rewrite <-HH1. now rewrite <-HH2.
         - (* switch *)
           econstructor; eauto.
           + now rewrite <-HH.
           + simpl_Forall.
-            eapply H; eauto. now rewrite HH.
-          + intros ?? Hdef Hfind.
+            eapply H; eauto.
+            destruct HH as (HH1&HH2); split; unfold Sem.filter_hist.
+            now rewrite <-HH1. now rewrite <-HH2.
+          + intros ?? Hdef Hfind. destruct HH as (HH&_).
             rewrite Env.Equiv_orel in HH. specialize (HH x). rewrite Hfind in HH. inv HH.
             rewrite <-H4. eapply H7; eauto with lcsem.
         - (* locals *)
-          eapply Scklocal with (Hl:=Hl); eauto.
-          intros. rewrite <-HH; eauto.
-          eapply Forall_impl; [|eauto]; intros ? Hsc ??? Hin Hvar.
-          rewrite <-HH. eapply Hsc; eauto. rewrite HH; eauto.
+          destruct Hi2. econstructor. 4,3:eauto.
+          + intros. destruct HH as (HH&_). rewrite <-HH; eauto.
+          + destruct HH as (_&HH). rewrite <-HH; eauto.
+          + simpl_Forall. destruct HH as (HH1&HH2). destruct H8.
+            split; simpl in *; intros; rewrite <-HH1 in *; eauto.
       Qed.
 
-      Lemma sem_block_ck'_refines : forall envP blk xs H H' bs,
+      Lemma sem_block_ck'_refines : forall envP blk xs H H' Hl bs,
           VarsDefined blk xs ->
           NoDupLocals xs blk ->
           Env.refines (@EqSt _) H H' ->
-          sem_block_ck' envP H bs blk ->
-          sem_block_ck' envP H' bs blk.
+          sem_block_ck' envP (H, Hl) bs blk ->
+          sem_block_ck' envP (H', Hl) bs blk.
       Proof.
         induction blk using block_ind2; intros * Hvars Hnd Href Hsem;
           inv Hvars; inv Hnd; inv Hsem.
@@ -2725,35 +2885,37 @@ Module Type LCLOCKSEMANTICS
             rewrite Hmaps in Hfind'. inv Hfind'.
             rewrite <-Heq. eapply H11; eauto.
         - (* locals *)
-          econstructor; [|eauto|eauto]; eauto using sem_var_refines.
-          eapply Forall_impl; [|eauto]; intros ? Hsc ??? Hin Hv.
-          eapply sem_clock_refines, Hsc; eauto; simpl in *.
-          + intros ?? Hfind.
+          econstructor; [|eauto|eauto|eauto|eauto]; eauto using sem_var_refines.
+          assert (Env.refines (EqSt (A:=svalue)) (Env.union H0 Hi') (Env.union H' Hi')) as Href'.
+          { intros ?? Hfind.
             eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
             * eapply Href in Hfind1 as (v'&?&?). exists v'; split; auto.
               eapply Env.union_find2; eauto.
-            * exists v. split; try reflexivity. eapply Env.union_find3'; eauto.
-          + assert (Env.dom_lb Hl (map fst locs)) as Hdom.
-            { eapply Env.dom_lb_incl with (ys:=concat xs0). rewrite <-H5. apply incl_appl, incl_refl.
-              eapply Env.dom_lb_concat, Forall_forall; eauto; intros ? Hin'.
-              eapply Forall2_ignore1, Forall_forall in H3 as (?&?&?); eauto.
-              rewrite Forall_forall in *.
-              eapply sem_block_dom_lb; eauto using sem_block_ck'_sem_block.
-              eapply NoDupLocals_incl; eauto.
-              rewrite Permutation_app_comm, H5. eapply incl_concat; eauto. }
-            simpl_In.
-            eapply Env.dom_lb_use in Hdom as (?&Hfind); [|solve_In].
-            inv Hv. econstructor. eapply Env.union_find3'; eauto.
-            eapply Env.union_find3' with (m1:=H') in Hfind. rewrite H2 in Hfind.
-            now inv Hfind.
+            * exists v. split; try reflexivity. eapply Env.union_find3'; eauto. }
+          eapply Forall_impl; [|eauto]; intros ? (Hsc1&Hsc2); simpl in *.
+          split; intros ??? Hin Hv.
+          1,2:eapply sem_clock_refines; eauto. eapply Hsc1; eauto; simpl in *.
+          assert (Env.dom_lb Hi' (map fst locs)) as Hdom.
+          { eapply Env.dom_lb_incl with (ys:=concat xs0). rewrite <-H5. apply incl_appl, incl_refl.
+            eapply Env.dom_lb_concat, Forall_forall; eauto; intros ? Hin'.
+            eapply Forall2_ignore1, Forall_forall in H3 as (?&?&?); eauto.
+            rewrite Forall_forall in *.
+            eapply sem_block_dom_lb; eauto using sem_block_ck'_sem_block.
+            eapply NoDupLocals_incl; eauto.
+            rewrite Permutation_app_comm, H5. eapply incl_concat; eauto. }
+          simpl_In.
+          eapply Env.dom_lb_use in Hdom as (?&Hfind); [|solve_In].
+          inv Hv. econstructor. eapply Env.union_find3'; eauto.
+          eapply Env.union_find3' with (m1:=H') in Hfind. rewrite H2 in Hfind.
+          now inv Hfind.
       Qed.
 
-      Lemma sem_block_ck'_restrict : forall envP blk xs vars H bs,
+      Lemma sem_block_ck'_restrict : forall envP blk xs Γ Γl H Hl bs,
           VarsDefined blk xs ->
           NoDupLocals xs blk ->
-          wc_block G vars blk ->
-          sem_block_ck' envP H bs blk ->
-          sem_block_ck' envP (Env.restrict H (List.map fst vars)) bs blk.
+          wc_block G Γ Γl blk ->
+          sem_block_ck' envP (H, Hl) bs blk ->
+          sem_block_ck' envP (Env.restrict H (List.map fst Γ), Hl) bs blk.
       Proof with eauto with lclocking.
         induction blk using block_ind2; intros * Hvars Hnd Hwc Hsem;
           inv Hvars; inv Hnd; inv Hwc; inv Hsem.
@@ -2768,35 +2930,45 @@ Module Type LCLOCKSEMANTICS
             eapply Forall2_ignore2, Forall_forall in H4 as (?&?&?); eauto.
             eapply sem_block_ck'_Equiv; try eapply H; eauto.
             2:{ eapply NoDupLocals_incl; eauto. apply incl_concat; auto. }
-            now setoid_rewrite <-Env.restrict_map.
+            unfold Sem.mask_hist; simpl. split; try reflexivity. now setoid_rewrite <-Env.restrict_map.
         - (* switch *)
           econstructor; eauto.
           + eapply Sem.sem_exp_restrict...
-          + do 2 (eapply Forall_forall; intros).
-            simpl_Forall. inv_VarsDefined.
-            eapply sem_block_ck'_Equiv; try eapply H. 2-4,7:eauto. instantiate (1:=List.map (fun x => (fst x, Cbase)) vars).
+          + simpl_Forall. inv_VarsDefined.
+            eapply sem_block_ck'_Equiv; try eapply H. 2-4,7:eauto.
+            instantiate (1:=List.map (fun x => (fst x, Cbase)) Γ). 3:instantiate (1:=List.map (fun x => (fst x, Cbase)) Γl).
             2:{ eapply NoDupLocals_incl; eauto. take (Permutation _ _) and rewrite <-it. apply incl_concat; auto. }
             2:{ eapply wc_block_incl; eauto.
-                intros (?&?) Hin. eapply H10 in Hin as (Hin&?); subst.
-                solve_In. }
-            setoid_rewrite <-Env.restrict_map. rewrite map_map; simpl. reflexivity.
+                1,2:intros (?&?) Hin.
+                eapply H9 in Hin as (Hin&?); subst. solve_In.
+                eapply H12 in Hin as (Hin&?); subst. solve_In.
+            }
+            split; try reflexivity. setoid_rewrite <-Env.restrict_map. rewrite map_map; simpl. reflexivity.
           + intros ?? Hdef Hfind.
             apply Env.restrict_find_inv in Hfind as (?&?); eauto.
         - (* locals *)
-          eapply Scklocal with (Hl:=Env.restrict Hl (List.map fst vars ++ List.map fst locs)); eauto.
+          eapply Scklocal with (Hi':=Env.restrict Hi' (List.map fst Γ ++ List.map fst locs)); eauto.
           + intros ?? Hvar Hnin.
             eapply sem_var_restrict_inv in Hvar as (Hin&Hvar); eauto.
             eapply sem_var_restrict; eauto.
             apply in_app_iff in Hin as [Hin|Hin]; auto.
             exfalso. eapply Hnin, fst_InMembers; eauto.
-          + rewrite Forall_forall in *; intros.
-            eapply Forall2_ignore2, Forall_forall in H3 as (?&?&?); eauto.
-            rewrite <-map_fst_idty, <-map_fst_idck, <-map_app.
+          + intros * Hin. edestruct H16 as (?&?&?&?&?&?&?); eauto.
+            simpl_Forall.
+            do 3 esplit. repeat split; eauto.
+            * eapply Sem.sem_exp_restrict; eauto.
+              take (wc_exp G _ _ _) and apply wc_exp_wx_exp in it. simpl_app.
+              erewrite map_map, map_ext with (l:=locs) in it; eauto. intros; destruct_conjs; auto.
+            * eapply sem_var_restrict; eauto. apply in_or_app, or_intror; solve_In.
+          + simpl_Forall. inv_VarsDefined.
+            rewrite <-2 map_fst_idty, <-map_fst_idck, <-map_app.
             eapply H; eauto.
-            eapply NoDupLocals_incl; eauto.
-            rewrite Permutation_app_comm, H5. eapply incl_concat; eauto.
-          + rewrite Forall_forall in *. intros * ???? Hin Hvar.
-            assert (Env.dom_lb Hl (map fst locs)) as Hdom2.
+            * eapply NoDupLocals_incl; eauto.
+              rewrite Permutation_app_comm, H5. eapply incl_concat; eauto.
+            * unfold idck, idty. erewrite 2 map_map, map_ext; eauto.
+              intros; destruct_conjs; auto.
+          + rewrite Forall_forall in *. intros * Hinp.
+            assert (Env.dom_lb Hi' (map fst locs)) as Hdom2.
             { eapply Env.dom_lb_incl with (ys:=concat xs0); [rewrite <-H5; eapply incl_appl, incl_refl|].
               eapply Env.dom_lb_concat.
               rewrite Forall_forall in *. intros.
@@ -2807,32 +2979,42 @@ Module Type LCLOCKSEMANTICS
               rewrite Permutation_app_comm. reflexivity.
             }
             assert (Env.refines (@EqSt _)
-                                (Env.union (Env.restrict H0 (map fst vars)) (Env.restrict Hl (map fst vars ++ map fst locs)))
-                                (Env.union H0 Hl)).
+                                (Env.union (Env.restrict H0 (map fst Γ)) (Env.restrict Hi' (map fst Γ ++ map fst locs)))
+                                (Env.union H0 Hi')) as Href.
             { intros ?? Hfind.
               eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
               - eapply Env.restrict_find_inv in Hfind1 as (Hin'&Hfind1).
                 exists v. split; try reflexivity. eapply Env.union_find2; eauto.
-                destruct (Env.find x1 Hl) eqn:Hfind3; eauto.
+                destruct (Env.find x0 Hi') eqn:Hfind3; eauto.
                 eapply Env.restrict_find in Hfind3; try rewrite Hfind2 in Hfind3; try congruence.
                 apply in_or_app; auto.
               - eapply Env.restrict_find_inv in Hfind2 as (?&?).
                 exists v. split; try reflexivity; eauto using Env.union_find3'.
             }
-            eapply sem_var_refines, H14 in Hvar; eauto.
-            eapply sem_clock_refines'; [| |eauto].
-            * eapply H10. solve_In.
-            * intros ?? Hinm Hvar'. inv Hvar'.
-              { eapply Env.union_find4' in H12 as [(Hfind1&Hfind2)|Hfind2].
-                - apply InMembers_app in Hinm as [Hinm|Hinm].
-                  + econstructor; eauto.
-                    eapply Env.union_find2. eapply Env.restrict_find; eauto. eapply fst_InMembers; eauto.
-                    eapply Env.restrict_find_None; eauto.
-                  + exfalso. eapply Env.dom_lb_use in Hdom2 as (?&Hfind3).
-                    * rewrite Hfind3 in Hfind2. congruence.
-                    * now rewrite fst_InMembers, map_fst_idck, map_fst_idty in Hinm.
+            assert (forall x vs,
+                       In x (map fst (Γ ++ map (fun '(x, (_, ck, _, _)) => (x, ck)) locs)) ->
+                       sem_var (Env.union H0 Hi') x vs ->
+                       sem_var (Env.union (Env.restrict H0 (map fst Γ)) (Env.restrict Hi' (map fst Γ ++ map fst locs))) x vs) as Href'.
+            { intros ?? Hinm Hvar'. inv Hvar'.
+              eapply Env.union_find4' in H2 as [(Hfind1&Hfind2)|Hfind2].
+              - apply fst_InMembers, InMembers_app in Hinm as [Hinm|Hinm].
+                + econstructor; eauto.
+                  eapply Env.union_find2. eapply Env.restrict_find; eauto. eapply fst_InMembers; eauto.
+                  eapply Env.restrict_find_None; eauto.
+                + exfalso. eapply Env.dom_lb_use in Hdom2 as (?&Hfind3).
+                  * rewrite Hfind3 in Hfind2. congruence.
+                  * erewrite fst_InMembers, map_map, map_ext in Hinm; eauto.
+                    intros; destruct_conjs; auto.
                 - econstructor; eauto. eapply Env.union_find3', Env.restrict_find; eauto.
-                  now rewrite fst_InMembers, map_app, map_fst_idck, map_fst_idty in Hinm. }
+                  erewrite map_app, map_map, map_ext with (l:=locs) in Hinm; eauto.
+                  intros; destruct_conjs; auto. }
+            split; intros ??? Hin Hvar; simpl in *.
+            * edestruct H18 as (Hv&_); eauto. eapply sem_var_refines, Hv in Hvar; eauto.
+              eapply sem_clock_refines'; [| |eauto]; eauto.
+              eapply wc_clock_wx_clock, H13. solve_In.
+            * edestruct H18 as (_&Hv); eauto. eapply Hv in Hvar; eauto.
+              eapply sem_clock_refines'; [| |eauto]; eauto.
+              eapply wc_clock_wx_clock, H13. solve_In.
       Qed.
     End sem_block_ck'.
 
@@ -2861,53 +3043,140 @@ Module Type LCLOCKSEMANTICS
       rewrite 2 tr_Stream_nth, filterv_nth, Hpres, equiv_decb_refl; auto.
     Qed.
 
-    Lemma sc_block : forall envP blk env envty xs Hi bs y cy,
+    Fact sc_var_inv_local :
+      forall Γ Γl (locs : list (ident * (type * clock * ident * option (exp * ident)))) Hi Hl Hi' Hl' bs cx,
+        Forall
+          (fun x =>
+           wc_clock (idck (idty Γ) ++ map (fun '(x0, (_, ck, _, _)) => (x0, ck)) locs) (snd x))
+          (idck (idty (idty locs))) ->
+        Env.dom Hi (map fst Γ) ->
+        Env.dom_lb Hl (map fst Γl) ->
+        (forall x vs, sem_var Hi' x vs -> ~ InMembers x locs -> sem_var Hi x vs) ->
+        Env.refines (EqSt (A:=svalue)) Hl Hl' ->
+        Env.refines (EqSt (A:=svalue)) Hi (Env.union Hi (Env.restrict Hi' (map fst Γ ++ map fst locs))) ->
+        (In cx (map snd (idcaus Γ)) \/ In cx (map snd (idcaus Γl)) -> sc_var_inv Γ Γl (Hi, Hl) bs cx) ->
+        (In cx (map snd (idty (map (fun '(x, (_, _, cx0, o)) => (x, (cx0, option_map snd o))) locs))) \/
+         In (Some cx) (map snd (idck (map (fun '(x, (_, _, cx0, o)) => (x, (cx0, option_map snd o))) locs))) ->
+         sc_var_inv (idty locs)
+                    (map_filter (fun '(x0, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x0, (ty, ck, cx))) o) locs)
+                    (Env.union Hi Hi', Hl') bs cx) ->
+        sc_var_inv
+          (Γ ++ idty locs)
+          (Γl ++ map_filter (fun '(x0, (ty, ck, _, o)) => option_map (fun '(_, cx0) => (x0, (ty, ck, cx0))) o) locs)
+          (Env.union Hi (Env.restrict Hi' (map fst Γ ++ map fst locs)), Hl') bs cx.
+    Proof.
+      intros * Hwc Hdom1 Hdom2 Href1 Href2 Href3 Hsc1 Hsc2.
+      split; intros ??? Hin Hv; simpl_In.
+      1,2:apply in_app_iff in Hin0 as [Hin0|Hin0]; simpl_In.
+      - eapply sem_clock_refines; [eapply Href3|].
+        edestruct Hsc1 as (Hinv&_); eauto. left; solve_In.
+        eapply Hinv; eauto. solve_In.
+        eapply sem_var_refines''; [| |eauto|eauto].
+        2:eapply Env.dom_dom_lb; eauto. solve_In.
+      - edestruct Hsc2 as (Hinv&_). left; solve_In.
+        eapply sem_clock_refines', Hinv; eauto.
+        + eapply Forall_forall, wc_clock_wx_clock in Hwc; eauto.
+          2:solve_In. eauto.
+        + intros ?? Hin' Hv'. inv Hv'.
+          { eapply Env.union_find4' in H0 as [(Hfind1&Hfind2)|Hfind2].
+            - econstructor; eauto.
+              eapply Env.union_find2; eauto using Env.restrict_find_None.
+            - econstructor; eauto.
+              eapply Env.union_find3', Env.restrict_find; eauto.
+              erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in Hin'; eauto.
+              intros; destruct_conjs; auto.
+          }
+        + solve_In.
+        + eapply sem_var_refines; [|eauto]. intros ?? Hfind.
+          { eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
+            - destruct (Env.find x0 Hi') eqn:Hfind3.
+              + assert (v ≡ s).
+                { eapply sem_var_det with (H:=Hi). econstructor; eauto; reflexivity.
+                  eapply Href1; eauto. econstructor; eauto; reflexivity.
+                   intro contra. eapply Env.restrict_find in Hfind3. rewrite Hfind3 in Hfind2; congruence.
+                  rewrite in_app_iff, <-2 fst_InMembers; auto. }
+               do 2 esplit; eauto. eapply Env.union_find3'; eauto.
+              + do 2 esplit; try reflexivity.
+                eapply Env.union_find2; eauto.
+            - eapply Env.restrict_find_inv in Hfind2 as (?&?).
+              do 2 esplit; try reflexivity.
+              eapply Env.union_find3'; eauto. }
+      - eapply sem_clock_refines; [eapply Href3|].
+        edestruct Hsc1 as (_&Hinv); eauto. right; solve_In.
+        eapply Hinv; eauto. solve_In.
+        eapply sem_var_refines'; [|eauto|eauto].
+        eapply Env.dom_lb_use; eauto. solve_In.
+      - edestruct Hsc2 as (_&Hinv). right; solve_In.
+        eapply sem_clock_refines', Hinv; eauto.
+        + take (Forall (fun _ => wc_clock _ _) _) and eapply Forall_forall in it; eauto.
+          2:solve_In. simpl in *. eapply wc_clock_wx_clock in it; eauto.
+        + intros ?? Hin' Hv'. inv Hv'.
+          { eapply Env.union_find4' in H0 as [(Hfind1&Hfind2)|Hfind2].
+            - econstructor; eauto.
+              eapply Env.union_find2; eauto using Env.restrict_find_None.
+            - econstructor; eauto.
+              eapply Env.union_find3', Env.restrict_find; eauto.
+              erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in Hin'; eauto.
+              intros; destruct_conjs; auto.
+          }
+        + solve_In. auto.
+    Qed.
+
+    Lemma sc_block : forall envP blk xs Γ Γl Γty Γtyl Hi bs y cy,
         wc_global G ->
-        NoDup (map snd (idcaus (env ++ locals blk))) ->
-        NoDupMembers env ->
-        NoDupLocals (map fst env) blk ->
+        NoDup (map snd (idcaus Γ ++ idcaus Γl
+                               ++ idty (locals blk)
+                               ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk))) ->
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDupLocals (map fst Γ ++ map fst Γl) blk ->
+        (forall x ty ck ty' ck', In (x, (ty, ck)) (idty Γ) -> In (x, (ty', ck')) (idty Γl) -> ty = ty' /\ ck = ck') ->
         VarsDefined blk xs ->
-        incl xs (map fst env) ->
-        wt_block G envty blk ->
-        wc_env (idck (idty env)) ->
-        wc_block G (idck (idty env)) blk ->
+        incl xs (map fst Γ) ->
+        wt_block G Γty Γtyl blk ->
+        wc_env (idck (idty Γ)) ->
+        wc_block G (idck (idty Γ)) (idck (idty Γl)) blk ->
         sem_block_ck' envP Hi bs blk ->
-        Env.dom Hi (map fst env) ->
+        Env.dom (fst Hi) (map fst Γ) ->
+        Env.dom_lb (snd Hi) (map fst Γl) ->
         In y xs ->
-        In (y, cy) (idcaus env) ->
-        (forall cx, In cx (map snd (idcaus env)) -> depends_on (idcaus env) cy cx blk -> sc_var_inv env Hi bs cx) ->
-        (forall cx, In cx (map snd (idcaus (locals blk))) -> depends_on (idcaus env) cy cx blk -> In cx envP) ->
-        sc_var_inv env Hi bs cy.
+        In (y, cy) (idcaus Γ) ->
+        (forall cx, In cx (map snd (idcaus Γ)) \/ In cx (map snd (idcaus Γl)) ->
+               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> sc_var_inv Γ Γl Hi bs cx) ->
+        (forall cx, In cx (map snd (idty (locals blk))) \/ In (Some cx) (map snd (idck (locals blk))) ->
+               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> In cx envP) ->
+        sc_var_inv Γ Γl Hi bs cy.
     Proof.
       induction blk as [(xs&es)| | |] using block_ind2;
-        intros * HwG Hnd1 Hnd2 Hnd3 Hvars Hincl Hwt Henv Hwc Hsem Hdom Hinxs Hinenv Hsc HenvP;
-        inv Hnd3; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl in *.
+        intros * HwG Hnd1 Hnd2 Hnd3 Hnd4 Hcorres Hvars Hincl Hwt Henv Hwc Hsem Hdom Hdoml Hinxs Hinenv (* Hdef  *)Hsc HenvP;
+        inv Hnd4; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl in *.
+
       - (* equation *)
         assert (Hsem:=H4).
         eapply In_nth with (d:=xH) in Hinxs as (?&Hlen&Hnth); subst.
         eapply sc_exp_equation in Hsem; rewrite app_nil_r in *; eauto.
-        intros * Hfree ??? Hin Hvar.
+        1:now rewrite map_app in Hnd1.
+        intros * Hfree.
         eapply Hsc; eauto.
-        + clear - Hin. solve_In.
-        + constructor. repeat esplit; eauto.
+        + eapply Is_free_left_list_In_snd; eauto.
+        + econstructor; eauto.
           eapply nth_error_nth'; eauto.
+
       - (* reset *)
-        eapply in_concat in Hinxs as (?&Hin1&Hin2). inv_VarsDefined.
-        eapply Forall_forall in H; eauto.
+        eapply in_concat in Hinxs as (?&Hin1&Hin2). inv_VarsDefined. simpl_Forall.
         eapply sc_var_inv_unmask; eauto.
-        intros k. specialize (H14 k).
+        intros k. specialize (H14 k). simpl_Forall.
         eapply H with (bs:=maskb k r bs); eauto.
-        2-7:rewrite Forall_forall in *; try rewrite map_app, map_fst_idcaus; eauto.
         + clear - Hinblks Hnd1.
-          unfold idcaus in *. rewrite 2 map_app, 2 map_map in *.
-          eapply nodup_app_map_flat_map; eauto.
+          rewrite app_assoc in *. eapply NoDup_locals_inv; eauto.
         + etransitivity; eauto using incl_concat.
-        + eapply Env.dom_map in Hdom; eauto.
-        + intros ? Hin Hdep. eapply sc_var_inv_mask; eauto.
+        + unfold Sem.mask_hist. eapply Env.dom_map in Hdom; eauto.
+        + unfold Sem.mask_hist. eapply Env.dom_lb_map in Hdoml; eauto.
+        + intros ? Hin' Hdep. eapply sc_var_inv_mask; eauto.
           eapply Hsc; eauto. constructor; solve_Exists.
-        + intros ? Hin Hdep. eapply HenvP; eauto.
+        + intros ? Hin' Hdep. eapply HenvP; eauto.
           2:constructor; solve_Exists.
-          solve_In.
+          destruct Hin'; [left|right]; solve_In.
       - (* switch *)
         assert (Syn.Is_defined_in y (Bswitch ec branches)) as Hdef.
         { constructor.
@@ -2917,129 +3186,140 @@ Module Type LCLOCKSEMANTICS
           eapply VarsDefined_Is_defined in Hvd; eauto.
           2:{ inv H2. take (Forall _ (snd _)) and eapply Forall_forall in it; eauto.
               eapply NoDupLocals_incl; [|eauto]; simpl.
-              etransitivity; [|eauto]. rewrite <-Hperm. apply incl_concat; auto.
+              etransitivity; [|eauto using incl_appl]. rewrite <-Hperm. apply incl_concat; auto.
           }
           left. solve_Exists.
         }
-        intros ??? Hinx Hvx.
-        eapply NoDup_snd_det in Hinenv.
-        2:(rewrite idcaus_app, map_app in Hnd1; eauto using NoDup_app_l).
-        2:solve_In.
-        subst; simpl in *.
-        assert (Syn.Is_defined_in y (Bswitch ec branches)) as Hdef'.
-        { constructor.
-          inv H5; try congruence. destruct H0 as (?&Hvd&Hperm).
-          rewrite <-Hperm in Hinxs. apply in_concat in Hinxs as (?&Hin1&Hin2).
-          eapply Forall2_ignore1, Forall_forall in Hvd as (?&?&Hvd); eauto.
-          eapply VarsDefined_Is_defined in Hvd; eauto.
-          2:{ inv H2. take (Forall _ (snd _)) and eapply Forall_forall in it; eauto.
-              eapply NoDupLocals_incl; [|eauto]; simpl.
-              etransitivity; [|eauto]. rewrite <-Hperm. apply incl_concat; auto.
-          }
-          left. solve_Exists.
-        }
-        assert (ck0 = ck); subst.
-        { inv Hdef. rename H1 into Hdef. simpl_Exists.
-          - simpl_Forall.
-            eapply wc_block_Is_defined_in in Hdef; eauto.
-            eapply InMembers_In in Hdef as (ck'&Hin1).
-            simpl_In.
-            eapply H15 in Hin1 as (Hin'&_). simpl_In.
-            eapply NoDupMembers_det in Hin3. 3:eapply Hin2. inv Hin3; auto.
-            auto.
-        }
-        assert (sem_clock Hi bs ck (abstract_clock sc)) as Hsemck.
-        { assert (Hsem:=H14). eapply sc_exp' with (k:=0) in Hsem; eauto.
-          2:{ rewrite <-length_clockof_numstreams, H12; auto. }
-          2:{ intros ? Hisf. intros ??? Hin' Hv'.
-              simpl_In.
-              eapply Hsc; eauto. 1,3:clear - Hin0; solve_In.
+        assert (sem_clock (fst Hi) bs ck (abstract_clock sc)) as Hsemck.
+        { assert (Hsem:=H15). eapply sc_exp' with (Γ:=Γ) (k:=0) in Hsem; eauto.
+          2:{ rewrite <-length_clockof_numstreams, H10; auto. }
+          2:{ intros ? Hisf.
+              eapply Hsc; eauto.
+              - eapply Is_free_left_In_snd; eauto.
               - eapply DepOnSwitch2; eauto.
-                eapply Is_defined_in_Is_defined_in in Hdef. inv Hdef; eauto.
-                clear - Hin0. solve_In.
+                eapply Is_defined_in_Is_defined_in in Hdef. inv Hdef; eauto. solve_Exists.
+                auto.
           }
           take (clockof _ = [_]) and rewrite it in Hsem; simpl in *; auto.
         }
-        assert (Forall (fun e => sc_var_inv (List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) env0) (filter_hist e sc Hi) (filterb e sc bs) cy) (map fst branches)) as Hinv.
-        { rewrite Forall_map, Forall_forall; intros (?&blks) Hinbrs.
-          repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
-          destruct it3 as (?&Hvars&Hperm).
+        assert (Forall (fun e => sc_var_inv (map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) Γ)
+                                         (map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) Γl)
+                                         (Sem.filter_hist e sc Hi) (filterb e sc bs) cy) (map fst branches)) as Hinv.
+        { simpl_Forall. take (Permutation _ _) and rename it into Hperm.
           rewrite <-Hperm in Hinxs. eapply in_concat in Hinxs as (?&Hin1&Hin2).
-          eapply Forall2_ignore1, Forall_forall in Hvars as (?&Hinblk&?); eauto.
-          repeat (take (Forall _ blks) and eapply Forall_forall in it; eauto).
-          eapply it3 with (y:=y); eauto.
-          + clear - Hinbrs Hinblk Hnd1.
-            unfold idcaus in *. rewrite 2 map_app, 3 map_map in *.
-            do 2 (eapply nodup_app_map_flat_map; eauto).
-            eapply in_map_iff with (f:=snd); eauto.
-            repeat rewrite flat_map_concat_map in *.
-            erewrite map_map, map_ext; eauto. intros (?&(?&?)&?); auto.
-          + clear - Hinbrs Hinblk Hnd2.
-            unfold idty in *.
-            rewrite fst_NoDupMembers in *. erewrite map_map, map_ext; eauto.
-            intros (?&(?&?)&?); auto.
+          inv_VarsDefined. simpl_Forall.
+          eapply H with (y:=y); eauto.
+          + clear - H0 Hinblks Hnd1.
+            rewrite app_assoc in *. eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
+            unfold idcaus in *. erewrite 2 map_map, map_ext with (l:=Γ), map_ext with (l:=Γl); eauto.
+            1,2:intros; destruct_conjs; auto.
+          + eapply nodupmembers_map; eauto. intros; destruct_conjs; auto.
+          + eapply nodupmembers_map; eauto. intros; destruct_conjs; auto.
           + eapply NoDupLocals_incl; [|eauto].
-            erewrite map_map, map_ext. reflexivity.
-            intros (?&(?&?)&?); auto.
+            erewrite 2 map_map, map_ext with (l:=Γ), map_ext with (l:=Γl). reflexivity.
+            1,2:intros; destruct_conjs; auto.
+          + intros * Hin' Hinl'. simpl_In.
+            split; auto.
+            eapply Hcorres; solve_In.
           + erewrite map_map, map_ext.
             etransitivity; eauto. rewrite <-Hperm. apply incl_concat; auto.
-            intros (?&(?&?)&?); auto.
+            intros; destruct_conjs; auto.
           + eapply Forall_forall; intros ? Hin. simpl_In. constructor.
           + eapply wc_block_incl; eauto.
-            intros (?&?) Hin. eapply H15 in Hin as (Hin&?); subst.
-            solve_In.
+            * intros (?&?) Hin. eapply H14 in Hin as (Hin&?); subst.
+              solve_In.
+            * intros (?&?) Hin. eapply H17 in Hin as (Hin&?); subst.
+              solve_In.
           + eapply Env.dom_map; eauto.
-            erewrite map_map, map_ext; eauto. intros (?&(?&?)&?); auto.
+            erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+          + unfold Sem.filter_hist; simpl. setoid_rewrite <- Env.dom_lb_map; eauto.
+            erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           + solve_In.
-          + intros ?? Hdep. intros ??? Hin Hv.
-            simpl_In.
-            assert (c = ck); subst.
-            { eapply depends_on_In with (x:=x2) (env:=map fst env'), in_map_iff in Hdep as ((?&?)&?&Hin'); eauto with lclocking; simpl in *; subst.
-              - eapply H15 in Hin' as (Hin'&?); subst. simpl_In.
-                eapply NoDupMembers_det in Hin; eauto. inv Hin; auto.
-              - clear - Hinbrs Hinblk Hnd1.
-                unfold idcaus in *. rewrite 2 map_app, 3 map_map in *.
-                do 2 (eapply nodup_app_map_flat_map; eauto).
-                eapply in_map_iff with (f:=snd); do 2 esplit; eauto; auto.
-                repeat rewrite flat_map_concat_map in *. rewrite map_map in *.
-                erewrite map_ext; eauto. intros (?&(?&?)&?); auto.
-              - solve_In.
-              - eapply NoDupLocals_incl; [|eauto].
-                erewrite map_fst_idcaus, map_map, map_ext; eauto. reflexivity.
-                intros (?&(?&?)&?); auto.
+          + intros ?? Hdep.
+            assert (forall x, In (x, cx) (idcaus Γ ++ idcaus Γl) -> In x (map fst Γ') \/ In x (map fst Γl')) as Hgamma.
+            { intros. eapply depends_on_In in Hdep; eauto with lclocking.
+              - clear - H0 Hinblks Hnd1.
+                rewrite app_assoc in *. eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
+                unfold idcaus in *. erewrite 2 map_map, map_ext with (l:=Γ), map_ext with (l:=Γl); eauto.
+                1,2:intros; destruct_conjs; auto.
+              - rewrite in_app_iff in *. destruct H5; [left|right]; solve_In.
+              - erewrite 2 map_fst_idcaus, 2 map_map, map_ext, map_ext with (l:=Γl); eauto.
+                1,2:intros; destruct_conjs; auto. }
+            assert (forall x ty ck', In (x, (ty, ck', cx)) (Γ ++ Γl) -> ck' = ck) as Hgamma2.
+            { intros * Hing. rewrite <-idcaus_app in Hgamma.
+              edestruct Hgamma as [Hin|Hin]. solve_In.
+              1,2:simpl_In.
+              - eapply H14 in Hin0 as (?&?); simpl_In; subst.
+                apply in_app_iff in Hing as [Hing|Hing].
+                + eapply NoDupMembers_det in Hing; eauto. now inv Hing.
+                + symmetry. eapply Hcorres; solve_In.
+              - eapply H17 in Hin0 as (?&?); simpl_In; subst.
+                apply in_app_iff in Hing as [Hing|Hing].
+                + eapply Hcorres; solve_In.
+                + eapply NoDupMembers_det in Hing; eauto. now inv Hing.
             }
-            eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
-            eapply Hsc in Hv; eauto. 2,4:solve_In.
-            2:{ constructor. solve_Exists.
-                unfold idcaus in Hdep. erewrite map_map, map_ext in Hdep; eauto. intros (?&(?&?)&?); auto. }
-            eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
-            eapply sem_clock_filter; eauto.
-          + intros ?? Hdep. apply HenvP.
-            * solve_In.
+            split; intros ??? Hin Hv; simpl_In.
+            1,2:assert (c = ck) by (eapply Hgamma2; eauto using in_or_app); subst.
+            * eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
+              eapply Hsc in Hv; eauto. 2:left; solve_In. 3:solve_In.
+              2:{ constructor. solve_Exists.
+                  unfold idcaus in Hdep. erewrite 2 map_map, map_ext, map_ext with (l:=Γl) in Hdep; eauto.
+                  1,2:intros (?&(?&?)&?); auto. }
+              eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
+              eapply sem_clock_filter; eauto.
+            * eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
+              eapply Hsc in Hv; eauto. 2:right; solve_In. 3:solve_In.
+              2:{ constructor. solve_Exists.
+                  unfold idcaus in Hdep. erewrite 2 map_map, map_ext, map_ext with (l:=Γl) in Hdep; eauto.
+                  1,2:intros (?&(?&?)&?); auto. }
+              eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
+              eapply sem_clock_filter; eauto.
+          + intros ? Hin' Hdep. apply HenvP.
+            * destruct Hin'; [left|right]; solve_In.
             * constructor. solve_Exists.
-              unfold idcaus in Hdep. erewrite map_map, map_ext in Hdep; eauto. intros (?&(?&?)&?); auto.
+              unfold idcaus in Hdep. erewrite 2 map_map, map_ext, map_ext with (l:=Γl) in Hdep; eauto.
+              1,2:intros (?&(?&?)&?); auto.
         } clear H. rewrite H8 in Hinv.
+        split; intros * Hin' Hvx.
+        2:{ exfalso. simpl_app. simpl_In.
+            rewrite app_assoc in Hnd1. eapply NoDup_app_l, NoDup_app_In in Hnd1.
+            eapply Hnd1. 1,2:solve_In. }
+        assert (x = y); subst.
+        { simpl_In. simpl_app.
+          eapply NoDup_snd_det with (xs1:=idcaus Γ); eauto using NoDup_app_l. solve_In. clear Hin; solve_In. }
+        simpl_In. eapply NoDupMembers_det in Hin0; eauto. inv Hin0.
+        assert (c = ck); subst.
+        { inv Hdef. rename H0 into Hdef. simpl_Exists.
+          - simpl_Forall.
+            eapply wc_block_Is_defined_in in Hdef; eauto.
+            eapply InMembers_In in Hdef as (ck'&Hin').
+            simpl_In.
+            eapply H14 in Hin' as (Hin'&_). simpl_In.
+            eapply NoDupMembers_det in Hin; eauto. inv Hin; auto.
+        }
         assert (abstract_clock xs0 ≡ abstract_clock sc) as Heq. 2:rewrite Heq; auto.
         assert (Hv':=Hvx). inv Hv'. rewrite H1.
-        specialize (H21 _ _ Hdef H0). rewrite slower_nth in H21.
-        eapply ntheq_eqst; intros n. specialize (H21 n).
-        repeat rewrite ac_nth in *. destruct (sc # n) eqn:Heq.
-        + rewrite H21; auto.
-        + rewrite H6 in H17. apply Forall2_singl in H17.
-          eapply SForall_forall in H17. rewrite Heq in H17; inv H17.
-          eapply Forall_forall with (x:=v0) in Hinv. 2:eapply in_seq; lia.
+        specialize (H22 _ _ Hdef H0). rewrite slower_nth in H22.
+        eapply ntheq_eqst; intros n'. specialize (H22 n').
+        repeat rewrite ac_nth in *. destruct (sc # n') eqn:Heq.
+        + rewrite H22; auto.
+        + take (wt_streams _ _) and rename it into Hwts.
+          rewrite H6 in Hwts. apply Forall2_singl in Hwts.
+          eapply SForall_forall in Hwts. rewrite Heq in Hwts; inv Hwts.
+          eapply Forall_forall with (x:=v0) in Hinv. 2:eapply in_seq; simpl in *; lia.
           eapply sem_var_filter in Hvx. eapply Hinv in Hvx. instantiate (1:=Cbase) in Hvx.
           2:solve_In.
-          inv Hvx. eapply eqst_ntheq with (n:=n) in H17. rewrite H1 in H17.
+          inv Hvx. eapply eqst_ntheq with (n:=n') in H16. rewrite H1 in H16.
           rewrite ac_nth in *. rewrite filterb_nth, filterv_nth in *. repeat rewrite Heq in *; simpl in *.
-          repeat rewrite equiv_decb_refl in H17. rewrite <-H17.
-          eapply sem_clock_equiv in Hsemck. specialize (Hsemck n). repeat rewrite tr_Stream_nth in Hsemck.
+          repeat rewrite equiv_decb_refl in H16. rewrite <-H16.
+          eapply sem_clock_equiv in Hsemck. specialize (Hsemck n'). repeat rewrite tr_Stream_nth in Hsemck.
           rewrite ac_nth, Heq in Hsemck.
           eapply IStr.sem_clock_instant_true_inv in Hsemck; auto.
+
       - (* locals *)
         assert (In y (concat xs0)) as Hinxs0 by (rewrite <-H7; auto with datatypes).
         eapply in_concat in Hinxs0 as (?&Hin1&Hin2).
-        assert (Env.dom_lb Hl (map fst locs)) as Hdom2.
+        assert (Env.dom_lb Hi' (map fst locs)) as Hdom2.
         { eapply Env.dom_lb_incl with (ys:=concat xs0); [rewrite <-H7; eapply incl_appl, incl_refl|].
           eapply Env.dom_lb_concat.
           rewrite Forall_forall in *. intros. inv_VarsDefined.
@@ -3047,112 +3327,115 @@ Module Type LCLOCKSEMANTICS
           eapply NoDupLocals_incl; eauto.
           etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
           rewrite Permutation_app_comm.
-          eapply incl_app; [eapply incl_appl; eauto|solve_incl_app].
+          eapply incl_app; [eapply incl_appl, incl_appl; eauto|solve_incl_app].
         }
-        inv_VarsDefined.
-        eapply Forall_forall in H; eauto.
-        assert (Env.refines (EqSt (A:=svalue)) Hi
-                              (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs)))) as Href2.
-        { intros ?? Hfind. destruct (Env.find x0 (Env.restrict Hl (map fst env0 ++ map fst locs))) eqn:Hfind'.
+        inv_VarsDefined. simpl_Forall.
+        assert (Env.refines (EqSt (A:=svalue)) Hi0
+                              (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)))) as Href2.
+        { intros ?? Hfind. destruct (Env.find x0 (Env.restrict Hi' (map fst Γ ++ map fst locs))) eqn:Hfind'.
           - exists s. split; eauto using Env.union_find3'.
             eapply sem_var_det; [now econstructor; try eapply Hfind|].
-            eapply H8; eauto.
+            eapply H6; eauto.
             + eapply sem_var_restrict_inv. now econstructor; eauto.
             + intros contra. eapply H5; eauto.
+              apply in_or_app; left.
               eapply Env.dom_use; eauto. econstructor; eauto.
           - exists v. split; try reflexivity.
             eapply Env.union_find2; eauto. }
-        assert (sc_var_inv (env0 ++ locs)
-                           (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs))) bs cy) as Hsc'.
-        { assert (Env.refines (EqSt (A:=svalue)) (Env.restrict Hl (map fst (env0 ++ locs)))
-                              (Env.union Hi (Env.restrict Hl (map fst (env0 ++ locs))))) as Href1.
+        assert (sc_var_inv (Γ ++ idty locs)
+                           (Γl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)
+                           (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)), Hl') bs cy) as Hsc'.
+        { assert (Env.refines (EqSt (A:=svalue)) (Env.restrict Hi' (map fst Γ ++ map fst locs))
+                              (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)))) as Href1.
           { intros ?? Hfind. exists v. split; try reflexivity.
             eapply Env.union_find3'; eauto. }
-          eapply H with (envty:=envty++idty (idty locs)); eauto.
+          eapply H with (Γty:=Γty++idty (idty (idty locs))); eauto.
           - clear - Hinblks Hnd1.
-            rewrite app_assoc, idcaus_app, map_app in Hnd1. rewrite idcaus_app, map_app.
-            unfold idcaus in *. rewrite 2 map_map in *.
-            eapply nodup_app_map_flat_map; eauto.
+            rewrite app_assoc in *. eapply NoDup_locals_inv; eauto. simpl_app. rewrite map_filter_app in Hnd1. simpl_app.
+            rewrite map_map_filter, map_map with (l:=locs).
+            erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd1.
+            eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
+            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
           - clear - Hnd2 Hinblks H4 H5.
-            apply NoDupMembers_app; auto.
+            apply NoDupMembers_app; auto. now rewrite NoDupMembers_idty.
+            intros * Hinm contra. rewrite fst_InMembers in Hinm. rewrite InMembers_idty in contra.
+            eapply H5; eauto using in_or_app.
+          - clear - Hnd3 Hinblks H4 H5.
+            apply NoDupMembers_app; auto. apply nodupmembers_map_filter; auto.
+            1:intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto.
             intros * Hinm contra. rewrite fst_InMembers in Hinm.
-            eapply H5; eauto.
-          - rewrite Forall_forall in *. rewrite map_app; eauto.
-          - rewrite map_app.
+            apply fst_InMembers in contra. simpl_In.
+            eapply H5; eauto using In_InMembers. apply in_or_app; right; solve_In.
+          - eapply NoDupLocals_incl; eauto. simpl_app. apply incl_appr'.
+            rewrite Permutation_app_comm. simpl_app. apply incl_appr', incl_app; intros ? Hin.
+            1,2:solve_In.
+          - intros * Hin1' Hin2'. simpl_In. rewrite in_app_iff in Hin0, Hin. destruct Hin0, Hin; simpl_In.
+            + eapply Hcorres; solve_In.
+            + exfalso.
+              eapply H5; eauto using In_InMembers. apply in_or_app, or_introl. solve_In.
+            + exfalso.
+              eapply H5; eauto using In_InMembers. apply in_or_app, or_intror. solve_In.
+            + eapply NoDupMembers_det in Hin; eauto. now inv Hin.
+          - rewrite map_app, map_fst_idty.
             etransitivity; eauto using incl_concat.
             rewrite <-H7, Permutation_app_comm.
             apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; eauto.
-          - rewrite Forall_forall in *; eauto.
+          - unfold idty. erewrite 2 map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - rewrite idty_app, idck_app. eapply Forall_app; split; eauto.
             + eapply Forall_impl; [|eauto]; intros; simpl in *.
               eapply wc_clock_incl; [|eauto]. solve_incl_app.
-            + rewrite Forall_map in H12. eapply Forall_impl; [|eauto]; eauto.
-          - rewrite idty_app, idck_app. rewrite Forall_forall in *; eauto.
+            + simpl_Forall. eapply wc_clock_incl; [|eauto]. apply incl_appr'.
+              unfold idck, idty. erewrite 2 map_map, map_ext; try reflexivity.
+              intros; destruct_conjs; auto.
+          - repeat rewrite idty_app, idck_app. clear - H11.
+            unfold idck, idty. erewrite 2 map_map with (l:=locs), map_ext with (l:=locs), 2 map_map_filter, map_filter_ext; eauto.
+            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
           - rewrite Forall_forall in *.
             assert (NoDupLocals x blk) as Hndl.
             { eapply NoDupLocals_incl; [|eauto].
               etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
-              rewrite Permutation_app_comm. apply incl_appl'; auto. }
+              rewrite Permutation_app_comm. apply incl_appl', incl_appl; auto. }
             eapply sem_block_ck'_refines, sem_block_ck'_restrict; eauto.
-            rewrite map_app, 2 map_fst_idck, 2 map_fst_idty, <-map_app; auto.
-          - rewrite map_app.
+            erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs); eauto.
+            intros; destruct_conjs; auto.
+          - rewrite map_app, map_fst_idty.
             eapply union_dom_ub_dom_lb_dom; eauto using Env.restrict_dom_ub.
             eapply Env.dom_lb_restrict_dom_lb; [eapply incl_appr, incl_refl|eauto].
+          - simpl. rewrite map_app. apply Env.dom_lb_app'; eauto using Env.dom_lb_refines.
+            apply Env.dom_lb_intro. intros ? Hin. simpl_In.
+            edestruct H12 as (?&?&?&?&?&?&?); eauto using sem_var_In.
           - rewrite idcaus_app, in_app_iff; auto.
-          - intros ? _ Hdep ??? Hin Hv. simpl_In.
-            apply in_app_iff in Hin0 as [Hin0|Hin0].
-            + eapply sem_clock_refines; [eapply Href2|].
-              eapply Hsc; eauto. 1,3:solve_In.
-              * rewrite idcaus_app in Hdep.
-                constructor. solve_Exists.
-              * eapply sem_var_refines''; [| |eauto|eauto].
-                2:eapply Env.dom_dom_lb; eauto. solve_In.
-            + eapply Forall_forall in H16.
-              eapply sem_clock_refines', H16; eauto.
-              * eapply Forall_forall in H12; eauto. solve_In.
-              * intros ?? Hin' Hv'. inv Hv'.
-                { eapply Env.union_find4' in H1 as [(Hfind1&Hfind2)|Hfind2].
-                  - econstructor; eauto.
-                    eapply Env.union_find2; eauto using Env.restrict_find_None.
-                  - econstructor; eauto.
-                    eapply Env.union_find3', Env.restrict_find; eauto.
-                    now rewrite fst_InMembers, map_app, 2 map_fst_idck, 2 map_fst_idty in Hin'.
-                }
-              * solve_In.
-              * eapply sem_var_refines; [|eauto]. intros ?? Hfind.
-                { eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
-                  - destruct (Env.find x1 Hl) eqn:Hfind3.
-                    + assert (v ≡ s).
-                      { eapply sem_var_det with (H:=Hi). econstructor; eauto; reflexivity.
-                        eapply H8; eauto. econstructor; eauto; reflexivity.
-                        intro contra. eapply Env.restrict_find in Hfind3. rewrite Hfind3 in Hfind2; congruence.
-                        rewrite in_app_iff, <-2 fst_InMembers; auto. }
-                      do 2 esplit; eauto. eapply Env.union_find3'; eauto.
-                    + do 2 esplit; try reflexivity.
-                      eapply Env.union_find2; eauto.
-                  - eapply Env.restrict_find_inv in Hfind2 as (?&?).
-                    do 2 esplit; try reflexivity.
-                    eapply Env.union_find3'; eauto. }
-              * eapply HenvP.
-                -- rewrite idcaus_app, map_app, in_app_iff. left. solve_In.
-                -- constructor. solve_Exists.
-                   rewrite idcaus_app in Hdep; eauto.
+          - intros ? _ Hdep.
+            assert (depends_on (idcaus Γ) (idcaus Γl) cy cx (Blocal locs blocks)) as Hdep'.
+            { econstructor; eauto. solve_Exists.  clear - Hdep. simpl_app.
+              erewrite map_map, map_ext with (l:=locs), map_map_filter, map_filter_ext in Hdep; eauto.
+              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto. }
+            eapply sc_var_inv_local; eauto.
+            intros Hin. eapply Forall_forall in H20; eauto. eapply HenvP; eauto.
+            clear - Hin. simpl_app. rewrite 2 in_app_iff.
+            destruct Hin; auto.
+
           - intros * Hin Hdep. apply HenvP.
-            eapply incl_map; eauto. apply incl_map, incl_appr. intros ??; apply in_flat_map; eauto.
-            constructor. solve_Exists.
-            rewrite idcaus_app in Hdep; eauto.
+            + clear - Hinblks Hin. simpl_app. repeat rewrite in_app_iff.
+              destruct Hin; [left;right|right;right]; solve_In.
+            + econstructor; eauto. solve_Exists. clear - Hdep. simpl_app.
+              erewrite map_map, map_ext with (l:=locs), map_map_filter, map_filter_ext in Hdep; eauto.
+              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
         }
-        intros ??? Hin3 Hv. simpl_In.
-        eapply sem_var_refines, Hsc' in Hv; eauto.
-        2:{ eapply in_map_iff; do 2 esplit; eauto using in_or_app. reflexivity. }
-        eapply sem_clock_refines_iff; try eapply Env.dom_dom_lb; eauto.
-        intros * Hfree. rewrite <-map_fst_idty, <-map_fst_idck, <-fst_InMembers.
-        eapply wc_clock_is_free_in; [|eauto]. eapply wc_env_var; eauto.
-        solve_In.
+        split; intros ??? Hin3 Hv; simpl_In.
+        + destruct Hsc' as (Hsc'&_). eapply sem_var_refines, Hsc' in Hv; eauto.
+          2:{ eapply in_map_iff; do 2 esplit; eauto using in_or_app. reflexivity. }
+          eapply sem_clock_refines_iff; try eapply Env.dom_dom_lb; eauto.
+          intros * Hfree. rewrite <-map_fst_idty, <-map_fst_idck, <-fst_InMembers.
+          eapply wc_clock_is_free_in; [|eauto]. eapply wc_env_var; eauto.
+          solve_In.
+        + exfalso. rewrite app_assoc, 2 map_app in Hnd1. eapply NoDup_app_l, NoDup_app_In in Hnd1; eauto.
+          eapply Hnd1. 1,2:solve_In.
     Qed.
 
+
     Fact sem_block_ck'_cons_nIn : forall envP x blk Hi bs,
-        ~In x (map snd (idcaus (locals blk))) ->
+        ~In x (map snd (idty (locals blk)) ++ map_filter (fun '(_, (_, o)) => o) (locals blk)) ->
         sem_block_ck' envP Hi bs blk ->
         sem_block_ck' (x::envP) Hi bs blk.
     Proof.
@@ -3164,137 +3447,179 @@ Module Type LCLOCKSEMANTICS
         econstructor; eauto.
         intros k. specialize (H6 k).
         rewrite Forall_forall in *; intros. eapply H; eauto.
-        contradict Hnin. solve_In.
+        contradict Hnin. rewrite in_app_iff in *.
+        destruct Hnin as [|]; [left|right]; solve_In. auto.
       - (* switch *)
         econstructor; eauto.
         simpl_Forall.
         eapply H; eauto.
-        contradict Hnin. solve_In.
+        contradict Hnin. rewrite in_app_iff in *.
+        destruct Hnin as [|]; [left|right]; solve_In. auto.
       - (* locals *)
         econstructor; eauto.
         + rewrite Forall_forall in *; intros. eapply H; eauto.
-          contradict Hnin. eapply incl_map; eauto. apply incl_map, incl_appr.
-          intros ??. solve_In.
+          contradict Hnin. simpl_app. repeat rewrite in_app_iff in *.
+          destruct Hnin as [|]; simpl_In.
+          * right; left. solve_In.
+          * right; right; right. solve_In. auto.
         + constructor; auto.
-          intros ??? Hin. exfalso.
-          eapply Hnin. rewrite idcaus_app, map_app, in_app_iff. left.
-          solve_In.
+          split; intros ??? Hin; exfalso; eapply Hnin; simpl_In;
+            simpl_app; repeat rewrite in_app_iff.
+          * left; solve_In.
+          * right; right; left. solve_In. auto.
     Qed.
 
-    Lemma sem_block_ck'_cons_In : forall envP blk env envty xs Hi bs y cy,
+    Lemma sem_block_ck'_cons_In : forall envP blk Γ Γl Γty Γtyl xs Hi bs y cy,
         wc_global G ->
-        NoDup (map snd (idcaus (env ++ locals blk))) ->
-        NoDupMembers env ->
-        NoDupLocals (map fst env) blk ->
+        NoDup
+         (map snd
+            (idcaus Γ ++
+             idcaus Γl ++
+             idty (locals blk) ++
+             map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (locals blk))) ->
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDupLocals (map fst Γ ++ map fst Γl) blk ->
+        (forall x ty ck ty' ck', In (x, (ty, ck)) (idty Γ) -> In (x, (ty', ck')) (idty Γl) -> ty = ty' /\ ck = ck') ->
         VarsDefined blk xs ->
-        incl xs (map fst env) ->
-        wt_block G envty blk ->
-        wc_env (idck (idty env)) ->
-        wc_block G (idck (idty env)) blk ->
+        incl xs (map fst Γ) ->
+        wt_block G Γty Γtyl blk ->
+        wc_env (idck (idty Γ)) ->
+        wc_block G (idck (idty Γ)) (idck (idty Γl)) blk ->
         sem_block_ck' envP Hi bs blk ->
-        Env.dom Hi (map fst env) ->
-        In (y, cy) (idcaus (locals blk)) ->
-        (forall cx, In cx (map snd (idcaus env)) -> depends_on (idcaus env) cy cx blk -> sc_var_inv env Hi bs cx) ->
-        (forall cx, In cx (map snd (idcaus (locals blk))) -> depends_on (idcaus env) cy cx blk -> In cx envP) ->
+        Env.dom (fst Hi) (map fst Γ) ->
+        Env.dom_lb (snd Hi) (map fst Γl) ->
+        In (y, cy) (idty (locals blk)) \/ In (y, cy) (map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk)) ->
+        (forall cx, In cx (map snd (idcaus Γ)) \/ In cx (map snd (idcaus Γl)) ->
+               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> sc_var_inv Γ Γl Hi bs cx) ->
+        (forall cx, In cx (map snd (idty (locals blk))) \/ In (Some cx) (map snd (idck (locals blk))) ->
+               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> In cx envP) ->
         sem_block_ck' (cy::envP) Hi bs blk.
     Proof.
       induction blk as [(xs&es)| | |] using block_ind2;
-        intros * HwG Hnd1 Hnd2 Hnd3 Hvars Hincl Hwt Hwenv Hwc Hsem Hdom Hinenv Hsc HenvP;
-        inv Hnd3; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl in *.
+        intros * HwG Hnd1 Hnd2 Hnd3 Hnd4 Hcorres Hvars Hincl Hwt Hwenv Hwc Hsem Hdom Hdoml Hinenv Hsc HenvP;
+        inv Hnd4; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl in *.
       - (* equation *)
-        inv Hinenv.
+        destruct Hinenv as [Hinenv|Hinenv]; inv Hinenv.
+
       - (* reset *)
         econstructor; eauto. intros k. specialize (H14 k).
-        eapply Forall2_ignore2 in H4.
-        rewrite Forall_forall in *; intros * Hinblk.
-        destruct (in_dec ident_eq_dec cy (map snd (idcaus (locals x)))).
+        eapply Forall2_ignore2 in H4. simpl_Forall.
+        destruct (in_dec ident_eq_dec cy (map snd (idty (locals x)) ++ map_filter (fun '(_, (_, o)) => o) (locals x))).
         2:eapply sem_block_ck'_cons_nIn; eauto. simpl_In.
-        edestruct H4 as (?&Hinvars&Hvars'); eauto.
-        eapply H with (env:=env0); eauto. 4:solve_In.
-        + clear - Hinblk Hnd1.
-          unfold idcaus in *. rewrite 2 map_app, 2 map_map in *.
-          eapply nodup_app_map_flat_map; eauto.
+        assert (exists y, In (y, cy) (idty (locals x)) \/ In (y, Some cy) (idck (locals x))) as (?&Hin).
+        { apply in_app_iff in i as [|]; simpl_In; esplit; [left|right]; solve_In. } clear i.
+        eapply H with (Γ:=Γ); eauto.
+        + clear - H0 Hnd1. rewrite app_assoc in *.
+          eapply NoDup_locals_inv; eauto.
         + etransitivity; eauto using incl_concat.
         + eapply Env.dom_map; eauto.
+        + unfold Sem.mask_hist; simpl. setoid_rewrite <-Env.dom_lb_map; eauto.
+        + destruct Hin; [left|right]; solve_In.
         + intros * ? Hdep.
           eapply sc_var_inv_mask, Hsc; eauto.
           constructor. solve_Exists.
-        + intros * ? Hdep. apply HenvP. solve_In.
+        + intros * ? Hdep. apply HenvP. destruct H9; [left|right]; solve_In.
           constructor. solve_Exists.
+
       - (* switch *)
         econstructor; eauto. simpl_Forall. inv_VarsDefined.
-        destruct (in_dec ident_eq_dec cy (map snd (idcaus (locals a)))).
-        2:eapply sem_block_ck'_cons_nIn; eauto.
-        simpl_In.
-        rename H0 into Hinbrs. rename H19 into Hinblk. rename Hin into Hinx. take (Permutation _ _) and rename it into Hperm.
-        eapply H with (env:=(List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) env0)); eauto.
-        + clear - Hinbrs Hinblk Hnd1.
-          unfold idcaus in *. rewrite 2 map_app, 3 map_map in *.
-          do 2 (eapply nodup_app_map_flat_map; eauto).
-          eapply in_map_iff with (f:=snd); eauto. solve_In.
-          repeat rewrite flat_map_concat_map in *.
-          erewrite map_map, map_ext; eauto. intros (?&(?&?)&?); auto.
-        + clear - Hinbrs Hinblk Hnd2.
-          unfold idty in *.
-          rewrite fst_NoDupMembers in *. erewrite map_map, map_ext; eauto.
-          intros (?&(?&?)&?); auto.
+        destruct (in_dec ident_eq_dec cy (map snd (idty (locals x0)) ++ map_filter (fun '(_, (_, o)) => o) (locals x0))).
+        2:eapply sem_block_ck'_cons_nIn; eauto. simpl_In.
+        assert (exists y, In (y, cy) (idty (locals x0)) \/ In (y, Some cy) (idck (locals x0))) as (?&Hinx).
+        { apply in_app_iff in i0 as [|]; simpl_In; esplit; [left|right]; solve_In. } clear i0.
+        rename H0 into Hinbrs. rename H19 into Hinblks. take (Permutation _ _) and rename it into Hperm.
+        eapply H with (Γ:=(List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) Γ))
+                      (Γl:=(List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) Γl)); eauto.
+        + clear - Hinbrs Hinblks Hnd1.
+          rewrite app_assoc in *. eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
+          unfold idcaus in *. erewrite 2 map_map, map_ext with (l:=Γ), map_ext with (l:=Γl); eauto.
+          1,2:intros; destruct_conjs; auto.
+        + eapply nodupmembers_map; eauto. intros; destruct_conjs; auto.
+        + eapply nodupmembers_map; eauto. intros; destruct_conjs; auto.
         + eapply NoDupLocals_incl; [|eauto].
-          erewrite map_map, map_ext. reflexivity.
-          intros (?&(?&?)&?); auto.
+          erewrite 2 map_map, map_ext with (l:=Γ), map_ext with (l:=Γl). reflexivity.
+          1,2:intros; destruct_conjs; auto.
+        + intros * Hin' Hinl'. simpl_In.
+          split; auto.
+          eapply Hcorres; solve_In.
         + erewrite map_map, map_ext.
           etransitivity; eauto. rewrite <-Hperm. apply incl_concat; auto.
-          intros (?&(?&?)&?); auto.
-        + eapply Forall_forall; intros ? Hin. unfold idty, idck in Hin.
-          simpl_In. constructor.
+          intros; destruct_conjs; auto.
+        + eapply Forall_forall; intros ? Hin. simpl_In. constructor.
         + eapply wc_block_incl; eauto.
-          intros (?&?) Hin. eapply H15 in Hin as (Hin&?); subst. solve_In.
+          * intros (?&?) Hin. eapply H14 in Hin as (Hin&?); subst.
+            solve_In.
+          * intros (?&?) Hin. eapply H17 in Hin as (Hin&?); subst.
+            solve_In.
         + eapply Env.dom_map; eauto.
-          erewrite map_map, map_ext; eauto. intros (?&(?&?)&?); auto.
-        + solve_In.
-        + intros ?? Hdep. intros ??? Hin Hv.
-          unfold idckcaus in Hin. simpl_In.
-          assert (c1 = ck); subst.
-          { eapply depends_on_In with (x:=x2) (env:=map fst env'), in_map_iff in Hdep as ((?&?)&?&Hin'); eauto with lclocking; simpl in *; subst.
-            - eapply H15 in Hin' as (Hin'&?); subst. simpl_In.
-              eapply NoDupMembers_det in Hin; eauto. inv Hin; auto.
-            - clear - Hinbrs Hinblk Hnd1.
-              unfold idcaus in *. rewrite 2 map_app, 3 map_map in *.
-              do 2 (eapply nodup_app_map_flat_map; eauto).
-              eapply in_map_iff with (f:=snd); do 2 esplit; eauto; auto.
-              repeat rewrite flat_map_concat_map in *. rewrite map_map in *.
-              erewrite map_ext; eauto. intros (?&(?&?)&?); auto.
-            - solve_In.
-            - eapply NoDupLocals_incl; [|eauto].
-              erewrite map_fst_idcaus, map_map, map_ext; eauto. reflexivity.
-              intros (?&(?&?)&?); auto.
+          erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+        + unfold Sem.filter_hist; simpl. setoid_rewrite <- Env.dom_lb_map; eauto.
+          erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+        + destruct Hinx; eauto. right. solve_In.
+        + intros ?? Hdep.
+          assert (forall x, In (x, cx) (idcaus Γ ++ idcaus Γl) -> In x (map fst Γ') \/ In x (map fst Γl')) as Hgamma.
+          { intros. eapply depends_on_In in Hdep; eauto with lclocking.
+            - clear - Hinbrs Hinblks Hnd1.
+              rewrite app_assoc in *. eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
+              unfold idcaus in *. erewrite 2 map_map, map_ext with (l:=Γ), map_ext with (l:=Γl); eauto.
+              1,2:intros; destruct_conjs; auto.
+            - rewrite in_app_iff in *. destruct H1; [left|right]; solve_In.
+            - erewrite 2 map_fst_idcaus, 2 map_map, map_ext, map_ext with (l:=Γl); eauto.
+              1,2:intros; destruct_conjs; auto. }
+          assert (forall x ty ck', In (x, (ty, ck', cx)) (Γ ++ Γl) -> ck' = ck) as Hgamma2.
+          { intros * Hing. rewrite <-idcaus_app in Hgamma.
+            edestruct Hgamma as [Hin|Hin]. solve_In.
+            1,2:simpl_In.
+            - eapply H14 in Hin0 as (?&?); simpl_In; subst.
+              apply in_app_iff in Hing as [Hing|Hing].
+              + eapply NoDupMembers_det in Hing; eauto. now inv Hing.
+              + symmetry. eapply Hcorres; solve_In.
+            - eapply H17 in Hin0 as (?&?); simpl_In; subst.
+              apply in_app_iff in Hing as [Hing|Hing].
+              + eapply Hcorres; solve_In.
+              + eapply NoDupMembers_det in Hing; eauto. now inv Hing.
           }
-          eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
-          eapply Hsc in Hv; eauto. 2,4:solve_In.
-          2:{ constructor. solve_Exists.
-              unfold idcaus in Hdep. erewrite map_map, map_ext in Hdep; eauto. intros (?&(?&?)&?); auto. }
-          assert (sem_clock Hi bs ck (abstract_clock sc)) as Hsemck.
-          { assert (Hsem:=H14). eapply sc_exp' with (k:=0) in Hsem; eauto.
-            2:{ rewrite <-length_clockof_numstreams, H12; auto. }
-            2:{ intros ? Hisf. intros ??? Hin' Hv'. simpl_In.
-                eapply sem_clock_refines, Hsc; eauto with env.
-                1,3:repeat (eapply in_map_iff; do 2 esplit; eauto with datatypes); auto. simpl.
+
+          assert (sem_clock (fst Hi) bs ck (abstract_clock sc)) as Hsemck.
+          { assert (Hsem:=H15). eapply sc_exp' with (Γ:=Γ) (k:=0) in Hsem; eauto.
+            2:{ rewrite <-length_clockof_numstreams, H10; auto. }
+            2:{ intros ? Hisf.
+                eapply Hsc; eauto.
+                - eapply Is_free_left_In_snd; eauto.
                 - eapply DepOnSwitch2; eauto. solve_Exists.
-                  eapply In_Is_defined_in; eauto using in_or_app. 4:reflexivity.
-                  + apply in_or_app; right. solve_In.
+                  destruct Hinx; [left|right]. eapply In_Is_defined_in; eauto using in_or_app. 3:reflexivity.
                   + apply in_or_app; right. solve_In.
                   + rewrite map_fst_idcaus. etransitivity; [|eauto]. rewrite <-Hperm. apply incl_concat; auto.
+                  + eapply Is_last_in_In; solve_In.
             }
-            rewrite H12 in Hsem; simpl in *. auto.
+            take (clockof _ = [_]) and rewrite it in Hsem; simpl in *; auto.
           }
-          eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
-          eapply sem_clock_filter; eauto.
-        + intros ?? Hdep. apply HenvP.
-          * eapply incl_map; eauto. apply incl_map.
-            intros ??; solve_In.
+
+          split; intros ??? Hin Hv; simpl_In.
+          1,2:assert (c = ck) by (eapply Hgamma2; eauto using in_or_app); subst.
+          * eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
+            eapply Hsc in Hv; eauto. 2:left; solve_In. 3:solve_In.
+            2:{ constructor. solve_Exists.
+                unfold idcaus in Hdep. erewrite 2 map_map, map_ext, map_ext with (l:=Γl) in Hdep; eauto.
+                1,2:intros (?&(?&?)&?); auto. }
+            eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
+            eapply sem_clock_filter; eauto.
+          * eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
+            eapply Hsc in Hv; eauto. 2:right; solve_In. 3:solve_In.
+            2:{ constructor. solve_Exists.
+                unfold idcaus in Hdep. erewrite 2 map_map, map_ext, map_ext with (l:=Γl) in Hdep; eauto.
+                1,2:intros (?&(?&?)&?); auto. }
+            eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
+            eapply sem_clock_filter; eauto.
+        + intros ? Hin' Hdep. apply HenvP.
+          * destruct Hin'; [left|right]; solve_In.
           * constructor. solve_Exists.
-            unfold idcaus in Hdep. erewrite map_map, map_ext in Hdep; eauto. intros (?&(?&?)&?); auto.
+            unfold idcaus in Hdep. erewrite 2 map_map, map_ext, map_ext with (l:=Γl) in Hdep; eauto.
+            1,2:intros (?&(?&?)&?); auto.
+
       - (* locals *)
-        assert (Env.dom_lb Hl (map fst locs)) as Hdom2.
+        assert (Env.dom_lb Hi' (map fst locs)) as Hdom2.
         { eapply Env.dom_lb_incl with (ys:=concat xs0); [rewrite <-H7; eapply incl_appl, incl_refl|].
           eapply Env.dom_lb_concat. simpl_Forall. inv_VarsDefined.
           rewrite Forall_forall in *. intros. inv_VarsDefined.
@@ -3302,253 +3627,285 @@ Module Type LCLOCKSEMANTICS
           eapply NoDupLocals_incl; eauto.
           etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
           rewrite Permutation_app_comm.
-          eapply incl_app; [eapply incl_appl; eauto|solve_incl_app].
+          eapply incl_app; [eapply incl_appl, incl_appl; eauto|solve_incl_app].
         }
-        assert (Env.refines (EqSt (A:=svalue)) Hi
-                            (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs)))) as Href2.
-        { intros ?? Hfind. destruct (Env.find x (Env.restrict Hl (map fst env0 ++ map fst locs))) eqn:Hfind'.
+        assert (Env.refines (EqSt (A:=svalue)) (Env.restrict Hi' (map fst Γ ++ map fst locs))
+                            (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)))) as Href1.
+        { intros ?? Hfind. exists v. split; try reflexivity.
+          eapply Env.union_find3'; eauto. }
+        assert (Env.refines (EqSt (A:=svalue)) Hi0
+                            (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)))) as Href2.
+        { intros ?? Hfind. destruct (Env.find x (Env.restrict Hi' (map fst Γ ++ map fst locs))) eqn:Hfind'.
           - exists s. split; eauto using Env.union_find3'.
             eapply sem_var_det; [now econstructor; try eapply Hfind|].
-            eapply H8; eauto.
+            eapply H6; eauto.
             + eapply sem_var_restrict_inv. now econstructor; eauto.
             + intros contra. eapply H5; eauto.
+              apply in_or_app, or_introl.
               eapply Env.dom_use; eauto. econstructor; eauto.
           - exists v. split; try reflexivity.
             eapply Env.union_find2; eauto. }
-        rewrite idcaus_app, in_app_iff in Hinenv. destruct Hinenv as [Hinenv|Hinenv].
-        + (* current locs *)
-          econstructor; eauto.
-          * rewrite Forall_forall in *; intros.
-            eapply sem_block_ck'_cons_nIn; eauto.
-            rewrite 2 idcaus_app, 2 map_app in Hnd1. eapply NoDup_app_r in Hnd1.
-            eapply NoDup_app_In in Hnd1; eauto.
-            2:repeat (eapply in_map_iff; now do 2 esplit; eauto).
-            contradict Hnd1. solve_In.
-          * constructor; auto.
-            assert (In y (concat xs0)) as Hinxs0.
-            { rewrite <-H7. apply in_app_iff; left. solve_In. }
-            eapply in_concat in Hinxs0 as (?&Hin1&Hin2). inv_VarsDefined.
-            eapply Forall_forall in H; eauto.
-            assert (Env.refines (EqSt (A:=svalue)) (Env.restrict Hl (map fst env0 ++ map fst locs))
-                                (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs)))) as Href1.
-            { intros ?? Hfind. exists v. split; try reflexivity.
-              eapply Env.union_find3'; eauto. }
-            assert (sc_var_inv (env0 ++ locs)
-                               (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs))) bs cy) as Hsc'.
-            { eapply sc_block with (envP:=envP); eauto.
-              - clear - Hinblks Hnd1.
-                rewrite app_assoc, idcaus_app, map_app in Hnd1. rewrite idcaus_app, map_app.
-                unfold idcaus in *. rewrite 2 map_map in *.
-                eapply nodup_app_map_flat_map; eauto.
-              - clear - Hnd2 Hinblks H4 H5.
-                apply NoDupMembers_app; auto.
-                intros * Hinm contra. rewrite fst_InMembers in Hinm.
-                eapply H5; eauto.
-              - rewrite Forall_forall in *. rewrite map_app; eauto.
-              - rewrite map_app.
-                etransitivity; eauto using incl_concat.
-                rewrite <-H7, Permutation_app_comm.
-                apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; eauto.
-              - eapply Forall_forall in H6; eauto.
-              - rewrite idty_app, idck_app. eapply Forall_app; split; eauto.
-                + eapply Forall_impl; [|eauto]; intros; simpl in *.
-                  eapply wc_clock_incl; [|eauto]. solve_incl_app.
-                + rewrite Forall_map in H12. eapply Forall_impl; [|eauto]; eauto.
-              - rewrite idty_app, idck_app. rewrite Forall_forall in *; eauto.
-              - rewrite Forall_forall in *.
-                assert (NoDupLocals x blk) as Hndl.
-                { eapply NoDupLocals_incl; [|eauto].
-                  etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
-                  rewrite Permutation_app_comm. apply incl_appl'; auto. }
-                eapply sem_block_ck'_refines, sem_block_ck'_restrict; eauto.
-                rewrite map_app, 2 map_fst_idck, 2 map_fst_idty; auto.
-              - rewrite map_app.
-                eapply union_dom_ub_dom_lb_dom; eauto using Env.restrict_dom_ub.
-                eapply Env.dom_lb_restrict_dom_lb; [eapply incl_appr, incl_refl|eauto].
-              - rewrite idcaus_app, in_app_iff; auto.
-              - intros ? _ Hdep ??? Hin Hv. simpl_In.
-                apply in_app_iff in Hin0 as [Hin0|Hin0].
-                + eapply sem_clock_refines; [eapply Href2|].
-                  eapply Hsc; eauto. 1,3:solve_In.
-                  * rewrite idcaus_app in Hdep.
-                    constructor. solve_Exists.
-                  * eapply sem_var_refines''; [| |eauto|eauto].
-                    2:eapply Env.dom_dom_lb; eauto. solve_In.
-                + eapply Forall_forall in H16.
-                  eapply sem_clock_refines', H16; eauto.
-                  * eapply Forall_forall in H12; eauto. solve_In.
-                  * intros ?? Hin' Hv'. inv Hv'.
-                    { eapply Env.union_find4' in H1 as [(Hfind1&Hfind2)|Hfind2].
-                      - econstructor; eauto.
-                        eapply Env.union_find2; eauto using Env.restrict_find_None.
-                      - econstructor; eauto.
-                        eapply Env.union_find3', Env.restrict_find; eauto.
-                        now rewrite fst_InMembers, map_app, 2 map_fst_idck, 2 map_fst_idty in Hin'.
-                    }
-                  * solve_In.
-                  * eapply sem_var_refines; [|eauto]. intros ?? Hfind.
-                    { eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
-                      - destruct (Env.find x1 Hl) eqn:Hfind3.
-                        + assert (v ≡ s).
-                          { eapply sem_var_det with (H:=Hi). econstructor; eauto; reflexivity.
-                            eapply H8; eauto. econstructor; eauto; reflexivity.
-                            intro contra. eapply Env.restrict_find in Hfind3. rewrite Hfind3 in Hfind2; congruence.
-                            rewrite in_app_iff, <-2 fst_InMembers; auto. }
-                          do 2 esplit; eauto. eapply Env.union_find3'; eauto.
-                        + do 2 esplit; try reflexivity.
-                          eapply Env.union_find2; eauto.
-                      - eapply Env.restrict_find_inv in Hfind2 as (?&?).
-                        do 2 esplit; try reflexivity.
-                        eapply Env.union_find3'; eauto. }
-                  * eapply HenvP.
-                    -- rewrite idcaus_app, map_app, in_app_iff. left. solve_In.
-                    -- constructor. solve_Exists.
-                       rewrite idcaus_app in Hdep; eauto.
-              - intros * Hin Hdep. apply HenvP.
-                eapply incl_map; eauto. apply incl_map, incl_appr. intros ??; apply in_flat_map; eauto.
-                constructor. solve_Exists.
-                rewrite idcaus_app in Hdep; eauto.
-            }
-            intros ??? Hin3 Hv.
-            assert (Env.refines (@EqSt _) (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs)))
-                                (Env.union Hi Hl)) as Href.
-            { intros ?? Hfind. eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
-              - destruct (Env.find x1 Hl) eqn:Hfind3.
-                + assert (v ≡ s).
-                  { eapply sem_var_det with (H:=Hi). econstructor; eauto; reflexivity.
-                    eapply H8; eauto. econstructor; eauto; reflexivity.
-                    intro contra. eapply Env.restrict_find in Hfind3. rewrite Hfind3 in Hfind2; congruence.
-                    rewrite in_app_iff, <-2 fst_InMembers; auto. }
-                  do 2 esplit; eauto. eapply Env.union_find3'; eauto.
-                + do 2 esplit; try reflexivity.
-                  eapply Env.union_find2; eauto.
-              - eapply Env.restrict_find_inv in Hfind2 as (?&?).
-                do 2 esplit; try reflexivity.
-                eapply Env.union_find3'; eauto. }
-            eapply sem_clock_refines, Hsc'; eauto. 1:(rewrite idckcaus_app; eauto using in_or_app).
-            eapply sem_var_refines''; [| |eauto|eauto].
-            -- eapply in_map_iff. do 2 esplit; eauto. instantiate (1:=fst). reflexivity.
-            -- eapply Env.union_dom_lb2, Env.dom_lb_restrict_dom_lb; eauto.
-               1,2:rewrite map_fst_idckcaus; auto. apply incl_appr, incl_refl.
-        + (* deeper *)
-          eapply Forall2_ignore2 in H3; eauto.
-          assert (Env.refines (@EqSt _) Hl (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs)))) as Href1.
-          { intros ?? Hfind. destruct (in_dec ident_eq_dec x (map fst locs)).
-            - do 2 esplit; try reflexivity.
-              eapply Env.union_find3', Env.restrict_find; eauto using in_or_app.
-            - rewrite <-fst_InMembers in n. eapply H8 in n. 2:(econstructor; eauto; reflexivity).
-              inv n.
-              destruct (Env.find x (Env.restrict Hl (map fst env0 ++ map fst locs))) eqn:Hfind2.
-              + assert (Hfind2':=Hfind2). eapply Env.restrict_find_inv in Hfind2 as (?&Hfind2).
-                rewrite Hfind2 in Hfind; inv Hfind.
-                do 2 eexists; [|eauto using Env.union_find3']. reflexivity.
-              + do 2 eexists; eauto. eapply Env.union_find2; eauto. }
-          eapply Scklocal with (Hl:=(Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs)))); eauto.
-          * intros * Hvar Hnin. inv Hvar.
-            { eapply Env.union_find4' in H1 as [(Hfind1&Hfind2)|Hfind2].
-              - econstructor; eauto.
-              - eapply Env.restrict_find_inv in Hfind2 as (?&Hfind2).
-                eapply H8; eauto. econstructor; eauto. }
-          * rewrite Forall_forall in *; intros * Hinblk.
-            destruct (in_dec ident_eq_dec cy (map snd (idcaus (locals x)))).
-            2:eapply sem_block_ck'_cons_nIn; eauto.
-            { edestruct H3 as (?&Hinvars&Hvars'); eauto. simpl_In.
-              eapply H with (env:=env0++locs); eauto. 9:solve_In.
-             - clear - Hinblk Hnd1.
-                rewrite app_assoc, idcaus_app, map_app in Hnd1. rewrite idcaus_app, map_app.
-                unfold idcaus in *. rewrite 2 map_map in *.
-                eapply nodup_app_map_flat_map; eauto.
-              - clear - Hnd2 Hinblk H4 H5.
-                apply NoDupMembers_app; auto.
-                intros * Hinm contra. rewrite fst_InMembers in Hinm.
-                eapply H5; eauto.
-              - rewrite map_app; eauto.
-              - rewrite map_app.
-                etransitivity; eauto using incl_concat.
-                rewrite <-H7, Permutation_app_comm.
-                apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; eauto.
-              - rewrite idty_app, idck_app. eapply Forall_app; split; eauto.
-                + eapply Forall_impl; [|eauto]; intros; simpl in *.
-                  eapply wc_clock_incl; [|eauto]. solve_incl_app.
-                + rewrite <-Forall_forall, Forall_map in H12. eapply Forall_impl; [|eauto]; eauto.
-              - rewrite idty_app, idck_app; eauto.
-              - assert (NoDupLocals x0 x) as Hndl.
-                { eapply NoDupLocals_incl; [|eauto].
-                  etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
-                  rewrite Permutation_app_comm. apply incl_appl'; auto. }
-                eapply sem_block_ck'_refines, sem_block_ck'_restrict; eauto.
-                rewrite map_app, 2 map_fst_idck, 2 map_fst_idty; auto. eapply Env.union_refines4'; eauto using EqStrel.
-              - rewrite map_app.
-                eapply union_dom_ub_dom_lb_dom; eauto using Env.restrict_dom_ub.
-                eapply Env.dom_lb_restrict_dom_lb; [eapply incl_appr, incl_refl|eauto].
-              - intros ? _ Hdep ??? ? Hv. simpl_In.
-                apply in_app_iff in Hin as [?|?].
-                + eapply sem_clock_refines; [eapply Href2|].
-                  eapply Hsc; eauto. 1,3:solve_In.
-                  * rewrite idcaus_app in Hdep.
-                    constructor; simpl. solve_Exists.
-                  * eapply sem_var_refines''; [| |eauto|eauto].
-                    2:eapply Env.dom_dom_lb; eauto. solve_In.
-                + eapply sem_clock_refines', H16; eauto.
-                  * eapply H12. solve_In.
-                  * intros ?? Hin' Hv'. inv Hv'.
-                    { eapply Env.union_find4' in H13 as [(Hfind1&Hfind2)|Hfind2].
-                      - econstructor; eauto.
-                        eapply Env.union_find2; eauto using Env.restrict_find_None.
-                      - econstructor; eauto.
-                        eapply Env.union_find3', Env.restrict_find; eauto.
-                        now rewrite fst_InMembers, map_app, 2 map_fst_idck, 2 map_fst_idty in Hin'.
-                    }
-                  * eapply HenvP.
-                    -- rewrite idcaus_app, map_app, in_app_iff. left. solve_In.
-                    -- constructor. solve_Exists.
-                       rewrite idcaus_app in Hdep; eauto.
-                  * eapply in_map_iff; do 2 esplit; eauto. reflexivity.
-                  * eapply sem_var_refines; [|eauto]. intros ?? Hfind.
-                    { eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
-                      - destruct (Env.find x3 Hl) eqn:Hfind3.
-                        + assert (v ≡ s).
-                          { eapply sem_var_det with (H:=Hi). econstructor; eauto; reflexivity.
-                            eapply H8; eauto. econstructor; eauto; reflexivity.
-                            intro contra. eapply Env.restrict_find in Hfind3. rewrite Hfind3 in Hfind2; congruence.
-                            rewrite in_app_iff, <-2 fst_InMembers; auto. }
-                          do 2 esplit; eauto. eapply Env.union_find3'; eauto.
-                        + do 2 esplit; try reflexivity.
-                          eapply Env.union_find2; eauto.
-                      - eapply Env.restrict_find_inv in Hfind2 as (?&?).
-                        do 2 esplit; try reflexivity.
-                        eapply Env.union_find3'; eauto. }
-              - intros * ? Hdep. apply HenvP.
-                eapply incl_map; eauto. apply incl_map, incl_appr. intros ??; apply in_flat_map; eauto.
-                constructor. solve_Exists.
-                rewrite idcaus_app in Hdep; eauto.
-            }
-            edestruct H3 as (?&?&Hvars); eauto.
-            assert (NoDupLocals x0 x) as Hndl.
+        rewrite idty_app, map_filter_app, 2 in_app_iff in Hinenv.
+        rewrite or_assoc, <-(or_assoc (In _ (idty (flat_map _ _)))), (or_comm (In _ (idty (flat_map _ _)))), or_assoc in Hinenv.
+        assert (NoDupMembers (Γ ++ idty locs)) as Hnd2'.
+        { apply NoDupMembers_app; auto.
+          - apply NoDupMembers_idty; auto.
+          - intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm2. eapply H5; eauto.
+            apply in_app_iff, or_introl, fst_InMembers; auto. }
+        assert (NoDupMembers (Γl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)) as Hnd3'.
+        { apply NoDupMembers_app; auto.
+          - apply nodupmembers_map_filter; auto.
+            intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+          - intros ? Hinm1 Hinm2. rewrite fst_InMembers in Hinm2. simpl_In.
+            eapply H5; eauto using In_InMembers.
+            apply in_app_iff, or_intror, fst_InMembers; auto.
+        }
+
+        assert (forall cx,
+                   depends_on (idcaus Γ) (idcaus Γl) cy cx (Blocal locs blocks) ->
+                   sc_var_inv (Γ ++ idty locs)
+                              (Γl ++ map_filter (fun '(x1, (ty, ck, _, o)) => option_map (fun '(_, cx0) => (x1, (ty, ck, cx0))) o) locs)
+                              (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)), Hl') bs cx
+               ) as Hsc'.
+        { intros. eapply sc_var_inv_local; eauto.
+          - rewrite Forall_map in H16; auto.
+          - intros Hin. eapply Forall_forall in H20; eauto.
+            eapply HenvP; eauto.
+            clear - Hin. simpl_app. repeat rewrite in_app_iff.
+            destruct Hin; auto. }
+
+        eapply Scklocal with (Hi':=(Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)))); eauto.
+        { intros * Hvar Hnin. inv Hvar.
+          eapply Env.union_find4' in H1 as [(Hfind1&Hfind2)|Hfind2].
+          - econstructor; eauto.
+          - eapply Env.restrict_find_inv in Hfind2 as (?&Hfind2).
+            eapply H6; eauto. econstructor; eauto.
+        }
+        { intros. edestruct H12 as (?&?&?&?&?&?&?); eauto.
+          do 3 esplit. repeat split; eauto.
+          - eapply Sem.sem_exp_refines; [eapply Env.union_refines4'|]; eauto using EqStrel.
+            eapply Sem.sem_exp_restrict; eauto.
+            simpl_Forall. take (wc_exp _ _ _ _) and eapply wc_exp_wx_exp in it as Hwx.
+            erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in Hwx; eauto.
+            intros; destruct_conjs; auto.
+          - eapply sem_var_refines; [eapply Env.union_refines4'|]; eauto using EqStrel.
+            eapply sem_var_restrict; eauto.
+            apply in_or_app, or_intror; solve_In.
+        }
+        + (* sub-blocks *)
+          simpl_Forall. inv_VarsDefined.
+          assert (sem_block_ck' envP (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)), Hl') bs x) as Hsem.
+          { assert (NoDupLocals xs1 x) as Hndl.
             { eapply NoDupLocals_incl; [|eauto].
               etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
-              rewrite Permutation_app_comm. apply incl_appl'; auto. }
+              rewrite Permutation_app_comm. apply incl_appl', incl_appl; auto. }
             eapply sem_block_ck'_refines, sem_block_ck'_restrict; eauto.
-            intros ?? Hfind. do 2 esplit; try reflexivity.
-            rewrite map_app, 2 map_fst_idck, 2 map_fst_idty in Hfind.
-            eapply Env.union_find3'; eauto.
-          * assert (Env.refines (@EqSt _) (Env.union Hi Hl)
-                                (Env.union Hi (Env.union Hi (Env.restrict Hl (map fst env0 ++ map fst locs))))).
-            { intros ?? Hfind. eapply Env.union_find4' in Hfind as [(Hfind1&Hfind2)|Hfind2].
-              - eapply Href2 in Hfind1 as (?&?&?).
-                do 2 esplit; eauto. eapply Env.union_find3'; eauto.
-              - eapply Href1 in Hfind2 as (?&?&?).
-                do 2 esplit; eauto. eapply Env.union_find3'; eauto. }
-            { constructor; auto.
-              - intros ??? Hin. exfalso. simpl_In.
-                rewrite 2 idcaus_app, 2 map_app in Hnd1.
-                eapply NoDup_app_r, NoDup_app_In in Hnd1; eauto. eapply Hnd1.
-                solve_In. simpl. solve_In.
-              - eapply Forall_impl; [|eauto]; intros ? Hsc' ??? Hin Hv.
-                eapply sem_clock_refines, Hsc'; eauto.
-                eapply sem_var_refines_iff; [eauto| | |eauto]. eapply Env.union_dom_lb2; eauto.
-                solve_In.
+            erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs).
+            eapply Env.union_refines4', EqStrel. intros; destruct_conjs; auto. }
+
+          destruct (in_dec ident_eq_dec cy (map snd (idty (locals x)) ++ map_filter (fun '(_, (_, o)) => o) (locals x))).
+          2: eapply sem_block_ck'_cons_nIn; eauto.
+          assert (exists y, In (y, cy) (idty (locals x)) \/ In (y, Some cy) (idck (locals x))) as (?&Hinx).
+          { apply in_app_iff in i as [|]; simpl_In; esplit; [left|right]; solve_In. } clear i.
+          { eapply H with (Γ:=Γ++_) (Γl:=Γl++_); eauto.
+            - clear - H0 Hnd1.
+              rewrite app_assoc in *. eapply NoDup_locals_inv; eauto. simpl_app. rewrite map_filter_app in Hnd1. simpl_app.
+              rewrite map_map_filter, map_map with (l:=locs).
+              erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd1.
+              eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
+              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+            - eapply NoDupLocals_incl; eauto. simpl_app. apply incl_appr'.
+              rewrite Permutation_app_comm. simpl_app. apply incl_appr', incl_app; intros ? Hin.
+              1,2:solve_In.
+            - intros * Hin1' Hin2'. simpl_In. rewrite in_app_iff in Hin0, Hin. destruct Hin0, Hin; simpl_In.
+              + eapply Hcorres; solve_In.
+              + exfalso.
+                eapply H5; eauto using In_InMembers. apply in_or_app, or_introl. solve_In.
+              + exfalso.
+                eapply H5; eauto using In_InMembers. apply in_or_app, or_intror. solve_In.
+              + eapply NoDupMembers_det in Hin; eauto. now inv Hin.
+            - rewrite map_app, map_fst_idty.
+              etransitivity; eauto using incl_concat.
+              rewrite <-H7, Permutation_app_comm.
+              apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; eauto.
+            - rewrite idty_app, idck_app. eapply Forall_app; split; eauto.
+              + eapply Forall_impl; [|eauto]; intros; simpl in *.
+                eapply wc_clock_incl; [|eauto]. solve_incl_app.
+              + simpl_Forall. eapply wc_clock_incl; [|eauto]. apply incl_appr'.
+                unfold idck, idty. erewrite 2 map_map, map_ext; try reflexivity.
+                intros; destruct_conjs; auto.
+            - repeat rewrite idty_app, idck_app. clear - H11.
+              unfold idck, idty. erewrite 2 map_map with (l:=locs), map_ext with (l:=locs), 2 map_map_filter, map_filter_ext; eauto.
+              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+            - rewrite map_app, map_fst_idty.
+              eapply union_dom_ub_dom_lb_dom; eauto using Env.restrict_dom_ub.
+              eapply Env.dom_lb_restrict_dom_lb; [eapply incl_appr, incl_refl|eauto].
+            - simpl. rewrite map_app. apply Env.dom_lb_app'; eauto using Env.dom_lb_refines.
+              apply Env.dom_lb_intro. intros ? Hin. simpl_In.
+              edestruct H12 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+            - destruct Hinx; [left|right]; solve_In.
+            - intros ? _ Hdep.
+              eapply Hsc'.
+              econstructor; eauto. solve_Exists.  clear - Hdep. simpl_app.
+              erewrite map_map, map_ext with (l:=locs), map_map_filter, map_filter_ext in Hdep; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+
+            - intros * Hin Hdep. apply HenvP.
+              + clear - H0 Hin. simpl_app. repeat rewrite in_app_iff.
+                destruct Hin; [left;right|right;right]; solve_In.
+              + econstructor; eauto. solve_Exists. clear - Hdep. simpl_app.
+                erewrite map_map, map_ext with (l:=locs), map_map_filter, map_filter_ext in Hdep; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+          }
+        + (* current locs and lasts *)
+          constructor; eauto.
+          2:{ simpl_Forall. take (sc_var_inv _ _ _ _ _) and destruct it as (Hsc1&Hsc2).
+              assert (forall x vs,
+                         In x (map fst (idck (idty Γ) ++ map (fun '(x, (_, ck, _, _)) => (x, ck)) locs)) ->
+                         sem_var (Env.union Hi0 Hi') x vs ->
+                         sem_var (Env.union Hi0 (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)))) x vs) as Hvs.
+              { intros ?? Hin' Hv'. inv Hv'.
+                eapply Env.union_find4' in H15 as [(Hfind1&Hfind2)|Hfind2].
+                - econstructor; eauto.
+                  eapply Env.union_find3', Env.union_find2; eauto using Env.restrict_find_None.
+                - econstructor; eauto.
+                  eapply Env.union_find3', Env.union_find3', Env.restrict_find; eauto.
+                  erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in Hin'; eauto.
+                  intros; destruct_conjs; auto.
+              }
+
+              split; intros; simpl in *; simpl_In.
+              1,2:eapply Forall_forall in H16 as Hck; [|solve_In]; simpl in *.
+              1,2:eapply sem_clock_refines'; eauto using wc_clock_wx_clock.
+              - eapply Hsc1; eauto; solve_In. inv H15. take (Env.MapsTo _ _ _) and rename it into Hfind2.
+                repeat eapply Env.union_find4' in Hfind2 as [(Hfind1&Hfind2)|Hfind2]; econstructor; eauto.
+                + eapply Env.union_find2; eauto.
+                  apply Env.union_find_None in Hfind2 as (_&Hfind2).
+                  destruct (Env.find x0 Hi') eqn:Hfind; auto. eapply Env.restrict_find in Hfind. rewrite Hfind in Hfind2. congruence.
+                  apply in_or_app, or_intror. solve_In.
+                + eapply Env.union_find2; eauto.
+                  destruct (Env.find x0 Hi') eqn:Hfind; auto. eapply Env.restrict_find in Hfind. rewrite Hfind in Hfind2. congruence.
+                  apply in_or_app, or_intror. solve_In.
+                + apply Env.restrict_find_inv in Hfind2 as (?&?). apply Env.union_find3'; auto.
+              - eapply Hsc2; eauto; solve_In. auto.
+          }
+          destruct Hinenv as [Hinenv|[Hinenv|Hinenv]]; simpl_In.
+
+          * (* locs *)
+            split; intros * ? Hv; simpl_In.
+            2:{ exfalso. clear - Hin0 Hin1 Hnd1.
+                simpl_app; rewrite map_filter_app in Hnd1; simpl_app.
+                eapply NoDup_app_r, NoDup_app_r, NoDup_app_In in Hnd1. 2:clear Hin1; solve_In.
+                eapply Hnd1. repeat rewrite in_app_iff. right; left. solve_In. auto.
             }
+            assert (In x (concat xs0)) as Hinxs.
+            { take (Permutation _ _) and rewrite <-it. apply in_or_app, or_introl. solve_In. }
+            apply in_concat in Hinxs as (?&Hinxs1&Hinxs2). inv_VarsDefined. simpl_Forall.
+
+            assert (sem_block_ck' envP (Env.union Hi0 (Env.restrict Hi' (map fst Γ ++ map fst locs)), Hl') bs blk) as Hsem.
+            { assert (NoDupLocals x0 blk) as Hndl.
+              { eapply NoDupLocals_incl; [|eauto].
+                etransitivity; [eapply incl_concat; eauto|]. rewrite <-H7.
+                rewrite Permutation_app_comm. apply incl_appl', incl_appl; auto. }
+              eapply sem_block_ck'_refines, sem_block_ck'_restrict; eauto.
+              erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs).
+              eapply Env.union_refines4', EqStrel. intros; destruct_conjs; auto. }
+
+            { eapply sc_block with (Γ:=Γ ++ idty locs) (Γl:=Γl ++ map_filter _ locs) in Hsem as (Hsc1&_); eauto.
+              - eapply sem_clock_refines, Hsc1; eauto using Env.union_refines4', EqStrel; simpl.
+                + rewrite idckcaus_app. apply in_or_app, or_intror. solve_In.
+                + inv Hv. econstructor; eauto.
+                  eapply Env.union_find4' in H1 as [(Hfind1&Hfind2)|Hfind2]; eauto.
+                  eapply Env.union_find_None in Hfind2 as (?&?).
+                  eapply Env.union_find2; eauto.
+              - clear - Hinblks Hnd1.
+                rewrite app_assoc in *. eapply NoDup_locals_inv; eauto. simpl_app. rewrite map_filter_app in Hnd1. simpl_app.
+                rewrite map_map_filter, map_map with (l:=locs).
+                erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd1.
+                eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+              - eapply NoDupLocals_incl; eauto. simpl_app. apply incl_appr'.
+                rewrite Permutation_app_comm. simpl_app. apply incl_appr', incl_app; intros ? Hin.
+                1,2:solve_In.
+              - intros * Hin1' Hin2'. simpl_In. rewrite in_app_iff in Hin2, Hin. destruct Hin2, Hin; simpl_In.
+                + eapply Hcorres; solve_In.
+                + exfalso.
+                  eapply H5; eauto using In_InMembers. apply in_or_app, or_introl. solve_In.
+                + exfalso.
+                  eapply H5; eauto using In_InMembers. apply in_or_app, or_intror. solve_In.
+                + eapply NoDupMembers_det in Hin; eauto. now inv Hin.
+              - rewrite map_app, map_fst_idty.
+                etransitivity; eauto using incl_concat.
+                rewrite <-H7, Permutation_app_comm.
+                apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; eauto.
+              - rewrite idty_app, idck_app. eapply Forall_app; split; eauto.
+                + eapply Forall_impl; [|eauto]; intros; simpl in *.
+                  eapply wc_clock_incl; [|eauto]. solve_incl_app.
+              + simpl_Forall. eapply wc_clock_incl; [|eauto]. apply incl_appr'.
+                unfold idck, idty. erewrite 2 map_map, map_ext; try reflexivity.
+                intros; destruct_conjs; auto.
+              - repeat rewrite idty_app, idck_app. clear - H11.
+                unfold idck, idty. erewrite 2 map_map with (l:=locs), map_ext with (l:=locs), 2 map_map_filter, map_filter_ext; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+              - rewrite map_app, map_fst_idty.
+                eapply union_dom_ub_dom_lb_dom; eauto using Env.restrict_dom_ub.
+                eapply Env.dom_lb_restrict_dom_lb; [eapply incl_appr, incl_refl|eauto].
+              - simpl. rewrite map_app. apply Env.dom_lb_app'; eauto using Env.dom_lb_refines.
+                apply Env.dom_lb_intro. intros ? Hin. simpl_In.
+                edestruct H12 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+              - rewrite idcaus_app, in_app_iff. right. solve_In.
+              - intros * _ Hdep. eapply Hsc'.
+                econstructor; eauto. solve_Exists. clear - Hdep.
+                simpl_app. erewrite map_map, map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - intros * Hin Hdep. apply HenvP.
+                + clear - Hinblks Hin. simpl_app. repeat rewrite in_app_iff.
+                  destruct Hin; [left;right|right;right]; solve_In.
+                + econstructor; eauto. solve_Exists. clear - Hdep. simpl_app.
+                  erewrite map_map, map_ext with (l:=locs), map_map_filter, map_filter_ext in Hdep; eauto.
+                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+            }
+
+          * (* lasts *)
+            split; intros * ? Hv; simpl_In.
+            1:{ exfalso. clear - Hin0 Hin1 Hnd1.
+                simpl_app; rewrite map_filter_app in Hnd1; simpl_app.
+                eapply NoDup_app_r, NoDup_app_r, NoDup_app_In in Hnd1. 2:solve_In.
+                eapply Hnd1. repeat rewrite in_app_iff. right; left. clear Hin1. solve_In. auto.
+            } simpl_Forall.
+            edestruct H12 as (?&?&?&He&Hv1&Hfby&Hv2); eauto.
+            eapply sem_var_det in Hv; eauto. rewrite <-Hv.
+            { eapply Sem.sem_exp_restrict, Sem.sem_exp_refines, sc_exp' with (Γ:=Γ++idty locs) (Γl:=Γl++map_filter _ locs) (k:=0) in He; eauto; simpl in *.
+              - take (clockof e0 = _) and rewrite it in He; simpl in He.
+                apply ac_fby1 in Hfby. rewrite <-Hfby.
+                eapply sem_clock_refines; eauto.
+                eapply Env.union_refines4', EqStrel.
+              - clear - H0. simpl_app.
+                erewrite 2 map_map with (l:=locs), map_ext with (l:=locs), 2 map_map_filter, map_filter_ext; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - rewrite <-length_clockof_numstreams, H1; auto.
+              - intros ? Hfree.
+                eapply Hsc'. eapply DepOnLocal2; eauto.
+                solve_Exists. split; auto.
+                clear - Hfree. simpl_app.
+                erewrite map_map, map_map_filter, map_ext with (l:=locs), map_filter_ext in Hfree; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - clear - H0. simpl_app.
+                erewrite 2 map_map with (l:=locs), map_ext with (l:=locs), 2 map_map_filter, map_filter_ext; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - eapply wc_exp_wx_exp in H0.
+                erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in H0; eauto.
+                intros; destruct_conjs; auto.
+            }
+          * split; auto; intros; simpl_In; exfalso.
+            1,2:clear - Hin0 Hinenv Hnd1.
+            1,2:simpl_app; rewrite map_filter_app in Hnd1; simpl_app.
+            1,2:apply NoDup_app_r, NoDup_app_r in Hnd1.
+            -- eapply NoDup_app_In in Hnd1. 2:solve_In. eapply Hnd1. repeat rewrite in_app_iff.
+               destruct Hinenv; [left|right;right]; solve_In. auto.
+            -- apply NoDup_app_r in Hnd1. rewrite Permutation_swap in Hnd1.
+               eapply NoDup_app_In in Hnd1. 2:solve_In. eapply Hnd1. repeat rewrite in_app_iff.
+               destruct Hinenv; [left|right]; solve_In. auto.
     Qed.
 
     Lemma sem_node_sc_vars :
@@ -3558,61 +3915,90 @@ Module Type LCLOCKSEMANTICS
         wc_node G n ->
         node_causal n ->
         Env.dom H (map fst (n_in n ++ n_out n)) ->
-        Forall (sc_var_inv (n_in n ++ n_out n) H b) (map snd (idcaus (n_in n))) ->
-        Sem.sem_block G H b (n_block n) ->
-        sc_vars (idck (idty (n_in n ++ n_out n))) H b /\
-        sem_block_ck' (map snd (idcaus (n_in n ++ n_out n ++ locals (n_block n)))) H b (n_block n).
+        Forall (sc_var_inv (n_in n ++ n_out n) [] (H, @Env.empty _) b) (map snd (idcaus (n_in n))) ->
+        Sem.sem_block G (H, @Env.empty _) b (n_block n) ->
+        sc_vars (idck (idty (n_in n ++ n_out n))) [] (H, @Env.empty _) b /\
+        sem_block_ck' (map snd (idcaus (n_in n ++ n_out n))
+                           ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
+                           ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n))) (H, @Env.empty _) b (n_block n).
     Proof.
       intros * HwcG Hwtn Hwcn Hcau Hdom Hins Hsem.
-      assert (Forall (sc_var_inv (n_in n ++ n_out n) H b) (map snd (idcaus (n_in n ++ n_out n ++ locals (n_block n)))) /\
-              sem_block_ck' (map snd (idcaus (n_in n ++ n_out n ++ locals (n_block n)))) H b (n_block n)) as (?&?).
+      assert (Forall (sc_var_inv (n_in n ++ n_out n) [] (H, @Env.empty _) b)
+                     (map snd (idcaus (n_in n ++ n_out n))
+                          ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
+                          ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n))) /\
+                sem_block_ck' (map snd (idcaus (n_in n ++ n_out n))
+                                   ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
+                                   ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n)))
+                              (H, @Env.empty _) b (n_block n)) as (?&?).
       2:{ split; auto.
-          eapply sc_var_inv_sc_vars.
+          change (@nil (ident * clock)) with (idck (idty (@nil (ident * (type * clock * ident))))).
+          eapply sc_var_inv_sc_vars; simpl; auto with datatypes.
           - eapply Forall_forall; intros * Hin.
             eapply Env.dom_use in Hin; eauto. inv Hin.
             do 2 esplit; eauto. reflexivity.
           - eapply Forall_incl; eauto.
-            repeat rewrite idcaus_app. solve_incl_app. }
+            repeat rewrite idcaus_app. rewrite app_nil_r. solve_incl_app. }
       eapply node_causal_ind; eauto.
       - intros ?? Hperm (Hvars&Hlocs). split. rewrite <-Hperm; auto.
         eapply sem_block_ck'_Perm; eauto.
       - split; auto. apply sem_block_sem_block_ck'; auto.
       - intros ?? Hin (Hvars&Hlocs) Hdep.
         repeat rewrite idcaus_app, map_app, in_app_iff in Hin.
-        destruct Hcau as (Hnd&_). rewrite app_assoc, idcaus_app, map_app in Hnd.
-        destruct Hin as [Hin|[Hin|Hin]]; (split; [constructor; auto|]).
+        destruct Hcau as (Hnd&_). simpl_app.
+        rewrite or_assoc in Hin. destruct Hin as [Hin|[Hin|Hin]]; (split; [constructor; auto|]).
         + eapply Forall_forall in Hins; eauto.
         + eapply sem_block_ck'_cons_nIn; eauto.
-          eapply NoDup_app_In in Hnd; eauto. rewrite idcaus_app, map_app, in_app_iff; auto.
+          eapply NoDup_app_In in Hnd; eauto. contradict Hnd.
+          repeat rewrite in_app_iff in *. right. destruct Hnd; [left|right]; solve_In.
         + pose proof (n_defd n) as (?&Hdef&Hperm). simpl_In.
-          eapply sc_block; eauto.
-          * rewrite idcaus_app, map_app; auto.
+          eapply sc_block; eauto with datatypes.
+          * clear - Hnd. simpl_app. simpl.
+            erewrite map_map with (l:=locals _), map_ext with (l:=locals _), map_map_filter, map_filter_ext; eauto.
+            1,2:intro; destruct_conjs; auto. destruct o; simpl; auto.
           * apply n_nodup.
-          * apply n_nodup.
+          * rewrite app_nil_r. apply n_nodup.
+          * intros * _ [].
           * rewrite Hperm. solve_incl_app.
           * eapply Hwtn.
           * eapply Hwcn.
           * eapply Hwcn.
+          * simpl. now rewrite map_app.
+          * apply Env.dom_lb_nil.
           * rewrite Hperm. solve_In.
           * simpl. rewrite idcaus_app, in_app_iff; right. solve_In.
-          * intros ?? Hdep'.
-            eapply Forall_forall in Hvars; eauto.
+          * intros ? [|[]] Hdep'. simpl_In.
+            eapply Forall_forall in Hvars; [|eapply Hdep]; eauto.
+            rewrite idcaus_app in Hdep'; eauto.
+          * intros ? Hin1 Hdep'. rewrite idcaus_app in Hdep'; eauto.
         + eapply sem_block_ck'_cons_nIn; eauto.
-          eapply NoDup_app_In in Hnd; eauto. rewrite idcaus_app, map_app, in_app_iff; auto.
-        + intros ??? Hin'. exfalso.
-          eapply NoDup_app_In in Hnd; eauto. solve_In.
-        + pose proof (n_defd n) as (?&Hdef&Hperm). simpl_In.
-          eapply sem_block_ck'_cons_In with (env:=(n_in n ++ n_out n)); eauto.
-          * rewrite idcaus_app, map_app; auto.
+          eapply NoDup_app_r, NoDup_app_In in Hnd; eauto. contradict Hnd.
+          rewrite in_app_iff in *. destruct Hnd; [left|right]; solve_In.
+        + split; intros ??? Hin'; [|inv Hin']. exfalso. simpl_In.
+          rewrite app_assoc in Hnd. eapply NoDup_app_In in Hnd; eauto.
+          2:{ rewrite in_app_iff in *. destruct Hin0; [left|right]; solve_In. }
+          eapply Hnd. clear Hin0. rewrite in_app_iff. destruct Hin; [left|right]; solve_In.
+        + pose proof (n_defd n) as (?&Hdef&Hperm).
+          assert (exists y, In (y, x) (idty (locals (n_block n))) \/ In (y, Some x) (idck (locals (n_block n)))) as (?&Hin').
+          { destruct Hin; simpl_In; eexists; [left|right]; solve_In. } clear Hin.
+          eapply sem_block_ck'_cons_In with (Γ:=(n_in n ++ n_out n)) (Γl:=[]); eauto with datatypes; simpl.
+          * clear - Hnd. simpl_app.
+            erewrite map_map with (l:=locals _), map_ext with (l:=locals _), map_map_filter, map_filter_ext; eauto.
+            1,2:intro; destruct_conjs; auto. destruct o; simpl; auto.
           * apply n_nodup.
-          * apply n_nodup.
+          * rewrite app_nil_r. apply n_nodup.
+          * intros * _ [].
           * rewrite Hperm. solve_incl_app.
           * eapply Hwtn.
           * eapply Hwcn.
           * eapply Hwcn.
-          * solve_In.
-          * intros ?? Hdep'.
-            eapply Forall_forall in Hvars; eauto.
+          * simpl. now rewrite map_app.
+          * apply Env.dom_lb_nil.
+          * destruct Hin'; [left|right]; solve_In; eauto.
+          * intros ? [|[]] Hdep'. simpl_In.
+            eapply Forall_forall in Hvars; [|eapply Hdep]; eauto.
+            rewrite idcaus_app in Hdep'; eauto.
+          * intros ? Hin1 Hdep'. rewrite idcaus_app in Hdep'; eauto.
     Qed.
 
     Lemma sem_clocks_det' : forall H H' b ins vins ss,
@@ -3631,15 +4017,15 @@ Module Type LCLOCKSEMANTICS
     Qed.
 
     Lemma sem_node_restrict {prefs2} : forall (n : @node PSyn prefs2) H b xs ys,
-        wc_block G (idck (idty (n_in n ++ n_out n))) (n_block n) ->
+        wc_block G (idck (idty (n_in n ++ n_out n))) [] (n_block n) ->
         Forall2 (sem_var H) (idents (n_in n)) xs ->
         Forall2 (sem_var H) (idents (n_out n)) ys ->
-        Sem.sem_block G H b (n_block n) ->
+        Sem.sem_block G (H, Env.empty _) b (n_block n) ->
         let H' := Env.restrict H (idents (n_in n ++ n_out n)) in
         Env.dom H' (idents (n_in n ++ n_out n)) /\
         Forall2 (sem_var H') (idents (n_in n)) xs /\
         Forall2 (sem_var H') (idents (n_out n)) ys /\
-        Sem.sem_block G H' b (n_block n).
+        Sem.sem_block G (H', Env.empty _) b (n_block n).
     Proof with eauto.
       intros * Hwc Hins Houts Heqs.
       remember (Env.restrict _ _) as H'; simpl.
@@ -3658,14 +4044,14 @@ Module Type LCLOCKSEMANTICS
         eapply in_map_iff; do 2 esplit; eauto using in_or_app. reflexivity.
       - subst. eapply Sem.sem_block_restrict in Heqs; eauto.
         eapply wc_block_wx_block in Hwc.
-        rewrite map_fst_idck, map_fst_idty in Hwc. assumption.
+        rewrite map_fst_idck, map_fst_idty in Hwc. eauto.
     Qed.
 
     Lemma sc_var_inv_intro {prefs2} : forall (n : @node PSyn prefs2) H xs,
         node_causal n ->
         Forall2 (sem_var H) (idents (n_in n)) xs ->
         Forall2 (fun xc => sem_clock H (clocks_of xs) (snd xc)) (idck (idty (n_in n))) (map abstract_clock xs) ->
-        Forall (sc_var_inv (n_in n ++ n_out n) H (clocks_of xs)) (map snd (idcaus (n_in n))).
+        Forall (sc_var_inv (n_in n ++ n_out n) [] (H, Env.empty _) (clocks_of xs)) (map snd (idcaus (n_in n))).
     Proof.
       intros * (Hnd&_) Hvar Hclock.
       unfold idents, idck, idty, idcaus in *.
@@ -3674,15 +4060,12 @@ Module Type LCLOCKSEMANTICS
       eapply Forall2_Forall2 in Hclock; [|eapply Hvar]. eapply Forall2_ignore2 in Hclock.
       clear - Hnd Hclock.
       eapply Forall_impl_In; [|eauto].
-      intros (?&(?&?)&?) ? (?&?&?&?) ??? Hin Hv; simpl in *. simpl_In.
+      intros (?&(?&?)&?) ? (?&?&?&?). split; intros ??? Hin Hv; simpl in *. 2:inv Hin. simpl_In.
       rewrite in_app_iff in Hin0. destruct Hin0 as [Hin0|Hin0].
-      2:{ exfalso. rewrite 4 map_app in Hnd. eapply NoDup_app_In in Hnd.
-          eapply Hnd, in_app_iff. left.
-          1,2:(repeat (eapply in_map_iff; do 2 esplit)). 2,3,5,6:eauto. 1,2:eauto.
-      }
-      rewrite 4 map_app in Hnd. eapply NoDup_app_l, NoDup_snd_det in Hnd.
-      2:(eapply in_map_iff; do 2 esplit; try eapply H0); eauto.
-      2:(eapply in_map_iff; do 2 esplit; try eapply Hin); eauto; reflexivity. subst.
+      2:{ exfalso. simpl_app. eapply NoDup_app_In in Hnd.
+          eapply Hnd, in_app_iff. left. 1,2:solve_In. }
+      simpl_app.
+      eapply NoDup_app_l, NoDup_snd_det in Hnd. 2:solve_In. 2:clear Hin0; solve_In. subst.
       eapply sem_var_det in H2; eauto. rewrite H2.
       specialize (node_NoDup n) as Hnd. apply fst_NoDupMembers in Hnd.
       eapply NoDupMembers_det in Hnd; auto.
@@ -3690,29 +4073,32 @@ Module Type LCLOCKSEMANTICS
       inv Hnd; auto.
     Qed.
 
-    Fact wc_exp_Is_free_left : forall env e x k,
-        wc_exp G (idty env) e ->
-        Is_free_left (idck env) x k e ->
-        In x (map snd (idck env)).
+    Fact wc_exp_Is_free_left : forall Γ Γl e x k,
+        wc_exp G (idty Γ) (idty Γl) e ->
+        Is_free_left (idck Γ) (idck Γl) x k e ->
+        In x (map snd (idck Γ)) \/ In x (map snd (idck Γl)).
     Proof.
       Local Ltac solve_forall_exists :=
         match goal with
-        | H: Is_free_left_list _ _ _ _ |- _ =>
+        | H: Is_free_left_list _ _ _ _ _ |- _ =>
             eapply Is_free_left_list_Exists in H as (?&?)
         end; simpl_Exists; simpl_Forall; eauto.
       induction e using exp_ind2; intros * Hwc Hfree;
         inv Hwc; inv Hfree; eauto.
-      - (* var *) solve_In.
+      - (* var *) left. solve_In.
+      - (* last *) right. solve_In.
       - (* binop *) destruct H1; eauto.
       - (* fby *)
         solve_forall_exists.
       - (* arrow *)
         destruct H3 as [Hex|Hex]; eauto; solve_forall_exists.
       - (* when *)
-        destruct H2 as [[? Hex]|Hex]; subst; eauto. solve_In.
+        destruct H2 as [[? Hex]|Hex]; subst; eauto.
+        left. solve_In.
         solve_forall_exists.
       - (* merge *)
-        destruct H2 as [[? Hex]|Hex]; subst; eauto. solve_In.
+        destruct H2 as [[? Hex]|Hex]; subst; eauto.
+        left. solve_In.
         simpl_Exists. simpl_Forall.
         solve_forall_exists.
       - (* case *)
@@ -3726,25 +4112,27 @@ Module Type LCLOCKSEMANTICS
     Qed.
 
     (** After getting sc_var_inv, we can easily give an alignment lemma for expressions *)
-    Lemma sc_exp'' : forall (env : list (ident * (type * clock * ident))) envty H b e vs,
+    Lemma sc_exp'' : forall (Γ Γl : list (ident * (type * clock * ident))) Γty Γtyl H b e vs,
         wc_global G ->
-        NoDupMembers env ->
-        NoDup (map snd (idcaus env)) ->
-        sc_vars (idck (idty env)) H b ->
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        sc_vars (idck (idty Γ)) (idck (idty Γl)) H b ->
 
-        wt_exp G envty e ->
-        wc_exp G (idck (idty env)) e ->
+        wt_exp G Γty Γtyl e ->
+        wc_exp G (idck (idty Γ)) (idck (idty Γl)) e ->
         Sem.sem_exp G H b e vs ->
-        Forall2 (sem_clock H b) (clockof e) (map abstract_clock vs).
+        Forall2 (sem_clock (fst H) b) (clockof e) (map abstract_clock vs).
     Proof.
-      intros * HwcG Hnd1 Hnd2 Hinv Hwt Hwc Hsem.
+      intros * HwcG Hnd1 Hnd2 Hnd3 Hinv Hwt Hwc Hsem.
       eapply sc_vars_sc_var_inv in Hinv; eauto.
-      assert (forall k, k < numstreams e -> sc_exp_inv env0 envty H b e k); intros.
+      assert (forall k, k < numstreams e -> sc_exp_inv Γ Γl Γty Γtyl H b e k); intros.
       eapply exp_causal_ind
-             with (P_exp:=sc_exp_inv _ _ H b); eauto with lclocking; intros.
+             with (P_exp:=sc_exp_inv _ _ _ _ H b); eauto with lclocking; intros.
       - apply sc_exp_const.
       - apply sc_exp_enum.
       - eapply sc_exp_var; eauto.
+      - eapply sc_exp_last; eauto.
       - apply sc_exp_unop; auto.
       - apply sc_exp_binop; auto.
       - apply sc_exp_fby; auto.
@@ -3753,11 +4141,10 @@ Module Type LCLOCKSEMANTICS
       - eapply sc_exp_merge; eauto.
       - apply sc_exp_case; auto.
       - eapply sc_exp_app; eauto.
-      - eapply wc_exp_wx_exp in Hwc. rewrite map_fst_idck, map_fst_idty in Hwc. now rewrite map_fst_idcaus.
-      - intros ? Hcau.
-        eapply Forall_forall in Hinv; eauto.
-        rewrite <-idck_idckcaus.
-        eapply wc_exp_Is_free_left; eauto. rewrite idty_idckcaus; eauto. rewrite idck_idckcaus; eauto.
+      - eapply wc_exp_wx_exp in Hwc. rewrite 2 map_fst_idck, 2 map_fst_idty in Hwc. now rewrite 2 map_fst_idcaus.
+      - eapply Forall_forall in Hinv; eauto.
+        rewrite <-2 idck_idckcaus, in_app_iff.
+        eapply wc_exp_Is_free_left; eauto. rewrite 2 idty_idckcaus; eauto. rewrite 2 idck_idckcaus; eauto.
       - assert (length vs = numstreams e) as Hlen'.
         { eapply sem_exp_numstreams in Hsem; eauto with lclocking. }
         eapply Forall2_forall2; split.
@@ -3770,63 +4157,63 @@ Module Type LCLOCKSEMANTICS
           erewrite map_nth'; eauto. congruence.
     Qed.
 
-    Corollary sc_exps'' : forall (env : list (ident * (type * clock * ident))) envty H b es vss,
+    Corollary sc_exps'' : forall (Γ Γl : list (ident * (type * clock * ident))) Γty Γtyl H b es vss,
         wc_global G ->
-        NoDupMembers env ->
-        NoDup (map snd (idcaus env)) ->
-        sc_vars (idck (idty env)) H b ->
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        sc_vars (idck (idty Γ)) (idck (idty Γl)) H b ->
 
-        Forall (wt_exp G envty) es ->
-        Forall (wc_exp G (idck (idty env))) es ->
+        Forall (wt_exp G Γty Γtyl) es ->
+        Forall (wc_exp G (idck (idty Γ)) (idck (idty Γl))) es ->
         Forall2 (Sem.sem_exp G H b) es vss ->
-        Forall2 (sem_clock H b) (clocksof es) (map abstract_clock (concat vss)).
+        Forall2 (sem_clock (fst H) b) (clocksof es) (map abstract_clock (concat vss)).
     Proof.
-      intros * HwcG Hnd1 Hnd2 Hsc Hwt Hwc Hsem.
+      intros * HwcG Hnd1 Hnd2 Hnd3 Hsc Hwt Hwc Hsem.
       unfold clocksof.
       rewrite Forall2_map_2, flat_map_concat_map.
-      apply Forall2_concat. rewrite Forall2_map_1.
-      eapply Forall2_impl_In; [|eauto]; intros.
-      eapply sc_exp'' in H2; eauto. 1-3:simpl_Forall; eauto.
+      apply Forall2_concat. simpl_Forall.
+      eapply sc_exp'' with (Γ:=Γ) in H1; eauto. simpl_Forall; eauto.
     Qed.
   End sc_inv.
 
   Global Hint Unfold idckcaus : list.
 
-  Lemma sc_vars_mask : forall env H b r k,
-      sc_vars env H b ->
-      sc_vars env (mask_hist k r H) (maskb k r b).
+  Lemma sc_vars_mask : forall Γ Γl H b r k,
+      sc_vars Γ Γl H b ->
+      sc_vars Γ Γl (Sem.mask_hist k r H) (maskb k r b).
   Proof.
-    intros * Hinv.
-    eapply Forall_impl; [|eauto]. intros (?&?) (?&Hvar&Hck).
-    eapply sem_var_mask in Hvar. eapply sem_clock_mask in Hck.
-    exists (maskv k r x). split; eauto. rewrite ac_mask; eauto.
+    intros * (Hinv1&Hinv2).
+    split; simpl_Forall;
+      take (sem_var _ _ _) and rename it into Hvar;
+      take (sem_clock _ _ _ _) and rename it into Hck.
+    1,2:eapply sem_var_mask in Hvar; eapply sem_clock_mask in Hck.
+    1,2:do 2 esplit; eauto; rewrite ac_mask; eauto.
   Qed.
 
-  Lemma sc_vars_unmask : forall env H b r,
-      (forall k, sc_vars env (mask_hist k r H) (maskb k r b)) ->
-      sc_vars env H b.
+  Lemma sc_vars_unmask : forall Γ Γl H b r,
+      (forall k, sc_vars Γ Γl (Sem.mask_hist k r H) (maskb k r b)) ->
+      sc_vars Γ Γl H b.
   Proof.
     intros * Hinv.
-    eapply Forall_forall; intros (?&?) Hin.
-    specialize (Hinv 0) as Hinv0.
-    eapply Forall_forall in Hinv0; eauto. destruct Hinv0 as (?&Hvar0&_).
-    eapply sem_var_mask_inv in Hvar0 as (vs&Hvar0&Heq0).
-    exists vs. split; auto.
-    eapply sem_clock_unmask; intros k. rewrite <-ac_mask.
-    specialize (Hinv k) as Hinvk.
-    eapply Forall_forall in Hinvk; eauto. destruct Hinvk as (?&Hvark&Hckk).
-    eapply sem_var_mask_inv in Hvark as (vs'&Hvark&Heqk).
-    eapply sem_var_det in Hvar0; eauto.
+    split; simpl_Forall.
+    1,2:specialize (Hinv 0) as Hinv0; destruct Hinv0; simpl_Forall;
+    take (sem_var _ _ _) and eapply sem_var_mask_inv in it as (vs&Hvar0&Heq0);
+    exists vs; split; auto;
+    eapply sem_clock_unmask; intros k; rewrite <-ac_mask;
+    specialize (Hinv k) as (?&?); simpl_Forall;
+    take (sem_var (mask_hist _ _ _) _ _) and eapply sem_var_mask_inv in it as (?&?&Heqk);
+    eapply sem_var_det in Hvar0; eauto;
     rewrite <-Hvar0, <-Heqk; auto.
   Qed.
 
-  Lemma sc_vars_slower_hist : forall env H b,
-      sc_vars env H b ->
-      Env.dom H (map fst env) ->
-      slower_hist H b.
+  Lemma sc_vars_slower_hist : forall Γ Γl H b,
+      sc_vars Γ Γl H b ->
+      Env.dom (fst H) (map fst Γ) ->
+      slower_hist (fst H) b.
   Proof.
-    intros * Hsc Hdom ?? Hfind.
-    assert (exists ck, In (x, ck) env0) as (?&Hin).
+    intros * (Hsc&_) Hdom ?? Hfind.
+    assert (exists ck, In (x, ck) Γ) as (?&Hin).
     { eapply Env.find_In, Env.dom_use in Hfind; eauto. simpl_In; eauto. }
     eapply Forall_forall in Hsc; eauto.
     simpl in *. destruct Hsc as (?&Hsem&Hck).
@@ -3852,16 +4239,17 @@ Module Type LCLOCKSEMANTICS
         sem_clock_inputs G f ins ->
         sem_node_ck G f ins outs.
 
-    Lemma sem_exp_sem_exp_ck : forall (env : list (ident * (type * _ * ident))) envty H bs e vs,
-        NoDupMembers env ->
-        NoDup (map snd (idcaus env)) ->
-        sc_vars (idck (idty env)) H bs ->
-        wt_exp G envty e ->
-        wc_exp G (idck (idty env)) e ->
+    Lemma sem_exp_sem_exp_ck : forall (Γ Γl : list (ident * (type * _ * ident))) Γty Γtyl H bs e vs,
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        sc_vars (idck (idty Γ)) (idck (idty Γl)) H bs ->
+        wt_exp G Γty Γtyl e ->
+        wc_exp G (idck (idty Γ)) (idck (idty Γl)) e ->
         Sem.sem_exp G H bs e vs ->
         sem_exp_ck G H bs e vs.
     Proof.
-      induction e using exp_ind2; intros * Hnd1 Hnd2 Hsc Hwt Hwc Hsem;
+      induction e using exp_ind2; intros * Hnd1 Hnd2 Hnd3 Hsc Hwt Hwc Hsem;
         inv Hwt; inv Hwc; inv Hsem;
           econstructor; eauto.
       1-5,10-11:(eapply Forall2_impl_In; [|eauto]; intros;
@@ -3886,87 +4274,93 @@ Module Type LCLOCKSEMANTICS
         eapply sc_inside_mask with (es0:=es); eauto.
         + eapply sem_exps_sem_var; eauto.
         + eapply wc_find_node in HwcG as (?&?&?); eauto.
-        + eapply sc_exps'' with (env:=env0); eauto.
+        + eapply sc_exps'' with (Γ0:=Γ); eauto.
     Qed.
 
-    Corollary sem_equation_sem_equation_ck : forall (env : list (ident * (type * clock * ident))) envty H bs equ,
-        NoDupMembers env ->
-        NoDup (map snd (idcaus env)) ->
-        sc_vars (idck (idty env)) H bs ->
-        wt_equation G envty equ ->
-        wc_equation G (idck (idty env)) equ ->
+    Corollary sem_equation_sem_equation_ck : forall (Γ Γl : list (ident * (type * clock * ident))) Γty Γtyl H bs equ,
+        NoDupMembers Γ ->
+        NoDupMembers Γl ->
+        NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)) ->
+        sc_vars (idck (idty Γ)) (idck (idty Γl)) H bs ->
+        wt_equation G Γty Γtyl equ ->
+        wc_equation G (idck (idty Γ)) (idck (idty Γl)) equ ->
         Sem.sem_equation G H bs equ ->
         sem_equation_ck G H bs equ.
     Proof.
-      intros * Hnd1 Hnd2 Hsc Hwt Hwc Hsem.
+      intros * Hnd1 Hnd2 Hnd3 Hsc Hwt Hwc Hsem.
       inv Hsem. inv Hwt. inv Hwc.
       - (* app *)
         econstructor; eauto.
         apply Forall_singl in H0. inv H0.
         inv H1; inv H14. inv H5. do 2 (econstructor; eauto).
         + eapply Forall2_impl_In; [|eauto]; intros.
-          eapply sem_exp_sem_exp_ck; eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
+          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
         + eapply Forall2_impl_In; [|eauto]; intros.
-          eapply sem_exp_sem_exp_ck; eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
+          eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto. 1-2:eapply Forall_forall; [|eauto]; eauto.
         + intros k. eapply Hnode; eauto.
           specialize (H28 k). inv H28. rewrite H1 in H17; inv H17. rewrite H1 in H8; inv H8.
           repeat (esplit; eauto).
           eapply sc_inside_mask with (es:=es0); eauto.
           * eapply sem_exps_sem_var; eauto.
           * eapply wc_find_node in HwcG as (?&?&?); eauto.
-          * eapply sc_exps'' with (env:=env0); eauto.
+          * eapply sc_exps'' with (Γ0:=Γ); eauto.
       - (* general case *)
         econstructor; eauto.
         eapply Forall2_impl_In; [|eauto]; intros.
-        eapply sem_exp_sem_exp_ck; eauto. 1-2:eapply Forall_forall; eauto.
+        eapply sem_exp_sem_exp_ck with (Γ:=Γ); eauto. 1-2:eapply Forall_forall; eauto.
     Qed.
 
     Hint Resolve Env.union_refines2 Env.union_dom' Env.adds_opt'_refines Env.adds_opt'_dom
          EqStrel EqStrel_Reflexive : core.
 
-    Fact sem_blocks_sem_blocks_ck : forall envP (envty envck: list (ident * (type * clock * ident))) H bs blks xs,
+    Fact sem_blocks_sem_blocks_ck : forall envP (Γty Γtyl Γck Γckl : list (ident * (type * clock * ident))) H bs blks xs,
       Forall
-        (fun blk => forall xs (envty envck: list (ident * (type * clock * ident))) H bs,
-             NoDupMembers envty ->
-             NoDupMembers envck ->
-             NoDup (map snd (idcaus (envck ++ locals blk))) ->
-             NoDupLocals (map fst envty) blk ->
+        (fun blk => forall xs (Γty Γtyl Γck Γckl : list (ident * (type * clock * ident))) H bs,
+             NoDupMembers Γty -> NoDupMembers Γtyl ->
+             NoDupMembers Γck -> NoDupMembers Γckl ->
+             NoDup (map snd (idcaus Γck ++ idcaus Γckl ++ idty (locals blk)
+                                    ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (locals blk))) ->
+             NoDupLocals (map fst Γty ++ map fst Γtyl) blk ->
              VarsDefined blk xs ->
-             incl xs (map fst envck) ->
-             incl (idty (idty envck)) (idty (idty envty)) ->
-             incl (map snd (idcaus (envck ++ locals blk))) envP ->
-             Env.dom H (map fst envty) ->
-             sc_vars (idck (idty envck)) H bs ->
-             wt_block G (idty (idty envty)) blk ->
-             wc_env (idck (idty envck)) ->
-             wc_block G (idck (idty envck)) blk ->
+             incl xs (map fst Γck) ->
+             incl (idty (idty Γck)) (idty (idty Γty)) ->
+             incl (idty (idty Γckl)) (idty (idty Γtyl)) ->
+             incl (map snd (idcaus Γck ++ idcaus Γckl ++ idty (locals blk)
+                                   ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (locals blk))) envP ->
+             Env.dom (fst H) (map fst Γty) ->
+             sc_vars (idck (idty Γck)) (idck (idty Γckl)) H bs ->
+             wt_block G (idty (idty Γty)) (idty (idty Γtyl)) blk ->
+             wc_env (idck (idty Γck)) ->
+             wc_block G (idck (idty Γck)) (idck (idty Γckl)) blk ->
              sem_block_ck' G envP H bs blk ->
              sem_block_ck G H bs blk) blks ->
-      NoDupMembers envty ->
-      NoDupMembers envck ->
-      NoDup (map snd (idcaus (envck ++ flat_map locals blks))) ->
-      Forall (NoDupLocals (map fst envty)) blks ->
+      NoDupMembers Γty -> NoDupMembers Γtyl ->
+      NoDupMembers Γck -> NoDupMembers Γckl ->
+      NoDup (map snd (idcaus Γck ++ idcaus Γckl ++ idty (flat_map locals blks)
+                             ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (flat_map locals blks))) ->
+      Forall (NoDupLocals (map fst Γty ++ map fst Γtyl)) blks ->
       Forall2 VarsDefined blks xs ->
-      incl (concat xs) (map fst envck) ->
-      incl (idty (idty envck)) (idty (idty envty)) ->
-      incl (map snd (idcaus (envck ++ flat_map locals blks))) envP ->
-      Env.dom H (map fst envty) ->
-      sc_vars (idck (idty envck)) H bs ->
-      Forall (wt_block G (idty (idty envty))) blks ->
-      wc_env (idck (idty envck)) ->
-      Forall (wc_block G (idck (idty envck))) blks ->
+      incl (concat xs) (map fst Γck) ->
+      incl (idty (idty Γck)) (idty (idty Γty)) ->
+      incl (idty (idty Γckl)) (idty (idty Γtyl)) ->
+      incl (map snd (idcaus Γck ++ idcaus Γckl ++ idty (flat_map locals blks)
+                             ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (flat_map locals blks))) envP ->
+      Env.dom (fst H) (map fst Γty) ->
+      sc_vars (idck (idty Γck)) (idck (idty Γckl)) H bs ->
+      Forall (wt_block G (idty (idty Γty)) (idty (idty Γtyl))) blks ->
+      wc_env (idck (idty Γck)) ->
+      Forall (wc_block G (idck (idty Γck)) (idck (idty Γckl))) blks ->
       Forall (sem_block_ck' G envP H bs) blks ->
       Forall (sem_block_ck G H bs) blks.
     Proof.
-      induction blks; intros * Hf Hnd1 Hnd2 Hnd3 Hnd4 Hvars Hincl Hincl2 HenvP Hdom Hsc Hwt Hwenv Hwc Hsem;
-        inv Hnd4; inv Hvars; inv Hwt; inv Hwc; inv Hsem; inv Hf; simpl in *; auto.
-      eapply incl_app' in Hincl as (Hincl1&Hincl3).
-      rewrite 2 idcaus_app, 2 map_app in HenvP.
-      eapply IHblks in H9; eauto. clear IHblks.
-      2:{ rewrite 2 idcaus_app in Hnd3. rewrite idcaus_app. solve_NoDup_app. }
-      eapply H12 with (envty:=envty) (envck:=envck) in H10; eauto. clear H12.
-      rewrite 2 idcaus_app in Hnd3. rewrite idcaus_app. solve_NoDup_app.
-      1-2:rewrite idcaus_app, map_app in *; etransitivity; [|eauto]; solve_incl_app.
+      intros * Hf Hnd1 Hnd2 Hnd3 Hnd4 Hnd5 Hnd6 Hvars Hincl Hincl1 Hincl2 HenvP Hdom Hsc Hwt Hwenv Hwc Hsem.
+      simpl_Forall. inv_VarsDefined. simpl_Forall.
+      eapply Hf with (Γty:=Γty) (Γtyl:=Γtyl) (Γck:=Γck); eauto.
+      - rewrite app_assoc. eapply NoDup_locals_inv; eauto. simpl_app; auto.
+      - etransitivity; [|eauto]; eauto using incl_concat.
+      - etransitivity; [|eauto]. simpl_app.
+        apply incl_appr', incl_appr', incl_app; [apply incl_appl|apply incl_appr]; apply incl_map.
+        1,2:intros ? Hin; solve_In. auto.
     Qed.
 
     Lemma refines_restrict_Equiv : forall vars (H H' : history),
@@ -3990,130 +4384,127 @@ Module Type LCLOCKSEMANTICS
         apply Env.restrict_find_inv in Hfind' as (?&?); auto.
     Qed.
 
-    Lemma sem_block_sem_block_ck : forall envP blk xs (envty envck: list (ident * (type * clock * ident))) H bs,
-        NoDupMembers envty ->
-        NoDupMembers envck ->
-        NoDup (map snd (idcaus (envck ++ locals blk))) ->
-        NoDupLocals (map fst envty) blk ->
+    Lemma sem_block_sem_block_ck : forall envP blk xs (Γty Γtyl Γck Γckl : list (ident * (type * clock * ident))) H bs,
+        NoDupMembers Γty -> NoDupMembers Γtyl ->
+        NoDupMembers Γck -> NoDupMembers Γckl ->
+        NoDup (map snd (idcaus Γck ++ idcaus Γckl ++ idty (locals blk)
+                               ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (locals blk))) ->
+        NoDupLocals (map fst Γty ++ map fst Γtyl) blk ->
         VarsDefined blk xs ->
-        incl xs (map fst envck) ->
-        incl (idty (idty envck)) (idty (idty envty)) ->
-        incl (map snd (idcaus (envck ++ locals blk))) envP ->
-        Env.dom H (map fst envty) ->
-        sc_vars (idck (idty envck)) H bs ->
-        wt_block G (idty (idty envty)) blk ->
-        wc_env (idck (idty envck)) ->
-        wc_block G (idck (idty envck)) blk ->
+        incl xs (map fst Γck) ->
+        incl (idty (idty Γck)) (idty (idty Γty)) ->
+        incl (idty (idty Γckl)) (idty (idty Γtyl)) ->
+        incl (map snd (idcaus Γck ++ idcaus Γckl ++ idty (locals blk)
+                              ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (locals blk))) envP ->
+        Env.dom (fst H) (map fst Γty) ->
+        sc_vars (idck (idty Γck)) (idck (idty Γckl)) H bs ->
+        wt_block G (idty (idty Γty)) (idty (idty Γtyl)) blk ->
+        wc_env (idck (idty Γck)) ->
+        wc_block G (idck (idty Γck)) (idck (idty Γckl)) blk ->
         sem_block_ck' G envP H bs blk ->
         sem_block_ck G H bs blk.
     Proof.
       induction blk using block_ind2;
-        intros * Hnd1 Hnd2 Hnd3 Hnd4 Hvars Hincl Hincl2 HenvP Hdom Hsc Hwt Hwenv Hwc Hsem;
-        inv Hnd4; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl_ndup Hnd1.
+        intros * Hnd1 Hnd2 Hnd3 Hnd4 Hnd5 Hnd6 Hvars Hincl Hincl1 Hincl2 HenvP Hdom Hsc Hwt Hwenv Hwc Hsem;
+        inv Hnd6; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl_ndup Hnd1.
+
       - (* equation *)
-        assert (incl (map fst envck) (map fst envty)) as Hincl'.
-        { rewrite <-4 map_fst_idty. apply incl_map; auto. }
-        rewrite app_nil_r in *.
-        constructor. eapply sem_equation_sem_equation_ck with (env:=envck); eauto.
+        constructor. eapply sem_equation_sem_equation_ck with (Γ:=Γck); eauto.
+        rewrite app_nil_r, map_app in Hnd5; auto.
+
       - (* reset *)
-        assert (incl (map fst envck) (map fst envty)) as Hincl'.
-        { rewrite <-4 map_fst_idty. apply incl_map; auto. }
         econstructor; eauto.
-        + assert (Hsem2:=H9).
-          eapply sem_exp_sem_exp_ck with (env:=envck) in Hsem2. 4:eauto using sc_vars_refines. 1-5:eauto using Sem.sem_exp_refines.
-          rewrite idcaus_app in Hnd3. solve_NoDup_app.
+        + assert (Hsem2:=H7).
+          eapply sem_exp_sem_exp_ck with (Γ:=Γck) in Hsem2; eauto.
+          clear - Hnd5. simpl_app. rewrite app_assoc in Hnd5; eauto using NoDup_app_l.
         + intros k.
-          eapply sem_blocks_sem_blocks_ck with (envck:=envck) (envty:=envty) (H:=mask_hist k r H0) in H; eauto.
+          eapply sem_blocks_sem_blocks_ck with (Γty:=Γty) (Γtyl:=Γtyl) (Γck:=Γck) (H:=Sem.mask_hist k r H0) in H; eauto.
           * eapply Env.dom_map; eauto.
           * eapply sc_vars_mask; eauto.
+
       - (* switch *)
-        assert (incl (map fst envck) (map fst envty)) as Hincl'.
-        { rewrite <-4 map_fst_idty. apply incl_map; auto. }
-        assert (sem_exp G (Env.restrict H0 (map fst envck)) bs ec [sc]) as Hsem.
-        { eapply Sem.sem_exp_restrict; eauto. rewrite <-map_fst_idty, <-map_fst_idck; eauto with lclocking. }
-        assert (sem_clock H0 bs ck (abstract_clock sc)) as Hsemck.
-        { eapply sc_exp' with (k:=0) in Hsem; eauto using Sem.sem_exp_refines.
-          2:{ rewrite <-length_clockof_numstreams, H13; auto. }
-          2:{ intros ? Hisf. intros ??? Hin' Hv'. simpl_In.
-              eapply Forall_forall in Hsc. 2:solve_In.
-              destruct Hsc as (?&Hv&Hck).
-              eapply sem_var_restrict in Hv; eauto. 2:solve_In.
-              eapply sem_var_det in Hv'; eauto. rewrite <-Hv'. 2:solve_In.
-              eapply sem_clock_refines'. 3:eauto.
-              eapply Forall_forall in Hwenv. 2:solve_In. eauto.
-              intros ?? Hin' ?. rewrite InMembers_idck, InMembers_idty in Hin'.
-              eapply sem_var_restrict; eauto. apply fst_InMembers; auto.
-          }
-          rewrite H13 in Hsem; simpl in *.
-          eapply sem_clock_wt_refines' with (vars:=idty (idty envty)). 3:eauto.
-          1:{ eapply wt_exp_clockof in H5. rewrite H13 in H5. apply Forall_singl in H5; eauto. }
-          intros ?? Hin Hv.
-          eapply sem_var_restrict_inv; eauto.
+        assert (sem_clock (fst H0) bs ck (abstract_clock sc)) as Hsemck.
+        { eapply sc_exp'' with (Γ:=Γck) in H16; eauto.
+          2:{ clear - Hnd5. simpl_app. rewrite app_assoc in Hnd5; eauto using NoDup_app_l. }
+          take (clockof _ = _) and rewrite it in H16; simpl_Forall; eauto.
         }
 
         econstructor; eauto.
-        + assert (Hsem2:=H15).
-          eapply sem_exp_sem_exp_ck in Hsem2. 4:eauto using sc_vars_refines. 1-5:eauto using Sem.sem_exp_refines.
-          rewrite idcaus_app in Hnd3. solve_NoDup_app.
+        + eapply sem_exp_sem_exp_ck with (Γ:=Γck) in H16; eauto.
+          clear - Hnd5. simpl_app. rewrite app_assoc in Hnd5; eauto using NoDup_app_l.
         + eapply Forall_forall; intros.
           repeat (take (Forall _ branches) and eapply Forall_forall in it; eauto).
           destruct it3 as (?&Hvars&Hperm).
-          remember (List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) (List.filter (fun '(x, (_, ck', _)) => ck' ==b ck) envck)) as envck'.
-          assert (incl env' (idck (idty envck'))) as Hincl1.
-          { subst. intros (?&?) Hin. apply H16 in Hin as (Hin&?); subst.
-            simpl_In. solve_In.
-            2:eapply filter_In; split; [eauto|]; apply equiv_decb_refl.
-            reflexivity.
-          }
-          eapply sem_blocks_sem_blocks_ck with (envck:=envck') (envty:=envty) (H:=filter_hist (fst x) sc H0) in it; eauto.
-          * subst; clear - Hnd2.
-            erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers. 2:intros (?&(?&?)&?); auto.
-            apply nodupmembers_filter; auto.
-          * subst. clear - Hnd3 H1. rewrite idcaus_app, map_app in *.
-            apply NoDup_app'.
-            -- subst; clear - Hnd3. apply NoDup_app_l in Hnd3.
-               induction envck as [|(?&(?&?)&?)]; simpl in *; auto.
-               inv Hnd3. destruct (_ ==b _); simpl; auto. constructor; auto.
-               contradict H1. clear - H1.
-               simpl_In. eapply filter_In in Hin as (Hin&_). solve_In.
-            -- apply NoDup_app_r in Hnd3. unfold idcaus in *. rewrite map_map in *.
-               eapply nodup_app_map_flat_map with (xs:=[]) in Hnd3; simpl in *; eauto.
-            -- eapply Forall_forall. intros ? Hinm1 Hinm2.
-               simpl_In. eapply filter_In in Hin0 as (Hin0&_).
-               eapply NoDup_app_In in Hnd3. eapply Hnd3. 2:solve_In. simpl.
-               solve_In.
+          remember (List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) (List.filter (fun '(x, (_, ck', _)) => ck' ==b ck) Γck)) as Γck'.
+          remember (List.map (fun '(x, (ty, _, cx)) => (x, (ty, Cbase, cx))) (List.filter (fun '(x, (_, ck', _)) => ck' ==b ck) Γckl)) as Γckl'.
+          eapply sem_blocks_sem_blocks_ck with (Γty:=Γty) (Γtyl:=Γtyl) (Γck:=Γck') (Γckl:=Γckl') (H:=Sem.filter_hist (fst x) sc H0) in it; eauto.
+          * subst. eapply nodupmembers_map, nodupmembers_filter; eauto.
+            intros; destruct_conjs; auto.
+          * subst. eapply nodupmembers_map, nodupmembers_filter; eauto.
+            intros; destruct_conjs; auto.
+          * subst. clear - Hnd5 H1. rewrite app_assoc. eapply NoDup_locals_inv2; eauto.
+            simpl_app. repeat rewrite map_map in *. rewrite app_assoc, <-map_app, <-filter_app.
+            rewrite app_assoc, <-map_app in Hnd5.
+            apply NoDup_app'; eauto using NoDup_app_r.
+            -- apply NoDup_app_l in Hnd5. clear - Hnd5.
+               induction (Γck ++ Γckl) as [|]; destruct_conjs; simpl in *;
+                 inv Hnd5; auto with datatypes.
+               destruct (_ ==b _); auto. constructor; auto.
+               contradict H1. solve_In.
+            -- simpl_Forall. intros Hin2. simpl_In.
+               eapply NoDup_app_In in Hnd5. 2:solve_In.
+               eapply Hnd5; eauto.
           * intros ? Hin. eapply Forall_VarsDefined_Is_defined in Hvars; eauto.
             2:{ eapply Forall_impl; [|eapply it4]; intros.
                 eapply NoDupLocals_incl; [|eauto]. etransitivity. rewrite Hperm; eauto.
-                etransitivity; eauto. reflexivity. }
+                apply incl_appl. repeat rewrite <-map_fst_idty. apply incl_map; auto. }
             eapply Exists_Is_defined_in_wx_In in Hvars.
             2:{ eapply Forall_impl; [|eapply it1]; intros; eauto using wc_block_wx_block. }
-            rewrite <-map_fst_idty, <-map_fst_idck. eapply incl_map; eauto.
+            rewrite <-map_fst_idty, <-map_fst_idck. subst. simpl_In.
+            eapply H15 in Hin0 as (?&?). solve_In; eauto.
+            apply equiv_decb_refl.
           * subst. etransitivity; eauto.
             unfold idty. repeat rewrite map_map. erewrite map_ext. apply incl_map, incl_filter', incl_refl.
             intros (?&(?&?)&?); auto.
-          * subst. clear - HenvP H1.
-            unfold idcaus in *. rewrite 2 map_app, 3 map_map in *. etransitivity; [|eauto].
-            apply incl_app; [apply incl_appl|apply incl_appr, incl_map].
-            -- erewrite map_ext. apply incl_map, incl_filter', incl_refl. intros (?&(?&?)&?); auto.
-            -- intros ??. solve_In.
+          * subst. etransitivity; eauto.
+            unfold idty. repeat rewrite map_map. erewrite map_ext. apply incl_map, incl_filter', incl_refl.
+            intros (?&(?&?)&?); auto.
+          * subst. etransitivity; [|eauto]. clear - H1.
+            simpl_app. repeat rewrite map_map.
+            erewrite map_ext with (l:=Γck), map_ext with (l:=filter _ Γckl).
+            apply incl_app, incl_app; [eapply incl_appl|apply incl_appr, incl_appl|].
+            1,2:apply incl_map, incl_filter.
+            apply incl_appr, incl_appr, incl_app; [apply incl_appl|apply incl_appr].
+            1,2:intros ? Hin; solve_In. auto.
+            1,2:intros; destruct_conjs; auto.
           * subst. apply Env.dom_map; auto.
-          * eapply Forall_forall; intros (?&?) Hin; subst. simpl_In.
-            apply filter_In in Hin0 as (Hin&Heq). apply clock_eqb_eq in Heq; subst.
+          * destruct Hsc as (Hsc1&Hsc2). split; subst; simpl_Forall; simpl_In.
+            1,2:apply clock_eqb_eq in Hf; subst.
 
-            eapply Forall_forall in Hsc. 2:solve_In. simpl in *.
-            destruct Hsc as (?&Hvar&Hck). eapply sem_var_filter in Hvar.
-            eexists. esplit; eauto.
-            eapply sem_clock_det in Hck. 2:eapply Hsemck. rewrite ac_filter, <-Hck.
-            eapply sem_clock_filter; eauto.
+            -- eapply Forall_forall in Hsc1. 2:solve_In. simpl in *.
+               destruct Hsc1 as (?&Hvar&Hck). eapply sem_var_filter in Hvar.
+               do 2 esplit; eauto.
+               eapply sem_clock_det in Hck. 2:eapply Hsemck. rewrite ac_filter, <-Hck.
+               eapply sem_clock_filter; eauto.
+            -- eapply Forall_forall in Hsc2. 2:solve_In. simpl in *.
+               destruct Hsc2 as (?&Hvar&Hck). eapply sem_var_filter in Hvar.
+               do 2 esplit; eauto.
+               eapply sem_clock_det in Hck. 2:eapply Hsemck. rewrite ac_filter, <-Hck.
+               eapply sem_clock_filter; eauto.
+
           * subst. eapply Forall_forall; intros ? Hin. simpl_In.
             constructor.
           * eapply Forall_impl; [|eapply it1]; intros.
             eapply wc_block_incl; eauto.
+            1,2:subst; intros ? Hin; destruct_conjs.
+            -- eapply H15 in Hin as (?&?); solve_In. apply equiv_decb_refl.
+            -- eapply H18 in Hin as (?&?); solve_In. apply equiv_decb_refl.
       - (* locals *)
-        assert (incl (map fst envck) (map fst envty)) as Hincl'.
+        assert (incl (map fst Γck) (map fst Γty)) as Hincl1'.
         { rewrite <-4 map_fst_idty. apply incl_map; auto. }
-        assert (Env.dom_lb Hl (map fst locs)) as Hdomlb.
+        assert (incl (map fst Γckl) (map fst Γtyl)) as Hincl2'.
+        { rewrite <-4 map_fst_idty. apply incl_map; auto. }
+        assert (Env.dom_lb Hi' (map fst locs)) as Hdomlb.
         { eapply Env.dom_lb_incl with (ys:=concat xs0). rewrite <-H8. apply incl_appl, incl_refl.
           eapply Env.dom_lb_concat, Forall_forall; eauto; intros ? Hin'.
           eapply Forall2_ignore1, Forall_forall in H4 as (?&?&?); eauto.
@@ -4122,82 +4513,149 @@ Module Type LCLOCKSEMANTICS
           eapply NoDupLocals_incl; eauto.
           rewrite Permutation_app_comm.
           etransitivity; [eapply incl_concat; eauto|].
-          rewrite <-H8. apply incl_app; [apply incl_appl, incl_refl|apply incl_appr; auto].
+          rewrite <-H8. apply incl_app; [apply incl_appl, incl_refl|apply incl_appr, incl_appl; auto].
           etransitivity; eauto. }
-        assert (Env.refines (EqSt (A:=svalue)) H0 (Env.restrict (Env.union H0 Hl) (map fst envty ++ map fst locs))) as Href1.
+        assert (Env.refines (EqSt (A:=svalue)) Hi (Env.restrict (Env.union Hi Hi') (map fst Γty ++ map fst locs))) as Href1.
         { intros ?? Hfind.
-          assert (In x (map fst envty)) as Hin by (eapply Env.dom_use; eauto; econstructor; eauto).
-          destruct (Env.find x Hl) eqn:Hfind2.
+          assert (In x (map fst Γty)) as Hin by (eapply Env.dom_use; eauto; econstructor; eauto).
+          destruct (Env.find x Hi') eqn:Hfind2.
           - do 2 esplit. 2:eapply Env.restrict_find, Env.union_find3'; eauto using in_or_app.
             eapply sem_var_det. econstructor; [eapply Hfind|reflexivity].
-            eapply H9; eauto. econstructor; eauto; reflexivity.
+            eapply H7; eauto. econstructor; eauto; reflexivity.
             intro contra. eapply H6; eauto using in_or_app.
           - do 2 esplit. reflexivity.
             eapply Env.restrict_find, Env.union_find2; eauto using in_or_app. }
-        assert (Forall (sem_block_ck G (Env.restrict (Env.union H0 Hl) (map fst envty ++ map fst locs)) bs) blocks) as Hblks.
-        { eapply sem_blocks_sem_blocks_ck with (envck:=envck++locs) (envty:=envty++locs); eauto.
+        assert (sc_vars (idck (idty (Γck ++ idty locs)))
+                        (idck (idty (Γckl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)))
+                        (Env.restrict (Env.union Hi Hi') (map fst Γty ++ map fst locs), Hl') bs
+               ) as Hsc'.
+        { unfold sc_vars. rewrite 2 idty_app, 2 idck_app. repeat rewrite Forall_app.
+          rewrite and_assoc, <-(and_assoc (Forall _ (idck (idty (idty locs))))), (and_comm (Forall _ (idck (idty (idty locs))))), and_assoc, <-and_assoc.
+          split.
+          - eapply sc_vars_refines; eauto.
+          - eapply sc_var_inv_sc_vars.
+            + simpl_Forall. simpl_In.
+              eapply Env.dom_lb_use in Hdomlb as (?&Hfind); eauto. 2:solve_In.
+              do 2 eexists; try reflexivity.
+              eapply Env.restrict_find, Env.union_find3'; eauto.
+              apply in_or_app, or_intror; solve_In.
+            + simpl_Forall. simpl_In.
+              edestruct H13 as (?&?&?&?&?&?&?); eauto.
+            + simpl_Forall.
+              assert (In x envP) as HinP.
+              { eapply HenvP. clear - H0. simpl_app.
+                repeat rewrite in_app_iff in *. right. right.
+                destruct H0; simpl_In.
+                + left. solve_In.
+                + right; right; left. solve_In. auto.
+              } simpl_Forall.
+              take (sc_var_inv _ _ _ _ _) and destruct it as (Hsc1&Hsc2).
+              split; intros; simpl_In.
+              1,2:eapply sem_clock_refines'. 3:eapply Hsc1; eauto; try solve_In.
+              6:eapply Hsc2; eauto; try solve_In; eauto.
+              * eapply Forall_forall in H17; [|solve_In]; simpl in *.
+                eapply wc_clock_wx_clock in H17; eauto.
+              * intros * Hin Hv.
+                eapply sem_var_restrict; eauto.
+                erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in Hin.
+                rewrite in_app_iff in *. destruct Hin; eauto. intros; destruct_conjs; auto.
+              * eapply sem_var_restrict_inv in H2 as (?&?); eauto.
+              * eapply Forall_forall in H17; [|solve_In]; simpl in *.
+                eapply wc_clock_wx_clock in H17; eauto.
+              * intros * Hin Hv.
+                eapply sem_var_restrict; eauto.
+                erewrite map_app, map_fst_idck, map_fst_idty, map_map, map_ext with (l:=locs) in Hin.
+                rewrite in_app_iff in *. destruct Hin; eauto. intros; destruct_conjs; auto.
+        }
+        assert (NoDupMembers (Γck ++ idty locs)) as Hnd3'.
+        { apply NoDupMembers_app; auto.
+          - now apply NoDupMembers_idty.
+          - intros * Hinm1 Hinm2. rewrite InMembers_idty in Hinm2.
+            eapply H6; eauto. apply in_or_app, or_introl, Hincl1', fst_InMembers; auto.
+        }
+        assert (NoDupMembers
+                  (Γckl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)) as Hnd4'.
+        { apply NoDupMembers_app; auto.
+          - apply nodupmembers_map_filter; auto.
+            intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+          - intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm2. simpl_In.
+            eapply H6; eauto using In_InMembers.
+            apply in_or_app, or_intror, Hincl2', fst_InMembers; auto.
+        }
+        assert (Forall (sem_block_ck G (Env.restrict (Env.union Hi Hi') (map fst Γty ++ map fst locs), Hl') bs) blocks) as Hblks.
+        { eapply sem_blocks_sem_blocks_ck with (Γty:=Γty++idty locs)
+                                               (Γtyl:=Γtyl++map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)
+                                               (Γck:=Γck++idty locs) (Γckl:=Γckl++map_filter _ locs); eauto.
           - apply NoDupMembers_app; auto.
-            intros x. rewrite fst_InMembers.
-            intros ??. eapply H6; eauto.
+            + apply NoDupMembers_idty; auto.
+            + intros * Hinm1 Hinm2. rewrite InMembers_idty in Hinm2.
+              eapply H6; eauto. apply in_or_app, or_introl, fst_InMembers; auto.
           - apply NoDupMembers_app; auto.
-            intros x. rewrite fst_InMembers.
-            intros ??. eapply H6; eauto.
-          - now rewrite <-app_assoc.
-          - eapply Forall_impl; [|eapply H3]; intros. now rewrite map_app.
-          - rewrite <-H8, map_app, Permutation_app_comm.
-            eapply incl_appl'; eauto.
-          - rewrite 4 idty_app. apply incl_app; [apply incl_appl; auto|apply incl_appr, incl_refl].
-          - etransitivity; [|eauto]. solve_incl_app.
-          - rewrite map_app. eapply Env.dom_lb_restrict_dom.
+            + eapply nodupmembers_map_filter; eauto.
+              intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+            + intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm2. simpl_In.
+              eapply H6; eauto using In_InMembers.
+              apply in_or_app, or_intror, fst_InMembers; auto.
+          - clear - Hnd5.
+            rewrite app_assoc in *. simpl_app. rewrite map_filter_app in Hnd5. simpl_app.
+            rewrite map_map_filter, map_map with (l:=locs).
+            erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd5.
+            eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
+            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+          - simpl_Forall.
+            eapply NoDupLocals_incl; eauto. simpl_app. apply incl_appr'.
+            rewrite Permutation_app_comm. simpl_app. apply incl_appr', incl_app; intros ? Hin.
+            1,2:solve_In.
+          - take (Permutation _ _) and rewrite <-it.
+            rewrite map_app, map_fst_idty, Permutation_app_comm.
+            apply incl_appl'; auto.
+          - simpl_app.
+            apply incl_app; [apply incl_appl|apply incl_appr]; auto. reflexivity.
+          - simpl_app.
+            apply incl_app; [apply incl_appl|apply incl_appr]; auto. reflexivity.
+          - etransitivity; [|eauto]. clear - Γck.
+            simpl_app. repeat rewrite map_map.
+            apply incl_appr', incl_app; [apply incl_appr, incl_appl|apply incl_appr', incl_appr].
+            1:erewrite map_ext; try reflexivity; intros; destruct_conjs; auto.
+            repeat apply incl_app; [apply incl_appr, incl_appl|apply incl_appl|apply incl_appr, incl_appr];
+              try reflexivity.
+            erewrite 2 map_map_filter, map_filter_map, map_filter_ext; try reflexivity.
+            intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+          - rewrite map_app, map_fst_idty. eapply Env.dom_lb_restrict_dom.
             eapply Env.union_dom_lb; eauto using Env.dom_dom_lb.
-          - rewrite idty_app, idck_app. apply Forall_app; split.
-            + eapply sc_vars_refines; [|eauto]; eauto.
-            + eapply sc_var_inv_sc_vars.
-              * eapply Forall_forall; intros.
-                eapply Env.dom_lb_use in Hdomlb as (?&Hfind); eauto.
-                do 2 eexists; try reflexivity.
-                eapply Env.restrict_find, Env.union_find3'; eauto using in_or_app.
-              * rewrite Forall_forall in *. intros ? Hin ??? Hin' Hvar. simpl_In.
-                { eapply sem_clock_refines'.
-                  - eapply H13; eauto. solve_In.
-                  - intros ?? Hinm Hvar'. rewrite fst_InMembers, map_app, 2 map_fst_idck, 2 map_fst_idty in Hinm.
-                    eapply sem_var_restrict; eauto.
-                    rewrite in_app_iff in *. destruct Hinm; auto.
-                  - eapply H17; eauto. 2:solve_In.
-                    + eapply HenvP, incl_map; eauto. rewrite 2 idcaus_app.
-                      apply incl_appr, incl_appl, incl_refl.
-                      solve_In.
-                    + eapply sem_var_refines; [|eauto]. eapply Env.restrict_refines; eauto using EqStrel_Transitive.
-                }
-          - rewrite 2 idty_app; auto.
+          - simpl_Forall. take (wt_block _ _ _ _) and clear - it.
+            simpl_app. repeat rewrite map_map in *; simpl in *.
+            erewrite map_ext with (l:=locs), map_map_filter, map_filter_ext; eauto.
+            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
           - rewrite idty_app, idck_app. eapply Forall_forall; intros (?&?) Hin.
-            apply in_app_iff in Hin as [Hin|Hin].
-            + eapply Forall_forall in Hwenv; eauto.
+            apply in_app_iff in Hin as [Hin|Hin]; simpl_In.
+            + eapply Forall_forall in Hwenv; eauto. 2:solve_In.
               eapply wc_clock_incl; [|eauto]. solve_incl_app.
-            + eapply Forall_forall in H13; eauto. solve_In.
-          - rewrite idty_app, idck_app; auto.
-          - eapply Forall_impl_In; [|eapply H16]. intros ? Hin Hsem.
-            rewrite <-map_app, <-map_fst_idty, <-map_fst_idck.
-            eapply Forall2_ignore2, Forall_forall in H4 as (?&?&?); eauto. rewrite Forall_forall in *.
-            assert (NoDupLocals x a) as Hndl.
+            + eapply Forall_forall in H17; eauto. 2:solve_In.
+              simpl in *. simpl_app. repeat rewrite map_map in *. erewrite map_ext with (l:=locs); eauto.
+              intros; destruct_conjs; auto.
+          - simpl_Forall. take (wc_block _ _ _ _) and clear - it.
+            simpl_app. repeat rewrite map_map in *; simpl in *.
+            erewrite map_ext with (l:=locs), map_map_filter, map_filter_ext; eauto.
+            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+          - simpl_Forall. inv_VarsDefined.
+            assert (NoDupLocals xs1 x) as Hndl.
             { eapply NoDupLocals_incl; eauto.
               rewrite Permutation_app_comm.
               etransitivity; [eapply incl_concat; eauto|].
-              rewrite <-H8. apply incl_app; [apply incl_appl, incl_refl|apply incl_appr; auto].
+              rewrite <-H8. apply incl_app; [apply incl_appl, incl_refl|apply incl_appr, incl_appl; auto].
               etransitivity; eauto. }
-            eapply sem_block_ck'_refines with (H4:=Env.restrict (Env.union H0 Hl) (map fst (idck (idty (envck++locs))))). 1,2:eauto.
-            2:eapply sem_block_ck'_restrict; eauto.
-            + rewrite 2 map_fst_idck, 2 map_fst_idty, 2 map_app.
-              eapply Env.incl_restrict_refines; eauto.
-              apply incl_app; [apply incl_appl; auto|apply incl_appr, incl_refl].
-            + rewrite idty_app, idck_app; auto.
-            + eapply sem_block_ck'_refines; [eauto|eauto| |eauto]. eapply Env.union_refines4'; eauto.
+            rewrite <-map_fst_idty with (xs2:=locs), <-map_app, <-map_fst_idty, <-map_fst_idck.
+            eapply sem_block_ck'_refines. 1,2:eauto. eapply Env.incl_restrict_refines; eauto using EqStrel_Transitive.
+            2:eapply sem_block_ck'_restrict, sem_block_ck'_refines; eauto using Env.union_refines4'.
+            erewrite map_app, 2 map_fst_idck, 2 map_fst_idty, map_app, map_fst_idty, map_map, map_ext with (l:=locs).
+            apply incl_appl'; auto. intros; destruct_conjs; auto.
         }
-        assert (Env.dom (Env.restrict (Env.union H0 Hl) (map fst envty ++ map fst locs)) (map fst envty ++ map fst locs)) as Hdom'.
+        assert (Env.dom (Env.restrict (Env.union Hi Hi') (map fst Γty ++ map fst locs)) (map fst Γty ++ map fst locs)) as Hdom'.
         { eapply Env.dom_lb_restrict_dom, Env.union_dom_lb; eauto using Env.dom_dom_lb. }
-        eapply Slocal with (H':=Env.restrict (Env.union H0 Hl) (map fst envty ++ map fst locs)); eauto.
+        eapply Slocal with (H':=Env.restrict (Env.union Hi Hi') (map fst Γty ++ map fst locs)); eauto.
         + intros ?? Hvar Hnin1.
-          assert (Env.In x (Env.restrict (Env.union H0 Hl) (map fst envty ++ map fst locs))) as Hin.
+          assert (Env.In x (Env.restrict (Env.union Hi Hi') (map fst Γty ++ map fst locs))) as Hin.
           { inv Hvar. econstructor; eauto. }
           eapply Env.dom_use in Hin; eauto. rewrite in_app_iff in Hin.
           destruct Hin as [Hin|Hin]. 2:exfalso; apply fst_InMembers in Hin; eauto.
@@ -4205,21 +4663,32 @@ Module Type LCLOCKSEMANTICS
           eapply sem_var_det; eauto.
           eapply sem_var_refines; eauto. econstructor; eauto; reflexivity.
         + eapply local_hist_dom; eauto.
-        + eapply sc_var_inv_sc_vars.
-          * eapply Forall_forall; intros.
-            eapply Env.dom_lb_use in Hdomlb as (?&Hfind); eauto.
-            do 2 eexists; try reflexivity.
-            eapply Env.restrict_find, Env.union_find3'; eauto using in_or_app.
-          * rewrite Forall_forall in *. intros ? Hin ??? Hin' Hvar.
-            { eapply sem_clock_refines'.
-              - eapply H13; eauto. solve_In.
-              - intros ?? Hinm Hvar'. rewrite fst_InMembers, map_app, 2 map_fst_idck, 2 map_fst_idty in Hinm.
-                eapply sem_var_restrict; eauto.
-                rewrite in_app_iff in *. destruct Hinm; auto.
-              - eapply H17; eauto.
-                + eapply HenvP, incl_map; eauto. rewrite 2 idcaus_app. solve_incl_app.
-                + eapply sem_var_refines; [|eauto]. eapply Env.restrict_refines; eauto using EqStrel_Transitive.
+        + intros. edestruct H13 as (?&?&?&?&?&?&?); eauto.
+          do 3 esplit. repeat split; eauto using sem_var_refines.
+          * simpl_Forall.
+            { eapply sem_exp_sem_exp_ck with (Γ:=Γck ++ _) (Γl:=Γckl ++ _), Sem.sem_exp_restrict, Sem.sem_exp_refines; eauto using Env.union_refines4'.
+              - clear - Hnd5. simpl_app. rewrite map_filter_app in Hnd5. simpl_app.
+                rewrite (app_assoc _ _ (map snd (map_filter _ _))), (Permutation_app_comm _ (map snd (map_filter _ (map _ locs)))) in Hnd5.
+                repeat rewrite app_assoc in Hnd5. apply NoDup_app_l, NoDup_app_l in Hnd5. simpl_app.
+                eapply Permutation_NoDup; [|eauto].
+                repeat rewrite map_map. erewrite 2 map_map_filter, map_filter_map, map_ext with (l:=locs), map_filter_ext. solve_Permutation_app.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - take (wc_exp _ _ _ _) and clear - it. simpl_app.
+                repeat rewrite map_map in *.
+                erewrite map_ext with (l:=locs), map_map_filter, map_filter_ext; eauto.
+                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - take (wc_exp _ _ _ _) and eapply wc_exp_wx_exp in it. simpl_app.
+                repeat rewrite map_map in *. erewrite map_ext, map_ext with (l:=locs) in it; eauto.
+                eapply wx_exp_incl; [|reflexivity|eauto]. apply incl_appl'; eauto.
+                1,2:intros; destruct_conjs; auto.
             }
+          * eapply sem_var_restrict, sem_var_refines; eauto using Env.union_refines4'.
+            apply in_app_iff, or_intror. solve_In.
+        + clear - Hsc'. destruct Hsc' as (Hsc1&Hsc2). simpl_app.
+          rewrite Forall_app in Hsc1, Hsc2. destruct Hsc1, Hsc2 as (?&Hsc4).
+          split; auto.
+          erewrite 2 map_map_filter, map_filter_ext in Hsc4; eauto.
+          intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
     Qed.
 
   End sem_ck.
@@ -4269,7 +4738,7 @@ Module Type LCLOCKSEMANTICS
 
       (* sem_node_ck *)
       pose proof (n_defd n) as (?&Hdef&Hperm).
-      eapply sem_block_sem_block_ck in Hloc; eauto.
+      eapply sem_block_sem_block_ck with (Γckl:=[]) (Γtyl:=[]) in Hloc; eauto; auto with datatypes.
       eapply Snode with (H:=H'); eauto.
       + rewrite find_node_now; auto.
       + eapply sem_block_ck_cons'; eauto.
@@ -4278,11 +4747,14 @@ Module Type LCLOCKSEMANTICS
       + intros. eapply IHnodes; eauto. inv Hwt; inv H7; constructor; auto.
       + apply n_nodup.
       + apply n_nodup.
-      + rewrite <-app_assoc. apply H2.
-      + apply n_nodup.
+      + simpl. destruct H2 as (Hnd&_). clear - Hnd. simpl_app.
+        erewrite map_map with (l:=locals _), map_ext with (l:=locals _), map_map_filter, map_filter_ext; eauto.
+        1,2:intros; destruct_conjs; auto. destruct o; auto.
+      + rewrite app_nil_r. apply n_nodup.
       + rewrite Hperm. solve_incl_app.
-      + reflexivity.
-      + rewrite <-app_assoc. reflexivity.
+      + simpl. simpl_app.
+        apply incl_appr', incl_appr', incl_app; [apply incl_appl|apply incl_appr].
+        1,2:intros ? Hin; solve_In.
       + inv Hwt; inv H5; destruct H8 as ((?&?&?&?)&_); auto.
 
     - rewrite find_node_other in Hfind; eauto.
@@ -4297,17 +4769,17 @@ Module Type LCLOCKSEMANTICS
   (** ** Finally getting the alignment result from sem_exp_ck *)
 
   Lemma sc_outside_mask' {PSyn prefs} :
-    forall (G: @global PSyn prefs) f n H b env ncks es rs ss vs bck sub,
+    forall (G: @global PSyn prefs) f n H b Γ Γl ncks es rs ss vs bck sub,
       wc_global G ->
       find_node f G = Some n ->
-      Forall (wc_exp G env) es ->
+      Forall (wc_exp G Γ Γl) es ->
       Forall2 (sem_exp_ck G H b) es ss ->
       (forall k, sem_node_ck G f (map (maskv k rs) (concat ss)) (map (maskv k rs) vs)) ->
-      Forall2 (fun '(_, o) (s : Stream svalue) => LiftO True (fun x0 : ident => sem_var H x0 s) o) ncks vs ->
-      Forall2 (sem_clock H b) (clocksof es) (map abstract_clock (concat ss)) ->
+      Forall2 (fun '(_, o) (s : Stream svalue) => LiftO True (fun x0 : ident => sem_var (fst H) x0 s) o) ncks vs ->
+      Forall2 (sem_clock (fst H) b) (clocksof es) (map abstract_clock (concat ss)) ->
       Forall2 (WellInstantiated bck sub) (idck (idty (n_in n))) (nclocksof es) ->
       Forall2 (WellInstantiated bck sub) (idck (idty (n_out n))) ncks ->
-      Forall2 (sem_clock H b) (map fst ncks) (map abstract_clock vs).
+      Forall2 (sem_clock (fst H) b) (map fst ncks) (map abstract_clock vs).
   Proof.
     intros * HwcG Hfind Hwc Hseme Hsem Hvars Hcki Hwi Hwo.
     eapply sc_outside_mask with (rs0:=rs) (es0:=es); eauto.
@@ -4316,7 +4788,7 @@ Module Type LCLOCKSEMANTICS
     - intros k.
       specialize (Hsem k). inv Hsem. rewrite Hfind in H1; inv H1.
       exists H0. repeat split; eauto.
-      destruct H6 as (?&Hinv). clear - H3 Hinv. unfold sc_vars in Hinv.
+      destruct H6 as (?&Hinv). clear - H3 Hinv. destruct Hinv as (Hinv&_).
       unfold idents, idck, idty in *.
       rewrite 2 Forall2_map_1, Forall2_map_2. rewrite Forall2_map_1 in H3.
       eapply Forall2_impl_In; [|eauto]; intros (?&?&?) ? Hin _ Hvar.
@@ -4326,16 +4798,16 @@ Module Type LCLOCKSEMANTICS
       rewrite <-Hvar; eauto.
   Qed.
 
-  Fact sc_exps' {PSyn prefs} : forall (G : @global PSyn prefs) H b env es ss,
+  Fact sc_exps' {PSyn prefs} : forall (G : @global PSyn prefs) H b Γ Γl es ss,
       Forall
          (fun e => forall vs,
-              wc_exp G env e ->
+              wc_exp G Γ Γl e ->
               sem_exp_ck G H b e vs ->
-              Forall2 (sem_clock H b) (clockof e) (map abstract_clock vs)) es ->
+              Forall2 (sem_clock (fst H) b) (clockof e) (map abstract_clock vs)) es ->
 
-      Forall (wc_exp G env) es ->
+      Forall (wc_exp G Γ Γl) es ->
       Forall2 (sem_exp_ck G H b) es ss ->
-      Forall2 (sem_clock H b) (clocksof es) (map abstract_clock (concat ss)).
+      Forall2 (sem_clock (fst H) b) (clocksof es) (map abstract_clock (concat ss)).
   Proof.
     intros * Hf Hwc Hsem.
     assert (length es = length ss) as Hlength by (eapply Forall2_length in Hsem; eauto).
@@ -4346,16 +4818,16 @@ Module Type LCLOCKSEMANTICS
     setoid_rewrite Forall2_map_2 in Hf; eauto.
   Qed.
 
-  Lemma Forall2Brs_sc_exp1 {PSyn prefs} (G: @global PSyn prefs) : forall H b env ck x tx es vs,
+  Lemma Forall2Brs_sc_exp1 {PSyn prefs} (G: @global PSyn prefs) : forall H b Γ Γl ck x tx es vs,
     Forall (fun es =>
               Forall (fun e => forall vs,
-                          wc_exp G env e ->
+                          wc_exp G Γ Γl e ->
                           sem_exp_ck G H b e vs ->
-                          Forall2 (sem_clock H b) (clockof e) (map abstract_clock vs)) (snd es)) es ->
-    Forall (fun es => Forall (wc_exp G env) (snd es)) es ->
+                          Forall2 (sem_clock (fst H) b) (clockof e) (map abstract_clock vs)) (snd es)) es ->
+    Forall (fun es => Forall (wc_exp G Γ Γl) (snd es)) es ->
     Forall (fun '(i, es) => Forall (eq (Con ck x (tx, i))) (clocksof es)) es ->
     Forall2Brs (sem_exp_ck G H b) es vs ->
-    Forall (Forall (fun '(i, v) => sem_clock H b (Con ck x (tx, i)) (abstract_clock v))) vs.
+    Forall (Forall (fun '(i, v) => sem_clock (fst H) b (Con ck x (tx, i)) (abstract_clock v))) vs.
   Proof.
     induction es; intros * Hf Hwc Hck Hse; inv Hf; inv Hwc; inv Hck; inv Hse; auto.
     { eapply Forall_impl; [|eauto]; intros; simpl in *; subst; auto. }
@@ -4368,12 +4840,12 @@ Module Type LCLOCKSEMANTICS
     constructor; eauto.
   Qed.
 
-  Lemma sc_exp {PSyn prefs} (G: @global PSyn prefs) : forall env H b e vs,
+  Lemma sc_exp {PSyn prefs} (G: @global PSyn prefs) : forall Γ Γl H b e vs,
       wc_global G ->
-      sc_vars env H b ->
-      wc_exp G env e ->
+      sc_vars Γ Γl H b ->
+      wc_exp G Γ Γl e ->
       sem_exp_ck G H b e vs ->
-      Forall2 (sem_clock H b) (clockof e) (map abstract_clock vs).
+      Forall2 (sem_clock (fst H) b) (clockof e) (map abstract_clock vs).
   Proof.
     intros * HwcG Hinv. revert vs.
     induction e using exp_ind2; intros * Hwc Hsem;
@@ -4386,7 +4858,11 @@ Module Type LCLOCKSEMANTICS
       rewrite H6, ac_enum. now constructor.
     - (* var *)
       constructor; auto.
-      eapply Forall_forall in Hinv; eauto. destruct Hinv as (?&Hvar&Hsem).
+      destruct Hinv as (Hinv&_). simpl_Forall.
+      eapply sem_var_det in H7; eauto. rewrite <-H7; auto.
+    - (* last *)
+      constructor; auto.
+      destruct Hinv as (_&Hinv). simpl_Forall.
       eapply sem_var_det in H7; eauto. rewrite <-H7; auto.
     - (* unop *)
       eapply IHe in H8; eauto. rewrite H4 in H8; simpl in H8.
@@ -4420,7 +4896,7 @@ Module Type LCLOCKSEMANTICS
         2:{ simpl_Forall. eapply sem_exp_numstreams; eauto using sem_exp_ck_sem_exp with lclocking. }
         destruct es as [|(?&?)]; try congruence. simpl in *.
         inv H15; simpl in *.
-        inv H8. rewrite H10, length_clocksof_annots; auto.
+        inv H8. rewrite H9, length_clocksof_annots; auto.
       }
       assert (Hlen2:=H15). eapply Forall2Brs_length2 in Hlen2.
       eapply Forall2Brs_sc_exp1 in H15; eauto.
@@ -4478,26 +4954,26 @@ Module Type LCLOCKSEMANTICS
       + eapply sc_exps'; eauto.
   Qed.
 
-  Corollary sc_exps {PSyn prefs} (G: @global PSyn prefs) : forall env H b es vss,
+  Corollary sc_exps {PSyn prefs} (G: @global PSyn prefs) : forall Γ Γl H b es vss,
       wc_global G ->
-      sc_vars env H b ->
+      sc_vars Γ Γl H b ->
 
-      Forall (wc_exp G env) es ->
+      Forall (wc_exp G Γ Γl) es ->
       Forall2 (sem_exp_ck G H b) es vss ->
-      Forall2 (sem_clock H b) (clocksof es) (map abstract_clock (concat vss)).
+      Forall2 (sem_clock (fst H) b) (clocksof es) (map abstract_clock (concat vss)).
   Proof.
     intros * HwcG Hsc Hwc Hsem.
     eapply sc_exps'; eauto.
     eapply Forall_forall; intros; eauto using sc_exp.
   Qed.
 
-  Corollary sc_exps2 {PSyn prefs} (G: @global PSyn prefs) : forall env H b es vss,
+  Corollary sc_exps2 {PSyn prefs} (G: @global PSyn prefs) : forall Γ Γl H b es vss,
       wc_global G ->
-      sc_vars env H b ->
+      sc_vars Γ Γl H b ->
 
-      Forall (wc_exp G env) es ->
+      Forall (wc_exp G Γ Γl) es ->
       Forall2 (fun e v => sem_exp_ck G H b e [v]) es vss ->
-      Forall2 (sem_clock H b) (clocksof es) (map abstract_clock vss).
+      Forall2 (sem_clock (fst H) b) (clocksof es) (map abstract_clock vss).
   Proof.
     induction es; intros * HwcG Hsc Hwc Hsem; inv Hwc; inv Hsem; simpl; auto.
     eapply sc_exp in H4; eauto. simpl in H4. inv H4; inv H8; simpl.
@@ -4594,8 +5070,10 @@ Module Type LCLOCKSEMANTICS
         simpl_Forall; eauto.
       - (* local *)
         econstructor; eauto.
-        rewrite Forall_forall in *; eauto.
-      Qed.
+        + intros. edestruct H7 as (?&?&?&?&?&?&?); eauto.
+          do 3 esplit; eauto using sem_ref_sem_exp.
+        + simpl_Forall; eauto.
+    Qed.
 
     Fact global_sem_ref_nil : forall enums,
       global_sem_refines (Global enums []) (Global enums []).
@@ -4734,30 +5212,32 @@ Module Type LCLOCKSEMANTICS
       rewrite CommonStreams.const_Cons. constructor; auto.
     Qed.
 
-    Fact clocked_node_absent: forall H bs vars,
-        clocked_node H bs vars ->
-        clocked_node (Env.map (fun _ => Streams.const absent) H) (Streams.const false) vars.
+    Fact clocked_node_absent: forall H Hl bs vars,
+        clocked_node (H, Hl) bs vars ->
+        clocked_node (Env.map (fun _ => Streams.const absent) H, Env.map (fun _ => Streams.const absent) Hl) (Streams.const false) vars.
     Proof.
       unfold clocked_node.
       intros * (Hdom&Hsc).
       split.
-      - now rewrite Env.dom_map.
-      - eapply Forall_impl; [|eauto]; intros (?&?) (?&Hvar&Hck).
+      - simpl. now rewrite Env.dom_map.
+      - destruct Hsc. split; simpl_Forall.
         exists (Streams.const absent). split; eauto with lcsem.
-        eapply sem_clock_absent in Hck. now rewrite ac_Streams_const.
+        eapply sem_clock_absent in H2. now rewrite ac_Streams_const.
     Qed.
 
     Lemma sem_block_absent:
       forall (G : @global PSyn prefs) H bs bck,
         sem_block_ck G H bs bck ->
-        sem_block_ck G (Env.map (fun _ => Streams.const absent) H) (Streams.const false) bck.
+        sem_block_ck G (Env.map (fun _ => Streams.const absent) (fst H), Env.map (fun _ => Streams.const absent) (snd H)) (Streams.const false) bck.
     Proof with eauto with lcsem.
       intros * Sem.
       eapply sem_block_ck_ind2
-        with (P_exp := fun H _ e vs => sem_exp_ck G (Env.map (fun _ => Streams.const absent) H)
+        with (P_exp := fun H _ e vs => sem_exp_ck G (Env.map (fun _ => Streams.const absent) (fst H), Env.map (fun _ => Streams.const absent) (snd H))
                                                 (Streams.const false) e (List.map (fun _ => Streams.const absent) vs))
-             (P_equation := fun H _ eq => sem_equation_ck G (Env.map (fun _ => Streams.const absent) H) (Streams.const false) eq)
-             (P_block := fun H _ bck => sem_block_ck G (Env.map (fun _ => Streams.const absent) H) (Streams.const false) bck)
+             (P_equation := fun H _ eq => sem_equation_ck G (Env.map (fun _ => Streams.const absent) (fst H), Env.map (fun _ => Streams.const absent) (snd H))
+                                                       (Streams.const false) eq)
+             (P_block := fun H _ bck => sem_block_ck G (Env.map (fun _ => Streams.const absent) (fst H), Env.map (fun _ => Streams.const absent) (snd H))
+                                                  (Streams.const false) bck)
              (P_node := fun f xs ys => sem_node_ck G f (map (fun _ => Streams.const absent) xs) (map (fun _ => Streams.const absent) ys));
 
         simpl in *; subst; intros; eauto.
@@ -4772,7 +5252,9 @@ Module Type LCLOCKSEMANTICS
         rewrite const_nth. symmetry.
         apply enum_false, const_nth.
       - (* Evar *)
-        econstructor...
+        econstructor. eapply sem_var_absent; eauto.
+      - (* Elast *)
+        econstructor. eapply sem_var_absent; eauto.
       - (* Eunop *)
         econstructor; eauto.
         eapply lift1_spec; intros.
@@ -4792,13 +5274,14 @@ Module Type LCLOCKSEMANTICS
         repeat rewrite <-concat_map. rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3.
         eapply Forall3_impl_In; [|eauto]. intros * _ _ _ _. apply arrow_absent.
       - (* Ewhen *)
-        econstructor...
-        rewrite <-concat_map, Forall2_map_1, Forall2_map_2.
-        eapply Forall2_impl_In; [|eauto]. intros ?? _ _ When.
+        econstructor. 2:eapply sem_var_absent; eauto.
+        erewrite Forall2_map_2; eapply Forall2_impl_In; [|eauto]; intros ???? Hsem; eapply Hsem; eauto.
+        rewrite <-concat_map. simpl_Forall.
         apply when_spec. intros n.
         left. repeat split; apply const_nth.
       - (* Emerge *)
         econstructor...
+        + eapply sem_var_absent; eauto.
         + clear H2.
           eapply Forall2Brs_map_2, Forall2Brs_impl_In; [|eauto]; intros; simpl in *; eauto.
         + rewrite Forall2_map_1, Forall2_map_2.
@@ -4841,8 +5324,8 @@ Module Type LCLOCKSEMANTICS
           1,2:intros * Eq; symmetry; apply mask_absent.
       - (* Equation *)
         econstructor; eauto with lcsem.
-        rewrite <-concat_map, Forall2_map_2.
-        eapply Forall2_impl_In; eauto with lcsem.
+        rewrite <-concat_map. simpl_Forall.
+        eapply sem_var_absent; eauto.
       - (* Beq *)
         econstructor; eauto.
       - (* Breset *)
@@ -4851,8 +5334,8 @@ Module Type LCLOCKSEMANTICS
         intros k. specialize (H4 k) as (_&Hsem').
         eapply Forall_impl; [|eauto]; intros; simpl in *.
         rewrite maskb_absent.
-        eapply sem_block_refines; [|eauto].
-        rewrite mask_hist_absent, mask_hist_absent'. reflexivity.
+        eapply sem_block_ck_morph; eauto. 2:reflexivity.
+        split; simpl; rewrite mask_hist_absent, mask_hist_absent'; reflexivity.
       - (* Bswitch *)
         econstructor; eauto.
         + inv H3; inv H11.
@@ -4860,8 +5343,9 @@ Module Type LCLOCKSEMANTICS
           eapply SForall_forall; intros. rewrite const_nth. constructor.
         + do 2 (eapply Forall_forall; intros).
           repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
-          rewrite filter_hist_absent, <-filter_hist_absent', filterb_absent; eauto.
-        + intros ?? _ Hfind. unfold Env.MapsTo in *.
+          rewrite filterb_absent. eapply sem_block_ck_morph in it0; eauto. 2:reflexivity.
+          split; simpl; rewrite filter_hist_absent, filter_hist_absent'; reflexivity.
+        + intros ?? _ Hfind. unfold Env.MapsTo in *. simpl in *.
           rewrite Env.Props.P.F.map_o in Hfind.
           apply option_map_inv in Hfind as (?&?&?); subst.
           rewrite ac_Streams_const, slower_nth; intros.
@@ -4877,16 +5361,20 @@ Module Type LCLOCKSEMANTICS
           eapply Env.dom_use in H2. rewrite H2, 2 in_app_iff.
           apply or_iff_compat_r.
           now rewrite <-2 fst_InMembers, <-2 Env.In_Members, Env.Props.P.F.map_in_iff.
-        + eapply Forall_impl; [|eauto]; intros (?&?) (?&?&?).
-          do 2 esplit; eauto using sem_var_absent.
-          rewrite ac_Streams_const. eapply sem_clock_absent; eauto.
+        + eapply Env.refines_map; eauto. intros; reflexivity.
+        + intros * Hin. edestruct H4 as (?&?&?&?&?&?&?&?); eauto.
+          do 3 esplit. repeat split; eauto. 1,3:eapply sem_var_absent; eauto.
+          apply fby_absent.
+        + destruct H5 as (?&?). split; simpl_Forall.
+          1,2:do 2 esplit; eauto using sem_var_absent.
+          1,2:rewrite ac_Streams_const; eapply sem_clock_absent; eauto.
       - (* Node *)
         econstructor. 5:reflexivity. 1-4:eauto; subst.
         1,2:(rewrite Forall2_map_2; eapply Forall2_impl_In; [|eauto];
              intros; eapply sem_var_absent; eauto).
         + rewrite clocks_of_false; auto.
         + rewrite clocks_of_false.
-          eapply clocked_node_absent; eauto.
+          eapply clocked_node_absent in H7; eauto.
     Qed.
 
   End sem_node_absent.

@@ -70,7 +70,8 @@ Module Type LORDERED
       Is_node_in_exp f ec \/ Exists (fun blks => Exists (Is_node_in_block f) (snd blks)) branches ->
       Is_node_in_block f (Bswitch ec branches)
   | INBlocal : forall locs blocks,
-      Exists (Is_node_in_block f) blocks ->
+      Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
+      \/ Exists (Is_node_in_block f) blocks ->
       Is_node_in_block f (Blocal locs blocks).
 
   Definition Ordered_nodes {PSyn prefs} : @global PSyn prefs -> Prop :=
@@ -174,7 +175,9 @@ Module Type LORDERED
       + eapply wl_exp_Is_node_in_exp; eauto.
       + simpl_Exists; simpl_Forall; eauto.
     - inv Hwl. inv Hin.
-      simpl_Exists; simpl_Forall; eauto.
+      destruct H1 as [Hex|Hex]; simpl_Exists; simpl_Forall; eauto.
+      destruct o; simpl in *; destruct_conjs; [|inv Hex].
+      eapply wl_exp_Is_node_in_exp; eauto.
   Qed.
 
   Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,

@@ -33,6 +33,12 @@ src/Lustre/LSemDeterminism.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
+src/Lustre/DeLast/DeLast.v
+src/Lustre/DeLast/DLTyping.v
+src/Lustre/DeLast/DLClocking.v
+src/Lustre/DeLast/DLCorrectness.v
+src/Lustre/DeLast/LDeLast.v
+
 src/Lustre/ClockSwitch/ClockSwitch.v
 src/Lustre/ClockSwitch/CSTyping.v
 src/Lustre/ClockSwitch/CSClocking.v

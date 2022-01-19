@@ -884,6 +884,26 @@ Module Fresh(Ids : IDS).
       induction a1s; intros * Hmap; repeat inv_bind; simpl in *; auto.
       f_equal; eauto.
     Qed.
+
+    Fact mmap_values_valid_follows : forall a st a1s st' pref aft,
+        st_valid_after st pref aft ->
+        (forall a a1 st st', k a st = (a1, st') -> st_valid_after st pref aft -> st_valid_after st' pref aft) ->
+        (forall a a1 st st', k a st = (a1, st') -> st_follows st st') ->
+        mmap a st = (a1s, st') ->
+        Forall2 (fun a a1 =>
+                   exists st'' st''',
+                     st_valid_after st'' pref aft
+                     /\ st_follows st st''
+                     /\ k a st'' = (a1, st''')) a a1s.
+    Proof.
+      induction a; intros * Hval1 Hval2 Hfollows Hfold; simpl in *; repeat inv_bind.
+      - constructor.
+      - constructor.
+        + repeat esplit; eauto. reflexivity.
+        + eapply IHa in H0; eauto.
+          simpl_Forall. repeat esplit; eauto. etransitivity; eauto.
+    Qed.
+
   End mmap.
 
   Section mmap2.

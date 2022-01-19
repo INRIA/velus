@@ -42,6 +42,8 @@ Module Type OBCSWITCHESNORMALIZATION
        (Import TypObc: OBCTYPING     Ids Op OpAux SynObc ComTyp SemObc)
        (Import Equ   : EQUIV         Ids Op OpAux SynObc ComTyp SemObc TypObc).
 
+  Import List.
+
   Definition has_default_branch: list (option stmt) -> bool :=
     existsb (or_default_with true (fun _ => false)).
 

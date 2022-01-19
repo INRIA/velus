@@ -42,6 +42,7 @@ module type SYNTAX =
     | Econst of cconst
     | Eenum of enumtag * typ
     | Evar   of ident * ann
+    | Elast  of ident * ann
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
     | Efby   of exp list * exp list * ann list
@@ -57,7 +58,7 @@ module type SYNTAX =
     | Beq of equation
     | Breset of block list * exp
     | Bswitch of exp * (enumtag * block list) list
-    | Blocal of (ident * ((typ * clock) * ident)) list * block list
+    | Blocal of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * block list
 
     type node = {
           n_name     : ident;
@@ -98,6 +99,7 @@ module PrintFun
       | L.Econst _ -> (16, NA)
       | L.Eenum _ -> (16, NA)
       | L.Evar _   -> (16, NA)
+      | L.Elast _  -> (16, NA)
       | L.Eunop  (op, _, _)    -> PrintOps.prec_unop op
       | L.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
       | L.Efby _   -> (14, RtoL) (* higher than * / % *)
@@ -143,6 +145,8 @@ module PrintFun
         PrintOps.print_enumtag p c
       | L.Evar (id, _) ->
         print_ident p id
+      | L.Elast (id, _) ->
+        fprintf p "last %a" print_ident id
       | L.Eunop  (op, e, (ty, _)) ->
         PrintOps.print_unop p op ty (exp prec') e
       | L.Ebinop (op, e1, e2, (ty, _)) ->
@@ -220,6 +224,15 @@ module PrintFun
         PrintOps.print_typ ty
         print_clock_decl ck
 
+    let print_local_decl p (id, (((ty, ck), cx), o)) =
+      match o with
+      | Some (e, _) ->
+        fprintf p "%a@ : %a%a"
+          print_ident id
+          PrintOps.print_typ ty
+          print_clock_decl ck
+      | None -> print_decl p (id, ((ty, ck), cx))
+
     let print_decl_list = print_semicol_list print_decl
 
     let print_pattern p xs =
@@ -252,7 +265,7 @@ module PrintFun
           (List.map (fun (i, blks) -> (asprintf "%a" PrintOps.print_enumtag i, Some blks)) brs, None)
       | L.Blocal (locals, blks) ->
         fprintf p "%a@[<v 2>let@;%a@;<0 -2>@]tel"
-          (print_semicol_list_as "var" print_decl) locals
+          (print_semicol_list_as "var" print_local_decl) locals
           (print_semicol_list print_block) blks
 
     let print_node p { L.n_name     = name;

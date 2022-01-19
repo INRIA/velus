@@ -365,7 +365,7 @@ Module Type NORMFBY
         eapply Forall_forall; intros. constructor.
       + eapply normfby_equation_vars_perm in H. now rewrite flat_map_concat_map in H.
     - simpl in Hun. cases; repeat inv_bind.
-      1-3,5-13:(exists [(concat xs0)]; simpl; rewrite app_nil_r; split; auto; repeat constructor; auto).
+      1-3,5-14:(exists [(concat xs0)]; simpl; rewrite app_nil_r; split; auto; repeat constructor; auto).
       inv H; inv H5. inv H3; inv H6.
       eapply H4 in H0 as (ys1&Hvars1&Hperm1); eauto.
       exists ys1. simpl; rewrite app_nil_r. split; auto.
@@ -461,6 +461,7 @@ Module Type NORMFBY
   Inductive normalized_node {PSyn1 PSyn2 prefs1 prefs2} (G : @global PSyn1 prefs1) : (@node PSyn2 prefs2) -> Prop :=
   | normalized_Node : forall n locs blks,
       n_block n = Blocal locs blks ->
+      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall (normalized_block G (ps_from_list (List.map fst (n_out n)))) blks ->
       normalized_node G n.
 
@@ -956,16 +957,16 @@ Module Type NORMFBY
   Lemma norm2_not_in_norm1_prefs :
     ~PS.In norm2 norm1_prefs.
   Proof.
-    unfold norm1_prefs, local_prefs, switch_prefs, elab_prefs.
-    rewrite 3 PSF.add_iff, PSF.singleton_iff.
+    unfold norm1_prefs, local_prefs, switch_prefs, last_prefs, elab_prefs.
+    rewrite 4 PSF.add_iff, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
-    repeat rewrite NoDup_cons_iff in Hnd. destruct Hnd as (Hnin1&Hnin2&Hnin3&Hnin4&_).
-    intros [contra|[contra|[contra|contra]]]; rewrite contra in *; eauto with datatypes.
+    repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
+    intros [contra|[contra|[contra|[contra|contra]]]]; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
   Lemma normfby_node_init_st_valid {A} : forall (n: @node nolocal_top_block norm1_prefs) locs blks,
       n_block n = Blocal locs blks ->
-      st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ locs))).
+      st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs))).
   Proof.
     intros * Hn.
     specialize (n_nodup n) as (Hndup&Hndl).
@@ -976,7 +977,7 @@ Module Type NORMFBY
     - apply norm2_not_in_norm1_prefs.
     - rewrite <- ps_from_list_ps_of_list, PS_For_all_Forall'.
       pose proof (n_good n) as (Good1&Good2&_); eauto. rewrite Hn in Good2. inv Good2.
-      rewrite app_assoc, map_app, Forall_app.
+      rewrite app_assoc, map_app, Forall_app, map_fst_idty.
       split; auto.
   Qed.
 
@@ -989,7 +990,7 @@ Module Type NORMFBY
                   | Blocal vars blks =>
                     let res := normfby_blocks (ps_from_list (map fst (n_out n))) blks init_st in
                     let nvars := st_anns (snd res) in
-                    Blocal (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH))) nvars) (fst res)
+                    Blocal (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res)
                   | blk => blk
                   end;
        n_ingt0 := n_ingt0 n;
@@ -1014,14 +1015,15 @@ Module Type NORMFBY
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. rewrite fst_NoDupMembers in H3.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs)))) as Hvalid.
     { eapply normfby_blocks_st_valid; eauto.
       eapply normfby_node_init_st_valid; eauto.
     }
     assert (Hvalid':=Hvalid). eapply st_valid_after_NoDupMembers in Hvalid.
     2:{ rewrite app_assoc. apply NoDupMembers_app; auto.
-        - rewrite fst_NoDupMembers; auto.
-        - intros * Hinm Hinl. rewrite fst_InMembers in Hinm. eapply H4; eauto using in_or_app.
+        - rewrite NoDupMembers_idty, fst_NoDupMembers; auto.
+        - intros * Hinm Hinl. rewrite fst_InMembers in Hinm. rewrite InMembers_idty in Hinl.
+          eapply H4; eauto using in_or_app.
     }
     constructor; simpl.
     - eapply normfby_blocks_NoDupLocals; [|eauto].
@@ -1033,7 +1035,8 @@ Module Type NORMFBY
       { eapply st_valid_prefixed; eauto. }
       intros ? Hin. repeat rewrite map_app in *. repeat rewrite in_app_iff in *. destruct Hin as [[?|Hin]|[Hin|Hin]]; auto.
       rewrite map_map in Hin. eapply Forall_forall in Hids; eauto.
-    - rewrite fst_NoDupMembers, map_app, map_map.
+    - rewrite 2 map_app, map_fst_idty in Hvalid.
+      rewrite fst_NoDupMembers, map_app, map_map.
       solve_NoDup_app.
     - rewrite app_assoc, map_app, <-app_assoc in Hvalid.
       setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'; eauto.
@@ -1050,7 +1053,7 @@ Module Type NORMFBY
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
     destruct (n_block n) as [| | |locs blks] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs)))) as Hvalid.
     { specialize (n_nodup n) as (Hndup&Hndl).
       rewrite Hblk in Hndl; simpl in Hndl. inv Hndl. rewrite fst_NoDupMembers in H3.
       eapply normfby_blocks_st_valid; eauto.
@@ -1069,7 +1072,9 @@ Module Type NORMFBY
   Next Obligation.
     pose proof (n_syn n) as Hsyn. inv Hsyn.
     constructor.
-    eapply normfby_blocks_nolocal; eauto using surjective_pairing.
+    - apply Forall_app; split; auto.
+      simpl_Forall; auto.
+    - eapply normfby_blocks_nolocal; eauto using surjective_pairing.
   Qed.
 
   Global Program Instance normfby_node_transform_unit: TransformUnit node node :=
@@ -1145,17 +1150,18 @@ Module Type NORMFBY
   Proof.
     intros * Hunt. inversion_clear Hunt as [??? Hblk Hblks].
     econstructor; simpl. rewrite Hblk; eauto.
-    pose proof (n_good n) as (Good&_).
-    destruct (normfby_blocks _ _ _) as (blks'&st') eqn:Hnorm.
-    eapply normfby_blocks_normalized_block in Hnorm; eauto.
-    2:rewrite ps_from_list_ps_of_list; reflexivity.
-    { eapply init_st_valid.
-      - apply norm2_not_in_norm1_prefs.
-      - rewrite PS_For_all_Forall.
-        eapply Forall_incl; eauto.
-        intros ? Hin.
-        rewrite ps_from_list_ps_of_list, ps_of_list_ps_to_list in Hin.
-        rewrite map_app, in_app_iff; auto. }
+    - apply Forall_app; split; auto. simpl_Forall; auto.
+    - pose proof (n_good n) as (Good&_).
+      destruct (normfby_blocks _ _ _) as (blks'&st') eqn:Hnorm.
+      eapply normfby_blocks_normalized_block in Hnorm; eauto.
+      2:rewrite ps_from_list_ps_of_list; reflexivity.
+      { eapply init_st_valid.
+        - apply norm2_not_in_norm1_prefs.
+        - rewrite PS_For_all_Forall.
+          eapply Forall_incl; eauto.
+          intros ? Hin.
+          rewrite ps_from_list_ps_of_list, ps_of_list_ps_to_list in Hin.
+          rewrite map_app, in_app_iff; auto. }
   Qed.
 
   Fact normfby_global_normalized_global : forall G,

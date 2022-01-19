@@ -75,7 +75,7 @@ Module Type TRCLOCKING
     Lemma wc_lexp :
       forall vars e e',
         to_lexp e = OK e' ->
-        LC.wc_exp G vars e ->
+        LC.wc_exp G vars [] e ->
         (exists ck,
             L.clockof e = [ck]
             /\ wc_exp vars e' ck).
@@ -131,9 +131,9 @@ Module Type TRCLOCKING
 
     Lemma wc_cexp : forall vars e e',
         to_cexp e = OK e' ->
-        LT.wt_exp G (idty vars) e ->
+        LT.wt_exp G (idty vars) [] e ->
         wc_env (idck vars) ->
-        LC.wc_exp G (idck vars) e ->
+        LC.wc_exp G (idck vars) [] e ->
         (exists ck,
             L.clockof e = [ck]
             /\ wc_cexp (idck vars) e' ck).
@@ -212,7 +212,7 @@ Module Type TRCLOCKING
           contradict Hnnil. apply map_eq_nil in Hnnil.
           eapply Permutation_nil. rewrite <-Hnnil. apply Permutation_sym, BranchesSort.Permuted_sort.
         + constructor. eapply wc_add_whens.
-          eapply LC.wc_exp_clockof in H6; eauto.
+          eapply LC.wc_exp_clockof in H6; eauto. 2:constructor.
           rewrite H7 in H6. apply Forall_singl in H6. auto.
         + intros ? Hin.
           eapply in_map_iff in Hin as ((?&?)&Heq&Hin); simpl in *; inv Heq.
@@ -250,7 +250,7 @@ Module Type TRCLOCKING
        -> see LClocking.wc_equation *)
     Lemma wc_equation_app_inputs (n : @L.node L.nolocal_top_block norm2_prefs) : forall vars n' bck sub xs es es',
         length (L.n_out n) = length xs ->
-        Forall (LC.wc_exp G vars) es ->
+        Forall (LC.wc_exp G vars []) es ->
         Forall2 (LC.WellInstantiated bck sub) (idck (idty (L.n_in n))) (L.nclocksof es) ->
         to_node n = OK n' ->
         mmap to_lexp es = OK es' ->
@@ -296,7 +296,7 @@ Module Type TRCLOCKING
           repeat rewrite in_app_iff; eauto.
           setoid_rewrite map_length; auto.
       }
-      simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
+      simpl. destruct e; take (LC.wc_exp G vars _ _) and inv it;
                inv Hcke; inv Tolexp.
       - constructor.
       - destruct tys; take (map _ _ = [_]) and inv it.
@@ -308,16 +308,16 @@ Module Type TRCLOCKING
         to_equation env envo xr e = OK e' ->
         envs_eq env (idck vars) ->
         Forall (fun xr => In xr (idck vars)) xr ->
-        LT.wt_equation G (idty vars) e ->
+        LT.wt_equation G (idty vars) [] e ->
         wc_env (idck vars) ->
-        LC.wc_equation G (idck vars) e ->
+        LC.wc_equation G (idck vars) [] e ->
         NLC.wc_equation P (idck vars) e'.
     Proof.
       intros ????? [xs [|? []]] e' Hg Htr Henvs Hxr Hwt Hwcenv Hwc;
         try (inv Htr; cases; discriminate).
       Opaque to_cexp.
       destruct e; inv Hwt; simpl in *; simpl_Foralls; cases_eqn Eq; try monadInv Htr.
-      1-7,9-14:(inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
+      1-8,10-15:(inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
                 assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto).
       Transparent to_cexp.
       1-13:try (solve [monadInv EQ1]).
@@ -332,7 +332,7 @@ Module Type TRCLOCKING
       - inv Hwc. simpl_Foralls.
         cases; try monadInv Htr.
         constructor; eauto using envs_eq_in.
-        take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
+        take (LC.wc_exp _ _ _ _) and inv it. simpl_Foralls.
         eapply wc_lexp in EQ2 as (?& Heq &?); eauto.
         take (Forall2 eq _ _) and rewrite Forall2_eq in it.
         unfold L.clocksof in it. simpl in *. rewrite app_nil_r in *.
@@ -389,8 +389,8 @@ Module Type TRCLOCKING
         rename Eq into Vars. eapply vars_of_spec in Vars.
         clear H0 H3.
         rename H4 into Hf2. simpl in Hf2; rewrite app_nil_r in Hf2.
-        take (LC.wc_exp _ _ _) and inversion_clear it
-          as [| | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
+        take (LC.wc_exp _ _ _ _) and inversion_clear it
+          as [| | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and
@@ -442,9 +442,9 @@ Module Type TRCLOCKING
         block_to_equation env envo xr d = OK e' ->
         envs_eq env (idck vars) ->
         Forall (fun xr => In xr (idck vars)) xr ->
-        LT.wt_block G (idty vars) d ->
+        LT.wt_block G (idty vars) [] d ->
         wc_env (idck vars) ->
-        LC.wc_block G (idck vars) d ->
+        LC.wc_block G (idck vars) [] d ->
         NLC.wc_equation P (idck vars) e'.
     Proof.
       induction d using L.block_ind2; intros * Hg Htr Henvs Hxr Hwt Hwenv Hwc;
@@ -453,7 +453,7 @@ Module Type TRCLOCKING
       - cases. apply Forall_singl in H. apply Forall_singl in H2. apply Forall_singl in H3.
         eapply H; eauto.
         constructor; auto.
-        inv H7; auto.
+        inv H8; auto.
       - inv Htr.
       - inv Htr.
     Qed.
@@ -470,30 +470,37 @@ Module Type TRCLOCKING
       tonodeInv Htn. unfold NLC.wc_node. simpl.
       inversion Hwc as (WCi&WCo&WCeq). rewrite idty_app in WCo.
       inversion_clear Hwt as (_&_&_&WT).
-      cases_eqn Hblk. eapply envs_eq_node in Hblk.
-      monadInv Hmmap.
+      pose proof (L.n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *; symmetry in H; rename H into Hblk.
+      eapply envs_eq_node in Hblk.
+      monadInv Hmmap. inv WCeq. inv WT.
+      rewrite map_filter_nil in H5. rewrite map_filter_nil in H6. 2,3:simpl_Forall; subst; auto.
       repeat (split; try tauto).
-      - inv WCeq. rewrite Forall_map in H3.
-        rewrite (Permutation_app_comm (idty l)), app_assoc, idck_app. apply Forall_app; split; auto.
+      - rewrite Forall_map in H8.
+        rewrite (Permutation_app_comm (idty (idty l))), app_assoc, idck_app. apply Forall_app; split; auto.
         1,2:(eapply Forall_impl; [|eauto]; simpl in *; intros;
              eapply LC.wc_clock_incl; [|eauto]; unfold idty, idck;
              repeat rewrite map_app; repeat rewrite map_map; solve_incl_app).
-      - inv WCeq. inv WT.
-        eapply mmap_inversion in EQ.
-        induction EQ; inv H1; inv H2; constructor; eauto.
+        simpl. erewrite map_ext; try reflexivity. intros; destruct_conjs; auto.
+      - eapply mmap_inversion in EQ.
+        induction EQ; inv H1; inv H5; inv H6; constructor; eauto.
         eapply wc_block_to_equation; eauto.
         + repeat rewrite <-idty_app; eauto.
-        + eapply LT.wt_block_incl; [|eauto]. rewrite (Permutation_app_comm (idty l)).
-          unfold idty. solve_incl_app.
-        + unfold wc_env. rewrite (Permutation_app_comm (idty l)), 2 app_assoc, 3 idck_app.
+        + eapply LT.wt_block_incl; [|reflexivity|eauto]. simpl_app. repeat rewrite map_map; simpl.
+          apply incl_appr'. erewrite Permutation_app_comm, map_ext with (l:=l); try reflexivity.
+          intros; destruct_conjs; auto.
+        + unfold wc_env. rewrite (Permutation_app_comm (idty (idty l))), 2 app_assoc, 3 idck_app.
           apply Forall_app; split.
           * eapply Forall_impl; [|eauto]. intros (?&?) ?.
-            eapply LC.wc_clock_incl; [|eauto]. unfold idty, idck; solve_incl_app.
-          * rewrite Forall_map in H3. eapply Forall_impl; [|eauto]. intros (?&?) ?.
-            eapply LC.wc_clock_incl; [|eauto].
-            rewrite <-app_assoc, (Permutation_app_comm (idck (idty l))). unfold idty, idck. simpl_app. reflexivity.
-        + rewrite (Permutation_app_comm (idty l)).
-          now rewrite app_assoc, idck_app, <-idty_app.
+            eapply LC.wc_clock_incl; [|eauto]. solve_incl_app.
+          * rewrite Forall_map in H8. eapply Forall_impl; [|eauto]. intros (?&?) ?.
+            eapply LC.wc_clock_incl; [|eauto]. simpl_app. repeat rewrite map_map.
+            apply incl_appr'. erewrite Permutation_app_comm, map_ext with (l:=l); try reflexivity.
+            intros; destruct_conjs; auto.
+        + rewrite (Permutation_app_comm (idty (idty l))).
+          eapply LC.wc_block_incl; [|reflexivity|eauto].
+          simpl_app. repeat rewrite map_map.
+          apply incl_appr'. erewrite map_ext with (l:=l); try reflexivity.
+          intros; destruct_conjs; auto.
     Qed.
 
   End wc_node.

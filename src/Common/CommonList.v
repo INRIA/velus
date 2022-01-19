@@ -4930,7 +4930,68 @@ Section map_filter.
     eapply Incl in In.
     eapply map_filter_In; eauto.
   Qed.
+
+  Lemma map_filter_nil : forall xs,
+      Forall (fun x => f x = None) xs ->
+      map_filter xs = [].
+  Proof.
+    intros * Hf.
+    induction Hf; simpl; auto.
+    rewrite H; auto.
+  Qed.
 End map_filter.
+
+Lemma map_filter_ext {A B} : forall (f g : A -> option B) xs,
+    (forall x, f x = g x) ->
+    map_filter f xs = map_filter g xs.
+Proof.
+  intros * Hfg.
+  induction xs; simpl; auto.
+  destruct (f a) eqn:Hf; rewrite Hfg in Hf; rewrite Hf; auto.
+Qed.
+
+Lemma map_map_filter {A B C} : forall (f : A -> option B) (g : B -> C) xs,
+    map g (map_filter f xs) = map_filter (fun a => option_map g (f a)) xs.
+Proof.
+  induction xs; simpl; auto.
+  destruct (f a); simpl; auto.
+Qed.
+
+Lemma map_filter_map {A B C} : forall (f : B -> option C) (g : A -> B) xs,
+    (map_filter f (map g xs)) = map_filter (fun a => f (g a)) xs.
+Proof.
+  induction xs; simpl; auto.
+  destruct (f (g a)); auto.
+Qed.
+
+Lemma nodupmembers_map {A B C} :
+  forall (f : _ -> (A * C)) (l: list (A * B)),
+    (forall a b, fst (f (a, b)) = a) ->
+    NoDupMembers l ->
+    NoDupMembers (map f l).
+Proof.
+  intros * Hl Hnd.
+  erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto.
+  intros (?&?); simpl. apply Hl.
+Qed.
+
+Lemma nodupmembers_map_filter {A B C} :
+  forall (f : _ -> option (A * C)) (l: list (A * B)),
+    (forall a b, LiftO True (fun '(a', _) => a' = a) (f (a, b))) ->
+    NoDupMembers l ->
+    NoDupMembers (map_filter f l).
+Proof.
+  intros * Hl Hnd.
+  induction Hnd; simpl; auto with datatypes.
+  destruct (f (a, b)) as [(?&?)|] eqn:Hf; auto.
+  specialize (Hl a b) as Hl1. rewrite Hf in Hl1; simpl in *; subst.
+  constructor; auto.
+  contradict H.
+  apply fst_InMembers, in_map_iff in H as ((?&?)&?&Hin); subst.
+  apply map_filter_In' in Hin as ((?&?)&Hin&Hf').
+  specialize (Hl a b0). rewrite Hf' in Hl; simpl in *; subst.
+  eauto using In_InMembers.
+Qed.
 
 Global Instance Permutation_map_filter_Proper {A B}:
   Proper ((@eq (A -> option B)) ==> Permutation (A:=A) ==> (Permutation (A:=B)))
@@ -5181,6 +5242,29 @@ Proof.
   eapply in_flat_map; eauto.
 Qed.
 
+
+Fact nodup_map_flat_map {A B C} : forall (f : C -> B) (g : A -> list C) x xs,
+    In x xs ->
+    NoDup (map f (flat_map g xs)) ->
+    NoDup (map f (g x)).
+Proof.
+  induction xs; intros * Hin Hnd;
+    inv Hin; simpl in *; rewrite map_app in *.
+  - apply NoDup_app_l in Hnd; auto.
+  - apply NoDup_app_r in Hnd; auto.
+Qed.
+
+Fact nodup_map_filter_flat_map {A B C D} : forall (f : C -> option B) (g : A -> list C) (h : B -> D) x xs,
+    In x xs ->
+    NoDup (map h (map_filter f (flat_map g xs))) ->
+    NoDup (map h (map_filter f (g x))).
+Proof.
+  induction xs; intros * Hin Hnd;
+    inv Hin; simpl in *; rewrite map_filter_app, map_app in Hnd.
+  - apply NoDup_app_l in Hnd; auto.
+  - apply NoDup_app_r in Hnd; auto.
+Qed.
+
 Fact nodup_app_map_flat_map {A B C} : forall (f : C -> B) (g : A -> list C) xs y ys,
     In y ys ->
     NoDup (xs ++ map f (flat_map g ys)) ->
@@ -5189,10 +5273,7 @@ Proof.
   intros * Hin Hnd.
   apply NoDup_app'.
   - apply NoDup_app_l in Hnd; auto.
-  - apply NoDup_app_r in Hnd.
-    induction ys; inv Hin; simpl in *; rewrite map_app in *.
-    + apply NoDup_app_l in Hnd; auto.
-    + apply NoDup_app_r in Hnd; auto.
+  - eapply nodup_map_flat_map, NoDup_app_r; eauto.
   - eapply Forall_forall; intros * Hin1 Hin2.
     eapply NoDup_app_In in Hnd; eauto. eapply Hnd.
     eapply incl_map; [|eauto]. intros ??.
@@ -5225,14 +5306,24 @@ Ltac simpl_In :=
          let Hin1 := fresh "Hin" in
          let Hin2 := fresh "Hinf" in
          apply in_flat_map in H as (?&Hin1&Hin2)
+     | H: In _ (filter _ _) |- _ =>
+         let Hin := fresh "Hin" in
+         let Hf := fresh "Hf" in
+         apply filter_In in H as (Hin&Hf)
+     | H:In _ (map_filter _ _) |- _ =>
+         let Hin1 := fresh "Hin" in
+         let Hin2 := fresh "Hf" in
+         apply map_filter_In' in H as (?&Hin1&Hin2)
      | H:In _ (?f _) |- _ => autounfold with list in H; simpl_map_In H
      | |- In _ (?f _) => progress (autounfold with list); simpl_In
-     end; simpl).
+     end; simpl; inv_equalities).
 
 Ltac solve_In :=
   repeat
     (simpl_In;
      match goal with
+     | |- In _ (map_filter _ _) => eapply map_filter_In
+     | |- In _ (filter _ _) => eapply filter_In; split
      | |- exists _, _ /\ In _ _ => do 2 esplit; eauto; try solve_In; auto; simpl
      | |- In _ (flat_map _ _) => apply in_flat_map; do 2 esplit
      | H: In _ (combine _ _) |- In _ _ =>
@@ -5251,8 +5342,8 @@ Ltac simpl_Forall :=
 
      | H: Forall _ ?xs, Hin: In _ ?xs |- _ =>
          eapply Forall_forall in H; [|eapply Hin]; simpl in *
-     | H: Forall _ ?xs |- Forall _ ?xs =>
-         eapply Forall_impl_In; [|eapply H]; intros
+     (* | H: Forall _ ?xs |- Forall _ ?xs => *)
+     (*     eapply Forall_impl_In; [|eapply H]; intros *)
      | H: Forall _ (map _ _) |- _ => rewrite Forall_map in H
      | |- Forall _ (map _ _) => rewrite Forall_map
      | |- Forall _ _ => apply Forall_forall; intros
@@ -5316,9 +5407,11 @@ Ltac solve_Exists :=
 
 (* Tactics for solving incl / NoDup / NoDupMembers obligations *)
 
+Create HintDb list.
+
 Ltac simpl_app :=
-  repeat rewrite map_app in *;
-  repeat rewrite <-app_assoc in *.
+  autounfold with list in *;
+  repeat (rewrite map_app in * || rewrite map_filter_app in * || rewrite <-app_assoc in * ).
 
 (** Solves a goal of the form incl xss yss, where yss is of the form xs1 ++ xs2 ++ xs3 ++ ...
     and xs is also a concatenation of a subset of xsk, in the same order.
@@ -5391,8 +5484,8 @@ Ltac solve_NoDupMembers_app :=
 Ltac solve_Permutation_app :=
   simpl_app;
   match goal with
-  | |- Permutation ?xs ?xs => apply Permutation_refl
-  | |- Permutation (?xs ++ _) (?xs ++ _) => apply Permutation_app_head; solve_Permutation_app
+  | |- Permutation _ _ => apply Permutation_refl
+  | |- Permutation (_ ++ _) (_ ++ _) => apply Permutation_app_head; solve_Permutation_app
   | |- Permutation (?xs ++ ?ys) _ => rewrite (Permutation_app_comm xs ys); solve_Permutation_app
   end.
 

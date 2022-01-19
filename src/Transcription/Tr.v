@@ -41,7 +41,8 @@ Module Type TR
                                     do le2 <- to_lexp e2;
                                     OK (CE.Ebinop op le1 le2 ty)
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
-                                    OK (CE.Ewhen le x b)
+                                   OK (CE.Ewhen le x b)
+    | L.Elast _ _
     | L.Efby _ _ _
     | L.Earrow _ _ _
     | L.Ewhen _ _ _ _
@@ -143,6 +144,7 @@ Module Type TR
       | _ => Error (msg "type error : expected enumerated type for condition")
       end
 
+    | L.Elast _ _
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
     | L.Efby _ _ _
@@ -315,14 +317,14 @@ Module Type TR
   Definition mmap_block_to_equation {PSyn prefs} env envo (n: @L.node PSyn prefs) :
     res { neqs | match n.(L.n_block) with
                  | L.Blocal locs blks =>
-                   do neqs <- mmap (block_to_equation (Env.adds' (idty locs) env) envo []) blks;
+                   do neqs <- mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo []) blks;
                    OK (locs, neqs)
                  | _ => Error (msg "node not normalized")
                  end = OK neqs }.
   Proof.
     destruct (L.n_block n); simpl.
     1-3:right; exact (msg "node not normalized").
-    destruct (mmap (block_to_equation (Env.adds' (idty l) env) envo []) l0).
+    destruct (mmap (block_to_equation (Env.adds' (idty (idty l)) env) envo []) l0).
     left. simpl. eauto.
     right. auto.
   Defined.
@@ -349,7 +351,7 @@ Module Type TR
           NL.n_name     := n.(L.n_name);
           NL.n_in       := idty n.(L.n_in);
           NL.n_out      := idty n.(L.n_out);
-          NL.n_vars     := idty (fst res);
+          NL.n_vars     := idty (idty (fst res));
           NL.n_eqs      := snd res;
 
           NL.n_ingt0    := L.n_ingt0 n;
@@ -374,7 +376,7 @@ Module Type TR
     cases. rename l0 into blks. inv Hsyn.
     monadInv1 P. inv Hvars.
     assert (NL.vars_defined neqs = concat xs).
-    { revert neqs EQ. clear - H0 H2. induction H2; inv H0; simpl.
+    { revert neqs EQ. clear - H2 H3. induction H3; inv H2; simpl.
       - intros neqs Htr. inv Htr. auto.
       - intros neqs Htoeq. monadInv Htoeq.
         apply IHForall2 in EQ1; auto. simpl.
@@ -389,7 +391,7 @@ Module Type TR
           eapply it; eauto.
     }
     simpl. rewrite H.
-    rewrite <-H4, map_app, Hperm. reflexivity.
+    rewrite <-H5, map_app, Hperm, map_fst_idty. reflexivity.
   Qed.
 
   (* NL.n_vout obligation *)
@@ -425,11 +427,11 @@ Module Type TR
     pose proof (L.n_nodup n) as (Hndup1&Hndup2).
     cases. rename l3 into blks. monadInv P.
     inv Hndup2.
-    rewrite (Permutation_app_comm (idty vars)), app_assoc, <-idty_app.
+    rewrite (Permutation_app_comm (idty (idty vars))), app_assoc, <-idty_app.
     apply NoDupMembers_app; eauto.
     - rewrite NoDupMembers_idty; auto.
-    - rewrite NoDupMembers_idty; auto.
-    - intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1, Hinm2.
+    - rewrite 2 NoDupMembers_idty; auto.
+    - intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1. rewrite 2 InMembers_idty in Hinm2.
       eapply H4; eauto.
       now apply fst_InMembers.
   Qed.
@@ -440,15 +442,15 @@ Module Type TR
     pose proof (L.n_good n) as (Hgood1&Hgood2&Hat).
     split; auto.
     cases. monadInv P.
-    rewrite (Permutation_app_comm (idty vars)), app_assoc, <-idty_app, map_app, 2 map_fst_idty.
+    rewrite (Permutation_app_comm (idty (idty vars))), app_assoc, <-idty_app, map_app, 3 map_fst_idty.
     inv Hgood2.
     apply Forall_app. split; auto.
     1,2:(eapply Forall_impl; [|eauto]; intros * [?|(pref&Hpref&?&?&?)];
          subst; [left|right]; auto;
          exists pref; eauto;
-         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, elab_prefs in Hpref;
+         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, last_prefs, elab_prefs in Hpref;
          repeat rewrite PSF.add_iff in *; rewrite PS.singleton_spec in *;
-         destruct Hpref as [|[|[|[|]]]]; subst; split; eauto 10).
+         destruct Hpref as [|[|[|[|[|]]]]]; subst; split; eauto 10).
   Qed.
 
   Definition to_global (G : L.global) :=
@@ -634,10 +636,10 @@ Module Type TR
     Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs blks :
       L.n_block n = L.Blocal locs blks ->
       envs_eq
-        (Env.adds' (idty locs)
+        (Env.adds' (idty (idty locs))
                    (Env.adds' (idty (L.n_in n))
                               (Env.from_list (idty (L.n_out n)))))
-        (idck (idty (L.n_in n ++ locs ++ L.n_out n))).
+        (idck (idty (L.n_in n ++ idty locs ++ L.n_out n))).
     Proof.
       intros Hblk.
       pose proof (L.n_nodup n) as (Hnd1&Hnd2). rewrite Hblk in *; clear Hblk.
@@ -648,7 +650,9 @@ Module Type TR
       2:rewrite envs_eq_app_comm; apply env_eq_env_adds', env_eq_env_from_list.
       1-3:repeat rewrite <-idty_app; repeat rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
       rewrite (Permutation_app_comm (L.n_out _)).
-      apply NoDupMembers_app; eauto using NoDupMembers_app_l. intros. rewrite fst_InMembers; eauto.
+      apply NoDupMembers_app; eauto using NoDupMembers_app_l.
+      - now rewrite NoDupMembers_idty.
+      - intros ? Hinm1. rewrite InMembers_idty in Hinm1. rewrite fst_InMembers; eauto.
     Qed.
 
   End Envs_eq.

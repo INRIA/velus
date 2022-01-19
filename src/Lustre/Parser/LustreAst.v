@@ -86,6 +86,7 @@ Inductive expression :=
 | APP      : ident -> list expression -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
+| LAST     : ident -> astloc -> expression
 | FBY      : list expression -> list expression -> astloc -> expression
 | ARROW    : list expression -> list expression -> astloc -> expression
 | WHEN     : list expression -> ident -> ident -> astloc -> expression
@@ -100,6 +101,7 @@ Definition expression_loc (e: expression) : astloc :=
   | APP _ _ _ l => l
   | CONSTANT _ l => l
   | VARIABLE _ l => l
+  | LAST _ l => l
   | FBY _ _ l => l
   | ARROW _ _ l => l
   | WHEN _ _ _ l => l
@@ -107,6 +109,7 @@ Definition expression_loc (e: expression) : astloc :=
   end.
 
 Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
+Definition local_decls : Type := list (ident * (type_name * preclock * list expression * astloc)).
 
 Definition equation : Type := (list ident * list expression * astloc)%type.
 
@@ -114,7 +117,7 @@ Inductive block :=
 | BEQ      : equation -> block
 | BRESET   : list block -> list expression -> astloc -> block
 | BSWITCH  : list expression -> list (ident * list block) -> astloc -> block
-| BLOCAL   : var_decls -> list block -> astloc -> block.
+| BLOCAL   : local_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
@@ -172,6 +175,10 @@ Section expression_ind2.
     forall x a,
       P (VARIABLE x a).
 
+  Hypothesis LASTCase:
+    forall x a,
+      P (LAST x a).
+
   Hypothesis FBYCase:
     forall e0s es a,
       Forall P e0s ->
@@ -212,6 +219,7 @@ Section expression_ind2.
     - apply APPCase; SolveForall.
     - apply CONSTANTCase; SolveForall.
     - apply VARIABLECase; SolveForall.
+    - apply LASTCase; SolveForall.
     - apply FBYCase; SolveForall.
     - apply ARROWCase; SolveForall.
     - apply WHENCase; SolveForall.
@@ -250,6 +258,6 @@ Section block_ind2.
       induction l0 as [|(?&?)]; constructor; eauto; simpl.
       induction l0; auto.
     - apply LOCALCase.
-      induction l; auto.
+      induction l0; auto.
   Qed.
 End block_ind2.

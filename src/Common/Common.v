@@ -184,6 +184,7 @@ Module Type IDS.
   Parameter reset : ident.
 
   Parameter elab : ident.
+  Parameter last : ident.
   Parameter switch : ident.
   Parameter local : ident.
   Parameter norm1 : ident.
@@ -192,12 +193,13 @@ Module Type IDS.
 
   (** Incremental prefix sets *)
   Definition elab_prefs := PS.singleton elab.
-  Definition switch_prefs := PS.add switch elab_prefs.
+  Definition last_prefs := PS.add last elab_prefs.
+  Definition switch_prefs := PS.add switch last_prefs.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
-  Definition gensym_prefs := [elab; switch; local; norm1; norm2].
+  Definition gensym_prefs := [elab; last; switch; local; norm1; norm2].
   Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
 
   Parameter default : ident.
@@ -213,6 +215,7 @@ Module Type IDS.
   Conjecture step_atom : atom step.
   Conjecture reset_atom : atom reset.
   Conjecture elab_atom : atom elab.
+  Conjecture last_atom : atom last.
   Conjecture switch_atom : atom switch.
   Conjecture local_atom : atom local.
   Conjecture norm1_atom : atom norm1.
@@ -891,22 +894,6 @@ Section ORel2.
   Qed.
 
 End ORel2.
-
-Lemma option_map_inv:
-  forall {A B} (f: A -> B) oa b,
-    option_map f oa = Some b ->
-    exists a, oa = Some a /\ b = f a.
-Proof.
-  unfold option_map; intros * E.
-  cases; inv E; eauto.
-Qed.
-
-Lemma option_map_None:
-  forall {A B} (f: A -> B) oa,
-    option_map f oa = None <-> oa = None.
-Proof.
-  unfold option_map; intros; cases; intuition; discriminate.
-Qed.
 
 (** The option monad *)
 

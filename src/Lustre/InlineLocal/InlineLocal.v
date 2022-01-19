@@ -42,6 +42,7 @@ Module Type INLINELOCAL
       match e with
       | Econst _ | Eenum _ _ => e
       | Evar x ann => Evar (rename_in_var x) (rename_in_ann ann)
+      | Elast x ann => Elast x (rename_in_ann ann)
       | Eunop op e1 ann => Eunop op (rename_in_exp e1) (rename_in_ann ann)
       | Ebinop op e1 e2 ann => Ebinop op (rename_in_exp e1) (rename_in_exp e2) (rename_in_ann ann)
       | Efby e0s e1s anns => Efby (map rename_in_exp e0s) (map rename_in_exp e1s) (map rename_in_ann anns)
@@ -178,7 +179,7 @@ Module Type INLINELOCAL
       do blks' <- mmap (inlinelocal_block sub) blks;
       ret [Breset (concat blks') (rename_in_exp sub er)]
     | Blocal locs blks =>
-      let locs' := map (fun '(x, (ty, ck)) => (x, (ty, (rename_in_clock sub ck)))) (idty locs) in
+      let locs' := map (fun '(x, (ty, ck)) => (x, (ty, (rename_in_clock sub ck)))) (idty (idty locs)) in
       do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
       do blks' <- mmap (inlinelocal_block sub') blks;
@@ -186,7 +187,7 @@ Module Type INLINELOCAL
     | _ => (* Should not happen *) ret [blk]
     end.
 
-  Definition inlinelocal_topblock (blk : block) : FreshAnn (list block * list (ident * (type * clock * ident))) :=
+  Definition inlinelocal_topblock (blk : block) : FreshAnn (list block * list (ident * _)) :=
     match blk with
     | Blocal locs blks =>
       do blks' <- mmap (inlinelocal_block (@Env.empty _)) blks;
@@ -311,9 +312,9 @@ Module Type INLINELOCAL
       simpl. now rewrite <-app_assoc.
     - (* local *)
       eapply mmap_vars_perm in H1 as (ys1&Hvars1&Hperm1); eauto.
-      2:{ eapply Forall_impl; [|eapply H4]; intros.
+      2:{ simpl_Forall.
           eapply NoDupLocals_incl; [|eauto].
-          rewrite <-H5, (Permutation_app_comm _ xs). repeat rewrite app_assoc.
+          rewrite <-H6, (Permutation_app_comm _ xs). repeat rewrite app_assoc.
           apply incl_app; try solve [solve_incl_app].
           apply incl_app; try solve [solve_incl_app].
           rewrite (Permutation_app_comm _ xs), <-app_assoc. apply incl_appr.
@@ -322,29 +323,29 @@ Module Type INLINELOCAL
           - eapply Env.elements_correct in Hfind.
             apply in_or_app, or_introl, in_map_iff; eauto.
           - eapply fresh_idents_rename_sub1 in H0; eauto. 2:econstructor; eauto.
-            unfold idty in H0. rewrite fst_InMembers, 2 map_map in H0.
-            erewrite map_ext in H0; eauto using in_or_app. intros (?&(?&?)&?); eauto.
+            unfold idty in H0. rewrite fst_InMembers in H0.
+            simpl_In. apply in_or_app, or_intror. solve_In.
       }
-      rewrite <-H5, map_app in Hperm1.
+      rewrite <-H6, map_app in Hperm1.
       unfold st_ids in Hperm1. do 1 (erewrite fresh_idents_rename_anns in Hperm1; eauto); simpl in *.
       rewrite map_app, not_in_union_map_rename1, not_in_union_map_rename2,
               (Permutation_swap (concat ys1)), <-app_assoc in Hperm1.
       2:{ eapply Forall_forall; intros * Hin contra.
           eapply fresh_idents_rename_sub1 in contra; eauto.
-          unfold idty in contra. rewrite fst_InMembers, 2 map_map in contra.
+          unfold idty in contra. rewrite fst_InMembers, 3 map_map in contra.
           erewrite map_ext, <-fst_InMembers in contra.
-          eapply H8; eauto using in_or_app. intros (?&(?&?)&?); auto. }
+          eapply H9; eauto using in_or_app. intros; destruct_conjs; auto. }
       2:{ eapply Forall_forall; intros * Hin (?&contra). apply fst_InMembers in Hin.
-          eapply H8; eauto. apply in_or_app; left.
+          eapply H9; eauto. apply in_or_app; left.
           eapply in_map_iff. do 2 esplit.
           2:eapply Env.elements_correct; eauto. reflexivity. }
       eapply Ker.fresh_idents_rename_ids in H0.
-      2:{ rewrite fst_NoDupMembers in H7.
-          unfold idty. rewrite fst_NoDupMembers, 2 map_map; simpl.
-          erewrite map_ext; eauto. intros (?&(?&?)&?); auto. }
+      2:{ rewrite fst_NoDupMembers in H8.
+          unfold idty. rewrite fst_NoDupMembers, 3 map_map; simpl.
+          erewrite map_ext; eauto. intros; destruct_conjs; auto. }
       rewrite H0 in Hperm1. unfold idty in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
       erewrite map_ext in Hperm1. eapply Permutation_app_inv_l in Hperm1.
-      2:(intros (?&(?&?)&?); simpl; auto).
+      2:intros; destruct_conjs; auto.
       repeat esplit; eauto.
   Qed.
 
@@ -386,9 +387,9 @@ Module Type INLINELOCAL
       edestruct H0 as (?&Hin'&?&?&Hdl); eauto.
     - (* local *)
       apply Forall_concat.
-      eapply mmap_values, Forall2_ignore1 in H2.
+      eapply mmap_values, Forall2_ignore1 in H1.
       rewrite Forall_forall in *; intros * Hin.
-      edestruct H2 as (?&Hin'&?&?&Hdl); eauto.
+      edestruct H1 as (?&Hin'&?&?&Hdl); eauto.
   Qed.
 
   Lemma inlinelocal_topblock_GoodLocals : forall blk blks' vars st st',
@@ -435,9 +436,9 @@ Module Type INLINELOCAL
       eapply Forall_concat. rewrite Forall_forall in *; intros.
       edestruct H0 as (?&?&?&?&?); eauto.
     - (* local *)
-      eapply mmap_values, Forall2_ignore1 in H2.
+      eapply mmap_values, Forall2_ignore1 in H1.
       eapply Forall_concat. rewrite Forall_forall in *; intros.
-      edestruct H2 as (?&?&?&?&?); eauto.
+      edestruct H1 as (?&?&?&?&?); eauto.
   Qed.
 
   Lemma inlinelocal_topblock_NoDupLocals xs : forall blk blks' vars st st',
@@ -456,12 +457,13 @@ Module Type INLINELOCAL
 
   Lemma inlinelocal_topblock_incl : forall blk blks' vars st st',
       inlinelocal_topblock blk st = (blks', vars, st') ->
-      incl vars (locals blk).
+      incl (map fst vars) (map fst (locals blk)).
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hil; repeat inv_bind.
     1-3:apply incl_nil'.
-    apply incl_appl, incl_refl.
+    erewrite map_app, map_map, map_ext.
+    apply incl_appl, incl_refl. intros; destruct_conjs; auto.
     Transparent inlinelocal_block.
   Qed.
 
@@ -503,10 +505,10 @@ Module Type INLINELOCAL
       rewrite Forall_forall in *; intros.
       edestruct H0 as (?&?&(?&?&?)); eauto.
     - (* local *)
-      eapply mmap_values, Forall2_ignore1 in H2.
+      eapply mmap_values, Forall2_ignore1 in H1.
       eapply Forall_concat.
       rewrite Forall_forall in *; intros.
-      edestruct H2 as (?&?&?&?&Hdl); eauto.
+      edestruct H1 as (?&?&?&?&Hdl); eauto.
   Qed.
 
   Lemma inlinelocal_topblock_nolocal : forall blk blks' vars st st',
@@ -524,30 +526,40 @@ Module Type INLINELOCAL
     Transparent inlinelocal_block.
   Qed.
 
+  Lemma inlinelocal_topblock_nolast : forall blk blks' vars st st',
+      noswitch_block blk ->
+      inlinelocal_topblock blk st = (blks', vars, st') ->
+      Forall (fun '(_, (_, _, _, o)) => o = None) vars.
+  Proof.
+    intros * Hns Hil.
+    inv Hns; repeat inv_bind; auto.
+  Qed.
+
   (** ** Transformation of node and program *)
 
   Lemma local_not_in_switch_prefs :
     ~PS.In local switch_prefs.
   Proof.
-    unfold switch_prefs, elab_prefs.
-    rewrite PS.add_spec, not_or'. rewrite PSF.singleton_iff.
+    unfold switch_prefs, last_prefs, elab_prefs.
+    rewrite 2 PS.add_spec, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
-    repeat rewrite NoDup_cons_iff in Hnd.
-    split; intros contra; subst; rewrite contra in Hnd.
-    - destruct Hnd as (_&Hnin&_); eauto with datatypes.
-    - destruct Hnd as (Hnin&_); eauto with datatypes.
+    repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
+    intros [contra|[contra|contra]]; subst; rewrite contra in *; eauto with datatypes.
   Qed.
 
   Program Definition inlinelocal_node (n: @node noswitch_block switch_prefs) : @node nolocal_top_block local_prefs :=
     let res := inlinelocal_topblock (n_block n) init_st in
-    {| n_name := (n_name n);
-       n_hasstate := (n_hasstate n);
-       n_in := (n_in n);
-       n_out := (n_out n);
-       n_block := Blocal (snd (fst res)++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH))) (st_anns (snd res)))
-                         (fst (fst res));
-       n_ingt0 := (n_ingt0 n);
-       n_outgt0 := (n_outgt0 n);
+    {|
+      n_name := (n_name n);
+      n_hasstate := (n_hasstate n);
+      n_in := (n_in n);
+      n_out := (n_out n);
+      n_block := Blocal
+                   (snd (fst res)++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None)))
+                        (st_anns (snd res)))
+                   (fst (fst res));
+      n_ingt0 := (n_ingt0 n);
+      n_outgt0 := (n_outgt0 n);
     |}.
   Next Obligation.
     pose proof (n_defd n) as (?&Hvars&Hperm).
@@ -584,7 +596,8 @@ Module Type INLINELOCAL
       + intros * Hinm1 Hinm2.
         rewrite fst_InMembers in Hinm1, Hinm2. rewrite map_map in Hinm2.
         eapply st_valid_after_AtomOrGensym_nIn in Hinm2; eauto using local_not_in_switch_prefs.
-        eapply Forall_forall; [|eapply Hinm1]. eapply Forall_incl, incl_map, inlinelocal_topblock_incl; eauto.
+        eapply Forall_forall; [|eapply Hinm1].
+        eapply Forall_incl, inlinelocal_topblock_incl; eauto.
         eapply GoodLocals_locals; eauto.
     - intros ? Hinm contra.
       eapply st_valid_after_NoDupMembers in H; eauto.
@@ -602,7 +615,7 @@ Module Type INLINELOCAL
     - assert (Hil:=Hdl). eapply inlinelocal_topblock_st_valid_after, st_valid_prefixed in Hdl.
       2:{ eapply init_st_valid. eapply local_not_in_switch_prefs. eapply PS_For_all_empty. }
       rewrite map_app, map_map, Forall_app; split; simpl.
-      + eapply AtomOrGensym_add, Forall_incl, incl_map, inlinelocal_topblock_incl; eauto.
+        eapply AtomOrGensym_add, Forall_incl, inlinelocal_topblock_incl; eauto.
         eapply GoodLocals_locals; eauto.
       + eapply Forall_impl; [|eauto]; intros; simpl in *.
         right. do 2 eexists; eauto using PSF.add_1.
@@ -610,9 +623,11 @@ Module Type INLINELOCAL
   Qed.
   Next Obligation.
     pose proof (n_syn n) as Hsyn.
-    constructor.
     destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hdl.
-    eapply inlinelocal_topblock_nolocal; eauto.
+    constructor.
+    - simpl_Forall. apply in_app_iff in H as [|]; simpl_In; auto.
+      apply inlinelocal_topblock_nolast in Hdl; auto. simpl_Forall; auto.
+    - eapply inlinelocal_topblock_nolocal; eauto.
   Qed.
 
   Global Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch_block switch_prefs) node :=

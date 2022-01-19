@@ -47,6 +47,35 @@ Ltac destruct_conjs :=
     | x: _ * _ |- _ => destruct x
     end; simpl in *.
 
+Lemma option_map_inv:
+  forall {A B} (f: A -> B) oa b,
+    option_map f oa = Some b ->
+    exists a, oa = Some a /\ b = f a.
+Proof.
+  unfold option_map; intros * E.
+  cases; inv E; eauto.
+Qed.
+
+Lemma option_map_None:
+  forall {A B} (f: A -> B) oa,
+    option_map f oa = None <-> oa = None.
+Proof.
+  unfold option_map; intros; cases; intuition; discriminate.
+Qed.
+
+Ltac inv_equalities :=
+  destruct_conjs; subst;
+  repeat
+    match goal with
+    | H: (_, _) = (_, _) |- _ => inv H
+    | H: option_map _ _ = Some _ |- _ =>
+        let Hf := fresh "Hf" in
+        let Heq := fresh "Heq" in
+        apply option_map_inv in H as (?&Hf&Heq); destruct_conjs
+    | H: option_map _ _ = None |- _ =>
+        apply option_map_None in H; subst
+    end.
+
 (* Tactics for manipulating hypotheses without renaming them.
    Lighter-weight (but less expressive) than match goal with.
 

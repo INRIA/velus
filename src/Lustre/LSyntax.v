@@ -44,6 +44,7 @@ Module Type LSYNTAX
   | Econst : cconst -> exp
   | Eenum  : enumtag -> type -> exp
   | Evar   : ident -> ann -> exp
+  | Elast  : ident -> ann -> exp
   | Eunop  : unop -> exp -> ann -> exp
   | Ebinop : binop -> exp -> exp -> ann -> exp
   | Efby   : list exp -> list exp -> list ann -> exp
@@ -67,7 +68,7 @@ Module Type LSYNTAX
   | Beq : equation -> block
   | Breset : list block -> exp -> block
   | Bswitch : exp -> list (enumtag * list block) -> block
-  | Blocal : list (ident * (type * clock * ident)) -> list block -> block.
+  | Blocal : list (ident * (type * clock * ident * option (exp * ident))) -> list block -> block.
 
   (** ** Node *)
 
@@ -78,6 +79,7 @@ Module Type LSYNTAX
     | Earrow _ _ anns
     | Eapp _ _ _ anns => length anns
     | Evar _ _
+    | Elast _ _
     | Eunop _ _ _
     | Ebinop _ _ _ _ => 1
     | Ewhen _ _ _  (tys, _)
@@ -95,6 +97,7 @@ Module Type LSYNTAX
     | Earrow _ _ anns
     | Eapp _ _ _ anns => anns
     | Evar _ ann
+    | Elast _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [ann]
     | Ewhen _ _ _  (tys, ck)
@@ -112,6 +115,7 @@ Module Type LSYNTAX
     | Efby _ _ anns
     | Earrow _ _ anns
     | Eapp _ _ _ anns => map fst anns
+    | Elast _ ann
     | Evar _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [fst ann]
@@ -130,6 +134,7 @@ Module Type LSYNTAX
     | Earrow _ _ anns
     | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
+    | Elast _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [snd ann]
     | Ewhen _ _ _ anns
@@ -147,6 +152,7 @@ Module Type LSYNTAX
     | Earrow _ _ anns
     | Eapp _ _ _ anns => map (fun ann => (snd ann, None)) anns
     | Evar x ann => [(snd ann, Some x)]
+    | Elast x ann => [(snd ann, None)]
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [(snd ann, None)]
     | Ewhen _ _ _ anns
@@ -221,12 +227,12 @@ Module Type LSYNTAX
           eapply Forall_forall in H as (?&Hvars&Hperm); [|eapply Hin]
       end.
 
-  Fixpoint locals (d : block) : list (ident * (type * clock * ident)) :=
+  Fixpoint locals (d : block) : list (ident * (ident * option ident)) :=
     match d with
     | Beq _ => []
     | Breset blocks _ => flat_map locals blocks
     | Bswitch _ branches => flat_map (fun blks => flat_map locals (snd blks)) branches
-    | Blocal loc blocks => loc ++ (flat_map locals blocks)
+    | Blocal loc blocks => map (fun '(x, (_, _, cx, o)) => (x, (cx, option_map snd o))) loc ++ (flat_map locals blocks)
     end.
 
   (** ** Shadowing is prohibited *)
@@ -381,6 +387,10 @@ Module Type LSYNTAX
       forall x a,
         P (Evar x a).
 
+    Hypothesis ElastCase:
+      forall x a,
+        P (Elast x a).
+
     Hypothesis EunopCase:
       forall op e a,
         P e ->
@@ -439,6 +449,7 @@ Module Type LSYNTAX
       - apply EconstCase; auto.
       - apply EenumCase; auto.
       - apply EvarCase; auto.
+      - apply ElastCase; auto.
       - apply EunopCase; auto.
       - apply EbinopCase; auto.
       - apply EfbyCase; SolveForall; auto.
@@ -823,6 +834,8 @@ Module Type LSYNTAX
       wl_exp G (Eenum k ty)
   | wl_Evar : forall G x a,
       wl_exp G (Evar x a)
+  | wl_Elast : forall G x a,
+      wl_exp G (Elast x a)
   | wl_Eunop : forall G op e a,
       wl_exp G e ->
       numstreams e = 1 ->
@@ -893,6 +906,7 @@ Module Type LSYNTAX
       wl_block G (Bswitch ec branches)
   | wl_Blocal : forall locs blocks,
       Forall (wl_block G) blocks ->
+      Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wl_exp G e /\ numstreams e = 1) o) locs ->
       wl_block G (Blocal locs blocks).
 
   Definition wl_node {PSyn prefs} (G : @global PSyn prefs) (n : @node PSyn prefs) :=
@@ -903,69 +917,82 @@ Module Type LSYNTAX
 
   (** ** Limiting the variables appearing in expression, equation or block to an environnement *)
 
-  Inductive wx_exp (vars : list ident) : exp -> Prop :=
+  Inductive wx_clock (vars : list ident) : clock -> Prop :=
+  | wx_Cbase : wx_clock vars Cbase
+  | wx_Con : forall ck x tx,
+      wx_clock vars ck ->
+      In x vars ->
+      wx_clock vars (Con ck x tx).
+
+  Inductive wx_exp (env : list ident) (envl : list ident) : exp -> Prop :=
   | wx_Const : forall c,
-      wx_exp vars (Econst c)
+      wx_exp env envl (Econst c)
   | wx_Enum : forall k ty,
-      wx_exp vars (Eenum k ty)
+      wx_exp env envl (Eenum k ty)
   | wx_Evar : forall x a,
-      In x vars ->
-      wx_exp vars (Evar x a)
+      In x env ->
+      wx_exp env envl (Evar x a)
+  | wx_Elast : forall x ty ck,
+      In x envl ->
+      wx_exp env envl (Elast x (ty, ck))
   | wx_Eunop : forall op e a,
-      wx_exp vars e ->
-      wx_exp vars (Eunop op e a)
+      wx_exp env envl e ->
+      wx_exp env envl (Eunop op e a)
   | wx_Ebinop : forall op e1 e2 a,
-      wx_exp vars e1 ->
-      wx_exp vars e2 ->
-      wx_exp vars (Ebinop op e1 e2 a)
+      wx_exp env envl e1 ->
+      wx_exp env envl e2 ->
+      wx_exp env envl (Ebinop op e1 e2 a)
   | wx_Efby : forall e0s es anns,
-      Forall (wx_exp vars) e0s ->
-      Forall (wx_exp vars) es ->
-      wx_exp vars (Efby e0s es anns)
+      Forall (wx_exp env envl) e0s ->
+      Forall (wx_exp env envl) es ->
+      wx_exp env envl (Efby e0s es anns)
   | wx_Earrow : forall e0s es anns,
-      Forall (wx_exp vars) e0s ->
-      Forall (wx_exp vars) es ->
-      wx_exp vars (Earrow e0s es anns)
+      Forall (wx_exp env envl) e0s ->
+      Forall (wx_exp env envl) es ->
+      wx_exp env envl (Earrow e0s es anns)
   | wx_Ewhen : forall es x b tys nck,
-      In x vars ->
-      Forall (wx_exp vars) es ->
-      wx_exp vars (Ewhen es x b (tys, nck))
+      In x env ->
+      Forall (wx_exp env envl) es ->
+      wx_exp env envl (Ewhen es x b (tys, nck))
   | wx_Emerge : forall x tx es tys nck,
-      In x vars ->
-      Forall (fun es => Forall (wx_exp vars) (snd es)) es ->
-      wx_exp vars (Emerge (x, tx) es (tys, nck))
+      In x env ->
+      Forall (fun es => Forall (wx_exp env envl) (snd es)) es ->
+      wx_exp env envl (Emerge (x, tx) es (tys, nck))
   | wx_Ecase : forall e es d tys nck,
-      wx_exp vars e ->
-      Forall (fun es => Forall (wx_exp vars) (snd es)) es ->
-      (forall d0, d = Some d0 -> Forall (wx_exp vars) d0) ->
-      wx_exp vars (Ecase e es d (tys, nck))
+      wx_exp env envl e ->
+      Forall (fun es => Forall (wx_exp env envl) (snd es)) es ->
+      (forall d0, d = Some d0 -> Forall (wx_exp env envl) d0) ->
+      wx_exp env envl (Ecase e es d (tys, nck))
   | wx_Eapp : forall f es er anns,
-      Forall (wx_exp vars) es ->
-      Forall (wx_exp vars) er ->
-      wx_exp vars (Eapp f es er anns).
+      Forall (wx_exp env envl) es ->
+      Forall (wx_exp env envl) er ->
+      wx_exp env envl (Eapp f es er anns).
 
-  Definition wx_equation vars (eq : equation) :=
+  Definition wx_equation env envl (eq : equation) :=
     let (xs, es) := eq in
-    Forall (wx_exp vars) es /\ incl xs vars.
+    Forall (wx_exp env envl) es /\ incl xs env.
 
-  Inductive wx_block : list ident -> block -> Prop :=
-  | wx_Beq : forall vars eq,
-      wx_equation vars eq ->
-      wx_block vars (Beq eq)
-  | wx_Breset : forall vars blks er,
-      Forall (wx_block vars) blks ->
-      wx_exp vars er ->
-      wx_block vars (Breset blks er)
-  | wc_Bswitch : forall vars ec branches,
-      wx_exp vars ec ->
-      Forall (fun blks => Forall (wx_block vars) (snd blks)) branches ->
-      wx_block vars (Bswitch ec branches)
-  | wx_Blocal : forall vars locs blks,
-      Forall (wx_block (vars++map fst locs)) blks ->
-      wx_block vars (Blocal locs blks).
+  Inductive wx_block : list ident -> list ident -> block -> Prop :=
+  | wx_Beq : forall env envl eq,
+      wx_equation env envl eq ->
+      wx_block env envl (Beq eq)
+  | wx_Breset : forall env envl blks er,
+      Forall (wx_block env envl) blks ->
+      wx_exp env envl er ->
+      wx_block env envl (Breset blks er)
+  | wc_Bswitch : forall env envl ec branches,
+      wx_exp env envl ec ->
+      Forall (fun blks => Forall (wx_block env envl) (snd blks)) branches ->
+      wx_block env envl (Bswitch ec branches)
+  | wx_Blocal : forall env envl locs blks,
+      let env' := env ++ map fst locs in
+      let envl' := envl ++ map_filter (fun '(x, (_, _, o)) => option_map (fun _ => x) o) locs in
+      Forall (wx_block env' envl') blks ->
+      Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wx_exp env' envl' e) o) locs ->
+      wx_block env envl (Blocal locs blks).
 
   Definition wx_node {PSyn prefs} (n : @node PSyn prefs) :=
-    wx_block (map fst (n_in n ++ n_out n)) (n_block n).
+    wx_block (map fst (n_in n ++ n_out n)) [] (n_block n).
 
   Definition wx_global {PSyn prefs} (G: @global PSyn prefs) : Prop :=
     Forall wx_node (nodes G).
@@ -974,12 +1001,22 @@ Module Type LSYNTAX
 
     Hint Constructors wx_exp wx_block : core.
 
-    Lemma wx_exp_incl : forall env env' e,
-      incl env env' ->
-      wx_exp env e ->
-      wx_exp env' e.
+    Lemma wx_clock_incl : forall env env' ck,
+        incl env env' ->
+        wx_clock env ck ->
+        wx_clock env' ck.
     Proof.
-      induction e using exp_ind2; intros * Hincl Hwx; inv Hwx; auto.
+      induction ck; intros * Hincl Hwc; inv Hwc;
+        constructor; eauto.
+    Qed.
+
+    Lemma wx_exp_incl : forall Γ Γl Γ' Γl' e,
+        incl Γ Γ' ->
+        incl Γl Γl' ->
+        wx_exp Γ Γl e ->
+        wx_exp Γ' Γl' e.
+    Proof.
+      induction e using exp_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx; auto.
       - (* fby *)
         constructor; simpl_Forall; auto.
       - (* arrow *)
@@ -998,25 +1035,27 @@ Module Type LSYNTAX
         constructor; simpl_Forall; eauto.
     Qed.
 
-    Lemma wx_equation_incl : forall env env' equ,
-        incl env env' ->
-        wx_equation env equ ->
-        wx_equation env' equ.
+    Lemma wx_equation_incl : forall Γ Γl Γ' Γl' equ,
+        incl Γ Γ' ->
+        incl Γl Γl' ->
+        wx_equation Γ Γl equ ->
+        wx_equation Γ' Γl' equ.
     Proof.
-      intros ?? (xs&es) Hincl (Hes&Hxs).
+      intros ???? (xs&es) Hincl1 Hincl2 (Hes&Hxs).
       split.
       - simpl_Forall.
         eapply wx_exp_incl; eauto.
       - etransitivity; eauto.
     Qed.
 
-    Lemma wx_block_incl : forall env env' blk,
-        incl env env' ->
-        wx_block env blk ->
-        wx_block env' blk.
+    Lemma wx_block_incl : forall Γ Γ' Γl Γl' blk,
+        incl Γ Γ' ->
+        incl Γl Γl' ->
+        wx_block Γ Γl blk ->
+        wx_block Γ' Γl' blk.
     Proof.
-      intros *. revert env env'.
-      induction blk using block_ind2; intros * Hincl Hwx; inv Hwx.
+      intros *. revert Γ Γl Γ' Γl'.
+      induction blk using block_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx.
       - (* equation *)
         constructor. eapply wx_equation_incl; eauto.
       - (* reset *)
@@ -1028,9 +1067,19 @@ Module Type LSYNTAX
         + simpl_Forall; eauto.
       - (* local *)
         constructor; simpl_Forall; eauto.
-        eapply H; eauto using incl_appl'.
+        + eapply H; eauto using incl_appl'.
+        + destruct o as [(?&?)|]; simpl in *; auto.
+          eapply wx_exp_incl; eauto using incl_appl'.
     Qed.
   End wx_incl.
+
+  (* Lemma wx_clock_Is_free_in : forall vars ck x, *)
+  (*     wx_clock vars ck -> *)
+  (*     Is_free_in_clock x ck -> *)
+  (*     In x vars. *)
+  (* Proof. *)
+  (*   induction ck; intros * Hwx Hfree; inv Hwx; inv Hfree; eauto. *)
+  (* Qed. *)
 
   (** *** Additional properties *)
 
@@ -1071,37 +1120,38 @@ Module Type LSYNTAX
     rewrite Hperm. reflexivity.
   Qed.
 
-  Lemma NoDupLocals_enrich : forall blk xs xs',
-      (forall x, In x xs' -> ~InMembers x (locals blk)) ->
-      NoDupLocals xs blk ->
-      NoDupLocals (xs++xs') blk.
-  Proof.
-    induction blk using block_ind2; intros * Hnd1 Hnd2;
-      inv Hnd2; simpl in *.
-    - (* equation *)
-      constructor.
-    - (* reset *)
-      constructor.
-      simpl_Forall.
-      eapply H; eauto.
-      intros ? Hin Hinm. eapply Hnd1; eauto.
-      apply inmembers_flat_map; solve_Exists.
-    - (* switch *)
-      constructor. simpl_Forall.
-      eapply H; eauto.
-      intros ? Hin Hinm. eapply Hnd1; eauto.
-      do 2 (apply inmembers_flat_map; solve_Exists).
-    - (* local *)
-      constructor; auto.
-      + simpl_Forall.
-        rewrite <-app_assoc, (Permutation_app_comm xs'), app_assoc.
-        eapply H; eauto.
-        intros ? Hin Hinm1. eapply Hnd1; eauto.
-        apply InMembers_app, or_intror. apply inmembers_flat_map; solve_Exists.
-      + intros ? Hinm Hin. apply in_app_iff in Hin as [Hin|Hin].
-        * eapply H5; eauto.
-        * eapply Hnd1; eauto. apply InMembers_app; auto.
-  Qed.
+  (* XXX dead lemma *)
+  (* Lemma NoDupLocals_enrich : forall blk xs xs', *)
+  (*     (forall x, In x xs' -> ~InMembers x (locals blk)) -> *)
+  (*     NoDupLocals xs blk -> *)
+  (*     NoDupLocals (xs++xs') blk. *)
+  (* Proof. *)
+  (*   induction blk using block_ind2; intros * Hnd1 Hnd2; *)
+  (*     inv Hnd2; simpl in *. *)
+  (*   - (* equation *) *)
+  (*     constructor. *)
+  (*   - (* reset *) *)
+  (*     constructor. *)
+  (*     simpl_Forall. *)
+  (*     eapply H; eauto. *)
+  (*     intros ? Hin Hinm. eapply Hnd1; eauto. *)
+  (*     apply inmembers_flat_map; solve_Exists. *)
+  (*   - (* switch *) *)
+  (*     constructor. simpl_Forall. *)
+  (*     eapply H; eauto. *)
+  (*     intros ? Hin Hinm. eapply Hnd1; eauto. *)
+  (*     do 2 (apply inmembers_flat_map; solve_Exists). *)
+  (*   - (* local *) *)
+  (*     constructor; auto. *)
+  (*     + simpl_Forall. *)
+  (*       rewrite <-app_assoc, (Permutation_app_comm xs'), app_assoc. *)
+  (*       eapply H; eauto. *)
+  (*       intros ? Hin Hinm1. eapply Hnd1; eauto. *)
+  (*       apply InMembers_app, or_intror. apply inmembers_flat_map; solve_Exists. *)
+  (*     + intros ? Hinm Hin. apply in_app_iff in Hin as [Hin|Hin]. *)
+  (*       * eapply H5; eauto. *)
+  (*       * eapply Hnd1; eauto. rewrite InMembers_app, InMembers_idty; auto. *)
+  (* Qed. *)
 
   Lemma NoDupLocals_incl' prefs npref : forall blk xs ys,
       ~PS.In npref prefs ->
@@ -1186,9 +1236,10 @@ Module Type LSYNTAX
       eapply Forall_map; eauto.
     - (* locals *)
       rewrite map_app, Forall_app; split; auto.
-      rewrite flat_map_concat_map, concat_map.
-      eapply Forall_concat. simpl_Forall.
-      eapply Forall_forall in H; eauto. solve_In.
+      + erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+      + rewrite flat_map_concat_map, concat_map.
+        eapply Forall_concat, Forall_map, Forall_map.
+        rewrite Forall_forall in *; eauto.
   Qed.
 
   (** ** Specifications of some subset of the language *)
@@ -1203,6 +1254,7 @@ Module Type LSYNTAX
 
   Inductive nolocal_top_block : block -> Prop :=
   | NLnode : forall locs blks,
+      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall nolocal_block blks ->
       nolocal_top_block (Blocal locs blks).
 
@@ -1214,8 +1266,42 @@ Module Type LSYNTAX
       Forall noswitch_block blks ->
       noswitch_block (Breset blks er)
   | NSlocal : forall locs blks,
+      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall noswitch_block blks ->
       noswitch_block (Blocal locs blks).
+
+  (** *** Without last *)
+
+  Inductive nolast_block : block -> Prop :=
+  | NLaeq : forall eq, nolast_block (Beq eq)
+  | NLareset : forall blks er,
+      Forall nolast_block blks ->
+      nolast_block (Breset blks er)
+  | NLaswitch : forall ec branches,
+      Forall (fun blks => Forall nolast_block (snd blks)) branches ->
+      nolast_block (Bswitch ec branches)
+  | NLalocal : forall locs blks,
+      Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
+      Forall nolast_block blks ->
+      nolast_block (Blocal locs blks).
+
+  (** Inclusion of these properties *)
+
+  Fact noswitch_nolast : forall blk,
+      noswitch_block blk ->
+      nolast_block blk.
+  Proof.
+    induction blk using block_ind2; intros * Hns;
+      inv Hns; constructor; simpl_Forall; eauto.
+  Qed.
+
+  Fact nolocal_noswitch : forall blk,
+      nolocal_block blk ->
+      noswitch_block blk.
+  Proof.
+    induction blk using block_ind2; intros * Hns;
+      inv Hns; constructor; simpl_Forall; eauto.
+  Qed.
 
   (** *** Some more properties *)
 
@@ -1298,27 +1384,26 @@ Module Type LSYNTAX
       exfalso. apply H8, fst_InMembers; auto.
   Qed.
 
-  Lemma Is_defined_in_wx_In : forall blk env x,
-      wx_block env blk ->
+  Lemma Is_defined_in_wx_In : forall blk env envl x,
+      wx_block env envl blk ->
       Is_defined_in x blk ->
       In x env.
   Proof.
     induction blk using block_ind2; intros * Hwx Hdef; inv Hwx; inv Hdef.
     - (* equation *)
-      destruct H1; auto.
+      destruct H2; auto.
     - (* reset *)
       simpl_Exists; simpl_Forall; eauto.
     - (* switch *)
-      rename H1 into Hdef.
       simpl_Exists; simpl_Forall; eauto.
     - (* local *)
       simpl_Exists; simpl_Forall.
-      eapply H, in_app_iff in H2 as [|]; eauto.
-      exfalso. apply H4, fst_InMembers; auto.
+      eapply H, in_app_iff in H2 as [|]. 3:eauto. 1,2:eauto.
+      exfalso. apply H3, fst_InMembers; auto.
   Qed.
 
-  Corollary Exists_Is_defined_in_wx_In : forall blks env x,
-      Forall (wx_block env) blks ->
+  Corollary Exists_Is_defined_in_wx_In : forall blks env envl x,
+      Forall (wx_block env envl) blks ->
       Exists (Is_defined_in x) blks ->
       In x env.
   Proof.

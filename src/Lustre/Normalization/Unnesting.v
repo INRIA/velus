@@ -182,7 +182,7 @@ Module Type UNNESTING
     repeat progress
            (try rewrite map_app in *; try rewrite idck_app in *;
             try rewrite <-app_assoc in *;
-            try rewrite map_fst_idck in *).
+            try rewrite map_fst_idck in * ).
   Ltac solve_ndup :=
     ndup_simpl; solve_NoDup_app.
 
@@ -241,7 +241,7 @@ Module Type UNNESTING
     intros * Hk.
     unfold unnest_reset; simpl.
     destruct (hd_default es') eqn:Hes'.
-    1-2,4-11:
+    1-2,4-12:
       (right; destruct (hd _) as [ty ck] eqn:Hx; simpl;
        destruct (fresh_ident norm1 None (ty, ck) st') as [x st''] eqn:Hfresh;
        repeat eexists; eauto; repeat inv_bind;
@@ -330,9 +330,7 @@ Module Type UNNESTING
     let unnest_controls := fun es => do (es, eqs) <- mmap2 (unnest_exp G true) es; ret (concat es, concat eqs) in
     let unnest_resets := fun es => do (es, eqs) <- mmap2 (unnest_reset (unnest_exp G true)) es; ret (es, concat eqs) in
     match e with
-    | Econst c => ret ([Econst c], [])
-    | Eenum k ty => ret ([Eenum k ty], [])
-    | Evar v ann => ret ([Evar v ann], [])
+    | Econst _ | Eenum _ _ | Evar _ _ | Elast _ _ => ret ([e], [])
     | Eunop op e1 ann =>
       do (e1', eqs) <- unnest_exp G false e1;
       ret ([Eunop op (hd_default e1') ann], eqs)
@@ -569,6 +567,8 @@ Module Type UNNESTING
       repeat inv_bind...
     - (* var *)
       repeat inv_bind...
+    - (* last *)
+      repeat inv_bind...
     - (* unop *)
       repeat inv_bind...
     - (* binop *)
@@ -758,6 +758,7 @@ Module Type UNNESTING
     - (* const *) now repeat inv_bind.
     - (* enum *) now repeat inv_bind.
     - (* var *) now repeat inv_bind.
+    - (* last *) now repeat inv_bind.
     - (* unop *)
       repeat inv_bind...
     - (* binop *)
@@ -1719,6 +1720,7 @@ Module Type UNNESTING
   Inductive unnested_node {PSyn1 PSyn2 prefs1 prefs2} (G: @global PSyn1 prefs1) : @node PSyn2 prefs2 -> Prop :=
   | unnested_Node : forall n locs blks,
       n_block n = Blocal locs blks ->
+      Forall (fun '(x, (_, _, _, o)) => o = None) locs ->
       Forall (unnested_block G) blks ->
       unnested_node G n.
 
@@ -1787,36 +1789,38 @@ Module Type UNNESTING
     - inv Hf; auto.
   Qed.
 
-  Fact mmap2_normalized_lexp' {A A2} :
-    forall (k : A -> FreshAnn ((list exp) * A2)) a es' a2s st st',
+  Fact mmap2_normalized_lexp' {A2} vars :
+    forall (k : exp -> FreshAnn ((list exp) * A2)) a es' a2s st st',
+      Forall (wx_exp vars []) a ->
       mmap2 k a st = (es', a2s, st') ->
       Forall (fun a => forall es' a2s st st',
+                  wx_exp vars [] a ->
                   k a st = (es', a2s, st') ->
                   Forall normalized_lexp es') a ->
       Forall normalized_lexp (concat es').
   Proof.
-    intros k a eqs' a2s st st' Hmap Hf.
+    intros * Hwx Hmap Hf.
     apply mmap2_values in Hmap.
-    induction Hmap; simpl in *.
-    - constructor.
-    - destruct H as [? [? H]]. inv Hf.
+    induction Hmap; simpl in *; inv Hwx; inv Hf; auto.
+    - destruct H as [? [? H]].
       rewrite Forall_app.
       split; eauto.
   Qed.
 
-  Fact mmap2_normalized_cexp' {A A2} :
-    forall (k : A -> FreshAnn (list exp * A2)) a es' a2s st st',
-      mmap2 k a st = (es', a2s, st') ->
-      Forall (fun a => forall es' a2s st st',
-                  k a st = (es', a2s, st') ->
-                  Forall normalized_cexp es') a ->
+  Fact mmap2_normalized_cexp' {A2} vars :
+    forall (k : _ -> FreshAnn (list exp * A2)) es es' a2s st st',
+      Forall (wx_exp vars []) es ->
+      mmap2 k es st = (es', a2s, st') ->
+      Forall (fun e => forall es' a2s st st',
+                  wx_exp vars [] e ->
+                  k e st = (es', a2s, st') ->
+                  Forall normalized_cexp es') es ->
       Forall normalized_cexp (concat es').
   Proof.
-    intros k a eqs' a2s st st' Hmap Hf.
+    intros * Hwx Hmap Hf.
     apply mmap2_values in Hmap.
-    induction Hmap; simpl in *.
-    - constructor.
-    - destruct H as [? [? H]]. inv Hf.
+    induction Hmap; simpl in *; inv Hwx; inv Hf; auto.
+    - destruct H as [? [? H]].
       rewrite Forall_app.
       split; eauto.
   Qed.
@@ -1841,33 +1845,29 @@ Module Type UNNESTING
   Local Hint Resolve in_combine_l in_combine_r : norm.
   Global Hint Resolve normalized_lexp_hd_default normalized_cexp_hd_default : norm.
 
-  Lemma unnest_exp_normalized_lexp : forall G e es' eqs' st st',
+  Lemma unnest_exp_normalized_lexp : forall G vars e es' eqs' st st',
+      wx_exp vars [] e ->
       unnest_exp G false e st = (es', eqs', st') ->
       Forall normalized_lexp es'.
   Proof with eauto with norm.
-    induction e using exp_ind2; intros * Hnorm;
-      repeat inv_bind; repeat constructor.
-    - (* var *)
-      destruct a...
-    - (* unop *)
-      destruct a...
-    - (* binop *)
-      destruct a. constructor...
+    induction e using exp_ind2; intros * Hwx Hnorm; inv Hwx; destruct_conjs;
+      repeat inv_bind; repeat constructor...
+    - (* last *) inv H0.
     - (* fby *)
       simpl_Forall...
     - (* arrow *)
       simpl_Forall...
     - (* when *)
-      destruct a. repeat inv_bind. unfold unnest_when.
-      apply mmap2_normalized_lexp' in H0...
+      unfold unnest_when.
+      eapply mmap2_normalized_lexp' in H0...
       rewrite_Forall_forall.
       simpl_In...
     - (* merge *)
-      destruct a. repeat inv_bind. unfold unnest_merge.
+      unfold unnest_merge.
       rewrite_Forall_forall.
       simpl_In...
     - (* case *)
-      destruct a. repeat inv_bind. unfold unnest_case.
+      unfold unnest_case.
       rewrite_Forall_forall.
       simpl_In...
     - (* app *)
@@ -1876,23 +1876,25 @@ Module Type UNNESTING
   Qed.
   Global Hint Resolve unnest_exp_normalized_lexp : norm.
 
-  Corollary mmap2_normalized_lexp : forall G es es' eqs' st st',
+  Corollary mmap2_normalized_lexp : forall G vars es es' eqs' st st',
+      Forall (wx_exp vars []) es ->
       mmap2 (unnest_exp G false) es st = (es', eqs', st') ->
       Forall normalized_lexp (concat es').
   Proof.
-    intros * Hnorm.
-    eapply mmap2_normalized_lexp' in Hnorm; auto.
+    intros * Hwx Hnorm.
+    eapply mmap2_normalized_lexp' in Hnorm; eauto.
     solve_forall.
   Qed.
   Global Hint Resolve mmap2_normalized_lexp : norm.
 
-  Corollary unnest_exps_normalized_lexp: forall G es es' eqs' st st',
+  Corollary unnest_exps_normalized_lexp: forall G vars es es' eqs' st st',
+      Forall (wx_exp vars []) es ->
       unnest_exps G es st = (es', eqs', st') ->
       Forall normalized_lexp es'.
   Proof.
-    intros * Hnorm.
+    intros * Hwx Hnorm.
     unfold unnest_exps in Hnorm. repeat inv_bind.
-    apply mmap2_normalized_lexp in H; auto.
+    eapply mmap2_normalized_lexp in H; eauto.
   Qed.
   Global Hint Resolve unnest_exps_normalized_lexp : norm.
 
@@ -1979,64 +1981,60 @@ Module Type UNNESTING
       + destruct d; inv H; simpl; auto.
   Qed.
 
-  Lemma unnest_exp_normalized_cexp : forall G e es' eqs' st st',
+  Lemma unnest_exp_normalized_cexp : forall G vars e es' eqs' st st',
+      wx_exp vars [] e ->
       unnest_exp G true e st = (es', eqs', st') ->
       Forall normalized_cexp es'.
   Proof with eauto with norm.
-    induction e using exp_ind2; intros es' eqs' st st' Hnorm;
-      repeat inv_bind; repeat constructor.
-    - (* var *)
-      destruct a...
-    - (* unop *)
-      destruct a...
-    - (* binop *)
-      destruct a. constructor...
+    induction e using exp_ind2; intros * Hwx Hnorm; inv Hwx; destruct_conjs;
+      repeat inv_bind; repeat constructor...
+    - (* last *) inv H0.
     - (* fby *)
       solve_forall.
     - (* arrow *)
       solve_forall.
     - (* when *)
-      destruct a. repeat inv_bind. unfold unnest_when.
-      apply mmap2_normalized_lexp in H0.
+      unfold unnest_when.
+      eapply mmap2_normalized_lexp in H0; eauto.
       rewrite_Forall_forall.
       simpl_In...
     - (* merge *)
-      destruct a. repeat inv_bind.
       eapply unnest_merge_normalized_cexp...
       apply mmap2_normalized_cexp'' in H0; [|solve_forall].
-      2:{ repeat inv_bind. eapply mmap2_normalized_cexp' in H2; solve_forall... }
+      2:{ repeat inv_bind. eapply mmap2_normalized_cexp' in H3; solve_forall... }
       apply Forall_concat in H0; rewrite Forall_map in H0; auto.
     - (* case *)
-      destruct a. repeat inv_bind.
       eapply unnest_case_normalized_cexp...
       + apply mmap2_normalized_cexp'' in H2; [|solve_forall]; eauto.
         { apply Forall_concat in H2; rewrite Forall_map in H2; auto. }
         repeat inv_bind; simpl; auto.
-        eapply mmap2_normalized_cexp' in H5; eauto.
+        eapply mmap2_normalized_cexp' in H6; eauto; solve_forall...
       + destruct d; repeat inv_bind; simpl in *; auto.
-        eapply mmap2_normalized_cexp' in H3; [|solve_forall]; eauto.
+        eapply mmap2_normalized_cexp' in H3; eauto.
     - (* app *)
       solve_forall.
   Qed.
   Global Hint Resolve unnest_exp_normalized_cexp : norm.
 
-  Corollary mmap2_normalized_cexp : forall G es es' eqs' st st',
+  Corollary mmap2_normalized_cexp : forall G vars es es' eqs' st st',
+      Forall (wx_exp vars []) es ->
       mmap2 (unnest_exp G true) es st = (es', eqs', st') ->
       Forall normalized_cexp (concat es').
   Proof.
-    intros. apply mmap2_normalized_cexp' in H; auto.
+    intros. eapply mmap2_normalized_cexp' in H; eauto.
     solve_forall.
   Qed.
 
-  Corollary mmap2_normalized_cexps : forall G (es : list (enumtag * list exp)) es' eqs' st st',
+  Corollary mmap2_normalized_cexps : forall G vars (es : list (enumtag * list exp)) es' eqs' st st',
+      Forall (fun es => Forall (wx_exp vars []) (snd es)) es ->
       mmap2 (fun '(i, es) => do (es', eqs') <- mmap2 (unnest_exp G true) es;
                           ret (i, concat es', concat eqs')) es st = (es', eqs', st') ->
       Forall (fun es => Forall normalized_cexp (snd es)) es'.
   Proof.
-    intros. apply mmap2_normalized_cexp'' in H.
-    - apply Forall_concat in H; rewrite Forall_map in H; auto.
+    intros * Hwx Hmap. apply mmap2_normalized_cexp'' in Hmap.
+    - apply Forall_concat in Hmap; simpl_Forall; auto.
     - solve_forall; repeat inv_bind.
-      apply mmap2_normalized_cexp in H1; auto.
+      eapply mmap2_normalized_cexp in H1; eauto.
   Qed.
 
   Fact mmap2_unnested_eq {PSyn A A1} :
@@ -2067,8 +2065,9 @@ Module Type UNNESTING
       rewrite IHck; auto.
   Qed.
 
-  Lemma unnest_noops_exp_noops_exp : forall G es f n es' es'' eqs' eqs'' st st' st'',
+  Lemma unnest_noops_exp_noops_exp : forall G vars es f n es' es'' eqs' eqs'' st st' st'',
       Forall (wl_exp G) es ->
+      Forall (wx_exp vars []) es ->
       length (annots es) = length (n_in n) ->
       find_node f G = Some n ->
       mmap2 (unnest_exp G false) es st = (es', eqs', st') ->
@@ -2076,8 +2075,8 @@ Module Type UNNESTING
       Forall normalized_lexp es'' /\
       Forall2 noops_exp (map (fun '(_, (_, ck, _)) => ck) (n_in n)) es''.
   Proof.
-    intros * Hwl Hlen Hfind Hmap Hun.
-    assert (Hnormed:=Hmap). eapply mmap2_normalized_lexp in Hnormed.
+    intros * Hwl Hwx Hlen Hfind Hmap Hun.
+    assert (Hnormed:=Hmap). eapply mmap2_normalized_lexp in Hnormed; eauto.
     eapply mmap2_unnest_exp_length in Hmap; eauto. rewrite <- Hmap in Hlen.
     unfold find_node_incks, unnest_noops_exps in Hun. rewrite Hfind in Hun.
     repeat inv_bind.
@@ -2094,16 +2093,17 @@ Module Type UNNESTING
     - destruct c; split; econstructor; simpl; eauto with norm.
   Qed.
 
-  Lemma unnest_noops_exp_unnested_eq : forall G es f n es' es'' eqs' eqs'' st st' st'',
+  Lemma unnest_noops_exp_unnested_eq : forall G vars es f n es' es'' eqs' eqs'' st st' st'',
       Forall (wl_exp G) es ->
+      Forall (wx_exp vars []) es ->
       length (annots es) = length (n_in n) ->
       find_node f G = Some n ->
       mmap2 (unnest_exp G false) es st = (es', eqs', st') ->
       unnest_noops_exps (find_node_incks G f) (concat es') st' = (es'', eqs'', st'') ->
       Forall (unnested_equation G) eqs''.
   Proof.
-    intros * Hwl Hlen Hfind Hmap Hun.
-    assert (Hnormed:=Hmap). eapply mmap2_normalized_lexp in Hnormed.
+    intros * Hwl Hwx Hlen Hfind Hmap Hun.
+    assert (Hnormed:=Hmap). eapply mmap2_normalized_lexp in Hnormed; eauto.
     eapply mmap2_unnest_exp_length in Hmap; eauto. rewrite <- Hmap in Hlen.
     unfold find_node_incks, unnest_noops_exps in Hun. rewrite Hfind in Hun.
     repeat inv_bind.
@@ -2118,23 +2118,23 @@ Module Type UNNESTING
     destruct (is_noops_exp _ _) eqn:Hnoops; repeat inv_bind; auto with norm.
   Qed.
 
-  Lemma unnest_exp_unnested_eq : forall G e is_control es' eqs' st st',
+  Lemma unnest_exp_unnested_eq : forall G vars e is_control es' eqs' st st',
       wl_exp G e ->
+      wx_exp vars [] e ->
       unnest_exp G is_control e st = (es', eqs', st') ->
       Forall (unnested_equation G) eqs'.
   Proof with eauto with norm.
-    induction e using exp_ind2; intros * Hwl Hnorm; repeat inv_bind; eauto.
-    - (* unop *)
-      inv Hwl; eauto.
+    induction e using exp_ind2; intros * Hwl Hwx Hnorm;
+      inv Hwl; inv Hwx; repeat inv_bind; eauto.
     - (* binop *)
-      inv Hwl. apply Forall_app. split...
+      apply Forall_app. split...
     - (* fby *)
       repeat rewrite Forall_app; repeat split.
-      2:eapply mmap2_unnested_eq in H1; eauto; inv Hwl; solve_forall.
-      2:eapply mmap2_unnested_eq in H2; eauto; inv Hwl; solve_forall.
+      2:eapply mmap2_unnested_eq in H1; eauto; solve_forall.
+      2:eapply mmap2_unnested_eq in H2; eauto; solve_forall.
       eapply Forall_forall; intros ? Hin.
       eapply mk_equations_In in Hin as (?&?&?&?&Hfby); subst.
-      2:{ inv Hwl. apply idents_for_anns_length in H3.
+      2:{ apply idents_for_anns_length in H5.
           rewrite unnest_fby_length, map_length; auto.
           - apply mmap2_unnest_exp_length in H1; auto.
             congruence.
@@ -2143,30 +2143,29 @@ Module Type UNNESTING
       }
       unfold unnest_fby in Hfby; simpl_In.
       econstructor.
-      eapply Forall_forall in H5...
-      eapply Forall_forall in H4...
+      eapply mmap2_normalized_lexp in H1; eauto. simpl_Forall...
+      eapply mmap2_normalized_lexp in H2; eauto. simpl_Forall...
     - (* arrow *)
       repeat rewrite Forall_app; repeat split.
-      2:eapply mmap2_unnested_eq in H1; eauto; inv Hwl; solve_forall.
-      2:eapply mmap2_unnested_eq in H2; eauto; inv Hwl; solve_forall.
+      2:eapply mmap2_unnested_eq in H1; eauto; solve_forall.
+      2:eapply mmap2_unnested_eq in H2; eauto; solve_forall.
       eapply Forall_forall; intros ? Hin.
-      eapply mk_equations_In in Hin as (?&?&?&?&Harrow); subst.
-      2:{ inv Hwl. apply idents_for_anns_length in H3.
+      eapply mk_equations_In in Hin as (?&?&?&?&Hfby); subst.
+      2:{ apply idents_for_anns_length in H5.
           rewrite unnest_arrow_length, map_length; auto.
           - apply mmap2_unnest_exp_length in H1; auto.
             congruence.
           - apply mmap2_unnest_exp_length in H2; auto.
             congruence.
       }
-      unfold unnest_arrow in Harrow; simpl_In.
+      unfold unnest_fby in Hfby; simpl_In.
       econstructor.
-      eapply Forall_forall in H5...
-      eapply Forall_forall in H4...
+      eapply mmap2_normalized_lexp in H1; eauto. simpl_Forall...
+      eapply mmap2_normalized_lexp in H2; eauto. simpl_Forall...
     - (* when *)
-      inv Hwl. repeat inv_bind.
+      repeat inv_bind.
       eapply mmap2_unnested_eq in H0; eauto. solve_forall.
     - (* merge *)
-      inv Hwl.
       destruct is_control; repeat inv_bind;
         repeat rewrite Forall_app; repeat split.
       1,3: (eapply mmap2_unnested_eq; eauto; solve_forall; repeat inv_bind;
@@ -2179,7 +2178,6 @@ Module Type UNNESTING
       eapply Forall_forall in Hmerge; [|eapply unnest_merge_normalized_cexp]; eauto.
       eapply mmap2_normalized_cexps in H0; eauto.
     - (* case *)
-      inv Hwl.
       destruct is_control; repeat inv_bind; unfold unnest_case;
         repeat rewrite Forall_app; repeat split.
       1,5:(eapply IHe; eauto).
@@ -2188,10 +2186,10 @@ Module Type UNNESTING
             eapply mmap2_unnested_eq; eauto; solve_forall).
       1,3:(destruct d; repeat inv_bind; simpl in *; auto;
            eapply mmap2_unnested_eq; eauto; solve_forall;
-           eapply Forall_forall in H11; eauto).
+           eapply Forall_forall in H11; eapply Forall_forall in H15; eauto).
       rewrite Forall_forall; intros ? Hin.
       eapply mk_equations_In in Hin as (?&?&?&?&Hcase); subst.
-      2:{ apply idents_for_anns_length in H4. rewrite map_length in H4.
+      2:{ apply idents_for_anns_length in H8. rewrite map_length in H8.
           rewrite unnest_case_length, map_length... }
       econstructor; eauto.
       eapply Forall_forall in Hcase; [|eapply unnest_case_normalized_cexp]; eauto with norm.
@@ -2204,28 +2202,29 @@ Module Type UNNESTING
         eapply mmap2_normalized_cexp in H3; eauto.
     - (* app *)
       assert (length (concat x6) = length (find_node_incks G f)).
-      { erewrite mmap2_unnest_exp_length; [|inv Hwl |eauto]. 2:eauto.
-        unfold find_node_incks. inv Hwl.
-        rewrite H13, map_length. congruence. }
+      { erewrite mmap2_unnest_exp_length; [| |eauto]. 2:eauto.
+        unfold find_node_incks.
+        rewrite H9, map_length. congruence. }
       constructor. 2:repeat rewrite Forall_app; repeat split.
-      + eapply unnest_resets_is_var in H3.
-        inv Hwl; eapply unnest_noops_exp_noops_exp in H2 as (?&?). 3-5:eauto. 1,2:eauto with norm.
-      + eapply mmap2_unnested_eq in H1... inv Hwl; solve_forall.
-      + inv Hwl; eapply unnest_noops_exp_unnested_eq in H2. 3-5:eauto. 1,2:eauto.
-      + eapply unnest_resets_unnested_eq in H3...
-        inv Hwl; solve_forall.
+      + eapply unnest_resets_is_var in H4.
+        eapply unnest_noops_exp_noops_exp in H3 as (?&?). 3-6:eauto. 1,2:eauto with norm.
+      + eapply mmap2_unnested_eq in H1... solve_forall.
+      + eapply unnest_noops_exp_unnested_eq in H3. 3-6:eauto. 1,2:eauto.
+      + eapply unnest_resets_unnested_eq in H4...
+        solve_forall.
         split; eauto.
-        eapply unnest_exp_normalized_cexp in H7.
+        eapply unnest_exp_normalized_cexp in H5; eauto.
         solve_forall.
   Qed.
   Global Hint Resolve unnest_exp_unnested_eq : norm.
 
-  Corollary unnest_exps_unnested_eq : forall G es es' eqs' st st',
+  Corollary unnest_exps_unnested_eq : forall G vars es es' eqs' st st',
       Forall (wl_exp G) es ->
+      Forall (wx_exp vars []) es ->
       unnest_exps G es st = (es', eqs', st') ->
       Forall (unnested_equation G) eqs'.
   Proof.
-    intros * Hwl Hnorm.
+    intros * Hwl Hwx Hnorm.
     unfold unnest_exps in Hnorm. repeat inv_bind.
     eapply mmap2_unnested_eq in H; eauto.
     solve_forall.
@@ -2240,18 +2239,20 @@ Module Type UNNESTING
     inv Hnormed...
   Qed.
 
-  Fact unnest_rhs_unnested_rhs : forall G e es' eqs' st st',
+  Fact unnest_rhs_unnested_rhs : forall G vars e es' eqs' st st',
       wl_exp G e ->
+      wx_exp vars [] e ->
       unnest_rhs G e st = (es', eqs', st') ->
       Forall (unnested_rhs G) es'.
   Proof with eauto with norm.
-    intros * Hwl Hnorm.
+    intros * Hwl Hwx Hnorm.
     destruct e; unfold unnest_rhs in Hnorm;
-      try (apply unnest_exp_normalized_cexp in Hnorm; solve_forall; auto).
+      try (eapply unnest_exp_normalized_cexp in Hnorm; solve_forall; auto);
+      inv Hwx; inv Hwl.
     - (* fby *)
       repeat inv_bind.
-      apply unnest_exps_normalized_lexp in H.
-      apply unnest_exps_normalized_lexp in H0.
+      eapply unnest_exps_normalized_lexp in H; eauto.
+      eapply unnest_exps_normalized_lexp in H0; eauto.
       unfold unnest_fby.
       apply Forall_forall; intros * Hin.
       simpl_In.
@@ -2260,8 +2261,8 @@ Module Type UNNESTING
       + eapply Forall_forall in H0; eauto.
     - (* arrow *)
      repeat inv_bind.
-     apply unnest_exps_normalized_lexp in H.
-     apply unnest_exps_normalized_lexp in H0.
+     eapply unnest_exps_normalized_lexp in H; eauto.
+     eapply unnest_exps_normalized_lexp in H0; eauto.
      unfold unnest_arrow.
      simpl_Forall.
      simpl_In.
@@ -2270,78 +2271,81 @@ Module Type UNNESTING
      + eapply Forall_forall in H0; eauto.
     - (* app *)
       repeat inv_bind...
-      assert (Hr:=H1). eapply unnest_resets_is_var in H1.
+      assert (Hr:=H1). eapply unnest_resets_is_var in H2.
       constructor; [|constructor].
-      inv Hwl.
       simpl in Hr. repeat inv_bind.
       unfold unnest_exps in H; repeat inv_bind.
       econstructor; eauto.
       1,2:eapply unnest_noops_exp_noops_exp with (es:=l)...
   Qed.
 
-  Corollary unnest_rhss_unnested_rhs : forall G es es' eqs' st st',
+  Corollary unnest_rhss_unnested_rhs : forall G vars es es' eqs' st st',
       Forall (wl_exp G) es ->
+      Forall (wx_exp vars []) es ->
       unnest_rhss G es st = (es', eqs', st') ->
       Forall (unnested_rhs G) es'.
   Proof with eauto.
-    intros * Hwl Hnorm.
+    intros * Hwl Hwx Hnorm.
     unfold unnest_rhss in Hnorm. repeat inv_bind.
     eapply mmap2_values in H.
     induction H; simpl; try constructor.
-    inv Hwl.
+    inv Hwl. inv Hwx.
     apply Forall_app. split; auto.
     destruct H as [? [? H]].
     eapply unnest_rhs_unnested_rhs; eauto.
   Qed.
 
-  Fact unnest_rhs_unnested_eq : forall G e es' eqs' st st',
+  Fact unnest_rhs_unnested_eq : forall G vars e es' eqs' st st',
       wl_exp G e ->
+      wx_exp vars [] e ->
       unnest_rhs G e st = (es', eqs', st') ->
       Forall (unnested_equation G) eqs'.
   Proof with eauto.
-    intros * Hwl Hnorm.
+    intros * Hwl Hwx Hnorm.
     destruct e; unfold unnest_rhs in Hnorm;
-      try (eapply unnest_exp_unnested_eq in Hnorm; eauto).
+      try (eapply unnest_exp_unnested_eq in Hnorm; eauto);
+      inv Hwl; inv Hwx.
     - (* fby *)
       repeat inv_bind.
       repeat rewrite Forall_app; repeat split...
-      1,2:eapply unnest_exps_unnested_eq; [|eauto]; inv Hwl; eauto.
+      1,2:eapply unnest_exps_unnested_eq; [| |eauto]; eauto.
     - (* arrow *)
       repeat inv_bind.
       repeat rewrite Forall_app; repeat split...
-      1,2:eapply unnest_exps_unnested_eq; [|eauto]; inv Hwl; eauto.
+      1,2:eapply unnest_exps_unnested_eq; [| |eauto]; eauto.
     - (* app *)
       repeat inv_bind...
-      eapply unnest_resets_unnested_eq with (G0:=G) in H1.
-      2:{ inv Hwl; solve_forall.
+      eapply unnest_resets_unnested_eq with (G0:=G) in H2.
+      2:{ solve_forall.
           split; eauto with norm.
           eapply unnest_exp_normalized_cexp in H4; eauto. solve_forall. }
       repeat rewrite Forall_app; repeat split; auto.
-      apply unnest_exps_unnested_eq in H; inv Hwl; eauto.
+      eapply unnest_exps_unnested_eq in H; eauto.
       unfold unnest_exps in H; repeat inv_bind.
-      inv Hwl.
       eapply unnest_noops_exp_unnested_eq with (es:=l) in H0; eauto.
   Qed.
   Global Hint Resolve unnest_rhs_unnested_eq : norm.
 
-  Corollary unnest_rhss_unnested_eq : forall G es es' eqs' st st',
+  Corollary unnest_rhss_unnested_eq : forall G vars es es' eqs' st st',
       Forall (wl_exp G) es ->
+      Forall (wx_exp vars []) es ->
       unnest_rhss G es st = (es', eqs', st') ->
       Forall (unnested_equation G) eqs'.
   Proof.
-    intros * Hwl Hnorm.
+    intros * Hwl Hwx Hnorm.
     unfold unnest_rhss in Hnorm; repeat inv_bind.
     eapply mmap2_unnested_eq in H; eauto.
-    eapply Forall_impl; [|eauto]. intros; eauto with norm.
+    rewrite Forall_forall in *; intros; eauto with norm.
   Qed.
   Global Hint Resolve unnest_rhss_unnested_eq : norm.
 
-  Lemma unnest_equation_unnested_eq : forall G eq eqs' st st',
+  Lemma unnest_equation_unnested_eq : forall G vars eq eqs' st st',
       wl_equation G eq ->
+      wx_equation vars [] eq ->
       unnest_equation G eq st = (eqs', st') ->
       Forall (unnested_equation G) eqs'.
   Proof with eauto with norm.
-    intros G [xs es] * (Hwl1&Hwl2) Hnorm.
+    intros ?? [xs es] * (Hwl1&Hwl2) (Hwx&_) Hnorm.
     unfold unnest_equation in Hnorm.
     repeat inv_bind.
     rewrite Forall_app. split.
@@ -2367,22 +2371,21 @@ Module Type UNNESTING
     - eapply unnest_rhss_unnested_eq in H; eauto.
   Qed.
 
-  Lemma unnest_block_unnested_block : forall G blk blks' st st',
+  Lemma unnest_block_unnested_block : forall G vars blk blks' st st',
       wl_block G blk ->
+      wx_block vars [] blk ->
       nolocal_block blk ->
       unnest_block G blk st = (blks', st') ->
       Forall (unnested_block G) blks'.
   Proof.
-    induction blk using block_ind2; intros * Hwl Hnl Hun; inv Hwl; inv Hnl; repeat inv_bind.
+    induction blk using block_ind2; intros * Hwl Hwx Hnl Hun; inv Hwl; inv Hwx; inv Hnl; repeat inv_bind.
     - eapply unnest_equation_unnested_eq in H; eauto.
       rewrite Forall_map. rewrite Forall_forall in *; auto with norm.
     - apply Forall_app. split.
       + eapply unnest_reset_is_var in H5 as (xr&ann&?); subst.
-        clear - H H0 H1 H2.
-        revert st x x0 H0. induction H; inv H1; inv H2; intros; repeat inv_bind; simpl; auto.
-        rewrite map_app, Forall_app. split; eauto.
-        eapply H in H1; eauto. clear - H1.
-        induction H1; simpl; constructor; auto with norm.
+        apply mmap_values, Forall2_ignore1 in H0.
+        eapply Forall_map, Forall_concat, Forall_impl; [|eauto]; intros; destruct_conjs.
+        simpl_Forall. constructor; eauto. eapply H in H6; eauto. simpl_Forall; auto.
       + eapply unnest_reset_unnested_eq in H5.
         2:{ intros; split; eauto with norm.
             eapply unnest_exp_normalized_cexp in H6; eauto.
@@ -2390,15 +2393,16 @@ Module Type UNNESTING
         rewrite Forall_map. rewrite Forall_forall in *; auto with norm.
   Qed.
 
-  Corollary unnest_blocks_unnested_blocks : forall G blks blks' st st',
+  Corollary unnest_blocks_unnested_blocks : forall G vars blks blks' st st',
       Forall (wl_block G) blks ->
+      Forall (wx_block vars []) blks ->
       Forall nolocal_block blks ->
       unnest_blocks G blks st = (blks', st') ->
       Forall (unnested_block G) blks'.
   Proof.
-    induction blks; intros * Hwl Hnl Hnorm;
+    induction blks; intros * Hwl Hwx Hnl Hnorm;
       unfold unnest_blocks in Hnorm; repeat inv_bind; simpl; auto.
-    inv Hwl. inv Hnl. apply Forall_app; split.
+    inv Hwl. inv Hwx. inv Hnl. apply Forall_app; split.
     - eapply unnest_block_unnested_block; eauto.
     - eapply IHblks; eauto.
       unfold unnest_blocks; repeat inv_bind; repeat eexists; eauto.
@@ -2522,22 +2526,22 @@ Module Type UNNESTING
   Lemma norm1_not_in_local_prefs :
     ~PS.In norm1 local_prefs.
   Proof.
-    unfold local_prefs, switch_prefs, elab_prefs.
-    rewrite 2 PSF.add_iff, PSF.singleton_iff.
+    unfold local_prefs, switch_prefs, last_prefs, elab_prefs.
+    rewrite 3 PSF.add_iff, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
-    repeat rewrite NoDup_cons_iff in Hnd. destruct Hnd as (Hnin1&Hnin2&Hnin3&Hnin4&_).
-    intros [contra|[contra|contra]]; subst; rewrite contra in *; eauto with datatypes.
+    repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
+    intros [contra|[contra|[contra|contra]]]; subst; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
   Lemma unnest_node_init_st_valid {A PSyn} : forall (n: @node PSyn local_prefs) locs blks,
       n_block n = Blocal locs blks ->
-      st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ locs))).
+      st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs))).
   Proof.
     intros * Hn.
     eapply init_st_valid; eauto using norm1_not_in_local_prefs.
     - rewrite <- ps_from_list_ps_of_list, PS_For_all_Forall'.
       pose proof (n_good n) as (Good1&Good2&_); eauto. rewrite Hn in Good2. inv Good2.
-      rewrite app_assoc, map_app, Forall_app. split; auto.
+      rewrite app_assoc, map_app, map_fst_idty, Forall_app. split; auto.
   Qed.
 
   Program Definition unnest_node G (n : @node nolocal_top_block local_prefs) : @node nolocal_top_block norm1_prefs :=
@@ -2549,7 +2553,7 @@ Module Type UNNESTING
                   | Blocal vars blks =>
                     let res := unnest_blocks G blks init_st in
                     let nvars := st_anns (snd res) in
-                    Blocal (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH))) nvars) (fst res)
+                    Blocal (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res)
                   | blk => blk
                   end;
        n_ingt0 := (n_ingt0 n);
@@ -2574,7 +2578,7 @@ Module Type UNNESTING
     destruct (unnest_blocks G blks init_st) as (blks'&st') eqn:Hunn.
     repeat erewrite unnest_blocks_no_anon; eauto. repeat rewrite app_nil_r.
     split; eauto using NoDupMembers_app_l.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs)))) as Hvalid.
     { eapply unnest_blocks_st_valid; eauto.
       - eapply unnest_node_init_st_valid; eauto.
     }
@@ -2588,15 +2592,16 @@ Module Type UNNESTING
       eapply NoDupLocals_incl' with (npref:=norm1). 1,2,4:eauto using norm1_not_in_local_prefs.
       intros ? Hin. rewrite app_assoc, in_app_iff in Hin. destruct Hin as [?|Hin]; auto.
       eapply st_valid_prefixed, Forall_forall in Hvalid; eauto.
-    - rewrite 2 map_app, <-app_assoc, <-app_assoc in Hnd'. do 2 apply NoDup_app_r in Hnd'.
+    - rewrite 2 map_app, <-app_assoc, <-app_assoc, map_fst_idty in Hnd'. do 2 apply NoDup_app_r in Hnd'.
       rewrite fst_NoDupMembers, map_app, map_map; simpl; auto.
     - setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'.
-      + eapply H6; eauto using in_or_app.
+      + eapply H7; eauto using in_or_app.
       + eapply NoDup_app_In in Hnd'; eauto. 2:rewrite app_assoc, map_app; eauto using in_or_app.
         rewrite fst_InMembers, map_map in Hinm; eauto.
     - rewrite app_assoc. apply NoDupMembers_app; auto.
-      intros ? Hinm contra. rewrite fst_InMembers in Hinm.
-      eapply H6; eauto using in_or_app.
+      + now rewrite NoDupMembers_idty.
+      + intros ? Hinm contra. rewrite InMembers_idty in contra. rewrite fst_InMembers in Hinm.
+        eapply H7; eauto using in_or_app.
   Qed.
   Next Obligation.
     specialize (n_nodup n) as (Hndup&Hndl).
@@ -2604,7 +2609,7 @@ Module Type UNNESTING
     pose proof (n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *. simpl in *.
     destruct (unnest_blocks G blks init_st) as (blks'&st') eqn:Hunn.
     repeat split; eauto using AtomOrGensym_add.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ locs)))) as Hvalid.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs)))) as Hvalid.
     { eapply unnest_blocks_st_valid; eauto.
       eapply unnest_node_init_st_valid; eauto.
     }
@@ -2615,13 +2620,15 @@ Module Type UNNESTING
       erewrite map_map, map_ext; [eauto|]. eapply Forall_impl; [|eapply Hvalid]; intros ? (?&?&?); simpl in *; subst; eauto.
       right. do 2 esplit; eauto. apply PSF.add_1; auto.
       intros (?&?&?); auto.
-    + eapply unnest_blocks_GoodLocals in H4; eauto.
+    + eapply unnest_blocks_GoodLocals in H5; eauto.
       rewrite Forall_forall in *; eauto using GoodLocals_add.
   Qed.
   Next Obligation.
     specialize (n_syn n) as Hsyn. inv Hsyn.
     constructor.
-    eapply unnest_blocks_nolocal; eauto using surjective_pairing.
+    - apply Forall_app. split; auto.
+      simpl_Forall; auto.
+    - eapply unnest_blocks_nolocal; eauto using surjective_pairing.
   Qed.
 
   Fixpoint unnest_nodes enums nds :=
@@ -2699,29 +2706,36 @@ Module Type UNNESTING
 
   Lemma unnest_node_unnested_node : forall G n,
       wl_node G n ->
+      wx_node n ->
       unnested_node G (unnest_node G n).
   Proof.
-    intros * Hwl.
+    intros * Hwl Hwx.
     unfold unnest_node; simpl.
     pose proof (n_syn n) as Hsyn. inv Hsyn.
     econstructor; simpl. rewrite <-H; eauto.
-    eapply unnest_blocks_unnested_blocks; [|eauto|eapply surjective_pairing]; eauto.
-    unfold wl_node in Hwl. rewrite <-H in Hwl; inv Hwl; auto.
+    - apply Forall_app. split; auto.
+      simpl_Forall; auto.
+    - eapply unnest_blocks_unnested_blocks. 3:eauto. 3:eapply surjective_pairing.
+      + unfold wl_node in Hwl. rewrite <-H in Hwl; inv Hwl; auto.
+      + unfold wx_node in Hwx. rewrite <-H in Hwx; inv Hwx; subst envl'.
+        rewrite map_filter_nil in H6; eauto.
+        simpl_Forall; subst; auto.
   Qed.
 
   Lemma unnest_global_unnested_global : forall G,
       wl_global G ->
+      wx_global G ->
       unnested_global (unnest_global G).
   Proof.
     unfold unnest_global. destruct G as (enums&nodes).
-    induction nodes; intros * Hwl; constructor; auto.
+    induction nodes; intros * Hwl Hwx; constructor; auto.
     - constructor; auto.
       + eapply iface_eq_unnested_node; simpl.
         * apply unnest_nodes_eq.
-        * inv Hwl. destruct H1. eapply unnest_node_unnested_node; eauto.
+        * inv Hwl. inv Hwx. destruct H1. eapply unnest_node_unnested_node; eauto.
       + simpl in *. eapply unnest_nodes_names.
-        inv Hwl; destruct H1; auto.
-    - inv Hwl. apply IHnodes; auto.
+        inv Hwl; inv Hwx; destruct H1; auto.
+    - inv Hwl. inv Hwx. apply IHnodes; auto.
   Qed.
 
   (** ** Additional properties *)

@@ -51,6 +51,7 @@ let () =
       ("int64",    fun loc ->  INT64    loc);
       ("int8",     fun loc ->  INT8     loc);
       ("land",     fun loc ->  LAND     loc);
+      ("last",     fun loc ->  LAST     loc);
       ("let",      fun loc ->  LET      loc);
       ("lnot",     fun loc ->  LNOT     loc);
       ("lor",      fun loc ->  LOR      loc);
