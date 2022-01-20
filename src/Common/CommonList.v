@@ -5411,7 +5411,7 @@ Create HintDb list.
 
 Ltac simpl_app :=
   autounfold with list in *;
-  repeat (rewrite map_app in * || rewrite map_filter_app in * || rewrite <-app_assoc in * ).
+  repeat (simpl in *; (rewrite map_app in * || rewrite map_filter_app in * || rewrite <-app_assoc in * )).
 
 (** Solves a goal of the form incl xss yss, where yss is of the form xs1 ++ xs2 ++ xs3 ++ ...
     and xs is also a concatenation of a subset of xsk, in the same order.

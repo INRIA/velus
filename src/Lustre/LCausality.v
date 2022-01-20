@@ -175,17 +175,65 @@ Module Type LCAUSALITY
 
   (* Definition causality *)
 
+  Definition idcaus_of_locals blk :=
+    idty (locals blk)
+    ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk).
+
+  Global Hint Unfold idcaus_of_locals : list.
+
+  Fact idcaus_of_locals_In_reset : forall blocks er blk x cx,
+      In blk blocks ->
+      In (x, cx) (idcaus_of_locals blk) ->
+      In (x, cx) (idcaus_of_locals (Breset blocks er)).
+  Proof.
+    intros * Hinblk Hin.
+    unfold idcaus_of_locals in *; simpl in *.
+    rewrite in_app_iff in *. destruct Hin; [left|right]; solve_In. auto.
+  Qed.
+
+  Fact idcaus_of_locals_In_switch : forall ec branches blks blk x cx,
+      In blk (snd blks) ->
+      In blks branches ->
+      In (x, cx) (idcaus_of_locals blk) ->
+      In (x, cx) (idcaus_of_locals (Bswitch ec branches)).
+  Proof.
+    intros * Hinblk Hinbrs Hin.
+    unfold idcaus_of_locals in *; simpl in *.
+    rewrite in_app_iff in *. destruct Hin; [left|right]; solve_In. auto.
+  Qed.
+
+  Fact idcaus_of_locals_In_local1 : forall locs blocks blk x cx,
+      In blk blocks ->
+      In (x, cx) (idcaus_of_locals blk) ->
+      In (x, cx) (idcaus_of_locals (Blocal locs blocks)).
+  Proof.
+    intros * Hinblk Hin.
+    unfold idcaus_of_locals in *; simpl in *.
+    simpl_app. repeat rewrite in_app_iff in *.
+    destruct Hin; [right;left|right;right;right]; solve_In. auto.
+  Qed.
+
+  Fact idcaus_of_locals_In_local2 : forall locs blocks cx,
+      In cx (map snd (idcaus (idty locs)))
+      \/ In cx
+           (map snd
+                (idcaus (map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs))) ->
+      In cx (map snd (idcaus_of_locals (Blocal locs blocks))).
+  Proof.
+    intros * Hin.
+    unfold idcaus_of_locals; simpl. simpl_app.
+    repeat rewrite in_app_iff.
+    destruct Hin; [left|right;right;left]; solve_In. auto.
+  Qed.
+
   Definition graph_of_node {PSyn prefs v a} (n : @node PSyn prefs) (g : AcyGraph v a) : Prop :=
-    PS.Equal (vertices g) (PSP.of_list (map snd (idcaus (n_in n ++ n_out n))
-                                            ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
-                                            ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n))))
+    PS.Equal (vertices g)
+             (PSP.of_list (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))))
     /\ (forall cx cy, depends_on (idcaus (n_in n ++ n_out n)) [] cx cy (n_block n) ->
                 is_arc g cy cx).
 
   Definition node_causal {PSyn prefs} (n : @node PSyn prefs) :=
-    NoDup (map snd (idcaus (n_in n ++ n_out n))
-               ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
-               ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n))) /\
+    NoDup (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))) /\
     exists v a (g : AcyGraph v a), graph_of_node n g.
 
   (* Some properties *)
@@ -194,7 +242,7 @@ Module Type LCAUSALITY
       node_causal nd ->
       NoDup (map snd (idcaus (n_in nd ++ n_out nd))).
   Proof.
-    intros * (Hnd&_).
+    intros * (Hnd&_). rewrite map_app in Hnd.
     now apply NoDup_app_l in Hnd.
   Qed.
 
@@ -432,9 +480,7 @@ Module Type LCAUSALITY
     Env.union_fuse PS.union vo (Env.from_list (map (fun '(_, (_, _, cx)) => (cx, PS.empty)) (n_in n))).
 
   Definition check_node_causality {PSyn prefs} (n : @node PSyn prefs) : res unit :=
-    if check_nodup (map snd (idcaus (n_in n ++ n_out n))
-               ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
-               ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n))) then
+    if check_nodup (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))) then
       match build_acyclic_graph (Env.map PSP.to_list (build_graph n)) with
       | OK _ => OK tt
       | Error msg => Error (MSG "Node " :: (CTX (n_name n)) :: MSG " : " :: msg)
@@ -1503,38 +1549,35 @@ Module Type LCAUSALITY
   Lemma build_graph_dom {PSyn prefs} : forall (G: @global PSyn prefs) n,
       wl_node G n ->
       wx_node n ->
-      Env.dom (build_graph n) (map snd (idcaus (n_in n ++ n_out n))
-                                   ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
-                                   ++ map_filter (fun '(_, (_, o)) => o) (locals (n_block n))).
+      Env.dom (build_graph n) (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))).
   Proof.
     intros * Hwl Hwx. unfold idents, build_graph.
     eapply Env.dom_intro. intros x.
     rewrite Env.union_fuse_In, Env.In_from_list, fst_InMembers.
-    rewrite idcaus_app, map_app.
-    repeat rewrite in_app_iff. rewrite or_assoc. rewrite or_comm.
-    unfold idcaus at 3. erewrite 2 map_map, map_ext. apply or_iff_compat_l.
+    rewrite or_comm. simpl_app.
+    erewrite 2 map_map, map_ext, in_app_iff. apply or_iff_compat_l.
     2:intros (?&(?&?)&?); auto.
     pose proof (n_defd n) as (xs&Hdef&Hperm).
     erewrite collect_depends_on_dom with (xs0:=xs); eauto.
     3:reflexivity.
-    2:{ eapply fst_NoDupMembers. rewrite <-idcaus_app, map_fst_idcaus. apply node_NoDup. }
-    3:rewrite <-idcaus_app, map_fst_idcaus; apply node_NoDupLocals.
-    2,3:rewrite <-idcaus_app, map_fst_idcaus; eauto. 2:rewrite Hperm; solve_incl_app.
-    rewrite Is_last_in_In, <-or_assoc.
+    2:{ eapply fst_NoDupMembers. erewrite <-map_app, map_map, map_ext. apply node_NoDup.
+        intros; destruct_conjs; auto. }
+    (* 3:{ erewrite <-map_app, map_map, map_ext. apply node_NoDupLocals. *)
+    (*     intros; destruct_conjs; auto. } *)
+    2-4:erewrite <-map_app, map_map, map_ext with (g:=fst); [|intros; destruct_conjs; auto]; eauto.
+    2:rewrite Hperm; solve_incl_app. 2:apply node_NoDupLocals.
+    unfold idcaus_of_locals; simpl_app. repeat rewrite in_app_iff. rewrite <-or_assoc.
+    rewrite Is_last_in_In.
     split; (intros [Hin|Hin]; [left|right]).
     - eapply Is_defined_in_restrict, Is_defined_in_In in Hin; eauto.
-      2:{ rewrite Hperm, map_fst_idcaus. reflexivity. }
-      2:{ eapply NoDupLocals_incl, node_NoDupLocals.
-          rewrite map_fst_idcaus. solve_incl_app. }
-      2:{ intros ? Hin'. rewrite Hperm, <-map_fst_idcaus in Hin'.
-          eapply NoDupMembers_app_InMembers_l. 2:rewrite fst_InMembers; eauto.
-          rewrite <-idcaus_app, NoDupMembers_idcaus. apply n_nodup.
-      }
+      2-3:erewrite map_map, map_ext with (g:=fst); [|intros; destruct_conjs; auto]; eauto.
+      2:rewrite Hperm; solve_incl_app.
+      2:{ eapply NoDupLocals_incl, node_NoDupLocals. solve_incl_app. }
+      2:{ intros ? Hin' Hinm. rewrite fst_InMembers in Hinm. simpl_In.
+          eapply NoDupMembers_app_InMembers. eapply n_nodup with (n0:=n). eapply In_InMembers; eauto.
+          rewrite Hperm in Hin'. now rewrite fst_InMembers. }
       rewrite map_app, in_app_iff in Hin. destruct Hin; auto.
-      right.
-      unfold idty in H. erewrite map_map, map_ext in H; eauto.
-      intros; destruct_conjs; auto.
-    - solve_In.
+    - solve_In. auto.
     - destruct Hin; simpl_In.
       1,2:eapply In_Is_defined_in with (cenv:=idcaus (n_out n)); eauto.
       1-8:try rewrite Hperm.
@@ -1547,9 +1590,7 @@ Module Type LCAUSALITY
   Lemma build_graph_find {PSyn prefs} : forall (G: @global PSyn prefs) n x y,
       wl_node G n ->
       wx_node n ->
-      NoDup (map snd (idcaus (n_in n ++ n_out n)
-                      ++ idty (locals (n_block n))
-                      ++ map_filter (fun '(x1, (_, o)) => option_map (fun cx : ident => (x1, cx)) o) (locals (n_block n)))) ->
+      NoDup (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))) ->
       depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) ->
       exists ys, (Env.find x (build_graph n)) = Some ys /\ PS.In y ys.
   Proof.
@@ -1563,17 +1604,16 @@ Module Type LCAUSALITY
     }
     pose proof (n_defd n) as (?&Hdef&Hperm).
     eapply collect_depends_on_spec in Hdep as (?&Hx&Hy); eauto with datatypes. 2,3:reflexivity.
-    - assert (In x (map snd (idcaus (n_in n ++ n_out n))
-                        ++ map (fun '(_, (cx, _)) => cx) (locals (n_block n))
-                        ++ map_filter (fun '(x1, (_, o)) => o) (locals (n_block n)))) as Hin'.
-      { rewrite app_assoc, in_app_iff.
+    - assert (In x (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n)))) as Hin'.
+      { unfold idcaus_of_locals.
         eapply Env.find_In, collect_depends_on_dom in Hx as [Hdef'|Hlast']; eauto.
         - eapply Is_defined_in_In in Hdef; eauto.
           2:rewrite Hperm, map_fst_idcaus; solve_incl_app.
-          left. rewrite map_app in Hdef. rewrite in_app_iff in *. destruct Hdef; auto.
-          right. solve_In.
+          repeat rewrite map_app in *. repeat rewrite in_app_iff in *.
+          destruct Hdef as [|]; auto.
         - eapply Is_last_in_In in Hlast'; eauto.
-          right. solve_In.
+          repeat rewrite map_app. repeat rewrite in_app_iff.
+          right. right. solve_In. auto.
         - reflexivity.
         - rewrite Hperm, map_fst_idcaus. solve_incl_app.
         - rewrite map_fst_idcaus. eapply node_NoDupLocals.
@@ -1625,9 +1665,6 @@ Module Type LCAUSALITY
       exists (PSP.to_list ys).
       rewrite Env.Props.P.F.map_o, Find; split; auto.
       apply In_PS_elements; auto.
-      repeat rewrite map_app.
-      unfold idty. erewrite map_map, map_ext with (l:=locals _), map_map_filter, map_filter_ext; eauto.
-      1,2:intros; destruct_conjs; auto. destruct o; auto.
   Qed.
 
   Corollary check_causality_correct {PSyn prefs} : forall (G: @global PSyn prefs) tts,
@@ -1871,32 +1908,28 @@ Module Type LCAUSALITY
         graph_of_node n g ->
         (forall xs ys, Permutation xs ys -> P_vars xs -> P_vars ys) ->
         P_vars [] ->
-        (forall x xs, In x (map snd (idcaus (n_in n ++ n_out n)))
-                 \/ In x (map (fun '(_, (cx, _)) => cx) (locals (n_block n)))
-                 \/ In (Some x) (map (fun '(_, (_, cx)) => cx) (locals (n_block n))) ->
-                 P_vars xs ->
-                 (forall y, depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) -> In y xs) ->
-                 P_vars (x::xs)) ->
+        (forall x xs,
+            In x (map snd (idcaus (n_in n ++ n_out n))) \/ In x (map snd (idcaus_of_locals (n_block n))) ->
+            P_vars xs ->
+            (forall y, depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) -> In y xs) ->
+            P_vars (x::xs)) ->
         P_vars (PS.elements (vertices g)).
     Proof.
       intros * [Hv Ha] Hperm Hnil Hdep.
       specialize (has_TopoOrder g) as (xs'&Heq&Hpre).
       eapply Hperm. rewrite Heq, Permutation_PS_elements_of_list. reflexivity.
       eapply TopoOrder_NoDup; eauto.
-      assert (incl xs' (map snd (idcaus (n_in n ++ n_out n)) ++
-                        map (fun '(_, (cx, _)) => cx) (locals (n_block n)) ++
-                        map_filter (fun '(_, (_, o)) => o) (locals (n_block n)))) as Hincl.
+      assert (incl xs' (map snd (idcaus (n_in n ++ n_out n)) ++ map snd (idcaus_of_locals (n_block n)))) as Hincl.
       { rewrite Hv in Heq.
         repeat rewrite <- ps_from_list_ps_of_list in Heq.
         intros ? Hin. rewrite <- ps_from_list_In in *.
         unfold idents in *.
-        now rewrite <- Heq in Hin. }
+        now rewrite <- Heq, map_app in Hin. }
       clear Heq.
       induction xs'; auto.
       apply incl_cons' in Hincl as (Hin&Hincl). inversion_clear Hpre as [|?? (?&?&Hin') Hpre'].
       eapply Hdep; eauto.
-      - repeat rewrite in_app_iff in Hin. destruct Hin as [|[|Hin]]; auto.
-        do 2 right. solve_In.
+      - repeat rewrite in_app_iff in Hin. destruct Hin as [|]; auto.
       - intros * Hdep'. eapply Hin'. left.
         eapply Ha; eauto.
     Qed.
@@ -1905,21 +1938,18 @@ Module Type LCAUSALITY
         node_causal n ->
         (forall xs ys, Permutation xs ys -> P_vars xs -> P_vars ys) ->
         P_vars [] ->
-        (forall x xs, In x (map snd (idcaus (n_in n ++ n_out n)))
-                 \/ In x (map (fun '(_, (cx, _)) => cx) (locals (n_block n)))
-                 \/ In (Some x) (map (fun '(_, (_, cx)) => cx) (locals (n_block n))) ->
-                 P_vars xs ->
-                 (forall y, depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) -> In y xs) ->
-                 P_vars (x::xs)) ->
-        P_vars (map snd (idcaus (n_in n ++ n_out n)) ++
-                map (fun '(_, (cx, _)) => cx) (locals (n_block n)) ++
-                map_filter (fun '(_, (_, o)) => o) (locals (n_block n))).
+        (forall x xs,
+            In x (map snd (idcaus (n_in n ++ n_out n))) \/ In x (map snd (idcaus_of_locals (n_block n))) ->
+            P_vars xs ->
+            (forall y, depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) -> In y xs) ->
+            P_vars (x::xs)) ->
+        P_vars (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))).
     Proof.
       intros * (Hnd&?&?&g&Hcaus) Hperm Hnil Hdep.
       assert (Hvars:=Hcaus). eapply causal_ind in Hvars; eauto.
       destruct Hcaus as (Heq&_).
       eapply Hperm; [|eauto].
-      rewrite Heq, Permutation_PS_elements_of_list; auto. (*  reflexivity. *)
+      rewrite Heq, Permutation_PS_elements_of_list; auto.
     Qed.
   End node_causal_ind.
 
