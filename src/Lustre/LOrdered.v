@@ -8,6 +8,7 @@ From Velus Require Import CommonProgram.
 From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 
 (** * Ordering of Lustre nodes *)
@@ -25,7 +26,8 @@ Module Type LORDERED
        (Op          : OPERATORS)
        (OpAux       : OPERATORS_AUX Ids Op)
        (Cks         : CLOCKS Ids Op OpAux)
-       (Import Syn  : LSYNTAX Ids Op OpAux Cks).
+       (Senv        : STATICENV Ids Op OpAux Cks)
+       (Import Syn  : LSYNTAX Ids Op OpAux Cks Senv).
 
   Inductive Is_node_in_exp : ident -> exp -> Prop :=
   | INEunop: forall f op e a,
@@ -209,7 +211,8 @@ Module LOrderedFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS Ids Op OpAux)
-       (Syn   : LSYNTAX Ids Op OpAux Cks)
-       <: LORDERED Ids Op OpAux Cks Syn.
-  Include LORDERED Ids Op OpAux Cks Syn.
+       (Senv  : STATICENV Ids Op OpAux Cks)
+       (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
+       <: LORDERED Ids Op OpAux Cks Senv Syn.
+  Include LORDERED Ids Op OpAux Cks Senv Syn.
 End LOrderedFun.

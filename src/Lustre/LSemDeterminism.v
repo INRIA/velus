@@ -9,6 +9,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import CoindStreams.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LCausality Lustre.LOrdered Lustre.LSemantics.
 
 (** ** Proof of the determinism of the coinductive semantics
@@ -20,12 +21,13 @@ Module Type LSEMDETERMINISM
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks   : CLOCKS        Ids Op OpAux)
-       (Import Syn   : LSYNTAX Ids Op OpAux Cks)
-       (Import Typ   : LTYPING Ids Op OpAux Cks Syn)
-       (Import LCA   : LCAUSALITY Ids Op OpAux Cks Syn)
-       (Import Lord  : LORDERED Ids Op OpAux Cks Syn)
+       (Import Senv  : STATICENV     Ids Op OpAux Cks)
+       (Import Syn   : LSYNTAX Ids Op OpAux Cks Senv)
+       (Import Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Import LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
+       (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
-       (Import Sem   : LSEMANTICS Ids Op OpAux Cks Syn Lord CStr).
+       (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord CStr).
 
   Import List.
 
@@ -55,15 +57,15 @@ Module Type LSEMDETERMINISM
 
     Hypothesis HdetG : det_nodes G.
 
-    Variable Γ Γl : list (ident * (type * clock * ident)).
+    Variable Γ : static_env.
 
     Definition det_var_inv n (H1 H2 : history) : ident -> Prop :=
       fun cx => forall x vs1 vs2,
-          (In (x, cx) (idcaus Γ) ->
+          (HasCaus Γ x cx ->
            sem_var (fst H1) x vs1 ->
            sem_var (fst H2) x vs2 ->
            EqStN n vs1 vs2)
-          /\ (In (x, cx) (idcaus Γl) ->
+          /\ (HasLastCaus Γ x cx ->
              sem_var (snd H1) x vs1 ->
              sem_var (snd H2) x vs2 ->
              EqStN n vs1 vs2).
@@ -72,13 +74,13 @@ Module Type LSEMDETERMINISM
 
     Definition det_exp_inv n H1 H2 bs1 bs2 : exp -> nat -> Prop :=
       fun e k => forall ss1 ss2,
-          wt_exp G (idty (idty Γ)) (idty (idty Γl)) e ->
+          wt_exp G Γ e ->
           sem_exp G H1 bs1 e ss1 ->
           sem_exp G H2 bs2 e ss2 ->
           EqStN n (nth k ss1 def_stream) (nth k ss2 def_stream).
 
     Lemma P_exps_det_exp_inv : forall n H1 H2 bs1 bs2 es k ss1 ss2,
-        Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) es ->
+        Forall (wt_exp G Γ) es ->
         P_exps (det_exp_inv n H1 H2 bs1 bs2) es k ->
         Forall2 (sem_exp G H1 bs1) es ss1 ->
         Forall2 (sem_exp G H2 bs2) es ss2 ->
@@ -100,7 +102,7 @@ Module Type LSEMDETERMINISM
 
     Lemma Forall2Brs_det_exp_inv : forall n H1 H2 bs1 bs2 es k ss1 ss2,
         k < length ss1 ->
-        Forall (fun es => Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) (snd es)) es ->
+        Forall (fun es => Forall (wt_exp G Γ) (snd es)) es ->
         Forall (fun es => P_exps (det_exp_inv n H1 H2 bs1 bs2) (snd es) k) es ->
         Forall2Brs (sem_exp G H1 bs1) es ss1 ->
         Forall2Brs (sem_exp G H2 bs2) es ss2 ->
@@ -129,7 +131,7 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Lemma P_exps_det_exp_inv_all : forall n H1 H2 bs1 bs2 es ss1 ss2,
-        Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) es ->
+        Forall (wt_exp G Γ) es ->
         (forall k, k < length (annots es) -> P_exps (det_exp_inv n H1 H2 bs1 bs2) es k) ->
         Forall2 (sem_exp G H1 bs1) es ss1 ->
         Forall2 (sem_exp G H2 bs2) es ss2 ->
@@ -397,11 +399,11 @@ Module Type LSEMDETERMINISM
 
     Fact det_exps_n' : forall n Hi1 Hi2 bs1 bs2 es ss1 ss2,
         Forall (fun e => forall ss1 ss2,
-                    wt_exp G (idty (idty Γ)) (idty (idty Γl)) e ->
+                    wt_exp G Γ e ->
                     sem_exp G Hi1 bs1 e ss1 ->
                     sem_exp G Hi2 bs2 e ss2 ->
                     Forall2 (EqStN n) ss1 ss2) es ->
-        Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) es->
+        Forall (wt_exp G Γ) es->
         Forall2 (sem_exp G Hi1 bs1) es ss1 ->
         Forall2 (sem_exp G Hi2 bs2) es ss2 ->
         Forall2 (EqStN n) (concat ss1) (concat ss2).
@@ -418,11 +420,11 @@ Module Type LSEMDETERMINISM
              Forall
                (fun e =>
                   forall ss1 ss2,
-                    wt_exp G (idty (idty Γ)) (idty (idty Γl)) e ->
+                    wt_exp G Γ e ->
                     sem_exp G H1 bs1 e ss1 -> sem_exp G H2 bs2 e ss2 -> Forall2 (EqStN n) ss1 ss2)
                (snd es)) es ->
         length ss1 = length ss2 ->
-        Forall (fun es => Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) (snd es)) es ->
+        Forall (fun es => Forall (wt_exp G Γ) (snd es)) es ->
         Forall2Brs (sem_exp G H1 bs1) es ss1 ->
         Forall2Brs (sem_exp G H2 bs2) es ss2 ->
         Forall2 (Forall2 (fun xs1 xs2 => EqStN n (snd xs1) (snd xs2))) ss1 ss2.
@@ -449,9 +451,9 @@ Module Type LSEMDETERMINISM
         I chose a clocking hypothesis because this lemma is used in the
         clocked-semantics proof. *)
     Lemma det_exp_n : forall n Hi1 Hi2 bs1 bs2 e ss1 ss2,
-        (forall x, In x (map snd (idcaus Γ)) \/ In x (map snd (idcaus Γl)) -> det_var_inv n Hi1 Hi2 x) ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv n Hi1 Hi2 cx) ->
         EqStN n bs1 bs2 ->
-        wt_exp G (idty (idty Γ)) (idty (idty Γl)) e ->
+        wt_exp G Γ e ->
         sem_exp G Hi1 bs1 e ss1 ->
         sem_exp G Hi2 bs2 e ss2 ->
         Forall2 (EqStN n) ss1 ss2.
@@ -468,14 +470,15 @@ Module Type LSEMDETERMINISM
         rewrite H7, H8. eapply enum_detn; eauto.
       - (* var *)
         inv Hs1. inv Hs2.
-        constructor; auto. simpl_In.
-        edestruct Hn as (Hn1&_). left; solve_In.
-        eapply Hn1; eauto. solve_In.
+        constructor; auto. inv H1. simpl_In.
+        edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
+        eapply Hn1; eauto. econstructor; solve_In; eauto.
       - (* last *)
         inv Hs1. inv Hs2.
-        constructor; auto. simpl_In.
-        edestruct Hn as (_&Hn2). right; solve_In.
-        eapply Hn2; eauto. solve_In.
+        constructor; auto. inv H2. simpl_In.
+        destruct (causl_last e) eqn:Hcaus; try congruence.
+        edestruct Hn as (_&Hn2). right; econstructor; solve_In; eauto.
+        eapply Hn2; eauto. econstructor; solve_In; eauto.
       - (* unop *)
         inversion_clear Hs1 as [| | | |???????? Hse1 Hty1 Hl1| | | | | | | |].
         inversion_clear Hs2 as [| | | |???????? Hse2 Hty2 Hl2| | | | | | | |].
@@ -520,7 +523,9 @@ Module Type LSEMDETERMINISM
         inversion_clear Hs1 as [| | | | | | | |????????? Hse1 Hsv1 Hwhen1| | | |].
         inversion_clear Hs2 as [| | | | | | | |????????? Hse2 Hsv2 Hwhen2| | | |].
         eapply det_exps_n' in H; eauto.
-        edestruct Hn as (Hn1&_). left; solve_In. eapply Hn1 in Hsv1; eauto. 2:solve_In.
+        inv H4; simpl_In.
+        edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
+        eapply Hn1 in Hsv1; eauto. 2:econstructor; solve_In; eauto.
         clear - H Hsv1 Hwhen1 Hwhen2.
         rewrite_Forall_forall. congruence.
         eapply when_detn. 2:eauto.
@@ -531,7 +536,9 @@ Module Type LSEMDETERMINISM
         repeat simpl_In.
         inversion_clear Hs1 as [| | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
         inversion_clear Hs2 as [| | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
-        edestruct Hn as (Hn1&_). left; solve_In. eapply Hn1 in Hsv1; eauto. 2:solve_In.
+        inv H3; simpl_In.
+        edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
+        eapply Hn1 in Hsv1; eauto. 2:econstructor; solve_In; eauto.
         eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
         2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
             2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
@@ -601,9 +608,9 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Corollary det_exps_n : forall n Hi1 Hi2 bs1 bs2 es ss1 ss2,
-        (forall x, In x (map snd (idcaus Γ)) \/ In x (map snd (idcaus Γl)) -> det_var_inv n Hi1 Hi2 x) ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv n Hi1 Hi2 cx) ->
         EqStN n bs1 bs2 ->
-        Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) es ->
+        Forall (wt_exp G Γ) es ->
         Forall2 (sem_exp G Hi1 bs1) es ss1 ->
         Forall2 (sem_exp G Hi2 bs2) es ss2 ->
         Forall2 (EqStN n) (concat ss1) (concat ss2).
@@ -617,7 +624,7 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Corollary det_exp : forall Hi bs e ss1 ss2,
-        wt_exp G (idty (idty Γ)) (idty (idty Γl)) e ->
+        wt_exp G Γ e ->
         sem_exp G Hi bs e ss1 ->
         sem_exp G Hi bs e ss2 ->
         EqSts ss1 ss2.
@@ -631,7 +638,7 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Corollary det_exps : forall Hi bs es ss1 ss2,
-        Forall (wt_exp G (idty (idty Γ)) (idty (idty Γl))) es ->
+        Forall (wt_exp G Γ) es ->
         Forall2 (sem_exp G Hi bs) es ss1 ->
         Forall2 (sem_exp G Hi bs) es ss2 ->
         EqSts (concat ss1) (concat ss2).
@@ -669,11 +676,11 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Lemma det_exp_S : forall n Hi1 Hi2 bs1 bs2 e k,
-        (forall x, In x (map snd (idcaus Γ)) \/ In x (map snd (idcaus Γl)) -> det_var_inv n Hi1 Hi2 x) ->
-        wt_exp G (idty (idty Γ)) (idty (idty Γl)) e ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv n Hi1 Hi2 cx) ->
+        wt_exp G Γ e ->
         k < numstreams e ->
         EqStN (S n) bs1 bs2 ->
-        (forall x, Is_free_left (idcaus Γ) (idcaus Γl) x k e -> det_var_inv (S n) Hi1 Hi2 x) ->
+        (forall x, Is_free_left Γ x k e -> det_var_inv (S n) Hi1 Hi2 x) ->
         det_exp_inv (S n) Hi1 Hi2 bs1 bs2 e k.
     Proof.
       intros * Hn Hwt Hnum Hbs HSn.
@@ -850,19 +857,17 @@ Module Type LSEMDETERMINISM
         eapply EqStNs_unmask; eauto. intros.
         eapply HdetG. 2,3:eauto.
         eapply EqStNs_mask; eauto.
-      - apply wt_exp_wx_exp in Hwt. rewrite 4 map_fst_idty in Hwt.
-        rewrite 2 map_fst_idcaus; auto.
     Qed.
 
-    Hypothesis Hnd : NoDup (map snd (idcaus Γ) ++ map snd (idcaus Γl)).
+    Hypothesis Hnd : NoDup (map snd (idcaus_of_senv Γ)).
 
     Lemma det_equation_S : forall n Hi1 Hi2 bs1 bs2 xs es k cx,
-        wt_equation G (idty (idty Γ)) (idty (idty Γl)) (xs, es) ->
+        wt_equation G Γ (xs, es) ->
         Sem.sem_equation G Hi1 bs1 (xs, es) ->
         Sem.sem_equation G Hi2 bs2 (xs, es) ->
         k < length xs ->
         P_exps (det_exp_inv (S n) Hi1 Hi2 bs1 bs2) es k ->
-        In (nth k xs xH, cx) (idcaus Γ) ->
+        HasCaus Γ (nth k xs xH) cx ->
         det_var_inv (S n) Hi1 Hi2 cx.
     Proof.
       intros * (* Hn  *)(Hwt1&Hwt2) Hsem1 Hsem2 Hnum HSn Hin.
@@ -871,19 +876,18 @@ Module Type LSEMDETERMINISM
       intros ???. split; intros Hin' Hv1 Hv2.
       - eapply Forall2_forall2 in H5 as (Hl1&Heq1).
         eapply Forall2_forall2 in H7 as (Hl2&Heq2).
-        eapply NoDup_snd_det in Hin; eauto using NoDup_app_l; subst.
+        eapply HasCaus_snd_det in Hin; eauto; subst.
         eapply EqStN_morph. 3:eauto.
         1,2:eapply sem_var_det; eauto.
-      - exfalso. simpl_In.
-        eapply NoDup_app_In in Hnd; eauto. eapply Hnd. 1,2:solve_In.
+      - exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto.
     Qed.
 
   End sem_equation_det.
 
-  Lemma det_var_inv_mask : forall Γ Γl n rs1 rs2 Hi1 Hi2 x,
+  Lemma det_var_inv_mask : forall Γ n rs1 rs2 Hi1 Hi2 x,
       EqStN n rs1 rs2 ->
-      det_var_inv Γ Γl n Hi1 Hi2 x ->
-      forall k, det_var_inv Γ Γl n (mask_hist k rs1 Hi1) (mask_hist k rs2 Hi2) x.
+      det_var_inv Γ n Hi1 Hi2 x ->
+      forall k, det_var_inv Γ n (mask_hist k rs1 Hi1) (mask_hist k rs2 Hi2) x.
   Proof.
     intros * Heq Hdet ????.
     split; intros Hin Hv1 Hv2.
@@ -894,10 +898,10 @@ Module Type LSEMDETERMINISM
          eapply Hdet in Hv2; eauto).
   Qed.
 
-  Lemma det_var_inv_unmask : forall Γ Γl n rs1 rs2 Hi1 Hi2 x,
+  Lemma det_var_inv_unmask : forall Γ n rs1 rs2 Hi1 Hi2 x,
       EqStN n rs1 rs2 ->
-      (forall k, det_var_inv Γ Γl n (mask_hist k rs1 Hi1) (mask_hist k rs2 Hi2) x) ->
-      det_var_inv Γ Γl n Hi1 Hi2 x.
+      (forall k, det_var_inv Γ n (mask_hist k rs1 Hi1) (mask_hist k rs2 Hi2) x) ->
+      det_var_inv Γ n Hi1 Hi2 x.
   Proof.
     intros * Heq Hdet ???.
     split; intros Hin Hv1 Hv2; eapply EqStN_unmask; eauto;
@@ -905,10 +909,10 @@ Module Type LSEMDETERMINISM
       eapply Hd; unfold mask_hist; eauto using sem_var_mask.
   Qed.
 
-  Lemma det_var_inv_filter : forall Γ Γl n sc1 sc2 Hi1 Hi2 x,
+  Lemma det_var_inv_filter : forall Γ n sc1 sc2 Hi1 Hi2 x,
       EqStN n sc1 sc2 ->
-      det_var_inv Γ Γl n Hi1 Hi2 x ->
-      forall c, det_var_inv Γ Γl n (filter_hist c sc1 Hi1) (filter_hist c sc2 Hi2) x.
+      det_var_inv Γ n Hi1 Hi2 x ->
+      forall c, det_var_inv Γ n (filter_hist c sc1 Hi1) (filter_hist c sc2 Hi2) x.
   Proof.
     intros * Heq Hdet ????.
     split; intros Hin Hv1 Hv2.
@@ -919,16 +923,16 @@ Module Type LSEMDETERMINISM
          eapply Hdet in Hv2; eauto).
   Qed.
 
-  Lemma det_var_inv_unfilter dom : forall Γ Γl tn n sc1 sc2 Hi1 Hi2 x,
+  Lemma det_var_inv_unfilter dom : forall Γ tn n sc1 sc2 Hi1 Hi2 x,
       wt_stream sc1 (Tenum tn) ->
       wt_stream sc2 (Tenum tn) ->
       EqStN n sc1 sc2 ->
-      (forall c, In c (seq 0 (snd tn)) -> det_var_inv Γ Γl n (filter_hist c sc1 Hi1) (filter_hist c sc2 Hi2) x) ->
+      (forall c, In c (seq 0 (snd tn)) -> det_var_inv Γ n (filter_hist c sc1 Hi1) (filter_hist c sc2 Hi2) x) ->
       slower_subhist dom (fst Hi1) (abstract_clock sc1) ->
       slower_subhist dom (fst Hi2) (abstract_clock sc2) ->
-      (forall y, In (y, x) (idcaus Γ) -> dom y) ->
-      ~In x (map snd (idcaus Γl)) ->
-      det_var_inv Γ Γl n Hi1 Hi2 x.
+      (forall y, HasCaus Γ y x -> dom y) ->
+      (forall y, ~HasLastCaus Γ y x) ->
+      det_var_inv Γ n Hi1 Hi2 x.
   Proof.
     intros * Hwt1 Hwt2 Heq Hdet Hsl1 Hsl2 Hdom Hnin ???.
     split; intros Hin Hv1 Hv2.
@@ -937,7 +941,7 @@ Module Type LSEMDETERMINISM
       eapply Hd; unfold filter_hist; eauto using sem_var_filter.
       + inv Hv1. rewrite H1. eapply Hsl1; eauto.
       + inv Hv2. rewrite H1. eapply Hsl2; eauto.
-    - exfalso. apply Hnin. solve_In.
+    - exfalso. eapply Hnin; eauto.
   Qed.
 
   Section sem_block_det.
@@ -968,7 +972,7 @@ Module Type LSEMDETERMINISM
         slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) (fst Hi1) (abstract_clock sc1) ->
         slower_subhist (fun x => Syn.Is_defined_in x (Bswitch ec branches)) (fst Hi2) (abstract_clock sc2) ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bswitch ec branches)
-    | Sdetlocal : forall Hi1 Hi2 Hl1 Hl2 bs1 bs2 locs locsl blocks Hi1' Hi2' Hl1' Hl2',
+    | Sdetlocal : forall Hi1 Hi2 Hl1 Hl2 bs1 bs2 locs blocks Hi1' Hi2' Hl1' Hl2',
         (forall x vs, sem_var Hi1' x vs -> ~InMembers x locs -> sem_var Hi1 x vs) ->
         (forall x vs, sem_var Hi2' x vs -> ~InMembers x locs -> sem_var Hi2 x vs) ->
 
@@ -986,11 +990,10 @@ Module Type LSEMDETERMINISM
 
         Forall (sem_block_det n envS (Hi1', Hl1') (Hi2', Hl2') bs1 bs2) blocks ->
 
-        locsl = map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs ->
-        Forall (det_var_inv (idty locs) locsl
-                            (pred n) (Hi1', Hl1') (Hi2', Hl2')) (map snd (idcaus (idty locs++locsl))) ->
-        Forall (fun x => In x envS -> det_var_inv (idty locs) locsl n (Hi1', Hl1') (Hi2', Hl2') x)
-               (map snd (idcaus (idty locs++locsl))) ->
+        Forall (det_var_inv (senv_of_locs locs)
+                            (pred n) (Hi1', Hl1') (Hi2', Hl2')) (map snd (idcaus_of_senv (senv_of_locs locs))) ->
+        Forall (fun x => In x envS -> det_var_inv (senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2') x)
+               (map snd (idcaus_of_senv (senv_of_locs locs))) ->
         sem_block_det n envS (Hi1, Hl1) (Hi2, Hl2) bs1 bs2 (Blocal locs blocks).
 
     (* Initialize with two "simple" sems *)
@@ -1020,34 +1023,31 @@ Module Type LSEMDETERMINISM
 
     (* Go from n to n + 1 :) *)
     Lemma sem_block_det_S : forall n envS blk Hi1 Hi2 bs1 bs2,
-        incl (map snd (idty (locals blk))) envS ->
-        incl (map_filter snd (idck (locals blk))) envS ->
+        incl (map snd (idcaus_of_locals blk)) envS ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 blk ->
         sem_block_det (S n) [] Hi1 Hi2 bs1 bs2 blk.
     Proof.
-      induction blk using block_ind2; intros * Hincl1 Hincl2 Hsem; inv Hsem; simpl in *.
+      induction blk using block_ind2; intros * Hincl Hsem; inv Hsem; simpl in *.
       - (* equation *)
         constructor; eauto.
       - (* reset *)
         econstructor; eauto.
         intros k. specialize (H10 k).
         rewrite Forall_forall in *; intros; eauto.
-        eapply H; eauto. 1,2:etransitivity. 2:eapply Hincl1. 3:eapply Hincl2.
-        1,2:intros ??; solve_In. auto.
+        eapply H; eauto. etransitivity. 2:eapply Hincl.
+        intros ??. simpl_In. eapply idcaus_of_locals_In_reset in Hin; eauto. solve_In.
       - (* switch *)
         econstructor; eauto. simpl_Forall.
         eapply H; eauto.
-        1,2:etransitivity. 2:eapply Hincl1. 3:eapply Hincl2.
-        1,2:intros ??; solve_In. auto.
+        etransitivity. 2:eapply Hincl.
+         intros ??. simpl_In. eapply idcaus_of_locals_In_switch in Hin; eauto. solve_In. auto.
       - (* locals *)
         econstructor; eauto. 1-3:simpl_Forall.
         + eapply H; eauto.
-          1,2:etransitivity. 2:eapply Hincl1. 3:eapply Hincl2.
-          apply incl_map, incl_map, incl_appr; intros ??; solve_In.
-          intros ??; solve_In. apply in_or_app; right. solve_In. auto.
-        + eapply H15. rewrite idcaus_app, in_app_iff in H0. destruct H0 as [Hin|Hin].
-          * eapply Hincl1; solve_In. 2:apply in_or_app; left; solve_In. auto.
-          * eapply Hincl2; solve_In. apply in_or_app; left; solve_In. auto.
+          etransitivity. 2:eapply Hincl.
+          intros ??; simpl_In. eapply idcaus_of_locals_In_local1 in Hin; eauto. solve_In.
+        + eapply H14, Hincl.
+          eapply idcaus_of_locals_In_local2 in H0; eauto. solve_In.
         + now exfalso.
     Qed.
 
@@ -1087,15 +1087,14 @@ Module Type LSEMDETERMINISM
 
     Hint Resolve sem_block_det_sem_block1 sem_block_det_sem_block2 : ldet.
 
-    Lemma det_var_inv_incl : forall Γ Γ' Γl Γl' n Hi1 Hi2 x,
+    Lemma det_var_inv_incl : forall Γ Γ' n Hi1 Hi2 x,
         incl Γ Γ' ->
-        incl Γl Γl' ->
-        det_var_inv Γ' Γl' n Hi1 Hi2 x ->
-        det_var_inv Γ Γl n Hi1 Hi2 x.
+        det_var_inv Γ' n Hi1 Hi2 x ->
+        det_var_inv Γ n Hi1 Hi2 x.
     Proof.
-      intros * Hincl1 Hincl2 Hdet ???.
+      intros * Hincl1 Hdet ???.
       split; intros Hin Hv1 Hv2; eauto.
-      1,2:eapply Hdet in Hv2; eauto. 1,2:eapply incl_map; eauto.
+      1,2:eapply Hdet in Hv2; eauto with senv.
     Qed.
 
     Import Permutation.
@@ -1122,77 +1121,68 @@ Module Type LSEMDETERMINISM
     Qed.
 
     Fact det_var_inv_local :
-      forall Γ Γl (locs : list (ident * (type * clock * ident * option (exp * ident)))) Hi1 Hi2 Hl1 Hl2 Hi1' Hi2' Hl1' Hl2' n cx,
-        (forall x : ident, InMembers x locs -> ~ In x (map fst Γ ++ map fst Γl)) ->
-        Env.dom_lb Hl1 (map fst Γl) ->
-        Env.dom_lb Hl2 (map fst Γl) ->
+      forall Γ (locs : list (ident * (type * clock * ident * option (exp * ident)))) Hi1 Hi2 Hl1 Hl2 Hi1' Hi2' Hl1' Hl2' n cx,
+        (forall x : ident, InMembers x locs -> ~ In x (map fst Γ)) ->
+        (forall x, IsLast Γ x -> Env.In x Hl1) ->
+        (forall x, IsLast Γ x -> Env.In x Hl2) ->
         (forall x vs, sem_var Hi1' x vs -> ~ InMembers x locs -> sem_var Hi1 x vs) ->
         (forall x vs, sem_var Hi2' x vs -> ~ InMembers x locs -> sem_var Hi2 x vs) ->
         Env.refines (@EqSt _) Hl1 Hl1' ->
         Env.refines (@EqSt _) Hl2 Hl2' ->
-        (In cx (map snd (idcaus Γ)) \/ In cx (map snd (idcaus Γl)) -> det_var_inv Γ Γl n (Hi1, Hl1) (Hi2, Hl2) cx) ->
-        (In cx (map snd (idcaus (idty locs))) \/
-         In cx (map snd (idcaus (map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs))) ->
-         det_var_inv (idty locs)
-                     (map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)
-                     n (Hi1', Hl1') (Hi2', Hl2') cx) ->
-         det_var_inv (Γ ++ idty locs)
-                     (Γl ++ map_filter (fun '(x2, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x2, (ty, ck, cx))) o) locs)
-                     n (Hi1', Hl1') (Hi2', Hl2') cx.
+        (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n (Hi1, Hl1) (Hi2, Hl2) cx) ->
+        (forall x, HasCaus (senv_of_locs locs) x cx \/ HasLastCaus (senv_of_locs locs) x cx ->
+              det_var_inv (senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2') cx) ->
+        det_var_inv (Γ ++ senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2') cx.
     Proof.
       intros * Hnd Hdoml1 Hdoml2 Href1 Href2 Hrefl1 Hrefl2 Hsc1 Hsc2.
-      split; intros Hin Hv1 Hv2; rewrite idcaus_app, in_app_iff in Hin; destruct Hin as [Hin|Hin]; simpl in *.
-      - edestruct Hsc1 as (Hinv&_). left; solve_In.
-        eapply Hinv; eauto.
+      split; intros Hin Hv1 Hv2; inv Hin; rewrite in_app_iff in H; destruct H as [Hin|Hin]; simpl in *.
+      - edestruct Hsc1 as (Hinv&_); [|eapply Hinv]; eauto with senv.
         + eapply Href1; eauto. intros Hnin.
-          eapply Hnd; eauto. apply in_or_app, or_introl. solve_In.
+          eapply Hnd; eauto. solve_In.
         + eapply Href2; eauto. intros Hnin.
-          eapply Hnd; eauto. apply in_or_app, or_introl. solve_In.
-      - edestruct Hsc2 as (Hinv&_). left; solve_In.
-        eapply Hinv; eauto.
-      - edestruct Hsc1 as (_&Hinv). right; solve_In.
-        eapply Hinv; eauto.
-        1,2:eapply sem_var_refines'; eauto.
-        1,2:simpl; eapply Env.dom_lb_use; eauto; solve_In.
-      - edestruct Hsc2 as (_&Hinv). right; solve_In.
-        eapply Hinv; eauto.
+          eapply Hnd; eauto. solve_In.
+      - edestruct Hsc2 as (Hinv&_); [|eapply Hinv]; eauto with senv.
+      - edestruct Hsc1 as (_&Hinv); [|eapply Hinv]; eauto with senv.
+        1,2:eapply sem_var_refines'; eauto with senv.
+        + eapply Hdoml1. econstructor; eauto. congruence.
+        + eapply Hdoml2. econstructor; eauto. congruence.
+      - edestruct Hsc2 as (_&Hinv); [|eapply Hinv]; eauto with senv.
     Qed.
 
-    Lemma det_block_S : forall n envS blk Γ Γl xs Hi1 Hi2 bs1 bs2 y cy,
+    Lemma det_block_S : forall n envS blk Γ xs Hi1 Hi2 bs1 bs2 y cy,
         det_nodes G ->
-        NoDup (map snd ((idcaus Γ ++ idcaus Γl) ++ idcaus_of_locals blk)) ->
-        NoDupLocals (map fst Γ ++ map fst Γl) blk ->
+        NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_locals blk)) ->
+        NoDupLocals (map fst Γ) blk ->
         VarsDefined blk xs ->
         incl xs (map fst Γ) ->
-        Env.dom_lb (snd Hi1) (map fst Γl) ->
-        Env.dom_lb (snd Hi2) (map fst Γl) ->
-        (forall x, In x (map snd (idcaus Γ)) \/ In x (map snd (idcaus Γl)) -> det_var_inv Γ Γl n Hi1 Hi2 x) ->
-        wt_block G (idty (idty Γ)) (idty (idty Γl)) blk ->
+        (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
+        (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
+        wt_block G Γ blk ->
         sem_block_det (S n) envS Hi1 Hi2 bs1 bs2 blk ->
         EqStN (S n) bs1 bs2 ->
         In y xs ->
-        In (y, cy) (idcaus Γ) ->
-        (forall cx, In cx (map snd (idcaus Γ)) \/ In cx (map snd (idcaus Γl)) ->
-               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> det_var_inv Γ Γl (S n) Hi1 Hi2 cx) ->
+        HasCaus Γ y cy ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
+                 depends_on Γ cy cx blk -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         (forall cx, In cx (map snd (idcaus_of_locals blk)) ->
-               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> In cx envS) ->
-        det_var_inv Γ Γl (S n) Hi1 Hi2 cy.
+               depends_on Γ cy cx blk -> In cx envS) ->
+        det_var_inv Γ (S n) Hi1 Hi2 cy.
     Proof.
       induction blk as [(xs&es)| | |] using block_ind2;
-        intros * HdetG Hnd Hnd2 Hvars Hincl Hdom1 Hdom2 Hn Hwt Hsem Hbs Hinxs Hinenv (* Hdef  *) HSn HenvS;
+        intros * HdetG Hnd Hnd2 Hvars Hincl Hdom1 Hdom2 Hn Hwt Hsem Hbs Hinxs Hinenv HSn HenvS;
         inv Hnd2; inv Hvars; inv Hwt; inv Hsem; simpl in *.
       - (* equation *)
         eapply In_nth in Hinxs as (?&Hlen&Hnth). instantiate (1:=xH) in Hnth.
         rewrite app_nil_r in Hnd.
         eapply det_equation_S; eauto.
-        + rewrite map_app in Hnd; auto.
         + eapply Pexp_Pexps.
           * simpl_Forall.
             eapply det_exp_S; eauto.
-          * intros ? Hfree. eapply HSn; eauto using Is_free_left_list_In_snd.
-            rewrite <-Hnth in *.
-            econstructor; eauto using nth_error_nth'.
-          * destruct H2 as (_&Hf2). apply Forall2_length in Hf2.
+          * intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_list_In_snd in IsF as (?&?).
+            eapply HSn; eauto.
+            rewrite <-Hnth in *. econstructor; eauto using nth_error_nth'.
+          * destruct H1 as (_&Hf2). apply Forall2_length in Hf2.
             rewrite <-length_typesof_annots. congruence.
         + now rewrite Hnth.
 
@@ -1201,12 +1191,11 @@ Module Type LSEMDETERMINISM
         assert (EqStN (S n) r1 r2) as Hrs.
         { eapply bools_of_detn. 2,3:eauto.
           eapply det_exp_S with (k:=0) (n0:=n) in H5; eauto.
-          - eapply H5 in H6; simpl in H6; eauto.
-          - rewrite <-length_typeof_numstreams, H8; simpl. lia.
-          - intros ? Hfree. eapply HSn; eauto using Is_free_left_In_snd.
-            eapply DepOnReset2; eauto. solve_Exists.
-            left. eapply In_Is_defined_in with (cenv:=idcaus Γ); eauto using incl_refl.
-            1,2:eapply in_or_app; eauto. rewrite map_fst_idcaus.
+          - eapply H5 in H8; simpl in H8; eauto.
+          - rewrite <-length_typeof_numstreams, H7; simpl. lia.
+          - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
+            eapply HSn, DepOnReset2; eauto. solve_Exists.
+            left. eapply In_Is_defined_in with (Γ:=Γ); eauto using in_or_app.
             etransitivity; eauto using incl_concat.
         }
         eapply det_var_inv_unmask; eauto.
@@ -1215,40 +1204,35 @@ Module Type LSEMDETERMINISM
         + clear - Hinblks Hnd.
           eapply NoDup_locals_inv; eauto.
         + etransitivity; eauto using incl_concat.
-        + setoid_rewrite <-Env.dom_lb_map; eauto.
-        + setoid_rewrite <-Env.dom_lb_map; eauto.
+        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
         + intros. eapply det_var_inv_mask; eauto using EqStN_weaken.
         + eapply EqStN_mask; eauto.
-        + intros ? Hin' Hdep. eapply det_var_inv_mask; eauto.
+        + intros * Hin' Hdep. eapply det_var_inv_mask; eauto.
           eapply HSn; eauto. constructor. solve_Exists.
-        + intros ? Hin' Hdep. eapply HenvS; eauto.
+        + intros * Hin' Hdep. eapply HenvS; eauto.
           2:constructor; solve_Exists. simpl_In.
           eapply idcaus_of_locals_In_reset in Hin; eauto. solve_In.
 
       - (* switch *)
-        assert (Is_defined_in (idcaus Γ) cy (Bswitch ec branches)) as Hdef.
-        { eapply In_Is_defined_in with (cenv:=idcaus Γ); eauto using incl_refl, in_or_app.
-          econstructor; eauto.
-          now rewrite map_fst_idcaus.
-        }
-        eapply det_exp_S with (k:=0) (n0:=n) in H9; eauto. specialize (H9 H10); simpl in H9.
+        assert (Is_defined_in Γ cy (Bswitch ec branches)) as Hdef.
+        { eapply In_Is_defined_in with (Γ:=Γ); eauto using incl_refl, in_or_app.
+          econstructor; eauto. }
+        eapply det_exp_S with (k:=0) (n0:=n) in H9; eauto. specialize (H9 H12); simpl in H9.
         2:{ rewrite <-length_typeof_numstreams, H6; auto. }
-        2:{ intros ? Isf. eapply HSn; eauto using Is_free_left_In_snd.
-            eapply DepOnSwitch2; eauto.
+        2:{ intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
+            eapply HSn, DepOnSwitch2; eauto.
             inv Hdef. solve_Exists. }
         repeat (take (wt_streams [_] (typeof ec)) and rewrite H6 in it; apply Forall2_singl in it).
         eapply det_var_inv_unfilter. 3:eauto. 1-6:eauto.
         2:{ intros ? Hinenv'; simpl.
-            eapply NoDup_snd_det in Hinenv; eauto; subst. 2:solve_NoDup_app.
+            eapply HasCaus_snd_det in Hinenv; eauto; subst. 2:solve_NoDup_app.
             eapply VarsDefined_Is_defined; eauto. 2:constructor; auto.
             constructor.
             eapply Forall_impl; [|eapply H2]; intros (?&?) ?.
-            eapply Forall_impl; [|eauto]; intros. eapply NoDupLocals_incl; [|eauto].
-            apply incl_appl; auto.
+            eapply Forall_impl; [|eauto]; intros. eapply NoDupLocals_incl; eauto.
         }
-        2:{ intros Hnin.
-            rewrite 2 map_app in Hnd. eapply NoDup_app_l, NoDup_app_In in Hnd; eauto.
-            solve_In. }
+        2:{ intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
         intros ? Hseq.
         assert (exists blks, In (c, blks) branches) as (blks&Hinbrs).
         { rewrite <-H8 in Hseq. simpl_In; eauto. }
@@ -1261,14 +1245,14 @@ Module Type LSEMDETERMINISM
         + clear - Hinbrs Hinblk Hnd.
           eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
         + etransitivity; [|eauto]. rewrite <-Hperm. eapply incl_concat; eauto.
-        + setoid_rewrite <-Env.dom_lb_map; auto.
-        + setoid_rewrite <-Env.dom_lb_map; auto.
-        + intros ? Hin. eapply det_var_inv_filter; eauto using EqStN_weaken.
+        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + intros * Hin. eapply det_var_inv_filter; eauto using EqStN_weaken.
         + eapply EqStN_filter; eauto.
-        + intros ? Hin Hdep. eapply det_var_inv_filter; eauto.
+        + intros * Hin Hdep. eapply det_var_inv_filter; eauto.
           eapply HSn; eauto.
           constructor. solve_Exists.
-        + intros ? Hin Hdep. eapply HenvS; eauto.
+        + intros * Hin Hdep. eapply HenvS; eauto.
           * simpl_In. eapply idcaus_of_locals_In_switch in Hin0; eauto. solve_In. auto.
           * constructor. solve_Exists.
 
@@ -1277,77 +1261,65 @@ Module Type LSEMDETERMINISM
         eapply in_concat in Hinxs0 as (?&Hin1&Hin2).
         eapply Forall2_ignore1, Forall_forall in H3 as (?&Hinblk&Hvars); eauto.
         eapply Forall_forall in H; eauto.
-        assert (det_var_inv (Γ ++ idty locs)
-                            (Γl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)
+        assert (det_var_inv (Γ ++ senv_of_locs locs)
                             (S n) (Hi1', Hl1') (Hi2', Hl2') cy) as Hdet'.
         { eapply H; eauto.
           - clear - Hinblk Hnd.
-            eapply NoDup_locals_inv; eauto. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-            rewrite map_map_filter, map_map with (l:=locs).
-            erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd.
+            eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
+            simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+            rewrite map_filter_map, map_map with (l:=locs) in Hnd.
+            erewrite map_filter_ext, map_ext with (l:=locs) in Hnd.
             eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
             1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
-          - simpl_Forall. eapply NoDupLocals_incl; [|eauto].
-            simpl_app. apply incl_appr', incl_app; [apply incl_appr|apply incl_appr'].
-            1,2:intros ? Hin; solve_In.
-          - etransitivity; eauto using incl_concat.
-            rewrite <-H7, Permutation_app_comm, map_app, map_fst_idty.
+          - simpl_Forall. now rewrite map_app, map_fst_senv_of_locs.
+          - rewrite map_app, map_fst_senv_of_locs.
+            etransitivity; eauto using incl_concat.
+            rewrite <-H7, Permutation_app_comm.
             apply incl_app; [apply incl_appl|apply incl_appr]; eauto using incl_refl.
-          - rewrite map_app. apply Env.dom_lb_intro; intros ? Hin.
-            apply in_app_iff in Hin as [|]; simpl_In.
-            + eapply Env.In_refines; eauto. eapply Env.dom_lb_use; eauto. solve_In.
-            + edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
-          - rewrite map_app. apply Env.dom_lb_intro; intros ? Hin.
-            apply in_app_iff in Hin as [|]; simpl_In.
-            + eapply Env.In_refines; eauto. eapply Env.dom_lb_use; eauto. solve_In.
-            + edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+          - intros * Hin. inv Hin.
+            apply in_app_iff in H0 as [|]; simpl_In; subst.
+            + eapply Env.In_refines; eauto with senv.
+            + destruct o as [(?&?)|]; simpl in *; try congruence.
+              edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+          - intros * Hin. inv Hin.
+            apply in_app_iff in H0 as [|]; simpl_In; subst.
+            + eapply Env.In_refines; eauto with senv.
+            + destruct o as [(?&?)|]; simpl in *; try congruence.
+              edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
           - intros * _. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
-            intros Hin. eapply Forall_forall in H23; eauto.
-            clear - Hin. simpl_app. rewrite in_app_iff; auto.
-          - simpl_Forall. clear - H9. simpl_app. repeat rewrite map_map in *; simpl in *.
-            erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext; eauto.
-            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+            intros ? Hin. eapply Forall_forall in H22; eauto.
+            apply idcaus_of_senv_In in Hin. solve_In.
           - simpl_Forall; auto.
-          - rewrite idcaus_app. apply in_app_iff; auto.
-          - intros ? _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
+          - simpl_Forall; auto.
+          - apply HasCaus_app; auto.
+          - intros * _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
             + intros. eapply HSn; eauto.
-              econstructor; eauto. solve_Exists. clear - Hdep.
-              simpl_app. repeat rewrite map_map in *.
-              erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
-            + intros Hin. eapply Forall_forall in H24; eauto. eapply H24.
-              2:{ clear - Hin. simpl_app. rewrite in_app_iff; auto. }
+              econstructor; eauto. solve_Exists.
+            + intros * Hin.
+              assert (In cx (map snd (idcaus_of_senv (senv_of_locs locs)))) as Hin'.
+              { apply idcaus_of_senv_In in Hin. solve_In. }
+              eapply Forall_forall in H23; eauto. eapply H23.
               eapply HenvS.
-              * eapply idcaus_of_locals_In_local2; eauto.
-              * econstructor; eauto. solve_Exists. clear - Hdep.
-                simpl_app. repeat rewrite map_map in *.
-                erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              * simpl_In. eapply idcaus_of_locals_In_local2 in Hin0; eauto. solve_In.
+              * econstructor; eauto. solve_Exists.
           - intros * Hin Hdep. apply HenvS.
             + simpl_In. eapply idcaus_of_locals_In_local1 in Hin0; eauto. solve_In.
-            + econstructor; eauto. solve_Exists. clear - Hdep.
-              simpl_app. repeat rewrite map_map in *.
-              erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+            + econstructor; eauto. solve_Exists.
         }
         intros ???. split; intros Hin3 Hv1 Hv2.
-        + assert (x1 = y); subst.
-          { rewrite map_app in Hnd. eapply NoDup_snd_det; eauto using NoDup_app_l, in_or_app. }
+        + eapply HasCaus_snd_det in Hinenv; eauto; subst. 2:solve_NoDup_app.
           assert (~InMembers y locs) as Hnin.
-          { intro contra. eapply H5; eauto.
-            apply in_or_app, or_introl; solve_In. }
+          { intros ?. eapply H5; eauto. }
           assert (NoDupLocals x x0).
           { rewrite Forall_forall in *. eapply NoDupLocals_incl; eauto.
-            intros x' ?; eapply in_concat' with (x1:=x') in Hin1; eauto.
-            rewrite <-H7 in Hin1. repeat rewrite in_app_iff in *. destruct Hin1; auto.
+            etransitivity; eauto using incl_concat.
+            rewrite <-H7, Permutation_app_comm.
+            apply incl_app; [apply incl_appl; auto|apply incl_appr, incl_refl].
           }
-          edestruct Hdet' as (Hd1&_); eauto using in_or_app. eapply Hd1.
-          rewrite idcaus_app; eauto using in_or_app.
+          edestruct Hdet' as (Hd1&_). eapply Hd1; [eapply HasCaus_app| |]; eauto.
           1,2:(eapply sem_var_refines_inv; [| | |eauto]; intros; eauto).
           1,2:rewrite Forall_forall in *; eapply sem_block_dom_lb; eauto with ldet.
-        + exfalso. simpl_In.
-          rewrite 2 map_app in Hnd. eapply NoDup_app_l, NoDup_app_In in Hnd.
-          eapply Hnd. solve_In. simpl. solve_In.
+        + exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
     Qed.
 
     Lemma sem_block_det_cons_nIn : forall n envS x blk Hi1 Hi2 bs1 bs2,
@@ -1375,29 +1347,28 @@ Module Type LSEMDETERMINISM
         + rewrite Forall_forall in *; intros. eapply H; eauto.
           contradict Hnin.
           simpl_In. eapply idcaus_of_locals_In_local1 in Hin; eauto. solve_In.
-        + eapply Forall_impl_In; [|eapply H15]; intros * Hin1 Hloc Hin2.
+        + eapply Forall_impl_In; [|eapply H14]; intros * Hin1 Hloc Hin2.
           inv Hin2; eauto.
-          exfalso. eapply Hnin. eapply idcaus_of_locals_In_local2.
-          simpl_app. rewrite in_app_iff in Hin1. auto.
+          exfalso. eapply Hnin. simpl_In. eapply idcaus_of_locals_In_local2 in Hin; eauto. solve_In.
     Qed.
 
-    Lemma sem_block_det_cons_In : forall n envS blk Γ Γl xs Hi1 Hi2 bs1 bs2 y cy,
+    Lemma sem_block_det_cons_In : forall n envS blk Γ xs Hi1 Hi2 bs1 bs2 y cy,
         det_nodes G ->
-        NoDup (map snd ((idcaus Γ ++ idcaus Γl) ++ idcaus_of_locals blk)) ->
-        NoDupLocals (map fst Γ ++ map fst Γl) blk ->
+        NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_locals blk)) ->
+        NoDupLocals (map fst Γ) blk ->
         VarsDefined blk xs ->
         incl xs (map fst Γ) ->
-        Env.dom_lb (snd Hi1) (map fst Γl) ->
-        Env.dom_lb (snd Hi2) (map fst Γl) ->
-        (forall x, In x (map snd (idcaus Γ)) \/ In x (map snd (idcaus Γl)) -> det_var_inv Γ Γl n Hi1 Hi2 x) ->
-        wt_block G (idty (idty Γ)) (idty (idty Γl)) blk ->
+        (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
+        (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
+        wt_block G Γ blk ->
         sem_block_det (S n) envS Hi1 Hi2 bs1 bs2 blk ->
         EqStN (S n) bs1 bs2 ->
         In (y, cy) (idcaus_of_locals blk) ->
-        (forall cx, In cx (map snd (idcaus Γ)) \/ In cx (map snd (idcaus Γl))
-               -> depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> det_var_inv Γ Γl (S n) Hi1 Hi2 cx) ->
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
+                 depends_on Γ cy cx blk -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         (forall cx, In cx (map snd (idcaus_of_locals blk)) ->
-               depends_on (idcaus Γ) (idcaus Γl) cy cx blk -> In cx envS) ->
+               depends_on Γ cy cx blk -> In cx envS) ->
         sem_block_det (S n) (cy::envS) Hi1 Hi2 bs1 bs2 blk.
     Proof.
       induction blk as [(xs&es)| | |] using block_ind2;
@@ -1416,15 +1387,15 @@ Module Type LSEMDETERMINISM
         assert (EqStN (S n) r1 r2) as Hrs.
         { eapply bools_of_detn. 2,3:eauto.
           eapply det_exp_S with (k0:=0) (n0:=n) in H5; eauto.
-          - eapply H5 in H6; eauto.
-          - rewrite <-length_typeof_numstreams, H8; simpl; lia.
-          - intros ? Hfree. eapply HSn; eauto using Is_free_left_In_snd.
-            eapply DepOnReset2; eauto. solve_Exists.
+          - eapply H5 in H8; eauto.
+          - rewrite <-length_typeof_numstreams, H7; simpl; lia.
+          - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
+            eapply HSn, DepOnReset2; eauto. solve_Exists.
             unfold idcaus_of_locals in i; simpl in *. rewrite map_app in i.
             apply in_app_iff in i as [Hin|Hin]; [left|right]; simpl_In.
-            + eapply In_Is_defined_in with (cenv:=idcaus Γ); eauto using incl_refl, in_or_app.
-              1,2:eapply in_or_app; eauto; right; solve_In.
-              rewrite map_fst_idcaus. etransitivity; eauto using incl_concat.
+            + eapply In_Is_defined_in with (Γ:=Γ); eauto.
+              eapply in_or_app. 1,2:right; solve_In.
+              etransitivity; eauto using incl_concat.
             + eapply Is_last_in_In. solve_In.
         }
         { simpl_In.
@@ -1432,15 +1403,15 @@ Module Type LSEMDETERMINISM
           - clear - Hinblk Hnd.
             eapply NoDup_locals_inv; eauto.
           - etransitivity; eauto using incl_concat.
-          - setoid_rewrite <-Env.dom_lb_map; eauto.
-          - setoid_rewrite <-Env.dom_lb_map; eauto.
+          - setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+          - setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
           - intros * ?.
             eapply det_var_inv_mask; eauto using EqStN_weaken.
           - eapply EqStN_mask; eauto.
-          - intros ? Hin' Hdep.
+          - intros * Hin' Hdep.
             eapply det_var_inv_mask; eauto. eapply HSn; eauto.
             constructor. solve_Exists.
-          - intros ? Hin' Hdep. eapply HenvS; eauto.
+          - intros * Hin' Hdep. eapply HenvS; eauto.
             2:constructor; solve_Exists. simpl_In.
             eapply idcaus_of_locals_In_reset in Hin0; eauto. solve_In.
         }
@@ -1449,15 +1420,15 @@ Module Type LSEMDETERMINISM
         econstructor; eauto. simpl_Forall. inv_VarsDefined.
         destruct (in_dec ident_eq_dec cy (map snd (idcaus_of_locals x0))).
         2:eapply sem_block_det_cons_nIn; eauto. simpl_In.
-        eapply det_exp_S with (k:=0) (n1:=n) in H9; eauto. specialize (H9 H10); simpl in H9.
+        eapply det_exp_S with (k:=0) (n1:=n) in H9; eauto. specialize (H9 H12); simpl in H9.
         2:{ rewrite <-length_typeof_numstreams, H6; auto. }
-        2:{ intros ? Isf. eapply HSn; eauto using Is_free_left_In_snd.
-            eapply DepOnSwitch2; eauto. solve_Exists.
+        2:{ intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
+            eapply HSn, DepOnSwitch2; eauto. solve_Exists.
             unfold idcaus_of_locals in Hin; simpl in *.
             apply in_app_iff in Hin as [Hin|Hin]; [left|right]; simpl_In.
-            + eapply In_Is_defined_in with (cenv:=idcaus Γ); eauto using incl_refl, in_or_app.
-              1,2:eapply in_or_app; eauto; right; solve_In.
-              rewrite map_fst_idcaus. etransitivity; eauto using incl_concat.
+            + eapply In_Is_defined_in; eauto.
+              apply in_or_app. 1,2:right; solve_In.
+              etransitivity; eauto using incl_concat.
               take (Permutation _ _) and now rewrite it.
             + eapply Is_last_in_In. solve_In.
         }
@@ -1466,11 +1437,11 @@ Module Type LSEMDETERMINISM
         + clear - H0 H16 Hnd.
           eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
         + etransitivity; [|eauto]. take (Permutation _ _) and rewrite <-it. eapply incl_concat; eauto.
-        + setoid_rewrite <-Env.dom_lb_map; auto.
-        + setoid_rewrite <-Env.dom_lb_map; auto.
-        + intros ??. eapply det_var_inv_filter; eauto using EqStN_weaken.
+        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + intros * ??. eapply det_var_inv_filter; eauto using EqStN_weaken.
         + eapply EqStN_filter; eauto.
-        + intros ?? Hdep. eapply det_var_inv_filter; eauto.
+        + intros * ? Hdep. eapply det_var_inv_filter; eauto.
           eapply HSn; eauto.
           constructor. solve_Exists.
         + intros ? Hin' Hdep. eapply HenvS; eauto.
@@ -1479,9 +1450,9 @@ Module Type LSEMDETERMINISM
 
       - (* locals *)
         unfold idcaus_of_locals in Hinenv; simpl in *.
-        repeat rewrite idty_app in Hinenv. rewrite map_filter_app in Hinenv. repeat rewrite in_app_iff in Hinenv.
-        rewrite or_assoc, <-(or_assoc (In _ (idty (flat_map _ _)))),
-          (or_comm (In _ (idty (flat_map _ _)))), or_assoc, <-or_assoc in Hinenv.
+        repeat rewrite map_app in Hinenv. rewrite map_filter_app in Hinenv. repeat rewrite in_app_iff in Hinenv.
+        rewrite or_assoc, <-(or_assoc (In _ (map _ (flat_map _ _)))),
+          (or_comm (In _ (map _ (flat_map _ _)))), or_assoc, <-or_assoc in Hinenv.
         destruct Hinenv as [[Hinenv|Hinenv]|Hinenv].
         + (* current locs *)
           econstructor; eauto.
@@ -1489,147 +1460,115 @@ Module Type LSEMDETERMINISM
             eapply sem_block_det_cons_nIn; eauto.
             { intro Hin. clear - H0 Hinenv Hin Hnd.
               simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-              eapply NoDup_app_r, NoDup_app_r in Hnd. eapply NoDup_app_In with (x0:=cy) in Hnd.
+              eapply NoDup_app_r, NoDup_app_In with (x0:=cy) in Hnd.
               2:solve_In. clear Hinenv.
               eapply Hnd. repeat rewrite in_app_iff in *.
-              destruct Hin; [left|right;right]. solve_In.
-              simpl_In; subst. solve_In. auto. }
+              destruct Hin; [left|right;right]; solve_In; auto. }
           * eapply Forall_impl_In; [|eauto]; intros ? Hin Hdet Hin'.
             inv Hin'; eauto.
-            2:{ simpl_Forall. eauto. }
             assert (In y (concat xs0)) as Hinvars.
             { rewrite <-H7. apply in_or_app; left.
               clear - Hinenv. solve_In. }
             eapply in_concat in Hinvars as (xs'&?&Hinvars). inv_VarsDefined.
-            eapply det_var_inv_incl with (Γ':=Γ ++ idty locs)
-                                         (Γl':=Γl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs).
-            1,2:solve_incl_app.
+            eapply det_var_inv_incl with (Γ':=Γ ++ senv_of_locs locs).
+            1:solve_incl_app.
             { eapply det_block_S with (envS:=envS); eauto.
               - clear - Hinblks Hnd.
-                eapply NoDup_locals_inv; eauto. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-                rewrite map_map_filter, map_map with (l:=locs).
-                erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd.
+                eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
+                simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+                rewrite map_filter_map, map_map with (l:=locs) in Hnd.
+                erewrite map_filter_ext, map_ext with (l:=locs) in Hnd.
                 eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
                 1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
-              - simpl_Forall. eapply NoDupLocals_incl; [|eauto].
-                simpl_app. apply incl_appr', incl_app; [apply incl_appr|apply incl_appr'].
-                1,2:intros ? Hin'; solve_In.
-              - etransitivity; eauto using incl_concat.
-                rewrite <-H7, Permutation_app_comm, map_app, map_fst_idty.
+              - simpl_Forall. now rewrite map_app, map_fst_senv_of_locs.
+              - rewrite map_app, map_fst_senv_of_locs.
+                etransitivity; eauto using incl_concat.
+                rewrite <-H7, Permutation_app_comm.
                 apply incl_app; [apply incl_appl|apply incl_appr]; eauto using incl_refl.
-              - rewrite map_app. apply Env.dom_lb_intro; intros ? Hin'.
-                apply in_app_iff in Hin' as [|]; simpl_In.
-                + eapply Env.In_refines; eauto. eapply Env.dom_lb_use; eauto. solve_In.
-                + edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
-              - rewrite map_app. apply Env.dom_lb_intro; intros ? Hin'.
-                apply in_app_iff in Hin' as [|]; simpl_In.
-                + eapply Env.In_refines; eauto. eapply Env.dom_lb_use; eauto. solve_In.
-                + edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+              - intros * Hin'. inv Hin'.
+                apply in_app_iff in H1 as [|]; simpl_In; subst.
+                + eapply Env.In_refines; eauto with senv.
+                + destruct o as [(?&?)|]; simpl in *; try congruence.
+                  edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+              - intros * Hin'. inv Hin'.
+                apply in_app_iff in H1 as [|]; simpl_In; subst.
+                + eapply Env.In_refines; eauto with senv.
+                + destruct o as [(?&?)|]; simpl in *; try congruence.
+                  edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
               - intros * _. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
-                intros Hin'. eapply Forall_forall in H23; eauto.
-                clear - Hin'. simpl_app. rewrite in_app_iff; auto.
-              - simpl_Forall. clear - H9. simpl_app. repeat rewrite map_map in *; simpl in *.
-                erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext; eauto.
-                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                intros * Hin'. eapply Forall_forall in H22; eauto.
+                clear - Hin'. unfold idcaus_of_senv. simpl_app. rewrite in_app_iff; auto.
+                destruct Hin' as [Hin'|Hin']; inv Hin'; simpl_In; [left|right]; solve_In. auto.
               - simpl_Forall; auto.
-              - rewrite idcaus_app. apply in_app_iff; auto. right; solve_In.
-              - intros ? _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
+              - simpl_Forall; auto.
+              - simpl_In. econstructor. apply in_or_app; right; solve_In. auto.
+              - intros * _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
                 + intros. eapply HSn; eauto.
-                  econstructor; eauto. solve_Exists. clear - Hdep.
-                  simpl_app. repeat rewrite map_map in *.
-                  erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
-                + intros Hin'. eapply Forall_forall with (x:=cx) in H24; eauto. eapply H24.
-                  2:{ clear - Hin'. simpl_app. rewrite in_app_iff; auto. }
+                  econstructor; eauto. solve_Exists.
+                + intros * Hin'.
+                  assert (In cx (map snd (idcaus_of_senv (senv_of_locs locs)))) as Hin2.
+                  { apply idcaus_of_senv_In in Hin'. solve_In. }
+                  eapply Forall_forall with (x:=cx) in H23; eauto. eapply H23.
                   eapply HenvS.
-                  * apply idcaus_of_locals_In_local2; auto.
-                  * econstructor; eauto. solve_Exists. clear - Hdep.
-                    simpl_app. repeat rewrite map_map in *.
-                    erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                    1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                  * simpl_In. eapply idcaus_of_locals_In_local2 in Hin0; eauto. solve_In.
+                  * econstructor; eauto. solve_Exists.
               - intros * Hin' Hdep. apply HenvS.
                 + simpl_In. eapply idcaus_of_locals_In_local1 in Hin0; eauto. solve_In.
-                + econstructor; eauto. solve_Exists. clear - Hdep.
-                  simpl_app. repeat rewrite map_map in *.
-                  erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                + econstructor; eauto. solve_Exists.
             }
 
         + (* lasts *)
-          simpl_In. repeat (apply option_map_inv in Hf as (?&Hf&Heq); destruct_conjs; inv Heq).
+          simpl_In; subst.
           econstructor; eauto.
           * rewrite Forall_forall in *; intros.
             eapply sem_block_det_cons_nIn; eauto.
             { intro Hin. subst. clear - H0 Hin0 Hin Hnd.
               simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-              eapply NoDup_app_r, NoDup_app_r, NoDup_app_r in Hnd. rewrite Permutation_swap in Hnd.
-              eapply NoDup_app_In with (x:=i1) in Hnd.
+              eapply NoDup_app_r, NoDup_app_r in Hnd. rewrite Permutation_swap in Hnd.
+              eapply NoDup_app_In with (x0:=i1) in Hnd.
               2:solve_In; auto. clear Hin0.
               eapply Hnd. repeat rewrite in_app_iff in *.
-              destruct Hin; [left|right]. solve_In.
-              simpl_In; subst. solve_In. auto. }
+              destruct Hin; [left|right]; solve_In. auto. }
           * apply Forall_forall; intros * Hin HinenvS. destruct HinenvS; subst; [|simpl_Forall; eauto].
-            simpl_In. apply in_app_iff in Hin as [|]; simpl_In.
-            1:{ exfalso. clear - Hnd Hin Hin0. simpl_app.
+            simpl_In. unfold idcaus_of_senv, senv_of_locs in Hin1. apply in_app_iff in Hin1 as [|]; simpl_In; subst.
+            1:{ exfalso. clear - Hnd Hin1 Hin0. simpl_app.
                 rewrite map_filter_app in Hnd. simpl_app.
-                eapply NoDup_app_r, NoDup_app_r, NoDup_app_In in Hnd. 2:solve_In.
-                eapply Hnd. repeat rewrite in_app_iff. right; left. clear Hin. solve_In. auto.
+                eapply NoDup_app_r, NoDup_app_In in Hnd. 2:solve_In.
+                eapply Hnd. repeat rewrite in_app_iff. right; left. clear Hin1. solve_In. auto.
             }
             edestruct H15 as (?&?&?&He1&Hv1&Hfby1&Hv'1); eauto.
             edestruct H16 as (?&?&?&He2&Hv2&Hfby2&Hv'2); eauto.
             split; intros * Hin' Hv Hv'.
-            1:{ exfalso. clear - Hnd Hin Hin'. simpl_In. simpl_app.
-                rewrite map_filter_app in Hnd. simpl_app.
-                eapply NoDup_app_r, NoDup_app_r, NoDup_app_In in Hnd. 2:solve_In.
-                eapply Hnd. repeat rewrite in_app_iff. right; left. clear Hin1. solve_In. auto.
+            1:{ exfalso. clear - Hnd Hin1 Hin'. inv Hin'. simpl_In.
+                simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+                eapply NoDup_app_r, NoDup_app_In in Hnd. 2:solve_In.
+                eapply Hnd. repeat rewrite in_app_iff. right; left. clear Hin. solve_In. auto.
             } simpl in *.
             assert (x5 = i2); subst.
-            { clear - Hin Hin' Hnd. simpl_In. simpl_app.
-              rewrite map_filter_app in Hnd. simpl_app.
-              apply NoDup_app_r, NoDup_app_r, NoDup_app_r, NoDup_app_r, NoDup_app_l in Hnd.
-              eapply NoDup_snd_det; eauto. solve_In; simpl; eauto. clear Hin1. solve_In; simpl; auto.
+            { clear - Hin1 Hin' Hnd. inv Hin'. simpl_In; subst.
+              simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+              apply NoDup_app_r, NoDup_app_r, NoDup_app_r, NoDup_app_l in Hnd.
+              eapply NoDup_snd_det; eauto. solve_In; simpl; eauto. clear Hin. solve_In; simpl; auto.
             } clear Hin'.
             eapply sem_var_det in Hv'1; eauto. eapply sem_var_det in Hv'2; eauto. rewrite Hv'1, Hv'2.
             { eapply fby_det_Sn; eauto.
               - simpl_Forall.
                 eapply det_exp_S with (k:=0) in He1; eauto. specialize (He1 He2). simpl in *; eauto.
                 + intros. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
-                  intros Hin'.
-                  assert (exists x, In (x, x5) (idcaus (idty locs ++
-                                                   map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)))
-                    as (?&Hin2).
-                  { simpl_app. setoid_rewrite in_app_iff.
-                    destruct Hin'; simpl_In; eexists; [left|right]; solve_In. eauto. }
-                  eapply Forall_forall in H23; eauto. eauto.
-                + clear - H0. simpl_app. repeat rewrite map_map in *; simpl in *.
-                  erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext; eauto.
-                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                  intros * Hin'. apply idcaus_of_senv_In in Hin'.
+                  eapply Forall_forall in H22; eauto. eauto.
                 + rewrite <-length_typeof_numstreams, H1; auto.
-                + intros * Hfree. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
+                + intros * IsF. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
                   * intros. eapply HSn; eauto.
                     eapply DepOnLocal2; eauto. solve_Exists; split; auto.
-                    clear - Hfree. simpl_app. repeat rewrite map_map in *; simpl in *.
-                    erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hfree; eauto.
-                    1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
-                  * intros Hin'.
-                    assert (exists x, In (x, x5) (idcaus (idty locs ++
-                                                     map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs)))
-                      as (?&Hin2).
-                    { simpl_app. setoid_rewrite in_app_iff.
-                      destruct Hin'; simpl_In; eexists; [left|right]; solve_In. eauto. }
-                    eapply Forall_forall in H24; eauto. eapply H24. clear Hin2.
+                  * intros * Hin'. apply idcaus_of_senv_In in Hin'.
+                    eapply Forall_forall in H23; eauto. eapply H23.
                     eapply HenvS; simpl.
-                    { eapply idcaus_of_locals_In_local2; eauto. }
+                    { eapply idcaus_of_locals_In_local2 in Hin'; eauto. solve_In. }
                     eapply DepOnLocal2; eauto. solve_Exists; split; auto.
-                    clear - Hfree. simpl_app. repeat rewrite map_map in *; simpl in *.
-                    erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hfree; eauto.
-                    1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
-                + clear - H0. simpl_app. repeat rewrite map_map in *; simpl in *.
-                  erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext; eauto.
-                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
-              - eapply Forall_forall in H23. 2:simpl_app; apply in_app_iff, or_introl; solve_In.
+              - eapply Forall_forall in H22. 2:unfold idcaus_of_senv; simpl_app; apply in_app_iff, or_introl; solve_In.
                 simpl in *.
-                edestruct H23 as (Hinv&_). eapply Hinv; eauto. solve_In.
+                edestruct H22 as (Hinv&_). eapply Hinv; eauto. econstructor; solve_In. auto.
             }
 
         + (* deeper *)
@@ -1637,68 +1576,58 @@ Module Type LSEMDETERMINISM
           * apply Forall_forall; intros * Hinblk.
             destruct (in_dec ident_eq_dec cy (map snd (idcaus_of_locals x))). unfold idcaus_of_locals in i; simpl in i.
             2:simpl_Forall; eapply sem_block_det_cons_nIn; eauto.
-            assert (exists y, In (y, cy) (idty (locals x)) \/ In (y, Some cy) (idck (locals x))) as (?&Hin).
-            { simpl_app. apply in_app_iff in i as [|]; simpl_In; esplit; [left|right]; solve_In. } clear i.
+            simpl_In.
             inv_VarsDefined. rewrite Forall_forall in H.
-            { eapply H with (Γ:=Γ ++ idty locs)
-                            (Γl:=Γl ++ map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs); eauto.
+            { eapply H with (Γ:=Γ ++ senv_of_locs locs); eauto.
               - clear - Hinblk Hnd.
-                eapply NoDup_locals_inv; eauto. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-                rewrite map_map_filter, map_map with (l:=locs).
-                erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd.
+                eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
+                simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+                rewrite map_filter_map, map_map with (l:=locs) in Hnd.
+                erewrite map_filter_ext, map_ext with (l:=locs) in Hnd.
                 eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
                 1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
-              - simpl_Forall. eapply NoDupLocals_incl; [|eauto].
-                simpl_app. apply incl_appr', incl_app; [apply incl_appr|apply incl_appr'].
-                1,2:intros ? Hin'; solve_In.
-              - etransitivity; eauto using incl_concat.
-                rewrite <-H7, Permutation_app_comm, map_app, map_fst_idty.
+              - simpl_Forall. now rewrite map_app, map_fst_senv_of_locs.
+              - rewrite map_app, map_fst_senv_of_locs.
+                etransitivity; eauto using incl_concat.
+                rewrite <-H7, Permutation_app_comm.
                 apply incl_app; [apply incl_appl|apply incl_appr]; eauto using incl_refl.
-              - rewrite map_app. apply Env.dom_lb_intro; intros ? Hin'.
-                apply in_app_iff in Hin' as [|]; simpl_In.
-                + eapply Env.In_refines; eauto. eapply Env.dom_lb_use; eauto. solve_In.
-                + edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
-              - rewrite map_app. apply Env.dom_lb_intro; intros ? Hin'.
-                apply in_app_iff in Hin' as [|]; simpl_In.
-                + eapply Env.In_refines; eauto. eapply Env.dom_lb_use; eauto. solve_In.
-                + edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+              - intros * Hin'. inv Hin'.
+                apply in_app_iff in H0 as [|]; simpl_In; subst.
+                + eapply Env.In_refines; eauto with senv.
+                + destruct o as [(?&?)|]; simpl in *; try congruence.
+                  edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
+              - intros * Hin'. inv Hin'.
+                apply in_app_iff in H0 as [|]; simpl_In; subst.
+                + eapply Env.In_refines; eauto with senv.
+                + destruct o as [(?&?)|]; simpl in *; try congruence.
+                  edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
               - intros * _. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
-                intros Hin'. eapply Forall_forall in H23; eauto.
-                clear - Hin'. simpl_app. rewrite in_app_iff; auto.
-              - simpl_Forall. clear - H9. simpl_app. repeat rewrite map_map in *; simpl in *.
-                erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext; eauto.
-                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                intros * Hin'. eapply Forall_forall in H22; eauto.
+                clear - Hin'. unfold idcaus_of_senv. simpl_app. rewrite in_app_iff; auto.
+                destruct Hin' as [Hin'|Hin']; inv Hin'; simpl_In; [left|right]; solve_In. auto.
               - simpl_Forall; auto.
-              - unfold idcaus_of_locals. rewrite in_app_iff. destruct Hin; [left|right]; solve_In.
-              - intros ? _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
+              - simpl_Forall; auto.
+              - intros * _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
                 + intros. eapply HSn; eauto.
-                  econstructor; eauto. solve_Exists. clear - Hdep.
-                  simpl_app. repeat rewrite map_map in *.
-                  erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
-                + intros Hin'. eapply Forall_forall with (x:=cx) in H24; eauto. eapply H24.
-                  2:{ clear - Hin'. simpl_app. rewrite in_app_iff; auto. }
+                  econstructor; eauto. solve_Exists.
+                + intros * Hin'.
+                  assert (In cx (map snd (idcaus_of_senv (senv_of_locs locs)))) as Hin2.
+                  { apply idcaus_of_senv_In in Hin'. solve_In. }
+                  eapply Forall_forall with (x:=cx) in H23; eauto. eapply H23.
                   eapply HenvS.
-                  * clear - Hin'. eapply idcaus_of_locals_In_local2; eauto.
-                  * econstructor; eauto. solve_Exists. clear - Hdep.
-                    simpl_app. repeat rewrite map_map in *.
-                    erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                    1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                  * clear - Hin2. simpl_In. eapply idcaus_of_locals_In_local2 in Hin; solve_In.
+                  * econstructor; eauto. solve_Exists.
               - intros * Hin' Hdep. apply HenvS.
                 + simpl_In. eapply idcaus_of_locals_In_local1 in Hin0; eauto. solve_In.
-                + econstructor; eauto. solve_Exists. clear - Hdep.
-                  simpl_app. repeat rewrite map_map in *.
-                  erewrite map_map_filter, map_ext with (l:=locs), map_filter_ext in Hdep; eauto.
-                  1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+                + econstructor; eauto. solve_Exists.
             }
           * simpl_Forall. destruct H1; subst; eauto.
-            exfalso.
-            simpl_In.
-            clear - Hinenv Hin Hnd. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-            repeat rewrite map_map in Hnd. apply NoDup_app_r, NoDup_app_r in Hnd.
+            exfalso. unfold idcaus_of_senv in H0.
+            clear - Hinenv H0 Hnd. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+            repeat rewrite map_map in Hnd. apply NoDup_app_r in Hnd.
             rewrite (app_assoc (map _ (flat_map _ _))), (Permutation_app_comm (map _ (flat_map _ _))) in Hnd.
             simpl_app. rewrite app_assoc in Hnd. eapply NoDup_app_In with (x:=i0) in Hnd.
-            2:{ rewrite in_app_iff in *. destruct Hin; simpl_In. left; solve_In.
+            2:{ rewrite in_app_iff in *. destruct H0; simpl_In. left; solve_In.
                 right; solve_In. auto. }
             eapply Hnd. rewrite in_app_iff in *.
             destruct Hinenv; [left|right]; solve_In. auto.
@@ -1712,15 +1641,15 @@ Module Type LSEMDETERMINISM
         EqStN n bs1 bs2 ->
         sem_block G Hi1 bs1 (n_block nd) ->
         sem_block G Hi2 bs2 (n_block nd) ->
-        Forall (det_var_inv (n_in nd ++ n_out nd) [] n Hi1 Hi2) (map snd (idcaus (n_in nd))) ->
-        Forall (det_var_inv (n_in nd ++ n_out nd) [] n Hi1 Hi2) (map snd (idcaus (n_in nd ++ n_out nd))).
+        Forall (det_var_inv (senv_of_inout (n_in nd ++ n_out nd)) n Hi1 Hi2) (map snd (idcaus (n_in nd))) ->
+        Forall (det_var_inv (senv_of_inout (n_in nd ++ n_out nd)) n Hi1 Hi2) (map snd (idcaus (n_in nd ++ n_out nd))).
     Proof.
       intros * HdetG Hwtn Hcaus Hbs Hsem1 Hsem2 Hins.
 
       assert (sem_block_det n (map snd (idcaus (n_in nd ++ n_out nd) ++ idcaus_of_locals (n_block nd)))
                             Hi1 Hi2 bs1 bs2 (n_block nd) /\
               Forall (fun x => In x (map snd (idcaus (n_in nd ++ n_out nd))) ->
-                            det_var_inv (n_in nd ++ n_out nd) [] n Hi1 Hi2 x)
+                            det_var_inv (senv_of_inout (n_in nd ++ n_out nd)) n Hi1 Hi2 x)
                      (map snd (idcaus (n_in nd ++ n_out nd) ++ idcaus_of_locals (n_block nd)))) as (_&Hvars).
       2:{ eapply Forall_impl_In; [|eapply Forall_incl; [eapply Hvars|]]; eauto.
           repeat rewrite idcaus_app. solve_incl_app. }
@@ -1743,11 +1672,8 @@ Module Type LSEMDETERMINISM
           * eapply sem_block_det_Perm; eauto.
           * rewrite <-Hperm; auto.
         + split; auto.
-          eapply sem_block_det_S; [| |eauto].
-          * unfold idcaus_of_locals; simpl. solve_incl_app.
-          * unfold idcaus_of_locals; simpl. solve_incl_app.
-            intros ??; solve_In. auto.
-        + intros ?? Hin (Hblk'&Hvars') Hdep.
+          eapply sem_block_det_S; [|eauto]. solve_incl_app.
+        + intros * Hin (Hblk'&Hvars') Hdep.
           repeat rewrite idcaus_app, map_app, in_app_iff in Hin.
           destruct Hcaus as (Hnd&_).
           destruct Hin as [[Hin|Hin]|Hin]; (split; [|constructor; auto; intros Hin']).
@@ -1761,33 +1687,34 @@ Module Type LSEMDETERMINISM
             eapply NoDup_app_r, NoDup_app_In in Hnd; eauto.
           * pose proof (n_defd nd) as (?&Hdef&Hperm). simpl_In.
             eapply det_block_S; eauto.
-            -- clear - Hnd. simpl_app. auto.
-            -- rewrite app_nil_r. apply node_NoDupLocals.
-            -- rewrite Hperm. solve_incl_app.
-            -- apply Env.dom_lb_nil.
-            -- apply Env.dom_lb_nil.
-            -- intros ? [Hin'|Hin']; [|inv Hin']. simpl_In.
+            -- clear - Hnd. now rewrite idcaus_of_senv_inout.
+            -- rewrite map_fst_senv_of_inout. apply node_NoDupLocals.
+            -- rewrite map_fst_senv_of_inout, Hperm. solve_incl_app.
+            -- intros * Has. inv Has. simpl_In. congruence.
+            -- intros * Has. inv Has. simpl_In. congruence.
+            -- intros * [Hin'|Hin']; inv Hin'; simpl_In; try congruence.
                eapply Forall_forall in Hvars; eauto. eapply Hvars. solve_In.
                rewrite map_app. apply in_app_iff, or_introl. solve_In.
             -- destruct Hwtn as (?&?&?&?); auto.
             -- rewrite Hperm. solve_In.
-            -- rewrite idcaus_app, in_app_iff; auto. right. solve_In.
-            -- intros ? [Hin'|Hin'] ?; [|inv Hin'].
-               eapply Forall_forall in Hvars'; eauto.
+            -- clear - Hin0. econstructor. solve_In; eauto using in_or_app.
+               1,2:simpl; auto.
+            -- intros * [Hin'|Hin'] ?; inv Hin'; simpl_In; try congruence.
+               eapply Forall_forall in Hvars'; eauto. eapply Hvars'. solve_In.
           * pose proof (n_defd nd) as (?&Hdef&Hperm).
             simpl_In.
-            eapply sem_block_det_cons_In with (Γl:=[]); eauto.
-            -- clear - Hnd. simpl_app. simpl. auto.
-            -- rewrite app_nil_r. apply node_NoDupLocals.
-            -- rewrite Hperm. solve_incl_app.
-            -- apply Env.dom_lb_nil.
-            -- apply Env.dom_lb_nil.
-            -- intros ? [Hin'|Hin']; [|inv Hin']. simpl_In.
+            eapply sem_block_det_cons_In; eauto.
+            -- clear - Hnd. now rewrite idcaus_of_senv_inout.
+            -- rewrite map_fst_senv_of_inout. apply node_NoDupLocals.
+            -- rewrite map_fst_senv_of_inout, Hperm. solve_incl_app.
+            -- intros * Has. inv Has. simpl_In. congruence.
+            -- intros * Has. inv Has. simpl_In. congruence.
+            -- intros * [Hin'|Hin']; inv Hin'; simpl_In; try congruence.
                eapply Forall_forall in Hvars; eauto. eapply Hvars. solve_In.
                rewrite map_app. apply in_app_iff, or_introl. solve_In.
             -- destruct Hwtn as (?&?&?&?); auto.
-            -- intros ? [Hin'|Hin'] Hdep'; [|inv Hin'].
-               eapply Forall_forall in Hvars'; eauto.
+            -- intros * [Hin'|Hin'] ?; inv Hin'; simpl_In; try congruence.
+               eapply Forall_forall in Hvars'; eauto. eapply Hvars'. solve_In.
           * exfalso. clear - Hin Hin' Hnd. simpl_In. simpl_app. rewrite app_assoc in Hnd.
             eapply NoDup_app_In in Hnd; eauto. eapply Hnd. rewrite <-map_app. solve_In.
             repeat rewrite in_app_iff in *.
@@ -1814,7 +1741,7 @@ Module Type LSEMDETERMINISM
       eapply sem_block_cons in Hbcks1; eauto using wl_global_Ordered_nodes with ltyping.
       eapply sem_block_cons in Hbcks2; eauto using wl_global_Ordered_nodes with ltyping.
 
-      assert (Forall (det_var_inv (n_in n1 ++ n_out n1) [] n (H, @Env.empty _) (H0, @Env.empty _)) (map snd (idcaus (n_in n1)))) as Hins.
+      assert (Forall (det_var_inv (senv_of_inout (n_in n1 ++ n_out n1)) n (H, @Env.empty _) (H0, @Env.empty _)) (map snd (idcaus (n_in n1)))) as Hins.
       { eapply node_causal_NoDup in H1 as Hnd.
         clear - Heqins Hins1 Hins2 Hnd.
         assert (incl (idcaus (n_in n1)) (idcaus (n_in n1 ++ n_out n1))) as Hincl.
@@ -1823,9 +1750,9 @@ Module Type LSEMDETERMINISM
         generalize (n_in n1 ++ n_out n1) as cenv.
         induction (n_in n1) as [|(?&(?&?)&?)]; intros * Hins1 Hins2 Heqins;
           inv Hins1; inv Hins2; inv Heqins; constructor; eauto; simpl in *.
-        - intros ???. split; intros Hin Hv1 Hv2; [|inv Hin].
+        - intros ???. split; intros Hin Hv1 Hv2; inv Hin; simpl_In; try congruence.
           specialize (Hincl _ (in_eq _ _)).
-          eapply NoDup_snd_det in Hincl; eauto; subst.
+          eapply NoDup_snd_det in Hincl; [|eauto|solve_In]; subst.
           eapply sem_var_det in H3; eauto. eapply sem_var_det in H4; eauto.
           now rewrite H3, H4.
         - eapply IHl; eauto. eapply incl_cons'; eauto. }
@@ -1835,7 +1762,7 @@ Module Type LSEMDETERMINISM
         unfold idcaus in Hins. rewrite Forall_map, Forall_map in Hins.
         eapply Forall_forall in Hins; [|eauto using in_or_app].
         eapply Hins in Hv2; eauto; simpl in *.
-        solve_In; eauto using in_or_app. reflexivity.
+        econstructor. solve_In; eauto using in_or_app. 1,2:reflexivity.
       + inv Hwt; inv H4. eapply IHnds; eauto. split; eauto.
       + inv Hwt; inv H4. destruct H7; auto.
       + eapply clocks_of_EqStN; eauto.
@@ -1865,12 +1792,13 @@ Module LSemDeterminismFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS        Ids Op OpAux)
-       (Syn   : LSYNTAX Ids Op OpAux Cks)
-       (Typ   : LTYPING Ids Op OpAux Cks Syn)
-       (LCA   : LCAUSALITY Ids Op OpAux Cks Syn)
-       (Lord  : LORDERED Ids Op OpAux Cks Syn)
+       (Senv  : STATICENV     Ids Op OpAux Cks)
+       (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
+       (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
+       (LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
+       (Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (CStr  : COINDSTREAMS Ids Op OpAux Cks)
-       (Sem   : LSEMANTICS Ids Op OpAux Cks Syn Lord CStr)
-<: LSEMDETERMINISM Ids Op OpAux Cks Syn Typ LCA Lord CStr Sem.
-  Include LSEMDETERMINISM Ids Op OpAux Cks Syn Typ LCA Lord CStr Sem.
+       (Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord CStr)
+<: LSEMDETERMINISM Ids Op OpAux Cks Senv Syn Typ LCA Lord CStr Sem.
+  Include LSEMDETERMINISM Ids Op OpAux Cks Senv Syn Typ LCA Lord CStr Sem.
 End LSemDeterminismFun.

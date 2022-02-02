@@ -6,6 +6,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.Normalization.Normalization.
@@ -19,16 +20,17 @@ Module Type TRNORMALARGS
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks   : CLOCKS Ids Op OpAux)
-       (Import LSyn  : LSYNTAX Ids Op OpAux Cks)
-       (LOrd         : LORDERED Ids Op OpAux Cks LSyn)
-       (Import Norm  : NORMALIZATION Ids Op OpAux Cks LSyn)
+       (Import Senv  : STATICENV Ids Op OpAux Cks)
+       (Import LSyn  : LSYNTAX Ids Op OpAux Cks Senv)
+       (LOrd         : LORDERED Ids Op OpAux Cks Senv LSyn)
+       (Import Norm  : NORMALIZATION Ids Op OpAux Cks Senv LSyn)
        (Import CE    : CESYNTAX Ids Op OpAux Cks)
        (CETyp        : CETYPING Ids Op OpAux Cks CE)
        (NL           : NLSYNTAX Ids Op OpAux Cks CE)
        (Ord          : NLORDERED Ids Op OpAux Cks CE NL)
        (Typ          : NLTYPING Ids Op OpAux Cks CE NL Ord CETyp)
        (Import NLNA  : NLNORMALARGS Ids Op OpAux Cks CE CETyp NL Ord Typ)
-       (Import TR    : TR Ids Op OpAux Cks LSyn CE NL).
+       (Import TR    : TR Ids Op OpAux Cks Senv LSyn CE NL).
 
   (** *** The actual result *)
 
@@ -68,7 +70,7 @@ Module Type TRNORMALARGS
       econstructor; eauto.
       erewrite <- to_node_in; eauto.
       eapply to_lexps_noops_exps; eauto.
-      unfold idty; erewrite map_map, map_ext; eauto. intros (?&((?&?)&?)); auto.
+      unfold Common.idty; erewrite map_map, map_ext; eauto. intros (?&((?&?)&?)); auto.
     - (* fby *)
       monadInv Htoeq.
       constructor.
@@ -128,16 +130,17 @@ Module TrNormalArgsFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS Ids Op OpAux)
-       (LSyn  : LSYNTAX Ids Op OpAux Cks)
-       (LOrd  : LORDERED Ids Op OpAux Cks LSyn)
-       (Norm  : NORMALIZATION Ids Op OpAux Cks LSyn)
+       (Senv  : STATICENV Ids Op OpAux Cks)
+       (LSyn  : LSYNTAX Ids Op OpAux Cks Senv)
+       (LOrd  : LORDERED Ids Op OpAux Cks Senv LSyn)
+       (Norm  : NORMALIZATION Ids Op OpAux Cks Senv LSyn)
        (CE    : CESYNTAX Ids Op OpAux Cks)
        (CETyp : CETYPING Ids Op OpAux Cks CE)
        (NL    : NLSYNTAX Ids Op OpAux Cks CE)
        (Ord   : NLORDERED Ids Op OpAux Cks CE NL)
        (Typ   : NLTYPING Ids Op OpAux Cks CE NL Ord CETyp)
        (NLNA  : NLNORMALARGS Ids Op OpAux Cks CE CETyp NL Ord Typ)
-       (TR    : TR Ids Op OpAux Cks LSyn CE NL)
-       <: TRNORMALARGS Ids Op OpAux Cks LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
-  Include TRNORMALARGS Ids Op OpAux Cks LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
+       (TR    : TR Ids Op OpAux Cks Senv LSyn CE NL)
+       <: TRNORMALARGS Ids Op OpAux Cks Senv LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
+  Include TRNORMALARGS Ids Op OpAux Cks Senv LSyn LOrd Norm CE CETyp NL Ord Typ NLNA TR.
 End TrNormalArgsFun.

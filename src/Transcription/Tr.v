@@ -2,6 +2,7 @@ From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
@@ -26,7 +27,8 @@ Module Type TR
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Ids Op)
        (Import Cks  : CLOCKS Ids Op OpAux)
-       (L           : LSYNTAX  Ids Op OpAux Cks)
+       (Senv        : STATICENV Ids Op OpAux Cks)
+       (L           : LSYNTAX  Ids Op OpAux Cks Senv)
        (Import CE   : CESYNTAX Ids Op OpAux Cks)
        (NL          : NLSYNTAX Ids Op OpAux Cks CE).
 
@@ -1076,9 +1078,10 @@ Module TrFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS   Ids Op OpAux)
-       (L     : LSYNTAX  Ids Op OpAux Cks)
+       (Senv  : STATICENV Ids Op OpAux Cks)
+       (L     : LSYNTAX  Ids Op OpAux Cks Senv)
        (CE    : CESYNTAX Ids Op OpAux Cks)
        (NL    : NLSYNTAX Ids Op OpAux Cks CE)
-       <: TR Ids Op OpAux Cks L CE NL.
-  Include TR Ids Op OpAux Cks L CE NL.
+       <: TR Ids Op OpAux Cks Senv L CE NL.
+  Include TR Ids Op OpAux Cks Senv L CE NL.
 End TrFun.

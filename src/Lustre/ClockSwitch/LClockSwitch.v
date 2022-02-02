@@ -2,6 +2,7 @@ From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
 From Velus Require Import CoindStreams IndexedStreams.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking.
 From Velus Require Import Lustre.LCausality Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics LClockSemantics.
@@ -16,17 +17,18 @@ Module Type LCLOCKSWITCH
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (CStr : COINDSTREAMS Ids Op OpAux Cks)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       (Typ : LTYPING Ids Op OpAux Cks Syn)
-       (Clo : LCLOCKING Ids Op OpAux Cks Syn)
-       (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
-       (Ord : LORDERED Ids Op OpAux Cks Syn)
-       (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem).
-  Declare Module Export CS      : CLOCKSWITCH Ids Op OpAux Cks Syn.
-  Declare Module Export CSTyp   : CSTYPING Ids Op OpAux Cks Syn Typ CS.
-  Declare Module Export CSClo   : CSCLOCKING Ids Op OpAux Cks Syn Clo CS.
-  Declare Module Export Correct : CSCORRECTNESS Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem ClSem CS.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Typ : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Clo : LCLOCKING Ids Op OpAux Cks Senv Syn)
+       (Cau : LCAUSALITY Ids Op OpAux Cks Senv Syn)
+       (Ord : LORDERED Ids Op OpAux Cks Senv Syn)
+       (Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
+       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem).
+  Declare Module Export CS      : CLOCKSWITCH Ids Op OpAux Cks Senv Syn.
+  Declare Module Export CSTyp   : CSTYPING Ids Op OpAux Cks Senv Syn Typ CS.
+  Declare Module Export CSClo   : CSCLOCKING Ids Op OpAux Cks Senv Syn Clo CS.
+  Declare Module Export Correct : CSCORRECTNESS Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem ClSem CS.
 End LCLOCKSWITCH.
 
 Module LClockSwitchFun
@@ -35,16 +37,17 @@ Module LClockSwitchFun
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
        (CStr : COINDSTREAMS Ids Op OpAux Cks)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       (Typ : LTYPING Ids Op OpAux Cks Syn)
-       (Clo : LCLOCKING Ids Op OpAux Cks Syn)
-       (Cau : LCAUSALITY Ids Op OpAux Cks Syn)
-       (Ord : LORDERED Ids Op OpAux Cks Syn)
-       (Sem : LSEMANTICS Ids Op OpAux Cks Syn Ord CStr)
-       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Syn Typ Clo Cau Ord CStr Sem)
-       <: LCLOCKSWITCH Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem ClSem.
-  Module Export CS := ClockSwitchFun Ids Op OpAux Cks Syn.
-  Module Export CSTyp := CSTypingFun Ids Op OpAux Cks Syn Typ CS.
-  Module Export CSClo := CSClockingFun Ids Op OpAux Cks Syn Clo CS.
-  Module Export Correct := CSCorrectnessFun Ids Op OpAux Cks CStr Syn Typ Clo Cau Ord Sem ClSem CS.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Typ : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Clo : LCLOCKING Ids Op OpAux Cks Senv Syn)
+       (Cau : LCAUSALITY Ids Op OpAux Cks Senv Syn)
+       (Ord : LORDERED Ids Op OpAux Cks Senv Syn)
+       (Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
+       (ClSem : LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem)
+       <: LCLOCKSWITCH Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem ClSem.
+  Module Export CS := ClockSwitchFun Ids Op OpAux Cks Senv Syn.
+  Module Export CSTyp := CSTypingFun Ids Op OpAux Cks Senv Syn Typ CS.
+  Module Export CSClo := CSClockingFun Ids Op OpAux Cks Senv Syn Clo CS.
+  Module Export Correct := CSCorrectnessFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem ClSem CS.
 End LClockSwitchFun.

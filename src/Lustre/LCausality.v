@@ -11,6 +11,7 @@ From Velus Require Import Common Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import AcyGraph.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 
 (** * Lustre causality *)
@@ -20,60 +21,61 @@ Module Type LCAUSALITY
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks).
+       (Import Senv : STATICENV Ids Op OpAux Cks)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks Senv).
 
   (** ** Causality definition *)
 
   (** Variables that appear in the nth stream of an expression, to the left of fbys. *)
-  Inductive Is_free_left (cenv cenvl : list (ident * ident)) (cx : ident) : nat -> exp -> Prop :=
+  Inductive Is_free_left (Γ : static_env) (cx : ident) : nat -> exp -> Prop :=
   | IFLvar : forall x a,
-      In (x, cx) cenv ->
-      Is_free_left cenv cenvl cx 0 (Evar x a)
+      HasCaus Γ x cx ->
+      Is_free_left Γ cx 0 (Evar x a)
   | IFLlast : forall x a,
-      In (x, cx) cenvl ->
-      Is_free_left cenv cenvl cx 0 (Elast x a)
+      HasLastCaus Γ x cx ->
+      Is_free_left Γ cx 0 (Elast x a)
   | IFLunop : forall op e a,
-      Is_free_left cenv cenvl cx 0 e ->
-      Is_free_left cenv cenvl cx 0 (Eunop op e a)
+      Is_free_left Γ cx 0 e ->
+      Is_free_left Γ cx 0 (Eunop op e a)
   | IFLbinop : forall op e1 e2 a,
-      Is_free_left cenv cenvl cx 0 e1
-      \/ Is_free_left cenv cenvl cx 0 e2 ->
-      Is_free_left cenv cenvl cx 0 (Ebinop op e1 e2 a)
+      Is_free_left Γ cx 0 e1
+      \/ Is_free_left Γ cx 0 e2 ->
+      Is_free_left Γ cx 0 (Ebinop op e1 e2 a)
   | IFLfby : forall e0s es a k,
-      Is_free_left_list cenv cenvl cx k e0s ->
-      Is_free_left cenv cenvl cx k (Efby e0s es a)
+      Is_free_left_list Γ cx k e0s ->
+      Is_free_left Γ cx k (Efby e0s es a)
   | IFLarrow : forall e0s es a k,
-      Is_free_left_list cenv cenvl cx k e0s
-      \/ Is_free_left_list cenv cenvl cx k es ->
-      Is_free_left cenv cenvl cx k (Earrow e0s es a)
+      Is_free_left_list Γ cx k e0s
+      \/ Is_free_left_list Γ cx k es ->
+      Is_free_left Γ cx k (Earrow e0s es a)
   | IFLwhen : forall es x b a k,
-      (k < length (fst a) /\ In (x, cx) cenv)
-      \/ Is_free_left_list cenv cenvl cx k es ->
-      Is_free_left cenv cenvl cx k (Ewhen es x b a)
+      (k < length (fst a) /\ HasCaus Γ x cx)
+      \/ Is_free_left_list Γ cx k es ->
+      Is_free_left Γ cx k (Ewhen es x b a)
   | IFLmerge : forall x es ty a k,
-      (k < length (fst a) /\ In (x, cx) cenv)
-      \/ Exists (fun es => Is_free_left_list cenv cenvl cx k (snd es)) es ->
-      Is_free_left cenv cenvl cx k (Emerge (x, ty) es a)
+      (k < length (fst a) /\ HasCaus Γ x cx)
+      \/ Exists (fun es => Is_free_left_list Γ cx k (snd es)) es ->
+      Is_free_left Γ cx k (Emerge (x, ty) es a)
   | IFLcase : forall e es d a k,
-      (k < length (fst a) /\ Is_free_left cenv cenvl cx 0 e)
-      \/ Exists (fun es => Is_free_left_list cenv cenvl cx k (snd es)) es
-      \/ (exists d0, d = Some d0 /\ Is_free_left_list cenv cenvl cx k d0) ->
-      Is_free_left cenv cenvl cx k (Ecase e es d a)
+      (k < length (fst a) /\ Is_free_left Γ cx 0 e)
+      \/ Exists (fun es => Is_free_left_list Γ cx k (snd es)) es
+      \/ (exists d0, d = Some d0 /\ Is_free_left_list Γ cx k d0) ->
+      Is_free_left Γ cx k (Ecase e es d a)
   | IFLapp : forall f es er a k,
       k < length a ->
-      (exists k', Exists (Is_free_left cenv cenvl cx k') es)
-      \/ (Exists (Is_free_left cenv cenvl cx 0) er) ->
-      Is_free_left cenv cenvl cx k (Eapp f es er a)
+      (exists k', Exists (Is_free_left Γ cx k') es)
+      \/ (Exists (Is_free_left Γ cx 0) er) ->
+      Is_free_left Γ cx k (Eapp f es er a)
 
-  with Is_free_left_list (cenv cenvl : list (ident * ident)) (cx : ident) : nat -> list exp -> Prop :=
+  with Is_free_left_list (Γ : static_env) (cx : ident) : nat -> list exp -> Prop :=
   | IFLLnow : forall k e es,
       k < numstreams e ->
-      Is_free_left cenv cenvl cx k e ->
-      Is_free_left_list cenv cenvl cx k (e::es)
+      Is_free_left Γ cx k e ->
+      Is_free_left_list Γ cx k (e::es)
   | IFLLlater : forall k e es,
       k >= numstreams e ->
-      Is_free_left_list cenv cenvl cx (k - numstreams e) es ->
-      Is_free_left_list cenv cenvl cx k (e::es).
+      Is_free_left_list Γ cx (k - numstreams e) es ->
+      Is_free_left_list Γ cx k (e::es).
 
   Local Hint Constructors Is_free_left Is_free_left_list : lcaus.
 
@@ -92,13 +94,6 @@ Module Type LCAUSALITY
 
   Global Hint Unfold idcaus : list.
 
-  Lemma InMembers_idcaus {A B} : forall x (xs : list (ident * (A * B * ident))),
-      InMembers x (idcaus xs) <-> InMembers x xs.
-  Proof.
-    intros *.
-    now rewrite fst_InMembers, map_fst_idcaus, <-fst_InMembers.
-  Qed.
-
   Lemma NoDupMembers_idcaus {A B} : forall (xs : list (ident * (A * B * ident))),
       NoDupMembers (idcaus xs) <-> NoDupMembers xs.
   Proof.
@@ -106,10 +101,19 @@ Module Type LCAUSALITY
     now rewrite fst_NoDupMembers, map_fst_idcaus, <-fst_NoDupMembers.
   Qed.
 
+  Fact idcaus_of_senv_inout : forall xs,
+      idcaus_of_senv (senv_of_inout xs) = idcaus xs.
+  Proof.
+    intros *. unfold idcaus_of_senv, senv_of_inout, idcaus.
+    erewrite map_map, map_ext, map_filter_nil, app_nil_r. reflexivity.
+    - simpl_Forall. auto.
+    - intros; destruct_conjs; auto.
+  Qed.
+
   Inductive Is_defined_in Γ (cx : ident) : block -> Prop :=
   | DefEq : forall x xs es,
       In x xs ->
-      In (x, cx) Γ ->
+      HasCaus Γ x cx ->
       Is_defined_in Γ cx (Beq (xs, es))
   | DefReset : forall blocks er,
       Exists (Is_defined_in Γ cx) blocks ->
@@ -118,7 +122,7 @@ Module Type LCAUSALITY
       Exists (fun blks => Exists (Is_defined_in Γ cx) (snd blks)) branches ->
       Is_defined_in Γ cx (Bswitch ec branches)
   | DefLocal : forall locs blocks,
-      Exists (Is_defined_in (Γ ++ idcaus (idty locs)) cx) blocks ->
+      Exists (Is_defined_in (Γ ++ senv_of_locs locs) cx) blocks ->
       Is_defined_in Γ cx (Blocal locs blocks).
 
   Inductive Is_last_in (cx : ident) : block -> Prop :=
@@ -135,48 +139,115 @@ Module Type LCAUSALITY
       In (x, (ty, ck, cx', Some (e, cx))) locs ->
       Is_last_in cx (Blocal locs blocks).
 
-  Inductive depends_on cenv cenvl (cx cy : ident) : block -> Prop :=
+  Inductive depends_on Γ (cx cy : ident) : block -> Prop :=
   | DepOnEq : forall xs es k x,
       nth_error xs k = Some x ->
-      In (x, cx) cenv ->
-      Is_free_left_list cenv cenvl cy k es ->
-      depends_on cenv cenvl cx cy (Beq (xs, es))
+      HasCaus Γ x cx ->
+      Is_free_left_list Γ cy k es ->
+      depends_on Γ cx cy (Beq (xs, es))
 
   | DepOnSwitch1 : forall ec branches,
-      Exists (fun blks => Exists (depends_on cenv cenvl cx cy) (snd blks)) branches ->
-      depends_on cenv cenvl cx cy (Bswitch ec branches)
+      Exists (fun blks => Exists (depends_on Γ cx cy) (snd blks)) branches ->
+      depends_on Γ cx cy (Bswitch ec branches)
   | DepOnSwitch2 : forall ec branches,
-      Exists (fun blks => Exists (fun blk => Is_defined_in cenv cx blk \/ Is_last_in cx blk) (snd blks)) branches ->
-      Is_free_left cenv cenvl cy 0 ec ->
-      depends_on cenv cenvl cx cy (Bswitch ec branches)
+      Exists (fun blks => Exists (fun blk => Is_defined_in Γ cx blk \/ Is_last_in cx blk) (snd blks)) branches ->
+      Is_free_left Γ cy 0 ec ->
+      depends_on Γ cx cy (Bswitch ec branches)
 
   | DepOnReset1 : forall blocks er,
-      Exists (depends_on cenv cenvl cx cy) blocks ->
-      depends_on cenv cenvl cx cy (Breset blocks er)
+      Exists (depends_on Γ cx cy) blocks ->
+      depends_on Γ cx cy (Breset blocks er)
   | DepOnReset2 : forall blocks er,
-      Exists (fun blk => Is_defined_in cenv cx blk \/ Is_last_in cx blk) blocks ->
-      Is_free_left cenv cenvl cy 0 er ->
-      depends_on cenv cenvl cx cy (Breset blocks er)
+      Exists (fun blk => Is_defined_in Γ cx blk \/ Is_last_in cx blk) blocks ->
+      Is_free_left Γ cy 0 er ->
+      depends_on Γ cx cy (Breset blocks er)
 
-  | DepOnLocal1 : forall locs blks cenv' cenvl',
-      cenv' = cenv ++ map (fun '(x, (_, _, cx, _)) => (x, cx)) locs ->
-      cenvl' = cenvl ++ map_filter (fun '(x, (_, _, _, o)) => option_map (fun '(_, cx) => (x, cx)) o) locs ->
-      Exists (depends_on cenv' cenvl' cx cy) blks ->
-      depends_on cenv cenvl cx cy (Blocal locs blks)
-  | DepOnLocal2 : forall locs blks cenv' cenvl',
-      cenv' = cenv ++ map (fun '(x, (_, _, cx, _)) => (x, cx)) locs ->
-      cenvl' = cenvl ++ map_filter (fun '(x, (_, _, _, o)) => option_map (fun '(_, cx) => (x, cx)) o) locs ->
+  | DepOnLocal1 : forall locs blks Γ',
+      Γ' = Γ ++ senv_of_locs locs ->
+      Exists (depends_on Γ' cx cy) blks ->
+      depends_on Γ cx cy (Blocal locs blks)
+  | DepOnLocal2 : forall locs blks Γ',
+      Γ' = Γ ++ senv_of_locs locs ->
       Exists (fun '(_, (_, ck, _, o)) =>
                 match o with
                 | None => False
-                | Some (e, cx') => cx' = cx /\ Is_free_left cenv' cenvl' cy 0 e
+                | Some (e, cx') => cx' = cx /\ Is_free_left Γ' cy 0 e
                 end) locs ->
-      depends_on cenv cenvl cx cy (Blocal locs blks).
+      depends_on Γ cx cy (Blocal locs blks).
 
-  (* Definition causality *)
+  Section incl.
+    Fact Is_free_left_list_incl' : forall Γ Γ' es,
+      Forall (fun e => forall cx k, Is_free_left Γ cx k e -> Is_free_left Γ' cx k e) es ->
+      forall cx k, Is_free_left_list Γ cx k es ->
+              Is_free_left_list Γ' cx k es.
+    Proof.
+      intros * Hf * Hex.
+      induction Hex; inv Hf; [left|right]; auto.
+    Qed.
+
+    Lemma Is_free_left_incl : forall Γ Γ' e,
+        (forall x cx, HasCaus Γ x cx -> HasCaus Γ' x cx) ->
+        (forall x cx, HasLastCaus Γ x cx -> HasLastCaus Γ' x cx) ->
+        forall cx k, Is_free_left Γ cx k e ->
+                Is_free_left Γ' cx k e.
+    Proof.
+      intros * Hc1 Hc2.
+      induction e using exp_ind2; intros * Hfree; inv Hfree; constructor;
+        repeat (match goal with
+                | H: _ \/ _ |- _ \/ _ => destruct H; [left|right]
+                | H: _ /\ _ |- _ /\ _ => destruct H; split; auto
+                | H: Exists _ _ |- Exists _ _ => solve_Exists; simpl_Forall
+                | H: exists _, Exists _ _ |- _ => destruct H as (x&?); exists x
+                | H : exists _, _ /\ _ |- exists _, _ /\ _ => destruct H as (x&?&?); subst; esplit; split
+                | H: Is_free_left_list _ _ _ _ |- _ => eapply Is_free_left_list_incl' in H; eauto
+                end);
+        eauto using Is_free_left.
+    Qed.
+
+    Lemma Is_defined_in_incl : forall blk Γ Γ',
+        (forall x cx, HasCaus Γ x cx -> HasCaus Γ' x cx) ->
+        forall cx, Is_defined_in Γ cx blk -> Is_defined_in Γ' cx blk.
+    Proof.
+      induction blk using block_ind2; intros * Hc * Hdef; inv Hdef;
+        econstructor; eauto using Is_defined_in;
+        solve_Exists; simpl_Forall; eauto.
+      eapply H; [|eauto].
+      intros *. rewrite 2 HasCaus_app. intros [|]; auto.
+    Qed.
+
+    Lemma depends_on_incl : forall blk Γ Γ',
+        (forall x cx, HasCaus Γ x cx -> HasCaus Γ' x cx) ->
+        (forall x cx, HasLastCaus Γ x cx -> HasLastCaus Γ' x cx) ->
+        forall cx cy, depends_on Γ cx cy blk -> depends_on Γ' cx cy blk.
+    Proof.
+      induction blk using block_ind2; intros * Hc1 Hc2 * Hdep; inv Hdep.
+      - (* equation *)
+        econstructor; eauto.
+        eapply Is_free_left_list_incl'; eauto. simpl_Forall; eauto using Is_free_left_incl.
+      - (* reset *)
+        econstructor. solve_Exists. simpl_Forall; eauto.
+      - eapply DepOnReset2; eauto using Is_free_left_incl.
+        solve_Exists. destruct H2; eauto using Is_defined_in_incl.
+      - (* switch *)
+        econstructor. solve_Exists. simpl_Forall; eauto.
+      - eapply DepOnSwitch2; eauto using Is_free_left_incl.
+        solve_Exists. destruct H2; eauto using Is_defined_in_incl.
+      - (* last *)
+        econstructor; eauto. solve_Exists; simpl_Forall.
+        eapply H; [| |eauto].
+        + intros *. rewrite 2 HasCaus_app; intros [|]; auto.
+        + intros *. rewrite 2 HasLastCaus_app; intros [|]; auto.
+      - eapply DepOnLocal2; eauto using Is_free_left_incl.
+        solve_Exists. destruct o as [(?&?)|]; simpl in *; auto.
+        destruct H3; split; auto.
+        eapply Is_free_left_incl; [| |eauto].
+        + intros *. rewrite 2 HasCaus_app; intros [|]; auto.
+        + intros *. rewrite 2 HasLastCaus_app; intros [|]; auto.
+    Qed.
+  End incl.
 
   Definition idcaus_of_locals blk :=
-    idty (locals blk)
+    map (fun '(x, (cx, _)) => (x, cx)) (locals blk)
     ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk).
 
   Global Hint Unfold idcaus_of_locals : list.
@@ -213,23 +284,20 @@ Module Type LCAUSALITY
     destruct Hin; [right;left|right;right;right]; solve_In. auto.
   Qed.
 
-  Fact idcaus_of_locals_In_local2 : forall locs blocks cx,
-      In cx (map snd (idcaus (idty locs)))
-      \/ In cx
-           (map snd
-                (idcaus (map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(_, cx) => (x, (ty, ck, cx))) o) locs))) ->
-      In cx (map snd (idcaus_of_locals (Blocal locs blocks))).
+  Fact idcaus_of_locals_In_local2 : forall locs blocks x cx,
+      In (x, cx) (idcaus_of_senv (senv_of_locs locs)) ->
+      In (x, cx) (idcaus_of_locals (Blocal locs blocks)).
   Proof.
     intros * Hin.
-    unfold idcaus_of_locals; simpl. simpl_app.
-    repeat rewrite in_app_iff.
-    destruct Hin; [left|right;right;left]; solve_In. auto.
+    unfold idcaus_of_locals, idcaus_of_senv, senv_of_locs in *; simpl. simpl_app.
+    repeat rewrite in_app_iff in *.
+    destruct Hin; [left|right;right;left]; solve_In. subst; simpl; auto.
   Qed.
 
   Definition graph_of_node {PSyn prefs v a} (n : @node PSyn prefs) (g : AcyGraph v a) : Prop :=
     PS.Equal (vertices g)
              (PSP.of_list (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))))
-    /\ (forall cx cy, depends_on (idcaus (n_in n ++ n_out n)) [] cx cy (n_block n) ->
+    /\ (forall cx cy, depends_on (senv_of_inout (n_in n ++ n_out n)) cx cy (n_block n) ->
                 is_arc g cy cx).
 
   Definition node_causal {PSyn prefs} (n : @node PSyn prefs) :=
@@ -246,9 +314,9 @@ Module Type LCAUSALITY
     now apply NoDup_app_l in Hnd.
   Qed.
 
-  Fact Is_free_left_list_length' cenv cenvl : forall es x k,
-      Forall (fun e => forall x k, Is_free_left cenv cenvl x k e -> k < Datatypes.length (annot e)) es ->
-      Is_free_left_list cenv cenvl x k es ->
+  Fact Is_free_left_list_length' Γ : forall es x k,
+      Forall (fun e => forall x k, Is_free_left Γ x k e -> k < Datatypes.length (annot e)) es ->
+      Is_free_left_list Γ x k es ->
       k < length (annots es).
   Proof.
     induction es; intros * Hf Hfree; inv Hfree; simpl;
@@ -261,9 +329,9 @@ Module Type LCAUSALITY
       apply PeanoNat.Nat.lt_sub_lt_add_l in IHes; auto.
   Qed.
 
-  Lemma Is_free_left_length {PSyn prefs} (G: @global PSyn prefs) cenv cenvl : forall e x k,
+  Lemma Is_free_left_length {PSyn prefs} (G: @global PSyn prefs) Γ : forall e x k,
       wl_exp G e ->
-      Is_free_left cenv cenvl x k e ->
+      Is_free_left Γ x k e ->
       k < length (annot e).
   Proof.
     Local Ltac solve_forall2 Ha H :=
@@ -297,9 +365,9 @@ Module Type LCAUSALITY
         solve_forall2 H13 H0.
   Qed.
 
-  Corollary Is_free_left_list_length {PSyn prefs} (G: @global PSyn prefs) cenv cenvl : forall es x k,
+  Corollary Is_free_left_list_length {PSyn prefs} (G: @global PSyn prefs) Γ : forall es x k,
       Forall (wl_exp G) es ->
-      Is_free_left_list cenv cenvl x k es ->
+      Is_free_left_list Γ x k es ->
       k < length (annots es).
   Proof.
     intros * Hwl Hfree.
@@ -308,9 +376,9 @@ Module Type LCAUSALITY
     eapply Is_free_left_length; eauto.
   Qed.
 
-  Lemma Is_free_left_list_Exists cenv cenvl : forall es x k,
-      Is_free_left_list cenv cenvl x k es ->
-      exists k', Exists (Is_free_left cenv cenvl x k') es.
+  Lemma Is_free_left_list_Exists Γ : forall es x k,
+      Is_free_left_list Γ x k es ->
+      exists k', Exists (Is_free_left Γ x k') es.
   Proof.
     induction es; intros * Hfree; inv Hfree.
     - exists k. left; auto.
@@ -318,13 +386,13 @@ Module Type LCAUSALITY
       exists k'. right; auto.
   Qed.
 
-  Lemma Is_free_left_In_snd cenv cenvl : forall e x k,
-      Is_free_left cenv cenvl x k e ->
-      In x (map snd cenv) \/ In x (map snd cenvl).
+  Lemma Is_free_left_In_snd Γ : forall e x k,
+      Is_free_left Γ x k e ->
+      exists y, HasCaus Γ y x \/ HasLastCaus Γ y x.
   Proof.
     induction e using exp_ind2; intros * Hfree; inv Hfree.
-    - (* var *) left. solve_In.
-    - (* last *) right. solve_In.
+    - (* var *) eauto.
+    - (* last *) eauto.
     - (* unop *)
       eauto.
     - (* binop *)
@@ -340,14 +408,12 @@ Module Type LCAUSALITY
            simpl_Exists; eauto).
     - (* when *)
       rewrite Forall_forall in *.
-      destruct H2 as [(_&Hin)|Hex].
-      + left. solve_In.
+      destruct H2 as [(_&Hin)|Hex]; eauto.
       + eapply Is_free_left_list_Exists in Hex as (?&Hex).
         simpl_Exists; eauto.
     - (* merge *)
       repeat setoid_rewrite Forall_forall in H.
-      destruct H2 as [(_&Hin)|Hex].
-      + left. solve_In.
+      destruct H2 as [(_&Hin)|Hex]; eauto.
       + eapply Exists_exists in Hex as (?&?&Hex).
         eapply Is_free_left_list_Exists in Hex as (?&Hex).
         simpl_Exists; eauto.
@@ -366,9 +432,9 @@ Module Type LCAUSALITY
       destruct H7 as [(?&Hex)|Hex]; simpl_Exists; eauto.
   Qed.
 
-  Corollary Is_free_left_list_In_snd cenv cenvl : forall es x k,
-      Is_free_left_list cenv cenvl x k es ->
-      In x (map snd cenv) \/ In x (map snd cenvl).
+  Corollary Is_free_left_list_In_snd Γ : forall es x k,
+      Is_free_left_list Γ x k es ->
+      exists y, HasCaus Γ y x \/ HasLastCaus Γ y x.
   Proof.
     intros * Hfree.
     eapply Is_free_left_list_Exists in Hfree as (?&Hex).
@@ -378,14 +444,14 @@ Module Type LCAUSALITY
 
   Local Hint Constructors Is_defined_in : lcaus.
 
-  Lemma Is_defined_in_Is_defined_in : forall x cx blk cenv,
-      In (x, cx) cenv ->
+  Lemma Is_defined_in_Is_defined_in : forall x cx blk Γ,
+      HasCaus Γ x cx ->
       Syn.Is_defined_in x blk ->
-      Is_defined_in cenv cx blk.
+      Is_defined_in Γ cx blk.
   Proof.
     induction blk using block_ind2; intros * Hin Hdep; inv Hdep; eauto with lcaus.
     1-3:simpl_Exists; simpl_Forall; econstructor; solve_Exists.
-    eapply H; eauto using in_or_app.
+    eapply H; eauto. apply HasCaus_app; auto.
   Qed.
 
   (** ** Causality check *)
@@ -583,58 +649,54 @@ Module Type LCAUSALITY
     eapply collect_free_left_length; eauto.
   Qed.
 
-  Lemma collect_free_var_complete cenv cenv' : forall x cx,
-      Env.Equiv eq cenv' (Env.from_list cenv) ->
-      NoDupMembers cenv ->
-      In (x, cx) cenv ->
-      collect_free_var cenv' x = cx.
-  Proof.
-    intros * Heq Hnd Hin.
-    unfold collect_free_var. rewrite Heq.
-    erewrite Env.find_In_from_list; eauto.
-    reflexivity.
-  Qed.
-
   Section collect_free_spec.
 
-    Variable cenv cenvl : list (ident * ident).
+    Variable Γ : static_env.
     Variable cenv' cenvl' : Env.t ident.
 
-    Hypothesis Heq : Env.Equiv eq cenv' (Env.from_list cenv).
-    Hypothesis Heql : Env.Equiv eq cenvl' (Env.from_list cenvl).
+    Hypothesis Heq : forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx.
+    Hypothesis Heql : forall x cx, Env.find x cenvl' = Some cx <-> HasLastCaus Γ x cx.
 
     Lemma collect_free_var_correct : forall x cx,
-        InMembers x cenv ->
+        InMembers x Γ ->
         collect_free_var cenv' x = cx ->
-        In (x, cx) cenv.
+        HasCaus Γ x cx.
     Proof.
       intros * Hinm Hcoll.
-      unfold collect_free_var in Hcoll. rewrite Heq in Hcoll.
-      eapply Env.In_from_list in Hinm as (cx'&Hfind).
-      rewrite Hfind in Hcoll; simpl in *; subst.
-      eapply Env.from_list_find_In in Hfind; auto.
+      unfold collect_free_var in Hcoll. rewrite <-Heq.
+      assert (exists cx, HasCaus Γ x cx) as (?&Hhas).
+      { apply InMembers_In in Hinm; simpl_In. destruct Hinm.
+        esplit. econstructor; eauto. }
+      rewrite <-Heq in Hhas. setoid_rewrite Hhas in Hcoll; simpl in *; subst; auto.
     Qed.
 
-    Hypothesis Hnd1 : NoDupMembers cenv.
-    Hypothesis Hnd2 : NoDupMembers cenvl.
+    Hypothesis Hnd1 : NoDupMembers Γ.
 
-    Lemma collect_free_clock_complete : forall x cx ck,
-        In (x, cx) cenv ->
-        Is_free_in_clock x ck ->
-        PS.In cx (collect_free_clock cenv' ck).
+    Lemma collect_free_var_complete : forall x cx,
+        HasCaus Γ x cx ->
+        collect_free_var cenv' x = cx.
     Proof.
-      induction ck; intros * Hin Hfree; inv Hfree; simpl.
-      - eapply PSF.add_1, collect_free_var_complete; eauto.
-      - apply PSF.add_2; eauto.
+      intros * Hin.
+      unfold collect_free_var. apply Heq in Hin.
+      setoid_rewrite Hin. reflexivity.
+    Qed.
+
+    Lemma collect_free_last_complete : forall x cx,
+        HasLastCaus Γ x cx ->
+        collect_free_var cenvl' x = cx.
+    Proof.
+      intros * Hin.
+      unfold collect_free_var. apply Heql in Hin.
+      setoid_rewrite Hin. reflexivity.
     Qed.
 
     Lemma collect_free_left_list_spec' {PSyn prefs} : forall (G: @global PSyn prefs) es x k,
         Forall (wl_exp G) es ->
-        Forall (wx_exp (map fst cenv) (map fst cenvl)) es ->
-        Forall (fun e => forall k, wl_exp G e -> wx_exp (map fst cenv) (map fst cenvl) e ->
-                           Is_free_left cenv cenvl x k e ->
+        Forall (wx_exp Γ) es ->
+        Forall (fun e => forall k, wl_exp G e -> wx_exp Γ e ->
+                           Is_free_left Γ x k e ->
                            PS.In x (nth k (collect_free_left cenv' cenvl' e) PS.empty)) es ->
-        Is_free_left_list cenv cenvl x k es ->
+        Is_free_left_list Γ x k es ->
         PS.In x (List.nth k (collect_free_left_list cenv' cenvl' es) PS.empty).
     Proof.
       induction es; intros * Hwl Hwx Hf Hfree; inv Hwl; inv Hwx; inv Hf. inv Hfree. simpl.
@@ -647,12 +709,12 @@ Module Type LCAUSALITY
 
     Lemma psunion_collect_free_list_spec' {PSyn prefs} : forall (G: @global PSyn prefs) es x,
         Forall (wl_exp G) es ->
-        Forall (wx_exp (map fst cenv) (map fst cenvl)) es ->
+        Forall (wx_exp Γ) es ->
         Forall (fun e => forall k, wl_exp G e ->
-                           wx_exp (map fst cenv) (map fst cenvl) e ->
-                           Is_free_left cenv cenvl x k e ->
+                           wx_exp Γ e->
+                           Is_free_left Γ x k e ->
                            PS.In x (nth k (collect_free_left cenv' cenvl' e) PS.empty)) es ->
-        (exists k', Exists (Is_free_left cenv cenvl x k') es) ->
+        (exists k', Exists (Is_free_left Γ x k') es) ->
         PS.In x (PSUnion (collect_free_left_list cenv' cenvl' es)).
     Proof.
       induction es; intros * Hwl Hwx Hf (?&Hex); inv Hwl; inv Hwx; inv Hf. inv Hex. simpl.
@@ -680,13 +742,13 @@ Module Type LCAUSALITY
     Lemma Exists_Exists_Is_free {PSyn prefs} : forall (G: @global PSyn prefs) es x k,
       Forall (wl_exp G) es ->
       Forall (fun e => numstreams e = 1) es ->
-      Exists (Is_free_left cenv cenvl x k) es ->
-      Exists (Is_free_left cenv cenvl x 0) es.
+      Exists (Is_free_left Γ x k) es ->
+      Exists (Is_free_left Γ x 0) es.
     Proof.
       intros * Wl Num Free.
       simpl_Exists; simpl_Forall.
       assert (k = 0) as Hk'; subst; eauto.
-      take (Is_free_left _ _ _ _ _) and eapply Is_free_left_length in it; eauto. 2:solve_Exists.
+      take (Is_free_left _ _ _ _) and eapply Is_free_left_length in it; eauto. 2:solve_Exists.
       rewrite length_annot_numstreams, Num in it.
       apply PeanoNat.Nat.lt_1_r; auto.
     Qed.
@@ -739,13 +801,13 @@ Module Type LCAUSALITY
 
     Fact collect_free_left_spec {PSyn prefs}: forall (G: @global PSyn prefs) x e k,
         wl_exp G e ->
-        wx_exp (map fst cenv) (map fst cenvl) e ->
-        Is_free_left cenv cenvl x k e ->
+        wx_exp Γ e ->
+        Is_free_left Γ x k e ->
         PS.In x (List.nth k (collect_free_left cenv' cenvl' e) PS.empty).
     Proof with eauto with lcaus.
       induction e using exp_ind2;
         (intros * Hwl Hwx Hfree;
-         specialize (Is_free_left_length G cenv cenvl _ _ _ Hwl Hfree) as Hlen1;
+         specialize (Is_free_left_length G Γ _ _ _ Hwl Hfree) as Hlen1;
          specialize (collect_free_left_length G cenv' cenvl' _ Hwl) as Hlen2;
          try destruct a as [ty [ck name]];
          inv Hwl; inv Hwx; inv Hfree; simpl in *;
@@ -755,17 +817,17 @@ Module Type LCAUSALITY
         eapply collect_free_var_complete; eauto.
       - (* last *)
         apply PSF.singleton_2; auto.
-        eapply collect_free_var_complete; eauto.
+        eapply collect_free_last_complete; eauto.
       - (* unop *)
         eapply IHe; eauto.
       - (* binop *)
-        erewrite <- collect_free_left_length with (cenv0:=cenv') (cenv'0:=cenvl') in H6, H7; eauto.
+        erewrite <- collect_free_left_length with (cenv:=cenv') (cenv'0:=cenvl') in H6, H7; eauto.
         repeat singleton_length.
         destruct H2 as [?|?].
         * apply PSF.union_2. eapply IHe1 in H; eauto.
         * apply PSF.union_3. eapply IHe2 in H; eauto.
       - (* fby *)
-        erewrite <- collect_free_left_list_length with (cenv0:=cenv') (cenv'0:=cenvl') in H7, H8; eauto.
+        erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv'0:=cenvl') in H7, H8; eauto.
         eapply collect_free_left_list_spec'; eauto.
       - (* arrow *)
         erewrite <- collect_free_left_list_length in H7, H8; eauto.
@@ -775,7 +837,7 @@ Module Type LCAUSALITY
         repeat rewrite PS.union_spec.
         destruct H5; [left|right]; eapply collect_free_left_list_spec'; eauto.
       - (* when *)
-        erewrite <- collect_free_left_list_length with (cenv0:=cenv') (cenv'0:=cenvl') in H6; eauto.
+        erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv'0:=cenvl') in H6; eauto.
         erewrite map_nth' with (d':=PS.empty).
         2:(erewrite <- map_length, Hlen2; eapply Hlen1; eauto).
         destruct H4 as [(_&?)|?]; subst.
@@ -826,8 +888,8 @@ Module Type LCAUSALITY
 
     Corollary collect_free_left_list_spec {PSyn prefs} : forall (G: @global PSyn prefs) es x k,
         Forall (wl_exp G) es ->
-        Forall (wx_exp (map fst cenv) (map fst cenvl)) es ->
-        Is_free_left_list cenv cenvl x k es ->
+        Forall (wx_exp Γ) es ->
+        Is_free_left_list Γ x k es ->
         PS.In x (List.nth k (collect_free_left_list cenv' cenvl' es) PS.empty).
     Proof.
       intros * Hwl Hwx.
@@ -855,15 +917,36 @@ Module Type LCAUSALITY
       left. apply IHl; auto.
   Qed.
 
-  Lemma collect_depends_on_dom {PSyn prefs} (G: @global PSyn prefs) : forall blk xs cenv cenvl cenv' cenvl',
-      NoDupMembers cenv ->
-      Env.Equiv eq cenv' (Env.from_list cenv) ->
+  Fact equiv_env_local {A} : forall Γ locs cenv',
+      NoDupMembers locs ->
+      (forall x, InMembers x locs -> ~In x (map fst Γ)) ->
+      (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
+      (forall x cx, Env.find x (Env.union cenv' (Env.from_list (map (fun '(x1, (_, _, cx1, _)) => (x1, cx1)) locs))) = Some cx
+               <-> HasCaus (Γ ++ @senv_of_locs A locs) x cx).
+  Proof.
+    intros * Hnd1 Hnd2 Heq *. rewrite HasCaus_app. split; intros Hin.
+    - apply Env.union_find4 in Hin as [|Hin].
+      + left. eapply Heq; eauto.
+      + apply Env.from_list_find_In in Hin. simpl_In.
+        right. econstructor. solve_In. eauto.
+    - destruct Hin as [Hin|Hin].
+      + apply Env.union_find2. apply Heq; auto.
+        rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list.
+        intros Hinm. apply InMembers_In in Hinm as (?&?); simpl_In.
+        eapply Hnd2; eauto using In_InMembers. inv Hin; solve_In.
+      + apply Env.union_find3'. inv Hin. simpl_In.
+        apply Env.find_In_from_list. solve_In. apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+  Qed.
+
+  Lemma collect_depends_on_dom {PSyn prefs} (G: @global PSyn prefs) : forall blk xs Γ cenv' cenvl',
+      NoDupMembers Γ ->
+      (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       VarsDefined blk xs ->
-      incl xs (map fst cenv) ->
-      NoDupLocals (map fst cenv) blk ->
+      incl xs (map fst Γ) ->
+      NoDupLocals (map fst Γ) blk ->
       wl_block G blk ->
-      wx_block (map fst cenv) cenvl blk ->
-      forall cx, Env.In cx (collect_depends_on cenv' cenvl' blk) <-> Is_defined_in cenv cx blk \/ Is_last_in cx blk.
+      wx_block Γ blk ->
+      forall cx, Env.In cx (collect_depends_on cenv' cenvl' blk) <-> Is_defined_in Γ cx blk \/ Is_last_in cx blk.
   Proof.
     induction blk using block_ind2; intros * Hnd Heq Hvars Hincl Hndloc Hwl Hwx cx;
       inv Hvars; inv Hndloc; inv Hwl; inv Hwx; simpl.
@@ -903,30 +986,20 @@ Module Type LCAUSALITY
         1,2:rewrite unions_fuse_PS_In; solve_Exists; eapply H; eauto.
         1,2:etransitivity; eauto using incl_concat; take (Permutation _ _) and rewrite it; eauto.
     - (* locals *)
-      assert (NoDupMembers (cenv ++ idcaus (idty locs))) as Hnd'.
+      assert (NoDupMembers (Γ ++ senv_of_locs locs)) as Hnd'.
       { apply NoDupMembers_app; auto.
-        - rewrite NoDupMembers_idcaus, NoDupMembers_idty; auto.
-        - intros * Hin. contradict Hin.
-          rewrite fst_InMembers. apply H7.
-          rewrite fst_InMembers, map_fst_idcaus, map_fst_idty, <-fst_InMembers in Hin; auto.
-      }
-      assert (Env.Equiv eq (Env.union cenv' (Env.from_list (idcaus (idty locs))))
-                        (Env.from_list (cenv ++ idcaus (idty locs)))) as Hequiv.
-      { rewrite Heq. unfold Env.union, Env.from_list.
-        rewrite <-Env.adds'_app.
-        eapply Env.adds'_Perm; eauto using Env.NoDupMembers_elements.
-        apply Env.elements_from_list.
-        rewrite NoDupMembers_idcaus, NoDupMembers_idty; auto.
+        - apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+        - intros * Hin Hinm2. apply InMembers_senv_of_locs in Hinm2.
+          eapply H7; eauto. now rewrite <-fst_InMembers.
       }
       split; intros Hin.
       + rewrite Env.union_fuse_In, unions_fuse_PS_In, Exists_exists, Env.In_from_list in Hin.
         destruct Hin as [(?&Hin1&Hin2)|]; subst.
         * simpl_In. solve_Exists. simpl_Forall. inv_VarsDefined.
-          edestruct H as ([|]&_); eauto.
-          1-3:rewrite map_app, map_fst_idcaus, map_fst_idty; eauto.
+          edestruct H as ([|]&_); eauto using equiv_env_local.
+          1-2:rewrite map_app, map_fst_senv_of_locs; eauto.
           -- etransitivity; [|eauto using incl_appl'].
              rewrite Permutation_app_comm, H4; eauto using incl_concat.
-          -- unfold idcaus, idty. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           -- left. constructor. solve_Exists.
           -- right. constructor. solve_Exists.
         * eapply InMembers_In in H0 as (?&Hin). simpl_In.
@@ -934,32 +1007,28 @@ Module Type LCAUSALITY
       + rewrite Env.union_fuse_In, unions_fuse_PS_In, Exists_exists. setoid_rewrite in_map_iff.
         destruct Hin as [Hin|Hin]; inv Hin; simpl_Exists; inv_VarsDefined; simpl_Forall.
         * left. do 2 esplit; eauto.
-          eapply H; eauto.
-          2-4:rewrite map_app, map_fst_idcaus, map_fst_idty; eauto.
-          -- unfold idcaus at 1, idty at 1 in Hequiv. erewrite map_map, map_ext in Hequiv; eauto.
-             intros; destruct_conjs; auto.
-          -- etransitivity; [|eauto using incl_appl'].
-             rewrite Permutation_app_comm, H4; eauto using incl_concat.
+          eapply H; eauto using equiv_env_local.
+          1-2:rewrite map_app, map_fst_senv_of_locs; auto.
+          etransitivity; [|eauto using incl_appl'].
+          rewrite Permutation_app_comm, H4; eauto using incl_concat.
         * left. do 2 esplit; eauto.
-          eapply H; eauto.
-          2-4:rewrite map_app, map_fst_idcaus, map_fst_idty; eauto.
-          -- unfold idcaus at 1, idty at 1 in Hequiv. erewrite map_map, map_ext in Hequiv; eauto.
-             intros; destruct_conjs; auto.
-          -- etransitivity; [|eauto using incl_appl'].
-             rewrite Permutation_app_comm, H4; eauto using incl_concat.
+          eapply H; eauto using equiv_env_local.
+          1-2:rewrite map_app, map_fst_senv_of_locs; auto.
+          etransitivity; [|eauto using incl_appl'].
+          rewrite Permutation_app_comm, H4; eauto using incl_concat.
         * right. eapply Env.In_from_list, In_InMembers. solve_In. simpl. eauto.
   Qed.
 
-  Corollary flat_map_collect_depends_on_dom {PSyn prefs} (G: @global PSyn prefs) : forall blks cenv cenvl cenv' cenvl' xs,
-      NoDupMembers cenv ->
-      Env.Equiv eq cenv' (Env.from_list cenv) ->
+  Corollary flat_map_collect_depends_on_dom {PSyn prefs} (G: @global PSyn prefs) : forall blks Γ cenv' cenvl' xs,
+      NoDupMembers Γ ->
+      (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       Forall2 VarsDefined blks xs ->
-      incl (concat xs) (map fst cenv) ->
-      Forall (NoDupLocals (map fst cenv)) blks ->
+      incl (concat xs) (map fst Γ) ->
+      Forall (NoDupLocals (map fst Γ)) blks ->
       Forall (wl_block G) blks ->
-      Forall (wx_block (map fst cenv) cenvl) blks ->
+      Forall (wx_block Γ) blks ->
       forall cx, Env.In cx (unions_fuse (map (collect_depends_on cenv' cenvl') blks)) <->
-              Exists (Is_defined_in cenv cx) blks \/ Exists (Is_last_in cx) blks.
+              Exists (Is_defined_in Γ cx) blks \/ Exists (Is_last_in cx) blks.
   Proof.
     intros * Hnd Heq Hvd Hincl Hndl Hwl Hwx ?.
     split; intros Hin.
@@ -1012,14 +1081,14 @@ Module Type LCAUSALITY
 
   Fact NoDup_locals_inv : forall blks blk xs,
       In blk blks ->
-      NoDup (map snd (xs ++ idty (flat_map locals blks) ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (flat_map locals blks))) ->
-      NoDup (map snd (xs ++ idty (locals blk) ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk))).
+      NoDup (map snd (xs ++ map (fun '(x, (cx, _)) => (x, cx)) (flat_map locals blks) ++ map_filter (fun '(x, (_, o)) => option_map (fun cx : ident => (x, cx)) o) (flat_map locals blks))) ->
+      NoDup (map snd (xs ++ map (fun '(x, (cx, _)) => (x, cx)) (locals blk) ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk))).
   Proof.
     intros * Hin Hnd.
     repeat rewrite map_app in *.
     repeat apply NoDup_app'; eauto using NoDup_app_l.
     - apply NoDup_app_r, NoDup_app_l in Hnd.
-      unfold idty in *. rewrite map_map in *. eapply nodup_map_flat_map; eauto.
+      rewrite map_map in *. eapply nodup_map_flat_map; eauto.
     - apply NoDup_app_r, NoDup_app_r in Hnd.
       eapply nodup_map_filter_flat_map; eauto.
     - simpl_Forall. intros Hin2. simpl_In.
@@ -1032,15 +1101,15 @@ Module Type LCAUSALITY
 
   Fact NoDup_locals_inv2 {A} : forall (brs : list (A * list block)) blks xs,
       In blks brs ->
-      NoDup (map snd (xs ++ idty (flat_map (fun blks => flat_map locals (snd blks)) brs)
+      NoDup (map snd (xs ++ map (fun '(x, (cx, _)) => (x, cx)) (flat_map (fun blks => flat_map locals (snd blks)) brs)
                          ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (flat_map (fun blks => flat_map locals (snd blks)) brs))) ->
-      NoDup (map snd (xs ++ idty (flat_map locals (snd blks)) ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (flat_map locals (snd blks)))).
+      NoDup (map snd (xs ++ map (fun '(x, (cx, _)) => (x, cx)) (flat_map locals (snd blks)) ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (flat_map locals (snd blks)))).
   Proof.
     intros * Hin Hnd.
     repeat rewrite map_app in *.
     repeat apply NoDup_app'; eauto using NoDup_app_l.
     - apply NoDup_app_r, NoDup_app_l in Hnd.
-      unfold idty in *. rewrite map_map in *. eapply nodup_map_flat_map with (xs0:=map snd brs); eauto.
+      rewrite map_map in *. eapply nodup_map_flat_map with (xs0:=map snd brs); eauto.
       solve_In. rewrite flat_map_concat_map in *. rewrite map_map; eauto.
     - apply NoDup_app_r, NoDup_app_r in Hnd.
       eapply nodup_map_filter_flat_map with (xs0:=map snd brs); eauto.
@@ -1062,27 +1131,46 @@ Module Type LCAUSALITY
     intros; destruct_conjs. destruct o as [(?&?)|]; auto.
   Qed.
 
-  Lemma collect_depends_on_spec {PSyn prefs} : forall (G: @global PSyn prefs) x y blk xs cenv cenvl cenv' cenvl',
-      NoDupMembers cenv ->
-      NoDupMembers cenvl ->
-      Env.Equiv eq cenv' (Env.from_list cenv) ->
-      Env.Equiv eq cenvl' (Env.from_list cenvl) ->
-      NoDup (map snd (Env.elements cenv' ++ Env.elements cenvl'
-                                   ++ idty (locals blk)
-                                   ++ map_filter (fun '(x, (_, o)) => option_map (fun cx => (x, cx)) o) (locals blk))) ->
+  Fact equiv_env_last_local {A} : forall Γ locs cenv',
+      NoDupMembers locs ->
+      (forall x, InMembers x locs -> ~In x (map fst Γ)) ->
+      (forall x cx, Env.find x cenv' = Some cx <-> HasLastCaus Γ x cx) ->
+      (forall x cx, Env.find x (Env.union cenv' (Env.from_list (map_filter (fun '(x2, (_, _, _, o)) => option_map (fun '(_, cx0) => (x2, cx0)) o) locs))) = Some cx
+               <-> HasLastCaus (Γ ++ @senv_of_locs A locs) x cx).
+  Proof.
+    intros * Hnd1 Hnd2 Heq *. rewrite HasLastCaus_app. split; intros Hin.
+    - apply Env.union_find4 in Hin as [|Hin].
+      + left. eapply Heq; eauto.
+      + apply Env.from_list_find_In in Hin. simpl_In.
+        right. econstructor. solve_In. simpl. eauto.
+    - destruct Hin as [Hin|Hin].
+      + apply Env.union_find2. apply Heq; auto.
+        rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list.
+        intros Hinm. apply InMembers_In in Hinm as (?&?); simpl_In.
+        eapply Hnd2; eauto using In_InMembers. inv Hin; solve_In.
+      + apply Env.union_find3'. inv Hin. simpl_In. subst.
+        apply Env.find_In_from_list. solve_In. apply nodupmembers_map_filter; auto.
+        intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
+  Qed.
+
+  Lemma collect_depends_on_spec {PSyn prefs} : forall (G: @global PSyn prefs) x y blk xs Γ cenv' cenvl',
+      NoDupMembers Γ ->
+      (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
+      (forall x cx, Env.find x cenvl' = Some cx <-> HasLastCaus Γ x cx) ->
+      NoDup (map snd (Env.elements cenv' ++ Env.elements cenvl' ++ idcaus_of_locals blk)) ->
       VarsDefined blk xs ->
       NoDup xs ->
       Forall (fun x => Env.In x cenv') xs ->
-      NoDupLocals (map fst cenv ++ map fst cenvl) blk ->
+      NoDupLocals (map fst Γ) blk ->
       wl_block G blk ->
-      wx_block (map fst cenv) (map fst cenvl) blk ->
-      depends_on cenv cenvl x y blk ->
+      wx_block Γ blk ->
+      depends_on Γ x y blk ->
       exists s, Env.MapsTo x s (collect_depends_on cenv' cenvl' blk) /\ PS.In y s.
   Proof.
-    induction blk using block_ind2; intros * Hnd1 Hnd2 Henv Henvl Hnd4 Hvars Hndvars Hvarsenv Hndl Hwl Hwx Hdep;
+    induction blk using block_ind2; intros * Hnd1 Henv Henvl Hnd4 Hvars Hndvars Hvarsenv Hndl Hwl Hwx Hdep;
       simpl; inv Hvars; inv Hndl; inv Hwl; inv Hwx; inv Hdep.
     - (* equation *)
-      inv H0. inv H3.
+      inv H0. inv H2.
       eapply collect_free_left_list_spec in H4; eauto.
       repeat esplit; eauto.
       erewrite <-collect_free_left_list_length in H5; eauto.
@@ -1095,12 +1183,12 @@ Module Type LCAUSALITY
       erewrite In_combine_nth_error.
       repeat esplit; eauto.
       + erewrite map_nth_error; eauto.
-        erewrite collect_free_var_complete; eauto.
+        erewrite collect_free_var_complete; eauto with senv.
       + eapply nth_error_nth'.
         erewrite <-H5. eapply nth_error_Some; intro; congruence.
     - (* reset block (sub-blocks) *)
       simpl_Exists. simpl_Forall. inv_VarsDefined.
-      eapply H with (cenv:=cenv) (cenvl:=cenvl) (cenv':=cenv') (cenvl':=cenvl') in Hdef as (?&?&?); eauto.
+      eapply H with (cenv':=cenv') (cenvl':=cenvl') in Hdef as (?&?&?); eauto.
       2:{ rewrite app_assoc in *. eapply NoDup_locals_inv; eauto. }
       2:eapply NoDup_concat; eauto.
       2:{ eapply Forall_incl; eauto.
@@ -1113,19 +1201,16 @@ Module Type LCAUSALITY
       clear H. apply Exists_or_inv in H7.
       eapply flat_map_collect_depends_on_dom, unions_fuse_PS_In, Exists_exists in H7 as (?&Hin1&(?&Hfind2)); eauto.
       2:{ intros ? Hin. eapply Forall_forall in Hvarsenv; eauto.
-          rewrite Henv in Hvarsenv.
-          apply Env.In_from_list, fst_InMembers in Hvarsenv; auto.
-      }
+          inv Hvarsenv. eapply Henv in H0. inv H0. solve_In. }
       eapply unions_fuse_Subset in Hfind2 as (?&Hfind&Hsub); eauto.
       repeat esplit.
       + unfold Env.MapsTo. now erewrite Env.Props.P.F.map_o, Hfind.
       + eapply collect_free_left_spec in H10; eauto.
         eapply PSF.union_iff; eauto.
-      + simpl_Forall. eapply NoDupLocals_incl; eauto. solve_incl_app.
     - (* switch (sub-blocks) *)
       setoid_rewrite Env.Props.P.F.map_mapsto_iff.
       simpl_Exists. simpl_Forall. inv_VarsDefined.
-      eapply H with (cenv:=cenv) (cenv':=cenv') in Hdef as (?&Hfind&?); eauto.
+      eapply H with (cenv':=cenv') in Hdef as (?&Hfind&?); eauto.
       2:{ rewrite app_assoc in *. eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto. }
       2:{ take (Permutation _ _) and rewrite <-it in Hndvars. eapply NoDup_concat; eauto. }
       2:{ take (Permutation _ _) and rewrite <-it in Hvarsenv. eapply Forall_incl, incl_concat; eauto. }
@@ -1144,14 +1229,12 @@ Module Type LCAUSALITY
         2-4:clear Hin0; simpl_Forall; eauto.
         - intros ? Hin'.
           take (Permutation _ _) and rewrite it in Hin'. simpl_Forall.
-          rewrite Henv in Hvarsenv.
-          apply Env.In_from_list, fst_InMembers in Hvarsenv; auto.
-        - eapply NoDupLocals_incl; eauto. solve_incl_app.
+          inv Hvarsenv. eapply Henv in H0. inv H0. solve_In.
       }
       eapply collect_free_left_spec in H10; eauto.
       repeat esplit; eauto. eapply PSF.union_iff; left; eauto.
     - (* local block (sub-blocks) *)
-      simpl_Exists. inv_VarsDefined. take (depends_on _ _ _ _ _) and rename it into Hdep.
+      simpl_Exists. inv_VarsDefined. take (depends_on _ _ _ _) and rename it into Hdep.
       simpl_Forall.
       eapply H with (xs:=xs1) in Hdep as (?&Hinc&Hpsin); eauto.
       + eapply unions_fuse_Subset in Hinc as (?&Hfind&Hsub). 2:eapply in_map_iff; eauto.
@@ -1161,25 +1244,10 @@ Module Type LCAUSALITY
         eapply PSF.union_iff. left; eauto.
       + apply NoDupMembers_app; auto.
         * apply nodupmembers_map; auto. intros; destruct_conjs; auto.
-        * intros * Hin1 Hin2. erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers in Hin2. 2:intros; destruct_conjs; auto.
-          eapply H7; eauto. rewrite in_app_iff, <-2 fst_InMembers; auto.
-      + apply NoDupMembers_app; auto.
-        * eapply nodupmembers_map_filter; eauto.
-          intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
-        * intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm2. simpl_In.
-          eapply H7; eauto using In_InMembers.
-          rewrite in_app_iff, <-2 fst_InMembers; auto.
-      + rewrite Henv. unfold Env.union, Env.from_list.
-        rewrite <-Env.adds'_app.
-        eapply Env.adds'_Perm; eauto using Env.NoDupMembers_elements.
-        apply Env.elements_from_list.
-        apply nodupmembers_map; auto. intros; destruct_conjs; auto.
-      + rewrite Henvl. unfold Env.union, Env.from_list.
-        rewrite <-Env.adds'_app.
-        eapply Env.adds'_Perm; eauto using Env.NoDupMembers_elements.
-        apply Env.elements_from_list.
-        apply nodupmembers_map_filter; eauto.
-        intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
+        * intros * Hin1 Hin2. rewrite InMembers_senv_of_locs in Hin2.
+          eapply H7; eauto using In_InMembers. now rewrite <-fst_InMembers.
+      + eapply equiv_env_local; eauto.
+      + eapply equiv_env_last_local; eauto.
       + rewrite 2 Env.elements_union, 2 Env.elements_from_list.
         * clear - Hin Hnd4. rewrite app_assoc. eapply NoDup_locals_inv; eauto.
           eapply Permutation_NoDup in Hnd4; eauto. simpl_app.
@@ -1192,34 +1260,25 @@ Module Type LCAUSALITY
         * apply nodupmembers_map_filter; auto.
           intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
         * apply nodupmembers_map; auto. intros; destruct_conjs; auto.
-        * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2.
-          rewrite Henvl, Env.In_from_list in Hin1. rewrite fst_InMembers in Hin1, Hin2. simpl_In.
-          eapply H7; eauto using In_InMembers.
-          apply in_or_app, or_intror. solve_In.
-        * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2.
-          rewrite Henv, Env.In_from_list in Hin1. rewrite fst_InMembers in Hin1, Hin2. simpl_In.
-          eapply H7; eauto using In_InMembers.
-          apply in_or_app, or_introl. solve_In.
+        * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2. inv Hin1. apply Henvl in H0; inv H0.
+          rewrite fst_InMembers in Hin2. simpl_In.
+          eapply H7; eauto using In_InMembers. solve_In.
+        * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2. inv Hin1. apply Henv in H0; inv H0.
+          rewrite fst_InMembers in Hin2. simpl_In.
+          eapply H7; eauto using In_InMembers. solve_In.
       + eapply NoDup_concat; eauto.
         rewrite <-H4. apply NoDup_app'; auto.
         * now eapply fst_NoDupMembers.
         * eapply Forall_forall; intros ? Hin1 Hin2. simpl_Forall.
-          rewrite Henv, Env.In_from_list in Hvarsenv.
-          eapply H7. apply fst_InMembers; eauto.
-          apply in_or_app, or_introl, fst_InMembers; eauto.
+          inv Hvarsenv. eapply Henv in H0. inv H0.
+          eapply H7. apply fst_InMembers; eauto. solve_In.
       + eapply Forall_forall; intros.
         assert (In x1 (concat xs0)) as Hin' by (eapply incl_concat; eauto).
         rewrite Env.union_In.
         rewrite <-H4 in Hin'. apply in_app_or in Hin' as [Hin'|Hin']; [right|]; eauto.
         * apply Env.In_from_list, fst_InMembers. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
         * simpl_Forall; auto.
-      + rewrite 2 map_app, map_map, map_fst_map_filter.
-        eapply NoDupLocals_incl; eauto. simpl_app.
-        apply incl_appr'. rewrite Permutation_swap. apply incl_appr', incl_app.
-        * erewrite map_ext; try reflexivity. intros; destruct_conjs; auto.
-        * intros ? Hin'. solve_In.
-      + subst env' envl'. erewrite 2 map_app, map_map, map_ext with (l:=locs), map_fst_map_filter; eauto.
-        intros; destruct_conjs; auto.
+      + rewrite map_app, map_fst_senv_of_locs; auto.
     - (* local (last) *)
       simpl_Exists. destruct o as [(?&?)|]. 2:take False and inv it.
       destruct_conjs; subst.
@@ -1240,57 +1299,38 @@ Module Type LCAUSALITY
         destruct (Env.find _ (unions_fuse _)); subst; eauto.
         repeat esplit; eauto.
         rewrite PSF.union_iff; auto.
-      + rewrite Henv. unfold Env.union, Env.from_list.
-        rewrite <-Env.adds'_app.
-        eapply Env.adds'_Perm; eauto using Env.NoDupMembers_elements.
-        apply Env.elements_from_list.
-        apply nodupmembers_map; auto. intros; destruct_conjs; auto.
-      + rewrite Henvl. unfold Env.union, Env.from_list.
-        rewrite <-Env.adds'_app.
-        eapply Env.adds'_Perm; eauto using Env.NoDupMembers_elements.
-        apply Env.elements_from_list.
-        apply nodupmembers_map_filter; eauto.
-        intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
-      + apply NoDupMembers_app; auto.
-        * eapply nodupmembers_map; auto. intros; destruct_conjs; auto.
-        * intros * Hinm1 Hinm2.
-          erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers in Hinm2. 2:intros; destruct_conjs; auto.
-          eapply H7; eauto. apply in_or_app, or_introl, fst_InMembers; auto.
-      + apply NoDupMembers_app; auto.
-        * eapply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
-          destruct o as [(?&?)|]; simpl; auto.
-        * intros * Hinm1 Hinm2.
-          erewrite fst_InMembers in Hinm2. simpl_In.
-          eapply H7; eauto using In_InMembers.
-          apply in_or_app, or_intror, fst_InMembers; auto.
+      + eapply equiv_env_local; eauto.
+      + eapply equiv_env_last_local; eauto.
       + simpl_Forall; eauto.
       + simpl_Forall; eauto.
-        subst env' envl'. erewrite map_app, map_app, map_map, map_ext with (l:=locs), map_fst_map_filter; eauto.
-        intros; destruct_conjs; auto.
   Qed.
 
   Local Hint Constructors Is_defined_in : lcaus.
 
-  Lemma Is_free_left_In Γ Γl cenv cenvl : forall e k x cx,
-      NoDup (map snd (cenv++cenvl)) ->
-      In (x, cx) (cenv++cenvl) ->
-      wx_exp Γ Γl e ->
-      Is_free_left cenv cenvl cx k e ->
-      In x Γ \/ In x Γl.
+  Lemma Is_free_left_In Γ Γ' : forall e k x cx,
+      NoDup (map snd (idcaus_of_senv Γ)) ->
+      HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
+      wx_exp Γ' e ->
+      Is_free_left Γ cx k e ->
+      IsVar Γ' x.
   Proof with simpl_Exists; simpl_Forall; eauto.
     induction e using exp_ind2; intros * Hnd Hin Hwx Hfree; inv Hwx; inv Hfree; eauto.
-    - eapply NoDup_snd_det in Hin. 2:eauto. 2:eapply in_or_app; eauto. subst; auto.
-    - eapply NoDup_snd_det in Hin. 2:eauto. 2:eapply in_or_app; eauto. subst; auto.
+    - destruct Hin; [|exfalso; eauto using NoDup_HasCaus_HasLastCaus].
+      eapply HasCaus_snd_det in H; eauto; subst; auto.
+    - destruct Hin; [exfalso; eauto using NoDup_HasCaus_HasLastCaus|].
+      eapply HasLastCaus_snd_det in H; eauto; subst; auto with senv.
     - destruct H2; eauto.
     - eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
     - destruct H4 as [H4|H4].
       + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
       + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
     - destruct H3 as [(_&?)|H4].
-      + eapply NoDup_snd_det in Hin. 2:eauto. 2:eapply in_or_app; eauto. subst; auto.
+      + destruct Hin; [|exfalso; eauto using NoDup_HasCaus_HasLastCaus].
+        eapply HasCaus_snd_det in H1; eauto; subst; auto.
       + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
     - destruct H3 as [(_&?)|Hfree].
-      + eapply NoDup_snd_det in Hin. 2:eauto. 2:eapply in_or_app; eauto. subst; auto.
+      + destruct Hin; [|exfalso; eauto using NoDup_HasCaus_HasLastCaus].
+        eapply HasCaus_snd_det in H1; eauto; subst; auto.
       + simpl_Exists. eapply Is_free_left_list_Exists in Hfree as (?&Hfree)...
     - destruct H3 as [(_&?)|[Hfree|Hfree]]; eauto.
       + simpl_Exists. eapply Is_free_left_list_Exists in Hfree as (?&Hfree)...
@@ -1301,108 +1341,99 @@ Module Type LCAUSALITY
     - destruct H9 as [(?&Hfree)|Hfree]...
   Qed.
 
-  Lemma depends_on_In : forall blk Γ Γl cenv cenvl cy x cx,
-      NoDup (map snd (cenv ++ cenvl
-                           ++ idty (locals blk)
-                           ++ map_filter (fun '(x1, (_, o)) => option_map (fun cx : ident => (x1, cx)) o) (locals blk))) ->
-      In (x, cx) (cenv++cenvl) ->
-      NoDupLocals (map fst cenv++map fst cenvl) blk ->
-      wx_block Γ Γl blk ->
-      depends_on cenv cenvl cy cx blk ->
-      In x Γ \/ In x Γl.
+  Lemma depends_on_In : forall blk Γ Γ' cy x cx,
+      NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_locals blk)) ->
+      HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
+      NoDupLocals (map fst Γ) blk ->
+      wx_block Γ' blk ->
+      depends_on Γ cy cx blk ->
+      IsVar Γ' x.
   Proof.
-    induction blk using block_ind2; intros * Hnd Hin (* Hnin  *) Hnd2 Hwx Hdep; inv Hwx; inv Hdep; inv Hnd2; simpl in *.
+    induction blk using block_ind2; intros * Hnd Hin Hnd2 Hwx Hdep; inv Hwx; inv Hdep; inv Hnd2; simpl in *.
     - (* equation *)
       rewrite app_nil_r in Hnd.
       eapply Is_free_left_list_Exists in H3 as (?&Hfree). simpl_Exists. simpl_Forall.
-      eapply Is_free_left_In in Hfree; eauto using NoDup_app_l.
+      eapply Is_free_left_In in Hfree; eauto.
     - (* reset *)
       simpl_Exists; simpl_Forall.
       eapply H; eauto.
-      + clear - Hnd Hin0. rewrite app_assoc in *.
-        eapply NoDup_locals_inv; eauto.
-    - rewrite app_assoc, map_app in Hnd.
+      + eapply NoDup_locals_inv; eauto.
+    - rewrite map_app in Hnd.
       eapply Is_free_left_In in H5; eauto using NoDup_app_l.
     - (* switch *)
       rename H1 into Hdef. simpl_Exists. simpl_Forall.
       eapply H; eauto.
-      + clear - Hnd Hin0 Hin1.
-        rewrite app_assoc in *.
-        eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
-    - rewrite app_assoc, map_app in Hnd.
+      + eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
+    - rewrite map_app in Hnd.
       eapply Is_free_left_In in H3; eauto using NoDup_app_l.
     - (* local *)
       simpl_Exists. simpl_Forall.
-      eapply H in H6 as Hin'. 5:eauto.
-      + subst env' envl'. repeat rewrite in_app_iff in Hin'.
-        destruct Hin' as [[|]|[|]]; eauto. 1,2:exfalso.
-        1,2:eapply H8; [eapply fst_InMembers; eauto|
-                         rewrite in_app_iff in *; destruct Hin; [left|right]; solve_In].
-        solve_In.
-      + clear - Hnd Hin0. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
+      eapply H in H4 as Hin'. 5:eauto.
+      + eapply IsVar_app in Hin' as [|]; eauto. exfalso.
+        inv H0. rewrite InMembers_senv_of_locs in H1.
+        eapply H8; eauto.
+        destruct Hin as [Hin|Hin]; inv Hin; solve_In.
+      + clear - Hnd Hin0.
+        rewrite idcaus_of_senv_locs_Perm.
+        simpl_app. rewrite map_filter_app in Hnd. simpl_app.
         erewrite map_filter_map, map_filter_ext, map_map with (l:=locs), map_ext with (l:=locs) in Hnd.
         repeat rewrite <-map_app.
         repeat rewrite app_assoc. rewrite <-app_assoc. eapply NoDup_locals_inv; eauto.
         simpl_app.
         eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
         1,2:intros; destruct_conjs; auto. destruct o; destruct_conjs; auto.
-      + repeat rewrite in_app_iff in *. destruct Hin; auto.
-      + eapply NoDupLocals_incl; eauto. simpl_app.
-        apply incl_appr'. erewrite map_map, map_ext, map_fst_map_filter.
-        apply incl_app; [apply incl_appr, incl_refl|apply incl_appr']. 2:intros; destruct_conjs; auto.
-        intros ??. solve_In.
+      + rewrite HasCaus_app, HasLastCaus_app. destruct Hin; auto.
+      + now rewrite map_app, map_fst_senv_of_locs.
     - simpl_Exists; simpl_Forall. destruct o; destruct_conjs; simpl in *; try (take False and inv it); subst.
       eapply Is_free_left_In in H1 as Hin'. 4:eauto.
-      + subst env' envl'. repeat rewrite in_app_iff in Hin'.
-        destruct Hin' as [[|]|[|]]; eauto. 1,2:exfalso.
-        1,2:eapply H8; [eapply fst_InMembers; eauto|
-                         rewrite in_app_iff in *; destruct Hin; [left|right]; solve_In].
-        solve_In.
-      + clear - Hnd. simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-        rewrite (app_assoc _ (map snd cenvl)), (Permutation_app_comm _ (map snd cenvl)), <-app_assoc.
+      + eapply IsVar_app in Hin' as [|]; eauto. exfalso.
+        inv H0. rewrite InMembers_senv_of_locs in H3.
+        eapply H8; eauto.
+        destruct Hin as [Hin|Hin]; inv Hin; solve_In.
+      + clear - Hnd.
+        rewrite idcaus_of_senv_locs_Perm.
+        simpl_app. rewrite map_filter_app in Hnd. simpl_app.
         erewrite map_map with (l:=locs), map_ext with (l:=locs), map_filter_map, map_filter_ext in Hnd.
-        eapply NoDup_incl_app. 3:eauto. apply incl_appr', incl_appr', incl_appr, incl_appl, incl_refl.
-        intros. solve_NoDup_app.
+        repeat rewrite app_assoc in Hnd. apply NoDup_app_l in Hnd. simpl_app.
+        rewrite Permutation_app_comm with (l':=map snd (map_filter _ locs)) in Hnd.
+        repeat rewrite app_assoc in Hnd. apply NoDup_app_l in Hnd. simpl_app; eauto.
         1,2:intros; destruct_conjs; auto. destruct o; destruct_conjs; auto.
-      + repeat rewrite in_app_iff in *. destruct Hin; auto.
+      + rewrite HasCaus_app, HasLastCaus_app. destruct Hin; auto.
   Qed.
 
-  Fact In_Is_defined_in_helper : forall x cx cenv blocks xs0,
+  Fact In_Is_defined_in_helper : forall x cx Γ blocks xs0,
       In x (concat xs0 ++ map fst (flat_map locals blocks)) ->
-      In (x, cx) (cenv ++ idty (flat_map locals blocks)) ->
+      HasCaus Γ x cx \/ In (x, cx) (map (fun '(x, (cx, _)) => (x, cx)) (flat_map locals blocks)) ->
       Forall2 VarsDefined blocks xs0 ->
-      Exists (fun blk => In (x, cx) (cenv ++ idty (locals blk)) /\ exists xs, In xs xs0 /\ VarsDefined blk xs /\ In x (xs ++ map fst (locals blk))) blocks.
+      Exists (fun blk => (HasCaus Γ x cx \/ In (x, cx) (map (fun '(x, (cx, _)) => (x, cx)) (locals blk)))
+                      /\ exists xs, In xs xs0 /\ VarsDefined blk xs /\ In x (xs ++ map fst (locals blk))) blocks.
   Proof.
     intros * Hin Henv Hvars.
-    induction Hvars; simpl in *. inv Hin.
-    rewrite idty_app, Permutation_swap, 2 in_app_iff in Henv.
-    destruct Henv as [Henv|[Henv|Henv]].
-    + left. repeat esplit; eauto.
-      1,2:apply in_or_app; auto.
-      right. solve_In.
-    + rewrite map_app, <-app_assoc in Hin. repeat rewrite in_app_iff in Hin.
-      destruct Hin as [Hin|[Hin|[Hin|Hin]]].
-      1,3:left; repeat esplit; eauto using in_or_app.
-      1,2:right; eapply Exists_exists in IHHvars as (?&?&?&?&?&?&?); eauto using in_or_app.
-      1,2:eapply Exists_exists; repeat esplit; eauto.
-    + right. eapply Exists_exists in IHHvars as (?&?&?&?&?&?&?); eauto.
-      eapply Exists_exists. repeat esplit; eauto.
-      1,2:apply in_or_app; auto. right.
-      solve_In.
+    setoid_rewrite in_app_iff.
+    rewrite in_app_iff in Hin. destruct Hin, Henv; simpl_In.
+    1,2:apply in_concat in H as (?&?&?).
+    - eapply Forall2_ignore1 in Hvars. simpl_Forall. solve_Exists.
+      split; eauto.
+    - eapply Forall2_ignore2 in Hvars. simpl_Forall. solve_Exists.
+      repeat esplit; eauto. 1,2:right; solve_In.
+    - eapply Forall2_ignore2 in Hvars. simpl_Forall. solve_Exists.
+      repeat esplit; eauto. right; solve_In.
+    - eapply Forall2_ignore2 in Hvars. simpl_Forall. solve_Exists.
+      repeat esplit; eauto. 1,2:right; solve_In.
   Qed.
 
-  Lemma In_Is_defined_in : forall x cx blk xs cenv cenv',
+  Lemma In_Is_defined_in : forall x cx blk xs Γ,
       VarsDefined blk xs ->
       In x (xs ++ map fst (locals blk)) ->
-      In (x, cx) (cenv ++ idty (locals blk)) ->
-      incl xs (map fst cenv) ->
-      incl cenv cenv' ->
-      Is_defined_in cenv' cx blk.
+      HasCaus Γ x cx \/ In (x, cx) (map (fun '(x, (cx, _)) => (x, cx)) (locals blk)) ->
+      incl xs (map fst Γ) ->
+      Is_defined_in Γ cx blk.
   Proof.
-    induction blk using block_ind2; intros * Hvars Hin Henv Hincl1 Hincl2; simpl in *; inv Hvars.
+    induction blk using block_ind2; intros * Hvars Hin Henv Hincl2; simpl in *; inv Hvars.
     - (* equation *)
       rewrite app_nil_r in *.
       destruct eq. econstructor; eauto.
+      destruct Henv; auto. inv H.
     - (* reset *)
       constructor.
       eapply In_Is_defined_in_helper in H3 as Hin'; eauto.
@@ -1410,22 +1441,21 @@ Module Type LCAUSALITY
       eapply H; eauto. etransitivity; [|eauto]. apply incl_concat; auto.
     - (* switch *)
       constructor.
-      assert (Exists (fun blk => In (x, cx) (cenv ++ idty (flat_map locals (snd blk)))
+      assert (Exists (fun blk => (HasCaus Γ x cx \/ In (x, cx) (map (fun '(x, (cx, _)) => (x, cx)) (flat_map locals (snd blk))))
                               /\ exists ys, Forall2 VarsDefined (snd blk) ys /\ Permutation (concat ys) xs
                                       /\ In x (xs ++ map fst (flat_map locals (snd blk)))
                      ) branches) as Hex.
       { clear H.
-        apply in_app_iff in Henv as [Henv|Henv].
-        - inv H4; try congruence; simpl in *. destruct H as (?&Hvars&Hperm).
-          rewrite map_app in Hin. repeat rewrite in_app_iff in Hin.
-          destruct Hin as [Hin|[Hin|Hin]].
-          1,2:left; repeat esplit; eauto using in_or_app.
-          right. simpl_In. simpl_Forall.
-          eapply Exists_exists. repeat esplit; eauto using in_or_app.
-          apply in_or_app, or_intror. solve_In.
-        - simpl_In. simpl_Forall.
-          eapply Exists_exists; repeat esplit; eauto using in_or_app.
-          1,2:eapply in_or_app, or_intror; solve_In. } clear H4.
+        setoid_rewrite in_app_iff.
+        rewrite in_app_iff in Hin. destruct Hin, Henv; simpl_In.
+        - inv H4; try congruence. destruct H1 as (?&?&?).
+          left; repeat esplit; eauto.
+        - simpl_Forall. solve_Exists. repeat esplit; eauto.
+          right. solve_In.
+        - simpl_Forall. solve_Exists. repeat esplit; eauto.
+          right. solve_In.
+        - simpl_Forall. solve_Exists. repeat esplit; eauto.
+          1,2:right; solve_In. } clear H4.
       simpl_Exists.
       eapply In_Is_defined_in_helper, Exists_exists in H1 as (?&?&?&?&?&?&?); eauto. 2:take (Permutation _ _) and rewrite it; auto.
       solve_Exists. simpl_Forall.
@@ -1434,17 +1464,15 @@ Module Type LCAUSALITY
     - (* locals *)
       erewrite map_app, app_assoc, (Permutation_app_comm xs), map_map, map_ext, H4 in Hin.
       2:intros; destruct_conjs; auto.
-      rewrite idty_app, app_assoc in Henv.
       eapply In_Is_defined_in_helper in H2 as Hin'; eauto.
       constructor. solve_Exists. simpl_Forall.
       eapply H; eauto.
       + etransitivity; [eapply incl_concat; eauto|].
-        rewrite <-H4. erewrite map_app, map_fst_idty, Permutation_app_comm, map_map, map_ext with (l:=locs).
+        rewrite <-H4. erewrite map_app, map_fst_senv_of_locs, Permutation_app_comm.
         apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; auto.
-        intros; destruct_conjs; auto.
-      + unfold idty, idcaus. erewrite 2 map_map, map_ext with (l:=locs).
-        apply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; auto.
-        intros; destruct_conjs; auto.
+      + rewrite map_app, in_app_iff in Henv. rewrite HasCaus_app.
+        destruct Henv as [|[|]]; auto. simpl_In.
+        left; right. econstructor. solve_In. auto.
   Qed.
 
   Lemma Is_defined_in_restrict : forall x blk xs cenv cenv',
@@ -1457,8 +1485,8 @@ Module Type LCAUSALITY
     induction blk using block_ind2; intros * Hndloc Hvars Hnin Hdef; inv Hndloc; inv Hvars; inv Hdef.
     - (* equation *)
       econstructor; eauto.
-      eapply in_app_or in H1 as [Hin|Hin]; auto.
-      exfalso.
+      eapply HasCaus_app in H1 as [Hin|Hin]; auto.
+      exfalso. inv Hin.
       eapply Hnin, In_InMembers; eauto.
     - (* reset *)
       constructor. solve_Exists. inv_VarsDefined. simpl_Forall.
@@ -1479,45 +1507,39 @@ Module Type LCAUSALITY
       rewrite fst_InMembers. rewrite <-fst_InMembers in H0. eauto.
   Qed.
 
-  Lemma Is_defined_in_In : forall cx blk xs cenv,
+  Lemma Is_defined_in_In : forall cx blk xs Γ,
       VarsDefined blk xs ->
-      incl xs (map fst cenv) ->
-      Is_defined_in cenv cx blk ->
-      In cx (map snd (cenv ++ idty (locals blk))).
+      incl xs (map fst Γ) ->
+      Is_defined_in Γ cx blk ->
+      (exists x, HasCaus Γ x cx) \/ In cx (map (fun '(_, (cx, _)) => cx) (locals blk)).
   Proof.
     induction blk using block_ind2; intros * Hvars Hincl1 Hdef; simpl in *; inv Hvars; inv Hdef.
-    - (* equation *)
-      rewrite app_nil_r in *.
-      solve_In.
+    - (* equation *) eauto.
     - (* reset *)
       simpl_Exists. inv_VarsDefined. simpl_Forall.
-      eapply H in Hdef; eauto.
+      eapply H in Hdef as [|]; eauto.
       2:etransitivity; eauto using incl_concat.
-      rewrite map_app, in_app_iff in *. destruct Hdef; auto.
       right. solve_In.
     - (* switch *)
       simpl_Exists. inv_VarsDefined. simpl_Forall.
-      eapply H in Hdef; eauto.
+      eapply H in Hdef as [|]; eauto.
       2:etransitivity; [|eauto]; take (Permutation _ _) and rewrite <-it; eapply incl_concat; eauto.
-      unfold idty in *. repeat rewrite map_app in *. rewrite map_map in *.
-      eapply in_app_map_flat_map, in_app_map_flat_map; eauto.
+      right; solve_In.
     - (* locals *)
       simpl_Exists. inv_VarsDefined. simpl_Forall.
-      eapply H in Hdef; eauto.
-      2:{ etransitivity; eauto using incl_concat.
-          rewrite <-H4. rewrite map_app, map_fst_idcaus, map_fst_idty, Permutation_app_comm.
+      rewrite map_app, in_app_iff.
+      eapply H with (Γ:=Γ++senv_of_locs locs) in Hdef as [(?&Has)|]; eauto.
+      3:{ etransitivity; eauto using incl_concat.
+          rewrite <-H4, map_app, map_fst_senv_of_locs, Permutation_app_comm.
           eapply incl_app; [apply incl_appl|apply incl_appr, incl_refl]; auto.
       }
-      rewrite idty_app.
-      repeat rewrite map_app in *.
-      rewrite app_assoc.
-      repeat rewrite in_app_iff in *. destruct Hdef as [[|]|]; auto.
-      + left; right. solve_In.
-      + right. solve_In.
+      apply HasCaus_app in Has as [|Has]; eauto.
+      + inv Has. right. left. solve_In.
+      + right. right. solve_In.
   Qed.
 
   Lemma Is_last_in_In : forall blk cx,
-      Is_last_in cx blk <-> In (Some cx) (map snd (idck (locals blk))).
+      Is_last_in cx blk <-> In (Some cx) (map (fun '(_, (_, cx)) => cx) (locals blk)).
   Proof.
     induction blk using block_ind2; intros; simpl.
     - (* equation *)
@@ -1540,7 +1562,7 @@ Module Type LCAUSALITY
         * simpl_Exists. simpl_Forall.
           eapply H in H1. solve_In. 2:apply in_or_app; right; solve_In. auto.
         * solve_In. 2:apply in_or_app; left; solve_In. auto.
-      + apply in_app_iff in Hin as [Hin|Hin]; simpl_In.
+      + apply in_app_iff in Hin0 as [Hin|Hin]; simpl_In.
         * subst. eapply LastLocal2; eauto.
         * constructor. solve_Exists. simpl_Forall.
           apply H; solve_In.
@@ -1559,31 +1581,35 @@ Module Type LCAUSALITY
     2:intros (?&(?&?)&?); auto.
     pose proof (n_defd n) as (xs&Hdef&Hperm).
     erewrite collect_depends_on_dom with (xs0:=xs); eauto.
-    3:reflexivity.
-    2:{ eapply fst_NoDupMembers. erewrite <-map_app, map_map, map_ext. apply node_NoDup.
-        intros; destruct_conjs; auto. }
-    (* 3:{ erewrite <-map_app, map_map, map_ext. apply node_NoDupLocals. *)
-    (*     intros; destruct_conjs; auto. } *)
-    2-4:erewrite <-map_app, map_map, map_ext with (g:=fst); [|intros; destruct_conjs; auto]; eauto.
-    2:rewrite Hperm; solve_incl_app. 2:apply node_NoDupLocals.
-    unfold idcaus_of_locals; simpl_app. repeat rewrite in_app_iff. rewrite <-or_assoc.
+    2:{ apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto. }
+    3,4:rewrite map_fst_senv_of_inout.
+    3:rewrite Hperm; solve_incl_app. 3:apply node_NoDupLocals.
+    2:{ intros *. erewrite <-map_app. split; intros Hin.
+        - apply Env.from_list_find_In in Hin. simpl_In.
+          econstructor. solve_In. reflexivity.
+        - inv Hin. simpl_In.
+          apply Env.find_In_from_list. solve_In.
+          apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+    }
+    repeat rewrite in_app_iff. rewrite <-or_assoc.
     rewrite Is_last_in_In.
     split; (intros [Hin|Hin]; [left|right]).
-    - eapply Is_defined_in_restrict, Is_defined_in_In in Hin; eauto.
+    - simpl_app. eapply Is_defined_in_restrict, Is_defined_in_In in Hin; eauto.
       2-3:erewrite map_map, map_ext with (g:=fst); [|intros; destruct_conjs; auto]; eauto.
       2:rewrite Hperm; solve_incl_app.
       2:{ eapply NoDupLocals_incl, node_NoDupLocals. solve_incl_app. }
       2:{ intros ? Hin' Hinm. rewrite fst_InMembers in Hinm. simpl_In.
           eapply NoDupMembers_app_InMembers. eapply n_nodup with (n0:=n). eapply In_InMembers; eauto.
           rewrite Hperm in Hin'. now rewrite fst_InMembers. }
-      rewrite map_app, in_app_iff in Hin. destruct Hin; auto.
+      destruct Hin as [(?&Hcaus)|]. 2:right; solve_In.
+      inv Hcaus. left; solve_In.
     - solve_In. auto.
     - destruct Hin; simpl_In.
-      1,2:eapply In_Is_defined_in with (cenv:=idcaus (n_out n)); eauto.
-      1-8:try rewrite Hperm.
-      1,2,5,6:apply in_app_iff. 1,2:left; solve_In. 1,2:right; solve_In.
-      1,3:rewrite <-map_fst_idcaus; reflexivity.
-      1,2:solve_incl_app.
+      1,2:eapply In_Is_defined_in; eauto.
+      1,4:rewrite Hperm, in_app_iff. left; solve_In. right; solve_In.
+      2,4:rewrite Hperm, map_fst_senv_of_inout; solve_incl_app.
+      + left. econstructor. simpl_app. apply in_or_app, or_intror. solve_In. auto.
+      + right. solve_In.
     - solve_In.
   Qed.
 
@@ -1591,7 +1617,7 @@ Module Type LCAUSALITY
       wl_node G n ->
       wx_node n ->
       NoDup (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))) ->
-      depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) ->
+      depends_on (senv_of_inout (n_in n ++ n_out n)) x y (n_block n) ->
       exists ys, (Env.find x (build_graph n)) = Some ys /\ PS.In y ys.
   Proof.
     intros * Hwl Hwx Hndcaus Hdep.
@@ -1603,37 +1629,50 @@ Module Type LCAUSALITY
       now rewrite NoDupMembers_idcaus.
     }
     pose proof (n_defd n) as (?&Hdef&Hperm).
-    eapply collect_depends_on_spec in Hdep as (?&Hx&Hy); eauto with datatypes. 2,3:reflexivity.
+    assert (forall x1 cx,
+               Env.find x1 (Env.from_list (idcaus (n_in n ++ n_out n))) = Some cx
+               <-> HasCaus (senv_of_inout (n_in n ++ n_out n)) x1 cx
+           ) as Hequiv.
+    { split; intros Hin.
+      - apply Env.from_list_find_In in Hin. simpl_In.
+        econstructor. solve_In; eauto. reflexivity.
+      - inv Hin. apply Env.find_In_from_list; auto.
+        solve_In. }
+    eapply collect_depends_on_spec with
+      (cenv':= Env.from_list (idcaus (n_in n ++ n_out n)))
+      (cenvl':=Env.empty _)
+      in Hdep as (?&Hx&Hy); eauto with datatypes.
     - assert (In x (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n)))) as Hin'.
       { unfold idcaus_of_locals.
         eapply Env.find_In, collect_depends_on_dom in Hx as [Hdef'|Hlast']; eauto.
         - eapply Is_defined_in_In in Hdef; eauto.
-          2:rewrite Hperm, map_fst_idcaus; solve_incl_app.
+          2:rewrite Hperm, map_fst_senv_of_inout; solve_incl_app.
           repeat rewrite map_app in *. repeat rewrite in_app_iff in *.
-          destruct Hdef as [|]; auto.
+          destruct Hdef as [(?&Has)|]; auto.
+          + inv Has. left. solve_In.
+          + right; left. solve_In.
         - eapply Is_last_in_In in Hlast'; eauto.
           repeat rewrite map_app. repeat rewrite in_app_iff.
           right. right. solve_In. auto.
-        - reflexivity.
-        - rewrite Hperm, map_fst_idcaus. solve_incl_app.
-        - rewrite map_fst_idcaus. eapply node_NoDupLocals.
-        - rewrite map_fst_idcaus; eauto.
+        - apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+        - rewrite Hperm, map_fst_senv_of_inout. solve_incl_app.
+        - rewrite map_fst_senv_of_inout. apply node_NoDupLocals.
       }
       apply Hdom in Hin' as (?&Hfind). clear Hdom.
       eexists; split; eauto.
       unfold build_graph in Hfind.
       rewrite Env.union_fuse_spec, Hx in Hfind.
       destruct (Env.find _ _); inv Hfind; auto using PSF.union_2.
-    - rewrite Env.elements_from_list.
-      2:rewrite fst_NoDupMembers, map_fst_idcaus; apply node_NoDup.
-      now simpl.
+    - apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+    - setoid_rewrite Env.gempty. split; intros; try congruence.
+      inv H; simpl_In; auto.
+    - rewrite Env.elements_from_list; auto.
     - rewrite Hperm. rewrite NoDupMembers_idcaus in Hnd.
       eapply fst_NoDupMembers, NoDupMembers_app_r; eauto.
     - rewrite Hperm. eapply Forall_forall; intros.
       rewrite Env.In_from_list, fst_InMembers, map_fst_idcaus, map_app.
       apply in_or_app; auto.
-    - rewrite app_nil_r, map_fst_idcaus; apply node_NoDupLocals.
-    - now rewrite map_fst_idcaus.
+    - rewrite map_fst_senv_of_inout; apply node_NoDupLocals.
   Qed.
 
   (** We prove that the [check_node_causality] function only succeeds if
@@ -1691,7 +1730,7 @@ Module Type LCAUSALITY
     Context {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
-    Variable cenv cenvl : list (ident * ident).
+    Variable Γ : static_env.
 
     Variable P_var : ident -> Prop.
     Variable P_exp : exp -> nat -> Prop.
@@ -1708,9 +1747,9 @@ Module Type LCAUSALITY
 
     Lemma Pexp_Pexps : forall es k,
         Forall (fun e => forall k, k < numstreams e
-                           -> (forall x, Is_free_left cenv cenvl x k e -> P_var x)
+                           -> (forall x, Is_free_left Γ x k e -> P_var x)
                            -> P_exp e k) es ->
-        (forall x, Is_free_left_list cenv cenvl x k es -> P_var x) ->
+        (forall x, Is_free_left_list Γ x k es -> P_var x) ->
         k < length (annots es) ->
         P_exps es k.
     Proof.
@@ -1732,12 +1771,12 @@ Module Type LCAUSALITY
         P_exp (Eenum k ty) 0.
 
     Hypothesis EvarCase : forall x cx ann,
-        In (x, cx) cenv ->
+        HasCaus Γ x cx ->
         P_var cx ->
         P_exp (Evar x ann) 0.
 
     Hypothesis ElastCase : forall x cx ann,
-        In (x, cx) cenvl ->
+        HasLastCaus Γ x cx ->
         P_var cx ->
         P_exp (Elast x ann) 0.
 
@@ -1765,13 +1804,13 @@ Module Type LCAUSALITY
     Hypothesis EwhenCase : forall es x cx b ann k,
         k < length (fst ann) ->
         P_exps es k ->
-        In (x, cx) cenv ->
+        HasCaus Γ x cx ->
         P_var cx ->
         P_exp (Ewhen es x b ann) k.
 
     Hypothesis EmergeCase : forall x cx tx es ann k,
         k < length (fst ann) ->
-        In (x, cx) cenv ->
+        HasCaus Γ x cx ->
         P_var cx ->
         Forall (fun es => P_exps (snd es) k) es ->
         P_exp (Emerge (x, tx) es ann) k.
@@ -1792,14 +1831,14 @@ Module Type LCAUSALITY
     (* Exp-level induction *)
     Fixpoint exp_causal_ind e {struct e} : forall k,
         wl_exp G e ->
-        wx_exp (map fst cenv) (map fst cenvl) e ->
-        (forall x, Is_free_left cenv cenvl x k e -> P_var x) ->
+        wx_exp Γ e ->
+        (forall x, Is_free_left Γ x k e -> P_var x) ->
         k < numstreams e ->
         P_exp e k.
-    Proof with eauto with lcaus.
+    Proof with eauto with senv lcaus.
       Local Ltac solve_forall' es :=
         match goal with
-        | Hwl: Forall (wl_exp _) es, Hwx: Forall (wx_exp _ _) es, Hind : forall e k, wl_exp _ e -> _ |- _ =>
+        | Hwl: Forall (wl_exp _) es, Hwx: Forall (wx_exp _) es, Hind : forall e k, wl_exp _ e -> _ |- _ =>
           clear - Hind Hwl Hwx;
           induction es; inv Hwl; inv Hwx; constructor; auto
         end.
@@ -1813,11 +1852,11 @@ Module Type LCAUSALITY
         apply EenumCase.
       - (* var *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
-        simpl_In.
+        inv H0. apply InMembers_In in H as (?&?).
         eapply EvarCase, Hfree...
       - (* last *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
-        simpl_In.
+        inv H0. destruct (causl_last e) eqn:Hfind; try congruence.
         eapply ElastCase, Hfree...
       - (* unop *)
         rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
@@ -1836,14 +1875,14 @@ Module Type LCAUSALITY
         1,2:eapply Pexp_Pexps; auto with lcaus; try congruence.
         solve_forall' l. solve_forall' l0.
       - (* when *)
-        apply in_map_iff in H1 as ((x&cx)&?&?); subst.
-        eapply EwhenCase...
+        inv H1. apply InMembers_In in H as (?&?).
+        eapply EwhenCase... 2:eapply Hfree...
         eapply Pexp_Pexps... 2:congruence.
         solve_forall' l.
       - (* merge *)
-        apply in_map_iff in H1 as ((?&?)&?&?); subst.
-        eapply EmergeCase...
-        assert (forall x, Exists (fun es => Is_free_left_list cenv cenvl x k (snd es)) l -> P_var x) as Hfree' by auto with lcaus.
+        inv H1. apply InMembers_In in H as (?&?).
+        eapply EmergeCase... eapply Hfree...
+        assert (forall x, Exists (fun es => Is_free_left_list Γ x k (snd es)) l -> P_var x) as Hfree' by auto with lcaus.
         clear Hfree H3.
         induction l; inv H4; inv H5; inv H7; constructor; auto.
         eapply Pexp_Pexps; eauto. 2:congruence.
@@ -1852,7 +1891,7 @@ Module Type LCAUSALITY
       - (* case *)
         apply EcaseCase; eauto.
         + eapply exp_causal_ind... rewrite H4; auto.
-        + assert (forall x, Exists (fun es => Is_free_left_list cenv cenvl x k (snd es)) l -> P_var x) as Hfree' by auto with lcaus.
+        + assert (forall x, Exists (fun es => Is_free_left_list Γ x k (snd es)) l -> P_var x) as Hfree' by auto with lcaus.
           clear Hfree H5.
           induction l; inv H7; inv H8; inv H12; constructor; auto.
           eapply Pexp_Pexps; eauto. 2:congruence.
@@ -1877,7 +1916,7 @@ Module Type LCAUSALITY
             eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.
             right. solve_Exists. simpl_Forall.
             rewrite <-length_annot_numstreams in H6.
-            take (Is_free_left _ _ _ _ _) and rename it into Hfree1.
+            take (Is_free_left _ _ _ _) and rename it into Hfree1.
             assert (Hfree2:=Hfree1). eapply Is_free_left_length in Hfree1; eauto.
             rewrite H6 in Hfree1. destruct x0; auto. lia.
     Qed.
@@ -1894,10 +1933,10 @@ Module Type LCAUSALITY
 
     (* We can "follow" the [TopOrder] extracted from an [AcyGraph]. *)
     (* This gives us an order over the variables of the node *)
-    Lemma TopoOrder_inv {v a} : forall cenv cenvl (g : AcyGraph v a) blk x xs,
-        (forall x y, depends_on cenv cenvl x y blk -> is_arc g y x) ->
+    Lemma TopoOrder_inv {v a} : forall Γ (g : AcyGraph v a) blk x xs,
+        (forall x y, depends_on Γ x y blk -> is_arc g y x) ->
         TopoOrder g (x::xs) ->
-        (forall y, depends_on cenv cenvl x y blk -> In y xs).
+        (forall y, depends_on Γ x y blk -> In y xs).
     Proof.
       intros * Hdep Hpref Hin Hdep'.
       inversion_clear Hpref as [|?? (?&?&Harc) ?].
@@ -1911,7 +1950,7 @@ Module Type LCAUSALITY
         (forall x xs,
             In x (map snd (idcaus (n_in n ++ n_out n))) \/ In x (map snd (idcaus_of_locals (n_block n))) ->
             P_vars xs ->
-            (forall y, depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) -> In y xs) ->
+            (forall y, depends_on (senv_of_inout (n_in n ++ n_out n)) x y (n_block n) -> In y xs) ->
             P_vars (x::xs)) ->
         P_vars (PS.elements (vertices g)).
     Proof.
@@ -1941,7 +1980,7 @@ Module Type LCAUSALITY
         (forall x xs,
             In x (map snd (idcaus (n_in n ++ n_out n))) \/ In x (map snd (idcaus_of_locals (n_block n))) ->
             P_vars xs ->
-            (forall y, depends_on (idcaus (n_in n ++ n_out n)) [] x y (n_block n) -> In y xs) ->
+            (forall y, depends_on (senv_of_inout (n_in n ++ n_out n)) x y (n_block n) -> In y xs) ->
             P_vars (x::xs)) ->
         P_vars (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))).
     Proof.
@@ -1960,7 +1999,8 @@ Module LCausalityFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS Ids Op OpAux)
-       (Syn   : LSYNTAX Ids Op OpAux Cks)
-       <: LCAUSALITY Ids Op OpAux Cks Syn.
-  Include LCAUSALITY Ids Op OpAux Cks Syn.
+       (Senv  : STATICENV Ids Op OpAux Cks)
+       (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
+       <: LCAUSALITY Ids Op OpAux Cks Senv Syn.
+  Include LCAUSALITY Ids Op OpAux Cks Senv Syn.
 End LCausalityFun.

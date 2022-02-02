@@ -14,6 +14,7 @@ From Velus Require Import CommonList.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import CoindStreams.
@@ -25,8 +26,9 @@ Module Type LSEMANTICS
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks   : CLOCKS        Ids Op OpAux)
-       (Import Syn   : LSYNTAX       Ids Op OpAux Cks)
-       (Import Lord  : LORDERED      Ids Op OpAux Cks Syn)
+       (Import Senv  : STATICENV     Ids Op OpAux Cks)
+       (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+       (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
 
   CoInductive fby1: value -> Stream svalue -> Stream svalue -> Stream svalue -> Prop :=
@@ -1433,17 +1435,18 @@ Module Type LSEMANTICS
   Qed.
 
 
-  Fact sem_exp_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ Γl H Hl b e vs,
-      wx_exp Γ Γl e ->
+  Fact sem_exp_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b e vs,
+      wx_exp Γ e ->
       sem_exp G (H, Hl) b e vs ->
-      sem_exp G (Env.restrict H Γ, Hl) b e vs.
+      sem_exp G (Env.restrict H (List.map fst Γ), Hl) b e vs.
   Proof with eauto with datatypes.
     induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem.
     - (* const *) constructor...
     - (* enum *) constructor...
     - (* var *)
       constructor. eapply sem_var_restrict...
-    - econstructor...
+      inv H1. now rewrite <-fst_InMembers.
+    - (* last *) econstructor...
     - (* unop *)
       econstructor...
     - (* binop *)
@@ -1460,9 +1463,11 @@ Module Type LSEMANTICS
       econstructor...
       + simpl_Forall; eauto.
       + eapply sem_var_restrict...
+        inv H3. now rewrite <-fst_InMembers.
     - (* merge *)
       econstructor...
       + eapply sem_var_restrict...
+        inv H3. now rewrite <-fst_InMembers.
       + eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
         simpl_Exists; simpl_Forall; eauto.
     - (* case *)
@@ -1480,18 +1485,19 @@ Module Type LSEMANTICS
       1,2:simpl_Forall; eauto.
   Qed.
 
-  Lemma sem_equation_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ Γl H Hl b eq,
-      wx_equation Γ Γl eq ->
+  Lemma sem_equation_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b eq,
+      wx_equation Γ eq ->
       sem_equation G (H, Hl) b eq ->
-      sem_equation G (Env.restrict H Γ, Hl) b eq.
+      sem_equation G (Env.restrict H (List.map fst Γ), Hl) b eq.
   Proof with eauto with datatypes.
-    intros G ?? ?? b [xs es] Hwc Hsem.
+    intros G ?? ? b [xs es] Hwc Hsem.
     destruct Hwc as (?&?). inv Hsem.
     econstructor. instantiate (1:=ss).
     + simpl_Forall; eauto.
       eapply sem_exp_restrict...
     + simpl_Forall; eauto.
       eapply sem_var_restrict...
+      inv H1. now rewrite <-fst_InMembers.
   Qed.
 
   Lemma sem_clock_refines : forall H H' ck bs bs',
@@ -1544,10 +1550,10 @@ Module Type LSEMANTICS
     eapply sem_var_restrict; eauto.
   Qed.
 
-  Lemma sem_block_restrict {PSyn prefs} : forall (G: @global PSyn prefs) blk Γ Γl H Hl b,
-      wx_block Γ Γl blk ->
+  Lemma sem_block_restrict {PSyn prefs} : forall (G: @global PSyn prefs) blk Γ H Hl b,
+      wx_block Γ blk ->
       sem_block G (H, Hl) b blk ->
-      sem_block G (Env.restrict H Γ, Hl) b blk.
+      sem_block G (Env.restrict H (List.map fst Γ), Hl) b blk.
   Proof.
     induction blk using block_ind2; intros * Hwc Hsem; inv Hwc; inv Hsem.
     - (* equation *)
@@ -1568,18 +1574,19 @@ Module Type LSEMANTICS
       + intros ?? Hdef Hmaps.
         eapply H11; eauto. eapply Env.restrict_find_inv; eauto.
     - (* locals *)
-      eapply Slocal with (H'0:=Env.restrict H' (Γ ++ List.map fst locs)).
+      eapply Slocal with (H'0:=Env.restrict H' (List.map fst (Γ ++ senv_of_locs locs))).
       + intros * Hsem Hnin.
         eapply sem_var_restrict_inv in Hsem as (Hin&Hsem).
         eapply sem_var_restrict; eauto.
-        apply in_app_iff in Hin as [Hin|Hin]; auto.
+        simpl_app. apply in_app_iff in Hin as [Hin|Hin]; auto.
+        setoid_rewrite map_fst_senv_of_locs in Hin.
         exfalso. apply Hnin, fst_InMembers; auto.
       + eauto.
       + intros * Hin. edestruct H11; eauto. destruct_conjs.
         simpl_Forall.
         do 3 esplit. repeat split; eauto.
         eapply sem_exp_restrict; eauto.
-        eapply sem_var_restrict; eauto. apply in_or_app. right. solve_In.
+        eapply sem_var_restrict; eauto. simpl_app. apply in_or_app. right. solve_In.
       + simpl_Forall; eauto.
   Qed.
 
@@ -1676,9 +1683,10 @@ Module LSemanticsFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks   : CLOCKS        Ids Op OpAux)
-       (Syn   : LSYNTAX       Ids Op OpAux Cks)
-       (Lord  : LORDERED      Ids Op OpAux Cks Syn)
+       (Senv  : STATICENV     Ids Op OpAux Cks)
+       (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
+       (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Str   : COINDSTREAMS  Ids Op OpAux Cks)
-<: LSEMANTICS Ids Op OpAux Cks Syn Lord Str.
-  Include LSEMANTICS Ids Op OpAux Cks Syn Lord Str.
+<: LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str.
+  Include LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str.
 End LSemanticsFun.

@@ -8,6 +8,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Fresh.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 
 (** * Remove Local Blocks *)
@@ -17,7 +18,8 @@ Module Type DELAST
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks).
+       (Import Senv : STATICENV Ids Op OpAux Cks)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks Senv).
 
   (** ** Rename some variables *)
   Section rename.
@@ -618,7 +620,8 @@ Module DeLastFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       <: DELAST Ids Op OpAux Cks Syn.
-  Include DELAST Ids Op OpAux Cks Syn.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       <: DELAST Ids Op OpAux Cks Senv Syn.
+  Include DELAST Ids Op OpAux Cks Senv Syn.
 End DeLastFun.

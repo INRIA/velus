@@ -3,6 +3,7 @@ From Velus Require Import CommonProgram.
 From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Coq Require Import PArith.
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Setoid Morphisms.
@@ -17,7 +18,8 @@ Module Type LSYNTAX
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
-       (Import Cks  : CLOCKS Ids Op OpAux).
+       (Import Cks  : CLOCKS Ids Op OpAux)
+       (Import Senv : STATICENV Ids Op OpAux Cks).
 
   (** ** Expressions *)
 
@@ -924,75 +926,74 @@ Module Type LSYNTAX
       In x vars ->
       wx_clock vars (Con ck x tx).
 
-  Inductive wx_exp (env : list ident) (envl : list ident) : exp -> Prop :=
+  Inductive wx_exp (Γ : static_env) : exp -> Prop :=
   | wx_Const : forall c,
-      wx_exp env envl (Econst c)
+      wx_exp Γ (Econst c)
   | wx_Enum : forall k ty,
-      wx_exp env envl (Eenum k ty)
+      wx_exp Γ (Eenum k ty)
   | wx_Evar : forall x a,
-      In x env ->
-      wx_exp env envl (Evar x a)
+      IsVar Γ x ->
+      wx_exp Γ (Evar x a)
   | wx_Elast : forall x ty ck,
-      In x envl ->
-      wx_exp env envl (Elast x (ty, ck))
+      IsLast Γ x ->
+      wx_exp Γ (Elast x (ty, ck))
   | wx_Eunop : forall op e a,
-      wx_exp env envl e ->
-      wx_exp env envl (Eunop op e a)
+      wx_exp Γ e ->
+      wx_exp Γ (Eunop op e a)
   | wx_Ebinop : forall op e1 e2 a,
-      wx_exp env envl e1 ->
-      wx_exp env envl e2 ->
-      wx_exp env envl (Ebinop op e1 e2 a)
+      wx_exp Γ e1 ->
+      wx_exp Γ e2 ->
+      wx_exp Γ (Ebinop op e1 e2 a)
   | wx_Efby : forall e0s es anns,
-      Forall (wx_exp env envl) e0s ->
-      Forall (wx_exp env envl) es ->
-      wx_exp env envl (Efby e0s es anns)
+      Forall (wx_exp Γ) e0s ->
+      Forall (wx_exp Γ) es ->
+      wx_exp Γ (Efby e0s es anns)
   | wx_Earrow : forall e0s es anns,
-      Forall (wx_exp env envl) e0s ->
-      Forall (wx_exp env envl) es ->
-      wx_exp env envl (Earrow e0s es anns)
+      Forall (wx_exp Γ) e0s ->
+      Forall (wx_exp Γ) es ->
+      wx_exp Γ (Earrow e0s es anns)
   | wx_Ewhen : forall es x b tys nck,
-      In x env ->
-      Forall (wx_exp env envl) es ->
-      wx_exp env envl (Ewhen es x b (tys, nck))
+      IsVar Γ x ->
+      Forall (wx_exp Γ) es ->
+      wx_exp Γ (Ewhen es x b (tys, nck))
   | wx_Emerge : forall x tx es tys nck,
-      In x env ->
-      Forall (fun es => Forall (wx_exp env envl) (snd es)) es ->
-      wx_exp env envl (Emerge (x, tx) es (tys, nck))
+      IsVar Γ x ->
+      Forall (fun es => Forall (wx_exp Γ) (snd es)) es ->
+      wx_exp Γ (Emerge (x, tx) es (tys, nck))
   | wx_Ecase : forall e es d tys nck,
-      wx_exp env envl e ->
-      Forall (fun es => Forall (wx_exp env envl) (snd es)) es ->
-      (forall d0, d = Some d0 -> Forall (wx_exp env envl) d0) ->
-      wx_exp env envl (Ecase e es d (tys, nck))
+      wx_exp Γ e ->
+      Forall (fun es => Forall (wx_exp Γ) (snd es)) es ->
+      (forall d0, d = Some d0 -> Forall (wx_exp Γ) d0) ->
+      wx_exp Γ (Ecase e es d (tys, nck))
   | wx_Eapp : forall f es er anns,
-      Forall (wx_exp env envl) es ->
-      Forall (wx_exp env envl) er ->
-      wx_exp env envl (Eapp f es er anns).
+      Forall (wx_exp Γ) es ->
+      Forall (wx_exp Γ) er ->
+      wx_exp Γ (Eapp f es er anns).
 
-  Definition wx_equation env envl (eq : equation) :=
+  Definition wx_equation Γ (eq : equation) :=
     let (xs, es) := eq in
-    Forall (wx_exp env envl) es /\ incl xs env.
+    Forall (wx_exp Γ) es /\ Forall (IsVar Γ) xs.
 
-  Inductive wx_block : list ident -> list ident -> block -> Prop :=
-  | wx_Beq : forall env envl eq,
-      wx_equation env envl eq ->
-      wx_block env envl (Beq eq)
-  | wx_Breset : forall env envl blks er,
-      Forall (wx_block env envl) blks ->
-      wx_exp env envl er ->
-      wx_block env envl (Breset blks er)
-  | wc_Bswitch : forall env envl ec branches,
-      wx_exp env envl ec ->
-      Forall (fun blks => Forall (wx_block env envl) (snd blks)) branches ->
-      wx_block env envl (Bswitch ec branches)
-  | wx_Blocal : forall env envl locs blks,
-      let env' := env ++ map fst locs in
-      let envl' := envl ++ map_filter (fun '(x, (_, _, o)) => option_map (fun _ => x) o) locs in
-      Forall (wx_block env' envl') blks ->
-      Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wx_exp env' envl' e) o) locs ->
-      wx_block env envl (Blocal locs blks).
+  Inductive wx_block : static_env -> block -> Prop :=
+  | wx_Beq : forall Γ eq,
+      wx_equation Γ eq ->
+      wx_block Γ (Beq eq)
+  | wx_Breset : forall Γ blks er,
+      Forall (wx_block Γ) blks ->
+      wx_exp Γ er ->
+      wx_block Γ (Breset blks er)
+  | wc_Bswitch : forall Γ ec branches,
+      wx_exp Γ ec ->
+      Forall (fun blks => Forall (wx_block Γ) (snd blks)) branches ->
+      wx_block Γ (Bswitch ec branches)
+  | wx_Blocal : forall Γ Γ' locs blks,
+      Γ' = Γ ++ senv_of_locs locs ->
+      Forall (wx_block Γ') blks ->
+      Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wx_exp Γ' e) o) locs ->
+      wx_block Γ (Blocal locs blks).
 
   Definition wx_node {PSyn prefs} (n : @node PSyn prefs) :=
-    wx_block (map fst (n_in n ++ n_out n)) [] (n_block n).
+    wx_block (senv_of_inout (n_in n ++ n_out n)) (n_block n).
 
   Definition wx_global {PSyn prefs} (G: @global PSyn prefs) : Prop :=
     Forall wx_node (nodes G).
@@ -1001,22 +1002,13 @@ Module Type LSYNTAX
 
     Hint Constructors wx_exp wx_block : core.
 
-    Lemma wx_clock_incl : forall env env' ck,
-        incl env env' ->
-        wx_clock env ck ->
-        wx_clock env' ck.
+    Lemma wx_exp_incl : forall Γ Γ' e,
+        (forall x, IsVar Γ x -> IsVar Γ' x) ->
+        (forall x, IsLast Γ x -> IsLast Γ' x) ->
+        wx_exp Γ e ->
+        wx_exp Γ' e.
     Proof.
-      induction ck; intros * Hincl Hwc; inv Hwc;
-        constructor; eauto.
-    Qed.
-
-    Lemma wx_exp_incl : forall Γ Γl Γ' Γl' e,
-        incl Γ Γ' ->
-        incl Γl Γl' ->
-        wx_exp Γ Γl e ->
-        wx_exp Γ' Γl' e.
-    Proof.
-      induction e using exp_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx; auto.
+      induction e using exp_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx; eauto with senv.
       - (* fby *)
         constructor; simpl_Forall; auto.
       - (* arrow *)
@@ -1035,26 +1027,26 @@ Module Type LSYNTAX
         constructor; simpl_Forall; eauto.
     Qed.
 
-    Lemma wx_equation_incl : forall Γ Γl Γ' Γl' equ,
-        incl Γ Γ' ->
-        incl Γl Γl' ->
-        wx_equation Γ Γl equ ->
-        wx_equation Γ' Γl' equ.
+    Lemma wx_equation_incl : forall Γ Γ' equ,
+        (forall x, IsVar Γ x -> IsVar Γ' x) ->
+        (forall x, IsLast Γ x -> IsLast Γ' x) ->
+        wx_equation Γ equ ->
+        wx_equation Γ' equ.
     Proof.
-      intros ???? (xs&es) Hincl1 Hincl2 (Hes&Hxs).
+      intros ?? (xs&es) Hincl1 Hincl2 (Hes&Hxs).
       split.
       - simpl_Forall.
         eapply wx_exp_incl; eauto.
-      - etransitivity; eauto.
+      - simpl_Forall. eauto.
     Qed.
 
-    Lemma wx_block_incl : forall Γ Γ' Γl Γl' blk,
-        incl Γ Γ' ->
-        incl Γl Γl' ->
-        wx_block Γ Γl blk ->
-        wx_block Γ' Γl' blk.
+    Lemma wx_block_incl : forall Γ Γ' blk,
+        (forall x, IsVar Γ x -> IsVar Γ' x) ->
+        (forall x, IsLast Γ x -> IsLast Γ' x) ->
+        wx_block Γ blk ->
+        wx_block Γ' blk.
     Proof.
-      intros *. revert Γ Γl Γ' Γl'.
+      intros *. revert Γ Γ'.
       induction blk using block_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx.
       - (* equation *)
         constructor. eapply wx_equation_incl; eauto.
@@ -1066,10 +1058,13 @@ Module Type LSYNTAX
         + eapply wx_exp_incl; eauto.
         + simpl_Forall; eauto.
       - (* local *)
-        constructor; simpl_Forall; eauto.
-        + eapply H; eauto using incl_appl'.
-        + destruct o as [(?&?)|]; simpl in *; auto.
-          eapply wx_exp_incl; eauto using incl_appl'.
+        assert (forall x, IsVar (Γ ++ senv_of_locs locs) x -> IsVar (Γ' ++ senv_of_locs locs) x) as Hincl1'.
+        { intros * Hv. rewrite IsVar_app in *. destruct Hv; eauto. }
+        assert (forall x, IsLast (Γ ++ senv_of_locs locs) x -> IsLast (Γ' ++ senv_of_locs locs) x) as Hincl2'.
+        { intros * Hv. rewrite IsLast_app in *. destruct Hv; eauto. }
+        econstructor; simpl_Forall; eauto.
+        destruct o as [(?&?)|]; simpl in *; auto.
+        eapply wx_exp_incl; eauto.
     Qed.
   End wx_incl.
 
@@ -1099,7 +1094,7 @@ Module Type LSYNTAX
       constructor; auto.
       + simpl_Forall.
         eapply H; eauto using incl_appl'.
-      + intros * Hin. contradict H5; eauto.
+      + intros * Hin ?. eapply H5; eauto.
   Qed.
 
   Corollary node_NoDupLocals {PSyn prefs} : forall (n : @node PSyn prefs),
@@ -1119,39 +1114,6 @@ Module Type LSYNTAX
     eapply NoDupLocals_incl; eauto.
     rewrite Hperm. reflexivity.
   Qed.
-
-  (* XXX dead lemma *)
-  (* Lemma NoDupLocals_enrich : forall blk xs xs', *)
-  (*     (forall x, In x xs' -> ~InMembers x (locals blk)) -> *)
-  (*     NoDupLocals xs blk -> *)
-  (*     NoDupLocals (xs++xs') blk. *)
-  (* Proof. *)
-  (*   induction blk using block_ind2; intros * Hnd1 Hnd2; *)
-  (*     inv Hnd2; simpl in *. *)
-  (*   - (* equation *) *)
-  (*     constructor. *)
-  (*   - (* reset *) *)
-  (*     constructor. *)
-  (*     simpl_Forall. *)
-  (*     eapply H; eauto. *)
-  (*     intros ? Hin Hinm. eapply Hnd1; eauto. *)
-  (*     apply inmembers_flat_map; solve_Exists. *)
-  (*   - (* switch *) *)
-  (*     constructor. simpl_Forall. *)
-  (*     eapply H; eauto. *)
-  (*     intros ? Hin Hinm. eapply Hnd1; eauto. *)
-  (*     do 2 (apply inmembers_flat_map; solve_Exists). *)
-  (*   - (* local *) *)
-  (*     constructor; auto. *)
-  (*     + simpl_Forall. *)
-  (*       rewrite <-app_assoc, (Permutation_app_comm xs'), app_assoc. *)
-  (*       eapply H; eauto. *)
-  (*       intros ? Hin Hinm1. eapply Hnd1; eauto. *)
-  (*       apply InMembers_app, or_intror. apply inmembers_flat_map; solve_Exists. *)
-  (*     + intros ? Hinm Hin. apply in_app_iff in Hin as [Hin|Hin]. *)
-  (*       * eapply H5; eauto. *)
-  (*       * eapply Hnd1; eauto. rewrite InMembers_app, InMembers_idty; auto. *)
-  (* Qed. *)
 
   Lemma NoDupLocals_incl' prefs npref : forall blk xs ys,
       ~PS.In npref prefs ->
@@ -1313,7 +1275,7 @@ Module Type LSYNTAX
   Proof.
     induction blk using block_ind2; intros * Hnd Hvars Hin; inv Hnd; inv Hvars.
     - (* equation *)
-      destruct eq. constructor; auto.
+      destruct eq; simpl in *. constructor; auto.
     - (* reset *)
       constructor.
       eapply in_concat in Hin as (?&Hin1&Hin2). inv_VarsDefined.
@@ -1384,28 +1346,28 @@ Module Type LSYNTAX
       exfalso. apply H8, fst_InMembers; auto.
   Qed.
 
-  Lemma Is_defined_in_wx_In : forall blk env envl x,
-      wx_block env envl blk ->
+  Lemma Is_defined_in_wx_In : forall blk env x,
+      wx_block env blk ->
       Is_defined_in x blk ->
-      In x env.
+      InMembers x env.
   Proof.
     induction blk using block_ind2; intros * Hwx Hdef; inv Hwx; inv Hdef.
     - (* equation *)
-      destruct H2; auto.
+      destruct H1; auto. simpl_Forall. inv H1; auto.
     - (* reset *)
       simpl_Exists; simpl_Forall; eauto.
     - (* switch *)
       simpl_Exists; simpl_Forall; eauto.
     - (* local *)
       simpl_Exists; simpl_Forall.
-      eapply H, in_app_iff in H2 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H3, fst_InMembers; auto.
+      eapply H, InMembers_app in H2 as [|]. 3:eauto. 1,2:eauto.
+      exfalso. apply H3, InMembers_senv_of_locs; auto.
   Qed.
 
-  Corollary Exists_Is_defined_in_wx_In : forall blks env envl x,
-      Forall (wx_block env envl) blks ->
+  Corollary Exists_Is_defined_in_wx_In : forall blks env x,
+      Forall (wx_block env) blks ->
       Exists (Is_defined_in x) blks ->
-      In x env.
+      InMembers x env.
   Proof.
     intros * Hf Hex.
     simpl_Exists; simpl_Forall; eauto using Is_defined_in_wx_In.
@@ -1471,6 +1433,7 @@ Module LSyntaxFun
        (Ids      : IDS)
        (Op       : OPERATORS)
        (OpAux    : OPERATORS_AUX Ids Op)
-       (Cks      : CLOCKS Ids Op OpAux) <: LSYNTAX Ids Op OpAux Cks.
-  Include LSYNTAX Ids Op OpAux Cks.
+       (Cks      : CLOCKS Ids Op OpAux)
+       (Senv     : STATICENV Ids Op OpAux Cks) <: LSYNTAX Ids Op OpAux Cks Senv.
+  Include LSYNTAX Ids Op OpAux Cks Senv.
 End LSyntaxFun.

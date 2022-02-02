@@ -8,6 +8,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Fresh.
+From Velus Require Import StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 
 (** * Remove Local Blocks *)
@@ -17,7 +18,8 @@ Module Type INLINELOCAL
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks).
+       (Import Senv : STATICENV Ids Op OpAux Cks)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks Senv).
 
   (** ** Rename some variables *)
   Section rename.
@@ -179,7 +181,7 @@ Module Type INLINELOCAL
       do blks' <- mmap (inlinelocal_block sub) blks;
       ret [Breset (concat blks') (rename_in_exp sub er)]
     | Blocal locs blks =>
-      let locs' := map (fun '(x, (ty, ck)) => (x, (ty, (rename_in_clock sub ck)))) (idty (idty locs)) in
+      let locs' := map (fun '(x, (ty, ck, _, _)) => (x, (ty, (rename_in_clock sub ck)))) locs in
       do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
       do blks' <- mmap (inlinelocal_block sub') blks;
@@ -332,7 +334,7 @@ Module Type INLINELOCAL
               (Permutation_swap (concat ys1)), <-app_assoc in Hperm1.
       2:{ eapply Forall_forall; intros * Hin contra.
           eapply fresh_idents_rename_sub1 in contra; eauto.
-          unfold idty in contra. rewrite fst_InMembers, 3 map_map in contra.
+          unfold idty in contra. rewrite fst_InMembers, map_map in contra.
           erewrite map_ext, <-fst_InMembers in contra.
           eapply H9; eauto using in_or_app. intros; destruct_conjs; auto. }
       2:{ eapply Forall_forall; intros * Hin (?&contra). apply fst_InMembers in Hin.
@@ -341,7 +343,7 @@ Module Type INLINELOCAL
           2:eapply Env.elements_correct; eauto. reflexivity. }
       eapply Ker.fresh_idents_rename_ids in H0.
       2:{ rewrite fst_NoDupMembers in H8.
-          unfold idty. rewrite fst_NoDupMembers, 3 map_map; simpl.
+          unfold idty. rewrite fst_NoDupMembers, map_map; simpl.
           erewrite map_ext; eauto. intros; destruct_conjs; auto. }
       rewrite H0 in Hperm1. unfold idty in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
       erewrite map_ext in Hperm1. eapply Permutation_app_inv_l in Hperm1.
@@ -660,7 +662,8 @@ Module InlineLocalFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       <: INLINELOCAL Ids Op OpAux Cks Syn.
-  Include INLINELOCAL Ids Op OpAux Cks Syn.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       <: INLINELOCAL Ids Op OpAux Cks Senv Syn.
+  Include INLINELOCAL Ids Op OpAux Cks Senv Syn.
 End InlineLocalFun.

@@ -41,6 +41,8 @@ Import List.ListNotations.
 Open Scope error_monad_scope.
 Open Scope stream_scope.
 
+Import Common.
+
 Section WtStream.
   Context {PSyn : block -> Prop} {prefs : PS.t}.
 

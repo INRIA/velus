@@ -2,6 +2,7 @@ From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
@@ -34,9 +35,10 @@ Module Type TRCLOCKING
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX  Ids Op)
        (Import Cks  : CLOCKS     Ids Op OpAux)
-       (L           : LSYNTAX    Ids Op OpAux Cks)
-       (LT          : LTYPING    Ids Op OpAux Cks L)
-       (LC          : LCLOCKING  Ids Op OpAux Cks L)
+       (Senv        : STATICENV  Ids Op OpAux Cks)
+       (L           : LSYNTAX    Ids Op OpAux Cks Senv)
+       (LT          : LTYPING    Ids Op OpAux Cks Senv L)
+       (LC          : LCLOCKING  Ids Op OpAux Cks Senv L)
        (Import CE   : CESYNTAX   Ids Op OpAux Cks)
        (NL          : NLSYNTAX   Ids Op OpAux Cks CE)
        (Import Ord  : NLORDERED  Ids Op OpAux Cks CE NL)
@@ -44,10 +46,10 @@ Module Type TRCLOCKING
        (Import IsD  : ISDEFINED  Ids Op OpAux Cks CE NL Mem)
        (Import CEClo: CECLOCKING Ids Op OpAux Cks CE)
        (NLC         : NLCLOCKING Ids Op OpAux Cks CE NL Ord Mem IsD CEClo)
-       (Import TR   : TR         Ids Op OpAux Cks L CE NL).
+       (Import TR   : TR         Ids Op OpAux Cks Senv L CE NL).
 
-  Module Norm := NormalizationFun Ids Op OpAux Cks L.
-  Module Completeness := CompletenessFun Ids Op OpAux Cks L LT Norm CE NL TR.
+  Module Norm := NormalizationFun Ids Op OpAux Cks Senv L.
+  Module Completeness := CompletenessFun Ids Op OpAux Cks Senv L LT Norm CE NL TR.
 
   Lemma envs_eq_in :
     forall env cenv x ck,
@@ -75,17 +77,17 @@ Module Type TRCLOCKING
     Lemma wc_lexp :
       forall vars e e',
         to_lexp e = OK e' ->
-        LC.wc_exp G vars [] e ->
+        LC.wc_exp G vars e ->
         (exists ck,
             L.clockof e = [ck]
-            /\ wc_exp vars e' ck).
+            /\ wc_exp (Senv.idck vars) e' ck).
     Proof.
       intros * Hto Hwc. revert dependent e'.
       induction e using L.exp_ind2; intros; inv Hto; inv Hwc.
       - exists Cbase. split; constructor.
       - exists Cbase. split; constructor.
       - simpl. esplit; split; eauto.
-        monadInv H0. now constructor.
+        monadInv H0. constructor. inv H1; solve_In.
       - simpl. esplit; split; eauto.
         monadInv H0. constructor. apply IHe in EQ as (?&?&?); eauto.
         congruence.
@@ -100,6 +102,7 @@ Module Type TRCLOCKING
         take (_ -> _) and apply it in EQ as (?& Heq &?); auto.
         unfold L.clocksof in *. simpl in *. rewrite app_nil_r in *.
         rewrite Heq in *. simpl_Foralls. congruence.
+        inv H5. solve_In.
     Qed.
 
     Lemma wc_exp_cexp :
@@ -131,12 +134,12 @@ Module Type TRCLOCKING
 
     Lemma wc_cexp : forall vars e e',
         to_cexp e = OK e' ->
-        LT.wt_exp G (idty vars) [] e ->
-        wc_env (idck vars) ->
-        LC.wc_exp G (idck vars) [] e ->
+        LT.wt_exp G vars e ->
+        wc_env (Senv.idck vars) ->
+        LC.wc_exp G vars e ->
         (exists ck,
             L.clockof e = [ck]
-            /\ wc_cexp (idck vars) e' ck).
+            /\ wc_cexp (Senv.idck vars) e' ck).
     Proof.
       intros * Hto Hwt Hwenv Hwc. revert dependent e'.
       Opaque to_lexp.
@@ -148,6 +151,7 @@ Module Type TRCLOCKING
       1-2:cases; monadInv Hto.
       - simpl. esplit; split; eauto.
         inv Hwc. inv Hwt. simpl_Foralls. constructor; simpl; auto.
+        + inv H4. solve_In.
         + intro contra.
           assert (map snd x0 = nil) as Hnil.
           { eapply Permutation_nil. rewrite <-contra.
@@ -155,7 +159,7 @@ Module Type TRCLOCKING
           destruct es, x0; simpl in *; try congruence.
           apply H5; auto. monadInv EQ.
         + erewrite map_length, <-Permutation_length, <-map_length, to_controls_fst, map_length; eauto using BranchesSort.Permuted_sort.
-          assert (Forall (fun '(i, e) => wc_cexp (idck vars) e (Con c x1 (Tenum tn, i))) x0) as Hwc'.
+          assert (Forall (fun '(i, e) => wc_cexp (Senv.idck vars) e (Con c x1 (Tenum tn, i))) x0) as Hwc'.
           { eapply Forall_forall; intros (?&?) Hin.
             eapply mmap_inversion, Coqlib.list_forall2_in_right in EQ as ((?&?)&Hin2&Htr); eauto.
             cases; monadInv Htr.
@@ -212,7 +216,7 @@ Module Type TRCLOCKING
           contradict Hnnil. apply map_eq_nil in Hnnil.
           eapply Permutation_nil. rewrite <-Hnnil. apply Permutation_sym, BranchesSort.Permuted_sort.
         + constructor. eapply wc_add_whens.
-          eapply LC.wc_exp_clockof in H6; eauto. 2:constructor.
+          eapply LC.wc_exp_clockof in H6; eauto.
           rewrite H7 in H6. apply Forall_singl in H6. auto.
         + intros ? Hin.
           eapply in_map_iff in Hin as ((?&?)&Heq&Hin); simpl in *; inv Heq.
@@ -250,7 +254,7 @@ Module Type TRCLOCKING
        -> see LClocking.wc_equation *)
     Lemma wc_equation_app_inputs (n : @L.node L.nolocal_top_block norm2_prefs) : forall vars n' bck sub xs es es',
         length (L.n_out n) = length xs ->
-        Forall (LC.wc_exp G vars []) es ->
+        Forall (LC.wc_exp G vars) es ->
         Forall2 (LC.WellInstantiated bck sub) (idck (idty (L.n_in n))) (L.nclocksof es) ->
         to_node n = OK n' ->
         mmap to_lexp es = OK es' ->
@@ -258,7 +262,7 @@ Module Type TRCLOCKING
                           | None => assoc_ident x (combine (L.idents (L.n_out n)) xs)
                           | s => s
                           end in
-        Forall2 (fun '(x0, (_, xck)) le => SameVar (sub' x0) le /\ (exists lck, wc_exp vars le lck /\ instck bck sub' xck = Some lck)) (NL.n_in n') es'.
+        Forall2 (fun '(x0, (_, xck)) le => SameVar (sub' x0) le /\ (exists lck, wc_exp (Senv.idck vars) le lck /\ instck bck sub' xck = Some lck)) (NL.n_in n') es'.
     Proof.
       intros * Hlen Wce WIi Hton EQ.
       erewrite <-to_node_in; eauto.
@@ -296,7 +300,7 @@ Module Type TRCLOCKING
           repeat rewrite in_app_iff; eauto.
           setoid_rewrite map_length; auto.
       }
-      simpl. destruct e; take (LC.wc_exp G vars _ _) and inv it;
+      simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
                inv Hcke; inv Tolexp.
       - constructor.
       - destruct tys; take (map _ _ = [_]) and inv it.
@@ -306,38 +310,40 @@ Module Type TRCLOCKING
       forall P env envo xr vars e e',
         to_global G = OK P ->
         to_equation env envo xr e = OK e' ->
-        envs_eq env (idck vars) ->
-        Forall (fun xr => In xr (idck vars)) xr ->
-        LT.wt_equation G (idty vars) [] e ->
-        wc_env (idck vars) ->
-        LC.wc_equation G (idck vars) [] e ->
-        NLC.wc_equation P (idck vars) e'.
+        envs_eq env (Senv.idck vars) ->
+        Forall (fun xr => In xr (Senv.idck vars)) xr ->
+        LT.wt_equation G vars e ->
+        wc_env (Senv.idck vars) ->
+        LC.wc_equation G vars e ->
+        NLC.wc_equation P (Senv.idck vars) e'.
     Proof.
       intros ????? [xs [|? []]] e' Hg Htr Henvs Hxr Hwt Hwcenv Hwc;
         try (inv Htr; cases; discriminate).
       Opaque to_cexp.
       destruct e; inv Hwt; simpl in *; simpl_Foralls; cases_eqn Eq; try monadInv Htr.
       1-8,10-15:(inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
-                assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto).
+                 assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto;
+                 take (Senv.HasClock _ _ _) and inv it).
       Transparent to_cexp.
       1-13:try (solve [monadInv EQ1]).
       1-8:simpl in *.
-      1-5:(eapply envs_eq_find in Henvs; eauto;
+      1-5:(eapply envs_eq_find in Henvs; eauto; solve_In;
            pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; congruence).
       1-3:(cases; monadInv EQ1; simpl in *;
            inv H;
-           (eapply envs_eq_find in Henvs; eauto;
+           (eapply envs_eq_find in Henvs; eauto; solve_In;
             pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; congruence)).
       2:inv Hwc; simpl_Foralls.
       - inv Hwc. simpl_Foralls.
         cases; try monadInv Htr.
         constructor; eauto using envs_eq_in.
-        take (LC.wc_exp _ _ _ _) and inv it. simpl_Foralls.
+        take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
         eapply wc_lexp in EQ2 as (?& Heq &?); eauto.
         take (Forall2 eq _ _) and rewrite Forall2_eq in it.
         unfold L.clocksof in it. simpl in *. rewrite app_nil_r in *.
         rewrite Heq in it. rewrite it in *.
-        eapply envs_eq_find in Henvs; eauto.
+        take (Senv.HasClock _ _ _) and inv it.
+        eapply envs_eq_find in Henvs; eauto; [|solve_In].
         pose proof (find_clock_det _ _ _ _ EQ0 Henvs) as ->.
         congruence.
       - (* app (equation) *)
@@ -350,7 +356,7 @@ Module Type TRCLOCKING
                      pose proof (LC.wc_find_node _ _ n HwcG it) as (?& (Wcin &?));
                 apply find_base_clock_bck;
                 [rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto;
-                 unfold idck; rewrite map_length, length_idty; exact (L.n_ingt0 n)
+                 rewrite map_length; exact (L.n_ingt0 n)
                 | apply LC.WellInstantiated_parent in WIi;
                   rewrite L.clocksof_nclocksof, Forall_map;
                   eapply Forall_impl; eauto; now simpl]).
@@ -358,13 +364,16 @@ Module Type TRCLOCKING
         + eapply wc_equation_app_inputs with (es:=l) (xs:=xs); eauto.
           apply Forall2_length in Hf2. apply Forall3_length in WIo as (WIo&?).
           unfold idty, idck in *. repeat rewrite map_length in *. congruence.
+          unfold idck, idty. simpl_Forall. eauto.
         + (* outputs *)
           unfold idck in *.
           erewrite <- (to_node_out n n'); eauto.
           clear - Hf2 WIo.
+          replace (map _ (L.n_out n)) with (idck (idty (L.n_out n))) in WIo.
+          2:{ unfold idty, idck. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
           apply Forall2_forall. split.
           2:{ apply Forall2_length in Hf2. apply Forall3_length in WIo as (?&?).
-              repeat rewrite map_length in *. congruence. }
+              unfold idty, idck in *. repeat rewrite map_length in *. congruence. }
           intros (?&(?&?)) ? Hin. split.
           * destruct (sub i) eqn:Hsub.
             eapply Forall3_ignore2, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto; simpl in *. destruct WIo as (?&Hsub'&?); simpl in *.
@@ -380,16 +389,16 @@ Module Type TRCLOCKING
             eapply Forall3_Forall3 in WIo; eauto. clear Hf2.
             eapply Forall3_ignore2, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto.
             destruct WIo as (?&?&?&?); simpl in *.
-            esplit; split; eauto using instck_sub_ext.
+            esplit; split; eauto using instck_sub_ext. inv H; solve_In.
         + eapply Forall_app; split; eauto.
           eapply Forall2_ignore1 in Vars.
           eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?); subst.
-          eapply Forall_forall in H7; eauto. inv H7; auto.
+          eapply Forall_forall in H7; eauto. inv H7; inv H1; solve_In.
       - (* app (exp) *)
         rename Eq into Vars. eapply vars_of_spec in Vars.
         clear H0 H3.
         rename H4 into Hf2. simpl in Hf2; rewrite app_nil_r in Hf2.
-        take (LC.wc_exp _ _ _ _) and inversion_clear it
+        take (LC.wc_exp _ _ _) and inversion_clear it
           as [| | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
@@ -397,25 +406,28 @@ Module Type TRCLOCKING
                      pose proof (LC.wc_find_node _ _ n HwcG it) as (?& (Wcin &?));
                 apply find_base_clock_bck;
                 [rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto;
-                 unfold idck; rewrite map_length, length_idty; exact (L.n_ingt0 n)
+                 rewrite map_length; exact (L.n_ingt0 n)
                 | apply LC.WellInstantiated_parent in WIi;
                   rewrite L.clocksof_nclocksof, Forall_map;
                   eapply Forall_impl; eauto; now simpl]).
         eapply NLC.CEqApp; eauto; try discriminate.
         + eapply wc_equation_app_inputs with (es:=l) (xs:=xs); eauto.
           apply Forall2_length in Hf2. apply Forall2_length in WIo.
-          unfold idty, idck in *. repeat rewrite map_length in *. congruence.
+          1,2:unfold idty, idck in *. repeat rewrite map_length in *. congruence.
+          simpl_Forall. eauto.
         + (* outputs *)
           unfold idck in *.
           erewrite <- (to_node_out n n'); eauto.
           clear - Hf2 WIo.
+          replace (map _ (L.n_out n)) with (idck (idty (L.n_out n))) in WIo.
+          2:{ unfold idty, idck. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
           rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
           eapply Forall3_ignore1' in Hf2. eapply Forall3_ignore2' in WIo. eapply Forall3_Forall3 in WIo; eauto. clear Hf2.
           2:{ apply Forall3_length in Hf2 as (?&?). repeat rewrite map_length in *; auto. }
           2:{ apply Forall2_length in Hf2. apply Forall2_length in WIo. congruence. }
           apply Forall2_forall. split.
           2:{ apply Forall3_length in WIo as (?&?).
-              repeat rewrite map_length in *. congruence. }
+              unfold idck, idty in *. repeat rewrite map_length in *. congruence. }
           intros (?&(?&?)) ? Hin. split.
           * destruct (sub i) eqn:Hsub.
             -- eapply Forall3_ignore3, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto; simpl in *. destruct WIo as ((?&?)&?&Hsub'&?); simpl in *.
@@ -429,23 +441,23 @@ Module Type TRCLOCKING
                eauto using NoDup_app_l, NoDup_app_r.
           * eapply Forall3_ignore3, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto.
             destruct WIo as ((?&?)&?&?&?); simpl in *.
-            esplit; split; eauto using instck_sub_ext.
+            esplit; split; eauto using instck_sub_ext. inv H; solve_In.
         + eapply Forall_app; split; eauto.
           eapply Forall2_ignore1 in Vars.
           eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?); subst.
-          eapply Forall_forall in Wcer; eauto. inv Wcer; auto.
+          eapply Forall_forall in Wcer; eauto. inv Wcer; inv H2; solve_In.
     Qed.
 
     Lemma wc_block_to_equation :
       forall P env envo d xr vars e',
         to_global G = OK P ->
         block_to_equation env envo xr d = OK e' ->
-        envs_eq env (idck vars) ->
-        Forall (fun xr => In xr (idck vars)) xr ->
-        LT.wt_block G (idty vars) [] d ->
-        wc_env (idck vars) ->
-        LC.wc_block G (idck vars) [] d ->
-        NLC.wc_equation P (idck vars) e'.
+        envs_eq env (Senv.idck vars) ->
+        Forall (fun xr => In xr (Senv.idck vars)) xr ->
+        LT.wt_block G vars d ->
+        wc_env (Senv.idck vars) ->
+        LC.wc_block G vars d ->
+        NLC.wc_equation P (Senv.idck vars) e'.
     Proof.
       induction d using L.block_ind2; intros * Hg Htr Henvs Hxr Hwt Hwenv Hwc;
         inv Hwt; inv Hwc; simpl in *.
@@ -453,9 +465,16 @@ Module Type TRCLOCKING
       - cases. apply Forall_singl in H. apply Forall_singl in H2. apply Forall_singl in H3.
         eapply H; eauto.
         constructor; auto.
-        inv H8; auto.
+        inv H7; inv H1. solve_In.
       - inv Htr.
       - inv Htr.
+    Qed.
+
+    Fact idck_idty : forall (xs : list (_ * (type * clock * ident))),
+        idck (idty xs) = map (fun '(x, (_, ck, _)) => (x, ck)) xs.
+    Proof.
+      intros. unfold idck, idty. rewrite map_map.
+      eapply map_ext. intros; destruct_conjs; auto.
     Qed.
 
     Lemma wc_node :
@@ -468,39 +487,38 @@ Module Type TRCLOCKING
     Proof.
       intros * Htn Htg Hwt Hwc.
       tonodeInv Htn. unfold NLC.wc_node. simpl.
-      inversion Hwc as (WCi&WCo&WCeq). rewrite idty_app in WCo.
+      inversion Hwc as (WCi&WCo&WCeq). rewrite map_app in WCo.
       inversion_clear Hwt as (_&_&_&WT).
       pose proof (L.n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *; symmetry in H; rename H into Hblk.
       eapply envs_eq_node in Hblk.
       monadInv Hmmap. inv WCeq. inv WT.
-      rewrite map_filter_nil in H5. rewrite map_filter_nil in H6. 2,3:simpl_Forall; subst; auto.
-      repeat (split; try tauto).
-      - rewrite Forall_map in H8.
-        rewrite (Permutation_app_comm (idty (idty l))), app_assoc, idck_app. apply Forall_app; split; auto.
-        1,2:(eapply Forall_impl; [|eauto]; simpl in *; intros;
-             eapply LC.wc_clock_incl; [|eauto]; unfold idty, idck;
-             repeat rewrite map_app; repeat rewrite map_map; solve_incl_app).
-        simpl. erewrite map_ext; try reflexivity. intros; destruct_conjs; auto.
-      - eapply mmap_inversion in EQ.
-        induction EQ; inv H1; inv H5; inv H6; constructor; eauto.
-        eapply wc_block_to_equation; eauto.
-        + repeat rewrite <-idty_app; eauto.
-        + eapply LT.wt_block_incl; [|reflexivity|eauto]. simpl_app. repeat rewrite map_map; simpl.
-          apply incl_appr'. erewrite Permutation_app_comm, map_ext with (l:=l); try reflexivity.
-          intros; destruct_conjs; auto.
-        + unfold wc_env. rewrite (Permutation_app_comm (idty (idty l))), 2 app_assoc, 3 idck_app.
-          apply Forall_app; split.
-          * eapply Forall_impl; [|eauto]. intros (?&?) ?.
-            eapply LC.wc_clock_incl; [|eauto]. solve_incl_app.
-          * rewrite Forall_map in H8. eapply Forall_impl; [|eauto]. intros (?&?) ?.
-            eapply LC.wc_clock_incl; [|eauto]. simpl_app. repeat rewrite map_map.
-            apply incl_appr'. erewrite Permutation_app_comm, map_ext with (l:=l); try reflexivity.
-            intros; destruct_conjs; auto.
-        + rewrite (Permutation_app_comm (idty (idty l))).
-          eapply LC.wc_block_incl; [|reflexivity|eauto].
+      repeat rewrite <-idty_app. repeat rewrite idck_idty.
+      repeat split; (try now simpl_app).
+      - rewrite (Permutation_app_comm (idty l)), app_assoc, map_app. apply Forall_app; split; auto.
+        1,2:(unfold wc_env in *; rewrite <-map_app in WCo; simpl_Forall).
+        + eapply LC.wc_clock_incl; [|eauto]. solve_incl_app.
+        + simpl_In. simpl_Forall. eapply LC.wc_clock_incl; [|eauto].
           simpl_app. repeat rewrite map_map.
-          apply incl_appr'. erewrite map_ext with (l:=l); try reflexivity.
-          intros; destruct_conjs; auto.
+          erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); try reflexivity.
+          1-3:intros; destruct_conjs; auto.
+      - eapply mmap_inversion in EQ.
+        induction EQ; inv H1; inv H4; inv H5; constructor; eauto.
+        eapply wc_block_to_equation in H3; eauto.
+        + clear - H3. simpl_app.
+          repeat rewrite map_map in *.
+          erewrite (Permutation_app_comm (map _ l)), map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _); eauto.
+          1-3:intros; destruct_conjs; auto.
+        + intros ??. specialize (Hblk x ck). rewrite <-Hblk.
+          rewrite (Permutation_app_comm (idty l)). simpl_app. repeat rewrite in_app_iff.
+          split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
+        + unfold wc_env in *. unfold Senv.idck. rewrite map_app. rewrite <-map_app in WCo.
+          apply Forall_app; split; simpl_Forall; simpl_In; simpl_Forall.
+          * eapply LC.wc_clock_incl; [|eauto].
+            unfold Senv.senv_of_inout. erewrite map_map, map_ext. apply incl_appl, incl_refl.
+            intros; destruct_conjs; auto.
+          * unfold Senv.senv_of_inout, Senv.senv_of_locs.
+            clear - H6. simpl_app. repeat rewrite map_map in *.
+            erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); eauto.
     Qed.
 
   End wc_node.
@@ -532,9 +550,10 @@ Module TrClockingFun
        (Op   : OPERATORS)
        (OpAux: OPERATORS_AUX  Ids Op)
        (Cks  : CLOCKS     Ids Op OpAux)
-       (L    : LSYNTAX    Ids Op OpAux Cks)
-       (LT   : LTYPING    Ids Op OpAux Cks L)
-       (LC   : LCLOCKING  Ids Op OpAux Cks L)
+       (Senv : STATICENV  Ids Op OpAux Cks)
+       (L    : LSYNTAX    Ids Op OpAux Cks Senv)
+       (LT   : LTYPING    Ids Op OpAux Cks Senv L)
+       (LC   : LCLOCKING  Ids Op OpAux Cks Senv L)
        (CE   : CESYNTAX   Ids Op OpAux Cks)
        (NL   : NLSYNTAX   Ids Op OpAux Cks CE)
        (Ord  : NLORDERED  Ids Op OpAux Cks CE NL)
@@ -542,7 +561,7 @@ Module TrClockingFun
        (IsD  : ISDEFINED  Ids Op OpAux Cks CE NL Mem)
        (CEClo: CECLOCKING Ids Op OpAux Cks CE)
        (NLC  : NLCLOCKING Ids Op OpAux Cks CE NL Ord Mem IsD CEClo)
-       (TR   : TR         Ids Op OpAux Cks L CE NL)
-<: TRCLOCKING Ids Op OpAux Cks L LT LC CE NL Ord Mem IsD CEClo NLC TR.
-  Include TRCLOCKING Ids Op OpAux Cks L LT LC CE NL Ord Mem IsD CEClo NLC TR.
+       (TR   : TR         Ids Op OpAux Cks Senv L CE NL)
+<: TRCLOCKING Ids Op OpAux Cks Senv L LT LC CE NL Ord Mem IsD CEClo NLC TR.
+  Include TRCLOCKING Ids Op OpAux Cks Senv L LT LC CE NL Ord Mem IsD CEClo NLC TR.
 End TrClockingFun.

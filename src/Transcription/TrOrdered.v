@@ -2,6 +2,7 @@ From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
@@ -28,12 +29,13 @@ Module Type TRORDERED
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX    Ids Op)
        (Import Cks  : CLOCKS           Ids Op OpAux)
-       (L           : LSYNTAX          Ids Op OpAux Cks)
-       (Lord        : LORDERED         Ids Op OpAux Cks L)
+       (Senv        : STATICENV        Ids Op OpAux Cks)
+       (L           : LSYNTAX          Ids Op OpAux Cks Senv)
+       (Lord        : LORDERED         Ids Op OpAux Cks Senv L)
        (Import CE   : CESYNTAX         Ids Op OpAux Cks)
-       (NL          : NLSYNTAX         Ids Op OpAux Cks    CE)
-       (Ord         : NLORDERED        Ids Op OpAux Cks    CE NL)
-       (Import TR   : TR               Ids Op OpAux Cks L  CE NL).
+       (NL          : NLSYNTAX         Ids Op OpAux Cks         CE)
+       (Ord         : NLORDERED        Ids Op OpAux Cks         CE NL)
+       (Import TR   : TR               Ids Op OpAux Cks Senv L  CE NL).
 
   Lemma inin_l_nl :
     forall f n n',
@@ -120,12 +122,13 @@ Module TrOrderedFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (LSyn : LSYNTAX Ids Op OpAux Cks)
-       (LOrd : LORDERED Ids Op OpAux Cks LSyn)
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (LSyn : LSYNTAX Ids Op OpAux Cks Senv)
+       (LOrd : LORDERED Ids Op OpAux Cks Senv LSyn)
        (CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
        (Ord : NLORDERED Ids Op OpAux Cks CE NL)
-       (TR : TR Ids Op OpAux Cks LSyn CE NL)
-       <: TRORDERED Ids Op OpAux Cks LSyn LOrd CE NL Ord TR.
-  Include TRORDERED Ids Op OpAux Cks LSyn LOrd CE NL Ord TR.
+       (TR : TR Ids Op OpAux Cks Senv LSyn CE NL)
+       <: TRORDERED Ids Op OpAux Cks Senv LSyn LOrd CE NL Ord TR.
+  Include TRORDERED Ids Op OpAux Cks Senv LSyn LOrd CE NL Ord TR.
 End TrOrderedFun.

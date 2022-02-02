@@ -20,6 +20,7 @@ src/Common/CommonTyping.v
 src/Common/CompCertLib.v
 src/AcyGraph.v
 
+src/Lustre/StaticEnv.v
 src/Lustre/LSemantics.v
 src/Lustre/LSyntax.v
 src/Lustre/Parser/LustreParser.v

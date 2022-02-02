@@ -6,6 +6,7 @@ From Velus Require Import Common.
 From Velus Require Import Operators Environment.
 From Velus Require Import Clocks.
 From Velus Require Import Fresh.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping.
 From Velus Require Import Lustre.DeLast.DeLast.
 
@@ -14,29 +15,10 @@ Module Type DLTYPING
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks)
-       (Import Clo : LTYPING Ids Op OpAux Cks Syn)
-       (Import IL  : DELAST Ids Op OpAux Cks Syn).
-
-  Lemma rename_in_sub : forall x y (ty : Op.type) sub xs,
-      Env.find x sub = Some y ->
-      In (x, ty) xs ->
-      In (y, ty) (map (fun '(x, ty) => (rename_in_var sub x, ty)) xs).
-  Proof.
-    intros * Hfind Hin.
-    solve_In.
-    unfold rename_in_var. now rewrite Hfind.
-  Qed.
-
-  Lemma rename_in_nsub : forall x (ty : Op.type) sub xs,
-      Env.find x sub = None ->
-      In (x, ty) xs ->
-      In (x, ty) (map (fun '(x, ty) => (rename_in_var sub x, ty)) xs).
-  Proof.
-    intros * Hfind Hin.
-    solve_In.
-    unfold rename_in_var. now rewrite Hfind.
-  Qed.
+       (Import Senv : STATICENV Ids Op OpAux Cks)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Import Clo : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Import IL  : DELAST Ids Op OpAux Cks Senv Syn).
 
   Section rename.
     Context {PSyn : block -> Prop}.
@@ -46,16 +28,10 @@ Module Type DLTYPING
     Variable sub : Env.t ident.
 
     Section rename_in_exp.
-      Variable Γ Γl : list (ident * Op.type).
+      Variable Γ Γ' : static_env.
 
-      Lemma rename_in_last_wt : forall x ty,
-          In (x, ty) Γl ->
-          In (rename_in_var sub x, ty) (map (fun '(x, ty) => (rename_in_var sub x, ty)) Γl).
-      Proof.
-        intros * Hin.
-        unfold rename_in_var.
-        destruct (Env.find _ _) eqn:Hfind; eauto using rename_in_sub, rename_in_nsub.
-      Qed.
+      Hypothesis Hvar : forall x ty, HasType Γ x ty -> HasType Γ' x ty.
+      Hypothesis Hlast : forall x ty, HasType Γ x ty -> IsLast Γ x -> HasType Γ' (rename_in_var sub x) ty.
 
       Lemma rename_in_exp_typeof : forall e,
           typeof (rename_in_exp sub e) = typeof e.
@@ -71,20 +47,19 @@ Module Type DLTYPING
       Qed.
 
       Lemma rename_in_exp_wt : forall e,
-          wt_exp G Γ Γl e ->
-          wt_exp G (Γ++map (fun '(x, ty) => (rename_in_var sub x, ty)) Γl) [] (rename_in_exp sub e).
+          wt_exp G Γ e ->
+          wt_exp G Γ' (rename_in_exp sub e).
       Proof.
         intros * Hwc; induction e using exp_ind2; inv Hwc; simpl;
           econstructor; eauto using in_or_app; simpl_Forall; eauto;
           match goal with
-          | |- wt_clock _ (_ ++ _) _ => eapply wt_clock_incl; [|eauto]; apply incl_appl, incl_refl
+          | |- wt_clock _ _ _ => eapply wt_clock_incl; eauto
           | |- typeof _ = _ => rewrite rename_in_exp_typeof; auto
           | |- typesof _ = _ => rewrite rename_in_exp_typesof; auto
           | |- context [map fst (map _ _)] =>
               erewrite map_map, map_ext; eauto; intros; destruct_conjs; auto
           | _ => idtac
           end.
-        - apply in_or_app, or_intror. apply rename_in_last_wt; auto.
         - intros contra. apply map_eq_nil in contra; subst. contradiction.
         - intros contra. apply map_eq_nil in contra; subst. contradiction.
         - erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto.
@@ -94,8 +69,8 @@ Module Type DLTYPING
       Qed.
 
       Lemma rename_in_equation_wt : forall eq,
-          wt_equation G Γ Γl eq ->
-          wt_equation G (Γ++map (fun '(x, ty) => (rename_in_var sub x, ty)) Γl) [] (rename_in_equation sub eq).
+          wt_equation G Γ eq ->
+          wt_equation G Γ' (rename_in_equation sub eq).
       Proof.
         intros (?&?) (Hwt1&Hwt2).
         simpl. constructor.
@@ -110,24 +85,29 @@ Module Type DLTYPING
 
   Import Fresh Facts Tactics.
 
-  Lemma delast_block_wt {PSyn prefs} (G: @global PSyn prefs) : forall blk sub Γ Γl blk' st st',
-      (forall x, Env.In x sub -> InMembers x Γl) ->
-      NoDupLocals (map fst Γl) blk ->
-      wt_block G Γ Γl blk ->
+  Lemma delast_block_wt {PSyn prefs} (G: @global PSyn prefs) : forall blk sub Γ Γ' blk' st st',
+      (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
+      (forall x ty, HasType Γ x ty -> IsLast Γ x -> HasType Γ' (rename_in_var sub x) ty) ->
+      (forall x, Env.In x sub -> IsLast Γ x) ->
+      NoDupLocals (map fst Γ) blk ->
+      wt_block G Γ blk ->
       delast_block sub blk st = (blk', st') ->
-      wt_block G (Γ++map (fun '(x, ty) => (rename_in_var sub x, ty)) Γl) [] blk'.
+      wt_block G Γ' blk'.
   Proof.
-    induction blk using block_ind2; intros * Hsubin Hnd Hwt Hdl;
+    induction blk using block_ind2; intros * Hvar Hlast Hsubin Hnd Hwt Hdl;
       inv Hnd; inv Hwt; repeat inv_bind.
+
     - (* equation *)
       constructor.
       eapply rename_in_equation_wt; eauto.
+
     - (* reset *)
       constructor.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
         simpl_Forall; eauto.
       + eapply rename_in_exp_wt; eauto.
       + now rewrite rename_in_exp_typeof.
+
     - (* switch *)
       econstructor; eauto.
       + eapply rename_in_exp_wt; eauto.
@@ -140,76 +120,79 @@ Module Type DLTYPING
         simpl_Forall; eauto. repeat inv_bind.
         eapply mmap_values, Forall2_ignore1 in H7; eauto.
         simpl_Forall; eauto.
+
     - (* local *)
-      assert (forall y, Env.In y (Env.from_list (map fst x)) <->
-                   InMembers y (map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) locs)) as Hsubin'.
-      { intros. rewrite Env.In_from_list.
-        eapply fresh_idents_InMembers in H0. erewrite H0, 2 fst_InMembers.
-        split; intros; solve_In. }
-      assert (incl
-                ((Γ ++ map (fun '(x6, (ty, _, _, _)) => (x6, ty)) locs)
-                   ++ map (fun '(x6, ty) => (rename_in_var (Env.union sub (Env.from_list (map fst x))) x6, ty)) (Γl ++ map_filter (fun '(x6, (ty, _, _, o)) => option_map (fun _ : exp * ident => (x6, ty)) o) locs))
-                ((Γ ++ map (fun '(x6, ty) => (rename_in_var sub x6, ty)) Γl)
-                   ++ map (fun '(x6, (ty, _, _, _)) => (x6, ty)) (map (fun '(x6, (ty, ck, cx, _)) => (x6, (ty, ck, cx, @None (exp * ident)))) locs ++ map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, 1%positive, None))) x))
-             ) as Hincl.
-      { simpl_app.
-        apply incl_appr', incl_app;
-          [apply incl_appr, incl_appl; erewrite map_map, map_ext; try reflexivity;
-           intros; destruct_conjs; auto|].
-        apply incl_app; [apply incl_appl|apply incl_appr, incl_appr].
-        - intros ? Hin; solve_In. rewrite not_in_union_rename2; auto.
-          erewrite Hsubin'. intros contra. apply fst_InMembers in contra. simpl_In.
+      assert (forall y, Env.In y (Env.from_list (map fst x)) -> IsLast (senv_of_locs locs) y) as Hsubin'.
+      { intros *. rewrite Env.In_from_list.
+        eapply fresh_idents_InMembers in H0. erewrite <-H0, fst_InMembers.
+        intros; simpl_In. econstructor; solve_In. simpl. congruence. }
+      assert (forall x2 ty,
+                 HasType (Γ ++ senv_of_locs locs) x2 ty ->
+                 HasType
+                   (Γ' ++ @senv_of_locs exp
+                       (map (fun '(x3, (ty0, ck, cx, _)) => (x3, (ty0, ck, cx, None))) locs ++
+                            map (fun '(_, lx, (ty0, ck, _)) => (lx, (ty0, ck, 1%positive, None))) x)) x2 ty) as Hvar'.
+      { intros *. rewrite 2 HasType_app. intros [|Hty]; auto.
+        right. inv Hty; simpl_In.
+        econstructor. solve_In. 2:apply in_app_iff, or_introl; solve_In.
+        1,2:eauto.
+      }
+      assert (forall x2 ty,
+                 HasType (Γ ++ senv_of_locs locs) x2 ty ->
+                 IsLast (Γ ++ senv_of_locs locs) x2 ->
+                 HasType
+                   (Γ' ++
+                       @senv_of_locs exp
+                       (map (fun '(x3, (ty0, ck, cx, _)) => (x3, (ty0, ck, cx, None))) locs ++
+                            map (fun '(_, lx, (ty0, ck, _)) => (lx, (ty0, ck, 1%positive, None))) x))
+                   (rename_in_var (Env.union sub (Env.from_list (map fst x))) x2) ty) as Hlast'.
+      { intros *. rewrite 2 HasType_app, IsLast_app.
+        intros [Hty|Hty] [Hl|Hl]; eauto.
+        - left. rewrite not_in_union_rename2; eauto.
+          intro contra. apply Hsubin' in contra.
+          inv Hl. inv contra. simpl_In.
           eapply H5; eauto using In_InMembers. solve_In.
-        - intros ? Hin; simpl_In.
-          assert (Hfresh:=H0). eapply fresh_idents_In in H0 as (?&Hin'). 2:solve_In; simpl; eauto.
-          solve_In.
-          rewrite not_in_union_rename1.
-          2:{ intros Hsub. eapply H5; eauto using In_InMembers.
-              rewrite <-fst_InMembers; eauto. }
-          unfold rename_in_var. erewrite fresh_idents_sub; eauto. 3:solve_In. auto.
-          apply nodupmembers_map_filter; auto. intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto.
+        - exfalso.
+          inv Hty. inv Hl. simpl_In.
+          eapply H5; eauto using In_InMembers. solve_In.
+        - exfalso.
+          inv Hty. inv Hl. simpl_In.
+          eapply H5; eauto using In_InMembers. solve_In.
+        - right. simpl_app. apply HasType_app. right.
+          inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
+          destruct o0 as [(?&?)|]; simpl in *; try congruence.
+          eapply fresh_idents_In_rename in H0. 3:solve_In; simpl; auto.
+          2:{ apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
+              destruct o as [(?&?)|]; simpl in *; auto. }
+          econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
+          intro contra. apply Hsubin in contra.
+          inv contra. eapply H5; eauto using In_InMembers. solve_In.
       }
       econstructor; eauto. rewrite Forall_app; split.
-      + rewrite map_filter_nil; simpl.
-        2:{ apply Forall_app; split; simpl_Forall; auto. }
-        simpl_Forall. repeat constructor; simpl.
+      + simpl_Forall. repeat constructor; simpl.
         * eapply fresh_idents_In' in H3; eauto. simpl_In. simpl_Forall.
-          eapply rename_in_exp_wt in H3. eapply wt_exp_incl; [|reflexivity|eauto]. eauto.
+          eapply rename_in_exp_wt in H3; eauto.
         * eapply fresh_idents_In' in H3; eauto. simpl_In.
-          simpl_app. repeat rewrite in_app_iff. right; right; left; solve_In.
+          econstructor. simpl_app. repeat rewrite in_app_iff. right; left; solve_In. auto.
         * eapply fresh_idents_In' in H3; eauto. simpl_In.
-          eapply Forall_forall in H8; [|solve_In]; simpl in *.
-          eapply wt_clock_incl; [|eauto]. simpl_app.
-          apply incl_appr', incl_appr, incl_appl.
-          erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
+          eapply Forall_forall in H7; [|solve_In]; simpl in *.
+          eapply wt_clock_incl; eauto.
         * rewrite rename_in_exp_typeof, app_nil_r.
           eapply fresh_idents_In' in H3; eauto. simpl_In. simpl_Forall. auto.
         * eapply fresh_idents_In' in H3; eauto. simpl_In.
-          eapply Forall_forall in H8; [|solve_In]; simpl in *.
-          eapply wt_clock_incl; [|eauto]. simpl_app.
-          apply incl_appr', incl_appr, incl_appl.
-          erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
-        * simpl_app. repeat rewrite in_app_iff. right; right; right. solve_In.
+          eapply Forall_forall in H7; [|solve_In]; simpl in *.
+          eapply wt_clock_incl; eauto.
+        * simpl_app. repeat rewrite HasType_app. right; right. econstructor; solve_In. auto.
       + eapply mmap_values(* _valid *), Forall2_ignore1 in H1; eauto.
         simpl_Forall.
-        rewrite map_filter_nil.
-        2:{ apply Forall_app; split; simpl_Forall; auto. }
-        eapply H with (sub:=Env.union _ _) in H7; eauto.
-        * eapply wt_block_incl; [|reflexivity|eauto]. eauto.
-        * intros * Hin. rewrite InMembers_app. apply Env.union_In in Hin as [|Hin]; eauto.
-          right.
-          rewrite Hsubin' in Hin. rewrite fst_InMembers in Hin. rewrite fst_InMembers. solve_In. auto.
-        * rewrite map_app. eapply NoDupLocals_incl; [|eauto].
-          apply incl_appr'. intros ? Hin. solve_In.
+        eapply H; eauto.
+        * intros * Hin. rewrite IsLast_app. apply Env.union_In in Hin as [|]; eauto.
+        * rewrite map_app, map_fst_senv_of_locs; auto.
       + simpl_app. unfold wt_clocks in *. apply Forall_app; split; auto.
-        * simpl_Forall. eapply wt_clock_incl; [|eauto].
-          apply incl_appr', incl_appr, incl_appl.
-          erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
+        * simpl_Forall. eapply wt_clock_incl; eauto.
         * eapply mmap_values, Forall2_ignore1 in H0; simpl_Forall.
           repeat inv_bind. simpl_In.
-          simpl_Forall. eapply wt_clock_incl; [|eauto].
-          apply incl_appr', incl_appr, incl_appl.
-          erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
+          simpl_Forall. eapply wt_clock_incl; eauto.
       + simpl_app. apply Forall_app; split; auto.
         * simpl_Forall; auto.
         * eapply mmap_values, Forall2_ignore1 in H0; simpl_Forall.
@@ -232,10 +215,12 @@ Module Type DLTYPING
     repeat econstructor; simpl; eauto.
     1,2:destruct Hiface as (Heq&_); rewrite <-Heq; auto.
     - eapply Forall_impl; [|eauto]; intros; eauto using iface_eq_wt_enum.
-    - eapply delast_block_wt in Hwt4. 4:apply surjective_pairing.
-      + rewrite app_nil_r in Hwt4. eapply iface_eq_wt_block, Hwt4; eauto.
+    - eapply delast_block_wt in Hwt4. 6:apply surjective_pairing.
+      + eapply iface_eq_wt_block, Hwt4; eauto.
+      + auto.
+      + intros * _ Hl. apply senv_of_inout_NoLast in Hl as [].
       + intros. rewrite Env.Props.P.F.empty_in_iff in H. inv H.
-      + eapply NoDupLocals_incl; eauto. apply incl_nil'.
+      + rewrite map_fst_senv_of_inout; auto.
   Qed.
 
   Theorem delast_global_wt : forall G,
@@ -257,9 +242,10 @@ Module DLTypingFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       (Clo : LTYPING Ids Op OpAux Cks Syn)
-       (IL  : DELAST Ids Op OpAux Cks Syn)
-       <: DLTYPING Ids Op OpAux Cks Syn Clo IL.
-  Include DLTYPING Ids Op OpAux Cks Syn Clo IL.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Clo : LTYPING Ids Op OpAux Cks Senv Syn)
+       (IL  : DELAST Ids Op OpAux Cks Senv Syn)
+       <: DLTYPING Ids Op OpAux Cks Senv Syn Clo IL.
+  Include DLTYPING Ids Op OpAux Cks Senv Syn Clo IL.
 End DLTypingFun.

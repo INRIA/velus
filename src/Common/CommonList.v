@@ -5323,7 +5323,7 @@ Ltac solve_In :=
     (simpl_In;
      match goal with
      | |- In _ (map_filter _ _) => eapply map_filter_In
-     | |- In _ (filter _ _) => eapply filter_In; split
+     | |- In _ (filter _ _) => apply filter_In; split
      | |- exists _, _ /\ In _ _ => do 2 esplit; eauto; try solve_In; auto; simpl
      | |- In _ (flat_map _ _) => apply in_flat_map; do 2 esplit
      | H: In _ (combine _ _) |- In _ _ =>
@@ -5429,11 +5429,23 @@ Ltac solve_incl_app :=
   | _ => idtac
   end.
 
-Lemma NoDup_incl_app {A : Type} : forall (xs ys zs : list A),
+Lemma NoDup_incl_app1 {A : Type} : forall (xs ys zs : list A),
     incl zs ys ->
     (NoDup ys -> NoDup zs) ->
     NoDup (xs ++ ys) ->
     NoDup (xs ++ zs).
+Proof.
+  intros * Hincl Hnd1 Hnd2.
+  apply NoDup_app'; eauto using NoDup_app_l, NoDup_app_r.
+  eapply Forall_forall; intros ? Hin1 Hin2.
+  eapply NoDup_app_In in Hnd2; eauto.
+Qed.
+
+Lemma NoDup_incl_app2 {A : Type} : forall (xs ys zs : list A),
+    incl zs xs ->
+    (NoDup xs -> NoDup zs) ->
+    NoDup (xs ++ ys) ->
+    NoDup (zs ++ ys).
 Proof.
   intros * Hincl Hnd1 Hnd2.
   apply NoDup_app'; eauto using NoDup_app_l, NoDup_app_r.
@@ -5449,7 +5461,7 @@ Ltac solve_NoDup_app :=
   | Hnd:NoDup (?xs1++?ys1) |- NoDup ?xs1 =>
     now eapply NoDup_app_l, Hnd
   | Hnd:NoDup (?xs1++?ys1) |- NoDup (?xs1++_) =>
-    eapply NoDup_incl_app with (ys:=ys1);
+    eapply NoDup_incl_app1 with (ys:=ys1);
     [| |eauto]; [now solve_incl_app|clear Hnd; intros; solve_NoDup_app]
   | Hnd:NoDup (_++_) |- NoDup _ =>
     eapply NoDup_app_r in Hnd; solve_NoDup_app

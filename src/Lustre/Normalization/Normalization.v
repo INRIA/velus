@@ -7,6 +7,7 @@ From compcert Require Import common.Errors.
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.Normalization.Unnesting Lustre.Normalization.NormFby.
 
@@ -17,10 +18,11 @@ Module Type NORMALIZATION
        (Import Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks).
+       (Import Senv : STATICENV Ids Op OpAux Cks)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks Senv).
 
-  Module Export Unnesting := UnnestingFun Ids Op OpAux Cks Syn.
-  Module Export NormFby := NormFbyFun Ids Op OpAux Cks Syn Unnesting.
+  Module Export Unnesting := UnnestingFun Ids Op OpAux Cks Senv Syn.
+  Module Export NormFby := NormFbyFun Ids Op OpAux Cks Senv Syn Unnesting.
 
   Definition normalize_global G :=
     normfby_global (unnest_global G).
@@ -51,7 +53,8 @@ Module NormalizationFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       <: NORMALIZATION Ids Op OpAux Cks Syn.
-  Include NORMALIZATION Ids Op OpAux Cks Syn.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       <: NORMALIZATION Ids Op OpAux Cks Senv Syn.
+  Include NORMALIZATION Ids Op OpAux Cks Senv Syn.
 End NormalizationFun.

@@ -8,6 +8,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Normalization.
@@ -24,12 +25,13 @@ Module Type COMPLETENESS
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import LSyn : LSYNTAX Ids Op OpAux Cks)
-       (Import LT : LTYPING Ids Op OpAux Cks LSyn)
-       (Import Norm : NORMALIZATION Ids Op OpAux Cks LSyn)
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Import LSyn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Import LT : LTYPING Ids Op OpAux Cks Senv LSyn)
+       (Import Norm : NORMALIZATION Ids Op OpAux Cks Senv LSyn)
        (Import CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
-       (Import TR : TR Ids Op OpAux Cks LSyn CE NL).
+       (Import TR : TR Ids Op OpAux Cks Senv LSyn CE NL).
 
   Fact to_constant_complete : forall c,
     normalized_constant c ->
@@ -89,7 +91,7 @@ Module Type COMPLETENESS
   Qed.
 
   Fact to_cexp_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall e,
-      wt_exp G vars [] e ->
+      wt_exp G vars e ->
       normalized_cexp e ->
       exists e', to_cexp e = OK e'.
   Proof with eauto.
@@ -120,7 +122,7 @@ Module Type COMPLETENESS
                           | (i, e0 :: nil) => do ce <- to_cexp e0; OK (i, ce)
                           | (i, e0 :: _ :: _) => Error (msg "control expression not normalized")
                           end) es = OK es') as (?&Htoces).
-      { assert (Forall (fun es => Forall (wt_exp G vars []) (snd es)) es) as Hwt' by (inv Hwt; auto).
+      { assert (Forall (fun es => Forall (wt_exp G vars) (snd es)) es) as Hwt' by (inv Hwt; auto).
         clear - H Hwt' H6.
         induction es; inv H; inv Hwt'; inv H6; simpl; eauto.
         destruct a, H5 as (?&?&Hnormed); simpl in *; subst; auto.
@@ -138,7 +140,7 @@ Module Type COMPLETENESS
   Qed.
 
   Fact to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo xr xs es,
-      wt_equation G vars [] (xs, es) ->
+      wt_equation G vars (xs, es) ->
       normalized_equation G out (xs, es) ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
@@ -167,7 +169,7 @@ Module Type COMPLETENESS
   Qed.
 
   Fact block_to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo blk xs xr,
-      wt_block G vars [] blk ->
+      wt_block G vars blk ->
       normalized_block G out blk ->
       VarsDefined blk xs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
@@ -178,7 +180,7 @@ Module Type COMPLETENESS
     induction Hnorm; intros * Hvars Hfind; inv Hwt; inv Hvars; simpl.
     - destruct eq. eapply to_equation_complete in H; eauto.
     - destruct ann0 as (?&?).
-      inv H1. inv H3; inv H8.
+      simpl_Forall.
       simpl in Hfind; rewrite app_nil_r in Hfind.
       eapply IHHnorm; eauto.
   Qed.
@@ -207,11 +209,10 @@ Module Type COMPLETENESS
     }
     destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt.
     clear Hblk Hperm H3.
-    rewrite map_filter_nil in H5. 2:simpl_Forall; subst; auto.
     induction H1; intros; simpl in *; eauto.
-    inv Hnormed. inv H5. apply Forall_app in Hfind' as (?&?). simpl in *.
+    inv Hnormed. inv H4. apply Forall_app in Hfind' as (?&?). simpl in *.
     eapply block_to_equation_complete in H3 as (?&Heqs1); eauto.
-    eapply IHForall2 in H4 as (?&Heqs2); eauto.
+    eapply IHForall2 in H6 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
@@ -266,7 +267,7 @@ Module Type COMPLETENESS
       erewrite EQ; simpl; eauto.
   Qed.
 
-  Module NTyping := NTypingFun Ids Op OpAux Cks LSyn LT Norm.
+  Module NTyping := NTypingFun Ids Op OpAux Cks Senv LSyn LT Norm.
 
   Theorem normalize_global_complete : forall G,
       wt_global G ->
@@ -283,12 +284,13 @@ Module CompletenessFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (LSyn : LSYNTAX Ids Op OpAux Cks)
-       (LT : LTYPING Ids Op OpAux Cks LSyn)
-       (Norm : NORMALIZATION Ids Op OpAux Cks LSyn)
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (LSyn : LSYNTAX Ids Op OpAux Cks Senv)
+       (LT : LTYPING Ids Op OpAux Cks Senv LSyn)
+       (Norm : NORMALIZATION Ids Op OpAux Cks Senv LSyn)
        (CE : CESYNTAX Ids Op OpAux Cks)
        (NL : NLSYNTAX Ids Op OpAux Cks CE)
-       (TR : TR Ids Op OpAux Cks LSyn CE NL)
-       <: COMPLETENESS Ids Op OpAux Cks LSyn LT Norm CE NL TR.
-  Include COMPLETENESS Ids Op OpAux Cks LSyn LT Norm CE NL TR.
+       (TR : TR Ids Op OpAux Cks Senv LSyn CE NL)
+       <: COMPLETENESS Ids Op OpAux Cks Senv LSyn LT Norm CE NL TR.
+  Include COMPLETENESS Ids Op OpAux Cks Senv LSyn LT Norm CE NL TR.
 End CompletenessFun.

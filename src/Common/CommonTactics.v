@@ -73,8 +73,8 @@ Ltac inv_equalities :=
         let Heq := fresh "Heq" in
         apply option_map_inv in H as (?&Hf&Heq); destruct_conjs
     | H: option_map _ _ = None |- _ =>
-        apply option_map_None in H; subst
-    end.
+        apply option_map_None in H
+    end; subst.
 
 (* Tactics for manipulating hypotheses without renaming them.
    Lighter-weight (but less expressive) than match goal with.

@@ -6,6 +6,7 @@ From Velus Require Import Common Environment.
 From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
+From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Fresh.
 From Velus Require Import Lustre.Normalization.Unnesting.
@@ -17,8 +18,9 @@ Module Type NORMFBY
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
-       (Import Syn : LSYNTAX Ids Op OpAux Cks)
-       (Import Unt : UNNESTING Ids Op OpAux Cks Syn).
+       (Import Senv : STATICENV Ids Op OpAux Cks)
+       (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Import Unt : UNNESTING Ids Op OpAux Cks Senv Syn).
 
   Import Fresh Fresh.Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
@@ -966,7 +968,7 @@ Module Type NORMFBY
 
   Lemma normfby_node_init_st_valid {A} : forall (n: @node nolocal_top_block norm1_prefs) locs blks,
       n_block n = Blocal locs blks ->
-      st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs))).
+      st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs))).
   Proof.
     intros * Hn.
     specialize (n_nodup n) as (Hndup&Hndl).
@@ -1015,7 +1017,7 @@ Module Type NORMFBY
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. rewrite fst_NoDupMembers in H3.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs)))) as Hvalid.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs)))) as Hvalid.
     { eapply normfby_blocks_st_valid; eauto.
       eapply normfby_node_init_st_valid; eauto.
     }
@@ -1053,7 +1055,7 @@ Module Type NORMFBY
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
     destruct (n_block n) as [| | |locs blks] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ idty locs)))) as Hvalid.
+    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs)))) as Hvalid.
     { specialize (n_nodup n) as (Hndup&Hndl).
       rewrite Hblk in Hndl; simpl in Hndl. inv Hndl. rewrite fst_NoDupMembers in H3.
       eapply normfby_blocks_st_valid; eauto.
@@ -1183,8 +1185,9 @@ Module NormFbyFun
        (Op : OPERATORS)
        (OpAux : OPERATORS_AUX Ids Op)
        (Cks : CLOCKS Ids Op OpAux)
-       (Syn : LSYNTAX Ids Op OpAux Cks)
-       (Unt : UNNESTING Ids Op OpAux Cks Syn)
-       <: NORMFBY Ids Op OpAux Cks Syn Unt.
-  Include NORMFBY Ids Op OpAux Cks Syn Unt.
+       (Senv : STATICENV Ids Op OpAux Cks)
+       (Syn : LSYNTAX Ids Op OpAux Cks Senv)
+       (Unt : UNNESTING Ids Op OpAux Cks Senv Syn)
+       <: NORMFBY Ids Op OpAux Cks Senv Syn Unt.
+  Include NORMFBY Ids Op OpAux Cks Senv Syn Unt.
 End NormFbyFun.
