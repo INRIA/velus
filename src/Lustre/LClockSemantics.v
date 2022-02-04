@@ -37,28 +37,6 @@ Module Type LCLOCKSEMANTICS
   Module IStr := IndexedStreamsFun Ids Op OpAux Cks.
   Module Import CIStr := CoindIndexedFun Ids Op OpAux Cks CStr IStr.
 
-  Fact history_nth_add : forall H n id vs,
-      Env.Equal (history_nth n (Env.add id vs H)) (Env.add id (vs # n) (history_nth n H)).
-  Proof.
-    intros H n id vs id'.
-    destruct Env.find eqn:Hfind; symmetry.
-    - eapply history_nth_find_Some' in Hfind as [vs' [? Hfind]]; subst.
-      destruct (ident_eqb id id') eqn:Heq.
-      + rewrite ident_eqb_eq in Heq; subst.
-        rewrite Env.gss in *.
-        inv H0. auto.
-      + rewrite ident_eqb_neq in Heq.
-        rewrite Env.gso in *; auto.
-        eapply history_nth_find_Some in H0; eauto.
-    - eapply history_nth_find_None' in Hfind.
-      destruct (ident_eqb id id') eqn:Heq.
-      + rewrite ident_eqb_eq in Heq; subst.
-        rewrite Env.gss in *. inv Hfind.
-      + rewrite ident_eqb_neq in Heq.
-        rewrite Env.gso in *; auto.
-        eapply history_nth_find_None; auto.
-  Qed.
-
   Lemma history_tl_same_find : forall H H' vars,
       Forall (fun x => orel (EqSt (A:=svalue)) (Env.find x H) (Env.find x H')) vars ->
       Forall (fun x => orel (EqSt (A:=svalue)) (Env.find x (history_tl H)) (Env.find x (history_tl H'))) vars.
@@ -1536,72 +1514,6 @@ Module Type LCLOCKSEMANTICS
 
   Global Hint Constructors Is_free_in_clock : clocks lcsem.
 
-  Lemma sc_inst:
-    forall H H' b b' ck ck' bck sub cks,
-      instck bck sub ck = Some ck' ->
-      sem_clock H b ck cks ->
-      sem_clock H' b' bck b ->
-      (forall x x',
-          Is_free_in_clock x ck ->
-          sub x = Some x' ->
-          orel (@EqSt svalue) (Env.find x H) (Env.find x' H')) ->
-      sem_clock H' b' ck' cks.
-  Proof with eauto with lcsem.
-    intros * Hinst Hck Hbck Henv.
-    rewrite sem_clock_equiv in *.
-    intros n. specialize (Hck n). specialize (Hbck n).
-    assert (forall x x' n, Is_free_in_clock x ck -> sub x = Some x' -> orel (eq (A:=svalue)) (Env.find x (CIStr.tr_history H n)) (Env.find x' (CIStr.tr_history H' n))) as Henv'.
-    { intros * Hfree Hsub. specialize (Henv x x' Hfree Hsub).
-    eapply tr_history_find_orel in Henv; eauto. } clear Henv.
-    unfold tr_Stream in *.
-    revert H H' b b' ck' bck cks sub Hinst Hck Hbck Henv'.
-    induction ck; intros.
-    - inv Hinst. inv Hck; auto.
-    - inversion Hinst as [Hcase]. cases_eqn Hcase. inv Hcase.
-      inv Hck.
-      1,2:econstructor;eauto. 5:eapply IStr.Son_abs2; eauto.
-      2,4,6:(unfold IStr.sem_var_instant in *;
-             specialize (Henv' i i0 n (FreeCon1 _ _ _) Hcase1); rewrite H5 in Henv';
-             inv Henv'; auto).
-      * rewrite H4 in *; eapply IHck in Hcase0...
-      * rewrite H4 in *; eapply IHck in Hcase0...
-      * eapply IHck with (cks:=Streams.const true) in Hcase0...
-        rewrite const_nth in Hcase0; auto. rewrite const_nth; eauto.
-  Qed.
-
-  Lemma sc_inst':
-      forall H' H b b' ck ck' bck sub cks,
-      instck bck sub ck = Some ck' ->
-      sem_clock H' b' ck' cks ->
-      sem_clock H' b' bck b ->
-      (forall x x',
-          Is_free_in_clock x ck ->
-          sub x = Some x' ->
-          orel (@EqSt svalue) (Env.find x H) (Env.find x' H')) ->
-      sem_clock H b ck cks.
-  Proof with eauto with lcsem.
-    intros * Hinst Hck Hbck Henv.
-    rewrite sem_clock_equiv in *.
-    intros n. specialize (Hck n). specialize (Hbck n).
-    assert (forall x x' n, Is_free_in_clock x ck -> sub x = Some x' -> orel (eq (A:=svalue)) (Env.find x (CIStr.tr_history H n)) (Env.find x' (CIStr.tr_history H' n))) as Henv'.
-    { intros * Hfree Hsub. specialize (Henv x x' Hfree Hsub).
-    eapply tr_history_find_orel in Henv; eauto. } clear Henv.
-    unfold tr_Stream in *.
-    revert H H' b b' ck' bck cks sub Hinst Hck Hbck Henv'.
-    induction ck; intros; simpl in *.
-    - inv Hinst. eapply IStr.sem_clock_instant_det in Hck; eauto. rewrite Hck; auto with indexedstreams.
-    - inversion Hinst as [Hcase]. cases_eqn Hcase. inv Hcase.
-      inv Hck.
-      1,2:econstructor;eauto. 5:eapply IStr.Son_abs2; eauto.
-      2,4,6:(unfold IStr.sem_var_instant in *;
-             specialize (Henv' i i0 n (FreeCon1 _ _ _) Hcase1); rewrite H5 in Henv';
-             inv Henv'; auto).
-      * rewrite H4 in *; eapply IHck in Hcase0...
-      * rewrite H4 in *; eapply IHck in Hcase0...
-      * eapply IHck with (cks:=Streams.const true) in Hcase0...
-        rewrite const_nth in Hcase0; auto. rewrite const_nth; eauto.
-  Qed.
-
   Lemma sc_parent :
     forall H b ck lck ss,
       Forall2 (sem_clock H b) lck (map abstract_clock ss) ->
@@ -2642,19 +2554,6 @@ Module Type LCLOCKSEMANTICS
 
     (** ** more `filter` properties *)
 
-    Fact sem_var_instant_filter : forall H n sc e x v,
-        IStr.sem_var_instant (CIStr.tr_history H n) x v ->
-        IStr.sem_var_instant (CIStr.tr_history (filter_hist e sc H) n) x (if sc # n ==b present (Venum e) then v else absent).
-    Proof.
-      intros * Hsem.
-      unfold IStr.sem_var_instant in *.
-      setoid_rewrite Env.Props.P.F.map_o in Hsem.
-      do 2 setoid_rewrite Env.Props.P.F.map_o.
-      apply option_map_inv in Hsem as (?&Hfind&?); subst.
-      rewrite Hfind; simpl.
-      unfold tr_Stream. now setoid_rewrite filter_nth.
-    Qed.
-
     Lemma sem_clock_filter : forall Hi Hi' bs ck k sc,
         sem_clock Hi bs ck (abstract_clock sc) ->
         sem_clock Hi' (filterb k sc bs) Cbase (filterb k sc (abstract_clock sc)).
@@ -2975,17 +2874,6 @@ Module Type LCLOCKSEMANTICS
       split; intros [Hin|Hin]; auto.
       - eapply Env.dom_ub_use, in_app_iff in Hdom3; eauto.
       - eapply Env.dom_lb_use in Hin; eauto.
-    Qed.
-
-    Lemma filter_hist_present : forall sc e Hi n,
-        sc # n = present (Venum e) ->
-        Env.Equiv eq (CIStr.tr_history (filter_hist e sc Hi) n) (CIStr.tr_history Hi n).
-    Proof.
-      intros * Hpres.
-      unfold CIStr.tr_history, filter_hist. rewrite Env.map_map.
-      apply Env.Equiv_orel; intros. rewrite 2 Env.Props.P.F.map_o.
-      destruct (Env.find x Hi); simpl; constructor.
-      rewrite 2 tr_Stream_nth, filterv_nth, Hpres, equiv_decb_refl; auto.
     Qed.
 
     Fact sc_var_inv_local :
@@ -4086,27 +3974,6 @@ Module Type LCLOCKSEMANTICS
     Hint Resolve Env.union_refines2 Env.union_dom' Env.adds_opt'_refines Env.adds_opt'_dom
          EqStrel EqStrel_Reflexive : core.
 
-    Lemma refines_restrict_Equiv : forall vars (H H' : history),
-        Env.dom H vars ->
-        Env.refines (@EqSt _) H H' ->
-        Env.Equiv (@EqSt _) H (Env.restrict H' vars).
-    Proof.
-      intros * Hdom Href.
-      apply Env.Equiv_orel; intros.
-      destruct (Env.find x H) eqn:Hfind.
-      - assert (In x vars) as Hin.
-        { eapply Env.dom_use; eauto. econstructor; eauto. }
-        eapply Href in Hfind as (?&?&Hfind).
-        erewrite Env.restrict_find; eauto.
-        constructor; auto.
-      - assert (~In x vars) as Hnin.
-        { intro contra. eapply Env.dom_use in contra; eauto.
-          inv contra. unfold Env.MapsTo in *. congruence. }
-        destruct (Env.find _ (Env.restrict _ _)) eqn:Hfind'; auto with datatypes.
-        exfalso.
-        apply Env.restrict_find_inv in Hfind' as (?&?); auto.
-    Qed.
-
     Lemma sem_block_sem_block_ck : forall envP blk xs Γty Γck H bs,
         NoDupMembers Γty ->
         NoDupMembers Γck ->
@@ -4850,25 +4717,6 @@ Module Type LCLOCKSEMANTICS
       rewrite clocks_of_nth, const_nth.
       induction ss; simpl; auto.
       rewrite const_nth; simpl; auto.
-    Qed.
-
-    Lemma sem_clock_inputs_false : forall (G : @global PSyn prefs) f xs,
-        sem_clock_inputs G f xs ->
-        sem_clock_inputs G f (map (fun _ => Streams.const absent) xs).
-    Proof.
-      intros * (H&n&Find&Sem&Ck).
-      exists (Env.map (fun _ => Streams.const absent) H). exists n.
-      repeat split; auto.
-      - simpl_Forall; eauto using sem_var_absent.
-      - simpl_Forall. take (sem_clock _ _ _ _) and rename it into SemCk.
-        rewrite ac_Streams_const, clocks_of_false.
-        rewrite sem_clock_equiv in *.
-        clear - SemCk. eapply sem_clock_false in SemCk.
-        intros n. specialize (SemCk n); simpl in *.
-        rewrite tr_Stream_const.
-        unfold CIStr.tr_history in *. rewrite Env.map_map in SemCk. rewrite Env.map_map.
-        erewrite Env.map_ext; [eauto|].
-        intros ?; simpl. rewrite tr_Stream_const. reflexivity.
     Qed.
 
     Lemma fby_absent:

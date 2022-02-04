@@ -457,12 +457,6 @@ Module Type UNNESTING
     induction xs; intros; simpl; f_equal; auto.
   Qed.
 
-  Lemma mk_equations_length : forall xs es,
-      length (mk_equations xs es) = length xs.
-  Proof.
-    induction xs; intros; simpl; f_equal; auto.
-  Qed.
-
   Lemma mk_equations_In : forall v xs es,
       length xs = length es ->
       In v (mk_equations xs es) ->
@@ -1218,18 +1212,6 @@ Module Type UNNESTING
     repeat constructor; auto.
   Qed.
 
-  Corollary mmap2_unnest_exp_annots_length' :
-    forall G is_control es es' eqs' st st',
-      Forall (wl_exp G) es ->
-      mmap2 (unnest_exp G is_control) es st = (es', eqs', st') ->
-      Forall2 (fun es' e => length (annots es') = length (annot e)) es' es.
-  Proof.
-    intros * Hf Hmap.
-    eapply mmap2_unnest_exp_annots' in Hmap; eauto.
-    induction Hmap; inv Hf; constructor; eauto.
-    congruence.
-  Qed.
-
   Fact mmap2_unnest_exp_annots :
     forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
@@ -1277,16 +1259,6 @@ Module Type UNNESTING
     eapply mmap2_unnest_exp_annots in H; eauto.
   Qed.
 
-  Corollary unnest_exps_annots_length : forall G es es' eqs' st st',
-      Forall (wl_exp G) es ->
-      unnest_exps G es st = (es', eqs', st') ->
-      length (annots es') = length (annots es).
-  Proof.
-    intros * Hwt Hnorm.
-    eapply unnest_exps_annots in Hnorm; eauto.
-    congruence.
-  Qed.
-
   Fact unnest_rhs_annot : forall G e es' eqs' st st',
       wl_exp G e ->
       unnest_rhs G e st = (es', eqs', st') ->
@@ -1307,16 +1279,6 @@ Module Type UNNESTING
       eapply unnest_exps_length in H0; eauto; congruence.
     - (* app *)
       repeat inv_bind; simpl; rewrite app_nil_r; reflexivity.
-  Qed.
-
-  Corollary unnest_rhs_annot_length : forall G e es' eqs' st st',
-      wl_exp G e ->
-      unnest_rhs G e st = (es', eqs', st') ->
-      length (annots es') = length (annot e).
-  Proof.
-    intros * Hwt Hnorm.
-    eapply unnest_rhs_annot in Hnorm; eauto.
-    congruence.
   Qed.
 
   Fact unnest_rhss_annots : forall G es es' eqs' st st',
@@ -2246,14 +2208,6 @@ Module Type UNNESTING
   Qed.
   Global Hint Resolve unnest_exps_unnested_eq : norm.
 
-  Fact unnested_equation_unnested_rhs {PSyn prefs} : forall (G: @global PSyn prefs) xs es,
-      unnested_equation G (xs, es) ->
-      Forall (unnested_rhs G) es.
-  Proof with eauto with norm.
-    intros * Hnormed.
-    inv Hnormed...
-  Qed.
-
   Fact unnest_rhs_unnested_rhs : forall G Γ e es' eqs' st st',
       (forall x, ~IsLast Γ x) ->
       wl_exp G e ->
@@ -2763,21 +2717,6 @@ Module Type UNNESTING
   Qed.
 
   (** ** Additional properties *)
-
-  Fact unnested_equation_not_nil {PSyn prefs} : forall (G: @global PSyn prefs) eq,
-      unnested_equation G eq ->
-      wl_equation G eq ->
-      fst eq <> [].
-  Proof.
-    intros * Hunt Hwl contra.
-    inv Hunt; simpl in *; subst. 3,4:congruence.
-    1-2:(destruct Hwl as [Hwl1 Hwl2]; try rewrite app_nil_r in Hwl2; simpl in Hwl2;
-       apply Forall_singl in Hwl1; inv Hwl1).
-    - specialize (n_outgt0 n) as Hout.
-      rewrite H11 in H0. inv H0.
-      apply (Nat.lt_irrefl (length (n_out n))). rewrite <- H13 at 1. setoid_rewrite <- Hwl2; auto.
-    - inv contra.
-  Qed.
 
   Ltac solve_st_follows :=
     repeat inv_bind;

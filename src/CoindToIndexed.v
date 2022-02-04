@@ -98,13 +98,6 @@ Module Type COINDTOINDEXED
       - rewrite 2 tr_Stream_S; auto.
     Qed.
 
-    Fact tr_Streams_app:
-      forall A (xss yss: list (Stream A)) n,
-        tr_Streams (xss ++ yss) n = tr_Streams xss n ++ tr_Streams yss n.
-    Proof.
-      unfold tr_Streams; intros; rewrite map_app; auto.
-    Qed.
-
     (** The counterpart of [tr_Stream_tl] for lists of Streams. *)
     Lemma tr_Streams_tl:
       forall A (xss: list (Stream A)) n,

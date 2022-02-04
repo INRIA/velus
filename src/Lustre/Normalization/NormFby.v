@@ -297,15 +297,6 @@ Module Type NORMFBY
   Qed.
   Global Hint Resolve normfby_block_st_follows : norm.
 
-  Corollary normfby_equations_st_follows : forall to_cut blocks blocks' st st',
-      normfby_blocks to_cut blocks st = (blocks', st') ->
-      st_follows st st'.
-  Proof.
-    intros * Hfby. unfold normfby_blocks in *; repeat inv_bind.
-    eapply mmap_st_follows; eauto.
-    solve_forall.
-  Qed.
-
   (** *** The variables generated are a permutation of the ones contained in the state *)
 
   Fact init_var_for_clock_vars_perm : forall ck id eqs st st',
@@ -391,26 +382,6 @@ Module Type NORMFBY
     intros * Hvars Hun. unfold normfby_blocks in Hun. repeat inv_bind.
     eapply mmap_vars_perm; [|eauto|eauto].
     solve_forall. eapply normfby_block_vars_perm; eauto.
-  Qed.
-
-  (** *** Preservation of annotations *)
-
-  Fact fby_iteexp_annot : forall e0 e ann es' eqs' st st',
-      fby_iteexp e0 e ann st = (es', eqs', st') ->
-      annot es' = [ann].
-  Proof.
-    intros e0 e [ty cl] es' eqs' st st' Hfby.
-    unfold fby_iteexp in Hfby.
-    repeat inv_bind; reflexivity.
-  Qed.
-
-  Fact arrow_iteexp_annot : forall e0 e ann es' eqs' st st',
-      arrow_iteexp e0 e ann st = (es', eqs', st') ->
-      annot es' = [ann].
-  Proof.
-    intros e0 e [ty cl] es' eqs' st st' Hfby.
-    unfold arrow_iteexp in Hfby.
-    repeat inv_bind; reflexivity.
   Qed.
 
   (** *** Additional props *)
@@ -520,158 +491,6 @@ Module Type NORMFBY
     - eapply IHnds; eauto.
   Qed.
 
-  (** *** Preservation of wl property *)
-
-  Fact add_whens_numstreams : forall ty ck e,
-      numstreams e = 1 ->
-      numstreams (add_whens e ty ck) = 1.
-  Proof.
-    induction ck; intros *; try destruct p; simpl; auto.
-  Qed.
-
-  Fact add_whens_wl {PSyn prefs} : forall (G : @global PSyn prefs) ty ck e,
-      numstreams e = 1 ->
-      wl_exp G e ->
-      wl_exp G (add_whens e ty ck).
-  Proof.
-    induction ck; intros * Hlen Hwl; simpl; auto.
-    destruct p; constructor; simpl; auto.
-    rewrite app_nil_r, length_annot_numstreams.
-    apply add_whens_numstreams; auto.
-  Qed.
-
-  Global Hint Constructors wl_exp : norm.
-
-  Fact init_var_for_clock_wl {PSyn prefs} : forall (G : @global PSyn prefs) ck id eqs' st st',
-      init_var_for_clock ck st = (id, eqs', st') ->
-      Forall (wl_equation G) eqs'.
-  Proof.
-    intros * Hinit.
-    unfold init_var_for_clock in Hinit.
-    destruct (fresh_ident _ _). inv Hinit.
-    repeat constructor; simpl.
-    1,2:apply add_whens_wl; auto with norm.
-    1,2:simpl; rewrite app_nil_r, length_annot_numstreams; apply add_whens_numstreams; auto.
-  Qed.
-
-  Fact fby_iteexp_numstreams : forall e0 e a e' eqs' st st',
-      fby_iteexp e0 e a st = (e', eqs', st') ->
-      numstreams e' = 1.
-  Proof.
-    intros * Hfby. destruct a as [ty ck].
-    unfold fby_iteexp in Hfby.
-    repeat inv_bind; simpl; auto.
-  Qed.
-
-  Fact fby_iteexp_wl_exp {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
-      wl_exp G e0 ->
-      wl_exp G e ->
-      numstreams e0 = 1 ->
-      numstreams e = 1 ->
-      fby_iteexp e0 e a st = (e', eqs', st') ->
-      wl_exp G e'.
-  Proof.
-    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby.
-    destruct a as [ty ck].
-    unfold fby_iteexp in Hfby.
-    repeat inv_bind.
-    repeat constructor; auto; simpl.
-    - congruence.
-    - rewrite app_nil_r, length_annot_numstreams; auto.
-    - intros ??; congruence.
-    - intros ??; congruence.
-  Qed.
-
-  Fact fby_iteexp_wl_eq {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
-      wl_exp G e0 ->
-      wl_exp G e ->
-      numstreams e0 = 1 ->
-      numstreams e = 1 ->
-      fby_iteexp e0 e a st = (e', eqs', st') ->
-      Forall (wl_equation G) eqs'.
-  Proof.
-    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby.
-    destruct a as [ty ck].
-    unfold fby_iteexp in Hfby.
-    repeat inv_bind; auto.
-    repeat constructor; simpl; auto.
-    - apply add_whens_wl; auto.
-      1,2:destruct ty; simpl; auto with norm.
-    - rewrite app_nil_r, length_annot_numstreams. apply add_whens_numstreams; auto.
-      destruct ty; simpl; auto.
-    - rewrite app_nil_r, length_annot_numstreams; auto.
-    - eapply init_var_for_clock_wl; eauto.
-  Qed.
-
-  Fact arrow_iteexp_numstreams : forall e0 e a e' eqs' st st',
-      arrow_iteexp e0 e a st = (e', eqs', st') ->
-      numstreams e' = 1.
-  Proof.
-    intros * Hfby. destruct a as [ty ck].
-    unfold arrow_iteexp in Hfby.
-    repeat inv_bind. reflexivity.
-  Qed.
-
-  Fact arrow_iteexp_wl_exp {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
-      wl_exp G e0 ->
-      wl_exp G e ->
-      numstreams e0 = 1 ->
-      numstreams e = 1 ->
-      arrow_iteexp e0 e a st = (e', eqs', st') ->
-      wl_exp G e'.
-  Proof.
-    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby. destruct a as [ty ck].
-    unfold arrow_iteexp in Hfby; repeat inv_bind.
-    repeat constructor; auto; simpl.
-    congruence.
-    1,2:rewrite app_nil_r, length_annot_numstreams; auto.
-    1,2:intros ??; congruence.
-  Qed.
-
-  Fact arrow_iteexp_wl_eq {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
-      wl_exp G e0 ->
-      wl_exp G e ->
-      numstreams e0 = 1 ->
-      numstreams e = 1 ->
-      arrow_iteexp e0 e a st = (e', eqs', st') ->
-      Forall (wl_equation G) eqs'.
-  Proof.
-    intros * Hwl1 Hwl2 Hn1 Hn2 Hfby.
-    destruct a as [ty ck].
-    unfold arrow_iteexp in Hfby; repeat inv_bind.
-    eapply init_var_for_clock_wl in H; eauto.
-  Qed.
-
-  Fact normfby_equation_wl {PSyn prefs} : forall (G : @global PSyn prefs) to_cut eq eqs' st st',
-      wl_equation G eq ->
-      normfby_equation to_cut eq st = (eqs', st') ->
-      Forall (wl_equation G) eqs'.
-  Proof.
-    intros * Hwl Hfby.
-    inv_normfby_equation Hfby to_cut eq.
-    - destruct x2 as [ty ck].
-      destruct PS.mem; repeat inv_bind; auto.
-      destruct Hwl as [Hwl _]; inv Hwl; repeat (constructor; auto).
-    - destruct Hwl as [Hwl _]. apply Forall_singl in Hwl.
-      inv Hwl.
-      apply Forall_singl in H3. apply Forall_singl in H5.
-      simpl in *. rewrite app_nil_r, length_annot_numstreams in *.
-      repeat constructor; simpl; try rewrite app_nil_r.
-      + eapply fby_iteexp_wl_exp in H; eauto.
-      + eapply fby_iteexp_annot in H; eauto.
-        rewrite H; auto.
-      + eapply fby_iteexp_wl_eq in H; eauto.
-    - destruct Hwl as [Hwl _]. apply Forall_singl in Hwl.
-      inv Hwl.
-      apply Forall_singl in H3. apply Forall_singl in H5.
-      simpl in *. rewrite app_nil_r, length_annot_numstreams in *.
-      repeat constructor; simpl; try rewrite app_nil_r.
-      + eapply arrow_iteexp_wl_exp in H; eauto.
-      + eapply arrow_iteexp_annot in H; eauto.
-        rewrite H; auto.
-      + eapply arrow_iteexp_wl_eq in H; eauto.
-  Qed.
-
   (** ** After normalization, equations and expressions are normalized *)
 
   Fact add_whens_is_constant : forall ty ck e,
@@ -708,17 +527,6 @@ Module Type NORMFBY
     - induction Hconst...
   Qed.
 
-  Fact init_var_for_clock_unnested_eq {PSyn prefs} : forall (G : @global PSyn prefs) ck id eqs' st st',
-      init_var_for_clock ck st = (id, eqs', st') ->
-      Forall (unnested_equation G) eqs'.
-  Proof.
-    intros * Hinit.
-    unfold init_var_for_clock in Hinit.
-    destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
-    repeat constructor.
-    1-2:eapply add_whens_normalized_lexp; eauto with norm.
-  Qed.
-
   Fact init_var_for_clock_normalized_eq {PSyn prefs} : forall (G : @global PSyn prefs) ck id eqs' out st st',
       st_valid_after st out ->
       init_var_for_clock ck st = (id, eqs', st') ->
@@ -731,75 +539,6 @@ Module Type NORMFBY
     + eapply fresh_ident_nIn' in Hfresh; eauto.
     + apply add_whens_is_constant; auto with norm.
     + apply add_whens_normalized_lexp; auto with norm.
-  Qed.
-
-  Fact fby_iteexp_unnested_eq {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' st st',
-      normalized_lexp e0 ->
-      normalized_lexp e ->
-      fby_iteexp e0 e a st = (e', eqs', st') ->
-      Forall (unnested_equation G) eqs'.
-  Proof.
-    intros * Hnormed1 Hnormed2 Hfby. destruct a as [ty ck].
-    unfold fby_iteexp in Hfby.
-    repeat inv_bind; auto.
-    repeat constructor; auto.
-    - apply add_whens_normalized_lexp; destruct ty; simpl; auto with norm.
-    - eapply init_var_for_clock_unnested_eq in H; eauto.
-  Qed.
-
-  Fact fby_iteexp_normalized_eq {PSyn prefs} : forall (G : @global PSyn prefs) e0 e a e' eqs' out st st',
-      st_valid_after st out ->
-      normalized_lexp e ->
-      fby_iteexp e0 e a st = (e', eqs', st') ->
-      Forall (normalized_equation G out) eqs'.
-  Proof.
-    intros G e0 e [ty ck] * Hvalid He Hfby.
-    unfold fby_iteexp in Hfby.
-    repeat inv_bind; constructor.
-    - assert (st_valid_after x1 out0) as Hvalid' by eauto with norm.
-      constructor; auto.
-      + eapply fresh_ident_nIn' in H0; eauto.
-      + eapply add_whens_is_constant; destruct ty; simpl; eauto with norm.
-    - eapply init_var_for_clock_normalized_eq in H; eauto.
-  Qed.
-
-  Fact normfby_equation_unnested_eq {PSyn prefs} : forall (G : @global PSyn prefs) to_cut eq eqs' st st',
-      unnested_equation G eq ->
-      normfby_equation to_cut eq st = (eqs', st') ->
-      Forall (unnested_equation G) eqs'.
-  Proof.
-    intros * Hunt Hfby.
-    inv_normfby_equation Hfby to_cut eq;
-      try destruct x2 as [ty ck].
-    - destruct PS.mem; repeat inv_bind; auto.
-      inv Hunt; constructor; auto with norm.
-    - assert (H':=H). eapply fby_iteexp_unnested_eq in H'.
-      constructor; eauto.
-      repeat inv_bind. repeat constructor; eauto with norm.
-      1,2:repeat esplit; eauto with norm.
-      2:intros ??; congruence.
-      1-3:(clear - Hunt; inv Hunt; eauto with norm; inv H0; inv H).
-    - repeat inv_bind. repeat constructor; auto with norm.
-      1,2:repeat esplit; eauto with norm.
-      3:intros ??; congruence.
-      1-2:(clear - Hunt; inv Hunt; eauto with norm; inv H0; inv H).
-      eapply init_var_for_clock_unnested_eq in H; eauto.
-  Qed.
-
-  Fact normfby_block_unnested_block {PSyn prefs} : forall (G : @global PSyn prefs) to_cut bck bcks' st st',
-      unnested_block G bck ->
-      normfby_block to_cut bck st = (bcks', st') ->
-      Forall (unnested_block G) bcks'.
-  Proof.
-    induction bck using block_ind2; intros * Hunt Hfby;
-      inv Hunt; simpl in *; cases; repeat inv_bind.
-    - eapply normfby_equation_unnested_eq in H; eauto.
-      rewrite Forall_map. eapply Forall_impl; [|eauto]; intros.
-      constructor; auto.
-    - apply Forall_singl in H.
-      eapply H in H0; eauto.
-      rewrite Forall_map. eapply Forall_impl; [|eauto]; intros.
-      constructor; auto.
   Qed.
 
   Fact normfby_equation_normalized_eq {PSyn prefs} : forall (G : @global PSyn prefs) out to_cut eq eqs' st st',
@@ -1112,39 +851,6 @@ Module Type NORMFBY
   Qed.
 
   (** *** After normalization, a global is normalized *)
-
-  Lemma iface_eq_normalized_equation {PSyn1 PSyn2 prefs1 prefs2} : forall (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) to_cut eq,
-      global_iface_eq G G' ->
-      normalized_equation G to_cut eq ->
-      normalized_equation G' to_cut eq.
-  Proof.
-    intros * Heq Hunt.
-    inv Hunt; try constructor; eauto.
-    destruct Heq as (_&Heq). specialize (Heq f).
-    rewrite H0 in Heq. inv Heq. destruct H5 as (_&_&?&_).
-    econstructor; eauto. congruence.
-  Qed.
-
-  Lemma iface_eq_normalized_block {PSyn1 PSyn2 prefs1 prefs2} : forall (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) to_cut d,
-      global_iface_eq G G' ->
-      normalized_block G to_cut d ->
-      normalized_block G' to_cut d.
-  Proof.
-    induction d using block_ind2; intros * Heq Hnormed; inv Hnormed; constructor.
-    - eapply iface_eq_normalized_equation; eauto.
-    - apply Forall_singl in H; eauto.
-  Qed.
-
-  Corollary iface_eq_normalized_node {P1 P2 P3 p1 p2 p3} : forall (G : @global P1 p1) (G' : @global P2 p2) (n : @node P3 p3),
-      global_iface_eq G G' ->
-      normalized_node G n ->
-      normalized_node G' n.
-  Proof.
-    intros * Hglob Hunt.
-    inv Hunt. econstructor; eauto.
-    eapply Forall_impl; [|eauto]. intros.
-    eapply iface_eq_normalized_block; eauto.
-  Qed.
 
   Fact normfby_node_normalized_node {PSyn prefs} : forall (G : @global PSyn prefs) n,
       unnested_node G n ->

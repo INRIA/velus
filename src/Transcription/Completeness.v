@@ -81,15 +81,6 @@ Module Type COMPLETENESS
       rewrite He'; rewrite Hes'. simpl...
   Qed.
 
-  Fact to_lexp_normalized : forall e e',
-      to_lexp e = OK e' ->
-      normalized_lexp e.
-  Proof.
-    induction e using exp_ind2; intros * Htr;
-      simpl in *; cases; monadInv Htr; eauto with norm.
-    - apply Forall_singl in H. constructor; eauto.
-  Qed.
-
   Fact to_cexp_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall e,
       wt_exp G vars e ->
       normalized_cexp e ->

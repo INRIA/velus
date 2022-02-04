@@ -1306,8 +1306,6 @@ Module Type COINDSTREAMS
   Definition history_nth (n : nat) (H: history) : env :=
     Env.map (Str_nth n) H.
 
-  Definition history_hd (H: history) : env := history_nth 0 H.
-
   Lemma history_nth_tl : forall H n,
       history_nth (S n) H = history_nth n (history_tl H).
   Proof.
@@ -1384,17 +1382,6 @@ Module Type COINDSTREAMS
       congruence.
   Qed.
 
-  Fact history_hd_refines : forall H H',
-      Env.refines eq H H' ->
-      Env.refines eq (history_hd H) (history_hd H').
-  Proof.
-    intros H H' Href x v Hfind.
-    eapply history_nth_find_Some' in Hfind as [vs' [Hfind Heq]].
-    exists v; split; auto.
-    eapply Href in Hfind as [vs'' [? Hfind]]; subst.
-    eapply history_nth_find_Some in Hfind; eauto.
-  Qed.
-
   Fact history_tl_refines : forall H H',
       Env.refines (@EqSt _) H H' ->
       Env.refines (@EqSt _) (history_tl H) (history_tl H').
@@ -1406,17 +1393,6 @@ Module Type COINDSTREAMS
     apply history_tl_find_Some in Hfind'.
     split; auto.
     destruct vs'; simpl. inv Heq'; auto.
-  Qed.
-
-  Lemma env_find_tl : forall x x' H H',
-      orel (@EqSt svalue) (Env.find x H) (Env.find x' H') ->
-      orel (@EqSt svalue)
-           (Env.find x (history_tl H))
-           (Env.find x' (history_tl H')).
-  Proof.
-    intros * Hfind. unfold history_tl.
-    do 2 rewrite Env.Props.P.F.map_o.
-    inversion Hfind as [|?? Hs]; eauto; econstructor; now rewrite Hs.
   Qed.
 
   (** * sem_var
@@ -1451,16 +1427,6 @@ Module Type COINDSTREAMS
     rewrite H2, H4.
     apply Env.find_1 in H1. apply Env.find_1 in H3.
     rewrite H1 in H3. inv H3. reflexivity.
-  Qed.
-
-  Lemma env_maps_hd :
-    forall i v s H,
-      Env.MapsTo i (v ⋅ s) H -> Env.MapsTo i v (history_hd H).
-  Proof.
-    intros * Hmap.
-    unfold history_hd.
-    assert (v = Streams.hd (v ⋅ s)) as Hv by auto.
-    rewrite Hv. eapply Env.map_1. assumption.
   Qed.
 
   Lemma env_maps_tl :
@@ -2261,18 +2227,6 @@ Module Type COINDSTREAMS
            | 0 => if r then (Streams.const absent) else (x ⋅ (maskv 0 rs xs))
            | 1 => if r then (x ⋅ (maskv 0 rs xs)) else (absent ⋅ maskv 1 rs xs)
            | S (S _ as k') => if r then (absent ⋅ maskv k' rs xs) else (absent ⋅ maskv k rs xs)
-           end).
-  Proof.
-    eapply mask_Cons.
-  Qed.
-
-  Corollary maskb_Cons :
-    forall k r rs x xs,
-      (maskb k (r ⋅ rs) (x ⋅ xs))
-        ≡ (match k with
-           | 0 => if r then (Streams.const false) else (x ⋅ (maskb 0 rs xs))
-           | 1 => if r then (x ⋅ (maskb 0 rs xs)) else (false ⋅ maskb 1 rs xs)
-           | S (S _ as k') => if r then (false ⋅ maskb k' rs xs) else (false ⋅ maskb k rs xs)
            end).
   Proof.
     eapply mask_Cons.

@@ -1373,16 +1373,6 @@ Module Type LSEMANTICS
         exists (v'::vs'). split; constructor; auto.
     Qed.
 
-    Fact sem_vars_dom_lb : forall H xs vs,
-        Forall2 (sem_var H) xs vs ->
-        Env.dom_lb H xs.
-    Proof.
-      intros * Hf.
-      eapply Forall2_ignore2 in Hf.
-      eapply Env.dom_lb_intro; intros ? Hin.
-      simpl_Forall; eauto using sem_var_In.
-    Qed.
-
     Fact sem_block_sem_var : forall blk x Hi bs,
         Is_defined_in x blk ->
         sem_block G Hi bs blk ->

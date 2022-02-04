@@ -147,22 +147,6 @@ Module Type ISVARIABLE
     - constructor; eapply IHeqs; eauto.
   Qed.
 
-  Lemma n_out_variable_in_eqs:
-    forall n x,
-      In x (map fst n.(n_out)) ->
-      Is_variable_in x n.(n_eqs).
-  Proof.
-    intros.
-    apply Is_variable_in_var_defined.
-    eapply not_In2_app; eauto using n.(n_vout).
-    unfold vars_defined; simpl; setoid_rewrite flat_map_concat_map.
-    rewrite <- concat_app, <-map_app, Permutation_app_comm, filter_notb_app.
-    pose proof n.(n_defd) as HH.
-    unfold vars_defined in HH; rewrite flat_map_concat_map in HH.
-    rewrite HH, map_app.
-    now intuition.
-  Qed.
-
   (** * Decision procedure *)
 
   Definition variable_eq (vars: PS.t) (eq: equation) : PS.t :=
@@ -287,46 +271,6 @@ Module Type ISVARIABLE
           end; try inversion H;
             (right; apply add_spec; intuition).
         left; apply IHeqs; apply H.
-  Qed.
-
-  Lemma Is_variable_in_dec:
-    forall x eqs, {Is_variable_in x eqs}+{~Is_variable_in x eqs}.
-  Proof.
-    intros x eqs.
-    apply Bool.reflect_dec with (b := PS.mem x (variables eqs)).
-    apply Bool.iff_reflect.
-    rewrite PS.mem_spec.
-    symmetry.
-    apply Is_variable_in_variables.
-  Qed.
-
-  Lemma variable_eq_empty:
-    forall x eq variables,
-      PS.In x (variable_eq variables eq)
-      <-> PS.In x (variable_eq PS.empty eq) \/ PS.In x variables.
-  Proof.
-    split; intro H.
-    destruct eq;
-      match goal with
-      | |- context[ EqApp _ _ _ _ _ ] =>
-        generalize ps_adds_spec; intro add_spec
-      | _ =>
-        generalize PS.add_spec; intro add_spec
-      end;
-      simpl in *;
-        try (apply add_spec in H; destruct H; [try subst i|]);
-        try (rewrite add_spec; auto).
-        intuition.
-    destruct eq eqn:Heq; simpl in *; destruct H;
-      match goal with
-      | _ : _ = EqApp _ _ _ _ _ |- _ =>
-        generalize ps_adds_spec; intro add_spec
-      | _ =>
-        generalize PS.add_spec; intro add_spec
-      end;
-      try (apply add_spec in H; destruct H); try apply PS.empty_spec in H;
-        try (rewrite ps_adds_spec; auto);
-        intuition.
   Qed.
 
 End ISVARIABLE.

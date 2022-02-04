@@ -727,23 +727,6 @@ Module Type CORRECTNESS
         inv Hgt.
   Qed.
 
-  Lemma sem_const_exp {PSyn prefs} :
-    forall (G: @L.global PSyn prefs) H b e c c' xs,
-      to_constant e = OK c ->
-      LS.sem_exp G H b e [present c' ⋅ xs] ->
-      c' = sem_const c.
-  Proof.
-    induction e using L.exp_ind2; intros * Htoc Hsem;
-      inv Htoc; inv Hsem.
-    - symmetry in H5. apply const_inv2 in H5. inv H5. tauto.
-    - symmetry in H4. inv H4; simpl in *.
-      destruct (Streams.hd b); try congruence.
-    - cases. inv H0. inv H5.
-      inv H10. inv H6. inv H12. inv H7. rewrite app_nil_r in H0.
-      subst. inv H6.
-      eapply H4; eauto.
-  Qed.
-
   Fact sem_clock_ac : forall H bs bs' ck x ty k xs vs ys,
       sem_var H x vs ->
       sem_clock H bs (Con ck x (ty, k)) bs' ->
@@ -925,20 +908,6 @@ Module Type CORRECTNESS
     eapply sem_lexp_mask; eauto.
   Qed.
 
-  Lemma sem_cexp_mask: forall r H b e v,
-      (forall k, NLSC.sem_cexp (mask_hist k r H) (maskb k r b) e (maskv k r v)) ->
-      NLSC.sem_cexp H b e v.
-  Proof.
-    intros * Hsem.
-    rewrite <-tr_stream_eqst, <-(tr_stream_eqst v), <-tr_history_equiv.
-    eapply NICStr.sem_cexp_impl. intros n.
-    specialize (Hsem ((count r) # n)).
-    eapply NCIStr.sem_cexp_impl in Hsem. specialize (Hsem n); simpl in Hsem.
-    unfold CIStr'.tr_Stream in Hsem.
-    rewrite maskv_nth, maskb_nth, Nat.eqb_refl in Hsem.
-    rewrite <-LCS.history_mask_count; eauto.
-  Qed.
-
   Lemma sem_aexp_mask: forall r H b ck e v,
       (forall k, NLSC.sem_aexp (mask_hist k r H) (maskb k r b) ck e (maskv k r v)) ->
       NLSC.sem_aexp H b ck e v.
@@ -1092,21 +1061,6 @@ Module Type CORRECTNESS
     inv Hsem; eapply sem_lexp_mask_inv in H1; eauto.
   Qed.
 
-  Lemma sem_vars_unmask: forall r H xs vs,
-      (forall k : nat, Forall2 (sem_var (mask_hist k r H)) xs (map (maskv k r) vs)) ->
-      Forall2 (sem_var H) xs vs.
-  Proof.
-    setoid_rewrite Forall2_map_2.
-    induction xs; intros * Hf.
-    - specialize (Hf 0); inv Hf; auto.
-    - assert (Hf0 := Hf 0). inv Hf0.
-      constructor.
-      + eapply LCS.sem_var_unmask. intros k.
-        specialize (Hf k). inv Hf; eauto.
-      + eapply IHxs; intros.
-        specialize (Hf k). inv Hf; eauto.
-  Qed.
-
   Lemma sem_normalized_lexp_det {PSyn prefs} : forall (G: @L.global PSyn prefs) H b e vs1 vs2,
       LN.Unnesting.normalized_lexp e ->
       LS.sem_exp G H b e vs1 ->
@@ -1152,26 +1106,6 @@ Module Type CORRECTNESS
       rewrite when_spec in *.
       specialize (H3 n) as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?)]];
         specialize (H4 n) as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?)]]; congruence.
-  Qed.
-
-  Fact disj_str_Cons : forall x y xs ys,
-      disj_str [x ⋅ xs; y ⋅ ys] ≡ x || y ⋅ disj_str [xs; ys].
-  Proof.
-    intros.
-    eapply ntheq_eqst. intros [|].
-    - rewrite 2 Str_nth_0_hd; simpl.
-      rewrite Bool.orb_false_r; auto.
-    - rewrite 2 Str_nth_S_tl; simpl.
-      reflexivity.
-  Qed.
-
-  Lemma mask_comm {A} (absent : A) : forall k1 k2 r1 r2 xs,
-      mask absent k1 r1 (mask absent k2 r2 xs) ≡ mask absent k2 r2 (mask absent k1 r1 xs).
-  Proof.
-    intros *.
-    eapply ntheq_eqst. intros n.
-    repeat rewrite mask_nth.
-    destruct (_ =? _), (_ =? _); auto.
   Qed.
 
   Lemma disj_str_maskb : forall k r rs,

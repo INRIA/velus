@@ -343,15 +343,6 @@ Module Type LCLOCKING
     eapply wt_program_find_unit in Hwc as (?&?); eauto.
   Qed.
 
-  Lemma indexes_app:
-    forall xs ys,
-      indexes (xs ++ ys) = indexes xs ++ indexes ys.
-  Proof.
-    induction xs as [|x xs IH]. reflexivity.
-    destruct x; simpl; auto.
-    destruct o; simpl; auto.
-  Qed.
-
   Global Instance wc_exp_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation _
                 ==> @eq exp ==> iff)
@@ -365,15 +356,6 @@ Module Type LCLOCKING
       eauto with lclocking.
   Qed.
 
-  (* Instance wc_exp_pointwise_Proper {PSyn prefs}: *)
-  (*   Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * clock) *)
-  (*               ==> pointwise_relation _ iff) *)
-  (*          wc_exp. *)
-  (* Proof. *)
-  (*   intros G G' HG env' env Henv e. *)
-  (*   now rewrite Henv, HG. *)
-  (* Qed. *)
-
   Global Instance wc_equation_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation _
                 ==> @eq equation ==> iff)
@@ -385,14 +367,6 @@ Module Type LCLOCKING
     1-10:(rewrite Henv in * || rewrite <-Henv in * || idtac); eauto.
     1-4:simpl_Forall; (setoid_rewrite Henv || setoid_rewrite <-Henv); auto.
   Qed.
-
-  (* Instance wc_equation_pointwise_Proper {PSyn prefs}: *)
-  (*   Proper (@eq (@global PSyn prefs) ==> @Permutation.Permutation (ident * clock) *)
-  (*               ==> pointwise_relation _ iff) *)
-  (*          wc_equation. *)
-  (* Proof. *)
-  (*   intros G1 G2 HG env1 env2 Henv eq; subst. now rewrite Henv. *)
-  (* Qed. *)
 
   Global Instance wc_block_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation _

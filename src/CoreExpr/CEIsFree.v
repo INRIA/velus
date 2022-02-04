@@ -446,13 +446,6 @@ Module Type CEISFREE
                        end).
   Qed.
 
-  Lemma free_in_caexp_spec':
-    forall x ck e, PS.In x (free_in_caexp ck e PS.empty)
-                   <-> Is_free_in_caexp x ck e.
-  Proof.
-    setoid_rewrite (free_in_caexp_spec _ _ _ PS.empty); intuition.
-  Qed.
-
 End CEISFREE.
 
 Module CEIsFreeFun

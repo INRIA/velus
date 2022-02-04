@@ -45,19 +45,6 @@ Module Type NCLOCKING
       reflexivity.
   Qed.
 
-  Corollary mmap2_unnest_exp_clocksof' :
-    forall G vars is_control es es' eqs' st st',
-      Forall (wc_exp G vars) es ->
-      mmap2 (unnest_exp G is_control) es st = (es', eqs', st') ->
-      Forall2 (fun es' e => clocksof es' = clockof e) es' es.
-  Proof with eauto with lclocking.
-    intros G vars is_control es es' eqs' st st' Hwt Hmap.
-    eapply mmap2_unnest_exp_annots' in Hmap...
-    clear Hwt.
-    induction Hmap; constructor; eauto.
-    rewrite clocksof_annots, H, <- clockof_annot...
-  Qed.
-
   Corollary mmap2_unnest_exp_clocksof'' : forall G vars is_control es es' eqs' st st',
       Forall (wc_exp G vars) es ->
       mmap2 (unnest_exp G is_control) es st = (es', eqs', st') ->

@@ -120,26 +120,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
     induction xs, n; simpl; auto.
   Qed.
 
-  Lemma absent_list_spec:
-    forall A xs (ys: list A),
-      length xs = length ys ->
-      absent_list xs ->
-      xs = all_absent ys.
-  Proof.
-    induction xs, ys; simpl; inversion 1; auto.
-    inversion_clear 1; subst; f_equal; auto.
-  Qed.
-
-  Lemma absent_list_spec':
-    forall A xs (ys: list A),
-      xs = all_absent ys ->
-      absent_list xs.
-  Proof.
-    induction xs, ys; simpl; inversion 1; constructor; auto.
-    match goal with H: _ = all_absent _ |- _ => rewrite <-H end.
-    eapply IHxs; eauto.
-  Qed.
-
   Lemma absent_list_spec_b:
     forall xs,
       absent_list xs <-> forallb (fun x => x ==b absent) xs = true.
@@ -149,49 +129,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
     - inversion_clear 1; subst; apply andb_true_intro; intuition.
     - intro H; apply andb_prop in H as (E & Hforall).
       rewrite equiv_decb_equiv in E; constructor; auto.
-      apply IHxs; auto.
-  Qed.
-
-  Lemma all_absent_map:
-    forall A B (l: list A) (f: A -> B),
-      all_absent (map f l) = all_absent l.
-  Proof.
-    unfold all_absent; induction l; intros; simpl; auto with datatypes.
-  Qed.
-
-  Lemma present_list_spec:
-    forall xs,
-      present_list xs <-> exists (vs: list value), xs = map present vs.
-  Proof.
-    induction xs as [| x xs IHxs].
-    - split; intro H.
-      + exists []; eauto.
-      + constructor.
-    - split; intro H.
-      + inversion H as [| ? ? Hx Hxs]; subst.
-        apply not_absent_present in Hx as [v Hv].
-        apply IHxs in Hxs as [vs Hvs].
-        exists (v :: vs). simpl.
-        congruence.
-      + destruct H as [vs Hvs].
-        destruct vs; simpl; try discriminate.
-        apply Forall_cons.
-        * intro. subst x; discriminate.
-        * eapply IHxs.
-          exists vs. now inv Hvs.
-  Qed.
-
-  Lemma present_list_spec_b:
-    forall xs,
-      present_list xs <-> forallb (fun x => x <>b absent) xs = true.
-  Proof.
-    induction xs; simpl; split; auto.
-    - constructor.
-    - inversion_clear 1 as [|?? NE]; apply andb_true_intro; intuition.
-      apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; auto.
-    - intro H; apply andb_prop in H as (E & Hforall).
-      apply Bool.negb_true_iff in E; rewrite not_equiv_decb_equiv in E.
-      constructor; auto.
       apply IHxs; auto.
   Qed.
 
@@ -372,21 +309,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
     now inv Hpres; inv Habs; auto.
   Qed.
 
-
-  Lemma all_absent_mask:
-    forall xss k r n,
-      wf_streams xss ->
-      all_absent (mask k r xss n) = all_absent (xss n).
-  Proof.
-    intros * Wf; unfold mask.
-    destruct (k =? count r n); auto.
-    specialize (Wf n).
-    assert (length (all_absent (xss 0)) = length (xss n)) as Length
-        by now (unfold all_absent; rewrite map_length).
-    clear Wf; revert Length; generalize (xss n) as l, (all_absent (xss 0)) as l'.
-    induction l, l'; inversion 1; simpl; auto with datatypes.
-  Qed.
-
   Lemma absent_list_mask:
     forall xss k r n,
       absent_list (xss n) ->
@@ -395,9 +317,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
     intros; unfold mask.
     destruct (k =? count r n); auto using all_absent_spec.
   Qed.
-
-  Definition vstr (xss: stream (list cconst)): stream (list svalue) :=
-    fun n => map (fun c => present (Vscalar (sem_cconst c))) (xss n).
 
   (** Restrictions of Environments *)
   Section HistoryRestriction.

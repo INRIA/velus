@@ -44,19 +44,6 @@ Module Type NTYPING
     rewrite typesof_annots, Hnorm, <- typeof_annot...
   Qed.
 
-  Corollary mmap2_unnest_exp_typesof' :
-    forall G is_control es es' eqs' st st',
-      Forall (wl_exp G) es ->
-      mmap2 (unnest_exp G is_control) es st = (es', eqs', st') ->
-      Forall2 (fun es' e => typesof es' = typeof e) es' es.
-  Proof with eauto.
-    intros * Hwl Hmap.
-    eapply mmap2_unnest_exp_annots' in Hmap...
-    clear Hwl.
-    induction Hmap; constructor; eauto.
-    rewrite typesof_annots, H, <- typeof_annot...
-  Qed.
-
   Corollary mmap2_unnest_exp_typesof'' : forall G is_control es es' eqs' st st',
       Forall (wl_exp G) es ->
       mmap2 (unnest_exp G is_control) es st = (es', eqs', st') ->

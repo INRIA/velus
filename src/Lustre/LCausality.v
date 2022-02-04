@@ -1931,18 +1931,6 @@ Module Type LCAUSALITY
 
     Variable P_vars : list ident -> Prop.
 
-    (* We can "follow" the [TopOrder] extracted from an [AcyGraph]. *)
-    (* This gives us an order over the variables of the node *)
-    Lemma TopoOrder_inv {v a} : forall Γ (g : AcyGraph v a) blk x xs,
-        (forall x y, depends_on Γ x y blk -> is_arc g y x) ->
-        TopoOrder g (x::xs) ->
-        (forall y, depends_on Γ x y blk -> In y xs).
-    Proof.
-      intros * Hdep Hpref Hin Hdep'.
-      inversion_clear Hpref as [|?? (?&?&Harc) ?].
-      eapply Harc. left. eapply Hdep; eauto.
-    Qed.
-
     Lemma causal_ind {v a} : forall (g : AcyGraph v a),
         graph_of_node n g ->
         (forall xs ys, Permutation xs ys -> P_vars xs -> P_vars ys) ->

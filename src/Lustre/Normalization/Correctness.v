@@ -193,21 +193,6 @@ Module Type CORRECTNESS
     - eapply fresh_ident_hist_st; eauto.
   Qed.
 
-  Lemma app_PS_NoDup : forall (xs ys : list ident),
-      NoDup (xs ++ ys) ->
-      NoDup (xs ++ PSP.to_list (PSP.of_list ys)).
-  Proof.
-    intros.
-    apply NoDup_app'_iff; repeat split; eauto using NoDup_app_l, PS_elements_NoDup.
-    eapply Forall_forall; intros.
-    eapply NoDup_app_In in H; eauto.
-    contradict H.
-    rewrite In_PS_elements, PSP.of_list_1 in H.
-    apply SetoidList.InA_alt in H as (?&?&?); subst; auto.
-  Qed.
-  Local Hint Unfold PSP.to_list : datatypes.
-  Local Hint Resolve app_PS_NoDup : datatypes.
-
   Ltac solve_incl :=
     repeat unfold idty; repeat unfold idck;
     match goal with
@@ -245,15 +230,6 @@ Module Type CORRECTNESS
     | H : IsLast ?l1 ?x |- IsLast ?l2 ?x =>
         eapply IsLast_incl; [|eauto]
     end; auto.
-
-  Lemma sem_exp_ck_sem_var {PSyn prefs} :
-    forall (G: @global PSyn prefs) env H b e vs,
-      wc_exp G env e ->
-      sem_exp_ck G H b e vs ->
-      Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclockof e) vs.
-  Proof.
-    intros. eapply sem_exp_sem_var; eauto using sem_exp_ck_sem_exp.
-  Qed.
 
   Section unnest_node_sem.
     Variable G1 : @global nolocal_top_block local_prefs.
@@ -2182,14 +2158,6 @@ Module Type CORRECTNESS
       rewrite const_val_enum; eauto.
     Qed.
 
-    Definition value_to_bool' (v : value) :=
-      match v with
-      | Venum tag => if (tag ==b true_tag) then Some true
-                    else if (tag ==b false_tag) then Some false
-                         else None
-      | _ => None
-      end.
-
     Lemma arrow_case : forall bs y0s ys zs,
         (aligned y0s bs \/ aligned ys bs \/ aligned zs bs) ->
         arrow y0s ys zs ->
@@ -2242,18 +2210,6 @@ Module Type CORRECTNESS
     (** *** Additional stuff *)
 
     Import NormFby.
-
-    Fact st_valid_after_NoDupMembers {A} : forall st (vars : list (ident * A)),
-        NoDupMembers vars ->
-        st_valid_after st (PSP.of_list (map fst vars)) ->
-        NoDupMembers (vars++st_anns st).
-    Proof.
-      intros * Hndup Hvalid.
-      eapply st_valid_NoDup in Hvalid.
-      rewrite ps_of_list_ps_to_list_Perm in Hvalid. 2:rewrite <- fst_NoDupMembers; auto.
-      unfold st_ids in Hvalid.
-      rewrite Permutation_app_comm, <- map_app, <- fst_NoDupMembers in Hvalid; auto.
-    Qed.
 
     Fact fresh_ident_refines' {B} : forall hint vars H a id (v : Stream svalue) (st st' : fresh_st B),
         st_valid_after st (PSP.of_list vars) ->
@@ -2772,12 +2728,6 @@ Module Type CORRECTNESS
       econstructor...
       destruct G1; eapply sem_block_ck_cons...
       eapply find_node_later_not_Is_node_in in Hord1...
-  Qed.
-
-  Fact normfby_global_names' : forall nds,
-      Forall2 (fun n n' => n_name n = n_name n') nds (map normfby_node nds).
-  Proof.
-    induction nds; simpl; auto.
   Qed.
 
   Lemma normfby_global_refines : forall G,
