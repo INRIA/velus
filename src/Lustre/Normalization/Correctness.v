@@ -81,7 +81,7 @@ Module Type CORRECTNESS
   Proof.
     intros * Hdom Hfresh.
     apply Facts.fresh_ident_vars_perm in Hfresh.
-    apply Env.dom_add_cons with (x:=id) (v0:=v) in Hdom.
+    apply Env.dom_add_cons with (x:=id) (v:=v) in Hdom.
     eapply Env.dom_Permutation; [| eauto].
     symmetry. rewrite Permutation_middle.
     apply Permutation_app_head. assumption.
@@ -386,7 +386,7 @@ Module Type CORRECTNESS
       intros * Hlen Hsem Hvar Hwhen.
       unfold unnest_when. simpl_forall.
       rewrite_Forall_forall. 1:congruence.
-      eapply Swhen with (ss0:=[[nth n ss default_stream]])...
+      eapply Swhen with (ss:=[[nth n ss default_stream]])...
       - repeat constructor...
         eapply H1... congruence.
     Qed.
@@ -1227,7 +1227,7 @@ Module Type CORRECTNESS
         destruct H4 as (H'''&Href3&Hvalid3&Histst3&Hsem3&Hsem3').
 
         assert (sem_exp_ck G2 (H''', Hl) b (Eapp f x2 x5 (map snd x8)) vs) as Hsem'.
-        { eapply Sapp with (ss0:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss)))...
+        { eapply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss)))...
           + rewrite <- concat_map, Forall2_map_2.
             solve_forall. eapply sem_exp_refines...
           + intros k. specialize (H23 k).
@@ -1249,7 +1249,7 @@ Module Type CORRECTNESS
           assert (Hwc:=H10). eapply mmap2_unnest_exp_wc in H10 as (Hwc'&_); eauto.
           eapply Forall2_concat in Hsem1.
           erewrite map_ext, <-map_map.
-          change H''' with (fst (H''', Hl)). eapply sc_outside_mask' with (es0:=es) (G:=G1); eauto.
+          change H''' with (fst (H''', Hl)). eapply sc_outside_mask' with (es:=es) (G:=G1); eauto.
           4:intros (?&?); auto.
           * eapply Forall2_impl_In; [|eauto]; intros; simpl in *.
             repeat (eapply sem_exp_refines; eauto).
@@ -1260,7 +1260,7 @@ Module Type CORRECTNESS
             repeat (eapply sem_clock_refines; eauto).
         + clear - Hvars. solve_forall. eauto with lcsem.
         + constructor; [| repeat rewrite Forall_app; repeat split].
-          * apply Seq with (ss0:=[vs]).
+          * apply Seq with (ss:=[vs]).
             -- repeat constructor...
                eapply sem_exp_refines...
             -- simpl. rewrite app_nil_r; auto.
@@ -1391,7 +1391,7 @@ Module Type CORRECTNESS
         exists H'''. repeat (split; auto).
         + repeat (etransitivity; eauto).
         + right. eexists; split...
-          apply Sapp with (ss0:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs0:=rs) (bs0:=bs); eauto.
+          apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs); eauto.
           * rewrite <- concat_map, Forall2_map_2; auto.
             solve_forall. repeat (eapply sem_exp_refines; eauto).
           * rewrite concat_map_singl2. intros k. eapply HGref, H20; eauto.
@@ -1604,7 +1604,7 @@ Module Type CORRECTNESS
         exists H'''. repeat (split; auto). 2:constructor.
         + repeat (etransitivity; eauto).
         + econstructor. econstructor; eauto.
-          apply Sapp with (ss0:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs0:=rs) (bs0:=bs); eauto.
+          apply Sapp with (ss:=(concat (List.map (fun x => List.map (fun x => [x]) x) ss))) (rs:=rs) (bs:=bs); eauto.
           * rewrite <- concat_map, Forall2_map_2; auto.
             solve_forall. repeat (eapply sem_exp_refines; eauto).
           * rewrite concat_map_singl2. intros k. eapply HGref, H23; eauto.
@@ -1641,7 +1641,7 @@ Module Type CORRECTNESS
         { rewrite split_nth in Hnth; inv Hnth.
           rewrite split_nth in Hnth'; inv Hnth'.
           repeat rewrite combine_for_numstreams_fst_split; try congruence. } subst.
-        apply Seq with (ss0:=[l0]).
+        apply Seq with (ss:=[l0]).
         + repeat constructor...
         + simpl. rewrite app_nil_r.
           rewrite_Forall_forall.
@@ -1888,7 +1888,7 @@ Module Type CORRECTNESS
 
         eapply unnest_blocks_sem with (vars:=senv_of_inout (n_in n0 ++ n_out n0) ++ senv_of_locs locs)
           in Hsem as (Hf&Href&_&(Hdom&Hsc)&Hsem); eauto. 5:eapply surjective_pairing.
-        eapply Snode with (H5:=H); simpl; eauto.
+        eapply Snode with (H:=H); simpl; eauto.
         + erewrite find_node_now; eauto.
         + assumption.
         + assumption.
@@ -2134,11 +2134,9 @@ Module Type CORRECTNESS
       inv Hfby1.
       repeat rewrite sfby_Cons. econstructor; simpl.
       + rewrite sfby_const.
-        eapply case_EqStS with (x0:=[(1, vs);(0, vs1)]); auto.
-        constructor; [|constructor]; auto; split; auto; simpl.
-        reflexivity.
-        eapply sfby_fby1'...
-        apply case_false...
+        assert (vs1 ≡ sfby v1 vs0) as Heq by (eapply sfby_fby1'; eauto).
+        rewrite Heq.
+        apply case_false... rewrite <-Heq; auto.
       + repeat constructor; simpl; auto; congruence.
       + constructor.
       + repeat constructor.
@@ -2671,7 +2669,7 @@ Module Type CORRECTNESS
 
       eapply normfby_blocks_sem with (vars:=senv_of_inout (n_in n0 ++ n_out n0) ++ senv_of_locs locs)
         in Hsem as (Hf&Hre'&(Hdom&Hsc)&Heqs'')... 6:eapply surjective_pairing.
-      eapply Snode with (H0:=H); simpl...
+      eapply Snode with (H:=H); simpl...
       + erewrite find_node_now...
       + assumption.
       + assumption.

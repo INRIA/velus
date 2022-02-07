@@ -601,8 +601,8 @@ Module Type NTYPING
           solve_forall. repeat solve_incl.
       - (* fby *)
         repeat inv_bind.
-        assert (Hnorm1:=H1). eapply mmap2_wt with (vars0:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
-        assert (Hnorm2:=H2). eapply mmap2_wt with (vars0:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
+        assert (Hnorm1:=H1). eapply mmap2_wt with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
+        assert (Hnorm2:=H2). eapply mmap2_wt with (vars:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
         2,3:solve_mmap2.
         repeat rewrite Forall_app. repeat split.
         3-4:solve_forall; repeat solve_incl.
@@ -635,8 +635,8 @@ Module Type NTYPING
           apply HasType_app; auto.
       - (* arrow *)
         repeat inv_bind.
-        assert (Hnorm1:=H1). eapply mmap2_wt with (vars0:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
-        assert (Hnorm2:=H2). eapply mmap2_wt with (vars0:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
+        assert (Hnorm1:=H1). eapply mmap2_wt with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
+        assert (Hnorm2:=H2). eapply mmap2_wt with (vars:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
         2,3:solve_mmap2.
         repeat rewrite Forall_app. repeat split.
         3-4:solve_forall; repeat solve_incl.
@@ -669,7 +669,7 @@ Module Type NTYPING
           apply HasType_app; auto.
       - (* when *)
         destruct tn. repeat inv_bind.
-        assert (Hnorm:=H0). eapply mmap2_wt with (vars0:=vars++st_senv st') in H0 as [Hwt1 Hwt1']; eauto with norm.
+        assert (Hnorm:=H0). eapply mmap2_wt with (vars:=vars++st_senv st') in H0 as [Hwt1 Hwt1']; eauto with norm.
         2:solve_mmap2.
         split; eauto.
         eapply unnest_when_wt_exp; eauto.
@@ -679,7 +679,7 @@ Module Type NTYPING
         + eapply mmap2_unnest_exp_typesof'' in Hnorm; eauto with ltyping.
       - (* merge *)
         destruct tn. repeat inv_bind.
-        assert (Hnorm1:=H0). eapply mmap2_wt' with (vars0:=vars++st_senv x2) in H0 as [Hwt1 Hwt1']; eauto.
+        assert (Hnorm1:=H0). eapply mmap2_wt' with (vars:=vars++st_senv x2) in H0 as [Hwt1 Hwt1']; eauto.
         2:(intros; destruct a; repeat solve_st_follows).
         2:{ solve_forall. repeat inv_bind. eapply mmap2_wt in H7; eauto with norm.
             solve_mmap2. }
@@ -719,7 +719,7 @@ Module Type NTYPING
       - (* case (total) *)
         destruct tn. repeat inv_bind.
         assert (Hnorm0:=H1). eapply IHe in H1 as (Hwt1&Hwt1'); eauto.
-        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars0:=vars++st_senv x7) in H2 as (Hwt2&Hwt2'); eauto.
+        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars:=vars++st_senv x7) in H2 as (Hwt2&Hwt2'); eauto.
         2:(intros; destruct a; repeat solve_st_follows).
         2:{ solve_forall. repeat inv_bind. eapply mmap2_wt in H3...
             solve_mmap2. }
@@ -764,11 +764,11 @@ Module Type NTYPING
       - (* case (default) *)
         destruct tn. repeat inv_bind.
         assert (Hnorm0:=H1). eapply IHe in H1 as (Hwt1&Hwt1')...
-        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars0:=vars++st_senv x7) in H2 as (Hwt2&Hwt2')...
+        assert (Hnorm1:=H2). eapply mmap2_wt' with (vars:=vars++st_senv x7) in H2 as (Hwt2&Hwt2')...
         2:(intros; destruct a; repeat solve_st_follows).
         2:{ solve_forall. repeat inv_bind. eapply mmap2_wt in H11...
             solve_mmap2. }
-        assert (Hnorm2:=H3). eapply mmap2_wt with (vars0:=vars++st_senv x7) in H3 as (Hwt3&Hwt3')...
+        assert (Hnorm2:=H3). eapply mmap2_wt with (vars:=vars++st_senv x7) in H3 as (Hwt3&Hwt3')...
         2:solve_mmap2.
         remember (unnest_case _ _ _ _ _) as cases.
         assert (Forall (wt_exp G2 (vars++st_senv x7)) cases) as Hwt'.
@@ -815,7 +815,7 @@ Module Type NTYPING
         assert (Hun:=H3). eapply unnest_resets_wt in H3 as [Hwt2 [Hwt2' Hwt2'']]; simpl...
         2,3:solve_forall. 2:eapply H13 in H6; eauto. 2,3:repeat solve_incl.
 
-        assert (Hnorm:=H1). eapply mmap2_wt with (vars0:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
+        assert (Hnorm:=H1). eapply mmap2_wt with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
         2:solve_mmap2. clear H0.
 
         assert (length (find_node_incks G1 f) = length (concat x6)) as Hlen1.

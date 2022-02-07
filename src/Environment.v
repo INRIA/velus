@@ -1672,7 +1672,7 @@ Module Env.
       find x H = None.
   Proof.
     intros * DH NI.
-    apply dom_use with (x0:=x) in DH.
+    apply dom_use with (x:=x) in DH.
     rewrite <-DH in NI.
     rewrite Props.P.F.in_find_iff in NI.
     now apply None_eq_dne in NI.
@@ -1684,7 +1684,7 @@ Module Env.
       dom (remove x env) (filter (nequiv_decb x) xs).
   Proof.
     intros * D. apply dom_intro. intros y.
-    apply dom_use with (x0:=y) in D.
+    apply dom_use with (x:=y) in D.
     destruct (ident_eq_dec y x); subst.
     - setoid_rewrite In_find. rewrite grs, filter_In.
       split; [intros (? & ?); discriminate|intros (? & HH)].
@@ -1714,7 +1714,7 @@ Module Env.
       induction xs; intros H d Hdom.
       - simpl. assumption.
       - destruct a; simpl.
-        apply dom_add_cons with (x:=i) (v0:=v) in Hdom.
+        apply dom_add_cons with (x:=i) (v:=v) in Hdom.
         apply IHxs in Hdom.
         erewrite dom_Permutation; [eauto|].
         apply Permutation.Permutation_middle.
@@ -2012,7 +2012,7 @@ Module Env.
     apply dom_ub_intro; intros ? Hin.
     apply In_adds_spec' in Hin as [|].
     - apply in_or_app, or_intror. now apply fst_InMembers.
-    - eapply dom_ub_use with (x0:=x) in Hdom; eauto using in_or_app.
+    - eapply dom_ub_use with (x:=x) in Hdom; eauto using in_or_app.
   Qed.
 
   Section EnvRestrict.

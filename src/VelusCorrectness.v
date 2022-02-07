@@ -255,8 +255,8 @@ Proof.
         by (rewrite <-length_idty; congruence).
     assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout
         by (rewrite <-length_idty; congruence).
-    eapply IOStep with (Spec_in_out0:=or_introl Hnnul)
-                       (Len_ins0:=Hlenin) (Len_outs0:=Hlenout); eauto.
+    eapply IOStep with (Spec_in_out:=or_introl Hnnul)
+                       (Len_ins:=Hlenin) (Len_outs:=Hlenout); eauto.
     eapply traceinf_sim_trans; eauto.
     eapply trace_inf_sim_node.
     1,2:f_equal; auto.

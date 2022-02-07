@@ -780,7 +780,7 @@ Section split.
   Proof.
     intros xs.
     specialize (split_combine xs) as Hcomb.
-    rewrite split_fst_snd in Hcomb; auto.
+    symmetry. rewrite split_fst_snd in Hcomb; auto.
   Qed.
 End split.
 

@@ -2287,7 +2287,7 @@ Module Type UNNESTING
       1,2:eapply unnest_exps_unnested_eq; [eauto| | |eauto]; eauto.
     - (* app *)
       repeat inv_bind...
-      eapply unnest_resets_unnested_eq with (G0:=G) in H2.
+      eapply unnest_resets_unnested_eq with (G:=G) in H2.
       2:{ solve_forall.
           split; eauto with norm.
           eapply unnest_exp_normalized_cexp in H4; eauto. solve_forall. }

@@ -358,7 +358,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
         Env.dom H xs <-> Env.dom (restr_hist H i) xs.
     Proof.
       split; intros HH; apply Env.dom_intro; intro x;
-        apply Env.dom_use with (x0:=x) in HH;
+        apply Env.dom_use with (x:=x) in HH;
         now rewrite <-HH, Env_In_restr_hist.
     Qed.
 
@@ -392,14 +392,14 @@ if the clocked stream is [absent] at the corresponding instant. *)
           intro i.
           assert (forall i, Env.In x (H i)) as Ix
               by (intro j; specialize (DH j);
-                  apply Env.dom_use with (x0:=x) in DH; firstorder).
+                  apply Env.dom_use with (x:=x) in DH; firstorder).
           setoid_rewrite Env.In_find in Ix.
           destruct (Ix i) as (v & Ixi). rewrite Ixi.
           apply Env.add_remove in Ixi. rewrite Ixi at 1.
           apply Env.Equal_add_both.
           assert (forall i, Env.dom (Env.remove x (H i)) xs) as Dr.
           { intro j. specialize (DH j).
-            apply Env.dom_cons_remove with (x0:=x) in DH. simpl in DH.
+            apply Env.dom_cons_remove with (x:=x) in DH. simpl in DH.
             rewrite nequiv_decb_refl, not_in_filter_nequiv_decb in DH; auto. }
           specialize (IH ND' (fun i => Env.remove x (H i)) Dr) as (H' & IH1 & IH2).
           intro y. destruct (in_dec ident_eq_dec y xs) as [Iy|Ny].
@@ -407,7 +407,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
             rewrite IH1.
             assert (y <> x) by (intro; subst; auto).
             repeat rewrite Env_find_restr_hist. rewrite IH2; auto; clear IH2.
-            simpl. specialize (Dr i). apply Env.dom_use with (x0:=y) in Dr.
+            simpl. specialize (Dr i). apply Env.dom_use with (x:=y) in Dr.
             destruct Dr as (Dr1 & Dr2). specialize (Dr2 Iy).
             rewrite Env.In_find in Dr2. destruct Dr2 as (yv & Fy); rewrite Fy.
             erewrite Env.find_In_from_list.

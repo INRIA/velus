@@ -137,7 +137,7 @@ Module Type CSCORRECTNESS
           simpl_Exists. simpl_Forall. eauto.
         + simpl_Forall; eauto.
       - (* app *)
-        eapply Sapp with (ss0:=ss); eauto.
+        eapply Sapp with (ss:=ss); eauto.
         1,2:simpl_Forall; eauto.
         intros. eapply HGref; eauto.
     Qed.
@@ -147,7 +147,7 @@ Module Type CSCORRECTNESS
         sem_equation_ck G2 (H', Hl) bs' (subclock_equation bck sub equ).
     Proof.
       intros (?&?) Hsem. inv Hsem.
-      eapply Seq with (ss0:=ss); simpl_Forall;
+      eapply Seq with (ss:=ss); simpl_Forall;
         eauto using subclock_exp_sem, rename_var_sem.
     Qed.
 
@@ -342,7 +342,7 @@ Module Type CSCORRECTNESS
       constructor. econstructor. repeat constructor.
       2:{ simpl; rewrite app_nil_r; repeat constructor.
           eapply rename_var_sem, Hx; eauto. }
-      eapply Smerge with (vs0:=[List.map (fun '(k, _) => (k, filterv k c vs)) subs]); eauto.
+      eapply Smerge with (vs:=[List.map (fun '(k, _) => (k, filterv k c vs)) subs]); eauto.
       - clear Hperm.
         induction subs as [|(?&?)]; simpl; inv Hx'; repeat constructor.
         econstructor; eauto.
@@ -592,7 +592,7 @@ Module Type CSCORRECTNESS
         assert (sem_exp_ck G2 (Hi', Hl) bs' (subclock_exp bck sub ec) [sc]) as Hsem.
         { eapply subclock_exp_sem; eauto. }
         assert (Hcond:=H0). eapply cond_eq_sem in H0 as (Hi1&Href1&Hv1&Hsem1&Hdom1&Hdomub1&Hsc1); eauto.
-        assert (Hni:=H4). eapply new_idents_sem with (bs'0:=bs') (Hl0:=Hl) in H4 as (Hi2&Href2&Hdom2&Hdomub2&Hv2&Hsc2); eauto with fresh.
+        assert (Hni:=H4). eapply new_idents_sem with (bs':=bs') (Hl:=Hl) in H4 as (Hi2&Href2&Hdom2&Hdomub2&Hv2&Hsc2); eauto with fresh.
         2:eapply Sem.sem_clock_refines; eauto.
         2:take (wt_streams [_] [_]) and inv it; auto.
 
@@ -790,7 +790,7 @@ Module Type CSCORRECTNESS
              + apply Env.Props.P.F.not_find_in_iff; eauto.
            - eapply Sem.sem_var_refines; [|eapply Hnsub]; eauto using Env.union_refines4', EqStrel. }
 
-        eapply Slocal with (H'0:=Env.union (Env.restrict H' (map fst locs)) Hi'); eauto.
+        eapply Slocal with (H':=Env.union (Env.restrict H' (map fst locs)) Hi'); eauto.
         + intros ?? Hv1 Hnim.
           erewrite fst_InMembers, map_map, map_ext with (g:=fst) in Hnim. 2:intros; destruct_conjs; auto.
           inv Hv1. econstructor; eauto.
@@ -865,7 +865,7 @@ Module Type CSCORRECTNESS
       inv Hwt. destruct H4 as (Hwt&_); simpl in Hwt.
       eapply switch_block_sem in Hblksem...
       17:eapply surjective_pairing.
-      eapply Snode with (H0:=H); simpl... 1-19:repeat rewrite map_fst_idty in *; auto.
+      eapply Snode with (H:=H); simpl... 1-19:repeat rewrite map_fst_idty in *; auto.
       + erewrite find_node_now...
       + eauto.
       + eauto.

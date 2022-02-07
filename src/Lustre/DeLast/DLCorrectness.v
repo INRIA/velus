@@ -77,23 +77,8 @@ Module Type DLCORRECTNESS
           sem_equation_ck G (H', @Env.empty _) bs (rename_in_equation sub eq).
       Proof.
         intros * Hwx Hsem. inv Hsem. inv Hwx. simpl in *.
-        eapply Seq with (ss0:=ss); simpl_Forall; eauto using sem_var_refines, rename_in_exp_sem.
+        eapply Seq with (ss:=ss); simpl_Forall; eauto using sem_var_refines, rename_in_exp_sem.
       Qed.
-
-      (* Lemma rename_in_sc_vars : forall bs Γ Γ', *)
-      (*     (forall x ck, ~IsLast Γ x -> HasClock Γ' x ck -> HasClock Γ x ck) -> *)
-      (*     (forall x ck, ~IsLast Γ x -> HasCaus Γ' x ck -> HasCaus Γ x ck) -> *)
-      (*     sc_vars Γ (H, Hl) bs -> *)
-      (*     sc_vars Γ' (H', @Env.empty _) bs. *)
-      (* Proof. *)
-      (*   intros * Hvar1 Hvar2 (Hsc1&Hsc2). split; auto; intros * Hca Hck; simpl in *. *)
-      (*   - edestruct Hsc1 as (?&?&?) *)
-      (*   apply Forall_app; split. *)
-      (*   - simpl_Forall. do 2 esplit; eauto using sem_var_refines, sem_clock_refines. *)
-      (*   - simpl_Forall. *)
-      (*     do 2 esplit; eauto using sem_clock_refines. eapply Hsub; eauto. *)
-      (*     eapply Hincl. solve_In. *)
-      (* Qed. *)
 
     End rename_in_exp.
 
@@ -380,7 +365,7 @@ Module Type DLCORRECTNESS
           erewrite Hdom1', map_ext with (l:=locs). reflexivity.
           1,2:intros; destruct_conjs; auto. }
 
-        eapply Slocal with (H'0:=Hi2') (Hl'0:=Env.empty _).
+        eapply Slocal with (H':=Hi2') (Hl':=Env.empty _).
         6:apply Forall_app; split.
         + subst. intros * Hv' Hnin.
           eapply sem_var_adds' in Hv' as [(?&?&?)|Hv']; auto. 2:apply sem_var_union in Hv' as [Hv'|Hv']; auto.

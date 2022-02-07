@@ -501,7 +501,7 @@ Module Type LCLOCKING
       - constructor. eauto using wc_equation_incl.
       - econstructor; eauto using wc_exp_incl.
         simpl_Forall; eauto.
-      - eapply wc_Bswitch with (Γ'1:=Γ'0); simpl_Forall; eauto using wc_exp_incl.
+      - eapply wc_Bswitch with (Γ':=Γ'0); simpl_Forall; eauto using wc_exp_incl.
         intros. edestruct H5; eauto with senv.
       - econstructor; simpl_Forall; eauto using incl_appl'.
         + eapply H; [| |eauto].
@@ -2186,7 +2186,7 @@ Module Type LCLOCKING
         + congruence.
         + inv H7.
           destruct H1 as [? [? [? ?]]].
-          eapply wc_Eapp with (n0:=sy)...
+          eapply wc_Eapp with (n:=sy)...
           * rewrite <-H3...
           * rewrite <-H4...
     Qed.

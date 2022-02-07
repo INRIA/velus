@@ -263,7 +263,7 @@ Module Type ILTYPING
           2:intros; destruct_conjs; auto.
           apply H0 in Hin as (?&?&?&_); eauto. econstructor; eauto.
       }
-      eapply mmap_inlinelocal_block_wt with (Γ'0:=Γ'++senv_of_locs locs) in H. 1,12:eauto. 1-10:eauto.
+      eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_locs locs) in H. 1,12:eauto. 1-10:eauto.
       + rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
       + intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_locs.
@@ -354,7 +354,7 @@ Module Type ILTYPING
     destruct blk; intros * Hnl Hns Hnd Hgood Hwt Hwtc Hvalid Hil; repeat inv_bind; simpl. 3:inv Hns.
     1,2:eapply inlinelocal_block_wt with (Γ':=[]); try rewrite app_nil_r; eauto.
     5:inv Hnd; inv Hgood; inv Hwt;
-      eapply mmap_inlinelocal_block_wt with (Γ0:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwt1&Hwt2); try rewrite app_nil_r; eauto.
+      eapply mmap_inlinelocal_block_wt with (Γ:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwt1&Hwt2); try rewrite app_nil_r; eauto.
     2,4,9:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
     1,2,6:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
     - rewrite <-app_assoc in Hwt1, Hwt2. split; eauto.

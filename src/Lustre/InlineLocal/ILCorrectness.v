@@ -772,7 +772,7 @@ Module Type ILCORRECTNESS
                (locs':=snd (fst (inlinelocal_topblock (n_block n0) init_st)))
                (st':=snd (inlinelocal_topblock (n_block n0) init_st))
           in Hblksem as (Hf&Href&Hdom&Hsc&Hsem); eauto. 12:destruct inlinelocal_topblock as ((?&?)&?); reflexivity.
-        eapply Snode with (H0:=H); simpl; eauto.
+        eapply Snode with (H:=H); simpl; eauto.
         + erewrite find_node_now; eauto.
         + eauto.
         + eauto.

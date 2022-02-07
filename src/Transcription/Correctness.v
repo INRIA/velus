@@ -114,7 +114,7 @@ Module Type CORRECTNESS
     - (* merge *)
       destruct a as ([|? [|]]&?); monadInv Htr; fold to_cexp in *.
       inv Hsem. destruct s0.
-      eapply LS.Smerge with (vs0:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs); eauto.
+      eapply LS.Smerge with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs); eauto.
       + eapply sem_var_step; eauto.
       + clear - EQ H0 H9. eapply LS.Forall2Brs_map_2.
         eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
@@ -128,8 +128,8 @@ Module Type CORRECTNESS
     - (* case *)
       destruct a as ([|? [|]]&?); cases; monadInv Htr; fold to_cexp in *.
       + inv Hsem. destruct s0.
-        eapply LS.ScaseDefault with (vs0:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs)
-                                    (vd0:=(map (map (fun x => Streams.tl x)) vd)).
+        eapply LS.ScaseDefault with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs)
+                                    (vd:=(map (map (fun x => Streams.tl x)) vd)).
         * eapply sem_lexp_step in H7; eauto.
         * simpl. inv H10; inv H6.
           constructor; auto. inv H5; auto.
@@ -146,7 +146,7 @@ Module Type CORRECTNESS
           eapply Forall3_impl_In; [|eauto]; intros ??? _ _ _ Hcase.
           inv Hcase; auto.
       + inv Hsem. destruct s0.
-        eapply LS.ScaseTotal with (vs0:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs).
+        eapply LS.ScaseTotal with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs).
         * eapply sem_lexp_step in H10; eauto.
         * eapply LS.Forall2Brs_map_2.
           eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
@@ -1298,7 +1298,7 @@ Module Type CORRECTNESS
       assert (exists v, forall k, NLSC.sem_aexp (mask_hist k r H) (maskb k r b) ck x2 (maskv k r v)
                         /\ LS.fby (NCor.const_val (abstract_clock (maskv k r v)) (sem_const x0))
                                  (maskv k r v) (maskv k r y)) as (v&Hsel).
-      { eapply consolidate_mask with (P0:=fun k v => NLSC.sem_aexp (mask_hist k r H) (maskb k r b) ck x2 v
+      { eapply consolidate_mask with (P:=fun k v => NLSC.sem_aexp (mask_hist k r H) (maskb k r b) ck x2 v
                                        /\ LS.fby (NCor.const_val (abstract_clock v) (sem_const x0))
                                                 v (maskv k r y)).
         { intros ?????? (?&?); subst; split.
@@ -1352,9 +1352,9 @@ Module Type CORRECTNESS
           as (ess&Hse).
         setoid_rewrite Forall2_map_2.
         setoid_rewrite Forall2_forall'
-          with (P0 := fun k e v => LCS.sem_exp_ck G (LS.mask_hist k r (H, Hl)) (maskb k r b) e [maskv k r v]).
+          with (P := fun k e v => LCS.sem_exp_ck G (LS.mask_hist k r (H, Hl)) (maskb k r b) e [maskv k r v]).
         eapply Forall_Forall2. eapply Forall_forall; intros.
-        eapply consolidate_mask with (P0:=fun k v => LCS.sem_exp_ck G (LS.mask_hist k r (H, Hl)) (maskb k r b) x0 [v]).
+        eapply consolidate_mask with (P:=fun k v => LCS.sem_exp_ck G (LS.mask_hist k r (H, Hl)) (maskb k r b) x0 [v]).
         { intros ????? Heq ?; subst.
           rewrite <-Heq; auto. }
         intros k. specialize (Hsem k). inv Hsem. simpl_Foralls.
@@ -1511,7 +1511,7 @@ Module Type CORRECTNESS
         eapply sem_var_mask_inv in H13 as (?&?&?); eauto. }
       assert (exists sr, bools_of vr sr) as (?&Hbool).
       { setoid_rewrite <-bools_of_mask with (rs:=r).
-        eapply consolidate_mask with (P0:=fun k sr => bools_of (maskv k r vr) sr).
+        eapply consolidate_mask with (P:=fun k sr => bools_of (maskv k r vr) sr).
         { intros ????? Heq ?; subst. now rewrite <-Heq. }
         intros k.
         eapply sem_var_mask with (r:=r) (k:=k) in Hx.

@@ -1138,7 +1138,7 @@ Module Type LCLOCKSEMANTICS
         * destruct H7 as (EH1&EH2); split; unfold Sem.filter_hist. now rewrite <-EH1. now rewrite <-EH2.
         * now rewrite H8.
       + destruct H7 as (EH&_). now rewrite <-EH.
-    - destruct H'0. eapply Slocal with (H'0:=H'); eauto.
+    - destruct H'0. eapply Slocal with (H':=H'); eauto.
       + intros. destruct H8 as (EH&_). rewrite <-EH; eauto.
       + eapply Env.dom_intro; intros. eapply Env.dom_use in H2.
         rewrite H2. rewrite 2 in_app_iff. apply or_iff_compat_r.
@@ -1447,7 +1447,7 @@ Module Type LCLOCKSEMANTICS
       induction blk using block_ind2; intros * Hsem; inv Hsem.
       - (* equation *)
         inv H3. constructor.
-        eapply Sem.Seq with (ss0:=ss); simpl_Forall; eauto using sem_exp_ck_sem_exp.
+        eapply Sem.Seq with (ss:=ss); simpl_Forall; eauto using sem_exp_ck_sem_exp.
       - (* reset *)
         econstructor; eauto using sem_exp_ck_sem_exp.
         intros. specialize (H7 k). simpl_Forall; eauto.
@@ -2284,7 +2284,7 @@ Module Type LCLOCKSEMANTICS
         sc_exp_inv Γ Γty H b e k.
     Proof.
       intros * Hnd1 Hsc Hwt Hwc Hnum Hfree.
-      eapply exp_causal_ind with (Γ0:=Γ) (P_exp:=sc_exp_inv _ _ H b); eauto with lclocking; intros.
+      eapply exp_causal_ind with (Γ:=Γ) (P_exp:=sc_exp_inv _ _ H b); eauto with lclocking; intros.
       - apply sc_exp_const.
       - apply sc_exp_enum.
       - eapply sc_exp_var; eauto.
@@ -3933,10 +3933,10 @@ Module Type LCLOCKSEMANTICS
         intros k. eapply Hnode; eauto.
         specialize (H26 k). inv H26. rewrite H15 in H3; inv H3.
         repeat (esplit; eauto).
-        eapply sc_inside_mask with (es0:=es); eauto.
+        eapply sc_inside_mask with (es:=es); eauto.
         + eapply sem_exps_sem_var; eauto.
         + eapply wc_find_node in HwcG as (?&?&?); eauto.
-        + eapply sc_exps'' with (Γ0:=Γ); eauto.
+        + eapply sc_exps'' with (Γ:=Γ); eauto.
     Qed.
 
     Corollary sem_equation_sem_equation_ck : forall Γ Γty H bs equ,
@@ -3964,7 +3964,7 @@ Module Type LCLOCKSEMANTICS
           eapply sc_inside_mask with (es:=es0); eauto.
           * eapply sem_exps_sem_var; eauto.
           * eapply wc_find_node in HwcG as (?&?&?); eauto.
-          * eapply sc_exps'' with (Γ0:=Γ); eauto.
+          * eapply sc_exps'' with (Γ:=Γ); eauto.
       - (* general case *)
         econstructor; eauto.
         eapply Forall2_impl_In; [|eauto]; intros.
@@ -4323,7 +4323,7 @@ Module Type LCLOCKSEMANTICS
       Forall2 (sem_clock (fst H) b) (map fst ncks) (map abstract_clock vs).
   Proof.
     intros * HwcG Hfind Hwc Hseme Hsem Hvars Hcki Hwi Hwo.
-    eapply sc_outside_mask with (rs0:=rs) (es0:=es); eauto.
+    eapply sc_outside_mask with (rs:=rs) (es:=es); eauto.
     2,3:eapply wc_find_node in HwcG as (?&?&?&?); eauto.
     - eapply sem_exps_sem_var, sem_exps_ck_sem_exps; eauto.
     - intros k.
@@ -4483,7 +4483,7 @@ Module Type LCLOCKSEMANTICS
       rewrite H7 in H16; simpl in H16. inv H16; auto.
     - (* app *)
       erewrite map_ext, <-map_map.
-      eapply sc_outside_mask' with (es0:=es); eauto. 3:intros (?&?); simpl; auto.
+      eapply sc_outside_mask' with (es:=es); eauto. 3:intros (?&?); simpl; auto.
       + rewrite Forall2_map_1. apply Forall2_forall. split.
         * intros (?&?) ??; simpl in *; auto.
         * rewrite Forall2_map_2 in H10. eapply Forall2_length in H10. rewrite <-H10.
@@ -4876,7 +4876,7 @@ Module Type LCLOCKSEMANTICS
           rewrite ac_Streams_const, slower_nth; intros.
           rewrite const_nth; auto.
       - (* Blocal *)
-        eapply Slocal with (H'0:=Env.map (fun _ => Streams.const absent) H'); eauto.
+        eapply Slocal with (H':=Env.map (fun _ => Streams.const absent) H'); eauto.
         + intros * Hsemv Hinm1.
           eapply sem_var_absent_inv in Hsemv as (?&Hvar&Heq).
           eapply H1 in Hvar; eauto.

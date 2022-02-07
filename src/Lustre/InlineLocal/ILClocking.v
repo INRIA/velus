@@ -360,7 +360,7 @@ Module Type ILCLOCKING
         eapply fst_InMembers, Forall_forall in Hin2; eauto.
         eapply contradict_AtomOrGensym in Hin2; eauto using local_not_in_switch_prefs.
       }
-      eapply mmap_inlinelocal_block_wc with (Γ'0:=Γ'++senv_of_locs locs) in H1. 1-15:eauto.
+      eapply mmap_inlinelocal_block_wc with (Γ':=Γ'++senv_of_locs locs) in H1. 1-15:eauto.
       + rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
       + intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_locs.
@@ -483,7 +483,7 @@ Module Type ILCLOCKING
     destruct blk; intros * Hnl Hns Hnd Hgood Hwenv Hwc Hwcck Hvalid Hil; repeat inv_bind; simpl.
     3:inv Hns.
     1,2:eapply inlinelocal_block_wc with (Γ':=[]); try rewrite app_nil_r; eauto.
-    7:inv Hns; inv Hnd; inv Hgood; inv Hwc; eapply mmap_inlinelocal_block_wc with (Γ0:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwc1&Hwc2); try rewrite app_nil_r; eauto.
+    7:inv Hns; inv Hnd; inv Hgood; inv Hwc; eapply mmap_inlinelocal_block_wc with (Γ:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwc1&Hwc2); try rewrite app_nil_r; eauto.
     1,4,10:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
     1,3,8:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
     1,2,6:intros * Hfind; eapply Env.Props.P.F.empty_mapsto_iff in Hfind as [].

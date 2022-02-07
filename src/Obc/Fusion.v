@@ -422,7 +422,7 @@ Module Type FUSION
         match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
         assert (length l = length ss) by congruence.
         pose proof Hin as Hin'.
-        eapply length_in_right_combine with (l0 := ss) in Hin as (s & Hin); eauto.
+        eapply length_in_right_combine with (l := ss) in Hin as (s & Hin); eauto.
         eexists; split; eauto.
         apply in_combine_l in Hin.
         repeat take (Forall _ ss) and eapply Forall_forall in it; eauto.
@@ -494,7 +494,7 @@ Module Type FUSION
         match goal with H: typeof _ = _, H': typeof _ = _ |- _ => rewrite H in H'; inv H' end.
         assert (length l = length ss) by congruence.
         pose proof Hin as Hin'.
-        eapply length_in_right_combine with (l0 := ss) in Hin as (s & Hin); eauto.
+        eapply length_in_right_combine with (l := ss) in Hin as (s & Hin); eauto.
         eexists; split; eauto.
         apply in_combine_l in Hin.
         repeat take (Forall _ ss) and eapply Forall_forall in it; eauto.

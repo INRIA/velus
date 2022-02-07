@@ -796,8 +796,8 @@ Module Type NCLOCKING
           solve_forall. repeat solve_incl.
       - (* fby *)
         repeat inv_bind.
-        assert (Hnorm1:=H1). eapply mmap2_wc with (vars0:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
-        assert (Hnorm2:=H2). eapply mmap2_wc with (vars0:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
+        assert (Hnorm1:=H1). eapply mmap2_wc with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
+        assert (Hnorm2:=H2). eapply mmap2_wc with (vars:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
         2,3:solve_mmap2.
         repeat rewrite Forall_app. repeat split.
         3-4:solve_forall; repeat solve_incl.
@@ -832,8 +832,8 @@ Module Type NCLOCKING
             apply HasClock_app; auto.
       - (* arrow *)
         repeat inv_bind.
-        assert (Hnorm1:=H1). eapply mmap2_wc with (vars0:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
-        assert (Hnorm2:=H2). eapply mmap2_wc with (vars0:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
+        assert (Hnorm1:=H1). eapply mmap2_wc with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
+        assert (Hnorm2:=H2). eapply mmap2_wc with (vars:=vars++st_senv x4) in H2 as [Hwt2 Hwt2']...
         2,3:solve_mmap2.
         repeat rewrite Forall_app. repeat split.
         3-4:solve_forall; repeat solve_incl.
@@ -868,7 +868,7 @@ Module Type NCLOCKING
           apply HasClock_app; auto.
       - (* when *)
         repeat inv_bind.
-        assert (H0':=H0). eapply mmap2_wc with (vars0:=vars++st_senv st') in H0' as [Hwc1 Hwc1']...
+        assert (H0':=H0). eapply mmap2_wc with (vars:=vars++st_senv st') in H0' as [Hwc1 Hwc1']...
         2:solve_mmap2.
         split; auto.
         apply unnest_when_wc_exp...
@@ -881,7 +881,7 @@ Module Type NCLOCKING
         assert (Hnorm1:=H0). eapply mmap2_wc' in H0 as (?&?).
         2:(intros; repeat inv_bind; destruct a; repeat solve_st_follows).
         2:{ solve_forall; repeat inv_bind.
-            eapply mmap2_wc with (vars0:=vars++st_senv x2) in H5... solve_mmap2. }
+            eapply mmap2_wc with (vars:=vars++st_senv x2) in H5... solve_mmap2. }
         assert (Forall (wc_exp G2 (vars++st_senv st')) (unnest_merge (x0, tx) x tys ck)) as Hwcexp.
         { eapply unnest_merge_wc_exp...
           + destruct is_control; repeat solve_incl.
@@ -918,7 +918,7 @@ Module Type NCLOCKING
         assert (Hnorm1:=H2). eapply mmap2_wc' in H2 as (?&?).
         2:(intros; repeat inv_bind; destruct a; repeat solve_st_follows).
         2:{ solve_forall; repeat inv_bind.
-            eapply mmap2_wc with (vars0:=vars++st_senv x4) in H9... solve_mmap2. }
+            eapply mmap2_wc with (vars:=vars++st_senv x4) in H9... solve_mmap2. }
         assert (length x = 1); try singleton_length.
         { eapply unnest_exp_length in Hnorm0...
           now rewrite Hnorm0, <-length_clockof_numstreams, H6. }
@@ -972,7 +972,7 @@ Module Type NCLOCKING
         assert (st_follows x4 x7) as Hfollows by repeat solve_st_follows.
         eapply unnest_resets_wc in H3 as (Hck2&Hwt2&Hwt2'); eauto.
         2:solve_mmap2. 2:solve_forall; repeat solve_incl.
-        assert (Hnorm:=H1). eapply mmap2_wc with (vars0:=vars++st_senv x1) in H1 as [Hwc1 Hwc1']...
+        assert (Hnorm:=H1). eapply mmap2_wc with (vars:=vars++st_senv x1) in H1 as [Hwc1 Hwc1']...
         2:solve_mmap2.
 
         assert (length (find_node_incks G1 f) = length (concat x6)) as Hlen1.
@@ -1099,7 +1099,7 @@ Module Type NCLOCKING
         Forall (wc_equation G2 (vars++st_senv st')) (concat eqs').
     Proof.
       intros * Hnl Hwt Hmap.
-      eapply mmap2_wc' with (vars0:=vars++st_senv st') in Hmap as (Hwc1&Hwc2); eauto.
+      eapply mmap2_wc' with (vars:=vars++st_senv st') in Hmap as (Hwc1&Hwc2); eauto.
       - split; auto.
         rewrite <-Forall_concat, Forall_map in Hwc1. eauto.
       - intros ?? (?&?) (?&?) ??. repeat solve_st_follows.

@@ -1073,7 +1073,7 @@ Module Type LSEMANTICS
         * destruct EH as (EH1&EH2); split; unfold filter_hist. now rewrite <-EH1. now rewrite <-EH2.
         * now rewrite <-Eb.
       + destruct EH as (EH&_). now rewrite <-EH.
-    - destruct H'0. eapply Slocal with (H'0:=H'); eauto.
+    - destruct H'0. eapply Slocal with (H':=H'); eauto.
       + intros * ??. destruct EH as (EH&_). rewrite <-EH; eauto.
       + destruct EH as (_&EH). rewrite <-EH; eauto.
       + intros. edestruct H2; eauto. destruct_conjs.
@@ -1564,7 +1564,7 @@ Module Type LSEMANTICS
       + intros ?? Hdef Hmaps.
         eapply H11; eauto. eapply Env.restrict_find_inv; eauto.
     - (* locals *)
-      eapply Slocal with (H'0:=Env.restrict H' (List.map fst (Γ ++ senv_of_locs locs))).
+      eapply Slocal with (H':=Env.restrict H' (List.map fst (Γ ++ senv_of_locs locs))).
       + intros * Hsem Hnin.
         eapply sem_var_restrict_inv in Hsem as (Hin&Hsem).
         eapply sem_var_restrict; eauto.

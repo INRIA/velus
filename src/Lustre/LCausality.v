@@ -821,13 +821,13 @@ Module Type LCAUSALITY
       - (* unop *)
         eapply IHe; eauto.
       - (* binop *)
-        erewrite <- collect_free_left_length with (cenv:=cenv') (cenv'0:=cenvl') in H6, H7; eauto.
+        erewrite <- collect_free_left_length with (cenv:=cenv') (cenv':=cenvl') in H6, H7; eauto.
         repeat singleton_length.
         destruct H2 as [?|?].
         * apply PSF.union_2. eapply IHe1 in H; eauto.
         * apply PSF.union_3. eapply IHe2 in H; eauto.
       - (* fby *)
-        erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv'0:=cenvl') in H7, H8; eauto.
+        erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv':=cenvl') in H7, H8; eauto.
         eapply collect_free_left_list_spec'; eauto.
       - (* arrow *)
         erewrite <- collect_free_left_list_length in H7, H8; eauto.
@@ -837,7 +837,7 @@ Module Type LCAUSALITY
         repeat rewrite PS.union_spec.
         destruct H5; [left|right]; eapply collect_free_left_list_spec'; eauto.
       - (* when *)
-        erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv'0:=cenvl') in H6; eauto.
+        erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv':=cenvl') in H6; eauto.
         erewrite map_nth' with (d':=PS.empty).
         2:(erewrite <- map_length, Hlen2; eapply Hlen1; eauto).
         destruct H4 as [(_&?)|?]; subst.
@@ -1109,10 +1109,10 @@ Module Type LCAUSALITY
     repeat rewrite map_app in *.
     repeat apply NoDup_app'; eauto using NoDup_app_l.
     - apply NoDup_app_r, NoDup_app_l in Hnd.
-      rewrite map_map in *. eapply nodup_map_flat_map with (xs0:=map snd brs); eauto.
+      rewrite map_map in *. eapply nodup_map_flat_map with (xs:=map snd brs); eauto.
       solve_In. rewrite flat_map_concat_map in *. rewrite map_map; eauto.
     - apply NoDup_app_r, NoDup_app_r in Hnd.
-      eapply nodup_map_filter_flat_map with (xs0:=map snd brs); eauto.
+      eapply nodup_map_filter_flat_map with (xs:=map snd brs); eauto.
       solve_In. rewrite flat_map_concat_map in *. rewrite map_map; eauto.
     - simpl_Forall. intros Hin2. simpl_In.
       eapply NoDup_app_r, NoDup_app_In in Hnd. eapply Hnd. 2:clear Hin0; solve_In.
@@ -1580,7 +1580,7 @@ Module Type LCAUSALITY
     erewrite 2 map_map, map_ext, in_app_iff. apply or_iff_compat_l.
     2:intros (?&(?&?)&?); auto.
     pose proof (n_defd n) as (xs&Hdef&Hperm).
-    erewrite collect_depends_on_dom with (xs0:=xs); eauto.
+    erewrite collect_depends_on_dom with (xs:=xs); eauto.
     2:{ apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto. }
     3,4:rewrite map_fst_senv_of_inout.
     3:rewrite Hperm; solve_incl_app. 3:apply node_NoDupLocals.
@@ -1599,7 +1599,7 @@ Module Type LCAUSALITY
       2:rewrite Hperm; solve_incl_app.
       2:{ eapply NoDupLocals_incl, node_NoDupLocals. solve_incl_app. }
       2:{ intros ? Hin' Hinm. rewrite fst_InMembers in Hinm. simpl_In.
-          eapply NoDupMembers_app_InMembers. eapply n_nodup with (n0:=n). eapply In_InMembers; eauto.
+          eapply NoDupMembers_app_InMembers. eapply n_nodup with (n:=n). eapply In_InMembers; eauto.
           rewrite Hperm in Hin'. now rewrite fst_InMembers. }
       destruct Hin as [(?&Hcaus)|]. 2:right; solve_In.
       inv Hcaus. left; solve_In.
@@ -1622,7 +1622,7 @@ Module Type LCAUSALITY
   Proof.
     intros * Hwl Hwx Hndcaus Hdep.
     specialize (build_graph_dom G n Hwl) as Hdom.
-    eapply Env.dom_use with (x0:=x) in Hdom; eauto.
+    eapply Env.dom_use with (x:=x) in Hdom; eauto.
     rewrite Env.In_find in Hdom. symmetry in Hdom.
     assert (NoDupMembers (idcaus (n_in n ++ n_out n))) as Hnd.
     { pose proof (n_nodup n) as (Hnd&_).

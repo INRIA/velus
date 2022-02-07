@@ -502,8 +502,8 @@ Module Type LSEMDETERMINISM
         clear - H H0 Hfby1 Hfby2.
         rewrite_Forall_forall. congruence.
         eapply fby_detn.
-        + eapply H2 with (a:=def_stream) (b:=def_stream) (n0:=n0); eauto. congruence.
-        + eapply H1 with (a:=def_stream) (b:=def_stream) (n0:=n0); eauto. congruence.
+        + eapply H2 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
+        + eapply H1 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
         + eapply H8; eauto; congruence.
         + eapply H5; eauto; congruence.
       - (* arrow *)
@@ -514,8 +514,8 @@ Module Type LSEMDETERMINISM
         clear - H H0 Harrow1 Harrow2.
         rewrite_Forall_forall. congruence.
         eapply arrow_detn.
-        + eapply H2 with (a:=def_stream) (b:=def_stream) (n0:=n0); eauto. congruence.
-        + eapply H1 with (a:=def_stream) (b:=def_stream) (n0:=n0); eauto. congruence.
+        + eapply H2 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
+        + eapply H1 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
         + eapply H8; eauto; congruence.
         + eapply H5; eauto; congruence.
       - (* when *)
@@ -529,7 +529,7 @@ Module Type LSEMDETERMINISM
         clear - H Hsv1 Hwhen1 Hwhen2.
         rewrite_Forall_forall. congruence.
         eapply when_detn. 2:eauto.
-        + eapply H0 with (a:=def_stream) (b:=def_stream) (n0:=n0); eauto. congruence.
+        + eapply H0 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
         + eapply H4; eauto; congruence.
         + eapply H2; eauto; congruence.
       - (* merge *)
@@ -1190,7 +1190,7 @@ Module Type LSEMDETERMINISM
         eapply in_concat in Hinxs as (?&Hin1&Hin2). inv_VarsDefined. simpl_Forall.
         assert (EqStN (S n) r1 r2) as Hrs.
         { eapply bools_of_detn. 2,3:eauto.
-          eapply det_exp_S with (k:=0) (n0:=n) in H5; eauto.
+          eapply det_exp_S with (k:=0) (n:=n) in H5; eauto.
           - eapply H5 in H8; simpl in H8; eauto.
           - rewrite <-length_typeof_numstreams, H7; simpl. lia.
           - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
@@ -1218,7 +1218,7 @@ Module Type LSEMDETERMINISM
         assert (Is_defined_in Γ cy (Bswitch ec branches)) as Hdef.
         { eapply In_Is_defined_in with (Γ:=Γ); eauto using incl_refl, in_or_app.
           econstructor; eauto. }
-        eapply det_exp_S with (k:=0) (n0:=n) in H9; eauto. specialize (H9 H12); simpl in H9.
+        eapply det_exp_S with (k:=0) (n:=n) in H9; eauto. specialize (H9 H12); simpl in H9.
         2:{ rewrite <-length_typeof_numstreams, H6; auto. }
         2:{ intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
             eapply HSn, DepOnSwitch2; eauto.
@@ -1386,7 +1386,7 @@ Module Type LSEMDETERMINISM
         edestruct H4 as (?&Hinvars&Hvars'); eauto.
         assert (EqStN (S n) r1 r2) as Hrs.
         { eapply bools_of_detn. 2,3:eauto.
-          eapply det_exp_S with (k0:=0) (n0:=n) in H5; eauto.
+          eapply det_exp_S with (k:=0) (n:=n) in H5; eauto.
           - eapply H5 in H8; eauto.
           - rewrite <-length_typeof_numstreams, H7; simpl; lia.
           - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
@@ -1420,7 +1420,7 @@ Module Type LSEMDETERMINISM
         econstructor; eauto. simpl_Forall. inv_VarsDefined.
         destruct (in_dec ident_eq_dec cy (map snd (idcaus_of_locals x0))).
         2:eapply sem_block_det_cons_nIn; eauto. simpl_In.
-        eapply det_exp_S with (k:=0) (n1:=n) in H9; eauto. specialize (H9 H12); simpl in H9.
+        eapply det_exp_S with (k:=0) (n:=n) in H9; eauto. specialize (H9 H12); simpl in H9.
         2:{ rewrite <-length_typeof_numstreams, H6; auto. }
         2:{ intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
             eapply HSn, DepOnSwitch2; eauto. solve_Exists.
@@ -1460,7 +1460,7 @@ Module Type LSEMDETERMINISM
             eapply sem_block_det_cons_nIn; eauto.
             { intro Hin. clear - H0 Hinenv Hin Hnd.
               simpl_app. rewrite map_filter_app in Hnd. simpl_app.
-              eapply NoDup_app_r, NoDup_app_In with (x0:=cy) in Hnd.
+              eapply NoDup_app_r, NoDup_app_In with (x:=cy) in Hnd.
               2:solve_In. clear Hinenv.
               eapply Hnd. repeat rewrite in_app_iff in *.
               destruct Hin; [left|right;right]; solve_In; auto. }
@@ -1525,7 +1525,7 @@ Module Type LSEMDETERMINISM
             { intro Hin. subst. clear - H0 Hin0 Hin Hnd.
               simpl_app. rewrite map_filter_app in Hnd. simpl_app.
               eapply NoDup_app_r, NoDup_app_r in Hnd. rewrite Permutation_swap in Hnd.
-              eapply NoDup_app_In with (x0:=i1) in Hnd.
+              eapply NoDup_app_In with (x:=i1) in Hnd.
               2:solve_In; auto. clear Hin0.
               eapply Hnd. repeat rewrite in_app_iff in *.
               destruct Hin; [left|right]; solve_In. auto. }

@@ -102,11 +102,11 @@ Module Type DLCLOCKING
         12:(pose proof (rename_in_exp_nclocksof sub es) as Hncks; eapply Forall2_trans_ex in Hncks; eauto).
 
         12:eapply wc_Eapp with
-          (bck0:=bck)
-          (sub1:=fun x => match (sub0 x) with
-                       | Some y => Some y
-                       | _ => Env.find x sub2
-                       end).
+          (bck:=bck)
+          (sub:=fun x => match (sub0 x) with
+                      | Some y => Some y
+                      | _ => Env.find x sub2
+                      end).
         1-11:econstructor.
         1-40:eauto using in_or_app; simpl_Forall; eauto;
           match goal with
@@ -182,11 +182,11 @@ Module Type DLCLOCKING
           }
           pose proof (rename_in_exp_nclocksof sub es) as Hncks; eapply Forall2_trans_ex in Hncks; eauto.
           eapply wc_EqApp with
-          (bck0:=bck)
-          (sub1:=fun x => match (sub0 x) with
-                       | Some y => Some y
-                       | _ => Env.find x sub2
-                       end); simpl_Forall; eauto using in_or_app, rename_in_exp_wc.
+          (bck:=bck)
+          (sub:=fun x => match (sub0 x) with
+                      | Some y => Some y
+                      | _ => Env.find x sub2
+                      end); simpl_Forall; eauto using in_or_app, rename_in_exp_wc.
           3:erewrite rename_in_exp_clockof; eauto.
           + simpl_Forall. destruct b; inv_equalities.
             destruct o; simpl in *; subst.
@@ -235,7 +235,7 @@ Module Type DLCLOCKING
       + rewrite rename_in_exp_clockof; eauto.
 
     - (* switch *)
-      eapply wc_Bswitch with (Γ'1:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, Build_annotation e.(typ) Cbase e.(causl) e.(causl_last)) else None) Γ').
+      eapply wc_Bswitch with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, Build_annotation e.(typ) Cbase e.(causl) e.(causl_last)) else None) Γ').
       + eapply rename_in_exp_wc; eauto.
       + rewrite rename_in_exp_clockof; eauto.
       + apply mmap_values in H0. inv H0; auto. congruence.
