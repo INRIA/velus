@@ -295,18 +295,13 @@ Module Type STATICENV
 
   Import Permutation.
 
-  Fact idcaus_of_senv_locs_Perm {A} : forall env locs,
-      Permutation (idcaus_of_senv (env ++ @senv_of_locs A locs))
-                  (idcaus_of_senv env
-                   ++ map (fun '(x, (_, _, cx, _)) => (x, cx)) locs
-                   ++ map_filter (fun '(x, (_, _, _, o)) => option_map (fun '(_, cx) => (x, cx)) o) locs).
+  Fact idcaus_of_senv_app : forall Γ1 Γ2,
+      Permutation (idcaus_of_senv (Γ1 ++ Γ2))
+                  (idcaus_of_senv Γ1 ++ idcaus_of_senv Γ2).
   Proof.
-    intros *.
-    unfold idcaus_of_senv, senv_of_locs. simpl_app. apply Permutation_app_head.
-    rewrite Permutation_app_comm. simpl_app. apply Permutation_app_head.
-    rewrite Permutation_app_comm. erewrite map_map, map_ext. apply Permutation_app_head.
-    erewrite map_filter_map, map_filter_ext. reflexivity.
-    1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+    intros.
+    unfold idcaus_of_senv. simpl_app.
+    apply Permutation_app_head, Permutation_swap.
   Qed.
 
   Fact idcaus_of_senv_In : forall Γ x cx,

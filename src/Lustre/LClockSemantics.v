@@ -3002,9 +3002,8 @@ Module Type LCLOCKSEMANTICS
         + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
         + intros * Hin' Hdep. eapply sc_var_inv_mask; eauto.
           eapply Hsc; eauto. constructor; solve_Exists.
-        + intros * Hin' Hdep. eapply HenvP; eauto.
-          2:constructor; solve_Exists.
-          simpl_In. eapply idcaus_of_locals_In_reset in Hin; eauto. solve_In.
+        + intros * Hin' Hdep. eapply HenvP; eauto. solve_In.
+          constructor; solve_Exists.
 
       - (* switch *)
         assert (Syn.Is_defined_in y (Bswitch ec branches)) as Hdef.
@@ -3089,10 +3088,9 @@ Module Type LCLOCKSEMANTICS
                   1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
               eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
               eapply sem_clock_filter; eauto.
-          + intros ? Hin' Hdep. apply HenvP.
-            * simpl_In. eapply idcaus_of_locals_In_switch in Hin; eauto. solve_In. auto.
-            * constructor. solve_Exists. eapply depends_on_incl; [| |eauto].
-              1,2:intros * Has; inv Has; simpl_In; eauto with senv.
+          + intros ? Hin' Hdep. apply HenvP. solve_In.
+            constructor. solve_Exists. eapply depends_on_incl; [| |eauto].
+            1,2:intros * Has; inv Has; simpl_In; eauto with senv.
         } clear H. rewrite H8 in Hinv.
         split; intros * Hca Hck Hvx.
         2:{ exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
@@ -3159,12 +3157,8 @@ Module Type LCLOCKSEMANTICS
             eapply Env.union_find3'; eauto. }
           eapply H with (Γty:=Γty++senv_of_locs locs); eauto.
           - clear - Hinblks Hnd1.
-            eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
-            simpl_app. rewrite map_filter_app in Hnd1. simpl_app.
-            rewrite map_filter_map, map_map with (l:=locs) in Hnd1.
-            erewrite map_filter_ext, map_ext with (l:=locs) in Hnd1.
-            eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
-            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+            eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_app.
+            simpl_app. auto.
           - clear - Hnd2 Hinblks H4 H5.
             apply NoDupMembers_app; auto. apply NoDupMembers_senv_of_locs; auto.
             intros * Hinm contra. rewrite fst_InMembers in Hinm. rewrite InMembers_senv_of_locs in contra.
@@ -3228,14 +3222,12 @@ Module Type LCLOCKSEMANTICS
         econstructor; eauto.
         intros k. specialize (H6 k).
         rewrite Forall_forall in *; intros. eapply H; eauto.
-        contradict Hnin.
-        simpl_In. eapply idcaus_of_locals_In_reset in Hin; eauto. solve_In.
+        contradict Hnin. solve_In.
       - (* switch *)
         econstructor; eauto.
         simpl_Forall.
         eapply H; eauto.
-        contradict Hnin.
-        simpl_In. eapply idcaus_of_locals_In_switch in Hin; eauto. solve_In. auto.
+        contradict Hnin. solve_In.
       - (* locals *)
         econstructor; eauto.
         + rewrite Forall_forall in *; intros. eapply H; eauto.
@@ -3284,9 +3276,8 @@ Module Type LCLOCKSEMANTICS
         + intros * ? Hdep.
           eapply sc_var_inv_mask, Hsc; eauto.
           constructor. solve_Exists.
-        + intros * ? Hdep. apply HenvP.
-          * simpl_In. eapply idcaus_of_locals_In_reset in H0; eauto. solve_In.
-          * constructor. solve_Exists.
+        + intros * ? Hdep. apply HenvP. solve_In.
+          constructor. solve_Exists.
 
       - (* switch *)
         econstructor; eauto. simpl_Forall. inv_VarsDefined.
@@ -3317,7 +3308,7 @@ Module Type LCLOCKSEMANTICS
           eapply Hdoml. inv His; simpl_In. econstructor; eauto.
                    + intros * ? Hdep.
             assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
-            { intros * Has. eapply depends_on_In with (x:=x2) in Hdep; eauto with lclocking.
+            { intros * Has. eapply depends_on_In with (x:=x3) in Hdep; eauto with lclocking.
               - inv Hdep. now rewrite <-fst_InMembers.
               - clear - Hinbrs Hinblks Hnd1.
                 eapply NoDup_locals_inv, NoDup_locals_inv2; eauto. auto.
@@ -3336,17 +3327,16 @@ Module Type LCLOCKSEMANTICS
               2:{ rewrite <-length_clockof_numstreams, H12; auto. }
               2:{ intros ? Hisf. assert (Hisf':=Hisf). eapply Is_free_left_In_snd in Hisf' as (?&?); eauto.
                   eapply Hsc; eauto.
-                  - eapply DepOnSwitch2; eauto. solve_Exists. unfold idcaus_of_locals in Hin. rewrite in_app_iff in Hin.
-                    destruct Hin; [left|right]. eapply In_Is_defined_in; eauto using in_or_app.
-                    + apply in_or_app; right. solve_In.
-                    + etransitivity; [|eauto]. rewrite <-Hperm. apply incl_concat; auto.
-                    + eapply Is_last_in_In; solve_In.
+                  - eapply DepOnSwitch2; eauto. solve_Exists.
+                    eapply idcaus_of_locals_def_last; eauto. 2:solve_In.
+                    eapply NoDupLocals_incl; [|eauto].
+                    etransitivity; [|eauto]. rewrite <-Hperm. apply incl_concat; auto.
               }
               take (clockof _ = [_]) and rewrite it in Hsem; simpl in *; auto.
             }
 
             split; intros * Hca Hck Hv; inv Hca; inv Hck; simpl_In.
-            1,2:eapply NoDupMembers_det in Hin0; eauto; subst.
+            1,2:eapply NoDupMembers_det in Hin3; eauto; subst.
             1,2:assert (a0.(clo) = ck) by (eapply Hgamma2; eauto with senv).
             * eapply sem_var_filter_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_filter.
               eapply Hsc in Hv. 4,5:eauto with senv. 2:eauto with senv.
@@ -3360,10 +3350,9 @@ Module Type LCLOCKSEMANTICS
                   1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
               eapply sem_clock_det in Hv. 2:eapply Hsemck. rewrite <-Hv.
               eapply sem_clock_filter; eauto.
-          + intros ? Hin' Hdep. apply HenvP.
-            * simpl_In. eapply idcaus_of_locals_In_switch in Hin0; eauto. solve_In. auto.
-            * constructor. solve_Exists. eapply depends_on_incl; [| |eauto].
-              1,2:intros * Has; inv Has; simpl_In; eauto with senv.
+          + intros ? Hin' Hdep. apply HenvP. solve_In.
+            constructor. solve_Exists. eapply depends_on_incl; [| |eauto].
+            1,2:intros * Has; inv Has; simpl_In; eauto with senv.
 
       - (* locals *)
         assert (Env.dom_lb Hi' (map fst locs)) as Hdom2.
@@ -3391,8 +3380,6 @@ Module Type LCLOCKSEMANTICS
               eapply Env.dom_use; eauto. econstructor; eauto.
           - exists v. split; try reflexivity.
             eapply Env.union_find2; eauto. }
-        unfold idcaus_of_locals in Hinenv; simpl in *. rewrite map_app, map_filter_app, 3 in_app_iff in Hinenv.
-        rewrite or_assoc, <-(or_assoc (In _ (map _ (flat_map _ _)))), (or_comm (In _ (map _ (flat_map _ _)))), or_assoc in Hinenv.
         assert (NoDupMembers (Γ ++ senv_of_locs locs)) as Hnd2'.
         { apply NoDupMembers_app; auto.
           - apply NoDupMembers_senv_of_locs; auto.
@@ -3441,12 +3428,8 @@ Module Type LCLOCKSEMANTICS
           2: eapply sem_block_ck'_cons_nIn; eauto. simpl_In.
           { eapply H with (Γ:=Γ++_); eauto.
             - clear - H0 Hnd1.
-              eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
-              simpl_app. rewrite map_filter_app in Hnd1. simpl_app.
-              rewrite map_filter_map, map_map with (l:=locs) in Hnd1.
-              erewrite map_filter_ext, map_ext with (l:=locs) in Hnd1.
-              eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
-              1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+              eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_app.
+              simpl_app. auto.
             - rewrite map_app, map_fst_senv_of_locs; auto.
             - rewrite map_app, map_fst_senv_of_locs.
               etransitivity; eauto using incl_concat.
@@ -3501,14 +3484,14 @@ Module Type LCLOCKSEMANTICS
                 + apply Env.restrict_find_inv in Hfind2 as (?&?). apply Env.union_find3'; auto.
               - eapply Hsc2; eauto. 1,2:econstructor; solve_In; auto.
           }
-          destruct Hinenv as [Hinenv|[Hinenv|Hinenv]]; simpl_In.
+          unfold idcaus_of_senv in Hinenv. repeat rewrite in_app_iff in Hinenv.
+          destruct Hinenv as [[Hinenv|Hinenv]|Hinenv]; simpl_In.
 
           * (* locs *)
             split; intros * Hca Hck Hv; inv Hca; inv Hck; simpl_In; eapply NoDupMembers_det in Hin1; eauto; inv_equalities.
-            2:{ exfalso. 
-                simpl_app; rewrite map_filter_app in Hnd1; simpl_app.
-                eapply NoDup_app_r, NoDup_app_In in Hnd1. 2:clear Hin; solve_In.
-                eapply Hnd1. repeat rewrite in_app_iff. right; left. solve_In. auto.
+            2:{ exfalso. clear - Hin0 Hin Hnd1. unfold idcaus_of_senv in *. simpl_app.
+                eapply NoDup_app_r, NoDup_app_r, NoDup_app_In in Hnd1. 2:clear Hin; solve_In.
+                eapply Hnd1. repeat rewrite in_app_iff. left. solve_In. auto.
             }
             assert (In x (concat xs0)) as Hinxs.
             { take (Permutation _ _) and rewrite <-it. apply in_or_app, or_introl. solve_In. }
@@ -3532,12 +3515,8 @@ Module Type LCLOCKSEMANTICS
                   eapply Env.union_find_None in Hfind2 as (?&?).
                   eapply Env.union_find2; eauto.
               - clear - Hinblks Hnd1.
-                eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
-                simpl_app. rewrite map_filter_app in Hnd1. simpl_app.
-                rewrite map_filter_map, map_map with (l:=locs) in Hnd1.
-                erewrite map_filter_ext, map_ext with (l:=locs) in Hnd1.
-                eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
-                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+                eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_app.
+                simpl_app. auto.
               - rewrite map_app, map_fst_senv_of_locs; auto.
               - rewrite map_app, map_fst_senv_of_locs; auto.
                 etransitivity; eauto using incl_concat.
@@ -3551,7 +3530,7 @@ Module Type LCLOCKSEMANTICS
                 eapply Env.dom_lb_restrict_dom_lb; [eapply incl_appr, incl_refl|eauto].
               - simpl. intros *. rewrite IsLast_app. intros [|Hil].
                 + eapply Env.In_refines; eauto.
-                + inv Hil. simpl_In. destruct o as [(?&?)|]; simpl in *; try congruence.
+                + inv Hil. simpl_In. destruct o0 as [(?&?)|]; simpl in *; try congruence.
                   edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In.
               - rewrite HasCaus_app. right. econstructor; eauto. solve_In.
               - intros * _ Hdep. eapply Hsc'.
@@ -3564,9 +3543,9 @@ Module Type LCLOCKSEMANTICS
           * (* lasts *)
             split; intros * Hca Hck Hv; inv Hca; inv Hck; simpl_In; eapply NoDupMembers_det in Hin1; eauto; inv_equalities.
             1:{ exfalso. clear - Hin0 Hin Hnd1.
-                simpl_app; rewrite map_filter_app in Hnd1; simpl_app.
-                eapply NoDup_app_r, NoDup_app_In in Hnd1. 2:solve_In.
-                eapply Hnd1. repeat rewrite in_app_iff. right; left. clear Hin. solve_In. auto.
+                unfold idcaus_of_senv in *. simpl_app.
+                eapply NoDup_app_r, NoDup_app_r, NoDup_app_In in Hnd1. 2:solve_In.
+                eapply Hnd1. repeat rewrite in_app_iff. left. clear Hin. solve_In. auto.
             } simpl_Forall.
             edestruct H16 as (?&?&?&He&Hv1&Hfby&Hv2); eauto.
             eapply sem_var_det in Hv; eauto. rewrite <-Hv.
@@ -3582,14 +3561,13 @@ Module Type LCLOCKSEMANTICS
               - rewrite map_app, map_fst_senv_of_locs; auto.
             }
           * split; intros * Hca Hck Hv; inv Hca; inv Hck; simpl_In; eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
-            1,2:exfalso; clear - Hin Hinenv Hnd1.
-            1,2:simpl_app; rewrite map_filter_app in Hnd1; simpl_app.
-            1,2:apply NoDup_app_r in Hnd1.
-            -- eapply NoDup_app_In in Hnd1. 2:solve_In. eapply Hnd1. repeat rewrite in_app_iff.
-               destruct Hinenv; [left|right;right]; solve_In. auto.
-            -- apply NoDup_app_r in Hnd1. rewrite Permutation_swap in Hnd1.
-               eapply NoDup_app_In in Hnd1. 2:solve_In. eapply Hnd1. repeat rewrite in_app_iff.
-               destruct Hinenv; [left|right]; solve_In. auto.
+            1,2:exfalso; clear - Hin Hinf Hin1 Hnd1.
+            1,2:unfold idcaus_of_senv in *; simpl_app.
+            1,2:apply NoDup_app_r, NoDup_app_r in Hnd1.
+            -- eapply NoDup_app_In in Hnd1. 2:solve_In. eapply Hnd1. rewrite in_app_iff.
+               right. solve_In.
+            -- apply NoDup_app_r in Hnd1.
+               eapply NoDup_app_In in Hnd1. 2:solve_In. eapply Hnd1. solve_In.
     Qed.
 
     Lemma sem_node_sc_vars :
@@ -4009,7 +3987,7 @@ Module Type LCLOCKSEMANTICS
           * eapply NoDup_locals_inv; eauto.
           * etransitivity; eauto using incl_concat.
           * etransitivity; [|eauto]. rewrite 2 map_app. apply incl_appr'.
-            intros ??. simpl_In. eapply idcaus_of_locals_In_reset in Hin; eauto. solve_In.
+            intros ??. solve_In.
           * eapply Env.dom_map; eauto.
           * eapply sc_vars_mask; eauto.
 
@@ -4058,8 +4036,8 @@ Module Type LCLOCKSEMANTICS
             erewrite map_ext with (l:=Γck), map_filter_map, map_filter_ext.
             apply incl_app, incl_app; [apply incl_appl|apply incl_appr, incl_appl|].
             apply incl_map, incl_filter. apply incl_map, incl_map_filter, incl_filter.
-            apply incl_appr, incl_appr, incl_app; [apply incl_appl|apply incl_appr].
-            1,2:intros ? Hin; solve_In. auto.
+            apply incl_appr, incl_appr.
+            intros ? Hin; solve_In.
             1,2:intros; destruct_conjs; auto.
           * subst. apply Env.dom_map; auto.
           * destruct Hsc as (Hsc1&Hsc2).
@@ -4164,12 +4142,8 @@ Module Type LCLOCKSEMANTICS
             + intros * Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2.
               eapply H6; eauto. apply fst_InMembers; auto.
           - clear - H0 Hnd5.
-            eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_locs_Perm.
-            simpl_app. rewrite map_filter_app in Hnd5. simpl_app.
-            rewrite map_filter_map, map_map with (l:=locs) in Hnd5.
-            erewrite map_filter_ext, map_ext with (l:=locs) in Hnd5.
-            eapply Permutation_NoDup; [|eauto]. solve_Permutation_app.
-            1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl in *; auto.
+            eapply NoDup_locals_inv; eauto. rewrite idcaus_of_senv_app.
+            simpl_app. auto.
           - rewrite map_app, map_fst_senv_of_locs; auto.
           - rewrite map_app, map_fst_senv_of_locs.
             etransitivity; eauto using incl_concat.
@@ -4177,10 +4151,8 @@ Module Type LCLOCKSEMANTICS
             rewrite Permutation_app_comm; auto using incl_appl'.
           - intros *. rewrite 2 HasType_app. intros [|]; auto.
           - etransitivity; [|eauto]. clear - H0.
-            rewrite idcaus_of_senv_locs_Perm. simpl_app.
-            apply incl_appr', incl_app; [apply incl_appl; intros ??; solve_In|apply incl_appr].
-            apply incl_app; [apply incl_appr, incl_appl; intros ??; solve_In; auto|].
-            apply incl_app; [apply incl_appl|apply incl_appr, incl_appr]; intros ??; solve_In; auto.
+            rewrite idcaus_of_senv_app. simpl_app.
+            apply incl_appr', incl_appr'. intros ??; solve_In; auto.
           - rewrite map_app, map_fst_senv_of_locs. eapply Env.dom_lb_restrict_dom.
             eapply Env.union_dom_lb; eauto using Env.dom_dom_lb.
           - simpl_app. eapply Forall_app; split; eauto.
@@ -4215,12 +4187,8 @@ Module Type LCLOCKSEMANTICS
           * simpl_Forall.
             { rewrite <-map_fst_senv_of_locs, <-map_app.
               eapply sem_exp_sem_exp_ck with (Γ:=Γck ++ _), Sem.sem_exp_restrict, Sem.sem_exp_refines; eauto using Env.union_refines4'.
-              - clear - Hnd5. rewrite idcaus_of_senv_locs_Perm. simpl_app. rewrite map_filter_app in Hnd5. simpl_app.
-                rewrite (app_assoc _ _ (map snd (map_filter _ _))), (Permutation_app_comm _ (map snd (map_filter _ (map _ locs)))) in Hnd5.
-                repeat rewrite app_assoc in Hnd5. apply NoDup_app_l, NoDup_app_l in Hnd5. simpl_app.
-                eapply Permutation_NoDup; [|eauto].
-                repeat rewrite map_map. erewrite 2 map_map_filter, map_filter_map, map_ext with (l:=locs), map_filter_ext. solve_Permutation_app.
-                1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; auto.
+              - clear - Hnd5. rewrite idcaus_of_senv_app. simpl_app.
+                rewrite app_assoc in Hnd5; eauto using NoDup_app_l.
               - rewrite map_app, map_fst_senv_of_locs; auto.
               - eauto with ltyping.
             }
