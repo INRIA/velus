@@ -1805,7 +1805,8 @@ Module Type CORRECTNESS
             constructor; auto.
       - exists H0. repeat (esplit; eauto with env).
         + constructor; auto. econstructor; eauto with lcsem.
-          solve_forall. solve_forall. eapply sem_ref_sem_block; eauto.
+          simpl_Forall; do 2 esplit; eauto; simpl_Forall.
+          eapply sem_ref_sem_block; eauto.
       - exists H0. repeat (esplit; eauto with env).
         + constructor; auto. econstructor; eauto.
           * intros. edestruct H13 as (?&?&?&?&?&?&?); eauto.

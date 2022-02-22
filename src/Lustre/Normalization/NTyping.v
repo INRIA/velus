@@ -979,33 +979,17 @@ Module Type NTYPING
       eapply unnest_rhss_typesof in Hnorm...
       rewrite <- Hnorm in H1.
       clear Hnorm. revert xs H1.
-      induction x; intros xs H1; try constructor; simpl in H1.
-      + inv H1; simpl; auto.
-      + inv Hwt. repeat constructor...
-        simpl. rewrite app_nil_r.
-        rewrite_Forall_forall.
-        * rewrite app_length in H.
-          rewrite firstn_length. rewrite H.
-          rewrite length_typeof_numstreams.
-          apply Nat.min_l. lia.
-        * rewrite firstn_length in H2.
-          rewrite PeanoNat.Nat.min_glb_lt_iff in H2; destruct H2 as [Hlen1 Hlen2].
-          specialize (H1 a0 b _ _ _ Hlen2 eq_refl eq_refl).
-          rewrite app_nth1 in H1. 2: rewrite length_typeof_numstreams...
-          rewrite nth_firstn_1. 2:eauto.
-          repeat solve_incl.
-      + inv Hwt. apply IHx...
-        rewrite_Forall_forall.
-        * rewrite app_length in H.
-          rewrite skipn_length. rewrite H.
-          rewrite length_typeof_numstreams. lia.
-        * rewrite skipn_length in H2.
-          rewrite nth_skipn.
-          assert (n + numstreams a < length xs) as Hlen by lia.
-          specialize (H1 a0 b _ _ _ Hlen eq_refl eq_refl).
-          rewrite app_nth2 in H1. 2: rewrite length_typeof_numstreams; lia.
-          rewrite length_typeof_numstreams in H1.
-          replace (n + numstreams a - numstreams a) with n in H1 by lia...
+      induction x; intros xs H1; simpl in *.
+      + simpl_Forall. inv H.
+      + inv Hwt.
+        apply Forall2_length in H1 as Hlen.
+        erewrite <-firstn_skipn with (n:=numstreams a) (l:=xs) in H1. apply Forall2_app_split in H1 as (Hf1&Hf2).
+        2:{ rewrite app_length in Hlen.
+            rewrite firstn_length. rewrite Hlen.
+            rewrite length_typeof_numstreams.
+            apply Nat.min_l. lia. }
+        repeat constructor; simpl; try rewrite app_nil_r...
+        simpl_Forall. repeat solve_incl.
     Qed.
 
     Lemma unnest_block_wt : forall vars d blocks' st st',

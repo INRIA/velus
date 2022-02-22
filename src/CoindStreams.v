@@ -1495,6 +1495,14 @@ Module Type COINDSTREAMS
     now rewrite <- H4, <- H5.
   Qed.
 
+  Lemma sem_var_union : forall Hi1 Hi2 x vs,
+      sem_var (Env.union Hi1 Hi2) x vs ->
+      sem_var Hi1 x vs \/ sem_var Hi2 x vs.
+  Proof.
+    intros * Hv. inv Hv.
+    eapply Env.union_find4 in H0 as [Hfind|Hfind]; eauto using sem_var.
+  Qed.
+
   (** ** clocks_of and its properties *)
 
   Add Parametric Morphism : clocks_of
@@ -2753,156 +2761,248 @@ Module Type COINDSTREAMS
 
   Global Hint Resolve ac_slower : coindstreams.
 
-  (** *** filter and friends *)
+  (** *** filter relation *)
 
-  (* does not constrain the input history enough in the case of an absence *)
-  CoFixpoint filter {A} (abs : A) (sel : enumtag) (es : Stream svalue) (vs : Stream A) : Stream A :=
-    (if hd es ==b present (Venum sel) then hd vs else abs) ⋅ (filter abs sel (tl es) (tl vs)).
+  CoInductive filter {A} (abs : A) (sel : enumtag) : Stream svalue -> Stream A -> Stream A -> Prop :=
+  | filter_abs : forall es xs ys,
+      filter abs sel es xs ys ->
+      filter abs sel (absent ⋅ es) (abs ⋅ xs) (abs ⋅ ys)
+  | filter_sel : forall es x xs ys,
+      filter abs sel es xs ys ->
+      filter abs sel (present (Venum sel) ⋅ es) (x ⋅ xs) (x ⋅ ys)
+  | filter_nsel : forall v es x xs ys,
+      filter abs sel es xs ys ->
+      v <> Venum sel ->
+      filter abs sel (present v ⋅ es) (x ⋅ xs) (abs ⋅ ys).
 
-  (** Synchronous value filter *)
+  Lemma filter_nth {A} (abs : A) sel : forall es xs ys,
+      filter abs sel es xs ys ->
+        (forall n,
+            (es # n = absent /\ xs # n = abs /\ ys # n = abs)
+            \/ (es # n = present (Venum sel) /\ xs # n = ys # n)
+            \/ (exists v, es # n = present v /\ v <> Venum sel /\ ys # n = abs)
+        ).
+  Proof.
+    - intros * H n. revert es xs ys H.
+      induction n; intros.
+      + inv H; intuition.
+        right; right. repeat esplit; eauto.
+      + inv H; repeat rewrite Str_nth_S; auto.
+  Qed.
+
+  (* Filter of values *)
   Definition filterv := filter absent.
 
-  (** Filtering an history *)
-  Definition filter_hist sel es := Env.map (filterv sel es).
+  (* Filtering of histories *)
+  Definition filter_hist sel es (Hi Hi' : history) :=
+    Env.refines (fun vs' vs => filterv sel es vs vs') Hi' Hi.
 
-  (** Boolean filter *)
-  Definition filterb := filter false.
+  Add Parametric Morphism sel : (filterv sel)
+      with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
+        as filterv_morph.
+  Proof.
+    cofix CoFix.
+    intros (?&?) (?&?) Heq1 (?&?) (?&?) Heq2 (?&?) (?&?) Heq3 Hf;
+      inv Hf; inv Heq1; inv Heq2; inv Heq3; simpl in *; subst.
+    - constructor. eapply CoFix; eauto.
+    - constructor. eapply CoFix; eauto.
+    - constructor; auto. eapply CoFix; eauto.
+  Qed.
 
-  Lemma filter_nth {A} (abs : A) :
+  Add Parametric Morphism sel : (filter_hist sel)
+      with signature @EqSt _ ==> Env.Equiv (@EqSt _) ==> Env.Equiv (@EqSt _) ==> Basics.impl
+        as filter_hist_morph.
+  Proof.
+    intros * Heq1 * Heq2 * Heq3 Hf.
+    unfold filter_hist in *.
+    intros ?? Hfind. eapply Env.Equiv_orel in Heq3. rewrite Hfind in Heq3. inv Heq3.
+    symmetry in H. apply Hf in H as (?&Hfilter&Hfind').
+    eapply Env.Equiv_orel in Heq2. rewrite Hfind' in Heq2. inv Heq2.
+    do 2 esplit; [|eauto].
+    rewrite <-Heq1, <-H2, <-H1; auto.
+  Qed.
+
+  (** filter as a function *)
+
+  (* does not constrain the input history enough in the case of an absence *)
+  CoFixpoint ffilter {A} (abs : A) (sel : enumtag) (es : Stream svalue) (vs : Stream A) : Stream A :=
+    (if hd es ==b present (Venum sel) then hd vs else abs) ⋅ (ffilter abs sel (tl es) (tl vs)).
+
+  Definition ffilterv := ffilter absent.
+  Definition ffilter_hist sel es := Env.map (ffilterv sel es).
+  Definition ffilterb := ffilter false.
+
+  Lemma ffilter_nth {A} (abs : A) :
     forall n sel es xs,
-      (filter abs sel es xs) # n = if es # n ==b present (Venum sel) then xs # n else abs.
+      (ffilter abs sel es xs) # n = if es # n ==b present (Venum sel) then xs # n else abs.
   Proof.
     unfold Str_nth.
     induction n; intros; unfold_St es; unfold_St xs; auto.
   Qed.
 
-  Corollary filterv_nth:
+  Corollary ffilterv_nth:
     forall n e es xs,
-      (filterv e es xs) # n = if es # n ==b present (Venum e) then xs # n else absent.
+      (ffilterv e es xs) # n = if es # n ==b present (Venum e) then xs # n else absent.
   Proof.
-    intros. setoid_rewrite filter_nth; auto.
+    intros. setoid_rewrite ffilter_nth; auto.
   Qed.
 
-  Corollary filterb_nth:
+  Corollary ffilterb_nth:
     forall n e es xs,
-      (filterb e es xs) # n = if es # n ==b present (Venum e) then xs # n else false.
+      (ffilterb e es xs) # n = if es # n ==b present (Venum e) then xs # n else false.
   Proof.
-    intros. setoid_rewrite filter_nth; auto.
+    intros. setoid_rewrite ffilter_nth; auto.
   Qed.
 
-  Lemma filter_Cons {A} (absent: A) :
+  Lemma ffilter_Cons {A} (absent: A) :
     forall sel e es x xs,
-      (filter absent sel (e ⋅ es) (x ⋅ xs))
-        ≡ (if e ==b present (Venum sel) then x else absent) ⋅ (filter absent sel es xs).
+      (ffilter absent sel (e ⋅ es) (x ⋅ xs))
+        ≡ (if e ==b present (Venum sel) then x else absent) ⋅ (ffilter absent sel es xs).
   Proof.
     intros *.
     constructor; simpl; reflexivity.
   Qed.
 
-  Add Parametric Morphism {A} (absent: A) k : (filter absent k)
+  Lemma filter_ffilter {A} (abs : A) sel : forall es vs vs',
+      filter abs sel es vs vs' ->
+      vs' ≡ ffilter abs sel es vs.
+  Proof.
+    cofix CoFix.
+    intros * Hfilter; inv Hfilter; constructor; simpl; auto.
+    - rewrite equiv_decb_refl; auto.
+    - destruct (_ ==b _) eqn:Heq; auto.
+      rewrite equiv_decb_equiv in Heq. inv Heq. congruence.
+  Qed.
+
+  Lemma ffilterv_filterv sel tn : forall es vs,
+      wt_stream es (Tenum tn) ->
+      abstract_clock vs ≡ abstract_clock es ->
+      filterv sel es vs (ffilterv sel es vs).
+  Proof.
+    cofix CoFix.
+    intros ([]&?) ([]&?) Hwt Hac; inv Hwt; inv Hac; simpl in *; try congruence.
+    - rewrite (unfold_Stream (ffilterv _ _ _)); simpl.
+      constructor. apply CoFix; auto.
+    - inv H1. rewrite (unfold_Stream (ffilterv _ _ _)); simpl. destruct (_ ==b _) eqn:Heq.
+      + rewrite equiv_decb_equiv in Heq. inv Heq.
+        constructor. apply CoFix; auto.
+      + constructor. apply CoFix; auto.
+        intro contra. inv contra. rewrite equiv_decb_refl in Heq. congruence.
+  Qed.
+
+  Lemma filter_hist_ffilter_hist sel es : forall Hi Hi',
+      filter_hist sel es Hi Hi' ->
+      Env.refines (@EqSt _) Hi' (ffilter_hist sel es Hi).
+  Proof.
+    intros * Hfilter.
+    intros ?? Hfind.
+    eapply Hfilter in Hfind as (?&Hf&Hfind).
+    apply filter_ffilter in Hf.
+    do 2 esplit; eauto.
+    setoid_rewrite Env.Props.P.F.map_o. now rewrite Hfind.
+  Qed.
+
+  Lemma filter_hist_restrict_ac sel tn es : forall Hi xs,
+      wt_stream es (Tenum tn) ->
+      (forall x vs, In x xs -> sem_var Hi x vs -> abstract_clock vs ≡ abstract_clock es) ->
+      filter_hist sel es Hi (Env.restrict (ffilter_hist sel es Hi) xs).
+  Proof.
+    intros * Hwt Hac.
+    intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
+    setoid_rewrite Env.Props.P.F.map_o in Hfind. inv_equalities.
+    do 2 esplit; [|eauto].
+    eapply ffilterv_filterv; eauto.
+    eapply Hac; eauto. econstructor; eauto. reflexivity.
+  Qed.
+
+  Add Parametric Morphism {A} (absent: A) k : (ffilter absent k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as filter_morph.
+        as ffilter_morph.
   Proof.
     intros rs rs' Ers xs xs' Exs.
     eapply ntheq_eqst; intros n.
     eapply eqst_ntheq with (n:=n) in Exs.
-    rewrite 2 filter_nth, Exs, Ers. reflexivity.
+    rewrite 2 ffilter_nth, Exs, Ers. reflexivity.
   Qed.
 
-  Add Parametric Morphism k : (filterv k)
+  Add Parametric Morphism k : (ffilterv k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as filterv_morph.
+        as ffilterv_morph.
   Proof.
     intros rs rs' Ers xs xs' Exs.
-    apply filter_morph; auto.
+    apply ffilter_morph; auto.
   Qed.
 
-  Add Parametric Morphism k : (filter_hist k)
+  Add Parametric Morphism k : (ffilter_hist k)
       with signature @EqSt _ ==> Env.Equiv (@EqSt _) ==> Env.Equiv (@EqSt _)
-        as filter_hist_morph.
+        as ffilter_hist_morph.
   Proof.
     intros r r' Er H H' EH.
-    unfold filter_hist. rewrite Env.Equiv_orel in *; intros x.
+    unfold ffilter_hist. rewrite Env.Equiv_orel in *; intros x.
     specialize (EH x). repeat rewrite Env.Props.P.F.map_o.
     destruct (Env.find x H); inv EH; simpl; constructor; auto.
     rewrite H2, Er. reflexivity.
   Qed.
 
-  Add Parametric Morphism k : (filterb k)
+  Add Parametric Morphism k : (ffilterb k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as filterb_morph.
+        as ffilterb_morph.
   Proof.
     intros rs rs' Ers xs xs' Exs.
-    apply filter_morph; auto.
+    apply ffilter_morph; auto.
   Qed.
 
-  Lemma EqSt_unfilter : forall tn es xs ys,
-      wt_stream es (Tenum tn) ->
-      (forall sel, In sel (seq 0 (snd tn)) -> filterv sel es xs ≡ filterv sel es ys) ->
-      slower xs (abstract_clock es) ->
-      slower ys (abstract_clock es) ->
-      xs ≡ ys.
-  Proof.
-    intros * Hwt Heq Hcs1 Hcs2.
-    eapply ntheq_eqst. intros ?.
-    eapply SForall_forall in Hwt. instantiate (1:=n) in Hwt.
-    destruct (es # n) eqn:Hes; simpl in *.
-    - eapply slower_nth in Hcs1. 2:rewrite ac_nth, Hes; eauto.
-      eapply slower_nth in Hcs2. 2:rewrite ac_nth, Hes; eauto.
-      congruence.
-    - inv Hwt.
-      assert (In v0 (seq 0 (snd tn))) as Hin by (apply in_seq; lia).
-      specialize (Heq _ Hin). eapply Str_nth_EqSt with (n:=n) in Heq.
-      setoid_rewrite filter_nth in Heq; rewrite Hes in Heq; simpl in *.
-      repeat rewrite equiv_decb_refl in Heq; auto.
-  Qed.
-
-  Lemma EqStN_filter {A} (absent : A) : forall n sc1 sc2 xs1 xs2,
+  Lemma EqStN_ffilter {A} (absent : A) : forall n sc1 sc2 xs1 xs2,
       EqStN n sc1 sc2 ->
       EqStN n xs1 xs2 ->
-      forall c, EqStN n (filter absent c sc1 xs1) (filter absent c sc2 xs2).
+      forall c, EqStN n (ffilter absent c sc1 xs1) (ffilter absent c sc2 xs2).
   Proof.
     induction n; intros * Heq1 Heq2 k; auto with coindstreams.
-    inv Heq1; inv Heq2; repeat rewrite filter_Cons.
+    inv Heq1; inv Heq2; repeat rewrite ffilter_Cons.
     destruct k as [|[|]], x2; try (solve [constructor; auto]).
   Qed.
 
   Lemma EqStN_unfilter : forall n tn sc1 sc2 xs1 xs2,
+      snd tn > 0 ->
       wt_stream sc1 (Tenum tn) ->
       wt_stream sc2 (Tenum tn) ->
       EqStN n sc1 sc2 ->
-      (forall sel, In sel (seq 0 (snd tn)) -> EqStN n (filterv sel sc1 xs1) (filterv sel sc2 xs2)) ->
-      slower xs1 (abstract_clock sc1) ->
-      slower xs2 (abstract_clock sc2) ->
+      (forall sel, In sel (seq 0 (snd tn)) ->
+              exists xs1' xs2',
+                filterv sel sc1 xs1 xs1'
+                /\ filterv sel sc2 xs2 xs2'
+                /\ EqStN n xs1' xs2') ->
       EqStN n xs1 xs2.
   Proof.
-    intros * Hwt1 Hwt2 Heq1 Heq2 Hcs1 Hcs2.
+    intros * Htn Hwt1 Hwt2 Heq1 Heq2.
     eapply EqStN_spec. intros ? Hlt.
     eapply EqStN_spec in Heq1; [|eauto].
     eapply SForall_forall in Hwt1; instantiate (1:=k) in Hwt1.
     eapply SForall_forall in Hwt2; instantiate (1:=k) in Hwt2.
     destruct (sc2 # k) eqn:Heq3; simpl in *.
-    - eapply slower_nth in Hcs1. 2:rewrite ac_nth, Heq1; eauto.
-      eapply slower_nth in Hcs2. 2:rewrite ac_nth, Heq3; eauto.
-      congruence.
-    - inv Hwt2.
-      assert (In v0 (seq 0 (snd tn))) as Hin by (apply in_seq; lia).
-      specialize (Heq2 _ Hin). eapply EqStN_spec in Heq2; [|eauto].
-      setoid_rewrite filter_nth in Heq2. rewrite Heq1, Heq3 in Heq2; simpl in *.
-      repeat rewrite equiv_decb_refl in Heq2; auto.
+    1,2:rewrite Heq1 in *; inv Hwt1; inv Hwt2.
+    - edestruct Heq2 as (?&?&Hf1&Hf2&Heq). apply in_seq. auto.
+      eapply filter_nth with (n:=k) in Hf1 as [|[|]]; destruct_conjs; try congruence.
+      eapply filter_nth with (n:=k) in Hf2 as [|[|]]; destruct_conjs; try congruence.
+    - assert (In v0 (seq 0 (snd tn))) as Hin by (apply in_seq; lia).
+      specialize (Heq2 _ Hin) as (?&?&Hf1&Hf2&Heq).
+      eapply filter_nth with (n:=k) in Hf1 as [|[|]]; destruct_conjs; try congruence.
+      eapply filter_nth with (n:=k) in Hf2 as [|[|]]; destruct_conjs; try congruence.
+      rewrite EqStN_spec in Heq.
+      rewrite H0, Heq; auto.
   Qed.
 
-  Lemma ac_filter : forall k sc xs,
-      abstract_clock (filterv k sc xs) ≡ filterb k sc (abstract_clock xs).
+  Lemma ac_ffilter : forall k sc xs,
+      abstract_clock (ffilterv k sc xs) ≡ ffilterb k sc (abstract_clock xs).
   Proof.
     intros. apply ntheq_eqst; intros n.
-    rewrite ac_nth. setoid_rewrite filter_nth. rewrite ac_nth.
+    rewrite ac_nth. setoid_rewrite ffilter_nth. rewrite ac_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Lemma sem_var_filter: forall k r H x v,
+  Lemma sem_var_ffilter: forall k r H x v,
       sem_var H x v ->
-      sem_var (filter_hist k r H) x (filterv k r v).
+      sem_var (ffilter_hist k r H) x (ffilterv k r v).
   Proof.
     intros * Hvar. inv Hvar.
     econstructor.
@@ -2910,9 +3010,34 @@ Module Type COINDSTREAMS
     rewrite H2. reflexivity.
   Qed.
 
-  Lemma sem_var_filter_inv: forall k r H x v,
-      sem_var (filter_hist k r H) x v ->
-      exists v', sem_var H x v' /\ v ≡ (filterv k r v').
+  Lemma sem_var_filter x: forall sel sc Hi Hi' vs,
+      filter_hist sel sc Hi Hi' ->
+      sem_var Hi x vs ->
+      Env.In x Hi' ->
+      filterv sel sc vs (ffilterv sel sc vs).
+  Proof.
+
+    intros * Hfilter Hvar Hin.
+    inv Hin. eapply Hfilter in H as (?&Hf&Hv).
+    eapply sem_var_det in Hvar; [|econstructor; eauto; reflexivity].
+    rewrite Hvar in Hf.
+    assert (Hf':=Hf). apply filter_ffilter in Hf'. rewrite <-Hf'; auto.
+  Qed.
+
+  Lemma sem_var_filter_inv: forall k r Hi Hi' x v,
+      filter_hist k r Hi Hi' ->
+      sem_var Hi' x v ->
+      exists v', sem_var Hi x v' /\ filterv k r v' v.
+  Proof.
+    intros * Hf Hvar. inv Hvar.
+    apply Hf in H0 as (?&Hfilter&?).
+    do 2 esplit; eauto. 2:rewrite H1; eauto.
+    econstructor; eauto. reflexivity.
+  Qed.
+
+  Lemma sem_var_ffilter_inv: forall k r H x v,
+      sem_var (ffilter_hist k r H) x v ->
+      exists v', sem_var H x v' /\ v ≡ (ffilterv k r v').
   Proof.
     intros * Hvar. inv Hvar.
     eapply Env.Props.P.F.map_mapsto_iff in H1 as (v'&?&Hmap); subst.
@@ -2920,11 +3045,11 @@ Module Type COINDSTREAMS
     econstructor; eauto. reflexivity.
   Qed.
 
-  Lemma refines_filter : forall e sc H H',
+  Lemma refines_ffilter : forall e sc H H',
       Env.refines (@EqSt _) H H' ->
-      Env.refines (@EqSt _) (filter_hist e sc H) (filter_hist e sc H').
+      Env.refines (@EqSt _) (ffilter_hist e sc H) (ffilter_hist e sc H').
   Proof.
-    unfold filter_hist.
+    unfold ffilter_hist.
     intros * Href ?? Hfind.
     rewrite Env.Props.P.F.map_o in *.
     apply option_map_inv in Hfind as (?&Hfind&?); subst.
@@ -2933,28 +3058,48 @@ Module Type COINDSTREAMS
     do 2 esplit; eauto. now rewrite Heq.
   Qed.
 
-  Lemma filter_absent {A} (absent: A) : forall k sc,
-      filter absent k sc (Streams.const absent) ≡ Streams.const absent.
+  Lemma filter_absent {A} (abs: A) e :
+    filter abs e (Streams.const absent) (Streams.const abs) (Streams.const abs).
+  Proof.
+    cofix CoFix.
+    rewrite (unfold_Stream (Streams.const absent)), (unfold_Stream (Streams.const abs)); simpl.
+    constructor; auto.
+  Qed.
+
+  Corollary filter_hist_absent e sc : forall Hi Hi',
+    filter_hist e sc Hi Hi' ->
+    filter_hist e (Streams.const absent)
+                (Env.map (fun _ => Streams.const absent) Hi) (Env.map (fun _ => Streams.const absent) Hi').
+  Proof.
+    intros * Hfilter.
+    intros ?? Hfind. rewrite Env.Props.P.F.map_o in Hfind. inv_equalities.
+    apply Hfilter in Hf as (?&Hf&Hfind).
+    do 2 esplit. 2:rewrite Env.Props.P.F.map_o, Hfind; simpl; auto.
+    apply filter_absent.
+  Qed.
+
+  Lemma ffilter_absent {A} (absent: A) : forall k sc,
+      ffilter absent k sc (Streams.const absent) ≡ Streams.const absent.
   Proof.
     intros *.
     eapply ntheq_eqst. intros n.
-    rewrite filter_nth, const_nth.
+    rewrite ffilter_nth, const_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Corollary filter_hist_absent: forall k sc (H: Env.t (Stream svalue)),
-      Env.Equiv (@EqSt _) (filter_hist k sc (Env.map (fun _ => Streams.const absent) H))
+  Corollary ffilter_hist_absent: forall k sc (H: Env.t (Stream svalue)),
+      Env.Equiv (@EqSt _) (ffilter_hist k sc (Env.map (fun _ => Streams.const absent) H))
                 (Env.map (fun _ => Streams.const absent) H).
   Proof.
     intros *.
     rewrite Env.Equiv_orel. intros x.
     repeat setoid_rewrite Env.Props.P.F.map_o.
     destruct (Env.find _ _); simpl; constructor.
-    eapply filter_absent.
+    eapply ffilter_absent.
   Qed.
 
-  Corollary filter_hist_absent': forall k sc (H: Env.t (Stream svalue)),
-      Env.Equiv (@EqSt _) (Env.map (fun _ => Streams.const absent) (filter_hist k sc H))
+  Corollary ffilter_hist_absent': forall k sc (H: Env.t (Stream svalue)),
+      Env.Equiv (@EqSt _) (Env.map (fun _ => Streams.const absent) (ffilter_hist k sc H))
                 (Env.map (fun _ => Streams.const absent) H).
   Proof.
     intros *.
@@ -2964,23 +3109,23 @@ Module Type COINDSTREAMS
     reflexivity.
   Qed.
 
-  Corollary filterb_absent: forall k sc,
-      filterb k sc (Streams.const false) ≡ Streams.const false.
+  Corollary ffilterb_absent: forall k sc,
+      ffilterb k sc (Streams.const false) ≡ Streams.const false.
   Proof.
     intros *.
     eapply ntheq_eqst. intros n.
-    rewrite filterb_nth, const_nth.
+    rewrite ffilterb_nth, const_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Lemma filterb_both_slower : forall k sc bs bs',
+  Lemma ffilterb_both_slower : forall k sc bs bs',
       slower sc bs ->
       slower sc bs' ->
-      filterb k sc bs ≡ filterb k sc bs'.
+      ffilterb k sc bs ≡ ffilterb k sc bs'.
   Proof.
     intros * Hslow1 Hslow2.
     apply ntheq_eqst; intros n.
-    rewrite slower_nth in *. repeat rewrite filterb_nth.
+    rewrite slower_nth in *. repeat rewrite ffilterb_nth.
     specialize (Hslow1 n). specialize (Hslow2 n).
     destruct (sc # n); auto.
     destruct (_ ==b _); auto.

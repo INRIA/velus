@@ -194,14 +194,6 @@ Module Type ILCORRECTNESS
           econstructor; eauto.
     Qed.
 
-    Lemma sem_var_union : forall Hi1 Hi2 x vs,
-        sem_var (Env.union Hi1 Hi2) x vs ->
-        sem_var Hi1 x vs \/ sem_var Hi2 x vs.
-    Proof.
-      intros * Hv. inv Hv.
-      eapply Env.union_find4 in H0 as [Hfind|Hfind]; eauto using sem_var.
-    Qed.
-
     Lemma sem_var_disj_union : forall Hi1 Hi2 x vs,
         (forall x, Env.In x Hi1 -> ~Env.In x Hi2) ->
         sem_var (Env.union Hi1 Hi2) x vs <-> sem_var Hi1 x vs \/ sem_var Hi2 x vs.

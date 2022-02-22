@@ -1826,6 +1826,17 @@ Module Env.
     1,2:erewrite Props.P.F.map_in_iff in *; auto.
   Qed.
 
+  Lemma dom_ub_refines: forall {A R} (H H' : Env.t A) d,
+      refines R H H' ->
+      dom_ub H' d ->
+      dom_ub H d.
+  Proof.
+    intros * Href Hdom.
+    apply dom_ub_intro; intros * Hin.
+    eapply dom_ub_use in Hdom; eauto.
+    eapply In_refines; eauto.
+  Qed.
+
   Lemma refines_dom_ub_dom:
     forall {A R} (H H' : Env.t A) d,
       refines R H H' ->
@@ -2125,6 +2136,15 @@ Module Env.
         eapply dom_ub_use in Hdom; eauto.
         inv Hvar. econstructor; eauto.
       - eapply restrict_refines in Hvar as (?&?&?); eauto with env; subst; auto.
+    Qed.
+
+    Lemma restrict_refines' : forall R xs Hi1 Hi2,
+        refines R Hi1 Hi2 ->
+        refines R (restrict Hi1 xs) (restrict Hi2 xs).
+    Proof.
+      intros * Href ?? Hfind.
+      apply restrict_find_inv in Hfind as (Hin&Hfind). apply Href in Hfind as (?&Heq&Hfind).
+      do 2 esplit; eauto using restrict_find.
     Qed.
 
     Corollary restrict_find_None : forall xs H id,
@@ -2691,7 +2711,19 @@ Module Env.
       right. eapply Env.dom_lb_use; eauto.
     Qed.
 
-    Lemma union_dom_ub : forall m1 m2 xs ys,
+    Lemma union_dom_ub : forall m1 m2 xs,
+        dom_ub m1 xs ->
+        dom_ub m2 xs ->
+        dom_ub (union m1 m2) xs.
+    Proof.
+      intros * Hd1 Hd2.
+      eapply dom_ub_intro; intros ? Hin.
+      rewrite union_In in Hin.
+      destruct Hin as [Hin|Hin].
+      1,2:eapply Env.dom_ub_use; [|eauto]; eauto.
+    Qed.
+
+    Lemma union_dom_ub_app : forall m1 m2 xs ys,
         dom_ub m1 xs ->
         dom_ub m2 ys ->
         dom_ub (union m1 m2) (xs ++ ys).
