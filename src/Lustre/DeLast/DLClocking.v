@@ -244,19 +244,61 @@ Module Type DLCLOCKING
         split; eauto with senv.
       + intros * Hl. inv Hl. simpl_In. destruct (clo a ==b ck) eqn:Hck; inv Hf; simpl.
         eauto with senv.
-      +{ eapply mmap_values, Forall2_ignore1 in H0; eauto.
-         simpl_Forall; eauto. repeat inv_bind.
-         eapply mmap_values, Forall2_ignore1 in H7; eauto.
-         simpl_Forall. eapply H in H9; eauto.
-         - intros * Hck. apply H6 in Hck as (?&?); subst; eauto.
-           eapply Hvar in H12. inv H12. econstructor; solve_In. simpl. rewrite equiv_decb_refl; eauto. auto.
-         - intros * Hck Hl. apply H6 in Hck as (Hck&?); subst.
-           eapply H8, Hlast in Hl; eauto.
-           inv Hl. econstructor; solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
-         - intros ? Hin. simpl_In. assert (HasClock Γ'0 a a0.(clo)) as Hck by eauto with senv.
-           apply H6 in Hck as (Hck&?); subst. inv Hck.
-           apply Hincl; solve_In.
-        }
+      + eapply mmap_values, Forall2_ignore1 in H0; eauto.
+        simpl_Forall; eauto. repeat inv_bind.
+        eapply mmap_values, Forall2_ignore1 in H7; eauto.
+        simpl_Forall. eapply H in H9; eauto.
+        * intros * Hck. apply H6 in Hck as (?&?); subst; eauto.
+          eapply Hvar in H12. inv H12. econstructor; solve_In. simpl. rewrite equiv_decb_refl; eauto. auto.
+        * intros * Hck Hl. apply H6 in Hck as (Hck&?); subst.
+          eapply H8, Hlast in Hl; eauto.
+          inv Hl. econstructor; solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
+        * intros ? Hin. simpl_In. assert (HasClock Γ'0 a a0.(clo)) as Hck by eauto with senv.
+          apply H6 in Hck as (Hck&?); subst. inv Hck.
+          apply Hincl; solve_In.
+
+    - (* automaton *)
+      assert (forall x ck',
+                 HasClock Γ'0 x ck' ->
+                 HasClock
+                   (map_filter
+                      (fun '(x, e0) =>
+                         if clo e0 ==b ck then Some (x, ann_with_clock e0 Cbase) else None) Γ') x ck') as Hvar'.
+      { intros * Hck. apply H6 in Hck as (?&?); subst; eauto.
+        eapply Hvar in H1. inv H1. econstructor; solve_In. simpl. rewrite equiv_decb_refl; eauto. auto.
+      }
+      assert (forall x ck',
+                 HasClock Γ'0 x ck' ->
+                 IsLast Γ'0 x ->
+                 HasClock
+                   (map_filter
+                      (fun '(x, e0) =>
+                         if clo e0 ==b ck then Some (x, ann_with_clock e0 Cbase) else None) Γ') (rename_in_var sub x) ck') as Hlast'.
+      { intros * Hck Hl. apply H6 in Hck as (Hck&?); subst.
+        eapply H8, Hlast in Hl; eauto.
+        inv Hl. econstructor; solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
+      }
+      eapply wc_Bauto with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, Build_annotation e.(typ) Cbase e.(causl) e.(causl_last)) else None) Γ').
+      + eapply wc_clock_incl; eauto. intros ? Hin; simpl_In.
+        assert (HasClock Γ i0 a0.(clo)) as Hck by (eauto with senv).
+        apply Hvar in Hck; inv Hck. solve_In. congruence.
+      + apply mmap_values in H0. inv H0; auto. congruence.
+      + intros * Hca. inv Hca. simpl_In. destruct (clo a ==b ck) eqn:Hck; inv Hf; simpl.
+        rewrite equiv_decb_equiv in Hck. inv Hck.
+        split; eauto with senv.
+      + intros * Hl. inv Hl. simpl_In. destruct (clo a ==b ck) eqn:Hck; inv Hf; simpl.
+        eauto with senv.
+      + simpl_Forall. split; eauto using rename_in_exp_wc.
+        now rewrite rename_in_exp_clockof.
+      + eapply mmap_values, Forall2_ignore1 in H0; eauto.
+        simpl_Forall. repeat inv_bind. split; simpl_Forall.
+        * eapply mmap_values, Forall2_ignore1 in H3. simpl_Forall.
+          eapply H; eauto.
+          intros ? Hin. simpl_In. assert (HasClock Γ'0 a a0.(clo)) as Hck by eauto with senv.
+          apply H6 in Hck as (Hck&?); subst. inv Hck.
+          apply Hincl; solve_In.
+        * split; eauto using rename_in_exp_wc.
+          now rewrite rename_in_exp_clockof.
 
     - (* local *)
       assert (forall y, Env.In y (Env.from_list (map fst x)) -> IsLast (senv_of_locs locs) y) as Hsubin'.
@@ -341,7 +383,7 @@ Module Type DLCLOCKING
   (** Typing of the node *)
 
   Lemma delast_node_wc : forall G1 G2 (n : @node _ _),
-      global_iface_eq G1 G2 ->
+      global_iface_incl G1 G2 ->
       wc_node G1 n ->
       wc_node G2 (delast_node n).
   Proof.
@@ -351,7 +393,7 @@ Module Type DLCLOCKING
     pose proof (n_syn n) as Hsyn.
     repeat econstructor; simpl; eauto.
     eapply delast_block_wc in Hwc3. 7:apply surjective_pairing.
-    - eapply iface_eq_wc_block, Hwc3; eauto.
+    - eapply iface_incl_wc_block, Hwc3; eauto.
     - auto.
     - intros * _ Hl. apply senv_of_inout_NoLast in Hl as [].
     - reflexivity.
@@ -367,7 +409,7 @@ Module Type DLCLOCKING
     intros * Hwc.
     eapply CommonTyping.transform_units_wt_program; eauto.
     intros ?? Hwc'.
-    eapply delast_node_wc; eauto. eapply delast_global_iface_eq.
+    eapply delast_node_wc; eauto. eapply iface_eq_iface_incl, delast_global_iface_eq.
   Qed.
 
 End DLCLOCKING.

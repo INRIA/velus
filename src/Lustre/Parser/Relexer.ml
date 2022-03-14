@@ -3,6 +3,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   let open LustreParser.Aut.Gram in
   match tok with
   | ASSERT l     -> (LustreParser2.ASSERT     l, l)
+  | AUTOMATON l  -> (LustreParser2.AUTOMATON  l, l)
   | AND l        -> (LustreParser2.AND        l, l)
   (* | BOOL l       -> let v = (Obj.magic l :
    *                              Common.ident * LustreAst.astloc) in
@@ -15,6 +16,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | CONSTANT l   -> let v = (Obj.magic l :
                               LustreAst.constant * LustreAst.astloc) in
                     (LustreParser2.CONSTANT   v, snd v)
+  | DO l         -> (LustreParser2.DO         l, l)
   | DOT l        -> (LustreParser2.DOT        l, l)
   | ELSE l       -> (LustreParser2.ELSE       l, l)
   | END l        -> (LustreParser2.END        l, l)
@@ -31,6 +33,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | GEQ l        -> (LustreParser2.GEQ        l, l)
   | GT l         -> (LustreParser2.GT         l, l)
   | IFTE l       -> (LustreParser2.IFTE       l, l)
+  | INITIALLY l  -> (LustreParser2.INITIALLY  l, l)
   | INT16 l      -> (LustreParser2.INT16      l, l)
   | INT32 l      -> (LustreParser2.INT32      l, l)
   | INT64 l      -> (LustreParser2.INT64      l, l)
@@ -56,15 +59,18 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | ON l         -> (LustreParser2.ON         l, l)
   | ONOT l       -> (LustreParser2.ONOT       l, l)
   | OR l         -> (LustreParser2.OR         l, l)
+  | OTHERWISE l  -> (LustreParser2.OTHERWISE  l, l)
   | PLUS l       -> (LustreParser2.PLUS       l, l)
   | RARROW l     -> (LustreParser2.RARROW     l, l)
   | RESET l      -> (LustreParser2.RESET      l, l)
   | RESTART l    -> (LustreParser2.RESTART    l, l)
+  | RESUME l     -> (LustreParser2.RESUME     l, l)
   | RETURNS l    -> (LustreParser2.RETURNS    l, l)
   | RPAREN l     -> (LustreParser2.RPAREN     l, l)
   | SEMICOLON l  -> (LustreParser2.SEMICOLON  l, l)
   | SLASH l      -> (LustreParser2.SLASH      l, l)
   | STAR l       -> (LustreParser2.STAR       l, l)
+  | STATE l      -> (LustreParser2.STATE      l, l)
   | SWITCH l     -> (LustreParser2.SWITCH     l, l)
   | TEL l        -> (LustreParser2.TEL        l, l)
   | THEN l       -> (LustreParser2.THEN       l, l)
@@ -75,6 +81,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | UINT64 l     -> (LustreParser2.UINT64     l, l)
   | UINT8 l      -> (LustreParser2.UINT8      l, l)
   | UNDERSCORE l -> (LustreParser2.UNDERSCORE l, l)
+  | UNTIL l      -> (LustreParser2.UNTIL      l, l)
   | VAR l        -> (LustreParser2.VAR        l, l)
   | VAR_NAME l   -> (LustreParser2.VAR_NAME   l, snd l)
   | WHEN l       -> (LustreParser2.WHEN       l, l)

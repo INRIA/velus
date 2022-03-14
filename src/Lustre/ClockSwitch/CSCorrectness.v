@@ -11,6 +11,7 @@ From Velus Require Import CoindIndexed.
 From Velus Require Import Fresh.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
+From Velus Require Import Lustre.SubClock.SCCorrectness.
 From Velus Require Import Lustre.ClockSwitch.ClockSwitch.
 From Velus Require Import Lustre.ClockSwitch.CSClocking.
 
@@ -30,163 +31,15 @@ Module Type CSCORRECTNESS
        (Import LCS   : LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Ty Cl LCA Ord CStr Sem)
        (Import CS    : CLOCKSWITCH Ids Op OpAux Cks Senv Syn).
 
+  Module Import SCT := SCCorrectnessFun Ids Op OpAux Cks CStr Senv Syn Ty Cl LCA Ord Sem LCS SC. Import SC.
+
   Module Clocking := CSClockingFun Ids Op OpAux Cks Senv Syn Cl CS.
   Module Import CIStr := CoindIndexedFun Ids Op OpAux Cks CStr IStr.
-
-  Section subclock.
-    Context {PSyn1 PSyn2 : block -> Prop} {prefs1 prefs2 : PS.t}.
-    Variable G1 : @global PSyn1 prefs1.
-    Variable G2 : @global PSyn2 prefs2.
-
-    Hypothesis HGref : global_sem_refines G1 G2.
-
-    Variable bck : clock.
-    Variable sub : Env.t ident.
-    Variable bs bs' : Stream bool.
-    Variable H H' Hl : history.
-
-    Hypothesis Hbck : sem_clock H' bs' bck bs.
-
-    Corollary add_whens_const_sem : forall c ty,
-        sem_exp_ck G2 (H', Hl) bs' (add_whens (Econst c) ty bck) [const bs c].
-    Proof.
-      revert bs bs' H' Hbck.
-      induction bck as [|??? (?&?)]; intros * Hbck *; simpl.
-      - inv Hbck. rewrite H1. constructor; auto.
-        reflexivity.
-      - assert (Hbck':=Hbck). inv Hbck'; simpl.
-        1,2,3:(eapply Swhen; eauto; simpl;
-               repeat constructor; try eapply IHc; eauto;
-               repeat constructor; eauto using sem_clock_when_const).
-    Qed.
-
-    Corollary add_whens_enum_sem : forall ty k,
-        sem_exp_ck G2 (H', Hl) bs' (add_whens (Eenum k ty) ty bck) [enum bs k].
-    Proof.
-      revert bs bs' H' Hbck.
-      induction bck as [|??? (?&?)]; intros * Hbck *; simpl.
-      - inv Hbck. rewrite H1. constructor; auto.
-        reflexivity.
-      - assert (Hbck':=Hbck). inv Hbck'; simpl.
-        1,2,3:(eapply Swhen; eauto; simpl;
-               repeat constructor; try eapply IHc; eauto;
-               repeat constructor; eauto using sem_clock_when_enum).
-    Qed.
-
-    Hypothesis Hsub : forall x y vs,
-        Env.find x sub = Some y ->
-        sem_var H x vs ->
-        sem_var H' y vs.
-
-    Hypothesis Hnsub : forall x vs,
-        Env.find x sub = None ->
-        sem_var H x vs ->
-        sem_var H' x vs.
-
-    Lemma rename_var_sem : forall x vs,
-        sem_var H x vs ->
-        sem_var H' (rename_var sub x) vs.
-    Proof.
-      unfold rename_var; intros * Hsem.
-      destruct (Env.find _ _) eqn:Hfind; eauto.
-    Qed.
-
-    Lemma subclock_exp_sem : forall e vs,
-        sem_exp_ck G1 (H, Hl) bs e vs ->
-        sem_exp_ck G2 (H', Hl) bs' (subclock_exp bck sub e) vs.
-    Proof.
-      induction e using exp_ind2; intros * Hsem; inv Hsem; simpl.
-      - (* const *)
-        rewrite H4. apply add_whens_const_sem.
-      - (* enum *)
-        rewrite H6. apply add_whens_enum_sem.
-      - (* var *)
-        constructor.
-        eapply rename_var_sem; eauto.
-      - constructor. auto.
-      - (* unop *)
-        econstructor; eauto.
-        now rewrite subclock_exp_typeof.
-      - (* binop *)
-        econstructor; eauto.
-        1,2:now rewrite subclock_exp_typeof.
-      - (* fby *)
-        econstructor; eauto.
-        1,2:simpl_Forall; eauto.
-      - (* arrow *)
-        econstructor; eauto.
-        1,2:simpl_Forall; eauto.
-      - (* when *)
-        econstructor; eauto using rename_var_sem.
-        simpl_Forall; eauto.
-      - (* merge *)
-        econstructor; eauto using rename_var_sem.
-        rewrite <-Sem.Forall2Brs_map_1.
-        eapply Sem.Forall2Brs_impl_In; [|eauto]; intros ?? Hex Hsem.
-        simpl_Exists. simpl_Forall. eauto.
-      - (* case (total) *)
-        econstructor; eauto.
-        rewrite <-Sem.Forall2Brs_map_1.
-        eapply Sem.Forall2Brs_impl_In; [|eauto]; intros ?? Hex Hsem.
-        simpl_Exists. simpl_Forall. eauto.
-      - (* case (default) *)
-        econstructor; eauto; simpl in *.
-        + now rewrite subclock_exp_typeof.
-        + rewrite <-Sem.Forall2Brs_map_1.
-          eapply Sem.Forall2Brs_impl_In; [|eauto]; intros ?? Hex Hsem.
-          simpl_Exists. simpl_Forall. eauto.
-        + simpl_Forall; eauto.
-      - (* app *)
-        eapply Sapp with (ss:=ss); eauto.
-        1,2:simpl_Forall; eauto.
-        intros. eapply HGref; eauto.
-    Qed.
-
-    Lemma subclock_equation_sem : forall equ,
-        sem_equation_ck G1 (H, Hl) bs equ ->
-        sem_equation_ck G2 (H', Hl) bs' (subclock_equation bck sub equ).
-    Proof.
-      intros (?&?) Hsem. inv Hsem.
-      eapply Seq with (ss:=ss); simpl_Forall;
-        eauto using subclock_exp_sem, rename_var_sem.
-    Qed.
-
-  End subclock.
-
-  Lemma subclock_clock_sem : forall bck sub Hi Hi' bs bs' ck bs1,
-      (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi' y vs) ->
-      (forall x vs, Env.find x sub = None -> sem_var Hi x vs -> sem_var Hi' x vs) ->
-      sem_clock Hi' bs' bck bs ->
-      sem_clock Hi bs ck bs1 ->
-      sem_clock Hi' bs' (subclock_clock bck sub ck) bs1.
-  Proof.
-    cofix CoFix; intros * Hsub Hnsub Hbck * Hsemck;
-      destruct bs, bs'; inv Hsemck; simpl.
-    - rewrite <-H0. assumption.
-    - econstructor; eauto using rename_var_sem.
-      eapply CoFix in H2; eauto using sc_step.
-      + intros * Hfind Hv.
-        eapply sem_var_step_inv in Hv as (?&?). eapply sem_var_step; eauto.
-      + intros * Hfind Hv.
-        eapply sem_var_step_inv in Hv as (?&?). eapply sem_var_step; eauto.
-    - econstructor; eauto using rename_var_sem.
-      eapply CoFix in H2; eauto using sc_step.
-      + intros * Hfind Hv.
-        eapply sem_var_step_inv in Hv as (?&?). eapply sem_var_step; eauto.
-      + intros * Hfind Hv.
-        eapply sem_var_step_inv in Hv as (?&?). eapply sem_var_step; eauto.
-    - eapply Son_abs2; eauto using rename_var_sem.
-      eapply CoFix in H3; eauto using sc_step.
-      + intros * Hfind Hv.
-        eapply sem_var_step_inv in Hv as (?&?). eapply sem_var_step; eauto.
-      + intros * Hfind Hv.
-        eapply sem_var_step_inv in Hv as (?&?). eapply sem_var_step; eauto.
-  Qed.
 
   Import Fresh Facts Tactics List.
 
   Section switch_block.
-    Variable G1 : @global nolast_block last_prefs.
+    Variable G1 : @global noauto_block auto_prefs.
     Variable G2 : @global noswitch_block switch_prefs.
 
     Hypothesis HwcG1 : wc_global G1.
@@ -196,7 +49,7 @@ Module Type CSCORRECTNESS
     Import Fresh Facts Tactics List.
 
     Lemma cond_eq_sem envty : forall Hi Hl bs e ty ck vs x xcs eqs' st st' aft,
-        Forall (AtomOrGensym last_prefs) envty ->
+        Forall (AtomOrGensym auto_prefs) envty ->
         st_valid_after st switch aft ->
         Env.dom_ub Hi (envty ++ st_ids st) ->
         sem_exp_ck G2 (Hi, Hl) bs e [vs] ->
@@ -220,7 +73,7 @@ Module Type CSCORRECTNESS
             [eapply Env.refines_add; intros Henvin; try reflexivity;
              eapply Env.dom_ub_use, in_app_iff in Henvin as [Hin|Hin]; eauto;
              [eapply fresh_ident_prefixed in H as (?&?&?); subst;
-              eapply Forall_forall in Hat; eauto; eapply contradict_AtomOrGensym in Hat; eauto using switch_not_in_last_prefs
+              eapply Forall_forall in Hat; eauto; eapply contradict_AtomOrGensym in Hat; eauto using switch_not_in_auto_prefs
              |eapply fresh_ident_nIn; eauto]
             |]).
       1-11:(assert (sem_var (Env.add x vs Hi) x vs) as Hv;
@@ -254,9 +107,9 @@ Module Type CSCORRECTNESS
       repeat rewrite tr_Stream_nth in *. rewrite ac_nth in Hck. rewrite ffilterb_nth.
       setoid_rewrite SForall_forall in Hwt. specialize (Hwt n).
       rewrite slower_nth in Hslow. specialize (Hslow n).
-      destruct (sc # n) eqn:Hsc; simpl.
+      destruct (sc # n) eqn:Hsc; simpl; setoid_rewrite Hsc in Hck.
       - constructor; auto.
-      - destruct (bs # n); [|specialize (Hslow eq_refl); congruence].
+      - destruct (bs # n); [|specialize (Hslow eq_refl); setoid_rewrite Hsc in Hslow; congruence].
         destruct (_ ==b _) eqn:Heq.
         + rewrite equiv_decb_equiv in Heq; inv Heq.
           constructor; auto.
@@ -275,7 +128,7 @@ Module Type CSCORRECTNESS
       setoid_rewrite SForall_forall in Hwt. specialize (Hwt n).
       eapply eqst_ntheq with (n:=n) in Hac. repeat rewrite ac_nth in Hac.
       rewrite ffilterv_nth.
-      destruct (vs # n), (sc # n); try congruence; simpl; auto.
+      destruct (vs # n) eqn:Hvs, (sc # n) eqn:Hsc; setoid_rewrite Hsc in Hac; try congruence; simpl; auto.
       right. inv Hwt.
       destruct (_ ==b _) eqn:Heq.
       - rewrite equiv_decb_equiv in Heq; inv Heq.
@@ -311,7 +164,7 @@ Module Type CSCORRECTNESS
       apply merge_spec. intros n.
       eapply SForall_forall in Hwt. instantiate (1:=n) in Hwt.
       eapply eqst_ntheq with (n:=n) in Hac. repeat rewrite ac_nth in Hac.
-      destruct (c # n) eqn:Hc, (vs # n) eqn:Hvs; simpl in *; try congruence; [left|right].
+      destruct (c # n) eqn:Hc, (vs # n) eqn:Hvs; setoid_rewrite Hc in Hac; simpl in *; try congruence; [left|right].
       - repeat split; auto.
         apply Forall_map, Forall_forall; intros (?&?) ?; simpl.
         rewrite ffilterv_nth, Hc; simpl; auto.
@@ -352,7 +205,7 @@ Module Type CSCORRECTNESS
 
     Lemma new_idents_sem {A} envty frees defs bck tn xc : forall Hi Hi' Hl bs' (branches : list (enumtag * A)) xs sc st st' aft,
         st_valid_after st switch aft ->
-        Forall (AtomOrGensym last_prefs) envty ->
+        Forall (AtomOrGensym auto_prefs) envty ->
         Env.dom_ub Hi' (envty ++ st_ids st) ->
         sem_var Hi' xc sc ->
         sem_clock Hi' bs' bck (abstract_clock sc) ->
@@ -385,7 +238,7 @@ Module Type CSCORRECTNESS
         eapply Forall_forall; intros * Hin1 Hin2. eapply Env.dom_ub_use in Hin2; eauto.
         apply in_app_iff in Hin2 as [Hin2|Hin2].
         - eapply Forall_forall in Hat; eauto.
-          eapply st_valid_after_AtomOrGensym_nIn in Hvalid'; eauto using switch_not_in_last_prefs.
+          eapply st_valid_after_AtomOrGensym_nIn in Hvalid'; eauto using switch_not_in_auto_prefs.
           eapply Hvalid'. rewrite Hmmap.
           erewrite flat_map_concat_map, concat_map, map_map in *. erewrite map_ext; eauto using in_or_app.
           intros (((?&?)&?)&?). erewrite 2 map_map, map_ext; eauto. intros ((?&?)&?&?); auto.
@@ -458,14 +311,14 @@ Module Type CSCORRECTNESS
                incl (map fst Γck) (map fst Γty) ->
                NoDupMembers Γty ->
                NoDupMembers Γck ->
-               Forall (AtomOrGensym last_prefs) (map fst Γty) ->
+               Forall (AtomOrGensym auto_prefs) (map fst Γty) ->
                Env.dom_ub Hi (map fst Γty) ->
                sc_vars Γck (Hi, Hl) bs ->
                Env.dom_ub Hi' (map fst Γty ++ st_ids st) ->
                sem_clock Hi' bs' bck bs ->
-               nolast_block blk ->
+               noauto_block blk ->
                NoDupLocals (map fst Γty) blk ->
-               GoodLocals last_prefs blk ->
+               GoodLocals auto_prefs blk ->
                wt_block G1 Γty blk ->
                wc_block G1 Γck blk ->
                sem_block_ck G1 (Hi, Hl) bs blk ->
@@ -479,14 +332,14 @@ Module Type CSCORRECTNESS
         incl (map fst Γck) (map fst Γty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
-        Forall (AtomOrGensym last_prefs) (map fst Γty) ->
+        Forall (AtomOrGensym auto_prefs) (map fst Γty) ->
         Env.dom_ub Hi (map fst Γty) ->
         sc_vars Γck (Hi, Hl) bs ->
         Env.dom_ub Hi' (map fst Γty ++ st_ids st) ->
         sem_clock Hi' bs' bck bs ->
-        Forall nolast_block blks ->
+        Forall noauto_block blks ->
         Forall (NoDupLocals (map fst Γty)) blks ->
-        Forall (GoodLocals last_prefs) blks ->
+        Forall (GoodLocals auto_prefs) blks ->
         Forall (wt_block G1 Γty) blks ->
         Forall (wc_block G1 Γck) blks ->
         Forall (sem_block_ck G1 (Hi, Hl) bs) blks ->
@@ -510,14 +363,14 @@ Module Type CSCORRECTNESS
         incl (map fst Γck) (map fst Γty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
-        Forall (AtomOrGensym last_prefs) (map fst Γty) ->
+        Forall (AtomOrGensym auto_prefs) (map fst Γty) ->
         Env.dom_ub Hi (map fst Γty) ->
         sc_vars Γck (Hi, Hl) bs ->
         Env.dom_ub Hi' (map fst Γty ++ st_ids st) ->
         sem_clock Hi' bs' bck bs ->
-        nolast_block blk ->
+        noauto_block blk ->
         NoDupLocals (map fst Γty) blk ->
-        GoodLocals last_prefs blk ->
+        GoodLocals auto_prefs blk ->
         wt_block G1 Γty blk ->
         wc_block G1 Γck blk ->
         sem_block_ck G1 (Hi, Hl) bs blk ->
@@ -739,7 +592,7 @@ Module Type CSCORRECTNESS
                erewrite <-map_ext, <-map_map. eapply sem_block_restrict; eauto.
                3:intros; destruct_conjs; auto.
                + unfold wc_env. simpl_Forall. simpl_In. constructor.
-               + eapply sem_block_change_lasts; [eauto| |eauto with lclocking|eauto].
+               + eapply sem_block_change_lasts; [eauto using noauto_nolast| |eauto with lclocking|eauto].
                  intros * Hnl. eapply Hnl1; eauto.
                  destruct H as (Hfilter1&Hfilter2).
                  apply filter_hist_ffilter_hist in Hfilter1.
@@ -770,7 +623,7 @@ Module Type CSCORRECTNESS
         { intros ? Hinm Hin.
           eapply Env.dom_ub_use, in_app_iff in Hin as [|]; eauto.
           - eapply H7; eauto.
-          - eapply st_valid_after_AtomOrGensym_nIn; eauto using switch_not_in_last_prefs.
+          - eapply st_valid_after_AtomOrGensym_nIn; eauto using switch_not_in_auto_prefs.
             eapply fst_InMembers, Forall_forall in Hinm; eauto.
         }
 
@@ -880,7 +733,7 @@ Module Type CSCORRECTNESS
       + apply senv_of_inout_NoLast.
       + intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
       + intros * Hfind. rewrite Env.gempty in Hfind. congruence.
-      + eapply init_st_valid; eauto using switch_not_in_last_prefs, PS_For_all_empty.
+      + eapply init_st_valid; eauto using switch_not_in_auto_prefs, PS_For_all_empty.
       + reflexivity.
       + apply nodupmembers_map; auto. intros; destruct_conjs; auto.
       + apply nodupmembers_map; auto. intros; destruct_conjs; auto.
@@ -898,14 +751,6 @@ Module Type CSCORRECTNESS
       econstructor...
       destruct G1; eapply sem_block_ck_cons...
       eapply find_node_later_not_Is_node_in in Hord1...
-  Qed.
-
-  Fact wc_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),
-      wc_global G ->
-      Ordered_nodes G.
-  Proof.
-    intros G Hwt.
-    apply wl_global_Ordered_nodes; auto using wc_global_wl_global.
   Qed.
 
   Lemma switch_global_refines : forall G,

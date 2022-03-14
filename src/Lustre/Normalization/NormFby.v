@@ -10,6 +10,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Fresh.
 From Velus Require Import Lustre.Normalization.Unnesting.
+From Velus Require Import Lustre.SubClock.SubClock.
 
 (** * Putting FBYs into normalized form *)
 
@@ -25,12 +26,7 @@ Module Type NORMFBY
   Import Fresh Fresh.Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
-  (** Add some whens on top of an expression *)
-  Fixpoint add_whens (e : exp) (ty : type) (cl : clock) :=
-    match cl with
-    | Cbase => e
-    | Con cl' ckid (_, b) => Ewhen [(add_whens e ty cl')] ckid b ([ty], cl)
-    end.
+  Module Import SC := SubClockFun Ids Op OpAux Cks Senv Syn.
 
   Open Scope bool_scope.
 
@@ -372,6 +368,9 @@ Module Type NORMFBY
     - exists [xs]. split; try constructor; auto.
       + econstructor; eauto.
       + simpl; rewrite app_nil_r; auto.
+    - exists [xs]. split; try constructor; auto.
+      + econstructor; eauto.
+      + simpl; rewrite app_nil_r; auto.
   Qed.
 
   Corollary normfby_blocks_vars_perm : forall G blks blks' xs st st',
@@ -620,6 +619,7 @@ Module Type NORMFBY
       rewrite Forall_map. eapply Forall_impl; [|eauto]. intros ??. constructor; auto.
     - do 2 (constructor; auto).
     - do 2 (constructor; auto).
+    - do 2 (constructor; auto).
   Qed.
 
   Corollary normfby_blocks_GoodLocals to_cut : forall prefs blks blks' st st',
@@ -698,11 +698,11 @@ Module Type NORMFBY
   Lemma norm2_not_in_norm1_prefs :
     ~PS.In norm2 norm1_prefs.
   Proof.
-    unfold norm1_prefs, local_prefs, switch_prefs, last_prefs, elab_prefs.
-    rewrite 4 PSF.add_iff, PSF.singleton_iff.
+    unfold norm1_prefs, local_prefs, switch_prefs, auto_prefs, last_prefs, elab_prefs.
+    rewrite 5 PSF.add_iff, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
     repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
-    intros [contra|[contra|[contra|[contra|contra]]]]; rewrite contra in *; eauto 10 with datatypes.
+    intros [contra|[contra|[contra|[contra|[contra|contra]]]]]; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
   Lemma normfby_node_init_st_valid {A} : forall (n: @node nolocal_top_block norm1_prefs) locs blks,
@@ -752,7 +752,7 @@ Module Type NORMFBY
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood&_).
     pose proof (n_nodup n) as (Hndup&Hndl).
-    destruct (n_block n) as [| | |locs blks] eqn:Hblk; eauto.
+    destruct (n_block n) as [| | | |locs blks] eqn:Hblk; eauto.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. rewrite fst_NoDupMembers in H3.
@@ -792,7 +792,7 @@ Module Type NORMFBY
   Qed.
   Next Obligation.
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
-    destruct (n_block n) as [| | |locs blks] eqn:Hblk; eauto using GoodLocals_add.
+    destruct (n_block n) as [| | | |locs blks] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
     assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs)))) as Hvalid.
     { specialize (n_nodup n) as (Hndup&Hndl).

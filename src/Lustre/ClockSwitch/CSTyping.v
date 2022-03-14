@@ -12,6 +12,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.ClockSwitch.ClockSwitch.
+From Velus Require Import Lustre.SubClock.SCTyping.
 
 Module Type CSTYPING
        (Import Ids : IDS)
@@ -23,120 +24,7 @@ Module Type CSTYPING
        (Import Typ : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import CS : CLOCKSWITCH Ids Op OpAux Cks Senv Syn).
 
-  Section subclock.
-    Variable bck : clock.
-    Variable sub : Env.t ident.
-
-    Variable Γ Γ' : static_env.
-
-    Hypothesis NoLast : forall x, ~IsLast Γ x.
-
-    Hypothesis Hsub : forall x y ty,
-        Env.find x sub = Some y ->
-        HasType Γ x ty ->
-        HasType Γ' y ty.
-
-    Hypothesis Hnsub : forall x ty,
-        Env.find x sub = None ->
-        HasType Γ x ty ->
-        HasType Γ' x ty.
-
-    Lemma rename_var_wt : forall x ty,
-        HasType Γ x ty ->
-        HasType Γ' (rename_var sub x) ty.
-    Proof.
-      unfold rename_var.
-      intros * Hin.
-      destruct (Env.find _ _) eqn:Hfind; simpl in *; eauto.
-    Qed.
-
-    Context {PSyn : block -> Prop} {prefs : PS.t}.
-    Variable G : @global PSyn prefs.
-
-    Hypothesis Hwbck : wt_clock G.(enums) Γ' bck.
-
-    Lemma subclock_clock_wt : forall ck,
-        wt_clock G.(enums) Γ ck ->
-        wt_clock G.(enums) Γ' (subclock_clock bck sub ck).
-    Proof.
-      induction ck; intros * Hwt; inv Hwt; simpl; auto.
-      constructor; eauto using rename_var_wt.
-    Qed.
-    Local Hint Resolve subclock_clock_wt : ltyping.
-
-    Lemma add_whens_wt : forall e ty,
-        typeof e = [ty] ->
-        wt_exp G Γ' e ->
-        wt_exp G Γ' (add_whens e ty bck).
-    Proof.
-      clear Hsub Hnsub.
-      induction bck as [|??? (?&?)]; intros * Hbase Hwt; inv Hwbck;
-        simpl in *; auto.
-      econstructor; eauto; simpl.
-      - rewrite add_whens_typeof; auto.
-      - constructor; auto.
-    Qed.
-
-    Lemma subclock_exp_wt : forall e,
-        wt_exp G Γ e ->
-        wt_exp G Γ' (subclock_exp bck sub e).
-    Proof with auto with ltyping.
-      induction e using exp_ind2; intros * Hwt; inv Hwt; simpl in *.
-      3-13:econstructor; simpl in *; eauto using rename_var_wt, subclock_clock_wt.
-      1-42:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-      1-34:try rewrite subclock_exp_typeof.
-      1-34:try rewrite subclock_exp_typesof.
-      1-34:try (rewrite map_subclock_ann_clock; auto). 1-34:try (rewrite map_subclock_ann_type; auto). 1-30:auto.
-      - apply add_whens_wt...
-      - apply add_whens_wt...
-      - eapply NoLast in H2 as [].
-      - eapply NoLast in H2 as [].
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst...
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst...
-      - erewrite map_map, map_ext; eauto. intros (?&?); auto.
-      - contradict H6. apply map_eq_nil in H6; auto.
-      - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
-        specialize (H _ Hin). specialize (H7 _ Hin).
-        rewrite Forall_forall in *; eauto.
-      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
-        rewrite subclock_exp_typesof.
-        eapply Forall_forall in H8; eauto; auto.
-      - erewrite map_map, map_ext; eauto. intros (?&?); auto.
-      - contradict H9. apply map_eq_nil in H9; auto.
-      - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
-        specialize (H _ Hin). specialize (H10 _ Hin).
-        rewrite Forall_forall in *; eauto.
-      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
-        rewrite subclock_exp_typesof.
-        eapply Forall_forall in H11; eauto; auto.
-      - erewrite map_map, map_ext; eauto. intros (?&?); auto.
-      - erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto. intros (?&?); auto.
-      - contradict H10. apply map_eq_nil in H10; auto.
-      - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
-        specialize (H _ Hin). specialize (H11 _ Hin).
-        rewrite Forall_forall in *; eauto.
-      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
-        rewrite subclock_exp_typesof.
-        eapply Forall_forall in H12; eauto; auto.
-      - rewrite Forall2_map_1. eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&((?&?)&?)) _ _ ?; auto.
-      - rewrite Forall_map. eapply Forall_impl; [|eapply H10]; eauto; intros.
-        now rewrite subclock_exp_typeof.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros.
-        eapply subclock_clock_wt; eauto.
-    Qed.
-
-    Lemma subclock_equation_wt : forall eq,
-        wt_equation G Γ eq ->
-        wt_equation G Γ' (subclock_equation bck sub eq).
-    Proof.
-      intros (?&?) (Hwt1&Hwt2). constructor.
-      - rewrite Forall_map.
-        eapply Forall_impl; [|eauto]; eauto using subclock_exp_wt.
-      - rewrite Forall2_map_1, subclock_exp_typesof.
-        eapply Forall2_impl_In; [|eauto]; intros; eauto using rename_var_wt.
-    Qed.
-
-  End subclock.
+  Module Import SCT := SCTypingFun Ids Op OpAux Cks Senv Syn Typ SC. Import SC.
 
   Import Fresh Facts Tactics.
 
@@ -285,7 +173,7 @@ Module Type CSTYPING
         NoDupMembers Γck ->
         Forall (wt_enum G) (map (fun '(_, a) => a.(typ)) Γty) ->
         wt_clock G.(enums) Γty' bck ->
-        nolast_block blk ->
+        noauto_block blk ->
         NoDupLocals (map fst Γty) blk ->
         wt_block G Γty blk ->
         switch_block Γck bck sub blk st = (blk', st') ->
@@ -469,7 +357,6 @@ Module Type CSTYPING
           * eapply new_idents_wt_enum in H0; simpl_Forall; simpl_In; simpl_Forall; eauto.
         + simpl_Forall. auto.
         + simpl_Forall. simpl_In. auto.
-
       - (* local *)
         econstructor; eauto.
         + apply mmap_values, Forall2_ignore1 in H0. simpl_Forall.
@@ -531,15 +418,14 @@ Module Type CSTYPING
   Qed.
 
   Lemma switch_node_wt G1 G2 : forall n,
-      global_iface_eq G1 G2 ->
+      global_iface_incl G1 G2 ->
       wt_node G1 n ->
       wt_node G2 (switch_node n).
   Proof.
     intros * Heq (Hwc1&Hwc2&Hwc3&Hwt4).
     repeat split; simpl; auto.
-    1-2:destruct Heq as (Henums&_); congruence.
-    1:eapply Forall_impl; [|eauto]; intros; eauto using iface_eq_wt_enum.
-    eapply iface_eq_wt_block; eauto.
+    1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
+    eapply iface_incl_wt_block; eauto.
     eapply switch_block_wt in Hwt4; eauto. 10:eapply surjective_pairing.
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
     - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
@@ -562,7 +448,7 @@ Module Type CSTYPING
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wt; eauto.
-      eapply switch_global_iface_eq.
+      eapply iface_eq_iface_incl, switch_global_iface_eq.
     - rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros.
       simpl; eauto.
     - eapply IHnds; eauto.

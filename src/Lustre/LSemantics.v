@@ -31,7 +31,7 @@ Module Type LSEMANTICS
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
 
-  CoInductive fby1: value -> Stream svalue -> Stream svalue -> Stream svalue -> Prop :=
+  CoInductive fby1 {A : Type} : A -> Stream (synchronous A) -> Stream (synchronous A) -> Stream (synchronous A) -> Prop :=
   | Fby1A:
       forall v xs ys rs,
         fby1 v xs ys rs ->
@@ -41,7 +41,7 @@ Module Type LSEMANTICS
         fby1 s xs ys rs ->
         fby1 v (present w ⋅ xs) (present s ⋅ ys) (present v ⋅ rs).
 
-  CoInductive fby: Stream svalue -> Stream svalue -> Stream svalue -> Prop :=
+  CoInductive fby {A : Type} : Stream (synchronous A) -> Stream (synchronous A) -> Stream (synchronous A) -> Prop :=
   | FbyA:
       forall xs ys rs,
         fby xs ys rs ->
@@ -94,6 +94,9 @@ Module Type LSEMANTICS
     Definition filter_hist e cs Hi Hi' :=
       filter_hist e cs (fst Hi) (fst Hi')
       /\ Env.Equiv (@EqSt _) (snd Hi') (ffilter_hist e cs (snd Hi)).
+    Definition select_hist e k stres Hi Hi' :=
+      select_hist e k stres (fst Hi) (fst Hi')
+      /\ Env.Equiv (@EqSt _) (snd Hi') (fselect_hist e k stres (snd Hi)).
 
     Inductive sem_exp
       : history -> Stream bool -> exp -> list (Stream svalue) -> Prop :=
@@ -218,6 +221,17 @@ Module Type LSEMANTICS
           Forall2 (sem_var (fst H)) xs (concat ss) ->
           sem_equation H b (xs, es)
 
+    with sem_transitions : history -> Stream bool -> list (exp * (enumtag * bool)) -> (enumtag * bool) -> Stream (synchronous (enumtag * bool)) -> Prop :=
+    | Stransdef : forall H bs default stres,
+        stres ≡ const_stres bs default ->
+        sem_transitions H bs [] default stres
+    | Strans : forall H bs e C r trans default vs bs' stres1 stres,
+        sem_exp H bs e [vs] ->
+        bools_of vs bs' ->
+        sem_transitions H bs trans default stres1 ->
+        stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
+        sem_transitions H bs ((e, (C, r))::trans) default stres
+
     with sem_block: history -> Stream bool -> block -> Prop :=
     | Sbeq:
         forall H b eq,
@@ -239,6 +253,19 @@ Module Type LSEMANTICS
                     exists Hi', filter_hist (fst blks) sc Hi Hi'
                            /\ Forall (sem_block Hi' (ffilterb (fst blks) sc b)) (snd blks)) branches ->
           sem_block Hi b (Bswitch ec branches)
+
+    | Sauto:
+      forall H bs ini oth states ck bs' stres0 stres1 stres,
+        sem_clock (fst H) bs ck bs' ->
+        sem_transitions H bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+        fby stres0 stres1 stres ->
+        Forall (fun state =>
+                  forall k, exists Hik, select_hist (fst state) k stres H Hik
+                              /\ let bik := fselectb (fst state) k stres bs in
+                                Forall (sem_block Hik bik) (fst (snd state))
+                                /\ sem_transitions Hik bik (snd (snd state)) (fst state, false) (fselect absent (fst state) k stres stres1)
+               ) states ->
+        sem_block H bs (Bauto ck (ini, oth) states)
 
     | Slocal:
         forall H Hl H' Hl' b locs blks,
@@ -279,6 +306,7 @@ Module Type LSEMANTICS
 
     Variable P_exp : history -> Stream bool -> exp -> list (Stream svalue) -> Prop.
     Variable P_equation : history -> Stream bool -> equation -> Prop.
+    Variable P_transitions : history -> Stream bool -> list (exp * (enumtag * bool)) -> (enumtag * bool) -> Stream (synchronous (enumtag * bool)) -> Prop.
     Variable P_block : history -> Stream bool -> block -> Prop.
     Variable P_node : ident -> list (Stream svalue) -> list (Stream svalue) -> Prop.
 
@@ -415,10 +443,40 @@ Module Type LSEMANTICS
         P_exp Hi b ec [sc] ->
         wt_streams [sc] (typeof ec) ->
         Forall (fun blks => exists Hi', filter_hist (fst blks) sc Hi Hi'
-                                /\ Forall (sem_block G Hi' (ffilterb (fst blks) sc b)) (snd blks)) branches ->
-        Forall (fun blks => exists Hi', filter_hist (fst blks) sc Hi Hi'
+                                /\ Forall (sem_block G Hi' (ffilterb (fst blks) sc b)) (snd blks)
                                 /\ Forall (P_block Hi' (ffilterb (fst blks) sc b)) (snd blks)) branches ->
         P_block Hi b (Bswitch ec branches).
+
+    Hypothesis TransDefCase:
+      forall Hi bs default stres,
+        stres ≡ const_stres bs default ->
+        P_transitions Hi bs [] default stres.
+
+    Hypothesis TransCase:
+      forall Hi bs e C r trans default vs bs' stres1 stres,
+        sem_exp G Hi bs e [vs] ->
+        P_exp Hi bs e [vs] ->
+        bools_of vs bs' ->
+        sem_transitions G Hi bs trans default stres1 ->
+        P_transitions Hi bs trans default stres1 ->
+        stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
+        P_transitions Hi bs ((e, (C, r))::trans) default stres.
+
+    Hypothesis BautoCase:
+      forall Hi bs ini oth states ck bs' stres0 stres1 stres,
+        sem_clock (fst Hi) bs ck bs' ->
+        sem_transitions G Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+        P_transitions Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+        fby stres0 stres1 stres ->
+        Forall (fun state =>
+                  forall k, exists Hik, select_hist (fst state) k stres Hi Hik
+                              /\ let bik := fselectb (fst state) k stres bs in
+                                Forall (sem_block G Hik bik) (fst (snd state))
+                                /\ Forall (P_block Hik bik) (fst (snd state))
+                                /\ sem_transitions G Hik bik (snd (snd state)) (fst state, false) (fselect absent (fst state) k stres stres1)
+                                /\ P_transitions Hik bik (snd (snd state)) (fst state, false) (fselect absent (fst state) k stres stres1)
+               ) states ->
+        P_block Hi bs (Bauto ck (ini, oth) states).
 
     Hypothesis BlocalCase:
       forall H Hl H' Hl' b locs blks,
@@ -464,12 +522,17 @@ Module Type LSEMANTICS
            (H: history) (b: Stream bool) (e: equation)
            (Sem: sem_equation G H b e)
            {struct Sem}
-         : P_equation H b e
+      : P_equation H b e
     with sem_block_ind2
            (H: history) (b: Stream bool) (d: block)
            (Sem: sem_block G H b d)
            {struct Sem}
-         : P_block H b d
+      : P_block H b d
+    with sem_transitions_ind2
+           (H: history) (b: Stream bool) trans default stres
+           (Sem: sem_transitions G H b trans default stres)
+           {struct Sem}
+         : P_transitions H b trans default stres
     with sem_node_ind2
            (f: ident) (ss os: list (Stream svalue))
            (Sem: sem_node G f ss os)
@@ -503,13 +566,20 @@ Module Type LSEMANTICS
         + eapply BresetCase; eauto.
           intros k. specialize (H2 k). split; eauto. SolveForall.
         + eapply BswitchCase; eauto.
-          SolveForall; destruct_conjs. constructor; auto.
-          do 2 esplit; eauto. simpl. SolveForall.
+          SolveForall. destruct_conjs. constructor; auto.
+          do 2 esplit; eauto. simpl. split; auto. SolveForall.
+        + eapply BautoCase; eauto.
+          SolveForall. constructor; auto.
+          intros k. specialize (H3 k). destruct_conjs.
+          esplit. split; [|split; [|split]]; eauto. SolveForall.
         + eapply BlocalCase; eauto.
           2:SolveForall.
           intros * Hin.
           eapply H2 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
           repeat split; eauto.
+      - destruct Sem.
+        + eapply TransDefCase; eauto.
+        + eapply TransCase; eauto.
       - destruct Sem.
         eapply Node; eauto.
     Qed.
@@ -619,11 +689,15 @@ Module Type LSEMANTICS
     | k: nat,H: forall (_ : nat), _ |- _ => specialize (H k); sem_block_cons
     | H: Forall2 _ ?xs _ |- Forall2 _ ?xs _ =>
         eapply Forall2_impl_In in H; eauto; intros; sem_block_cons
-    | H: filter_hist _ _ _ ?Hi' |- exists _, filter_hist _ _ _ _ /\ _ =>
-        clear H; do 2 esplit; [auto|sem_block_cons]
+    | |- exists _, filter_hist _ _ _ _ /\ _ =>
+        do 2 esplit; [auto|sem_block_cons]
+    | |- exists _, select_hist _ _ _ _ _ /\ _ /\ _ =>
+        do 2 esplit; [auto|split;sem_block_cons]
     | H: forall _ _ _ _ _ _, In _ _ -> exists _ _ _, _ /\ _ /\ _ /\ _ |- exists _ _ _, _ /\ _ /\ _ /\ _ =>
-        edestruct H as (?&?&?&?&?&?); eauto;
+        edestruct H as (?&?&?&?&?&?&?); eauto;
         do 3 esplit; split; [|split; [|split]]; eauto; sem_block_cons
+    | |- exists _ _, _ /\ _ /\ _ =>
+        do 2 esplit; split; [|split]; eauto; sem_block_cons
     | _ => auto
     end.
 
@@ -640,6 +714,8 @@ Module Type LSEMANTICS
       with
         (P_block := fun bk H d => ~Is_node_in_block nd.(n_name) d
                                      -> sem_block (Global enums0 nds) bk H d)
+        (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
+                                                       -> sem_transitions (Global enums0 nds) bk H trans default stres)
         (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
                                    -> sem_equation (Global enums0 nds) bk H eq)
         (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
@@ -678,7 +754,9 @@ Module Type LSEMANTICS
     induction Hsem using sem_block_ind2
       with
         (P_block := fun bk H d => ~Is_node_in_block nd.(n_name) d
-                                     -> sem_block (Global enums0 (nd::nds)) bk H d)
+                               -> sem_block (Global enums0 (nd::nds)) bk H d)
+        (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
+                                                       -> sem_transitions (Global enums0 (nd::nds)) bk H trans default stres)
         (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
                                    -> sem_equation (Global enums0 (nd::nds)) bk H eq)
         (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
@@ -704,7 +782,7 @@ Module Type LSEMANTICS
     eapply find_node_later_not_Is_node_in in H0; eauto.
   Qed.
 
-  Add Parametric Morphism v : (fby1 v)
+  Add Parametric Morphism {A} (v : A) : (fby1 v)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
         as fby1_EqSt.
   Proof.
@@ -718,7 +796,7 @@ Module Type LSEMANTICS
     + inv H4. econstructor. eapply Cofix; eauto. now inv H2.
   Qed.
 
-  Add Parametric Morphism : fby
+  Add Parametric Morphism {A} : (@fby A)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
         as fby_EqSt.
   Proof.
@@ -845,6 +923,7 @@ Module Type LSEMANTICS
     intros H H' EH b b' Eb e xs xs' Exs Sem.
     revert H' b' xs' EH Eb Exs; induction Sem using sem_exp_ind2 with
                                     (P_equation := fun H b e => True)
+                                    (P_transitions := fun _ _ _ _ _ => True)
                                     (P_block := fun H b d => True)
                                     (P_node := fun i xs ys => forall ys', EqSts ys ys' -> sem_node G i xs ys');
       auto; intros;
@@ -924,6 +1003,19 @@ Module Type LSEMANTICS
       destruct EH as (EH&_). now rewrite <-EH.
   Qed.
 
+  Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_transitions G)
+      with signature history_equiv ==> @EqSt bool ==> eq ==> eq ==> @EqSt _ ==> Basics.impl
+        as sem_transitions_morph.
+  Proof.
+    intros H H' EH ?? Eb ???? Estres Hsem.
+    revert dependent y3.
+    induction Hsem; intros * Heq; econstructor; eauto.
+    - rewrite <-Heq, <-Eb; auto.
+    - now rewrite <-EH, <-Eb.
+    - eapply IHHsem; eauto. reflexivity.
+    - now rewrite <-Heq.
+  Qed.
+
   Add Parametric Morphism {PSyn prefs} (G : @global PSyn prefs) : (sem_block G)
       with signature history_equiv ==> @EqSt bool ==> eq ==> Basics.impl
         as sem_block_morph.
@@ -931,6 +1023,7 @@ Module Type LSEMANTICS
     unfold Basics.impl; intros H H' EH b b' Eb d Sem.
     revert H' b' EH Eb; induction Sem using sem_block_ind2
       with (P_exp := fun _ _ _ _ => True)
+           (P_transitions := fun _ _ _ _ _ => True)
            (P_equation := fun _ _ _ => True)
            (P_node := fun _ _ _ => True); intros; auto.
     - constructor. now rewrite <-EH, <-Eb.
@@ -947,8 +1040,18 @@ Module Type LSEMANTICS
       + simpl_Forall.
         do 2 esplit.
         * destruct EH as (EH1&EH2); unfold filter_hist in *.
-          destruct H2. split. rewrite <-EH1 at 1. eauto. rewrite <-EH2 at 1. eauto.
+          destruct H1. split. rewrite <-EH1 at 1. eauto. rewrite <-EH2 at 1. eauto.
         * simpl_Forall. apply H4. reflexivity. now rewrite <-Eb.
+    - econstructor; eauto.
+      + destruct EH as (EH1&EH2). rewrite <-EH1, <-Eb; eauto.
+      + now rewrite <-EH.
+      + simpl_Forall. specialize (H2 k) as ((Hik&Hikl)&?). destruct_conjs.
+        exists (Hik, Hikl). split; [|split]; eauto.
+        * destruct EH as (EH1&EH2). destruct H2 as (Hsel1&Hsel2).
+          split. rewrite <-EH1; auto. rewrite <-EH2; auto.
+        * simpl_Forall. eapply H5; eauto. reflexivity.
+          unfold fselectb, fselect. now rewrite Eb.
+        * now rewrite <-Eb.
     - destruct H'0. eapply Slocal with (H':=H'); eauto.
       + intros * ??. destruct EH as (EH&_). rewrite <-EH; eauto.
       + destruct EH as (_&EH). rewrite <-EH; eauto.
@@ -1005,6 +1108,11 @@ Module Type LSEMANTICS
     - (* switch *)
       simpl_Exists; simpl_Forall.
       eapply H in H4; eauto. destruct H1.
+      eapply Env.In_refines; eauto.
+    - (* automaton *)
+      simpl_Exists; simpl_Forall. specialize (H10 0); destruct_conjs.
+      simpl_Forall.
+      eapply H in H3; eauto. destruct H1.
       eapply Env.In_refines; eauto.
     - (* local *)
       simpl_Exists; simpl_Forall.
@@ -1079,6 +1187,26 @@ Module Type LSEMANTICS
     eapply Env.dom_lb_use in Hdom; eauto.
   Qed.
 
+  Lemma sem_clock_refines : forall H H' ck bs bs',
+      Env.refines (@EqSt _) H H' ->
+      sem_clock H bs ck bs' ->
+      sem_clock H' bs ck bs'.
+  Proof.
+    induction ck; intros * Href Hck; inv Hck.
+    - constructor; auto.
+    - econstructor; eauto using sem_var_refines.
+  Qed.
+
+  Lemma sem_clock_refines' : forall vars H H' ck bs bs',
+      wx_clock vars ck ->
+      (forall x vs, IsVar vars x -> sem_var H x vs -> sem_var H' x vs) ->
+      sem_clock H bs ck bs' ->
+      sem_clock H' bs ck bs'.
+  Proof.
+    induction ck; intros * Hwx Href Hck; inv Hwx; inv Hck;
+      econstructor; eauto.
+  Qed.
+
   Fact sem_exp_refines {PSyn prefs} : forall (G : @global PSyn prefs) b e H H' Hl v,
       Env.refines (@EqSt _) H H' ->
       sem_exp G (H, Hl) b e v ->
@@ -1098,6 +1226,15 @@ Module Type LSEMANTICS
     intros * Href Hsem. inv Hsem; simpl in *.
     apply Seq with (ss:=ss); simpl_Forall;
       eauto using sem_exp_refines, sem_var_refines.
+  Qed.
+
+  Fact sem_transitions_refines {PSyn prefs} : forall (G : @global PSyn prefs) H H' Hl b trans default stres,
+      Env.refines (@EqSt _) H H' ->
+      sem_transitions G (H, Hl) b trans default stres ->
+      sem_transitions G (H', Hl) b trans default stres.
+  Proof with eauto.
+    induction trans; intros * Href Hsem; inv Hsem;
+      econstructor; eauto using sem_exp_refines.
   Qed.
 
   Fact sem_block_refines {PSyn prefs} : forall (G: @global PSyn prefs) d H H' Hl b,
@@ -1122,6 +1259,14 @@ Module Type LSEMANTICS
         intros ?? Hfind. apply Href1 in Hfind as (?&Hfilter&Hfind').
         apply Href in Hfind' as (?&?&?). do 2 esplit; [|eauto].
         now rewrite <-H5.
+    - (* automaton *)
+      eapply Sauto; eauto using sem_clock_refines, sem_transitions_refines.
+      simpl_Forall. specialize (H10 k); destruct_conjs.
+      esplit; split; [|split]; eauto.
+      destruct H2 as (Href1&?); split; simpl in *; [|auto].
+      intros ?? Hfind. apply Href1 in Hfind as (?&Hfilter&Hfind').
+      apply Href in Hfind' as (?&?&?). do 2 esplit; [|eauto].
+      now rewrite <-H6.
     - (* locals *)
       econstructor; [| | |eauto]. 1-3:eauto.
       intros ?? Hv Hnin. eapply sem_var_refines; eauto.
@@ -1142,7 +1287,7 @@ Module Type LSEMANTICS
       induction e using exp_ind2; intros v Hsem Hwl; inv Hwl; inv Hsem; simpl; auto.
       - (* fby *)
         take (Forall3 _ _ _ _) and eapply Forall3_length in it as (Hlen1&Hlen2).
-        rewrite <- H12, <-Hlen2.
+        rewrite <- H12. setoid_rewrite <-Hlen2.
         unfold annots; rewrite flat_map_concat_map.
         apply concat_length_eq.
         rewrite Forall2_map_2, Forall2_swap_args.
@@ -1266,6 +1411,18 @@ Module Type LSEMANTICS
         auto using EqStrel_Transitive, EqStrel_Reflexive.
   Qed.
 
+  Fact sem_clock_restrict : forall vars ck H bs bs',
+      wx_clock vars ck ->
+      sem_clock H bs ck bs' ->
+      sem_clock (Env.restrict H (List.map fst vars)) bs ck bs'.
+  Proof.
+    intros * Hwc Hsem.
+    eapply sem_clock_refines'; [eauto| |eauto].
+    intros ?? Hinm Hvar.
+    eapply sem_var_restrict; eauto.
+    inv Hinm. now apply fst_InMembers.
+  Qed.
+
   Fact sem_exp_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b e vs,
       wx_exp Γ e ->
       sem_exp G (H, Hl) b e vs ->
@@ -1295,54 +1452,13 @@ Module Type LSEMANTICS
       inv H1. now rewrite <-fst_InMembers.
   Qed.
 
-  Lemma sem_clock_refines : forall H H' ck bs bs',
-      Env.refines (@EqSt _) H H' ->
-      sem_clock H bs ck bs' ->
-      sem_clock H' bs ck bs'.
-  Proof.
-    cofix CoFix; destruct ck; intros * Href Hsem.
-    - inv Hsem; constructor; auto.
-    - inv Hsem.
-      + econstructor; eauto.
-        * eapply sem_var_refines; eauto.
-        * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
-      + econstructor; eauto.
-        * eapply sem_var_refines; eauto.
-        * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
-      + eapply Son_abs2; eauto.
-        * eapply sem_var_refines; eauto.
-        * eapply CoFix; [|eauto]. eapply history_tl_refines; eauto.
-  Qed.
-
-  Lemma sem_clock_refines' : forall vars H H' ck bs bs',
-      wx_clock vars ck ->
-      (forall x vs, In x vars -> sem_var H x vs -> sem_var H' x vs) ->
-      sem_clock H bs ck bs' ->
-      sem_clock H' bs ck bs'.
-  Proof.
-    cofix CoFix; destruct ck; intros * Hwc Href Hsem.
-    - inv Hsem; constructor; auto.
-    - assert (Hwx:=Hwc). inv Hwc; inv Hsem.
-      + econstructor; eauto.
-        eapply CoFix. 1,3:eauto. intros ??? Hv.
-        eapply sem_var_step_inv in Hv as (?&?); eauto using sem_var_step.
-      + econstructor; eauto.
-        eapply CoFix. 1,3:eauto. intros ??? Hv.
-        eapply sem_var_step_inv in Hv as (?&?); eauto using sem_var_step.
-      + eapply Son_abs2; eauto.
-        eapply CoFix. 1,3:eauto. intros ??? Hv.
-        eapply sem_var_step_inv in Hv as (?&?); eauto using sem_var_step.
-  Qed.
-
-  Corollary sem_clock_restrict : forall vars ck H bs bs',
-      wx_clock vars ck ->
-      sem_clock H bs ck bs' ->
-      sem_clock (Env.restrict H vars) bs ck bs'.
-  Proof.
-    intros * Hwc Hsem.
-    eapply sem_clock_refines'; [eauto| |eauto].
-    intros ?? Hinm Hvar.
-    eapply sem_var_restrict; eauto.
+  Fact sem_transitions_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b trans default stres,
+      Forall (fun '(e, _) => wx_exp Γ e) trans ->
+      sem_transitions G (H, Hl) b trans default stres ->
+      sem_transitions G (Env.restrict H (List.map fst Γ), Hl) b trans default stres.
+  Proof with eauto.
+    induction trans; intros * Hwx Hsem; inv Hwx; inv Hsem;
+      econstructor; eauto using sem_exp_restrict.
   Qed.
 
   Lemma sem_block_restrict {PSyn prefs} : forall (G: @global PSyn prefs) blk Γ H Hl b,
@@ -1368,6 +1484,18 @@ Module Type LSEMANTICS
         intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
         eapply Href1 in Hfind as (?&Hfilter&Hfind').
         do 2 esplit; eauto using Env.restrict_find.
+    - (* automaton *)
+      econstructor; eauto.
+      + eapply sem_clock_restrict; eauto.
+      + eapply sem_transitions_restrict; eauto. simpl_Forall; auto.
+      + simpl_Forall. specialize (H15 k); destruct_conjs.
+        esplit; split; [|split].
+        2:{ simpl_Forall. eapply H; eauto. }
+        2:{ eapply sem_transitions_restrict; eauto. }
+        destruct H5 as (Href1&Href2). split; auto.
+        intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
+        eapply Href1 in Hfind as (?&Hfilter&Hfind').
+        do 2 esplit; eauto using Env.restrict_find.
     - (* locals *)
       eapply Slocal with (H':=Env.restrict H' (List.map fst (Γ ++ senv_of_locs locs))).
       + intros * Hsem Hnin.
@@ -1389,9 +1517,9 @@ Module Type LSEMANTICS
 
   (** fby keeps the synchronization *)
 
-  Lemma ac_fby1 :
+  Lemma ac_fby1 {A} :
     forall xs ys rs,
-      fby xs ys rs -> abstract_clock xs ≡ abstract_clock rs.
+      @fby A xs ys rs -> abstract_clock xs ≡ abstract_clock rs.
   Proof.
     cofix Cofix.
     intros * Hfby.
@@ -1402,9 +1530,9 @@ Module Type LSEMANTICS
     unfold_Stv xs; inv Hfby1; econstructor; simpl; eauto.
   Qed.
 
-  Lemma ac_fby2 :
+  Lemma ac_fby2 {A} :
     forall xs ys rs,
-      fby xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
+      @fby A xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
   Proof.
     cofix Cofix. intros * Hfby.
     unfold_Stv ys; inv Hfby; econstructor; simpl; eauto.
@@ -1469,6 +1597,117 @@ Module Type LSEMANTICS
     - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
     - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
     - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
+  Qed.
+
+  (** ** Typing of the state machines state stream *)
+
+  Lemma sem_transitions_wt_state {PSyn prefs A} (G : @global PSyn prefs) (states : list (enumtag * A)) :
+    forall Hi bs trans default stres,
+      Permutation.Permutation (List.map fst states) (seq 0 (Datatypes.length states)) ->
+      Forall (fun '(_, (t, _)) => InMembers t states) trans ->
+      In (fst default) (seq 0 (Datatypes.length states)) ->
+      sem_transitions G Hi bs trans default stres ->
+      SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres.
+  Proof.
+    induction trans; intros * Hperm Hwt1 Hwt2 Hsem; inv Hwt1; inv Hsem.
+    - apply SForall_forall; intros.
+      apply eqst_ntheq with (n:=n) in H0. setoid_rewrite Str_nth_map in H0.
+      eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
+      2:symmetry; apply H0. destruct (bs # n); simpl; auto.
+      destruct default0. apply in_seq in Hwt2; simpl in *. lia.
+    - apply IHtrans in H8; auto.
+      apply SForall_forall; intros.
+      apply eqst_ntheq with (n:=n) in H11. rewrite choose_first_nth in H11. setoid_rewrite Str_nth_map in H11.
+      apply SForall_forall with (n:=n) in H8.
+      eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
+      2:symmetry; apply H11. destruct (bs' # n); simpl; auto.
+      rewrite fst_InMembers, Hperm in H1. apply in_seq in H1. lia.
+  Qed.
+
+  Fact fby1_SForall {A} (P : _ -> Prop) : forall n v xs ys zs,
+      @fby1 A v xs ys zs ->
+      P (present v) ->
+      SForall P xs ->
+      (forall m, m < n -> P (ys # m)) ->
+      P zs # n.
+  Proof.
+    induction n; intros * Hfby Hp Hf Hlt; inv Hfby; inv Hf.
+    1,2:rewrite Str_nth_0; auto.
+    1,2:rewrite Str_nth_S_tl; simpl.
+    - eapply IHn; eauto.
+      intros m Hlt'. specialize (Hlt (S m)).
+      rewrite Str_nth_S_tl in Hlt. apply Hlt; lia.
+    - eapply IHn; eauto.
+      + specialize (Hlt 0). apply Hlt. lia.
+      + intros m Hlt'. specialize (Hlt (S m)).
+        rewrite Str_nth_S_tl in Hlt. apply Hlt; lia.
+  Qed.
+
+  Corollary fby_SForall {A} (P : _ -> Prop) : forall n xs ys zs,
+      @fby A xs ys zs ->
+      SForall P xs ->
+      (forall m, m < n -> P (ys # m)) ->
+      P zs # n.
+  Proof.
+    induction n; intros * Hfby Hf Hlt; inv Hfby; inv Hf.
+    1,2:rewrite Str_nth_0; auto.
+    1,2:rewrite Str_nth_S_tl; simpl.
+    - eapply IHn; eauto.
+      intros m Hlt'. specialize (Hlt (S m)).
+      rewrite Str_nth_S_tl in Hlt. apply Hlt; lia.
+    - eapply fby1_SForall; eauto.
+      + specialize (Hlt 0). apply Hlt. lia.
+      + intros m Hlt'. specialize (Hlt (S m)).
+        rewrite Str_nth_S_tl in Hlt. apply Hlt; lia.
+  Qed.
+
+  Corollary sem_automaton_wt_state {PSyn prefs A} (G : @global PSyn prefs) (states : list (enumtag * (A * list transition))) :
+    forall Hi bs bs' ini oth stres0 stres1 stres,
+      Permutation.Permutation (List.map fst states) (seq 0 (Datatypes.length states)) ->
+      Forall (fun '(_, t) => InMembers t states) ini ->
+      In oth (seq 0 (Datatypes.length states)) ->
+      Forall (fun blks => Forall (fun '(e, (t, _)) => InMembers t states) (snd (snd blks))) states ->
+      sem_transitions G Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+      fby stres0 stres1 stres ->
+      Forall (fun state =>
+               forall k, exists Hik,
+                 select_hist (fst state) k stres Hi Hik /\
+                 (let bik := fselectb (fst state) k stres bs in
+                  sem_transitions G Hik bik (snd (snd state))
+                    (fst state, false) (fselect absent (fst state) k stres stres1))) states ->
+      SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres.
+  Proof.
+    intros * Hperm Hwtini Hwtoth Hwtst Hsemini Hfby Hsemst.
+    eapply sem_transitions_wt_state in Hsemini as Hwt0; eauto.
+    2:simpl_Forall; auto.
+    assert (Forall (fun state => forall k, SForall (fun v => match v with present (e, _) => e < length states | _ => True end)
+                                           (fselect absent (fst state) k stres stres1)) states) as Hwt1.
+    { simpl_Forall. specialize (Hsemst k); destruct_conjs.
+      eapply sem_transitions_wt_state in H1; eauto.
+      rewrite <-Hperm; auto. solve_In. }
+    clear - Hperm Hwt0 Hwt1 Hfby.
+    apply SForall_forall; intros n.
+    induction n using Wf_nat.lt_wf_ind.
+    apply Wf_nat.lt_wf_ind with (n:=n).
+    intros n' Hrec.
+    eapply fby_SForall; eauto.
+    intros * Hlt. specialize (Hrec _ Hlt).
+    destruct (stres # m) as [|(?&?)] eqn:Hres.
+    - apply ac_fby2, eqst_ntheq with (n:=m) in Hfby.
+      rewrite 2 ac_nth in Hfby. rewrite Hres in Hfby.
+      destruct (stres1 # m) eqn:Hres1; try congruence.
+      eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
+      2:symmetry; apply Hres1. simpl; auto.
+    - eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end) in Hrec; [|eauto].
+      simpl in *.
+      assert (In e (List.map fst states)) as Hin.
+      { rewrite Hperm. apply in_seq. lia. }
+      simpl_In. simpl_Forall.
+      specialize (Hwt1 ((count (ffilterb e (stres_st stres) (stres_res stres))) # m)).
+      apply SForall_forall with (n:=m) in Hwt1.
+      unfold fselect in Hwt1. rewrite mask_nth, Nat.eqb_refl, ffilter_nth in Hwt1.
+      unfold stres_st in Hwt1. rewrite Str_nth_map, Hres, equiv_decb_refl in Hwt1.
+      auto.
   Qed.
 
 End LSEMANTICS.

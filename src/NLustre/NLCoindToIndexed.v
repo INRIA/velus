@@ -238,7 +238,8 @@ Module Type NLCOINDTOINDEXED
       intros * n.
       rewrite reset_impl. unfold Indexed.reset.
       repeat rewrite <-fby_impl.
-      destruct (tr_Stream (sfby v0 xs) n); auto.
+      destruct (tr_Stream (sfby v0 xs) n) eqn:Hfby; setoid_rewrite Hfby; auto.
+      clear Hfby.
       induction n; simpl; auto.
       destruct (tr_Stream _ _); auto.
       rewrite <-fby_impl. destruct (tr_Stream _ _); auto.
@@ -279,7 +280,7 @@ Module Type NLCOINDTOINDEXED
           specialize (He n); simpl in *.
           assert (Hnth2':=Hnth2). eapply nth_error_split in Hnth2' as (es1&es2&?&Hles1).
           econstructor; eauto.
-          * congruence.
+          * now rewrite <-H1.
           * eapply Forall_forall; intros ? Hin'.
             assert (exists k', nth_error es k' = Some x3 /\ k' <> x0) as (k'&Hnth3&Hneq).
             { apply in_app_iff in Hin' as [Hin'|Hin'];
@@ -329,7 +330,7 @@ Module Type NLCOINDTOINDEXED
           eapply CESem.Scase_pres with (vs:=vs); eauto.
           * eapply Forall2_trans_ex in Hpres; eauto.
             eapply Forall2_impl_In; [|eauto]; intros ?? _ _ (?&?&He2&?).
-            specialize (He2 n); simpl in *. congruence.
+            specialize (He2 n); simpl in *. now rewrite <-H3.
           * eapply nth_error_Forall2 in Hpres as (?&Hnth3&?); eauto.
             congruence.
 
@@ -393,7 +394,6 @@ Module Type NLCOINDTOINDEXED
       intros ** n; revert dependent xs; revert rs.
       induction n; intros * Rst.
       - unfold_Stv xs; inv Rst; rewrite tr_Stream_0; auto.
-        right; exists c'; rewrite tr_Stream_0; auto.
       - unfold_Stv xs; inv Rst; rewrite 2 tr_Stream_S; auto.
     Qed.
 

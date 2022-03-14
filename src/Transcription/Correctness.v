@@ -741,7 +741,7 @@ Module Type CORRECTNESS
     intros n. specialize (Hvar n). specialize (Hck n). specialize (Hwhen n).
     repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hck. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
     rewrite ac_nth.
-    destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]]; rewrite Hv, Hy in *.
+    destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]]; rewrite Hv in *; setoid_rewrite Hy.
     - inv Hck; auto. exfalso.
       eapply IStr.sem_var_instant_det in Hvar; eauto; congruence.
     - inv Hck; auto. exfalso.
@@ -765,8 +765,8 @@ Module Type CORRECTNESS
     rewrite LCS.CIStr.CIStr.tr_Stream_ac in *.
     repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in *. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
     destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]];
-      rewrite Hx, Hv, Hy in *; inv Hck; auto.
-    1,2:eapply IStr.sem_var_instant_det in Hvar; eauto; congruence.
+      rewrite Hv in *; setoid_rewrite Hx; inv Hck; auto;
+      try setoid_rewrite Hy in H5; try congruence.
   Qed.
 
   Fact sem_clock_const : forall H ck x s ty k bs bs' bs'' c xs ys,

@@ -956,6 +956,40 @@ Module Fresh(Ids : IDS).
         etransitivity; eauto.
     Qed.
 
+    Fact mmap2_values_valid : forall a st a1s a2s st' pref aft,
+        st_valid_after st pref aft ->
+        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_valid_after st pref aft -> st_valid_after st' pref aft) ->
+        mmap2 a st = (a1s, a2s, st') ->
+        Forall3 (fun a a1 a2 =>
+                   exists st'' st''',
+                     st_valid_after st'' pref aft
+                     /\ k a st'' = (a1, a2, st''')) a a1s a2s.
+    Proof.
+      induction a; intros * Hval1 Hval2 Hfold; simpl in *; repeat inv_bind.
+      - constructor.
+      - constructor; eauto.
+    Qed.
+
+    Fact mmap2_values_valid_follows : forall a st a1s a2s st' pref aft,
+        st_valid_after st pref aft ->
+        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_valid_after st pref aft -> st_valid_after st' pref aft) ->
+        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') ->
+        mmap2 a st = (a1s, a2s, st') ->
+        Forall3 (fun a a1 a2 =>
+                   exists st'' st''',
+                     st_valid_after st'' pref aft
+                     /\ st_follows st st''
+                     /\ k a st'' = (a1, a2, st''')) a a1s a2s.
+    Proof.
+      induction a; intros * Hval1 Hval2 Hfollows Hfold; simpl in *; repeat inv_bind.
+      - constructor.
+      - constructor.
+        + repeat esplit; eauto. reflexivity.
+        + eapply IHa in H0; eauto.
+          eapply Forall3_impl_In; [|eauto]; intros; destruct_conjs.
+          do 2 esplit. repeat (split; eauto). etransitivity; eauto.
+    Qed.
+
     Fact mmap2_length_1 : forall a st a1s a2s st',
         mmap2 a st = (a1s, a2s, st') ->
         length a1s = length a.

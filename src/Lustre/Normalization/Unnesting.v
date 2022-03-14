@@ -1568,6 +1568,9 @@ Module Type UNNESTING
     - exists [xs]. split; try constructor; auto.
       + econstructor; eauto.
       + simpl; rewrite app_nil_r; auto.
+    - exists [xs]. split; try constructor; auto.
+      + econstructor; eauto.
+      + simpl; rewrite app_nil_r; auto.
   Qed.
 
   Corollary unnest_blocks_vars_perm : forall G blks blks' xs st st',
@@ -2364,6 +2367,7 @@ Module Type UNNESTING
       + simpl_Forall. constructor.
     - do 2 (constructor; auto).
     - do 2 (constructor; auto).
+    - do 2 (constructor; auto).
   Qed.
 
   Corollary unnest_blocks_GoodLocals G : forall prefs blks blks' st st',
@@ -2407,6 +2411,7 @@ Module Type UNNESTING
       + eapply mmap_NoDupLocals in H; eauto.
         simpl_Forall. constructor. simpl_Forall.
       + simpl_Forall. constructor.
+    - constructor; auto.
     - constructor; auto.
     - constructor; auto.
   Qed.
@@ -2458,11 +2463,11 @@ Module Type UNNESTING
   Lemma norm1_not_in_local_prefs :
     ~PS.In norm1 local_prefs.
   Proof.
-    unfold local_prefs, switch_prefs, last_prefs, elab_prefs.
-    rewrite 3 PSF.add_iff, PSF.singleton_iff.
+    unfold local_prefs, switch_prefs, auto_prefs, last_prefs, elab_prefs.
+    rewrite 4 PSF.add_iff, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
     repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
-    intros [contra|[contra|[contra|contra]]]; subst; rewrite contra in *; eauto 10 with datatypes.
+    intros [contra|[contra|[contra|[contra|contra]]]]; subst; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
   Lemma unnest_node_init_st_valid {A PSyn} : forall (n: @node PSyn local_prefs) locs blks,

@@ -32,9 +32,11 @@ let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
     [
       ("assert",   fun loc ->  ASSERT   loc);
+      ("automaton", fun loc -> AUTOMATON loc);
       ("and",      fun loc ->  AND      loc);
       (* ("bool",     fun loc ->  BOOL     (makeident "bool", loc)); *)
       ("case",     fun loc ->  CASE     loc);
+      ("do",       fun loc ->  DO       loc);
       ("double",   fun loc ->  FLOAT64  loc); (* LEGACY *)
       ("else",     fun loc ->  ELSE     loc);
       ("end",      fun loc ->  END      loc);
@@ -45,6 +47,7 @@ let () =
       ("float32",  fun loc ->  FLOAT32  loc);
       ("float64",  fun loc ->  FLOAT64  loc);
       ("if",       fun loc ->  IFTE     loc);
+      ("initially", fun loc -> INITIALLY loc);
       ("int",      fun loc ->  INT32    loc); (* LEGACY *)
       ("int16",    fun loc ->  INT16    loc);
       ("int32",    fun loc ->  INT32    loc);
@@ -66,10 +69,13 @@ let () =
       ("on",       fun loc ->  ON       loc);
       ("onot",     fun loc ->  ONOT     loc);
       ("or",       fun loc ->  OR       loc);
+      ("otherwise", fun loc -> OTHERWISE loc);
       ("real",     fun loc ->  FLOAT64  loc); (* LEGACY *)
       ("reset",    fun loc ->  RESET    loc);
       ("restart",  fun loc ->  RESTART  loc);
+      ("resume",   fun loc ->  RESUME   loc);
       ("returns",  fun loc ->  RETURNS  loc);
+      ("state",    fun loc ->  STATE    loc);
       ("switch",   fun loc ->  SWITCH   loc);
       ("tel",      fun loc ->  TEL      loc);
       ("then",     fun loc ->  THEN     loc);
@@ -80,6 +86,7 @@ let () =
       ("uint32",   fun loc ->  UINT32   loc);
       ("uint64",   fun loc ->  UINT64   loc);
       ("uint8",    fun loc ->  UINT8    loc);
+      ("until",    fun loc ->  UNTIL    loc);
       ("var",      fun loc ->  VAR      loc);
       ("when",     fun loc ->  WHEN     loc);
       ("whenot",   fun loc ->  WHENOT   loc);

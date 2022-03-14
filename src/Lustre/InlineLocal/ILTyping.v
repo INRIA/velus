@@ -9,6 +9,7 @@ From Velus Require Import Fresh.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping.
 From Velus Require Import Lustre.InlineLocal.InlineLocal.
+From Velus Require Import Lustre.SubClock.SCTyping.
 
 Module Type ILTYPING
        (Import Ids : IDS)
@@ -17,129 +18,10 @@ Module Type ILTYPING
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import Senv : STATICENV Ids Op OpAux Cks)
        (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
-       (Import Clo : LTYPING Ids Op OpAux Cks Senv Syn)
+       (Import Typ : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import IL  : INLINELOCAL Ids Op OpAux Cks Senv Syn).
 
-  Section rename_in_clock.
-    Variable sub : Env.t ident.
-    Variable Γ Γ' : static_env.
-
-    Hypothesis Hsub : forall x y ty,
-        Env.find x sub = Some y ->
-        HasType Γ x ty ->
-        HasType Γ' y ty.
-
-    Hypothesis Hnsub : forall x ty,
-        Env.find x sub = None ->
-        HasType Γ x ty ->
-        HasType Γ' x ty.
-
-    Lemma rename_in_var_wt : forall x ty,
-        HasType Γ x ty ->
-        HasType Γ' (rename_in_var sub x) ty.
-    Proof.
-      intros * Hin.
-      unfold rename_in_var.
-      destruct (Env.find _ _) eqn:Hfind; eauto.
-    Qed.
-
-    Lemma rename_in_clock_wt : forall enums ck,
-        wt_clock enums Γ ck ->
-        wt_clock enums Γ' (rename_in_clock sub ck).
-    Proof.
-      induction ck; intros * Hwc; inv Hwc; simpl; auto.
-      - constructor.
-      - constructor; eauto using rename_in_var_wt.
-    Qed.
-
-  End rename_in_clock.
-
-  Section rename.
-    Context {PSyn : block -> Prop}.
-    Context {prefs : PS.t}.
-    Variable G : @global PSyn prefs.
-
-    Variable sub : Env.t ident.
-
-    Section rename_in_exp.
-      Variable Γ Γ' : static_env.
-
-      Hypothesis NoLast : forall x, ~IsLast Γ x.
-
-      Hypothesis Hsub : forall x y ty,
-          Env.find x sub = Some y ->
-          HasType Γ x ty ->
-          HasType Γ' y ty.
-
-      Hypothesis Hnsub : forall x ty,
-          Env.find x sub = None ->
-          HasType Γ x ty ->
-          HasType Γ' x ty.
-
-      Lemma rename_in_exp_typeof : forall e,
-          typeof (rename_in_exp sub e) = typeof e.
-      Proof.
-        induction e using exp_ind2; simpl; auto. 3:destruct x; simpl; auto.
-        1-3:repeat rewrite map_map; simpl; auto.
-      Qed.
-
-      Corollary rename_in_exp_typesof : forall es,
-          typesof (map (rename_in_exp sub) es) = typesof es.
-      Proof.
-        induction es; simpl; auto.
-        f_equal; auto using rename_in_exp_typeof.
-      Qed.
-
-      Lemma rename_in_exp_wt : forall e,
-          wt_exp G Γ e ->
-          wt_exp G Γ' (rename_in_exp sub e).
-      Proof.
-        intros * Hwc; induction e using exp_ind2; inv Hwc; simpl;
-          econstructor; eauto using rename_in_var_wt, rename_in_clock_wt.
-        1,2:take (IsLast _ _) and eapply NoLast in it as [].
-        1-38:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-        1-31:try rewrite rename_in_exp_typeof; simpl; auto.
-        1-26:try rewrite rename_in_exp_typesof; simpl; auto.
-        1-23:try rewrite map_map; eauto.
-        - simpl_Forall; eauto using rename_in_clock_wt.
-        - simpl_Forall; eauto using rename_in_clock_wt.
-        - erewrite map_ext; eauto. intros (?&?); auto.
-        - contradict H6. apply map_eq_nil in H6; auto.
-        - simpl_Forall; eauto.
-        - simpl_Forall.
-          rewrite rename_in_exp_typesof. auto.
-        - erewrite map_ext; eauto. intros (?&?); auto.
-        - contradict H9. apply map_eq_nil in H9; auto.
-        - simpl_Forall; eauto.
-        - simpl_Forall.
-          rewrite rename_in_exp_typesof. auto.
-        - erewrite map_ext; eauto. intros (?&?); auto.
-        - erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; auto.
-          intros (?&?); auto.
-        - contradict H9. apply map_eq_nil in H9; auto.
-        - simpl_Forall; eauto.
-        - simpl_Forall.
-          rewrite rename_in_exp_typesof. auto.
-        - simpl_Forall; eauto.
-        - simpl_Forall; eauto.
-        - simpl_Forall.
-          rewrite rename_in_exp_typeof; auto.
-        - simpl_Forall; eauto using rename_in_clock_wt.
-      Qed.
-
-      Lemma rename_in_equation_wt : forall eq,
-          wt_equation G Γ eq ->
-          wt_equation G Γ' (rename_in_equation sub eq).
-      Proof.
-        intros (?&?) (Hwt1&Hwt2).
-        simpl. constructor.
-        - simpl_Forall; eauto using rename_in_exp_wt.
-        - rewrite rename_in_exp_typesof. simpl_Forall; eauto using rename_in_var_wt.
-      Qed.
-
-    End rename_in_exp.
-
-  End rename.
+  Module Import SCT := SCTypingFun Ids Op OpAux Cks Senv Syn Typ SC. Import SC.
 
   Import Fresh Facts Tactics.
 
@@ -239,17 +121,17 @@ Module Type ILTYPING
     - (* equation *)
       split; auto.
       do 2 constructor; auto.
-      eapply rename_in_equation_wt; [| | |eauto]; eauto with ltyping.
+      eapply subclock_equation_wt; eauto with ltyping.
 
     - (* reset *)
       repeat constructor; auto.
       + eapply mmap_inlinelocal_block_wt; eauto.
-      + eapply rename_in_exp_wt; [| | |eauto]; eauto using in_or_app.
+      + eapply subclock_exp_wt; eauto using in_or_app with ltyping.
         eapply In_sub1; eauto. 2:eapply In_sub2; eauto.
         1,2:(intros; eapply HasType_incl; [|eauto];
              eapply incl_map, st_follows_incl, mmap_st_follows; eauto;
              eapply Forall_forall; eauto with fresh).
-      + now rewrite rename_in_exp_typeof.
+      + now setoid_rewrite subclock_exp_typeof.
       + eapply mmap_inlinelocal_block_wt; eauto.
 
     - (* local *)
@@ -298,7 +180,7 @@ Module Type ILTYPING
         * assert (Hfresh:=H0). eapply fresh_idents_rename_ids in H0. rewrite H0.
           2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
           unfold wt_clocks in H11. rewrite Forall_forall in H5. simpl_Forall.
-          eapply rename_in_clock_wt, rename_in_clock_wt with (Γ':=Γ++senv_of_locs locs++st_senv st). 5:eauto.
+          eapply subclock_clock_wt, subclock_clock_wt with (Γ':=Γ++senv_of_locs locs++st_senv st). 3,6,7:eauto with ltyping.
           4:{ intros ?? Hfind Hin. repeat rewrite HasType_app in *. destruct Hin as [|[Hin|]]; eauto.
               exfalso. inv Hin. eapply In_InMembers, Hsubin in H12. inv H12; congruence.
           }
@@ -352,11 +234,11 @@ Module Type ILTYPING
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hnl Hns Hnd Hgood Hwt Hwtc Hvalid Hil; repeat inv_bind; simpl. 3:inv Hns.
-    1,2:eapply inlinelocal_block_wt with (Γ':=[]); try rewrite app_nil_r; eauto.
-    5:inv Hnd; inv Hgood; inv Hwt;
+    1-3:eapply inlinelocal_block_wt with (Γ':=[]); try rewrite app_nil_r; eauto.
+    7:inv Hnd; inv Hgood; inv Hwt;
       eapply mmap_inlinelocal_block_wt with (Γ:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwt1&Hwt2); try rewrite app_nil_r; eauto.
-    2,4,9:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
-    1,2,6:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
+    2,4,6,11:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
+    1,2,3,7:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
     - rewrite <-app_assoc in Hwt1, Hwt2. split; eauto.
       apply Forall_app. split; auto; simpl_Forall.
       unfold wt_clocks, Common.idty in H9. simpl_Forall.
@@ -426,7 +308,7 @@ Module Type ILTYPING
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hnd Hwt Hwte Hil; repeat inv_bind; simpl.
-    1,2,3:eapply inlinelocal_block_wt_enum; eauto.
+    1-4:eapply inlinelocal_block_wt_enum; eauto.
     inv Hns. inv Hwt. inv Hnd.
     repeat setoid_rewrite map_app. apply Forall_app; split; auto.
     eapply mmap_inlinelocal_block_wt_enum in H; eauto.
@@ -437,7 +319,7 @@ Module Type ILTYPING
   (** Typing of the node *)
 
   Lemma inlinelocal_node_wt : forall G1 G2 (n : @node _ _),
-      global_iface_eq G1 G2 ->
+      global_iface_incl G1 G2 ->
       wt_node G1 n ->
       wt_node G2 (inlinelocal_node n).
   Proof.
@@ -446,13 +328,13 @@ Module Type ILTYPING
     pose proof (n_good n) as (_&Hgood&_).
     pose proof (n_syn n) as Hsyn.
     repeat econstructor; simpl; eauto.
-    1,2:destruct Hiface as (Heq&_); rewrite <-Heq; auto.
-    eapply Forall_impl; [|eauto]; intros; eauto using iface_eq_wt_enum.
+    1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
+    eapply Forall_impl; [|eauto]; intros; eauto using iface_incl_wt_enum.
     1-3:destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hdl.
     - (* blocks *)
       eapply inlinelocal_topblock_wt with (Γ:=senv_of_inout (n_in n ++ n_out n)) in Hdl as (?&?); try rewrite app_nil_r; simpl; eauto.
       + eapply Forall_impl; [|eauto]; intros ? Hwt.
-        eapply iface_eq_wt_block; eauto. clear - Hwt.
+        eapply iface_incl_wt_block; eauto. clear - Hwt.
         simpl_app. repeat rewrite map_map in *; simpl in *.
         erewrite map_ext with (l:=l0), map_ext with (l:=st_anns f).
         eapply wt_block_incl; eauto.
@@ -465,9 +347,9 @@ Module Type ILTYPING
       eapply inlinelocal_topblock_wt with (Γ:=senv_of_inout (n_in n ++ n_out n)) in Hdl as (?&?); try rewrite app_nil_r; simpl; eauto.
       + simpl_app. unfold wt_clocks in *. rewrite Forall_app in H0. destruct H0.
         rewrite Forall_app; split; simpl_Forall.
-        * erewrite map_ext with (l:=l0), map_map, map_ext with (l:=st_anns f); eauto using iface_eq_wt_clock.
+        * erewrite map_ext with (l:=l0), map_map, map_ext with (l:=st_anns f); eauto using iface_incl_wt_clock.
           intros; destruct_conjs; auto.
-        * erewrite map_ext with (l:=l0), map_map, map_ext with (l:=st_anns f); eauto using iface_eq_wt_clock.
+        * erewrite map_ext with (l:=l0), map_map, map_ext with (l:=st_anns f); eauto using iface_incl_wt_clock.
           intros; destruct_conjs; auto.
       + apply senv_of_inout_NoLast.
       + rewrite map_fst_senv_of_inout. apply n_nodup.
@@ -476,7 +358,7 @@ Module Type ILTYPING
     - (* enums *)
       eapply inlinelocal_topblock_wt_enum, Forall_app in Hdl as (?&?); eauto.
       2:{ rewrite init_st_anns; simpl; auto. }
-      simpl_app. apply Forall_app; split; simpl_Forall; eauto using iface_eq_wt_enum.
+      simpl_app. apply Forall_app; split; simpl_Forall; eauto using iface_incl_wt_enum.
     - simpl_Forall. apply in_app_iff in H as [|]; simpl_In; auto.
       destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hinl; simpl in *.
       eapply inlinelocal_topblock_nolast in Hinl; eauto.
@@ -492,7 +374,7 @@ Module Type ILTYPING
     split; auto.
     eapply CommonTyping.transform_units_wt_program; eauto.
     intros ?? Hwt'.
-    eapply inlinelocal_node_wt; eauto. eapply inlinelocal_global_iface_eq.
+    eapply inlinelocal_node_wt; eauto. eapply iface_eq_iface_incl, inlinelocal_global_iface_eq.
   Qed.
 
 End ILTYPING.

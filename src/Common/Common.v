@@ -185,6 +185,7 @@ Module Type IDS.
 
   Parameter elab : ident.
   Parameter last : ident.
+  Parameter auto : ident.
   Parameter switch : ident.
   Parameter local : ident.
   Parameter norm1 : ident.
@@ -194,12 +195,13 @@ Module Type IDS.
   (** Incremental prefix sets *)
   Definition elab_prefs := PS.singleton elab.
   Definition last_prefs := PS.add last elab_prefs.
-  Definition switch_prefs := PS.add switch last_prefs.
+  Definition auto_prefs := PS.add auto last_prefs.
+  Definition switch_prefs := PS.add switch auto_prefs.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
-  Definition gensym_prefs := [elab; last; switch; local; norm1; norm2].
+  Definition gensym_prefs := [elab; last; auto; switch; local; norm1; norm2].
   Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
 
   Parameter default : ident.
@@ -215,6 +217,7 @@ Module Type IDS.
   Conjecture step_atom : atom step.
   Conjecture reset_atom : atom reset.
   Conjecture elab_atom : atom elab.
+  Conjecture auto_atom : atom auto.
   Conjecture last_atom : atom last.
   Conjecture switch_atom : atom switch.
   Conjecture local_atom : atom local.

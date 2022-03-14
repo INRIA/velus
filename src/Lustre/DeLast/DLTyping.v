@@ -121,6 +121,26 @@ Module Type DLTYPING
         eapply mmap_values, Forall2_ignore1 in H7; eauto.
         simpl_Forall; eauto.
 
+    - (* automaton *)
+      assert (forall y, InMembers y states -> InMembers y x) as Hinm.
+      { intros * Hinm. apply mmap_values, Forall2_ignore2 in H0.
+        rewrite fst_InMembers in *. simpl_In. simpl_Forall.
+        repeat inv_bind. solve_In. }
+      econstructor; eauto using wt_clock_incl.
+      + simpl_Forall. split; [|split]; eauto using rename_in_exp_wt.
+        now rewrite rename_in_exp_typeof.
+      + assert (map fst x = map fst states) as Heq.
+        { apply mmap_values in H0. clear - H0.
+          induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
+        setoid_rewrite Heq. erewrite <-map_length. setoid_rewrite Heq. rewrite map_length; auto.
+      + apply mmap_values in H0; inv H0; congruence.
+      + eapply mmap_values, Forall2_ignore1 in H0; eauto.
+        simpl_Forall; eauto. repeat inv_bind.
+        eapply mmap_values, Forall2_ignore1 in H3; eauto.
+        split; simpl_Forall; eauto.
+        split; [|split]; eauto using rename_in_exp_wt.
+        now rewrite rename_in_exp_typeof.
+
     - (* local *)
       assert (forall y, Env.In y (Env.from_list (map fst x)) -> IsLast (senv_of_locs locs) y) as Hsubin'.
       { intros *. rewrite Env.In_from_list.
@@ -204,7 +224,7 @@ Module Type DLTYPING
   (** Typing of the node *)
 
   Lemma delast_node_wt : forall G1 G2 (n : @node _ _),
-      global_iface_eq G1 G2 ->
+      global_iface_incl G1 G2 ->
       wt_node G1 n ->
       wt_node G2 (delast_node n).
   Proof.
@@ -213,10 +233,9 @@ Module Type DLTYPING
     pose proof (n_good n) as (_&Hgood&_).
     pose proof (n_syn n) as Hsyn.
     repeat econstructor; simpl; eauto.
-    1,2:destruct Hiface as (Heq&_); rewrite <-Heq; auto.
-    - eapply Forall_impl; [|eauto]; intros; eauto using iface_eq_wt_enum.
+    1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
     - eapply delast_block_wt in Hwt4. 6:apply surjective_pairing.
-      + eapply iface_eq_wt_block, Hwt4; eauto.
+      + eapply iface_incl_wt_block, Hwt4; eauto.
       + auto.
       + intros * _ Hl. apply senv_of_inout_NoLast in Hl as [].
       + intros. rewrite Env.Props.P.F.empty_in_iff in H. inv H.
@@ -232,7 +251,7 @@ Module Type DLTYPING
     split; auto.
     eapply CommonTyping.transform_units_wt_program; eauto.
     intros ?? Hwt'.
-    eapply delast_node_wt; eauto. eapply delast_global_iface_eq.
+    eapply delast_node_wt; eauto. eapply iface_eq_iface_incl, delast_global_iface_eq.
   Qed.
 
 End DLTYPING.

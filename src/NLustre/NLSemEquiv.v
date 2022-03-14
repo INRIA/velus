@@ -118,7 +118,7 @@ Module Type NLSEMEQUIV
       specialize (E n).
       apply Forall2_forall2 in E as (?&?).
       intro k.
-      replace absent with (Str_nth n (Streams.const absent))
+      replace absent with (Str_nth n (Streams.const (@absent value)))
         by apply const_nth.
       rewrite 2 map_nth.
       unfold CIStr.ICStr.tr_streams, CIStr.ICStr.tr_streams_from.

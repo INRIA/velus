@@ -380,6 +380,25 @@ End ElabNotations.
 
 Import ElabNotations.
 
+Local Ltac monadInv :=
+  simpl in *;
+  match goal with
+  | H: OK _ = OK _ |- _ =>
+    inversion H; clear H; try subst
+  | H: Error _ = OK _ |- _ =>
+    discriminate
+  | H: ret _ _ = _ |- _ =>
+    unfold ret in H
+  | H: bind ?x ?f ?st = OK ?res |- _ =>
+    let H1 := fresh "Hbind" in
+    let H2 := fresh "Hbind" in
+    eapply bind_inv in H as (?&?&H1&H2)
+  | H: bind2 ?x ?f ?st = OK ?res |- _ =>
+    let H1 := fresh "Hbind" in
+    let H2 := fresh "Hbind" in
+    eapply bind2_inv in H as (?&?&?&H1&H2)
+  end; simpl in *.
+
 Section mmap.
   Context {A B : Type}.
   Variable (f : A -> Elab B).
@@ -389,20 +408,18 @@ Section mmap.
     | nil => ret nil
     | hd :: tl => do hd' <- f hd; do tl' <- mmap tl; ret (hd' :: tl')
     end.
+
+
+  Fact mmap_values : forall a st a1s st',
+      mmap a st = OK (a1s, st') ->
+      Forall2 (fun a a1 => exists st'', exists st''', f a st'' = OK (a1, st''')) a a1s.
+  Proof.
+    induction a; intros st a1s st' Hfold; repeat monadInv.
+    - constructor.
+    - specialize (IHa _ _ _ Hbind1).
+      constructor; eauto.
+  Qed.
 End mmap.
-
-Section mmap2.
-  Context {A B1 B2 : Type}.
-  Variable (f : A -> Elab (B1 * B2)).
-
-  Fixpoint mmap2 (l: list A) {struct l} : Elab (list B1 * list B2) :=
-    match l with
-    | nil => ret (nil, nil)
-    | hd :: tl => do (hd1, hd2) <- f hd;
-                 do (tl1, tl2) <- mmap2 tl;
-                 ret ((hd1::tl1), (hd2::tl2))
-    end.
-End mmap2.
 
 Section ElabSclock.
 
@@ -1325,26 +1342,6 @@ Section ElabVarDecls.
 
 End ElabVarDecls.
 
-Local Ltac monadInv :=
-  simpl in *;
-  unfold err_not_singleton, err_loc, error in *;
-  match goal with
-  | H: OK _ = OK _ |- _ =>
-    inversion H; clear H; try subst
-  | H: Error _ = OK _ |- _ =>
-    discriminate
-  | H: ret _ _ = _ |- _ =>
-    unfold ret in H
-  | H: bind ?x ?f ?st = OK ?res |- _ =>
-    let H1 := fresh "Hbind" in
-    let H2 := fresh "Hbind" in
-    eapply bind_inv in H as (?&?&H1&H2)
-  | H: bind2 ?x ?f ?st = OK ?res |- _ =>
-    let H1 := fresh "Hbind" in
-    let H2 := fresh "Hbind" in
-    eapply bind2_inv in H as (?&?&?&H1&H2)
-  end; simpl in *.
-
 Section AtomOrGensym.
 
   Definition check_atom loc name :=
@@ -1374,6 +1371,35 @@ End AtomOrGensym.
 
 Section ElabBlock.
 
+  Fixpoint vars_defined (ab : LustreAst.block) : list ident :=
+      match ab with
+      | BEQ (xs, _, _) => xs
+      | BRESET ablks _ _ => flat_map vars_defined ablks
+      | BSWITCH _ abrs _ => flat_map (fun '(_, blks) => flat_map vars_defined blks) abrs
+      | BAUTO _ states _ => flat_map (fun '(_, (blks, _)) => flat_map vars_defined blks) states
+      | BLOCAL _ ablks _ => flat_map vars_defined ablks
+      end.
+
+  Fixpoint find_a_clock (tenv : Env.t (type * clock * bool)) (xs : list ident) :=
+    match xs with
+    | [] => Cbase
+    | x::xs => or_default_with (find_a_clock tenv xs) (fun '(_, ck, _) => ck) (Env.find x tenv)
+    end.
+
+  Definition find_a_clock_of_defined tenv (ab : LustreAst.block) :=
+    find_a_clock tenv (vars_defined ab).
+
+  Definition elab_transition_cond env tenv nenv (es : list expression) loc :=
+    match es with
+    | [e] => do (e, _) <- elab_exp env tenv nenv e;
+            do (ety, eck) <- single_annot loc e;
+            do ety <- assert_type' loc ety bool_type;
+            do _ <- unify_sclock tenv loc eck Sbase;
+            do e <- freeze_exp env e;
+            ret e
+    | _ => err_not_singleton loc
+    end.
+
   Fixpoint elab_block env tenv nenv (ab : LustreAst.block) : Elab Syn.block :=
     match ab with
     | BEQ aeq =>
@@ -1402,6 +1428,25 @@ Section ElabBlock.
       do _ <- check_duplicates loc cs;
       do _ <- check_exhaustivity loc (snd tn) cs;
       ret (Bswitch ec brs)
+    | BAUTO (ini, oth) states loc => (* TODO *)
+        let ck := find_a_clock_of_defined env (BAUTO (ini, oth) states loc) in
+        let env := Env.map (fun '(ty, _, b) => (ty, Cbase, b)) (Env.Props.P.filter (fun _ '(_, ck', _) => ck ==b ck') env) in
+        let tenv' := Env.add xH (List.map fst states) (@Env.empty _) in
+        do (oth, _) <- elab_enum tenv' loc oth;
+        do ini <- mmap (fun '(e, t, loc) =>
+                         do (t, _) <- elab_enum tenv' loc t;
+                         do e <- elab_transition_cond env tenv nenv e loc;
+                         ret (e, t)) ini;
+        do states <- mmap (fun '(t, (ablks, trans)) =>
+                            do (t, _) <- elab_enum tenv' loc t;
+                            do blks <- mmap (elab_block env tenv nenv) ablks;
+                            do trans <- mmap (fun '(e, (t, b), loc) =>
+                                               do (t, _) <- elab_enum tenv' loc t;
+                                               do e <- elab_transition_cond env tenv nenv e loc;
+                                               ret (e, (t, b))) trans;
+                            ret (t, (blks, trans))
+                         ) states;
+        ret (Bauto ck (ini, oth) states)
     | BSWITCH _ _ loc => err_not_singleton loc
     | BLOCAL locs ablks loc =>
       do env <- elab_var_decls tenv loc env locs;
@@ -1480,7 +1525,10 @@ Section ElabDeclaration.
       do _ <- mmap (check_noduplocals loc env) blks;
       ret tt
     | Bswitch _ branches =>
-      do _ <- mmap (fun blks => mmap (check_noduplocals loc env) (snd blks)) branches;
+      do _ <- mmap (fun '(_, blks) => mmap (check_noduplocals loc env) blks) branches;
+      ret tt
+    | Bauto _ _ states =>
+      do _ <- mmap (fun '(_, (blks, _)) => mmap (check_noduplocals loc env) blks) states;
       ret tt
     | Blocal locs blks =>
       do _ <- check_nodup loc locs;
@@ -1500,19 +1548,19 @@ Section ElabDeclaration.
       constructor.
     - (* reset *)
       constructor.
-      clear - Henv H Hbind. revert st x x0 Hbind.
-      induction H; intros * Hbind; repeat monadInv; constructor; eauto.
+      apply mmap_values, Forall2_ignore2 in Hbind. simpl_Forall; eauto.
     - (* switch *)
       constructor.
-      clear - Henv H Hbind. revert st x x0 Hbind.
-      induction H; intros * Hbind; repeat monadInv; constructor; eauto.
-      clear - Henv H Hbind0. revert st x2 x3 Hbind0.
-      induction H; intros * Hbind; repeat monadInv; constructor; eauto.
+      apply mmap_values, Forall2_ignore2 in Hbind. simpl_Forall; eauto.
+      apply mmap_values, Forall2_ignore2 in H2. simpl_Forall; eauto.
+    - (* automaton *)
+      constructor.
+      apply mmap_values, Forall2_ignore2 in Hbind. simpl_Forall; eauto.
+      apply mmap_values, Forall2_ignore2 in H2. simpl_Forall; eauto.
     - (* local *)
       repeat monadInv.
       constructor.
-      + clear - Henv H Hbind0. revert x2 x3 x4 Hbind0.
-        induction H; intros * Hbind; repeat monadInv; constructor; eauto.
+      + apply mmap_values, Forall2_ignore2 in Hbind0. simpl_Forall.
         eapply H. 2:eauto.
         intros * Hin. rewrite PS.union_spec, nameset_spec.
         repeat rewrite in_app_iff in Hin. destruct Hin as [?|?]; eauto.
@@ -1573,6 +1621,13 @@ Section ElabDeclaration.
       do _ <- mmap (fun blks => do xs' <- mmap (check_defined_block loc) (snd blks);
                             check_defined_vars loc xs (concat xs')) tl;
       ret xs
+    | Bauto _ _ [] => err_loc loc (msg "switches should have at least one branch")
+    | Bauto _ _ ((_, (hd, _))::tl) =>
+      do xs <- mmap (check_defined_block loc) hd;
+      let xs := concat xs in
+      do _ <- mmap (fun '(_, (blks, _)) => do xs' <- mmap (check_defined_block loc) blks;
+                            check_defined_vars loc xs (concat xs')) tl;
+      ret xs
     | Blocal locals blks =>
       do xs <- mmap (check_defined_block loc) blks;
       check_defined_local loc (map fst locals) (concat xs)
@@ -1583,14 +1638,13 @@ Section ElabDeclaration.
       check_defined_block loc blk st = OK (xs, st') ->
       VarsDefined blk xs.
   Proof.
-    induction blk as [(?&?)| | |] using block_ind2;
+    induction blk as [(?&?)| | | |] using block_ind2;
       intros * Hnd Hc; inv Hnd; repeat monadInv.
     - (* equation *)
       econstructor.
     - (* reset *)
       econstructor.
-      revert st x st' Hbind.
-      induction H; intros * Hbind; inv H2; repeat monadInv; constructor; eauto.
+      apply mmap_values in Hbind. simpl_Forall; eauto.
     - (* switch *)
       simpl in *. cases. repeat monadInv. inv H. inv H2.
       repeat constructor.
@@ -1603,6 +1657,19 @@ Section ElabDeclaration.
         eapply check_defined_vars_spec in Hbind2.
         exists x2. split; auto using Permutation_sym.
         clear - H H2 Hbind1. revert x1 x2 x6 Hbind1.
+        induction H; intros * Hbind; inv H2; repeat monadInv; constructor; eauto.
+    - (* automaton *)
+      simpl in *. cases. repeat monadInv. inv H. inv H2.
+      repeat constructor.
+      + congruence.
+      + exists x. split; try reflexivity.
+        clear - Hbind H1 H3. revert st x x0 Hbind.
+        induction H3; intros * Hbind; inv H1; repeat monadInv; constructor; eauto.
+      + clear - Hbind1 H4 H5. revert x0 x1 st' Hbind1.
+        induction H4; intros * Hbind; inv H5; destruct_conjs; repeat monadInv; constructor; eauto.
+        eapply check_defined_vars_spec in Hbind2.
+        exists x2. split; auto using Permutation_sym.
+        clear - H H2 Hbind1. revert x1 x2 x5 Hbind1.
         induction H; intros * Hbind; inv H2; repeat monadInv; constructor; eauto.
     - (* local *)
       eapply LVDlocal with (xs:=x).
@@ -1626,21 +1693,22 @@ Section ElabDeclaration.
       constructor.
     - (* reset *)
       cases. repeat monadInv.
-      constructor. clear - Hbind H.
-      revert x x0 st Hbind.
-      induction H; intros * Hbind; repeat monadInv; eauto.
+      constructor.
+      apply mmap_values, Forall2_ignore1 in Hbind. simpl_Forall; eauto.
     - (* switch *)
       cases. repeat monadInv.
-      constructor. clear - Hbind3 H. revert x8 x9 x10 Hbind3.
-      induction branches as [|(?&?)]; intros * Hbind; inv H; repeat monadInv; constructor; eauto.
-      clear - H2 Hbind2. revert x9 x11 x0 Hbind2.
-      induction H2; intros; repeat monadInv; eauto.
+      constructor.
+      apply mmap_values, Forall2_ignore1 in Hbind3. simpl_Forall; repeat monadInv.
+      apply mmap_values, Forall2_ignore1 in Hbind6. simpl_Forall; eauto.
+    - (* automaton *)
+      cases. repeat monadInv.
+      constructor.
+      apply mmap_values, Forall2_ignore1 in Hbind0. simpl_Forall; repeat monadInv.
+      apply mmap_values, Forall2_ignore1 in Hbind3. simpl_Forall; eauto.
     - (* local *)
       constructor.
       + eapply mmap_check_atom_AtomOrGensym; eauto.
-      + clear - Hbind2 H.
-        revert x4 x5 st' Hbind2.
-        induction H; intros * Hbind; repeat monadInv; eauto.
+      + apply mmap_values, Forall2_ignore1 in Hbind2. simpl_Forall; eauto.
   Qed.
 
   Local Obligation Tactic :=

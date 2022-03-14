@@ -136,6 +136,11 @@ Module Type DELAST
         do branches' <- mmap (fun '(k, blks) => do blks' <- mmap (delast_block sub) blks;
                                             ret (k, blks')) branches;
         ret (Bswitch (rename_in_exp sub ec) branches')
+    | Bauto ck (ini, oth) states =>
+        do states' <- mmap (fun '(k, (blks, trans)) =>
+                             do blks' <- mmap (delast_block sub) blks;
+                             ret (k, (blks', map (fun '(e, k) => (rename_in_exp sub e, k)) trans))) states;
+        ret (Bauto ck (map (fun '(e, k) => (rename_in_exp sub e, k)) ini, oth) states')
     | Blocal locs blks =>
         let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) locs in
         do lasts' <- fresh_idents lasts;
@@ -259,6 +264,11 @@ Module Type DELAST
       eapply mmap_st_valid; eauto. simpl_Forall; repeat inv_bind.
       eapply mmap_st_valid; eauto. simpl_Forall.
       eapply H; eauto.
+    - (* automaton *)
+      destruct ini; repeat inv_bind.
+      eapply mmap_st_valid; eauto. simpl_Forall; repeat inv_bind.
+      eapply mmap_st_valid; eauto. simpl_Forall.
+      eapply H; eauto.
     - (* local *)
       eapply fresh_idents_st_valid_after in H0; eauto.
       eapply mmap_st_valid; eauto.
@@ -285,6 +295,11 @@ Module Type DELAST
     - (* switch *)
       eapply mmap_st_follows; eauto. simpl_Forall; repeat inv_bind.
       eapply mmap_st_follows; eauto. simpl_Forall; eauto.
+    - (* automaton *)
+      destruct ini; repeat inv_bind.
+      eapply mmap_st_follows; eauto. simpl_Forall; repeat inv_bind.
+      eapply mmap_st_follows; eauto. simpl_Forall.
+      eapply H; eauto.
     - (* local *)
       etransitivity; [eapply fresh_idents_st_follows; eauto|].
       eapply mmap_st_follows; eauto. simpl_Forall; eauto.
@@ -331,6 +346,13 @@ Module Type DELAST
       + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall.
         repeat inv_bind.
         eapply mmap_vars_perm in H3; eauto.
+    - (* automaton *)
+      destruct ini; repeat inv_bind.
+      constructor.
+      + apply mmap_values in H0. inv H0; congruence.
+      + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall.
+        repeat inv_bind.
+        eapply mmap_vars_perm in H3; eauto.
     - (* local *)
       eapply mmap_vars_perm in H; eauto. clear H1.
       econstructor.
@@ -368,6 +390,12 @@ Module Type DELAST
       eapply mmap_values, Forall2_ignore1 in H0.
       simpl_Forall; eauto.
     - (* switch *)
+      repeat constructor.
+      eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
+      eapply mmap_values, Forall2_ignore1 in H3.
+      simpl_Forall; eauto.
+    - (* automaton *)
+      destruct ini; repeat inv_bind.
       repeat constructor.
       eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
       eapply mmap_values, Forall2_ignore1 in H3.
@@ -488,6 +516,18 @@ Module Type DELAST
         simpl_Forall. destruct Hat; auto.
         right. eapply incl_map; eauto. apply st_follows_incl; eauto.
         eapply mmap_st_follows; eauto. simpl_Forall; eauto with fresh.
+    - (* automaton *)
+      destruct ini; repeat inv_bind.
+      constructor. revert x st st' Hvalid H0 Hat.
+      induction states as [|(?&?&?)]; intros; inv H; inv H1; inv H3; repeat inv_bind; auto.
+      constructor.
+      + eapply mmap_delast_NoDupLocals in H; eauto.
+      + eapply IHstates in H0; eauto.
+        1:{ eapply mmap_st_valid in H; eauto.
+            simpl_Forall. eapply delast_block_st_valid_after in H3; eauto. }
+        simpl_Forall. destruct Hat; auto.
+        right. eapply incl_map; eauto. apply st_follows_incl; eauto.
+        eapply mmap_st_follows; eauto. simpl_Forall; eauto with fresh.
     - (* local *)
       assert (Forall (fun '(_, lx, _) => exists n hint, lx = gensym last hint n) x) as Hgen.
       { eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
@@ -534,6 +574,12 @@ Module Type DELAST
       eapply mmap_values, Forall2_ignore1 in H0.
       simpl_Forall; eauto.
     - (* switch *)
+      constructor.
+      eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
+      eapply mmap_values, Forall2_ignore1 in H2.
+      simpl_Forall; eauto.
+    - (* automaton *)
+      destruct ini; repeat inv_bind.
       constructor.
       eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
       eapply mmap_values, Forall2_ignore1 in H2.

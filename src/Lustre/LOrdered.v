@@ -71,6 +71,11 @@ Module Type LORDERED
   | INBswitch : forall ec branches,
       Is_node_in_exp f ec \/ Exists (fun blks => Exists (Is_node_in_block f) (snd blks)) branches ->
       Is_node_in_block f (Bswitch ec branches)
+  | INBauto : forall ini oth states ck,
+      Exists (fun '(e, _) => Is_node_in_exp f e) ini
+      \/ Exists (fun blks => Exists (Is_node_in_block f) (fst (snd blks))
+                         \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd (snd blks))) states ->
+      Is_node_in_block f (Bauto ck (ini, oth) states)
   | INBlocal : forall locs blocks,
       Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
       \/ Exists (Is_node_in_block f) blocks ->
@@ -176,6 +181,9 @@ Module Type LORDERED
       destruct H1 as [Hisin|Hisin].
       + eapply wl_exp_Is_node_in_exp; eauto.
       + simpl_Exists; simpl_Forall; eauto.
+    - inv Hwl. inv Hin. destruct H1 as [Hisin|Hisin]; simpl_Exists; simpl_Forall.
+      + eapply wl_exp_Is_node_in_exp; eauto.
+      + destruct Hisin as [|]; simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
     - inv Hwl. inv Hin.
       destruct H1 as [Hex|Hex]; simpl_Exists; simpl_Forall; eauto.
       destruct o; simpl in *; destruct_conjs; [|inv Hex].
@@ -202,6 +210,21 @@ Module Type LORDERED
     eapply wl_node_Is_node_in, in_map_iff in IsNodeIn as (?&Name&Hin); eauto.
     rewrite find_unit_Exists.
     solve_Exists.
+  Qed.
+
+  Lemma Ordered_nodes_change_enums {PSyn prefs} : forall (nds : list (@node PSyn prefs)) enms1 enms2,
+      Ordered_nodes (Global enms1 nds) ->
+      Ordered_nodes (Global enms2 nds).
+  Proof.
+    induction nds; intros * Hord; inv Hord; constructor; simpl in *.
+    - destruct H1 as (Hnin&Hnames).
+      split; auto. intros * Hinblk. specialize (Hnin _ Hinblk) as (?&?&?&?).
+      split; auto.
+      destruct (find_unit f {| enums := enms2; nodes := nds |}) as [(?&?)|] eqn:Hnone; eauto. exfalso.
+      apply find_unit_None in Hnone. simpl in *.
+      apply find_unit_spec in H0 as (Hname&?&Hsome&_); simpl in *; subst.
+      apply Forall_elt in Hnone. congruence.
+    - eapply IHnds, H2.
   Qed.
 
 End LORDERED.

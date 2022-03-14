@@ -10,6 +10,7 @@ From Velus Require Import Clocks.
 From Velus Require Import Fresh.
 From Velus Require Import StaticEnv.
 From Velus Require Import Lustre.LSyntax.
+From Velus Require Import Lustre.SubClock.SubClock.
 
 (** * Remove Local Blocks *)
 
@@ -22,84 +23,20 @@ Module Type INLINELOCAL
        (Import Syn : LSYNTAX Ids Op OpAux Cks Senv).
 
   (** ** Rename some variables *)
-  Section rename.
-    Variable (sub : Env.t ident).
 
-    Definition rename_in_var (x : ident) :=
-      or_default x (Env.find x sub).
+  Module Import SC := SubClockFun Ids Op OpAux Cks Senv Syn.
 
-    Fixpoint rename_in_clock (ck : clock) :=
-      match ck with
-      | Cbase => Cbase
-      | Con ck' x t => Con (rename_in_clock ck') (rename_in_var x) t
-      end.
-
-    Definition rename_in_nclock (nck : nclock) :=
-      (rename_in_clock (fst nck), option_map rename_in_var (snd nck)).
-
-    Definition rename_in_ann {A} (ann : (A * clock)) :=
-      (fst ann, rename_in_clock (snd ann)).
-
-    Fixpoint rename_in_exp (e : exp) :=
-      match e with
-      | Econst _ | Eenum _ _ => e
-      | Evar x ann => Evar (rename_in_var x) (rename_in_ann ann)
-      | Elast x ann => Elast x (rename_in_ann ann)
-      | Eunop op e1 ann => Eunop op (rename_in_exp e1) (rename_in_ann ann)
-      | Ebinop op e1 e2 ann => Ebinop op (rename_in_exp e1) (rename_in_exp e2) (rename_in_ann ann)
-      | Efby e0s e1s anns => Efby (map rename_in_exp e0s) (map rename_in_exp e1s) (map rename_in_ann anns)
-      | Earrow e0s e1s anns => Earrow (map rename_in_exp e0s) (map rename_in_exp e1s) (map rename_in_ann anns)
-      | Ewhen es x t ann => Ewhen (map rename_in_exp es) (rename_in_var x) t (rename_in_ann ann)
-      | Emerge (x, ty) es ann => Emerge (rename_in_var x, ty) (map (fun '(i, es) => (i, map rename_in_exp es)) es) (rename_in_ann ann)
-      | Ecase e es d ann =>
-        Ecase (rename_in_exp e) (map (fun '(i, es) => (i, map rename_in_exp es)) es) (option_map (map rename_in_exp) d) (rename_in_ann ann)
-      | Eapp f es er ann => Eapp f (map rename_in_exp es) (map rename_in_exp er) (map rename_in_ann ann)
-      end.
-
-    Definition rename_in_reset :=
-      map (fun '(xr, ckr) => (rename_in_var xr, rename_in_clock ckr)).
-
-    Definition rename_in_equation '(xs, es) : equation :=
-      (map rename_in_var xs, map rename_in_exp es).
-
-    (** *** Properties *)
-
-    Lemma rename_in_ann_clock {A} : forall (ann : (A * clock)),
-        snd (rename_in_ann ann) = rename_in_clock (snd ann).
-    Proof. reflexivity. Qed.
-
-    Corollary map_rename_in_ann_clock {A} : forall (anns : list (A * clock)),
-        map snd (map rename_in_ann anns) = map rename_in_clock (map snd anns).
-    Proof.
-      induction anns; simpl; auto with datatypes.
-    Qed.
-
-  End rename.
+  Definition rename_in_clock := subclock_clock Cbase.
+  Definition rename_in_exp := subclock_exp Cbase.
+  Definition rename_in_equation := subclock_equation Cbase.
 
   (** ** More properties *)
 
-  Section rename_empty.
-
-    Fact rename_in_var_empty : forall x,
-      rename_in_var (Env.empty _) x = x.
-    Proof.
-      intros. unfold rename_in_var.
-      simpl. rewrite Env.gempty. reflexivity.
-    Qed.
-
-    Corollary rename_in_vars_empty : forall xs,
-        map (rename_in_var (Env.empty _)) xs = xs.
-    Proof.
-      induction xs; simpl; f_equal; auto using rename_in_var_empty.
-    Qed.
-
-  End rename_empty.
-
   Fact not_in_union_rename1 : forall x sub sub',
       ~Env.In x sub ->
-      rename_in_var (Env.union sub sub') x = rename_in_var sub' x.
+      rename_var (Env.union sub sub') x = rename_var sub' x.
   Proof.
-    unfold rename_in_var.
+    unfold rename_var.
     intros * Hnin.
     eapply Env.Props.P.F.not_find_in_iff in Hnin.
     destruct (Env.find x (Env.union sub sub')) eqn:Hfind.
@@ -110,16 +47,16 @@ Module Type INLINELOCAL
 
   Corollary not_in_union_map_rename1 : forall xs sub sub',
       Forall (fun x => ~Env.In x sub) xs ->
-      map (rename_in_var (Env.union sub sub')) xs = map (rename_in_var sub') xs.
+      map (rename_var (Env.union sub sub')) xs = map (rename_var sub') xs.
   Proof.
     induction xs; intros * Hf; inv Hf; simpl; f_equal; auto using not_in_union_rename1.
   Qed.
 
   Fact not_in_union_rename2 : forall x sub sub',
       ~Env.In x sub' ->
-      rename_in_var (Env.union sub sub') x = rename_in_var sub x.
+      rename_var (Env.union sub sub') x = rename_var sub x.
   Proof.
-    unfold rename_in_var.
+    unfold rename_var.
     intros * Hnin.
     destruct (Env.find x (Env.union sub sub')) eqn:Hfind.
     - eapply Env.union_find4 in Hfind as [Hfind|Hfind].
@@ -132,17 +69,17 @@ Module Type INLINELOCAL
 
   Corollary not_in_union_map_rename2 : forall xs sub sub',
       Forall (fun x => ~Env.In x sub') xs ->
-      map (rename_in_var (Env.union sub sub')) xs = map (rename_in_var sub) xs.
+      map (rename_var (Env.union sub sub')) xs = map (rename_var sub) xs.
   Proof.
     induction xs; intros * Hf; inv Hf; simpl; f_equal; auto using not_in_union_rename2.
   Qed.
 
-  Lemma disjoint_union_rename_in_var : forall (sub1 sub2: Env.t ident) x,
+  Lemma disjoint_union_rename_var : forall (sub1 sub2: Env.t ident) x,
       (forall x, Env.In x sub1 -> ~Env.In x sub2) ->
       (forall x y, Env.MapsTo x y sub1 -> ~Env.In y sub2) ->
-      rename_in_var sub2 (rename_in_var sub1 x) = rename_in_var (Env.union sub1 sub2) x.
+      rename_var sub2 (rename_var sub1 x) = rename_var (Env.union sub1 sub2) x.
   Proof.
-    unfold rename_in_var.
+    unfold rename_var.
     intros * Hnin1 Hnin2.
     destruct (Env.find x (Env.union _ _)) eqn:Hfind; simpl.
     - destruct (Env.find x sub1) eqn:Hfind1; simpl.
@@ -163,7 +100,7 @@ Module Type INLINELOCAL
   Proof.
     intros * Hsub1 Hsub2.
     induction ck; simpl; auto.
-    f_equal; auto using disjoint_union_rename_in_var.
+    f_equal; auto using disjoint_union_rename_var.
   Qed.
 
   (** ** Inlining of local blocks *)
@@ -227,7 +164,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hdl Hvalid; repeat inv_bind; auto.
-    1-3:eapply inlinelocal_block_st_valid_after; eauto.
+    1-4:eapply inlinelocal_block_st_valid_after; eauto.
     eapply mmap_st_valid in H; eauto.
     eapply Forall_forall; intros.
     eapply inlinelocal_block_st_valid_after; eauto.
@@ -255,7 +192,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hil; repeat inv_bind.
-    1-3:eapply inlinelocal_block_st_follows; eauto.
+    1-4:eapply inlinelocal_block_st_follows; eauto.
     eapply mmap_st_follows; eauto.
     eapply Forall_forall; intros; eauto using inlinelocal_block_st_follows.
     Transparent inlinelocal_block.
@@ -276,12 +213,12 @@ Module Type INLINELOCAL
              VarsDefined blk xs ->
              NoDupLocals (map fst (Env.elements sub) ++ xs) blk ->
              f sub blk st = (blks', st') ->
-             exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys ++ st_ids st) (map (rename_in_var sub) xs ++ st_ids st')) blks ->
+             exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys ++ st_ids st) (map (rename_var sub) xs ++ st_ids st')) blks ->
       Forall noswitch_block blks ->
       Forall2 VarsDefined blks xs ->
       Forall (NoDupLocals (map fst (Env.elements sub) ++ concat xs)) blks ->
       mmap (f sub) blks st = (blks', st') ->
-      exists ys, Forall2 VarsDefined (concat blks') ys /\ Permutation (concat ys ++ st_ids st) (map (rename_in_var sub) (concat xs) ++ st_ids st').
+      exists ys, Forall2 VarsDefined (concat blks') ys /\ Permutation (concat ys ++ st_ids st) (map (rename_var sub) (concat xs) ++ st_ids st').
   Proof.
     induction blks; intros * Hf Hns Hvars Hnd Hnorm; inv Hf; inv Hns; inv Hvars; inv Hnd; repeat inv_bind; simpl.
     - exists []. split; auto.
@@ -300,7 +237,7 @@ Module Type INLINELOCAL
       VarsDefined blk xs ->
       NoDupLocals (map fst (Env.elements sub) ++ xs) blk ->
       inlinelocal_block sub blk st = (blks', st') ->
-      exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys ++ st_ids st) (map (rename_in_var sub) xs ++ st_ids st').
+      exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys ++ st_ids st) (map (rename_var sub) xs ++ st_ids st').
   Proof.
     induction blk using block_ind2; intros * Hns Hvars Hnd Hdl;
       inv Hns; inv Hvars; inv Hnd; repeat inv_bind.
@@ -360,9 +297,9 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hvars Hnd Hil; repeat inv_bind; simpl.
-    1-3:eapply inlinelocal_block_vars_perm in H as (?&?&Hperm); eauto.
-    4:inv Hvars; inv Hnd; eapply mmap_vars_perm in H as (?&?&Hperm); eauto.
-    1-4:rewrite rename_in_vars_empty in Hperm; eauto.
+    1-4:eapply inlinelocal_block_vars_perm in H as (?&?&Hperm); eauto.
+    5:inv Hvars; inv Hnd; eapply mmap_vars_perm in H as (?&?&Hperm); eauto.
+    1-5:rewrite rename_vars_empty in Hperm; eauto.
     - do 2 esplit; eauto. rewrite Hperm, <-H4, (Permutation_app_comm _ xs), <-app_assoc; auto.
     - eapply Forall_forall; intros; eauto using inlinelocal_block_vars_perm.
     - inv Hns; auto.
@@ -401,7 +338,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hil; repeat inv_bind.
-    1-3:eapply inlinelocal_block_GoodLocals; eauto.
+    1-4:eapply inlinelocal_block_GoodLocals; eauto.
     apply Forall_concat.
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
     rewrite Forall_forall in *; intros * Hin.
@@ -411,14 +348,14 @@ Module Type INLINELOCAL
 
   (** *** NoDupLocals *)
 
-  Lemma rename_in_var_injective : forall sub x y,
+  Lemma rename_var_injective : forall sub x y,
       Env.In x sub ->
       Env.In y sub ->
       NoDup (map snd (Env.elements sub)) ->
-      rename_in_var sub x = rename_in_var sub y ->
+      rename_var sub x = rename_var sub y ->
       x = y.
   Proof.
-    unfold rename_in_var.
+    unfold rename_var.
     intros * (?&Hfind1) (?&Hfind2) Hndsub Hren.
     rewrite Hfind1, Hfind2 in Hren; simpl in Hren; inv Hren.
     eapply NoDup_snd_det; eauto using Env.elements_correct.
@@ -450,7 +387,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hil; repeat inv_bind.
-    1-3:eapply inlinelocal_block_NoDupLocals; eauto.
+    1-4:eapply inlinelocal_block_NoDupLocals; eauto.
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
     eapply Forall_concat. rewrite Forall_forall in *; intros.
     edestruct H as (?&?&?&?&?); eauto using inlinelocal_block_NoDupLocals.
@@ -463,7 +400,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hil; repeat inv_bind.
-    1-3:apply incl_nil'.
+    1-4:apply incl_nil'.
     erewrite map_app, map_map, map_ext.
     apply incl_appl, incl_refl. intros; destruct_conjs; auto.
     Transparent inlinelocal_block.
@@ -476,7 +413,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hnd Hil; inv Hnd; repeat inv_bind; auto.
-    1-3:constructor.
+    1-4:constructor.
     Transparent inlinelocal_block.
   Qed.
 
@@ -520,7 +457,7 @@ Module Type INLINELOCAL
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hil; repeat inv_bind.
-    1-3:eapply inlinelocal_block_nolocal; eauto.
+    1-4:eapply inlinelocal_block_nolocal; eauto.
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
     eapply Forall_concat.
     rewrite Forall_forall in *; intros.
@@ -542,11 +479,11 @@ Module Type INLINELOCAL
   Lemma local_not_in_switch_prefs :
     ~PS.In local switch_prefs.
   Proof.
-    unfold switch_prefs, last_prefs, elab_prefs.
-    rewrite 2 PS.add_spec, PSF.singleton_iff.
+    unfold switch_prefs, auto_prefs, last_prefs, elab_prefs.
+    rewrite 3 PS.add_spec, PSF.singleton_iff.
     pose proof gensym_prefs_NoDup as Hnd. unfold gensym_prefs in Hnd.
     repeat rewrite NoDup_cons_iff in Hnd. destruct_conjs.
-    intros [contra|[contra|contra]]; subst; rewrite contra in *; eauto with datatypes.
+    intros [contra|[contra|[contra|contra]]]; subst; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
   Program Definition inlinelocal_node (n: @node noswitch_block switch_prefs) : @node nolocal_top_block local_prefs :=

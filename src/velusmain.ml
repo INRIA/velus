@@ -9,6 +9,7 @@ open Ctypes
 let print_c = ref false
 let write_lustre = ref false
 let write_nolast = ref false
+let write_noauto = ref false
 let write_noswitch = ref false
 let write_nolocal = ref false
 let write_nlustre = ref false
@@ -94,6 +95,8 @@ let compile source_name filename =
   then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
   if !write_nolast
   then Veluslib.nolast_destination := Some (filename ^ ".nolast.lus");
+  if !write_noauto
+  then Veluslib.noauto_destination := Some (filename ^ ".noauto.lus");
   if !write_noswitch
   then Veluslib.noswitch_destination := Some (filename ^ ".noswitch.lus");
   if !write_nolocal
@@ -144,6 +147,7 @@ let speclist = [
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <source>.parsed.lus";
   "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <source>.nolast.lus";
+  "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <source>.noauto.lus";
   "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <source>.noswitch.lus";
   "-dnolocal", Arg.Set write_nolocal, " Save Lustre without local blocks in <source>.nolocal.lus";
   "-dnlustre", Arg.Set write_nlustre,

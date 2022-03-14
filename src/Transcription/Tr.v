@@ -325,7 +325,7 @@ Module Type TR
                  end = OK neqs }.
   Proof.
     destruct (L.n_block n); simpl.
-    1-3:right; exact (msg "node not normalized").
+    1-4:right; exact (msg "node not normalized").
     destruct (mmap (block_to_equation (Env.adds' (idty (idty l)) env) envo []) l0).
     left. simpl. eauto.
     right. auto.
@@ -450,9 +450,9 @@ Module Type TR
     1,2:(eapply Forall_impl; [|eauto]; intros * [?|(pref&Hpref&?&?&?)];
          subst; [left|right]; auto;
          exists pref; eauto;
-         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, last_prefs, elab_prefs in Hpref;
+         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, auto_prefs, last_prefs, elab_prefs in Hpref;
          repeat rewrite PSF.add_iff in *; rewrite PS.singleton_spec in *;
-         destruct Hpref as [|[|[|[|[|]]]]]; subst; split; eauto 10).
+         destruct Hpref as [|[|[|[|[|[|]]]]]]; subst; split; eauto 10).
   Qed.
 
   Definition to_global (G : L.global) :=

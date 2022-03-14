@@ -8,6 +8,7 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LClocking.
 From Velus Require Import Lustre.InlineLocal.InlineLocal.
+From Velus Require Import Lustre.SubClock.SCClocking.
 
 Module Type ILCLOCKING
        (Import Ids : IDS)
@@ -19,178 +20,7 @@ Module Type ILCLOCKING
        (Import Clo : LCLOCKING Ids Op OpAux Cks Senv Syn)
        (Import DL  : INLINELOCAL Ids Op OpAux Cks Senv Syn).
 
-  Section rename.
-    Variable sub : Env.t ident.
-    Variable Γ Γ' : static_env.
-
-    Hypothesis NoLast : forall x, ~IsLast Γ x.
-
-    Hypothesis Hsub : forall x y ck,
-        Env.find x sub = Some y ->
-        HasClock Γ x ck ->
-        HasClock Γ' y (rename_in_clock sub ck).
-
-    Hypothesis Hnsub : forall x ck,
-        Env.find x sub = None ->
-        HasClock Γ x ck ->
-        HasClock Γ' x (rename_in_clock sub ck).
-
-    Lemma rename_in_var_wc : forall x ck,
-        HasClock Γ x ck ->
-        HasClock Γ' (rename_in_var sub x) (rename_in_clock sub ck).
-    Proof.
-      intros * Hin.
-      unfold rename_in_var.
-      destruct (Env.find _ _) eqn:Hfind; eauto.
-    Qed.
-
-    Lemma rename_in_clock_wc : forall ck,
-        wc_clock (idck Γ) ck ->
-        wc_clock (idck Γ') (rename_in_clock sub ck).
-    Proof.
-      induction ck; intros * Hwc; inv Hwc; auto with clocks.
-      simpl. constructor; eauto.
-      simpl_In. assert (HasClock Γ i a.(clo)) as Hck by eauto with senv.
-      apply rename_in_var_wc in Hck; auto. inv Hck. solve_In.
-      congruence.
-    Qed.
-
-    Context {PSyn : block -> Prop}.
-    Context {prefs : PS.t}.
-    Variable G : @global PSyn prefs.
-
-    Lemma rename_in_exp_clockof : forall e,
-        clockof (rename_in_exp sub e) = map (rename_in_clock sub) (clockof e).
-    Proof.
-      induction e using exp_ind2; simpl; auto; destruct_conjs.
-      1-6:repeat rewrite map_map; simpl.
-      1-6:eapply map_ext; eauto.
-    Qed.
-
-    Corollary rename_in_exp_clocksof : forall es,
-        clocksof (map (rename_in_exp sub) es) = map (rename_in_clock sub) (clocksof es).
-    Proof.
-      induction es; simpl; auto.
-      rewrite map_app. f_equal; auto using rename_in_exp_clockof.
-    Qed.
-
-    Lemma rename_in_exp_nclockof : forall e,
-        nclockof (rename_in_exp sub e) = map (rename_in_nclock sub) (nclockof e).
-    Proof.
-      induction e using exp_ind2; simpl; auto. 4:destruct x.
-      1-6:repeat rewrite map_map; simpl.
-      1-6:eapply map_ext; eauto.
-    Qed.
-
-    Corollary rename_in_exp_nclocksof : forall es,
-        nclocksof (map (rename_in_exp sub) es) = map (rename_in_nclock sub) (nclocksof es).
-    Proof.
-      induction es; simpl; auto.
-      rewrite map_app. f_equal; auto using rename_in_exp_nclockof.
-    Qed.
-
-    Lemma rename_in_clock_instck : forall sub1 sub0 bck ck ck',
-        instck bck sub0 ck = Some ck' ->
-        instck (rename_in_clock sub1 bck) (fun x0 => option_map (rename_in_var sub1) (sub0 x0)) ck = Some (rename_in_clock sub1 ck').
-    Proof.
-      induction ck; intros * Hinst; simpl in *.
-      - inv Hinst; auto.
-      - cases_eqn Heq; inv Hinst; simpl in *.
-        + inv Heq2; simpl.
-          specialize (IHck _ eq_refl). now inv IHck.
-        + congruence.
-        + specialize (IHck _ eq_refl). congruence.
-    Qed.
-
-    Lemma rename_in_nclock_WellInstantiated1 : forall bck sub0 sub xck nck,
-        WellInstantiated bck sub0 xck nck ->
-        WellInstantiated (rename_in_clock sub bck) (fun x => option_map (rename_in_var sub) (sub0 x)) xck (rename_in_nclock sub nck).
-    Proof.
-      intros ??? (x&ck) (ck'&name) (Hw1&Hw2). split; simpl in *.
-      - rewrite Hw1. destruct name; simpl; auto.
-      - apply rename_in_clock_instck; auto.
-    Qed.
-
-    Lemma rename_in_nclock_WellInstantiated2 : forall bck sub0 sub xck ck,
-        WellInstantiated bck sub0 xck (ck, None) ->
-        WellInstantiated (rename_in_clock sub bck) (fun x => option_map (rename_in_var sub) (sub0 x)) xck (rename_in_clock sub ck, None).
-    Proof.
-      intros ??? (x&ck) ck' (Hw1&Hw2). split; simpl in *.
-      - rewrite Hw1. reflexivity.
-      - apply rename_in_clock_instck; auto.
-    Qed.
-
-    Lemma rename_in_exp_wc : forall e,
-        wc_exp G Γ e ->
-        wc_exp G Γ' (rename_in_exp sub e).
-    Proof.
-      intros * Hwc; induction e using exp_ind2; inv Hwc; simpl;
-        econstructor; eauto using rename_in_var_wc.
-      1,2:take (IsLast _ _) and eapply NoLast in it as [].
-      1-31:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-      1-24:try rewrite rename_in_exp_clockof; simpl.
-      1-24:try rewrite rename_in_exp_clocksof; simpl.
-      1-24:try (rewrite map_rename_in_ann_clock; rewrite Forall2_eq in *; congruence).
-      - now rewrite H3.
-      - now rewrite H5.
-      - now rewrite H6.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ? Hun.
-        inv Hun; simpl in *; subst. constructor.
-      - now rewrite map_length.
-      - contradict H4. apply map_eq_nil in H4; auto.
-      - simpl_Forall; eauto.
-      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
-        rewrite rename_in_exp_clocksof, Forall_map.
-        simpl_Forall; subst; auto.
-      - rewrite Forall_map. eapply Forall_impl; [|eapply H7]; eauto; intros (?&?) ?; simpl in *.
-        now rewrite rename_in_exp_clocksof, map_length.
-      - now rewrite H6.
-      - contradict H7. apply map_eq_nil in H7; auto.
-      - simpl_Forall; eauto.
-      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
-        rewrite rename_in_exp_clocksof. simpl_Forall; subst; auto.
-      - rewrite Forall_map. eapply Forall_impl; [|eapply H10]; eauto; intros (?&?) ?; simpl in *.
-        now rewrite rename_in_exp_clocksof, map_length.
-      - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
-        specialize (H11 _ eq_refl). simpl_Forall; eauto.
-      - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
-        specialize (H12 _ eq_refl).
-        rewrite rename_in_exp_clocksof, Forall_map. eapply Forall_impl; [|eauto]; intros; subst; auto.
-      - intros ? Hopt. eapply option_map_inv in Hopt as (?&?&?); subst; simpl in *.
-        specialize (H13 _ eq_refl).
-        now rewrite rename_in_exp_clocksof, map_length.
-      - rewrite rename_in_exp_nclocksof. simpl_Forall.
-        eapply rename_in_nclock_WellInstantiated1; eauto.
-      - simpl_Forall.
-        eapply rename_in_nclock_WellInstantiated2; eauto.
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ? (?&Hck).
-        rewrite rename_in_exp_clockof, Hck; simpl; eauto.
-    Qed.
-
-    Lemma rename_in_equation_wc : forall eq,
-        wc_equation G Γ eq ->
-        wc_equation G Γ' (rename_in_equation sub eq).
-    Proof.
-      intros (?&?) Hwc. inv Hwc; simpl.
-      - (* app *)
-        econstructor; eauto.
-        + simpl_Forall; eauto using rename_in_exp_wc.
-        + simpl_Forall; eauto using rename_in_exp_wc.
-        + rewrite rename_in_exp_nclocksof. simpl_Forall.
-          eapply rename_in_nclock_WellInstantiated1; eauto.
-        + rewrite 2 Forall3_map_2, Forall3_map_3. rewrite Forall3_map_2 in H5.
-          eapply Forall3_impl_In; [|eauto]; intros (?&?) (?&?) ? _ _ _ ?; simpl.
-          eapply rename_in_nclock_WellInstantiated1 in H; eauto. eapply H.
-        + rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ? (?&Hck).
-          rewrite rename_in_exp_clockof, Hck; simpl; eauto.
-        + simpl_Forall; eauto using rename_in_var_wc.
-      - (* general case *)
-        econstructor; eauto.
-        + simpl_Forall; eauto using rename_in_exp_wc.
-        + rewrite rename_in_exp_clocksof. simpl_Forall; eauto using rename_in_var_wc.
-    Qed.
-
-  End rename.
+  Module Import SCC := SCClockingFun Ids Op OpAux Cks Senv Syn Clo SC. Import SC.
 
   Import Fresh Facts Tactics.
 
@@ -213,7 +43,7 @@ Module Type ILCLOCKING
   Proof.
     induction ck; intros * Hnin Hwc; inv Hwc; simpl; auto.
     rewrite IHck; eauto. f_equal; auto.
-    unfold rename_in_var.
+    unfold rename_var.
     destruct (Env.find i sub) eqn:Hfind; auto.
     exfalso.
     eapply Hnin; eauto using In_InMembers.
@@ -323,17 +153,17 @@ Module Type ILCLOCKING
     - (* equation *)
       split; auto.
       do 2 constructor; auto.
-      eapply rename_in_equation_wc; [| | |eauto]; eauto with lclocking.
+      eapply subclock_equation_wc; eauto with lclocking.
 
     - (* reset *)
       repeat econstructor; eauto.
       + eapply mmap_inlinelocal_block_wc; eauto.
-      + eapply rename_in_exp_wc; [| | |eauto]; eauto using in_or_app.
+      + eapply subclock_exp_wc; eauto using in_or_app with lclocking.
         eapply In_sub1; eauto. 2:eapply In_sub2; eauto.
         1,2:(intros; eapply HasClock_incl; [|eauto];
              eapply incl_map, st_follows_incl, mmap_st_follows; eauto with lclocking;
              eapply Forall_forall; eauto with fresh).
-      + rewrite rename_in_exp_clockof, H8; simpl; eauto.
+      + setoid_rewrite subclock_exp_clockof. rewrite H8; simpl; eauto.
       + eapply mmap_inlinelocal_block_wc; eauto.
 
     - (* local *)
@@ -380,7 +210,7 @@ Module Type ILCLOCKING
           eapply Env.union_find4 in Hfind as [Hfind|Hfind]; try congruence.
           eapply HasClock_incl; eauto using incl_map, st_follows_incl, fresh_idents_rename_st_follows.
           erewrite <-disjoint_union_rename_in_clock, rename_in_clock_idem; eauto.
-          2:eapply rename_in_clock_wc with (Γ:=Γ++Γ'), wc_env_var; eauto with lclocking; eauto with datatypes.
+          2:eapply subclock_clock_wc with (Γ:=Γ++Γ'), wc_env_var; eauto with lclocking; eauto with datatypes.
           2:eapply In_sub1; eauto. 2:eapply In_sub2; eauto.
           2:{ inv Hin. solve_In; eauto using in_or_app. auto. }
           intros ?. simpl_app. rewrite Hsubin', InMembers_app. intros [Hinm1|Hinm1] Hinm2.
@@ -410,8 +240,9 @@ Module Type ILCLOCKING
         * assert (Hfresh:=H0). eapply fresh_idents_rename_ids in H0. rewrite H0.
           2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
           simpl_Forall. rewrite <-map_app.
-          eapply rename_in_clock_wc, rename_in_clock_wc
+          eapply subclock_clock_wc, subclock_clock_wc
             with (Γ':=Γ++map (fun '(x, a) => (x, ann_with_clock a (rename_in_clock sub a.(clo)))) (senv_of_locs locs)++st_senv st).
+          3,6:eauto with lclocking.
           5:repeat rewrite <-map_app in H12; eauto.
           4:{ intros ?? Hfind Hin. repeat rewrite HasClock_app in *. destruct Hin as [Hin|[Hin|Hin]]; auto.
               - left. erewrite rename_in_clock_idem with (vars:=idck Γ); eauto.
@@ -482,11 +313,11 @@ Module Type ILCLOCKING
     Opaque inlinelocal_block.
     destruct blk; intros * Hnl Hns Hnd Hgood Hwenv Hwc Hwcck Hvalid Hil; repeat inv_bind; simpl.
     3:inv Hns.
-    1,2:eapply inlinelocal_block_wc with (Γ':=[]); try rewrite app_nil_r; eauto.
-    7:inv Hns; inv Hnd; inv Hgood; inv Hwc; eapply mmap_inlinelocal_block_wc with (Γ:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwc1&Hwc2); try rewrite app_nil_r; eauto.
-    1,4,10:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
-    1,3,8:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
-    1,2,6:intros * Hfind; eapply Env.Props.P.F.empty_mapsto_iff in Hfind as [].
+    1-3:eapply inlinelocal_block_wc with (Γ':=[]); try rewrite app_nil_r; eauto.
+    10:inv Hns; inv Hnd; inv Hgood; inv Hwc; eapply mmap_inlinelocal_block_wc with (Γ:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwc1&Hwc2); try rewrite app_nil_r; eauto.
+    1,4,7,13:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
+    1,3,5,10:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
+    1,2,3,7:intros * Hfind; eapply Env.Props.P.F.empty_mapsto_iff in Hfind as [].
     - simpl_app. split; auto. rewrite Forall_app; split; simpl_Forall; auto.
       eapply wc_clock_incl; [|eauto]. solve_incl_app.
     - eapply Forall_forall; intros; eauto using inlinelocal_block_wc.
@@ -507,7 +338,7 @@ Module Type ILCLOCKING
   Qed.
 
   Lemma inlinelocal_node_wc : forall G1 G2 n,
-      global_iface_eq G1 G2 ->
+      global_iface_incl G1 G2 ->
       wc_node G1 n ->
       wc_node G2 (inlinelocal_node n).
   Proof.
@@ -525,7 +356,7 @@ Module Type ILCLOCKING
       2:rewrite Forall_app in H0; destruct H0 as (Hwc4&Hwc5).
       2:rewrite Forall_app; split.
       + simpl_Forall. unfold st_senv, senv_of_tyck in *.
-        eapply iface_eq_wc_block, wc_block_incl; [eauto| | |eauto]; intros * ?.
+        eapply iface_incl_wc_block, wc_block_incl; [eauto| | |eauto]; intros * ?.
         * eapply HasClock_incl; [|eauto].
           simpl_app. solve_incl_app. erewrite map_map, map_ext. reflexivity.
           intros; destruct_conjs; auto.
@@ -559,7 +390,7 @@ Module Type ILCLOCKING
     intros * Hwc.
     eapply CommonTyping.transform_units_wt_program; eauto.
     intros ?? Hwc'.
-    eapply inlinelocal_node_wc; eauto. eapply inlinelocal_global_iface_eq.
+    eapply inlinelocal_node_wc; eauto. eapply iface_eq_iface_incl, inlinelocal_global_iface_eq.
   Qed.
 
 End ILCLOCKING.

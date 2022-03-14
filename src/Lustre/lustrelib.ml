@@ -54,10 +54,13 @@ module type SYNTAX =
 
     type equation = idents * exp list
 
+    type transition = exp * (enumtag * bool)
+
     type block =
     | Beq of equation
     | Breset of block list * exp
     | Bswitch of exp * (enumtag * block list) list
+    | Bauto of clock * ((exp * enumtag) list * enumtag) * (enumtag * (block list * transition list)) list
     | Blocal of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * block list
 
     type node = {
@@ -251,6 +254,22 @@ module PrintFun
         name
         (print_semicol_list px) xs
 
+    let rec print_initially p (ini, oth) =
+      match ini with
+      | [] -> fprintf p "otherwise %a"
+                PrintOps.print_enumtag oth
+      | (e, t)::inis ->
+         fprintf p "if %a then %a;@;%a"
+           print_exp e
+           PrintOps.print_enumtag t
+           print_initially (inis, oth)
+
+    let print_transition p (e, (k, r)) =
+      fprintf p "@[<h>until %a %s %a@]"
+        print_exp e
+        (if r then "restart" else "resume")
+        PrintOps.print_enumtag k
+
     let rec print_block p bck =
       match bck with
       | L.Beq eq -> print_equation p eq
@@ -263,10 +282,21 @@ module PrintFun
           print_exp ec
           (PrintOps.print_branches (print_semicol_list print_block))
           (List.map (fun (i, blks) -> (asprintf "%a" PrintOps.print_enumtag i, Some blks)) brs, None)
+      | L.Bauto (_, ini, states) ->
+         fprintf p "@[<v 2>automaton@;initially %a@;%a@;end@]"
+           print_initially ini
+           (pp_print_list print_state) states
       | L.Blocal (locals, blks) ->
         fprintf p "%a@[<v 2>let@;%a@;<0 -2>@]tel"
           (print_semicol_list_as "var" print_local_decl) locals
           (print_semicol_list print_block) blks
+
+    and print_state p (e, (blks, trans)) =
+      fprintf p "@[<v 2>state %a@;do %a%a%a@]"
+        PrintOps.print_enumtag e
+        (print_semicol_list print_block) blks
+        (fun p _ -> if trans = [] then () else fprintf p "@;") ()
+        (print_semicol_list print_transition) trans
 
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;

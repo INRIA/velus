@@ -54,8 +54,8 @@ Module Type INDEXEDTOCOIND
     : list (Stream svalue) :=
     seq_streams (nth_tr_streams_from n xss) (length (xss n)).
 
-  Definition tr_streams: stream (list svalue) -> list (Stream svalue) :=
-    tr_streams_from 0.
+  Definition tr_streams xss :=
+    tr_streams_from 0 xss.
 
   Ltac unfold_tr_streams :=
     unfold tr_streams, tr_streams_from.
@@ -72,8 +72,8 @@ Module Type INDEXEDTOCOIND
   (** Translate an history from coinductive to indexed world.
       Every element of the history is translated.
    *)
-  Definition tr_history : IStr.history -> history :=
-    tr_history_from 0.
+  Definition tr_history H :=
+    tr_history_from 0 H.
 
   (** The counterpart of [tr_stream_from_tl] for histories. *)
   Lemma tr_history_from_tl:
@@ -284,20 +284,15 @@ Module Type INDEXEDTOCOIND
         constructor; simpl; auto.
         specialize (Sem n); now inv Sem.
       - destruct p. apply sem_clock_inv in Sem as (bs' & xs & Sem_bs' & Sem_xs & Spec).
-        revert Spec n; cofix CoFix; intros.
-        rewrite (init_from_n bs).
-        apply IHck with (n:=n) in Sem_bs';
-          rewrite (init_from_n bs') in Sem_bs'.
-        apply (sem_var_impl_from n) in Sem_xs;
-          rewrite (init_from_n xs) in Sem_xs.
-        destruct (Spec n) as [|[]]; destruct_conjs;
-          repeat match goal with H:_ n = _ |- _ => rewrite H in *; clear H end.
-        + econstructor; eauto.
-          rewrite init_from_tl, tr_history_from_tl; auto.
-        + econstructor; eauto.
-          rewrite init_from_tl, tr_history_from_tl; auto.
-        + eapply CStr.Son_abs2; eauto.
-          rewrite init_from_tl, tr_history_from_tl; auto.
+        econstructor; eauto.
+        + apply sem_var_impl_from; eauto.
+        + apply ntheq_eqst. intros n0. rewrite ac_nth. repeat rewrite init_from_nth.
+          specialize (Spec (n0 + n)) as [(Hb&Hx&?)|[(Hb&Hx&?)|(?&Hb&Hx&?&?)]];
+            try rewrite Hb, Hx; auto.
+        + apply enums_of_nth. intros n0.
+          repeat rewrite init_from_nth.
+          specialize (Spec (n0 + n)) as [(?&?&?)|[(?&?)|(?&?&?&?&?)]]; eauto.
+          right; right. eexists. intuition; eauto.
     Qed.
 
     Corollary sem_clock_impl:
