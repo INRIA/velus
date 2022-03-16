@@ -3,7 +3,7 @@ type t = A | B
 node f(x : t) returns (y : int)
 let
     switch x
-    | A -> y = 0;
-    | B -> y = 1;
+    | A do y = 0;
+    | B do y = 1;
     end
 tel

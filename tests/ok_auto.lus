@@ -3,8 +3,8 @@ let
     automaton
     initially if c0 then A; otherwise B
     state A do y = 0 fby (y + 1)
-            until b restart B
+            until b then B
     state B do y = 0 fby (y - 1)
-            until b restart A
+            until b then A
     end
 tel

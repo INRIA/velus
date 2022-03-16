@@ -8,8 +8,8 @@ tel
 node kom (a, b : bool; y : bool when a; z : bool when b)
 returns (u, v: bool);
 let
-  u = merge a (true -> y) (false -> false);
-  v = merge b (true -> z) (false -> false);
+  u = merge a y false;
+  v = merge b z false;
 tel
 
 node main (a, b, c : bool)

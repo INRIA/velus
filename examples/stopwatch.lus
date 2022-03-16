@@ -6,7 +6,7 @@
 node current(d : int; ck : bool; x : int when ck)
 returns (y : int);
 let
-  y = merge(ck; x; (d fby y) when not ck);
+  y = merge ck x ((d fby y) when not ck);
 tel
 
 node count (init, incr : int; vreset : bool)
@@ -16,13 +16,13 @@ let
 tel
 
 node two_states (init, set, vreset : bool)
-returns (state : bool);
-var pstate : bool;
+returns (st : bool);
+var pst : bool;
 let
-  state = init -> (if set and not pstate then true
-                   else if vreset and pstate then false
-                   else pstate);
-  pstate = false fby state;
+  st = init -> (if set and not pst then true
+                else if vreset and pst then false
+                else pst);
+  pst = false fby st;
 tel
 
 node simple_stopwatch (start_stop, vreset, hs : bool);

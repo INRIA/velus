@@ -3,7 +3,7 @@ type t = A | B
 node f(b : bool; x : t; z : int when b) returns (y : int);
 let
   switch x
-  | A -> y = merge(b; z; 1);
-  | B -> y = 2;
+  | A do y = merge b z 1;
+  | B do y = 2;
   end
 tel

@@ -6,6 +6,6 @@ var w : bool when a;
 let
     w = (not b) when a;
     x = b when not a;
-    y = merge a (true -> w) (false -> x);
+    y = merge a (true => w) (false => x);
 tel
 

@@ -2,8 +2,8 @@ node f(b : bool) returns (y : int)
 var last x : int = 0;
 let
     switch b
-    | true -> x = last x + 1
-    | false -> x = last x - 1
+    | true do x = last x + 1
+    | false do x = last x - 1
     end;
     y = x;
 tel

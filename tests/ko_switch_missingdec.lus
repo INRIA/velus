@@ -3,8 +3,8 @@ type t = A | B | C
 node g(x : t) returns (y : int; z : bool);
 let
   switch x
-  | A -> z = false;
-  | B -> y = 2; z = true;
-  | C -> y = 3; z = true;
+  | A do z = false;
+  | B do y = 2; z = true;
+  | C do y = 3; z = true;
   end
 tel

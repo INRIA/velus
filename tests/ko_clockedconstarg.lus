@@ -3,8 +3,8 @@ node f(x: bool; y: bool when x)
 returns (z: bool);
 var w: bool;
 let
-  w = merge x (true -> y and (z when x))
-              (false -> z when not x);
+  w = merge x (y and (z when x))
+              (z when not x);
   z = false fby w;
 tel
 

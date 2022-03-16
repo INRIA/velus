@@ -13,7 +13,7 @@ var t : int when x;
 let
     t = 42 fby (t + 1);
     switch g(f(x, t))
-    | True -> y = 12;
-    | False -> y = 21;
+    | True do y = 12;
+    | False do y = 21;
     end
 tel

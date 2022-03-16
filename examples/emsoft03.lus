@@ -51,7 +51,7 @@ var clk, c, pre_rer_input, count : bool;
     r : int when clk;
 let
   rer_output = (0 < v) and (c or count);
-  v = merge clk (true -> r) (false -> pv when not clk);
+  v = merge clk r (pv when not clk);
   r = count_down (count when clk, numberofcycle when clk);
   pv = 0 fby v;
   c = false fby rer_output;

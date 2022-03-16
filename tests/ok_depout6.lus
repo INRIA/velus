@@ -9,8 +9,8 @@ tel
 node g(a: bool; b: bool when a)
 returns (x: bool; y: bool when x);
 let
-  x = merge a (true -> true) (false -> false);
-  y = (merge a (true -> b) (false -> false)) when x;
+  x = merge a true false;
+  y = (merge a b false) when x;
 tel
 
 node main(b: bool)

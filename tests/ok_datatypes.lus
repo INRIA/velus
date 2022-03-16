@@ -2,7 +2,7 @@ type t = A | B | C
 
 node f (x: t) returns (y: int)
 let
-   y = case x of (A -> 0) (C -> 2) (B -> 1);
+   y = case x of (A => 0) (C => 2) (B => 1);
 tel
 
 node g (x: t) returns (y: int)
@@ -13,5 +13,5 @@ let
    a = 0 when A(x);
    b = 1 when B(x);
    c = 2 when C(x);
-   y = merge x (B -> b) (C -> c) (A -> a);
+   y = merge x (B => b) (C => c) (A => a);
 tel

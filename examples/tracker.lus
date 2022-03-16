@@ -21,7 +21,7 @@ let
   x = rising(s > limit);
   (s, p) = d_integrator(acc);
   t = merge x 
-            (true -> counter(1 when x, 1 when x, false when x)) 
-            (false -> (0 fby t) when not x);
+            (true => counter(1 when x, 1 when x, false when x))
+            (false => (0 fby t) when not x);
 tel
 

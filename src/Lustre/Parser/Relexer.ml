@@ -16,7 +16,9 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | CONSTANT l   -> let v = (Obj.magic l :
                               LustreAst.constant * LustreAst.astloc) in
                     (LustreParser2.CONSTANT   v, snd v)
+  | CONTINUE l   -> (LustreParser2.CONTINUE   l, l)
   | DO l         -> (LustreParser2.DO         l, l)
+  | DONE l       -> (LustreParser2.DONE       l, l)
   | DOT l        -> (LustreParser2.DOT        l, l)
   | ELSE l       -> (LustreParser2.ELSE       l, l)
   | END l        -> (LustreParser2.END        l, l)
@@ -33,6 +35,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | GEQ l        -> (LustreParser2.GEQ        l, l)
   | GT l         -> (LustreParser2.GT         l, l)
   | IFTE l       -> (LustreParser2.IFTE       l, l)
+  | IN l         -> (LustreParser2.IN         l, l)
   | INITIALLY l  -> (LustreParser2.INITIALLY  l, l)
   | INT16 l      -> (LustreParser2.INT16      l, l)
   | INT32 l      -> (LustreParser2.INT32      l, l)
@@ -64,9 +67,9 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | RARROW l     -> (LustreParser2.RARROW     l, l)
   | RESET l      -> (LustreParser2.RESET      l, l)
   | RESTART l    -> (LustreParser2.RESTART    l, l)
-  | RESUME l     -> (LustreParser2.RESUME     l, l)
   | RETURNS l    -> (LustreParser2.RETURNS    l, l)
   | RPAREN l     -> (LustreParser2.RPAREN     l, l)
+  | RRARROW l    -> (LustreParser2.RRARROW    l, l)
   | SEMICOLON l  -> (LustreParser2.SEMICOLON  l, l)
   | SLASH l      -> (LustreParser2.SLASH      l, l)
   | STAR l       -> (LustreParser2.STAR       l, l)

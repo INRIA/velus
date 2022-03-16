@@ -1,0 +1,48 @@
+(* Examples from the paper
+   "A Conservative Extension of Synchronous Data-flow with State Machines",
+   Colaço, Pagano, and Pouzet, EMSOFT 2005 *)
+
+node chrono (stst, rst : bool) returns (disp_1 : int; disp_2 : int);
+var last s : int = 0;
+    last m : int = 0;
+    run : bool;
+let
+  automaton
+    initially CHRONO
+    state CHRONO do
+      automaton
+        initially STOP
+        state STOP do
+          s = 0 -> last s;
+          m = 0 -> last m;
+          run = false;
+        until stst continue START
+
+        state START do
+          do var d : int; in
+            d = 0 fby (d + 1);
+            s = if d < (0 fby d) then (last s + 1) mod 60
+                else last s;
+            m = if s < last s
+                then (last m + 1) mod 60
+                else last m;
+            run = true;
+          done
+        until stst continue STOP
+      end
+    until rst and not run then CHRONO
+  end;
+
+  automaton
+    initially TIME
+    state TIME do
+      disp_1 = s;
+      disp_2 = m;
+    until rst and run then LAP
+
+    state LAP do
+      disp_1 = 0 fby disp_1;
+      disp_2 = 0 fby disp_2;
+    until rst then TIME
+  end;
+tel

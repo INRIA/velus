@@ -54,8 +54,8 @@ let
                     else (false fby frozen));
   displayed_time =
     merge frozen
-          (true -> (0 fby displayed_time) when frozen)
-          (false -> internal_time when not frozen);
+          (true => (0 fby displayed_time) when frozen)
+          (false => internal_time when not frozen);
   (internal_time, running) =
       simple_stopwatch(start_stop, actual_vreset, hs);
   actual_vreset =
@@ -91,10 +91,10 @@ node watchdog3 (set, vreset, time_unit: bool;
 var clock: bool;
 let
    alarm = merge clock
-                 (true -> watchdog2(set when clock,
+                 (true => watchdog2(set when clock,
                                     vreset when clock,
                                     delay when clock)) 
-                 (false -> (false fby alarm) when not clock);
+                 (false => (false fby alarm) when not clock);
    clock = true -> set or vreset or time_unit;
 tel
 

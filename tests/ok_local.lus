@@ -1,12 +1,12 @@
 node f(x : int) returns (z : bool)
 var y : int;
 let
-  var t : int;
-  let
+  -- We support both heptagon syntax and let/tel syntax for local blocks
+  do var t : int; in
     -- x -> t -> y
     t = x fby (t + 1);
     y = t;
-  tel;
+  done;
   var t : int;
   let
     -- y -> t -> z
