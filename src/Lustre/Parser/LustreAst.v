@@ -119,7 +119,7 @@ Inductive block :=
 | BEQ      : equation -> block
 | BRESET   : list block -> list expression -> astloc -> block
 | BSWITCH  : list expression -> list (ident * list block) -> astloc -> block
-| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (list block * list transition)) -> astloc -> block
+| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (local_decls * list block * list transition)) -> astloc -> block
 | BLOCAL   : local_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
@@ -248,7 +248,7 @@ Section block_ind2.
       P (BSWITCH ec branches loc).
 
   Hypothesis AUTOCase : forall ini states loc,
-      Forall (fun '(_, (blks, _)) => Forall P blks) states ->
+      Forall (fun '(_, (_, blks, _)) => Forall P blks) states ->
       P (BAUTO ini states loc).
 
   Hypothesis LOCALCase : forall locs blks loc,
@@ -265,8 +265,8 @@ Section block_ind2.
       induction l0 as [|(?&?)]; constructor; eauto; simpl.
       induction l0; auto.
     - apply AUTOCase.
-      induction l as [|(?&?&?)]; constructor; eauto; simpl.
-      induction l; auto.
+      induction l as [|(?&(?&?)&?)]; constructor; eauto; simpl.
+      induction l0; auto.
     - apply LOCALCase.
       induction l0; auto.
   Qed.

@@ -3179,6 +3179,14 @@ Module Type COINDSTREAMS
     rewrite H2, Er. reflexivity.
   Qed.
 
+  Lemma ac_fselect : forall e k sc xs,
+      abstract_clock (fselectv e k sc xs) ≡ fselectb e k sc (abstract_clock xs).
+  Proof.
+    intros.
+    unfold fselectv, fselectb, fselect.
+    rewrite ac_mask, ac_ffilter. reflexivity.
+  Qed.
+
   Lemma select_fselect {A} (abs : A) sel k : forall es vs vs',
       select abs sel k es vs vs' ->
       vs' ≡ fselect abs sel k es vs.

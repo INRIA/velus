@@ -1619,12 +1619,12 @@ Module Type CORRECTNESS
       take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
       take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv Hblocks.
-      assert (Env.refines (@EqSt _) H H') as Href.
+      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H10.
+      assert (Env.refines (@EqSt _) H Hi') as Href.
       { rewrite map_fst_senv_of_inout in Hdom.
         eapply LCS.local_hist_dom_refines. 3,4:eauto. 1,2:eauto.
       }
-      eapply NLSC.SNode with (H:=H'); simpl.
+      eapply NLSC.SNode with (H:=Hi'); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
       + erewrite <- to_node_in, map_fst_idty; eauto.
         eapply Forall2_impl_In; [|eauto]; intros. eapply LS.sem_var_refines; eauto.
@@ -1640,8 +1640,8 @@ Module Type CORRECTNESS
         tonodeInv EQ0; simpl in *.
         eapply sem_blockstoeqs with (cenv:=senv_of_inout (L.n_in n ++ L.n_out n) ++ _). 1-9:eauto.
         5:{ clear Htr. rewrite Hblk in Hmmap. monadInv Hmmap; eauto. }
-        * inv Hwt4. eauto.
-        * inv Hwc3. eauto.
+        * inv Hwt4. inv H8. eauto.
+        * inv Hwc3. inv H8. eauto.
         * apply envs_eq_node in Hblk. clear - Hblk.
           intros ??. specialize (Hblk x ck). rewrite <-Hblk.
           rewrite (Permutation_app_comm (Common.idty locs)).
@@ -1650,7 +1650,7 @@ Module Type CORRECTNESS
         * apply sc_vars_app; eauto.
           2:eapply sc_vars_refines; eauto.
           intros *. rewrite InMembers_senv_of_locs, fst_InMembers, map_fst_senv_of_inout.
-          intros Hin1 Hin2. eapply H11; eauto.
+          intros Hin1 Hin2. eapply H12; eauto.
     - eapply LCS.sem_node_ck_cons in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.

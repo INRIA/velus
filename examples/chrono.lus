@@ -18,16 +18,14 @@ let
           run = false;
         until stst continue START
 
-        state START do
-          do var d : int; in
-            d = 0 fby (d + 1);
-            s = if d < (0 fby d) then (last s + 1) mod 60
-                else last s;
-            m = if s < last s
-                then (last m + 1) mod 60
-                else last m;
-            run = true;
-          done
+        state START var d : int; do
+          d = 0 fby (d + 1);
+          s = if d < (0 fby d) then (last s + 1) mod 60
+              else last s;
+          m = if s < last s
+              then (last m + 1) mod 60
+              else last m;
+          run = true;
         until stst continue STOP
       end
     until rst and not run then CHRONO

@@ -1818,11 +1818,7 @@ Module Type NCLOCKING
         - apply senv_of_inout_NoLast.
         - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
       }
-      econstructor. 1-4:eauto.
-      - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
-        eapply unnest_blocks_wc in Heqres as Hwc'...
-        2:unfold st_senv; rewrite init_st_anns, app_nil_r...
-        + simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
+      inv H4. do 2 econstructor; eauto.
       - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
         eapply unnest_blocks_wc_env in Heqres as Henv'...
         2,3:unfold st_senv; rewrite init_st_anns, app_nil_r. 3:eauto.
@@ -1838,6 +1834,10 @@ Module Type NCLOCKING
           2:simpl_app; repeat solve_incl.
           solve_incl. apply incl_appl. intros ??. solve_In.
       - apply Forall_app; split; simpl_Forall; subst; auto.
+      - destruct (unnest_blocks _ _ _) as (eqs'&st') eqn:Heqres.
+        eapply unnest_blocks_wc in Heqres as Hwc'...
+        2:unfold st_senv; rewrite init_st_anns, app_nil_r...
+        simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.
 
   End unnest_node_wc.
@@ -2131,18 +2131,7 @@ Module Type NCLOCKING
       unfold normfby_node.
       repeat constructor; simpl; auto.
       inv Hunn. rewrite H in Hblk; inv Hblk. rewrite H.
-      econstructor. 1-4:eauto.
-      - destruct (normfby_blocks _ _ _) as (eqs'&st') eqn:Heqres.
-        eapply normfby_blocks_wc in Heqres as [? _]; eauto.
-        2,3:unfold st_senv; rewrite init_st_anns, app_nil_r.
-        3:eauto.
-        + simpl_app.
-          erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
-        + unfold wc_env, idck in *.
-          rewrite map_app, Forall_app. split; auto.
-          1,2:simpl_Forall; simpl_In; simpl_Forall.
-          2:simpl_app; repeat solve_incl.
-          solve_incl. apply incl_appl. intros ??. solve_In.
+      inv H4. do 2 econstructor; eauto.
       - destruct (normfby_blocks _ _ _) as (eqs'&st') eqn:Heqres.
         eapply normfby_blocks_wc in Heqres as [_ Henv']; eauto.
         1-3:unfold st_senv in *; try rewrite init_st_anns, app_nil_r. 3:eauto.
@@ -2158,6 +2147,17 @@ Module Type NCLOCKING
           2:simpl_app; repeat solve_incl.
           solve_incl. apply incl_appl. intros ??. solve_In.
       - apply Forall_app; split; simpl_Forall; subst; auto.
+      - destruct (normfby_blocks _ _ _) as (eqs'&st') eqn:Heqres.
+        eapply normfby_blocks_wc in Heqres as [? _]; eauto.
+        2,3:unfold st_senv; rewrite init_st_anns, app_nil_r.
+        3:eauto.
+        + simpl_app.
+          erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
+        + unfold wc_env, idck in *.
+          rewrite map_app, Forall_app. split; auto.
+          1,2:simpl_Forall; simpl_In; simpl_Forall.
+          2:simpl_app; repeat solve_incl.
+          solve_incl. apply incl_appl. intros ??. solve_In.
     Qed.
 
   End normfby_node_wc.

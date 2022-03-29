@@ -96,8 +96,9 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<list (list LustreAst.expression * Common.ident * LustreAst.astloc) * Common.ident> initially
 %type<LustreAst.transition> transition
 %type<list LustreAst.transition> transitions
-%type<Common.ident * (list LustreAst.block * list LustreAst.transition)> auto_state
-%type<list (Common.ident * (list LustreAst.block * list LustreAst.transition))> auto_state_list
+%type<list LustreAst.transition> untils
+%type<Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition)> auto_state
+%type<list (Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition))> auto_state_list
 %type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
@@ -494,22 +495,28 @@ initially:
   { let '(ini, oth) := ini in ((e, fst c, loc)::ini, oth) }
 
 transition:
-| loc=UNTIL e=expression CONTINUE c=ENUM_NAME
+| e=expression loc=CONTINUE c=ENUM_NAME
   { (e, (fst c, false), loc) }
-| loc=UNTIL e=expression THEN c=ENUM_NAME
+| e=expression loc=THEN c=ENUM_NAME
   { (e, (fst c, true), loc) }
 
 transitions:
-| /* empty */
-  { [] }
 | tr=transition
   { [tr] }
-| tr=transition SEMICOLON trs=transitions
+| tr=transition BAR trs=transitions
   { tr::trs }
 
+untils:
+| /* empty */
+  { [] }
+| UNTIL trs=transitions
+  { trs }
+
 auto_state:
-| loc=STATE c=ENUM_NAME DO blks=blocks trs=transitions
-  { (fst c, (blks, trs)) }
+| loc=STATE c=ENUM_NAME DO blks=blocks trs=untils
+  { (fst c, ([], blks, trs)) }
+| loc=STATE c=ENUM_NAME locals=local_decl DO blks=blocks trs=untils
+  { (fst c, (locals, blks, trs)) }
 
 auto_state_list:
 | st=auto_state { [st] }
@@ -526,7 +533,6 @@ block:
    { LustreAst.BAUTO ini states loc }
 /* Supporting both heptagon and var/let/tel syntax */
 | loc=DO locals=local_decl IN blks=blocks DONE
-   { LustreAst.BLOCAL locals blks loc }
 | locals=local_decl loc=LET blks=blocks TEL
    { LustreAst.BLOCAL locals blks loc }
 

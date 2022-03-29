@@ -1716,11 +1716,7 @@ Module Type NTYPING
       { apply NoLast_app; split.
         - apply senv_of_inout_NoLast.
         - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence. }
-      econstructor.
-      1-5:eauto.
-      - destruct (unnest_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
-        eapply unnest_blocks_wt_block in Heqres; eauto. 2:unfold st_senv; rewrite init_st_anns, app_nil_r; eauto.
-        simpl_app. auto. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
+      inv H4. do 2 econstructor; eauto.
       - unfold wt_clocks in *.
         rewrite idty_app with (xs:=locs). apply Forall_app; split.
         + solve_forall. simpl_app. repeat solve_incl.
@@ -1741,6 +1737,9 @@ Module Type NTYPING
           rewrite map_app, Forall_app; split;
             simpl_Forall; simpl_In; simpl_Forall; eauto using iface_incl_wt_enum.
       - apply Forall_app; split; simpl_Forall; subst; simpl; auto.
+      - destruct (unnest_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
+        eapply unnest_blocks_wt_block in Heqres; eauto. 2:unfold st_senv; rewrite init_st_anns, app_nil_r; eauto.
+        simpl_app. auto. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.
 
   End unnest_node_wt.
@@ -2199,13 +2198,8 @@ Module Type NTYPING
       destruct Hiface as (Henums&_).
       split; [|split; [|split]]; simpl; try solve [rewrite <- Henums; auto].
       1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-      rewrite <-H in *; simpl in *. inv Heq.
-      econstructor.
-      1-5:eauto.
-      - destruct (normfby_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
-        eapply normfby_blocks_wt in Heqres. 3:eauto. 2:rewrite map_app, Forall_app; split; eauto.
-        2,3:simpl_Forall; simpl_In; simpl_Forall; eauto.
-        simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
+      rewrite <-H in *; simpl in *. inv Heq. inv H4.
+      do 2 econstructor; eauto.
       - unfold wt_clocks in *. simpl_app. apply Forall_app; split.
         + simpl_Forall. repeat solve_incl.
         + destruct (normfby_blocks _ _ _) as (blocks&st') eqn:Heqres.
@@ -2222,6 +2216,10 @@ Module Type NTYPING
         + unfold st_senv. rewrite init_st_anns, app_nil_r.
           rewrite map_app, Forall_app; split; simpl_Forall; simpl_In; simpl_Forall; eauto using iface_incl_wt_enum.
       - apply Forall_app; split; simpl_Forall; subst; simpl; auto.
+      - destruct (normfby_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
+        eapply normfby_blocks_wt in Heqres. 3:eauto. 2:rewrite map_app, Forall_app; split; eauto.
+        2,3:simpl_Forall; simpl_In; simpl_Forall; eauto.
+        simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.
 
   End normfby_node_wt.

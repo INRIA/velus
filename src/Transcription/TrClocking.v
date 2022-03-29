@@ -492,18 +492,18 @@ Module Type TRCLOCKING
       inversion_clear Hwt as (_&_&_&WT).
       pose proof (L.n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *; symmetry in H; rename H into Hblk.
       eapply envs_eq_node in Hblk.
-      monadInv Hmmap. inv WCeq. inv WT.
+      monadInv Hmmap. inv WCeq; inv H3. inv WT; inv H3.
       repeat rewrite <-idty_app. repeat rewrite idck_idty.
       repeat split; (try now simpl_app).
       - rewrite (Permutation_app_comm (idty l)), app_assoc, map_app. apply Forall_app; split; auto.
         1,2:(unfold wc_env in *; rewrite <-map_app in WCo; simpl_Forall).
-        + eapply LC.wc_clock_incl; [|eauto]. solve_incl_app.
-        + simpl_In. simpl_Forall. eapply LC.wc_clock_incl; [|eauto].
+        + eapply wc_clock_incl; [|eauto]. solve_incl_app.
+        + simpl_In. simpl_Forall. eapply wc_clock_incl; [|eauto].
           simpl_app. repeat rewrite map_map.
           erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); try reflexivity.
           1-3:intros; destruct_conjs; auto.
       - eapply mmap_inversion in EQ.
-        induction EQ; inv H1; inv H4; inv H5; constructor; eauto.
+        induction EQ; inv H1; inv H8; inv H12; constructor; eauto.
         eapply wc_block_to_equation in H3; eauto.
         + clear - H3. simpl_app.
           repeat rewrite map_map in *.
@@ -514,11 +514,11 @@ Module Type TRCLOCKING
           split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
         + unfold wc_env in *. unfold Senv.idck. rewrite map_app. rewrite <-map_app in WCo.
           apply Forall_app; split; simpl_Forall; simpl_In; simpl_Forall.
-          * eapply LC.wc_clock_incl; [|eauto].
+          * eapply wc_clock_incl; [|eauto].
             unfold Senv.senv_of_inout. erewrite map_map, map_ext. apply incl_appl, incl_refl.
             intros; destruct_conjs; auto.
           * unfold Senv.senv_of_inout, Senv.senv_of_locs.
-            clear - H6. simpl_app. repeat rewrite map_map in *.
+            clear - H5. simpl_app. repeat rewrite map_map in *.
             erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); eauto.
     Qed.
 

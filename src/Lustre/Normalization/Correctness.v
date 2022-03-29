@@ -1881,7 +1881,8 @@ Module Type CORRECTNESS
           - apply senv_of_inout_NoLast.
           - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
         }
-        assert (Forall (sem_block_ck G1 (H', Env.empty _) (clocks_of ins)) blks) as Hsem.
+        inv H10. inv H11.
+        assert (Forall (sem_block_ck G1 (Hi', Env.empty _) (clocks_of ins)) blks) as Hsem.
         { simpl_Forall.
           eapply sem_block_change_lasts;
             eauto using nolocal_noswitch, noswitch_noauto, noauto_nolast with lclocking.
@@ -1897,7 +1898,7 @@ Module Type CORRECTNESS
           2:{ eapply find_node_not_Is_node_in in Hord2.
             2:erewrite find_node_now; eauto. eauto. }
           rewrite <-H0.
-          econstructor. 4:destruct G2; eauto.
+          do 2 econstructor. 6:destruct G2; eauto.
           * intros ?? Hv Hnin1.
             assert (In x (map fst (n_in n0 ++ n_out n0))) as Hinx0.
             { assert (Env.In x Hf) as Hin by (inv Hv; econstructor; eauto).
@@ -1908,7 +1909,7 @@ Module Type CORRECTNESS
               - apply Hnin1. apply InMembers_app, or_intror, fst_InMembers.
                 solve_In.
             }
-            eapply H12; eauto.
+            eapply H14; eauto.
             -- rewrite map_fst_senv_of_inout in H7.
               eapply sem_var_refines_iff. 1,4:eauto. eapply Env.dom_dom_lb; eauto.
                erewrite <-Env.dom_use in Hinx0; [|eauto].
@@ -1925,7 +1926,6 @@ Module Type CORRECTNESS
           * intros. apply in_app_iff in H5 as [|]. simpl_Forall; congruence. simpl_In.
           * eapply sc_vars_incl; [|eauto]. solve_incl_app.
             erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
-          * destruct G2; eauto.
         + simpl.
           constructor; simpl; auto.
         + unfold st_senv. rewrite init_st_anns, app_nil_r. auto.
@@ -1935,13 +1935,13 @@ Module Type CORRECTNESS
           eapply unnest_node_init_st_valid; eauto.
         + constructor.
           * rewrite map_app, map_fst_senv_of_locs.
-            erewrite local_hist_dom in H13; eauto. simpl in H13.
+            erewrite local_hist_dom in H15; eauto. simpl in H15.
             unfold st_ids. rewrite init_st_anns, app_nil_r. auto.
           * unfold st_senv. rewrite init_st_anns, app_nil_r.
             eapply local_hist_sc_vars with (H:=H); eauto.
             1-4:repeat rewrite map_fst_senv_of_inout in *; repeat rewrite map_fst_senv_of_locs in *; auto.
             1,2:repeat setoid_rewrite InMembers_senv_of_locs; auto.
-            1:{ destruct Hnd as (_&Hnd). inv Hnd. auto. }
+            1:{ destruct Hnd as (_&Hnd). inv Hnd. inv H10. auto. }
             eapply sc_vars_change_lasts; eauto.
             eapply NoLast_app; eauto.
       - erewrite find_node_other in Hfind; eauto.
@@ -2628,13 +2628,14 @@ Module Type CORRECTNESS
       simpl in *. repeat rewrite app_nil_r in *. rewrite map_fst_senv_of_inout in H8.
       destruct H0 as (_&_&Hwc). rewrite Hblk in Hwc. inv Hwc.
       assert (forall x, ~IsLast (senv_of_inout (n_in n0 ++ n_out n0) ++ senv_of_locs locs) x) as Hnl.
-        { apply NoLast_app; split.
-          - apply senv_of_inout_NoLast.
-          - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
-        }
-      assert (Forall (sem_block_ck G1 (H', Env.empty _) (clocks_of ins)) blks) as Hsem.
+      { apply NoLast_app; split.
+        - apply senv_of_inout_NoLast.
+        - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
+      }
+      inv H10. inv H11.
+      assert (Forall (sem_block_ck G1 (Hi', Env.empty _) (clocks_of ins)) blks) as Hsem.
       { simpl_Forall. eapply sem_block_change_lasts; eauto with lclocking.
-        - pose proof (n_syn n0) as Hsyn. inv Hsyn. rewrite Hblk in H12; inv H12.
+        - pose proof (n_syn n0) as Hsyn. inv Hsyn. rewrite Hblk in H11; inv H11.
           simpl_Forall; eauto using nolocal_noswitch, noswitch_noauto, noauto_nolast.
         - destruct G1; eauto.
       }
@@ -2649,7 +2650,7 @@ Module Type CORRECTNESS
           2:{ eapply find_node_not_Is_node_in in Hord2.
             2:erewrite find_node_now; eauto. eauto. }
           rewrite Hblk.
-          econstructor. 4:destruct G2; eauto.
+          do 2 econstructor. 6:destruct G2; eauto.
           * intros ?? Hv Hnin1.
             assert (In x1 (map fst (n_in n0 ++ n_out n0))) as Hinx0.
             { assert (Env.In x1 Hf) as Hin by (inv Hv; econstructor; eauto).
@@ -2660,7 +2661,7 @@ Module Type CORRECTNESS
               - apply Hnin1. apply InMembers_app, or_intror, fst_InMembers.
                 solve_In.
             }
-            eapply H13; eauto.
+            eapply H14; eauto.
             -- eapply sem_var_refines_iff. 1,4:eauto. eapply Env.dom_dom_lb; eauto.
                erewrite <-Env.dom_use in Hinx0; [|eauto].
                eapply Env.In_Members, fst_InMembers in Hinx0.
@@ -2675,7 +2676,6 @@ Module Type CORRECTNESS
           * intros. apply in_app_iff in H0 as [|]. simpl_Forall; congruence. simpl_In.
           * eapply sc_vars_incl; [|eauto]. solve_incl_app.
             erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
-          * destruct G2; eauto.
       + simpl. constructor; simpl; auto.
         now rewrite map_fst_senv_of_inout.
       + destruct G1, G2; auto.
@@ -2689,7 +2689,7 @@ Module Type CORRECTNESS
         * eapply local_hist_sc_vars with (H:=H); eauto.
           1-4:repeat rewrite map_fst_senv_of_inout in *; repeat rewrite map_fst_senv_of_locs in *; auto.
           1,2:repeat setoid_rewrite InMembers_senv_of_locs; auto.
-          1:{ destruct Hnd as (_&Hnd). inv Hnd. auto. }
+          1:{ destruct Hnd as (_&Hnd). inv Hnd. inv H10. auto. }
           eapply sc_vars_change_lasts; eauto.
           eapply NoLast_app; eauto.
     - erewrite find_node_other in Hfind; eauto.

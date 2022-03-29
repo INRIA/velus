@@ -51,6 +51,18 @@ Module Type COMPAUTO
              None ([ty; OpAux.bool_velus_type], Cbase)]
     end.
 
+  Section auto_scope.
+    Context {A : Type}.
+    Variable f_auto : A -> FreshAnn (list block * list (list (ident * nat))).
+    (* Variable f_add_eqs : list block -> A -> A. *)
+
+    Definition auto_scope (s : scope A) : FreshAnn (_ * list (ident * nat)) :=
+      let 'Scope locs blks := s in
+      do (blks', tys) <- f_auto blks;
+      ret (Scope locs blks', concat tys).
+
+  End auto_scope.
+
   Fixpoint auto_block (blk : block) : FreshAnn (block * list (ident * nat)) :=
     match blk with
     | Beq _ => ret (blk, [])
@@ -59,12 +71,12 @@ Module Type COMPAUTO
         ret (Breset blks' er, concat tys)
     | Bswitch ec branches =>
         do (branches', tys) <- mmap2 (fun '(e, blks) =>
-                                       do (blks', tys) <- mmap2 auto_block blks;
-                                       ret ((e, blks'), concat tys)) branches;
+                                       do (blks', tys) <- auto_scope (mmap2 auto_block) blks;
+                                       ret ((e, blks'), tys)) branches;
         ret (Bswitch ec branches', concat tys)
-    | Blocal locs blks =>
-        do (blks', tys) <- mmap2 auto_block blks;
-        ret (Blocal locs blks', concat tys)
+    | Blocal s =>
+        do (s', tys) <- auto_scope (mmap2 auto_block) s;
+        ret (Blocal s', tys)
     | Bauto ck (ini, oth) states =>
         do tyid <- fresh_ident;
         let ty := (tyid, List.length states) in
@@ -77,17 +89,20 @@ Module Type COMPAUTO
                                     add_whens (Eenum OpAux.false_tag OpAux.bool_velus_type) OpAux.bool_velus_type ck]
                                   [Evar pst (Tenum ty, ck); Evar pres (OpAux.bool_velus_type, ck)]
                                   [(Tenum ty, ck); (OpAux.bool_velus_type, ck)]]) in
-        do (branches, tys) <- mmap2 (fun '(e, (blks, trans)) =>
-                                        do (blks', tys) <- mmap2 auto_block blks;
-                                        let transeq := Beq ([pst; pres], trans_exp (Tenum ty) trans e) in
-                                        ret ((e, [Breset (transeq::blks') (Evar res (OpAux.bool_velus_type, Cbase))]),
-                                             concat tys)) states;
+        do (branches, tys) <- mmap2 (fun '(e, s) =>
+                                      do (s', tys) <- auto_scope
+                                                       (fun '(blks, trans) =>
+                                                          do (blks', tys) <- mmap2 auto_block blks;
+                                                          let transeq := Beq ([pst; pres], trans_exp (Tenum ty) trans e) in
+                                                          ret (transeq::blks', tys))
+                                                       s;
+                                      ret ((e, (Scope [] [Breset [Blocal s'] (Evar res (OpAux.bool_velus_type, Cbase))])), tys)) states;
         let switch := Bswitch (Evar st (Tenum ty, ck)) branches in
-        ret (Blocal [(st, (Tenum ty, ck, xH, None));
-                     (pst, (Tenum ty, ck, xH, None));
-                     (res, (OpAux.bool_velus_type, ck, xH, None));
-                     (pres, (OpAux.bool_velus_type, ck, xH, None))]
-                    [stateq;switch], ty::concat tys)
+        ret (Blocal (Scope [(st, (Tenum ty, ck, xH, None));
+                            (pst, (Tenum ty, ck, xH, None));
+                            (res, (OpAux.bool_velus_type, ck, xH, None));
+                            (pres, (OpAux.bool_velus_type, ck, xH, None))]
+                           [stateq;switch]), ty::concat tys)
     end.
 
   (** Preservation of st_valid_after *)
@@ -103,11 +118,11 @@ Module Type COMPAUTO
       eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
     - (* switch *)
       eapply mmap2_st_valid; eauto. simpl_Forall.
-      repeat inv_bind.
+      destruct s0. repeat inv_bind.
       eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
     - (* automaton *)
       eapply mmap2_st_valid; eauto 8 using fresh_ident_st_valid. simpl_Forall.
-      repeat inv_bind.
+      destruct s0 as [?(?&?)]. repeat inv_bind.
       eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
     - (* local *)
       eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
@@ -127,12 +142,12 @@ Module Type COMPAUTO
       eapply mmap2_st_follows; eauto.
     - (* switch *)
       eapply mmap2_st_follows; eauto; simpl_Forall.
-      repeat inv_bind.
+      destruct s0. repeat inv_bind.
       eapply mmap2_st_follows; eauto; simpl_Forall; eauto.
     - (* automaton *)
       etransitivity. 2:eapply mmap2_st_follows; eauto.
       repeat (etransitivity; eauto using fresh_ident_st_follows).
-      simpl_Forall. repeat inv_bind.
+      simpl_Forall. destruct s0 as [?(?&?)]. repeat inv_bind.
       eapply mmap2_st_follows; eauto; simpl_Forall; eauto.
     - (* local *)
       eapply mmap2_st_follows; eauto.
@@ -170,28 +185,31 @@ Module Type COMPAUTO
       constructor.
       + apply Forall3_ignore3 in H0; inv H0; congruence.
       + apply Forall3_ignore13 in H0; simpl_Forall.
-        esplit; split; eauto.
-        repeat inv_bind.
+        destruct s0; repeat inv_bind.
+        inv H4; inv_VarsDefined. constructor. do 2 esplit; eauto.
         apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H5.
-        eapply Forall2_trans_ex in H4; eauto. simpl_Forall; eauto.
+        eapply Forall2_trans_ex in Hvars; eauto. simpl_Forall; eauto.
     - (* automaton *)
-      econstructor. constructor; constructor; eauto.
+      do 3 econstructor. split; [do 2 constructor; eauto|].
       2:{ simpl. rewrite app_nil_r.
-          apply perm_skip, perm_swap. }
+          rewrite Permutation_app_comm. apply perm_skip, perm_swap. }
       apply mmap2_values in H7.
       constructor.
       + apply Forall3_ignore3 in H7; inv H7; try congruence. auto.
       + apply Forall3_ignore13 in H7; simpl_Forall.
-        repeat inv_bind.
+        destruct s0 as [?(?&?)]; repeat inv_bind.
+        inv H5; inv_VarsDefined. constructor.
         apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H10.
-        eapply Forall2_trans_ex in H5; eauto.
-        esplit; split.
-        * repeat constructor. instantiate (1:=x11). simpl_Forall; eauto.
-        * simpl. rewrite app_nil_r; eauto using Permutation.
+        eapply Forall2_trans_ex in Hvars; eauto.
+        do 2 esplit.
+        * repeat constructor. do 2 esplit. repeat constructor. instantiate (1:=x12). simpl_Forall; eauto.
+          simpl. rewrite Hperm. rewrite 2 app_comm_cons. reflexivity.
+        * simpl. repeat rewrite app_nil_r; eauto using Permutation.
     - (* local *)
-      econstructor; eauto.
+      inv H1; inv_VarsDefined.
+      do 2 econstructor. do 2 esplit; [|eauto].
       apply mmap2_values, Forall3_ignore3, Forall2_swap_args in H0.
-      eapply Forall2_trans_ex in H2; eauto. simpl_Forall; eauto.
+      eapply Forall2_trans_ex in Hvars; eauto. simpl_Forall; eauto.
   Qed.
 
   (** NoDupLocals *)
@@ -226,6 +244,28 @@ Module Type COMPAUTO
       repeat (take (In _ _) and inv it); subst; eauto with datatypes.
   Qed.
 
+  Lemma auto_scope_NoDupScope {A} P_good P_nd f_auto aft : forall locs (blk: A) xs s' tys st st',
+      st_valid_after st auto aft ->
+      Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
+      GoodLocalsScope P_good last_prefs (Scope locs blk) ->
+      NoDupScope P_nd xs (Scope locs blk) ->
+      auto_scope f_auto (Scope locs blk) st = ((s', tys), st') ->
+      (forall xs blks' tys st st',
+          st_valid_after st auto aft ->
+          Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
+          P_good blk ->
+          P_nd xs blk ->
+          f_auto blk st = ((blks', tys), st') ->
+          Forall (NoDupLocals xs) blks') ->
+      NoDupScope (fun xs => Forall (NoDupLocals xs)) xs s'.
+  Proof.
+    intros * Hvalid Hat Hgood Hnd Haut; inv Hgood; inv Hnd; repeat inv_bind.
+    econstructor; eauto.
+    eapply H0; eauto.
+    apply Forall_app; split; auto.
+    simpl_Forall. auto.
+  Qed.
+
   Lemma auto_block_NoDupLocals aft : forall blk xs blk' tys st st',
       st_valid_after st auto aft ->
       Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
@@ -234,48 +274,59 @@ Module Type COMPAUTO
       auto_block blk st = ((blk', tys), st') ->
       NoDupLocals xs blk'.
   Proof.
+    Opaque auto_scope.
     induction blk using block_ind2; intros * Hvalid Hat Hgood Hnd Haut;
       inv Hgood; inv Hnd; destruct_conjs; repeat inv_bind.
     - (* equation *)
       constructor.
+
     - (* reset *)
       constructor.
       eapply mmap2_values_valid_follows, Forall3_ignore13 in H0; eauto using auto_block_st_valid, auto_block_st_follows.
       simpl_Forall. eapply H; eauto.
       simpl_Forall. destruct Hat; eauto. right; eapply incl_map; eauto using st_follows_incl.
+
     - (* switch *)
       constructor.
       eapply mmap2_values_valid_follows, Forall3_ignore13 in H0; eauto.
-      2,3:intros; destruct_conjs; repeat inv_bind.
+      Transparent auto_scope.
+      2,3:intros; destruct_conjs; destruct s0; repeat inv_bind.
       2:{ eapply mmap2_st_valid; eauto. simpl_Forall; eauto using auto_block_st_valid. }
       2:{ eapply mmap2_st_follows; eauto. simpl_Forall; eauto using auto_block_st_follows. }
-      simpl_Forall. repeat inv_bind.
-      eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto using auto_block_st_valid, auto_block_st_follows.
-      simpl_Forall. eapply H; eauto.
-      simpl_Forall. destruct Hat; eauto. right; eapply incl_map; eauto.
-      apply st_follows_incl; etransitivity; eauto.
-    - (* automaton *)
-      constructor; simpl.
-      + repeat constructor.
-        eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto 8 using fresh_ident_st_valid.
-        2,3:intros; destruct_conjs; repeat inv_bind.
-        2:{ eapply mmap2_st_valid; eauto. simpl_Forall; eauto using auto_block_st_valid. }
-        2:{ eapply mmap2_st_follows; eauto. simpl_Forall; eauto using auto_block_st_follows. }
-        simpl_Forall. repeat inv_bind.
-        take (In _ [_]) and apply In_singleton in it; subst.
-        repeat constructor.
+      Opaque auto_scope.
+      simpl_Forall. destruct s0; repeat inv_bind. eapply auto_scope_NoDupScope; eauto.
+      + simpl_Forall. destruct Hat; eauto. right; eapply incl_map; eauto using st_follows_incl.
+      + intros.
         eapply mmap2_values_valid_follows, Forall3_ignore13 in H12; eauto using auto_block_st_valid, auto_block_st_follows.
         simpl_Forall. eapply H; eauto.
+        simpl_Forall. destruct H9; eauto. right; eapply incl_map; eauto using st_follows_incl.
+      Transparent auto_scope.
+
+    - (* automaton *)
+      do 2 constructor; simpl.
+      + repeat constructor.
+        eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto 8 using fresh_ident_st_valid.
+        2,3:intros; destruct_conjs; destruct s0 as [?(?&?)]; repeat inv_bind.
+        2:{ eapply mmap2_st_valid; eauto. simpl_Forall; eauto using auto_block_st_valid. }
+        2:{ eapply mmap2_st_follows; eauto. simpl_Forall; eauto using auto_block_st_follows. }
+        simpl_Forall. repeat inv_bind. destruct s0 as [?(?&?)].
+        repeat constructor. 2:{ intros * Hin; inv Hin. } rewrite app_nil_r.
+        eapply auto_scope_NoDupScope; eauto.
         1:apply Forall_app; split.
         * simpl_Forall. destruct Hat; auto. right; eapply incl_map; eauto.
           apply st_follows_incl; repeat (etransitivity; eauto using fresh_ident_st_follows).
         * repeat apply Forall_cons; auto.
           all:right; eapply incl_map; eauto using fresh_ident_Inids.
-          all:apply st_follows_incl; repeat (etransitivity; eauto using fresh_ident_st_follows).
-        * eapply NoDupLocals_incl' in H3; eauto using auto_not_in_last_prefs.
+          all:apply st_follows_incl; repeat (try reflexivity; etransitivity; eauto using fresh_ident_st_follows).
+        * eapply NoDupScope_incl' in H3; eauto using auto_not_in_last_prefs.
+          2:{ intros; simpl_Forall. eapply NoDupLocals_incl' in H13; eauto using auto_not_in_last_prefs. }
           intros * Hin. apply in_app_iff in Hin as [|]; auto.
           repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
-          repeat (take (In x20 _) and inv it; eauto).
+          repeat (take (In x15 _) and inv it; eauto).
+        * intros; repeat inv_bind.
+          eapply mmap2_values_valid_follows, Forall3_ignore13 in H17; eauto using auto_block_st_valid, auto_block_st_follows.
+          repeat constructor. simpl_Forall. eapply H; eauto.
+          simpl_Forall. destruct H14; auto. right. eapply incl_map; eauto using st_follows_incl.
       + rewrite fst_NoDupMembers; simpl.
         eapply fresh_idents_NoDup; eauto using fresh_ident_st_valid.
       + intros * Heq Hin. simpl_Forall.
@@ -289,10 +340,11 @@ Module Type COMPAUTO
                     apply st_follows_incl; repeat (try reflexivity; etransitivity; eauto using fresh_ident_st_follows)).
     - (* local *)
       constructor; auto.
-      eapply mmap2_values_valid_follows, Forall3_ignore13 in H0; eauto using auto_block_st_valid, auto_block_st_follows.
-      simpl_Forall. eapply H; eauto.
-      apply Forall_app; split; simpl_Forall; auto.
-      destruct Hat; eauto. right; eapply incl_map; eauto using st_follows_incl.
+      eapply auto_scope_NoDupScope; eauto.
+      intros.
+      eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto using auto_block_st_valid, auto_block_st_follows.
+      simpl_Forall. eapply H; eauto. simpl_Forall.
+      destruct H4; eauto. right; eapply incl_map; eauto using st_follows_incl.
   Qed.
 
   (** GoodLocals *)
@@ -310,17 +362,18 @@ Module Type COMPAUTO
       constructor. auto_block_simpl_Forall.
     - (* switch *)
       constructor. auto_block_simpl_Forall.
+      destruct s0; repeat inv_bind. inv H1. constructor; eauto using AtomOrGensym_add. auto_block_simpl_Forall.
     - (* automaton *)
-      constructor; simpl.
+      do 2 constructor; simpl.
       + repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
         repeat apply Forall_cons; auto.
         all:right; do 2 esplit; eauto; now apply PSF.add_1.
       + repeat constructor.
-        auto_block_simpl_Forall.
-        take (In _ [_]) and apply In_singleton in it; subst. repeat constructor.
+        auto_block_simpl_Forall. destruct s0 as [?(?&?)]; repeat inv_bind. inv H1.
+        repeat constructor; eauto using AtomOrGensym_add.
         auto_block_simpl_Forall.
     - (* local *)
-      constructor; eauto using AtomOrGensym_add.
+      inv H1. do 2 constructor; eauto using AtomOrGensym_add.
       auto_block_simpl_Forall.
   Qed.
 
@@ -339,12 +392,13 @@ Module Type COMPAUTO
       constructor. auto_block_simpl_Forall.
     - (* switch *)
       constructor. auto_block_simpl_Forall.
+      inv H1. repeat inv_bind. constructor; auto. auto_block_simpl_Forall.
     - (* automaton *)
       repeat constructor. auto_block_simpl_Forall.
-      take (In _ [_]) and apply In_singleton in it; subst. repeat constructor.
+      inv H1; destruct blks. repeat inv_bind. repeat constructor; auto.
       auto_block_simpl_Forall.
     - (* local *)
-      constructor; auto. auto_block_simpl_Forall.
+      inv H1. repeat constructor; auto. auto_block_simpl_Forall.
   Qed.
 
   Program Definition auto_node (n: @node nolast_block last_prefs) : @node noauto_block auto_prefs * list (ident * nat) :=

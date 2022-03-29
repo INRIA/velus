@@ -45,7 +45,7 @@ Module Type TRORDERED
   Proof.
     intros * Htr Hord.
     destruct n'. simpl in Hord.
-    tonodeInv Htr. cases. constructor. right.
+    tonodeInv Htr. cases. do 2 constructor. right.
     clear - Hord Hmmap. monadInv Hmmap. rename EQ into Hmmap. revert dependent n_eqs.
     induction l1; intros. inv Hmmap. inv Hord.
     apply mmap_cons in Hmmap.

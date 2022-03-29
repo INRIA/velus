@@ -61,6 +61,12 @@ Module Type LORDERED
   Definition Is_node_in_eq (f: ident) (eq: equation) : Prop :=
     List.Exists (Is_node_in_exp f) (snd eq).
 
+  Inductive Is_node_in_scope {A} (P_in : A -> Prop) (f : ident) : scope A -> Prop :=
+  | INScope : forall locs blks,
+      Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
+      \/ P_in blks ->
+      Is_node_in_scope P_in f (Scope locs blks).
+
   Inductive Is_node_in_block (f: ident) : block -> Prop :=
   | INBeq: forall eq,
       Is_node_in_eq f eq ->
@@ -69,17 +75,18 @@ Module Type LORDERED
       Exists (Is_node_in_block f) blocks \/ Is_node_in_exp f er ->
       Is_node_in_block f (Breset blocks er)
   | INBswitch : forall ec branches,
-      Is_node_in_exp f ec \/ Exists (fun blks => Exists (Is_node_in_block f) (snd blks)) branches ->
+      Is_node_in_exp f ec
+      \/ Exists (fun blks => Is_node_in_scope (Exists (Is_node_in_block f)) f (snd blks)) branches ->
       Is_node_in_block f (Bswitch ec branches)
   | INBauto : forall ini oth states ck,
       Exists (fun '(e, _) => Is_node_in_exp f e) ini
-      \/ Exists (fun blks => Exists (Is_node_in_block f) (fst (snd blks))
-                         \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd (snd blks))) states ->
+      \/ Exists (fun blks => Is_node_in_scope
+                           (fun blks => Exists (Is_node_in_block f) (fst blks)
+                                     \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd blks)) f (snd blks)) states ->
       Is_node_in_block f (Bauto ck (ini, oth) states)
-  | INBlocal : forall locs blocks,
-      Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
-      \/ Exists (Is_node_in_block f) blocks ->
-      Is_node_in_block f (Blocal locs blocks).
+  | INBlocal : forall scope,
+      Is_node_in_scope (Exists (Is_node_in_block f)) f scope ->
+      Is_node_in_block f (Blocal scope).
 
   Definition Ordered_nodes {PSyn prefs} : @global PSyn prefs -> Prop :=
     Ordered_program (fun f nd => Is_node_in_block f nd.(n_block)).
@@ -165,7 +172,7 @@ Module Type LORDERED
     simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
   Qed.
 
-  Lemma wl_equation_Is_node_in_block {PSyn prefs} : forall (G: @global PSyn prefs) d f,
+  Lemma wl_block_Is_node_in_block {PSyn prefs} : forall (G: @global PSyn prefs) d f,
       wl_block G d ->
       Is_node_in_block f d ->
       In f (map n_name (nodes G)).
@@ -181,13 +188,17 @@ Module Type LORDERED
       destruct H1 as [Hisin|Hisin].
       + eapply wl_exp_Is_node_in_exp; eauto.
       + simpl_Exists; simpl_Forall; eauto.
+        inv Hisin. inv H5.
+        destruct H0 as [|]; simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
+        destruct o; simpl in *; destruct_conjs; [|take False and inv it]; eauto using wl_exp_Is_node_in_exp.
     - inv Hwl. inv Hin. destruct H1 as [Hisin|Hisin]; simpl_Exists; simpl_Forall.
       + eapply wl_exp_Is_node_in_exp; eauto.
-      + destruct Hisin as [|]; simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
-    - inv Hwl. inv Hin.
-      destruct H1 as [Hex|Hex]; simpl_Exists; simpl_Forall; eauto.
-      destruct o; simpl in *; destruct_conjs; [|inv Hex].
-      eapply wl_exp_Is_node_in_exp; eauto.
+      + inv Hisin. inv H5. destruct_conjs.
+        destruct H0 as [|[|]]; simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
+        destruct o; simpl in *; destruct_conjs; [|take False and inv it]; eauto using wl_exp_Is_node_in_exp.
+    - inv Hwl; inv H1. inv Hin; inv H1.
+      destruct H2 as [Hex|Hex]; simpl_Exists; simpl_Forall; eauto.
+      destruct o; simpl in *; destruct_conjs; [|inv Hex]; eauto using wl_exp_Is_node_in_exp.
   Qed.
 
   Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,
@@ -197,7 +208,7 @@ Module Type LORDERED
   Proof.
     intros * Hwl Hisin.
     unfold wl_node in Hwl.
-    eapply wl_equation_Is_node_in_block; eauto.
+    eapply wl_block_Is_node_in_block; eauto.
   Qed.
 
   Lemma wl_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),

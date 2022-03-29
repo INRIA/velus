@@ -117,7 +117,7 @@ Module Type INLINELOCAL
     | Breset blks er =>
       do blks' <- mmap (inlinelocal_block sub) blks;
       ret [Breset (concat blks') (rename_in_exp sub er)]
-    | Blocal locs blks =>
+    | Blocal (Scope locs blks) =>
       let locs' := map (fun '(x, (ty, ck, _, _)) => (x, (ty, (rename_in_clock sub ck)))) locs in
       do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
@@ -128,7 +128,7 @@ Module Type INLINELOCAL
 
   Definition inlinelocal_topblock (blk : block) : FreshAnn (list block * list (ident * _)) :=
     match blk with
-    | Blocal locs blks =>
+    | Blocal (Scope locs blks) =>
       do blks' <- mmap (inlinelocal_block (@Env.empty _)) blks;
       ret (concat blks', locs)
     | _ =>
@@ -163,7 +163,7 @@ Module Type INLINELOCAL
       st_valid_after st' aft.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hdl Hvalid; repeat inv_bind; auto.
+    destruct blk; intros * Hdl Hvalid; try destruct s; repeat inv_bind; auto.
     1-4:eapply inlinelocal_block_st_valid_after; eauto.
     eapply mmap_st_valid in H; eauto.
     eapply Forall_forall; intros.
@@ -191,7 +191,7 @@ Module Type INLINELOCAL
       st_follows st st'.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hil; repeat inv_bind.
+    destruct blk; intros * Hil; try destruct s; repeat inv_bind.
     1-4:eapply inlinelocal_block_st_follows; eauto.
     eapply mmap_st_follows; eauto.
     eapply Forall_forall; intros; eauto using inlinelocal_block_st_follows.
@@ -250,42 +250,39 @@ Module Type INLINELOCAL
       do 2 esplit; eauto using VarsDefined.
       simpl. now rewrite <-app_assoc.
     - (* local *)
-      eapply mmap_vars_perm in H1 as (ys1&Hvars1&Hperm1); eauto.
+      inv H1. inv H5. inv_VarsDefined.
+      eapply mmap_vars_perm in H4 as (ys1&Hvars1&Hperm1); eauto.
       2:{ simpl_Forall.
           eapply NoDupLocals_incl; [|eauto].
-          rewrite <-H6, (Permutation_app_comm _ xs). repeat rewrite app_assoc.
+          rewrite <-app_assoc, <-Hperm.
           apply incl_app; try solve [solve_incl_app].
-          apply incl_app; try solve [solve_incl_app].
-          rewrite (Permutation_app_comm _ xs), <-app_assoc. apply incl_appr.
-          intros ? Hin. eapply in_map_iff in Hin as ((?&?)&?&Hin); subst.
-          eapply Env.elements_complete, Env.union_find4 in Hin as [Hfind|Hfind].
+          intros ? Hin. simpl_In.
+          eapply Env.elements_complete, Env.union_find4 in Hin0 as [Hfind|Hfind].
           - eapply Env.elements_correct in Hfind.
-            apply in_or_app, or_introl, in_map_iff; eauto.
+            apply in_or_app, or_introl; solve_In.
           - eapply fresh_idents_rename_sub1 in H0; eauto. 2:econstructor; eauto.
-            unfold idty in H0. rewrite fst_InMembers in H0.
-            simpl_In. apply in_or_app, or_intror. solve_In.
+            rewrite fst_InMembers in H0. simpl_In.
+            rewrite Hperm, 2 in_app_iff. right; right. solve_In.
       }
-      rewrite <-H6, map_app in Hperm1.
+      rewrite Hperm, map_app in Hperm1.
       unfold st_ids in Hperm1. do 1 (erewrite fresh_idents_rename_anns in Hperm1; eauto); simpl in *.
-      rewrite map_app, not_in_union_map_rename1, not_in_union_map_rename2,
-              (Permutation_swap (concat ys1)), <-app_assoc in Hperm1.
-      2:{ eapply Forall_forall; intros * Hin contra.
-          eapply fresh_idents_rename_sub1 in contra; eauto.
-          unfold idty in contra. rewrite fst_InMembers, map_map in contra.
-          erewrite map_ext, <-fst_InMembers in contra.
-          eapply H9; eauto using in_or_app. intros; destruct_conjs; auto. }
-      2:{ eapply Forall_forall; intros * Hin (?&contra). apply fst_InMembers in Hin.
-          eapply H9; eauto. apply in_or_app; left.
-          eapply in_map_iff. do 2 esplit.
+      do 2 esplit; eauto.
+      rewrite map_app, not_in_union_map_rename2, not_in_union_map_rename1,
+        (Permutation_swap (concat ys1)), <-app_assoc in Hperm1.
+      2:{ simpl_Forall; subst.
+          intros (?&contra). eapply H11; eauto using In_InMembers.
+          apply in_or_app; left. solve_In.
           2:eapply Env.elements_correct; eauto. reflexivity. }
+      2:{ simpl_Forall; subst.
+          intro contra. eapply fresh_idents_rename_sub1 in contra; eauto.
+          rewrite fst_InMembers in contra; simpl_In.
+          eapply H11; eauto using In_InMembers, in_or_app. }
       eapply Ker.fresh_idents_rename_ids in H0.
-      2:{ rewrite fst_NoDupMembers in H8.
-          unfold idty. rewrite fst_NoDupMembers, map_map; simpl.
-          erewrite map_ext; eauto. intros; destruct_conjs; auto. }
-      rewrite H0 in Hperm1. unfold idty in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
-      erewrite map_ext in Hperm1. eapply Permutation_app_inv_l in Hperm1.
-      2:intros; destruct_conjs; auto.
-      repeat esplit; eauto.
+      2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
+      rewrite H0 in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
+      rewrite Permutation_swap with (xs:=map _ xs) in Hperm1.
+      erewrite map_ext in Hperm1. eapply Permutation_app_inv_l in Hperm1; auto.
+      intros; destruct_conjs; auto.
   Qed.
 
   Lemma inlinelocal_topblock_vars_perm : forall blk blks' vars xs st st',
@@ -296,16 +293,19 @@ Module Type INLINELOCAL
       exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys ++ st_ids st) (xs ++ map fst vars ++ st_ids st').
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hns Hvars Hnd Hil; repeat inv_bind; simpl.
+    destruct blk; intros * Hns Hvars Hnd Hil; try destruct s; repeat inv_bind; simpl.
     1-4:eapply inlinelocal_block_vars_perm in H as (?&?&Hperm); eauto.
-    5:inv Hvars; inv Hnd; eapply mmap_vars_perm in H as (?&?&Hperm); eauto.
-    1-5:rewrite rename_vars_empty in Hperm; eauto.
-    - do 2 esplit; eauto. rewrite Hperm, <-H4, (Permutation_app_comm _ xs), <-app_assoc; auto.
+    5:(inv Hvars; inv Hnd;
+       take (VarsDefinedScope _ _ _) and inv it; inv_VarsDefined;
+       take (NoDupScope _ _ _) and inv it; eapply mmap_vars_perm in H as (?&?&Hperm'); eauto).
+    1-5:try rewrite rename_vars_empty in Hperm; eauto.
+    - rewrite rename_vars_empty in Hperm'; eauto.
+      do 2 esplit; eauto. rewrite Hperm', Hperm, <-app_assoc; auto.
     - eapply Forall_forall; intros; eauto using inlinelocal_block_vars_perm.
     - inv Hns; auto.
     - rewrite Env.Props.P.elements_empty; simpl.
       eapply Forall_impl; [|eauto]; intros.
-      now rewrite <-H4, Permutation_app_comm.
+      now rewrite Hperm.
     Transparent inlinelocal_block.
   Qed.
 
@@ -337,7 +337,7 @@ Module Type INLINELOCAL
       Forall (GoodLocals local_prefs) blks'.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hns Hil; repeat inv_bind.
+    destruct blk; intros * Hns Hil; try destruct s; repeat inv_bind.
     1-4:eapply inlinelocal_block_GoodLocals; eauto.
     apply Forall_concat.
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
@@ -386,7 +386,7 @@ Module Type INLINELOCAL
       Forall (NoDupLocals xs) blks'.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hns Hil; repeat inv_bind.
+    destruct blk; intros * Hns Hil; try destruct s; repeat inv_bind.
     1-4:eapply inlinelocal_block_NoDupLocals; eauto.
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
     eapply Forall_concat. rewrite Forall_forall in *; intros.
@@ -399,7 +399,7 @@ Module Type INLINELOCAL
       incl (map fst vars) (map fst (locals blk)).
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hil; repeat inv_bind.
+    destruct blk; intros * Hil; try destruct s; repeat inv_bind.
     1-4:apply incl_nil'.
     erewrite map_app, map_map, map_ext.
     apply incl_appl, incl_refl. intros; destruct_conjs; auto.
@@ -412,8 +412,9 @@ Module Type INLINELOCAL
       NoDupMembers vars.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hnd Hil; inv Hnd; repeat inv_bind; auto.
+    destruct blk; intros * Hnd Hil; inv Hnd; try destruct s; repeat inv_bind; auto.
     1-4:constructor.
+    inv H1; auto.
     Transparent inlinelocal_block.
   Qed.
 
@@ -423,7 +424,8 @@ Module Type INLINELOCAL
       forall x, InMembers x vars -> ~In x xs.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hnd Hil; inv Hnd; repeat inv_bind; auto.
+    destruct blk; intros * Hnd Hil; inv Hnd; try destruct s; repeat inv_bind; auto.
+    inv H1; auto.
     Transparent inlinelocal_block.
   Qed.
 
@@ -456,7 +458,7 @@ Module Type INLINELOCAL
       Forall nolocal_block blks'.
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hns Hil; repeat inv_bind.
+    destruct blk; intros * Hns Hil; try destruct s; repeat inv_bind.
     1-4:eapply inlinelocal_block_nolocal; eauto.
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
     eapply Forall_concat.
@@ -494,9 +496,10 @@ Module Type INLINELOCAL
       n_in := (n_in n);
       n_out := (n_out n);
       n_block := Blocal
-                   (snd (fst res)++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None)))
-                        (st_anns (snd res)))
-                   (fst (fst res));
+                   (Scope
+                      (snd (fst res)++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None)))
+                           (st_anns (snd res)))
+                      (fst (fst res)));
       n_ingt0 := (n_ingt0 n);
       n_outgt0 := (n_outgt0 n);
     |}.
@@ -509,11 +512,11 @@ Module Type INLINELOCAL
     eapply inlinelocal_topblock_vars_perm in Hvars as (?&?&Hperm'); eauto.
     2:{ rewrite Hperm.
         eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
-    econstructor; eauto.
+    do 2 econstructor; eauto. do 2 esplit; eauto.
     unfold st_ids in *. rewrite init_st_anns, app_nil_r in Hperm'.
-    erewrite map_app, map_map, Hperm', <-app_assoc; simpl.
-    rewrite (app_assoc x), (Permutation_app_comm x), <-app_assoc. apply Permutation_app_head.
-    now rewrite Permutation_app_comm.
+    erewrite Hperm', map_app; simpl.
+    repeat apply Permutation_app_head.
+    erewrite map_map; eauto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
@@ -526,7 +529,7 @@ Module Type INLINELOCAL
       rewrite <-ps_from_list_ps_of_list.
       apply PS_For_all_Forall'. auto.
     }
-    split; eauto. constructor; eauto.
+    split; eauto. do 2 constructor; eauto.
     - eapply inlinelocal_topblock_NoDupLocals; eauto.
     - assert (Hvalid:=H). eapply st_valid_NoDup, NoDup_app_l in H.
       apply NoDupMembers_app.
@@ -550,7 +553,7 @@ Module Type INLINELOCAL
     destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hdl. simpl.
     pose proof (n_syn n) as Hsyn.
     repeat split; eauto using AtomOrGensym_add.
-    constructor.
+    do 2 constructor.
     - assert (Hil:=Hdl). eapply inlinelocal_topblock_st_valid_after, st_valid_prefixed in Hdl.
       2:{ eapply init_st_valid. eapply local_not_in_switch_prefs. eapply PS_For_all_empty. }
       rewrite map_app, map_map, Forall_app; split; simpl.

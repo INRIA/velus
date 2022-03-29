@@ -432,7 +432,7 @@ Module Type NORMFBY
 
   Inductive normalized_node {PSyn1 PSyn2 prefs1 prefs2} (G : @global PSyn1 prefs1) : (@node PSyn2 prefs2) -> Prop :=
   | normalized_Node : forall n locs blks,
-      n_block n = Blocal locs blks ->
+      n_block n = Blocal (Scope locs blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall (normalized_block G (ps_from_list (List.map fst (n_out n)))) blks ->
       normalized_node G n.
@@ -706,7 +706,7 @@ Module Type NORMFBY
   Qed.
 
   Lemma normfby_node_init_st_valid {A} : forall (n: @node nolocal_top_block norm1_prefs) locs blks,
-      n_block n = Blocal locs blks ->
+      n_block n = Blocal (Scope locs blks) ->
       st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs))).
   Proof.
     intros * Hn.
@@ -717,7 +717,7 @@ Module Type NORMFBY
     eapply init_st_valid.
     - apply norm2_not_in_norm1_prefs.
     - rewrite <- ps_from_list_ps_of_list, PS_For_all_Forall'.
-      pose proof (n_good n) as (Good1&Good2&_); eauto. rewrite Hn in Good2. inv Good2.
+      pose proof (n_good n) as (Good1&Good2&_); eauto. rewrite Hn in Good2. inv Good2. inv H0.
       rewrite app_assoc, map_app, Forall_app, map_fst_idty.
       split; auto.
   Qed.
@@ -728,10 +728,10 @@ Module Type NORMFBY
        n_in := n_in n;
        n_out := n_out n;
        n_block := match (n_block n) with
-                  | Blocal vars blks =>
+                  | Blocal (Scope vars blks) =>
                     let res := normfby_blocks (ps_from_list (map fst (n_out n))) blks init_st in
                     let nvars := st_anns (snd res) in
-                    Blocal (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res)
+                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res))
                   | blk => blk
                   end;
        n_ingt0 := n_ingt0 n;
@@ -739,23 +739,24 @@ Module Type NORMFBY
     |}.
   Next Obligation.
     specialize (n_defd n) as (?&Hvars&Hperm).
-    destruct (n_block n) eqn:Hn; eauto. inv Hvars.
+    destruct (n_block n) eqn:Hn; eauto. inv Hvars; inv H0; destruct_conjs.
     destruct (normfby_blocks _ _ _) as (blks'&st') eqn:Hblks.
     do 2 esplit; [|eauto].
     eapply normfby_blocks_vars_perm in Hblks as (ys&Hvars&Hperm'); eauto.
-    econstructor; eauto.
+    constructor. econstructor; eauto.
     unfold st_ids in *. rewrite init_st_anns, app_nil_r in Hperm'.
-    rewrite Hperm', <-H3, map_app, <-2 app_assoc.
-    apply Permutation_app_head. rewrite Permutation_app_comm. apply Permutation_app_head.
+    do 2 esplit; eauto.
+    rewrite Hperm', H0, map_app, <-app_assoc.
+    apply Permutation_app_head, Permutation_app_head.
     rewrite map_map; simpl. reflexivity.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood&_).
     pose proof (n_nodup n) as (Hndup&Hndl).
-    destruct (n_block n) as [| | | |locs blks] eqn:Hblk; eauto.
+    destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
-    inv Hndl. rewrite fst_NoDupMembers in H3.
+    inv Hndl. inv H1. rewrite fst_NoDupMembers in H4.
     assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs)))) as Hvalid.
     { eapply normfby_blocks_st_valid; eauto.
       eapply normfby_node_init_st_valid; eauto.
@@ -764,14 +765,12 @@ Module Type NORMFBY
     2:{ rewrite app_assoc. apply NoDupMembers_app; auto.
         - rewrite NoDupMembers_idty, fst_NoDupMembers; auto.
         - intros * Hinm Hinl. rewrite fst_InMembers in Hinm. rewrite InMembers_idty in Hinl.
-          eapply H4; eauto using in_or_app.
+          eapply H5; eauto using in_or_app.
     }
-    constructor; simpl.
+    do 2 constructor; simpl.
     - eapply normfby_blocks_NoDupLocals; [|eauto].
-      inv Hgood.
-      eapply Forall_impl_In; [|eapply H1]; intros.
+      inv Hgood. inv H0. simpl_Forall.
       eapply NoDupLocals_incl' with (npref:=norm2). 1,2,4:eauto using norm2_not_in_norm1_prefs.
-      eapply Forall_forall in H5; eauto.
       assert (Forall (fun id => exists x hint, id = gensym norm2 hint x) (st_ids st')) as Hids.
       { eapply st_valid_prefixed; eauto. }
       intros ? Hin. repeat rewrite map_app in *. repeat rewrite in_app_iff in *. destruct Hin as [[?|Hin]|[Hin|Hin]]; auto.
@@ -781,7 +780,7 @@ Module Type NORMFBY
       solve_NoDup_app.
     - rewrite app_assoc, map_app, <-app_assoc in Hvalid.
       setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'; eauto.
-      + eapply H4; eauto.
+      + eapply H5; eauto.
       + rewrite fst_InMembers, map_map in Hinm.
         eapply st_valid_prefixed, Forall_forall in Hvalid' as (?&?&?); eauto; subst.
         eapply Forall_forall in Hgood1; eauto.
@@ -792,22 +791,22 @@ Module Type NORMFBY
   Qed.
   Next Obligation.
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
-    destruct (n_block n) as [| | | |locs blks] eqn:Hblk; eauto using GoodLocals_add.
+    destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
     assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs)))) as Hvalid.
     { specialize (n_nodup n) as (Hndup&Hndl).
-      rewrite Hblk in Hndl; simpl in Hndl. inv Hndl. rewrite fst_NoDupMembers in H3.
+      rewrite Hblk in Hndl; simpl in Hndl. inv Hndl. inv H1. rewrite fst_NoDupMembers in H4.
       eapply normfby_blocks_st_valid; eauto.
       eapply normfby_node_init_st_valid; eauto.
     }
-    inv Hgood2.
-    constructor.
+    inv Hgood2. inv H0.
+    do 2 constructor.
     + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using AtomOrGensym_add.
       eapply st_valid_prefixed in Hvalid; auto; simpl.
       erewrite map_map, map_ext with (g:=fst); [eauto|]. 2:intros (?&?&?); auto.
       eapply Forall_impl; [|eauto]. intros ? (?&?); subst. right.
       do 2 esplit; eauto. now apply PSF.add_1.
-    + eapply normfby_blocks_GoodLocals in H2; eauto.
+    + eapply normfby_blocks_GoodLocals in H3; eauto.
       rewrite Forall_forall in *; eauto using GoodLocals_add.
   Qed.
   Next Obligation.

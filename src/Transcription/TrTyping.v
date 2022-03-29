@@ -434,23 +434,23 @@ Module Type TRTYPING
       pose proof (L.n_syn n) as Hsyn. inv Hsyn. rename H into Hblk. rewrite <-Hblk in *. symmetry in Hblk.
       assert (Forall (fun blk => exists xs, L.VarsDefined blk xs /\ NoDup xs) blks) as Hvars'. 2:clear Hnd1 Hnd2 Hvars Hperm.
       { clear - Hnd1 Hnd2 Hvars Hperm.
-        inv Hvars. inv Hnd2. eapply Forall2_ignore2 in H1.
-        rewrite Forall_forall in *; intros. edestruct H1 as (?&?&Hvars); eauto.
+        inv Hvars; inv H0; L.inv_VarsDefined.
+        inv Hnd2; inv H1. apply Forall2_ignore2 in Hvars. simpl_Forall.
         do 2 esplit; eauto.
-        eapply NoDup_concat; eauto. rewrite <-H3, Hperm.
+        eapply NoDup_concat; eauto. rewrite Hperm0, Hperm.
         apply NoDup_app'.
-        - apply fst_NoDupMembers; auto.
         - apply NoDupMembers_app_r in Hnd1. apply fst_NoDupMembers; eauto.
-        - eapply Forall_forall; intros * Hinm. eapply fst_InMembers, H6 in Hinm.
-          contradict Hinm. rewrite map_app, in_app_iff; auto.
+        - apply fst_NoDupMembers; auto.
+        - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H5 in Hinm2.
+          apply Hinm2. rewrite map_app, in_app_iff; auto.
       }
       monadInv Hmmap.
       split.
-      - inv Hwt.
+      - inv Hwt. inv H3.
         eapply mmap_inversion in EQ.
         eapply envs_eq_node in Hblk.
-        induction EQ; inv H1; inv H4; inv Hvars'; constructor; auto.
-        destruct H4 as (?&?&?).
+        induction EQ; inv H1; inv H9; inv Hvars'; constructor; auto.
+        destruct H9 as (?&?&?).
         eapply wt_block_to_equation in H3; eauto; simpl; auto.
         + simpl_app. repeat rewrite map_map in *; simpl in *.
           erewrite map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _), Permutation_app_comm with (l:=map _ l); eauto.
@@ -462,10 +462,9 @@ Module Type TRTYPING
           simpl_In. repeat rewrite in_app_iff in Hin0. destruct Hin0 as [|[|]]; simpl_In; simpl_Forall; eauto.
           1,2:eapply LT.wt_clock_incl; [|eauto].
           1,2:intros; simpl_app; repeat rewrite Senv.HasType_app in *; intuition.
-        + clear - H7 Wte.
-          rewrite map_app. apply Forall_app; split; simpl_Forall; simpl_In; simpl_Forall; auto.
+        + rewrite map_app. apply Forall_app; split; simpl_Forall; simpl_In; simpl_Forall; auto.
       - erewrite to_global_enums; eauto.
-        clear - Wte Hwt. inv Hwt. intros * Hin.
+        clear - Wte Hwt. inv Hwt; inv H1. intros * Hin.
         simpl_app. repeat rewrite map_map in *; simpl in *.
         rewrite Forall_app in Wte. destruct Wte.
         repeat rewrite in_app_iff in Hin. destruct Hin as [|[|]]; simpl_In; simpl_Forall; eauto.
