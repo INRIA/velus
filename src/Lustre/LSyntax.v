@@ -68,6 +68,18 @@ Module Type LSYNTAX
 
   Definition transition : Type := exp * (enumtag * bool). (* condition, new state, with or without reset *)
 
+  (* Scope
+
+    Contains local variable definitions.
+    It is defined generically in order to factorize related definitions and proofs.
+    Scope can appear under local blocks, as well as under switch and state machines branches.
+    The parameter A is usually a list of blocks (as well as a list of transitions in the state-machine case).
+
+    Local variables are declared with:
+    - typing and clocking annotations (provided by the programmer)
+    - a causality label (added by elaboration) that is used to build the dependency graph of the node
+    - if the variable is defined by last, the last expression and a causality label for the last variable
+   *)
   Inductive scope A :=
   | Scope : list (ident * (type * clock * ident * option (exp * ident))) -> A -> scope A.
 
@@ -327,6 +339,27 @@ Module Type LSYNTAX
       GoodLocalsScope (Forall (GoodLocals prefs)) prefs scope ->
       GoodLocals prefs (Blocal scope).
 
+  (* Full node
+
+    The `PSyn` and `prefs` parameters are used to caracterize changes in nodes
+    during compilation
+    - `PSyn` indicates a property of the syntax of block
+      (see `nolast_block`, `noauto_block`, `noswitch_block`, `nolocal_top_block`)
+    - `prefs` indicates the possible prefix for variable names in a node.
+      for instance, after elaboration, names of the form "elab$x$42" can appear.
+      after compilation of last expressions, names of the form "last$x$42" can also appear.
+      See `AtomOrGensym` and `GoodLocals` for more details
+
+    These are represented as type parameters of a node.
+    The other solution would be to use subset types, but this would complicate the
+    definition compilation functions over the global.
+    With this representation, most of these functions are simply defined as mapping
+    a node compilation function.
+
+    Input and Output variables are declared with:
+    - typing and clocking annotations (provided by the programmer)
+    - a causality label (added by elaboration) that is used to build the dependency graph of the node
+   *)
   Record node {PSyn : block -> Prop} {prefs : PS.t} : Type :=
     mk_node {
         n_name     : ident;
