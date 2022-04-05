@@ -1,0 +1,19 @@
+.expr {
+    color: green;
+}
+
+.operator {
+    color: green;
+}
+
+.constant {
+    color: blue;
+}
+
+.type {
+    color: blue;
+}
+
+.block {
+    color: purple;
+}
