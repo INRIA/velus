@@ -1652,8 +1652,8 @@ Module Type UNNESTING
       unnested_block G (Breset [block] (Evar x ann)).
 
   Inductive unnested_node {PSyn1 PSyn2 prefs1 prefs2} (G: @global PSyn1 prefs1) : @node PSyn2 prefs2 -> Prop :=
-  | unnested_Node : forall n locs blks,
-      n_block n = Blocal (Scope locs blks) ->
+  | unnested_Node : forall n locs caus blks,
+      n_block n = Blocal (Scope locs caus blks) ->
       Forall (fun '(x, (_, _, _, o)) => o = None) locs ->
       Forall (unnested_block G) blks ->
       unnested_node G n.
@@ -2470,8 +2470,8 @@ Module Type UNNESTING
     intros [contra|[contra|[contra|[contra|contra]]]]; subst; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
-  Lemma unnest_node_init_st_valid {A PSyn} : forall (n: @node PSyn local_prefs) locs blks,
-      n_block n = Blocal (Scope locs blks) ->
+  Lemma unnest_node_init_st_valid {A PSyn} : forall (n: @node PSyn local_prefs) locs caus blks,
+      n_block n = Blocal (Scope locs caus blks) ->
       st_valid_after (@init_st A) (PSP.of_list (map fst (n_in n ++ n_out n ++ Common.idty locs))).
   Proof.
     intros * Hn.
@@ -2489,10 +2489,10 @@ Module Type UNNESTING
        n_in := (n_in n);
        n_out := (n_out n);
        n_block := match (n_block n) with
-                  | Blocal (Scope vars blks) =>
+                  | Blocal (Scope vars _ blks) =>
                     let res := unnest_blocks G blks init_st in
                     let nvars := st_anns (snd res) in
-                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res))
+                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) [] (fst res))
                   | blk => blk
                   end;
        n_ingt0 := (n_ingt0 n);
@@ -2504,7 +2504,7 @@ Module Type UNNESTING
     destruct (unnest_blocks _ _) as (blks'&st') eqn:Heqs.
     do 2 esplit; [|eauto].
     eapply unnest_blocks_vars_perm in Heqs as (ys&Hvars&Hperm'); eauto.
-    constructor. econstructor; eauto.
+    constructor. econstructor; eauto using incl_nil'.
     unfold st_ids in *. rewrite init_st_anns, app_nil_r in Hperm'. simpl.
     do 2 esplit; eauto. rewrite Hperm', H0, map_app, <-app_assoc.
     apply Permutation_app_head, Permutation_app_head.
@@ -2534,13 +2534,14 @@ Module Type UNNESTING
     - rewrite 2 map_app, <-app_assoc, <-app_assoc, map_fst_idty in Hnd'. do 2 apply NoDup_app_r in Hnd'.
       rewrite fst_NoDupMembers, map_app, map_map; simpl; auto.
     - setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'.
-      + eapply H8; eauto using in_or_app.
+      + eapply H9; eauto using in_or_app.
       + eapply NoDup_app_In in Hnd'; eauto. 2:rewrite app_assoc, map_app; eauto using in_or_app.
         rewrite fst_InMembers, map_map in Hinm; eauto.
+    - constructor.
     - rewrite app_assoc. apply NoDupMembers_app; auto.
       + now rewrite NoDupMembers_idty.
       + intros ? Hinm contra. rewrite InMembers_idty in contra. rewrite fst_InMembers in Hinm.
-        eapply H8; eauto using in_or_app.
+        eapply H9; eauto using in_or_app.
   Qed.
   Next Obligation.
     specialize (n_nodup n) as (Hndup&Hndl).
@@ -2559,7 +2560,7 @@ Module Type UNNESTING
       erewrite map_map, map_ext; [eauto|]. eapply Forall_impl; [|eapply Hvalid]; intros ? (?&?&?); simpl in *; subst; eauto.
       right. do 2 esplit; eauto. apply PSF.add_1; auto.
       intros (?&?&?); auto.
-    + eapply unnest_blocks_GoodLocals in H6; eauto.
+    + eapply unnest_blocks_GoodLocals in H7; eauto.
       rewrite Forall_forall in *; eauto using GoodLocals_add.
   Qed.
   Next Obligation.

@@ -56,6 +56,16 @@ Module Env.
       apply xmapi_xmapi.
     Qed.
 
+    Lemma mapi_elements {B} (f : _ -> A -> B) : forall m,
+        Env.elements (Env.mapi f m) = List.map (fun '(x, y) => (x, f x y)) (Env.elements m).
+    Proof.
+      intros m.
+      unfold elements, mapi. generalize xH as i.
+      induction m; intros; simpl in *; auto.
+      destruct o; simpl in *.
+      1,2:repeat rewrite map_app; simpl; f_equal; auto.
+    Qed.
+
     Lemma map_map:
       forall {B C} (f: A -> B) (g: B -> C) (m: t A),
         map g (map f m) = map (fun x => g (f x)) m.

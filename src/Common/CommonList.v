@@ -1912,9 +1912,9 @@ Section ForallExists.
       now constructor 2; apply IH.
   Qed.
 
-  Lemma Exists_Exists:
+  Lemma Exists_impl_In:
     forall (Q : A -> Prop) xs,
-    (forall x, P x -> Q x) ->
+    (forall x, In x xs -> P x -> Q x) ->
     Exists P xs -> Exists Q xs.
   Proof.
     intros * Himpl Hex.

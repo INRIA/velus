@@ -1909,7 +1909,7 @@ Module Type CORRECTNESS
               - apply Hnin1. apply InMembers_app, or_intror, fst_InMembers.
                 solve_In.
             }
-            eapply H14; eauto.
+            eapply H15; eauto.
             -- rewrite map_fst_senv_of_inout in H7.
               eapply sem_var_refines_iff. 1,4:eauto. eapply Env.dom_dom_lb; eauto.
                erewrite <-Env.dom_use in Hinx0; [|eauto].
@@ -1935,7 +1935,7 @@ Module Type CORRECTNESS
           eapply unnest_node_init_st_valid; eauto.
         + constructor.
           * rewrite map_app, map_fst_senv_of_locs.
-            erewrite local_hist_dom in H15; eauto. simpl in H15.
+            erewrite local_hist_dom in H16; eauto. simpl in H16.
             unfold st_ids. rewrite init_st_anns, app_nil_r. auto.
           * unfold st_senv. rewrite init_st_anns, app_nil_r.
             eapply local_hist_sc_vars with (H:=H); eauto.
@@ -2623,7 +2623,7 @@ Module Type CORRECTNESS
       remember (normfby_node n0) as n'.
       unfold normfby_node in Heqn'; inv Heqn'.
       specialize (n_nodup n0) as Hnd.
-      inversion_clear Hunt as [|?? [[??? Hblk ?] _] Hunt'].
+      inversion_clear Hunt as [|?? [[???? Hblk ?] _] Hunt'].
       rewrite Hblk in *. inv Hblksem. inv H5.
       simpl in *. repeat rewrite app_nil_r in *. rewrite map_fst_senv_of_inout in H8.
       destruct H0 as (_&_&Hwc). rewrite Hblk in Hwc. inv Hwc.

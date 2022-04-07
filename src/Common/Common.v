@@ -160,15 +160,33 @@ Qed.
 
 Lemma assoc_ident_false:
   forall {A} (x: ident) (xs: list (ident * A)),
-    ~InMembers x xs ->
+    ~InMembers x xs <->
     assoc_ident x xs = None.
 Proof.
-  induction xs as [| a]; auto.
-  intro nin. unfold assoc_ident. cases_eqn EE.
-  apply find_some in EE as [Hin Eq]. destruct a. subst. simpl in *.
-  apply ident_eqb_eq in Eq as ->.
-  exfalso. apply nin. destruct Hin as [H|H].
-  inv H. tauto. eauto using In_InMembers.
+  split.
+  - induction xs as [|(?&?)]; auto.
+    intro nin. unfold assoc_ident. cases_eqn EE.
+    apply find_some in EE as [Hin Eq]. subst. simpl in *.
+    apply ident_eqb_eq in Eq as ->.
+    exfalso. apply nin. destruct Hin as [H|H].
+    inv H. tauto. eauto using In_InMembers.
+  - induction xs as [|(?&?)]; auto.
+    intro nin. apply not_or'.
+    unfold assoc_ident in *. simpl in *. destruct (ident_eqb i x) eqn:EE; try congruence.
+    apply ident_eqb_neq in EE. split; auto.
+Qed.
+
+Lemma assoc_ident_In:
+  forall {A} (x: ident) (y : A) (xs: list (ident * A)),
+    assoc_ident x xs = Some y ->
+    In (x, y) xs.
+Proof.
+  unfold assoc_ident.
+  induction xs as [| a]; intros * Hassc; simpl in *. inv Hassc.
+  destruct a; simpl in *; destruct (ident_eqb i x) eqn:Hident; simpl in *.
+  - inv Hassc.
+    apply ident_eqb_eq in Hident; subst; auto.
+  - auto.
 Qed.
 
 Module Type IDS.

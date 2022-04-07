@@ -47,23 +47,23 @@ Module Type TRORDERED
     destruct n'. simpl in Hord.
     tonodeInv Htr. cases. do 2 constructor. right.
     clear - Hord Hmmap. monadInv Hmmap. rename EQ into Hmmap. revert dependent n_eqs.
-    induction l1; intros. inv Hmmap. inv Hord.
+    induction l2; intros. inv Hmmap. inv Hord.
     apply mmap_cons in Hmmap.
     destruct Hmmap as (eq' & l' & Hneqs & Hteq & Hmmap); subst.
     inversion_clear Hord as [ ? ? Hord' |].
-    - constructor. clear IHl1 Hmmap.
+    - constructor. clear IHl2 Hmmap.
       revert dependent eq'. generalize (@nil (ident * clock)) as xr.
       induction a using L.block_ind2; intros; simpl in *;
         try solve [monadInv Hteq].
       + destruct eq' as [| i ck x le |]; inv Hord'.
         destruct eq as [ xs [|]]. inv Hteq.
-        destruct l2; [ idtac | inv Hteq; cases ].
+        destruct l1; [ idtac | inv Hteq; cases ].
         destruct e; inv Hteq; cases; monadInv H0.
         do 2 econstructor; apply Lord.INEapp2.
       + cases. apply Forall_singl in H.
         eapply H in Hteq; eauto.
         constructor. eauto.
-    - apply Exists_cons_tl. eapply IHl1; eauto.
+    - apply Exists_cons_tl. eapply IHl2; eauto.
   Qed.
 
   Lemma ninin_l_nl :

@@ -106,7 +106,7 @@ Module Type LSEMANTICS
       Variable sem_block : history -> A -> Prop.
 
       Inductive sem_scope : history -> Stream bool -> (scope A) -> Prop :=
-      | Sscope : forall Hi Hi' Hl Hl' bs locs blks,
+      | Sscope : forall Hi Hi' Hl Hl' bs locs caus blks,
           (* Content of the internal history : bottom-up constraints *)
           (forall x vs, sem_var Hi' x vs -> ~InMembers x locs -> sem_var Hi x vs) ->
 
@@ -121,7 +121,7 @@ Module Type LSEMANTICS
                 /\ sem_var Hl' x vs) ->
 
           sem_block (Hi', Hl') blks ->
-          sem_scope (Hi, Hl) bs (Scope locs blks).
+          sem_scope (Hi, Hl) bs (Scope locs caus blks).
     End sem_scope.
 
     Inductive sem_exp
@@ -1145,22 +1145,22 @@ Module Type LSEMANTICS
       simpl_Exists; simpl_Forall.
       destruct s; inv H2; inv H4.
       simpl_Exists. simpl_Forall.
-      eapply H in H15; eauto. inv H15.
+      eapply H in H16; eauto. inv H16.
       destruct H1. eapply Env.In_refines; eauto.
-      eapply sem_var_In, H11; eauto.
+      eapply sem_var_In, H13; eauto.
       econstructor; eauto. reflexivity.
     - (* automaton *)
       simpl_Exists; simpl_Forall. specialize (H10 0); destruct_conjs.
-      destruct s as [?(?&?)]; inv H3; inv H2.
+      destruct s; destruct_conjs. inv H3; inv H2.
       simpl_Exists. simpl_Forall.
       eapply H in H2; eauto. inv H2.
       destruct H1. eapply Env.In_refines; eauto.
-      eapply sem_var_In, H11; eauto.
+      eapply sem_var_In, H13; eauto.
       econstructor; eauto. reflexivity.
     - (* local *)
       inv H4. inv H2. simpl_Exists; simpl_Forall.
-      eapply H in H10; eauto. inv H10.
-      eapply sem_var_In, H5; eauto.
+      eapply H in H11; eauto. inv H11.
+      eapply sem_var_In, H6; eauto.
       econstructor; eauto. reflexivity.
   Qed.
 
@@ -1173,23 +1173,22 @@ Module Type LSEMANTICS
     eapply sem_block_defined; eauto.
   Qed.
 
-  Lemma sem_scope_defined {PSyn prefs} (G: @global PSyn prefs) : forall locs blks Hi bs x,
-      sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs blks) ->
-      Is_defined_in_scope (List.Exists (Is_defined_in x)) x (Scope locs blks) ->
+  Lemma sem_scope_defined {PSyn prefs} (G: @global PSyn prefs) : forall locs caus blks Hi bs x,
+      sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs caus blks) ->
+      Is_defined_in_scope (List.Exists (Is_defined_in x)) x (Scope locs caus blks) ->
       Env.In x (fst Hi).
   Proof.
     intros * Hsem Hdef; inv Hsem; inv Hdef.
-    eapply Forall_sem_block_defined in H6; eauto.
-    inv H6.
-    eapply sem_var_In, H1; eauto.
+    eapply Forall_sem_block_defined in H7; eauto. inv H7.
+    eapply sem_var_In, H2; eauto.
     econstructor; eauto. reflexivity.
   Qed.
 
   Corollary sem_scope_defined1 {PSyn prefs} (G: @global PSyn prefs) :
-    forall locs blks Hi bs Γ xs x,
-      sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs blks) ->
-      VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined blks xs /\ Permutation (concat xs) ys) (Scope locs blks) xs ->
-      NoDupScope (fun Γ => Forall (NoDupLocals Γ)) Γ (Scope locs blks) ->
+    forall locs caus blks Hi bs Γ xs x,
+      sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs caus blks) ->
+      VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined blks xs /\ Permutation (concat xs) ys) (Scope locs caus blks) xs ->
+      NoDupScope (fun Γ => Forall (NoDupLocals Γ)) Γ (Scope locs caus blks) ->
       incl xs Γ ->
       In x xs ->
       Env.In x (fst Hi).
@@ -1206,16 +1205,16 @@ Module Type LSEMANTICS
   Qed.
 
   Corollary sem_scope_defined2 {A} {PSyn prefs} (G: @global PSyn prefs) :
-    forall locs (blks: _ * A) Hi bs Γ xs x,
-      sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi blks => Forall (sem_block G Hi bs) (fst blks)) Hi bs (Scope locs blks) ->
-      VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined (fst blks) xs /\ Permutation (concat xs) ys) (Scope locs blks) xs ->
-      NoDupScope (fun Γ blks => Forall (NoDupLocals Γ) (fst blks)) Γ (Scope locs blks) ->
+    forall locs caus (blks: _ * A) Hi bs Γ xs x,
+      sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi blks => Forall (sem_block G Hi bs) (fst blks)) Hi bs (Scope locs caus blks) ->
+      VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined (fst blks) xs /\ Permutation (concat xs) ys) (Scope locs caus blks) xs ->
+      NoDupScope (fun Γ blks => Forall (NoDupLocals Γ) (fst blks)) Γ (Scope locs caus blks) ->
       incl xs Γ ->
       In x xs ->
       Env.In x (fst Hi).
   Proof.
     intros * Hsem Hdef Hnd Hincl Hinxs.
-    eapply sem_scope_defined1; eauto.
+    eapply sem_scope_defined1 with (caus:=caus); eauto.
     - inv Hsem; econstructor; eauto.
     - inv Hdef; econstructor; eauto.
     - inv Hnd; econstructor; eauto.
@@ -1362,7 +1361,7 @@ Module Type LSEMANTICS
     - (* automaton *)
       eapply Sauto; eauto using sem_clock_refines, sem_transitions_refines.
       simpl_Forall. specialize (H10 k); destruct_conjs.
-      destruct s as [?(?&?)]. inv H3; destruct_conjs.
+      destruct s; destruct_conjs. inv H3; destruct_conjs.
       esplit; split; eauto. 2:econstructor; repeat (split; eauto); eauto.
       destruct H2 as (Href1&?); split; simpl in *; [|auto].
       intros ?? Hfind. apply Href1 in Hfind as (?&Hfilter&Hfind').
@@ -1581,11 +1580,11 @@ Module Type LSEMANTICS
   Qed.
 
   Lemma sem_scope_restrict {A} (wx_block : _ -> _ -> Prop) (sem_block : _ -> _ -> Prop) {PSyn prefs} (G: @global PSyn prefs) :
-    forall Γ Hi Hl bs locs (blks : A),
+    forall Γ Hi Hl bs locs caus (blks : A),
       (forall Γ Hi Hl, wx_block Γ blks -> sem_block (Hi, Hl) blks -> sem_block (Env.restrict Hi (List.map fst Γ), Hl) blks) ->
-      wx_scope wx_block Γ (Scope locs blks) ->
-      sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (Hi, Hl) bs (Scope locs blks) ->
-      sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (Env.restrict Hi (List.map fst Γ), Hl) bs (Scope locs blks).
+      wx_scope wx_block Γ (Scope locs caus blks) ->
+      sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (Hi, Hl) bs (Scope locs caus blks) ->
+      sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (Env.restrict Hi (List.map fst Γ), Hl) bs (Scope locs caus blks).
   Proof.
     intros * Hp Hwx Hsem; inv Hwx; inv Hsem.
     eapply Sscope with (Hi':=Env.restrict Hi' (List.map fst (Γ ++ senv_of_locs locs))); eauto.
@@ -1595,7 +1594,7 @@ Module Type LSEMANTICS
       simpl_app. apply in_app_iff in Hin as [Hin|Hin]; auto.
       setoid_rewrite map_fst_senv_of_locs in Hin.
       exfalso. apply Hnin, fst_InMembers; auto.
-    - intros * Hin. edestruct H8; eauto. destruct_conjs.
+    - intros * Hin. edestruct H9; eauto. destruct_conjs.
       simpl_Forall.
       do 3 esplit. repeat split; eauto.
       eapply sem_exp_restrict; eauto.
@@ -1636,7 +1635,7 @@ Module Type LSEMANTICS
           intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
           eapply Href1 in Hfind as (?&Hfilter&Hfind').
           do 2 esplit; eauto using Env.restrict_find.
-        * destruct s as [?(?&?)]. eapply sem_scope_restrict; eauto.
+        * destruct s; destruct_conjs. eapply sem_scope_restrict; eauto.
           intros * (?&?) (?&?); split; simpl_Forall; eauto using sem_transitions_restrict.
     - (* locals *)
       constructor. eapply sem_scope_restrict; eauto.
@@ -1796,14 +1795,14 @@ Module Type LSEMANTICS
       Permutation.Permutation (List.map fst states) (seq 0 (Datatypes.length states)) ->
       Forall (fun '(_, t) => InMembers t states) ini ->
       In oth (seq 0 (Datatypes.length states)) ->
-      Forall (fun blks => let 'Scope _ (_, trans) := snd blks in
+      Forall (fun blks => let 'Scope _ _ (_, trans) := snd blks in
                        Forall (fun '(e, (t, _)) => InMembers t states) trans) states ->
       sem_transitions G Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
       fby stres0 stres1 stres ->
       Forall (fun state =>
                forall k, exists Hik,
                  (let bik := fselectb (fst state) k stres bs in
-                  let 'Scope _ (_, trans) := snd state in
+                  let 'Scope _ _ (_, trans) := snd state in
                   sem_transitions G Hik bik trans
                     (fst state, false) (fselect absent (fst state) k stres stres1))) states ->
       SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres.
@@ -1813,7 +1812,7 @@ Module Type LSEMANTICS
     2:simpl_Forall; auto.
     assert (Forall (fun state => forall k, SForall (fun v => match v with present (e, _) => e < length states | _ => True end)
                                            (fselect absent (fst state) k stres stres1)) states) as Hwt1.
-    { simpl_Forall. destruct s as [?(?&?)]. specialize (Hsemst k); destruct_conjs.
+    { simpl_Forall. destruct s; destruct_conjs. specialize (Hsemst k); destruct_conjs.
       eapply sem_transitions_wt_state in H0; eauto.
       rewrite <-Hperm; auto. solve_In. }
     clear - Hperm Hwt0 Hwt1 Hfby.

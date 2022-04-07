@@ -150,7 +150,7 @@ Module Type CSCLOCKING
     Qed.
 
     Lemma switch_scope_wc {A} P_na P_nd P_wc f_switch :
-      forall locs (blk: A) bck sub Γck Γck' s' st st',
+      forall locs caus (blk: A) bck sub Γck Γck' s' st st',
         (forall x, ~ IsLast Γck x) ->
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y ck, Env.find x sub = Some y -> HasClock Γck x ck -> HasClock Γck' y (subclock_clock bck sub ck)) ->
@@ -158,10 +158,10 @@ Module Type CSCLOCKING
         NoDupMembers Γck ->
         wc_env (idck Γck) ->
         wc_clock (idck Γck') bck ->
-        noauto_scope P_na (Scope locs blk) ->
-        NoDupScope P_nd (map fst Γck) (Scope locs blk) ->
-        wc_scope P_wc G Γck (Scope locs blk) ->
-        switch_scope f_switch Γck bck sub (Scope locs blk) st = (s', st') ->
+        noauto_scope P_na (Scope locs caus blk) ->
+        NoDupScope P_nd (map fst Γck) (Scope locs caus blk) ->
+        wc_scope P_wc G Γck (Scope locs caus blk) ->
+        switch_scope f_switch Γck bck sub (Scope locs caus blk) st = (s', st') ->
         (forall Γck Γck' blk' st st',
             (forall x, ~ IsLast Γck x) ->
             (forall x, Env.In x sub -> InMembers x Γck) ->
@@ -184,7 +184,7 @@ Module Type CSCLOCKING
         eapply subclock_clock_wc; eauto.
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           exfalso. simpl_In.
-          eapply Env.find_In, Hsubin, fst_InMembers, H6 in Hfind; eauto.
+          eapply Env.find_In, Hsubin, fst_InMembers, H7 in Hfind; eauto.
           inv Hin; simpl_In; eauto using In_InMembers.
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin; simpl_In; econstructor. solve_In. auto.
@@ -199,13 +199,13 @@ Module Type CSCLOCKING
           exfalso. eapply Env.find_In, Hsubin, fst_InMembers in Hfind; eauto.
           inv Hin. simpl_In.
           assert (HasClock Γck x0 a.(clo)) as Hty by eauto with senv. inv Hty.
-          eapply H6; eauto using In_InMembers. solve_In.
+          eapply H7; eauto using In_InMembers. solve_In.
         + intros ??? Hin.
           repeat rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin. simpl_In. econstructor; solve_In; auto.
         + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2. rewrite fst_InMembers in Hinm1.
-          eapply H6; eauto.
+          eapply H7; eauto.
         + simpl_app. apply wc_env_app; auto.
           simpl_Forall; auto.
         + eapply wc_clock_incl; [|eauto]. solve_incl_app.

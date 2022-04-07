@@ -176,8 +176,8 @@ Module Type COMPLETENESS
       eapply IHHnorm; eauto.
   Qed.
 
-  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
-      n_block n = Blocal (Scope locs blks) ->
+  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs caus blks,
+      n_block n = Blocal (Scope locs caus blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       wt_node G n ->
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
@@ -202,9 +202,9 @@ Module Type COMPLETENESS
     destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt; inv H1.
     clear Hblk Hperm0.
     induction Hvars; intros; simpl in *; eauto.
-    inv Hnormed. inv H7. apply Forall_app in Hfind' as (?&?). simpl in *.
-    eapply block_to_equation_complete in H8 as (?&Heqs1); eauto.
-    eapply IHHvars in H9 as (?&Heqs2); eauto.
+    inv Hnormed. inv H9. apply Forall_app in Hfind' as (?&?). simpl in *.
+    eapply block_to_equation_complete in H2 as (?&Heqs1); eauto.
+    eapply IHHvars in H10 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
@@ -215,7 +215,7 @@ Module Type COMPLETENESS
       normalized_node G n ->
       exists n', to_node n = OK n'.
   Proof.
-    intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk Hnormed].
+    intros * Hwtn Hnorm. inversion_clear Hnorm as [???? Hblk Hnormed].
     unfold to_node.
     edestruct (mmap_block_to_equation_complete G n)
               with (env:=Env.adds' (idty (n_in n)) (Env.from_list (idty (n_out n))))

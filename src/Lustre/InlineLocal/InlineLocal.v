@@ -117,7 +117,7 @@ Module Type INLINELOCAL
     | Breset blks er =>
       do blks' <- mmap (inlinelocal_block sub) blks;
       ret [Breset (concat blks') (rename_in_exp sub er)]
-    | Blocal (Scope locs blks) =>
+    | Blocal (Scope locs _ blks) =>
       let locs' := map (fun '(x, (ty, ck, _, _)) => (x, (ty, (rename_in_clock sub ck)))) locs in
       do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
@@ -128,7 +128,7 @@ Module Type INLINELOCAL
 
   Definition inlinelocal_topblock (blk : block) : FreshAnn (list block * list (ident * _)) :=
     match blk with
-    | Blocal (Scope locs blks) =>
+    | Blocal (Scope locs _ blks) =>
       do blks' <- mmap (inlinelocal_block (@Env.empty _)) blks;
       ret (concat blks', locs)
     | _ =>
@@ -270,13 +270,13 @@ Module Type INLINELOCAL
       rewrite map_app, not_in_union_map_rename2, not_in_union_map_rename1,
         (Permutation_swap (concat ys1)), <-app_assoc in Hperm1.
       2:{ simpl_Forall; subst.
-          intros (?&contra). eapply H11; eauto using In_InMembers.
+          intros (?&contra). eapply H13; eauto using In_InMembers.
           apply in_or_app; left. solve_In.
           2:eapply Env.elements_correct; eauto. reflexivity. }
       2:{ simpl_Forall; subst.
           intro contra. eapply fresh_idents_rename_sub1 in contra; eauto.
           rewrite fst_InMembers in contra; simpl_In.
-          eapply H11; eauto using In_InMembers, in_or_app. }
+          eapply H13; eauto using In_InMembers, in_or_app. }
       eapply Ker.fresh_idents_rename_ids in H0.
       2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
       rewrite H0 in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
@@ -498,7 +498,7 @@ Module Type INLINELOCAL
       n_block := Blocal
                    (Scope
                       (snd (fst res)++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None)))
-                           (st_anns (snd res)))
+                           (st_anns (snd res))) []
                       (fst (fst res)));
       n_ingt0 := (n_ingt0 n);
       n_outgt0 := (n_outgt0 n);
@@ -512,7 +512,7 @@ Module Type INLINELOCAL
     eapply inlinelocal_topblock_vars_perm in Hvars as (?&?&Hperm'); eauto.
     2:{ rewrite Hperm.
         eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
-    do 2 econstructor; eauto. do 2 esplit; eauto.
+    do 2 econstructor; eauto using incl_nil'. do 2 esplit; eauto.
     unfold st_ids in *. rewrite init_st_anns, app_nil_r in Hperm'.
     erewrite Hperm', map_app; simpl.
     repeat apply Permutation_app_head.
@@ -546,6 +546,7 @@ Module Type INLINELOCAL
       eapply NoDup_app_In in H; eauto using in_or_app.
       erewrite InMembers_app, 2 fst_InMembers, map_map, map_ext in Hinm; destruct Hinm as [Hinm|]; eauto.
       eapply inlinelocal_topblock_nIn; eauto. eapply fst_InMembers; eauto.
+    - constructor.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).

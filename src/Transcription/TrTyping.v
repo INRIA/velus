@@ -441,7 +441,7 @@ Module Type TRTYPING
         apply NoDup_app'.
         - apply NoDupMembers_app_r in Hnd1. apply fst_NoDupMembers; eauto.
         - apply fst_NoDupMembers; auto.
-        - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H5 in Hinm2.
+        - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H7 in Hinm2.
           apply Hinm2. rewrite map_app, in_app_iff; auto.
       }
       monadInv Hmmap.
@@ -449,16 +449,16 @@ Module Type TRTYPING
       - inv Hwt. inv H3.
         eapply mmap_inversion in EQ.
         eapply envs_eq_node in Hblk.
-        induction EQ; inv H1; inv H9; inv Hvars'; constructor; auto.
-        destruct H9 as (?&?&?).
-        eapply wt_block_to_equation in H3; eauto; simpl; auto.
+        induction EQ; inv H1; inv H10; inv Hvars'; constructor; auto.
+        destruct H10 as (?&?&?).
+        eapply wt_block_to_equation in H; eauto; simpl; auto.
         + simpl_app. repeat rewrite map_map in *; simpl in *.
           erewrite map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _), Permutation_app_comm with (l:=map _ l); eauto.
           1-3:intros; destruct_conjs; auto.
         + intros ?? Hfind.
           eapply envs_eq_find' in Hfind; eauto.
           erewrite to_global_enums; eauto.
-          clear - Wti Wto H5 Hfind. unfold LT.wt_clocks, idty in *.
+          clear - Wti Wto H6 Hfind. unfold LT.wt_clocks, idty in *.
           simpl_In. repeat rewrite in_app_iff in Hin0. destruct Hin0 as [|[|]]; simpl_In; simpl_Forall; eauto.
           1,2:eapply LT.wt_clock_incl; [|eauto].
           1,2:intros; simpl_app; repeat rewrite Senv.HasType_app in *; intuition.

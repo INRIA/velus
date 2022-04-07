@@ -76,12 +76,13 @@ Module Type CACLOCKING
         + rewrite trans_exp_clockof; auto.
     Qed.
 
-    Lemma auto_scope_wc {A} P_nl P_wc f_auto : forall locs (blk: A) s' tys Γ Γ' st st',
+    Lemma auto_scope_wc {A} P_nl P_wc f_auto :
+      forall locs caus (blk: A) s' tys Γ Γ' st st',
         (forall x, ~IsLast Γ x) ->
         (forall x, ~IsLast Γ' x) ->
-        nolast_scope P_nl (Scope locs blk) ->
-        wc_scope P_wc G1 Γ (Scope locs blk) ->
-        auto_scope f_auto (Scope locs blk) st = (s', tys, st') ->
+        nolast_scope P_nl (Scope locs caus blk) ->
+        wc_scope P_wc G1 Γ (Scope locs caus blk) ->
+        auto_scope f_auto (Scope locs caus blk) st = (s', tys, st') ->
         (forall Γ blks' tys st st',
             (forall x, ~IsLast Γ x) ->
             P_nl blk ->
@@ -95,7 +96,7 @@ Module Type CACLOCKING
       - simpl_Forall.
         eapply wc_clock_incl; [|eauto]. solve_incl_app.
       - simpl_Forall; subst; auto.
-      - eapply Hind in H7; eauto.
+      - eapply Hind in H8; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
           intros ? Hl; inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
@@ -166,7 +167,7 @@ Module Type CACLOCKING
           * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
             inv H13. simpl in *.
             destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
-          * auto_block_simpl_Forall. destruct s0 as [?(?&?)].
+          * auto_block_simpl_Forall. destruct s0; destruct p as (?&?).
             econstructor; eauto. 1,2:repeat constructor. rewrite app_nil_r. econstructor; eauto; repeat constructor.
             2:{ simpl. econstructor; eauto with datatypes. }
             eapply auto_scope_wc in H15; eauto.

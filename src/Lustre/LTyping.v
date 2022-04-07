@@ -186,14 +186,14 @@ Module Type LTYPING
 
   Inductive wt_scope {A} (P_wt : static_env -> A -> Prop) {PSyn prefs} (G: @global PSyn prefs) :
     static_env -> scope A -> Prop :=
-  | wt_Scope : forall Γ Γ' locs blks,
+  | wt_Scope : forall Γ Γ' locs caus blks,
       Γ' = Γ ++ senv_of_locs locs ->
       wt_clocks G.(enums) Γ' (Common.idty locs) ->
       Forall (wt_enum G) (map (fun '(_, (ty, _, _, _)) => ty) locs) ->
       Forall (fun '(_, (ty, _, _, o)) =>
                 LiftO True (fun '(e, _) => wt_exp G Γ' e /\ typeof e = [ty]) o) locs ->
       P_wt Γ' blks ->
-      wt_scope P_wt G Γ (Scope locs blks).
+      wt_scope P_wt G Γ (Scope locs caus blks).
 
   Inductive wt_block {PSyn prefs} (G: @global PSyn prefs) : static_env -> block -> Prop :=
   | wt_Beq: forall Γ eq,
@@ -576,15 +576,15 @@ Module Type LTYPING
       - simpl_Forall; eauto with senv.
     Qed.
 
-    Lemma wt_scope_incl {A} (P_wt : static_env -> A -> Prop) {PSyn prefs} : forall (G: @global PSyn prefs) Γ Γ' locs blks,
+    Lemma wt_scope_incl {A} (P_wt : static_env -> A -> Prop) {PSyn prefs} : forall (G: @global PSyn prefs) Γ Γ' locs caus blks,
         (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
         (forall x, IsLast Γ x -> IsLast Γ' x) ->
         (forall Γ Γ', (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
                  (forall x, IsLast Γ x -> IsLast Γ' x) ->
                  P_wt Γ blks ->
                  P_wt Γ' blks) ->
-        wt_scope P_wt G Γ (Scope locs blks) ->
-        wt_scope P_wt G Γ' (Scope locs blks).
+        wt_scope P_wt G Γ (Scope locs caus blks) ->
+        wt_scope P_wt G Γ' (Scope locs caus blks).
     Proof.
       intros * Hty Hl Hp Hwt.
       assert (forall x ty, HasType (Γ ++ senv_of_locs locs) x ty -> HasType (Γ' ++ senv_of_locs locs) x ty) as Hty'.
@@ -1302,7 +1302,7 @@ Module Type LTYPING
 
     Definition check_scope {A} (f_check : Env.t type -> Env.t type -> A -> bool)
                (venv venvl : Env.t type) (s : scope A) : bool :=
-      let 'Scope locs blks := s in
+      let 'Scope locs _ blks := s in
       let venv' := Env.union venv (Env.from_list (map (fun '(x, (ty, _, _, _)) => (x, ty)) locs)) in
       let venvl' := Env.union venvl (Env.from_list (map_filter (fun '(x, (ty, _, _, o)) => option_map (fun _ => (x, ty)) o) locs)) in
       forallb (check_clock eenv venv') (map (fun '(_, (_, ck, _, _)) => ck) locs)
@@ -1353,7 +1353,7 @@ Module Type LTYPING
 
     Opaque check_enum.
 
-    Fact check_scope_correct {A} f_check (P_wt : _ -> _ -> Prop) : forall locs (blks: A) venv venvl env,
+    Fact check_scope_correct {A} f_check (P_wt : _ -> _ -> Prop) : forall locs caus (blks: A) venv venvl env,
         (forall x ty, Env.find x venv = Some ty -> HasType env x ty) ->
         (forall x ty, Env.find x venvl = Some ty -> HasType env x ty /\ IsLast env x) ->
         (forall venv venvl env,
@@ -1361,8 +1361,8 @@ Module Type LTYPING
             (forall x ty, Env.find x venvl = Some ty -> HasType env x ty /\ IsLast env x) ->
             f_check venv venvl blks = true ->
             P_wt env blks) ->
-        check_scope f_check venv venvl (Scope locs blks) = true ->
-        wt_scope P_wt G env (Scope locs blks).
+        check_scope f_check venv venvl (Scope locs caus blks) = true ->
+        wt_scope P_wt G env (Scope locs caus blks).
     Proof.
       intros * Henv Henvl Hp Hc.
       assert (forall x ty, Env.find x (Env.union venv (Env.from_list (map (fun '(x0, (ty0, _, _, _)) => (x0, ty0)) locs))) = Some ty ->
@@ -1435,7 +1435,7 @@ Module Type LTYPING
           eapply check_bool_exp_correct in Hce as (?&?); eauto using check_tag_correct.
         + apply check_perm_seq_spec; auto.
         + contradict CN; subst; simpl in *. auto.
-        + destruct s as [?(?&?)]. eapply check_scope_correct; eauto.
+        + destruct s; destruct_conjs. eapply check_scope_correct; eauto.
           intros * ?? Hc; simpl in *.
           rewrite Bool.andb_true_iff, 2 forallb_Forall in Hc. destruct Hc as (?&CT).
           split; simpl_Forall; eauto.
@@ -1563,10 +1563,10 @@ Module Type LTYPING
       + assumption.
     Qed.
 
-    Fact iface_incl_wt_scope {A} (P_wt1 P_wt2: _ -> _ -> Prop) : forall Γ locs (blks : A),
+    Fact iface_incl_wt_scope {A} (P_wt1 P_wt2: _ -> _ -> Prop) : forall Γ locs caus (blks : A),
         (forall Γ, P_wt1 Γ blks -> P_wt2 Γ blks) ->
-        wt_scope P_wt1 G1 Γ (Scope locs blks) ->
-        wt_scope P_wt2 G2 Γ (Scope locs blks).
+        wt_scope P_wt1 G1 Γ (Scope locs caus blks) ->
+        wt_scope P_wt2 G2 Γ (Scope locs caus blks).
     Proof.
       intros * Hp Hwt. inv Hwt.
       econstructor; eauto.
@@ -1589,7 +1589,7 @@ Module Type LTYPING
         + simpl_Forall; eauto. destruct s.
           eapply iface_incl_wt_scope; eauto. intros; simpl_Forall; eauto.
       - econstructor; eauto; simpl_Forall; eauto using iface_incl_wt_exp, iface_incl_wt_clock.
-        destruct s as [?(?&?)].
+        destruct s; destruct_conjs.
         eapply iface_incl_wt_scope; eauto.
         intros ? (?&?); split; simpl_Forall; eauto using iface_incl_wt_exp.
       - constructor.
@@ -1711,10 +1711,10 @@ Module Type LTYPING
   Global Hint Resolve wt_equation_wl_equation : ltyping.
 
   Fact wt_scope_wl_scope {A} (P_wt: _ -> _ -> Prop) (P_wl: _ -> Prop) {PSyn prefs} (G: @global PSyn prefs) :
-    forall locs (blks: A) Γ,
+    forall locs caus (blks: A) Γ,
       (forall Γ, P_wt Γ blks -> P_wl blks) ->
-      wt_scope P_wt G Γ (Scope locs blks) ->
-      wl_scope P_wl G (Scope locs blks).
+      wt_scope P_wt G Γ (Scope locs caus blks) ->
+      wl_scope P_wl G (Scope locs caus blks).
   Proof.
     intros * Hp Hwt. inv Hwt.
     constructor; eauto.
@@ -1738,7 +1738,7 @@ Module Type LTYPING
         destruct s. eapply wt_scope_wl_scope; eauto. intros; simpl_Forall; eauto.
     - econstructor; simpl_Forall; eauto.
       + split; eauto with ltyping. now rewrite <-length_typeof_numstreams, H2.
-      + destruct s as [?(?&?)]. eapply wt_scope_wl_scope; eauto.
+      + destruct s; destruct_conjs. eapply wt_scope_wl_scope; eauto.
         intros * (?&?); split; simpl_Forall; eauto.
         split; eauto with ltyping. now rewrite <-length_typeof_numstreams, H10.
     - constructor. eapply wt_scope_wl_scope; eauto.
@@ -1900,10 +1900,10 @@ Module Type LTYPING
   Global Hint Resolve wt_equation_wx_equation : ltyping.
 
   Fact wt_scope_wx_scope {A} (P_wt: _ -> _ -> Prop) (P_wx: _ -> _ -> Prop) {PSyn prefs} (G: @global PSyn prefs) :
-    forall locs (blks: A) Γ,
+    forall locs caus (blks: A) Γ,
       (forall Γ, P_wt Γ blks -> P_wx Γ blks) ->
-      wt_scope P_wt G Γ (Scope locs blks) ->
-      wx_scope P_wx Γ (Scope locs blks).
+      wt_scope P_wt G Γ (Scope locs caus blks) ->
+      wx_scope P_wx Γ (Scope locs caus blks).
   Proof.
     intros * Hp Hwt. inv Hwt.
     econstructor; eauto.
@@ -1919,7 +1919,7 @@ Module Type LTYPING
     1-5:econstructor; simpl_Forall; eauto with ltyping.
     - destruct s. eapply wt_scope_wx_scope; eauto.
       intros; simpl_Forall; eauto.
-    - destruct s as [?(?&?)].
+    - destruct s; destruct_conjs.
       eapply wt_scope_wx_scope; eauto.
       intros * (?&?); split; simpl_Forall; eauto with ltyping.
     - eapply wt_scope_wx_scope; eauto.

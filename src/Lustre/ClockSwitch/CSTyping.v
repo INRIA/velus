@@ -164,7 +164,7 @@ Module Type CSTYPING
     Qed.
 
     Lemma switch_scope_wt {A} P_na P_nd P_wt f_switch :
-      forall locs (blk: A) bck sub Γck Γty Γty' s' st st',
+      forall locs caus (blk: A) bck sub Γck Γty Γty' s' st st',
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y ty, Env.find x sub = Some y -> HasType Γty x ty -> HasType Γty' y ty)->
         (forall x, ~ IsLast Γty x) ->
@@ -174,10 +174,10 @@ Module Type CSTYPING
         NoDupMembers Γck ->
         Forall (wt_enum G) (map (fun '(_, a) => a.(typ)) Γty) ->
         wt_clock G.(enums) Γty' bck ->
-        noauto_scope P_na (Scope locs blk) ->
-        NoDupScope P_nd (map fst Γty) (Scope locs blk) ->
-        wt_scope P_wt G Γty (Scope locs blk) ->
-        switch_scope f_switch Γck bck sub (Scope locs blk) st = (s', st') ->
+        noauto_scope P_na (Scope locs caus blk) ->
+        NoDupScope P_nd (map fst Γty) (Scope locs caus blk) ->
+        wt_scope P_wt G Γty (Scope locs caus blk) ->
+        switch_scope f_switch Γck bck sub (Scope locs caus blk) st = (s', st') ->
         (forall Γty Γck Γty' blk' st st',
             (forall x, Env.In x sub -> InMembers x Γck) ->
             (forall x y ty, Env.find x sub = Some y -> HasType Γty x ty -> HasType Γty' y ty)->
@@ -205,7 +205,7 @@ Module Type CSTYPING
           destruct Hin as [Hin|Hin]; eauto.
           exfalso. simpl_In.
           eapply Env.find_In, Hsubin, fst_InMembers in Hfind. inv Hin; simpl_In.
-          eapply H6; eauto using In_InMembers.
+          eapply H7; eauto using In_InMembers.
           simpl_In. assert (HasType Γck x0 a.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty. solve_In.
         + intros ?? Hfind Hin. rewrite HasType_app in *.
@@ -222,7 +222,7 @@ Module Type CSTYPING
           inv Hin. simpl_In.
           assert (HasType Γck x0 a.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty.
-          eapply H6; eauto using In_InMembers. solve_In.
+          eapply H7; eauto using In_InMembers. solve_In.
         + rewrite NoLast_app. split; auto; intros * Hil.
           inv Hil. simpl_In. simpl_Forall; subst; simpl in *; congruence.
         + intros ?? Hin.
@@ -232,10 +232,10 @@ Module Type CSTYPING
           destruct Hin as [Hin|Hin]; simpl_In; eauto.
         + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2. rewrite fst_InMembers in Hinm1.
-          eapply H6; eauto.
+          eapply H7; eauto.
         + apply NoDupMembers_app; auto. apply nodupmembers_map; auto. intros; destruct_conjs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2.
-          eapply H6; eauto.
+          eapply H7; eauto.
           eapply InMembers_In in Hinm1 as (?&Hin1).
           assert (HasType Γck x0 x1.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty; solve_In.

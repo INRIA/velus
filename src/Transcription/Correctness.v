@@ -1602,7 +1602,7 @@ Module Type CORRECTNESS
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Hblocks Hbk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
+    inv Hnormed. destruct H2. inversion_clear H0 as [???? Hblk Hlocs Hblks].
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
@@ -1619,7 +1619,7 @@ Module Type CORRECTNESS
       take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
       take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H10.
+      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H9.
       assert (Env.refines (@EqSt _) H Hi') as Href.
       { rewrite map_fst_senv_of_inout in Hdom.
         eapply LCS.local_hist_dom_refines. 3,4:eauto. 1,2:eauto.
@@ -1650,7 +1650,7 @@ Module Type CORRECTNESS
         * apply sc_vars_app; eauto.
           2:eapply sc_vars_refines; eauto.
           intros *. rewrite InMembers_senv_of_locs, fst_InMembers, map_fst_senv_of_inout.
-          intros Hin1 Hin2. eapply H12; eauto.
+          intros Hin1 Hin2. eapply H13; eauto.
     - eapply LCS.sem_node_ck_cons in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.

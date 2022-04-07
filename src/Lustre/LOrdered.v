@@ -62,10 +62,10 @@ Module Type LORDERED
     List.Exists (Is_node_in_exp f) (snd eq).
 
   Inductive Is_node_in_scope {A} (P_in : A -> Prop) (f : ident) : scope A -> Prop :=
-  | INScope : forall locs blks,
+  | INScope : forall locs caus blks,
       Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
       \/ P_in blks ->
-      Is_node_in_scope P_in f (Scope locs blks).
+      Is_node_in_scope P_in f (Scope locs caus blks).
 
   Inductive Is_node_in_block (f: ident) : block -> Prop :=
   | INBeq: forall eq,

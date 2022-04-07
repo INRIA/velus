@@ -57,7 +57,7 @@ module type SYNTAX =
     type transition = exp * (enumtag * bool)
 
     type 'a scope =
-    | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * 'a
+    | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * (ident * ident) list * 'a
 
     type block =
     | Beq of equation
@@ -295,7 +295,7 @@ module PrintFun
          fprintf p "@[<v 2>automaton@;initially %a@;%a@;end@]"
            print_initially ini
            (pp_print_list print_state) states
-      | L.Blocal (Scope (locals, blks)) ->
+      | L.Blocal (Scope (locals, _, blks)) ->
         fprintf p "do %a@[<v 2>in@ %a@;<0 -2>@]done"
           (print_semicol_list_as "var" print_local_decl) locals
           print_blocks blks
@@ -303,13 +303,13 @@ module PrintFun
     and print_blocks p blks =
       print_semicol_list print_block p blks
 
-    and print_switch_branch p (e, Scope (locs, blks)) =
+    and print_switch_branch p (e, Scope (locs, _, blks)) =
       fprintf p "@[<v 2>| %a %ado@ %a@]"
         PrintOps.print_enumtag e
         (print_semicol_list_as "var" print_local_decl) locs
         print_blocks blks
 
-    and print_state p (e, (Scope (locs, (blks, trans)))) =
+    and print_state p (e, (Scope (locs, _, (blks, trans)))) =
       fprintf p "@[<v 2>state %a %ado@ %a%a@]"
         PrintOps.print_enumtag e
         (print_semicol_list_as "var" print_local_decl) locs
@@ -317,7 +317,7 @@ module PrintFun
         print_until_list trans
 
     let print_top_block p = function
-      | L.Blocal (Scope (locals, blks)) ->
+      | L.Blocal (Scope (locals, _, blks)) ->
         fprintf p "%a@[<v 2>let@ %a@;<0 -2>@]tel"
           (print_semicol_list_as "var" print_local_decl) locals
           print_blocks blks

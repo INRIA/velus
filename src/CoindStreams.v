@@ -1222,12 +1222,12 @@ Module Type COINDSTREAMS
       symmetry. rewrite <- Exists_existsb with (P:=fun x' => x' # n = x # n).
       2:{ intros x0. split; intros; congruence. }
       eapply SetoidList.InA_altdef in H.
-      eapply Exists_Exists; [|eauto]. intros ? Eq. rewrite Eq; auto.
+      eapply Exists_impl; [|eauto]. intros ? Eq. rewrite Eq; auto.
     - destruct (x # n) eqn:Hxn; simpl; auto.
       rewrite <- Exists_existsb with (P:=fun x' => x' # n = x # n).
       2:{ intros x0. split; intros; congruence. }
       eapply SetoidList.InA_altdef in H.
-      eapply Exists_Exists; [|eauto]. intros ? Eq. rewrite Eq; auto.
+      eapply Exists_impl; [|eauto]. intros ? Eq. rewrite Eq; auto.
     - destruct (existsb _ l') eqn:Ex.
       + rewrite <-Exists_existsb with (P:=fun x => x # n = true) in *. 2,3:reflexivity.
         rewrite H; auto.

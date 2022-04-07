@@ -132,7 +132,7 @@ Module Type DELAST
     Variable f_add_eqs : list block -> A -> A.
 
     Definition delast_scope sub (s : scope A) : FreshAnn (scope A) :=
-      let 'Scope locs blks := s in
+      let 'Scope locs _ blks := s in
       let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) locs in
       do lasts' <- fresh_idents lasts;
       let sub1 := Env.from_list (map fst lasts') in
@@ -143,7 +143,7 @@ Module Type DELAST
                ([lx], [Efby [rename_in_exp sub' e]
                             [Evar x (ty, ck)] [(ty, ck)]])) lasts' in
       ret (Scope (map (fun '(x, (ty, ck, cx, _)) => (x, (ty, ck, cx, None))) locs
-                      ++ map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, None))) lasts')
+                      ++ map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, None))) lasts') []
                   (f_add_eqs (map Beq fbyeqs) blks')).
   End delast_scope.
 
@@ -269,8 +269,8 @@ Module Type DELAST
     simpl_Forall. repeat inv_bind. eapply fresh_ident_st_valid in H0; eauto.
   Qed.
 
-  Fact delast_scope_st_valid {A} f_dl f_add : forall sub locs (blks : A) s' st st' aft,
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Fact delast_scope_st_valid {A} f_dl f_add : forall sub locs caus (blks : A) s' st st' aft,
+      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
       st_valid_after st aft ->
       (forall sub blks' st st',
           f_dl sub blks st = (blks', st') ->
@@ -300,7 +300,7 @@ Module Type DELAST
     - (* automaton *)
       destruct ini; repeat inv_bind.
       eapply mmap_st_valid; eauto. simpl_Forall; repeat inv_bind.
-      destruct s0 as [?(?&?)]. eapply delast_scope_st_valid; eauto.
+      destruct s0; destruct_conjs. eapply delast_scope_st_valid; eauto.
       intros; repeat inv_bind. eapply mmap_st_valid; eauto.
       simpl_Forall. eapply H; eauto.
     - (* local *)
@@ -319,8 +319,8 @@ Module Type DELAST
     simpl_Forall. repeat inv_bind; eauto with fresh.
   Qed.
 
-  Fact delast_scope_st_follows {A} f_dl f_add : forall sub locs (blks : A) s' st st',
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Fact delast_scope_st_follows {A} f_dl f_add : forall sub locs caus (blks : A) s' st st',
+      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
       (forall sub blks' st st',
           f_dl sub blks st = (blks', st') ->
           st_follows st st') ->
@@ -347,7 +347,7 @@ Module Type DELAST
     - (* automaton *)
       destruct ini; repeat inv_bind.
       eapply mmap_st_follows; eauto. simpl_Forall; repeat inv_bind.
-      destruct s0 as [?(?&?)]. eapply delast_scope_st_follows; eauto.
+      destruct s0; destruct_conjs. eapply delast_scope_st_follows; eauto.
       intros; repeat inv_bind.
       eapply mmap_st_follows; eauto. simpl_Forall; eauto.
     - (* local *)
@@ -379,9 +379,9 @@ Module Type DELAST
       inv Hf; inv Hvars; repeat inv_bind; simpl; constructor; eauto.
   Qed.
 
-  Lemma delast_scope_vars_perm {A} P_vd f_dl f_add : forall locs (blks: A) sub s' xs st st',
-      VarsDefinedScope P_vd (Scope locs blks) xs ->
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Lemma delast_scope_vars_perm {A} P_vd f_dl f_add : forall locs caus (blks: A) sub s' xs st st',
+      VarsDefinedScope P_vd (Scope locs caus blks) xs ->
+      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
       (forall xs sub blks' st st',
           P_vd blks xs ->
           f_dl sub blks st = (blks', st') ->
@@ -394,7 +394,7 @@ Module Type DELAST
   Proof.
     intros * Hvd Hdl Hind Hadd; inv Hvd. repeat inv_bind.
     eapply Hind in H0; eauto.
-    econstructor. rewrite map_app, app_assoc, map_map.
+    econstructor; eauto using incl_nil'. rewrite map_app, app_assoc, map_map.
     rewrite <-concat_map_singl1 with (l:=map _ (map _ x)).
     eapply Hadd.
     - simpl_Forall. constructor.
@@ -430,7 +430,7 @@ Module Type DELAST
       constructor.
       + apply mmap_values in H0. inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
-        destruct s0 as [?(?&?)]. eapply delast_scope_vars_perm; eauto.
+        destruct s0; destruct_conjs. eapply delast_scope_vars_perm; eauto.
         * intros; repeat inv_bind; destruct_conjs. do 2 esplit; [|eauto].
           eapply mmap_vars_perm; eauto.
         * intros; destruct_conjs.
@@ -457,9 +457,9 @@ Module Type DELAST
     eapply fresh_ident_prefixed in H1; auto.
   Qed.
 
-  Lemma delast_scope_GoodLocals {A} P_good1 (P_good2: _ -> Prop) f_dl f_add : forall locs (blks: A) sub s' st st',
-      GoodLocalsScope P_good1 elab_prefs (Scope locs blks) ->
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Lemma delast_scope_GoodLocals {A} P_good1 (P_good2: _ -> Prop) f_dl f_add : forall locs caus (blks: A) sub s' st st',
+      GoodLocalsScope P_good1 elab_prefs (Scope locs caus blks) ->
+      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
       (forall sub blks' st st',
           P_good1 blks ->
           f_dl sub blks st = (blks', st') ->
@@ -507,7 +507,7 @@ Module Type DELAST
       destruct ini; repeat inv_bind.
       repeat constructor.
       eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
-      destruct s0 as [?(?&?)]. eapply delast_scope_GoodLocals; eauto.
+      destruct s0; destruct_conjs. eapply delast_scope_GoodLocals; eauto.
       + intros; repeat inv_bind. eapply mmap_values, Forall2_ignore1 in H5.
         simpl_Forall; eauto.
       + intros. destruct blks2. apply Forall_app; auto.
@@ -600,12 +600,12 @@ Module Type DELAST
   Qed.
 
   Lemma delast_scope_NoDupLocals {A} P_good P_nd f_dl f_add aft :
-    forall locs (blks: A) xs sub s' st st',
+    forall locs caus (blks: A) xs sub s' st st',
       st_valid_after st aft ->
       Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
-      GoodLocalsScope P_good elab_prefs (Scope locs blks) ->
-      NoDupScope P_nd xs (Scope locs blks) ->
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+      GoodLocalsScope P_good elab_prefs (Scope locs caus blks) ->
+      NoDupScope P_nd xs (Scope locs caus blks) ->
+      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
       (forall xs ys,
           P_good blks ->
           (forall x : ident, In x ys -> In x xs \/ (exists id hint, x = gensym last hint id)) ->
@@ -628,7 +628,7 @@ Module Type DELAST
       repeat inv_bind.
     assert (Forall (fun '(_, lx, _) => exists n hint, lx = gensym last hint n) x) as Hgen.
     { eapply mmap_values, Forall2_ignore1 in H. simpl_Forall. repeat inv_bind.
-      eapply fresh_ident_prefixed in H7; auto. }
+      eapply fresh_ident_prefixed in H5; auto. }
     constructor.
     - apply Hadd. 1:simpl_Forall; constructor.
       eapply Hind in H0; eauto using fresh_idents_st_valid_after.
@@ -648,12 +648,13 @@ Module Type DELAST
       + intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm1, Hinm2. simpl_In.
         simpl_Forall; subst. eapply contradict_AtomOrGensym; eauto using last_not_in_elab_prefs.
     - intros * Hinm1 Hin2. apply InMembers_app in Hinm1 as [Hinm1|Hinm1].
-      + eapply H6; eauto. rewrite fst_InMembers in *. solve_In.
+      + eapply H7; eauto. rewrite fst_InMembers in *. solve_In.
       + rewrite fst_InMembers in Hinm1. simpl_In.
         simpl_Forall; subst. destruct Hat.
-        * eapply contradict_AtomOrGensym in H4; eauto using last_not_in_elab_prefs.
+        * eapply contradict_AtomOrGensym in H2; eauto using last_not_in_elab_prefs.
         * eapply fresh_idents_nIn_ids in H; [|eauto].
           simpl_Forall; eauto.
+    - constructor.
   Qed.
 
   Lemma delast_block_NoDupLocals aft : forall blk xs sub blk' st st',
@@ -694,15 +695,15 @@ Module Type DELAST
       destruct ini; repeat inv_bind.
       eapply mmap_values_valid_follows in H0; eauto.
       2:{ intros; destruct_conjs; repeat inv_bind.
-          destruct s0 as [?(?&?)]. eapply delast_scope_st_valid; eauto.
+          destruct s0; destruct_conjs. eapply delast_scope_st_valid; eauto.
           intros; repeat inv_bind; eapply mmap_st_valid; eauto.
           simpl_Forall. eapply delast_block_st_valid_after; eauto. }
       2:{ intros; destruct_conjs; repeat inv_bind.
-          destruct s0 as [?(?&?)]. eapply delast_scope_st_follows; eauto.
+          destruct s0; destruct_conjs. eapply delast_scope_st_follows; eauto.
           intros; repeat inv_bind; eapply mmap_st_follows; eauto.
           simpl_Forall. eapply delast_block_st_follows; eauto. }
       constructor. eapply Forall2_ignore1 in H0; simpl_Forall; repeat inv_bind.
-      + destruct s, s0 as [?(?&?)]. eapply delast_scope_NoDupLocals; eauto.
+      + destruct s, s0; destruct_conjs. eapply delast_scope_NoDupLocals; eauto.
         * simpl_Forall. destruct Hat; auto.
           right. eapply incl_map; eauto. apply st_follows_incl; eauto with fresh.
         * intros. simpl_Forall.
@@ -721,8 +722,8 @@ Module Type DELAST
 
   (** *** No last remaining *)
 
-  Fact delast_scope_nolast {A} f_dl f_add (P_nl: _ -> Prop) : forall sub locs (blks : A) s' st st',
-      delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
+  Fact delast_scope_nolast {A} f_dl f_add (P_nl: _ -> Prop) : forall sub locs caus (blks : A) s' st st',
+      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
       (forall sub blks' st st',
           f_dl sub blks st = (blks', st') ->
           P_nl blks') ->
@@ -762,7 +763,7 @@ Module Type DELAST
       destruct ini; repeat inv_bind.
       constructor.
       eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall. repeat inv_bind.
-      destruct s0 as [?(?&?)]. eapply delast_scope_nolast; eauto.
+      destruct s0; destruct_conjs. eapply delast_scope_nolast; eauto.
       + intros; repeat inv_bind. eapply mmap_values, Forall2_ignore1 in H3.
         simpl_Forall; eauto.
       + intros. destruct blks2. apply Forall_app; auto.

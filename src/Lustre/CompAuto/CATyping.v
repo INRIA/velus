@@ -100,13 +100,14 @@ Module Type CATYPING
         + constructor.
     Qed.
 
-    Lemma auto_scope_wt {A} P_nl P_wt f_auto : forall locs (blk: A) s' tys Γ Γ' st st',
+    Lemma auto_scope_wt {A} P_nl P_wt f_auto :
+      forall locs caus (blk: A) s' tys Γ Γ' st st',
         (forall x, ~IsLast Γ x) ->
         (forall x, ~IsLast Γ' x) ->
-        nolast_scope P_nl (Scope locs blk) ->
-        wt_scope P_wt G1 Γ (Scope locs blk) ->
+        nolast_scope P_nl (Scope locs caus blk) ->
+        wt_scope P_wt G1 Γ (Scope locs caus blk) ->
         incl tys G2.(enums) ->
-        auto_scope f_auto (Scope locs blk) st = (s', tys, st') ->
+        auto_scope f_auto (Scope locs caus blk) st = (s', tys, st') ->
         (forall Γ blks' tys st st',
             (forall x, ~IsLast Γ x) ->
             P_nl blk ->
@@ -123,7 +124,7 @@ Module Type CATYPING
         intros. repeat rewrite HasType_app in *. intuition.
       - simpl_Forall; subst; eauto with ltyping.
       - simpl_Forall; subst; eauto.
-      - eapply Hind in H8; eauto.
+      - eapply Hind in H9; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
           intros ? Hl; inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
@@ -205,7 +206,7 @@ Module Type CATYPING
             apply mmap2_values, Forall3_ignore3 in H12.
             clear - H12. induction H12; destruct_conjs; repeat inv_bind; auto.
           * apply mmap2_values, Forall3_ignore3 in H12. inv H12; auto; congruence.
-          * auto_block_simpl_Forall. destruct s0 as [?(?&?)].
+          * auto_block_simpl_Forall. destruct s0; destruct_conjs.
             econstructor; eauto; repeat constructor. 1,2:rewrite app_nil_r.
             2:{ econstructor; eauto with datatypes. }
             eapply auto_scope_wt with (Γ':=[_;_;_;_]) in H15; eauto. eapply H15.

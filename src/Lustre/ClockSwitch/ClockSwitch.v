@@ -129,11 +129,11 @@ Module Type CLOCKSWITCH
     Variable f_s : static_env -> A -> FreshAnn A.
 
     Definition switch_scope (env : static_env) bck sub scop : FreshAnn (scope A) :=
-      let 'Scope locs blks := scop in
+      let 'Scope locs _ blks := scop in
       let locs' := map (fun '(x, (ty, ck, cx, o)) => (x, (ty, subclock_clock bck sub ck, cx, o))) locs in
       let env := env++senv_of_locs locs in
       do blks' <- f_s env blks;
-      ret (Scope locs' blks').
+      ret (Scope locs' [] blks').
 
   End switch_scope.
 
@@ -182,7 +182,7 @@ Module Type CLOCKSWITCH
                ) branches xs';
       let mergeeqs := map (fun '(x, ann) => merge_defs sub x ann.(typ) bck xc tx (map (fun '(k, sub, _, _) => (k, sub)) xs')) defs in
       let locs := flat_map (fun '(_, _, nfrees, ndefs) => (map (fun '(_, x, (ty, ck)) => (x, (ty, ck, xH, None))) (nfrees++ndefs))) xs' in
-      ret (Blocal (Scope (List.map (fun '(xc, (ty, ck)) => (xc, (ty, ck, xH, None))) xcs++locs) (mergeeqs++concat blks'++map Beq condeqs)))
+      ret (Blocal (Scope (List.map (fun '(xc, (ty, ck)) => (xc, (ty, ck, xH, None))) xcs++locs) [] (mergeeqs++concat blks'++map Beq condeqs)))
 
     | Bauto _ _ _ => ret blk
     end.
@@ -316,15 +316,15 @@ Module Type CLOCKSWITCH
   Qed.
 
   Lemma switch_scope_VarsDefined {A} P_na P_vd P_nd f_switch :
-    forall xs env bck sub locs (blk: A) s' st st',
+    forall xs env bck sub locs caus (blk: A) s' st st',
       incl xs (map fst env) ->
       (forall x, Env.In x sub -> InMembers x env) ->
       NoDupMembers env ->
       NoDup xs ->
-      noauto_scope P_na (Scope locs blk) ->
-      VarsDefinedScope P_vd (Scope locs blk) xs ->
-      NoDupScope P_nd (map fst env) (Scope locs blk) ->
-      switch_scope f_switch env bck sub (Scope locs blk) st = (s', st') ->
+      noauto_scope P_na (Scope locs caus blk) ->
+      VarsDefinedScope P_vd (Scope locs caus blk) xs ->
+      NoDupScope P_nd (map fst env) (Scope locs caus blk) ->
+      switch_scope f_switch env bck sub (Scope locs caus blk) st = (s', st') ->
       (forall xs env blk' st st',
           incl xs (map fst env) ->
           (forall x, Env.In x sub -> InMembers x env) ->
@@ -340,20 +340,21 @@ Module Type CLOCKSWITCH
     intros * Hincl Hsub Hnd1 Hnd2 Hnauto Hvars Hnd3 Hf Hind;
       inv Hnauto; inv Hvars; inv Hnd3; repeat inv_bind.
     eapply Hind with (xs:=xs++map fst locs) in H; eauto.
-    - econstructor. rewrite map_map, map_ext with (g:=fst). 2:intros; destruct_conjs; auto.
+    - econstructor; eauto using incl_nil'.
+      rewrite map_map, map_ext with (g:=fst). 2:intros; destruct_conjs; auto.
       rewrite map_app, rename_vars_idem with (xs:=map fst locs) in H; auto.
-      intros * Hsub' Hnin. eapply H7; apply fst_InMembers; eauto.
+      intros * Hsub' Hnin. eapply H9; apply fst_InMembers; eauto.
     - rewrite map_app, map_fst_senv_of_locs.
       eapply incl_appl'; eauto.
     - intros. rewrite InMembers_app; auto.
     - apply NoDupMembers_app; auto.
       + now apply NoDupMembers_senv_of_locs.
       + intros * Hinm1 Hinm2.
-        eapply H7, fst_InMembers; eauto. apply InMembers_senv_of_locs; auto.
+        eapply H9, fst_InMembers; eauto. apply InMembers_senv_of_locs; auto.
     - apply NoDup_app'; auto.
       + now apply fst_NoDupMembers.
       + simpl_Forall. eapply Hincl in H0. intros ?.
-        eapply H7; eauto. now apply fst_InMembers.
+        eapply H9; eauto. now apply fst_InMembers.
     - now rewrite map_app, map_fst_senv_of_locs.
   Qed.
 
@@ -410,7 +411,7 @@ Module Type CLOCKSWITCH
             eapply vars_defined_Is_defined_in; simpl; auto.
         - rewrite <-map_app, <-fst_NoDupMembers, <-Hperm; auto.
       }
-      do 2 constructor. do 2 esplit.
+      do 2 constructor; eauto using incl_nil'. do 2 esplit.
       repeat apply Forall2_app; simpl_Forall.
       + instantiate (1:=map (fun '(x, _) => [rename_var sub x]) defs). simpl_Forall.
         constructor.
@@ -696,13 +697,14 @@ Module Type CLOCKSWITCH
     right. eapply incl_map; eauto using st_follows_incl, switch_block_st_follows.
   Qed.
 
-  Lemma switch_scope_NoDupScope {A} P_nd P_good f_switch : forall locs (blk: A) xs env bck sub s' st st' aft,
+  Lemma switch_scope_NoDupScope {A} P_nd P_good f_switch :
+    forall locs caus (blk: A) xs env bck sub s' st st' aft,
       NoDup xs ->
-      NoDupScope P_nd xs (Scope locs blk) ->
+      NoDupScope P_nd xs (Scope locs caus blk) ->
       Forall (fun x => AtomOrGensym auto_prefs x \/ In x (st_ids st)) xs ->
-      GoodLocalsScope P_good auto_prefs (Scope locs blk) ->
+      GoodLocalsScope P_good auto_prefs (Scope locs caus blk) ->
       st_valid_after st switch aft ->
-      switch_scope f_switch env bck sub (Scope locs blk) st = (s', st') ->
+      switch_scope f_switch env bck sub (Scope locs caus blk) st = (s', st') ->
       (forall xs env blk' st st',
           NoDup xs ->
           P_nd xs blk ->
@@ -714,18 +716,18 @@ Module Type CLOCKSWITCH
       NoDupScope P_nd xs s'.
   Proof.
     intros * Hnd1 Hnd2 Hat Hgood Hvalid Hs; inv Hnd2; inv Hgood; repeat inv_bind.
-    constructor.
+    constructor. 4:constructor.
     + eapply H0; eauto.
       * apply NoDup_app'; auto. apply fst_NoDupMembers, nodupmembers_map; auto.
         intros; destruct_conjs; auto.
         eapply Forall_forall; intros ? Hinm1 Hinm2; simpl_In.
-        eapply H4; eauto using In_InMembers.
+        eapply H5; eauto using In_InMembers.
       * erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
       * apply Forall_app; split; auto.
         simpl_Forall; auto.
     + apply nodupmembers_map; auto.
       intros; destruct_conjs; auto.
-    + intros ? Hinm Hinm2. eapply H4; eauto.
+    + intros ? Hinm Hinm2. eapply H5; eauto.
       erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers in Hinm; eauto.
       intros; destruct_conjs; auto.
   Qed.
@@ -885,10 +887,10 @@ Module Type CLOCKSWITCH
     1-11:constructor; auto; right; do 2 esplit; eauto; apply PSF.add_1; auto.
   Qed.
 
-  Lemma switch_scope_GoodLocals {A} P_good f_switch : forall locs (blk: A) env bck sub s' st st',
+  Lemma switch_scope_GoodLocals {A} P_good f_switch : forall locs caus (blk: A) env bck sub s' st st',
       (forall x y, Env.MapsTo x y sub -> AtomOrGensym switch_prefs y) ->
-      GoodLocalsScope P_good switch_prefs (Scope locs blk) ->
-      switch_scope f_switch env bck sub (Scope locs blk) st = (s', st') ->
+      GoodLocalsScope P_good switch_prefs (Scope locs caus blk) ->
+      switch_scope f_switch env bck sub (Scope locs caus blk) st = (s', st') ->
       (forall env blk' st st',
           (forall x y, Env.MapsTo x y sub -> AtomOrGensym switch_prefs y) ->
           P_good blk -> f_switch env blk st = (blk', st') -> P_good blk') ->

@@ -26,6 +26,9 @@ Module Type STATICENV
   Definition ann_with_clock (ann : annotation) (ck : clock) :=
     Build_annotation ann.(typ) ck ann.(causl) ann.(causl_last).
 
+  Definition ann_with_caus (ann : annotation) (cx : ident) :=
+    Build_annotation ann.(typ) ann.(clo) cx ann.(causl_last).
+
   Definition static_env := list (ident * annotation).
 
   Inductive IsVar : static_env -> ident -> Prop :=
