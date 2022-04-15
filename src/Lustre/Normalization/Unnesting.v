@@ -696,7 +696,6 @@ Module Type UNNESTING
   Global Hint Resolve unnest_noops_exps_st_follows : norm.
 
   Local Ltac solve_st_follows' :=
-    repeat inv_bind;
     match goal with
     | |- st_follows ?st ?st =>
       reflexivity
@@ -719,30 +718,17 @@ Module Type UNNESTING
       st_follows st st'.
   Proof with eauto.
     induction e using exp_ind2; intros is_control res st st' Hnorm;
-      simpl in Hnorm.
-    - (* const *) now repeat inv_bind.
-    - (* enum *) now repeat inv_bind.
-    - (* var *) now repeat inv_bind.
-    - (* last *) now repeat inv_bind.
-    - (* unop *)
-      repeat inv_bind...
+      simpl in Hnorm; destruct_conjs; repeat inv_bind; repeat solve_st_follows'; eauto.
     - (* binop *)
-      repeat inv_bind; etransitivity...
-    - (* fby *) repeat solve_st_follows'.
-    - (* arrow *) repeat solve_st_follows'.
+      etransitivity...
     - (* when *)
-      destruct a. repeat solve_st_follows'.
+      repeat inv_bind. repeat solve_st_follows'.
     - (* merge *)
-      destruct a.
-      destruct is_control; repeat solve_st_follows'.
+      destruct is_control; repeat inv_bind; repeat solve_st_follows'.
     - (* case *)
-      destruct a.
       destruct is_control; repeat inv_bind;
-        (etransitivity; [ eapply IHe; eauto | repeat solve_st_follows' ]).
-      1,2:destruct d; repeat inv_bind; repeat solve_st_follows'.
-    - (* app *)
-      repeat inv_bind.
-      etransitivity; eauto with norm. repeat solve_st_follows'.
+        (etransitivity; [ eapply IHe; eauto | repeat inv_bind; repeat solve_st_follows' ]).
+      1-4:destruct d; repeat inv_bind; repeat solve_st_follows'.
   Qed.
   Global Hint Resolve unnest_exp_st_follows : norm.
 
@@ -969,17 +955,14 @@ Module Type UNNESTING
       Forall (fun e => numstreams e = 1) es'.
   Proof.
     intros * Hnorm.
-    induction e; simpl in Hnorm; repeat inv_bind; repeat constructor.
-    3:destruct l0; repeat inv_bind.
-    4,5:destruct l0, is_control; repeat inv_bind.
-    1,2,5,7,8:rewrite Forall_map; eapply Forall_forall; intros [? ?] ?; auto.
-    1,2,3:(unfold unnest_when, unnest_merge, unnest_case;
-           rewrite Forall_forall; intros ? Hin).
-    - simpl_In. reflexivity.
-    - clear - Hin. revert x Hin.
-      induction l0; intros; simpl; inv Hin; eauto.
-    - clear - Hin. revert Hin. revert x2 x5.
-      induction l0; intros; simpl; inv Hin; eauto.
+    induction e; destruct_conjs; simpl in *; repeat inv_bind; repeat constructor.
+    4,5:destruct is_control; repeat inv_bind.
+    all:simpl_Forall; auto.
+    all:(unfold unnest_when, unnest_merge, unnest_case in *; simpl_In; auto).
+    - clear - H0. revert x H0.
+      induction l0; intros; simpl; inv H0; eauto.
+    - clear - H2. revert x2 x5 H2.
+      induction l0; intros; simpl; inv H2; eauto.
   Qed.
 
   Corollary mmap2_unnest_exp_numstreams : forall G es is_control es' eqs' st st',
@@ -1340,7 +1323,7 @@ Module Type UNNESTING
 
   Fact unnest_exp_vars_perm : forall G e is_control es' eqs' st st',
       unnest_exp G is_control e st = ((es', eqs'), st') ->
-      Permutation ((flat_map fst eqs')++(st_ids st)) (st_ids st')(* ++(fresh_in e) *).
+      Permutation ((flat_map fst eqs')++(st_ids st)) (st_ids st').
   Proof with eauto.
     induction e using exp_ind2; intros is_control e' eqs' st st' Hnorm;
       simpl in Hnorm; repeat inv_bind...

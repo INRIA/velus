@@ -426,17 +426,13 @@ Module Type LCAUSALITY
         (forall x cx, HasCaus Γ x cx -> HasCaus Γ' x cx) ->
         forall cx, Is_defined_in Γ cx blk -> Is_defined_in Γ' cx blk.
     Proof.
-      induction blk using block_ind2; intros * Hc * Hdef; inv Hdef;
-        econstructor; eauto using Is_defined_in;
-        solve_Exists; simpl_Forall; eauto.
-      - destruct s.
-        eapply Is_defined_in_scope_incl; eauto.
-        intros; simpl in *; solve_Exists. simpl_Forall; eauto.
-      - destruct s; destruct_conjs.
-        eapply Is_defined_in_scope_incl; eauto.
-        intros; simpl in *; solve_Exists. simpl_Forall; eauto.
-      - eapply Is_defined_in_scope_incl; eauto.
-        intros; simpl in *; solve_Exists. simpl_Forall; eauto.
+      induction blk using block_ind2; intros * Hc * Hdef; inv Hdef; econstructor;
+        repeat
+          match goal with
+          | s:scope _ |- _ => destruct s
+          | |- Is_defined_in_scope _ _ _ _ => eapply Is_defined_in_scope_incl; eauto; intros
+          | _ => solve_Exists; simpl_Forall
+          end; eauto using Is_defined_in.
     Qed.
 
     Fact depends_on_scope_incl {A} (P_dep : _ -> _ -> _ -> A -> Prop) : forall locs caus blks Γ Γ',
@@ -550,35 +546,30 @@ Module Type LCAUSALITY
       Is_free_left Γ x k e ->
       k < length (annot e).
   Proof.
-    Local Ltac solve_forall2 Ha H :=
+    Local Ltac solve_forall2 Ha :=
       setoid_rewrite <- Ha;
       eapply Is_free_left_list_length'; eauto;
-      eapply Forall_Forall in H; eauto;
-      clear - H;
-      eapply Forall_impl; eauto; intros ? [? ?] ? ? ?; eauto.
+      simpl_Forall; eauto.
 
     induction e using exp_ind2; intros * Hwl Hfree; inv Hfree; inv Hwl; simpl; auto.
     - (* fby *)
-      solve_forall2 H8 H.
+      solve_forall2 H8.
     - (* arrow *)
-      destruct H3 as [?|?]; auto. solve_forall2 H8 H. solve_forall2 H9 H0.
+      destruct H3 as [?|?]; auto. solve_forall2 H8. solve_forall2 H9.
     - (* when *)
       rewrite map_length. destruct H2 as [[? ?]|?]; auto.
-      solve_forall2 H7 H.
+      solve_forall2 H7.
     - (* merge *)
       rewrite map_length. destruct H2 as [[? ?]|?]; auto.
-      eapply Forall_Forall in H; eauto. eapply Forall_Forall in H6; eauto. clear H7 H.
-      eapply Forall_Exists in H0; eauto. eapply Exists_exists in H0 as (?&?&((?&IH)&Wl)&?).
-      solve_forall2 H0 IH.
+      simpl_Exists; simpl_Forall.
+      solve_forall2 H7.
     - (* case *)
       rewrite map_length. destruct H3 as [[? ?]|[Hex|(?&?&Hex)]]; subst; simpl in *; auto.
-      + eapply Exists_exists in Hex as (?&Hin&Hex); subst.
-        rewrite Forall_forall in *; eauto. specialize (H10 _ Hin). erewrite <-H11; eauto.
-        eapply Is_free_left_list_length'; eauto.
-        eapply Forall_impl_In in H; eauto; simpl. intros; simpl. eapply H2; eauto.
-        eapply Forall_forall in H10; eauto.
+      + simpl_Exists; simpl_Forall.
+        erewrite <-H11; eauto.
+        eapply Is_free_left_list_length'; eauto. simpl_Forall; eauto.
       + specialize (H13 _ eq_refl). specialize (H12 _ eq_refl).
-        solve_forall2 H13 H0.
+        solve_forall2 H13.
   Qed.
 
   Corollary Is_free_left_list_length {PSyn prefs} (G: @global PSyn prefs) Γ : forall es x k,
@@ -606,46 +597,13 @@ Module Type LCAUSALITY
       Is_free_left Γ x k e ->
       exists y, HasCaus Γ y x \/ HasLastCaus Γ y x.
   Proof.
-    induction e using exp_ind2; intros * Hfree; inv Hfree.
-    - (* var *) eauto.
-    - (* last *) eauto.
-    - (* unop *)
-      eauto.
-    - (* binop *)
-      destruct H1; eauto.
-    - (* fby *)
-      rewrite Forall_forall in *.
-      eapply Is_free_left_list_Exists in H3 as (?&Hex).
-      simpl_Exists; eauto.
-    - (* arrow *)
-      rewrite Forall_forall in *.
-      destruct H3 as [Hex|Hex].
-      1,2:(eapply Is_free_left_list_Exists in Hex as (?&Hex);
-           simpl_Exists; eauto).
-    - (* when *)
-      rewrite Forall_forall in *.
-      destruct H2 as [(_&Hin)|Hex]; eauto.
-      + eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        simpl_Exists; eauto.
-    - (* merge *)
-      repeat setoid_rewrite Forall_forall in H.
-      destruct H2 as [(_&Hin)|Hex]; eauto.
-      + eapply Exists_exists in Hex as (?&?&Hex).
-        eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        simpl_Exists; eauto.
-    - (* case *)
-      rewrite Forall_forall in *.
-      destruct H3 as [(_&Hin)|[Hex|(?&?&Hex)]]; subst; simpl in *; eauto.
-      + eapply Exists_exists in Hex as (?&Hin&Hex); subst.
-        eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        simpl_Exists.
-        eapply H, Forall_forall in Hin; eauto.
-      + rewrite Forall_forall in *.
-        eapply Is_free_left_list_Exists in Hex as (?&Hex).
-        simpl_Exists; eauto.
-    - (* app *)
-      rewrite Forall_forall in *.
-      destruct H7 as [(?&Hex)|Hex]; simpl_Exists; eauto.
+    induction e using exp_ind2; intros * Hfree; inv Hfree;
+      repeat match goal with
+             | H: _ \/ _ |- _ => destruct H; destruct_conjs
+             | H: Is_free_left_list _ _ _ _ |- _ =>
+                 eapply Is_free_left_list_Exists in H as (?&?)
+             | _ => simpl_Exists; simpl_Forall; subst
+             end; eauto.
   Qed.
 
   Corollary Is_free_left_list_In_snd Γ : forall es x k,
@@ -685,7 +643,7 @@ Module Type LCAUSALITY
   Proof.
     induction blk using block_ind2; intros * Hin Hdep;
       inv Hdep; inv_VarsDefined; eauto with lcaus.
-    1-4:simpl_Exists; simpl_Forall; econstructor; solve_Exists.
+    all:simpl_Exists; simpl_Forall; econstructor; solve_Exists.
     all:try destruct s; destruct_conjs; eapply Is_defined_scope_Is_defined_scope; eauto.
     all:intros; repeat simpl_Exists; simpl_Forall; solve_Exists.
   Qed.
@@ -852,12 +810,10 @@ Module Type LCAUSALITY
       clear - H;
       eapply Forall_impl; eauto; intros ? [? ?]; auto.
 
-    induction e using exp_ind2; intros Hwl; inv Hwl; simpl; try reflexivity.
+    induction e using exp_ind2; intros Hwl; inv Hwl; destruct_conjs; simpl; try reflexivity.
     - (* unop *)
-      destruct a as (?&?).
       rewrite <- length_annot_numstreams in H4. rewrite IHe; auto.
     - (* binop *)
-      destruct a as (?&?).
       rewrite <- length_annot_numstreams in H6, H7.
       rewrite map_length, combine_length, IHe1, IHe2, H6, H7; auto.
     - (* fby *)
@@ -873,7 +829,7 @@ Module Type LCAUSALITY
       setoid_rewrite collect_free_left_list_length'; auto.
       solve_forall H.
     - (* merge *)
-      destruct x. rewrite map_length, assemble_brs_free_left_list_length, map_length; auto.
+      rewrite map_length, assemble_brs_free_left_list_length, map_length; auto.
       rewrite Forall_map.
       rewrite Forall_forall in *; intros.
       erewrite <- H6; eauto.
@@ -1787,32 +1743,20 @@ Module Type LCAUSALITY
       wx_exp Γ' e ->
       Is_free_left Γ cx k e ->
       IsVar Γ' x.
-  Proof with simpl_Exists; simpl_Forall; eauto.
-    induction e using exp_ind2; intros * Hnd Hin Hwx Hfree; inv Hwx; inv Hfree; eauto.
-    - destruct Hin; [|exfalso; eauto using NoDup_HasCaus_HasLastCaus].
-      eapply HasCaus_snd_det in H; eauto; subst; auto.
-    - destruct Hin; [exfalso; eauto using NoDup_HasCaus_HasLastCaus|].
-      eapply HasLastCaus_snd_det in H; eauto; subst; auto with senv.
-    - destruct H2; eauto.
-    - eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
-    - destruct H4 as [H4|H4].
-      + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
-      + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
-    - destruct H3 as [(_&?)|H4].
-      + destruct Hin; [|exfalso; eauto using NoDup_HasCaus_HasLastCaus].
-        eapply HasCaus_snd_det in H1; eauto; subst; auto.
-      + eapply Is_free_left_list_Exists in H4 as (?&Hfree)...
-    - destruct H3 as [(_&?)|Hfree].
-      + destruct Hin; [|exfalso; eauto using NoDup_HasCaus_HasLastCaus].
-        eapply HasCaus_snd_det in H1; eauto; subst; auto.
-      + simpl_Exists. eapply Is_free_left_list_Exists in Hfree as (?&Hfree)...
-    - destruct H3 as [(_&?)|[Hfree|Hfree]]; eauto.
-      + simpl_Exists. eapply Is_free_left_list_Exists in Hfree as (?&Hfree)...
-      + destruct Hfree as (?&?&Hfree); subst.
-        eapply Is_free_left_list_Exists in Hfree as (?&Hfree); eapply Exists_exists in Hfree as (?&?&Hfree).
-        specialize (H7 _ eq_refl). simpl in *.
-        simpl_Forall; eauto.
-    - destruct H9 as [(?&Hfree)|Hfree]...
+  Proof.
+    induction e using exp_ind2; intros * Hnd Hin Hwx Hfree; inv Hwx; inv Hfree; eauto;
+      repeat match goal with
+             | H: _ \/ _ |- _ => destruct H
+             | Hc1: HasCaus Γ _ ?cx, Hc2: HasCaus Γ _ ?cx |- _ =>
+                 eapply HasCaus_snd_det in Hc1; eauto; subst
+             | Hc1: HasLastCaus Γ _ ?cx, Hc2: HasLastCaus Γ _ ?cx |- _ =>
+                 eapply HasLastCaus_snd_det in Hc1; eauto; subst
+             | Hc1: HasCaus Γ _ ?cx, Hc2: HasLastCaus Γ _ ?cx |- _ =>
+                 exfalso; eauto using NoDup_HasCaus_HasLastCaus
+             | H: Is_free_left_list _ _ _ _ |- _ => apply Is_free_left_list_Exists in H as (?&?)
+             | H: forall _, Some _ = Some _ -> _ |- _ => specialize (H _ eq_refl)
+             | _ => simpl_Exists; simpl_Forall; subst
+             end; eauto using IsLast_IsVar.
   Qed.
 
   Lemma depends_scope_In {A} f_idcaus P_vd P_nd P_wx P_dep : forall locs caus (blks: A) Γ Γ' xs cy x cx,
@@ -2212,27 +2156,20 @@ Module Type LCAUSALITY
           induction es; inv Hwl; inv Hwx; constructor; auto
         end.
 
-      intros * Hwl Hwx Hfree Hnum; destruct e; inv Hwl; inv Hwx; simpl in *.
-      - (* const *)
-        rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
-        apply EconstCase.
-      - (* enum *)
-        rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
-        apply EenumCase.
+      intros * Hwl Hwx Hfree Hnum; destruct e; inv Hwl; inv Hwx; simpl in *;
+        repeat match goal with
+               | H: _ < 1 |- _ => apply PeanoNat.Nat.lt_1_r in H; subst
+               end; eauto.
       - (* var *)
-        rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         inv H0. apply InMembers_In in H as (?&?).
         eapply EvarCase, Hfree...
       - (* last *)
-        rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         inv H0. destruct (causl_last e) eqn:Hfind; try congruence.
         eapply ElastCase, Hfree...
       - (* unop *)
-        rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         apply EunopCase.
         eapply exp_causal_ind... rewrite H4; auto.
       - (* binop *)
-        rewrite PeanoNat.Nat.lt_1_r in Hnum; subst.
         apply EbinopCase.
         1,2:eapply exp_causal_ind... rewrite H6; auto. rewrite H7; auto.
       - (* fby *)

@@ -142,23 +142,17 @@ Module Type LORDERED
       In f (map n_name (nodes G)).
   Proof.
     intros * Hwl Hisin.
-    induction e using exp_ind2; inv Hwl; inv Hisin.
-    - (* unop *) auto.
-    - (* binop *) destruct H1; auto.
-    - (* fby *) destruct H3 as [?|?]; simpl_Exists; simpl_Forall; eauto.
-    - (* arrow *) destruct H3 as [?|?]; simpl_Exists; simpl_Forall; eauto.
-    - (* when *) simpl_Exists; simpl_Forall; eauto.
-    - (* merge *)
-      simpl_Exists; simpl_Forall; eauto.
-    - (* case *)
-      destruct H3 as [Hex|[Hex|(?&?&Hex)]]; subst; simpl in *; auto.
-      + simpl_Exists; simpl_Forall; eauto.
-      + specialize (H11 _ eq_refl). simpl_Exists; simpl_Forall; eauto.
-    - (* app1 *) clear H8. destruct H3; simpl_Exists; simpl_Forall; eauto.
-    - (* app2 *) assert (find_node f0 G <> None) as Hfind.
+    induction e using exp_ind2; inv Hwl; inv Hisin;
+      repeat match goal with
+             | H: _ \/ _ |- _ => destruct H
+             | H: forall x, Some _ = Some x -> _ |- _ => specialize (H _ eq_refl)
+             | _ => simpl_Exists; simpl_Forall; subst
+             end; auto.
+    - (* app2 *)
+      assert (find_node f0 G <> None) as Hfind.
       { intro contra. congruence. }
-      apply find_node_Exists, Exists_exists in Hfind as [? [Hin Hname]].
-      rewrite in_map_iff; eauto.
+      apply find_node_Exists, Exists_exists in Hfind as (?&?&?).
+      solve_In.
   Qed.
 
   Lemma wl_equation_Is_node_in_eq {PSyn prefs} : forall (G: @global PSyn prefs) eq f,
@@ -177,28 +171,15 @@ Module Type LORDERED
       Is_node_in_block f d ->
       In f (map n_name (nodes G)).
   Proof.
-    induction d using block_ind2; intros * Hwl Hin.
-    - inv Hwl; inv Hin.
-      eapply wl_equation_Is_node_in_eq; eauto.
-    - inv Hwl. inv Hin.
-      destruct H1 as [Hisin|Hisin].
-      + simpl_Exists; simpl_Forall; eauto.
-      + eapply wl_exp_Is_node_in_exp; eauto.
-    - inv Hwl. inv Hin.
-      destruct H1 as [Hisin|Hisin].
-      + eapply wl_exp_Is_node_in_exp; eauto.
-      + simpl_Exists; simpl_Forall; eauto.
-        inv Hisin. inv H5.
-        destruct H0 as [|]; simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
-        destruct o; simpl in *; destruct_conjs; [|take False and inv it]; eauto using wl_exp_Is_node_in_exp.
-    - inv Hwl. inv Hin. destruct H1 as [Hisin|Hisin]; simpl_Exists; simpl_Forall.
-      + eapply wl_exp_Is_node_in_exp; eauto.
-      + inv Hisin. inv H5. destruct_conjs.
-        destruct H0 as [|[|]]; simpl_Exists; simpl_Forall; eauto using wl_exp_Is_node_in_exp.
-        destruct o; simpl in *; destruct_conjs; [|take False and inv it]; eauto using wl_exp_Is_node_in_exp.
-    - inv Hwl; inv H1. inv Hin; inv H1.
-      destruct H2 as [Hex|Hex]; simpl_Exists; simpl_Forall; eauto.
-      destruct o; simpl in *; destruct_conjs; [|inv Hex]; eauto using wl_exp_Is_node_in_exp.
+    induction d using block_ind2; intros * Hwl Hin; inv Hwl; inv Hin;
+      repeat match goal with
+             | H: _ \/ _ |- _ => destruct H
+             | Hin: Is_node_in_scope _ _ _ |- _ => inv Hin
+             | Hwl: wl_scope _ _ _ |- _ => inv Hwl
+             | o: option _ |- _ => destruct o; destruct_conjs; simpl in *
+             | H: False |- _ => now inv H
+             | _ => simpl_Exists; simpl_Forall
+             end; eauto using wl_exp_Is_node_in_exp, wl_equation_Is_node_in_eq.
   Qed.
 
   Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,

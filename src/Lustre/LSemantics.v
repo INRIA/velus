@@ -1678,13 +1678,13 @@ Module Type LSEMANTICS
     intros bs xs ys zs Hfby.
     specialize (ac_fby1 _ _ _ Hfby) as Hac1. specialize (ac_fby2 _ _ _ Hfby) as Hac2.
     specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
-    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
+    intros [Hsync|[Hsync|Hsync]]; repeat split; auto;
+      match goal with
+      | Hal: aligned ?xs bs, Hal2: aligned ?xs (abstract_clock ?xs) |- _ =>
+          eapply aligned_EqSt in Hal2; eauto; rewrite Hal2;
+          (rewrite Hac1||rewrite Hac2||idtac); eauto;
+          ((now rewrite <-Hac1)||(now rewrite <-Hac2))
+      end.
   Qed.
 
   Lemma ac_arrow1 : forall xs ys rs,
@@ -1719,13 +1719,13 @@ Module Type LSEMANTICS
     intros bs xs ys zs Hfby.
     specialize (ac_arrow1 _ _ _ Hfby) as Hac1. specialize (ac_arrow2 _ _ _ Hfby) as Hac2.
     specialize (ac_aligned xs) as Hs1. specialize (ac_aligned ys) as Hs2. specialize (ac_aligned zs) as Hs3.
-    intros [Hsync|[Hsync|Hsync]]; repeat split; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1, <- Hac2; auto.
-    - eapply aligned_EqSt in Hs1; eauto. rewrite Hs1, Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs2; eauto. rewrite Hs2, Hac2; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac1; auto.
-    - eapply aligned_EqSt in Hs3; eauto. rewrite Hs3, <- Hac2; auto.
+    intros [Hsync|[Hsync|Hsync]]; repeat split; auto;
+      match goal with
+      | Hal: aligned ?xs bs, Hal2: aligned ?xs (abstract_clock ?xs) |- _ =>
+          eapply aligned_EqSt in Hal2; eauto; rewrite Hal2;
+          (rewrite Hac1||rewrite Hac2||idtac); eauto;
+          ((now rewrite <-Hac1)||(now rewrite <-Hac2))
+      end.
   Qed.
 
   (** ** Typing of the state machines state stream *)
