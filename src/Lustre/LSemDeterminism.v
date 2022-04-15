@@ -55,10 +55,13 @@ Module Type LSEMDETERMINISM
       EqStN n xs1 xs2 ->
       forall k, EqStN n (mask absent k rs1 xs1) (mask absent k rs2 xs2).
   Proof.
-    induction n; intros * Heq1 Heq2 k; auto with coindstreams.
-    inv Heq1; inv Heq2; repeat rewrite mask_Cons.
-    destruct k as [|[|]], x2; try (solve [constructor; auto]).
-    reflexivity.
+    intros * Heqr Heqx ?.
+    apply EqStN_spec. intros. rewrite 2 mask_nth.
+    assert ((count rs1) # k0 = (count rs2) # k0) as Hcount.
+    { eapply EqStN_spec; eauto using count_EqStN. }
+    rewrite Hcount; clear Hcount.
+    destruct (_ =? _); auto.
+    eapply EqStN_spec; eauto.
   Qed.
 
   Corollary EqStNs_mask {A} (absent : A) : forall n rs1 rs2 xs1 xs2,
@@ -79,17 +82,12 @@ Module Type LSEMDETERMINISM
       (forall k, EqStN n (mask absent k rs1 xs1) (mask absent k rs2 xs2)) ->
       EqStN n xs1 xs2.
   Proof.
-    induction n; intros * Heq1 Heq2; auto with coindstreams.
-    inv Heq1. unfold_St xs1; unfold_St xs2.
-    repeat setoid_rewrite mask_Cons in Heq2.
-    constructor.
-    - destruct x2.
-      + specialize (Heq2 1). inv Heq2; auto.
-      + specialize (Heq2 0). inv Heq2; auto.
-    - eapply IHn; eauto.
-      intros k. destruct x2.
-      + specialize (Heq2 (S k)). destruct k; inv Heq2; auto.
-      + specialize (Heq2 k). destruct k as [|[|]]; inv Heq2; auto.
+    intros * Heq1 Heq2.
+    apply EqStN_spec; intros.
+    assert ((count rs1) # k = (count rs2) # k) as Hcount.
+    { eapply EqStN_spec; eauto using count_EqStN. }
+    specialize (Heq2 ((count rs1) # k)). eapply EqStN_spec in Heq2; [|eauto].
+    rewrite 2 mask_nth, Hcount, Nat.eqb_refl in Heq2. auto.
   Qed.
 
   Corollary EqStNs_unmask {A} (absent : A) : forall n rs1 rs2 xs1 xs2,
@@ -1115,27 +1113,29 @@ Module Type LSEMDETERMINISM
     destruct (sc2 # k) as [|(?&?)] eqn:Heq3; simpl in *.
     1,2:rewrite Heq1' in *.
     - edestruct Heq2 with (k:=0) as (?&?&Hf1&Hf2&Heq). apply in_seq. auto.
-      inv Hf1. inv Hf2.
-      eapply filter_nth with (n:=k) in H as [|[|]]; destruct_conjs.
+      apply select_mask_filter in Hf1 as (?&Hfil1&Hmask1).
+      apply select_mask_filter in Hf2 as (?&Hfil2&Hmask2).
+      eapply filter_nth with (n:=k) in Hfil1 as [|[|]]; destruct_conjs.
       2,3:setoid_rewrite Str_nth_map in H; setoid_rewrite Heq1' in H; try congruence.
-      eapply filter_nth with (n:=k) in H1 as [|[|]]; destruct_conjs; try congruence.
-      1,2:setoid_rewrite Str_nth_map in H1; setoid_rewrite Heq3 in H1; try congruence.
+      eapply filter_nth with (n:=k) in Hfil2 as [|[|]]; destruct_conjs; try congruence.
+      1,2:setoid_rewrite Str_nth_map in H2; setoid_rewrite Heq3 in H2; try congruence.
     - assert (In n0 (seq 0 tn)) as Hin by (apply in_seq; lia).
       specialize (Heq2 _ ((count (ffilterb n0 (stres_st sc1) (stres_res sc1))) # k) Hin) as (?&?&Hf1&Hf2&Heq).
-      inv Hf1. inv Hf2.
-      eapply filter_nth with (n:=k) in H as [|[|]]; destruct_conjs.
+      apply select_mask_filter in Hf1 as (?&Hfil1&Hmask1).
+      apply select_mask_filter in Hf2 as (?&Hfil2&Hmask2).
+      eapply filter_nth with (n:=k) in Hfil1 as [|[|]]; destruct_conjs.
       1,3:setoid_rewrite Str_nth_map in H; setoid_rewrite Heq1' in H; try congruence.
-      eapply filter_nth with (n:=k) in H1 as [|[|]]; destruct_conjs.
+      eapply filter_nth with (n:=k) in Hfil2 as [|[|]]; destruct_conjs.
       1,3:setoid_rewrite Str_nth_map in H1; setoid_rewrite Heq3 in H1; try congruence.
-      rewrite H3, H4.
+      rewrite H0, H2.
       rewrite EqStN_spec in Heq. specialize (Heq _ Hlt).
-      apply eqst_ntheq with (n:=k) in H0. rewrite mask_nth, Nat.eqb_refl in H0.
-      apply eqst_ntheq with (n:=k) in H2. erewrite mask_nth in H2.
+      apply eqst_ntheq with (n:=k) in Hmask1. rewrite mask_nth, Nat.eqb_refl in Hmask1.
+      apply eqst_ntheq with (n:=k) in Hmask2. erewrite mask_nth in Hmask2.
       replace ((count (ffilterb n0 (stres_st sc2) (stres_res sc2))) # k)
-        with ((count (ffilterb n0 (stres_st sc1) (stres_res sc1))) # k) in H2.
+        with ((count (ffilterb n0 (stres_st sc1) (stres_res sc1))) # k) in Hmask2.
       2:{ eapply EqStN_spec; eauto.
           apply count_EqStN, EqStN_ffilter; eauto using map_EqStN. }
-      rewrite Nat.eqb_refl in H2.
+      rewrite Nat.eqb_refl in Hmask2.
       congruence.
   Qed.
 

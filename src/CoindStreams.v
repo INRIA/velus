@@ -2182,15 +2182,14 @@ Module Type COINDSTREAMS
 
   (** ** mask and friends *)
 
-  CoFixpoint mask {A : Type} (absent: A) (k: nat) (rs: Stream bool) (xs: Stream A) : Stream A :=
-    let mask' k' := mask absent k' (tl rs) (tl xs) in
-    match k, hd rs with
-    | 0, true    => Streams.const absent
-    | 0, false   => hd xs  ⋅ mask' 0
-    | 1, true    => hd xs  ⋅ mask' 0
-    | S k', true => absent ⋅ mask' k'
-    | S _, false => absent ⋅ mask' k
+  CoFixpoint mask' {A : Type} (absent: A) (k k': nat) (rs: Stream bool) (xs: Stream A) : Stream A :=
+    let mask' k' := mask' absent k k' (tl rs) (tl xs) in
+    match hd rs with
+    | false => (if k' =? k then hd xs else absent) ⋅ mask' k'
+    | true  => (if S k' =? k then hd xs else absent) ⋅ mask' (S k')
     end.
+  Definition mask {A : Type} (absent: A) k rs xs :=
+    mask' absent k 0 rs xs.
 
   (** Synchronous value mask *)
   Definition maskv k rs := @mask svalue absent k rs.
@@ -2203,28 +2202,16 @@ Module Type COINDSTREAMS
 
   Lemma mask_nth {A} (absent: A) :
     forall n k rs xs,
-      (mask absent k rs xs) # n = if (count rs) # n  =? k then xs # n else absent.
+      (mask absent k rs xs) # n = if (count rs) # n =? k then xs # n else absent.
   Proof.
-    unfold Str_nth.
-    induction n, k as [|[|k]]; intros;
-      unfold_Stv rs; simpl; auto.
-    - pose proof (count_acc_grow 1 rs) as H.
-      apply (ForAll_Str_nth_tl n) in H; inv H.
-      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by lia;
-        apply beq_nat_false_iff in E; rewrite E.
-      pose proof (const_nth n absent); auto.
+    unfold mask, Str_nth. intros n k rs.
+    replace (hd (Str_nth_tl n (count rs))) with (0 + hd (Str_nth_tl n (count rs))) by auto.
+    generalize 0 as k'. revert k rs.
+    induction n; intros; unfold_Stv rs; simpl; auto.
+    - rewrite Nat.add_1_r. reflexivity.
+    - rewrite Nat.add_0_r. reflexivity.
     - rewrite IHn; unfold count.
-      destruct (hd (Str_nth_tl n (count_acc 1 rs)) =? 1) eqn: E;
-        rewrite count_S_nth in E.
-      + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
-      + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
-          rewrite E; auto.
-    - rewrite IHn; unfold count.
-      destruct (hd (Str_nth_tl n (count_acc 1 rs)) =? S (S k)) eqn: E;
-        rewrite count_S_nth in E.
-      + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
-      + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
-          rewrite E; auto.
+      rewrite count_S_nth, <-plus_n_Sm, plus_Sn_m. reflexivity.
   Qed.
 
   Corollary maskv_nth:
@@ -2241,30 +2228,24 @@ Module Type COINDSTREAMS
     intros. setoid_rewrite mask_nth; auto.
   Qed.
 
-  Lemma mask_Cons {A} (absent: A) :
-    forall k r rs x xs,
-      (mask absent k (r ⋅ rs) (x ⋅ xs))
-        ≡ (match k with
-           | 0 => if r then (Streams.const absent) else (x ⋅ (mask absent 0 rs xs))
-           | 1 => if r then (x ⋅ (mask absent 0 rs xs)) else (absent ⋅ mask absent 1 rs xs)
-           | S (S _ as k') => if r then (absent ⋅ mask absent k' rs xs) else (absent ⋅ mask absent k rs xs)
-           end).
+  Lemma mask'_Cons {A} (absent: A) :
+    forall k r rs x xs k',
+      (mask' absent k k' (r ⋅ rs) (x ⋅ xs))
+      = (match r with
+         | false => (if k' =? k then x else absent) ⋅ mask' absent k k' rs xs
+         | true  => (if S k' =? k then x else absent) ⋅ mask' absent k (S k') rs xs
+         end).
   Proof.
     intros *.
-    constructor; simpl.
-    1,2:destruct k; [|destruct k]; destruct r; try reflexivity.
+    rewrite (unfold_Stream (mask' _ _ _ _ _)); simpl.
+    destruct r; simpl; reflexivity.
   Qed.
 
-  Corollary maskv_Cons :
-    forall k r rs x xs,
-      (maskv k (r ⋅ rs) (x ⋅ xs))
-        ≡ (match k with
-           | 0 => if r then (Streams.const absent) else (x ⋅ (maskv 0 rs xs))
-           | 1 => if r then (x ⋅ (maskv 0 rs xs)) else (absent ⋅ maskv 1 rs xs)
-           | S (S _ as k') => if r then (absent ⋅ maskv k' rs xs) else (absent ⋅ maskv k rs xs)
-           end).
+  Lemma mask'_S {A} (absent: A) : forall k k' rs xs,
+      mask' absent (S k) (S k') rs xs ≡ mask' absent k k' rs xs.
   Proof.
-    eapply mask_Cons.
+    cofix CoFix.
+    intros. destruct rs as [[]], xs; constructor; simpl; auto.
   Qed.
 
   Lemma EqSt_unmask {A} (absent: A) : forall b x y,
@@ -2558,11 +2539,9 @@ Module Type COINDSTREAMS
   Lemma ac_mask : forall k rs xs,
       abstract_clock (maskv k rs xs) ≡ maskb k rs (abstract_clock xs).
   Proof.
-    cofix CoFix.
-    intros.
-    unfold_Stv xs; unfold_Stv rs;
-      constructor; simpl; destruct k as [|[|?]]; eauto.
-    1,2:unfold Streams.const; apply ac_Streams_const.
+    intros. apply ntheq_eqst; intros.
+    rewrite ac_nth, maskv_nth, maskb_nth, ac_nth.
+    destruct (_ =? _); auto.
   Qed.
 
   Lemma bools_of_mask : forall rs xs bs,
@@ -2844,10 +2823,10 @@ Module Type COINDSTREAMS
   Lemma ffilter_Cons {A} (absent: A) :
     forall sel e es x xs,
       (ffilter absent sel (e ⋅ es) (x ⋅ xs))
-        ≡ (if e ==b present (Venum sel) then x else absent) ⋅ (ffilter absent sel es xs).
+        = (if e ==b present (Venum sel) then x else absent) ⋅ (ffilter absent sel es xs).
   Proof.
     intros *.
-    constructor; simpl; reflexivity.
+    rewrite (unfold_Stream (ffilter _ _ _ _)); simpl. reflexivity.
   Qed.
 
   Lemma filter_ffilter {A} (abs : A) sel : forall es vs vs',
@@ -3087,11 +3066,27 @@ Module Type COINDSTREAMS
   Definition stres_res (stres : Stream (synchronous (enumtag * bool))) :=
     Streams.map (fun v => match v with present (_, b) => b | absent => false end) stres.
 
-  Inductive select {A} (absent : A) (sel : enumtag) (k : nat) (stres : Stream (synchronous (enumtag * bool))) : Stream A -> Stream A -> Prop :=
-  | sele : forall xs ys zs,
-      filter absent sel (stres_st stres) xs ys ->
-      zs ≡ mask absent k (ffilterb sel (stres_st stres) (stres_res stres)) ys ->
-      select absent sel k stres xs zs.
+  (* Inductive select {A} (absent : A) (sel : enumtag) (k : nat) (stres : Stream (synchronous (enumtag * bool))) : Stream A -> Stream A -> Prop := *)
+  (* | sele : forall xs ys zs, *)
+  (*     filter absent sel (stres_st stres) xs ys -> *)
+  (*     zs ≡ mask absent k (ffilterb sel (stres_st stres) (stres_res stres)) ys -> *)
+  (*     select absent sel k stres xs zs. *)
+
+  CoInductive select' {A} (abs : A) (sel : enumtag) (k : nat) : nat -> Stream (synchronous (enumtag * bool)) -> Stream A -> Stream A -> Prop :=
+  | select_abs : forall k' stres xs ys,
+      select' abs sel k k' stres xs ys ->
+      select' abs sel k k' (absent ⋅ stres) (abs ⋅ xs) (abs ⋅ ys)
+  | select_nsel : forall k' v r stres x xs ys,
+      select' abs sel k k' stres xs ys ->
+      v <> sel ->
+      select' abs sel k k' (present (v, r) ⋅ stres) (x ⋅ xs) (abs ⋅ ys)
+  | select_nreset : forall k' stres x xs ys,
+      select' abs sel k k' stres xs ys ->
+      select' abs sel k k' (present (sel, false) ⋅ stres) (x ⋅ xs) ((if k' =? k then x else abs) ⋅ ys)
+  | select_reset : forall k' stres x xs ys,
+      select' abs sel k (S k') stres xs ys ->
+      select' abs sel k k' (present (sel, true) ⋅ stres) (x ⋅ xs) ((if S k' =? k then x else abs) ⋅ ys).
+  Definition select {A} (abs : A) sel k := select' abs sel k 0.
 
   Definition selectv := select (@absent value).
   Definition select_hist sel k stres Hi Hi' :=
@@ -3124,13 +3119,66 @@ Module Type COINDSTREAMS
     rewrite 2 Str_nth_map. rewrite Heq; auto.
   Qed.
 
+  Lemma select_mask_filter {A} (abs: A) sel k : forall stres xs zs,
+      select abs sel k stres xs zs
+      <-> exists ys, filter abs sel (stres_st stres) xs ys
+              /\ zs ≡ mask abs k (ffilterb sel (stres_st stres) (stres_res stres)) ys.
+  Proof.
+    intros *. split.
+    - intros * Hsel. exists (ffilter abs sel (stres_st stres) xs). split.
+      + revert Hsel. unfold select. generalize 0 as k'. revert stres xs zs.
+        cofix CoFix; intros [] [] [] * Hsel.
+        inversion Hsel; clear Hsel; subst k'0 s s0 a s1 a0 s2.
+        all:unfold stres_st; rewrite map_Cons, ffilter_Cons.
+        * constructor; eauto.
+        * replace (present (Venum v) ==b present (Venum sel)) with false.
+          2:{ destruct (_ ==b _) eqn:Heq; auto.
+              rewrite equiv_decb_equiv in Heq. inv Heq. congruence. }
+          constructor; eauto.
+          contradict H7; now inv H7.
+        * rewrite equiv_decb_refl. constructor; eauto.
+        * rewrite equiv_decb_refl. constructor; eauto.
+
+      + revert Hsel. unfold select, mask. generalize 0 as k'. revert stres xs zs.
+        cofix CoFix; intros [] [] [] * Hsel.
+        inversion Hsel; clear Hsel; subst k'0 s s0 a s1 a0 s2.
+        all:unfold stres_st, stres_res, ffilterb; rewrite 2 map_Cons, 2 ffilter_Cons, mask'_Cons.
+        * constructor; simpl; eauto. destruct (_ =? _); auto.
+        * replace (present (Venum v) ==b present (Venum sel)) with false.
+          2:{ destruct (_ ==b _) eqn:Heq; auto.
+              rewrite equiv_decb_equiv in Heq. inv Heq. congruence. }
+          constructor; eauto. destruct (_ =? _); auto.
+        * rewrite equiv_decb_refl. constructor; eauto.
+        * rewrite equiv_decb_refl. constructor; eauto.
+
+    - intros (ys&Hfilter&Hmask).
+      revert Hfilter Hmask. unfold mask, select. generalize 0 as k'.
+      revert stres xs ys zs.
+      cofix CoFix; intros [] [] [] [] * Hfilter Hmask.
+      setoid_rewrite map_Cons in Hfilter. setoid_rewrite map_Cons in Hmask.
+      inv Hmask; simpl in *; subst.
+      inversion Hfilter; clear Hfilter; subst a xs a0 s2.
+      + destruct s as [|(?&?)]; simpl in *; try congruence.
+        destruct (_ =? _); constructor; eauto.
+      + destruct s as [|(?&?)]; simpl in *. inv H.
+        inversion H; clear H. subst e es.
+        rewrite equiv_decb_refl in *.
+        destruct b; constructor; eauto.
+      + destruct s as [|(?&?)]; simpl in *; inv H.
+        destruct (_ ==b _) eqn:Heq; simpl in *.
+        { rewrite equiv_decb_equiv in Heq. inv Heq. congruence. }
+        destruct (_ =? _); constructor; eauto.
+  Qed.
+
   Add Parametric Morphism e k : (selectv e k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
         as selectv_EqSt.
   Proof.
     intros * Heq1 * Heq2 * Heq3 Hsel.
-    inv Hsel. econstructor; eauto. 2:rewrite <-Heq3, <-Heq1; eauto.
-    now rewrite <-Heq1, <-Heq2.
+    unfold selectv in *. rewrite select_mask_filter in *.
+    destruct Hsel as (?&?&?). do 2 esplit.
+    - rewrite <-Heq2, <-Heq1; eauto.
+    - rewrite <-Heq3, <-Heq1; eauto.
   Qed.
 
   Add Parametric Morphism sel k : (select_hist sel k)
@@ -3191,9 +3239,9 @@ Module Type COINDSTREAMS
       select abs sel k es vs vs' ->
       vs' ≡ fselect abs sel k es vs.
   Proof.
-    intros * Hsel. inv Hsel.
-    apply filter_ffilter in H.
-    rewrite H0, H. reflexivity.
+    intros * Hsel. apply select_mask_filter in Hsel as (?&Hfil&Hmask).
+    apply filter_ffilter in Hfil.
+    rewrite Hmask, Hfil. reflexivity.
   Qed.
 
   Lemma sem_var_fselect: forall e k r H x v,
@@ -3244,8 +3292,7 @@ Module Type COINDSTREAMS
       abstract_clock vs ≡ abstract_clock es ->
       selectv sel k es vs (fselectv sel k es vs).
   Proof.
-    intros * Hac.
-    econstructor.
+    intros * Hac. apply select_mask_filter. do 2 esplit.
     + eapply ffilterv_filterv.
       rewrite Hac. apply ntheq_eqst; intros.
       rewrite 2 ac_nth. setoid_rewrite Str_nth_map. destruct (es # n) as [|(?&?)]; auto.
@@ -3291,7 +3338,7 @@ Module Type COINDSTREAMS
   Lemma select_absent {A} (abs: A) e k :
     select abs e k (Streams.const absent) (Streams.const abs) (Streams.const abs).
   Proof.
-    intros. econstructor.
+    intros. apply select_mask_filter. do 2 esplit.
     rewrite stres_st_absent; eauto using filter_absent.
     rewrite stres_st_absent, stres_res_absent.
     apply ntheq_eqst. intros n.

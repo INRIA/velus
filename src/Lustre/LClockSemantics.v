@@ -3188,8 +3188,8 @@ Module Type LCLOCKSEMANTICS
           { edestruct Hin as (?&?); eauto. do 2 esplit; eauto. reflexivity. }
           eapply sem_var_select_inv with (k:=(count (ffilterb 0 (stres_st sc) (stres_res sc))) # n) in Hv' as (?&?&Hfilter'); eauto.
           eapply sem_var_det in Hv; eauto. rewrite <-Hv.
-          inv Hfilter'.
-          eapply filter_nth with (n:=n) in H0 as [(?&Hx&?)|[(Hscn'&Hx)|(?&Hscn'&?&Hy)]]; try rewrite Hx; auto.
+          apply select_mask_filter in Hfilter' as (?&Hfil&Hmask).
+          eapply filter_nth with (n:=n) in Hfil as [(?&Hx&?)|[(Hscn'&Hx)|(?&Hscn'&?&Hy)]]; try rewrite Hx; auto.
           1,2:setoid_rewrite Str_nth_map in Hscn'; setoid_rewrite Hscn in Hscn'; congruence.
         + edestruct Hsc with (c:=n0) as ((Hi'&?)&Hin&(Hfilter&_)&(Hsc'&_)). apply in_seq; lia.
           assert (exists vs, sem_var Hi' x0 vs) as (?&Hv').
@@ -3201,11 +3201,12 @@ Module Type LCLOCKSEMANTICS
           eapply sem_clock_equiv in Hv'. specialize (Hv' n).
           unfold fselectb, fselect in Hv'. rewrite 2 tr_Stream_nth, ac_nth, mask_nth, Nat.eqb_refl, ffilter_nth in Hv'.
           setoid_rewrite Str_nth_map in Hv'. setoid_rewrite Hscn in Hv'. rewrite equiv_decb_refl in Hv'. inv Hv'.
-          inv Hfilter'. apply eqst_ntheq with (n:=n) in H2. rewrite mask_nth, Nat.eqb_refl in H2.
-          eapply filter_nth with (n:=n) in H1 as [(Hscn'&Hx&Hy)|[(Hscn'&Hx)|(?&Hscn'&?&?)]].
+          apply select_mask_filter in Hfilter' as (ys&Hfil&Hmask).
+          apply eqst_ntheq with (n:=n) in Hmask. rewrite mask_nth, Nat.eqb_refl in Hmask.
+          eapply filter_nth with (n:=n) in Hfil as [(Hscn'&Hx&Hy)|[(Hscn'&Hx)|(?&Hscn'&?&?)]].
           1,3:setoid_rewrite Str_nth_map in Hscn'; setoid_rewrite Hscn in Hscn'; congruence.
           rewrite Hx. rewrite Hscn in Hsemck. apply IStr.sem_clock_instant_true_inv in Hsemck.
-          rewrite H2 in H0. destruct (ys # n); try congruence.
+          rewrite Hmask in H0. destruct (ys # n); try congruence.
       - exfalso. eapply Hnin; eauto.
     Qed.
 
