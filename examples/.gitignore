@@ -6,6 +6,7 @@
 *.nolocal.lus
 *.sn.lus
 *.n.lus
+*.stc
 *.bkp
 *.wcet
 *.epci

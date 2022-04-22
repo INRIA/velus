@@ -281,9 +281,11 @@ module SchedulerFun
         List.iter (add_exp_deps add_dep_var) es;
         add_dep_inst i
 
-    let add_reset_dependencies add_dep_next = function
+    let add_reset_dependencies add_dep_next add_dep_step = function
       | TcReset (x, _, _, _) ->
         add_dep_next x
+      | TcInstReset (i, _, _) ->
+        add_dep_step i
       | _ -> ()
 
     (** Map variable identifiers to trconstr ids *)
@@ -305,9 +307,10 @@ module SchedulerFun
       | TcNext (x, _, _, _) ->
         pm_update x (id, true) vars, insts
       | TcInstReset (i, _, _) ->
-        vars, PM.add i id insts
-      | TcStep (_, xs, _, _, _, _) ->
-        List.fold_left (fun m x -> PM.add x [(id, false)] m) vars xs, insts
+        vars, pm_update i (id, false) insts
+      | TcStep (i, xs, _, _, _, _) ->
+        List.fold_left (fun m x -> PM.add x [(id, false)] m) vars xs,
+        pm_update i (id, true) insts
 
     let fold_left_i f acc l =
       List.fold_left (fun (acc, i) x -> f i acc x, i + 1) (acc, 0) l
@@ -360,8 +363,8 @@ module SchedulerFun
         fprintf fmt "reset %s" (extern_atom x)
       | TcNext (x, _, _, _) ->
         fprintf fmt "next %s" (extern_atom x)
-      | TcInstReset (_, _, _) ->
-        pp_print_string fmt "_"
+      | TcInstReset (f, _, _) ->
+        fprintf fmt "reset(%s)" (extern_atom f)
       | TcStep (_, xs, _, _, _, _) ->
         fprintf fmt "{@[<hov 2>%a@]}"
           (pp_print_list ~pp_sep:pp_print_space pp_print_string)
@@ -542,21 +545,15 @@ module SchedulerFun
               else add xi yi) ys
       in
       let add_dep_inst xi y =
-        match PM.find y instmap with
-        | None    -> ()                 (* ignore simple steps *)
-        | Some yi -> add xi yi
-      in
-      let add_dep_next xi y =
-        match PM.find y varmap with
-        | Some ys -> List.iter (fun (yi, isnext) -> if isnext then add yi xi else ()) ys
-        | _ -> ()
+          match PM.find y instmap with
+          | None    -> ()                 (* ignore simple steps *)
+          | Some ys -> List.iter (fun (yi, isstep) ->
+              if yi = xi then ()
+              else if isstep then add yi xi else add xi yi) ys
       in
 
       (* Add dependencies to free variables *)
       List.iteri (fun n -> add_dependencies (add_dep_var n) (add_dep_inst n)) sbtcs;
-
-      (* Add dependencies between reset and next *)
-      List.iteri (fun n -> add_reset_dependencies (add_dep_next n)) sbtcs;
 
       let ct = empty_clock_tree () in
       Array.iter (enqueue_tc ct) tcs;

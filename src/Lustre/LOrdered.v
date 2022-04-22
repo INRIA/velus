@@ -78,12 +78,13 @@ Module Type LORDERED
       Is_node_in_exp f ec
       \/ Exists (fun blks => Is_node_in_scope (Exists (Is_node_in_block f)) f (snd blks)) branches ->
       Is_node_in_block f (Bswitch ec branches)
-  | INBauto : forall ini oth states ck,
+  | INBauto : forall type ini oth states ck,
       Exists (fun '(e, _) => Is_node_in_exp f e) ini
-      \/ Exists (fun blks => Is_node_in_scope
-                           (fun blks => Exists (Is_node_in_block f) (fst blks)
-                                     \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd blks)) f (snd blks)) states ->
-      Is_node_in_block f (Bauto ck (ini, oth) states)
+      \/ Exists (fun blks => Exists (fun '(e, _) => Is_node_in_exp f e) (fst (snd blks))
+                         \/ Is_node_in_scope
+                             (fun blks => Exists (Is_node_in_block f) (fst blks)
+                                       \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd blks)) f (snd (snd blks))) states ->
+      Is_node_in_block f (Bauto ck type (ini, oth) states)
   | INBlocal : forall scope,
       Is_node_in_scope (Exists (Is_node_in_block f)) f scope ->
       Is_node_in_block f (Blocal scope).

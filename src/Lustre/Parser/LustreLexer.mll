@@ -88,6 +88,7 @@ let () =
       ("uint32",   fun loc ->  UINT32   loc);
       ("uint64",   fun loc ->  UINT64   loc);
       ("uint8",    fun loc ->  UINT8    loc);
+      ("unless",   fun loc ->  UNLESS   loc);
       ("until",    fun loc ->  UNTIL    loc);
       ("var",      fun loc ->  VAR      loc);
       ("when",     fun loc ->  WHEN     loc);

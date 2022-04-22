@@ -369,7 +369,7 @@ Module Type DLCLOCKING
                    (map_filter
                       (fun '(x, e0) =>
                          if clo e0 ==b ck then Some (x, ann_with_clock e0 Cbase) else None) Γ') x ck') as Hvar'.
-      { intros * Hck. apply H6 in Hck as (?&?); subst; eauto.
+      { intros * Hck. apply H8 in Hck as (?&?); subst; eauto.
         eapply Hvar in H1. inv H1. econstructor; solve_In. simpl. rewrite equiv_decb_refl; eauto. auto.
       }
       assert (forall x ck',
@@ -379,8 +379,8 @@ Module Type DLCLOCKING
                    (map_filter
                       (fun '(x, e0) =>
                          if clo e0 ==b ck then Some (x, ann_with_clock e0 Cbase) else None) Γ') (rename_in_var sub x) ck') as Hlast'.
-      { intros * Hck Hl. apply H6 in Hck as (Hck&?); subst.
-        eapply H8, Hlast in Hl; eauto.
+      { intros * Hck Hl. apply H8 in Hck as (Hck&?); subst.
+        eapply H9, Hlast in Hl; eauto.
         inv Hl. econstructor; solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
       }
       eapply wc_Bauto with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, Build_annotation e.(typ) Cbase e.(causl) e.(causl_last)) else None) Γ').
@@ -397,12 +397,14 @@ Module Type DLCLOCKING
         now rewrite rename_in_exp_clockof.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
         simpl_Forall. repeat inv_bind.
-        destruct s0; destruct_conjs. eapply delast_scope_wc in H10; eauto.
+        destruct s0; destruct_conjs; split.
+        2:eapply delast_scope_wc in H3; eauto.
+        * simpl_Forall. rewrite rename_in_exp_clockof; eauto using rename_in_exp_wc.
         * intros ? Hin. simpl_In. assert (HasClock Γ'0 a a0.(clo)) as Hck by eauto with senv.
-          apply H6 in Hck as (Hck&?); subst. inv Hck.
+          apply H8 in Hck as (Hck&?); subst. inv Hck.
           apply Hincl; solve_In.
         * intros; destruct_conjs; repeat inv_bind. split.
-          -- eapply mmap_values, Forall2_ignore1 in H16. simpl_Forall; eauto.
+          -- eapply mmap_values, Forall2_ignore1 in H17. simpl_Forall; eauto.
           -- simpl_Forall; split; eauto using rename_in_exp_wc.
              now rewrite rename_in_exp_clockof.
         * intros; simpl in *. destruct_conjs.

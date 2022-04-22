@@ -1812,6 +1812,8 @@ Module Type CORRECTNESS
         constructor; eauto. eapply sem_ref_sem_block; eauto. econstructor; eauto.
       - exists H0. repeat (esplit; eauto with env).
         constructor; eauto. eapply sem_ref_sem_block; eauto. econstructor; eauto.
+      - exists H0. repeat (esplit; eauto with env).
+        constructor; eauto. eapply sem_ref_sem_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_sem : forall vars b blocks H Hl blocks' st st',

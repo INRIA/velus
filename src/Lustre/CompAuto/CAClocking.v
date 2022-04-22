@@ -110,7 +110,7 @@ Module Type CACLOCKING
         wc_block G2 Γ blk'.
     Proof.
       Opaque auto_scope.
-      induction blk using block_ind2; intros * Hnl1 Hnl2 Hwc (* Henums  *)Hat;
+      induction blk using block_ind2; intros * Hnl1 Hnl2 Hwc (* Henums  *)Hat; try destruct type;
         inv Hnl2; inv Hwc; repeat inv_bind.
       - (* equation *)
         constructor; eauto with lclocking.
@@ -128,7 +128,7 @@ Module Type CACLOCKING
           * intros * Hl. inv Hl. inv H11.
           * intros. auto_block_simpl_Forall.
 
-      - (* automaton *)
+      - (* automaton (weak) *)
         Local Ltac wc_automaton :=
           match goal with
           | Hincl: incl (?x::_) (enums G2) |- In ?x G2.(enums) =>
@@ -148,9 +148,9 @@ Module Type CACLOCKING
         + repeat constructor.
         + econstructor. repeat constructor.
           all:wc_automaton.
-          *{ eapply init_state_exp_wc in H9; eauto.
+          *{ eapply init_state_exp_wc in H10; eauto.
              - intros ??. eapply Hnl1; eauto.
-             - intros. edestruct H6; eauto. rewrite HasClock_app; eauto.
+             - intros. edestruct H8; eauto. rewrite HasClock_app; eauto.
              - wc_automaton.
            }
           * apply add_whens_wc; auto. wc_automaton.
@@ -163,7 +163,7 @@ Module Type CACLOCKING
           * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
             -- inv H13. simpl in *.
                destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
-            -- edestruct H6; eauto.
+            -- edestruct H8; eauto.
           * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
             inv H13. simpl in *.
             destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
@@ -181,9 +181,64 @@ Module Type CACLOCKING
               eapply wc_exp_incl; [| |eauto]; intros * Hi; inv Hi; econstructor; eauto with datatypes. }
             { rewrite trans_exp_clockof; repeat constructor; econstructor; eauto with datatypes. }
             { auto_block_simpl_Forall.
-              eapply H in H18; eauto.
+              eapply H in H19; eauto.
               - eapply wc_block_incl; [| |eauto]; intros * Hi; inv Hi; econstructor; eauto with datatypes.
             }
+
+      - (* automaton (strong) *)
+        do 2 econstructor; eauto; simpl.
+        3:repeat (apply Forall_cons); auto.
+        + repeat apply Forall_cons; auto. all:wc_automaton.
+        + repeat constructor.
+        + econstructor. repeat constructor.
+          all:wc_automaton.
+          * apply add_whens_wc; auto. wc_automaton.
+            constructor.
+          * apply add_whens_wc; auto. wc_automaton.
+            constructor.
+          * simpl. rewrite 2 add_whens_clockof; auto.
+        + remember [_;_;_;_] as Γ''.
+          eapply wc_Bswitch with (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ''++Γ'); simpl; eauto.
+          * constructor. subst. wc_automaton.
+          * destruct states; simpl in *; try congruence. auto.
+          * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
+            -- inv H13. simpl in *.
+               destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
+            -- edestruct H8; eauto.
+          * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
+            inv H13. simpl in *.
+            destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
+          *{ simpl_Forall. econstructor; eauto. 1,2:constructor; auto.
+             simpl. rewrite app_nil_r.
+             econstructor; simpl; eauto. repeat constructor.
+             - eapply trans_exp_wc. simpl_Forall.
+               split; auto. eapply wc_exp_incl; [| |eauto]; intros; wc_automaton.
+             - rewrite trans_exp_clockof. repeat constructor.
+               1,2:subst; rewrite HasClock_app; left; simpl; econstructor; eauto with datatypes.
+             - constructor. subst; rewrite HasClock_app; left; simpl; econstructor; eauto with datatypes.
+            }
+        + remember [_;_;_;_] as Γ''.
+          eapply wc_Bswitch with (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ''++Γ'); simpl; eauto; wc_automaton.
+          * subst. constructor; wc_automaton.
+          * apply mmap2_values, Forall3_ignore3 in H12. inv H12; auto; congruence.
+          * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
+            -- inv H13. simpl in *.
+               destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
+            -- edestruct H8; eauto.
+          * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
+            inv H13. simpl in *.
+            destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
+          * auto_block_simpl_Forall. destruct s0; destruct p as (?&?).
+            econstructor; eauto. 1,2:repeat constructor. rewrite app_nil_r. econstructor; eauto; repeat constructor.
+            2:{ simpl. econstructor; eauto with datatypes. }
+            eapply auto_scope_wc in H15; eauto.
+            1:{ intros ??. eapply Hnl1; eauto. }
+            1:{ intros ? Hl; inv Hl. simpl_In.
+                destruct Hin as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
+            intros; repeat inv_bind. repeat constructor.
+            auto_block_simpl_Forall.
+            eapply H in H19; eauto.
+            eapply wc_block_incl; [| |eauto]; intros * Hi; inv Hi; econstructor; eauto with datatypes.
 
       - (* local *)
         econstructor; eauto.

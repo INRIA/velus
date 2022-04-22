@@ -85,13 +85,15 @@ Module Type LSYNTAX
 
   Arguments Scope {_}.
 
+  Inductive auto_type := Weak | Strong.
+
   Inductive block : Type :=
   | Beq : equation -> block
   | Breset : list block -> exp -> block
   | Bswitch : exp -> list (enumtag * scope (list block)) -> block
   (* For automatons : initially, states. We also need the base clock of the state-machine for clock-checking *)
-  | Bauto : clock -> list (exp * enumtag) * enumtag ->
-            list (enumtag * scope (list block * list transition)) -> block
+  | Bauto : auto_type -> clock -> list (exp * enumtag) * enumtag ->
+            list (enumtag * (list transition * scope (list block * list transition))) -> block
   | Blocal : scope (list block) -> block.
 
   (** ** Node *)
@@ -206,9 +208,9 @@ Module Type LSYNTAX
   | DefSwitch : forall ec branches,
       Exists (fun blks => Is_defined_in_scope (Exists (Is_defined_in x)) x (snd blks)) branches ->
       Is_defined_in x (Bswitch ec branches)
-  | DefAuto : forall ini states ck,
-      Exists (fun blks => Is_defined_in_scope (fun blks => Exists (Is_defined_in x) (fst blks)) x (snd blks)) states ->
-      Is_defined_in x (Bauto ck ini states)
+  | DefAuto : forall ini states type ck,
+      Exists (fun blks => Is_defined_in_scope (fun blks => Exists (Is_defined_in x) (fst blks)) x (snd (snd blks))) states ->
+      Is_defined_in x (Bauto type ck ini states)
   | DefLocal : forall scope,
       Is_defined_in_scope (Exists (Is_defined_in x)) x scope ->
       Is_defined_in x (Blocal scope).
@@ -224,8 +226,8 @@ Module Type LSYNTAX
     | Breset blocks _ => PSUnion (map vars_defined blocks)
     | Bswitch _ branches =>
       PSUnion (map (fun blks => vars_defined_scope (fun blks => PSUnion (map vars_defined blks)) (snd blks)) branches)
-    | Bauto _ _ states =>
-      PSUnion (map (fun '(_, blks) => vars_defined_scope (fun '(blks, _) => PSUnion (map vars_defined blks)) blks) states)
+    | Bauto _ _ _ states =>
+      PSUnion (map (fun '(_, (_, blks)) => vars_defined_scope (fun '(blks, _) => PSUnion (map vars_defined blks)) blks) states)
     | Blocal scope =>
         vars_defined_scope (fun blks => PSUnion (map vars_defined blks)) scope
     end.
@@ -247,11 +249,11 @@ Module Type LSYNTAX
       Forall (fun blks => VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined blks xs
                                                            /\ Permutation (concat xs) ys) (snd blks) ys) branches ->
       VarsDefined (Bswitch ec branches) ys
-  | LVDauto : forall ini states ck ys,
+  | LVDauto : forall ini states type ck ys,
       states <> [] ->
       Forall (fun blks => VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined (fst blks) xs
-                                                           /\ Permutation (concat xs) ys) (snd blks) ys) states ->
-      VarsDefined (Bauto ck ini states) ys
+                                                           /\ Permutation (concat xs) ys) (snd (snd blks)) ys) states ->
+      VarsDefined (Bauto type ck ini states) ys
   | LVDlocal : forall scope ys,
       VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined blks xs /\ Permutation (concat xs) ys) scope ys ->
       VarsDefined (Blocal scope) ys.
@@ -288,7 +290,7 @@ Module Type LSYNTAX
     | Beq _ => []
     | Breset blocks _ => flat_map locals blocks
     | Bswitch _ branches => flat_map (fun blks => scope_locals (flat_map locals) (snd blks)) branches
-    | Bauto _ _ states => flat_map (fun blks => scope_locals (fun blks => flat_map locals (fst blks)) (snd blks)) states
+    | Bauto _ _ _ states => flat_map (fun blks => scope_locals (fun blks => flat_map locals (fst blks)) (snd (snd blks))) states
     | Blocal scope => scope_locals (flat_map locals) scope
     end.
 
@@ -310,9 +312,9 @@ Module Type LSYNTAX
   | NDLswitch : forall env ec branches,
       Forall (fun blks => NoDupScope (fun env => Forall (NoDupLocals env)) env (snd blks)) branches ->
       NoDupLocals env (Bswitch ec branches)
-  | NDLauto : forall env ini states ck,
-      Forall (fun blks => NoDupScope (fun env blks => Forall (NoDupLocals env) (fst blks)) env (snd blks)) states ->
-      NoDupLocals env (Bauto ck ini states)
+  | NDLauto : forall env type ini states ck,
+      Forall (fun blks => NoDupScope (fun env blks => Forall (NoDupLocals env) (fst blks)) env (snd (snd blks))) states ->
+      NoDupLocals env (Bauto type ck ini states)
   | NDLlocal : forall env scope,
       NoDupScope (fun env => Forall (NoDupLocals env)) env scope ->
       NoDupLocals env (Blocal scope).
@@ -334,9 +336,9 @@ Module Type LSYNTAX
   | GoodSwitch : forall ec branches,
       Forall (fun blks => GoodLocalsScope (Forall (GoodLocals prefs)) prefs (snd blks)) branches ->
       GoodLocals prefs (Bswitch ec branches)
-  | GoodAuto : forall ini states ck,
-      Forall (fun blks => GoodLocalsScope (fun blks => Forall (GoodLocals prefs) (fst blks)) prefs (snd blks)) states ->
-      GoodLocals prefs (Bauto ck ini states)
+  | GoodAuto : forall type ini states ck,
+      Forall (fun blks => GoodLocalsScope (fun blks => Forall (GoodLocals prefs) (fst blks)) prefs (snd (snd blks))) states ->
+      GoodLocals prefs (Bauto type ck ini states)
   | GoodLocal : forall scope,
       GoodLocalsScope (Forall (GoodLocals prefs)) prefs scope ->
       GoodLocals prefs (Blocal scope).
@@ -588,9 +590,9 @@ Module Type LSYNTAX
         P (Bswitch ec branches).
 
     Hypothesis BautoCase:
-      forall ini states ck,
-        Forall (fun '(_, Scope _ _ (blks, _)) => Forall P blks) states ->
-        P (Bauto ck ini states).
+      forall type ini states ck,
+        Forall (fun '(_, (_, Scope _ _ (blks, _))) => Forall P blks) states ->
+        P (Bauto type ck ini states).
 
     Hypothesis BlocalCase:
       forall locs caus blocks,
@@ -605,7 +607,7 @@ Module Type LSYNTAX
       - apply BswitchCase; induction l as [|(?&s)]; try destruct s; constructor; auto.
         induction l2; auto.
       - apply BautoCase; induction l; constructor; auto. destruct_conjs.
-        destruct s; destruct_conjs. induction l3; auto.
+        destruct s; destruct_conjs. induction l4; auto.
       - destruct s. apply BlocalCase; induction l1; auto.
     Qed.
 
@@ -1059,14 +1061,15 @@ Module Type LSYNTAX
       branches <> [] ->
       Forall (fun blks => wl_scope (Forall (wl_block G)) G (snd blks)) branches ->
       wl_block G (Bswitch ec branches)
-  | wl_Bauto : forall ini oth states ck,
+  | wl_Bauto : forall type ini oth states ck,
       Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) ini ->
       states <> [] ->
-      Forall (fun blks => wl_scope (fun blks =>
-                                   Forall (wl_block G) (fst blks)
-                                   /\ Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (snd blks)) G (snd blks)
+      Forall (fun blks => Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (fst (snd blks))
+                       /\ wl_scope (fun blks =>
+                                     Forall (wl_block G) (fst blks)
+                                     /\ Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (snd blks)) G (snd (snd blks))
              ) states ->
-      wl_block G (Bauto ck (ini, oth) states)
+      wl_block G (Bauto type ck (ini, oth) states)
   | wl_Blocal : forall scope,
       wl_scope (Forall (wl_block G)) G scope ->
       wl_block G (Blocal scope).
@@ -1153,14 +1156,15 @@ Module Type LSYNTAX
       wx_exp Γ ec ->
       Forall (fun blks => wx_scope (fun Γ => Forall (wx_block Γ)) Γ (snd blks)) branches ->
       wx_block Γ (Bswitch ec branches)
-  | wx_Bauto : forall Γ ini oth states ck,
+  | wx_Bauto : forall Γ type ini oth states ck,
       wx_clock Γ ck ->
       Forall (fun '(e, _) => wx_exp Γ e) ini ->
       states <> [] ->
-      Forall (fun blks => wx_scope (fun Γ blks => Forall (wx_block Γ) (fst blks)
-                                            /\ Forall (fun '(e, _) => wx_exp Γ e) (snd blks)) Γ (snd blks)
+      Forall (fun blks => Forall (fun '(e, _) => wx_exp Γ e) (fst (snd blks))
+                       /\ wx_scope (fun Γ blks => Forall (wx_block Γ) (fst blks)
+                                              /\ Forall (fun '(e, _) => wx_exp Γ e) (snd blks)) Γ (snd (snd blks))
              ) states ->
-      wx_block Γ (Bauto ck (ini, oth) states)
+      wx_block Γ (Bauto type ck (ini, oth) states)
   | wx_Blocal : forall Γ scope,
       wx_scope (fun Γ => Forall (wx_block Γ)) Γ scope ->
       wx_block Γ (Blocal scope).
@@ -1263,7 +1267,8 @@ Module Type LSYNTAX
           intros * ???; simpl_Forall; eauto.
       - (* automaton *)
         constructor; auto; simpl_Forall; eauto using wx_exp_incl, wx_clock_incl.
-        destruct s. eapply wx_scope_incl; eauto.
+        destruct s. split; simpl_Forall; eauto using wx_exp_incl.
+        eapply wx_scope_incl; eauto.
         intros * ?? (?&?); split; simpl_Forall; eauto using wx_exp_incl.
       - (* local *)
         constructor. eapply wx_scope_incl; eauto.
@@ -1514,9 +1519,9 @@ Module Type LSYNTAX
   | NLaswitch : forall ec branches,
       Forall (fun blks => nolast_scope (Forall nolast_block) (snd blks)) branches ->
       nolast_block (Bswitch ec branches)
-  | NLaauto : forall ini states ck,
-      Forall (fun blks => nolast_scope (fun blks => Forall nolast_block (fst blks)) (snd blks)) states ->
-      nolast_block (Bauto ck ini states)
+  | NLaauto : forall type ini states ck,
+      Forall (fun blks => nolast_scope (fun blks => Forall nolast_block (fst blks)) (snd (snd blks))) states ->
+      nolast_block (Bauto type ck ini states)
   | NLalocal : forall scope,
       nolast_scope (Forall nolast_block) scope ->
       nolast_block (Blocal scope).
@@ -1594,7 +1599,7 @@ Module Type LSYNTAX
       eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; auto using incl_concat.
     - (* automaton *)
       constructor.
-      inv H; try congruence. inv H2. destruct_conjs. inv H6. clear H1 H5 H8.
+      inv H; try congruence. inv H2. destruct_conjs. inv H7. clear H1 H5 H8.
       left. destruct s.
       eapply VarsDefinedScope_Is_defined; eauto.
       intros; simpl in *. destruct H as (?&Hvars&Hperm).
@@ -1697,9 +1702,9 @@ Module Type LSYNTAX
       exfalso. apply H2, InMembers_senv_of_locs; auto.
     - (* automaton *)
       simpl_Exists; simpl_Forall; eauto.
-      inv H1. inv H7. simpl_Exists; simpl_Forall; eauto.
+      inv H1. destruct_conjs. inv H2. simpl_Exists; simpl_Forall; eauto.
       eapply H, InMembers_app in H1 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H2, InMembers_senv_of_locs; auto.
+      exfalso. apply H4, InMembers_senv_of_locs; auto.
     - (* local *)
       inv H1. inv H2.
       simpl_Exists; simpl_Forall.
@@ -1737,8 +1742,8 @@ Module Type LSYNTAX
       apply Forall2_swap_args in Hvars0. eapply Forall2_trans_ex in Hvars; eauto.
       simpl_Forall; eauto.
     - (* automaton *)
-      inv H5; inv H7; try congruence. clear H1 H8.
-      destruct x. inv H0. inv H5. inv_VarsDefined; simpl in *. subst. inv H8.
+      inv H6; inv H8; try congruence. clear H1 H6.
+      destruct x as (?&?&?). inv H0. inv H4. inv_VarsDefined; simpl in *. subst. inv H8.
       eapply Permutation_app_inv_r. rewrite <-Hperm, <-Hperm0.
       apply Permutation_concat.
       apply Forall2_swap_args in Hvars0. eapply Forall2_trans_ex in Hvars; eauto.

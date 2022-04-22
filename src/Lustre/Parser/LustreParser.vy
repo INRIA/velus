@@ -60,7 +60,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %token<LustreAst.astloc> RESET RESTART EVERY
 %token<LustreAst.astloc> SWITCH END
 %token<LustreAst.astloc> DO IN DONE
-%token<LustreAst.astloc> AUTOMATON INITIALLY OTHERWISE STATE UNTIL CONTINUE
+%token<LustreAst.astloc> AUTOMATON INITIALLY OTHERWISE STATE UNLESS UNTIL CONTINUE
 
 %token<LustreAst.astloc> EOF
 
@@ -97,8 +97,9 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.transition> transition
 %type<list LustreAst.transition> transitions
 %type<list LustreAst.transition> untils
-%type<Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition)> auto_state
-%type<list (Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition))> auto_state_list
+%type<list LustreAst.transition> unless
+%type<Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition * list LustreAst.transition)> auto_state
+%type<list (Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition * list LustreAst.transition))> auto_state_list
 %type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
@@ -512,11 +513,17 @@ untils:
 | UNTIL trs=transitions
   { trs }
 
+unless:
+| /* empty */
+  { [] }
+| UNLESS trs=transitions
+  { trs }
+
 auto_state:
-| loc=STATE c=ENUM_NAME DO blks=blocks trs=untils
-  { (fst c, ([], blks, trs)) }
-| loc=STATE c=ENUM_NAME locals=local_decl DO blks=blocks trs=untils
-  { (fst c, (locals, blks, trs)) }
+| loc=STATE c=ENUM_NAME DO blks=blocks unt=untils unl=unless
+  { (fst c, ([], blks, unt, unl)) }
+| loc=STATE c=ENUM_NAME locals=local_decl DO blks=blocks unt=untils unl=unless
+  { (fst c, (locals, blks, unt, unl)) }
 
 auto_state_list:
 | st=auto_state { [st] }

@@ -56,6 +56,8 @@ module type SYNTAX =
 
     type transition = exp * (enumtag * bool)
 
+    type auto_type = Weak | Strong
+
     type 'a scope =
     | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * (ident * ident) list * 'a
 
@@ -63,7 +65,7 @@ module type SYNTAX =
     | Beq of equation
     | Breset of block list * exp
     | Bswitch of exp * (enumtag * (block list) scope) list
-    | Bauto of clock * ((exp * enumtag) list * enumtag) * (enumtag * (block list * transition list) scope) list
+    | Bauto of auto_type * clock * ((exp * enumtag) list * enumtag) * (enumtag * (transition list * (block list * transition list) scope)) list
     | Blocal of (block list) scope
 
     type node = {
@@ -257,15 +259,17 @@ module PrintFun
       fprintf p "@[<hov 2>%a = %a@]"
         print_pattern xs (exp_list 0) es
 
-    let rec print_initially p (ini, oth) =
-      match ini with
-      | [] -> fprintf p "otherwise %a"
-                PrintOps.print_enumtag oth
-      | (e, t)::inis ->
-         fprintf p "if %a then %a;@;%a"
-           print_exp e
-           PrintOps.print_enumtag t
-           print_initially (inis, oth)
+    let print_initially p (ini, oth) =
+      let rec aux p = function
+        | [] -> fprintf p "otherwise %a"
+                  PrintOps.print_enumtag oth
+        | (e, t)::inis ->
+          fprintf p "if %a then %a;@;%a"
+            print_exp e
+            PrintOps.print_enumtag t
+            aux inis
+      in if ini = [] then PrintOps.print_enumtag p oth
+      else aux p ini
 
     let print_transition p (e, (k, r)) =
       fprintf p "@[<h> %a %s %a@]"
@@ -281,6 +285,11 @@ module PrintFun
         fprintf p "@;@[<h>until@[<v -1>%a@]@]@;"
           (print_bar_list print_transition) xs
 
+    let print_unless_list p xs =
+      if xs = [] then () else
+        fprintf p "@;@[<h>unless@[<v -1>%a@]@]@;"
+          (print_bar_list print_transition) xs
+
     let rec print_block p = function
       | L.Beq eq -> print_equation p eq
       | L.Breset (blks, er) ->
@@ -291,7 +300,7 @@ module PrintFun
         fprintf p "@[<v 0>@[<h 2>switch@ %a@]@ %a@]@ end"
           print_exp ec
           (pp_print_list print_switch_branch) brs
-      | L.Bauto (_, ini, states) ->
+      | L.Bauto (_, _, ini, states) ->
          fprintf p "@[<v 2>automaton@;initially %a@;%a@;end@]"
            print_initially ini
            (pp_print_list print_state) states
@@ -309,12 +318,13 @@ module PrintFun
         (print_semicol_list_as "var" print_local_decl) locs
         print_blocks blks
 
-    and print_state p (e, (Scope (locs, _, (blks, trans)))) =
-      fprintf p "@[<v 2>state %a %ado@ %a%a@]"
+    and print_state p (e, (unl, Scope (locs, _, (blks, unt)))) =
+      fprintf p "@[<v 2>state %a %ado@ %a%a%a@]"
         PrintOps.print_enumtag e
         (print_semicol_list_as "var" print_local_decl) locs
         (print_semicol_list print_block) blks
-        print_until_list trans
+        print_until_list unt
+        print_unless_list unl
 
     let print_top_block p = function
       | L.Blocal (Scope (locals, _, blks)) ->
