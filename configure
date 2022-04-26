@@ -49,6 +49,7 @@ printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 # Generate the _CoqProject file
 {
     printf -- "-R \"%s\" Velus\\n" "$srcdir";
+    printf -- "-R \"%s/Lustre/Denot/Cpo\" Cpo\\n" "$srcdir";
     while read -r subdir; do
       printf -- "-R \"%s/%s\" compcert.%s\\n" "$compcertdir" "$subdir" "$subdir"
     done <includes;
