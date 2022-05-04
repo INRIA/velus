@@ -15,12 +15,12 @@ Global Hint Rewrite
      FST_simpl SND_simpl
      CONS_simpl Cons_simpl
      Fst_simpl Snd_simpl
+     PAIR_simpl Pair_simpl
+     ID_simpl Id_simpl
      DSCASE_simpl DScase_cons
      first_cons
-     (* TODO: peut-être pas rem_simpl, app_simpl... *)
-     rem_simpl rem_cons
-     remf_simpl
-     app_simpl app_cons
+     REM_simpl rem_cons
+     app_cons
      filter_eq_cons map_eq_cons
      rem_bot map_bot filter_bot
   : cpodb.
@@ -123,6 +123,8 @@ Lemma CTE_eq : forall (D1 D2 : cpo) a b, CTE D1 D2 a b == a.
 Proof.
   trivial.
 Qed.
+
+Global Hint Rewrite CTE_eq : cpodb.
 
 (** *** Continuous version of fcont_app  *)
 Definition fcont_app2 {D1 D2 D3:cpo} (f: D1-C-> D2 -C-> D3) (x:D2) : D1 -c> D3 :=
@@ -290,6 +292,13 @@ Proof.
   now rewrite DS_inv at 1.
 Qed.
 
+Lemma is_cons_DS_const :
+  forall {A} (a : A), is_cons (DS_const a).
+Proof.
+  intros.
+  now rewrite DS_const_eq.
+Qed.
+
 Lemma DS_const_inf :
   forall {A} (a : A), infinite (DS_const a).
 Proof.
@@ -379,6 +388,19 @@ Proof.
   apply is_cons_elim in Hc as (y & xs & Hxs').
   rewrite Hxs' in Hs.
   eauto.
+Qed.
+
+Lemma rem_eq_cons : forall D (b:D) s t,
+    rem s == cons b t ->
+    exists a, s == cons a (cons b t).
+Proof.
+  intros * Hrs.
+  destruct (is_cons_rem _ s) as (a' & b' & t' & Hs).
+  rewrite Hrs; auto.
+  apply rem_eq_compat in Hs as HH.
+  rewrite rem_cons, Hrs in HH.
+  apply Con_eq_simpl in HH as [? Ht]; subst.
+  exists a'. now rewrite Hs, Ht.
 Qed.
 
 Lemma map_eq_cons_elim : forall D D' (f : D -> D') a s x,
