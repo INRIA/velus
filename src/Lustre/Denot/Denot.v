@@ -111,38 +111,31 @@ Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
       end (nprod_const c n)
   end.
 
-(* Variable vars : list (ident * (type * clock)). *)
-
-(* (* TODO: raffiner *) *)
-(* Definition type_vars (x : ident) : Type := *)
-(*   if existsb (ident_eqb x) (List.map fst vars) *)
-(*   then sampl value *)
-(*   else unit. *)
-
 Definition SI := fun _ : ident => sampl value.
+
 Definition denot_exp (e : exp) : DS_prod SI -C-> DS bool -C-> nprod (numstreams e).
-  apply curry.
   revert e.
   fix denot_exp 1.
   intro e.
   destruct e eqn:He; simpl (nprod _).
   - (* Econst *)
-    exact (sconst (Vscalar (sem_cconst c)) @_ SND _ _).
+    exact (CTE _ _ (sconst (Vscalar (sem_cconst c)))).
   - (* Eenum *)
     exact (CTE _ _ 0).
   - (* Evar *)
-    exact (PROJ _ i @_ FST _ _).
+    exact (CTE _ _ @_ PROJ (DS_fam SI) i).
   - (* Elast *)
     exact (CTE _ _ 0).
   - (* Eunop *)
-    specialize (denot_exp e0) as fe.
+    apply curry.
+    eapply fcont_comp. 2: apply (uncurry (denot_exp e0)).
     destruct (numstreams e0) as [|[]].
     (* pas le bon nombre de flots: *)
-    1,3: exact (CTE _ _ (DS_const (err error_Ty))).
+    1,3: apply CTE, (DS_const (err error_Ty)).
     destruct (typeof e0) as [|ty []].
     (* pas le bon nombre de flots: *)
-    1,3: exact (CTE _ _ (DS_const (err error_Ty))).
-    exact (sunop (fun v => sem_unop u v ty) @_ fe).
+    1,3: apply CTE, (DS_const (err error_Ty)).
+    exact (sunop (fun v => sem_unop u v ty)).
   - (* Ebinop *)
     exact (CTE _ _ 0).
   - (* Efby *)
@@ -156,22 +149,26 @@ Definition denot_exp (e : exp) : DS_prod SI -C-> DS bool -C-> nprod (numstreams 
                 (list_sum (List.map numstreams es))) as [Heq|].
     destruct (Nat.eq_dec
                 (length anns)
-                (list_sum (List.map numstreams es))
+                (list_sum (List.map numstreams e0s))
              ) as [->|].
     (* si les tailles ne correspondent pas : *)
-    2,3: exact (CTE _ _ (nprod_const (err error_Ty) _)).
+    2,3: apply CTE, CTE, (nprod_const (err error_Ty) _).
     (* calculer les flots de e0s *)
-    assert (Dprod (DS_prod SI) (DS bool) -C-> nprod (list_sum (List.map numstreams e0s))) as s0s.
-    { clear Heq. induction e0s as [|a]; simpl (list_sum _).
+    assert (DS_prod SI -C-> DS bool -C-> nprod (list_sum (List.map numstreams e0s))) as s0s.
+    { clear Heq.
+      apply curry.
+      induction e0s as [|a]; simpl (list_sum _).
       + exact (CTE _ _ (DS_const (err error_Ty))).
-      + exact ((nprod_app _ _ @2_ (denot_exp a)) IHe0s). }
+      + exact ((nprod_app _ _ @2_ uncurry (denot_exp a)) IHe0s). }
     (* calculer les flots de es *)
-    assert (Dprod (DS_prod SI) (DS bool) -C-> nprod (list_sum (List.map numstreams es))) as ss.
-    { clear Heq. induction es as [|a]; simpl (list_sum _).
+    assert (DS_prod SI -C-> DS bool -C-> nprod (list_sum (List.map numstreams es))) as ss.
+    { clear Heq.
+      apply curry.
+      induction es as [|a]; simpl (list_sum _).
       + exact (CTE _ _ (DS_const (err error_Ty))).
-      + exact ((nprod_app _ _ @2_ (denot_exp a)) IHes). }
-    rewrite Heq in s0s.
-    exact ((lift2 (@SDfuns.fby) _ @2_ s0s) ss).
+      + exact ((nprod_app _ _ @2_ uncurry (denot_exp a)) IHes). }
+    rewrite <- Heq in ss.
+    exact (curry ((lift2 (@SDfuns.fby) _ @2_ uncurry s0s) (uncurry ss))).
   - (* Earrow *)
     exact (CTE _ _ 0).
   - (* Ewhen *)
@@ -261,23 +258,37 @@ Lemma denot_exp_eq :
                           (*       (denot_exp er genv env bs) (denot_exp e genv env bs) *)
       | _ => 0
       end.
-(* Proof. *)
-(*   destruct e; auto. *)
-(*   - intros. *)
-(*     rewrite unfolding_lemma. *)
-(*     cbn. *)
-(*     simpl. *)
-(*     unfold denot_exp at 1. *)
-(*     fold (denot_exp e). *)
+Proof.
+  destruct e; auto; intros env bs.
+  - (* Eunop *)
+    unfold denot_exp at 1.
+    fold (denot_exp e).
+    autorewrite with cpodb using (simpl (fst _); simpl (snd _)).
+    generalize (denot_exp e env bs) as ss.
+    generalize (numstreams e) as ne.
+    destruct ne as [|[]]; intros; auto.
+    destruct (typeof e) as [|? []]; auto.
+  - (* Efby*)
+    rename l into e0s.
+    rename l0 into es.
+    rename l1 into a.
+    unfold denot_exp at 1.
+    destruct
+      (Nat.eq_dec (list_sum (List.map numstreams e0s)) (list_sum (List.map numstreams es))) as [E1|],
+      (Nat.eq_dec (length a) (list_sum (List.map numstreams e0s))) as [E2|]; auto.
+    (* FIXME: (denot_exps e0s) et (denot_exps es) apparaissent sous forme déroulée
+       à gauche de l'égalité car [denot_exps] n'existait pas encore lors de la définition
+       de [denot_exp]. Coq n'arrive pas à les enrouler avec [fold (denot_exps e0s)] et
+       [fold (denot_exps es)]. On doit l'aider avec la tactique suivante.
+     *)
+    do 2 match goal with
+     | |- context [ curry (list_rect ?A ?B ?C ?D) ] =>
+         change (curry (list_rect A B C D)) with (denot_exps D);
+         generalize (denot_exps D); intro (* pour pouvoir détruire E1 et E2 *)
+      end.
+    now destruct E1, E2.
+Qed.
 
-(*     generalize (denot_exp e env0 bs) as ss. *)
-(*     destruct (numstreams e) as [|[]]; auto. *)
-(*     unfold denot_exp; simpl. *)
-(*     autorewrite with cpodb using (simpl (snd _); simpl (fst _)). *)
-(*     cbn. *)
-(*     destruct (numstreams e). *)
-  (* Qed. *)
-  Admitted.
 
 (* obtenir le premier élément *)
 Definition nprod_fst {n} : nprod n -C-> DS (sampl value) :=
