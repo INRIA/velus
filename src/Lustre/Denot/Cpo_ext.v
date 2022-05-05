@@ -23,6 +23,7 @@ Global Hint Rewrite
      app_cons
      filter_eq_cons map_eq_cons
      rem_bot map_bot filter_bot
+     PROD_map_simpl
   : cpodb.
 
 (** ** Cpo_def.v  *)
@@ -176,6 +177,15 @@ Definition Dprodi_DISTR :
   red; intros; intro i; simpl.
   eapply Ole_trans; eauto.
 Defined.
+
+Lemma Dprodi_DISTR_simpl :
+  forall (I:Type) (Di:I->cpo) (D:cpo) (f: Dprodi (fun i => D -C-> Di i)) (d : D) (i : I),
+    Dprodi_DISTR I Di D f d i == f i d.
+Proof.
+  trivial.
+Qed.
+
+Global Hint Rewrite Dprodi_DISTR_simpl : cpodb.
 
 Lemma FIXP_fixp :
   forall D (F : D -C-> D), FIXP _ F = fixp (fcontit F).

@@ -357,17 +357,6 @@ Fixpoint get_nth {n} (np : nprod n) (p : nat) {struct p} : DS (sampl value) :=
           end np
   end.
 
-(* TODO: move *)
-Lemma Dprodi_DISTR_simpl :
-  forall (I:Type) (Di:I->cpo) (D:cpo) (f: Dprodi (fun i => D -C-> Di i)) (d : D) (i : I),
-    Dprodi_DISTR I Di D f d i == f i d.
-Proof.
-  trivial.
-Qed.
-(* Global *) Hint Rewrite Dprodi_DISTR_simpl : cpodb.
-(* TODO: move *)
-Hint Rewrite PROD_map_simpl ID_simpl Id_simpl : cpodb.
-
 Lemma denot_equation_eq :
   forall xs es env bs x,
     denot_equation (xs,es) env bs x
