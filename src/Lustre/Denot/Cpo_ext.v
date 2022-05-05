@@ -200,6 +200,21 @@ Add Parametric Morphism (D1 D2 D3 : cpo) : (curry (D1:=D1) (D2:=D2) (D3:=D3))
   now rewrite H.
 Qed.
 
+Lemma uncurry_Uncurry :
+  forall (D1 D2 D3 : cpo) (f: D1 -c> D2 -C-> D3),
+    uncurry f = Uncurry D1 D2 D3 f.
+Proof.
+  trivial.
+Qed.
+Global Hint Rewrite uncurry_Uncurry : cpodb.
+
+Add Parametric Morphism (D1 D2 D3 : cpo) : (uncurry (D1:=D1) (D2:=D2) (D3:=D3))
+      with signature Oeq (O:=D1 -c> D2 -C-> D3) ==> Oeq (O:=Dprod D1 D2 -c> D3)
+        as uncurry_eq_compat.
+  intros.
+  unfold uncurry.
+  now rewrite H.
+Qed.
 
 (** ** Cpo_streams_type.v  *)
 
