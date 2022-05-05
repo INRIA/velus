@@ -611,8 +611,13 @@ Lemma is_consn_sunop :
     is_cons (nrem n s) ->
     is_cons (nrem n (sunop f s)).
 Proof.
-  (* TODO *)
+  intros.
+  unfold sunop.
+  rewrite MAP_map, nrem_map.
+  now apply is_cons_map.
 Qed.
+
+End Ncons_ops.
 
 
 End LDENOT.
