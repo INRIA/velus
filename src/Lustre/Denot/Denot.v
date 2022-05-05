@@ -617,6 +617,17 @@ Proof.
   now apply is_cons_map.
 Qed.
 
+Lemma is_consn_sconst :
+  forall {A} (c : A) bs n,
+    is_cons (nrem n bs) ->
+    is_cons (nrem n (sconst c bs)).
+Proof.
+  intros.
+  unfold sconst.
+  rewrite MAP_map, nrem_map.
+  now apply is_cons_map.
+Qed.
+
 End Ncons_ops.
 
 
