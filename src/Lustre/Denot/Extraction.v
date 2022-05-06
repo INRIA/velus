@@ -136,7 +136,7 @@ Extract Constant Ident.Ids.prefix => "Veluscommon.prefix".
 Extract Constant Ident.Ids.gensym => "Veluscommon.gensym".
 (* **************************************** *)
 
-Module Denot := LDenotFun Ident.Ids Interface.Op Interface.OpAux Interface.Cks L.Senv L.Syn L.Typ L.Ord Interface.CStr.
+Module Denot := LDenotFun Ident.Ids Interface.Op Interface.OpAux Interface.Cks L.Senv L.Syn L.Ord Interface.CStr.
 
 Import L.Syn Interface.Op Interface.Cks.
 
@@ -233,10 +233,221 @@ Import Cpo_def.
 
 
 Definition bk : DS bool := DS_const true.
-Definition res := FIXP _ (Denot.denot_equation (ins++outs++vars) eq1 <___> bk).
+Definition res := FIXP _ (Denot.denot_equation eq1 <___> bk).
 Definition test_stream := res _p.
 Definition output_stream := print_sampl_list (take_list 20 test_stream).
 
+Import Denot.
+Require Import Infty.
+
+
+
+(* TODO: move, morphisme? *)
+Lemma DS_prod_eq_compat :
+  forall I SI i (p q : @DS_prod I SI),
+    p == q -> p i == q i.
+Proof.
+  intros ????? [].
+  split; auto.
+Qed.
+
+(* Add Parametric Morphism I SI i : (@DS_prod I SI D) *)
+(*     with signature eq ==> (@Oeq (DS D)) as cons_eq_compat_morph. *)
+(*   intros; apply cons_eq_compat; auto. *)
+(* Qed. *)
+
+Definition all_infinite vars (env : DS_prod SI) : Prop :=
+  forall i, In i vars -> infinite (PROJ _ i env).
+
+
+Module TEST1.
+
+  Definition _q : ident := 15%positive.
+(* not 0 *)
+Definition not0 : exp :=
+  Eunop (UnaryOp Cop.Onotbool) (Econst (Cint Integers.Int.zero IBool Unsigned)) (tbool,Cbase).
+(* 1 *)
+Definition e1 : exp :=
+  Econst (Cint Integers.Int.one IBool Unsigned).
+(* not p *)
+Definition notp : exp :=
+  Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool,Cbase)) (tbool, Cbase).
+
+Definition eq2 : equation :=
+  ([_q], [ not0]).
+Definition eq3 : equation :=
+  ([_p;_q], [e1; notp]).
+
+Lemma test_infinite1 :
+  forall bs,
+    infinite bs ->
+    let env := FIXP _ (denot_equation eq3 <___> bs) in
+    all_infinite (fst eq3) env.
+Proof.
+  (* TODO: move after denot_equation_eq *)
+  Opaque denot_equation.
+  intros ??.
+  unfold eq3; simpl.
+  intros i Hin.
+  assert (infinite (PROJ (DS_fam SI) _p (FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs)))) as Hp.
+  {
+    rewrite FIXP_eq.
+    rewrite fcont_app2_simpl, PROJ_simpl.
+    rewrite denot_equation_eq.
+    simpl.
+    rewrite (denot_exps_eq e1 [notp]).
+    autorewrite with cpodb using simpl.
+    now apply infinite_map.
+  }
+  assert (infinite (PROJ (DS_fam SI) _q (FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs)))) as Hq.
+  {
+    rewrite FIXP_eq.
+    rewrite fcont_app2_simpl, PROJ_simpl.
+    rewrite denot_equation_eq; simpl.
+    rewrite ID_simpl, Id_simpl.
+    remember ((FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs))) as env.
+    (* TODO: problème de reflexivité dans les arguments *)
+    rewrite (denot_exps_eq e1 [notp] env bs); simpl.
+    rewrite SND_PAIR_simpl.
+    rewrite (denot_exps_eq notp [] env bs), CTE_eq.
+    rewrite denot_exp_eq; simpl.
+    setoid_rewrite (denot_exp_eq (Evar _p (tbool, Cbase)) env bs).
+    now apply infinite_map.
+  }
+  inversion Hin as [|[|[]]]; subst; auto.
+Qed.
+End TEST1.
+
+Module TEST2.
+
+
+  Definition _p : ident := 9%positive.
+  Definition _q : ident := 15%positive.
+
+  (* 0 fby not p *)
+  Definition zfbynotp : exp :=
+    Efby [Econst (Cint Integers.Int.zero IBool Unsigned)]
+      [Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool,Cbase)) (tbool, Cbase)]
+      [(tbool,Cbase)].
+
+  Definition eq1 : equation :=
+    ([_p;_q], [Evar _q (tbool,Cbase); zfbynotp]).
+
+
+  (* TODO: move *)
+  (* TODO: le P est utile mais un peu artificiel... *)
+  Lemma nrem_inf_gen :
+    forall {A} I (P : I -> Prop) (H : I -> DS A),
+      (forall n i, P i -> is_cons (nrem n (H i))) ->
+      forall i, P i -> infinite (H i).
+  Proof.
+    intros A I P.
+    cofix Cof.
+    intros H Hc i Pi.
+    constructor.
+    - apply (Hc O i Pi).
+    - apply Cof with (H := fun i => rem (H i)); auto.
+      intros n j.
+      apply (Hc (S n) j).
+  Qed.
+
+  (* TODO: move *)
+  Lemma inf_nrem :
+    forall  {A} (s : DS A), infinite s -> forall n, is_cons (nrem n s).
+  Proof.
+    intros * Hf n.
+    revert dependent s.
+    induction n; intros; inv Hf; simpl; auto.
+  Qed.
+
+
+  Definition all_infinite (vars : list ident) (env : DS_prod SI) : Prop :=
+    forall i, In i vars -> infinite (env i).
+
+  Lemma test_infinite2 :
+  forall bs,
+    infinite bs ->
+    let env := FIXP _ (denot_equation eq1 <___> bs) in
+    all_infinite (fst eq1) env.
+  Proof.
+  Opaque denot_equation denot_exp.
+  intros bs bsi.
+  unfold eq1; simpl.
+
+  (* TODO: tout ça pour appliquer [nrem_inf_gen], c'est moyen *)
+  unfold all_infinite.
+  apply nrem_inf_gen
+    with (H := FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs)).
+
+  induction n; simpl; intros.
+  - (* instant 0 *)
+    assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)) as Hq.
+    { (* _q *)
+    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
+    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
+    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]). (* pourquoi ?? *)
+    autorewrite with cpodb using simpl.
+    rewrite (denot_exps_eq zfbynotp []), denot_exp_eq.
+    simpl. unfold eq_rect_r, eq_rect.
+    autorewrite with cpodb using simpl.
+    apply is_cons_fby.
+    rewrite (denot_exps_eq (Econst (Cint Integers.Int.zero IBool Unsigned)) []), denot_exp_eq.
+    autorewrite with cpodb using simpl.
+    apply is_cons_map. now inv bsi.
+    }
+    destruct (ident_eq_dec i _q) as [|Hnq]; subst; auto.
+    assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _p)) as Hp.
+    { (* _p *)
+    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
+    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
+    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]), denot_exp_eq.
+    autorewrite with cpodb using simpl; auto.
+    }
+    destruct (ident_eq_dec i _p) as [|Hnp]; subst; auto.
+    { (* others *)
+      exfalso. clear Hp Hq. firstorder.
+    }
+  - (* instant (S n) *)
+    assert (is_cons
+              (nrem n (rem (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)))) as Hq.
+    { (* _q *)
+    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
+    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
+    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]). (* pourquoi ?? *)
+    autorewrite with cpodb using simpl.
+    rewrite (denot_exps_eq zfbynotp []), denot_exp_eq.
+    simpl. unfold eq_rect_r, eq_rect.
+    autorewrite with cpodb using simpl.
+    apply is_consn_S_fby.
+    + rewrite (denot_exps_eq (Econst (Cint Integers.Int.zero IBool Unsigned)) []), denot_exp_eq.
+      autorewrite with cpodb using simpl.
+      apply is_consn_sconst with (n := (S n)); auto using inf_nrem.
+    + rewrite (denot_exps_eq (Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool, Cbase)) (tbool, Cbase)) []), 2 denot_exp_eq.
+      autorewrite with cpodb using simpl.
+      apply is_consn_sunop.
+      apply IHn; simpl; auto.
+    }
+    destruct (ident_eq_dec i _q) as [|Hnq]; subst; auto.
+    assert (is_cons
+              (nrem n (rem (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _p)))) as Hp.
+    { (* _p *)
+    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
+    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
+    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]), denot_exp_eq.
+    autorewrite with cpodb using simpl; auto.
+    }
+    destruct (ident_eq_dec i _p) as [|Hnp]; subst; auto.
+    { (* others *)
+      exfalso. clear IHn Hp Hq. firstorder.
+    }
+  Qed.
+
+(* Definition bk : DS bool := DS_const true. *)
+(* Definition res := FIXP _ (Denot.denot_equation eq3 <___> bk). *)
+(* Definition test_stream := res _q. *)
+(* Definition output_stream := print_sampl_list (take_list 20 test_stream). *)
+
+End TEST2.
 
 
 (* (** on le retrouve dans  [extration-denot/Extraction.ml]  *) *)
@@ -249,6 +460,7 @@ Separate Extraction
 	 FMapPositive.PositiveMap.add FMapPositive.PositiveMap.empty
 	 FMapPositive.PositiveMap.find
          output_stream
+         (* TEST_infty.output_stream *)
          (* output_stream0 *)
          (* output_stream1 *)
          (* output_stream2 *)
