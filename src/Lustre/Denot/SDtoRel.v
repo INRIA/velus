@@ -8,6 +8,7 @@ Close Scope equiv_scope. (* conflicting notation "==" *)
 
 Require Import Cpo_ext.
 Require Import SDfuns.
+Require Import Denot.
 
 (* TODO: déjà dans Vélus *)
 Lemma eq_EqSt:
@@ -290,7 +291,11 @@ Module Type SDTOREL
        (* (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn) *)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
-       (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str).
+       (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
+       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord Str).
+
+(* vérification des prédicats sémantiques  *)
+Section oks.
 
 Definition sval_of_sampl : sampl value -> svalue :=
   fun v => match v with
@@ -379,5 +384,6 @@ Proof.
   apply ok_fby1; auto.
 Qed.
 
+End oks.
 
 End SDTOREL.
