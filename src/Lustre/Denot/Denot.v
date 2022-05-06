@@ -369,14 +369,13 @@ Lemma denot_equation_eq :
          end
        else DS_const (err error_Ty).
 Proof.
-  intros.
+  intros ?? env ??.
   unfold denot_equation.
   destruct (Nat.eq_dec (length xs) (list_sum (List.map numstreams es))) as [Heq|]; auto.
+  (* FIXME: pourquoi faut-il ajouter ça ? *)
+  Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb.
   autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  (* TODO: pourquoi ça ne fonctionne pas mieux que ça ?  : *)
-  rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)).
-  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  generalize (denot_exps es env0 bs).
+  generalize (denot_exps es env bs).
   revert Heq.
   generalize (list_sum (List.map numstreams es)).
   induction xs; intros; simpl; auto.
