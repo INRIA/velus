@@ -168,8 +168,7 @@ Proof.
     cases; solve_err; rewrite ?fbyA_eq, ?fby1AP_eq.
     all: cases; solve_err; rewrite ?fby_eq, ?fby1_eq.
     all: cases; solve_err; autorewrite with cpodb; auto.
-  - Opaque nrem.
-    repeat rewrite nrem_S in *.
+  - repeat rewrite nrem_S in *.
     setoid_rewrite nrem_S in IHn.
     apply is_consn_is_cons in Hx as Hc.
     apply is_cons_rem in Hc as (x2 & x3 & xs' & Hc).
