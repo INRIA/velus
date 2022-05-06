@@ -126,6 +126,17 @@ Ltac solve_err :=
         now auto using is_cons_DS_const, is_consn_DS_const
     end.
 
+Lemma is_cons_fby :
+  forall (xs ys : DS (sampl A)),
+    is_cons xs ->
+    is_cons (fby xs ys).
+Proof.
+  intros * Hx.
+  apply is_cons_elim in Hx as (?&?&->).
+  rewrite fby_eq.
+  cases; solve_err.
+Qed.
+
 Lemma is_consn_S_fby1 :
   forall n v (xs ys : DS (sampl A)),
     is_cons (nrem (S n) xs) ->
