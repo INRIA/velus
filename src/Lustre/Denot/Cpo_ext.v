@@ -23,6 +23,7 @@ Global Hint Rewrite
      app_cons
      filter_eq_cons map_eq_cons
      rem_bot map_bot filter_bot
+     PROJ_simpl
      PROD_map_simpl
   : cpodb.
 
@@ -192,7 +193,7 @@ Lemma FIXP_fixp :
 Proof.
   trivial.
 Qed.
-Global Hint Rewrite FIXP_fixp : cpodb.
+(* Global Hint Rewrite FIXP_fixp : cpodb. *)
 
 Lemma curry_Curry :
   forall (D1 D2 D3 : cpo) (f:Dprod D1 D2 -c> D3),
