@@ -237,32 +237,17 @@ Definition res := FIXP _ (Denot.denot_equation eq1 <___> bk).
 Definition test_stream := res _p.
 Definition output_stream := print_sampl_list (take_list 20 test_stream).
 
-Import Denot.
+
 Require Import Infty.
+Import Denot.
 
-
-
-(* TODO: move, morphisme? *)
-Lemma DS_prod_eq_compat :
-  forall I SI i (p q : @DS_prod I SI),
-    p == q -> p i == q i.
-Proof.
-  intros ????? [].
-  split; auto.
-Qed.
-
-(* Add Parametric Morphism I SI i : (@DS_prod I SI D) *)
-(*     with signature eq ==> (@Oeq (DS D)) as cons_eq_compat_morph. *)
-(*   intros; apply cons_eq_compat; auto. *)
-(* Qed. *)
+Module TEST1.
+  (* Equation simple sans fby  *)
 
 Definition all_infinite vars (env : DS_prod SI) : Prop :=
   forall i, In i vars -> infinite (PROJ _ i env).
 
-
-Module TEST1.
-
-  Definition _q : ident := 15%positive.
+Definition _q : ident := 15%positive.
 (* not 0 *)
 Definition not0 : exp :=
   Eunop (UnaryOp Cop.Onotbool) (Econst (Cint Integers.Int.zero IBool Unsigned)) (tbool,Cbase).
@@ -316,10 +301,12 @@ Proof.
   }
   inversion Hin as [|[|[]]]; subst; auto.
 Qed.
+
 End TEST1.
 
-Module TEST2.
 
+Module TEST2.
+  (* équation avec [fby] utilisant les propriétés de producivité *)
 
   Definition _p : ident := 9%positive.
   Definition _q : ident := 15%positive.
@@ -332,7 +319,6 @@ Module TEST2.
 
   Definition eq1 : equation :=
     ([_p;_q], [Evar _q (tbool,Cbase); zfbynotp]).
-
 
   (* TODO: move *)
   (* TODO: le P est utile mais un peu artificiel... *)
@@ -359,7 +345,6 @@ Module TEST2.
     revert dependent s.
     induction n; intros; inv Hf; simpl; auto.
   Qed.
-
 
   Definition all_infinite (vars : list ident) (env : DS_prod SI) : Prop :=
     forall i, In i vars -> infinite (env i).
@@ -449,6 +434,10 @@ Module TEST2.
 
 End TEST2.
 
+(* Require Import LCausality. *)
+(* Module Import Caus := LCausalityFun Ident.Ids Interface.Op Interface.OpAux Interface.Cks L.Senv L.Syn. *)
+
+(* Check causal_ind. *)
 
 (* (** on le retrouve dans  [extration-denot/Extraction.ml]  *) *)
 Cd "extraction-denot".
