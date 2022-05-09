@@ -53,7 +53,7 @@ Section Stream_DS.
     cofix Cof; intros * Heq.
     destruct Hs as [Hcs Hs].
     destruct Ht as [Hct Ht].
-    rewrite Streams.unfold_Stream; simpl.
+    rewrite unfold_Stream; simpl.
     destruct (uncons Hct) as (?&? & Ht').
     constructor; simpl; destruct (uncons Hcs) as (?&?& Hs').
     - apply decomp_eqCon in Ht'.
@@ -94,7 +94,7 @@ Section Stream_DS.
     destruct (S_of_DS_eq _ xsi _ Hxs) as [inf' Heq2].
     exists x', xs'. split; auto.
     rewrite Heq2 in Heq. clear - Heq.
-    setoid_rewrite Streams.unfold_Stream in Heq.
+    setoid_rewrite unfold_Stream in Heq.
     simpl in Heq.
     destruct inf', (uncons i) as (?&?& Hdec).
     apply decompCon_eq in Hdec.
@@ -107,10 +107,10 @@ Section Stream_DS.
   Qed.
 
   Lemma const_DS_const :
-    forall v Hi, Streams.const (f v) ≡ S_of_DS (DS_const v) Hi.
+    forall v Hi, const (f v) ≡ S_of_DS (DS_const v) Hi.
   Proof.
     intros.
-    remember_st (Streams.const (f v)) as sl.
+    remember_st (const (f v)) as sl.
     remember_st (S_of_DS (DS_const v) Hi) as sr.
     revert_all.
     cofix Cof; intros.
