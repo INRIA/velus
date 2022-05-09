@@ -117,7 +117,7 @@ End Alt_inf.
 
 Section Ncons_ops.
 
-Context {A : Type}.
+Context {A B : Type}.
 
 Ltac solve_err :=
   try match goal with
@@ -195,7 +195,7 @@ Proof.
 Qed.
 
 Lemma is_consn_sunop :
-  forall {A B} (f : A -> option B) s n,
+  forall (f : A -> option B) s n,
     is_cons (nrem n s) ->
     is_cons (nrem n (sunop f s)).
 Proof.
@@ -206,7 +206,7 @@ Proof.
 Qed.
 
 Lemma is_consn_sconst :
-  forall {A} (c : A) bs n,
+  forall (c : A) bs n,
     is_cons (nrem n bs) ->
     is_cons (nrem n (sconst c bs)).
 Proof.
