@@ -38,6 +38,14 @@ Proof.
     apply (Hc (S n)).
 Qed.
 
+Lemma inf_nrem :
+  forall (s : DS A), infinite s -> forall n, is_cons (nrem n s).
+Proof.
+  intros * Hf n.
+  revert dependent s.
+  induction n; intros; inversion Hf; simpl; auto.
+Qed.
+
 Lemma is_consn_DS_const :
   forall (c : A) n,
     is_cons (nrem n (DS_const c)).

@@ -306,7 +306,7 @@ End TEST1.
 
 
 Module TEST2.
-  (* équation avec [fby] utilisant les propriétés de producivité *)
+  (* équation avec [fby] utilisant les propriétés de productivité *)
 
   Definition _p : ident := 9%positive.
   Definition _q : ident := 15%positive.
@@ -320,34 +320,17 @@ Module TEST2.
   Definition eq1 : equation :=
     ([_p;_q], [Evar _q (tbool,Cbase); zfbynotp]).
 
-  (* TODO: move *)
-  (* TODO: le P est utile mais un peu artificiel... *)
-  Lemma nrem_inf_gen :
-    forall {A} I (P : I -> Prop) (H : I -> DS A),
-      (forall n i, P i -> is_cons (nrem n (H i))) ->
-      forall i, P i -> infinite (H i).
-  Proof.
-    intros A I P.
-    cofix Cof.
-    intros H Hc i Pi.
-    constructor.
-    - apply (Hc O i Pi).
-    - apply Cof with (H := fun i => rem (H i)); auto.
-      intros n j.
-      apply (Hc (S n) j).
-  Qed.
-
-  (* TODO: move *)
-  Lemma inf_nrem :
-    forall  {A} (s : DS A), infinite s -> forall n, is_cons (nrem n s).
-  Proof.
-    intros * Hf n.
-    revert dependent s.
-    induction n; intros; inv Hf; simpl; auto.
-  Qed.
-
   Definition all_infinite (vars : list ident) (env : DS_prod SI) : Prop :=
     forall i, In i vars -> infinite (env i).
+
+  Lemma nrem_all_inf :
+    forall vars env,
+      (forall n i, In i vars -> is_cons (nrem n (env i))) ->
+      all_infinite vars env.
+  Proof.
+    intros ?????.
+    apply nrem_inf; auto.
+  Qed.
 
   Lemma test_infinite2 :
   forall bs,
@@ -358,12 +341,7 @@ Module TEST2.
   Opaque denot_equation denot_exp.
   intros bs bsi.
   unfold eq1; simpl.
-
-  (* TODO: tout ça pour appliquer [nrem_inf_gen], c'est moyen *)
-  unfold all_infinite.
-  apply nrem_inf_gen
-    with (H := FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs)).
-
+  apply nrem_all_inf.
   induction n; simpl; intros.
   - (* instant 0 *)
     assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)) as Hq.
