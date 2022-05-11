@@ -8,6 +8,7 @@ From Cpo Require Import Cpo_streams_type.
 Create HintDb cpodb.
 
 Global Hint Rewrite
+     CURRY_simpl UNCURRY_simpl
      Curry_simpl Uncurry_simpl
      fcont_comp_simpl
      fcont_comp2_simpl
