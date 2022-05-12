@@ -22,36 +22,7 @@ Module Type LDENOT
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
 
-
-(* TODO: pour l'instant on se restreint aux cas suivants *)
-Inductive restr_exp : exp -> Prop :=
-| restr_Econst :
-  forall c,
-    restr_exp (Econst c)
-| restr_Evar :
-  forall x ann,
-    restr_exp (Evar x ann)
-| restr_Eunop :
-  forall op e ann,
-    restr_exp e ->
-    restr_exp (Eunop op e ann)
-| restr_Efby :
-  forall e0s es anns,
-    Forall restr_exp e0s ->
-    Forall restr_exp es ->
-    restr_exp (Efby e0s es anns)
-(* | restr_Eapp : *)
-(*   forall f es ers anns, *)
-(*     Forall restr_exp es -> *)
-(*     Forall restr_exp ers -> *)
-(*     restr_exp (Eapp f es ers anns) *)
-.
-
-Section EXP.
-
-(* Context {PSyn : block -> Prop}. *)
-(* Context {prefs : PS.t}. *)
-(* Parameter G : @global PSyn prefs. *)
+Section Nprod.
 
 Fixpoint nprod (n : nat) : cpo :=
   match n with
@@ -60,8 +31,7 @@ Fixpoint nprod (n : nat) : cpo :=
   | S n => Dprod (DS (sampl value)) (nprod n)
   end.
 
-(* TODO: helper lemma ? *)
-Definition nprod_app : forall n p, nprod n -C-> nprod p -C-> nprod (n + p).
+Definition nprod_app : forall {n p}, nprod n -C-> nprod p -C-> nprod (n + p).
   induction n as [|[]]; intro p.
   - exact (CURRY _ _ _ (SND _ _ )).
   - destruct p.
@@ -71,6 +41,85 @@ Definition nprod_app : forall n p, nprod n -C-> nprod p -C-> nprod (n + p).
     exact ((PAIR _ _ @2_ (FST _ _ @_ FST _ _))
              ((IHn p @2_ (SND _ _ @_ FST _ _)) (SND _ _))).
 Defined.
+
+(* obtenir le premier élément *)
+Definition nprod_fst {n} : nprod n -C-> DS (sampl value) :=
+  match n with
+  | O => CTE _ _ (DS_const (err error_Ty))
+  | 1 => ID _
+  | (S n) => FST _ _
+  end.
+
+(* jeter le premier élément *)
+Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
+  match n with
+  | O => CTE _ _ (DS_const (err error_Ty))
+  | (S n) => SND _ _
+  end.
+
+Lemma nprod_fst_app :
+  forall m n (mp : nprod (S m)) (np : nprod n),
+    nprod_fst (nprod_app mp np) == nprod_fst mp.
+Proof.
+  destruct m, n; auto.
+Qed.
+
+(* donne le p-ème flot de np ou DS_const (err error_Ty) *)
+Fixpoint get_nth {n} (np : nprod n) (p : nat) {struct p} : DS (sampl value) :=
+  match p with
+  | O => nprod_fst np
+  | S p => match n return nprod n -> _ with
+          | O => fun _ => DS_const (err error_Ty)
+          | S _ => fun np => get_nth (nprod_skip np) p
+          end np
+  end.
+
+Lemma get_nth_Oeq_compat :
+  forall n (np np' : nprod n),
+    np == np' ->
+    forall k, get_nth np k == get_nth np' k.
+Proof.
+  induction n; simpl; intros * Heq.
+  - destruct k; auto.
+  - destruct n, k; auto.
+    + unfold get_nth. now rewrite Heq.
+    + simpl. autorewrite with cpodb. auto.
+Qed.
+
+Global Add Parametric Morphism n : get_nth
+       with signature (@Oeq (nprod n)) ==> eq ==> (@Oeq (DS (sampl value))) as get_nth_compat_morph.
+Proof.
+  exact (get_nth_Oeq_compat n).
+Qed.
+
+Lemma nprod_app_nth1 :
+  forall m n (mp : nprod m) (np : nprod n) k,
+    k < m ->
+    get_nth (nprod_app mp np) k == get_nth mp k.
+Proof.
+  induction m; intros * Hk.
+  - inversion Hk.
+  - destruct k; simpl.
+    + now setoid_rewrite nprod_fst_app.
+    + rewrite <- (IHm n _ np); auto with arith.
+      destruct m; simpl; auto; lia.
+Qed.
+
+Lemma nprod_app_nth2 :
+  forall m n (mp : nprod m) (np : nprod n) k,
+    k >= m ->
+    get_nth (nprod_app mp np) k == get_nth np (k-m).
+Proof.
+  induction m; intros * Hk.
+  - simpl in *. autorewrite with cpodb; auto with arith.
+  - Opaque nprod_app.
+    destruct k; simpl.
+    + lia.
+    + destruct m, n; auto with arith.
+      * destruct k; simpl; now autorewrite with cpodb.
+      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
+      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
+Qed.
 
 Fixpoint lift (F : forall D, DS (sampl D) -C-> DS (sampl D)) n {struct n} : nprod n -C-> nprod n :=
   match n with
@@ -110,6 +159,35 @@ Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
       | S m => fun np => (DS_const c, np)
       end (nprod_const c n)
   end.
+
+End Nprod.
+
+
+Section EXP.
+
+(* TODO: pour l'instant on se restreint aux cas suivants *)
+Inductive restr_exp : exp -> Prop :=
+| restr_Econst :
+  forall c,
+    restr_exp (Econst c)
+| restr_Evar :
+  forall x ann,
+    restr_exp (Evar x ann)
+| restr_Eunop :
+  forall op e ann,
+    restr_exp e ->
+    restr_exp (Eunop op e ann)
+| restr_Efby :
+  forall e0s es anns,
+    Forall restr_exp e0s ->
+    Forall restr_exp es ->
+    restr_exp (Efby e0s es anns)
+(* | restr_Eapp : *)
+(*   forall f es ers anns, *)
+(*     Forall restr_exp es -> *)
+(*     Forall restr_exp ers -> *)
+(*     restr_exp (Eapp f es ers anns) *)
+.
 
 Definition SI := fun _ : ident => sampl value.
 
@@ -159,14 +237,14 @@ Definition denot_exp (e : exp) : DS_prod SI -C-> DS bool -C-> nprod (numstreams 
       apply curry.
       induction e0s as [|a]; simpl (list_sum _).
       + exact (CTE _ _ (DS_const (err error_Ty))).
-      + exact ((nprod_app _ _ @2_ uncurry (denot_exp a)) IHe0s). }
+      + exact ((nprod_app @2_ uncurry (denot_exp a)) IHe0s). }
     (* calculer les flots de es *)
     assert (DS_prod SI -C-> DS bool -C-> nprod (list_sum (List.map numstreams es))) as ss.
     { clear Heq.
       apply curry.
       induction es as [|a]; simpl (list_sum _).
       + exact (CTE _ _ (DS_const (err error_Ty))).
-      + exact ((nprod_app _ _ @2_ uncurry (denot_exp a)) IHes). }
+      + exact ((nprod_app @2_ uncurry (denot_exp a)) IHes). }
     rewrite <- Heq in ss.
     exact (curry ((lift2 (@SDfuns.fby) _ @2_ uncurry s0s) (uncurry ss))).
   - (* Earrow *)
@@ -192,17 +270,18 @@ Definition denot_exps (es : list exp) :
   apply curry.
   induction es as [|a]; simpl (list_sum _).
   + exact (CTE _ _ (DS_const (err error_Ty))).
-  + exact ((nprod_app _ _ @2_ uncurry (denot_exp a)) IHes).
+  + exact ((nprod_app @2_ uncurry (denot_exp a)) IHes).
 Defined.
 
 Lemma denot_exps_eq :
   forall e es env bs,
     denot_exps (e :: es) env bs
-    == nprod_app _ _ (denot_exp e env bs) (denot_exps es env bs).
+    == nprod_app (denot_exp e env bs) (denot_exps es env bs).
 Proof.
   trivial.
 Qed.
 
+(* ?????? *)
 Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
   fun n m =>
     match Nat.eq_dec n m with
@@ -290,21 +369,6 @@ Proof.
 Qed.
 
 
-(* obtenir le premier élément *)
-Definition nprod_fst {n} : nprod n -C-> DS (sampl value) :=
-  match n with
-  | O => CTE _ _ (DS_const (err error_Ty))
-  | 1 => ID _
-  | (S n) => FST _ _
-  end.
-
-(* jeter le premier élément *)
-Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
-  match n with
-  | O => CTE _ _ (DS_const (err error_Ty))
-  | (S n) => SND _ _
-  end.
-
 Definition denot_equation (e : equation) : DS_prod SI -C-> DS bool -C-> DS_prod SI.
   destruct e as (xs,es).
   (* vérification des tailles *)
@@ -345,16 +409,6 @@ Fixpoint mem_nth (l : list ident) (x : ident) : option nat :=
   | y :: l =>
       if ident_eq_dec x y then Some O
       else option_map S (mem_nth l x)
-  end.
-
-(* (* donne le p-ème flot de np ou DS_const (err error_Ty)  *) *)
-Fixpoint get_nth {n} (np : nprod n) (p : nat) {struct p} : DS (sampl value) :=
-  match p with
-  | O => nprod_fst np
-  | S p => match n return nprod n -> _ with
-          | O => fun _ => DS_const (err error_Ty)
-          | S _ => fun np => get_nth (nprod_skip np) p
-          end np
   end.
 
 Lemma denot_equation_eq :
