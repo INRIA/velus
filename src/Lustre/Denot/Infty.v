@@ -202,6 +202,19 @@ Proof.
       apply is_consn_S_fby1; rewrite ?nrem_S; now autorewrite with cpodb.
 Qed.
 
+Lemma is_consn_fby :
+  forall n (xs ys : DS (sampl A)),
+    is_cons (nrem n xs) ->
+    is_cons (nrem n ys) ->
+    is_cons (nrem n (SDfuns.fby xs ys)).
+Proof.
+  intros.
+  destruct n.
+  apply is_cons_fby; auto.
+  apply is_consn_S_fby, is_consn_S; auto.
+Qed.
+
+
 Lemma is_consn_sunop :
   forall (f : A -> option B) s n,
     is_cons (nrem n s) ->
