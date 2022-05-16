@@ -92,6 +92,13 @@ Proof.
   exact (get_nth_Oeq_compat n).
 Qed.
 
+Lemma get_nth_skip :
+  forall {n} (np : nprod (S n)) k,
+    get_nth (nprod_skip np) k == get_nth np (S k).
+Proof.
+  induction k; auto.
+Qed.
+
 Lemma nprod_app_nth1 :
   forall m n (mp : nprod m) (np : nprod n) k,
     k < m ->
@@ -159,6 +166,18 @@ Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
       | S m => fun np => (DS_const c, np)
       end (nprod_const c n)
   end.
+
+Lemma get_nth_const :
+  forall c n k,
+    k < n ->
+    get_nth (nprod_const c n) k == DS_const c.
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - inversion Hk.
+  - destruct k; auto; lia.
+  - destruct k; auto.
+    rewrite <- get_nth_skip, IHn; auto with arith.
+Qed.
 
 End Nprod.
 
