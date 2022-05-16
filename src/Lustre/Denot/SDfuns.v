@@ -5,8 +5,8 @@ Require Import Cpo_ext.
 (** * Streams operations for the Lustre synchronous semantics *)
 
 Inductive error :=
-| error_Ty  (* erreur de typage *)
-| error_Cl  (* cadencement *)
+| error_Ty  (* method not undersood error, memory corruption (no typing yet)    TODO: change name*)
+| error_Cl  (* runtime scheduling error *)
 | error_Op  (* opérateur (débordement, div par 0, undef, etc.) *)
 .
 
