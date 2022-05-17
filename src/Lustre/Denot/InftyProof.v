@@ -125,7 +125,6 @@ Module Type LSEMDETERMINISM
     Section Forall_Nprod.
 
       Variable P : DS (sampl value) -> Prop.
-      Context `{ Proper _ (@Oeq (DS (sampl value)) ==> iff) P }.
 
       Definition forall_nprod {n} (np : nprod n) : Prop.
         induction n as [|[]]; simpl in *.
@@ -177,26 +176,26 @@ Module Type LSEMDETERMINISM
           apply IHn; auto using forall_nprod_skip with arith.
       Qed.
 
-      Lemma forall_nprod_Oeq_compat :
-        forall {n} (np np' : nprod n),
-          np == np' ->
-          forall_nprod np <-> forall_nprod np'.
-      Proof.
-        intros * Heq.
-        split; intro Hf.
-        - apply forall_nprod_k; intros.
-          rewrite <- Heq.
-          auto using forall_nprod_k'.
-        - apply forall_nprod_k; intros.
-          rewrite Heq.
-          auto using forall_nprod_k'.
-      Qed.
+      (* Lemma forall_nprod_Oeq_compat : *)
+      (*   forall {n} (np np' : nprod n), *)
+      (*     np == np' -> *)
+      (*     forall_nprod np <-> forall_nprod np'. *)
+      (* Proof. *)
+      (*   intros * Heq. *)
+      (*   split; intro Hf. *)
+      (*   - apply forall_nprod_k; intros. *)
+      (*     rewrite <- Heq. *)
+      (*     auto using forall_nprod_k'. *)
+      (*   - apply forall_nprod_k; intros. *)
+      (*     rewrite Heq. *)
+      (*     auto using forall_nprod_k'. *)
+      (* Qed. *)
 
-      Add Parametric Morphism {n} : forall_nprod
-          with signature (@Oeq (nprod n)) ==> iff as forall_nprod_compat_morph.
-      Proof.
-        exact (forall_nprod_Oeq_compat).
-      Qed.
+      (* Add Parametric Morphism {n} : forall_nprod *)
+      (*     with signature (@Oeq (nprod n)) ==> iff as forall_nprod_compat_morph. *)
+      (* Proof. *)
+      (*   exact (forall_nprod_Oeq_compat). *)
+      (* Qed. *)
 
       Lemma forall_nprod_app :
         forall {n m} (np : nprod n) (mp : nprod m),
@@ -233,9 +232,8 @@ Module Type LSEMDETERMINISM
       rewrite <- numstreams_annots in Hks.
       induction es; simpl; auto.
       apply forall_nprod_k.
-      - now intros ?? ->.
-      - intros.
-        eapply P_exps_inf_exp_inv in Hks; eauto.
+      intros.
+      eapply P_exps_inf_exp_inv in Hks; eauto.
     Qed.
 
     Lemma EqSts_mask : forall k r ss1 ss2,
@@ -533,16 +531,6 @@ Module Type LSEMDETERMINISM
     (*     induction Hf1; intros * Hf2 Heq1 Heq2; inv Heq1; inv Heq2; inv Hf2; constructor; eauto. *)
     (* Qed. *)
 
-    (* TODO: nettoyer tout ça *)
-    Global Instance aa :
-      forall n m , Proper (Oeq (O:=nprod m) ==> iff)
-                (forall_nprod (fun s : DStr (sampl value) => is_cons (nrem n s))).
-    Proof.
-      intros * ?? Heq.
-      apply forall_nprod_Oeq_compat; auto.
-      now intros ?? ->.
-    Qed.
-
     (** The clocking hypothesis could be replaced with a typing one.
         The important point is that all the variables appearing in the expression
         are in `env`.
@@ -579,23 +567,17 @@ Module Type LSEMDETERMINISM
         rewrite denot_exp_eq; simpl.
         unfold eq_rect_r, eq_rect.
         cases.
-        2,3: apply forall_nprod_k;
-        [ now intros ?? ->
-        | intros; rewrite get_nth_const; auto using is_consn_DS_const ].
+        2,3: apply forall_nprod_k; intros; rewrite get_nth_const; auto using is_consn_DS_const.
     (* TODO: un lemme pour ça : *)
         assert (forall_nprod (fun s => is_cons (nrem n s)) (denot_exps e0s env0 bs)) as He0s.
         { clear dependent es. clear H9.
           induction e0s; simpl in *; auto; simpl_Forall.
-          setoid_rewrite denot_exps_eq.
-          apply forall_nprod_app; auto.
-          {now intros ??->.}
+          setoid_rewrite denot_exps_eq; auto using forall_nprod_app.
         }
         assert (forall_nprod (fun s => is_cons (nrem n s)) (denot_exps es env0 bs)) as Hes.
         { clear dependent e0s. clear H8.
           induction es; simpl in *; auto; simpl_Forall.
-          setoid_rewrite denot_exps_eq.
-          apply forall_nprod_app; auto.
-          {now intros ??->.}
+          setoid_rewrite denot_exps_eq; auto using forall_nprod_app.
         }
         clear - He0s Hes e.
         revert He0s Hes.
@@ -611,129 +593,7 @@ Module Type LSEMDETERMINISM
           simpl; auto using is_consn_fby.
           now apply IHi.
     Qed.
-        (* va marcher mais laborieux : *)
-        (* apply forall_nprod_k. *)
 
-      - (* binop *)
-        inversion_clear Hs1 as [| | | | |??????????? Hse11 Hse12 Hty11 Hty12 Hl1| | | | | | |].
-        inversion_clear Hs2 as [| | | | |??????????? Hse21 Hse22 Hty21 Hty22 Hl2| | | | | | |].
-        rewrite Hty21 in Hty11; inv Hty11. rewrite Hty22 in Hty12; inv Hty12.
-        eapply IHe1 in Hse21; eauto. eapply IHe2 in Hse22; eauto.
-        inv Hse21. inv Hse22.
-        constructor; auto.
-        eapply lift2_detn. 3,4:eauto. 1,2:eauto.
-      - (* fby *)
-        inversion_clear Hs1 as [| | | | | |???????? Hse11 Hse12 Hfby1| | | | | |].
-        inversion_clear Hs2 as [| | | | | |???????? Hse21 Hse22 Hfby2| | | | | |].
-        eapply det_exps_n' in H; eauto.
-        eapply det_exps_n' in H0; eauto.
-        clear - H H0 Hfby1 Hfby2.
-        rewrite_Forall_forall. congruence.
-        eapply fby_detn.
-        + eapply H2 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
-        + eapply H1 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
-        + eapply H8; eauto; congruence.
-        + eapply H5; eauto; congruence.
-      - (* arrow *)
-        inversion_clear Hs1 as [| | | | | | |???????? Hse11 Hse12 Harrow1| | | | |].
-        inversion_clear Hs2 as [| | | | | | |???????? Hse21 Hse22 Harrow2| | | | |].
-        eapply det_exps_n' in H; eauto.
-        eapply det_exps_n' in H0; eauto.
-        clear - H H0 Harrow1 Harrow2.
-        rewrite_Forall_forall. congruence.
-        eapply arrow_detn.
-        + eapply H2 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
-        + eapply H1 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
-        + eapply H8; eauto; congruence.
-        + eapply H5; eauto; congruence.
-      - (* when *)
-        repeat simpl_In.
-        inversion_clear Hs1 as [| | | | | | | |????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | |????????? Hse2 Hsv2 Hwhen2| | | |].
-        eapply det_exps_n' in H; eauto.
-        inv H4; simpl_In.
-        edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
-        eapply Hn1 in Hsv1; eauto. 2:econstructor; solve_In; eauto.
-        clear - H Hsv1 Hwhen1 Hwhen2.
-        rewrite_Forall_forall. congruence.
-        eapply when_detn. 2:eauto.
-        + eapply H0 with (a:=def_stream) (b:=def_stream) (n:=n0); eauto. congruence.
-        + eapply H4; eauto; congruence.
-        + eapply H2; eauto; congruence.
-      - (* merge *)
-        repeat simpl_In.
-        inversion_clear Hs1 as [| | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
-        inversion_clear Hs2 as [| | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
-        inv H3; simpl_In.
-        edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
-        eapply Hn1 in Hsv1; eauto. 2:econstructor; solve_In; eauto.
-        eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
-        2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
-            2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
-            2,3:do 2 (eapply Forall_forall in H7; eauto with ltyping).
-            inv Hse1; inv Hse2; try congruence. exfalso; auto.
-        }
-        eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-        clear - Hmerge1 Hmerge2 Hsv1 H H5 Hse1 Hse2. revert vs0 ss2 Hsv1 Hmerge2 H Hse1 Hse2.
-        induction Hmerge1; intros * Hsv1 Hmerge2 Heq Hse1 Hse2;
-          inv Heq; inv Hmerge2; inv Hse1; inv Hse2;
-            constructor; eauto.
-        eapply merge_detn. 5,6:eauto. 1-4:eauto.
-        congruence.
-        rewrite fst_NoDupMembers, H6, H5. apply seq_NoDup.
-      - (* case *)
-        inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
-        inversion_clear Hs2 as [| | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
-        eapply IHe in Hsv2; eauto. apply Forall2_singl in Hsv2.
-        eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
-        2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
-            2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
-            2,3:do 2 (eapply Forall_forall in H10; eauto with ltyping).
-            inv Hse1; inv Hse2; try congruence. exfalso; auto.
-        }
-        eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-        rewrite Forall3_map_2 in Hcase1. rewrite Forall3_map_2 in Hcase2.
-        clear - Hcase1 Hcase2 Hsv2 H H8 Hse1 Hse2. revert vs0 ss2 Hsv2 Hcase2 H Hse1 Hse2.
-        induction Hcase1; intros * Hsv2 Hcase2 Heq Hse1 Hse2;
-          inv Heq; inv Hcase2; inv Hse1; inv Hse2;
-            constructor; eauto.
-        eapply case_detn. 6,7:eauto. 1-5:eauto.
-        congruence.
-        rewrite fst_NoDupMembers, H3, H8. apply seq_NoDup.
-        intros. congruence.
-      - (* case (default) *)
-        inversion_clear Hs1 as [| | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
-        inversion_clear Hs2 as [| | | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
-        eapply IHe in Hsv2; eauto. apply Forall2_singl in Hsv2.
-        eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
-        2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
-            2,3:do 2 (eapply Forall_forall; intros); eapply sem_exp_numstreams; eauto.
-            2,3:do 2 (eapply Forall_forall in H11; eauto with ltyping).
-            inv Hse1; inv Hse2; try congruence. exfalso; auto.
-        }
-        eapply det_exps_n' in Hd2; eauto.
-        eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-        rewrite Forall3_map_2 in Hcase1. rewrite Forall3_map_2 in Hcase2.
-        clear - Hcase1 Hcase2 Hsv2 H H9 Hse1 Hse2 Hd2. revert Hcase1 Hsv2 Hcase2 H Hse1 Hse2 Hd2.
-        generalize (concat vd). generalize (concat vd0). intros * Hcase1. revert vs0 l ss2.
-        induction Hcase1; intros * Hsv2 Hcase2 Heq Hse1 Hse2 Hd2;
-          inv Heq; inv Hcase2; inv Hse1; inv Hse2; inv Hd2;
-            constructor; eauto.
-        eapply case_detn. 6,7:eauto. 1-5:eauto.
-        congruence.
-        rewrite fst_NoDupMembers, H5, <-fst_NoDupMembers; auto.
-        intros ?? Heq1 Heq2. inv Heq1. inv Heq2. assumption.
-      - (* app *)
-        inversion_clear Hs1 as [| | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].
-        inversion_clear Hs2 as [| | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
-        eapply det_exps_n' in H; eauto.
-        rewrite <-Forall2_map_2 in Her1, Her2.
-        eapply det_exps_n' in H0; eauto. repeat rewrite concat_map_singl1 in H0.
-        eapply bools_ofs_detn in Hbools2; eauto.
-        eapply EqStNs_unmask; [eapply Hbools2|]; intros. clear H0.
-        eapply HdetG. 2,3:eauto.
-        eapply EqStNs_mask; eauto.
-    Qed.
 
     Corollary det_exps_n : forall n Hi1 Hi2 bs1 bs2 es ss1 ss2,
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv n Hi1 Hi2 cx) ->
