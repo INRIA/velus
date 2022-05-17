@@ -59,7 +59,7 @@ Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
 
 Lemma nprod_fst_app :
   forall m n (mp : nprod (S m)) (np : nprod n),
-    nprod_fst (nprod_app mp np) == nprod_fst mp.
+    nprod_fst (nprod_app mp np) = nprod_fst mp.
 Proof.
   destruct m, n; auto.
 Qed.
@@ -94,7 +94,7 @@ Qed.
 
 Lemma get_nth_skip :
   forall {n} (np : nprod (S n)) k,
-    get_nth (nprod_skip np) k == get_nth np (S k).
+    get_nth (nprod_skip np) k = get_nth np (S k).
 Proof.
   induction k; auto.
 Qed.
@@ -102,7 +102,7 @@ Qed.
 Lemma nprod_app_nth1 :
   forall m n (mp : nprod m) (np : nprod n) k,
     k < m ->
-    get_nth (nprod_app mp np) k == get_nth mp k.
+    get_nth (nprod_app mp np) k = get_nth mp k.
 Proof.
   induction m; intros * Hk.
   - inversion Hk.
@@ -115,7 +115,7 @@ Qed.
 Lemma nprod_app_nth2 :
   forall m n (mp : nprod m) (np : nprod n) k,
     k >= m ->
-    get_nth (nprod_app mp np) k == get_nth np (k-m).
+    get_nth (nprod_app mp np) k = get_nth np (k-m).
 Proof.
   induction m; intros * Hk.
   - simpl in *. autorewrite with cpodb; auto with arith.
@@ -170,7 +170,7 @@ Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
 Lemma get_nth_const :
   forall c n k,
     k < n ->
-    get_nth (nprod_const c n) k == DS_const c.
+    get_nth (nprod_const c n) k = DS_const c.
 Proof.
   induction n as [|[]]; intros * Hk.
   - inversion Hk.
@@ -295,7 +295,7 @@ Defined.
 Lemma denot_exps_eq :
   forall e es env bs,
     denot_exps (e :: es) env bs
-    == nprod_app (denot_exp e env bs) (denot_exps es env bs).
+    = nprod_app (denot_exp e env bs) (denot_exps es env bs).
 Proof.
   trivial.
 Qed.
@@ -433,7 +433,7 @@ Fixpoint mem_nth (l : list ident) (x : ident) : option nat :=
 Lemma denot_equation_eq :
   forall xs es env bs x,
     denot_equation (xs,es) env bs x
-    == if Nat.eq_dec (length xs) (list_sum (List.map numstreams es))
+    = if Nat.eq_dec (length xs) (list_sum (List.map numstreams es))
        then
          let ss := denot_exps es env bs in
          match mem_nth xs x with

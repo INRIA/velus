@@ -122,7 +122,7 @@ Qed.
 (** function that ignore its 2nd argument *)
 Definition CTE (D1 D2:cpo) : D1 -C-> D2 -C-> D1 := (curry (FST D1 D2)).
 
-Lemma CTE_eq : forall (D1 D2 : cpo) a b, CTE D1 D2 a b == a.
+Lemma CTE_eq : forall (D1 D2 : cpo) a b, CTE D1 D2 a b = a.
 Proof.
   trivial.
 Qed.
@@ -182,7 +182,7 @@ Defined.
 
 Lemma Dprodi_DISTR_simpl :
   forall (I:Type) (Di:I->cpo) (D:cpo) (f: Dprodi (fun i => D -C-> Di i)) (d : D) (i : I),
-    Dprodi_DISTR I Di D f d i == f i d.
+    Dprodi_DISTR I Di D f d i = f i d.
 Proof.
   trivial.
 Qed.
