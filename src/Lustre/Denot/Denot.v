@@ -128,18 +128,18 @@ Proof.
       * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
 Qed.
 
-Fixpoint lift (F : forall D, DS (sampl D) -C-> DS (sampl D)) n {struct n} : nprod n -C-> nprod n :=
+Fixpoint lift (F : forall D, DS (sampl D) -C-> DS (sampl D)) {n} {struct n} : nprod n -C-> nprod n :=
   match n with
   | O => ID _
   | S n =>
       match n return nprod n -C-> nprod n -> nprod (S n) -C-> nprod (S n) with
       | O => fun _ => F _
       | S _ => fun fn => PROD_map (F _) fn
-      end (lift F n)
+      end (@lift F n)
   end.
 
 Definition lift2
-  (F : forall A : Type, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) n :
+  (F : forall A : Type, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) {n} :
   nprod n -C-> nprod n -C-> nprod n.
   induction n as [|[]].
   - exact 0. (* ? *)
@@ -152,7 +152,7 @@ Defined.
 
 Lemma lift2_simpl :
   forall F n u U v V,
-    lift2 F (S (S n)) (u, U) (v, V) = (F _ u v, lift2 F (S n) U V).
+    @lift2 F (S (S n)) (u, U) (v, V) = (F _ u v, @lift2 F (S n) U V).
 Proof.
   trivial.
 Qed.
@@ -265,7 +265,7 @@ Definition denot_exp (e : exp) : DS_prod SI -C-> DS bool -C-> nprod (numstreams 
       + exact (CTE _ _ (DS_const (err error_Ty))).
       + exact ((nprod_app @2_ uncurry (denot_exp a)) IHes). }
     rewrite <- Heq in ss.
-    exact (curry ((lift2 (@SDfuns.fby) _ @2_ uncurry s0s) (uncurry ss))).
+    exact (curry ((lift2 (@SDfuns.fby) @2_ uncurry s0s) (uncurry ss))).
   - (* Earrow *)
     exact (CTE _ _ 0).
   - (* Ewhen *)
@@ -306,7 +306,7 @@ Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
     match Nat.eq_dec n m with
     | left a =>
         eq_rect_r (fun n0 : nat => nprod n0 -> nprod m -> nprod n0)
-          (fun mm => lift2 (@fby) m mm ) a
+          (fun mm => lift2 (@fby) mm) a
     | right b => fun (_ : nprod n) (_ : nprod m) => nprod_const abs n
     end.
 
@@ -335,7 +335,7 @@ Lemma denot_exp_eq :
           let m := (list_sum (List.map numstreams es)) in
           match Nat.eq_dec n m, Nat.eq_dec (length an) n with
           | left eqm, left eqan =>
-              eq_rect_r nprod (lift2 (@SDfuns.fby) _ s0s (eq_rect_r nprod ss eqm)) eqan
+              eq_rect_r nprod (lift2 (@SDfuns.fby) s0s (eq_rect_r nprod ss eqm)) eqan
           | _, _ => nprod_const (err error_Ty) _
           end
       (* | Earrow _ e0 e => *)
