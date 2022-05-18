@@ -212,6 +212,23 @@ Module Type LSEMDETERMINISM
           apply forall_nprod_k'; auto; lia.
       Qed.
 
+      Lemma forall_nprod_lift2 :
+        forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
+          (forall x y, P x -> P y -> P (f _ x y)) ->
+          forall {n} (np np' : nprod n),
+          forall_nprod np ->
+          forall_nprod np' ->
+          forall_nprod (lift2 f np np').
+      Proof.
+        intros f Hf.
+        induction n as [|[]]; intros * H H'; auto.
+        simpl in *; auto.
+        destruct np,np',H,H'.
+        rewrite lift2_simpl.
+        split; simpl in *; auto .
+        now apply IHn.
+      Qed.
+
     End Forall_Nprod.
 
     Lemma numstreams_annots :
@@ -531,20 +548,38 @@ Module Type LSEMDETERMINISM
     (*     induction Hf1; intros * Hf2 Heq1 Heq2; inv Heq1; inv Heq2; inv Hf2; constructor; eauto. *)
     (* Qed. *)
 
+    Lemma denot_exps_nprod :
+      forall n env bs es,
+        Forall (fun e => forall_nprod (fun s => is_cons (nrem n s)) (denot_exp e env bs)) es ->
+        forall_nprod (fun s => is_cons (nrem n s)) (denot_exps es env bs).
+    Proof.
+      induction es; simpl in *; intros; auto; simpl_Forall.
+      setoid_rewrite denot_exps_eq; auto using forall_nprod_app.
+    Qed.
+
+    (* TODO: move *)
+    Lemma Forall_impl2 : forall {A} (P Q : A -> Prop) l,
+        Forall (fun x => P x -> Q x) l -> Forall P l -> Forall Q l.
+    Proof.
+      intros.
+      rewrite Forall_forall in *. firstorder.
+    Qed.
+
     (** The clocking hypothesis could be replaced with a typing one.
         The important point is that all the variables appearing in the expression
         are in `env`.
         I chose a clocking hypothesis because this lemma is used in the
         clocked-semantics proof. *)
-    Lemma inf_exp_n : forall n env bs e,
+    Lemma inf_exp_n : forall n env bs,
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> inf_var_inv n env cx) ->
+        is_cons (nrem n bs) ->
+        forall e,
         wt_exp G Γ e ->
         restr_exp e ->
-        is_cons (nrem n bs) ->
         forall_nprod (fun s => is_cons (nrem n s)) (denot_exp e env bs).
     Proof.
-      (* intros * Hn Hbs. revert ss1 ss2. *)
-      induction e using exp_ind2; intros * Hn Hwt Hr Hb; inv Hr; inv Hwt.
+      intros * Hn Hb.
+      induction e using exp_ind2; intros * Hwt Hr; inv Hr; inv Hwt.
       - (* const *)
         rewrite denot_exp_eq.
         apply is_consn_sconst; auto.
@@ -567,31 +602,10 @@ Module Type LSEMDETERMINISM
         rewrite denot_exp_eq; simpl.
         unfold eq_rect_r, eq_rect.
         cases.
-        2,3: apply forall_nprod_k; intros; rewrite get_nth_const; auto using is_consn_DS_const.
-    (* TODO: un lemme pour ça : *)
-        assert (forall_nprod (fun s => is_cons (nrem n s)) (denot_exps e0s env0 bs)) as He0s.
-        { clear dependent es. clear H9.
-          induction e0s; simpl in *; auto; simpl_Forall.
-          setoid_rewrite denot_exps_eq; auto using forall_nprod_app.
-        }
-        assert (forall_nprod (fun s => is_cons (nrem n s)) (denot_exps es env0 bs)) as Hes.
-        { clear dependent e0s. clear H8.
-          induction es; simpl in *; auto; simpl_Forall.
-          setoid_rewrite denot_exps_eq; auto using forall_nprod_app.
-        }
-        clear - He0s Hes e.
-        revert He0s Hes.
-        generalize ((denot_exps e0s env0 bs)), ((denot_exps es env0 bs)).
-        rewrite e.
-        generalize (list_sum (map numstreams es)).
-        intro i.
-        induction i as [|[]]; auto; intros s0s ss Hs0s Hss.
-        + simpl in *. auto using is_consn_fby.
-        + destruct s0s, ss, Hs0s, Hss.
-          setoid_rewrite lift2_simpl.
-          split.
-          simpl; auto using is_consn_fby.
-          now apply IHi.
+        apply forall_nprod_lift2; cases;
+          now eauto using is_consn_fby, denot_exps_nprod, Forall_impl2.
+        all: apply forall_nprod_k; intros; rewrite get_nth_const;
+          now auto using is_consn_DS_const.
     Qed.
 
 
