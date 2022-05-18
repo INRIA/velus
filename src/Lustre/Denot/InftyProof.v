@@ -75,15 +75,18 @@ Module Type LSEMDETERMINISM
     Definition inf_exp_inv n env bs : exp -> nat -> Prop :=
       fun e k =>
         wt_exp G Γ e ->
+        restr_exp e ->
         is_cons (nrem n (get_nth (denot_exp e env bs) k)).
 
     Lemma P_exps_inf_exp_inv : forall n env bs es k,
         Forall (wt_exp G Γ) es ->
+        Forall restr_exp es ->
         P_exps (inf_exp_inv n env bs) es k ->
         is_cons (nrem n (get_nth (denot_exps es env bs) k)).
     Proof.
-      induction es as [| e es]; intros * Hwt Hp; inv Hwt; simpl. inv Hp.
+      induction es as [| e es]; intros * Hwt Hr Hp; inv Hwt; simpl.
       inv Hp.
+      inv Hr; inv Hp.
       - (* now *)
         setoid_rewrite denot_exps_eq.
         rewrite nprod_app_nth1; auto.
@@ -242,10 +245,11 @@ Module Type LSEMDETERMINISM
 
     Lemma P_exps_inf_exp_inv_all : forall n env bs es,
         Forall (wt_exp G Γ) es ->
+        Forall restr_exp es ->
         (forall k, k < length (annots es) -> P_exps (inf_exp_inv n env bs) es k) ->
         forall_nprod (fun s => is_cons (nrem n s)) (denot_exps es env bs).
     Proof.
-      intros * Hwt Hks.
+      intros * Hwt Hr Hks.
       rewrite <- numstreams_annots in Hks.
       induction es; simpl; auto.
       apply forall_nprod_k.
@@ -608,50 +612,60 @@ Module Type LSEMDETERMINISM
           now auto using is_consn_DS_const.
     Qed.
 
-
-    Corollary det_exps_n : forall n Hi1 Hi2 bs1 bs2 es ss1 ss2,
-        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv n Hi1 Hi2 cx) ->
-        EqStN n bs1 bs2 ->
+    Corollary inf_exps_n : forall n env bs es,
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> inf_var_inv n env cx) ->
+        is_cons (nrem n bs) ->
         Forall (wt_exp G Γ) es ->
-        Forall2 (sem_exp G Hi1 bs1) es ss1 ->
-        Forall2 (sem_exp G Hi2 bs2) es ss2 ->
-        Forall2 (EqStN n) (concat ss1) (concat ss2).
+        Forall restr_exp es ->
+        forall_nprod (fun s => is_cons (nrem n s)) (denot_exps es env bs).
     Proof.
-      intros * Hin Hbs Hwt Hsem1 Hsem2.
-      eapply Forall2_concat.
-      eapply Forall2_trans_ex in Hsem2; [|eapply Forall2_swap_args, Hsem1].
-      eapply Forall2_impl_In; [|eauto]; intros ?? _ _ (?&Hin'&(Hs1&Hs2)).
-      rewrite Forall_forall in *.
-      eapply det_exp_n; eauto.
+      intros * Hin Hb Hwt Hr.
+      induction es; simpl; auto; simpl_Forall.
+      setoid_rewrite denot_exps_eq; auto using forall_nprod_app, inf_exp_n.
     Qed.
 
-    Corollary det_exp : forall Hi bs e ss1 ss2,
+    (* TODO: move *)
+    Lemma forall_nprod_impl :
+      forall (P Q : DS (sampl value) -> Prop),
+        (forall x, P x -> Q x) ->
+        forall {n} (np : nprod n),
+        forall_nprod P np ->
+        forall_nprod Q np.
+    Proof.
+      induction n as [|[]]; intros * Hf; auto.
+      - now simpl in *; auto.
+      - destruct Hf.
+        split; auto.
+        now apply IHn.
+    Qed.
+
+    Corollary inf_exp : forall env bs e,
         wt_exp G Γ e ->
-        sem_exp G Hi bs e ss1 ->
-        sem_exp G Hi bs e ss2 ->
-        EqSts ss1 ss2.
+        restr_exp e ->
+        forall_nprod (fun s => infinite s) (denot_exp e env bs).
     Proof.
-      intros * Hwt Hs1 Hs2.
-      eapply EqStN_EqSts. intros n.
-      eapply det_exp_n; eauto.
-      + intros * _ ???.
-        split; intros; eapply EqStN_EqSt, sem_var_det; eauto.
-      + reflexivity.
-    Qed.
+      intros * Hwt Hr.
+      apply forall_nprod_impl with (1 := nrem_inf).
+      apply forall_nprod_k. intros k Hk n.
+      pose proof (inf_exp_n n) as Hn.
+      eapply forall_nprod_k' in Hn; eauto.
+      + intros * ???.
+        (* impossible, bien sûr *)
+    Abort.
 
-    Corollary det_exps : forall Hi bs es ss1 ss2,
-        Forall (wt_exp G Γ) es ->
-        Forall2 (sem_exp G Hi bs) es ss1 ->
-        Forall2 (sem_exp G Hi bs) es ss2 ->
-        EqSts (concat ss1) (concat ss2).
-    Proof.
-      intros * Hwt Hs1 Hs2.
-      eapply EqStN_EqSts. intros n.
-      eapply det_exps_n; eauto.
-      + intros * _ ???.
-        split; intros; eapply EqStN_EqSt, sem_var_det; eauto.
-      + reflexivity.
-    Qed.
+    (* Corollary det_exps : forall Hi bs es ss1 ss2, *)
+    (*     Forall (wt_exp G Γ) es -> *)
+    (*     Forall2 (sem_exp G Hi bs) es ss1 -> *)
+    (*     Forall2 (sem_exp G Hi bs) es ss2 -> *)
+    (*     EqSts (concat ss1) (concat ss2). *)
+    (* Proof. *)
+    (*   intros * Hwt Hs1 Hs2. *)
+    (*   eapply EqStN_EqSts. intros n. *)
+    (*   eapply det_exps_n; eauto. *)
+    (*   + intros * _ ???. *)
+    (*     split; intros; eapply EqStN_EqSt, sem_var_det; eauto. *)
+    (*   + reflexivity. *)
+    (* Qed. *)
 
     (** We reason inductively on the length of streams.
         Given that all the streams in the environnement are equal "up-to",
@@ -663,203 +677,79 @@ Module Type LSEMDETERMINISM
         for the right-side stream of a fby, as the output only depends on its previous value.
      *)
 
-    Lemma fby_det_Sn : forall n xs1 xs2 ys1 ys2 zs1 zs2,
-        EqStN (S n) xs1 xs2 ->
-        EqStN n ys1 ys2 ->
-        fby xs1 ys1 zs1 ->
-        fby xs2 ys2 zs2 ->
-        EqStN (S n) zs1 zs2.
+    (* Lemma fby_det_Sn : forall n xs1 xs2 ys1 ys2 zs1 zs2, *)
+    (*     EqStN (S n) xs1 xs2 -> *)
+    (*     EqStN n ys1 ys2 -> *)
+    (*     fby xs1 ys1 zs1 -> *)
+    (*     fby xs2 ys2 zs2 -> *)
+    (*     EqStN (S n) zs1 zs2. *)
+    (* Proof. *)
+    (*   induction n; intros * Heq1 Heq2 Hfby1 Hfby2; inv Heq1; inv Heq2; *)
+    (*     inv Hfby1; inv Hfby2; constructor; auto. eauto. *)
+    (*   clear IHn. revert y xs0 xs1 xs3 xs2 rs rs0 H1 H2 H6 H7. *)
+    (*   induction n; intros * Heq1 Heq2 Hfby1 Hfby2; inv Heq1; inv Heq2; *)
+    (*     inv Hfby1; inv Hfby2; constructor; eauto. *)
+    (* Qed. *)
+
+    (* TODO: move *)
+    Lemma lift2_nth :
+      forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
+      forall {n} (np np' : nprod n) k,
+        k < n ->
+        get_nth (lift2 f np np') k = f _ (get_nth np k) (get_nth np' k).
     Proof.
-      induction n; intros * Heq1 Heq2 Hfby1 Hfby2; inv Heq1; inv Heq2;
-        inv Hfby1; inv Hfby2; constructor; auto. eauto.
-      clear IHn. revert y xs0 xs1 xs3 xs2 rs rs0 H1 H2 H6 H7.
-      induction n; intros * Heq1 Heq2 Hfby1 Hfby2; inv Heq1; inv Heq2;
-        inv Hfby1; inv Hfby2; constructor; eauto.
+      induction n as [|[]]; intros; auto; try lia.
+      - destruct k; simpl; auto; lia.
+      - destruct np, np'.
+        rewrite lift2_simpl.
+        destruct k; auto.
+        rewrite <- 3 get_nth_skip, <- IHn; auto with arith.
     Qed.
 
-    Lemma det_exp_S : forall n Hi1 Hi2 bs1 bs2 e k,
-        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv n Hi1 Hi2 cx) ->
-        wt_exp G Γ e ->
-        k < numstreams e ->
-        EqStN (S n) bs1 bs2 ->
-        (forall x, Is_free_left Γ x k e -> det_var_inv (S n) Hi1 Hi2 x) ->
-        det_exp_inv (S n) Hi1 Hi2 bs1 bs2 e k.
+    Lemma inf_exp_S : forall n env bs,
+        (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> inf_var_inv n env cx) ->
+        is_cons (nrem (S n) bs) ->
+        forall e k,
+          wt_exp G Γ e ->
+          restr_exp e ->
+          k < numstreams e ->
+          (forall x, Is_free_left Γ x k e -> inf_var_inv (S n) env x) ->
+          inf_exp_inv (S n) env bs e k.
     Proof.
-      intros * Hn Hwt Hnum Hbs HSn.
+      intros n env * Hn Hbs e k.
+      intros I J K L.
       eapply exp_causal_ind
-        with (P_exp:=det_exp_inv (S n) Hi1 Hi2 bs1 bs2); eauto with ltyping.
-      1-12:clear Hwt HSn.
+        with (P_exp:=inf_exp_inv (S n) env bs); eauto with ltyping.
+      all: clear I J K L e k.
+      all: intros.
+      all: intros Hwt Hr; inv Hr; inv Hwt.
       - (* const *)
-        intros ??? Hwt Hs1 Hs2. inv Hs1. inv Hs2. simpl.
-        rewrite H3, H4. eapply const_detn; eauto.
-      - (* enum *)
-        intros ???? Hwt Hs1 Hs2. inv Hs1. inv Hs2. simpl.
-        rewrite H5, H6. eapply enum_detn; eauto.
+        rewrite denot_exp_eq.
+        now apply is_consn_sconst.
       - (* var *)
-        intros ???? Hvar ?? Hwt Hs1 Hs2. inv Hwt. inv Hs1. inv Hs2. simpl.
-        edestruct Hvar as (Hv&_). eapply Hv; eauto.
-      - (* last *)
-        intros ???? Hvar ?? Hwt Hs1 Hs2. inv Hwt. inv Hs1. inv Hs2. simpl.
-        edestruct Hvar as (_&Hv). eapply Hv; eauto.
+        rewrite denot_exp_eq.
+        now apply H0.
       - (* unop *)
-        intros ??? He1 ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | |???????? Hse1 Hty1 Hl1| | | | | | | |].
-        inversion_clear Hs2 as [| | | |???????? Hse2 Hty2 Hl2| | | | | | | |].
-        rewrite Hty2 in Hty1; inv Hty1.
-        eapply He1 in Hse2; eauto. simpl in *.
-        eapply lift1_detn; eauto.
-      - (* binop *)
-        intros ???? He1 He2 ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | | |??????????? Hse11 Hse12 Hty11 Hty12 Hl1| | | | | | |].
-        inversion_clear Hs2 as [| | | | |??????????? Hse21 Hse22 Hty21 Hty22 Hl2| | | | | | |].
-        rewrite Hty21 in Hty11; inv Hty11. rewrite Hty22 in Hty12; inv Hty12.
-        eapply He1 in Hse21; eauto. eapply He2 in Hse22; eauto. simpl in *.
-        eapply lift2_detn. 3,4:eauto. 1,2:eauto.
+        rewrite denot_exp_eq.
+        cases; try congruence; inv H5. (* typeof *)
+        assert (is_cons (nrem (S n) (get_nth (denot_exp e1 env bs) 0))) as He by auto.
+        revert He.
+        generalize (denot_exp e1 env bs).
+        generalize (numstreams e1).
+        intros ns t Ht.
+        cases.
+        2: apply is_consn_DS_const. (* pourquoi auto ne fonctionne pas ? *)
+        apply is_consn_sunop; auto.
       - (* fby *)
-        intros ???? Hk He0s ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | | | |???????? Hse11 Hse12 Hfby1| | | | | |].
-        inversion_clear Hs2 as [| | | | | |???????? Hse21 Hse22 Hfby2| | | | | |].
-        eapply P_exps_det_exp_inv in He0s; eauto.
-        eapply det_exps_n in Hse22; eauto using EqStN_weaken.
-        assert (length (concat s0ss) = length ann0) as Hlen1.
-        { eapply sem_exps_numstreams in Hse11; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse11.
-          assumption. }
-        assert (length (concat s0ss0) = length ann0) as Hlen2.
-        { eapply sem_exps_numstreams in Hse21; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse21.
-          assumption. }
-        eapply fby_det_Sn; eauto.
-        + eapply Forall2_forall2 in Hse22 as (_&Heq). eapply Heq; eauto.
-          eapply Forall3_length in Hfby1 as (Hl1&Hl2). rewrite <-Hl1, Hlen1; eauto.
-        + eapply Forall3_forall3 in Hfby1 as (_&_&Hfby1).
-          eapply Hfby1 with (b:=def_stream); eauto. congruence.
-        + eapply Forall3_forall3 in Hfby2 as (_&_&Hfby2).
-          eapply Hfby2 with (b:=def_stream); eauto. congruence.
-      - (* arrow *)
-        intros ???? Hk He0s He1s ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | | | | |???????? Hse11 Hse12 Harrow1| | | | |].
-        inversion_clear Hs2 as [| | | | | | |???????? Hse21 Hse22 Harrow2| | | | |].
-        eapply P_exps_det_exp_inv in He0s; eauto.
-        eapply P_exps_det_exp_inv in He1s; eauto.
-        assert (length (concat s0ss) = length ann0) as Hlen1.
-        { eapply sem_exps_numstreams in Hse11; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse11.
-          assumption. }
-        assert (length (concat s0ss0) = length ann0) as Hlen2.
-        { eapply sem_exps_numstreams in Hse21; eauto with ltyping.
-          rewrite <-length_typesof_annots, H5, map_length in Hse21.
-          assumption. }
-        eapply arrow_detn. eapply He0s. eapply He1s.
-        + eapply Forall3_forall3 in Harrow1 as (_&_&Harrow1). eapply Harrow1; eauto.
-          congruence.
-        + eapply Forall3_forall3 in Harrow2 as (_&_&Harrow2). eapply Harrow2; eauto.
-          congruence.
-      - (* when *)
-        intros ?????? Hk Hes Hin Hvar ?? Hwt Hs1 Hs2. inv Hwt. simpl in *.
-        inversion_clear Hs1 as [| | | | | | | |????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | |????????? Hse2 Hsv2 Hwhen2| | | |].
-        eapply Hvar in Hsv2; eauto.
-        eapply P_exps_det_exp_inv in Hes; eauto.
-        assert (length (concat ss) = length (typesof es)) as Hlen1.
-        { eapply sem_exps_numstreams in Hse1; eauto with ltyping.
-          now rewrite <-length_typesof_annots in Hse1. }
-        assert (length (concat ss0) = length (typesof es)) as Hlen2.
-        { eapply sem_exps_numstreams in Hse2; eauto with ltyping.
-          now rewrite <-length_typesof_annots in Hse2. }
-        clear - Hk Hlen1 Hlen2 Hsv2 Hes Hwhen1 Hwhen2.
-        rewrite_Forall_forall.
-        eapply when_detn.
-        + eapply Hes.
-        + eapply Hsv2.
-        + eapply H2; eauto. congruence.
-        + eapply H0; eauto. congruence.
-      - (* merge *)
-        intros ?????? Hk Hin Hvar Hes ?? Hwt Hs1 Hs2. assert (Hwt':=Hwt). inv Hwt'. simpl in *.
-        assert (length ss1 = length tys) as Hlen1.
-        { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
-        assert (length ss2 = length tys) as Hlen2.
-        { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
-        inversion_clear Hs1 as [| | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
-        inversion_clear Hs2 as [| | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
-        eapply Hvar in Hsv1; eauto using In_InMembers.
-        assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
-        { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall2_length in Hmerge1. congruence. }
-        eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-        eapply Forall2_forall2 in Hmerge1 as (?&Hmerge1).
-        eapply Forall2_forall2 in Hmerge2 as (?&Hmerge2).
-        eapply merge_detn. 5:eapply Hmerge1; eauto. 6:eapply Hmerge2; eauto. 3,4:eauto.
-        3,4:congruence.
-        + eapply Forall_forall in Hse1; [|eapply nth_In]. eapply Forall_forall in Hse2; [|eapply nth_In].
-          rewrite Hse1, Hse2; auto. 1,2:congruence.
-        + eapply Forall_forall in Hse1; [|eapply nth_In].
-          rewrite fst_NoDupMembers, Hse1, H5. apply seq_NoDup. congruence.
-      - (* case *)
-        intros ????? Hk Hse Hvar Hes ?? Hwt Hs1 Hs2. assert (Hwt':=Hwt). inv Hwt'; simpl in *.
-        + (* total *)
-          assert (length ss1 = length tys) as Hlen1.
-          { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
-          assert (length ss2 = length tys) as Hlen2.
-          { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
-          inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
-          inversion_clear Hs2 as [| | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
-          eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
-          assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
-          { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall3_length in Hcase1 as (?&?). congruence. }
-          eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-          eapply Forall3_forall3 in Hcase1 as (?&?&Hcase1).
-          eapply Forall3_forall3 in Hcase2 as (?&?&Hcase2).
-          eapply case_detn. 6:eapply Hcase1; eauto. 7:eapply Hcase2; eauto. 1-5:eauto.
-          4,5:congruence.
-          * eapply Forall_forall in Hse1; [|eapply nth_In]. eapply Forall_forall in Hse2; [|eapply nth_In].
-            rewrite Hse1, Hse2; auto. 1,2:congruence.
-          * eapply Forall_forall in Hse1; [|eapply nth_In].
-            rewrite fst_NoDupMembers, Hse1, H6. apply seq_NoDup. congruence.
-          * intros ??. instantiate (1:=None). instantiate (1:=None). intros Hnth1 Hnth2.
-            erewrite map_nth with (d:=bool_velus_type) in Hnth1. inv Hnth1.
-        + (* default *)
-          assert (length ss1 = length (typesof d0)) as Hlen1.
-          { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
-          assert (length ss2 = length (typesof d0)) as Hlen2.
-          { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
-          inversion_clear Hs1 as [| | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
-          inversion_clear Hs2 as [| | | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
-          eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
-          assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
-          { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall3_length in Hcase1 as (?&?). congruence. }
-          eapply P_exps_det_exp_inv in Hes; eauto.
-          eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-          eapply Forall3_forall3 in Hcase1 as (?&?&Hcase1).
-          eapply Forall3_forall3 in Hcase2 as (?&?&Hcase2).
-          eapply case_detn. 6:eapply Hcase1; eauto. 7:eapply Hcase2; eauto. 1-5:eauto.
-          4,5:congruence.
-          * eapply Forall_forall in Hse1; [|eapply nth_In]. eapply Forall_forall in Hse2; [|eapply nth_In].
-            rewrite Hse1, Hse2; auto. 1,2:congruence.
-          * eapply Forall_forall in Hse1; [|eapply nth_In].
-            rewrite fst_NoDupMembers, Hse1, <-fst_NoDupMembers; auto. congruence.
-          * intros ??. instantiate (1:=None). instantiate (1:=None). intros Hnth1 Hnth2.
-            erewrite map_nth' with (d':=def_stream) in Hnth1, Hnth2. inv Hnth1. inv Hnth2. auto.
-            1,2:rewrite map_length in H, H1; congruence.
-      - (* app *)
-        intros ????? Hlen Hes Her ?? Hwt Hsem1 Hsem2. inv Hwt.
-        inversion_clear Hsem1 as [| | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].
-        inversion_clear Hsem2 as [| | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
-        eapply P_exps_det_exp_inv_all in Hes; eauto.
-        rewrite <-Forall2_map_2 in Her1, Her2. eapply P_exps_det_exp_inv_all in Her; eauto.
-        do 2 rewrite concat_map_singl1 in Her.
-        eapply bools_ofs_detn in Hbools2; eauto.
-        assert (Forall2 (EqStN (S n)) ss1 ss2) as Heq.
-        2:{ eapply Forall2_forall2 in Heq as (_&Heq).
-            eapply Heq; eauto.
-            specialize (Hn1 0). inv Hn1. rewrite H5 in H0. inv H0.
-            unfold idents in H2. rewrite Forall2_map_1, Forall2_map_2 in H2. eapply Forall2_length in H2.
-            eapply Forall2_length in H7.
-            rewrite <-H2, <-H7; auto.
-        }
-        eapply EqStNs_unmask; eauto. intros.
-        eapply HdetG. 2,3:eauto.
-        eapply EqStNs_mask; eauto.
+        rewrite denot_exp_eq; simpl.
+        unfold eq_rect_r, eq_rect.
+        cases.
+        2,3: rewrite get_nth_const; auto; apply (is_consn_DS_const _ (S n)).
+        rewrite lift2_nth; auto; cases.
+        apply is_consn_S_fby; auto using P_exps_inf_exp_inv.
+        apply forall_nprod_k'; auto using inf_exps_n, is_consn_S.
     Qed.
+
 
     Hypothesis Hnd : NoDup (map snd (idcaus_of_senv Γ)).
 
