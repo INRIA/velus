@@ -8,7 +8,7 @@ From Coq Require Import Program.Tactics.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -141,7 +141,8 @@ Module Type NLCOINDTOINDEXED
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_exp_impl in Indexed';
-          rewrite tr_Stream_S, tr_history_tl; eauto.
+          (take (CoInd.sem_annot _ _ _ _ _ _) and eapply IHn in it as [|]; destruct_conjs;
+           [left|right; do 2 esplit]; try rewrite tr_Stream_S; try rewrite tr_history_tl; eauto).
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated
@@ -366,7 +367,8 @@ Module Type NLCOINDTOINDEXED
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_cexp_impl in Indexed';
-          repeat rewrite tr_Stream_S; rewrite tr_history_tl; eauto.
+          (take (CoInd.sem_annot _ _ _ _ _ _) and eapply IHn in it as [|]; destruct_conjs;
+           [left|right; do 2 esplit]; try rewrite tr_Stream_S; try rewrite tr_history_tl; eauto).
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated

@@ -1,6 +1,6 @@
 From Velus Require Import Common.
 From Velus Require Import Operators.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Clocks.
 
 From Coq Require Import Setoid.
@@ -318,114 +318,48 @@ if the clocked stream is [absent] at the corresponding instant. *)
     destruct (k =? count r n); auto using all_absent_spec.
   Qed.
 
-  (** Restrictions of Environments *)
+  (** Restrictions of FEnvironments *)
   Section HistoryRestriction.
 
-    Definition env := Env.t svalue.
-    Definition history' := Env.t (stream svalue).
+    Definition env := FEnv.t svalue.
+    Definition history' := FEnv.t (stream svalue).
 
     Definition restr_hist (H : history') (n: nat): env :=
-      Env.map (fun xs => xs n) H.
+      FEnv.map (fun xs => xs n) H.
 
-    Lemma Env_find_restr_hist:
+    Hint Unfold restr_hist : fenv.
+
+    Lemma FEnv_find_restr_hist:
       forall H x i,
-        Env.find x (restr_hist H i) = option_map (fun xs => xs i) (Env.find x H).
+        (restr_hist H i) x = option_map (fun xs => xs i) (H x).
     Proof.
-      unfold restr_hist. now setoid_rewrite Env.Props.P.F.map_o.
+      unfold restr_hist. reflexivity.
     Qed.
 
-    Lemma Env_add_restr_hist:
+    Lemma FEnv_add_restr_hist:
       forall H x s i,
-        Env.Equal (restr_hist (Env.add x s H) i) (Env.add x (s i) (restr_hist H i)).
+        FEnv.Equiv eq (restr_hist (FEnv.add x s H) i) (FEnv.add x (s i) (restr_hist H i)).
     Proof.
-      intros H x s i x'. unfold restr_hist.
-      setoid_rewrite Env.Props.P.F.map_o.
+      intros H x s i x'. simpl_fenv.
       destruct (ident_eq_dec x' x).
-      - subst. now setoid_rewrite Env.gss.
-      - now setoid_rewrite Env.gso; auto; rewrite <-Env.Props.P.F.map_o.
+      - subst. now setoid_rewrite FEnv.gss.
+      - now setoid_rewrite FEnv.gso.
     Qed.
 
-    Lemma Env_In_restr_hist:
+    Lemma FEnv_In_restr_hist:
       forall H x i,
-        Env.In x H <-> Env.In x (restr_hist H i).
+        FEnv.In x H <-> FEnv.In x (restr_hist H i).
     Proof.
       intros. unfold restr_hist.
-      now rewrite Env.Props.P.F.map_in_iff.
+      now rewrite FEnv.map_in_iff.
     Qed.
 
-    Lemma Env_dom_restr_hist:
+    Lemma FEnv_dom_restr_hist:
       forall H xs i,
-        Env.dom H xs <-> Env.dom (restr_hist H i) xs.
+        FEnv.dom H xs <-> FEnv.dom (restr_hist H i) xs.
     Proof.
-      split; intros HH; apply Env.dom_intro; intro x;
-        apply Env.dom_use with (x:=x) in HH;
-        now rewrite <-HH, Env_In_restr_hist.
-    Qed.
-
-    Lemma stream_env_to_env_stream:
-      forall xs (H : stream (Env.t svalue)),
-        (forall i, Env.dom (H i) xs) ->
-        (exists (H' : Env.t (stream svalue)),
-            (forall i, Env.Equal (H i) (restr_hist H' i))
-            /\ (forall x, In x xs -> Env.find x H' = Some (fun i => match Env.find x (H i) with
-                                                            Some v => v | None => absent end))).
-    Proof.
-      setoid_rewrite <-(nub_same_elements ident_eq_dec).
-      intros ys.
-      pose proof (NoDup_nub ident_eq_dec ys) as NDN; revert NDN.
-      induction (nub ident_eq_dec ys) as [|x xs IH]; clear ys;
-        intros ND H DH.
-      - (* environment is empty *)
-        exists (Env.empty _). split; [|now inversion 1].
-        intros i y. specialize (DH i).
-        apply Env.dom_use with (x:=y) in DH.
-        unfold Env.from_list. rewrite Env_find_restr_hist, Env.gempty; simpl.
-        apply Env.Props.P.F.not_find_in_iff; rewrite DH; auto.
-      - (* environment is not empty *)
-        inversion ND as [|? ? Nx ND']; subst.
-        exists (Env.add x (fun i => match Env.find x (H i) with Some y => y | None => absent end)
-                   (Env.from_list (map (fun x => (x,
-                                               fun i => match Env.find x (H i) with Some y => y | None => absent end)) xs))).
-        setoid_rewrite Env_add_restr_hist.
-        split.
-        + (* show point-wise equality of H and H' *)
-          intro i.
-          assert (forall i, Env.In x (H i)) as Ix
-              by (intro j; specialize (DH j);
-                  apply Env.dom_use with (x:=x) in DH; firstorder).
-          setoid_rewrite Env.In_find in Ix.
-          destruct (Ix i) as (v & Ixi). rewrite Ixi.
-          apply Env.add_remove in Ixi. rewrite Ixi at 1.
-          apply Env.Equal_add_both.
-          assert (forall i, Env.dom (Env.remove x (H i)) xs) as Dr.
-          { intro j. specialize (DH j).
-            apply Env.dom_cons_remove with (x:=x) in DH. simpl in DH.
-            rewrite nequiv_decb_refl, not_in_filter_nequiv_decb in DH; auto. }
-          specialize (IH ND' (fun i => Env.remove x (H i)) Dr) as (H' & IH1 & IH2).
-          intro y. destruct (in_dec ident_eq_dec y xs) as [Iy|Ny].
-          * (* element in domain of environment *)
-            rewrite IH1.
-            assert (y <> x) by (intro; subst; auto).
-            repeat rewrite Env_find_restr_hist. rewrite IH2; auto; clear IH2.
-            simpl. specialize (Dr i). apply Env.dom_use with (x:=y) in Dr.
-            destruct Dr as (Dr1 & Dr2). specialize (Dr2 Iy).
-            rewrite Env.In_find in Dr2. destruct Dr2 as (yv & Fy); rewrite Fy.
-            erewrite Env.find_In_from_list.
-            2:now apply in_map_iff; eauto.
-            now simpl; rewrite Env.gro in Fy; auto; rewrite Fy.
-            now apply fst_NoDupMembers; rewrite map_map, map_id.
-          * (* element outside domain of environment *)
-            rewrite Env.find_not_In_dom with (1:=Dr i) (2:=Ny).
-            rewrite Env.find_not_In_dom with (2:=Ny); auto.
-            apply Env_dom_restr_hist, Env.dom_from_list_map_fst;
-              [apply fst_NoDupMembers|]; now rewrite map_map, map_id.
-        + (* show characterization of H' *)
-          intros y Iy. inv Iy. now rewrite Env.gss.
-          rewrite Env.gso; [|intro; subst; auto].
-          erewrite Env.find_In_from_list. reflexivity.
-          now apply in_map_iff; eauto.
-          apply fst_NoDupMembers. rewrite map_map; simpl.
-          rewrite map_id. inv ND; auto.
+      split; intros HH x; specialize (HH x);
+        now rewrite <-HH, FEnv_In_restr_hist.
     Qed.
 
   End HistoryRestriction.
@@ -448,7 +382,7 @@ environment.
     Variable R: env.
 
     Definition sem_var_instant (x: ident) (v: svalue) : Prop :=
-      Env.find x R = Some v.
+      R x = Some v.
 
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
@@ -475,16 +409,16 @@ environment.
   Global Hint Constructors sem_clock_instant : indexedstreams.
 
   Add Parametric Morphism : sem_var_instant
-      with signature Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+      with signature FEnv.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
         as sem_var_instant_morph.
   Proof.
     intros H H' EH x v Hvar.
-    eapply Env.Equiv_orel in EH. rewrite Hvar in EH. inv EH.
+    specialize (EH x). rewrite Hvar in EH. inv EH.
     symmetry in H1. eapply H1.
   Qed.
 
   Add Parametric Morphism : sem_clock_instant
-      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> Basics.impl
+      with signature eq ==> FEnv.Equiv eq ==> eq ==> eq ==> Basics.impl
         as sem_clock_instant_morph.
   Proof.
     intros b H H' EH ck. revert b.
@@ -655,7 +589,7 @@ environment.
     Variable R: env.
 
     Definition interp_var_instant (x: ident): svalue :=
-      match Env.find x R with
+      match R x with
       | Some v => v
       | None => absent
       end.

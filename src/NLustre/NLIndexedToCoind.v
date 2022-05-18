@@ -8,7 +8,7 @@ From Coq Require Import Program.Tactics.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -59,21 +59,21 @@ Module Type NLINDEXEDTOCOIND
     (*   forall H x xs, *)
     (*     CESem.sem_var H x xs -> *)
     (*     exists xs', *)
-    (*       Env.find x H = Some xs' *)
+    (*       FEnv.find x H = Some xs' *)
     (*       /\ xs ≈ xs'. *)
     (* Proof. *)
     (*   unfold CESem.sem_var, CESem.lift'. *)
     (*   intros * Sem. *)
-    (*   destruct (Env.find x H) as [xs'|] eqn: E; simpl in *. *)
+    (*   destruct (FEnv.find x H) as [xs'|] eqn: E; simpl in *. *)
     (*   - exists xs'; intuition. *)
     (*     intro n; specialize (Sem n). *)
     (*     unfold CESem.sem_var_instant, CESem.restr_hist in Sem. *)
-    (*     rewrite Env.Props.P.F.map_o in Sem. *)
+    (*     rewrite FEnv.Props.P.F.map_o in Sem. *)
     (*     setoid_rewrite E in Sem. *)
     (*     now inv Sem. *)
     (*   - specialize (Sem 0). *)
     (*     unfold CESem.sem_var_instant, CESem.restr_hist in Sem. *)
-    (*     rewrite Env.Props.P.F.map_o in Sem. *)
+    (*     rewrite FEnv.Props.P.F.map_o in Sem. *)
     (*     now setoid_rewrite E in Sem. *)
     (* Qed. *)
 
@@ -268,7 +268,7 @@ Module Type NLINDEXEDTOCOIND
         n: nat |- _ =>
         let m := fresh "m" in
         intro m; repeat rewrite init_from_nth;
-        specialize (Spec (m + n));
+        specialize (Spec (m + n))%nat;
         repeat match goal with
                  H: _ \/ _ |- _ => destruct H
                end;
@@ -310,7 +310,7 @@ Module Type NLINDEXEDTOCOIND
       - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
         apply lift2_spec.
-        intro m; repeat rewrite init_from_nth; specialize (Spec (m + n)).
+        intro m; repeat rewrite init_from_nth; specialize (Spec (m + n)%nat).
         repeat match goal with H: _ \/ _ |- _ => destruct H end; destruct_conjs; intuition.
         right; do 3 eexists; intuition; eauto.
     Qed.
@@ -397,28 +397,31 @@ Module Type NLINDEXEDTOCOIND
     (** We deduce from the previous lemmas the correspondence for annotated
         [exp]. *)
     Corollary sem_aexp_impl_from:
-      forall n H b e es ck,
+      forall n H H' b e es ck,
+        FEnv.Equiv (@EqSt _) H' (tr_history_from n H) ->
         CESem.sem_aexp b H ck e es ->
-        CoInd.sem_aexp (tr_history_from n H) (tr_stream_from n b) ck e
-                        (tr_stream_from n es).
+        CoInd.sem_aexp H' (tr_stream_from n b) ck e
+                       (tr_stream_from n es).
     Proof.
-      cofix Cofix; intros * Sem.
+      cofix Cofix; intros * Heq Sem.
       pose proof Sem as Sem';
         apply sem_aexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
         apply (sem_exp_impl_from n) in Sem';
         apply sem_clock_impl_from with (n:=n) in Sem_ck.
       rewrite (init_from_n es) in *.
       rewrite (init_from_n bs), Ebs in Sem_ck.
-      destruct (es n); econstructor; eauto;
-        rewrite init_from_tl, tr_history_from_tl;
-        apply Cofix; auto.
+      destruct (es n); econstructor; eauto.
+      1,2,4,5:rewrite Heq; eauto.
+      1,2:rewrite init_from_tl; eapply Cofix; eauto.
+      1,2:(rewrite <-tr_history_from_tl; eapply FEnv.map_Equiv; eauto;
+           intros * HE; now rewrite HE).
     Qed.
 
     Corollary sem_aexp_impl:
       forall H b e es ck,
         CESem.sem_aexp b H ck e es ->
         CoInd.sem_aexp (tr_history H) (tr_stream b) ck e (tr_stream es).
-    Proof. apply sem_aexp_impl_from. Qed.
+    Proof. intros. eapply sem_aexp_impl_from; eauto. reflexivity. Qed.
     Hint Resolve sem_aexp_impl_from sem_aexp_impl : nlsem.
 
     (** ** cexp level synchronous operators inversion principles *)
@@ -674,7 +677,7 @@ Module Type NLINDEXEDTOCOIND
           take (Forall _ _) and rename it into IH.
           induction Hess; simpl; constructor; inv IH; auto.
         + apply merge_spec.
-          intro m; specialize (Spec (m + n));
+          intro m; specialize (Spec (m + n)%nat);
             destruct Spec as [(?&?&?&?&?&Hxs&Happ&Hlen&Hpres&Habs&Hes)|
                               (Hxs&Habs&Hes)];
             subst; repeat rewrite init_from_nth.
@@ -712,7 +715,7 @@ Module Type NLINDEXEDTOCOIND
           take (Forall _ _) and rename it into IH.
           induction Hess; simpl; constructor; inv IH; auto.
         + apply case_spec.
-          intro m; specialize (Spec (m + n));
+          intro m; specialize (Spec (m + n)%nat);
             destruct Spec as [(?&?&?&?&Hxs&Hsome&Hpres&Hes)|
                               (Hxs&Habs&Hes)];
             subst; repeat rewrite init_from_nth.
@@ -766,28 +769,31 @@ Module Type NLINDEXEDTOCOIND
     (** We deduce from the previous lemmas the correspondence for annotated
         [cexp]. *)
     Corollary sem_caexp_impl_from:
-      forall n H b e es ck,
+      forall n H H' b e es ck,
+        FEnv.Equiv (@EqSt _) H' (tr_history_from n H) ->
         CESem.sem_caexp b H ck e es ->
-        CoInd.sem_caexp (tr_history_from n H) (tr_stream_from n b) ck e
+        CoInd.sem_caexp H' (tr_stream_from n b) ck e
                         (tr_stream_from n es).
     Proof.
-      cofix Cofix; intros * Sem.
+      cofix Cofix; intros * Heq Sem.
       pose proof Sem as Sem';
         apply sem_caexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
         apply (sem_cexp_impl_from n) in Sem';
         apply sem_clock_impl_from with (n:=n) in Sem_ck.
       rewrite (init_from_n es) in *.
       rewrite (init_from_n bs), Ebs in Sem_ck.
-      destruct (es n); econstructor; eauto;
-        rewrite init_from_tl, tr_history_from_tl;
-        apply Cofix; auto.
+      destruct (es n); econstructor; eauto.
+      1,2,4,5:rewrite Heq; eauto.
+      1,2:rewrite init_from_tl; eapply Cofix; eauto.
+      1,2:(rewrite <-tr_history_from_tl; eapply FEnv.map_Equiv; eauto;
+           intros * HE; now rewrite HE).
     Qed.
 
     Corollary sem_caexp_impl:
       forall H b e es ck,
         CESem.sem_caexp b H ck e es ->
         CoInd.sem_caexp (tr_history H) (tr_stream b) ck e (tr_stream es).
-    Proof. apply sem_caexp_impl_from. Qed.
+    Proof. intros. eapply sem_caexp_impl_from; eauto. reflexivity. Qed.
     Hint Resolve sem_caexp_impl_from sem_caexp_impl : nlsem.
 
     (** * RESET CORRESPONDENCE  *)

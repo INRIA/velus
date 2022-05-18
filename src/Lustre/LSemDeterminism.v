@@ -5,7 +5,7 @@ Open Scope list_scope.
 
 From Velus Require Import Common.
 From Velus Require Import CommonList.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import CoindStreams.
 From Velus Require Import Clocks.
@@ -1053,7 +1053,7 @@ Module Type LSEMDETERMINISM
       EqStN n sc1 sc2 ->
       (forall c, In c (seq 0 (snd tn)) ->
             exists Hi1' Hi2',
-              (forall y, HasCaus Γ y x -> Env.In y (fst Hi1') /\ Env.In y (fst Hi2'))
+              (forall y, HasCaus Γ y x -> FEnv.In y (fst Hi1') /\ FEnv.In y (fst Hi2'))
               /\ filter_hist c sc1 Hi1 Hi1'
               /\ filter_hist c sc2 Hi2 Hi2'
               /\ det_var_inv Γ n Hi1' Hi2' x) ->
@@ -1204,7 +1204,7 @@ Module Type LSEMDETERMINISM
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc2 ->
       (forall c k, In c (seq 0 tn) ->
               exists Hi1' Hi2',
-                (forall y, HasCaus Γ y x -> Env.In y (fst Hi1') /\ Env.In y (fst Hi2'))
+                (forall y, HasCaus Γ y x -> FEnv.In y (fst Hi1') /\ FEnv.In y (fst Hi2'))
                 /\ select_hist c k sc1 Hi1 Hi1'
                 /\ select_hist c k sc2 Hi2 Hi2'
                 /\ det_var_inv Γ n Hi1' Hi2' x) ->
@@ -1289,12 +1289,12 @@ Module Type LSEMDETERMINISM
   Fact det_var_inv_local1 :
     forall Γ (locs : list (ident * (type * clock * ident * option (exp * ident)))) Hi1 Hi2 Hl1 Hl2 Hi1' Hi2' Hl1' Hl2' n cx,
       (forall x : ident, InMembers x locs -> ~ In x (map fst Γ)) ->
-      (forall x, IsLast Γ x -> Env.In x Hl1) ->
-      (forall x, IsLast Γ x -> Env.In x Hl2) ->
+      (forall x, IsLast Γ x -> FEnv.In x Hl1) ->
+      (forall x, IsLast Γ x -> FEnv.In x Hl2) ->
       (forall x vs, sem_var Hi1' x vs -> ~ InMembers x locs -> sem_var Hi1 x vs) ->
       (forall x vs, sem_var Hi2' x vs -> ~ InMembers x locs -> sem_var Hi2 x vs) ->
-      Env.refines (@EqSt _) Hl1 Hl1' ->
-      Env.refines (@EqSt _) Hl2 Hl2' ->
+      FEnv.refines (@EqSt _) Hl1 Hl1' ->
+      FEnv.refines (@EqSt _) Hl2 Hl2' ->
       (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n (Hi1, Hl1) (Hi2, Hl2) cx) ->
       (forall x, HasCaus (senv_of_locs locs) x cx \/ HasLastCaus (senv_of_locs locs) x cx ->
             det_var_inv (senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2') cx) ->
@@ -1320,12 +1320,12 @@ Module Type LSEMDETERMINISM
   Fact det_var_inv_local2 :
     forall Γ (locs : list (ident * (type * clock * ident * option (exp * ident)))) caus Hi1 Hi2 Hl1 Hl2 Hi1' Hi2' Hl1' Hl2' n cx,
       (forall x : ident, InMembers x locs -> ~ In x (map fst Γ)) ->
-      (forall x, IsLast Γ x -> Env.In x Hl1) ->
-      (forall x, IsLast Γ x -> Env.In x Hl2) ->
+      (forall x, IsLast Γ x -> FEnv.In x Hl1) ->
+      (forall x, IsLast Γ x -> FEnv.In x Hl2) ->
       (forall x vs, sem_var Hi1' x vs -> ~ InMembers x locs -> sem_var Hi1 x vs) ->
       (forall x vs, sem_var Hi2' x vs -> ~ InMembers x locs -> sem_var Hi2 x vs) ->
-      Env.refines (@EqSt _) Hl1 Hl1' ->
-      Env.refines (@EqSt _) Hl2 Hl2' ->
+      FEnv.refines (@EqSt _) Hl1 Hl1' ->
+      FEnv.refines (@EqSt _) Hl2 Hl2' ->
       (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n (Hi1, Hl1) (Hi2, Hl2) cx) ->
       (forall x, HasCaus (senv_of_locs locs) x cx \/ HasLastCaus (senv_of_locs locs) x cx ->
             det_var_inv (senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2') cx) ->
@@ -1369,8 +1369,8 @@ Module Type LSEMDETERMINISM
           (forall x vs, sem_var Hi1' x vs -> ~InMembers x locs -> sem_var Hi1 x vs) ->
           (forall x vs, sem_var Hi2' x vs -> ~InMembers x locs -> sem_var Hi2 x vs) ->
 
-          Env.refines (@EqSt _) Hl1 Hl1' ->
-          Env.refines (@EqSt _) Hl2 Hl2' ->
+          FEnv.refines (@EqSt _) Hl1 Hl1' ->
+          FEnv.refines (@EqSt _) Hl2 Hl2' ->
 
           (forall x ty ck cx e0 clx,
               In (x, (ty, ck, cx, Some (e0, clx))) locs ->
@@ -1537,16 +1537,16 @@ Module Type LSEMDETERMINISM
         NoDupScope P_nd (map fst Γ) (Scope locs caus blks) ->
         wt_scope P_wt G Γ (Scope locs caus blks) ->
         EqStN (S n) bs1 bs2 ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi1)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi2)) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         incl (map snd (idcaus_of_scope f_idcaus (Scope locs caus blks))) envS ->
         sem_scope_det P_blk1 n envS Hi1 Hi2 bs1 bs2 (Scope locs caus blks) ->
         (forall Γ Hi1 Hi2,
             P_nd (map fst Γ) blks ->
             P_wt Γ blks ->
-            (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
-            (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+            (forall x, IsLast Γ x -> FEnv.In x (snd Hi1)) ->
+            (forall x, IsLast Γ x -> FEnv.In x (snd Hi2)) ->
             (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
             incl (map snd (f_idcaus blks)) envS ->
             P_blk1 Hi1 Hi2 blks ->
@@ -1560,12 +1560,12 @@ Module Type LSEMDETERMINISM
         + rewrite map_app, map_fst_senv_of_locs; auto.
         + intros * Hin. inv Hin.
           apply in_app_iff in H as [|]; simpl_In; subst.
-          * eapply Env.In_refines; eauto with senv.
+          * eapply FEnv.In_refines; eauto with senv.
           * destruct o as [(?&?)|]; simpl in *; try congruence.
             edestruct H14 as (?&?&?&?&?&?&?); eauto using sem_var_In.
         + intros * Hin. inv Hin.
           apply in_app_iff in H as [|]; simpl_In; subst.
-          * eapply Env.In_refines; eauto with senv.
+          * eapply FEnv.In_refines; eauto with senv.
           * destruct o as [(?&?)|]; simpl in *; try congruence.
             edestruct H15 as (?&?&?&?&?&?&?); eauto using sem_var_In.
         + intros. eapply det_var_inv_local1 with (Hl1:=Hl1); eauto.
@@ -1587,8 +1587,8 @@ Module Type LSEMDETERMINISM
         NoDupLocals (map fst Γ) blk ->
         wt_block G Γ blk ->
         EqStN (S n) bs1 bs2 ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi1)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi2)) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         incl (map snd (idcaus_of_locals blk)) envS ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 blk ->
@@ -1607,8 +1607,8 @@ Module Type LSEMDETERMINISM
         eapply bools_of_detn in H13; eauto.
         eapply H; eauto.
         + apply EqStN_mask; eauto.
-        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-        + setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + setoid_rewrite FEnv.map_in_iff; eauto.
+        + setoid_rewrite FEnv.map_in_iff; eauto.
         + intros. eapply det_var_inv_mask; eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. solve_In.
@@ -1619,8 +1619,8 @@ Module Type LSEMDETERMINISM
         eapply det_exp_n in H10; eauto. simpl_Forall.
         destruct s. eapply det_scope_S; eauto.
         + apply EqStN_ffilter; eauto.
-        + destruct H1 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-        + destruct H12 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + destruct H1 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+        + destruct H12 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
         + intros. eapply det_var_inv_filter; eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. simpl_In. solve_In.
@@ -1658,8 +1658,8 @@ Module Type LSEMDETERMINISM
             * inv H1. simpl_Forall; eauto.
             * intros. inv H2.
               eapply det_var_inv_local1. 8:intros; eapply det_var_inv_select; eauto. all:eauto.
-              -- intros. destruct H3 as (_&Hsel1). rewrite Hsel1. eapply Env.Props.P.F.map_in_iff; auto.
-              -- intros. destruct H4 as (_&Hsel1). rewrite Hsel1. eapply Env.Props.P.F.map_in_iff; auto.
+              -- intros. destruct H3 as (_&Hsel1). rewrite Hsel1. eapply FEnv.map_in_iff; auto.
+              -- intros. destruct H4 as (_&Hsel1). rewrite Hsel1. eapply FEnv.map_in_iff; auto.
               -- intros * Hcaus. apply idcaus_of_senv_In in Hcaus. simpl_Forall.
                  eapply H35; eauto. eapply Hincl. solve_In; eauto using in_or_app. auto.
             * apply EqStN_mask. 1,2:apply EqStN_ffilter; eauto using EqStN_weaken.
@@ -1672,8 +1672,8 @@ Module Type LSEMDETERMINISM
         eapply det_scope_S; eauto.
         + apply EqStN_mask. 1,2:apply EqStN_ffilter; auto.
           1-3:apply map_EqStN; auto.
-        + destruct H4 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-        + destruct H11 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + destruct H4 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+        + destruct H11 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
         + intros. eapply det_var_inv_select. 2-4:eauto. eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. simpl_In. solve_In.
@@ -1718,8 +1718,8 @@ Module Type LSEMDETERMINISM
         eapply det_scope_S; eauto.
         + apply EqStN_mask. 1,2:apply EqStN_ffilter; auto.
           1-3:apply map_EqStN; auto.
-        + destruct H10 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-        + destruct H13 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+        + destruct H10 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+        + destruct H13 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
         + intros. eapply det_var_inv_select. 2-4:eauto. eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. simpl_In. solve_In.
@@ -1863,8 +1863,8 @@ Module Type LSEMDETERMINISM
         NoDupScope P_nd (map fst Γ) (Scope locs caus blks) ->
         VarsDefinedScope P_vd (Scope locs caus blks) xs ->
         incl xs (map fst Γ) ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi1)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi2)) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
         wt_scope P_wt G Γ (Scope locs caus blks) ->
         sem_scope_det P_blk1 n envS Hi1 Hi2 bs1 bs2 (Scope locs caus blks) ->
@@ -1880,7 +1880,7 @@ Module Type LSEMDETERMINISM
             P_vd blks xs ->
             P_nd Γ blks ->
             P_blk1 Hi1 Hi2 blks ->
-            Env.dom_lb (fst Hi1) xs /\ Env.dom_lb (fst Hi2) xs) ->
+            FEnv.dom_lb (fst Hi1) xs /\ FEnv.dom_lb (fst Hi2) xs) ->
         (forall Γ Γ',
             (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
             (forall x, IsLast Γ x -> IsLast Γ' x) ->
@@ -1892,8 +1892,8 @@ Module Type LSEMDETERMINISM
             P_nd (map fst Γ) blks ->
             P_vd blks xs ->
             incl xs (map fst Γ) ->
-            (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
-            (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+            (forall x, IsLast Γ x -> FEnv.In x (snd Hi1)) ->
+            (forall x, IsLast Γ x -> FEnv.In x (snd Hi2)) ->
             (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
             P_wt Γ blks ->
             P_blk1 Hi1 Hi2 blks ->
@@ -1923,12 +1923,12 @@ Module Type LSEMDETERMINISM
           eapply incl_appl'; auto. }
       1:{ intros * Hin. rewrite IsLast_app, replace_idcaus_IsLast in Hin.
           destruct Hin as [|Hin]; [|inv Hin]; simpl_In.
-          + eapply Env.In_refines; eauto with senv.
+          + eapply FEnv.In_refines; eauto with senv.
           + destruct o as [(?&?)|]; simpl in *; try congruence.
             edestruct H16 as (?&?&?&?&?&?&?); eauto using sem_var_In. }
       1:{ intros * Hin. rewrite IsLast_app, replace_idcaus_IsLast in Hin.
           destruct Hin as [|Hin]; [|inv Hin]; simpl_In.
-          + eapply Env.In_refines; eauto with senv.
+          + eapply FEnv.In_refines; eauto with senv.
           + destruct o as [(?&?)|]; simpl in *; try congruence.
             edestruct H17 as (?&?&?&?&?&?&?); eauto using sem_var_In. }
       1:{ intros * _. eapply det_var_inv_local2 with (Hl1:=Hl1); eauto.
@@ -1967,7 +1967,7 @@ Module Type LSEMDETERMINISM
           1,2:(eapply sem_var_refines_inv; [| | |eauto]; intros; eauto).
           1,2:edestruct Hdomlb with (xs:=xs ++ map fst locs) as (Hdoml1&Hdoml2); eauto.
           1,3:eapply incl_appl'; eauto.
-          1,2:eapply Env.dom_lb_incl; [|eauto]; intros ??; eauto using in_or_app.
+          1,2:eapply FEnv.dom_lb_incl; [|eauto]; solve_incl_app.
         + split; intros Hin3 Hv1 Hv2.
           * eapply HasCaus_snd_det in Hinenv; eauto; subst. 2:solve_NoDup_app.
             assert (~InMembers y locs) as Hnin.
@@ -1979,7 +1979,7 @@ Module Type LSEMDETERMINISM
             1,2:(eapply sem_var_refines_inv; [| | |eauto]; intros; eauto).
             1,2:edestruct Hdomlb with (xs:=xs ++ map fst locs) as (Hdoml1&Hdoml2); eauto.
             1,3:eapply incl_appl'; eauto.
-            1,2:eapply Env.dom_lb_incl; [|eauto]; intros ??; eauto using in_or_app.
+            1,2:eapply FEnv.dom_lb_incl; [|eauto]; solve_incl_app.
           * exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
       - econstructor; eauto.
         + eapply Forall_forall; intros ?? [|HinS]; subst; [|simpl_Forall; auto].
@@ -2050,8 +2050,8 @@ Module Type LSEMDETERMINISM
         NoDupLocals (map fst Γ) blk ->
         VarsDefined blk xs ->
         incl xs (map fst Γ) ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi1)) ->
-        (forall x, IsLast Γ x -> Env.In x (snd Hi2)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi1)) ->
+        (forall x, IsLast Γ x -> FEnv.In x (snd Hi2)) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
         wt_block G Γ blk ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 blk ->
@@ -2105,8 +2105,8 @@ Module Type LSEMDETERMINISM
           edestruct H with (xs:=xs). 11:eauto. all:eauto.
           - eapply NoDup_locals_inv; eauto.
           - etransitivity; eauto using incl_concat.
-          - setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-          - setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+          - setoid_rewrite FEnv.map_in_iff; eauto.
+          - setoid_rewrite FEnv.map_in_iff; eauto.
           - intros. eapply det_var_inv_mask; eauto.
           - eapply EqStN_mask; eauto.
           - intros Hdef'. eapply EqStN_mask; eauto.
@@ -2153,8 +2153,8 @@ Module Type LSEMDETERMINISM
         { simpl_Forall. destruct s. do 2 esplit; eauto. split; [|split]; eauto.
           eapply det_scope_cons; eauto.
           - eapply NoDup_locals_inv2; eauto.
-          - destruct H1 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-          - destruct H14 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+          - destruct H1 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - destruct H14 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
           - intros * Hin. eapply det_var_inv_filter; eauto using EqStN_weaken.
           - eapply EqStN_ffilter; eauto.
           - intros Hdef'. eapply EqStN_ffilter; eauto.
@@ -2243,8 +2243,8 @@ Module Type LSEMDETERMINISM
           do 2 esplit; eauto. split; [|split]; eauto.
           eapply det_scope_cons; eauto.
           - eapply NoDup_locals_inv3; eauto.
-          - destruct H4 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-          - destruct H13 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+          - destruct H4 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - destruct H13 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
           - intros * Hin. eapply det_var_inv_select; eauto.
           - eapply EqStN_fselect; eauto.
           - intros Hdef'. eapply EqStN_fselect; eauto.
@@ -2360,8 +2360,8 @@ Module Type LSEMDETERMINISM
           do 2 esplit; eauto. split; [|split]; eauto.
           eapply det_scope_cons; eauto.
           - eapply NoDup_locals_inv3; eauto.
-          - destruct H12 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
-          - destruct H15 as (?&Heq). setoid_rewrite Heq. setoid_rewrite Env.Props.P.F.map_in_iff; eauto.
+          - destruct H12 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - destruct H15 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
           - intros * Hin. eapply det_var_inv_select with (sc1:=stres11); eauto.
           - eapply EqStN_fselect; eauto.
           - intros Hdef'. eapply EqStN_fselect; eauto.
@@ -2570,7 +2570,7 @@ Module Type LSEMDETERMINISM
       eapply sem_block_cons in Hbcks1; eauto using wl_global_Ordered_nodes with ltyping.
       eapply sem_block_cons in Hbcks2; eauto using wl_global_Ordered_nodes with ltyping.
 
-      assert (Forall (det_var_inv (senv_of_inout (n_in n1 ++ n_out n1)) n (H, @Env.empty _) (H0, @Env.empty _)) (map snd (idcaus (n_in n1)))) as Hins.
+      assert (Forall (det_var_inv (senv_of_inout (n_in n1 ++ n_out n1)) n (H, @FEnv.empty _) (H0, @FEnv.empty _)) (map snd (idcaus (n_in n1)))) as Hins.
       { eapply node_causal_NoDup in H1 as Hnd.
         clear - Heqins Hins1 Hins2 Hnd.
         assert (incl (idcaus (n_in n1)) (idcaus (n_in n1 ++ n_out n1))) as Hincl.

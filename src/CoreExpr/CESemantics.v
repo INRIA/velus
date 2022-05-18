@@ -6,7 +6,7 @@ From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import VelusMemory.
@@ -22,7 +22,7 @@ Module Type CESEMANTICS
        (Import Syn   : CESYNTAX       Ids Op OpAux Cks)
        (Import Str   : INDEXEDSTREAMS Ids Op OpAux Cks).
 
-  (** ** Environment and history *)
+  (** ** FEnvironment and history *)
 
   (**
 
@@ -32,7 +32,7 @@ environment.
 
    *)
 
-  Definition env := Env.t svalue.
+  Definition env := FEnv.t svalue.
   Definition history := stream env.
 
   (** ** Instantaneous semantics *)
@@ -298,7 +298,7 @@ environment.
   (** Morphisms properties *)
 
   Add Parametric Morphism : sem_exp_instant
-      with signature @eq _ ==> Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+      with signature @eq _ ==> FEnv.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
         as sem_exp_instant_morph.
   Proof.
     intros b H H' EH x.
@@ -314,7 +314,7 @@ environment.
   Qed.
 
   Add Parametric Morphism : sem_cexp_instant
-      with signature @eq _ ==> Env.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+      with signature @eq _ ==> FEnv.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
         as sem_cexp_instant_morph.
   Proof.
     intros b H H' EH x.
@@ -338,9 +338,9 @@ environment.
   Qed.
 
   Add Parametric Morphism A sem
-    (sem_compat: Proper (eq ==> Env.Equiv eq ==> eq ==> eq ==> Basics.impl) sem)
+    (sem_compat: Proper (eq ==> FEnv.Equiv eq ==> eq ==> eq ==> Basics.impl) sem)
     : (fun b e => @sem_annotated_instant b e A sem)
-      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
+      with signature eq ==> FEnv.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
         as sem_annotated_instant_morph.
   Proof.
     intros b H H' EH ck e v Sem.
@@ -350,7 +350,7 @@ environment.
   Qed.
 
   Add Parametric Morphism : sem_aexp_instant
-      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
+      with signature eq ==> FEnv.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
         as sem_aexp_instant_morph.
   Proof.
     intros; eapply sem_annotated_instant_morph; eauto.
@@ -358,7 +358,7 @@ environment.
   Qed.
 
   Add Parametric Morphism : sem_caexp_instant
-      with signature eq ==> Env.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
+      with signature eq ==> FEnv.Equiv eq ==> eq ==> eq ==> eq ==> Basics.impl
         as sem_caexp_morph.
   Proof.
     intros; eapply sem_annotated_instant_morph; eauto.

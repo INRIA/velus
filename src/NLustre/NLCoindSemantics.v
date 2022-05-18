@@ -8,7 +8,7 @@ From Coq Require Import Arith.EqNat.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
@@ -421,11 +421,11 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : sem_var
-      with signature Env.Equiv (@EqSt _) ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_var_EqSt.
   Proof.
     intros H H' EH x xs xs' E; intro Sem; inv Sem.
-    eapply Env.Equiv_orel in EH. rewrite H1 in EH. inv EH. symmetry in H3.
+    specialize (EH x). rewrite H1 in EH. inv EH. symmetry in H3.
     econstructor; eauto.
     transitivity xs; symmetry; auto.
     transitivity xs'0; symmetry; auto.
@@ -508,7 +508,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : sem_exp
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_exp_morph.
   Proof.
     intros H H' EH b b' Eb e xs xs' Exs Sem.
@@ -537,7 +537,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : sem_cexp
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_cexp_morph.
   Proof.
     intros H H' EH b b' Eb e xs xs' Exs Sem.
@@ -564,9 +564,9 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism A sem
-    (sem_compat: Proper (Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl) sem)
+    (sem_compat: Proper (FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl) sem)
     : (@sem_annot A sem)
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_annot_morph.
   Proof.
     revert sem_compat; cofix Cofix.
@@ -586,7 +586,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : sem_aexp
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_aexp_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.
@@ -594,7 +594,7 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Add Parametric Morphism : sem_caexp
-      with signature Env.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_caexp_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.

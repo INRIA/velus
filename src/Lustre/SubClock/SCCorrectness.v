@@ -10,7 +10,7 @@ From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import CoindIndexed.
 From Velus Require Import Fresh.
 From Velus Require Import Lustre.StaticEnv.
-From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LSemantics Lustre.LClockedSemantics.
 From Velus Require Import Lustre.SubClock.SubClock.
 From Velus Require Import Lustre.SubClock.SCClocking.
 
@@ -22,12 +22,10 @@ Module Type SCCORRECTNESS
        (Import SCtr  : COINDSTREAMS Ids Op OpAux Cks)
        (Import Senv  : STATICENV Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX Ids Op OpAux Cks Senv)
-       (Import Ty    : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import Cl    : LCLOCKING Ids Op OpAux Cks Senv Syn)
-       (LCA          : LCAUSALITY Ids Op OpAux Cks Senv Syn)
        (Import Ord   : LORDERED Ids Op OpAux Cks Senv Syn)
        (Sem          : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord SCtr)
-       (Import LSC   : LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Ty Cl LCA Ord SCtr Sem)
+       (Import LSC   : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Cl Ord SCtr Sem)
        (Import SC    : SUBCLOCK Ids Op OpAux Cks Senv Syn).
 
   Module Clocking := SCClockingFun Ids Op OpAux Cks Senv Syn Cl SC.
@@ -175,13 +173,11 @@ Module SCCorrectnessFun
        (SCtr  : COINDSTREAMS Ids Op OpAux Cks)
        (Senv  : STATICENV Ids Op OpAux Cks)
        (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
-       (Ty    : LTYPING Ids Op OpAux Cks Senv Syn)
        (Clo   : LCLOCKING Ids Op OpAux Cks Senv Syn)
-       (LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
        (Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord SCtr)
-       (LSC   : LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Ty Clo LCA Lord SCtr Sem)
+       (LSC   : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Clo Lord SCtr Sem)
        (SC    : SUBCLOCK Ids Op OpAux Cks Senv Syn)
-       <: SCCORRECTNESS Ids Op OpAux Cks SCtr Senv Syn Ty Clo LCA Lord Sem LSC SC.
-  Include SCCORRECTNESS Ids Op OpAux Cks SCtr Senv Syn Ty Clo LCA Lord Sem LSC SC.
+       <: SCCORRECTNESS Ids Op OpAux Cks SCtr Senv Syn Clo Lord Sem LSC SC.
+  Include SCCORRECTNESS Ids Op OpAux Cks SCtr Senv Syn Clo Lord Sem LSC SC.
 End SCCorrectnessFun.

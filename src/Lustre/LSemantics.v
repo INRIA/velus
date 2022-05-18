@@ -11,7 +11,7 @@ From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
 From Velus Require Import CommonProgram.
 From Velus Require Import CommonList.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
@@ -93,10 +93,10 @@ Module Type LSEMANTICS
     Definition mask_hist k rs H := (mask_hist k rs (fst H), mask_hist k rs (snd H)).
     Definition filter_hist e cs Hi Hi' :=
       filter_hist e cs (fst Hi) (fst Hi')
-      /\ Env.Equiv (@EqSt _) (snd Hi') (ffilter_hist e cs (snd Hi)).
+      /\ FEnv.Equiv (@EqSt _) (snd Hi') (ffilter_hist e cs (snd Hi)).
     Definition select_hist e k stres Hi Hi' :=
       select_hist e k stres (fst Hi) (fst Hi')
-      /\ Env.Equiv (@EqSt _) (snd Hi') (fselect_hist e k stres (snd Hi)).
+      /\ FEnv.Equiv (@EqSt _) (snd Hi') (fselect_hist e k stres (snd Hi)).
 
     Section sem_scope.
 
@@ -111,7 +111,7 @@ Module Type LSEMANTICS
           (forall x vs, sem_var Hi' x vs -> ~InMembers x locs -> sem_var Hi x vs) ->
 
           (* Content of the last history : top-down constraints *)
-          Env.refines (@EqSt _) Hl Hl' ->
+          Hl ⊑ Hl' ->
           (forall x ty ck cx e0 clx,
               In (x, (ty, ck, cx, Some (e0, clx))) locs ->
               exists vs0 vs1 vs,
@@ -327,7 +327,7 @@ Module Type LSEMANTICS
           find_node f G = Some n ->
           Forall2 (sem_var H) (idents n.(n_in)) ss ->
           Forall2 (sem_var H) (idents n.(n_out)) os ->
-          sem_block (H, Env.empty _) b n.(n_block) ->
+          sem_block (H, FEnv.empty _) b n.(n_block) ->
           b = clocks_of ss ->
           sem_node f ss os.
 
@@ -553,8 +553,8 @@ Module Type LSEMANTICS
         find_node f G = Some n ->
         Forall2 (sem_var H) (idents n.(n_in)) ss ->
         Forall2 (sem_var H) (idents n.(n_out)) os ->
-        sem_block G (H, Env.empty _) b n.(n_block) ->
-        P_block (H, Env.empty _) b n.(n_block) ->
+        sem_block G (H, FEnv.empty _) b n.(n_block) ->
+        P_block (H, FEnv.empty _) b n.(n_block) ->
         b = clocks_of ss ->
         P_node f ss os.
 
@@ -979,18 +979,17 @@ Module Type LSEMANTICS
   Qed.
 
   Add Parametric Morphism : sem_var
-      with signature Env.Equiv (@EqSt _) ==> eq ==> @EqSt svalue ==> Basics.impl
+      with signature FEnv.Equiv (@EqSt _) ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_var_EqSt.
   Proof.
     intros H H' EH x xs xs' E; intro Sem; inv Sem.
-    eapply Env.Equiv_orel in EH. rewrite H1 in EH. inv EH.
+    specialize (EH x). rewrite H1 in EH. inv EH.
     econstructor; eauto.
-    - symmetry in H3. eapply H3.
-    - now rewrite <-E, H2, H4.
+    now rewrite <-E, H2, H4.
   Qed.
 
   Definition history_equiv (Hi1 Hi2 : history) : Prop :=
-    Env.Equiv (@EqSt _) (fst Hi1) (fst Hi2) /\ Env.Equiv (@EqSt _) (snd Hi1) (snd Hi2).
+    FEnv.Equiv (@EqSt _) (fst Hi1) (fst Hi2) /\ FEnv.Equiv (@EqSt _) (snd Hi1) (snd Hi2).
 
   Global Instance history_equiv_refl : Reflexive history_equiv.
   Proof. split; reflexivity. Qed.
@@ -1180,7 +1179,7 @@ Module Type LSEMANTICS
 
   Fact sem_var_In : forall H x vs,
       sem_var H x vs ->
-      Env.In x H.
+      FEnv.In x H.
   Proof.
     intros * Hv. inv Hv.
     econstructor; eauto.
@@ -1188,7 +1187,7 @@ Module Type LSEMANTICS
 
   Corollary sem_vars_In : forall H xs vs,
       Forall2 (sem_var H) xs vs ->
-      Forall (fun v => Env.In v H) xs.
+      Forall (fun v => FEnv.In v H) xs.
   Proof.
     intros * Hvs.
     induction Hvs; constructor; eauto using sem_var_In.
@@ -1199,7 +1198,7 @@ Module Type LSEMANTICS
   Lemma sem_block_defined {PSyn prefs} (G: @global PSyn prefs) : forall blk H bs x,
       sem_block G H bs blk ->
       Is_defined_in x blk ->
-      Env.In x (fst H).
+      FEnv.In x (fst H).
   Proof.
     induction blk using block_ind2; intros * Hsem Hdef; inv Hsem; inv Hdef.
     - (* equation *)
@@ -1207,13 +1206,14 @@ Module Type LSEMANTICS
     - (* reset *)
       specialize (H8 0).
       simpl_Exists; simpl_Forall.
-      eapply H, Env.map_2 in H8; eauto.
+      destruct H0; simpl in *. eapply H in H8; eauto.
+      setoid_rewrite FEnv.map_in_iff in H8; eauto.
     - (* switch *)
       simpl_Exists; simpl_Forall.
       destruct s; inv H2; inv H4.
       simpl_Exists. simpl_Forall.
       eapply H in H16; eauto. inv H16.
-      destruct H1. eapply Env.In_refines; eauto.
+      destruct H1. eapply FEnv.In_refines; eauto.
       eapply sem_var_In, H13; eauto.
       econstructor; eauto. reflexivity.
     - (* automaton *)
@@ -1221,7 +1221,7 @@ Module Type LSEMANTICS
       destruct s; destruct_conjs. inv H3; inv H2.
       simpl_Exists. simpl_Forall.
       eapply H in H2; eauto. inv H2.
-      destruct H1. eapply Env.In_refines; eauto.
+      destruct H1. eapply FEnv.In_refines; eauto.
       eapply sem_var_In, H13; eauto.
       econstructor; eauto. reflexivity.
     - (* automaton *)
@@ -1229,7 +1229,7 @@ Module Type LSEMANTICS
       destruct s; destruct_conjs. inv H3; inv H2.
       simpl_Exists. simpl_Forall.
       eapply H in H16; eauto. inv H16.
-      destruct H1. eapply Env.In_refines; eauto.
+      destruct H1. eapply FEnv.In_refines; eauto.
       eapply sem_var_In, H13; eauto.
       econstructor; eauto. reflexivity.
     - (* local *)
@@ -1242,7 +1242,7 @@ Module Type LSEMANTICS
   Corollary Forall_sem_block_defined {PSyn prefs} (G: @global PSyn prefs) : forall blks x H bs,
       Forall (sem_block G H bs) blks ->
       List.Exists (Is_defined_in x) blks ->
-      Env.In x (fst H).
+      FEnv.In x (fst H).
   Proof.
     intros * Hsem Hdef; simpl_Exists; simpl_Forall.
     eapply sem_block_defined; eauto.
@@ -1251,7 +1251,7 @@ Module Type LSEMANTICS
   Lemma sem_scope_defined {PSyn prefs} (G: @global PSyn prefs) : forall locs caus blks Hi bs x,
       sem_scope (fun Hi => sem_exp G Hi bs) (fun Hi => Forall (sem_block G Hi bs)) Hi bs (Scope locs caus blks) ->
       Is_defined_in_scope (List.Exists (Is_defined_in x)) x (Scope locs caus blks) ->
-      Env.In x (fst Hi).
+      FEnv.In x (fst Hi).
   Proof.
     intros * Hsem Hdef; inv Hsem; inv Hdef.
     eapply Forall_sem_block_defined in H7; eauto. inv H7.
@@ -1266,7 +1266,7 @@ Module Type LSEMANTICS
       NoDupScope (fun Γ => Forall (NoDupLocals Γ)) Γ (Scope locs caus blks) ->
       incl xs Γ ->
       In x xs ->
-      Env.In x (fst Hi).
+      FEnv.In x (fst Hi).
   Proof.
     intros * Hsem Hdef Hnd Hincl Hinxs.
     eapply sem_scope_defined; eauto.
@@ -1286,7 +1286,7 @@ Module Type LSEMANTICS
       NoDupScope (fun Γ blks => Forall (NoDupLocals Γ) (fst blks)) Γ (Scope locs caus blks) ->
       incl xs Γ ->
       In x xs ->
-      Env.In x (fst Hi).
+      FEnv.In x (fst Hi).
   Proof.
     intros * Hsem Hdef Hnd Hincl Hinxs.
     eapply sem_scope_defined1 with (caus:=caus); eauto.
@@ -1299,9 +1299,9 @@ Module Type LSEMANTICS
   (** If a new environment [refines] the previous one, it gives the same semantics
       to variables and therefore expressions, equations dans nodes *)
 
-  Fact refines_eq_EqSt : forall H H' ,
-      Env.refines eq H H' ->
-      Env.refines (@EqSt svalue) H H'.
+  Fact refines_eq_EqSt {A} : forall H H' ,
+      FEnv.refines eq H H' ->
+      FEnv.refines (@EqSt A) H H'.
   Proof.
     intros * Href ?? Hfind.
     eapply Href in Hfind as (?&?&Hfind); subst.
@@ -1310,26 +1310,25 @@ Module Type LSEMANTICS
   Qed.
 
   Fact sem_var_refines : forall H H' id v,
-      Env.refines (@EqSt _) H H' ->
+      H ⊑ H' ->
       sem_var H id v ->
       sem_var H' id v.
   Proof.
     intros H H' id v Href Hsem.
-    destruct Hsem.
-    unfold Env.MapsTo in H0. eapply Href in H0 as (?&?&Hfind).
+    destruct Hsem. eapply Href in H0 as (?&?&Hfind).
     econstructor; eauto.
     etransitivity; eauto.
   Qed.
 
   Lemma sem_var_refines_inv : forall env Hi1 Hi2 x vs,
-      In x env ->
-      Env.dom_lb Hi1 env ->
+      List.In x env ->
+      FEnv.dom_lb Hi1 env ->
       (forall vs, sem_var Hi1 x vs -> sem_var Hi2 x vs) ->
       sem_var Hi2 x vs ->
       sem_var Hi1 x vs.
   Proof.
     intros * Hin Hdom Href Hvar.
-    eapply Env.dom_lb_use in Hdom as (vs'&Hfind); eauto.
+    eapply Hdom in Hin as (vs'&Hfind).
     assert (sem_var Hi1 x vs') as Hvar' by (econstructor; eauto; reflexivity).
     specialize (Href _ Hvar').
     eapply sem_var_det in Href; eauto.
@@ -1337,32 +1336,31 @@ Module Type LSEMANTICS
   Qed.
 
   Lemma sem_var_refines' : forall Hi1 Hi2 x vs,
-      Env.In x Hi1 ->
-      Env.refines (@EqSt _) Hi1 Hi2 ->
+      FEnv.In x Hi1 ->
+      Hi1 ⊑ Hi2 ->
       sem_var Hi2 x vs ->
       sem_var Hi1 x vs.
   Proof.
     intros * Hin Href Hv2.
     inv Hin. econstructor; eauto.
     eapply Href in H as (?&Heq&Hfind').
-    inv Hv2. unfold Env.MapsTo in *. rewrite Hfind' in H0; inv H0.
+    inv Hv2. rewrite Hfind' in H0; inv H0.
     rewrite Heq; auto.
   Qed.
 
   Corollary sem_var_refines'' : forall env Hi1 Hi2 x vs,
-      In x env ->
-      Env.dom_lb Hi1 env ->
-      Env.refines (@EqSt _) Hi1 Hi2 ->
+      List.In x env ->
+      FEnv.dom_lb Hi1 env ->
+      Hi1 ⊑ Hi2 ->
       sem_var Hi2 x vs ->
       sem_var Hi1 x vs.
   Proof.
     intros * Hin Hdom Href Hvar.
     eapply sem_var_refines' in Hvar; eauto.
-    eapply Env.dom_lb_use in Hdom; eauto.
   Qed.
 
   Lemma sem_clock_refines : forall H H' ck bs bs',
-      Env.refines (@EqSt _) H H' ->
+      H ⊑ H' ->
       sem_clock H bs ck bs' ->
       sem_clock H' bs ck bs'.
   Proof.
@@ -1382,7 +1380,7 @@ Module Type LSEMANTICS
   Qed.
 
   Fact sem_exp_refines {PSyn prefs} : forall (G : @global PSyn prefs) b e H H' Hl v,
-      Env.refines (@EqSt _) H H' ->
+      H ⊑ H' ->
       sem_exp G (H, Hl) b e v ->
       sem_exp G (H', Hl) b e v.
   Proof with eauto with datatypes.
@@ -1393,7 +1391,7 @@ Module Type LSEMANTICS
   Qed.
 
   Fact sem_equation_refines {PSyn prefs} : forall (G : @global PSyn prefs) H H' Hl b equ,
-      Env.refines (@EqSt _) H H' ->
+      H ⊑ H' ->
       sem_equation G (H, Hl) b equ ->
       sem_equation G (H', Hl) b equ.
   Proof with eauto.
@@ -1403,7 +1401,7 @@ Module Type LSEMANTICS
   Qed.
 
   Fact sem_transitions_refines {PSyn prefs} : forall (G : @global PSyn prefs) H H' Hl b trans default stres,
-      Env.refines (@EqSt _) H H' ->
+      H ⊑ H' ->
       sem_transitions G (H, Hl) b trans default stres ->
       sem_transitions G (H', Hl) b trans default stres.
   Proof with eauto.
@@ -1412,7 +1410,7 @@ Module Type LSEMANTICS
   Qed.
 
   Fact sem_block_refines {PSyn prefs} : forall (G: @global PSyn prefs) d H H' Hl b,
-      Env.refines (@EqSt _) H H' ->
+      H ⊑ H' ->
       sem_block G (H, Hl) b d ->
       sem_block G (H', Hl) b d.
   Proof.
@@ -1424,7 +1422,7 @@ Module Type LSEMANTICS
       intros k. specialize (H8 k).
       rewrite Forall_forall in *. intros ? Hin.
       eapply H. 1,3:eauto.
-      eapply Env.refines_map; eauto.
+      eapply FEnv.refines_map; eauto.
       intros ?? Heq. rewrite Heq. reflexivity.
     - (* switch *)
       econstructor; eauto using sem_exp_refines.
@@ -1565,10 +1563,9 @@ Module Type LSEMANTICS
         VarsDefined blk xs ->
         NoDupLocals xs blk ->
         sem_block G (Hi, Hl) bs blk ->
-        Env.dom_lb Hi xs.
+        FEnv.dom_lb Hi xs.
     Proof.
-      intros * Hvars Hnd Hsem.
-      eapply Env.dom_lb_intro. intros ? Hin.
+      intros * Hvars Hnd Hsem ? Hin.
       eapply VarsDefined_Is_defined in Hin; eauto.
       eapply sem_block_sem_var in Hin as (?&Hvar); eauto.
       simpl in *; eauto using sem_var_In.
@@ -1579,10 +1576,10 @@ Module Type LSEMANTICS
         Forall (NoDupLocals ys) blks ->
         Forall (sem_block G (Hi, Hl) bs) blks ->
         Permutation (concat xs) ys ->
-        Env.dom_lb Hi ys.
+        FEnv.dom_lb Hi ys.
     Proof.
-      intros * Hvars Hnd Hsem Hperm.
-      eapply Env.dom_lb_intro. intros ? Hin. rewrite <-Hperm in Hin.
+      intros * Hvars Hnd Hsem Hperm ? Hin.
+      rewrite <-Hperm in Hin.
       eapply Forall_VarsDefined_Is_defined in Hin; eauto.
       2:{ simpl_Forall. eapply NoDupLocals_incl; [|eauto]. now rewrite Hperm. }
       simpl_Exists; simpl_Forall.
@@ -1595,34 +1592,32 @@ Module Type LSEMANTICS
   (** ** Restriction *)
 
   Fact sem_var_restrict : forall vars H id v,
-      In id vars ->
+      List.In id vars ->
       sem_var H id v ->
-      sem_var (Env.restrict H vars) id v.
+      sem_var (FEnv.restrict H vars) id v.
   Proof.
     intros * HIn Hsem.
     inv Hsem.
     econstructor; eauto.
-    apply Env.find_1 in H1. apply Env.find_2.
-    apply Env.restrict_find; auto.
+    apply FEnv.restrict_find; auto.
   Qed.
 
   Fact sem_var_restrict_inv : forall vars H id v,
-      sem_var (Env.restrict H vars) id v ->
-      In id vars /\ sem_var H id v.
+      sem_var (FEnv.restrict H vars) id v ->
+      List.In id vars /\ sem_var H id v.
   Proof.
     intros * Hvar; split.
-    - pose proof (Env.restrict_dom_ub vars H) as Hdom.
-      eapply Env.dom_ub_use in Hdom; eauto.
+    - eapply FEnv.restrict_dom_ub.
       inv Hvar. econstructor; eauto.
     - eapply sem_var_refines; [|eauto].
-      eapply Env.restrict_refines;
+      eapply FEnv.restrict_refines;
         auto using EqStrel_Transitive, EqStrel_Reflexive.
   Qed.
 
   Fact sem_clock_restrict : forall vars ck H bs bs',
       wx_clock vars ck ->
       sem_clock H bs ck bs' ->
-      sem_clock (Env.restrict H (List.map fst vars)) bs ck bs'.
+      sem_clock (FEnv.restrict H (List.map fst vars)) bs ck bs'.
   Proof.
     intros * Hwc Hsem.
     eapply sem_clock_refines'; [eauto| |eauto].
@@ -1634,7 +1629,7 @@ Module Type LSEMANTICS
   Fact sem_exp_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b e vs,
       wx_exp Γ e ->
       sem_exp G (H, Hl) b e vs ->
-      sem_exp G (Env.restrict H (List.map fst Γ), Hl) b e vs.
+      sem_exp G (FEnv.restrict H (List.map fst Γ), Hl) b e vs.
   Proof with eauto with datatypes.
     induction e using exp_ind2; intros vs Hwt Hsem; inv Hwt; inv Hsem;
       econstructor; eauto; simpl_Forall; eauto.
@@ -1648,7 +1643,7 @@ Module Type LSEMANTICS
   Lemma sem_equation_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b eq,
       wx_equation Γ eq ->
       sem_equation G (H, Hl) b eq ->
-      sem_equation G (Env.restrict H (List.map fst Γ), Hl) b eq.
+      sem_equation G (FEnv.restrict H (List.map fst Γ), Hl) b eq.
   Proof with eauto with datatypes.
     intros G ?? ? b [xs es] Hwc Hsem.
     destruct Hwc as (?&?). inv Hsem.
@@ -1657,13 +1652,13 @@ Module Type LSEMANTICS
       eapply sem_exp_restrict...
     + simpl_Forall; eauto.
       eapply sem_var_restrict...
-      inv H1. now rewrite <-fst_InMembers.
+      inv H1. now apply fst_InMembers.
   Qed.
 
   Fact sem_transitions_restrict {PSyn prefs} : forall (G : @global PSyn prefs) Γ H Hl b trans default stres,
       Forall (fun '(e, _) => wx_exp Γ e) trans ->
       sem_transitions G (H, Hl) b trans default stres ->
-      sem_transitions G (Env.restrict H (List.map fst Γ), Hl) b trans default stres.
+      sem_transitions G (FEnv.restrict H (List.map fst Γ), Hl) b trans default stres.
   Proof with eauto.
     induction trans; intros * Hwx Hsem; inv Hwx; inv Hsem;
       econstructor; eauto using sem_exp_restrict.
@@ -1671,13 +1666,13 @@ Module Type LSEMANTICS
 
   Lemma sem_scope_restrict {A} (wx_block : _ -> _ -> Prop) (sem_block : _ -> _ -> Prop) {PSyn prefs} (G: @global PSyn prefs) :
     forall Γ Hi Hl bs locs caus (blks : A),
-      (forall Γ Hi Hl, wx_block Γ blks -> sem_block (Hi, Hl) blks -> sem_block (Env.restrict Hi (List.map fst Γ), Hl) blks) ->
+      (forall Γ Hi Hl, wx_block Γ blks -> sem_block (Hi, Hl) blks -> sem_block (FEnv.restrict Hi (List.map fst Γ), Hl) blks) ->
       wx_scope wx_block Γ (Scope locs caus blks) ->
       sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (Hi, Hl) bs (Scope locs caus blks) ->
-      sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (Env.restrict Hi (List.map fst Γ), Hl) bs (Scope locs caus blks).
+      sem_scope (fun Hi' => sem_exp G Hi' bs) sem_block (FEnv.restrict Hi (List.map fst Γ), Hl) bs (Scope locs caus blks).
   Proof.
     intros * Hp Hwx Hsem; inv Hwx; inv Hsem.
-    eapply Sscope with (Hi':=Env.restrict Hi' (List.map fst (Γ ++ senv_of_locs locs))); eauto.
+    eapply Sscope with (Hi':=FEnv.restrict Hi' (List.map fst (Γ ++ senv_of_locs locs))); eauto.
     - intros * Hsem Hnin.
       eapply sem_var_restrict_inv in Hsem as (Hin&Hsem).
       eapply sem_var_restrict; eauto.
@@ -1694,7 +1689,7 @@ Module Type LSEMANTICS
   Lemma sem_block_restrict {PSyn prefs} : forall (G: @global PSyn prefs) blk Γ H Hl b,
       wx_block Γ blk ->
       sem_block G (H, Hl) b blk ->
-      sem_block G (Env.restrict H (List.map fst Γ), Hl) b blk.
+      sem_block G (FEnv.restrict H (List.map fst Γ), Hl) b blk.
   Proof.
     induction blk using block_ind2; intros * Hwc Hsem; inv Hwc; inv Hsem.
     - (* equation *)
@@ -1705,14 +1700,15 @@ Module Type LSEMANTICS
       intros k; specialize (H10 k).
       rewrite Forall_forall in *. intros ? Hin.
       eapply sem_block_refines; try eapply H; eauto.
-      now setoid_rewrite <-Env.restrict_map.
+      setoid_rewrite <-FEnv.restrict_map; auto using EqStrel_Reflexive.
+      reflexivity.
     - (* switch *)
       econstructor; eauto using sem_exp_restrict.
       simpl_Forall. do 2 esplit.
       + instantiate (1:=(_,_)). destruct H2 as (Href1&Href2); split; simpl in *; [|eauto].
-        intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
+        intros ?? Hfind. apply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
         eapply Href1 in Hfind as (?&Hfilter&Hfind').
-        do 2 esplit; eauto using Env.restrict_find.
+        do 2 esplit; eauto using FEnv.restrict_find.
       + destruct s. eapply sem_scope_restrict; eauto.
         intros; simpl_Forall; eauto.
     - (* automaton (weak transitions) *)
@@ -1722,9 +1718,9 @@ Module Type LSEMANTICS
       + simpl_Forall. specialize (H16 k); destruct_conjs.
         esplit; split.
         * instantiate (1:=(_,_)). destruct H4 as (Href1&Href2); split; simpl in *; [|eauto].
-          intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
+          intros ?? Hfind. apply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
           eapply Href1 in Hfind as (?&Hfilter&Hfind').
-          do 2 esplit; eauto using Env.restrict_find.
+          do 2 esplit; eauto using FEnv.restrict_find.
         * destruct s; destruct_conjs. eapply sem_scope_restrict; eauto.
           intros * (?&?) (?&?); split; simpl_Forall; eauto using sem_transitions_restrict.
     - (* automaton (strong transitions) *)
@@ -1733,16 +1729,16 @@ Module Type LSEMANTICS
       + simpl_Forall. specialize (H15 k); destruct_conjs.
         esplit; split.
         * instantiate (1:=(_,_)). destruct H4 as (Href1&Href2); split; simpl in *; [|eauto].
-          intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
+          intros ?? Hfind. apply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
           eapply Href1 in Hfind as (?&Hfilter&Hfind').
-          do 2 esplit; eauto using Env.restrict_find.
+          do 2 esplit; eauto using FEnv.restrict_find.
         * eauto using sem_transitions_restrict.
       + simpl_Forall. specialize (H16 k); destruct_conjs.
         esplit; split.
         * instantiate (1:=(_,_)). destruct H4 as (Href1&Href2); split; simpl in *; [|eauto].
-          intros ?? Hfind. apply Env.restrict_find_inv in Hfind as (Hin&Hfind).
+          intros ?? Hfind. apply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
           eapply Href1 in Hfind as (?&Hfilter&Hfind').
-          do 2 esplit; eauto using Env.restrict_find.
+          do 2 esplit; eauto using FEnv.restrict_find.
         * destruct s; destruct_conjs. eapply sem_scope_restrict; eauto.
           intros; simpl_Forall; eauto.
     - (* locals *)

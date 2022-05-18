@@ -7,7 +7,7 @@ From Coq Require Import NPeano.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
@@ -36,16 +36,14 @@ Module Type COINDINDEXED
   Qed.
 
   Fact tr_history_equiv: forall H,
-      Env.Equiv (@EqSt _) (ICStr.tr_history (CIStr.tr_history H)) H.
+      FEnv.Equiv (@EqSt _) (ICStr.tr_history (CIStr.tr_history H)) H.
   Proof.
     intros H.
     unfold CIStr.tr_history, ICStr.tr_history, ICStr.tr_history_from.
-    constructor; intros.
-    - rewrite Env.Props.P.F.mapi_in_iff, Env.Props.P.F.map_in_iff. reflexivity.
-    - unfold Env.MapsTo in H0. rewrite Env.gmapi in H0.
-      apply option_map_inv_Some in H0 as [v [Hfind Hinit]]; subst.
-      apply ntheq_eqst. intros n.
-      rewrite init_from_nth, Nat.add_0_r, Env.Props.P.F.map_o, H1; simpl; auto.
+    intros x. simpl_fenv.
+    destruct (H x); simpl; constructor.
+    apply ntheq_eqst. intros n.
+    rewrite init_from_nth, Nat.add_0_r; auto.
   Qed.
 
   Lemma sem_var_equiv : forall H x v,

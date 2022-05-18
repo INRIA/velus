@@ -25,16 +25,16 @@ Module Type CEPROPERTIES
 
   Lemma sem_var_instant_switch_env:
     forall R R' x v,
-      Env.find x R = Env.find x R' ->
+      R x = R' x ->
       sem_var_instant R x v <-> sem_var_instant R' x v.
   Proof.
     intros; split; unfold sem_var_instant;
-      take (Env.find x R = _) and rewrite it; auto.
+      take (R x = _) and rewrite it; auto.
   Qed.
 
   Lemma sem_exp_instant_switch_env:
     forall b R R' e v,
-      (forall x, Is_free_in_exp x e -> Env.find x R = Env.find x R') ->
+      (forall x, Is_free_in_exp x e -> R x = R' x) ->
       sem_exp_instant b R e v <-> sem_exp_instant b R' e v.
   Proof.
     induction e; intros * RRx.
@@ -70,7 +70,7 @@ Module Type CEPROPERTIES
 
   Lemma sem_exps_instant_switch_env:
     forall b R R' es vs,
-      (forall x, Exists (Is_free_in_exp x) es -> Env.find x R = Env.find x R') ->
+      (forall x, Exists (Is_free_in_exp x) es -> R x = R' x) ->
       sem_exps_instant b R es vs <-> sem_exps_instant b R' es vs.
   Proof.
     induction es as [|e es IH]. now split; inversion 1; subst; auto with nlsem.
@@ -82,7 +82,7 @@ Module Type CEPROPERTIES
 
   Lemma sem_cexp_instant_switch_env:
     forall b R R' e v,
-      (forall x, Is_free_in_cexp x e -> Env.find x R = Env.find x R') ->
+      (forall x, Is_free_in_cexp x e -> R x = R' x) ->
       sem_cexp_instant b R e v <-> sem_cexp_instant b R' e v.
   Proof with eauto with nlfree.
     induction e using cexp_ind2; intros * RRx.
@@ -203,7 +203,7 @@ Module Type CEPROPERTIES
 
   Lemma sem_clock_instant_switch_env:
     forall b R R' ck v,
-      (forall x, Is_free_in_clock x ck -> Env.find x R = Env.find x R') ->
+      (forall x, Is_free_in_clock x ck -> R x = R' x) ->
       sem_clock_instant b R ck v <-> sem_clock_instant b R' ck v.
   Proof.
     induction ck; intros v RRx.
@@ -220,7 +220,7 @@ Module Type CEPROPERTIES
   Lemma sem_aexp_instant_switch_env:
     forall b R R' ck e v,
       (forall x, Is_free_in_clock x ck \/ Is_free_in_exp x e ->
-            Env.find x R = Env.find x R') ->
+            R x = R' x) ->
       sem_aexp_instant b R ck e v <-> sem_aexp_instant b R' ck e v.
   Proof.
     intros * RRx. split.
@@ -241,7 +241,7 @@ Module Type CEPROPERTIES
   Lemma sem_caexp_instant_switch_env:
     forall b R R' ck e v,
       (forall x, Is_free_in_clock x ck \/ Is_free_in_cexp x e ->
-            Env.find x R = Env.find x R') ->
+            R x = R' x) ->
       sem_caexp_instant b R ck e v <-> sem_caexp_instant b R' ck e v.
   Proof.
     intros * RRx. split.
@@ -258,19 +258,6 @@ Module Type CEPROPERTIES
                and apply sem_clock_instant_switch_env with (R:=R) in it; eauto;
             constructor; auto.
   Qed.
-
-  Ltac solve_switch_env_obligation :=
-    match goal with
-    | [Henv: Env.refines ?R ?env1 ?env2 |- forall x, ?P -> Env.find x ?env2 = Env.find x ?Env1] =>
-      let y := fresh "y" in
-      let H := fresh "H" in
-      intros y H; try match type of H with _ \/ _ => destruct H end;
-      (apply Env.refines_orel_find with (x0:=y) in Henv; auto;
-       symmetry; apply orel_eq, Henv)
-    | [Henv: Env.refines ?R ?env1 ?env2 |- Env.find ?x ?env2 = Env.find ?x ?Env1] =>
-      apply Env.refines_orel_find with (x0:=x) in Henv; auto;
-      symmetry; apply orel_eq, Henv
-    end.
 
   (** Well-typed expressions and free variables *)
 
