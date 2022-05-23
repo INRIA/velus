@@ -1,0 +1,10 @@
+node f(c0, b : bool) returns (y : int)
+let
+    automaton
+    initially if c0 then A; otherwise B
+    state A do y = 0 fby (y + 1)
+            until b then B
+    state B do y = 0 fby (y - 1)
+            until b then A
+    end
+tel

@@ -15,9 +15,9 @@ var edge, ck : bool; v : int;
 let
   edge = i and (false fby (not i));
   ck = edge or (false fby o);
-  v = merge(ck;
-        count_down((edge, n) when ck);
-        0 when not ck);
+  v = merge ck
+            (count_down((edge, n) when ck))
+            (0 when not ck);
   o = v > 0;
 tel
 

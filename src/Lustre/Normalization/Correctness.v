@@ -13,6 +13,7 @@ From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LOrdered Lustre.LTyping Lustre.LClocking Lustre.LCausality Lustre.LSemantics Lustre.LClockSemantics.
 From Velus Require Import Lustre.Normalization.Normalization.
 From Velus Require Import Lustre.Normalization.NTyping Lustre.Normalization.NClocking.
+From Velus Require Import Lustre.SubClock.SCCorrectness.
 
 (** * Correctness of the Normalization *)
 
@@ -31,6 +32,8 @@ Module Type CORRECTNESS
        (Import Sem : LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr)
        (Import LCS : LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Ty Cl LCA Ord CStr Sem)
        (Import Norm : NORMALIZATION Ids Op OpAux Cks Senv Syn).
+
+  Module Import SCT := SCCorrectnessFun Ids Op OpAux Cks CStr Senv Syn Ty Cl LCA Ord Sem LCS SC. Import SC.
 
   Import Fresh Tactics Unnesting.
   Module Import Typing := NTypingFun Ids Op OpAux Cks Senv Syn Ty Norm.
@@ -196,12 +199,12 @@ Module Type CORRECTNESS
   Ltac solve_incl :=
     repeat unfold idty; repeat unfold idck;
     match goal with
-    | Hiface : global_iface_eq ?G1 ?G2, H : wt_clock (enums ?G1) _ ?ck |- wt_clock (enums ?G2) _ ?ck =>
-      eapply iface_eq_wt_clock; eauto
+    | Hiface : global_iface_incl ?G1 ?G2, H : wt_clock (enums ?G1) _ ?ck |- wt_clock (enums ?G2) _ ?ck =>
+      eapply iface_incl_wt_clock; eauto
     | H : wc_clock ?l1 ?ck |- wc_clock ?l2 ?ck =>
       eapply wc_clock_incl; [| eauto]
-    | Hiface : global_iface_eq ?G1 ?G2, H : wt_exp ?G1 _ ?e |- wt_exp ?G2 _ ?e =>
-      eapply iface_eq_wt_exp; eauto
+    | Hiface : global_iface_incl ?G1 ?G2, H : wt_exp ?G1 _ ?e |- wt_exp ?G2 _ ?e =>
+      eapply iface_incl_wt_exp; eauto
     | H : wt_exp ?G ?l1 ?e |- wt_exp ?G ?l2 ?e =>
       eapply wt_exp_incl; [| |eauto]; intros
     | H : wc_exp ?G ?l1 ?e |- wc_exp ?G ?l2 ?e =>
@@ -237,9 +240,9 @@ Module Type CORRECTNESS
 
     Hypothesis HwcG1 : wc_global G1.
     Hypothesis HwcG2 : wc_global G2.
-    Hypothesis Hifaceeq : global_iface_eq G1 G2.
+    Hypothesis Hifaceeq : global_iface_incl G1 G2.
 
-    Hint Resolve iface_eq_wc_exp : norm.
+    Hint Resolve iface_incl_wc_exp : norm.
 
     (** ** Conservation of sem_exp *)
 
@@ -1804,15 +1807,11 @@ Module Type CORRECTNESS
           * eapply Forall_impl; eauto; intros.
             constructor; auto.
       - exists H0. repeat (esplit; eauto with env).
-        + constructor; auto. econstructor; eauto with lcsem.
-          simpl_Forall; do 2 esplit; eauto; simpl_Forall.
-          eapply sem_ref_sem_block; eauto.
+        constructor; eauto. eapply sem_ref_sem_block; eauto. econstructor; eauto.
       - exists H0. repeat (esplit; eauto with env).
-        + constructor; auto. econstructor; eauto.
-          * intros. edestruct H13 as (?&?&?&?&?&?&?); eauto.
-            do 3 esplit. repeat split; eauto.
-            eapply sem_ref_sem_exp; eauto.
-          * solve_forall. solve_forall. eapply sem_ref_sem_block; eauto.
+        constructor; eauto. eapply sem_ref_sem_block; eauto. econstructor; eauto.
+      - exists H0. repeat (esplit; eauto with env).
+        constructor; eauto. eapply sem_ref_sem_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_sem : forall vars b blocks H Hl blocks' st st',
@@ -1882,9 +1881,11 @@ Module Type CORRECTNESS
           - apply senv_of_inout_NoLast.
           - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
         }
-        assert (Forall (sem_block_ck G1 (H', Env.empty _) (clocks_of ins)) blks) as Hsem.
+        inv H10. inv H11.
+        assert (Forall (sem_block_ck G1 (Hi', Env.empty _) (clocks_of ins)) blks) as Hsem.
         { simpl_Forall.
-          eapply sem_block_change_lasts; eauto using nolocal_noswitch, noswitch_nolast with lclocking.
+          eapply sem_block_change_lasts;
+            eauto using nolocal_noswitch, noswitch_noauto, noauto_nolast with lclocking.
         }
 
         eapply unnest_blocks_sem with (vars:=senv_of_inout (n_in n0 ++ n_out n0) ++ senv_of_locs locs)
@@ -1897,7 +1898,7 @@ Module Type CORRECTNESS
           2:{ eapply find_node_not_Is_node_in in Hord2.
             2:erewrite find_node_now; eauto. eauto. }
           rewrite <-H0.
-          econstructor. 4:destruct G2; eauto.
+          do 2 econstructor. 6:destruct G2; eauto.
           * intros ?? Hv Hnin1.
             assert (In x (map fst (n_in n0 ++ n_out n0))) as Hinx0.
             { assert (Env.In x Hf) as Hin by (inv Hv; econstructor; eauto).
@@ -1908,7 +1909,7 @@ Module Type CORRECTNESS
               - apply Hnin1. apply InMembers_app, or_intror, fst_InMembers.
                 solve_In.
             }
-            eapply H12; eauto.
+            eapply H15; eauto.
             -- rewrite map_fst_senv_of_inout in H7.
               eapply sem_var_refines_iff. 1,4:eauto. eapply Env.dom_dom_lb; eauto.
                erewrite <-Env.dom_use in Hinx0; [|eauto].
@@ -1925,7 +1926,6 @@ Module Type CORRECTNESS
           * intros. apply in_app_iff in H5 as [|]. simpl_Forall; congruence. simpl_In.
           * eapply sc_vars_incl; [|eauto]. solve_incl_app.
             erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
-          * destruct G2; eauto.
         + simpl.
           constructor; simpl; auto.
         + unfold st_senv. rewrite init_st_anns, app_nil_r. auto.
@@ -1935,13 +1935,13 @@ Module Type CORRECTNESS
           eapply unnest_node_init_st_valid; eauto.
         + constructor.
           * rewrite map_app, map_fst_senv_of_locs.
-            erewrite local_hist_dom in H13; eauto. simpl in H13.
+            erewrite local_hist_dom in H16; eauto. simpl in H16.
             unfold st_ids. rewrite init_st_anns, app_nil_r. auto.
           * unfold st_senv. rewrite init_st_anns, app_nil_r.
             eapply local_hist_sc_vars with (H:=H); eauto.
             1-4:repeat rewrite map_fst_senv_of_inout in *; repeat rewrite map_fst_senv_of_locs in *; auto.
             1,2:repeat setoid_rewrite InMembers_senv_of_locs; auto.
-            1:{ destruct Hnd as (_&Hnd). inv Hnd. auto. }
+            1:{ destruct Hnd as (_&Hnd). inv Hnd. inv H10. auto. }
             eapply sc_vars_change_lasts; eauto.
             eapply NoLast_app; eauto.
       - erewrite find_node_other in Hfind; eauto.
@@ -1954,13 +1954,6 @@ Module Type CORRECTNESS
 
   End unnest_node_sem.
 
-  Fact wc_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),
-      wc_global G ->
-      Ordered_nodes G.
-  Proof.
-    intros G Hwt.
-    apply wl_global_Ordered_nodes; auto with lclocking.
-  Qed.
   Local Hint Resolve wc_global_Ordered_nodes : norm.
 
   Lemma unnest_global_refines : forall G,
@@ -1981,7 +1974,7 @@ Module Type CORRECTNESS
         * inv Hwc; eauto.
         * change (Global enms (unnest_nodes enms nds)) with (unnest_global (Global enms nds)).
           eapply unnest_global_wc. inv Hwc; auto.
-        * apply unnest_nodes_eq.
+        * apply iface_eq_iface_incl, unnest_nodes_eq.
         * inv Hwc. eapply IHnds...
   Qed.
 
@@ -2232,28 +2225,6 @@ Module Type CORRECTNESS
       + eapply Facts.fresh_ident_nIn in Hfresh...
     Qed.
 
-    Corollary add_whens_const_sem_exp : forall H Hl b ck ty b' c,
-        sem_clock H b ck b' ->
-        sem_exp_ck G2 (H, Hl) b (add_whens (Econst c) ty ck) [const b' c].
-    Proof.
-      induction ck; try destruct p; intros * Hsem; assert (Hsem':=Hsem); inv Hsem'; simpl.
-      constructor. rewrite H1; reflexivity.
-      1,2,3: (eapply Swhen; eauto; simpl;
-              repeat constructor; try eapply IHck; eauto;
-              repeat constructor; eapply sem_clock_when_const; eauto).
-    Qed.
-
-    Corollary add_whens_enum_sem_exp : forall H Hl b ck ty b' c,
-        sem_clock H b ck b' ->
-        sem_exp_ck G2 (H, Hl) b (add_whens (Eenum c ty) ty ck) [enum b' c].
-    Proof.
-      induction ck; try destruct p; intros * Hsem; assert (Hsem':=Hsem); inv Hsem'; simpl.
-      constructor. rewrite H1; reflexivity.
-      1,2,3: (eapply Swhen; eauto; simpl;
-              repeat constructor; try eapply IHck; eauto;
-              repeat constructor; eapply sem_clock_when_enum; eauto).
-    Qed.
-
     Fact init_var_for_clock_sem : forall vars bs H Hl ck bs' x eqs' st st',
         (forall x, ~IsLast vars x) ->
         sem_clock H bs ck bs' ->
@@ -2286,7 +2257,7 @@ Module Type CORRECTNESS
       + repeat constructor.
         apply Seq with (ss:=[[(init_stream bs' (* rs' *))]]); simpl; repeat constructor.
         * econstructor; repeat constructor.
-          1,2:apply add_whens_enum_sem_exp; eauto using sem_clock_refines.
+          1,2:apply add_whens_enum_sem; eauto using sem_clock_refines.
           repeat constructor. unfold init_stream.
           repeat rewrite const_val_const; subst.
           do 2 rewrite const_val_enum. apply sfby_fby; simpl; eauto.
@@ -2295,7 +2266,7 @@ Module Type CORRECTNESS
           rewrite HeqH'. apply Env.add_1. reflexivity.
     Qed.
 
-    Hypothesis Hiface : global_iface_eq G1 G2.
+    Hypothesis Hiface : global_iface_incl G1 G2.
     Hypothesis HGref : global_sem_refines G1 G2.
 
     Hypothesis HwcG1 : wc_global G1.
@@ -2357,11 +2328,11 @@ Module Type CORRECTNESS
           * destruct ty as [|(?&?)]; simpl; rewrite Heqv0; subst.
             -- eapply sem_exp_ck_morph; eauto. 1,2:reflexivity.
                econstructor; eauto. eapply const_val_const.
-               eapply add_whens_const_sem_exp.
+               eapply add_whens_const_sem.
                eapply sem_clock_refines; [|eauto]. etransitivity...
             -- eapply sem_exp_ck_morph; eauto. 1,2:reflexivity.
                econstructor; eauto. eapply const_val_enum.
-               eapply add_whens_enum_sem_exp.
+               eapply add_whens_enum_sem.
                eapply sem_clock_refines; [|eauto]. etransitivity...
           * eapply sem_ref_sem_exp...
             eapply sem_exp_refines; [|eauto]; etransitivity...
@@ -2627,7 +2598,7 @@ Module Type CORRECTNESS
   End normfby_node_sem.
 
   Lemma normfby_node_sem : forall G1 G2 f n ins outs,
-      global_iface_eq G1 G2 ->
+      global_iface_incl G1 G2 ->
       global_sem_refines G1 G2 ->
       unnested_global (Global G1.(enums) (n::G1.(nodes))) ->
       wc_global (Global G1.(enums) (n::G1.(nodes))) ->
@@ -2652,19 +2623,20 @@ Module Type CORRECTNESS
       remember (normfby_node n0) as n'.
       unfold normfby_node in Heqn'; inv Heqn'.
       specialize (n_nodup n0) as Hnd.
-      inversion_clear Hunt as [|?? [[??? Hblk ?] _] Hunt'].
+      inversion_clear Hunt as [|?? [[???? Hblk ?] _] Hunt'].
       rewrite Hblk in *. inv Hblksem. inv H5.
       simpl in *. repeat rewrite app_nil_r in *. rewrite map_fst_senv_of_inout in H8.
       destruct H0 as (_&_&Hwc). rewrite Hblk in Hwc. inv Hwc.
       assert (forall x, ~IsLast (senv_of_inout (n_in n0 ++ n_out n0) ++ senv_of_locs locs) x) as Hnl.
-        { apply NoLast_app; split.
-          - apply senv_of_inout_NoLast.
-          - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
-        }
-      assert (Forall (sem_block_ck G1 (H', Env.empty _) (clocks_of ins)) blks) as Hsem.
+      { apply NoLast_app; split.
+        - apply senv_of_inout_NoLast.
+        - intros * Hil. inv Hil. simpl_In. simpl_Forall. subst; simpl in *; congruence.
+      }
+      inv H10. inv H11.
+      assert (Forall (sem_block_ck G1 (Hi', Env.empty _) (clocks_of ins)) blks) as Hsem.
       { simpl_Forall. eapply sem_block_change_lasts; eauto with lclocking.
-        - pose proof (n_syn n0) as Hsyn. inv Hsyn. rewrite Hblk in H12; inv H12.
-          simpl_Forall; eauto using nolocal_noswitch, noswitch_nolast.
+        - pose proof (n_syn n0) as Hsyn. inv Hsyn. rewrite Hblk in H11; inv H11.
+          simpl_Forall; eauto using nolocal_noswitch, noswitch_noauto, noauto_nolast.
         - destruct G1; eauto.
       }
 
@@ -2678,7 +2650,7 @@ Module Type CORRECTNESS
           2:{ eapply find_node_not_Is_node_in in Hord2.
             2:erewrite find_node_now; eauto. eauto. }
           rewrite Hblk.
-          econstructor. 4:destruct G2; eauto.
+          do 2 econstructor. 6:destruct G2; eauto.
           * intros ?? Hv Hnin1.
             assert (In x1 (map fst (n_in n0 ++ n_out n0))) as Hinx0.
             { assert (Env.In x1 Hf) as Hin by (inv Hv; econstructor; eauto).
@@ -2689,7 +2661,7 @@ Module Type CORRECTNESS
               - apply Hnin1. apply InMembers_app, or_intror, fst_InMembers.
                 solve_In.
             }
-            eapply H13; eauto.
+            eapply H14; eauto.
             -- eapply sem_var_refines_iff. 1,4:eauto. eapply Env.dom_dom_lb; eauto.
                erewrite <-Env.dom_use in Hinx0; [|eauto].
                eapply Env.In_Members, fst_InMembers in Hinx0.
@@ -2704,7 +2676,6 @@ Module Type CORRECTNESS
           * intros. apply in_app_iff in H0 as [|]. simpl_Forall; congruence. simpl_In.
           * eapply sc_vars_incl; [|eauto]. solve_incl_app.
             erewrite map_map, map_ext; try reflexivity. intros; destruct_conjs; auto.
-          * destruct G2; eauto.
       + simpl. constructor; simpl; auto.
         now rewrite map_fst_senv_of_inout.
       + destruct G1, G2; auto.
@@ -2718,7 +2689,7 @@ Module Type CORRECTNESS
         * eapply local_hist_sc_vars with (H:=H); eauto.
           1-4:repeat rewrite map_fst_senv_of_inout in *; repeat rewrite map_fst_senv_of_locs in *; auto.
           1,2:repeat setoid_rewrite InMembers_senv_of_locs; auto.
-          1:{ destruct Hnd as (_&Hnd). inv Hnd. auto. }
+          1:{ destruct Hnd as (_&Hnd). inv Hnd. inv H10. auto. }
           eapply sc_vars_change_lasts; eauto.
           eapply NoLast_app; eauto.
     - erewrite find_node_other in Hfind; eauto.
@@ -2743,7 +2714,7 @@ Module Type CORRECTNESS
       + inv Hunt; inv Hwc. eapply IHnds...
       + intros ins outs Hsem; simpl.
         eapply normfby_node_sem with (G1:=(Global enms nds)) (G2:=(Global _ _)) in Hsem...
-        * apply normfby_global_eq.
+        * apply iface_eq_iface_incl, normfby_global_eq.
         * inv Hunt; inv Hwc. eapply IHnds...
         * eapply normfby_global_wc in Hwc... inv Hwc...
         * eapply wc_global_Ordered_nodes.

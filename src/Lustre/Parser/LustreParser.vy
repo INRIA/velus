@@ -42,7 +42,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
 %token<LustreAst.astloc> HASH
 %token<LustreAst.astloc> BAR
-%token<LustreAst.astloc> RARROW UNDERSCORE
+%token<LustreAst.astloc> RRARROW UNDERSCORE
 %token<LustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
 %token<LustreAst.astloc> IFTE THEN ELSE CASE OF
 
@@ -51,13 +51,16 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %token<LustreAst.astloc> INT8 UINT8 INT16 UINT16 INT32 UINT32
   INT64 UINT64 FLOAT32 FLOAT64
 
-%token<LustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR LAST FBY
+%token<LustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR
 %token<LustreAst.astloc> TYPE
+%token<LustreAst.astloc> LAST FBY RARROW
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
 
 %token<LustreAst.astloc> RESET RESTART EVERY
 %token<LustreAst.astloc> SWITCH END
+%token<LustreAst.astloc> DO IN DONE
+%token<LustreAst.astloc> AUTOMATON INITIALLY OTHERWISE STATE UNTIL CONTINUE
 
 %token<LustreAst.astloc> EOF
 
@@ -82,7 +85,6 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.clock> clock
 %type<LustreAst.local_decls> last_var_decl
 %type<LustreAst.local_decls> var_decl_list
-%type<LustreAst.local_decls> local_var_decl
 %type<LustreAst.local_decls> local_decl
 %type<LustreAst.local_decls> local_decl_list
 %type<LustreAst.var_decls (* Reverse order *)> parameter_list oparameter_list
@@ -91,6 +93,12 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.block> block
 %type<list LustreAst.block> blocks
 %type<list (Common.ident * list LustreAst.block)> switch_branch_list
+%type<list (list LustreAst.expression * Common.ident * LustreAst.astloc) * Common.ident> initially
+%type<LustreAst.transition> transition
+%type<list LustreAst.transition> transitions
+%type<list LustreAst.transition> untils
+%type<Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition)> auto_state
+%type<list (Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition))> auto_state_list
 %type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
@@ -335,17 +343,17 @@ arrow_expression:
     { [LustreAst.ARROW e0 e1 loc] }
 
 branch_list:
-| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN
+| LPAREN c=ENUM_NAME RRARROW expr=expression RPAREN
     { [(fst c, expr)] }
-| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN bs=branch_list
+| LPAREN c=ENUM_NAME RRARROW expr=expression RPAREN bs=branch_list
     { (fst c, expr) :: bs }
 
 branch_list_with_default:
-| LPAREN UNDERSCORE RARROW expr=expression RPAREN
+| LPAREN UNDERSCORE RRARROW expr=expression RPAREN
     { [], expr }
-| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN
+| LPAREN c=ENUM_NAME RRARROW expr=expression RPAREN
     { [(fst c, expr)], [] }
-| LPAREN c=ENUM_NAME RARROW expr=expression RPAREN bs=branch_list_with_default
+| LPAREN c=ENUM_NAME RRARROW expr=expression RPAREN bs=branch_list_with_default
     { (fst c, expr) :: (fst bs), (snd bs) }
 
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
@@ -356,7 +364,7 @@ expression:
     { [LustreAst.CASE expr1 [(true_id, expr2); (false_id, expr3)] [] loc] }
 | loc=CASE expr=expression OF brs=branch_list_with_default
     { [LustreAst.CASE expr (fst brs) (snd brs) loc] }
-| loc=MERGE LPAREN id=VAR_NAME SEMICOLON expr1=expression SEMICOLON expr2=expression RPAREN
+| loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
     { [LustreAst.MERGE (fst id) [(true_id, expr1); (false_id, expr2)] loc] }
 | loc=MERGE id=VAR_NAME bs=branch_list
     { [LustreAst.MERGE (fst id) bs loc] }
@@ -378,13 +386,13 @@ last_var_decl:
    { [(fst id, (fst ty, clk, e, loc))] }
 
 var_decl_list:
-| vars=last_var_decl
+| vars=last_var_decl SEMICOLON
     { vars }
-| vars_list=var_decl_list SEMICOLON vars=last_var_decl
-    { vars_list ++ vars }
+| vars=last_var_decl SEMICOLON vars_list=var_decl_list
+    { vars ++ vars_list }
 
-local_var_decl:
-| loc=VAR vars_list=var_decl_list SEMICOLON
+local_decl:
+| loc=VAR vars_list=var_decl_list
     { vars_list }
 
 identifier_list:
@@ -441,14 +449,10 @@ clock:
 | clk=clock ONOT id=VAR_NAME
     { LustreAst.ON clk (fst id) false_id }
 
-local_decl:
-| vd=local_var_decl
-    { vd }
-
 local_decl_list:
 | /* empty */
     { [] }
-| dl=local_decl_list d=local_decl
+| d=local_decl dl=local_decl_list
     { d ++ dl }
 
 parameter_list:
@@ -477,10 +481,46 @@ equation:
     { (rev pat, exp, loc) }
 
 switch_branch_list:
-| BAR c=ENUM_NAME RARROW blk=blocks
+| BAR c=ENUM_NAME DO blk=blocks
     { [(fst c, blk)] }
-| BAR c=ENUM_NAME RARROW blk=blocks bs=switch_branch_list
+| BAR c=ENUM_NAME DO blk=blocks bs=switch_branch_list
     { (fst c, blk) :: bs }
+
+initially:
+| c=ENUM_NAME
+  { ([], fst c) }
+| OTHERWISE c=ENUM_NAME
+  { ([], fst c) }
+| loc=IFTE e=expression THEN c=ENUM_NAME SEMICOLON ini=initially
+  { let '(ini, oth) := ini in ((e, fst c, loc)::ini, oth) }
+
+transition:
+| e=expression loc=CONTINUE c=ENUM_NAME
+  { (e, (fst c, false), loc) }
+| e=expression loc=THEN c=ENUM_NAME
+  { (e, (fst c, true), loc) }
+
+transitions:
+| tr=transition
+  { [tr] }
+| tr=transition BAR trs=transitions
+  { tr::trs }
+
+untils:
+| /* empty */
+  { [] }
+| UNTIL trs=transitions
+  { trs }
+
+auto_state:
+| loc=STATE c=ENUM_NAME DO blks=blocks trs=untils
+  { (fst c, ([], blks, trs)) }
+| loc=STATE c=ENUM_NAME locals=local_decl DO blks=blocks trs=untils
+  { (fst c, (locals, blks, trs)) }
+
+auto_state_list:
+| st=auto_state { [st] }
+| st=auto_state sts=auto_state_list { st::sts }
 
 block:
 | eq=equation
@@ -489,7 +529,11 @@ block:
    { LustreAst.BRESET blks er loc }
 | loc=SWITCH ec=expression brs=switch_branch_list END
    { LustreAst.BSWITCH ec brs loc }
-| locals=local_decl_list loc=LET blks=blocks TEL
+| loc=AUTOMATON INITIALLY ini=initially states=auto_state_list END
+   { LustreAst.BAUTO ini states loc }
+/* Supporting both heptagon and var/let/tel syntax */
+| loc=DO locals=local_decl IN blks=blocks DONE
+| locals=local_decl loc=LET blks=blocks TEL
    { LustreAst.BLOCAL locals blks loc }
 
 blocks:

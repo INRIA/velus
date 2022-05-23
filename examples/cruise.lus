@@ -29,7 +29,7 @@ let
   pre_aux = 0.0 fby aux;
 tel
  
-node cruisecontrol (onn, off, resume : bool; speed : real;
+node cruisecontrol (onn, off, resum : bool; speed : real;
                     set, quist_onaccel, quist_ondecel : bool;
                     accel, brake : real)
 returns (cruisespeed, throttlecmd : real);
@@ -61,10 +61,10 @@ let
                     speed when st_on when not st_interrupt,
                     ((r_2 when st_on) or r_1) when not st_interrupt);
 
-  throttlecmd = merge st_on (true -> throttlecmd_2)
-                            (false -> accel when not st_on);
-  cruisespeed = merge st_on (true -> cruisespeed_2)
-                            (false -> pre_cruisespeed when not st_on);
+  throttlecmd = merge st_on (true => throttlecmd_2)
+                            (false => accel when not st_on);
+  cruisespeed = merge st_on (true => cruisespeed_2)
+                            (false => pre_cruisespeed when not st_on);
   pre_cruisespeed = 0.0 fby cruisespeed;
 
   between = (((speed >= 30.0) and (speed <= 150.0)) when st_on)
@@ -72,16 +72,16 @@ let
 
   throttlecmd_2 =
     merge st_interrupt
-          (true -> (accel when st_on) when st_interrupt)
-          (false -> merge st_standby
-                          (true -> ((accel when st_on) when not st_interrupt)
+          (true => (accel when st_on) when st_interrupt)
+          (false => merge st_standby
+                          (true => ((accel when st_on) when not st_interrupt)
                                                               when st_standby)
-                          (false -> regul_on));
+                          (false => regul_on));
 
   cruisespeed_2 = merge st_interrupt
-                        (true ->
+                        (true =>
                           (pre_cruisespeed when st_on) when st_interrupt)
-                        (false -> cruise_speed);
+                        (false => cruise_speed);
 
   (* vstate logic
      off: st_on = false
@@ -95,14 +95,14 @@ let
           |               until (not accelerator and between) then regulon
           |             until braking then interrupt
           | interrupt:  st_interrupt = true
-          |             until resume then regulation
+          |             until resum then regulation
           until off then off
   *)
   st_on = false fby ns_2;
-  ns_2 = merge st_on (true -> not off when st_on)
-                     (false -> onn when not st_on);
-  nr_2 = merge st_on (true -> off when st_on)
-                     (false -> onn when not st_on);
+  ns_2 = merge st_on (true => not off when st_on)
+                     (false => onn when not st_on);
+  nr_2 = merge st_on (true => off when st_on)
+                     (false => onn when not st_on);
 
   st_standby = if (((r_2 when st_on) or r_1) when not st_interrupt)
                then (false when st_on when not st_interrupt) else pre_ns;
@@ -114,12 +114,12 @@ let
 
   st_interrupt = if (r_2 when st_on) then (false when st_on) else (false fby ns_1);
   ns_1 = merge st_interrupt
-               (true -> not ((resume when st_on) when st_interrupt))
-               (false -> not ((braking when st_on) when not st_interrupt));
+               (true => not ((resum when st_on) when st_interrupt))
+               (false => not ((braking when st_on) when not st_interrupt));
   r_1  = if (r_2 when st_on) then (false when st_on) else (false fby nr_1);
   nr_1 = merge st_interrupt
-               (true -> (resume when st_on) when st_interrupt)
-               (false -> (braking when st_on) when not st_interrupt);
+               (true => (resum when st_on) when st_interrupt)
+               (false => (braking when st_on) when not st_interrupt);
 tel
 
 (* make an interface for continuous inputs *)
@@ -137,14 +137,14 @@ tel
 (* make the interface for manual testing *)
 (* all the inputs are given through the keyboard *)
 node interface(key : int)
-returns (onn, off, set, resume, quickaccel, quickdecel : bool;
+returns (onn, off, set, resum, quickaccel, quickdecel : bool;
          speed, accel, brake : real);
 var speed_present, speed_up : bool;
 let
   onn = (key = 111); -- 'o'
   off = (key = 102); -- 'f'
   set = (key = 115); -- 's'
-  resume = (key = 114); -- 'r'
+  resum = (key = 114); -- 'r'
   quickaccel = (key = 97); -- 'a'
   quickdecel = (key = 100); -- 'd'
 
@@ -159,14 +159,14 @@ tel
 
 node cruise (key : int)
 returns (cruisespeed, throttlecmd : real);
-var onn, off, set, resume, quickaccel, quickdecel : bool;
+var onn, off, set, resum, quickaccel, quickdecel : bool;
     speed, accel, brake : real;
 let
-  (onn, off, set, resume, quickaccel, quickdecel, speed, accel, brake) =
+  (onn, off, set, resum, quickaccel, quickdecel, speed, accel, brake) =
       interface(key);
 
   (cruisespeed, throttlecmd) =
-    cruisecontrol (onn, off, resume,
+    cruisecontrol (onn, off, resum,
                    speed, set, quickaccel,
                    quickdecel, accel, brake);
 tel

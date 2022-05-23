@@ -3,8 +3,8 @@ type t = A | B | C | D | E | F
 node f (x: t) returns (y: int; z : bool)
 let
    (y, z) = case x of 
-              (A -> (1, true))
-              (D -> (4, true))
-              (E -> (5, true))
-              (_ -> (0, false));
+              (A => (1, true))
+              (D => (4, true))
+              (E => (5, true))
+              (_ => (0, false));
 tel

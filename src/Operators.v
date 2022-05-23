@@ -147,9 +147,14 @@ Module Type OPERATORS_AUX
 
   (** A synchronous [value] is either an absence or a present constant *)
 
-  Inductive svalue :=
+  Inductive synchronous (A : Type) :=
   | absent
-  | present (v: value).
+  | present (v: A).
+
+  Arguments absent {_}.
+  Arguments present {_}.
+
+  Definition svalue := synchronous value.
 
   Definition svalue_dec (v1 v2: svalue) : {v1 = v2} + {v1 <> v2}.
     repeat decide equality.
@@ -159,7 +164,7 @@ Module Type OPERATORS_AUX
   Global Instance: EqDec svalue eq := { equiv_dec := svalue_dec }.
 
   Lemma not_absent_bool:
-    forall x, x <> absent <-> x <>b absent = true.
+    forall (x : svalue), x <> absent <-> x <>b absent = true.
   Proof.
     unfold nequiv_decb.
     setoid_rewrite Bool.negb_true_iff.

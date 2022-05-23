@@ -113,10 +113,13 @@ Definition local_decls : Type := list (ident * (type_name * preclock * list expr
 
 Definition equation : Type := (list ident * list expression * astloc)%type.
 
+Definition transition : Type := (list expression * (ident * bool) * astloc).
+
 Inductive block :=
 | BEQ      : equation -> block
 | BRESET   : list block -> list expression -> astloc -> block
 | BSWITCH  : list expression -> list (ident * list block) -> astloc -> block
+| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (local_decls * list block * list transition)) -> astloc -> block
 | BLOCAL   : local_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
@@ -244,6 +247,10 @@ Section block_ind2.
       Forall (fun blks => Forall P (snd blks)) branches ->
       P (BSWITCH ec branches loc).
 
+  Hypothesis AUTOCase : forall ini states loc,
+      Forall (fun '(_, (_, blks, _)) => Forall P blks) states ->
+      P (BAUTO ini states loc).
+
   Hypothesis LOCALCase : forall locs blks loc,
       Forall P blks ->
       P (BLOCAL locs blks loc).
@@ -256,6 +263,9 @@ Section block_ind2.
       induction l; auto.
     - apply SWITCHCase.
       induction l0 as [|(?&?)]; constructor; eauto; simpl.
+      induction l0; auto.
+    - apply AUTOCase.
+      induction l as [|(?&(?&?)&?)]; constructor; eauto; simpl.
       induction l0; auto.
     - apply LOCALCase.
       induction l0; auto.

@@ -6,6 +6,7 @@ From Coq Require Import List. Import List.ListNotations. Open Scope list_scope.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping.
 From Velus Require Import Lustre.Normalization.Normalization.
+From Velus Require Import Lustre.SubClock.SCTyping.
 
 (** * Preservation of Typing through Normalization *)
 
@@ -18,6 +19,8 @@ Module Type NTYPING
        (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
        (Import Typ : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import Norm : NORMALIZATION Ids Op OpAux Cks Senv Syn).
+
+  Module Import SCT := SCTypingFun Ids Op OpAux Cks Senv Syn Typ SC. Import SC.
 
   Import Fresh Facts Tactics.
 
@@ -138,18 +141,18 @@ Module Type NTYPING
 
   Ltac solve_incl :=
     match goal with
-    | Hiface : global_iface_eq ?G1 ?G2, H : wt_clock (enums ?G1) _ ?ck |- wt_clock (enums ?G2) _ ?ck =>
-        eapply iface_eq_wt_clock; eauto
+    | Hiface : global_iface_incl ?G1 ?G2, H : wt_clock (enums ?G1) _ ?ck |- wt_clock (enums ?G2) _ ?ck =>
+        eapply iface_incl_wt_clock; eauto
     | H : wt_clock _ ?l1 ?cl |- wt_clock _ ?l2 ?cl =>
         eapply wt_clock_incl; [|eauto]; intros
-    | Hiface : global_iface_eq ?G1 ?G2, H : wt_exp ?G1 _ ?e |- wt_exp ?G2 _ ?e =>
-        eapply iface_eq_wt_exp; eauto
+    | Hiface : global_iface_incl ?G1 ?G2, H : wt_exp ?G1 _ ?e |- wt_exp ?G2 _ ?e =>
+        eapply iface_incl_wt_exp; eauto
     | H : wt_exp ?G ?l1 ?e |- wt_exp ?G ?l2 ?e =>
         eapply wt_exp_incl; [| |eauto]; intros
     | H : wt_equation ?G ?l1 ?eq |- wt_equation ?G ?l2 ?eq =>
         eapply wt_equation_incl; [| |eauto]; intros
-    | Hiface : global_iface_eq ?G1 ?G2, H : wt_block ?G1 _ ?e |- wt_block ?G2 _ ?e =>
-        eapply iface_eq_wt_block; eauto
+    | Hiface : global_iface_incl ?G1 ?G2, H : wt_block ?G1 _ ?e |- wt_block ?G2 _ ?e =>
+        eapply iface_incl_wt_block; eauto
     | H : wt_block ?G ?l1 ?eq |- wt_block ?G ?l2 ?eq =>
         eapply wt_block_incl; [| |eauto]; intros
     | |- incl ?l1 ?l1 => reflexivity
@@ -182,7 +185,7 @@ Module Type NTYPING
     Variable G1 : @global nolocal_top_block local_prefs.
     Variable G2 : @global nolocal_top_block norm1_prefs.
 
-    Hypothesis Hiface : global_iface_eq G1 G2.
+    Hypothesis Hiface : global_iface_incl G1 G2.
 
     Fact idents_for_anns_wt : forall vars anns ids st st',
         idents_for_anns anns st = (ids, st') ->
@@ -451,7 +454,7 @@ Module Type NTYPING
 
     Import Permutation.
 
-    Local Hint Resolve iface_eq_wt_clock iface_eq_wt_exp : norm.
+    Local Hint Resolve iface_incl_wt_clock iface_incl_wt_exp : norm.
 
     Fact unnest_reset_wt : forall vars e e' eqs' st st' ,
         (forall es' eqs' st0',
@@ -533,7 +536,7 @@ Module Type NTYPING
       - intros * Follows Un. eapply H1 in Un; eauto. 1,2:repeat solve_st_follows.
     Qed.
 
-    Local Hint Resolve iface_eq_wt_enum : norm.
+    Local Hint Resolve iface_incl_wt_enum : norm.
 
     Fact unnest_controls_fst : forall (es : list (enumtag * list exp)) es' eqs' st st',
         mmap2 (fun '(i, es) => bind2 (mmap2 (unnest_exp G1 true) es)
@@ -673,7 +676,7 @@ Module Type NTYPING
         2:solve_mmap2.
         split; eauto.
         eapply unnest_when_wt_exp; eauto.
-        + destruct Hiface as (Heq&_); rewrite <-Heq; eauto.
+        + apply Hiface; eauto.
         + repeat solve_incl.
         + repeat solve_incl.
         + eapply mmap2_unnest_exp_typesof'' in Hnorm; eauto with ltyping.
@@ -686,7 +689,7 @@ Module Type NTYPING
         remember (unnest_merge _ _ _ _) as merges.
         assert (Forall (wt_exp G2 (vars++st_senv x2)) merges) as Hwt'.
         { subst. apply unnest_merge_wt_exp; auto.
-          - destruct Hiface as (Heq&_); rewrite <-Heq; auto.
+          - apply Hiface; eauto.
           - repeat solve_incl.
           - erewrite unnest_controls_fst; eauto.
           - apply mmap2_length_1 in Hnorm1.
@@ -732,7 +735,7 @@ Module Type NTYPING
           - repeat solve_incl.
           - eapply unnest_exp_typeof in Hnorm0; eauto with ltyping; simpl in *; rewrite app_nil_r in *.
             rewrite Hnorm0; eauto.
-          - destruct Hiface as (Heq&_); rewrite <-Heq; auto.
+          - apply Hiface; eauto.
           - erewrite unnest_controls_fst; eauto.
           - apply mmap2_length_1 in Hnorm1.
             intro contra; subst. destruct es; simpl in *; try congruence.
@@ -779,7 +782,7 @@ Module Type NTYPING
           - repeat solve_incl.
           - eapply unnest_exp_typeof in Hnorm0; eauto with ltyping; simpl in *; rewrite app_nil_r in *.
             rewrite Hnorm0; eauto.
-          - destruct Hiface as (Heq&_); rewrite <-Heq; auto.
+          - apply Hiface; eauto.
           - erewrite unnest_controls_fst; eauto.
           - erewrite fst_NoDupMembers, unnest_controls_fst, <-fst_NoDupMembers; eauto.
           - apply mmap2_length_1 in Hnorm1.
@@ -830,10 +833,9 @@ Module Type NTYPING
         4,6:eapply Forall_impl; [|eauto]; intros; repeat solve_incl.
         + specialize (idents_for_anns_incl_ty _ _ _ _ H4) as Hincl.
           eapply idents_for_anns_wt with (vars:=vars) in H4... solve_forall; repeat solve_incl.
-        + destruct Hiface as (_&Hiface'). specialize (Hiface' f).
-          rewrite H7 in Hiface'. inv Hiface'. destruct H3 as (?&?&Hin&Hout).
+        + apply Hiface in H7 as (?&?&?&?&Hin&Hout).
           repeat econstructor; eauto.
-          * eapply unnest_noops_exps_wt with (vars:=vars) in H2 as (?&?)...
+          * eapply unnest_noops_exps_wt with (vars:=vars) in H2 as (?&?); eauto.
             solve_forall; repeat solve_incl.
             eapply mmap2_normalized_lexp in Hnorm. 1,3:eauto using Forall_wt_exp_wx_exp.
             rewrite NoLast_app; split; auto. apply senv_of_tyck_NoLast.
@@ -932,8 +934,7 @@ Module Type NTYPING
         repeat split; auto.
         2:solve_forall; repeat solve_incl.
         repeat constructor.
-        destruct Hiface as (_&Hiface'). specialize (Hiface' i).
-        rewrite H5 in Hiface'. inv Hiface'. destruct H2 as (?&?&Hin&Hout).
+        apply Hiface in H5 as (?&?&?&?&Hin&Hout).
         repeat econstructor; eauto.
         + eapply unnest_noops_exps_wt with (vars:=vars) in H0 as (?&?); auto.
           solve_forall; repeat solve_incl.
@@ -1021,8 +1022,9 @@ Module Type NTYPING
             solve_forall; repeat solve_incl.
         + rewrite Forall_map.
           eapply Forall_impl; [|eauto]; intros; constructor; auto.
-      - constructor; auto. eapply iface_eq_wt_block; eauto. econstructor; eauto.
-      - constructor; auto. eapply iface_eq_wt_block; eauto. econstructor; eauto.
+      - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
+      - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
+      - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_wt_block : forall vars blocks blocks' st st' ,
@@ -1455,7 +1457,7 @@ Module Type NTYPING
       { eapply unnest_exp_length in Hk0; eauto with ltyping.
         now rewrite <-length_typeof_numstreams, Hty in Hk0. }
       eapply unnest_exp_annot in Hk0; eauto with ltyping; simpl in Hk0; rewrite app_nil_r in Hk0.
-      eapply iface_eq_wt_exp, wt_exp_wt_enum in Hwt; eauto.
+      eapply iface_incl_wt_exp, wt_exp_wt_enum in Hwt; eauto.
       rewrite typeof_annot in *. rewrite Hk0 in Hhd.
       rewrite Forall_map in Hwt. destruct (annot e); inv Hwt; simpl in *; try congruence.
       subst; auto.
@@ -1565,9 +1567,11 @@ Module Type NTYPING
         eapply idents_for_anns_wt_enum in H4; eauto.
         + eapply wt_find_node in H7 as (G'&(_&_&Henums'&_)&Heq); eauto.
           rewrite map_app, Forall_app in Henums'. destruct Henums' as (_&Henums').
-          clear - H9 Henums' Heq Hiface. destruct Hiface as (Heq2&_).
+          clear - H9 Henums' Heq Hiface.
           rewrite Forall_map. induction H9; inv Henums'; constructor; auto.
-          destruct x as (?&?), y as (?&(?&?)&?); subst; simpl in *. destruct t; simpl in *; auto.
+          destruct x as (?&?), y as (?&(?&?)&?); subst; simpl in *.
+          eapply iface_incl_wt_enum; eauto.
+          destruct t; simpl in *; auto.
           destruct H2; split; auto. congruence.
         + eapply unnest_resets_wt_enum in H3; eauto. solve_mmap2'.
           solve_forall; repeat solve_incl.
@@ -1705,17 +1709,14 @@ Module Type NTYPING
       unfold unnest_node.
       pose proof (n_syn n) as Hsyn. inv Hsyn.
       destruct Hiface as (Henums&_).
-      split; [|split;[|split]]; simpl; try solve [rewrite <- Henums; auto]. solve_forall.
+      split; [|split;[|split]]; simpl; try solve [rewrite <- Henums; auto].
+      1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
       rewrite <-H in *; simpl in *. inv Heq.
       assert (forall x, ~ IsLast (senv_of_inout (n_in n ++ n_out n) ++ senv_of_locs locs) x) as Hnl.
       { apply NoLast_app; split.
         - apply senv_of_inout_NoLast.
         - intros * Hl. inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence. }
-      econstructor.
-      1-5:eauto.
-      - destruct (unnest_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
-        eapply unnest_blocks_wt_block in Heqres; eauto. 2:unfold st_senv; rewrite init_st_anns, app_nil_r; eauto.
-        simpl_app. auto. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
+      inv H4. do 2 econstructor; eauto.
       - unfold wt_clocks in *.
         rewrite idty_app with (xs:=locs). apply Forall_app; split.
         + solve_forall. simpl_app. repeat solve_incl.
@@ -1734,8 +1735,11 @@ Module Type NTYPING
         + unfold st_senv. rewrite init_st_anns, app_nil_r. auto.
         + unfold st_senv. rewrite init_st_anns, app_nil_r.
           rewrite map_app, Forall_app; split;
-            simpl_Forall; simpl_In; simpl_Forall; eauto using iface_eq_wt_enum.
+            simpl_Forall; simpl_In; simpl_Forall; eauto using iface_incl_wt_enum.
       - apply Forall_app; split; simpl_Forall; subst; simpl; auto.
+      - destruct (unnest_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
+        eapply unnest_blocks_wt_block in Heqres; eauto. 2:unfold st_senv; rewrite init_st_anns, app_nil_r; eauto.
+        simpl_app. auto. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.
 
   End unnest_node_wt.
@@ -1749,7 +1753,7 @@ Module Type NTYPING
     destruct H1.
     constructor; [constructor|].
     - eapply unnest_node_wt; eauto. 2:split; auto.
-      eapply unnest_nodes_eq.
+      eapply iface_eq_iface_incl, unnest_nodes_eq.
     - eapply unnest_nodes_names; eauto.
     - eapply IHnds; eauto.
   Qed.
@@ -1760,31 +1764,9 @@ Module Type NTYPING
     Variable G1 : @global nolocal_top_block norm1_prefs.
     Variable G2 : @global nolocal_top_block norm2_prefs.
 
-    Hypothesis Hiface : global_iface_eq G1 G2.
+    Hypothesis Hiface : global_iface_incl G1 G2.
     Hypothesis Hbool : In (bool_id, 2) G1.(enums).
-    Hint Resolve iface_eq_wt_clock iface_eq_wt_exp : norm.
-
-    Fact add_whens_typeof : forall e ty ck,
-        typeof e = [ty] ->
-        typeof (add_whens e ty ck) = [ty].
-    Proof.
-      induction ck; [|destruct p]; intro Hty; simpl; auto.
-    Qed.
-
-    Fact add_whens_wt_exp : forall vars e ty cl e' ,
-        wt_exp G1 vars e ->
-        typeof e = [ty] ->
-        wt_clock G1.(enums) vars cl ->
-        add_whens e ty cl = e' ->
-        wt_exp G2 vars e'.
-    Proof.
-      induction cl; intros e' Hwt Hty Hclock Hwhens; simpl in Hwhens; inv Hclock; subst.
-      - eauto with norm.
-      - destruct Hiface as (Henums&_).
-        repeat (econstructor; simpl; try rewrite <-Henums; eauto).
-        rewrite app_nil_r.
-        rewrite add_whens_typeof; auto.
-    Qed.
+    Hint Resolve iface_incl_wt_clock iface_incl_wt_exp : norm.
 
     Fact init_var_for_clock_wt_eq : forall vars ck id eqs' st st' ,
         wt_clock G1.(enums) (vars++st_senv st) ck ->
@@ -1795,10 +1777,10 @@ Module Type NTYPING
       unfold init_var_for_clock in Hinit.
       destruct (fresh_ident _ _) eqn:Hfresh. inv Hinit.
         repeat constructor; simpl; repeat rewrite app_nil_r; auto.
-        1,2:eapply add_whens_wt_exp; [| | |eauto]; eauto.
-        1,3:constructor; simpl; auto.
-        3,4:eapply add_whens_typeof; simpl; auto.
-        1,2,3:repeat solve_incl.
+        1,2:eapply add_whens_wt; eauto.
+        2,4:constructor; simpl; auto.
+        5,6:eapply add_whens_typeof; simpl; auto.
+        1-6:repeat solve_incl. 1,2:destruct Hiface; rewrite H; reflexivity.
         eapply fresh_ident_In in Hfresh.
         eapply HasType_app; right; unfold st_senv, idty; econstructor; solve_In. auto.
     Qed.
@@ -1821,7 +1803,7 @@ Module Type NTYPING
         econstructor; solve_In. auto.
       - apply fresh_ident_In in H0.
         apply HasType_app, or_intror; econstructor; solve_In; auto.
-      - destruct Hiface as (Henums&_). congruence.
+      - apply Hiface; auto.
       - congruence.
     Qed.
 
@@ -1840,7 +1822,7 @@ Module Type NTYPING
       2,5,6,7:repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
       - apply init_var_for_clock_In in H as In.
         apply HasType_app, or_intror; econstructor; solve_In; auto.
-      - destruct Hiface as (Henums&_). congruence.
+      - apply Hiface; auto.
       - congruence.
     Qed.
 
@@ -1862,13 +1844,14 @@ Module Type NTYPING
       { repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows. }
       constructor.
       - repeat constructor; simpl; try rewrite app_nil_r; eauto with norm.
-        + eapply add_whens_wt_exp; [| | |eauto]; auto.
+        + eapply add_whens_wt; eauto.
+          * repeat solve_incl.
+          * destruct ty; simpl; auto.
+            now rewrite Op.ctype_init_ctype.
           * destruct ty; simpl; [constructor|]; auto.
             eapply wt_exp_wt_enum in Hwt1; eauto.
             rewrite Hty1 in Hwt1. apply Forall_singl in Hwt1. destruct Hwt1.
-            constructor; auto.
-          * destruct ty; simpl; auto.
-            now rewrite Op.ctype_init_ctype.
+            constructor; auto. apply Hiface; auto.
         + repeat solve_incl; eapply init_var_for_clock_st_follows in H; repeat solve_st_follows.
         + eapply add_whens_typeof.
           destruct ty; simpl; auto. now rewrite Op.ctype_init_ctype.
@@ -1906,7 +1889,7 @@ Module Type NTYPING
         + apply fresh_ident_In in H. apply HasType_app, or_intror. econstructor; solve_In. auto.
         + apply fresh_ident_In in H. apply HasType_app, or_intror. econstructor; solve_In. auto.
         + destruct Hwt. constructor; eauto.
-          eapply iface_eq_wt_equation; eauto.
+          eapply iface_incl_wt_equation; eauto.
           constructor; auto. solve_forall; repeat solve_incl.
           simpl. solve_forall. apply HasType_app; auto.
       - (* fby *)
@@ -1961,6 +1944,7 @@ Module Type NTYPING
         apply Forall_singl in H. apply H in H0; eauto.
         rewrite Forall_map. solve_forall.
         constructor; auto. repeat solve_incl.
+      - repeat inv_bind. constructor; auto. repeat solve_incl.
       - repeat inv_bind. constructor; auto. repeat solve_incl.
       - repeat inv_bind. constructor; auto. repeat solve_incl.
     Qed.
@@ -2064,6 +2048,7 @@ Module Type NTYPING
         apply Forall_singl in H; eauto.
       - repeat inv_bind; auto.
       - repeat inv_bind; auto.
+      - repeat inv_bind; auto.
     Qed.
 
     Corollary normfby_blocks_wt_clock : forall vars to_cut blocks blocks' st st' ,
@@ -2106,7 +2091,7 @@ Module Type NTYPING
       inv Hfby.
       eapply fresh_ident_wt_enum' in Hfresh; eauto.
       constructor; simpl; auto.
-      destruct Hiface; congruence.
+      apply Hiface; auto.
     Qed.
 
     Fact fby_iteexp_wt_enum : forall vars e0 e ty ck e' eqs' st st' ,
@@ -2149,19 +2134,19 @@ Module Type NTYPING
         destruct Hwt as [Hwt _]. apply Forall_singl in Hwt.
         inv Hwt. apply Forall_singl in H7.
         eapply fresh_ident_wt_enum' in H; eauto. simpl in *.
-        eapply Forall_singl, iface_eq_wt_exp in H4; eauto. eapply wt_exp_wt_enum in H4; eauto.
+        eapply Forall_singl, iface_incl_wt_exp in H4; eauto. eapply wt_exp_wt_enum in H4; eauto.
         rewrite app_nil_r in H5. rewrite H5 in H4. apply Forall_singl in H4; eauto.
       - (* fby *)
         eapply fby_iteexp_wt_enum in H; eauto.
         destruct Hwt as [Hwt _]. apply Forall_singl in Hwt.
         inv Hwt. apply Forall_singl in H7; auto. simpl in *.
-        eapply Forall_singl, iface_eq_wt_exp in H4; eauto. eapply wt_exp_wt_enum in H4; eauto.
+        eapply Forall_singl, iface_incl_wt_exp in H4; eauto. eapply wt_exp_wt_enum in H4; eauto.
         rewrite app_nil_r in H5. rewrite H5 in H4. apply Forall_singl in H4; eauto.
       - (* arrow *)
         destruct Hwt as [Hwt _]. apply Forall_singl in Hwt.
         inv Hwt. apply Forall_singl in H7; auto. simpl in *.
         eapply arrow_iteexp_wt_enum in H; eauto.
-        eapply Forall_singl, iface_eq_wt_exp in H4; eauto. eapply wt_exp_wt_enum in H4; eauto.
+        eapply Forall_singl, iface_incl_wt_exp in H4; eauto. eapply wt_exp_wt_enum in H4; eauto.
         rewrite app_nil_r in H5. rewrite H5 in H4. apply Forall_singl in H4; eauto.
     Qed.
 
@@ -2179,6 +2164,7 @@ Module Type NTYPING
         simpl in Hnorm. cases; repeat inv_bind; auto.
         inv Hwt. apply Forall_singl in H3.
         apply Forall_singl in H; eauto.
+      - repeat inv_bind; auto.
       - repeat inv_bind; auto.
       - repeat inv_bind; auto.
     Qed.
@@ -2200,7 +2186,7 @@ Module Type NTYPING
 
     (** Finally, typing of a node *)
 
-    Local Hint Resolve iface_eq_wt_enum : norm.
+    Local Hint Resolve iface_incl_wt_enum : norm.
 
     Lemma normfby_node_wt : forall n,
         wt_node G1 n ->
@@ -2210,14 +2196,10 @@ Module Type NTYPING
       unfold normfby_node.
       pose proof (n_syn n) as Hsyn. inv Hsyn.
       destruct Hiface as (Henums&_).
-      split; [|split; [|split]]; simpl; try solve [rewrite <- Henums; auto]. solve_forall.
-      rewrite <-H in *; simpl in *. inv Heq.
-      econstructor.
-      1-5:eauto.
-      - destruct (normfby_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
-        eapply normfby_blocks_wt in Heqres. 3:eauto. 2:rewrite map_app, Forall_app; split; eauto.
-        2,3:simpl_Forall; simpl_In; simpl_Forall; eauto.
-        simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
+      split; [|split; [|split]]; simpl; try solve [rewrite <- Henums; auto].
+      1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
+      rewrite <-H in *; simpl in *. inv Heq. inv H4.
+      do 2 econstructor; eauto.
       - unfold wt_clocks in *. simpl_app. apply Forall_app; split.
         + simpl_Forall. repeat solve_incl.
         + destruct (normfby_blocks _ _ _) as (blocks&st') eqn:Heqres.
@@ -2229,11 +2211,15 @@ Module Type NTYPING
       - destruct (normfby_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
         eapply normfby_blocks_wt_enum with (vars:=senv_of_inout (n_in n ++ n_out n) ++ senv_of_locs locs) in Heqres; eauto.
         + simpl_app. rewrite 3 Forall_app in Heqres. destruct Heqres as (?&?&?&?).
-          rewrite Forall_app; split; simpl_Forall; eauto using iface_eq_wt_enum.
+          rewrite Forall_app; split; simpl_Forall; eauto using iface_incl_wt_enum.
         + unfold st_senv. rewrite init_st_anns, app_nil_r. auto.
         + unfold st_senv. rewrite init_st_anns, app_nil_r.
-          rewrite map_app, Forall_app; split; simpl_Forall; simpl_In; simpl_Forall; eauto using iface_eq_wt_enum.
+          rewrite map_app, Forall_app; split; simpl_Forall; simpl_In; simpl_Forall; eauto using iface_incl_wt_enum.
       - apply Forall_app; split; simpl_Forall; subst; simpl; auto.
+      - destruct (normfby_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
+        eapply normfby_blocks_wt in Heqres. 3:eauto. 2:rewrite map_app, Forall_app; split; eauto.
+        2,3:simpl_Forall; simpl_In; simpl_Forall; eauto.
+        simpl_app. erewrite map_map, map_ext with (l:=st_anns _); eauto. intros; destruct_conjs; auto.
     Qed.
 
   End normfby_node_wt.
@@ -2246,7 +2232,7 @@ Module Type NTYPING
     induction nds; simpl; inv Hwt; split; simpl; auto. constructor.
     destruct H2. constructor; [constructor|]; simpl in *.
     - eapply normfby_node_wt; eauto; simpl; auto. 2:split; auto.
-      eapply normfby_global_eq.
+      eapply iface_eq_iface_incl, normfby_global_eq.
     - eapply normfby_nodes_names; eauto.
     - eapply IHnds; eauto.
   Qed.

@@ -7,6 +7,9 @@ export OCAMLFIND_IGNORE_DUPS_IN = $(shell ocamlc -where)/compiler-libs
 OCAMLOPT=ocamlfind ocamlopt -package compiler-libs.common -linkpkg
 OCAMLLEX=ocamllex
 
+vltohtml: vltohtml.cmx
+	$(OCAMLOPT) -o $@ $^
+
 rat: rat.cmx
 	$(OCAMLOPT) -o rat rat.cmx
 

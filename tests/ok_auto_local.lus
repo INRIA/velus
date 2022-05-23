@@ -1,0 +1,13 @@
+node test(b : bool) returns (y : int)
+let
+    automaton initially A
+    state A var d : int; do
+        d = 0 fby (d + 1);
+        y = d / 2;
+        until d > 5 continue B
+            | d > 10 then A
+    state B do
+        y = 0;
+        until true continue A
+    end
+tel

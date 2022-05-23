@@ -13,6 +13,6 @@ var w : bool when a;
 let
     w = (not b) when a;
     x = b when not a;
-    (y, z) = merge a (true -> f(w)) (false -> f(x));
+    (y, z) = merge a (true => f(w)) (false => f(x));
 tel
 

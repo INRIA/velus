@@ -3,7 +3,7 @@ type t = A
 node f(ckw : bool; w : t :: . on ckw) returns (y : int :: . on ckw)
 let
   switch w
-  | A -> var t : int;
+  | A do var t : int;
          let t = 4;
              y = (t when ckw) + 3;
          tel

@@ -149,6 +149,7 @@ Extract Constant Cabs.char_code => "int64".
 
 Extract Constant Velus.print_lustre => "Veluslib.print_lustre_if".
 Extract Constant Velus.print_nolast => "Veluslib.print_nolast_if".
+Extract Constant Velus.print_noauto => "Veluslib.print_noauto_if".
 Extract Constant Velus.print_noswitch => "Veluslib.print_noswitch_if".
 Extract Constant Velus.print_nolocal => "Veluslib.print_nolocal_if".
 Extract Constant Velus.print_nlustre => "Veluslib.print_nlustre_if".

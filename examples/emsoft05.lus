@@ -8,8 +8,8 @@ var o2 : int when ck;
     ck, ns : bool;
 let
   o2 = o_1 when ck;
-  o = merge ck (true -> o2) (false -> 0 when not ck);
-  ns = merge ck (true -> not x when ck) (false -> x when not ck);
+  o = merge ck o2 (0 when not ck);
+  ns = merge ck (not x when ck) (x when not ck);
   o_1 = 0 fby o;
   ck = false fby ns;
 tel
@@ -24,25 +24,25 @@ let
   r_2 = false fby nr_2;
   ck_2 = if r_1 then false else v_3;
   d = if (r_1 when run) then (0 when run) else v_12 + (1 when run);
-  s = merge run (true -> if d < v_12
+  s = merge run (true => if d < v_12
                  then (((s_1 + 1) mod 60) when run)
                  else (s_1 when run))
-                (false -> if (r_1 when not run)
+                (false => if (r_1 when not run)
                  then (0 when not run)
                  else (s_1 when not run));
-  run = merge ck_2 (true -> not (stst when ck_2))
-                   (false -> stst when not ck_2);
-  m = merge run (true -> if ((s < s_1) when run)
+  run = merge ck_2 (true => not (stst when ck_2))
+                   (false => stst when not ck_2);
+  m = merge run (true => if ((s < s_1) when run)
                          then (((m_1 + 1) mod 60) when run)
                          else (m_1 when run))
-                (false -> if (r_1 when not run)
+                (false => if (r_1 when not run)
                           then (0 when not run)
                           else (m_1 when not run));
   v = (rst and run) when not ck;
-  disp_1 = merge ck (true -> p_disp_1 when ck) (false -> s when not ck);
-  disp_2 = merge ck (true -> p_disp_2 when ck) (false -> m when not ck);
-  ns_2 = merge ck (true -> not rst when ck) (false -> v);
-  nr_2 = merge ck (true -> rst when ck) (false -> v);
+  disp_1 = merge ck (p_disp_1 when ck) (s when not ck);
+  disp_2 = merge ck (p_disp_2 when ck) (m when not ck);
+  ns_2 = merge ck (not rst when ck) v;
+  nr_2 = merge ck (rst when ck) v;
   p_disp_2 = 0 fby disp_2;
   p_disp_1 = 0 fby disp_1;
   m_1 = 0 fby m;

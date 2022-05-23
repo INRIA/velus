@@ -3,6 +3,7 @@
 
 let lustre_destination = ref (None : string option)
 let nolast_destination = ref (None : string option)
+let noauto_destination = ref (None : string option)
 let noswitch_destination = ref (None : string option)
 let nolocal_destination = ref (None : string option)
 let nlustre_destination = ref (None : string option)
@@ -63,6 +64,9 @@ let print_lustre_if =
 
 let print_nolast_if =
   print_if nolast_destination Interfacelib.PrintLustre.print_global
+
+let print_noauto_if =
+  print_if noauto_destination Interfacelib.PrintLustre.print_global
 
 let print_noswitch_if =
   print_if noswitch_destination Interfacelib.PrintLustre.print_global

@@ -318,15 +318,16 @@ Module Type TR
 
   Definition mmap_block_to_equation {PSyn prefs} env envo (n: @L.node PSyn prefs) :
     res { neqs | match n.(L.n_block) with
-                 | L.Blocal locs blks =>
+                 | L.Blocal (L.Scope locs _ blks) =>
                    do neqs <- mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo []) blks;
                    OK (locs, neqs)
                  | _ => Error (msg "node not normalized")
                  end = OK neqs }.
   Proof.
     destruct (L.n_block n); simpl.
-    1-3:right; exact (msg "node not normalized").
-    destruct (mmap (block_to_equation (Env.adds' (idty (idty l)) env) envo []) l0).
+    1-4:right; exact (msg "node not normalized").
+    destruct s as [? l0].
+    destruct (mmap (block_to_equation (Env.adds' (idty (idty l)) env) envo []) l1).
     left. simpl. eauto.
     right. auto.
   Defined.
@@ -376,16 +377,16 @@ Module Type TR
     pose proof (L.n_defd n) as (vd&Hvars&Hperm).
     pose proof (L.n_syn n) as Hsyn.
     cases. rename l0 into blks. inv Hsyn.
-    monadInv1 P. inv Hvars.
-    assert (NL.vars_defined neqs = concat xs).
-    { revert neqs EQ. clear - H2 H3. induction H3; inv H2; simpl.
+    monadInv1 P. inv Hvars. inv H0. destruct H6 as (xs0&Hvd&Hperm').
+    assert (NL.vars_defined neqs = concat xs0).
+    { revert neqs EQ. clear - H3 Hvd. induction Hvd; inv H3; simpl.
       - intros neqs Htr. inv Htr. auto.
       - intros neqs Htoeq. monadInv Htoeq.
-        apply IHForall2 in EQ1; auto. simpl.
+        apply IHHvd in EQ1; auto. simpl.
         f_equal; auto.
-        clear - H H4 EQ.
+        clear - H H2 EQ.
         revert EQ y H. generalize (@nil (ident * clock)) as xr.
-        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H4; inv Hvd; try congruence.
+        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H2; inv Hvd; try congruence.
         + apply ok_fst_defined in EQ; auto.
         + cases; simpl.
           repeat (take (Forall _ [_]) and apply Forall_singl in it).
@@ -393,7 +394,7 @@ Module Type TR
           eapply it; eauto.
     }
     simpl. rewrite H.
-    rewrite <-H5, map_app, Hperm, map_fst_idty. reflexivity.
+    rewrite Hperm', map_app, Hperm, Permutation_app_comm, map_fst_idty. reflexivity.
   Qed.
 
   (* NL.n_vout obligation *)
@@ -432,9 +433,9 @@ Module Type TR
     rewrite (Permutation_app_comm (idty (idty vars))), app_assoc, <-idty_app.
     apply NoDupMembers_app; eauto.
     - rewrite NoDupMembers_idty; auto.
-    - rewrite 2 NoDupMembers_idty; auto.
-    - intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1. rewrite 2 InMembers_idty in Hinm2.
-      eapply H4; eauto.
+    - inv H1. rewrite 2 NoDupMembers_idty; auto.
+    - inv H1. intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1. rewrite 2 InMembers_idty in Hinm2.
+      eapply H6; eauto.
       now apply fst_InMembers.
   Qed.
 
@@ -445,14 +446,14 @@ Module Type TR
     split; auto.
     cases. monadInv P.
     rewrite (Permutation_app_comm (idty (idty vars))), app_assoc, <-idty_app, map_app, 3 map_fst_idty.
-    inv Hgood2.
+    inv Hgood2. inv H0.
     apply Forall_app. split; auto.
     1,2:(eapply Forall_impl; [|eauto]; intros * [?|(pref&Hpref&?&?&?)];
          subst; [left|right]; auto;
          exists pref; eauto;
-         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, last_prefs, elab_prefs in Hpref;
+         unfold norm2_prefs, norm1_prefs, local_prefs, switch_prefs, auto_prefs, last_prefs, elab_prefs in Hpref;
          repeat rewrite PSF.add_iff in *; rewrite PS.singleton_spec in *;
-         destruct Hpref as [|[|[|[|[|]]]]]; subst; split; eauto 10).
+         destruct Hpref as [|[|[|[|[|[|]]]]]]; subst; split; eauto 10).
   Qed.
 
   Definition to_global (G : L.global) :=
@@ -635,8 +636,8 @@ Module Type TR
         right. unfold envs_eq in Heq. rewrite Heq. eauto.
     Qed.
 
-    Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs blks :
-      L.n_block n = L.Blocal locs blks ->
+    Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs caus blks :
+      L.n_block n = L.Blocal (L.Scope locs caus blks) ->
       envs_eq
         (Env.adds' (idty (idty locs))
                    (Env.adds' (idty (L.n_in n))
@@ -653,8 +654,8 @@ Module Type TR
       1-3:repeat rewrite <-idty_app; repeat rewrite NoDupMembers_idty; eauto using NoDupMembers_app_r.
       rewrite (Permutation_app_comm (L.n_out _)).
       apply NoDupMembers_app; eauto using NoDupMembers_app_l.
-      - now rewrite NoDupMembers_idty.
-      - intros ? Hinm1. rewrite InMembers_idty in Hinm1. rewrite fst_InMembers; eauto.
+      - inv H1. now rewrite NoDupMembers_idty.
+      - inv H1. intros ? Hinm1. rewrite InMembers_idty in Hinm1. rewrite fst_InMembers; eauto.
     Qed.
 
   End Envs_eq.

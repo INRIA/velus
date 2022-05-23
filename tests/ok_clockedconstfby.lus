@@ -4,6 +4,6 @@ returns (z: bool);
 var w: bool when x;
 let
   w = false fby (not y);
-  z = merge x (true -> w) (false -> true);
+  z = merge x w true;
 tel
 

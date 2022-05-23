@@ -54,11 +54,17 @@ module type SYNTAX =
 
     type equation = idents * exp list
 
+    type transition = exp * (enumtag * bool)
+
+    type 'a scope =
+    | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * (ident * ident) list * 'a
+
     type block =
     | Beq of equation
     | Breset of block list * exp
-    | Bswitch of exp * (enumtag * block list) list
-    | Blocal of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * block list
+    | Bswitch of exp * (enumtag * (block list) scope) list
+    | Bauto of clock * ((exp * enumtag) list * enumtag) * (enumtag * (block list * transition list) scope) list
+    | Blocal of (block list) scope
 
     type node = {
           n_name     : ident;
@@ -124,10 +130,16 @@ module PrintFun
       pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_clock
 
     let print_comma_list p =
-      pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") p
+      pp_print_list ~pp_sep:(fun p () -> fprintf p ",@;") p
 
     let print_semicol_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p ";@;") p
+
+    let print_semicol_list_as name px p xs =
+    if xs = [] then () else
+      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
+        name
+        (print_semicol_list px) xs
 
     let rec exp prec p e =
       let (prec', assoc) = precedence e in
@@ -161,12 +173,12 @@ module PrintFun
           print_ident x
           PrintOps.print_enumtag c
       | L.Emerge ((id, _), es, _) ->
-        fprintf p "merge %a@ %a"
+        fprintf p "@[<v>merge %a%a@]"
           print_ident id
           (PrintOps.print_branches exp_enclosed_list)
           (List.map (fun (i, ce) -> (asprintf "%a" PrintOps.print_enumtag i, Some ce)) es, None)
       | L.Ecase (e, es, d, _) ->
-        fprintf p "case %a@ of@ %a"
+        fprintf p "@[<v>case %a of%a@]"
           (exp 16) e
           (PrintOps.print_branches exp_enclosed_list)
           (List.map (fun (i, ce) -> (asprintf "%a" PrintOps.print_enumtag i, Some ce)) es, d)
@@ -242,31 +254,74 @@ module PrintFun
                  (print_comma_list print_ident) xs
 
     let rec print_equation p (xs, es) =
-      fprintf p "@[<hov 2>%a =@ %a@]"
+      fprintf p "@[<hov 2>%a = %a@]"
         print_pattern xs (exp_list 0) es
 
-    let print_semicol_list_as name px p xs =
-    if List.length xs > 0 then
-      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
-        name
-        (print_semicol_list px) xs
+    let rec print_initially p (ini, oth) =
+      match ini with
+      | [] -> fprintf p "otherwise %a"
+                PrintOps.print_enumtag oth
+      | (e, t)::inis ->
+         fprintf p "if %a then %a;@;%a"
+           print_exp e
+           PrintOps.print_enumtag t
+           print_initially (inis, oth)
 
-    let rec print_block p bck =
-      match bck with
+    let print_transition p (e, (k, r)) =
+      fprintf p "@[<h> %a %s %a@]"
+        print_exp e
+        (if r then "then" else "continue")
+        PrintOps.print_enumtag k
+
+    let print_bar_list p =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p "@;|") p
+
+    let print_until_list p xs =
+      if xs = [] then () else
+        fprintf p "@;@[<h>until@[<v -1>%a@]@]@;"
+          (print_bar_list print_transition) xs
+
+    let rec print_block p = function
       | L.Beq eq -> print_equation p eq
       | L.Breset (blks, er) ->
         fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a"
-          (print_semicol_list print_block) blks
+          print_blocks blks
           print_exp er
       | L.Bswitch (ec, brs) ->
-        fprintf p "@[<v 0>@[<h 2>switch@;%a@]%a@]@;end"
+        fprintf p "@[<v 0>@[<h 2>switch@ %a@]@ %a@]@ end"
           print_exp ec
-          (PrintOps.print_branches (print_semicol_list print_block))
-          (List.map (fun (i, blks) -> (asprintf "%a" PrintOps.print_enumtag i, Some blks)) brs, None)
-      | L.Blocal (locals, blks) ->
-        fprintf p "%a@[<v 2>let@;%a@;<0 -2>@]tel"
+          (pp_print_list print_switch_branch) brs
+      | L.Bauto (_, ini, states) ->
+         fprintf p "@[<v 2>automaton@;initially %a@;%a@;end@]"
+           print_initially ini
+           (pp_print_list print_state) states
+      | L.Blocal (Scope (locals, _, blks)) ->
+        fprintf p "do %a@[<v 2>in@ %a@;<0 -2>@]done"
           (print_semicol_list_as "var" print_local_decl) locals
-          (print_semicol_list print_block) blks
+          print_blocks blks
+
+    and print_blocks p blks =
+      print_semicol_list print_block p blks
+
+    and print_switch_branch p (e, Scope (locs, _, blks)) =
+      fprintf p "@[<v 2>| %a %ado@ %a@]"
+        PrintOps.print_enumtag e
+        (print_semicol_list_as "var" print_local_decl) locs
+        print_blocks blks
+
+    and print_state p (e, (Scope (locs, _, (blks, trans)))) =
+      fprintf p "@[<v 2>state %a %ado@ %a%a@]"
+        PrintOps.print_enumtag e
+        (print_semicol_list_as "var" print_local_decl) locs
+        (print_semicol_list print_block) blks
+        print_until_list trans
+
+    let print_top_block p = function
+      | L.Blocal (Scope (locals, _, blks)) ->
+        fprintf p "%a@[<v 2>let@ %a@;<0 -2>@]tel"
+          (print_semicol_list_as "var" print_local_decl) locals
+          print_blocks blks
+      | blk -> print_block p blk
 
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;
@@ -283,7 +338,7 @@ module PrintFun
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        print_block blk
+        print_top_block blk
 
     let print_global p prog =
       fprintf p "@[<v 0>%a@]@."

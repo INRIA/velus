@@ -176,8 +176,8 @@ Module Type COMPLETENESS
       eapply IHHnorm; eauto.
   Qed.
 
-  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
-      n_block n = Blocal locs blks ->
+  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs caus blks,
+      n_block n = Blocal (Scope locs caus blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       wt_node G n ->
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
@@ -186,24 +186,25 @@ Module Type COMPLETENESS
       exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo nil) blks = OK eqs'.
   Proof.
     intros * Hblk Hlocs Hwtn Hnormed Hfind Henvo.
-    pose proof (n_defd n) as (?&Hvars&Hperm). rewrite Hblk in Hvars. inv Hvars.
-    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty (idty locs)) env) x = OK cl) (concat xs)) as Hfind'.
-    { rewrite <-H3, Hperm.
-      apply Forall_app; split; solve_forall.
-      - eapply In_InMembers in H.
-        unfold find_clock. cases_eqn Hfind; eauto.
-        eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
-        rewrite 2 InMembers_idty in Hinm. simpl in *. congruence.
-      - unfold find_clock in *; simpl in *.
+    pose proof (n_defd n) as (?&Hvars&Hperm). rewrite Hblk in Hvars. inv Hvars; inv H0; inv_VarsDefined.
+    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty (idty locs)) env) x = OK cl) (concat x0)) as Hfind'.
+    { rewrite Hperm0.
+      apply Forall_app; split; simpl_Forall; subst.
+      - rewrite Hperm in H; simpl_In; simpl_Forall.
+        unfold find_clock in *; simpl in *.
         cases_eqn Hfind; subst; eauto.
         eapply Env.find_adds'_nIn in Hfind1 as (?&?). congruence.
+      - apply In_InMembers in H.
+        unfold find_clock. cases_eqn Hfind; eauto.
+        eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
+        rewrite 2 InMembers_idty in Hinm. congruence.
     }
-    destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt.
-    clear Hblk Hperm H3.
-    induction H1; intros; simpl in *; eauto.
-    inv Hnormed. inv H4. apply Forall_app in Hfind' as (?&?). simpl in *.
-    eapply block_to_equation_complete in H3 as (?&Heqs1); eauto.
-    eapply IHForall2 in H6 as (?&Heqs2); eauto.
+    destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt; inv H1.
+    clear Hblk Hperm0.
+    induction Hvars; intros; simpl in *; eauto.
+    inv Hnormed. inv H9. apply Forall_app in Hfind' as (?&?). simpl in *.
+    eapply block_to_equation_complete in H2 as (?&Heqs1); eauto.
+    eapply IHHvars in H10 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
@@ -214,7 +215,7 @@ Module Type COMPLETENESS
       normalized_node G n ->
       exists n', to_node n = OK n'.
   Proof.
-    intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk Hnormed].
+    intros * Hwtn Hnorm. inversion_clear Hnorm as [???? Hblk Hnormed].
     unfold to_node.
     edestruct (mmap_block_to_equation_complete G n)
               with (env:=Env.adds' (idty (n_in n)) (Env.from_list (idty (n_out n))))

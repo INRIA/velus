@@ -176,7 +176,9 @@ Module Type NLINDEXEDSEMANTICS
   Qed.
 
   Definition bools_of (vs: stream svalue) (rs: stream bool) :=
-    forall n, (vs n = absent /\ rs n = false) \/ (exists c', vs n = present (Venum c') /\ rs n = (c' ==b true_tag)).
+    forall n, (vs n = absent /\ rs n = false) \/
+         (vs n = present (Venum true_tag) /\ rs n = true) \/
+         (vs n = present (Venum false_tag) /\ rs n = false).
 
   Lemma bools_of_det : forall vs rs rs',
       bools_of vs rs ->
@@ -185,7 +187,8 @@ Module Type NLINDEXEDSEMANTICS
   Proof.
     intros * Hb1 Hb2.
     extensionality n.
-    specialize (Hb1 n) as [(?&?)|(?&?&?)]; specialize (Hb2 n) as [(?&?)|(?&?&?)]; congruence.
+    specialize (Hb1 n) as [(?&?)|[(?&?)|(?&?)]]; specialize (Hb2 n) as [(?&?)|[(?&?)|(?&?)]]; try congruence.
+    1,2:rewrite H in H1; inv H1.
   Qed.
 
   Definition bools_ofs (vs : list vstream) (rs : cstream) :=
@@ -229,7 +232,8 @@ Module Type NLINDEXEDSEMANTICS
   Proof.
     intros * (rss&Bools&_).
     induction Bools; simpl in *; constructor; auto.
-    specialize (H n) as [(?&?)|(?&?&?)]; subst; eauto.
+    specialize (H n) as [(?&?)|[(?&?)|(?&?)]]; subst; eauto.
+    - erewrite H; simpl; eauto.
     - erewrite H; simpl; eauto.
     - erewrite H; simpl; eauto.
   Qed.
@@ -244,14 +248,15 @@ Module Type NLINDEXEDSEMANTICS
     - rewrite B2 in Rs. clear B2.
       eapply Exists_existsb with (P:=fun x => x n = true) in Rs; intuition.
       induction B1; simpl in *; inv Rs; auto.
-      left. specialize (H n) as [(?&?)|(?&?&Hy)]; try congruence.
+      left. specialize (H n) as [(?&?)|[(?&Hy)|(?&?)]]; try congruence.
       rewrite Hy in H1.
-      rewrite H; simpl. congruence.
+      rewrite H; simpl. rewrite equiv_decb_refl; auto.
     - rewrite B2. clear B2.
       eapply Exists_existsb with (P:=fun x => x n = true); intuition.
       induction B1; simpl in *; inv Rs; auto.
-      left. specialize (H n) as [(?&?)|(?&?&Hy)].
-      1,2:rewrite H in H1; simpl in *; try congruence.
+      left. specialize (H n) as [(?&?)|[(?&Hy)|(?&?)]].
+      1-3:rewrite H in H1; simpl in *; try congruence.
+      inv H1.
   Qed.
 
   Lemma bools_ofs_svalue_to_bool_false:
@@ -264,18 +269,17 @@ Module Type NLINDEXEDSEMANTICS
     - rewrite B2 in Rs. clear B2.
       apply existsb_Forall, forallb_Forall in Rs.
       induction B1; simpl in *; inv Rs; constructor; auto.
-      specialize (H n) as [(?&?)|(?&?&Hy)]; try congruence.
-      1,2:rewrite H; simpl; auto.
+      specialize (H n) as [(?&?)|[(?&Hy)|(?&?)]]; try congruence.
+      1-3:rewrite H; simpl; auto.
       rewrite Bool.negb_true_iff in H2.
       congruence.
     - rewrite B2. clear B2.
       eapply existsb_Forall, forallb_Forall.
       induction B1; simpl in *; inv Rs; auto.
       econstructor; eauto.
-      specialize (H n) as [(?&Hy)|(?&?&Hy)].
-      1,2:rewrite Hy; simpl in *; auto.
+      specialize (H n) as [(?&Hy)|[(?&Hy)|(?&Hy)]].
+      1-3:rewrite Hy; simpl in *; auto.
       rewrite H in H2; simpl in *. inv H2.
-      rewrite H1; auto.
   Qed.
 
   (** ** Another formulation for the resetable fby.

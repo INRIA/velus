@@ -13,20 +13,20 @@ let
     pi = i fby i;
     ppi = i fby pi;
     switch i
-    | Blue ->
+    | Blue do
         d = case pi of
-            (Blue -> if ppi = Blue then Immobile else Undet)
-            (Red -> Clockwise)
-            (Green -> Anticlockwise);
-    | Red ->
+            (Blue => if ppi = Blue then Immobile else Undet)
+            (Red => Clockwise)
+            (Green => Anticlockwise);
+    | Red do
         d = case i of
-            (Red -> if ppi = Red then Immobile else Undet)
-            (Green -> Clockwise)
-            (Blue -> Anticlockwise);
-    | Green ->
+            (Red => if ppi = Red then Immobile else Undet)
+            (Green => Clockwise)
+            (Blue => Anticlockwise);
+    | Green do
         d = case i of
-            (Green -> if ppi = Green then Immobile else Undet)
-            (Red -> Anticlockwise)
-            (Blue -> Clockwise);
+            (Green => if ppi = Green then Immobile else Undet)
+            (Red => Anticlockwise)
+            (Blue => Clockwise);
     end
 tel

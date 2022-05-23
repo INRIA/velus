@@ -611,7 +611,7 @@ Module Type CORRECTNESS
   Lemma fby1_reset1_fby:
     forall n r x0 v0 x y,
       (forall m, m <= n -> r # m = false) ->
-      LS.fby1 v0 (NCor.const_val (abstract_clock (maskv 0 r x)) x0) (maskv 0 r x) (maskv 0 r y) ->
+      LS.fby1 v0 (NCor.const_val (abstract_clock (mask' absent 0 0 r x)) x0) (mask' absent 0 0 r x) (mask' absent 0 0 r y) ->
       y # n = (NLSC.reset1 x0 (sfby v0 x) r false) # n.
   Proof.
     induction n;
@@ -621,16 +621,20 @@ Module Type CORRECTNESS
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
     - exfalso. specialize (Hle 0 (Nat.le_0_l _)).
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
-    - rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby. inv Hfby; auto.
-    - rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby. inv Hfby; auto.
+    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+      inv Hfby; auto.
+    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
+      inv Hfby; auto.
     - exfalso. specialize (Hle 0 (Nat.le_0_l _)).
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
     - exfalso. specialize (Hle 0 (Nat.le_0_l _)).
       rewrite Str_nth_0_hd in Hle; simpl in Hle; congruence.
-    - rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby. inv Hfby; auto.
+    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      inv Hfby; auto.
       eapply IHn in H3; eauto.
       intros ? Hle'. specialize (Hle (S m)). rewrite Str_nth_S_tl in Hle. eapply Hle; lia.
-    - rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby. inv Hfby; auto.
+    - rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      inv Hfby; auto.
       eapply IHn in H1; eauto.
       intros ? Hle'. specialize (Hle (S m)). rewrite Str_nth_S_tl in Hle. eapply Hle; lia.
   Qed.
@@ -662,23 +666,23 @@ Module Type CORRECTNESS
     intros * Hfby.
     eapply ntheq_eqst. intros n.
     assert (forall k, (count r) # n <= k ->
-                 LS.fby (NCor.const_val (abstract_clock (maskv k r x)) x0) (maskv k r x) (maskv k r y)) as Hfby'.
-    { intros; auto. } clear Hfby. rename Hfby' into Hfby.
+                 LS.fby (NCor.const_val (abstract_clock (mask' absent k 0 r x)) x0) (mask' absent k 0 r x) (mask' absent k 0 r y)) as Hfby'.
+    { intros. apply Hfby. } clear Hfby. rename Hfby' into Hfby.
 
     revert x0 x y r Hfby.
     induction n;
       intros; unfold_Stv r; unfold_Stv x; destruct y;
         repeat rewrite Str_nth_0_hd; repeat rewrite Str_nth_S_tl; simpl in *.
-    - specialize (Hfby 1). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+    - specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
-    - specialize (Hfby 1). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+    - specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
-    - specialize (Hfby 0). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+    - specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
-    - specialize (Hfby 0). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+    - specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl in Hfby.
       rewrite Str_nth_0_hd in Hfby; simpl in Hfby; specialize (Hfby (Nat.le_refl _)).
       inv Hfby; auto.
     - rewrite NLSC.reset1_fby.
@@ -686,13 +690,13 @@ Module Type CORRECTNESS
       specialize (Hfby (S k)).
       rewrite Str_nth_S_tl in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
       specialize (Hfby (le_n_S _ _ Hc)).
-      destruct k; rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; eauto.
-    - (* 2 possibilities :
-         + there is no reset before n, in which case the sequence behaves as fby1 until n
-         + there is a reset before n, in which case we can use the induction hypothesis
-       *)
+      destruct k; rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, 2 mask'_S in Hfby; inv Hfby; eauto.
+    - (* 2 possibilities : *)
+    (*      + there is no reset before n, in which case the sequence behaves as fby1 until n *)
+    (*      + there is a reset before n, in which case we can use the induction hypothesis *)
+    (*    *)
       destruct (reset_or_not_reset n r).
-      + specialize (Hfby 1). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      + specialize (Hfby 1). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons, Nat.eqb_refl, 2 mask'_S in Hfby.
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
         rewrite (proj1 (count_0 _ _)) in Hfby; auto. specialize (Hfby (Nat.le_refl _)).
         inv Hfby.
@@ -701,19 +705,19 @@ Module Type CORRECTNESS
         eapply IHn; eauto. intros k Hle.
         assert (k > 0) as Hgt by (eapply count_not_0 in H; lia).
         specialize (Hfby (S k)).
-        rewrite Str_nth_S_tl, 2 maskv_Cons in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
+        rewrite Str_nth_S_tl, 2 mask'_Cons, 2 mask'_S in Hfby; simpl in Hfby. setoid_rewrite count_S_nth' in Hfby.
         specialize (Hfby (le_n_S _ _ Hle)).
         destruct k; rewrite ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; eauto.
         inv Hgt.
     - eapply IHn; auto. intros [|k] Hle.
-      + specialize (Hfby 0). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      + specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby. specialize (Hfby Hle).
         inv Hfby; auto.
       + specialize (Hfby (S k)).
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby. specialize (Hfby Hle).
-        destruct k; rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; auto.
+        destruct k; rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; auto.
     - destruct (reset_or_not_reset n r).
-      + specialize (Hfby 0). rewrite 2 maskv_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
+      + specialize (Hfby 0). rewrite 2 mask'_Cons, ac_Cons, NCor.const_val_Cons in Hfby.
         rewrite Str_nth_S_tl in Hfby; simpl in Hfby.
         rewrite (proj1 (count_0 _ _)) in Hfby; auto. specialize (Hfby (Nat.le_refl _)).
         inv Hfby.
@@ -722,7 +726,7 @@ Module Type CORRECTNESS
         eapply IHn; eauto. intros k Hle.
         assert (k > 0) as Hgt by (eapply count_not_0 in H; lia).
         specialize (Hfby k).
-        rewrite Str_nth_S_tl, 2 maskv_Cons in Hfby; simpl in Hfby. specialize (Hfby Hle).
+        rewrite Str_nth_S_tl, 2 mask'_Cons in Hfby; simpl in Hfby. specialize (Hfby Hle).
         destruct k as [|[|]]; rewrite ac_Cons, NCor.const_val_Cons in Hfby; inv Hfby; eauto.
         inv Hgt.
   Qed.
@@ -741,7 +745,7 @@ Module Type CORRECTNESS
     intros n. specialize (Hvar n). specialize (Hck n). specialize (Hwhen n).
     repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hck. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
     rewrite ac_nth.
-    destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]]; rewrite Hv, Hy in *.
+    destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]]; rewrite Hv in *; setoid_rewrite Hy.
     - inv Hck; auto. exfalso.
       eapply IStr.sem_var_instant_det in Hvar; eauto; congruence.
     - inv Hck; auto. exfalso.
@@ -765,8 +769,8 @@ Module Type CORRECTNESS
     rewrite LCS.CIStr.CIStr.tr_Stream_ac in *.
     repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in *. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
     destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]];
-      rewrite Hx, Hv, Hy in *; inv Hck; auto.
-    1,2:eapply IStr.sem_var_instant_det in Hvar; eauto; congruence.
+      rewrite Hv in *; setoid_rewrite Hx; inv Hck; auto;
+      try setoid_rewrite Hy in H5; try congruence.
   Qed.
 
   Fact sem_clock_const : forall H ck x s ty k bs bs' bs'' c xs ys,
@@ -1602,7 +1606,7 @@ Module Type CORRECTNESS
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Hblocks Hbk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
+    inv Hnormed. destruct H2. inversion_clear H0 as [???? Hblk Hlocs Hblks].
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
@@ -1619,12 +1623,12 @@ Module Type CORRECTNESS
       take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
       take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv Hblocks.
-      assert (Env.refines (@EqSt _) H H') as Href.
+      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H9.
+      assert (Env.refines (@EqSt _) H Hi') as Href.
       { rewrite map_fst_senv_of_inout in Hdom.
         eapply LCS.local_hist_dom_refines. 3,4:eauto. 1,2:eauto.
       }
-      eapply NLSC.SNode with (H:=H'); simpl.
+      eapply NLSC.SNode with (H:=Hi'); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
       + erewrite <- to_node_in, map_fst_idty; eauto.
         eapply Forall2_impl_In; [|eauto]; intros. eapply LS.sem_var_refines; eauto.
@@ -1640,8 +1644,8 @@ Module Type CORRECTNESS
         tonodeInv EQ0; simpl in *.
         eapply sem_blockstoeqs with (cenv:=senv_of_inout (L.n_in n ++ L.n_out n) ++ _). 1-9:eauto.
         5:{ clear Htr. rewrite Hblk in Hmmap. monadInv Hmmap; eauto. }
-        * inv Hwt4. eauto.
-        * inv Hwc3. eauto.
+        * inv Hwt4. inv H8. eauto.
+        * inv Hwc3. inv H8. eauto.
         * apply envs_eq_node in Hblk. clear - Hblk.
           intros ??. specialize (Hblk x ck). rewrite <-Hblk.
           rewrite (Permutation_app_comm (Common.idty locs)).
@@ -1650,7 +1654,7 @@ Module Type CORRECTNESS
         * apply sc_vars_app; eauto.
           2:eapply sc_vars_refines; eauto.
           intros *. rewrite InMembers_senv_of_locs, fst_InMembers, map_fst_senv_of_inout.
-          intros Hin1 Hin2. eapply H11; eauto.
+          intros Hin1 Hin2. eapply H13; eauto.
     - eapply LCS.sem_node_ck_cons in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.

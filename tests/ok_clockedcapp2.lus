@@ -21,7 +21,7 @@ var u: bool when w;
     z1: bool when x; y1: bool when z1;
     z2: bool when w; y2: bool when z2;
 let
-  y = merge(x; w; false);
+  y = merge x w false;
   (* The correct form is:
         w = g(f(true when x, z, false when x when z), x);
 

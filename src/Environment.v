@@ -56,6 +56,16 @@ Module Env.
       apply xmapi_xmapi.
     Qed.
 
+    Lemma mapi_elements {B} (f : _ -> A -> B) : forall m,
+        Env.elements (Env.mapi f m) = List.map (fun '(x, y) => (x, f x y)) (Env.elements m).
+    Proof.
+      intros m.
+      unfold elements, mapi. generalize xH as i.
+      induction m; intros; simpl in *; auto.
+      destruct o; simpl in *.
+      1,2:repeat rewrite map_app; simpl; f_equal; auto.
+    Qed.
+
     Lemma map_map:
       forall {B C} (f: A -> B) (g: B -> C) (m: t A),
         map g (map f m) = map (fun x => g (f x)) m.
@@ -2138,15 +2148,6 @@ Module Env.
       - eapply restrict_refines in Hvar as (?&?&?); eauto with env; subst; auto.
     Qed.
 
-    Lemma restrict_refines' : forall R xs Hi1 Hi2,
-        refines R Hi1 Hi2 ->
-        refines R (restrict Hi1 xs) (restrict Hi2 xs).
-    Proof.
-      intros * Href ?? Hfind.
-      apply restrict_find_inv in Hfind as (Hin&Hfind). apply Href in Hfind as (?&Heq&Hfind).
-      do 2 esplit; eauto using restrict_find.
-    Qed.
-
     Corollary restrict_find_None : forall xs H id,
         find id H = None ->
         find id (restrict H xs) = None.
@@ -2154,6 +2155,30 @@ Module Env.
       intros * Hfind.
       destruct (find _ (restrict _ _)) eqn:Hfind'; auto.
       eapply restrict_find_inv in Hfind' as (?&?). congruence.
+    Qed.
+
+    Lemma restrict_Equiv : forall R xs Hi1 Hi2,
+        Equiv R Hi1 Hi2 ->
+        Equiv R (restrict Hi1 xs) (restrict Hi2 xs).
+    Proof.
+      intros * Heq. rewrite Equiv_orel in *.
+      intros x. specialize (Heq x). inv Heq.
+      - rewrite 2 restrict_find_None; auto. constructor.
+      - destruct (ListDec.In_dec ident_eq_dec x xs).
+        + erewrite 2 restrict_find; eauto.
+          constructor; auto.
+        + destruct (find x (restrict Hi1 xs)) eqn:Hfind1, (find x (restrict Hi2 xs)) eqn:Hfind2; try constructor.
+          1-3:exfalso.
+          1-3:(apply restrict_find_inv in Hfind1 as (?&?)||apply restrict_find_inv in Hfind2 as (?&?)); contradiction.
+    Qed.
+
+    Lemma restrict_refines' : forall R xs Hi1 Hi2,
+        refines R Hi1 Hi2 ->
+        refines R (restrict Hi1 xs) (restrict Hi2 xs).
+    Proof.
+      intros * Href ?? Hfind.
+      apply restrict_find_inv in Hfind as (Hin&Hfind). apply Href in Hfind as (?&Heq&Hfind).
+      do 2 esplit; eauto using restrict_find.
     Qed.
 
     Lemma incl_restrict_refines : forall R xs ys (H : Env.t V),

@@ -1,3 +1,6 @@
 *.dpd
 *.dot
 *.svg
+*.cmx
+vltohtml.ml
+vltohtml

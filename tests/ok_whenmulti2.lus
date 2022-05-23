@@ -21,6 +21,6 @@ let
     *)
     (w1, w2, w3, w4) = (f(b), f(not b)) when a;
     x = b when not a;
-    y = merge a (true -> w1) (false -> x);
+    y = merge a w1 x;
 tel
 

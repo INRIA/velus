@@ -164,29 +164,23 @@ Module Type CLOCKS
     now apply Forall_forall with (2:=Hcv) in Hwc.
   Qed.
 
-  Lemma wc_clock_add:
-    forall x v env ck,
-      ~InMembers x env ->
-      wc_clock env ck ->
-      wc_clock ((x, v) :: env) ck.
+  Fact wc_clock_incl : forall vars vars' ck,
+      incl vars vars' ->
+      wc_clock vars ck ->
+      wc_clock vars' ck.
   Proof.
-    induction ck; auto using wc_clock.
-    inversion 2.
-    auto using wc_clock with datatypes.
+    intros vars vars' ck Hincl Hwc.
+    induction Hwc; auto with clocks.
   Qed.
 
-  Lemma wc_env_add:
-    forall x env ck,
-      ~InMembers x env ->
-      wc_clock env ck ->
-      wc_env env ->
-      wc_env ((x, ck) :: env).
+  Lemma wc_env_app : forall vars vars',
+      wc_env vars ->
+      Forall (fun '(_, ck) => wc_clock (vars++vars') ck) vars' ->
+      wc_env (vars ++ vars').
   Proof.
-    intros * Hnm Hwc Hwce.
-    constructor.
-    now apply wc_clock_add; auto.
-    unfold wc_env in *. simpl_Forall.
-    apply wc_clock_add; auto.
+    intros * Hwenv1 Hwenv2. unfold wc_env in *.
+    apply Forall_app; split; simpl_Forall; auto.
+    eapply wc_clock_incl; [|eauto]. solve_incl_app.
   Qed.
 
   Lemma wc_clock_sub:

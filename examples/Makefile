@@ -51,6 +51,7 @@ EXAMPLES = \
 	avgvelocity.lus \
 	count.lus \
 	rer.lus \
+	rer-reset.lus \
 	cruise.lus \
 	emsoft03.lus \
 	emsoft05.lus \
@@ -58,6 +59,7 @@ EXAMPLES = \
 	kind_functionalChain.lus \
 	landing_gear.lus \
 	minus.lus \
+	nav.lus \
 	pip_ex.lus \
 	prodcell.lus \
 	tracker.lus \
@@ -66,7 +68,8 @@ EXAMPLES = \
 	new_watch.lus \
 	stopwatch.lus \
 	abro.lus \
-	colors.lus
+	colors.lus \
+	chrono.lus
 
 ## Main targets
 

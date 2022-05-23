@@ -18,7 +18,7 @@ returns (y: bool);
 var w: bool when x;
     z1: bool when x; y1: bool when z1;
 let
-  y = merge(x; w; false);
+  y = merge x w false;
   (* The correct form is:
         w = g(f(true when x), x);
      

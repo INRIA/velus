@@ -82,13 +82,13 @@ if the clocked stream is [absent] at the corresponding instant. *)
   (** ** Synchronous functions *)
 
   Lemma present_injection:
-    forall x y, x = y <-> present x = present y.
+    forall (x y : svalue), x = y <-> present x = present y.
   Proof.
     split; intro H; [rewrite H|injection H]; auto.
   Qed.
 
   Lemma not_absent_present:
-    forall x, x <> absent <-> exists c, x = present c.
+    forall (x : svalue), x <> absent <-> exists c, x = present c.
   Proof.
     intros x.
     split; intro HH.

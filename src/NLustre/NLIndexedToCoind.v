@@ -359,7 +359,7 @@ Module Type NLINDEXEDTOCOIND
         + eapply Sem; eauto.
           unfold streams_nth.
           intros k; rewrite Eess'.
-          change absent with ((fun es => es k) (fun _ => absent)).
+          change absent with ((fun es => es k) (fun _ => @absent value)).
           rewrite map_nth; eauto.
         + unfold CESem.sem_exp; clear.
           intros ?? E ?? E' Sem; subst.
@@ -802,7 +802,7 @@ Module Type NLINDEXEDTOCOIND
       pose proof Rst.
       specialize (Rst n).
       rewrite (init_from_n xs), (init_from_n rs).
-      destruct Rst as [(-> & ->)|(? & -> & ->)]; auto using bools_of.
+      destruct Rst as [(-> & ->)|[(-> & ->)|(-> & ->)]]; auto using bools_of.
     Qed.
 
     Corollary bools_of_impl:
@@ -895,12 +895,12 @@ Module Type NLINDEXEDTOCOIND
       cofix Cofix; intros.
       constructor; simpl.
       - unfold CESem.clock_of, CESem.clock_of_instant.
-        destruct (existsb (fun v : svalue => v <>b absent) (xss n)) eqn: E.
+        destruct (existsb (fun v : svalue => v <>b absent) (xss n)) eqn: E; setoid_rewrite E.
         + assert (forall v, v <> absent <-> (v <>b absent) = true)
             by (unfold nequiv_decb; setoid_rewrite Bool.negb_true_iff;
                 setoid_rewrite not_equiv_decb_equiv; reflexivity).
-          rewrite <-Exists_existsb with (P := fun v => hd v <> absent); auto.
-          rewrite <-Exists_existsb with (P := fun v => v <> absent) in E; auto.
+          setoid_rewrite <-Exists_existsb with (P := fun v => hd v <> @absent value); auto.
+          setoid_rewrite <-Exists_existsb with (P := fun v => v <> absent) in E; auto.
           apply Exists_In_tr_streams_from_hd in E; auto.
         + unfold nequiv_decb in *.
           apply existsb_Forall_neg, forallb_Forall in E.

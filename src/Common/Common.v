@@ -160,15 +160,33 @@ Qed.
 
 Lemma assoc_ident_false:
   forall {A} (x: ident) (xs: list (ident * A)),
-    ~InMembers x xs ->
+    ~InMembers x xs <->
     assoc_ident x xs = None.
 Proof.
-  induction xs as [| a]; auto.
-  intro nin. unfold assoc_ident. cases_eqn EE.
-  apply find_some in EE as [Hin Eq]. destruct a. subst. simpl in *.
-  apply ident_eqb_eq in Eq as ->.
-  exfalso. apply nin. destruct Hin as [H|H].
-  inv H. tauto. eauto using In_InMembers.
+  split.
+  - induction xs as [|(?&?)]; auto.
+    intro nin. unfold assoc_ident. cases_eqn EE.
+    apply find_some in EE as [Hin Eq]. subst. simpl in *.
+    apply ident_eqb_eq in Eq as ->.
+    exfalso. apply nin. destruct Hin as [H|H].
+    inv H. tauto. eauto using In_InMembers.
+  - induction xs as [|(?&?)]; auto.
+    intro nin. apply not_or'.
+    unfold assoc_ident in *. simpl in *. destruct (ident_eqb i x) eqn:EE; try congruence.
+    apply ident_eqb_neq in EE. split; auto.
+Qed.
+
+Lemma assoc_ident_In:
+  forall {A} (x: ident) (y : A) (xs: list (ident * A)),
+    assoc_ident x xs = Some y ->
+    In (x, y) xs.
+Proof.
+  unfold assoc_ident.
+  induction xs as [| a]; intros * Hassc; simpl in *. inv Hassc.
+  destruct a; simpl in *; destruct (ident_eqb i x) eqn:Hident; simpl in *.
+  - inv Hassc.
+    apply ident_eqb_eq in Hident; subst; auto.
+  - auto.
 Qed.
 
 Module Type IDS.
@@ -185,6 +203,7 @@ Module Type IDS.
 
   Parameter elab : ident.
   Parameter last : ident.
+  Parameter auto : ident.
   Parameter switch : ident.
   Parameter local : ident.
   Parameter norm1 : ident.
@@ -194,12 +213,13 @@ Module Type IDS.
   (** Incremental prefix sets *)
   Definition elab_prefs := PS.singleton elab.
   Definition last_prefs := PS.add last elab_prefs.
-  Definition switch_prefs := PS.add switch last_prefs.
+  Definition auto_prefs := PS.add auto last_prefs.
+  Definition switch_prefs := PS.add switch auto_prefs.
   Definition local_prefs := PS.add local switch_prefs.
   Definition norm1_prefs := PS.add norm1 local_prefs.
   Definition norm2_prefs := PS.add norm2 norm1_prefs.
 
-  Definition gensym_prefs := [elab; last; switch; local; norm1; norm2].
+  Definition gensym_prefs := [elab; last; auto; switch; local; norm1; norm2].
   Conjecture gensym_prefs_NoDup : NoDup gensym_prefs.
 
   Parameter default : ident.
@@ -215,6 +235,7 @@ Module Type IDS.
   Conjecture step_atom : atom step.
   Conjecture reset_atom : atom reset.
   Conjecture elab_atom : atom elab.
+  Conjecture auto_atom : atom auto.
   Conjecture last_atom : atom last.
   Conjecture switch_atom : atom switch.
   Conjecture local_atom : atom local.

@@ -8,7 +8,7 @@ clean:
 	rm -f LustreParser.v LustreLexer.ml LustreParser2.ml LustreParser2.mli LustreParser2.mly
 
 LustreParser.v: LustreParser.vy
-	$(MENHIR) --no-stdlib --coq --coq-no-version-check $<
+	$(MENHIR) --explain --no-stdlib --coq --coq-no-version-check $<
 
 LustreParser2.mly: LustreParser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@

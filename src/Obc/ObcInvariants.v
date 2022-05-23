@@ -155,7 +155,7 @@ Module Type OBCINVARIANTS
     induction stmt using stmt_ind2; intros Can; inv Can; auto using Can_write_in.
     constructor.
     eapply Forall_Exists in H2; eauto.
-    eapply Exists_Exists; [|eauto]. intros ? (?&?); auto.
+    eapply Exists_impl; [|eauto]. intros ? (?&?); auto.
   Qed.
   Global Hint Resolve Can_write_in_var_Can_write_in : obcinv.
 

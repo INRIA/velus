@@ -156,8 +156,8 @@ Module Type COINDTOINDEXED
       rewrite H2, maskv_nth. reflexivity.
     Qed.
 
-    Fact tr_Stream_ac : forall xs n,
-        tr_Stream (abstract_clock xs) n = match (xs # n) with absent => false | _ => true end.
+    Fact tr_Stream_ac {A} : forall xs n,
+        tr_Stream (@abstract_clock A xs) n = match (xs # n) with absent => false | _ => true end.
     Proof.
       intros xs n.
       rewrite tr_Stream_nth. apply ac_nth.
@@ -182,90 +182,24 @@ Module Type COINDTOINDEXED
 
     (** ** Semantics of clocks *)
 
-    (** Give an indexed specification for [sem_clock] in the previous style,
-        with added complexity as [sem_clock] depends on [H] and [b].
-        We go by induction on the clock [ck] then by induction on [n] and
-        inversion of the coinductive hypothesis as before. *)
-    Lemma sem_clock_index:
-      forall n H b ck bs,
-        CStr.sem_clock H b ck bs ->
-        (ck = Cbase
-         /\ tr_Stream b n = tr_Stream bs n)
-        \/
-        (exists ck' x t c,
-            ck = Con ck' x (t, c)
-            /\ IStr.sem_clock_instant
-                (tr_Stream b n) (tr_history H n) ck' true
-            /\ IStr.sem_var_instant (tr_history H n) x
-                                      (present (Venum c))
-            /\ tr_Stream bs n = true)
-        \/
-        (exists ck' x c,
-            ck = Con ck' x c
-            /\ IStr.sem_clock_instant
-                (tr_Stream b n) (tr_history H n) ck' false
-            /\ IStr.sem_var_instant (tr_history H n) x absent
-            /\ tr_Stream bs n = false)
-        \/
-        (exists ck' x t c c',
-            ck = Con ck' x (t, c)
-            /\ IStr.sem_clock_instant
-                (tr_Stream b n) (tr_history H n) ck' true
-            /\ IStr.sem_var_instant (tr_history H n) x
-                                      (present (Venum c'))
-            /\ c <> c'
-            /\ tr_Stream bs n = false).
-    Proof.
-      Local Ltac rew_0 :=
-        try match goal with
-              H: tr_Stream _ _ = _ |- _ => now rewrite tr_Stream_0 in H
-            end.
-      intros n H b ck; revert n H b; induction ck as [|ck ? x k].
-      - inversion_clear 1 as [? ? ? Eb| | |].
-        left; intuition.
-        now rewrite Eb.
-      - intro n; revert x k; induction n; intros x k H bk bk' Indexed.
-        + inversion_clear Indexed as [|? ? ? ? ? ? ? ? ? IndexedCk Hvar
-                                     |? ? ? ? ? ? ? ? IndexedCk Hvar
-                                     |? ? ? ? ? ? ? ? ? ? IndexedCk Hvar].
-          * right; left.
-            apply sem_var_impl in Hvar;
-              unfold IStr.sem_var, IStr.lift in Hvar ; specialize (Hvar 0);
-                rewrite tr_Stream_0 in Hvar.
-            do 4 eexists; intuition; eauto.
-            apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto with indexedstreams; rew_0.
-            rewrite E, tr_Stream_0; constructor.
-          * right; right; left.
-            apply sem_var_impl in Hvar;
-              unfold IStr.sem_var, IStr.lift in Hvar ; specialize (Hvar 0);
-                rewrite tr_Stream_0 in Hvar.
-            do 3 eexists; intuition.
-            apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto with indexedstreams; rew_0.
-            rewrite E, tr_Stream_0; constructor.
-          * right; right; right.
-            apply sem_var_impl in Hvar;
-              unfold IStr.sem_var, IStr.lift in Hvar; specialize (Hvar 0);
-                rewrite tr_Stream_0 in Hvar.
-            do 5 eexists; intuition; eauto.
-            apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto with indexedstreams; rew_0.
-            rewrite E, tr_Stream_0; constructor.
-        + inversion_clear Indexed; rewrite <-tr_Stream_tl, tr_history_tl; eauto.
-    Qed.
-
     (** We can then deduce the correspondence lemma for [sem_clock]. *)
-    Corollary sem_clock_impl:
+    Lemma sem_clock_impl:
       forall H b ck bs,
         CStr.sem_clock H b ck bs ->
         IStr.sem_clock (tr_Stream b) (tr_history H) ck (tr_Stream bs).
     Proof.
-      intros * Indexed n.
-      apply (sem_clock_index n) in Indexed. destruct Indexed as [|[|[|]]];
-                                              destruct_conjs;
-        match goal with H: tr_Stream _ _ = _ |- _ => rewrite H end;
-        subst; eauto with indexedstreams.
+      intros * Hsemck n. revert dependent bs.
+      induction ck; intros * Hsemck.
+      - inv Hsemck. rewrite H1. constructor.
+      - inv Hsemck. apply IHck in H4.
+        apply sem_var_impl in H7. specialize (H7 n).
+        apply eqst_ntheq with (n:=n) in H9. rewrite ac_nth in H9.
+        repeat rewrite tr_Stream_nth in *. rewrite tr_Stream_nth in H7. rewrite <-H9 in *.
+        apply enums_of_nth with (n:=n) in H10 as [(Hx&Hb)|[(Hx&Hb)|(?&Hx&?&Hb)]];
+          rewrite Hx in *; rewrite Hb.
+        + setoid_rewrite Hx in H4. constructor; auto.
+        + setoid_rewrite Hx in H4. constructor; auto.
+        + setoid_rewrite Hx in H4. eapply Son_abs2; eauto.
     Qed.
     Global Hint Resolve sem_clock_impl : indexedstreams coindstreams nlsem.
 

@@ -102,7 +102,7 @@ Module Type TRNORMALARGS
     unfold normal_args_node.
     intros * Htog Hnormed Hton.
     tonodeInv Hton; simpl in *.
-    inversion_clear Hnormed as [??? Hblk _ Hnorm]. rewrite Hblk in Hmmap. monadInv Hmmap.
+    inversion_clear Hnormed as [???? Hblk _ Hnorm]. rewrite Hblk in Hmmap. monadInv Hmmap.
     eapply mmap_inversion in EQ. clear Hblk.
     induction EQ; inv Hnorm; constructor; auto.
     eapply block_to_equation_normal_args; eauto.

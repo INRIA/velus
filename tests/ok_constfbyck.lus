@@ -4,6 +4,6 @@ node test(ck: bool) returns (y: bool);
 var x : bool when ck;
 let
     x = (false fby true) and (true fby (false when ck));
-    y = merge ck (true -> x) (false -> true);
+    y = merge ck x true;
 tel
 
