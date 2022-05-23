@@ -291,9 +291,9 @@ Module Type LCAUSALITY
   | DefSwitch : forall ec branches,
       Exists (fun blks => Is_defined_in_scope (fun Γ => Exists (Is_defined_in Γ cx)) Γ cx (snd blks)) branches ->
       Is_defined_in Γ cx (Bswitch ec branches)
-  | DefAuto : forall ini states ck,
-      Exists (fun blks => Is_defined_in_scope (fun Γ blks => Exists (Is_defined_in Γ cx) (fst blks)) Γ cx (snd blks)) states ->
-      Is_defined_in Γ cx (Bauto ck ini states)
+  | DefAuto : forall type ini states ck,
+      Exists (fun blks => Is_defined_in_scope (fun Γ blks => Exists (Is_defined_in Γ cx) (fst blks)) Γ cx (snd (snd blks))) states ->
+      Is_defined_in Γ cx (Bauto type ck ini states)
   | DefLocal : forall scope,
       Is_defined_in_scope (fun Γ => Exists (Is_defined_in Γ cx)) Γ cx scope ->
       Is_defined_in Γ cx (Blocal scope).
@@ -313,9 +313,9 @@ Module Type LCAUSALITY
   | LastSwitch : forall ec branches,
       Exists (fun blks => Is_last_in_scope (Exists (Is_last_in cx)) cx (snd blks)) branches ->
       Is_last_in cx (Bswitch ec branches)
-  | LastAuto : forall ini states ck,
-      Exists (fun blks => Is_last_in_scope (fun blks => Exists (Is_last_in cx) (fst blks)) cx (snd blks)) states ->
-      Is_last_in cx (Bauto ck ini states)
+  | LastAuto : forall type ini states ck,
+      Exists (fun blks => Is_last_in_scope (fun blks => Exists (Is_last_in cx) (fst blks)) cx (snd (snd blks))) states ->
+      Is_last_in cx (Bauto type ck ini states)
   | LastLocal : forall scope,
       Is_last_in_scope (Exists (Is_last_in cx)) cx scope ->
       Is_last_in cx (Blocal scope).
@@ -361,18 +361,22 @@ Module Type LCAUSALITY
       Is_free_left Γ cy 0 ec ->
       depends_on Γ cx cy (Bswitch ec branches)
 
-  | DepOnAuto1 : forall ini states ck,
-      Exists (fun blks => depends_on_scope (fun Γ cx cy blks => Exists (depends_on Γ cx cy) (fst blks)) Γ cx cy (snd blks)) states ->
-      depends_on Γ cx cy (Bauto ck ini states)
-  | DepOnAuto2 : forall ini oth states ck y,
-      Is_defined_in Γ cx (Bauto ck (ini, oth) states) \/ Is_last_in cx (Bauto ck (ini, oth) states) ->
+  | DepOnAuto1 : forall type ini states ck,
+      Exists (fun blks => depends_on_scope (fun Γ cx cy blks => Exists (depends_on Γ cx cy) (fst blks)) Γ cx cy (snd (snd blks))) states ->
+      depends_on Γ cx cy (Bauto type ck ini states)
+  | DepOnAuto2 : forall type ini oth states ck y,
+      Is_defined_in Γ cx (Bauto type ck (ini, oth) states) \/ Is_last_in cx (Bauto type ck (ini, oth) states) ->
       Is_free_in_clock y ck ->
       HasCaus Γ y cy ->
-      depends_on Γ cx cy (Bauto ck (ini, oth) states)
-  | DepOnAuto3 : forall ini oth states ck,
-      Is_defined_in Γ cx (Bauto ck (ini, oth) states) \/ Is_last_in cx (Bauto ck (ini, oth) states) ->
+      depends_on Γ cx cy (Bauto type ck (ini, oth) states)
+  | DepOnAuto3 : forall type ini oth states ck,
+      Is_defined_in Γ cx (Bauto type ck (ini, oth) states) \/ Is_last_in cx (Bauto type ck (ini, oth) states) ->
       Exists (fun '(e, _) => Is_free_left Γ cy 0 e) ini ->
-      depends_on Γ cx cy (Bauto ck (ini, oth) states)
+      depends_on Γ cx cy (Bauto type ck (ini, oth) states)
+  | DepOnAuto4 : forall type ini oth states ck,
+      Is_defined_in Γ cx (Bauto type ck (ini, oth) states) \/ Is_last_in cx (Bauto type ck (ini, oth) states) ->
+      Exists (fun '(_, (unl, _)) => Exists (fun '(e, _) => Is_free_left Γ cy 0 e) unl) states ->
+      depends_on Γ cx cy (Bauto type ck (ini, oth) states)
 
   | DepOnLocal : forall scope,
       depends_on_scope (fun Γ cx cy => Exists (depends_on Γ cx cy)) Γ cx cy scope ->
@@ -485,6 +489,8 @@ Module Type LCAUSALITY
       - eapply DepOnAuto2; solve_Exists; eauto. destruct H3; eauto using Is_defined_in_incl.
       - eapply DepOnAuto3; solve_Exists; eauto using Is_free_left_incl.
         destruct H2; eauto using Is_defined_in_incl.
+      - eapply DepOnAuto4; repeat solve_Exists; eauto using Is_free_left_incl.
+        destruct H2; eauto using Is_defined_in_incl.
       - (* local *)
         constructor. eapply depends_on_scope_incl; eauto.
         intros; solve_Exists; simpl_Forall; eauto.
@@ -500,7 +506,7 @@ Module Type LCAUSALITY
     | Beq _ => []
     | Breset blocks _ => flat_map idcaus_of_locals blocks
     | Bswitch _ branches => flat_map (fun '(_, s) => idcaus_of_scope (flat_map idcaus_of_locals) s) branches
-    | Bauto _ _ states => flat_map (fun '(_, s) => idcaus_of_scope (fun '(blks, _) => flat_map idcaus_of_locals blks) s) states
+    | Bauto _ _ _ states => flat_map (fun '(_, (_, s)) => idcaus_of_scope (fun '(blks, _) => flat_map idcaus_of_locals blks) s) states
     | Blocal s => idcaus_of_scope (flat_map idcaus_of_locals) s
     end.
 
@@ -737,15 +743,16 @@ Module Type LCAUSALITY
               (unions_fuse (map (fun blks =>
                                    collect_depends_scope
                                      (fun cenv cenvl blks => unions_fuse (map (collect_depends_on cenv cenvl) blks)) cenv cenvl (snd blks)) branches))
-    | Bauto ck (ini, oth) states =>
-        let pc1 := PSUnion (map (fun '(e, _) => nth 0 (collect_free_left cenv cenvl e) PS.empty) ini) in
-        let pc2 := collect_free_clock cenv ck in
-        let pc := PS.union pc1 pc2 in
+    | Bauto _ ck (ini, oth) states =>
+        let pc1 := collect_free_clock cenv ck in
+        let pc2 := PSUnion (map (fun '(e, _) => nth 0 (collect_free_left cenv cenvl e) PS.empty) ini) in
+        let pc3 := PSUnion (map (fun '(_, (unl, _)) => PSUnion (map (fun '(e, _) => nth 0 (collect_free_left cenv cenvl e) PS.empty) unl)) states) in
+        let pc := PS.union pc1 (PS.union pc2 pc3) in
         Env.map (fun ps => PS.union pc ps)
-                (unions_fuse (map (fun blks =>
+                (unions_fuse (map (fun '(_, (_, blks)) =>
                                      collect_depends_scope
                                        (fun cenv cenvl blks => unions_fuse (map (collect_depends_on cenv cenvl) (fst blks)))
-                                       cenv cenvl (snd blks)) states))
+                                       cenv cenvl blks) states))
     | Blocal scope =>
         collect_depends_scope (fun cenv' cenvl' blks => unions_fuse (map (collect_depends_on cenv' cenvl') blks))
                               cenv cenvl scope
@@ -1260,17 +1267,17 @@ Module Type LCAUSALITY
         etransitivity; eauto. rewrite <-H18; eauto using incl_concat.
     - (* automaton *)
       erewrite Env.Props.P.F.map_in_iff, unions_fuse_PS_In, Exists_map.
-      eapply Exists_impl_In with (P:=fun s => Is_defined_in_scope _ _ _ (snd s) \/ Is_last_in_scope _ _ (snd s)).
+      eapply Exists_impl_In with (P:=fun s => Is_defined_in_scope _ _ _ (snd (snd s)) \/ Is_last_in_scope _ _ (snd (snd s))).
       2:{ destruct Hdef as [Hin|Hin]; inv Hin; solve_Exists. }
       intros; simpl_Forall. destruct s; destruct_conjs.
       eapply collect_depends_scope_dom; eauto.
       2:{ intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wx_exp_incl, wx_block_incl. }
       intros. rewrite unions_fuse_PS_In. simpl in *.
-      destruct H19 as [Hex|Hex]; solve_Exists; inv_VarsDefined; simpl_Forall.
+      destruct H21 as [Hex|Hex]; solve_Exists; inv_VarsDefined; simpl_Forall.
       + solve_Exists. eapply H; eauto.
-        etransitivity; eauto. rewrite <-H21; eauto using incl_concat.
+        etransitivity; eauto. rewrite <-H23; eauto using incl_concat.
       + solve_Exists. eapply H; eauto.
-        etransitivity; eauto. rewrite <-H21; eauto using incl_concat.
+        etransitivity; eauto. rewrite <-H23; eauto using incl_concat.
     - (* locals *)
       eapply collect_depends_scope_dom; eauto.
       + destruct Hdef as [Hdef|Hdef]; inv Hdef; eauto.
@@ -1339,6 +1346,18 @@ Module Type LCAUSALITY
     intros * Hin Hnd.
     repeat rewrite map_app in *.
     eapply nodup_app_map_flat_map with (ys:=map snd brs); eauto. solve_In.
+    erewrite flat_map_concat_map, map_map, <-flat_map_concat_map, flat_map_ext; eauto.
+    intros; destruct_conjs; auto.
+  Qed.
+
+  Fact NoDup_locals_inv3 {A B T} (f_idcaus : B -> list (ident * ident)) : forall (brs : list (A * (T * B))) k trans blks xs,
+      In (k, (trans, blks)) brs ->
+      NoDup (map snd (xs ++ flat_map (fun '(_, (_, blks)) => f_idcaus blks) brs)) ->
+      NoDup (map snd (xs ++ f_idcaus blks)).
+  Proof.
+    intros * Hin Hnd.
+    repeat rewrite map_app in *.
+    eapply nodup_app_map_flat_map with (ys:=map (fun x => snd (snd x)) brs); eauto. solve_In.
     erewrite flat_map_concat_map, map_map, <-flat_map_concat_map, flat_map_ext; eauto.
     intros; destruct_conjs; auto.
   Qed.
@@ -1672,7 +1691,7 @@ Module Type LCAUSALITY
         do 2 esplit; eauto.
         now apply PSF.union_3, Hsub.
       + rewrite app_assoc, map_app in *.
-        eapply nodup_app_map_flat_map; eauto. eapply in_map_iff with (f:=snd); do 2 esplit; eauto. auto.
+        eapply nodup_app_map_flat_map; eauto. eapply in_map_iff with (f:=fun x => (snd (snd x))); do 2 esplit; eauto. auto.
         erewrite flat_map_concat_map, map_map with (l:=states), map_ext with (l:=states), <-flat_map_concat_map; eauto.
         intros; destruct_conjs; auto.
       + intros; simpl in *. simpl_Exists. inv_VarsDefined. simpl_Forall.
@@ -1683,19 +1702,19 @@ Module Type LCAUSALITY
           now apply Hsub.
         * rewrite app_assoc in *. eapply NoDup_locals_inv; eauto.
         * eapply NoDup_concat; eauto. now take (Permutation _ _) and rewrite it.
-        * take (Permutation _ _) and rewrite <-it in H17. apply Forall_concat in H17.
+        * take (Permutation _ _) and rewrite <-it in H19. apply Forall_concat in H19.
           simpl_Forall; auto.
       + intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wx_block_incl, wx_exp_incl.
     - (* automaton (clock) *)
       clear H.
-      eapply collect_depends_on_dom, Env.map_2, unions_fuse_PS_In, Exists_exists in H9 as (?&Hin1&(?&Hfind2)); eauto.
+      eapply collect_depends_on_dom, Env.map_2, unions_fuse_PS_In, Exists_exists in H7 as (?&Hin1&(?&Hfind2)); eauto.
       2,4,5,6:econstructor; eauto.
       2:{ intros ? Hin. eapply Forall_forall in Hvarsenv; eauto.
           inv Hvarsenv. eapply Henv in H. inv H. solve_In. }
       eapply unions_fuse_Subset in Hfind2 as (?&Hfind&Hsub); eauto.
       repeat esplit.
       + unfold Env.MapsTo. now erewrite Env.Props.P.F.map_o, Hfind.
-      + eapply collect_free_clock_spec in H15; eauto.
+      + eapply collect_free_clock_spec in H16; eauto.
         repeat esplit; eauto. rewrite 2 PSF.union_iff; eauto.
     - (* automaton (initial state) *)
       clear H.
@@ -1707,9 +1726,23 @@ Module Type LCAUSALITY
       repeat esplit.
       + unfold Env.MapsTo. now erewrite Env.Props.P.F.map_o, Hfind.
       + simpl_Exists; simpl_Forall.
-        eapply collect_free_left_spec in H15; eauto.
-        repeat esplit; eauto. rewrite 2 PSF.union_iff; left; left; eauto.
+        eapply collect_free_left_spec in H16; eauto.
+        repeat esplit; eauto. rewrite 3 PSF.union_iff. left; right; left; auto.
         eapply In_In_PSUnion; eauto. solve_In.
+    - (* automaton (strong transitions) *)
+      clear H.
+      eapply collect_depends_on_dom, Env.map_2, unions_fuse_PS_In, Exists_exists in H3 as (?&Hin1&(?&Hfind2)); eauto.
+      2,4,5,6:econstructor; eauto.
+      2:{ intros ? Hin. eapply Forall_forall in Hvarsenv; eauto.
+          inv Hvarsenv. eapply Henv in H. inv H. solve_In. }
+      eapply unions_fuse_Subset in Hfind2 as (?&Hfind&Hsub); eauto.
+      repeat esplit.
+      + unfold Env.MapsTo. now erewrite Env.Props.P.F.map_o, Hfind.
+      + repeat simpl_Exists; simpl_Forall.
+        eapply collect_free_left_spec in H16; eauto.
+        repeat esplit; eauto. rewrite 3 PSF.union_iff. left; right; right; auto.
+        eapply In_In_PSUnion. 2:solve_In. simpl.
+        eapply In_In_PSUnion. 2:solve_In. simpl. eauto.
 
     - (* local block *)
       eapply collect_depends_scope_spec; eauto.
@@ -1870,23 +1903,26 @@ Module Type LCAUSALITY
       simpl_Exists. simpl_Forall.
       destruct s; destruct_conjs. eapply depends_scope_In; eauto.
       + rewrite map_app in *.
-        eapply nodup_app_map_flat_map; eauto. eapply in_map_iff with (f:=snd); do 2 esplit; eauto. auto.
+        eapply nodup_app_map_flat_map; eauto. eapply in_map_iff with (f:=fun x => snd (snd x)); do 2 esplit; eauto. auto.
         erewrite flat_map_concat_map, map_map with (l:=states), map_ext with (l:=states), <-flat_map_concat_map; eauto.
         intros; destruct_conjs; auto.
       + intros; simpl in *. simpl_Exists. simpl_Forall. inv_VarsDefined.
         eapply H with (xs:=xs1); eauto.
         * rewrite map_app in *. eapply nodup_app_map_flat_map; eauto.
-        * etransitivity; [|eauto]. rewrite <-H17; eauto using incl_concat.
+        * etransitivity; [|eauto]. rewrite <-H18; eauto using incl_concat.
     - rewrite map_app in Hnd.
       simpl_Exists. simpl_Forall.
-      eapply Is_free_in_clock_In in H9; eauto.
+      eapply Is_free_in_clock_In in H10; eauto.
       assert (x = y); subst; auto.
       destruct Hin.
       + eapply HasCaus_snd_det; eauto using NoDup_app_l.
       + exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto using NoDup_app_l.
     - rewrite map_app in Hnd.
       simpl_Exists. simpl_Forall.
-      eapply Is_free_left_In in H9; eauto using NoDup_app_l.
+      eapply Is_free_left_In in H10; eauto using NoDup_app_l.
+    - rewrite map_app in Hnd.
+      repeat simpl_Exists. simpl_Forall.
+      eapply Is_free_left_In in H10; eauto using NoDup_app_l.
 
     - (* local *)
       eapply depends_scope_In; eauto.

@@ -9,6 +9,7 @@ From compcert Require common.Values.
 From compcert Require cfrontend.Cop.
 From compcert Require cfrontend.Ctypes.
 From compcert Require cfrontend.Ctyping.
+From compcert Require cfrontend.ClightBigstep.
 From compcert Require common.Memory.
 From compcert Require common.Memdata.
 From compcert Require lib.Maps.
@@ -38,6 +39,9 @@ Module Export Op <: OPERATORS.
     | Tlong sg   => Ctypes.Tlong sg (Ctypes.mk_attr false (Some (Npos 3)))
     | Tfloat sz  => Ctypes.Tfloat sz Ctypes.noattr
     end.
+
+  Definition list_type_to_typelist : list Ctypes.type -> Ctypes.typelist :=
+    List.fold_right (Ctypes.Tcons) Ctypes.Tnil.
 
   Definition typecl (ty: Ctypes.type) : option ctype :=
     match ty with
@@ -266,17 +270,7 @@ Module Export Op <: OPERATORS.
     | _, _, _, _ => None
     end.
 
-  (* Definition is_bool_type (ty: type) : bool := *)
-  (*   match ty with *)
-  (*   | Tint Ctypes.IBool sg => true *)
-  (*   | _ => false *)
-  (*   end. *)
-
-  (* Definition unop_always_returns_bool (op: Cop.unary_operation) : bool := *)
-  (*   match op with *)
-  (*   | Cop.Onotbool => true *)
-  (*   | _            => false *)
-  (*   end. *)
+  (* Operator typing *)
 
   Definition bool_type := Tenum (bool_id, 2).
 
@@ -429,67 +423,6 @@ Module Export Op <: OPERATORS.
     end.
   Qed.
 
-  (* Lemma good_bool_vtrue: *)
-  (*   forall ty, *)
-  (*     good_bool Values.Vtrue ty. *)
-  (* Proof. *)
-  (*   intros; destruct ty; simpl; try destruct i; auto. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_vfalse: *)
-  (*   forall ty, *)
-  (*     good_bool Values.Vfalse ty. *)
-  (* Proof. *)
-  (*   intros; destruct ty; simpl; try destruct i; auto. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_vlong: *)
-  (*   forall ty i, *)
-  (*     good_bool (Values.Vlong i) ty. *)
-  (* Proof. *)
-  (*   intros; destruct ty; simpl; try destruct i0; auto. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_vfloat: *)
-  (*   forall ty f, *)
-  (*     good_bool (Values.Vfloat f) ty. *)
-  (* Proof. *)
-  (*   intros; destruct ty; simpl; try destruct i; auto. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_vsingle: *)
-  (*   forall ty f, *)
-  (*     good_bool (Values.Vsingle f) ty. *)
-  (* Proof. *)
-  (*   intros; destruct ty; simpl; try destruct i; auto. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_tint: *)
-  (*   forall v sz sg a, *)
-  (*     sz <> Ctypes.IBool -> *)
-  (*     good_bool v (Ctypes.Tint sz sg a). *)
-  (* Proof. *)
-  (*   intros; destruct v, sz; simpl; intuition. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_tlong: *)
-  (*   forall v sg a, *)
-  (*     good_bool v (Ctypes.Tlong sg a). *)
-  (* Proof. *)
-  (*   intros; destruct v; simpl; auto. *)
-  (* Qed. *)
-
-  (* Lemma good_bool_tfloat: *)
-  (*   forall v sz a, *)
-  (*     good_bool v (Ctypes.Tfloat sz a). *)
-  (* Proof. *)
-  (*   intros; destruct v; simpl; auto. *)
-  (* Qed. *)
-
-  (* Local Hint Immediate good_bool_vtrue good_bool_vfalse good_bool_vlong *)
-  (*       good_bool_vfloat good_bool_vsingle good_bool_tlong *)
-  (*       good_bool_tfloat. *)
-
   Lemma good_bool_not_bool:
     forall v ty,
       (forall sg a, ty <> Ctypes.Tint Ctypes.IBool sg a) ->
@@ -513,31 +446,6 @@ Module Export Op <: OPERATORS.
   Proof.
     intros * Hgb Hsz; subst; inversion_clear Hgb; auto.
   Qed.
-
-  (* Local Hint Resolve good_bool_zero_or_one. *)
-
-  (* Lemma wt_value_Vfalse_bool_type: *)
-  (*   wt_value (Values.Vfalse) bool_type. *)
-  (* Proof. *)
-  (*   constructor; unfold Ctyping.wt_int; [now vm_compute|intuition]. *)
-  (* Qed. *)
-
-  (* Lemma wt_value_Vtrue_bool_type: *)
-  (*   wt_value (Values.Vtrue) bool_type. *)
-  (* Proof. *)
-  (*   constructor; unfold Ctyping.wt_int; [now vm_compute|intuition]. *)
-  (* Qed. *)
-
-  (* Local Hint Resolve wt_value_Vfalse_bool_type wt_value_Vtrue_bool_type. *)
-
-  (* Lemma wt_value_of_bool_bool_type: *)
-  (*   forall v, *)
-  (*     wt_value (Values.Val.of_bool v) bool_type. *)
-  (* Proof. *)
-  (*   destruct v; simpl; auto. *)
-  (* Qed. *)
-
-  (* Local Hint Resolve wt_value_of_bool_bool_type. *)
 
   Lemma typecl_wt_val_wt_cvalue:
     forall cty ty v,
@@ -575,16 +483,6 @@ Module Export Op <: OPERATORS.
     destruct ty; inversion_clear Hwt;
     eauto using Ctyping.wt_val.
   Qed.
-
-  (* Lemma is_bool_type_true: *)
-  (*   forall ty, *)
-  (*     is_bool_type ty = true -> *)
-  (*     exists sg, ty = Tint Ctypes.IBool sg. *)
-  (* Proof. *)
-  (*   destruct ty; try destruct i, s; simpl; intuition. *)
-  (*   - exists Ctypes.Signed; auto. *)
-  (*   - exists Ctypes.Unsigned; auto. *)
-  (* Qed. *)
 
   Lemma type_castop:
     forall ty ty',
@@ -839,107 +737,6 @@ Module Export Op <: OPERATORS.
     forall n,
       enumtag_cltype n = cltype (enumtag_ctype n).
   Proof. reflexivity. Qed.
-
-  (* XXX: is in newer versions of CompCert *)
-  Lemma Zzero_ext_mod:
-    forall n x, (0 <= n)%Z -> (Zbits.Zzero_ext n x = x mod (Zpower.two_p n))%Z.
-  Proof.
-    intros. apply Zbits.equal_same_bits; intros.
-    rewrite Zbits.Zzero_ext_spec, Zbits.Ztestbit_mod_two_p by auto. auto.
-  Qed.
-  (* Lemma Zsign_ext_spec: *)
-  (*   forall n x i, (0 <= i)%Z -> *)
-  (*            Z.testbit (Int.Zsign_ext n x) i = Z.testbit x (if Coqlib.zlt i n then i else n - 1). *)
-  (* Proof. *)
-  (*   intros n0 x i I0. unfold Int.Zsign_ext. *)
-  (*   unfold Coqlib.proj_sumbool; destruct (Coqlib.zlt 0 n0) as [N0|N0]; simpl. *)
-  (*   - revert x i I0. pattern n0. apply Wf_Z.Zlt_lower_bound_ind with (z := 1%Z); [ | lia ]. *)
-  (*     unfold Int.Zsign_ext. intros. *)
-  (*     destruct (Coqlib.zeq x 1). *)
-  (*     + subst x; simpl. *)
-  (*       replace (if Coqlib.zlt i 1 then i else 0%Z) with 0%Z. *)
-  (*       rewrite Int.Ztestbit_base. *)
-  (*       destruct (Z.odd x0); [ apply Int.Ztestbit_m1; auto | apply Int.Ztestbit_0 ]. *)
-  (*       destruct (Coqlib.zlt i 1); lia. *)
-  (*     + set (x1 := Z.pred x). replace x1 with (Z.succ (Z.pred x1)) by lia. *)
-  (*       rewrite Int.Ziter_succ by (unfold x1; lia). rewrite Int.Ztestbit_shiftin by auto. *)
-  (*       destruct (Coqlib.zeq i 0). *)
-  (*       * subst i. rewrite Coqlib.zlt_true. rewrite Int.Ztestbit_base; auto. lia. *)
-  (*       * rewrite H by (unfold x1; lia). *)
-  (*         unfold x1; destruct (Coqlib.zlt (Z.pred i) (Z.pred x)). *)
-  (*         ** rewrite Coqlib.zlt_true by lia. *)
-  (*            rewrite (Int.Ztestbit_eq i x0) by lia. *)
-  (*            rewrite Coqlib.zeq_false by lia. auto. *)
-  (*         ** rewrite Coqlib.zlt_false by lia. *)
-  (*            rewrite (Int.Ztestbit_eq (x - 1) x0) by lia. *)
-  (*            rewrite Coqlib.zeq_false by lia. auto. *)
-  (*   - rewrite Int.Ziter_base by lia. *)
-  (*     (* rewrite Bool.andb_false_r. *) *)
-  (*     (* Search Z.testbit false.  *) *)
-  (*     destruct (Z.odd x); simpl. Search (Z.testbit (-1) _). *)
-  (*     rewrite Z.testbit_0_l, Z.testbit_neg_r. auto. *)
-  (*     destruct (zlt i n0); lia. *)
-  (* Qed. *)
-  (* Remark Zdecomp: *)
-  (*   forall x, x = Int.Zshiftin (Z.odd x) (Z.div2 x). *)
-  (* Proof. *)
-  (*   intros. destruct x; simpl. *)
-  (*   - auto. *)
-  (*   - destruct p; auto. *)
-  (*   - destruct p; auto. simpl. rewrite Pos.pred_double_succ. auto. *)
-  (* Qed. *)
-  (* Lemma Z_one_complement: *)
-  (*   forall i, (0 <= i)%Z -> *)
-  (*        forall x, Z.testbit (-x-1) i = negb (Z.testbit x i). *)
-  (* Proof. *)
-  (*   intros i0 POS0. pattern i0. apply Wf_Z.Zlt_0_ind; auto. *)
-  (*   intros i IND POS x. *)
-  (*   rewrite (Zdecomp x). set (y := Z.div2 x). *)
-  (*   replace (- Int.Zshiftin (Z.odd x) y - 1)%Z *)
-  (*     with (Int.Zshiftin (negb (Z.odd x)) (- y - 1))%Z. *)
-  (*   rewrite !Int.Ztestbit_shiftin; auto. *)
-  (*   destruct (Coqlib.zeq i 0). auto. apply IND. lia. *)
-  (*   rewrite !Int.Zshiftin_spec. destruct (Z.odd x); simpl negb; ring. *)
-  (* Qed. *)
-  (* Corollary Ztestbit_neg_two_p: *)
-  (*   forall n i, (0 <= n)%Z -> (0 <= i)%Z -> *)
-  (*          Z.testbit (- (Zpower.two_p n)) i = if Coqlib.zlt i n then false else true. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   replace (- Zpower.two_p n)%Z with (- (Zpower.two_p n - 1) - 1)%Z by lia. *)
-  (*   rewrite Z_one_complement by auto. *)
-  (*   rewrite Int.Ztestbit_two_p_m1 by auto. *)
-  (*   destruct (Coqlib.zlt i n); auto. *)
-  (* Qed. *)
-  (* Lemma Zsign_ext_zero_ext: *)
-  (*   forall n, (0 < n)%Z -> forall x, *)
-  (*       (Int.Zsign_ext n x = Int.Zzero_ext n x - (if Z.testbit x (n - 1) then Zpower.two_p n else 0))%Z. *)
-  (* Proof. *)
-  (*   intros. apply Int.equal_same_bits; intros. *)
-  (*   rewrite Int.Zsign_ext_spec by lia. *)
-  (*   destruct (Z.testbit x (n - 1)) eqn:SIGNBIT. *)
-  (*   - set (n' := (- Zpower.two_p n)%Z). *)
-  (*     replace (Int.Zzero_ext n x - Zpower.two_p n)%Z with (Int.Zzero_ext n x + n')%Z by (unfold n'; lia). *)
-  (*     rewrite Int.Z_add_is_or; auto. *)
-  (*     rewrite Int.Zzero_ext_spec by auto. unfold n'; rewrite Ztestbit_neg_two_p by lia. *)
-  (*     destruct (Coqlib.zlt i n). rewrite Bool.orb_false_r; auto. auto. *)
-  (*     intros. rewrite Int.Zzero_ext_spec by lia. unfold n'; rewrite Ztestbit_neg_two_p by lia. *)
-  (*     destruct (Coqlib.zlt j n); auto using Bool.andb_false_r. *)
-  (*   - replace (Int.Zzero_ext n x - 0)%Z with (Int.Zzero_ext n x) by lia. *)
-  (*     rewrite Int.Zzero_ext_spec by auto. *)
-  (*     destruct (Coqlib.zlt i n); auto. *)
-  (* Qed. *)
-  (* Lemma eqmod_Zsign_ext: *)
-  (*   forall n x, (0 < n)%Z -> *)
-  (*          Int.eqmod (Zpower.two_p n) (Int.Zsign_ext n x) x. *)
-  (* Proof. *)
-  (*   intros. rewrite Zsign_ext_zero_ext by auto. *)
-  (*   apply Int.eqmod_trans with (x - 0)%Z. *)
-  (*   apply Int.eqmod_sub. *)
-  (*   apply Int.eqmod_Zzero_ext; lia. *)
-  (*   exists (if Z.testbit x (n - 1) then 1 else 0). destruct (Z.testbit x (n - 1)); ring. *)
-  (*   apply eqmod_refl2; lia. *)
-  (* Qed. *)
 
   Definition memory_chunk_of_enumtag (n: nat) : AST.memory_chunk :=
     if n <=? 2 ^ 8 then AST.Mint8unsigned
@@ -1276,169 +1073,6 @@ Module Export Op <: OPERATORS.
     - destruct sz; inv Hwt; auto.
   Qed.
 
-  (* Operator typing *)
-
-  (*
-    Types and concrete syntax
-    -------------------------
-    Tint I8    Signed          "int8"
-    Tint I8    Unsigned        "uint8"
-    Tint I16   Signed          "int16"
-    Tint I16   Unsigned        "uint16"
-    Tint I32   Signed          "int32" / "int"
-    Tint I32   Unsigned        "uint32"
-    Tint IBool Signed          "bool"
-    Tint IBool Unsigned        "bool"
-    Tlong      Signed          "int64"
-    Tlong      Unsigned        "uint64"
-    Tfloat     F32             "float32"
-    Tfloat     F64             "float64" / "real"
-
-    Unary operators (prefix)
-    ------------------------
-    Onotbool      "not"
-    Onotint       "lnot"
-    Oneg          "-"
-
-    Unary cast (mix fix)
-    --------------------
-    "(" e ":" type ")"
-
-    Binary operators (infix)
-    ------------------------
-    Oadd          "+"
-    Osub          "-"
-    Omul          "*"
-    Odiv          "/"
-    Omod          "mod"
-    Oand          "land" / "and"
-    Oor           "lor"  / "or"
-    Oxor          "lxor"
-    Oshl          "lsl"
-    Oshr          "lsr"
-    Oeq           "="
-    One           "<>"
-    Olt           "<"
-    Ogt           ">"
-    Ole           "<="
-    Oge           ">="
-
-    Trinary operators (mixfix)
-    --------------------------
-    "if" / "then" / "else"
-   *)
-
-  (* Definition type_unop' (uop: unop) (ty: type) : option type := *)
-  (*   match uop with *)
-  (*   | UnaryOp op => *)
-  (*       match op with *)
-  (*       | Cop.Onotbool           => Some bool_type *)
-  (*       | Cop.Onotint => *)
-  (*         match ty with *)
-  (*         | Tint Ctypes.I32 sg   => Some ty *)
-  (*         | Tlong sg             => Some ty *)
-  (*         | Tint _ _             => Some (Tint Ctypes.I32 Ctypes.Signed) *)
-  (*         | _                    => None *)
-  (*         end *)
-  (*       | Cop.Oneg => *)
-  (*         match ty with *)
-  (*         | Tint Ctypes.I32 sg   => Some ty *)
-  (*         | Tlong sg             => Some ty *)
-  (*         | Tint _ _             => Some (Tint Ctypes.I32 Ctypes.Signed) *)
-  (*         | Tfloat sz            => Some ty *)
-  (*         end *)
-  (*       | Cop.Oabsfloat          => Some (Tfloat Ctypes.F64) *)
-  (*       end *)
-  (*   | CastOp ty' => Some ty' *)
-  (*   end. *)
-
-  (* Definition type_binop' (op: binop) (ty1 ty2: type) : option type := *)
-  (*   match op with *)
-  (*   | Cop.Oadd | Cop.Osub | Cop.Omul | Cop.Odiv => *)
-  (*       match ty1, ty2 with *)
-  (*       | Tfloat Ctypes.F64              , _                               => Some (Tfloat Ctypes.F64) *)
-  (*       | _                              , Tfloat Ctypes.F64               => Some (Tfloat Ctypes.F64) *)
-  (*       | Tfloat Ctypes.F32              , _                               => Some (Tfloat Ctypes.F32) *)
-  (*       | _                              , Tfloat Ctypes.F32               => Some (Tfloat Ctypes.F32) *)
-  (*       | Tlong Ctypes.Unsigned          , _                               => Some (Tlong Ctypes.Unsigned) *)
-  (*       | _                              , Tlong Ctypes.Unsigned           => Some (Tlong Ctypes.Unsigned) *)
-  (*       | Tlong Ctypes.Signed            , _                               => Some (Tlong Ctypes.Signed) *)
-  (*       | _                              , Tlong Ctypes.Signed             => Some (Tlong Ctypes.Signed) *)
-  (*       | Tint Ctypes.I32 Ctypes.Unsigned, _                               => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | _                              , Tint Ctypes.I32 Ctypes.Unsigned => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | Tint _ _                       , Tint _ _                        => Some (Tint Ctypes.I32 Ctypes.Signed) *)
-  (*       end *)
-  (*   | Cop.Omod => *)
-  (*       match ty1, ty2 with *)
-  (*       | Tfloat _                       , _                               => None *)
-  (*       | _                              , Tfloat _                        => None *)
-  (*       | Tlong Ctypes.Unsigned          , _                               => Some (Tlong Ctypes.Unsigned) *)
-  (*       | _                              , Tlong Ctypes.Unsigned           => Some (Tlong Ctypes.Unsigned) *)
-  (*       | Tlong Ctypes.Signed            , _                               => Some (Tlong Ctypes.Signed) *)
-  (*       | _                              , Tlong Ctypes.Signed             => Some (Tlong Ctypes.Signed) *)
-  (*       | Tint Ctypes.I32 Ctypes.Unsigned, _                               => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | _                              , Tint Ctypes.I32 Ctypes.Unsigned => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | Tint _ _                       , Tint _ _                        => Some (Tint Ctypes.I32 Ctypes.Signed) *)
-  (*       end *)
-  (*   | Cop.Oand | Cop.Oor | Cop.Oxor => *)
-  (*       match ty1, ty2 with *)
-  (*       | Tfloat _                       , _                               => None *)
-  (*       | _                              , Tfloat _                        => None *)
-  (*       | Tlong Ctypes.Unsigned          , _                               => Some (Tlong Ctypes.Unsigned) *)
-  (*       | _                              , Tlong Ctypes.Unsigned           => Some (Tlong Ctypes.Unsigned) *)
-  (*       | Tlong Ctypes.Signed            , _                               => Some (Tlong Ctypes.Signed) *)
-  (*       | _                              , Tlong Ctypes.Signed             => Some (Tlong Ctypes.Signed) *)
-  (*       | Tint Ctypes.IBool sg1          , Tint Ctypes.IBool sg2           => Some (Tint Ctypes.IBool Ctypes.Signed) *)
-  (*       | Tint Ctypes.I32 Ctypes.Unsigned, _                               => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | _                              , Tint Ctypes.I32 Ctypes.Unsigned => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | Tint _ _                       , Tint _ _                        => Some (Tint Ctypes.I32 Ctypes.Signed) *)
-  (*       end *)
-  (*   | Cop.Oshl | Cop.Oshr => *)
-  (*       match ty1, ty2 with *)
-  (*       | Tfloat _                       , _         => None *)
-  (*       | _                              , Tfloat _  => None *)
-  (*       | Tlong sg                       , _         => Some (Tlong sg) *)
-  (*       | Tint Ctypes.I32 Ctypes.Unsigned, _         => Some (Tint Ctypes.I32 Ctypes.Unsigned) *)
-  (*       | Tint _ _                       , _         => Some (Tint Ctypes.I32 Ctypes.Signed) *)
-  (*       end *)
-  (*   | Cop.Oeq | Cop.One | Cop.Olt | Cop.Ogt | Cop.Ole | Cop.Oge => Some bool_type *)
-  (*   end. *)
-
-  (* Lemma type_unop'_correct: *)
-  (*   forall op ty, *)
-  (*     type_unop' op ty = type_unop op ty. *)
-  (* Proof. *)
-  (*   intros. destruct op. *)
-  (*   - destruct u, ty; try destruct i; try destruct s; try destruct f; *)
-  (*       simpl in *; now DestructCases. *)
-  (*   - destruct t, ty; try destruct i; try destruct s; try destruct f; *)
-  (*       try destruct f0; simpl in *; DestructCases; auto. *)
-  (* Qed. *)
-
-  (* Lemma type_binop'_correct: *)
-  (*   forall op ty1 ty2, *)
-  (*     type_binop' op ty1 ty2 = type_binop op ty1 ty2. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold type_binop. *)
-  (*   destruct (binop_always_returns_bool op) eqn:Heq1; simpl; *)
-  (*     [|destruct *)
-  (*         (is_bool_binop op && (is_bool_type ty1 && is_bool_type ty2)) eqn:Heq2]. *)
-  (*   - destruct op; simpl in *; try discriminate; auto. *)
-  (*   - unfold type_binop'. *)
-  (*     repeat rewrite Bool.andb_true_iff in Heq2. *)
-  (*     destruct Heq2 as (Heq2 & Heq3 & Heq4). *)
-  (*     apply is_bool_type_true in Heq3; destruct Heq3 as (sg1 & Heq3). *)
-  (*     apply is_bool_type_true in Heq4; destruct Heq4 as (sg2 & Heq4). *)
-  (*     subst; destruct op; try discriminate; auto. *)
-  (*   - repeat rewrite Bool.andb_false_iff in Heq2. *)
-  (*     destruct op; simpl in *; try discriminate Heq1; *)
-  (*     (destruct ty1, ty2; try destruct i; try destruct i0; *)
-  (*      try destruct s; try destruct s0; try destruct f; *)
-  (*      try destruct f0; auto); *)
-  (*       (destruct Heq2 as [Heq2|[Heq2|Heq2]]; discriminate). *)
-  (* Qed. *)
-
   Open Scope string_scope.
 
   Definition string_of_ctype (ty: ctype) : String.string :=
@@ -1455,18 +1089,6 @@ Module Export Op <: OPERATORS.
     | Tfloat Ctypes.F32               => "float32"
     | Tfloat Ctypes.F64               => "float64"
     end.
-
-  (* Lemma enumtag_value_lte: *)
-  (*   forall n, (enumtag_of_value (value_of_enumtag n) <= n)%nat. *)
-  (* Proof. *)
-  (*   intro; simpl. *)
-  (*   unfold int_of_enumtag. *)
-  (*   rewrite Int.unsigned_repr_eq, <-Znat.Nat2Z.id. *)
-  (*   apply Znat.Z2Nat.inj_le; try lia. *)
-  (*   - apply Zdiv.Z_mod_lt, Int.modulus_pos. *)
-  (*   - apply Z.mod_le; try lia. *)
-  (*     apply Z.gt_lt, Int.modulus_pos. *)
-  (* Qed. *)
 
 End Op.
 
@@ -1494,7 +1116,7 @@ Proof.
   destruct tn; simpl in *.
   destruct (memory_chunk_of_enumtag_spec n) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
     rewrite E; unfold enumtag_to_int; simpl; auto;
-      unfold Int.zero_ext; rewrite Zzero_ext_mod, Z.mod_small, Int.repr_unsigned; auto; try lia;
+      unfold Int.zero_ext; rewrite Zbits.Zzero_ext_mod, Z.mod_small, Int.repr_unsigned; auto; try lia;
         rewrite Int.unsigned_repr.
   - replace 8%Z with (Z.of_nat 8); auto.
     rewrite <-Coqlib.two_power_nat_two_p, Zpower.two_power_nat_correct.
@@ -1596,7 +1218,7 @@ Proof.
     destruct (intsize_of_enumtag_spec n) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
     rewrite E; try discriminate;
       unfold enumtag_to_int; simpl; auto;
-        unfold Int.zero_ext; rewrite Zzero_ext_mod, Z.mod_small, Int.repr_unsigned; auto; try lia;
+        unfold Int.zero_ext; rewrite Zbits.Zzero_ext_mod, Z.mod_small, Int.repr_unsigned; auto; try lia;
           rewrite Int.unsigned_repr.
   - replace 8%Z with (Z.of_nat 8); auto.
     rewrite <-Coqlib.two_power_nat_two_p, Zpower.two_power_nat_correct.
@@ -1634,31 +1256,6 @@ Definition string_of_type (ty: type) : String.string :=
   | Tprimitive t => string_of_ctype t
   | Tenum (t, _) => pos_to_str t
   end.
-
-(* Definition ctype_to_type (t: ctype) : type := *)
-(*   if t ==b  then bool_type *)
-(*   else Tprimitive t. *)
-
-(* Definition velus_type_unop (uop: unop) (ty: velus_type) : option velus_type := *)
-(*   match ty with *)
-(*   | Tprimitive t => *)
-(*     option_map type_to_velus_type (type_unop' uop t) *)
-(*   | Tenum _ => if ty ==b bool_velus_type *)
-(*               then option_map type_to_velus_type (type_unop' uop bool_type) *)
-(*               else None *)
-(*   end. *)
-
-(* Definition velus_type_binop (op: binop) (ty1 ty2: velus_type) : option velus_type := *)
-(*   match ty1, ty2 with *)
-(*   | Tprimitive t1, Tprimitive t2 => *)
-(*     option_map (fun t => *)
-(*                   if t ==b bool_type then bool_velus_type *)
-(*                   else Tprimitive t) (type_binop' op t1 t2) *)
-(*   | Tenum _, Tenum _ => if (ty1 ==b bool_velus_type) && (ty2 ==b bool_velus_type) *)
-(*                        then option_map type_to_velus_type (type_binop' op bool_type bool_type) *)
-(*                        else None *)
-(*   | _, _ => None *)
-(*   end. *)
 
 From Velus Require Import IndexedStreams.
 From Velus Require Import CoindStreams.

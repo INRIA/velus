@@ -7,7 +7,7 @@ From Coq Require Import NPeano.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
@@ -40,7 +40,8 @@ Module Type COINDTOINDEXED
         Every element of the history is translated.
      *)
     Definition tr_history (H: CStr.history) : history :=
-      fun n => Env.map (fun xs => tr_Stream xs n) H.
+      fun n => FEnv.map (fun xs => tr_Stream xs n) H.
+    Global Hint Unfold tr_history : fenv.
 
     (** ** Properties  *)
 
@@ -116,41 +117,39 @@ Module Type COINDTOINDEXED
     (** The counterpart of [tr_Stream_tl] for histories. *)
     Lemma tr_history_tl:
       forall n H,
-        tr_history H (S n) = tr_history (history_tl H) n.
+        FEnv.Equiv eq (tr_history H (S n)) (tr_history (history_tl H) n).
     Proof.
-      now repeat setoid_rewrite Env.map_map.
+      intros * x. simpl_fenv.
+      destruct (H x); simpl; reflexivity.
     Qed.
 
     Fact tr_history_find_orel : forall H H' x x',
-        orel (@EqSt _) (Env.find x H) (Env.find x' H') ->
-        (forall n, orel (@eq _) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+        orel (@EqSt _) (H x) (H' x') ->
+        (forall n, orel (@eq _) ((tr_history H n) x) ((tr_history H' n) x')).
     Proof.
       intros * Horel n.
-      unfold tr_history, tr_Stream.
-      repeat rewrite Env.Props.P.F.map_o.
+      simpl_fenv. unfold tr_Stream.
       inv Horel; simpl; auto with datatypes.
       rewrite H2; auto with datatypes.
     Qed.
 
     Fact tr_history_find_orel_mask : forall H H' rs k x x',
-        orel (fun v1 v2 => EqSt (CStr.maskv k rs v1) v2) (Env.find x H) (Env.find x' H') ->
-        (forall n, orel (fun v1 v2 => (if (CStr.count rs) # n =? k then v1 else absent) = v2) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+        orel (fun v1 v2 => EqSt (CStr.maskv k rs v1) v2) (H x) (H' x') ->
+        (forall n, orel (fun v1 v2 => (if (CStr.count rs) # n =? k then v1 else absent) = v2) ((tr_history H n) x) ((tr_history H' n) x')).
     Proof.
       intros * Horel n.
-      unfold tr_history, tr_Stream.
-      repeat rewrite Env.Props.P.F.map_o.
+      simpl_fenv. unfold tr_Stream.
       inv Horel; simpl; auto with datatypes.
       constructor; auto.
       rewrite <- H2, maskv_nth. reflexivity.
     Qed.
 
     Fact tr_history_find_orel_unmask : forall H H' rs k x x',
-        orel (fun v1 v2 => EqSt v1 (CStr.maskv k rs v2)) (Env.find x H) (Env.find x' H') ->
-        (forall n, orel (fun v1 v2 => (v1 = if (CStr.count rs) # n =? k then v2 else absent)) (Env.find x (tr_history H n)) (Env.find x' (tr_history H' n))).
+        orel (fun v1 v2 => EqSt v1 (CStr.maskv k rs v2)) (H x) (H' x') ->
+        (forall n, orel (fun v1 v2 => (v1 = if (CStr.count rs) # n =? k then v2 else absent)) ((tr_history H n) x) ((tr_history H' n) x')).
     Proof.
       intros * Horel n.
-      unfold tr_history, tr_Stream.
-      repeat rewrite Env.Props.P.F.map_o.
+      simpl_fenv. unfold tr_Stream.
       inv Horel; simpl; auto with datatypes.
       constructor; auto.
       rewrite H2, maskv_nth. reflexivity.
@@ -175,8 +174,8 @@ Module Type COINDTOINDEXED
       intros * Find n.
       unfold sem_var_instant.
       inversion_clear Find as [???? Find' E].
-      unfold tr_history, Env.map.
-      rewrite Env.gmapi, Find', E; simpl; auto.
+      simpl_fenv.
+      rewrite Find', E; simpl; auto.
     Qed.
     Global Hint Resolve sem_var_impl : coindstreams indexedstreams nlsem.
 

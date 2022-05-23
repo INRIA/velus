@@ -1025,6 +1025,7 @@ Module Type NTYPING
       - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
       - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
       - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
+      - constructor; auto. eapply iface_incl_wt_block; eauto. econstructor; eauto.
     Qed.
 
     Corollary unnest_blocks_wt_block : forall vars blocks blocks' st st' ,

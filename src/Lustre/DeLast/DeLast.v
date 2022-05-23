@@ -159,15 +159,16 @@ Module Type DELAST
                                                        (fun eqs blks => eqs++blks) sub blks;
                                ret (k, blks')) branches;
         ret (Bswitch (rename_in_exp sub ec) branches')
-    | Bauto ck (ini, oth) states =>
-        do states' <- mmap (fun '(k, scope) =>
+    | Bauto type ck (ini, oth) states =>
+        do states' <- mmap (fun '(k, (unl, scope)) =>
+                             let unl' := map (fun '(e, k) => (rename_in_exp sub e, k)) unl in
                              do scope' <- delast_scope (fun sub '(blks, trans) =>
                                                         do blks' <- mmap (delast_block sub) blks;
                                                         ret (blks', map (fun '(e, k) => (rename_in_exp sub e, k)) trans))
                                                      (fun eqs '(blks, trans) => (eqs++blks, trans))
                                                      sub scope;
-                             ret (k, scope')) states;
-        ret (Bauto ck (map (fun '(e, k) => (rename_in_exp sub e, k)) ini, oth) states')
+                             ret (k, (unl', scope'))) states;
+        ret (Bauto type ck (map (fun '(e, k) => (rename_in_exp sub e, k)) ini, oth) states')
     | Blocal scope =>
         do scope' <- delast_scope (fun sub => mmap (delast_block sub))
                                  (fun eqs blks => eqs++blks) sub scope;

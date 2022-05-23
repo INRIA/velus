@@ -7,7 +7,7 @@ From Coq Require Import NPeano.
 From Coq Require Import Program.Tactics.
 
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import IndexedStreams.
@@ -63,7 +63,7 @@ Module Type INDEXEDTOCOIND
   (** Translate an history from indexed to coinductive world.
         Every element of the history is translated. *)
   Definition tr_history_from (n: nat) (H: IStr.history) : history :=
-    Env.mapi (fun x _ => init_from n (fun n => match Env.find x (H n) with
+    FEnv.mapi (fun x _ => init_from n (fun n => match (H n) x with
                                          | Some v => v
                                          | None => absent
                                          end)) (H 0).
@@ -74,13 +74,15 @@ Module Type INDEXEDTOCOIND
    *)
   Definition tr_history H :=
     tr_history_from 0 H.
+  Global Hint Unfold tr_history_from tr_history : fenv.
 
   (** The counterpart of [tr_stream_from_tl] for histories. *)
   Lemma tr_history_from_tl:
     forall n H,
-      history_tl (tr_history_from n H) = tr_history_from (S n) H.
+      FEnv.Equiv (@EqSt _) (history_tl (tr_history_from n H)) (tr_history_from (S n) H).
   Proof.
-    now setoid_rewrite Env.mapi_mapi.
+    intros * x. simpl_fenv; simpl.
+    destruct (H 0 x); simpl; reflexivity.
   Qed.
 
   (** ** Properties  *)
@@ -203,7 +205,7 @@ Module Type INDEXEDTOCOIND
     unfold IStr.sem_var, IStr.lift', sem_var_instant.
     intros * Sem.
     econstructor.
-    - unfold Env.MapsTo. setoid_rewrite Env.gmapi.
+    - simpl_fenv.
       rewrite Sem; simpl; eauto.
     - unfold tr_stream_from.
       apply ntheq_eqst; intro.
@@ -287,11 +289,11 @@ Module Type INDEXEDTOCOIND
         econstructor; eauto.
         + apply sem_var_impl_from; eauto.
         + apply ntheq_eqst. intros n0. rewrite ac_nth. repeat rewrite init_from_nth.
-          specialize (Spec (n0 + n)) as [(Hb&Hx&?)|[(Hb&Hx&?)|(?&Hb&Hx&?&?)]];
+          specialize (Spec (n0 + n)%nat) as [(Hb&Hx&?)|[(Hb&Hx&?)|(?&Hb&Hx&?&?)]];
             try rewrite Hb, Hx; auto.
         + apply enums_of_nth. intros n0.
           repeat rewrite init_from_nth.
-          specialize (Spec (n0 + n)) as [(?&?&?)|[(?&?)|(?&?&?&?&?)]]; eauto.
+          specialize (Spec (n0 + n)%nat) as [(?&?&?)|[(?&?)|(?&?&?&?&?)]]; eauto.
           right; right. eexists. intuition; eauto.
     Qed.
 

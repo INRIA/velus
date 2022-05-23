@@ -12,7 +12,6 @@
 (* *********************************************************************)
 
 From Velus Require Import Common.
-From Velus Require Import Environment.
 From Velus Require Import CommonTyping.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
@@ -37,7 +36,7 @@ Module Type CETYPINGSEMANTICS
        (Import CETyp : CETYPING    Ids Op OpAux Cks CESyn).
 
   Definition wt_env_svalue (R: env) '((x, ty): ident * type) :=
-    match Env.find x R with
+    match R x with
     | Some v => wt_svalue v ty
     | _ => True
     end.
@@ -62,7 +61,7 @@ Module Type CETYPINGSEMANTICS
     - eapply Forall_forall in WT; eauto.
       + instantiate (1 := (x, ty)) in WT.
         unfold wt_env_svalue, sem_var_instant in *.
-        take (Env.find _ _ = _) and rewrite it in WT; auto.
+        take (R _ = _) and rewrite it in WT; auto.
       + apply filter_In; split; auto.
         apply PSE.add_mem_1.
     - apply IHsem_exp_instant; auto.

@@ -84,6 +84,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | UINT64 l     -> (LustreParser2.UINT64     l, l)
   | UINT8 l      -> (LustreParser2.UINT8      l, l)
   | UNDERSCORE l -> (LustreParser2.UNDERSCORE l, l)
+  | UNLESS l     -> (LustreParser2.UNLESS     l, l)
   | UNTIL l      -> (LustreParser2.UNTIL      l, l)
   | VAR l        -> (LustreParser2.VAR        l, l)
   | VAR_NAME l   -> (LustreParser2.VAR_NAME   l, snd l)

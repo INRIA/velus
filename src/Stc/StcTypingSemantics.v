@@ -451,7 +451,7 @@ Module Type STCTYPINGSEMANTICS
                eapply In_InMembers; eauto.
              }
              simpl.
-             destruct (Env.find y R) as [[|v]|] eqn: Find; simpl; auto.
+             destruct (R y) as [[|v]|] eqn: Find; simpl; auto.
              assert (sem_var_instant R y (present v)) as Hvar by auto.
              eapply sem_trconstrs_nexts_of with (1 := Semtcs) in Hvar; eauto.
 

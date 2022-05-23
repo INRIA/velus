@@ -174,17 +174,19 @@ Module Type LCLOCKING
       Forall (fun blks => wc_scope (fun Γ' => Forall (wc_block G Γ')) G Γ' (snd blks)) branches ->
       wc_block G Γ (Bswitch ec branches)
 
-  | wc_Bauto : forall Γ Γ' ini oth states ck,
+  | wc_Bauto : forall Γ Γ' type ini oth states ck,
       wc_clock (idck Γ) ck ->
       states <> [] ->
       (forall x ck', HasClock Γ' x ck' -> HasClock Γ x ck /\ ck' = Cbase) ->
       (forall x, IsLast Γ' x -> IsLast Γ x) ->
       Forall (fun '(e, _) => wc_exp G Γ' e /\ clockof e = [Cbase]) ini ->
-      Forall (fun blks => wc_scope (fun Γ' blks => Forall (wc_block G Γ') (fst blks)
-                                             /\ Forall (fun '(e, (t, _)) => wc_exp G Γ' e
-                                                                        /\ clockof e = [Cbase]) (snd blks))
-                                G Γ' (snd blks)) states ->
-      wc_block G Γ (Bauto ck (ini, oth) states)
+      Forall (fun blks =>
+                Forall (fun '(e, (t, _)) => wc_exp G Γ' e /\ clockof e = [Cbase]) (fst (snd blks))
+                /\ wc_scope (fun Γ' blks =>
+                              Forall (wc_block G Γ') (fst blks)
+                              /\ Forall (fun '(e, (t, _)) => wc_exp G Γ' e /\ clockof e = [Cbase]) (snd blks))
+                           G Γ' (snd (snd blks))) states ->
+      wc_block G Γ (Bauto type ck (ini, oth) states)
 
   | wc_Blocal : forall Γ s,
       wc_scope (fun Γ' => Forall (wc_block G Γ')) G Γ s ->
@@ -541,7 +543,7 @@ Module Type LCLOCKING
           intros ??; simpl_In.
           assert (HasClock Γ i0 a0.(clo)) as Hck by (eauto with senv).
           apply Incl1 in Hck. inv Hck. solve_In. congruence.
-        + intros. edestruct H5; eauto with senv.
+        + intros. edestruct H7; eauto with senv.
       - constructor.
         eapply wc_scope_incl; eauto.
         intros. simpl_Forall; eauto.
@@ -1409,16 +1411,18 @@ Module Type LCLOCKING
           forallb (fun '(_, blks) => check_scope (fun venv' venvl' => forallb (check_block venv' venvl')) venv' venvl' blks) branches
         | _ => false
         end
-      | Bauto ck (ini, oth) states =>
+      | Bauto type ck (ini, oth) states =>
           let venv' := Env.map (fun _ => Cbase) (Env.Props.P.filter (fun x ck' => (ck' ==b ck)) venv) in
           let venvl' := Env.map (fun _ => Cbase) (Env.Props.P.filter (fun x ck' => (ck' ==b ck)) venvl) in
           check_clock venv ck
           && forallb (fun '(e, _) => check_base_exp venv' venvl' e) ini
           && negb (is_nil states)
-          && forallb (fun '(_, blks) =>
-                        check_scope (fun venv' venvl' '(blks, trans) =>
-                                       forallb (check_block venv' venvl') blks
-                                       && forallb (fun '(e, _) => check_base_exp venv' venvl' e) trans) venv' venvl' blks) states
+          && forallb (fun '(_, (unl, blks)) =>
+                        forallb (fun '(e, _) => check_base_exp venv' venvl' e) unl
+                        && check_scope (fun venv' venvl' '(blks, trans) =>
+                                          forallb (check_block venv' venvl') blks
+                                          && forallb (fun '(e, _) => check_base_exp venv' venvl' e) trans)
+                                       venv' venvl' blks) states
       | Blocal s =>
           check_scope (fun venv' venvl' => forallb (check_block venv' venvl')) venv venvl s
       end.
@@ -1565,15 +1569,17 @@ Module Type LCLOCKING
           econstructor; eauto.
         + simpl_Forall. eapply check_base_exp_correct in CE; eauto.
         + simpl_Forall. destruct s; destruct_conjs.
-          eapply check_scope_correct; eauto.
-          2:{ apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
-              cases; simpl; auto. }
-          2:{ eapply NoDupScope_incl; eauto.
-              - intros * Hincl ?; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
-              - intros ??. solve_In. destruct (_ ==b _); inv Hf; auto. }
-          intros * ???? Hc; simpl in *.
-          rewrite Bool.andb_true_iff, 2 forallb_Forall in Hc. destruct Hc as (?&CT).
-          split; simpl_Forall; eauto using check_base_exp_correct.
+          apply Bool.andb_true_iff in CB as (CL&CS). split.
+          * apply forallb_Forall in CL. simpl_Forall; eauto using check_base_exp_correct.
+          * eapply check_scope_correct; eauto.
+            2:{ apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
+                cases; simpl; auto. }
+            2:{ eapply NoDupScope_incl; eauto.
+                - intros * Hincl ?; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
+                - intros ??. solve_In. destruct (_ ==b _); inv Hf; auto. }
+            intros * ???? Hc; simpl in *.
+            rewrite Bool.andb_true_iff, 2 forallb_Forall in Hc. destruct Hc as (?&CT).
+            split; simpl_Forall; eauto using check_base_exp_correct.
       - (* local *)
         constructor.
         eapply check_scope_correct; eauto.
@@ -2353,6 +2359,7 @@ Module Type LCLOCKING
         intros; simpl_Forall; eauto.
       - econstructor; simpl_Forall; eauto using iface_incl_wc_exp.
         destruct s; destruct_conjs.
+        split; simpl_Forall; eauto using iface_incl_wc_exp.
         eapply iface_incl_wc_scope; eauto.
         intros ? (?&?); split; simpl_Forall; eauto using iface_incl_wc_exp.
       - constructor.
@@ -2448,9 +2455,12 @@ Module Type LCLOCKING
     - destruct s. eapply wc_scope_wl_scope; eauto.
       intros; simpl_Forall; eauto.
     - split; eauto with lclocking. now rewrite <-length_clockof_numstreams, H2.
-    - destruct s; destruct_conjs. eapply wc_scope_wl_scope; eauto.
-      intros * (?&?); split; simpl_Forall; eauto.
-      split; eauto with lclocking. now rewrite <-length_clockof_numstreams, H10.
+    - destruct s; destruct_conjs.
+      split; simpl_Forall.
+      + split; eauto with lclocking. now rewrite <-length_clockof_numstreams, H6.
+      + eapply wc_scope_wl_scope; eauto.
+        intros * (?&?); split; simpl_Forall; eauto.
+        split; eauto with lclocking. now rewrite <-length_clockof_numstreams, H11.
     - eapply wc_scope_wl_scope; eauto.
       intros; simpl_Forall; eauto.
   Qed.
@@ -2541,15 +2551,18 @@ Module Type LCLOCKING
       + intros; simpl_Forall; eauto using wx_block_incl.
       + intros; simpl_Forall; eauto.
     - eapply wx_exp_incl; [| |eauto with lclocking]; eauto.
-      intros ? Hv. inv Hv. apply fst_InMembers in H6. simpl_In.
-      edestruct H5 as (Has&_). econstructor; eauto.
+      intros ? Hv. inv Hv. apply fst_InMembers in H3. simpl_In.
+      edestruct H7 as (Has&_). econstructor; eauto.
       inv Has. constructor; eauto using In_InMembers.
-    - destruct s; destruct_conjs. eapply wx_scope_incl, wc_scope_wx_scope. 5:eauto.
-      all:eauto.
-      + intros * Hv; inv Hv. apply fst_InMembers in H1; simpl_In.
-        edestruct H5 as (Hck&_); eauto with senv.
-      + intros * ?? (?&?); split; simpl_Forall; eauto using wx_block_incl, wx_exp_incl.
-      + intros * (?&?); split; simpl_Forall; eauto using wc_exp_wx_exp.
+    - destruct s; destruct_conjs. split; simpl_Forall.
+      + eapply wx_exp_incl, wc_exp_wx_exp. 3:eauto. all:eauto.
+        intros * Hv; inv Hv. apply fst_InMembers in H10; simpl_In.
+        edestruct H7 as (Hck&_); eauto with senv.
+      + eapply wx_scope_incl, wc_scope_wx_scope. 5:eauto. all:eauto.
+        * intros * Hv; inv Hv. apply fst_InMembers in H3; simpl_In.
+          edestruct H7 as (Hck&_); eauto with senv.
+        * intros * ?? (?&?); split; simpl_Forall; eauto using wx_block_incl, wx_exp_incl.
+        * intros * (?&?); split; simpl_Forall; eauto using wc_exp_wx_exp.
     - eapply wc_scope_wx_scope; eauto.
       intros; simpl_Forall; eauto.
   Qed.

@@ -184,7 +184,7 @@ Module Type CLOCKSWITCH
       let locs := flat_map (fun '(_, _, nfrees, ndefs) => (map (fun '(_, x, (ty, ck)) => (x, (ty, ck, xH, None))) (nfrees++ndefs))) xs' in
       ret (Blocal (Scope (List.map (fun '(xc, (ty, ck)) => (xc, (ty, ck, xH, None))) xcs++locs) [] (mergeeqs++concat blks'++map Beq condeqs)))
 
-    | Bauto _ _ _ => ret blk
+    | Bauto _ _ _ _ => ret blk
     end.
 
   (** *** Some properties *)

@@ -110,6 +110,18 @@ Lemma equiv_decb_negb:
   forall x, (x ==b negb x) = false.
 Proof. destruct x; simpl; auto. Qed.
 
+Definition mem_ident (x : ident): list ident -> bool :=
+  existsb (fun y => ident_eqb y x).
+
+Lemma mem_ident_spec : forall x xs,
+    mem_ident x xs = true <-> In x xs.
+Proof.
+  unfold mem_ident; intros.
+  rewrite <-Exists_existsb with (P:=fun y => y = x).
+  - split; intros; solve_Exists; subst; auto.
+  - intros. now rewrite ident_eqb_eq.
+Qed.
+
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
 
@@ -666,15 +678,21 @@ End TypesAndClocks.
 
 Global Hint Unfold idty idck : list.
 
-Lemma In_of_list_InMembers:
+Lemma In_of_list : forall xs x,
+    PS.In x (PSP.of_list xs) <-> In x xs.
+Proof.
+  split; intros Hin.
+  - apply PSP.of_list_1, SetoidList.InA_alt in Hin as (y & Heq & Hin).
+    now subst.
+  - apply PSP.of_list_1, SetoidList.InA_alt. eauto.
+Qed.
+
+Corollary In_of_list_InMembers:
   forall {A} x (xs : list (ident * A)),
     PS.In x (PSP.of_list (map fst xs)) <-> InMembers x xs.
 Proof.
-  split; intros Hin.
-  - apply PSP.of_list_1, SetoidList.InA_alt in Hin as (y & Heq & Hin); subst y.
-    now apply fst_InMembers.
-  - apply PSP.of_list_1, SetoidList.InA_alt.
-    apply fst_InMembers in Hin. eauto.
+  intros.
+  now rewrite In_of_list, fst_InMembers.
 Qed.
 
 (** Useful functions on lists of options *)

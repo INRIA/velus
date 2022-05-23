@@ -1,5 +1,5 @@
 From Velus Require Import Common.
-From Velus Require Import Environment.
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
@@ -11,8 +11,7 @@ From Velus Require Import Transcription.Tr Transcription.TrOrdered.
 From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
-From Velus Require Import Lustre.LCausality.
-From Velus Require Import Lustre.LSemantics Lustre.LClockSemantics.
+From Velus Require Import Lustre.LSemantics Lustre.LClockedSemantics.
 From Velus Require Import Lustre.Normalization.Normalization.
 From Velus Require Import Lustre.Normalization.Correctness.
 From Velus Require Import NLustre.NLOrdered.
@@ -58,12 +57,11 @@ Module Type CORRECTNESS
        (Import TR   : TR               Ids Op OpAux Cks Senv L      CE NL)
        (LT          : LTYPING          Ids Op OpAux Cks Senv L)
        (LC          : LCLOCKING        Ids Op OpAux Cks Senv L)
-       (LCA         : LCAUSALITY       Ids Op OpAux Cks Senv L)
        (Ord         : NLORDERED        Ids Op OpAux Cks        CE NL)
        (Lord        : LORDERED         Ids Op OpAux Cks Senv L)
        (Import Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS          : LSEMANTICS       Ids Op OpAux Cks Senv L Lord       Str)
-       (Import LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks Senv L LT LC LCA Lord Str LS)
+       (Import LCS  : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv L LC Lord Str LS)
        (LN          : NORMALIZATION    Ids Op OpAux Cks Senv L)
        (NLSC        : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord).
 
@@ -591,7 +589,7 @@ Module Type CORRECTNESS
     - inv H10; econstructor; eauto using sem_var_step_nl.
   Qed.
 
-  Module NCor := CorrectnessFun Ids Op OpAux Cks Str Senv L LCA LT LC Lord LS LCS LN.
+  Module NCor := CorrectnessFun Ids Op OpAux Cks Str Senv L LT LC Lord LS LCS LN.
 
   Lemma reset_or_not_reset : forall n r,
       (forall m, m <= n -> r # m = false) \/
@@ -1254,14 +1252,13 @@ Module Type CORRECTNESS
       exists k1 k2,
         (forall xs, maskv k (disj_str [r1;r2]) xs ≡ maskv k1 (maskb k2 r2 r1) (maskv k2 r2 xs)) /\
         (forall bs, maskb k (disj_str [r1;r2]) bs ≡ maskb k1 (maskb k2 r2 r1) (maskb k2 r2 bs)) /\
-        (forall H, Env.Equiv (@EqSt _) (mask_hist k (disj_str [r1;r2]) H) (mask_hist k1 (maskb k2 r2 r1) (mask_hist k2 r2 H))).
+        (forall H, FEnv.Equiv (@EqSt _) (mask_hist k (disj_str [r1;r2]) H) (mask_hist k1 (maskb k2 r2 r1) (mask_hist k2 r2 H))).
   Proof.
     intros *.
     specialize (mask_disj k r1 r2) as (k1&k2&Heq).
     exists k1, k2. split; [|split]; eauto.
-    intros H. eapply Env.Equiv_orel; intros.
-    unfold mask_hist. repeat rewrite Env.Props.P.F.map_o.
-    destruct (Env.find x H); simpl; constructor; eauto.
+    intros H ?. simpl_fenv.
+    destruct (H x); simpl; constructor; eauto.
   Qed.
 
   Lemma sem_toeq {PSyn prefs} :
@@ -1624,7 +1621,7 @@ Module Type CORRECTNESS
       take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
       rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H9.
-      assert (Env.refines (@EqSt _) H Hi') as Href.
+      assert (H ⊑ Hi') as Href.
       { rewrite map_fst_senv_of_inout in Hdom.
         eapply LCS.local_hist_dom_refines. 3,4:eauto. 1,2:eauto.
       }
@@ -1688,14 +1685,13 @@ Module CorrectnessFun
        (TR   : TR               Ids Op OpAux Cks Senv L      CE NL)
        (LT   : LTYPING          Ids Op OpAux Cks Senv L)
        (LC   : LCLOCKING        Ids Op OpAux Cks Senv L)
-       (LCA  : LCAUSALITY       Ids Op OpAux Cks Senv L)
        (Ord  : NLORDERED        Ids Op OpAux Cks        CE NL)
        (Lord : LORDERED         Ids Op OpAux Cks Senv L)
        (Str  : COINDSTREAMS     Ids Op OpAux Cks)
        (LS   : LSEMANTICS       Ids Op OpAux Cks Senv L Lord       Str)
-       (LCS  : LCLOCKSEMANTICS  Ids Op OpAux Cks Senv L LT LC LCA Lord Str LS)
+       (LCS  : LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv L LC Lord Str LS)
        (LN   : NORMALIZATION    Ids Op OpAux Cks Senv L)
        (NLSC : NLCOINDSEMANTICS Ids Op OpAux Cks        CE NL Str Ord)
-<: CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC LCA Ord Lord Str LS LCS LN NLSC.
-  Include CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC LCA Ord Lord Str LS LCS LN NLSC.
+<: CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC Ord Lord Str LS LCS LN NLSC.
+  Include CORRECTNESS Ids Op OpAux Cks Senv L CE NL TR LT LC Ord Lord Str LS LCS LN NLSC.
 End CorrectnessFun.

@@ -164,7 +164,7 @@ Module Type CATYPING
           * intros. auto_block_simpl_Forall. eapply H in H18; eauto.
             etransitivity; eauto using incl_concat.
 
-      - (* automaton *)
+      - (* automaton (weak) *)
         Local Ltac wt_automaton :=
           match goal with
           | Hincl: incl (?x::_) (enums G2) |- In ?x G2.(enums) =>
@@ -210,7 +210,7 @@ Module Type CATYPING
             econstructor; eauto; repeat constructor. 1,2:rewrite app_nil_r.
             2:{ econstructor; eauto with datatypes. }
             eapply auto_scope_wt with (Γ':=[_;_;_;_]) in H15; eauto. eapply H15.
-            1:{ intros * Hl; inv Hl. destruct H16 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
+            1:{ intros * Hl; inv Hl. destruct H11 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
             1:{ etransitivity; eauto. eauto using incl_tl, incl_concat. }
             intros; repeat inv_bind.
             repeat constructor.
@@ -220,6 +220,64 @@ Module Type CATYPING
             }
             { rewrite trans_exp_typeof; simpl.
               repeat constructor; econstructor; eauto with datatypes. }
+            { auto_block_simpl_Forall.
+              eapply H in H24; eauto.
+              - intros * Hl. inv Hl.
+                destruct H25 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; eauto; try inv Heq; simpl in *; try congruence.
+                eapply H11; eauto with senv.
+              - eapply wt_block_incl; [| |eauto]; intros * Hin; inv Hin; econstructor; eauto with datatypes.
+              - etransitivity; eauto. eauto using incl_tl, incl_concat.
+            }
+
+      - (* automaton (strong) *)
+        do 2 econstructor; eauto; simpl.
+        4:repeat (apply Forall_cons); auto.
+        + unfold wt_clocks; repeat constructor; simpl.
+          all:wt_automaton.
+        + repeat (apply Forall_cons); auto.
+          all:split; simpl; try lia. 1,3:apply Henums; auto with datatypes.
+          1,2:destruct states; simpl in *; lia.
+          1,2:apply Hiface, HwtG1.
+        + repeat constructor.
+        + econstructor. repeat constructor.
+          all:wt_automaton.
+          * apply add_whens_wt; auto; wt_automaton.
+            constructor; [apply Henums; auto with datatypes|].
+            apply fst_InMembers in H7. rewrite H8 in H7. apply in_seq in H7 as (?&?); auto.
+          * apply add_whens_wt; auto; wt_automaton.
+            constructor; simpl; [apply Hiface, HwtG1|]. unfold OpAux.false_tag; lia.
+          * simpl. rewrite app_nil_r.
+            rewrite 2 add_whens_typeof; simpl; auto.
+        + econstructor; simpl; eauto. 5:simpl_Forall; econstructor; eauto. 5-7:constructor; auto.
+          * repeat constructor. 1,2:wt_automaton.
+          * apply Henums; auto with datatypes.
+          * erewrite map_map, map_ext; eauto.
+            intros; destruct_conjs; auto.
+          * destruct states; simpl in *; try congruence.
+          *{ rewrite app_nil_r. repeat constructor.
+             - apply trans_exp_wt; eauto using In_InMembers.
+               + apply Henums; auto with datatypes.
+               + simpl_Forall. split; [|split]; auto.
+                 eapply wt_exp_incl; [| |eauto]; intros; wt_automaton.
+             - rewrite trans_exp_typeof. repeat constructor. 1,2:wt_automaton.
+             - wt_automaton.
+            }
+        + eapply wt_block_incl with (Γ:=_++Γ).
+          1,2:intros * Hin; [rewrite HasType_app in *||rewrite IsLast_app in *]; (destruct Hin; eauto).
+          econstructor; simpl; eauto; wt_automaton.
+          * constructor. econstructor; eauto with datatypes.
+            eapply wt_clock_incl; [|eauto with ltyping]. intros * Ht; inv Ht; econstructor; eauto with datatypes.
+          * assert (map fst x9 = map fst states) as Heq; [|setoid_rewrite Heq]; auto.
+            apply mmap2_values, Forall3_ignore3 in H11.
+            clear - H11. induction H11; destruct_conjs; repeat inv_bind; auto.
+          * apply mmap2_values, Forall3_ignore3 in H11. inv H11; auto; congruence.
+          * auto_block_simpl_Forall. destruct s0; destruct_conjs.
+            econstructor; eauto; repeat constructor. 1,2:rewrite app_nil_r.
+            2:{ econstructor; eauto with datatypes. }
+            eapply auto_scope_wt with (Γ':=[_;_;_;_]) in H14; eauto. eapply H14.
+            1:{ intros * Hl; inv Hl. destruct H16 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
+            1:{ etransitivity; eauto. eauto using incl_tl, incl_concat. }
+            intros; repeat inv_bind.
             { auto_block_simpl_Forall.
               eapply H in H24; eauto.
               - intros * Hl. inv Hl.

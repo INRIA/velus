@@ -1378,7 +1378,7 @@ Section ElabBlock.
     | BSWITCH _ branches _ =>
       PSUnion (map (fun '(_, blks) => PSUnion (map vars_defined blks)) branches)
     | BAUTO _ states _ =>
-        PSUnion (map (fun '(_, (locs, blks, _)) =>
+        PSUnion (map (fun '(_, (locs, blks, _, _)) =>
                         let locs := ps_from_list (map fst locs) in
                         PS.filter (fun x => negb (PS.mem x locs)) (PSUnion (map vars_defined blks))) states)
     | BLOCAL locs blks _ =>
@@ -1406,68 +1406,76 @@ Section ElabBlock.
     | _ => err_not_singleton loc
     end.
 
-  Fixpoint elab_block env tenv nenv (ab : LustreAst.block) : Elab Syn.block :=
-    match ab with
-    | BEQ aeq =>
-      do eq <- elab_equation env tenv nenv aeq;
-      ret (Beq eq)
-    | BRESET ablks [aer] _ =>
-      do blks <- mmap (elab_block env tenv nenv) ablks;
-      do (er, loc) <- elab_exp env tenv nenv aer;
-      do _ <- assert_reset_type (er, loc);
-      do er <- freeze_exp env er;
-      ret (Breset blks er)
-    | BRESET _ _ loc => err_not_singleton loc
-    | BSWITCH [aec] abrs loc =>
-      do (ec, eloc) <- elab_exp env tenv nenv aec;
-      do (ety, eck) <- single_annot eloc ec;
-      do ec <- freeze_exp env ec;
-      do tn <- assert_enum_type' loc ety;
-      let ck := List.hd Cbase (clockof ec) in
-      let env := Env.map (fun '(ty, _, b) => (ty, Cbase, b)) (Env.Props.P.filter (fun _ '(_, ck', _) => ck ==b ck') env) in
-      let xs := vars_defined ab in
-      do brs <- mmap (fun '(c, ablks) =>
-                       do (c, tn') <- elab_enum tenv loc c;
-                       do _ <- assert_type' loc (Tenum tn) (Tenum tn');
-                       do blks <- mmap (elab_block env tenv nenv) ablks;
-                       do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
-                       ret (c, Scope [] caus blks)) abrs;
-      let cs := fst (split brs) in
-      do _ <- check_duplicates loc cs;
-      do _ <- check_exhaustivity loc (snd tn) cs;
-      ret (Bswitch ec brs)
-    | BAUTO (ini, oth) states loc =>
-        let ck := find_a_clock_of_defined env (BAUTO (ini, oth) states loc) in
-        let env := Env.map (fun '(ty, _, b) => (ty, Cbase, b)) (Env.Props.P.filter (fun _ '(_, ck', _) => ck ==b ck') env) in
-        let tenv' := Env.add xH (List.map fst states) (@Env.empty _) in
-        let xs := vars_defined ab in
-        do (oth, _) <- elab_enum tenv' loc oth;
-        do ini <- mmap (fun '(e, t, loc) =>
-                         do (t, _) <- elab_enum tenv' loc t;
-                         do e <- elab_transition_cond env tenv nenv e loc;
-                         ret (e, t)) ini;
-        do states <- mmap (fun '(t, (locs, ablks, trans)) =>
-                            do (t, _) <- elab_enum tenv' loc t;
-                            do env <- elab_var_decls tenv loc env locs;
-                            do locs <- mmap (annotate tenv env nenv) locs;
-                            do _ <- mmap (check_atom loc) (map fst locs);
-                            do blks <- mmap (elab_block env tenv nenv) ablks;
-                            do trans <- mmap (fun '(e, (t, b), loc) =>
-                                               do (t, _) <- elab_enum tenv' loc t;
-                                               do e <- elab_transition_cond env tenv nenv e loc;
-                                               ret (e, (t, b))) trans;
-                            do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
-                            ret (t, (Scope locs caus (blks, trans)))
-                         ) states;
-        ret (Bauto ck (ini, oth) states)
-    | BSWITCH _ _ loc => err_not_singleton loc
-    | BLOCAL locs ablks loc =>
-      do env <- elab_var_decls tenv loc env locs;
-      do locs <- mmap (annotate tenv env nenv) locs;
-      do _ <- mmap (check_atom loc) (map fst locs);
-      do blks <- mmap (elab_block env tenv nenv) ablks;
-      ret (Blocal (Scope locs [] blks))
-    end.
+   Fixpoint elab_block env tenv nenv (ab : LustreAst.block) : Elab Syn.block :=
+     match ab with
+     | BEQ aeq =>
+         do eq <- elab_equation env tenv nenv aeq;
+         ret (Beq eq)
+     | BRESET ablks [aer] _ =>
+         do blks <- mmap (elab_block env tenv nenv) ablks;
+         do (er, loc) <- elab_exp env tenv nenv aer;
+         do _ <- assert_reset_type (er, loc);
+         do er <- freeze_exp env er;
+         ret (Breset blks er)
+     | BRESET _ _ loc => err_not_singleton loc
+     | BSWITCH [aec] abrs loc =>
+         do (ec, eloc) <- elab_exp env tenv nenv aec;
+         do (ety, eck) <- single_annot eloc ec;
+         do ec <- freeze_exp env ec;
+         do tn <- assert_enum_type' loc ety;
+         let ck := List.hd Cbase (clockof ec) in
+         let env := Env.map (fun '(ty, _, b) => (ty, Cbase, b)) (Env.Props.P.filter (fun _ '(_, ck', _) => ck ==b ck') env) in
+         let xs := vars_defined ab in
+         do brs <- mmap (fun '(c, ablks) =>
+                          do (c, tn') <- elab_enum tenv loc c;
+                          do _ <- assert_type' loc (Tenum tn) (Tenum tn');
+                          do blks <- mmap (elab_block env tenv nenv) ablks;
+                          do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
+                          ret (c, Scope [] caus blks)) abrs;
+         let cs := fst (split brs) in
+         do _ <- check_duplicates loc cs;
+         do _ <- check_exhaustivity loc (snd tn) cs;
+         ret (Bswitch ec brs)
+     | BAUTO (ini, oth) states loc =>
+         let ck := find_a_clock_of_defined env (BAUTO (ini, oth) states loc) in
+         let env := Env.map (fun '(ty, _, b) => (ty, Cbase, b)) (Env.Props.P.filter (fun _ '(_, ck', _) => ck ==b ck') env) in
+         let tenv' := Env.add xH (List.map fst states) (@Env.empty _) in
+         let xs := vars_defined ab in
+         do (oth, _) <- elab_enum tenv' loc oth;
+         do ini <- mmap (fun '(e, t, loc) =>
+                          do (t, _) <- elab_enum tenv' loc t;
+                          do e <- elab_transition_cond env tenv nenv e loc;
+                          ret (e, t)) ini;
+         do states <- mmap (fun '(t, (locs, ablks, unt, unl)) =>
+                             do (t, _) <- elab_enum tenv' loc t;
+                             do env <- elab_var_decls tenv loc env locs;
+                             do locs <- mmap (annotate tenv env nenv) locs;
+                             do _ <- mmap (check_atom loc) (map fst locs);
+                             do blks <- mmap (elab_block env tenv nenv) ablks;
+                             do unt <- mmap (fun '(e, (t, b), loc) =>
+                                              do (t, _) <- elab_enum tenv' loc t;
+                                              do e <- elab_transition_cond env tenv nenv e loc;
+                                              ret (e, (t, b))) unt;
+                             do unl <- mmap (fun '(e, (t, b), loc) =>
+                                              do (t, _) <- elab_enum tenv' loc t;
+                                              do e <- elab_transition_cond env tenv nenv e loc;
+                                              ret (e, (t, b))) unl;
+                             do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
+                             ret (t, (unl, (Scope locs caus (blks, unt))))
+                          ) states;
+         do type <-
+              if forallb (fun '(_, (unl, _)) => is_nil unl) states then ret Weak
+              else if is_nil ini && forallb (fun '(_, (_, Scope _ _ (_, unt))) => is_nil unt) states then ret Strong
+                   else err_loc loc (msg "Strong and Weak transitions cannot be mixed in the same state-machine");
+         ret (Bauto type ck (ini, oth) states)
+     | BSWITCH _ _ loc => err_not_singleton loc
+     | BLOCAL locs ablks loc =>
+         do env <- elab_var_decls tenv loc env locs;
+         do locs <- mmap (annotate tenv env nenv) locs;
+         do _ <- mmap (check_atom loc) (map fst locs);
+         do blks <- mmap (elab_block env tenv nenv) ablks;
+         ret (Blocal (Scope locs [] blks))
+     end.
 
 End ElabBlock.
 
@@ -1550,8 +1558,8 @@ Section ElabDeclaration.
                        check_nodupscope (fun env => mmap (check_noduplocals loc env)) loc env s)
                     branches;
         ret tt
-    | Bauto _ _ states =>
-        do _ <- mmap (fun '(_, s) =>
+    | Bauto _ _ _ states =>
+        do _ <- mmap (fun '(_, (_, s)) =>
                        check_nodupscope (fun env '(blks, _) => mmap (check_noduplocals loc env) blks)
                                         loc env s) states;
       ret tt
@@ -1681,10 +1689,10 @@ Section ElabDeclaration.
       do _ <- mmap (fun blks => do xs' <- check_defined_scope (mmap (check_defined_block loc)) loc (snd blks);
                             check_defined_vars loc xs xs') tl;
       ret xs
-    | Bauto _ _ [] => err_loc loc (msg "state machines should have at least one branch")
-    | Bauto _ _ ((_, hd)::tl) =>
+    | Bauto _ _ _ [] => err_loc loc (msg "state machines should have at least one branch")
+    | Bauto _ _ _ ((_, (_, hd))::tl) =>
       do xs <- check_defined_scope (fun '(blks, _) => mmap (check_defined_block loc) blks) loc hd;
-      do _ <- mmap (fun '(_, blks) => do xs' <- check_defined_scope (fun '(blks, _) => mmap (check_defined_block loc) blks) loc blks;
+      do _ <- mmap (fun '(_, (_, blks)) => do xs' <- check_defined_scope (fun '(blks, _) => mmap (check_defined_block loc) blks) loc blks;
                             check_defined_vars loc xs xs') tl;
       ret xs
     | Blocal s => check_defined_scope (mmap (check_defined_block loc)) loc s
@@ -1764,7 +1772,7 @@ Section ElabDeclaration.
       + clear - Hbind1 H4 H5. revert x0 x1 st' Hbind1.
         induction H4; intros * Hbind; inv H5; repeat monadInv; constructor; eauto.
         destruct x as [?[]]; repeat monadInv. eapply check_defined_vars_spec in Hbind2.
-        eapply check_defined_scope_spec in Hbind1; eauto.
+        destruct s. eapply check_defined_scope_spec in Hbind1; eauto.
         * eapply VarsDefinedScope_Perm2; [|eauto]. now symmetry.
         * intros; simpl in *; inv_VarsDefined.
           do 2 esplit; eauto. now rewrite Hperm.
@@ -1805,7 +1813,7 @@ Section ElabDeclaration.
       apply mmap_values, Forall2_ignore1 in Hbind0. simpl_Forall; repeat monadInv.
       repeat constructor.
       + eapply mmap_check_atom_AtomOrGensym; eauto.
-      + apply mmap_values, Forall2_ignore1 in Hbind5. simpl_Forall; eauto.
+      + apply mmap_values, Forall2_ignore1 in Hbind6. simpl_Forall; eauto.
     - (* local *)
       repeat constructor.
       + eapply mmap_check_atom_AtomOrGensym; eauto.

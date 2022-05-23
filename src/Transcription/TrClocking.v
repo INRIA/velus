@@ -471,6 +471,7 @@ Module Type TRCLOCKING
       - inv Htr.
       - inv Htr.
       - inv Htr.
+      - inv Htr.
     Qed.
 
     Fact idck_idty : forall (xs : list (_ * (type * clock * ident))),

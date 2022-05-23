@@ -8,8 +8,9 @@ From Velus Require Export Lustre.LTyping.
 From Velus Require Export Lustre.LOrdered.
 From Velus Require Export Lustre.LCausality.
 From Velus Require Export Lustre.LSemantics.
+From Velus Require Export Lustre.LClockedSemantics.
 From Velus Require Export Lustre.LSemDeterminism.
-From Velus Require Export Lustre.LClockSemantics.
+From Velus Require Export Lustre.LClockCorrectness.
 From Velus Require Export Lustre.DeLast.LDeLast.
 From Velus Require Export Lustre.CompAuto.LCompAuto.
 From Velus Require Export Lustre.ClockSwitch.LClockSwitch.
@@ -31,14 +32,16 @@ Module Type LUSTRE
   Declare Module Export Ord: LORDERED   Ids Op OpAux Cks Senv Syn.
   Declare Module Export Cau: LCAUSALITY Ids Op OpAux Cks Senv Syn.
   Declare Module Export Sem: LSEMANTICS Ids Op OpAux Cks Senv Syn Ord CStr.
-  Declare Module Export SemDet: LSEMDETERMINISM Ids Op OpAux Cks Senv Syn Typ Cau Ord CStr Sem.
-  Declare Module Export CkSem: LCLOCKSEMANTICS Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem.
+  Declare Module Export CkSem: LCLOCKEDSEMANTICS Ids Op OpAux Cks Senv Syn Clo Ord CStr Sem.
 
-  Declare Module Export DeLast: LDELAST           Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Declare Module Export CompAuto: LCOMPAUTO       Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Declare Module Export ClockSwitch: LCLOCKSWITCH Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Declare Module Export InlineLocal: LINLINELOCAL Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
+  Declare Module Export SemDet: LSEMDETERMINISM Ids Op OpAux Cks Senv Syn Typ Cau Ord CStr Sem.
+  Declare Module Export CkCor: LCLOCKCORRECTNESS Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem CkSem.
+
+  Declare Module Export DeLast: LDELAST           Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export CompAuto: LCOMPAUTO       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export ClockSwitch: LCLOCKSWITCH Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export InlineLocal: LINLINELOCAL Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Declare Module Export Norm: LNORMALIZATION Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
 End LUSTRE.
 
 Module LustreFun
@@ -55,12 +58,15 @@ Module LustreFun
   Module Export Ord := LOrderedFun    Ids Op OpAux Cks Senv Syn.
   Module Export Cau := LCausalityFun  Ids Op OpAux Cks Senv Syn.
   Module Export Sem := LSemanticsFun  Ids Op OpAux Cks Senv Syn Ord CStr.
-  Module Export SemDet := LSemDeterminismFun Ids Op OpAux Cks Senv Syn Typ Cau Ord CStr Sem.
-  Module Export CkSem := LClockSemanticsFun Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem.
+  Module Export CkSem := LClockedSemanticsFun Ids Op OpAux Cks Senv Syn Clo Ord CStr Sem.
 
-  Module Export DeLast := LDeLastFun           Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Module Export CompAuto := LCompAutoFun       Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Module Export ClockSwitch := LClockSwitchFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Module Export InlineLocal := LInlineLocalFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
-  Module Export Norm := LNormalizationFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Cau Ord Sem CkSem.
+  Module Export SemDet := LSemDeterminismFun Ids Op OpAux Cks Senv Syn Typ Cau Ord CStr Sem.
+  Module Export CkCor:= LClockCorrectnessFun Ids Op OpAux Cks Senv Syn Typ Clo Cau Ord CStr Sem CkSem.
+
+
+  Module Export DeLast := LDeLastFun           Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export CompAuto := LCompAutoFun       Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export ClockSwitch := LClockSwitchFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export InlineLocal := LInlineLocalFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
+  Module Export Norm := LNormalizationFun Ids Op OpAux Cks CStr Senv Syn Typ Clo Ord Sem CkSem.
 End LustreFun.

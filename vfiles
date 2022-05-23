@@ -1,4 +1,5 @@
 src/Environment.v
+src/FunctionalEnvironment.v
 src/Ident.v
 src/Operators.v
 src/Clocks.v
@@ -29,7 +30,8 @@ src/Lustre/LTyping.v
 src/Lustre/LClocking.v
 src/Lustre/LOrdered.v
 src/Lustre/LCausality.v
-src/Lustre/LClockSemantics.v
+src/Lustre/LClockedSemantics.v
+src/Lustre/LClockCorrectness.v
 src/Lustre/LSemDeterminism.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v

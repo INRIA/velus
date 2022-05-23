@@ -224,6 +224,16 @@ Module Type UNNESTING
   Qed.
   Global Hint Resolve idents_for_anns_length : norm.
 
+  Fact idents_for_anns_st_anns: forall anns ids st st',
+      idents_for_anns anns st = (ids, st') ->
+      Permutation (st_anns st') (ids++st_anns st).
+  Proof.
+    induction anns as [|(?&?)]; intros * Hids; simpl in *; repeat inv_bind; auto.
+    apply IHanns in H0.
+    apply fresh_ident_anns in H; rewrite H in H0.
+    rewrite H0. symmetry. apply Permutation_middle.
+  Qed.
+
   Definition unnest_reset k (e : exp) : FreshAnn (exp * list equation) :=
       do (e', eqs1) <- k e;
       match hd_default e' with

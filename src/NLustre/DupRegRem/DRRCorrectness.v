@@ -70,7 +70,7 @@ Module Type DRRCORRECTNESS
 
     Hypothesis Hsub : forall x y,
         Env.find x sub = Some y ->
-        Env.find x R = Env.find y R.
+        R x = R y.
 
     Lemma subst_sem_var_instant : forall x v,
         sem_var_instant R x v <->
@@ -212,7 +212,7 @@ Module Type DRRCORRECTNESS
 
     Hypothesis Hsub : forall x y,
         Env.find x sub = Some y ->
-        forall n, Env.find x (H n) = Env.find y (H n).
+        forall n, (H n) x = (H n) y.
 
     Lemma subst_sem_var : forall x vs,
         sem_var H x vs ->
@@ -309,7 +309,7 @@ Module Type DRRCORRECTNESS
         PS.Equal (PSP.of_list (map fst xr1)) (PSP.of_list (map fst xr2)) ->
         sem_equation G1 base H (EqFby x ck c0 e xr1) ->
         sem_equation G1 base H (EqFby y ck c0 e xr2) ->
-        forall n, Env.find x (H n) = Env.find y (H n).
+        forall n, (H n) x = (H n) y.
     Proof.
       intros * Heq Hsem1 Hsem2.
       inv Hsem1. inv Hsem2.
