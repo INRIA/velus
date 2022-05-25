@@ -426,6 +426,9 @@ Definition denot_equation (ins : list ident) (e : equation) :
   pose proof (ss := denot_exps_ ins es).
   apply curry, curry, Dprodi_DISTR.
   intro x.
+  destruct (mem_ident x ins).
+  (* si x est une entrée *)
+  exact (PROJ (DS_fam SI) x @_ FST _ _ @_ FST _ _).
   (* x est un indice dans l'environment des sorties. S'il apparaît dans
      les xs on le met à jour, sinon on regarde dans l'environnement *)
   revert Heq ss.
@@ -447,6 +450,19 @@ Definition denot_equation (ins : list ident) (e : equation) :
         exact (PROD_map (ID _) nprod_skip).
 Defined.
 
+(* TODO *)
+Definition denot_block (ins : list ident) (b : block) :
+  DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
+  match b with
+  | Beq e => denot_equation ins e
+  | _ => 0
+  end.
+
+(* TODO *)
+Definition denot_node {PSyn prefs} (n : @node PSyn prefs) :
+  DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
+  denot_block (List.map fst n.(n_in)) n.(n_block).
+
 
 Section Equation_spec.
 
@@ -463,7 +479,8 @@ Lemma denot_equation_eq :
   forall ins xs es envI bs env x,
     denot_equation ins (xs,es) envI bs env x
     = if Nat.eq_dec (length xs) (list_sum (List.map numstreams es))
-       then
+      then
+        if mem_ident x ins then envI x else
          let ss := denot_exps ins es envI bs env in
          match mem_nth xs x with
          | None => env x
@@ -476,6 +493,8 @@ Proof.
   destruct (Nat.eq_dec (length xs) (list_sum (List.map numstreams es))) as [Heq|]; auto.
   (* FIXME: pourquoi faut-il ajouter ça ? *)
   Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb.
+  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
+  destruct (mem_ident x ins); auto.
   autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
   generalize (denot_exps_ ins es).
   revert Heq.
