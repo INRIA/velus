@@ -179,6 +179,7 @@ Extract Constant print_sampl_list =>
   print_newline()".
 
 
+Module Ex1.
 (* Variables defined in the program *)
 (* Definition _a : ident := 15%positive. *)
 (* Definition _b : ident := 16%positive. *)
@@ -233,189 +234,228 @@ Import Cpo_def.
 
 
 Definition bk : DS bool := DS_const true.
-Definition res := FIXP _ (Denot.denot_equation eq1 <___> bk).
+Definition res := FIXP _ (Denot.denot_equation (List.map fst ins) eq1 0 bk).
 Definition test_stream := res _p.
-Definition output_stream := print_sampl_list (take_list 20 test_stream).
+(* Definition output_stream := print_sampl_list (take_list 10 test_stream). *)
+End Ex1.
 
 
-Require Import Infty.
-Import Denot.
 
-Module TEST1.
-  (* Equation simple sans fby  *)
-
-Definition all_infinite vars (env : DS_prod SI) : Prop :=
-  forall i, In i vars -> infinite (PROJ _ i env).
-
+Module Ex2.
+Definition _i : ident := 13%positive.
+Definition _p : ident := 14%positive.
 Definition _q : ident := 15%positive.
-(* not 0 *)
-Definition not0 : exp :=
-  Eunop (UnaryOp Cop.Onotbool) (Econst (Cint Integers.Int.zero IBool Unsigned)) (tbool,Cbase).
-(* 1 *)
-Definition e1 : exp :=
-  Econst (Cint Integers.Int.one IBool Unsigned).
-(* not p *)
-Definition notp : exp :=
-  Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool,Cbase)) (tbool, Cbase).
 
-Definition eq2 : equation :=
-  ([_q], [ not0]).
-Definition eq3 : equation :=
-  ([_p;_q], [e1; notp]).
+Definition tbool : type := Tprimitive (Tint IBool Unsigned).
 
-Lemma test_infinite1 :
-  forall bs,
-    infinite bs ->
-    let env := FIXP _ (denot_equation eq3 <___> bs) in
-    all_infinite (fst eq3) env.
-Proof.
-  (* TODO: move after denot_equation_eq *)
-  Opaque denot_equation.
-  intros ??.
-  unfold eq3; simpl.
-  intros i Hin.
-  assert (infinite (PROJ (DS_fam SI) _p (FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs)))) as Hp.
-  {
-    rewrite FIXP_eq.
-    rewrite fcont_app2_simpl, PROJ_simpl.
-    rewrite denot_equation_eq.
-    simpl.
-    rewrite (denot_exps_eq e1 [notp]).
-    autorewrite with cpodb using simpl.
-    now apply infinite_map.
-  }
-  assert (infinite (PROJ (DS_fam SI) _q (FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs)))) as Hq.
-  {
-    rewrite FIXP_eq.
-    rewrite fcont_app2_simpl, PROJ_simpl.
-    rewrite denot_equation_eq; simpl.
-    rewrite ID_simpl, Id_simpl.
-    remember ((FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs))) as env.
-    (* TODO: problème de reflexivité dans les arguments *)
-    rewrite (denot_exps_eq e1 [notp] env bs); simpl.
-    rewrite SND_PAIR_simpl.
-    rewrite (denot_exps_eq notp [] env bs), CTE_eq.
-    rewrite denot_exp_eq; simpl.
-    setoid_rewrite (denot_exp_eq (Evar _p (tbool, Cbase)) env bs).
-    now apply infinite_map.
-  }
-  inversion Hin as [|[|[]]]; subst; auto.
-Qed.
+Definition ins : list (ident * (type * clock)) :=
+  [(_i, (tbool, Cbase))].
+Definition outs : list (ident * (type * clock)) :=
+  [(_q, (tbool, Cbase))].
+Definition vars : list (ident * (type * clock)) :=
+  [].
 
-End TEST1.
+(* 0 fby (not i) *)
+Definition zfbynoti : exp :=
+  Efby [Econst (Cint Integers.Int.zero IBool Unsigned)]
+    [Eunop (UnaryOp Cop.Onotbool) (Evar _i (tbool,Cbase)) (tbool, Cbase)]
+    [(tbool,Cbase)].
+
+Definition eq1 : equation :=
+  ([_p], [ zfbynoti]).
+
+Import Cpo_def Denot.
+
+Definition val_of_bool (b : bool) : value :=
+  if b then Vscalar (Values.Vint Integers.Int.one)
+  else Vscalar (Values.Vint Integers.Int.zero).
+Definition alt := FIXP _ (CONS (pres (val_of_bool true)) @_ CONS (pres (val_of_bool false))).
+
+Definition bk : DS bool := DS_const true.
+(* environment initial : seulement i  *)
+Definition envI : DS_prod SI :=
+  fun x => match x with
+        | 13%positive => alt
+        | _ => 0
+        end.
+
+Definition res := FIXP _ (Denot.denot_equation (List.map fst ins) eq1 envI bk).
+Definition test_stream := res _i.
+Definition output_stream := print_sampl_list (take_list 15 test_stream).
+End Ex2.
+
+(* Require Import Infty. *)
+(* Import Denot. *)
+(* Module TEST1. *)
+(*   (* Equation simple sans fby  *) *)
+
+(* Definition all_infinite vars (env : DS_prod SI) : Prop := *)
+(*   forall i, In i vars -> infinite (PROJ _ i env). *)
+
+(* Definition _q : ident := 15%positive. *)
+(* (* not 0 *) *)
+(* Definition not0 : exp := *)
+(*   Eunop (UnaryOp Cop.Onotbool) (Econst (Cint Integers.Int.zero IBool Unsigned)) (tbool,Cbase). *)
+(* (* 1 *) *)
+(* Definition e1 : exp := *)
+(*   Econst (Cint Integers.Int.one IBool Unsigned). *)
+(* (* not p *) *)
+(* Definition notp : exp := *)
+(*   Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool,Cbase)) (tbool, Cbase). *)
+
+(* Definition eq2 : equation := *)
+(*   ([_q], [ not0]). *)
+(* Definition eq3 : equation := *)
+(*   ([_p;_q], [e1; notp]). *)
+
+(* Lemma test_infinite1 : *)
+(*   forall bs, *)
+(*     infinite bs -> *)
+(*     let env := FIXP _ (denot_equation eq3 <___> bs) in *)
+(*     all_infinite (fst eq3) env. *)
+(* Proof. *)
+(*   (* TODO: move after denot_equation_eq *) *)
+(*   Opaque denot_equation. *)
+(*   intros ??. *)
+(*   unfold eq3; simpl. *)
+(*   intros i Hin. *)
+(*   assert (infinite (PROJ (DS_fam SI) _p (FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs)))) as Hp. *)
+(*   { *)
+(*     rewrite FIXP_eq. *)
+(*     rewrite fcont_app2_simpl, PROJ_simpl. *)
+(*     rewrite denot_equation_eq. *)
+(*     simpl. *)
+(*     rewrite (denot_exps_eq e1 [notp]). *)
+(*     autorewrite with cpodb using simpl. *)
+(*     now apply infinite_map. *)
+(*   } *)
+(*   assert (infinite (PROJ (DS_fam SI) _q (FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs)))) as Hq. *)
+(*   { *)
+(*     rewrite FIXP_eq. *)
+(*     rewrite fcont_app2_simpl, PROJ_simpl. *)
+(*     rewrite denot_equation_eq; simpl. *)
+(*     rewrite ID_simpl, Id_simpl. *)
+(*     remember ((FIXP (DS_prod SI) (denot_equation ([_p; _q], [e1; notp]) <___> bs))) as env. *)
+(*     (* TODO: problème de reflexivité dans les arguments *) *)
+(*     rewrite (denot_exps_eq e1 [notp] env bs); simpl. *)
+(*     rewrite SND_PAIR_simpl. *)
+(*     rewrite (denot_exps_eq notp [] env bs), CTE_eq. *)
+(*     rewrite denot_exp_eq; simpl. *)
+(*     setoid_rewrite (denot_exp_eq (Evar _p (tbool, Cbase)) env bs). *)
+(*     now apply infinite_map. *)
+(*   } *)
+(*   inversion Hin as [|[|[]]]; subst; auto. *)
+(* Qed. *)
+
+(* End TEST1. *)
 
 
-Module TEST2.
-  (* équation avec [fby] utilisant les propriétés de productivité *)
+(* Module TEST2. *)
+(*   (* équation avec [fby] utilisant les propriétés de productivité *) *)
 
-  Definition _p : ident := 9%positive.
-  Definition _q : ident := 15%positive.
+(*   Definition _p : ident := 9%positive. *)
+(*   Definition _q : ident := 15%positive. *)
 
-  (* 0 fby not p *)
-  Definition zfbynotp : exp :=
-    Efby [Econst (Cint Integers.Int.zero IBool Unsigned)]
-      [Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool,Cbase)) (tbool, Cbase)]
-      [(tbool,Cbase)].
+(*   (* 0 fby not p *) *)
+(*   Definition zfbynotp : exp := *)
+(*     Efby [Econst (Cint Integers.Int.zero IBool Unsigned)] *)
+(*       [Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool,Cbase)) (tbool, Cbase)] *)
+(*       [(tbool,Cbase)]. *)
 
-  Definition eq1 : equation :=
-    ([_p;_q], [Evar _q (tbool,Cbase); zfbynotp]).
+(*   Definition eq1 : equation := *)
+(*     ([_p;_q], [Evar _q (tbool,Cbase); zfbynotp]). *)
 
-  Definition all_infinite (vars : list ident) (env : DS_prod SI) : Prop :=
-    forall i, In i vars -> infinite (env i).
+(*   Definition all_infinite (vars : list ident) (env : DS_prod SI) : Prop := *)
+(*     forall i, In i vars -> infinite (env i). *)
 
-  Lemma nrem_all_inf :
-    forall vars env,
-      (forall n i, In i vars -> is_cons (nrem n (env i))) ->
-      all_infinite vars env.
-  Proof.
-    intros ?????.
-    apply nrem_inf; auto.
-  Qed.
+(*   Lemma nrem_all_inf : *)
+(*     forall vars env, *)
+(*       (forall n i, In i vars -> is_cons (nrem n (env i))) -> *)
+(*       all_infinite vars env. *)
+(*   Proof. *)
+(*     intros ?????. *)
+(*     apply nrem_inf; auto. *)
+(*   Qed. *)
 
-  Lemma test_infinite2 :
-  forall bs,
-    infinite bs ->
-    let env := FIXP _ (denot_equation eq1 <___> bs) in
-    all_infinite (fst eq1) env.
-  Proof.
-  Opaque denot_equation denot_exp.
-  intros bs bsi.
-  unfold eq1; simpl.
-  apply nrem_all_inf.
-  induction n; simpl; intros.
-  - (* instant 0 *)
-    assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)) as Hq.
-    { (* _q *)
-    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
-    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
-    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]). (* pourquoi ?? *)
-    autorewrite with cpodb using simpl.
-    rewrite (denot_exps_eq zfbynotp []), denot_exp_eq.
-    simpl. unfold eq_rect_r, eq_rect.
-    autorewrite with cpodb using simpl.
-    apply is_cons_fby.
-    rewrite (denot_exps_eq (Econst (Cint Integers.Int.zero IBool Unsigned)) []), denot_exp_eq.
-    autorewrite with cpodb using simpl.
-    apply is_cons_map. now inv bsi.
-    }
-    destruct (ident_eq_dec i _q) as [|Hnq]; subst; auto.
-    assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _p)) as Hp.
-    { (* _p *)
-    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
-    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
-    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]), denot_exp_eq.
-    autorewrite with cpodb using simpl; auto.
-    }
-    destruct (ident_eq_dec i _p) as [|Hnp]; subst; auto.
-    { (* others *)
-      exfalso. clear Hp Hq. firstorder.
-    }
-  - (* instant (S n) *)
-    assert (is_cons
-              (nrem n (rem (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)))) as Hq.
-    { (* _q *)
-    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
-    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
-    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]). (* pourquoi ?? *)
-    autorewrite with cpodb using simpl.
-    rewrite (denot_exps_eq zfbynotp []), denot_exp_eq.
-    simpl. unfold eq_rect_r, eq_rect.
-    autorewrite with cpodb using simpl.
-    apply is_consn_S_fby.
-    + rewrite (denot_exps_eq (Econst (Cint Integers.Int.zero IBool Unsigned)) []), denot_exp_eq.
-      autorewrite with cpodb using simpl.
-      apply is_consn_sconst with (n := (S n)); auto using inf_nrem.
-    + rewrite (denot_exps_eq (Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool, Cbase)) (tbool, Cbase)) []), 2 denot_exp_eq.
-      autorewrite with cpodb using simpl.
-      apply is_consn_sunop.
-      apply IHn; simpl; auto.
-    }
-    destruct (ident_eq_dec i _q) as [|Hnq]; subst; auto.
-    assert (is_cons
-              (nrem n (rem (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _p)))) as Hp.
-    { (* _p *)
-    rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl.
-    rewrite fcont_app2_simpl, denot_equation_eq; simpl.
-    rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]), denot_exp_eq.
-    autorewrite with cpodb using simpl; auto.
-    }
-    destruct (ident_eq_dec i _p) as [|Hnp]; subst; auto.
-    { (* others *)
-      exfalso. clear IHn Hp Hq. firstorder.
-    }
-  Qed.
+(*   Lemma test_infinite2 : *)
+(*   forall bs, *)
+(*     infinite bs -> *)
+(*     let env := FIXP _ (denot_equation eq1 <___> bs) in *)
+(*     all_infinite (fst eq1) env. *)
+(*   Proof. *)
+(*   Opaque denot_equation denot_exp. *)
+(*   intros bs bsi. *)
+(*   unfold eq1; simpl. *)
+(*   apply nrem_all_inf. *)
+(*   induction n; simpl; intros. *)
+(*   - (* instant 0 *) *)
+(*     assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)) as Hq. *)
+(*     { (* _q *) *)
+(*     rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl. *)
+(*     rewrite fcont_app2_simpl, denot_equation_eq; simpl. *)
+(*     rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]). (* pourquoi ?? *) *)
+(*     autorewrite with cpodb using simpl. *)
+(*     rewrite (denot_exps_eq zfbynotp []), denot_exp_eq. *)
+(*     simpl. unfold eq_rect_r, eq_rect. *)
+(*     autorewrite with cpodb using simpl. *)
+(*     apply is_cons_fby. *)
+(*     rewrite (denot_exps_eq (Econst (Cint Integers.Int.zero IBool Unsigned)) []), denot_exp_eq. *)
+(*     autorewrite with cpodb using simpl. *)
+(*     apply is_cons_map. now inv bsi. *)
+(*     } *)
+(*     destruct (ident_eq_dec i _q) as [|Hnq]; subst; auto. *)
+(*     assert (is_cons (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _p)) as Hp. *)
+(*     { (* _p *) *)
+(*     rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl. *)
+(*     rewrite fcont_app2_simpl, denot_equation_eq; simpl. *)
+(*     rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]), denot_exp_eq. *)
+(*     autorewrite with cpodb using simpl; auto. *)
+(*     } *)
+(*     destruct (ident_eq_dec i _p) as [|Hnp]; subst; auto. *)
+(*     { (* others *) *)
+(*       exfalso. clear Hp Hq. firstorder. *)
+(*     } *)
+(*   - (* instant (S n) *) *)
+(*     assert (is_cons *)
+(*               (nrem n (rem (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _q)))) as Hq. *)
+(*     { (* _q *) *)
+(*     rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl. *)
+(*     rewrite fcont_app2_simpl, denot_equation_eq; simpl. *)
+(*     rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]). (* pourquoi ?? *) *)
+(*     autorewrite with cpodb using simpl. *)
+(*     rewrite (denot_exps_eq zfbynotp []), denot_exp_eq. *)
+(*     simpl. unfold eq_rect_r, eq_rect. *)
+(*     autorewrite with cpodb using simpl. *)
+(*     apply is_consn_S_fby. *)
+(*     + rewrite (denot_exps_eq (Econst (Cint Integers.Int.zero IBool Unsigned)) []), denot_exp_eq. *)
+(*       autorewrite with cpodb using simpl. *)
+(*       apply is_consn_sconst with (n := (S n)); auto using inf_nrem. *)
+(*     + rewrite (denot_exps_eq (Eunop (UnaryOp Cop.Onotbool) (Evar _p (tbool, Cbase)) (tbool, Cbase)) []), 2 denot_exp_eq. *)
+(*       autorewrite with cpodb using simpl. *)
+(*       apply is_consn_sunop. *)
+(*       apply IHn; simpl; auto. *)
+(*     } *)
+(*     destruct (ident_eq_dec i _q) as [|Hnq]; subst; auto. *)
+(*     assert (is_cons *)
+(*               (nrem n (rem (FIXP (DS_prod SI) (denot_equation ([_p; _q], [Evar _q (tbool, Cbase); zfbynotp]) <___> bs) _p)))) as Hp. *)
+(*     { (* _p *) *)
+(*     rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl. *)
+(*     rewrite fcont_app2_simpl, denot_equation_eq; simpl. *)
+(*     rewrite (denot_exps_eq (Evar _q (tbool, Cbase)) [zfbynotp]), denot_exp_eq. *)
+(*     autorewrite with cpodb using simpl; auto. *)
+(*     } *)
+(*     destruct (ident_eq_dec i _p) as [|Hnp]; subst; auto. *)
+(*     { (* others *) *)
+(*       exfalso. clear IHn Hp Hq. firstorder. *)
+(*     } *)
+(*   Qed. *)
 
-(* Definition bk : DS bool := DS_const true. *)
-(* Definition res := FIXP _ (Denot.denot_equation eq3 <___> bk). *)
-(* Definition test_stream := res _q. *)
-(* Definition output_stream := print_sampl_list (take_list 20 test_stream). *)
+(* (* Definition bk : DS bool := DS_const true. *) *)
+(* (* Definition res := FIXP _ (Denot.denot_equation eq3 <___> bk). *) *)
+(* (* Definition test_stream := res _q. *) *)
+(* (* Definition output_stream := print_sampl_list (take_list 20 test_stream). *) *)
 
-End TEST2.
-
-(* Require Import LCausality. *)
-(* Module Import Caus := LCausalityFun Ident.Ids Interface.Op Interface.OpAux Interface.Cks L.Senv L.Syn. *)
-
-(* Check causal_ind. *)
+(* End TEST2. *)
 
 (* (** on le retrouve dans  [extration-denot/Extraction.ml]  *) *)
 Cd "extraction-denot".
@@ -426,7 +466,7 @@ Separate Extraction
 	 Floats.Float32.from_parsed Floats.Float.from_parsed
 	 FMapPositive.PositiveMap.add FMapPositive.PositiveMap.empty
 	 FMapPositive.PositiveMap.find
-         output_stream
+         Ex2.output_stream
          (* TEST_infty.output_stream *)
          (* output_stream0 *)
          (* output_stream1 *)
