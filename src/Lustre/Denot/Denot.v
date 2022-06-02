@@ -181,6 +181,108 @@ Qed.
 
 End Nprod.
 
+Section Forall_Nprod.
+
+Variable P : DS (sampl value) -> Prop.
+
+Definition forall_nprod {n} (np : nprod n) : Prop.
+  induction n as [|[]]; simpl in *.
+  - exact True.
+  - exact (P np).
+  - exact (P (fst np) /\ IHn (snd np)).
+Defined.
+
+Lemma forall_nprod_skip :
+  forall {n} (np : nprod (S n)),
+    forall_nprod np ->
+    forall_nprod (nprod_skip np).
+Proof.
+  intros * Hnp.
+  destruct n.
+  - now simpl.
+  - destruct Hnp. auto.
+Qed.
+
+Lemma forall_nprod_k :
+  forall {n} (np : nprod n),
+    (forall k, k < n -> P (get_nth np k)) ->
+    forall_nprod np.
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - constructor.
+  - apply (Hk O); auto.
+  - split.
+    + apply (Hk O); auto with arith.
+    + apply IHn; intros.
+      change (snd np) with (nprod_skip np).
+      rewrite get_nth_skip; auto with arith.
+Qed.
+
+Lemma forall_nprod_k' :
+  forall {n} (np : nprod n),
+    forall_nprod np ->
+    (forall k, k < n -> P (get_nth np k)).
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - lia.
+  - intros.
+    assert (k = O) by lia; subst.
+    now simpl in Hk.
+  - intros.
+    specialize (IHn (nprod_skip np)).
+    setoid_rewrite get_nth_skip in IHn.
+    destruct k. { destruct Hk; auto. }
+    apply IHn; auto using forall_nprod_skip with arith.
+Qed.
+
+Lemma forall_nprod_app :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    forall_nprod np ->
+    forall_nprod mp ->
+    forall_nprod (nprod_app np mp).
+Proof.
+  intros * Hnp Hmp.
+  apply forall_nprod_k.
+  intros * Hk.
+  destruct (Nat.lt_ge_cases k n).
+  - rewrite nprod_app_nth1; auto using forall_nprod_k'.
+  - rewrite nprod_app_nth2; auto.
+    apply forall_nprod_k'; auto; lia.
+Qed.
+
+Lemma forall_nprod_lift2 :
+  forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
+    (forall x y, P x -> P y -> P (f _ x y)) ->
+    forall {n} (np np' : nprod n),
+      forall_nprod np ->
+      forall_nprod np' ->
+      forall_nprod (lift2 f np np').
+Proof.
+  intros f Hf.
+  induction n as [|[]]; intros * H H'; auto.
+  simpl in *; auto.
+  destruct np,np',H,H'.
+  rewrite lift2_simpl.
+  split; simpl in *; auto .
+  now apply IHn.
+Qed.
+
+End Forall_Nprod.
+
+Lemma forall_nprod_impl :
+  forall (P Q : DS (sampl value) -> Prop),
+    (forall x, P x -> Q x) ->
+    forall {n} (np : nprod n),
+      forall_nprod P np ->
+      forall_nprod Q np.
+Proof.
+  induction n as [|[]]; intros * Hf; auto.
+  - now simpl in *; auto.
+  - destruct Hf.
+    split; auto.
+    now apply IHn.
+Qed.
+
 
 Section EXP.
 
@@ -209,16 +311,6 @@ Inductive restr_exp : exp -> Prop :=
 .
 
 Definition SI := fun _ : ident => sampl value.
-
-(* TODO: use, move? *)
-Definition CTE2 (D1 D2 D3:cpo) : (D1 -C-> D2) -c> D1 -C-> D3 -C-> D2 :=
-  curry (curry (uncurry (AP D1 D2) @_ FST _ _)).
-
-Lemma CTE2_eq : forall (D1 D2 D3: cpo) f a b, CTE2 D1 D2 D3  f a b = f a.
-Proof.
-  trivial.
-Qed.
-(* Global *) Hint Rewrite CTE2_eq : cpodb.
 
 Definition denot_exp_ (ins : list ident)
   (e : exp) :
@@ -412,6 +504,8 @@ Proof.
     now destruct E1, E2.
 Qed.
 
+End EXP.
+
 
 Definition denot_equation (ins : list ident) (e : equation) :
   DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
@@ -449,20 +543,6 @@ Definition denot_equation (ins : list ident) (e : equation) :
       * inv Heq.
         exact (PROD_map (ID _) nprod_skip).
 Defined.
-
-(* TODO *)
-Definition denot_block (ins : list ident) (b : block) :
-  DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
-  match b with
-  | Beq e => denot_equation ins e
-  | _ => 0
-  end.
-
-(* TODO *)
-Definition denot_node {PSyn prefs} (n : @node PSyn prefs) :
-  DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
-  denot_block (List.map fst n.(n_in)) n.(n_block).
-
 
 Section Equation_spec.
 
@@ -561,7 +641,25 @@ End Equation_spec.
 (*           * exact (SND _ _). *)
 (*     Defined. *)
 
-End EXP.
+Inductive restr_block : block -> Prop :=
+| restr_Beq :
+  forall xs es,
+    Forall restr_exp es ->
+    restr_block (Beq (xs,es)).
+
+Definition restr_node {PSyn prefs} (nd : @node PSyn prefs) : Prop :=
+  restr_block nd.(n_block).
+
+Definition denot_block (ins : list ident) (b : block) :
+  DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
+  match b with
+  | Beq e => denot_equation ins e
+  | _ => 0
+  end.
+
+Definition denot_node {PSyn prefs} (n : @node PSyn prefs) :
+  DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
+  denot_block (List.map fst n.(n_in)) n.(n_block).
 
 End LDENOT.
 
