@@ -157,6 +157,20 @@ Proof.
   trivial.
 Qed.
 
+Lemma lift2_nth :
+  forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
+  forall {n} (np np' : nprod n) k,
+    k < n ->
+    get_nth (lift2 f np np') k = f _ (get_nth np k) (get_nth np' k).
+Proof.
+  induction n as [|[]]; intros; auto; try lia.
+  - destruct k; simpl; auto; lia.
+  - destruct np, np'.
+    rewrite lift2_simpl.
+    destruct k; auto.
+    rewrite <- 3 get_nth_skip, <- IHn; auto with arith.
+Qed.
+
 Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
   match n with
   | O => DS_const (err error_Ty)
@@ -554,6 +568,20 @@ Fixpoint mem_nth (l : list ident) (x : ident) : option nat :=
       if ident_eq_dec x y then Some O
       else option_map S (mem_nth l x)
   end.
+
+Lemma mem_nth_nth :
+  forall l k d,
+    NoDup l ->
+    k < length l ->
+    mem_nth l (nth k l d) = Some k.
+Proof.
+  induction l; simpl; intros * Hdup Hk. lia.
+  destruct k.
+  - destruct ident_eq_dec; congruence.
+  - inv Hdup. cases; subst.
+    + exfalso. auto using nth_In with arith.
+    + rewrite IHl; auto with arith.
+Qed.
 
 Lemma denot_equation_eq :
   forall ins xs es envI bs env x,
