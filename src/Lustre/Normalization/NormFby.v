@@ -48,7 +48,7 @@ Module Type NORMFBY
   Definition init_type (ty : type) :=
     match ty with
     | Tprimitive cty => Econst (init_ctype cty)
-    | Tenum _ => Eenum 0 ty
+    | Tenum _ _ => Eenum 0 ty
     end.
 
   (** Generate a if-then-else equation for (0 fby e), and return an expression using it *)
@@ -483,7 +483,7 @@ Module Type NORMFBY
       unnested_global G.
   Proof.
     unfold normalized_global, unnested_global.
-    destruct G as (enums&nds).
+    destruct G as (types&nds).
     induction nds; intros Hnormed; inv Hnormed; constructor.
     - destruct H1. split; eauto.
       eapply normalized_node_unnested_node; eauto.
@@ -822,7 +822,7 @@ Module Type NORMFBY
     { transform_unit := normfby_node }.
 
   Global Program Instance normfby_global_without_units : TransformProgramWithoutUnits (@global nolocal_top_block norm1_prefs) (@global nolocal_top_block norm2_prefs) :=
-    { transform_program_without_units := fun g => Global g.(enums) [] }.
+    { transform_program_without_units := fun g => Global g.(types) [] }.
 
   Definition normfby_global : @global nolocal_top_block norm1_prefs -> @global nolocal_top_block norm2_prefs := transform_units.
 
@@ -876,7 +876,7 @@ Module Type NORMFBY
       unnested_global G ->
       normalized_global (normfby_global G).
   Proof.
-    unfold normfby_global. destruct G as (enums&nds).
+    unfold normfby_global. destruct G as (types&nds).
     intros * Hunt.
     eapply transform_units_wt_program; eauto.
     intros ?? Huntn.

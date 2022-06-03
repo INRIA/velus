@@ -148,7 +148,7 @@ Module Type STCCLOCKINGSEMANTICS
 
     - (* systems *)
       rename H2 into Find'; rename H4 into Hins'; rename H5 into Houts'.
-      assert (enums P = enums P')
+      assert (types P = types P')
         by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
       rewrite Find' in Find; inv Find.
       apply Forall_forall; unfold idck.

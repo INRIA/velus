@@ -17,7 +17,7 @@ From Velus Require Import Lustre.SubClock.SCTyping.
 Module Type CSTYPING
        (Import Ids : IDS)
        (Import Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Ids Op)
+       (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import Senv : STATICENV Ids Op OpAux Cks)
        (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
@@ -50,18 +50,18 @@ Module Type CSTYPING
     Qed.
 
     Lemma cond_eq_wt_clock vars : forall e ty ck x xcs eqs' st st',
-        wt_clock G.(enums) vars ck ->
+        wt_clock G.(types) vars ck ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wt_clock G.(enums) vars) (map snd (Common.idck xcs)).
+        Forall (wt_clock G.(types) vars) (map snd (Common.idck xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
     Qed.
 
-    Lemma cond_eq_wt_enum : forall e ty ck x xcs eqs' st st',
-        wt_enum G ty ->
+    Lemma cond_eq_wt_type : forall e ty ck x xcs eqs' st st',
+        wt_type G.(types) ty ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wt_enum G) (map snd (Common.idty xcs)).
+        Forall (wt_type G.(types)) (map snd (Common.idty xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -78,13 +78,13 @@ Module Type CSTYPING
       inv Hck; eauto with senv datatypes.
     Qed.
 
-    Lemma new_idents_wt_clock Γ' : forall ck x tn k ids ids' st st',
-        In tn G.(enums) ->
-        k < snd tn ->
-        wt_clock G.(enums) Γ' ck ->
-        HasType Γ' x (Tenum tn) ->
-        new_idents ck x (Tenum tn) k ids st = (ids', st') ->
-        Forall (fun '(_, _, (_, ck)) => wt_clock G.(enums) Γ' ck) ids'.
+    Lemma new_idents_wt_clock Γ' : forall ck x tx tn k ids ids' st st',
+        In (Tenum tx tn) G.(types) ->
+        k < length tn ->
+        wt_clock G.(types) Γ' ck ->
+        HasType Γ' x (Tenum tx tn) ->
+        new_idents ck x (Tenum tx tn) k ids st = (ids', st') ->
+        Forall (fun '(_, _, (_, ck)) => wt_clock G.(types) Γ' ck) ids'.
     Proof.
       intros * Hen Hk Hck Hin Hni.
       unfold new_idents in *. eapply mmap_values, Forall2_ignore1 in Hni.
@@ -93,38 +93,38 @@ Module Type CSTYPING
       econstructor; eauto.
     Qed.
 
-    Lemma new_idents_wt_enum : forall ck x tn k ids ids' st st',
-        Forall (wt_enum G) (map (fun '(_, ann) => ann.(typ)) ids) ->
-        new_idents ck x (Tenum tn) k ids st = (ids', st') ->
-        Forall (fun '(_, _, (ty, _)) => wt_enum G ty) ids'.
+    Lemma new_idents_wt_type : forall ck x tx tn k ids ids' st st',
+        Forall (wt_type G.(types)) (map (fun '(_, ann) => ann.(typ)) ids) ->
+        new_idents ck x (Tenum tx tn) k ids st = (ids', st') ->
+        Forall (fun '(_, _, (ty, _)) => wt_type G.(types) ty) ids'.
     Proof.
       intros * Hwt Hni.
       unfold new_idents in *. eapply mmap_values, Forall2_ignore1 in Hni.
       simpl_Forall. simpl_In. simpl_Forall. repeat inv_bind. auto.
     Qed.
 
-    Lemma when_free_wt Γ : forall x y ty ck cx tn k,
+    Lemma when_free_wt Γ : forall x y ty ck cx tx tn k,
         HasType Γ x ty ->
         HasType Γ y ty ->
-        HasType Γ cx (Tenum tn) ->
-        k < snd tn ->
-        In tn G.(enums) ->
-        wt_clock G.(enums) Γ ck ->
-        wt_block G Γ (when_free x y ty ck cx (Tenum tn) k).
+        HasType Γ cx (Tenum tx tn) ->
+        k < length tn ->
+        In (Tenum tx tn) G.(types) ->
+        wt_clock G.(types) Γ ck ->
+        wt_block G Γ (when_free x y ty ck cx (Tenum tx tn) k).
     Proof.
       intros.
       repeat (econstructor; simpl; eauto).
     Qed.
 
-    Lemma merge_defs_wt Γ : forall sub y ty ck x tn xcs,
-        HasType Γ x (Tenum tn) ->
-        In tn G.(enums) ->
+    Lemma merge_defs_wt Γ : forall sub y ty ck x tx tn xcs,
+        HasType Γ x (Tenum tx tn) ->
+        In (Tenum tx tn) G.(types) ->
         HasType Γ (rename_var sub y) ty ->
-        wt_clock G.(enums) Γ ck ->
+        wt_clock G.(types) Γ ck ->
         xcs <> [] ->
-        Permutation (map fst xcs) (seq 0 (snd tn)) ->
+        Permutation (map fst xcs) (seq 0 (length tn)) ->
         Forall (fun '(k, sub) => HasType Γ (rename_var sub y) ty) xcs ->
-        wt_block G Γ (merge_defs sub y ty ck x (Tenum tn) xcs).
+        wt_block G Γ (merge_defs sub y ty ck x (Tenum tx tn) xcs).
     Proof.
       intros * Hin1 Htn Hin2 Hck Hnnil Hperm Hf.
       repeat constructor; auto.
@@ -172,8 +172,8 @@ Module Type CSTYPING
         (forall x ty, HasType Γck x ty -> HasType Γty x ty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
-        Forall (wt_enum G) (map (fun '(_, a) => a.(typ)) Γty) ->
-        wt_clock G.(enums) Γty' bck ->
+        Forall (wt_type G.(types)) (map (fun '(_, a) => a.(typ)) Γty) ->
+        wt_clock G.(types) Γty' bck ->
         noauto_scope P_na (Scope locs caus blk) ->
         NoDupScope P_nd (map fst Γty) (Scope locs caus blk) ->
         wt_scope P_wt G Γty (Scope locs caus blk) ->
@@ -186,8 +186,8 @@ Module Type CSTYPING
             (forall x ty, HasType Γck x ty -> HasType Γty x ty) ->
             NoDupMembers Γty ->
             NoDupMembers Γck ->
-            Forall (wt_enum G) (map (fun '(_, a) => a.(typ)) Γty) ->
-            wt_clock G.(enums) Γty' bck ->
+            Forall (wt_type G.(types)) (map (fun '(_, a) => a.(typ)) Γty) ->
+            wt_clock G.(types) Γty' bck ->
             P_na blk ->
             P_nd (map fst Γty) blk ->
             P_wt Γty blk ->
@@ -245,6 +245,7 @@ Module Type CSTYPING
     Qed.
 
     Lemma switch_block_wt : forall blk bck sub Γck Γty Γty' blk' st st',
+        wt_global G ->
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y ty, Env.find x sub = Some y -> HasType Γty x ty -> HasType Γty' y ty)->
         (forall x, ~ IsLast Γty x) ->
@@ -252,8 +253,8 @@ Module Type CSTYPING
         (forall x ty, HasType Γck x ty -> HasType Γty x ty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
-        Forall (wt_enum G) (map (fun '(_, a) => a.(typ)) Γty) ->
-        wt_clock G.(enums) Γty' bck ->
+        Forall (wt_type G.(types)) (map (fun '(_, a) => a.(typ)) Γty) ->
+        wt_clock G.(types) Γty' bck ->
         noauto_block blk ->
         NoDupLocals (map fst Γty) blk ->
         wt_block G Γty blk ->
@@ -261,7 +262,7 @@ Module Type CSTYPING
         wt_block G Γty' blk'.
     Proof.
       Opaque switch_scope.
-      induction blk using block_ind2; intros * Hsubin Hsub Hnsub Hnl1 Hincl Hnd1 Hnd2 Hwenv Hbck Hnl2 Hnd3 Hwt Hsw;
+      induction blk using block_ind2; intros * HwtG Hsubin Hsub Hnsub Hnl1 Hincl Hnd1 Hnd2 Hwenv Hbck Hnl2 Hnd3 Hwt Hsw;
         inv Hnl2; inv Hnd3; inv Hwt; repeat inv_bind; simpl in *.
       - (* equation *)
         constructor. eapply subclock_equation_wt; eauto.
@@ -280,14 +281,14 @@ Module Type CSTYPING
         assert (length (clockof ec) = 1) as Hlck.
         { rewrite length_clockof_numstreams, <-length_typeof_numstreams, H5; auto. }
         remember (clockof ec) as ck; symmetry in Heqck. singleton_length. rename c into ck.
-        assert (wt_clock G.(enums) Γty' (subclock_clock bck sub ck)) as Hck'.
+        assert (wt_clock G.(types) Γty' (subclock_clock bck sub ck)) as Hck'.
         { eapply subclock_clock_wt; eauto.
           eapply wt_exp_clockof in H4; eauto. rewrite Heqck in H4. apply Forall_singl in H4; auto. }
 
         rewrite subclock_exp_typeof, H5 in *; simpl in *.
         rewrite subclock_exp_clockof, Heqck in *; simpl in *.
 
-        assert (HasType (Γty' ++ senv_of_tyck l1) i (Tenum tn)) as Hini.
+        assert (HasType (Γty' ++ senv_of_tyck l1) i (Tenum tx tn)) as Hini.
         { eapply cond_eq_In in H0; eauto using subclock_exp_wt.
           now rewrite subclock_exp_typeof. }
 
@@ -300,11 +301,11 @@ Module Type CSTYPING
         + eapply cond_eq_wt_clock in H0; eauto.
           unfold Common.idty, Common.idck in *. simpl_Forall.
           eapply wt_clock_incl; [|eauto]. intros **. rewrite HasType_app; auto.
-        + assert (Forall (fun k => k < snd tn) (map fst branches)) as Hlt.
+        + assert (Forall (fun k => k < length tn) (map fst branches)) as Hlt.
           { rewrite H7. apply Forall_forall; intros ? Hin.
             apply in_seq in Hin as (?&?); auto. }
           clear - Hini H2 H6 Hlt Hck'.
-          eapply Forall_impl with (P:=fun '(_, (_, ck, _)) => wt_clock G.(enums) (Γty'++senv_of_tyck l1) ck). intros (?&(?&?)&?) ?.
+          eapply Forall_impl with (P:=fun '(_, (_, ck, _)) => wt_clock G.(types) (Γty'++senv_of_tyck l1) ck). intros (?&(?&?)&?) ?.
           1:{ eapply wt_clock_incl; [|eauto].
               intros. simpl_app. rewrite app_assoc, HasType_app. left. erewrite map_map, map_ext; eauto.
               intros; destruct_conjs; auto. }
@@ -317,12 +318,12 @@ Module Type CSTYPING
           2,3:eapply wt_clock_incl; [|eauto]; intros *; rewrite HasType_app; auto.
           simpl_app.
           apply Forall_app; split; simpl_Forall; auto.
-        + eapply cond_eq_wt_enum in H0; eauto.
-          2:{ constructor; auto; destruct tn as (?&[]); simpl in *; try lia.
-              apply Permutation_sym, Permutation_nil, map_eq_nil in H7. congruence. }
+        + eapply cond_eq_wt_type in H0; eauto.
+          2:{ apply wt_exp_wt_type in H4; auto.
+              take (typeof ec = _) and rewrite it in H4. now inv H4. }
           clear - H0.
           unfold Common.idty in *. simpl_Forall; auto.
-        + assert (Forall (wt_enum G) (map (fun '(_, ann) => ann.(typ)) Γck)) as Hwenv2.
+        + assert (Forall (wt_type G.(types)) (map (fun '(_, ann) => ann.(typ)) Γck)) as Hwenv2.
           { simpl_Forall.
             assert (HasType Γck k a.(typ)) as Hty by eauto with senv.
             eapply Hincl in Hty. inv Hty. simpl_Forall; auto. congruence. }
@@ -333,8 +334,8 @@ Module Type CSTYPING
           rewrite 3 map_app. apply Forall_app; split; auto.
           destruct H as (?&?&?); repeat inv_bind.
           apply Forall_app; split.
-          * eapply new_idents_wt_enum in H; simpl_Forall; simpl_In; simpl_Forall; eauto.
-          * eapply new_idents_wt_enum in H0; simpl_Forall; simpl_In; simpl_Forall; eauto.
+          * eapply new_idents_wt_type in H; simpl_Forall; simpl_In; simpl_Forall; eauto.
+          * eapply new_idents_wt_type in H0; simpl_Forall; simpl_In; simpl_Forall; eauto.
         + simpl_Forall. auto.
         + simpl_Forall. simpl_In. auto.
         + simpl_Forall.
@@ -343,7 +344,7 @@ Module Type CSTYPING
             simpl_app. apply incl_appl. intros ??. solve_In.
           * apply HasType_app. left.
             eapply rename_var_wt; eauto.
-            assert (Is_defined_in i1 (Bswitch ec branches)) as Hdef.
+            assert (Is_defined_in i0 (Bswitch ec branches)) as Hdef.
             { eapply vars_defined_Is_defined_in.
               eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
               apply PSF.mem_2; auto. }
@@ -461,11 +462,12 @@ Module Type CSTYPING
   Qed.
 
   Lemma switch_node_wt G1 G2 : forall n,
+      wt_global G1 ->
       global_iface_incl G1 G2 ->
       wt_node G1 n ->
       wt_node G2 (switch_node n).
   Proof.
-    intros * Heq (Hwc1&Hwc2&Hwc3&Hwt4).
+    intros * Hwt1 Heq (Hwc1&Hwc2&Hwc3&Hwt4).
     repeat split; simpl; auto.
     1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
     eapply iface_incl_wt_block; eauto.
@@ -485,13 +487,14 @@ Module Type CSTYPING
       wt_global G ->
       wt_global (switch_global G).
   Proof.
-    intros (enums&nds) (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
+    intros (types&nds) (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
     constructor; auto.
     induction nds; simpl; inv Hwt; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wt; eauto.
-      eapply iface_eq_iface_incl, switch_global_iface_eq.
+      + econstructor; eauto.
+      + eapply iface_eq_iface_incl, switch_global_iface_eq.
     - rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros.
       simpl; eauto.
     - eapply IHnds; eauto.

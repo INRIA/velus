@@ -498,7 +498,7 @@ Module Type DCE
     { transform_unit := dce_node }.
 
   Local Program Instance dce_without_units: TransformProgramWithoutUnits global global :=
-    { transform_program_without_units := fun g => Global g.(enums) [] }.
+    { transform_program_without_units := fun g => Global g.(types) [] }.
 
   Definition dce_global : global -> global := transform_units.
 

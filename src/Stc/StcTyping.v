@@ -33,47 +33,45 @@ Module Type STCTYPING
   | wt_TcDef:
       forall x ck e,
         In (x, typeofc e) Γv ->
-        wt_clock P.(enums) (Γv ++ Γm) ck ->
-        wt_cexp P.(enums) (Γv ++ Γm) e ->
+        wt_clock P.(types) (Γv ++ Γm) ck ->
+        wt_cexp P.(types) (Γv ++ Γm) e ->
         wt_trconstr P Γv Γm (TcDef x ck e)
   | wt_TcResetConst:
       forall x ckr ty c0,
         In (x, ty) Γm ->
-        wt_const P.(enums) c0 ty ->
-        wt_clock P.(enums) (Γv ++ Γm) ckr ->
+        wt_const P.(types) c0 ty ->
+        wt_clock P.(types) (Γv ++ Γm) ckr ->
         wt_trconstr P Γv Γm (TcReset x ckr ty c0)
   | wt_TcNext:
       forall x ck ckrs e,
         In (x, typeof e) Γm ->
-        wt_clock P.(enums) (Γv ++ Γm) ck ->
-        wt_exp P.(enums) (Γv ++ Γm) e ->
+        wt_clock P.(types) (Γv ++ Γm) ck ->
+        wt_exp P.(types) (Γv ++ Γm) e ->
         wt_trconstr P Γv Γm (TcNext x ck ckrs e)
   | wt_TcIReset:
       forall s ck f i P',
         find_system f P = Some (s, P') ->
-        wt_clock P.(enums) (Γv ++ Γm) ck ->
+        wt_clock P.(types) (Γv ++ Γm) ck ->
         wt_trconstr P Γv Γm (TcInstReset i ck f)
   | wt_TcCall:
       forall s xs ck rst f es i P',
         find_system f P = Some (s, P') ->
         Forall2 (fun x '(_, (t, _)) => In (x, t) Γv) xs s.(s_out) ->
         Forall2 (fun e '(_, (t, _)) => typeof e = t) es s.(s_in) ->
-        wt_clock P.(enums) (Γv ++ Γm) ck ->
-        Forall (wt_exp P.(enums) (Γv ++ Γm)) es ->
+        wt_clock P.(types) (Γv ++ Γm) ck ->
+        Forall (wt_exp P.(types) (Γv ++ Γm)) es ->
         wt_trconstr P Γv Γm (TcStep i xs ck rst f es).
 
   Definition wt_nexts (P: program) : list (ident * (const * type * clock)) -> Prop :=
-    Forall (fun '(_, (c, t, _)) => wt_const P.(enums) c t).
+    Forall (fun '(_, (c, t, _)) => wt_const P.(types) c t).
 
   Definition wt_system (P: program) (s: system) : Prop :=
         Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
                             (mems_of_nexts s.(s_nexts)))
                s.(s_tcs)
         /\ wt_nexts P s.(s_nexts)
-        /\ forall x tn,
-            In (x, Tenum tn) (idty (s_in s ++ s_vars s ++ s_out s)) ->
-            In tn P.(enums)
-            /\ 0 < snd tn.
+        /\ forall x ty,
+            In (x, ty) (idty (s_in s ++ s_vars s ++ s_out s)) -> wt_type P.(types) ty.
 
   Definition wt_program := CommonTyping.wt_program wt_system.
 

@@ -53,9 +53,11 @@ module type SYNTAX =
                        c_methods : coq_method list }
 
     type program = {
-      enums: (ident * Datatypes.nat) list;
+      types: typ list;
       classes: coq_class list
     }
+
+    val typeof : exp -> typ
   end
 
 module SyncFun (Obc: SYNTAX)
@@ -201,8 +203,8 @@ sig
           fprintf p "state(%s)" (extern_atom id)
       | Obc.Const c ->
           Ops.print_cconst p c
-      | Obc.Enum (c, _) ->
-          Ops.print_enumtag p c
+      | Obc.Enum (c, ty) ->
+          Ops.print_enumtag p (c, ty)
       | Obc.Unop (op, e, ty) ->
           Ops.print_unop p op ty (expr prec') e
       | Obc.Binop (op, e1, e2, ty) ->
@@ -222,6 +224,9 @@ sig
 
     let print_ident p id = pp_print_string p (extern_atom id)
 
+    let print_branch_tag ty i p =
+      Ops.print_enumtag p (Ops.enumtag_of_int i, ty)
+
     let rec print_stmt p s =
       match s with
       | Obc.Assign (id, e) ->
@@ -231,12 +236,13 @@ sig
           fprintf p "@[<hv 2>state(%s) :=@ %a@]" (extern_atom id)
             print_expr e
       | Obc.Switch (e, ss, default) ->
-          fprintf p
-            "@[<v 2>switch %a {%a@]@;}"
-            print_expr e
-            (Ops.print_branches print_stmt)
-            (List.mapi (fun i e -> (string_of_int i, e)) ss,
-             if List.exists Option.is_none ss then Some default else None)
+        let ty = Obc.typeof e in
+        fprintf p
+          "@[<v 2>switch %a {%a@]@;}"
+          print_expr e
+          (Ops.print_branches print_stmt)
+          (List.mapi (fun i e -> ((fun p -> print_branch_tag ty i p), e)) ss,
+           if List.exists Option.is_none ss then Some default else None)
       | Obc.Comp (s1, s2) ->
           fprintf p "%a;@ %a" print_stmt s1 print_stmt s2
       | Obc.Call ([], cls, i, m, es) ->
@@ -310,6 +316,7 @@ sig
 
     let print_program p prog =
       fprintf p "@[<v 0>";
+      List.iter (fprintf p "%a@;@;" Ops.print_typ_decl) (List.rev prog.Obc.types);
       List.iter (fprintf p "%a@;@;" print_class) prog.Obc.classes;
       fprintf p "@]@."
   end

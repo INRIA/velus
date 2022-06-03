@@ -751,9 +751,9 @@ Module Type LSEMANTICS
     | H: Forall2Brs _ ?l1 ?l2 |- Forall2Brs _ ?l1 ?l2 =>
         eapply Forall2Brs_impl_In in H; eauto; intros; sem_block_cons
     | H: _ -> ?G |- ?G => eapply H; sem_block_cons
-    | Hname: n_name ?nd <> _, Hfind: find_node _ {| enums := _; nodes := ?nd :: _ |} = _ |- _ =>
+    | Hname: n_name ?nd <> _, Hfind: find_node _ {| types := _; nodes := ?nd :: _ |} = _ |- _ =>
         rewrite find_node_other in Hfind; auto
-    | Hname: n_name ?nd <> _ |- find_node _ {| enums := _; nodes := ?nd :: _ |} = _ =>
+    | Hname: n_name ?nd <> _ |- find_node _ {| types := _; nodes := ?nd :: _ |} = _ =>
         rewrite find_node_other; auto
     | Hname: n_name ?nd <> _ |- ~_ => idtac
     | H: ~Is_node_in_exp _ (Eapp _ _ _ _) |- _ <> _ => contradict H; subst; eapply INEapp2
@@ -781,25 +781,25 @@ Module Type LSEMANTICS
     end.
 
   Lemma sem_block_cons {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds enums bck H bk,
-      Ordered_nodes (Global enums (nd::nds))
-      -> sem_block (Global enums (nd::nds)) H bk bck
+    forall (nd : @node PSyn prefs) nds types bck H bk,
+      Ordered_nodes (Global types (nd::nds))
+      -> sem_block (Global types (nd::nds)) H bk bck
       -> ~Is_node_in_block nd.(n_name) bck
-      -> sem_block (Global enums nds) H bk bck.
+      -> sem_block (Global types nds) H bk bck.
   Proof.
     intros * Hord Hsem Hnf.
     revert Hnf.
     induction Hsem using sem_block_ind2
       with
         (P_block := fun bk H d => ~Is_node_in_block nd.(n_name) d
-                                     -> sem_block (Global enums0 nds) bk H d)
+                                     -> sem_block (Global types0 nds) bk H d)
         (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
-                                                       -> sem_transitions (Global enums0 nds) bk H trans default stres)
+                                                       -> sem_transitions (Global types0 nds) bk H trans default stres)
         (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
-                                   -> sem_equation (Global enums0 nds) bk H eq)
+                                   -> sem_equation (Global types0 nds) bk H eq)
         (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
-                                -> sem_exp (Global enums0 nds) H bk e ss)
-        (P_node := fun f xs ys => nd.(n_name) <> f -> sem_node (Global enums0 nds) f xs ys);
+                                -> sem_exp (Global types0 nds) H bk e ss)
+        (P_node := fun f xs ys => nd.(n_name) <> f -> sem_node (Global types0 nds) f xs ys);
       try (now econstructor; eauto); intros.
 
     all:econstructor; eauto; repeat sem_block_cons.
@@ -807,11 +807,11 @@ Module Type LSEMANTICS
   Qed.
 
   Corollary sem_node_cons {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds enums f xs ys,
-      Ordered_nodes (Global enums (nd::nds))
-      -> sem_node (Global enums (nd::nds)) f xs ys
+    forall (nd : @node PSyn prefs) nds types f xs ys,
+      Ordered_nodes (Global types (nd::nds))
+      -> sem_node (Global types (nd::nds)) f xs ys
       -> nd.(n_name) <> f
-      -> sem_node (Global enums nds) f xs ys.
+      -> sem_node (Global types nds) f xs ys.
   Proof.
     intros * Hord Hsem Hnf.
     inv Hsem.
@@ -822,36 +822,36 @@ Module Type LSEMANTICS
   Qed.
 
   Lemma sem_block_cons' {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds enums bck H bk,
-      Ordered_nodes (Global enums (nd::nds))
-      -> sem_block (Global enums nds) H bk bck
+    forall (nd : @node PSyn prefs) nds types bck H bk,
+      Ordered_nodes (Global types (nd::nds))
+      -> sem_block (Global types nds) H bk bck
       -> ~Is_node_in_block nd.(n_name) bck
-      -> sem_block (Global enums (nd::nds)) H bk bck.
+      -> sem_block (Global types (nd::nds)) H bk bck.
   Proof.
     intros * Hord Hsem Hnf.
     revert Hnf.
     induction Hsem using sem_block_ind2
       with
         (P_block := fun bk H d => ~Is_node_in_block nd.(n_name) d
-                               -> sem_block (Global enums0 (nd::nds)) bk H d)
+                               -> sem_block (Global types0 (nd::nds)) bk H d)
         (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
-                                                       -> sem_transitions (Global enums0 (nd::nds)) bk H trans default stres)
+                                                       -> sem_transitions (Global types0 (nd::nds)) bk H trans default stres)
         (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
-                                   -> sem_equation (Global enums0 (nd::nds)) bk H eq)
+                                   -> sem_equation (Global types0 (nd::nds)) bk H eq)
         (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
-                                -> sem_exp (Global enums0 (nd::nds)) H bk e ss)
-        (P_node := fun f xs ys => nd.(n_name) <> f -> sem_node (Global enums0 (nd::nds)) f xs ys);
+                                -> sem_exp (Global types0 (nd::nds)) H bk e ss)
+        (P_node := fun f xs ys => nd.(n_name) <> f -> sem_node (Global types0 (nd::nds)) f xs ys);
       try (now econstructor; eauto); intros.
     all:econstructor; eauto; repeat sem_block_cons.
     - eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Corollary sem_node_cons' {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds enums f xs ys,
-      Ordered_nodes (Global enums (nd::nds))
-      -> sem_node (Global enums nds) f xs ys
+    forall (nd : @node PSyn prefs) nds types f xs ys,
+      Ordered_nodes (Global types (nd::nds))
+      -> sem_node (Global types nds) f xs ys
       -> nd.(n_name) <> f
-      -> sem_node (Global enums (nd::nds)) f xs ys.
+      -> sem_node (Global types (nd::nds)) f xs ys.
   Proof.
     intros * Hord Hsem Hneq.
     inv Hsem.

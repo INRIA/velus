@@ -57,8 +57,7 @@ Section finite_traces.
   Proof.
     inversion 1; subst; simpl.
     - now apply eventval_of_cvalue_match.
-    - destruct tn; simpl in *.
-      destruct (memory_chunk_of_enumtag_spec n) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
+    - destruct (memory_chunk_of_enumtag_spec (length tn)) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
         rewrite E; constructor.
   Qed.
 

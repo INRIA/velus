@@ -1043,7 +1043,7 @@ Module Type CLOCKSWITCH
     { transform_unit := switch_node }.
 
   Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global noauto_block auto_prefs) (@global noswitch_block switch_prefs) :=
-    { transform_program_without_units := fun g => Global g.(enums) [] }.
+    { transform_program_without_units := fun g => Global g.(types) [] }.
 
   Definition switch_global : @global noauto_block auto_prefs -> @global noswitch_block switch_prefs :=
     transform_units.

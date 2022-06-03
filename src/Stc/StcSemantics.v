@@ -446,7 +446,7 @@ Module Type STCSEMANTICS
   Proof.
     intros ?? (enms & P) * Ord Find Hin Closed; inversion_clear Closed as [????? Find'].
     econstructor; eauto.
-    assert (enms = enums P') as Enums
+    assert (enms = types P') as Enums
         by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
     apply find_unit_spec in Find as (?&?& E &?); simpl in E; subst.
     apply Ordered_systems_split in Ord.

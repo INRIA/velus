@@ -427,7 +427,7 @@ Module Type CSCLOCKING
       wc_global G ->
       wc_global (switch_global G).
   Proof.
-    intros (enums&nds). unfold wc_global, CommonTyping.wt_program; simpl.
+    intros (types&nds). unfold wc_global, CommonTyping.wt_program; simpl.
     induction nds; intros * Hwc; simpl; inv Hwc; auto with datatypes.
     destruct H1.
     constructor; [constructor|].

@@ -1,6 +1,10 @@
 From Coq Require Import PeanoNat.
+From Coq Require Import List.
 From Velus Require Import Common.
 From Coq Require Export Classes.EquivDec.
+
+Import List.ListNotations.
+Open Scope list_scope.
 
 Module Type OPERATORS.
 
@@ -29,7 +33,7 @@ Module Type OPERATORS.
 
   Inductive type :=
   | Tprimitive : ctype -> type
-  | Tenum      : ident * nat -> type.
+  | Tenum      : ident -> list ident -> type.
 
   Inductive const :=
   | Const: cconst -> const
@@ -65,9 +69,9 @@ Module Type OPERATORS.
     | WTVScalarPrimitive: forall v t,
         wt_cvalue v t ->
         wt_value (Vscalar v) (Tprimitive t)
-    | WTVEnum: forall v tn,
-        v < snd tn ->
-        wt_value (Venum v) (Tenum tn).
+    | WTVEnum: forall v tx tn,
+        v < length tn ->
+        wt_value (Venum v) (Tenum tx tn).
 
   Conjecture pres_sem_unop:
     forall op ty1 ty v1 v,
@@ -136,7 +140,7 @@ Module Type OPERATORS_AUX
     end.
 
 
-  Definition bool_velus_type := Tenum (bool_id, 2).
+  Definition bool_velus_type := Tenum bool_id [false_id; true_id].
 
   Definition type_dec (t1 t2: type) : {t1 = t2} + {t1 <> t2}.
     repeat decide equality.
@@ -197,13 +201,22 @@ Module Type OPERATORS_AUX
     destruct (x ==b y); auto.
   Qed.
 
-  Inductive wt_const (enums: list (ident * nat)): const -> type -> Prop :=
+  Inductive wt_type (types: list type): type -> Prop :=
+  | WTTPrim: forall cty,
+      wt_type types (Tprimitive cty)
+  | WTTEnum: forall tx tn,
+      In (Tenum tx tn) types ->
+      0 < length tn ->
+      NoDup tn ->
+      wt_type types (Tenum tx tn).
+
+  Inductive wt_const (enums: list type): const -> type -> Prop :=
   | WTCConst: forall c,
       wt_const enums (Const c) (Tprimitive (ctype_cconst c))
-  | WTCEnum: forall c tn,
-      List.In tn enums ->
-      c < snd tn ->
-      wt_const enums (Enum c) (Tenum tn).
+  | WTCEnum: forall c tx tn,
+      In (Tenum tx tn) enums ->
+      c < length tn ->
+      wt_const enums (Enum c) (Tenum tx tn).
 
   Definition wt_values vs (xts: list (ident * type))
     := List.Forall2 (fun v xt => wt_value v (snd xt)) vs xts.

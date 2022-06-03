@@ -71,7 +71,7 @@ Module Type NLNORMALARGS
     Forall (normal_args_eq G) n.(n_eqs).
 
   Definition normal_args (G: global) :=
-    Forall' (fun ns => normal_args_node (Global G.(enums) ns)) G.(nodes).
+    Forall' (fun ns => normal_args_node (Global G.(types) ns)) G.(nodes).
 
   Lemma normal_args_node_cons:
     forall node G enums,
@@ -129,34 +129,34 @@ Module Type NLNORMALARGS
                       rewrite H1 in H2; clear H1 end; discriminate.
   Qed.
 
-  Lemma normal_args_eq_enums_cons:
+  Lemma normal_args_eq_types_cons:
     forall ns enums e eq,
       normal_args_eq (Global enums ns) eq ->
       normal_args_eq (Global (e :: enums) ns) eq.
   Proof.
     induction 1; eauto using normal_args_eq.
     econstructor; eauto.
-    now rewrite find_node_enums_cons.
+    now rewrite find_node_types_cons.
   Qed.
 
-  Corollary normal_args_node_enums_cons:
+  Corollary normal_args_node_types_cons:
     forall ns enums e n,
       normal_args_node (Global enums ns) n ->
       normal_args_node (Global (e :: enums) ns) n.
   Proof.
     unfold normal_args_node; intros * NA.
     apply Forall_forall; intros; eapply Forall_forall in NA; eauto.
-    now apply normal_args_eq_enums_cons.
+    now apply normal_args_eq_types_cons.
   Qed.
 
-  Corollary normal_args_enums_cons:
+  Corollary normal_args_types_cons:
     forall enums ns e,
       normal_args (Global enums ns) ->
       normal_args (Global (e :: enums) ns).
   Proof.
     unfold normal_args.
     induction ns; simpl; intros * NA; inv NA; constructor.
-    - now apply normal_args_node_enums_cons.
+    - now apply normal_args_node_types_cons.
     - apply IHns; auto.
   Qed.
 

@@ -250,7 +250,7 @@ Module Type COMPLETENESS
     induction nds; intros * Hwt Hnormed;
       inversion_clear Hnormed as [|?? (Hnormed'&_)];
       inversion_clear Hwt as [|?? (?&?)]; simpl in *.
-    - exists (NL.Global enums0 nil). reflexivity.
+    - exists (NL.Global types0 nil). reflexivity.
     - unfold to_global; simpl.
       eapply to_node_complete in Hnormed' as (hd'&Hton); auto.
       erewrite Hton; clear Hton; simpl.

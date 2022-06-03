@@ -255,7 +255,7 @@ Inductive eexp : Type :=
 
 Inductive const_annot :=
 | ConstA: cconst -> const_annot
-| EnumA: enumtag -> (ident * nat) -> const_annot.
+| EnumA: enumtag -> (ident * list ident) -> const_annot.
 
 Definition msg_of_sident (id : sident) : errmsg :=
   match id with
@@ -438,7 +438,7 @@ Section ElabSclock.
   Fixpoint msg_of_clock (ck: clock) : errmsg :=
     match ck with
     | Cbase          => msg "."
-    | Con ck id (Tenum (t, _), c) =>
+    | Con ck id (Tenum t _, c) =>
       msg_of_clock ck ++ MSG " on " :: msg_of_enumtag t c
                     :: MSG "(" :: CTX id :: MSG ")" :: nil
     | _ => msg ""
@@ -448,7 +448,7 @@ Section ElabSclock.
     match ck with
     | Sbase          => msg "."
     | Svar x         => CTX x :: nil
-    | Son ck id (Tenum (t, _), c) =>
+    | Son ck id (Tenum t _, c) =>
       msg_of_sclock ck ++ MSG " on " :: msg_of_enumtag t c
                     :: MSG "(" :: msg_of_sident id ++ MSG ")" :: nil
     | _ => msg ""
@@ -592,22 +592,22 @@ Section ElabExpressions.
     if xty ==b ty then ret tt
     else err_loc loc (msg_of_types xty ty).
 
-  Definition assert_enum_type (loc: astloc) (x: ident) (xty: type) : Elab (ident * nat) :=
+  Definition assert_enum_type (loc: astloc) (x: ident) (xty: type) : Elab (ident * list ident) :=
     match xty with
-    | Tenum tn => ret tn
+    | Tenum tx tn => ret (tx, tn)
     | _ => err_loc loc (CTX x :: MSG ": " :: msg_of_enum_type xty)
     end.
 
-  Definition assert_enum_type' (loc: astloc) (ty: type) : Elab (ident * nat) :=
+  Definition assert_enum_type' (loc: astloc) (ty: type) : Elab (ident * list ident) :=
     match ty with
-    | Tenum tn => ret tn
+    | Tenum tx tn => ret (tx, tn)
     | _ => err_loc loc (msg_of_enum_type ty)
     end.
 
   Definition assert_primitive_type' (loc: astloc) (ty: type) : Elab unit :=
     match ty with
     | Tprimitive _ => ret tt
-    | Tenum tn => err_loc loc (msg_of_primitive_type ty)
+    | Tenum _ _ => err_loc loc (msg_of_primitive_type ty)
     end.
 
   Definition find_node_interface (loc: astloc) (f: ident)
@@ -617,7 +617,7 @@ Section ElabExpressions.
     | Some tcs => ret tcs
     end.
 
-  Definition enum_to_enumtag (loc: astloc) (ty: ident) (c: ident) (cs: list ident) : option (enumtag * nat) :=
+  Definition enum_to_enumtag (loc: astloc) (ty: ident) (c: ident) (cs: list ident) : option (enumtag * list ident) :=
     let (t, n) := fold_left
                     (fun (acc: option enumtag * nat) c' =>
                        let (t, n) := acc in
@@ -627,11 +627,11 @@ Section ElabExpressions.
                                 end
                        in (t, n + 1)) cs (None, 0)
     in match t with
-       | Some t => Some (t, n)
+       | Some t => Some (t, cs)
        | None => None
        end.
 
-  Definition elab_enum (loc: astloc) (c: ident) : Elab (enumtag * (ident * nat)) :=
+  Definition elab_enum (loc: astloc) (c: ident) : Elab (enumtag * (ident * list ident)) :=
     let r := Env.fold (fun ty cs r => match r with
                                    | None =>
                                      match enum_to_enumtag loc ty c cs with
@@ -697,11 +697,11 @@ Section ElabExpressions.
     | Some ty' => ret ty'
     end.
 
-  Definition enum_bound (loc: astloc) (ty: ident) : Elab nat :=
+  Definition enum_bound (loc: astloc) (ty: ident) :=
     match Env.find ty tenv with
     | None => err_loc loc (MSG "enumerated type " :: CTX ty :: msg " not declared.")
     | Some cs => let n := length cs in
-                if 0 <? n then ret n
+                if 0 <? n then ret cs
                 else err_loc loc (MSG "empty enumerated type " :: CTX ty :: msg " .")
     end.
 
@@ -718,15 +718,15 @@ Section ElabExpressions.
     | Tfloat32 => ret (Tprimitive (Tfloat Ctypes.F32))
     | Tfloat64 => ret (Tprimitive (Tfloat Ctypes.F64))
     | Tenum_name t =>
-      do n <- enum_bound loc t;
-      ret (Tenum (t, n))
+      do tn <- enum_bound loc t;
+      ret (Tenum t tn)
     end.
 
   Definition elab_primitive_type (loc: astloc)  (ty: LustreAst.type_name) : Elab ctype :=
     do ty <- elab_type loc ty;
     match ty with
     | Tprimitive t => ret t
-    | Tenum _ => err_loc loc (msg "primitive type expected")
+    | Tenum _ _ => err_loc loc (msg "primitive type expected")
     end.
 
   Definition err_not_singleton {A} (loc: astloc) : Elab A :=
@@ -935,20 +935,20 @@ Section ElabExpressions.
       | [] => err_loc loc (msg "no branch")
       end.
 
-  Definition elab_branches (loc: astloc) (tn: ident * nat) (exhaustive : bool)
+  Definition elab_branches (loc: astloc) (tn: ident * list ident) (exhaustive : bool)
              (elab_exp: LustreAst.expression -> Elab (eexp * astloc))
              (f_ck: enumtag -> sclock)
              (aes: list (ident * list LustreAst.expression)) :
     Elab (list (enumtag * list eexp) * list (type * sclock * astloc)) :=
     do aes <- mmap (fun '(c, ae) =>
                      do (c, tn') <- elab_enum loc c;
-                     do _ <- assert_type' loc (Tenum tn) (Tenum tn');
+                     do _ <- assert_type' loc (Tenum (fst tn) (snd tn)) (Tenum (fst tn') (snd tn'));
                      do e <- mmap elab_exp ae;
                      do _ <- unify_same_clock (f_ck c) (lannots e);
                      ret (c, e)) aes;
     let cs := fst (split aes) in
     do _ <- check_duplicates loc cs;
-    do _ <- if exhaustive then check_exhaustivity loc (snd tn) cs else ret tt;
+    do _ <- if exhaustive then check_exhaustivity loc (length (snd tn)) cs else ret tt;
     do e0 <- hd_branch loc aes;
     let anns0 := lannots (snd e0) in
     do _ <- mmap (fun '(_, ae) =>
@@ -963,7 +963,7 @@ Section ElabExpressions.
       do c <- elab_constant loc ac;
       match c with
       | ConstA c => ret (Econst c (Svar x), loc)
-      | EnumA tag ty => ret (Eenum tag (Tenum ty) (Svar x), loc)
+      | EnumA tag ty => ret (Eenum tag (Tenum (fst ty) (snd ty)) (Svar x), loc)
       end
 
     | VARIABLE x loc =>
@@ -1024,14 +1024,14 @@ Section ElabExpressions.
       let ans' := lannots eas' in
       do _ <- unify_same_clock xck ans';
       ret (Ewhen (map fst eas') x c
-                 (lannots_ty ans', Son xck (Vnm x) (Tenum tn', c)), loc)
+                 (lannots_ty ans', Son xck (Vnm x) (Tenum (fst tn') (snd tn'), c)), loc)
 
     | MERGE x aes loc =>
       do (xty, sck) <- find_var loc x;
       do tn <- assert_enum_type loc x xty;
       do (eas, tys) <- elab_branches loc tn true elab_exp (fun c => Son sck (Vnm x) (xty, c))
                                     aes;
-      ret (Emerge (x, Tenum tn) eas (lannots_ty tys, sck), loc)
+      ret (Emerge (x, Tenum (fst tn) (snd tn)) eas (lannots_ty tys, sck), loc)
 
     | CASE [ae] aes [] loc =>
       do (e, eloc) <- elab_exp ae;
@@ -1272,7 +1272,7 @@ Section ElabVarDecls.
             else do _ <- assert_enum_type loc y yt;
                  do _ <- assert_preclock loc x cy' cy;
                  do (c', tn') <- elab_enum tenv loc c;
-                 do _ <- assert_id_type loc y yt (Tenum tn');
+                 do _ <- assert_id_type loc y yt (Tenum (fst tn') (snd tn'));
                  do ty <- elab_type tenv loc sty;
                  elab_var_decls_pass (Env.add x (ty, Con cy y (yt, c'), negb (is_nil e)) env, notdone) vds
           end
@@ -1285,7 +1285,7 @@ Section ElabVarDecls.
             then err_loc loc (CTX x :: msg " is declared more than once")
             else do _ <- assert_enum_type loc y yt;
                  do (c', tn') <- elab_enum tenv loc c;
-                 do _ <- assert_id_type loc y yt (Tenum tn');
+                 do _ <- assert_id_type loc y yt (Tenum (fst tn') (snd tn'));
                  do ty <- elab_type tenv loc sty;
                  elab_var_decls_pass
                    (Env.add x (ty, Con cy y (yt, c'), negb (is_nil e)) env, notdone) vds
@@ -1428,13 +1428,13 @@ Section ElabBlock.
          let xs := vars_defined ab in
          do brs <- mmap (fun '(c, ablks) =>
                           do (c, tn') <- elab_enum tenv loc c;
-                          do _ <- assert_type' loc (Tenum tn) (Tenum tn');
+                          do _ <- assert_type' loc (Tenum (fst tn) (snd tn)) (Tenum (fst tn') (snd tn'));
                           do blks <- mmap (elab_block env tenv nenv) ablks;
                           do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
                           ret (c, Scope [] caus blks)) abrs;
          let cs := fst (split brs) in
          do _ <- check_duplicates loc cs;
-         do _ <- check_exhaustivity loc (snd tn) cs;
+         do _ <- check_exhaustivity loc (length (snd tn)) cs;
          ret (Bswitch ec brs)
      | BAUTO (ini, oth) states loc =>
          let ck := find_a_clock_of_defined env (BAUTO (ini, oth) states loc) in
@@ -1905,9 +1905,9 @@ Section ElabDeclaration.
   Qed.
 
   Program Definition elab_declaration_type
-          (name: ident) (constr : list ident) (loc: astloc) : res (ident * nat) :=
+          (name: ident) (constr : list ident) (loc: astloc) : res type :=
     if Common.check_nodup constr
-    then OK (name, length constr)
+    then OK (Tenum name constr)
     else Error (err_loc' loc (MSG "duplicate constructor for type " :: CTX name :: nil)).
 
 End ElabDeclaration.
@@ -1926,20 +1926,17 @@ Section ElabDeclarations.
     do n <- elab_declaration_node tenv nenv name has_state inputs outputs block loc;
     if Env.mem (n_name n) nenv
     then Error (err_loc' loc (MSG "deplicate definition for " :: CTX name :: nil))
-    else elab_declarations' (Global G.(enums) (n :: G.(nodes)))
+    else elab_declarations' (Global G.(types) (n :: G.(nodes)))
                           tenv (Env.add n.(n_name) (idty n.(n_in), idty n.(n_out)) nenv) ds
   | TYPE name constructors loc :: ds =>
     do t <- elab_declaration_type name constructors loc;
     if Env.mem name tenv
     then Error (err_loc' loc (MSG "duplicate definition for " :: CTX name :: nil))
-    else elab_declarations' (Global (t :: G.(enums)) G.(nodes))
+    else elab_declarations' (Global (t :: G.(types)) G.(nodes))
                           (Env.add name constructors tenv) nenv ds
   end.
 
   Import Instantiator.L.
-
-  Definition bool_enums :=
-    [(bool_id, 2)].
 
   Definition bool_tenv :=
     Env.add bool_id
@@ -1948,7 +1945,7 @@ Section ElabDeclarations.
 
   Program Definition elab_declarations (decls: list declaration) :
     res {G | wt_global G /\ wc_global G } :=
-    match elab_declarations' (Global bool_enums []) bool_tenv (Env.empty _) decls with
+    match elab_declarations' (Global [bool_velus_type] []) bool_tenv (Env.empty _) decls with
     | OK G =>
       match Typ.check_global G, Clo.check_global G with
       | true, true => OK (exist _ G _)

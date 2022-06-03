@@ -20,33 +20,33 @@ Module Type CETYPING
 
   Section WellTyped.
 
-    Variable enums : list (ident * nat).
+    Variable types : list type.
     Variable Γ : list (ident * type).
 
     Inductive wt_clock : clock -> Prop :=
     | wt_Cbase:
         wt_clock Cbase
-    | wt_Con: forall ck x tn c,
-        In (x, Tenum tn) Γ ->
-        In tn enums ->
-        c < snd tn ->
+    | wt_Con: forall ck x tx tn c,
+        In (x, Tenum tx tn) Γ ->
+        In (Tenum tx tn) types ->
+        c < length tn ->
         wt_clock ck ->
-        wt_clock (Con ck x (Tenum tn, c)).
+        wt_clock (Con ck x (Tenum tx tn, c)).
 
     Inductive wt_exp : exp -> Prop :=
     | wt_Econst: forall c,
         wt_exp (Econst c)
-    | wt_Eenum: forall x tn,
-        In tn enums ->
-        x < snd tn ->
-        wt_exp (Eenum x (Tenum tn))
+    | wt_Eenum: forall x tx tn,
+        In (Tenum tx tn) types ->
+        x < length tn ->
+        wt_exp (Eenum x (Tenum tx tn))
     | wt_Evar: forall x ty,
         In (x, ty) Γ ->
         wt_exp (Evar x ty)
-    | wt_Ewhen: forall e x b tn,
-        In (x, Tenum tn) Γ ->
-        In tn enums ->
-        b < snd tn ->
+    | wt_Ewhen: forall e x b tx tn,
+        In (x, Tenum tx tn) Γ ->
+        In (Tenum tx tn) types ->
+        b < length tn ->
         wt_exp e ->
         wt_exp (Ewhen e x b)
     | wt_Eunop: forall op e ty,
@@ -60,18 +60,18 @@ Module Type CETYPING
         wt_exp (Ebinop op e1 e2 ty).
 
     Inductive wt_cexp : cexp -> Prop :=
-    | wt_Emerge: forall x l ty tn,
-        In (x, Tenum tn) Γ ->
-        In tn enums ->
-        snd tn = length l ->
+    | wt_Emerge: forall x l ty tx tn,
+        In (x, Tenum tx tn) Γ ->
+        In (Tenum tx tn) types ->
+        length tn = length l ->
         Forall (fun e => typeofc e = ty) l ->
         Forall wt_cexp l ->
-        wt_cexp (Emerge (x, Tenum tn) l ty)
-    | wt_Ecase: forall e l d tn,
+        wt_cexp (Emerge (x, Tenum tx tn) l ty)
+    | wt_Ecase: forall e l d tx tn,
         wt_exp e ->
-        typeof e = Tenum tn ->
-        In tn enums ->
-        snd tn = length l ->
+        typeof e = Tenum tx tn ->
+        In (Tenum tx tn) types ->
+        length tn = length l ->
         (forall e, In (Some e) l -> typeofc e = typeofc d) ->
         wt_cexp d ->
         (forall e, In (Some e) l -> wt_cexp e) ->
@@ -97,7 +97,7 @@ Module Type CETYPING
   Qed.
 
   Global Instance wt_clock_Proper:
-    Proper (@Permutation.Permutation (ident * nat) ==>
+    Proper (@Permutation.Permutation type ==>
             @Permutation.Permutation (ident * type) ==>
             @eq clock ==> iff)
            wt_clock.
@@ -114,7 +114,7 @@ Module Type CETYPING
   Qed.
 
   Global Instance wt_exp_Proper:
-    Proper (@Permutation.Permutation (ident * nat) ==>
+    Proper (@Permutation.Permutation type ==>
             @Permutation.Permutation (ident * type) ==>
             @eq exp ==> iff)
            wt_exp.
@@ -135,7 +135,7 @@ Module Type CETYPING
   Qed.
 
   Global Instance wt_exp_pointwise_Proper:
-    Proper (@Permutation.Permutation (ident * nat) ==>
+    Proper (@Permutation.Permutation type ==>
             @Permutation.Permutation (ident * type) ==>
             pointwise_relation exp iff)
            wt_exp.
@@ -145,7 +145,7 @@ Module Type CETYPING
   Qed.
 
   Global Instance wt_cexp_Proper:
-    Proper (@Permutation.Permutation (ident * nat) ==>
+    Proper (@Permutation.Permutation type ==>
             @Permutation.Permutation (ident * type) ==>
             @eq cexp ==> iff)
            wt_cexp.
@@ -171,7 +171,7 @@ Module Type CETYPING
       apply it; auto.
   Qed.
 
-  Lemma wt_clock_enums_cons:
+  Lemma wt_clock_types_cons:
     forall enums e Γ ck,
       wt_clock enums Γ ck ->
       wt_clock (e :: enums) Γ ck.
@@ -181,7 +181,7 @@ Module Type CETYPING
     now right.
   Qed.
 
-  Lemma wt_exp_enums_cons:
+  Lemma wt_exp_types_cons:
     forall enums e Γ ex,
       wt_exp enums Γ ex ->
       wt_exp (e :: enums) Γ ex.
@@ -193,18 +193,18 @@ Module Type CETYPING
       now right.
   Qed.
 
-  Lemma wt_cexp_enums_cons:
+  Lemma wt_cexp_types_cons:
     forall enums e Γ ce,
       wt_cexp enums Γ ce ->
       wt_cexp (e :: enums) Γ ce.
   Proof.
     induction ce using cexp_ind2'; intros * WT; inv WT;
-      eauto using wt_cexp, wt_exp_enums_cons.
+      eauto using wt_cexp, wt_exp_types_cons.
     - econstructor; eauto.
       + now right.
       + apply Forall_forall; intros.
         repeat take (Forall _ _) and eapply Forall_forall in it; eauto.
-    - econstructor; eauto using wt_exp_enums_cons.
+    - econstructor; eauto using wt_exp_types_cons.
       + now right.
       + intros.
         take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in it; auto.

@@ -196,8 +196,8 @@ Module Type CORRECTNESS
     Hint Resolve cexp_correct : obcsem.
 
     Lemma clock_correct_true:
-      forall enums Γ base ck,
-        wt_clock enums Γ ck ->
+      forall types Γ base ck,
+        wt_clock types Γ ck ->
         equiv_env (fun x => Is_free_in_clock x ck) R mems me ve ->
         sem_clock_instant base R ck true ->
         Is_present_in mems me ve ck.
@@ -211,8 +211,8 @@ Module Type CORRECTNESS
     Qed.
 
     Lemma clock_correct_false:
-      forall enums Γ ck,
-        wt_clock enums Γ ck ->
+      forall types Γ ck,
+        wt_clock types Γ ck ->
         equiv_env (fun x => Is_free_in_clock x ck) R mems me ve ->
         sem_clock_instant true R ck false ->
         Is_absent_in mems me ve ck.
@@ -230,8 +230,8 @@ Module Type CORRECTNESS
   End ExprClock.
 
   Lemma stmt_eval_Control_fwd:
-    forall prog enums Γ me ve mems ck s me' ve',
-      wt_clock enums Γ ck ->
+    forall prog types Γ me ve mems ck s me' ve',
+      wt_clock types Γ ck ->
       stmt_eval prog me ve (Control mems ck s) (me', ve') ->
       (Is_present_in mems me ve ck
        /\ stmt_eval prog me ve s (me', ve'))
@@ -242,7 +242,6 @@ Module Type CORRECTNESS
     intros * WT StEval.
     revert dependent s.
     induction WT; intuition.
-    destruct tn.
     simpl in *; apply IHWT in StEval as [[Hp Hs]|[Hp [Hmenv Henv]]];
       intuition; inv Hs.
     take (nth_error _ _ = _) and rewrite nth_error_skip_branches_with in it.
@@ -253,7 +252,7 @@ Module Type CORRECTNESS
   Section StmtEvalControl.
 
     Variables (prog  : program)
-              (enums : list (ident * nat))
+              (types : list type)
               (Γ     : list (ident * type))
               (insts : list (ident * ident))
               (Γm    : list (ident * type))
@@ -264,11 +263,11 @@ Module Type CORRECTNESS
               (ck    : clock)
               (s     : stmt).
 
-    Hypotheses (EnumsSpec   : enums = prog.(Obc.Syn.enums))
+    Hypotheses (TypesSpec   : types = prog.(Obc.Syn.types))
                (TypeEnvSpec : type_env_spec Γ Γm Γv mems)
                (WTmenv      : wt_env (values me) Γm)
                (WTvenv      : wt_env ve Γv)
-               (WTck        : wt_clock enums Γ ck)
+               (WTck        : wt_clock types Γ ck)
                (WTs         : wt_stmt prog insts Γm Γv s).
 
     (* Conjunction required for simultaneous induction. *)
@@ -284,8 +283,8 @@ Module Type CORRECTNESS
       revert dependent s; clear s WTs.
       induction ck; split; auto.
       - inversion 1.
-      - pose proof (Control_wt _ _ _ _ _ _ EnumsSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
-        inv WTck; destruct tn.
+      - pose proof (Control_wt _ _ _ _ _ _ TypesSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
+        inv WTck.
         inversion_clear 1 as [??? Hp|????? Hp]; simpl in *;
           eapply Control_wt_inv in WTcontrol; eauto;
             eapply IHc in Hp; eauto; simpl in *.
@@ -294,17 +293,17 @@ Module Type CORRECTNESS
           inv WTcontrol.
           take (wt_exp _ _ _ _) and eapply pres_sem_exp in it; eauto.
           rewrite typeof_tovar in it; inv it; simpl in *.
-          destruct (Compare_dec.le_lt_dec n b'); try lia.
+          destruct (Compare_dec.le_lt_dec (length tn) b'); try lia.
           destruct (Nat.eq_dec b' c0); try contradiction; eauto.
         + eauto with obcsem.
-      - pose proof (Control_wt _ _ _ _ _ _ EnumsSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
-        inv WTck; destruct tn.
+      - pose proof (Control_wt _ _ _ _ _ _ TypesSpec TypeEnvSpec _ _ _ WTck WTs) as WTcontrol.
+        inv WTck.
         inversion_clear 1 as [|???? Hp]; simpl in *; intros.
         eapply Control_wt_inv in WTcontrol; eauto;
           eapply IHc in Hp; eauto; simpl in *.
         econstructor; eauto.
         + rewrite nth_error_skip_branches_with.
-          destruct (Compare_dec.le_lt_dec n c0); try lia.
+          destruct (Compare_dec.le_lt_dec (length tn) c0); try lia.
           destruct (Nat.eq_dec c0 c0); try contradiction; eauto.
         + eauto.
     Qed.
@@ -1308,7 +1307,7 @@ Module Type CORRECTNESS
           -- take (Forall _ es) and rename it into WTexps.
              apply Forall_map, Forall_forall; intros * Hin.
              eapply Forall_forall in WTexps; eauto.
-             assert (Stc.Syn.enums P = enums (translate P)) by auto.
+             assert (Stc.Syn.types P = types (translate P)) by auto.
              eapply translate_arg_wt in WTexps; eauto.
         *{ inv WTmenv; unfold instance_match.
            assert (~Is_step_in i tcs) as NStep.
@@ -1552,7 +1551,7 @@ Module Type CORRECTNESS
       Stc.Typ.wt_program P ->
       correct_system P f.
   Proof.
-    intros (enums & P); induction P as [|system]; unfold correct_system;
+    intros (types & P); induction P as [|system]; unfold correct_system;
       intros b (Ord & WSCH & NormalArgs) WC WT ???????? Sem Find Tcs Spec WTS WTins E;
       pose proof Sem;
       inversion_clear Sem as [????????? Find' ? Outs Hscv Htcs Closed TransClosed Closed'];
@@ -1564,8 +1563,8 @@ Module Type CORRECTNESS
       inversion_clear NormalArgs as [|?? Hnormal];
       inversion_clear WC as [|?? WCb];
       inversion WT as [|?? [WTb]]; simpl in *; subst.
-    assert (Well_defined (Stc.Syn.Program enums P)) by (split; auto).
-    assert (correct_program (Stc.Syn.Program enums P)) by (unfold correct_program; intros; auto).
+    assert (Well_defined (Stc.Syn.Program types P)) by (split; auto).
+    assert (correct_program (Stc.Syn.Program types P)) by (unfold correct_program; intros; auto).
     destruct WCb as (?&?&?& WCtcs); rewrite 2 idck_app, <-2 app_assoc in WCtcs.
     destruct WTb as (WTtcs &?).
     eapply find_unit_cons in Find as [[E' Find]|[E' Find]]; simpl in *; eauto.

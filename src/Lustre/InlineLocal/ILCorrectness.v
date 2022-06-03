@@ -608,11 +608,11 @@ Module Type ILCORRECTNESS
     Qed.
 
     Lemma inlinelocal_node_sem : forall f n ins outs,
-        wc_global (Global G1.(enums) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(enums) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(enums) ((inlinelocal_node n)::G2.(nodes))) ->
-        sem_node_ck (Global G1.(enums) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(enums) ((inlinelocal_node n)::G2.(nodes))) f ins outs.
+        wc_global (Global G1.(types) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) ((inlinelocal_node n)::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) ((inlinelocal_node n)::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * Hwc Hord1 Hord2 Hsem.
 
@@ -622,7 +622,7 @@ Module Type ILCORRECTNESS
         eapply sem_block_ck_cons in H3; eauto. rename H3 into Hblksem.
         2:{ inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
 
-        replace {| enums := enums G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
+        replace {| types := types G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
         inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc.
@@ -705,7 +705,7 @@ Module Type ILCORRECTNESS
       apply global_sem_ref_cons with (f:=n_name a)...
       + inv Hwc. eapply IHnds...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (map inlinelocal_node nds)).(enums)).
+        change enms with ((Global enms (map inlinelocal_node nds)).(types)).
         eapply inlinelocal_node_sem with (G1:=Global enms nds)...
         1,2:inv Hwc...
   Qed.

@@ -53,11 +53,11 @@ Module Type SCTYPING
     Context {PSyn : block -> Prop} {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
-    Hypothesis Hwbck : wt_clock G.(enums) Γ' bck.
+    Hypothesis Hwbck : wt_clock G.(types) Γ' bck.
 
     Lemma subclock_clock_wt : forall ck,
-        wt_clock G.(enums) Γ ck ->
-        wt_clock G.(enums) Γ' (subclock_clock bck sub ck).
+        wt_clock G.(types) Γ ck ->
+        wt_clock G.(types) Γ' (subclock_clock bck sub ck).
     Proof.
       induction ck; intros * Hwt; inv Hwt; simpl; auto.
       constructor; eauto using rename_var_wt.

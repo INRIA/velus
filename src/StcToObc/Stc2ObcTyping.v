@@ -62,14 +62,14 @@ Module Type STC2OBCTYPING
   Section Expressions.
 
     Variable p      : program.
-    Variable enums  : list (ident * nat).
+    Variable types  : list type.
     Variable Γ      : list (ident * type).
     Variable Γm     : list (ident * type).
     Variable Γv     : list (ident * type).
     Variable memset : PS.t.
 
-    Hypothesis EnumsSpec:
-      enums = p.(Obc.Syn.enums).
+    Hypothesis TypesSpec:
+      types = p.(Obc.Syn.types).
 
     Definition type_env_spec :=
       forall x ty,
@@ -105,7 +105,7 @@ Module Type STC2OBCTYPING
 
     Lemma translate_exp_wt:
       forall e,
-        CE.Typ.wt_exp enums Γ e ->
+        CE.Typ.wt_exp types Γ e ->
         wt_exp p Γm Γv (translate_exp memset e).
     Proof.
       induction e; simpl; intro WTle; inv WTle; eauto using wt_exp.
@@ -117,7 +117,7 @@ Module Type STC2OBCTYPING
 
     Corollary translate_arg_wt:
       forall e clkvars ck,
-        CE.Typ.wt_exp enums Γ e ->
+        CE.Typ.wt_exp types Γ e ->
         wt_exp p Γm Γv (translate_arg memset clkvars ck e).
     Proof.
       unfold translate_arg, var_on_base_clock; intros * WT.
@@ -131,7 +131,7 @@ Module Type STC2OBCTYPING
 
     Lemma translate_cexp_wt:
       forall insts x e,
-        wt_cexp enums Γ e ->
+        wt_cexp types Γ e ->
         In (x, typeofc e) Γv ->
         wt_stmt p insts Γm Γv (translate_cexp memset x e).
     Proof.
@@ -156,20 +156,20 @@ Module Type STC2OBCTYPING
 
     Lemma Control_wt:
       forall insts ck s,
-        wt_clock enums Γ ck ->
+        wt_clock types Γ ck ->
         wt_stmt p insts Γm Γv s ->
         wt_stmt p insts Γm Γv (Control memset ck s).
     Proof.
       induction ck; intros s WTc WTs;
-        inversion_clear WTc as [|???? Hin]; auto.
-      simpl; destruct tn; FromMemset; apply IHck; eauto;
+        inversion_clear WTc as [|????? Hin]; auto.
+      simpl; FromMemset; apply IHck; eauto;
         subst; econstructor; simpl; eauto using wt_exp; try rewrite skip_branches_with_length;
           eauto using wt_stmt.
-      - clear - WTs. induction n.
+      - clear - WTs. induction (length tn).
         + rewrite skip_branches_with_0; contradiction.
         + rewrite skip_branches_with_S; setoid_rewrite in_app; intros * [|Hin]; auto.
           inv Hin; cases; auto; contradiction.
-      - clear - WTs. induction n.
+      - clear - WTs. induction (length tn).
         + rewrite skip_branches_with_0; contradiction.
         + rewrite skip_branches_with_S; setoid_rewrite in_app; intros * [|Hin]; auto.
           inv Hin; cases; auto; contradiction.
@@ -177,13 +177,13 @@ Module Type STC2OBCTYPING
 
     Lemma Control_wt_inv:
       forall insts ck s,
-        wt_clock enums Γ ck ->
+        wt_clock types Γ ck ->
         wt_stmt p insts Γm Γv (Control memset ck s) ->
         wt_stmt p insts Γm Γv s.
     Proof.
-      clear EnumsSpec.
+      clear TypesSpec.
       induction ck; simpl; intros s WTc WTcontrol; auto.
-      inv WTc; destruct tn.
+      inv WTc.
       apply IHck in WTcontrol; auto.
       inv WTcontrol.
       simpl in *. take (_ < _) and apply skip_branches_with_In with (s := s) in it; eauto.
@@ -242,7 +242,7 @@ Module Type STC2OBCTYPING
         apply TypeEnvSpec in Hin.
         now rewrite PSF.mem_1 in Hin.
       + econstructor; eauto.
-      + assert (In (x, Tenum tn) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+      + assert (In (x, Tenum tx tn) (Γv ++ Γm)) as Hin by (apply in_app; auto).
         apply TypeEnvSpec in Hin.
         now rewrite PSF.mem_1 in Hin.
       + econstructor; eauto.
@@ -384,7 +384,7 @@ Module Type STC2OBCTYPING
                 (map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
                 (step_method s).
   Proof.
-    unfold wt_system, wt_method; intros * (WT &?& Henums); simpl.
+    unfold wt_system, wt_method; intros * (WT &?& Htypes); simpl.
     split.
     - eapply translate_tcs_wt; eauto using s_nodup_variables with obctyping.
       unfold meth_vars, step_method; simpl.
@@ -457,7 +457,7 @@ Module Type STC2OBCTYPING
                 (map (fun xc => (fst xc, snd (fst (snd xc)))) (s_nexts s))
                 (reset_method s).
   Proof.
-    unfold wt_system, wt_method; intros * (WT & WTinits & Henums).
+    unfold wt_system, wt_method; intros * (WT & WTinits & Htypes).
     unfold translate_tcs, meth_vars, translate_reset; simpl.
     split; try contradiction.
     constructor.

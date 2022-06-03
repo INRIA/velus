@@ -577,7 +577,7 @@ Module Type INLINELOCAL
     { transform_unit := inlinelocal_node }.
 
   Global Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch_block switch_prefs) (@global nolocal_top_block local_prefs) :=
-    { transform_program_without_units := fun g => Global g.(enums) [] }.
+    { transform_program_without_units := fun g => Global g.(types) [] }.
 
   Definition inlinelocal_global : @global noswitch_block switch_prefs -> @global nolocal_top_block local_prefs :=
     transform_units.

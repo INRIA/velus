@@ -230,21 +230,21 @@ Module Type STCSYNTAX
   Qed.
 
   Record program := Program {
-                        enums : list (ident * nat);
+                        types : list type;
                         systems : list system
                       }.
 
   Global Program Instance program_program: CommonProgram.Program system program :=
     { units := systems;
-      update := fun p => Program p.(enums) }.
+      update := fun p => Program p.(types) }.
 
   Definition find_system : ident -> program -> option (system * program) :=
     find_unit.
 
   Remark find_system_other:
-    forall b P bl enums,
+    forall b P bl types,
       bl.(s_name) <> b ->
-      find_system b (Program enums (bl :: P)) = find_system b (Program enums P).
+      find_system b (Program types (bl :: P)) = find_system b (Program types P).
   Proof.
     intros; eapply find_unit_other; simpl; eauto.
     intro; auto.

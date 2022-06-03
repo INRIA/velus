@@ -56,16 +56,16 @@ Module Type DRRTYPING
     Variable (G : global).
 
     Lemma rename_in_clock_wt : forall ck,
-        wt_clock G.(enums) (inouts++vars) ck ->
-        wt_clock G.(enums) (inouts++vars') (rename_in_clock sub ck).
+        wt_clock G.(types) (inouts++vars) ck ->
+        wt_clock G.(types) (inouts++vars') (rename_in_clock sub ck).
     Proof.
       induction ck; intros * Hwt; inv Hwt; auto with nltyping.
       simpl. constructor; eauto with nltyping.
     Qed.
 
     Lemma rename_in_exp_wt : forall e,
-        wt_exp G.(enums) (inouts++vars) e ->
-        wt_exp G.(enums) (inouts++vars') (rename_in_exp sub e).
+        wt_exp G.(types) (inouts++vars) e ->
+        wt_exp G.(types) (inouts++vars') (rename_in_exp sub e).
     Proof.
       intros * Hwt; induction Hwt;
         simpl; econstructor; eauto with nltyping.
@@ -73,8 +73,8 @@ Module Type DRRTYPING
     Qed.
 
     Lemma rename_in_cexp_wt : forall e,
-        wt_cexp G.(enums) (inouts++vars) e ->
-        wt_cexp G.(enums) (inouts++vars') (rename_in_cexp sub e).
+        wt_cexp G.(types) (inouts++vars) e ->
+        wt_cexp G.(types) (inouts++vars') (rename_in_cexp sub e).
     Proof.
       induction e using cexp_ind2'; intros * Hwt; inv Hwt;
         simpl; econstructor; eauto using rename_in_var_wt, rename_in_exp_wt.

@@ -71,7 +71,7 @@ Module Type NLCLOCKING
            n.(n_eqs).
 
   Definition wc_global (G: global) :=
-    Forall' (fun ns => wc_node (Global G.(enums) ns)) G.(nodes).
+    Forall' (fun ns => wc_node (Global G.(types) ns)) G.(nodes).
 
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
@@ -143,10 +143,10 @@ Module Type NLCLOCKING
   Qed.
 
   Lemma wc_equation_global_cons:
-    forall Ω nd G eq enums,
-      Ordered_nodes (Global enums (nd :: G)) ->
-      wc_equation (Global enums G) Ω eq ->
-      wc_equation (Global enums (nd :: G)) Ω eq.
+    forall Ω nd G eq types,
+      Ordered_nodes (Global types (nd :: G)) ->
+      wc_equation (Global types G) Ω eq ->
+      wc_equation (Global types (nd :: G)) Ω eq.
   Proof.
     intros * OnG WCnG.
     inversion_clear OnG as [|? ? [? HndG] OG].
@@ -154,7 +154,7 @@ Module Type NLCLOCKING
     econstructor; eauto.
     unfold find_node, option_map, find_unit; simpl.
     destruct (ident_eq_dec (n_name nd) f); auto.
-    assert (find_node f (Global enums0 G) <> None) as Hfind by congruence.
+    assert (find_node f (Global types0 G) <> None) as Hfind by congruence.
     apply find_node_Exists in Hfind.
     apply decidable_Exists_not_Forall in Hfind.
     - subst; contradiction.
@@ -162,10 +162,10 @@ Module Type NLCLOCKING
   Qed.
 
   Lemma wc_equation_global_app:
-    forall Ω G' G eq enums,
-      Ordered_nodes (Global enums (G' ++ G)) ->
-      wc_equation (Global enums G) Ω eq ->
-      wc_equation (Global enums (G' ++ G)) Ω eq.
+    forall Ω G' G eq types,
+      Ordered_nodes (Global types (G' ++ G)) ->
+      wc_equation (Global types G) Ω eq ->
+      wc_equation (Global types (G' ++ G)) Ω eq.
   Proof.
     induction G'; auto.
     simpl. intros * OG WCeq.
@@ -173,35 +173,35 @@ Module Type NLCLOCKING
     inv OG. auto.
   Qed.
 
-  Lemma wc_equation_enums_cons:
-    forall ns enums e Ω eq,
-      wc_equation (Global enums ns) Ω eq ->
-      wc_equation (Global (e :: enums) ns) Ω eq.
+  Lemma wc_equation_types_cons:
+    forall ns types e Ω eq,
+      wc_equation (Global types ns) Ω eq ->
+      wc_equation (Global (e :: types) ns) Ω eq.
   Proof.
     induction 1; eauto using wc_equation.
     econstructor; eauto.
-    now rewrite find_node_enums_cons.
+    now rewrite find_node_types_cons.
   Qed.
 
-  Corollary wc_node_enums_cons:
-    forall ns enums e n,
-      wc_node (Global enums ns) n ->
-      wc_node (Global (e :: enums) ns) n.
+  Corollary wc_node_types_cons:
+    forall ns types e n,
+      wc_node (Global types ns) n ->
+      wc_node (Global (e :: types) ns) n.
   Proof.
     unfold wc_node; intuition.
     apply Forall_forall; intros;
       take (Forall _ _) and eapply Forall_forall in it; eauto.
-    now apply wc_equation_enums_cons.
+    now apply wc_equation_types_cons.
   Qed.
 
-  Corollary wc_global_enums_cons:
-    forall enums ns e,
-      wc_global (Global enums ns) ->
-      wc_global (Global (e :: enums) ns).
+  Corollary wc_global_types_cons:
+    forall types ns e,
+      wc_global (Global types ns) ->
+      wc_global (Global (e :: types) ns).
   Proof.
     unfold wc_global.
     induction ns; simpl; intros * WC; inv WC; constructor.
-    - now apply wc_node_enums_cons.
+    - now apply wc_node_types_cons.
     - apply IHns; auto.
   Qed.
 

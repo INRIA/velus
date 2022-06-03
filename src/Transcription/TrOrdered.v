@@ -103,13 +103,13 @@ Module Type TRORDERED
       { eapply inin_l_nl; eauto. }
       apply H in Hfin as (?&(?&?&?)). split; auto.
       + erewrite <-to_node_name; eauto.
-      + assert (L.find_node f {| L.enums := enums; L.nodes := l |} = Some x0) as Hfind'.
+      + assert (L.find_node f {| L.types := types; L.nodes := l |} = Some x0) as Hfind'.
         { unfold L.find_node. rewrite H2; auto. }
         eapply find_node_global in Hfind' as (?&?&?). 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
         unfold NL.find_node in H3. apply option_map_inv in H3 as ((?&?)&?&?); subst.
         erewrite CommonProgram.find_unit_later; eauto. 1-2:simpl; auto.
         apply CommonProgram.equiv_program_refl.
-    - replace l with {| L.enums := enums; L.nodes := l |}.(L.nodes) in H0 by eauto.
+    - replace l with {| L.types := types; L.nodes := l |}.(L.nodes) in H0 by eauto.
       eapply to_global_names' in H0. 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
       simpl in H0. erewrite to_node_name in H0; eauto.
     - eapply IHHord in EQ; eauto.

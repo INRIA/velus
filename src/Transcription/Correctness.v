@@ -284,14 +284,16 @@ Module Type CORRECTNESS
       1,2:now rewrite <-Hperm.
   Qed.
 
-  Lemma case_complete : forall tx c vs vs' vd s,
-      wt_streams [c] [Tenum (tx, (length vs'))] ->
-      map fst vs' = seq 0 (length vs') ->
+  Lemma case_complete : forall tx tn c vs vs' vd s,
+      wt_streams [c] [Tenum tx tn] ->
+      map fst vs' = seq 0 (length tn) ->
       (forall i v, In (i, v) vs' <-> In (i, v) vs \/ (i < length vs' /\ ~InMembers i vs /\ v = vd)) ->
       case c vs (Some vd) s ->
       case c vs' None s.
   Proof.
     intros * Hwt Hfst Heq Hcase.
+    assert (length vs' = length tn) as Hlen.
+    { erewrite <-map_length, Hfst, seq_length; auto. }
     rewrite case_spec in *. intros n.
     specialize (Hcase n) as [(Hc&Hf&Hd&Hs)|[(?&?&Hc&Habs&Hpres&Hd&Hs)|(?&?&Hc&Habs&Hneq&Hd&Hs)]]; simpl in *.
     - left. repeat split; auto.
@@ -311,7 +313,7 @@ Module Type CORRECTNESS
         * eapply Forall_forall in Habs; eauto. auto.
         * congruence.
       + eapply Forall2_singl, SForall_forall in Hwt. rewrite Hc in Hwt; inv Hwt; simpl in *.
-        assert (Hnth:=H1). eapply nth_In with (d:=(0, Streams.const absent)) in Hnth.
+        assert (Hnth:=H1). rewrite <-Hlen in Hnth. eapply nth_In with (d:=(0, Streams.const absent)) in Hnth.
         rewrite combine_fst_snd in Hnth at 1. rewrite Hfst, combine_nth, seq_nth in Hnth; auto; simpl in *.
         2:rewrite seq_length, map_length; auto.
         apply Exists_exists. do 2 esplit; eauto; simpl. split; auto.
@@ -539,13 +541,13 @@ Module Type CORRECTNESS
         - intros ?????; lia.
         - intros ?? Hle. eapply Nat.leb_le in Hle; auto.
       }
-      assert (incl (map fst s') (seq 0 n)) as Hincl'.
+      assert (incl (map fst s') (seq 0 (length tn))) as Hincl'.
       { rewrite <-Hperm, H12; auto. }
       econstructor; eauto.
       + eapply complete_branches_sem; eauto.
       + eapply case_complete, case_Permutation; eauto.
-        * rewrite combine_length, seq_length, Nat.min_id, map_length, complete_sem_length; eauto.
-        * rewrite combine_map_fst', combine_length, seq_length, Nat.min_id; eauto.
+        (* * rewrite combine_length, seq_length, Nat.min_id, map_length, complete_sem_length; eauto. *)
+        * rewrite combine_map_fst', map_length, complete_sem_length; auto.
           rewrite seq_length; eauto.
         * intros ??. rewrite map_length, complete_sem_length; eauto.
           erewrite <-complete_sem_fst, <-combine_fst_snd at 1; eauto.
@@ -1656,7 +1658,7 @@ Module Type CORRECTNESS
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.
       rewrite cons_is_app in Hord.
-      assert (Lord.Ordered_nodes {| L.enums := enms; L.nodes := nds |}) as Hord'.
+      assert (Lord.Ordered_nodes {| L.types := enms; L.nodes := nds |}) as Hord'.
       { eapply Lord.Ordered_nodes_append in Hord; eauto.
         econstructor; simpl; eauto. 2:rewrite cons_is_app; auto.
         intros ?; simpl; auto. }

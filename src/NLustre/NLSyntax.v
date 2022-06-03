@@ -80,13 +80,13 @@ Module Type NLSYNTAX
   (** ** Program *)
 
   Record global := Global {
-                       enums : list (ident * nat);
+                       types : list type;
                        nodes : list node
                      }.
 
   Global Program Instance global_program: Program node global :=
     { units := nodes;
-      update := fun g => Global g.(enums) }.
+      update := fun g => Global g.(types) }.
 
   Definition find_node (f: ident) (G: global) :=
     option_map fst (find_unit f G).
@@ -153,15 +153,15 @@ Module Type NLSYNTAX
     rewrite option_map_None, find_unit_None; reflexivity.
   Qed.
 
-  Lemma find_node_enums_cons:
-    forall ns enums e f,
-      find_node f (Global (e :: enums) ns) = find_node f (Global enums ns).
+  Lemma find_node_types_cons:
+    forall ns types e f,
+      find_node f (Global (e :: types) ns) = find_node f (Global types ns).
   Proof.
     unfold find_node; simpl.
     induction ns; simpl; auto.
     intros.
     remember (find_unit f _) as F eqn: E; symmetry in E.
-    remember (find_unit f (Global enums0 _)) as F' eqn: E'; symmetry in E'.
+    remember (find_unit f (Global types0 _)) as F' eqn: E'; symmetry in E'.
     rewrite find_unit_cons in E; simpl; eauto.
     rewrite find_unit_cons in E'; simpl; eauto.
     destruct E as [(?&?)|(?&?)], E' as [(?&?)|(?&?)]; subst; simpl; auto; contradiction.
@@ -363,7 +363,7 @@ Module Type NLSYNTAX
 
     (** Globals are equivalent if they contain equivalent nodes *)
     Definition global_iface_eq (G1 G2 : global) : Prop :=
-      enums G1 = enums G2 /\
+      types G1 = types G2 /\
       forall f, orel2 node_iface_eq (find_node f G1) (find_node f G2).
 
     Lemma global_iface_eq_nil : forall enums,

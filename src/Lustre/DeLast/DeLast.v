@@ -823,7 +823,7 @@ Module Type DELAST
     { transform_unit := delast_node }.
 
   Global Program Instance delast_global_without_units : TransformProgramWithoutUnits (@global (fun _ => True) elab_prefs) (@global nolast_block last_prefs) :=
-    { transform_program_without_units := fun g => Global g.(enums) [] }.
+    { transform_program_without_units := fun g => Global g.(types) [] }.
 
   Definition delast_global : @global (fun _ => True) elab_prefs -> @global nolast_block last_prefs :=
     transform_units.

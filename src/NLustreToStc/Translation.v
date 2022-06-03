@@ -504,7 +504,7 @@ Module Type TRANSLATION
     { transform_unit := translate_node }.
 
   Global Program Instance global_program_without_units : TransformProgramWithoutUnits global SynStc.program :=
-    { transform_program_without_units := fun g => SynStc.Program g.(enums) [] }.
+    { transform_program_without_units := fun g => SynStc.Program g.(types) [] }.
 
   Definition translate : global -> SynStc.program := transform_units.
 
