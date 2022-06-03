@@ -6,3 +6,4 @@
 .gitmodules export-ignore
 TODO export-ignore
 CHECKLIST export-ignore
+*.v gitlab-language=coq
