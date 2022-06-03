@@ -1,3 +1,4 @@
+*.v gitlab-language=coq
 /docker export-ignore  
 /drafts export-ignore
 /examples/original export-ignore
@@ -6,4 +7,3 @@
 .gitmodules export-ignore
 TODO export-ignore
 CHECKLIST export-ignore
-*.v gitlab-language=coq
