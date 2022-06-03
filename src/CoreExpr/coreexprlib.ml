@@ -47,6 +47,7 @@ sig
     | Ecase of exp * cexp option list * cexp
     | Eexp of exp
 
+  val typeof : exp -> typ
 end
 
 module PrintFun (CE: SYNTAX)
@@ -57,8 +58,8 @@ module PrintFun (CE: SYNTAX)
                            and type enumtag = CE.enumtag) :
 sig
   val print_ident           : formatter -> ident -> unit
-  val print_exp             : formatter -> CE.exp -> unit
-  val print_cexp            : formatter -> CE.cexp -> unit
+  val print_exp             : (ident * CE.typ) list -> formatter -> CE.exp -> unit
+  val print_cexp            : (ident * CE.typ) list -> formatter -> CE.cexp -> unit
   val print_fullclocks      : bool ref
   val print_clock           : formatter -> CE.clock -> unit
   val print_clock_decl      : formatter -> CE.clock -> unit
@@ -88,7 +89,12 @@ struct
 
   let print_ident p i = pp_print_string p (extern_atom i)
 
-  let rec exp prec p e =
+  let find_type tenv tx =
+    try
+      List.assoc tx tenv
+    with _ -> failwith (Printf.sprintf "Not found: %s" (extern_atom tx))
+
+  let rec exp prec tenv p e =
     let (prec', assoc) = lprecedence e in
     let (prec1, prec2) =
       if assoc = LtoR
@@ -100,42 +106,47 @@ struct
     begin match e with
       | CE.Econst c ->
         PrintOps.print_cconst p c
-      | CE.Eenum (c, _) ->
-        PrintOps.print_enumtag p c
+      | CE.Eenum (c, ty) ->
+        PrintOps.print_enumtag p (c, ty)
       | CE.Evar (id, _) ->
         print_ident p id
       | CE.Ewhen (e, x, c) ->
         fprintf p "%a when (%a=%a)"
-          (exp prec') e
+          (exp prec' tenv) e
           print_ident x
-          PrintOps.print_enumtag c
+          PrintOps.print_enumtag (c, find_type tenv x)
       | CE.Eunop  (op, e, ty) ->
-        PrintOps.print_unop p op ty (exp prec') e
+        PrintOps.print_unop p op ty (exp prec' tenv) e
       | CE.Ebinop (op, e1, e2, ty) ->
-        PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
+        PrintOps.print_binop p op ty (exp prec1 tenv) e1 (exp prec2 tenv) e2
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
   let print_exp = exp 0
 
-  let rec cexp prec p e =
+  let print_branch_tag ty i p =
+    PrintOps.print_enumtag p (PrintOps.enumtag_of_int i, ty)
+
+  let rec cexp prec tenv p e =
     let (prec', assoc) = cprecedence e in
     if prec' < prec
     then fprintf p "@[<hov 2>("
     else fprintf p "@[<hov 2>";
     begin match e with
-      | CE.Emerge ((id, _), ces, _) ->
+      | CE.Emerge ((id, ty), ces, _) ->
         fprintf p "@[<v>merge %a%a@]"
           print_ident id
-          (PrintOps.print_branches (cexp 16)) (List.mapi (fun i ce -> (string_of_int i, Some ce)) ces, None)
+          (PrintOps.print_branches (cexp 16 tenv))
+          (List.mapi (fun i ce -> (print_branch_tag ty i, Some ce)) ces, None)
       | CE.Ecase (e, ces, d) ->
+        let ty = CE.typeof e in
         fprintf p "@[<v>case %a of%a@]"
-          (exp prec') e
-          (PrintOps.print_branches (cexp 16))
-          (List.mapi (fun i ce -> (string_of_int i, ce)) ces,
+          (exp prec' tenv) e
+          (PrintOps.print_branches (cexp 16 tenv))
+          (List.mapi (fun i ce -> (print_branch_tag ty i, ce)) ces,
            if List.exists Option.is_none ces then Some d else None)
       | CE.Eexp e ->
-        exp (prec' + 1) p e
+        exp (prec' + 1) tenv p e
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -144,23 +155,23 @@ struct
   let rec print_clock p ck =
     match ck with
     | CE.Cbase -> fprintf p "."
-    | CE.Con (ck', x, (_, c)) ->
+    | CE.Con (ck', x, (ty, c)) ->
       fprintf p "%a on (%a=%a)"
         print_clock ck'
         print_ident x
-        PrintOps.print_enumtag c
+        PrintOps.print_enumtag (c, ty)
 
   let print_fullclocks = ref false
 
   let print_clock_decl p ck =
     match ck with
     | CE.Cbase -> ()
-    | CE.Con (ck', x, (_, c)) ->
+    | CE.Con (ck', x, (ty, c)) ->
       if !print_fullclocks
       then fprintf p " :: @[<hov 3>%a@]" print_clock ck
       else fprintf p " when (%a=%a)"
           print_ident x
-          PrintOps.print_enumtag c
+          PrintOps.print_enumtag (c, ty)
 
   let print_decl p (id, (ty, ck)) =
     fprintf p "%a@ : %a%a"

@@ -159,7 +159,7 @@ Module Type TRCLOCKING
           destruct es, x0; simpl in *; try congruence.
           apply H5; auto. monadInv EQ.
         + erewrite map_length, <-Permutation_length, <-map_length, to_controls_fst, map_length; eauto using BranchesSort.Permuted_sort.
-          assert (Forall (fun '(i, e) => wc_cexp (Senv.idck vars) e (Con c x1 (Tenum tn, i))) x0) as Hwc'.
+          assert (Forall (fun '(i, e) => wc_cexp (Senv.idck vars) e (Con c x1 (Tenum tx0 tn, i))) x0) as Hwc'.
           { eapply Forall_forall; intros (?&?) Hin.
             eapply mmap_inversion, Coqlib.list_forall2_in_right in EQ as ((?&?)&Hin2&Htr); eauto.
             cases; monadInv Htr.
@@ -174,8 +174,8 @@ Module Type TRCLOCKING
           replace (seq 0 (Datatypes.length es)) with (map fst (BranchesSort.sort x0)).
           2:{ eapply Permutation_seq_eq.
               - erewrite <-BranchesSort.Permuted_sort, to_controls_fst; eauto.
-                erewrite H12. replace (Datatypes.length es) with (snd tn); auto.
-                erewrite <-map_length, H12, seq_length; auto.
+                erewrite H12. replace (Datatypes.length es) with (length tn); auto.
+                symmetry. erewrite <-map_length, H12, seq_length; auto.
               - apply Sorted.Sorted_StronglySorted. intros ?????; lia.
                 eapply Sorted_map, Sorted_impl, BranchesSort.Sorted_sort.
                 intros * Hleb. apply Nat.leb_le in Hleb; auto.

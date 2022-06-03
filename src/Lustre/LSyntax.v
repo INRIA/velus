@@ -390,14 +390,14 @@ Module Type LSYNTAX
 
   Record global {PSyn prefs} :=
     Global {
-        enums : list (ident * nat);
+        types : list type;
         nodes : list (@node PSyn prefs);
       }.
   Arguments Global {_ _}.
 
   Global Program Instance global_program {PSyn prefs} : Program (@node PSyn prefs) global :=
     { units := nodes;
-      update := fun g => Global g.(enums) }.
+      update := fun g => Global g.(types) }.
 
   Section find_node.
     Context {PSyn : block -> Prop}.
@@ -415,9 +415,9 @@ Module Type LSYNTAX
     Qed.
 
     Lemma find_node_now:
-      forall f n G enums,
+      forall f n G types,
         n.(n_name) = f ->
-        find_node f (Global enums (n::G)) = Some n.
+        find_node f (Global types (n::G)) = Some n.
     Proof.
       intros * Heq; subst.
       unfold find_node, find_unit; simpl.
@@ -425,9 +425,9 @@ Module Type LSYNTAX
     Qed.
 
     Lemma find_node_other:
-      forall f n G enums,
+      forall f n G types,
         n.(n_name) <> f ->
-        find_node f (Global enums (n::G)) = find_node f (Global enums G).
+        find_node f (Global types (n::G)) = find_node f (Global types G).
     Proof.
       intros * Hnf.
       unfold find_node. f_equal.
@@ -435,10 +435,10 @@ Module Type LSYNTAX
       now intros ?.
     Qed.
 
-    Lemma find_node_cons f (a : @node PSyn prefs) enums nds n :
-      find_node f (Global enums (a :: nds)) = Some n ->
+    Lemma find_node_cons f (a : @node PSyn prefs) types nds n :
+      find_node f (Global types (a :: nds)) = Some n ->
       (f = n_name a /\ a = n) \/
-      (f <> n_name a /\ find_node f (Global enums nds) = Some n).
+      (f <> n_name a /\ find_node f (Global types nds) = Some n).
     Proof.
       unfold find_node. intros Hfind.
       apply option_map_inv in Hfind as ((?&?)&Hfind&?); subst.
@@ -448,7 +448,7 @@ Module Type LSYNTAX
         rewrite H0; auto.
     Qed.
 
-    Lemma find_node_change_enums : forall nds enms enms' f,
+    Lemma find_node_change_types : forall nds enms enms' f,
         find_node f (Global enms nds) = find_node f (Global enms' nds).
     Proof.
       induction nds; intros *. reflexivity.
@@ -459,20 +459,20 @@ Module Type LSYNTAX
 
   End find_node.
 
-  Lemma equiv_program_enums {PSyn prefs} : forall (G G' : @global PSyn prefs),
+  Lemma equiv_program_types {PSyn prefs} : forall (G G' : @global PSyn prefs),
       equiv_program G G' ->
-      enums G = enums G'.
+      types G = types G'.
   Proof.
     intros * Heq.
     specialize (Heq []); inv Heq; auto.
   Qed.
 
-  Corollary suffix_enums {PSyn prefs} : forall (G G' : @global PSyn prefs),
+  Corollary suffix_types {PSyn prefs} : forall (G G' : @global PSyn prefs),
       suffix G G' ->
-      enums G = enums G'.
+      types G = types G'.
   Proof.
     intros * Suff. inv Suff.
-    apply equiv_program_enums; auto.
+    apply equiv_program_types; auto.
   Qed.
 
   (** Structural properties *)
@@ -838,13 +838,13 @@ Module Type LSYNTAX
       n.(n_out) = n'.(n_out).
 
     Definition global_iface_incl (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) : Prop :=
-      incl (enums G) (enums G') /\
+      incl (types G) (types G') /\
       forall f n, find_node f G = Some n ->
              exists n', find_node f G' = Some n' /\ node_iface_eq n n'.
 
     (** Globals are equivalent if they contain equivalent nodes *)
     Definition global_iface_eq (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) : Prop :=
-      enums G = enums G' /\
+      types G = types G' /\
       forall f, orel2 node_iface_eq (find_node f G) (find_node f G').
 
     Lemma iface_eq_iface_incl : forall (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2),
@@ -857,21 +857,21 @@ Module Type LSYNTAX
       - intros * Hfind. specialize (Hg2 f). rewrite Hfind in Hg2; inv Hg2. eauto.
     Qed.
 
-    Lemma global_iface_eq_nil : forall enums,
-        global_iface_eq (Global enums []) (Global enums []).
+    Lemma global_iface_eq_nil : forall types,
+        global_iface_eq (Global types []) (Global types []).
     Proof.
       unfold global_iface_eq, find_node.
       constructor; auto.
       intros *; simpl. constructor.
     Qed.
 
-    Lemma global_iface_eq_cons : forall enums nds nds' n n',
-        global_iface_eq (Global enums nds) (Global enums nds') ->
+    Lemma global_iface_eq_cons : forall types nds nds' n n',
+        global_iface_eq (Global types nds) (Global types nds') ->
         n.(n_name) = n'.(n_name) ->
         n.(n_hasstate) = n'.(n_hasstate) ->
         n.(n_in) = n'.(n_in) ->
         n.(n_out) = n'.(n_out) ->
-        global_iface_eq (Global enums (n::nds)) (Global enums (n'::nds')).
+        global_iface_eq (Global types (n::nds)) (Global types (n'::nds')).
     Proof.
       intros * (?&Heq) Hname Hstate Hin Hout.
       constructor; auto. intros ?.

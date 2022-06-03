@@ -330,7 +330,7 @@ Module Type CORRECTNESS
         apply msem_equations_cons in Heqs; auto.
         inv Ord.
         eapply msem_equations_memory_closed_rec; eauto.
-    - assert (find_node f {| NL.Syn.enums := enums0; nodes := G |} = Some n0)
+    - assert (find_node f {| NL.Syn.types := types0; nodes := G |} = Some n0)
         by (unfold find_node; rewrite Find; auto).
       assert (~ Is_node_in (n_name node) (n_eqs n0))
         by (eapply find_node_other_not_Is_node_in; eauto).

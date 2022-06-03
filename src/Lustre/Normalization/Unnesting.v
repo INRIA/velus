@@ -2571,7 +2571,7 @@ Module Type UNNESTING
     end.
 
   Definition unnest_global G :=
-    Global G.(enums) (unnest_nodes G.(enums) G.(nodes)).
+    Global G.(types) (unnest_nodes G.(types) G.(nodes)).
 
   (** *** unnest_global produces an equivalent global *)
 

@@ -266,7 +266,7 @@ Module Type STC2OBCINVARIANTS
       Can_write_in x (Control mems ck s) -> Can_write_in x s.
   Proof.
     induction ck; simpl; auto.
-    destruct p, t as [|(?&?)].
+    destruct p, t as [|].
     - inversion 1.
     - intros * Cw; apply IHck in Cw; inv Cw.
       take (Exists _ _) and apply Exists_exists in it as ([|] & Hin & Cw);
@@ -281,7 +281,7 @@ Module Type STC2OBCINVARIANTS
   Proof.
     intros * WT; split; eauto using Can_write_in_Control.
     revert s; induction ck; simpl; auto; inv WT.
-    destruct tn; intros * Cw; apply IHck; auto.
+    intros * Cw; apply IHck; auto.
     constructor.
     apply Exists_exists.
     take (_ < _) and eapply skip_branches_with_In in it; eauto.
@@ -292,7 +292,7 @@ Module Type STC2OBCINVARIANTS
       Can_write_in_var x (Control mems ck s) -> Can_write_in_var x s.
   Proof.
     induction ck; simpl; auto.
-    destruct p, t as [|(?&?)].
+    destruct p, t as [|].
     - inversion 1.
     - intros * Cw; apply IHck in Cw; inv Cw.
       take (Exists _ _) and apply Exists_exists in it as ([|] & Hin & Cw);
@@ -307,7 +307,7 @@ Module Type STC2OBCINVARIANTS
   Proof.
     intros * WT; split; eauto using Can_write_in_var_Control.
     revert s; induction ck; simpl; auto; inv WT.
-    destruct tn; intros * Cw; apply IHck; auto.
+    intros * Cw; apply IHck; auto.
     constructor.
     apply Exists_exists.
     take (_ < _) and eapply skip_branches_with_In in it; eauto.
@@ -319,7 +319,7 @@ Module Type STC2OBCINVARIANTS
       No_Overwrites (Control mems ck s) <-> No_Overwrites s.
   Proof.
     induction ck; simpl; try reflexivity; inversion_clear 1.
-    destruct tn; setoid_rewrite IHck; eauto; split; simpl in *.
+    setoid_rewrite IHck; eauto; split; simpl in *.
     - inversion_clear 1; auto.
       take (_ < _) and eapply skip_branches_with_In in it; eauto.
       eapply Forall_forall in it; eauto; auto.

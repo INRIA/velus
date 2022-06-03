@@ -1100,7 +1100,7 @@ Module Type LCAUSALITY
           eapply collect_free_left_list_spec'; eauto.
         * left. eapply collect_free_left_list_spec'; eauto.
       - (* app *)
-        erewrite map_nth'; eauto. 2:exact (Tenum (xH, 0), Cbase).
+        erewrite map_nth'; eauto. 2:exact (Tenum xH [], Cbase).
         rewrite PSUnion_In_app.
         destruct H15.
         * right. eapply psunion_collect_free_list_spec'; eauto.

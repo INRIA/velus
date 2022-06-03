@@ -14,10 +14,14 @@ module type PRINT_OPS =
     type binop
     type enumtag
 
+    val enumtag_of_int    : int -> enumtag
+    val int_of_enumtag    : enumtag -> int
+
     val print_typ         : Format.formatter -> typ -> unit
+    val print_typ_decl    : Format.formatter -> typ -> unit
     val print_cconst      : Format.formatter -> cconst -> unit
-    val print_const       : Format.formatter -> const -> unit
-    val print_enumtag     : Format.formatter -> enumtag -> unit
+    val print_const       : Format.formatter -> (const * typ) -> unit
+    val print_enumtag     : Format.formatter -> (enumtag * typ) -> unit
     val print_unop        : Format.formatter -> unop -> typ
                             -> (Format.formatter -> 'a -> unit) -> 'a -> unit
     val print_binop       : Format.formatter -> binop -> typ
@@ -25,7 +29,7 @@ module type PRINT_OPS =
                             -> (Format.formatter -> 'a -> unit) -> 'a
                             -> unit
     val print_branches    : (Format.formatter -> 'a -> unit) -> Format.formatter
-                            -> (string * 'a option) list * 'a option -> unit
+                            -> ((Format.formatter -> unit) * 'a option) list * 'a option -> unit
 
     val prec_unop   : unop  -> int * associativity
     val prec_binop  : binop -> int * associativity

@@ -47,8 +47,8 @@ Module Type TRANSLATION
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
       | Cbase      => s
-      | Con ck x (Tenum (t, n), c) =>
-        Control ck (Switch (tovar (x, Tenum (t, n))) (skip_branches_with n c s) Skip)
+      | Con ck x (Tenum t tn, c) =>
+        Control ck (Switch (tovar (x, Tenum t tn)) (skip_branches_with (length tn) c s) Skip)
       | _ => Skip
       end.
 
@@ -232,7 +232,7 @@ Module Type TRANSLATION
   Qed.
 
   Global Program Instance program_program_without_units : TransformProgramWithoutUnits SynStc.program program :=
-    { transform_program_without_units := fun p => Program p.(SynStc.enums) [] }.
+    { transform_program_without_units := fun p => Program p.(SynStc.types) [] }.
 
   Definition translate: SynStc.program -> program := transform_units.
 

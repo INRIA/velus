@@ -216,7 +216,7 @@ Module Type EQUIV
                (program_refines :
                   (forall (progs' : program * program),
                       ltsuffix2_prog progs' progs -> Prop)) =>
-             (fst progs).(enums) = (snd progs).(enums)
+             (fst progs).(types) = (snd progs).(types)
              /\
              forall n c2 prog2'
                (Hf2: find_class n (snd progs) = Some (c2, prog2')),
@@ -232,7 +232,7 @@ Module Type EQUIV
     forall (P : ident -> ident -> list (ident * type)
                 -> Env.t value -> Env.t value -> Prop) prog1 prog2,
       program_refines P prog1 prog2 <->
-      (prog1.(enums) = prog2.(enums)
+      (prog1.(types) = prog2.(types)
        /\ forall n c2 prog2',
           find_class n prog2 = Some (c2, prog2') ->
           exists (c1 : class) (prog1' : program),
@@ -254,7 +254,7 @@ Module Type EQUIV
   Lemma program_refines_by_class':
     forall (Pc : class -> class -> Prop) P p1 p2,
       wt_program p2 ->
-      p1.(enums) = p2.(enums) ->
+      p1.(types) = p2.(types) ->
       Forall2 (fun c1 c2 => forall p1' p2',
                    wt_program p2' ->
                    wt_class p2' c2 ->
@@ -401,7 +401,7 @@ Module Type EQUIV
   Lemma program_refines_enums:
     forall P p1 p2,
       program_refines P p1 p2 ->
-      enums p1 = enums p2.
+      types p1 = types p2.
   Proof.
     setoid_rewrite program_refines_def; intuition.
   Qed.

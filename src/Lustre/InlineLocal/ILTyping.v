@@ -14,7 +14,7 @@ From Velus Require Import Lustre.SubClock.SCTyping.
 Module Type ILTYPING
        (Import Ids : IDS)
        (Op : OPERATORS)
-       (OpAux : OPERATORS_AUX Ids Op)
+       (Import OpAux : OPERATORS_AUX Ids Op)
        (Import Cks : CLOCKS Ids Op OpAux)
        (Import Senv : STATICENV Ids Op OpAux Cks)
        (Import Syn : LSYNTAX Ids Op OpAux Cks Senv)
@@ -62,11 +62,11 @@ Module Type ILTYPING
                   NoDupLocals (map fst Γ++map fst Γ') blk ->
                   GoodLocals switch_prefs blk ->
                   wt_block G (Γ++Γ') blk ->
-                  Forall (wt_clock (enums G) (Γ ++ st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
+                  Forall (wt_clock (types G) (Γ ++ st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
                   st_valid_after st local PS.empty ->
                   inlinelocal_block sub blk st = (blks', st') ->
                   Forall (wt_block G (Γ ++ st_senv st')) blks' /\
-                  Forall (wt_clock (enums G) (Γ ++ st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st'))) blks ->
+                  Forall (wt_clock (types G) (Γ ++ st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st'))) blks ->
       (forall x, ~IsLast (Γ ++ Γ') x) ->
       (forall x, InMembers x Γ -> ~InMembers x Γ') ->
       (forall x, Env.In x sub <-> InMembers x Γ') ->
@@ -75,11 +75,11 @@ Module Type ILTYPING
       Forall (NoDupLocals (map fst Γ++map fst Γ')) blks ->
       Forall (GoodLocals switch_prefs) blks ->
       Forall (wt_block G (Γ++Γ')) blks ->
-      Forall (wt_clock (enums G) (Γ ++ st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
+      Forall (wt_clock (types G) (Γ ++ st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
       st_valid_after st local PS.empty ->
       mmap (inlinelocal_block sub) blks st = (blks', st') ->
       Forall (wt_block G (Γ ++ st_senv st')) (concat blks') /\
-      Forall (wt_clock (enums G) (Γ ++ st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
+      Forall (wt_clock (types G) (Γ ++ st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
     induction blks; intros * Hf Hnl Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hvalid Hmmap;
       inv Hf; inv Hns; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind; simpl; auto.
@@ -109,11 +109,11 @@ Module Type ILTYPING
       NoDupLocals (map fst Γ++map fst Γ') blk ->
       GoodLocals switch_prefs blk ->
       wt_block G (Γ++Γ') blk ->
-      Forall (wt_clock G.(enums) (Γ++st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
+      Forall (wt_clock G.(types) (Γ++st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
       st_valid_after st local PS.empty ->
       inlinelocal_block sub blk st = (blks', st') ->
       Forall (wt_block G (Γ++st_senv st')) blks' /\
-      Forall (wt_clock G.(enums) (Γ++st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
+      Forall (wt_clock G.(types) (Γ++st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
     induction blk using block_ind2; intros * Hnl Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hvalid Hdl;
       inv Hns; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind.
@@ -226,11 +226,11 @@ Module Type ILTYPING
       NoDupLocals (map fst Γ) blk ->
       GoodLocals switch_prefs blk ->
       wt_block G Γ blk ->
-      Forall (wt_clock G.(enums) (Γ++st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
+      Forall (wt_clock G.(types) (Γ++st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
       st_valid_after st local PS.empty ->
       inlinelocal_topblock blk st = (blks', locs', st') ->
       Forall (wt_block G (Γ++senv_of_locs locs'++st_senv st')) blks' /\
-      Forall (wt_clock G.(enums) (Γ++senv_of_locs locs'++st_senv st'))
+      Forall (wt_clock G.(types) (Γ++senv_of_locs locs'++st_senv st'))
              (map (fun '(_, (_, ck, _, _)) => ck) locs'++map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
     Opaque inlinelocal_block.
@@ -255,43 +255,43 @@ Module Type ILTYPING
 
   (** Used enum types are correct *)
 
-  Fact mmap_inlinelocal_block_wt_enum {PSyn prefs} (G: @global PSyn prefs) : forall blks sub xs Γ blks' st st',
+  Fact mmap_inlinelocal_block_wt_type {PSyn prefs} (G: @global PSyn prefs) : forall blks sub xs Γ blks' st st',
       Forall
         (fun blk => forall sub xs Γ blks' st st',
              noswitch_block blk ->
              NoDupLocals xs blk ->
              wt_block G Γ blk ->
-             Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
+             Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
              inlinelocal_block sub blk st = (blks', st') ->
-             Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st'))) blks ->
+             Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st'))) blks ->
       Forall noswitch_block blks ->
       Forall (NoDupLocals xs) blks ->
       Forall (wt_block G Γ) blks ->
-      Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
+      Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
       mmap (inlinelocal_block sub) blks st = (blks', st') ->
-      Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st')).
+      Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st')).
   Proof.
-    induction blks; intros * Hnd Hf Hns Hwt Henums Hmap;
+    induction blks; intros * Hnd Hf Hns Hwt Htypes Hmap;
       inv Hnd; inv Hf; inv Hns; inv Hwt; repeat inv_bind; eauto.
   Qed.
 
-  Lemma inlinelocal_block_wt_enum {PSyn prefs} (G: @global PSyn prefs) : forall blk sub xs Γ blks' st st',
+  Lemma inlinelocal_block_wt_type {PSyn prefs} (G: @global PSyn prefs) : forall blk sub xs Γ blks' st st',
       noswitch_block blk ->
       NoDupLocals xs blk ->
       wt_block G Γ blk ->
-      Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
+      Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
       inlinelocal_block sub blk st = (blks', st') ->
-      Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st')).
+      Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st')).
   Proof.
     induction blk using block_ind2; intros * Hns Hnd Hwt Hf Hdl;
       inv Hns; inv Hnd; inv Hwt; repeat inv_bind; auto.
 
     - (* reset *)
-      eapply mmap_inlinelocal_block_wt_enum in H0; eauto.
+      eapply mmap_inlinelocal_block_wt_type in H0; eauto.
 
     - (* local *)
       inv H3. inv H5.
-      eapply mmap_inlinelocal_block_wt_enum in H1; eauto.
+      eapply mmap_inlinelocal_block_wt_type in H1; eauto.
       erewrite fresh_idents_rename_anns; [|eauto].
       rewrite map_app. apply Forall_app; split; auto.
       eapply fresh_idents_rename_ids in H0.
@@ -299,21 +299,21 @@ Module Type ILTYPING
       rewrite H0. simpl_Forall. auto.
   Qed.
 
-  Lemma inlinelocal_topblock_wt_enum {PSyn prefs} (G: @global PSyn prefs) : forall blk xs Γ blks' locs' st st',
+  Lemma inlinelocal_topblock_wt_type {PSyn prefs} (G: @global PSyn prefs) : forall blk xs Γ blks' locs' st st',
       noswitch_block blk ->
       NoDupLocals xs blk ->
       wt_block G Γ blk ->
-      Forall (wt_enum G) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
+      Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st)) ->
       inlinelocal_topblock blk st = (blks', locs', st') ->
-      Forall (wt_enum G) (map (fun '(_, (ty, _, _, _)) => ty) locs'++map (fun '(_, (ty, _)) => ty) (st_anns st')).
+      Forall (wt_type G.(types)) (map (fun '(_, (ty, _, _, _)) => ty) locs'++map (fun '(_, (ty, _)) => ty) (st_anns st')).
   Proof.
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hnd Hwt Hwte Hil; try destruct s; repeat inv_bind; simpl.
-    1-4:eapply inlinelocal_block_wt_enum; eauto.
+    1-4:eapply inlinelocal_block_wt_type; eauto.
     inv Hns. inv Hwt; inv H3. inv Hnd; inv H3.
     repeat setoid_rewrite map_app. apply Forall_app; split; auto.
-    eapply mmap_inlinelocal_block_wt_enum in H; eauto.
-    eapply Forall_forall; intros; eauto using inlinelocal_block_wt_enum.
+    eapply mmap_inlinelocal_block_wt_type in H; eauto.
+    eapply Forall_forall; intros; eauto using inlinelocal_block_wt_type.
     Transparent inlinelocal_block.
   Qed.
 
@@ -330,7 +330,7 @@ Module Type ILTYPING
     pose proof (n_syn n) as Hsyn.
     repeat econstructor; simpl; eauto.
     1-2:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-    simpl_Forall; eauto using iface_incl_wt_enum.
+    simpl_Forall; eauto using iface_incl_wt_type.
     1-4:destruct (inlinelocal_topblock _ _) as ((?&?)&?) eqn:Hdl.
     - (* clocks *)
       eapply inlinelocal_topblock_wt with (Γ:=senv_of_inout (n_in n ++ n_out n)) in Hdl as (?&?); try rewrite app_nil_r; simpl; eauto.
@@ -344,10 +344,10 @@ Module Type ILTYPING
       + rewrite map_fst_senv_of_inout. apply n_nodup.
       + rewrite init_st_anns; simpl; auto.
       + eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
-    - (* enums *)
-      eapply inlinelocal_topblock_wt_enum, Forall_app in Hdl as (?&?); eauto.
+    - (* types *)
+      eapply inlinelocal_topblock_wt_type, Forall_app in Hdl as (?&?); eauto.
       2:{ rewrite init_st_anns; simpl; auto. }
-      simpl_app. apply Forall_app; split; simpl_Forall; eauto using iface_incl_wt_enum.
+      simpl_app. apply Forall_app; split; simpl_Forall; eauto using iface_incl_wt_type.
     - simpl_Forall. apply in_app_iff in H as [|]; simpl_In; auto.
       eapply inlinelocal_topblock_nolast in Hdl; eauto.
       simpl_Forall; subst; simpl; auto.

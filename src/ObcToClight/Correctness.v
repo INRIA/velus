@@ -451,11 +451,10 @@ Section PRESERVATION.
             * take (option_map _ _ = Some _) and apply option_map_inv in it as (v' & Sem &?); subst; simpl.
               erewrite sem_unary_operation_any_mem; eauto.
               eapply wt_cvalue_not_vundef_nor_vptr; eauto.
-            * destruct tn as (t', n'); simpl in *.
-              destruct (EquivDec.equiv_decb t' bool_id); try discriminate.
+            * destruct (EquivDec.equiv_decb tx bool_id); try discriminate.
               take (option_map _ _ = Some _) and apply option_map_inv in it as (v' & Sem &?); subst; simpl.
               cases; simpl; inv Sem; unfold enumtag_cltype;
-              destruct (intsize_of_enumtag_spec n') as [[Hn ->]|[[Hn ->]|[Hn ->]]]; auto.
+              destruct (intsize_of_enumtag_spec (length tn)) as [[Hn ->]|[[Hn ->]|[Hn ->]]]; auto.
           + inv WTv; simpl in *; take (_ = typeof _) and rewrite <-it in *.
             * take (option_map _ _ = Some _) and apply option_map_inv in it as (v' & Sem &?); subst; simpl.
               simpl in *; cases; take (Some _ = Some _) and inv it; simpl.
@@ -470,10 +469,10 @@ Section PRESERVATION.
           simpl in *. unfold translate_binop.
           econstructor; eauto.
           erewrite 2 type_pres; eauto.
-          inversion WTv1 as [|? []]; inversion WTv2 as [|? []]; subst; simpl in *;
+          inversion WTv1 as [|?]; inversion WTv2 as [|?]; subst; simpl in *;
             take (_ = typeof ex1) and rewrite <-it in *;
-          take (_ = typeof ex2) and rewrite <-it in *; simpl in *;
-            try discriminate.
+            take (_ = typeof ex2) and rewrite <-it in *; simpl in *;
+            try discriminate; simpl.
           + cases_eqn E;
               take (option_map _ _ = Some v) and apply option_map_inv in it as (v' & Sem &?);
               subst; simpl.
@@ -483,7 +482,7 @@ Section PRESERVATION.
                 eapply wt_cvalue_not_vundef_nor_vptr; eauto.
             * erewrite sem_binary_operation_any_cenv_mem; eauto;
                 eapply wt_cvalue_not_vundef_nor_vptr; eauto.
-          + destruct (EquivDec.equiv_decb i bool_id && EquivDec.equiv_decb i0 bool_id); simpl in *.
+          + destruct (EquivDec.equiv_decb tx bool_id && EquivDec.equiv_decb tx0 bool_id); simpl in *.
             * take (option_map _ _ = Some v) and apply option_map_inv in it as (v' & Sem &?);
                 subst; simpl.
               eapply sem_binop_bool_spec; auto.
@@ -491,8 +490,8 @@ Section PRESERVATION.
                 unfold Cop.sem_cmp, Cop.sem_binarith;
                 rewrite ? sem_cast_binarith_enumtag_cltype_l, ? sem_cast_binarith_enumtag_cltype_r;
                 unfold enumtag_cltype;
-                destruct (intsize_of_enumtag_spec n) as [[Hn ->]|[[Hn ->]|[Hn ->]]],
-                                                        (intsize_of_enumtag_spec n0) as [[Hn0 ->]|[[Hn0 ->]|[Hn0 ->]]];
+                destruct (intsize_of_enumtag_spec (length tn)) as [[Hn ->]|[[Hn ->]|[Hn ->]]],
+                  (intsize_of_enumtag_spec (length tn0)) as [[Hn0 ->]|[[Hn0 ->]|[Hn0 ->]]];
                 simpl; cases.
 
         (* Valid x ty *)
@@ -1226,15 +1225,15 @@ Section PRESERVATION.
       apply map_nth_error with (f := option_map (translate_stmt (rev_prog prog) owner caller)) in Nth'.
       assert (0 <= Z.of_nat c <= Int.max_unsigned).
       { split; try lia.
-        assert (wt_value (Venum c) (Tenum tn)) as WTv
-          by (take (_ = Tenum tn) and rewrite <-it; eauto with obctyping clight).
+        assert (wt_value (Venum c) (Tenum tx tn)) as WTv
+          by (take (_ = Tenum tx tn) and rewrite <-it; eauto with obctyping clight).
         inv WTv.
-        assert (enums prog = enums prog') as E
+        assert (types prog = types prog') as E
             by (apply find_unit_equiv_program in Findowner; specialize (Findowner []); inv Findowner; auto).
         pose proof (check_size_enums_spec _ _ _ _ _ TRANSL) as Chck.
         rewrite E in Chck; eapply Forall_forall in Chck; eauto.
-        unfold check_size_enum in Chck; destruct tn as (t, n); simpl in *.
-        destruct (Z.of_nat n <=? Int.max_unsigned) eqn: Lte ; try discriminate.
+        unfold check_size_enum in Chck; simpl in *.
+        destruct (Z.of_nat (length tn) <=? Int.max_unsigned) eqn: Lte ; try discriminate.
         apply Z.leb_le in Lte; lia.
       }
       destruct s; simpl in *.

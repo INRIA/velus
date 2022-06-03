@@ -92,8 +92,8 @@ Section Translate.
       translate_const c
     | Enum c (Tprimitive _) =>   (* impossible case *)
       cl_zero
-    | Enum c (Tenum (_, n)) =>
-      translate_enum c n
+    | Enum c (Tenum _ n) =>
+      translate_enum c (length n)
     | Unop op e ty =>
       translate_unop op (translate_exp e) (translate_type ty)
     | Binop op e1 e2 ty =>
@@ -473,13 +473,17 @@ Definition make_program'
   | Error msg => Error msg
   end.
 
-Definition check_size_enum '((x, n): ident * nat) : res unit :=
-  if Z.of_nat n <=? Int.max_unsigned
-  then OK tt
-  else Error [MSG "ObcToClight: enum type is too big: '"; CTX x; MSG "'." ].
+Definition check_size_enum '(ty: type) : res unit :=
+  match ty with
+  | Tenum x tn =>
+      if Z.of_nat (length tn) <=? Int.max_unsigned
+      then OK tt
+      else Error [MSG "ObcToClight: enum type is too big: '"; CTX x; MSG "'." ]
+  | _ => OK tt
+  end.
 
 Definition check_size_enums (prog: program) : res unit :=
-  iter_error check_size_enum prog.(enums).
+  iter_error check_size_enum prog.(types).
 
 Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
   let (x, ty) := bind in

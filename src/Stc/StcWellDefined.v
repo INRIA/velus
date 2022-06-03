@@ -113,7 +113,7 @@ Module Type STCWELLDEFINED
     Forall (normal_args_tc P) s.(s_tcs).
 
   Definition normal_args (P: program) : Prop :=
-    Forall' (fun ss => normal_args_system (Program P.(enums) ss)) P.(systems).
+    Forall' (fun ss => normal_args_system (Program P.(types) ss)) P.(systems).
 
   Lemma normal_args_system_cons:
     forall system P enums,

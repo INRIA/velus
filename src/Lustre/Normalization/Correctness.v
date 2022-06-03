@@ -220,7 +220,7 @@ Module Type CORRECTNESS
   Ltac solve_incl :=
     repeat unfold idty; repeat unfold idck;
     match goal with
-    | Hiface : global_iface_incl ?G1 ?G2, H : wt_clock (enums ?G1) _ ?ck |- wt_clock (enums ?G2) _ ?ck =>
+    | Hiface : global_iface_incl ?G1 ?G2, H : wt_clock (types ?G1) _ ?ck |- wt_clock (types ?G2) _ ?ck =>
       eapply iface_incl_wt_clock; eauto
     | H : wc_clock ?l1 ?ck |- wc_clock ?l2 ?ck =>
       eapply wc_clock_incl; [| eauto]
@@ -1874,11 +1874,11 @@ Module Type CORRECTNESS
     Qed.
 
     Lemma unnest_node_sem : forall f n ins outs,
-        wc_global (Global G1.(enums) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(enums) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(enums) ((unnest_node G1 n)::G2.(nodes))) ->
-        sem_node_ck (Global G1.(enums) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(enums) ((unnest_node G1 n)::G2.(nodes))) f ins outs.
+        wc_global (Global G1.(types) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) ((unnest_node G1 n)::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) ((unnest_node G1 n)::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * HwcG Hord1 Hord2 Hsem.
 
@@ -1889,7 +1889,7 @@ Module Type CORRECTNESS
         2:{ inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
 
         inv HwcG. destruct H4 as (Hwc&_). simpl in *.
-        replace {| enums := enums G1; nodes := nodes G1 |} with G1 in Hblksem, Hwc by (destruct G1; auto).
+        replace {| types := types G1; nodes := nodes G1 |} with G1 in Hblksem, Hwc by (destruct G1; auto).
         remember (unnest_node G1 n0) as n'.
         unfold unnest_node in Heqn'; inv Heqn'.
         specialize (n_nodup n0) as Hnd.
@@ -1986,7 +1986,7 @@ Module Type CORRECTNESS
       apply global_sem_ref_cons with (f:=n_name a)...
       + inv Hwc. eapply IHnds...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (unnest_nodes enms nds)).(enums)).
+        change enms with ((Global enms (unnest_nodes enms nds)).(types)).
         eapply unnest_node_sem...
         * inv Hwc; eauto.
         * change (Global enms (unnest_nodes enms nds)) with (unnest_global (Global enms nds)).
@@ -2317,8 +2317,9 @@ Module Type CORRECTNESS
 
       eapply init_var_for_clock_sem in H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]...
       remember (abstract_clock y0) as bs'.
-      remember (match ty with Tprimitive cty => Vscalar (Op.sem_cconst (Op.init_ctype cty))
-                         | Tenum (_, n) => Venum 0 end) as v0.
+      remember (match ty with
+                | Tprimitive cty => Vscalar (Op.sem_cconst (Op.init_ctype cty))
+                | Tenum _ n => Venum 0 end) as v0.
       remember (sfby v0 y) as y'.
       remember (FEnv.add x2 y' H') as H''.
       assert (FEnv.refines (@EqSt _) H' H'') by (subst; destruct Histst1; eapply fresh_ident_refines' in H1; eauto).
@@ -2341,7 +2342,7 @@ Module Type CORRECTNESS
           eapply fby_init_stream_case; eauto using ac_aligned.
       - apply Seq with (ss:=[[y']]); repeat constructor.
         + eapply Sfby with (s0ss:=[[const_val bs' v0]]) (sss:=[[y]]); repeat constructor.
-          * destruct ty as [|(?&?)]; simpl; rewrite Heqv0; subst.
+          * destruct ty as [|]; simpl; rewrite Heqv0; subst.
             -- eapply sem_exp_ck_morph; eauto. 1,2:reflexivity.
                econstructor; eauto. eapply const_val_const.
                eapply add_whens_const_sem.
@@ -2613,16 +2614,16 @@ Module Type CORRECTNESS
   Lemma normfby_node_sem : forall G1 G2 f n ins outs,
       global_iface_incl G1 G2 ->
       global_sem_refines G1 G2 ->
-      unnested_global (Global G1.(enums) (n::G1.(nodes))) ->
-      wc_global (Global G1.(enums) (n::G1.(nodes))) ->
+      unnested_global (Global G1.(types) (n::G1.(nodes))) ->
+      wc_global (Global G1.(types) (n::G1.(nodes))) ->
       wc_global G2 ->
-      Ordered_nodes (Global G1.(enums) (n::G1.(nodes))) ->
-      Ordered_nodes (Global G2.(enums) ((normfby_node n)::G2.(nodes))) ->
-      sem_node_ck (Global G1.(enums) (n::G1.(nodes))) f ins outs ->
-      sem_node_ck (Global G2.(enums) ((normfby_node n)::G2.(nodes))) f ins outs.
+      Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
+      Ordered_nodes (Global G2.(types) ((normfby_node n)::G2.(nodes))) ->
+      sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
+      sem_node_ck (Global G2.(types) ((normfby_node n)::G2.(nodes))) f ins outs.
   Proof with eauto.
     intros * Hiface Href Hunt HwcG HwcG' Hord1 Hord2 Hsem.
-    assert (Ordered_nodes (Global G2.(enums) (normfby_node n :: G2.(nodes)))) as Hord'.
+    assert (Ordered_nodes (Global G2.(types) (normfby_node n :: G2.(nodes)))) as Hord'.
     { inv Hord2. destruct H1. constructor; [split|]... }
 
     inv Hsem; assert (Hfind:=H0). destruct (ident_eq_dec (n_name n) f).

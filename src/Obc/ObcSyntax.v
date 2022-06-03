@@ -272,16 +272,16 @@ Module Type OBCSYNTAX
 
   Record program : Type :=
     Program {
-        enums : list (ident * nat);
+        types : list type;
         classes : list class;
       }.
 
   Global Program Instance program_program: CommonProgram.Program class program :=
     { units := classes;
-      update := fun p => Program p.(enums) }.
+      update := fun p => Program p.(types) }.
 
   Global Program Instance program_program_without_units : TransformProgramWithoutUnits program program :=
-    { transform_program_without_units := fun p => Program p.(enums) [] }.
+    { transform_program_without_units := fun p => Program p.(types) [] }.
 
   Fixpoint find_method (f: ident) (ms: list method) : option method :=
     match ms with
@@ -554,7 +554,7 @@ Module Type OBCSYNTAX
   Global Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
   Definition rev_prog (p: program) : program :=
-    Program p.(enums) (rev_tr p.(classes)).
+    Program p.(types) (rev_tr p.(classes)).
 (*
   (** Simple Static Analysis of Obc statements *)
 

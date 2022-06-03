@@ -89,16 +89,16 @@ Module Type STCORDERED
       Ordered_systems P'.
   Proof.
     intros * Ord Find.
-    assert (enums P = enums P') as E
+    assert (types P = types P') as E
         by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
     eapply Ordered_program_find_unit in Ord; simpl in *; eauto.
     rewrite E in Ord; now inv Ord.
   Qed.
 
   Lemma find_system_other_not_Is_system_in:
-    forall f s P s' P' enums,
-      Ordered_systems (Program enums (s :: P)) ->
-      find_system f (Program enums P) = Some (s', P') ->
+    forall f s P s' P' types,
+      Ordered_systems (Program types (s :: P)) ->
+      find_system f (Program types P) = Some (s', P') ->
       ~ Is_system_in s.(s_name) s'.(s_tcs).
   Proof.
     intros * Ord Find.

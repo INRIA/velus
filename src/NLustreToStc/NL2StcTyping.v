@@ -175,7 +175,7 @@ Module Type NL2STCTYPING
     intros G n (WT &?).
     cut (forall inits insts,
             wt_nexts (translate G) inits ->
-            Forall (fun '(_, (c, t, _)) => wt_const (NL.Syn.enums G) c t) (fst (fold_left gather_eq (n_eqs n) (inits, insts)))).
+            Forall (fun '(_, (c, t, _)) => wt_const (NL.Syn.types G) c t) (fst (fold_left gather_eq (n_eqs n) (inits, insts)))).
     - intros HH; apply HH; constructor.
     - induction WT as [|eq ? WTeq]; intros * WTinits; simpl; auto.
       destruct eq; simpl; cases.

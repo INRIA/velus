@@ -38,7 +38,7 @@ module ClightTypeFormats
           | Tlong sg      -> PrintCsyntax.name_longtype sg
           | Tfloat sz     -> PrintCsyntax.name_floattype sz
         end
-      | Tenum (_, n) -> type_decl (Tprimitive (enumtag_ctype n))
+      | Tenum (_, n) -> type_decl (Tprimitive (enumtag_ctype (Datatypes.length n)))
 
     let rec type_printf ty =
       let open Ctypes in
@@ -59,7 +59,7 @@ module ClightTypeFormats
           | Tfloat F32           -> "%e"
           | Tfloat F64           -> "%e"
         end
-      | Tenum (_, n) -> type_printf (Tprimitive (enumtag_ctype n))
+      | Tenum (_, n) -> type_printf (Tprimitive (enumtag_ctype (Datatypes.length n)))
 
     let rec type_scanf ty =
       let open Ctypes in
@@ -81,7 +81,7 @@ module ClightTypeFormats
           | Tfloat F32           -> "%f"
           | Tfloat F64           -> "%lf"
         end
-      | Tenum (_, n) -> type_scanf (Tprimitive (enumtag_ctype n))
+      | Tenum (_, n) -> type_scanf (Tprimitive (enumtag_ctype (Datatypes.length n)))
 
   end
 
@@ -131,8 +131,20 @@ module PrintClightOpsFun (OpNames : sig
     type binop   = Ops.binop
     type enumtag = Ops.enumtag
 
+    let enumtag_of_int = Nat.of_int
+    let int_of_enumtag = Nat.to_int
+
     let print_typ' p ty = Ops.string_of_ctype ty |> fmt_coqstring p
     let print_typ p ty = Interface.string_of_type ty |> fmt_coqstring p
+
+    let print_ident p i = pp_print_string p (extern_atom i)
+
+    let print_typ_decl p = function
+      | Ops.Tprimitive _ -> ()
+      | Ops.Tenum (tx, tn) ->
+        fprintf p "enum %a = %a"
+          print_ident tx
+          (pp_print_list ~pp_sep:(fun p _ -> fprintf p " | ") print_ident) tn
 
     let print_cconst p c =
       match c with
@@ -154,7 +166,7 @@ module PrintClightOpsFun (OpNames : sig
       | Ops.UnaryOp op, Ops.Tprimitive ty ->
           fprintf p "%s %a" (OpNames.name_unop ty op) print_exp e
       | Ops.UnaryOp op, Ops.Tenum (_, n) ->
-          fprintf p "%s %a" (OpNames.name_unop (Ops.enumtag_ctype n) op) print_exp e
+          fprintf p "%s %a" (OpNames.name_unop (Ops.enumtag_ctype (Datatypes.length n)) op) print_exp e
       | Ops.CastOp ty, _ ->
           fprintf p "(%a : %a)" print_exp e print_typ' ty
 
@@ -168,7 +180,7 @@ module PrintClightOpsFun (OpNames : sig
       | Ops.Tenum (_, n) ->
         fprintf p "%a@ %s %a"
           print_exp1 e1
-          (OpNames.name_binop (Ops.enumtag_ctype n) op)
+          (OpNames.name_binop (Ops.enumtag_ctype (Datatypes.length n)) op)
           print_exp2 e2
 
     let prec_unop op = (15, RtoL)
@@ -183,21 +195,27 @@ module PrintClightOpsFun (OpNames : sig
         | Oxor            -> ( 7, LtoR)
         | Oor             -> ( 6, LtoR)
 
-    let print_enumtag p c =
-      fprintf p "%d" (Nat.to_int c)
+    let print_enumtag p (c, ty) =
+      try
+        match ty with
+        | Ops.Tenum (_, tn) -> print_ident p (List.nth tn (Nat.to_int c))
+        | _ -> invalid_arg "print_enumtag"
+      with _ ->
+        fprintf p "%d" (Nat.to_int c)
 
-    let print_const p c =
+    let print_const p (c, ty) =
       match c with
       | Ops.Const c -> print_cconst p c
-      | Ops.Enum c -> print_enumtag p c
+      | Ops.Enum c -> print_enumtag p (c, ty)
 
     let print_branches pp_br p (brs, default) =
-      List.iter (fun (n, o) ->
+      List.iter (fun (pp_n, o) ->
           match o with
           | Some b ->
-            fprintf p "@;| %s => @[<hv 0>%a@]" n pp_br b
+            fprintf p "@;| %t => @[<hv 0>%a@]"
+              pp_n pp_br b
           | None ->
-            fprintf p "@;| %s => _" n
+            fprintf p "@;| %t => _" pp_n
         ) brs;
       match default with
       | Some d ->

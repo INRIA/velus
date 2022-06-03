@@ -50,9 +50,9 @@ Module Type LCLOCKCORRECTNESS
               (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (map abstract_clock xs).
 
   Lemma sem_clock_inputs_cons {PSyn prefs} :
-    forall enums (nodes : list (@node PSyn prefs)) f n ins,
+    forall types (nodes : list (@node PSyn prefs)) f n ins,
       n_name n <> f ->
-      sem_clock_inputs (Global enums nodes) f ins <-> sem_clock_inputs (Global enums (n :: nodes)) f ins.
+      sem_clock_inputs (Global types nodes) f ins <-> sem_clock_inputs (Global types (n :: nodes)) f ins.
   Proof.
     intros * Hname.
     split; intros (H & n' & Hfind &?&?);
@@ -62,8 +62,8 @@ Module Type LCLOCKCORRECTNESS
   Qed.
 
   Lemma inputs_clocked_vars {PSyn prefs} :
-    forall enums (nodes : list (@node PSyn prefs)) n H f ins,
-      sem_clock_inputs (Global enums (n :: nodes)) f ins ->
+    forall types (nodes : list (@node PSyn prefs)) n H f ins,
+      sem_clock_inputs (Global types (n :: nodes)) f ins ->
       n_name n = f ->
       wc_env (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
       Forall2 (sem_var H) (idents (n_in n)) ins ->
@@ -1238,12 +1238,12 @@ Module Type LCLOCKCORRECTNESS
       Qed.
     End sem_block_ck'.
 
-    Lemma sc_var_inv_unfilter : forall Γ Γ' tn sc Hi bs x,
-        snd tn > 0 ->
-        wt_stream sc (Tenum tn) ->
+    Lemma sc_var_inv_unfilter : forall Γ Γ' tx tn sc Hi bs x,
+        0 < length tn ->
+        wt_stream sc (Tenum tx tn) ->
         (forall y ck, HasCaus Γ y x -> HasClock Γ y ck -> HasCaus Γ' y x /\ HasClock Γ' y Cbase) ->
         (forall y ck, HasCaus Γ y x -> HasClock Γ y ck -> sem_clock (fst Hi) bs ck (abstract_clock sc)) ->
-        (forall c, In c (seq 0 (snd tn)) ->
+        (forall c, In c (seq 0 (length tn)) ->
               exists Hi',
                 (forall y, HasCaus Γ y x -> FEnv.In y (fst Hi'))
                 /\ Sem.filter_hist c sc Hi Hi'
@@ -1282,7 +1282,7 @@ Module Type LCLOCKCORRECTNESS
     Qed.
 
     Lemma sc_var_inv_unselect : forall Γ Γ' tn sc Hi bs x,
-        tn > 0 ->
+        0 < tn ->
         SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc ->
         (forall y ck, HasCaus Γ y x -> HasClock Γ y ck -> HasCaus Γ' y x /\ HasClock Γ' y Cbase) ->
         (forall y ck, HasCaus Γ y x -> HasClock Γ y ck -> sem_clock (fst Hi) bs ck (abstract_clock sc)) ->
@@ -1896,7 +1896,7 @@ Module Type LCLOCKCORRECTNESS
             eapply NoDupLocals_incl; [|econstructor; eauto]. auto. }
           assert (Is_defined_in Γ cy (Bswitch ec branches)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
           eapply sc_var_inv_unfilter with (tn:=tn) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
-          * destruct tn as (?&[]); simpl in *; try lia.
+          * destruct tn; simpl in *; try lia.
             apply Permutation_sym, Permutation_nil, map_eq_nil in H8; congruence.
           * rewrite H6 in H21; inv H21; eauto.
           * intros * Hca Hck.
@@ -3317,8 +3317,8 @@ Module Type LCLOCKCORRECTNESS
         sem_clock_inputs G f ins ->
         sem_node_ck G f ins outs.
   Proof with eauto.
-    intros (enums&nodes) Hwt Hwc.
-    assert (Ordered_nodes (Global enums nodes)) as Hord by (eauto using wl_global_Ordered_nodes with ltyping).
+    intros (types&nodes) Hwt Hwc.
+    assert (Ordered_nodes (Global types nodes)) as Hord by (eauto using wl_global_Ordered_nodes with ltyping).
     revert Hwc Hord.
     induction nodes; intros Hwc Hord Hcaus ??? Hsem Hckins. now inversion Hsem.
     assert (Hsem' := Hsem).
@@ -3344,7 +3344,7 @@ Module Type LCLOCKCORRECTNESS
       clear H HeqH' Hins Houts.
 
       (* sc_vars H *)
-      assert (wc_global (Global enums nodes0)) as Hvars by eauto.
+      assert (wc_global (Global types nodes0)) as Hvars by eauto.
       eapply sem_node_sc_vars in Hvars as (Hvars&Hloc); eauto.
       2:{ intros. eapply IHnodes; eauto. inv Hwt. inv H7. constructor; auto. }
       2:{ inv Hwt; inv H5; destruct H8; auto. }

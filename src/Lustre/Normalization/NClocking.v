@@ -1846,7 +1846,7 @@ Module Type NCLOCKING
       wc_global G ->
       wc_global (unnest_global G).
   Proof.
-    intros (enums&nds). unfold wc_global, CommonTyping.wt_program; simpl.
+    intros (types&nds). unfold wc_global, CommonTyping.wt_program; simpl.
     induction nds; intros * Hwc; simpl; inv Hwc; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
@@ -2167,7 +2167,7 @@ Module Type NCLOCKING
       wc_global G ->
       wc_global (normfby_global G).
   Proof.
-    intros (enums&nds). unfold wc_global, unnested_global, CommonTyping.wt_program; simpl.
+    intros (types&nds). unfold wc_global, unnested_global, CommonTyping.wt_program; simpl.
     induction nds; intros * Hun Hwc; simpl;
       inversion_clear Hun as [|?? (?&?)];
       inversion_clear Hwc as [|?? (?&?)]; auto with datatypes.

@@ -239,7 +239,7 @@ Lemma In_rec_instance_methods_In_insts:
 Proof.
   induction s using stmt_ind2'; intros * Wt Hin Spec; inv Wt; simpl in *; eauto.
   - revert dependent m; revert dependent s.
-    take (snd _ = _) and clear it; induction ss as [|[|] ? IH]; simpl in *; intros; eauto;
+    take (length _ = _) and clear it; induction ss as [|[|] ? IH]; simpl in *; intros; eauto;
       take (Forall _ (_ :: _)) and inv it; eauto.
     eapply IH; eauto.
   - destruct_list ys; eauto.
@@ -271,7 +271,7 @@ Proof.
   induction s using stmt_ind2'; simpl; intros * Wt Nodup Ho; inv Wt;
     try (rewrite F.empty_mapsto_iff; tauto).
   - revert m; revert dependent s.
-    take (snd _ = _) and clear it;
+    take (length _ = _) and clear it;
       induction ss as [|[|] ? IH]; simpl in *; intros; eauto;
         take (Forall _ (_ :: _)) and inv it; eauto.
     rewrite IH, IHs; eauto; symmetry; rewrite IH; auto; tauto.
@@ -564,8 +564,8 @@ Lemma build_check_size_env_ok:
     /\ check_size_env p.(prog_comp_env) types = OK tt.
 Proof.
   unfold make_program'; intros.
-  destruct (build_composite_env' types) as [[gce ?]|?]; try discriminate.
-  destruct (check_size_env gce types) eqn: E; try discriminate.
+  destruct (build_composite_env' types0) as [[gce ?]|?]; try discriminate.
+  destruct (check_size_env gce types0) eqn: E; try discriminate.
   destruct u; inv H; simpl; split; auto.
 Qed.
 
@@ -595,8 +595,8 @@ Lemma check_size_env_spec:
                      end) types.
 Proof.
   intros; unfold check_size_env; rewrite iter_error_ok.
-  induction types as [|[]]; simpl; split; auto;
-    inversion_clear 1; constructor; auto; apply IHtypes; auto.
+  induction types0 as [|[]]; simpl; split; auto;
+    inversion_clear 1; constructor; auto; apply IHtypes0; auto.
 Qed.
 
 Lemma make_program_defs:
@@ -607,8 +607,8 @@ Lemma make_program_defs:
       /\ p.(AST.prog_defs) = map (vardef gce false) gvars ++ map (vardef gce true) gvars_vol ++ defs.
 Proof.
   unfold make_program'; intros.
-  destruct (build_composite_env' types) as [[gce ?]|?]; try discriminate.
-  destruct (check_size_env gce types) eqn: E; try discriminate.
+  destruct (build_composite_env' types0) as [[gce ?]|?]; try discriminate.
+  destruct (check_size_env gce types0) eqn: E; try discriminate.
   destruct u; inv H; simpl; eauto.
 Qed.
 
@@ -1257,7 +1257,7 @@ Section MethodSpec.
     induction f.(m_body) using stmt_ind2';
       inversion_clear WT as [| | | |????????? Findcl' Findmth'|]; simpl; auto.
     - revert dependent s.
-      take (snd _ = _) and clear it; induction ss as [|[|] ? IH]; simpl in *; intros; auto;
+      take (length _ = _) and clear it; induction ss as [|[|] ? IH]; simpl in *; intros; auto;
         take (Forall _ (_ :: _)) and inv it; eauto.
       rewrite IH, IHs; eauto.
     - setoid_rewrite IHs1; auto.
@@ -1284,7 +1284,7 @@ Section MethodSpec.
       rewrite IHs; auto.
       assert (map (Datatypes.option_map (translate_stmt (rev_prog prog') c f)) ss =
               map (Datatypes.option_map (translate_stmt (rev_prog prog) c f)) ss) as ->; auto.
-      take (snd _ = _) and clear it; induction ss as [|[|] ? IH]; auto; simpl in *;
+      take (length _ = _) and clear it; induction ss as [|[|] ? IH]; auto; simpl in *;
         take (Forall _ (_ :: _)) and inv it; f_equal; auto.
       f_equal; auto.
     - now rewrite IHs1, IHs2.
@@ -1348,7 +1348,7 @@ Section TranslateOk.
   Hypothesis TRANSL: translate do_sync all_public main_node prog = OK tprog.
 
   Lemma check_size_enums_spec:
-    Forall (fun tn => check_size_enum tn = OK tt) prog.(enums).
+    Forall (fun tn => check_size_enum tn = OK tt) prog.(types).
   Proof.
     inv_trans TRANSL.
     apply iter_error_ok; auto.

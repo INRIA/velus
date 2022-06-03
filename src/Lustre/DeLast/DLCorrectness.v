@@ -490,7 +490,7 @@ Module Type DLCORRECTNESS
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
                 eapply sem_clock_det in Hsemck; eauto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i0) as Hlast.
+                assert (IsLast Γck i) as Hlast.
                 { eapply H9. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.
@@ -780,12 +780,12 @@ Module Type DLCORRECTNESS
     Qed.
 
     Lemma delast_node_sem : forall f n ins outs,
-        wt_global (Global G1.(enums) (n::G1.(nodes))) ->
-        wc_global (Global G1.(enums) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(enums) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(enums) ((delast_node n)::G2.(nodes))) ->
-        sem_node_ck (Global G1.(enums) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(enums) ((delast_node n)::G2.(nodes))) f ins outs.
+        wt_global (Global G1.(types) (n::G1.(nodes))) ->
+        wc_global (Global G1.(types) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) ((delast_node n)::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) ((delast_node n)::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * (_&Hwt) Hwc Hord1 Hord2 Hsem.
 
@@ -795,7 +795,7 @@ Module Type DLCORRECTNESS
         eapply sem_block_ck_cons in H3; eauto. rename H3 into Hblksem.
         2:{ inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
 
-        replace {| enums := enums G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
+        replace {| types := types G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
         inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc.
@@ -842,7 +842,7 @@ Module Type DLCORRECTNESS
       wc_global G ->
       global_sem_refines G (delast_global G).
   Proof with eauto using wc_global_Ordered_nodes.
-    intros (enms&nds) (Henums&Hwt).
+    intros (enms&nds) (Htypes&Hwt).
     induction nds; intros * Hwc; simpl.
     - apply global_sem_ref_nil.
     - assert (Hwc':=Hwc).
@@ -851,7 +851,7 @@ Module Type DLCORRECTNESS
       apply global_sem_ref_cons with (f:=n_name a)...
       + inv Hwt. inv Hwc. eapply IHnds...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (map delast_node nds)).(enums)).
+        change enms with ((Global enms (map delast_node nds)).(types)).
         eapply delast_node_sem with (G1:=Global enms nds)...
         1-3:inv Hwt; inv Hwc...
         destruct H1. constructor... constructor...

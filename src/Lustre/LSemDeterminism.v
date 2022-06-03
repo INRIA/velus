@@ -994,12 +994,12 @@ Module Type LSEMDETERMINISM
     destruct k as [|[|]], x2; try (solve [constructor; auto]).
   Qed.
 
-  Lemma EqStN_unfilter : forall n tn sc1 sc2 xs1 xs2,
-      snd tn > 0 ->
-      wt_stream sc1 (Tenum tn) ->
-      wt_stream sc2 (Tenum tn) ->
+  Lemma EqStN_unfilter : forall n tx tn sc1 sc2 xs1 xs2,
+      0 < length tn ->
+      wt_stream sc1 (Tenum tx tn) ->
+      wt_stream sc2 (Tenum tx tn) ->
       EqStN n sc1 sc2 ->
-      (forall sel, In sel (seq 0 (snd tn)) ->
+      (forall sel, In sel (seq 0 (length tn)) ->
               exists xs1' xs2',
                 filterv sel sc1 xs1 xs1'
                 /\ filterv sel sc2 xs2 xs2'
@@ -1016,7 +1016,7 @@ Module Type LSEMDETERMINISM
     - edestruct Heq2 as (?&?&Hf1&Hf2&Heq). apply in_seq. auto.
       eapply filter_nth with (n:=k) in Hf1 as [|[|]]; destruct_conjs; try congruence.
       eapply filter_nth with (n:=k) in Hf2 as [|[|]]; destruct_conjs; try congruence.
-    - assert (In v0 (seq 0 (snd tn))) as Hin by (apply in_seq; lia).
+    - assert (In v0 (seq 0 (length tn))) as Hin by (apply in_seq; lia).
       specialize (Heq2 _ Hin) as (?&?&Hf1&Hf2&Heq).
       eapply filter_nth with (n:=k) in Hf1 as [|[|]]; destruct_conjs; try congruence.
       eapply filter_nth with (n:=k) in Hf2 as [|[|]]; destruct_conjs; try congruence.
@@ -1046,12 +1046,12 @@ Module Type LSEMDETERMINISM
       eapply Hdet in Hv2; eauto.
   Qed.
 
-  Lemma det_var_inv_unfilter : forall Γ tn n sc1 sc2 Hi1 Hi2 x,
-      snd tn > 0 ->
-      wt_stream sc1 (Tenum tn) ->
-      wt_stream sc2 (Tenum tn) ->
+  Lemma det_var_inv_unfilter : forall Γ tx tn n sc1 sc2 Hi1 Hi2 x,
+      0 < length tn ->
+      wt_stream sc1 (Tenum tx tn) ->
+      wt_stream sc2 (Tenum tx tn) ->
       EqStN n sc1 sc2 ->
-      (forall c, In c (seq 0 (snd tn)) ->
+      (forall c, In c (seq 0 (length tn)) ->
             exists Hi1' Hi2',
               (forall y, HasCaus Γ y x -> FEnv.In y (fst Hi1') /\ FEnv.In y (fst Hi2'))
               /\ filter_hist c sc1 Hi1 Hi1'
@@ -1094,7 +1094,7 @@ Module Type LSEMDETERMINISM
   Qed.
 
   Lemma EqStN_unselect {A} (abs : A) : forall n tn sc1 sc2 xs1 xs2,
-      tn > 0 ->
+      0 < tn ->
       EqStN n sc1 sc2 ->
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc1 ->
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc2 ->
@@ -1140,7 +1140,7 @@ Module Type LSEMDETERMINISM
   Qed.
 
   Lemma EqStN_unfselect {A} : forall n tn sc1 sc2 xs1 xs2,
-      tn > 0 ->
+      0 < tn ->
       EqStN n sc1 sc2 ->
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc1 ->
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc2 ->
@@ -1198,7 +1198,7 @@ Module Type LSEMDETERMINISM
   Qed.
 
   Lemma det_var_inv_unselect : forall Γ tn n sc1 sc2 Hi1 Hi2 x,
-      tn > 0 ->
+      0 < tn ->
       EqStN n sc1 sc2 ->
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc1 ->
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc2 ->
@@ -2197,7 +2197,7 @@ Module Type LSEMDETERMINISM
         + repeat (take (wt_streams [_] (typeof ec)) and rewrite H6 in it; apply Forall2_singl in it).
           intros * Hinxs Hca.
           eapply det_var_inv_unfilter with (sc1:=sc1); eauto.
-          * destruct tn as (?&[]); simpl in *; try lia.
+          * destruct tn; simpl in *; try lia.
             apply Permutation_sym, Permutation_nil, map_eq_nil in H8; congruence.
           * eapply HSsc; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
             eapply VarsDefined_Is_defined; eauto. econstructor; eauto.

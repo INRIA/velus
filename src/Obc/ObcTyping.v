@@ -45,10 +45,10 @@ Module Type OBCTYPING
         wt_exp (State x ty)
     | wt_Const: forall c,
         wt_exp (Const c)
-    | wt_Enum: forall c tn,
-        In tn p.(enums) ->
-        c < snd tn ->
-        wt_exp (Enum c (Tenum tn))
+    | wt_Enum: forall c tx tn,
+        In (Tenum tx tn) p.(types) ->
+        c < length tn ->
+        wt_exp (Enum c (Tenum tx tn))
     | wt_Unop: forall op e ty,
         type_unop op (typeof e) = Some ty ->
         wt_exp e ->
@@ -72,11 +72,11 @@ Module Type OBCTYPING
         In (x, typeof e) Γm ->
         wt_exp e ->
         wt_stmt (AssignSt x e)
-    | wt_Switch: forall e ss d tn,
+    | wt_Switch: forall e ss d tx tn,
         wt_exp e ->
-        typeof e = Tenum tn ->
-        In tn p.(enums) ->
-        snd tn = length ss ->
+        typeof e = Tenum tx tn ->
+        In (Tenum tx tn) p.(types) ->
+        length tn = length ss ->
         wt_stmt d ->
         (forall s, In (Some s) ss -> wt_stmt s) -> (* cannot write it with Forall and or_default_with because of positive occurence check *)
         wt_stmt (Switch e ss d)
@@ -103,10 +103,7 @@ Module Type OBCTYPING
                        (Γm  : list (ident * type))
                        (m     : method) : Prop
     := wt_stmt p insts Γm (meth_vars m) m.(m_body)
-       /\ (forall x tn,
-             In (x, Tenum tn) (meth_vars m) ->
-             In tn (enums p)
-             /\ 0 < snd tn).
+       /\ (forall x ty, In (x, ty) (meth_vars m) -> wt_type p.(types) ty).
 
   Definition wt_class (p : program) (cls: class) : Prop
     := (Forall (fun ocls=> find_class (snd ocls) p <> None) cls.(c_objs))
@@ -116,18 +113,22 @@ Module Type OBCTYPING
 
   Global Hint Constructors wt_exp wt_stmt: obctyping.
 
+  Import Permutation.
+
   Global Instance wt_exp_Proper:
     Proper (@eq program
-                ==> @Permutation.Permutation (ident * type)
-                ==> @Permutation.Permutation (ident * type)
+                ==> @Permutation (ident * type)
+                ==> @Permutation (ident * type)
                 ==> @eq exp ==> iff) wt_exp.
   Proof.
     intros p2 p1 Hp m2 m1 Hm v2 v1 Hv e' e He; subst.
     induction e; split; inversion_clear 1; econstructor; eauto;
-      try rewrite Hm in *;
-      try rewrite Hv in *;
-      repeat match goal with H:_ <-> _ |- _ => apply H; clear H end;
-      auto with obctyping.
+      match goal with
+      | Hp: Permutation ?v _ |- In _ ?v => rewrite Hp
+      | Hp: Permutation _ ?v |- In _ ?v => rewrite <-Hp
+      | H: _ <-> _ |- _ => apply H
+      | _ => idtac
+      end; auto.
   Qed.
 
   Global Instance wt_stmt_Proper:
@@ -221,7 +222,7 @@ Module Type OBCTYPING
   Proof.
     induction e; inversion_clear 2; eauto using wt_exp.
     econstructor; eauto.
-    assert (enums p = enums p') as ->
+    assert (types p = types p') as ->
         by (take (find_class _ _ = _) and apply find_unit_equiv_program in it;
             specialize (it []); inv it; auto); auto.
   Qed.
@@ -636,7 +637,7 @@ Module Type OBCTYPING
       classes prog = pre ++ c :: post ->
       wt_program prog ->
       In (o, cid) c.(c_objs) ->
-      find_class cid (Program prog.(enums) pre) = None.
+      find_class cid (Program prog.(types) pre) = None.
   Proof.
     unfold wt_program, CommonTyping.wt_program.
     intros * E WT Hin; setoid_rewrite E in WT; clear E.
@@ -771,7 +772,7 @@ Module Type OBCTYPING
   Proof.
     intros * WT Find WTm.
     (* pose proof Find as Eq; apply find_class_enums in Eq. *)
-    assert (enums p = enums p') as Enums
+    assert (types p = types p') as Enums
       by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
     inversion_clear WTm as [????? WTinsts]; constructor; auto.
     apply Forall_forall; intros (?&?) Hin.

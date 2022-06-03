@@ -44,12 +44,12 @@ Module Type CACLOCKING
 
     Hypothesis Hiface : global_iface_incl G1 G2.
 
-    Lemma init_state_exp_wc {A} Γ Γ' (states : list (Op.enumtag * A)) : forall tx ck trans oth,
+    Lemma init_state_exp_wc {A} Γ Γ' (states : list (Op.enumtag * A)) : forall tx tn ck trans oth,
         (forall x, ~IsLast Γ' x) ->
         (forall x ck', HasClock Γ' x ck' -> HasClock Γ x ck /\ ck' = Cbase) ->
         wc_clock (idck Γ) ck ->
         Forall (fun '(e, t) => wc_exp G1 Γ' e /\ clockof e = [Cbase]) trans ->
-        wc_exp G2 Γ (init_state_exp (Op.Tenum (tx, length states)) ck trans oth).
+        wc_exp G2 Γ (init_state_exp (Op.Tenum tx tn) ck trans oth).
     Proof.
       induction trans as [|(?&?)]; intros * Hnl Hck Hwck Hf; inv Hf; destruct_conjs; simpl.
       - apply add_whens_wc; auto. constructor.
@@ -65,9 +65,9 @@ Module Type CACLOCKING
         + rewrite init_state_exp_clockof; simpl; auto.
     Qed.
 
-    Lemma trans_exp_wc {A} Γ (states : list (Op.enumtag * A)) : forall tx trans oth,
+    Lemma trans_exp_wc Γ : forall tx tn trans oth,
         Forall (fun '(e, _) => wc_exp G1 Γ e /\ clockof e = [Cbase]) trans ->
-        Forall (wc_exp G2 Γ) (trans_exp (Op.Tenum (tx, length states)) trans oth).
+        Forall (wc_exp G2 Γ) (trans_exp (Op.Tenum tx tn) trans oth).
     Proof.
       induction trans as [|(?&?&?)]; intros * Hf; inv Hf; destruct_conjs; simpl.
       - repeat constructor; auto.
@@ -110,7 +110,7 @@ Module Type CACLOCKING
         wc_block G2 Γ blk'.
     Proof.
       Opaque auto_scope.
-      induction blk using block_ind2; intros * Hnl1 Hnl2 Hwc (* Henums  *)Hat; try destruct type;
+      induction blk using block_ind2; intros * Hnl1 Hnl2 Hwc (* Htypes  *)Hat; try destruct type;
         inv Hnl2; inv Hwc; repeat inv_bind.
       - (* equation *)
         constructor; eauto with lclocking.
@@ -131,7 +131,7 @@ Module Type CACLOCKING
       - (* automaton (weak) *)
         Local Ltac wc_automaton :=
           match goal with
-          | Hincl: incl (?x::_) (enums G2) |- In ?x G2.(enums) =>
+          | Hincl: incl (?x::_) (types G2) |- In ?x G2.(types) =>
             apply Hincl; eauto with datatypes
           | |- HasClock _ _ _ =>
             apply HasClock_app; auto; right; econstructor; eauto with datatypes
@@ -159,18 +159,18 @@ Module Type CACLOCKING
         + remember [_;_;_;_] as Γ''.
           eapply wc_Bswitch with (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ''++Γ'); simpl; eauto; wc_automaton.
           * subst. constructor; wc_automaton.
-          * apply mmap2_values, Forall3_ignore3 in H12. inv H12; auto; congruence.
+          * apply mmap2_values, Forall3_ignore3 in H13. inv H13; auto; congruence.
           * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
-            -- inv H13. simpl in *.
-               destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
+            -- inv H14. simpl in *.
+               destruct H15 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
             -- edestruct H8; eauto.
           * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
-            inv H13. simpl in *.
-            destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
+            take (IsLast _ _) and inv it. simpl in *.
+            take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
           * auto_block_simpl_Forall. destruct s0; destruct p as (?&?).
             econstructor; eauto. 1,2:repeat constructor. rewrite app_nil_r. econstructor; eauto; repeat constructor.
             2:{ simpl. econstructor; eauto with datatypes. }
-            eapply auto_scope_wc in H15; eauto.
+            take (auto_scope _ _ _ = _) and eapply auto_scope_wc in it; eauto.
             1:{ intros ??. eapply Hnl1; eauto. }
             1:{ intros ? Hl; inv Hl. simpl_In.
                 destruct Hin as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
@@ -202,12 +202,12 @@ Module Type CACLOCKING
           * constructor. subst. wc_automaton.
           * destruct states; simpl in *; try congruence. auto.
           * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
-            -- inv H13. simpl in *.
-               destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
+            -- take (HasClock _ _ _) and inv it. simpl in *.
+               take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
             -- edestruct H8; eauto.
           * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
-            inv H13. simpl in *.
-            destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
+            take (IsLast _ _) and inv it. simpl in *.
+            take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
           *{ simpl_Forall. econstructor; eauto. 1,2:constructor; auto.
              simpl. rewrite app_nil_r.
              econstructor; simpl; eauto. repeat constructor.
@@ -220,18 +220,18 @@ Module Type CACLOCKING
         + remember [_;_;_;_] as Γ''.
           eapply wc_Bswitch with (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ''++Γ'); simpl; eauto; wc_automaton.
           * subst. constructor; wc_automaton.
-          * apply mmap2_values, Forall3_ignore3 in H12. inv H12; auto; congruence.
+          * apply mmap2_values, Forall3_ignore3 in H13. inv H13; auto; congruence.
           * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
-            -- inv H13. simpl in *.
-               destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
+            -- take (HasClock _ _ _) and inv it. simpl in *.
+               take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
             -- edestruct H8; eauto.
           * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
-            inv H13. simpl in *.
-            destruct H14 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
+            take (IsLast _ _) and inv it. simpl in *.
+            take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; right; econstructor; eauto with datatypes.
           * auto_block_simpl_Forall. destruct s0; destruct p as (?&?).
             econstructor; eauto. 1,2:repeat constructor. rewrite app_nil_r. econstructor; eauto; repeat constructor.
             2:{ simpl. econstructor; eauto with datatypes. }
-            eapply auto_scope_wc in H15; eauto.
+            take (auto_scope _ _ _ = _) and eapply auto_scope_wc in it; eauto.
             1:{ intros ??. eapply Hnl1; eauto. }
             1:{ intros ? Hl; inv Hl. simpl_In.
                 destruct Hin as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
@@ -271,14 +271,14 @@ Module Type CACLOCKING
     induction nds; intros * Hwc.
     - constructor.
     - inv Hwc. destruct H1 as (Hwcn&Hnames).
-      assert (wc_global {| enums := enms; nodes := nds |}) as Hwc' by auto.
+      assert (wc_global {| types := enms; nodes := nds |}) as Hwc' by auto.
       specialize (IHnds _ Hwc').
       constructor; simpl in *; auto with datatypes. split.
       + eapply auto_node_wc; eauto.
         eapply global_iface_incl_trans. apply auto_global_iface_incl.
         split; simpl; solve_incl_app.
         intros * Hfind. do 2 esplit; eauto. 2:apply node_iface_eq_refl.
-        erewrite find_node_change_enums. apply Hfind; eauto.
+        erewrite find_node_change_types. apply Hfind; eauto.
       + simpl_Forall.
         apply in_map_iff in H as (?&?&Hin); subst. apply in_map_iff in Hin as (?&?&Hin); subst.
         simpl_Forall. auto.
@@ -287,7 +287,7 @@ Module Type CACLOCKING
         eapply iface_incl_wc_node; eauto. simpl.
         split; simpl; solve_incl_app.
         intros * Hfind. do 2 esplit; eauto. 2:apply node_iface_eq_refl.
-        erewrite find_node_change_enums, Hfind; eauto.
+        erewrite find_node_change_types, Hfind; eauto.
   Qed.
 
 End CACLOCKING.

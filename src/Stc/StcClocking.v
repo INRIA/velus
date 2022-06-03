@@ -81,7 +81,7 @@ Module Type STCCLOCKING
            s.(s_tcs).
 
   Definition wc_program (P: program) :=
-    Forall' (fun P' => wc_system (Program P.(enums) P')) P.(systems).
+    Forall' (fun P' => wc_system (Program P.(types) P')) P.(systems).
 
   Inductive Has_clock_tc: clock -> trconstr -> Prop :=
   | HcTcDef:
@@ -143,7 +143,7 @@ Module Type STCCLOCKING
       wc_system P' b.
   Proof.
     intros (enumsP &P) * WCG Hfind.
-    assert (enumsP = enums P')
+    assert (enumsP = types P')
       by (apply find_unit_equiv_program in Hfind; specialize (Hfind nil); inv Hfind; auto).
     apply find_unit_spec in Hfind as (?&?&?&?); simpl in *; subst.
     apply wc_program_app_weaken in WCG.

@@ -43,7 +43,7 @@ module type SYNTAX =
       n_eqs  : equation list }
 
     type global = {
-      enums: (ident * Datatypes.nat) list;
+      types: typ list;
       nodes: node list
     }
   end
@@ -63,7 +63,7 @@ module PrintFun
                   and type cexp    = CE.cexp
                   and type enumtag = Ops.enumtag) :
   sig
-    val print_equation   : formatter -> NL.equation -> unit
+    val print_equation   : (ident * CE.typ) list -> formatter -> NL.equation -> unit
     val print_node       : Format.formatter -> NL.node -> unit
     val print_global     : Format.formatter -> NL.global -> unit
     val print_fullclocks : bool ref
@@ -73,37 +73,40 @@ module PrintFun
 
     include Coreexprlib.PrintFun (CE) (Ops)
 
-    let rec print_equation p eq =
+    let find_type tenv tx =
+      List.assoc tx tenv
+
+    let rec print_equation tenv p eq =
       match eq with
       | NL.EqDef (x, ck, e) ->
           fprintf p "@[<hov 2>%a =@ %a;@]"
             print_ident x
-            print_cexp e
+            (print_cexp tenv) e
       | NL.EqApp (xs, ck, f, es, []) ->
           fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@]);@]"
             print_pattern xs
             print_ident f
-            (print_comma_list print_exp) es
+            (print_comma_list (print_exp tenv)) es
       | NL.EqApp (xs, ck, f, es, ckrs) ->
         fprintf p "@[<hov 2>%a =@ (restart@ %a@ every@ %a)(@[<hv 0>%a@]);@]"
           print_pattern xs
           print_ident f
           (print_comma_list print_ident) (List.map fst ckrs)
-          (print_comma_list print_exp) es
+          (print_comma_list (print_exp tenv)) es
       | NL.EqFby (x, ck, v0, e, []) ->
           fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
             print_ident x
-            Ops.print_const v0
-            print_exp e
+            Ops.print_const (v0, List.assoc x tenv)
+            (print_exp tenv) e
       | NL.EqFby (x, ck, v0, e, ckrs) ->
         fprintf p "@[<hov 2>%a =@ reset (%a fby@ %a) every %a;@]"
           print_ident x
-          Ops.print_const v0
-          print_exp e
+          Ops.print_const (v0, List.assoc x tenv)
+          (print_exp tenv) e
           (print_comma_list print_ident) (List.map fst ckrs)
 
-    let print_equations p =
-      pp_print_list ~pp_sep:pp_force_newline print_equation p
+    let print_equations tenv p =
+      pp_print_list ~pp_sep:pp_force_newline (print_equation tenv) p
 
     let print_node p { NL.n_name = name;
                        NL.n_in   = inputs;
@@ -122,10 +125,11 @@ module PrintFun
         print_decl_list inputs
         print_decl_list outputs
         (print_semicol_list_as "var" print_decl) locals
-        print_equations (List.rev eqs)
+        (print_equations (List.map (fun (x, (ty, _)) -> (x, ty)) (inputs@outputs@locals))) (List.rev eqs)
 
     let print_global p prog =
-      fprintf p "@[<v 0>%a@]@."
-        (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_node)
-        (List.rev prog.NL.nodes)
+      fprintf p "@[<v 0>";
+      List.iter (fprintf p "%a@;@;" Ops.print_typ_decl) (List.rev prog.NL.types);
+      List.iter (fprintf p "%a@;@;" print_node) (List.rev prog.NL.nodes);
+      fprintf p "@]@."
   end

@@ -93,7 +93,7 @@ Module Type OBCADDDEFAULTS
       match type_of_var x with
       | None => s
       | Some (Tprimitive ty) => Comp (Assign x (Const (init_ctype ty))) s
-      | Some (Tenum t) => Comp (Assign x (Enum 0 (Tenum t))) s
+      | Some (Tenum tx tn) => Comp (Assign x (Enum 0 (Tenum tx tn))) s
       end.
 
     Definition add_writes W s := PS.fold add_write W s.
@@ -651,11 +651,9 @@ Module Type OBCADDDEFAULTS
           Hypothesis wf_vars_tyenv:
             (forall x ty, In (x, ty) vars <-> type_of_var x = Some ty).
 
-          Hypothesis vars_enum:
-            forall x tn,
-              In (x, Tenum tn) vars ->
-              In tn (enums p)
-              /\ 0 < snd tn.
+          Hypothesis vars_types:
+            forall x ty,
+              In (x, ty) vars -> wt_type (types p) ty.
 
           Lemma wf_vars_tyenv':
             forall x, InMembers x vars <-> type_of_var x <> None.
@@ -701,8 +699,8 @@ Module Type OBCADDDEFAULTS
             split; intro HH.
             - destruct ty.
               + econstructor; eauto; econstructor; simpl; eauto using wt_exp; rewrite ctype_init_ctype; auto.
-              + edestruct vars_enum as (?&?); eauto.
-                do 3 (econstructor; eauto).
+              + eapply vars_types in Hw as Hwt. inv Hwt.
+                repeat (econstructor; eauto).
             - destruct ty; now inversion HH.
           Qed.
 
@@ -1800,10 +1798,7 @@ Module Type OBCADDDEFAULTS
       (forall x ty, In (x, ty) vars <-> tyenv x = Some ty).
 
     Hypothesis vars_enum:
-      forall x tn,
-        In (x, Tenum tn) vars ->
-        In tn (enums p)
-        /\ 0 < snd tn.
+      forall x ty, In (x, ty) vars -> wt_type (types p) ty.
 
     Lemma add_defaults_stmt_wt:
       forall s t req req' stimes always,
@@ -1837,11 +1832,9 @@ Module Type OBCADDDEFAULTS
           destruct (add_defaults_stmt tyenv ∅ s2) as [[[t2 rq2] st2] al2] eqn: Hdefs2.
           inv Hadd.
           assert (wt_stmt p insts mems vars s1
-                  /\ wt_stmt p insts mems vars s2) as (Hwts1 & Hwts2)
-              by (destruct E as [|[[]|[]]]; subst; split;
-                  ((now apply Hwtss; left; auto)
-                   || (now apply Hwtss; right; left; auto)
-                   || auto)); clear Hwtd Hwtss.
+                  /\ wt_stmt p insts mems vars s2) as (Hwts1 & Hwts2).
+          { destruct E as [|[[]|[]]]; split; subst; auto;
+              take (forall s, In _ _ -> wt_stmt _ _ _ _ _) and apply it; auto with datatypes. }
 
           assert (wt_stmt p insts mems vars t1
                   /\ PS.For_all (fun x => InMembers x vars) st1
@@ -2025,11 +2018,9 @@ Module Type OBCADDDEFAULTS
           (* use typing to deduce that added writes are in tyenv *)
           inversion_clear Hwt as [| |???????? Hwtd Hwtss| | |].
           assert (wt_stmt p insts mems vars s1
-                  /\ wt_stmt p insts mems vars s2) as (Hwt1 & Hwt2)
-              by (destruct E as [|[[]|[]]]; subst; split;
-                  ((now apply Hwtss; left; auto)
-                   || (now apply Hwtss; right; left; auto)
-                   || auto)); clear Hwtd Hwtss.
+                  /\ wt_stmt p insts mems vars s2) as (Hwt1 & Hwt2).
+          { destruct E as [|[[]|[]]]; split; subst; auto;
+              take (forall s, In _ _ -> wt_stmt _ _ _ _ _) and apply it; auto with datatypes. }
           match goal with
             H: Forall ?P ss |- _ => assert (P (Some s1) /\ P (Some s2)) as (IHs1 & IHs2)
                 by (destruct E as [|[[]|[]]]; subst; split;
@@ -2346,11 +2337,9 @@ Module Type OBCADDDEFAULTS
           pose proof Nth as Hin; apply nth_error_In in Hin.
 
           assert (wt_stmt p insts mems vars s1
-                  /\ wt_stmt p insts mems vars s2) as (Hwt1 & Hwt2)
-              by (destruct E as [|[[]|[]]]; subst; split;
-                  ((now apply Hwtss; left; auto)
-                   || (now apply Hwtss; right; left; auto)
-                   || auto)).
+                  /\ wt_stmt p insts mems vars s2) as (Hwt1 & Hwt2).
+          { destruct E as [|[[]|[]]]; split; subst; auto;
+              take (forall s, In _ _ -> wt_stmt _ _ _ _ _) and apply it; auto with datatypes. }
 
           assert (No_Overwrites (or_default s s0)) as NOO
             by (inversion_clear Hno as [| |? ? ? Hnoss| | |];
@@ -2615,7 +2604,7 @@ Module Type OBCADDDEFAULTS
       apply wt_method_add_defaults in WTm.
       unfold wt_method, meth_vars in WTm; simpl in WTm.
       destruct WTm as (WTm & Henums).
-      change enums0 with (enums (add_defaults {| enums := enums0; classes := p' |})) in Henums.
+      change types0 with (types (add_defaults {| types := types0; classes := p' |})) in Henums.
 
       pose proof (add_defaults_stmt_wt _ _ _ _ _ Hinf Henums _ _ _ _ _ _ Heqdefs WTm)
           as (WTt & WTst & WTal & Hreq').

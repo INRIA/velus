@@ -84,7 +84,7 @@ Module Type TR
   Definition init_type (ty : type) :=
     match ty with
     | Tprimitive cty => Econst (Op.init_ctype cty)
-    | Tenum _ => Eenum 0 ty
+    | Tenum _ _ => Eenum 0 ty
     end.
 
   Fixpoint add_whens (e: CE.exp) (ty: type) (ck: clock) : CE.exp :=
@@ -140,8 +140,8 @@ Module Type TR
       do d' <- to_cexp d;
       let ty := L.typeof e in
       match ty with
-      | [Tenum (_, tn)] =>
-        let ces := (complete_branches (seq 0 tn) (BranchesSort.sort ces)) in
+      | [Tenum _ tn] =>
+        let ces := (complete_branches (seq 0 (length tn)) (BranchesSort.sort ces)) in
         OK (CE.Ecase le (map snd ces) d')
       | _ => Error (msg "type error : expected enumerated type for condition")
       end
@@ -458,7 +458,7 @@ Module Type TR
 
   Definition to_global (G : L.global) :=
     do nds' <- mmap to_node G.(L.nodes);
-    OK (NL.Global G.(L.enums) nds').
+    OK (NL.Global G.(L.types) nds').
 
   Ltac tonodeInv H :=
     match type of H with
@@ -938,9 +938,9 @@ Module Type TR
       simpl in H2; auto.
   Qed.
 
-  Fact to_global_enums : forall G G',
+  Fact to_global_types : forall G G',
       to_global G = OK G' ->
-      NL.enums G' = L.enums G.
+      NL.types G' = L.types G.
   Proof.
     intros (?&?) * Htog.
     monadInv Htog; auto.

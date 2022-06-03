@@ -274,7 +274,7 @@ Module Type STCSCHEDULE
   Qed.
 
   Definition schedule (P: program) : program :=
-    Program P.(enums) (map schedule_system P.(systems)).
+    Program P.(types) (map schedule_system P.(systems)).
 
   Lemma schedule_system_name:
     forall s, (schedule_system s).(s_name) = s.(s_name).

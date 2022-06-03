@@ -16,6 +16,9 @@ From compcert Require lib.Maps.
 From Coq Require Import String.
 From Coq Require Import ZArith.BinInt.
 
+Import List.ListNotations.
+Open Scope list_scope.
+
 Open Scope bool_scope.
 (* Interface avec CompCert *)
 
@@ -105,7 +108,7 @@ Module Export Op <: OPERATORS.
 
   Inductive type :=
   | Tprimitive : ctype -> type
-  | Tenum      : ident * nat -> type.
+  | Tenum      : ident -> list ident -> type.
 
   Inductive const :=
   | Const: cconst -> const
@@ -183,7 +186,7 @@ Module Export Op <: OPERATORS.
                  | UnaryOp op => Cop.sem_unary_operation op v (cltype ty) Memory.Mem.empty
                  | CastOp ty' => Cop.sem_cast v (cltype ty) (cltype ty') Memory.Mem.empty
                  end
-    | Venum c, Tenum (t, _) =>
+    | Venum c, Tenum t _ =>
       if t ==b bool_id
       then option_map Venum (sem_unop_bool uop c)
       else None
@@ -259,7 +262,7 @@ Module Export Op <: OPERATORS.
       if binop_always_returns_bool bop
       then option_map Venum (option_map enumtag_of_cvalue v')
       else option_map Vscalar v'
-    | Venum c1, Tenum (t1, _), Venum c2, Tenum (t2, _) =>
+    | Venum c1, Tenum t1 _, Venum c2, Tenum t2 _ =>
       if (t1 ==b bool_id) && (t2 ==b bool_id)
       then option_map Venum (sem_binop_bool bop c1 c2)
       else match bop with
@@ -272,7 +275,7 @@ Module Export Op <: OPERATORS.
 
   (* Operator typing *)
 
-  Definition bool_type := Tenum (bool_id, 2).
+  Definition bool_type := Tenum bool_id [false_id; true_id].
 
   Definition type_unop (uop: unop) (ty: type) : option type :=
     match ty with
@@ -289,7 +292,7 @@ Module Export Op <: OPERATORS.
         | Errors.Error _ => None
         end
       end
-    | Tenum (t, _) =>
+    | Tenum t _ =>
       if t ==b bool_id then Some bool_type else None
     end.
 
@@ -301,7 +304,7 @@ Module Export Op <: OPERATORS.
            | Errors.OK ty' => option_map Tprimitive (typecl ty')
            | Errors.Error _ => None
            end
-    | Tenum (t1, _), Tenum (t2, _) =>
+    | Tenum t1 _, Tenum t2 _ =>
       if (t1 ==b bool_id) && (t2 ==b bool_id) && (binop_sometimes_returns_bool bop)
       then Some bool_type
       else match bop with
@@ -513,9 +516,9 @@ Module Export Op <: OPERATORS.
   | WTVScalarPrimitive: forall v t,
       wt_cvalue v t ->
       wt_value (Vscalar v) (Tprimitive t)
-  | WTVEnum: forall v tn,
-      v < snd tn ->
-      wt_value (Venum v) (Tenum tn).
+  | WTVEnum: forall v tx tn,
+      v < List.length tn ->
+      wt_value (Venum v) (Tenum tx tn).
 
   Lemma typecl_cltype:
     forall t, typecl (cltype t) = Some t.
@@ -557,8 +560,7 @@ Module Export Op <: OPERATORS.
           DestructCases; repeat split; try discriminate; auto.
         * unfold Cop.sem_absfloat in Hsop.
           DestructCases; repeat split; try discriminate; auto.
-    + destruct tn as (t,n).
-      destruct (t ==b bool_id); try discriminate.
+    + destruct (tx ==b bool_id); try discriminate.
       inv Htop.
       apply option_map_inv in Hsop as (v' & Hsop &?); subst.
       constructor.
@@ -592,8 +594,7 @@ Module Export Op <: OPERATORS.
           DestructCases;
             try match goal with |- context [if ?x then _ else _] => destruct x end;
             simpl; auto.
-      + destruct tn as (t,n).
-        destruct (t ==b bool_id); try discriminate.
+      + destruct (tx ==b bool_id); try discriminate.
   Qed.
 
   Lemma sem_cast_same:
@@ -746,7 +747,7 @@ Module Export Op <: OPERATORS.
   Definition type_to_chunk (ty: type) : AST.memory_chunk :=
     match ty with
     | Tprimitive ty => type_chunk ty
-    | Tenum (_, n) => memory_chunk_of_enumtag n
+    | Tenum _ n => memory_chunk_of_enumtag (List.length n)
     end.
 
   Lemma memory_chunk_of_enumtag_spec:
@@ -889,7 +890,7 @@ Module Export Op <: OPERATORS.
   Proof.
     unfold type_binop, sem_binop.
     intros * Hty Hsem Hwt1 Hwt2.
-    inversion Hwt1 as [?? Hwt1'|? (t1, n1)]; inversion Hwt2 as [?? Hwt2'|? (t2, n2)]; subst;
+    inversion Hwt1 as [?? Hwt1'|? t1 n1]; inversion Hwt2 as [?? Hwt2'|? t2 n2]; subst;
       try discriminate.
     (* Scalar - Scalar *)
     - destruct (binop_always_returns_bool bop) eqn: Hbop;
@@ -1113,8 +1114,7 @@ Lemma wt_value_load_result:
     value_to_cvalue v = Values.Val.load_result (type_to_chunk ty) (value_to_cvalue v).
 Proof.
   inversion 1; subst; simpl; auto.
-  destruct tn; simpl in *.
-  destruct (memory_chunk_of_enumtag_spec n) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
+  destruct (memory_chunk_of_enumtag_spec (Datatypes.length tn)) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
     rewrite E; unfold enumtag_to_int; simpl; auto;
       unfold Int.zero_ext; rewrite Zbits.Zzero_ext_mod, Z.mod_small, Int.repr_unsigned; auto; try lia;
         rewrite Int.unsigned_repr.
@@ -1153,15 +1153,15 @@ Qed.
 Definition translate_type (ty: type) : Ctypes.type :=
   match ty with
   | Tprimitive t => cltype t
-  | Tenum (_, n) => enumtag_cltype n
+  | Tenum _ tn => enumtag_cltype (Datatypes.length tn)
   end.
 
 Lemma translate_type_align:
   forall gcenv ty,
     (Memdata.align_chunk (type_to_chunk ty) | Ctypes.alignof gcenv (translate_type ty))%Z.
 Proof.
-  destruct ty as [|(?&?)]; simpl; auto.
-  destruct (intsize_memory_chunk_of_enumtag_spec n) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
+  destruct ty as [|]; simpl; auto.
+  destruct (intsize_memory_chunk_of_enumtag_spec (Datatypes.length l)) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
     rewrite E, E'; simpl; auto.
 Qed.
 
@@ -1169,8 +1169,8 @@ Lemma translate_type_access_by_value:
   forall ty,
     Ctypes.access_mode (translate_type ty) = Ctypes.By_value (type_to_chunk ty).
 Proof.
-  destruct ty as [|(?&?)]; simpl; auto.
-  destruct (intsize_memory_chunk_of_enumtag_spec n) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
+  destruct ty as [|]; simpl; auto.
+  destruct (intsize_memory_chunk_of_enumtag_spec (Datatypes.length l)) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
     rewrite E, E'; simpl; auto.
 Qed.
 
@@ -1178,8 +1178,8 @@ Lemma sizeof_translate_type_chunk:
   forall gcenv ty,
     Ctypes.sizeof gcenv (translate_type ty) = Memdata.size_chunk (type_to_chunk ty).
 Proof.
-  destruct ty as [|(?&?)]; simpl; auto using sizeof_cltype_chunk.
-  destruct (intsize_memory_chunk_of_enumtag_spec n) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
+  destruct ty as [|]; simpl; auto using sizeof_cltype_chunk.
+  destruct (intsize_memory_chunk_of_enumtag_spec (Datatypes.length l)) as [(Hn & E & E')|[(Hn & E & E')|(Hn & E & E')]];
     rewrite E, E'; simpl; auto.
 Qed.
 
@@ -1211,11 +1211,10 @@ Lemma sem_cast_same':
     Some (value_to_cvalue v).
 Proof.
   inversion_clear 1; simpl; auto.
-  destruct tn; simpl in *.
   rewrite ? enumtag_cltype_ctype; auto.
   apply sem_cast_same.
   constructor; auto;
-    destruct (intsize_of_enumtag_spec n) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
+    destruct (intsize_of_enumtag_spec (Datatypes.length tn)) as [(Hn & E)|[(Hn & E)|(Hn & E)]];
     rewrite E; try discriminate;
       unfold enumtag_to_int; simpl; auto;
         unfold Int.zero_ext; rewrite Zbits.Zzero_ext_mod, Z.mod_small, Int.repr_unsigned; auto; try lia;
@@ -1242,11 +1241,11 @@ Qed.
 Global Hint Resolve sem_cast_same' : clight.
 
 Lemma sem_switch_arg_enum:
-  forall c t,
-    Cop.sem_switch_arg (value_to_cvalue (Venum c)) (translate_type (Tenum t)) =
+  forall c tx tn,
+    Cop.sem_switch_arg (value_to_cvalue (Venum c)) (translate_type (Tenum tx tn)) =
     Some (Int.unsigned (Int.repr (Z.of_nat c))).
 Proof.
-  intros ? (?&?).
+  intros *.
   unfold Cop.sem_switch_arg; simpl; auto.
 Qed.
 Global Hint Resolve sem_switch_arg_enum : clight.
@@ -1254,7 +1253,7 @@ Global Hint Resolve sem_switch_arg_enum : clight.
 Definition string_of_type (ty: type) : String.string :=
   match ty with
   | Tprimitive t => string_of_ctype t
-  | Tenum (t, _) => pos_to_str t
+  | Tenum t _ => pos_to_str t
   end.
 
 From Velus Require Import IndexedStreams.

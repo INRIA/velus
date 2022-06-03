@@ -94,12 +94,12 @@ Module Type CSCORRECTNESS
             do 2 esplit; eauto using Sem.sem_clock_refines).
     Qed.
 
-    Lemma sem_clock_Con_filter Hi bs' bs : forall ck xc tn e sc,
-        wt_stream sc (Tenum tn) ->
+    Lemma sem_clock_Con_filter Hi bs' bs : forall ck xc tx tn e sc,
+        wt_stream sc (Tenum tx tn) ->
         slower sc bs ->
         sem_var Hi xc sc ->
         sem_clock Hi bs' ck (abstract_clock sc) ->
-        sem_clock Hi bs' (Con ck xc (Tenum tn, e)) (ffilterb e sc bs).
+        sem_clock Hi bs' (Con ck xc (Tenum tx tn, e)) (ffilterb e sc bs).
     Proof.
       intros * Hwt Hslow Hv Hck.
       rewrite sem_clock_equiv in *. rewrite sem_var_equiv in *.
@@ -119,8 +119,8 @@ Module Type CSCORRECTNESS
           intro contra; subst. rewrite equiv_decb_refl in Heq. congruence.
     Qed.
 
-    Lemma when_filter : forall tn e vs sc,
-        wt_stream sc (Tenum tn) ->
+    Lemma when_filter : forall tx tn e vs sc,
+        wt_stream sc (Tenum tx tn) ->
         abstract_clock vs ≡ abstract_clock sc ->
         when e vs sc (ffilterv e sc vs).
     Proof.
@@ -139,13 +139,13 @@ Module Type CSCORRECTNESS
         rewrite equiv_decb_refl in Heq. congruence.
     Qed.
 
-    Lemma when_free_sem Hi' Hl bs' : forall x y ty ck cx tn e sc vs,
+    Lemma when_free_sem Hi' Hl bs' : forall x y ty ck cx tx tn e sc vs,
         sem_var Hi' cx sc ->
-        wt_stream sc (Tenum tn) ->
+        wt_stream sc (Tenum tx tn) ->
         sem_var Hi' x vs ->
         abstract_clock vs ≡ abstract_clock sc ->
         sem_var Hi' y (ffilterv e sc vs) ->
-        sem_block_ck G2 (Hi', Hl) bs' (when_free x y ty ck cx (Tenum tn) e).
+        sem_block_ck G2 (Hi', Hl) bs' (when_free x y ty ck cx (Tenum tx tn) e).
     Proof.
       intros * Hcx Hwt Hx Hac Hy.
       constructor. econstructor. repeat constructor.
@@ -155,10 +155,10 @@ Module Type CSCORRECTNESS
       eapply when_filter; eauto.
     Qed.
 
-    Lemma merge_filter {A} : forall c vs (brs : list (enumtag * A)) tn,
-        wt_stream c (Tenum tn) ->
+    Lemma merge_filter {A} : forall c vs (brs : list (enumtag * A)) tx tn,
+        wt_stream c (Tenum tx tn) ->
         abstract_clock vs ≡ abstract_clock c ->
-        Permutation (map fst brs) (seq 0 (snd tn)) ->
+        Permutation (map fst brs) (seq 0 (length tn)) ->
         merge c (map (fun '(k, _) => (k, ffilterv k c vs)) brs) vs.
     Proof.
       intros * Hwt Hac Hperm.
@@ -181,16 +181,16 @@ Module Type CSCORRECTNESS
           rewrite equiv_decb_equiv in Heq. inv Heq; congruence.
     Qed.
 
-    Lemma merge_defs_sem Hi Hi' Hl bs' : forall sub x ty ck xc tn subs c vs,
-        Permutation (map fst subs) (seq 0 (snd tn)) ->
+    Lemma merge_defs_sem Hi Hi' Hl bs' : forall sub x ty ck xc tx tn subs c vs,
+        Permutation (map fst subs) (seq 0 (length tn)) ->
         (forall x0 y vs, Env.find x0 sub = Some y -> sem_var Hi x0 vs -> sem_var Hi' y vs) ->
         (forall x0 vs, Env.find x0 sub = None -> sem_var Hi x0 vs -> sem_var Hi' x0 vs) ->
         sem_var Hi' xc c ->
-        wt_stream c (Tenum tn) ->
+        wt_stream c (Tenum tx tn) ->
         sem_var Hi x vs ->
         abstract_clock vs ≡ abstract_clock c ->
         Forall (fun '(k, sub) => sem_var Hi' (rename_var sub x) (ffilterv k c vs)) subs ->
-        sem_block_ck G2 (Hi', Hl) bs' (merge_defs sub x ty ck xc (Tenum tn) subs).
+        sem_block_ck G2 (Hi', Hl) bs' (merge_defs sub x ty ck xc (Tenum tx tn) subs).
     Proof.
       intros * Hperm Hsub Hnsub Hxc Hwt Hx Hac Hx'.
       constructor. econstructor. repeat constructor.
@@ -204,19 +204,20 @@ Module Type CSCORRECTNESS
       - repeat constructor. eapply merge_filter; eauto.
     Qed.
 
-    Lemma new_idents_sem {A} envty frees defs bck tn xc : forall Hi Hi' Hl bs' (branches : list (enumtag * A)) xs sc st st' aft,
+    Lemma new_idents_sem {A} envty frees defs bck tx tn xc :
+      forall Hi Hi' Hl bs' (branches : list (enumtag * A)) xs sc st st' aft,
         st_valid_after st switch aft ->
         Forall (AtomOrGensym auto_prefs) envty ->
         FEnv.dom_ub Hi' (envty ++ st_ids st) ->
         sem_var Hi' xc sc ->
         sem_clock Hi' bs' bck (abstract_clock sc) ->
-        wt_stream sc (Tenum tn) ->
+        wt_stream sc (Tenum tx tn) ->
         Forall (fun '(x, _) => exists vs, sem_var Hi x vs /\ abstract_clock vs ≡ abstract_clock sc) (frees++defs) ->
         mmap
           (fun '(k, _) =>
-             bind (new_idents bck xc (Tenum tn) k frees)
+             bind (new_idents bck xc (Tenum tx tn) k frees)
                   (fun nfrees =>
-                     bind (new_idents bck xc (Tenum tn) k defs)
+                     bind (new_idents bck xc (Tenum tx tn) k defs)
                           (fun ndefs => ret (k, Env.from_list (map (fun '(x, y2, _) => (x, y2)) (nfrees ++ ndefs)), nfrees, ndefs)))) branches st = (xs, st') ->
         exists Hi'',
           Hi' ⊑ Hi'' /\
@@ -278,10 +279,10 @@ Module Type CSCORRECTNESS
         rewrite H3; simpl; auto.
       - intros * Hck. inv Hck. simpl_In.
         eapply mmap_values, Forall2_ignore1, Forall_forall in Hmmap as ((?&?)&?&?&?&?); eauto; repeat inv_bind.
-        assert (InMembers i0 (frees++defs)) as Hin3. 2:eapply InMembers_In in Hin3 as (?&Hin3).
+        assert (InMembers i (frees++defs)) as Hin3. 2:eapply InMembers_In in Hin3 as (?&Hin3).
         { erewrite fst_InMembers, map_app, <-2 new_idents_old; eauto.
           rewrite <-map_app. apply in_map_iff; do 2 esplit; eauto. auto. }
-        assert (c = Con bck xc (Tenum (i, n), e0)); subst.
+        assert (c = Con bck xc (Tenum tx tn, e0)); subst.
         { apply in_app_iff in Hin0 as [Hin'|Hin'];
             eapply Clocking.new_idents_In_inv_ck in Hin'; eauto. }
         eapply Forall_forall in Hsc; eauto; simpl in *. destruct Hsc as (vs&Hv&Hac).
@@ -609,14 +610,14 @@ Module Type CSCORRECTNESS
             intros; destruct_conjs; auto. erewrite map_map, map_ext; eauto.
             intros; destruct_conjs; auto.
         + simpl_Forall.
-          assert (Is_defined_in i1 (Bswitch ec branches)) as Hdef.
+          assert (Is_defined_in i0 (Bswitch ec branches)) as Hdef.
           { eapply vars_defined_Is_defined_in.
             eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
             apply PSF.mem_2; auto. }
           inv Hdef. simpl_Exists. simpl_Forall.
           destruct s. eapply wc_scope_Is_defined_in, InMembers_In in H19 as (?&Hin1); eauto.
           2:{ intros; simpl_Exists; simpl_Forall; eauto using wc_block_Is_defined_in. }
-          assert (HasClock Γ' i1 x.(clo)) as Hck by eauto with senv.
+          assert (HasClock Γ' i0 x.(clo)) as Hck by eauto with senv.
           eapply H14 in Hck as (Hin'&?); subst. inv Hin'.
           edestruct Hsc as ((?&Hv&Hck)&_); eauto with senv.
           eapply merge_defs_sem; eauto using Sem.sem_var_refines.
@@ -630,7 +631,7 @@ Module Type CSCORRECTNESS
           * eapply sem_clock_det in Hsemck; eauto.
           * rewrite Forall_map. eapply Forall_impl_In; [|eapply Hv2]; intros (((?&?)&?)&?) Hinxs Hsub'.
             eapply Hsub'; eauto.
-            assert (Env.In i1 t0) as Henvin.
+            assert (Env.In i0 t0) as Henvin.
             { eapply Forall_forall in Hinsubs; eauto. 2:eapply InMembers_app; left; eauto using In_InMembers.
               simpl in *; auto. }
             inv Henvin. unfold rename_var, Env.MapsTo in *.
@@ -725,7 +726,7 @@ Module Type CSCORRECTNESS
                eapply switch_blocks_sem'; eauto.
            }
           *{ simpl_Forall.
-             assert (InMembers i1 (filter (fun '(_, ann) => ann.(clo) ==b ck) l0)) as Hin.
+             assert (InMembers i0 (filter (fun '(_, ann) => ann.(clo) ==b ck) l0)) as Hin.
              { eapply new_idents_In_inv in H22 as (?&?&?); eauto using In_InMembers. }
              apply InMembers_In in Hin as (?&Hin).
              eapply Forall_forall in Hsc'; eauto using in_or_app; simpl in *. destruct Hsc' as (?&Hv&Heq).
@@ -755,12 +756,12 @@ Module Type CSCORRECTNESS
 
   Lemma switch_node_sem G1 G2 : forall f n ins outs,
       global_sem_refines G1 G2 ->
-      CommonTyping.wt_program wt_node {| enums := enums G1; nodes := n :: nodes G1 |} ->
-      wc_global (Global G1.(enums) (n::G1.(nodes))) ->
-      Ordered_nodes (Global G1.(enums) (n::G1.(nodes))) ->
-      Ordered_nodes (Global G2.(enums) ((switch_node n)::G2.(nodes))) ->
-      sem_node_ck (Global G1.(enums) (n::G1.(nodes))) f ins outs ->
-      sem_node_ck (Global G2.(enums) ((switch_node n)::G2.(nodes))) f ins outs.
+      CommonTyping.wt_program wt_node {| types := types G1; nodes := n :: nodes G1 |} ->
+      wc_global (Global G1.(types) (n::G1.(nodes))) ->
+      Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
+      Ordered_nodes (Global G2.(types) ((switch_node n)::G2.(nodes))) ->
+      sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
+      sem_node_ck (Global G2.(types) ((switch_node n)::G2.(nodes))) f ins outs.
   Proof with eauto.
     intros * HGref Hwt Hwc Hord1 Hord2 Hsem.
 
@@ -770,7 +771,7 @@ Module Type CSCORRECTNESS
       eapply sem_block_ck_cons in H3; eauto. rename H3 into Hblksem.
       2:{ inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
 
-      replace {| enums := enums G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
+      replace {| types := types G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
       pose proof (n_nodup n0) as (Hnd1&Hnd2).
       pose proof (n_good n0) as (Hgood1&Hgood2&_).
       inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc.
@@ -824,7 +825,7 @@ Module Type CSCORRECTNESS
       apply global_sem_ref_cons with (f:=n_name a)...
       + inv Hwc. inv Hwt. eapply IHnds...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (map switch_node nds)).(enums)).
+        change enms with ((Global enms (map switch_node nds)).(types)).
         eapply switch_node_sem with (G1:=Global enms nds)...
         inv Hwt; inv Hwc...
   Qed.

@@ -108,9 +108,9 @@ Module Type LORDERED
     Qed.
 
     Lemma find_node_later_not_Is_node_in {PSyn prefs}:
-      forall f enums (nd: @node PSyn prefs) nds nd',
-        Ordered_nodes (Global enums (nd::nds))
-        -> find_node f (Global enums nds) = Some nd'
+      forall f types (nd: @node PSyn prefs) nds nd',
+        Ordered_nodes (Global types (nd::nds))
+        -> find_node f (Global types nds) = Some nd'
         -> ~Is_node_in_block nd.(n_name) nd'.(n_block).
     Proof.
       intros * Hord Hfind Hini.
@@ -205,7 +205,7 @@ Module Type LORDERED
     solve_Exists.
   Qed.
 
-  Lemma Ordered_nodes_change_enums {PSyn prefs} : forall (nds : list (@node PSyn prefs)) enms1 enms2,
+  Lemma Ordered_nodes_change_types {PSyn prefs} : forall (nds : list (@node PSyn prefs)) enms1 enms2,
       Ordered_nodes (Global enms1 nds) ->
       Ordered_nodes (Global enms2 nds).
   Proof.
@@ -213,7 +213,7 @@ Module Type LORDERED
     - destruct H1 as (Hnin&Hnames).
       split; auto. intros * Hinblk. specialize (Hnin _ Hinblk) as (?&?&?&?).
       split; auto.
-      destruct (find_unit f {| enums := enms2; nodes := nds |}) as [(?&?)|] eqn:Hnone; eauto. exfalso.
+      destruct (find_unit f {| types := enms2; nodes := nds |}) as [(?&?)|] eqn:Hnone; eauto. exfalso.
       apply find_unit_None in Hnone. simpl in *.
       apply find_unit_spec in H0 as (Hname&?&Hsome&_); simpl in *; subst.
       apply Forall_elt in Hnone. congruence.

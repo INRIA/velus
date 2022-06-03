@@ -35,8 +35,8 @@ Module Type DCETYPING
        (Import Typ   : NLTYPING        Ids Op OpAux Cks CESyn Syn Ord CETyp)
        (Import DCE   : DCE             Ids Op OpAux Cks CESyn CEF Syn Free Mem Def).
 
-  Lemma wt_clock_free : forall enums vars ck x,
-    wt_clock enums vars ck ->
+  Lemma wt_clock_free : forall types vars ck x,
+    wt_clock types vars ck ->
     Is_free_in_clock x ck ->
     InMembers x vars.
   Proof.
@@ -44,8 +44,8 @@ Module Type DCETYPING
       inv Hwt; inv Hfree; eauto using In_InMembers.
   Qed.
 
-  Lemma wt_exp_free : forall enums vars e x,
-      wt_exp enums vars e ->
+  Lemma wt_exp_free : forall types vars e x,
+      wt_exp types vars e ->
       Is_free_in_exp x e ->
       InMembers x vars.
   Proof.
@@ -54,8 +54,8 @@ Module Type DCETYPING
     destruct H1; eauto.
   Qed.
 
-  Lemma wt_cexp_free : forall enums vars e x,
-      wt_cexp enums vars e ->
+  Lemma wt_cexp_free : forall types vars e x,
+      wt_cexp types vars e ->
       Is_free_in_cexp x e ->
       InMembers x vars.
   Proof.
@@ -97,8 +97,8 @@ Module Type DCETYPING
 
     Lemma wt_clock_restrict : forall vars vars' ck,
         (forall x ty, In (x, ty) vars -> Is_free_in_clock x ck -> In (x, ty) vars') ->
-        wt_clock G1.(enums) vars ck ->
-        wt_clock G2.(enums) vars' ck.
+        wt_clock G1.(types) vars ck ->
+        wt_clock G2.(types) vars' ck.
     Proof.
       induction ck; intros * Hincl Hwt; inv Hwt; constructor; auto with nlfree.
       destruct HG. congruence.
@@ -106,8 +106,8 @@ Module Type DCETYPING
 
     Lemma wt_exp_restrict : forall vars vars' e,
         (forall x ty, In (x, ty) vars -> Is_free_in_exp x e -> In (x, ty) vars') ->
-        wt_exp G1.(enums) vars e ->
-        wt_exp G2.(enums) vars' e.
+        wt_exp G1.(types) vars e ->
+        wt_exp G2.(types) vars' e.
     Proof with eauto with nltyping nlfree.
       induction e; intros * Hincl Hwt; inv Hwt...
       - constructor... destruct HG; congruence.
@@ -118,8 +118,8 @@ Module Type DCETYPING
 
     Lemma wt_cexp_restrict : forall vars vars' e,
         (forall x ty, In (x, ty) vars -> Is_free_in_cexp x e -> In (x, ty) vars') ->
-        wt_cexp G1.(enums) vars e ->
-        wt_cexp G2.(enums) vars' e.
+        wt_cexp G1.(types) vars e ->
+        wt_cexp G2.(types) vars' e.
     Proof with eauto with nltyping nlfree.
       induction e using cexp_ind2'; intros * Hincl Hwt; inv Hwt...
       - econstructor...
@@ -231,7 +231,7 @@ Module Type DCETYPING
           eapply InMembers_idty, wt_equation_def_free; eauto.
       - intros x tn Hin. specialize (Hwt2 x tn).
         repeat rewrite idty_app, in_app_iff in Hin, Hwt2.
-        destruct HG as (Henums&_). rewrite <-Henums.
+        destruct HG as (Htypes&_). rewrite <-Htypes.
         destruct Hin as [|[Hin|]]; auto.
         apply Hwt2; right; left.
         apply in_map_iff in Hin as ((?&?)&Heq&Hin); inv Heq.

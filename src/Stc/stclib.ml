@@ -47,7 +47,7 @@ module type SYNTAX =
       s_tcs  : trconstr list }
 
     type program = {
-      enums: (ident * Datatypes.nat) list;
+      types: typ list;
       systems: system list
     }
   end
@@ -66,7 +66,7 @@ module PrintFun
                   and type cexp  = CE.cexp)
   :
   sig
-    val print_trconstr   : formatter -> Stc.trconstr -> unit
+    val print_trconstr   : (ident * CE.typ) list -> formatter -> Stc.trconstr -> unit
     val print_system     : Format.formatter -> Stc.system -> unit
     val print_program    : Format.formatter -> Stc.program -> unit
     val print_fullclocks : bool ref
@@ -76,10 +76,10 @@ module PrintFun
 
     include Coreexprlib.PrintFun (CE) (Ops)
 
-    let print_reset p (id, ((c0, _), ck)) =
+    let print_reset p (id, ((c0, ty), ck)) =
       fprintf p "%a@ = %a%a"
         print_ident id
-        Ops.print_const c0
+        Ops.print_const (c0, ty)
         print_clock_decl ck
 
     let print_subsystem p (id, f) =
@@ -87,21 +87,21 @@ module PrintFun
         print_ident id
         print_ident f
 
-    let rec print_trconstr p tc =
+    let rec print_trconstr tenv p tc =
       match tc with
       | Stc.TcDef (x, ck, e) ->
         fprintf p "@[<hov 2>%a =@ %a@]"
           print_ident x
-          print_cexp e
-      | Stc.TcReset (x, ckr, _, c0) ->
+          (print_cexp tenv) e
+      | Stc.TcReset (x, ckr, ty, c0) ->
         fprintf p "@[<hov 2>reset@ %a = %a every@ (%a)@]"
           print_ident x
-          Ops.print_const c0
+          Ops.print_const (c0, ty)
           print_clock ckr
       | Stc.TcNext (x, ck, _, e) ->
         fprintf p "@[<hov 2>next@ %a =@ %a@]"
           print_ident x
-          print_exp e
+          (print_exp tenv) e
       | Stc.TcInstReset (s, ck, f) ->
         fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
             print_ident f
@@ -112,10 +112,10 @@ module PrintFun
           print_pattern xs
           print_ident f
           print_ident i
-          (print_comma_list print_exp) es
+          (print_comma_list (print_exp tenv)) es
 
-    let print_trconstrs p =
-      pp_print_list ~pp_sep:pp_force_newline print_trconstr p
+    let print_trconstrs tenv p =
+      pp_print_list ~pp_sep:pp_force_newline (print_trconstr tenv) p
 
     let print_system p { Stc.s_name   = name;
                          Stc.s_in     = inputs;
@@ -141,12 +141,14 @@ module PrintFun
         print_decl_list inputs
         print_decl_list outputs
         (print_comma_list_as "var" print_decl) locals
-        print_trconstrs (List.rev tcs)
+        (print_trconstrs ((List.map (fun (x, (ty, _)) -> (x, ty)) (inputs@outputs@locals))
+                          @(List.map (fun (x, ((_, ty), _)) -> (x, ty)) nexts))) (List.rev tcs)
 
     let print_program p prog =
-      fprintf p "@[<v 0>%a@]@."
-        (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_system)
-        (List.rev prog.Stc.systems)
+      fprintf p "@[<v 0>";
+      List.iter (fprintf p "%a@;@;" Ops.print_typ_decl) (List.rev prog.Stc.types);
+      List.iter (fprintf p "%a@;@;" print_system) (List.rev prog.Stc.systems);
+      fprintf p "@]@."
   end
 
 module SchedulerFun
