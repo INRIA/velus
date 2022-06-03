@@ -3,7 +3,7 @@ From Coq Require Import BinPos List.
 From Velus Require Import Common Ident Operators Clocks CoindStreams.
 From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LOrdered Lustre.LSemantics Lustre.LTyping.
 
-From Cpo Require Import Cpo_def Cpo_streams_type Systems.
+From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 Import ListNotations.

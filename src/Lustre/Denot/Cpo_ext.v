@@ -1,7 +1,6 @@
 (** * Extension of the Cpo library *)
 
-From Cpo Require Import Cpo_def.
-From Cpo Require Import Cpo_streams_type.
+From Velus Require Import Lustre.Denot.Cpo.
 
 (* simplification by rewriting during proofs, usage:
    [autorewrite with cpodb] *)

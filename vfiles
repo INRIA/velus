@@ -73,10 +73,16 @@ src/Lustre/Normalization/NClocking.v
 src/Lustre/Normalization/Correctness.v
 src/Lustre/Normalization/LNormalization.v
 
+src/Lustre/Denot/Cpo/Cpo_def.v
+src/Lustre/Denot/Cpo/Cpo_streams_type.v
+src/Lustre/Denot/Cpo/Systems.v
+src/Lustre/Denot/Cpo.v
+
 src/Lustre/Denot/Cpo_ext.v
 src/Lustre/Denot/SDfuns.v
 src/Lustre/Denot/Denot.v
-src/Lustre/Denot/Extraction.v
+src/Lustre/Denot/Infty.v
+src/Lustre/Denot/InftyProof.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v

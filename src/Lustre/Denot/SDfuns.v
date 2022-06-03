@@ -1,5 +1,5 @@
 From Coq Require Import BinPos.
-From Cpo Require Import Cpo_def Cpo_streams_type Systems.
+From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext.
 
 (** * Streams operations for the Lustre synchronous semantics *)

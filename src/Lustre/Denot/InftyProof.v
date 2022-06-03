@@ -12,11 +12,9 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LCausality Lustre.LOrdered Lustre.LSemantics.
 
-From Cpo Require Import Cpo_streams_type Systems.
-Require Import SDfuns.
-Require Import Denot.
-Require Import Infty.
-Require Import Cpo_ext.
+From Velus Require Import Lustre.Denot.Cpo.
+Require Import Cpo_ext SDfuns Denot Infty.
+
 Import List.
 
 (* TODO: move *)

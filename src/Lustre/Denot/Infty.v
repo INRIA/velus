@@ -1,8 +1,6 @@
 From Velus Require Import Common.
-From Cpo Require Import Cpo_def Cpo_streams_type Systems.
-
-Require Import Cpo_ext.
-Require Import SDfuns.
+From Velus Require Import Lustre.Denot.Cpo.
+Require Import Cpo_ext SDfuns.
 
 (** * Infinity of streams defined in SDfuns  *)
 
