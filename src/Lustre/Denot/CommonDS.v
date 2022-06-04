@@ -1,6 +1,6 @@
 From Coq Require Import Streams.
-From Cpo Require Import Cpo_def Cpo_streams_type.
 From Velus Require Import Common.
+From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext.
 
 (** * General facts about Denotational streams *)
