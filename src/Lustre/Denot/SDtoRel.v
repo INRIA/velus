@@ -1,13 +1,14 @@
 From Coq Require Import BinPos List.
-From Cpo Require Import Cpo_def Cpo_streams_type Systems.
 
 From Velus Require Import Common Ident Environment Operators Clocks CoindStreams.
 From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LOrdered Lustre.LSemantics Lustre.LTyping Lustre.LCausality.
 
+From Velus Require Import Lustre.Denot.Cpo.
+
 Close Scope equiv_scope. (* conflicting notation "==" *)
 Import ListNotations.
 
-Require Import Cpo_ext CommonDS SDfuns Denot Infty.
+Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof.
 
 Module Type SDTOREL
        (Import Ids   : IDS)
@@ -16,12 +17,14 @@ Module Type SDTOREL
        (Import Cks   : CLOCKS        Ids Op OpAux)
        (Import Senv  : STATICENV     Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
-       (* (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn) *)
-       (* (Import Caus  : LCAUSALITY    Ids Op OpAux Cks Senv Syn) *)
+       (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn)
+       (Import Caus  : LCAUSALITY    Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord Str).
+       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord Str)
+       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Str Den).
+
 
 (** ** Correspondence of semantic predicate for streams functions *)
 
@@ -31,6 +34,7 @@ Definition sval_of_sampl : sampl value -> svalue :=
         | abs => absent
         | err e => absent
         end.
+
 Definition S_of_DSv := S_of_DS sval_of_sampl.
 
 Definition safe_val : sampl value -> Prop :=
@@ -114,8 +118,78 @@ Proof.
 Qed.
 
 
-Definition all_infinite (vars : list ident) (env : DS_prod SI) : Prop :=
-  forall i, In i vars -> infinite (env i).
+(** Général *)
+
+Definition hist_of_env (env : DS_prod SI) (l : list ident)
+  (Hinf : all_infinite l env) : Str.history :=
+  fun x =>
+    match in_dec ident_eq_dec x l with
+    | left Hin => Some (S_of_DSv (env x) (Hinf x Hin))
+    | right _ => None
+    end.
+
+CoFixpoint DS_of_S {A} (s : Stream A) : DS A :=
+  match s with
+  | Streams.Cons a s => CONS a (DS_of_S s)
+  end.
+
+Lemma DS_of_S_inf : forall {A} (s : Stream A), infinite (DS_of_S s).
+  cofix Cof.
+  destruct s; constructor.
+  - rewrite DS_inv; simpl; auto.
+  - rewrite (DS_inv (DS_of_S (a ⋅ s))); simpl.
+    rewrite rem_cons; auto.
+Qed.
+
+Definition sampl_of_sval : svalue -> sampl value :=
+  fun v => match v with
+        | present v => pres v
+        | absent => abs
+        end.
+
+Definition env_of_list (l : list ident) (ss : list (Stream svalue)) : DS_prod SI :=
+  fun x =>
+    match assoc_ident x (combine l ss) with
+    | Some s => DS_of_S (Streams.map sampl_of_sval s)
+    | None => DS_const (err error_Ty)
+    end.
+
+Lemma env_of_list_inf :
+  forall l ss, all_infinite l (env_of_list l ss).
+Proof.
+  intros * x Hin.
+  unfold env_of_list.
+  cases; auto using DS_of_S_inf, DS_const_inf.
+Qed.
+
+Definition list_of_hist (H : Str.history) (xs : list ident) : list (Stream svalue) :=
+  CommonList.map_filter H xs.
+
+(* TODO: énoncer plutôt exist os, .. et faire ça dans la preuve ? *)
+Lemma ok_node :
+  forall {PSyn prefs} (G : @global PSyn prefs),
+  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
+  forall f (nd : node) ss,
+    find_node f G = Some nd ->
+    forall (Hwt : wt_node G nd)
+      (Hnc : node_causal nd)
+      (Hre : restr_node nd)
+      bs (bsi : infinite bs) (* TODO: ça va dégager *)
+    ,
+    let envI := env_of_list (List.map fst nd.(n_in)) ss in
+    let infI := env_of_list_inf (List.map fst nd.(n_in)) ss in
+    let env := FIXP (DS_prod SI) (denot_node nd envI bs) in
+    let infO := denot_inf G HasCausInj nd envI bs Hre Hwt Hnc bsi infI in
+    let H := hist_of_env env (List.map fst nd.(n_out)) infO in
+    let os := list_of_hist H (List.map fst nd.(n_out)) in
+    sem_node G f ss os.
+Proof.
+Qed.
+
+
+
+
+
 
 Definition nprod_inf n (np : nprod n) : Prop.
   induction n as [|[]]; simpl in *.
