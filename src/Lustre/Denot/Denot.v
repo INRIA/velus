@@ -548,8 +548,13 @@ Definition denot_equation (ins : list ident) (e : equation) :
   clear ss.
   apply curry.
   revert dependent n.
+  (* TODO: on considère que toutes les sorties sont définies dans
+     cette équation. L'alternative est de garder la liste des sorties
+     et de faire deux cas lorsque la variable n'appartient pas à xs :
+     - si la varible est une sortie : retrouner (env x)
+     - sinon, renvoyer error_Ty *)
   induction xs as [| y xs]; intros.
-  - exact (PROJ _ x @_ FST _ _).
+  - exact (CTE _ _ (DS_const (err error_Ty))).
   - destruct (ident_eq_dec x y).
     + exact (nprod_fst @_ SND _ _).
     + eapply fcont_comp.
@@ -583,6 +588,14 @@ Proof.
     + rewrite IHl; auto with arith.
 Qed.
 
+Lemma mem_nth_In :
+  forall l x n, mem_nth l x = Some n -> In x l.
+Proof.
+  induction l as [|y l]; simpl; intros * Hm; try congruence.
+  destruct (ident_eq_dec x y); subst; auto.
+  apply option_map_inv in Hm as (?&?&?); eauto.
+Qed.
+
 Lemma denot_equation_eq :
   forall ins xs es envI bs env x,
     denot_equation ins (xs,es) envI bs env x
@@ -591,7 +604,7 @@ Lemma denot_equation_eq :
         if mem_ident x ins then envI x else
          let ss := denot_exps ins es envI bs env in
          match mem_nth xs x with
-         | None => env x
+         | None => DS_const (err error_Ty)
          | Some n => get_nth ss n
          end
        else DS_const (err error_Ty).
