@@ -24,18 +24,15 @@ Module Type DRR
   Definition const_dec : forall (c1 c2 : const),
     { c1 = c2 } + { c1 <> c2 }.
   Proof.
-    decide equality.
-    1-2:auto using cconst_dec, Nat.eq_dec.
+    repeat decide equality.
+    apply cconst_dec.
   Defined.
 
   Definition exp_dec : forall (e1 e2 : exp),
     { e1 = e2 } + { e1 <> e2 }.
   Proof.
-    decide equality.
-    1-11:auto using cconst_dec, Nat.eq_dec, Pos.eq_dec.
-    1-3,5:apply EqDec_instance_5.
-    apply EqDec_instance_3.
-    apply EqDec_instance_4.
+    repeat decide equality.
+    all:auto using ctype_dec, cconst_dec, unop_dec, binop_dec, Nat.eq_dec, Pos.eq_dec.
   Defined.
 
   Global Instance: EqDec const eq := { equiv_dec := const_dec }.
@@ -76,7 +73,7 @@ Module Type DRR
       match e with
       | Econst _ | Eenum _ _ => e
       | Evar x ty => Evar (rename_in_var x) ty
-      | Ewhen e x t => Ewhen (rename_in_exp e) (rename_in_var x) t
+      | Ewhen e (x, tx) t => Ewhen (rename_in_exp e) (rename_in_var x, tx) t
       | Eunop op e1 ty => Eunop op (rename_in_exp e1) ty
       | Ebinop op e1 e2 ty => Ebinop op (rename_in_exp e1) (rename_in_exp e2) ty
       end.
@@ -134,7 +131,7 @@ Module Type DRR
   Lemma rename_in_exp_typeof : forall sub e,
       typeof (rename_in_exp sub e) = typeof e.
   Proof.
-    induction e; intros; simpl; auto.
+    induction e; destruct_conjs; intros; simpl; auto.
   Qed.
 
   Lemma rename_in_cexp_typeofc : forall sub e,

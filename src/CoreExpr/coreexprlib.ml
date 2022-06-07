@@ -38,7 +38,7 @@ sig
     | Econst of cconst
     | Eenum of enumtag * typ
     | Evar of ident * typ
-    | Ewhen of exp * ident * enumtag
+    | Ewhen of exp * (ident * typ) * enumtag
     | Eunop of unop * exp * typ
     | Ebinop of binop * exp * exp * typ
 
@@ -58,8 +58,8 @@ module PrintFun (CE: SYNTAX)
                            and type enumtag = CE.enumtag) :
 sig
   val print_ident           : formatter -> ident -> unit
-  val print_exp             : (ident * CE.typ) list -> formatter -> CE.exp -> unit
-  val print_cexp            : (ident * CE.typ) list -> formatter -> CE.cexp -> unit
+  val print_exp             : formatter -> CE.exp -> unit
+  val print_cexp            : formatter -> CE.cexp -> unit
   val print_fullclocks      : bool ref
   val print_clock           : formatter -> CE.clock -> unit
   val print_clock_decl      : formatter -> CE.clock -> unit
@@ -89,12 +89,7 @@ struct
 
   let print_ident p i = pp_print_string p (extern_atom i)
 
-  let find_type tenv tx =
-    try
-      List.assoc tx tenv
-    with _ -> failwith (Printf.sprintf "Not found: %s" (extern_atom tx))
-
-  let rec exp prec tenv p e =
+  let rec exp prec p e =
     let (prec', assoc) = lprecedence e in
     let (prec1, prec2) =
       if assoc = LtoR
@@ -110,15 +105,15 @@ struct
         PrintOps.print_enumtag p (c, ty)
       | CE.Evar (id, _) ->
         print_ident p id
-      | CE.Ewhen (e, x, c) ->
+      | CE.Ewhen (e, (x, tx), c) ->
         fprintf p "%a when (%a=%a)"
-          (exp prec' tenv) e
+          (exp prec') e
           print_ident x
-          PrintOps.print_enumtag (c, find_type tenv x)
+          PrintOps.print_enumtag (c, tx)
       | CE.Eunop  (op, e, ty) ->
-        PrintOps.print_unop p op ty (exp prec' tenv) e
+        PrintOps.print_unop p op ty (exp prec') e
       | CE.Ebinop (op, e1, e2, ty) ->
-        PrintOps.print_binop p op ty (exp prec1 tenv) e1 (exp prec2 tenv) e2
+        PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -127,7 +122,7 @@ struct
   let print_branch_tag ty i p =
     PrintOps.print_enumtag p (PrintOps.enumtag_of_int i, ty)
 
-  let rec cexp prec tenv p e =
+  let rec cexp prec p e =
     let (prec', assoc) = cprecedence e in
     if prec' < prec
     then fprintf p "@[<hov 2>("
@@ -136,17 +131,17 @@ struct
       | CE.Emerge ((id, ty), ces, _) ->
         fprintf p "@[<v>merge %a%a@]"
           print_ident id
-          (PrintOps.print_branches (cexp 16 tenv))
+          (PrintOps.print_branches (cexp 16))
           (List.mapi (fun i ce -> (print_branch_tag ty i, Some ce)) ces, None)
       | CE.Ecase (e, ces, d) ->
         let ty = CE.typeof e in
         fprintf p "@[<v>case %a of%a@]"
-          (exp prec' tenv) e
-          (PrintOps.print_branches (cexp 16 tenv))
+          (exp prec') e
+          (PrintOps.print_branches (cexp 16))
           (List.mapi (fun i ce -> (print_branch_tag ty i, ce)) ces,
            if List.exists Option.is_none ces then Some d else None)
       | CE.Eexp e ->
-        exp (prec' + 1) tenv p e
+        exp (prec' + 1) p e
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

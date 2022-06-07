@@ -40,10 +40,10 @@ Module Type CECLOCKING
           In (x, ck) vars ->
           wc_exp (Evar x ty) ck
     | Cwhen:
-        forall e x t b ck,
+        forall e x tx t b ck,
           wc_exp e ck ->
           In (x, ck) vars ->
-          wc_exp (Ewhen e x b) (Con ck x (t, b))
+          wc_exp (Ewhen e (x, tx) b) (Con ck x (t, b))
     | Cunop:
         forall op e ck ty,
           wc_exp e ck ->
@@ -89,7 +89,7 @@ Module Type CECLOCKING
     - intros ck Hwc; inversion_clear 1 as [| |? ? ? Hcv| | |].
       apply wc_env_var with (1:=Hwc) (2:=Hcv).
     - intros ck Hwc.
-      inversion_clear 1 as [| | |???? ck' Hle Hcv | |].
+      inversion_clear 1 as [| | |????? ck' Hle Hcv | |].
       constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
     - intros ck Hwc; inversion_clear 1; auto.
     - intros ck Hwc; inversion_clear 1; auto.

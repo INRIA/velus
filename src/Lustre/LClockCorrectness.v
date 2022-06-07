@@ -372,24 +372,24 @@ Module Type LCLOCKCORRECTNESS
       erewrite sem_exps_numstreams, <- length_clocksof_annots, <- H10, map_length; eauto with ltyping.
     Qed.
 
-    Lemma sc_exp_when : forall Γ Γty H b es x cx b' ann k,
+    Lemma sc_exp_when : forall Γ Γty H b es x tx cx b' ann k,
         NoDupMembers Γ ->
         k < length (fst ann) ->
         P_exps (sc_exp_inv Γ Γty H b) es k ->
         HasCaus Γ x cx ->
         sc_var_inv Γ H b cx ->
-        sc_exp_inv Γ Γty H b (Ewhen es x b' ann) k.
+        sc_exp_inv Γ Γty H b (Ewhen es (x, tx) b' ann) k.
     Proof.
       intros * Hnd Hk Hes Hin Hvar ss Hwt Hwc Hsem; simpl.
       inv Hwt. inv Hwc. inv Hsem.
       eapply P_exps_sc_exp_inv in Hes; eauto.
-      assert (Hv:=H18). eapply Hvar in Hv; eauto.
+      take (sem_var _ _ _) and assert (Hv:=it). eapply Hvar in Hv; eauto.
       erewrite map_nth' with (d':=OpAux.bool_velus_type); eauto.
-      eapply Forall_forall in H12. 2:eapply nth_In; rewrite <- H13; eauto.
-      eapply sc_when in Hes; eauto. erewrite H12; eauto.
-      eapply Forall2_forall2 in H19 as [_ Hwhen].
+      eapply Forall_forall in H13. 2:eapply nth_In; rewrite <- H14; eauto.
+      eapply sc_when in Hes; eauto. erewrite H13; eauto.
+      eapply Forall2_forall2 in H20 as [_ Hwhen].
       eapply Hwhen; eauto.
-      replace (length (concat ss0)) with (length (annots es)). rewrite <- length_clocksof_annots, <- H13; eauto.
+      replace (length (concat ss0)) with (length (annots es)). rewrite <- length_clocksof_annots, <- H14; eauto.
       symmetry. eapply sem_exps_numstreams; eauto with ltyping.
     Qed.
 
@@ -687,11 +687,12 @@ Module Type LCLOCKCORRECTNESS
           sem_transitions G H bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
           fby stres0 stres1 stres ->
           Forall (fun state =>
-                    forall k, exists Hik, Sem.select_hist (fst state) k stres H Hik
-                                /\ let bik := fselectb (fst state) k stres bs in
+                    let tag := fst (fst state) in
+                    forall k, exists Hik, Sem.select_hist tag k stres H Hik
+                                /\ let bik := fselectb tag k stres bs in
                                   sem_scope_ck' (fun Γ Hi' blks =>
                                                    Forall (sem_block_ck' envP Γ Hi' bik) (fst blks)
-                                                   /\ sem_transitions G Hi' bik (snd blks) (fst state, false) (fselect absent (fst state) k stres stres1)
+                                                   /\ sem_transitions G Hi' bik (snd blks) (tag, false) (fselect absent (tag) k stres stres1)
                                                 ) envP (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hik bik (snd (snd state))
                  ) states ->
           sem_block_ck' envP Γ H bs (Bauto Weak ck (ini, oth) states)
@@ -700,13 +701,15 @@ Module Type LCLOCKCORRECTNESS
           sem_clock (fst H) bs ck bs' ->
           fby (const_stres bs' (ini, false)) stres1 stres ->
           Forall (fun state =>
-                    forall k, exists Hik, Sem.select_hist (fst state) k stres H Hik
-                                /\ let bik := fselectb (fst state) k stres bs in
-                                  sem_transitions G Hik bik (fst (snd state)) (fst state, false) (fselect absent (fst state) k stres stres1)
+                    let tag := fst (fst state) in
+                    forall k, exists Hik, Sem.select_hist tag k stres H Hik
+                                /\ let bik := fselectb tag k stres bs in
+                                  sem_transitions G Hik bik (fst (snd state)) (tag, false) (fselect absent (tag) k stres stres1)
                  ) states ->
           Forall (fun state =>
-                    forall k, exists Hik, Sem.select_hist (fst state) k stres1 H Hik
-                                /\ let bik := fselectb (fst state) k stres1 bs in
+                    let tag := fst (fst state) in
+                    forall k, exists Hik, Sem.select_hist tag k stres1 H Hik
+                                /\ let bik := fselectb tag k stres1 bs in
                                   sem_scope_ck' (fun Γ Hi' blks => Forall (sem_block_ck' envP Γ Hi' bik) (fst blks)
                                                 ) envP (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hik bik (snd (snd state))
                  ) states ->
@@ -1928,18 +1931,19 @@ Module Type LCLOCKCORRECTNESS
         assert (Is_defined_in Γ cy (Bauto Weak ck (ini0, oth) states) \/ Is_last_in cy (Bauto Weak ck (ini0, oth) states) ->
                 bs' ≡ abstract_clock stres) as Hac.
         { intros * Hdef.
-          symmetry. eapply sc_transitions' with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γ) in H24; eauto. 3,4:simpl_Forall; eauto.
-          - apply ac_fby1 in H25. now rewrite <-H25.
+          symmetry. take (sem_transitions _ _ _ _ _ _) and eapply sc_transitions'
+            with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γ) in it; eauto. 3,4:simpl_Forall; eauto.
+          - take (fby _ _ _) and apply ac_fby1 in it; now rewrite <-it.
           - apply nodupmembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           - split; auto.
             eapply wc_exp_incl; [| |eauto].
-            + intros * Has. eapply H17 in Has as (Has&?).
+            + intros * Has. eapply H18 in Has as (Has&?).
               inv Has. econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
               auto.
-            + intros * His. eapply H18 in His as His'.
-              inv His; inv His'. edestruct H17 as (Has&?); eauto with senv.
-              inv Has. eapply NoDupMembers_det in H21; eauto; subst.
+            + intros * His. eapply H19 in His as His'.
+              inv His; inv His'. edestruct H18 as (Has&?); eauto with senv.
+              inv Has. eapply NoDupMembers_det in H22; eauto; subst.
               econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
               simpl; auto.
           - intros * Hex. simpl_Exists.
@@ -1960,7 +1964,7 @@ Module Type LCLOCKCORRECTNESS
               eapply DepOnAuto3; eauto.
               solve_Exists. eapply Is_free_left_incl in Hex; eauto.
         }
-        assert (Forall (fun '(e, (_, s)) => forall k, exists Hi',
+        assert (Forall (fun '((e, _), (_, s)) => forall k, exists Hi',
                             Sem.select_hist e k stres Hi Hi'
                             /\ (forall y, In y xs -> HasCaus (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) y cy ->
                                     sc_var_inv (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) Hi' (fselectb e k stres bs) cy) /\
@@ -1969,11 +1973,11 @@ Module Type LCLOCKCORRECTNESS
                                              /\ sem_transitions G Hi (fselectb e k stres bs) (snd blks) (e, false) (fselect absent e k stres stres1))
                                 (cy :: envP) (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' (fselectb e k stres bs) s)
                        states) as Hf.
-        { simpl_Forall. intros. specialize (H26 k); destruct_conjs. destruct s; destruct_conjs.
+        { simpl_Forall. intros. take (forall (k: nat), _) and specialize (it k); destruct_conjs. destruct s; destruct_conjs.
           do 2 esplit; eauto.
-          eapply sc_scope
+          take (wt_scope _ _ _ _) and eapply sc_scope
             with (P_dep:=fun Γ cx cy blks => Exists (depends_on Γ cx cy) (fst blks))
-                 (Γ:=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) in H9 as (Hsc'&?); eauto.
+                 (Γ:=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) in it as (Hsc'&?); eauto.
           - clear - H0 Hnd1.
             eapply NoDup_locals_inv3; eauto.
             unfold idcaus_of_senv in *. erewrite map_map, map_filter_map, map_ext with (l:=Γ), map_filter_ext with (xs:=Γ); eauto.
@@ -1983,15 +1987,15 @@ Module Type LCLOCKCORRECTNESS
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - apply Forall_forall; intros ? Hin. simpl_In. constructor.
           - eapply wc_scope_incl; [| |eauto|].
-            + intros * Has. eapply H17 in Has as (Has&?).
+            + intros * Has. eapply H18 in Has as (Has&?).
               inv Has. econstructor; solve_In. auto.
-            + intros * His. eapply H18 in His.
+            + intros * His. eapply H19 in His.
               inv His. econstructor; solve_In. auto.
             + intros; simpl in *.
               destruct_conjs; split; eauto; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
-          - destruct H13 as (Href&_). eapply FEnv.dom_ub_refines; eauto.
+          - take (Sem.select_hist _ _ _ _ _) and destruct it as (Href&_). eapply FEnv.dom_ub_refines; eauto.
             erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
-          - intros ? His. destruct H13 as (_&Heq). rewrite Heq. setoid_rewrite FEnv.map_in_iff.
+          - intros ? His. take (Sem.select_hist _ _ _ _ _) and destruct it as (_&Heq). rewrite Heq. setoid_rewrite FEnv.map_in_iff.
             eapply Hdoml. inv His; simpl_In. econstructor; eauto.
           - intros * ? Hdep.
             assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
@@ -2007,7 +2011,7 @@ Module Type LCLOCKCORRECTNESS
                 2:eapply NoDupScope_incl; eauto. 2:intros; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
                 + eapply wc_scope_Is_defined_in, fst_InMembers in H7; eauto.
                   intros; simpl_Exists; simpl_Forall; eauto using wc_block_Is_defined_in.
-                + intros; inv_VarsDefined. rewrite <-Hperm in H26. apply in_concat in H26 as (?&Hin1&Hin2).
+                + intros; inv_VarsDefined. rewrite <-Hperm in H23. apply in_concat in H23 as (?&Hin1&Hin2).
                   inv_VarsDefined; simpl_Forall. solve_Exists. eapply VarsDefined_Is_defined; eauto.
                   eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; eauto using incl_concat.
               - destruct Has as [Has|Has]; inv Has; [left|right]; econstructor; solve_In; auto.
@@ -2019,27 +2023,27 @@ Module Type LCLOCKCORRECTNESS
             }
             assert (forall x ck', HasCaus Γ x cx \/ HasLastCaus Γ x cx -> HasClock Γ x ck' -> ck' = ck) as Hgamma2.
             { intros * Hing Hck. apply Hgamma in Hing. simpl_In.
-              edestruct H17 as (Hck'&?); eauto. econstructor; solve_In; eauto.
+              edestruct H18 as (Hck'&?); eauto. econstructor; solve_In; eauto.
               inv Hck. inv Hck'. eapply NoDupMembers_det in H21; eauto. congruence. }
             split; intros ??? Hca Hck Hv; inv Hca; inv Hck; simpl_In.
             1,2:eapply NoDupMembers_det in Hin0; eauto; subst.
             1,2:assert (a0.(clo) = ck) by (eapply Hgamma2; eauto with senv); subst.
-            + destruct H13 as (Hfilter&_). eapply sem_var_select_inv in Hv as (?&Hv&Heq); eauto.
+            + take (Sem.select_hist _ _ _ _ _) and destruct it as (Hfilter&_). eapply sem_var_select_inv in Hv as (?&Hv&Heq); eauto.
               apply select_fselect in Heq. rewrite Heq, ac_fselect.
               assert (depends_on Γ cy (causl a0) (Bauto Weak (clo a0) (ini0, oth) states)) as Hdep2.
               { eapply depends_on_incl. 3:econstructor; solve_Exists.
                 1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
               eapply Hsc in Hv. 4,5:eauto with senv. 2,3:eauto with senv.
-              eapply sem_clock_det in Hv. 2:eapply H23.
+              eapply sem_clock_det in Hv. 2:eapply H24.
               rewrite <-Hv, Hac; eauto using depends_on_def_last.
               eapply sem_clock_select. rewrite <-Hac; eauto using depends_on_def_last.
-            + destruct H13 as (?&Hselect). rewrite Hselect in Hv.
+            + take (Sem.select_hist _ _ _ _ _) and destruct it as (?&Hselect). rewrite Hselect in Hv.
               eapply sem_var_fselect_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_fselect.
               assert (depends_on Γ cy cx (Bauto Weak (clo a0) (ini0, oth) states)) as Hdep2.
               { eapply depends_on_incl. 3:econstructor; solve_Exists.
                 1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
               eapply Hsc in Hv. 4,5:eauto with senv. 2,3:eauto with senv.
-              eapply sem_clock_det in Hv. 2:eapply H23.
+              eapply sem_clock_det in Hv. 2:eapply H24.
               rewrite <-Hv, Hac; eauto using depends_on_def_last.
               eapply sem_clock_select. rewrite <-Hac; eauto using depends_on_def_last.
           - intros ? Hin' Hdep. apply HenvP. solve_In.
@@ -2051,7 +2055,7 @@ Module Type LCLOCKCORRECTNESS
             eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H29; eauto using incl_concat.
           - intros; simpl in *; destruct_conjs; split; simpl_Forall; inv_VarsDefined.
             + eapply sem_block_ck'_restrict; eauto.
-              * unfold wc_env, idck in H20; simpl_Forall; auto.
+              * take (wc_env _) and unfold wc_env, idck in it; simpl_Forall; auto.
               * eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H31; eauto using incl_concat.
             + eapply Sem.sem_transitions_restrict; eauto. simpl_Forall; eauto with lclocking.
           - intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
@@ -2069,15 +2073,15 @@ Module Type LCLOCKCORRECTNESS
               - intros * Hin' Hdep. eapply H35; eauto.
                 2:solve_Exists. solve_In.
               - split; eauto.
-                intros * Hdef' Hin' Hca. eapply H26; eauto.
+                intros * Hdef' Hin' Hca. take (forall (y : ident), In _ _ -> _) and eapply it; eauto.
                 eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
             } clear H.
             split.
             + intros * Hinxs Hca. inv_VarsDefined.
               rewrite <-H39 in Hinxs. apply in_concat in Hinxs as (?&?&?); inv_VarsDefined; simpl_Forall.
-              eapply H26; eauto.
+              take (forall (x : ident) (xs : list ident), _ -> _) and eapply it; eauto.
             + simpl_Forall; eauto.
-        } clear H H26.
+        } clear H H27.
         split.
         + intros * Hinxs Hca1.
           assert (Syn.Is_defined_in y (Bauto Weak ck (ini0, oth) states)) as Hdef.
@@ -2086,11 +2090,179 @@ Module Type LCLOCKCORRECTNESS
           assert (Is_defined_in Γ cy (Bauto Weak ck (ini0, oth) states)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
           eapply sc_var_inv_unselect with (tn:=List.length states) (sc:=stres) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
           1:{ destruct states; try congruence. simpl; lia. }
-          1:{ eapply sem_automaton_wt_state1 in H24; eauto. 1,3,4:simpl_Forall; auto.
+          1:{ take (sem_transitions _ _ _ _ _ _) and eapply sem_automaton_wt_state1 in it; eauto. 1,3,4:simpl_Forall; auto.
               - inv H4. simpl_Forall; auto.
               - destruct s; destruct_conjs; intros. specialize (Hf k). destruct_conjs. simpl_Forall.
-                inv H15; destruct_conjs; eauto.
+                take (sem_scope_ck' _ _ _ _ _ _) and inv it; destruct_conjs; eauto.
               - now rewrite <-H11, <-fst_InMembers. }
+          1:{ intros * Hca Hck.
+              eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
+              inv Hck. inv Hca.
+              split; econstructor; solve_In; auto.
+          }
+          1:{ intros * Hca Hck.
+              eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
+              inv Hck. inv Hca. eapply NoDupMembers_det in H; eauto. subst.
+              assert (clo e = ck) as Heq; [|rewrite Heq].
+              { inv Hdef. rename H1 into Hdef. simpl_Exists.
+                simpl_Forall.
+                destruct s. eapply wc_scope_Is_defined_in in H1; eauto.
+                2:{ intros; simpl in *; simpl_Exists; simpl_Forall.
+                    eapply wc_block_Is_defined_in; eauto. }
+                eapply InMembers_In in H1 as (?&Hin').
+                edestruct H18 as (Hck&_); eauto with senv.
+                inv Hck. eapply NoDupMembers_det in H0; eauto. congruence.
+              }
+              rewrite <-Hac; auto.
+          }
+          2:{ intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
+          intros * Hin. rewrite <-H11 in Hin. simpl_In. simpl_Forall.
+          specialize (Hf k); destruct_conjs.
+          esplit; split; [|split]; eauto.
+          1:{ intros ? Hca.
+              eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
+              destruct s. eapply sem_scope_defined2; eauto.
+              take (sem_scope_ck' _ _ _ _ _ _) and inv it; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
+          }
+          take (forall (y : ident), _ -> _ -> _) and eapply it; eauto. inv Hca1; econstructor; solve_In. auto.
+        + econstructor; eauto. simpl_Forall.
+          specialize (Hf k); destruct_conjs; eauto.
+
+      - (* automaton (strong) *)
+        assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states) \/ Is_last_in cy (Bauto Strong ck ([], oth) states) ->
+                bs' ≡ abstract_clock stres) as Hac.
+        { intros * Hdef.
+          take (fby _ _ _) and apply ac_fby1 in it as Hac1. rewrite <-Hac1.
+          symmetry. apply const_stres_ac. }
+        assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states) \/ Is_last_in cy (Bauto Strong ck ([], oth) states) ->
+                bs' ≡ abstract_clock stres1) as Hac1.
+        { intros * Hdef.
+          take (fby _ _ _) and apply ac_fby2 in it as Hac2. rewrite Hac2; auto. }
+        assert (Forall (fun '((e, _), (_, s)) => forall k, exists Hi',
+                            Sem.select_hist e k stres1 Hi Hi'
+                            /\ (forall y, In y xs -> HasCaus (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) y cy ->
+                                    sc_var_inv (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) Hi' (fselectb e k stres1 bs) cy) /\
+                              sem_scope_ck'
+                                (fun Γ Hi blks => Forall (sem_block_ck' (cy::envP) Γ Hi (fselectb e k stres1 bs)) (fst blks))
+                                (cy :: envP) (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' (fselectb e k stres1 bs) s)
+                       states) as Hf.
+        { simpl_Forall. intros. specialize (H25 k); destruct_conjs. destruct s; destruct_conjs.
+          do 2 esplit; eauto.
+          take (wt_scope _ _ _ _) and eapply sc_scope
+            with (P_dep:=fun Γ cx cy blks => Exists (depends_on Γ cx cy) (fst blks))
+                 (Γ:=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) in it as (Hsc'&?); eauto.
+          - clear - H0 Hnd1.
+            eapply NoDup_locals_inv3; eauto.
+            unfold idcaus_of_senv in *. erewrite map_map, map_filter_map, map_ext with (l:=Γ), map_filter_ext with (xs:=Γ); eauto.
+            1,2:intros; destruct_conjs; auto.
+          - apply nodupmembers_map; auto.
+          - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+          - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+          - apply Forall_forall; intros ? Hin. simpl_In. constructor.
+          - eapply wc_scope_incl; [| |eauto|].
+            + intros * Has. eapply H17 in Has as (Has&?).
+              inv Has. econstructor; solve_In. auto.
+            + intros * His. eapply H18 in His.
+              inv His. econstructor; solve_In. auto.
+            + intros; simpl in *.
+              destruct_conjs; split; eauto; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
+          - take (Sem.select_hist _ _ _ _ _) and destruct it as (Href&_). eapply FEnv.dom_ub_refines; eauto.
+            erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+          - intros ? His. take (Sem.select_hist _ _ _ _ _) and destruct it as (_&Heq). rewrite Heq. setoid_rewrite FEnv.map_in_iff.
+            eapply Hdoml. inv His; simpl_In. econstructor; eauto.
+          - intros * ? Hdep.
+            assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
+            { intros * Has. eapply depends_scope_In with (Γ':=Γ') (x:=x0) in Hdep; eauto with lclocking.
+              - inv Hdep. rewrite <-fst_InMembers; eauto.
+              - apply nodupmembers_map; auto.
+              - clear - H0 Hnd1.
+                eapply NoDup_locals_inv3; eauto. auto.
+                unfold idcaus_of_senv in *. simpl_app.
+                erewrite map_map with (l:=Γ), map_ext with (l:=Γ), map_filter_map, map_filter_ext; eauto.
+                1,2:intros; destruct_conjs; auto.
+              - intros ? Hin. eapply VarsDefinedScope_Is_defined with (P_def:=fun blks => Exists (Syn.Is_defined_in a) (fst blks)) in H7; eauto.
+                2:eapply NoDupScope_incl; eauto. 2:intros; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
+                + eapply wc_scope_Is_defined_in, fst_InMembers in H7; eauto.
+                  intros; simpl_Exists; simpl_Forall; eauto using wc_block_Is_defined_in.
+                + intros; inv_VarsDefined. rewrite <-Hperm in H22. apply in_concat in H22 as (?&Hin1&Hin2).
+                  inv_VarsDefined; simpl_Forall. solve_Exists. eapply VarsDefined_Is_defined; eauto.
+                  eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; eauto using incl_concat.
+              - destruct Has as [Has|Has]; inv Has; [left|right]; econstructor; solve_In; auto.
+              - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+              - eapply wc_scope_wx_scope; eauto.
+              - intros; simpl in *. simpl_Exists; inv_VarsDefined; simpl_Forall.
+                eapply depends_on_In with (xs:=xs1); eauto using NoDup_locals_inv with lclocking.
+                etransitivity; [|eauto]. rewrite <-H31; eauto using incl_concat.
+            }
+            assert (forall x ck', HasCaus Γ x cx \/ HasLastCaus Γ x cx -> HasClock Γ x ck' -> ck' = ck) as Hgamma2.
+            { intros * Hing Hck. apply Hgamma in Hing. simpl_In.
+              edestruct H17 as (Hck'&?); eauto. econstructor; solve_In; eauto.
+              inv Hck. inv Hck'. eapply NoDupMembers_det in H21; eauto. congruence. }
+            split; intros ??? Hca Hck Hv; inv Hca; inv Hck; simpl_In.
+            1,2:eapply NoDupMembers_det in Hin0; eauto; subst.
+            1,2:assert (a0.(clo) = ck) by (eapply Hgamma2; eauto with senv); subst.
+            + destruct H15 as (Hfilter&_). eapply sem_var_select_inv in Hv as (?&Hv&Heq); eauto.
+              apply select_fselect in Heq. rewrite Heq, ac_fselect.
+              assert (depends_on Γ cy (causl a0) (Bauto Strong (clo a0) ([], oth) states)) as Hdep2.
+              { eapply depends_on_incl. 3:econstructor; solve_Exists.
+                1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
+              eapply Hsc in Hv. 4,5:eauto with senv. 2,3:eauto with senv.
+              eapply sem_clock_det in Hv. 2:eapply H9.
+              rewrite <-Hv, Hac1; eauto using depends_on_def_last.
+              eapply sem_clock_select. rewrite <-Hac1; eauto using depends_on_def_last.
+            + take (Sem.select_hist _ _ _ _ _) and destruct it as (?&Hselect). rewrite Hselect in Hv.
+              eapply sem_var_fselect_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_fselect.
+              assert (depends_on Γ cy cx (Bauto Strong (clo a0) ([], oth) states)) as Hdep2.
+              { eapply depends_on_incl. 3:econstructor; solve_Exists.
+                1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
+              eapply Hsc in Hv. 4,5:eauto with senv. 2,3:eauto with senv.
+              eapply sem_clock_det in Hv. 2:eapply H9.
+              rewrite <-Hv, Hac1; eauto using depends_on_def_last.
+              eapply sem_clock_select. rewrite <-Hac1; eauto using depends_on_def_last.
+          - intros ? Hin' Hdep. apply HenvP. solve_In.
+            eapply depends_on_incl. 3:econstructor; solve_Exists.
+            1,2:intros * Has; inv Has; simpl_In; eauto with senv.
+          - intros; simpl in *; simpl_Forall; inv_VarsDefined.
+            eapply sem_block_ck'_refines; eauto.
+            eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H27; eauto using incl_concat.
+          - intros; simpl in *; simpl_Forall; inv_VarsDefined.
+            eapply sem_block_ck'_restrict; eauto.
+            + take (wc_env _) and unfold wc_env, idck in it; simpl_Forall; auto.
+            + eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H29; eauto using incl_concat.
+          - intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
+          - intros; simpl in *. destruct_conjs.
+            assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+                                              sc_var_inv Γ0 Hi0 (fselectb e k stres1 bs) cy)
+                                     /\ sem_block_ck' (cy::envP) Γ0 Hi0 (fselectb e k stres1 bs) blks) l2) as Hf.
+            { simpl_Forall. inv_VarsDefined.
+              edestruct H with (Γ:=Γ0) (xs:=xs1). 10:eauto. all:eauto.
+              - eapply NoDup_locals_inv; eauto.
+              - etransitivity; eauto using incl_concat.
+                take (Permutation _ _) and now rewrite it.
+              - intros * Hin' Hdep. eapply H32; eauto. solve_Exists.
+              - intros * Hin' Hdep. eapply H33; eauto.
+                2:solve_Exists. solve_In.
+              - split; eauto.
+                intros * Hdef' Hin' Hca. take (forall (y: ident), _ -> _) and eapply it; eauto.
+                eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+            } clear H.
+            split.
+            + intros * Hinxs Hca. inv_VarsDefined.
+              rewrite <-H36 in Hinxs. apply in_concat in Hinxs as (?&?&?); inv_VarsDefined; simpl_Forall.
+              take (forall (y: ident) (xs: list ident), _ -> _) and eapply it; eauto.
+            + simpl_Forall; eauto.
+        } clear H H25.
+        split.
+        + intros * Hinxs Hca1.
+          assert (Syn.Is_defined_in y (Bauto Strong ck ([], oth) states)) as Hdef.
+          { eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+            eapply NoDupLocals_incl; [|econstructor; eauto]. auto. }
+          assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
+          eapply sc_var_inv_unselect with (tn:=List.length states) (sc:=stres1) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
+          1:{ destruct states; try congruence. simpl; lia. }
+          1:{ take (fby _ _ _) and eapply sem_automaton_wt_state3 in it; eauto. 2,3:simpl_Forall; auto.
+              - now rewrite <-H10, <-fst_InMembers.
+              - intros. specialize (H24 k); destruct_conjs. eauto. }
           1:{ intros * Hca Hck.
               eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
               inv Hck. inv Hca.
@@ -2109,174 +2281,6 @@ Module Type LCLOCKCORRECTNESS
                 edestruct H17 as (Hck&_); eauto with senv.
                 inv Hck. eapply NoDupMembers_det in H0; eauto. congruence.
               }
-              rewrite <-Hac; auto.
-          }
-          2:{ intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
-          intros * Hin. rewrite <-H11 in Hin. simpl_In. simpl_Forall.
-          specialize (Hf k); destruct_conjs.
-          esplit; split; [|split]; eauto.
-          1:{ intros ? Hca.
-              eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
-              destruct s. eapply sem_scope_defined2; eauto.
-              inv H13; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
-          }
-          eapply H9; eauto. inv Hca1; econstructor; solve_In. auto.
-        + econstructor; eauto. simpl_Forall.
-          specialize (Hf k); destruct_conjs; eauto.
-
-      - (* automaton (strong) *)
-        assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states) \/ Is_last_in cy (Bauto Strong ck ([], oth) states) ->
-                bs' ≡ abstract_clock stres) as Hac.
-        { intros * Hdef.
-          apply ac_fby1 in H22 as Hac1. rewrite <-Hac1.
-          symmetry. apply const_stres_ac. }
-        assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states) \/ Is_last_in cy (Bauto Strong ck ([], oth) states) ->
-                bs' ≡ abstract_clock stres1) as Hac1.
-        { intros * Hdef.
-          apply ac_fby2 in H22 as Hac2. rewrite Hac2; auto. }
-        assert (Forall (fun '(e, (_, s)) => forall k, exists Hi',
-                            Sem.select_hist e k stres1 Hi Hi'
-                            /\ (forall y, In y xs -> HasCaus (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) y cy ->
-                                    sc_var_inv (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) Hi' (fselectb e k stres1 bs) cy) /\
-                              sem_scope_ck'
-                                (fun Γ Hi blks => Forall (sem_block_ck' (cy::envP) Γ Hi (fselectb e k stres1 bs)) (fst blks))
-                                (cy :: envP) (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' (fselectb e k stres1 bs) s)
-                       states) as Hf.
-        { simpl_Forall. intros. specialize (H24 k); destruct_conjs. destruct s; destruct_conjs.
-          do 2 esplit; eauto.
-          eapply sc_scope
-            with (P_dep:=fun Γ cx cy blks => Exists (depends_on Γ cx cy) (fst blks))
-                 (Γ:=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) in H18 as (Hsc'&?); eauto.
-          - clear - H0 Hnd1.
-            eapply NoDup_locals_inv3; eauto.
-            unfold idcaus_of_senv in *. erewrite map_map, map_filter_map, map_ext with (l:=Γ), map_filter_ext with (xs:=Γ); eauto.
-            1,2:intros; destruct_conjs; auto.
-          - apply nodupmembers_map; auto.
-          - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
-          - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
-          - apply Forall_forall; intros ? Hin. simpl_In. constructor.
-          - eapply wc_scope_incl; [| |eauto|].
-            + intros * Has. eapply H16 in Has as (Has&?).
-              inv Has. econstructor; solve_In. auto.
-            + intros * His. eapply H17 in His.
-              inv His. econstructor; solve_In. auto.
-            + intros; simpl in *.
-              destruct_conjs; split; eauto; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
-          - destruct H14 as (Href&_). eapply FEnv.dom_ub_refines; eauto.
-            erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
-          - intros ? His. destruct H14 as (_&Heq). rewrite Heq. setoid_rewrite FEnv.map_in_iff.
-            eapply Hdoml. inv His; simpl_In. econstructor; eauto.
-          - intros * ? Hdep.
-            assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
-            { intros * Has. eapply depends_scope_In with (Γ':=Γ') (x:=x0) in Hdep; eauto with lclocking.
-              - inv Hdep. rewrite <-fst_InMembers; eauto.
-              - apply nodupmembers_map; auto.
-              - clear - H0 Hnd1.
-                eapply NoDup_locals_inv3; eauto. auto.
-                unfold idcaus_of_senv in *. simpl_app.
-                erewrite map_map with (l:=Γ), map_ext with (l:=Γ), map_filter_map, map_filter_ext; eauto.
-                1,2:intros; destruct_conjs; auto.
-              - intros ? Hin. eapply VarsDefinedScope_Is_defined with (P_def:=fun blks => Exists (Syn.Is_defined_in a) (fst blks)) in H7; eauto.
-                2:eapply NoDupScope_incl; eauto. 2:intros; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
-                + eapply wc_scope_Is_defined_in, fst_InMembers in H7; eauto.
-                  intros; simpl_Exists; simpl_Forall; eauto using wc_block_Is_defined_in.
-                + intros; inv_VarsDefined. rewrite <-Hperm in H24. apply in_concat in H24 as (?&Hin1&Hin2).
-                  inv_VarsDefined; simpl_Forall. solve_Exists. eapply VarsDefined_Is_defined; eauto.
-                  eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; eauto using incl_concat.
-              - destruct Has as [Has|Has]; inv Has; [left|right]; econstructor; solve_In; auto.
-              - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
-              - eapply wc_scope_wx_scope; eauto.
-              - intros; simpl in *. simpl_Exists; inv_VarsDefined; simpl_Forall.
-                eapply depends_on_In with (xs:=xs1); eauto using NoDup_locals_inv with lclocking.
-                etransitivity; [|eauto]. rewrite <-H31; eauto using incl_concat.
-            }
-            assert (forall x ck', HasCaus Γ x cx \/ HasLastCaus Γ x cx -> HasClock Γ x ck' -> ck' = ck) as Hgamma2.
-            { intros * Hing Hck. apply Hgamma in Hing. simpl_In.
-              edestruct H16 as (Hck'&?); eauto. econstructor; solve_In; eauto.
-              inv Hck. inv Hck'. eapply NoDupMembers_det in H21; eauto. congruence. }
-            split; intros ??? Hca Hck Hv; inv Hca; inv Hck; simpl_In.
-            1,2:eapply NoDupMembers_det in Hin0; eauto; subst.
-            1,2:assert (a0.(clo) = ck) by (eapply Hgamma2; eauto with senv); subst.
-            + destruct H14 as (Hfilter&_). eapply sem_var_select_inv in Hv as (?&Hv&Heq); eauto.
-              apply select_fselect in Heq. rewrite Heq, ac_fselect.
-              assert (depends_on Γ cy (causl a0) (Bauto Strong (clo a0) ([], oth) states)) as Hdep2.
-              { eapply depends_on_incl. 3:econstructor; solve_Exists.
-                1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
-              eapply Hsc in Hv. 4,5:eauto with senv. 2,3:eauto with senv.
-              eapply sem_clock_det in Hv. 2:eapply H8.
-              rewrite <-Hv, Hac1; eauto using depends_on_def_last.
-              eapply sem_clock_select. rewrite <-Hac1; eauto using depends_on_def_last.
-            + take (Sem.select_hist _ _ _ _ _) and destruct it as (?&Hselect). rewrite Hselect in Hv.
-              eapply sem_var_fselect_inv in Hv as (?&Hv&Heq). rewrite Heq, ac_fselect.
-              assert (depends_on Γ cy cx (Bauto Strong (clo a0) ([], oth) states)) as Hdep2.
-              { eapply depends_on_incl. 3:econstructor; solve_Exists.
-                1,2:intros * Has; inv Has; simpl_In; eauto with senv. }
-              eapply Hsc in Hv. 4,5:eauto with senv. 2,3:eauto with senv.
-              eapply sem_clock_det in Hv. 2:eapply H8.
-              rewrite <-Hv, Hac1; eauto using depends_on_def_last.
-              eapply sem_clock_select. rewrite <-Hac1; eauto using depends_on_def_last.
-          - intros ? Hin' Hdep. apply HenvP. solve_In.
-            eapply depends_on_incl. 3:econstructor; solve_Exists.
-            1,2:intros * Has; inv Has; simpl_In; eauto with senv.
-          - intros; simpl in *; simpl_Forall; inv_VarsDefined.
-            eapply sem_block_ck'_refines; eauto.
-            eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H27; eauto using incl_concat.
-          - intros; simpl in *; simpl_Forall; inv_VarsDefined.
-            eapply sem_block_ck'_restrict; eauto.
-            + unfold wc_env, idck in H19; simpl_Forall; auto.
-            + eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H29; eauto using incl_concat.
-          - intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
-          - intros; simpl in *. destruct_conjs.
-            assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
-                                              sc_var_inv Γ0 Hi0 (fselectb e k stres1 bs) cy)
-                                     /\ sem_block_ck' (cy::envP) Γ0 Hi0 (fselectb e k stres1 bs) blks) l2) as Hf.
-            { simpl_Forall. inv_VarsDefined.
-              edestruct H with (Γ:=Γ0) (xs:=xs1). 10:eauto. all:eauto.
-              - eapply NoDup_locals_inv; eauto.
-              - etransitivity; eauto using incl_concat.
-                take (Permutation _ _) and now rewrite it.
-              - intros * Hin' Hdep. eapply H32; eauto. solve_Exists.
-              - intros * Hin' Hdep. eapply H33; eauto.
-                2:solve_Exists. solve_In.
-              - split; eauto.
-                intros * Hdef' Hin' Hca. eapply H24; eauto.
-                eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
-            } clear H.
-            split.
-            + intros * Hinxs Hca. inv_VarsDefined.
-              rewrite <-H36 in Hinxs. apply in_concat in Hinxs as (?&?&?); inv_VarsDefined; simpl_Forall.
-              eapply H24; eauto.
-            + simpl_Forall; eauto.
-        } clear H H24.
-        split.
-        + intros * Hinxs Hca1.
-          assert (Syn.Is_defined_in y (Bauto Strong ck ([], oth) states)) as Hdef.
-          { eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
-            eapply NoDupLocals_incl; [|econstructor; eauto]. auto. }
-          assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
-          eapply sc_var_inv_unselect with (tn:=List.length states) (sc:=stres1) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
-          1:{ destruct states; try congruence. simpl; lia. }
-          1:{ eapply sem_automaton_wt_state3 in H22; eauto. 2,3:simpl_Forall; auto.
-              - now rewrite <-H10, <-fst_InMembers.
-              - intros. specialize (H23 k); destruct_conjs. eauto. }
-          1:{ intros * Hca Hck.
-              eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
-              inv Hck. inv Hca.
-              split; econstructor; solve_In; auto.
-          }
-          1:{ intros * Hca Hck.
-              eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
-              inv Hck. inv Hca. eapply NoDupMembers_det in H; eauto. subst.
-              assert (clo e = ck) as Heq; [|rewrite Heq].
-              { inv Hdef. rename H1 into Hdef. simpl_Exists.
-                simpl_Forall.
-                destruct s. eapply wc_scope_Is_defined_in in H1; eauto.
-                2:{ intros; simpl in *; simpl_Exists; simpl_Forall.
-                    eapply wc_block_Is_defined_in; eauto. }
-                eapply InMembers_In in H1 as (?&Hin').
-                edestruct H16 as (Hck&_); eauto with senv.
-                inv Hck. eapply NoDupMembers_det in H0; eauto. congruence.
-              }
               rewrite <-Hac1; auto.
           }
           2:{ intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
@@ -2286,9 +2290,9 @@ Module Type LCLOCKCORRECTNESS
           1:{ intros ? Hca.
               eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
               destruct s. eapply sem_scope_defined2; eauto.
-              inv H14; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
+              take (sem_scope_ck' _ _ _ _ _ _) and inv it; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
           }
-          eapply H12; eauto. inv Hca1; econstructor; solve_In. auto.
+          eapply H13; eauto. inv Hca1; econstructor; solve_In. auto.
         + econstructor; eauto. simpl_Forall.
           specialize (Hf k); destruct_conjs; eauto.
 
@@ -3018,18 +3022,19 @@ Module Type LCLOCKCORRECTNESS
             eauto with senv.
         }
         assert (bs' ≡ abstract_clock stres) as Hac.
-        { symmetry. eapply sc_transitions'' with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in H25; eauto. 3,4:simpl_Forall; eauto.
-          - apply ac_fby1 in H26. now rewrite <-H26.
+        { symmetry. take (sem_transitions _ _ _ _ _ _) and eapply sc_transitions''
+            with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in it; eauto. 3,4:simpl_Forall; eauto.
+          - take (fby _ _ _) and apply ac_fby1 in it; now rewrite <-it.
           - apply nodupmembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           - split; auto.
             eapply wc_exp_incl; [| |eauto].
-            + intros * Has. eapply H18 in Has as (Has&?).
+            + intros * Has. eapply H19 in Has as (Has&?).
               inv Has. econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
               auto.
-            + intros * His. eapply H19 in His as His'.
-              inv His; inv His'. edestruct H18 as (Has&?); eauto with senv.
-              inv Has. eapply NoDupMembers_det in H20; eauto; subst.
+            + intros * His. eapply H20 in His as His'.
+              inv His; inv His'. edestruct H19 as (Has&?); eauto with senv.
+              inv Has. eapply NoDupMembers_det in H21; eauto; subst.
               econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
               simpl; auto.
         }
@@ -3043,15 +3048,15 @@ Module Type LCLOCKCORRECTNESS
             intros; destruct (_ ==b _); simpl; auto.
           * rewrite map_app in Hnd5. apply idcaus_of_senv_filter_NoDup; eauto using NoDup_app_l.
           * eapply wc_exp_incl; [| |eauto].
-            -- intros * Has. eapply H18 in Has as (Has&?).
+            -- intros * Has. eapply H19 in Has as (Has&?).
                inv Has. econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
                auto.
-            -- intros * His. eapply H19 in His as His'.
-               inv His; inv His'. edestruct H18 as (Has&?); eauto with senv.
-               inv Has. eapply NoDupMembers_det in H20; eauto; subst.
+            -- intros * His. eapply H20 in His as His'.
+               inv His; inv His'. edestruct H19 as (Has&?); eauto with senv.
+               inv Has. eapply NoDupMembers_det in H21; eauto; subst.
                econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
                simpl; auto.
-        + simpl_Forall. specialize (H27 k); destruct_conjs.
+        + simpl_Forall. take (forall k, _) and specialize (it k); destruct_conjs.
           take (Sem.select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2).
           apply select_hist_fselect_hist in Hsel1.
           eapply sc_vars_fselect with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in Hsc as Hsc''.
@@ -3064,13 +3069,13 @@ Module Type LCLOCKCORRECTNESS
           1:{ instantiate (1:=(_, _)). split; simpl; eauto.
               eapply select_hist_restrict_ac with (xs:=map fst Γ'0); eauto.
               intros * Hin Hvar. simpl_In.
-              destruct Hsc as ((?&Hv&Hck)&_). eapply H18; eauto with senv.
+              destruct Hsc as ((?&Hv&Hck)&_). eapply H19; eauto with senv.
               eapply sem_var_det in Hvar; eauto. rewrite <-Hvar.
-              eapply sem_clock_det in H24; eauto. rewrite H24; auto.
+              rewrite <-Hac. eapply sem_clock_det; eauto.
           }
           destruct s; destruct_conjs. eapply sem_scope_restrict; eauto.
           1:{ apply Forall_forall. intros * Hin; simpl_In.
-              edestruct H18 as (?&Hbase); eauto with senv. rewrite Hbase. constructor. }
+              edestruct H19 as (?&Hbase); eauto with senv. rewrite Hbase. constructor. }
           2:{ intros; destruct_conjs; split; simpl_Forall; eauto using sem_block_restrict.
               eapply sem_transitions_restrict; eauto. simpl_Forall; eauto with lclocking. }
           eapply sem_scope_sem_scope_ck
@@ -3094,7 +3099,151 @@ Module Type LCLOCKCORRECTNESS
             eapply wc_scope_Is_defined_in, InMembers_In in H8 as (?&?); eauto.
             2:{ intros; simpl in *. eapply Exists_Is_defined_in_wx_In; [|eauto].
                 simpl_Forall; eauto with lclocking. }
-            edestruct H18; eauto with senv. inv H10. solve_In.
+            edestruct H19; eauto with senv. take (HasClock _ _ _) and inv it. solve_In.
+            2:rewrite equiv_decb_refl; eauto. auto.
+          * subst. intros * Hty. apply Hincl1.
+            inv Hty. simpl_In.
+            destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq. eauto with senv.
+          * subst. etransitivity; [|eapply HenvP].
+            rewrite 2 map_app. apply incl_app; [apply incl_appl|apply incl_appr; intros ??; solve_In].
+            unfold idcaus_of_senv. simpl_app. repeat rewrite map_map.
+            apply incl_app; [apply incl_appl|apply incl_appr].
+            1-2:intros ??; solve_In. 1,3:destruct (_ ==b _); inv Hf; eauto; simpl in *. rewrite Hf0; simpl; eauto. auto.
+          * apply FEnv.dom_map. auto.
+          * eapply sc_vars_morph; eauto. 2:reflexivity.
+            split; try reflexivity. rewrite Hsel2; reflexivity.
+          * subst. eapply Forall_forall; intros ? Hin. simpl_In.
+            destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
+            constructor.
+          * simpl_Forall. constructor.
+          * eapply wc_scope_incl; [| |eauto|].
+            1,2:intros * Hin.
+            -- eapply H19 in Hin as (Hck&?); subst.
+               inv Hck. econstructor; solve_In; auto. simpl. rewrite equiv_decb_refl; eauto. auto.
+            -- assert (exists ck, HasClock Γ'0 x ck) as (?&Hck) by (inv Hin; eauto with senv).
+               eapply H19 in Hck as (Hck&?); subst.
+               eapply H20 in Hin as Hil; subst.
+               inv Hil. inv Hck. eapply NoDupMembers_det in H4; eauto; subst.
+               econstructor; solve_In; auto. simpl. rewrite equiv_decb_refl; eauto. auto.
+            -- intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wc_block_incl.
+               split; eauto using wc_exp_incl.
+          * eapply sem_scope_ck'_refines2. 2-5:eauto.
+            etransitivity; eauto.
+          * intros; simpl in *; destruct_conjs; split; simpl_Forall; inv_VarsDefined; eauto using Sem.sem_transitions_refines.
+            eapply sem_block_ck'_refines; eauto.
+            eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
+          * intros; simpl in *; destruct_conjs; split; simpl_Forall; inv_VarsDefined.
+            -- eapply sem_block_ck'_restrict; eauto.
+               eapply NoDupLocals_incl; [|eauto]. do 2 (etransitivity; eauto). take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
+            -- eapply Sem.sem_transitions_restrict; eauto. simpl_Forall; eauto with lclocking.
+          * intros; simpl in *; simpl_Forall; inv_VarsDefined.
+            destruct Hi. eapply Forall_sem_block_dom_lb; eauto; simpl_Forall; eauto using NoDupLocals_incl, sem_block_ck'_sem_block.
+          * intros; simpl in *; destruct_conjs; split.
+            2:{ eapply sem_transitions_sem_transitions_ck; eauto.
+                2,3:simpl_Forall; eauto. solve_NoDup_app. }
+            simpl_Forall. inv_VarsDefined.
+            eapply H with (Γty:=Γty0); eauto using NoDup_locals_inv.
+            -- etransitivity; eauto. take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
+            -- etransitivity; eauto. rewrite 2 map_app. apply incl_appr'. intros ??; solve_In.
+
+      - (* automaton (strong) *)
+        assert (sc_vars (map_filter (fun '(x, e) => if clo e ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) H0 bs') as Hsc'.
+        { eapply sc_vars_subclock. 1,4:eauto.
+          - intros * Hck; inv Hck; simpl_In.
+            destruct (_ ==b _) eqn:Heq; inv Hf. rewrite equiv_decb_equiv in Heq; inv Heq.
+            eauto with senv.
+          - intros * Hl; inv Hl; simpl_In.
+            destruct (_ ==b _) eqn:Heq; inv Hf. rewrite equiv_decb_equiv in Heq; inv Heq.
+            eauto with senv.
+        }
+        assert (bs' ≡ abstract_clock stres) as Hac.
+        { symmetry. take (fby _ _ _) and apply ac_fby1 in it; rewrite <-it. apply const_stres_ac. }
+        assert (bs' ≡ abstract_clock stres1) as Hac1.
+        { take (fby _ _ _) and apply ac_fby2 in it; now rewrite it. }
+
+        assert (incl (map fst Γck) (map fst Γty)) as Hincl'.
+        { intros ? Hv. simpl_In. assert (HasType Γck a a0.(typ)) as Hty by eauto with senv.
+          specialize (Hincl1 _ _ Hty). inv Hincl1. do 2 esplit; eauto. auto. }
+
+        econstructor; eauto.
+        + simpl_Forall. specialize (H25 k); destruct_conjs.
+          take (Sem.select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2).
+          apply select_hist_fselect_hist in Hsel1.
+          eapply sc_vars_fselect with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in Hsc as Hsc''.
+          2:rewrite <-Hac; eauto.
+          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
+              eauto with senv. }
+          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
+              eauto with senv. }
+          do 2 esplit.
+          1:{ instantiate (1:=(_,_)). split; simpl; eauto.
+              eapply select_hist_restrict_ac with (xs:=map fst Γ'0); eauto.
+              intros * Hin Hvar. simpl_In.
+              destruct Hsc as ((?&Hv&Hck)&_). eapply H18; eauto with senv.
+              eapply sem_var_det in Hvar; eauto. rewrite <-Hvar.
+              rewrite <-Hac. eapply sem_clock_det; eauto.
+          }
+          eapply sem_transitions_restrict, sem_transitions_sem_transitions_ck
+            with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck); eauto.
+          1,5,6:simpl_Forall; eauto with lclocking.
+          * eapply wc_exp_incl; [| |eauto].
+            -- intros * Has. eapply H18 in Has as (Has&?).
+               inv Has. econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
+               auto.
+            -- intros * His. eapply H19 in His as His'.
+               inv His; inv His'. edestruct H18 as (Has&?); eauto with senv.
+               inv Has. eapply NoDupMembers_det in H27; eauto; subst.
+               econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
+               simpl; auto.
+          * apply nodupmembers_map_filter; auto.
+            intros; destruct (_ ==b _); simpl; auto.
+          * rewrite map_app in Hnd5. apply idcaus_of_senv_filter_NoDup; eauto using NoDup_app_l.
+          * eapply sc_vars_morph; [reflexivity| |reflexivity|eauto].
+            split; try reflexivity. symmetry; auto.
+          * simpl; eapply Sem.sem_transitions_refines; eauto.
+        + simpl_Forall. specialize (H26 k); destruct_conjs.
+          take (Sem.select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2).
+          apply select_hist_fselect_hist in Hsel1.
+          eapply sc_vars_fselect with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in Hsc as Hsc''.
+          2:rewrite <-Hac1; eauto.
+          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
+              eauto with senv. }
+          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
+              eauto with senv. }
+          esplit; split.
+          1:{ instantiate (1:=(_, _)). split; simpl; eauto.
+              eapply select_hist_restrict_ac with (xs:=map fst Γ'0); eauto.
+              intros * Hin Hvar. simpl_In.
+              destruct Hsc as ((?&Hv&Hck)&_). eapply H18; eauto with senv.
+              eapply sem_var_det in Hvar; eauto. rewrite <-Hvar.
+              rewrite <-Hac1. eapply sem_clock_det; eauto.
+          }
+          destruct s; destruct_conjs. eapply sem_scope_restrict; eauto.
+          1:{ apply Forall_forall. intros * Hin; simpl_In.
+              edestruct H18 as (?&Hbase); eauto with senv. rewrite Hbase. constructor. }
+          2:{ intros; simpl_Forall; eauto using sem_block_restrict. }
+          eapply sem_scope_sem_scope_ck
+            with (Γty:=Γty)
+                 (Γck:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck)
+                 (Γ':=map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ'); eauto.
+          * subst. eapply nodupmembers_map_filter; eauto.
+            intros *. destruct (_ ==b _); simpl; auto.
+          * subst. eapply NoDup_locals_inv3; eauto.
+            rewrite map_app in *. eapply NoDup_incl_app2. 3:apply Hnd5.
+            -- intros ? Hin. unfold idcaus_of_senv in *. rewrite map_app, in_app_iff in *.
+               destruct Hin; [left|right]; simpl_In; destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq; simpl in *.
+               1,2:solve_In; try rewrite Hf0; simpl; eauto. auto.
+            -- intros Hnd. eapply idcaus_of_senv_filter_NoDup; eauto.
+          * intros ? Hin.
+            eapply VarsDefinedScope_Is_defined with (P_def:=fun blks => Exists (Syn.Is_defined_in a) (fst blks)) in H8; eauto.
+            2:{ eapply NoDupScope_incl ; [| |eauto]. 2:etransitivity; eauto using incl_concat.
+                intros; simpl in *; simpl_Forall. eauto using NoDupLocals_incl. }
+            2:{ intros; simpl in *. inv_VarsDefined. eapply Forall_VarsDefined_Is_defined; eauto.
+                simpl_Forall. 1,2:now rewrite Hperm. }
+            eapply wc_scope_Is_defined_in, InMembers_In in H8 as (?&?); eauto.
+            2:{ intros; simpl in *. eapply Exists_Is_defined_in_wx_In; [|eauto].
+                simpl_Forall; eauto with lclocking. }
+            edestruct H18; eauto with senv. take (HasClock _ _ _) and inv it. solve_In.
             2:rewrite equiv_decb_refl; eauto. auto.
           * subst. intros * Hty. apply Hincl1.
             inv Hty. simpl_In.
@@ -3118,151 +3267,7 @@ Module Type LCLOCKCORRECTNESS
             -- assert (exists ck, HasClock Γ'0 x ck) as (?&Hck) by (inv Hin; eauto with senv).
                eapply H18 in Hck as (Hck&?); subst.
                eapply H19 in Hin as Hil; subst.
-               inv Hil. inv Hck. eapply NoDupMembers_det in H4; eauto; subst.
-               econstructor; solve_In; auto. simpl. rewrite equiv_decb_refl; eauto. auto.
-            -- intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wc_block_incl.
-               split; eauto using wc_exp_incl.
-          * eapply sem_scope_ck'_refines2. 2-5:eauto.
-            etransitivity; eauto.
-          * intros; simpl in *; destruct_conjs; split; simpl_Forall; inv_VarsDefined; eauto using Sem.sem_transitions_refines.
-            eapply sem_block_ck'_refines; eauto.
-            eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H28; eauto using incl_concat.
-          * intros; simpl in *; destruct_conjs; split; simpl_Forall; inv_VarsDefined.
-            -- eapply sem_block_ck'_restrict; eauto.
-               eapply NoDupLocals_incl; [|eauto]. do 2 (etransitivity; eauto). rewrite <-H31; eauto using incl_concat.
-            -- eapply Sem.sem_transitions_restrict; eauto. simpl_Forall; eauto with lclocking.
-          * intros; simpl in *; simpl_Forall; inv_VarsDefined.
-            destruct Hi. eapply Forall_sem_block_dom_lb; eauto; simpl_Forall; eauto using NoDupLocals_incl, sem_block_ck'_sem_block.
-          * intros; simpl in *; destruct_conjs; split.
-            2:{ eapply sem_transitions_sem_transitions_ck; eauto.
-                2,3:simpl_Forall; eauto. solve_NoDup_app. }
-            simpl_Forall. inv_VarsDefined.
-            eapply H with (Γty:=Γty0); eauto using NoDup_locals_inv.
-            -- etransitivity; eauto. rewrite <-H40; eauto using incl_concat.
-            -- etransitivity; eauto. rewrite 2 map_app. apply incl_appr'. intros ??; solve_In.
-
-      - (* automaton (strong) *)
-        assert (sc_vars (map_filter (fun '(x, e) => if clo e ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) H0 bs') as Hsc'.
-        { eapply sc_vars_subclock. 1,4:eauto.
-          - intros * Hck; inv Hck; simpl_In.
-            destruct (_ ==b _) eqn:Heq; inv Hf. rewrite equiv_decb_equiv in Heq; inv Heq.
-            eauto with senv.
-          - intros * Hl; inv Hl; simpl_In.
-            destruct (_ ==b _) eqn:Heq; inv Hf. rewrite equiv_decb_equiv in Heq; inv Heq.
-            eauto with senv.
-        }
-        assert (bs' ≡ abstract_clock stres) as Hac.
-        { symmetry. apply ac_fby1 in H23. rewrite <-H23. apply const_stres_ac. }
-        assert (bs' ≡ abstract_clock stres1) as Hac1.
-        { apply ac_fby2 in H23. now rewrite H23. }
-
-        assert (incl (map fst Γck) (map fst Γty)) as Hincl'.
-        { intros ? Hv. simpl_In. assert (HasType Γck a a0.(typ)) as Hty by eauto with senv.
-          specialize (Hincl1 _ _ Hty). inv Hincl1. do 2 esplit; eauto. auto. }
-
-        econstructor; eauto.
-        + simpl_Forall. specialize (H24 k); destruct_conjs.
-          take (Sem.select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2).
-          apply select_hist_fselect_hist in Hsel1.
-          eapply sc_vars_fselect with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in Hsc as Hsc''.
-          2:rewrite <-Hac; eauto.
-          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
-              eauto with senv. }
-          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
-              eauto with senv. }
-          do 2 esplit.
-          1:{ instantiate (1:=(_,_)). split; simpl; eauto.
-              eapply select_hist_restrict_ac with (xs:=map fst Γ'0); eauto.
-              intros * Hin Hvar. simpl_In.
-              destruct Hsc as ((?&Hv&Hck)&_). eapply H17; eauto with senv.
-              eapply sem_var_det in Hvar; eauto. rewrite <-Hvar.
-              eapply sem_clock_det in H9; eauto. rewrite H9; auto.
-          }
-          eapply sem_transitions_restrict, sem_transitions_sem_transitions_ck
-            with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck); eauto.
-          1,5,6:simpl_Forall; eauto with lclocking.
-          * eapply wc_exp_incl; [| |eauto].
-            -- intros * Has. eapply H17 in Has as (Has&?).
-               inv Has. econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
-               auto.
-            -- intros * His. eapply H18 in His as His'.
-               inv His; inv His'. edestruct H17 as (Has&?); eauto with senv.
-               inv Has. eapply NoDupMembers_det in H26; eauto; subst.
-               econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
-               simpl; auto.
-          * apply nodupmembers_map_filter; auto.
-            intros; destruct (_ ==b _); simpl; auto.
-          * rewrite map_app in Hnd5. apply idcaus_of_senv_filter_NoDup; eauto using NoDup_app_l.
-          * eapply sc_vars_morph; [reflexivity| |reflexivity|eauto].
-            split; try reflexivity. symmetry; auto.
-          * simpl; eapply Sem.sem_transitions_refines; eauto.
-        + simpl_Forall. specialize (H25 k); destruct_conjs.
-          take (Sem.select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2).
-          apply select_hist_fselect_hist in Hsel1.
-          eapply sc_vars_fselect with (Γ':=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in Hsc as Hsc''.
-          2:rewrite <-Hac1; eauto.
-          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
-              eauto with senv. }
-          2:{ intros * Has. inv Has; simpl_In. destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
-              eauto with senv. }
-          esplit; split.
-          1:{ instantiate (1:=(_, _)). split; simpl; eauto.
-              eapply select_hist_restrict_ac with (xs:=map fst Γ'0); eauto.
-              intros * Hin Hvar. simpl_In.
-              destruct Hsc as ((?&Hv&Hck)&_). eapply H17; eauto with senv.
-              eapply sem_var_det in Hvar; eauto. rewrite <-Hvar.
-              eapply sem_clock_det in H9; eauto. rewrite H9; auto.
-          }
-          destruct s; destruct_conjs. eapply sem_scope_restrict; eauto.
-          1:{ apply Forall_forall. intros * Hin; simpl_In.
-              edestruct H17 as (?&Hbase); eauto with senv. rewrite Hbase. constructor. }
-          2:{ intros; simpl_Forall; eauto using sem_block_restrict. }
-          eapply sem_scope_sem_scope_ck
-            with (Γty:=Γty)
-                 (Γck:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck)
-                 (Γ':=map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ'); eauto.
-          * subst. eapply nodupmembers_map_filter; eauto.
-            intros *. destruct (_ ==b _); simpl; auto.
-          * subst. eapply NoDup_locals_inv3; eauto.
-            rewrite map_app in *. eapply NoDup_incl_app2. 3:apply Hnd5.
-            -- intros ? Hin. unfold idcaus_of_senv in *. rewrite map_app, in_app_iff in *.
-               destruct Hin; [left|right]; simpl_In; destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq; simpl in *.
-               1,2:solve_In; try rewrite Hf0; simpl; eauto. auto.
-            -- intros Hnd. eapply idcaus_of_senv_filter_NoDup; eauto.
-          * intros ? Hin.
-            eapply VarsDefinedScope_Is_defined with (P_def:=fun blks => Exists (Syn.Is_defined_in a) (fst blks)) in H8; eauto.
-            2:{ eapply NoDupScope_incl ; [| |eauto]. 2:etransitivity; eauto using incl_concat.
-                intros; simpl in *; simpl_Forall. eauto using NoDupLocals_incl. }
-            2:{ intros; simpl in *. inv_VarsDefined. eapply Forall_VarsDefined_Is_defined; eauto.
-                simpl_Forall. 1,2:now rewrite Hperm. }
-            eapply wc_scope_Is_defined_in, InMembers_In in H8 as (?&?); eauto.
-            2:{ intros; simpl in *. eapply Exists_Is_defined_in_wx_In; [|eauto].
-                simpl_Forall; eauto with lclocking. }
-            edestruct H17; eauto with senv. inv H13. solve_In.
-            2:rewrite equiv_decb_refl; eauto. auto.
-          * subst. intros * Hty. apply Hincl1.
-            inv Hty. simpl_In.
-            destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq. eauto with senv.
-          * subst. etransitivity; [|eapply HenvP].
-            rewrite 2 map_app. apply incl_app; [apply incl_appl|apply incl_appr; intros ??; solve_In].
-            unfold idcaus_of_senv. simpl_app. repeat rewrite map_map.
-            apply incl_app; [apply incl_appl|apply incl_appr].
-            1-2:intros ??; solve_In. 1,3:destruct (_ ==b _); inv Hf; eauto; simpl in *. rewrite Hf0; simpl; eauto. auto.
-          * apply FEnv.dom_map. auto.
-          * eapply sc_vars_morph; eauto. 2:reflexivity.
-            split; try reflexivity. rewrite <-Hsel2; reflexivity.
-          * subst. eapply Forall_forall; intros ? Hin. simpl_In.
-            destruct (_ ==b _) eqn:Heq; inv Hf; rewrite equiv_decb_equiv in Heq; inv Heq.
-            constructor.
-          * simpl_Forall. constructor.
-          * eapply wc_scope_incl; [| |eauto|].
-            1,2:intros * Hin.
-            -- eapply H17 in Hin as (Hck&?); subst.
-               inv Hck. econstructor; solve_In; auto. simpl. rewrite equiv_decb_refl; eauto. auto.
-            -- assert (exists ck, HasClock Γ'0 x ck) as (?&Hck) by (inv Hin; eauto with senv).
-               eapply H17 in Hck as (Hck&?); subst.
-               eapply H18 in Hin as Hil; subst.
-               inv Hil. inv Hck. eapply NoDupMembers_det in H13; eauto; subst.
+               inv Hil. inv Hck. eapply NoDupMembers_det in H14; eauto; subst.
                econstructor; solve_In; auto. simpl. rewrite equiv_decb_refl; eauto. auto.
             -- intros; simpl in *; destruct_conjs; split; simpl_Forall; eauto using wc_block_incl.
                split; eauto using wc_exp_incl.
@@ -3270,16 +3275,16 @@ Module Type LCLOCKCORRECTNESS
             etransitivity; eauto.
           * intros; simpl in *; simpl_Forall; inv_VarsDefined; eauto.
             eapply sem_block_ck'_refines; eauto.
-            eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. rewrite <-H26; eauto using incl_concat.
+            eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto. take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
           * intros; simpl in *; simpl_Forall; inv_VarsDefined.
             eapply sem_block_ck'_restrict; eauto.
-            eapply NoDupLocals_incl; [|eauto]. do 2 (etransitivity; eauto). rewrite <-H29; eauto using incl_concat.
+            eapply NoDupLocals_incl; [|eauto]. do 2 (etransitivity; eauto). take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
           * intros; simpl in *; simpl_Forall; inv_VarsDefined.
             destruct Hi. eapply Forall_sem_block_dom_lb; eauto; simpl_Forall; eauto using NoDupLocals_incl, sem_block_ck'_sem_block.
           * intros; simpl in *.
             simpl_Forall. inv_VarsDefined.
             eapply H with (Γty:=Γty0); eauto using NoDup_locals_inv.
-            -- etransitivity; eauto. rewrite <-H38; eauto using incl_concat.
+            -- etransitivity; eauto. take (Permutation _ _) and rewrite <-it; eauto using incl_concat.
             -- etransitivity; eauto. rewrite 2 map_app. apply incl_appr'. intros ??; solve_In.
 
       - (* locals *)

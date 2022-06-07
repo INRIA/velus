@@ -159,10 +159,10 @@ Module Type CACLOCKING
         + remember [_;_;_;_] as Γ''.
           eapply wc_Bswitch with (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ''++Γ'); simpl; eauto; wc_automaton.
           * subst. constructor; wc_automaton.
-          * apply mmap2_values, Forall3_ignore3 in H13. inv H13; auto; congruence.
+          * take (mmap2 _ _ _ = _) and apply mmap2_values, Forall3_ignore3 in it; inv it; auto; congruence.
           * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
-            -- inv H14. simpl in *.
-               destruct H15 as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
+            -- take (HasClock _ _ _) and inv it. simpl in *.
+               take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
             -- edestruct H8; eauto.
           * intros *. rewrite 2 IsLast_app. intros [|]; eauto.
             take (IsLast _ _) and inv it. simpl in *.
@@ -181,7 +181,7 @@ Module Type CACLOCKING
               eapply wc_exp_incl; [| |eauto]; intros * Hi; inv Hi; econstructor; eauto with datatypes. }
             { rewrite trans_exp_clockof; repeat constructor; econstructor; eauto with datatypes. }
             { auto_block_simpl_Forall.
-              eapply H in H19; eauto.
+              take (wc_block _ _ _) and eapply H in it; eauto.
               - eapply wc_block_incl; [| |eauto]; intros * Hi; inv Hi; econstructor; eauto with datatypes.
             }
 
@@ -220,7 +220,7 @@ Module Type CACLOCKING
         + remember [_;_;_;_] as Γ''.
           eapply wc_Bswitch with (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ''++Γ'); simpl; eauto; wc_automaton.
           * subst. constructor; wc_automaton.
-          * apply mmap2_values, Forall3_ignore3 in H13. inv H13; auto; congruence.
+          * take (mmap2 _ _ _ = _) and apply mmap2_values, Forall3_ignore3 in it. inv it; auto; congruence.
           * intros *. rewrite 2 HasClock_app. subst; intros [|]; eauto.
             -- take (HasClock _ _ _) and inv it. simpl in *.
                take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; split; auto; right; econstructor; eauto with datatypes.
@@ -237,7 +237,7 @@ Module Type CACLOCKING
                 destruct Hin as [Heq|[Heq|[Heq|[Heq|Heq]]]]; inv Heq; simpl in *; congruence. }
             intros; repeat inv_bind. repeat constructor.
             auto_block_simpl_Forall.
-            eapply H in H19; eauto.
+            take (wc_block _ _ _) and eapply H in it; eauto.
             eapply wc_block_incl; [| |eauto]; intros * Hi; inv Hi; econstructor; eauto with datatypes.
 
       - (* local *)

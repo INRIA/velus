@@ -51,7 +51,7 @@ Module Type LSYNTAX
   | Ebinop : binop -> exp -> exp -> ann -> exp
   | Efby   : list exp -> list exp -> list ann -> exp
   | Earrow : list exp -> list exp -> list ann -> exp
-  | Ewhen  : list exp -> ident -> enumtag -> lann -> exp
+  | Ewhen  : list exp -> (ident * type) -> enumtag -> lann -> exp
   | Emerge : ident * type -> list (enumtag * list exp) -> lann -> exp
   | Ecase  : exp -> list (enumtag * list exp) -> option (list exp) -> lann -> exp
   | Eapp   : ident -> list exp -> list exp -> list ann -> exp.
@@ -93,7 +93,7 @@ Module Type LSYNTAX
   | Bswitch : exp -> list (enumtag * scope (list block)) -> block
   (* For automatons : initially, states. We also need the base clock of the state-machine for clock-checking *)
   | Bauto : auto_type -> clock -> list (exp * enumtag) * enumtag ->
-            list (enumtag * (list transition * scope (list block * list transition))) -> block
+            list ((enumtag * ident) * (list transition * scope (list block * list transition))) -> block
   | Blocal : scope (list block) -> block.
 
   (** ** Node *)
@@ -1115,10 +1115,10 @@ Module Type LSYNTAX
       Forall (wx_exp Γ) e0s ->
       Forall (wx_exp Γ) es ->
       wx_exp Γ (Earrow e0s es anns)
-  | wx_Ewhen : forall es x b tys nck,
+  | wx_Ewhen : forall es x tx b tys nck,
       IsVar Γ x ->
       Forall (wx_exp Γ) es ->
-      wx_exp Γ (Ewhen es x b (tys, nck))
+      wx_exp Γ (Ewhen es (x, tx) b (tys, nck))
   | wx_Emerge : forall x tx es tys nck,
       IsVar Γ x ->
       Forall (fun es => Forall (wx_exp Γ) (snd es)) es ->

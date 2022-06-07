@@ -48,7 +48,7 @@ Module Type CETYPING
         In (Tenum tx tn) types ->
         b < length tn ->
         wt_exp e ->
-        wt_exp (Ewhen e x b)
+        wt_exp (Ewhen e (x, Tenum tx tn) b)
     | wt_Eunop: forall op e ty,
         type_unop op (typeof e) = Some ty ->
         wt_exp e ->

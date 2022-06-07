@@ -63,11 +63,11 @@ Module Type NLCOINDSEMANTICS
         sem_var H x xs ->
         sem_exp H b (Evar x ty) xs
   | Swhen:
-      forall H b e x c es xs os,
+      forall H b e x tx c es xs os,
         sem_exp H b e es ->
         sem_var H x xs ->
         when c es xs os ->
-        sem_exp H b (Ewhen e x c) os
+        sem_exp H b (Ewhen e (x, tx) c) os
   | Sunop:
       forall H b op e ty es os,
         sem_exp H b e es ->

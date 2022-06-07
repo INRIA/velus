@@ -66,21 +66,21 @@ environment.
           sem_var_instant R x v ->
           sem_exp_instant (Evar x ty) v
     | Swhen_eq:
-        forall s x sc b,
+        forall s x tx sc b,
           sem_var_instant R x (present (Venum b)) ->
           sem_exp_instant s (present sc) ->
-          sem_exp_instant (Ewhen s x b) (present sc)
+          sem_exp_instant (Ewhen s (x, tx) b) (present sc)
     | Swhen_abs1:
-        forall s x sc b b',
+        forall s x tx sc b b',
           sem_var_instant R x (present (Venum b')) ->
           b <> b' ->
           sem_exp_instant s (present sc) ->
-          sem_exp_instant (Ewhen s x b) absent
+          sem_exp_instant (Ewhen s (x, tx) b) absent
     | Swhen_abs:
-        forall s x b,
+        forall s x tx b,
           sem_var_instant R x absent ->
           sem_exp_instant s absent ->
-          sem_exp_instant (Ewhen s x b) absent
+          sem_exp_instant (Ewhen s (x, tx) b) absent
     | Sunop_eq:
         forall le op v v' ty,
           sem_exp_instant le (present v) ->
@@ -506,7 +506,7 @@ environment.
       - (* Eenum *)
         do 2 inversion_clear 1; destruct base; congruence.
       - (* Ewhen *)
-        intros v1 v2 Hsem1 Hsem2.
+        intros v1 v2 Hsem1 Hsem2. destruct_conjs.
         inversion Hsem1; inversion Hsem2; subst;
           repeat match goal with
                  | H1:sem_exp_instant ?b ?R ?e ?v1,

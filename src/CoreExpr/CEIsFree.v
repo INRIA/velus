@@ -25,8 +25,8 @@ Module Type CEISFREE
   | FreeEwhen1: forall e c cv x,
       Is_free_in_exp x e ->
       Is_free_in_exp x (Ewhen e c cv)
-  | FreeEwhen2: forall e c cv,
-      Is_free_in_exp c (Ewhen e c cv)
+  | FreeEwhen2: forall e c tx cv,
+      Is_free_in_exp c (Ewhen e (c, tx) cv)
   | FreeEunop : forall c op e ty,
       Is_free_in_exp c e -> Is_free_in_exp c (Eunop op e ty)
   | FreeEbinop : forall c op e1 e2 ty,
@@ -91,8 +91,8 @@ Module Type CEISFREE
   Qed.
 
   Lemma Is_free_in_when_disj:
-    forall y e x c, Is_free_in_exp y (Ewhen e x c)
-                    <-> y = x \/ Is_free_in_exp y e.
+    forall y e x tx c, Is_free_in_exp y (Ewhen e (x, tx) c)
+                  <-> y = x \/ Is_free_in_exp y e.
   Proof.
     intros y e x c; split; intro HH.
     inversion_clear HH; auto.
@@ -131,7 +131,7 @@ Module Type CEISFREE
     | Econst _ => fvs
     | Eenum _ _ => fvs
     | Evar x _ => PS.add x fvs
-    | Ewhen e x _ => free_in_exp e (PS.add x fvs)
+    | Ewhen e (x, _) _ => free_in_exp e (PS.add x fvs)
     | Eunop _ e _ => free_in_exp e fvs
     | Ebinop _ e1 e2 _ => free_in_exp e2 (free_in_exp e1 fvs)
     end.
@@ -182,7 +182,7 @@ Module Type CEISFREE
     forall x e m, PS.In x (free_in_exp e m)
                   <-> Is_free_in_exp x e \/ PS.In x m.
   Proof.
-    intro x; induction e using exp_ind;
+    intro x; induction e using exp_ind; destruct_conjs;
       try now intro m; (split;
                         [
                           intro H0; try apply IHe in H0

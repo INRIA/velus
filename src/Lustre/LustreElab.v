@@ -247,7 +247,7 @@ Inductive eexp : Type :=
 | Efby   : list eexp -> list eexp -> list ann -> eexp
 | Earrow : list eexp -> list eexp -> list ann -> eexp
 
-| Ewhen  : list eexp -> ident -> enumtag -> lann -> eexp
+| Ewhen  : list eexp -> (ident * type) -> enumtag -> lann -> eexp
 | Emerge : (ident * type) -> list (enumtag * list eexp) -> lann -> eexp
 | Ecase  : eexp -> list (enumtag * list eexp) -> option (list eexp) -> lann -> eexp
 
@@ -1023,7 +1023,7 @@ Section ElabExpressions.
       do eas' <- mmap elab_exp aes';
       let ans' := lannots eas' in
       do _ <- unify_same_clock xck ans';
-      ret (Ewhen (map fst eas') x c
+      ret (Ewhen (map fst eas') (x, xty) c
                  (lannots_ty ans', Son xck (Vnm x) (Tenum (fst tn') (snd tn'), c)), loc)
 
     | MERGE x aes loc =>
@@ -1090,9 +1090,9 @@ Section ElabExpressions.
   Fixpoint add_whens (e: Syn.exp) (tys: list type) (ck: clock) : Elab Syn.exp :=
     match ck with
     | Cbase => ret e
-    | Con ck' x (_, k) =>
+    | Con ck' x (tx, k) =>
       do e' <- add_whens e tys ck';
-      if Env.mem x env then ret (Syn.Ewhen [e'] x k (tys, ck))
+      if Env.mem x env then ret (Syn.Ewhen [e'] (x, tx) k (tys, ck))
       else error (MSG "Clock variable " :: CTX x :: MSG " escapes its scope" :: nil)
     end.
 
@@ -1139,10 +1139,10 @@ Section ElabExpressions.
       do anns <- mmap freeze_ann anns;
       ret (Syn.Earrow e0s es anns)
 
-    | Ewhen es ckid b (tys, nck) =>
+    | Ewhen es (ckid, tx) b (tys, nck) =>
       do es <- freeze_exps es;
       do nck <- freeze_clock nck;
-      ret (Syn.Ewhen es ckid b (tys, nck))
+      ret (Syn.Ewhen es (ckid, tx) b (tys, nck))
 
     | Emerge ckid es (tys, nck) =>
       do es <- mmap (fun '(i, es) => do es' <- freeze_exps es; ret (i, es')) es;
@@ -1446,8 +1446,8 @@ Section ElabBlock.
                           do (t, _) <- elab_enum tenv' loc t;
                           do e <- elab_transition_cond env tenv nenv e loc;
                           ret (e, t)) ini;
-         do states <- mmap (fun '(t, (locs, ablks, unt, unl)) =>
-                             do (t, _) <- elab_enum tenv' loc t;
+         do states <- mmap (fun '(constr, (locs, ablks, unt, unl)) =>
+                             do (t, _) <- elab_enum tenv' loc constr;
                              do env <- elab_var_decls tenv loc env locs;
                              do locs <- mmap (annotate tenv env nenv) locs;
                              do _ <- mmap (check_atom loc) (map fst locs);
@@ -1461,7 +1461,7 @@ Section ElabBlock.
                                               do e <- elab_transition_cond env tenv nenv e loc;
                                               ret (e, (t, b))) unl;
                              do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
-                             ret (t, (unl, (Scope locs caus (blks, unt))))
+                             ret ((t, constr), (unl, (Scope locs caus (blks, unt))))
                           ) states;
          do type <-
               if forallb (fun '(_, (unl, _)) => is_nil unl) states then ret Weak
@@ -1771,7 +1771,7 @@ Section ElabDeclaration.
           eapply check_defined_blocks_spec in H0; eauto.
       + clear - Hbind1 H4 H5. revert x0 x1 st' Hbind1.
         induction H4; intros * Hbind; inv H5; repeat monadInv; constructor; eauto.
-        destruct x as [?[]]; repeat monadInv. eapply check_defined_vars_spec in Hbind2.
+        destruct x as [(?&?)[]]; repeat monadInv. eapply check_defined_vars_spec in Hbind2.
         destruct s. eapply check_defined_scope_spec in Hbind1; eauto.
         * eapply VarsDefinedScope_Perm2; [|eauto]. now symmetry.
         * intros; simpl in *; inv_VarsDefined.

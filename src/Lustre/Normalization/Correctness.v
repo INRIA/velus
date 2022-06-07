@@ -400,12 +400,12 @@ Module Type CORRECTNESS
       Unshelve. 1-2:exact default_stream.
     Qed.
 
-    Fact unnest_when_sem : forall H bs es tys ckid b ck s ss os,
+    Fact unnest_when_sem : forall H bs es tys ckid tx b ck s ss os,
         length es = length tys ->
         Forall2 (fun e s => sem_exp_ck G2 H bs e [s]) es ss ->
         sem_var (fst H) ckid s ->
         Forall2 (fun s' => when b s' s) ss os ->
-        Forall2 (fun e s => sem_exp_ck G2 H bs e [s]) (unnest_when ckid b es tys ck) os.
+        Forall2 (fun e s => sem_exp_ck G2 H bs e [s]) (unnest_when (ckid, tx) b es tys ck) os.
     Proof with eauto.
       intros * Hlen Hsem Hvar Hwhen.
       unfold unnest_when. simpl_forall.
@@ -951,7 +951,7 @@ Module Type CORRECTNESS
       - (* when *)
         inv Hwc. inv Hsem. repeat inv_bind.
         assert (length (concat x1) = length (annots es)) as Hlength by (eapply mmap2_unnest_exp_length; eauto with lclocking).
-        assert (length es = length ss) by (apply Forall2_length in H13; auto).
+        assert (length es = length ss) by (apply Forall2_length in H14; auto).
         eapply mmap2_sem in H1... clear H.
         destruct H1 as [H' [Hvalid1 [Href1 [Hhistst1 [Hsem1 Hsem1']]]]].
         apply Forall2_concat in Hsem1.

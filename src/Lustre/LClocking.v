@@ -93,12 +93,12 @@ Module Type LCLOCKING
         Forall2 eq (map snd anns) (clocksof es) ->
         wc_exp (Earrow e0s es anns)
 
-    | wc_Ewhen: forall es x ty b tys ck,
+    | wc_Ewhen: forall es x tx ty b tys ck,
         HasClock Γ x ck ->
         Forall wc_exp es ->
         Forall (eq ck) (clocksof es) ->
         length tys = length (clocksof es) ->
-        wc_exp (Ewhen es x b (tys, (Con ck x (ty, b))))
+        wc_exp (Ewhen es (x, tx) b (tys, (Con ck x (ty, b))))
 
     | wc_Emerge: forall x tx es tys ck,
         HasClock Γ x ck ->
@@ -270,13 +270,13 @@ Module Type LCLOCKING
         P (Earrow e0s es anns).
 
     Hypothesis EwhenCase:
-      forall es x ty b tys ck,
+      forall es x tx ty b tys ck,
         HasClock Γ x ck ->
         Forall (wc_exp G Γ) es ->
         Forall P es ->
         Forall (eq ck) (clocksof es) ->
         length tys = length (clocksof es) ->
-        P (Ewhen es x b (tys, Con ck x (ty, b))).
+        P (Ewhen es (x, tx) b (tys, Con ck x (ty, b))).
 
     Hypothesis EmergeCase:
       forall x tx es tys ck,
@@ -679,7 +679,7 @@ Module Type LCLOCKING
         if forall3b check_paired_clocks nc0s ncs anns
         then Some (map snd anns) else None
 
-      | Ewhen es x b (tys, nc) =>
+      | Ewhen es (x, _) b (tys, nc) =>
         match nc with
         | Con xc y (_, yb) =>
           do nces <- oconcat (map check_exp es);

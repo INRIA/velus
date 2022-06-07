@@ -541,17 +541,17 @@ Module Type DLCORRECTNESS
 
       - (* automaton (weak) *)
         assert (bs' ≡ abstract_clock stres) as Hac.
-        { eapply sc_transitions in H22; eauto.
-          - apply ac_fby1 in H23. rewrite <-H23, <-H22. reflexivity.
+        { take (sem_transitions_ck _ _ _ _ _ _) and eapply sc_transitions in it; eauto.
+          - take (fby _ _ _) and apply ac_fby1 in it. rewrite <-it0, <-it. reflexivity.
           - eapply sc_vars_subclock; eauto.
           - simpl_Forall; eauto. }
         econstructor; eauto using sem_clock_refines.
-        + eapply rename_in_transitions_sem in H22; eauto.
+        + take (sem_transitions_ck _ _ _ _ _ _) and eapply rename_in_transitions_sem in it; eauto.
           2:{ simpl_Forall.
               eapply wx_exp_incl. 2,3:eauto with lclocking.
               intros * Hv. inv Hv. apply fst_InMembers in H15; simpl_In.
               edestruct H9 as (Hck&_); eauto with senv. }
-          rewrite map_map in H22. erewrite map_map, map_ext; eauto using sem_ref_sem_transitions.
+          rewrite map_map in it. erewrite map_map, map_ext; eauto using sem_ref_sem_transitions.
           intros; destruct_conjs; auto.
         + eapply mmap_values_valid_follows, Forall2_ignore1 in H0; eauto.
           2:{ intros; destruct_conjs; repeat inv_bind.
@@ -562,7 +562,7 @@ Module Type DLCORRECTNESS
               destruct s0; destruct_conjs. eapply delast_scope_st_follows; eauto.
               intros; repeat inv_bind. eapply mmap_st_follows; eauto.
               simpl_Forall. eapply delast_block_st_follows; eauto. }
-          simpl_Forall. specialize (H24 k); destruct_conjs.
+          simpl_Forall. specialize (H25 k); destruct_conjs.
           take (select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2). apply select_hist_fselect_hist in Hsel1.
           repeat inv_bind.
           assert (forall x vs,
@@ -583,15 +583,15 @@ Module Type DLCORRECTNESS
               intros * Hin Hv; simpl_In. apply in_app_iff in Hin as [Hin|Hin]; simpl_In.
               + edestruct Hsc as ((?&Hv'&Hck)&_). eapply H9; eauto with senv.
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
-                eapply sem_clock_det in H21; eauto. rewrite H21; auto.
+                rewrite <-Hac. eapply sem_clock_det; eauto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i) as Hlast.
+                assert (IsLast Γck i0) as Hlast.
                 { eapply H10. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.
                 1:{ eapply H9; eauto with senv. }
-                apply Hvarl in Hv'; auto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
-                eapply sem_clock_det in H21; eauto. rewrite H21; auto.
+                apply Hvarl in Hv'; auto. eapply sem_var_det in Hv; eauto. rewrite <-Hv, <-Hac.
+                eapply sem_clock_det; eauto.
           }
           destruct s0; destruct_conjs.
           eapply delast_scope_sem with (st:=x1) (Γck:=Γ') (Hl:=t0) (Hi:=FEnv.restrict _ _); eauto.
@@ -625,10 +625,10 @@ Module Type DLCORRECTNESS
           * intros; repeat inv_bind. destruct_conjs; split.
             2:{ eapply rename_in_transitions_sem with (Hl:=Hl0); eauto using sem_ref_sem_transitions.
                 simpl_Forall; eauto with lclocking. }
-            eapply mmap_values_valid_follows, Forall2_ignore1 in H40; eauto.
+            take (mmap _ _ _ = _) and eapply mmap_values_valid_follows, Forall2_ignore1 in it; eauto.
             2:{ intros. eapply delast_block_st_valid_after; eauto. }
             2:{ intros. eapply delast_block_st_follows; eauto. }
-            simpl_Forall. eapply H in H47; eauto.
+            simpl_Forall. take (delast_block _ _ _ = _) and eapply H in it; eauto.
             -- intros. eapply incl_map; eauto using st_follows_incl.
             -- simpl_Forall; auto.
             -- eapply FEnv.dom_ub_incl; eauto. apply incl_appr', incl_map; eauto using st_follows_incl.
@@ -636,10 +636,10 @@ Module Type DLCORRECTNESS
 
       - (* automaton (strong) *)
         assert (bs' ≡ abstract_clock stres) as Hac.
-        { apply ac_fby1 in H20 as Hac1.
+        { take (fby _ _ _) and apply ac_fby1 in it as Hac1.
           rewrite <-Hac1. symmetry. apply const_stres_ac. }
         assert (bs' ≡ abstract_clock stres1) as Hac1.
-        { apply ac_fby2 in H20 as Hac2. now rewrite Hac2. }
+        { take (fby _ _ _) and apply ac_fby2 in it; now rewrite it. }
         econstructor; eauto using sem_clock_refines.
         + clear H.
           eapply mmap_values_valid_follows, Forall2_ignore1 in H0; eauto.
@@ -652,7 +652,7 @@ Module Type DLCORRECTNESS
               intros; repeat inv_bind. eapply mmap_st_follows; eauto.
               simpl_Forall. eapply delast_block_st_follows; eauto. }
           simpl_Forall; repeat inv_bind.
-          specialize (H21 k); destruct_conjs.
+          specialize (H22 k); destruct_conjs.
           take (select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2). apply select_hist_fselect_hist in Hsel1.
           assert (forall x vs,
                      IsLast Γ' x ->
@@ -674,7 +674,7 @@ Module Type DLCORRECTNESS
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
                 eapply sem_clock_det in H8; eauto. rewrite H8; auto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i) as Hlast.
+                assert (IsLast Γck i0) as Hlast.
                 { eapply H10. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.
@@ -696,7 +696,7 @@ Module Type DLCORRECTNESS
               destruct s0; destruct_conjs. eapply delast_scope_st_follows; eauto.
               intros; repeat inv_bind. eapply mmap_st_follows; eauto.
               simpl_Forall. eapply delast_block_st_follows; eauto. }
-          simpl_Forall. specialize (H22 k); destruct_conjs.
+          simpl_Forall. specialize (H23 k); destruct_conjs.
           take (select_hist _ _ _ _ _) and destruct it as (Hsel1&Hsel2). apply select_hist_fselect_hist in Hsel1.
           repeat inv_bind.
           assert (forall x vs,
@@ -719,7 +719,7 @@ Module Type DLCORRECTNESS
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
                 eapply sem_clock_det in H8; eauto. rewrite H8; auto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i) as Hlast.
+                assert (IsLast Γck i0) as Hlast.
                 { eapply H10. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.
@@ -760,7 +760,7 @@ Module Type DLCORRECTNESS
             eapply mmap_values_valid_follows, Forall2_ignore1 in H40; eauto.
             2:{ intros. eapply delast_block_st_valid_after; eauto. }
             2:{ intros. eapply delast_block_st_follows; eauto. }
-            simpl_Forall. eapply H in H46; eauto.
+            simpl_Forall. take (delast_block _ _ _ = _) and eapply H in it; eauto.
             -- intros. eapply incl_map; eauto using st_follows_incl.
             -- simpl_Forall; auto.
             -- eapply FEnv.dom_ub_incl; eauto. apply incl_appr', incl_map; eauto using st_follows_incl.

@@ -192,7 +192,7 @@ Module Type CORRECTNESS
       eapply ty_lexp in EQ; eauto. eapply ty_lexp in EQ1; eauto.
       rewrite H11 in EQ. inv EQ. rewrite H12 in EQ1. now inv EQ1.
     - cases. monadInv H2. inv Hsem. inv H0. clear H4. inv Hwt.
-      inv H9. inv H5. inv H12. inv H5. simpl in H11; rewrite app_nil_r in H11. inv H11. inv H12.
+      simpl_Forall; try rewrite app_nil_r in *; subst.
       econstructor; eauto.
   Qed.
 
@@ -822,7 +822,7 @@ Module Type CORRECTNESS
       do 2 (destruct tys; simpl in *; try congruence). inv Hck.
       symmetry in H9. singleton_length.
       apply Forall_singl in H8; inv H8.
-      inv Hsem. inv H12; inv H8. simpl in H14; rewrite app_nil_r in H14. inv H14; inv H9.
+      inv Hsem. simpl_Forall. rewrite app_nil_r in *; subst.
       assert (b' ≡ abstract_clock cs) as Hac.
       { eapply sem_clock_ac in Hsck; eauto. }
       rewrite Hac in *. eapply sem_clock_inv in H8 as Hck'; eauto.
@@ -1099,13 +1099,13 @@ Module Type CORRECTNESS
         specialize (H17 n) as [(?&?&?)|(?&?&?&?&?&?&?)]; try congruence.
     - (* when *)
       eapply sem_var_det in H9; eauto.
-      inv H8; inv H4. inv H11; inv H5.
+      simpl_Forall. rewrite app_nil_r in *.
       eapply IHHun in H2; eauto.
-      simpl in *; rewrite app_nil_r in *. clear -H2 H9 H10 H13.
-      revert vs1 vs2 H10 H13.
-      induction H2; intros; inv H10; inv H13; constructor; eauto.
+      clear -H2 H9 H10 H14.
+      revert vs1 vs2 H10 H14.
+      induction H2; intros; inv H10; inv H14; constructor; eauto.
       2:eapply IHForall2; eauto.
-      rewrite H, H9 in H4. clear - H3 H4.
+      rewrite <-H, H9 in H4. clear - H3 H4.
       eapply ntheq_eqst. intros n.
       rewrite when_spec in *.
       specialize (H3 n) as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?)]];

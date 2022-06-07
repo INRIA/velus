@@ -66,7 +66,7 @@ module PrintFun
                   and type cexp  = CE.cexp)
   :
   sig
-    val print_trconstr   : (ident * CE.typ) list -> formatter -> Stc.trconstr -> unit
+    val print_trconstr   : Format.formatter -> Stc.trconstr -> unit
     val print_system     : Format.formatter -> Stc.system -> unit
     val print_program    : Format.formatter -> Stc.program -> unit
     val print_fullclocks : bool ref
@@ -87,12 +87,12 @@ module PrintFun
         print_ident id
         print_ident f
 
-    let rec print_trconstr tenv p tc =
+    let rec print_trconstr p tc =
       match tc with
       | Stc.TcDef (x, ck, e) ->
         fprintf p "@[<hov 2>%a =@ %a@]"
           print_ident x
-          (print_cexp tenv) e
+          print_cexp e
       | Stc.TcReset (x, ckr, ty, c0) ->
         fprintf p "@[<hov 2>reset@ %a = %a every@ (%a)@]"
           print_ident x
@@ -101,7 +101,7 @@ module PrintFun
       | Stc.TcNext (x, ck, _, e) ->
         fprintf p "@[<hov 2>next@ %a =@ %a@]"
           print_ident x
-          (print_exp tenv) e
+          print_exp e
       | Stc.TcInstReset (s, ck, f) ->
         fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
             print_ident f
@@ -112,10 +112,10 @@ module PrintFun
           print_pattern xs
           print_ident f
           print_ident i
-          (print_comma_list (print_exp tenv)) es
+          (print_comma_list print_exp) es
 
-    let print_trconstrs tenv p =
-      pp_print_list ~pp_sep:pp_force_newline (print_trconstr tenv) p
+    let print_trconstrs p =
+      pp_print_list ~pp_sep:pp_force_newline print_trconstr p
 
     let print_system p { Stc.s_name   = name;
                          Stc.s_in     = inputs;
@@ -141,8 +141,7 @@ module PrintFun
         print_decl_list inputs
         print_decl_list outputs
         (print_comma_list_as "var" print_decl) locals
-        (print_trconstrs ((List.map (fun (x, (ty, _)) -> (x, ty)) (inputs@outputs@locals))
-                          @(List.map (fun (x, ((_, ty), _)) -> (x, ty)) nexts))) (List.rev tcs)
+        print_trconstrs (List.rev tcs)
 
     let print_program p prog =
       fprintf p "@[<v 0>";
@@ -251,7 +250,7 @@ module SchedulerFun
         | Econst _
         | Eenum _               -> ()
         | Evar (x, _)           -> add_dep x
-        | Ewhen (e, x, _)       -> add_dep x; go e
+        | Ewhen (e, (x, _), _)       -> add_dep x; go e
         | Eunop (_, e, _)       -> go e
         | Ebinop (_, e1, e2, _) -> go e1; go e2
       in go

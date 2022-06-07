@@ -250,7 +250,7 @@ Module Type NTYPING
         wt_clock G2.(types) vars ck ->
         Forall (wt_exp G2 vars) es ->
         Forall2 (fun e ty => typeof e = [ty]) es tys ->
-        Forall (wt_exp G2 vars) (unnest_when ckid k es tys ck).
+        Forall (wt_exp G2 vars) (unnest_when (ckid, Tenum tx tn) k es tys ck).
     Proof.
       intros * InE InV Hlt Hwtck Hwt Htys. unfold unnest_when.
       assert (length es = length tys) as Hlength by (eapply Forall2_length in Htys; eauto).

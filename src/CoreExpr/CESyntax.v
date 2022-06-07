@@ -16,7 +16,7 @@ Module Type CESYNTAX
   | Econst : cconst -> exp
   | Eenum  : enumtag -> type -> exp
   | Evar   : ident -> type -> exp
-  | Ewhen  : exp -> ident -> enumtag -> exp
+  | Ewhen  : exp -> (ident * type) -> enumtag -> exp
   | Eunop  : unop -> exp -> type -> exp
   | Ebinop : binop -> exp -> exp -> type -> exp.
 

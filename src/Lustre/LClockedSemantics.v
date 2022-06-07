@@ -179,11 +179,11 @@ Module Type LCLOCKEDSEMANTICS
           sem_exp_ck H b (Earrow e0s es anns) os
 
     | Swhen:
-        forall H b x s k es lann ss os,
+        forall H b x tx s k es lann ss os,
           Forall2 (sem_exp_ck H b) es ss ->
           sem_var (fst H) x s ->
           Forall2 (fun s' => when k s' s) (concat ss) os ->
-          sem_exp_ck H b (Ewhen es x k lann) os
+          sem_exp_ck H b (Ewhen es (x, tx) k lann) os
 
     | Smerge:
         forall H b x tx s es lann vs os,
@@ -264,12 +264,13 @@ Module Type LCLOCKEDSEMANTICS
         sem_transitions_ck H bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
         fby stres0 stres1 stres ->
         Forall (fun state =>
-                  forall k, exists Hik, Sem.select_hist (fst state) k stres H Hik
-                              /\ let bik := fselectb (fst state) k stres bs in
+                  let tag := fst (fst state) in
+                  forall k, exists Hik, Sem.select_hist tag k stres H Hik
+                              /\ let bik := fselectb tag k stres bs in
                                 sem_scope_ck (fun Hi' => sem_exp_ck Hi' bik)
                                              (fun Hi' blks =>
                                                 Forall (sem_block_ck Hi' bik) (fst blks)
-                                                /\ sem_transitions_ck Hi' bik (snd blks) (fst state, false) (fselect absent (fst state) k stres stres1)
+                                                /\ sem_transitions_ck Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
                                              ) Hik bik (snd (snd state))
                ) states ->
         sem_block_ck H bs (Bauto Weak ck (ini, oth) states)
@@ -279,13 +280,15 @@ Module Type LCLOCKEDSEMANTICS
         sem_clock (fst H) bs ck bs' ->
         fby (const_stres bs' (ini, false)) stres1 stres ->
         Forall (fun state =>
-                  forall k, exists Hik, Sem.select_hist (fst state) k stres H Hik
-                              /\ let bik := fselectb (fst state) k stres bs in
-                                sem_transitions_ck Hik bik (fst (snd state)) (fst state, false) (fselect absent (fst state) k stres stres1)
+                  let tag := fst (fst state) in
+                  forall k, exists Hik, Sem.select_hist tag k stres H Hik
+                              /\ let bik := fselectb tag k stres bs in
+                                sem_transitions_ck Hik bik (fst (snd state)) (tag, false) (fselect absent tag k stres stres1)
                ) states ->
         Forall (fun state =>
-                  forall k, exists Hik, Sem.select_hist (fst state) k stres1 H Hik
-                              /\ let bik := fselectb (fst state) k stres1 bs in
+                  let tag := fst (fst state) in
+                  forall k, exists Hik, Sem.select_hist tag k stres1 H Hik
+                              /\ let bik := fselectb tag k stres1 bs in
                                 sem_scope_ck (fun Hi' => sem_exp_ck Hi' bik)
                                              (fun Hi' blks => Forall (sem_block_ck Hi' bik) (fst blks)
                                              ) Hik bik (snd (snd state))
@@ -377,12 +380,12 @@ Module Type LCLOCKEDSEMANTICS
           P_exp H b (Earrow e0s es anns) os.
 
       Hypothesis WhenCase:
-        forall H b x s k es lann ss os,
+        forall H b x tx s k es lann ss os,
           Forall2 (sem_exp_ck H b) es ss ->
           Forall2 (P_exp H b) es ss ->
           sem_var (fst H) x s ->
           Forall2 (fun s' => when k s' s) (concat ss) os ->
-          P_exp H b (Ewhen es x k lann) os.
+          P_exp H b (Ewhen es (x, tx) k lann) os.
 
       Hypothesis MergeCase:
         forall H b x tx s es lann vs os,
@@ -474,45 +477,47 @@ Module Type LCLOCKEDSEMANTICS
           stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
           P_transitions Hi bs ((e, (C, r))::trans) default stres.
 
-      Hypothesis BautoWeakCase:
-        forall Hi bs ini oth states ck bs' stres0 stres1 stres,
-          sem_clock (fst Hi) bs ck bs' ->
-          sem_transitions_ck Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
-          P_transitions Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
-          fby stres0 stres1 stres ->
-          Forall (fun state =>
-                    forall k, exists Hik,
-                      Sem.select_hist (fst state) k stres Hi Hik
-                      /\ let bik := fselectb (fst state) k stres bs in
-                        sem_scope_ck (fun Hi' e vs => sem_exp_ck Hi' bik e vs /\ P_exp Hi' bik e vs)
-                                     (fun Hi' blks => Forall (sem_block_ck Hi' bik) (fst blks)
-                                                   /\ Forall (P_block Hi' bik) (fst blks)
-                                                   /\ sem_transitions_ck Hi' bik (snd blks) (fst state, false) (fselect absent (fst state) k stres stres1)
-                                                   /\ P_transitions Hi' bik (snd blks) (fst state, false) (fselect absent (fst state) k stres stres1)
-                                     ) Hik bik (snd (snd state))
-                 ) states ->
-          P_block Hi bs (Bauto Weak ck (ini, oth) states).
+    Hypothesis BautoWeakCase:
+      forall Hi bs ini oth states ck bs' stres0 stres1 stres,
+        sem_clock (fst Hi) bs ck bs' ->
+        sem_transitions_ck Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+        P_transitions Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+        fby stres0 stres1 stres ->
+        Forall (fun '((tag, _), (_, scope)) =>
+                  forall k, exists Hik,
+                    Sem.select_hist tag k stres Hi Hik
+                    /\ let bik := fselectb tag k stres bs in
+                      sem_scope_ck
+                        (fun Hi' e vs => sem_exp_ck Hi' bik e vs /\ P_exp Hi' bik e vs)
+                        (fun Hi' blks => Forall (sem_block_ck Hi' bik) (fst blks)
+                                      /\ Forall (P_block Hi' bik) (fst blks)
+                                      /\ sem_transitions_ck Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
+                                      /\ P_transitions Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
+                        ) Hik bik scope
+          ) states ->
+        P_block Hi bs (Bauto Weak ck (ini, oth) states).
 
-      Hypothesis BautoStrongCase:
-        forall Hi bs ini states ck bs' stres0 stres1,
-          sem_clock (fst Hi) bs ck bs' ->
-          fby (const_stres bs' (ini, false)) stres1 stres0 ->
-          Forall (fun state =>
-                    forall k, exists Hik, Sem.select_hist (fst state) k stres0 Hi Hik
-                                /\ let bik := fselectb (fst state) k stres0 bs in
-                                  sem_transitions_ck Hik bik (fst (snd state)) (fst state, false) (fselect absent (fst state) k stres0 stres1)
-                                  /\ P_transitions Hik bik (fst (snd state)) (fst state, false) (fselect absent (fst state) k stres0 stres1)
-                 ) states ->
-          Forall (fun state =>
-                    forall k, exists Hik,
-                      Sem.select_hist (fst state) k stres1 Hi Hik
-                      /\ let bik := fselectb (fst state) k stres1 bs in
-                        sem_scope_ck (fun Hi' e vs => sem_exp_ck Hi' bik e vs /\ P_exp Hi' bik e vs)
-                                     (fun Hi' blks => Forall (sem_block_ck Hi' bik) (fst blks)
-                                                   /\ Forall (P_block Hi' bik) (fst blks)
-                                     ) Hik bik (snd (snd state))
-                 ) states ->
-          P_block Hi bs (Bauto Strong ck ([], ini) states).
+    Hypothesis BautoStrongCase:
+      forall Hi bs ini states ck bs' stres0 stres1,
+        sem_clock (fst Hi) bs ck bs' ->
+        fby (const_stres bs' (ini, false)) stres1 stres0 ->
+        Forall (fun '((tag, _), (unl, _)) =>
+                  forall k, exists Hik, Sem.select_hist tag k stres0 Hi Hik
+                              /\ let bik := fselectb tag k stres0 bs in
+                                sem_transitions_ck Hik bik unl (tag, false) (fselect absent tag k stres0 stres1)
+                                /\ P_transitions Hik bik unl (tag, false) (fselect absent tag k stres0 stres1)
+               ) states ->
+        Forall (fun '((tag, _), (_, scope)) =>
+                  forall k, exists Hik,
+                    Sem.select_hist tag k stres1 Hi Hik
+                    /\ let bik := fselectb tag k stres1 bs in
+                      sem_scope_ck
+                        (fun Hi' e vs => sem_exp_ck Hi' bik e vs /\ P_exp Hi' bik e vs)
+                        (fun Hi' blks => Forall (sem_block_ck Hi' bik) (fst blks)
+                                      /\ Forall (P_block Hi' bik) (fst blks)
+                        ) Hik bik scope
+          ) states ->
+        P_block Hi bs (Bauto Strong ck ([], ini) states).
 
       Hypothesis BlocalCase:
         forall Hi bs scope,
@@ -604,24 +609,25 @@ Module Type LCLOCKEDSEMANTICS
               repeat split; eauto.
             * simpl. SolveForall.
           + eapply BautoWeakCase; eauto.
-            SolveForall. constructor; auto.
+            SolveForall; destruct_conjs. constructor; auto.
             intros k. specialize (H0 k). destruct_conjs.
-            inv H5. destruct_conjs. esplit. split; eauto.
+            take (sem_scope_ck _ _ _ _ _) and inv it. destruct_conjs.
+            esplit. split; eauto.
             econstructor; eauto. 2:split; [|split; [|split]]; eauto.
-            * intros * Hin. eapply H11 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
+            * intros * Hin. eapply H10 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
               repeat split; eauto.
             * simpl. SolveForall.
-          + eapply BautoStrongCase; eauto.
-            * clear - H3 sem_transitions_ind2. SolveForall. constructor; auto.
-              intros k. specialize (H0 k). destruct_conjs. eauto.
-            * clear H3. SolveForall. constructor; auto.
-              intros k. specialize (H0 k). destruct_conjs.
-              do 2 esplit; eauto.
-              inv H3. econstructor; eauto.
-              2:split; auto; SolveForall.
-              intros * Hin.
-              eapply H10 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
-              repeat split; eauto.
+            + eapply BautoStrongCase; eauto.
+              * clear - H3 sem_transitions_ind2. SolveForall. destruct_conjs. constructor; auto.
+                intros k. specialize (H0 k). destruct_conjs. eauto.
+              * clear H3. SolveForall. destruct_conjs. constructor; auto.
+                intros k. specialize (H0 k). destruct_conjs.
+                take (sem_scope_ck _ _ _ _ _) and inv it. destruct_conjs.
+                do 2 esplit; eauto. econstructor; eauto.
+                2:split; auto; simpl.
+                -- intros * Hin. eapply H9 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
+                  repeat split; eauto.
+                -- SolveForall.
           + eapply BlocalCase; eauto.
             inv H0. econstructor; eauto. 2:split; auto; SolveForall.
             intros. edestruct H4 as (?&?&?&?&?&?&?); eauto.
@@ -1448,11 +1454,11 @@ Module Type LCLOCKEDSEMANTICS
       + destruct EH as (EH1&EH2). rewrite <-EH1, <-Eb; eauto.
       + now rewrite <-EH.
       + simpl_Forall. specialize (H4 k) as ((Hik&Hikl)&?). destruct_conjs.
-        inv H6; destruct_conjs.
+        take (sem_scope_ck _ _ _ _ _) and inv it; destruct_conjs.
         exists (Hik, Hikl). split; [|econstructor]; eauto.
         * destruct EH as (EH1&EH2). destruct H4 as (Hsel1&Hsel2).
           split. rewrite <-EH1; auto. rewrite <-EH2; auto.
-        * intros * Hin. edestruct H12 as (?&?&?&(?&_)&?&?&?); eauto.
+        * intros * Hin. edestruct H11 as (?&?&?&(?&_)&?&?&?); eauto.
           do 3 esplit. repeat (split; eauto).
           now rewrite <-Eb.
         * now rewrite <-Eb.
@@ -2330,9 +2336,9 @@ Module Type LCLOCKEDSEMANTICS
     - (* when *)
       eapply sc_exps' in H0; eauto.
       erewrite Forall_eq with (l2:=clocksof es) in H0; eauto.
-      clear - H14 H15 H0. revert tys H0.
+      clear - H15 H16 H0. revert tys H0.
       repeat setoid_rewrite Forall2_map_1.
-      induction H15; intros * Hsem; simpl in *; inv Hsem; constructor; eauto.
+      induction H16; intros * Hsem; simpl in *; inv Hsem; constructor; eauto.
       eapply sc_when; eauto.
     - (* merge *)
       simpl_Forall.

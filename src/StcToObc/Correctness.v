@@ -857,7 +857,7 @@ Module Type CORRECTNESS
            the same value. *)
         simpl in *.
         destruct (instck ck isub nck) eqn:Heq; try discriminate.
-        destruct (isub i1); try discriminate.
+        destruct (isub _); try discriminate.
         inv Hwc. inv Hinst. inv Hlck.
         * (* Con lck i0 b0 = false because lck = false,
              the goal follows form the induction hypothesis. *)

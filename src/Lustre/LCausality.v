@@ -48,10 +48,10 @@ Module Type LCAUSALITY
       Is_free_left_list Γ cx k e0s
       \/ Is_free_left_list Γ cx k es ->
       Is_free_left Γ cx k (Earrow e0s es a)
-  | IFLwhen : forall es x b a k,
+  | IFLwhen : forall es x tx b a k,
       (k < length (fst a) /\ HasCaus Γ x cx)
       \/ Is_free_left_list Γ cx k es ->
-      Is_free_left Γ cx k (Ewhen es x b a)
+      Is_free_left Γ cx k (Ewhen es (x, tx) b a)
   | IFLmerge : forall x es ty a k,
       (k < length (fst a) /\ HasCaus Γ x cx)
       \/ Exists (fun es => Is_free_left_list Γ cx k (snd es)) es ->
@@ -690,7 +690,7 @@ Module Type LCAUSALITY
         let ps1 := collect_free_left_list e0s in
         let ps2 := collect_free_left_list es in
         List.map (fun '(ps1, ps2) => PS.union ps1 ps2) (List.combine ps1 ps2)
-      | Ewhen es x _ _ =>
+      | Ewhen es (x, _) _ _ =>
         let cx := collect_free_var cenv x in
         List.map (fun ps => PS.add cx ps) (collect_free_left_list es)
       | Emerge (x, _) es (tys, _) =>
@@ -2150,12 +2150,12 @@ Module Type LCAUSALITY
         P_exps es k ->
         P_exp (Earrow e0s es ann) k.
 
-    Hypothesis EwhenCase : forall es x cx b ann k,
+    Hypothesis EwhenCase : forall es x tx cx b ann k,
         k < length (fst ann) ->
         P_exps es k ->
         HasCaus Γ x cx ->
         P_var cx ->
-        P_exp (Ewhen es x b ann) k.
+        P_exp (Ewhen es (x, tx) b ann) k.
 
     Hypothesis EmergeCase : forall x cx tx es ann k,
         k < length (fst ann) ->

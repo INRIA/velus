@@ -90,7 +90,7 @@ Module Type TR
   Fixpoint add_whens (e: CE.exp) (ty: type) (ck: clock) : CE.exp :=
     match ck with
     | Cbase => e
-    | Con ck' x (_, k) => Ewhen (add_whens e ty ck') x k
+    | Con ck' x (tx, k) => Ewhen (add_whens e ty ck') (x, tx) k
     end.
 
   (** For partial `case`, we add the missing branches *)

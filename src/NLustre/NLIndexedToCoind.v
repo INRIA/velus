@@ -178,8 +178,8 @@ Module Type NLINDEXEDTOCOIND
       end.
 
     Lemma when_inv:
-      forall H b e x k es,
-        CESem.sem_exp b H (Ewhen e x k) es ->
+      forall H b e x tx k es,
+        CESem.sem_exp b H (Ewhen e (x, tx) k) es ->
         exists ys xs,
           CESem.sem_exp b H e ys
           /\ IStr.sem_var H x xs
@@ -286,7 +286,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros * Sem; unfold CESem.sem_exp, lift in Sem.
+      induction e; intros * Sem; destruct_conjs; unfold CESem.sem_exp, lift in Sem.
 
       - constructor.
         apply const_spec; use_spec Sem; inv Sem; auto.

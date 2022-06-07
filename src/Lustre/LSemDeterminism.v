@@ -579,10 +579,10 @@ Module Type LSEMDETERMINISM
         + eapply H5; eauto; congruence.
       - (* when *)
         repeat simpl_In.
-        inversion_clear Hs1 as [| | | | | | | |????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | |????????? Hse2 Hsv2 Hwhen2| | | |].
+        inversion_clear Hs1 as [| | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
+        inversion_clear Hs2 as [| | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
         eapply det_exps_n' in H; eauto.
-        inv H4; simpl_In.
+        take (HasType _ _ _) and inv it; simpl_In.
         edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
         eapply Hn1 in Hsv1; eauto. 2:econstructor; solve_In; eauto.
         clear - H Hsv1 Hwhen1 Hwhen2.
@@ -814,9 +814,9 @@ Module Type LSEMDETERMINISM
         + eapply Forall3_forall3 in Harrow2 as (_&_&Harrow2). eapply Harrow2; eauto.
           congruence.
       - (* when *)
-        intros ?????? Hk Hes Hin Hvar ?? Hwt Hs1 Hs2. inv Hwt. simpl in *.
-        inversion_clear Hs1 as [| | | | | | | |????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | |????????? Hse2 Hsv2 Hwhen2| | | |].
+        intros ??????? Hk Hes Hin Hvar ?? Hwt Hs1 Hs2. inv Hwt. simpl in *.
+        inversion_clear Hs1 as [| | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
+        inversion_clear Hs2 as [| | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
         eapply Hvar in Hsv2; eauto.
         eapply P_exps_det_exp_inv in Hes; eauto.
         assert (length (concat ss) = length (typesof es)) as Hlen1.
@@ -1430,15 +1430,16 @@ Module Type LSEMDETERMINISM
         fby stres02 stres12 stres2 ->
         EqStN n stres11 stres12 ->
         Forall (fun state =>
+                  let tag := fst (fst state) in
                   forall k, exists Hik1 Hik2,
-                    select_hist (fst state) k stres1 Hi1 Hik1
-                    /\ select_hist (fst state) k stres2 Hi2 Hik2
-                    /\ let bik1 := fselectb (fst state) k stres1 bs1 in
-                      let bik2 := fselectb (fst state) k stres2 bs2 in
+                    select_hist tag k stres1 Hi1 Hik1
+                    /\ select_hist tag k stres2 Hi2 Hik2
+                    /\ let bik1 := fselectb tag k stres1 bs1 in
+                      let bik2 := fselectb tag k stres2 bs2 in
                       sem_scope_det (fun Hi1 Hi2 blks =>
                                        Forall (sem_block_det n envS Hi1 Hi2 bik1 bik2) (fst blks)
-                                       /\ sem_transitions G Hi1 bik1 (snd blks) (fst state, false) (fselect absent (fst state) k stres1 stres11)
-                                       /\ sem_transitions G Hi2 bik2 (snd blks) (fst state, false) (fselect absent (fst state) k stres2 stres12))
+                                       /\ sem_transitions G Hi1 bik1 (snd blks) (tag, false) (fselect absent tag k stres1 stres11)
+                                       /\ sem_transitions G Hi2 bik2 (snd blks) (tag, false) (fselect absent tag k stres2 stres12))
                                     n envS Hik1 Hik2 bik1 bik2 (snd (snd state))
                ) states ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bauto Weak ck (ini, oth) states)
@@ -1450,20 +1451,22 @@ Module Type LSEMDETERMINISM
         fby (const_stres bs'1 (ini, false)) stres11 stres1 ->
         fby (const_stres bs'2 (ini, false)) stres12 stres2 ->
         Forall (fun state =>
-                  forall k, exists Hik1 Hik2, select_hist (fst state) k stres1 Hi1 Hik1
-                                    /\ select_hist (fst state) k stres2 Hi2 Hik2
-                                    /\ let bik1 := fselectb (fst state) k stres1 bs1 in
-                                      let bik2 := fselectb (fst state) k stres2 bs2 in
-                                      sem_transitions G Hik1 bik1 (fst (snd state)) (fst state, false) (fselect absent (fst state) k stres1 stres11)
-                                      /\ sem_transitions G Hik2 bik2 (fst (snd state)) (fst state, false) (fselect absent (fst state) k stres2 stres12)
+                  let tag := fst (fst state) in
+                  forall k, exists Hik1 Hik2, select_hist tag k stres1 Hi1 Hik1
+                                    /\ select_hist tag k stres2 Hi2 Hik2
+                                    /\ let bik1 := fselectb tag k stres1 bs1 in
+                                      let bik2 := fselectb tag k stres2 bs2 in
+                                      sem_transitions G Hik1 bik1 (fst (snd state)) (tag, false) (fselect absent (tag) k stres1 stres11)
+                                      /\ sem_transitions G Hik2 bik2 (fst (snd state)) (tag, false) (fselect absent (tag) k stres2 stres12)
                ) states ->
         EqStN n stres11 stres12 ->
         Forall (fun state =>
+                  let tag := fst (fst state) in
                   forall k, exists Hik1 Hik2,
-                    select_hist (fst state) k stres11 Hi1 Hik1
-                    /\ select_hist (fst state) k stres12 Hi2 Hik2
-                    /\ let bik1 := fselectb (fst state) k stres11 bs1 in
-                      let bik2 := fselectb (fst state) k stres12 bs2 in
+                    select_hist tag k stres11 Hi1 Hik1
+                    /\ select_hist tag k stres12 Hi2 Hik2
+                    /\ let bik1 := fselectb tag k stres11 bs1 in
+                      let bik2 := fselectb tag k stres12 bs2 in
                       sem_scope_det (fun Hi1 Hi2 blks => Forall (sem_block_det n envS Hi1 Hi2 bik1 bik2) (fst blks))
                                     n envS Hik1 Hik2 bik1 bik2 (snd (snd state))
                ) states ->
@@ -1629,51 +1632,51 @@ Module Type LSEMDETERMINISM
           etransitivity; [|eauto]. intros ??; solve_In.
 
       - (* automaton (weak) *)
-        eapply sem_clock_detN in H12 as Hbs'; eauto with ltyping.
+        take (sem_clock _ _ _ _) and eapply sem_clock_detN in it as Hbs'; eauto with ltyping.
         assert (EqStN (S n) stres1 stres2) as Hstates.
         { take (fby _ _ stres2) and eapply fby_det_Sn in it; eauto.
-          eapply sem_transitions_detS in H14; eauto using det_var_inv_weaken.
+          eapply sem_transitions_detS in H15; eauto using det_var_inv_weaken.
           simpl_Forall; eauto. }
         assert (EqStN (S n) stres11 stres12) as Hstates1.
         { eapply EqStN_unfselect with (tn:=length states); eauto.
           + destruct states; simpl in *; lia.
-          + eapply sem_automaton_wt_state1 with (states:=states) in H13; eauto.
-            1,3,4:simpl_Forall; try destruct s; destruct_conjs; eauto.
-            * inv H3. simpl_Forall; auto.
-            * intros. specialize (H22 k); destruct_conjs. inv H15; simpl_Forall; eauto.
-            * rewrite <-H9. now apply fst_InMembers.
           + eapply sem_automaton_wt_state1 with (states:=states) in H14; eauto.
             1,3,4:simpl_Forall; try destruct s; destruct_conjs; eauto.
             * inv H3. simpl_Forall; auto.
-            * intros. specialize (H22 k); destruct_conjs. inv H15; simpl_Forall; eauto.
+            * intros. specialize (H23 k); destruct_conjs. take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; simpl_Forall; eauto.
+            * rewrite <-H9. now apply fst_InMembers.
+          + eapply sem_automaton_wt_state1 with (states:=states) in H15; eauto.
+            1,3,4:simpl_Forall; try destruct s; destruct_conjs; eauto.
+            * inv H3. simpl_Forall; auto.
+            * intros. specialize (H23 k); destruct_conjs. take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; simpl_Forall; eauto.
             * rewrite <-H9. now apply fst_InMembers.
           + take (fby _ _ stres1) and (apply ac_fby2 in it; rewrite <-it). apply ac_slower.
           + take (fby _ _ stres2) and (apply ac_fby2 in it; rewrite <-it). apply ac_slower.
           + intros * Hsel.
-            assert (exists blks, In (sel, blks) states) as (blks&Hinstates).
+            assert (exists c blks, In ((sel, c), blks) states) as (?&blks&Hinstates).
             { rewrite <-H9 in Hsel. simpl_In; eauto. }
             simpl_Forall. destruct s; destruct_conjs.
-            specialize (H22 k); destruct_conjs. inv H11; destruct_conjs.
-            eapply sem_transitions_detn in H15; eauto using det_var_inv_select, det_var_inv_weaken.
+            specialize (H23 k); destruct_conjs. take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; destruct_conjs.
+            eapply sem_transitions_detn in H13; eauto using det_var_inv_select, det_var_inv_weaken.
             * inv H1. simpl_Forall; eauto.
             * intros. inv H2.
               eapply det_var_inv_local1. 8:intros; eapply det_var_inv_select; eauto. all:eauto.
               -- intros. destruct H3 as (_&Hsel1). rewrite Hsel1. eapply FEnv.map_in_iff; auto.
               -- intros. destruct H4 as (_&Hsel1). rewrite Hsel1. eapply FEnv.map_in_iff; auto.
               -- intros * Hcaus. apply idcaus_of_senv_In in Hcaus. simpl_Forall.
-                 eapply H35; eauto. eapply Hincl. solve_In; eauto using in_or_app. auto.
+                 take (In _ envS -> _) and eapply it; eauto. eapply Hincl. solve_In; eauto using in_or_app. auto.
             * apply EqStN_mask. 1,2:apply EqStN_ffilter; eauto using EqStN_weaken.
               1-3:apply map_EqStN; eauto using EqStN_weaken.
         }
         econstructor; eauto.
-        simpl_Forall. specialize (H22 k); destruct_conjs.
+        simpl_Forall. specialize (H23 k); destruct_conjs.
         do 2 esplit. repeat (split; eauto). simpl_Forall.
         destruct s; destruct_conjs.
         eapply det_scope_S; eauto.
         + apply EqStN_mask. 1,2:apply EqStN_ffilter; auto.
           1-3:apply map_EqStN; auto.
         + destruct H4 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
-        + destruct H11 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+        + destruct H12 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
         + intros. eapply det_var_inv_select. 2-4:eauto. eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. simpl_In. solve_In.
@@ -1685,41 +1688,41 @@ Module Type LSEMDETERMINISM
           * etransitivity; [|eauto]. intros ??; solve_In.
 
       - (* automaton (strong) *)
-        eapply sem_clock_detN in H6 as Hbs'; eauto with ltyping.
+        take (sem_clock _ _ _ _) and eapply sem_clock_detN in it as Hbs'; eauto with ltyping.
         assert (EqStN (S n) stres1 stres2) as Hstates.
         { take (fby _ _ stres2) and eapply fby_det_Sn in it; eauto using const_stres_detn. }
         assert (EqStN (S n) stres11 stres12) as Hstates1.
         { eapply EqStN_unfselect with (tn:=length states); eauto.
           + destruct states; simpl in *; lia.
-          + eapply sem_automaton_wt_state2 with (states:=states) in H11; eauto.
-            2,3:simpl_Forall; try destruct s; destruct_conjs; eauto.
-            * rewrite <-H8. now apply fst_InMembers.
-            * intros. specialize (H17 k); destruct_conjs. esplit; eauto.
           + eapply sem_automaton_wt_state2 with (states:=states) in H12; eauto.
             2,3:simpl_Forall; try destruct s; destruct_conjs; eauto.
             * rewrite <-H8. now apply fst_InMembers.
-            * intros. specialize (H17 k); destruct_conjs. esplit; eauto.
+            * intros. specialize (H18 k); destruct_conjs. esplit; eauto.
+          + eapply sem_automaton_wt_state2 with (states:=states) in H13; eauto.
+            2,3:simpl_Forall; try destruct s; destruct_conjs; eauto.
+            * rewrite <-H8. now apply fst_InMembers.
+            * intros. specialize (H18 k); destruct_conjs. esplit; eauto.
           + take (fby _ _ stres1) and (apply ac_fby2 in it; rewrite <-it). apply ac_slower.
           + take (fby _ _ stres2) and (apply ac_fby2 in it; rewrite <-it). apply ac_slower.
           + intros * Hsel.
-            assert (exists blks, In (sel, blks) states) as (blks&Hinstates).
+            assert (exists c blks, In ((sel, c), blks) states) as (?&blks&Hinstates).
             { rewrite <-H8 in Hsel. simpl_In; eauto. }
             simpl_Forall.
-            specialize (H17 k); destruct_conjs.
+            specialize (H18 k); destruct_conjs.
             eapply sem_transitions_detn in H14; eauto using det_var_inv_select, det_var_inv_weaken.
             * inv H1. simpl_Forall; eauto.
             * apply EqStN_mask. 1,2:apply EqStN_ffilter; eauto using EqStN_weaken.
               1-3:apply map_EqStN; eauto using EqStN_weaken.
         }
         econstructor; eauto.
-        simpl_Forall. specialize (H19 k); destruct_conjs.
+        simpl_Forall. specialize (H20 k); destruct_conjs.
         do 2 esplit. repeat (split; eauto).
         destruct s; destruct_conjs.
         eapply det_scope_S; eauto.
         + apply EqStN_mask. 1,2:apply EqStN_ffilter; auto.
           1-3:apply map_EqStN; auto.
-        + destruct H10 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
-        + destruct H13 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+        + destruct H7 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+        + destruct H11 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
         + intros. eapply det_var_inv_select. 2-4:eauto. eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. simpl_In. solve_In.
@@ -2221,16 +2224,16 @@ Module Type LSEMDETERMINISM
           intros. eapply HSn; eauto with lcaus. }
         assert (EqStN n stres1 stres2) as Hstres.
         { eapply fby_detn. 2-4:eauto.
-          eapply sem_transitions_detn in H16; eauto.
+          take (sem_transitions _ Hi2 _ _ _ _) and eapply sem_transitions_detn in it; eauto.
           simpl_Forall; eauto. }
         assert (Is_defined_in Γ cy (Bauto Weak ck (ini0, oth) states) \/ Is_last_in cy (Bauto Weak ck (ini0, oth) states) -> EqStN (S n) stres1 stres2) as HSstres.
         { intros. eapply fby_det_Sn. 3-4:eauto. 2:auto.
-          eapply sem_transitions_detS in H16; eauto.
+          take (sem_transitions _ Hi2 _ _ _ _) and eapply sem_transitions_detS in it; eauto.
           - simpl_Forall; eauto.
           - intros. eapply HSn; eauto.
             eapply DepOnAuto3; eauto. solve_Exists.
         }
-        assert (Forall (fun '(e, (_, s)) => forall k, exists Hi1' Hi2',
+        assert (Forall (fun '((e, _), (_, s)) => forall k, exists Hi1' Hi2',
                             select_hist e k stres1 Hi1 Hi1' /\ select_hist e k stres2 Hi2 Hi2'
                             /\ (forall y, In y xs -> HasCaus Γ y cy -> det_var_inv Γ (S n) Hi1' Hi2' cy) /\
                               sem_scope_det
@@ -2239,12 +2242,12 @@ Module Type LSEMDETERMINISM
                                                   /\ sem_transitions G Hi2 (fselectb e k stres2 bs2) (snd blks) (e, false) (fselect absent e k stres2 stres12))
                                 n (cy :: envS) Hi1' Hi2' (fselectb e k stres1 bs1) (fselectb e k stres2 bs2) s)
                        states) as Hf.
-        { simpl_Forall. intros. specialize (H24 k); destruct_conjs. destruct s; destruct_conjs.
+        { simpl_Forall. intros. take (forall (k : nat), _) and specialize (it k); destruct_conjs. destruct s; destruct_conjs.
           do 2 esplit; eauto. split; [|split]; eauto.
           eapply det_scope_cons; eauto.
           - eapply NoDup_locals_inv3; eauto.
-          - destruct H4 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
-          - destruct H13 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - take (select_hist _ _ stres1 _ _) and destruct it as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - take (select_hist _ _ stres2 _ _) and destruct it as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
           - intros * Hin. eapply det_var_inv_select; eauto.
           - eapply EqStN_fselect; eauto.
           - intros Hdef'. eapply EqStN_fselect; eauto.
@@ -2272,19 +2275,19 @@ Module Type LSEMDETERMINISM
               - etransitivity; eauto using incl_concat.
                 take (Permutation _ _) and now rewrite it.
               - eapply EqStN_fselect; eauto.
-              - intros Hdef'. eapply H31; eauto.
+              - intros Hdef'. eapply H32; eauto.
                 destruct Hdef'; [left|right]; solve_Exists.
-              - intros * Hin' Hdep. eapply H32; eauto. solve_Exists.
-              - intros * Hin' Hdep. eapply H33; eauto.
+              - intros * Hin' Hdep. eapply H33; eauto. solve_Exists.
+              - intros * Hin' Hdep. eapply H34; eauto.
                 2:solve_Exists. solve_In.
               - split; eauto.
-                intros * Hdef' Hin' Hca. eapply H24; eauto.
+                intros * Hdef' Hin' Hca. eapply H25; eauto.
                 eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
             }
             split; simpl_Forall; eauto.
-            intros * Hin Hca. rewrite <-H37 in Hin. apply in_concat in Hin as (?&?&?).
+            intros * Hin Hca. take (Permutation _ xs0) and rewrite <-it in Hin. apply in_concat in Hin as (?&?&?).
             inv_VarsDefined; simpl_Forall; eauto.
-        } clear H H24.
+        } clear H H25.
         split.
         + intros * Hinxs Hca.
           eapply det_var_inv_unselect with (tn:=length states) (sc1:=stres1); eauto.
@@ -2292,25 +2295,25 @@ Module Type LSEMDETERMINISM
           * eapply HSstres; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
             eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. eauto.
-          * eapply sem_automaton_wt_state1 in H15; eauto. 1,3:simpl_Forall; eauto.
+          * take (sem_transitions _ Hi1 _ _ _ _) and eapply sem_automaton_wt_state1 in it; eauto. 1,3:simpl_Forall; eauto.
             -- inv H1. simpl_Forall; auto.
             -- now rewrite <-H11, <-fst_InMembers.
             -- simpl_Forall. destruct s; destruct_conjs; intros. specialize (Hf k); destruct_conjs.
-               inv H17; destruct_conjs. eauto.
-          * eapply sem_automaton_wt_state1 in H16; eauto. 1,3:simpl_Forall; eauto.
+               take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; destruct_conjs. eauto.
+          * take (sem_transitions _ Hi2 _ _ _ _) and eapply sem_automaton_wt_state1 in it; eauto. 1,3:simpl_Forall; eauto.
             -- inv H1. simpl_Forall; auto.
             -- now rewrite <-H11, <-fst_InMembers.
             -- simpl_Forall. destruct s; destruct_conjs; intros. specialize (Hf k); destruct_conjs.
-               inv H17; destruct_conjs. eauto.
+               take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; destruct_conjs. eauto.
           * intros * Hseq.
-            assert (exists blks, In (c, blks) states) as ([]&Hinbrs); destruct_conjs.
+            assert (exists constr blks, In ((c, constr), blks) states) as (?&?&Hinbrs); destruct_conjs.
             { rewrite <-H11 in Hseq. simpl_In; eauto. }
             simpl_Forall. specialize (Hf k); destruct_conjs.
             do 2 esplit. split; [|split; [|split]]; eauto.
             intros ? Hcaus.
             eapply HasCaus_snd_det in Hca; eauto; subst. 2:simpl_app; eauto using NoDup_app_l.
             destruct s as [??(?&?)]. split; eapply sem_scope_defined2; eauto.
-            1,2:inv H13; econstructor; eauto; simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2.
+            1,2:take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; econstructor; eauto; simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2.
           * intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
         + econstructor; eauto.
           simpl_Forall. specialize (Hf k); destruct_conjs. eauto.
@@ -2328,20 +2331,20 @@ Module Type LSEMDETERMINISM
         assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states) \/ Is_last_in cy (Bauto Strong ck ([], oth) states) -> EqStN (S n) stres11 stres12) as HSstres1.
         { intros. eapply EqStN_unfselect with (tn:=length states); eauto.
           - destruct states; simpl in *; lia.
-          - eapply sem_automaton_wt_state2 with (states:=states) in H13; eauto.
+          - take (fby _ _ stres1) and eapply sem_automaton_wt_state2 with (states:=states) in it; eauto.
             2,3:simpl_Forall; try destruct s; destruct_conjs; eauto.
             + rewrite <-H10. now apply fst_InMembers.
-            + intros. specialize (H19 k); destruct_conjs. eauto.
-          - eapply sem_automaton_wt_state2 with (states:=states) in H14; eauto.
+            + intros. specialize (H20 k); destruct_conjs. eauto.
+          - take (fby _ _ stres2) and eapply sem_automaton_wt_state2 with (states:=states) in it; eauto.
             2,3:simpl_Forall; try destruct s; destruct_conjs; eauto.
             + rewrite <-H10. now apply fst_InMembers.
-            + intros. specialize (H19 k); destruct_conjs. eauto.
+            + intros. specialize (H20 k); destruct_conjs. eauto.
           - take (fby _ _ stres1) and (apply ac_fby2 in it; rewrite <-it). apply ac_slower.
           - take (fby _ _ stres2) and (apply ac_fby2 in it; rewrite <-it). apply ac_slower.
           - intros * Hsel. rewrite <-H10 in Hsel. simpl_In.
             simpl_Forall.
-            specialize (H19 k); destruct_conjs.
-            eapply sem_transitions_detS in H17; eauto using det_var_inv_select, det_var_inv_weaken.
+            specialize (H20 k); destruct_conjs.
+            take (sem_transitions _ (t1, t2) _ _ _ _) and eapply sem_transitions_detS in it; eauto using det_var_inv_select, det_var_inv_weaken.
             + simpl_Forall; eauto.
             + intros. eapply det_var_inv_select; eauto. eapply HSn; eauto.
               eapply DepOnAuto4; eauto. repeat solve_Exists.
@@ -2349,19 +2352,19 @@ Module Type LSEMDETERMINISM
               1-3:apply map_EqStN; eauto using EqStN_weaken.
         }
 
-        assert (Forall (fun '(e, (_, s)) => forall k, exists Hi1' Hi2',
+        assert (Forall (fun '((e, _), (_, s)) => forall k, exists Hi1' Hi2',
                             select_hist e k stres11 Hi1 Hi1' /\ select_hist e k stres12 Hi2 Hi2'
                             /\ (forall y, In y xs -> HasCaus Γ y cy -> det_var_inv Γ (S n) Hi1' Hi2' cy) /\
                               sem_scope_det
                                 (fun Hi1 Hi2 blks => Forall (sem_block_det n (cy::envS) Hi1 Hi2 (fselectb e k stres11 bs1) (fselectb e k stres12 bs2)) (fst blks))
                                 n (cy :: envS) Hi1' Hi2' (fselectb e k stres11 bs1) (fselectb e k stres12 bs2) s)
                        states) as Hf.
-        { simpl_Forall. intros. specialize (H21 k); destruct_conjs. destruct s; destruct_conjs.
+        { simpl_Forall. intros. specialize (H22 k); destruct_conjs. destruct s; destruct_conjs.
           do 2 esplit; eauto. split; [|split]; eauto.
           eapply det_scope_cons; eauto.
           - eapply NoDup_locals_inv3; eauto.
-          - destruct H12 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
-          - destruct H15 as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - take (select_hist _ _ stres11 _ _) and destruct it as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
+          - take (select_hist _ _ stres12 _ _) and destruct it as (?&Heq). setoid_rewrite Heq. setoid_rewrite FEnv.map_in_iff; eauto.
           - intros * Hin. eapply det_var_inv_select with (sc1:=stres11); eauto.
           - eapply EqStN_fselect; eauto.
           - intros Hdef'. eapply EqStN_fselect; eauto.
@@ -2388,19 +2391,19 @@ Module Type LSEMDETERMINISM
               - etransitivity; eauto using incl_concat.
                 take (Permutation _ _) and now rewrite it.
               - eapply EqStN_fselect; eauto.
-              - intros Hdef'. eapply H29; eauto.
+              - intros Hdef'. eapply H30; eauto.
                 destruct Hdef'; [left|right]; solve_Exists.
-              - intros * Hin' Hdep. eapply H30; eauto. solve_Exists.
-              - intros * Hin' Hdep. eapply H31; eauto.
+              - intros * Hin' Hdep. eapply H31; eauto. solve_Exists.
+              - intros * Hin' Hdep. eapply H32; eauto.
                 2:solve_Exists. solve_In.
               - split; eauto.
-                intros * Hdef' Hin' Hca. eapply H22; eauto.
+                intros * Hdef' Hin' Hca. eapply H23; eauto.
                 eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
             }
             split; simpl_Forall; eauto.
-            intros * Hin Hca. rewrite <-H33 in Hin. apply in_concat in Hin as (?&?&?).
+            intros * Hin Hca. take (Permutation _ xs0) and rewrite <-it in Hin. apply in_concat in Hin as (?&?&?).
             inv_VarsDefined; simpl_Forall; eauto.
-        } clear H H21.
+        } clear H H22.
         split.
         + intros * Hinxs Hca.
           eapply det_var_inv_unselect with (tn:=length states) (sc1:=stres11); eauto.
@@ -2408,19 +2411,20 @@ Module Type LSEMDETERMINISM
           * eapply HSstres1; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
             eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. eauto.
-          * eapply sem_automaton_wt_state3 in H13; eauto. 2,3:simpl_Forall; eauto.
+          * take (fby _ _ stres1) and eapply sem_automaton_wt_state3 in it; eauto. 2,3:simpl_Forall; eauto.
             -- now rewrite <-H10, <-fst_InMembers.
-            -- destruct s; destruct_conjs; intros. specialize (H19 k); destruct_conjs. eauto.
-          * eapply sem_automaton_wt_state3 in H14; eauto. 2,3:simpl_Forall; eauto.
+            -- destruct s; destruct_conjs; intros. specialize (H20 k); destruct_conjs. eauto.
+          * take (fby _ _ stres2) and eapply sem_automaton_wt_state3 in it; eauto. 2,3:simpl_Forall; eauto.
             -- now rewrite <-H10, <-fst_InMembers.
-            -- destruct s; destruct_conjs; intros. specialize (H19 k); destruct_conjs. eauto.
+            -- destruct s; destruct_conjs; intros. specialize (H20 k); destruct_conjs. eauto.
           * intros * Hseq. rewrite <-H10 in Hseq. simpl_In.
             simpl_Forall. specialize (Hf k); destruct_conjs.
             do 2 esplit. split; [|split; [|split]]; eauto.
             intros ? Hcaus.
             eapply HasCaus_snd_det in Hca; eauto; subst. 2:simpl_app; eauto using NoDup_app_l.
             destruct s as [??(?&?)]. split; eapply sem_scope_defined2; eauto.
-            1,2:inv H15; econstructor; eauto; simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2.
+            1,2:take (sem_scope_det _ _ _ _ _ _ _ _) and inv it; econstructor; eauto;
+            simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2.
           * intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
         + econstructor; eauto.
           simpl_Forall. specialize (Hf k); destruct_conjs. eauto.

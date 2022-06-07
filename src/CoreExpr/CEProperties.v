@@ -48,6 +48,7 @@ Module Type CEPROPERTIES
         eauto using sem_exp_instant with nlfree.
       symmetry; auto with nlfree.
     - (* Ewhen *)
+      destruct_conjs.
       split; inversion_clear 1;
         take (sem_var_instant _ _ _) and eapply sem_var_instant_switch_env in it;
         take (sem_exp_instant _ _ _ _)

@@ -536,12 +536,12 @@ Module Type NCLOCKING
       constructor; simpl in *; eauto; try rewrite app_nil_r; eauto.
     Qed.
 
-    Fact unnest_when_wc_exp : forall vars ckid ck b ty es tys,
+    Fact unnest_when_wc_exp : forall vars ckid tx ck b ty es tys,
         length es = length tys ->
         HasClock vars ckid ck ->
         Forall (wc_exp G2 vars) es ->
         Forall (fun e => clockof e = [ck]) es ->
-        Forall (wc_exp G2 vars) (unnest_when ckid b es tys (Con ck ckid (ty, b))).
+        Forall (wc_exp G2 vars) (unnest_when (ckid, tx) b es tys (Con ck ckid (ty, b))).
     Proof.
       intros * Hlen Hin Hwc Hck. unfold unnest_when.
       solve_forall.

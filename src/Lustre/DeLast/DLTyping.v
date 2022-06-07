@@ -225,23 +225,22 @@ Module Type DLTYPING
         * intros. apply Forall_app; auto.
 
     - (* automaton (weak) *)
-      assert (forall y, InMembers y states -> InMembers y x) as Hinm.
-      { intros * Hinm. apply mmap_values, Forall2_ignore2 in H0.
-        rewrite fst_InMembers in *. simpl_In. simpl_Forall.
-        repeat inv_bind. solve_In. }
+      assert (map fst x = map fst states) as Heq.
+      { apply mmap_values in H0. clear - H0.
+        induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
+      assert (forall y, InMembers y (map fst states) -> InMembers y (map fst x)) as Hinm.
+      { intros. congruence. }
       econstructor; eauto using wt_clock_incl.
       + simpl_Forall. split; [|split]; eauto using rename_in_exp_wt.
         now rewrite rename_in_exp_typeof.
-      + assert (map fst x = map fst states) as Heq.
-        { apply mmap_values in H0. clear - H0.
-          induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
-        setoid_rewrite Heq. erewrite <-map_length. setoid_rewrite Heq. rewrite map_length; auto.
+      + setoid_rewrite Heq. erewrite <-map_length. setoid_rewrite Heq. rewrite map_length; auto.
+      + now setoid_rewrite Heq.
       + apply mmap_values in H0; inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
         simpl_Forall; repeat inv_bind.
         destruct s0; destruct_conjs. split; auto. eapply delast_scope_wt; eauto.
         * intros; repeat inv_bind; split.
-          -- eapply mmap_values, Forall2_ignore1 in H15; eauto.
+          -- eapply mmap_values, Forall2_ignore1 in H16; eauto.
              simpl_Forall; eauto.
           -- simpl_Forall; simpl_In; simpl_Forall.
              split; [|split]; eauto using rename_in_exp_wt.
@@ -249,15 +248,14 @@ Module Type DLTYPING
         * intros. destruct_conjs. split; auto. apply Forall_app; auto.
 
     - (* automaton (strong) *)
-      assert (forall y, InMembers y states -> InMembers y x) as Hinm.
-      { intros * Hinm. apply mmap_values, Forall2_ignore2 in H0.
-        rewrite fst_InMembers in *. simpl_In. simpl_Forall.
-        repeat inv_bind. solve_In. }
+      assert (map fst x = map fst states) as Heq.
+      { apply mmap_values in H0. clear - H0.
+        induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
+      assert (forall y, InMembers y (map fst states) -> InMembers y (map fst x)) as Hinm.
+      { intros * Hinm. congruence. }
       econstructor; eauto using wt_clock_incl.
-      + assert (map fst x = map fst states) as Heq.
-        { apply mmap_values in H0. clear - H0.
-          induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
-        setoid_rewrite Heq. erewrite <-map_length. setoid_rewrite Heq. rewrite map_length; auto.
+      + setoid_rewrite Heq. erewrite <-map_length. setoid_rewrite Heq. rewrite map_length; auto.
+      + now setoid_rewrite Heq.
       + apply mmap_values in H0; inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
         simpl_Forall; repeat inv_bind.
@@ -265,7 +263,7 @@ Module Type DLTYPING
         * simpl_Forall. rewrite rename_in_exp_typeof. eauto using rename_in_exp_wt.
         * eapply delast_scope_wt; eauto.
           -- intros; destruct_conjs; subst; repeat inv_bind; split; auto.
-             eapply mmap_values, Forall2_ignore1 in H15; eauto.
+             eapply mmap_values, Forall2_ignore1 in H16; eauto.
              simpl_Forall; eauto.
           -- intros; destruct_conjs; subst.
              split; auto. apply Forall_app; auto.

@@ -117,7 +117,7 @@ Module Type CLOCKSWITCH
                         ret (x, y, (ann.(typ), Con bck xc (tx, k)))) ids.
 
   Definition when_free (x y : ident) ty ck xc tx k :=
-    Beq ([y], [Ewhen [Evar x (ty, ck)] xc k ([ty], Con ck xc (tx, k))]).
+    Beq ([y], [Ewhen [Evar x (ty, ck)] (xc, tx) k ([ty], Con ck xc (tx, k))]).
 
   Definition merge_defs sub (y : ident) ty ck xc tx (brs : list (enumtag * Env.t ident)) :=
     Beq ([rename_var sub y], [Emerge (xc, tx)

@@ -43,7 +43,7 @@ Module Type SUBCLOCK
     Fixpoint add_whens (e : exp) (ty : type) (ck : clock) :=
       match ck with
       | Cbase => e
-      | Con ck' ckid (_, b) => Ewhen [(add_whens e ty ck')] ckid b ([ty], ck)
+      | Con ck' ckid (tx, b) => Ewhen [(add_whens e ty ck')] (ckid, tx) b ([ty], ck)
       end.
 
     Fixpoint subclock_exp (e : exp) :=
@@ -56,7 +56,7 @@ Module Type SUBCLOCK
       | Ebinop op e1 e2 ann => Ebinop op (subclock_exp e1) (subclock_exp e2) (subclock_ann ann)
       | Efby e0s e1s anns => Efby (map subclock_exp e0s) (map subclock_exp e1s) (map subclock_ann anns)
       | Earrow e0s e1s anns => Earrow (map subclock_exp e0s) (map subclock_exp e1s) (map subclock_ann anns)
-      | Ewhen es x t ann => Ewhen (map subclock_exp es) (rename_var x) t (subclock_ann ann)
+      | Ewhen es (x, tx) t ann => Ewhen (map subclock_exp es) (rename_var x, tx) t (subclock_ann ann)
       | Emerge (x, ty) es ann => Emerge (rename_var x, ty) (map (fun '(i, es) => (i, map subclock_exp es)) es) (subclock_ann ann)
       | Ecase e es d ann =>
         Ecase (subclock_exp e) (map (fun '(i, es) => (i, map subclock_exp es)) es) (option_map (map subclock_exp) d) (subclock_ann ann)
@@ -110,7 +110,7 @@ Module Type SUBCLOCK
     Lemma subclock_exp_nclockof : forall e,
         nclockof (subclock_exp bck sub e) = map (subclock_nclock bck sub) (nclockof e).
     Proof.
-      destruct e; simpl in *; auto.
+      destruct e; destruct_conjs; simpl in *; auto.
       - (* const *)
         apply add_whens_nclockof; auto.
       - (* enum *)
@@ -122,7 +122,7 @@ Module Type SUBCLOCK
       - (* when *)
         rewrite map_map; auto.
       - (* merge *)
-        destruct p; simpl. rewrite map_map; auto.
+        rewrite map_map; auto.
       - (* case *)
         rewrite map_map; auto.
       - (* app *)
@@ -172,7 +172,7 @@ Module Type SUBCLOCK
     Lemma subclock_exp_typeof : forall e,
         typeof (subclock_exp bck sub e) = typeof e.
     Proof.
-      destruct e; simpl in *; auto.
+      destruct e; destruct_conjs; simpl in *; auto.
       - (* const *)
         apply add_whens_typeof; auto.
       - (* enum *)
@@ -181,8 +181,6 @@ Module Type SUBCLOCK
         rewrite map_map; auto.
       - (* arrow *)
         rewrite map_map; auto.
-      - (* merge *)
-        destruct p; simpl; auto.
       - (* app *)
         rewrite map_map; auto.
     Qed.
