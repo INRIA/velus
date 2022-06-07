@@ -120,13 +120,10 @@ Qed.
 
 (** Général *)
 
-Definition hist_of_env (env : DS_prod SI) (l : list ident)
-  (Hinf : all_infinite l env) : Str.history :=
-  fun x =>
-    match in_dec ident_eq_dec x l with
-    | left Hin => Some (S_of_DSv (env x) (Hinf x Hin))
-    | right _ => None
-    end.
+(* TODO: err -> abs *)
+Definition hist_of_env (env : DS_prod SI) (Hinf : all_infinite env) : Str.history :=
+  fun x => Some (S_of_DSv (env x) (Hinf x)).
+
 
 CoFixpoint DS_of_S {A} (s : Stream A) : DS A :=
   match s with
@@ -154,10 +151,18 @@ Definition env_of_list (l : list ident) (ss : list (Stream svalue)) : DS_prod SI
     | None => DS_const (err error_Ty)
     end.
 
-Lemma env_of_list_inf :
-  forall l ss, all_infinite l (env_of_list l ss).
+Lemma env_of_list_inf_in :
+  forall l ss, all_infinite_in l (env_of_list l ss).
 Proof.
   intros * x Hin.
+  unfold env_of_list.
+  cases; auto using DS_of_S_inf, DS_const_inf.
+Qed.
+
+Lemma env_of_list_inf :
+  forall l ss, all_infinite (env_of_list l ss).
+Proof.
+  intros * x.
   unfold env_of_list.
   cases; auto using DS_of_S_inf, DS_const_inf.
 Qed.
@@ -165,25 +170,178 @@ Qed.
 Definition list_of_hist (H : Str.history) (xs : list ident) : list (Stream svalue) :=
   CommonList.map_filter H xs.
 
+Lemma list_of_hist_ok :
+  forall env Henv l,
+    let H := hist_of_env env Henv in
+    Forall2 (sem_var H) l (list_of_hist H l).
+Proof.
+  induction l; simpl; constructor; auto.
+  now econstructor; auto.
+Qed.
+
+(* TODO: move *)
+Lemma denot_node_input :
+  forall {PSyn prefs} (G : @global PSyn prefs)
+    nd envI bs env x,
+    wt_node G nd ->
+    restr_node nd ->
+    In x (List.map fst nd.(n_in)) ->
+    denot_node nd envI bs env x = envI x.
+Proof.
+  intros * Hwt Hr Hin.
+  unfold denot_node, denot_block.
+  destruct Hwt as (?&?&?& Hwt).
+  inv Hr. destruct Hwt eqn:HH; try congruence.
+  take (Beq _ = Beq _) and inv it.
+  eapply denot_equation_input; eauto.
+Qed.
+
+Lemma DS_of_S_of_DSv :
+  forall s H,
+    s ≡ S_of_DSv (DS_of_S (Streams.map sampl_of_sval s)) H.
+Proof.
+  intros.
+  remember_st (S_of_DSv (DS_of_S (Streams.map sampl_of_sval s)) H) as t.
+  revert_all.
+  cofix Cof; intros s Hinf t Ht.
+  destruct s, t.
+  apply S_of_DS_Cons in Ht as (?&?& Hc &?&?& Ht).
+  setoid_rewrite unfold_Stream in Hc.
+  setoid_rewrite DS_inv in Hc.
+  apply Con_eq_simpl in Hc as [].
+  constructor; simpl.
+  - subst; destruct s; auto.
+  - unshelve eapply Cof.
+    { setoid_rewrite unfold_Stream in Hinf.
+      setoid_rewrite DS_inv in Hinf.
+      simpl in Hinf; eauto using cons_infinite. }
+    rewrite <- Ht.
+    now apply _S_of_DS_eq.
+Qed.
+
+(* TODO: move *)
+Lemma map_filter_Some :
+  forall {A B} (f : A -> B) l,
+    CommonList.map_filter (fun x => Some (f x)) l = List.map f l.
+Proof.
+  induction l; simpl; auto.
+Qed.
+
+(* TODO: move *)
+Lemma map_EqSts_ext_in :
+  forall (A B : Type)(f g:A->Stream B) l, (forall a, In a l -> f a ≡ g a) -> EqSts (List.map f l) (List.map g l).
+Proof.
+  intros A B f g l; induction l as [|? ? IHl]; simpl; constructor; auto.
+  apply IHl; auto.
+Qed.
+
+(* TODO: move *)
+Lemma assoc_ident_cons2 :
+  forall {A} x y a (l : list (ident * A)),
+    x <> y ->
+    assoc_ident x ((y,a) :: l) = assoc_ident x l.
+Proof.
+  intros.
+  unfold assoc_ident.
+  simpl.
+  destruct (ident_eqb y x) eqn:?; auto.
+  rewrite ident_eqb_eq in *.
+  congruence.
+Qed.
+
+(* TODO: move *)
+Lemma assoc_ident_cons1 :
+  forall {A} x a (l : list (ident * A)),
+    assoc_ident x ((x,a) :: l) = Some a.
+Proof.
+  intros.
+  unfold assoc_ident.
+  simpl.
+  now rewrite ident_eqb_refl.
+Qed.
+
+(* TODO: move *)
+Lemma list_of_hist_of_list :
+  forall l ss H,
+    NoDup l ->
+    length l = length ss ->
+    EqSts (list_of_hist (hist_of_env (env_of_list l ss) H) l) ss.
+Proof.
+  unfold list_of_hist, hist_of_env.
+  intros * Hd Hl.
+  rewrite map_filter_Some.
+  revert dependent ss.
+  induction l; destruct ss; simpl; intros; try congruence; constructor.
+  - setoid_rewrite _S_of_DS_eq.
+    2: unfold env_of_list; simpl; rewrite assoc_ident_cons1; reflexivity.
+    symmetry. apply DS_of_S_of_DSv.
+  - inv Hd.
+    erewrite map_EqSts_ext_in.
+    apply IHl; auto.
+    intros x Hx.
+    apply _S_of_DS_eq.
+    unfold env_of_list; simpl.
+    rewrite assoc_ident_cons2; auto.
+    intro. subst; auto.
+ Unshelve. all:eauto using env_of_list_inf, DS_of_S_inf.
+Qed.
+
+(* TODO: move *)
+Lemma env_of_list_ok :
+  forall l ss HH,
+    NoDup l ->
+    length l = length ss ->
+    Forall2 (sem_var (hist_of_env (env_of_list l ss) HH)) l ss.
+Proof.
+  intros * Hd Hl.
+  pose proof (list_of_hist_of_list _ _ HH Hd Hl) as Hss.
+  (* TODO: setoid déconne à plein régime, là! *)
+  rewrite Forall2_EqSt_iff. 3: now rewrite <- Hss.
+  2:{ intros ??????. subst.
+      split; apply sem_var_morph; auto; try reflexivity.
+      now symmetry. }
+  eapply Forall2_impl_In; eauto using list_of_hist_ok.
+Qed.
+
+
 (* TODO: énoncer plutôt exist os, .. et faire ça dans la preuve ? *)
 Lemma ok_node :
   forall {PSyn prefs} (G : @global PSyn prefs),
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
   forall f (nd : node) ss,
-    find_node f G = Some nd ->
-    forall (Hwt : wt_node G nd)
-      (Hnc : node_causal nd)
-      (Hre : restr_node nd)
-      bs (bsi : infinite bs) (* TODO: ça va dégager *)
-    ,
+    length nd.(n_in) = length ss ->
+  forall (Hn : find_node f G = Some nd)
+    (Hwt : wt_node G nd)
+    (Hnc : node_causal nd)
+    (Hre : restr_node nd)
+  ,
     let envI := env_of_list (List.map fst nd.(n_in)) ss in
-    let infI := env_of_list_inf (List.map fst nd.(n_in)) ss in
+    let infI := env_of_list_inf_in (List.map fst nd.(n_in)) ss in
+    let bs := DS_of_S (clocks_of ss) in
+    let bsi := DS_of_S_inf (clocks_of ss) in
     let env := FIXP (DS_prod SI) (denot_node nd envI bs) in
-    let infO := denot_inf G HasCausInj nd envI bs Hre Hwt Hnc bsi infI in
-    let H := hist_of_env env (List.map fst nd.(n_out)) infO in
+    let infO := denot_inf_all G HasCausInj nd envI bs Hre Hwt Hnc bsi infI in
+    let H := hist_of_env env infO in
     let os := list_of_hist H (List.map fst nd.(n_out)) in
     sem_node G f ss os.
 Proof.
+  intros * Hl. intros.
+  eapply Snode with (H := H); eauto using list_of_hist_ok.
+  - subst H env0.
+    pose proof nd.(n_nodup) as [ND].
+    apply fst_NoDupMembers in ND.
+    rewrite map_app in ND.
+    eapply Forall2_impl_In, env_of_list_ok; eauto using NoDup_app_l.
+    2: unfold idents; rewrite map_length; auto.
+    intros x s Hx Hs Hv.
+    inversion_clear Hv as [???? Hh Hu].
+    unfold hist_of_env in *. inv Hh.
+    rewrite Hu.
+    eapply sem_var_intro, _S_of_DS_eq; auto.
+    setoid_rewrite <- PROJ_simpl at 2.
+    erewrite FIXP_eq, PROJ_simpl, denot_node_input; eauto.
+    Unshelve. apply env_of_list_inf.
+  - (* TODO *)
 Qed.
 
 
@@ -293,7 +451,7 @@ Proof.
   (* pose (ss := denot_exps es env0 bs). *)
   pose (ss := List.map (fun e => list_of_nprod' _ (denot_exp e env0 bs)) es).
   econstructor; simpl in *.
-  Search denot_equation.
+  Search denot_node.
 Qed.
 
 
