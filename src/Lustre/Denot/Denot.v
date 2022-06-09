@@ -300,30 +300,6 @@ Qed.
 
 Section EXP.
 
-(* TODO: pour l'instant on se restreint aux cas suivants *)
-Inductive restr_exp : exp -> Prop :=
-| restr_Econst :
-  forall c,
-    restr_exp (Econst c)
-| restr_Evar :
-  forall x ann,
-    restr_exp (Evar x ann)
-| restr_Eunop :
-  forall op e ann,
-    restr_exp e ->
-    restr_exp (Eunop op e ann)
-| restr_Efby :
-  forall e0s es anns,
-    Forall restr_exp e0s ->
-    Forall restr_exp es ->
-    restr_exp (Efby e0s es anns)
-(* | restr_Eapp : *)
-(*   forall f es ers anns, *)
-(*     Forall restr_exp es -> *)
-(*     Forall restr_exp ers -> *)
-(*     restr_exp (Eapp f es ers anns) *)
-.
-
 Definition SI := fun _ : ident => sampl value.
 
 Definition denot_exp_ (ins : list ident)
@@ -337,13 +313,13 @@ Definition denot_exp_ (ins : list ident)
   - (* Econst *)
     apply (sconst (Vscalar (sem_cconst c)) @_ SND _ _ @_ FST _ _).
   - (* Eenum *)
-    exact (CTE _ _ 0).
+    apply CTE, (DS_const (err error_Ty)).
   - (* Evar *)
     exact (if mem_ident i ins
            then PROJ (DS_fam SI) i @_ FST _ _ @_ FST _ _
            else PROJ (DS_fam SI) i @_ SND _ _).
   - (* Elast *)
-    exact (CTE _ _ 0).
+    apply CTE, (DS_const (err error_Ty)).
   - (* Eunop *)
     eapply fcont_comp. 2: apply (denot_exp e0).
     destruct (numstreams e0) as [|[]].
@@ -354,7 +330,7 @@ Definition denot_exp_ (ins : list ident)
     1,3: apply CTE, (DS_const (err error_Ty)).
     exact (sunop (fun v => sem_unop u v ty)).
   - (* Ebinop *)
-    exact (CTE _ _ 0).
+    apply CTE, (DS_const (err error_Ty)).
   - (* Efby *)
     rename l into e0s.
     rename l0 into es.
@@ -386,15 +362,15 @@ Definition denot_exp_ (ins : list ident)
     rewrite <- Heq in ss.
     exact ((lift2 (@SDfuns.fby) @2_ s0s) ss).
   - (* Earrow *)
-    exact (CTE _ _ 0).
+    apply CTE, (nprod_const (err error_Ty)).
   - (* Ewhen *)
-    exact (CTE _ _ 0).
+    apply CTE, (nprod_const (err error_Ty)).
   - (* Emerge *)
-    exact (CTE _ _ 0).
+    apply CTE, (nprod_const (err error_Ty)).
   - (* Ecase *)
-    exact (CTE _ _ 0).
+    apply CTE, (nprod_const (err error_Ty)).
   - (* Eapp *)
-    exact (CTE _ _ 0).
+    apply CTE, (nprod_const (err error_Ty)).
 Defined.
 
 Definition denot_exp (ins : list ident) (e : exp) :
@@ -481,7 +457,7 @@ Lemma denot_exp_eq :
       (* | Ereset _ _ f fd e er => *)
       (*     reset (denot_app s gd f fd genv) *)
                           (*       (denot_exp er genv env bs) (denot_exp e genv env bs) *)
-      | _ => 0
+      | _ => nprod_const (err error_Ty) _
       end.
 Proof.
   destruct e; auto; intros envI bs env.
@@ -517,6 +493,8 @@ Proof.
       end.
     now destruct E1, E2.
 Qed.
+
+Global Opaque denot_exp.
 
 End EXP.
 
@@ -628,6 +606,8 @@ Proof.
   destruct (mem_nth xs x); auto.
 Qed.
 
+Global Opaque denot_equation.
+
 End Equation_spec.
 
 (* (* 1ère version : construction directe de l'environnement en parcourant *)
@@ -682,20 +662,11 @@ End Equation_spec.
 (*           * exact (SND _ _). *)
 (*     Defined. *)
 
-Inductive restr_block : block -> Prop :=
-| restr_Beq :
-  forall xs es,
-    Forall restr_exp es ->
-    restr_block (Beq (xs,es)).
-
-Definition restr_node {PSyn prefs} (nd : @node PSyn prefs) : Prop :=
-  restr_block nd.(n_block).
-
 Definition denot_block (ins : list ident) (b : block) :
   DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
   match b with
   | Beq e => denot_equation ins e
-  | _ => 0
+  | _ => curry (curry (FST _ _ @_ FST _ _)) (* garder les entrées *)
   end.
 
 Definition denot_node {PSyn prefs} (n : @node PSyn prefs) :
