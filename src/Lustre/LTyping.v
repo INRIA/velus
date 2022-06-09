@@ -256,182 +256,6 @@ Module Type LTYPING
   Global Hint Constructors wt_type wt_clock wt_exp wt_block : ltyping.
   Global Hint Unfold wt_equation : ltyping.
 
-  Section wt_exp_ind2.
-    Context (PSyn : block -> Prop).
-    Context (prefs : PS.t).
-
-    Variable (G : @global PSyn prefs).
-    Variable Γ : static_env.
-    Variable P : exp -> Prop.
-
-    Hypothesis EconstCase:
-      forall c,
-        P (Econst c).
-
-    Hypothesis EenumCase:
-      forall k tx tn,
-        wt_type G.(types) (Tenum tx tn) ->
-        k < length tn ->
-        P (Eenum k (Tenum tx tn)).
-
-    Hypothesis EvarCase:
-      forall x ty nck,
-        HasType Γ x ty ->
-        wt_clock G.(types) Γ nck ->
-        P (Evar x (ty, nck)).
-
-    Hypothesis ElastCase:
-      forall x ty nck,
-        HasType Γ x ty ->
-        IsLast Γ x ->
-        wt_clock G.(types) Γ nck ->
-        P (Elast x (ty, nck)).
-
-    Hypothesis EunopCase:
-      forall op e tye ty nck,
-        wt_exp G Γ e ->
-        P e ->
-        typeof e = [tye] ->
-        type_unop op tye = Some ty ->
-        wt_type G.(types) ty ->
-        wt_clock G.(types) Γ nck ->
-        P (Eunop op e (ty, nck)).
-
-    Hypothesis EbinopCase:
-      forall op e1 e2 ty1 ty2 ty nck,
-        wt_exp G Γ e1 ->
-        P e1 ->
-        wt_exp G Γ e2 ->
-        P e2 ->
-        typeof e1 = [ty1] ->
-        typeof e2 = [ty2] ->
-        type_binop op ty1 ty2 = Some ty ->
-        wt_type G.(types) ty ->
-        wt_clock G.(types) Γ nck ->
-        P (Ebinop op e1 e2 (ty, nck)).
-
-    Hypothesis EfbyCase:
-      forall e0s es anns,
-        Forall (wt_exp G Γ) e0s ->
-        Forall (wt_exp G Γ) es ->
-        Forall P e0s ->
-        Forall P es ->
-        typesof es = map fst anns ->
-        typesof e0s = map fst anns ->
-        Forall (wt_clock G.(types) Γ) (map snd anns) ->
-        P (Efby e0s es anns).
-
-    Hypothesis EarrowCase:
-      forall e0s es anns,
-        Forall (wt_exp G Γ) e0s ->
-        Forall (wt_exp G Γ) es ->
-        Forall P e0s ->
-        Forall P es ->
-        typesof es = map fst anns ->
-        typesof e0s = map fst anns ->
-        Forall (wt_clock G.(types) Γ) (map snd anns) ->
-        P (Earrow e0s es anns).
-
-    Hypothesis EwhenCase:
-      forall es x b tx tn tys nck,
-        HasType Γ x (Tenum tx tn) ->
-        In (Tenum tx tn) G.(types) ->
-        b < length tn ->
-        Forall (wt_exp G Γ) es ->
-        Forall P es ->
-        typesof es = tys ->
-        wt_clock G.(types) Γ nck ->
-        P (Ewhen es (x, Tenum tx tn) b (tys, nck)).
-
-    Hypothesis EmergeCase:
-      forall x es tx tn tys nck,
-        HasType Γ x (Tenum tx tn) ->
-        In (Tenum tx tn) G.(types) ->
-        Permutation (map fst es) (seq 0 (length tn)) ->
-        es <> nil ->
-        Forall (fun es => Forall (wt_exp G Γ) (snd es)) es ->
-        Forall (fun es => Forall P (snd es)) es ->
-        Forall (fun es => typesof (snd es) = tys) es ->
-        wt_clock G.(types) Γ nck ->
-        P (Emerge (x, Tenum tx tn) es (tys, nck)).
-
-    Hypothesis EcasetotalCase:
-      forall e es tx tn tys nck,
-        wt_exp G Γ e ->
-        P e ->
-        typeof e = [Tenum tx tn] ->
-        In (Tenum tx tn) G.(types) ->
-        Permutation (map fst es) (seq 0 (length tn)) ->
-        es <> nil ->
-        Forall (fun es => Forall (wt_exp G Γ) (snd es)) es ->
-        Forall (fun es => Forall P (snd es)) es ->
-        Forall (fun es => typesof (snd es) = tys) es ->
-        wt_clock G.(types) Γ nck ->
-        P (Ecase e es None (tys, nck)).
-
-    Hypothesis EcasedefaultCase:
-      forall e es d tx tn tys nck,
-        wt_exp G Γ e ->
-        P e ->
-        typeof e = [Tenum tx tn] ->
-        In (Tenum tx tn) G.(types) ->
-        incl (map fst es) (seq 0 (length tn)) ->
-        NoDupMembers es ->
-        es <> nil ->
-        Forall (fun es => Forall (wt_exp G Γ) (snd es)) es ->
-        Forall (fun es => Forall P (snd es)) es ->
-        Forall (fun es => typesof (snd es) = tys) es ->
-        Forall (wt_exp G Γ) d ->
-        Forall P d ->
-        typesof d = tys ->
-        wt_clock G.(types) Γ nck ->
-        P (Ecase e es (Some d) (tys, nck)).
-
-    Hypothesis EappCase:
-      forall f es er anns n,
-        Forall (wt_exp G Γ) es ->
-        Forall (wt_exp G Γ) er ->
-        Forall P es ->
-        Forall P er ->
-        find_node f G = Some n ->
-        Forall2 (fun et '(_, (t, _, _)) => et = t) (typesof es) n.(n_in) ->
-        Forall2 (fun a '(_, (t, _, _)) => fst a = t) anns n.(n_out) ->
-        Forall (fun e => typeof e = [bool_velus_type]) er ->
-        Forall (fun a => wt_clock G.(types) Γ (snd a)) anns ->
-        P (Eapp f es er anns).
-
-    Fixpoint wt_exp_ind2 (e: exp) (H: wt_exp G Γ e) {struct H} : P e.
-    Proof.
-      destruct H; eauto.
-      - apply EfbyCase; auto.
-        + clear H2. induction H; auto.
-        + clear H1. induction H0; auto.
-      - apply EarrowCase; auto.
-        + clear H2. induction H; auto.
-        + clear H1. induction H0; auto.
-      - eapply EwhenCase; eauto.
-        clear H3. induction H2; auto.
-      - apply EmergeCase; auto.
-        clear H1 H2 H4.
-        induction H3; constructor; auto.
-        induction H1; auto.
-      - eapply EcasetotalCase; eauto.
-        clear H2 H3 H5.
-        induction H4; constructor; auto.
-        induction H2; auto.
-      - eapply EcasedefaultCase; eauto.
-        + clear H2 H3 H4 H6.
-          induction H5; constructor; auto.
-          induction H2; auto.
-        + clear H8.
-          induction H7; auto.
-      - eapply EappCase; eauto.
-        + clear H2 H5. induction H; eauto.
-        + clear H4. induction H0; eauto.
-    Qed.
-
-  End wt_exp_ind2.
-
   Lemma wt_global_NoDup {PSyn prefs}:
     forall (g : @global PSyn prefs),
       wt_global g ->
@@ -510,17 +334,15 @@ Module Type LTYPING
            wt_exp.
   Proof.
     intros G G' HG env' env Henv e' e He. subst.
-    split; intro H;
-      induction H using wt_exp_ind2;
-      (rewrite Henv in * || rewrite <-Henv in * || idtac);
-      try match goal with
-          | H:Forall (fun a => wt_clock _ env' (snd a)) _ |- _ =>
-            setoid_rewrite Henv in H
-          | H:Forall (fun a => wt_clock _ env (snd a)) _ |- _ =>
-            setoid_rewrite <-Henv in H
-          end;
-      eauto with ltyping;
-      econstructor; eauto.
+    split; intro H; induction e using exp_ind2; inv H; econstructor; simpl_Forall; eauto;
+      match goal with
+      | |- HasType env' _ _ => now rewrite Henv
+      | |- HasType env _ _ => now rewrite <-Henv
+      | |- IsLast env' _ => now rewrite Henv
+      | |- IsLast env _ => now rewrite <-Henv
+      | |- wt_clock _ env' _ => now rewrite Henv
+      | |- wt_clock _ env _ => now rewrite <-Henv
+      end.
   Qed.
 
   Global Instance wt_exp_pointwise_Proper {PSyn prefs}:
@@ -564,13 +386,9 @@ Module Type LTYPING
         wt_exp G Γ e ->
         wt_exp G Γ' e.
     Proof.
-      intros * Hincl1 Hincl2 Hwt.
-      induction Hwt using wt_exp_ind2;
-        econstructor; eauto with senv ltyping.
-      1-2:eapply Forall_impl; [| eauto]; intros; eauto with ltyping.
-      (* app *)
-      eapply Forall_impl; [| eauto].
-      intros; simpl in *; eauto using incl_map with ltyping.
+      intros * Hincl1 Hincl2 Hwt;
+        induction e using exp_ind2; inv Hwt;
+        econstructor; simpl_Forall; eauto with senv ltyping.
     Qed.
 
     Lemma wt_equation_incl {PSyn prefs} : forall (G: @global PSyn prefs) Γ Γ' eq,

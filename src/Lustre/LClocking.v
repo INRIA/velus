@@ -205,143 +205,6 @@ Module Type LCLOCKING
   Global Hint Constructors wc_exp wc_equation wc_block : lclocking.
   Global Hint Unfold wc_node wc_global wc_env : lclocking.
 
-  Section wc_exp_ind2.
-    Context (PSyn : block -> Prop).
-    Context (prefs : PS.t).
-
-    Variable G : @global PSyn prefs.
-    Variable Γ : static_env.
-    Variable P : exp -> Prop.
-
-    Hypothesis EconstCase:
-      forall c,
-        P (Econst c).
-
-    Hypothesis EenumCase:
-      forall k ty,
-        P (Eenum k ty).
-
-    Hypothesis EvarCase:
-      forall x ty ck,
-        HasClock Γ x ck ->
-        P (Evar x (ty, ck)).
-
-    Hypothesis ElastCase:
-      forall x ty ck,
-        HasClock Γ x ck ->
-        IsLast Γ x ->
-        P (Elast x (ty, ck)).
-
-    Hypothesis EunopCase:
-      forall op e ty ck,
-        wc_exp G Γ e ->
-        P e ->
-        clockof e = [ck] ->
-        P (Eunop op e (ty, ck)).
-
-    Hypothesis EbinopCase:
-      forall op e1 e2 ty ck,
-        wc_exp G Γ e1 ->
-        P e1 ->
-        wc_exp G Γ e2 ->
-        P e2 ->
-        clockof e1 = [ck] ->
-        clockof e2 = [ck] ->
-        P (Ebinop op e1 e2 (ty, ck)).
-
-    Hypothesis EfbyCase:
-      forall e0s es anns,
-        Forall (wc_exp G Γ) e0s ->
-        Forall (wc_exp G Γ) es ->
-        Forall P es ->
-        Forall P e0s ->
-        Forall2 eq (map snd anns) (clocksof e0s) ->
-        Forall2 eq (map snd anns) (clocksof es) ->
-        P (Efby e0s es anns).
-
-    Hypothesis EarrowCase:
-      forall e0s es anns,
-        Forall (wc_exp G Γ) e0s ->
-        Forall (wc_exp G Γ) es ->
-        Forall P es ->
-        Forall P e0s ->
-        Forall2 eq (map snd anns) (clocksof e0s) ->
-        Forall2 eq (map snd anns) (clocksof es) ->
-        P (Earrow e0s es anns).
-
-    Hypothesis EwhenCase:
-      forall es x tx ty b tys ck,
-        HasClock Γ x ck ->
-        Forall (wc_exp G Γ) es ->
-        Forall P es ->
-        Forall (eq ck) (clocksof es) ->
-        length tys = length (clocksof es) ->
-        P (Ewhen es (x, tx) b (tys, Con ck x (ty, b))).
-
-    Hypothesis EmergeCase:
-      forall x tx es tys ck,
-        HasClock Γ x ck ->
-        es <> nil ->
-        Forall (fun es => Forall (wc_exp G Γ) (snd es)) es ->
-        Forall (fun es => Forall P (snd es)) es ->
-        Forall (fun '(i, es) => Forall (eq (Con ck x (tx, i))) (clocksof es)) es ->
-        Forall (fun es => length tys = length (clocksof (snd es))) es ->
-        P (Emerge (x, tx) es (tys, ck)).
-
-    Hypothesis EcaseCase:
-      forall e es d tys ck,
-        wc_exp G Γ e ->
-        P e ->
-        clockof e = [ck] ->
-        es <> nil ->
-        Forall (fun es => Forall (wc_exp G Γ) (snd es)) es ->
-        Forall (fun es => Forall P (snd es)) es ->
-        Forall (fun es => Forall (eq ck) (clocksof (snd es))) es ->
-        Forall (fun es => length tys = length (clocksof (snd es))) es ->
-        (forall d0, d = Some d0 -> Forall (wc_exp G Γ) d0) ->
-        (forall d0, d = Some d0 -> Forall P d0) ->
-        (forall d0, d = Some d0 -> Forall (eq ck) (clocksof d0)) ->
-        (forall d0, d = Some d0 -> length tys = length (clocksof d0)) ->
-        P (Ecase e es d (tys, ck)).
-
-    Hypothesis EappCase:
-      forall f es er anns n bck sub,
-        Forall (wc_exp G Γ) es ->
-        Forall (wc_exp G Γ) er ->
-        Forall P es ->
-        Forall P er ->
-        find_node f G = Some n ->
-        Forall2 (WellInstantiated bck sub) (map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_in)) (nclocksof es) ->
-        Forall2 (WellInstantiated bck sub) (map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_out)) (map (fun '(_, ck) => (ck, None)) anns) ->
-        Forall (fun e => exists ck, clockof e = [ck]) er ->
-        P (Eapp f es er anns).
-
-    Fixpoint wc_exp_ind2 (e: exp) (H: wc_exp G Γ e) {struct H} : P e.
-    Proof.
-      destruct H; eauto.
-      - apply EfbyCase; auto.
-        + clear H2. induction H0; auto.
-        + clear H1. induction H; auto.
-      - apply EarrowCase; auto.
-        + clear H2. induction H0; auto.
-        + clear H1. induction H; auto.
-      - apply EwhenCase; auto.
-        clear H1 H2. induction H0; auto.
-      - apply EmergeCase; auto.
-        clear H0 H2 H3. induction H1; constructor; auto.
-        induction H0; auto.
-      - apply EcaseCase; auto.
-        + clear H1 H3 H4. induction H2; constructor; auto.
-          induction H1; auto.
-        + intros; subst. clear H6 H7. specialize (H5 _ eq_refl).
-          induction H5; auto.
-      - eapply EappCase; eauto.
-        + clear H1 H2. induction H; eauto.
-        + clear H4. induction H0; eauto.
-    Qed.
-
-  End wc_exp_ind2.
-
   Lemma wc_global_NoDup {PSyn prefs}:
     forall (g: @global PSyn prefs),
       wc_global g ->
@@ -367,12 +230,18 @@ Module Type LCLOCKING
                 ==> @eq exp ==> iff)
            wc_exp.
   Proof.
-    intros G G' HG env' env Henv ?? He.
-    rewrite HG, He. clear HG He.
-    split; intro H;
-      induction H using wc_exp_ind2;
-      (rewrite Henv in * || rewrite <-Henv in * || idtac);
-      eauto with lclocking.
+    intros G G' HG env' env Henv ?? He. subst.
+    split; intro H; induction y using exp_ind2; inv H; econstructor; simpl_Forall; eauto;
+      match goal with
+      | |- HasClock env' _ _ => now rewrite Henv
+      | |- HasClock env _ _ => now rewrite <-Henv
+      | |- IsLast env' _ => now rewrite Henv
+      | |- IsLast env _ => now rewrite <-Henv
+      | _ => idtac
+      end.
+    1,2:intros * Heq; subst; simpl in *.
+    1,2:take (forall (d1 : list exp), _ -> Forall (wc_exp _ _) _) and specialize (it _ eq_refl).
+    1,2:simpl_Forall; eauto.
   Qed.
 
   Global Instance wc_equation_Proper {PSyn prefs}:
