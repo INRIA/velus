@@ -44,6 +44,12 @@ Proof.
   induction n; intros; inversion Hf; simpl; auto.
 Qed.
 
+Lemma nrem_inf_iff :
+  forall (s : DS A), (forall n, is_cons (nrem n s)) <-> infinite s.
+Proof.
+  split; auto using nrem_inf, inf_nrem.
+Qed.
+
 Lemma is_consn_DS_const :
   forall (c : A) n,
     is_cons (nrem n (DS_const c)).
@@ -125,12 +131,54 @@ Section Ncons_ops.
 
 Context {A B : Type}.
 
+Lemma is_consn_sconst :
+  forall (c : A) bs n,
+    is_cons (nrem n bs) ->
+    is_cons (nrem n (sconst c bs)).
+Proof.
+  intros.
+  unfold sconst.
+  rewrite MAP_map, nrem_map.
+  now apply is_cons_map.
+Qed.
+
+Lemma sconst_inf :
+  forall (c : A) bs,
+    infinite bs ->
+    infinite (sconst c bs).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros.
+  auto using is_consn_sconst.
+Qed.
+
 Ltac solve_err :=
   try match goal with
     | |- context [ DS_const _ ] =>
         repeat rewrite DS_const_eq, rem_cons;
         now auto using is_cons_DS_const, is_consn_DS_const
     end.
+
+Lemma is_consn_sunop :
+  forall (f : A -> option B) s n,
+    is_cons (nrem n s) ->
+    is_cons (nrem n (sunop f s)).
+Proof.
+  intros.
+  unfold sunop.
+  rewrite MAP_map, nrem_map.
+  now apply is_cons_map.
+Qed.
+
+Lemma sunop_inf :
+  forall (op : A -> option B) s,
+    infinite s ->
+    infinite (sunop op s).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros.
+  auto using is_consn_sunop.
+Qed.
 
 Lemma is_cons_fby :
   forall (xs ys : DS (sampl A)),
@@ -212,27 +260,15 @@ Proof.
   apply is_consn_S_fby, is_consn_S; auto.
 Qed.
 
-
-Lemma is_consn_sunop :
-  forall (f : A -> option B) s n,
-    is_cons (nrem n s) ->
-    is_cons (nrem n (sunop f s)).
+Lemma fby_inf :
+  forall (xs ys : DS (sampl A)),
+    infinite xs ->
+    infinite ys ->
+    infinite (SDfuns.fby xs ys).
 Proof.
+  setoid_rewrite <- nrem_inf_iff.
   intros.
-  unfold sunop.
-  rewrite MAP_map, nrem_map.
-  now apply is_cons_map.
-Qed.
-
-Lemma is_consn_sconst :
-  forall (c : A) bs n,
-    is_cons (nrem n bs) ->
-    is_cons (nrem n (sconst c bs)).
-Proof.
-  intros.
-  unfold sconst.
-  rewrite MAP_map, nrem_map.
-  now apply is_cons_map.
+  auto using is_consn_fby.
 Qed.
 
 End Ncons_ops.

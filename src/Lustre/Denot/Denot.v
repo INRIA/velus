@@ -249,6 +249,13 @@ Proof.
     apply IHn; auto using forall_nprod_skip with arith.
 Qed.
 
+Lemma forall_nprod_k_iff :
+  forall {n} (np : nprod n),
+    forall_nprod np <-> (forall k, k < n -> P (get_nth np k)).
+Proof.
+  split; auto using forall_nprod_k, forall_nprod_k'.
+Qed.
+
 Lemma forall_nprod_app :
   forall {n m} (np : nprod n) (mp : nprod m),
     forall_nprod np ->
@@ -262,6 +269,20 @@ Proof.
   - rewrite nprod_app_nth1; auto using forall_nprod_k'.
   - rewrite nprod_app_nth2; auto.
     apply forall_nprod_k'; auto; lia.
+Qed.
+
+Lemma app_forall_nprod :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    forall_nprod (nprod_app np mp) ->
+    forall_nprod np
+    /\ forall_nprod mp.
+Proof.
+  setoid_rewrite forall_nprod_k_iff.
+  intros * Hf; split; intros k Hk.
+  - specialize (Hf k).
+    rewrite nprod_app_nth1 in Hf; auto with arith.
+  - specialize (Hf (n + k)).
+    rewrite nprod_app_nth2, minus_plus in Hf; auto with arith.
 Qed.
 
 Lemma forall_nprod_lift2 :
@@ -279,6 +300,16 @@ Proof.
   rewrite lift2_simpl.
   split; simpl in *; auto .
   now apply IHn.
+Qed.
+
+Lemma forall_nprod_const :
+  forall {n} c,
+    P (DS_const c) ->
+    forall_nprod (nprod_const c n).
+Proof.
+  intros.
+  apply forall_nprod_k; intros.
+  now rewrite get_nth_const.
 Qed.
 
 End Forall_Nprod.

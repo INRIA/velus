@@ -713,6 +713,63 @@ Module Type LDENOTINF
 
   End node_inf.
 
+
+  (** Une fois l'infinité des flots obtenue, on peut l'utiliser pour
+      prouver l'infinité des expression. *)
+  Lemma infinite_exp :
+  forall ins envI bs env,
+    infinite bs ->
+    all_infinite envI ->
+    all_infinite env ->
+    forall e,
+    forall_nprod (@infinite _) (denot_exp ins e envI bs env).
+Proof.
+  intros * Hins Hinf Hbs.
+  induction e using exp_ind2; intros; simpl; setoid_rewrite denot_exp_eq.
+  (* cas restreints : *)
+  all: try (simpl; now auto using forall_nprod_const, DS_const_inf).
+  - (* const *)
+    apply sconst_inf; auto.
+  - (* var *)
+    unfold all_infinite in *.
+    cases_eqn HH; rewrite ?mem_ident_spec in HH; eauto.
+  - (* unop *)
+    assert (forall_nprod (@infinite _) (denot_exp ins e envI bs env0)) as He by eauto.
+    revert He.
+    generalize (denot_exp ins e envI bs env0).
+    generalize (numstreams e).
+    intros.
+    cases; simpl; auto using sunop_inf, DS_const_inf.
+  - (* fby *)
+    assert (forall_nprod (@infinite _) (denot_exps ins e0s envI bs env0)) as He0s.
+    { induction e0s; simpl_Forall; auto.
+      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
+    assert (forall_nprod (@infinite _) (denot_exps ins es envI bs env0)) as Hes.
+    { induction es; simpl_Forall; auto.
+      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
+    revert He0s Hes.
+    generalize (denot_exps ins e0s envI bs env0).
+    generalize (denot_exps ins es envI bs env0).
+    generalize (list_sum (List.map numstreams e0s)).
+    generalize (list_sum (List.map numstreams es)).
+    intros; unfold eq_rect_r, eq_rect, eq_sym.
+    cases; subst; auto using forall_nprod_const, DS_const_inf, forall_nprod_lift2, fby_inf.
+Qed.
+
+Corollary infinite_exps :
+  forall ins envI bs env,
+    infinite bs ->
+    all_infinite envI ->
+    all_infinite env ->
+    forall es,
+    forall_nprod (@infinite _) (denot_exps ins es envI bs env).
+Proof.
+  induction es; simpl; auto.
+  intros; simpl_Forall.
+  setoid_rewrite denot_exps_eq.
+  auto using forall_nprod_app, infinite_exp.
+Qed.
+
 End LDENOTINF.
 
 Module LDenotInfFun
