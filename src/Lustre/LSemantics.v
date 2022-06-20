@@ -336,335 +336,6 @@ Module Type LSEMANTICS
 
   End NodeSemantics.
 
-  (** Custom induction schemes *)
-
-  Section sem_exp_ind2.
-    Context (PSyn : block -> Prop).
-    Context (prefs : PS.t).
-    Variable G : @global PSyn prefs.
-
-    Variable P_exp : history -> Stream bool -> exp -> list (Stream svalue) -> Prop.
-    Variable P_equation : history -> Stream bool -> equation -> Prop.
-    Variable P_transitions : history -> Stream bool -> list (exp * (enumtag * bool)) -> (enumtag * bool) -> Stream (synchronous (enumtag * bool)) -> Prop.
-    Variable P_block : history -> Stream bool -> block -> Prop.
-    Variable P_node : ident -> list (Stream svalue) -> list (Stream svalue) -> Prop.
-
-    Hypothesis ConstCase:
-      forall H b c cs,
-        cs ≡ const b c ->
-        P_exp H b (Econst c) [cs].
-
-    Hypothesis EnumCase:
-      forall H b k ty es,
-        es ≡ enum b k ->
-        P_exp H b (Eenum k ty) [es].
-
-    Hypothesis VarCase:
-      forall H b x s ann,
-        sem_var (fst H) x s ->
-        P_exp H b (Evar x ann) [s].
-
-    Hypothesis LastCase:
-      forall H b x s ann,
-        sem_var (snd H) x s ->
-        P_exp H b (Elast x ann) [s].
-
-    Hypothesis UnopCase:
-      forall H b e op ty s o ann,
-        sem_exp G H b e [s] ->
-        P_exp H b e [s] ->
-        typeof e = [ty] ->
-        lift1 op ty s o ->
-        P_exp H b (Eunop op e ann) [o].
-
-    Hypothesis BinopCase:
-      forall H b e1 e2 op ty1 ty2 s1 s2 o ann,
-        sem_exp G H b e1 [s1] ->
-        P_exp H b e1 [s1] ->
-        sem_exp G H b e2 [s2] ->
-        P_exp H b e2 [s2] ->
-        typeof e1 = [ty1] ->
-        typeof e2 = [ty2] ->
-        lift2 op ty1 ty2 s1 s2 o ->
-        P_exp H b (Ebinop op e1 e2 ann) [o].
-
-    Hypothesis FbyCase:
-      forall H b e0s es anns s0ss sss os,
-        Forall2 (sem_exp G H b) e0s s0ss ->
-        Forall2 (P_exp H b) e0s s0ss ->
-        Forall2 (sem_exp G H b) es sss ->
-        Forall2 (P_exp H b) es sss ->
-        Forall3 fby (concat s0ss) (concat sss) os ->
-        P_exp H b (Efby e0s es anns) os.
-
-    Hypothesis ArrowCase:
-      forall H b e0s es anns s0ss sss os,
-        Forall2 (sem_exp G H b) e0s s0ss ->
-        Forall2 (P_exp H b) e0s s0ss ->
-        Forall2 (sem_exp G H b) es sss ->
-        Forall2 (P_exp H b) es sss ->
-        Forall3 arrow (concat s0ss) (concat sss) os ->
-        P_exp H b (Earrow e0s es anns) os.
-
-    Hypothesis WhenCase:
-      forall H b x tx s k es lann ss os,
-        Forall2 (sem_exp G H b) es ss ->
-        Forall2 (P_exp H b) es ss ->
-        sem_var (fst H) x s ->
-        Forall2 (fun s' => when k s' s) (concat ss) os ->
-        P_exp H b (Ewhen es (x, tx) k lann) os.
-
-    Hypothesis MergeCase:
-      forall H b x tx s es lann vs os,
-        sem_var (fst H) x s ->
-        Forall2Brs (sem_exp G H b) es vs ->
-        Forall2Brs (P_exp H b) es vs ->
-        Forall2 (merge s) vs os ->
-        P_exp H b (Emerge (x, tx) es lann) os.
-
-    Hypothesis CaseTotalCase:
-      forall H b e s es tys ck vs os,
-        sem_exp G H b e [s] ->
-        P_exp H b e [s] ->
-        Forall2Brs (sem_exp G H b) es vs ->
-        Forall2Brs (P_exp H b) es vs ->
-        Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
-        P_exp H b (Ecase e es None (tys, ck)) os.
-
-    Hypothesis CaseDefaultCase:
-      forall H b e s es d lann vs vd os,
-        sem_exp G H b e [s] ->
-        P_exp H b e [s] ->
-        wt_streams [s] (typeof e) ->
-        Forall2Brs (sem_exp G H b) es vs ->
-        Forall2Brs (P_exp H b) es vs ->
-        Forall2 (sem_exp G H b) d vd ->
-        Forall2 (P_exp H b) d vd ->
-        Forall3 (case s) vs (List.map Some (concat vd)) os ->
-        P_exp H b (Ecase e es (Some d) lann) os.
-
-    Hypothesis AppCase:
-      forall H b f es er lann ss os sr bs,
-        Forall2 (sem_exp G H b) es ss ->
-        Forall2 (P_exp H b) es ss ->
-        Forall2 (fun e r => sem_exp G H b e [r]) er sr ->
-        Forall2 (fun e r => P_exp H b e [r]) er sr ->
-        bools_ofs sr bs ->
-        (forall k, sem_node G f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)
-              /\ P_node f (List.map (maskv k bs) (concat ss)) (List.map (maskv k bs) os)) ->
-        P_exp H b (Eapp f es er lann) os.
-
-    Hypothesis Equation:
-      forall H b xs es ss,
-        Forall2 (sem_exp G H b) es ss ->
-        Forall2 (P_exp H b) es ss ->
-        Forall2 (sem_var (fst H)) xs (concat ss) ->
-        P_equation H b (xs, es).
-
-    Hypothesis BeqCase:
-      forall H b eq,
-        sem_equation G H b eq ->
-        P_equation H b eq ->
-        P_block H b (Beq eq).
-
-    Hypothesis BresetCase:
-      forall H b blocks er sr r,
-        sem_exp G H b er [sr] ->
-        P_exp H b er [sr] ->
-        bools_of sr r ->
-        (forall k, Forall (sem_block G (mask_hist k r H) (maskb k r b)) blocks /\
-              Forall (P_block (mask_hist k r H) (maskb k r b)) blocks) ->
-        P_block H b (Breset blocks er).
-
-    Hypothesis BswitchCase:
-      forall Hi b ec branches sc,
-        sem_exp G Hi b ec [sc] ->
-        P_exp Hi b ec [sc] ->
-        wt_streams [sc] (typeof ec) ->
-        Forall (fun blks => exists Hi', filter_hist (fst blks) sc Hi Hi'
-                                /\ let bi := ffilterb (fst blks) sc b in
-                                  sem_scope (fun Hi' e vs => sem_exp G Hi' bi e vs /\ P_exp Hi' bi e vs)
-                                            (fun Hi' blks => Forall (sem_block G Hi' bi) blks
-                                                          /\ Forall (P_block Hi' bi) blks
-                                            ) Hi' bi (snd blks)) branches ->
-        P_block Hi b (Bswitch ec branches).
-
-    Hypothesis TransDefCase:
-      forall Hi bs default stres,
-        stres ≡ const_stres bs default ->
-        P_transitions Hi bs [] default stres.
-
-    Hypothesis TransCase:
-      forall Hi bs e C r trans default vs bs' stres1 stres,
-        sem_exp G Hi bs e [vs] ->
-        P_exp Hi bs e [vs] ->
-        bools_of vs bs' ->
-        sem_transitions G Hi bs trans default stres1 ->
-        P_transitions Hi bs trans default stres1 ->
-        stres ≡ choose_first (const_stres bs' (C, r)) stres1 ->
-        P_transitions Hi bs ((e, (C, r))::trans) default stres.
-
-    Hypothesis BautoWeakCase:
-      forall Hi bs ini oth states ck bs' stres0 stres1 stres,
-        sem_clock (fst Hi) bs ck bs' ->
-        sem_transitions G Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
-        P_transitions Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
-        fby stres0 stres1 stres ->
-        Forall (fun '((tag, _), (_, scope)) =>
-                  forall k, exists Hik,
-                    select_hist tag k stres Hi Hik
-                    /\ let bik := fselectb tag k stres bs in
-                      sem_scope (fun Hi' e vs => sem_exp G Hi' bik e vs /\ P_exp Hi' bik e vs)
-                                (fun Hi' blks => Forall (sem_block G Hi' bik) (fst blks)
-                                              /\ Forall (P_block Hi' bik) (fst blks)
-                                              /\ sem_transitions G Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
-                                              /\ P_transitions Hi' bik (snd blks) (tag, false) (fselect absent tag k stres stres1)
-                                ) Hik bik scope
-               ) states ->
-        P_block Hi bs (Bauto Weak ck (ini, oth) states).
-
-    Hypothesis BautoStrongCase:
-      forall Hi bs ini states ck bs' stres0 stres1,
-        sem_clock (fst Hi) bs ck bs' ->
-        fby (const_stres bs' (ini, false)) stres1 stres0 ->
-        Forall (fun '((tag, _), (unl, _)) =>
-                  forall k, exists Hik, select_hist tag k stres0 Hi Hik
-                              /\ let bik := fselectb tag k stres0 bs in
-                                sem_transitions G Hik bik unl (tag, false) (fselect absent tag k stres0 stres1)
-                                /\ P_transitions Hik bik unl (tag, false) (fselect absent tag k stres0 stres1)
-               ) states ->
-        Forall (fun '((tag, _), (_, scope)) =>
-                  forall k, exists Hik,
-                    select_hist tag k stres1 Hi Hik
-                    /\ let bik := fselectb tag k stres1 bs in
-                      sem_scope (fun Hi' e vs => sem_exp G Hi' bik e vs /\ P_exp Hi' bik e vs)
-                                (fun Hi' blks => Forall (sem_block G Hi' bik) (fst blks)
-                                              /\ Forall (P_block Hi' bik) (fst blks)
-                                ) Hik bik scope
-               ) states ->
-        P_block Hi bs (Bauto Strong ck ([], ini) states).
-
-    Hypothesis BlocalCase:
-      forall Hi bs scope,
-        sem_scope (fun Hi' e vs => sem_exp G Hi' bs e vs /\ P_exp Hi' bs e vs)
-                  (fun Hi' blks => Forall (sem_block G Hi' bs) blks /\ Forall (P_block Hi' bs) blks)
-                  Hi bs scope ->
-        P_block Hi bs (Blocal scope).
-
-    Hypothesis Node:
-      forall f ss os n H b,
-        find_node f G = Some n ->
-        Forall2 (sem_var H) (idents n.(n_in)) ss ->
-        Forall2 (sem_var H) (idents n.(n_out)) os ->
-        sem_block G (H, FEnv.empty _) b n.(n_block) ->
-        P_block (H, FEnv.empty _) b n.(n_block) ->
-        b = clocks_of ss ->
-        P_node f ss os.
-
-    Local Ltac SolveForall :=
-      match goal with
-      | H: Forall ?P1 ?l |- Forall ?P2 ?l =>
-        induction H; auto
-      | H: Forall2 ?P1 ?l1 ?l2 |- Forall2 ?P2 ?l1 ?l2 =>
-        induction H; auto
-      | _ => idtac
-      end.
-
-    Fixpoint sem_exp_ind2
-             (H: history) (b: Stream bool) (e: exp) (ss: list (Stream svalue))
-             (Sem: sem_exp G H b e ss)
-             {struct Sem}
-      : P_exp H b e ss
-    with sem_equation_ind2
-           (H: history) (b: Stream bool) (e: equation)
-           (Sem: sem_equation G H b e)
-           {struct Sem}
-      : P_equation H b e
-    with sem_block_ind2
-           (H: history) (b: Stream bool) (d: block)
-           (Sem: sem_block G H b d)
-           {struct Sem}
-      : P_block H b d
-    with sem_transitions_ind2
-           (H: history) (b: Stream bool) trans default stres
-           (Sem: sem_transitions G H b trans default stres)
-           {struct Sem}
-         : P_transitions H b trans default stres
-    with sem_node_ind2
-           (f: ident) (ss os: list (Stream svalue))
-           (Sem: sem_node G f ss os)
-           {struct Sem}
-         : P_node f ss os.
-    Proof.
-      - destruct Sem.
-        + apply ConstCase; eauto.
-        + apply EnumCase; eauto.
-        + apply VarCase; auto.
-        + apply LastCase; auto.
-        + eapply UnopCase; eauto.
-        + eapply BinopCase; eauto.
-        + eapply FbyCase; eauto; clear H2; SolveForall.
-        + eapply ArrowCase; eauto; clear H2; SolveForall.
-        + eapply WhenCase; eauto; clear H2; SolveForall.
-        + eapply MergeCase; eauto; clear H2; SolveForall.
-          induction H1; econstructor; eauto. clear IHForall2Brs H3. SolveForall.
-        + eapply CaseTotalCase; eauto; clear H1.
-          induction H0; econstructor; eauto. clear IHForall2Brs H2. SolveForall.
-        + eapply CaseDefaultCase; eauto.
-          * clear - sem_exp_ind2 H1.
-            induction H1; econstructor; eauto. clear IHForall2Brs H2. SolveForall.
-          * clear - sem_exp_ind2 H2.
-            SolveForall.
-        + eapply AppCase; eauto; clear H2 H3; SolveForall.
-      - destruct Sem.
-        eapply Equation with (ss:=ss); eauto; clear H1; SolveForall.
-      - destruct Sem.
-        + apply BeqCase; eauto.
-        + eapply BresetCase; eauto.
-          intros k. specialize (H2 k). split; eauto. SolveForall.
-        + eapply BswitchCase; eauto.
-          SolveForall. constructor; auto.
-          destruct_conjs.
-          inv H3. destruct_conjs. do 2 esplit; eauto.
-          destruct Hi. econstructor; eauto. 2:split; eauto.
-          * intros * Hin. eapply H8 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
-            repeat split; eauto.
-          * simpl. SolveForall.
-        + eapply BautoWeakCase; eauto.
-          SolveForall; destruct_conjs. constructor; auto.
-          intros k. specialize (H3 k). destruct_conjs.
-          take (sem_scope _ _ _ _ _) and inv it. destruct_conjs.
-          esplit. split; eauto.
-          econstructor; eauto. 2:split; [|split; [|split]]; eauto.
-          * intros * Hin. eapply H8 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
-            repeat split; eauto.
-          * simpl. SolveForall.
-        + eapply BautoStrongCase; eauto.
-          * clear - H2 sem_transitions_ind2. SolveForall. destruct_conjs. constructor; auto.
-            intros k. specialize (H0 k). destruct_conjs. eauto.
-          * clear H2. SolveForall. destruct_conjs. constructor; auto.
-            intros k. specialize (H2 k). destruct_conjs.
-            take (sem_scope _ _ _ _ _) and inv it. destruct_conjs.
-            do 2 esplit; eauto. econstructor; eauto.
-            2:split; auto; simpl.
-            -- intros * Hin. eapply H7 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
-               repeat split; eauto.
-            -- SolveForall.
-        + eapply BlocalCase; eauto.
-          inv H. econstructor; eauto.
-          2:split; auto; SolveForall.
-          intros * Hin.
-          eapply H2 in Hin as (?&?&?&?&?&?&?). do 3 esplit; eauto.
-          repeat split; eauto.
-      - destruct Sem.
-        + eapply TransDefCase; eauto.
-        + eapply TransCase; eauto.
-      - destruct Sem.
-        eapply Node; eauto.
-    Qed.
-
-  End sem_exp_ind2.
-
   (** ** Properties of Forall2Brs *)
 
   Lemma Forall2Brs_impl_In (P1 P2 : _ -> _ -> Prop) : forall es vs,
@@ -749,120 +420,122 @@ Module Type LSEMANTICS
 
   (** ** properties of the [global] environment *)
 
-  Ltac sem_block_cons :=
+  Ltac sem_cons :=
     intros; simpl_Forall; solve_Exists;
+    unfold Is_node_in_eq in *;
     match goal with
     | H: Forall2Brs _ ?l1 ?l2 |- Forall2Brs _ ?l1 ?l2 =>
-        eapply Forall2Brs_impl_In in H; eauto; intros; sem_block_cons
-    | H: _ -> ?G |- ?G => eapply H; sem_block_cons
+        eapply Forall2Brs_impl_In in H; eauto; intros; sem_cons
+    | H: forall _, _ -> _ -> _ -> sem_exp _ _ _ ?e _ |- sem_exp _ _ _ ?e _ => eapply H; eauto
+    | H: forall _ _, _ -> _ -> _ -> sem_block _ _ _ ?e |- sem_block _ _ _ ?e => eapply H; eauto
+    | H: forall (_ : ident) (xs ys : list (Stream svalue)), _ -> _ -> sem_node _ _ _ _ |- sem_node _ _ _ _ =>
+        eapply H; eauto using Is_node_in_exp; econstructor; sem_cons
     | Hname: n_name ?nd <> _, Hfind: find_node _ {| types := _; nodes := ?nd :: _ |} = _ |- _ =>
         rewrite find_node_other in Hfind; auto
     | Hname: n_name ?nd <> _ |- find_node _ {| types := _; nodes := ?nd :: _ |} = _ =>
         rewrite find_node_other; auto
     | Hname: n_name ?nd <> _ |- ~_ => idtac
     | H: ~Is_node_in_exp _ (Eapp _ _ _ _) |- _ <> _ => contradict H; subst; eapply INEapp2
-    | H: ~_ |- ~_ => contradict H; try constructor; unfold Is_node_in_eq in *; sem_block_cons
-    | |- _ \/ _ => solve [left;sem_block_cons|right;sem_block_cons]
+    | H: ~_ |- ~_ => contradict H; try constructor; sem_cons
+    | |- _ \/ _ => solve [left;sem_cons|right;sem_cons]
     | |- exists d, Some _ = Some d /\ List.Exists _ d =>
-        do 2 esplit; [reflexivity|sem_block_cons]
-    | k: nat,H: forall (_ : nat), _ |- _ => specialize (H k); sem_block_cons
+        do 2 esplit; [reflexivity|sem_cons]
+    | k: nat,H: forall (_ : nat), _ |- _ => specialize (H k); sem_cons
     | H: Forall2 _ ?xs _ |- Forall2 _ ?xs _ =>
-        eapply Forall2_impl_In in H; eauto; intros; sem_block_cons
+        eapply Forall2_impl_In in H; eauto; intros; sem_cons
     | |- exists _, filter_hist _ _ _ _ /\ _ =>
-        do 2 esplit; [auto|sem_block_cons]
+        do 2 esplit; [auto|sem_cons]
     | |- exists _, select_hist _ _ _ _ _ /\ _ =>
-        do 2 esplit; [auto|sem_block_cons]
+        do 2 esplit; [auto|sem_cons]
     | H: forall _ _ _ _ _ _, In _ _ -> exists _ _ _, _ /\ _ /\ _ /\ _ |- exists _ _ _, _ /\ _ /\ _ /\ _ =>
         edestruct H as (?&?&?&?&?&?&?); eauto;
-        do 3 esplit; split; [|split; [|split]]; eauto; sem_block_cons
+        do 3 esplit; split; [|split; [|split]]; eauto; sem_cons
     | H:sem_scope _ _ _ _ _ |- sem_scope _ _ _ _ _ =>
         inv H; destruct_conjs; econstructor; eauto
-    | |- Is_node_in_scope _ _ _ => econstructor; sem_block_cons
-    | |- _ /\ _ => split; sem_block_cons
+    | |- Is_node_in_scope _ _ _ => econstructor; sem_cons
+    | |- _ /\ _ => split; sem_cons
     | |- exists _ _, _ /\ _ /\ _ =>
-        do 2 esplit; split; [|split]; eauto; sem_block_cons
+        do 2 esplit; split; [|split]; eauto; sem_cons
     | _ => auto
     end.
 
-  Lemma sem_block_cons {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types bck H bk,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_block (Global types (nd::nds)) H bk bck
-      -> ~Is_node_in_block nd.(n_name) bck
-      -> sem_block (Global types nds) H bk bck.
+  Section sem_cons.
+    Context {PSyn prefs} (typs : list type) (nd : @node PSyn prefs) (nds : list (@node PSyn prefs)).
+
+    Lemma sem_exp_cons1' :
+      forall H bk e vs,
+        (forall f xs ys, Is_node_in_exp f e -> sem_node (Global typs (nd::nds)) f xs ys -> sem_node (Global typs nds) f xs ys) ->
+        sem_exp (Global typs (nd::nds)) H bk e vs ->
+        ~Is_node_in_exp nd.(n_name) e ->
+        sem_exp (Global typs nds) H bk e vs.
+    Proof.
+      induction e using exp_ind2; intros * Hnodes Hsem Hnf; inv Hsem; econstructor; eauto;
+        repeat sem_cons.
+    Qed.
+
+    Lemma sem_transitions_cons1' :
+      forall H bk trs def sts,
+        (forall f xs ys, List.Exists (fun '(e, _) => Is_node_in_exp f e) trs -> sem_node (Global typs (nd::nds)) f xs ys -> sem_node (Global typs nds) f xs ys) ->
+        sem_transitions (Global typs (nd::nds)) H bk trs def sts ->
+        ~List.Exists (fun '(e, _) => Is_node_in_exp (n_name nd) e) trs ->
+        sem_transitions (Global typs nds) H bk trs def sts.
+    Proof.
+      induction trs; intros * Hnodes Hsem Hnf; inv Hsem; econstructor; eauto;
+        repeat sem_cons.
+      eapply sem_exp_cons1'; eauto.
+    Qed.
+
+    Lemma sem_block_cons1' :
+      forall blk H bk,
+        (forall f xs ys, Is_node_in_block f blk -> sem_node (Global typs (nd::nds)) f xs ys -> sem_node (Global typs nds) f xs ys) ->
+        sem_block (Global typs (nd::nds)) H bk blk ->
+        ~Is_node_in_block nd.(n_name) blk ->
+        sem_block (Global typs nds) H bk blk.
+    Proof.
+      induction blk using block_ind2; intros * Hnodes Hsem Hnf; inv Hsem; econstructor; eauto;
+        repeat
+          match goal with
+          | H: sem_equation _ _ _ _ |- sem_equation _ _ _ _ => inv H; econstructor; eauto
+          | |- sem_exp _ _ _ _ _ => eapply sem_exp_cons1'
+          | |- sem_transitions _ _ _ _ _ _ => eapply sem_transitions_cons1'
+          | H: forall _ _, _ -> _ -> _ -> sem_block _ _ _ ?blk |- sem_block _ _ _ ?blk => eapply H
+          | _ => repeat sem_cons
+          end.
+    Qed.
+
+  End sem_cons.
+
+  Lemma sem_node_cons1 {PSyn prefs} :
+    forall (nd : @node PSyn prefs) nds typs f xs ys,
+      Ordered_nodes (Global typs (nd::nds)) ->
+      sem_node (Global typs (nd::nds)) f xs ys ->
+      nd.(n_name) <> f ->
+      sem_node (Global typs nds) f xs ys.
   Proof.
     intros * Hord Hsem Hnf.
-    revert Hnf.
-    induction Hsem using sem_block_ind2
-      with
-        (P_block := fun bk H d => ~Is_node_in_block nd.(n_name) d
-                                     -> sem_block (Global types0 nds) bk H d)
-        (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
-                                                       -> sem_transitions (Global types0 nds) bk H trans default stres)
-        (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
-                                   -> sem_equation (Global types0 nds) bk H eq)
-        (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
-                                -> sem_exp (Global types0 nds) H bk e ss)
-        (P_node := fun f xs ys => nd.(n_name) <> f -> sem_node (Global types0 nds) f xs ys);
-      try (now econstructor; eauto); intros.
-
-    all:econstructor; eauto; repeat sem_block_cons.
-    - eapply find_node_later_not_Is_node_in; eauto.
+    assert (exists n, find_node f (Global typs (nd::nds)) = Some n) as (?&Hfind) by (inv Hsem; eauto).
+    revert Hnf xs ys Hsem.
+    eapply ordered_nodes_ind with (P_node:=fun f => n_name nd <> f -> forall xs ys, sem_node _ f xs ys -> sem_node _ f xs ys); eauto.
+    intros * Hfind' Hind Hnf * Hsem.
+    inv Hsem. take (find_node _ _ = Some n0) and rewrite Hfind' in it; inv it. econstructor; eauto.
+    - rewrite find_node_other in Hfind'; auto.
+    - eapply sem_block_cons1'; intros; eauto.
+      eapply Hind; eauto. intro contra; subst.
+      1,2:(rewrite find_node_other with (1:=Hnf) in Hfind';
+           eapply find_node_later_not_Is_node_in; eauto).
   Qed.
 
-  Corollary sem_node_cons {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types f xs ys,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_node (Global types (nd::nds)) f xs ys
-      -> nd.(n_name) <> f
-      -> sem_node (Global types nds) f xs ys.
+  Corollary sem_block_cons1 {PSyn prefs} :
+    forall (nd : @node PSyn prefs) nds typs blk Hi bs,
+      Ordered_nodes (Global typs (nd::nds)) ->
+      sem_block (Global typs (nd::nds)) Hi bs blk ->
+      ~Is_node_in_block nd.(n_name) blk ->
+      sem_block (Global typs nds) Hi bs blk.
   Proof.
-    intros * Hord Hsem Hnf.
-    inv Hsem.
-    rewrite find_node_other with (1:=Hnf) in H0.
-    econstructor; eauto.
-    eapply sem_block_cons; eauto.
-    eapply find_node_later_not_Is_node_in; eauto.
-  Qed.
-
-  Lemma sem_block_cons' {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types bck H bk,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_block (Global types nds) H bk bck
-      -> ~Is_node_in_block nd.(n_name) bck
-      -> sem_block (Global types (nd::nds)) H bk bck.
-  Proof.
-    intros * Hord Hsem Hnf.
-    revert Hnf.
-    induction Hsem using sem_block_ind2
-      with
-        (P_block := fun bk H d => ~Is_node_in_block nd.(n_name) d
-                               -> sem_block (Global types0 (nd::nds)) bk H d)
-        (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
-                                                       -> sem_transitions (Global types0 (nd::nds)) bk H trans default stres)
-        (P_equation := fun bk H eq => ~Is_node_in_eq nd.(n_name) eq
-                                   -> sem_equation (Global types0 (nd::nds)) bk H eq)
-        (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
-                                -> sem_exp (Global types0 (nd::nds)) H bk e ss)
-        (P_node := fun f xs ys => nd.(n_name) <> f -> sem_node (Global types0 (nd::nds)) f xs ys);
-      try (now econstructor; eauto); intros.
-    all:econstructor; eauto; repeat sem_block_cons.
-    - eapply find_node_later_not_Is_node_in; eauto.
-  Qed.
-
-  Corollary sem_node_cons' {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types f xs ys,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_node (Global types nds) f xs ys
-      -> nd.(n_name) <> f
-      -> sem_node (Global types (nd::nds)) f xs ys.
-  Proof.
-    intros * Hord Hsem Hneq.
-    inv Hsem.
-    econstructor; eauto.
-    erewrite <-find_node_other in H0; eauto.
-    eapply sem_block_cons'; eauto.
-    eapply find_node_later_not_Is_node_in in H0; eauto.
+    intros * Hord Hsem Hnin.
+    eapply sem_block_cons1'; eauto.
+    intros. eapply sem_node_cons1; eauto.
+    destruct (ident_eq_dec (n_name nd) f); subst; congruence.
   Qed.
 
   Add Parametric Morphism {A} (v : A) : (fby1 v)
@@ -1002,75 +675,51 @@ Module Type LSEMANTICS
       with signature history_equiv ==> @EqSt bool ==> eq ==> @EqSts svalue ==> Basics.impl
         as sem_exp_morph.
   Proof.
-    intros H H' EH b b' Eb e xs xs' Exs Sem.
-    revert H' b' xs' EH Eb Exs; induction Sem using sem_exp_ind2 with
-                                    (P_equation := fun H b e => True)
-                                    (P_transitions := fun _ _ _ _ _ => True)
-                                    (P_block := fun H b d => True)
-                                    (P_node := fun i xs ys => forall ys', EqSts ys ys' -> sem_node G i xs ys');
-      auto; intros;
-      unfold EqSts in *; simpl_Forall.
-    - econstructor; rewrite <-Eb; etransitivity; eauto; now symmetry.
-    - econstructor; rewrite <-Eb; etransitivity; eauto; now symmetry.
-    - constructor. destruct EH as (EH&_). now rewrite <-EH, <-H3.
-    - constructor. destruct EH as (_&EH). now rewrite <-EH, <-H3.
+    intros H H' EH b b' Eb e xs xs' Exs Hsem. revert xs xs' Hsem Exs.
+    induction e using exp_ind2; intros; inv Hsem; unfold EqSts in *; simpl_Forall.
+    - econstructor. now rewrite <-Eb, <-H2.
+    - econstructor. now rewrite <-Eb, <-H2.
+    - constructor. destruct EH as (EH&_). now rewrite <-EH, <-H2.
+    - constructor. destruct EH as (_&EH). now rewrite <-EH, <-H2.
     - econstructor; eauto.
-      + apply IHSem; eauto; reflexivity.
-      + now rewrite <-H4.
+      + eapply IHe; eauto. reflexivity.
+      + now take (_ ≡ y) and rewrite <-it.
     - econstructor; eauto.
-      + apply IHSem1; eauto; reflexivity.
-      + apply IHSem2; eauto; reflexivity.
-      + now rewrite <-H5.
-    - econstructor.
-      + eapply Forall2_impl_In; [|apply H1].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H3].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall3_EqSt; eauto. solve_proper.
-    - econstructor.
-      + eapply Forall2_impl_In; [|apply H1].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H3].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall3_EqSt; eauto. solve_proper.
-    - econstructor; eauto.
-      + eapply Forall2_impl_In; [|apply H1].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
+      + eapply IHe1; eauto; reflexivity.
+      + eapply IHe2; eauto; reflexivity.
+      + now take (_ ≡ y) and rewrite <-it.
+    - eapply Sfby with (s0ss:=s0ss) (sss:=sss); simpl_Forall.
+      1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      eapply Forall3_EqSt; eauto. solve_proper.
+    - eapply Sarrow with (s0ss:=s0ss) (sss:=sss); simpl_Forall.
+      1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      eapply Forall3_EqSt; eauto. solve_proper.
+    - eapply Swhen with (ss:=ss); eauto; simpl_Forall.
+      + take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
       + destruct EH as (EH&_). rewrite <-EH; eauto.
       + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
       + destruct EH as (EH&_). rewrite <-EH; eauto.
       + instantiate (1:=vs).
-        eapply Forall2Brs_impl_In; [|eapply H2]; intros ?? _ Hs.
-        eapply Hs; eauto. reflexivity.
-      + rewrite <-Exs; auto.
+        eapply Forall2Brs_impl_In; [|eauto]; intros.
+        simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
+      + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
-      + eapply IHSem; eauto. reflexivity.
-      + instantiate (1:=vs).
-        eapply Forall2Brs_impl_In; [|eapply H1]; intros ?? _ Hs.
-        eapply Hs; eauto. reflexivity.
+      + eapply IHe; eauto. reflexivity.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros.
+        simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
       + eapply Forall3_EqSt_Proper; eauto. solve_proper.
-    - econstructor; eauto.
-      + eapply IHSem; eauto. reflexivity.
-      + instantiate (1:=vs).
-        eapply Forall2Brs_impl_In; [|eapply H2]; intros ?? _ Hs.
-        eapply Hs; eauto. reflexivity.
-      + instantiate (1:=vd).
-        eapply Forall2_impl_In; [|apply H4]; intros ?? _ _ Hs.
-        eapply Hs; eauto. reflexivity.
+    - eapply ScaseDefault with (vd:=vd); eauto.
+      + eapply IHe; eauto. reflexivity.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros.
+        simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
+      + simpl_Forall. eapply H1; eauto. reflexivity.
       + eapply Forall3_EqSt_Proper; eauto. solve_proper.
-    - econstructor; eauto.
-      + eapply Forall2_impl_In; [|apply H1].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H3].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + intro k; specialize (H5 k); destruct H5 as (?&Hr).
-        apply Hr.
-        apply map_st_EqSt_Proper; auto.
-        intros ?? ->; reflexivity.
-
-    - econstructor; eauto.
-      eapply Forall2_EqSt; eauto. solve_proper.
+    - eapply Sapp with (ss:=ss) (rs:=rs); eauto; simpl_Forall.
+      1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      intro k; take (forall k, _) and specialize (it k); inv it.
+      econstructor; eauto.
+      simpl_Forall. eapply Forall2_EqSt; eauto. solve_proper.
   Qed.
 
   Add Parametric Morphism {PSyn prefs} (G : @global PSyn prefs) : (sem_equation G)
@@ -1102,70 +751,63 @@ Module Type LSEMANTICS
       with signature history_equiv ==> @EqSt bool ==> eq ==> Basics.impl
         as sem_block_morph.
   Proof.
-    unfold Basics.impl; intros H H' EH b b' Eb d Sem.
-    revert H' b' EH Eb; induction Sem using sem_block_ind2
-      with (P_exp := fun _ _ _ _ => True)
-           (P_transitions := fun _ _ _ _ _ => True)
-           (P_equation := fun _ _ _ => True)
-           (P_node := fun _ _ _ => True); intros; auto.
+    intros H H' EH b b' Eb blk.
+    revert H H' b b' EH Eb; induction blk using block_ind2; intros * EH Eb Hsem; inv Hsem.
     - constructor. now rewrite <-EH, <-Eb.
     - econstructor; eauto.
       + now rewrite <-EH, <-Eb.
-      + intros k. specialize (H2 k) as (Hsem&Hsem').
-        eapply Forall_Forall in Hsem; eauto. clear Hsem'.
-        eapply Forall_impl; [|eauto].
-        intros ? (?&?). eapply H2; eauto.
+      + intros k. specialize (H8 k); simpl_Forall. eapply H; eauto.
         * destruct EH as (EH1&EH2); split; unfold mask_hist. now rewrite <-EH1. now rewrite <-EH2.
         * now rewrite <-Eb.
     - econstructor; eauto.
       + now rewrite <-EH, <-Eb.
-      + simpl_Forall. inv H3.
+      + simpl_Forall. take (sem_scope _ _ _ _ _) and inv it.
         do 2 esplit. 2:econstructor; eauto.
         * destruct EH as (EH1&EH2); unfold filter_hist in *.
-          destruct H1. split. rewrite <-EH1 at 1. eauto. rewrite <-EH2 at 1. eauto.
-        * intros * Hin. edestruct H8 as (?&?&?&(?&_)&?&?&?); eauto.
+          destruct_conjs. split. rewrite <-EH1 at 1. eauto. rewrite <-EH2 at 1. eauto.
+        * intros * Hin. edestruct H9 as (?&?&?&?&?&?&?); eauto.
           do 3 esplit. repeat (split; eauto).
           now rewrite <-Eb.
-        * simpl_Forall. eapply H5; eauto. reflexivity. now rewrite <-Eb.
+        * simpl_Forall. eapply H; eauto. reflexivity. now rewrite <-Eb.
     - econstructor; eauto.
       + destruct EH as (EH1&EH2). rewrite <-EH1, <-Eb; eauto.
       + now rewrite <-EH.
-      + simpl_Forall. specialize (H2 k) as ((Hik&Hikl)&?). destruct_conjs.
-        inv H4; destruct_conjs.
+      + simpl_Forall. specialize (H11 k) as ((Hik&Hikl)&?). destruct_conjs.
+        take (sem_scope _ _ _ _ _) and inv it; destruct_conjs.
         exists (Hik, Hikl). split; [|econstructor; repeat split]; eauto.
         * destruct EH as (EH1&EH2). destruct H2 as (Hsel1&Hsel2).
           split. rewrite <-EH1; auto. rewrite <-EH2; auto.
-        * intros * Hin. edestruct H9 as (?&?&?&(?&_)&?&?&?); eauto.
+        * intros * Hin. edestruct H7 as (?&?&?&?&?&?&?); eauto.
           do 3 esplit. repeat (split; eauto).
           now rewrite <-Eb.
-        * simpl_Forall. eapply H5; eauto. reflexivity. now rewrite <-Eb.
+        * simpl_Forall. eapply H; eauto. reflexivity. now rewrite <-Eb.
         * now rewrite <-Eb.
     - econstructor; eauto.
       + destruct EH as (EH1&EH2). rewrite <-EH1, <-Eb; eauto.
-      + simpl_Forall. specialize (H1 k) as ((Hik&Hikl)&?). destruct_conjs.
+      + simpl_Forall. specialize (H10 k) as ((Hik&Hikl)&?). destruct_conjs.
         exists (Hik, Hikl). split.
-        * destruct EH as (EH1&EH2). destruct H1 as (Hsel1&Hsel2).
+        * destruct EH as (EH1&EH2). destruct H2 as (?&?).
           split. rewrite <-EH1; auto. rewrite <-EH2; auto.
         * now rewrite <-Eb.
-      + simpl_Forall. specialize (H2 k) as ((Hik&Hikl)&?). destruct_conjs.
-        inv H4; destruct_conjs.
+      + simpl_Forall. specialize (H11 k) as ((Hik&Hikl)&?). destruct_conjs.
+        take (sem_scope _ _ _ _ _) and inv it; destruct_conjs.
         exists (Hik, Hikl). split; [|econstructor; repeat split]; eauto.
         * destruct EH as (EH1&EH2). destruct H2 as (Hsel1&Hsel2).
           split. rewrite <-EH1; auto. rewrite <-EH2; auto.
-        * intros * Hin. edestruct H9 as (?&?&?&(?&_)&?&?&?); eauto.
+        * intros * Hin. edestruct H7 as (?&?&?&?&?&?&?); eauto.
           do 3 esplit. repeat (split; eauto).
           now rewrite <-Eb.
-        * simpl_Forall. eapply H5; eauto. reflexivity. now rewrite <-Eb.
-
+        * simpl_Forall. eapply H; eauto. reflexivity. now rewrite <-Eb.
     - constructor. destruct EH as (EH1&EH2).
-      inv H; destruct_conjs. destruct H'. eapply Sscope with (Hi':=Hi') (Hl':=Hl').
+      take (sem_scope _ _ _ _ _) and inv it; destruct_conjs. destruct H'.
+      eapply Sscope with (Hi':=Hi') (Hl':=Hl').
       + now setoid_rewrite <-EH1.
       + now rewrite <-EH2.
-      + intros. edestruct H2; eauto. destruct_conjs.
+      + intros. edestruct H8; eauto. destruct_conjs.
         do 3 esplit; eauto. repeat split; eauto.
         now rewrite <-Eb.
       + simpl_Forall.
-        eapply H3; eauto. reflexivity.
+        eapply H; eauto. reflexivity.
   Qed.
 
   Add Parametric Morphism {PSyn prefs} (G : @global PSyn prefs) : (sem_node G)

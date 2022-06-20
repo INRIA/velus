@@ -2571,8 +2571,8 @@ Module Type LSEMDETERMINISM
     - assert (Hfind2:=Hfind1). rewrite find_node_now in Hfind2; auto; inv Hfind2.
       assert (~ Is_node_in_block (n_name n1) (n_block n1)) as Hnin.
       { eapply find_node_not_Is_node_in; eauto using wl_global_Ordered_nodes with ltyping. }
-      eapply sem_block_cons in Hbcks1; eauto using wl_global_Ordered_nodes with ltyping.
-      eapply sem_block_cons in Hbcks2; eauto using wl_global_Ordered_nodes with ltyping.
+      eapply sem_block_cons1 in Hbcks1; eauto using wl_global_Ordered_nodes with ltyping.
+      eapply sem_block_cons1 in Hbcks2; eauto using wl_global_Ordered_nodes with ltyping.
 
       assert (Forall (det_var_inv (senv_of_inout (n_in n1 ++ n_out n1)) n (H, @FEnv.empty _) (H0, @FEnv.empty _)) (map snd (idcaus (n_in n1)))) as Hins.
       { eapply node_causal_NoDup in H1 as Hnd.
@@ -2602,7 +2602,7 @@ Module Type LSEMDETERMINISM
     - rewrite find_node_other in Hfind1; auto.
       eapply IHnds; eauto. inv Hwt; inv H4; split; auto.
       1,2:econstructor; eauto.
-      1,2:eapply sem_block_cons; eauto using wl_global_Ordered_nodes with ltyping.
+      1,2:eapply sem_block_cons1; eauto using wl_global_Ordered_nodes with ltyping.
       1,2:eapply find_node_later_not_Is_node_in; eauto using wl_global_Ordered_nodes with ltyping.
   Qed.
 

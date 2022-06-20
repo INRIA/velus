@@ -1302,73 +1302,51 @@ Module Type LCLOCKEDSEMANTICS
       with signature history_equiv ==> @EqSt bool ==> eq ==> @EqSts svalue ==> Basics.impl
         as sem_exp_ck_morph.
   Proof.
-    intros H H' EH b b' Eb e xs xs' Exs Hsem. revert H' b' xs' EH Eb Exs.
-    eapply sem_exp_ck_ind2 with
-        (P_exp := fun H b e xs => forall H' b' xs', history_equiv H H' -> b ≡ b' -> EqSts xs xs' -> sem_exp_ck G H' b' e xs')
-        (P_equation := fun H b e => True)
-        (P_transitions := fun _ _ _ _ _ => True)
-        (P_block := fun H b d => True)
-        (P_node := fun f xs ys => forall ys', EqSts ys ys' -> sem_node_ck G f xs ys');
-      intros; eauto; unfold EqSts in *; simpl_Forall.
-    - econstructor. rewrite <-H3; etransitivity; eauto; now symmetry.
-    - econstructor. rewrite <-H3; etransitivity; eauto; now symmetry.
-    - constructor. destruct H2 as (EH&_). now rewrite <-EH, <-H7.
-    - constructor. destruct H2 as (_&EH). now rewrite <-EH, <-H7.
+    intros H H' EH b b' Eb e xs xs' Exs Hsem. revert xs xs' Hsem Exs.
+    induction e using exp_ind2; intros; inv Hsem; unfold EqSts in *; simpl_Forall.
+    - econstructor. now rewrite <-Eb, <-H2.
+    - econstructor. now rewrite <-Eb, <-H2.
+    - constructor. destruct EH as (EH&_). now rewrite <-EH, <-H2.
+    - constructor. destruct EH as (_&EH). now rewrite <-EH, <-H2.
     - econstructor; eauto.
-      + apply H2; eauto; reflexivity.
-      + now rewrite <-H10.
+      + eapply IHe; eauto. reflexivity.
+      + now take (_ ≡ y) and rewrite <-it.
     - econstructor; eauto.
-      + apply H2; eauto; reflexivity.
-      + apply H4; eauto; reflexivity.
-      + now rewrite <-H13.
-    - econstructor.
-      + eapply Forall2_impl_In; [|apply H2].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H4].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall3_EqSt; eauto. solve_proper.
-    - econstructor.
-      + eapply Forall2_impl_In; [|apply H2].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H4].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall3_EqSt; eauto. solve_proper.
-    - econstructor; eauto.
-      + eapply Forall2_impl_In; [|apply H2].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + destruct H5 as (EH&_). rewrite <-EH; eauto.
+      + eapply IHe1; eauto; reflexivity.
+      + eapply IHe2; eauto; reflexivity.
+      + now take (_ ≡ y) and rewrite <-it.
+    - eapply Sfby with (s0ss:=s0ss) (sss:=sss); simpl_Forall.
+      1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      eapply Forall3_EqSt; eauto. solve_proper.
+    - eapply Sarrow with (s0ss:=s0ss) (sss:=sss); simpl_Forall.
+      1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      eapply Forall3_EqSt; eauto. solve_proper.
+    - eapply Swhen with (ss:=ss); eauto; simpl_Forall.
+      + take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      + destruct EH as (EH&_). rewrite <-EH; eauto.
       + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
-      + destruct H5 as (EH&_). rewrite <-EH; eauto.
+      + destruct EH as (EH&_). rewrite <-EH; eauto.
       + instantiate (1:=vs).
-        eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse. eapply Hse; eauto. reflexivity.
-      + rewrite <-H7; auto.
+        eapply Forall2Brs_impl_In; [|eauto]; intros.
+        simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
+      + eapply Forall2_EqSt; eauto. solve_proper.
     - econstructor; eauto.
-      + eapply H2; eauto. reflexivity.
-      + instantiate (1:=vs).
-        eapply Forall2Brs_impl_In; [|eapply H4]; intros ?? _ Hs.
-        eapply Hs; eauto. reflexivity.
+      + eapply IHe; eauto. reflexivity.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros.
+        simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
       + eapply Forall3_EqSt_Proper; eauto. solve_proper.
-    - econstructor; eauto.
-      + eapply H2; eauto. reflexivity.
-      + instantiate (1:=vs).
-        eapply Forall2Brs_impl_In; [|eapply H5]; intros ?? _ Hs.
-        eapply Hs; eauto. reflexivity.
-      + instantiate (1:=vd).
-        eapply Forall2_impl_In; [|apply H7]; intros ?? _ _ Hs.
-        eapply Hs; eauto. reflexivity.
+    - eapply ScaseDefault with (vd:=vd); eauto.
+      + eapply IHe; eauto. reflexivity.
+      + eapply Forall2Brs_impl_In; [|eauto]; intros.
+        simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
+      + simpl_Forall. eapply H1; eauto. reflexivity.
       + eapply Forall3_EqSt_Proper; eauto. solve_proper.
-    - econstructor; eauto.
-      + eapply Forall2_impl_In; [|apply H2].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + eapply Forall2_impl_In; [|apply H4].
-        intros * ?? Hs; apply Hs; auto; reflexivity.
-      + intro k; specialize (H6 k); destruct H6 as (?&Hr).
-        apply Hr.
-        apply map_st_EqSt_Proper; auto.
-        intros ?? ->; reflexivity.
-    - econstructor; eauto.
-      eapply Forall2_EqSt; eauto. solve_proper.
+    - eapply Sapp with (ss:=ss) (rs:=rs); eauto; simpl_Forall.
+      1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
+      intro k; take (forall k, _) and specialize (it k); inv it.
+      econstructor; eauto.
+      simpl_Forall. eapply Forall2_EqSt; eauto. solve_proper.
   Qed.
 
   Add Parametric Morphism {PSyn prefs} (G: @global PSyn prefs) : (sem_equation_ck G)
@@ -1510,11 +1488,12 @@ Module Type LCLOCKEDSEMANTICS
 
   (** ** Properties of the [global] environment *)
 
-  Ltac sem_block_cons :=
+  Ltac sem_cons :=
     match goal with
+    | H: _ -> ?R |- ?R => eapply H; eauto
     | H:sem_scope_ck _ _ _ _ _ |- sem_scope_ck _ _ _ _ _ =>
         inv H; destruct_conjs; econstructor; eauto
-    | _ => Sem.sem_block_cons
+    | _ => Sem.sem_cons
     end.
 
   Lemma sem_block_ck_cons {PSyn prefs} :
@@ -1538,7 +1517,7 @@ Module Type LCLOCKEDSEMANTICS
                                -> sem_block_ck (Global types0 nds) H bk d)
         (P_node := fun f ins outs => nd.(n_name) <> f
                                   -> sem_node_ck (Global types0 nds) f ins outs). 24:eauto.
-    all:econstructor; eauto; repeat sem_block_cons.
+    all:econstructor; eauto; repeat sem_cons.
     - eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
@@ -1577,7 +1556,7 @@ Module Type LCLOCKEDSEMANTICS
                                -> sem_block_ck (Global types0 (nd::nds)) H bk d)
         (P_node := fun f ins outs => nd.(n_name) <> f
                                   -> sem_node_ck (Global types0 (nd::nds)) f ins outs). 24:eauto.
-    all:econstructor; eauto; repeat sem_block_cons.
+    all:econstructor; eauto; repeat sem_cons.
     - eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 

@@ -3333,7 +3333,7 @@ Module Type LCLOCKCORRECTNESS
     - destruct Hckins as (?&?&Hfind'&Hins'&Hscin).
       rewrite find_node_now in Hfind'; auto. inv Hfind'.
       rewrite find_node_now in Hfind; auto. inv Hfind.
-      eapply Sem.sem_block_cons in Heqs; eauto.
+      eapply Sem.sem_block_cons1 in Heqs; eauto.
       assert (Hord':=Hord). inversion_clear Hord' as [|? ? Hord'' Hnneqs Hnn].
       inversion_clear Hwc as [|?? (Hwcn&_) Hwcg].
       inv Hcaus.
@@ -3380,7 +3380,7 @@ Module Type LCLOCKCORRECTNESS
         intros; destruct_conjs; auto.
 
     - rewrite find_node_other in Hfind; eauto.
-      eapply Sem.sem_node_cons in Hsem; auto.
+      eapply Sem.sem_node_cons1 in Hsem; auto.
       assert (Hord':=Hord). rewrite cons_is_app in Hord'.
       inv Hord'. inv Hwt; inv H1. inv Hwc. inv Hcaus. eapply IHnodes in Hsem; eauto.
       eapply sem_node_ck_cons'; eauto.

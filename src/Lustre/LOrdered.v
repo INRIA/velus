@@ -220,6 +220,47 @@ Module Type LORDERED
     - eapply IHnds, H2.
   Qed.
 
+  (** Induction based on order of nodes *)
+
+  Section ordered_nodes_ind.
+    Context {PSyn prefs} (G: @global PSyn prefs).
+
+    Variable P_node : ident -> Prop.
+
+    Hypothesis Hnode : forall f n,
+        find_node f G = Some n ->
+        (forall f', Is_node_in_block f' (n_block n) -> P_node f') ->
+        P_node f.
+
+    Lemma ordered_nodes_ind :
+      Ordered_nodes G ->
+      (forall f n, find_node f G = Some n -> P_node f).
+    Proof.
+      destruct G. induction nodes0; intros * Hord * Hfind; inv Hord; destruct_conjs; simpl in *.
+      now inv Hfind.
+      assert (forall f n0,
+                 find_node f {| types := types0; nodes := nodes0 |} = Some n0 ->
+                 P_node f) as Hind.
+      { intros. eapply IHnodes0; eauto.
+        intros * Hsome Hord. eapply Hnode; eauto.
+        rewrite find_node_other; auto.
+        edestruct (find_node_Exists f1 {| types := types0; nodes := nodes0 |}) as (Hex&_).
+        eapply Exists_exists in Hex as (?&?&?); subst; try congruence.
+        simpl_Forall; auto.
+      } clear IHnodes0.
+      destruct (ident_eq_dec f (n_name a)); subst.
+      - rewrite find_node_now in Hfind; auto; inv Hfind.
+        eapply Hnode; eauto using find_node_now.
+        intros ? Hblk.
+        eapply H in Hblk as (_&?&?&Hfind).
+        eapply Hind; eauto.
+        unfold find_node. now rewrite Hfind.
+      - rewrite find_node_other in Hfind; auto.
+        eapply Hind; eauto.
+    Qed.
+
+  End ordered_nodes_ind.
+
 End LORDERED.
 
 Module LOrderedFun
