@@ -47,7 +47,7 @@ Proof.
   induction l as [|(k', x')]; split; intros Hin; try inv Hin.
   - constructor.
     now rewrite <-eq_key_equiv with (x:=x) (x':=x').
-  - destruct (IHl k x); apply inmembers_cons; auto.
+  - destruct (IHl k x); apply InMembers_cons; auto.
   - constructor.
     now apply eq_key_equiv.
   - destruct (IHl k x); apply SetoidList.InA_cons; right; auto.
@@ -1813,7 +1813,7 @@ Section TranslateOk.
           + pose proof (m_nodupvars caller) as Nodup.
             unfold var_names in Hin'. rewrite <-fst_InMembers, InMembers_translate_param_idem in Hin'.
             apply (NoDupMembers_app_InMembers y) in Nodup; auto.
-            apply Nodup; rewrite InMembers_app, Out; right; apply inmembers_eq.
+            apply Nodup; rewrite InMembers_app, Out; right; apply InMembers_eq.
 
         - set (f:= {|
                     fn_return := Tvoid;

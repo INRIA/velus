@@ -433,7 +433,7 @@ Module Type OBCTYPING
         apply NoDupMembers_app_r in Nodup.
         inversion_clear Nodup as [|? ? ? Notin].
         apply Notin.
-        apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
+        apply InMembers_app; right; apply InMembers_app; right; apply InMembers_eq.
       }
       unfold wt_env_value; simpl.
       rewrite Env.find_In_gsso_opt, Env.gempty; auto.

@@ -1574,7 +1574,7 @@ Module Type LCLOCKCORRECTNESS
           apply replace_idcaus_NoDup; auto.
           eapply Permutation_NoDup; [|eauto]. solve_Permutation_app. }
       1:{ apply NoDupMembers_app; auto.
-          - apply nodupmembers_map; auto.
+          - apply NoDupMembers_map; auto.
           - now apply NoDupMembers_senv_of_locs.
           - intros. rewrite InMembers_senv_of_locs. intros ?.
             eapply H5, fst_InMembers; eauto. rewrite fst_InMembers in *. solve_In. }
@@ -1684,7 +1684,7 @@ Module Type LCLOCKCORRECTNESS
                 eapply sem_clock_refines; eauto.
                 eapply FEnv.union_refines4', EqStrel.
               - apply NoDupMembers_app; auto.
-                + apply nodupmembers_map; auto.
+                + apply NoDupMembers_map; auto.
                 + apply NoDupMembers_senv_of_locs; auto.
                 + intros. rewrite InMembers_senv_of_locs. intros ?.
                   eapply H5, fst_InMembers; eauto. rewrite fst_InMembers in *; solve_In.
@@ -1798,7 +1798,7 @@ Module Type LCLOCKCORRECTNESS
             eapply NoDup_locals_inv2; eauto.
             unfold idcaus_of_senv in *. erewrite map_map, map_filter_map, map_ext with (l:=Γ), map_filter_ext with (xs:=Γ); eauto.
             1,2:intros; destruct_conjs; auto.
-          - apply nodupmembers_map; auto.
+          - apply NoDupMembers_map; auto.
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - apply Forall_forall; intros ? Hin. simpl_In. constructor.
@@ -1816,7 +1816,7 @@ Module Type LCLOCKCORRECTNESS
             assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
             { intros * Has. eapply depends_scope_In with (Γ':=Γ') (x:=x0) in Hdep; eauto with lclocking.
               - inv Hdep. rewrite <-fst_InMembers; eauto.
-              - apply nodupmembers_map; auto.
+              - apply NoDupMembers_map; auto.
               - clear - H0 Hnd1.
                 eapply NoDup_locals_inv2; eauto. auto.
                 unfold idcaus_of_senv in *. simpl_app.
@@ -1934,7 +1934,7 @@ Module Type LCLOCKCORRECTNESS
           symmetry. take (sem_transitions _ _ _ _ _ _) and eapply sc_transitions'
             with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γ) in it; eauto. 3,4:simpl_Forall; eauto.
           - take (fby _ _ _) and apply ac_fby1 in it; now rewrite <-it.
-          - apply nodupmembers_map_filter; auto.
+          - apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           - split; auto.
             eapply wc_exp_incl; [| |eauto].
@@ -1982,7 +1982,7 @@ Module Type LCLOCKCORRECTNESS
             eapply NoDup_locals_inv3; eauto.
             unfold idcaus_of_senv in *. erewrite map_map, map_filter_map, map_ext with (l:=Γ), map_filter_ext with (xs:=Γ); eauto.
             1,2:intros; destruct_conjs; auto.
-          - apply nodupmembers_map; auto.
+          - apply NoDupMembers_map; auto.
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - apply Forall_forall; intros ? Hin. simpl_In. constructor.
@@ -2001,7 +2001,7 @@ Module Type LCLOCKCORRECTNESS
             assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
             { intros * Has. eapply depends_scope_In with (Γ':=Γ') (x:=x0) in Hdep; eauto with lclocking.
               - inv Hdep. rewrite <-fst_InMembers; eauto.
-              - apply nodupmembers_map; auto.
+              - apply NoDupMembers_map; auto.
               - clear - H0 Hnd1.
                 eapply NoDup_locals_inv3; eauto. auto.
                 unfold idcaus_of_senv in *. simpl_app.
@@ -2155,7 +2155,7 @@ Module Type LCLOCKCORRECTNESS
             eapply NoDup_locals_inv3; eauto.
             unfold idcaus_of_senv in *. erewrite map_map, map_filter_map, map_ext with (l:=Γ), map_filter_ext with (xs:=Γ); eauto.
             1,2:intros; destruct_conjs; auto.
-          - apply nodupmembers_map; auto.
+          - apply NoDupMembers_map; auto.
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
           - apply Forall_forall; intros ? Hin. simpl_In. constructor.
@@ -2174,7 +2174,7 @@ Module Type LCLOCKCORRECTNESS
             assert (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> In x (map fst Γ')) as Hgamma.
             { intros * Has. eapply depends_scope_In with (Γ':=Γ') (x:=x0) in Hdep; eauto with lclocking.
               - inv Hdep. rewrite <-fst_InMembers; eauto.
-              - apply nodupmembers_map; auto.
+              - apply NoDupMembers_map; auto.
               - clear - H0 Hnd1.
                 eapply NoDup_locals_inv3; eauto. auto.
                 unfold idcaus_of_senv in *. simpl_app.
@@ -2948,7 +2948,7 @@ Module Type LCLOCKCORRECTNESS
             with (Γty:=Γty)
                  (Γck:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck)
                  (Γ':=map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ'); eauto.
-          * eapply nodupmembers_map_filter; eauto.
+          * eapply NoDupMembers_map_filter; eauto.
             intros *. destruct (_ ==b _); simpl; auto.
           * subst. eapply NoDup_locals_inv2; eauto.
             rewrite map_app in *. eapply NoDup_incl_app2. 3:apply Hnd5.
@@ -3025,7 +3025,7 @@ Module Type LCLOCKCORRECTNESS
         { symmetry. take (sem_transitions _ _ _ _ _ _) and eapply sc_transitions''
             with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck) in it; eauto. 3,4:simpl_Forall; eauto.
           - take (fby _ _ _) and apply ac_fby1 in it; now rewrite <-it.
-          - apply nodupmembers_map_filter; auto.
+          - apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           - split; auto.
             eapply wc_exp_incl; [| |eauto].
@@ -3044,7 +3044,7 @@ Module Type LCLOCKCORRECTNESS
 
         econstructor; eauto.
         + eapply sem_transitions_sem_transitions_ck with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck); eauto. 3,4:simpl_Forall; eauto.
-          * apply nodupmembers_map_filter; auto.
+          * apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           * rewrite map_app in Hnd5. apply idcaus_of_senv_filter_NoDup; eauto using NoDup_app_l.
           * eapply wc_exp_incl; [| |eauto].
@@ -3082,7 +3082,7 @@ Module Type LCLOCKCORRECTNESS
             with (Γty:=Γty)
                  (Γck:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck)
                  (Γ':=map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ'); eauto.
-          * subst. eapply nodupmembers_map_filter; eauto.
+          * subst. eapply NoDupMembers_map_filter; eauto.
             intros *. destruct (_ ==b _); simpl; auto.
           * subst. eapply NoDup_locals_inv3; eauto.
             rewrite map_app in *. eapply NoDup_incl_app2. 3:apply Hnd5.
@@ -3195,7 +3195,7 @@ Module Type LCLOCKCORRECTNESS
                inv Has. eapply NoDupMembers_det in H27; eauto; subst.
                econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
                simpl; auto.
-          * apply nodupmembers_map_filter; auto.
+          * apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           * rewrite map_app in Hnd5. apply idcaus_of_senv_filter_NoDup; eauto using NoDup_app_l.
           * eapply sc_vars_morph; [reflexivity| |reflexivity|eauto].
@@ -3226,7 +3226,7 @@ Module Type LCLOCKCORRECTNESS
             with (Γty:=Γty)
                  (Γck:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck)
                  (Γ':=map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ'); eauto.
-          * subst. eapply nodupmembers_map_filter; eauto.
+          * subst. eapply NoDupMembers_map_filter; eauto.
             intros *. destruct (_ ==b _); simpl; auto.
           * subst. eapply NoDup_locals_inv3; eauto.
             rewrite map_app in *. eapply NoDup_incl_app2. 3:apply Hnd5.
@@ -3358,13 +3358,13 @@ Module Type LCLOCKCORRECTNESS
       (* sem_node_ck *)
       pose proof (n_defd n) as (?&Hdef&Hperm).
       eapply sem_block_sem_block_ck in Hloc; eauto; auto with datatypes.
-      eapply Snode with (H:=H'); eauto.
+      eapply Snode with (H:=H'); autorewrite with list; eauto.
       + rewrite find_node_now; auto.
       + eapply sem_block_ck_cons'; eauto.
       + unfold clocked_node. split; auto.
         rewrite map_fst_senv_of_inout; auto.
       + intros. eapply IHnodes; eauto. inv Hwt; inv H7; constructor; auto.
-      + rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
+      + apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
       + rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
       + simpl. destruct H2 as (Hnd&_). rewrite idcaus_of_senv_inout. auto.
       + rewrite map_fst_senv_of_inout. apply n_nodup.

@@ -365,7 +365,7 @@ Module Type ILCORRECTNESS
           eapply H14... }
         assert (NoDup (map snd (Env.elements x0))) as Hnd2.
         {  eapply fresh_idents_rename_sub_NoDup in H0; eauto.
-           apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
+           apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
         assert (Forall nolocal_block (concat x2)) as Hnlo.
         { apply Forall_concat.
           apply mmap_values, Forall2_ignore1 in H5. simpl_Forall.
@@ -423,7 +423,7 @@ Module Type ILCORRECTNESS
            rewrite FEnv.union_In, Hdom', 2 in_app_iff, or_assoc. apply or_iff_compat_l. symmetry.
            unfold st_ids. erewrite fresh_idents_rename_anns; eauto.
            rewrite map_app, in_app_iff, or_comm. apply or_iff_compat_l.
-           eapply fresh_idents_rename_ids in H0 as ?; subst; eauto. 2:apply nodupmembers_map; auto; intros; destruct_conjs; auto.
+           eapply fresh_idents_rename_ids in H0 as ?; subst; eauto. 2:apply NoDupMembers_map; auto; intros; destruct_conjs; auto.
            split; [intros|intros (?&Hfind)]; simpl_In.
            - eapply fresh_idents_rename_sub2 in H0 as ((?&?&Hfind&_)&_). apply fst_InMembers; solve_In.
              simpl in *. setoid_rewrite Hfind; simpl.
@@ -672,7 +672,7 @@ Module Type ILCORRECTNESS
             destruct Hck as [Hck|Hck]; [left|right]; inv Hck; simpl_In; econstructor; solve_In; auto.
         + simpl. constructor; simpl; auto.
         + apply senv_of_inout_NoLast.
-        + apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+        + apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
         + apply n_syn.
         + now rewrite map_fst_senv_of_inout.
         + now rewrite map_fst_senv_of_inout.

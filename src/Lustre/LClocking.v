@@ -1398,7 +1398,7 @@ Module Type LCLOCKING
             simpl; assumption.
           * intros; simpl in *. eapply forallb_Forall in H7.
             simpl_Forall; eauto.
-          * apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
+          * apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
             cases; simpl; auto.
           *{ eapply NoDupScope_incl; eauto.
              - intros * Hincl ?; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
@@ -1441,7 +1441,7 @@ Module Type LCLOCKING
           apply Bool.andb_true_iff in CB as (CL&CS). split.
           * apply forallb_Forall in CL. simpl_Forall; eauto using check_base_exp_correct.
           * eapply check_scope_correct; eauto.
-            2:{ apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
+            2:{ apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
                 cases; simpl; auto. }
             2:{ eapply NoDupScope_incl; eauto.
                 - intros * Hincl ?; simpl in *; simpl_Forall; eauto using NoDupLocals_incl.
@@ -1503,7 +1503,7 @@ Module Type LCLOCKING
       - intros * Hfind. apply Env.from_list_find_In in Hfind. simpl_In.
         econstructor. solve_In. reflexivity.
       - intros * Hfind. rewrite Env.gempty in Hfind. congruence.
-      - apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+      - apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
       - rewrite map_fst_senv_of_inout. apply n_nodup.
     Qed.
 
@@ -2138,7 +2138,7 @@ Module Type LCLOCKING
           eapply Forall_forall in H5; eauto; simpl in *.
           destruct o; simpl in *; auto; try congruence. inv Hf. inv H5; solve_In.
         * intros ? Hmap. simpl_In. congruence.
-      + rewrite <-map_app. apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+      + rewrite <-map_app. apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
       + destruct Hwcnode as [_ [Hwcnode _]].
         rewrite <-map_app...
   Qed.

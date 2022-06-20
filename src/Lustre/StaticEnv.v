@@ -239,6 +239,8 @@ Module Type STATICENV
       1,2:econstructor; try eapply in_app_iff; eauto.
   Qed.
 
+  Global Hint Rewrite IsLast_app HasType_app HasClock_app HasCaus_app HasLastCaus_app : list.
+
   Definition senv_of_tyck (l : list (ident * (type * clock))) : static_env :=
     List.map (fun '(x, (ty, ck)) => (x, Build_annotation ty ck xH None)) l.
 
@@ -380,14 +382,7 @@ Module Type STATICENV
     destruct H as (H1&H2). intros [|]; [eapply H1|eapply H2]; eauto.
   Qed.
 
-  (* Notations *)
-
-  (* Notation "Γ ⊢ x" := (IsVar Γ x) (at level 50). *)
-  (* Notation "Γ ⊢ x : ty" := (HasType Γ x ty) (at level 50). *)
-  (* Notation "Γ ⊢ x : ck" := (HasClock Γ x ck) (at level 50). *)
-  (* Notation "Γ ⊢ x : cx" := (HasCaus Γ x cx) (at level 50). *)
-  (* Notation "Γ ⊢ 'last' x" := (IsLast Γ x) (at level 50). *)
-  (* Notation "Γ ⊢ 'last' x : cx" := (HasLastCaus Γ x cx) (at level 50). *)
+  Global Hint Rewrite map_fst_senv_of_inout : list.
 
 End STATICENV.
 

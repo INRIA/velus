@@ -278,7 +278,7 @@ Module Type INLINELOCAL
           rewrite fst_InMembers in contra; simpl_In.
           eapply H13; eauto using In_InMembers, in_or_app. }
       eapply Ker.fresh_idents_rename_ids in H0.
-      2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
+      2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
       rewrite H0 in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
       rewrite Permutation_swap with (xs:=map _ xs) in Hperm1.
       erewrite map_ext in Hperm1. eapply Permutation_app_inv_l in Hperm1; auto.

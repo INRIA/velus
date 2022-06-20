@@ -417,7 +417,7 @@ Module Type CSCLOCKING
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
     - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
     - intros ?? _ Hin. rewrite subclock_clock_idem; auto.
-    - apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+    - apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
     - unfold idck, senv_of_inout. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
     - apply n_syn.
     - rewrite map_fst_senv_of_inout. apply n_nodup.

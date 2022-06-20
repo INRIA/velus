@@ -233,7 +233,7 @@ Module Type CSTYPING
         + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2. rewrite fst_InMembers in Hinm1.
           eapply H7; eauto.
-        + apply NoDupMembers_app; auto. apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+        + apply NoDupMembers_app; auto. apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2.
           eapply H7; eauto.
           eapply InMembers_In in Hinm1 as (?&Hin1).
@@ -475,8 +475,8 @@ Module Type CSTYPING
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
     - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
     - apply senv_of_inout_NoLast.
-    - rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
-    - rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
+    - apply NoDupMembers_map, n_nodup; intros; destruct_conjs; auto.
+    - apply NoDupMembers_map, n_nodup; intros; destruct_conjs; auto.
     - simpl_Forall. simpl_In. simpl_Forall. auto.
     - constructor.
     - apply n_syn.

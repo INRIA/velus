@@ -644,7 +644,7 @@ Module Type DELAST
         simpl_In.
         eapply Forall_forall in Hgen; eauto. simpl in *; auto.
     - apply NoDupMembers_app.
-      + apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+      + apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
       + eapply fresh_idents_NoDup; eauto.
       + intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm1, Hinm2. simpl_In.
         simpl_Forall; subst. eapply contradict_AtomOrGensym; eauto using last_not_in_elab_prefs.

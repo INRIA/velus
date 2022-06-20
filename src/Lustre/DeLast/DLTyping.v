@@ -148,7 +148,7 @@ Module Type DLTYPING
         inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
         destruct o0 as [(?&?)|]; simpl in *; try congruence.
         eapply fresh_idents_In_rename in H. 3:solve_In; simpl; auto.
-        2:{ apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
+        2:{ apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
             destruct o as [(?&?)|]; simpl in *; auto. }
         econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
         intro contra. apply Hsubin in contra.

@@ -538,7 +538,7 @@ Module Type CSCORRECTNESS
 
         assert (NoDupMembers (l ++ filter (fun '(_, ann) => ann.(clo) ==b ck) l0)) as Hnd'.
         {  apply Partition_Permutation in Hpart. rewrite Hpart in Hnd2.
-           apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, nodupmembers_filter.
+           apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, NoDupMembers_filter.
            intros ? Hinm1 Hinm2.
            eapply NoDupMembers_app_InMembers in Hnd2; eauto. eapply Hnd2, filter_InMembers'; eauto. }
 
@@ -793,8 +793,8 @@ Module Type CSCORRECTNESS
       + intros * Hfind. rewrite Env.gempty in Hfind. congruence.
       + eapply init_st_valid; eauto using switch_not_in_auto_prefs, PS_For_all_empty.
       + reflexivity.
-      + apply nodupmembers_map; auto. intros; destruct_conjs; auto.
-      + apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+      + apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
+      + apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
       + now rewrite map_fst_senv_of_inout.
       + eapply FEnv.dom_ub_incl; eauto using FEnv.dom_dom_ub. solve_incl_app.
       + eapply FEnv.dom_ub_incl; eauto using FEnv.dom_dom_ub. solve_incl_app.

@@ -316,7 +316,7 @@ Module Type DLCORRECTNESS
           eapply Hvarl; eauto. eapply sem_var_refines'; eauto using Env.dom_lb_use.
         - right. inv Hin. simpl_In. destruct o as [(?&?)|]; simpl in *; try congruence.
           eapply fresh_idents_In_rename in H. 3:solve_In; simpl; eauto.
-          2:{ apply nodupmembers_map_filter; auto.
+          2:{ apply NoDupMembers_map_filter; auto.
               intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
           erewrite not_in_union_rename1.
           2:{ intro contra. apply Hsubin1 in contra. inv contra.
@@ -366,7 +366,7 @@ Module Type DLCORRECTNESS
         * edestruct Hsc1 as (?&?&?); eauto. 1:econstructor; solve_In; auto. simpl in *.
           eauto using sem_var_refines, sem_clock_refines.
         * eapply fresh_idents_In'_rename in H as (?&?); eauto.
-          2:{ apply nodupmembers_map_filter; auto.
+          2:{ apply NoDupMembers_map_filter; auto.
               intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
           simpl_In.
           edestruct Hsc2 as (?&?&?). 1,2:econstructor; solve_In; simpl; eauto. congruence.
@@ -377,7 +377,7 @@ Module Type DLCORRECTNESS
           -- apply IsLast_app; right. econstructor. solve_In. simpl; congruence.
       + simpl_Forall. constructor.
         eapply fresh_idents_In'_rename in H as (?&?); subst; [| |eauto]. simpl_In.
-        2:{ apply nodupmembers_map_filter; auto.
+        2:{ apply NoDupMembers_map_filter; auto.
             intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
         edestruct H21 as (vs0&vs1&vs&He&Hv&Hfby&Hvl); eauto.
         eapply Seq with (ss:=[[vs]]); simpl; repeat constructor.

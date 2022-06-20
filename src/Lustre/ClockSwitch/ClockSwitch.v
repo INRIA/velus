@@ -239,7 +239,7 @@ Module Type CLOCKSWITCH
   Proof.
     intros * Hnd Hpart.
     apply Partition_Permutation in Hpart. rewrite Hpart in Hnd.
-    apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, nodupmembers_filter.
+    apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, NoDupMembers_filter.
     intros ? Hinm1 Hinm2.
     eapply NoDupMembers_app_InMembers in Hnd; eauto using filter_InMembers'.
   Qed.
@@ -427,7 +427,7 @@ Module Type CLOCKSWITCH
         assert (Hnids:=H9). eapply new_idents_rename with (ids1:=(filter _ _)) (ids2:=defs) in H9 as (_&Hdefs'); eauto.
         2:{ apply Partition_Permutation in Hpart. rewrite Hpart in Hnd1.
             apply NoDupMembers_app;
-              eauto using NoDupMembers_app_l, NoDupMembers_app_r, nodupmembers_filter.
+              eauto using NoDupMembers_app_l, NoDupMembers_app_r, NoDupMembers_filter.
             intros ? Hinm1 Hinm2. apply filter_InMembers in Hinm1 as (?&Hinm1&_).
             apply In_InMembers in Hinm1.
             eapply NoDupMembers_app_InMembers in Hnd1; eauto. }
@@ -441,7 +441,7 @@ Module Type CLOCKSWITCH
             erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers, Permutation_app_comm; eauto.
             1,2:intros; destruct_conjs; auto.
         }
-        1:{ erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto. 2:intros (?&?); auto.
+        1:{ apply NoDupMembers_map; auto.
             eapply switch_block_NoDupMembers_env; eauto. }
         1:{ rewrite Hdefs; auto. }
         1:{ eapply VarsDefinedScope_Perm1; [|eauto]. now symmetry. }
@@ -718,14 +718,14 @@ Module Type CLOCKSWITCH
     intros * Hnd1 Hnd2 Hat Hgood Hvalid Hs; inv Hnd2; inv Hgood; repeat inv_bind.
     constructor. 4:constructor.
     + eapply H0; eauto.
-      * apply NoDup_app'; auto. apply fst_NoDupMembers, nodupmembers_map; auto.
+      * apply NoDup_app'; auto. apply fst_NoDupMembers, NoDupMembers_map; auto.
         intros; destruct_conjs; auto.
         eapply Forall_forall; intros ? Hinm1 Hinm2; simpl_In.
         eapply H5; eauto using In_InMembers.
       * erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
       * apply Forall_app; split; auto.
         simpl_Forall; auto.
-    + apply nodupmembers_map; auto.
+    + apply NoDupMembers_map; auto.
       intros; destruct_conjs; auto.
     + intros ? Hinm Hinm2. eapply H5; eauto.
       erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers in Hinm; eauto.
@@ -825,7 +825,7 @@ Module Type CLOCKSWITCH
         * intros; simpl in *.
           eapply switch_blocks_NoDupLocals'; eauto.
       + simpl_Forall. constructor.
-      + eapply nodupmembers_map, cond_eq_NoDupMembers; eauto.
+      + eapply NoDupMembers_map, cond_eq_NoDupMembers; eauto.
         intros; destruct_conjs; auto.
       + eapply new_idents_st_ids' in H2.
         apply st_valid_NoDup in Hvalid'. rewrite H2 in Hvalid'.
@@ -1010,7 +1010,7 @@ Module Type CLOCKSWITCH
     - now rewrite rename_vars_empty.
     - rewrite Hvars, map_fst_senv_of_inout. solve_incl_app.
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
-    - apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+    - apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
     - rewrite Hvars. apply fst_NoDupMembers; eauto using NoDupMembers_app_r.
     - apply n_syn.
     - eapply NoDupLocals_incl; [|eauto]. rewrite map_fst_senv_of_inout. solve_incl_app.

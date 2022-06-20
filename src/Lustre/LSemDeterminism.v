@@ -338,9 +338,8 @@ Module Type LSEMDETERMINISM
       inv Hmerge1; inv Hmerge2; constructor; eauto.
       1,3:eapply IHn. 5,6,11,12:eauto. 1-8:eauto.
       1,4:erewrite 2 map_map, map_ext with (l:=xss1), map_ext with (l:=xss2); eauto; intros (?&?); auto.
-      1,3:erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto; intros (?&?); auto.
-      1,2:(rewrite Forall2_map_1, Forall2_map_2; eapply Forall2_impl_In; [|eauto];
-           intros (?&?) (?&?) _ _ Heq; inv Heq; simpl in *; subst; auto).
+      1,3:apply NoDupMembers_map; auto.
+      1,2:simpl_Forall; take (EqStN (S _) _ _) and inv it; auto.
       clear - Hfst Hnd Heq2 H3 H5. unfold EqSts in *.
       induction Heq2; inv H3; inv H5; inv Hnd; simpl in *; inv Hfst; auto.
       - destruct y, H1, H2; subst; simpl in *.
@@ -368,11 +367,9 @@ Module Type LSEMDETERMINISM
       - econstructor; eauto.
         eapply IHn. 6,7:eauto. 1-5:intros; eauto.
         erewrite 2 map_map, map_ext with (l:=xss1), map_ext with (l:=xss2); eauto; intros (?&?); auto.
-        erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto; intros (?&?); auto.
-        (rewrite Forall2_map_1, Forall2_map_2; eapply Forall2_impl_In; [|eauto];
-           intros (?&?) (?&?) _ _ Heq; inv Heq; simpl in *; subst; auto).
-        eapply option_map_inv in H as (?&?&?); subst.
-        eapply option_map_inv in H6 as (?&?&?); subst.
+        apply NoDupMembers_map; auto.
+        simpl_Forall; take (EqStN (S _) _ _) and inv it; auto.
+        inv_equalities.
         specialize (Heq3 _ _ eq_refl eq_refl). inv Heq3; auto.
       - econstructor; eauto.
         + clear - Hfst Hnd Heq2 H8 H12. unfold EqSts in *.
@@ -387,11 +384,9 @@ Module Type LSEMDETERMINISM
             simpl_Exists; subst; eauto using In_InMembers.
         + eapply IHn. 6,7:eauto. 1-5:intros; eauto.
           erewrite 2 map_map, map_ext with (l:=xss1), map_ext with (l:=xss2); eauto; intros (?&?); auto.
-          erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto; intros (?&?); auto.
-          (rewrite Forall2_map_1, Forall2_map_2; eapply Forall2_impl_In; [|eauto];
-           intros (?&?) (?&?) _ _ Heq; inv Heq; simpl in *; subst; auto).
-          eapply option_map_inv in H as (?&?&?); subst.
-          eapply option_map_inv in H0 as (?&?&?); subst.
+          apply NoDupMembers_map; auto.
+          simpl_Forall; take (EqStN (S _) _ _) and inv it; auto.
+          inv_equalities.
           specialize (Heq3 _ _ eq_refl eq_refl). inv Heq3; auto.
       - exfalso. simpl_Exists.
         eapply In_InMembers, fst_InMembers in Hin. setoid_rewrite Hfst in Hin.
@@ -1914,7 +1909,7 @@ Module Type LSEMDETERMINISM
         inv Hnd2; inv Hvars; inv Hwt; inv Hsem; simpl in *.
       edestruct Hind with (Γ:=replace_idcaus caus Γ ++ senv_of_locs locs) as (Hdet'&Hcons); eauto using in_or_app.
       1:{ apply NoDupMembers_app.
-          - apply nodupmembers_map; auto.
+          - apply NoDupMembers_map; auto.
           - apply NoDupMembers_senv_of_locs; auto.
           - intros. rewrite InMembers_senv_of_locs. intros ?. eapply H5; eauto.
             apply fst_InMembers in H. solve_In. }
@@ -2490,7 +2485,7 @@ Module Type LSEMDETERMINISM
           * eapply Forall_forall in Hins; eauto. solve_In.
           * eapply Hdet; eauto. 2:econstructor; solve_In; eauto using in_or_app. 2,3:eauto.
             rewrite Hperm. solve_In.
-        + apply nodupmembers_map, n_nodup. intros; destruct_conjs; auto.
+        + apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
         + clear - Hnd. now rewrite idcaus_of_senv_inout.
         + rewrite map_fst_senv_of_inout. apply node_NoDupLocals.
         + rewrite map_fst_senv_of_inout, Hperm. solve_incl_app.

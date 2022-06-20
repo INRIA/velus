@@ -1456,8 +1456,8 @@ Section FunctionEntry.
     - simpl; econstructor; split; auto.
       unfold match_value, Env.adds; simpl.
       induction ys as [|(y, t)]; simpl; auto.
-      assert (y <> s) by (intro; subst; apply Nos'; apply inmembers_eq).
-      assert (y <> o) by (intro; subst; apply Noo'; apply inmembers_eq).
+      assert (y <> s) by (intro; subst; apply Nos'; apply InMembers_eq).
+      assert (y <> o) by (intro; subst; apply Noo'; apply InMembers_eq).
       constructor.
       + rewrite Env.gempty.
         do 2 (rewrite PTree.gso; auto).
@@ -1481,8 +1481,8 @@ Section FunctionEntry.
         as (le' & Bind & ?); eauto.
       + eapply NotInMembers_cons; eauto.
       + eapply NotInMembers_cons; eauto.
-      + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
-        assert (x <> o) by (intro; subst; apply Noo; apply inmembers_eq).
+      + assert (x <> s) by (intro; subst; apply Nos; apply InMembers_eq).
+        assert (x <> o) by (intro; subst; apply Noo; apply InMembers_eq).
         exists (PTree.set x (value_to_cvalue v) le'); split.
         * simpl map; rewrite bind_parameter_temps_comm; auto.
           apply bind_parameter_temps_cons; auto.
@@ -1523,7 +1523,7 @@ Section FunctionEntry.
     - simpl; econstructor; split; auto.
       unfold match_value, Env.adds; simpl.
       induction ys as [|(y, t)]; simpl; auto.
-      assert (y <> s) by (intro; subst; apply Nos'; apply inmembers_eq).
+      assert (y <> s) by (intro; subst; apply Nos'; apply InMembers_eq).
       constructor.
       + rewrite Env.gempty, PTree.gso, PTree.gss; simpl; auto.
       + apply NotInMembers_cons in Nos'; destruct Nos' as [Nos'].
@@ -1542,7 +1542,7 @@ Section FunctionEntry.
       edestruct IHxs with (s:=s) (ts:=ts) (sptr:=sptr)
         as (le' & Bind & ?); eauto.
       + eapply NotInMembers_cons; eauto.
-      + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
+      + assert (x <> s) by (intro; subst; apply Nos; apply InMembers_eq).
         exists (PTree.set x (value_to_cvalue v) le'); split.
         * simpl map; rewrite bind_parameter_temps_comm_noout; auto.
           apply bind_parameter_temps_cons; auto.
@@ -1630,7 +1630,7 @@ Section FunctionEntry.
       rewrite range_wand_equiv in Hrep; eauto.
       + now rewrite sep_assoc in Hrep.
       + eapply Permutation_Forall; eauto.
-      + eapply alloc_nodupmembers; eauto.
+      + eapply alloc_NoDupMembers; eauto.
         * unfold PTree.elements; simpl; constructor.
         * unfold PTree.elements; simpl.
           clear H H0 Nodup Alloc Perm Perm_fst.

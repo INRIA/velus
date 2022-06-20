@@ -261,8 +261,7 @@ Module Type COMMONTYPING
     apply Forall_cons2 in WTenv.
     destruct WTenv as (WTx & WTenv).
     destruct y as (y & ty).
-    apply nodupmembers_cons in Hndup.
-    destruct Hndup as (Hnin & Hndup).
+    apply NoDupMembers_cons_inv in Hndup as (Hnin & Hndup).
     inv Hin.
     - match goal with H:(y, ty) = _ |- _ => injection H; intros; subst end.
       constructor.

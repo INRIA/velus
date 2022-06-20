@@ -621,7 +621,7 @@ Module Type CACORRECTNESS
                  * subst. eapply sc_vars_refines. 3:eauto. 2:reflexivity. eauto.
                  *{ eapply sem_transitions_refines, sem_transitions_restrict with (Γ:=((x1, default_ann)::(x3, default_ann)::(x5, default_ann)::(x7, default_ann)::Γ' ++ senv_of_locs locs)) in H2; eauto.
                     2:{ simpl_Forall. eapply wx_exp_incl. 3:eauto with lclocking.
-                        1,2:intros * Hv; inv Hv; econstructor; eauto using inmembers_cons with datatypes. }
+                        1,2:intros * Hv; inv Hv; econstructor; eauto using InMembers_cons with datatypes. }
                     eapply trans_exp_sem in H2 as (ss&Htranssem&Hconcat); eauto.
                     + repeat constructor. econstructor. 2:rewrite Hconcat; simpl.
                       * eapply Forall2_impl_In; [|eauto]; intros.
@@ -783,7 +783,7 @@ Module Type CACORRECTNESS
                  repeat constructor.
                  *{ take (sem_transitions_ck _ _ _ _ _ _) and eapply sem_transitions_refines, sem_transitions_restrict with (Γ:=((x1, default_ann)::(x3, default_ann)::(x5, default_ann)::(x7, default_ann)::Γ')) in it; eauto.
                     2:{ simpl_Forall. eapply wx_exp_incl. 3:eauto with lclocking.
-                        1,2:intros * Hv; inv Hv; econstructor; eauto using inmembers_cons with datatypes. }
+                        1,2:intros * Hv; inv Hv; econstructor; eauto using InMembers_cons with datatypes. }
                     eapply sem_equation_ck_morph. 2,3:reflexivity.
                     1:{ instantiate (1:=(FEnv.restrict _ _,_)). split.
                         - setoid_rewrite <-FEnv.restrict_map; auto using EqStrel_Reflexive. apply FEnv.restrict_Equiv.

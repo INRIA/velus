@@ -287,14 +287,14 @@ Module Type TRCLOCKING
       unfold LC.WellInstantiated in Wi. destruct Wi; simpl in *.
       destruct ins as [|(?&?&?)]; simpl in *; inv H0.
       constructor; eauto.
-      2:{ eapply IHes; eauto. now apply nodupmembers_cons in Hdup. }
+      2:{ eapply IHes; eauto. now inv Hdup. }
       split; simpl; eauto.
       2:{ exists (fst nc). split. apply Wce. auto using instck_sub_ext. }
       simpl in *. take (sub _ = _) and rewrite it. destruct nc as (ck & []).
       2:{ simpl.
           assert (assoc_ident i (combine (L.idents (L.n_out n)) xs) = None) as Hassc.
           { apply assoc_ident_false.
-            apply nodupmembers_cons in Hdup as [Hin].
+            apply NoDupMembers_cons_inv in Hdup as [Hin].
             rewrite <- In_InMembers_combine. unfold L.idents. intro Hin'.
             apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
             eapply Hin, In_InMembers.

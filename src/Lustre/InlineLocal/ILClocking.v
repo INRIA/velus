@@ -224,7 +224,7 @@ Module Type ILCLOCKING
           { eapply In_InMembers. solve_In. }
           unfold Env.MapsTo in *. erewrite Env.union_find3' in Hfind; [|eauto]. inv Hfind.
           eapply fresh_idents_rename_ids in Hfresh. rewrite Hfresh.
-          2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
+          2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
           econstructor. solve_In. rewrite Hmap; simpl. eauto. simpl.
           apply disjoint_union_rename_in_clock; auto.
       + intros ?? Hfind. eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eauto.
@@ -239,7 +239,7 @@ Module Type ILCLOCKING
       + erewrite fresh_idents_rename_anns; [|eauto]. simpl_app.
         apply Forall_app; split.
         * assert (Hfresh:=H0). eapply fresh_idents_rename_ids in H0. rewrite H0.
-          2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
+          2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
           simpl_Forall. rewrite <-map_app.
           eapply subclock_clock_wc, subclock_clock_wc
             with (Γ':=Γ++map (fun '(x, a) => (x, ann_with_clock a (rename_in_clock sub a.(clo)))) (senv_of_locs locs)++st_senv st).
