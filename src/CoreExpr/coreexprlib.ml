@@ -25,6 +25,7 @@ let extern_atom = Camlcoq.extern_atom
 module type SYNTAX =
 sig
   type typ
+  type ctype
   type cconst
   type unop
   type binop
@@ -47,11 +48,16 @@ sig
     | Ecase of exp * cexp option list * cexp
     | Eexp of exp
 
+  type rhs =
+    | Eextcall of ident * exp list * ctype
+    | Ecexp of cexp
+
   val typeof : exp -> typ
 end
 
 module PrintFun (CE: SYNTAX)
     (PrintOps : PRINT_OPS with type typ     = CE.typ
+                           and type ctype   = CE.ctype
                            and type cconst  = CE.cconst
                            and type unop    = CE.unop
                            and type binop   = CE.binop
@@ -60,6 +66,7 @@ sig
   val print_ident           : formatter -> ident -> unit
   val print_exp             : formatter -> CE.exp -> unit
   val print_cexp            : formatter -> CE.cexp -> unit
+  val print_rhs             : formatter -> CE.rhs -> unit
   val print_fullclocks      : bool ref
   val print_clock           : formatter -> CE.clock -> unit
   val print_clock_decl      : formatter -> CE.clock -> unit
@@ -146,6 +153,16 @@ struct
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
   let print_cexp = cexp 0
+
+  let print_comma_list print =
+    pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") print
+
+  let print_rhs p = function
+    | CE.Eextcall (f, es, _) ->
+      fprintf p "external %a@,(@[<hov 0>%a@])"
+        print_ident f
+        (print_comma_list print_exp) es
+    | CE.Ecexp e -> print_cexp p e
 
   let rec print_clock p ck =
     match ck with

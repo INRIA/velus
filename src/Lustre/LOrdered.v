@@ -35,6 +35,9 @@ Module Type LORDERED
   | INEbinop: forall f op e1 e2 a,
       Is_node_in_exp f e1 \/ Is_node_in_exp f e2 ->
       Is_node_in_exp f (Ebinop op e1 e2 a)
+  | INEextcall: forall f g es a,
+      Exists (Is_node_in_exp f) es ->
+      Is_node_in_exp f (Eextcall g es a)
   | INEfby: forall f le1 le2 la,
       Exists (Is_node_in_exp f) le1 \/ Exists (Is_node_in_exp f) le2 ->
       Is_node_in_exp f (Efby le1 le2 la)
@@ -108,9 +111,9 @@ Module Type LORDERED
     Qed.
 
     Lemma find_node_later_not_Is_node_in {PSyn prefs}:
-      forall f types (nd: @node PSyn prefs) nds nd',
-        Ordered_nodes (Global types (nd::nds))
-        -> find_node f (Global types nds) = Some nd'
+      forall f types externs (nd: @node PSyn prefs) nds nd',
+        Ordered_nodes (Global types externs (nd::nds))
+        -> find_node f (Global types externs nds) = Some nd'
         -> ~Is_node_in_block nd.(n_name) nd'.(n_block).
     Proof.
       intros * Hord Hfind Hini.
@@ -205,9 +208,10 @@ Module Type LORDERED
     solve_Exists.
   Qed.
 
-  Lemma Ordered_nodes_change_types {PSyn prefs} : forall (nds : list (@node PSyn prefs)) enms1 enms2,
-      Ordered_nodes (Global enms1 nds) ->
-      Ordered_nodes (Global enms2 nds).
+  Lemma Ordered_nodes_change_types {PSyn prefs} :
+    forall (nds : list (@node PSyn prefs)) enms1 enms2 externs1 externs2,
+      Ordered_nodes (Global enms1 externs1 nds) ->
+      Ordered_nodes (Global enms2 externs2 nds).
   Proof.
     induction nds; intros * Hord; inv Hord; constructor; simpl in *.
     - destruct H1 as (Hnin&Hnames).
@@ -239,12 +243,12 @@ Module Type LORDERED
       destruct G. induction nodes0; intros * Hord * Hfind; inv Hord; destruct_conjs; simpl in *.
       now inv Hfind.
       assert (forall f n0,
-                 find_node f {| types := types0; nodes := nodes0 |} = Some n0 ->
+                 find_node f {| types := types0; externs := externs0; nodes := nodes0 |} = Some n0 ->
                  P_node f) as Hind.
       { intros. eapply IHnodes0; eauto.
         intros * Hsome Hord. eapply Hnode; eauto.
         rewrite find_node_other; auto.
-        edestruct (find_node_Exists f1 {| types := types0; nodes := nodes0 |}) as (Hex&_).
+        edestruct (find_node_Exists f1 {| types := types0; externs := externs0; nodes := nodes0 |}) as (Hex&_).
         eapply Exists_exists in Hex as (?&?&?); subst; try congruence.
         simpl_Forall; auto.
       } clear IHnodes0.

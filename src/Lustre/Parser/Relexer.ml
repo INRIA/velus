@@ -24,6 +24,7 @@ let map_token (tok : LustreParser.Aut.Gram.token) =
   | END l        -> (LustreParser2.END        l, l)
   | ENUM_NAME l  -> (LustreParser2.ENUM_NAME  l, snd l)
   | EVERY l      -> (LustreParser2.EVERY      l, l)
+  | EXTERNAL l   -> (LustreParser2.EXTERNAL   l, l)
   | EOF l        -> (LustreParser2.EOF        l, l)
   | EQ l         -> (LustreParser2.EQ         l, l)
   | HASH l       -> (LustreParser2.HASH       l, l)

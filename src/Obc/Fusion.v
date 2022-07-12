@@ -244,6 +244,8 @@ Module Type FUSION
       Fusible (Assign x e)
   | IFAssignSt: forall x e,
       Fusible (AssignSt x e)
+  | IFExternCall: forall x f es ty,
+      Fusible (ExternCall x f es ty)
   | IFSwitch: forall e ss d,
       Forall (fun s => Fusible (or_default d s)) ss ->
       (forall x, Is_free_in_exp x e -> Forall (fun s => ~ Can_write_in x (or_default d s)) ss) ->
@@ -299,9 +301,9 @@ Module Type FUSION
   Proof.
     intros * Hfw prog menv env menv' env'.
     split; intro Hstmt.
-    - inversion_clear Hstmt as [| | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
-      inversion_clear Hs as   [| | | |? ? ? ? ? ? ? ? ? ? Hx1 Nths Hss|];
-        inversion_clear Ht as [| | | |? ? ? ? ? ? ? ? ? ? Hx3 Ntht Hts|].
+    - inversion_clear Hstmt as [| | | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
+      inversion_clear Hs as   [| | | | |? ? ? ? ? ? ? ? ? ? Hx1 Nths Hss|];
+        inversion_clear Ht as [| | | | |? ? ? ? ? ? ? ? ? ? Hx3 Ntht Hts|].
       econstructor; eauto.
       + apply cannot_write_exp_eval with (3:=Hss) in Hx1.
         * apply exp_eval_det with (1:=Hx3) in Hx1.
@@ -314,7 +316,7 @@ Module Type FUSION
           eapply nth_error_In, Forall_forall in Nths; eauto.
           contradiction.
       + simpl; unfold option_map2_defaults; cases; simpl in *; eauto with obcsem.
-    - inversion_clear Hstmt as [| | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
+    - inversion_clear Hstmt as [| | | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
       rewrite map2_combine in Hv.
       apply map_nth_error_inv in Hv as ((s1 & s2) & Nth & ?); subst.
       apply combine_nth_error in Nth as (Nth1 &?).
@@ -657,7 +659,7 @@ Module Type FUSION
     Proof with eauto with obctyping obcinv.
       induction s1 using stmt_ind2; destruct s2; inversion_clear 1; inversion_clear 1;
         intros Hno; inv Hno; simpl; eauto with obcinv; repeat (take (No_Overwrites (_ _)) and inv it).
-      2-6:constructor; eauto with obctyping obcinv; intros;
+      2-7:constructor; eauto with obctyping obcinv; intros;
       repeat match goal with
              | |- ~ _ => intros contra
              | H:Can_write_in_var _ (zip _ _) |- _ =>
@@ -804,6 +806,7 @@ Module Type FUSION
       + now apply fuse_find_method'.
       + apply Forall_forall; intros * Hin.
         take (Forall _ _) and eapply Forall_forall in it; eauto using wt_exp_fuse_program.
+    - econstructor; simpl_Forall; eauto using wt_exp_fuse_program.
   Qed.
 
   Lemma wt_stmt_fuse:

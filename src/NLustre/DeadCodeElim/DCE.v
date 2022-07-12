@@ -498,7 +498,7 @@ Module Type DCE
     { transform_unit := dce_node }.
 
   Local Program Instance dce_without_units: TransformProgramWithoutUnits global global :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition dce_global : global -> global := transform_units.
 
@@ -530,7 +530,7 @@ Module Type DCE
   Lemma dce_global_iface_eq : forall G,
       global_iface_eq G (dce_global G).
   Proof.
-    intros. split; intros; auto.
+    intros. repeat split; intros; auto.
     destruct (find_node _ _) eqn:Hfind.
     - erewrite find_node_dce_forward; eauto.
       constructor; simpl.

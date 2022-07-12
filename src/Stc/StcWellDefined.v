@@ -113,15 +113,15 @@ Module Type STCWELLDEFINED
     Forall (normal_args_tc P) s.(s_tcs).
 
   Definition normal_args (P: program) : Prop :=
-    Forall' (fun ss => normal_args_system (Program P.(types) ss)) P.(systems).
+    Forall' (fun ss => normal_args_system (Program P.(types) P.(externs) ss)) P.(systems).
 
   Lemma normal_args_system_cons:
-    forall system P enums,
-      normal_args_system (Program enums (system :: P)) system ->
+    forall system P enums externs,
+      normal_args_system (Program enums externs (system :: P)) system ->
       ~ Is_system_in system.(s_name) system.(s_tcs) ->
-      normal_args_system (Program enums P) system.
+      normal_args_system (Program enums externs P) system.
   Proof.
-    intros system P enums Hnarg Hord.
+    intros system P enums externs Hnarg Hord.
     apply Forall_forall.
     intros tc Hin.
     destruct tc; eauto using normal_args_tc.
@@ -146,8 +146,8 @@ Module Type STCWELLDEFINED
     unfold reset_consistency.
     induction tcs as [|[]]; simpl; auto; intros * Wsch Spec;
       inversion_clear Wsch as [|?? (_&Nexts&_)];
-        try (eapply IHtcs; eauto; intros j r Step' ckr;
-             specialize (Spec j r); rewrite Next_with_reset_in_cons_not_next in Spec;
+        try (eapply IHtcs; eauto; intros j ckrs Step' ckr;
+             specialize (Spec j ckrs); rewrite Next_with_reset_in_cons_not_next in Spec;
              [|now discriminate]).
     - eapply Spec in Step'. rewrite Step'.
       repeat rewrite Is_reset_in_reflect. reflexivity.
@@ -180,8 +180,8 @@ Module Type STCWELLDEFINED
     unfold ireset_consistency.
     induction tcs as [|[]]; simpl; auto; intros * Wsch Spec;
       inversion_clear Wsch as [|?? (Free&Next&Subs)]; clear Free Next;
-        try (eapply IHtcs; eauto; intros j r Step' ckr;
-             specialize (Spec j r); rewrite Step_with_ireset_in_cons_not_step in Spec;
+        try (eapply IHtcs; eauto; intros j ckrs Step' ckr;
+             specialize (Spec j ckrs); rewrite Step_with_ireset_in_cons_not_step in Spec;
              [|now discriminate]).
     - eapply Spec in Step'. rewrite Step'.
       repeat rewrite Is_ireset_in_reflect. reflexivity.

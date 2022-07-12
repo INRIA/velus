@@ -19,6 +19,7 @@ let extern_atom = Camlcoq.extern_atom
 module type SYNTAX =
   sig
     type typ
+    type ctype
     type cconst
     type enumtag
     type unop
@@ -39,6 +40,7 @@ module type SYNTAX =
     | Switch   of exp * stmt option list * stmt
     | Comp     of stmt * stmt
     | Call     of ident list * ident * ident * ident * exp list
+    | ExternCall of ident * ident * exp list * ctype
     | Skip
 
     type coq_method = { m_name : ident;
@@ -54,6 +56,7 @@ module type SYNTAX =
 
     type program = {
       types: typ list;
+      externs: (ident * (ctype list * ctype)) list;
       classes: coq_class list
     }
 
@@ -164,6 +167,7 @@ module SyncFun (Obc: SYNTAX)
 module PrintFun
     (Ops: PRINT_OPS)
     (Obc: SYNTAX with type typ     = Ops.typ
+                  and type ctype = Ops.ctype
                   and type cconst  = Ops.cconst
                   and type enumtag = Ops.enumtag
                   and type unop    = Ops.unop
@@ -260,6 +264,12 @@ sig
             (extern_atom i)
             (extern_atom m)
             (print_comma_list print_expr) es
+      | Obc.ExternCall (y, f, es, _) ->
+        fprintf p
+          "@[<hv 2>%a :=@ external@ @[<hv 2>%a@,(@[<hov 0>%a@])@]@]"
+          print_ident y
+          print_ident f
+          (print_comma_list print_expr) es
       | Obc.Skip ->
           fprintf p "skip"
 
@@ -314,9 +324,16 @@ sig
       print_methods p true meths;
       fprintf p "@;<0 -2>}@]"
 
+    let print_extern_decl p (f, (tyins, tyout)) =
+      fprintf p "external %a(%a) returns %a"
+        print_ident f
+        (print_comma_list Ops.print_ctype) tyins
+        Ops.print_ctype tyout
+
     let print_program p prog =
       fprintf p "@[<v 0>";
       List.iter (fprintf p "%a@;@;" Ops.print_typ_decl) (List.rev prog.Obc.types);
+      List.iter (fprintf p "%a@;@;" print_extern_decl) (List.rev prog.Obc.externs);
       List.iter (fprintf p "%a@;@;" print_class) prog.Obc.classes;
       fprintf p "@]@."
   end

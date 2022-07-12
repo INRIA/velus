@@ -164,6 +164,13 @@ Module Type LCLOCKEDSEMANTICS
           lift2 op ty1 ty2 s1 s2 o ->
           sem_exp_ck H b (Ebinop op e1 e2 ann) [o]
 
+    | Sextcall:
+      forall H b f es tyout ck tyins ss vs,
+        Forall2 (fun ty cty => ty = Tprimitive cty) (typesof es) tyins ->
+        Forall2 (sem_exp_ck H b) es ss ->
+        liftn (fun ss => sem_extern f tyins ss tyout) (concat ss) vs ->
+        sem_exp_ck H b (Eextcall f es (tyout, ck)) [vs]
+
     | Sfby:
         forall H b e0s es anns s0ss sss os,
           Forall2 (sem_exp_ck H b) e0s s0ss ->
@@ -360,6 +367,14 @@ Module Type LCLOCKEDSEMANTICS
           typeof e2 = [ty2] ->
           lift2 op ty1 ty2 s1 s2 o ->
           P_exp H b (Ebinop op e1 e2 ann) [o].
+
+      Hypothesis ExtcallCase:
+        forall H b f es tyout ck tyins ss vs,
+          Forall2 (fun cty ty => cty = Tprimitive ty) (typesof es) tyins ->
+          Forall2 (sem_exp_ck H b) es ss ->
+          Forall2 (P_exp H b) es ss ->
+          liftn (fun ss => sem_extern f tyins ss tyout) (concat ss) vs ->
+          P_exp  H b (Eextcall f es (tyout, ck)) [vs].
 
       Hypothesis FbyCase:
         forall H b e0s es anns s0ss sss os,
@@ -579,6 +594,7 @@ Module Type LCLOCKEDSEMANTICS
           + apply LastCase; auto.
           + eapply UnopCase; eauto.
           + eapply BinopCase; eauto.
+          + eapply ExtcallCase; eauto. clear H1 H3; SolveForall.
           + eapply FbyCase; eauto; clear H3; SolveForall.
           + eapply ArrowCase; eauto; clear H3; SolveForall.
           + eapply WhenCase; eauto; clear H3; SolveForall.
@@ -1315,6 +1331,9 @@ Module Type LCLOCKEDSEMANTICS
       + eapply IHe1; eauto; reflexivity.
       + eapply IHe2; eauto; reflexivity.
       + now take (_ ≡ y) and rewrite <-it.
+    - eapply Sextcall with (ss:=ss); simpl_Forall; eauto.
+      + eapply H0; eauto; reflexivity.
+      + now take (_ ≡ y) and rewrite <-it.
     - eapply Sfby with (s0ss:=s0ss) (sss:=sss); simpl_Forall.
       1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
       eapply Forall3_EqSt; eauto. solve_proper.
@@ -1497,36 +1516,36 @@ Module Type LCLOCKEDSEMANTICS
     end.
 
   Lemma sem_block_ck_cons {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types bck Hi bk,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_block_ck (Global types (nd::nds)) Hi bk bck
+    forall (nd : @node PSyn prefs) nds types externs bck Hi bk,
+      Ordered_nodes (Global types externs (nd::nds))
+      -> sem_block_ck (Global types externs (nd::nds)) Hi bk bck
       -> ~Is_node_in_block nd.(n_name) bck
-      -> sem_block_ck (Global types nds) Hi bk bck.
+      -> sem_block_ck (Global types externs nds) Hi bk bck.
   Proof.
     intros * Hord Hsem Hnf.
     revert Hnf.
     eapply sem_block_ck_ind2
       with
         (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
-                                -> sem_exp_ck (Global types0 nds) H bk e ss)
+                                -> sem_exp_ck (Global types0 externs0 nds) H bk e ss)
         (P_equation := fun H bk eq => ~Is_node_in_eq nd.(n_name) eq
-                                   -> sem_equation_ck (Global types0 nds) H bk eq)
+                                   -> sem_equation_ck (Global types0 externs0 nds) H bk eq)
         (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
-                                                       -> sem_transitions_ck (Global types0 nds) bk H trans default stres)
+                                                       -> sem_transitions_ck (Global types0 externs0 nds) bk H trans default stres)
         (P_block := fun H bk d => ~Is_node_in_block nd.(n_name) d
-                               -> sem_block_ck (Global types0 nds) H bk d)
+                               -> sem_block_ck (Global types0 externs0 nds) H bk d)
         (P_node := fun f ins outs => nd.(n_name) <> f
-                                  -> sem_node_ck (Global types0 nds) f ins outs). 24:eauto.
+                                  -> sem_node_ck (Global types0 externs0 nds) f ins outs). 25:eauto.
     all:econstructor; eauto; repeat sem_cons.
     - eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Corollary sem_node_ck_cons {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types f xs ys,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_node_ck (Global types (nd::nds)) f xs ys
+    forall (nd : @node PSyn prefs) nds types externs f xs ys,
+      Ordered_nodes (Global types externs (nd::nds))
+      -> sem_node_ck (Global types externs (nd::nds)) f xs ys
       -> nd.(n_name) <> f
-      -> sem_node_ck (Global types nds) f xs ys.
+      -> sem_node_ck (Global types externs nds) f xs ys.
   Proof.
     intros * Hord Hsem Hnf. inv Hsem.
     rewrite find_node_other with (1:=Hnf) in H0.
@@ -1536,36 +1555,36 @@ Module Type LCLOCKEDSEMANTICS
   Qed.
 
   Lemma sem_block_ck_cons' {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types bck Hi bk,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_block_ck (Global types nds) Hi bk bck
+    forall (nd : @node PSyn prefs) nds types externs bck Hi bk,
+      Ordered_nodes (Global types externs (nd::nds))
+      -> sem_block_ck (Global types externs nds) Hi bk bck
       -> ~Is_node_in_block nd.(n_name) bck
-      -> sem_block_ck (Global types (nd::nds)) Hi bk bck.
+      -> sem_block_ck (Global types externs (nd::nds)) Hi bk bck.
   Proof.
     intros * Hord Hsem Hnf.
     revert Hnf.
     eapply sem_block_ck_ind2
       with
         (P_exp := fun H bk e ss => ~ Is_node_in_exp nd.(n_name) e
-                                -> sem_exp_ck (Global types0 (nd::nds)) H bk e ss)
+                                -> sem_exp_ck (Global types0 externs0 (nd::nds)) H bk e ss)
         (P_equation := fun H bk eq => ~Is_node_in_eq nd.(n_name) eq
-                                   -> sem_equation_ck (Global types0 (nd::nds)) H bk eq)
+                                   -> sem_equation_ck (Global types0 externs0 (nd::nds)) H bk eq)
         (P_transitions := fun bk H trans default stres => ~List.Exists (fun '(e, _) => Is_node_in_exp nd.(n_name) e) trans
-                                                       -> sem_transitions_ck (Global types0 (nd::nds)) bk H trans default stres)
+                                                       -> sem_transitions_ck (Global types0 externs0 (nd::nds)) bk H trans default stres)
         (P_block := fun H bk d => ~Is_node_in_block nd.(n_name) d
-                               -> sem_block_ck (Global types0 (nd::nds)) H bk d)
+                               -> sem_block_ck (Global types0 externs0 (nd::nds)) H bk d)
         (P_node := fun f ins outs => nd.(n_name) <> f
-                                  -> sem_node_ck (Global types0 (nd::nds)) f ins outs). 24:eauto.
+                                  -> sem_node_ck (Global types0 externs0 (nd::nds)) f ins outs). 25:eauto.
     all:econstructor; eauto; repeat sem_cons.
     - eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
   Corollary sem_node_ck_cons' {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds types f xs ys,
-      Ordered_nodes (Global types (nd::nds))
-      -> sem_node_ck (Global types nds) f xs ys
+    forall (nd : @node PSyn prefs) nds types externs f xs ys,
+      Ordered_nodes (Global types externs (nd::nds))
+      -> sem_node_ck (Global types externs nds) f xs ys
       -> nd.(n_name) <> f
-      -> sem_node_ck (Global types (nd::nds)) f xs ys.
+      -> sem_node_ck (Global types externs (nd::nds)) f xs ys.
   Proof.
     intros * Hord Hsem Hnf. inv Hsem.
     econstructor; eauto.
@@ -1575,11 +1594,11 @@ Module Type LCLOCKEDSEMANTICS
   Qed.
 
   Lemma sem_node_ck_cons_iff {PSyn prefs} :
-    forall (n : @node PSyn prefs) nds types f xs ys,
-      Ordered_nodes (Global types (n::nds)) ->
+    forall (n : @node PSyn prefs) nds types externs f xs ys,
+      Ordered_nodes (Global types externs (n::nds)) ->
       n_name n <> f ->
-      sem_node_ck (Global types nds) f xs ys <->
-      sem_node_ck (Global types (n::nds)) f xs ys.
+      sem_node_ck (Global types externs nds) f xs ys <->
+      sem_node_ck (Global types externs (n::nds)) f xs ys.
   Proof.
     intros * Hord Hname.
     split; intros Hsem.
@@ -1602,7 +1621,7 @@ Module Type LCLOCKEDSEMANTICS
           (P_equation := fun H b eq => sem_equation G H b eq)
           (P_transitions := fun H b trans default stres => sem_transitions G H b trans default stres)
           (P_block := fun H b blk => sem_block G H b blk)
-          (P_node := fun f xs ys => sem_node G f xs ys). 24:eauto.
+          (P_node := fun f xs ys => sem_node G f xs ys). 25:eauto.
       all:intros; econstructor; eauto.
       1,2:intros k.
       - specialize (H6 k) as (?&?); auto.
@@ -2175,30 +2194,30 @@ Module Type LCLOCKEDSEMANTICS
 
   (** ** Alignment of streams produced by expressions *)
 
-    Lemma sem_exp_sem_var {PSyn prefs} :
-      forall (G: @global PSyn prefs) Γ H b e vs,
-        wc_exp G Γ e ->
-        sem_exp G H b e vs ->
-        Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclockof e) vs.
-    Proof.
-      intros * Hwc Hsem.
-      assert (length vs = length (nclockof e)) as Hlen.
-      { rewrite length_nclockof_numstreams. eapply sem_exp_numstreams; eauto with lclocking. }
-      inv Hwc; inv Hsem; simpl in *; repeat constructor; repeat rewrite map_length in *.
-      all:simpl_Forall; simpl; auto;
-        apply Forall2_forall; split; auto.
-    Qed.
+  Lemma sem_exp_sem_var {PSyn prefs} :
+    forall (G: @global PSyn prefs) Γ H b e vs,
+      wc_exp G Γ e ->
+      sem_exp G H b e vs ->
+      Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclockof e) vs.
+  Proof.
+    intros * Hwc Hsem.
+    assert (length vs = length (nclockof e)) as Hlen.
+    { rewrite length_nclockof_numstreams. eapply sem_exp_numstreams; eauto with lclocking. }
+    inv Hwc; inv Hsem; simpl in *; repeat constructor; repeat rewrite map_length in *.
+    all:simpl_Forall; simpl; auto;
+      apply Forall2_forall; split; auto.
+  Qed.
 
-    Corollary sem_exps_sem_var {PSyn prefs} :
-      forall (G: @global PSyn prefs) Γ H b es vs,
-        Forall (wc_exp G Γ) es ->
-        Forall2 (sem_exp G H b) es vs ->
-        Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclocksof es) (concat vs).
-    Proof.
-      induction es; intros * Hwc Hsem; inv Hwc; inv Hsem; simpl; auto.
-      apply Forall2_app; auto.
-      eapply sem_exp_sem_var; eauto.
-    Qed.
+  Corollary sem_exps_sem_var {PSyn prefs} :
+    forall (G: @global PSyn prefs) Γ H b es vs,
+      Forall (wc_exp G Γ) es ->
+      Forall2 (sem_exp G H b) es vs ->
+      Forall2 (fun '(_, o) s => LiftO True (fun x : ident => sem_var (fst H) x s) o) (nclocksof es) (concat vs).
+  Proof.
+    induction es; intros * Hwc Hsem; inv Hwc; inv Hsem; simpl; auto.
+    apply Forall2_app; auto.
+    eapply sem_exp_sem_var; eauto.
+  Qed.
 
   Lemma sc_outside_mask' {PSyn prefs} :
     forall (G: @global PSyn prefs) f n H b Γ ncks es rs ss vs bck sub,
@@ -2300,6 +2319,11 @@ Module Type LCLOCKEDSEMANTICS
     - (* binop *)
       eapply IHe1 in H9; eauto. rewrite H6 in H9; simpl in H9.
       rewrite <-ac_lift2; eauto.
+    - (* extcall *)
+      eapply sc_exps', Forall2_ignore2 in H0; eauto. simpl_Forall.
+      take (liftn _ _ _) and apply ac_liftn in it.
+      destruct (clocksof es); try congruence; simpl_Forall; simpl_In; simpl_Forall.
+      now rewrite <-it.
     - (* fby *)
       rewrite Forall2_eq in H7. rewrite H7.
       eapply sc_exps' in H0; eauto.
@@ -2492,6 +2516,9 @@ Module Type LCLOCKEDSEMANTICS
     Proof with eauto with datatypes.
       induction e using exp_ind2; intros * Href Hsem;
         inv Hsem...
+      - (* extcall *)
+        econstructor...
+        simpl_Forall...
       - (* fby *)
         econstructor...
         + simpl_Forall...
@@ -2592,21 +2619,21 @@ Module Type LCLOCKEDSEMANTICS
         + simpl_Forall; eauto.
     Qed.
 
-    Fact global_sem_ref_nil : forall enms1 enms2,
-      global_sem_refines (Global enms1 []) (Global enms2 []).
+    Fact global_sem_ref_nil : forall enms1 enms2 exts1 exts2,
+      global_sem_refines (Global enms1 exts1 []) (Global enms2 exts2 []).
     Proof.
       intros * f ins outs Hsem.
       inv Hsem. unfold find_node in H0; simpl in H0; inv H0.
     Qed.
 
-    Fact global_sem_ref_cons : forall enms1 enms2 nds nds' n n' f,
-        Ordered_nodes (Global enms1 (n::nds)) ->
-        Ordered_nodes (Global enms2 (n'::nds')) ->
+    Fact global_sem_ref_cons : forall enms1 enms2 exts1 exts2 nds nds' n n' f,
+        Ordered_nodes (Global enms1 exts1 (n::nds)) ->
+        Ordered_nodes (Global enms2 exts2 (n'::nds')) ->
         n_name n = f ->
         n_name n' = f ->
-        global_sem_refines (Global enms1 nds) (Global enms2 nds') ->
-        node_sem_refines (Global enms1 (n::nds)) (Global enms2 (n'::nds')) f ->
-        global_sem_refines (Global enms1 (n::nds)) (Global enms2 (n'::nds')).
+        global_sem_refines (Global enms1 exts1 nds) (Global enms2 exts2 nds') ->
+        node_sem_refines (Global enms1 exts1 (n::nds)) (Global enms2 exts2 (n'::nds')) f ->
+        global_sem_refines (Global enms1 exts1 (n::nds)) (Global enms2 exts2 (n'::nds')).
     Proof with eauto.
       intros * Hord1 Hord2 Hname1 Hname2 Hglob Hnode f0 ins outs Hsem.
       destruct (ident_eq_dec (n_name n) f0); subst.
@@ -2799,6 +2826,11 @@ Module Type LCLOCKEDSEMANTICS
         econstructor; eauto.
         eapply lift2_spec; intros.
         left. repeat split; apply const_nth.
+      - (* Eextcall *)
+        econstructor; eauto.
+        erewrite Forall2_map_2; eapply Forall2_impl_In; [|eauto]; intros ???? Hsem; eapply Hsem; eauto.
+        eapply liftn_spec; intros.
+        left. split; [apply Forall_concat|]; simpl_Forall; apply const_nth.
       - (* Efby *)
         econstructor.
         1,2:erewrite Forall2_map_2; eapply Forall2_impl_In; [|eauto]; intros ???? Hsem; eapply Hsem; eauto.

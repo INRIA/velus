@@ -323,20 +323,31 @@ Module Type TRCLOCKING
         try (inv Htr; cases; discriminate).
       Opaque to_cexp.
       destruct e; inv Hwt; simpl in *; simpl_Foralls; cases_eqn Eq; try monadInv Htr.
-      1-8,10-15:(inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
-                 assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto;
-                 take (Senv.HasClock _ _ _) and inv it).
+      all: try (inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
+                assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto;
+                econstructor;
+                take (Senv.HasClock _ _ _) and inv it).
       Transparent to_cexp.
-      1-13:try (solve [monadInv EQ1]).
-      1-8:simpl in *.
+      all:try (solve [monadInv EQ1]); simpl in *.
+      all:simpl in *.
       1-5:(eapply envs_eq_find in Henvs; eauto; solve_In;
            pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; congruence).
-      1-3:(cases; monadInv EQ1; simpl in *;
+      3-5:(cases; monadInv EQ1; simpl in *;
            inv H;
            (eapply envs_eq_find in Henvs; eauto; solve_In;
             pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; congruence)).
-      2:inv Hwc; simpl_Foralls.
-      - inv Hwc. simpl_Foralls.
+      3:inv Hwc; simpl_Foralls.
+      - (* extcall *)
+        inv Hwc. simpl_Forall.
+        take (LC.wc_exp _ _ _) and inv it.
+        repeat constructor.
+        + take (Senv.HasClock _ _ _) and inv it. solve_In.
+        + simpl_Forall.
+          eapply mmap_inversion, Coqlib.list_forall2_in_right in EQ; eauto; destruct_conjs; simpl_Forall.
+          eapply wc_lexp in H1 as (?&?&?); eauto.
+          apply Forall_flat_map in H7. simpl_Forall. rewrite H1 in H7. simpl_Forall; auto.
+      - (* fby *)
+        inv Hwc. simpl_Foralls.
         cases; try monadInv Htr.
         constructor; eauto using envs_eq_in.
         take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
@@ -401,7 +412,7 @@ Module Type TRCLOCKING
         clear H0 H3.
         rename H4 into Hf2. simpl in Hf2; rewrite app_nil_r in Hf2.
         take (LC.wc_exp _ _ _) and inversion_clear it
-          as [| | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
+          as [| | | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and
@@ -534,15 +545,15 @@ Module Type TRCLOCKING
       to_global G = OK P ->
       NLC.wc_global P.
   Proof.
-    intros (?&nds) ? (_&Hwt). revert P Hwt.
-    induction nds as [| n]. inversion 3. constructor.
+    intros [] ? (_&Hwt). revert P Hwt.
+    induction nodes as [| n]. inversion 3. constructor.
     intros * Hwt Hwc Htr. monadInv Htr; simpl in *; monadInv EQ.
     inversion_clear Hwt as [|?? (?&?) Wt ].
     inversion_clear Hwc as [|?? (?&?) Wc ].
     constructor; simpl.
     - eapply wc_node; eauto; simpl; auto.
       unfold to_global; simpl; rewrite EQ; simpl; auto.
-    - eapply IHnds in Wc; eauto.
+    - eapply IHnodes in Wc; eauto.
       2:(unfold to_global; simpl; rewrite EQ; simpl; auto).
       apply Wc.
   Qed.

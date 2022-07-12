@@ -34,20 +34,20 @@ Module Type STCORDERED
   (*       Ordered_systems (Program enums (s :: P)). *)
 
   Lemma Ordered_systems_append:
-    forall P P' enums,
-      Ordered_systems (Program enums (P ++ P')) ->
-      Ordered_systems (Program enums P').
+    forall P P' enums externs,
+      Ordered_systems (Program enums externs (P ++ P')) ->
+      Ordered_systems (Program enums externs P').
   Proof.
     intros * Ord; eapply Ordered_program_append' in Ord as (?&?); simpl in *; eauto.
   Qed.
 
   Lemma Ordered_systems_split:
-    forall P1 s P enums,
-      Ordered_systems (Program enums (P1 ++ s :: P)) ->
+    forall P1 s P enums externs,
+      Ordered_systems (Program enums externs (P1 ++ s :: P)) ->
       Forall (fun xb =>
-                  find_system (snd xb) (Program enums P1) = None
+                  find_system (snd xb) (Program enums externs P1) = None
                   /\ snd xb <> s.(s_name)
-                  /\ exists s' P', find_system (snd xb) (Program enums P) = Some (s', P'))
+                  /\ exists s' P', find_system (snd xb) (Program enums externs P) = Some (s', P'))
              s.(s_subs).
   Proof.
     intros * Ord.
@@ -89,16 +89,18 @@ Module Type STCORDERED
       Ordered_systems P'.
   Proof.
     intros * Ord Find.
-    assert (types P = types P') as E
+    assert (types P = types P') as Etypes
+        by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
+    assert (externs P = externs P') as Eexterns
         by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
     eapply Ordered_program_find_unit in Ord; simpl in *; eauto.
-    rewrite E in Ord; now inv Ord.
+    rewrite Etypes, Eexterns in Ord; now inv Ord.
   Qed.
 
   Lemma find_system_other_not_Is_system_in:
-    forall f s P s' P' types,
-      Ordered_systems (Program types (s :: P)) ->
-      find_system f (Program types P) = Some (s', P') ->
+    forall f s P s' P' types externs,
+      Ordered_systems (Program types externs (s :: P)) ->
+      find_system f (Program types externs P) = Some (s', P') ->
       ~ Is_system_in s.(s_name) s'.(s_tcs).
   Proof.
     intros * Ord Find.

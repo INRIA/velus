@@ -633,7 +633,7 @@ Module Type CLOCKSWITCH
     cases; repeat inv_bind; simpl in *;
       rewrite Permutation_app_comm; simpl.
     3:reflexivity.
-    1-11:symmetry; eapply fresh_ident_vars_perm; eauto.
+    all:symmetry; eapply fresh_ident_vars_perm; eauto.
   Qed.
 
   Corollary cond_eq_incl : forall e tx bck xc xcs eqs st st',
@@ -883,8 +883,8 @@ Module Type CLOCKSWITCH
   Proof.
     unfold cond_eq. intros * Hcond.
     cases; repeat inv_bind; simpl; auto.
-    1-11:try take (fresh_ident _ _ _ _ = _) and eapply fresh_ident_prefixed in it as (?&?&?); subst.
-    1-11:constructor; auto; right; do 2 esplit; eauto; apply PSF.add_1; auto.
+    all:try take (fresh_ident _ _ _ _ = _) and eapply fresh_ident_prefixed in it as (?&?&?); subst.
+    all:constructor; auto; right; do 2 esplit; eauto; apply PSF.add_1; auto.
   Qed.
 
   Lemma switch_scope_GoodLocals {A} P_good f_switch : forall locs caus (blk: A) env bck sub s' st st',
@@ -1043,7 +1043,7 @@ Module Type CLOCKSWITCH
     { transform_unit := switch_node }.
 
   Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global noauto_block auto_prefs) (@global noswitch_block switch_prefs) :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition switch_global : @global noauto_block auto_prefs -> @global noswitch_block switch_prefs :=
     transform_units.
@@ -1053,7 +1053,7 @@ Module Type CLOCKSWITCH
   Lemma switch_global_iface_eq : forall G,
       global_iface_eq G (switch_global G).
   Proof.
-    split; auto.
+    repeat split; auto.
     intros f. unfold find_node.
     destruct (find_unit f G) as [(?&?)|] eqn:Hfind; simpl.
     - setoid_rewrite find_unit_transform_units_forward; eauto.

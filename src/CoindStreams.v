@@ -492,6 +492,20 @@ Module Type COINDSTREAMS
         lift2 op ty1 ty2 xs ys rs ->
         lift2 op ty1 ty2 (present x ⋅ xs) (present y ⋅ ys) (present r ⋅ rs).
 
+  CoInductive liftn (sem_extern : list cvalue -> cvalue -> Prop)
+    : list (Stream svalue) -> Stream svalue -> Prop :=
+  | LiftNA:
+      forall xss ys,
+        Forall (fun xs => hd xs = absent) xss ->
+        liftn sem_extern (List.map (@tl _) xss) ys ->
+        liftn sem_extern xss (absent ⋅ ys)
+  | LiftNScalarP:
+      forall xs xss y ys,
+        Forall2 (fun xs x => hd xs = present (Vscalar x)) xss xs ->
+        sem_extern xs y ->
+        liftn sem_extern (List.map (@tl _) xss) ys ->
+        liftn sem_extern xss (present (Vscalar y) ⋅ ys).
+
   CoInductive when (c: enumtag)
     : Stream svalue -> Stream svalue -> Stream svalue -> Prop :=
   | WhenA:
@@ -543,6 +557,34 @@ Module Type COINDSTREAMS
         Forall (fun es => hd (snd es) <> absent) ess ->
         Forall (fun es => (fst es) <> c) ess ->
         case (present (Venum c) ⋅ xs) ess (Some (present vd ⋅ d)) (present vd ⋅ rs).
+
+  Add Parametric Morphism op t : (lift1 op t)
+      with signature @EqSt svalue ==> @EqSt svalue ==> Basics.impl
+        as lift1_EqSt.
+  Proof.
+    cofix Cofix.
+    intros es es' Ees ys ys' Eys Lift.
+    destruct es' as [[]], ys' as [[]];
+      inv Lift; inv Eys; inv Ees; simpl in *; try discriminate.
+    - constructor; eapply Cofix; eauto.
+    - constructor.
+      + now inv H1; inv H3.
+      + eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism op t1 t2 : (lift2 op t1 t2)
+      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
+        as lift2_EqSt.
+  Proof.
+    cofix Cofix.
+    intros e1s e1s' Ee1s e2s e2s' Ee2s ys ys' Eys Lift.
+    destruct e1s' as [[]], e2s' as [[]], ys' as [[]];
+      inv Lift; inv Eys; inv Ee1s; inv Ee2s; simpl in *; try discriminate.
+    - constructor; eapply Cofix; eauto.
+    - constructor.
+      + now inv H1; inv H3; inv H5.
+      + eapply Cofix; eauto.
+  Qed.
 
   Add Parametric Morphism : merge
       with signature @EqSt svalue ==> eq ==> @EqSt svalue ==> Basics.impl
@@ -875,6 +917,59 @@ Module Type COINDSTREAMS
           rewrite Str_nth_0 in E, E', E''; inv E; inv E'; inv E''.
         constructor; auto.
         cofix_step CoFix H.
+  Qed.
+
+  Lemma liftn_spec:
+    forall sem_extern xss ys,
+      liftn sem_extern xss ys <->
+      (forall n,
+          (Forall (fun xs => xs # n = absent) xss
+           /\ ys # n = absent)
+          \/
+          (exists xs y,
+             Forall2 (fun xs x => xs # n = present (Vscalar x)) xss xs
+             /\ sem_extern xs y
+             /\ ys # n = present (Vscalar y))).
+  Proof.
+    split.
+    - intros H n; revert dependent xss; revert ys.
+      induction n; intros.
+      + inv H; intuition.
+        right. do 3 eexists; intuition; eauto.
+      + inv H; repeat rewrite Str_nth_S; eauto.
+        1,2:edestruct IHn as [(?&?)|(?&?&?&?&?)]; eauto.
+        1,3:left; split; simpl_Forall; auto.
+        1,2:right; do 2 esplit; repeat split; eauto; simpl_Forall; auto.
+    - revert xss ys.
+      cofix CoFix; intros * H.
+      unfold_Stv ys;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?)|(?&?&?&?&?)]; discriminate).
+      + econstructor.
+        * destruct (H 0) as [(?&?)|(?&?&?& E & E')]; try discriminate.
+          simpl_Forall; auto.
+        * cofix_step CoFix H.
+          destruct H as [(?&?)|(?&?&?&?&?)]; [left|right]; repeat esplit; simpl_Forall; eauto.
+      + destruct (H 0) as [(?&?)|(?&?&?& E & E')]; try discriminate.
+        inv E'.
+        econstructor; eauto.
+        cofix_step CoFix H.
+        destruct H as [(?&?)|(?&?&?&?&?)]; [left|right]; repeat esplit; simpl_Forall; eauto.
+  Qed.
+
+  Add Parametric Morphism sem_extern : (liftn sem_extern)
+      with signature @EqSts svalue ==> @EqSt svalue ==> Basics.impl
+        as liftn_EqSt.
+  Proof.
+    intros * Heq1 * Heq2 Hlift.
+    apply liftn_spec; intros. apply liftn_spec with (n:=n) in Hlift.
+    apply eqst_ntheq with (n:=n) in Heq2.
+    destruct Hlift as [(?&?)|(?&?&?&?&?)]; [left|right]; repeat esplit; eauto; try congruence.
+    - eapply Forall2_ignore1 in Heq1; simpl_Forall.
+      take (_ ≡ _) and apply eqst_ntheq with (n:=n) in it; setoid_rewrite <-it; auto.
+    - apply Forall2_swap_args in Heq1. eapply Forall2_trans_ex in H; [|eauto].
+      simpl_Forall.
+      take (_ ≡ _) and apply eqst_ntheq with (n:=n) in it; setoid_rewrite <-it; auto.
   Qed.
 
   (** ** cexp level synchronous operators specifications *)
@@ -1978,6 +2073,20 @@ Module Type COINDSTREAMS
     cofix Cofix.
     intros * Hlift.
     unfold_Stv s1; inv Hlift; econstructor; simpl; eauto.
+  Qed.
+
+  Lemma ac_liftn :
+    forall f ss vs,
+      liftn f ss vs ->
+      Forall (fun ss => abstract_clock ss ≡ abstract_clock vs) ss.
+  Proof.
+    intros * Hlift. rewrite liftn_spec in Hlift.
+    simpl_Forall.
+    apply ntheq_eqst; intros. rewrite 2 ac_nth.
+    specialize (Hlift n) as [(?&?)|(?&?&?&?&?)];
+      [|take (Forall2 _ _ _) and apply Forall2_ignore2 in it]; simpl_Forall.
+    1,2:take (vs # n = _) and setoid_rewrite it.
+    1,2:take (x # n = _) and setoid_rewrite it; auto.
   Qed.
 
   Lemma ac_aligned :

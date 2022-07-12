@@ -58,10 +58,10 @@ Module Type DLCORRECTNESS
           sem_exp_ck G (H', FEnv.empty _) bs (rename_in_exp sub e) vss.
       Proof.
         induction e using exp_ind2; intros * Hwx Hsem; inv Hwx; inv Hsem; simpl.
-        1-13:econstructor; simpl in *; eauto using sem_var_refines.
+        1-14:econstructor; simpl in *; eauto using sem_var_refines.
         1-3:rewrite Typing.rename_in_exp_typeof; auto.
-        1-5,10-12:(simpl in *; simpl_Forall; eauto).
-        - specialize (H8 _ eq_refl). simpl_Forall; eauto.
+        all:(simpl in *; simpl_Forall; eauto).
+        - now rewrite Typing.rename_in_exp_typesof.
         - rewrite <-Forall2Brs_map_1. eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
           simpl_Exists. simpl_Forall. eauto.
         - rewrite <-Forall2Brs_map_1. eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
@@ -69,6 +69,7 @@ Module Type DLCORRECTNESS
         - rewrite Typing.rename_in_exp_typeof; auto.
         - rewrite <-Forall2Brs_map_1. eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hs.
           simpl_Exists. simpl_Forall. eauto.
+        - specialize (H8 _ eq_refl). simpl_Forall; eauto.
       Qed.
 
       Corollary rename_in_equation_sem : forall bs eq,
@@ -780,12 +781,12 @@ Module Type DLCORRECTNESS
     Qed.
 
     Lemma delast_node_sem : forall f n ins outs,
-        wt_global (Global G1.(types) (n::G1.(nodes))) ->
-        wc_global (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(types) ((delast_node n)::G2.(nodes))) ->
-        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(types) ((delast_node n)::G2.(nodes))) f ins outs.
+        wt_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        wc_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) G2.(externs) ((delast_node n)::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) G1.(externs) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) G2.(externs) ((delast_node n)::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * (_&Hwt) Hwc Hord1 Hord2 Hsem.
 
@@ -842,17 +843,17 @@ Module Type DLCORRECTNESS
       wc_global G ->
       global_sem_refines G (delast_global G).
   Proof with eauto using wc_global_Ordered_nodes.
-    intros (enms&nds) (Htypes&Hwt).
-    induction nds; intros * Hwc; simpl.
+    intros [] (Htypes&Hwt).
+    induction nodes0; intros * Hwc; simpl.
     - apply global_sem_ref_nil.
     - assert (Hwc':=Hwc).
       eapply Clocking.delast_global_wc, wc_global_Ordered_nodes in Hwc' ;
         unfold delast_global in Hwc'; simpl in Hwc'.
       apply global_sem_ref_cons with (f:=n_name a)...
-      + inv Hwt. inv Hwc. eapply IHnds...
+      + inv Hwt. inv Hwc. eapply IHnodes0...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (map delast_node nds)).(types)).
-        eapply delast_node_sem with (G1:=Global enms nds)...
+        change types0 with ((Global types0 externs0 (map delast_node nodes0)).(types)).
+        eapply delast_node_sem with (G1:=Global types0 externs0 nodes0)...
         1-3:inv Hwt; inv Hwc...
         destruct H1. constructor... constructor...
   Qed.

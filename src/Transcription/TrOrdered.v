@@ -80,11 +80,11 @@ Module Type TRORDERED
       to_global G = OK G' ->
       Forall (fun n => (name <> NL.n_name n)%type) G'.(NL.nodes).
   Proof.
-    intros ? (enms&nds) ? Hnames Htog. monadInv Htog.
+    intros ? [] ? Hnames Htog. monadInv Htog.
     revert dependent x.
-    induction nds; intros; simpl in *; monadInv EQ; simpl; inv Hnames; constructor.
+    induction nodes; intros; simpl in *; monadInv EQ; simpl; inv Hnames; constructor.
     - erewrite <-to_node_name; eauto.
-    - eapply IHnds in EQ; eauto.
+    - eapply IHnodes in EQ; eauto.
   Qed.
 
   Lemma ord_l_nl :
@@ -93,7 +93,7 @@ Module Type TRORDERED
       Lord.Ordered_nodes G ->
       Ord.Ordered_nodes P.
   Proof.
-    intros (?&nds) ? Htr Hord. monadInv Htr.
+    intros [] ? Htr Hord. monadInv Htr.
     revert dependent x.
     unfold Lord.Ordered_nodes, CommonProgram.Ordered_program in Hord; simpl in Hord.
     induction Hord as [|?? (?&?)]; intros; simpl in *; monadInv EQ; constructor; eauto.
@@ -103,13 +103,13 @@ Module Type TRORDERED
       { eapply inin_l_nl; eauto. }
       apply H in Hfin as (?&(?&?&?)). split; auto.
       + erewrite <-to_node_name; eauto.
-      + assert (L.find_node f {| L.types := types; L.nodes := l |} = Some x0) as Hfind'.
+      + assert (L.find_node f {| L.types := types; L.externs := externs; L.nodes := l |} = Some x0) as Hfind'.
         { unfold L.find_node. rewrite H2; auto. }
         eapply find_node_global in Hfind' as (?&?&?). 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
         unfold NL.find_node in H3. apply option_map_inv in H3 as ((?&?)&?&?); subst.
         erewrite CommonProgram.find_unit_later; eauto. 1-2:simpl; auto.
         apply CommonProgram.equiv_program_refl.
-    - replace l with {| L.types := types; L.nodes := l |}.(L.nodes) in H0 by eauto.
+    - replace l with {| L.types := types; L.externs := externs; L.nodes := l |}.(L.nodes) in H0 by eauto.
       eapply to_global_names' in H0. 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
       simpl in H0. erewrite to_node_name in H0; eauto.
     - eapply IHHord in EQ; eauto.

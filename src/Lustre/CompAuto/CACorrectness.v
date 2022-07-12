@@ -961,12 +961,12 @@ Module Type CACORRECTNESS
     Qed.
 
     Lemma auto_node_sem : forall f n ins outs,
-        wt_global (Global G1.(types) (n::G1.(nodes))) ->
-        wc_global (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(types) ((fst (auto_node n))::G2.(nodes))) ->
-        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(types) ((fst (auto_node n))::G2.(nodes))) f ins outs.
+        wt_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        wc_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) G2.(externs) ((fst (auto_node n))::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) G1.(externs) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) G2.(externs) ((fst (auto_node n))::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * (_&Hwt) Hwc Hord1 Hord2 Hsem.
 
@@ -1017,19 +1017,20 @@ Module Type CACORRECTNESS
       wc_global G ->
       global_sem_refines G (auto_global G).
   Proof with eauto using wc_global_Ordered_nodes.
-    intros (enms&nds) (Htypes&Hwt). unfold auto_global; simpl.
-    generalize (enms ++ flat_map snd (List.map auto_node nds)). revert enms Htypes Hwt.
-    induction nds; intros * Htypes Hwt * Hwc; simpl.
+    intros [] (Htypes&Hwt). unfold auto_global; simpl.
+    generalize (types0 ++ flat_map snd (List.map auto_node nodes0)). revert types0 Htypes Hwt.
+    induction nodes0; intros * Htypes Hwt * Hwc; simpl.
     - apply global_sem_ref_nil.
     - assert (Hwc':=Hwc).
       eapply Clocking.auto_global_wc, wc_global_Ordered_nodes in Hwc'.
-      assert (global_sem_refines {| types := enms; nodes := nds |} {| types := l; nodes := List.map fst (List.map auto_node nds) |}) as Hind.
-      { inv Hwt. inv Hwc. eapply IHnds... }
+      assert (global_sem_refines {| types := types0; externs := externs0; nodes := nodes0|}
+                                 {| types := l; externs := externs0; nodes := List.map fst (List.map auto_node nodes0) |}) as Hind.
+      { inv Hwt. inv Hwc. eapply IHnodes0... }
       apply global_sem_ref_cons with (f:=n_name a)...
       + eapply Ordered_nodes_change_types; eauto.
       + intros ins outs Hsem; simpl in *.
-        change l with ((Global l (List.map fst (List.map auto_node nds))).(types)).
-        eapply auto_node_sem with (G1:=Global enms nds)...
+        change l with ((Global l externs0 (List.map fst (List.map auto_node nodes0))).(types)).
+        eapply auto_node_sem with (G1:=Global types0 externs0 nodes0)...
         1-3:inv Hwt; inv Hwc...
         * destruct H1. constructor... constructor...
         * eapply Ordered_nodes_change_types; eauto.

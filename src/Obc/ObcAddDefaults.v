@@ -149,7 +149,7 @@ Module Type OBCADDDEFAULTS
       induction ws as [|w ws IH]; auto.
       simpl. unfold add_write at 1.
       destruct (type_of_var w); [intro Hcw|now intuition].
-      destruct t; inversion_clear Hcw as [| | |? ? ? Hcw'|? ? ? Hcw'];
+      destruct t; inversion_clear Hcw as [| | | |? ? ? Hcw'|? ? ? Hcw'];
         try (now inversion_clear Hcw'; auto); intuition.
     Qed.
 
@@ -170,16 +170,16 @@ Module Type OBCADDDEFAULTS
       - intros (me' & ve' & Heval1 & Heval2). now inv Heval1.
       - unfold add_write at 1 3. intro Heval.
         destruct (type_of_var w) as [[]|].
-        + inversion_clear Heval as [| | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
+        + inversion_clear Heval as [| | | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
           apply IH in Heval2 as (me' & ve' & Heval1' & Heval2'). eauto using stmt_eval.
-        + inversion_clear Heval as [| | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
+        + inversion_clear Heval as [| | | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
           apply IH in Heval2 as (me' & ve' & Heval1' & Heval2'). eauto using stmt_eval.
         + apply IH in Heval as (me' & ve' & Heval1' & Heval2'). eauto.
       - unfold add_write at 1 3. intros (me' & ve' & Heval1 & Heval3).
         destruct (type_of_var w) as [[]|].
-        + inversion_clear Heval1 as [| | |? ? ? ? ? ? ? ? ? Heval1' Heval2| |].
+        + inversion_clear Heval1 as [| | | |? ? ? ? ? ? ? ? ? Heval1' Heval2| |].
           econstructor; [now eapply Heval1'|]. apply IH; eauto.
-        + inversion_clear Heval1 as [| | |? ? ? ? ? ? ? ? ? Heval1' Heval2| |].
+        + inversion_clear Heval1 as [| | | |? ? ? ? ? ? ? ? ? Heval1' Heval2| |].
           econstructor; [now eapply Heval1'|]. apply IH; eauto.
         + apply IH; eauto.
     Qed.
@@ -205,10 +205,10 @@ Module Type OBCADDDEFAULTS
       apply Decidable.not_or in Hin.
       destruct Hin as (Hnwx & Hnin).
       unfold add_write in Heval. destruct (type_of_var w) as [[]|].
-      - inversion_clear Heval as [| | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
+      - inversion_clear Heval as [| | | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
         apply IH with (x:=x) in Heval2; auto. rewrite Heval2.
         inv Heval1. rewrite Env.gso; auto.
-      - inversion_clear Heval as [| | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
+      - inversion_clear Heval as [| | | |? ? ? ? ? ? ? ? ? Heval1 Heval2| |].
         apply IH with (x:=x) in Heval2; auto. rewrite Heval2.
         inv Heval1. rewrite Env.gso; auto.
       - apply IH with (x:=x) in Heval; auto.
@@ -240,7 +240,7 @@ Module Type OBCADDDEFAULTS
       unfold add_write in Heval.
       apply not_None_is_Some in Hnn; destruct Hnn as (wv & Hnn).
       rewrite Hnn in Heval.
-      destruct wv; inversion_clear Heval as [| | |? ? ? ? ? ? ? Ha Hb Heval1 Heval2| |].
+      destruct wv; inversion_clear Heval as [| | | |? ? ? ? ? ? ? Ha Hb Heval1 Heval2| |].
       - pose proof (stmt_eval_mono _ _ _ _ _ _ Heval2) as Henv1'.
         apply IH in Heval2; auto.
         constructor; auto.
@@ -942,7 +942,7 @@ Module Type OBCADDDEFAULTS
                   eapply stmt_eval_mono; eauto.
                   eapply stmt_eval_add_writes; eauto.
                   PS_split; intuition.
-              - inversion_clear WT as [| |???????? Hwtd Hwtss| | |].
+              - inversion_clear WT as [| |???????? Hwtd Hwtss| | | |].
                 apply Forall_forall; intros os Hin.
                 destruct os; auto.
               - intros x Hin.
@@ -1162,6 +1162,7 @@ Module Type OBCADDDEFAULTS
         let (es', required') := fold_right add_valid
                                            ([], ps_removes xs required) es
         in (Call xs f o m es', required', ∅, PSP.of_list xs)
+      | ExternCall y f fty es => (s, PS.remove y required, ∅, PS.singleton y)
       | Comp s1 s2 =>
         let '(t2, required2, sometimes2, always2) := add_defaults_stmt required s2 in
         let '(t1, required1, sometimes1, always1) := add_defaults_stmt required2 s1 in
@@ -1399,7 +1400,7 @@ Module Type OBCADDDEFAULTS
       /\ No_Naked_Vars t.
   Proof.
     unfold PS.For_all.
-    induction s as [| |??? IH| |ys clsid o f es|] using stmt_ind2;
+    induction s as [| |??? IH| |ys clsid o f es| |] using stmt_ind2;
       intros t rq rq' st al Hadd.
     - (* * Assign i e *)
       inv Hadd.
@@ -1546,6 +1547,16 @@ Module Type OBCADDDEFAULTS
         rewrite Forall_map; auto. apply Forall_forall.
         intros e Hin y ty. destruct e; try discriminate.
 
+    - (* ExternCall *)
+      inv Hadd.
+      repeat split; auto with obcinv.
+      + intros ? Hin. rewrite PS.union_spec.
+        edestruct (equiv_dec y) as [He|Hne]; eauto using PSF.remove_2.
+        now rewrite He, PS.singleton_spec; auto.
+      + setoid_rewrite PS.union_spec.
+        intros ? [Hin|Hin]; try not_In_empty.
+        apply PSF.singleton_iff in Hin; subst; auto with obcinv.
+
     - (* * Skip *)
       inv Hadd; setoid_rewrite PSF.empty_iff; intuition.
   Qed.
@@ -1566,7 +1577,7 @@ Module Type OBCADDDEFAULTS
       add_defaults_stmt tyenv req s = (t, req', st, al) ->
       (forall x, Can_write_in_var x s <-> Can_write_in_var x t).
   Proof.
-    induction s as [| |??? IH| |ys clsid o f es|] using stmt_ind2.
+    induction s as [| |??? IH| |ys clsid o f es| |] using stmt_ind2.
     - (* Assign i e *)
       now inversion_clear 1.
 
@@ -1653,6 +1664,9 @@ Module Type OBCADDDEFAULTS
       rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
       inv Hadd. split; inversion_clear 1; auto with obcinv.
 
+    - (* ExternCall *)
+      now inversion_clear 1.
+
     - (* * Skip *)
       now inversion_clear 1.
   Qed.
@@ -1664,7 +1678,7 @@ Module Type OBCADDDEFAULTS
       forall x, ~ x ∈ (stimes ∪ always) ->
            Env.find x ve' = Env.find x ve.
   Proof.
-    induction s as [| |??? IH | |ys clsid o f es|] using stmt_ind2;
+    induction s as [| |??? IH | |ys clsid o f es|x |] using stmt_ind2;
       intros t me me' ve ve' rq rq' st al Hadd Heval y Hnin.
 
     - (* * Assign i e *)
@@ -1723,6 +1737,10 @@ Module Type OBCADDDEFAULTS
       inv Hadd. inv Heval.
       apply Env.find_In_gsso_opt.
       intro Hin; apply Hnin. apply PSF.union_3, ps_of_list_In; auto.
+
+    - (* ExternCall *)
+      inv Hadd. inv Heval. rewrite Env.gso; intuition.
+
     - (* * Skip *)
       now inv Heval.
   Qed.
@@ -1774,6 +1792,7 @@ Module Type OBCADDDEFAULTS
       + now rewrite add_defaults_method_m_in.
       + apply Forall_forall; intros; take (Forall _ _) and eapply Forall_forall in it;
           eauto using wt_exp_add_defaults.
+    - econstructor; simpl_Forall; eauto using wt_exp_add_defaults.
   Qed.
 
   Corollary wt_method_add_defaults:
@@ -1809,7 +1828,7 @@ Module Type OBCADDDEFAULTS
         /\ PS.For_all (fun x => InMembers x vars) always
         /\ PS.For_all (fun x => x ∈ req \/ InMembers x vars) req'.
     Proof.
-      induction s as [| |??? IHd IH| |ys clsid o f es|] using stmt_ind2';
+      induction s as [| |??? IHd IH| |ys clsid o f es|x|] using stmt_ind2';
       intros * Hadd WTs;
         try (injection Hadd; intros; subst always stimes req' t).
 
@@ -1825,7 +1844,7 @@ Module Type OBCADDDEFAULTS
       - (* * Switch e ss *)
         apply add_defaults_stmt_switch_spec in Hadd as [(s1 & s2 & E & Hadd)|Hadd].
         + (* * Ifte e s1 s2 *)
-          inversion_clear WTs as [| |???????? Hwtd Hwtss| | |].
+          inversion_clear WTs as [| |???????? Hwtd Hwtss| | | |].
           unfold add_defaults_ite in Hadd.
           simpl in Hadd.
           destruct (add_defaults_stmt tyenv ∅ s1) as [[[t1 rq1] st1] al1] eqn: Hdefs1.
@@ -1897,7 +1916,7 @@ Module Type OBCADDDEFAULTS
             PS_split; contradiction.
 
       - (* * Comp s1 s2 *)
-        inversion_clear WTs as [| | |? ? Hwt1 Hwt2| |].
+        inversion_clear WTs as [| | |? ? Hwt1 Hwt2| | |].
         simpl in Hadd.
         set (defs2 := add_defaults_stmt tyenv req s2).
         assert (add_defaults_stmt tyenv req s2 = defs2) as Hdefs2 by now subst defs2.
@@ -1942,6 +1961,12 @@ Module Type OBCADDDEFAULTS
           destruct e; auto. simpl in Hin.
           inversion_clear WTe.
           apply PS.add_spec in Hin as [Hin|Hin]; subst; eauto using In_InMembers.
+
+      - (* ExternalCall *)
+        repeat split; auto using PS_For_all_empty; intros ? Hin.
+        + apply PS.singleton_spec in Hin; subst.
+          inv WTs. eauto using In_InMembers.
+        + apply PS.remove_spec in Hin as (? & ?); auto.
 
       - (* * Skip *)
         repeat split; auto using PS_For_all_empty; intros x Hin; auto.
@@ -1991,7 +2016,7 @@ Module Type OBCADDDEFAULTS
     Proof.
       intros * Hcall Hadd Heval Hwt Hre1.
       revert t me me' ve ve' Heval req req' stimes always Hadd Hre1.
-      induction s as [| |??? IH| |ys clsid o f es|] using stmt_ind2;
+      induction s as [| |??? IH| |ys clsid o f es|x|] using stmt_ind2;
         intros t me me' ve ve' Heval rq rq' st al Hadd Hre1.
 
       - (* * Assign i e *)
@@ -2016,7 +2041,7 @@ Module Type OBCADDDEFAULTS
           inv Hadd.
 
           (* use typing to deduce that added writes are in tyenv *)
-          inversion_clear Hwt as [| |???????? Hwtd Hwtss| | |].
+          inversion_clear Hwt as [| |???????? Hwtd Hwtss| | | |].
           assert (wt_stmt p insts mems vars s1
                   /\ wt_stmt p insts mems vars s2) as (Hwt1 & Hwt2).
           { destruct E as [|[[]|[]]]; split; subst; auto;
@@ -2041,7 +2066,7 @@ Module Type OBCADDDEFAULTS
           apply stmt_eval_add_writes_split in Heval as (meW & veW & HevalW & Heval).
 
           (* massage the stmt_evals *)
-          inversion_clear Heval as [| | | |? ? ? ? ? ? ? ? ? ? ? ? Heval'|].
+          inversion_clear Heval as [| | | | |? ? ? ? ? ? ? ? ? ? ? ? Heval'|].
           assert (exists meW' veW',
                      stmt_eval p meW veW
                                (if s0
@@ -2130,7 +2155,7 @@ Module Type OBCADDDEFAULTS
       - (* * Comp s1 s2 *)
         pose proof (add_defaults_stmt_inv1 _ _ _ _ _ _ _ Hadd) as (HIc & HId).
 
-        inversion_clear Hwt as [| | |? ? Hwt1 Hwt2| |].
+        inversion_clear Hwt as [| | |? ? Hwt1 Hwt2| | |].
         specialize (IHs1 Hwt1). specialize (IHs2 Hwt2).
         clear Hwt1 Hwt2. inversion Hadd as [Hadd']; clear Hadd.
 
@@ -2232,6 +2257,14 @@ Module Type OBCADDDEFAULTS
             apply Forall2_in_right with (2:=Hin) in Hvos as (e & Hein & He).
             destruct e; simpl; inv He; discriminate.
 
+      - (* ExternCall *)
+        inv Hadd. inv Heval.
+        repeat split; auto using PSP.empty_inter_1.
+        + intros ? Hnin. rewrite Env.gso; auto.
+          intro; now apply Hnin, PSF.union_3, PS.singleton_spec.
+        + intros ? Hin. apply PSP.FM.singleton_1 in Hin.
+          apply Env.Props.P.F.add_in_iff; auto.
+
       - (* * Skip *)
         inv Hadd. inv Heval.
         setoid_rewrite PSF.empty_iff; intuition.
@@ -2311,7 +2344,7 @@ Module Type OBCADDDEFAULTS
       intros p' s rq t rq' st al Hpr Hcall Hno Hwt Hadd
              me ve1 ve2 me' ve2' Hpre Henv Heval.
       revert t rq rq' st al Hadd ve1 Henv Hpre; revert dependent ve2; revert me ve2' me'.
-      induction s as [| |??? IH| |ys clsid o f es|] using stmt_ind2;
+      induction s as [| |??? IH| |ys clsid o f es|x|] using stmt_ind2;
         intros; inv Heval.
 
       - (* Assign x e *)
@@ -2328,7 +2361,7 @@ Module Type OBCADDDEFAULTS
         (* if-then-else's *)
         + rename ve2 into ve0, ve1 into ve0', ve2' into ve3, Henv into Henv0'.
           unfold add_defaults_ite in Hadd.
-          inversion_clear Hwt as [| |???????? Hwtd Hwtss| | |].
+          inversion_clear Hwt as [| |???????? Hwtd Hwtss| | | |].
           destruct (add_defaults_stmt tyenv ∅ s1) as [[[t1 rq1] st1] al1] eqn: Hdefs1.
           destruct (add_defaults_stmt tyenv ∅ s2) as [[[t2 rq2] st2] al2] eqn: Hdefs2.
           inv Hadd.
@@ -2342,7 +2375,7 @@ Module Type OBCADDDEFAULTS
               take (forall s, In _ _ -> wt_stmt _ _ _ _ _) and apply it; auto with datatypes. }
 
           assert (No_Overwrites (or_default s s0)) as NOO
-            by (inversion_clear Hno as [| |? ? ? Hnoss| | |];
+            by (inversion_clear Hno as [| |? ? ? Hnoss| | | |];
                   eapply Forall_forall in Hnoss; eauto).
           assert (wt_stmt p insts mems vars (or_default s s0)) as WT
               by (destruct s0; auto).
@@ -2428,7 +2461,7 @@ Module Type OBCADDDEFAULTS
         simpl in *.
         rename ve1 into ve0', ve0 into ve1, ve2' into ve2, ve2 into ve0, Henv into Henv0.
 
-        inversion_clear Hwt as [| | |? ? Hwt1 Hwt2| |].
+        inversion_clear Hwt as [| | |? ? Hwt1 Hwt2| | |].
 
         set (defs2 := add_defaults_stmt tyenv rq s2).
         assert (add_defaults_stmt tyenv rq s2 = defs2) as Hdefs2 by now subst defs2.
@@ -2443,7 +2476,7 @@ Module Type OBCADDDEFAULTS
         assert (in1_notin2 rq' (stimes1 ∪ always1) ve0' ve0) as Hpre'.
         { apply in1_notin2_infer with (1:=Hpre); auto.
           now intros x ?; PS_split; destruct (PSP.In_dec x always2); intuition. }
-        inversion_clear Hno as [| | | |? ? Hwnw1 Hwnw2 Hno1 Hno2|].
+        inversion_clear Hno as [| | | | |? ? Hwnw1 Hwnw2 Hno1 Hno2|].
         edestruct IHs1 as (ve1' & Henv1' & Heval1'); eauto.
 
         assert (in1_notin2 rq2 (stimes2 ∪ always2) ve1' ve1) as Hpre''.
@@ -2520,6 +2553,12 @@ Module Type OBCADDDEFAULTS
             rewrite Env.find_gsso_opt in Hfind; auto.
         + intros; eapply fst_InMembers, Env.In_adds_opt_In; eauto.
 
+      - (* Assign x e *)
+        inv Hadd.
+        exists (Env.add x (Vscalar rvo) ve1).
+        split; eauto using Env.refines_add_both.
+        econstructor; eauto; simpl_Forall; eauto using exp_eval_refines, stmt_eval.
+
       - (* skip *)
         inv Hadd; eauto using stmt_eval.
     Qed.
@@ -2557,7 +2596,7 @@ Module Type OBCADDDEFAULTS
         stmt_call_eval (add_defaults p) ome clsid f vos ome' rvos ->
         Forall (fun x => x <> None) rvos.
   Proof.
-    intros (?&p); induction p as [|c p' IH]; simpl. now inversion 3.
+    intros []; induction classes0 as [|c p' IH]; simpl. now inversion 3.
     intros WTp ome ome'' clsid f vos rvos Hvos Heval.
     inversion_clear WTp as [|?? [WTc Hpnd] WTp'].
     specialize (IH WTp').
@@ -2604,7 +2643,7 @@ Module Type OBCADDDEFAULTS
       apply wt_method_add_defaults in WTm.
       unfold wt_method, meth_vars in WTm; simpl in WTm.
       destruct WTm as (WTm & Henums).
-      change types0 with (types (add_defaults {| types := types0; classes := p' |})) in Henums.
+      change types0 with (types (add_defaults {| types := types0; externs := externs0; classes := p' |})) in Henums.
 
       pose proof (add_defaults_stmt_wt _ _ _ _ _ Hinf Henums _ _ _ _ _ _ Heqdefs WTm)
           as (WTt & WTst & WTal & Hreq').
@@ -2744,7 +2783,7 @@ Module Type OBCADDDEFAULTS
     intros Hnoo Hncwin Hcall me ve1' ve1 me' ve2 Hpre Henv Heval.
     destruct WT as (WT & Henums).
     apply wt_stmt_program_refines with (1:=Hpr) in WT.
-    erewrite <-program_refines_enums in Henums; eauto.
+    erewrite <-program_refines_types in Henums; eauto.
 
     assert (forall x ty,
       In (x, ty) (ins ++ vars ++ outs) <->
@@ -2904,6 +2943,7 @@ Module Type OBCADDDEFAULTS
     assert (p1' = add_defaults p2') as Hp1'.
     { destruct p1', p2'; unfold add_defaults; simpl; f_equal.
       - apply program_refines_def in Hpr as (?&?); auto.
+      - apply program_refines_def in Hpr as (?&?&?); auto.
       - simpl in Hadc. clear Hpr WTp' WTc; induction Hadc; auto; subst; simpl; auto.
     }
     subst. now apply stmt_call_eval_add_defaults_class_not_None.

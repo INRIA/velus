@@ -93,6 +93,12 @@ Module Type OBCTYPING
         Forall2 (fun e xt => typeof e = snd xt) es fm.(m_in) ->
         Forall wt_exp es ->
         wt_stmt (Call ys clsid o f es)
+    | wt_ExternCall: forall y f es tyins tyout,
+        Forall wt_exp es ->
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        In (f, (tyins, tyout)) p.(externs) ->
+        In (y, Tprimitive tyout) Γv ->
+        wt_stmt (ExternCall y f es tyout)
     | wt_Skip:
         wt_stmt Skip.
 
@@ -164,22 +170,15 @@ Module Type OBCTYPING
     - constructor; try rewrite <-IHs1; try rewrite <-IHs2; auto.
     - constructor; try rewrite IHs1; try rewrite IHs2; auto.
     (* Call *)
-    - econstructor; eauto.
-      * now rewrite <-Hxs.
-      * match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
-                      apply Forall2_impl_In with (2:=H) end.
-        intros; now rewrite <-Hzs.
-      * match goal with H:Forall (wt_exp _ _ _) _ |- _ =>
-                        apply Forall_impl with (2:=H) end.
-        intros; now rewrite <-Hys, <-Hzs.
-    - econstructor; eauto.
-      * now rewrite Hxs.
-      * match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
-                        apply Forall2_impl_In with (2:=H) end.
-        intros; now rewrite Hzs.
-      * match goal with H:Forall (wt_exp _ _ _) _ |- _ =>
-                        apply Forall_impl with (2:=H) end.
-        intros; now rewrite Hys, Hzs.
+    - econstructor; eauto; simpl_Forall.
+      1-3:try rewrite <-Hxs; try rewrite <-Hys; try rewrite <-Hzs; auto.
+    - econstructor; eauto; simpl_Forall.
+      1-3:try rewrite Hxs; try rewrite Hys; try rewrite Hzs; auto.
+    (* Extern Call *)
+    - econstructor; eauto; simpl_Forall.
+      1-2:try rewrite <-Hxs; try rewrite <-Hys; try rewrite <-Hzs; auto.
+    - econstructor; eauto; simpl_Forall.
+      1-2:try rewrite Hxs; try rewrite Hys; try rewrite Hzs; auto.
     (* Skip *)
     - constructor.
     - constructor.
@@ -523,9 +522,19 @@ Module Type OBCTYPING
           apply Forall_forall with (1:=H) in Hxy end.
         eapply pres_sem_expo in Hxy; eauto; inv WTm; auto with obctyping.
 
+    - (* extern call *)
+      intros * Htys Hevals Hcall * Hndups Hndupm Hndupi WTp WTm WTe WTstmt.
+      inv WTstmt.
+      split; auto. eapply wt_env_add; eauto.
+      constructor.
+      eapply pres_sem_extern; [|eauto].
+      apply Forall2_swap_args in Hevals. eapply Forall2_trans_ex in Htys; [|eauto].
+      simpl_Forall; eauto.
+      eapply pres_sem_exp in H3; eauto. 2:now destruct WTm.
+      inv H3; auto. congruence.
+
     - (* sequential composition *)
-      intros p menv env s1 s2
-             * Hstmt1 IH1 Hstmt2 IH2 mems insts Γv Hndups Hndupm Hndupi WTp WTm Wte WTstmt.
+      intros * Hstmt1 IH1 Hstmt2 IH2 mems insts Γv Hndups Hndupm Hndupi WTp WTm Wte WTstmt.
       inv WTstmt.
       (* match goal with WTstmt1:wt_stmt _ _ _ _ s1 |- _ => *)
       (*                 specialize (IH1 _ _ Hndups WTp WTs WTstmt1) end. *)
@@ -637,7 +646,7 @@ Module Type OBCTYPING
       classes prog = pre ++ c :: post ->
       wt_program prog ->
       In (o, cid) c.(c_objs) ->
-      find_class cid (Program prog.(types) pre) = None.
+      find_class cid (Program prog.(types) prog.(externs) pre) = None.
   Proof.
     unfold wt_program, CommonTyping.wt_program.
     intros * E WT Hin; setoid_rewrite E in WT; clear E.
@@ -663,8 +672,8 @@ Module Type OBCTYPING
   Qed.
 
   Remark wt_program_not_same_name:
-    forall post o c cid enums,
-      wt_program (Program enums (c :: post)) ->
+    forall post o c cid enums externs,
+      wt_program (Program enums externs (c :: post)) ->
       In (o, cid) c.(c_objs) ->
       cid <> c.(c_name).
   Proof.
@@ -724,15 +733,13 @@ Module Type OBCTYPING
       wt_stmt prog insts Γm Γv s.
   Proof.
     induction s using stmt_ind2'; inversion_clear 1;
-      intros * Sub; econstructor; eauto using wt_exp_suffix.
+      intros * Sub; econstructor; simpl_Forall; eauto using wt_exp_suffix.
     - take (suffix _ _) and inv it; auto.
       take (equiv_program _ _) and specialize (it nil); inv it; auto.
     - intros.
       take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in *; auto.
     - eapply find_unit_suffix_same; eauto.
-    - apply Forall_forall; intros.
-      take (Forall _ _) and eapply Forall_forall in it; eauto.
-      eapply wt_exp_suffix; eauto.
+    - take (suffix _ _) and inv it. take (equiv_program _ _) and specialize (it nil); inv it; auto.
   Qed.
 
   Global Hint Constructors suffix : program.
@@ -774,6 +781,8 @@ Module Type OBCTYPING
     (* pose proof Find as Eq; apply find_class_enums in Eq. *)
     assert (types p = types p') as Enums
       by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
+    assert (externs p = externs p') as Externs
+      by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
     inversion_clear WTm as [????? WTinsts]; constructor; auto.
     apply Forall_forall; intros (?&?) Hin.
     eapply Forall_forall in WTinsts; eauto.
@@ -800,19 +809,19 @@ Module Type OBCTYPING
       find_class n prog = Some (c, prog') ->
       exists prog'', find_class n (rev_prog prog) = Some (c, prog'').
   Proof.
-    intros (enums & prog).
+    intros [].
     unfold rev_prog; setoid_rewrite rev_tr_spec.
-    induction prog as [|c']; simpl; intros * WTP Find; try discriminate.
+    induction classes0 as [|c']; simpl; intros * WTP Find; try discriminate.
     inversion_clear WTP as [|?? [Hwtc Hndup] Hwtp]; simpl.
     setoid_rewrite find_unit_app; simpl; eauto.
     eapply find_unit_cons in Find as [[E Find]|[]]; simpl in *; eauto.
     - inv Find.
-      assert (find_unit (c_name c') (Program enums (rev prog)) = None) as E
+      assert (find_unit (c_name c') (Program types0 externs0 (rev classes0)) = None) as E
           by (apply find_unit_None; simpl; apply Forall_rev; auto).
       setoid_rewrite E.
       unfold find_unit; simpl.
       destruct (ident_eq_dec (c_name c') (c_name c')); try contradiction; eauto.
-    - edestruct IHprog as (? & Find'); eauto.
+    - edestruct IHclasses0 as (? & Find'); eauto.
       setoid_rewrite Find'; eauto.
   Qed.
 

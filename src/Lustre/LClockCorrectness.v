@@ -50,9 +50,9 @@ Module Type LCLOCKCORRECTNESS
               (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (map abstract_clock xs).
 
   Lemma sem_clock_inputs_cons {PSyn prefs} :
-    forall types (nodes : list (@node PSyn prefs)) f n ins,
+    forall types externs (nodes : list (@node PSyn prefs)) f n ins,
       n_name n <> f ->
-      sem_clock_inputs (Global types nodes) f ins <-> sem_clock_inputs (Global types (n :: nodes)) f ins.
+      sem_clock_inputs (Global types externs nodes) f ins <-> sem_clock_inputs (Global types externs (n :: nodes)) f ins.
   Proof.
     intros * Hname.
     split; intros (H & n' & Hfind &?&?);
@@ -62,8 +62,8 @@ Module Type LCLOCKCORRECTNESS
   Qed.
 
   Lemma inputs_clocked_vars {PSyn prefs} :
-    forall types (nodes : list (@node PSyn prefs)) n H f ins,
-      sem_clock_inputs (Global types (n :: nodes)) f ins ->
+    forall types externs (nodes : list (@node PSyn prefs)) n H f ins,
+      sem_clock_inputs (Global types externs (n :: nodes)) f ins ->
       n_name n = f ->
       wc_env (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
       Forall2 (sem_var H) (idents (n_in n)) ins ->
@@ -335,6 +335,18 @@ Module Type LCLOCKCORRECTNESS
       rewrite <- ac_lift2; eauto.
     Qed.
 
+    Lemma sc_exp_extcall : forall Γ Γty H b f es ann,
+       (forall k, k < length (annots es) -> P_exps (sc_exp_inv Γ Γty H b) es k) ->
+       sc_exp_inv Γ Γty H b (Eextcall f es ann) 0.
+    Proof.
+      intros * Hes ? Hwt Hwc Hsem; inv Hwt; inv Hwc; inv Hsem; simpl.
+      eapply P_exps_sc_exp_inv_all in Hes; eauto.
+      take (liftn _ _ _) and apply ac_liftn in it.
+      destruct (clocksof es); try congruence; simpl_Forall; simpl_In; simpl_Forall.
+      destruct (concat ss0); inv Hes. simpl_Forall.
+      take (_ ≡ _) and rewrite <-it; auto.
+    Qed.
+
     Lemma sc_exp_fby : forall Γ Γty H b e0s es ann k,
         k < length ann ->
         P_exps (sc_exp_inv Γ Γty H b) e0s k ->
@@ -512,6 +524,7 @@ Module Type LCLOCKCORRECTNESS
       - eapply sc_exp_last; eauto.
       - apply sc_exp_unop; auto.
       - apply sc_exp_binop; auto.
+      - apply sc_exp_extcall; auto.
       - apply sc_exp_fby; auto.
       - apply sc_exp_arrow; auto.
       - eapply sc_exp_when; eauto.
@@ -2470,6 +2483,8 @@ Module Type LCLOCKCORRECTNESS
       - (* var *) solve_In. 2:eapply idcaus_of_senv_In; eauto. auto.
       - (* last *) solve_In. 2:eapply idcaus_of_senv_In; eauto. auto.
       - (* binop *) destruct H1; eauto.
+      - (* extcall *)
+        destruct_conjs; simpl_Exists; simpl_Forall; eauto.
       - (* fby *)
         solve_forall_exists.
       - (* arrow *)
@@ -2515,6 +2530,7 @@ Module Type LCLOCKCORRECTNESS
       - eapply sc_exp_last; eauto.
       - apply sc_exp_unop; auto.
       - apply sc_exp_binop; auto.
+      - apply sc_exp_extcall; auto.
       - apply sc_exp_fby; auto.
       - apply sc_exp_arrow; auto.
       - eapply sc_exp_when; eauto.
@@ -2606,7 +2622,7 @@ Module Type LCLOCKCORRECTNESS
       induction e using exp_ind2; intros * Hnd1 Hnd3 Hsc Hwt Hwc Hsem;
         inv Hwt; inv Hwc; inv Hsem;
           econstructor; eauto.
-      1-5,10-11:(eapply Forall2_impl_In; [|eauto]; intros;
+      1-6,11-12:(eapply Forall2_impl_In; [|eauto]; intros;
                  rewrite Forall_forall in *; eauto).
       - (* merge *)
         eapply Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
@@ -3322,10 +3338,10 @@ Module Type LCLOCKCORRECTNESS
         sem_clock_inputs G f ins ->
         sem_node_ck G f ins outs.
   Proof with eauto.
-    intros (types&nodes) Hwt Hwc.
-    assert (Ordered_nodes (Global types nodes)) as Hord by (eauto using wl_global_Ordered_nodes with ltyping).
+    intros [] Hwt Hwc.
+    assert (Ordered_nodes (Global types0 externs0 nodes0)) as Hord by (eauto using wl_global_Ordered_nodes with ltyping).
     revert Hwc Hord.
-    induction nodes; intros Hwc Hord Hcaus ??? Hsem Hckins. now inversion Hsem.
+    induction nodes0; intros Hwc Hord Hcaus ??? Hsem Hckins. now inversion Hsem.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Heqs Hbk].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
@@ -3349,9 +3365,9 @@ Module Type LCLOCKCORRECTNESS
       clear H HeqH' Hins Houts.
 
       (* sc_vars H *)
-      assert (wc_global (Global types nodes0)) as Hvars by eauto.
+      assert (wc_global (Global types0 externs0 nodes0)) as Hvars by eauto.
       eapply sem_node_sc_vars in Hvars as (Hvars&Hloc); eauto.
-      2:{ intros. eapply IHnodes; eauto. inv Hwt. inv H7. constructor; auto. }
+      2:{ intros. eapply IHnodes0; eauto. inv Hwt. inv H7. constructor; auto. }
       2:{ inv Hwt; inv H5; destruct H8; auto. }
       2:{ eapply sc_var_inv_intro; eauto. }
 
@@ -3363,7 +3379,7 @@ Module Type LCLOCKCORRECTNESS
       + eapply sem_block_ck_cons'; eauto.
       + unfold clocked_node. split; auto.
         rewrite map_fst_senv_of_inout; auto.
-      + intros. eapply IHnodes; eauto. inv Hwt; inv H7; constructor; auto.
+      + intros. eapply IHnodes0; eauto. inv Hwt; inv H7; constructor; auto.
       + apply NoDupMembers_map, n_nodup. intros; destruct_conjs; auto.
       + rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
       + simpl. destruct H2 as (Hnd&_). rewrite idcaus_of_senv_inout. auto.
@@ -3382,7 +3398,7 @@ Module Type LCLOCKCORRECTNESS
     - rewrite find_node_other in Hfind; eauto.
       eapply Sem.sem_node_cons1 in Hsem; auto.
       assert (Hord':=Hord). rewrite cons_is_app in Hord'.
-      inv Hord'. inv Hwt; inv H1. inv Hwc. inv Hcaus. eapply IHnodes in Hsem; eauto.
+      inv Hord'. inv Hwt; inv H1. inv Hwc. inv Hcaus. eapply IHnodes0 in Hsem; eauto.
       eapply sem_node_ck_cons'; eauto.
       constructor; auto.
       eapply sem_clock_inputs_cons; eauto.

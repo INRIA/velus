@@ -765,7 +765,7 @@ Module Type CORRECTNESS
             Forall2 (fun e v => sem_exp_ck G2 (H', Hl) b e [v]) es' vs /\
             Forall (sem_equation_ck G2 (H', Hl) b) eqs').
     Proof with eauto with norm lclocking.
-      induction e using exp_ind2; intros * Hnl Hwc Hsem Hvalid Histst Hnorm; repeat inv_bind. 11,12:inv Hwc; inv Hsem.
+      induction e using exp_ind2; intros * Hnl Hwc Hsem Hvalid Histst Hnorm; repeat inv_bind. 12,13:inv Hwc; inv Hsem.
       - (* const *)
         inv Hsem. exists H. repeat (split; auto with lcsem). reflexivity.
       - (* enum *)
@@ -800,9 +800,37 @@ Module Type CORRECTNESS
           * congruence.
         + apply Forall_app. split; solve_forall...
           eapply sem_equation_refines...
+
+      - (* extcall *)
+        destruct_conjs; repeat inv_bind.
+        eapply sc_exp in Hsem as Hsck... 2:destruct Histst; auto.
+        inv Hwc; inv Hsem. simpl_Forall.
+
+        assert (Hnorm1:=H1). eapply mmap2_sem in H1... clear H.
+        destruct H1 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1' Hsem1'']]]]]. apply Forall2_concat in Hsem1'.
+
+        assert (Hnorm2:=H2). eapply fresh_ident_refines in H2... 2:destruct Histst1...
+        eapply fresh_ident_hist_st with (H:=H') in Hnorm2 as Histst2...
+        2:eapply sem_clock_refines; eauto.
+
+        assert (sem_var (FEnv.add x2 vs0 H') x2 vs0) as Hv.
+        { repeat constructor. econstructor; simpl.
+          rewrite FEnv.gss; eauto. reflexivity. }
+        exists (FEnv.add x2 vs0 H'). split;[|split;[|split;[|split]]]; eauto with norm.
+        + etransitivity...
+        + eapply fresh_ident_st_valid...
+        + repeat constructor; eauto.
+        + repeat constructor; eauto.
+          2:simpl_Forall; eauto using sem_equation_refines.
+          econstructor. econstructor; eauto. 1,2:simpl; econstructor.
+          2:instantiate (1:=map (fun x => [x]) (concat ss)).
+          all:try rewrite concat_map_singl1; eauto; simpl_Forall; eauto using sem_exp_refines.
+          eapply mmap2_unnest_exp_typesof in Hnorm1; eauto with lclocking.
+          congruence.
+
       - (* fby *)
-        inversion_clear Hwc as [| | | | | |??? Hwc1 Hwc2 Hl1 Hl2 | | | | |].
-        inversion_clear Hsem as [| | | | | |???????? Hsem1 Hsem2 Fby| | | | | |].
+        inversion_clear Hwc as [| | | | | | |??? Hwc1 Hwc2 Hl1 Hl2 | | | | |].
+        inversion_clear Hsem as [| | | | | | |???????? Hsem1 Hsem2 Fby| | | | | |].
         assert (length (concat x2) = length (annots e0s)) as Hlength1 by (eapply mmap2_unnest_exp_length; eauto with lclocking).
         assert (length (concat x6) = length (annots es)) as Hlength2 by (eapply mmap2_unnest_exp_length; eauto with lclocking).
         assert (Forall (fun e => numstreams e = 1) (concat x2)) as Hnumstreams.
@@ -875,8 +903,8 @@ Module Type CORRECTNESS
              eapply H2 with (x1:=(i, a1))...
 
       - (* arrow *)
-        inversion_clear Hwc as [| | | | | | |??? Hwc1 Hwc2 Hl1 Hl2| | | |].
-        inversion_clear Hsem as [| | | | | | |???????? Hsem1 Hsem2 Arrow| | | | |].
+        inversion_clear Hwc as [| | | | | | | |??? Hwc1 Hwc2 Hl1 Hl2| | | |].
+        inversion_clear Hsem as [| | | | | | | |???????? Hsem1 Hsem2 Arrow| | | | |].
         assert (length (concat x2) = length (annots e0s)) as Hlength1 by (eapply mmap2_unnest_exp_length; eauto with lclocking).
         assert (length (concat x6) = length (annots es)) as Hlength2 by (eapply mmap2_unnest_exp_length; eauto with lclocking).
         assert (Forall (fun e => numstreams e = 1) (concat x2)) as Hnumstreams.
@@ -1336,10 +1364,23 @@ Module Type CORRECTNESS
       intros * Hnl Hwt Hsem Hvalid Histst Hnorm.
       destruct e; try (eapply unnest_exp_sem in Hnorm as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem2]]]]]; eauto;
                        exists H'; repeat (split; eauto)).
-      1,2,3:unfold unnest_rhs in Hnorm; repeat inv_bind. 3:inv Hwt; inv Hsem.
+      1-4:unfold unnest_rhs in Hnorm; repeat inv_bind. 4:inv Hwt; inv Hsem.
+      - (* extcall *)
+        inv Hwt. inv Hsem.
+        unfold unnest_exps in *; repeat inv_bind.
+        assert (Hnorm1:=H0). eapply unnest_exps_sem in H0...
+        destruct H0 as [H' [Href1 [Hvalid1 [Histst1 [Hsem1 Hsem1']]]]]. apply Forall2_concat in Hsem1.
+
+        exists H'. repeat (split; auto).
+        repeat constructor. econstructor.
+        2:instantiate (1:=map (fun x => [x]) (concat ss)).
+        all:try rewrite concat_map_singl1; eauto; simpl_Forall; eauto using sem_exp_refines.
+        eapply mmap2_unnest_exp_typesof in Hnorm1; eauto with lclocking.
+        congruence.
+
       - (* fby *)
-        inversion_clear Hwt as [| | | | | |??? Hwc1 Hwc2 Hl1 Hl2 | | | | |].
-        inversion_clear Hsem as [| | | | | |???????? Hsem1 Hsem2 Fby| | | | | |].
+        inversion_clear Hwt as [| | | | | | |??? Hwc1 Hwc2 Hl1 Hl2 | | | | |].
+        inversion_clear Hsem as [| | | | | | |???????? Hsem1 Hsem2 Fby| | | | | |].
         assert (length x = length (annots l)) as Hlength1 by (eapply unnest_exps_length; eauto with lclocking).
         assert (length x2 = length (annots l0)) as Hlength2 by (eapply unnest_exps_length; eauto with lclocking).
         unfold unnest_exps in *. repeat inv_bind.
@@ -1361,9 +1402,10 @@ Module Type CORRECTNESS
           * eapply Forall2_length in Hl2; solve_length.
         + repeat rewrite Forall_app. repeat split...
           solve_forall; (eapply sem_equation_refines; [|eauto]; etransitivity; eauto). reflexivity.
+
       - (* arrow *)
-        inversion_clear Hwt as [| | | | | | |??? Hwc1 Hwc2 Hl1 Hl2| | | |].
-        inversion_clear Hsem as [| | | | | | |???????? Hsem1 Hsem2 Fby| | | | |].
+        inversion_clear Hwt as [| | | | | | | |??? Hwc1 Hwc2 Hl1 Hl2| | | |].
+        inversion_clear Hsem as [| | | | | | | |???????? Hsem1 Hsem2 Fby| | | | |].
         assert (length x = length (annots l)) as Hlength1 by (eapply unnest_exps_length; eauto with lclocking).
         assert (length x2 = length (annots l0)) as Hlength2 by (eapply unnest_exps_length; eauto with lclocking).
         unfold unnest_exps in *. repeat inv_bind.
@@ -1874,11 +1916,11 @@ Module Type CORRECTNESS
     Qed.
 
     Lemma unnest_node_sem : forall f n ins outs,
-        wc_global (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(types) ((unnest_node G1 n)::G2.(nodes))) ->
-        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(types) ((unnest_node G1 n)::G2.(nodes))) f ins outs.
+        wc_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) G2.(externs) ((unnest_node G1 n)::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) G1.(externs) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) G2.(externs) ((unnest_node G1 n)::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * HwcG Hord1 Hord2 Hsem.
 
@@ -1977,22 +2019,23 @@ Module Type CORRECTNESS
       wc_global G ->
       global_sem_refines G (unnest_global G).
   Proof with eauto with norm.
-    intros (enms&nds).
-    induction nds; intros * Hwc; simpl.
+    intros [].
+    induction nodes0; intros * Hwc; simpl.
     - apply global_sem_ref_nil.
     - assert (Hwc':=Hwc).
       eapply unnest_global_wc, wc_global_Ordered_nodes in Hwc' ;
         unfold unnest_global in Hwc'; simpl in Hwc'.
       apply global_sem_ref_cons with (f:=n_name a)...
-      + inv Hwc. eapply IHnds...
+      + inv Hwc. eapply IHnodes0...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (unnest_nodes enms nds)).(types)).
+        change types0 with ((Global types0 externs0 (unnest_nodes types0 externs0 nodes0)).(types)).
         eapply unnest_node_sem...
         * inv Hwc; eauto.
-        * change (Global enms (unnest_nodes enms nds)) with (unnest_global (Global enms nds)).
+        * change (Global types0 externs0 (unnest_nodes types0 externs0 nodes0))
+            with (unnest_global (Global types0 externs0 nodes0)).
           eapply unnest_global_wc. inv Hwc; auto.
         * apply iface_eq_iface_incl, unnest_nodes_eq.
-        * inv Hwc. eapply IHnds...
+        * inv Hwc. eapply IHnodes0...
   Qed.
 
   Theorem unnest_global_sem : forall G f ins outs,
@@ -2422,7 +2465,7 @@ Module Type CORRECTNESS
         destruct PS.mem; repeat inv_bind.
         + inv Hsem. inv H6; inv H5.
           simpl in H7; rewrite app_nil_r in H7. inv H7; inv H6.
-          assert (Hsem':=H3). inversion_clear H3 as [| | | | | |???????? Hsem0 Hsem1 Hsem| | | | | |].
+          assert (Hsem':=H3). inversion_clear H3 as [| | | | | | |???????? Hsem0 Hsem1 Hsem| | | | | |].
           inv Hsem0; inv H6. inv Hsem1; inv H7.
           simpl in Hsem; repeat rewrite app_nil_r in Hsem. inv Hsem; inv H9.
           inv Hwc. rename H6 into Hwc. apply Forall_singl in Hwc. assert (Hwc':=Hwc). inv Hwc'.
@@ -2455,7 +2498,7 @@ Module Type CORRECTNESS
         apply Forall_singl in Hwc. inv Hwc.
         apply Forall_singl in H4. rewrite Forall2_eq in H6; simpl in H6; rewrite app_nil_r in H6.
         inv Hsem. inv H10; inv H9. simpl in H11; rewrite app_nil_r in H11. inv H11; inv H10.
-        inversion_clear H3 as [| | | | | |???????? Hsem0 Hsem1 Hsem| | | | | |].
+        inversion_clear H3 as [| | | | | | |???????? Hsem0 Hsem1 Hsem| | | | | |].
         inv Hsem0; inv H10. inv Hsem1; inv H11.
         simpl in Hsem; repeat rewrite app_nil_r in Hsem. inv Hsem; inv H13.
         eapply fby_iteexp_sem with (nck:=ck) in H0 as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem' Hsem'']]]]]...
@@ -2469,7 +2512,7 @@ Module Type CORRECTNESS
         inv Hwc. rename H3 into Hwc. clear H4. apply Forall_singl in Hwc. inv Hwc.
         apply Forall_singl in H4. rewrite Forall2_eq in H6; simpl in H6; rewrite app_nil_r in H6.
         inv Hsem. inv H10; inv H9. simpl in *; rewrite app_nil_r in *. inv H11; inv H10.
-        inversion_clear H3 as [| | | | | | |???????? Hsem0 Hsem1 Hsem| | | | |].
+        inversion_clear H3 as [| | | | | | | |???????? Hsem0 Hsem1 Hsem| | | | |].
         inv Hsem0; inv H10. inv Hsem1; inv H11.
         simpl in Hsem; repeat rewrite app_nil_r in Hsem. inv Hsem; inv H13.
         eapply arrow_iteexp_sem with (nck:=ck) in H0 as [H' [Href1 [Hvalid1 [Hhistst1 [Hsem' Hsem'']]]]]...
@@ -2614,16 +2657,16 @@ Module Type CORRECTNESS
   Lemma normfby_node_sem : forall G1 G2 f n ins outs,
       global_iface_incl G1 G2 ->
       global_sem_refines G1 G2 ->
-      unnested_global (Global G1.(types) (n::G1.(nodes))) ->
-      wc_global (Global G1.(types) (n::G1.(nodes))) ->
+      unnested_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+      wc_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
       wc_global G2 ->
-      Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
-      Ordered_nodes (Global G2.(types) ((normfby_node n)::G2.(nodes))) ->
-      sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
-      sem_node_ck (Global G2.(types) ((normfby_node n)::G2.(nodes))) f ins outs.
+      Ordered_nodes (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+      Ordered_nodes (Global G2.(types) G2.(externs) ((normfby_node n)::G2.(nodes))) ->
+      sem_node_ck (Global G1.(types) G1.(externs) (n::G1.(nodes))) f ins outs ->
+      sem_node_ck (Global G2.(types) G2.(externs) ((normfby_node n)::G2.(nodes))) f ins outs.
   Proof with eauto.
     intros * Hiface Href Hunt HwcG HwcG' Hord1 Hord2 Hsem.
-    assert (Ordered_nodes (Global G2.(types) (normfby_node n :: G2.(nodes)))) as Hord'.
+    assert (Ordered_nodes (Global G2.(types) G2.(externs) (normfby_node n :: G2.(nodes)))) as Hord'.
     { inv Hord2. destruct H1. constructor; [split|]... }
 
     inv Hsem; assert (Hfind:=H0). destruct (ident_eq_dec (n_name n) f).
@@ -2716,17 +2759,17 @@ Module Type CORRECTNESS
       wc_global G ->
       global_sem_refines G (normfby_global G).
   Proof with eauto with norm.
-    intros (enms&nds).
-    induction nds; intros * Hunt Hwc; simpl.
+    intros [].
+    induction nodes0; intros * Hunt Hwc; simpl.
     - apply global_sem_ref_nil.
     - apply global_sem_ref_cons with (f:=n_name a)...
       + eapply normfby_global_wc, wc_global_Ordered_nodes in Hwc;
           unfold normfby_global in Hwc; simpl in Hwc...
-      + inv Hunt; inv Hwc. eapply IHnds...
+      + inv Hunt; inv Hwc. eapply IHnodes0...
       + intros ins outs Hsem; simpl.
-        eapply normfby_node_sem with (G1:=(Global enms nds)) (G2:=(Global _ _)) in Hsem...
+        eapply normfby_node_sem with (G1:=(Global types0 externs0 nodes0)) (G2:=(Global _ _ _)) in Hsem...
         * apply iface_eq_iface_incl, normfby_global_eq.
-        * inv Hunt; inv Hwc. eapply IHnds...
+        * inv Hunt; inv Hwc. eapply IHnodes0...
         * eapply normfby_global_wc in Hwc... inv Hwc...
         * eapply wc_global_Ordered_nodes.
           eapply normfby_global_wc in Hwc...

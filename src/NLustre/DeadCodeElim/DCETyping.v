@@ -66,6 +66,15 @@ Module Type DCETYPING
       subst; simpl in *; eauto.
   Qed.
 
+  Lemma wt_rhs_free : forall types externs vars e x,
+      wt_rhs types externs vars e ->
+      Is_free_in_rhs x e ->
+      InMembers x vars.
+  Proof.
+    intros * Wt Free; inv Wt; inv Free; eauto using wt_cexp_free.
+    simpl_Exists; simpl_Forall; eauto using wt_exp_free.
+  Qed.
+
   Lemma wt_equation_def_free : forall G vars eq x,
       wt_equation G vars eq ->
       Is_defined_in_eq x eq \/ Is_free_in_eq x eq ->
@@ -74,7 +83,7 @@ Module Type DCETYPING
     induction eq; intros * Hwt Hdeff; inv Hwt.
     - destruct Hdeff as [Hdef|Hfree].
       + inv Hdef; eauto using In_InMembers.
-      + inv Hfree. inv H1; eauto using wt_clock_free, wt_cexp_free.
+      + inv Hfree. inv H1; eauto using wt_clock_free, wt_rhs_free.
     - destruct Hdeff as [Hdef|Hfree].
       + inv Hdef. eapply Forall2_ignore2, Forall_forall in H5; eauto.
         destruct H5 as ((?&?&?)&?&?); simpl; eauto using In_InMembers.
@@ -135,6 +144,18 @@ Module Type DCETYPING
     Qed.
     Local Hint Resolve wt_cexp_restrict : nltyping.
 
+    Lemma wt_rhs_restrict : forall vars vars' e,
+        (forall x ty, In (x, ty) vars -> Is_free_in_rhs x e -> In (x, ty) vars') ->
+        wt_rhs G1.(types) G1.(externs) vars e ->
+        wt_rhs G2.(types) G2.(externs) vars' e.
+    Proof with eauto with nltyping nlfree.
+      intros * Hincl Wt; inv Wt; econstructor; simpl_Forall...
+      - eapply wt_exp_restrict; [|eauto].
+        intros. eapply Hincl; eauto.
+        constructor. solve_Exists.
+      - destruct HG as (?&?&?). congruence.
+    Qed.
+
     Lemma wt_equation_restrict : forall vars vars' eq,
         (forall x ty, In (x, ty) vars -> Is_defined_in_eq x eq \/ Is_free_in_eq x eq -> In (x, ty) vars') ->
         wt_equation G1 vars eq ->
@@ -143,8 +164,8 @@ Module Type DCETYPING
       intros * Hincl Hwt. inv Hwt.
       - econstructor...
         + eapply wt_clock_restrict with (vars:=vars)...
-        + eapply wt_cexp_restrict with (vars:=vars)...
-      - destruct HG as (?&Hf). specialize (Hf f). rewrite H in Hf; inv Hf. destruct H9 as (Hname&Hin&Hout).
+        + eapply wt_rhs_restrict with (vars:=vars)...
+      - destruct HG as (?&?&Hf). specialize (Hf f). rewrite H in Hf; inv Hf. destruct H10 as (Hname&Hin&Hout).
         econstructor...
         + rewrite <-Hout. eapply Forall2_impl_In; [|eauto].
           intros ? (?&?&?) Hin1 Hin2 ?; simpl in *...

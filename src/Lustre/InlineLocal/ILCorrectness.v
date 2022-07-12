@@ -608,11 +608,11 @@ Module Type ILCORRECTNESS
     Qed.
 
     Lemma inlinelocal_node_sem : forall f n ins outs,
-        wc_global (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
-        Ordered_nodes (Global G2.(types) ((inlinelocal_node n)::G2.(nodes))) ->
-        sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
-        sem_node_ck (Global G2.(types) ((inlinelocal_node n)::G2.(nodes))) f ins outs.
+        wc_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+        Ordered_nodes (Global G2.(types) G2.(externs) ((inlinelocal_node n)::G2.(nodes))) ->
+        sem_node_ck (Global G1.(types) G1.(externs) (n::G1.(nodes))) f ins outs ->
+        sem_node_ck (Global G2.(types) G2.(externs) ((inlinelocal_node n)::G2.(nodes))) f ins outs.
     Proof with eauto.
       intros * Hwc Hord1 Hord2 Hsem.
 
@@ -696,17 +696,17 @@ Module Type ILCORRECTNESS
       wc_global G ->
       global_sem_refines G (inlinelocal_global G).
   Proof with eauto using wc_global_Ordered_nodes.
-    intros (enms&nds).
-    induction nds; intros * Hwc; simpl.
+    intros [].
+    induction nodes0; intros * Hwc; simpl.
     - apply global_sem_ref_nil.
     - assert (Hwc':=Hwc).
       eapply Clocking.inlinelocal_global_wc, wc_global_Ordered_nodes in Hwc' ;
         unfold inlinelocal_global in Hwc'; simpl in Hwc'.
       apply global_sem_ref_cons with (f:=n_name a)...
-      + inv Hwc. eapply IHnds...
+      + inv Hwc. eapply IHnodes0...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (map inlinelocal_node nds)).(types)).
-        eapply inlinelocal_node_sem with (G1:=Global enms nds)...
+        change types0 with ((Global types0 externs0 (map inlinelocal_node nodes0)).(types)).
+        eapply inlinelocal_node_sem with (G1:=Global types0 externs0 nodes0)...
         1,2:inv Hwc...
   Qed.
 

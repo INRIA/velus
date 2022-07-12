@@ -41,6 +41,9 @@ Module Type LCAUSALITY
       Is_free_left Γ cx 0 e1
       \/ Is_free_left Γ cx 0 e2 ->
       Is_free_left Γ cx 0 (Ebinop op e1 e2 a)
+  | IFLextcall : forall f es a,
+      (exists k, Exists (Is_free_left Γ cx k) es) ->
+      Is_free_left Γ cx 0 (Eextcall f es a)
   | IFLfby : forall e0s es a k,
       Is_free_left_list Γ cx k e0s ->
       Is_free_left Γ cx k (Efby e0s es a)
@@ -558,6 +561,8 @@ Module Type LCAUSALITY
       simpl_Forall; eauto.
 
     induction e using exp_ind2; intros * Hwl Hfree; inv Hfree; inv Hwl; simpl; auto.
+    - (* extcall *)
+      destruct_conjs. lia.
     - (* fby *)
       solve_forall2 H8.
     - (* arrow *)
@@ -684,6 +689,8 @@ Module Type LCAUSALITY
         let ps1 := collect_free_left e1 in
         let ps2 := collect_free_left e2 in
         List.map (fun '(ps1, ps2) => PS.union ps1 ps2) (List.combine ps1 ps2)
+      | Eextcall _ es _ =>
+          [PSUnion (collect_free_left_list es)]
       | Efby e0s _ _ =>
         collect_free_left_list e0s
       | Earrow e0s es _ =>
@@ -1047,6 +1054,8 @@ Module Type LCAUSALITY
         destruct H2 as [?|?].
         * apply PSF.union_2. eapply IHe1 in H; eauto.
         * apply PSF.union_3. eapply IHe2 in H; eauto.
+      - (* extcall *)
+        eapply psunion_collect_free_list_spec'; eauto.
       - (* fby *)
         erewrite <- collect_free_left_list_length with (cenv:=cenv') (cenv':=cenvl') in H7, H8; eauto.
         eapply collect_free_left_list_spec'; eauto.
@@ -2138,6 +2147,10 @@ Module Type LCAUSALITY
         P_exp e2 0 ->
         P_exp (Ebinop op e1 e2 ann) 0.
 
+    Hypothesis EextcallCase : forall f es ann,
+        (forall k, k < length (annots es) -> P_exps es k) ->
+        P_exp (Eextcall f es ann) 0.
+
     (* We're reasoning on causality, so we only get the hypothesis on the lhs *)
     Hypothesis EfbyCase : forall e0s es ann k,
         k < length ann ->
@@ -2208,6 +2221,13 @@ Module Type LCAUSALITY
       - (* binop *)
         apply EbinopCase.
         1,2:eapply exp_causal_ind... rewrite H6; auto. rewrite H7; auto.
+      - (* extcall *)
+        apply EextcallCase.
+        + intros k' Hk'. eapply Pexp_Pexps; eauto.
+          * solve_forall' l.
+          * intros ? Hfree'. eapply Hfree.
+            constructor; eauto.
+            eapply Is_free_left_list_Exists in Hfree' as [? ?]; eauto.
       - (* fby *)
         eapply EfbyCase; eauto.
         + eapply Pexp_Pexps... 2:congruence.

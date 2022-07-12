@@ -79,7 +79,7 @@ Module Type STCSEMANTICS
     Inductive sem_trconstr: bool -> env -> state -> state -> state -> trconstr -> Prop :=
     | STcDef:
         forall base R S I S' x v ck ce,
-          sem_caexp_instant base R ck ce v ->
+          sem_arhs_instant base R ck ce v ->
           sem_var_instant R x v ->
           sem_trconstr base R S I S' (TcDef x ck ce)
     | STcReset:
@@ -136,7 +136,7 @@ Module Type STCSEMANTICS
 
     Hypothesis TcDefCase:
       forall base R S I S' x v ck ce,
-        sem_caexp_instant base R ck ce v ->
+        sem_arhs_instant base R ck ce v ->
         sem_var_instant R x v ->
         P_trconstr base R S I S' (TcDef x ck ce).
 
@@ -376,10 +376,10 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma initial_state_other:
-    forall S0 s P enums f,
+    forall S0 s P enums externs f,
       s_name s <> f ->
-      (initial_state (Program enums P) f S0 <->
-      initial_state (Program enums (s :: P)) f S0).
+      (initial_state (Program enums externs P) f S0 <->
+      initial_state (Program enums externs (s :: P)) f S0).
   Proof.
     split; inversion_clear 1 as [????? Find]; econstructor; eauto.
     - rewrite find_system_other; eauto.
@@ -426,10 +426,10 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma state_closed_other:
-    forall S s P f enums,
+    forall S s P f enums externs,
       s_name s <> f ->
-      (state_closed (Program enums P) f S <->
-      state_closed (Program enums (s :: P)) f S).
+      (state_closed (Program enums externs P) f S <->
+      state_closed (Program enums externs (s :: P)) f S).
   Proof.
     split; inversion_clear 1 as [????? Find]; econstructor; eauto.
     - rewrite find_system_other; eauto.
@@ -444,9 +444,11 @@ Module Type STCSEMANTICS
       state_closed P g S ->
       state_closed P' g S.
   Proof.
-    intros ?? (enms & P) * Ord Find Hin Closed; inversion_clear Closed as [????? Find'].
+    intros ?? [] * Ord Find Hin Closed; inversion_clear Closed as [????? Find'].
     econstructor; eauto.
-    assert (enms = types P') as Enums
+    assert (types0 = types P') as Enums
+        by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
+    assert (externs0 = externs P') as Externs
         by (apply find_unit_equiv_program in Find; specialize (Find nil); inv Find; auto).
     apply find_unit_spec in Find as (?&?& E &?); simpl in E; subst.
     apply Ordered_systems_split in Ord.
@@ -470,10 +472,10 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma state_closed_insts_cons:
-    forall I s P enums,
-      Ordered_systems (Program enums (s :: P)) ->
-      state_closed_insts (Program enums P) s.(s_subs) I ->
-      state_closed_insts (Program enums (s :: P)) s.(s_subs) I.
+    forall I s P enums externs,
+      Ordered_systems (Program enums externs (s :: P)) ->
+      state_closed_insts (Program enums externs P) s.(s_subs) I ->
+      state_closed_insts (Program enums externs (s :: P)) s.(s_subs) I.
   Proof.
     intros * Ord Closed; inversion_clear Ord as [|?? [Spec ?]].
     intros ?? Find; apply Closed in Find as (g & Hin &?).
@@ -484,20 +486,20 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma sem_system_cons:
-    forall P enums s f xs S S' ys,
-      Ordered_systems (Program enums (s :: P)) ->
-      sem_system (Program enums (s :: P)) f xs S S' ys ->
+    forall P enums externs s f xs S S' ys,
+      Ordered_systems (Program enums externs (s :: P)) ->
+      sem_system (Program enums externs (s :: P)) f xs S S' ys ->
       s.(s_name) <> f ->
-      sem_system (Program enums P) f xs S S' ys.
+      sem_system (Program enums externs P) f xs S S' ys.
   Proof.
-    intros ? enums * Hord Hsem Hnf.
+    intros ? enums externs * Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [| | | |?????????????????????? IH|
                        ????????? Hf ???? Closed ClosedI Closed' IH]
                         using sem_system_mult
       with (P_trconstr := fun bk H S I S' tc =>
                             ~Is_system_in_tc s.(s_name) tc ->
-                            sem_trconstr (Program enums P) bk H S I S' tc);
+                            sem_trconstr (Program enums externs P) bk H S I S' tc);
       eauto using sem_trconstr.
     - intro Hnin; econstructor; eauto.
       destruct r; eauto.
@@ -519,17 +521,17 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma sem_system_cons2:
-    forall s P enums f xs S S' ys,
-      Ordered_systems (Program enums (s :: P)) ->
-      sem_system (Program enums P) f xs S S' ys ->
-      sem_system (Program enums (s :: P)) f xs S S' ys.
+    forall s P enums externs f xs S S' ys,
+      Ordered_systems (Program enums externs (s :: P)) ->
+      sem_system (Program enums externs P) f xs S S' ys ->
+      sem_system (Program enums externs (s :: P)) f xs S S' ys.
   Proof.
-    intros ?? enums * Hord Hsem.
+    intros ?? enums externs * Hord Hsem.
     induction Hsem as [| | | | |
                        ????????? Hfind ???? Closed ClosedI Closed' IHtcs] using sem_system_mult
       with (P_trconstr := fun bk H S I S' tc =>
                             ~Is_system_in_tc s.(s_name) tc ->
-                            sem_trconstr (Program enums (s :: P)) bk H S I S' tc);
+                            sem_trconstr (Program enums externs (s :: P)) bk H S I S' tc);
       eauto using sem_trconstr.
     - intros Notin; econstructor; eauto.
       destruct r; eauto.
@@ -562,11 +564,11 @@ Module Type STCSEMANTICS
   Qed.
 
   Lemma sem_trconstrs_cons:
-    forall P enums bk H S I S' tcs s,
-      Ordered_systems (Program enums (s :: P)) ->
+    forall P enums externs bk H S I S' tcs s,
+      Ordered_systems (Program enums externs (s :: P)) ->
       ~ Is_system_in s.(s_name) tcs ->
-      (Forall (sem_trconstr (Program enums P) bk H S I S') tcs <->
-       Forall (sem_trconstr (Program enums (s :: P)) bk H S I S') tcs).
+      (Forall (sem_trconstr (Program enums externs P) bk H S I S') tcs <->
+       Forall (sem_trconstr (Program enums externs (s :: P)) bk H S I S') tcs).
   Proof.
     intros * Hord Hnini.
     induction tcs as [|tc tcs IH]; [now constructor|].
@@ -880,7 +882,7 @@ Module Type STCSEMANTICS
       inversion_clear Htcs as [|?? Htc];
       inversion_clear Htc as [????????? Exp| | | |]; eauto.
     - destruct Spec; eauto; subst.
-      apply sem_caexp_instant_absent in Exp; subst; auto.
+      apply sem_arhs_instant_absent in Exp; subst; auto.
     - assert (absent_list xs) as Abs
           by (eapply clock_of_instant_false, not_subrate_clock_impl; eauto).
       eapply IH in Abs; eauto.
@@ -898,9 +900,9 @@ Module Type STCSEMANTICS
       absent_list xs ->
       absent_list ys /\ S' ≋ S.
   Proof.
-    intros (enumsP & P) * Ord Sem Abs.
+    intros [] * Ord Sem Abs.
     revert dependent xs; revert f S S' ys.
-    induction P as [|system]; intros;
+    induction systems0 as [|system]; intros;
       inversion_clear Sem as [????????? Find Ins ?? Htcs Closed ClosedI Closed'];
       try now inv Find.
     pose proof Find.
@@ -917,7 +919,7 @@ Module Type STCSEMANTICS
         destruct Hin as (x & ?&?).
         eapply sem_var_instant_det; eauto.
         eapply sem_trconstrs_absent_vars; eauto.
-        * intros; eapply IHP; eauto.
+        * intros; eapply IHsystems0; eauto.
         * rewrite <-s_vars_out_in_tcs.
           apply in_app; auto.
       + inversion_clear Closed as [?????? Nexts Insts];
@@ -931,10 +933,10 @@ Module Type STCSEMANTICS
         setoid_rewrite s_subs_steps_of in Insts;
           setoid_rewrite s_subs_steps_of in Insts'.
         eapply sem_trconstrs_absent_states in Htcs; eauto.
-        * intros; eapply IHP; eauto.
+        * intros; eapply IHsystems0; eauto.
         * eapply sem_trconstrs_reset_clocks; eauto using s_reset_consistency.
         * eapply sem_trconstrs_ireset_clocks; eauto using s_ireset_consistency.
-    - pose proof Ord; inv Ord; eapply IHP; eauto.
+    - pose proof Ord; inv Ord; eapply IHsystems0; eauto.
       rewrite <-state_closed_other in Closed, ClosedI, Closed'; eauto.
       eapply SSystem with (I := I); eauto.
       apply sem_trconstrs_cons in Htcs; eauto.

@@ -42,11 +42,11 @@ Module Type CSTYPING
         Forall (wt_equation G (vars++senv_of_tyck xcs)) eqs'.
     Proof.
       intros * Hwt Hck Hcond; destruct e; destruct_conjs; repeat inv_bind.
-      1-12:constructor; auto; rewrite Permutation_app_comm; simpl.
-      1-11:(constructor; [constructor; auto; eapply wt_exp_incl in Hwt; eauto;
+      all:constructor; auto; rewrite Permutation_app_comm; simpl.
+      all:(constructor; [constructor; auto; eapply wt_exp_incl in Hwt; eauto;
                           intros * Hl; inv Hl; econstructor; eauto with datatypes|]).
-      1-11:try take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
-      1-11:constructor; auto; eauto with senv datatypes.
+      all:try take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
+      all:constructor; auto; eauto with senv datatypes.
     Qed.
 
     Lemma cond_eq_wt_clock vars : forall e ty ck x xcs eqs' st st',
@@ -487,9 +487,9 @@ Module Type CSTYPING
       wt_global G ->
       wt_global (switch_global G).
   Proof.
-    intros (types&nds) (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
+    intros [] (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
     constructor; auto.
-    induction nds; simpl; inv Hwt; auto with datatypes.
+    induction nodes0; simpl; inv Hwt; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wt; eauto.
@@ -497,7 +497,7 @@ Module Type CSTYPING
       + eapply iface_eq_iface_incl, switch_global_iface_eq.
     - rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros.
       simpl; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
 End CSTYPING.

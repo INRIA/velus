@@ -191,10 +191,10 @@ Module Type STCTYPINGSEMANTICS
           destruct Var; [|now apply WTvars].
           inv WT; eapply NoDupMembers_det in Hin; eauto; subst.
           unfold sem_var_instant in Hvar; rewrite Hvar.
-          eapply sem_caexp_instant_wt; eauto.
+          eapply sem_arhs_instant_wt; eauto.
           apply Forall_filter.
           apply Forall_forall; intros (y' & t') Hin' Free.
-          apply free_in_cexp_spec' in Free.
+          apply free_in_rhs_spec in Free. rewrite PSF.empty_iff in Free. destruct Free as [Free|[]].
           assert (Is_free_in_tc y' (TcDef y ck ce)) as Free' by now do 2 constructor.
           now apply WTfree.
         + exists M; split; auto.
@@ -563,7 +563,7 @@ Module Type STCTYPINGSEMANTICS
       wt_memory S' p' (mems_of_nexts (s_nexts s)) s.(s_subs)
       /\ Forall2 (fun xt v => wt_svalue v (fst (snd xt))) s.(s_out) ys.
   Proof.
-    intros (? & p); induction p as [|s']; intros * WTp Wsch Sem Find WTS WTins;
+    intros []; induction systems0 as [|s']; intros * WTp Wsch Sem Find WTS WTins;
       try now inversion Find.
     pose proof WTp as WTp'; inversion_clear WTp as [|?? [[WTtcs]]].
     inv Wsch.
@@ -644,7 +644,7 @@ Module Type STCTYPINGSEMANTICS
         intro E'; rewrite E' in Hin; contradiction.
       }
       take (wt_memory _ _ _ _) and eapply wt_memory_other in it; simpl; eauto.
-      eapply IHp; eauto.
+      eapply IHsystems0; eauto.
       eapply sem_system_cons; eauto.
   Qed.
 

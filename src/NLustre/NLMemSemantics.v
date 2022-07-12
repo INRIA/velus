@@ -112,7 +112,7 @@ Module Type NLMEMSEMANTICS
     | SEqDef:
         forall bk H M x ck xs ce,
           sem_var H x xs ->
-          sem_caexp bk H ck ce xs ->
+          sem_arhs bk H ck ce xs ->
           msem_equation bk H M (EqDef x ck ce)
     | SEqApp:
         forall bk H M x xs ck f Mx arg xrs ys rs ls xss,
@@ -170,7 +170,7 @@ Module Type NLMEMSEMANTICS
     Hypothesis EqDefCase:
       forall bk H M x ck xs ce,
         sem_var H x xs ->
-        sem_caexp bk H ck ce xs ->
+        sem_arhs bk H ck ce xs ->
         P_equation bk H M (EqDef x ck ce).
 
     Hypothesis EqAppCase:
@@ -246,20 +246,20 @@ Module Type NLMEMSEMANTICS
   (** *** Environment cons-ing lemmas *)
 
   Lemma msem_node_cons:
-    forall n G f xs M ys enums,
-      Ordered_nodes (Global enums (n :: G)) ->
-      msem_node (Global enums (n :: G)) f xs M ys ->
+    forall n G f xs M ys enums externs,
+      Ordered_nodes (Global enums externs (n :: G)) ->
+      msem_node (Global enums externs (n :: G)) f xs M ys ->
       n.(n_name) <> f ->
-      msem_node (Global enums G) f xs M ys.
+      msem_node (Global enums externs G) f xs M ys.
   Proof.
-    intros ?????? enums Hord Hsem Hnf.
+    intros ?????? enums externs Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [ |????????????????????? Hsems|
                        |???????? Hf ????? IH]
         using msem_node_mult
       with (P_equation := fun bk H M eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
-                            msem_equation (Global enums G) bk H M eq);
+                            msem_equation (Global enums externs G) bk H M eq);
       eauto with nlsem.
     - intro Hnin.
       econstructor; eauto.
@@ -277,19 +277,19 @@ Module Type NLMEMSEMANTICS
   Qed.
 
   Lemma msem_cons2:
-    forall n G enums,
-      Ordered_nodes (Global enums G) ->
+    forall n G enums externs,
+      Ordered_nodes (Global enums externs G) ->
       Forall (fun n' => n.(n_name) <> n'.(n_name)) G ->
       (forall f xv M yv,
-          msem_node (Global enums G) f xv M yv ->
-          msem_node (Global enums (n :: G)) f xv M yv)
+          msem_node (Global enums externs G) f xv M yv ->
+          msem_node (Global enums externs (n :: G)) f xv M yv)
       /\
       (forall bk R M eq,
-          msem_equation (Global enums G) bk R M eq ->
+          msem_equation (Global enums externs G) bk R M eq ->
           ~Is_node_in_eq n.(n_name) eq ->
-          msem_equation (Global enums (n::G)) bk R M eq).
+          msem_equation (Global enums externs (n::G)) bk R M eq).
   Proof.
-    intros n G enums OG Fn.
+    intros n G enums externs OG Fn.
     apply msem_node_equation_ind; try (now intros; econstructor; eauto).
     - intros. econstructor; eauto. intro k.
       take (forall k, exists Mr, _) and specialize (it k);
@@ -300,30 +300,27 @@ Module Type NLMEMSEMANTICS
       econstructor; eauto.
       + erewrite <-find_node_other in Ff; eauto.
         apply find_node_In in Ff as (? & Ff).
-        rewrite Forall_forall in Fn. specialize (Fn _ Ff). now subst.
+        simpl_Forall. now subst.
       + apply find_node_not_Is_node_in_eq with (g:=n.(n_name)) in Ff; auto.
-        take (Forall _ n0.(n_eqs)) and rename it into Feqs.
-        apply Forall_Forall with (1:=Ff) in Feqs.
-        apply Forall_impl_In with (2:=Feqs).
-        intros eq Ineq (? & ?); auto.
+        simpl_Forall; eauto.
   Qed.
 
   Lemma msem_node_cons2:
-    forall n G f xs M ys enums,
-      Ordered_nodes (Global enums G) ->
-      msem_node (Global enums G) f xs M ys ->
+    forall n G f xs M ys enums externs,
+      Ordered_nodes (Global enums externs G) ->
+      msem_node (Global enums externs G) f xs M ys ->
       Forall (fun n' => n_name n <> n_name n') G ->
-      msem_node (Global enums (n :: G)) f xs M ys.
+      msem_node (Global enums externs (n :: G)) f xs M ys.
   Proof. intros; apply msem_cons2; auto. Qed.
 
   Local Hint Resolve msem_node_cons msem_cons2 msem_node_cons2 : nlsem.
 
   Lemma msem_equations_cons:
-    forall G bk H M eqs n enums,
-      Ordered_nodes (Global enums (n :: G)) ->
+    forall G bk H M eqs n enums externs,
+      Ordered_nodes (Global enums externs (n :: G)) ->
       ~Is_node_in n.(n_name) eqs ->
-      (Forall (msem_equation (Global enums G) bk H M) eqs <->
-       Forall (msem_equation (Global enums (n :: G)) bk H M) eqs).
+      (Forall (msem_equation (Global enums externs G) bk H M) eqs <->
+       Forall (msem_equation (Global enums externs (n :: G)) bk H M) eqs).
   Proof.
     intros * Hord Hnini.
     induction eqs as [|eq eqs IH]; [now constructor|].
@@ -626,9 +623,9 @@ dataflow memory for which the non-standard semantics holds true.
       sem_node G f xs ys ->
       exists M, msem_node G f xs M ys.
   Proof.
-    intros (enums & G); induction G as [|node].
+    intros []; induction nodes0 as [|node].
     inversion 2;
-      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Hfind ??? Heqs].
@@ -646,7 +643,7 @@ dataflow memory for which the non-standard semantics holds true.
       rewrite <-msem_equations_cons; eauto.
     - apply sem_node_cons with (1:=Hord) in Hsem; auto.
       inv Hord.
-      eapply IHG in Hsem as (M &?); eauto.
+      eapply IHnodes0 in Hsem as (M &?); eauto.
       exists M.
       now eapply msem_node_cons2; eauto.
   Qed.
@@ -761,9 +758,9 @@ dataflow memory for which the non-standard semantics holds true.
       msem_node G f xss2 M2 yss2 ->
       M1 0 ≋ M2 0.
   Proof.
-    intros (enums & G); induction G as [|node].
+    intros []; induction nodes0 as [|node].
     inversion 2;
-      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem1 Hsem2.
     assert (Hsem1' := Hsem1);  assert (Hsem2' := Hsem2).
     inversion_clear Hsem1' as [??????? Clock1 Hfind1 Ins1 ?? Heqs1];
@@ -775,7 +772,7 @@ dataflow memory for which the non-standard semantics holds true.
     eapply find_unit_cons in Hfind2 as [[E Hfind2]|[E Hfind2]]; simpl; eauto.
     - inv Hfind2.
       assert (~ Is_node_in node.(n_name) node.(n_eqs))
-        by (eapply find_node_not_Is_node_in with (G := Global enums (node::G)); eauto).
+        by (eapply find_node_not_Is_node_in with (G := Global types0 externs0 (node::nodes0)); eauto).
       eapply msem_equations_cons in Heqs1; eauto.
       eapply msem_equations_cons in Heqs2; eauto.
       eapply msem_eqs_same_initial_memory; eauto.
@@ -932,9 +929,9 @@ dataflow memory for which the non-standard semantics holds true.
       (forall n, n < n0 -> absent_list (xss n)) ->
       forall n, n <= n0 -> M n ≋ M 0.
   Proof.
-    intros ? (?& G); induction G as [|node].
+    intros ? []; induction nodes0 as [|node].
     inversion 2;
-      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem Abs n Spec.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Clock Hfind Ins ?? Heqs].

@@ -217,6 +217,7 @@ Module Type EQUIV
                   (forall (progs' : program * program),
                       ltsuffix2_prog progs' progs -> Prop)) =>
              (fst progs).(types) = (snd progs).(types)
+             /\ (fst progs).(externs) = (snd progs).(externs)
              /\
              forall n c2 prog2'
                (Hf2: find_class n (snd progs) = Some (c2, prog2')),
@@ -233,6 +234,7 @@ Module Type EQUIV
                 -> Env.t value -> Env.t value -> Prop) prog1 prog2,
       program_refines P prog1 prog2 <->
       (prog1.(types) = prog2.(types)
+       /\ prog1.(externs) = prog2.(externs)
        /\ forall n c2 prog2',
           find_class n prog2 = Some (c2, prog2') ->
           exists (c1 : class) (prog1' : program),
@@ -243,7 +245,7 @@ Module Type EQUIV
     intros.
     unfold program_refines at 1.
     rewrite PFix_eq.
-    - split; intros (?& HH); split; auto;
+    - split; intros (?&?& HH); (split; [|split]); auto;
         intros n c2 prog2' Hfind;
         destruct (HH n c2 prog2' Hfind) as (c1' & prog1' & Hfind' & Hcr & Hfix);
         eauto.
@@ -255,6 +257,7 @@ Module Type EQUIV
     forall (Pc : class -> class -> Prop) P p1 p2,
       wt_program p2 ->
       p1.(types) = p2.(types) ->
+      p1.(externs) = p2.(externs) ->
       Forall2 (fun c1 c2 => forall p1' p2',
                    wt_program p2' ->
                    wt_class p2' c2 ->
@@ -266,19 +269,19 @@ Module Type EQUIV
       Forall2 Pc p1.(classes) p2.(classes) ->
       program_refines P p1 p2.
   Proof.
-    intros Pc P p1 p2 WTp Enums Hfa Hclasses.
-    rewrite program_refines_def; split; auto.
+    intros Pc P p1 p2 WTp Types Externs Hfa Hclasses.
+    rewrite program_refines_def; split; [|split]; auto.
     unfold find_class.
     pose proof (Forall2_length _ _ _ Hfa) as Hlen.
     revert WTp Hfa Hclasses.
-    destruct p1 as (es1 & cls1), p2 as (es2 & cls2); simpl in *.
-    pattern cls1, cls2.
+    destruct p1, p2; simpl in *; subst.
+    pattern classes0, classes1.
     apply forall2_right; auto; try discriminate.
     clear Hlen. intros c1 c2 p1' p2' Hfa' WTp2' Hpr' Hpc'.
     inversion_clear Hpr' as [|? ? ? ? Hcr' Hpr].
     inversion_clear Hpc' as [|? ? ? ? Hpc Hpcs].
     inversion_clear WTp2' as [|?? [WTc Hnodup] WTp].
-    assert (program_refines P (Program es1 p1') (Program es2 p2')) as Hpr'
+    assert (program_refines P (Program types1 externs1 p1') (Program types1 externs1 p2')) as Hpr'
         by (rewrite program_refines_def; eauto).
     clear Hfa'.
     simpl in *.
@@ -291,7 +294,7 @@ Module Type EQUIV
       + inv Hfind2.
         rewrite <-Hcn.
         destruct (ident_eq_dec (c_name c1) (c_name c1)); eauto; contradiction.
-      + apply program_refines_def in Hpr' as (?& Hpr').
+      + apply program_refines_def in Hpr' as (?&?& Hpr').
         destruct (Hpr' _ _ _ Hfind2) as (c1' & p1''' & Hfind1 & Hcr1 & Hpr1).
         exists c1', p1'''.
         rewrite Hcn.
@@ -396,12 +399,22 @@ Module Type EQUIV
       econstructor; eauto.
       apply Forall_forall; intros * Hin.
       take (Forall _ es) and eapply Forall_forall in it; eauto using wt_exp_program_refines.
+    - econstructor; simpl_Forall; eauto using wt_exp_program_refines.
+      now apply program_refines_def in Hpr as (?& -> &?).
   Qed.
 
-  Lemma program_refines_enums:
+  Lemma program_refines_types:
     forall P p1 p2,
       program_refines P p1 p2 ->
       types p1 = types p2.
+  Proof.
+    setoid_rewrite program_refines_def; intuition.
+  Qed.
+
+  Lemma program_refines_externs:
+    forall P p1 p2,
+      program_refines P p1 p2 ->
+      externs p1 = externs p2.
   Proof.
     setoid_rewrite program_refines_def; intuition.
   Qed.

@@ -599,7 +599,7 @@ Module Type COMPAUTO
 
   Definition auto_global (G : @global nolast_block last_prefs) : @global noauto_block auto_prefs :=
     let ndstys := map auto_node G.(nodes) in
-    Global (G.(types)++flat_map snd ndstys) (map fst ndstys).
+    Global (G.(types)++flat_map snd ndstys) G.(externs) (map fst ndstys).
 
   Lemma auto_node_iface_eq : forall n,
       node_iface_eq n (fst (auto_node n)).
@@ -612,12 +612,12 @@ Module Type COMPAUTO
       find_node f G = Some n ->
       exists n', find_node f (auto_global G) = Some n' /\ node_iface_eq n n'.
   Proof.
-    intros (enms&nds). revert enms. unfold auto_global.
-    induction nds; intros * Hfind; simpl in *. inv Hfind.
+    intros []. revert types0. unfold auto_global.
+    induction nodes0; intros * Hfind; simpl in *. inv Hfind.
     apply find_node_cons in Hfind as [(?&?)|(Hneq&?)]; subst; simpl in *.
     - do 2 esplit. apply find_node_now; auto.
       apply auto_node_iface_eq.
-    - edestruct IHnds as (?&?&?); eauto.
+    - edestruct IHnodes0 as (?&?&?); eauto.
       do 2 esplit; eauto.
       rewrite find_node_other; eauto.
       erewrite find_node_change_types; eauto.
@@ -626,8 +626,9 @@ Module Type COMPAUTO
   Lemma auto_global_iface_incl : forall G,
       global_iface_incl G (auto_global G).
   Proof.
-    split.
+    repeat split.
     - simpl. apply incl_appl, incl_refl.
+    - reflexivity.
     - intros. apply auto_global_find_node; auto.
   Qed.
 
@@ -635,12 +636,12 @@ Module Type COMPAUTO
       find_node f (auto_global G) = Some n ->
       exists n', find_node f G = Some n' /\ node_iface_eq n n'.
   Proof.
-    intros (enms&nds). revert enms. unfold auto_global.
-    induction nds; intros * Hfind; simpl in *. inv Hfind.
+    intros []. revert types0. unfold auto_global.
+    induction nodes0; intros * Hfind; simpl in *. inv Hfind.
     apply find_node_cons in Hfind as [(?&?)|(Hneq&?)]; subst; simpl in *.
     - do 2 esplit. apply find_node_now; auto.
       apply node_iface_eq_sym, auto_node_iface_eq.
-    - edestruct IHnds as (?&?&?); eauto.
+    - edestruct IHnodes0 as (?&?&?); eauto.
       2:{ do 2 esplit; eauto.
           rewrite find_node_other; eauto. }
       erewrite find_node_change_types; eauto.

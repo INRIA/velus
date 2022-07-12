@@ -95,7 +95,16 @@ Module Type DRRTYPING
         simpl in H; eauto.
     Qed.
 
-    Local Hint Resolve rename_in_var_wt rename_in_clock_wt rename_in_exp_wt rename_in_cexp_wt : nltyping.
+    Lemma rename_in_rhs_wt : forall e,
+        wt_rhs G.(types) G.(externs) (inouts++vars) e ->
+        wt_rhs G.(types) G.(externs) (inouts++vars') (rename_in_rhs sub e).
+    Proof.
+      intros * Hwt; inv Hwt; econstructor; eauto;
+        simpl_Forall; eauto using rename_in_exp_wt, rename_in_cexp_wt.
+      now rewrite rename_in_exp_typeof.
+    Qed.
+
+    Local Hint Resolve rename_in_var_wt rename_in_clock_wt rename_in_exp_wt rename_in_cexp_wt rename_in_rhs_wt : nltyping.
 
     Lemma rename_in_equation_wt : forall equ,
         (forall x, In x (var_defined equ) -> Env.find x sub = None) ->
@@ -104,29 +113,16 @@ Module Type DRRTYPING
     Proof with eauto with nltyping.
       intros * Hdef Hwt; inv Hwt; simpl in *.
       - constructor...
-        rewrite rename_in_cexp_typeofc; auto.
-      - econstructor...
-        + eapply Forall2_impl_In; [|eauto]; intros ? (?&?&?) ? _ ?; auto.
-        + rewrite Forall2_map_1.
-          eapply Forall2_impl_In; [|eauto]; intros ? (?&?&?) _ _ Hty.
-          rewrite rename_in_exp_typeof; auto.
-        + rewrite Forall_map.
-          eapply Forall_impl_In; [|eapply H3]; intros...
-        + rewrite Forall_map in *. unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) (?&?).
-          simpl in *...
-        + rewrite Forall_map in *. unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eapply H5]; intros (?&?) ?.
-          simpl in *...
+        rewrite rename_in_rhs_typeofr; auto.
+      - econstructor; eauto; simpl_Forall; eauto with nltyping.
+        + now rewrite rename_in_exp_typeof.
+        + unfold rename_in_reset in *. simpl_In. simpl_Forall; split; eauto with nltyping.
+        + unfold rename_in_reset in *. simpl_In. simpl_Forall; eauto with nltyping.
       - constructor...
         + rewrite rename_in_exp_typeof; auto.
         + rewrite rename_in_exp_typeof; auto.
-        + rewrite Forall_map in *. unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eapply H3]; intros (?&?) (?&?).
-          simpl in *...
-        + rewrite Forall_map in *. unfold rename_in_reset.
-          rewrite Forall_map. eapply Forall_impl; [|eapply H4]; intros (?&?) ?.
-          simpl in *...
+        + unfold rename_in_reset. simpl_Forall...
+        + unfold rename_in_reset. simpl_Forall...
     Qed.
 
   End rename.

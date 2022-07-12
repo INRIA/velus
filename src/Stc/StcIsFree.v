@@ -22,7 +22,7 @@ Module Type STCISFREE
   Inductive Is_free_in_tc: ident -> trconstr -> Prop :=
   | FreeTcDef:
       forall x ck e y,
-        Is_free_in_caexp y ck e ->
+        Is_free_in_arhs y ck e ->
         Is_free_in_tc y (TcDef x ck e)
   | FreeTcReset:
       forall x ckr ty c0 y,
@@ -46,7 +46,7 @@ Module Type STCISFREE
 
   Definition free_in_tc (tc: trconstr) (fvs: PS.t) : PS.t :=
     match tc with
-    | TcDef _ ck e => free_in_caexp ck e fvs
+    | TcDef _ ck e => free_in_arhs ck e fvs
     | TcReset _ ckr _ _ => free_in_clock ckr fvs
     | TcNext _ ck _ e => free_in_aexp ck e fvs
     | TcInstReset _ ck _ => free_in_clock ck fvs
@@ -66,12 +66,12 @@ Module Type STCISFREE
               | o: option (clock * const) |- _ => destruct o as [(?&?)|]
               | H:PS.In _ (free_in_tc _ _) |- _ =>
                 apply free_in_clock_spec in H
-                || apply free_in_caexp_spec in H
+                || apply free_in_arhs_spec in H
                 || apply free_in_aexp_spec in H
                 || apply free_in_aexps_spec in H
               | |- PS.In _ (free_in_tc _ _) =>
                 apply free_in_clock_spec
-                || apply free_in_caexp_spec
+                || apply free_in_arhs_spec
                 || apply free_in_aexp_spec
                 || apply free_in_aexps_spec
               | _ => intuition; eauto with stcfree

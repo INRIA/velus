@@ -577,7 +577,7 @@ Module Type INLINELOCAL
     { transform_unit := inlinelocal_node }.
 
   Global Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch_block switch_prefs) (@global nolocal_top_block local_prefs) :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition inlinelocal_global : @global noswitch_block switch_prefs -> @global nolocal_top_block local_prefs :=
     transform_units.
@@ -587,7 +587,7 @@ Module Type INLINELOCAL
   Lemma inlinelocal_global_iface_eq : forall G,
       global_iface_eq G (inlinelocal_global G).
   Proof.
-    split; auto.
+    repeat split; auto.
     intros f. unfold find_node.
     destruct (find_unit f G) as [(?&?)|] eqn:Hfind; simpl.
     - setoid_rewrite find_unit_transform_units_forward; eauto.

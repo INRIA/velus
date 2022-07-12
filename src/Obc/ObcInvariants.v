@@ -28,6 +28,8 @@ Module Type OBCINVARIANTS
   | CWICall_ap: forall x xs cls i f es,
       In x xs ->
       Can_write_in x (Call xs cls i f es)
+  | CWIExternCall: forall y f fty es,
+      Can_write_in y (ExternCall y f fty es)
   | CWIComp1: forall x s1 s2,
       Can_write_in x s1 ->
       Can_write_in x (Comp s1 s2)
@@ -118,6 +120,9 @@ Module Type OBCINVARIANTS
       rewrite exp_eval_adds_opt_extend_venv; auto.
       intros x Hin Hfree'. apply Hfree in Hfree'.
       auto with obcinv.
+    - inv Hstmt.
+      rewrite <-exp_eval_extend_venv; auto.
+      intros Habs. apply (Hfree y); eauto with obcinv.
     - now inv Hstmt.
   Qed.
 
@@ -139,6 +144,8 @@ Module Type OBCINVARIANTS
   | CWIVCall_ap: forall x xs cls i f es,
       In x xs ->
       Can_write_in_var x (Call xs cls i f es)
+  | CWIVExternCall: forall y f fty es,
+      Can_write_in_var y (ExternCall y f fty es)
   | CWIVComp1: forall x s1 s2,
       Can_write_in_var x s1 ->
       Can_write_in_var x (Comp s1 s2)
@@ -154,8 +161,7 @@ Module Type OBCINVARIANTS
     intros ? stmt.
     induction stmt using stmt_ind2; intros Can; inv Can; auto using Can_write_in.
     constructor.
-    eapply Forall_Exists in H2; eauto.
-    eapply Exists_impl; [|eauto]. intros ? (?&?); auto.
+    solve_Exists. simpl_Forall. eauto.
   Qed.
   Global Hint Resolve Can_write_in_var_Can_write_in : obcinv.
 
@@ -204,6 +210,8 @@ Module Type OBCINVARIANTS
       No_Overwrites (Switch e ss d)
   | NoOCall: forall xs cls i f es,
       No_Overwrites (Call xs cls i f es)
+  | NoOExternCall: forall y f fty es,
+      No_Overwrites (ExternCall y f fty es)
   | NoOComp: forall s1 s2,
       (forall x, Can_write_in_var x s1 -> ~Can_write_in_var x s2) ->
       (forall x, Can_write_in_var x s2 -> ~Can_write_in_var x s1) ->
@@ -244,6 +252,8 @@ Module Type OBCINVARIANTS
   | NNVCall: forall xs cls i f es,
       Forall (fun e => forall x ty, e <> Var x ty) es ->
       No_Naked_Vars (Call xs cls i f es)
+  | NNVExternCall: forall y f fty es,
+      No_Naked_Vars (ExternCall y f fty es)
   | NNVComp: forall s1 s2,
       No_Naked_Vars s1 ->
       No_Naked_Vars s2 ->

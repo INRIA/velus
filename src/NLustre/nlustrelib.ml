@@ -24,14 +24,16 @@ module type SYNTAX =
   sig
     type clock
     type typ
+    type ctype
     type cconst
     type const
     type exp
     type cexp
+    type rhs
     type enumtag
 
     type equation =
-    | EqDef of ident * clock * cexp
+    | EqDef of ident * clock * rhs
     | EqApp of idents * clock * ident * exp list * (ident * clock) list
     | EqFby of ident * clock * const * exp * (ident * clock) list
 
@@ -44,6 +46,7 @@ module type SYNTAX =
 
     type global = {
       types: typ list;
+      externs: (ident * (ctype list * ctype)) list;
       nodes: node list
     }
   end
@@ -51,16 +54,19 @@ module type SYNTAX =
 module PrintFun
     (Ops: PRINT_OPS)
     (CE : Coreexprlib.SYNTAX with type typ     = Ops.typ
+                              and type ctype   = Ops.ctype
                               and type cconst  = Ops.cconst
                               and type unop    = Ops.unop
                               and type binop   = Ops.binop
                               and type enumtag = Ops.enumtag)
     (NL : SYNTAX with type clock   = CE.clock
                   and type typ     = Ops.typ
+                  and type ctype   = Ops.ctype
                   and type cconst  = Ops.cconst
                   and type const   = Ops.const
                   and type exp     = CE.exp
                   and type cexp    = CE.cexp
+                  and type rhs     = CE.rhs
                   and type enumtag = Ops.enumtag) :
   sig
     val print_equation   : Format.formatter -> NL.equation -> unit
@@ -78,7 +84,7 @@ module PrintFun
       | NL.EqDef (x, ck, e) ->
           fprintf p "@[<hov 2>%a =@ %a;@]"
             print_ident x
-            print_cexp e
+            print_rhs e
       | NL.EqApp (xs, ck, f, es, []) ->
           fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@]);@]"
             print_pattern xs
@@ -124,9 +130,16 @@ module PrintFun
         (print_semicol_list_as "var" print_decl) locals
         print_equations (List.rev eqs)
 
+    let print_extern_decl p (f, (tyins, tyout)) =
+      fprintf p "external %a(%a) returns %a"
+        print_ident f
+        (print_comma_list Ops.print_ctype) tyins
+        Ops.print_ctype tyout
+
     let print_global p prog =
       fprintf p "@[<v 0>";
       List.iter (fprintf p "%a@;@;" Ops.print_typ_decl) (List.rev prog.NL.types);
+      List.iter (fprintf p "%a@;@;" print_extern_decl) (List.rev prog.NL.externs);
       List.iter (fprintf p "%a@;@;" print_node) (List.rev prog.NL.nodes);
       fprintf p "@]@."
   end

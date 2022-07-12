@@ -135,6 +135,23 @@ environment.
           sem_exp_instant e v ->
           sem_cexp_instant (Eexp e) v.
 
+    Inductive sem_rhs_instant: rhs -> svalue -> Prop :=
+    | Sextcall_pres:
+      forall f es tyout tyins vs v,
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        Forall2 (fun e v => sem_exp_instant e (present (Vscalar v))) es vs ->
+        sem_extern f tyins vs tyout v ->
+        sem_rhs_instant (Eextcall f es tyout) (present (Vscalar v))
+    | Sextcall_abs:
+      forall f es tyout tyins,
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        Forall (fun e => sem_exp_instant e absent) es ->
+        sem_rhs_instant (Eextcall f es tyout) absent
+    | Scexp:
+      forall e v,
+        sem_cexp_instant e v ->
+        sem_rhs_instant (Ecexp e) v.
+
   End InstantSemantics.
 
   Global Hint Constructors sem_exp_instant sem_cexp_instant : nlsem stcsem.
@@ -228,6 +245,7 @@ environment.
 
     Definition sem_aexp_instant := sem_annotated_instant sem_exp_instant.
     Definition sem_caexp_instant := sem_annotated_instant sem_cexp_instant.
+    Definition sem_arhs_instant := sem_annotated_instant sem_rhs_instant.
 
   End InstantAnnotatedSemantics.
 
@@ -261,6 +279,12 @@ environment.
 
     Definition sem_cexp (c: cexp) (xs: stream svalue): Prop :=
       lift bk H sem_cexp_instant c xs.
+
+    Definition sem_arhs ck (c: rhs) (xs: stream svalue) : Prop :=
+      lift bk H (fun base R => sem_arhs_instant base R ck) c xs.
+
+    Definition sem_rhs (c: rhs) (xs: stream svalue): Prop :=
+      lift bk H sem_rhs_instant c xs.
 
   End LiftSemantics.
 
@@ -335,6 +359,14 @@ environment.
     - eapply Forall2_impl_In; [|eauto]. intros.
       eapply Forall_forall in H0; eauto. eapply H0; eauto.
     - rewrite Forall_forall in *. intros. eapply H0; eauto.
+  Qed.
+
+  Add Parametric Morphism : sem_rhs_instant
+      with signature @eq _ ==> FEnv.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+        as sem_rhs_instant_morph.
+  Proof.
+    intros b H H' EH xs xs' Sem; inv Sem; econstructor; eauto; simpl_Forall.
+    all:rewrite <-EH; auto.
   Qed.
 
   Add Parametric Morphism A sem
@@ -437,9 +469,9 @@ environment.
     now rewrite Hsem in Hgt0.
   Qed.
 
-  Lemma sem_caexp_instant_absent:
+  Lemma sem_arhs_instant_absent:
     forall R ck e v,
-      sem_caexp_instant false R ck e v ->
+      sem_arhs_instant false R ck e v ->
       v = absent.
   Proof.
     inversion_clear 1; auto.

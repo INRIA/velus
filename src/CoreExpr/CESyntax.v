@@ -27,6 +27,10 @@ Module Type CESYNTAX
   | Ecase  : exp -> list (option cexp) -> cexp -> cexp
   | Eexp   : exp -> cexp.
 
+  Inductive rhs : Type :=
+  | Eextcall : ident -> list exp -> ctype -> rhs
+  | Ecexp  : cexp -> rhs.
+
   Section cexp_ind2.
 
     Variable P : cexp -> Prop.
@@ -103,6 +107,12 @@ Module Type CESYNTAX
     | Emerge _ _ ty => ty
     | Ecase _ _ e   => typeofc e
     | Eexp e        => typeof e
+    end.
+
+  Definition typeofr (r: rhs): type :=
+    match r with
+    | Eextcall _ _ cty => Tprimitive cty
+    | Ecexp e         => typeofc e
     end.
 
   (** Predicate used in [normal_args] in NLustre and Stc. *)

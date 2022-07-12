@@ -96,6 +96,12 @@ Module Type OBCSEMANTICS
         exp_eval me ve e2 (Some v2) ->
         sem_binop op v1 (typeof e1) v2 (typeof e2) = Some v' ->
         exp_eval me ve (Binop op e1 e2 ty) (Some v')
+  (* | eextern : *)
+  (*     forall f es ty ge tyins vs v', *)
+  (*       Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins -> *)
+  (*       Forall2 (fun e v => exp_eval me ve e (Some (Vscalar v))) es vs -> *)
+  (*       sem_extern (* XXX *) ge f tyins vs ty v' -> *)
+  (*       exp_eval me ve (Extern f es (Tprimitive ty)) (Some (Vscalar v')) *)
   | evalid:
       forall x v ty,
         Env.find x ve = Some v ->
@@ -116,6 +122,12 @@ Module Type OBCSEMANTICS
         Forall2 (exp_eval me ve) es vos ->
         stmt_call_eval prog (instance_match o me) clsid f vos ome' rvos ->
         stmt_eval prog me ve (Call ys clsid o f es) (add_inst o ome' me, Env.adds_opt ys rvos ve)
+  | Iexterncall:
+    forall prog me ve es f tyout tyins vs y rvo,
+      Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+      Forall2 (fun e v => exp_eval me ve e (Some (Vscalar v))) es vs ->
+      sem_extern f tyins vs tyout rvo ->
+      stmt_eval prog me ve (ExternCall y f es tyout) (me, Env.add y (Vscalar rvo) ve)
   | Icomp:
       forall prog me ve a1 a2 ve1 me1 ve2 me2,
         stmt_eval prog me ve a1 (me1, ve1) ->
@@ -168,6 +180,13 @@ Module Type OBCSEMANTICS
         P_call prog (instance_match o me) clsid f vos ome' rvos ->
         P_stmt prog me ve (Call ys clsid o f es) (add_inst o ome' me, Env.adds_opt ys rvos ve).
 
+    Hypothesis externcallCase:
+      forall prog me ve es f tyout tyins vs y rvo,
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        Forall2 (fun e v => exp_eval me ve e (Some (Vscalar v))) es vs ->
+        sem_extern f tyins vs tyout rvo ->
+        P_stmt prog me ve (ExternCall y f es tyout) (me, Env.add y (Vscalar rvo) ve).
+
     Hypothesis compCase:
       forall prog me ve a1 a2 ve1 me1 ve2 me2,
         stmt_eval prog me ve a1 (me1, ve1) ->
@@ -210,6 +229,7 @@ Module Type OBCSEMANTICS
         + apply assignCase; auto.
         + apply assignstCase; auto.
         + eapply callCase; eauto.
+        + eapply externcallCase; eauto.
         + eapply compCase; eauto.
         + eapply switchCase; eauto.
         + apply skipCase.
@@ -291,6 +311,18 @@ Module Type OBCSEMANTICS
     eapply exp_eval_det; eauto.
   Qed.
 
+  Lemma exps_eval_det':
+    forall me ve es vs1 vs2,
+      Forall2 (fun e v => exp_eval me ve e (Some (Vscalar v))) es vs1 ->
+      Forall2 (fun e v => exp_eval me ve e (Some (Vscalar v))) es vs2 ->
+      vs1 = vs2.
+  Proof.
+    intros * Sem1 Sem2; revert dependent vs2; induction Sem1;
+      inversion_clear 1; auto.
+    f_equal; auto.
+    eapply exp_eval_det in H; eauto. now inv H.
+  Qed.
+
   Lemma stmt_eval_call_eval_det:
     (forall prog me ve s meve1,
         stmt_eval prog me ve s meve1 ->
@@ -328,6 +360,19 @@ Module Type OBCSEMANTICS
            H': stmt_call_eval _ _ _ _ _ ?ome' ?rvs |- _ =>
         assert (ome' = me' /\ rvs = rvs') as E; eauto; inv E
       end; auto.
+    - (* Extern Call *)
+      take (stmt_eval _ _ _ _ _) and inv it. repeat f_equal.
+      match goal with
+        H: Forall2 _ _ _, H': Forall2 _ _ _ |- _ =>
+        eapply exps_eval_det' with (2 := H') in H; eauto; inv H
+      end.
+      assert (tyins = tyins0); subst.
+      { apply Forall2_eq.
+        eapply Forall2_swap_args in H. eapply Forall2_trans_ex in H10; [|eauto].
+        simpl_Forall. congruence.
+      }
+      eapply sem_extern_det; eauto.
+
     - (* Comp *)
       match goal with H:stmt_eval _ _ _ (Comp _ _) _ |- _ => inv H end.
       match goal with
@@ -376,15 +421,6 @@ Module Type OBCSEMANTICS
     intuition; congruence.
   Qed.
 
-  Lemma stmt_call_eval_det:
-    forall prog me clsid f vs me1 rvs1 me2 rvs2,
-        stmt_call_eval prog me clsid f vs me1 rvs1 ->
-        stmt_call_eval prog me clsid f vs me2 rvs2 ->
-        me1 = me2 /\ rvs1 = rvs2.
-  Proof.
-    intros; eapply (proj2 stmt_eval_call_eval_det); eauto.
-  Qed.
-
   Lemma stmt_eval_fold_left_shift:
     forall A prog f (xs:list A) iacc me ve me' ve',
       stmt_eval prog me ve
@@ -404,7 +440,7 @@ Module Type OBCSEMANTICS
     - setoid_rewrite IHxs; split.
       + intros (?&?&?& H); inv H; eauto 8 using stmt_eval.
       + intros (?&?&(?&?&?& H)&?);
-          inversion_clear H as [| | |?????????? H'| |]; inv H';
+          inversion_clear H as [| | | |?????????? H'| |]; inv H';
             eauto using stmt_eval.
   Qed.
 
@@ -457,7 +493,7 @@ Proof.
     - setoid_rewrite IHxs; split.
       + intros (?&?& H &?); inv H; eauto 8 using stmt_eval.
       + intros (?&?&?&?&?& H &?);
-          inversion_clear H as [| | |????????? H'| |]; inv H';
+          inversion_clear H as [| | | |????????? H'| |]; inv H';
             eauto using stmt_eval.
   Qed.
 
@@ -562,10 +598,10 @@ Proof.
   Qed.
 
   Lemma stmt_call_eval_cons:
-    forall prog c' c me f vs me' rvs enums,
+    forall prog c' c me f vs me' rvs enums externs,
       c_name c <> c' ->
-      (stmt_call_eval (Program enums (c :: prog)) me c' f vs me' rvs
-       <-> stmt_call_eval (Program enums prog) me c' f vs me' rvs).
+      (stmt_call_eval (Program enums externs (c :: prog)) me c' f vs me' rvs
+       <-> stmt_call_eval (Program enums externs prog) me c' f vs me' rvs).
   Proof.
     intros * Neq; split; intros Sem.
     - inversion_clear Sem as [??????????? Find].

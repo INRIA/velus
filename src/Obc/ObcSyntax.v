@@ -46,6 +46,8 @@ Module Type OBCSYNTAX
   | Call     : list ident -> ident -> ident -> ident -> list exp -> stmt
   (* y1, ..., yn := class instance method (e1, ..., em) *)
   (* The method name must be an atom, in order to guarantee injectivity of the prefixed C call *)
+  (* y := f (e1, ... em) *)
+  | ExternCall : ident -> ident -> list exp -> ctype -> stmt
   | Skip.
 
   Section stmt_ind2.
@@ -75,6 +77,10 @@ Module Type OBCSYNTAX
       forall ys c i f es,
         P (Call ys c i f es).
 
+    Hypothesis ExternCallCase:
+      forall y f es ty,
+        P (ExternCall y f es ty).
+
     Hypothesis SkipCase:
       P Skip.
 
@@ -87,6 +93,7 @@ Module Type OBCSYNTAX
         induction l as [|[]]; auto.
       - apply CompCase; auto.
       - apply CallCase.
+      - apply ExternCallCase.
       - apply SkipCase.
     Defined.
 
@@ -120,6 +127,10 @@ Module Type OBCSYNTAX
       forall ys c i f es,
         P (Call ys c i f es).
 
+    Hypothesis ExternCallCase:
+      forall y f es ty,
+        P (ExternCall y f es ty).
+
     Hypothesis SkipCase:
       P Skip.
 
@@ -132,6 +143,7 @@ Module Type OBCSYNTAX
         induction l as [|[]]; constructor; simpl; auto.
       - apply CompCase; auto.
       - apply CallCase.
+      - apply ExternCallCase.
       - apply SkipCase.
     Defined.
 
@@ -273,15 +285,16 @@ Module Type OBCSYNTAX
   Record program : Type :=
     Program {
         types : list type;
+        externs : list (ident * (list ctype * ctype));
         classes : list class;
       }.
 
   Global Program Instance program_program: CommonProgram.Program class program :=
     { units := classes;
-      update := fun p => Program p.(types) }.
+      update := fun p => Program p.(types) p.(externs) }.
 
   Global Program Instance program_program_without_units : TransformProgramWithoutUnits program program :=
-    { transform_program_without_units := fun p => Program p.(types) [] }.
+    { transform_program_without_units := fun p => Program p.(types) p.(externs) [] }.
 
   Fixpoint find_method (f: ident) (ms: list method) : option method :=
     match ms with
@@ -554,152 +567,8 @@ Module Type OBCSYNTAX
   Global Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
   Definition rev_prog (p: program) : program :=
-    Program p.(types) (rev_tr p.(classes)).
-(*
-  (** Simple Static Analysis of Obc statements *)
+    Program p.(types) p.(externs) (rev_tr p.(classes)).
 
-  Definition naked_var (e: exp) : option ident :=
-    match e with
-    | Var x _ => Some x
-    | _ => None
-    end.
-
-  Inductive Is_naked_arg_in (x: ident) : stmt -> Prop :=
-  | NACall: forall xs c i m es,
-        Exists (fun e=> naked_var e = Some x) es ->
-        Is_naked_arg_in x (Call xs c i m es)
-  | NAIfte1: forall e s1 s2,
-        Is_naked_arg_in x s1 ->
-        Is_naked_arg_in x (Ifte e s1 s2)
-  | NAIfte2: forall e s1 s2,
-        Is_naked_arg_in x s2 ->
-        Is_naked_arg_in x (Ifte e s1 s2)
-  | NAComp1: forall s1 s2,
-        Is_naked_arg_in x s1 ->
-        Is_naked_arg_in x (Comp s1 s2)
-  | NAComp2: forall s1 s2,
-        Is_naked_arg_in x s2 ->
-        Is_naked_arg_in x (Comp s1 s2).
-
-  Inductive Must_write_in (x: ident) : stmt -> Prop :=
-  | MWIAssign: forall e,
-      Must_write_in x (Assign x e)
-  | MWIAssignSg: forall e,
-      Must_write_in x (AssignSt x e)
-  | MWIIfte: forall e s1 s2,
-      Must_write_in x s1 ->
-      Must_write_in x s2 ->
-      Must_write_in x (Ifte e s1 s2)
-  | MWIComp1: forall s1 s2,
-      Must_write_in x s1 ->
-      Must_write_in x (Comp s1 s2)
-  | MWIComp2: forall s1 s2,
-      Must_write_in x s2 ->
-      Must_write_in x (Comp s1 s2)
-  | MWICall: forall xs cl o m es,
-      In x xs ->
-      Must_write_in x (Call xs cl o m es).
-
-  Function analyze_obc' (na : PS.t) (mw: PS.t) (s: stmt) : PS.t * PS.t :=
-    match s with
-    | Assign x e => (na, PS.add x mw)
-    | AssignSt x e => (na, PS.add x mw)
-    | Ifte e s1 s2 =>
-      let (na1, mw1) := analyze_obc' na mw s1 in
-      let (na2, mw2) := analyze_obc' na1 mw s2 in
-      (na2, PS.inter mw1 mw2)
-    | Comp s1 s2 =>
-      let (na1, mw1) := analyze_obc' na mw s1 in
-      analyze_obc' na1 mw1 s2
-    | Call xs cl i m es =>
-      (ps_from_fo_list' naked_var es na, ps_from_list' xs mw)
-    | Skip => (na, mw)
-    end.
-
-  Definition analyze_obc : stmt -> PS.t * PS.t :=
-    analyze_obc' PS.empty PS.empty.
-
-  Lemma analyze_obc'_spec_na:
-    forall s na mw na' mw' x,
-      analyze_obc' na mw s = (na', mw') ->
-      PS.In x na' ->
-      PS.In x na \/ Is_naked_arg_in x s.
-  Proof.
-    induction s; simpl; intros na mw na' mw' x Hao Hin.
-    - inv Hao; auto.
-    - inv Hao; auto.
-    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
-      destruct (analyze_obc' na1 mw s2) as (na2, mw2) eqn:Hao2.
-      inversion Hao; subst; clear Hao.
-      eapply IHs2 in Hao2; eauto.
-      destruct Hao2; auto using Is_naked_arg_in.
-      eapply IHs1 in Hao1; eauto.
-      destruct Hao1; auto using Is_naked_arg_in.
-    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
-      eapply IHs2 in Hao; eauto.
-      destruct Hao; auto using Is_naked_arg_in.
-      eapply IHs1 in Hao1; eauto.
-      destruct Hao1; auto using Is_naked_arg_in.
-    - inv Hao. apply In_ps_from_fo_list' in Hin.
-      destruct Hin as [|Hin]; auto. right.
-      constructor. apply Exists_exists.
-      induction l as [|e es IH]. now inversion Hin.
-      inversion Hin as [Hna|Hin']; eauto with datatypes.
-      apply IH in Hin' as (e' & Ha & Hb); eauto with datatypes.
-    - inv Hao; auto.
-  Qed.
-
-  Lemma analyze_obc'_spec_mw:
-    forall s na mw na' mw' x,
-      analyze_obc' na mw s = (na', mw') ->
-      PS.In x mw' ->
-      PS.In x mw \/ Must_write_in x s.
-  Proof.
-    induction s; simpl; intros na mw na' mw' x Hao Hin.
-    - inv Hao. apply PS.add_spec in Hin as [Hin|Hin]; subst;
-                 auto using Must_write_in.
-    - inv Hao. apply PS.add_spec in Hin as [Hin|Hin]; subst;
-                 auto using Must_write_in.
-    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
-      destruct (analyze_obc' na1 mw s2) as (na2, mw2) eqn:Hao2.
-      inversion Hao; subst; clear Hao.
-      apply PS.inter_spec in Hin as (Hin1 & Hin2).
-      eapply IHs2 in Hao2; eauto.
-      destruct Hao2; auto using Must_write_in.
-      eapply IHs1 in Hao1; eauto.
-      destruct Hao1; auto using Must_write_in.
-    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
-      eapply IHs2 in Hao; eauto.
-      destruct Hao; auto using Must_write_in.
-      eapply IHs1 in Hao1; eauto.
-      destruct Hao1; auto using Must_write_in.
-    - inv Hao. apply In_ps_from_list' in Hin.
-      destruct Hin; auto using Must_write_in.
-    - inv Hao; auto.
-  Qed.
-
-  Lemma analyze_obc_spec_na:
-    forall s na mw,
-      analyze_obc s = (na, mw) ->
-      forall x, PS.In x na -> Is_naked_arg_in x s.
-  Proof.
-    intros * Ha x Hin.
-    eapply analyze_obc'_spec_na in Ha; eauto.
-    destruct Ha as [Ha|]; auto.
-    now apply not_In_empty in Ha.
-  Qed.
-
-  Lemma analyze_obc_spec_mw:
-    forall s na mw,
-      analyze_obc s = (na, mw) ->
-      forall x, PS.In x mw -> Must_write_in x s.
-  Proof.
-    intros * Ha x Hin.
-    eapply analyze_obc'_spec_mw in Ha; eauto.
-    destruct Ha as [Ha|]; auto.
-    now apply not_In_empty in Ha.
-  Qed.
-*)
 End OBCSYNTAX.
 
 Module ObcSyntaxFun

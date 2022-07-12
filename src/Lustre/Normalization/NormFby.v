@@ -354,7 +354,7 @@ Module Type NORMFBY
         eapply Forall_forall; intros. constructor.
       + eapply normfby_equation_vars_perm in H. now rewrite flat_map_concat_map in H.
     - simpl in Hun. cases; repeat inv_bind.
-      1-3,5-14:(exists [(concat xs0)]; simpl; rewrite app_nil_r; split; auto; repeat constructor; auto).
+      1-3,5-15:(exists [(concat xs0)]; simpl; rewrite app_nil_r; split; auto; repeat constructor; auto).
       inv H; inv H5. inv H3; inv H6.
       eapply H4 in H0 as (ys1&Hvars1&Hperm1); eauto.
       exists ys1. simpl; rewrite app_nil_r. split; auto.
@@ -418,6 +418,9 @@ Module Type NORMFBY
       normalized_constant e0 ->
       normalized_lexp e ->
       normalized_equation G out ([x], [Efby [e0] [e] [ann]])
+  | normalized_eq_Eextcall : forall out x f es ann,
+      Forall normalized_lexp es ->
+      normalized_equation G out ([x], [Eextcall f es ann])
   | normalized_eq_cexp : forall out x e,
       normalized_cexp e ->
       normalized_equation G out ([x], [e]).
@@ -483,11 +486,11 @@ Module Type NORMFBY
       unnested_global G.
   Proof.
     unfold normalized_global, unnested_global.
-    destruct G as (types&nds).
-    induction nds; intros Hnormed; inv Hnormed; constructor.
+    destruct G.
+    induction nodes0; intros Hnormed; inv Hnormed; constructor.
     - destruct H1. split; eauto.
       eapply normalized_node_unnested_node; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
   (** ** After normalization, equations and expressions are normalized *)
@@ -568,6 +571,8 @@ Module Type NORMFBY
       1-2:repeat esplit; eauto...
       intros ??; congruence.
       eapply init_var_for_clock_normalized_eq; eauto.
+    - (* extapp *)
+      repeat econstructor; eauto.
     - (* cexp *)
       inv H; repeat inv_bind; auto...
       inv H0; repeat inv_bind; auto...
@@ -822,7 +827,7 @@ Module Type NORMFBY
     { transform_unit := normfby_node }.
 
   Global Program Instance normfby_global_without_units : TransformProgramWithoutUnits (@global nolocal_top_block norm1_prefs) (@global nolocal_top_block norm2_prefs) :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition normfby_global : @global nolocal_top_block norm1_prefs -> @global nolocal_top_block norm2_prefs := transform_units.
 
@@ -831,7 +836,7 @@ Module Type NORMFBY
   Fact normfby_global_eq : forall G,
       global_iface_eq G (normfby_global G).
   Proof.
-    split; auto.
+    repeat split; auto.
     intros f. unfold find_node.
     destruct (find_unit f G) as [(?&?)|] eqn:Hfind; simpl.
     - setoid_rewrite find_unit_transform_units_forward; eauto.
@@ -876,7 +881,7 @@ Module Type NORMFBY
       unnested_global G ->
       normalized_global (normfby_global G).
   Proof.
-    unfold normfby_global. destruct G as (types&nds).
+    unfold normfby_global. destruct G.
     intros * Hunt.
     eapply transform_units_wt_program; eauto.
     intros ?? Huntn.

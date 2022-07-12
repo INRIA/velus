@@ -54,6 +54,7 @@ Module Type SUBCLOCK
       | Elast x ann => Elast x (subclock_ann ann)
       | Eunop op e1 ann => Eunop op (subclock_exp e1) (subclock_ann ann)
       | Ebinop op e1 e2 ann => Ebinop op (subclock_exp e1) (subclock_exp e2) (subclock_ann ann)
+      | Eextcall f es (tyout, ck) => Eextcall f (map subclock_exp es) (tyout, subclock_clock ck)
       | Efby e0s e1s anns => Efby (map subclock_exp e0s) (map subclock_exp e1s) (map subclock_ann anns)
       | Earrow e0s e1s anns => Earrow (map subclock_exp e0s) (map subclock_exp e1s) (map subclock_ann anns)
       | Ewhen es (x, tx) t ann => Ewhen (map subclock_exp es) (rename_var x, tx) t (subclock_ann ann)

@@ -32,9 +32,9 @@ Module Type STCTYPING
   Inductive wt_trconstr (P: program) (Γv: list (ident * type)) (Γm: list (ident * type)): trconstr -> Prop :=
   | wt_TcDef:
       forall x ck e,
-        In (x, typeofc e) Γv ->
+        In (x, typeofr e) Γv ->
         wt_clock P.(types) (Γv ++ Γm) ck ->
-        wt_cexp P.(types) (Γv ++ Γm) e ->
+        wt_rhs P.(types) P.(externs) (Γv ++ Γm) e ->
         wt_trconstr P Γv Γm (TcDef x ck e)
   | wt_TcResetConst:
       forall x ckr ty c0,

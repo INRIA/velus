@@ -124,6 +124,7 @@ module PrintClightOpsFun (OpNames : sig
     module Ops = Interface.Op
     module OpAux = Interface.OpAux
 
+    type ctype   = Ops.ctype
     type typ     = Ops.coq_type
     type cconst  = Ops.cconst
     type const   = Ops.const
@@ -134,7 +135,7 @@ module PrintClightOpsFun (OpNames : sig
     let enumtag_of_int = Nat.of_int
     let int_of_enumtag = Nat.to_int
 
-    let print_typ' p ty = Ops.string_of_ctype ty |> fmt_coqstring p
+    let print_ctype p ty = Ops.string_of_ctype ty |> fmt_coqstring p
     let print_typ p ty = Interface.string_of_type ty |> fmt_coqstring p
 
     let print_ident p i = pp_print_string p (extern_atom i)
@@ -168,7 +169,7 @@ module PrintClightOpsFun (OpNames : sig
       | Ops.UnaryOp op, Ops.Tenum (_, n) ->
           fprintf p "%s %a" (OpNames.name_unop (Ops.enumtag_ctype (Datatypes.length n)) op) print_exp e
       | Ops.CastOp ty, _ ->
-          fprintf p "(%a : %a)" print_exp e print_typ' ty
+          fprintf p "(%a : %a)" print_exp e print_ctype ty
 
     let print_binop p op ty print_exp1 e1 print_exp2 e2 =
       match ty with

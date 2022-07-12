@@ -34,6 +34,7 @@ Module Type DELAST
       | Elast x ann => Evar (rename_in_var x) ann
       | Eunop op e1 ann => Eunop op (rename_in_exp e1) ann
       | Ebinop op e1 e2 ann => Ebinop op (rename_in_exp e1) (rename_in_exp e2) ann
+      | Eextcall f es ann => Eextcall f (map rename_in_exp es) ann
       | Efby e0s e1s anns => Efby (map rename_in_exp e0s) (map rename_in_exp e1s) anns
       | Earrow e0s e1s anns => Earrow (map rename_in_exp e0s) (map rename_in_exp e1s) anns
       | Ewhen es x t ann => Ewhen (map rename_in_exp es) x t ann
@@ -823,7 +824,7 @@ Module Type DELAST
     { transform_unit := delast_node }.
 
   Global Program Instance delast_global_without_units : TransformProgramWithoutUnits (@global (fun _ => True) elab_prefs) (@global nolast_block last_prefs) :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition delast_global : @global (fun _ => True) elab_prefs -> @global nolast_block last_prefs :=
     transform_units.
@@ -833,7 +834,7 @@ Module Type DELAST
   Lemma delast_global_iface_eq : forall G,
       global_iface_eq G (delast_global G).
   Proof.
-    split; auto.
+    repeat split; auto.
     intros f. unfold find_node.
     destruct (find_unit f G) as [(?&?)|] eqn:Hfind; simpl.
     - setoid_rewrite find_unit_transform_units_forward; eauto.

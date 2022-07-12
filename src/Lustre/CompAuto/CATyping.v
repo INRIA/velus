@@ -333,31 +333,31 @@ Module Type CATYPING
       wt_global G ->
       wt_global (auto_global G).
   Proof.
-    intros (enms&nds). revert enms.
-    induction nds; intros * Hwt.
+    intros []. revert types0.
+    induction nodes0; intros * Hwt.
     - destruct Hwt. constructor; simpl in *; auto with datatypes.
       now rewrite app_nil_r.
       constructor.
     - destruct Hwt.
       inv H0. destruct H3 as (Hwtn&Hnames). constructor; simpl; eauto with datatypes.
       1:{ inv H. constructor; auto. rewrite in_app_iff; auto. }
-      assert (wt_global {| types := enms; nodes := nds |}) as Hwt' by (constructor; auto).
-      specialize (IHnds _ Hwt').
+      assert (wt_global {| types := types0; externs := externs0; nodes := nodes0 |}) as Hwt' by (constructor; auto).
+      specialize (IHnodes0 _ Hwt').
       constructor; simpl in *; auto with datatypes. split.
       + eapply auto_node_wt; eauto.
         * eapply global_iface_incl_trans. apply auto_global_iface_incl.
-          split; simpl; solve_incl_app.
+          repeat split; simpl; solve_incl_app.
           intros * Hfind. do 2 esplit; eauto. 2:apply node_iface_eq_refl.
           erewrite find_node_change_types. apply Hfind; eauto.
         * simpl. solve_incl_app.
       + simpl_Forall.
         apply in_map_iff in H0 as (?&?&Hin); subst. apply in_map_iff in Hin as (?&?&Hin); subst.
         simpl_Forall. auto.
-      + destruct IHnds as (?&IHnds).
+      + destruct IHnodes0 as (?&IHnds).
         eapply Forall'_impl; [|eapply IHnds].
         intros * (?&?). split; auto.
         eapply iface_incl_wt_node; eauto. simpl.
-        split; simpl; solve_incl_app.
+        repeat split; simpl; solve_incl_app.
         intros * Hfind. do 2 esplit; eauto. 2:apply node_iface_eq_refl.
         erewrite find_node_change_types, Hfind; eauto.
   Qed.

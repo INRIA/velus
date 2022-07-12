@@ -267,25 +267,24 @@ Module Type CACLOCKING
       wc_global G ->
       wc_global (auto_global G).
   Proof.
-    intros (enms&nds). revert enms.
-    induction nds; intros * Hwc.
+    intros []. revert types0.
+    induction nodes0; intros * Hwc.
     - constructor.
     - inv Hwc. destruct H1 as (Hwcn&Hnames).
-      assert (wc_global {| types := enms; nodes := nds |}) as Hwc' by auto.
-      specialize (IHnds _ Hwc').
+      assert (wc_global {| types := types0; externs := externs0; nodes := nodes0 |}) as Hwc' by auto.
+      specialize (IHnodes0 _ Hwc').
       constructor; simpl in *; auto with datatypes. split.
       + eapply auto_node_wc; eauto.
         eapply global_iface_incl_trans. apply auto_global_iface_incl.
-        split; simpl; solve_incl_app.
+        repeat split; simpl; solve_incl_app.
         intros * Hfind. do 2 esplit; eauto. 2:apply node_iface_eq_refl.
         erewrite find_node_change_types. apply Hfind; eauto.
-      + simpl_Forall.
-        apply in_map_iff in H as (?&?&Hin); subst. apply in_map_iff in Hin as (?&?&Hin); subst.
+      + simpl_Forall. simpl_In.
         simpl_Forall. auto.
-      + eapply Forall'_impl; [|eapply IHnds].
+      + eapply Forall'_impl; [|eapply IHnodes0].
         intros * (?&?). split; auto.
         eapply iface_incl_wc_node; eauto. simpl.
-        split; simpl; solve_incl_app.
+        repeat split; simpl; solve_incl_app.
         intros * Hfind. do 2 esplit; eauto. 2:apply node_iface_eq_refl.
         erewrite find_node_change_types, Hfind; eauto.
   Qed.

@@ -111,10 +111,10 @@ Module Type CORRECTNESS
       msem_node G f xss M yss ->
       initial_state (translate G) f (M 0).
   Proof.
-    intros (?& G).
-    induction G as [|node ? IH].
+    intros [].
+    induction nodes0 as [|node ? IH].
     inversion 2;
-      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ _ []) = _ |- _ => inversion Hf end.
     intros * Hord Hsem.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Clock Hfind Ins ?? Heqs Closed].
@@ -232,11 +232,11 @@ Module Type CORRECTNESS
     forall n, memory_closed_rec G f (M n).
 
   Lemma memory_closed_rec_other:
-    forall M G f node enums,
-      Ordered_nodes (Global enums (node :: G)) ->
+    forall M G f node enums externs,
+      Ordered_nodes (Global enums externs (node :: G)) ->
       node.(n_name) <> f ->
-      (memory_closed_rec (Global enums (node :: G)) f M
-       <-> memory_closed_rec (Global enums G) f M).
+      (memory_closed_rec (Global enums externs (node :: G)) f M
+       <-> memory_closed_rec (Global enums externs G) f M).
   Proof.
     induction M as [? IH] using memory_ind'.
     split; inversion_clear 1 as [???? Find ? Insts].
@@ -261,11 +261,11 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma memory_closed_rec_n_other:
-    forall M G f node enums,
-      Ordered_nodes (Global enums (node :: G)) ->
+    forall M G f node enums externs,
+      Ordered_nodes (Global enums externs (node :: G)) ->
       node.(n_name) <> f ->
-      (memory_closed_rec_n (Global enums (node :: G)) f M
-       <-> memory_closed_rec_n (Global enums G) f M).
+      (memory_closed_rec_n (Global enums externs (node :: G)) f M
+       <-> memory_closed_rec_n (Global enums externs G) f M).
   Proof.
     split; intros Closed n; specialize (Closed n).
     - apply memory_closed_rec_other in Closed; auto.
@@ -305,8 +305,8 @@ Module Type CORRECTNESS
       msem_node G f xss M yss ->
       memory_closed_rec_n G f M.
   Proof.
-    intros (?& G).
-    induction G as [|node]; intros ???? Ord;
+    intros [].
+    induction nodes0 as [|node]; intros ???? Ord;
       inversion_clear 1 as [???????? Find ??? Heqs Closed];
       try now inv Find.
     pose proof Find.
@@ -330,7 +330,7 @@ Module Type CORRECTNESS
         apply msem_equations_cons in Heqs; auto.
         inv Ord.
         eapply msem_equations_memory_closed_rec; eauto.
-    - assert (find_node f {| NL.Syn.types := types0; nodes := G |} = Some n0)
+    - assert (find_node f {| NL.Syn.types := types0; nodes := nodes0 |} = Some n0)
         by (unfold find_node; rewrite Find; auto).
       assert (~ Is_node_in (n_name node) (n_eqs n0))
         by (eapply find_node_other_not_Is_node_in; eauto).
@@ -795,10 +795,10 @@ Module Type CORRECTNESS
       msem_node G f xss M yss ->
       sem_system_n (translate G) f M xss yss (next M).
   Proof.
-    intros (enums & G).
-    induction G as [|node ? IH].
+    intros [].
+    induction nodes0 as [|node ? IH].
     inversion 3;
-      match goal with Hf: find_node _ (Global _ []) = _ |- _ => inversion Hf end.
+      match goal with Hf: find_node _ (Global _ _ []) = _ |- _ => inversion Hf end.
     intros * Hord WC Hsem n.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Clock Hfind Ins Outs Ck Heqs Closed].
@@ -806,7 +806,7 @@ Module Type CORRECTNESS
     pose proof Hord as Hord'; inversion_clear Hord' as [|???? NodeIn].
     apply option_map_inv in Hfind as ((?&?)&Hfind&?).
     pose proof Hfind as Hfind'.
-    assert (Ordered_systems (Program enums (translate_node node :: map translate_node G)))
+    assert (Ordered_systems (Program types0 externs0 (translate_node node :: map translate_node nodes0)))
       by (apply Ordered_nodes_systems in Hord; auto).
     inversion WC as [|?? (?&?&?& WCeqs)]; subst; simpl in WCeqs.
     eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl in *; eauto.

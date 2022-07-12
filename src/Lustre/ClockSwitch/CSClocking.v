@@ -45,11 +45,11 @@ Module Type CSCLOCKING
     Proof.
       intros * Hwc Hck Hcond; destruct e; repeat inv_bind.
       3:destruct a; repeat inv_bind; auto.
-      1-11:constructor; auto; rewrite Permutation_app_comm; simpl.
-      1-11:(constructor; [constructor; auto; eapply wc_exp_incl in Hwc; eauto;
-                          intros * Hl; inv Hl; econstructor; eauto with datatypes|]).
-      1-11:simpl; try take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
-      1-11:constructor; eauto with senv datatypes.
+      all:constructor; auto; rewrite Permutation_app_comm; simpl.
+      all:(constructor; [constructor; auto; eapply wc_exp_incl in Hwc; eauto;
+                         intros * Hl; inv Hl; econstructor; eauto with datatypes|]).
+      all:simpl; try take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
+      all:constructor; eauto with senv datatypes.
     Qed.
 
     Lemma cond_eq_wc_clock Γ : forall e ty ck x xcs eqs' st st',
@@ -427,8 +427,8 @@ Module Type CSCLOCKING
       wc_global G ->
       wc_global (switch_global G).
   Proof.
-    intros (types&nds). unfold wc_global, CommonTyping.wt_program; simpl.
-    induction nds; intros * Hwc; simpl; inv Hwc; auto with datatypes.
+    intros []. unfold wc_global, CommonTyping.wt_program; simpl.
+    induction nodes0; intros * Hwc; simpl; inv Hwc; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wc; eauto.
@@ -436,7 +436,7 @@ Module Type CSCLOCKING
       eapply H2; eauto.
     - rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros.
       simpl; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
 End CSCLOCKING.

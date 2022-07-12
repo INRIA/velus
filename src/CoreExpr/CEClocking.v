@@ -73,6 +73,16 @@ Module Type CECLOCKING
           wc_exp e ck ->
           wc_cexp (Eexp e) ck.
 
+    Inductive wc_rhs : rhs -> clock -> Prop :=
+    | Cextcall:
+        forall f es ty ck,
+          Forall (fun e => wc_exp e ck) es ->
+          wc_rhs (Eextcall f es ty) ck
+    | Ccexp:
+        forall e ck,
+          wc_cexp e ck ->
+          wc_rhs (Ecexp e) ck.
+
   End WellClocked.
 
   (** ** Basic properties of clocking *)
@@ -176,6 +186,17 @@ Module Type CECLOCKING
           + intros * Hin;
               repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
             apply it; auto.
+  Qed.
+
+  Global Instance wc_rhs_Proper:
+    Proper (@Permutation.Permutation (ident * _) ==>
+            @eq _ ==> @eq _ ==> iff)
+           wc_rhs.
+  Proof.
+    intros env' env Henv e' e ? ck' ck ?; subst.
+    destruct e; split; intros Hwc; inv Hwc; econstructor; eauto; simpl_Forall.
+    all:try rewrite Henv; auto.
+    all:try rewrite <-Henv; auto.
   Qed.
 
 End CECLOCKING.

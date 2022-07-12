@@ -262,6 +262,8 @@ Module Type NCLOCKING
       repeat constructor.
     - (* binop *)
       repeat constructor.
+    - (* extcall *)
+      repeat constructor.
     - (* fby *)
       erewrite idents_for_anns_nclocksof, Forall2_map_2; eauto.
       eapply idents_for_anns_values in H5. rewrite <-H5, 2 Forall2_map_1.
@@ -798,6 +800,17 @@ Module Type NCLOCKING
           rewrite app_nil_r, H8 in Hnorm2...
         + apply Forall_app; split; auto.
           solve_forall. repeat solve_incl.
+      - (* extcall *)
+        destruct_conjs; repeat inv_bind.
+        assert (Hnorm1:=H0). eapply mmap2_wc with (vars:=vars++st_senv x1) in H0 as [Hwt1 Hwt1']...
+        2:solve_mmap2.
+        eapply mmap2_unnest_exp_clocksof in Hnorm1; eauto.
+        assert (HasClock (vars ++ st_senv st') x2 ck) as Hck.
+        { take (fresh_ident _ _ _ _ = _) and eapply fresh_ident_In in it.
+          apply HasClock_app, or_intror. econstructor; solve_In. auto. }
+        repeat constructor; auto.
+        2,3:rewrite Hnorm1; auto.
+        1,2:simpl_Forall; repeat solve_incl.
       - (* fby *)
         repeat inv_bind.
         assert (Hnorm1:=H1). eapply mmap2_wc with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
@@ -1122,6 +1135,10 @@ Module Type NCLOCKING
       intros * Hnl Hwc Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
         try (solve [eapply unnest_exp_wc in Hnorm; eauto]); repeat inv_bind; inv Hwc.
+      - (* extcall *)
+        assert (Hnorm:=H). eapply unnest_exps_wc in H as [Hwc1 Hwc1']...
+        eapply unnest_exps_clocksof in Hnorm...
+        repeat constructor; auto. 1,2:congruence.
       - (* fby *)
         rewrite Forall2_eq in H6, H7.
         repeat inv_bind.
@@ -1574,6 +1591,12 @@ Module Type NCLOCKING
         eapply IHe1 in H...
         eapply IHe2 in H0...
         repeat solve_incl.
+      - (* extcall *)
+        destruct_conjs; repeat inv_bind.
+        eapply wc_exp_clockof in Hwc as Hwck... simpl in *; simpl_Forall.
+        inv Hwc.
+        eapply fresh_ident_wc_env in H1; eauto. 2:repeat solve_incl.
+        eapply mmap2_wc_env in H0... solve_mmap2'.
       - (* fby *)
         inv Hwc.
         rewrite Forall2_eq in H9, H10.
@@ -1690,19 +1713,18 @@ Module Type NCLOCKING
       intros * Hnl Hwenv Hwc Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
         try (solve [eapply unnest_exp_wc_env in Hnorm; eauto]);
-        repeat inv_bind.
+        repeat inv_bind; inv Hwc.
+      - (* extcall *)
+        eapply unnest_exps_wc_env in H...
       - (* fby *)
-        inv Hwc.
         assert (Hwenv1:=H). eapply unnest_exps_wc_env in Hwenv1...
         assert (Hwenv2:=H0). eapply unnest_exps_wc_env in Hwenv2...
         solve_forall; repeat solve_incl.
       - (* arrow *)
-        inv Hwc.
         assert (Hwenv1:=H). eapply unnest_exps_wc_env in Hwenv1...
         assert (Hwenv2:=H0). eapply unnest_exps_wc_env in Hwenv2...
         solve_forall; repeat solve_incl.
       - (* app *)
-        inv Hwc.
         assert (Hnorm:=H). eapply unnest_exps_wc_env in H...
         assert (Hnorm2:=H0). eapply unnest_noops_exps_wc_env in H0...
         + eapply unnest_resets_wc_env in H1... 2:solve_forall; repeat solve_incl.
@@ -1846,15 +1868,15 @@ Module Type NCLOCKING
       wc_global G ->
       wc_global (unnest_global G).
   Proof.
-    intros (types&nds). unfold wc_global, CommonTyping.wt_program; simpl.
-    induction nds; intros * Hwc; simpl; inv Hwc; auto with datatypes.
+    intros []. unfold wc_global, CommonTyping.wt_program; simpl.
+    induction nodes0; intros * Hwc; simpl; inv Hwc; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply unnest_node_wc; eauto.
-      2: eapply IHnds; eauto.
+      2: eapply IHnodes0; eauto.
       eapply iface_eq_iface_incl, unnest_nodes_eq.
     - eapply unnest_nodes_names; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
   (** ** Preservation of clocking through second pass *)
@@ -2167,15 +2189,15 @@ Module Type NCLOCKING
       wc_global G ->
       wc_global (normfby_global G).
   Proof.
-    intros (types&nds). unfold wc_global, unnested_global, CommonTyping.wt_program; simpl.
-    induction nds; intros * Hun Hwc; simpl;
+    intros []. unfold wc_global, unnested_global, CommonTyping.wt_program; simpl.
+    induction nodes0; intros * Hun Hwc; simpl;
       inversion_clear Hun as [|?? (?&?)];
       inversion_clear Hwc as [|?? (?&?)]; auto with datatypes.
     constructor; [constructor|].
     - eapply normfby_node_wc; eauto.
       eapply iface_eq_iface_incl, normfby_global_eq.
     - simpl. eapply normfby_nodes_names; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
   (** ** Conclusion *)

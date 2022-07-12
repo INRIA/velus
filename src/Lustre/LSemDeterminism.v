@@ -285,6 +285,39 @@ Module Type LSEMDETERMINISM
       rewrite H6 in H8. now inv H8.
     Qed.
 
+    Lemma liftn_detn : forall n f tyins tyout xss1 xss2 ys1 ys2,
+        xss1 <> [] ->
+        Forall2 (EqStN n) xss1 xss2 ->
+        liftn (fun vs v => sem_extern f tyins vs tyout v) xss1 ys1 ->
+        liftn (fun vs v => sem_extern f tyins vs tyout v) xss2 ys2 ->
+        EqStN n ys1 ys2.
+    Proof.
+      intros * Hnnil Heqsts Hl1 Hl2.
+      apply EqStN_spec; intros * Hlt.
+      apply liftn_spec with (n:=k) in Hl1. apply liftn_spec with (n:=k) in Hl2.
+      destruct Hl1 as [(?&?)|(?&?&?&?&?)], Hl2 as [(?&?)|(?&?&?&?&?)]; try congruence.
+      - exfalso. eapply Forall2_ignore2 in H1.
+        inv Heqsts; try congruence; simpl_Forall.
+        take (EqStN _ x1 y) and eapply EqStN_spec in it; rename it into contra; eauto.
+        take (_ = absent) and setoid_rewrite it in contra.
+        take (_ = present _) and setoid_rewrite it in contra. congruence.
+      - exfalso. eapply Forall2_ignore2 in H.
+        inv Heqsts; try congruence; simpl_Forall.
+        take (EqStN _ x1 y) and eapply EqStN_spec in it; rename it into contra; eauto.
+        take (_ = absent) and setoid_rewrite it in contra.
+        take (_ = present _) and setoid_rewrite it in contra. congruence.
+      - take (ys1 # k = _) and rewrite it.
+        take (ys2 # k = _) and rewrite it.
+        repeat f_equal.
+        eapply sem_extern_det; eauto. replace x with x1; auto.
+        clear - Hlt Heqsts H H2.
+        apply Forall2_swap_args in H. eapply Forall2_trans_ex in Heqsts; [|eauto].
+        eapply Forall2_trans_ex in H2; [|eauto].
+        clear - Hlt H2. induction H2; destruct_conjs; f_equal; auto.
+        eapply EqStN_spec in H4; eauto.
+        setoid_rewrite H3 in H4. setoid_rewrite H1 in H4. now inv H4.
+    Qed.
+
     Corollary fby_detn {A} : forall n (xs1 xs2 ys1 ys2 zs1 zs2 : Stream (synchronous A)),
         EqStN n xs1 xs2 ->
         EqStN n ys1 ys2 ->
@@ -531,23 +564,35 @@ Module Type LSEMDETERMINISM
         edestruct Hn as (_&Hn2). right; econstructor; solve_In; eauto.
         eapply Hn2; eauto. econstructor; solve_In; eauto.
       - (* unop *)
-        inversion_clear Hs1 as [| | | |???????? Hse1 Hty1 Hl1| | | | | | | |].
-        inversion_clear Hs2 as [| | | |???????? Hse2 Hty2 Hl2| | | | | | | |].
+        inversion_clear Hs1 as [| | | |???????? Hse1 Hty1 Hl1| | | | | | | | |].
+        inversion_clear Hs2 as [| | | |???????? Hse2 Hty2 Hl2| | | | | | | | |].
         rewrite Hty2 in Hty1; inv Hty1.
         eapply IHe in Hse1; eauto. inv Hse1.
         constructor; auto.
         eapply lift1_detn; eauto.
       - (* binop *)
-        inversion_clear Hs1 as [| | | | |??????????? Hse11 Hse12 Hty11 Hty12 Hl1| | | | | | |].
-        inversion_clear Hs2 as [| | | | |??????????? Hse21 Hse22 Hty21 Hty22 Hl2| | | | | | |].
+        inversion_clear Hs1 as [| | | | |??????????? Hse11 Hse12 Hty11 Hty12 Hl1| | | | | | | |].
+        inversion_clear Hs2 as [| | | | |??????????? Hse21 Hse22 Hty21 Hty22 Hl2| | | | | | | |].
         rewrite Hty21 in Hty11; inv Hty11. rewrite Hty22 in Hty12; inv Hty12.
         eapply IHe1 in Hse21; eauto. eapply IHe2 in Hse22; eauto.
         inv Hse21. inv Hse22.
         constructor; auto.
         eapply lift2_detn. 3,4:eauto. 1,2:eauto.
+      - (* extcall *)
+        inversion_clear Hs1 as [| | | | | |????????? Hty1 Hse1 Hl1| | | | | | |].
+        inversion_clear Hs2 as [| | | | | |????????? Hty2 Hse2 Hl2| | | | | | |].
+        constructor; auto.
+        assert (tyins1 = tyins0); subst.
+        { apply Forall2_eq. eapply Forall2_trans_ex in Hty1. 2:eapply Forall2_swap_args, Hty2.
+          simpl_Forall. congruence. }
+        eapply liftn_detn. 3,4:eauto.
+        + eapply sem_exps_numstreams in Hse1; [|eauto with ltyping].
+          rewrite typesof_annots in H5.
+          destruct (annots es), (concat ss); simpl in *; try congruence.
+        + eapply det_exps_n'; eauto.
       - (* fby *)
-        inversion_clear Hs1 as [| | | | | |???????? Hse11 Hse12 Hfby1| | | | | |].
-        inversion_clear Hs2 as [| | | | | |???????? Hse21 Hse22 Hfby2| | | | | |].
+        inversion_clear Hs1 as [| | | | | | |???????? Hse11 Hse12 Hfby1| | | | | |].
+        inversion_clear Hs2 as [| | | | | | |???????? Hse21 Hse22 Hfby2| | | | | |].
         eapply det_exps_n' in H; eauto.
         eapply det_exps_n' in H0; eauto.
         clear - H H0 Hfby1 Hfby2.
@@ -561,8 +606,8 @@ Module Type LSEMDETERMINISM
         + eapply H8; eauto. setoid_rewrite H7; auto.
         + eapply H5; eauto. setoid_rewrite <-H. setoid_rewrite H7. auto.
       - (* arrow *)
-        inversion_clear Hs1 as [| | | | | | |???????? Hse11 Hse12 Harrow1| | | | |].
-        inversion_clear Hs2 as [| | | | | | |???????? Hse21 Hse22 Harrow2| | | | |].
+        inversion_clear Hs1 as [| | | | | | | |???????? Hse11 Hse12 Harrow1| | | | |].
+        inversion_clear Hs2 as [| | | | | | | |???????? Hse21 Hse22 Harrow2| | | | |].
         eapply det_exps_n' in H; eauto.
         eapply det_exps_n' in H0; eauto.
         clear - H H0 Harrow1 Harrow2.
@@ -574,8 +619,8 @@ Module Type LSEMDETERMINISM
         + eapply H5; eauto; congruence.
       - (* when *)
         repeat simpl_In.
-        inversion_clear Hs1 as [| | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
+        inversion_clear Hs1 as [| | | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
+        inversion_clear Hs2 as [| | | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
         eapply det_exps_n' in H; eauto.
         take (HasType _ _ _) and inv it; simpl_In.
         edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
@@ -588,8 +633,8 @@ Module Type LSEMDETERMINISM
         + eapply H2; eauto; congruence.
       - (* merge *)
         repeat simpl_In.
-        inversion_clear Hs1 as [| | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
-        inversion_clear Hs2 as [| | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
+        inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
+        inversion_clear Hs2 as [| | | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
         inv H3; simpl_In.
         edestruct Hn as (Hn1&_). left; econstructor; solve_In; eauto.
         eapply Hn1 in Hsv1; eauto. 2:econstructor; solve_In; eauto.
@@ -608,8 +653,8 @@ Module Type LSEMDETERMINISM
         congruence.
         rewrite fst_NoDupMembers, H6, H5. apply seq_NoDup.
       - (* case *)
-        inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
-        inversion_clear Hs2 as [| | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
+        inversion_clear Hs1 as [| | | | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
+        inversion_clear Hs2 as [| | | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
         eapply IHe in Hsv2; eauto. apply Forall2_singl in Hsv2.
         eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
         2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
@@ -628,8 +673,8 @@ Module Type LSEMDETERMINISM
         rewrite fst_NoDupMembers, H3, H8. apply seq_NoDup.
         intros. congruence.
       - (* case (default) *)
-        inversion_clear Hs1 as [| | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
-        inversion_clear Hs2 as [| | | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
+        inversion_clear Hs1 as [| | | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
+        inversion_clear Hs2 as [| | | | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
         eapply IHe in Hsv2; eauto. apply Forall2_singl in Hsv2.
         eapply Forall2Brs_det_exp_n' in H. 3-5:eauto.
         2:{ eapply Forall2Brs_length1 in Hse1. eapply Forall2Brs_length1 in Hse2.
@@ -650,8 +695,8 @@ Module Type LSEMDETERMINISM
         rewrite fst_NoDupMembers, H5, <-fst_NoDupMembers; auto.
         intros ?? Heq1 Heq2. inv Heq1. inv Heq2. assumption.
       - (* app *)
-        inversion_clear Hs1 as [| | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].
-        inversion_clear Hs2 as [| | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
+        inversion_clear Hs1 as [| | | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].
+        inversion_clear Hs2 as [| | | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
         eapply det_exps_n' in H; eauto.
         rewrite <-Forall2_map_2 in Her1, Her2.
         eapply det_exps_n' in H0; eauto. repeat rewrite concat_map_singl1 in H0.
@@ -740,7 +785,7 @@ Module Type LSEMDETERMINISM
       intros * Hn Hwt Hnum Hbs HSn.
       eapply exp_causal_ind
         with (P_exp:=det_exp_inv (S n) Hi1 Hi2 bs1 bs2); eauto with ltyping.
-      1-12:clear Hwt HSn.
+      1-13:clear Hwt HSn.
       - (* const *)
         intros ??? Hwt Hs1 Hs2. inv Hs1. inv Hs2. simpl.
         rewrite H3, H4. eapply const_detn; eauto.
@@ -755,22 +800,35 @@ Module Type LSEMDETERMINISM
         edestruct Hvar as (_&Hv). eapply Hv; eauto.
       - (* unop *)
         intros ??? He1 ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | |???????? Hse1 Hty1 Hl1| | | | | | | |].
-        inversion_clear Hs2 as [| | | |???????? Hse2 Hty2 Hl2| | | | | | | |].
+        inversion_clear Hs1 as [| | | |???????? Hse1 Hty1 Hl1| | | | | | | | |].
+        inversion_clear Hs2 as [| | | |???????? Hse2 Hty2 Hl2| | | | | | | | |].
         rewrite Hty2 in Hty1; inv Hty1.
         eapply He1 in Hse2; eauto. simpl in *.
         eapply lift1_detn; eauto.
       - (* binop *)
         intros ???? He1 He2 ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | | |??????????? Hse11 Hse12 Hty11 Hty12 Hl1| | | | | | |].
-        inversion_clear Hs2 as [| | | | |??????????? Hse21 Hse22 Hty21 Hty22 Hl2| | | | | | |].
+        inversion_clear Hs1 as [| | | | |??????????? Hse11 Hse12 Hty11 Hty12 Hl1| | | | | | | |].
+        inversion_clear Hs2 as [| | | | |??????????? Hse21 Hse22 Hty21 Hty22 Hl2| | | | | | | |].
         rewrite Hty21 in Hty11; inv Hty11. rewrite Hty22 in Hty12; inv Hty12.
         eapply He1 in Hse21; eauto. eapply He2 in Hse22; eauto. simpl in *.
         eapply lift2_detn. 3,4:eauto. 1,2:eauto.
+      - (* extcall *)
+        intros * Hes ?? Hwt Hs1 Hs2. inv Hwt.
+        inversion_clear Hs1 as [| | | | | |????????? Hty1 Hse1 Hl1| | | | | | |].
+        inversion_clear Hs2 as [| | | | | |????????? Hty2 Hse2 Hl2| | | | | | |].
+        simpl.
+        assert (tyins1 = tyins0); subst.
+        { apply Forall2_eq. eapply Forall2_trans_ex in Hty1. 2:eapply Forall2_swap_args, Hty2.
+          simpl_Forall. congruence. }
+        eapply liftn_detn. 3,4:eauto.
+        + eapply sem_exps_numstreams in Hse1; [|eauto with ltyping].
+          rewrite typesof_annots in H4.
+          destruct (annots es), (concat ss); simpl in *; try congruence.
+        + eapply P_exps_det_exp_inv_all in Hes; eauto.
       - (* fby *)
         intros ???? Hk He0s ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | | | |???????? Hse11 Hse12 Hfby1| | | | | |].
-        inversion_clear Hs2 as [| | | | | |???????? Hse21 Hse22 Hfby2| | | | | |].
+        inversion_clear Hs1 as [| | | | | | |???????? Hse11 Hse12 Hfby1| | | | | |].
+        inversion_clear Hs2 as [| | | | | | |???????? Hse21 Hse22 Hfby2| | | | | |].
         eapply P_exps_det_exp_inv in He0s; eauto.
         eapply det_exps_n in Hse22; eauto using EqStN_weaken.
         assert (length (concat s0ss) = length ann0) as Hlen1.
@@ -791,8 +849,8 @@ Module Type LSEMDETERMINISM
           eapply Hfby2 with (b:=def_stream); eauto. setoid_rewrite Hlen2. auto.
       - (* arrow *)
         intros ???? Hk He0s He1s ?? Hwt Hs1 Hs2. inv Hwt.
-        inversion_clear Hs1 as [| | | | | | |???????? Hse11 Hse12 Harrow1| | | | |].
-        inversion_clear Hs2 as [| | | | | | |???????? Hse21 Hse22 Harrow2| | | | |].
+        inversion_clear Hs1 as [| | | | | | | |???????? Hse11 Hse12 Harrow1| | | | |].
+        inversion_clear Hs2 as [| | | | | | | |???????? Hse21 Hse22 Harrow2| | | | |].
         eapply P_exps_det_exp_inv in He0s; eauto.
         eapply P_exps_det_exp_inv in He1s; eauto.
         assert (length (concat s0ss) = length ann0) as Hlen1.
@@ -810,8 +868,8 @@ Module Type LSEMDETERMINISM
           congruence.
       - (* when *)
         intros ??????? Hk Hes Hin Hvar ?? Hwt Hs1 Hs2. inv Hwt. simpl in *.
-        inversion_clear Hs1 as [| | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
-        inversion_clear Hs2 as [| | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
+        inversion_clear Hs1 as [| | | | | | | | |?????????? Hse1 Hsv1 Hwhen1| | | |].
+        inversion_clear Hs2 as [| | | | | | | | |?????????? Hse2 Hsv2 Hwhen2| | | |].
         eapply Hvar in Hsv2; eauto.
         eapply P_exps_det_exp_inv in Hes; eauto.
         assert (length (concat ss) = length (typesof es)) as Hlen1.
@@ -833,8 +891,8 @@ Module Type LSEMDETERMINISM
         { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
         assert (length ss2 = length tys) as Hlen2.
         { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
-        inversion_clear Hs1 as [| | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
-        inversion_clear Hs2 as [| | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
+        inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hmerge1| | |].
+        inversion_clear Hs2 as [| | | | | | | | | |????????? Hsv2 Hse2 Hmerge2| | |].
         eapply Hvar in Hsv1; eauto using In_InMembers.
         assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
         { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall2_length in Hmerge1. congruence. }
@@ -854,8 +912,8 @@ Module Type LSEMDETERMINISM
           { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
           assert (length ss2 = length tys) as Hlen2.
           { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
-          inversion_clear Hs1 as [| | | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
-          inversion_clear Hs2 as [| | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
+          inversion_clear Hs1 as [| | | | | | | | | | |????????? Hsv1 Hse1 Hcase1| |].
+          inversion_clear Hs2 as [| | | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
           eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
           assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
           { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall3_length in Hcase1 as (?&?). congruence. }
@@ -875,8 +933,8 @@ Module Type LSEMDETERMINISM
           { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }
           assert (length ss2 = length (typesof d0)) as Hlen2.
           { eapply sem_exp_numstreams in Hs2; eauto with ltyping. }
-          inversion_clear Hs1 as [| | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
-          inversion_clear Hs2 as [| | | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
+          inversion_clear Hs1 as [| | | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
+          inversion_clear Hs2 as [| | | | | | | | | | | |?????????? Hsv2 _ Hse2 Hd2 Hcase2|].
           eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
           assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
           { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall3_length in Hcase1 as (?&?). congruence. }
@@ -895,8 +953,8 @@ Module Type LSEMDETERMINISM
             1,2:rewrite map_length in H, H1; try setoid_rewrite <-H; try setoid_rewrite <-H1; congruence.
       - (* app *)
         intros ????? Hlen Hes Her ?? Hwt Hsem1 Hsem2. inv Hwt.
-        inversion_clear Hsem1 as [| | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].
-        inversion_clear Hsem2 as [| | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
+        inversion_clear Hsem1 as [| | | | | | | | | | | | |?????????? Hes1 Her1 Hbools1 Hn1].
+        inversion_clear Hsem2 as [| | | | | | | | | | | | |?????????? Hes2 Her2 Hbools2 Hn2].
         eapply P_exps_det_exp_inv_all in Hes; eauto.
         rewrite <-Forall2_map_2 in Her1, Her2. eapply P_exps_det_exp_inv_all in Her; eauto.
         do 2 rewrite concat_map_singl1 in Her.
@@ -2556,8 +2614,8 @@ Module Type LSEMDETERMINISM
       Forall node_causal (nodes G) ->
       det_nodes G.
   Proof.
-    intros (enms&nds).
-    induction nds as [|nd nds]; intros Hwt Hcaus ?????? Heqins Hs1 Hs2;
+    intros [].
+    induction nodes0 as [|nd nds]; intros Hwt Hcaus ?????? Heqins Hs1 Hs2;
       inv Hcaus. now inv Hs1.
     inversion_clear Hs1 as [?????? Hfind1 Hins1 Houts1 Hbcks1 Hbk1].
     inversion_clear Hs2 as [?????? Hfind2 Hins2 Houts2 Hbcks2 Hbk2].

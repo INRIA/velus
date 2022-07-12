@@ -231,10 +231,16 @@ Module Type STC2OBCTYPING
       wt_trconstr P Γv Γm tc ->
       wt_stmt (translate P) insts Γm' Γv' (translate_tc memset clkvars tc).
   Proof.
-    intros * TypeEnvSpec Spec_m Spec_i Nodup WT; induction WT; inv Spec_m; inv Spec_i;
+    intros * TypeEnvSpec Spec_m Spec_i Nodup WT; induction WT; try (take (wt_rhs _ _ _ _) and inv it);
+      inv Spec_m; inv Spec_i;
       try eapply Control_wt; eauto.
+    - econstructor; eauto; simpl_Forall; eauto using translate_exp_wt.
+      + now rewrite typeof_correct.
+      + simpl in *. specialize  (TypeEnvSpec x (Tprimitive tyout)).
+        rewrite PSE.mem_3 in TypeEnvSpec; auto.
+        apply TypeEnvSpec, in_or_app; auto.
     - eapply translate_cexp_wt; eauto.
-      assert (In (x, typeofc e) (Γv ++ Γm)) as Hin by (apply in_app; auto).
+      assert (In (x, typeofc e0) (Γv ++ Γm)) as Hin by (apply in_app; auto).
       apply TypeEnvSpec in Hin.
       now rewrite PSE.mem_3 in Hin.
     - inv H0; eapply Control_wt; eauto. 1-2:constructor; eauto.
@@ -423,7 +429,7 @@ Module Type STC2OBCTYPING
         rewrite wt_stmt_fold_left_lift; split; auto.
     - apply wt_stmt_fold_left_lift in WT as (?& WT');
         rewrite wt_stmt_fold_left_lift; split; auto.
-      inversion_clear WT' as [| | |?? WT| |]; inv WT; eauto with obctyping.
+      inversion_clear WT' as [| | |?? WT| | |]; inv WT; eauto with obctyping.
   Qed.
 
   Lemma reset_insts_wt:

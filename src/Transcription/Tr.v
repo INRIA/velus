@@ -45,6 +45,7 @@ Module Type TR
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                    OK (CE.Ewhen le x b)
     | L.Elast _ _
+    | L.Eextcall _ _ _
     | L.Efby _ _ _
     | L.Earrow _ _ _
     | L.Ewhen _ _ _ _
@@ -147,6 +148,7 @@ Module Type TR
       end
 
     | L.Elast _ _
+    | L.Eextcall _ _ _
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
     | L.Efby _ _ _
@@ -228,12 +230,19 @@ Module Type TR
           OK (NL.EqFby x ck c0 le xr)
         | _ => Error (msg "fby equation not normalized")
         end
+      | L.Eextcall f es (tyout, ck) =>
+          match xs with
+          | [x] =>
+              do les <- mmap to_lexp es;
+              OK (NL.EqDef x ck (Eextcall f les tyout))
+          | _ => Error (msg "equation not normalized")
+          end
       | _ =>
         match xs with
         | [x] =>
           do ck <- find_clock env x;
           do ce <- to_cexp e;
-          OK (NL.EqDef x ck ce)
+          OK (NL.EqDef x ck (Ecexp ce))
         | _ => Error (msg "basic equation not normalized")
         end
       end
@@ -458,7 +467,7 @@ Module Type TR
 
   Definition to_global (G : L.global) :=
     do nds' <- mmap to_node G.(L.nodes);
-    OK (NL.Global G.(L.types) nds').
+    OK (NL.Global G.(L.types) G.(L.externs) nds').
 
   Ltac tonodeInv H :=
     match type of H with
@@ -514,9 +523,9 @@ Module Type TR
     L.find_node f G = Some n ->
     exists n', NL.find_node f P = Some n' /\ to_node n = OK n'.
   Proof.
-    destruct G as (?&nds). unfold to_global.
+    destruct G. unfold to_global.
     revert P.
-    induction nds; intros * Htrans Hfind. inversion Hfind.
+    induction nodes; intros * Htrans Hfind. inversion Hfind.
     apply L.find_node_cons in Hfind.
     destruct Hfind as [(Heq&?)|(Hneq&Hfind)]; subst.
     - monadInv Htrans. simpl in EQ. monadInv EQ.
@@ -524,7 +533,7 @@ Module Type TR
       simpl. apply to_node_name in EQ0.
       rewrite NL.find_node_now; eauto.
     - monadInv Htrans. simpl in *. monadInv EQ.
-      eapply IHnds in Hfind as (n'&P'&nP). 2:rewrite EQ; simpl; eauto.
+      eapply IHnodes in Hfind as (n'&P'&nP). 2:rewrite EQ; simpl; eauto.
       exists n'. split; eauto.
       rewrite NL.find_node_other; eauto.
       apply to_node_name in EQ0. rewrite <-EQ0; auto.
@@ -535,16 +544,16 @@ Module Type TR
     NL.find_node f P = Some n' ->
     exists n, L.find_node f G = Some n /\ to_node n = OK n'.
   Proof.
-    destruct G as (?&nds). unfold to_global.
+    destruct G. unfold to_global.
     revert P.
-    induction nds; intros * Htrans Hfind; simpl in *; monadInv Htrans; simpl in *; try solve [inversion Hfind].
+    induction nodes; intros * Htrans Hfind; simpl in *; monadInv Htrans; simpl in *; try solve [inversion Hfind].
     monadInv EQ.
     destruct (ident_eq_dec (NL.n_name x0) f) eqn:Hname.
     - clear EQ.
       erewrite L.find_node_now. 2:erewrite to_node_name; eauto.
       erewrite NL.find_node_now in Hfind; eauto. inv Hfind; eauto.
     - erewrite NL.find_node_other in Hfind; eauto.
-      eapply IHnds in Hfind as (?&Hfind'&Hton); eauto. 2:rewrite EQ; eauto.
+      eapply IHnodes in Hfind as (?&Hfind'&Hton); eauto. 2:rewrite EQ; eauto.
       eexists; split; eauto.
       rewrite L.find_node_other; eauto.
       erewrite to_node_name; eauto.
@@ -930,11 +939,11 @@ Module Type TR
       Forall (fun n => (name <> NL.n_name n)%type) G'.(NL.nodes).
   Proof.
     unfold to_global.
-    intros ? (enms&nds).
-    induction nds; intros * Hnames Htog; inv Hnames; monadInv Htog;
+    intros ? [].
+    induction nodes; intros * Hnames Htog; inv Hnames; monadInv Htog;
       simpl in EQ; monadInv EQ; constructor; simpl; auto.
     - erewrite to_node_name in H1; eauto.
-    - eapply IHnds in H2; eauto. 2:simpl; rewrite EQ; simpl; eauto.
+    - eapply IHnodes in H2; eauto. 2:simpl; rewrite EQ; simpl; eauto.
       simpl in H2; auto.
   Qed.
 
@@ -942,7 +951,15 @@ Module Type TR
       to_global G = OK G' ->
       NL.types G' = L.types G.
   Proof.
-    intros (?&?) * Htog.
+    intros [] * Htog.
+    monadInv Htog; auto.
+  Qed.
+
+  Fact to_global_externs : forall G G',
+      to_global G = OK G' ->
+      NL.externs G' = L.externs G.
+  Proof.
+    intros [] * Htog.
     monadInv Htog; auto.
   Qed.
 

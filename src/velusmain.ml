@@ -20,6 +20,11 @@ let write_cl = ref false
 let write_cm = ref false
 let write_sync = ref false
 
+let output_file = ref None
+
+let set_output_file s =
+  output_file := Some s
+
 let set_main_node s =
   Veluslib.main_node := Some s
 
@@ -90,7 +95,7 @@ let parse toks =
   | LustreParser.MenhirLibParser.Inter.Timeout_pr -> assert false
   | LustreParser.MenhirLibParser.Inter.Parsed_pr (ast, _) -> ast
 
-let compile source_name filename =
+let compile source_name filename out_name =
   if !write_lustre
   then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
   if !write_nolast
@@ -124,17 +129,22 @@ let compile source_name filename =
   | Error errmsg ->
     Format.eprintf "%a@." Driveraux.print_error errmsg; exit 1
   | OK asm ->
-    let oc = open_out (filename ^ ".s") in
+    let oc = open_out (out_name ^ ".s") in
     PrintAsm.print_program oc asm;
     close_out oc
 
 let process file =
-  if Filename.check_suffix file ".ept"
-  then compile file (Filename.chop_suffix file ".ept")
-  else if Filename.check_suffix file ".lus"
-  then compile file (Filename.chop_suffix file ".lus")
-  else
-    raise (Arg.Bad ("don't know what to do with " ^ file))
+  let filename =
+    if Filename.check_suffix file ".ept"
+      then Filename.chop_suffix file ".ept"
+      else if Filename.check_suffix file ".lus"
+      then Filename.chop_suffix file ".lus"
+      else raise (Arg.Bad ("don't know what to do with " ^ file))
+  in let out_name =
+    match !output_file with
+    | Some f -> f
+    | None -> filename
+  in compile file filename (Filename.remove_extension out_name)
 
 let set_fullclocks () =
   Interfacelib.PrintLustre.print_fullclocks := true;
@@ -142,6 +152,7 @@ let set_fullclocks () =
   Interfacelib.PrintStc.print_fullclocks := true
 
 let speclist = [
+  "-o", Arg.String set_output_file, " Save the file name for generated code";
   "-main", Arg.String set_main_node, " Specify the main node";
   "-sync", Arg.Set write_sync, " Generate sync() in <source>.sync.c";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)

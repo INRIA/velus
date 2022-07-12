@@ -114,17 +114,19 @@ Module Type SCCLOCKING
         wc_exp G Γ' (subclock_exp bck sub e).
     Proof with eauto with lclocking.
       induction e using exp_ind2; intros * Hwc; inv Hwc; simpl in *.
-      3-12:econstructor; simpl in *; eauto using rename_var_wc with lclocking.
+      3-13:econstructor; simpl in *; eauto using rename_var_wc with lclocking.
       3,4:take (IsLast _ _) and eapply NoLast in it as [].
-      1-33:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-      1-26:try rewrite subclock_exp_clockof.
-      1-26:try rewrite subclock_exp_clocksof.
-      1-26:try (rewrite map_subclock_ann_clock; rewrite Forall2_eq in *; congruence).
+      all:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
+      all:try rewrite subclock_exp_clockof.
+      all:try rewrite subclock_exp_clocksof.
+      all:try (rewrite map_subclock_ann_clock; rewrite Forall2_eq in *; congruence).
       - apply add_whens_wc...
       - apply add_whens_wc...
       - take (clockof e = [_]) and rewrite it; auto.
       - take (clockof e1 = [_]) and rewrite it; auto.
       - take (clockof e2 = [_]) and rewrite it; auto.
+      - simpl_Forall; subst; auto.
+      - contradict H5. eapply map_eq_nil; eauto.
       - simpl_Forall; subst; auto.
       - rewrite map_length; auto.
       - contradict H4. apply map_eq_nil in H4; auto.

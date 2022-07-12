@@ -7,6 +7,7 @@ let fmt_coqstring p s = List.iter (Format.pp_print_char p) s
 
 module type PRINT_OPS =
   sig
+    type ctype
     type typ
     type cconst
     type const
@@ -17,6 +18,7 @@ module type PRINT_OPS =
     val enumtag_of_int    : int -> enumtag
     val int_of_enumtag    : enumtag -> int
 
+    val print_ctype       : Format.formatter -> ctype -> unit
     val print_typ         : Format.formatter -> typ -> unit
     val print_typ_decl    : Format.formatter -> typ -> unit
     val print_cconst      : Format.formatter -> cconst -> unit

@@ -43,6 +43,7 @@ let () =
       ("else",     fun loc ->  ELSE     loc);
       ("end",      fun loc ->  END      loc);
       ("every",    fun loc ->  EVERY    loc);
+      ("external", fun loc ->  EXTERNAL loc);
       ("false",    fun loc ->  ENUM_NAME (makeident "False", loc));
       ("fby",      fun loc ->  FBY      loc);
       ("float",    fun loc ->  FLOAT32  loc); (* LEGACY *)

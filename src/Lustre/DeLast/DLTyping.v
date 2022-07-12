@@ -55,17 +55,15 @@ Module Type DLTYPING
           match goal with
           | |- wt_clock _ _ _ => eapply wt_clock_incl; eauto
           | |- typeof _ = _ => rewrite rename_in_exp_typeof; auto
-          | |- typesof _ = _ => rewrite rename_in_exp_typesof; auto
+          | |- context [typesof (map _ _)] => rewrite rename_in_exp_typesof; auto
           | |- context [map fst (map _ _)] =>
               erewrite map_map, map_ext; eauto; intros; destruct_conjs; auto
+          | |- map _ _ <> nil =>
+              intros contra; apply map_eq_nil in contra; subst; contradiction
           | _ => idtac
           end.
-        - intros contra. apply map_eq_nil in contra; subst. contradiction.
-        - intros contra. apply map_eq_nil in contra; subst. contradiction.
         - erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto.
           intros; destruct_conjs; auto.
-        - intros contra. apply map_eq_nil in contra; subst. contradiction.
-        - rewrite rename_in_exp_typesof; auto.
       Qed.
 
       Lemma rename_in_equation_wt : forall eq,

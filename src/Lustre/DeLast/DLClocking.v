@@ -67,13 +67,13 @@ Module Type DLCLOCKING
           wc_exp G Γ' (rename_in_exp sub e).
       Proof.
         intros * Hwc; induction e using exp_ind2; inv Hwc; simpl.
-        12:remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
+        13:remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                             (combine (map fst (n_in n)) (nclocksof (map (rename_in_exp sub) es))))) as sub2.
-        12:assert (length (n_in n) = length (nclocksof (map (rename_in_exp sub) es))) as Hlen2.
-        12:{ apply Forall2_length in H8. repeat setoid_rewrite map_length in H8. rewrite H8.
+        13:assert (length (n_in n) = length (nclocksof (map (rename_in_exp sub) es))) as Hlen2.
+        13:{ apply Forall2_length in H8. repeat setoid_rewrite map_length in H8. rewrite H8.
              pose proof (rename_in_exp_nclocksof sub es) as Hncks. apply Forall2_length in Hncks; auto. }
-        12:assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (rename_in_exp sub) es))) as Hsub2.
-        12:{ apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        13:assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (rename_in_exp sub) es))) as Hsub2.
+        13:{ apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
              intros (?&?) (?&?) Hin'.
              assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof (map (rename_in_exp sub) es)))) as Hin2.
              { repeat setoid_rewrite combine_map_fst in Hin'.
@@ -99,22 +99,23 @@ Module Type DLCLOCKING
                apply option_map_inv in Hopt as (?&?&Heq); inv Heq.
                eapply NoDupMembers_det in Hin2; eauto. inv Hin2.
         }
-        12:(pose proof (rename_in_exp_nclocksof sub es) as Hncks; eapply Forall2_trans_ex in Hncks; eauto).
+        13:(pose proof (rename_in_exp_nclocksof sub es) as Hncks; eapply Forall2_trans_ex in Hncks; eauto).
 
-        12:eapply wc_Eapp with
+        13:eapply wc_Eapp with
           (bck:=bck)
           (sub:=fun x => match (sub0 x) with
                       | Some y => Some y
                       | _ => Env.find x sub2
                       end).
-        1-11:econstructor.
-        1-40:eauto using in_or_app; simpl_Forall; eauto;
+        1-12:econstructor.
+        all:eauto using in_or_app; simpl_Forall; eauto;
           match goal with
           | |- clockof _ = _ => rewrite rename_in_exp_clockof; auto
           | |- context [clocksof _] => rewrite rename_in_exp_clocksof; auto
           | H: context [clocksof _] |- _ => rewrite rename_in_exp_clocksof in H; auto
           | _ => idtac
           end.
+        - simpl_Forall; auto.
         - simpl_Forall; auto.
         - intros contra. apply map_eq_nil in contra; subst. contradiction.
         - simpl_Forall; auto.

@@ -70,16 +70,16 @@ Module Type CSCORRECTNESS
           + intros [|[]]; auto.
           + intros * Hca. inv Hca. inv H.
           + intros * Hca. inv Hca. inv H. }
-      1-11:(assert (FEnv.refines (@EqSt _) Hi (FEnv.add x vs Hi)) as Href;
-            [eapply FEnv.add_refines; intros Henvin; try reflexivity;
-             eapply Hdom, in_app_iff in Henvin as [Hin|Hin]; eauto;
-             [eapply fresh_ident_prefixed in H as (?&?&?); subst;
-              eapply Forall_forall in Hat; eauto; eapply contradict_AtomOrGensym in Hat; eauto using switch_not_in_auto_prefs
-             |eapply fresh_ident_nIn; eauto]
-            |]).
-      1-11:(assert (sem_var (FEnv.add x vs Hi) x vs) as Hv;
-            [econstructor; try reflexivity; apply FEnv.gss; reflexivity|]).
-      1-11:
+      all:(assert (FEnv.refines (@EqSt _) Hi (FEnv.add x vs Hi)) as Href;
+           [eapply FEnv.add_refines; intros Henvin; try reflexivity;
+            eapply Hdom, in_app_iff in Henvin as [Hin|Hin]; eauto;
+            [eapply fresh_ident_prefixed in H as (?&?&?); subst;
+             eapply Forall_forall in Hat; eauto; eapply contradict_AtomOrGensym in Hat; eauto using switch_not_in_auto_prefs
+            |eapply fresh_ident_nIn; eauto]
+           |]).
+      all:(assert (sem_var (FEnv.add x vs Hi) x vs) as Hv;
+           [econstructor; try reflexivity; apply FEnv.gss; reflexivity|]).
+      all:
         (exists (FEnv.add x vs Hi); split; [|split; [|split; [|split; [|split]]]]; eauto; simpl;
               [do 2 (econstructor; eauto);
                [econstructor; eauto using sem_exp_refines|
@@ -88,10 +88,10 @@ Module Type CSCORRECTNESS
                split; [intros|intros [|[]]]; auto
               |intros ?; rewrite <-fresh_ident_vars_perm, <-Permutation_middle; eauto; apply FEnv.add_dom_ub; auto
               |split]).
-      1-22:(intros * Hck; inv Hck; try (intros Hca; inv Hca);
-            repeat (take (_ \/ False) and destruct it as [|[]]); inv_equalities;
-            simpl in *; try congruence;
-            do 2 esplit; eauto using Sem.sem_clock_refines).
+      all:(intros * Hck; inv Hck; try (intros Hca; inv Hca);
+           repeat (take (_ \/ False) and destruct it as [|[]]); inv_equalities;
+           simpl in *; try congruence;
+           do 2 esplit; eauto using Sem.sem_clock_refines).
     Qed.
 
     Lemma sem_clock_Con_filter Hi bs' bs : forall ck xc tx tn e sc,
@@ -756,12 +756,12 @@ Module Type CSCORRECTNESS
 
   Lemma switch_node_sem G1 G2 : forall f n ins outs,
       global_sem_refines G1 G2 ->
-      CommonTyping.wt_program wt_node {| types := types G1; nodes := n :: nodes G1 |} ->
-      wc_global (Global G1.(types) (n::G1.(nodes))) ->
-      Ordered_nodes (Global G1.(types) (n::G1.(nodes))) ->
-      Ordered_nodes (Global G2.(types) ((switch_node n)::G2.(nodes))) ->
-      sem_node_ck (Global G1.(types) (n::G1.(nodes))) f ins outs ->
-      sem_node_ck (Global G2.(types) ((switch_node n)::G2.(nodes))) f ins outs.
+      CommonTyping.wt_program wt_node {| types := G1.(types); externs := G1.(externs); nodes := n :: G1.(nodes) |} ->
+      wc_global (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+      Ordered_nodes (Global G1.(types) G1.(externs) (n::G1.(nodes))) ->
+      Ordered_nodes (Global G2.(types) G2.(externs) ((switch_node n)::G2.(nodes))) ->
+      sem_node_ck (Global G1.(types) G1.(externs) (n::G1.(nodes))) f ins outs ->
+      sem_node_ck (Global G2.(types) G2.(externs) ((switch_node n)::G2.(nodes))) f ins outs.
   Proof with eauto.
     intros * HGref Hwt Hwc Hord1 Hord2 Hsem.
 
@@ -816,17 +816,17 @@ Module Type CSCORRECTNESS
       wc_global G ->
       global_sem_refines G (switch_global G).
   Proof with eauto using wc_global_Ordered_nodes.
-    intros (enms&nds) (_&Hwt). revert Hwt.
-    induction nds; intros * Hwt Hwc; simpl.
+    intros [] (_&Hwt). revert Hwt.
+    induction nodes0; intros * Hwt Hwc; simpl.
     - apply global_sem_ref_nil.
     - assert (Hwc':=Hwc).
       eapply Clocking.switch_global_wc, wc_global_Ordered_nodes in Hwc' ;
         unfold switch_global in Hwc'; simpl in Hwc'.
       apply global_sem_ref_cons with (f:=n_name a)...
-      + inv Hwc. inv Hwt. eapply IHnds...
+      + inv Hwc. inv Hwt. eapply IHnodes0...
       + intros ins outs Hsem; simpl in *.
-        change enms with ((Global enms (map switch_node nds)).(types)).
-        eapply switch_node_sem with (G1:=Global enms nds)...
+        change types0 with ((Global types0 externs0 (map switch_node nodes0)).(types)).
+        eapply switch_node_sem with (G1:=Global types0 externs0 nodes0)...
         inv Hwt; inv Hwc...
   Qed.
 

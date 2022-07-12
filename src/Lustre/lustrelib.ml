@@ -26,6 +26,7 @@ let extern_atom = Camlcoq.extern_atom
 module type SYNTAX =
   sig
     type typ
+    type ctype
     type cconst
     type unop
     type binop
@@ -45,6 +46,7 @@ module type SYNTAX =
     | Elast  of ident * ann
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
+    | Eextcall of ident * exp list * (ctype * clock)
     | Efby   of exp list * exp list * ann list
     | Earrow of exp list * exp list * ann list
     | Ewhen  of exp list * (ident * typ) * enumtag * lann
@@ -78,6 +80,7 @@ module type SYNTAX =
 
     type global = {
       types: typ list;
+      externs: (ident * (ctype list * ctype)) list;
       nodes: node list
     }
 
@@ -87,6 +90,7 @@ module type SYNTAX =
 module PrintFun
     (PrintOps: PRINT_OPS)
     (L: SYNTAX with type typ     = PrintOps.typ
+                and type ctype   = PrintOps.ctype
                 and type cconst  = PrintOps.cconst
                 and type unop    = PrintOps.unop
                 and type binop   = PrintOps.binop
@@ -112,6 +116,7 @@ module PrintFun
       | L.Elast _  -> (16, NA)
       | L.Eunop  (op, _, _)    -> PrintOps.prec_unop op
       | L.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
+      | L.Eextcall _ -> (4, NA)
       | L.Efby _   -> (14, RtoL) (* higher than * / % *)
       | L.Earrow _ -> (14, RtoL)
       | L.Ewhen _  -> (12, LtoR) (* precedence of + - *)
@@ -167,6 +172,10 @@ module PrintFun
         PrintOps.print_unop p op ty (exp prec') e
       | L.Ebinop (op, e1, e2, (ty, _)) ->
         PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
+      | L.Eextcall (f, es, _) ->
+        fprintf p "external %a(%a)"
+          print_ident f
+          (exp_list prec2) es
       | L.Efby (e0s, es, _) ->
         fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Earrow (e0s, es, _) ->
@@ -358,9 +367,16 @@ module PrintFun
         print_decl_list outputs
         print_top_block blk
 
+    let print_extern_decl p (f, (tyins, tyout)) =
+      fprintf p "external %a(%a) returns %a"
+        print_ident f
+        (print_comma_list PrintOps.print_ctype) tyins
+        PrintOps.print_ctype tyout
+
     let print_global p prog =
       fprintf p "@[<v 0>";
       List.iter (fprintf p "%a@;@;" PrintOps.print_typ_decl) (List.rev prog.L.types);
+      List.iter (fprintf p "%a@;@;" print_extern_decl) (List.rev prog.L.externs);
       List.iter (fprintf p "%a@;@;" print_node) (List.rev prog.L.nodes);
       fprintf p "@]@."
   end

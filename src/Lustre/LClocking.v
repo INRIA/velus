@@ -79,6 +79,12 @@ Module Type LCLOCKING
         clockof e2 = [ck] ->
         wc_exp (Ebinop op e1 e2 (ty, ck))
 
+    | wc_Eextcall: forall f es tyout ck,
+        Forall wc_exp es ->
+        Forall (eq ck) (clocksof es) ->
+        clocksof es <> [] ->
+        wc_exp (Eextcall f es (tyout, ck))
+
     | wc_Efby: forall e0s es anns,
         Forall wc_exp e0s ->
         Forall wc_exp es ->
@@ -237,6 +243,7 @@ Module Type LCLOCKING
       | |- HasClock env _ _ => now rewrite <-Henv
       | |- IsLast env' _ => now rewrite Henv
       | |- IsLast env _ => now rewrite <-Henv
+      | |- wc_clock _ _ => eapply wc_clock_incl; [|eauto]; unfold idck; now rewrite Henv
       | _ => idtac
       end.
     1,2:intros * Heq; subst; simpl in *.
@@ -354,9 +361,9 @@ Module Type LCLOCKING
         wc_exp G Γ' e .
     Proof with eauto with lclocking.
       induction e using exp_ind2; intros Hincl1 Hincl2 Hwc; inv Hwc...
-      1-6:econstructor; simpl_Forall...
-      intros ? Hin; subst; simpl in *.
-      specialize (H11 _ eq_refl). simpl_Forall...
+      all:econstructor; simpl_Forall...
+      + intros ? Hin; subst; simpl in *.
+        specialize (H11 _ eq_refl). simpl_Forall...
     Qed.
 
     Lemma wc_equation_incl : forall Γ Γ' eq,
@@ -535,6 +542,11 @@ Module Type LCLOCKING
         do nc1 <- assert_singleton (check_exp e1);
         do nc2 <- assert_singleton (check_exp e2);
         if (xc ==b nc1) && (xc ==b nc2) then Some [xc] else None
+
+      | Eextcall f es (_, ck) =>
+        do ncs <- oconcat (map check_exp es);
+        if forallb (fun ck' => ck' ==b ck) ncs && negb (is_nil ncs) then Some [ck] else None
+
 
       | Efby e0s es anns =>
         do nc0s <- oconcat (map check_exp e0s);
@@ -951,6 +963,14 @@ Module Type LCLOCKING
         apply IHe in OE0 as (? & ?)...
       - (* Ebinop *)
         apply IHe1 in OE0 as (? & ?); apply IHe2 in OE1 as (? & ?)...
+      - (* Eextcall *)
+        repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
+        apply oconcat_map_check_exp' in OE0 as (? & ?); auto; subst.
+        take (forallb _ _ = true) and apply forallb_Forall in it.
+        split... econstructor; eauto.
+        simpl_Forall. now rewrite equiv_decb_equiv in it.
+        take (negb _ = true) and rewrite Bool.negb_true_iff, <-Bool.not_true_iff_false in it.
+        contradict it. now apply is_nil_spec.
       - (* Efby *)
         repeat take (Forall (fun e :exp => _) _) and rewrite Forall_forall in it.
         apply oconcat_map_check_exp' in OE0 as (? & ?); auto.
@@ -1109,9 +1129,9 @@ Module Type LCLOCKING
     Proof.
       intros eq CE. destruct eq as (xs, es); simpl in CE.
       cases_eqn CE.
-      1-14:take (forall2b _ _ _ = true) and apply check_vars_correct in it.
-      1-12,14:(take (oconcat (map _ _) = Some _)
-                    and apply oconcat_map_check_exp in it as (WC & NC);
+      all:take (forall2b _ _ _ = true) and apply check_vars_correct in it.
+      all:try (take (oconcat (map _ _) = Some _)
+                 and apply oconcat_map_check_exp in it as (WC & NC);
                econstructor; eauto; rewrite NC; auto).
       repeat progress
              match goal with
@@ -2081,6 +2101,15 @@ Module Type LCLOCKING
     - (* binop *)
       apply IHe1 in H3...
       rewrite H5 in H3. inv H3; auto.
+    - (* external *)
+      destruct (clocksof es) eqn:Hck; simpl in *; try congruence.
+      simpl_Forall.
+      assert (Exists (fun e => exists l, clockof e = c::l) es).
+      { clear - Hck. induction es; simpl in *; try congruence.
+        destruct (clockof a) eqn:Hck'; simpl in *; auto.
+        inv Hck. eauto. }
+      simpl_Exists; simpl_Forall.
+      rewrite H0 in H. specialize (H H3). now inv H.
     - (* fby *)
       rewrite Forall2_eq in H6, H7. rewrite H6.
       Forall_clocksof...
@@ -2178,15 +2207,16 @@ Module Type LCLOCKING
         wc_exp G2 Γ e.
     Proof with eauto with lclocking.
       induction e using exp_ind2; intros Hwc; inv Hwc...
-      1-5:econstructor; try (destruct Heq; erewrite <-equiv_program_enums)...
-      1-8:simpl_Forall...
+      1-6:econstructor; try (destruct Heq; erewrite <-equiv_program_enums)...
+      all:simpl_Forall...
       - intros ??; subst; simpl in *. specialize (H11 _ eq_refl).
         rewrite Forall_forall in *...
       - (* app *)
         apply Heq in H7 as (?&?&?&?&?&?).
         econstructor; eauto.
         1,2:simpl_Forall; eauto.
-        instantiate (1:=sub). instantiate (1:=bck). 1,2:congruence.
+        instantiate (1:=sub). instantiate (1:=bck).
+        1,2:simpl_Forall; congruence.
     Qed.
 
     Fact iface_incl_wc_equation : forall Γ equ,
@@ -2272,7 +2302,8 @@ Module Type LCLOCKING
              | H: forall _, Some _ = Some _ -> _ |- _ => specialize (H _ eq_refl)
              | _ => simpl_Forall; intros; subst
              end; simpl; eauto with lclocking.
-      - rewrite length_nclocksof_annots, <-length_clocksof_annots in H8...
+    - contradict H5. rewrite clocksof_annots, H5; auto.
+    - rewrite length_nclocksof_annots, <-length_clocksof_annots in H8...
   Qed.
   Global Hint Resolve wc_exp_wl_exp : lclocking.
 

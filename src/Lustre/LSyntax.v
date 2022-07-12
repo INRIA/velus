@@ -49,6 +49,7 @@ Module Type LSYNTAX
   | Elast  : ident -> ann -> exp
   | Eunop  : unop -> exp -> ann -> exp
   | Ebinop : binop -> exp -> exp -> ann -> exp
+  | Eextcall: ident -> list exp -> (ctype * clock) -> exp
   | Efby   : list exp -> list exp -> list ann -> exp
   | Earrow : list exp -> list exp -> list ann -> exp
   | Ewhen  : list exp -> (ident * type) -> enumtag -> lann -> exp
@@ -107,7 +108,8 @@ Module Type LSYNTAX
     | Evar _ _
     | Elast _ _
     | Eunop _ _ _
-    | Ebinop _ _ _ _ => 1
+    | Ebinop _ _ _ _
+    | Eextcall _ _ _ => 1
     | Ewhen _ _ _  (tys, _)
     | Emerge _ _ (tys, _)
     | Ecase _ _ _ (tys, _) => length tys
@@ -126,6 +128,7 @@ Module Type LSYNTAX
     | Elast _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [ann]
+    | Eextcall _ _ (cty, ck) => [(Tprimitive cty, ck)]
     | Ewhen _ _ _  (tys, ck)
     | Emerge _ _ (tys, ck)
     | Ecase _ _ _ (tys, ck) => map (fun ty=> (ty, ck)) tys
@@ -145,6 +148,7 @@ Module Type LSYNTAX
     | Evar _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [fst ann]
+    | Eextcall _ _ (cty, _) => [Tprimitive cty]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
     | Ecase _ _ _ anns => fst anns
@@ -163,6 +167,7 @@ Module Type LSYNTAX
     | Elast _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [snd ann]
+    | Eextcall _ _ (_, ck) => [ck]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
     | Ecase _ _ _ anns => map (fun _ => snd anns) (fst anns)
@@ -181,6 +186,7 @@ Module Type LSYNTAX
     | Elast x ann => [(snd ann, None)]
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [(snd ann, None)]
+    | Eextcall _ _ (_, ck) => [(ck, None)]
     | Ewhen _ _ _ anns
     | Emerge _ _ anns
     | Ecase _ _ _ anns => map (fun _ => (snd anns, None)) (fst anns)
@@ -390,14 +396,15 @@ Module Type LSYNTAX
 
   Record global {PSyn prefs} :=
     Global {
-        types : list type;
-        nodes : list (@node PSyn prefs);
+        types   : list type;
+        externs : list (ident * (list ctype * ctype));
+        nodes   : list (@node PSyn prefs);
       }.
   Arguments Global {_ _}.
 
   Global Program Instance global_program {PSyn prefs} : Program (@node PSyn prefs) global :=
     { units := nodes;
-      update := fun g => Global g.(types) }.
+      update := fun g => Global g.(types) g.(externs) }.
 
   Section find_node.
     Context {PSyn : block -> Prop}.
@@ -415,9 +422,9 @@ Module Type LSYNTAX
     Qed.
 
     Lemma find_node_now:
-      forall f n G types,
+      forall f n G types externs,
         n.(n_name) = f ->
-        find_node f (Global types (n::G)) = Some n.
+        find_node f (Global types externs (n::G)) = Some n.
     Proof.
       intros * Heq; subst.
       unfold find_node, find_unit; simpl.
@@ -425,9 +432,9 @@ Module Type LSYNTAX
     Qed.
 
     Lemma find_node_other:
-      forall f n G types,
+      forall f n G types externs,
         n.(n_name) <> f ->
-        find_node f (Global types (n::G)) = find_node f (Global types G).
+        find_node f (Global types externs (n::G)) = find_node f (Global types externs G).
     Proof.
       intros * Hnf.
       unfold find_node. f_equal.
@@ -435,10 +442,10 @@ Module Type LSYNTAX
       now intros ?.
     Qed.
 
-    Lemma find_node_cons f (a : @node PSyn prefs) types nds n :
-      find_node f (Global types (a :: nds)) = Some n ->
+    Lemma find_node_cons f (a : @node PSyn prefs) types externs nds n :
+      find_node f (Global types externs (a :: nds)) = Some n ->
       (f = n_name a /\ a = n) \/
-      (f <> n_name a /\ find_node f (Global types nds) = Some n).
+      (f <> n_name a /\ find_node f (Global types externs nds) = Some n).
     Proof.
       unfold find_node. intros Hfind.
       apply option_map_inv in Hfind as ((?&?)&Hfind&?); subst.
@@ -448,8 +455,8 @@ Module Type LSYNTAX
         rewrite H0; auto.
     Qed.
 
-    Lemma find_node_change_types : forall nds enms enms' f,
-        find_node f (Global enms nds) = find_node f (Global enms' nds).
+    Lemma find_node_change_types : forall nds enms enms' ext ext' f,
+        find_node f (Global enms ext nds) = find_node f (Global enms' ext' nds).
     Proof.
       induction nds; intros *. reflexivity.
       destruct (ident_eq_dec f (n_name a)); subst.
@@ -508,6 +515,11 @@ Module Type LSYNTAX
         P e2 ->
         P (Ebinop op e1 e2 a).
 
+    Hypothesis EextcallCase:
+      forall f es ann,
+        Forall P es ->
+        P (Eextcall f es ann).
+
     Hypothesis EfbyCase:
       forall e0s es a,
         Forall P e0s ->
@@ -558,6 +570,7 @@ Module Type LSYNTAX
       - apply ElastCase; auto.
       - apply EunopCase; auto.
       - apply EbinopCase; auto.
+      - apply EextcallCase; SolveForall; auto.
       - apply EfbyCase; SolveForall; auto.
       - apply EarrowCase; SolveForall; auto.
       - apply EwhenCase; SolveForall.
@@ -618,10 +631,7 @@ Module Type LSYNTAX
   Fact length_annot_numstreams : forall e,
       length (annot e) = numstreams e.
   Proof.
-    destruct e; simpl; auto.
-    - destruct l0. apply map_length.
-    - destruct l0. apply map_length.
-    - destruct l0. apply map_length.
+    destruct e; simpl; auto; destruct_conjs; auto using map_length.
   Qed.
 
   (** typesof *)
@@ -629,16 +639,9 @@ Module Type LSYNTAX
   Fact typeof_annot : forall e,
       typeof e = map fst (annot e).
   Proof.
-    destruct e; simpl; try reflexivity.
-    - destruct l0; simpl.
-      rewrite map_map; simpl.
-      symmetry. apply map_id.
-    - destruct l0; simpl.
-      rewrite map_map; simpl.
-      symmetry. apply map_id.
-    - destruct l0; simpl.
-      rewrite map_map; simpl.
-      symmetry. apply map_id.
+    destruct e; simpl; try reflexivity;
+      destruct_conjs; auto.
+    all:now rewrite map_map, map_id.
   Qed.
 
   Corollary length_typeof_numstreams : forall e,
@@ -683,16 +686,8 @@ Module Type LSYNTAX
   Fact clockof_annot : forall e,
       clockof e = map snd (annot e).
   Proof.
-    destruct e; simpl; try reflexivity.
-    - destruct l0; simpl.
-      repeat rewrite map_map.
-      reflexivity.
-    - destruct l0; simpl.
-      repeat rewrite map_map.
-      reflexivity.
-    - destruct l0; simpl.
-      repeat rewrite map_map.
-      reflexivity.
+    destruct e; simpl; try reflexivity; destruct_conjs;
+      repeat rewrite map_map; auto.
   Qed.
 
   Corollary length_clockof_numstreams : forall e,
@@ -750,9 +745,8 @@ Module Type LSYNTAX
   Fact nclockof_annot : forall e,
       map fst (nclockof e) = map snd (annot e).
   Proof.
-    destruct e; simpl; try reflexivity.
-    3-5:destruct l0; simpl.
-    1-6:repeat rewrite map_map; simpl; auto.
+    destruct e; simpl; try reflexivity;
+      destruct_conjs; repeat rewrite map_map; auto.
   Qed.
 
   Corollary length_nclockof_numstreams : forall e,
@@ -783,7 +777,7 @@ Module Type LSYNTAX
     forall e,
       clockof e = map stripname (nclockof e).
   Proof.
-    destruct e; simpl; try rewrite map_map; auto.
+    destruct e; simpl; destruct_conjs; try rewrite map_map; auto.
   Qed.
 
   Lemma nclockof_length :
@@ -838,43 +832,46 @@ Module Type LSYNTAX
       n.(n_out) = n'.(n_out).
 
     Definition global_iface_incl (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) : Prop :=
-      incl (types G) (types G') /\
-      forall f n, find_node f G = Some n ->
-             exists n', find_node f G' = Some n' /\ node_iface_eq n n'.
+      incl (types G) (types G')
+      /\ incl (externs G) (externs G')
+      /\ forall f n, find_node f G = Some n ->
+               exists n', find_node f G' = Some n' /\ node_iface_eq n n'.
 
     (** Globals are equivalent if they contain equivalent nodes *)
     Definition global_iface_eq (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) : Prop :=
-      types G = types G' /\
-      forall f, orel2 node_iface_eq (find_node f G) (find_node f G').
+      types G = types G'
+      /\ externs G = externs G'
+      /\ forall f, orel2 node_iface_eq (find_node f G) (find_node f G').
 
     Lemma iface_eq_iface_incl : forall (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2),
         global_iface_eq G G' ->
         global_iface_incl G G'.
     Proof.
-      intros * (Hg1&Hg2).
-      split.
-      - rewrite Hg1. reflexivity.
+      intros * (Htyps&Hexts&Hg2).
+      repeat split.
+      - now rewrite Htyps.
+      - now rewrite Hexts.
       - intros * Hfind. specialize (Hg2 f). rewrite Hfind in Hg2; inv Hg2. eauto.
     Qed.
 
-    Lemma global_iface_eq_nil : forall types,
-        global_iface_eq (Global types []) (Global types []).
+    Lemma global_iface_eq_nil : forall types externs,
+        global_iface_eq (Global types externs []) (Global types externs []).
     Proof.
       unfold global_iface_eq, find_node.
-      constructor; auto.
+      repeat split; auto.
       intros *; simpl. constructor.
     Qed.
 
-    Lemma global_iface_eq_cons : forall types nds nds' n n',
-        global_iface_eq (Global types nds) (Global types nds') ->
+    Lemma global_iface_eq_cons : forall types externs nds nds' n n',
+        global_iface_eq (Global types externs nds) (Global types externs nds') ->
         n.(n_name) = n'.(n_name) ->
         n.(n_hasstate) = n'.(n_hasstate) ->
         n.(n_in) = n'.(n_in) ->
         n.(n_out) = n'.(n_out) ->
-        global_iface_eq (Global types (n::nds)) (Global types (n'::nds')).
+        global_iface_eq (Global types externs (n::nds)) (Global types externs (n'::nds')).
     Proof.
-      intros * (?&Heq) Hname Hstate Hin Hout.
-      constructor; auto. intros ?.
+      intros * (?&?&Heq) Hname Hstate Hin Hout.
+      repeat split; auto. intros ?.
       destruct (Pos.eq_dec (n_name n) f); subst.
       - simpl. repeat rewrite find_node_now; auto.
         repeat constructor; auto.
@@ -888,7 +885,7 @@ Module Type LSYNTAX
         exists n', (find_node f G' = Some n' /\
                node_iface_eq n n').
     Proof.
-      intros G G' f n (_&Hglob) Hfind.
+      intros G G' f n (_&_&Hglob) Hfind.
       specialize (Hglob f).
       inv Hglob; try congruence.
       rewrite Hfind in H. inv H.
@@ -923,7 +920,7 @@ Module Type LSYNTAX
 
   Lemma global_iface_incl_refl {PSyn prefs} : Reflexive (@global_iface_incl PSyn _ prefs _).
   Proof.
-    intros G. split; intros; try reflexivity.
+    intros G. repeat split; intros; try reflexivity.
     do 2 esplit; eauto. apply node_iface_eq_refl.
   Qed.
 
@@ -933,10 +930,8 @@ Module Type LSYNTAX
       global_iface_incl n1 n3.
   Proof.
     intros n1 n2 n3 H12 H23.
-    destruct H12 as [? H12].
-    destruct H23 as [? H23].
-    split.
-    - etransitivity; eauto.
+    destruct H12 as (?&?&H12), H23 as (?&?&H23).
+    repeat split. 1,2:etransitivity; eauto.
     - intros * Hfind. specialize (H12 _ _ Hfind) as (?&Hfind2&?).
       specialize (H23 _ _ Hfind2) as (?&Hfind3&?).
       do 2 esplit; eauto.
@@ -945,7 +940,7 @@ Module Type LSYNTAX
 
   Fact global_iface_eq_refl {PSyn prefs} : Reflexive (@global_iface_eq PSyn _ prefs _).
   Proof.
-    intros G. split; intros; try reflexivity.
+    intros G. repeat split; intros; try reflexivity.
     destruct (find_node f G); constructor.
     apply node_iface_eq_refl.
   Qed.
@@ -954,10 +949,10 @@ Module Type LSYNTAX
       global_iface_eq G1 G2 ->
       global_iface_eq G2 G1.
   Proof.
-    intros * H12.
-    inv H12. constructor; auto.
-    intros f. specialize (H0 f).
-    inv H0; constructor; auto.
+    intros * (?&?&H12).
+    repeat split; auto.
+    intros f. specialize (H12 f).
+    inv H12; constructor; auto.
     apply node_iface_eq_sym; auto.
   Qed.
 
@@ -967,12 +962,11 @@ Module Type LSYNTAX
       global_iface_eq n1 n3.
   Proof.
     intros n1 n2 n3 H12 H23.
-    destruct H12 as [? H12].
-    destruct H23 as [? H23].
-    split; try congruence.
+    destruct H12 as (?&?&H12), H23 as (?&?&H23).
+    repeat split; try congruence.
     intros f. specialize (H12 f). specialize (H23 f).
     inv H12; inv H23; try congruence; constructor.
-    rewrite <-H2 in H4. inv H4.
+    rewrite <-H4 in H6. inv H6.
     eapply node_iface_eq_trans; eauto.
   Qed.
 
@@ -997,6 +991,10 @@ Module Type LSYNTAX
       numstreams e1 = 1 ->
       numstreams e2 = 1 ->
       wl_exp G (Ebinop op e1 e2 a)
+  | wl_Eextapp : forall G f es ann,
+      Forall (wl_exp G) es ->
+      annots es <> [] ->
+      wl_exp G (Eextcall f es ann)
   | wl_Efby : forall G e0s es anns,
       Forall (wl_exp G) e0s ->
       Forall (wl_exp G) es ->
@@ -1107,6 +1105,9 @@ Module Type LSYNTAX
       wx_exp Γ e1 ->
       wx_exp Γ e2 ->
       wx_exp Γ (Ebinop op e1 e2 a)
+  | wc_Eextcall : forall f es ann,
+      Forall (wx_exp Γ) es ->
+      wx_exp Γ (Eextcall f es ann)
   | wx_Efby : forall e0s es anns,
       Forall (wx_exp Γ) e0s ->
       Forall (wx_exp Γ) es ->
@@ -1193,23 +1194,11 @@ Module Type LSYNTAX
         wx_exp Γ e ->
         wx_exp Γ' e.
     Proof.
-      induction e using exp_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx; eauto with senv.
-      - (* fby *)
-        constructor; simpl_Forall; auto.
-      - (* arrow *)
-        constructor; simpl_Forall; auto.
-      - (* when *)
+      induction e using exp_ind2; intros * Hincl1 Hincl2 Hwx; inv Hwx; eauto with senv;
         constructor; simpl_Forall; eauto.
-      - (* merge *)
-        constructor; simpl_Forall; eauto.
-      - (* case *)
-        constructor; eauto.
-        + simpl_Forall; eauto.
-        + intros ??; subst; simpl in *.
-          simpl_Forall; eauto.
-          eapply Forall_forall in H7; eauto.
-      - (* app *)
-        constructor; simpl_Forall; eauto.
+      - intros ??; subst; simpl in *.
+        simpl_Forall; eauto.
+        eapply Forall_forall in H7; eauto.
     Qed.
 
     Lemma wx_equation_incl : forall Γ Γ' equ,

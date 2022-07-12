@@ -602,6 +602,20 @@ Module Type NTYPING
         + repeat solve_incl.
         + apply Forall_app; split; auto.
           solve_forall. repeat solve_incl.
+      - (* extcall *)
+        repeat inv_bind.
+        assert (Hnorm1:=H0). eapply mmap2_wt with (vars:=vars++st_senv x1) in H0 as [Hwt1 Hwt1']...
+        2:solve_mmap2.
+        apply mmap2_unnest_exp_typesof in Hnorm1 as Htys; eauto with ltyping.
+        assert (HasType (vars ++ st_senv st') x2 (Tprimitive tyout)) as Hty.
+        { take (fresh_ident _ _ _ _ = _) and apply fresh_ident_In in it.
+          apply HasType_app, or_intror.
+          econstructor; solve_In. auto. }
+        repeat constructor; auto.
+        3:eapply Forall_impl; [|eauto]; intros. 1,3:repeat solve_incl.
+        econstructor; simpl_Forall; repeat solve_incl.
+        1-3:try rewrite Htys; eauto.
+        destruct Hiface as (?&?&?); eauto.
       - (* fby *)
         repeat inv_bind.
         assert (Hnorm1:=H1). eapply mmap2_wt with (vars:=vars++st_senv x1) in H1 as [Hwt1 Hwt1']...
@@ -889,6 +903,13 @@ Module Type NTYPING
       intros * Hnl Hwt Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
         try (solve [eapply unnest_exp_wt in Hnorm; eauto]); inv Hwt.
+      - (* extcall *)
+        repeat inv_bind.
+        assert (Hnorm1:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']...
+        eapply unnest_exps_typesof in Hnorm1 as Htys; eauto with ltyping.
+        repeat econstructor; eauto. 4:repeat solve_incl.
+        1-3:try erewrite Htys; eauto.
+        destruct Hiface as (?&?&?); eauto.
       - (* fby *)
         repeat inv_bind.
         assert (Hnorm1:=H). eapply unnest_exps_wt in H as [Hwt1 Hwt1']...
@@ -1195,6 +1216,11 @@ Module Type NTYPING
       - (* binop *)
         eapply IHe2 in H0...
         repeat solve_incl.
+      - (* extcall *)
+        destruct_conjs; repeat inv_bind.
+        assert (Hnorm:=H0). eapply mmap2_wt_clock in H0... 2:solve_mmap2'.
+        eapply fresh_ident_wt_clock in H1... 2:repeat solve_incl.
+        simpl_Forall; repeat solve_incl.
       - (* fby *)
         assert (st_follows x4 st') as Hfollows by repeat solve_st_follows.
         assert (Hnorm:=H1). eapply mmap2_wt_clock in H1... 2:solve_mmap2'.
@@ -1287,14 +1313,14 @@ Module Type NTYPING
     Proof with eauto.
       intros * Hnl Hwt Hclocks Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
-        try eapply unnest_exp_wt_clock in Hnorm; eauto; repeat inv_bind. 3:inv Hwt.
+        try eapply unnest_exp_wt_clock in Hnorm; eauto; repeat inv_bind; inv Hwt.
+      - (* extcall *)
+        assert (Hnorm:=H). eapply unnest_exps_wt_clock in H...
       - (* fby *)
-        inv Hwt.
         assert (Hnorm:=H). eapply unnest_exps_wt_clock in H...
         assert (Hnorm1:=H0). eapply unnest_exps_wt_clock in H0...
         solve_forall; repeat solve_incl.
       - (* arrow *)
-        inv Hwt.
         assert (Hnorm:=H). eapply unnest_exps_wt_clock in H...
         assert (Hnorm1:=H0). eapply unnest_exps_wt_clock in H0...
         solve_forall; repeat solve_incl.
@@ -1519,6 +1545,9 @@ Module Type NTYPING
         eapply IHe; eauto.
       - (* binop *)
         eapply IHe2 in H0; eauto. repeat solve_incl.
+      - (* extcall *)
+        eapply fresh_ident_wt_type in H1; eauto. constructor.
+        eapply mmap2_wt_type in H0; eauto with norm. solve_mmap2'.
       - (* fby *)
         eapply idents_for_anns_wt_type in H3; eauto.
         1:{ rewrite <-H6. eapply wt_exps_wt_type; eauto. solve_forall. }
@@ -1610,6 +1639,8 @@ Module Type NTYPING
       intros * Hnl Hwt Hclocks Hnorm.
       destruct e; unfold unnest_rhs in Hnorm;
         try eapply unnest_exp_wt_type in Hnorm; eauto; repeat inv_bind; inv Hwt.
+      - (* extcall *)
+        eapply unnest_exps_wt_type in H...
       - (* fby *)
         eapply unnest_exps_wt_type in H0... solve_forall; repeat solve_incl.
         eapply unnest_exps_wt_type in H...
@@ -1748,14 +1779,14 @@ Module Type NTYPING
       wt_global G ->
       wt_global (unnest_global G).
   Proof.
-    intros (types&nds) (Htypes&Hwt). unfold CommonTyping.wt_program in Hwt; simpl.
-    induction nds; inv Hwt; split; simpl; auto. constructor.
+    intros [] (Htypes&Hwt). unfold CommonTyping.wt_program in Hwt; simpl.
+    induction nodes0; inv Hwt; split; simpl; auto. constructor.
     destruct H1.
     constructor; [constructor|].
     - eapply unnest_node_wt; eauto. 2:split; auto.
       eapply iface_eq_iface_incl, unnest_nodes_eq.
     - eapply unnest_nodes_names; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
   (** ** Preservation of wt through the second pass *)
@@ -2227,14 +2258,14 @@ Module Type NTYPING
       wt_global G ->
       wt_global (normfby_global G).
   Proof.
-    intros (types&nds) (?&Hwt). unfold CommonTyping.wt_program in Hwt; simpl.
-    induction nds; simpl; inv Hwt; split; simpl; auto. constructor.
+    intros [] (?&Hwt). unfold CommonTyping.wt_program in Hwt; simpl.
+    induction nodes0; simpl; inv Hwt; split; simpl; auto. constructor.
     destruct H2. constructor; [constructor|]; simpl in *.
     - eapply normfby_node_wt; eauto; simpl; auto.
       + eapply iface_eq_iface_incl, normfby_global_eq.
       + constructor; auto.
     - eapply normfby_nodes_names; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
   (** ** Conclusion *)

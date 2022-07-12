@@ -162,6 +162,13 @@ Module Type LSEMANTICS
         lift2 op ty1 ty2 s1 s2 o ->
         sem_exp H b (Ebinop op e1 e2 ann) [o]
 
+    | Sextcall:
+      forall H b f es tyout ck tyins ss vs,
+        Forall2 (fun ty cty => ty = Tprimitive cty) (typesof es) tyins ->
+        Forall2 (sem_exp H b) es ss ->
+        liftn (fun ss => sem_extern f tyins ss tyout) (concat ss) vs ->
+        sem_exp H b (Eextcall f es (tyout, ck)) [vs]
+
     | Sfby:
       forall H b e0s es anns s0ss sss os,
         Forall2 (sem_exp H b) e0s s0ss ->
@@ -460,14 +467,15 @@ Module Type LSEMANTICS
     end.
 
   Section sem_cons.
-    Context {PSyn prefs} (typs : list type) (nd : @node PSyn prefs) (nds : list (@node PSyn prefs)).
+    Context {PSyn prefs} (nd : @node PSyn prefs) (nds : list (@node PSyn prefs)).
+    Context (typs : list type) (externs : list (ident * (list ctype * ctype))).
 
     Lemma sem_exp_cons1' :
       forall H bk e vs,
-        (forall f xs ys, Is_node_in_exp f e -> sem_node (Global typs (nd::nds)) f xs ys -> sem_node (Global typs nds) f xs ys) ->
-        sem_exp (Global typs (nd::nds)) H bk e vs ->
+        (forall f xs ys, Is_node_in_exp f e -> sem_node (Global typs externs (nd::nds)) f xs ys -> sem_node (Global typs externs nds) f xs ys) ->
+        sem_exp (Global typs externs (nd::nds)) H bk e vs ->
         ~Is_node_in_exp nd.(n_name) e ->
-        sem_exp (Global typs nds) H bk e vs.
+        sem_exp (Global typs externs nds) H bk e vs.
     Proof.
       induction e using exp_ind2; intros * Hnodes Hsem Hnf; inv Hsem; econstructor; eauto;
         repeat sem_cons.
@@ -475,10 +483,10 @@ Module Type LSEMANTICS
 
     Lemma sem_transitions_cons1' :
       forall H bk trs def sts,
-        (forall f xs ys, List.Exists (fun '(e, _) => Is_node_in_exp f e) trs -> sem_node (Global typs (nd::nds)) f xs ys -> sem_node (Global typs nds) f xs ys) ->
-        sem_transitions (Global typs (nd::nds)) H bk trs def sts ->
+        (forall f xs ys, List.Exists (fun '(e, _) => Is_node_in_exp f e) trs -> sem_node (Global typs externs (nd::nds)) f xs ys -> sem_node (Global typs externs nds) f xs ys) ->
+        sem_transitions (Global typs externs (nd::nds)) H bk trs def sts ->
         ~List.Exists (fun '(e, _) => Is_node_in_exp (n_name nd) e) trs ->
-        sem_transitions (Global typs nds) H bk trs def sts.
+        sem_transitions (Global typs externs nds) H bk trs def sts.
     Proof.
       induction trs; intros * Hnodes Hsem Hnf; inv Hsem; econstructor; eauto;
         repeat sem_cons.
@@ -487,10 +495,10 @@ Module Type LSEMANTICS
 
     Lemma sem_block_cons1' :
       forall blk H bk,
-        (forall f xs ys, Is_node_in_block f blk -> sem_node (Global typs (nd::nds)) f xs ys -> sem_node (Global typs nds) f xs ys) ->
-        sem_block (Global typs (nd::nds)) H bk blk ->
+        (forall f xs ys, Is_node_in_block f blk -> sem_node (Global typs externs (nd::nds)) f xs ys -> sem_node (Global typs externs nds) f xs ys) ->
+        sem_block (Global typs externs (nd::nds)) H bk blk ->
         ~Is_node_in_block nd.(n_name) blk ->
-        sem_block (Global typs nds) H bk blk.
+        sem_block (Global typs externs nds) H bk blk.
     Proof.
       induction blk using block_ind2; intros * Hnodes Hsem Hnf; inv Hsem; econstructor; eauto;
         repeat
@@ -506,14 +514,14 @@ Module Type LSEMANTICS
   End sem_cons.
 
   Lemma sem_node_cons1 {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds typs f xs ys,
-      Ordered_nodes (Global typs (nd::nds)) ->
-      sem_node (Global typs (nd::nds)) f xs ys ->
+    forall (nd : @node PSyn prefs) nds typs externs f xs ys,
+      Ordered_nodes (Global typs externs (nd::nds)) ->
+      sem_node (Global typs externs (nd::nds)) f xs ys ->
       nd.(n_name) <> f ->
-      sem_node (Global typs nds) f xs ys.
+      sem_node (Global typs externs nds) f xs ys.
   Proof.
     intros * Hord Hsem Hnf.
-    assert (exists n, find_node f (Global typs (nd::nds)) = Some n) as (?&Hfind) by (inv Hsem; eauto).
+    assert (exists n, find_node f (Global typs externs0 (nd::nds)) = Some n) as (?&Hfind) by (inv Hsem; eauto).
     revert Hnf xs ys Hsem.
     eapply ordered_nodes_ind with (P_node:=fun f => n_name nd <> f -> forall xs ys, sem_node _ f xs ys -> sem_node _ f xs ys); eauto.
     intros * Hfind' Hind Hnf * Hsem.
@@ -526,11 +534,11 @@ Module Type LSEMANTICS
   Qed.
 
   Corollary sem_block_cons1 {PSyn prefs} :
-    forall (nd : @node PSyn prefs) nds typs blk Hi bs,
-      Ordered_nodes (Global typs (nd::nds)) ->
-      sem_block (Global typs (nd::nds)) Hi bs blk ->
+    forall (nd : @node PSyn prefs) nds typs externs blk Hi bs,
+      Ordered_nodes (Global typs externs (nd::nds)) ->
+      sem_block (Global typs externs (nd::nds)) Hi bs blk ->
       ~Is_node_in_block nd.(n_name) blk ->
-      sem_block (Global typs nds) Hi bs blk.
+      sem_block (Global typs externs nds) Hi bs blk.
   Proof.
     intros * Hord Hsem Hnin.
     eapply sem_block_cons1'; eauto.
@@ -609,34 +617,6 @@ Module Type LSEMANTICS
     + inv H. inv H2. inv H4. econstructor. eapply Cofix; eauto.
   Qed.
 
-  Add Parametric Morphism op t : (lift1 op t)
-      with signature @EqSt svalue ==> @EqSt svalue ==> Basics.impl
-        as lift1_EqSt.
-  Proof.
-    cofix Cofix.
-    intros es es' Ees ys ys' Eys Lift.
-    destruct es' as [[]], ys' as [[]];
-      inv Lift; inv Eys; inv Ees; simpl in *; try discriminate.
-    - constructor; eapply Cofix; eauto.
-    - constructor.
-      + now inv H1; inv H3.
-      + eapply Cofix; eauto.
-  Qed.
-
-  Add Parametric Morphism op t1 t2 : (lift2 op t1 t2)
-      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
-        as lift2_EqSt.
-  Proof.
-    cofix Cofix.
-    intros e1s e1s' Ee1s e2s e2s' Ee2s ys ys' Eys Lift.
-    destruct e1s' as [[]], e2s' as [[]], ys' as [[]];
-      inv Lift; inv Eys; inv Ee1s; inv Ee2s; simpl in *; try discriminate.
-    - constructor; eapply Cofix; eauto.
-    - constructor.
-      + now inv H1; inv H3; inv H5.
-      + eapply Cofix; eauto.
-  Qed.
-
   Add Parametric Morphism : const
       with signature @EqSt bool ==> eq ==> @EqSt svalue
         as const_EqSt.
@@ -687,6 +667,10 @@ Module Type LSEMANTICS
     - econstructor; eauto.
       + eapply IHe1; eauto; reflexivity.
       + eapply IHe2; eauto; reflexivity.
+      + now take (_ ≡ y) and rewrite <-it.
+    - eapply Sextcall with (ss:=ss); eauto.
+      + simpl_Forall; eauto.
+        take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
       + now take (_ ≡ y) and rewrite <-it.
     - eapply Sfby with (s0ss:=s0ss) (sss:=sss); simpl_Forall.
       1,2:take (forall xs xs', _ -> _ -> _) and eapply it; eauto; reflexivity.
