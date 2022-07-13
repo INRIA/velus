@@ -225,6 +225,19 @@ module PrintClightOpsFun (OpNames : sig
 
   end
 
+module PrintClight =
+  struct
+    let print_header p (prog: Clight.program) =
+      let open Ctypes in
+      let open PrintCsyntax in
+      let open PrintClight in
+      fprintf p "@[<v 0>";
+      List.iter (declare_composite p) prog.prog_types;
+      List.iter (define_composite p) prog.prog_types;
+      List.iter (print_globdecl p) prog.prog_defs;
+      fprintf p "@]@."
+  end
+
 (* module Basics = struct
  *   type typ   = Interface.OpAux.coq_type
  *   type const = Interface.Op.const

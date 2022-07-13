@@ -39,6 +39,7 @@ Parameter print_nlustre : NL.Syn.global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
+Parameter print_header  : Clight.program -> unit.
 Parameter do_dce        : unit -> bool.
 Parameter do_dupregrem  : unit -> bool.
 Parameter do_fusion     : unit -> bool.
@@ -112,6 +113,7 @@ Definition nl_to_asm (main_node: option ident) (g: NL.Syn.global) : res Asm.prog
   OK g
      @@@ nl_to_cl main_node
      @@ print print_Clight
+     @@ print print_header
      @@ add_builtins
      @@@ transf_clight2_program.
 

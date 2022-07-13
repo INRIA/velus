@@ -11,6 +11,7 @@ let stc_destination = ref (None : string option)
 let sch_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
 let sync_destination = ref (None : string option)
+let header_destination = ref (None : string option)
 let main_node = ref (None : string option)
 let reaction_counter = Camlcoq.intern_string "$reaction"
 
@@ -105,6 +106,9 @@ let print_obc_if prog =
   print_sync_if prog;
   print_if obc_destination Interfacelib.PrintObc.print_program
     (Interface.Obc.Syn.rev_prog prog)
+
+let print_header_if =
+  print_if header_destination Interfacelib.PrintClight.print_header
 
 let add_builtin p (name, (out, ins, _)) =
   let env = Env.empty in

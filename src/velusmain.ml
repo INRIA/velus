@@ -19,6 +19,7 @@ let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
 let write_sync = ref false
+let write_header = ref false
 let no_main = ref false
 
 let output_file = ref None
@@ -129,6 +130,8 @@ let compile source_name out_name =
   then PrintClight.destination := Some (out_name ^ ".light.c");
   if !write_cm
   then PrintCminor.destination := Some (out_name ^ ".cm");
+  if !write_header
+  then Veluslib.header_destination := Some (out_name ^ ".h");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in
@@ -166,6 +169,7 @@ let speclist = [
   "-nomain", Arg.Set no_main, " Compile as a library, without a main() function";
   "-sync", Arg.Set write_sync, " Generate sync() in <output>.sync.c";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
+  "-header", Arg.Set write_header, "Generate a header file in <output>.h";
 
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <output>.parsed.lus";
   "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <output>.nolast.lus";
