@@ -104,31 +104,31 @@ let parse toks =
   | LustreParser.MenhirLibParser.Inter.Timeout_pr -> assert false
   | LustreParser.MenhirLibParser.Inter.Parsed_pr (ast, _) -> ast
 
-let compile source_name filename out_name =
+let compile source_name out_name =
   if !write_lustre
-  then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
+  then Veluslib.lustre_destination := Some (out_name ^ ".parsed.lus");
   if !write_nolast
-  then Veluslib.nolast_destination := Some (filename ^ ".nolast.lus");
+  then Veluslib.nolast_destination := Some (out_name ^ ".nolast.lus");
   if !write_noauto
-  then Veluslib.noauto_destination := Some (filename ^ ".noauto.lus");
+  then Veluslib.noauto_destination := Some (out_name ^ ".noauto.lus");
   if !write_noswitch
-  then Veluslib.noswitch_destination := Some (filename ^ ".noswitch.lus");
+  then Veluslib.noswitch_destination := Some (out_name ^ ".noswitch.lus");
   if !write_nolocal
-  then Veluslib.nolocal_destination := Some (filename ^ ".nolocal.lus");
+  then Veluslib.nolocal_destination := Some (out_name ^ ".nolocal.lus");
   if !write_nlustre
-  then Veluslib.nlustre_destination := Some (filename ^ ".n.lus");
+  then Veluslib.nlustre_destination := Some (out_name ^ ".n.lus");
   if !write_stc
-  then Veluslib.stc_destination := Some (filename ^ ".stc");
+  then Veluslib.stc_destination := Some (out_name ^ ".stc");
   if !write_sch
-  then Veluslib.sch_destination := Some (filename ^ ".sch.stc");
+  then Veluslib.sch_destination := Some (out_name ^ ".sch.stc");
   if !write_obc
-  then Veluslib.obc_destination := Some (filename ^ ".obc");
+  then Veluslib.obc_destination := Some (out_name ^ ".obc");
   if !write_sync
-  then Veluslib.sync_destination := Some (filename ^ ".sync.c");
+  then Veluslib.sync_destination := Some (out_name ^ ".sync.c");
   if !write_cl
-  then PrintClight.destination := Some (filename ^ ".light.c");
+  then PrintClight.destination := Some (out_name ^ ".light.c");
   if !write_cm
-  then PrintCminor.destination := Some (filename ^ ".cm");
+  then PrintCminor.destination := Some (out_name ^ ".cm");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in
@@ -153,7 +153,7 @@ let process file =
     match !output_file with
     | Some f -> f
     | None -> filename
-  in compile file filename (Filename.remove_extension out_name)
+  in compile file (Filename.remove_extension out_name)
 
 let set_fullclocks () =
   Interfacelib.PrintLustre.print_fullclocks := true;
@@ -161,24 +161,24 @@ let set_fullclocks () =
   Interfacelib.PrintStc.print_fullclocks := true
 
 let speclist = [
-  "-o", Arg.String set_output_file, " Save the file name for generated code";
+  "-o", Arg.String set_output_file, " Set <output> file name";
   "-main", Arg.String set_main_node, " Specify the main node";
   "-nomain", Arg.Set no_main, " Compile as a library, without a main() function";
-  "-sync", Arg.Set write_sync, " Generate sync() in <source>.sync.c";
+  "-sync", Arg.Set write_sync, " Generate sync() in <output>.sync.c";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
 
-  "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <source>.parsed.lus";
-  "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <source>.nolast.lus";
-  "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <source>.noauto.lus";
-  "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <source>.noswitch.lus";
-  "-dnolocal", Arg.Set write_nolocal, " Save Lustre without local blocks in <source>.nolocal.lus";
+  "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <output>.parsed.lus";
+  "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <output>.nolast.lus";
+  "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <output>.noauto.lus";
+  "-dnoswitch", Arg.Set write_noswitch, " Save Lustre without switch blocks in <output>.noswitch.lus";
+  "-dnolocal", Arg.Set write_nolocal, " Save Lustre without local blocks in <output>.nolocal.lus";
   "-dnlustre", Arg.Set write_nlustre,
-                                   " Save generated N-Lustre in <source>.n.lus";
-  "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";
-  "-dsch", Arg.Set write_sch, " Save re-scheduled Stc in <source>.sch.stc";
-  "-dobc", Arg.Set write_obc, " Save generated Obc in <source>.obc";
-  "-dclight", Arg.Set write_cl, " Save generated Clight in <source>.light.c";
-  "-dcminor", Arg.Set write_cm, " Save generated Cminor in <source>.minor.c";
+                                   " Save generated N-Lustre in <output>.n.lus";
+  "-dstc", Arg.Set write_stc, " Save generated Stc in <output>.stc";
+  "-dsch", Arg.Set write_sch, " Save re-scheduled Stc in <output>.sch.stc";
+  "-dobc", Arg.Set write_obc, " Save generated Obc in <output>.obc";
+  "-dclight", Arg.Set write_cl, " Save generated Clight in <output>.light.c";
+  "-dcminor", Arg.Set write_cm, " Save generated Cminor in <output>.minor.c";
   "-fullclocks", Arg.Unit set_fullclocks,
                                          " Print 'full' clocks in declarations";
   "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
