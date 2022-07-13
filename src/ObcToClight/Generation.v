@@ -534,45 +534,55 @@ Definition check_nodup_names (prog: program) : res unit :=
   else Error (msg "ObcToClight: duplicate names").
 
 Definition translate (do_sync: bool) (all_public: bool)
-                     (main_node: ident) (prog: program): res Clight.program :=
+                     (main_node: option ident) (prog: program): res Clight.program :=
   do _ <- check_externs prog;
-  match find_class main_node prog with
-  | Some (c, _) =>
-    match find_method step c.(c_methods) with
-    | Some m =>
-      match find_method reset c.(c_methods) with
-      | Some _ =>
-        do _ <- check_size_enums prog;
-        let f := prefix_glob (prefix self main_id) in
-        let f_gvar := (f, type_of_inst main_node) in
-        let ins := map glob_bind m.(m_in) in
-        let outs := map glob_bind m.(m_out) in
-        (* revert the declarations ! *)
-        let prog := rev_prog prog in
-        let cs := map (translate_class prog) prog.(classes) in
-        let (structs, funs) := split cs in
-        let main_proved := (main_proved_id, make_main false main_node m) in
-        let entry_point := (main_id, make_entry_point do_sync) in
-        let gdefs :=
-          (map (fun '(f, (tyin, tyout)) => translate_external f tyin tyout) prog.(externs))
-            ++ concat funs
-            ++ (if do_sync
-                then [(sync_id, make_sync);
-                      (main_sync_id, make_main true main_node m)]
-                else [])
-            ++ [main_proved; entry_point]
-        in
-        make_program' (concat structs)
-                      [f_gvar]
-                      (outs ++ ins)
-                      gdefs
-                      (main_id ::
-                               (if do_sync then [main_sync_id] else [])
-                               ++ (if all_public then map fst (concat funs) else []))
-                      main_proved_id
-      | None => Error (msg "ObcToClight: reset function not found")
+  do _ <- check_size_enums prog;
+  let prog' := rev_prog prog in
+  let cs := map (translate_class prog') prog'.(classes) in
+  let (structs, funs) := split cs in
+  let gdefs :=
+    (map (fun '(f, (tyin, tyout)) => translate_external f tyin tyout) prog'.(externs))
+      ++ concat funs in
+  match main_node with
+  | Some main_node =>
+      match find_class main_node prog with
+      | Some (c, _) =>
+          match find_method step c.(c_methods) with
+          | Some m =>
+              match find_method reset c.(c_methods) with
+              | Some _ =>
+                  let f := prefix_glob (prefix self main_id) in
+                  let f_gvar := (f, type_of_inst main_node) in
+                  let ins := map glob_bind m.(m_in) in
+                  let outs := map glob_bind m.(m_out) in
+                  (* revert the declarations ! *)
+                  let main_proved := (main_proved_id, make_main false main_node m) in
+                  let entry_point := (main_id, make_entry_point do_sync) in
+                  let gdefs := gdefs
+                                ++ (if do_sync
+                                    then [(sync_id, make_sync);
+                                          (main_sync_id, make_main true main_node m)]
+                                    else [])
+                                ++ [main_proved; entry_point]
+                  in
+                  make_program' (concat structs)
+                    [f_gvar]
+                    (outs ++ ins)
+                    gdefs
+                    (main_id ::
+                       (if do_sync then [main_sync_id] else [])
+                       ++ (if all_public then map fst (concat funs) else []))
+                    main_proved_id
+              | None => Error (msg "ObcToClight: reset function not found")
+              end
+          | None => Error (msg "ObcToClight: step function not found")
+          end
+      | None => Error [MSG "ObcToClight: undefined node: '"; CTX main_node; MSG "'." ]
       end
-    | None => Error (msg "ObcToClight: step function not found")
-    end
-  | None => Error [MSG "ObcToClight: undefined node: '"; CTX main_node; MSG "'." ]
+  | None =>
+      make_program' (concat structs)
+        [] []
+        gdefs
+        (map fst (concat funs))
+        main_proved_id
   end.

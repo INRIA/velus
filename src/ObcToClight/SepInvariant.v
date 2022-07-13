@@ -1659,7 +1659,7 @@ Section FunctionEntry.
   Let tge              := Clight.globalenv tprog.
   Let gcenv            := Clight.genv_cenv tge.
 
-  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+  Hypothesis (TRANSL : translate do_sync all_public (Some main_node) prog = Errors.OK tprog)
              (WT     : wt_program prog).
 
   Lemma function_entry_match_states:
@@ -1838,7 +1838,7 @@ Section MainProgram.
   Let tge              := Clight.globalenv tprog.
   Let gcenv            := Clight.genv_cenv tge.
 
-  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+  Hypothesis (TRANSL : translate do_sync all_public (Some main_node) prog = Errors.OK tprog)
              (WT     : wt_program prog).
 
   Let out_step   := prefix out step.

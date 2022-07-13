@@ -19,6 +19,7 @@ let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
 let write_sync = ref false
+let no_main = ref false
 
 let output_file = ref None
 
@@ -35,12 +36,20 @@ let get_main_node decls =
     | LustreAst.NODE (n, _, _, _, _, _) :: ds -> last_decl (Some n) ds
     | _ :: ds -> last_decl last ds
   in
-  match !Veluslib.main_node with
-  | Some s -> intern_string s
-  | None   -> begin match last_decl None decls with
-      | Some s -> s
-      | None   -> Printf.fprintf stderr "no nodes found\n"; exit 1
-    end
+
+  if !no_main then (
+    if Option.is_some !Veluslib.main_node
+    then (Printf.fprintf stderr "-nomain is not compatible with -main"; exit 1);
+    if !write_sync
+    then (Printf.fprintf stderr "-nomain is not compatible with -sync"; exit 1);
+    None
+  ) else
+    match !Veluslib.main_node with
+    | Some s -> Some (intern_string s)
+    | None   -> begin match last_decl None decls with
+        | Some s -> Some s
+        | None   -> Printf.fprintf stderr "no nodes found\n"; exit 1
+      end
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
@@ -154,8 +163,10 @@ let set_fullclocks () =
 let speclist = [
   "-o", Arg.String set_output_file, " Save the file name for generated code";
   "-main", Arg.String set_main_node, " Specify the main node";
+  "-nomain", Arg.Set no_main, " Compile as a library, without a main() function";
   "-sync", Arg.Set write_sync, " Generate sync() in <source>.sync.c";
-  (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
+  "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
+
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <source>.parsed.lus";
   "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <source>.nolast.lus";
   "-dnoauto", Arg.Set write_noauto, " Save Lustre without automaton in <source>.noauto.lus";
@@ -176,7 +187,6 @@ let speclist = [
   "-noremovedupregs", Arg.Clear Veluslib.dupregrem, " Skip duplicate register removal";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
   "-nonormswitches", Arg.Clear Veluslib.normalize_switches, " Skip Obc switches normalization";
-  "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
 ]
 
 let usage_msg =

@@ -182,7 +182,7 @@ Section PRESERVATION.
   Let tge              := Clight.globalenv tprog.
   Let gcenv            := Clight.genv_cenv tge.
 
-  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+  Hypothesis (TRANSL : translate do_sync all_public (Some main_node) prog = Errors.OK tprog)
              (WT     : wt_program prog).
 
   Opaque sepconj.

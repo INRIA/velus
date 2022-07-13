@@ -1335,15 +1335,18 @@ Qed.
 
 Ltac inv_trans_tac H Eexterns En Estep Ereset Eenums structs funs E :=
   match type of H with
-    translate _ _ ?f ?p = OK _ =>
+    translate _ _ (Some ?f) ?p = OK _ =>
     let c := fresh "c" in
     let p' := fresh p in
-    unfold translate in H; apply bind_inversion in H as ([] & Eexterns & H);
+    unfold translate in H;
+    apply bind_inversion in H as ([] & Eexterns & H);
+    apply bind_inversion in H as ([] & Etypes & H);
+    destruct (split (map (translate_class (rev_prog p)) (rev_prog p).(classes))) as (structs, funs) eqn: E;
     destruct (find_class f p) as [(c, p')|] eqn: En; try discriminate;
     destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;
     destruct (find_method reset c.(c_methods)) eqn: Ereset; try discriminate;
-    destruct (split (map (translate_class (rev_prog p)) (rev_prog p).(classes))) as (structs, funs) eqn: E;
-    destruct (check_size_enums p) as [[]|] eqn: Eenums; simpl in *; try discriminate
+    destruct (check_size_enums p) as [[]|] eqn: Eenums; simpl in *; try discriminate;
+    rewrite <-app_assoc in H
   end.
 
 Tactic Notation "inv_trans" ident(H) "as" ident(Eexterns) ident(En) ident(Estep) ident(Ereset) ident(Eenums) "with" ident(s) ident(f) ident(E) :=
@@ -1411,7 +1414,7 @@ Section TranslateOk.
   Let tge := globalenv tprog.
   Let gcenv := genv_cenv tge.
 
-  Hypothesis TRANSL: translate do_sync all_public main_node prog = OK tprog.
+  Hypothesis TRANSL: translate do_sync all_public (Some main_node) prog = OK tprog.
 
   Lemma check_size_enums_spec:
     Forall (fun tn => check_size_enum tn = OK tt) prog.(types).
