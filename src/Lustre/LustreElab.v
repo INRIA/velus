@@ -1568,10 +1568,17 @@ Section ElabDeclaration.
       intuition.
   Qed.
 
+  Fixpoint find_dup (xs : list ident) :=
+    match xs with
+    | [] => xH
+    | x::xs => if mem_ident x xs then x
+             else find_dup xs
+    end.
+
   Definition check_nodup loc (xs : list ident) :=
     if check_nodup xs
     then ret tt
-    else err_loc loc (msg "Duplicate in input, outputs and locals of block").
+    else err_loc loc (MSG "Duplicate declaration of " :: CTX (find_dup xs) :: msg "").
 
   Lemma check_nodup_spec : forall loc xs st st',
       check_nodup loc xs st = OK (tt, st') ->
@@ -1678,20 +1685,31 @@ Section ElabDeclaration.
       destruct res0. apply mmap_values, Forall2_ignore2 in H1. simpl_Forall; eauto.
   Qed.
 
-  Definition check_defined_vars (loc: astloc) (xs1 xs2 : list ident) : Elab unit :=
-    if Common.check_nodup xs1 && Common.check_nodup xs2 then
-      if PS.equal (ps_from_list xs1) (ps_from_list xs2) then ret tt
-      else err_loc loc (msg "Missing or too many variables defined")
-    else err_loc loc (msg "Duplicate in vars defined").
+  Definition msg_of_missing_variables (exp def : PS.t) :=
+    match (PS.elements (PS.diff exp def)) with
+    | x::_ => (CTX x :: msg " is not defined")
+    | _ => match (PS.elements (PS.diff def exp)) with
+          | x::_ => (CTX x :: msg " shouldn't be defined")
+          | _ => msg "Missing or too many variables defined"
+          end
+    end.
 
-  Lemma check_defined_vars_spec loc : forall xs1 xs2 st res,
-      check_defined_vars loc xs1 xs2 st = OK res ->
-      Permutation xs1 xs2.
+  Definition check_defined_vars (loc: astloc) (exp def : list ident) : Elab unit :=
+    if Common.check_nodup def then
+      let exp := ps_from_list exp in
+      let def := ps_from_list def in
+      if PS.equal exp def then ret tt
+      else err_loc loc (msg_of_missing_variables exp def)
+    else err_loc loc (MSG "Duplicate definition of " :: CTX (find_dup def) :: msg "").
+
+  Lemma check_defined_vars_spec loc : forall exp def st res,
+      NoDup exp ->
+      check_defined_vars loc exp def st = OK res ->
+      Permutation exp def.
   Proof.
     unfold check_defined_vars.
-    intros * Hc. cases_eqn Heq; repeat monadInv.
-    apply Bool.andb_true_iff in Heq as (Heq1&Heq2).
-    apply check_nodup_correct in Heq1. apply check_nodup_correct in Heq2.
+    intros * Hnd Hc. cases_eqn Heq; repeat monadInv.
+    apply check_nodup_correct in Heq.
     apply PSF.equal_2, PS_elements_Equal in Heq0.
     unfold ps_from_list in Heq0. rewrite 2 Permutation_PS_elements_ps_adds in Heq0; auto.
     2,3:rewrite Forall_forall; intros; eapply not_In_empty.
@@ -1700,7 +1718,7 @@ Section ElabDeclaration.
 
   Definition check_defined_local (loc: astloc) (locals : list ident) (xs : list ident) : Elab (list ident) :=
     let (locals', ys) := partition (fun x => existsb (ident_eqb x) locals) xs in
-    do _ <- check_defined_vars loc locals' locals;
+    do _ <- check_defined_vars loc locals locals';
     ret ys.
 
   Lemma check_defined_local_spec loc : forall locals xs ys st st',
@@ -1712,13 +1730,13 @@ Section ElabDeclaration.
     cases_eqn Hf; repeat monadInv.
     eapply partition_Partition, Partition_Permutation in Hf.
     eapply check_defined_vars_spec in Hbind; eauto.
-    rewrite <-Hbind. now symmetry.
+    now rewrite Hf, Hbind.
   Qed.
 
   Definition check_incl loc xs ys : Elab unit :=
     let ys := ps_from_list ys in
     if forallb (fun x => PS.mem x ys) xs then ret tt
-    else err_loc loc (msg "causality annots should be included in defined variables").
+    else err_loc loc (msg_of_missing_variables ys (ps_from_list xs)).
 
   Lemma check_incl_spec loc : forall xs ys st st',
       check_incl loc xs ys st = OK (tt, st') ->
@@ -1746,12 +1764,14 @@ Section ElabDeclaration.
     | Bswitch _ [] => err_loc loc (msg "switches should have at least one branch")
     | Bswitch _ (hd::tl) =>
       do xs <- check_defined_scope (mmap (check_defined_block loc)) loc (snd hd);
+      do _ <- check_nodup loc xs;
       do _ <- mmap (fun blks => do xs' <- check_defined_scope (mmap (check_defined_block loc)) loc (snd blks);
                             check_defined_vars loc xs xs') tl;
       ret xs
     | Bauto _ _ _ [] => err_loc loc (msg "state machines should have at least one branch")
     | Bauto _ _ _ ((_, (_, hd))::tl) =>
       do xs <- check_defined_scope (fun '(blks, _) => mmap (check_defined_block loc) blks) loc hd;
+      do _ <- check_nodup loc xs;
       do _ <- mmap (fun '(_, (_, blks)) => do xs' <- check_defined_scope (fun '(blks, _) => mmap (check_defined_block loc) blks) loc blks;
                             check_defined_vars loc xs xs') tl;
       ret xs
@@ -1812,9 +1832,10 @@ Section ElabDeclaration.
         * intros; inv_VarsDefined. do 2 esplit; [eauto|]. now rewrite Hperm.
         * intros. do 2 esplit; [|reflexivity].
           eapply check_defined_blocks_spec in H; eauto.
-      + clear - Hbind1 H4 H5. revert x0 x1 st' Hbind1.
+      + take unit and destruct it. take (check_nodup _ _ _ = _) and apply check_nodup_spec in it as Hnd.
+        clear - Hnd Hbind0 H4 H5. revert x2 x3 st' Hbind0.
         induction H4; intros * Hbind; inv H5; repeat monadInv; constructor; eauto.
-        eapply check_defined_vars_spec in Hbind2.
+        eapply check_defined_vars_spec in Hbind2; eauto.
         destruct x as [?[]]. eapply check_defined_scope_spec in Hbind1; eauto.
         * eapply VarsDefinedScope_Perm1; [|eauto]. now symmetry.
         * intros; simpl in *; inv_VarsDefined.
@@ -1829,9 +1850,10 @@ Section ElabDeclaration.
         * intros; inv_VarsDefined. do 2 esplit; [eauto|]. now rewrite Hperm.
         * intros; simpl in *. do 2 esplit; [|reflexivity].
           eapply check_defined_blocks_spec in H0; eauto.
-      + clear - Hbind1 H4 H5. revert x0 x1 st' Hbind1.
+      + take unit and destruct it. take (check_nodup _ _ _ = _) and apply check_nodup_spec in it as Hnd.
+        clear - Hnd Hbind0 H4 H5. revert x2 x3 st' Hbind0.
         induction H4; intros * Hbind; inv H5; repeat monadInv; constructor; eauto.
-        destruct x as [(?&?)[]]; repeat monadInv. eapply check_defined_vars_spec in Hbind2.
+        destruct x as [(?&?)[]]; repeat monadInv. eapply check_defined_vars_spec in Hbind2; eauto.
         destruct s. eapply check_defined_scope_spec in Hbind1; eauto.
         * eapply VarsDefinedScope_Perm2; [|eauto]. now symmetry.
         * intros; simpl in *; inv_VarsDefined.
@@ -1912,6 +1934,7 @@ Section ElabDeclaration.
            do _       <- check_nodup loc (map fst (xin++xout));
            do _       <- check_noduplocals loc (nameset (nameset PS.empty xin) xout) blk;
            do defs    <- check_defined_block loc blk;
+           do _       <- check_nodup loc defs;
            do _       <- check_defined_vars loc defs (map fst xout);
            do _       <- check_atom loc name;
            do _       <- mmap (check_atom loc) (map fst (xin ++ xout));
@@ -1944,7 +1967,7 @@ Section ElabDeclaration.
     eapply check_defined_block_spec in Hbind6.
     2:{ eapply check_noduplocals_spec in Hbind5; eauto.
         instantiate (1:=[]). intros ? Hin. inv Hin. }
-    eapply check_defined_vars_spec in Hbind7.
+    eapply check_defined_vars_spec in Hbind8; eauto using check_nodup_spec.
     rewrite map_fst_idty; eauto.
   Qed.
   Next Obligation.
