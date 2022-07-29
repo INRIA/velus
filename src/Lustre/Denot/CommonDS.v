@@ -126,11 +126,10 @@ Section Stream_DS.
 
 End Stream_DS.
 
-
 (** ** Expressing safety properties *)
 Section DS_Forall.
 
-  Variable A : Type.
+  Context {A : Type}.
   Variable P : A -> Prop.
 
   CoInductive DSForall : DS A -> Prop :=
