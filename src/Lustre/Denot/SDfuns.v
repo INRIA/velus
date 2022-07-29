@@ -313,6 +313,36 @@ Section SStream_functions.
   Definition fbys : (bool -O-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) :=
     FIXP _ fbysf.
 
+  Lemma fbysF_eq : forall x xs ys,
+      fbys false (cons x xs) ys
+      == match x with
+         | abs => cons abs (fbys true xs ys)
+         | pres v => cons x (fby1AP None xs ys)
+         | err _ => DS_const x
+         end.
+  Proof.
+    intros.
+    unfold fbys.
+    assert (Heq:=FIXP_eq fbysf).
+    rewrite (ford_eq_elim (ford_eq_elim Heq false) (cons x xs)).
+    now rewrite <- fbyf_eq.
+  Qed.
+
+  Lemma fbysT_eq : forall xs y ys,
+      fbys true xs (cons y ys)
+      == match y with
+         | abs => fbys false xs ys
+         | err _ => DS_const y
+         | pres _ => DS_const (err error_Cl)
+         end.
+  Proof.
+    intros.
+    unfold fbys.
+    assert (Heq:=FIXP_eq fbysf).
+    rewrite (ford_eq_elim (ford_eq_elim Heq true) xs).
+    now rewrite <- fbyAf_eq.
+  Qed.
+
   Definition fbyA : DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A) := fbys true.
   Definition fby : DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A) := fbys false.
 
