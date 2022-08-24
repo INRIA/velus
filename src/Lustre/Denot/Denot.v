@@ -444,12 +444,15 @@ Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
     | right b => fun (_ : nprod n) (_ : nprod m) => nprod_const abs n
     end.
 
+Definition denot_var ins envI env x : DS (sampl value) :=
+  if mem_ident x ins then envI x else env x.
+
 Lemma denot_exp_eq :
   forall ins e envI bs env,
     denot_exp ins e envI bs env =
       match e return nprod (numstreams e) with
       | Econst c => sconst (Vscalar (sem_cconst c)) bs
-      | Evar x _ => if mem_ident x ins then envI x else env x
+      | Evar x _ => denot_var ins envI env x
       | Eunop op e an =>
           let se := denot_exp ins e envI bs env in
           match numstreams e as n return nprod n -> nprod 1 with
@@ -493,7 +496,7 @@ Lemma denot_exp_eq :
 Proof.
   destruct e; auto; intros envI bs env.
   - (* Evar *)
-    unfold denot_exp, denot_exp_ at 1.
+    unfold denot_exp, denot_exp_, denot_var at 1.
     cases.
   - (* Eunop *)
     unfold denot_exp, denot_exp_ at 1.

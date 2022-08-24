@@ -702,7 +702,7 @@ Section Op_correct.
 
 (* définition du prédicat op_correct qu'il faudra supposer sur les expressions  *)
 
-Variables (ins : list ident) (envI env : DS_prod SI) (bs : DS bool).
+Variables (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI).
 
 Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
   DSForall (fun s => match s with pres v => P v | _ => True end).
@@ -738,15 +738,19 @@ Definition op_correct {PSyn prefs} (n : @node PSyn prefs) : Prop :=
 
 End Op_correct.
 
+
+(* Parameter safe_env : DS_prod SI -> Prop. *)
 Theorem safe_exp :
   forall {PSyn prefs} (G : @global PSyn prefs),
   forall Γ ins e env envI bs,
     wt_exp G Γ e ->
     wc_exp G Γ e ->
-    op_correct_exp ins envI env bs e ->
+    op_correct_exp ins envI bs env e ->
+    (* safe_env env -> *)
     forall_nprod safe_DS (denot_exp ins e envI bs env).
 Proof.
   (* TODO: gros morceau *)
+  (* fichier à part ? oui *)
 Admitted.
 
 (* TODO: virer ? *)
@@ -777,7 +781,7 @@ Lemma ok_sem_exp :
     (* TODO: pourquoi denot_equation plutôt que node ? *)
     let env := (FIXP (DS_prod SI) (denot_equation ins equ envI (DS_of_S bs))) in
     forall (e : exp) (Hwt : wt_exp G Γ e) (Hwc : wc_exp G Γ e) (Hr : restr_exp e),
-      op_correct_exp ins envI env (DS_of_S bs) e ->
+      op_correct_exp ins envI (DS_of_S bs) env e ->
       let ss := denot_exp ins e envI (DS_of_S bs) env in
       let Infe := infinite_exp _ _ _ _ (DS_of_S_inf _) InfI Inf _ in
       sem_exp G (hist_of_env env Inf, empty _) bs e (Ss_of_nprod ss Infe).
@@ -793,6 +797,7 @@ Proof.
     econstructor; unfold hist_of_env; eauto.
     apply _S_of_DS_eq.
     setoid_rewrite denot_exp_eq.
+    unfold denot_var.
     cases_eqn HH; apply mem_ident_spec in HH.
     subst env0.
     setoid_rewrite <- PROJ_simpl at 2.
@@ -968,7 +973,7 @@ Lemma ok_sem_node :
     let infO := denot_inf G HasCausInj nd envI bs Hwt Hnc bsi infI in
     let H := hist_of_env env infO in
     let os := list_of_hist H outs in
-    op_correct ins envI env bs nd ->
+    op_correct ins envI bs env nd ->
     sem_node G f ss os.
 Proof.
   intros * Hl. intros until os. intro Hop.

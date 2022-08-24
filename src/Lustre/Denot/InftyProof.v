@@ -224,7 +224,7 @@ Module Type LDENOTINF
       rewrite denot_exp_eq.
       unfold P_vars, P_var in *.
       simpl. rewrite ID_simpl, Id_simpl, Forall_forall in *.
-      cases_eqn HH.
+      unfold denot_var. cases_eqn HH.
       + (* in *)
         rewrite mem_ident_spec in HH.
         now apply Hins.
@@ -281,7 +281,7 @@ Module Type LDENOTINF
       unfold P_vars, P_var in *.
       simpl. rewrite ID_simpl, Id_simpl, Forall_forall in *.
       setoid_rewrite denot_exp_eq.
-      cases_eqn HH.
+      unfold denot_var. cases_eqn HH.
       + (* in *)
         rewrite mem_ident_spec in HH.
         now apply Hins.
@@ -376,7 +376,7 @@ Module Type LDENOTINF
       unfold P_vars, P_var in *.
       simpl. rewrite ID_simpl, Id_simpl, Forall_forall in *.
       setoid_rewrite denot_exp_eq.
-      cases_eqn HH.
+      unfold denot_var. cases_eqn HH.
       + (* in *)
         rewrite mem_ident_spec in HH.
         now apply Hins.
@@ -731,7 +731,7 @@ Proof.
   - (* const *)
     apply sconst_inf; auto.
   - (* var *)
-    unfold all_infinite in *.
+    unfold all_infinite, denot_var in *.
     cases_eqn HH; rewrite ?mem_ident_spec in HH; eauto.
   - (* unop *)
     assert (forall_nprod (@infinite _) (denot_exp ins e envI bs env0)) as He by eauto.
