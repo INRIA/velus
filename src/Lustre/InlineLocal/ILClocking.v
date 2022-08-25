@@ -69,7 +69,7 @@ Module Type ILCLOCKING
 
   Local Hint Resolve In_sub1 In_sub2 : lclocking.
 
-  Definition st_senv st := senv_of_tyck (st_anns st).
+  Definition st_senv (st: fresh_st local _) := senv_of_tyck (st_anns st).
 
   Fact mmap_inlinelocal_block_wc {PSyn prefs} (G: @global PSyn prefs) sub Γ Γ' : forall blks blks' st st',
       Forall (fun blk => forall sub Γ' blks' st st',
@@ -85,7 +85,6 @@ Module Type ILCLOCKING
                   wc_env (idck (Γ++Γ')) ->
                   wc_block G (Γ++Γ') blk ->
                   Forall (wc_clock (idck (Γ ++ st_senv st))) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-                  st_valid_after st local PS.empty ->
                   inlinelocal_block sub blk st = (blks', st') ->
                   Forall (wc_block G (Γ ++ st_senv st')) blks' /\
                   Forall (wc_clock (idck (Γ ++ st_senv st'))) (map (fun '(_, (_, ck)) => ck) (st_anns st'))) blks ->
@@ -101,18 +100,16 @@ Module Type ILCLOCKING
       wc_env (idck (Γ++Γ')) ->
       Forall (wc_block G (Γ++Γ')) blks ->
       Forall (wc_clock (idck (Γ ++ st_senv st))) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-      st_valid_after st local PS.empty ->
       mmap (inlinelocal_block sub) blks st = (blks', st') ->
       Forall (wc_block G (Γ ++ st_senv st')) (concat blks') /\
       Forall (wc_clock (idck (Γ ++ st_senv st'))) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
-    induction blks; intros * Hf Hnl Hnin Hsubin Hsub Hsubgensym Hns Hnd Hgood Hwenv Hwenv2 Hwc Hwcc Hvalid Hmmap;
+    induction blks; intros * Hf Hnl Hnin Hsubin Hsub Hsubgensym Hns Hnd Hgood Hwenv Hwenv2 Hwc Hwcc Hmmap;
       inv Hf; inv Hns; inv Hnd; inv Hgood; inv Hwc; repeat inv_bind; simpl; auto.
     assert (Hdl:=H). eapply H1 in H as (?&?); eauto.
     assert (Hmap:=H0). eapply IHblks in H0 as (?&?); eauto.
     2:{ intros * Hfind Hin.
         eapply HasClock_incl; eauto. eapply incl_map, st_follows_incl; eauto with fresh. }
-    2:eapply inlinelocal_block_st_valid_after; eauto.
     constructor; auto.
     apply Forall_app. split; eauto.
     eapply Forall_impl; [|eauto]; intros.
@@ -142,12 +139,11 @@ Module Type ILCLOCKING
       wc_env (idck (Γ++Γ')) ->
       wc_block G (Γ++Γ') blk ->
       Forall (wc_clock (idck (Γ++st_senv st))) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-      st_valid_after st local PS.empty ->
       inlinelocal_block sub blk st = (blks', st') ->
       Forall (wc_block G (Γ++st_senv st')) blks' /\
       Forall (wc_clock (idck (Γ++st_senv st'))) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
-    induction blk using block_ind2; intros * Hnl Hnin Hsubin Hsub Hsubgensym Hns Hgood Hnd Hwenv Hwenv2 Hwc Hwcc Hvalid Hdl;
+    induction blk using block_ind2; intros * Hnl Hnin Hsubin Hsub Hsubgensym Hns Hgood Hnd Hwenv Hwenv2 Hwc Hwcc Hdl;
       inv Hns; inv Hnd; inv Hgood; inv Hwc; repeat inv_bind.
 
     - (* equation *)
@@ -180,7 +176,7 @@ Module Type ILCLOCKING
       }
       assert (forall x, InMembers x (st_anns st) -> ~InMembers x locs) as Hdisj.
       { intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm1. rewrite fst_InMembers in Hinm2.
-        eapply st_valid_after_AtomOrGensym_nIn in Hinm1; eauto using local_not_in_switch_prefs.
+        eapply st_valid_AtomOrGensym_nIn in Hinm1; eauto using local_not_in_switch_prefs.
         eapply Forall_forall; eauto. }
       assert (forall x : Env.key, Env.In x sub -> ~Env.In x x0) as Hsub1.
       { intros ?. rewrite Hsubin, Hsubin'. intros Hin1 Hin2.
@@ -294,7 +290,6 @@ Module Type ILCLOCKING
         * eapply Forall_impl; [|eauto]; intros.
           eapply wc_clock_incl; [|eauto]; solve_incl_app.
           apply incl_map, incl_map, st_follows_incl; eauto using fresh_idents_rename_st_follows.
-      + eapply fresh_idents_rename_st_valid; eauto.
   Qed.
 
   Lemma inlinelocal_topblock_wc {PSyn prefs} (G: @global PSyn prefs) Γ : forall blk blks' locs' st st',
@@ -305,14 +300,13 @@ Module Type ILCLOCKING
       wc_env (idck Γ) ->
       wc_block G Γ blk ->
       Forall (wc_clock (idck (Γ++st_senv st))) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-      st_valid_after st local PS.empty ->
       inlinelocal_topblock blk st = (blks', locs', st') ->
       Forall (wc_block G (Γ++senv_of_locs locs'++st_senv st')) blks' /\
       Forall (wc_clock (idck (Γ++senv_of_locs locs'++st_senv st')))
              (map (fun '(_, (_, ck, _, _)) => ck) locs'++map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hnl Hns Hnd Hgood Hwenv Hwc Hwcck Hvalid Hil; try destruct s; repeat inv_bind; simpl.
+    destruct blk; intros * Hnl Hns Hnd Hgood Hwenv Hwc Hwcck Hil; try destruct s; repeat inv_bind; simpl.
     3:inv Hns.
     1-3:eapply inlinelocal_block_wc with (Γ':=[]); try rewrite app_nil_r; eauto.
     10:inv Hns; inv Hnd; inv H3; inv Hgood; inv H1; inv Hwc; inv H3;
@@ -381,7 +375,6 @@ Module Type ILCLOCKING
     - unfold idck, senv_of_inout. erewrite map_map, map_ext; eauto.
       intros; destruct_conjs; auto.
     - rewrite init_st_anns; simpl; auto.
-    - eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
   Qed.
 
   Theorem inlinelocal_global_wc : forall G,

@@ -48,9 +48,8 @@ Module Type CSCORRECTNESS
     Import Permutation.
     Import Fresh Facts Tactics List.
 
-    Lemma cond_eq_sem envty : forall Hi Hl bs e ty ck vs x xcs eqs' st st' aft,
+    Lemma cond_eq_sem envty : forall Hi Hl bs e ty ck vs x xcs eqs' st st',
         Forall (AtomOrGensym auto_prefs) envty ->
-        st_valid_after st switch aft ->
         FEnv.dom_ub Hi (envty ++ st_ids st) ->
         sem_exp_ck G2 (Hi, Hl) bs e [vs] ->
         sem_clock Hi bs ck (abstract_clock vs) ->
@@ -63,7 +62,7 @@ Module Type CSCORRECTNESS
             FEnv.dom_ub Hi' (envty ++ st_ids st') /\
             sc_vars (senv_of_tyck xcs) (Hi', Hl) bs.
     Proof.
-      intros * Hat Hst Hdom Hsem Hsemck Hcond.
+      intros * Hat Hdom Hsem Hsemck Hcond.
       destruct e; simpl in *; repeat (take ann and destruct it); repeat inv_bind.
       3:{ inv Hsem. exists Hi; repeat split; simpl; eauto with fenv.
           + reflexivity.
@@ -205,8 +204,7 @@ Module Type CSCORRECTNESS
     Qed.
 
     Lemma new_idents_sem {A} envty frees defs bck tx tn xc :
-      forall Hi Hi' Hl bs' (branches : list (enumtag * A)) xs sc st st' aft,
-        st_valid_after st switch aft ->
+      forall Hi Hi' Hl bs' (branches : list (enumtag * A)) xs sc st st',
         Forall (AtomOrGensym auto_prefs) envty ->
         FEnv.dom_ub Hi' (envty ++ st_ids st) ->
         sem_var Hi' xc sc ->
@@ -226,15 +224,11 @@ Module Type CSCORRECTNESS
           Forall (fun '(k, sub, _, _) => (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi'' y (ffilterv k sc vs))) xs /\
           sc_vars (flat_map (fun '(_, _, nfrees, ndefs) => (map (fun '(_, x, (ty, ck)) => (x, Build_annotation ty ck xH None)) (nfrees++ndefs))) xs) (Hi'', Hl) bs'.
     Proof.
-      intros * Hst Hat Hdomub Hx Hsemck Hwt Hsc Hmmap.
+      intros * Hat Hdomub Hx Hsemck Hwt Hsc Hmmap.
       remember (Hi' + FEnv.of_list (flat_map (fun '(k, _, nfrees, ndefs) =>
                                                 map (fun '(x, nx, _) => (nx, ffilterv k sc (or_default (Streams.const absent) (Hi x))))
                                                     (nfrees++ndefs)) xs)) as Hi'2.
       exists Hi'2.
-      assert (st_valid_after st' switch aft) as Hvalid'.
-      { eapply mmap_st_valid; eauto.
-        eapply Forall_forall; intros (?&?) ? (((?&?)&?)&?) ????; repeat inv_bind.
-        do 2 (eapply new_idents_st_valid; [|eauto]; auto). }
       assert (Hi' ⊑ Hi'2) as Href.
       { subst. intros ?? Hfind. do 2 esplit; try reflexivity. apply FEnv.union2; auto.
         apply FEnv.of_list_None; intros Hinm; apply fst_InMembers in Hinm.
@@ -242,9 +236,9 @@ Module Type CSCORRECTNESS
         assert (FEnv.In x Hi') as Hin2 by (econstructor; eauto).
         apply Hdomub, in_app_iff in Hin2 as [Hin2|Hin2].
         - eapply Forall_forall in Hat; eauto.
-          eapply st_valid_after_AtomOrGensym_nIn in Hvalid'; eauto using switch_not_in_auto_prefs.
-          eapply Hvalid'. rewrite Hmmap. apply in_or_app, or_intror. solve_In. auto.
-        - eapply st_valid_NoDup, NoDup_app_l in Hvalid'. rewrite Hmmap in Hvalid'.
+          eapply st_valid_AtomOrGensym_nIn; eauto using switch_not_in_auto_prefs.
+          rewrite Hmmap. apply in_or_app, or_intror. solve_In. auto.
+        - specialize (st_valid_NoDup st') as Hvalid'. rewrite Hmmap in Hvalid'.
           eapply NoDup_app_In in Hvalid'; eauto.
           eapply Hvalid'.
           solve_In. auto.
@@ -254,7 +248,7 @@ Module Type CSCORRECTNESS
                    (fun '(k, _, nfrees, ndefs) =>
                       map (fun '(x2, nx, _) => (nx, ffilterv k sc (or_default (Streams.const absent) (Hi x2))))
                           (nfrees ++ ndefs)) xs)) as Hnd'.
-      { eapply st_valid_NoDup, NoDup_app_l in Hvalid'.
+      { specialize (st_valid_NoDup st') as Hvalid'.
         erewrite new_idents_st_ids' in Hvalid'; eauto. apply NoDup_app_r in Hvalid'.
         erewrite fst_NoDupMembers.
         rewrite flat_map_concat_map, concat_map, map_map in *. erewrite map_ext; eauto.
@@ -297,14 +291,13 @@ Module Type CSCORRECTNESS
       - intros * Hck Hca. exfalso. inv Hca. simpl_In. congruence.
     Qed.
 
-    Fact switch_blocks_sem' aft : forall bck sub Γty Γck Hi Hi' Hl bs bs' blks blks' st st',
+    Fact switch_blocks_sem' : forall bck sub Γty Γck Hi Hi' Hl bs bs' blks blks' st st',
         Forall
           (fun blk => forall bck sub Γty Γck Hi Hi' Hl bs bs' blk' st st',
                (forall x, ~IsLast Γck x) ->
                (forall x, Env.In x sub -> InMembers x Γck) ->
                (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi' y vs) ->
                (forall x vs, Env.find x sub = None -> sem_var Hi x vs -> sem_var Hi' x vs) ->
-               st_valid_after st switch aft ->
                incl (map fst Γck) (map fst Γty) ->
                NoDupMembers Γty ->
                NoDupMembers Γck ->
@@ -325,7 +318,6 @@ Module Type CSCORRECTNESS
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi' y vs) ->
         (forall x vs, Env.find x sub = None -> sem_var Hi x vs -> sem_var Hi' x vs) ->
-        st_valid_after st switch aft ->
         incl (map fst Γck) (map fst Γty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
@@ -343,22 +335,21 @@ Module Type CSCORRECTNESS
         mmap (switch_block Γck bck sub) blks st = (blks', st') ->
         Forall (sem_block_ck G2 (Hi', Hl) bs') blks'.
     Proof.
-      intros * Hf Hnl1 Hsubin Hsub Hnsub Hvalid Hincl Hnd1 Hnd2 Hat Hdom1 Hsc Hdom2 Hbck Hnl2 Hnd3 Hgood Hwt Hwc Hsem Hmmap.
-      eapply mmap_values_valid_follows, Forall2_ignore1 in Hmmap;
-        eauto using switch_block_st_valid, switch_block_st_follows.
-      simpl_Forall. eapply Hf; eauto.
+      intros * Hf Hnl1 Hsubin Hsub Hnsub Hincl Hnd1 Hnd2 Hat Hdom1 Hsc Hdom2 Hbck Hnl2 Hnd3 Hgood Hwt Hwc Hsem Hmmap.
+      eapply mmap_values_follows, Forall2_ignore1 in Hmmap;
+        eauto using switch_block_st_follows.
+      simpl_Forall. eapply Hf in H2; eauto.
       - simpl_Forall; auto.
       - eapply FEnv.dom_ub_incl; eauto.
         apply incl_app; [solve_incl_app|apply incl_appr, incl_map, st_follows_incl]; auto.
     Qed.
 
-    Lemma switch_scope_sem {A} P_na P_nd P_good P_wt P_wc P_sem1 f_switch (P_sem2: _ -> _ -> Prop) aft :
+    Lemma switch_scope_sem {A} P_na P_nd P_good P_wt P_wc P_sem1 f_switch (P_sem2: _ -> _ -> Prop) :
       forall locs caus (blk: A) bck sub Γty Γck Hi Hi' Hl bs bs' s' st st',
         (forall x, ~IsLast Γck x) ->
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi' y vs) ->
         (forall x vs, Env.find x sub = None -> sem_var Hi x vs -> sem_var Hi' x vs) ->
-        st_valid_after st switch aft ->
         incl (map fst Γck) (map fst Γty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
@@ -379,7 +370,6 @@ Module Type CSCORRECTNESS
             (forall x, Env.In x sub -> InMembers x Γck) ->
             (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi' y vs) ->
             (forall x vs, Env.find x sub = None -> sem_var Hi x vs -> sem_var Hi' x vs) ->
-            st_valid_after st switch aft ->
             incl (map fst Γck) (map fst Γty) ->
             NoDupMembers Γty ->
             NoDupMembers Γck ->
@@ -398,13 +388,13 @@ Module Type CSCORRECTNESS
             P_sem2 (Hi', Hl) blk') ->
         sem_scope_ck (fun Hi => sem_exp_ck G2 Hi bs') P_sem2 (Hi', Hl) bs' s'.
     Proof.
-      intros * Hnl1 Hsubin Hsub Hnsub Hvalid Hincl Hnd1 Hnd2 Hat Hdom Hsc Hdomub Hbck Hnl2 Hnd3 Hgood Hwt Hwc Hsem Hmmap Hind;
+      intros * Hnl1 Hsubin Hsub Hnsub Hincl Hnd1 Hnd2 Hat Hdom Hsc Hdomub Hbck Hnl2 Hnd3 Hgood Hwt Hwc Hsem Hmmap Hind;
         inv Hnl2; inv Hnd3; inv Hgood; inv Hwt; inv Hwc; inv Hsem; simpl in *; repeat inv_bind.
       assert (forall x, InMembers x locs -> ~FEnv.In x Hi') as Hnin.
       { intros ? Hinm Hin.
         eapply Hdomub, in_app_iff in Hin as [|]; eauto.
         - eapply H7; eauto.
-        - eapply st_valid_after_AtomOrGensym_nIn; eauto using switch_not_in_auto_prefs.
+        - eapply st_valid_AtomOrGensym_nIn; eauto using switch_not_in_auto_prefs.
           eapply fst_InMembers, Forall_forall in Hinm; eauto.
       }
 
@@ -474,12 +464,11 @@ Module Type CSCORRECTNESS
         + now rewrite map_app, map_fst_senv_of_locs.
     Qed.
 
-    Lemma switch_block_sem aft : forall blk bck sub Γty Γck Hi Hi' Hl bs bs' blk' st st',
+    Lemma switch_block_sem : forall blk bck sub Γty Γck Hi Hi' Hl bs bs' blk' st st',
         (forall x, ~IsLast Γck x) ->
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y vs, Env.find x sub = Some y -> sem_var Hi x vs -> sem_var Hi' y vs) ->
         (forall x vs, Env.find x sub = None -> sem_var Hi x vs -> sem_var Hi' x vs) ->
-        st_valid_after st switch aft ->
         incl (map fst Γck) (map fst Γty) ->
         NoDupMembers Γty ->
         NoDupMembers Γck ->
@@ -499,7 +488,7 @@ Module Type CSCORRECTNESS
     Proof.
       Opaque switch_scope.
       induction blk using block_ind2;
-        intros * Hnl1 Hsubin Hsub Hnsub Hvalid Hincl Hnd1 Hnd2 Hat Hdom Hsc Hdomub Hbck Hnl2 Hnd3 Hgood Hwt Hwc Hsem Hmmap;
+        intros * Hnl1 Hsubin Hsub Hnsub Hincl Hnd1 Hnd2 Hat Hdom Hsc Hdomub Hbck Hnl2 Hnd3 Hgood Hwt Hwc Hsem Hmmap;
         inv Hnl2; inv Hnd3; inv Hgood; inv Hwt; inv Hwc; inv Hsem; simpl in *; repeat inv_bind.
       - (* equation *)
         constructor. eapply subclock_equation_sem; eauto.
@@ -594,11 +583,7 @@ Module Type CSCORRECTNESS
         + intros. apply in_app_iff in H0 as [|]; simpl_In.
         + simpl_app. apply sc_vars_app.
           * intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm1, Hinm2.
-            assert (st_valid_after x2 switch aft) as Hvalid'.
-            { eapply mmap_st_valid; eauto. simpl_Forall; repeat inv_bind.
-              do 2 (eapply new_idents_st_valid; [|eauto]). auto.
-              eapply cond_eq_st_valid; eauto. }
-            apply st_valid_NoDup, NoDup_app_l in Hvalid'.
+            specialize (st_valid_NoDup x2) as Hvalid'.
             apply new_idents_st_ids' in Hni. apply cond_eq_st_ids in Hcond.
             rewrite Hni, Hcond in Hvalid'. simpl_app. simpl_In.
             eapply NoDup_app_r, NoDup_app_In in Hvalid'. 2:solve_In.
@@ -639,16 +624,11 @@ Module Type CSCORRECTNESS
         + eapply CS.mmap2_values' in H18. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in Hni.
           2:{ eapply Forall3_length in H18 as (?&?); congruence. }
           2:eapply mmap_length in Hni; eauto.
-          2:{ eapply mmap_st_valid, cond_eq_st_valid; eauto.
-              simpl_Forall; repeat inv_bind.
-              do 2 (eapply new_idents_st_valid; [|eauto]); eauto. }
-          2:{ intros (?&?) (((?&?)&?)&?) ?????; repeat inv_bind.
-              eapply switch_scope_st_valid; eauto. }
           2:{ intros (?&?) (((?&?)&?)&?) ????; repeat inv_bind.
               eapply switch_scope_st_follows; eauto. }
-          eapply Forall3_Forall3 in Hni; eauto. clear H15.
+          eapply Forall3_Forall3 in Hni; [|eapply H18]. clear H18.
           eapply Forall_concat, Forall_forall; intros ? Hin1.
-          eapply Forall3_ignore12, Forall_forall in Hni as ((?&?)&?&Hin2&Hin3&(?&?&Hvalid'&Hfollows'&?)&?&?&?); eauto; repeat inv_bind.
+          eapply Forall3_ignore12, Forall_forall in Hni as ((?&?)&?&Hin2&Hin3&(?&?&Hfollows&?)&?&?&?); eauto; repeat inv_bind.
           constructor.
           *{ constructor. simpl_Forall. destruct s.
              assert (wc_scope (fun Γ => Forall (wc_block G1 Γ)) G1 (map (fun '(x, ann) => (x, ann_with_clock ann Cbase)) (l ++ filter (fun '(_, ann) => ann.(clo) ==b ck) l0)) (Scope l2 l3 l4)) as Hwc'.
@@ -778,7 +758,7 @@ Module Type CSCORRECTNESS
       destruct H5 as (Hdom1&Hsc1).
       inv Hwt. destruct H4 as (Hwt&_); simpl in Hwt.
       eapply switch_block_sem in Hblksem...
-      17:eapply surjective_pairing.
+      16:eapply surjective_pairing.
       eapply Snode with (H:=H); simpl... 1-19:repeat rewrite map_fst_idty in *; auto.
       + erewrite find_node_now...
       + eauto.
@@ -791,7 +771,6 @@ Module Type CSCORRECTNESS
       + apply senv_of_inout_NoLast.
       + intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
       + intros * Hfind. rewrite Env.gempty in Hfind. congruence.
-      + eapply init_st_valid; eauto using switch_not_in_auto_prefs, PS_For_all_empty.
       + reflexivity.
       + apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
       + apply NoDupMembers_map; auto. intros; destruct_conjs; auto.

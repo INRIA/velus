@@ -50,7 +50,7 @@ Module Type ILTYPING
 
   Global Hint Resolve In_sub1 In_sub2 : ltyping.
 
-  Definition st_senv st := senv_of_tyck (st_anns st).
+  Definition st_senv (st: fresh_st local _) := senv_of_tyck (st_anns st).
 
   Fact mmap_inlinelocal_block_wt {PSyn prefs} (G: @global PSyn prefs) sub Γ Γ' : forall blks blks' st st',
       Forall (fun blk => forall sub Γ' blks' st st',
@@ -63,7 +63,6 @@ Module Type ILTYPING
                   GoodLocals switch_prefs blk ->
                   wt_block G (Γ++Γ') blk ->
                   Forall (wt_clock (types G) (Γ ++ st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-                  st_valid_after st local PS.empty ->
                   inlinelocal_block sub blk st = (blks', st') ->
                   Forall (wt_block G (Γ ++ st_senv st')) blks' /\
                   Forall (wt_clock (types G) (Γ ++ st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st'))) blks ->
@@ -76,18 +75,16 @@ Module Type ILTYPING
       Forall (GoodLocals switch_prefs) blks ->
       Forall (wt_block G (Γ++Γ')) blks ->
       Forall (wt_clock (types G) (Γ ++ st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-      st_valid_after st local PS.empty ->
       mmap (inlinelocal_block sub) blks st = (blks', st') ->
       Forall (wt_block G (Γ ++ st_senv st')) (concat blks') /\
       Forall (wt_clock (types G) (Γ ++ st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
-    induction blks; intros * Hf Hnl Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hvalid Hmmap;
+    induction blks; intros * Hf Hnl Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hmmap;
       inv Hf; inv Hns; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind; simpl; auto.
     assert (Hdl:=H). eapply H1 in H as (?&?); eauto.
     assert (Hmap:=H0). eapply IHblks in H0 as (?&?); eauto.
     2:{ intros * Hfind Hin.
         eapply HasType_incl; eauto. eapply incl_map, st_follows_incl; eauto with fresh. }
-    2:eapply inlinelocal_block_st_valid_after; eauto.
     constructor; auto.
     apply Forall_app. split; eauto.
     eapply Forall_impl; [|eauto]; intros.
@@ -110,12 +107,11 @@ Module Type ILTYPING
       GoodLocals switch_prefs blk ->
       wt_block G (Γ++Γ') blk ->
       Forall (wt_clock G.(types) (Γ++st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-      st_valid_after st local PS.empty ->
       inlinelocal_block sub blk st = (blks', st') ->
       Forall (wt_block G (Γ++st_senv st')) blks' /\
       Forall (wt_clock G.(types) (Γ++st_senv st')) (map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
-    induction blk using block_ind2; intros * Hnl Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hvalid Hdl;
+    induction blk using block_ind2; intros * Hnl Hnin Hsubin Hsub Hns Hnd Hgood Hwt Hwtc Hdl;
       inv Hns; inv Hnd; inv Hgood; inv Hwt; repeat inv_bind.
 
     - (* equation *)
@@ -146,7 +142,7 @@ Module Type ILTYPING
           apply H0 in Hin as (?&?&?&_); eauto. econstructor; eauto.
       }
       inv H3. inv H1. inv H6.
-      eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_locs locs) in H. 1,12:eauto. 1-10:eauto.
+      eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_locs locs) in H. 1,11:eauto. all:eauto.
       + rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
       + intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_locs.
@@ -210,14 +206,13 @@ Module Type ILTYPING
               econstructor. solve_In. rewrite Hfind. 1,2:reflexivity.
             - exfalso. inv Hin. unfold st_senv. simpl_In.
               apply In_InMembers, fst_InMembers in Hin.
-              eapply st_valid_after_AtomOrGensym_nIn in Hin; eauto using local_not_in_switch_prefs.
+              eapply st_valid_AtomOrGensym_nIn in Hin; eauto using local_not_in_switch_prefs.
               apply H8, fst_InMembers; auto.
           }
         * simpl_Forall.
           eapply wt_clock_incl; [|eauto].
           intros *. rewrite 2 HasType_app. intros [|]; auto; right.
           eapply HasType_incl; eauto. eapply incl_map, st_follows_incl, fresh_idents_rename_st_follows; eauto.
-      + eapply fresh_idents_rename_st_valid; eauto.
   Qed.
 
   Lemma inlinelocal_topblock_wt {PSyn prefs} (G: @global PSyn prefs) Γ : forall blk blks' locs' st st',
@@ -227,14 +222,13 @@ Module Type ILTYPING
       GoodLocals switch_prefs blk ->
       wt_block G Γ blk ->
       Forall (wt_clock G.(types) (Γ++st_senv st)) (map (fun '(_, (_, ck)) => ck) (st_anns st)) ->
-      st_valid_after st local PS.empty ->
       inlinelocal_topblock blk st = (blks', locs', st') ->
       Forall (wt_block G (Γ++senv_of_locs locs'++st_senv st')) blks' /\
       Forall (wt_clock G.(types) (Γ++senv_of_locs locs'++st_senv st'))
              (map (fun '(_, (_, ck, _, _)) => ck) locs'++map (fun '(_, (_, ck)) => ck) (st_anns st')).
   Proof.
     Opaque inlinelocal_block.
-    destruct blk; intros * Hnl Hns Hnd Hgood Hwt Hwtc Hvalid Hil; try destruct s; repeat inv_bind; simpl. 3:inv Hns.
+    destruct blk; intros * Hnl Hns Hnd Hgood Hwt Hwtc Hil; try destruct s; repeat inv_bind; simpl. 3:inv Hns.
     1-3:eapply inlinelocal_block_wt with (Γ':=[]); try rewrite app_nil_r; eauto.
     7:inv Hnd; inv Hgood; inv Hwt; inv H1; inv H2; inv H4; inv_VarsDefined;
       eapply mmap_inlinelocal_block_wt with (Γ:=Γ++senv_of_locs locs') (Γ':=[]) in H as (Hwt1&Hwt2); try rewrite app_nil_r; eauto.
@@ -343,7 +337,6 @@ Module Type ILTYPING
       + apply senv_of_inout_NoLast.
       + rewrite map_fst_senv_of_inout. apply n_nodup.
       + rewrite init_st_anns; simpl; auto.
-      + eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
     - (* types *)
       eapply inlinelocal_topblock_wt_type, Forall_app in Hdl as (?&?); eauto.
       2:{ rewrite init_st_anns; simpl; auto. }
@@ -362,7 +355,6 @@ Module Type ILTYPING
       + apply senv_of_inout_NoLast.
       + rewrite map_fst_senv_of_inout. apply n_nodup.
       + rewrite init_st_anns; simpl; auto.
-      + eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
   Qed.
 
   Theorem inlinelocal_global_wt : forall G,

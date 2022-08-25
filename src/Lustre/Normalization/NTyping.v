@@ -126,7 +126,7 @@ Module Type NTYPING
 
   (** ** A few additional tactics *)
 
-  Definition st_senv st := senv_of_tyck (st_anns st).
+  Definition st_senv {pref} (st: fresh_st pref _) := senv_of_tyck (st_anns st).
   Global Hint Unfold st_senv senv_of_tyck : list.
 
   Fact idents_for_anns_incl_ty : forall anns ids st st',
@@ -403,8 +403,8 @@ Module Type NTYPING
           1,2:reflexivity.
     Qed.
 
-    Fact mmap2_wt {A B} :
-      forall vars (k : A -> Fresh (list exp * list equation) B) a es' eqs' st st',
+    Fact mmap2_wt {pref A B} :
+      forall vars (k : A -> Fresh pref (list exp * list equation) B) a es' eqs' st st',
         mmap2 k a st = (es', eqs', st') ->
         (forall st st' a es eqs', k a st = (es, eqs', st') -> st_follows st st') ->
         Forall (fun a => forall es' eqs' st0 st0',
@@ -429,8 +429,8 @@ Module Type NTYPING
         etransitivity; eauto.
     Qed.
 
-    Fact mmap2_wt' {A B} :
-      forall vars (k : A -> Fresh (enumtag * list exp * list equation) B) a es' eqs' st st',
+    Fact mmap2_wt' {pref A B} :
+      forall vars (k : A -> Fresh pref (enumtag * list exp * list equation) B) a es' eqs' st st',
         mmap2 k a st = (es', eqs', st') ->
         (forall st st' a es eqs', k a st = (es, eqs', st') -> st_follows st st') ->
         Forall (fun a => forall n es' eqs' st0 st0',
@@ -608,7 +608,7 @@ Module Type NTYPING
         2:solve_mmap2.
         apply mmap2_unnest_exp_typesof in Hnorm1 as Htys; eauto with ltyping.
         assert (HasType (vars ++ st_senv st') x2 (Tprimitive tyout)) as Hty.
-        { take (fresh_ident _ _ _ _ = _) and apply fresh_ident_In in it.
+        { take (fresh_ident _ _ _ = _) and apply fresh_ident_In in it.
           apply HasType_app, or_intror.
           econstructor; solve_In. auto. }
         repeat constructor; auto.
@@ -1069,13 +1069,13 @@ Module Type NTYPING
 
     (** ** Preservation of wt_clock *)
 
-    Definition st_clocks (st : fresh_st (Op.type * clock)) : list clock :=
+    Definition st_clocks {pref} (st : fresh_st pref (Op.type * clock)) : list clock :=
       map (fun '(_, (_, cl)) => cl) (st_anns st).
 
-    Fact fresh_ident_wt_clock : forall types pref hint vars ty cl id st st',
+    Fact fresh_ident_wt_clock : forall types pref hint vars ty cl id (st st' : fresh_st pref _),
         Forall (wt_clock types vars) (st_clocks st) ->
         wt_clock types vars cl ->
-        fresh_ident pref hint (ty, cl) st = (id, st') ->
+        fresh_ident hint (ty, cl) st = (id, st') ->
         Forall (wt_clock types vars) (st_clocks st').
     Proof.
       intros * Hclocks Hwt Hfresh.
@@ -1414,10 +1414,10 @@ Module Type NTYPING
 
     (** The enum types used in the new variables are also correct *)
 
-    Lemma fresh_ident_wt_type : forall vars pref hint ty ck id st st',
+    Lemma fresh_ident_wt_type : forall vars pref hint ty ck id (st st': fresh_st pref _),
         wt_type G2.(types) ty ->
         Forall (wt_type G2.(types)) (map (fun '(_, ann) => ann.(typ)) (vars++st_senv st)) ->
-        fresh_ident pref hint (ty, ck) st = (id, st') ->
+        fresh_ident hint (ty, ck) st = (id, st') ->
         Forall (wt_type G2.(types)) (map (fun '(_, ann) => ann.(typ)) (vars++st_senv st')).
     Proof.
       unfold st_senv.
@@ -2099,10 +2099,10 @@ Module Type NTYPING
 
     (** wt_type *)
 
-    Lemma fresh_ident_wt_type' : forall vars pref hint ty ck id st st',
+    Lemma fresh_ident_wt_type' : forall vars pref hint ty ck id (st st': fresh_st pref _),
         wt_type G2.(types) ty ->
         Forall (wt_type G2.(types)) (map (fun '(_, a) => a.(typ)) (vars++st_senv st)) ->
-        fresh_ident pref hint (ty, ck) st = (id, st') ->
+        fresh_ident hint (ty, ck) st = (id, st') ->
         Forall (wt_type G2.(types)) (map (fun '(_, a) => a.(typ)) (vars++st_senv st')).
     Proof.
       unfold st_senv.

@@ -146,7 +146,7 @@ Module Type CATYPING
 
       - (* reset *)
         constructor; eauto with ltyping.
-        auto_block_simpl_Forall; eauto using auto_block_st_valid.
+        auto_block_simpl_Forall; eauto.
         take (auto_block _ _ = _) and eapply H in it; eauto.
         etransitivity; eauto using incl_concat.
 
@@ -160,7 +160,7 @@ Module Type CATYPING
         + auto_block_simpl_Forall.
           destruct s0. eapply auto_scope_wt with (Γ':=[]) in H10; eauto.
           * etransitivity; eauto using incl_concat.
-          * intros. auto_block_simpl_Forall; eauto using auto_block_st_valid.
+          * intros. auto_block_simpl_Forall; eauto.
             take (auto_block _ _ = _) and eapply H in it; eauto.
             etransitivity; eauto using incl_concat.
 

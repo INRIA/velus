@@ -28,9 +28,9 @@ Module Type COMPAUTO
   Import Fresh Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
-  Definition FreshAnn A := Fresh A (type * clock).
+  Definition FreshAnn A := Fresh auto A (type * clock).
 
-  Definition fresh_ident := fresh_ident auto None (OpAux.bool_velus_type, Cbase).
+  Definition fresh_ident : FreshAnn _ := fresh_ident None (OpAux.bool_velus_type, Cbase).
 
   Fixpoint init_state_exp ty ck (ini : list (exp * enumtag)) oth : exp :=
     match ini with
@@ -136,72 +136,7 @@ Module Type COMPAUTO
                            [stateq;switch1;switch2]), ty::concat tys)
     end.
 
-  (** Preservation of st_valid_after *)
-
-  Lemma auto_block_st_valid aft : forall blk blk' tys st st',
-      st_valid_after st auto aft ->
-      auto_block blk st = ((blk', tys), st') ->
-      st_valid_after st' auto aft.
-  Proof.
-    induction blk using block_ind2; intros * Hvalid Haut; try destruct type0;
-      destruct_conjs; repeat inv_bind; auto.
-    - (* reset *)
-      eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
-    - (* switch *)
-      eapply mmap2_st_valid; eauto. simpl_Forall.
-      destruct s0. repeat inv_bind.
-      eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
-    - (* automaton (weak) *)
-      eapply mmap2_st_valid; eauto 6 with fresh. simpl_Forall.
-      destruct s0; destruct_conjs. repeat inv_bind.
-      eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
-    - (* automaton (strong) *)
-      eapply mmap2_st_valid; eauto 6 with fresh. simpl_Forall.
-      destruct s0; destruct_conjs. repeat inv_bind.
-      eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
-    - (* local *)
-      eapply mmap2_st_valid; eauto. simpl_Forall; eauto.
-  Qed.
-
-  Corollary auto_scope_st_valid1 aft : forall s blks' tys st st',
-      st_valid_after st auto aft ->
-      auto_scope (mmap2 auto_block) s st = (blks', tys, st') ->
-      st_valid_after st' auto aft.
-  Proof.
-    intros [] * Hval Hauto.
-    repeat inv_bind. eapply mmap2_st_valid; eauto.
-    simpl_Forall; eauto using auto_block_st_valid.
-  Qed.
-
-  Corollary auto_scope_st_valid2 aft pst pres ty e : forall s blks' tys st st',
-      st_valid_after st auto aft ->
-      auto_scope
-        (fun '(blks, trans) =>
-           do (blks', tys) <- mmap2 auto_block blks;
-           let transeq := Beq ([pst; pres], trans_exp ty trans e) in
-           ret (transeq::blks', tys))
-        s st = (blks', tys, st') ->
-      st_valid_after st' auto aft.
-  Proof.
-    intros [] * Hval Hauto. destruct_conjs.
-    repeat inv_bind. eapply mmap2_st_valid; eauto.
-    simpl_Forall; eauto using auto_block_st_valid.
-  Qed.
-
-  Corollary auto_scope_st_valid3 aft : forall (s : scope (_ * list transition)) blks' tys st st',
-      st_valid_after st auto aft ->
-      auto_scope (fun '(blks, trans) =>
-                    do (blks', tys) <- mmap2 auto_block blks;
-                    ret (blks', tys))
-        s st = (blks', tys, st') ->
-      st_valid_after st' auto aft.
-  Proof.
-    intros [] * Hval Hauto. destruct_conjs.
-    repeat inv_bind. eapply mmap2_st_valid; eauto.
-    simpl_Forall; eauto using auto_block_st_valid.
-  Qed.
-
-  (** st_follows *)
+  (** Preservation of st_follows *)
 
   Lemma auto_block_st_follows : forall blk blk' tys st st',
       auto_block blk st = ((blk', tys), st') ->
@@ -322,90 +257,83 @@ Module Type COMPAUTO
     intros [contra|contra]; subst; rewrite contra in *; eauto with datatypes.
   Qed.
 
-  Lemma fresh_idents_NoDup aft : forall x1 x2 x3 x4 st st1 st2 st3 st4,
+  Lemma fresh_idents_NoDup : forall x1 x2 x3 x4 st st1 st2 st3 st4,
       fresh_ident st = (x1, st1) ->
       fresh_ident st1 = (x2, st2) ->
       fresh_ident st2 = (x3, st3) ->
       fresh_ident st3 = (x4, st4) ->
-      st_valid_after st auto aft ->
       NoDup [x1;x2;x3;x4].
   Proof.
-    intros * Hf1 Hf2 Hf3 Hf4 Hvalid.
-    assert (st_valid_after st4 auto aft) as Hvalid' by (eauto using fresh_ident_st_valid).
-    apply st_valid_NoDup in Hvalid'.
+    intros * Hf1 Hf2 Hf3 Hf4.
+    specialize (st_valid_NoDup st4) as Hvalid'.
     repeat (take (fresh_ident _ = _) and apply fresh_ident_vars_perm in it).
     repeat (take (Permutation _ _) and rewrite <-it in Hvalid'; clear it; simpl in Hvalid').
-    repeat rewrite app_comm_cons in Hvalid'. apply NoDup_app_l in Hvalid'.
+    repeat rewrite app_comm_cons in Hvalid'.
     repeat rewrite app_comm_cons in Hvalid'.
     repeat (take (NoDup (_ :: _)) and inv it).
     repeat constructor; intros Hin;
       repeat (take (In _ _) and inv it); subst; eauto with datatypes.
   Qed.
 
-  Lemma auto_scope_NoDupScope {A} P_good P_nd f_auto aft : forall locs caus (blk: A) xs s' tys st st',
-      st_valid_after st auto aft ->
+  Lemma auto_scope_NoDupScope {A} P_good P_nd f_auto : forall locs caus (blk: A) xs s' tys st st',
+      auto_scope f_auto (Scope locs caus blk) st = ((s', tys), st') ->
       Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
       GoodLocalsScope P_good last_prefs (Scope locs caus blk) ->
       NoDupScope P_nd xs (Scope locs caus blk) ->
-      auto_scope f_auto (Scope locs caus blk) st = ((s', tys), st') ->
       (forall xs blks' tys st st',
-          st_valid_after st auto aft ->
+          f_auto blk st = ((blks', tys), st') ->
           Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
           P_good blk ->
           P_nd xs blk ->
-          f_auto blk st = ((blks', tys), st') ->
           Forall (NoDupLocals xs) blks') ->
       NoDupScope (fun xs => Forall (NoDupLocals xs)) xs s'.
   Proof.
-    intros * Hvalid Hat Hgood Hnd Haut; inv Hgood; inv Hnd; repeat inv_bind.
+    intros * Haut Hat Hgood Hnd; inv Hgood; inv Hnd; repeat inv_bind.
     repeat econstructor; eauto.
     eapply H0; eauto.
     apply Forall_app; split; auto.
     simpl_Forall. auto.
   Qed.
 
-  Lemma auto_block_NoDupLocals aft : forall blk xs blk' tys st st',
-      st_valid_after st auto aft ->
+  Lemma auto_block_NoDupLocals : forall blk xs blk' tys st st',
+      auto_block blk st = ((blk', tys), st') ->
       Forall (fun x => AtomOrGensym last_prefs x \/ In x (st_ids st)) xs ->
       GoodLocals last_prefs blk ->
       NoDupLocals xs blk ->
-      auto_block blk st = ((blk', tys), st') ->
       NoDupLocals xs blk'.
   Proof.
     Opaque auto_scope.
-    induction blk using block_ind2; intros * Hvalid Hat Hgood Hnd Haut; try destruct type0;
+    induction blk using block_ind2; intros * Haut Hat Hgood Hnd; try destruct type0;
       inv Hgood; inv Hnd; destruct_conjs; repeat inv_bind.
     - (* equation *)
       constructor.
 
     - (* reset *)
       constructor.
-      eapply mmap2_values_valid_follows, Forall3_ignore13 in H0; eauto using auto_block_st_valid, auto_block_st_follows.
+      eapply mmap2_values_follows, Forall3_ignore13 in H0; eauto using auto_block_st_follows.
       simpl_Forall. eapply H; eauto.
       simpl_Forall. destruct Hat; eauto. right; eapply incl_map; eauto using st_follows_incl.
 
     - (* switch *)
       constructor.
-      eapply mmap2_values_valid_follows, Forall3_ignore13 in H0; eauto.
+      eapply mmap2_values_follows, Forall3_ignore13 in H0; eauto.
       Transparent auto_scope.
-      2,3:intros; destruct_conjs; destruct s0; repeat inv_bind.
-      2:{ eapply mmap2_st_valid; eauto. simpl_Forall; eauto using auto_block_st_valid. }
+      2:intros; destruct_conjs; destruct s0; repeat inv_bind.
       2:{ eapply mmap2_st_follows; eauto. simpl_Forall; eauto using auto_block_st_follows. }
       Opaque auto_scope.
       simpl_Forall. destruct s0; repeat inv_bind. eapply auto_scope_NoDupScope; eauto.
       + simpl_Forall. destruct Hat; eauto. right; eapply incl_map; eauto using st_follows_incl.
       + intros.
-        eapply mmap2_values_valid_follows, Forall3_ignore13 in H12; eauto using auto_block_st_valid, auto_block_st_follows.
+        eapply mmap2_values_follows, Forall3_ignore13 in H7; eauto using auto_block_st_follows.
         simpl_Forall. eapply H; eauto.
-        simpl_Forall. destruct H9; eauto. right; eapply incl_map; eauto using st_follows_incl.
+        simpl_Forall. destruct H8; eauto. right; eapply incl_map; eauto using st_follows_incl.
       Transparent auto_scope.
 
     - (* automaton (weak) *)
       do 2 constructor; simpl.
       + repeat constructor.
-        eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto 6 with fresh.
-        2,3:intros; destruct_conjs; destruct s0; destruct_conjs; repeat inv_bind.
-        2:{ eapply mmap2_st_valid; eauto. simpl_Forall; eauto using auto_block_st_valid. }
+        eapply mmap2_values_follows, Forall3_ignore13 in H7; eauto 6 with fresh.
+        2:intros; destruct_conjs; destruct s0; destruct_conjs; repeat inv_bind.
         2:{ eapply mmap2_st_follows; eauto. simpl_Forall; eauto using auto_block_st_follows. }
         Opaque auto_scope.
         simpl_Forall. repeat inv_bind. destruct s0; destruct_conjs.
@@ -423,9 +351,9 @@ Module Type COMPAUTO
           repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
           repeat (take (In x15 _) and inv it; eauto).
         * intros; repeat inv_bind.
-          eapply mmap2_values_valid_follows, Forall3_ignore13 in H17; eauto using auto_block_st_valid, auto_block_st_follows.
+          eapply mmap2_values_follows, Forall3_ignore13 in H12; eauto using auto_block_st_follows.
           repeat constructor. simpl_Forall. eapply H; eauto.
-          simpl_Forall. destruct H14; auto. right. eapply incl_map; eauto using st_follows_incl.
+          simpl_Forall. destruct H13; auto. right. eapply incl_map; eauto using st_follows_incl.
       + rewrite fst_NoDupMembers; simpl.
         eapply fresh_idents_NoDup; eauto with fresh.
       + intros * Heq Hin. simpl_Forall.
@@ -446,9 +374,8 @@ Module Type COMPAUTO
         constructor; auto with datatypes.
         repeat constructor.
       + repeat constructor.
-        eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto 7 with fresh.
-        2,3:intros; destruct_conjs; destruct s0; destruct_conjs; simpl in *; repeat inv_bind.
-        2:{ eapply mmap2_st_valid; eauto. simpl_Forall; eauto using auto_block_st_valid. }
+        eapply mmap2_values_follows, Forall3_ignore13 in H7; eauto 7 with fresh.
+        2:intros; destruct_conjs; destruct s0; destruct_conjs; simpl in *; repeat inv_bind.
         2:{ eapply mmap2_st_follows; eauto. simpl_Forall; eauto using auto_block_st_follows. }
         Opaque auto_scope.
         simpl_Forall. repeat inv_bind. destruct s0; destruct_conjs.
@@ -466,9 +393,9 @@ Module Type COMPAUTO
           repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
           repeat (take (In _ _) and inv it; eauto).
         * intros; repeat inv_bind.
-          eapply mmap2_values_valid_follows, Forall3_ignore13 in H17; eauto using auto_block_st_valid, auto_block_st_follows.
+          eapply mmap2_values_follows, Forall3_ignore13 in H12; eauto using auto_block_st_follows.
           repeat constructor. simpl_Forall. eapply H; eauto.
-          simpl_Forall. destruct H14; auto. right. eapply incl_map; eauto using st_follows_incl.
+          simpl_Forall. destruct H13; auto. right. eapply incl_map; eauto using st_follows_incl.
       + rewrite fst_NoDupMembers; simpl.
         eapply fresh_idents_NoDup; eauto with fresh.
       + intros * Heq Hin. simpl_Forall.
@@ -486,7 +413,7 @@ Module Type COMPAUTO
       constructor; auto.
       eapply auto_scope_NoDupScope; eauto.
       intros.
-      eapply mmap2_values_valid_follows, Forall3_ignore13 in H7; eauto using auto_block_st_valid, auto_block_st_follows.
+      eapply mmap2_values_follows, Forall3_ignore13 in H2; eauto using auto_block_st_follows.
       simpl_Forall. eapply H; eauto. simpl_Forall.
       destruct H4; eauto. right; eapply incl_map; eauto using st_follows_incl.
       Transparent auto_scope.
@@ -583,7 +510,6 @@ Module Type COMPAUTO
     pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
     split; auto.
     eapply auto_block_NoDupLocals; eauto.
-    - eapply init_st_valid; eauto using PS_For_all_empty, auto_not_in_last_prefs.
     - simpl_Forall; auto.
   Qed.
   Next Obligation.

@@ -109,7 +109,7 @@ Module Type INLINELOCAL
   Import Fresh Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
-  Definition FreshAnn A := Fresh A (type * clock).
+  Definition FreshAnn A := Fresh local A (type * clock).
 
   Fixpoint inlinelocal_block sub (blk : block) : FreshAnn (list block) :=
     match blk with
@@ -119,7 +119,7 @@ Module Type INLINELOCAL
       ret [Breset (concat blks') (rename_in_exp sub er)]
     | Blocal (Scope locs _ blks) =>
       let locs' := map (fun '(x, (ty, ck, _, _)) => (x, (ty, (rename_in_clock sub ck)))) locs in
-      do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
+      do (_, sub1) <- fresh_idents_rename locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
       do blks' <- mmap (inlinelocal_block sub') blks;
       ret (concat blks')
@@ -137,39 +137,6 @@ Module Type INLINELOCAL
     end.
 
   (** ** State properties *)
-
-  Definition st_valid_after {B} st aft := @st_valid_after B st local aft.
-
-  Lemma inlinelocal_block_st_valid_after : forall blk sub blks' st st' aft,
-      inlinelocal_block sub blk st = (blks', st') ->
-      st_valid_after st aft ->
-      st_valid_after st' aft.
-  Proof.
-    induction blk using block_ind2; intros * Hdl Hvalid; repeat inv_bind; auto.
-    - (* reset *)
-      eapply mmap_st_valid; eauto.
-      eapply Forall_impl; [|eauto]; intros ? Hdl ?????.
-      eapply Hdl; eauto.
-    - (* local *)
-      eapply fresh_idents_rename_st_valid in H0; eauto.
-      eapply mmap_st_valid in H1; eauto.
-      eapply Forall_impl; [|eauto]; intros ? Hdl ?????.
-      eapply Hdl; eauto.
-  Qed.
-
-  Lemma inlinelocal_topblock_st_valid_after : forall blk res st st' aft,
-      inlinelocal_topblock blk st = (res, st') ->
-      st_valid_after st aft ->
-      st_valid_after st' aft.
-  Proof.
-    Opaque inlinelocal_block.
-    destruct blk; intros * Hdl Hvalid; try destruct s; repeat inv_bind; auto.
-    1-4:eapply inlinelocal_block_st_valid_after; eauto.
-    eapply mmap_st_valid in H; eauto.
-    eapply Forall_forall; intros.
-    eapply inlinelocal_block_st_valid_after; eauto.
-    Transparent inlinelocal_block.
-  Qed.
 
   Lemma inlinelocal_block_st_follows : forall blk sub blks' st st',
       inlinelocal_block sub blk st = (blks', st') ->
@@ -524,28 +491,24 @@ Module Type INLINELOCAL
     pose proof (n_syn n) as Hsyn.
     repeat rewrite app_nil_r.
     destruct (inlinelocal_topblock _ _) as ((?&?)&st') eqn:Hdl. simpl.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n)))).
-    { eapply inlinelocal_topblock_st_valid_after, init_st_valid; eauto using local_not_in_switch_prefs.
-      rewrite <-ps_from_list_ps_of_list.
-      apply PS_For_all_Forall'. auto.
-    }
     split; eauto. do 2 constructor; eauto.
     - eapply inlinelocal_topblock_NoDupLocals; eauto.
-    - assert (Hvalid:=H). eapply st_valid_NoDup, NoDup_app_l in H.
+    - specialize (st_valid_NoDup st') as Hndup.
       apply NoDupMembers_app.
       + eapply inlinelocal_topblock_NoDupMembers; eauto.
       + rewrite fst_NoDupMembers, map_map; eauto.
       + intros * Hinm1 Hinm2.
         rewrite fst_InMembers in Hinm1, Hinm2. rewrite map_map in Hinm2.
-        eapply st_valid_after_AtomOrGensym_nIn in Hinm2; eauto using local_not_in_switch_prefs.
+        eapply st_valid_AtomOrGensym_nIn in Hinm2; eauto using local_not_in_switch_prefs.
         eapply Forall_forall; [|eapply Hinm1].
         eapply Forall_incl, inlinelocal_topblock_incl; eauto.
         eapply GoodLocals_locals; eauto.
-    - intros ? Hinm contra.
-      eapply st_valid_after_NoDupMembers in H; eauto.
-      eapply NoDup_app_In in H; eauto using in_or_app.
-      erewrite InMembers_app, 2 fst_InMembers, map_map, map_ext in Hinm; destruct Hinm as [Hinm|]; eauto.
-      eapply inlinelocal_topblock_nIn; eauto. eapply fst_InMembers; eauto.
+    - intros ? Hinm contra. simpl_Forall.
+      apply InMembers_app in Hinm as [Hinm|Hinm].
+      + eapply inlinelocal_topblock_nIn; eauto.
+      + apply fst_InMembers in Hinm.
+        eapply st_valid_AtomOrGensym_nIn; eauto using local_not_in_switch_prefs.
+        unfold st_ids. solve_In.
     - constructor.
   Qed.
   Next Obligation.
@@ -555,11 +518,10 @@ Module Type INLINELOCAL
     pose proof (n_syn n) as Hsyn.
     repeat split; eauto using AtomOrGensym_add.
     do 2 constructor.
-    - assert (Hil:=Hdl). eapply inlinelocal_topblock_st_valid_after, st_valid_prefixed in Hdl.
-      2:{ eapply init_st_valid. eapply local_not_in_switch_prefs. eapply PS_For_all_empty. }
+    - assert (Hil:=Hdl). specialize (st_valid_prefixed f) as Hpref.
       rewrite map_app, map_map, Forall_app; split; simpl.
-        eapply AtomOrGensym_add, Forall_incl, inlinelocal_topblock_incl; eauto.
-        eapply GoodLocals_locals; eauto.
+      eapply AtomOrGensym_add, Forall_incl, inlinelocal_topblock_incl; eauto.
+      eapply GoodLocals_locals; eauto.
       + eapply Forall_impl; [|eauto]; intros; simpl in *.
         right. do 2 eexists; eauto using PSF.add_1.
     - eapply inlinelocal_topblock_GoodLocals; eauto.

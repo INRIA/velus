@@ -121,10 +121,10 @@ Module Type DELAST
   Import Fresh Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
-  Definition FreshAnn A := Fresh A (type * clock).
+  Definition FreshAnn A := Fresh last A (type * clock).
 
-  Definition fresh_idents (lasts : list (ident * (type * clock * exp))) :=
-    mmap (fun '(x, (ty, ck, e)) => do lx <- fresh_ident last (Some x) (ty, ck);
+  Definition fresh_idents (lasts : list (ident * (type * clock * exp))) : FreshAnn _ :=
+    mmap (fun '(x, (ty, ck, e)) => do lx <- fresh_ident (Some x) (ty, ck);
                                 ret (x, lx, (ty, ck, e))) lasts.
 
   Section delast_scope.
@@ -258,59 +258,6 @@ Module Type DELAST
   Qed.
 
   (** ** State properties *)
-
-  Definition st_valid_after {B} st aft := @st_valid_after B st last aft.
-
-  Lemma fresh_idents_st_valid_after : forall lasts lasts' st st' aft,
-      fresh_idents lasts st = (lasts', st') ->
-      st_valid_after st aft ->
-      st_valid_after st' aft.
-  Proof.
-    intros * Hfresh Hvalid.
-    eapply mmap_st_valid in Hfresh; eauto.
-    simpl_Forall. repeat inv_bind. eapply fresh_ident_st_valid in H0; eauto.
-  Qed.
-
-  Fact delast_scope_st_valid {A} f_dl f_add : forall sub locs caus (blks : A) s' st st' aft,
-      delast_scope f_dl f_add sub (Scope locs caus blks) st = (s', st') ->
-      st_valid_after st aft ->
-      (forall sub blks' st st',
-          f_dl sub blks st = (blks', st') ->
-          st_valid_after st aft ->
-          st_valid_after st' aft) ->
-      st_valid_after st' aft.
-  Proof.
-    intros * Hdl Hval Hind; repeat inv_bind.
-    eapply fresh_idents_st_valid_after in H; eauto.
-  Qed.
-
-  Lemma delast_block_st_valid_after : forall blk sub blks' st st' aft,
-      delast_block sub blk st = (blks', st') ->
-      st_valid_after st aft ->
-      st_valid_after st' aft.
-  Proof.
-    Opaque delast_scope.
-    induction blk using block_ind2; intros * Hdl Hvalid; repeat inv_bind; auto.
-    - (* reset *)
-      eapply mmap_st_valid; eauto.
-      simpl_Forall. eapply H; eauto.
-    - (* switch *)
-      eapply mmap_st_valid; eauto. simpl_Forall; repeat inv_bind.
-      destruct s0. eapply delast_scope_st_valid; eauto.
-      intros; simpl in *. eapply mmap_st_valid; eauto.
-      simpl_Forall. eapply H; eauto.
-    - (* automaton *)
-      destruct ini; repeat inv_bind.
-      eapply mmap_st_valid; eauto. simpl_Forall; repeat inv_bind.
-      destruct s0; destruct_conjs. eapply delast_scope_st_valid; eauto.
-      intros; repeat inv_bind. eapply mmap_st_valid; eauto.
-      simpl_Forall. eapply H; eauto.
-    - (* local *)
-      eapply delast_scope_st_valid; eauto.
-      intros; simpl in *. eapply mmap_st_valid; eauto.
-      simpl_Forall. eapply H; eauto.
-      Transparent delast_scope.
-  Qed.
 
   Lemma fresh_idents_st_follows : forall lasts lasts' st st',
       fresh_idents lasts st = (lasts', st') ->
@@ -545,65 +492,57 @@ Module Type DELAST
     simpl_Forall. repeat inv_bind; eauto with fresh.
   Qed.
 
-  Fact fresh_idents_nIn_ids aft : forall lasts lasts' st st',
-      st_valid_after st aft ->
+  Fact fresh_idents_nIn_ids : forall lasts lasts' st st',
       fresh_idents lasts st = (lasts', st') ->
       Forall (fun '(_, lx, _) => ~In lx (st_ids st)) lasts'.
   Proof.
     unfold fresh_idents.
     induction lasts; intros; destruct_conjs; repeat inv_bind; constructor; eauto.
     - eapply fresh_ident_nIn in H; eauto.
-    - eapply IHlasts in H1. 2:eapply fresh_ident_st_valid in H0; eauto.
-      simpl_Forall. contradict H1.
+    - eapply IHlasts in H0.
+      simpl_Forall. contradict H0.
       eapply incl_map; eauto.
       apply st_follows_incl; eauto with fresh.
   Qed.
 
-  Fact fresh_idents_NoDup aft : forall lasts lasts' st st',
-      st_valid_after st aft ->
+  Fact fresh_idents_NoDup : forall lasts lasts' st st',
       fresh_idents lasts st = (lasts', st') ->
       NoDupMembers (map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, @None (exp * ident)))) lasts').
   Proof.
     unfold fresh_idents.
-    induction lasts; intros * Hvalid Hfresh;
+    induction lasts; intros * Hfresh;
       destruct_conjs; repeat inv_bind; constructor; eauto.
     - intros Hinm. rewrite fst_InMembers in Hinm; simpl_In.
-      eapply fresh_idents_nIn_ids in H0. 2:eapply fresh_ident_st_valid in H; eauto.
+      eapply fresh_idents_nIn_ids in H0.
       simpl_Forall.
       eapply H0, fresh_ident_Inids; eauto.
-    - eapply IHlasts in H0; eauto.
-      eapply fresh_ident_st_valid in H; eauto.
   Qed.
 
-  Fact mmap_delast_NoDupLocals sub aft : forall blks blks' xs st st',
+  Fact mmap_delast_NoDupLocals sub : forall blks blks' xs st st',
       Forall
         (fun blk => forall xs sub blk' st st',
-             st_valid_after st aft ->
              Forall (fun x : ident => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
              GoodLocals elab_prefs blk ->
              NoDupLocals xs blk ->
              delast_block sub blk st = (blk', st') ->
              NoDupLocals xs blk') blks ->
-      st_valid_after st aft ->
       Forall (fun x : ident => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
       Forall (GoodLocals elab_prefs) blks ->
       Forall (NoDupLocals xs) blks ->
       mmap (delast_block sub) blks st = (blks', st') ->
       Forall (NoDupLocals xs) blks'.
   Proof.
-    intros * Hf Hvalid Hat Hgood Hnd Hdl; repeat inv_bind.
-    eapply mmap_values_valid_follows in Hdl; eauto.
-    2:{ intros. eapply delast_block_st_valid_after; eauto. }
+    intros * Hf Hat Hgood Hnd Hdl; repeat inv_bind.
+    eapply mmap_values_follows in Hdl; eauto.
     2:{ intros. eapply delast_block_st_follows; eauto. }
     eapply Forall2_ignore1 in Hdl; simpl_Forall.
-    eapply Hf; eauto.
+    eapply Hf in H2; eauto.
     simpl_Forall. destruct Hat; auto.
     right. eapply incl_map; eauto. apply st_follows_incl; eauto with fresh.
   Qed.
 
-  Lemma delast_scope_NoDupLocals {A} P_good P_nd f_dl f_add aft :
+  Lemma delast_scope_NoDupLocals {A} P_good P_nd f_dl f_add :
     forall locs caus (blks: A) xs sub s' st st',
-      st_valid_after st aft ->
       Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
       GoodLocalsScope P_good elab_prefs (Scope locs caus blks) ->
       NoDupScope P_nd xs (Scope locs caus blks) ->
@@ -614,7 +553,6 @@ Module Type DELAST
           P_nd xs blks ->
           P_nd ys blks) ->
       (forall sub xs blks' st st',
-          st_valid_after st aft ->
           Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
           P_good blks ->
           P_nd xs blks ->
@@ -626,14 +564,14 @@ Module Type DELAST
           P_nd xs (f_add blks1 blks2)) ->
       NoDupScope P_nd xs s'.
   Proof.
-    intros * Hval Hat Hgood Hnd Hdl Hincl' Hind Hadd; inv Hgood; inv Hnd;
+    intros * Hat Hgood Hnd Hdl Hincl' Hind Hadd; inv Hgood; inv Hnd;
       repeat inv_bind.
     assert (Forall (fun '(_, lx, _) => exists n hint, lx = gensym last hint n) x) as Hgen.
     { eapply mmap_values, Forall2_ignore1 in H. simpl_Forall. repeat inv_bind.
       eapply fresh_ident_prefixed in H5; auto. }
     constructor.
     - apply Hadd. 1:simpl_Forall; constructor.
-      eapply Hind in H0; eauto using fresh_idents_st_valid_after.
+      eapply Hind in H0; eauto.
       + simpl_app. repeat rewrite Forall_app. repeat split.
         * simpl_Forall. destruct Hat; eauto. right.
           eapply incl_map; eauto using st_follows_incl, fresh_idents_st_follows.
@@ -654,13 +592,12 @@ Module Type DELAST
       + rewrite fst_InMembers in Hinm1. simpl_In.
         simpl_Forall; subst. destruct Hat.
         * eapply contradict_AtomOrGensym in H2; eauto using last_not_in_elab_prefs.
-        * eapply fresh_idents_nIn_ids in H; [|eauto].
+        * eapply fresh_idents_nIn_ids in H.
           simpl_Forall; eauto.
     - constructor.
   Qed.
 
-  Lemma delast_block_NoDupLocals aft : forall blk xs sub blk' st st',
-      st_valid_after st aft ->
+  Lemma delast_block_NoDupLocals : forall blk xs sub blk' st st',
       Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
       GoodLocals elab_prefs blk ->
       NoDupLocals xs blk ->
@@ -668,7 +605,7 @@ Module Type DELAST
       NoDupLocals xs blk'.
   Proof.
     Opaque delast_scope.
-    induction blk using block_ind2; intros * Hvalid Hat Hgood Hnd Hdl;
+    induction blk using block_ind2; intros * Hat Hgood Hnd Hdl;
       inv Hgood; inv Hnd; repeat inv_bind.
     - (* equation *)
       constructor.
@@ -676,39 +613,31 @@ Module Type DELAST
       constructor.
       eapply mmap_delast_NoDupLocals; eauto.
     - (* switch *)
-      eapply mmap_values_valid_follows in H0; eauto.
-      2:{ intros; destruct_conjs; repeat inv_bind.
-          destruct s0. eapply delast_scope_st_valid; eauto.
-          intros; simpl in *; eapply mmap_st_valid; eauto.
-          simpl_Forall. eapply delast_block_st_valid_after; eauto. }
+      eapply mmap_values_follows in H0; eauto.
       2:{ intros; destruct_conjs; repeat inv_bind.
           destruct s0. eapply delast_scope_st_follows; eauto.
           intros; simpl in *; eapply mmap_st_follows; eauto.
           simpl_Forall. eapply delast_block_st_follows; eauto. }
       constructor. eapply Forall2_ignore1 in H0; simpl_Forall; repeat inv_bind.
-      + destruct s, s0. eapply delast_scope_NoDupLocals; eauto.
+      + destruct s, s0. eapply delast_scope_NoDupLocals in H5; eauto.
         * simpl_Forall. destruct Hat; auto.
           right. eapply incl_map; eauto. apply st_follows_incl; eauto with fresh.
-        * intros. simpl_Forall.
+        * intros; simpl in *. simpl_Forall.
           eapply NoDupLocals_incl'; eauto using last_not_in_elab_prefs.
         * intros; simpl in *. eapply mmap_delast_NoDupLocals; eauto.
         * intros. apply Forall_app; auto.
     - (* automaton *)
       destruct ini; repeat inv_bind.
-      eapply mmap_values_valid_follows in H0; eauto.
-      2:{ intros; destruct_conjs; repeat inv_bind.
-          destruct s0; destruct_conjs. eapply delast_scope_st_valid; eauto.
-          intros; repeat inv_bind; eapply mmap_st_valid; eauto.
-          simpl_Forall. eapply delast_block_st_valid_after; eauto. }
+      eapply mmap_values_follows in H0; eauto.
       2:{ intros; destruct_conjs; repeat inv_bind.
           destruct s0; destruct_conjs. eapply delast_scope_st_follows; eauto.
           intros; repeat inv_bind; eapply mmap_st_follows; eauto.
           simpl_Forall. eapply delast_block_st_follows; eauto. }
       constructor. eapply Forall2_ignore1 in H0; simpl_Forall; repeat inv_bind.
-      + destruct s, s0; destruct_conjs. eapply delast_scope_NoDupLocals; eauto.
+      + destruct s, s0; destruct_conjs. eapply delast_scope_NoDupLocals in H5; eauto.
         * simpl_Forall. destruct Hat; auto.
           right. eapply incl_map; eauto. apply st_follows_incl; eauto with fresh.
-        * intros. simpl_Forall.
+        * intros; simpl in *. simpl_Forall.
           eapply NoDupLocals_incl'; eauto using last_not_in_elab_prefs.
         * intros; repeat inv_bind. eapply mmap_delast_NoDupLocals; eauto.
         * intros. destruct blks2. apply Forall_app; auto.
@@ -805,8 +734,7 @@ Module Type DELAST
     repeat split; auto.
     destruct (delast_block _ _) as (?&st') eqn:Hdl.
     eapply delast_block_NoDupLocals; eauto.
-    - eapply init_st_valid; eauto using last_not_in_elab_prefs, PS_For_all_empty.
-    - simpl_Forall; auto.
+    simpl_Forall; auto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).

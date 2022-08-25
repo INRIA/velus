@@ -357,7 +357,7 @@ Module Type NCLOCKING
 
   (** ** A few additional things *)
 
-  Definition st_senv st := senv_of_tyck (st_anns st).
+  Definition st_senv {pref} (st: fresh_st pref _) := senv_of_tyck (st_anns st).
   Global Hint Unfold st_senv senv_of_tyck : list.
 
   Fact idents_for_anns_incl_ck : forall anns ids st st',
@@ -401,10 +401,10 @@ Module Type NCLOCKING
 
   Import Permutation.
 
-  Fact fresh_ident_wc_env : forall pref hint vars ty ck id st st',
+  Fact fresh_ident_wc_env : forall pref hint vars ty ck id (st st': fresh_st pref _),
       wc_env (idck (vars++st_senv st)) ->
       wc_clock (idck (vars++st_senv st)) ck ->
-      fresh_ident pref hint (ty, ck) st = (id, st') ->
+      fresh_ident hint (ty, ck) st = (id, st') ->
       wc_env (idck (vars++st_senv st')).
   Proof.
     intros * Hwenv Hwc Hfresh.
@@ -460,8 +460,8 @@ Module Type NCLOCKING
       eapply HasClock_app. right. econstructor; solve_In; auto.
     Qed.
 
-    Fact mmap2_wc {A B} :
-      forall vars (k : A -> Fresh (list exp * list equation) B) a es' eqs' st st',
+    Fact mmap2_wc {pref A B} :
+      forall vars (k : A -> Fresh pref (list exp * list equation) B) a es' eqs' st st',
         mmap2 k a st = (es', eqs', st') ->
         (forall st st' a es eqs', k a st = (es, eqs', st') -> st_follows st st') ->
         Forall (fun a => forall es' eqs' st0 st0',
@@ -484,8 +484,8 @@ Module Type NCLOCKING
         repeat rewrite Forall_app. repeat split; eauto.
     Qed.
 
-    Fact mmap2_wc' {A B} :
-      forall vars (k : A -> Fresh (enumtag * list exp * list equation) B) a es' eqs' st st',
+    Fact mmap2_wc' {pref A B} :
+      forall vars (k : A -> Fresh pref (enumtag * list exp * list equation) B) a es' eqs' st st',
         mmap2 k a st = (es', eqs', st') ->
         (forall st st' a es eqs', k a st = (es, eqs', st') -> st_follows st st') ->
         Forall (fun a => forall n es' eqs' st0 st0',
@@ -680,7 +680,7 @@ Module Type NCLOCKING
         2,4,6,8,9,11,13,15:solve_forall; repeat solve_incl.
         1-7:simpl_Forall.
         1-7:repeat (constructor; eauto; repeat solve_incl); simpl in *.
-        1-7:(take (fresh_ident _ _ _ _ = (_, _)) and eapply fresh_ident_In in it;
+        1-7:(take (fresh_ident _ _ _ = (_, _)) and eapply fresh_ident_In in it;
              apply HasClock_app, or_intror; econstructor; solve_In; auto).
     Qed.
 
@@ -806,7 +806,7 @@ Module Type NCLOCKING
         2:solve_mmap2.
         eapply mmap2_unnest_exp_clocksof in Hnorm1; eauto.
         assert (HasClock (vars ++ st_senv st') x2 ck) as Hck.
-        { take (fresh_ident _ _ _ _ = _) and eapply fresh_ident_In in it.
+        { take (fresh_ident _ _ _ = _) and eapply fresh_ident_In in it.
           apply HasClock_app, or_intror. econstructor; solve_In. auto. }
         repeat constructor; auto.
         2,3:rewrite Hnorm1; auto.

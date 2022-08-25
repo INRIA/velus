@@ -145,7 +145,7 @@ Module Type ILCORRECTNESS
     Local Hint Resolve <- fst_InMembers InMembers_idck InMembers_idty : datatypes.
     Local Hint Resolve -> fst_InMembers InMembers_idck InMembers_idty : datatypes.
 
-    Definition st_senv st := senv_of_tyck (st_anns st).
+    Definition st_senv (st: fresh_st local _) := senv_of_tyck (st_anns st).
 
     Fact mmap_inlinelocal_block_sem : forall Γ blks sub Γ' blks' st st' bs Hi1 Hi2 Hl,
         Forall
@@ -167,7 +167,6 @@ Module Type ILCORRECTNESS
                sem_block_ck G1 (Hi1, Hl) bs blk ->
                FEnv.dom Hi2 (map fst Γ++st_ids st) ->
                sc_vars (Γ++st_senv st) (Hi2, Hl) bs ->
-               st_valid_after st local PS.empty ->
                inlinelocal_block sub blk st = (blks', st') ->
                exists Hi3,
                  Hi2 ⊑ Hi3 /\
@@ -192,7 +191,6 @@ Module Type ILCORRECTNESS
         Forall (sem_block_ck G1 (Hi1, Hl) bs) blks ->
         FEnv.dom Hi2 (map fst Γ++st_ids st) ->
         sc_vars (Γ++st_senv st) (Hi2, Hl) bs ->
-        st_valid_after st local PS.empty ->
         mmap (inlinelocal_block sub) blks st = (blks', st') ->
         exists Hi3,
           Hi2 ⊑ Hi3 /\
@@ -201,7 +199,7 @@ Module Type ILCORRECTNESS
           Forall (sem_block_ck G2 (Hi3, Hl) bs) (concat blks').
     Proof with eauto.
       induction blks;
-        intros * Hf Hnl Hdisj Hsubin Hsub Hnsub Hsubgensym Hnd1 Hns Hnd2 Hatgen Hgood Hwenv Hwc Hub Hsem Hdom Hsc Hvalid Hmmap;
+        intros * Hf Hnl Hdisj Hsubin Hsub Hnsub Hsubgensym Hnd1 Hns Hnd2 Hatgen Hgood Hwenv Hwc Hub Hsem Hdom Hsc Hmmap;
         inv Hf; inv Hns; inv Hnd2; inv Hgood; inv Hwc; inv Hsem; repeat inv_bind; simpl in *.
       - exists Hi2. repeat (split; auto with env). reflexivity.
       - assert (Hdl:=H).
@@ -210,7 +208,6 @@ Module Type ILCORRECTNESS
         eapply IHblks with (Hi1:=Hi1) (Hi2:=Hi3)
           in H0 as (Hi4&Href3&Hdom3&Hsc3&Hsem3)... clear IHblks H2.
         2,3:intros; eauto using sem_var_refines.
-        2:{ eapply inlinelocal_block_st_valid_after; eauto. }
         exists Hi4. repeat (split; auto).
         + etransitivity...
         + apply Forall_app; split; auto.
@@ -242,7 +239,6 @@ Module Type ILCORRECTNESS
         sem_block_ck G1 (Hi1, Hl) bs blk ->
         FEnv.dom Hi2 (map fst Γ ++ st_ids st) ->
         sc_vars (Γ++st_senv st) (Hi2, Hl) bs ->
-        st_valid_after st local PS.empty ->
         inlinelocal_block sub blk st = (blks', st') ->
         exists Hi3,
           Hi2 ⊑ Hi3 /\
@@ -251,7 +247,7 @@ Module Type ILCORRECTNESS
           Forall (sem_block_ck G2 (Hi3, Hl) bs) blks'.
     Proof with eauto with datatypes.
       induction blk using block_ind2;
-        intros * Hnl Hdisj Hsubin Hsub Hnsub Hsubgensym Hnd1 Hns Hnd2 Hgenat Hgood Hwenv Hwc Hub Hsem Hdom Hsc Hvalid Hdl;
+        intros * Hnl Hdisj Hsubin Hsub Hnsub Hsubgensym Hnd1 Hns Hnd2 Hgenat Hgood Hwenv Hwc Hub Hsem Hdom Hsc Hdl;
         inv Hns; inv Hnd2; inv Hgood; inv Hwc; inv Hsem; repeat inv_bind; simpl.
 
       - (* equation *)
@@ -466,7 +462,7 @@ Module Type ILCORRECTNESS
              { intros ? Hinm Henv. eapply Hdom in Henv.
                apply in_app_iff in Henv as [Hin'|Hin'].
                - eapply H14...
-               - eapply st_valid_after_AtomOrGensym_nIn in Hin'; eauto using local_not_in_switch_prefs.
+               - eapply st_valid_AtomOrGensym_nIn in Hin'; eauto using local_not_in_switch_prefs.
                  eapply Forall_forall in H9... }
              eapply subclock_clock_sem, subclock_clock_sem
                with (Hi':= Hi2 + FEnv.restrict Hi' (map fst locs)). 3,6:constructor; reflexivity. 5:eauto.
@@ -494,7 +490,6 @@ Module Type ILCORRECTNESS
                  -- right. apply fst_InMembers in Hin'. eapply sem_var_restrict...
                     solve_In.
           }
-        + eapply fresh_idents_rename_st_valid; eauto.
     Qed.
 
     Lemma inlinelocal_topblock_sem Γ : forall blk blks' locs' st st' bs Hi1 Hi2 Hl,
@@ -511,7 +506,6 @@ Module Type ILCORRECTNESS
         sem_block_ck G1 (Hi1, Hl) bs blk ->
         FEnv.dom Hi2 (map fst Γ ++ st_ids st) ->
         sc_vars (Γ++st_senv st) (Hi2, Hl) bs ->
-        st_valid_after st local PS.empty ->
         inlinelocal_topblock blk st = (blks', locs', st') ->
         exists Hi3,
           Hi2 ⊑ Hi3 /\
@@ -520,7 +514,7 @@ Module Type ILCORRECTNESS
           Forall (sem_block_ck G2 (Hi3, Hl) bs) blks'.
     Proof with eauto with datatypes.
       Opaque inlinelocal_block.
-      destruct blk; intros * Hnl Hinm Hnd1 Hns Hnd2 Hatgen Hgood Hwenv Hwc Hdom1 Hsem Hdom2 Hsc Hvalid Hil;
+      destruct blk; intros * Hnl Hinm Hnd1 Hns Hnd2 Hatgen Hgood Hwenv Hwc Hdom1 Hsem Hdom2 Hsc Hil;
         try destruct s; repeat inv_bind; simpl in *.
       3:inv Hns.
       1-3:eapply inlinelocal_block_sem with (Hi1:=Hi1) in H as (Hi3&?&Hdom3&Hsc3&?);
@@ -530,7 +524,7 @@ Module Type ILCORRECTNESS
       13:{ intros * Hin2 Hin1. eapply FEnv.restrict_In in Hin1 as (?&?).
            eapply Hdom2, in_app_iff in Hin2 as [Hin2|Hin2]...
            - eapply H9; eauto. now apply fst_InMembers.
-           - eapply st_valid_after_AtomOrGensym_nIn in Hin2; eauto using local_not_in_switch_prefs.
+           - eapply st_valid_AtomOrGensym_nIn in Hin2; eauto using local_not_in_switch_prefs.
              eapply Forall_forall in H5... }
       13:assert ((FEnv.restrict Hi' (map fst (Γ ++ senv_of_locs locs'))) ⊑ (Hi2 + (FEnv.restrict Hi' (map fst locs')))) as Href.
       13:{ intros ?? Hfind. eapply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
@@ -550,7 +544,7 @@ Module Type ILCORRECTNESS
            assert (FEnv.In x0 Hi2) as Hin by (econstructor; eauto).
            apply Hdom2, in_app_iff in Hin as [Hin|Hin].
            - intros ?. eapply H9; eauto. now apply fst_InMembers.
-           - intros ?. apply st_valid_prefixed in Hvalid.
+           - intros ?. specialize (st_valid_prefixed st) as Hvalid.
              simpl_Forall. simpl_In.
              eapply contradict_AtomOrGensym in H5; eauto using local_not_in_switch_prefs.
       }
@@ -634,7 +628,7 @@ Module Type ILCORRECTNESS
                (blks':=fst (fst (inlinelocal_topblock (n_block n0) init_st)))
                (locs':=snd (fst (inlinelocal_topblock (n_block n0) init_st)))
                (st':=snd (inlinelocal_topblock (n_block n0) init_st))
-          in Hblksem as (Hf&Href&Hdom&Hsc&Hsem); eauto. 12:destruct inlinelocal_topblock as ((?&?)&?); reflexivity.
+          in Hblksem as (Hf&Href&Hdom&Hsc&Hsem); eauto. 11:destruct inlinelocal_topblock as ((?&?)&?); reflexivity.
         eapply Snode with (H:=H); simpl; eauto.
         + erewrite find_node_now; eauto.
         + eauto.
@@ -681,7 +675,6 @@ Module Type ILCORRECTNESS
         + destruct Hwc as (?&?&?), G1; auto.
         + unfold st_ids; rewrite init_st_anns, app_nil_r...
         + unfold st_senv. rewrite init_st_anns, app_nil_r...
-        + eapply init_st_valid; eauto using local_not_in_switch_prefs, PS_For_all_empty.
       - erewrite find_node_other in Hfind; eauto.
         eapply sem_node_ck_cons'...
         destruct G2; apply HGref.
