@@ -15,79 +15,6 @@ From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.
 From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext CommonDS SDfuns Denot.
 
-(* TODO: virer *)
-Section Take.
-  Fixpoint take {A} (n : nat) (s : DS A) :=
-    match n with
-    | O => 0
-    | S n => app s (take n (rem s))
-    end.
-
-  Lemma take_eq_compat :
-    forall {A} n (s t : DS A),
-      s == t ->
-      take n s == take n t.
-  Proof.
-    induction n; intros; simpl; auto.
-    rewrite H, IHn at 1; auto.
-  Qed.
-
-  Add Parametric Morphism A : take
-      with signature @eq nat ==> @Oeq (DS A) ==> @Oeq (DS A)
-        as take_morph.
-  Proof.
-    apply take_eq_compat.
-  Qed.
-
-  Lemma take_1 : forall {A} (s : DS A),
-      take 1 s == first s.
-  Proof.
-    intros; simpl.
-    apply app_bot_right_first.
-  Qed.
-
-  (* TODO: on devrait pouvoir se passer de is_cons xs ... *)
-  Lemma rem_take :
-    forall {A} n (xs : DS A),
-      is_cons xs ->
-      rem (take (S n) xs) == take n (rem xs).
-  Proof.
-    intros; simpl.
-    rewrite rem_app; auto.
-  Qed.
-
-  (* TODO: move *)
-  Lemma is_cons_first_is_cons :
-    forall {A} (s t : DS A),
-      is_cons s ->
-      first s == first t ->
-      is_cons t.
-  Proof.
-    intros * Hc Hf.
-    apply first_is_cons.
-    rewrite <- Hf.
-    now apply is_cons_first.
-  Qed.
-
-  Lemma take_eq :
-    forall {A} (s t : DS A),
-      (forall n, take n s == take n t) ->
-      s == t.
-  Proof.
-    intros * Hn.
-    eapply DS_bisimulation_allin1
-      with (R := fun U V => (forall n, take n U == take n V)); auto.
-    - intros ????? H1 H2 ?. now rewrite <- H1, <- H2.
-    - clear. intros U V Hc Ht.
-      specialize (Ht 1) as Hf; rewrite 2 take_1 in Hf.
-      split; intros; auto.
-      rewrite <- 2 rem_take, Ht; destruct Hc;
-        eauto using is_cons_first_is_cons.
-  Qed.
-
-End Take.
-
-
 Module Type LDENOTSAFE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
@@ -100,16 +27,6 @@ Module Type LDENOTSAFE
        (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord CStr).
-
-  (* TODO: move *)
-  Fixpoint list_of_nprod {n} (np : nprod n) {struct n} : list (DS (sampl value)) :=
-    match n return nprod n -> _ with
-    | O => fun _ => []
-    | S m => fun np => nprod_fst np :: match m with
-                     | O => []
-                     | _ => list_of_nprod (nprod_skip np)
-                     end
-    end np.
 
 
 (* TODO: move, merge SDrel *)
@@ -132,8 +49,22 @@ Inductive restr_exp : exp -> Prop :=
 Section Op_correct.
 Variables (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI).
 
+(* TODO: move? *)
 Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
   DSForall (fun s => match s with pres v => P v | _ => True end).
+
+(* TODO: move? *)
+Lemma DSForall_pres_impl :
+  forall {A} (P Q : A -> Prop) (s : DS (sampl A)),
+    DSForall_pres P s ->
+    DSForall_pres (fun x => P x -> Q x) s ->
+    DSForall_pres Q s.
+Proof.
+  intros ???.
+  unfold DSForall_pres.
+  cofix Cof.
+  destruct s; intros Hp Himpl; inv Hp; inv Himpl; constructor; cases.
+Qed.
 
 Inductive op_correct_exp : exp -> Prop :=
 | opc_Econst :
@@ -145,10 +76,10 @@ Inductive op_correct_exp : exp -> Prop :=
 | opc_Eunop :
   forall op e ann,
     op_correct_exp e ->
-    (forall ss ty,
+    (forall (* ss *) ty,
         typeof e = [ty] ->
-        denot_exp ins e envI bs env = ss ->
-        forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) ss
+        (* denot_exp ins e envI bs env = ss -> *)
+        forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) (denot_exp ins e envI bs env)
     ) ->
     op_correct_exp (Eunop op e ann)
 | opc_Efby :
@@ -166,7 +97,7 @@ Definition op_correct {PSyn prefs} (n : @node PSyn prefs) : Prop :=
 End Op_correct.
 
 
-  Section node_safe.
+Section node_safe.
 
   Context {PSyn : block -> Prop}.
   Context {prefs : PS.t}.
@@ -175,12 +106,25 @@ End Op_correct.
 
   (* TODO: move *)
   Section SafeDS.
-  Definition safe_val : sampl value -> Prop :=
-  fun v => match v with
-        | err _ => False
-        | _ => True
-        end.
-  Definition safe_DS : DS (sampl value) -> Prop := DSForall safe_val.
+  Definition safe_DS : DS (sampl value) -> Prop :=
+    DSForall (fun v => match v with err _ => False | _ => True end).
+  Definition safe_ty : DS (sampl value) -> Prop :=
+    DSForall (fun v => match v with err error_Ty => False | _ => True end).
+  Definition safe_cl : DS (sampl value) -> Prop :=
+    DSForall (fun v => match v with err error_Cl => False | _ => True end).
+  Definition safe_op : DS (sampl value) -> Prop :=
+    DSForall (fun v => match v with err error_Op => False | _ => True end).
+  Lemma safe_DS_def :
+    forall s, safe_ty s ->
+         safe_cl s ->
+         safe_op s ->
+         safe_DS s.
+  Proof.
+    unfold safe_ty, safe_cl, safe_op, safe_DS.
+    cofix Cof.
+    destruct s; intros Hty Hcl Hop; inv Hty; inv Hcl; inv Hop;
+      constructor; cases.
+  Qed.
   End SafeDS.
 
     (* abstract_clock *)
@@ -213,6 +157,7 @@ End Op_correct.
       (* TODO: plutôt <= ? *)
     DSForall_pres (fun v => wt_value v ty) s.
 
+  (* c'est l'alignement, CORRECTION DES HORLOGES *)
   Definition wc_DS (ck : clock) (s : DS (sampl value)) :=
       (* TODO: plutôt <= ? *)
     denot_clock ck == AC s.
@@ -238,6 +183,7 @@ End Op_correct.
   Definition safe_env := wc_env /\ wt_env /\ ef_env.
 
   (** propriétés des dénotations des expressions *)
+  (* TODO: dégagez-moi tout ça *)
 
   Definition wc_denot (e : exp) :=
     let ss := denot_exp ins e envI bs env in
@@ -252,10 +198,15 @@ End Op_correct.
     forall_nprod safe_DS ss.
 
   Definition safe_denot (e : exp) :=
+    (* let ss := denot_exp ins e envI bs env in *)
+    (* Forall2 wc_DS (clockof e) (list_of_nprod ss) *)
+    (* /\ Forall2 wt_DS (typeof e) (list_of_nprod ss) *)
+    (* /\ forall_nprod safe_DS ss. *)
     wc_denot e /\ wt_denot e /\ ef_denot e.
 
 
-  (* TODO: move? *)
+  (** ** Faits sur sconst  *)
+
   Lemma AC_sconst :
     forall c bs,
       AC (sconst c bs) == bs.
@@ -277,38 +228,18 @@ End Op_correct.
 
   Opaque MAP. (*TODO: le faire plus tôt? *)
 
-  Lemma wc_econst :
-    forall c, wc_denot (Econst c).
+  Lemma wc_sconst :
+    forall c, wc_DS Cbase (sconst c bs).
   Proof.
-    constructor; auto.
-    rewrite denot_exp_eq; cbn.
     unfold wc_DS.
-    now rewrite AC_sconst.
+    intros.
+    rewrite AC_sconst; auto.
   Qed.
 
-  (* TODO: move *)
-  Lemma DSForall_map :
-    forall {A B} (f : A -> B) P s,
-      DSForall (fun x => P (f x)) s -> DSForall P (MAP f s).
+  Lemma wt_sconst :
+    forall c, wt_DS (Tprimitive (ctype_cconst c)) (sconst (Vscalar (sem_cconst c)) bs).
   Proof.
-    clear; intros.
-    remember (MAP f s) as fs. apply Oeq_refl_eq in Heqfs.
-    revert dependent s. revert fs.
-    cofix Cof; intros * H Hfs.
-    destruct fs.
-    - constructor.
-      apply Cof with s; auto. now rewrite eqEps.
-    - apply symmetry, map_eq_cons_elim in Hfs as (?&? & Hs &?&?); subst.
-      rewrite Hs in *; inv H.
-      constructor; auto.
-      apply Cof with (rem s); rewrite Hs, rem_cons; auto.
-  Qed.
-
-  Lemma wt_econst :
-    forall c, wt_denot (Econst c).
-  Proof.
-    constructor; auto.
-    rewrite denot_exp_eq; cbn.
+    intro.
     unfold wt_DS, DSForall_pres, sconst.
     apply DSForall_map.
     clear; revert bs.
@@ -319,21 +250,113 @@ End Op_correct.
     apply wt_cvalue_cconst.
   Qed.
 
-  Lemma ef_econst :
-    forall c, ef_denot (Econst c).
+  Lemma safe_sconst :
+    forall c, safe_DS (sconst (Vscalar (sem_cconst c)) bs).
   Proof.
     intro.
-    unfold ef_denot.
-    rewrite denot_exp_eq; cbn.
     unfold safe_DS, sconst.
     apply DSForall_map.
     clear; revert bs.
     cofix Cof.
     destruct bs; constructor; auto.
-    cases; simpl; auto.
+    cases_eqn HH.
   Qed.
 
-  (* TODO: move *)
+  (** ** Faits sur sunop *)
+
+  Lemma wt_sunop :
+    forall op s ty tye,
+      type_unop op tye = Some ty ->
+      wt_DS tye s ->
+      wt_DS ty (sunop (fun v => sem_unop op v tye) s).
+  Proof.
+    intros * Hop Hwt.
+    unfold wt_DS, DSForall_pres, sunop in *.
+    apply DSForall_map.
+    revert dependent s.
+    cofix Cof.
+    destruct s; intro Hs; constructor; inv Hs; auto.
+    cases_eqn HH; inv HH0.
+    eauto using pres_sem_unop.
+  Qed.
+
+  Lemma safe_ty_sunop :
+    forall op s ty tye,
+      type_unop op tye = Some ty ->
+      wt_DS tye s ->
+      safe_DS s ->
+      safe_ty (sunop (fun v => sem_unop op v tye) s).
+  Proof.
+    intros * Hop Hwt Hsf.
+    unfold wt_DS, safe_ty, safe_DS, sunop in *.
+    apply DSForall_map.
+    revert dependent s.
+    cofix Cof.
+    destruct s; intro Hs; constructor; inv Hsf; inv Hs; auto.
+    cases_eqn HH.
+  Qed.
+
+  Lemma safe_cl_sunop :
+    forall op s tye,
+      safe_DS s ->
+      safe_cl (sunop (fun v => sem_unop op v tye) s).
+  Proof.
+    intros * Hsf.
+    unfold safe_cl, safe_DS, sunop in *.
+    apply DSForall_map.
+    revert dependent s.
+    cofix Cof.
+    destruct s; intro Hs; constructor; inv Hs; auto.
+    cases_eqn HH.
+  Qed.
+
+  Lemma safe_op_sunop :
+    forall op s tye,
+      safe_DS s ->
+      DSForall_pres (fun v => sem_unop op v tye <> None) s ->
+      safe_op (sunop (fun v => sem_unop op v tye) s).
+  Proof.
+    intros * Hsf Hop.
+    unfold safe_op, safe_DS, sunop in *.
+    apply DSForall_map.
+    revert dependent s.
+    cofix Cof.
+    destruct s; intro Hs; constructor; inv Hs; inv Hop; auto.
+    cases_eqn HH.
+  Qed.
+
+  Lemma wc_sunop :
+    forall op s ck tye,
+      wc_DS ck s ->
+      DSForall_pres (fun v => sem_unop op v tye <> None) s ->
+      wc_DS ck (sunop (fun v => sem_unop op v tye) s).
+  Proof.
+    unfold wc_DS, DSForall_pres.
+    intros * -> Hop.
+    eapply DS_bisimulation_allin1
+      with (R := fun U V => exists s,
+                     DSForall_pres (fun v => sem_unop op v tye <> None) s
+                     /\ U == AC s
+                     /\ V == AC (sunop (fun v : value => sem_unop op v tye) s)).
+    3: eauto.
+    { intros ???? (?&?&?&?) ??. esplit; eauto. }
+    clear.
+    intros U V Hc (X & Hop & Hu & Hv).
+    rewrite Hu, Hv in *.
+    split.
+    - destruct Hc as [Hc|Hc].
+      all: repeat apply map_is_cons in Hc.
+      all: apply is_cons_elim in Hc as (?&?& Hx).
+      all: unfold AC, sunop; rewrite Hx, 3 MAP_map, 3 map_eq_cons, 2 first_cons.
+      all: rewrite Hx in Hop; inv Hop; destruct x; cases_eqn HH; congruence.
+    - exists (rem X).
+      unfold AC, sunop in *.
+      rewrite 3 MAP_map, <- 3 rem_map.
+      repeat split; auto. now apply DSForall_rem.
+  Qed.
+
+  (** ** Faits sur sfby *)
+
   Ltac find_specialize_in H :=
     repeat multimatch goal with
       | [ v : _ |- _ ] => specialize (H v)
@@ -346,27 +369,41 @@ End Op_correct.
       wt_exp G Γ e ->
       wc_exp G Γ e ->
       op_correct_exp ins envI bs env e ->
-      safe_denot e.
+      let ss := denot_exp ins e envI bs env in
+      Forall2 wt_DS (typeof e) (list_of_nprod ss)
+      /\ Forall2 wc_DS (clockof e) (list_of_nprod ss)
+      /\ forall_nprod safe_DS ss.
   Proof.
     intros (WT & WC & EF).
-    induction e; intros Hr Hwt Hwc Hoc; inv Hr.
+    induction e using exp_ind2; intros Hr Hwt Hwc Hoc; inv Hr.
     - (* Econst *)
-      unfold safe_denot.
-      auto using wc_econst, wt_econst, ef_econst.
+      rewrite denot_exp_eq; cbn.
+      auto using wt_sconst, wc_sconst, safe_sconst.
     - (* Evar *)
       inv Hwt. inv Hwc.
-      specialize (WT i). specialize (WC i). specialize (EF i).
-      unfold safe_denot, wc_denot, wt_denot, ef_denot.
+      specialize (WT x). specialize (WC x). specialize (EF x).
       rewrite denot_exp_eq; cbn.
       repeat split; eauto.
     - (* Eunop *)
-      (* rewrite denot_exp_eq. *)
-      (* apply wt_exp_wl_exp in Hwt as Hwl. inv Hwl. *)
-      (* inv Hwt. inv Hwc. inv Hoc. *)
-      (* find_specialize_in IHe. *)
-      (* revert IHe. *)
+      apply wt_exp_wl_exp in Hwt as Hwl.
+      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
+      find_specialize_in IHe.
+      find_specialize_in H13.
+      rewrite denot_exp_eq.
+      revert IHe H13.
+      generalize (denot_exp ins e envI bs env).
+      take (typeof e = _) and rewrite it.
+      take (numstreams e = _) and rewrite it.
+      cbn; intros s (Wte & Wce & Efe) Hop.
+      simpl_Forall.
+      apply DSForall_pres_impl in Hop; auto.
+      repeat split; simpl_Forall.
+      + apply wt_sunop; auto.
+      + apply wc_sunop; congruence.
+      + (* TODO: lemme trois-en-un ? *)
+        apply safe_DS_def; eauto using safe_ty_sunop, safe_cl_sunop, safe_op_sunop.
+    - (* Efby *)
   Qed.
-
 
   End Invariants.
   End node_safe.
