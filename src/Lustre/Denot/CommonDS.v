@@ -191,6 +191,14 @@ Section DS_Forall.
     inversion 1; assumption.
   Defined.
 
+  Lemma DSForall_rem : forall s, DSForall s -> DSForall (rem s).
+  Proof.
+    unfold rem, Rem, DSCase; simpl.
+    cofix Cof; intros.
+    destruct s; inv H; rewrite DScase_inv; auto.
+    constructor; auto.
+  Qed.
+
   (* unprovable induction proinciple *)
   Lemma DSForall_ind :
     (forall s, DSForall (rem s) -> DSForall s) ->
@@ -273,3 +281,31 @@ Section DS_Forall.
   Qed.
 
 End DS_Forall.
+
+Lemma DSForall_map :
+  forall {A B} (f : A -> B) P s,
+    DSForall (fun x => P (f x)) s -> DSForall P (MAP f s).
+Proof.
+  clear; intros.
+  remember (MAP f s) as fs. apply Oeq_refl_eq in Heqfs.
+  revert dependent s. revert fs.
+  cofix Cof; intros * H Hfs.
+  destruct fs.
+  - constructor.
+      apply Cof with s; auto. now rewrite eqEps.
+  - apply symmetry, map_eq_cons_elim in Hfs as (?&? & Hs &?&?); subst.
+    rewrite Hs in *; inv H.
+    constructor; auto.
+    apply Cof with (rem s); rewrite Hs, rem_cons; auto.
+Qed.
+
+Lemma DSForall_pres_impl :
+  forall {A} (P Q : A -> Prop) (s : DS A),
+    DSForall P s ->
+    DSForall (fun x => P x -> Q x) s ->
+    DSForall Q s.
+Proof.
+  intros ???.
+  cofix Cof.
+  destruct s; intros Hp Himpl; inv Hp; inv Himpl; constructor; cases.
+Qed.
