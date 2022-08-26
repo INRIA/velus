@@ -825,21 +825,14 @@ Proof.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
     (* TODO: mettre tout ça dans un seul prédicat ? *)
     (* wt *)
-    eapply Forall_impl_inside in H6 as He0s; [clear H|exact H].
-    eapply Forall_impl_inside in H7 as Hes; [clear H0|exact H0].
-    (* wc *)
-    eapply Forall_impl_inside in H11 as He0s'; [clear He0s |exact He0s].
-    eapply Forall_impl_inside in H12 as Hes'; [clear Hes|exact Hes].
-    (* restr *)
-    eapply Forall_impl_inside in H3 as He0s; [clear He0s'|exact He0s'].
-    eapply Forall_impl_inside in H5 as Hes; [clear Hes'|exact Hes'].
-    (* op_correct *)
-    eapply Forall_impl_inside in H4 as He0s'; [clear He0s |exact He0s].
-    eapply Forall_impl_inside in H16 as Hes'; [clear Hes|exact Hes].
+    apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
+    apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H, H0; auto.
 
     econstructor; simpl in *.
-    + erewrite Forall2_map_2, <- Forall2_same. apply He0s'.
-    + erewrite Forall2_map_2, <- Forall2_same. apply Hes'.
+    + erewrite Forall2_map_2, <- Forall2_same. apply H.
+    + erewrite Forall2_map_2, <- Forall2_same. apply H0.
     + rewrite <- 2 flat_map_concat_map.
       unshelve rewrite <- 2 Ss_exps; auto using DS_of_S_inf, infinite_exps.
 
