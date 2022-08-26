@@ -193,6 +193,7 @@ Proof.
     rewrite <- get_nth_skip, IHn; auto with arith.
 Qed.
 
+(* TODO: bouger ? *)
 Fixpoint list_of_nprod {n} (np : nprod n) : list (DS (sampl value)) :=
   match n return nprod n -> _ with
   | O => fun _ => []
@@ -201,6 +202,17 @@ Fixpoint list_of_nprod {n} (np : nprod n) : list (DS (sampl value)) :=
                    | _ => list_of_nprod (nprod_skip np)
                    end
   end np.
+
+Lemma list_of_nprod_app :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    list_of_nprod (nprod_app np mp) = list_of_nprod np ++ list_of_nprod mp.
+Proof.
+  induction n as [|[]]; intros; auto.
+  - destruct m; auto.
+  - destruct np as (p,np).
+    specialize (IHn _ np mp).
+    simpl; f_equal; auto.
+Qed.
 
 End Nprod.
 
