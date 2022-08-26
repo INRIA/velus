@@ -1231,7 +1231,7 @@ Module Type LTYPING
         { intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
           - apply Henv in Hfind. inv Hfind. eauto with senv datatypes.
           - apply Env.from_list_find_In in Hfind. simpl_In.
-            econstructor. apply in_or_app, or_intror. solve_In.
+            right. econstructor. solve_In.
             reflexivity.
         }
         assert (forall x ty,
@@ -1241,8 +1241,7 @@ Module Type LTYPING
           - apply Henvl in Hfind as (Hhas&His). inv Hhas. inv His.
             constructor; eauto with senv datatypes.
           - apply Env.from_list_find_In in Hfind. simpl_In.
-            split; econstructor; try apply in_or_app, or_intror; solve_In.
-            reflexivity. simpl. congruence.
+            split; right; econstructor. 1,3:solve_In. reflexivity. simpl. congruence.
         }
         simpl in *.
       repeat rewrite Bool.andb_true_iff in Hc. destruct Hc as (((CC&CE)&CL)&CB).

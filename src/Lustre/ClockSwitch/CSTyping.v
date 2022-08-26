@@ -152,7 +152,7 @@ Module Type CSTYPING
         intros ((?&?)&?&?); auto. }
       eapply mmap_values, Forall2_ignore2 in Hni1.
       eapply mmap_values, Forall2_ignore2 in Hni2. simpl_In.
-      apply HasType_app in Hinm as [Hin|Hin]; inv Hin; simpl_Forall; repeat inv_bind.
+      destruct Hinm as [Hin|Hin]; inv Hin; simpl_Forall; repeat inv_bind.
       - solve_In; eauto with datatypes.
         f_equal; auto.
         unfold rename_var. erewrite Env.find_In_from_list; eauto.

@@ -164,8 +164,8 @@ Module Type ILTYPING
           eapply HasType_incl; eauto using incl_map, st_follows_incl, fresh_idents_rename_st_follows.
         * unfold st_senv. erewrite fresh_idents_rename_anns; [|eauto].
           unfold senv_of_tyck. simpl_app. apply HasType_app, or_introl.
-          assert (Hfresh:=H0). eapply fresh_idents_rename_sub2 in H0 as ((?&?&Hmap&_)&_).
-          { inv Hin. simpl_In. eapply In_InMembers. solve_In. }
+          assert (Hfresh:=H0). eapply fresh_idents_rename_sub2 with (x:=x3) in H0 as ((?&?&Hmap&_)&_).
+          { inv Hin. solve_In. }
           unfold Env.MapsTo in *. erewrite Env.union_find3' in Hfind; [|eauto]. inv Hfind.
           eapply fresh_idents_rename_ids in Hfresh. rewrite Hfresh.
           2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
@@ -206,12 +206,12 @@ Module Type ILTYPING
               econstructor. solve_In. rewrite Hfind. 1,2:reflexivity.
             - exfalso. inv Hin. unfold st_senv. simpl_In.
               apply In_InMembers, fst_InMembers in Hin.
-              eapply st_valid_AtomOrGensym_nIn in Hin; eauto using local_not_in_switch_prefs.
-              apply H8, fst_InMembers; auto.
+              eapply st_valid_AtomOrGensym_nIn; eauto using local_not_in_switch_prefs.
+              unfold st_ids. solve_In.
           }
         * simpl_Forall.
           eapply wt_clock_incl; [|eauto].
-          intros *. rewrite 2 HasType_app. intros [|]; auto; right.
+          intros *. simpl_In. intros [|]; auto; right.
           eapply HasType_incl; eauto. eapply incl_map, st_follows_incl, fresh_idents_rename_st_follows; eauto.
   Qed.
 

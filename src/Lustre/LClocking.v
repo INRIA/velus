@@ -1341,8 +1341,7 @@ Module Type LCLOCKING
       { intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
         - apply Henv in Hfind. inv Hfind. eauto with senv datatypes.
         - apply Env.from_list_find_In in Hfind. simpl_In.
-          econstructor. apply in_or_app, or_intror. solve_In.
-          reflexivity.
+          right. econstructor. solve_In. reflexivity.
       }
       assert (forall x ty,
                  Env.find x (Env.union venvl (Env.from_list (map_filter (fun '(x0, (_, ty0, _, o)) => option_map (fun _ : exp * ident => (x0, ty0)) o) locs))) = Some ty ->
@@ -1351,8 +1350,7 @@ Module Type LCLOCKING
         - apply Henvl in Hfind as (Hhas&His). inv Hhas. inv His.
           constructor; eauto with senv datatypes.
         - apply Env.from_list_find_In in Hfind. simpl_In.
-          split; econstructor; try apply in_or_app, or_intror; solve_In.
-          reflexivity. simpl. congruence.
+          split; right; econstructor. 1,3:solve_In. reflexivity. simpl; congruence.
       }
       simpl in *.
       repeat rewrite Bool.andb_true_iff in Hc. destruct Hc as ((CC&CL)&CB).

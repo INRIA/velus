@@ -197,6 +197,9 @@ Module Type LCAUSALITY
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
+  Global Hint Rewrite -> replace_idcaus_IsVar replace_idcaus_HasType replace_idcaus_HasClock replace_idcaus_IsLast replace_idcaus_HasLastCaus : list.
+  Global Hint Rewrite -> map_fst_replace_idcaus.
+
   Lemma replace_idcaus_HasCaus_incl caus : forall Γ Γ',
       (forall x cx, HasCaus Γ x cx -> HasCaus Γ' x cx) ->
       (forall x cx, HasCaus (replace_idcaus caus Γ) x cx -> HasCaus (replace_idcaus caus Γ') x cx).
@@ -214,11 +217,8 @@ Module Type LCAUSALITY
   Proof.
     intros * Hincl * Hca.
     inv Hca; simpl_In.
-    assert (HasLastCaus Γ' x cx) as Hca'.
-    { eapply Hincl. econstructor; eauto.
-      destruct (assoc_ident _ _); simpl; auto. }
-    inv Hca'. econstructor; solve_In.
-    destruct (assoc_ident _ _); auto.
+    eapply Hincl. econstructor; eauto.
+    destruct (assoc_ident _ _); simpl; auto.
   Qed.
 
   Fact replace_idcaus_In_snd : forall Γ caus cx,
@@ -260,13 +260,13 @@ Module Type LCAUSALITY
       destruct (assoc_ident i0 _) eqn:Hassc1, (assoc_ident i _) eqn:Hassc2; simpl in *; subst.
       + apply assoc_ident_In in Hassc1. apply assoc_ident_In in Hassc2.
         eapply NoDup_snd_det in Hassc1; eauto using NoDup_app_r; subst.
-        eapply H1; eauto using In_InMembers.
+        eapply H1. solve_In.
       + apply H2, in_app_iff.
         apply assoc_ident_In in Hassc1. right. solve_In.
       + apply assoc_ident_In in Hassc2.
         rewrite <-map_app in H4. eapply NoDup_snd_det in H4; try rewrite in_app_iff; [|left|right]; eauto. 2:solve_In.
         subst. apply assoc_ident_false in Hassc1.
-        apply Hassc1; eauto using In_InMembers.
+        apply Hassc1. solve_In.
       + apply H2, in_app_iff.
         rewrite <-H5. left. solve_In.
     - simpl_Forall.
@@ -1208,8 +1208,8 @@ Module Type LCAUSALITY
     { apply NoDupMembers_app; auto.
       - apply NoDupMembers_map; auto.
       - apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-      - intros * Hin Hinm2. apply InMembers_senv_of_locs in Hinm2.
-        eapply H7; eauto. rewrite fst_InMembers, map_fst_replace_idcaus in Hin; auto.
+      - intros * Hin Hinm2. simpl_In.
+        eapply H7; solve_In.
     }
     simpl. repeat rewrite Env.union_fuse_In.
     destruct Hdef as [Hdef|Hdef]; inv Hdef.
@@ -1221,8 +1221,8 @@ Module Type LCAUSALITY
       + eapply Hwxincl; [| |eauto].
         1,2:intros; (rewrite IsVar_app in *||rewrite IsLast_app in * );
         (rewrite replace_idcaus_IsVar||rewrite replace_idcaus_IsLast); auto.
-    - right. apply fst_InMembers in H5.
-      apply Env.In_from_list, fst_InMembers. solve_In.
+    - right. simpl_In.
+      apply Env.In_from_list. solve_In.
       apply Hca in H11. rewrite H11; simpl; auto.
     - eapply Hp in H9; eauto.
       + now apply equiv_env_local.
@@ -1423,10 +1423,10 @@ Module Type LCAUSALITY
     induction caus; inv Hnd2; inv Hf; simpl. constructor.
     destruct H3 as (?&Hfind). unfold Env.MapsTo in Hfind. rewrite Hfind; simpl.
     constructor; auto.
-    intros * Hinm. apply fst_InMembers in Hinm. simpl_In. simpl_Forall.
+    intros * Hinm. simpl_In. simpl_Forall.
     destruct H4 as (?&Hfind2). unfold Env.MapsTo in Hfind2. rewrite Hfind2 in Hfind; simpl in *.
     eapply Env.NoDup_snd_elements in Hfind; eauto; subst.
-    eauto using In_InMembers.
+    take (~ _) and eapply it; solve_In.
   Qed.
 
   Fact find_caus_NoDup cenv : forall (caus: list (ident * ident)),
@@ -1445,7 +1445,7 @@ Module Type LCAUSALITY
               | H:assoc_ident _ _ = None |- _ => apply assoc_ident_false in H
               end); simpl in *; subst.
     - eapply NoDup_snd_det in Has1; eauto; subst.
-      eapply H3; eauto using In_InMembers.
+      eapply H3. solve_In.
     - eapply H6. solve_In.
     - eapply H4. solve_In.
     - eapply H1. solve_In.
@@ -1498,7 +1498,7 @@ Module Type LCAUSALITY
         * apply NoDupMembers_map; auto.
         * apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
         * intros * Hin1 Hin2. rewrite InMembers_senv_of_locs in Hin2.
-          eapply H7; eauto using In_InMembers. now rewrite fst_InMembers, map_fst_replace_idcaus in Hin1.
+          eapply H7; eauto using In_InMembers. solve_In.
       + eapply equiv_env_local; eauto.
       + eapply equiv_env_last_local; eauto.
       + rewrite 2 Env.elements_union, 2 Env.elements_from_list, Env.mapi_elements.
@@ -1531,16 +1531,15 @@ Module Type LCAUSALITY
           intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
         * apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
         * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2. inv Hin1. apply Henvl in H; inv H.
-          rewrite fst_InMembers in Hin2. simpl_In.
-          eapply H7; eauto using In_InMembers. solve_In.
+          simpl_In.
+          eapply H7; solve_In.
         * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2.
           apply Env.mapi_2 in Hin1. inv Hin1. apply Henv in H; inv H.
-          rewrite fst_InMembers in Hin2. simpl_In.
-          eapply H7; eauto using In_InMembers. solve_In.
+          simpl_In.
+          eapply H7; solve_In.
       + apply NoDup_app'; auto.
         * now eapply fst_NoDupMembers.
-        * eapply Forall_forall; intros ? Hin1 Hin2. simpl_Forall.
-          inv Hvarsenv. eapply Henv in H. inv H.
+        * simpl_Forall. intros Hin2. inv Hvarsenv. eapply Henv in H0. inv H0.
           eapply H7. apply fst_InMembers; eauto. solve_In.
       + simpl_Forall.
         rewrite Env.union_In.

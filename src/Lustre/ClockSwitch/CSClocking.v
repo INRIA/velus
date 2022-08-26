@@ -185,7 +185,7 @@ Module Type CSCLOCKING
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           exfalso. simpl_In.
           eapply Env.find_In, Hsubin, fst_InMembers, H7 in Hfind; eauto.
-          inv Hin; simpl_In; eauto using In_InMembers.
+          inv Hin; solve_In.
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin; simpl_In; econstructor. solve_In. auto.
         * eapply wc_clock_incl; eauto; repeat solve_incl_app.
@@ -204,8 +204,8 @@ Module Type CSCLOCKING
           repeat rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin. simpl_In. econstructor; solve_In; auto.
         + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
-          intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2. rewrite fst_InMembers in Hinm1.
-          eapply H7; eauto.
+          intros ? Hinm1 Hinm2. simpl_In.
+          eapply H7; solve_In.
         + simpl_app. apply wc_env_app; auto.
           simpl_Forall; auto.
         + eapply wc_clock_incl; [|eauto]. solve_incl_app.
@@ -328,11 +328,11 @@ Module Type CSCLOCKING
              - intros * Hfind Hin. inv Hin. simpl_In.
                eapply new_idents_In with (ids1:=filter _ _) in H11; eauto.
                2:{ eapply Env.find_In, Env.In_from_list in Hfind; eauto. }
-               unfold rename_var in H11. rewrite Hfind in H11. simpl_In.
-               simpl_app. rewrite 2 HasClock_app. do 2 right. econstructor; solve_In; eauto; simpl.
+               unfold rename_var in H11. rewrite Hfind in H11. simpl_In. simpl_app. simpl_In.
+               do 2 right. econstructor. solve_In; eauto. auto.
              - intros ?? Hfind Hin. exfalso.
                assert (Hnin:=Hfind). rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list in Hnin.
-               eapply Hnin. inv Hin. simpl_In.
+               eapply Hnin. inv Hin.
                erewrite fst_InMembers, map_map, map_ext, map_app, 2 new_idents_old; eauto.
                2:intros; destruct_conjs; auto.
                rewrite Permutation_app_comm, <-map_app. solve_In.

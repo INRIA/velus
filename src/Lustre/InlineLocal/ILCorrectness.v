@@ -644,9 +644,8 @@ Module Type ILCORRECTNESS
             eapply sem_var_In, Hdom in Hv.
             rewrite map_app in Hv; simpl in Hv. repeat rewrite in_app_iff in Hv.
             destruct Hv as [[Hin|Hin]|Hin]; auto. 1-2:exfalso.
-            -- eapply Hnin1. simpl_In. rewrite InMembers_app; eauto using In_InMembers.
-            -- eapply Hnin1. simpl_In. rewrite InMembers_app, 2 fst_InMembers; auto.
-               right; solve_In.
+            -- eapply Hnin1. solve_In; eauto using in_or_app. auto.
+            -- eapply Hnin1. solve_In. 2:apply in_or_app; right; solve_In. auto.
           * intros.
             specialize (Hdom x). specialize (Hdom1 x). rewrite Hdom, Hdom1.
             rewrite map_app, <-app_assoc, 2 in_app_iff. apply or_iff_compat_l.

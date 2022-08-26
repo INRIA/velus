@@ -300,12 +300,12 @@ Module Type DLCLOCKING
     + simpl_Forall. repeat constructor; simpl.
       * eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall.
         eapply rename_in_exp_wc in H; eauto.
-      * eapply fresh_idents_In' in H; eauto. simpl_In.
-        econstructor. simpl_app. repeat rewrite in_app_iff. right; left; solve_In. auto.
+      * eapply fresh_idents_In' in H; eauto. simpl_app. simpl_In.
+        right; left; econstructor. solve_In. auto.
       * eapply fresh_idents_In' in H; eauto. simpl_In.
         simpl_Forall.
-        rewrite rename_in_exp_clockof, app_nil_r, H3; auto.
-      * econstructor. simpl_app. repeat rewrite in_app_iff. right; right; solve_In. simpl; eauto.
+        rewrite rename_in_exp_clockof, H3; auto.
+      * simpl_app. simpl_In. right; right. econstructor. solve_In. auto.
     + eapply Hind; eauto.
       * rewrite map_app, map_fst_senv_of_locs. apply incl_appl'; auto.
       * intros * Hin. rewrite in_app_iff. apply Env.union_In in Hin as [|Hin]; eauto.

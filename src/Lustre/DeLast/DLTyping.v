@@ -167,8 +167,8 @@ Module Type DLTYPING
     - simpl_Forall. repeat constructor; simpl.
       + eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall.
         eapply rename_in_exp_wt in H; eauto.
-      + eapply fresh_idents_In' in H; eauto. simpl_In.
-        econstructor. simpl_app. repeat rewrite in_app_iff. right; left; solve_In. auto.
+      + eapply fresh_idents_In' in H; eauto. simpl_app. simpl_In.
+        right; left. econstructor; solve_In. auto.
       + eapply fresh_idents_In' in H; eauto. simpl_In.
         eapply Forall_forall in H7; [|solve_In]; simpl in *.
         eapply wt_clock_incl; eauto.
@@ -242,7 +242,8 @@ Module Type DLTYPING
              simpl_Forall; eauto.
           -- simpl_Forall; simpl_In; simpl_Forall.
              split; [|split]; eauto using rename_in_exp_wt.
-             now rewrite rename_in_exp_typeof.
+             ++ now rewrite rename_in_exp_typeof.
+             ++ setoid_rewrite Heq. solve_In.
         * intros. destruct_conjs. split; auto. apply Forall_app; auto.
 
     - (* automaton (strong) *)

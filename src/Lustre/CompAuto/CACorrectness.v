@@ -475,7 +475,7 @@ Module Type CACORRECTNESS
         + simpl. intros * [He|[He|[He|[He|He]]]]; inv He; auto.
         + split; intros * Hcka.
           2:{ intros Hla. inv Hla; simpl_In.
-              destruct Hin as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
+              take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
           simpl in *.
           inv Hcka; simpl in *. take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; do 2 esplit; simpl.
 
@@ -708,7 +708,7 @@ Module Type CACORRECTNESS
         + simpl. intros * [He|[He|[He|[He|He]]]]; inv He; auto.
         + split; intros * Hcka.
           2:{ intros Hla. inv Hla; simpl_In.
-              destruct Hin as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
+              take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
           simpl in *.
           inv Hcka; simpl in *. take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; do 2 esplit; simpl.
 

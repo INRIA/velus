@@ -384,12 +384,9 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       - rewrite fst_NoDupMembers, map_map; simpl.
         eapply fi_NoDup in Hfold; eauto.
         erewrite <-Permutation_rev, map_ext; eauto. intros ((?&?)&?); auto.
-      - intros ? Hinm1 Hinm2.
-        apply fst_InMembers in Hinm2. simpl_In; simpl_Forall; subst.
-        apply fst_InMembers in Hinm1. simpl_In.
-        eapply fi_fold_left_values, Forall2_ignore1, Forall_forall in Hfold as ((?&?)&?&Hfold); eauto; simpl in *.
-        destruct_conjs; subst.
-        eapply gensym_injective in H3 as (?&?); subst. lia.
+      - intros ? Hinm1 Hinm2. simpl_In.
+        eapply fi_fold_left_values, Forall2_ignore1 in Hfold. simpl_Forall; subst.
+        eapply gensym_injective in H5 as (?&?); subst. lia.
     Qed.
     Next Obligation.
       rewrite map_app. apply Forall_app; split; auto.

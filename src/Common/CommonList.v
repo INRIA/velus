@@ -4228,6 +4228,7 @@ Section InMembers.
 
 End InMembers.
 Global Hint Constructors NoDupMembers : datatypes.
+Global Hint Rewrite -> @fst_InMembers : list.
 
 Lemma NoDupMembers_filter {A B} :
   forall f (l: list (A * B)),
@@ -5314,6 +5315,7 @@ Local Ltac simpl_map_In H :=
   apply in_map_iff in H as (?&Heq&Hin); destruct_conjs; inv Heq; subst.
 
 Ltac simpl_In :=
+  repeat autorewrite with list in *;
   repeat
     (match goal with
      | H: In _ (map ?f _) |- _ => simpl_map_In H

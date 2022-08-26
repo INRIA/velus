@@ -2037,7 +2037,7 @@ Module Type LCLOCKCORRECTNESS
             assert (forall x ck', HasCaus Γ x cx \/ HasLastCaus Γ x cx -> HasClock Γ x ck' -> ck' = ck) as Hgamma2.
             { intros * Hing Hck. apply Hgamma in Hing. simpl_In.
               edestruct H18 as (Hck'&?); eauto. econstructor; solve_In; eauto.
-              inv Hck. inv Hck'. eapply NoDupMembers_det in H21; eauto. congruence. }
+              inv Hck. inv Hck'. eapply NoDupMembers_det in H9; eauto. congruence. }
             split; intros ??? Hca Hck Hv; inv Hca; inv Hck; simpl_In.
             1,2:eapply NoDupMembers_det in Hin0; eauto; subst.
             1,2:assert (a0.(clo) = ck) by (eapply Hgamma2; eauto with senv); subst.
@@ -2210,7 +2210,7 @@ Module Type LCLOCKCORRECTNESS
             assert (forall x ck', HasCaus Γ x cx \/ HasLastCaus Γ x cx -> HasClock Γ x ck' -> ck' = ck) as Hgamma2.
             { intros * Hing Hck. apply Hgamma in Hing. simpl_In.
               edestruct H17 as (Hck'&?); eauto. econstructor; solve_In; eauto.
-              inv Hck. inv Hck'. eapply NoDupMembers_det in H21; eauto. congruence. }
+              inv Hck. inv Hck'. eapply NoDupMembers_det in H20; eauto. congruence. }
             split; intros ??? Hca Hck Hv; inv Hca; inv Hck; simpl_In.
             1,2:eapply NoDupMembers_det in Hin0; eauto; subst.
             1,2:assert (a0.(clo) = ck) by (eapply Hgamma2; eauto with senv); subst.
@@ -2305,7 +2305,7 @@ Module Type LCLOCKCORRECTNESS
               destruct s. eapply sem_scope_defined2; eauto.
               take (sem_scope_ck' _ _ _ _ _ _) and inv it; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
           }
-          eapply H13; eauto. inv Hca1; econstructor; solve_In. auto.
+          eapply H8; eauto. inv Hca1; econstructor; solve_In. auto.
         + econstructor; eauto. simpl_Forall.
           specialize (Hf k); destruct_conjs; eauto.
 

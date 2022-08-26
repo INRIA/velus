@@ -273,18 +273,32 @@ Module Type STATICENV
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
+  Global Hint Rewrite -> map_fst_senv_of_tyck.
+  Global Hint Rewrite -> map_fst_senv_of_inout.
+  Global Hint Rewrite -> @map_fst_senv_of_locs.
+
   Lemma InMembers_senv_of_locs {A} : forall x locs,
       InMembers x (@senv_of_locs A locs) <-> InMembers x locs.
   Proof.
     intros *. symmetry.
-    symmetry. now rewrite fst_InMembers, map_fst_senv_of_locs, <-fst_InMembers.
+    symmetry. autorewrite with list. now rewrite map_fst_senv_of_locs.
   Qed.
+
+  Global Hint Rewrite -> @InMembers_senv_of_locs : list.
 
   Lemma NoDupMembers_senv_of_locs {A} : forall locs,
       NoDupMembers (@senv_of_locs A locs) <-> NoDupMembers locs.
   Proof.
     intros *. now rewrite fst_NoDupMembers, map_fst_senv_of_locs, <-fst_NoDupMembers.
   Qed.
+
+  Lemma IsVar_senv_of_locs {A} : forall x locs,
+      IsVar (@senv_of_locs A locs) x <-> InMembers x locs.
+  Proof.
+    split; intros * Hiv; [inv Hiv|constructor]; autorewrite with list in *; auto.
+  Qed.
+
+  Global Hint Rewrite -> @IsVar_senv_of_locs.
 
   Definition idty (env : static_env) : list (ident * type) :=
     map (fun '(x, entry) => (x, entry.(typ))) env.

@@ -16,7 +16,7 @@ From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import CoindIndexed.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
-From Velus Require Import Lustre.LSyntax Lustre.LClocking Lustre.LCausality Lustre.LOrdered.
+From Velus Require Import Lustre.LSyntax Lustre.LClocking Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics.
 
 Module Type LCLOCKEDSEMANTICS

@@ -572,7 +572,7 @@ Module Type DLCORRECTNESS
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
                 rewrite <-Hac. eapply sem_clock_det; eauto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i0) as Hlast.
+                assert (IsLast Γck i1) as Hlast.
                 { eapply H10. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.
@@ -656,7 +656,7 @@ Module Type DLCORRECTNESS
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
                 eapply sem_clock_det in H8; eauto. rewrite H8; auto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i0) as Hlast.
+                assert (IsLast Γck i1) as Hlast.
                 { eapply H10. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.
@@ -697,7 +697,7 @@ Module Type DLCORRECTNESS
                 eapply sem_var_refines in Hv'; eauto. eapply sem_var_det in Hv; eauto. rewrite <-Hv.
                 eapply sem_clock_det in H8; eauto. rewrite H8; auto.
               + unfold rename_in_var in Hv.
-                assert (IsLast Γck i0) as Hlast.
+                assert (IsLast Γck i1) as Hlast.
                 { eapply H10. econstructor; eauto. congruence. }
                 edestruct Hsubin2 as (?&Hsubfind); eauto.
                 destruct Hsc as (_&(?&Hv'&Hck)); eauto.

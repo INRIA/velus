@@ -694,8 +694,7 @@ Module Type CSCORRECTNESS
                    1,2:intros * Hin; (try eapply IsVar_incl; try eapply IsLast_incl; eauto).
                    -- inv Hin. apply fst_InMembers in H22. simpl_In.
                       econstructor; eauto using In_InMembers.
-                   -- inv Hin. simpl_In.
-                      econstructor; eauto.
+                   -- inv Hin. simpl_In. apply IsLast_app; eauto with senv.
                    -- intros; simpl in *; simpl_Forall. eapply wx_block_incl; eauto.
                    -- intros; simpl in *; simpl_Forall; eauto with lclocking.
                  * destruct H19 as (Hfilter1&Hfilter2).
