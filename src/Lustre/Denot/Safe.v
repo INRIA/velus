@@ -362,6 +362,72 @@ Section node_safe.
       | [ v : _ |- _ ] => specialize (H v)
       end.
 
+    (* TODO: move to LSyntax *)
+  Lemma annots_numstreams :
+    forall es, length (annots es) = list_sum (List.map numstreams es).
+  Proof.
+    induction es; simpl; auto.
+    rewrite app_length; f_equal; auto.
+    rewrite <- length_typeof_numstreams, typeof_annot.
+    now rewrite map_length.
+  Qed.
+
+  (* TODO: move, ne pas trop utiliser parce que c'est merdique *)
+Lemma Forall_impl_inside :
+  forall {A} (P Q : A -> Prop) xs,
+    (Forall (fun x => P x -> Q x) xs) ->
+    Forall P xs ->
+    Forall Q xs.
+Proof.
+  induction xs; auto.
+  intros FPQ FP. inv FPQ. inv FP.
+  constructor; auto.
+Qed.
+
+(* TODO: virer ? *)
+Lemma Forall_denot_exps :
+  forall P ins es envI bs env,
+    forall_nprod P (denot_exps ins es envI bs env)
+    <-> Forall (fun e => forall_nprod  P (denot_exp ins e envI bs env)) es.
+Proof.
+  induction es; intros; simpl; split; auto.
+  - intro Hs. setoid_rewrite denot_exps_eq in Hs.
+    apply app_forall_nprod in Hs as [].
+    constructor; auto.
+    now apply IHes.
+  - intro Hs. inv Hs.
+    setoid_rewrite denot_exps_eq.
+    apply forall_nprod_app; auto.
+    now apply IHes.
+Qed.
+
+(* TODO: généraliser... ? *)
+Lemma Forall_wt_exp :
+  forall es,
+    Forall (fun e => Forall2 wt_DS (typeof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
+    Forall2 wt_DS (typesof es) (list_of_nprod (denot_exps ins es envI bs env)).
+Proof.
+  induction 1.
+  - simpl; auto.
+  - rewrite denot_exps_eq; simpl.
+    rewrite list_of_nprod_app.
+    apply Forall2_app; auto.
+Qed.
+
+(* TODO: généraliser... ? *)
+Lemma Forall_wc_exp :
+  forall es,
+    Forall (fun e => Forall2 wc_DS (clockof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
+    Forall2 wc_DS (clocksof es) (list_of_nprod (denot_exps ins es envI bs env)).
+Proof.
+  induction 1.
+  - simpl; auto.
+  - rewrite denot_exps_eq; simpl.
+    rewrite list_of_nprod_app.
+    apply Forall2_app; auto.
+Qed.
+
+
   Lemma safe_exp :
     safe_env ->
     forall (e : exp),
@@ -403,6 +469,25 @@ Section node_safe.
       + (* TODO: lemme trois-en-un ? *)
         apply safe_DS_def; eauto using safe_ty_sunop, safe_cl_sunop, safe_op_sunop.
     - (* Efby *)
+      apply wt_exp_wl_exp in Hwt as Hwl.
+      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
+      apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H, H0; auto.
+      apply Forall_and_inv in H as [Wt0 H'], H0 as [Wt H0'].
+      apply Forall_and_inv in H' as [Wc0 Sf0], H0' as [Wc Sf].
+      apply Forall_wt_exp in Wt0, Wt.
+      apply Forall_wc_exp in Wc0, Wc.
+      apply Forall_denot_exps in Sf0, Sf.
+      rewrite denot_exp_eq.
+      revert Wt0 Wt Wc0 Wc Sf0 Sf.
+      generalize (denot_exps ins e0s envI bs env).
+      generalize (denot_exps ins es envI bs env).
+      rewrite annots_numstreams in *.
+      simpl; intros; cases; try congruence.
+      unfold eq_rect_r, eq_rect; destruct e, e0; simpl in *.
+      (* TODO *)
   Qed.
 
   End Invariants.
