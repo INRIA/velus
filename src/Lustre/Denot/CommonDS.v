@@ -299,7 +299,7 @@ Proof.
     apply Cof with (rem s); rewrite Hs, rem_cons; auto.
 Qed.
 
-Lemma DSForall_pres_impl :
+Lemma DSForall_impl :
   forall {A} (P Q : A -> Prop) (s : DS A),
     DSForall P s ->
     DSForall (fun x => P x -> Q x) s ->
