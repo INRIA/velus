@@ -193,6 +193,15 @@ Proof.
     rewrite <- get_nth_skip, IHn; auto with arith.
 Qed.
 
+Fixpoint list_of_nprod {n} (np : nprod n) : list (DS (sampl value)) :=
+  match n return nprod n -> _ with
+  | O => fun _ => []
+  | S m => fun np => nprod_fst np :: match m with
+                   | O => []
+                   | _ => list_of_nprod (nprod_skip np)
+                   end
+  end np.
+
 End Nprod.
 
 Section Forall_Nprod.
