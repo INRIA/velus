@@ -99,9 +99,9 @@ End Op_correct.
 
 Section node_safe.
 
-  Context {PSyn : block -> Prop}.
-  Context {prefs : PS.t}.
-  Variable (G : @global PSyn prefs).
+  (* Context {PSyn : block -> Prop}. *)
+  (* Context {prefs : PS.t}. *)
+  (* Variable (G : @global PSyn prefs). *)
   Variable Γ : static_env.
 
   (* TODO: move *)
@@ -181,28 +181,6 @@ Section node_safe.
       safe_DS (denot_var ins envI env x).
 
   Definition safe_env := wc_env /\ wt_env /\ ef_env.
-
-  (** propriétés des dénotations des expressions *)
-  (* TODO: dégagez-moi tout ça *)
-
-  Definition wc_denot (e : exp) :=
-    let ss := denot_exp ins e envI bs env in
-    Forall2 wc_DS (clockof e) (list_of_nprod ss).
-
-  Definition wt_denot (e : exp) :=
-    let ss := denot_exp ins e envI bs env in
-    Forall2 wt_DS (typeof e) (list_of_nprod ss).
-
-  Definition ef_denot (e : exp) :=
-    let ss := denot_exp ins e envI bs env in
-    forall_nprod safe_DS ss.
-
-  Definition safe_denot (e : exp) :=
-    (* let ss := denot_exp ins e envI bs env in *)
-    (* Forall2 wc_DS (clockof e) (list_of_nprod ss) *)
-    (* /\ Forall2 wt_DS (typeof e) (list_of_nprod ss) *)
-    (* /\ forall_nprod safe_DS ss. *)
-    wc_denot e /\ wt_denot e /\ ef_denot e.
 
 
   (** ** Faits sur sconst  *)
@@ -355,7 +333,100 @@ Section node_safe.
       repeat split; auto. now apply DSForall_rem.
   Qed.
 
-  (** ** Faits sur sfby *)
+  (** ** Faits sur fby *)
+
+  (* TODO: move? *)
+  Lemma fby1_cons :
+    forall {A} ov (s0 s : DS (sampl A)),
+      is_cons (fby1 ov s0 s) ->
+      is_cons s0.
+  Proof.
+    unfold fby1, fby1s.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := ov) in Hc. (* WTF *)
+    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+  Lemma fby1AP_cons :
+    forall {A} ov (s0 s : DS (sampl A)),
+      is_cons (fby1AP ov s0 s) ->
+      is_cons s.
+  Proof.
+    unfold fby1AP, fby1s.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := ov) in Hc. (* WTF *)
+    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+
+  Lemma DSForall_const :
+    forall {A} (P : A -> Prop) (c : A),
+      P c ->
+      DSForall P (DS_const c).
+  Proof.
+    cofix Cof; intros.
+    rewrite DS_inv; simpl.
+    constructor; auto.
+  Qed.
+
+  Lemma wt_fby1 :
+    forall ty ov s0 s,
+      (match ov with Some v => wt_value v ty | _ => True end) ->
+      wt_DS ty s0 ->
+      wt_DS ty s ->
+      wt_DS ty (fby1 ov s0 s).
+  Proof.
+    intros * Wtv Wt0 Wt.
+    unfold wt_DS, DSForall_pres, fby1 in *.
+    generalize false as b; intro.
+    remember (fby1s _ _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert dependent s.
+    revert dependent s0.
+    revert dependent ov.
+    revert t b.
+    cofix Cof; intros.
+    destruct t.
+    { constructor; rewrite <- eqEps in *; now eauto 2. }
+    assert (is_cons (fby1s b ov s0 s)) as Hc by (rewrite <- Ht; auto).
+    destruct b.
+    - (* fby1AP *)
+      apply fby1AP_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      fold (fby1AP ov) in Ht.
+      rewrite fby1AP_eq in Ht.
+      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+      all: assert (is_cons s0) as Hc by (eapply fby1_cons; now rewrite <- Ht).
+      all: apply is_cons_elim in Hc as (?&?&Hy); rewrite Hy in *.
+      all: rewrite fby1_eq in Ht.
+      all: cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
+      all: inv Wt; inv Wt0; constructor; auto.
+      all: unfold fby1AP in Ht; apply Cof in Ht; auto.
+    - (* fby1 *)
+      apply fby1_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      fold (fby1 ov) in Ht.
+      rewrite fby1_eq in Ht.
+      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
+      all: inv Wt0; constructor; auto.
+      all: unfold fby1AP in Ht; apply Cof in Ht; auto.
+  Qed.
+
+  Lemma wt_fby :
+    forall ty s0 s,
+      wt_DS ty s0 ->
+      wt_DS ty s ->
+      wt_DS ty (fby s0 s).
+  Proof.
+    intros * Wt0 Wt.
+    unfold wt_DS, DSForall_pres, fby in *.
+    apply DSForall_map.
+    revert dependent s.
+    cofix Cof.
+    destruct s; intro Hs; constructor; inv Hs; auto.
+    cases_eqn HH; inv HH0.
+    eauto using pres_sem_unop.
+  Qed.
+
 
   Ltac find_specialize_in H :=
     repeat multimatch goal with
@@ -428,9 +499,9 @@ Proof.
 Qed.
 
 
-  Lemma safe_exp :
+Lemma safe_exp :
     safe_env ->
-    forall (e : exp),
+    forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
       restr_exp e ->
       wt_exp G Γ e ->
       wc_exp G Γ e ->
@@ -487,7 +558,17 @@ Qed.
       rewrite annots_numstreams in *.
       simpl; intros; cases; try congruence.
       unfold eq_rect_r, eq_rect; destruct e, e0; simpl in *.
-      (* TODO *)
+
+          repeat split.
+      + take (typesof es = _) and rewrite it in *.
+        take (typesof e0s = _) and rewrite it in *.
+        Check wt_fby.
+        clear - Wt Wt0.
+        induction a as [|? []]; auto.
+        * inv Wt0. inv Wt. constructor; auto; apply wt_fby; auto.
+        * inv Wt0. inv Wt.
+          constructor; auto.
+
   Qed.
 
   End Invariants.
