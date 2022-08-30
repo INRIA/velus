@@ -555,6 +555,68 @@ Section node_safe.
       all: right; eexists; now rewrite Hf, rem_cons.
   Qed.
 
+  (* on fait tout en un, plutôt qu'en trois lemmes *)
+  Lemma safe_fby1 :
+    forall v s0 s,
+      safe_DS s0 ->
+      safe_DS s ->
+      AC s0 == AC s -> (* implied by [wc_DS ck s0 /\ wc_DS ck s] *)
+      safe_DS (fby1 (Some v) s0 s).
+  Proof.
+    unfold wc_DS.
+    intros * Safe0 Safe Hac.
+    remember (fby1 _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert dependent s.
+    revert dependent s0.
+    revert v t.
+    cofix Cof; intros.
+    destruct t.
+    { constructor. rewrite <- eqEps in *. eapply Cof in Ht; eauto . }
+    assert (is_cons s0) as Hs0 by (eapply fby1_cons; rewrite <- Ht; auto).
+    assert (is_cons s) as Hs by now rewrite <- AC_is_cons, <- Hac, AC_is_cons.
+    apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (sv & s' & Hs).
+    rewrite Hs, Hs0, 2 AC_cons in *.
+    inv Safe. inv Safe0.
+    rewrite fby1_eq in Ht.
+    cases_eqn HH; subst; try rewrite DS_const_eq in Ht; try rewrite fby1AP_eq in Ht.
+    all: apply Con_eq_simpl in Ht as (? & Ht), Hac as (?&?); subst; try congruence.
+    all: constructor; auto; eapply Cof in Ht; eauto.
+  Qed.
+
+  Lemma safe_fby :
+    forall ck s0 s,
+      safe_DS s0 ->
+      safe_DS s ->
+      wc_DS ck s0 ->
+      wc_DS ck s ->
+      safe_DS (fby s0 s).
+  Proof.
+    unfold wc_DS.
+    intros * Safe0 Safe Ck0 Ck.
+    assert (AC s0 == AC s) as Hac by now rewrite <- Ck0, <- Ck.
+    remember (fby _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    clear dependent ck.
+    revert dependent s.
+    revert dependent s0.
+    revert t.
+    cofix Cof; intros.
+    destruct t.
+    { constructor. rewrite <- eqEps in *. eapply Cof in Ht; eauto . }
+    assert (is_cons s0) as Hs0 by (eapply fby_cons; rewrite <- Ht; auto).
+    assert (is_cons s) as Hs by now rewrite <- AC_is_cons, <- Hac, AC_is_cons.
+    apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (sv & s' & Hs).
+    rewrite Hs, Hs0, 2 AC_cons in *.
+    inv Safe. inv Safe0.
+    rewrite fby_eq in Ht.
+    cases_eqn HH; subst;
+      try rewrite DS_const_eq in Ht;
+      try rewrite fbyA_eq in Ht;
+      try rewrite fby1AP_eq in Ht.
+    all: apply Con_eq_simpl in Ht as (? & Ht), Hac as (?&?); subst; try congruence.
+    all: constructor; auto.
+    - eapply Cof in Ht; eauto.
+    - rewrite Ht. eapply safe_fby1; eauto.
+  Qed.
 
   Ltac find_specialize_in H :=
     repeat multimatch goal with
@@ -696,7 +758,24 @@ Lemma safe_exp :
           setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
           inv Wt. inv Wt0.
           constructor; [ apply wt_fby | apply IHa ]; auto.
-      + 
+      + take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
+        take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
+        clear - Sf0 Sf Wc0 Wc.
+        induction a as [|? []]; auto.
+        * inv Wc0. inv Wc. constructor; auto; apply wc_fby; auto.
+        * destruct t, t0.
+          setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
+          inv Wc. inv Wc0. inv Sf0. inv Sf.
+          constructor; [ apply wc_fby | apply IHa ]; auto.
+      + take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
+        take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
+        clear - Sf0 Sf Wc0 Wc.
+        induction a as [|? []]; auto.
+        * inv Wc0. inv Wc. eapply safe_fby; eauto.
+        * destruct t, t0.
+          setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
+          inv Wc. inv Wc0. inv Sf0. inv Sf.
+          constructor; [ eapply safe_fby | apply IHa ]; eauto.
   Qed.
 
   End Invariants.
