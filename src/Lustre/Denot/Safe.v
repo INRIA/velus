@@ -370,15 +370,14 @@ Section node_safe.
   Qed.
 
   Lemma wt_fby1 :
-    forall ty ov s0 s,
+    forall ty b ov s0 s,
       (match ov with Some v => wt_value v ty | _ => True end) ->
       wt_DS ty s0 ->
       wt_DS ty s ->
-      wt_DS ty (fby1 ov s0 s).
+      wt_DS ty (fby1s b ov s0 s).
   Proof.
     intros * Wtv Wt0 Wt.
-    unfold wt_DS, DSForall_pres, fby1 in *.
-    generalize false as b; intro.
+    unfold wt_DS, DSForall_pres in *.
     remember (fby1s _ _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
     revert dependent s.
     revert dependent s0.
@@ -411,6 +410,31 @@ Section node_safe.
       all: unfold fby1AP in Ht; apply Cof in Ht; auto.
   Qed.
 
+  (* TODO: move *)
+  Lemma fbyA_cons :
+    forall {A} (s0 s : DS (sampl A)),
+      is_cons (fbyA s0 s) ->
+      is_cons s.
+  Proof.
+    unfold fbyA, fbys.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := true) in Hc.
+    2: rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+
+  Lemma fby_cons :
+    forall {A} (s0 s : DS (sampl A)),
+      is_cons (fby s0 s) ->
+      is_cons s0.
+  Proof.
+    unfold fby, fbys.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := false) in Hc. (* WTF *)
+    2: rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+
   Lemma wt_fby :
     forall ty s0 s,
       wt_DS ty s0 ->
@@ -419,12 +443,116 @@ Section node_safe.
   Proof.
     intros * Wt0 Wt.
     unfold wt_DS, DSForall_pres, fby in *.
-    apply DSForall_map.
+    generalize false as b; intro.
+    remember (fbys _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
     revert dependent s.
-    cofix Cof.
-    destruct s; intro Hs; constructor; inv Hs; auto.
-    cases_eqn HH; inv HH0.
-    eauto using pres_sem_unop.
+    revert dependent s0.
+    revert t b.
+    cofix Cof; intros.
+    destruct t.
+    { constructor; rewrite <- eqEps in *; now eauto 2. }
+    assert (is_cons (fbys b s0 s)) as Hc by (rewrite <- Ht; auto).
+    destruct b.
+    - (* fbyA *)
+      apply fbyA_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      fold (@fbyA value) in Ht.
+      rewrite fbyA_eq in Ht.
+      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+      all: assert (is_cons s0) as Hc by (eapply fby_cons; now rewrite <- Ht).
+      all: apply is_cons_elim in Hc as (?&?&Hy); rewrite Hy in *.
+      all: rewrite fby_eq in Ht.
+      all: cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
+      all: inv Wt; inv Wt0; constructor; auto.
+      + unfold fbyA in Ht; apply Cof in Ht; auto.
+      + rewrite Ht. now apply wt_fby1.
+    - (* fby *)
+      apply fby_cons, is_cons_elim in Hc as (?&?& Hx); rewrite Hx in *.
+      fold (@fby value) in Ht.
+      rewrite fby_eq in Ht.
+      cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+      all: apply Con_eq_simpl in Ht as (? & Ht); subst.
+      all: inv Wt0; constructor; auto.
+      + unfold fbyA in Ht; apply Cof in Ht; auto.
+      + rewrite Ht. now apply wt_fby1.
+  Qed.
+
+
+  (* TODO: move, use *)
+  Lemma AC_cons :
+    forall u U,
+      AC (cons u U) == match u with
+                       | pres _ => cons true (AC U)
+                       | _ => cons false (AC U)
+                       end.
+  Proof.
+    intros.
+    unfold AC.
+    rewrite MAP_map, map_eq_cons; cases.
+  Qed.
+  Lemma AC_is_cons :
+    forall U, is_cons (AC U) <-> is_cons U.
+  Proof.
+    split; eauto using map_is_cons, is_cons_map.
+  Qed.
+
+  Lemma wc_fby :
+    forall cl s0 s,
+      safe_DS s0 ->
+      safe_DS s ->
+      wc_DS cl s0 ->
+      wc_DS cl s ->
+      wc_DS cl (fby s0 s).
+  Proof.
+    unfold wc_DS.
+    intro ck.
+    generalize (denot_clock ck); clear ck.
+    intros.
+    eapply DS_bisimulation_allin1
+      with (R :=
+              fun C F => exists s0 s,
+                  safe_DS s0 /\ safe_DS s /\ C == AC s0 /\ C == AC s
+                  /\ (F == AC (fby s0 s)
+                     \/ (exists v, F == AC (fby1 (Some v) s0 s)))).
+    3: eauto 8.
+    { intros * (?&?&?&?&?&?&?) FF GG.
+      setoid_rewrite <- FF.
+      setoid_rewrite <- GG.
+      eauto 7. }
+    clear; intros C F Hcons (s0 & s & Safe0 & Safe & Hc0 & Hc & Hf).
+    assert (is_cons s0 /\ is_cons s) as (Hs0 & Hs). {
+      destruct Hcons as [|Hcons].
+      split; apply AC_is_cons; now rewrite <- ?Hc0, <- ?Hc.
+      destruct Hf as [Hf|(?&Hf)]; rewrite Hf in Hcons; apply AC_is_cons in Hcons.
+      apply fby_cons in Hcons. 2: apply fby1_cons in Hcons.
+      all: apply AC_is_cons in Hcons as ?; rewrite <- Hc0, Hc in *.
+      all: split; auto; now apply AC_is_cons.
+    }
+    apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (v & s' & Hs).
+    rewrite Hs, Hs0, AC_cons, Hc0 in *.
+    inv Safe; inv Safe0.
+    setoid_rewrite Hc0.
+    destruct Hf as [Hf | (vv & Hf)].
+    - (* fby *)
+      rewrite fby_eq in Hf.
+      cases; apply Con_eq_simpl in Hc as []; try congruence.
+      (* abs *)
+      + rewrite fbyA_eq, AC_cons in Hf.
+        split.  { now rewrite Hf, 2 first_cons. }
+        exists s0', s'.
+        rewrite Hf, 2 rem_cons; auto 6.
+      + rewrite fby1AP_eq, AC_cons in Hf.
+        split.  { now rewrite Hf, 2 first_cons. }
+        exists s0', s'.
+        repeat (split; rewrite ?Hf, ?AC_cons, ?rem_cons; auto).
+        right. eexists. now rewrite Hf, rem_cons.
+    - (* fby1 *)
+      rewrite Hs, Hs0, fby1_eq in Hf.
+      cases; apply Con_eq_simpl in Hc as []; try congruence.
+      all: rewrite fby1AP_eq, AC_cons in Hf.
+      all: split; [ now rewrite Hf, 2 first_cons |].
+      all: exists s0', s'; repeat (split; rewrite ?Hf, ?rem_cons; auto).
+      all: right; eexists; now rewrite Hf, rem_cons.
   Qed.
 
 
@@ -558,17 +686,17 @@ Lemma safe_exp :
       rewrite annots_numstreams in *.
       simpl; intros; cases; try congruence.
       unfold eq_rect_r, eq_rect; destruct e, e0; simpl in *.
-
-          repeat split.
+      repeat split.
       + take (typesof es = _) and rewrite it in *.
         take (typesof e0s = _) and rewrite it in *.
-        Check wt_fby.
-        clear - Wt Wt0.
+        clear - Wt0 Wt.
         induction a as [|? []]; auto.
-        * inv Wt0. inv Wt. constructor; auto; apply wt_fby; auto.
-        * inv Wt0. inv Wt.
-          constructor; auto.
-
+        * inv Wt0. inv Wt. constructor; auto; now apply wt_fby.
+        * destruct t, t0.
+          setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
+          inv Wt. inv Wt0.
+          constructor; [ apply wt_fby | apply IHa ]; auto.
+      + 
   Qed.
 
   End Invariants.
