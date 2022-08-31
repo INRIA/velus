@@ -195,13 +195,12 @@ Section node_safe.
   (** propriétés des flots *)
 
   Definition wt_DS (ty : type) (s : DS (sampl value)) :=
-      (* TODO: plutôt <= ? *)
     DSForall_pres (fun v => wt_value v ty) s.
 
-  (* c'est l'alignement, CORRECTION DES HORLOGES *)
+  (* c'est l'alignement, CORRECTION DES HORLOGES?? *)
   Definition wc_DS (ck : clock) (s : DS (sampl value)) :=
       (* TODO: plutôt <= ? *)
-    denot_clock ck == AC s.
+    AC s <= denot_clock ck.
 
   (** propriétés des environnements *)
 
@@ -344,6 +343,15 @@ Section node_safe.
     cases_eqn HH.
   Qed.
 
+  (* TODO: move to Cpo_ext *)
+  Lemma Con_le_simpl : forall D a b (s t : DS_ord D),
+      (Cpo_streams_type.Con a s:DS_ord D) <= Cpo_streams_type.Con b t-> a = b /\ s <= t.
+  Proof.
+    split.
+    now apply DSleCon_hd in H.
+    now apply DSleCon_tl in H.
+  Qed.
+
   Lemma wc_sunop :
     forall op s ck tye,
       wc_DS ck s ->
@@ -351,27 +359,32 @@ Section node_safe.
       wc_DS ck (sunop (fun v => sem_unop op v tye) s).
   Proof.
     unfold wc_DS, DSForall_pres.
-    intros * -> Hop.
-    eapply DS_bisimulation_allin1
-      with (R := fun U V => exists s,
-                     DSForall_pres (fun v => sem_unop op v tye <> None) s
-                     /\ U == AC s
-                     /\ V == AC (sunop (fun v : value => sem_unop op v tye) s)).
-    3: eauto.
-    { intros ???? (?&?&?&?) ??. esplit; eauto. }
-    clear.
-    intros U V Hc (X & Hop & Hu & Hv).
-    rewrite Hu, Hv in *.
-    split.
-    - destruct Hc as [Hc|Hc].
-      all: repeat apply map_is_cons in Hc.
-      all: apply is_cons_elim in Hc as (?&?& Hx).
-      all: unfold AC, sunop; rewrite Hx, 3 MAP_map, 3 map_eq_cons, 2 first_cons.
-      all: rewrite Hx in Hop; inv Hop; destruct x; cases_eqn HH; congruence.
-    - exists (rem X).
-      unfold AC, sunop in *.
-      rewrite 3 MAP_map, <- 3 rem_map.
-      repeat split; auto. now apply DSForall_rem.
+    intros * Hck Hop.
+    revert Hck. generalize (denot_clock ck) as C; intros.
+    remember (AC (sunop _ _)) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert Hop Ht Hck.
+    revert t s C.
+    cofix Cof; intros.
+    destruct t.
+    - constructor.
+      rewrite <- eqEps in Ht.
+      eapply Cof; eauto.
+    - assert (is_cons s) as Hcs
+          by (do 2 eapply map_is_cons; setoid_rewrite <- Ht; auto).
+      assert (is_cons C) as Hcc
+          by (eapply is_cons_le_compat, AC_is_cons; eauto).
+      apply uncons in Hcc as (vc & C' & Hc).
+      apply is_cons_elim in Hcs as (vs & S & Hs).
+      apply decomp_eqCon in Hc as Heqc.
+      rewrite Hs, Heqc in * |-.
+      rewrite sunop_eq, AC_cons in Ht.
+      rewrite AC_cons in Hck.
+      inv Hop.
+      cases_eqn HH;
+        apply Con_eq_simpl in Ht as [];
+        apply Con_le_simpl in Hck as [];
+        subst; try congruence.
+      all: eapply DSleCon with (t := C'), Cof; eauto.
   Qed.
 
   (** ** Faits sur fby1/fby *)
@@ -769,6 +782,36 @@ Section node_safe.
 
   End Invariants.
   End node_safe.
+
+(* (** * Deuxième partie : montrer que safe_env est préservé *) *)
+(* Theorem safe_equ : *)
+(*   forall Γ ins envI bs equ, *)
+(*     safe_env Γ ins envI bs 0 -> *)
+(*     (* wt_equation ? wc_equation ? op_correct ? *) *)
+(*     safe_env Γ ins envI bs (FIXP (DS_prod SI) (denot_equation ins equ envI bs)). *)
+(* Proof. *)
+(*   intros ???? (xs,es) S0. *)
+(*   rewrite FIXP_fixp. *)
+(*   apply fixp_ind; auto. *)
+(*   admit. (* admissibilité... *) *)
+(*   intros env Safe. *)
+(*   split; [|split]. *)
+(*   - (* wc *) *)
+(*     intros x ck Hck. *)
+(*     admit. *)
+(*   - (* wt *) *)
+(*     intros x ty Hty. *)
+(*     unfold wt_env, denot_var in *. *)
+(*     destruct (mem_ident x ins) eqn:Hxin. *)
+(*     + destruct Safe as (_& WT &_). specialize (WT _ _ Hty). *)
+(*       unfold denot_var in WT. cases; congruence. *)
+(*     + setoid_rewrite denot_equation_eq. *)
+(*       cases_eqn HH; try congruence. 2,3: admit. (* erreurs à traiter *) *)
+(*       simpl. *)
+(*       admit. (* ça marchera *) *)
+(*   - (* ef *) *)
+(*     admit. *)
+(* Qed. *)
 
 End LDENOTSAFE.
 
