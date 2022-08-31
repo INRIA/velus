@@ -187,6 +187,16 @@ Section DS_Forall.
     constructor; apply Cof.
   Qed.
 
+  Lemma DSForall_const :
+    forall c,
+      P c ->
+      DSForall (DS_const c).
+  Proof.
+    cofix Cof; intros.
+    rewrite DS_inv; simpl.
+    constructor; auto.
+  Qed.
+
   Lemma DSForall_eps : forall s, DSForall (Eps s) -> DSForall s.
     inversion 1; assumption.
   Defined.
