@@ -234,6 +234,30 @@ Section SStream_functions.
     now rewrite fby1f_eq.
   Qed.
 
+  Lemma fby1AP_cons :
+    forall ov xs ys,
+      is_cons (fby1AP ov xs ys) ->
+      is_cons ys.
+  Proof.
+    unfold fby1AP, fby1s.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := ov) in Hc. (* WTF *)
+    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+
+  Lemma fby1_cons :
+    forall ov xs ys,
+      is_cons (fby1 ov xs ys) ->
+      is_cons xs.
+  Proof.
+    unfold fby1, fby1s.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := ov) in Hc. (* WTF *)
+    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+
   (* pour définir fbyA/fby mutuellement récursives on utilise un
      commutateur booléen *)
   Definition fbysf :
@@ -376,6 +400,29 @@ Section SStream_functions.
     now rewrite fbyf_eq.
   Qed.
 
+  Lemma fbyA_cons :
+    forall xs ys,
+      is_cons (fbyA xs ys) ->
+      is_cons ys.
+  Proof.
+    unfold fbyA, fbys.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := true) in Hc.
+    2: rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
+
+  Lemma fby_cons :
+    forall xs ys,
+      is_cons (fby xs ys) ->
+      is_cons xs.
+  Proof.
+    unfold fby, fbys.
+    intros * Hc.
+    rewrite ford_eq_elim with (n := false) in Hc. (* WTF *)
+    2: rewrite FIXP_eq; reflexivity.
+    now apply DScase_is_cons in Hc.
+  Qed.
 
   (* Definition swhenf : *)
   (*   (DS (sampl bool * sampl A) -C-> DS (sampl A)) -C-> *)
