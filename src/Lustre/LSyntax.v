@@ -667,6 +667,15 @@ Module Type LSYNTAX
     apply map_length.
   Qed.
 
+  Fact annots_numstreams : forall es,
+      length (annots es) = list_sum (List.map numstreams es).
+  Proof.
+    induction es; simpl; auto.
+    rewrite app_length; f_equal; auto.
+    rewrite <- length_typeof_numstreams, typeof_annot.
+    now rewrite map_length.
+  Qed.
+
   Fact typeof_concat_typesof : forall l,
       concat (map typeof (concat l)) = concat (map typesof l).
   Proof.
