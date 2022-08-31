@@ -1,7 +1,7 @@
 From Coq Require Import BinPos List.
 
 From Velus Require Import Common Ident Operators Clocks CoindStreams.
-From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LOrdered Lustre.LSemantics Lustre.LTyping.
+From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LSemantics.
 
 From Velus Require Import Lustre.Denot.Cpo.
 
@@ -18,8 +18,6 @@ Module Type LDENOT
        (Import Cks   : CLOCKS        Ids Op OpAux)
        (Import Senv  : STATICENV     Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
-       (* (Import Typ   : LTYPING       Ids Op OpAux Cks Senv Syn) *)
-       (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
 
 Section Nprod.
@@ -737,8 +735,7 @@ Module LDenotFun
   (Cks   : CLOCKS        Ids Op OpAux)
   (Senv  : STATICENV     Ids Op OpAux Cks)
   (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
-  (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
   (Str   : COINDSTREAMS  Ids Op OpAux Cks)
-<: LDENOT Ids Op OpAux Cks Senv Syn Lord Str.
-  Include LDENOT Ids Op OpAux Cks Senv Syn Lord Str.
+<: LDENOT Ids Op OpAux Cks Senv Syn Str.
+  Include LDENOT Ids Op OpAux Cks Senv Syn Str.
 End LDenotFun.

@@ -10,10 +10,33 @@ From Velus Require Import Operators.
 From Velus Require Import CoindStreams.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
-From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.LOrdered Lustre.LSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking Lustre.LSemantics.
 
 From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext CommonDS SDfuns Denot.
+
+  (* TODO: move *)
+Lemma Forall_impl_inside :
+  forall {A} (P Q : A -> Prop) xs,
+    (Forall (fun x => P x -> Q x) xs) ->
+    Forall P xs ->
+    Forall Q xs.
+Proof.
+  induction xs; auto.
+  intros FPQ FP. inv FPQ. inv FP.
+  constructor; auto.
+Qed.
+
+(* TODO: move, rename ? *)
+Lemma Forall2_ignore1'': forall {A B} (P : B -> Prop) (xs : list A) ys,
+    length ys = length xs ->
+    Forall2 (fun _ y => P y) xs ys ->
+    Forall P ys.
+Proof.
+  intros ?? P xs ys; revert xs.
+  induction ys; intros * Hlen Hf; inv Hf; eauto.
+Qed.
+
 
 Module Type LDENOTSAFE
        (Import Ids   : IDS)
@@ -24,9 +47,8 @@ Module Type LDENOTSAFE
        (Import Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Import Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
-       (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord CStr).
+       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn CStr).
 
 
 (* TODO: move, merge SDrel *)
@@ -130,6 +152,25 @@ Section node_safe.
     (* abstract_clock *)
   Definition AC : DS (sampl value) -C-> DS bool :=
     MAP (fun v => match v with pres _ => true | _ => false end).
+
+  Lemma AC_cons :
+    forall u U,
+      AC (cons u U) == match u with
+                       | pres _ => cons true (AC U)
+                       | _ => cons false (AC U)
+                       end.
+  Proof.
+    intros.
+    unfold AC.
+    rewrite MAP_map, map_eq_cons; cases.
+  Qed.
+
+  Lemma AC_is_cons :
+    forall U, is_cons (AC U) <-> is_cons U.
+  Proof.
+    split; eauto using map_is_cons, is_cons_map.
+  Qed.
+
 
   Section Invariants.
 
@@ -333,41 +374,7 @@ Section node_safe.
       repeat split; auto. now apply DSForall_rem.
   Qed.
 
-  (** ** Faits sur fby *)
-
-  (* TODO: move? *)
-  Lemma fby1_cons :
-    forall {A} ov (s0 s : DS (sampl A)),
-      is_cons (fby1 ov s0 s) ->
-      is_cons s0.
-  Proof.
-    unfold fby1, fby1s.
-    intros * Hc.
-    rewrite ford_eq_elim with (n := ov) in Hc. (* WTF *)
-    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
-    now apply DScase_is_cons in Hc.
-  Qed.
-  Lemma fby1AP_cons :
-    forall {A} ov (s0 s : DS (sampl A)),
-      is_cons (fby1AP ov s0 s) ->
-      is_cons s.
-  Proof.
-    unfold fby1AP, fby1s.
-    intros * Hc.
-    rewrite ford_eq_elim with (n := ov) in Hc. (* WTF *)
-    2: apply ford_eq_elim; rewrite FIXP_eq; reflexivity.
-    now apply DScase_is_cons in Hc.
-  Qed.
-
-  Lemma DSForall_const :
-    forall {A} (P : A -> Prop) (c : A),
-      P c ->
-      DSForall P (DS_const c).
-  Proof.
-    cofix Cof; intros.
-    rewrite DS_inv; simpl.
-    constructor; auto.
-  Qed.
+  (** ** Faits sur fby1/fby *)
 
   Lemma wt_fby1 :
     forall ty b ov s0 s,
@@ -410,31 +417,6 @@ Section node_safe.
       all: unfold fby1AP in Ht; apply Cof in Ht; auto.
   Qed.
 
-  (* TODO: move *)
-  Lemma fbyA_cons :
-    forall {A} (s0 s : DS (sampl A)),
-      is_cons (fbyA s0 s) ->
-      is_cons s.
-  Proof.
-    unfold fbyA, fbys.
-    intros * Hc.
-    rewrite ford_eq_elim with (n := true) in Hc.
-    2: rewrite FIXP_eq; reflexivity.
-    now apply DScase_is_cons in Hc.
-  Qed.
-
-  Lemma fby_cons :
-    forall {A} (s0 s : DS (sampl A)),
-      is_cons (fby s0 s) ->
-      is_cons s0.
-  Proof.
-    unfold fby, fbys.
-    intros * Hc.
-    rewrite ford_eq_elim with (n := false) in Hc. (* WTF *)
-    2: rewrite FIXP_eq; reflexivity.
-    now apply DScase_is_cons in Hc.
-  Qed.
-
   Lemma wt_fby :
     forall ty s0 s,
       wt_DS ty s0 ->
@@ -475,25 +457,6 @@ Section node_safe.
       all: inv Wt0; constructor; auto.
       + unfold fbyA in Ht; apply Cof in Ht; auto.
       + rewrite Ht. now apply wt_fby1.
-  Qed.
-
-
-  (* TODO: move, use *)
-  Lemma AC_cons :
-    forall u U,
-      AC (cons u U) == match u with
-                       | pres _ => cons true (AC U)
-                       | _ => cons false (AC U)
-                       end.
-  Proof.
-    intros.
-    unfold AC.
-    rewrite MAP_map, map_eq_cons; cases.
-  Qed.
-  Lemma AC_is_cons :
-    forall U, is_cons (AC U) <-> is_cons U.
-  Proof.
-    split; eauto using map_is_cons, is_cons_map.
   Qed.
 
   Lemma wc_fby :
@@ -614,149 +577,120 @@ Section node_safe.
     - rewrite Ht. eapply safe_fby1; eauto.
   Qed.
 
+  (* TODO: merge in SDtoRel *)
+  Lemma Forall_denot_exps :
+    forall P ins es envI bs env,
+      forall_nprod P (denot_exps ins es envI bs env)
+      <-> Forall (fun e => forall_nprod  P (denot_exp ins e envI bs env)) es.
+  Proof.
+    induction es; intros; simpl; split; auto.
+    - intro Hs. setoid_rewrite denot_exps_eq in Hs.
+      apply app_forall_nprod in Hs as [].
+      constructor; auto.
+      now apply IHes.
+    - intro Hs. inv Hs.
+      setoid_rewrite denot_exps_eq.
+      apply forall_nprod_app; auto.
+      now apply IHes.
+  Qed.
+
+  (* TODO: généraliser... ? *)
+  Lemma Forall_wt_exp :
+    forall es,
+      Forall (fun e => Forall2 wt_DS (typeof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
+      Forall2 wt_DS (typesof es) (list_of_nprod (denot_exps ins es envI bs env)).
+  Proof.
+    induction 1.
+    - simpl; auto.
+    - rewrite denot_exps_eq; simpl.
+      rewrite list_of_nprod_app.
+      apply Forall2_app; auto.
+  Qed.
+
+  (* TODO: généraliser... ? *)
+  Lemma Forall_wc_exp :
+    forall es,
+      Forall (fun e => Forall2 wc_DS (clockof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
+      Forall2 wc_DS (clocksof es) (list_of_nprod (denot_exps ins es envI bs env)).
+  Proof.
+    induction 1.
+    - simpl; auto.
+    - rewrite denot_exps_eq; simpl.
+      rewrite list_of_nprod_app.
+      apply Forall2_app; auto.
+  Qed.
+
+  (* TODO: move, mais où? il faudrait une section pour list_of_nprod *)
+  Lemma forall_nprod_Forall :
+    forall P {n} (np : nprod n),
+      forall_nprod P np ->
+      Forall P (list_of_nprod np).
+  Proof.
+    induction n as [|[]]; intros * Hf.
+    - constructor.
+    - constructor; auto.
+    - inversion Hf.
+      constructor; auto.
+      now apply IHn.
+  Qed.
+
+  (* TODO: idem *)
+  Lemma Forall_forall_nprod :
+    forall P {n} (np : nprod n),
+      Forall P (list_of_nprod np) ->
+      forall_nprod P np.
+  Proof.
+    induction n as [|[]]; intros * Hf.
+    - constructor.
+    - inv Hf. auto.
+    - inv Hf.
+      constructor; auto.
+      now apply IHn.
+  Qed.
+
+  (* TODO: idem *)
+  Lemma list_of_nprod_length :
+    forall {n} (np : nprod n),
+      length (list_of_nprod np) = n.
+  Proof.
+    induction n as [|[]]; auto.
+    intros []; simpl.
+    f_equal. apply IHn.
+  Qed.
+
+  (* TODO: pourquoi faut-il spécifier tous les types ? *)
+  (* TODO: idem *)
+  Lemma Forall2_lift2 :
+    forall {A} (F : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A))
+      (P Q : A -> DS (sampl value) -> Prop),
+      (forall a x y, P a x -> P a y -> Q a (F _ x y)) ->
+      forall l {n} (l1 l2 : nprod n),
+        Forall2 P l (list_of_nprod l1) ->
+        Forall2 P l (list_of_nprod l2) ->
+        Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
+  Proof.
+    induction l as [|? []]; intros * Hl1 Hl2.
+    - simpl_Forall.
+      destruct n; simpl in *; auto; congruence.
+    - destruct n as [|[]]; simpl in *; simpl_Forall.
+      cbn; auto.
+    - destruct n as [|[]]; auto.
+      inv Hl1; simpl_Forall.
+      inv Hl1; simpl_Forall.
+      destruct l1 as (s1&l1), l2 as (s2&l2).
+      specialize (IHl _ l1 l2).
+      rewrite lift2_simpl.
+      constructor.
+      + inv Hl1. inv Hl2. cbn; auto.
+      + inv Hl1. inv Hl2. auto.
+  Qed.
+
   Ltac find_specialize_in H :=
     repeat multimatch goal with
       | [ v : _ |- _ ] => specialize (H v)
       end.
 
-    (* TODO: move to LSyntax *)
-  Lemma annots_numstreams :
-    forall es, length (annots es) = list_sum (List.map numstreams es).
-  Proof.
-    induction es; simpl; auto.
-    rewrite app_length; f_equal; auto.
-    rewrite <- length_typeof_numstreams, typeof_annot.
-    now rewrite map_length.
-  Qed.
-
-  (* TODO: move, ne pas trop utiliser parce que c'est merdique *)
-Lemma Forall_impl_inside :
-  forall {A} (P Q : A -> Prop) xs,
-    (Forall (fun x => P x -> Q x) xs) ->
-    Forall P xs ->
-    Forall Q xs.
-Proof.
-  induction xs; auto.
-  intros FPQ FP. inv FPQ. inv FP.
-  constructor; auto.
-Qed.
-
-(* TODO: virer ? *)
-Lemma Forall_denot_exps :
-  forall P ins es envI bs env,
-    forall_nprod P (denot_exps ins es envI bs env)
-    <-> Forall (fun e => forall_nprod  P (denot_exp ins e envI bs env)) es.
-Proof.
-  induction es; intros; simpl; split; auto.
-  - intro Hs. setoid_rewrite denot_exps_eq in Hs.
-    apply app_forall_nprod in Hs as [].
-    constructor; auto.
-    now apply IHes.
-  - intro Hs. inv Hs.
-    setoid_rewrite denot_exps_eq.
-    apply forall_nprod_app; auto.
-    now apply IHes.
-Qed.
-
-(* TODO: généraliser... ? *)
-Lemma Forall_wt_exp :
-  forall es,
-    Forall (fun e => Forall2 wt_DS (typeof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
-    Forall2 wt_DS (typesof es) (list_of_nprod (denot_exps ins es envI bs env)).
-Proof.
-  induction 1.
-  - simpl; auto.
-  - rewrite denot_exps_eq; simpl.
-    rewrite list_of_nprod_app.
-    apply Forall2_app; auto.
-Qed.
-
-(* TODO: généraliser... ? *)
-Lemma Forall_wc_exp :
-  forall es,
-    Forall (fun e => Forall2 wc_DS (clockof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
-    Forall2 wc_DS (clocksof es) (list_of_nprod (denot_exps ins es envI bs env)).
-Proof.
-  induction 1.
-  - simpl; auto.
-  - rewrite denot_exps_eq; simpl.
-    rewrite list_of_nprod_app.
-    apply Forall2_app; auto.
-Qed.
-
-
-(* TODO: move *)
-Lemma forall_nprod_Forall :
-  forall P {n} (np : nprod n),
-    forall_nprod P np ->
-    Forall P (list_of_nprod np).
-Proof.
-  induction n as [|[]]; intros * Hf.
-  - constructor.
-  - constructor; auto.
-  - inversion Hf.
-    constructor; auto.
-    now apply IHn.
-Qed.
-Lemma Forall_forall_nprod :
-  forall P {n} (np : nprod n),
-    Forall P (list_of_nprod np) ->
-    forall_nprod P np.
-Proof.
-  induction n as [|[]]; intros * Hf.
-  - constructor.
-  - inv Hf. auto.
-  - inv Hf.
-    constructor; auto.
-    now apply IHn.
-Qed.
-
-Lemma list_of_nprod_length :
-  forall {n} (np : nprod n),
-    length (list_of_nprod np) = n.
-Proof.
-  induction n as [|[]]; auto.
-  intros []; simpl.
-  f_equal. apply IHn.
-Qed.
-
-(* TODO: pourquoi faut-il spécifier tous les types ? *)
-Lemma Forall2_lift2 :
-  forall {A} (F : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A))
-    (P Q : A -> DS (sampl value) -> Prop),
-    (forall a x y, P a x -> P a y -> Q a (F _ x y)) ->
-    forall l {n} (l1 l2 : nprod n),
-      Forall2 P l (list_of_nprod l1) ->
-      Forall2 P l (list_of_nprod l2) ->
-      Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
-Proof.
-  induction l as [|? []]; intros * Hl1 Hl2.
-  - simpl_Forall.
-    destruct n; simpl in *; auto; congruence.
-  - destruct n as [|[]]; simpl in *; simpl_Forall.
-    cbn; auto.
-  - destruct n as [|[]]; auto.
-    inv Hl1; simpl_Forall.
-    inv Hl1; simpl_Forall.
-    destruct l1 as (s1&l1), l2 as (s2&l2).
-    specialize (IHl _ l1 l2).
-    rewrite lift2_simpl.
-    constructor.
-    + inv Hl1. inv Hl2. cbn; auto.
-    + inv Hl1. inv Hl2. auto.
-Qed.
-
-(* TODO: move, rename ? *)
-Lemma Forall2_ignore1'': forall {A B} (P : B -> Prop) (xs : list A) ys,
-    length ys = length xs ->
-    Forall2 (fun _ y => P y) xs ys ->
-    Forall P ys.
-Proof.
-  intros ?? P xs ys; revert xs.
-  induction ys; intros * Hlen Hf; inv Hf; eauto.
-Qed.
-
-Lemma safe_exp :
+  Lemma safe_exp :
     safe_env ->
     forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
       restr_exp e ->
@@ -807,7 +741,7 @@ Lemma safe_exp :
       apply Forall_and_inv in H' as [Wc0 Sf0], H0' as [Wc Sf].
       apply Forall_wt_exp in Wt0, Wt.
       apply Forall_wc_exp in Wc0, Wc.
-      apply Forall_denot_exps in Sf0, Sf.
+      apply Forall_denot_exps, forall_nprod_Forall in Sf0, Sf.
       rewrite denot_exp_eq.
       revert Wt0 Wt Wc0 Wc Sf0 Sf.
       generalize (denot_exps ins e0s envI bs env).
@@ -819,7 +753,6 @@ Lemma safe_exp :
       take (typesof e0s = _) and rewrite it in *.
       take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *.
       take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *.
-      apply forall_nprod_Forall in Sf0, Sf.
       repeat split.
       + eapply Forall2_lift2; eauto using wt_fby.
       + eapply Forall2_lift2. apply wc_fby.
@@ -848,9 +781,8 @@ Module LdenotsafeFun
        (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (Cl    : LCLOCKING     Ids Op OpAux Cks Senv Syn)
-       (Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (CStr  : COINDSTREAMS Ids Op OpAux Cks)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord CStr)
-<: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord CStr Den.
-  Include LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord CStr Den.
+       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn CStr)
+<: LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl CStr Den.
+  Include LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl CStr Den.
 End LdenotsafeFun.

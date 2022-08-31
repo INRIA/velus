@@ -10,7 +10,7 @@ From Velus Require Import Operators.
 From Velus Require Import CoindStreams.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.StaticEnv.
-From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LCausality Lustre.LOrdered Lustre.LSemantics.
+From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LCausality Lustre.LSemantics.
 
 From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext SDfuns Denot Infty.
@@ -45,9 +45,8 @@ Module Type LDENOTINF
        (Import Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Import Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
-       (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord CStr).
+       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn CStr).
 
   Section node_inf.
 
@@ -134,16 +133,6 @@ Module Type LDENOTINF
   Proof.
     unfold P_vars.
     eauto using Forall_app_weaken.
-  Qed.
-
-  (* TODO: move to LSyntax *)
-  Lemma annots_numstreams :
-    forall es, length (annots es) = list_sum (map numstreams es).
-  Proof.
-    induction es; simpl; auto.
-    rewrite app_length; f_equal; auto.
-    rewrite <- length_typeof_numstreams, typeof_annot.
-    now rewrite map_length.
   Qed.
 
   (* TODO: move? *)
@@ -781,9 +770,8 @@ Module LDenotInfFun
        (Syn   : LSYNTAX Ids Op OpAux Cks Senv)
        (Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
-       (Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (CStr  : COINDSTREAMS Ids Op OpAux Cks)
-       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord CStr)
-<: LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord CStr Den.
-  Include LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord CStr Den.
+       (Den   : LDENOT     Ids Op OpAux Cks Senv Syn CStr)
+<: LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA CStr Den.
+  Include LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA CStr Den.
 End LDenotInfFun.

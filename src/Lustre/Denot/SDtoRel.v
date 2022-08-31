@@ -8,7 +8,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 Close Scope equiv_scope. (* conflicting notation "==" *)
 Import ListNotations.
 
-Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof.
+Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof Safe.
 
 Module Type SDTOREL
        (Import Ids   : IDS)
@@ -23,8 +23,9 @@ Module Type SDTOREL
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord Str)
-       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Str Den).
+       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Str)
+       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Str Den)
+       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Str Den).
 
 (* TODO: pour l'instant on se restreint aux cas suivants *)
 Inductive restr_exp : exp -> Prop :=
