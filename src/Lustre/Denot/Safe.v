@@ -497,17 +497,15 @@ Section node_safe.
   Qed.
 
   Lemma wc_fby :
-    forall cl s0 s,
-      safe_DS s0 ->
-      safe_DS s ->
-      wc_DS cl s0 ->
-      wc_DS cl s ->
-      wc_DS cl (fby s0 s).
+    forall ck s0 s,
+      safe_DS s0 /\ wc_DS ck s0 -> (* pour une meilleure unification plus tard... *)
+      safe_DS s /\ wc_DS ck s ->
+      wc_DS ck (fby s0 s).
   Proof.
     unfold wc_DS.
     intro ck.
     generalize (denot_clock ck); clear ck.
-    intros.
+    intros * [][].
     eapply DS_bisimulation_allin1
       with (R :=
               fun C F => exists s0 s,
@@ -585,14 +583,12 @@ Section node_safe.
 
   Lemma safe_fby :
     forall ck s0 s,
-      safe_DS s0 ->
-      safe_DS s ->
-      wc_DS ck s0 ->
-      wc_DS ck s ->
+      safe_DS s0 /\ wc_DS ck s0 ->
+      safe_DS s /\ wc_DS ck s ->
       safe_DS (fby s0 s).
   Proof.
     unfold wc_DS.
-    intros * Safe0 Safe Ck0 Ck.
+    intros *[Safe0 Ck0][Safe Ck].
     assert (AC s0 == AC s) as Hac by now rewrite <- Ck0, <- Ck.
     remember (fby _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
     clear dependent ck.
@@ -689,6 +685,77 @@ Proof.
 Qed.
 
 
+(* TODO: move *)
+Lemma forall_nprod_Forall :
+  forall P {n} (np : nprod n),
+    forall_nprod P np ->
+    Forall P (list_of_nprod np).
+Proof.
+  induction n as [|[]]; intros * Hf.
+  - constructor.
+  - constructor; auto.
+  - inversion Hf.
+    constructor; auto.
+    now apply IHn.
+Qed.
+Lemma Forall_forall_nprod :
+  forall P {n} (np : nprod n),
+    Forall P (list_of_nprod np) ->
+    forall_nprod P np.
+Proof.
+  induction n as [|[]]; intros * Hf.
+  - constructor.
+  - inv Hf. auto.
+  - inv Hf.
+    constructor; auto.
+    now apply IHn.
+Qed.
+
+Lemma list_of_nprod_length :
+  forall {n} (np : nprod n),
+    length (list_of_nprod np) = n.
+Proof.
+  induction n as [|[]]; auto.
+  intros []; simpl.
+  f_equal. apply IHn.
+Qed.
+
+(* TODO: pourquoi faut-il spécifier tous les types ? *)
+Lemma Forall2_lift2 :
+  forall {A} (F : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A))
+    (P Q : A -> DS (sampl value) -> Prop),
+    (forall a x y, P a x -> P a y -> Q a (F _ x y)) ->
+    forall l {n} (l1 l2 : nprod n),
+      Forall2 P l (list_of_nprod l1) ->
+      Forall2 P l (list_of_nprod l2) ->
+      Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
+Proof.
+  induction l as [|? []]; intros * Hl1 Hl2.
+  - simpl_Forall.
+    destruct n; simpl in *; auto; congruence.
+  - destruct n as [|[]]; simpl in *; simpl_Forall.
+    cbn; auto.
+  - destruct n as [|[]]; auto.
+    inv Hl1; simpl_Forall.
+    inv Hl1; simpl_Forall.
+    destruct l1 as (s1&l1), l2 as (s2&l2).
+    specialize (IHl _ l1 l2).
+    rewrite lift2_simpl.
+    constructor.
+    + inv Hl1. inv Hl2. cbn; auto.
+    + inv Hl1. inv Hl2. auto.
+Qed.
+
+(* TODO: move, rename ? *)
+Lemma Forall2_ignore1'': forall {A B} (P : B -> Prop) (xs : list A) ys,
+    length ys = length xs ->
+    Forall2 (fun _ y => P y) xs ys ->
+    Forall P ys.
+Proof.
+  intros ?? P xs ys; revert xs.
+  induction ys; intros * Hlen Hf; inv Hf; eauto.
+Qed.
+
 Lemma safe_exp :
     safe_env ->
     forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
@@ -747,35 +814,24 @@ Lemma safe_exp :
       generalize (denot_exps ins es envI bs env).
       rewrite annots_numstreams in *.
       simpl; intros; cases; try congruence.
-      unfold eq_rect_r, eq_rect; destruct e, e0; simpl in *.
+      unfold eq_rect_r, eq_rect; destruct e, e0; simpl.
+      take (typesof es = _) and rewrite it in *.
+      take (typesof e0s = _) and rewrite it in *.
+      take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *.
+      take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *.
+      apply forall_nprod_Forall in Sf0, Sf.
       repeat split.
-      + take (typesof es = _) and rewrite it in *.
-        take (typesof e0s = _) and rewrite it in *.
-        clear - Wt0 Wt.
-        induction a as [|? []]; auto.
-        * inv Wt0. inv Wt. constructor; auto; now apply wt_fby.
-        * destruct t, t0.
-          setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
-          inv Wt. inv Wt0.
-          constructor; [ apply wt_fby | apply IHa ]; auto.
-      + take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
-        take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
-        clear - Sf0 Sf Wc0 Wc.
-        induction a as [|? []]; auto.
-        * inv Wc0. inv Wc. constructor; auto; apply wc_fby; auto.
-        * destruct t, t0.
-          setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
-          inv Wc. inv Wc0. inv Sf0. inv Sf.
-          constructor; [ apply wc_fby | apply IHa ]; auto.
-      + take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
-        take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *; clear it.
-        clear - Sf0 Sf Wc0 Wc.
-        induction a as [|? []]; auto.
-        * inv Wc0. inv Wc. eapply safe_fby; eauto.
-        * destruct t, t0.
-          setoid_rewrite (lift2_simpl (@fby) _ t0 t2 t t1).
-          inv Wc. inv Wc0. inv Sf0. inv Sf.
-          constructor; [ eapply safe_fby | apply IHa ]; eauto.
+      + eapply Forall2_lift2; eauto using wt_fby.
+      + eapply Forall2_lift2. apply wc_fby.
+        all: apply Forall2_Forall2; auto.
+        all: apply Forall2_ignore1'; auto.
+        all: now rewrite list_of_nprod_length, map_length.
+      + eapply Forall_forall_nprod, Forall2_ignore1''.
+        now rewrite list_of_nprod_length, map_length.
+        eapply Forall2_lift2. apply safe_fby.
+        all: apply Forall2_Forall2; eauto.
+        all: apply Forall2_ignore1'; auto.
+        all: now rewrite list_of_nprod_length, map_length.
   Qed.
 
   End Invariants.
