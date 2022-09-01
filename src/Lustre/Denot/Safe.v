@@ -558,65 +558,139 @@ Section node_safe.
       rewrite Ht; auto using wc_fby1.
   Qed.
 
-  (* on fait tout en un, plutôt qu'en trois lemmes *)
-  Lemma safe_fby1 :
-    forall v s0 s,
-      safe_DS s0 ->
-      safe_DS s ->
-      AC s0 == AC s -> (* implied by [wc_DS ck s0 /\ wc_DS ck s] *)
-      safe_DS (fby1 (Some v) s0 s).
+  (* (* on fait tout en un, plutôt qu'en trois lemmes *) *)
+  (* Lemma safe_fby1 : *)
+  (*   forall v s0 s, *)
+  (*     safe_DS s0 -> *)
+  (*     safe_DS s -> *)
+  (*     AC s0 == AC s -> (* implied by [wc_DS ck s0 /\ wc_DS ck s] *) *)
+  (*     safe_DS (fby1 (Some v) s0 s). *)
+  (* Proof. *)
+  (*   unfold wc_DS. *)
+  (*   intros * Safe0 Safe Hac. *)
+  (*   remember (fby1 _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht. *)
+  (*   revert dependent s. *)
+  (*   revert dependent s0. *)
+  (*   revert v t. *)
+  (*   cofix Cof; intros. *)
+  (*   destruct t. *)
+  (*   { constructor. rewrite <- eqEps in *. eapply Cof in Ht; eauto . } *)
+  (*   assert (is_cons s0) as Hs0 by (eapply fby1_cons; rewrite <- Ht; auto). *)
+  (*   assert (is_cons s) as Hs by now rewrite <- AC_is_cons, <- Hac, AC_is_cons. *)
+  (*   apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (sv & s' & Hs). *)
+  (*   rewrite Hs, Hs0, 2 AC_cons in *. *)
+  (*   inv Safe. inv Safe0. *)
+  (*   rewrite fby1_eq in Ht. *)
+  (*   cases_eqn HH; subst; try rewrite DS_const_eq in Ht; try rewrite fby1AP_eq in Ht. *)
+  (*   all: apply Con_eq_simpl in Ht as (? & Ht), Hac as (?&?); subst; try congruence. *)
+  (*   all: constructor; auto; eapply Cof in Ht; eauto. *)
+  (* Qed. *)
+
+  (* TODO: move *)
+  Lemma DSle_cons_elim :
+    forall D (x :  DS D) a (s : DS D),
+      (Cpo_streams_type.Con a s : DS D) <= x ->
+      exists t, x == Cpo_streams_type.Con a t /\ s <= t.
   Proof.
-    unfold wc_DS.
-    intros * Safe0 Safe Hac.
+    intros * Hle.
+    apply DSle_uncons in Hle as [? [ Hd]].
+    apply decomp_eqCon in Hd; eauto.
+  Qed.
+
+   Lemma Con_le_le :
+    forall {A} (x : A) xs y ys t,
+      (Cpo_streams_type.Con x xs : DS A) <= t ->
+      (Cpo_streams_type.Con y ys : DS A) <= t ->
+      x = y.
+  Proof.
+    intros * Le1 Le2.
+    eapply DSle_cons_elim in Le1 as (?& Hx &?), Le2 as (?& Hy &?).
+    rewrite Hx in Hy.
+    now apply Con_eq_simpl in Hy as [].
+  Qed.
+
+  Lemma safe_fby1 :
+    forall v cs xs ys,
+      safe_DS xs ->
+      AC xs <= cs ->
+      safe_DS ys ->
+      AC ys <= cs ->
+      safe_DS (fby1 (Some v) xs ys).
+  Proof.
+    clear; intros * Sx Cx Sy Cy.
     remember (fby1 _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
-    revert dependent s.
-    revert dependent s0.
-    revert v t.
-    cofix Cof; intros.
-    destruct t.
-    { constructor. rewrite <- eqEps in *. eapply Cof in Ht; eauto . }
-    assert (is_cons s0) as Hs0 by (eapply fby1_cons; rewrite <- Ht; auto).
-    assert (is_cons s) as Hs by now rewrite <- AC_is_cons, <- Hac, AC_is_cons.
-    apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (sv & s' & Hs).
-    rewrite Hs, Hs0, 2 AC_cons in *.
-    inv Safe. inv Safe0.
+    revert_all; cofix Cof; intros.
+    destruct t as [| b t].
+    { constructor. rewrite <- eqEps in Ht. apply Cof with v cs xs ys; auto. }
+    assert (is_cons xs) as Hcx by (eapply fby1_cons; now rewrite <- Ht).
+    apply is_cons_elim in Hcx as (vx & xs' & Hx).
+    rewrite Hx, AC_cons in *; clear Hx xs.
     rewrite fby1_eq in Ht.
-    cases_eqn HH; subst; try rewrite DS_const_eq in Ht; try rewrite fby1AP_eq in Ht.
-    all: apply Con_eq_simpl in Ht as (? & Ht), Hac as (?&?); subst; try congruence.
-    all: constructor; auto; eapply Cof in Ht; eauto.
+    cases; inv Sx; try tauto;
+      apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
+    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] xs' Cx' Ht ? Sx'.
+      { constructor. rewrite <- eqEps in Ht. apply Cof' with v cs ys xs'; auto. }
+      assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fby1AP_eq in Ht.
+      cases; inv Sy; try tauto.
+      2: now eapply Con_le_le in Cx'; eauto 1.
+      apply rem_le_compat in Cx', Cy.
+      rewrite rem_cons in Cx', Cy.
+      eapply Cof with v (rem cs) xs' ys'; auto.
+    - revert_all; intro Cof; cofix Cof'; intros * ??? Sy Cy [] ? xs' Cx' Ht ? Sx'.
+      { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
+      assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fby1AP_eq in Ht.
+      cases; inv Sy; try tauto. now eapply Con_le_le in Cx'; eauto 1.
+      apply rem_le_compat in Cx', Cy.
+      rewrite rem_cons in *.
+      eapply Cof with a0 (rem cs) xs' ys'; auto.
   Qed.
 
   Lemma safe_fby :
-    forall ck s0 s,
-      safe_DS s0 /\ wc_DS ck s0 ->
-      safe_DS s /\ wc_DS ck s ->
-      safe_DS (fby s0 s).
+    forall ck xs ys,
+      safe_DS xs /\ wc_DS ck xs ->
+      safe_DS ys /\ wc_DS ck ys ->
+      safe_DS (fby xs ys).
   Proof.
-    unfold wc_DS.
-    intros *[Safe0 Ck0][Safe Ck].
-    assert (AC s0 == AC s) as Hac by now rewrite <- Ck0, <- Ck.
+    unfold wc_DS; intro ck.
+    generalize (denot_clock ck); clear ck.
+    clear; intros cs * [Sx Cx] [Sy Cy].
     remember (fby _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
-    clear dependent ck.
-    revert dependent s.
-    revert dependent s0.
-    revert t.
-    cofix Cof; intros.
-    destruct t.
-    { constructor. rewrite <- eqEps in *. eapply Cof in Ht; eauto . }
-    assert (is_cons s0) as Hs0 by (eapply fby_cons; rewrite <- Ht; auto).
-    assert (is_cons s) as Hs by now rewrite <- AC_is_cons, <- Hac, AC_is_cons.
-    apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (sv & s' & Hs).
-    rewrite Hs, Hs0, 2 AC_cons in *.
-    inv Safe. inv Safe0.
+    revert_all; cofix Cof; intros.
+    destruct t as [| b t].
+    { constructor. rewrite <- eqEps in Ht. apply Cof with cs xs ys; auto. }
+    assert (is_cons xs) as Hcx by (eapply fby_cons; now rewrite <- Ht).
+    apply is_cons_elim in Hcx as (vx & xs' & Hx).
+    rewrite Hx, AC_cons in *; clear Hx xs.
     rewrite fby_eq in Ht.
-    cases_eqn HH; subst;
-      try rewrite DS_const_eq in Ht;
-      try rewrite fbyA_eq in Ht;
-      try rewrite fby1AP_eq in Ht.
-    all: apply Con_eq_simpl in Ht as (? & Ht), Hac as (?&?); subst; try congruence.
-    all: constructor; auto.
-    - eapply Cof in Ht; eauto.
-    - rewrite Ht. eapply safe_fby1; eauto.
+    cases; inv Sx; try tauto;
+      apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
+    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] xs' Cx' Ht ? Sx'.
+      { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
+      assert (is_cons ys) as Hcy by (eapply fbyA_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fbyA_eq in Ht.
+      cases; inv Sy; try tauto.
+      2: now eapply Con_le_le in Cx'; eauto 1.
+      apply rem_le_compat in Cx', Cy.
+      rewrite rem_cons in Cx', Cy.
+      eapply Cof with (rem cs) xs' ys'; auto.
+    - revert_all; intro Cof; cofix Cof'; intros * Sy Cy [] v xs' Cx' Ht ? Sx'.
+      { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
+      assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fby1AP_eq in Ht.
+      cases; inv Sy; try tauto. now eapply Con_le_le in Cx'; eauto 1.
+      apply rem_le_compat in Cx', Cy.
+      rewrite Ht, rem_cons in *.
+      apply safe_fby1 with (rem cs); auto.
   Qed.
 
   (* TODO: merge in SDtoRel *)
