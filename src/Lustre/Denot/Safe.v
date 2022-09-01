@@ -472,61 +472,90 @@ Section node_safe.
       + rewrite Ht. now apply wt_fby1.
   Qed.
 
-  Lemma wc_fby :
-    forall ck s0 s,
-      safe_DS s0 /\ wc_DS ck s0 -> (* pour une meilleure unification plus tard... *)
-      safe_DS s /\ wc_DS ck s ->
-      wc_DS ck (fby s0 s).
+  (* TODO: utiliser xs,ys partout *)
+  Lemma wc_fby1 :
+    forall cs v xs ys,
+      safe_DS xs ->
+      AC xs <= cs ->
+      safe_DS ys ->
+      AC ys <= cs ->
+      AC (fby1 (Some v) xs ys) <= cs.
   Proof.
-    unfold wc_DS.
-    intro ck.
+    clear; intros.
+    remember (AC (fby1 _ _ _)) as ts eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert_all.
+    cofix Cof; intros * Sx Cx Sy Cy [| b t] Ht.
+    { constructor. rewrite <- eqEps in Ht. eapply Cof with _ xs ys; eauto. }
+    assert (is_cons xs) as Hcx by (eapply fby1_cons, AC_is_cons; now rewrite <- Ht).
+    assert (is_cons cs) as Hcc by (eapply isCon_le, Cx; now apply AC_is_cons).
+    apply uncons in Hcc as (vc & cs' & Hdec).
+    apply decomp_eqCon in Hdec as Hc.
+    apply is_cons_elim in Hcx as (vx & xs' & Hx).
+    rewrite Hx, Hc, AC_cons in * |-; clear Hc Hx; clear xs.
+    rewrite fby1_eq in Ht.
+    cases; inv Sx; try tauto; rewrite AC_cons in *;
+      apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as []; subst.
+    all: econstructor; eauto; clear Hdec cs.
+    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
+      { constructor. rewrite <- eqEps in *. eapply Cof' with _ ys xs'; eauto. }
+      assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fby1AP_eq in Ht.
+      cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
+      eapply Cof with _ xs' ys'; eauto.
+    - revert_all; intro Cof; cofix Cof'; intros * v ys Sy [] ?? Ht ??? Cx' ?.
+      { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
+      assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fby1AP_eq in Ht.
+      cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
+      eapply Cof with _ xs' ys'; eauto.
+  Qed.
+
+  (* TODO: refaire avec DSle_rec_eq ??? *)
+  Lemma wc_fby :
+    forall ck xs ys,
+      safe_DS xs /\ wc_DS ck xs -> (* pour une meilleure unification plus tard... *)
+      safe_DS ys /\ wc_DS ck ys ->
+      wc_DS ck (fby xs ys).
+  Proof.
+    unfold wc_DS; intro ck.
     generalize (denot_clock ck); clear ck.
-    intros * [][].
-    eapply DS_bisimulation_allin1
-      with (R :=
-              fun C F => exists s0 s,
-                  safe_DS s0 /\ safe_DS s /\ C == AC s0 /\ C == AC s
-                  /\ (F == AC (fby s0 s)
-                     \/ (exists v, F == AC (fby1 (Some v) s0 s)))).
-    3: eauto 8.
-    { intros * (?&?&?&?&?&?&?) FF GG.
-      setoid_rewrite <- FF.
-      setoid_rewrite <- GG.
-      eauto 7. }
-    clear; intros C F Hcons (s0 & s & Safe0 & Safe & Hc0 & Hc & Hf).
-    assert (is_cons s0 /\ is_cons s) as (Hs0 & Hs). {
-      destruct Hcons as [|Hcons].
-      split; apply AC_is_cons; now rewrite <- ?Hc0, <- ?Hc.
-      destruct Hf as [Hf|(?&Hf)]; rewrite Hf in Hcons; apply AC_is_cons in Hcons.
-      apply fby_cons in Hcons. 2: apply fby1_cons in Hcons.
-      all: apply AC_is_cons in Hcons as ?; rewrite <- Hc0, Hc in *.
-      all: split; auto; now apply AC_is_cons.
-    }
-    apply is_cons_elim in Hs0 as (v0 & s0' & Hs0), Hs as (v & s' & Hs).
-    rewrite Hs, Hs0, AC_cons, Hc0 in *.
-    inv Safe; inv Safe0.
-    setoid_rewrite Hc0.
-    destruct Hf as [Hf | (vv & Hf)].
-    - (* fby *)
-      rewrite fby_eq in Hf.
-      cases; apply Con_eq_simpl in Hc as []; try congruence.
-      (* abs *)
-      + rewrite fbyA_eq, AC_cons in Hf.
-        split.  { now rewrite Hf, 2 first_cons. }
-        exists s0', s'.
-        rewrite Hf, 2 rem_cons; auto 6.
-      + rewrite fby1AP_eq, AC_cons in Hf.
-        split.  { now rewrite Hf, 2 first_cons. }
-        exists s0', s'.
-        repeat (split; rewrite ?Hf, ?AC_cons, ?rem_cons; auto).
-        right. eexists. now rewrite Hf, rem_cons.
-    - (* fby1 *)
-      rewrite Hs, Hs0, fby1_eq in Hf.
-      cases; apply Con_eq_simpl in Hc as []; try congruence.
-      all: rewrite fby1AP_eq, AC_cons in Hf.
-      all: split; [ now rewrite Hf, 2 first_cons |].
-      all: exists s0', s'; repeat (split; rewrite ?Hf, ?rem_cons; auto).
-      all: right; eexists; now rewrite Hf, rem_cons.
+    clear; intros cs ??  [Sx Cx][Sy Cy].
+    remember (AC (fby _ _)) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert_all.
+    cofix Cof; intros * Sx Cx Sy Cy [| b t] Ht.
+    { constructor. rewrite <- eqEps in Ht. eapply Cof with xs ys; eauto. }
+    assert (is_cons xs) as Hcx by (eapply fby_cons, AC_is_cons; now rewrite <- Ht).
+    assert (is_cons cs) as Hcc by (eapply isCon_le, Cx; now apply AC_is_cons).
+    apply uncons in Hcc as (vc & cs' & Hdec).
+    apply decomp_eqCon in Hdec as Hc.
+    apply is_cons_elim in Hcx as (vx & xs' & Hx).
+    rewrite Hx, Hc, AC_cons in * |-; clear Hc Hx; clear xs.
+    rewrite fby_eq in Ht.
+    cases; inv Sx; try tauto; rewrite AC_cons in *;
+      apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as [? Ht]; subst.
+    all: econstructor; eauto; clear Hdec cs.
+    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
+      { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
+      assert (is_cons ys) as Hcy by (eapply fbyA_cons, AC_is_cons; now rewrite <- Ht).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, AC_cons in *; clear Hy ys.
+      rewrite fbyA_eq in Ht.
+      cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
+      eapply Cof with xs' ys'; eauto.
+    - revert_all; intro Cof; cofix Cof'; intros * Sy [] ?? Ht ??? Cx' ?.
+      { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
+      assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
+      apply uncons in Hcy as (vy & ys' & Hdec).
+      apply decomp_eqCon in Hdec as Hy.
+      rewrite Hy, AC_cons in *.
+      rewrite fby1AP_eq in Ht.
+      cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
+      change (cons b d <= cs'). (* sinon rewrite Ht ne marche pas *)
+      rewrite Ht; auto using wc_fby1.
   Qed.
 
   (* on fait tout en un, plutôt qu'en trois lemmes *)
