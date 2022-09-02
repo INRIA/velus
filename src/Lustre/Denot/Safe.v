@@ -886,114 +886,81 @@ Section node_safe.
   End Invariants.
   End node_safe.
 
+Section Admissibility.
 
+  (** Pour l'instant, on montre l'admissibilité de [safe_env] en tant que
+      propriété de l'environnement des variables seulement (pas des entrées).
+      Ça nécessite de donner les composants de safe_env sous forme de fonctions
+      continues de l'environnement : DS_prod SI -C-> DS ...
+      TODO: ça va peut-être changer avec l'environnement des entrées ???
+   *)
 
-(* TODO: faire le ménage dans tout ça *)
+  (* version continue de denot_var *)
+  Definition denot_var_C ins envI x : DS_prod SI -C-> DS (sampl value) :=
+    if mem_ident x ins then CTE _ _ (envI x) else PROJ _ x.
 
-Lemma admissible_and :
-  forall (D:cpo) (P Q : D -> Prop),
-    admissible P ->
-    admissible Q ->
-    admissible (fun x => P x /\ Q x).
-Proof.
-  firstorder.
-Qed.
+  Fact denot_var_eq :
+    forall ins x envI env,
+      denot_var ins envI env x = denot_var_C ins envI x env.
+  Proof.
+    intros.
+    unfold denot_var, denot_var_C.
+    cases.
+  Qed.
 
-Lemma DSForall_admissible_prod :
-  forall P, @admissible (DS_prod SI) (fun s => forall x, DSForall P (s x)).
-Proof.
-  intros ????.
-  setoid_rewrite Dprodi_lub_simpl.
-  apply DSForall_admissible; simpl; auto.
-Qed.
+  (* version continue de denot_clock *)
+  Fixpoint denot_clock_C ins envI bs ck : DS_prod SI -C-> DS bool :=
+    match ck with
+    | Cbase =>  CTE _ _ bs
+    | Con ck x (_, k) =>
+        let sx := denot_var_C ins envI x in
+        let cks := denot_clock_C ins envI bs ck in
+        (ZIP (fun x c => match x with pres (Venum e) => (e ==b k) && c | _ => false end) @2_ sx) cks
+    end.
 
-Lemma DSForall_admissible_prod2 :
-  forall P (f: _ -> DS (sampl value) -C-> DS (sampl value)),
-    @admissible (DS_prod SI) (fun s => forall x, DSForall P (f x (s x))).
-Proof.
-  intros ?????.
-  setoid_rewrite Dprodi_lub_simpl.
-  eapply DSForall_admissible2; simpl; auto.
-Qed.
+  Fact denot_clock_eq :
+    forall ins envI bs env ck,
+      denot_clock ins envI bs env ck = denot_clock_C ins envI bs ck env.
+  Proof.
+    induction ck; simpl; cases.
+    now rewrite IHck, denot_var_eq.
+  Qed.
 
-Lemma DSForall_admissible_prod3 :
-  forall P (f: _ -> DS (sampl value) -C-> DS (sampl value)),
-    @admissible (DS_prod SI) (fun s => forall x, DSForall (P x) (f x (s x))).
-Proof.
-  intros ?????.
-  setoid_rewrite Dprodi_lub_simpl.
-  eapply DSForall_admissible2; simpl; auto.
-Qed.
+  (* version continue de (AC (denot_var ...)) *)
+  Definition AC_var_C ins envI x : DS_prod SI -C-> DS bool :=
+    AC @_ denot_var_C ins envI x.
 
-Lemma DSForall_forall :
-  forall {A T} (P : T -> A -> Prop) (s : DS A),
-    (forall x, DSForall (P x) s)
-    <-> DSForall (fun s => forall x, P x s) s.
-Proof.
-  split; revert s; cofix Cof; intros * Hf.
-  - destruct s; constructor; eauto using DSForall_tl.
-    + setoid_rewrite <- eqEps in Hf; eauto.
-    + intro x. specialize (Hf x). now inv Hf.
-  - destruct s; constructor; eauto using DSForall_tl.
-    + setoid_rewrite <- eqEps in Hf; eauto.
-    + inv Hf; auto.
-Qed.
+  Fact AC_var_eq :
+    forall ins x envI env,
+      AC (denot_var ins envI env x) = AC_var_C ins envI x env.
+  Proof.
+    intros.
+    unfold denot_var, AC_var_C, denot_var_C.
+    cases.
+  Qed.
 
-(* astuce pourrie pour faire marcher DSForall_admissible_prod3  *)
-Definition denot_var_aux ins envI x : DS (sampl value) -C-> DS (sampl value) :=
-  if mem_ident x ins then CTE _ _ (envI x) else ID _.
+  Lemma safe_env_admissible :
+    forall Γ ins envI bs,
+      admissible (safe_env Γ ins envI bs).
+  Proof.
+    intros.
+    repeat apply admissible_and; apply admissiblePT.
+    - unfold wc_env, wc_DS.
+      setoid_rewrite AC_var_eq.
+      setoid_rewrite denot_clock_eq.
+      intros ?????. (* TODO: appliquer le_admissible direct?? *)
+      apply le_admissible; auto.
+    - unfold wt_env, wt_DS, DSForall_pres.
+      do 2 setoid_rewrite DSForall_forall.
+      setoid_rewrite denot_var_eq.
+      apply DSForall_admissible3.
+    - unfold ef_env, safe_DS.
+      do 2 setoid_rewrite DSForall_forall.
+      setoid_rewrite denot_var_eq.
+      apply DSForall_admissible3.
+  Qed.
 
-Lemma denot_var_eq :
-  forall ins x envI env,
-    denot_var ins envI env x = denot_var_aux ins envI x (env x).
-Proof.
-  intros.
-  unfold denot_var, denot_var_aux.
-  cases.
-Qed.
-
-
-(* version dans Prop de l'admissibilité, sous laquelle on peut
-   réécrire les équivalences propositionnelles *)
-Definition admissibleP {D : cpo} (P : D -> Prop) :=
-  forall f : natO -m> D, (forall n, P (f n)) -> P (lub f).
-
-Lemma admissiblePT :
-  forall {D : cpo} (P : D -> Prop),
-    admissibleP P ->
-    admissible P.
-Proof.
-  trivial.
-Qed.
-
-Add Parametric Morphism (D : cpo) : (@admissibleP D)
-    with signature pointwise_relation _ iff ==> iff
-      as admissible_morph.
-Proof.
-  unfold pointwise_relation, admissibleP.
-  intros * Hxy.
-  split; intros HH ??; eapply Hxy, HH; firstorder.
-Qed.
-
-Lemma safe_env_admissible :
-  forall Γ ins envI bs,
-  admissible (safe_env Γ ins envI bs).
-Proof.
-  intros.
-  repeat apply admissible_and; apply admissiblePT.
-  - admit.
-  - unfold wt_env, wt_DS, DSForall_pres.
-    do 2 setoid_rewrite DSForall_forall.
-    setoid_rewrite denot_var_eq.
-    apply DSForall_admissible_prod3.
-  - unfold ef_env, safe_DS.
-    do 2 setoid_rewrite DSForall_forall.
-    setoid_rewrite denot_var_eq.
-    apply DSForall_admissible_prod3.
-Qed.
-
-
-
+End Admissibility.
 
 (** * Deuxième partie : montrer que safe_env est préservé *)
 Theorem safe_equ :
@@ -1004,8 +971,7 @@ Theorem safe_equ :
 Proof.
   intros ???? (xs,es) S0.
   rewrite FIXP_fixp.
-  apply fixp_ind; auto using TTTTT.
-  admit. (* admissibilité... *)
+  apply fixp_ind; auto using safe_env_admissible.
   intros env Safe.
   split; [|split].
   - (* wc *)
