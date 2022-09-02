@@ -886,35 +886,144 @@ Section node_safe.
   End Invariants.
   End node_safe.
 
-(* (** * Deuxième partie : montrer que safe_env est préservé *) *)
-(* Theorem safe_equ : *)
-(*   forall Γ ins envI bs equ, *)
-(*     safe_env Γ ins envI bs 0 -> *)
-(*     (* wt_equation ? wc_equation ? op_correct ? *) *)
-(*     safe_env Γ ins envI bs (FIXP (DS_prod SI) (denot_equation ins equ envI bs)). *)
-(* Proof. *)
-(*   intros ???? (xs,es) S0. *)
-(*   rewrite FIXP_fixp. *)
-(*   apply fixp_ind; auto. *)
-(*   admit. (* admissibilité... *) *)
-(*   intros env Safe. *)
-(*   split; [|split]. *)
-(*   - (* wc *) *)
-(*     intros x ck Hck. *)
-(*     admit. *)
-(*   - (* wt *) *)
-(*     intros x ty Hty. *)
-(*     unfold wt_env, denot_var in *. *)
-(*     destruct (mem_ident x ins) eqn:Hxin. *)
-(*     + destruct Safe as (_& WT &_). specialize (WT _ _ Hty). *)
-(*       unfold denot_var in WT. cases; congruence. *)
-(*     + setoid_rewrite denot_equation_eq. *)
-(*       cases_eqn HH; try congruence. 2,3: admit. (* erreurs à traiter *) *)
-(*       simpl. *)
-(*       admit. (* ça marchera *) *)
-(*   - (* ef *) *)
-(*     admit. *)
-(* Qed. *)
+
+
+(* TODO: faire le ménage dans tout ça *)
+
+Lemma admissible_and :
+  forall (D:cpo) (P Q : D -> Prop),
+    admissible P ->
+    admissible Q ->
+    admissible (fun x => P x /\ Q x).
+Proof.
+  firstorder.
+Qed.
+
+Lemma DSForall_admissible_prod :
+  forall P, @admissible (DS_prod SI) (fun s => forall x, DSForall P (s x)).
+Proof.
+  intros ????.
+  setoid_rewrite Dprodi_lub_simpl.
+  apply DSForall_admissible; simpl; auto.
+Qed.
+
+Lemma DSForall_admissible_prod2 :
+  forall P (f: _ -> DS (sampl value) -C-> DS (sampl value)),
+    @admissible (DS_prod SI) (fun s => forall x, DSForall P (f x (s x))).
+Proof.
+  intros ?????.
+  setoid_rewrite Dprodi_lub_simpl.
+  eapply DSForall_admissible2; simpl; auto.
+Qed.
+
+Lemma DSForall_admissible_prod3 :
+  forall P (f: _ -> DS (sampl value) -C-> DS (sampl value)),
+    @admissible (DS_prod SI) (fun s => forall x, DSForall (P x) (f x (s x))).
+Proof.
+  intros ?????.
+  setoid_rewrite Dprodi_lub_simpl.
+  eapply DSForall_admissible2; simpl; auto.
+Qed.
+
+Lemma DSForall_forall :
+  forall {A T} (P : T -> A -> Prop) (s : DS A),
+    (forall x, DSForall (P x) s)
+    <-> DSForall (fun s => forall x, P x s) s.
+Proof.
+  split; revert s; cofix Cof; intros * Hf.
+  - destruct s; constructor; eauto using DSForall_tl.
+    + setoid_rewrite <- eqEps in Hf; eauto.
+    + intro x. specialize (Hf x). now inv Hf.
+  - destruct s; constructor; eauto using DSForall_tl.
+    + setoid_rewrite <- eqEps in Hf; eauto.
+    + inv Hf; auto.
+Qed.
+
+(* astuce pourrie pour faire marcher DSForall_admissible_prod3  *)
+Definition denot_var_aux ins envI x : DS (sampl value) -C-> DS (sampl value) :=
+  if mem_ident x ins then CTE _ _ (envI x) else ID _.
+
+Lemma denot_var_eq :
+  forall ins x envI env,
+    denot_var ins envI env x = denot_var_aux ins envI x (env x).
+Proof.
+  intros.
+  unfold denot_var, denot_var_aux.
+  cases.
+Qed.
+
+
+(* version dans Prop de l'admissibilité, sous laquelle on peut
+   réécrire les équivalences propositionnelles *)
+Definition admissibleP {D : cpo} (P : D -> Prop) :=
+  forall f : natO -m> D, (forall n, P (f n)) -> P (lub f).
+
+Lemma admissiblePT :
+  forall {D : cpo} (P : D -> Prop),
+    admissibleP P ->
+    admissible P.
+Proof.
+  trivial.
+Qed.
+
+Add Parametric Morphism (D : cpo) : (@admissibleP D)
+    with signature pointwise_relation _ iff ==> iff
+      as admissible_morph.
+Proof.
+  unfold pointwise_relation, admissibleP.
+  intros * Hxy.
+  split; intros HH ??; eapply Hxy, HH; firstorder.
+Qed.
+
+Lemma safe_env_admissible :
+  forall Γ ins envI bs,
+  admissible (safe_env Γ ins envI bs).
+Proof.
+  intros.
+  repeat apply admissible_and; apply admissiblePT.
+  - admit.
+  - unfold wt_env, wt_DS, DSForall_pres.
+    do 2 setoid_rewrite DSForall_forall.
+    setoid_rewrite denot_var_eq.
+    apply DSForall_admissible_prod3.
+  - unfold ef_env, safe_DS.
+    do 2 setoid_rewrite DSForall_forall.
+    setoid_rewrite denot_var_eq.
+    apply DSForall_admissible_prod3.
+Qed.
+
+
+
+
+(** * Deuxième partie : montrer que safe_env est préservé *)
+Theorem safe_equ :
+  forall Γ ins envI bs equ,
+    safe_env Γ ins envI bs 0 ->
+    (* wt_equation ? wc_equation ? op_correct ? *)
+    safe_env Γ ins envI bs (FIXP (DS_prod SI) (denot_equation ins equ envI bs)).
+Proof.
+  intros ???? (xs,es) S0.
+  rewrite FIXP_fixp.
+  apply fixp_ind; auto using TTTTT.
+  admit. (* admissibilité... *)
+  intros env Safe.
+  split; [|split].
+  - (* wc *)
+    intros x ck Hck.
+    admit.
+  - (* wt *)
+    intros x ty Hty.
+    unfold wt_env, denot_var in *.
+    destruct (mem_ident x ins) eqn:Hxin.
+    + destruct Safe as (_& WT &_). specialize (WT _ _ Hty).
+      unfold denot_var in WT. cases; congruence.
+    + setoid_rewrite denot_equation_eq.
+      cases_eqn HH; try congruence. 2,3: admit. (* erreurs à traiter *)
+      simpl.
+      admit. (* ça marchera *)
+  - (* ef *)
+    admit.
+Qed.
 
 End LDENOTSAFE.
 
