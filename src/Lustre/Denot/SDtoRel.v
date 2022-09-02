@@ -632,49 +632,9 @@ Proof.
   now apply _Ss_of_nprod_eq.
 Qed.
 
+(* TODO: partager, évidemment *)
+Axiom restr_restr : forall e, Safe.restr_exp e <-> restr_exp e.
 
-Section Op_correct.
-
-(* définition du prédicat op_correct qu'il faudra supposer sur les expressions  *)
-
-Variables (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI).
-
-Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
-  DSForall (fun s => match s with pres v => P v | _ => True end).
-
-Inductive op_correct_exp : exp -> Prop :=
-| opc_Econst :
-  forall c,
-    op_correct_exp (Econst c)
-| opc_Evar :
-  forall x ann,
-    op_correct_exp (Evar x ann)
-| opc_Eunop :
-  forall op e ann,
-    op_correct_exp e ->
-    (forall ss ty,
-        typeof e = [ty] ->
-        denot_exp ins e envI bs env = ss ->
-        forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) ss
-    ) ->
-    op_correct_exp (Eunop op e ann)
-| opc_Efby :
-  forall e0s es anns,
-    Forall op_correct_exp e0s ->
-    Forall op_correct_exp es ->
-    op_correct_exp (Efby e0s es anns)
-.
-
-Definition op_correct {PSyn prefs} (n : @node PSyn prefs) : Prop :=
-  match n.(n_block) with
-  | Beq (xs,es) => Forall op_correct_exp es
-  | _ => True
-  end.
-
-End Op_correct.
-
-
-(* Parameter safe_env : DS_prod SI -> Prop. *)
 Theorem safe_exp :
   forall {PSyn prefs} (G : @global PSyn prefs),
   forall Γ ins e env envI bs,
@@ -684,26 +644,7 @@ Theorem safe_exp :
     (* safe_env env -> *)
     forall_nprod safe_DS (denot_exp ins e envI bs env).
 Proof.
-  (* TODO: gros morceau *)
-  (* fichier à part ? oui *)
-Admitted.
-
-(* TODO: virer ? *)
-Lemma Forall_denot_exps :
-  forall P ins es envI bs env,
-    forall_nprod P (denot_exps ins es envI bs env)
-    <-> Forall (fun e => forall_nprod  P (denot_exp ins e envI bs env)) es.
-Proof.
-  induction es; intros; simpl; split; auto.
-  - intro Hs. setoid_rewrite denot_exps_eq in Hs.
-    apply app_forall_nprod in Hs as [].
-    constructor; auto.
-    now apply IHes.
-  - intro Hs. inv Hs.
-    setoid_rewrite denot_exps_eq.
-    apply forall_nprod_app; auto.
-    now apply IHes.
-Qed.
+Abort.
 
 (* TODO: sampl value -> evalue
    dans K : seulement des err_Op, Ty?
@@ -739,7 +680,12 @@ Proof.
     rewrite FIXP_eq, PROJ_simpl.
     erewrite denot_equation_input; eauto.
   - (* unop *)
-    pose proof (safe_exp _ _ _ _ _ _ _ Hwt Hwc Hoc) as Hsafe.
+    eapply safe_exp in Hwc as Hs; eauto.
+    3: rewrite restr_restr; now constructor.
+    2: {
+      (* TODO *)
+    }
+    destruct Hs as (_&_&Hsafe).
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
     edestruct (Ss_of_nprod_eq _ Infe) as [Hinf0 HH].
