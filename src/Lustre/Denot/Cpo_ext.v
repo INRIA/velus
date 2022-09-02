@@ -1,5 +1,6 @@
 (** * Extension of the Cpo library *)
 
+From Coq Require Import Morphisms.
 From Velus Require Import Lustre.Denot.Cpo.
 
 (* simplification by rewriting during proofs, usage:
@@ -116,6 +117,45 @@ Proof.
   induction n; simpl; auto.
   destruct IHn.
   firstorder.
+Qed.
+
+Lemma admissible_and :
+  forall (D:cpo) (P Q : D -> Prop),
+    admissible P ->
+    admissible Q ->
+    admissible (fun x => P x /\ Q x).
+Proof.
+  firstorder.
+Qed.
+
+(** Prop version of admissibility, under which we can rewrite propositional
+    equivalences *)
+Definition admissibleP (D : cpo) (P : D -> Prop) :=
+  forall f : natO -m> D, (forall n, P (f n)) -> P (lub f).
+
+Fact admissiblePT :
+  forall (D : cpo) (P : D -> Prop),
+    admissibleP D P ->
+    admissible P.
+Proof.
+  trivial.
+Qed.
+
+Global Add Parametric Morphism (D : cpo) : (@admissibleP D)
+    with signature pointwise_relation D iff ==> iff
+      as admissible_morph.
+Proof.
+  unfold pointwise_relation, admissibleP.
+  intros * Hxy.
+  split; intros HH ??; apply Hxy, HH; firstorder.
+Qed.
+
+Lemma le_admissible :
+  forall (D D':cpo) (f g : D -C-> D'),
+    @admissible D (fun s => f s <= g s).
+Proof.
+  intros ?????.
+  setoid_rewrite lub_comp_eq; auto.
 Qed.
 
 (** function that ignore its 2nd argument *)
