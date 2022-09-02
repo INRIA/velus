@@ -267,9 +267,9 @@ Section DS_Forall.
       + now do 2 setoid_rewrite Hfn.
   Qed.
 
-  (** More general admissibility  *)
+  (** More general admissibility *)
   Lemma DSForall_admissible2 :
-    forall B (f : DS B -C-> DS A),
+    forall D (f : D -C-> DS A),
       admissible (fun s => DSForall (f s)).
   Proof.
     intros ?? seq Hseq.
@@ -318,4 +318,29 @@ Proof.
   intros ???.
   cofix Cof.
   destruct s; intros Hp Himpl; inv Hp; inv Himpl; constructor; cases.
+Qed.
+
+Lemma DSForall_forall :
+  forall {A T} (P : T -> A -> Prop) (s : DS A),
+    (forall x, DSForall (P x) s)
+    <-> DSForall (fun s => forall x, P x s) s.
+Proof.
+  split; revert s; cofix Cof; intros * Hf.
+  - destruct s; constructor; eauto using DSForall_tl.
+    + setoid_rewrite <- eqEps in Hf; eauto.
+    + intro x. specialize (Hf x). now inv Hf.
+  - destruct s; constructor; eauto using DSForall_tl.
+    + setoid_rewrite <- eqEps in Hf; eauto.
+    + inv Hf; auto.
+Qed.
+
+(** Admissibility with dependent predicate on elements of the stream *)
+Lemma DSForall_admissible3 :
+  forall (D:cpo) (A T : Type) (P : T -> A -> Prop) (f : T -> D -C-> DS A),
+    @admissible D (fun s => forall x, DSForall (P x) (f x s)).
+Proof.
+  intros ?????? Hf ?.
+  setoid_rewrite lub_comp_eq; auto.
+  apply DSForall_admissible; intro.
+  apply Hf.
 Qed.
