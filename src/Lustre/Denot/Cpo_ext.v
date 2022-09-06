@@ -103,7 +103,7 @@ Proof.
 Qed.
 
 (** like [fixp_ind], with a stronger hypothesis on arguments
-     of F, without having the corresponding admissibility *)
+     of F, without having to prove the corresponding admissibility *)
 Lemma fixp_inv : forall (D:cpo) (F:D -m> D) (P P' : D -> Prop),
     (forall x, P' x -> P x) ->
     admissible P ->
