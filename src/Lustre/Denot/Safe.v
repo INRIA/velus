@@ -199,7 +199,6 @@ Section node_safe.
 
   (* c'est l'alignement, CORRECTION DES HORLOGES?? *)
   Definition wc_DS (ck : clock) (s : DS (sampl value)) :=
-      (* TODO: plutôt <= ? *)
     AC s <= denot_clock ck.
 
   (** propriétés des environnements *)
@@ -883,6 +882,28 @@ Section node_safe.
         all: now rewrite list_of_nprod_length, map_length.
   Qed.
 
+  Lemma safe_exps :
+    safe_env ->
+    forall {PSyn Prefs} (G : @global PSyn Prefs) (es : list exp),
+      Forall restr_exp es ->
+      Forall (wt_exp G Γ) es ->
+      Forall (wc_exp G Γ) es ->
+      Forall (op_correct_exp ins envI bs env) es ->
+      let ss := denot_exps ins es envI bs env in
+      Forall2 wt_DS (typesof es) (list_of_nprod ss)
+      /\ Forall2 wc_DS (clocksof es) (list_of_nprod ss)
+      /\ forall_nprod safe_DS ss.
+  Proof.
+    intro Safe.
+    induction es as [|e es]; simpl; auto; intros.
+    simpl_Forall.
+    destruct IHes as (?&?&?); auto.
+    eapply safe_exp in Safe as (?&?&?); eauto.
+    setoid_rewrite denot_exps_eq.
+    setoid_rewrite list_of_nprod_app.
+    repeat split; auto using Forall2_app, forall_nprod_app.
+  Qed.
+
   End Invariants.
   End node_safe.
 
@@ -962,33 +983,290 @@ Section Admissibility.
 
 End Admissibility.
 
+
+Lemma denot_clock_le :
+  forall ins envI bs env env' ck ,
+    env <= env' ->
+    denot_clock ins envI bs env ck <=
+      denot_clock ins envI bs env' ck.
+Proof.
+  intros.
+  rewrite 2 denot_clock_eq.
+  auto.
+Qed.
+
+(* TODO: ça ressemble à une grosse connerie *)
+Definition admissible_rev (D:cpo)(P:D->Type) :=
+  forall f : natO -m> D, P (lub f) -> (forall n, P (f n)).
+
+(* TODO: expliquer *)
+Lemma admissible_impl :
+  forall (D : cpo) (P Q : D -> Type),
+    admissible P ->
+    admissible_rev _ Q ->
+    admissible (fun x => Q x -> P x).
+Proof.
+  unfold admissible, admissible_rev.
+  auto.
+Qed.
+
+
+(* TODO: move, preuve plus jolie? *)
+Lemma DSForall_le :
+  forall T (P : T -> Prop) s t,
+    s <= t ->
+    DSForall P t ->
+    DSForall P s.
+Proof.
+  cofix Cof; destruct s; constructor.
+  - inv H. eauto.
+  - apply DSle_cons_elim in H as (?& Ht & ?).
+    rewrite Ht in *. now inv H0.
+  - apply DSle_cons_elim in H as (?& Ht & ?).
+    rewrite Ht in *. inv H0.
+    eauto.
+Qed.
+
+(* TODO: expliquer *)
+(* TODO: refaire preuve *)
+Lemma op_correct_exp_le :
+  forall ins envI bs env env',
+    env <= env' ->
+    forall e,
+      op_correct_exp ins envI bs env' e ->
+      op_correct_exp ins envI bs env e.
+Proof.
+  induction e using exp_ind2; intros Hop; inv Hop;
+    constructor; eauto using Forall_impl_inside.
+  - (* unop *)
+    intros ty Hty.
+    specialize (H4 ty Hty).
+    assert ((denot_exp ins e envI bs env0 <= denot_exp ins e envI bs env')) as H' by auto.
+    revert H4 H'.
+    generalize ((denot_exp ins e envI bs env')).
+    generalize ((denot_exp ins e envI bs env0)).
+    generalize (numstreams e).
+    clear. induction n as [|[]]; intros; auto.
+    + simpl in *. eapply DSForall_le; eauto.
+    + destruct t, t0.
+      inv H4. destruct H'.
+      simpl (fst _) in *.
+      simpl (snd _) in *.
+      constructor; eauto.
+      eapply DSForall_le; eauto.
+      eapply IHn; eauto.
+Qed.
+
+(* TODO: expliquer le raisonnement avant/arrière *)
+Lemma fixp_inv2 : forall (D:cpo) (F:D -m> D) (P P' Q : D -> Prop),
+    (forall x, P' x -> P x) ->
+    admissible P ->
+    admissible_rev _ Q ->
+    Q (fixp F) ->
+    P' 0 ->
+    (forall x, P' x -> Q x -> P' (F x)) ->
+    P (fixp F).
+Proof.
+  intros; unfold fixp.
+  apply X; intros.
+  eapply proj2 with (A := P' (iter (D:=D) F n)).
+  induction n; simpl; auto.
+  destruct IHn.
+  firstorder.
+Qed.
+
+(* TODO: move *)
+Lemma list_of_nprod_nth :
+  forall {n} (np : nprod n) k d,
+    k < n ->
+    nth k (list_of_nprod np) d = get_nth np k.
+Proof.
+  induction n as [|[]]; auto; intros * Hk. inv Hk.
+  - destruct k as [|[]]; now inv Hk.
+  - destruct k; auto.
+    apply IHn; auto with arith.
+Qed.
+
+Lemma Forall2_Forall3 :
+  forall {A B C} (P : A -> B -> Prop) (Q : B -> C -> Prop) xs ys zs,
+    Forall2 P xs ys ->
+    Forall2 Q ys zs ->
+    Forall3 (fun x y z => P x y /\ Q y z) xs ys zs.
+Proof.
+  intros * Hp Hq.
+  revert dependent zs.
+  induction Hp; intros; simpl_Forall.
+  constructor.
+  inv Hq. constructor; auto.
+Qed.
+
+(* TODO: move *)
+Lemma mem_nth_nth :
+  forall x l k d,
+    mem_nth l x = Some k ->
+    k < length l /\ nth k l d = x.
+Proof.
+  induction l; simpl; intros * Hk; try congruence.
+  destruct ident_eq_dec; subst; inv Hk; auto with arith.
+  apply option_map_inv in H0 as (?& HH &?); subst.
+  edestruct IHl; eauto with arith.
+Qed.
+
+Lemma Forall2_nth :
+  forall {A B} (P : A -> B -> Prop) xs ys a b n,
+    Forall2 P xs ys ->
+    n < length xs ->
+    P (nth n xs a) (nth n ys b).
+Proof.
+  intros * H HH.
+  rewrite Forall2_forall2 in H.
+  eapply H; eauto.
+Qed.
+
+Lemma HasClock_det :
+  forall Γ x ck1 ck2,
+    HasClock Γ x ck1 ->
+    HasClock Γ x ck2 ->
+    ck1 = ck2.
+Proof.
+  intros * C1 C2; inv C1; inv C2.
+  (* TODO: vrai ou pas ??? *)
+Admitted.
+
+Lemma HasType_det :
+  forall Γ x ty1 ty2,
+    HasType Γ x ty1 ->
+    HasType Γ x ty2 ->
+    ty1 = ty2.
+Proof.
+Admitted.
+
+Lemma mem_ident_false :
+  forall x xs,
+    mem_ident x xs = false ->
+    In x xs ->
+    False.
+Proof.
+  intros * Hf Hin.
+  apply mem_ident_spec in Hin.
+  congruence.
+Qed.
+
+Lemma mem_nth_nIn :
+  forall x xs,
+    mem_nth xs x = None ->
+    In x xs ->
+    False.
+Proof.
+  intros * Hf Hin.
+  induction xs; simpl in *; cases.
+  apply option_map_None in Hf.
+  firstorder.
+Qed.
+
+Lemma IsVar_In :
+  forall Γ x,
+    IsVar Γ x ->
+    In x (List.map fst Γ).
+Proof.
+  intros * Hv.
+  inv Hv.
+  now apply fst_InMembers.
+Qed.
+
+(* Lemma HasClock_In : *)
+(*   forall Γ x ck, *)
+(*     HasClock Γ x ck -> *)
+(*     In x (List.map fst Γ). *)
+(* Proof. *)
+(*   intros * Hc. *)
+(*   inv Hc. *)
+(*   now apply in_map with (f := fst) in H. *)
+(* Qed. *)
+
+(* TODO: move *)
+From Coq Require Import Permutation.
+Definition safe_env' (Γ : static_env) (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI) :=
+  forall x ty ck,
+    HasType Γ x ty ->
+    HasClock Γ x ck ->
+    let s := denot_var ins envI env x in
+    wt_DS ty s
+    /\ wc_DS ins envI bs env ck s
+    /\ safe_DS s.
+
+Lemma sssss : forall Γ ins envI bs env, safe_env Γ ins envI bs env <-> safe_env' Γ ins envI bs env.
+Proof.
+  unfold safe_env, wt_env, wc_env, ef_env, safe_env'.
+  split; intros * H; intros.
+  - destruct H as (?&?&?). eauto 6.
+  - repeat split; intros x ? Hx; inv Hx; edestruct H as (?&?&?);
+      try econstructor; eauto.
+Qed.
+
 (** * Deuxième partie : montrer que safe_env est préservé *)
 Theorem safe_equ :
-  forall Γ ins envI bs equ,
+  forall {PSyn Prefs} (G : @global PSyn Prefs),
+  forall Γ ins envI bs xs es,
+    Forall restr_exp es ->
+    Permutation (List.map fst Γ) (ins ++ xs) ->
+    wc_equation G Γ (xs,es) ->
+    wt_equation G Γ (xs,es) ->
     safe_env Γ ins envI bs 0 ->
-    (* wt_equation ? wc_equation ? op_correct ? *)
-    safe_env Γ ins envI bs (FIXP (DS_prod SI) (denot_equation ins equ envI bs)).
+    let env := FIXP (DS_prod SI) (denot_equation ins (xs,es) envI bs) in
+    Forall (op_correct_exp ins envI bs env) es ->
+    safe_env Γ ins envI bs env.
 Proof.
-  intros ???? (xs,es) S0.
+  intros ??????? xs es Hr Hperm Hwc Hwt S0 env Hop; subst env.
   rewrite FIXP_fixp.
-  apply fixp_ind; auto using safe_env_admissible.
-  intros env Safe.
-  split; [|split].
-  - (* wc *)
-    intros x ck Hck.
-    admit.
-  - (* wt *)
-    intros x ty Hty.
-    unfold wt_env, denot_var in *.
-    destruct (mem_ident x ins) eqn:Hxin.
-    + destruct Safe as (_& WT &_). specialize (WT _ _ Hty).
-      unfold denot_var in WT. cases; congruence.
-    + setoid_rewrite denot_equation_eq.
-      cases_eqn HH; try congruence. 2,3: admit. (* erreurs à traiter *)
-      simpl.
-      admit. (* ça marchera *)
-  - (* ef *)
-    admit.
+  (* on a besoin de la croissance de env à chaque coup de denot_equation *)
+  (* TODO: il y a peut-être plus joli : *)
+  apply fixp_inv2 with
+    (Q := fun env =>
+             Forall (op_correct_exp ins envI bs env) es)
+    (P' := fun env =>
+             env <= denot_equation ins (xs,es) envI bs env
+             /\ safe_env Γ ins envI bs env);
+    try tauto; auto using safe_env_admissible.
+  - clear. induction es; intros ? Hf ?; inv Hf; eauto using op_correct_exp_le.
+  - clear Hop.
+    intros env (Le & Safe) Hop.
+    split; eauto using fmon_le_compat; auto.
+    inv Hwt. inv Hwc. { inversion Hr as [|?? HH]; inv HH. }
+    assert (length xs = list_sum (List.map numstreams es))
+      by (rewrite <- annots_numstreams, <- length_typesof_annots;
+          eauto using Forall2_length).
+    eapply safe_exps in Safe as Ss; eauto.
+    destruct Ss as (Wts & Wcs & Sfs).
+    apply sssss in Safe; apply sssss.
+    intros x ty ck Hty Hck.
+    edestruct Safe as (Wc & Wt & Ef); eauto.
+    eapply Permutation_in, in_app_or in Hperm; eauto using IsVar_In, HasClock_IsVar.
+    unfold denot_var in *.
+    setoid_rewrite denot_equation_eq.
+    cases_eqn HH; simpl; try congruence.
+    + (* entrée *)
+      unfold wc_DS in *.
+      repeat split; eauto 3 using denot_clock_le.
+    + eapply mem_nth_nth with (d := xH) in HH1 as [? Hn]; rewrite <- Hn in *.
+      repeat split.
+      * (* wt_DS *)
+        eapply Forall2_Forall3, Forall3_forall3 in Wts as (?&?& Hf); eauto.
+        eapply Hf; rewrite ?list_of_nprod_nth; auto; try congruence.
+        eapply HasType_det; try apply Forall2_nth; eauto.
+        Unshelve. all: auto; exact 0.
+      * (* wc_DS *)
+        unfold wc_DS in *.
+        eapply Ole_trans, denot_clock_le, Le.
+        eapply Forall2_Forall3, Forall3_forall3 in Wcs as (_ & Hl & Hf); auto.
+        rewrite list_of_nprod_length in Hl.
+        eapply Hf; rewrite ?list_of_nprod_nth; eauto; try congruence.
+        eapply HasClock_det; try apply Forall2_nth; eauto.
+        Unshelve. all: eauto; exact 0.
+      * apply forall_nprod_k'; auto; congruence.
+    + (* erreur *)
+      exfalso.
+      destruct Hperm; eauto using mem_ident_false, mem_nth_nIn.
 Qed.
 
 End LDENOTSAFE.
