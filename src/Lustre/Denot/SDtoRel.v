@@ -756,7 +756,7 @@ Proof.
 Qed.
 
 (* TODO: énoncer plutôt exist os, .. et faire ça dans la preuve ? *)
-Lemma ok_sem_node :
+Theorem ok_sem_node :
   forall {PSyn prefs} (G : @global PSyn prefs),
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
   forall f (nd : node) ss,
