@@ -1,4 +1,4 @@
-From Coq Require Import String Morphisms.
+From Coq Require Import String Morphisms Permutation.
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -174,13 +174,6 @@ Section node_safe.
 
   Section Invariants.
 
-    (** TODO:
-     * safe_enf := wc_env + wt_env + ef_env
-     * safe_env env + op_correct e -> safe_DS (denot_exp env e)
-     * wt_eq eq + wc_eq eq -> safe_env (FIXP (denot_equation eq))
-     *    .. avec fixp_ind, admissibilité...
-     *)
-
   Variables (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI).
 
   Fixpoint denot_clock ck : DS bool :=
@@ -219,7 +212,17 @@ Section node_safe.
       HasType Γ x ty ->
       safe_DS (denot_var ins envI env x).
 
-  Definition safe_env := wc_env /\ wt_env /\ ef_env.
+  (* Definition safe_env := wc_env /\ wt_env /\ ef_env. *)
+
+  (* TODO: virer  wt_env, wc_env, ef_env ? *)
+  Definition safe_env :=
+    forall x ty ck,
+      HasType Γ x ty ->
+      HasClock Γ x ck ->
+      let s := denot_var ins envI env x in
+      wt_DS ty s
+      /\ wc_DS ck s
+      /\ safe_DS s.
 
 
   (** ** Faits sur sconst  *)
@@ -817,16 +820,16 @@ Section node_safe.
       /\ Forall2 wc_DS (clockof e) (list_of_nprod ss)
       /\ forall_nprod safe_DS ss.
   Proof.
-    intros (WT & WC & EF).
+    intro Safe.
     induction e using exp_ind2; intros Hr Hwt Hwc Hoc; inv Hr.
     - (* Econst *)
       rewrite denot_exp_eq; cbn.
       auto using wt_sconst, wc_sconst, safe_sconst.
     - (* Evar *)
       inv Hwt. inv Hwc.
-      specialize (WT x). specialize (WC x). specialize (EF x).
+      edestruct Safe as (?&?&?); eauto.
       rewrite denot_exp_eq; cbn.
-      repeat split; eauto.
+      repeat split; auto.
     - (* Eunop *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
@@ -960,23 +963,45 @@ Section Admissibility.
     cases.
   Qed.
 
+  (* TODO: move *)
+  Lemma and_impl :
+    forall (A B C : Prop),
+      (A -> B /\ C) <-> ((A -> B) /\ (A -> C)).
+  Proof.
+    firstorder.
+  Qed.
+
+  (* TODO: comment généraliser admissible_and plus joliment que ça? *)
+  Lemma admissible_and3 :
+  forall T U V (D:cpo) (P Q : T -> U -> V -> D -> Prop),
+    admissible (fun d => forall x y z, P x y z d) ->
+    admissible (fun d => forall x y z, Q x y z d) ->
+    admissible (fun d => forall x y z, P x y z d /\ Q x y z d).
+  Proof.
+    Set Firstorder Depth 6.
+    firstorder.
+  Qed.
+
   Lemma safe_env_admissible :
     forall Γ ins envI bs,
       admissible (safe_env Γ ins envI bs).
   Proof.
     intros.
-    repeat apply admissible_and; apply admissiblePT.
+    unfold safe_env.
+    apply admissiblePT.
+    do 4 setoid_rewrite and_impl.
+    repeat apply admissible_and3; apply admissiblePT.
+    - unfold wt_env, wt_DS, DSForall_pres.
+      do 4 setoid_rewrite DSForall_forall.
+      setoid_rewrite denot_var_eq.
+      apply DSForall_admissible3.
     - unfold wc_env, wc_DS.
       setoid_rewrite AC_var_eq.
       setoid_rewrite denot_clock_eq.
-      intros ?????. (* TODO: appliquer le_admissible direct?? *)
-      apply le_admissible; auto.
-    - unfold wt_env, wt_DS, DSForall_pres.
-      do 2 setoid_rewrite DSForall_forall.
-      setoid_rewrite denot_var_eq.
-      apply DSForall_admissible3.
+      intros ???????. (* TODO: appliquer le_admissible direct?? *)
+      apply le_admissible; eauto 2.
     - unfold ef_env, safe_DS.
-      do 2 setoid_rewrite DSForall_forall.
+      do 4 setoid_rewrite DSForall_forall.
       setoid_rewrite denot_var_eq.
       apply DSForall_admissible3.
   Qed.
@@ -995,11 +1020,42 @@ Proof.
   auto.
 Qed.
 
-(* TODO: ça ressemble à une grosse connerie *)
+(* TODO: move *)
+Lemma DSForall_le :
+  forall T (P : T -> Prop) s t,
+    s <= t ->
+    DSForall P t ->
+    DSForall P s.
+Proof.
+  cofix Cof; destruct s; intros ? Le Hf; constructor;
+    inversion Le as [|???? HH]; eauto 2.
+  all: apply decomp_eqCon in HH; rewrite HH in *; inv Hf; eauto 2.
+Qed.
+
+(* op_correct est donné par hypothèse sur l'environment final,
+   mais on aura besoin de l'avoir à chaque itération *)
+Lemma op_correct_exp_le :
+  forall ins envI bs env env',
+    env <= env' ->
+    forall e,
+      op_correct_exp ins envI bs env' e ->
+      op_correct_exp ins envI bs env e.
+Proof.
+  intros * Le.
+  induction e using exp_ind2; intros Hop; inv Hop;
+    constructor; eauto using Forall_impl_inside.
+  - (* unop *)
+    intros ty Hty.
+    specialize (H3 ty Hty).
+    rewrite forall_nprod_k_iff in *.
+    intros k Hk.
+    eapply DSForall_le, H3; eauto.
+Qed.
+
 Definition admissible_rev (D:cpo)(P:D->Type) :=
   forall f : natO -m> D, P (lub f) -> (forall n, P (f n)).
 
-(* TODO: expliquer *)
+(* TODO: inutile *)
 Lemma admissible_impl :
   forall (D : cpo) (P Q : D -> Type),
     admissible P ->
@@ -1008,53 +1064,6 @@ Lemma admissible_impl :
 Proof.
   unfold admissible, admissible_rev.
   auto.
-Qed.
-
-
-(* TODO: move, preuve plus jolie? *)
-Lemma DSForall_le :
-  forall T (P : T -> Prop) s t,
-    s <= t ->
-    DSForall P t ->
-    DSForall P s.
-Proof.
-  cofix Cof; destruct s; constructor.
-  - inv H. eauto.
-  - apply DSle_cons_elim in H as (?& Ht & ?).
-    rewrite Ht in *. now inv H0.
-  - apply DSle_cons_elim in H as (?& Ht & ?).
-    rewrite Ht in *. inv H0.
-    eauto.
-Qed.
-
-(* TODO: expliquer *)
-(* TODO: refaire preuve *)
-Lemma op_correct_exp_le :
-  forall ins envI bs env env',
-    env <= env' ->
-    forall e,
-      op_correct_exp ins envI bs env' e ->
-      op_correct_exp ins envI bs env e.
-Proof.
-  induction e using exp_ind2; intros Hop; inv Hop;
-    constructor; eauto using Forall_impl_inside.
-  - (* unop *)
-    intros ty Hty.
-    specialize (H4 ty Hty).
-    assert ((denot_exp ins e envI bs env0 <= denot_exp ins e envI bs env')) as H' by auto.
-    revert H4 H'.
-    generalize ((denot_exp ins e envI bs env')).
-    generalize ((denot_exp ins e envI bs env0)).
-    generalize (numstreams e).
-    clear. induction n as [|[]]; intros; auto.
-    + simpl in *. eapply DSForall_le; eauto.
-    + destruct t, t0.
-      inv H4. destruct H'.
-      simpl (fst _) in *.
-      simpl (snd _) in *.
-      constructor; eauto.
-      eapply DSForall_le; eauto.
-      eapply IHn; eauto.
 Qed.
 
 (* TODO: expliquer le raisonnement avant/arrière *)
@@ -1079,7 +1088,7 @@ Qed.
 Lemma list_of_nprod_nth :
   forall {n} (np : nprod n) k d,
     k < n ->
-    nth k (list_of_nprod np) d = get_nth np k.
+    nth k (list_of_nprod np) d = get_nth k np.
 Proof.
   induction n as [|[]]; auto; intros * Hk. inv Hk.
   - destruct k as [|[]]; now inv Hk.
@@ -1174,35 +1183,6 @@ Proof.
   now apply fst_InMembers.
 Qed.
 
-(* Lemma HasClock_In : *)
-(*   forall Γ x ck, *)
-(*     HasClock Γ x ck -> *)
-(*     In x (List.map fst Γ). *)
-(* Proof. *)
-(*   intros * Hc. *)
-(*   inv Hc. *)
-(*   now apply in_map with (f := fst) in H. *)
-(* Qed. *)
-
-(* TODO: move *)
-From Coq Require Import Permutation.
-Definition safe_env' (Γ : static_env) (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI) :=
-  forall x ty ck,
-    HasType Γ x ty ->
-    HasClock Γ x ck ->
-    let s := denot_var ins envI env x in
-    wt_DS ty s
-    /\ wc_DS ins envI bs env ck s
-    /\ safe_DS s.
-
-Lemma sssss : forall Γ ins envI bs env, safe_env Γ ins envI bs env <-> safe_env' Γ ins envI bs env.
-Proof.
-  unfold safe_env, wt_env, wc_env, ef_env, safe_env'.
-  split; intros * H; intros.
-  - destruct H as (?&?&?). eauto 6.
-  - repeat split; intros x ? Hx; inv Hx; edestruct H as (?&?&?);
-      try econstructor; eauto.
-Qed.
 
 (** * Deuxième partie : montrer que safe_env est préservé *)
 Theorem safe_equ :
@@ -1238,7 +1218,6 @@ Proof.
           eauto using Forall2_length).
     eapply safe_exps in Safe as Ss; eauto.
     destruct Ss as (Wts & Wcs & Sfs).
-    apply sssss in Safe; apply sssss.
     intros x ty ck Hty Hck.
     edestruct Safe as (Wc & Wt & Ef); eauto.
     eapply Permutation_in, in_app_or in Hperm; eauto using IsVar_In, HasClock_IsVar.

@@ -63,19 +63,19 @@ Proof.
 Qed.
 
 (* donne le p-ème flot de np ou DS_const (err error_Ty) *)
-Fixpoint get_nth {n} (np : nprod n) (p : nat) {struct p} : DS (sampl value) :=
+Fixpoint get_nth (p : nat) {n} : nprod n -C-> DS (sampl value) :=
   match p with
-  | O => nprod_fst np
-  | S p => match n return nprod n -> _ with
-          | O => fun _ => DS_const (err error_Ty)
-          | S _ => fun np => get_nth (nprod_skip np) p
-          end np
+  | O => nprod_fst
+  | S p => match n return nprod n -C-> _ with
+          | O => CTE _ _ (DS_const (err error_Ty))
+          | S _ => get_nth p @_ nprod_skip
+          end
   end.
 
 Lemma get_nth_Oeq_compat :
-  forall n (np np' : nprod n),
+  forall n k (np np' : nprod n),
     np == np' ->
-    forall k, get_nth np k == get_nth np' k.
+    get_nth k np == get_nth k np'.
 Proof.
   induction n; simpl; intros * Heq.
   - destruct k; auto.
@@ -84,15 +84,15 @@ Proof.
     + simpl. autorewrite with cpodb. auto.
 Qed.
 
-Global Add Parametric Morphism n : get_nth
-       with signature (@Oeq (nprod n)) ==> eq ==> (@Oeq (DS (sampl value))) as get_nth_compat_morph.
+Global Add Parametric Morphism n k : (get_nth k)
+       with signature (@Oeq (nprod n)) ==> (@Oeq (DS (sampl value))) as get_nth_compat_morph.
 Proof.
-  exact (get_nth_Oeq_compat n).
+  exact (get_nth_Oeq_compat n k).
 Qed.
 
 Lemma get_nth_skip :
   forall {n} (np : nprod (S n)) k,
-    get_nth (nprod_skip np) k = get_nth np (S k).
+    get_nth k (nprod_skip np) = get_nth (S k) np.
 Proof.
   induction k; auto.
 Qed.
@@ -100,28 +100,30 @@ Qed.
 Lemma nprod_app_nth1 :
   forall m n (mp : nprod m) (np : nprod n) k,
     k < m ->
-    get_nth (nprod_app mp np) k = get_nth mp k.
+    get_nth k (nprod_app mp np) = get_nth k mp.
 Proof.
   induction m; intros * Hk.
   - inversion Hk.
   - destruct k; simpl.
     + now setoid_rewrite nprod_fst_app.
-    + rewrite <- (IHm n _ np); auto with arith.
+    + autorewrite with cpodb.
+      rewrite <- (IHm n _ np); auto with arith.
       destruct m; simpl; auto; lia.
 Qed.
 
 Lemma nprod_app_nth2 :
   forall m n (mp : nprod m) (np : nprod n) k,
     k >= m ->
-    get_nth (nprod_app mp np) k = get_nth np (k-m).
+    get_nth k (nprod_app mp np) = get_nth (k-m) np.
 Proof.
   induction m; intros * Hk.
-  - simpl in *. autorewrite with cpodb; auto with arith.
+  - simpl in *. autorewrite with cpodb; repeat f_equal; auto with arith.
   - Opaque nprod_app.
     destruct k; simpl.
     + lia.
     + destruct m, n; auto with arith.
       * destruct k; simpl; now autorewrite with cpodb.
+      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
       * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
       * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
 Qed.
@@ -159,7 +161,7 @@ Lemma lift2_nth :
   forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
   forall {n} (np np' : nprod n) k,
     k < n ->
-    get_nth (lift2 f np np') k = f _ (get_nth np k) (get_nth np' k).
+    get_nth k (lift2 f np np') = f _ (get_nth k np) (get_nth k np').
 Proof.
   induction n as [|[]]; intros; auto; try lia.
   - destruct k; simpl; auto; lia.
@@ -182,7 +184,7 @@ Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
 Lemma get_nth_const :
   forall c n k,
     k < n ->
-    get_nth (nprod_const c n) k = DS_const c.
+    get_nth k (nprod_const c n) = DS_const c.
 Proof.
   induction n as [|[]]; intros * Hk.
   - inversion Hk.
@@ -238,7 +240,7 @@ Qed.
 
 Lemma forall_nprod_k :
   forall {n} (np : nprod n),
-    (forall k, k < n -> P (get_nth np k)) ->
+    (forall k, k < n -> P (get_nth k np)) ->
     forall_nprod np.
 Proof.
   induction n as [|[]]; intros * Hk.
@@ -254,7 +256,7 @@ Qed.
 Lemma forall_nprod_k' :
   forall {n} (np : nprod n),
     forall_nprod np ->
-    (forall k, k < n -> P (get_nth np k)).
+    (forall k, k < n -> P (get_nth k np)).
 Proof.
   induction n as [|[]]; intros * Hk.
   - lia.
@@ -270,7 +272,7 @@ Qed.
 
 Lemma forall_nprod_k_iff :
   forall {n} (np : nprod n),
-    forall_nprod np <-> (forall k, k < n -> P (get_nth np k)).
+    forall_nprod np <-> (forall k, k < n -> P (get_nth k np)).
 Proof.
   split; auto using forall_nprod_k, forall_nprod_k'.
 Qed.
@@ -636,7 +638,7 @@ Lemma denot_equation_eq :
          let ss := denot_exps ins es envI bs env in
          match mem_nth xs x with
          | None => DS_const (err error_Ty)
-         | Some n => get_nth ss n
+         | Some n => get_nth n ss
          end
        else DS_const (err error_Ty).
 Proof.

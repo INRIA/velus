@@ -95,7 +95,7 @@ Module Type LDENOTINF
 
   Definition P_exp (n : nat) ins envI bs env (e : exp) (k : nat) : Prop :=
     let ss := denot_exp ins e envI bs env in
-    is_cons (nrem n (get_nth ss k)).
+    is_cons (nrem n (get_nth k ss)).
 
   Lemma P_vars_In :
     forall n env xs x,
@@ -154,7 +154,7 @@ Module Type LDENOTINF
 
   Lemma P_exps_k : forall n es ins envI bs env k,
       P_exps (P_exp n ins envI bs env) es k ->
-      is_cons (nrem n (get_nth (denot_exps ins es envI bs env) k)).
+      is_cons (nrem n (get_nth k (denot_exps ins es envI bs env))).
   Proof.
     induction es as [| e es]; intros * Hp (* Hwl Hr *); inv Hp; simpl_Forall.
     - setoid_rewrite denot_exps_eq.
@@ -223,7 +223,7 @@ Module Type LDENOTINF
       rewrite denot_exp_eq.
       cases_eqn HH; subst.
       1,3: inv Hwl; rewrite <- length_typeof_numstreams, HH in *; now simpl in *.
-      assert (is_cons (nrem O (get_nth (denot_exp ins e1 envI bs env0) 0))) as He.
+      assert (is_cons (nrem O (get_nth 0 (denot_exp ins e1 envI bs env0)))) as He.
       { inv Hwl. apply H; auto. }
       revert He.
       generalize (denot_exp ins e1 envI bs env0).
@@ -282,7 +282,7 @@ Module Type LDENOTINF
       rewrite denot_exp_eq.
       cases_eqn HH; subst.
       1,3: inv Hwl; rewrite <- length_typeof_numstreams, HH in *; now simpl in *.
-      assert (is_cons (nrem n (get_nth (denot_exp ins e envI bs env) 0))) as He.
+      assert (is_cons (nrem n (get_nth 0 (denot_exp ins e envI bs env)))) as He.
       { inv Hwl. inv Hwx. eapply IHe; auto; lia. }
       revert He.
       generalize (denot_exp ins e envI bs env).
@@ -375,7 +375,7 @@ Module Type LDENOTINF
       rewrite denot_exp_eq.
       cases_eqn HH; subst.
       1,3: inv Hwl; rewrite <- length_typeof_numstreams, HH in *; now simpl in *.
-      assert (is_cons (nrem (S n) (get_nth (denot_exp ins e1 envI bs env) 0))) as He.
+      assert (is_cons (nrem (S n) (get_nth 0 (denot_exp ins e1 envI bs env)))) as He.
       { inv Hwl. inv Hwx. apply H; auto. }
       revert He.
       generalize (denot_exp ins e1 envI bs env).
