@@ -193,27 +193,6 @@ Proof.
     rewrite <- get_nth_skip, IHn; auto with arith.
 Qed.
 
-(* TODO: bouger ? *)
-Fixpoint list_of_nprod {n} (np : nprod n) : list (DS (sampl value)) :=
-  match n return nprod n -> _ with
-  | O => fun _ => []
-  | S m => fun np => nprod_fst np :: match m with
-                   | O => []
-                   | _ => list_of_nprod (nprod_skip np)
-                   end
-  end np.
-
-Lemma list_of_nprod_app :
-  forall {n m} (np : nprod n) (mp : nprod m),
-    list_of_nprod (nprod_app np mp) = list_of_nprod np ++ list_of_nprod mp.
-Proof.
-  induction n as [|[]]; intros; auto.
-  - destruct m; auto.
-  - destruct np as (p,np).
-    specialize (IHn _ np mp).
-    simpl; f_equal; auto.
-Qed.
-
 End Nprod.
 
 Section Forall_Nprod.
@@ -348,6 +327,104 @@ Proof.
     split; auto.
     now apply IHn.
 Qed.
+
+
+(* TODO: bouger cette section et les précédentes dans un autre fichier *)
+Section List_of_nprod.
+
+Fixpoint list_of_nprod {n} (np : nprod n) : list (DS (sampl value)) :=
+  match n return nprod n -> _ with
+  | O => fun _ => []
+  | S m => fun np => nprod_fst np :: match m with
+                   | O => []
+                   | _ => list_of_nprod (nprod_skip np)
+                   end
+  end np.
+
+Lemma list_of_nprod_app :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    list_of_nprod (nprod_app np mp) = list_of_nprod np ++ list_of_nprod mp.
+Proof.
+  induction n as [|[]]; intros; auto.
+  - destruct m; auto.
+  - destruct np as (p,np).
+    specialize (IHn _ np mp).
+    simpl; f_equal; auto.
+Qed.
+
+Lemma list_of_nprod_nth :
+  forall {n} (np : nprod n) k d,
+    k < n ->
+    nth k (list_of_nprod np) d = get_nth k np.
+Proof.
+  induction n as [|[]]; auto; intros * Hk. inv Hk.
+  - destruct k as [|[]]; now inv Hk.
+  - destruct k; auto.
+    apply IHn; auto with arith.
+Qed.
+
+Lemma forall_nprod_Forall :
+  forall P {n} (np : nprod n),
+    forall_nprod P np ->
+    Forall P (list_of_nprod np).
+Proof.
+  induction n as [|[]]; intros * Hf.
+  - constructor.
+  - constructor; auto.
+  - inversion Hf.
+    constructor; auto.
+    now apply IHn.
+Qed.
+
+Lemma Forall_forall_nprod :
+  forall P {n} (np : nprod n),
+    Forall P (list_of_nprod np) ->
+    forall_nprod P np.
+Proof.
+  induction n as [|[]]; intros * Hf.
+  - constructor.
+  - inv Hf. auto.
+  - inv Hf.
+    constructor; auto.
+    now apply IHn.
+Qed.
+
+Lemma list_of_nprod_length :
+  forall {n} (np : nprod n),
+    length (list_of_nprod np) = n.
+Proof.
+  induction n as [|[]]; auto.
+  intros []; simpl.
+  f_equal. apply IHn.
+Qed.
+
+(* TODO: pourquoi faut-il spécifier tous les types ? *)
+Lemma Forall2_lift2 :
+  forall {A} (F : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A))
+    (P Q : A -> DS (sampl value) -> Prop),
+    (forall a x y, P a x -> P a y -> Q a (F _ x y)) ->
+    forall l {n} (l1 l2 : nprod n),
+      Forall2 P l (list_of_nprod l1) ->
+      Forall2 P l (list_of_nprod l2) ->
+      Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
+Proof.
+  induction l as [|? []]; intros * Hl1 Hl2.
+  - simpl_Forall.
+    destruct n; simpl in *; auto; congruence.
+  - destruct n as [|[]]; simpl in *; simpl_Forall.
+    cbn; auto.
+  - destruct n as [|[]]; auto.
+    inv Hl1; simpl_Forall.
+    inv Hl1; simpl_Forall.
+    destruct l1 as (s1&l1), l2 as (s2&l2).
+    specialize (IHl _ l1 l2).
+    rewrite lift2_simpl.
+    constructor.
+    + inv Hl1. inv Hl2. cbn; auto.
+    + inv Hl1. inv Hl2. auto.
+Qed.
+
+End List_of_nprod.
 
 
 Section EXP.
@@ -598,6 +675,10 @@ Defined.
 
 Section Equation_spec.
 
+
+(* TODO: bouger cette section, mais où ? *)
+Section Mem_nth.
+
 (* retourne l'indice de l'élément dans la liste *)
 Fixpoint mem_nth (l : list ident) (x : ident) : option nat :=
   match l with
@@ -628,6 +709,31 @@ Proof.
   destruct (ident_eq_dec x y); subst; auto.
   apply option_map_inv in Hm as (?&?&?); eauto.
 Qed.
+
+Lemma mem_nth_Some :
+  forall x l k d,
+    mem_nth l x = Some k ->
+    k < length l /\ nth k l d = x.
+Proof.
+  induction l; simpl; intros * Hk; try congruence.
+  destruct ident_eq_dec; subst; inv Hk; auto with arith.
+  apply option_map_inv in H0 as (?& HH &?); subst.
+  edestruct IHl; eauto with arith.
+Qed.
+
+Lemma mem_nth_nin :
+  forall x xs,
+    mem_nth xs x = None ->
+    In x xs ->
+    False.
+Proof.
+  intros * Hf Hin.
+  induction xs; simpl in *; cases.
+  apply option_map_None in Hf.
+  firstorder.
+Qed.
+
+End Mem_nth.
 
 Lemma denot_equation_eq :
   forall ins xs es envI bs env x,
@@ -727,6 +833,45 @@ Definition denot_block (ins : list ident) (b : block) :
 Definition denot_node {PSyn prefs} (n : @node PSyn prefs) :
   DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
   denot_block (List.map fst n.(n_in)) n.(n_block).
+
+
+
+Section Temp.
+
+(* TODO: pour l'instant on se restreint aux cas suivants *)
+Inductive restr_exp : exp -> Prop :=
+| restr_Econst :
+  forall c,
+    restr_exp (Econst c)
+| restr_Evar :
+  forall x ann,
+    restr_exp (Evar x ann)
+| restr_Eunop :
+  forall op e ann,
+    restr_exp e ->
+    restr_exp (Eunop op e ann)
+| restr_Efby :
+  forall e0s es anns,
+    Forall restr_exp e0s ->
+    Forall restr_exp es ->
+    restr_exp (Efby e0s es anns)
+(* | restr_Eapp : *)
+(*   forall f es ers anns, *)
+(*     Forall restr_exp es -> *)
+(*     Forall restr_exp ers -> *)
+(*     restr_exp (Eapp f es ers anns) *)
+.
+
+Inductive restr_block : block -> Prop :=
+| restr_Beq :
+  forall xs es,
+    Forall restr_exp es ->
+    restr_block (Beq (xs,es)).
+
+Definition restr_node {PSyn prefs} (nd : @node PSyn prefs) : Prop :=
+  restr_block nd.(n_block).
+
+End Temp.
 
 End LDENOT.
 

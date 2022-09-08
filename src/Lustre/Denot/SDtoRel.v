@@ -27,39 +27,6 @@ Module Type SDTOREL
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Str Den)
        (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Str Den).
 
-(* TODO: pour l'instant on se restreint aux cas suivants *)
-Inductive restr_exp : exp -> Prop :=
-| restr_Econst :
-  forall c,
-    restr_exp (Econst c)
-| restr_Evar :
-  forall x ann,
-    restr_exp (Evar x ann)
-| restr_Eunop :
-  forall op e ann,
-    restr_exp e ->
-    restr_exp (Eunop op e ann)
-| restr_Efby :
-  forall e0s es anns,
-    Forall restr_exp e0s ->
-    Forall restr_exp es ->
-    restr_exp (Efby e0s es anns)
-(* | restr_Eapp : *)
-(*   forall f es ers anns, *)
-(*     Forall restr_exp es -> *)
-(*     Forall restr_exp ers -> *)
-(*     restr_exp (Eapp f es ers anns) *)
-.
-
-Inductive restr_block : block -> Prop :=
-| restr_Beq :
-  forall xs es,
-    Forall restr_exp es ->
-    restr_block (Beq (xs,es)).
-
-Definition restr_node {PSyn prefs} (nd : @node PSyn prefs) : Prop :=
-  restr_block nd.(n_block).
-
 
 CoFixpoint DS_of_S {A} (s : Stream A) : DS A :=
   match s with
