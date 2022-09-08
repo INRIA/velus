@@ -285,6 +285,36 @@ Proof.
   now apply Con_tl_simpl in H.
 Qed.
 
+Lemma Con_le_simpl : forall D a b (s t : DS_ord D),
+    (Con a s:DS_ord D) <= Con b t -> a = b /\ s <= t.
+Proof.
+  split.
+  now apply DSleCon_hd in H.
+  now apply DSleCon_tl in H.
+Qed.
+
+Lemma DSle_cons_elim :
+  forall D (x :  DS D) a (s : DS D),
+    (Con a s : DS D) <= x ->
+    exists t, x == Con a t /\ s <= t.
+Proof.
+  intros * Hle.
+  apply DSle_uncons in Hle as [? [ Hd]].
+  apply decomp_eqCon in Hd; eauto.
+Qed.
+
+Lemma Con_le_le :
+  forall D x xs y ys t,
+    (Con x xs : DS D) <= t ->
+    (Con y ys : DS D) <= t ->
+    x = y.
+Proof.
+  intros * Le1 Le2.
+  eapply DSle_cons_elim in Le1 as (?& Hx &?), Le2 as (?& Hy &?).
+  rewrite Hx in Hy.
+  now apply Con_eq_simpl in Hy as [].
+Qed.
+
 Lemma app_app : forall D (s t u : DS D),
     app (app s u) t == app s t.
 Proof.

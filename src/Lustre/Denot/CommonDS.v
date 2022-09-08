@@ -180,6 +180,13 @@ Section DS_Forall.
     split; [|symmetry in H]; apply DSForall_Oeq; assumption.
   Qed.
 
+  Lemma DSForall_le : forall x y, x <= y -> DSForall y -> DSForall x.
+  Proof.
+    cofix Cof; destruct x; intros ? Le Hf; constructor;
+      inversion Le as [|???? HH]; eauto 2.
+    all: apply decomp_eqCon in HH; rewrite HH in *; inv Hf; eauto 2.
+  Qed.
+
   Lemma DSForall_bot : DSForall (DS_bot A).
   Proof.
     cofix Cof.
