@@ -85,6 +85,7 @@ src/Lustre/Denot/Denot.v
 src/Lustre/Denot/Infty.v
 src/Lustre/Denot/InftyProof.v
 src/Lustre/Denot/Safe.v
+src/Lustre/Denot/SDtoRel.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
