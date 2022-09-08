@@ -401,7 +401,7 @@ Section exp_safe.
   Qed.
 
   (** ** Faits sur fby1/fby *)
-  Axiom DEBUG : forall {A:Type},A.
+
   Lemma ty_fby1 :
     forall ty b ov xs ys,
       (match ov with Some v => wt_value v ty | _ => True end) ->
