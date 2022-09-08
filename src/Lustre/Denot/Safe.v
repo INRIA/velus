@@ -703,7 +703,7 @@ Section exp_safe.
       | [ v : _ |- _ ] => specialize (H v)
       end.
 
-  Lemma safe_exp :
+  Lemma safe_exp_ :
     safe_env ->
     forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
       restr_exp e ->
@@ -779,7 +779,21 @@ Section exp_safe.
         all: now rewrite list_of_nprod_length, map_length.
   Qed.
 
-  Lemma safe_exps :
+  Corollary safe_exp :
+    safe_env ->
+    forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
+      restr_exp e ->
+      wt_exp G Γ e ->
+      wc_exp G Γ e ->
+      op_correct_exp ins envI bs env e ->
+      let ss := denot_exp ins e envI bs env in
+      forall_nprod safe_DS ss.
+  Proof.
+    intros.
+    edestruct safe_exp_ as (?&?&?); eauto.
+  Qed.
+
+  Lemma safe_exps_ :
     safe_env ->
     forall {PSyn Prefs} (G : @global PSyn Prefs) (es : list exp),
       Forall restr_exp es ->
@@ -795,10 +809,24 @@ Section exp_safe.
     induction es as [|e es]; simpl; auto; intros.
     simpl_Forall.
     destruct IHes as (?&?&?); auto.
-    eapply safe_exp in Safe as (?&?&?); eauto.
+    eapply safe_exp_ in Safe as (?&?&?); eauto.
     setoid_rewrite denot_exps_eq.
     setoid_rewrite list_of_nprod_app.
     repeat split; auto using Forall2_app, forall_nprod_app.
+  Qed.
+
+  Corollary safe_exps :
+    safe_env ->
+    forall {PSyn Prefs} (G : @global PSyn Prefs) (es : list exp),
+      Forall restr_exp es ->
+      Forall (wt_exp G Γ) es ->
+      Forall (wc_exp G Γ) es ->
+      Forall (op_correct_exp ins envI bs env) es ->
+      let ss := denot_exps ins es envI bs env in
+      forall_nprod safe_DS ss.
+  Proof.
+    intros.
+    edestruct safe_exps_ as (?&?&?); eauto.
   Qed.
 
 End exp_safe.
@@ -1038,7 +1066,7 @@ Proof.
   assert (length xs = list_sum (List.map numstreams es))
     by (rewrite <- annots_numstreams, <- length_typesof_annots;
         eauto using Forall2_length).
-  eapply safe_exps in Safe as Ss; eauto.
+  eapply safe_exps_ in Safe as Ss; eauto.
   destruct Ss as (Wts & Wcs & Sfs).
   intros x ty ck Hty Hck.
   edestruct Safe as (Wc & Wt & Ef); eauto.
