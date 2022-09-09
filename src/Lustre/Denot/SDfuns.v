@@ -214,8 +214,9 @@ Section SStream_functions.
     intros.
     unfold fby1AP, fby1s.
     assert (Heq:=FIXP_eq fby1sf).
-    rewrite (ford_eq_elim (ford_eq_elim Heq true)).
-    now rewrite fby1APf_eq.
+    pose proof (ford_eq_elim (ford_eq_elim Heq true)) as ->.
+    rewrite fby1APf_eq.
+    unfold fby1, fby1s; auto.
   Qed.
 
   Lemma fby1_eq : forall ov x xs ys,
@@ -231,7 +232,8 @@ Section SStream_functions.
     unfold fby1, fby1s.
     assert (Heq:=FIXP_eq fby1sf).
     rewrite (ford_eq_elim (ford_eq_elim Heq false)).
-    now rewrite fby1f_eq.
+    rewrite fby1f_eq.
+    unfold fby1AP, fby1s; auto.
   Qed.
 
   Lemma fby1AP_cons :
@@ -348,7 +350,7 @@ Section SStream_functions.
     intros.
     unfold fbys.
     assert (Heq:=FIXP_eq fbysf).
-    rewrite (ford_eq_elim (ford_eq_elim Heq false) (cons x xs)).
+    pose proof (ford_eq_elim (ford_eq_elim Heq false) (cons x xs)) as ->.
     now rewrite <- fbyf_eq.
   Qed.
 
@@ -363,7 +365,7 @@ Section SStream_functions.
     intros.
     unfold fbys.
     assert (Heq:=FIXP_eq fbysf).
-    rewrite (ford_eq_elim (ford_eq_elim Heq true) xs).
+    pose proof (ford_eq_elim (ford_eq_elim Heq true) xs) as ->.
     now rewrite <- fbyAf_eq.
   Qed.
 
