@@ -128,6 +128,11 @@ Proof.
       * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
 Qed.
 
+(* TODO: !! simplifier
+   comme nprod ne concerne que les value, le polymorphisme de F est inutile.
+   Donc changer soit le type de F, soit le type de nprod (paramétré par un
+   type de flot ??
+ *)
 Fixpoint lift (F : forall D, DS (sampl D) -C-> DS (sampl D)) {n} {struct n} : nprod n -C-> nprod n :=
   match n with
   | O => ID _
@@ -137,6 +142,40 @@ Fixpoint lift (F : forall D, DS (sampl D) -C-> DS (sampl D)) {n} {struct n} : np
       | S _ => fun fn => PROD_map (F _) fn
       end (@lift F n)
   end.
+
+(* TODO: comment le définir directement ? *)
+Definition llift D (F : DS (sampl value) -C-> D -C-> DS (sampl value)) {n} :
+  nprod n -C-> D -C-> nprod n.
+  induction n as [|[]].
+  - apply CTE.
+  - apply F.
+  - apply curry.
+    apply (fcont_comp2 (PAIR _ _)).
+    exact ((F @2_ (FST _ _ @_ FST _ _)) (SND _ _)).
+    exact ((IHn @2_ (SND _ _ @_ FST _ _)) (SND _ _)).
+Defined.
+
+Lemma llift_simpl :
+  forall D F n d u U,
+    @llift D F (S (S n)) (u, U) d = (F u d, @llift D F (S n) U d).
+Proof.
+  trivial.
+Qed.
+
+Lemma llift_nth :
+  forall D F d,
+  forall {n} (np : nprod n) k,
+    k < n ->
+    get_nth k (llift D F np d) = F (get_nth k np) d.
+Proof.
+  induction n as [|[]]; intros; auto; try lia.
+  - destruct k; simpl; auto; lia.
+  - destruct np.
+    rewrite llift_simpl.
+    destruct k; auto.
+    rewrite <- get_nth_skip.
+    setoid_rewrite <- IHn; auto with arith.
+Qed.
 
 Definition lift2
   (F : forall A : Type, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) {n} :
@@ -328,6 +367,35 @@ Proof.
     now apply IHn.
 Qed.
 
+Lemma forall_nprod_and :
+  forall (P Q : DS (sampl value) -> Prop),
+    forall {n} (np : nprod n),
+    forall_nprod P np ->
+    forall_nprod Q np ->
+    forall_nprod (fun x => P x /\ Q x) np.
+Proof.
+  induction n as [|[]]; intros * Hp Hq; auto.
+  - constructor; auto.
+  - inv Hp. inv Hq.
+    constructor; auto; now apply IHn.
+Qed.
+
+Lemma forall_nprod_llift :
+  forall D (F : DS (sampl value) -C-> D -C-> DS (sampl value)) d,
+  forall (P Q : DS (sampl value) -> Prop),
+    (forall x, Q x -> P (F x d)) ->
+    forall {n} (np : nprod n),
+      forall_nprod Q np ->
+      forall_nprod P (llift _ F np d).
+Proof.
+  intros D F d ?? Hf.
+  induction n as [|[]]; intros * H; auto.
+  simpl in *; auto.
+  destruct np, H.
+  rewrite llift_simpl.
+  split; simpl in *; auto .
+  now apply IHn.
+Qed.
 
 (* TODO: bouger cette section et les précédentes dans un autre fichier *)
 Section List_of_nprod.
@@ -398,7 +466,6 @@ Proof.
   f_equal. apply IHn.
 Qed.
 
-(* TODO: pourquoi faut-il spécifier tous les types ? *)
 Lemma Forall2_lift2 :
   forall {A} (F : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A))
     (P Q : A -> DS (sampl value) -> Prop),
@@ -424,6 +491,47 @@ Proof.
     + inv Hl1. inv Hl2. auto.
 Qed.
 
+Lemma Forall2_llift :
+  forall {A} D d (F : DS (sampl value) -C-> D -C-> DS (sampl value))
+    (P Q : A -> DS (sampl value) -> Prop),
+    (forall a x, P a x -> Q a (F x d)) ->
+    forall (l : list A) {n} (l1 : nprod n),
+      Forall2 P l (list_of_nprod l1) ->
+      Forall2 Q l (list_of_nprod (llift _ F l1 d)).
+Proof.
+  induction l as [|? []]; intros * Hl1.
+  - simpl_Forall.
+    destruct n; simpl in *; auto; congruence.
+  - destruct n as [|[]]; simpl in *; simpl_Forall.
+    cbn; auto.
+  - destruct n as [|[]]; auto.
+    inv Hl1; simpl_Forall.
+    inv Hl1; simpl_Forall.
+    destruct l1 as (s1&l1).
+    specialize (IHl _ l1).
+    rewrite llift_simpl.
+    constructor.
+    + inv Hl1. cbn; auto.
+    + inv Hl1. auto.
+Qed.
+
+Lemma Forall_llift :
+  forall D d (F : DS (sampl value) -C-> D -C-> DS (sampl value))
+    (P Q : DS (sampl value) -> Prop),
+    (forall x, P x -> Q (F x d)) ->
+    forall {n} (np : nprod n),
+      Forall P (list_of_nprod np) ->
+      Forall Q (list_of_nprod (llift _ F np d)).
+Proof.
+  intros * HPQ.
+  induction n as [|[]]; intros * Hp.
+  - simpl_Forall. easy.
+  - simpl_Forall. destruct H; subst; try tauto; now apply HPQ.
+  - constructor.
+    + apply HPQ. now inv Hp.
+    + apply IHn; inv Hp; auto.
+Qed.
+
 End List_of_nprod.
 
 
@@ -431,10 +539,19 @@ Section EXP.
 
 Definition SI := fun _ : ident => sampl value.
 
+(* l'opérateur swhen spécialisé aux Velus.Op.value *)
+Definition swhenv :=
+  let get_tag := fun v => match v with Venum t => Some t | _ => None end in
+  @swhen value value enumtag get_tag Nat.eqb.
+
 Definition denot_exp_ (ins : list ident)
   (e : exp) :
   (* (inputs * base clock * env) -> streams *)
   Dprod (Dprod (DS_prod SI) (DS bool)) (DS_prod SI) -C-> nprod (numstreams e).
+  epose (denot_var :=
+       fun x => if mem_ident x ins
+             then PROJ (DS_fam SI) x @_ FST _ _ @_ FST _ _
+             else PROJ (DS_fam SI) x @_ SND _ _).
   revert e.
   fix denot_exp 1.
   intro e.
@@ -444,9 +561,7 @@ Definition denot_exp_ (ins : list ident)
   - (* Eenum *)
     apply CTE, (DS_const (err error_Ty)).
   - (* Evar *)
-    exact (if mem_ident i ins
-           then PROJ (DS_fam SI) i @_ FST _ _ @_ FST _ _
-           else PROJ (DS_fam SI) i @_ SND _ _).
+    exact (denot_var i).
   - (* Elast *)
     apply CTE, (DS_const (err error_Ty)).
   - (* Eunop *)
@@ -493,7 +608,19 @@ Definition denot_exp_ (ins : list ident)
   - (* Earrow *)
     apply CTE, (nprod_const (err error_Ty)).
   - (* Ewhen *)
-    apply CTE, (nprod_const (err error_Ty)).
+    rename l into es.
+    destruct l0 as (tys,ck).
+    destruct (Nat.eq_dec
+                (length tys)
+                (list_sum (List.map numstreams es))
+             ) as [->|].
+    2: apply CTE, (nprod_const (err error_Ty) _).
+    assert (Dprod (Dprod (DS_prod SI) (DS bool)) (DS_prod SI) -C-> nprod (list_sum (List.map numstreams es))) as ss.
+    { clear He.
+      induction es as [|a].
+      + exact (CTE _ _ (DS_const (err error_Ty))).
+      + exact ((nprod_app @2_ (denot_exp a)) IHes). }
+    exact ((llift _ (swhenv e0) @2_ ss) (denot_var i)).
   - (* Emerge *)
     apply CTE, (nprod_const (err error_Ty)).
   - (* Ecase *)
@@ -577,8 +704,13 @@ Lemma denot_exp_eq :
       (*     lift2 s (@arrow) _ (denot_exp e0 genv env bs) (denot_exp e genv env bs) *)
       (* | Epair _ _ e1 e2 => *)
       (*     PAIR_flat s _ _ (denot_exp e1 genv env bs) (denot_exp e2 genv env bs) *)
-      (* | Ewhen _ x vd e => *)
-      (*     llift s _ (@when) _ (denot_var s thisd x vd env) (denot_exp e genv env bs) *)
+      | Ewhen es x k (tys,_) =>
+          let ss := denot_exps ins es envI bs env in
+          match  Nat.eq_dec (length tys) (list_sum (List.map numstreams es)) with
+          | left eqn =>
+              eq_rect_r nprod (llift _ (swhenv k) ss (denot_var ins envI env x)) eqn
+          | _ => nprod_const (err error_Ty) _
+          end
       (* | Emerge _ x vd eT eF => *)
       (*     llift2 s _ (@merge) _ (denot_var s thisd x vd env) *)
       (*       (denot_exp eT genv env bs) (denot_exp eF genv env bs) *)
@@ -624,6 +756,18 @@ Proof.
          generalize (denot_exps_ ins D); intro (* pour pouvoir détruire E1 et E2 *)
       end.
     now destruct E1, E2.
+  - (* Ewhen *)
+    destruct l0 as (tys,?).
+    unfold denot_exp, denot_exp_, denot_var at 1.
+    (* unfold denot_exp, denot_exp_ at 1. *)
+    destruct (Nat.eq_dec _ _) as [E|]; auto.
+    unfold denot_exps.
+    match goal with
+     | |- context [  (list_rect ?A ?B ?C ?D) ] =>
+         change (list_rect A B C D) with (denot_exps_ ins D);
+         generalize (denot_exps_ ins D); intro (* pour pouvoir détruire E1 et E2 *)
+    end.
+    unfold eq_rect_r, eq_rect, eq_sym; cases.
 Qed.
 
 Global Opaque denot_exp.
@@ -855,6 +999,10 @@ Inductive restr_exp : exp -> Prop :=
     Forall restr_exp e0s ->
     Forall restr_exp es ->
     restr_exp (Efby e0s es anns)
+| restr_Ewhen :
+  forall es x k anns,
+    Forall restr_exp es ->
+    restr_exp (Ewhen es x k anns)
 (* | restr_Eapp : *)
 (*   forall f es ers anns, *)
 (*     Forall restr_exp es -> *)

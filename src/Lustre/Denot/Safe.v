@@ -29,6 +29,18 @@ Proof.
 Qed.
 
 (* TODO: move to Vélus *)
+Lemma Forall2_Forall_eq :
+  forall {A B} (P : A -> B -> Prop) a l1 l2,
+    Forall (eq a) l1 ->
+    Forall2 P l1 l2 ->
+    Forall (P a) l2.
+Proof.
+  induction 2; auto.
+  inv H.
+  constructor; auto.
+Qed.
+
+(* TODO: move to Vélus *)
 Lemma Forall2_Forall3 :
   forall {A B C} (P : A -> B -> Prop) (Q : B -> C -> Prop) xs ys zs,
     Forall2 P xs ys ->
@@ -143,6 +155,10 @@ Inductive op_correct_exp : exp -> Prop :=
     Forall op_correct_exp e0s ->
     Forall op_correct_exp es ->
     op_correct_exp (Efby e0s es anns)
+| opc_Ewhen :
+  forall es x k anns,
+    Forall op_correct_exp es ->
+    op_correct_exp (Ewhen es x k anns)
 .
 
 Definition op_correct {PSyn prefs} (n : @node PSyn prefs) : Prop :=
@@ -211,13 +227,19 @@ Section exp_safe.
     split; eauto using map_is_cons, is_cons_map.
   Qed.
 
+  Definition sample (k : enumtag) (x : sampl value) (c : bool) : bool :=
+    match x with
+    | pres (Venum e) => (k =? e) && c
+    | _ => false
+    end.
+
   Fixpoint denot_clock ck : DS bool :=
     match ck with
     | Cbase => bs
     | Con ck x (_, k) =>
         let sx := denot_var ins envI env x in
         let cks := denot_clock ck in
-        ZIP (fun x c => match x with pres (Venum e) => (e ==b k) && c | _ => false end) sx cks
+        ZIP (sample k) sx cks
     end.
 
   (* TODO: renommer en ty_DS, cl_DS ?? *)
@@ -225,6 +247,14 @@ Section exp_safe.
   (** A stream of values of type ty *)
   Definition ty_DS (ty : type) (s : DS (sampl value)) :=
     DSForall_pres (fun v => wt_value v ty) s.
+
+  Add Parametric Morphism : ty_DS
+      with signature eq ==> @Oeq (DS (sampl value)) ==> iff as ty_DS_Morph.
+  Proof.
+    unfold ty_DS.
+    intros * H.
+    now setoid_rewrite H.
+  Qed.
 
   (** A stream that respects its clock (≃ alignment).
       Because the stream might not yet be fully computed, we use
@@ -656,6 +686,106 @@ Section exp_safe.
       apply safe_fby1 with (rem cs); auto.
   Qed.
 
+
+  (** ** Faits sur swhenv *)
+
+  Lemma ty_swhenv :
+    forall ty xs tx tn k cs,
+      k < length tn ->
+      ty_DS ty xs ->
+      ty_DS (Tenum tx tn) cs ->
+      ty_DS ty (swhenv k xs cs).
+  Proof.
+    intros * Hk Wtx Wtc.
+    unfold ty_DS, DSForall_pres, swhenv in *.
+    remember (swhen _ _ _ _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert dependent cs.
+    revert dependent xs.
+    revert t.
+    cofix Cof; intros.
+    destruct t.
+    { constructor; rewrite <- eqEps in *; now eauto 2. }
+    assert (is_cons (swhen _ _ _ k xs cs)) as Hc by (rewrite <- Ht; auto).
+    apply swhen_cons in Hc as [Hx Hc].
+    apply is_cons_elim in Hc as (?&?&Hc), Hx as (?&?&Hx).
+    rewrite Hx, Hc in *.
+    inv Wtx. inv Wtc.
+    rewrite swhen_eq in Ht.
+    cases_eqn HH; subst; try (rewrite Ht; now apply DSForall_const).
+    all: apply Con_eq_simpl in Ht as (? & Ht); subst.
+    all: constructor; auto; eapply Cof; eauto.
+  Qed.
+
+  (* TODO: refaire les autres avec DSle_rec_eq, c'est 1000 fois mieux *)
+  Lemma cl_swhenv :
+    forall tx tn xs ck x ty k,
+      let cs := denot_var ins envI env x in
+      ty_DS (Tenum tx tn) cs
+      /\ safe_DS xs /\ cl_DS ck xs
+      /\ safe_DS cs /\ cl_DS ck cs ->
+      cl_DS (Con ck x (ty, k)) (swhenv k xs cs).
+  Proof.
+    unfold cl_DS, swhenv.
+    intros * (Tc & Sx & Cx & Sc & Cc); simpl.
+    eapply DSle_rec_eq with
+      (R := fun U V => exists xs cs cks,
+                ty_DS (Tenum tx tn) cs
+                /\ safe_DS cs
+                /\ safe_DS xs
+                /\ AC cs <= cks
+                /\ AC xs <= cks
+                /\ U == AC (swhen _ _ _ k xs cs)
+                /\ V == ZIP (sample k) cs cks).
+    3: eauto 10.
+    { intros * ? J K. setoid_rewrite <- J. setoid_rewrite <- K. eauto. }
+    clear.
+    intros u U V (xs & cs & cks & Tc & Sc & Sx & Cc & Cx & HU & HV).
+    assert (is_cons xs) as Hcx.
+    { eapply proj1, swhen_cons, AC_is_cons; now rewrite <- HU. }
+    assert (is_cons cs) as Hcc.
+    { eapply proj2, swhen_cons, AC_is_cons; now rewrite <- HU. }
+    apply is_cons_elim in Hcc as (?&?&Hc), Hcx as (?&?&Hx).
+    rewrite Hc, Hx in *. inv Sx. inv Sc. inv Tc.
+    rewrite swhen_eq in HU.
+    rewrite AC_cons in *.
+    cases_eqn HH; try take (Some _ = Some _) and inv it.
+    all: pose proof (Con_le_le _ _ _ _ _ _ Cx Cc); try easy.
+    all: try rewrite DS_const_eq in HU; rewrite AC_cons in HU.
+    all: apply Con_eq_simpl in HU as (?& Hu); subst.
+    all: apply DSle_cons_elim in Cx as (? & Hcx &?).
+    all: rewrite Hcx in *; rewrite zip_eq in HV; simpl in *.
+    all: apply Con_le_simpl in Cc as []; cases_eqn HH.
+    all: try rewrite HH2 in *; simpl in *.
+    all: do 2 esplit; eauto 10.
+  Qed.
+
+  Lemma safe_swhenv :
+    forall k tx tn ck xs cs,
+      ty_DS (Tenum tx tn) cs
+      /\ safe_DS xs /\ cl_DS ck xs
+      /\ safe_DS cs /\ cl_DS ck cs ->
+      safe_DS (swhenv k xs cs).
+  Proof.
+    unfold cl_DS, swhenv.
+    intros ????.
+    generalize (denot_clock ck); clear ck.
+    clear; intros cks * (Tx & Sx & Cx & Sc & Cc).
+    remember (swhen _ _ _ k _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    revert_all; cofix Cof; intros.
+    destruct t as [| b t].
+    { constructor. rewrite <- eqEps in Ht. apply Cof with k tx tn cks xs cs; auto. }
+    assert (is_cons xs) as Hcx by (eapply proj1, swhen_cons; now rewrite <- Ht).
+    assert (is_cons cs) as Hcc by (eapply proj2, swhen_cons; now rewrite <- Ht).
+    apply is_cons_elim in Hcx as (vx & xs' & Hx), Hcc as (vc & cs' & Hc).
+    rewrite Hx, Hc, AC_cons in *; clear Hx xs Hc cs.
+    unfold swhenv in Ht; rewrite swhen_eq in Ht.
+    cases_eqn HH; inv Sx; inv Sc; inv Tx; try tauto.
+    all: pose proof (Con_le_le _ _ _ _ _ _ Cx Cc); try easy.
+    all: apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
+    all: apply rem_le_compat in Cx, Cc; rewrite rem_cons in *.
+    all: eapply Cof with k tx tn (rem cks) xs' cs'; auto.
+  Qed.
+
   Lemma Forall_denot_exps :
     forall P ins es envI bs env,
       forall_nprod P (denot_exps ins es envI bs env)
@@ -777,6 +907,36 @@ Section exp_safe.
         all: apply Forall2_Forall2; eauto.
         all: apply Forall2_ignore1'; auto.
         all: now rewrite list_of_nprod_length, map_length.
+    - (* Ewhen *)
+      apply wt_exp_wl_exp in Hwt as Hwl.
+      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
+      apply Forall_impl_inside with (P := restr_exp) in H; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
+      apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H; auto.
+      apply Forall_and_inv in H as [Wt H'].
+      apply Forall_and_inv in H' as [Wc Sf].
+      apply Forall_ty_exp in Wt.
+      apply Forall_cl_exp in Wc.
+      apply Forall_denot_exps, forall_nprod_Forall in Sf.
+      rewrite denot_exp_eq.
+      revert Wt Wc Sf.
+      generalize (denot_exps ins es envI bs env).
+      rewrite annots_numstreams in *.
+      simpl; intros; cases; try congruence.
+      unfold eq_rect_r, eq_rect; destruct e; simpl.
+      eapply Forall2_Forall_eq in Wc; eauto.
+      edestruct Safe as (?&?&?); eauto.
+      repeat split.
+      + eapply Forall2_llift; eauto using ty_swhenv.
+      + eapply Forall2_map_1.
+        apply Forall2_ignore1'; rewrite ?list_of_nprod_length; auto.
+        eapply Forall_llift with (P := fun s => cl_DS _ s /\ safe_DS s).
+        { intros ? []. eapply cl_swhenv; eauto. }
+        apply Forall_Forall; auto.
+      + eapply forall_nprod_llift with (Q := fun s => cl_DS ck s /\ safe_DS s).
+        { intros ? []. eapply safe_swhenv. eauto. }
+        apply forall_nprod_and; auto using Forall_forall_nprod.
   Qed.
 
   Corollary safe_exp :
@@ -872,7 +1032,7 @@ Section Admissibility.
     | Con ck x (_, k) =>
         let sx := denot_var_C ins envI x in
         let cks := denot_clock_C ins envI bs ck in
-        (ZIP (fun x c => match x with pres (Venum e) => (e ==b k) && c | _ => false end) @2_ sx) cks
+        (ZIP (sample k) @2_ sx) cks
     end.
 
   Fact denot_clock_eq :

@@ -271,4 +271,49 @@ Proof.
   auto using is_consn_fby.
 Qed.
 
+Lemma is_cons_swhen :
+  forall T OT TB,
+  forall k xs cs,
+    is_cons xs ->
+    is_cons cs ->
+    is_cons (@swhen A B T OT TB k xs cs).
+Proof.
+  intros * Hx Hc.
+  apply is_cons_elim in Hx as (?&?&->).
+  apply is_cons_elim in Hc as (?&?&->).
+  rewrite swhen_eq.
+  cases; solve_err.
+Qed.
+
+Lemma is_consn_swhen :
+  forall T OT TB,
+  forall k n xs cs,
+    is_cons (nrem n xs) ->
+    is_cons (nrem n cs) ->
+    is_cons (nrem n (@swhen A B T OT TB k xs cs)).
+Proof.
+  induction n; simpl; intros * Hx Hc.
+  - apply is_cons_swhen; auto.
+  - apply is_consn_is_cons in Hx as Hx'.
+    apply is_consn_is_cons in Hc as Hc'.
+    apply is_cons_rem in Hx' as (?&?&?& Hx').
+    apply is_cons_rem in Hc' as (?&?&?& Hc').
+    rewrite Hx', Hc' in *.
+    rewrite swhen_eq.
+    cases; solve_err.
+    all: autorewrite with cpodb in Hx,Hc |- *; auto.
+Qed.
+
+Lemma swhen_inf :
+  forall T OT TB,
+  forall k xs cs,
+    infinite xs ->
+    infinite cs ->
+    infinite (@swhen A B T OT TB k xs cs).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros.
+  eauto using is_consn_swhen.
+Qed.
+
 End Ncons_ops.

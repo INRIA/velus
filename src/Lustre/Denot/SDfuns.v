@@ -426,67 +426,109 @@ Section SStream_functions.
     now apply DScase_is_cons in Hc.
   Qed.
 
-  (* Definition swhenf : *)
-  (*   (DS (sampl bool * sampl A) -C-> DS (sampl A)) -C-> *)
-  (*   DS (sampl bool * sampl A) -C-> DS (sampl A). *)
-  (*   apply curry. *)
-  (*   apply (fcont_comp2 (DSCASE (sampl bool * sampl A) (sampl A))). *)
-  (*   2:exact (SND _ _). *)
-  (*   apply ford_fcont_shift. intros (vc,vx). *)
-  (*   apply curry. *)
-  (*   match goal with *)
-  (*   | |- _ (_ (Dprod ?pl ?pr) _) => *)
-  (*       pose (f := (FST _ _ @_ (FST pl pr))); *)
-  (*       pose (CX := SND pl pr) *)
-  (*   end. *)
-  (*   destruct vc as [|c], vx as [|x]. *)
-  (*   (* asynchronous cases *) *)
-  (*   2,3: apply CTE, DS_bot. *)
-  (*   (* absent *) *)
-  (*   apply (CONS absent @_ (f @2_ ID _) CX). *)
-  (*   (* present *) *)
-  (*   destruct c. *)
-  (*   (* - true *) *)
-  (*   apply (CONS (present x) @_ (f @2_ ID _) CX). *)
-  (*   (* - false *) *)
-  (*   apply (CONS absent @_ (f @2_ ID _) CX). *)
-  (* Defined. *)
 
-  (* Lemma swhenf_eq : forall f c x CX, *)
-  (*     swhenf f (cons (c, x) CX) *)
-  (*     = match c, x with *)
-  (*       | present true, present x => cons (present x) (f CX) *)
-  (*       | present false, present x => cons absent (f CX) *)
-  (*       | absent, absent => cons absent (f CX) *)
-  (*       | _, _ => 0 *)
-  (*       end. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold swhenf. *)
-  (*   rewrite curry_Curry, Curry_simpl. *)
-  (*   setoid_rewrite DSCASE_simpl. *)
-  (*   setoid_rewrite DScase_cons. *)
-  (*   destruct c as [|[]], x; now simpl. *)
-  (* Qed. *)
+  Section When.
 
-  (* Definition swhen : DS (sampl bool) -C-> DS (sampl A) -C-> DS (sampl A) := *)
-  (*   curry (FIXP _ swhenf @_ (ZIP pair @2_ FST _ _) (SND _ _ )). *)
+  Variable enumtag : Type.
+  Variable tag_ov_val : B -> option enumtag.
+  Variable tag_eqb : enumtag -> enumtag -> bool.
 
-  (* Lemma swhen_eq : forall c C x X, *)
-  (*     swhen (cons c C) (cons x X) *)
-  (*     == match c, x with *)
-  (*        | present true, present x => cons (present x) (swhen C X) *)
-  (*        | present false, present x => cons absent (swhen C X) *)
-  (*        | absent, absent => cons absent (swhen C X) *)
-  (*        | _, _ => 0 *)
-  (*        end. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold swhen. *)
-  (*   autorewrite with localdb using (simpl (snd _); simpl (fst _)). *)
-  (*   rewrite FIXP_eq at 1. *)
-  (*   now rewrite swhenf_eq. *)
-  (* Qed. *)
+  Definition swhenf (k : enumtag) :
+    (DS (sampl A * sampl B) -C-> DS (sampl A)) -C->
+    (DS (sampl A * sampl B) -C-> DS (sampl A)).
+    apply curry.
+    apply (fcont_comp2 (DSCASE (sampl A * sampl B) (sampl A))).
+    2:exact (SND _ _).
+    apply ford_fcont_shift. intros (vx,vc).
+    apply curry.
+    match goal with
+    | |- _ (_ (Dprod ?pl ?pr) _) =>
+        pose (f := (FST _ _ @_ (FST pl pr)));
+        pose (XC := SND pl pr)
+    end.
+    exact match vx, vc with
+    | abs, abs => CONS abs @_ (f @2_ ID _) XC
+    | pres x, pres c =>
+        match tag_ov_val c with
+        | None => CTE _ _ (DS_const (err error_Ty))
+        | Some t =>
+            if tag_eqb k t
+            then CONS (pres x) @_ (f @2_ ID _) XC
+            else CONS abs @_ (f @2_ ID _) XC
+        end
+    | err e, _
+    | _, err e => CTE _ _ (DS_const (err e))
+    | _, _ => CTE _ _ (DS_const (err error_Cl))
+    end.
+  Defined.
+
+  Lemma swhenf_eq : forall k f x c XC,
+      swhenf k f (cons (x, c) XC)
+      = match x, c with
+        | abs, abs => cons abs (f XC)
+        | pres x, pres c =>
+            match tag_ov_val c with
+            | None => DS_const (err error_Ty)
+            | Some t =>
+                if tag_eqb k t
+                then cons (pres x) (f XC)
+                else cons abs (f XC)
+            end
+        | err e, _ | _, err e => DS_const (err e)
+        | _, _ => DS_const (err error_Cl)
+        end.
+  Proof.
+    intros.
+    unfold swhenf.
+    rewrite curry_Curry, Curry_simpl.
+    setoid_rewrite DSCASE_simpl.
+    setoid_rewrite DScase_cons.
+    destruct x, c; simpl; auto.
+    destruct (tag_ov_val _); auto.
+    destruct (tag_eqb _ _); auto.
+  Qed.
+
+  Definition swhen (k : enumtag) : DS (sampl A) -C-> DS (sampl B) -C-> DS (sampl A) :=
+    curry (FIXP _ (swhenf k) @_ (ZIP pair @2_ FST _ _) (SND _ _ )).
+
+  Lemma swhen_eq : forall k c C x X,
+      swhen k (cons x X) (cons c C)
+      == match x, c with
+        | abs, abs => cons abs (swhen k X C)
+        | pres x, pres c =>
+            match tag_ov_val c with
+            | None => DS_const (err error_Ty)
+            | Some t =>
+                if tag_eqb k t
+                then cons (pres x) (swhen k X C)
+                else cons abs (swhen k X C)
+            end
+        | err e, _ | _, err e => DS_const (err e)
+        | _, _ => DS_const (err error_Cl)
+        end.
+  Proof.
+    intros.
+    unfold swhen.
+    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
+    rewrite FIXP_eq at 1.
+    now rewrite swhenf_eq.
+  Qed.
+
+  Lemma swhen_cons :
+    forall k xs cs,
+      is_cons (swhen k xs cs) ->
+      is_cons xs /\ is_cons cs.
+  Proof.
+    intros *.
+    unfold swhen.
+    rewrite FIXP_eq; autorewrite with cpodb; simpl.
+    intros Hc. apply DScase_is_cons in Hc.
+    setoid_rewrite SND_PAIR_simpl in Hc.
+    eapply zip_is_cons; eauto.
+  Qed.
+
+  (* TODO: merge, renommer la section *)
+  End When.
 
   (* Definition smergef : *)
   (*   (DS (sampl bool * sampl A * sampl A) -C-> DS (sampl A)) *)

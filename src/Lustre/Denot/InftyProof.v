@@ -201,6 +201,20 @@ Module Type LDENOTINF
     intros * Hbs Hins Hk Hdep Hwl Hwx.
     assert (Hwl' := Hwl).
     revert Hwl.
+    assert ( (* cas des variables : *)
+        forall x cx, HasCaus Γ x cx ->
+                P_var 0 env0 cx ->
+                is_cons (denot_var ins envI env0 x)) as Hvar.
+    { unfold P_vars, P_var in Hins.
+      rewrite Forall_forall in Hins.
+      intros x cx Hc Hx.
+      unfold denot_var. cases_eqn HH.
+      + (* in *)
+        rewrite mem_ident_spec in HH.
+        now apply Hins.
+      + (* out *)
+        apply HasCausInj in Hc; subst; auto.
+    }
     eapply exp_causal_ind with (15 := Hdep); eauto.
     all: intros; clear dependent e; unfold P_exp.
     (* cas restreints : *)
@@ -211,14 +225,7 @@ Module Type LDENOTINF
       now apply is_consn_sconst.
     - (* var *)
       rewrite denot_exp_eq.
-      unfold P_vars, P_var in *.
-      simpl. rewrite ID_simpl, Id_simpl, Forall_forall in *.
-      unfold denot_var. cases_eqn HH.
-      + (* in *)
-        rewrite mem_ident_spec in HH.
-        now apply Hins.
-      + (* out *)
-        apply HasCausInj in H; subst; auto.
+      eapply Hvar; eauto.
     - (* unop *)
       rewrite denot_exp_eq.
       cases_eqn HH; subst.
@@ -242,7 +249,20 @@ Module Type LDENOTINF
       rewrite annots_numstreams, H8, <- H7 in *.
       eapply P_exps_k with (n := O); eauto.
       eauto using P_exps_impl, P_exps_Forall.
+    - (* when *)
+      destruct ann0 as (tys,?).
+      rewrite denot_exp_eq; simpl in *.
+      unfold eq_rect_r, eq_rect.
+      cases.
+      2: rewrite get_nth_const; auto; apply (is_consn_DS_const _ O).
+      rewrite llift_nth; auto; cases.
+      apply is_cons_swhen; eauto.
+      inv Hwl.
+      rewrite annots_numstreams in *.
+      eapply P_exps_k with (n := O); eauto.
+      eauto using P_exps_impl, P_exps_Forall.
   Qed.
+
 
   Lemma exp_n :
     forall Γ n e ins envI bs env k,
@@ -255,8 +275,22 @@ Module Type LDENOTINF
       P_exp n ins envI bs env e k.
   Proof.
     intros ?????? env ? Hbs Hins.
-    revert k.
-    induction e using exp_ind2; simpl; intros ? Hk Hwl Hwx Hn.
+    intros Hk Hwl Hwx Hn.
+    assert ( (* cas des variables : *)
+        forall x, IsVar Γ x ->
+             is_cons (nrem n (denot_var ins envI env x))) as Hvar.
+    { unfold P_vars, P_var in Hins.
+      rewrite Forall_forall in Hins.
+      intros.
+      unfold denot_var. cases_eqn HH.
+      * (* in *)
+        rewrite mem_ident_spec in HH.
+        now apply Hins.
+      * (* out *)
+        eapply Hn, HasCausRefl; auto.
+    }
+    revert dependent k.
+    induction e using exp_ind2; simpl; intros.
     all: unfold P_exp.
     (* cas restreints : *)
     all: try (rewrite denot_exp_eq, get_nth_const; simpl; cases;
@@ -267,16 +301,8 @@ Module Type LDENOTINF
       now apply is_consn_sconst.
     - (* var *)
       assert (k = O) by lia; subst.
-      unfold P_vars, P_var in *.
-      simpl. rewrite ID_simpl, Id_simpl, Forall_forall in *.
       setoid_rewrite denot_exp_eq.
-      unfold denot_var. cases_eqn HH.
-      + (* in *)
-        rewrite mem_ident_spec in HH.
-        now apply Hins.
-      + (* out *)
-        inv Hwx.
-        eapply Hn, HasCausRefl; auto.
+      inv Hwx. now apply Hvar.
     - (* unop *)
       assert (k = O) by lia; subst.
       rewrite denot_exp_eq.
@@ -317,6 +343,25 @@ Module Type LDENOTINF
         simpl_Forall.
         destruct (Nat.lt_ge_cases k (numstreams a0)); auto using P_exps.
         constructor 2; auto. apply IHes; auto; lia.
+    - (* when *)
+      rewrite denot_exp_eq; simpl.
+      unfold eq_rect_r, eq_rect.
+      cases.
+      2: rewrite get_nth_const; auto; apply (is_consn_DS_const _ n).
+      rewrite llift_nth; auto; cases.
+      inv Hwl.
+      apply is_consn_swhen.
+      + (* es *)
+        assert (k < list_sum (map numstreams es))
+          by (rewrite annots_numstreams in *; congruence).
+        apply P_exps_k.
+        inv Hwx. take (length _ = length _) and clear it.
+        revert dependent k. induction es as [|a es]; intros; simpl in *. lia.
+        simpl_Forall.
+        destruct (Nat.lt_ge_cases k (numstreams a)); auto using P_exps.
+        constructor 2; auto. apply IHes; auto; lia.
+      + (* x *)
+       inv Hwx. now apply Hvar.
   Qed.
 
   Lemma exps_n :
@@ -349,6 +394,20 @@ Module Type LDENOTINF
       P_exp (S n) ins envI bs env e k.
   Proof.
     intros ?????? env ? Hbs Hins Hk Hdep Hwl Hwx Hn.
+    assert ( (* cas des variables : *)
+        forall x cx, HasCaus Γ x cx ->
+                P_var (S n) env cx ->
+                is_cons (nrem (S n) (denot_var ins envI env x))) as Hvar.
+    { unfold P_vars, P_var in Hins.
+      rewrite Forall_forall in Hins.
+      intros x cx Hc Hx.
+      unfold denot_var. cases_eqn HH.
+      + (* in *)
+        rewrite mem_ident_spec in HH.
+        now apply Hins.
+      + (* out *)
+        apply HasCausInj in Hc; subst; auto.
+    }
     assert (Hwl' := Hwl).
     assert (Hwx' := Hwx).
     revert Hwl Hwx.
@@ -362,15 +421,8 @@ Module Type LDENOTINF
       rewrite denot_exp_eq.
       now apply is_consn_sconst.
     - (* var *)
-      unfold P_vars, P_var in *.
-      simpl. rewrite ID_simpl, Id_simpl, Forall_forall in *.
       setoid_rewrite denot_exp_eq.
-      unfold denot_var. cases_eqn HH.
-      + (* in *)
-        rewrite mem_ident_spec in HH.
-        now apply Hins.
-      + (* out *)
-        apply HasCausInj in H; subst; auto.
+      eapply Hvar; eauto.
     - (* unop *)
       rewrite denot_exp_eq.
       cases_eqn HH; subst.
@@ -398,6 +450,22 @@ Module Type LDENOTINF
         now apply P_exps_k.
       + (* es *)
         eapply P_exps_k, exps_n; eauto using is_consn_S, P_vars_S.
+    - (* when *)
+      destruct ann0 as (tys,?).
+      rewrite denot_exp_eq; simpl in *.
+      unfold eq_rect_r, eq_rect.
+      cases.
+      2: rewrite get_nth_const; auto; apply (is_consn_DS_const _ (S n)).
+      rewrite llift_nth; auto; cases.
+      inv Hwl. inv Hwx.
+      apply is_consn_swhen with (n := S n).
+      + (* es *)
+        assert (k < list_sum (map numstreams es))
+          by (rewrite annots_numstreams in *; congruence).
+        do 2 (apply P_exps_impl in H0; eauto using P_exps_Forall).
+        now apply P_exps_k.
+      + (* x *)
+        eapply Hvar; eauto.
   Qed.
 
   Lemma equation_n :
@@ -714,14 +782,13 @@ Module Type LDENOTINF
     forall_nprod (@infinite _) (denot_exp ins e envI bs env).
 Proof.
   intros * Hins Hinf Hbs.
+  assert (forall x, infinite (denot_var ins envI env0 x)) as Hvar.
+  { unfold all_infinite, denot_var in *. intro. cases; eauto. }
   induction e using exp_ind2; intros; simpl; setoid_rewrite denot_exp_eq.
   (* cas restreints : *)
   all: try (simpl; now auto using forall_nprod_const, DS_const_inf).
   - (* const *)
     apply sconst_inf; auto.
-  - (* var *)
-    unfold all_infinite, denot_var in *.
-    cases_eqn HH; rewrite ?mem_ident_spec in HH; eauto.
   - (* unop *)
     assert (forall_nprod (@infinite _) (denot_exp ins e envI bs env0)) as He by eauto.
     revert He.
@@ -743,6 +810,15 @@ Proof.
     generalize (list_sum (List.map numstreams es)).
     intros; unfold eq_rect_r, eq_rect, eq_sym.
     cases; subst; auto using forall_nprod_const, DS_const_inf, forall_nprod_lift2, fby_inf.
+  - (* when *)
+    assert (forall_nprod (@infinite _) (denot_exps ins es envI bs env0)) as Hes.
+    { induction es; simpl_Forall; auto.
+      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
+    revert Hes.
+    generalize (denot_exps ins es envI bs env0).
+    generalize (list_sum (List.map numstreams es)).
+    intros; unfold eq_rect_r, eq_rect, eq_sym.
+    cases; subst; eauto using forall_nprod_const, DS_const_inf, forall_nprod_llift, swhen_inf.
 Qed.
 
 Corollary infinite_exps :
