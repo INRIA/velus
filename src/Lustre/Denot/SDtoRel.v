@@ -2,8 +2,8 @@ From Coq Require Import BinPos List Permutation.
 
 From Velus Require Import Common Ident Environment Operators Clocks CoindStreams.
 From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LOrdered Lustre.LSemantics Lustre.LTyping Lustre.LClocking Lustre.LCausality.
-Import FunctionalEnvironment.FEnv.
 
+From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
@@ -32,7 +32,7 @@ Module Type SDTOREL
 (* https://stackoverflow.com/questions/73155085/coq-rewriting-under-a-pointwise-relation *)
 Import Morphisms.
 Add Parametric Morphism : sem_var
-    with signature Equiv (@EqSt _) ==> pointwise_relation _ (pointwise_relation _ iff)
+    with signature FEnv.Equiv (@EqSt _) ==> pointwise_relation _ (pointwise_relation _ iff)
       as sem_var_morph_pointwise.
 Proof.
   split; now rewrite H.
@@ -49,7 +49,7 @@ Qed.
 
 (* TODO: move to Vélus *)
 Add Parametric Morphism : (@pair Str.history Str.history) with signature
-        Equiv (EqSt (A:=svalue)) ==> Equiv (EqSt (A:=svalue)) ==> history_equiv
+        FEnv.Equiv (EqSt (A:=svalue)) ==> FEnv.Equiv (EqSt (A:=svalue)) ==> history_equiv
           as history_equiv_morph.
 Proof.
   intros ??????.
@@ -436,7 +436,7 @@ Qed.
 Lemma _hist_of_env_eq :
   forall env Hinf env' Hinf',
     env == env' ->
-    Equiv (EqSt (A:=svalue)) (hist_of_env env Hinf) (hist_of_env env' Hinf').
+    FEnv.Equiv (EqSt (A:=svalue)) (hist_of_env env Hinf) (hist_of_env env' Hinf').
 Proof.
   intros * Heq.
   unfold hist_of_env.
@@ -462,7 +462,7 @@ Lemma hist_of_env_eq :
   forall env Hinf env',
     env == env' ->
     exists Hinf',
-      Equiv (EqSt (A:=svalue)) (hist_of_env env Hinf) (hist_of_env env' Hinf').
+      FEnv.Equiv (EqSt (A:=svalue)) (hist_of_env env Hinf) (hist_of_env env' Hinf').
 Proof.
   intros * Heq.
   esplit.
@@ -582,7 +582,7 @@ Lemma ok_sem_exp :
       op_correct_exp ins envI (DS_of_S bs) env e ->
       let ss := denot_exp ins e envI (DS_of_S bs) env in
       let Infe := infinite_exp _ _ _ _ (DS_of_S_inf _) InfI Inf _ in
-      sem_exp G (hist_of_env env Inf, empty _) bs e (Ss_of_nprod ss Infe).
+      sem_exp G (hist_of_env env Inf, FEnv.empty _) bs e (Ss_of_nprod ss Infe).
 Proof.
   intros * ?? env Hsafe.
   assert (forall x, denot_var ins envI env x == env x) as Hvar.
@@ -603,12 +603,6 @@ Proof.
     econstructor; unfold hist_of_env; eauto.
     apply _S_of_DS_eq.
     now setoid_rewrite denot_exp_eq.
-    (* unfold denot_var. *)
-    (* cases_eqn HH; apply mem_ident_spec in HH. *)
-    (* subst env. *)
-    (* setoid_rewrite <- PROJ_simpl at 2. *)
-    (* rewrite FIXP_eq, PROJ_simpl. *)
-    (* erewrite denot_equation_input; eauto. *)
   - (* unop *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
@@ -629,82 +623,77 @@ Proof.
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
-    (* TODO: mettre tout ça dans un seul prédicat ? *)
-    (* wt *)
     apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
     apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
     apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H, H0; auto.
-
     econstructor; simpl in *.
     + erewrite Forall2_map_2, <- Forall2_same. apply H.
     + erewrite Forall2_map_2, <- Forall2_same. apply H0.
     + rewrite <- 2 flat_map_concat_map.
       unshelve rewrite <- 2 Ss_exps; auto using DS_of_S_inf, infinite_exps.
-
-      edestruct (Ss_of_nprod_eq _ Infe) as [Hinf0 HH].
-      { setoid_rewrite denot_exp_eq. simpl. reflexivity. }
-      fold env in HH. rewrite HH; clear HH.
-
-      remember (infinite_exps ins _ _ _ _ _ _ e0s) as Hinf1 eqn:HH; clear HH.
-      remember (infinite_exps ins _ _ _ _ _ _ es) as Hinf2 eqn:HH; clear HH.
-      setoid_rewrite denot_exp_eq in Hs. simpl in Hs.
-      revert Hinf0 Hinf1 Hinf2 Hs.
-      fold env.
+      remember (infinite_exps _ _ _ _ _ _ _ e0s) as Infe0s.
+      remember (infinite_exps _ _ _ _ _ _ _ es) as Infes.
+      remember Infe as Ifby.
+      clear - Hs H20 H21. (* pour les longueurs *)
+      revert Ifby Hs. fold env.
+      (* FIXME:
+         remember (denot_exp ins (Efby e0s es a) envI (DS_of_S bs) env)
+         seul ne fonctionne pas, il faut des annotation; pourquoi ? *)
+      remember (((@fconti_fun _ (fcont_cpo _ (fcont_cpo (DS_prod SI) (nprod (length a))))
+                    (denot_exp ins (Efby e0s es a)) envI) (DS_of_S bs)) env)
+        as fs eqn:Hfs.
+      revert Infe0s Infes Hfs.
+      setoid_rewrite denot_exp_eq; simpl.
+      cases; try (rewrite annots_numstreams in *; congruence).
       generalize (denot_exps ins e0s envI (DS_of_S bs) env) as s0s.
       generalize (denot_exps ins es envI (DS_of_S bs) env) as ss.
-      intros.
-      cases; try (rewrite annots_numstreams in *; congruence).
-      unfold eq_rect_r, eq_rect in *; destruct e0, e; simpl in *.
-
+      unfold eq_rect_r, eq_rect; destruct e, e0.
+      simpl; intros; subst.
       clear - Hs.
       induction (length a) as [|[]].
       * constructor.
       * constructor; auto using Forall3_nil, ok_fby.
-      * destruct ss as [s ss], s0s as [s0 s0s].
-        inv Hs.
-        edestruct (Ss_of_nprod_eq _ Hinf0) as [Hinf0' ->].
-        { rewrite lift2_simpl. reflexivity. }
-        constructor; simpl in *; auto using ok_fby.
+      * inv Hs. constructor.
+        ** simpl in *. now apply ok_fby.
+        ** now apply IHn.
   - (* when *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
-    (* TODO: mettre tout ça dans un seul prédicat ? *)
-    (* wt *)
     apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
     apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
     apply Forall_impl_inside with (P := restr_exp) in H; auto.
     apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H; auto.
-
+    edestruct (S_of_DSv_eq (env x) (Inf x)) as [Infx Hx].
+    { rewrite <- Hvar; reflexivity. } (* pratique pour la suite *)
     econstructor; simpl in *.
     + erewrite Forall2_map_2, <- Forall2_same. apply H.
-    + econstructor; unfold hist_of_env; now eauto.
+    + econstructor; unfold hist_of_env; eauto; rewrite Hx; reflexivity.
     + rewrite <- flat_map_concat_map.
       unshelve rewrite <- Ss_exps; auto using DS_of_S_inf, infinite_exps.
-      edestruct (Ss_of_nprod_eq _ Infe) as [Hinf0 HH].
-      { setoid_rewrite denot_exp_eq. simpl. reflexivity. }
-        (* cases; try (rewrite annots_numstreams in *; congruence). *)
-      fold env in HH. rewrite HH; clear HH.
-      remember (infinite_exps ins _ _ _ _ _ _ es) as Hinf2 eqn:HH; clear HH.
-      setoid_rewrite denot_exp_eq in Hs.
+      remember (infinite_exps _ _ _ _ _ _ _ es) as Infes.
+      remember Infe as Iwhen.
+      clear - Hs H18.
+      revert Iwhen Hs. fold env.
+      (* FIXME:
+         remember (denot_exp ins _ _ _)
+         seul ne fonctionne pas, il faut des annotation. ça doit avoir un rapport
+         avec l'égalité sur les tailles *)
+      remember (((@fconti_fun _ (fcont_cpo _ (fcont_cpo _ (nprod (length (typesof es)))))
+                    (denot_exp ins (Ewhen es x b (_,_))) envI) (DS_of_S bs)) env)
+        as fs eqn:Hfs.
+      revert Infes Hfs.
+      setoid_rewrite denot_exp_eq; simpl.
       cases; try (rewrite annots_numstreams in *; congruence).
-      revert Hs Hinf0 Hinf2. revert e.
-      fold env.
       generalize (denot_exps ins es envI (DS_of_S bs) env) as ss.
-      generalize (list_sum (List.map numstreams es)), (length (typesof es)).
-      intros.
-      unfold eq_rect_r, eq_rect in *; destruct e; simpl in *.
-      edestruct (Ss_of_nprod_eq _ Hinf0) as [Hinf0' ->]. now rewrite Hvar.
-      rewrite Hvar in Hs.
+      unfold eq_rect_r, eq_rect; destruct e.
+      simpl; intros; subst.
       clear - Hs.
-      induction n0 as [|[]].
-      * constructor.
-      * constructor; eauto using ok_when.
-      * destruct ss as [s ss].
-        edestruct (Ss_of_nprod_eq _ Hinf0') as [Hinf0'' ->].
-        { rewrite llift_simpl. reflexivity. }
-        inv Hs. constructor; eauto using ok_when.
+      induction (length (typesof es)) as [|[]]; eauto using Forall2, ok_when.
+      inv Hs. constructor.
+      now eapply ok_when.
+      now apply IHn.
 Qed.
 
 (* TODO: move *)
