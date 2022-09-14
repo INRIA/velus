@@ -351,6 +351,20 @@ Proof.
   now rewrite get_nth_const.
 Qed.
 
+Global Add Parametric Morphism n
+  (P_compat:  Morphisms.Proper (Oeq (O := DS (sampl value)) ==> iff) P)
+  : (forall_nprod)
+    with signature Oeq (O := nprod n) ==> iff
+      as forall_nprod_morph.
+Proof.
+  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
+  intros * Heq.
+  rewrite 2 forall_nprod_k_iff.
+  split; intros.
+  eapply P_compat; rewrite <- ?Heq; auto.
+  eapply P_compat; rewrite ?Heq; auto.
+Qed.
+
 End Forall_Nprod.
 
 Lemma forall_nprod_impl :

@@ -2,6 +2,7 @@ From Coq Require Import BinPos List Permutation.
 
 From Velus Require Import Common Ident Environment Operators Clocks CoindStreams.
 From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LOrdered Lustre.LSemantics Lustre.LTyping Lustre.LClocking Lustre.LCausality.
+Import FunctionalEnvironment.FEnv.
 
 From Velus Require Import Lustre.Denot.Cpo.
 
@@ -26,6 +27,64 @@ Module Type SDTOREL
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Str)
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Str Den)
        (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Str Den).
+
+(* TODO: move to Vélus *)
+(* https://stackoverflow.com/questions/73155085/coq-rewriting-under-a-pointwise-relation *)
+Import Morphisms.
+Add Parametric Morphism : sem_var
+    with signature Equiv (@EqSt _) ==> pointwise_relation _ (pointwise_relation _ iff)
+      as sem_var_morph_pointwise.
+Proof.
+  split; now rewrite H.
+Qed.
+
+(* TODO: trouver un moyen pour ne pas devoir ajouter ça *)
+Global Add Parametric Morphism k t : (fun s => when k s t)
+       with signature (@EqSt _) ==> (@EqSt _) ==> Basics.impl
+         as  when_morph2.
+Proof.
+  intros ?? HH ?? -> ?.
+  now rewrite <- HH.
+Qed.
+
+(* TODO: move to Vélus *)
+Add Parametric Morphism : (@pair Str.history Str.history) with signature
+        Equiv (EqSt (A:=svalue)) ==> Equiv (EqSt (A:=svalue)) ==> history_equiv
+          as history_equiv_morph.
+Proof.
+  intros ??????.
+  split; auto.
+Qed.
+
+(* TODO: move to Vélus, remplacer Forall3_EqSt *)
+Global Add Parametric Morphism
+  A B C (P: A -> B -> C -> Prop) eqA eqB eqC
+  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> eqC ==> Basics.impl) P)
+  : (@Forall3 A B C P)
+       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> (Forall2 eqC) ==> Basics.impl
+         as Forall3_morph.
+Proof.
+  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
+  induction x; intros x' Hx y y' Hy z z' Hz HF3.
+  - inv HF3. simpl_Forall. constructor.
+  - inv HF3. inv Hx. inv Hy. inv Hz.
+    constructor; eauto.
+Qed.
+
+(* TODO: move to Vélus, remplacer Forall2_EqSt *)
+Global Add Parametric Morphism
+  A B (P: A -> B -> Prop) eqA eqB
+  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> Basics.impl) P)
+  : (@Forall2 A B P)
+       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> Basics.impl
+         as Forall2_morph.
+Proof.
+  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
+  induction x; intros x' Hx y y' Hy HF2.
+  - inv HF2. simpl_Forall.
+  - inv HF2. inv Hx. inv Hy.
+    constructor; eauto.
+Qed.
 
 
 CoFixpoint DS_of_S {A} (s : Stream A) : DS A :=
@@ -202,14 +261,6 @@ Proof.
   all: cases; try easy; inv Sr; eauto.
 Qed.
 
-(* TODO: trouver un moyen pour ne pas devoir ajouter ça *)
-Global Add Parametric Morphism k t : (fun s => when k s t)
-       with signature (@EqSt _) ==> (@EqSt _) ==> Basics.impl
-         as  when_morph2.
-Proof.
-  intros ?? HH ?? -> ?.
-  now rewrite <- HH.
-Qed.
 
 (** Général *)
 
@@ -382,9 +433,6 @@ Proof.
   eapply Forall2_impl_In; eauto using list_of_hist_ok.
 Qed.
 
-(* TODO: move *)
-Import FunctionalEnvironment.FEnv.
-
 Lemma _hist_of_env_eq :
   forall env Hinf env' Hinf',
     env == env' ->
@@ -422,15 +470,6 @@ Proof.
   eapply all_infinite_Oeq_compat; eauto.
 Qed.
 
-(* TODO: move *)
-Add Parametric Morphism : (@pair Str.history Str.history) with signature
-        Equiv (EqSt (A:=svalue)) ==> Equiv (EqSt (A:=svalue)) ==> history_equiv
-          as history_equiv_morph.
-Proof.
-  intros ??????.
-  split; auto.
-Qed.
-
 
 Definition Ss_of_nprod {n} (np : nprod n) (Hinf : forall_nprod (@infinite _) np) : list (Stream svalue).
   induction n as [|[]].
@@ -461,36 +500,6 @@ Proof.
   constructor; auto.
 Qed.
 
-(* TODO: move, remplacer Forall3_EqSt *)
-Global Add Parametric Morphism
-  A B C (P: A -> B -> C -> Prop) eqA eqB eqC
-  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> eqC ==> Basics.impl) P)
-  : (@Forall3 A B C P)
-       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> (Forall2 eqC) ==> Basics.impl
-         as Forall3_morph.
-Proof.
-  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
-  induction x; intros x' Hx y y' Hy z z' Hz HF3.
-  - inv HF3. simpl_Forall. constructor.
-  - inv HF3. inv Hx. inv Hy. inv Hz.
-    constructor; eauto.
-Qed.
-
-(* TODO: move, remplacer Forall2_EqSt *)
-Global Add Parametric Morphism
-  A B (P: A -> B -> Prop) eqA eqB
-  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> Basics.impl) P)
-  : (@Forall2 A B P)
-       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> Basics.impl
-         as Forall2_morph.
-Proof.
-  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
-  induction x; intros x' Hx y y' Hy HF2.
-  - inv HF2. simpl_Forall.
-  - inv HF2. inv Hx. inv Hy.
-    constructor; eauto.
-Qed.
-
 (* TODO: variante avec existentielle *)
 Lemma _Ss_of_nprod_eq :
   forall {n} (np np' : nprod n) Hinf Hinf',
@@ -506,21 +515,6 @@ Proof.
     constructor; simpl; eauto.
     apply _S_of_DS_eq. auto.
     apply IHn. auto.
-Qed.
-
-(* TODO: utile ou pas ? *)
-Add Parametric Morphism P n
-  (P_compat:  Morphisms.Proper (Oeq (O := DS (sampl value)) ==> iff) P)
-  : (forall_nprod P)
-    with signature Oeq (O := nprod n) ==> iff
-      as forall_nprod_morph.
-Proof.
-  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
-  intros * Heq.
-  rewrite 2 forall_nprod_k_iff.
-  split; intros.
-  eapply P_compat; rewrite <- ?Heq; auto.
-  eapply P_compat; rewrite ?Heq; auto.
 Qed.
 
 Lemma Ss_of_nprod_eq :
@@ -758,17 +752,6 @@ Proof.
     destruct k.
     + apply _S_of_DS_eq; auto.
     + apply IHn; lia.
-Qed.
-
-
-(* TODO: move *)
-(* https://stackoverflow.com/questions/73155085/coq-rewriting-under-a-pointwise-relation *)
-Import Morphisms.
-Add Parametric Morphism : sem_var
-    with signature Equiv (@EqSt _) ==> pointwise_relation _ (pointwise_relation _ iff)
-      as sem_var_morph_pointwise.
-Proof.
-  split; now rewrite H.
 Qed.
 
 (* TODO: move *)
