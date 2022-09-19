@@ -368,8 +368,8 @@ Module Type NORMFBY
       normalized_block G out (Breset [block] (Evar x ann)).
 
   Inductive normalized_node {PSyn1 PSyn2 prefs1 prefs2} (G : @global PSyn1 prefs1) : (@node PSyn2 prefs2) -> Prop :=
-  | normalized_Node : forall n locs caus blks,
-      n_block n = Blocal (Scope locs caus blks) ->
+  | normalized_Node : forall n locs blks,
+      n_block n = Blocal (Scope locs blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall (normalized_block G (ps_from_list (List.map fst (n_out n)))) blks ->
       normalized_node G n.
@@ -645,10 +645,10 @@ Module Type NORMFBY
        n_in := n_in n;
        n_out := n_out n;
        n_block := match (n_block n) with
-                  | Blocal (Scope vars caus blks) =>
+                  | Blocal (Scope vars blks) =>
                     let res := normfby_blocks (ps_from_list (map fst (n_out n))) blks init_st in
                     let nvars := st_anns (snd res) in
-                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) [] (fst res))
+                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res))
                   | blk => blk
                   end;
        n_ingt0 := n_ingt0 n;
@@ -670,7 +670,7 @@ Module Type NORMFBY
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood&_).
     pose proof (n_nodup n) as (Hndup&Hndl).
-    destruct (n_block n) as [| | | |[locs ? blks]] eqn:Hblk; eauto.
+    destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Hunn.
     repeat rewrite app_nil_r. split; simpl in *; auto.
     inv Hndl. inv H1.
@@ -690,15 +690,14 @@ Module Type NORMFBY
         eapply st_valid_AtomOrGensym_nIn; eauto using norm2_not_in_norm1_prefs.
         unfold st_ids. solve_In.
     - setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'.
-      + eapply H6; eauto using in_or_app.
+      + eapply H5; eauto using in_or_app.
       + simpl_Forall. rewrite fst_InMembers in Hinm. simpl_In.
         eapply st_valid_AtomOrGensym_nIn; eauto using norm2_not_in_norm1_prefs.
         unfold st_ids. solve_In.
-    - constructor.
   Qed.
   Next Obligation.
     specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
-    destruct (n_block n) as [| | | |[locs ? blks]] eqn:Hblk; eauto using GoodLocals_add.
+    destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
     inv Hgood2. inv H0.
     do 2 constructor.
@@ -706,7 +705,7 @@ Module Type NORMFBY
       specialize (st_valid_prefixed st') as Hvalid.
       unfold st_ids in Hvalid. simpl_Forall; subst.
       right. do 2 esplit; eauto. now apply PSF.add_1.
-    + eapply normfby_blocks_GoodLocals in H4; eauto.
+    + eapply normfby_blocks_GoodLocals in H3; eauto.
       simpl_Forall; eauto using GoodLocals_add.
   Qed.
   Next Obligation.
@@ -755,7 +754,7 @@ Module Type NORMFBY
       unnested_node G n ->
       normalized_node G (normfby_node n).
   Proof.
-    intros * Hunt. inversion_clear Hunt as [???? Hblk Hblks].
+    intros * Hunt. inversion_clear Hunt as [??? Hblk Hblks].
     econstructor; simpl. rewrite Hblk; eauto.
     - apply Forall_app; split; auto. simpl_Forall; auto.
     - pose proof (n_good n) as (Good&_).

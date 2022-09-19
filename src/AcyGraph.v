@@ -501,31 +501,43 @@ Section Dfs.
   Defined.
   Extraction Inline none_visited.
 
-  Definition dfs'_loop
-             (inp : PS.t)
-             (dfs' : forall x (v : { v | visited inp v }),
-                 option { v' | visited inp v'
-                               & (In_ps [x] v'
-                                  /\ PS.Subset (proj1_sig v) v') })
+  Section dfs'_loop.
+    Variable (inp : PS.t)
+      (dfs' : forall x (v : { v | visited inp v }),
+          option { v' | visited inp v' & (In_ps [x] v' /\ PS.Subset (proj1_sig v) v') }).
+
+  Program Fixpoint dfs'_loop
              (zs : list positive)
-             (v : {v | visited inp v })
-    : option { v' | visited inp v' & (In_ps zs v' /\ PS.Subset (proj1_sig v) v') }.
-  Proof.
-    revert zs v.
-    fix dfs'_loop 1.
-    intros zs v.
-    destruct zs as [|w ws].
-    - refine (Some (sig2_of_sig v _)).
-      split. now apply In_ps_nil. reflexivity.
-    - destruct (dfs' w v) as [(v', Pv', (Hinv', Hsubv'))|]; [|exact None].
-      destruct (dfs'_loop ws (exist _ v' Pv')) as [v''|]; [|exact None].
-      refine (Some (sig2_weaken2 _ v'')).
-      intros S (Hin, Hsub). split.
-      + apply Forall_cons; auto.
-        rewrite <-Hsub. now inv Hinv'.
-      + rewrite <-Hsub. simpl. rewrite <-Hsubv'. reflexivity.
+             (v : {v | visited inp v }) {struct zs}
+    : option { v' | visited inp v' & (In_ps zs v' /\ PS.Subset (proj1_sig v) v') }  :=
+    match zs with
+    | [] => Some (sig2_of_sig v _)
+    | w::ws =>
+        match dfs' w v with
+        | None => None
+        | Some (exist2 _ _ v' _ _) =>
+            match dfs'_loop ws (exist _ v' _) with
+            | None => None
+            | Some v'' => Some (sig2_weaken2 _ v'')
+            end
+        end
+    end.
+  Next Obligation.
+    split.
+    - now apply In_ps_nil.
+    - reflexivity.
+  Defined.
+  Next Obligation.
+    clear Heq_anonymous0.
+    split.
+    - apply Forall_cons; auto.
+      take (PS.Subset _ s) and rewrite <-it.
+      take (In_ps [_] v') and now inv it.
+    - rewrite <-H0. rewrite <-s1. reflexivity.
   Defined.
   Extraction Inline dfs'_loop.
+
+  End dfs'_loop.
 
   Definition pre_visited_add:
     forall {inp} x
@@ -539,7 +551,7 @@ Section Dfs.
   Defined.
   Extraction Inline pre_visited_add.
 
-  Definition dfs'
+  Program Definition dfs'
      (s : dfs_state)
      (dfs'' : forall s', deeper s' s ->
                 forall x (v : { v | visited s'.(in_progress) v }),
@@ -548,42 +560,56 @@ Section Dfs.
      (x : positive)
      (v : { v | visited s.(in_progress) v })
     : option { v' | visited s.(in_progress) v'
-                    & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' }.
-  Proof.
-    destruct (PS.mem x s.(in_progress)) eqn:Mxs; [exact None|].
-    destruct (PS.mem x (proj1_sig v)) eqn:Mxv.
-    (* This node has already been visited. Show postcondition. *)
-    now refine (Some (sig2_of_sig v _)); split;
-      [apply In_ps_singleton; apply (PSF.mem_2 Mxv)|reflexivity].
-    (* Not yet visited ... *)
-    destruct (Env.find x graph) as [zs|] eqn:Mxg; [|exact None].
-    assert (forall z, PS.In z (PS.add x s.(in_progress)) -> Env.In z graph) as Hprog.
-    { intros z Hzin.
-      apply PS.add_spec in Hzin as [|Hzin]; subst.
-      - now apply Env.find_In in Mxg.
-      - now apply s.(progress_in_graph). }
-    pose (s' := mk_dfs_state (PS.add x s.(in_progress)) Hprog).
-    apply PSE.mem_4 in Mxs. apply PSE.mem_4 in Mxv.
-    assert (deeper s' s) as Hdeeper by now apply add_deeper.
-    pose proof (pre_visited_add x v Mxv) as (v', V', Qv'). subst.
-    destruct (dfs'_loop s'.(in_progress) (dfs'' s' Hdeeper) zs (exist _ _ V'))
-      as [(v'', (P1 & P2), (Hzs & Hsub))|]; [|exact None]. simpl in *.
-    refine (Some _).
-    exists (PS.add x v'').
-    (* Show postconditions *)
+                    & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
+    match PS.mem x s.(in_progress) with
+    | true => None
+    | false =>
+        match PS.mem x (proj1_sig v) with
+        | true => Some (sig2_of_sig v _)
+        | false =>
+            match (Env.find x graph) with
+            | None => None
+            | Some zs =>
+                let s' := mk_dfs_state (PS.add x s.(in_progress)) _ in
+                match (dfs'_loop s'.(in_progress) (dfs'' s' _) zs (exist _ v _)) with
+                | None => None
+                | Some (exist2 _ _ v' (conj P1 _) _) => Some (exist2 _ _ (PS.add x v') _ _)
+                end
+            end
+        end
+    end.
+  Next Obligation.
+    split; [|reflexivity].
+    repeat constructor.
+    apply PSF.mem_2; auto.
+  Defined.
+  Next Obligation.
+    apply PSF.add_iff in H as [|Hin]; subst; eauto using Env.find_In, progress_in_graph.
+  Defined.
+  Next Obligation.
+    apply add_deeper, PSE.mem_4; auto.
+  Defined.
+  Next Obligation.
+    simpl.
+    take (false = PS.mem x v) and (symmetry in it; apply PSE.mem_4 in it).
+    destruct (pre_visited_add x (exist _ v H) it) as (v', V', Qv'); subst; auto.
+  Defined.
+  Next Obligation.
+    simpl in *. clear Heq_anonymous.
     repeat split.
     - intros y Hyin.
       setoid_rewrite PS.add_spec.
-      apply not_or'. split; [now intro; subst; auto|].
-      apply P1. now apply PSF.add_2.
-    - destruct P2 as (a & P2 & P3).
-      exists (add_after (PSP.of_list zs) x a); split.
+      apply not_or'. split; [intro; subst|].
+      + clear - Heq_anonymous0 Hyin. eapply PSE.mem_4; eauto.
+      + apply P1. now apply PSF.add_2.
+    - rename a into P2. rename e into P3.
+      exists (add_after (PSP.of_list zs) x wildcard'); split.
       + apply add_after_AcyGraph; auto using PSF.add_1 with acygraph.
         * rewrite ps_of_list_In. intro contra.
-          eapply Forall_forall in Hzs; eauto.
+          unfold In_ps in *. simpl_Forall.
           eapply P1; eauto using PSF.add_1.
         * intros ? Hin. rewrite ps_of_list_In in Hin.
-          apply PSF.add_2. eapply Forall_forall in Hzs; eauto.
+          apply PSF.add_2. unfold In_ps in *. simpl_Forall. eauto.
         * intros ? _ HasArc.
           eapply is_trans_arc_is_vertex with (g:=P2) in HasArc as (Ver&_); eauto.
           eapply P1 in Ver; eauto using PSF.add_1.
@@ -594,8 +620,11 @@ Section Dfs.
           rewrite ps_of_list_In; auto.
         * destruct (P3 _ HH) as (? & ? & ?).
           exists x0. split; eauto using add_after_has_arc1.
-    - split. now apply In_ps_singleton, PS.add_spec; left.
-      rewrite <-Hsub. apply PSP.subset_add_2. reflexivity.
+  Defined.
+  Next Obligation.
+    clear Heq_anonymous. simpl in *. split.
+    - repeat constructor; auto using PSF.add_1.
+    - eapply PSP.subset_add_2; eauto.
   Defined.
 
   Definition dfs

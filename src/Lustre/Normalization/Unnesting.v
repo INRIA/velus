@@ -1522,8 +1522,8 @@ Module Type UNNESTING
       unnested_block G (Breset [block] (Evar x ann)).
 
   Inductive unnested_node {PSyn1 PSyn2 prefs1 prefs2} (G: @global PSyn1 prefs1) : @node PSyn2 prefs2 -> Prop :=
-  | unnested_Node : forall n locs caus blks,
-      n_block n = Blocal (Scope locs caus blks) ->
+  | unnested_Node : forall n locs blks,
+      n_block n = Blocal (Scope locs blks) ->
       Forall (fun '(x, (_, _, _, o)) => o = None) locs ->
       Forall (unnested_block G) blks ->
       unnested_node G n.
@@ -2359,10 +2359,10 @@ Module Type UNNESTING
        n_in := (n_in n);
        n_out := (n_out n);
        n_block := match (n_block n) with
-                  | Blocal (Scope vars _ blks) =>
+                  | Blocal (Scope vars blks) =>
                     let res := unnest_blocks G blks init_st in
                     let nvars := st_anns (snd res) in
-                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) [] (fst res))
+                    Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res))
                   | blk => blk
                   end;
        n_ingt0 := (n_ingt0 n);
@@ -2404,11 +2404,10 @@ Module Type UNNESTING
         eapply st_valid_AtomOrGensym_nIn; eauto using norm1_not_in_local_prefs.
         unfold st_ids. solve_In.
     - setoid_rewrite InMembers_app. intros * [Hinm|Hinm] Hin'.
-      + eapply H9; eauto using in_or_app.
+      + eapply H8; eauto using in_or_app.
       + simpl_Forall. rewrite fst_InMembers in Hinm. simpl_In.
         eapply st_valid_AtomOrGensym_nIn; eauto using norm1_not_in_local_prefs.
         unfold st_ids. solve_In.
-    - constructor.
   Qed.
   Next Obligation.
     specialize (n_nodup n) as (Hndup&Hndl).
@@ -2423,7 +2422,7 @@ Module Type UNNESTING
       erewrite map_map, map_ext; [eauto|]. eapply Forall_impl; [|eapply Hvalid]; intros ? (?&?&?); simpl in *; subst; eauto.
       right. do 2 esplit; eauto. apply PSF.add_1; auto.
       intros (?&?&?); auto.
-    + eapply unnest_blocks_GoodLocals in H7; eauto.
+    + eapply unnest_blocks_GoodLocals in H6; eauto.
       rewrite Forall_forall in *; eauto using GoodLocals_add.
   Qed.
   Next Obligation.

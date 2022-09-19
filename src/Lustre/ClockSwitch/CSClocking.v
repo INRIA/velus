@@ -150,7 +150,7 @@ Module Type CSCLOCKING
     Qed.
 
     Lemma switch_scope_wc {A} P_na P_nd P_wc f_switch :
-      forall locs caus (blk: A) bck sub Γck Γck' s' st st',
+      forall locs (blk: A) bck sub Γck Γck' s' st st',
         (forall x, ~ IsLast Γck x) ->
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y ck, Env.find x sub = Some y -> HasClock Γck x ck -> HasClock Γck' y (subclock_clock bck sub ck)) ->
@@ -158,10 +158,10 @@ Module Type CSCLOCKING
         NoDupMembers Γck ->
         wc_env (idck Γck) ->
         wc_clock (idck Γck') bck ->
-        noauto_scope P_na (Scope locs caus blk) ->
-        NoDupScope P_nd (map fst Γck) (Scope locs caus blk) ->
-        wc_scope P_wc G Γck (Scope locs caus blk) ->
-        switch_scope f_switch Γck bck sub (Scope locs caus blk) st = (s', st') ->
+        noauto_scope P_na (Scope locs blk) ->
+        NoDupScope P_nd (map fst Γck) (Scope locs blk) ->
+        wc_scope P_wc G Γck (Scope locs blk) ->
+        switch_scope f_switch Γck bck sub (Scope locs blk) st = (s', st') ->
         (forall Γck Γck' blk' st st',
             (forall x, ~ IsLast Γck x) ->
             (forall x, Env.In x sub -> InMembers x Γck) ->
@@ -179,12 +179,13 @@ Module Type CSCLOCKING
     Proof.
       intros * Hnl1 Hsubin Hsub Hnsub Hnd1 Hwenv Hbck Hnl2 Hnd3 Hwt Hswitch Hind;
         inv Hnl2; inv Hnd3; inv Hwt; repeat inv_bind; simpl in *.
+      take (forall x, InMembers x locs -> ~_) and rename it into Hdisj.
       econstructor; eauto.
       - simpl_Forall; subst.
         eapply subclock_clock_wc; eauto.
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           exfalso. simpl_In.
-          eapply Env.find_In, Hsubin, fst_InMembers, H7 in Hfind; eauto.
+          eapply Env.find_In, Hsubin, fst_InMembers, Hdisj in Hfind; eauto.
           inv Hin; solve_In.
         * intros * Hfind Hin. rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin; simpl_In; econstructor. solve_In. auto.
@@ -199,13 +200,13 @@ Module Type CSCLOCKING
           exfalso. eapply Env.find_In, Hsubin, fst_InMembers in Hfind; eauto.
           inv Hin. simpl_In.
           assert (HasClock Γck x0 a.(clo)) as Hty by eauto with senv. inv Hty.
-          eapply H7; eauto using In_InMembers. solve_In.
+          eapply Hdisj; eauto using In_InMembers. solve_In.
         + intros ??? Hin.
           repeat rewrite HasClock_app in *. destruct Hin as [Hin|Hin]; eauto.
           right. inv Hin. simpl_In. econstructor; solve_In; auto.
         + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
           intros ? Hinm1 Hinm2. simpl_In.
-          eapply H7; solve_In.
+          eapply Hdisj; solve_In.
         + simpl_app. apply wc_env_app; auto.
           simpl_Forall; auto.
         + eapply wc_clock_incl; [|eauto]. solve_incl_app.
@@ -290,9 +291,9 @@ Module Type CSCLOCKING
               eapply Partition_Forall1, Forall_forall in Hpart; eauto; simpl in *.
               apply PSF.mem_2; auto. }
             inv Hdef. simpl_Exists. simpl_Forall.
-            destruct s. eapply wc_scope_Is_defined_in in H13; eauto.
-            2:{ intros; simpl in *; simpl_Exists; simpl_Forall; eauto using wc_block_Is_defined_in. }
-            apply fst_InMembers in H13; simpl_In.
+            repeat (Syn.inv_branch || Clo.inv_branch). simpl_Exists. simpl_Forall.
+            take (Is_defined_in _ _) and eapply wc_block_Is_defined_in in it; eauto.
+            simpl_In.
             eapply H7; eauto with senv.
           * apply mmap_length in H2. destruct x, branches; simpl in *; try congruence.
           * eapply mmap_values, Forall2_ignore1 in H2. simpl_Forall.
@@ -304,20 +305,20 @@ Module Type CSCLOCKING
           2:{ eapply Forall3_length in H8 as (?&?); congruence. }
           2:{ eapply mmap_length in H2; eauto. }
           eapply Forall3_Forall3 in H2; eauto. clear H8.
-          eapply Forall_concat, Forall_forall; intros ? Hinblks.
-          eapply Forall3_ignore12, Forall_forall in H2 as ((?&?)&?&Hin2&Hin3&(?&?&?)&?&?&?); eauto.
-          repeat inv_bind.
+          apply Forall_concat. eapply Forall3_ignore12 in H2. simpl_Forall.
+          repeat inv_branch. repeat inv_bind.
 
-          assert (forall x, InMembers x (map (fun '(x, y, _) => (x, y)) (x10 ++ x12)) ->
+          assert (forall x, InMembers x (map (fun '(x, y, _) => (x, y)) (l3 ++ l2)) ->
                        InMembers x (filter (fun '(_, ann) => ann.(clo) ==b ck) l0 ++ l)) as Hinminv.
           { intros ? Hinm. rewrite fst_InMembers in Hinm. rewrite fst_InMembers.
             erewrite map_app, <-2 new_idents_old, <-map_app; eauto.
             erewrite map_map, map_ext in Hinm; eauto. intros ((?&?)&(?&?)); auto.
           }
 
-          constructor.
-          *{ destruct s. constructor. simpl_Forall.
-             eapply switch_scope_wc in H2; eauto.
+          take (In _ (_ ++ _)) and apply in_app_iff in it as [Hinblks|Hinblks]; simpl_In; simpl_Forall.
+          *{ eapply mmap_values, Forall2_ignore1 in H12.
+             repeat (Syn.inv_branch || Clo.inv_branch). simpl_Forall.
+             eapply H in H3; eauto.
              - intros * Hnl. eapply Hnl1. inv Hnl; simpl_In.
                econstructor.
                apply Partition_Permutation in Hpart. rewrite Hpart.
@@ -326,9 +327,9 @@ Module Type CSCLOCKING
                erewrite Permutation_app_comm, fst_InMembers, map_map, map_ext, <-fst_InMembers; auto.
                intros (?&?); auto.
              - intros * Hfind Hin. inv Hin. simpl_In.
-               eapply new_idents_In with (ids1:=filter _ _) in H11; eauto.
+               eapply new_idents_In with (ids1:=filter _ _) in H13; eauto.
                2:{ eapply Env.find_In, Env.In_from_list in Hfind; eauto. }
-               unfold rename_var in H11. rewrite Hfind in H11. simpl_In. simpl_app. simpl_In.
+               unfold rename_var in H13. rewrite Hfind in H13. simpl_In. simpl_app. simpl_In.
                do 2 right. econstructor. solve_In; eauto. auto.
              - intros ?? Hfind Hin. exfalso.
                assert (Hnin:=Hfind). rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list in Hnin.
@@ -342,36 +343,32 @@ Module Type CSCLOCKING
              - constructor.
                + eapply wc_clock_incl; eauto. solve_incl_app.
                + simpl_app. repeat rewrite in_app_iff; auto.
-                 apply HasClock_app in Hini as [Hini|Hini]; inv Hini; [left|right;left]; solve_In.
+                 destruct Hini as [Hini|Hini]; inv Hini; [left|right;left]; solve_In.
                  congruence.
-             - eapply NoDupScope_incl; eauto.
-               1:{ intros; simpl in *; simpl_Forall; eauto using NoDupLocals_incl. }
+             - eapply NoDupLocals_incl; eauto.
                apply Partition_Permutation in Hpart. rewrite Hpart.
                rewrite map_map, 2 map_app.
                apply incl_app; [apply incl_appl|apply incl_appr].
                + erewrite map_ext; try reflexivity. intros (?&?); auto.
                + erewrite map_ext; try eapply incl_map, incl_filter', incl_refl.
                  intros (?&?); auto.
-             - eapply wc_scope_incl; [| |eauto|]; intros * Hin.
+             - eapply wc_block_incl; [| |eauto]; intros * Hin.
                + eapply H7 in Hin as (Hin&?); subst.
                  apply Partition_Permutation in Hpart. rewrite Hpart, HasClock_app in Hin.
                  rewrite map_app, HasClock_app.
                  destruct Hin as [Hin|Hin]; inv Hin; [left|right]; econstructor; solve_In.
                  1,3:reflexivity. apply equiv_decb_refl.
                + exfalso. eapply Hnl1; eauto.
-               + intros; simpl_Forall; eauto using wc_block_incl.
-             - intros; simpl in *.
-               apply mmap_values, Forall2_ignore1 in H22. simpl_Forall; eauto.
            }
           *{ simpl_Forall.
              eapply when_free_wc.
              - eapply HasClock_app, or_introl, rename_var_wc; eauto.
-               eapply new_idents_In_inv in H12 as (?&Hin&?); eauto; subst.
+               eapply new_idents_In_inv in H10 as (?&?&?); eauto; subst.
                simpl_In. rewrite equiv_decb_equiv in Hf. inv Hf.
                apply Partition_Permutation in Hpart. rewrite Hpart.
                apply HasClock_app; eauto with senv.
              - simpl_app. rewrite 2 HasClock_app. do 2 right.
-               eapply new_idents_In_inv_ck in H8; eauto. rewrite <-H8; clear H8.
+               eapply new_idents_In_inv_ck in H10; eauto. rewrite <-H10; clear H10.
                econstructor; solve_In; eauto with datatypes. simpl; auto. auto.
              - simpl_app. repeat rewrite HasClock_app in *. destruct Hini as [Hini|Hini]; eauto.
                right; left; inv Hini; simpl_In. econstructor; solve_In; auto.

@@ -84,13 +84,13 @@ Module Type DLTYPING
   Import Fresh Facts Tactics.
 
   Fact delast_scope_wt {A} P_nd P_wt1 (P_wt2: _ -> _ -> Prop) f_dl f_add {PSyn prefs} (G: @global PSyn prefs) :
-    forall locs caus (blk: A) sub Γ Γ' s' st st',
+    forall locs (blk: A) sub Γ Γ' s' st st',
       (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
       (forall x ty, HasType Γ x ty -> IsLast Γ x -> HasType Γ' (rename_in_var sub x) ty) ->
       (forall x, Env.In x sub -> IsLast Γ x) ->
-      NoDupScope P_nd (map fst Γ) (Scope locs caus blk) ->
-      wt_scope P_wt1 G Γ (Scope locs caus blk) ->
-      delast_scope f_dl f_add sub (Scope locs caus blk) st = (s', st') ->
+      NoDupScope P_nd (map fst Γ) (Scope locs blk) ->
+      wt_scope P_wt1 G Γ (Scope locs blk) ->
+      delast_scope f_dl f_add sub (Scope locs blk) st = (s', st') ->
       (forall Γ Γ' sub blk' st st',
           (forall x ty, HasType Γ x ty -> HasType Γ' x ty) ->
           (forall x ty, HasType Γ x ty -> IsLast Γ x -> HasType Γ' (rename_in_var sub x) ty) ->
@@ -135,13 +135,13 @@ Module Type DLTYPING
       - left. rewrite not_in_union_rename2; eauto.
         intro contra. apply Hsubin' in contra.
         inv Hl. inv contra. simpl_In.
-        eapply H5; eauto using In_InMembers. solve_In.
+        eapply H4; eauto using In_InMembers. solve_In.
       - exfalso.
         inv Hty. inv Hl. simpl_In.
-        eapply H5; eauto using In_InMembers. solve_In.
+        eapply H4; eauto using In_InMembers. solve_In.
       - exfalso.
         inv Hty. inv Hl. simpl_In.
-        eapply H5; eauto using In_InMembers. solve_In.
+        eapply H4; eauto using In_InMembers. solve_In.
       - right. simpl_app. apply HasType_app. right.
         inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
         destruct o0 as [(?&?)|]; simpl in *; try congruence.
@@ -150,7 +150,7 @@ Module Type DLTYPING
             destruct o as [(?&?)|]; simpl in *; auto. }
         econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
         intro contra. apply Hsubin in contra.
-        inv contra. eapply H5; eauto using In_InMembers. solve_In.
+        inv contra. eapply H4; eauto using In_InMembers. solve_In.
     }
     econstructor; eauto. 4:apply Hadd.
     - simpl_app. unfold wt_clocks in *. apply Forall_app; split; auto.
@@ -170,12 +170,12 @@ Module Type DLTYPING
       + eapply fresh_idents_In' in H; eauto. simpl_app. simpl_In.
         right; left. econstructor; solve_In. auto.
       + eapply fresh_idents_In' in H; eauto. simpl_In.
-        eapply Forall_forall in H7; [|solve_In]; simpl in *.
+        eapply Forall_forall in H5; [|solve_In]; simpl in *.
         eapply wt_clock_incl; eauto.
       + rewrite rename_in_exp_typeof, app_nil_r.
         eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall. auto.
       + eapply fresh_idents_In' in H; eauto. simpl_In.
-        eapply Forall_forall in H7; [|solve_In]; simpl in *.
+        eapply Forall_forall in H5; [|solve_In]; simpl in *.
         eapply wt_clock_incl; eauto.
       + simpl_app. repeat rewrite HasType_app. right; right. econstructor; solve_In. auto.
     - eapply Hind; eauto.
@@ -213,19 +213,18 @@ Module Type DLTYPING
       + now rewrite rename_in_exp_typeof.
       + assert (map fst x = map fst branches) as Heq. 2:setoid_rewrite Heq; auto.
         apply mmap_values in H0. clear - H0.
-        induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto.
+        induction H0; destruct_conjs; try destruct b0; simpl; auto; repeat inv_bind. auto.
       + apply mmap_values in H0. inv H0; auto. congruence.
-      + eapply mmap_values, Forall2_ignore1 in H0; eauto.
-        simpl_Forall; repeat inv_bind.
-        destruct s0. eapply delast_scope_wt; eauto.
-        * intros. eapply mmap_values, Forall2_ignore1 in H15; eauto.
-          simpl_Forall; eauto.
-        * intros. apply Forall_app; auto.
+      + eapply mmap_values, Forall2_ignore1 in H0; eauto. simpl_Forall.
+        take (NoDupBranch _ _) and inv it. take (wt_branch _ _) and inv it. repeat inv_bind.
+        constructor.
+        eapply mmap_values, Forall2_ignore1 in H7; eauto.
+        simpl_Forall; eauto.
 
     - (* automaton (weak) *)
       assert (map fst x = map fst states) as Heq.
       { apply mmap_values in H0. clear - H0.
-        induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
+        induction H0; destruct_conjs; try destruct b0 as [?(?&[?(?&?)])]; simpl; auto; repeat inv_bind. auto. }
       assert (forall y, InMembers y (map fst states) -> InMembers y (map fst x)) as Hinm.
       { intros. congruence. }
       econstructor; eauto using wt_clock_incl.
@@ -234,11 +233,12 @@ Module Type DLTYPING
       + setoid_rewrite Heq. erewrite <-map_length. setoid_rewrite Heq. rewrite map_length; auto.
       + now setoid_rewrite Heq.
       + apply mmap_values in H0; inv H0; congruence.
-      + eapply mmap_values, Forall2_ignore1 in H0; eauto.
-        simpl_Forall; repeat inv_bind.
-        destruct s0; destruct_conjs. split; auto. eapply delast_scope_wt; eauto.
+      + eapply mmap_values, Forall2_ignore1 in H0; eauto. simpl_Forall.
+        destruct b0 as [?(?&[?(?&?)])]. repeat inv_bind.
+        take (NoDupBranch _ _) and inv it. take (wt_branch _ _) and inv it. destruct_conjs; subst.
+        constructor; split; auto. eapply delast_scope_wt; eauto.
         * intros; repeat inv_bind; split.
-          -- eapply mmap_values, Forall2_ignore1 in H16; eauto.
+          -- eapply mmap_values, Forall2_ignore1 in H17; eauto.
              simpl_Forall; eauto.
           -- simpl_Forall; simpl_In; simpl_Forall.
              split; [|split]; eauto using rename_in_exp_wt.
@@ -249,7 +249,7 @@ Module Type DLTYPING
     - (* automaton (strong) *)
       assert (map fst x = map fst states) as Heq.
       { apply mmap_values in H0. clear - H0.
-        induction H0; destruct_conjs; simpl; auto; repeat inv_bind. auto. }
+        induction H0; destruct_conjs; try destruct b0 as [?(?&[?(?&?)])]; simpl; auto; repeat inv_bind. auto. }
       assert (forall y, InMembers y (map fst states) -> InMembers y (map fst x)) as Hinm.
       { intros * Hinm. congruence. }
       econstructor; eauto using wt_clock_incl.
@@ -258,11 +258,15 @@ Module Type DLTYPING
       + apply mmap_values in H0; inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
         simpl_Forall; repeat inv_bind.
-        destruct s0; destruct_conjs. split; auto.
-        * simpl_Forall. rewrite rename_in_exp_typeof. eauto using rename_in_exp_wt.
+        destruct b0 as [?(?&[?(?&?)])]. repeat inv_bind.
+        take (NoDupBranch _ _) and inv it. take (wt_branch _ _) and inv it. destruct_conjs; subst.
+        constructor; split; auto.
+        * simpl_Forall. simpl_In. simpl_Forall. rewrite rename_in_exp_typeof.
+          repeat split; eauto using rename_in_exp_wt.
+          setoid_rewrite Heq. solve_In.
         * eapply delast_scope_wt; eauto.
           -- intros; destruct_conjs; subst; repeat inv_bind; split; auto.
-             eapply mmap_values, Forall2_ignore1 in H16; eauto.
+             eapply mmap_values, Forall2_ignore1 in H17; eauto.
              simpl_Forall; eauto.
           -- intros; destruct_conjs; subst.
              split; auto. apply Forall_app; auto.

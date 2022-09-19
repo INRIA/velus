@@ -517,9 +517,9 @@ Module Type TRCLOCKING
           erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); try reflexivity.
           1-3:intros; destruct_conjs; auto.
       - eapply mmap_inversion in EQ.
-        induction EQ; inv H1; inv H9; inv H13; constructor; eauto.
-        eapply wc_block_to_equation in H3; eauto.
-        + clear - H3. simpl_app.
+        induction EQ; repeat (take (Forall _ (_::_)) and inv it); constructor; eauto.
+        eapply wc_block_to_equation in H8; eauto.
+        + clear - H8. simpl_app.
           repeat rewrite map_map in *.
           erewrite (Permutation_app_comm (map _ l)), map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _); eauto.
           1-3:intros; destruct_conjs; auto.
@@ -532,7 +532,7 @@ Module Type TRCLOCKING
             unfold Senv.senv_of_inout. erewrite map_map, map_ext. apply incl_appl, incl_refl.
             intros; destruct_conjs; auto.
           * unfold Senv.senv_of_inout, Senv.senv_of_locs.
-            clear - H7. simpl_app. repeat rewrite map_map in *.
+            take (wc_clock _ _) and clear - it. simpl_app. repeat rewrite map_map in *.
             erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); eauto.
     Qed.
 

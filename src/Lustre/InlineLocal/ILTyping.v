@@ -141,13 +141,15 @@ Module Type ILTYPING
           2:intros; destruct_conjs; auto.
           apply H0 in Hin as (?&?&?&_); eauto. econstructor; eauto.
       }
-      inv H3. inv H1. inv H6.
+      repeat inv_scope. repeat Syn.inv_scope.
+      take (forall x, InMembers x locs -> ~_) and rename it into Hnd'; eauto.
       eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_locs locs) in H. 1,11:eauto. all:eauto.
       + rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
       + intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_locs.
         split; auto. intro contra.
-        eapply H13; eauto. apply in_or_app, or_introl, fst_InMembers; auto.
+        eapply Hnd'; eauto.
+        apply in_or_app, or_introl, fst_InMembers; auto.
       + intros. rewrite Env.union_In, InMembers_app, Hsubin.
         apply or_iff_compat_l.
         now rewrite InMembers_senv_of_locs.
@@ -156,7 +158,7 @@ Module Type ILTYPING
         * assert (Env.find x3 x0 = None) as Hone.
           { inv Hin. eapply In_InMembers, fst_InMembers in H1.
             destruct (Env.find x3 x0) eqn:Hfind'; eauto.
-            exfalso. eapply H13; eauto using in_or_app. eapply fst_InMembers.
+            exfalso. eapply Hnd'; eauto using in_or_app. eapply fst_InMembers.
             eapply fresh_idents_rename_sub1 in H0. 2:econstructor; eauto.
             erewrite fst_InMembers, map_map, map_ext in H0; eauto.
             intros; destruct_conjs; auto. }
@@ -171,21 +173,21 @@ Module Type ILTYPING
           2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
           inv Hin. simpl_In. econstructor; solve_In. rewrite Hmap; simpl; eauto. reflexivity.
       + rewrite map_app, map_fst_senv_of_locs, app_assoc; auto.
-      + rewrite <-app_assoc in H19; auto.
+      + rewrite <-app_assoc in H14; auto.
       + erewrite fresh_idents_rename_anns; [|eauto].
         simpl_app. apply Forall_app; split.
         * assert (Hfresh:=H0). eapply fresh_idents_rename_ids in H0. rewrite H0.
           2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
-          unfold wt_clocks in H15. rewrite Forall_forall in H8. simpl_Forall.
+          unfold wt_clocks in *. take (Forall (AtomOrGensym _) _) and rewrite Forall_forall in it. simpl_Forall.
           eapply subclock_clock_wt, subclock_clock_wt with (Γ':=Γ++senv_of_locs locs++st_senv st). 3,6,7:eauto with ltyping.
           4:{ intros ?? Hfind Hin. repeat rewrite HasType_app in *. destruct Hin as [|[Hin|]]; eauto.
-              exfalso. inv Hin. eapply In_InMembers, Hsubin in H3. inv H3; congruence.
+              exfalso. inv Hin. eapply In_InMembers, Hsubin in H4. inv H4; congruence.
           }
           3:{ intros ??? Hfind Hin. repeat rewrite HasType_app in *. destruct Hin as [Hin|[|Hin]]; eauto.
-              - exfalso. inv Hin. eapply In_InMembers, Hnin in H3.
-                eapply H3, Hsubin. econstructor; eauto.
+              - exfalso. inv Hin. eapply In_InMembers, Hnin in H4.
+                eapply H4, Hsubin. econstructor; eauto.
               - exfalso. inv Hin. simpl_In.
-                eapply H13; eauto using In_InMembers.
+                eapply Hnd'; eauto using In_InMembers.
                 eapply in_or_app, or_intror, fst_InMembers.
                 eapply Hsubin. econstructor; eauto. }
           2:{ intros ?? Hfind Hin. repeat rewrite HasType_app in *. destruct Hin as [|[Hin|]]; eauto.
@@ -200,13 +202,13 @@ Module Type ILTYPING
             erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers in Hfresh.
             2:intros; destruct_conjs; auto.
             repeat rewrite HasType_app in *. destruct Hin as [Hin|[Hin|Hin]]; auto.
-            - exfalso. inv Hin. eapply In_InMembers, fst_InMembers in H3.
-              eapply H13, in_or_app, or_introl; eauto.
+            - exfalso. inv Hin. eapply In_InMembers, fst_InMembers in H4.
+              eapply Hnd', in_or_app, or_introl; eauto.
             - inv Hin. simpl_In. right; left.
               econstructor. solve_In. rewrite Hfind. 1,2:reflexivity.
             - exfalso. inv Hin. unfold st_senv. simpl_In.
               apply In_InMembers, fst_InMembers in Hin.
-              eapply st_valid_AtomOrGensym_nIn; eauto using local_not_in_switch_prefs.
+              eapply st_valid_AtomOrGensym_nIn with (x:=x3); eauto using local_not_in_switch_prefs.
               unfold st_ids. solve_In.
           }
         * simpl_Forall.
@@ -235,7 +237,7 @@ Module Type ILTYPING
     2,4,6,11:intros * Hfind _; rewrite Env.gempty in Hfind; try congruence.
     1,2,3,7:intros *; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
     - rewrite <-app_assoc in Hwt1, Hwt2. split; eauto.
-      apply Forall_app. unfold wt_clocks, Common.idty in H8. split; auto; simpl_Forall.
+      apply Forall_app. unfold wt_clocks, Common.idty in *. split; auto; simpl_Forall.
       eapply wt_clock_incl; [|eauto]. intros *. repeat rewrite HasType_app. intros [|]; auto.
     - eapply Forall_forall; intros; eauto using inlinelocal_block_wt.
     - apply NoLast_app; split; auto.
@@ -284,7 +286,7 @@ Module Type ILTYPING
       eapply mmap_inlinelocal_block_wt_type in H0; eauto.
 
     - (* local *)
-      inv H3. inv H5.
+      repeat inv_scope. repeat Syn.inv_scope.
       eapply mmap_inlinelocal_block_wt_type in H1; eauto.
       erewrite fresh_idents_rename_anns; [|eauto].
       rewrite map_app. apply Forall_app; split; auto.
@@ -304,7 +306,7 @@ Module Type ILTYPING
     Opaque inlinelocal_block.
     destruct blk; intros * Hns Hnd Hwt Hwte Hil; try destruct s; repeat inv_bind; simpl.
     1-4:eapply inlinelocal_block_wt_type; eauto.
-    inv Hns. inv Hwt; inv H3. inv Hnd; inv H3.
+    inv Hns. inv Hwt. inv Hnd. repeat inv_scope. repeat Syn.inv_scope.
     repeat setoid_rewrite map_app. apply Forall_app; split; auto.
     eapply mmap_inlinelocal_block_wt_type in H; eauto.
     eapply Forall_forall; intros; eauto using inlinelocal_block_wt_type.

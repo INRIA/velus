@@ -460,6 +460,19 @@ Module Type COINDSTREAMS
   Definition wt_streams: list (Stream svalue) -> list type -> Prop :=
     Forall2 wt_stream.
 
+  Fact wt_stream_enum : forall xs tx tn,
+      wt_stream xs (Tenum tx tn) ->
+      SForall (fun v => match v with
+                     | present (Vscalar _) => False
+                     | _ => True
+                     end) xs.
+    Proof.
+      intros * Hwt.
+      apply SForall_forall; intros n. apply SForall_forall with (n:=n) in Hwt.
+      cases_eqn Hxs. setoid_rewrite Hxs in Hwt.
+      inv Hwt.
+    Qed.
+
   (** ** Synchronous operators *)
 
   CoFixpoint const (b: Stream bool) (c: cconst): Stream svalue :=
@@ -1603,6 +1616,16 @@ Module Type COINDSTREAMS
     eapply FEnv.union4 in H0 as [Hfind|Hfind]; eauto using sem_var.
   Qed.
 
+  Lemma sem_var_union' : forall Hi1 Hi2 x vs,
+      sem_var (Hi1 + Hi2) x vs ->
+      (~FEnv.In x Hi2 /\ sem_var Hi1 x vs) \/ sem_var Hi2 x vs.
+  Proof.
+    intros * Hv. inv Hv.
+    eapply FEnv.union4' in H0 as [Hfind|(Hnone&Hfind)]; eauto using sem_var.
+    left. split; eauto using sem_var.
+    now apply FEnv.not_find_In.
+  Qed.
+
   Lemma sem_var_disj_union : forall Hi1 Hi2 x vs,
       (forall x, FEnv.In x Hi1 -> ~FEnv.In x Hi2) ->
       sem_var (Hi1 + Hi2) x vs <-> sem_var Hi1 x vs \/ sem_var Hi2 x vs.
@@ -1631,6 +1654,16 @@ Module Type COINDSTREAMS
       exists vs', vs ≡ vs' /\ In (x, vs') xs.
   Proof.
     intros * Hvar. inv Hvar; eauto using FEnv.of_list_find_In.
+  Qed.
+
+  Lemma sem_var_union2 : forall Hi1 Hi2 x vs,
+      sem_var Hi1 x vs ->
+      ~FEnv.In x Hi2 ->
+      sem_var (Hi1 + Hi2) x vs.
+  Proof.
+    intros * Hvar Hnin. inv Hvar.
+    econstructor; eauto.
+    apply FEnv.union2; eauto. now apply FEnv.not_find_In.
   Qed.
 
   Lemma sem_var_union3' : forall Hi1 Hi2 x vs,
@@ -1933,7 +1966,7 @@ Module Type COINDSTREAMS
 
   (** ** Aligned and its properties *)
 
-  CoInductive aligned: Stream svalue -> Stream bool -> Prop :=
+  CoInductive aligned {A} : Stream (synchronous A) -> Stream bool -> Prop :=
   | synchro_present:
       forall v vs bs,
         aligned vs bs ->
@@ -1943,8 +1976,8 @@ Module Type COINDSTREAMS
         aligned vs bs ->
         aligned (absent ⋅ vs) (false ⋅ bs).
 
-  Global Instance aligned_Proper:
-    Proper (@EqSt _ ==> @EqSt bool ==> iff)
+  Global Instance aligned_Proper {A} :
+    Proper (@EqSt (synchronous A) ==> @EqSt bool ==> iff)
            aligned.
   Proof.
     intros vs vs' Heq1 bs bs' Heq2.
@@ -1955,7 +1988,7 @@ Module Type COINDSTREAMS
         constructor; eauto.
   Qed.
 
-  Lemma aligned_spec : forall vs bs,
+  Lemma aligned_spec {A} : forall (vs: Stream (synchronous A)) bs,
       aligned vs bs <->
       (forall n, (exists v, bs # n = true /\ vs # n = present v)
             \/ (bs # n = false /\ vs # n = absent)).
@@ -1975,7 +2008,7 @@ Module Type COINDSTREAMS
       1,2:(constructor; cofix_step CoFix H).
   Qed.
 
-  Lemma aligned_EqSt : forall vs bs1 bs2,
+  Lemma aligned_EqSt {A} : forall (vs: Stream (synchronous A)) bs1 bs2,
       aligned vs bs1 ->
       aligned vs bs2 ->
       bs1 ≡ bs2.
@@ -1992,7 +2025,7 @@ Module Type COINDSTREAMS
     remember (const bs c) as vs.
     rewrite aligned_spec. intros n.
     eapply eq_EqSt, const_spec with (n:=n) in Heqvs.
-    rewrite Heqvs; clear Heqvs.
+    setoid_rewrite Heqvs; clear Heqvs.
     destruct (bs # n).
     - left. eexists...
     - right...
@@ -2005,7 +2038,7 @@ Module Type COINDSTREAMS
     remember (enum bs c) as vs.
     rewrite aligned_spec. intros n.
     eapply eq_EqSt, enum_spec with (n:=n) in Heqvs.
-    rewrite Heqvs; clear Heqvs.
+    setoid_rewrite Heqvs; clear Heqvs.
     destruct (bs # n).
     - left. eexists...
     - right...
@@ -2089,8 +2122,8 @@ Module Type COINDSTREAMS
     1,2:take (x # n = _) and setoid_rewrite it; auto.
   Qed.
 
-  Lemma ac_aligned :
-    forall s, aligned s (abstract_clock s).
+  Lemma ac_aligned {A} :
+    forall (s: Stream (synchronous A)), aligned s (abstract_clock s).
   Proof.
     cofix Cofix. intro.
     unfold_Stv s; rewrite unfold_Stream; simpl; constructor; auto.
@@ -2767,7 +2800,7 @@ Module Type COINDSTREAMS
     rewrite <-Ebs, <-H2. eapply Hs; eauto.
   Qed.
 
-  Lemma aligned_slower : forall bs vs,
+  Lemma aligned_slower {A} : forall bs (vs: Stream (synchronous A)),
       aligned vs bs ->
       slower vs bs.
   Proof.
@@ -2775,7 +2808,7 @@ Module Type COINDSTREAMS
     inv H; constructor; apply CoFix; auto.
   Qed.
 
-  Lemma sc_slower : forall H bs ck bs' vs,
+  Lemma sc_slower : forall H bs ck bs' (vs: Stream (synchronous value)),
       sem_clock H bs ck bs' ->
       aligned vs bs' ->
       slower vs bs.
@@ -2784,10 +2817,10 @@ Module Type COINDSTREAMS
     - rewrite H1; auto using aligned_slower.
     - eapply IHck in H4. 2:rewrite <-H9; apply ac_aligned.
       clear - Hal H10 H4.
-      rewrite slower_nth in *. rewrite aligned_spec in *. rewrite enums_of_nth in *.
+      rewrite slower_nth in *. rewrite aligned_spec in Hal. rewrite enums_of_nth in H10.
       intros * Hfalse. specialize (Hal n). specialize (H10 n). specialize (H4 n Hfalse).
       destruct H10 as [(?&?)|[(Hx&?)|(?&Hx&?&?)]].
-      + destruct Hal as [(?&?&?)|(?&?)]; try congruence. auto.
+      + destruct Hal as [(?&?&?)|(?&?)]; try congruence.
       + setoid_rewrite H4 in Hx; congruence.
       + setoid_rewrite H4 in Hx; congruence.
   Qed.
@@ -2824,197 +2857,167 @@ Module Type COINDSTREAMS
 
   Global Hint Resolve ac_slower : coindstreams.
 
-  (** ** filter relation *)
-
-  CoInductive filter {A} (abs : A) (sel : enumtag) : Stream svalue -> Stream A -> Stream A -> Prop :=
-  | filter_abs : forall es xs ys,
-      filter abs sel es xs ys ->
-      filter abs sel (absent ⋅ es) (abs ⋅ xs) (abs ⋅ ys)
-  | filter_sel : forall es x xs ys,
-      filter abs sel es xs ys ->
-      filter abs sel (present (Venum sel) ⋅ es) (x ⋅ xs) (x ⋅ ys)
-  | filter_nsel : forall v es x xs ys,
-      filter abs sel es xs ys ->
-      v <> Venum sel ->
-      filter abs sel (present v ⋅ es) (x ⋅ xs) (abs ⋅ ys).
-
-  Lemma filter_nth {A} (abs : A) sel : forall es xs ys,
-      filter abs sel es xs ys <->
-        (forall n,
-            (es # n = absent /\ xs # n = abs /\ ys # n = abs)
-            \/ (es # n = present (Venum sel) /\ xs # n = ys # n)
-            \/ (exists v, es # n = present v /\ v <> Venum sel /\ ys # n = abs)
-        ).
+  Lemma slower_ac_morph {A B} : forall (vs1 : Stream (synchronous A)) (vs2 : Stream (synchronous B)) bs,
+      abstract_clock vs1 ≡ abstract_clock vs2 ->
+      slower vs1 bs ->
+      slower vs2 bs.
   Proof.
-    split.
-    - intros * H n. revert es xs ys H.
-      induction n; intros.
-      + inv H; intuition.
-        right; right. repeat esplit; eauto.
-      + inv H; repeat rewrite Str_nth_S; auto.
-    - revert es xs ys. cofix CoFix; intros (?&?) (?&?) (?&?) Heq.
-      specialize (Heq 0) as Heq0.
-      destruct Heq0 as [(Hsc&Hx&Hy)|[(Hsc&Hx)|(?&Hsc&Hx&Hy)]];
-        try erewrite Str_nth_0 in Hsc; try erewrite Str_nth_0 in Hx; try erewrite Str_nth_0 in Hy; subst.
-      1-3:constructor; auto; apply CoFix.
-      1-3:intros n; specialize (Heq (S n)) as [(Hsc'&Hx'&Hy')|[(Hsc'&Hx')|(?&Hsc'&Hx'&Hy')]];
-      erewrite Str_nth_S_tl in Hsc'; try erewrite Str_nth_S_tl in Hx'; try erewrite Str_nth_S_tl in Hy'; simpl in *; eauto 8.
+    cofix CoFix.
+    intros * Hac Hsc.
+    destruct vs1 as ([]&?), vs2 as ([]&?), bs as ([]&?);
+      inv Hsc; inv Hac; simpl in *; try congruence.
+    1-3:constructor; eapply CoFix; eauto.
   Qed.
 
-  (* Filter of values *)
-  Definition filterv := filter (@absent value).
+  (** ** when relation *)
 
-  (* Filtering of histories *)
-  Definition filter_hist (sel : enumtag) (es : Stream svalue) (Hi Hi' : history) :=
-    FEnv.refines (fun vs' vs => filterv sel es vs vs') Hi' Hi.
+  (* Whening of histories *)
+  Definition when_hist (sel : enumtag) (Hi : history) (es : Stream svalue) (Hi' : history) :=
+    FEnv.refines (fun vs' vs => when sel vs es vs') Hi' Hi.
 
-  Add Parametric Morphism {A} (abs : A) sel : (filter abs sel)
+  Add Parametric Morphism sel : (when sel)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
-        as filter_EqSt.
+        as when_EqSt.
   Proof.
     intros * Heq1 * Heq2 * Heq3 Hf.
-    apply filter_nth; intros.
-    apply filter_nth with (n:=n) in Hf.
+    apply when_spec; intros.
+    apply when_spec with (n:=n) in Hf.
     rewrite <-Heq1, <-Heq2, <-Heq3; auto.
-    destruct Hf as [|[|(?&?&?&?)]]; auto.
-    right; right. esplit. erewrite <-Heq1, <-Heq3; eauto.
+    destruct Hf as [|[|]]; destruct_conjs; auto.
+    - right; left. do 2 esplit. erewrite <-Heq1, <-Heq2, <-Heq3; eauto.
+    - right; right. esplit. erewrite <-Heq1, <-Heq2, <-Heq3; eauto.
   Qed.
 
-  Add Parametric Morphism sel : (filterv sel)
-      with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
-        as filterv_EqSt.
-  Proof.
-    intros * Heq1 * Heq2 * Heq3 Hfilter.
-    unfold filterv in *. rewrite <-Heq1, <-Heq2, <-Heq3; auto.
-  Qed.
-
-  Add Parametric Morphism sel : (filter_hist sel)
-      with signature @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _) ==> Basics.impl
-        as filter_hist_EqSt.
+  Add Parametric Morphism sel : (when_hist sel)
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> Basics.impl
+        as when_hist_EqSt.
   Proof.
     intros * Heq1 * Heq2 * Heq3 Hf.
-    unfold filter_hist in *.
+    unfold when_hist in *.
     intros ?? Hfind. specialize (Heq3 x2). rewrite Hfind in Heq3. inv Heq3.
-    symmetry in H. apply Hf in H as (?&Hfilter&Hfind').
-    specialize (Heq2 x2). rewrite Hfind' in Heq2. inv Heq2.
+    symmetry in H. apply Hf in H as (?&Hwhen&Hfind').
+    specialize (Heq1 x2). rewrite Hfind' in Heq1. inv Heq1.
     do 2 esplit; [|eauto].
-    rewrite <-Heq1, <-H2, <-H1; auto.
+    rewrite <-Heq2, <-H2, <-H1; auto.
   Qed.
 
-  (** filter as a function *)
+  (** when as a function *)
 
   (* does not constrain the input history enough in the case of an absence *)
-  CoFixpoint ffilter {A} (abs : A) (sel : enumtag) (es : Stream svalue) (vs : Stream A) : Stream A :=
-    (if hd es ==b present (Venum sel) then hd vs else abs) ⋅ (ffilter abs sel (tl es) (tl vs)).
+  CoFixpoint fwhen {A} (abs : A) (sel : enumtag) (es : Stream svalue) (vs : Stream A) : Stream A :=
+    (if hd es ==b present (Venum sel) then hd vs else abs) ⋅ (fwhen abs sel (tl es) (tl vs)).
 
-  Definition ffilterv sel es vs := ffilter (@absent value) sel es vs.
-  Definition ffilter_hist sel es := FEnv.map (ffilterv sel es).
-  Definition ffilterb := ffilter false.
+  Definition fwhenv sel es vs := fwhen (@absent value) sel es vs.
+  Definition fwhen_hist sel es := FEnv.map (fwhenv sel es).
+  Definition fwhenb := fwhen false.
 
-  Global Hint Unfold ffilter_hist : fenv.
+  Global Hint Unfold fwhen_hist : fenv.
 
-  Lemma ffilter_nth {A} (abs : A) :
+  Lemma fwhen_nth {A} (abs : A) :
     forall n sel es xs,
-      (ffilter abs sel es xs) # n = if es # n ==b present (Venum sel) then xs # n else abs.
+      (fwhen abs sel es xs) # n = if es # n ==b present (Venum sel) then xs # n else abs.
   Proof.
     unfold Str_nth.
     induction n; intros; unfold_St es; unfold_St xs; auto.
   Qed.
 
-  Corollary ffilterv_nth:
+  Corollary fwhenv_nth:
     forall n e es xs,
-      (ffilterv e es xs) # n = if es # n ==b present (Venum e) then xs # n else absent.
+      (fwhenv e es xs) # n = if es # n ==b present (Venum e) then xs # n else absent.
   Proof.
-    intros. setoid_rewrite ffilter_nth; auto.
+    intros. setoid_rewrite fwhen_nth; auto.
   Qed.
 
-  Corollary ffilterb_nth:
+  Corollary fwhenb_nth:
     forall n e es xs,
-      (ffilterb e es xs) # n = if es # n ==b present (Venum e) then xs # n else false.
+      (fwhenb e es xs) # n = if es # n ==b present (Venum e) then xs # n else false.
   Proof.
-    intros. setoid_rewrite ffilter_nth; auto.
+    intros. setoid_rewrite fwhen_nth; auto.
   Qed.
 
-  Lemma ffilter_Cons {A} (absent: A) :
+  Lemma fwhen_Cons {A} (abs : A) :
     forall sel e es x xs,
-      (ffilter absent sel (e ⋅ es) (x ⋅ xs))
-        = (if e ==b present (Venum sel) then x else absent) ⋅ (ffilter absent sel es xs).
+      (fwhen abs sel (e ⋅ es) (x ⋅ xs))
+        = (if e ==b present (Venum sel) then x else abs) ⋅ (fwhen abs sel es xs).
   Proof.
     intros *.
-    rewrite (unfold_Stream (ffilter _ _ _ _)); simpl. reflexivity.
+    rewrite (unfold_Stream (fwhen _ _ _ _)); simpl. reflexivity.
   Qed.
 
-  Lemma filter_ffilter {A} (abs : A) sel : forall es vs vs',
-      filter abs sel es vs vs' ->
-      vs' ≡ ffilter abs sel es vs.
+  Lemma when_fwhen sel : forall es vs vs',
+      when sel vs es vs' ->
+      vs' ≡ fwhenv sel es vs.
   Proof.
     cofix CoFix.
-    intros * Hfilter; inv Hfilter; constructor; simpl; auto.
-    - rewrite equiv_decb_refl; auto.
+    intros * Hwhen; inv Hwhen; constructor; simpl; auto.
     - destruct (_ ==b _) eqn:Heq; auto.
       rewrite equiv_decb_equiv in Heq. inv Heq. congruence.
+    - rewrite equiv_decb_refl; auto.
   Qed.
 
-  Lemma ffilterv_filterv sel : forall es vs,
+  Lemma fwhenv_whenv sel : forall es vs,
+      SForall (fun v => match v with present (Venum _) | absent => True | _ => False end) es ->
       abstract_clock vs ≡ abstract_clock es ->
-      filterv sel es vs (ffilterv sel es vs).
+      when sel vs es (fwhenv sel es vs).
   Proof.
     cofix CoFix.
-    intros ([]&?) ([]&?) Hac; inv Hac; simpl in *; try congruence.
-    - rewrite (unfold_Stream (ffilterv _ _ _)); simpl.
+    intros ([]&?) ([]&?) Hwt Hac; inv Hwt; inv Hac; simpl in *; try congruence.
+    - rewrite (unfold_Stream (fwhenv _ _ _)); simpl.
       constructor. apply CoFix; auto.
-    - rewrite (unfold_Stream (ffilterv _ _ _)); simpl. destruct (_ ==b _) eqn:Heq.
+    - rewrite (unfold_Stream (fwhenv _ _ _)); simpl. destruct (_ ==b _) eqn:Heq.
       + rewrite equiv_decb_equiv in Heq. inv Heq.
         constructor. apply CoFix; auto.
-      + constructor. apply CoFix; auto.
-        intro contra. inv contra. rewrite equiv_decb_refl in Heq. congruence.
+      + destruct v; try now exfalso.
+        constructor. apply CoFix; auto.
+        intro contra. subst e. rewrite equiv_decb_refl in Heq. congruence.
   Qed.
 
-  Lemma filter_hist_ffilter_hist sel es : forall Hi Hi',
-      filter_hist sel es Hi Hi' ->
-      Hi' ⊑ (ffilter_hist sel es Hi).
+  Lemma when_hist_fwhen_hist sel es : forall Hi Hi',
+      when_hist sel es Hi Hi' ->
+      Hi' ⊑ (fwhen_hist sel Hi es).
   Proof.
-    intros * Hfilter.
+    intros * Hwhen.
     intros ?? Hfind.
-    eapply Hfilter in Hfind as (?&Hf&Hfind).
-    apply filter_ffilter in Hf.
+    eapply Hwhen in Hfind as (?&Hf&Hfind).
+    apply when_fwhen in Hf.
     do 2 esplit; eauto.
     simpl_fenv. now rewrite Hfind.
   Qed.
 
-  Lemma filter_hist_restrict_ac sel es : forall Hi xs,
+  Lemma when_hist_restrict_ac sel es : forall Hi xs,
+      SForall (fun v => match v with present (Venum _) | absent => True | _ => False end) es ->
       (forall x vs, List.In x xs -> sem_var Hi x vs -> abstract_clock vs ≡ abstract_clock es) ->
-      filter_hist sel es Hi (FEnv.restrict (ffilter_hist sel es Hi) xs).
+      when_hist sel Hi es (FEnv.restrict (fwhen_hist sel es Hi) xs).
   Proof.
-    intros * Hac.
+    intros * Hwt Hac.
     intros ?? Hfind. apply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
     simpl_fenv.
     do 2 esplit; [|eauto].
-    eapply ffilterv_filterv; eauto.
+    eapply fwhenv_whenv; eauto.
     eapply Hac; eauto. econstructor; eauto. reflexivity.
   Qed.
 
-  Add Parametric Morphism {A} (absent: A) k : (ffilter absent k)
+  Add Parametric Morphism {A} (absent: A) k : (fwhen absent k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as ffilter_EqSt.
+        as fwhen_EqSt.
   Proof.
     intros rs rs' Ers xs xs' Exs.
     eapply ntheq_eqst; intros n.
     eapply eqst_ntheq with (n:=n) in Exs.
-    rewrite 2 ffilter_nth, Exs, Ers. reflexivity.
+    rewrite 2 fwhen_nth, Exs, Ers. reflexivity.
   Qed.
 
-  Add Parametric Morphism k : (ffilterv k)
+  Add Parametric Morphism k : (fwhenv k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as ffilterv_morph.
+        as fwhenv_morph.
   Proof.
     intros rs rs' Ers xs xs' Exs.
-    apply ffilter_EqSt; auto.
+    apply fwhen_EqSt; auto.
   Qed.
 
-  Add Parametric Morphism k : (ffilter_hist k)
+  Add Parametric Morphism k : (fwhen_hist k)
       with signature @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _)
-        as ffilter_hist_EqSt.
+        as fwhen_hist_EqSt.
   Proof.
     intros r r' Er H H' EH.
     intros x. specialize (EH x). simpl_fenv.
@@ -3022,59 +3025,59 @@ Module Type COINDSTREAMS
     rewrite H2, Er. reflexivity.
   Qed.
 
-  Add Parametric Morphism k : (ffilterb k)
+  Add Parametric Morphism k : (fwhenb k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _
-        as ffilterb_EqSt.
+        as fwhenb_EqSt.
   Proof.
     intros rs rs' Ers xs xs' Exs.
-    apply ffilter_EqSt; auto.
+    apply fwhen_EqSt; auto.
   Qed.
 
-  Lemma ac_ffilter : forall k sc xs,
-      abstract_clock (ffilterv k sc xs) ≡ ffilterb k sc (abstract_clock xs).
+  Lemma ac_fwhen : forall k sc xs,
+      abstract_clock (fwhenv k sc xs) ≡ fwhenb k sc (abstract_clock xs).
   Proof.
     intros. apply ntheq_eqst; intros n.
-    rewrite ac_nth. setoid_rewrite ffilter_nth. rewrite ac_nth.
+    rewrite ac_nth. setoid_rewrite fwhen_nth. rewrite ac_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Lemma sem_var_ffilter: forall k r H x v,
+  Lemma sem_var_fwhen: forall k r H x v,
       sem_var H x v ->
-      sem_var (ffilter_hist k r H) x (ffilterv k r v).
+      sem_var (fwhen_hist k r H) x (fwhenv k r v).
   Proof.
     intros * Hvar. inv Hvar.
     simpl_fenv. econstructor. now rewrite H1.
     now rewrite H2.
   Qed.
 
-  Lemma sem_var_filter x: forall sel sc Hi Hi' vs,
-      filter_hist sel sc Hi Hi' ->
+  Lemma sem_var_when x: forall sel sc Hi Hi' vs,
+      when_hist sel Hi sc Hi' ->
       sem_var Hi x vs ->
       FEnv.In x Hi' ->
-      filterv sel sc vs (ffilterv sel sc vs).
+      when sel vs sc (fwhenv sel sc vs).
   Proof.
 
-    intros * Hfilter Hvar Hin.
-    inv Hin. eapply Hfilter in H as (?&Hf&Hv).
+    intros * Hwhen Hvar Hin.
+    inv Hin. eapply Hwhen in H as (?&Hf&Hv).
     eapply sem_var_det in Hvar; [|econstructor; eauto; reflexivity].
     rewrite Hvar in Hf.
-    assert (Hf':=Hf). apply filter_ffilter in Hf'. rewrite <-Hf'; auto.
+    assert (Hf':=Hf). apply when_fwhen in Hf'. rewrite <-Hf'; auto.
   Qed.
 
-  Lemma sem_var_filter_inv: forall k r Hi Hi' x v,
-      filter_hist k r Hi Hi' ->
+  Lemma sem_var_when_inv: forall k r Hi Hi' x v,
+      when_hist k Hi r Hi' ->
       sem_var Hi' x v ->
-      exists v', sem_var Hi x v' /\ filterv k r v' v.
+      exists v', sem_var Hi x v' /\ when k v' r v.
   Proof.
     intros * Hf Hvar. inv Hvar.
-    apply Hf in H0 as (?&Hfilter&?).
+    apply Hf in H0 as (?&Hwhen&?).
     do 2 esplit; eauto. 2:rewrite H1; eauto.
     econstructor; eauto. reflexivity.
   Qed.
 
-  Lemma sem_var_ffilter_inv: forall k r H x v,
-      sem_var (ffilter_hist k r H) x v ->
-      exists v', sem_var H x v' /\ v ≡ (ffilterv k r v').
+  Lemma sem_var_fwhen_inv: forall k r H x v,
+      sem_var (fwhen_hist k r H) x v ->
+      exists v', sem_var H x v' /\ v ≡ (fwhenv k r v').
   Proof.
     intros * Hvar. inv Hvar.
     simpl_fenv.
@@ -3082,9 +3085,9 @@ Module Type COINDSTREAMS
     econstructor; eauto. reflexivity.
   Qed.
 
-  Lemma refines_ffilter : forall e sc H H',
+  Lemma refines_fwhen : forall e sc H H',
       H ⊑ H' ->
-      (ffilter_hist e sc H) ⊑ (ffilter_hist e sc H').
+      (fwhen_hist e sc H) ⊑ (fwhen_hist e sc H').
   Proof.
     intros * Href ?? Hfind.
     simpl_fenv.
@@ -3093,46 +3096,45 @@ Module Type COINDSTREAMS
     do 2 esplit; eauto. now rewrite Heq.
   Qed.
 
-  Lemma filter_absent {A} (abs: A) e :
-    filter abs e (Streams.const absent) (Streams.const abs) (Streams.const abs).
+  Lemma when_absent e :
+    when e (Streams.const absent) (Streams.const absent) (Streams.const absent).
   Proof.
     cofix CoFix.
-    rewrite (unfold_Stream (Streams.const absent)), (unfold_Stream (Streams.const abs)); simpl.
+    rewrite (unfold_Stream (Streams.const absent)), (unfold_Stream (Streams.const absent)); simpl.
     constructor; auto.
   Qed.
 
-  Corollary filter_hist_absent e sc : forall Hi Hi',
-    filter_hist e sc Hi Hi' ->
-    filter_hist e (Streams.const absent)
-                (FEnv.map (fun _ => Streams.const absent) Hi) (FEnv.map (fun _ => Streams.const absent) Hi').
+  Corollary when_hist_absent e sc : forall Hi Hi',
+    when_hist e Hi sc Hi' ->
+    when_hist e (FEnv.map (fun _ => Streams.const absent) Hi) (Streams.const absent) (FEnv.map (fun _ => Streams.const absent) Hi').
   Proof.
-    intros * Hfilter.
+    intros * Hwhen.
     intros ?? Hfind. simpl_fenv.
-    apply Hfilter in Hf as (?&Hf&Hfind).
+    apply Hwhen in Hf as (?&Hf&Hfind).
     do 2 esplit. 2:now rewrite Hfind.
-    apply filter_absent.
+    apply when_absent.
   Qed.
 
-  Lemma ffilter_absent {A} (absent: A) : forall k sc,
-      ffilter absent k sc (Streams.const absent) ≡ Streams.const absent.
+  Lemma fwhen_absent {A} (absent: A) : forall k sc,
+      fwhen absent k sc (Streams.const absent) ≡ Streams.const absent.
   Proof.
     intros *.
     eapply ntheq_eqst. intros n.
-    rewrite ffilter_nth, const_nth.
+    rewrite fwhen_nth, const_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Corollary ffilter_hist_absent: forall k sc (H: FEnv.t (Stream svalue)),
-      FEnv.Equiv (@EqSt _) (ffilter_hist k sc (FEnv.map (fun _ => Streams.const absent) H))
+  Corollary fwhen_hist_absent: forall k sc (H: FEnv.t (Stream svalue)),
+      FEnv.Equiv (@EqSt _) (fwhen_hist k sc (FEnv.map (fun _ => Streams.const absent) H))
                  (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
     intros * x. simpl_fenv.
     destruct (H x); constructor.
-    eapply ffilter_absent.
+    eapply fwhen_absent.
   Qed.
 
-  Corollary ffilter_hist_absent': forall k sc (H: FEnv.t (Stream svalue)),
-      FEnv.Equiv (@EqSt _) (FEnv.map (fun _ => Streams.const (@absent value)) (ffilter_hist k sc H))
+  Corollary fwhen_hist_absent': forall k sc (H: FEnv.t (Stream svalue)),
+      FEnv.Equiv (@EqSt _) (FEnv.map (fun _ => Streams.const (@absent value)) (fwhen_hist k sc H))
                  (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
     intros * x. simpl_fenv.
@@ -3140,24 +3142,24 @@ Module Type COINDSTREAMS
     reflexivity.
   Qed.
 
-  Corollary ffilterb_absent: forall k sc,
-      ffilterb k sc (Streams.const false) ≡ Streams.const false.
+  Corollary fwhenb_absent: forall k sc,
+      fwhenb k sc (Streams.const false) ≡ Streams.const false.
   Proof.
     intros *.
     eapply ntheq_eqst. intros n.
-    rewrite ffilterb_nth, const_nth.
+    rewrite fwhenb_nth, const_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Lemma ffilterb_both_slower : forall k sc bs bs',
+  Lemma fwhenb_both_slower : forall k sc bs bs',
       slower sc bs ->
       slower sc bs' ->
-      ffilterb k sc bs ≡ ffilterb k sc bs'.
+      fwhenb k sc bs ≡ fwhenb k sc bs'.
   Proof.
     intros * Hslow1 Hslow2.
     apply ntheq_eqst; intros n.
     setoid_rewrite slower_nth in Hslow1. setoid_rewrite slower_nth in Hslow2.
-    repeat rewrite ffilterb_nth.
+    repeat rewrite fwhenb_nth.
     specialize (Hslow1 n). specialize (Hslow2 n).
     destruct (sc # n) eqn:Hsc; setoid_rewrite Hsc; auto.
     destruct (_ ==b _); auto.
@@ -3166,37 +3168,36 @@ Module Type COINDSTREAMS
     - specialize (Hslow1 eq_refl); congruence.
   Qed.
 
-  (** ** select and fselect, combining filter and mask *)
+  (** ** select and fselect, combining when and mask *)
 
   Definition stres_st (stres : Stream (synchronous (enumtag * bool))) :=
     Streams.map (fun v => match v with present (e, _) => present (Venum e) | absent => absent end) stres.
   Definition stres_res (stres : Stream (synchronous (enumtag * bool))) :=
     Streams.map (fun v => match v with present (_, b) => b | absent => false end) stres.
 
-  CoInductive select' {A} (abs : A) (sel : enumtag) (k : nat) : nat -> Stream (synchronous (enumtag * bool)) -> Stream A -> Stream A -> Prop :=
+  CoInductive select' (sel : enumtag) (k : nat) : nat -> Stream (synchronous (enumtag * bool)) -> Stream svalue -> Stream svalue -> Prop :=
   | select_abs : forall k' stres xs ys,
-      select' abs sel k k' stres xs ys ->
-      select' abs sel k k' (absent ⋅ stres) (abs ⋅ xs) (abs ⋅ ys)
+      select' sel k k' stres xs ys ->
+      select' sel k k' (absent ⋅ stres) (absent ⋅ xs) (absent ⋅ ys)
   | select_nsel : forall k' v r stres x xs ys,
-      select' abs sel k k' stres xs ys ->
+      select' sel k k' stres xs ys ->
       v <> sel ->
-      select' abs sel k k' (present (v, r) ⋅ stres) (x ⋅ xs) (abs ⋅ ys)
+      select' sel k k' (present (v, r) ⋅ stres) (present x ⋅ xs) (absent ⋅ ys)
   | select_nreset : forall k' stres x xs ys,
-      select' abs sel k k' stres xs ys ->
-      select' abs sel k k' (present (sel, false) ⋅ stres) (x ⋅ xs) ((if k' =? k then x else abs) ⋅ ys)
+      select' sel k k' stres xs ys ->
+      select' sel k k' (present (sel, false) ⋅ stres) (present x ⋅ xs) ((if k' =? k then present x else absent) ⋅ ys)
   | select_reset : forall k' stres x xs ys,
-      select' abs sel k (S k') stres xs ys ->
-      select' abs sel k k' (present (sel, true) ⋅ stres) (x ⋅ xs) ((if S k' =? k then x else abs) ⋅ ys).
-  Definition select {A} (abs : A) sel k := select' abs sel k 0.
+      select' sel k (S k') stres xs ys ->
+      select' sel k k' (present (sel, true) ⋅ stres) (present x ⋅ xs) ((if S k' =? k then present x else absent) ⋅ ys).
+  Definition select sel k := select' sel k 0.
 
-  Definition selectv := select (@absent value).
   Definition select_hist sel k stres Hi Hi' :=
-    FEnv.refines (fun vs' vs => selectv sel k stres vs vs') Hi' Hi.
+    FEnv.refines (fun vs' vs => select sel k stres vs vs') Hi' Hi.
 
   Definition fselect {A} (absent : A) (e : enumtag) (k : nat) (stres : Stream (synchronous (enumtag * bool))) (xs : Stream A) :=
     mask absent k
-         (ffilterb e (stres_st stres) (stres_res stres))
-         (ffilter absent e (stres_st stres) xs).
+         (fwhenb e (stres_st stres) (stres_res stres))
+         (fwhen absent e (stres_st stres) xs).
 
   Definition fselectb := fselect false.
   Definition fselectv e k stres xs := fselect (@absent value) e k stres xs.
@@ -3221,30 +3222,30 @@ Module Type COINDSTREAMS
     rewrite 2 Str_nth_map. rewrite Heq; auto.
   Qed.
 
-  Lemma select_mask_filter {A} (abs: A) sel k : forall stres xs zs,
-      select abs sel k stres xs zs
-      <-> exists ys, filter abs sel (stres_st stres) xs ys
-              /\ zs ≡ mask abs k (ffilterb sel (stres_st stres) (stres_res stres)) ys.
+  Lemma select_mask_when sel k : forall stres xs zs,
+      select sel k stres xs zs
+      <-> exists ys, when sel xs (stres_st stres) ys
+              /\ zs ≡ maskv k (fwhenb sel (stres_st stres) (stres_res stres)) ys.
   Proof.
     intros *. split.
-    - intros * Hsel. exists (ffilter abs sel (stres_st stres) xs). split.
+    - intros * Hsel. exists (fwhenv sel (stres_st stres) xs). split.
       + revert Hsel. unfold select. generalize 0 as k'. revert stres xs zs.
         cofix CoFix; intros [] [] [] * Hsel.
-        inversion Hsel; clear Hsel; subst k'0 s s0 a s1 a0 s2.
-        all:unfold stres_st; rewrite map_Cons, ffilter_Cons.
+        inversion Hsel; clear Hsel; subst k'0 s s0 s1 s2 s3 s4.
+        all:unfold stres_st; unfold fwhenv; rewrite map_Cons, fwhen_Cons.
         * constructor; eauto.
         * replace (present (Venum v) ==b present (Venum sel)) with false.
           2:{ destruct (_ ==b _) eqn:Heq; auto.
               rewrite equiv_decb_equiv in Heq. inv Heq. congruence. }
           constructor; eauto.
-          contradict H7; now inv H7.
         * rewrite equiv_decb_refl. constructor; eauto.
         * rewrite equiv_decb_refl. constructor; eauto.
 
-      + revert Hsel. unfold select, mask. generalize 0 as k'. revert stres xs zs.
+      + revert Hsel. unfold select, maskv, mask. generalize 0 as k'. revert stres xs zs.
         cofix CoFix; intros [] [] [] * Hsel.
-        inversion Hsel; clear Hsel; subst k'0 s s0 a s1 a0 s2.
-        all:unfold stres_st, stres_res, ffilterb; rewrite 2 map_Cons, 2 ffilter_Cons, mask'_Cons.
+        inversion Hsel; clear Hsel; subst k'0 s s0 s1 s2 s3 s4.
+        all:unfold stres_st, stres_res, fwhenb; unfold fwhenb, fwhenv;
+          repeat rewrite map_Cons; repeat rewrite fwhen_Cons; repeat rewrite mask'_Cons.
         * constructor; simpl; eauto. destruct (_ =? _); auto.
         * replace (present (Venum v) ==b present (Venum sel)) with false.
           2:{ destruct (_ ==b _) eqn:Heq; auto.
@@ -3253,31 +3254,30 @@ Module Type COINDSTREAMS
         * rewrite equiv_decb_refl. constructor; eauto.
         * rewrite equiv_decb_refl. constructor; eauto.
 
-    - intros (ys&Hfilter&Hmask).
-      revert Hfilter Hmask. unfold mask, select. generalize 0 as k'.
+    - intros (ys&Hwhen&Hmask).
+      revert Hwhen Hmask. unfold maskv, mask, select. generalize 0 as k'.
       revert stres xs ys zs.
-      cofix CoFix; intros [] [] [] [] * Hfilter Hmask.
-      setoid_rewrite map_Cons in Hfilter. setoid_rewrite map_Cons in Hmask.
+      cofix CoFix; intros [] [] [] [] * Hwhen Hmask.
+      setoid_rewrite map_Cons in Hwhen. setoid_rewrite map_Cons in Hmask.
       inv Hmask; simpl in *; subst.
-      inversion Hfilter; clear Hfilter; subst a xs a0 s2.
+      inversion Hwhen; clear Hwhen; subst cs s1 s2 s3 s4.
       + destruct s as [|(?&?)]; simpl in *; try congruence.
         destruct (_ =? _); constructor; eauto.
-      + destruct s as [|(?&?)]; simpl in *. inv H.
-        inversion H; clear H. subst e es.
-        rewrite equiv_decb_refl in *.
-        destruct b; constructor; eauto.
-      + destruct s as [|(?&?)]; simpl in *; inv H.
+      + destruct s as [|(?&?)]; simpl in *; take (present _ = _) and inv it.
         destruct (_ ==b _) eqn:Heq; simpl in *.
         { rewrite equiv_decb_equiv in Heq. inv Heq. congruence. }
         destruct (_ =? _); constructor; eauto.
+      + destruct s as [|(?&?)]; simpl in *; take (present _ = _) and inversion it; subst e.
+        rewrite equiv_decb_refl in *.
+        destruct b; simpl; constructor; eauto.
   Qed.
 
-  Add Parametric Morphism e k : (selectv e k)
+  Add Parametric Morphism e k : (select e k)
       with signature @EqSt _ ==> @EqSt _ ==> @EqSt _ ==> Basics.impl
-        as selectv_EqSt.
+        as select_EqSt.
   Proof.
     intros * Heq1 * Heq2 * Heq3 Hsel.
-    unfold selectv in *. rewrite select_mask_filter in *.
+    rewrite select_mask_when in *.
     destruct Hsel as (?&?&?). do 2 esplit.
     - rewrite <-Heq2, <-Heq1; eauto.
     - rewrite <-Heq3, <-Heq1; eauto.
@@ -3290,7 +3290,7 @@ Module Type COINDSTREAMS
     intros * Heq1 * Heq2 * Heq3 Hf.
     unfold select_hist in *.
     intros ?? Hfind. specialize (Heq3 x2). rewrite Hfind in Heq3. inv Heq3.
-    symmetry in H. apply Hf in H as (?&Hfilter&Hfind').
+    symmetry in H. apply Hf in H as (?&Hwhen&Hfind').
     specialize (Heq2 x2). rewrite Hfind' in Heq2. inv Heq2.
     do 2 esplit; [|eauto].
     rewrite <-Heq1, <-H2, <-H1; auto.
@@ -3333,15 +3333,15 @@ Module Type COINDSTREAMS
   Proof.
     intros.
     unfold fselectv, fselectb, fselect.
-    rewrite ac_mask, ac_ffilter. reflexivity.
+    rewrite ac_mask, ac_fwhen. reflexivity.
   Qed.
 
-  Lemma select_fselect {A} (abs : A) sel k : forall es vs vs',
-      select abs sel k es vs vs' ->
-      vs' ≡ fselect abs sel k es vs.
+  Lemma select_fselect sel k : forall es vs vs',
+      select sel k es vs vs' ->
+      vs' ≡ fselectv sel k es vs.
   Proof.
-    intros * Hsel. apply select_mask_filter in Hsel as (?&Hfil&Hmask).
-    apply filter_ffilter in Hfil.
+    intros * Hsel. apply select_mask_when in Hsel as (?&Hfil&Hmask).
+    apply when_fwhen in Hfil.
     rewrite Hmask, Hfil. reflexivity.
   Qed.
 
@@ -3358,7 +3358,7 @@ Module Type COINDSTREAMS
       select_hist sel k sc Hi Hi' ->
       sem_var Hi x vs ->
       FEnv.In x Hi' ->
-      selectv sel k sc vs (fselectv sel k sc vs).
+      select sel k sc vs (fselectv sel k sc vs).
   Proof.
     intros * Hselect Hvar Hin.
     inv Hin. eapply Hselect in H as (?&Hf&Hv).
@@ -3370,10 +3370,10 @@ Module Type COINDSTREAMS
   Lemma sem_var_select_inv: forall sel k r Hi Hi' x v,
       select_hist sel k r Hi Hi' ->
       sem_var Hi' x v ->
-      exists v', sem_var Hi x v' /\ selectv sel k r v' v.
+      exists v', sem_var Hi x v' /\ select sel k r v' v.
   Proof.
     intros * Hf Hvar. inv Hvar.
-    apply Hf in H0 as (?&Hfilter&?).
+    apply Hf in H0 as (?&Hwhen&?).
     do 2 esplit; eauto. 2:rewrite H1; eauto.
     econstructor; eauto. reflexivity.
   Qed.
@@ -3389,13 +3389,15 @@ Module Type COINDSTREAMS
 
   Lemma fselectv_selectv sel k : forall es vs,
       abstract_clock vs ≡ abstract_clock es ->
-      selectv sel k es vs (fselectv sel k es vs).
+      select sel k es vs (fselectv sel k es vs).
   Proof.
-    intros * Hac. apply select_mask_filter. do 2 esplit.
-    + eapply ffilterv_filterv.
+    intros * Hac. apply select_mask_when. do 2 esplit.
+    + eapply fwhenv_whenv.
+      1:{ eapply SForall_forall; intros. unfold stres_st. rewrite Str_nth_map.
+          destruct (es # n) as [|(?&?)]; auto. }
       rewrite Hac. apply ntheq_eqst; intros.
       rewrite 2 ac_nth. setoid_rewrite Str_nth_map. destruct (es # n) as [|(?&?)]; auto.
-    + unfold fselectv, fselect, ffilterv. reflexivity.
+    + unfold fselectv, fselect, fwhenv. reflexivity.
   Qed.
 
   Lemma select_hist_fselect_hist sel k es : forall Hi Hi',
@@ -3422,6 +3424,23 @@ Module Type COINDSTREAMS
     eapply Hac; eauto. econstructor; eauto. reflexivity.
   Qed.
 
+  Fact stres_st_ac : forall stres,
+      abstract_clock (stres_st stres) ≡ abstract_clock stres.
+  Proof.
+    intros. unfold stres_st.
+    apply ntheq_eqst. intros n. rewrite 2 ac_nth, Str_nth_map.
+    destruct (stres # n) as [|(?&?)]; simpl; auto.
+  Qed.
+
+  Lemma ac_select :
+    forall e k cs xs rs,
+      select e k cs xs rs -> abstract_clock cs ≡ abstract_clock xs.
+  Proof.
+    intros * Hsel.
+    apply select_mask_when in Hsel as (?&Hwhen&_).
+    apply ac_when in Hwhen. now rewrite Hwhen, stres_st_ac.
+  Qed.
+
   Fact stres_st_absent : stres_st (Streams.const absent) ≡ Streams.const absent.
   Proof.
     apply ntheq_eqst. intros n. setoid_rewrite Str_nth_map.
@@ -3434,14 +3453,14 @@ Module Type COINDSTREAMS
     rewrite 2 const_nth; auto.
   Qed.
 
-  Lemma select_absent {A} (abs: A) e k :
-    select abs e k (Streams.const absent) (Streams.const abs) (Streams.const abs).
+  Lemma select_absent e k :
+    select e k (Streams.const absent) (Streams.const absent) (Streams.const absent).
   Proof.
-    intros. apply select_mask_filter. do 2 esplit.
-    rewrite stres_st_absent; eauto using filter_absent.
+    intros. apply select_mask_when. do 2 esplit.
+    rewrite stres_st_absent; eauto using when_absent.
     rewrite stres_st_absent, stres_res_absent.
     apply ntheq_eqst. intros n.
-    rewrite mask_nth, const_nth. destruct (_ =? _); auto.
+    unfold maskv. rewrite mask_nth, const_nth. destruct (_ =? _); auto.
   Qed.
 
   Corollary select_hist_absent e k sc : forall Hi Hi',
@@ -3461,7 +3480,7 @@ Module Type COINDSTREAMS
   Proof.
     intros *. unfold fselect.
     eapply ntheq_eqst. intros n.
-    rewrite mask_nth, ffilter_nth, const_nth.
+    rewrite mask_nth, fwhen_nth, const_nth.
     destruct (_ =? _); auto. destruct (_ ==b _); auto.
   Qed.
 
@@ -3487,6 +3506,20 @@ Module Type COINDSTREAMS
   Proof.
     intros *. unfold fselectb.
     rewrite fselect_absent. reflexivity.
+  Qed.
+
+  Lemma fselectb_both_slower : forall e k sc bs bs',
+      slower sc bs ->
+      slower sc bs' ->
+      fselectb e k sc bs ≡ fselectb e k sc bs'.
+  Proof.
+    intros * Hslow1 Hslow2.
+    unfold fselectb, fselect.
+    apply mask_morph; [reflexivity|].
+    apply fwhenb_both_slower.
+    1,2:apply slower_nth; intros n Hbs; setoid_rewrite Str_nth_map.
+    - rewrite slower_nth in Hslow1. specialize (Hslow1 _ Hbs). now rewrite Hslow1.
+    - rewrite slower_nth in Hslow2. specialize (Hslow2 _ Hbs). now rewrite Hslow2.
   Qed.
 
   (** ** Additional definitions for state machines *)

@@ -537,7 +537,7 @@ Module Type NLCOINDTOINDEXED
 
     (** Give an indexed specification for Streams synchronization. *)
     Lemma aligned_index:
-      forall xs bs,
+      forall (xs: Stream svalue) bs,
         aligned xs bs ->
         forall n, tr_Stream bs n = true <-> tr_Stream xs n <> absent.
     Proof.

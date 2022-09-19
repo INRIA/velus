@@ -65,10 +65,15 @@ Module Type LORDERED
     List.Exists (Is_node_in_exp f) (snd eq).
 
   Inductive Is_node_in_scope {A} (P_in : A -> Prop) (f : ident) : scope A -> Prop :=
-  | INScope : forall locs caus blks,
+  | INScope : forall locs blks,
       Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) locs
       \/ P_in blks ->
-      Is_node_in_scope P_in f (Scope locs caus blks).
+      Is_node_in_scope P_in f (Scope locs blks).
+
+  Inductive Is_node_in_branch {A} (P_in : A -> Prop) : branch A -> Prop :=
+  | INBranch : forall caus blks,
+      P_in blks ->
+      Is_node_in_branch P_in (Branch caus blks).
 
   Inductive Is_node_in_block (f: ident) : block -> Prop :=
   | INBeq: forall eq,
@@ -79,14 +84,17 @@ Module Type LORDERED
       Is_node_in_block f (Breset blocks er)
   | INBswitch : forall ec branches,
       Is_node_in_exp f ec
-      \/ Exists (fun blks => Is_node_in_scope (Exists (Is_node_in_block f)) f (snd blks)) branches ->
+      \/ Exists (fun blks => Is_node_in_branch (Exists (Is_node_in_block f)) (snd blks)) branches ->
       Is_node_in_block f (Bswitch ec branches)
   | INBauto : forall type ini oth states ck,
       Exists (fun '(e, _) => Is_node_in_exp f e) ini
-      \/ Exists (fun blks => Exists (fun '(e, _) => Is_node_in_exp f e) (fst (snd blks))
-                         \/ Is_node_in_scope
-                             (fun blks => Exists (Is_node_in_block f) (fst blks)
-                                       \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd blks)) f (snd (snd blks))) states ->
+      \/ Exists (fun blks =>
+                  Is_node_in_branch
+                    (fun blks => Exists (fun '(e, _) => Is_node_in_exp f e) (fst blks)
+                              \/ Is_node_in_scope
+                                  (fun blks => Exists (Is_node_in_block f) (fst blks)
+                                            \/ Exists (fun '(e, _) => Is_node_in_exp f e) (snd blks)) f (snd blks))
+                    (snd blks)) states ->
       Is_node_in_block f (Bauto ck type (ini, oth) states)
   | INBlocal : forall scope,
       Is_node_in_scope (Exists (Is_node_in_block f)) f scope ->
@@ -177,13 +185,16 @@ Module Type LORDERED
   Proof.
     induction d using block_ind2; intros * Hwl Hin; inv Hwl; inv Hin;
       repeat match goal with
-             | H: _ \/ _ |- _ => destruct H
-             | Hin: Is_node_in_scope _ _ _ |- _ => inv Hin
-             | Hwl: wl_scope _ _ _ |- _ => inv Hwl
-             | o: option _ |- _ => destruct o; destruct_conjs; simpl in *
-             | H: False |- _ => now inv H
-             | _ => simpl_Exists; simpl_Forall
-             end; eauto using wl_exp_Is_node_in_exp, wl_equation_Is_node_in_eq.
+        | H: _ \/ _ |- _ => destruct H
+        | Hin: Is_node_in_scope _ _ _ |- _ => inv Hin
+        | Hwl: wl_scope _ _ _ |- _ => inv Hwl
+        | Hin: Is_node_in_branch _ _ |- _ => inv Hin
+        | Hwl: wl_branch _ _ |- _ => inv Hwl
+        | o: option _ |- _ => destruct o; destruct_conjs; simpl in *
+        | H: False |- _ => now inv H
+        | H:Scope _ _ = Scope _ _ |- _ => inv H
+        | _ => simpl_Exists; simpl_Forall
+        end; eauto using wl_exp_Is_node_in_exp, wl_equation_Is_node_in_eq.
   Qed.
 
   Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,

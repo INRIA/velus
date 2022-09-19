@@ -1371,10 +1371,11 @@ Module Type CORRECTNESS
       econstructor; eauto.
       + eapply sem_aexp_mask; eauto. intros. eapply Hsel; eauto.
       + eapply Forall_forall. intros (?&?) Hin. simpl_Forall. simpl_In.
-        clear H3. edestruct Hvar as ((?&Hsemv&Hsemc)&_); eauto with senv.
+        eapply Forall2_ignore2 in Hsxr; simpl_Forall.
+        eapply Hvar in H1 as Hck; [|eauto with senv].
         econstructor; intros ? Hsemv'; eauto.
-        eapply sem_var_det in Hsemv; eauto.
-        do 2 esplit; eauto. rewrite <-Hsemv. apply ac_aligned.
+        eapply sem_var_det in H1; eauto.
+        do 2 esplit; eauto. rewrite <-H1. apply ac_aligned.
       + erewrite <-fby_reset_fby; eauto.
         intros k. eapply Hsel; eauto.
     - (* EArrow *) inv Hnormed. inv H2. inv H0.
@@ -1613,14 +1614,16 @@ Module Type CORRECTNESS
 
   Lemma inputs_clocked_vars {PSyn prefs} :
     forall (n: @L.node PSyn prefs) H Hl ins,
+      Forall2 (sem_var H) (L.idents (L.n_in n)) ins ->
       LCS.sc_vars (senv_of_inout (L.n_in n ++ L.n_out n)) (H, Hl) (clocks_of ins) ->
       NLSC.sem_clocked_vars H (clocks_of ins) (Common.idck (Common.idty (L.n_in n))).
   Proof.
-    intros * (Hsc&_).
-    unfold NLSC.sem_clocked_vars. simpl_Forall. simpl_In. edestruct Hsc as (?&Hvar&Hck).
-    econstructor; solve_In; eauto with datatypes. simpl; auto.
-    constructor; intros; eauto.
-    eapply sem_var_det in Hvar; eauto. rewrite <-Hvar in Hck.
+    intros * Hvs (Hsc&_).
+    unfold NLSC.sem_clocked_vars. simpl_Forall. simpl_In.
+    apply Forall2_ignore2 in Hvs. unfold L.idents in *. simpl_Forall.
+    econstructor; solve_In; eauto with datatypes.
+    intros * Hvar.
+    eapply Hsc in Hvar; [|econstructor; solve_In; eauto with datatypes; auto].
     do 2 esplit; eauto. apply ac_aligned.
   Qed.
 
@@ -1643,7 +1646,7 @@ Module Type CORRECTNESS
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Hblocks Hbk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    inv Hnormed. destruct H2. inversion_clear H0 as [???? Hblk Hlocs Hblks].
+    inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
@@ -1660,12 +1663,23 @@ Module Type CORRECTNESS
       take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
       take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H9.
-      assert (H ⊑ Hi') as Href.
+      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H10.
+      assert (H ⊑ H + Hi') as Href.
       { rewrite map_fst_senv_of_inout in Hdom.
-        eapply LCS.local_hist_dom_refines. 3,4:eauto. 1,2:eauto.
+        eapply LCS.local_hist_dom_refines. 3:eauto. 1,2:eauto.
       }
-      eapply NLSC.SNode with (H:=Hi'); simpl.
+      assert (sc_vars (senv_of_inout (L.n_in n ++ L.n_out n)) (H + Hi', FEnv.empty _ + Hl') (clocks_of ins)) as Hsc'.
+      { destruct Hsc as (Hsc1&_). split.
+        - intros * Hck Hv.
+          eapply LS.sem_clock_refines, Hsc1; eauto.
+          inv Hck; simpl_In.
+          apply sem_var_union in Hv as [Hv|Hv]; auto.
+          exfalso. apply LS.sem_var_In, H14, IsVar_senv_of_locs in Hv.
+          eapply H12; eauto; solve_In.
+        - intros * _ Hl. exfalso.
+          eapply senv_of_inout_NoLast; eauto.
+      }
+      eapply NLSC.SNode with (H:=H + Hi'); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
       + erewrite <- to_node_in, map_fst_idty; eauto.
         eapply Forall2_impl_In; [|eauto]; intros. eapply LS.sem_var_refines; eauto.
@@ -1673,7 +1687,7 @@ Module Type CORRECTNESS
         eapply Forall2_impl_In; [|eauto]; intros. eapply LS.sem_var_refines; eauto.
       + erewrite <- to_node_in; eauto.
         eapply inputs_clocked_vars; eauto.
-        eapply sc_vars_refines in Hsc; eauto.
+        simpl_Forall; eauto using LS.sem_var_refines.
       + apply NLSC.sem_equation_cons2; eauto using ord_l_nl.
         2:{ assert (Htrn' := EQ0).
             apply to_node_name in EQ0. rewrite <- EQ0.
@@ -1689,9 +1703,8 @@ Module Type CORRECTNESS
           simpl_app. repeat rewrite in_app_iff.
           split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
         * apply sc_vars_app; eauto.
-          2:eapply sc_vars_refines; eauto.
           intros *. rewrite InMembers_senv_of_locs, fst_InMembers, map_fst_senv_of_inout.
-          intros Hin1 Hin2. eapply H13; eauto.
+          intros Hin1 Hin2. eapply H12; eauto.
     - eapply LCS.sem_node_ck_cons in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.

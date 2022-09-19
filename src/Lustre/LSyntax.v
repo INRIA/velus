@@ -73,7 +73,7 @@ Module Type LSYNTAX
 
     Contains local variable definitions.
     It is defined generically in order to factorize related definitions and proofs.
-    Scope can appear under local blocks, as well as under switch and state machines branches.
+    Scope can appear under local blocks, and under state machines branches.
     The parameter A is usually a list of blocks (as well as a list of transitions in the state-machine case).
 
     Local variables are declared with:
@@ -82,19 +82,26 @@ Module Type LSYNTAX
     - if the variable is defined by last, the last expression and a causality label for the last variable
    *)
   Inductive scope A :=
-  | Scope : list (ident * (type * clock * ident * option (exp * ident))) -> list (ident * ident) -> A -> scope A.
-
+  | Scope : list (ident * (type * clock * ident * option (exp * ident))) -> A -> scope A.
   Arguments Scope {_}.
+
+  (* Switch and state machine branches
+
+     Declare new causality annotations (since each branch its own causality sub-graph)
+   *)
+  Inductive branch A :=
+  | Branch : list (ident * ident) -> A -> branch A.
+  Arguments Branch {_}.
 
   Inductive auto_type := Weak | Strong.
 
   Inductive block : Type :=
   | Beq : equation -> block
   | Breset : list block -> exp -> block
-  | Bswitch : exp -> list (enumtag * scope (list block)) -> block
+  | Bswitch : exp -> list (enumtag * branch (list block)) -> block
   (* For automatons : initially, states. We also need the base clock of the state-machine for clock-checking *)
   | Bauto : auto_type -> clock -> list (exp * enumtag) * enumtag ->
-            list ((enumtag * ident) * (list transition * scope (list block * list transition))) -> block
+            list ((enumtag * ident) * branch (list transition * scope (list block * list transition))) -> block
   | Blocal : scope (list block) -> block.
 
   (** ** Node *)
@@ -199,10 +206,15 @@ Module Type LSYNTAX
 
   (** `x ` is defined by `blk` *)
   Inductive Is_defined_in_scope {A} (Pdef : A -> Prop) x : scope A -> Prop :=
-  | DefScope : forall locs caus blks,
+  | DefScope : forall locs blks,
       Pdef blks ->
       ~InMembers x locs ->
-      Is_defined_in_scope Pdef x (Scope locs caus blks).
+      Is_defined_in_scope Pdef x (Scope locs blks).
+
+  Inductive Is_defined_in_branch {A} (Pdef : A -> Prop) : branch A -> Prop :=
+    | DefBranch : forall caus blks,
+        Pdef blks ->
+        Is_defined_in_branch Pdef (Branch caus blks).
 
   Inductive Is_defined_in (x : ident) : block -> Prop :=
   | DefEq : forall xs es,
@@ -212,10 +224,10 @@ Module Type LSYNTAX
       Exists (Is_defined_in x) blks ->
       Is_defined_in x (Breset blks er)
   | DefSwitch : forall ec branches,
-      Exists (fun blks => Is_defined_in_scope (Exists (Is_defined_in x)) x (snd blks)) branches ->
+      Exists (fun blks => Is_defined_in_branch (Exists (Is_defined_in x)) (snd blks)) branches ->
       Is_defined_in x (Bswitch ec branches)
   | DefAuto : forall ini states type ck,
-      Exists (fun blks => Is_defined_in_scope (fun blks => Exists (Is_defined_in x) (fst blks)) x (snd (snd blks))) states ->
+      Exists (fun blks => Is_defined_in_branch (fun blks => Is_defined_in_scope (fun blks => Exists (Is_defined_in x) (fst blks)) x (snd blks)) (snd blks)) states ->
       Is_defined_in x (Bauto type ck ini states)
   | DefLocal : forall scope,
       Is_defined_in_scope (Exists (Is_defined_in x)) x scope ->
@@ -223,27 +235,36 @@ Module Type LSYNTAX
 
   (** Compute the variables defined by a block *)
   Definition vars_defined_scope {A} f_vd (s : scope A) :=
-    let '(Scope locs _ blks) := s in
+    let '(Scope locs blks) := s in
     PS.filter (fun x => negb (mem_assoc_ident x locs)) (f_vd blks).
+
+  Definition vars_defined_branch {A} (f_vd : A -> PS.t) (s : branch A) :=
+    let '(Branch caus blks) := s in f_vd blks.
 
   Fixpoint vars_defined (d : block) :=
     match d with
     | Beq eq => ps_from_list (fst eq)
     | Breset blocks _ => PSUnion (map vars_defined blocks)
     | Bswitch _ branches =>
-      PSUnion (map (fun blks => vars_defined_scope (fun blks => PSUnion (map vars_defined blks)) (snd blks)) branches)
+      PSUnion (map (fun '(_, blks) => vars_defined_branch (fun blks => PSUnion (map vars_defined blks)) blks) branches)
     | Bauto _ _ _ states =>
-      PSUnion (map (fun '(_, (_, blks)) => vars_defined_scope (fun '(blks, _) => PSUnion (map vars_defined blks)) blks) states)
+      PSUnion (map (fun '(_, br) => vars_defined_branch (fun '(_, blks) => vars_defined_scope (fun '(blks, _) => PSUnion (map vars_defined blks)) blks) br) states)
     | Blocal scope =>
         vars_defined_scope (fun blks => PSUnion (map vars_defined blks)) scope
     end.
 
   (** Check that the variables defined by `blk` are indeed `xs` *)
+
   Inductive VarsDefinedScope {A} (P_vd : A -> list ident -> Prop) : scope A -> list ident -> Prop :=
-  | LVDscope : forall locs caus blks ys,
+  | LVDscope : forall locs blks ys,
       P_vd blks (ys ++ map fst locs) ->
+      VarsDefinedScope P_vd (Scope locs blks) ys.
+
+  Inductive VarsDefinedBranch {A} (P_vd : A -> list ident -> Prop) : branch A -> list ident -> Prop :=
+  | LVDbranch : forall caus blks ys,
+      P_vd blks ys ->
       incl (map fst caus) ys ->
-      VarsDefinedScope P_vd (Scope locs caus blks) ys.
+      VarsDefinedBranch P_vd (Branch caus blks) ys.
 
   Inductive VarsDefined : block -> list ident -> Prop :=
   | LVDeq : forall eq, VarsDefined (Beq eq) (fst eq)
@@ -252,13 +273,18 @@ Module Type LSYNTAX
       VarsDefined (Breset blocks er) (concat xs)
   | LVDswitch : forall ec branches ys,
       branches <> [] ->
-      Forall (fun blks => VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined blks xs
-                                                           /\ Permutation (concat xs) ys) (snd blks) ys) branches ->
+      Forall (fun blks => VarsDefinedBranch
+                         (fun blks ys => exists xs, Forall2 VarsDefined blks xs
+                                            /\ Permutation (concat xs) ys) (snd blks) ys) branches ->
       VarsDefined (Bswitch ec branches) ys
   | LVDauto : forall ini states type ck ys,
       states <> [] ->
-      Forall (fun blks => VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined (fst blks) xs
-                                                           /\ Permutation (concat xs) ys) (snd (snd blks)) ys) states ->
+      Forall (fun blks => VarsDefinedBranch
+                         (fun blks ys => VarsDefinedScope
+                                        (fun blks ys => exists xs, Forall2 VarsDefined (fst blks) xs
+                                                           /\ Permutation (concat xs) ys)
+                                        (snd blks) ys)
+                         (snd blks) ys) states ->
       VarsDefined (Bauto type ck ini states) ys
   | LVDlocal : forall scope ys,
       VarsDefinedScope (fun blks ys => exists xs, Forall2 VarsDefined blks xs /\ Permutation (concat xs) ys) scope ys ->
@@ -287,28 +313,20 @@ Module Type LSYNTAX
           eapply Forall_forall in H as (?&Hvars&Hperm); [|eapply Hin]
       end.
 
-  Definition scope_locals {A} (f_loc : A -> list (ident * (ident * option ident))) s :=
-    let '(Scope locs _ blks) := s in
-    map (fun '(x, (_, _, cx, o)) => (x, (cx, option_map snd o))) locs ++ f_loc blks.
-
-  Fixpoint locals (d : block) : list (ident * (ident * option ident)) :=
-    match d with
-    | Beq _ => []
-    | Breset blocks _ => flat_map locals blocks
-    | Bswitch _ branches => flat_map (fun blks => scope_locals (flat_map locals) (snd blks)) branches
-    | Bauto _ _ _ states => flat_map (fun blks => scope_locals (fun blks => flat_map locals (fst blks)) (snd (snd blks))) states
-    | Blocal scope => scope_locals (flat_map locals) scope
-    end.
-
   (** ** Shadowing is prohibited *)
 
   Inductive NoDupScope {A} (P_nd : list ident -> A -> Prop) : list ident -> scope A -> Prop :=
-  | NDscope : forall env locs caus blks,
+  | NDscope : forall env locs blks,
       P_nd (env ++ map fst locs) blks ->
       NoDupMembers locs ->
       (forall x, InMembers x locs -> ~In x env) ->
+      NoDupScope P_nd env (Scope locs blks).
+
+  Inductive NoDupBranch {A} (P_nd : A -> Prop) : branch A -> Prop :=
+  | NDbranch : forall caus blks,
+      P_nd blks ->
       NoDupMembers caus ->
-      NoDupScope P_nd env (Scope locs caus blks).
+      NoDupBranch P_nd (Branch caus blks).
 
   Inductive NoDupLocals : list ident -> block -> Prop :=
   | NDLeq : forall env eq, NoDupLocals env (Beq eq)
@@ -316,10 +334,10 @@ Module Type LSYNTAX
       Forall (NoDupLocals env) blocks ->
       NoDupLocals env (Breset blocks er)
   | NDLswitch : forall env ec branches,
-      Forall (fun blks => NoDupScope (fun env => Forall (NoDupLocals env)) env (snd blks)) branches ->
+      Forall (fun blks => NoDupBranch (Forall (NoDupLocals env)) (snd blks)) branches ->
       NoDupLocals env (Bswitch ec branches)
   | NDLauto : forall env type ini states ck,
-      Forall (fun blks => NoDupScope (fun env blks => Forall (NoDupLocals env) (fst blks)) env (snd (snd blks))) states ->
+      Forall (fun blks => NoDupBranch (fun blks => NoDupScope (fun env blks => Forall (NoDupLocals env) (fst blks)) env (snd blks)) (snd blks)) states ->
       NoDupLocals env (Bauto type ck ini states)
   | NDLlocal : forall env scope,
       NoDupScope (fun env => Forall (NoDupLocals env)) env scope ->
@@ -328,10 +346,15 @@ Module Type LSYNTAX
   (** ** All the locals must be well-formed *)
 
   Inductive GoodLocalsScope {A} (P_good : A -> Prop) (prefs : PS.t) : scope A -> Prop :=
-  | GoodScope : forall locs caus blks,
+  | GoodScope : forall locs blks,
       Forall (AtomOrGensym prefs) (map fst locs) ->
       P_good blks ->
-      GoodLocalsScope P_good prefs (Scope locs caus blks).
+      GoodLocalsScope P_good prefs (Scope locs blks).
+
+  Inductive GoodLocalsBranch {A} (P_good : A -> Prop) : branch A -> Prop :=
+  | GoodBranch : forall caus blks,
+      P_good blks ->
+      GoodLocalsBranch P_good (Branch caus blks).
 
   Inductive GoodLocals (prefs : PS.t) : block -> Prop :=
   | GoodEq : forall eq,
@@ -340,10 +363,10 @@ Module Type LSYNTAX
       Forall (GoodLocals prefs) blks ->
       GoodLocals prefs (Breset blks er)
   | GoodSwitch : forall ec branches,
-      Forall (fun blks => GoodLocalsScope (Forall (GoodLocals prefs)) prefs (snd blks)) branches ->
+      Forall (fun blks => GoodLocalsBranch (Forall (GoodLocals prefs)) (snd blks)) branches ->
       GoodLocals prefs (Bswitch ec branches)
   | GoodAuto : forall type ini states ck,
-      Forall (fun blks => GoodLocalsScope (fun blks => Forall (GoodLocals prefs) (fst blks)) prefs (snd (snd blks))) states ->
+      Forall (fun blks => GoodLocalsBranch (fun blks => GoodLocalsScope (fun blks => Forall (GoodLocals prefs) (fst blks)) prefs (snd blks)) (snd blks)) states ->
       GoodLocals prefs (Bauto type ck ini states)
   | GoodLocal : forall scope,
       GoodLocalsScope (Forall (GoodLocals prefs)) prefs scope ->
@@ -599,29 +622,29 @@ Module Type LSYNTAX
 
     Hypothesis BswitchCase:
       forall ec branches,
-        Forall (fun '(_, Scope _ _ blks) => Forall P blks) branches ->
+        Forall (fun '(_, Branch _ blks) => Forall P blks) branches ->
         P (Bswitch ec branches).
 
     Hypothesis BautoCase:
       forall type ini states ck,
-        Forall (fun '(_, (_, Scope _ _ (blks, _))) => Forall P blks) states ->
+        Forall (fun '(_, Branch _ (_, Scope _ (blks, _))) => Forall P blks) states ->
         P (Bauto type ck ini states).
 
     Hypothesis BlocalCase:
-      forall locs caus blocks,
+      forall locs blocks,
         Forall P blocks ->
-        P (Blocal (Scope locs caus blocks)).
+        P (Blocal (Scope locs blocks)).
 
     Fixpoint block_ind2 (d: block) : P d.
     Proof.
       destruct d.
       - apply BeqCase; auto.
       - apply BresetCase; induction l; auto.
-      - apply BswitchCase; induction l as [|(?&s)]; try destruct s; constructor; auto.
-        induction l2; auto.
-      - apply BautoCase; induction l; constructor; auto. destruct_conjs.
-        destruct s; destruct_conjs. induction l4; auto.
-      - destruct s. apply BlocalCase; induction l1; auto.
+      - apply BswitchCase; induction l as [|[?[? blks]]]; constructor; auto.
+        induction blks; auto.
+      - apply BautoCase; induction l as [|[?[?[?[?[blks ?]]]]]]; constructor; auto.
+        induction blks; auto.
+      - destruct s as [? blks]. apply BlocalCase; induction blks; auto.
     Qed.
 
   End block_ind2.
@@ -1039,10 +1062,15 @@ Module Type LSYNTAX
     Forall (wl_exp G) es /\ length xs = length (annots es).
 
   Inductive wl_scope {A} (P_wl : A -> Prop) {PSyn prefs} (G : @global PSyn prefs) : scope A -> Prop :=
-  | wl_Scope : forall locs caus blks,
+  | wl_Scope : forall locs blks,
       Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wl_exp G e /\ numstreams e = 1) o) locs ->
       P_wl blks ->
-      wl_scope P_wl G (Scope locs caus blks).
+      wl_scope P_wl G (Scope locs blks).
+
+  Inductive wl_branch {A} (P_wl : A -> Prop) : branch A -> Prop :=
+  | wl_Branch : forall caus blks,
+      P_wl blks ->
+      wl_branch P_wl (Branch caus blks).
 
   Inductive wl_block {PSyn prefs} (G : @global PSyn prefs) : block -> Prop :=
   | wl_Beq : forall eq,
@@ -1057,16 +1085,18 @@ Module Type LSYNTAX
       wl_exp G ec ->
       numstreams ec = 1 ->
       branches <> [] ->
-      Forall (fun blks => wl_scope (Forall (wl_block G)) G (snd blks)) branches ->
+      Forall (fun blks => wl_branch (Forall (wl_block G)) (snd blks)) branches ->
       wl_block G (Bswitch ec branches)
   | wl_Bauto : forall type ini oth states ck,
       Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) ini ->
       states <> [] ->
-      Forall (fun blks => Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (fst (snd blks))
-                       /\ wl_scope (fun blks =>
-                                     Forall (wl_block G) (fst blks)
-                                     /\ Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (snd blks)) G (snd (snd blks))
-             ) states ->
+      Forall (fun blks =>
+                wl_branch (fun blks =>
+                             Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (fst blks)
+                             /\ wl_scope (fun blks =>
+                                           Forall (wl_block G) (fst blks)
+                                           /\ Forall (fun '(e, _) => wl_exp G e /\ numstreams e = 1) (snd blks)) G (snd blks)
+                  ) (snd blks)) states ->
       wl_block G (Bauto type ck (ini, oth) states)
   | wl_Blocal : forall scope,
       wl_scope (Forall (wl_block G)) G scope ->
@@ -1139,11 +1169,16 @@ Module Type LSYNTAX
     Forall (wx_exp Γ) es /\ Forall (IsVar Γ) xs.
 
   Inductive wx_scope {A} (P_wx : static_env -> A -> Prop) : static_env -> scope A -> Prop :=
-  | wx_Scope : forall Γ Γ' locs caus blks,
+  | wx_Scope : forall Γ Γ' locs blks,
       Γ' = Γ ++ senv_of_locs locs ->
       Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wx_exp Γ' e) o) locs ->
       P_wx Γ' blks ->
-      wx_scope P_wx Γ (Scope locs caus blks).
+      wx_scope P_wx Γ (Scope locs blks).
+
+  Inductive wx_branch {A} (P_wx : A -> Prop) : branch A -> Prop :=
+  | wx_Branch : forall caus blks,
+      P_wx blks ->
+      wx_branch P_wx (Branch caus blks).
 
   Inductive wx_block : static_env -> block -> Prop :=
   | wx_Beq : forall Γ eq,
@@ -1155,16 +1190,20 @@ Module Type LSYNTAX
       wx_block Γ (Breset blks er)
   | wc_Bswitch : forall Γ ec branches,
       wx_exp Γ ec ->
-      Forall (fun blks => wx_scope (fun Γ => Forall (wx_block Γ)) Γ (snd blks)) branches ->
+      Forall (fun blks => wx_branch ( Forall (wx_block Γ)) (snd blks)) branches ->
       wx_block Γ (Bswitch ec branches)
   | wx_Bauto : forall Γ type ini oth states ck,
       wx_clock Γ ck ->
       Forall (fun '(e, _) => wx_exp Γ e) ini ->
       states <> [] ->
-      Forall (fun blks => Forall (fun '(e, _) => wx_exp Γ e) (fst (snd blks))
-                       /\ wx_scope (fun Γ blks => Forall (wx_block Γ) (fst blks)
-                                              /\ Forall (fun '(e, _) => wx_exp Γ e) (snd blks)) Γ (snd (snd blks))
-             ) states ->
+      Forall (fun blks =>
+                wx_branch
+                  (fun blks =>
+                     Forall (fun '(e, _) => wx_exp Γ e) (fst blks)
+                     /\ wx_scope (fun Γ blks => Forall (wx_block Γ) (fst blks)
+                                            /\ Forall (fun '(e, _) => wx_exp Γ e) (snd blks)) Γ (snd blks))
+                  (snd blks)
+        ) states ->
       wx_block Γ (Bauto type ck (ini, oth) states)
   | wx_Blocal : forall Γ scope,
       wx_scope (fun Γ => Forall (wx_block Γ)) Γ scope ->
@@ -1214,15 +1253,15 @@ Module Type LSYNTAX
       - simpl_Forall. eauto.
     Qed.
 
-    Fact wx_scope_incl {A} (P_wx: _ -> A -> Prop) :  forall Γ Γ' locs caus blks,
+    Fact wx_scope_incl {A} (P_wx: _ -> A -> Prop) :  forall Γ Γ' locs blks,
         (forall x, IsVar Γ x -> IsVar Γ' x) ->
         (forall x, IsLast Γ x -> IsLast Γ' x) ->
         (forall Γ Γ', (forall x, IsVar Γ x -> IsVar Γ' x) ->
                  (forall x, IsLast Γ x -> IsLast Γ' x) ->
                  P_wx Γ blks ->
                  P_wx Γ' blks) ->
-        wx_scope P_wx Γ (Scope locs caus blks) ->
-        wx_scope P_wx Γ' (Scope locs caus blks).
+        wx_scope P_wx Γ (Scope locs blks) ->
+        wx_scope P_wx Γ' (Scope locs blks).
     Proof.
       intros * Hin1 Hin2 Hp Hwx. inv Hwx.
       econstructor; eauto.
@@ -1251,11 +1290,11 @@ Module Type LSYNTAX
       - (* switch *)
         constructor.
         + eapply wx_exp_incl; eauto.
-        + simpl_Forall; eauto.
-          destruct s. eapply wx_scope_incl; eauto.
-          intros * ???; simpl_Forall; eauto.
+        + simpl_Forall; eauto. take (wx_branch _ _) and inv it. constructor.
+          simpl_Forall; eauto.
       - (* automaton *)
         constructor; auto; simpl_Forall; eauto using wx_exp_incl, wx_clock_incl.
+        take (wx_branch _ _) and inv it. constructor. destruct_conjs.
         destruct s. split; simpl_Forall; eauto using wx_exp_incl.
         eapply wx_scope_incl; eauto.
         intros * ?? (?&?); split; simpl_Forall; eauto using wx_exp_incl.
@@ -1264,185 +1303,6 @@ Module Type LSYNTAX
         intros; simpl_Forall; eauto.
     Qed.
   End wx_incl.
-
-  (** *** Additional properties *)
-
-  Fact NoDupScope_incl {A} (P_nd: _ -> A -> Prop) : forall locs caus blks xs xs',
-      (forall xs xs', incl xs xs' -> P_nd xs' blks -> P_nd xs blks) ->
-      incl xs xs' ->
-      NoDupScope P_nd xs' (Scope locs caus blks) ->
-      NoDupScope P_nd xs (Scope locs caus blks).
-  Proof.
-    intros * Hp Hincl Hnd.
-    inv Hnd; constructor; eauto using incl_appl'.
-    intros * Hin1 Hin2. eapply H5; eauto.
-  Qed.
-
-  Lemma NoDupLocals_incl : forall blk xs xs',
-      incl xs xs' ->
-      NoDupLocals xs' blk ->
-      NoDupLocals xs blk.
-  Proof.
-    induction blk using block_ind2; intros * Hincl Hnd; inv Hnd.
-    - (* eq *)
-      constructor.
-    - (* reset *)
-      constructor. simpl_Forall; eauto.
-    - (* switch *)
-      constructor. simpl_Forall; eauto.
-      destruct s. eapply NoDupScope_incl; eauto.
-      intros. simpl_Forall; eauto.
-    - (* automaton *)
-      constructor. simpl_Forall; eauto.
-      destruct s. eapply NoDupScope_incl; eauto.
-      intros. simpl_Forall; eauto.
-    - (* local *)
-      constructor; auto.
-      eapply NoDupScope_incl; eauto.
-      intros. simpl_Forall; eauto.
-  Qed.
-
-  Corollary node_NoDupLocals {PSyn prefs} : forall (n : @node PSyn prefs),
-      NoDupLocals (map fst (n_in n ++ n_out n)) (n_block n).
-  Proof.
-    intros *.
-    pose proof (n_nodup n) as (_&Hnd).
-    eapply NoDupLocals_incl; eauto.
-    solve_incl_app.
-  Qed.
-
-  Add Parametric Morphism : NoDupLocals
-      with signature @Permutation _ ==> eq ==> Basics.impl
-        as NoDupLocals_Permutation.
-  Proof.
-    intros * Hperm ? Hnd.
-    eapply NoDupLocals_incl; eauto.
-    rewrite Hperm. reflexivity.
-  Qed.
-
-  Fact NoDupScope_incl' {A} (P_nd : list ident -> A -> Prop) P_good npref prefs : forall locs caus blks xs ys,
-      ~PS.In npref prefs ->
-      GoodLocalsScope P_good prefs (Scope locs caus blks) ->
-      (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
-      NoDupScope P_nd xs (Scope locs caus blks) ->
-      (forall xs ys,
-          P_good blks ->
-          (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
-          P_nd xs blks ->
-          P_nd ys blks) ->
-      NoDupScope P_nd ys (Scope locs caus blks).
-  Proof.
-    intros * Hnin Hgood Hin Hnd Hp; inv Hnd; inv Hgood.
-    constructor; auto.
-    - eapply Hp in H2; eauto.
-      intros. rewrite in_app_iff in *. destruct H; eauto.
-      edestruct Hin; eauto.
-    - intros ? Hinm. specialize (H5 _ Hinm) as Hx.
-      contradict Hx. apply Hin in Hx as [?|(?&?&Hpref)]; auto; subst. exfalso.
-      eapply Forall_forall in H1. 2:(rewrite <- fst_InMembers; eauto).
-      inv H1.
-      + apply gensym_not_atom in H; auto.
-      + destruct H as (?&Hpsin&?&?&Heq).
-        eapply gensym_injective in Heq as (?&?); subst. contradiction.
-  Qed.
-
-  Lemma NoDupLocals_incl' prefs npref : forall blk xs ys,
-      ~PS.In npref prefs ->
-      GoodLocals prefs blk ->
-      (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
-      NoDupLocals xs blk ->
-      NoDupLocals ys blk.
-  Proof.
-    induction blk using block_ind2;
-      intros * Hnin Hgood Hin Hnd; inv Hgood; inv Hnd.
-    - (* equation *) constructor.
-    - (* reset *)
-      constructor. simpl_Forall; eauto.
-    - (* switch *)
-      constructor. simpl_Forall; eauto.
-      destruct s. eapply NoDupScope_incl'; eauto.
-      intros; simpl_Forall; eauto.
-    - (* automaton *)
-      constructor. simpl_Forall; eauto.
-      destruct s. eapply NoDupScope_incl'; eauto.
-      intros; simpl_Forall; eauto.
-    - (* local *)
-      constructor; auto.
-      eapply NoDupScope_incl'; eauto.
-      intros; simpl_Forall; eauto.
-  Qed.
-
-  Lemma node_NoDup {PSyn prefs} : forall (n : @node PSyn prefs),
-      NoDup (map fst (n_in n ++ n_out n)).
-  Proof.
-    intros n.
-    rewrite <- fst_NoDupMembers.
-    apply n_nodup.
-  Qed.
-
-  Lemma AtomOrGensym_add : forall pref prefs xs,
-      Forall (AtomOrGensym prefs) xs ->
-      Forall (AtomOrGensym (PS.add pref prefs)) xs.
-  Proof.
-    intros * Hat.
-    eapply Forall_impl; [|eauto].
-    intros ? [?|(pref'&?&?)]; [left|right]; subst; auto.
-    exists pref'. auto using PSF.add_2.
-  Qed.
-
-  Lemma GoodLocals_add : forall p prefs blk,
-      GoodLocals prefs blk ->
-      GoodLocals (PS.add p prefs) blk.
-  Proof.
-    induction blk using block_ind2; intros * Hgood; inv Hgood.
-    - (* equation *)
-      constructor; eauto.
-    - (* reset *)
-      constructor; eauto.
-      simpl_Forall; eauto.
-    - (* switch *)
-      constructor; eauto.
-      simpl_Forall; eauto.
-      inv H1; econstructor; eauto using AtomOrGensym_add.
-      simpl_Forall; eauto.
-    - (* automaton *)
-      constructor; eauto.
-      simpl_Forall; eauto.
-      inv H1; econstructor; eauto using AtomOrGensym_add.
-      simpl_Forall; eauto.
-    - (* locals *)
-      constructor.
-      inv H1; econstructor; eauto using AtomOrGensym_add.
-      simpl_Forall; eauto.
-  Qed.
-
-  Lemma GoodLocals_locals prefs : forall blk,
-      GoodLocals prefs blk ->
-      Forall (AtomOrGensym prefs) (map fst (locals blk)).
-  Proof.
-    induction blk using block_ind2; intros * Hgood; inv Hgood; simpl; auto.
-    - (* reset *)
-      rewrite flat_map_concat_map, concat_map.
-      eapply Forall_concat.
-      simpl_Forall; eauto.
-      eapply Forall_forall in H; eauto. solve_In.
-    - (* switch *)
-      rewrite flat_map_concat_map, Forall_map.
-      apply Forall_concat; simpl_Forall.
-      destruct s; simpl in *. apply in_app_iff in H2 as [|]; simpl_In.
-      + inv H1. simpl_Forall; auto.
-      + inv H1. simpl_Forall. eapply Forall_forall in H; [| |solve_In]; eauto.
-    - (* automaton *)
-      rewrite flat_map_concat_map, Forall_map. simpl.
-      apply Forall_concat. simpl_Forall; destruct s; simpl in *.
-      apply in_app_iff in H2 as [|]; simpl_In.
-      + inv H1. simpl_Forall; auto.
-      + inv H1. simpl_Forall. eapply Forall_forall in H; [| |solve_In]; eauto.
-    - (* locals *)
-      simpl_Forall. apply in_app_iff in H0 as [|]; simpl_In.
-      + inv H1; simpl_Forall; auto.
-      + inv H1; simpl_Forall. eapply Forall_forall in H; [| |solve_In]; eauto.
-  Qed.
 
   (** ** Specifications of some subset of the language *)
 
@@ -1455,10 +1315,10 @@ Module Type LSYNTAX
       nolocal_block (Breset blks er).
 
   Inductive nolocal_top_block : block -> Prop :=
-  | NLnode : forall locs caus blks,
+  | NLnode : forall locs blks,
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall nolocal_block blks ->
-      nolocal_top_block (Blocal (Scope locs caus blks)).
+      nolocal_top_block (Blocal (Scope locs blks)).
 
   (** *** Without switches *)
 
@@ -1467,18 +1327,23 @@ Module Type LSYNTAX
   | NSreset : forall blks er,
       Forall noswitch_block blks ->
       noswitch_block (Breset blks er)
-  | NSlocal : forall locs caus blks,
+  | NSlocal : forall locs blks,
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall noswitch_block blks ->
-      noswitch_block (Blocal (Scope locs caus blks)).
+      noswitch_block (Blocal (Scope locs blks)).
 
   (** *** Without automaton *)
 
   Inductive noauto_scope {A} (P_noauto : A -> Prop) : scope A -> Prop :=
-  | NAscope : forall locs caus blks,
+  | NAscope : forall locs blks,
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       P_noauto blks ->
-      noauto_scope P_noauto (Scope locs caus blks).
+      noauto_scope P_noauto (Scope locs blks).
+
+  Inductive noauto_branch {A} (P_noauto : A -> Prop) : branch A -> Prop :=
+  | NAbranch : forall caus blks,
+      P_noauto blks ->
+      noauto_branch P_noauto (Branch caus blks).
 
   Inductive noauto_block : block -> Prop :=
   | NAeq : forall eq, noauto_block (Beq eq)
@@ -1486,7 +1351,7 @@ Module Type LSYNTAX
       Forall noauto_block blks ->
       noauto_block (Breset blks er)
   | NAswitch : forall ec branches,
-      Forall (fun blks => noauto_scope (Forall noauto_block) (snd blks)) branches ->
+      Forall (fun blks => noauto_branch (Forall noauto_block) (snd blks)) branches ->
       noauto_block (Bswitch ec branches)
   | NAlocal : forall s,
       noauto_scope (Forall noauto_block) s ->
@@ -1495,10 +1360,15 @@ Module Type LSYNTAX
   (** *** Without last *)
 
   Inductive nolast_scope {A} (P_nolast : A -> Prop) : scope A -> Prop :=
-  | NLscope : forall locs caus blks,
+  | NLscope : forall locs blks,
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       P_nolast blks ->
-      nolast_scope P_nolast (Scope locs caus blks).
+      nolast_scope P_nolast (Scope locs blks).
+
+  Inductive nolast_branch {A} (P_nolast : A -> Prop) : branch A -> Prop :=
+  | NLbranch : forall caus blks,
+      P_nolast blks ->
+      nolast_branch P_nolast (Branch caus blks).
 
   Inductive nolast_block : block -> Prop :=
   | NLaeq : forall eq, nolast_block (Beq eq)
@@ -1506,10 +1376,10 @@ Module Type LSYNTAX
       Forall nolast_block blks ->
       nolast_block (Breset blks er)
   | NLaswitch : forall ec branches,
-      Forall (fun blks => nolast_scope (Forall nolast_block) (snd blks)) branches ->
+      Forall (fun blks => nolast_branch (Forall nolast_block) (snd blks)) branches ->
       nolast_block (Bswitch ec branches)
   | NLaauto : forall type ini states ck,
-      Forall (fun blks => nolast_scope (fun blks => Forall nolast_block (fst blks)) (snd (snd blks))) states ->
+      Forall (fun blks => nolast_branch (fun blks => nolast_scope (fun blks => Forall nolast_block (fst blks)) (snd blks)) (snd blks)) states ->
       nolast_block (Bauto type ck ini states)
   | NLalocal : forall scope,
       nolast_scope (Forall nolast_block) scope ->
@@ -1543,22 +1413,235 @@ Module Type LSYNTAX
       inv Hns; constructor; simpl_Forall; eauto.
   Qed.
 
-  (** *** Some more properties *)
+  (** *** Inversion tactics *)
 
-  Lemma VarsDefinedScope_Is_defined {A} P_nd P_vd (P_def: _ -> Prop) : forall locs caus (blks: A) xs x,
-      VarsDefinedScope P_vd (Scope locs caus blks) xs ->
-      NoDupScope P_nd xs (Scope locs caus blks) ->
+  Ltac inv_exp :=
+    match goal with
+    | H:wl_exp _ _ |- _ => inv H
+    | H:wx_exp _ _ |- _ => inv H
+    end.
+
+  Ltac inv_scope :=
+    match goal with
+    | H:Is_defined_in_scope _ _ _ |- _ => inv H
+    | H:VarsDefinedScope _ _ _ |- _ => inv H
+    | H:NoDupScope _ _ _ |- _ => inv H
+    | H:GoodLocalsScope _ _ _ |- _ => inv H
+    | H:wl_scope _ _ _ |- _ => inv H
+    | H:wx_scope _ _ _ |- _ => inv H
+    | H:noauto_scope _ _ |- _ => inv H
+    | H:nolast_scope _ _ |- _ => inv H
+    end;
+    destruct_conjs; subst.
+
+  Ltac inv_branch :=
+    match goal with
+    | H:Is_defined_in_branch _ _ |- _ => inv H
+    | H:VarsDefinedBranch _ _ _ |- _ => inv H
+    | H:NoDupBranch _ _ |- _ => inv H
+    | H:GoodLocalsBranch _ _ |- _ => inv H
+    | H:wl_branch _ _ |- _ => inv H
+    | H:wx_branch _ _ |- _ => inv H
+    | H:noauto_branch _ _ |- _ => inv H
+    | H:nolast_branch _ _ |- _ => inv H
+    end;
+    destruct_conjs; subst.
+
+  Ltac inv_block :=
+    match goal with
+    | H:Is_defined_in _ _ |- _ => inv H
+    | H:VarsDefined _ _ |- _ => inv H
+    | H:NoDupLocals _ _ |- _ => inv H
+    | H:GoodLocals _ _ |- _ => inv H
+    | H:wl_block _ _ |- _ => inv H
+    | H:wx_block _ _ |- _ => inv H
+    | H:nolocal_block _ |- _ => inv H
+    | H:nolocal_top_block _ |- _ => inv H
+    | H:noswitch_block _ |- _ => inv H
+    | H:noauto_block _ |- _ => inv H
+    | H:nolast_block _ |- _ => inv H
+    end.
+
+  (** *** Additional properties *)
+
+  Fact NoDupScope_incl {A} (P_nd: _ -> A -> Prop) : forall locs blks xs xs',
+      (forall xs xs', incl xs xs' -> P_nd xs' blks -> P_nd xs blks) ->
+      incl xs xs' ->
+      NoDupScope P_nd xs' (Scope locs blks) ->
+      NoDupScope P_nd xs (Scope locs blks).
+  Proof.
+    intros * Hp Hincl Hnd.
+    inv Hnd; constructor; eauto using incl_appl'.
+    intros * Hin1 Hin2. eapply H4; eauto.
+  Qed.
+
+  Lemma NoDupLocals_incl : forall blk xs xs',
+      incl xs xs' ->
+      NoDupLocals xs' blk ->
+      NoDupLocals xs blk.
+  Proof.
+    induction blk using block_ind2; intros * Hincl Hnd; inv_block.
+    - (* eq *)
+      constructor.
+    - (* reset *)
+      constructor. simpl_Forall; eauto.
+    - (* switch *)
+      constructor. simpl_Forall; eauto.
+      inv_branch. constructor; auto.
+      simpl_Forall; eauto.
+    - (* automaton *)
+      constructor. simpl_Forall; eauto.
+      inv_branch. constructor; auto.
+      destruct_conjs. destruct s. eapply NoDupScope_incl; eauto.
+      intros. simpl_Forall; eauto.
+    - (* local *)
+      constructor; auto.
+      eapply NoDupScope_incl; eauto.
+      intros. simpl_Forall; eauto.
+  Qed.
+
+  Corollary node_NoDupLocals {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDupLocals (map fst (n_in n ++ n_out n)) (n_block n).
+  Proof.
+    intros *.
+    pose proof (n_nodup n) as (_&Hnd).
+    eapply NoDupLocals_incl; eauto.
+    solve_incl_app.
+  Qed.
+
+  Add Parametric Morphism : NoDupLocals
+      with signature @Permutation _ ==> eq ==> Basics.impl
+        as NoDupLocals_Permutation.
+  Proof.
+    intros * Hperm ? Hnd.
+    eapply NoDupLocals_incl; eauto.
+    rewrite Hperm. reflexivity.
+  Qed.
+
+  Fact NoDupScope_incl' {A} (P_nd : list ident -> A -> Prop) P_good npref prefs : forall locs blks xs ys,
+      ~PS.In npref prefs ->
+      GoodLocalsScope P_good prefs (Scope locs blks) ->
+      (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
+      NoDupScope P_nd xs (Scope locs blks) ->
+      (forall xs ys,
+          P_good blks ->
+          (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
+          P_nd xs blks ->
+          P_nd ys blks) ->
+      NoDupScope P_nd ys (Scope locs blks).
+  Proof.
+    intros * Hnin Hgood Hin Hnd Hp; repeat inv_scope.
+    constructor; auto.
+    - eapply Hp in H1; eauto.
+      intros. rewrite in_app_iff in *. destruct H; eauto.
+      edestruct Hin; eauto.
+    - intros ? Hinm. specialize (H4 _ Hinm) as Hx.
+      contradict Hx. apply Hin in Hx as [?|(?&?&Hpref)]; auto; subst. exfalso.
+      eapply Forall_forall in H2. 2:(rewrite <- fst_InMembers; eauto).
+      inv H2.
+      + apply gensym_not_atom in H; auto.
+      + destruct H as (?&Hpsin&?&?&Heq).
+        eapply gensym_injective in Heq as (?&?); subst. contradiction.
+  Qed.
+
+  Lemma NoDupLocals_incl' prefs npref : forall blk xs ys,
+      ~PS.In npref prefs ->
+      GoodLocals prefs blk ->
+      (forall x, In x ys -> In x xs \/ exists id hint, x = gensym npref hint id) ->
+      NoDupLocals xs blk ->
+      NoDupLocals ys blk.
+  Proof.
+    induction blk using block_ind2;
+      intros * Hnin Hgood Hin Hnd; repeat inv_block.
+    - (* equation *) constructor.
+    - (* reset *)
+      constructor. simpl_Forall; eauto.
+    - (* switch *)
+      constructor. simpl_Forall; eauto.
+      repeat inv_branch. constructor; auto.
+      simpl_Forall; eauto.
+    - (* automaton *)
+      constructor. simpl_Forall; eauto.
+      repeat inv_branch. constructor; auto.
+      destruct s. eapply NoDupScope_incl'; eauto.
+      intros; simpl_Forall; eauto.
+    - (* local *)
+      constructor; auto.
+      eapply NoDupScope_incl'; eauto.
+      intros; simpl_Forall; eauto.
+  Qed.
+
+  Lemma node_NoDup {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDup (map fst (n_in n ++ n_out n)).
+  Proof.
+    intros n.
+    rewrite <- fst_NoDupMembers.
+    apply n_nodup.
+  Qed.
+
+  Lemma AtomOrGensym_add : forall pref prefs xs,
+      Forall (AtomOrGensym prefs) xs ->
+      Forall (AtomOrGensym (PS.add pref prefs)) xs.
+  Proof.
+    intros * Hat.
+    eapply Forall_impl; [|eauto].
+    intros ? [?|(pref'&?&?)]; [left|right]; subst; auto.
+    exists pref'. auto using PSF.add_2.
+  Qed.
+
+  Lemma GoodLocals_add : forall p prefs blk,
+      GoodLocals prefs blk ->
+      GoodLocals (PS.add p prefs) blk.
+  Proof.
+    induction blk using block_ind2; intros * Hgood; inv_block.
+    - (* equation *)
+      constructor; eauto.
+    - (* reset *)
+      constructor; eauto.
+      simpl_Forall; eauto.
+    - (* switch *)
+      constructor; eauto.
+      simpl_Forall; eauto.
+      inv H1; econstructor; eauto using AtomOrGensym_add.
+      simpl_Forall; eauto.
+    - (* automaton *)
+      constructor; eauto.
+      simpl_Forall; eauto.
+      inv_branch. inv_scope.
+      repeat econstructor; eauto using AtomOrGensym_add.
+      simpl_Forall; eauto.
+    - (* locals *)
+      constructor.
+      inv_scope; econstructor; eauto using AtomOrGensym_add.
+      simpl_Forall; eauto.
+  Qed.
+
+  Lemma VarsDefinedScope_Is_defined {A} P_nd P_vd (P_def: _ -> Prop) : forall locs (blks: A) xs x,
+      VarsDefinedScope P_vd (Scope locs blks) xs ->
+      NoDupScope P_nd xs (Scope locs blks) ->
       In x xs ->
       (forall xs,
           P_vd blks xs ->
           P_nd xs blks ->
           In x xs ->
           P_def blks) ->
-      Is_defined_in_scope P_def x (Scope locs caus blks).
+      Is_defined_in_scope P_def x (Scope locs blks).
   Proof.
     intros * Hnd Hvars Hin Hind; inv Hnd; inv Hvars.
     econstructor; eauto using in_or_app.
-    intros * Hnin. eapply H7; eauto.
+    intros * Hnin. eapply H5; eauto.
+  Qed.
+
+  Lemma VarsDefinedBranch_Is_defined {A} P_nd P_vd (P_def: _ -> Prop) : forall caus (blks: A) xs,
+      VarsDefinedBranch P_vd (Branch caus blks) xs ->
+      NoDupBranch P_nd (Branch caus blks) ->
+      (P_vd blks xs ->
+       P_nd blks ->
+       P_def blks) ->
+      Is_defined_in_branch P_def (Branch caus blks).
+  Proof.
+    intros * Hnd Hvars Hind; inv Hnd; inv Hvars.
+    econstructor; eauto.
   Qed.
 
   Lemma VarsDefined_Is_defined : forall blk xs x,
@@ -1580,19 +1663,19 @@ Module Type LSYNTAX
       constructor.
       inv H; try congruence. inv H2. inv H5. clear H1 H7 H8.
       left. destruct x0 as (?&[]).
-      eapply VarsDefinedScope_Is_defined; eauto.
+      eapply VarsDefinedBranch_Is_defined; eauto.
       intros; simpl in *. destruct H as (?&Hvars&Hperm).
-      rewrite <-Hperm in H2. eapply in_concat in H2 as (?&Hin1&Hin2). inv_VarsDefined.
+      rewrite <-Hperm in Hin. eapply in_concat in Hin as (?&Hin1&Hin2). inv_VarsDefined.
       solve_Exists. simpl_Forall.
       eapply H0; eauto.
       eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; auto using incl_concat.
     - (* automaton *)
       constructor.
       inv H; try congruence. inv H2. destruct_conjs. inv H7. clear H1 H5 H8.
-      left. destruct s.
-      eapply VarsDefinedScope_Is_defined; eauto.
-      intros; simpl in *. destruct H as (?&Hvars&Hperm).
-      rewrite <-Hperm in H2. eapply in_concat in H2 as (?&Hin1&Hin2). inv_VarsDefined.
+      left. destruct b. eapply VarsDefinedBranch_Is_defined; eauto.
+      intros; destruct_conjs; destruct s. eapply VarsDefinedScope_Is_defined; eauto.
+      intros; simpl in *. destruct H2 as (?&Hvars&Hperm).
+      rewrite <-Hperm in H7. eapply in_concat in H7 as (?&Hin1&Hin2). inv_VarsDefined.
       solve_Exists. simpl_Forall.
       eapply H0; eauto.
       eapply NoDupLocals_incl; [|eauto]. rewrite <-Hperm; auto using incl_concat.
@@ -1619,10 +1702,10 @@ Module Type LSYNTAX
     eapply NoDupLocals_incl; [|eauto]. apply incl_concat; auto.
   Qed.
 
-  Lemma VarsDefinedScope_Is_defined' {A} P_nd P_vd (P_def: _ -> Prop) : forall locs caus (blks: A) xs x,
-      VarsDefinedScope P_vd (Scope locs caus blks) xs ->
-      NoDupScope P_nd xs (Scope locs caus blks) ->
-      Is_defined_in_scope P_def x (Scope locs caus blks) ->
+  Lemma VarsDefinedScope_Is_defined' {A} P_nd P_vd (P_def: _ -> Prop) : forall locs (blks: A) xs x,
+      VarsDefinedScope P_vd (Scope locs blks) xs ->
+      NoDupScope P_nd xs (Scope locs blks) ->
+      Is_defined_in_scope P_def x (Scope locs blks) ->
       (forall xs,
           P_vd blks xs ->
           P_nd xs blks ->
@@ -1631,8 +1714,21 @@ Module Type LSYNTAX
       In x xs.
   Proof.
     intros * Hnd Hvars Hdef Hind; inv Hnd; inv Hvars; inv Hdef.
-    eapply Hind, in_app_iff in H3 as [Hin|Hin]; eauto.
+    eapply Hind, in_app_iff in H3 as [Hin|Hin]. 3,4:eauto. 1,2:eauto.
     apply fst_InMembers in Hin. congruence.
+  Qed.
+
+  Lemma VarsDefinedBranch_Is_defined' {A} P_nd P_vd (P_def: _ -> Prop) : forall locs (blks: A) xs x,
+      VarsDefinedBranch P_vd (Branch locs blks) xs ->
+      NoDupBranch P_nd (Branch locs blks) ->
+      Is_defined_in_branch P_def (Branch locs blks) ->
+      (P_vd blks xs ->
+       P_nd blks ->
+       P_def blks ->
+       In x xs) ->
+      In x xs.
+  Proof.
+    intros * Hnd Hvars Hdef Hind; inv Hnd; inv Hvars; inv Hdef; eauto.
   Qed.
 
   Lemma VarsDefined_Is_defined' : forall blk xs x,
@@ -1641,7 +1737,7 @@ Module Type LSYNTAX
       Is_defined_in x blk ->
       In x xs.
   Proof.
-    induction blk using block_ind2; intros * Hnd Hvars Hin; inv Hnd; inv Hvars; inv Hin.
+    induction blk using block_ind2; intros * Hnd Hvars Hin; repeat inv_block.
     - (* equation *)
       auto.
     - (* reset *)
@@ -1651,7 +1747,7 @@ Module Type LSYNTAX
       eapply NoDupLocals_incl; [|eauto]; auto using incl_concat.
     - (* switch *)
       rename H1 into Hdef. simpl_Exists. simpl_Forall.
-      destruct s. eapply VarsDefinedScope_Is_defined'; eauto.
+      destruct b. eapply VarsDefinedBranch_Is_defined'; eauto.
       intros. simpl_Exists. inv_VarsDefined. simpl_Forall.
       take (Permutation _ _) and rewrite <-it. eapply in_concat. repeat esplit; eauto.
       eapply H; eauto.
@@ -1659,6 +1755,7 @@ Module Type LSYNTAX
       take (Permutation _ _) and rewrite <-it; auto using incl_concat.
     - (* automaton *)
       rename H1 into Hdef. simpl_Exists. simpl_Forall.
+      destruct b. eapply VarsDefinedBranch_Is_defined'; eauto. intros; destruct_conjs.
       destruct s. eapply VarsDefinedScope_Is_defined'; eauto.
       intros; simpl in *. simpl_Exists. inv_VarsDefined. simpl_Forall.
       take (Permutation _ _) and rewrite <-it. eapply in_concat. repeat esplit; eauto.
@@ -1687,18 +1784,16 @@ Module Type LSYNTAX
     - (* switch *)
       simpl_Exists; simpl_Forall; eauto.
       inv H1. inv H4. simpl_Exists; simpl_Forall; eauto.
-      eapply H, InMembers_app in H0 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H2, InMembers_senv_of_locs; auto.
     - (* automaton *)
       simpl_Exists; simpl_Forall; eauto.
-      inv H1. destruct_conjs. inv H2. simpl_Exists; simpl_Forall; eauto.
+      inv H1. destruct_conjs. inv H0. inv H8. destruct_conjs. inv H3. simpl_Exists; simpl_Forall; eauto.
       eapply H, InMembers_app in H1 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H4, InMembers_senv_of_locs; auto.
+      exfalso. apply H2, InMembers_senv_of_locs; auto.
     - (* local *)
       inv H1. inv H2.
       simpl_Exists; simpl_Forall.
       eapply H, InMembers_app in H4 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H6, InMembers_senv_of_locs; auto.
+      exfalso. apply H5, InMembers_senv_of_locs; auto.
   Qed.
 
   Corollary Exists_Is_defined_in_wx_In : forall blks env x,
@@ -1726,13 +1821,13 @@ Module Type LSYNTAX
     - (* switch *)
       inv H4; inv H6; try congruence. clear H1 H8.
       destruct x. inv H0. inv H7. inv_VarsDefined; simpl in *. subst. inv H8.
-      eapply Permutation_app_inv_r. rewrite <-Hperm, <-Hperm0.
+      rewrite <-Hperm, <-Hperm0.
       apply Permutation_concat.
       apply Forall2_swap_args in Hvars0. eapply Forall2_trans_ex in Hvars; eauto.
       simpl_Forall; eauto.
     - (* automaton *)
       inv H6; inv H8; try congruence. clear H1 H6.
-      destruct x as (?&?&?). inv H0. inv H4. inv_VarsDefined; simpl in *. subst. inv H8.
+      destruct_conjs. inv H0. inv H4. inv H1. inv H6. inv_VarsDefined; simpl in *. destruct_conjs; subst. inv H1.
       eapply Permutation_app_inv_r. rewrite <-Hperm, <-Hperm0.
       apply Permutation_concat.
       apply Forall2_swap_args in Hvars0. eapply Forall2_trans_ex in Hvars; eauto.
@@ -1745,11 +1840,11 @@ Module Type LSYNTAX
       simpl_Forall; eauto.
   Qed.
 
-  Fact VarsDefinedScope_Perm1 : forall xs ys s,
+  Fact VarsDefinedBranch_Perm1 : forall xs ys s,
       Permutation xs ys ->
-      VarsDefinedScope
+      VarsDefinedBranch
         (fun blks ys => exists xs0, Forall2 VarsDefined blks xs0 /\ Permutation (concat xs0) ys) s xs ->
-      VarsDefinedScope
+      VarsDefinedBranch
         (fun blks ys => exists xs0, Forall2 VarsDefined blks xs0 /\ Permutation (concat xs0) ys) s ys.
   Proof.
     intros * Hperm Hvd; inv Hvd; inv_VarsDefined.
@@ -1757,7 +1852,7 @@ Module Type LSYNTAX
     1,2:now rewrite <-Hperm.
   Qed.
 
-  Fact VarsDefinedScope_Perm2 : forall xs ys (s: scope (_ * list transition)),
+  Fact VarsDefinedScope_Perm1 : forall xs ys (s: scope (_ * list transition)),
       Permutation xs ys ->
       VarsDefinedScope
         (fun blks ys => exists xs0, Forall2 VarsDefined (fst blks) xs0 /\ Permutation (concat xs0) ys) s xs ->
@@ -1766,7 +1861,21 @@ Module Type LSYNTAX
   Proof.
     intros * Hperm Hvd; inv Hvd; inv_VarsDefined.
     econstructor. do 2 esplit; eauto.
-    1,2:now rewrite <-Hperm.
+    now rewrite <-Hperm.
+  Qed.
+
+  Fact VarsDefinedBranch_Perm2 : forall xs ys b,
+      Permutation xs ys ->
+      VarsDefinedBranch
+        (fun (blks : list transition * scope (list block * list transition)) ys =>
+           VarsDefinedScope (fun blks0 ys0 => exists xs0, Forall2 VarsDefined (fst blks0) xs0 /\ Permutation (concat xs0) ys0) (snd blks) ys) b xs ->
+      VarsDefinedBranch
+        (fun (blks : list transition * scope (list block * list transition)) ys =>
+           VarsDefinedScope (fun blks0 ys0 => exists xs0, Forall2 VarsDefined (fst blks0) xs0 /\ Permutation (concat xs0) ys0) (snd blks) ys) b ys.
+  Proof.
+    intros * Hperm Hvd; inv Hvd; inv_VarsDefined.
+    econstructor. eapply VarsDefinedScope_Perm1; eauto.
+    now rewrite <-Hperm.
   Qed.
 
   Lemma Is_defined_in_vars_defined : forall x blk,
@@ -1785,21 +1894,16 @@ Module Type LSYNTAX
       inv Hin. rename H1 into Hin. simpl_Exists. simpl_Forall.
       inv Hin. simpl_Exists; simpl_Forall.
       repeat (eapply In_In_PSUnion; [|eapply in_map_iff; eauto]; simpl).
-      apply PSF.filter_3. intros ???; subst; auto.
-      + eapply In_In_PSUnion; eauto. eapply in_map_iff; eauto.
-      + eapply Bool.negb_true_iff.
-        eapply Bool.not_true_iff_false. intro contra.
-        apply H1.
-        eapply mem_assoc_ident_true in contra as ((?&?)&?); eauto using In_InMembers.
+      eauto.
     - (* automaton *)
       inv Hin. rename H1 into Hin. simpl_Exists. simpl_Forall.
-      inv Hin. simpl_Exists; simpl_Forall.
+      inv Hin. inv H0; destruct_conjs; subst. simpl_Exists; simpl_Forall.
       repeat (eapply In_In_PSUnion; [|eapply in_map_iff; eauto]; simpl).
       apply PSF.filter_3. intros ???; subst; auto.
       + eapply In_In_PSUnion; eauto. eapply in_map_iff; eauto.
       + eapply Bool.negb_true_iff.
         eapply Bool.not_true_iff_false. intro contra.
-        apply H1.
+        apply H3.
         eapply mem_assoc_ident_true in contra as ((?&?)&?); eauto using In_InMembers.
     - (* local *)
       inv Hin. inv H1.
@@ -1809,7 +1913,7 @@ Module Type LSYNTAX
         simpl_Forall; eauto.
       + eapply Bool.negb_true_iff.
         eapply Bool.not_true_iff_false. intro contra.
-        apply H5.
+        apply H4.
         eapply mem_assoc_ident_true in contra as ((?&?)&?); eauto using In_InMembers.
   Qed.
 
@@ -1827,22 +1931,18 @@ Module Type LSYNTAX
       constructor. solve_Exists.
     - (* switch *)
       unfold vars_defined_scope in *.
-      apply PSUnion_In_In in Hin as (?&Hin1&Hin2). simpl_In.
-      simpl_Forall. destruct s.
-      apply PS.filter_spec in Hin2 as (Hin2&Hassoc). 2:intros ?? Heq; inv Heq; auto.
-      apply PSUnion_In_In in Hin2 as (?&Hin2&Hin3). simpl_In.
+      apply PSUnion_In_In in Hin as (?&Hin1&Hin2). simpl_In. destruct b; simpl in *.
       simpl_Forall.
+      apply PSUnion_In_In in Hin2 as (?&Hin2&Hin3). simpl_In. simpl_Forall.
       constructor. solve_Exists. constructor. solve_Exists.
-      intros contra. eapply InMembers_In in contra as (?&?).
-      eapply Bool.negb_true_iff, mem_assoc_ident_false in Hassoc; eauto.
     - (* automaton *)
       unfold vars_defined_scope in *.
       apply PSUnion_In_In in Hin as (?&Hin1&Hin2). simpl_In.
-      simpl_Forall. destruct s; destruct_conjs.
+      simpl_Forall. destruct b; destruct_conjs; destruct s; destruct_conjs.
       apply PS.filter_spec in Hin2 as (Hin2&Hassoc). 2:intros ?? Heq; inv Heq; auto.
       apply PSUnion_In_In in Hin2 as (?&Hin2&Hin3). simpl_In.
       simpl_Forall.
-      constructor. solve_Exists. constructor. solve_Exists.
+      constructor. solve_Exists. constructor. constructor. solve_Exists.
       intros contra. eapply InMembers_In in contra as (?&?).
       eapply Bool.negb_true_iff, mem_assoc_ident_false in Hassoc; eauto.
     - (* local *)

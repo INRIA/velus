@@ -169,7 +169,7 @@ let speclist = [
   "-nomain", Arg.Set no_main, " Compile as a library, without a main() function";
   "-sync", Arg.Set write_sync, " Generate sync() in <output>.sync.c";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
-  "-header", Arg.Set write_header, "Generate a header file in <output>.h";
+  "-header", Arg.Set write_header, " Generate a header file in <output>.h";
 
   "-dlustre", Arg.Set write_lustre, " Save the parsed Lustre in <output>.parsed.lus";
   "-dnolast", Arg.Set write_nolast, " Save Lustre without last in <output>.nolast.lus";

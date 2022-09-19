@@ -23,6 +23,10 @@ Module Type CATYPING
 
   Module Import SCT := SCTypingFun Ids Op OpAux Cks Senv Syn Typ SC. Import SC.
 
+  Ltac inv_branch := (Syn.inv_branch || Typ.inv_branch).
+  Ltac inv_scope := (Syn.inv_scope || Typ.inv_scope).
+  Ltac inv_block := (Syn.inv_block || Typ.inv_block).
+
   Import Fresh Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
@@ -102,12 +106,12 @@ Module Type CATYPING
     Qed.
 
     Lemma auto_scope_wt {A} P_nl P_wt f_auto :
-      forall locs caus (blk: A) s' tys Γ Γ' st st',
+      forall locs (blk: A) s' tys Γ Γ' st st',
         (forall x, ~IsLast Γ x) ->
-        nolast_scope P_nl (Scope locs caus blk) ->
-        wt_scope P_wt G1 Γ (Scope locs caus blk) ->
+        nolast_scope P_nl (Scope locs blk) ->
+        wt_scope P_wt G1 Γ (Scope locs blk) ->
         incl tys G2.(types) ->
-        auto_scope f_auto (Scope locs caus blk) st = (s', tys, st') ->
+        auto_scope f_auto (Scope locs blk) st = (s', tys, st') ->
         (forall Γ blks' tys st st',
             (forall x, ~IsLast Γ x) ->
             P_nl blk ->
@@ -124,7 +128,7 @@ Module Type CATYPING
         intros. repeat rewrite HasType_app in *. intuition.
       - simpl_Forall; subst; eauto with ltyping.
       - simpl_Forall; subst; eauto.
-      - eapply Hind in H9; eauto.
+      - eapply Hind in H8; eauto.
         + now rewrite <-app_assoc.
         + repeat rewrite NoLast_app in *; repeat split; auto.
           intros ? Hl; inv Hl. simpl_In. simpl_Forall. subst; simpl in *; congruence.
@@ -155,14 +159,13 @@ Module Type CATYPING
         + apply Hiface; auto.
         + assert (map fst x = map fst branches) as Heq; [|setoid_rewrite Heq]; auto.
           apply mmap2_values, Forall3_ignore3 in H0.
-          apply Forall2_map_eq, Forall2_swap_args. simpl_Forall; repeat inv_bind; auto.
+          apply Forall2_map_eq, Forall2_swap_args. simpl_Forall; repeat inv_branch; repeat inv_bind; auto.
         + apply mmap2_values, Forall3_ignore3 in H0. inv H0; congruence.
         + auto_block_simpl_Forall.
-          destruct s0. eapply auto_scope_wt with (Γ':=[]) in H10; eauto.
-          * etransitivity; eauto using incl_concat.
-          * intros. auto_block_simpl_Forall; eauto.
-            take (auto_block _ _ = _) and eapply H in it; eauto.
-            etransitivity; eauto using incl_concat.
+          repeat inv_branch; repeat inv_bind.
+          constructor. auto_block_simpl_Forall; eauto.
+          take (auto_block _ _ = _) and eapply H in it; eauto.
+          do 2 (etransitivity; eauto using incl_concat).
 
       - (* automaton (weak) *)
         Local Ltac wt_automaton :=
@@ -171,8 +174,10 @@ Module Type CATYPING
             apply Hincl; eauto with datatypes
           | |- HasType _ _ _ =>
             apply HasType_app; auto; right; econstructor; eauto with datatypes
+          | H:HasClock ?x _ _ |- HasClock (_::_::_::_::?x) _ _ => inv H; econstructor; eauto with datatypes
           | |- IsLast _ _ =>
             apply IsLast_app; auto
+          | H:IsLast ?x _ |- IsLast (_::_::_::_::?x) _ => inv H; econstructor; eauto with datatypes
           | |- wt_clock _ _ _ =>
             eapply wt_clock_incl; [|eauto with ltyping]; intros; apply HasType_app; auto
           | _ => idtac
@@ -180,7 +185,7 @@ Module Type CATYPING
 
         assert (map fst x9 = map fst (map fst states)) as Heqstates.
         { apply mmap2_values, Forall3_ignore3 in H13.
-          clear - H13. induction H13; destruct_conjs; repeat inv_bind; auto.
+          clear - H13. induction H13; destruct_conjs; try destruct b0 as [?(?&?)]; repeat inv_bind; auto.
         }
         assert (wt_type G2.(types) (Tenum x (map snd (map fst states)))) as Hwty.
         { constructor; auto with datatypes.
@@ -214,8 +219,8 @@ Module Type CATYPING
           * rewrite 2 map_length. now setoid_rewrite Heqstates.
           * apply mmap2_values, Forall3_ignore3 in H13. inv H13; auto; congruence.
           * auto_block_simpl_Forall.
-            destruct s0; destruct_conjs.
-            econstructor; eauto; repeat constructor. 1,2:rewrite app_nil_r.
+            repeat inv_branch. destruct s as [?(?&?)]; destruct_conjs. repeat inv_bind.
+            do 2 econstructor; eauto; repeat constructor.
             2:{ econstructor; eauto with datatypes. }
             take (auto_scope _ _ _ = _) and eapply auto_scope_wt with (Γ':=[_;_;_;_]) in it; eauto. eapply it.
             1:{ etransitivity; eauto. eauto using incl_tl, incl_concat. }
@@ -233,7 +238,7 @@ Module Type CATYPING
               take (auto_block _ _ = _) and eapply H in it; eauto.
               - intros * Hl. inv Hl.
                 take (_ \/ _) and destruct it as [Heq|[Heq|[Heq|[Heq|Heq]]]]; eauto; try inv Heq; simpl in *; try congruence.
-                eapply H12; eauto with senv.
+                take (forall x, ~IsLast _ _) and eapply it; eauto with senv.
               - eapply wt_block_incl; [| |eauto]; intros * Hin; inv Hin; econstructor; eauto with datatypes.
               - etransitivity; eauto. eauto using incl_tl, incl_concat.
             }
@@ -241,7 +246,7 @@ Module Type CATYPING
       - (* automaton (strong) *)
         assert (map fst x9 = map fst (map fst states)) as Heqstates.
         { apply mmap2_values, Forall3_ignore3 in H12.
-          clear - H12. induction H12; destruct_conjs; repeat inv_bind; auto.
+          clear - H12. induction H12; destruct_conjs; try destruct b0 as [?(?&?)]; repeat inv_bind; auto.
         }
         assert (wt_type G2.(types) (Tenum x (map snd (map fst states)))) as Hwty.
         { constructor; auto with datatypes.
@@ -265,13 +270,13 @@ Module Type CATYPING
             econstructor; simpl; eauto.
           * simpl. rewrite app_nil_r.
             rewrite 2 add_whens_typeof; simpl; auto.
-        + econstructor; simpl; eauto. 5:simpl_Forall; econstructor; eauto. 5-7:constructor; auto.
+        + econstructor; simpl; eauto. 5:simpl_Forall; repeat inv_branch; do 2 econstructor; eauto.
           * repeat constructor. 1,2:wt_automaton.
           * apply Htypes; auto with datatypes.
           * erewrite 2 map_length, map_map, map_ext, <-map_map; eauto.
-            intros; destruct_conjs; auto.
+            intros; destruct_conjs; destruct b as [?(?&?)]; auto.
           * destruct states; simpl in *; try congruence.
-          *{ rewrite app_nil_r. repeat constructor.
+          *{ repeat constructor.
              - eapply trans_exp_wt; eauto using In_InMembers.
                + erewrite 2 map_length; eauto.
                + simpl_Forall. split; [|split]; auto.
@@ -287,9 +292,9 @@ Module Type CATYPING
             eapply wt_clock_incl; [|eauto with ltyping]. intros * Ht; inv Ht; econstructor; eauto with datatypes.
           * now setoid_rewrite Heqstates; rewrite 2 map_length.
           * apply mmap2_values, Forall3_ignore3 in H12. inv H12; auto; congruence.
-          * auto_block_simpl_Forall.
-            destruct s0; destruct_conjs.
-            econstructor; eauto; repeat constructor. 1,2:rewrite app_nil_r.
+          * auto_block_simpl_Forall. repeat inv_branch. repeat inv_bind.
+            destruct s as [?(?&?)]; destruct_conjs.
+            repeat constructor.
             2:{ econstructor; eauto with datatypes. }
             take (auto_scope _ _ _ = _) and eapply auto_scope_wt with (Γ':=[_;_;_;_]) in it; eauto. eapply it.
             1:{ etransitivity; eauto. eauto using incl_tl, incl_concat. }

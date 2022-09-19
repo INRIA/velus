@@ -119,6 +119,15 @@ Module Type STATICENV
     eauto using InMembers_incl with senv.
   Qed.
 
+  Lemma IsVar_incl_fst : forall senv1 senv2,
+      (forall x, IsVar senv1 x -> IsVar senv2 x) ->
+      incl (map fst senv1) (map fst senv2).
+  Proof.
+    intros * Hincl ? Hin. simpl_In.
+    assert (IsVar senv1 a) as Hv by (econstructor; solve_In).
+    apply Hincl in Hv. inv Hv. solve_In.
+  Qed.
+
   Lemma HasType_incl : forall senv1 senv2 x ty,
       incl senv1 senv2 ->
       HasType senv1 x ty ->
@@ -299,6 +308,12 @@ Module Type STATICENV
   Qed.
 
   Global Hint Rewrite -> @IsVar_senv_of_locs.
+
+  Lemma IsLast_senv_of_locs {A} : forall x locs,
+      IsLast (@senv_of_locs A locs) x -> InMembers x locs.
+  Proof.
+    intros * Hiv; inv Hiv; solve_In.
+  Qed.
 
   Definition idty (env : static_env) : list (ident * type) :=
     map (fun '(x, entry) => (x, entry.(typ))) env.
