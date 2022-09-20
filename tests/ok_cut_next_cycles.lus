@@ -1,0 +1,45 @@
+node f1(a : int) returns (b : int)
+var x, y : int;
+let
+    x = 0 fby (y + a);
+    y = 0 fby (x - a);
+    b = x + y;
+tel
+
+node f2(a : int) returns (b : int)
+var x, y, z : int;
+let
+    x = 0 fby (z + a);
+    y = 0 fby x;
+    z = 0 fby y;
+    b = x;
+tel
+
+node f3(a : int) returns (b : int)
+var x1, x2, y1, y2 : int;
+let
+    x1 = 0 fby (y1 + a);
+    y1 = 0 fby (x1 - a);
+    x2 = 0 fby (y2 + a);
+    y2 = 0 fby (x2 - a);
+    b = x1 + y2;
+tel
+
+node f4(a : int) returns (b : int)
+var x, y, z : int;
+let
+    x = 0 fby (y + z);
+    y = 0 fby (x - a);
+    z = 0 fby y;
+    b = z;
+tel
+
+node f5(a : bool) returns (b : bool)
+var x, y : bool;
+let
+    x = true fby y;
+    reset
+        y = false fby (not y);
+    every x;
+    b = x;
+tel

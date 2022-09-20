@@ -2626,7 +2626,7 @@ Module Type CORRECTNESS
 
         eapply normfby_blocks_sem
           with (vars:=senv_of_inout (n_in n0 ++ n_out n0) ++ senv_of_locs locs)
-               (to_cut := ps_from_list (map fst (n_out n0))) (st:=init_st)
+               (to_cut := (PS.union (ps_from_list (map fst (n_out n0))) (cut_next_cycles blks))) (st:=init_st)
           in Hsem as (Hf&Href&(Hdom&Hsc)&Heqs'')... 6:eapply surjective_pairing.
 
         assert (Href':=Href). eapply FEnv.union_refines_inv in Href' as (Hi''&Heq&Href'&Hdom'); auto using EqStrel_Reflexive.
@@ -2642,7 +2642,7 @@ Module Type CORRECTNESS
         + apply sem_block_ck_cons'; simpl...
           2:{ eapply find_node_not_Is_node_in in Hord2.
               2:erewrite find_node_now; eauto. eauto. }
-          rewrite Hblk.
+          rewrite Hblk in *.
           do 2 econstructor.
           5:{ destruct G2; eauto.
               simpl_Forall. eapply sem_block_ck_morph. 4:eauto. 2,3:reflexivity.

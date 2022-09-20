@@ -637,16 +637,75 @@ Module Type NORMFBY
     eapply normfby_block_nolocal; eauto.
   Qed.
 
+  (** ** Cut next cycles
+
+      Cycles of the form
+      x = 0 fby y;
+      y = 0 fby x;
+      leads to a non schedulable program in STC:
+      next x := y;
+      next y := x;
+      because a register cannot be used after it is updated.
+
+      The solution is to cut this cycle:
+      x = 0 fby y;
+      y' = 0 fby x;
+      y = y';
+      which can be scheduled to
+      y = y';
+      next y' := x;
+      next x := y;
+
+      The function `cut_next_cycles` tries to calculate a small set of
+      identifiers that need to be cut for the program to be schedulable.
+      It exploits the unnested form of the program.
+   *)
+
+  (* Get the free variables in a normalized lexp *)
+  Fixpoint free_vars_lexp (e : exp) : PS.t :=
+    match e with
+    | Econst _ | Eenum _ _ => PS.empty
+    | Evar x _ => PS.singleton x
+    | Eunop _ e1 _ => free_vars_lexp e1
+    | Ebinop _ e1 e2 _ => PS.union (free_vars_lexp e1) (free_vars_lexp e2)
+    | Ewhen [e] (x, _) _ _ => PS.add x (free_vars_lexp e)
+    | _ => PS.empty (* Not a normalized lexp *)
+    end.
+
+  (* Get the reverse dependencies induced by a fby equation. *)
+  Fixpoint next_dep (blk : block) : option (ident * PS.t) :=
+    match blk with
+    | Beq ([x], [Efby _ [e] _]) => Some (x, free_vars_lexp e)
+    | Breset [blk] _ => next_dep blk
+    | _ => None
+    end.
+
+  Definition cut_next_dep (deps : Env.t PS.t) (to_cut : PS.t) (blk : block) : (Env.t PS.t * PS.t) :=
+    match next_dep blk with
+    | None => (deps, to_cut)
+    | Some (x, used) =>
+        let used_trans := PS.fold (fun x s => match Env.find x deps with
+                                           | Some s' => PS.union s s'
+                                           | None => s
+                                           end) used used in
+        if PS.mem x used_trans
+        then (deps, PS.add x to_cut)
+        else (Env.add x used_trans deps, to_cut)
+    end.
+
+  Definition cut_next_cycles (blks : list block) : PS.t :=
+    snd (fold_left (fun '(deps, to_cut) => cut_next_dep deps to_cut) blks (Env.empty _, PS.empty)).
+
   (** ** Normalization of a full node *)
 
-  Program Definition normfby_node (* (to_cut : PS.t) *) (n : @node nolocal_top_block norm1_prefs) : @node nolocal_top_block norm2_prefs :=
+  Program Definition normfby_node (n : @node nolocal_top_block norm1_prefs) : @node nolocal_top_block norm2_prefs :=
     {| n_name := n_name n;
        n_hasstate := n_hasstate n;
        n_in := n_in n;
        n_out := n_out n;
        n_block := match (n_block n) with
                   | Blocal (Scope vars blks) =>
-                    let res := normfby_blocks (ps_from_list (map fst (n_out n))) blks init_st in
+                    let res := normfby_blocks (PS.union (ps_from_list (map fst (n_out n))) (cut_next_cycles blks)) blks init_st in
                     let nvars := st_anns (snd res) in
                     Blocal (Scope (vars++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) nvars) (fst res))
                   | blk => blk
@@ -761,7 +820,7 @@ Module Type NORMFBY
       destruct (normfby_blocks _ _ _) as (blks'&st') eqn:Hnorm.
       eapply normfby_blocks_normalized_block in Hnorm; eauto.
       + rewrite PS_For_all_Forall'. simpl_Forall. apply Forall_app in Good as (?&?); simpl_Forall; auto.
-      + reflexivity.
+      + apply PSP.union_subset_1.
   Qed.
 
   Fact normfby_global_normalized_global : forall G,
