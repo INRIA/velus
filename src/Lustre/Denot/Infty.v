@@ -129,7 +129,7 @@ End Alt_inf.
 
 Section Ncons_ops.
 
-Context {A B : Type}.
+Context {A B D : Type}.
 
 Lemma is_consn_sconst :
   forall (c : A) bs n,
@@ -158,6 +158,34 @@ Ltac solve_err :=
         repeat rewrite DS_const_eq, rem_cons;
         now auto using is_cons_DS_const, is_consn_DS_const
     end.
+
+Lemma is_cons_zip :
+  forall (f : A -> B -> D) xs ys,
+    is_cons xs ->
+    is_cons ys ->
+    is_cons (ZIP f xs ys).
+Proof.
+  intros * Cx Cy.
+  apply is_cons_elim in Cx as (?&?&->).
+  apply is_cons_elim in Cy as (?&?&->).
+  rewrite zip_eq.
+  cases; solve_err.
+Qed.
+
+Lemma is_consn_zip :
+  forall (f : A -> B -> D) n xs ys,
+    is_cons (nrem n xs) ->
+    is_cons (nrem n ys) ->
+    is_cons (nrem n (ZIP f xs ys)).
+Proof.
+  induction n; simpl; intros * Cx Cy; auto using is_cons_zip.
+  apply is_consn_is_cons in Cx as Hx.
+  apply is_cons_rem in Hx as (?&?&?& Hx); rewrite Hx in *.
+  apply is_consn_is_cons in Cy as Hy.
+  apply is_cons_rem in Hy as (?&?&?& Hy); rewrite Hy in *.
+  rewrite zip_eq, rem_cons in *.
+  apply IHn; auto.
+Qed.
 
 Lemma is_consn_sunop :
   forall (f : A -> option B) s n,
