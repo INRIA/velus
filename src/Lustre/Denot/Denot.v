@@ -20,6 +20,12 @@ Module Type LDENOT
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
 
+(* TODO: faire ça partout !! *)
+Context {PSyn : block -> Prop}.
+Context {Prefs : PS.t}.
+Definition node := @node PSyn Prefs.
+Definition global := @global PSyn Prefs.
+
 Section Nprod.
 
 Fixpoint nprod (n : nat) : cpo :=
@@ -610,9 +616,7 @@ End Mem_nth.
 
 Section Denot.
 
-Context {PSyn : block -> Prop}.
-Context {Prefs : PS.t}.
-Variable (G : @global PSyn Prefs).
+Variable (G : global).
 
 Definition SI := fun _ : ident => sampl value.
 Definition FI := fun _ : ident => (DS_prod SI -C-> DS_prod SI).
@@ -780,6 +784,8 @@ Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
 Definition denot_var ins envI env x : DS (sampl value) :=
   if mem_ident x ins then envI x else env x.
 
+(* TODO: envF -> envG *)
+(* TODO: wrapper pour tests d'égalité des longueurs *)
 Lemma denot_exp_eq :
   forall ins e envF envI bs env,
     denot_exp ins e envF envI bs env =
@@ -1045,7 +1051,7 @@ Definition denot_block (ins : list ident) (b : block) :
   | _ => curry (curry (curry (SND _ _ @_ FST _ _ @_ FST _ _))) (* garder les entrées *)
   end.
 
-Definition denot_node (n : @node PSyn Prefs) :
+Definition denot_node (n : node) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
   denot_block (List.map fst n.(n_in)) n.(n_block).
 
@@ -1062,15 +1068,21 @@ Fixpoint bss (ins : list ident) : DS_prod SI -C-> DS bool :=
   end.
 
 (* denot_node avec l'horloge de base instanciée par (bss ins) *)
-Definition denot_node2 (n : @node PSyn Prefs) :
+Definition denot_node2 (n : node) :
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
-  apply curry, curry.
-  refine ((denot_node n @4_ _) _ _ _).
-  - exact (FST _ _ @_ FST _ _). (* envF *)
-  - exact (SND _ _ @_ FST _ _). (* envI *)
-  - exact (bss (idents (n_in n)) @_ SND _ _ @_ FST _ _).
-  - exact (SND _ _).            (* env *)
+  apply curry.
+  refine ((denot_node n @3_ _) _ _).
+  - exact (FST _ _). (* envF *)
+  - exact (SND _ _). (* envI *)
+  - exact (bss (idents (n_in n)) @_ SND _ _).
 Defined.
+
+Lemma denot_node2_eq : forall n envF envI,
+    denot_node2 n envF envI =
+      denot_node n envF envI (bss (idents n.(n_in)) envI).
+Proof.
+  trivial.
+Qed.
 
 End Denot.
 
@@ -1079,14 +1091,28 @@ Section Global.
 
   Definition env_err_ty : DS_prod SI := fun _ => DS_const (err error_Ty).
 
-  Definition denot_global_ {PSyn Prefs} (G : @global PSyn Prefs) : Dprodi FI -C-> Dprodi FI.
+  Definition denot_global_ (G : global) : Dprodi FI -C-> Dprodi FI.
     apply Dprodi_DISTR; intro f.
     destruct (find_node f G).
     - exact (curry (FIXP _ @_ (denot_node2 G n @2_ FST _ _) (SND _ _))).
     - apply CTE, CTE, env_err_ty.
   Defined.
 
-  Definition denot_global {PSyn Prefs} (G : @global PSyn Prefs) : Dprodi FI :=
+  Lemma denot_global_eq :
+    forall G envF f envI,
+      denot_global_ G envF f envI =
+        match find_node f G with
+        | Some n => FIXP _ (denot_node2 G n envF envI)
+        | None => env_err_ty
+        end.
+  Proof.
+    intros.
+    unfold denot_global_.
+    autorewrite with cpodb.
+    cases.
+  Qed.
+
+  Definition denot_global (G : global) : Dprodi FI :=
     FIXP _ (denot_global_ G).
 
 End Global.
@@ -1127,7 +1153,7 @@ Inductive restr_block : block -> Prop :=
     Forall restr_exp es ->
     restr_block (Beq (xs,es)).
 
-Definition restr_node {PSyn prefs} (nd : @node PSyn prefs) : Prop :=
+Definition restr_node (nd : node) : Prop :=
   restr_block nd.(n_block).
 
 End Temp.
