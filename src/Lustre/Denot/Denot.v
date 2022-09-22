@@ -764,9 +764,9 @@ Definition denot_exps (ins : list ident) (es : list exp) :
   curry (curry (curry (denot_exps_ ins es))).
 
 Lemma denot_exps_eq :
-  forall ins e es envF envI bs env,
-    denot_exps ins (e :: es) envF envI bs env
-    = nprod_app (denot_exp ins e envF envI bs env) (denot_exps ins es envF envI bs env).
+  forall ins e es envG envI bs env,
+    denot_exps ins (e :: es) envG envI bs env
+    = nprod_app (denot_exp ins e envG envI bs env) (denot_exps ins es envG envI bs env).
 Proof.
   trivial.
 Qed.
@@ -784,16 +784,15 @@ Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
 Definition denot_var ins envI env x : DS (sampl value) :=
   if mem_ident x ins then envI x else env x.
 
-(* TODO: envF -> envG *)
 (* TODO: wrapper pour tests d'égalité des longueurs *)
 Lemma denot_exp_eq :
-  forall ins e envF envI bs env,
-    denot_exp ins e envF envI bs env =
+  forall ins e envG envI bs env,
+    denot_exp ins e envG envI bs env =
       match e return nprod (numstreams e) with
       | Econst c => sconst (Vscalar (sem_cconst c)) bs
       | Evar x _ => denot_var ins envI env x
       | Eunop op e an =>
-          let se := denot_exp ins e envF envI bs env in
+          let se := denot_exp ins e envG envI bs env in
           match numstreams e as n return nprod n -> nprod 1 with
           | 1 => fun se =>
               match typeof e with
@@ -805,8 +804,8 @@ Lemma denot_exp_eq :
       (* | Ebinop _ _ _ op e1 e2 => *)
       (*     binop (denot_lbinop op) (denot_exp e1 genv env bs) (denot_exp e2 genv env bs) *)
       | Efby e0s es an =>
-          let s0s := denot_exps ins e0s envF envI bs env in
-          let ss := denot_exps ins es envF envI bs env in
+          let s0s := denot_exps ins e0s envG envI bs env in
+          let ss := denot_exps ins es envG envI bs env in
           let n := (list_sum (List.map numstreams e0s)) in
           let m := (list_sum (List.map numstreams es)) in
           match Nat.eq_dec n m, Nat.eq_dec (length an) n with
@@ -819,20 +818,20 @@ Lemma denot_exp_eq :
       (* | Epair _ _ e1 e2 => *)
       (*     PAIR_flat s _ _ (denot_exp e1 genv env bs) (denot_exp e2 genv env bs) *)
       | Ewhen es x k (tys,_) =>
-          let ss := denot_exps ins es envF envI bs env in
+          let ss := denot_exps ins es envG envI bs env in
           match Nat.eq_dec (length tys) (list_sum (List.map numstreams es)) with
           | left eqn =>
               eq_rect_r nprod (llift _ (swhenv k) ss (denot_var ins envI env x)) eqn
           | _ => nprod_const (err error_Ty) _
           end
       | Eapp i es er an =>
-          let ss := denot_exps ins es envF envI bs env in
+          let ss := denot_exps ins es envG envI bs env in
           match find_node i G with
           | Some n =>
               match Nat.eq_dec (length an) (length (idents n.(n_out))) with
               | left eqan =>
                   eq_rect_r nprod
-                    (ss_of_env (idents n.(n_out)) (envF i (env_of_ss (idents n.(n_in)) ss)))
+                    (ss_of_env (idents n.(n_out)) (envG i (env_of_ss (idents n.(n_in)) ss)))
                     eqan
               | _ => nprod_const (err error_Ty) _
               end
@@ -850,7 +849,7 @@ Lemma denot_exp_eq :
       | _ => nprod_const (err error_Ty) _
       end.
 Proof.
-  destruct e; auto; intros envF envI bs env.
+  destruct e; auto; intros envG envI bs env.
   - (* Evar *)
     unfold denot_exp, denot_exp_, denot_var at 1.
     cases.
@@ -957,12 +956,12 @@ Defined.
 Section Equation_spec.
 
 Lemma denot_equation_eq :
-  forall ins xs es envF envI bs env x,
-    denot_equation ins (xs,es) envF envI bs env x
+  forall ins xs es envG envI bs env x,
+    denot_equation ins (xs,es) envG envI bs env x
     = if Nat.eq_dec (length xs) (list_sum (List.map numstreams es))
       then
         if mem_ident x ins then envI x else
-         let ss := denot_exps ins es envF envI bs env in
+         let ss := denot_exps ins es envG envI bs env in
          match mem_nth xs x with
          | None => DS_const (err error_Ty)
          | Some n => get_nth n ss
@@ -1072,14 +1071,14 @@ Definition denot_node2 (n : node) :
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
   apply curry.
   refine ((denot_node n @3_ _) _ _).
-  - exact (FST _ _). (* envF *)
+  - exact (FST _ _). (* envG *)
   - exact (SND _ _). (* envI *)
   - exact (bss (idents (n_in n)) @_ SND _ _).
 Defined.
 
-Lemma denot_node2_eq : forall n envF envI,
-    denot_node2 n envF envI =
-      denot_node n envF envI (bss (idents n.(n_in)) envI).
+Lemma denot_node2_eq : forall n envG envI,
+    denot_node2 n envG envI =
+      denot_node n envG envI (bss (idents n.(n_in)) envI).
 Proof.
   trivial.
 Qed.
@@ -1099,10 +1098,10 @@ Section Global.
   Defined.
 
   Lemma denot_global_eq :
-    forall G envF f envI,
-      denot_global_ G envF f envI =
+    forall G envG f envI,
+      denot_global_ G envG f envI =
         match find_node f G with
-        | Some n => FIXP _ (denot_node2 G n envF envI)
+        | Some n => FIXP _ (denot_node2 G n envG envI)
         | None => env_err_ty
         end.
   Proof.
