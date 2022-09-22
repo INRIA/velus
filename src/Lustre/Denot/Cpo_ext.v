@@ -119,6 +119,19 @@ Proof.
   firstorder.
 Qed.
 
+(* TODO: utiliser plus souvent ? *)
+(** like [fixp_ind], keeping in mind we are starting from 0 so
+      we can use x <= F x in the reasoning *)
+Lemma fixp_ind_le : forall (D:cpo)(F:D -m> D)(P:D->Type),
+    admissible P -> P 0 -> (forall x, P x -> x <= F x -> P (F x)) -> P (fixp F).
+Proof.
+  intros; unfold fixp.
+  apply X; intros.
+  assert (forall n, iter_ F n <= iter_ F (S n)).
+  intro m; induction m; simpl; auto.
+  induction n; simpl; firstorder.
+Qed.
+
 Lemma admissible_and :
   forall (D:cpo) (P Q : D -> Prop),
     admissible P ->

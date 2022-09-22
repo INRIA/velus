@@ -1034,18 +1034,6 @@ Module Type LDENOTINF
 
   End Denot_global_cons.
 
-  (* TODO: move, utiliser ? *)
-  (** like [fixp_ind], keeping in mind we are starting from 0 so
-      we can use x <= F x in the reasoning *)
-  Lemma fixp_ind_le : forall  (D:cpo)(F:D -m> D)(P:D->Type),
-      admissible P -> P 0 -> (forall x, P x -> x <= F x -> P (F x)) -> P (fixp F).
-    intros; unfold fixp.
-    apply X; intros.
-    assert (forall n, iter_ F n <= iter_ F (S n)).
-    intro m; induction m; simpl; auto.
-    induction n; simpl; firstorder.
-  Defined.
-
 
   (** Using the well-ordered property of programs, show that all nodes
       receiving streams of length n outputs streams of length n. *)
