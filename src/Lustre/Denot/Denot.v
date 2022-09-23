@@ -824,14 +824,14 @@ Lemma denot_exp_eq :
               eq_rect_r nprod (llift _ (swhenv k) ss (denot_var ins envI env x)) eqn
           | _ => nprod_const (err error_Ty) _
           end
-      | Eapp i es er an =>
+      | Eapp f es er an =>
           let ss := denot_exps ins es envG envI bs env in
-          match find_node i G with
+          match find_node f G with
           | Some n =>
               match Nat.eq_dec (length an) (length (idents n.(n_out))) with
               | left eqan =>
                   eq_rect_r nprod
-                    (ss_of_env (idents n.(n_out)) (envG i (env_of_ss (idents n.(n_in)) ss)))
+                    (ss_of_env (idents n.(n_out)) (envG f (env_of_ss (idents n.(n_in)) ss)))
                     eqan
               | _ => nprod_const (err error_Ty) _
               end
@@ -892,9 +892,9 @@ Proof.
     end.
     unfold eq_rect_r, eq_rect, eq_sym; cases.
   - (* Eapp *)
-    rename l into es, l0 into er, l1 into anns.
+    rename l into es, l0 into er, l1 into anns, i into f.
     unfold denot_exp, denot_exp_ at 1.
-    destruct (find_node i G) as [n|]; auto.
+    destruct (find_node f G) as [n|]; auto.
     destruct (Nat.eq_dec _ _); auto.
     unfold denot_exps.
     match goal with
