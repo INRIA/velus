@@ -115,7 +115,13 @@ Qed.
 
 (** ** TODO: description *)
 Section Op_correct.
-Variables (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI).
+Variables
+  (G : global)
+  (ins : list ident)
+  (envG : Dprodi FI)
+  (envI : DS_prod SI)
+  (bs : DS bool)
+  (env : DS_prod SI).
 
 (* TODO: move? *)
 Definition DSForall_pres {A} (P : A -> Prop) : DS (sampl A) -> Prop :=
@@ -147,7 +153,7 @@ Inductive op_correct_exp : exp -> Prop :=
     (forall (* ss *) ty,
         typeof e = [ty] ->
         (* denot_exp ins e envI bs env = ss -> *)
-        forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) (denot_exp ins e envI bs env)
+        forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) (denot_exp G ins e envG envI bs env)
     ) ->
     op_correct_exp (Eunop op e ann)
 | opc_Efby :
@@ -159,9 +165,13 @@ Inductive op_correct_exp : exp -> Prop :=
   forall es x k anns,
     Forall op_correct_exp es ->
     op_correct_exp (Ewhen es x k anns)
+| opc_Eapp :
+  forall f es anns,
+    (* TODO : quelles hypothèses ? *)
+    op_correct_exp (Eapp f es [] anns)
 .
 
-Definition op_correct {PSyn prefs} (n : @node PSyn prefs) : Prop :=
+Definition op_correct (n : node) : Prop :=
   match n.(n_block) with
   | Beq (xs,es) => Forall op_correct_exp es
   | _ => True
@@ -203,7 +213,13 @@ End SafeDS.
 Section exp_safe.
 
   Variable Γ : static_env.
-  Variables (ins : list ident) (envI : DS_prod SI) (bs : DS bool) (env : DS_prod SI).
+  Variables
+    (G : global)
+    (ins : list ident)
+    (envG : Dprodi FI)
+    (envI : DS_prod SI)
+    (bs : DS bool)
+    (env : DS_prod SI).
 
   (** abstract_clock *)
   Definition AC : DS (sampl value) -C-> DS bool :=
@@ -788,8 +804,8 @@ Section exp_safe.
 
   Lemma Forall_denot_exps :
     forall P ins es envI bs env,
-      forall_nprod P (denot_exps ins es envI bs env)
-      <-> Forall (fun e => forall_nprod  P (denot_exp ins e envI bs env)) es.
+      forall_nprod P (denot_exps G ins es envG envI bs env)
+      <-> Forall (fun e => forall_nprod  P (denot_exp G ins e envG envI bs env)) es.
   Proof.
     induction es; intros; simpl; split; auto.
     - intro Hs. setoid_rewrite denot_exps_eq in Hs.
@@ -805,8 +821,8 @@ Section exp_safe.
   (* TODO: généraliser... ? *)
   Lemma Forall_ty_exp :
     forall es,
-      Forall (fun e => Forall2 ty_DS (typeof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
-      Forall2 ty_DS (typesof es) (list_of_nprod (denot_exps ins es envI bs env)).
+      Forall (fun e => Forall2 ty_DS (typeof e) (list_of_nprod (denot_exp G ins e envG envI bs env))) es ->
+      Forall2 ty_DS (typesof es) (list_of_nprod (denot_exps G ins es envG envI bs env)).
   Proof.
     induction 1.
     - simpl; auto.
@@ -818,8 +834,8 @@ Section exp_safe.
   (* TODO: généraliser... ? *)
   Lemma Forall_cl_exp :
     forall es,
-      Forall (fun e => Forall2 cl_DS (clockof e) (list_of_nprod (denot_exp ins e envI bs env))) es ->
-      Forall2 cl_DS (clocksof es) (list_of_nprod (denot_exps ins es envI bs env)).
+      Forall (fun e => Forall2 cl_DS (clockof e) (list_of_nprod (denot_exp G ins e envG envI bs env))) es ->
+      Forall2 cl_DS (clocksof es) (list_of_nprod (denot_exps G ins es envG envI bs env)).
   Proof.
     induction 1.
     - simpl; auto.
@@ -835,12 +851,12 @@ Section exp_safe.
 
   Lemma safe_exp_ :
     safe_env ->
-    forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
+    forall (e : exp),
       restr_exp e ->
       wt_exp G Γ e ->
       wc_exp G Γ e ->
-      op_correct_exp ins envI bs env e ->
-      let ss := denot_exp ins e envI bs env in
+      op_correct_exp G ins envG envI bs env e ->
+      let ss := denot_exp G ins e envG envI bs env in
       Forall2 ty_DS (typeof e) (list_of_nprod ss)
       /\ Forall2 cl_DS (clockof e) (list_of_nprod ss)
       /\ forall_nprod safe_DS ss.
@@ -862,7 +878,7 @@ Section exp_safe.
       find_specialize_in H13.
       rewrite denot_exp_eq.
       revert IHe H13.
-      generalize (denot_exp ins e envI bs env).
+      generalize (denot_exp G ins e envG envI bs env).
       take (typeof e = _) and rewrite it.
       take (numstreams e = _) and rewrite it.
       simpl; intro s; autorewrite with cpodb.
@@ -878,7 +894,7 @@ Section exp_safe.
       apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H, H0; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H, H0; auto.
       apply Forall_and_inv in H as [Wt0 H'], H0 as [Wt H0'].
       apply Forall_and_inv in H' as [Wc0 Sf0], H0' as [Wc Sf].
       apply Forall_ty_exp in Wt0, Wt.
@@ -886,8 +902,8 @@ Section exp_safe.
       apply Forall_denot_exps, forall_nprod_Forall in Sf0, Sf.
       rewrite denot_exp_eq.
       revert Wt0 Wt Wc0 Wc Sf0 Sf.
-      generalize (denot_exps ins e0s envI bs env).
-      generalize (denot_exps ins es envI bs env).
+      generalize (denot_exps G ins e0s envG envI bs env).
+      generalize (denot_exps G ins es envG envI bs env).
       rewrite annots_numstreams in *.
       simpl; intros; cases; try congruence.
       unfold eq_rect_r, eq_rect; destruct e, e0; simpl.
@@ -913,7 +929,7 @@ Section exp_safe.
       apply Forall_impl_inside with (P := restr_exp) in H; auto.
       apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
       apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
       apply Forall_and_inv in H as [Wt H'].
       apply Forall_and_inv in H' as [Wc Sf].
       apply Forall_ty_exp in Wt.
@@ -921,7 +937,7 @@ Section exp_safe.
       apply Forall_denot_exps, forall_nprod_Forall in Sf.
       rewrite denot_exp_eq.
       revert Wt Wc Sf.
-      generalize (denot_exps ins es envI bs env).
+      generalize (denot_exps G ins es envG envI bs env).
       rewrite annots_numstreams in *.
       simpl; intros; cases; try congruence.
       unfold eq_rect_r, eq_rect; destruct e; simpl.
@@ -937,16 +953,18 @@ Section exp_safe.
       + eapply forall_nprod_llift with (Q := fun s => cl_DS ck s /\ safe_DS s).
         { intros ? []. eapply safe_swhenv. eauto. }
         apply forall_nprod_and; auto using Forall_forall_nprod.
-  Qed.
+    - (* Eapp *)
+      admit.
+  Admitted.
 
   Corollary safe_exp :
     safe_env ->
-    forall {PSyn Prefs} (G : @global PSyn Prefs) (e : exp),
+    forall (e : exp),
       restr_exp e ->
       wt_exp G Γ e ->
       wc_exp G Γ e ->
-      op_correct_exp ins envI bs env e ->
-      let ss := denot_exp ins e envI bs env in
+      op_correct_exp G ins envG envI bs env e ->
+      let ss := denot_exp G ins e envG envI bs env in
       forall_nprod safe_DS ss.
   Proof.
     intros.
@@ -955,12 +973,12 @@ Section exp_safe.
 
   Lemma safe_exps_ :
     safe_env ->
-    forall {PSyn Prefs} (G : @global PSyn Prefs) (es : list exp),
+    forall (es : list exp),
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp ins envI bs env) es ->
-      let ss := denot_exps ins es envI bs env in
+      Forall (op_correct_exp G ins envG envI bs env) es ->
+      let ss := denot_exps G ins es envG envI bs env in
       Forall2 ty_DS (typesof es) (list_of_nprod ss)
       /\ Forall2 cl_DS (clocksof es) (list_of_nprod ss)
       /\ forall_nprod safe_DS ss.
@@ -977,12 +995,12 @@ Section exp_safe.
 
   Corollary safe_exps :
     safe_env ->
-    forall {PSyn Prefs} (G : @global PSyn Prefs) (es : list exp),
+    forall (es : list exp),
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
-      Forall (op_correct_exp ins envI bs env) es ->
-      let ss := denot_exps ins es envI bs env in
+      Forall (op_correct_exp G ins envG envI bs env) es ->
+      let ss := denot_exps G ins es envG envI bs env in
       forall_nprod safe_DS ss.
   Proof.
     intros.
@@ -1132,11 +1150,11 @@ Qed.
 (* op_correct est donné par hypothèse sur l'environment final,
    mais on aura besoin de l'avoir à chaque itération *)
 Lemma op_correct_exp_le :
-  forall ins envI bs env env',
+  forall G ins envG envI bs env env',
     env <= env' ->
     forall e,
-      op_correct_exp ins envI bs env' e ->
-      op_correct_exp ins envI bs env e.
+      op_correct_exp G ins envG envI bs env' e ->
+      op_correct_exp G ins envG envI bs env e.
 Proof.
   intros * Le.
   induction e using exp_ind2; intros Hop; inv Hop;
@@ -1150,18 +1168,18 @@ Proof.
 Qed.
 
 Lemma oc_exp_admissible_rev :
-  forall ins envI bs e,
-    admissible_rev _ (fun env => op_correct_exp ins envI bs env e).
+  forall G ins envG envI bs e,
+    admissible_rev _ (fun env => op_correct_exp G ins envG envI bs env e).
 Proof.
   intros ???????.
   eauto using op_correct_exp_le.
 Qed.
 
 Lemma oc_exps_admissible_rev :
-  forall ins envI bs es,
-    admissible_rev _ (fun env => Forall (op_correct_exp ins envI bs env) es).
+  forall G ins envG envI bs es,
+    admissible_rev _ (fun env => Forall (op_correct_exp G ins envG envI bs env) es).
 Proof.
-  intros ????? Hf.
+  intros ??????? Hf.
   induction es; intros; auto.
   inv Hf.
   constructor; eauto using op_correct_exp_le.
@@ -1195,34 +1213,33 @@ Proof.
 Qed.
 
 Theorem safe_equ :
-  forall {PSyn Prefs} (G : @global PSyn Prefs),
-  forall Γ ins envI bs xs es,
+  forall G Γ ins envG envI bs xs es,
     Forall restr_exp es ->
     NoDupMembers Γ ->
     Permutation (List.map fst Γ) (ins ++ xs) ->
     wc_equation G Γ (xs,es) ->
     wt_equation G Γ (xs,es) ->
     safe_env Γ ins envI bs 0 ->
-    let env := FIXP (DS_prod SI) (denot_equation ins (xs,es) envI bs) in
-    Forall (op_correct_exp ins envI bs env) es ->
+    let env := FIXP (DS_prod SI) (denot_equation G ins (xs,es) envG envI bs) in
+    Forall (op_correct_exp G ins envG envI bs env) es ->
     safe_env Γ ins envI bs env.
 Proof.
-  intros ??????? xs es Hr Nd Hperm Hwc Hwt S0 env Hop; subst env.
+  intros ?????? xs es Hr Nd Hperm Hwc Hwt S0 env Hop; subst env.
   rewrite FIXP_fixp.
-  (* on renforce un peur l'induction car on a besoin de la croissance de
+  (* on renforce un peu l'induction car on a besoin de la croissance de
      l'environnement à chaque coup de denot_equation *)
   (* TODO: il y a peut-être plus joli à faire *)
   apply fixp_inv2 with
     (Q := fun env =>
-             Forall (op_correct_exp ins envI bs env) es)
+             Forall (op_correct_exp G ins envG envI bs env) es)
     (P' := fun env =>
-             env <= denot_equation ins (xs,es) envI bs env
+             env <= denot_equation G ins (xs,es) envG envI bs env
              /\ safe_env Γ ins envI bs env);
     try tauto; auto using safe_env_admissible, oc_exps_admissible_rev.
   clear Hop.
   intros env (Le & Safe) Hop.
   split; eauto using fmon_le_compat; auto.
-  inv Hwt. inv Hwc. { inversion Hr as [|?? HH]; inv HH. }
+  inv Hwt. inv Hwc. { admit. (* TODO: comment interdire ce cas-là ? *) }
   assert (length xs = list_sum (List.map numstreams es))
     by (rewrite <- annots_numstreams, <- length_typesof_annots;
         eauto using Forall2_length).
@@ -1256,7 +1273,7 @@ Proof.
   - (* erreur *)
     exfalso.
     destruct Hperm; eauto using mem_ident_false, mem_nth_nin.
-Qed.
+Admitted.
 
 End LDENOTSAFE.
 
