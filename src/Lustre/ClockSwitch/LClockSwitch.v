@@ -4,7 +4,7 @@ From Velus Require Import Clocks.
 From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import Lustre.StaticEnv.
 From Velus Require Import Lustre.LSyntax Lustre.LTyping Lustre.LClocking.
-From Velus Require Import Lustre.LCausality Lustre.LOrdered.
+From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics LClockedSemantics.
 From Velus Require Import Lustre.ClockSwitch.ClockSwitch.
 From Velus Require Import Lustre.ClockSwitch.CSTyping.

@@ -462,10 +462,10 @@ Section Dfs.
   Definition deeper : dfs_state -> dfs_state -> Prop :=
     ltof _ max_depth_remaining.
 
-  Lemma wf_deeper: well_founded deeper.
-  Proof.
-    apply well_founded_ltof.
-  Defined.
+  (* Lemma wf_deeper: well_founded deeper. *)
+  (* Proof. *)
+  (*   apply well_founded_ltof. *)
+  (* Defined. *)
 
   Lemma add_deeper:
     forall x s P,
@@ -501,14 +501,12 @@ Section Dfs.
   Defined.
   Extraction Inline none_visited.
 
-  Section dfs'_loop.
-    Variable (inp : PS.t)
-      (dfs' : forall x (v : { v | visited inp v }),
-          option { v' | visited inp v' & (In_ps [x] v' /\ PS.Subset (proj1_sig v) v') }).
-
   Program Fixpoint dfs'_loop
-             (zs : list positive)
-             (v : {v | visited inp v }) {struct zs}
+    (inp : PS.t)
+    (dfs' : forall x (v : { v | visited inp v }),
+        option { v' | visited inp v' & (In_ps [x] v' /\ PS.Subset (proj1_sig v) v') })
+    (zs : list positive)
+    (v : {v | visited inp v }) {struct zs}
     : option { v' | visited inp v' & (In_ps zs v' /\ PS.Subset (proj1_sig v) v') }  :=
     match zs with
     | [] => Some (sig2_of_sig v _)
@@ -516,7 +514,7 @@ Section Dfs.
         match dfs' w v with
         | None => None
         | Some (exist2 _ _ v' _ _) =>
-            match dfs'_loop ws (exist _ v' _) with
+            match dfs'_loop inp dfs' ws (exist _ v' _) with
             | None => None
             | Some v'' => Some (sig2_weaken2 _ v'')
             end
@@ -537,8 +535,6 @@ Section Dfs.
   Defined.
   Extraction Inline dfs'_loop.
 
-  End dfs'_loop.
-
   Definition pre_visited_add:
     forall {inp} x
       (v : { v | visited inp v }),
@@ -551,33 +547,28 @@ Section Dfs.
   Defined.
   Extraction Inline pre_visited_add.
 
-  Program Definition dfs'
-     (s : dfs_state)
-     (dfs'' : forall s', deeper s' s ->
-                forall x (v : { v | visited s'.(in_progress) v }),
-                  option { v' | visited s'.(in_progress) v'
-                                & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' })
-     (x : positive)
-     (v : { v | visited s.(in_progress) v })
-    : option { v' | visited s.(in_progress) v'
+  Program Fixpoint dfs' (s : dfs_state) {measure (max_depth_remaining s)} :
+    forall (x : positive) (v : { v | visited s.(in_progress) v }),
+      option { v' | visited s.(in_progress) v'
                     & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
-    match PS.mem x s.(in_progress) with
-    | true => None
-    | false =>
-        match PS.mem x (proj1_sig v) with
-        | true => Some (sig2_of_sig v _)
-        | false =>
-            match (Env.find x graph) with
-            | None => None
-            | Some zs =>
-                let s' := mk_dfs_state (PS.add x s.(in_progress)) _ in
-                match (dfs'_loop s'.(in_progress) (dfs'' s' _) zs (exist _ v _)) with
-                | None => None
-                | Some (exist2 _ _ v' (conj P1 _) _) => Some (exist2 _ _ (PS.add x v') _ _)
-                end
-            end
-        end
-    end.
+    fun x v =>
+      match PS.mem x s.(in_progress) with
+      | true => None
+      | false =>
+          match PS.mem x (proj1_sig v) with
+          | true => Some (sig2_of_sig v _)
+          | false =>
+              match (Env.find x graph) with
+              | None => None
+              | Some zs =>
+                  let s' := mk_dfs_state (PS.add x s.(in_progress)) _ in
+                  match (dfs'_loop s'.(in_progress) (dfs' s' _) zs (exist _ v _)) with
+                  | None => None
+                  | Some (exist2 _ _ v' (conj P1 _) _) => Some (exist2 _ _ (PS.add x v') _ _)
+                  end
+              end
+          end
+      end.
   Next Obligation.
     split; [|reflexivity].
     repeat constructor.
@@ -632,7 +623,7 @@ Section Dfs.
       option { v' | visited PS.empty v' &
                     (In_ps [x] v'
                      /\ PS.Subset (proj1_sig v) v') }
-    := Fix wf_deeper _ dfs' empty_dfs_state.
+    := dfs' empty_dfs_state.
 
 End Dfs.
 
