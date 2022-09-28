@@ -1505,6 +1505,10 @@ Section ElabBlock.
                          ret (e, t)) ini;
         do states <- mmap (fun '(constr, (locs, ablks, unt, unl)) =>
                             do (t, _) <- elab_enum tenv' loc constr;
+                            do unl <- mmap (fun '(e, (t, b), loc) =>
+                                             do (t, _) <- elab_enum tenv' loc t;
+                                             do e <- elab_transition_cond env nenv e loc;
+                                             ret (e, (t, b))) unl;
                             do env <- elab_var_decls tenv loc env locs;
                             do locs <- mmap (annotate tenv extenv nenv env) locs;
                             do _ <- mmap (check_atom loc) (map fst locs);
@@ -1513,10 +1517,6 @@ Section ElabBlock.
                                              do (t, _) <- elab_enum tenv' loc t;
                                              do e <- elab_transition_cond env nenv e loc;
                                              ret (e, (t, b))) unt;
-                            do unl <- mmap (fun '(e, (t, b), loc) =>
-                                             do (t, _) <- elab_enum tenv' loc t;
-                                             do e <- elab_transition_cond env nenv e loc;
-                                             ret (e, (t, b))) unl;
                             do caus <- mmap (fun x => do cx <- fresh_ident; ret (x, cx)) (PSP.to_list xs);
                             ret ((t, constr), Branch caus (unl, (Scope locs (blks, unt))))
                       ) states;
@@ -1946,7 +1946,7 @@ Section ElabDeclaration.
       apply mmap_values, Forall2_ignore1 in Hbind0. simpl_Forall; repeat monadInv.
       repeat constructor.
       + eapply mmap_check_atom_AtomOrGensym; eauto.
-      + apply mmap_values, Forall2_ignore1 in Hbind6. simpl_Forall; eauto.
+      + apply mmap_values, Forall2_ignore1 in Hbind7. simpl_Forall; eauto.
     - (* local *)
       repeat constructor.
       + eapply mmap_check_atom_AtomOrGensym; eauto.
