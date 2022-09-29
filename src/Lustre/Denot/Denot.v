@@ -636,10 +636,10 @@ Definition env_of_ss (ins : list ident) {n} : nprod n -C-> DS_prod SI :=
            end).
 (* extraire une liste de flots d'un environment *)
 Definition ss_of_env (outs : list ident) : DS_prod SI -C-> nprod (length outs).
-  induction outs as [| x [| y]].
+  induction outs as [| x []].
   - apply CTE, (DS_const (err error_Ty)).
   - apply (PROJ _ x).
-  - apply ((PAIR _ _ @2_ PROJ _ y) IHouts).
+  - apply ((PAIR _ _ @2_ PROJ _ x) IHouts).
 Defined.
 
 Definition denot_exp_ (ins : list ident)
