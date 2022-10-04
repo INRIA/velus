@@ -848,9 +848,29 @@ Section exp_safe.
 (* TODO: renommer la section *)
 End exp_safe.
 
-Section ÀTRIER.
+Section ÀDÉPLACER.
 
-  (* TODO: mutualiser SDtoRel  *)
+  (** dans CommonList ? *)
+
+  Lemma in_app_weak' :
+    forall A (x : A) l l',
+      In x l' -> In x (l ++ l').
+  Proof.
+    intros. apply in_app; auto.
+  Qed.
+
+  Lemma nth_In' :
+    forall A n (l:list A) (x d : A),
+      n < length l ->
+      nth n l d = x ->
+      In x l.
+  Proof.
+    induction n; destruct l; simpl; intros * Hn Hl; try now inv Hn.
+    - intro; subst; auto.
+    - eauto with arith.
+  Qed.
+
+  (* TODO: mutualiser SDtoRel *)
   Lemma NoDup_senv :
     forall (nd : node),
       NoDupMembers (senv_of_inout (n_in nd ++ n_out nd)).
@@ -860,6 +880,8 @@ Section ÀTRIER.
     rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers.
     apply n_nodup.
   Qed.
+
+  (** dans StaticEnv ? *)
 
   Lemma senv_of_inout_app :
     forall l1 l2,
@@ -899,14 +921,6 @@ Section ÀTRIER.
     now destruct (NoDup_app_In _ _ _ Hnd Hin).
   Qed.
 
-  (* TODO: inutile? *)
-  Lemma list_of_nprod_skip :
-    forall n (p : nprod (S n)),
-      list_of_nprod (nprod_skip p) = List.tl (list_of_nprod p).
-  Proof.
-    intros; simpl; cases.
-  Qed.
-
   Lemma Cl_senv :
     forall (n : node) x ck,
       HasClock (senv_of_inout (n_in n)) x ck ->
@@ -922,8 +936,61 @@ Section ÀTRIER.
     inv H; eauto.
   Qed.
 
+  Lemma senv_HasType :
+    forall l x ty ck i,
+      In (x,(ty,ck,i)) l ->
+      HasType (senv_of_inout l) x ty.
+  Proof.
+    intros * Hin.
+    unfold senv_of_inout.
+    econstructor; eauto.
+    apply in_map_iff.
+    exists (x,(ty,ck,i)); auto. auto.
+  Qed.
+
+  Lemma senv_HasClock :
+    forall l x ty ck i,
+      In (x,(ty,ck,i)) l ->
+      HasClock (senv_of_inout l) x ck.
+  Proof.
+    intros * Hin.
+    unfold senv_of_inout.
+    econstructor; eauto.
+    apply in_map_iff.
+    exists (x,(ty,ck,i)); auto. auto.
+  Qed.
+
+  Lemma In_HasType :
+    forall x l, In x (idents l) ->
+           exists ty, HasType (senv_of_inout l) x ty.
+  Proof.
+    unfold idents, senv_of_inout.
+    intros * Hin.
+    apply in_map_iff in Hin as ((?&(ty,?)&?)&?&?); simpl in *; subst.
+    exists ty.
+    econstructor.
+    rewrite in_map_iff.
+    esplit; split; now eauto.
+    reflexivity.
+  Qed.
+
+  (** dans LSyntax ? *)
+  Lemma not_in_out :
+    forall (n : node) x,
+      In x (List.map fst (n_in n)) ->
+      In x (List.map fst (n_out n)) ->
+      False.
+  Proof.
+    intros * Hin Hout.
+    pose proof (node_NoDup n) as ND.
+    rewrite map_app in ND.
+    eapply NoDup_app_In; eauto.
+  Qed.
+
+  (** dans denot ? *)
+
   Lemma env_of_ss_nth :
-    forall l {n} (np : nprod n) k x,
+    forall l n (np : nprod n) k x,
       mem_nth l x = Some k ->
       env_of_ss l np x = get_nth k np.
   Proof.
@@ -964,7 +1031,7 @@ Section ÀTRIER.
   Lemma mem_ident_nth :
     forall l x,
       mem_ident x l = true ->
-      exists k, k < length l /\ mem_nth l x = Some k.
+      exists k, mem_nth l x = Some k.
   Proof.
     intros * Hm.
     induction l; simpl in *; try congruence.
@@ -972,18 +1039,7 @@ Section ÀTRIER.
     exists O; auto with arith.
     apply Bool.orb_prop in Hm as [Hm|Hm].
     apply ident_eqb_eq in Hm; congruence.
-    destruct IHl as [? (?&->)]; simpl; eauto with arith.
-  Qed.
-
-  (* TODO: move, rename *)
-  Lemma mem_nth_Some' :
-    forall x l k,
-      mem_nth l x = Some k ->
-      nth_error l k = Some x.
-  Proof.
-    induction l; simpl; intros * Hm; cases; try congruence.
-    apply option_map_inv in Hm as (?&?&?); subst.
-    simpl; eauto.
+    destruct IHl as [? ->]; simpl; eauto with arith.
   Qed.
 
   Lemma nth_ss_of_env :
@@ -996,30 +1052,6 @@ Section ÀTRIER.
     - destruct k; auto. simpl in *; lia.
     - destruct k; simpl; auto.
       setoid_rewrite IHl; now auto with arith.
-  Qed.
-
-  Lemma senv_HasType :
-    forall l x ty ck i,
-      In (x,(ty,ck,i)) l ->
-      HasType (senv_of_inout l) x ty.
-  Proof.
-    intros * Hin.
-    unfold senv_of_inout.
-    econstructor; eauto.
-    apply in_map_iff.
-    exists (x,(ty,ck,i)); auto. auto.
-  Qed.
-
-  Lemma senv_HasClock :
-    forall l x ty ck i,
-      In (x,(ty,ck,i)) l ->
-      HasClock (senv_of_inout l) x ck.
-  Proof.
-    intros * Hin.
-    unfold senv_of_inout.
-    econstructor; eauto.
-    apply in_map_iff.
-    exists (x,(ty,ck,i)); auto. auto.
   Qed.
 
   (* TODO: move, remplacer celui de InftyProof par lui *)
@@ -1036,69 +1068,7 @@ Section ÀTRIER.
       + apply IHl. clear - Hp. firstorder.
   Qed.
 
-  Lemma In_HasType :
-    forall x l, In x (idents l) ->
-           exists ty, HasType (senv_of_inout l) x ty.
-  Proof.
-    unfold idents, senv_of_inout.
-    intros * Hin.
-    apply in_map_iff in Hin as ((?&(ty,?)&?)&?&?); simpl in *; subst.
-    exists ty.
-    econstructor.
-    rewrite in_map_iff.
-    esplit; split; now eauto.
-    reflexivity.
-  Qed.
-
-  (* TODO: useless *)
-  Lemma Forall2_forall2_error :
-    forall {A B} (P : A -> B -> Prop) l1 l2,
-      Forall2 P l1 l2
-      <->  forall  n,
-        orel2 P (nth_error l1 n) (nth_error l2 n).
-  Proof.
-    intros A B P l1. induction l1; intro l2.
-    - split; intro H.
-      + inv H. destruct n; simpl; constructor.
-      + specialize (H O). simpl in H. cases.
-    - split; intro H.
-      + inv H. rewrite IHl1 in *.
-        destruct n; simpl; eauto; now constructor.
-      + destruct l2. specialize (H O); inv H.
-        constructor.
-        * specialize (H O). now inv H.
-        * apply IHl1. intro n. specialize (H (S n)).
-          inv H; constructor; auto.
-  Qed.
-
-  Lemma in_app_weak' :
-    forall {A} (x : A) l l',
-      In x l' -> In x (l ++ l').
-  Proof.
-    intros. apply in_app; auto.
-  Qed.
-
-  Lemma nth_In' :
-    forall {A} (n:nat) (l:list A) (x d:A), n < length l -> nth n l d = x -> In x l.
-  Proof.
-    induction n; destruct l; simpl; intros * Hn Hl; try now inv Hn.
-    - intro; subst; auto.
-    - eauto with arith.
-  Qed.
-
-  Lemma not_in_out :
-    forall (n : node) x,
-      In x (List.map fst (n_in n)) ->
-      In x (List.map fst (n_out n)) ->
-      False.
-  Proof.
-    intros * Hin Hout.
-    pose proof (node_NoDup n) as ND.
-    rewrite map_app in ND.
-    eapply NoDup_app_In; eauto.
-  Qed.
-
-End ÀTRIER.
+End ÀDÉPLACER.
 
 
 (* TODO: renommer la section *)
@@ -1292,7 +1262,8 @@ Section Exp_safe.
     unfold denot_var.
     (* seul le cas où x est une entrée nous intéresse *)
     cases_eqn Hxin. 2: apply DSForall_bot.
-    apply mem_ident_nth in Hxin as (k & Hk & Hl).
+    apply mem_ident_nth in Hxin as (k & Hl).
+    apply mem_nth_Some in Hl as Hk; eauto.
     unfold idents in Hk.
     rewrite map_length in Hk.
     erewrite env_of_ss_nth; eauto.
