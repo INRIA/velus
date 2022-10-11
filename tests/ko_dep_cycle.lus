@@ -1,0 +1,6 @@
+node f(i : int) returns (x, y, z : int)
+let
+    x = i + z;
+    y = x / 2;
+    z = y + 1;
+tel

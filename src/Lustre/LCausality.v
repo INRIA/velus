@@ -879,12 +879,68 @@ Module Type LCAUSALITY
                 (n_block n) in
     Env.union_fuse PS.union vo (Env.from_list (map (fun '(_, (_, _, cx)) => (cx, PS.empty)) (n_in n))).
 
+  Section msgs_of_labels.
+    (** Generate an error message for each causality label in the block/node *)
+
+    Definition msgs_of_loc (x : ident * (type * clock * ident * option (exp * ident))) :=
+      let '(x, (_, _, cx, o)) := x in
+      (cx, [CTX x])::
+        (match o with
+         | None => []
+         | Some (_, clx) => [(clx, [MSG "last "; CTX x])]
+         end).
+
+    Definition msg_of_caus (tag : ident) (x : ident * ident) :=
+      let '(x, cx) := x in
+      (cx, CTX x::MSG "(" :: CTX tag :: msg ")").
+
+    Definition enum_nth_constructor (ty : type) k :=
+      match ty with
+      | Tenum _ tys => List.nth k tys xH
+      | _ => xH (* Should not happen *)
+      end.
+
+    Fixpoint msgs_of_local_labels (blk : block) : Env.t errmsg :=
+      match blk with
+      | Beq _ => Env.empty _
+      | Breset blks _ => Env.unions (map msgs_of_local_labels blks)
+      | Bswitch e brs =>
+          let ty := List.hd bool_velus_type (typeof e) in
+          Env.unions (map (fun '(k, Branch caus blks) =>
+                             let tag := enum_nth_constructor ty k in
+                             Env.union
+                               (Env.from_list (map (msg_of_caus tag) caus))
+                               (Env.unions (map msgs_of_local_labels blks))) brs)
+      | Bauto _ _ _ states =>
+          Env.unions (map (fun '((_, tag), Branch caus (_, Scope locs (blks, _))) =>
+                             Env.union
+                               (Env.union
+                                  (Env.from_list (map (msg_of_caus tag) caus))
+                                  (Env.from_list (flat_map msgs_of_loc locs)))
+                               (Env.unions (map msgs_of_local_labels blks))
+                        ) states)
+      | Blocal (Scope locs blks) =>
+          Env.union
+            (Env.from_list (flat_map msgs_of_loc locs))
+            (Env.unions (map msgs_of_local_labels blks))
+      end.
+
+    Definition msgs_of_inout (x : ident * (type * clock * ident)) :=
+      let '(x, (_, _, cx)) := x in
+      (cx, [CTX x]).
+
+    Definition msgs_of_labels {PSyn prefs} (n : @node PSyn prefs) : Env.t errmsg :=
+      Env.union (Env.from_list (map msgs_of_inout (n_in n ++ n_out n)))
+        (msgs_of_local_labels (n_block n)).
+
+  End msgs_of_labels.
+
   Definition check_node_causality {PSyn prefs} (n : @node PSyn prefs) : res unit :=
     let idcaus := (map snd (idcaus (n_in n ++ n_out n) ++ idcaus_of_locals (n_block n))) in
     let graph := build_graph n in
     if check_nodup idcaus
        && PS.equal (PSP.of_list idcaus) (PSP.of_list (map fst (Env.elements graph))) then
-      match build_acyclic_graph (Env.map PSP.to_list graph) with
+      match build_acyclic_graph (Env.map PSP.to_list graph) (fun _ => msgs_of_labels n) with
       | OK _ => OK tt
       | Error msg => Error (MSG "Node " :: (CTX (n_name n)) :: MSG " : " :: msg)
       end

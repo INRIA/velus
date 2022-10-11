@@ -514,8 +514,8 @@ Section Dfs.
   Extraction Inline pre_visited_add.
 
   Fact fold_dfs_props : forall zs p (v: {v | visited p v}) v'
-      (dfs : forall (x : positive) (v : {v | visited p v}), option {v' | visited p v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v'}),
-      ofold_left (fun v w => obind (dfs w v) (fun v' => Some (sig_of_sig2 v'))) zs (Some v) = Some v' ->
+      (dfs : forall (x : positive) (v : {v | visited p v}), res {v' | visited p v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v'}),
+      fold_left (fun v w => Errors.bind v (fun v => Errors.bind (dfs w v) (fun v' => OK (sig_of_sig2 v')))) zs (OK v) = OK v' ->
       In_ps zs (proj1_sig v') /\ PS.Subset (proj1_sig v) (proj1_sig v').
   Proof.
     intros * Hfold. unfold ofold_left, In_ps in *.
@@ -523,9 +523,9 @@ Section Dfs.
     rewrite Forall_rev.
     revert v v' dfs Hfold. induction (rev zs); intros * Heq; simpl in *; auto.
     - inv Heq. easy.
-    - cases_eqn Heq.
-      specialize (IHl _ _ _ Heq0) as (?&Hsub).
-      apply obind_inversion in Heq as ([?? (?&Hsub')]&Hd&Heq). inv Heq. simpl in *.
+    - apply bind_inversion in Heq as (?&Heq1&Heq2).
+      specialize (IHl _ _ _ Heq1) as (?&Hsub).
+      apply bind_inversion in Heq2 as ([?? (?&Hsub')]&Hd&Heq). inv Heq. simpl in *.
       split.
       + constructor.
         * now apply In_ps_singleton.
@@ -533,22 +533,47 @@ Section Dfs.
       + etransitivity; eauto.
   Qed.
 
-  Program Fixpoint dfs' (s : dfs_state) (x : positive) (v : { v | visited s.(in_progress) v })
+  Section msg_of.
+    Variable msgs : Env.t errmsg.
+
+    Definition msg_of_label (x : ident) :=
+      match Env.find x msgs with
+      | Some msg => msg
+      | None => msg "?"
+      end.
+
+    Fixpoint msg_of_cycle' (stop: ident) (s : list ident) :=
+      match s with
+      | [] => []
+      | x::tl =>
+          if ident_eq_dec x stop then msg_of_label x
+          else (msg_of_label x ++ MSG " -> " :: msg_of_cycle' stop tl)
+      end.
+    Definition msg_of_cycle (s : list ident) :=
+      match s with
+      | [] => []
+      | x::tl => msg_of_label x ++ MSG " -> " :: msg_of_cycle' x tl
+      end.
+  End msg_of.
+
+  Variable get_msgs : unit -> Env.t errmsg.
+
+  Program Fixpoint dfs' (s : dfs_state) (stack : list positive) (x : positive) (v : { v | visited s.(in_progress) v })
     {measure (max_depth_remaining s)} :
-    option { v' | visited s.(in_progress) v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
+    res { v' | visited s.(in_progress) v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
       match PS.mem x s.(in_progress) with
-      | true => None
+      | true => Error (MSG "dependency cycle : " :: msg_of_cycle (get_msgs tt) stack)
       | false =>
           match PS.mem x (proj1_sig v) with
-          | true => Some (sig2_of_sig v _)
+          | true => OK (sig2_of_sig v _)
           | false =>
               match (Env.find x graph) with
-              | None => None
+              | None => Error (CTX x :: msg " not found")
               | Some zs =>
                   let s' := mk_dfs_state (PS.add x s.(in_progress)) _ in
-                  match ofold_left (fun v w => obind (dfs' s' w v) (fun v' => Some (sig_of_sig2 v'))) zs (Some v) with
-                  | None => None
-                  | Some (exist _ v' (conj P1 _)) => Some (exist2 _ _ (PS.add x v') _ _)
+                  match fold_left (fun v w => Errors.bind v (fun v => Errors.bind (dfs' s' (w::stack) w v) (fun v' => OK (sig_of_sig2 v')))) zs (OK v) with
+                  | Error msg => Error msg
+                  | OK (exist _ v' (conj P1 _)) => OK (exist2 _ _ (PS.add x v') _ _)
                   end
               end
           end
@@ -608,29 +633,29 @@ Section Dfs.
 
   Definition dfs
     : forall x (v : { v | visited PS.empty v }),
-      option { v' | visited PS.empty v' &
+      res { v' | visited PS.empty v' &
                     (In_ps [x] v'
                      /\ PS.Subset (proj1_sig v) v') }
-    := dfs' empty_dfs_state.
+    := fun x => dfs' empty_dfs_state [x] x.
 
 End Dfs.
 
-Program Definition build_acyclic_graph (graph : Env.t (list positive)) : res PS.t :=
+Program Definition build_acyclic_graph (graph : Env.t (list positive)) (get_msgs : unit -> Env.t errmsg) : res PS.t :=
   bind (Env.fold (fun x _ vo =>
                     bind vo
-                         (fun v => match dfs graph x v with
-                                | None => Error (msg "Couldn't build acyclic graph")
-                                | Some v => OK (sig_of_sig2 v)
+                         (fun v => match dfs graph get_msgs x v with
+                                | Error msg => Error msg
+                                | OK v => OK (sig_of_sig2 v)
                                 end))
                          graph (OK (none_visited graph)))
                  (fun v => OK _).
 
-Lemma build_acyclic_graph_spec : forall graph v,
-    build_acyclic_graph graph = OK v ->
+Lemma build_acyclic_graph_spec : forall graph msgs v,
+    build_acyclic_graph graph msgs = OK v ->
     exists a, acgraph_of_graph graph v a /\ AcyGraph v a.
 Proof.
   unfold build_acyclic_graph.
-  intros graph v Hcheck.
+  intros * Hcheck.
   monadInv Hcheck. rename EQ into Hfold.
   rename x into v'.
   rewrite Env.fold_1 in Hfold.
@@ -650,7 +675,7 @@ Proof.
     generalize (Env.elements graph) as xs.
     induction xs as [|x xs IH]; [inversion 1; reflexivity|].
     simpl. intros acc v' (* Hacc *) Hfold.
-    destruct (dfs graph (fst x) acc) as [acc'|] eqn:Hacc'; simpl in *.
+    destruct (dfs graph msgs (fst x) acc) as [acc'|] eqn:Hacc'; simpl in *.
     + apply IH in Hfold.
       rewrite <-Hfold.
       apply Subset_ps_adds.

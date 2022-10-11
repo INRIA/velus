@@ -1,0 +1,7 @@
+node f(b : bool) returns (x, y : int)
+let
+    switch b
+    | true do x = 0; y = x;
+    | false do x = y; y = x;
+    end
+tel
