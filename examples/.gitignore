@@ -2,6 +2,8 @@
 *.s
 *.light.c
 *.parsed.lus
+*.nolast.lus
+*.noauto.lus
 *.noswitch.lus
 *.nolocal.lus
 *.sn.lus

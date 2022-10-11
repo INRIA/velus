@@ -501,40 +501,6 @@ Section Dfs.
   Defined.
   Extraction Inline none_visited.
 
-  Program Fixpoint dfs'_loop
-    (inp : PS.t)
-    (dfs' : forall x (v : { v | visited inp v }),
-        option { v' | visited inp v' & (In_ps [x] v' /\ PS.Subset (proj1_sig v) v') })
-    (zs : list positive)
-    (v : {v | visited inp v }) {struct zs}
-    : option { v' | visited inp v' & (In_ps zs v' /\ PS.Subset (proj1_sig v) v') }  :=
-    match zs with
-    | [] => Some (sig2_of_sig v _)
-    | w::ws =>
-        match dfs' w v with
-        | None => None
-        | Some (exist2 _ _ v' _ _) =>
-            match dfs'_loop inp dfs' ws (exist _ v' _) with
-            | None => None
-            | Some v'' => Some (sig2_weaken2 _ v'')
-            end
-        end
-    end.
-  Next Obligation.
-    split.
-    - now apply In_ps_nil.
-    - reflexivity.
-  Defined.
-  Next Obligation.
-    clear Heq_anonymous0.
-    split.
-    - apply Forall_cons; auto.
-      take (PS.Subset _ s) and rewrite <-it.
-      take (In_ps [_] v') and now inv it.
-    - rewrite <-H0. rewrite <-s1. reflexivity.
-  Defined.
-  Extraction Inline dfs'_loop.
-
   Definition pre_visited_add:
     forall {inp} x
       (v : { v | visited inp v }),
@@ -547,11 +513,29 @@ Section Dfs.
   Defined.
   Extraction Inline pre_visited_add.
 
-  Program Fixpoint dfs' (s : dfs_state) {measure (max_depth_remaining s)} :
-    forall (x : positive) (v : { v | visited s.(in_progress) v }),
-      option { v' | visited s.(in_progress) v'
-                    & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
-    fun x v =>
+  Fact fold_dfs_props : forall zs p (v: {v | visited p v}) v'
+      (dfs : forall (x : positive) (v : {v | visited p v}), option {v' | visited p v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v'}),
+      ofold_left (fun v w => obind (dfs w v) (fun v' => Some (sig_of_sig2 v'))) zs (Some v) = Some v' ->
+      In_ps zs (proj1_sig v') /\ PS.Subset (proj1_sig v) (proj1_sig v').
+  Proof.
+    intros * Hfold. unfold ofold_left, In_ps in *.
+    rewrite <-(List.rev_involutive zs), fold_right_rev_left in Hfold.
+    rewrite Forall_rev.
+    revert v v' dfs Hfold. induction (rev zs); intros * Heq; simpl in *; auto.
+    - inv Heq. easy.
+    - cases_eqn Heq.
+      specialize (IHl _ _ _ Heq0) as (?&Hsub).
+      apply obind_inversion in Heq as ([?? (?&Hsub')]&Hd&Heq). inv Heq. simpl in *.
+      split.
+      + constructor.
+        * now apply In_ps_singleton.
+        * simpl_Forall. eapply Hsub'; eauto.
+      + etransitivity; eauto.
+  Qed.
+
+  Program Fixpoint dfs' (s : dfs_state) (x : positive) (v : { v | visited s.(in_progress) v })
+    {measure (max_depth_remaining s)} :
+    option { v' | visited s.(in_progress) v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
       match PS.mem x s.(in_progress) with
       | true => None
       | false =>
@@ -562,9 +546,9 @@ Section Dfs.
               | None => None
               | Some zs =>
                   let s' := mk_dfs_state (PS.add x s.(in_progress)) _ in
-                  match (dfs'_loop s'.(in_progress) (dfs' s' _) zs (exist _ v _)) with
+                  match ofold_left (fun v w => obind (dfs' s' w v) (fun v' => Some (sig_of_sig2 v'))) zs (Some v) with
                   | None => None
-                  | Some (exist2 _ _ v' (conj P1 _) _) => Some (exist2 _ _ (PS.add x v') _ _)
+                  | Some (exist _ v' (conj P1 _)) => Some (exist2 _ _ (PS.add x v') _ _)
                   end
               end
           end
@@ -586,6 +570,9 @@ Section Dfs.
     destruct (pre_visited_add x (exist _ v H) it) as (v', V', Qv'); subst; auto.
   Defined.
   Next Obligation.
+    symmetry in Heq_anonymous.
+    assert (In_ps zs v' /\ (PS.Subset v v')) as (Hins&Hsub).
+    { apply fold_dfs_props in Heq_anonymous. auto. }
     simpl in *. clear Heq_anonymous.
     repeat split.
     - intros y Hyin.
@@ -613,9 +600,10 @@ Section Dfs.
           exists x0. split; eauto using add_after_has_arc1.
   Defined.
   Next Obligation.
-    clear Heq_anonymous. simpl in *. split.
+    simpl in *. split.
     - repeat constructor; auto using PSF.add_1.
-    - eapply PSP.subset_add_2; eauto.
+    - symmetry in Heq_anonymous. apply fold_dfs_props in Heq_anonymous as (?&?).
+      eapply PSP.subset_add_2; eauto.
   Defined.
 
   Definition dfs
