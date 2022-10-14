@@ -406,29 +406,23 @@ Section Dfs.
 
   Variable graph : Env.t (list positive).
 
-  Record dfs_state : Type :=
-    mk_dfs_state {
-        in_progress : PS.t;
-        progress_in_graph : forall x, PS.In x in_progress -> Env.In x graph
-      }.
+  Definition dfs_state := { p | forall x, PS.In x p -> Env.In x graph }.
+  Definition proj1_dfs_state (s : dfs_state) := proj1_sig s.
+  Coercion proj1_dfs_state : dfs_state >-> PS.t.
+  Extraction Inline proj1_dfs_state.
 
-  Extraction Inline in_progress.
-
-  Definition empty_dfs_state :=
-    {| in_progress := PS.empty;
-       progress_in_graph := fun x Hin =>
-                              False_ind (Env.In x graph) (not_In_empty x Hin) |}.
+  Program Definition empty_dfs_state : dfs_state :=
+    exist _ PS.empty _.
   Extraction Inline empty_dfs_state.
 
   Lemma cardinals_in_progress_le_graph:
-    forall a,
-      PS.cardinal a.(in_progress) <= Env.cardinal graph.
+    forall (a : dfs_state),
+      PS.cardinal a <= Env.cardinal graph.
   Proof.
-    intro a.
-    rewrite Env.cardinal_1, PS.cardinal_spec.
+    intros [p Hag].
+    rewrite Env.cardinal_1, PS.cardinal_spec. simpl.
     rewrite <-(map_length fst).
-    pose proof a.(progress_in_graph) as Hag.
-    assert (NoDup (PS.elements (in_progress a))) as Hnds
+    assert (NoDup (PS.elements p)) as Hnds
         by (rewrite NoDup_NoDupA; apply PS.elements_spec2w).
     assert (NoDupMembers (Env.elements graph)) as Hndg
         by (apply Env.NoDupMembers_elements).
@@ -438,7 +432,7 @@ Section Dfs.
     setoid_rewrite fst_InMembers in Hag.
     revert Hag Hnds Hndg.
     generalize (map fst (Env.elements graph)) as g.
-    generalize (PS.elements a.(in_progress)) as n.
+    generalize (PS.elements p) as n.
     induction n as [|x n IH]; auto using le_0_n.
     intros g Hin NDn NDg. simpl.
     inversion_clear NDn as [|?? Hnx NDn'].
@@ -456,29 +450,22 @@ Section Dfs.
     subst; auto.
   Qed.
 
-  Definition max_depth_remaining (s : dfs_state) : nat :=
-    Env.cardinal graph - PS.cardinal s.(in_progress).
+  Definition num_remaining (s : dfs_state) : nat :=
+    Env.cardinal graph - PS.cardinal s.
 
   Definition deeper : dfs_state -> dfs_state -> Prop :=
-    ltof _ max_depth_remaining.
-
-  (* Lemma wf_deeper: well_founded deeper. *)
-  (* Proof. *)
-  (*   apply well_founded_ltof. *)
-  (* Defined. *)
+    ltof _ num_remaining.
 
   Lemma add_deeper:
-    forall x s P,
-      ~ PS.In x (in_progress s) ->
-      deeper {| in_progress := PS.add x (in_progress s);
-                progress_in_graph := P |} s.
+    forall x (s : dfs_state) P,
+      ~ PS.In x s ->
+      deeper (exist _ (PS.add x s) P) s.
   Proof.
-    unfold deeper, ltof, max_depth_remaining.
+    unfold deeper, ltof, num_remaining.
     intros x s Hprog Hnin.
     pose proof (cardinals_in_progress_le_graph s) as Hag.
     pose proof (cardinals_in_progress_le_graph
-                  {| in_progress := PS.add x (in_progress s);
-                     progress_in_graph := Hprog |}) as Hbg.
+                  (exist _ (PS.add x s) Hprog)).
     simpl in *.
     rewrite PSP.add_cardinal_2 with (1:=Hnin) in *.
     lia.
@@ -558,10 +545,10 @@ Section Dfs.
 
   Variable get_msgs : unit -> Env.t errmsg.
 
-  Program Fixpoint dfs' (s : dfs_state) (stack : list positive) (x : positive) (v : { v | visited s.(in_progress) v })
-    {measure (max_depth_remaining s)} :
-    res { v' | visited s.(in_progress) v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
-      match PS.mem x s.(in_progress) with
+  Program Fixpoint dfs' (s : dfs_state) (stack : list positive) (x : positive) (v : { v | visited s v })
+    {measure (num_remaining s)} :
+    res { v' | visited s v' & In_ps [x] v' /\ PS.Subset (proj1_sig v) v' } :=
+      match PS.mem x s with
       | true => Error (MSG "dependency cycle : " :: msg_of_cycle (get_msgs tt) stack)
       | false =>
           match PS.mem x (proj1_sig v) with
@@ -570,7 +557,7 @@ Section Dfs.
               match (Env.find x graph) with
               | None => Error (CTX x :: msg " not found")
               | Some zs =>
-                  let s' := mk_dfs_state (PS.add x s.(in_progress)) _ in
+                  let s' := exist _ (PS.add x s) _ in
                   match fold_left (fun v w => Errors.bind v (fun v => Errors.bind (dfs' s' (w::stack) w v) (fun v' => OK (sig_of_sig2 v')))) zs (OK v) with
                   | Error msg => Error msg
                   | OK (exist _ v' (conj P1 _)) => OK (exist2 _ _ (PS.add x v') _ _)
@@ -584,7 +571,7 @@ Section Dfs.
     apply PSF.mem_2; auto.
   Defined.
   Next Obligation.
-    apply PSF.add_iff in H as [|Hin]; subst; eauto using Env.find_In, progress_in_graph.
+    apply PSF.add_iff in H as [|Hin]; subst; eauto using Env.find_In. apply (proj2_sig s); auto.
   Defined.
   Next Obligation.
     apply add_deeper, PSE.mem_4; auto.
