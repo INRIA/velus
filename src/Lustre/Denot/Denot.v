@@ -1050,35 +1050,49 @@ Definition denot_block (ins : list ident) (b : block) :
   | _ => curry (curry (curry (SND _ _ @_ FST _ _ @_ FST _ _))) (* garder les entrées *)
   end.
 
-Definition denot_node (n : node) :
-  Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI :=
-  denot_block (List.map fst n.(n_in)) n.(n_block).
+(** abstract_clock *)
+Definition AC : DS (sampl value) -C-> DS bool :=
+  MAP (fun v => match v with pres _ => true | _ => false end).
 
+Lemma AC_eq :
+  forall u U,
+    AC (cons u U) == match u with
+                     | pres _ => cons true (AC U)
+                     | _ => cons false (AC U)
+                     end.
+Proof.
+  intros.
+  unfold AC.
+  rewrite MAP_map, map_eq_cons; cases.
+Qed.
 
-(* TODO: move? *)
-Definition is_pres {A} (v : sampl A) := match v with pres _ => true | _ => false end.
+Lemma AC_is_cons :
+  forall U, is_cons (AC U) <-> is_cons U.
+Proof.
+  split; eauto using map_is_cons, is_cons_map.
+Qed.
 
 (* TODO: move? *)
 (* équivalent de clocks_of *)
 Fixpoint bss (ins : list ident) : DS_prod SI -C-> DS bool :=
   match ins with
   | [] => CTE _ _ (DS_const false)
-  | x :: ins => (ZIP orb @2_ bss ins) (MAP is_pres @_ PROJ _ x)
+  | x :: ins => (ZIP orb @2_ (AC @_ PROJ _ x)) (bss ins)
   end.
 
-(* denot_node avec l'horloge de base instanciée par (bss ins) *)
-Definition denot_node2 (n : node) :
+Definition denot_node (n : node) :
+  (* envG -> envI -> env -> env *)
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
   apply curry.
-  refine ((denot_node n @3_ _) _ _).
+  refine ((denot_block (idents n.(n_in)) n.(n_block) @3_ _) _ _).
   - exact (FST _ _). (* envG *)
   - exact (SND _ _). (* envI *)
-  - exact (bss (idents (n_in n)) @_ SND _ _).
+  - exact (bss (idents n.(n_in)) @_ SND _ _).
 Defined.
 
-Lemma denot_node2_eq : forall n envG envI,
-    denot_node2 n envG envI =
-      denot_node n envG envI (bss (idents n.(n_in)) envI).
+Lemma denot_node_eq : forall n envG envI,
+    let ins := idents n.(n_in) in
+    denot_node n envG envI = denot_block ins n.(n_block) envG envI (bss ins envI).
 Proof.
   trivial.
 Qed.
@@ -1093,7 +1107,7 @@ Section Global.
   Definition denot_global_ (G : global) : Dprodi FI -C-> Dprodi FI.
     apply Dprodi_DISTR; intro f.
     destruct (find_node f G).
-    - exact (curry (FIXP _ @_ (denot_node2 G n @2_ FST _ _) (SND _ _))).
+    - exact (curry (FIXP _ @_ (denot_node G n @2_ FST _ _) (SND _ _))).
     - apply CTE, CTE, env_err_ty.
   Defined.
 
@@ -1101,7 +1115,7 @@ Section Global.
     forall G envG f envI,
       denot_global_ G envG f envI =
         match find_node f G with
-        | Some n => FIXP _ (denot_node2 G n envG envI)
+        | Some n => FIXP _ (denot_node G n envG envI)
         | None => env_err_ty
         end.
   Proof.
