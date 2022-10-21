@@ -45,6 +45,7 @@ Module Type TR
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                    OK (CE.Ewhen le x b)
     | L.Elast _ _
+    | L.Eextcall _ _ _
     | L.Efby _ _ _
     | L.Earrow _ _ _
     | L.Ewhen _ _ _ _
@@ -90,7 +91,7 @@ Module Type TR
   Fixpoint add_whens (e: CE.exp) (ty: type) (ck: clock) : CE.exp :=
     match ck with
     | Cbase => e
-    | Con ck' x (_, k) => Ewhen (add_whens e ty ck') x k
+    | Con ck' x (tx, k) => Ewhen (add_whens e ty ck') (x, tx) k
     end.
 
   (** For partial `case`, we add the missing branches *)
@@ -147,6 +148,7 @@ Module Type TR
       end
 
     | L.Elast _ _
+    | L.Eextcall _ _ _
     | L.Emerge _ _ _
     | L.Ecase _ _ _ _
     | L.Efby _ _ _
@@ -228,12 +230,19 @@ Module Type TR
           OK (NL.EqFby x ck c0 le xr)
         | _ => Error (msg "fby equation not normalized")
         end
+      | L.Eextcall f es (tyout, ck) =>
+          match xs with
+          | [x] =>
+              do les <- mmap to_lexp es;
+              OK (NL.EqDef x ck (Eextcall f les tyout))
+          | _ => Error (msg "equation not normalized")
+          end
       | _ =>
         match xs with
         | [x] =>
           do ck <- find_clock env x;
           do ce <- to_cexp e;
-          OK (NL.EqDef x ck ce)
+          OK (NL.EqDef x ck (Ecexp ce))
         | _ => Error (msg "basic equation not normalized")
         end
       end
@@ -318,7 +327,7 @@ Module Type TR
 
   Definition mmap_block_to_equation {PSyn prefs} env envo (n: @L.node PSyn prefs) :
     res { neqs | match n.(L.n_block) with
-                 | L.Blocal (L.Scope locs _ blks) =>
+                 | L.Blocal (L.Scope locs blks) =>
                    do neqs <- mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo []) blks;
                    OK (locs, neqs)
                  | _ => Error (msg "node not normalized")
@@ -327,7 +336,7 @@ Module Type TR
     destruct (L.n_block n); simpl.
     1-4:right; exact (msg "node not normalized").
     destruct s as [? l0].
-    destruct (mmap (block_to_equation (Env.adds' (idty (idty l)) env) envo []) l1).
+    destruct (mmap (block_to_equation (Env.adds' (idty (idty l)) env) envo []) l0).
     left. simpl. eauto.
     right. auto.
   Defined.
@@ -377,16 +386,16 @@ Module Type TR
     pose proof (L.n_defd n) as (vd&Hvars&Hperm).
     pose proof (L.n_syn n) as Hsyn.
     cases. rename l0 into blks. inv Hsyn.
-    monadInv1 P. inv Hvars. inv H0. destruct H6 as (xs0&Hvd&Hperm').
+    monadInv1 P. inv Hvars. inv H0. destruct H5 as (xs0&Hvd&Hperm').
     assert (NL.vars_defined neqs = concat xs0).
-    { revert neqs EQ. clear - H3 Hvd. induction Hvd; inv H3; simpl.
+    { revert neqs EQ. clear - H2 Hvd. induction Hvd; inv H2; simpl.
       - intros neqs Htr. inv Htr. auto.
       - intros neqs Htoeq. monadInv Htoeq.
         apply IHHvd in EQ1; auto. simpl.
         f_equal; auto.
-        clear - H H2 EQ.
+        clear - H H3 EQ.
         revert EQ y H. generalize (@nil (ident * clock)) as xr.
-        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H2; inv Hvd; try congruence.
+        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H3; inv Hvd; try congruence.
         + apply ok_fst_defined in EQ; auto.
         + cases; simpl.
           repeat (take (Forall _ [_]) and apply Forall_singl in it).
@@ -435,7 +444,7 @@ Module Type TR
     - rewrite NoDupMembers_idty; auto.
     - inv H1. rewrite 2 NoDupMembers_idty; auto.
     - inv H1. intros ? Hinm1 Hinm2. rewrite InMembers_idty in Hinm1. rewrite 2 InMembers_idty in Hinm2.
-      eapply H6; eauto.
+      eapply H5; eauto.
       now apply fst_InMembers.
   Qed.
 
@@ -458,7 +467,7 @@ Module Type TR
 
   Definition to_global (G : L.global) :=
     do nds' <- mmap to_node G.(L.nodes);
-    OK (NL.Global G.(L.types) nds').
+    OK (NL.Global G.(L.types) G.(L.externs) nds').
 
   Ltac tonodeInv H :=
     match type of H with
@@ -514,9 +523,9 @@ Module Type TR
     L.find_node f G = Some n ->
     exists n', NL.find_node f P = Some n' /\ to_node n = OK n'.
   Proof.
-    destruct G as (?&nds). unfold to_global.
+    destruct G. unfold to_global.
     revert P.
-    induction nds; intros * Htrans Hfind. inversion Hfind.
+    induction nodes; intros * Htrans Hfind. inversion Hfind.
     apply L.find_node_cons in Hfind.
     destruct Hfind as [(Heq&?)|(Hneq&Hfind)]; subst.
     - monadInv Htrans. simpl in EQ. monadInv EQ.
@@ -524,7 +533,7 @@ Module Type TR
       simpl. apply to_node_name in EQ0.
       rewrite NL.find_node_now; eauto.
     - monadInv Htrans. simpl in *. monadInv EQ.
-      eapply IHnds in Hfind as (n'&P'&nP). 2:rewrite EQ; simpl; eauto.
+      eapply IHnodes in Hfind as (n'&P'&nP). 2:rewrite EQ; simpl; eauto.
       exists n'. split; eauto.
       rewrite NL.find_node_other; eauto.
       apply to_node_name in EQ0. rewrite <-EQ0; auto.
@@ -535,16 +544,16 @@ Module Type TR
     NL.find_node f P = Some n' ->
     exists n, L.find_node f G = Some n /\ to_node n = OK n'.
   Proof.
-    destruct G as (?&nds). unfold to_global.
+    destruct G. unfold to_global.
     revert P.
-    induction nds; intros * Htrans Hfind; simpl in *; monadInv Htrans; simpl in *; try solve [inversion Hfind].
+    induction nodes; intros * Htrans Hfind; simpl in *; monadInv Htrans; simpl in *; try solve [inversion Hfind].
     monadInv EQ.
     destruct (ident_eq_dec (NL.n_name x0) f) eqn:Hname.
     - clear EQ.
       erewrite L.find_node_now. 2:erewrite to_node_name; eauto.
       erewrite NL.find_node_now in Hfind; eauto. inv Hfind; eauto.
     - erewrite NL.find_node_other in Hfind; eauto.
-      eapply IHnds in Hfind as (?&Hfind'&Hton); eauto. 2:rewrite EQ; eauto.
+      eapply IHnodes in Hfind as (?&Hfind'&Hton); eauto. 2:rewrite EQ; eauto.
       eexists; split; eauto.
       rewrite L.find_node_other; eauto.
       erewrite to_node_name; eauto.
@@ -636,8 +645,8 @@ Module Type TR
         right. unfold envs_eq in Heq. rewrite Heq. eauto.
     Qed.
 
-    Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs caus blks :
-      L.n_block n = L.Blocal (L.Scope locs caus blks) ->
+    Lemma envs_eq_node {PSyn prefs} (n : @L.node PSyn prefs) locs blks :
+      L.n_block n = L.Blocal (L.Scope locs blks) ->
       envs_eq
         (Env.adds' (idty (idty locs))
                    (Env.adds' (idty (L.n_in n))
@@ -930,11 +939,11 @@ Module Type TR
       Forall (fun n => (name <> NL.n_name n)%type) G'.(NL.nodes).
   Proof.
     unfold to_global.
-    intros ? (enms&nds).
-    induction nds; intros * Hnames Htog; inv Hnames; monadInv Htog;
+    intros ? [].
+    induction nodes; intros * Hnames Htog; inv Hnames; monadInv Htog;
       simpl in EQ; monadInv EQ; constructor; simpl; auto.
     - erewrite to_node_name in H1; eauto.
-    - eapply IHnds in H2; eauto. 2:simpl; rewrite EQ; simpl; eauto.
+    - eapply IHnodes in H2; eauto. 2:simpl; rewrite EQ; simpl; eauto.
       simpl in H2; auto.
   Qed.
 
@@ -942,7 +951,15 @@ Module Type TR
       to_global G = OK G' ->
       NL.types G' = L.types G.
   Proof.
-    intros (?&?) * Htog.
+    intros [] * Htog.
+    monadInv Htog; auto.
+  Qed.
+
+  Fact to_global_externs : forall G G',
+      to_global G = OK G' ->
+      NL.externs G' = L.externs G.
+  Proof.
+    intros [] * Htog.
     monadInv Htog; auto.
   Qed.
 

@@ -53,10 +53,21 @@ Module Type OPERATORS.
   Parameter sem_unop  : unop -> value -> type -> option value.
   Parameter sem_binop : binop -> value -> type -> value -> type -> option value.
 
+  (* External functions *)
+
+  Parameter sem_extern : (* extern_env ->  *) ident -> list ctype -> list cvalue -> ctype -> cvalue -> Prop.
+
+  Axiom sem_extern_det : forall f tyins ins tyout out1 out2,
+      sem_extern f tyins ins tyout out1 ->
+      sem_extern f tyins ins tyout out2 ->
+      out1 = out2.
+
   (* Typing *)
 
   Parameter type_unop  : unop -> type -> option type.
   Parameter type_binop : binop -> type -> type -> option type.
+
+  (* Parameter type_extern : extern_type -> list ctype -> option ctype. *)
 
   Parameter wt_cvalue : cvalue -> ctype -> Prop.
 
@@ -87,6 +98,12 @@ Module Type OPERATORS.
       wt_value v1 ty1 ->
       wt_value v2 ty2 ->
       wt_value v ty.
+
+  Conjecture pres_sem_extern:
+    forall f tyins vins tyout vout,
+      Forall2 wt_cvalue vins tyins ->
+      sem_extern f tyins vins tyout vout ->
+      wt_cvalue vout tyout.
 
   (* Decidability of elements *)
 

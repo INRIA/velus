@@ -63,11 +63,11 @@ Module Type NLCOINDSEMANTICS
         sem_var H x xs ->
         sem_exp H b (Evar x ty) xs
   | Swhen:
-      forall H b e x c es xs os,
+      forall H b e x tx c es xs os,
         sem_exp H b e es ->
         sem_var H x xs ->
         when c es xs os ->
-        sem_exp H b (Ewhen e x c) os
+        sem_exp H b (Ewhen e (x, tx) c) os
   | Sunop:
       forall H b op e ty es os,
         sem_exp H b e es ->
@@ -97,6 +97,18 @@ Module Type NLCOINDSEMANTICS
       forall H b e es,
         sem_exp H b e es ->
         sem_cexp H b (Eexp e) es.
+
+  Inductive sem_rhs: history -> Stream bool -> rhs -> Stream svalue -> Prop :=
+  | Sextcall:
+      forall H b f es tyout tyins ss vs,
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        Forall2 (sem_exp H b) es ss ->
+        liftn (fun vs v => sem_extern f tyins vs tyout v) ss vs ->
+        sem_rhs H b (Eextcall f es tyout) vs
+  | Scexp:
+      forall H b e ss,
+        sem_cexp H b e ss ->
+        sem_rhs H b (Ecexp e) ss.
 
   Section SemInd.
 
@@ -156,6 +168,7 @@ Module Type NLCOINDSEMANTICS
 
   Definition sem_aexp := sem_annot sem_exp.
   Definition sem_caexp := sem_annot sem_cexp.
+  Definition sem_arhs := sem_annot sem_rhs.
 
   CoFixpoint reset1 (v0: value) (xs: Stream svalue) (rs: Stream bool) (doreset : bool) : Stream svalue :=
     match xs, rs, doreset with
@@ -258,7 +271,7 @@ Module Type NLCOINDSEMANTICS
     Inductive sem_equation: history -> Stream bool -> equation -> Prop :=
     | SeqDef:
         forall H b x ck e es,
-          sem_caexp H b ck e es ->
+          sem_arhs H b ck e es ->
           sem_var H x es ->
           sem_equation H b (EqDef x ck e)
     | SeqApp:
@@ -303,7 +316,7 @@ Module Type NLCOINDSEMANTICS
 
     Hypothesis EqDefCase:
       forall H b x ck e es,
-        sem_caexp H b ck e es ->
+        sem_arhs H b ck e es ->
         sem_var H x es ->
         P_equation H b (EqDef x ck e).
 
@@ -361,11 +374,11 @@ Module Type NLCOINDSEMANTICS
   (** ** Properties of the [global] environment *)
 
   Lemma sem_node_cons2:
-    forall enms nd nds f xs ys,
-      Ordered_nodes (Global enms nds)
-      -> sem_node (Global enms nds) f xs ys
+    forall enms externs nd nds f xs ys,
+      Ordered_nodes (Global enms externs nds)
+      -> sem_node (Global enms externs nds) f xs ys
       -> Forall (fun nd' : node => n_name nd <> n_name nd') nds
-      -> sem_node (Global enms (nd::nds)) f xs ys.
+      -> sem_node (Global enms externs (nd::nds)) f xs ys.
   Proof.
     intros * Hord Hsem Hnin.
     assert (Hnin':=Hnin).
@@ -377,7 +390,7 @@ Module Type NLCOINDSEMANTICS
       using sem_node_mult
       with (P_equation := fun bk H eq =>
                    ~Is_node_in_eq nd.(n_name) eq
-                   -> sem_equation (Global enms (nd::nds)) bk H eq);
+                   -> sem_equation (Global enms externs0 (nd::nds)) bk H eq);
       try eauto using sem_equation; try intro Hb.
     - econstructor; eauto. intro k.
       take (forall k, _ /\ _) and specialize (it k) as []. auto.
@@ -399,11 +412,11 @@ Module Type NLCOINDSEMANTICS
   Qed.
 
   Lemma sem_equation_cons2:
-    forall enms nds b H eqs nd,
-      Ordered_nodes (Global enms (nd::nds))
-      -> Forall (sem_equation (Global enms nds) H b) eqs
+    forall enms externs nds b H eqs nd,
+      Ordered_nodes (Global enms externs (nd::nds))
+      -> Forall (sem_equation (Global enms externs nds) H b) eqs
       -> ~Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (Global enms (nd::nds)) H b) eqs.
+      -> Forall (sem_equation (Global enms externs (nd::nds)) H b) eqs.
   Proof.
     intros * Hord Hsem Hnini.
     induction eqs as [|eq eqs IH]; [now constructor|].
@@ -447,34 +460,6 @@ Module Type NLCOINDSEMANTICS
       + repeat (take (present _ = present _) and inv it).
         constructor.
         eapply Cofix; eauto.
-  Qed.
-
-  Add Parametric Morphism op t : (lift1 op t)
-      with signature @EqSt svalue ==> @EqSt svalue ==> Basics.impl
-        as lift1_EqSt.
-  Proof.
-    cofix Cofix.
-    intros es es' Ees ys ys' Eys Lift.
-    destruct es' as [[]], ys' as [[]];
-      inversion Lift; inversion Eys; inversion Ees; simpl in *; subst ys es; try discriminate.
-    - constructor; eapply Cofix; eauto.
-    - repeat (take (present _ = present _) and inv it).
-      constructor; auto.
-      eapply Cofix; eauto.
-  Qed.
-
-  Add Parametric Morphism op t1 t2 : (lift2 op t1 t2)
-      with signature @EqSt svalue ==> @EqSt svalue ==> @EqSt svalue ==> Basics.impl
-        as lift2_EqSt.
-  Proof.
-    cofix Cofix.
-    intros e1s e1s' Ee1s e2s e2s' Ee2s ys ys' Eys Lift.
-    destruct e1s' as [[]], e2s' as [[]], ys' as [[]];
-      inversion Lift; inversion Eys; inversion Ee1s; inversion Ee2s; simpl in *; subst ys e1s e2s; try discriminate.
-    - constructor; eapply Cofix; eauto.
-    - repeat (take (present _ = present _) and inv it).
-      constructor; auto.
-      eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism : (const)
@@ -563,6 +548,16 @@ Module Type NLCOINDSEMANTICS
       now rewrite <-EH, <-Eb, <-Exs.
   Qed.
 
+  Add Parametric Morphism : sem_rhs
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl
+        as sem_rhs_morph.
+  Proof.
+    intros H H' EH b b' Eb e xs xs' Exs Sem.
+    inv Sem; econstructor; eauto.
+    instantiate (1:=ss). simpl_Forall.
+    1,3:rewrite <-Eb, <-EH; auto. 1,2:now rewrite <-Exs.
+  Qed.
+
   Add Parametric Morphism A sem
     (sem_compat: Proper (FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> @EqSt svalue ==> Basics.impl) sem)
     : (@sem_annot A sem)
@@ -596,6 +591,14 @@ Module Type NLCOINDSEMANTICS
   Add Parametric Morphism : sem_caexp
       with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_caexp_morph.
+  Proof.
+    intros; eapply sem_annot_morph; eauto.
+    solve_proper.
+  Qed.
+
+  Add Parametric Morphism : sem_arhs
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt bool ==> eq ==> eq ==> @EqSt svalue ==> Basics.impl
+        as sem_arhs_morph.
   Proof.
     intros; eapply sem_annot_morph; eauto.
     solve_proper.

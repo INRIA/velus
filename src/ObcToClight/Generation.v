@@ -100,9 +100,6 @@ Section Translate.
       translate_binop op (translate_exp e1) (translate_exp e2) (translate_type ty)
     end.
 
-  Definition list_type_to_typelist : list Ctypes.type -> Ctypes.typelist :=
-    fold_right (Ctypes.Tcons) Ctypes.Tnil.
-
   Definition funcall (y: option ident) (f: ident) (tret: option Ctypes.type) (args: list Clight.expr) : Clight.statement :=
     let tys := map Clight.typeof args in
     let tret := or_default Ctypes.Tvoid tret in
@@ -191,6 +188,17 @@ Section Translate.
       Clight.Ssequence (translate_stmt s1) (translate_stmt s2)
     | Call ys cls o f es =>
       binded_funcall ys cls o f (map translate_exp es)
+    | ExternCall y f es tyout =>
+        let es := map translate_exp es in
+        let tyins := map Clight.typeof es in
+        let y' := prefix temp y in
+        Clight.Ssequence
+          (Clight.Scall (Some y')
+             (Clight.Evar f (Ctypes.Tfunction (list_type_to_typelist tyins)
+                               (cltype tyout)
+                               AST.cc_default))
+             es)
+          (assign y (cltype tyout) (Clight.Etempvar y' (cltype tyout)))
     | Skip => Clight.Sskip
     end.
 
@@ -254,6 +262,19 @@ Fixpoint rec_instance_methods_temp (prog: program) (m: Env.t type) (s: stmt) : E
 Definition instance_methods_temp (prog: program) (m: method): Env.t type :=
   rec_instance_methods_temp prog (Env.empty _) m.(m_body).
 
+Fixpoint rec_extcalls_temp (m: Env.t type) (s: stmt) : Env.t type :=
+  match s with
+  | Switch _ branches default =>
+    fold_left (fun m => or_default_with m (rec_extcalls_temp m))
+              branches (rec_extcalls_temp m default)
+  | Comp s1 s2 => rec_extcalls_temp (rec_extcalls_temp m s1) s2
+  | ExternCall y _ _ cty => Env.add (prefix temp y) (Tprimitive cty) m
+  | _ => m
+  end.
+
+Definition extcalls_temp (m: method): Env.t type :=
+  rec_extcalls_temp (Env.empty _) m.(m_body).
+
 Definition make_out_temps (out_temps: Env.t type): list (ident * Ctypes.type) :=
   map translate_param (Env.elements out_temps).
 
@@ -266,6 +287,7 @@ Definition translate_method (prog: program) (c: class) (m: method)
   let body := translate_stmt prog c m m.(m_body) in
   let out_vars := make_out_vars (instance_methods m) in
   let out_temps := make_out_temps (instance_methods_temp prog m) in
+  let extcall_temps := make_out_temps (extcalls_temp m) in
   let self := (prefix obc2c self, type_of_inst_p c.(c_name)) in
   let ins := map translate_param m.(m_in) in
   let out := (prefix obc2c out, type_of_inst_p (prefix_fun m.(m_name) c.(c_name))) in
@@ -274,14 +296,14 @@ Definition translate_method (prog: program) (c: class) (m: method)
   match m.(m_out) with
   | [] =>
     let args := self :: ins in
-    fundef args out_vars (out_temps ++ vars) Ctypes.Tvoid (return_with body None)
+    fundef args out_vars (out_temps ++ extcall_temps ++ vars) Ctypes.Tvoid (return_with body None)
   | [(y, t) as yt] =>
     let args := self :: ins in
     let c_t := translate_type t in
-    fundef args out_vars (translate_param yt :: out_temps ++ vars) c_t (return_with body (Some (make_in_arg yt)))
+    fundef args out_vars (translate_param yt :: out_temps ++ extcall_temps ++ vars) c_t (return_with body (Some (make_in_arg yt)))
   | _ :: _ =>
     let args := self :: out :: ins in
-    fundef args out_vars (out_temps ++ vars) Ctypes.Tvoid (return_with body None)
+    fundef args out_vars (out_temps ++ extcall_temps ++ vars) Ctypes.Tvoid (return_with body None)
   end).
 
 Definition make_methods (prog: program) (c: class)
@@ -489,43 +511,78 @@ Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
   let (x, ty) := bind in
   (prefix_glob x, translate_type ty).
 
+Definition translate_external (f : ident) (tyins : list ctype) (tyout : ctype) : (ident * AST.globdef (Ctypes.fundef Clight.function) Ctypes.type) :=
+  let ctyins := List.map cltype tyins in
+  let ctyout := cltype tyout in
+  let sig := {| AST.sig_args := List.map Ctypes.typ_of_type ctyins;
+               AST.sig_res := Ctypes.rettype_of_type ctyout;
+               AST.sig_cc := AST.cc_default |} in
+  (f, AST.Gfun (Ctypes.External (AST.EF_external (pos_to_str f) sig) (list_type_to_typelist ctyins) ctyout AST.cc_default)).
+
+Definition check_externs (prog : program): res unit :=
+  do _ <- if (forallb is_atom (map fst prog.(externs))) then OK tt
+         else Error (msg "ObcToClight: external function with non-atomic name");
+  do _ <- if (check_nodup (map fst prog.(externs))) then OK tt
+             else Error (msg "ObcToClight: duplicate extern definition");
+  do _ <- if (existsb (fun f => mem_assoc_ident f prog.(externs)) [sync_id; main_sync_id; main_proved_id; main_id])
+         then Error (msg "ObcToClight: external function name shouldn't be 'sync', 'main_sync', 'main_proved' or 'main'")
+         else OK tt;
+  OK tt.
+
+Definition check_nodup_names (prog: program) : res unit :=
+  if (check_nodup (map fst prog.(externs) ++ map c_name prog.(classes))) then OK tt
+  else Error (msg "ObcToClight: duplicate names").
+
 Definition translate (do_sync: bool) (all_public: bool)
-                     (main_node: ident) (prog: program): res Clight.program :=
-  match find_class main_node prog with
-  | Some (c, _) =>
-    match find_method step c.(c_methods) with
-    | Some m =>
-      match find_method reset c.(c_methods) with
-      | Some _ =>
-        do _ <- check_size_enums prog;
-        let f := prefix_glob (prefix self main_id) in
-        let f_gvar := (f, type_of_inst main_node) in
-        let ins := map glob_bind m.(m_in) in
-        let outs := map glob_bind m.(m_out) in
-        (* revert the declarations ! *)
-        let prog := rev_prog prog in
-        let cs := map (translate_class prog) prog.(classes) in
-        let (structs, funs) := split cs in
-        let main_proved := (main_proved_id, make_main false main_node m) in
-        let entry_point := (main_id, make_entry_point do_sync) in
-        let gdefs := concat funs
-                            ++ (if do_sync
-                                then [(sync_id, make_sync);
-                                      (main_sync_id, make_main true main_node m)]
-                                else [])
-                            ++ [main_proved; entry_point]
-        in
-        make_program' (concat structs)
-                      [f_gvar]
-                      (outs ++ ins)
-                      gdefs
-                      (main_id ::
-                               (if do_sync then [main_sync_id] else [])
-                               ++ (if all_public then map fst (concat funs) else []))
-                      main_proved_id
-      | None => Error (msg "ObcToClight: reset function not found")
+                     (main_node: option ident) (prog: program): res Clight.program :=
+  do _ <- check_externs prog;
+  do _ <- check_size_enums prog;
+  let prog' := rev_prog prog in
+  let cs := map (translate_class prog') prog'.(classes) in
+  let (structs, funs) := split cs in
+  let gdefs :=
+    (map (fun '(f, (tyin, tyout)) => translate_external f tyin tyout) prog'.(externs))
+      ++ concat funs in
+  match main_node with
+  | Some main_node =>
+      match find_class main_node prog with
+      | Some (c, _) =>
+          match find_method step c.(c_methods) with
+          | Some m =>
+              match find_method reset c.(c_methods) with
+              | Some _ =>
+                  let f := prefix_glob (prefix self main_id) in
+                  let f_gvar := (f, type_of_inst main_node) in
+                  let ins := map glob_bind m.(m_in) in
+                  let outs := map glob_bind m.(m_out) in
+                  (* revert the declarations ! *)
+                  let main_proved := (main_proved_id, make_main false main_node m) in
+                  let entry_point := (main_id, make_entry_point do_sync) in
+                  let gdefs := gdefs
+                                ++ (if do_sync
+                                    then [(sync_id, make_sync);
+                                          (main_sync_id, make_main true main_node m)]
+                                    else [])
+                                ++ [main_proved; entry_point]
+                  in
+                  make_program' (concat structs)
+                    [f_gvar]
+                    (outs ++ ins)
+                    gdefs
+                    (main_id ::
+                       (if do_sync then [main_sync_id] else [])
+                       ++ (if all_public then map fst (concat funs) else []))
+                    main_proved_id
+              | None => Error (msg "ObcToClight: reset function not found")
+              end
+          | None => Error (msg "ObcToClight: step function not found")
+          end
+      | None => Error [MSG "ObcToClight: undefined node: '"; CTX main_node; MSG "'." ]
       end
-    | None => Error (msg "ObcToClight: step function not found")
-    end
-  | None => Error [MSG "ObcToClight: undefined node: '"; CTX main_node; MSG "'." ]
+  | None =>
+      make_program' (concat structs)
+        [] []
+        gdefs
+        (map fst (concat funs))
+        main_proved_id
   end.

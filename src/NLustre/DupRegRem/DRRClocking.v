@@ -94,6 +94,13 @@ Module Type DRRCLOCKING
         eapply H in H7; eauto.
     Qed.
 
+    Lemma rename_in_rhs_wc : forall e ck,
+        wc_rhs (inouts ++ vars) e ck ->
+        wc_rhs (inouts ++ vars') (rename_in_rhs sub e) (rename_in_clock sub ck).
+    Proof.
+      intros * Hwc; inv Hwc; econstructor; simpl_Forall; eauto using rename_in_exp_wc, rename_in_cexp_wc.
+    Qed.
+
     Lemma instck_rename_in_clock : forall ck sub0 bck ck',
       instck bck sub0 ck = Some ck' ->
       instck (rename_in_clock sub bck) (fun x => option_map (fun x1 => rename_in_var sub x1) (sub0 x)) ck =
@@ -106,7 +113,7 @@ Module Type DRRCLOCKING
         destruct (sub0 i); inv Hinst1; simpl. reflexivity.
     Qed.
 
-    Local Hint Resolve rename_in_var_wc rename_in_clock_wc rename_in_exp_wc rename_in_cexp_wc : nlclocking.
+    Local Hint Resolve rename_in_var_wc rename_in_clock_wc rename_in_exp_wc rename_in_cexp_wc rename_in_rhs_wc : nlclocking.
 
     Lemma rename_in_equation_wc : forall equ,
         (forall x, In x (var_defined equ) -> Env.find x sub = None) ->

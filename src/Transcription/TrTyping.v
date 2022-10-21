@@ -321,33 +321,46 @@ Module Type TRTYPING
       Opaque to_cexp.
       intros ????? [xs [|? []]] e' Hg Htr Henvs Hxr Hckr Hen Hdup (Hwt & Hf2);
         try (inv Htr; cases; discriminate).
-      apply Forall_singl in Hwt.
-      destruct e; simpl in *; cases_eqn Eq; monadInv Htr.
-      1-8,10-15:(simpl_Forall;
-                 take (Senv.HasType _ _ _) and inv it;
-                 econstructor;
-                 [erewrite typeofc_cexp; eauto; solve_In|
+      simpl_Forall.
+      destruct e; simpl in *; cases_eqn Eq; monadInv Htr; simpl_Forall.
+      all:try (take (Senv.HasType _ _ _) and inv it;
+               econstructor;
+               [simpl; erewrite typeofc_cexp; eauto; solve_In|
                  eauto using wt_clock_l_ce|
-                   erewrite to_global_types; eauto; eapply wt_cexp; eauto];
-                 take (In _ _) and clear it; simpl_Forall; eauto).
-      1-9:simpl; try rewrite app_nil_r in *; try congruence.
+                 econstructor; erewrite to_global_types; eauto; eapply wt_cexp; eauto];
+               take (In _ _) and clear it; simpl_Forall; eauto).
+      all:simpl; try rewrite app_nil_r in *; try congruence.
+      - take (LT.wt_exp _ _ _) and inv it.
+        repeat constructor; simpl. 3:econstructor; eauto.
+        + take (Senv.HasType _ _ _) and inv it. solve_In. congruence.
+        + eapply wt_clock_l_ce; eauto.
+          erewrite to_global_types; eauto.
+        + simpl_Forall.
+          eapply mmap_inversion, Coqlib.list_forall2_in_right in EQ; eauto; destruct_conjs.
+          simpl_Forall.
+          erewrite to_global_types; eauto using wt_lexp.
+        + instantiate (1:=tyins). apply mmap_inversion in EQ.
+          clear - EQ H4 H5. revert tyins H5.
+          induction EQ; intros * Htys; inv H4; simpl in *.
+          * inv Htys; auto.
+          * eapply ty_lexp in H; eauto. rewrite H in *; simpl in *.
+            inv Htys; constructor; auto.
+        + erewrite to_global_externs; eauto.
       - simpl_Foralls. take (LT.wt_exp _ _ _) and inv it. simpl_Foralls.
         simpl in *. rewrite app_nil_r in *.
         constructor; eauto.
-        + inv H2. erewrite typeof_lexp; eauto. solve_In.
+        + take (Senv.HasType _ _ _) and inv it. erewrite typeof_lexp; eauto. solve_In.
           congruence.
-        + rewrite <-H1 in H6. erewrite typeof_lexp; eauto.
-          rewrite <-H1 in H7.
+        + rewrite <-H2 in H6. erewrite typeof_lexp; eauto.
+          rewrite <-H2 in H7.
           erewrite to_global_types; eauto. eapply wt_constant; eauto.
         + eapply Henvs in EQ0. eapply wt_clock_l_ce; eauto.
         + erewrite to_global_types; eauto. eapply wt_lexp; eauto.
         + simpl_Forall. inv Hxr. split; solve_In; try congruence.
           erewrite to_global_types; eauto. inv HwtG; take (wt_type _ _) and inv it; eauto.
         + erewrite to_global_types; eauto.
-          eapply Forall_impl; [|eauto]. intros; eauto using wt_clock_l_ce.
-      - rewrite app_nil_r in Hf2.
-        simpl_Foralls.
-        take (LT.wt_exp _ _ _) and inv it;
+          simpl_Forall; eauto using wt_clock_l_ce.
+      - take (LT.wt_exp _ _ _) and inv it;
           assert (Hg':=Hg); eapply find_node_global in Hg' as (?&?&?); eauto.
         eapply vars_of_spec in Eq.
         apply mmap_inversion in EQ.
@@ -441,7 +454,7 @@ Module Type TRTYPING
         apply NoDup_app'.
         - apply NoDupMembers_app_r in Hnd1. apply fst_NoDupMembers; eauto.
         - apply fst_NoDupMembers; auto.
-        - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H7 in Hinm2.
+        - eapply Forall_forall; intros * Hinm1 Hinm2. eapply fst_InMembers, H5 in Hinm2.
           apply Hinm2. rewrite map_app, in_app_iff; auto.
       }
       monadInv Hmmap.
@@ -449,8 +462,8 @@ Module Type TRTYPING
       - inv Hwt. inv H3.
         eapply mmap_inversion in EQ.
         eapply envs_eq_node in Hblk.
-        induction EQ; inv H1; inv H10; inv Hvars'; constructor; auto.
-        destruct H10 as (?&?&?).
+        induction EQ; repeat (take (Forall _ (_::_)) and inv it); constructor; auto.
+        destruct_conjs.
         eapply wt_block_to_equation in H; eauto; simpl; auto.
         + simpl_app. repeat rewrite map_map in *; simpl in *.
           erewrite map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _), Permutation_app_comm with (l:=map _ l); eauto.
@@ -458,7 +471,7 @@ Module Type TRTYPING
         + intros ?? Hfind.
           eapply envs_eq_find' in Hfind; eauto.
           erewrite to_global_types; eauto.
-          clear - Wti Wto H6 Hfind. unfold LT.wt_clocks, idty in *.
+          clear - Wti Wto H5 Hfind. unfold LT.wt_clocks, idty in *.
           simpl_In. repeat rewrite in_app_iff in Hin0. destruct Hin0 as [|[|]]; simpl_In; simpl_Forall; eauto.
           1,2:eapply LT.wt_clock_incl; [|eauto].
           1,2:intros; simpl_app; repeat rewrite Senv.HasType_app in *; intuition.
@@ -478,8 +491,8 @@ Module Type TRTYPING
       to_global G = OK P ->
       NLT.wt_global P.
   Proof.
-    intros (?&nds) ? (Hbool&Hwt). revert P.
-    induction nds as [| n]. inversion 1. constructor.
+    intros [] ? (Hbool&Hwt). revert P.
+    induction nodes as [| n]. inversion 1. constructor.
     intros * Htr; simpl in *. monadInv Htr. simpl in *. monadInv EQ.
     inversion_clear Hwt as [|?? (Hwt'&Hnames) Hf ].
     constructor; simpl in *.
@@ -487,10 +500,10 @@ Module Type TRTYPING
       + eapply wt_node; eauto. constructor; auto.
         unfold to_global; simpl; rewrite EQ; simpl; auto.
       + erewrite to_node_name in Hnames; eauto.
-        replace x1 with (NL.Global types x1).(NL.nodes) by auto.
-        eapply to_global_names with (G:=L.Global types nds); eauto.
+        replace x1 with (NL.Global types externs x1).(NL.nodes) by auto.
+        eapply to_global_names with (G:=L.Global types externs nodes); eauto.
         unfold to_global; simpl; rewrite EQ; simpl; auto.
-    - eapply IHnds in Hf; eauto.
+    - eapply IHnodes in Hf; eauto.
       2:unfold to_global; simpl; erewrite EQ; simpl; auto.
       auto.
   Qed.

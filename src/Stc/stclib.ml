@@ -26,12 +26,14 @@ module type SYNTAX =
   sig
     type clock
     type typ
+    type ctype
     type const
     type exp
     type cexp
+    type rhs
 
     type trconstr =
-    | TcDef   of ident * clock * cexp
+    | TcDef   of ident * clock * rhs
     | TcReset  of ident * clock * typ * const
     | TcNext  of ident * clock * clock list * exp
     | TcInstReset of ident * clock * ident
@@ -48,6 +50,7 @@ module type SYNTAX =
 
     type program = {
       types: typ list;
+      externs: (ident * (ctype list * ctype)) list;
       systems: system list
     }
   end
@@ -55,18 +58,21 @@ module type SYNTAX =
 module PrintFun
     (Ops: PRINT_OPS)
     (CE : Coreexprlib.SYNTAX with type typ     = Ops.typ
+                              and type ctype   = Ops.ctype
                               and type cconst  = Ops.cconst
                               and type unop    = Ops.unop
                               and type binop   = Ops.binop
                               and type enumtag = Ops.enumtag)
     (Stc: SYNTAX with type clock = CE.clock
                   and type typ   = Ops.typ
+                  and type ctype = Ops.ctype
                   and type const = Ops.const
                   and type exp   = CE.exp
-                  and type cexp  = CE.cexp)
+                  and type cexp  = CE.cexp
+                  and type rhs = CE.rhs)
   :
   sig
-    val print_trconstr   : (ident * CE.typ) list -> formatter -> Stc.trconstr -> unit
+    val print_trconstr   : Format.formatter -> Stc.trconstr -> unit
     val print_system     : Format.formatter -> Stc.system -> unit
     val print_program    : Format.formatter -> Stc.program -> unit
     val print_fullclocks : bool ref
@@ -87,12 +93,12 @@ module PrintFun
         print_ident id
         print_ident f
 
-    let rec print_trconstr tenv p tc =
+    let rec print_trconstr p tc =
       match tc with
       | Stc.TcDef (x, ck, e) ->
         fprintf p "@[<hov 2>%a =@ %a@]"
           print_ident x
-          (print_cexp tenv) e
+          print_rhs e
       | Stc.TcReset (x, ckr, ty, c0) ->
         fprintf p "@[<hov 2>reset@ %a = %a every@ (%a)@]"
           print_ident x
@@ -101,7 +107,7 @@ module PrintFun
       | Stc.TcNext (x, ck, _, e) ->
         fprintf p "@[<hov 2>next@ %a =@ %a@]"
           print_ident x
-          (print_exp tenv) e
+          print_exp e
       | Stc.TcInstReset (s, ck, f) ->
         fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
             print_ident f
@@ -112,10 +118,10 @@ module PrintFun
           print_pattern xs
           print_ident f
           print_ident i
-          (print_comma_list (print_exp tenv)) es
+          (print_comma_list print_exp) es
 
-    let print_trconstrs tenv p =
-      pp_print_list ~pp_sep:pp_force_newline (print_trconstr tenv) p
+    let print_trconstrs p =
+      pp_print_list ~pp_sep:pp_force_newline print_trconstr p
 
     let print_system p { Stc.s_name   = name;
                          Stc.s_in     = inputs;
@@ -141,12 +147,18 @@ module PrintFun
         print_decl_list inputs
         print_decl_list outputs
         (print_comma_list_as "var" print_decl) locals
-        (print_trconstrs ((List.map (fun (x, (ty, _)) -> (x, ty)) (inputs@outputs@locals))
-                          @(List.map (fun (x, ((_, ty), _)) -> (x, ty)) nexts))) (List.rev tcs)
+        print_trconstrs (List.rev tcs)
+
+    let print_extern_decl p (f, (tyins, tyout)) =
+      fprintf p "external %a(%a) returns %a"
+        print_ident f
+        (print_comma_list Ops.print_ctype) tyins
+        Ops.print_ctype tyout
 
     let print_program p prog =
       fprintf p "@[<v 0>";
       List.iter (fprintf p "%a@;@;" Ops.print_typ_decl) (List.rev prog.Stc.types);
+      List.iter (fprintf p "%a@;@;" print_extern_decl) (List.rev prog.Stc.externs);
       List.iter (fprintf p "%a@;@;" print_system) (List.rev prog.Stc.systems);
       fprintf p "@]@."
   end
@@ -156,7 +168,8 @@ module SchedulerFun
     (Stc: SYNTAX with type clock = CE.clock
                  and type typ    = CE.typ
                  and type exp    = CE.exp
-                 and type cexp   = CE.cexp) :
+                 and type cexp   = CE.cexp
+                 and type rhs    = CE.rhs) :
   sig
     val schedule : ident -> Stc.trconstr list -> BinNums.positive list
   end
@@ -251,7 +264,7 @@ module SchedulerFun
         | Econst _
         | Eenum _               -> ()
         | Evar (x, _)           -> add_dep x
-        | Ewhen (e, x, _)       -> add_dep x; go e
+        | Ewhen (e, (x, _), _)       -> add_dep x; go e
         | Eunop (_, e, _)       -> go e
         | Ebinop (_, e1, e2, _) -> go e1; go e2
       in go
@@ -267,10 +280,14 @@ module SchedulerFun
         | Eexp e         -> go_exp e
       in go
 
+    let add_rhs_deps add_dep = function
+      | Eextcall (_, es, _) -> List.iter (add_exp_deps add_dep) es
+      | Ecexp e -> add_cexp_deps add_dep e
+
     let add_dependencies add_dep_var add_dep_inst = function
       | TcDef (_, ck, ce) ->
         add_clock_deps add_dep_var ck;
-        add_cexp_deps add_dep_var ce
+        add_rhs_deps add_dep_var ce
       | TcReset (x, ckr, _, _) ->
         add_clock_deps add_dep_var ckr
       | TcNext (x, ck, _, e) ->

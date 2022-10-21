@@ -66,21 +66,21 @@ environment.
           sem_var_instant R x v ->
           sem_exp_instant (Evar x ty) v
     | Swhen_eq:
-        forall s x sc b,
+        forall s x tx sc b,
           sem_var_instant R x (present (Venum b)) ->
           sem_exp_instant s (present sc) ->
-          sem_exp_instant (Ewhen s x b) (present sc)
+          sem_exp_instant (Ewhen s (x, tx) b) (present sc)
     | Swhen_abs1:
-        forall s x sc b b',
+        forall s x tx sc b b',
           sem_var_instant R x (present (Venum b')) ->
           b <> b' ->
           sem_exp_instant s (present sc) ->
-          sem_exp_instant (Ewhen s x b) absent
+          sem_exp_instant (Ewhen s (x, tx) b) absent
     | Swhen_abs:
-        forall s x b,
+        forall s x tx b,
           sem_var_instant R x absent ->
           sem_exp_instant s absent ->
-          sem_exp_instant (Ewhen s x b) absent
+          sem_exp_instant (Ewhen s (x, tx) b) absent
     | Sunop_eq:
         forall le op v v' ty,
           sem_exp_instant le (present v) ->
@@ -134,6 +134,23 @@ environment.
         forall e v,
           sem_exp_instant e v ->
           sem_cexp_instant (Eexp e) v.
+
+    Inductive sem_rhs_instant: rhs -> svalue -> Prop :=
+    | Sextcall_pres:
+      forall f es tyout tyins vs v,
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        Forall2 (fun e v => sem_exp_instant e (present (Vscalar v))) es vs ->
+        sem_extern f tyins vs tyout v ->
+        sem_rhs_instant (Eextcall f es tyout) (present (Vscalar v))
+    | Sextcall_abs:
+      forall f es tyout tyins,
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        Forall (fun e => sem_exp_instant e absent) es ->
+        sem_rhs_instant (Eextcall f es tyout) absent
+    | Scexp:
+      forall e v,
+        sem_cexp_instant e v ->
+        sem_rhs_instant (Ecexp e) v.
 
   End InstantSemantics.
 
@@ -228,6 +245,7 @@ environment.
 
     Definition sem_aexp_instant := sem_annotated_instant sem_exp_instant.
     Definition sem_caexp_instant := sem_annotated_instant sem_cexp_instant.
+    Definition sem_arhs_instant := sem_annotated_instant sem_rhs_instant.
 
   End InstantAnnotatedSemantics.
 
@@ -261,6 +279,12 @@ environment.
 
     Definition sem_cexp (c: cexp) (xs: stream svalue): Prop :=
       lift bk H sem_cexp_instant c xs.
+
+    Definition sem_arhs ck (c: rhs) (xs: stream svalue) : Prop :=
+      lift bk H (fun base R => sem_arhs_instant base R ck) c xs.
+
+    Definition sem_rhs (c: rhs) (xs: stream svalue): Prop :=
+      lift bk H sem_rhs_instant c xs.
 
   End LiftSemantics.
 
@@ -335,6 +359,14 @@ environment.
     - eapply Forall2_impl_In; [|eauto]. intros.
       eapply Forall_forall in H0; eauto. eapply H0; eauto.
     - rewrite Forall_forall in *. intros. eapply H0; eauto.
+  Qed.
+
+  Add Parametric Morphism : sem_rhs_instant
+      with signature @eq _ ==> FEnv.Equiv eq ==> @eq _ ==> @eq _ ==> Basics.impl
+        as sem_rhs_instant_morph.
+  Proof.
+    intros b H H' EH xs xs' Sem; inv Sem; econstructor; eauto; simpl_Forall.
+    all:rewrite <-EH; auto.
   Qed.
 
   Add Parametric Morphism A sem
@@ -437,9 +469,9 @@ environment.
     now rewrite Hsem in Hgt0.
   Qed.
 
-  Lemma sem_caexp_instant_absent:
+  Lemma sem_arhs_instant_absent:
     forall R ck e v,
-      sem_caexp_instant false R ck e v ->
+      sem_arhs_instant false R ck e v ->
       v = absent.
   Proof.
     inversion_clear 1; auto.
@@ -506,7 +538,7 @@ environment.
       - (* Eenum *)
         do 2 inversion_clear 1; destruct base; congruence.
       - (* Ewhen *)
-        intros v1 v2 Hsem1 Hsem2.
+        intros v1 v2 Hsem1 Hsem2. destruct_conjs.
         inversion Hsem1; inversion Hsem2; subst;
           repeat match goal with
                  | H1:sem_exp_instant ?b ?R ?e ?v1,

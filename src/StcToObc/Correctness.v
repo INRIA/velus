@@ -438,7 +438,7 @@ Module Type CORRECTNESS
         /\ stmt_eval prog (add_mems s.(s_nexts) me) ve (reset_insts s.(s_subs)) (me', ve').
   Proof.
     unfold translate_reset; split.
-    - inversion_clear 1 as [| | |????????? StEval| |].
+    - inversion_clear 1 as [| | | |????????? StEval| |].
       pose proof (reset_mems_spec (s_nexts s) prog me ve) as StEval'.
       eapply stmt_eval_det with (2 := StEval') in StEval as (? & ?); subst.
       split; auto.
@@ -711,7 +711,7 @@ Module Type CORRECTNESS
       exists me',
         stmt_call_eval (translate P) me f reset [] me' [].
   Proof.
-    intros (?& P); induction P as [|system]; try now inversion 2.
+    intros []; induction systems0 as [|system]; try now inversion 2.
     intros * Ord Find.
     pose proof Find as Find';
       apply find_unit_transform_units_forward in Find'.
@@ -729,7 +729,7 @@ Module Type CORRECTNESS
           apply reset_mems_spec.
         * simpl; auto.
     - unfold translate; simpl; inv Ord.
-      edestruct IHP; eauto.
+      edestruct IHsystems0; eauto.
       eexists; rewrite stmt_call_eval_cons; eauto.
   Qed.
 
@@ -857,7 +857,7 @@ Module Type CORRECTNESS
            the same value. *)
         simpl in *.
         destruct (instck ck isub nck) eqn:Heq; try discriminate.
-        destruct (isub i1); try discriminate.
+        destruct (isub _); try discriminate.
         inv Hwc. inv Hinst. inv Hlck.
         * (* Con lck i0 b0 = false because lck = false,
              the goal follows form the induction hypothesis. *)
@@ -971,9 +971,10 @@ Module Type CORRECTNESS
       find_val x me' = find_val x me.
   Proof.
     destruct tc; simpl; intros ?????????? WT NIsReset NIsNext StEval;
-      inv WT; try (take (wt_const _ _ _) and inv it);
+      inv WT; try (take (wt_rhs _ _ _ _) and inv it); try (take (wt_const _ _ _) and inv it);
         eapply stmt_eval_Control_fwd in StEval; eauto;
           destruct StEval as [(?& StEval)|(?&?&?)]; try congruence.
+    - now inv StEval.
     - now apply stmt_eval_translate_cexp_menv_inv in StEval as ->.
     - inv StEval.
       apply not_Is_reset_in_tc_TcReset in NIsReset.
@@ -1017,10 +1018,13 @@ Module Type CORRECTNESS
   Proof.
     intros * WT Hnd Heval.
     destruct tc; simpl in Heval; inv WT;
+      try (take (wt_rhs _ _ _ _) and inv it);
       try (take (wt_const _ _ _) and inv it);
       eapply stmt_eval_Control_fwd in Heval; eauto;
         destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
         subst; auto.
+    - inv Heval. rewrite Env.gso; auto.
+      intro; subst; apply Hnd; constructor.
     - apply stmt_eval_translate_cexp_venv_inv in Heval as (?&?); subst.
       rewrite Env.gso; auto.
       intro; subst; apply Hnd; constructor.
@@ -1073,10 +1077,13 @@ Module Type CORRECTNESS
   Proof.
     intros * WT Hnd Heval.
     destruct tc; simpl in Heval; inv WT;
+      try (take (wt_rhs _ _ _ _) and inv it);
       try (take (wt_const _ _ _) and inv it);
       eapply stmt_eval_Control_fwd in Heval; eauto;
         destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
         subst; auto.
+    - inv Heval. rewrite Env.gso; auto.
+      intro; subst; apply Hnd; constructor.
     - apply stmt_eval_translate_cexp_venv_inv in Heval as (?&?); subst.
       rewrite Env.gso; auto.
       intro; subst; apply Hnd; constructor.
@@ -1150,11 +1157,38 @@ Module Type CORRECTNESS
                       ??????????? FindI Init|
                       ??????????????? ClockR Find_I Hexps Hck Hsystem Hvars];
       subst; simpl in *; inv Hwt;
+      try (take (wt_rhs _ _ _ _) and inv it);
         try (take (wt_const _ _ _) and inv it);
         eapply Control_wt_inv in Hwt'; eauto.
 
+    - (* TcDef external *)
+      inv WTmenv; inv Hexp; take (sem_rhs_instant _ _ _ _) and inv it;
+        exists me; eexists; split;
+        try solve [eapply stmt_eval_Control_absent'; eauto; auto with obcsem].
+      + eapply stmt_eval_Control_present'; eauto; auto with obcsem.
+        econstructor; eauto; simpl_Forall.
+        * rewrite typeof_correct; auto.
+        * eapply exp_correct; eauto.
+          eapply equiv_env_map; eauto. intros; repeat constructor; solve_Exists.
+      + split.
+        * apply Memory_Corres_Def; auto.
+        * inversion_clear 1; intros Hvar'.
+          eapply sem_var_instant_det in Hvar; eauto; subst.
+          inv Hvar'; rewrite Env.gss; auto.
+      + split.
+        * apply Memory_Corres_Def; auto.
+        * inversion_clear 1; intros Hvar'.
+          eapply sem_var_instant_det in Hvar; eauto.
+          unfold variables in Vars.
+          subst; simpl in *; apply NoDup_app_cons in Vars as (Hnin & ?).
+          apply Hve; auto using Is_variable_in_tc.
+          intro; apply Hnin, in_app; auto.
+          rewrite Is_variable_in_variables.
+          intro; apply Hnin, in_app; auto.
+
     - (* TcDef *)
-      inv WTmenv; inv Hexp; exists me; eexists; split;
+      inv WTmenv; inv Hexp; take (sem_rhs_instant _ _ _ _) and inv it;
+        exists me; eexists; split;
         try solve [eapply stmt_eval_Control_absent'; eauto; auto with obcsem].
       + eapply stmt_eval_Control_present'; eauto; auto with obcsem.
         eapply cexp_correct; eauto with obcsem.
@@ -1551,7 +1585,7 @@ Module Type CORRECTNESS
       Stc.Typ.wt_program P ->
       correct_system P f.
   Proof.
-    intros (types & P); induction P as [|system]; unfold correct_system;
+    intros []; induction systems0 as [|system]; unfold correct_system;
       intros b (Ord & WSCH & NormalArgs) WC WT ???????? Sem Find Tcs Spec WTS WTins E;
       pose proof Sem;
       inversion_clear Sem as [????????? Find' ? Outs Hscv Htcs Closed TransClosed Closed'];
@@ -1563,8 +1597,8 @@ Module Type CORRECTNESS
       inversion_clear NormalArgs as [|?? Hnormal];
       inversion_clear WC as [|?? WCb];
       inversion WT as [|?? [WTb]]; simpl in *; subst.
-    assert (Well_defined (Stc.Syn.Program types P)) by (split; auto).
-    assert (correct_program (Stc.Syn.Program types P)) by (unfold correct_program; intros; auto).
+    assert (Well_defined (Stc.Syn.Program types0 externs0 systems0)) by (split; auto).
+    assert (correct_program (Stc.Syn.Program types0 externs0 systems0)) by (unfold correct_program; intros; auto).
     destruct WCb as (?&?&?& WCtcs); rewrite 2 idck_app, <-2 app_assoc in WCtcs.
     destruct WTb as (WTtcs &?).
     eapply find_unit_cons in Find as [[E' Find]|[E' Find]]; simpl in *; eauto.
@@ -1721,7 +1755,7 @@ Module Type CORRECTNESS
         { apply Forall_forall; intros * Hin; apply in_map with (f := snd) in Hin.
           intro E''; rewrite E'' in Hin; contradiction.
         }
-        edestruct IHP as (me' &?&?); eauto using sem_system.
+        edestruct IHsystems0 as (me' &?&?); eauto using sem_system.
         exists me'; split; auto.
         apply stmt_call_eval_cons; auto.
       + rewrite steps_iresets_of_Is_system_in, map_app,

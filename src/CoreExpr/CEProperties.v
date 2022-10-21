@@ -48,6 +48,7 @@ Module Type CEPROPERTIES
         eauto using sem_exp_instant with nlfree.
       symmetry; auto with nlfree.
     - (* Ewhen *)
+      destruct_conjs.
       split; inversion_clear 1;
         take (sem_var_instant _ _ _) and eapply sem_var_instant_switch_env in it;
         take (sem_exp_instant _ _ _ _)
@@ -311,6 +312,16 @@ Module Type CEPROPERTIES
       apply it; auto.
   Qed.
 
+  Lemma Is_free_in_wt_rhs:
+    forall tenv texterns (xs : list (ident * (Op.type * clock))) x e,
+      Is_free_in_rhs x e ->
+      wt_rhs tenv texterns (idty xs) e ->
+      InMembers x xs.
+  Proof.
+    intros * Hf Hwt; inv Hf; inv Hwt; eauto using Is_free_in_wt_cexp.
+    simpl_Exists. simpl_Forall. eauto using Is_free_in_wt_exp.
+  Qed.
+
   Lemma Is_free_in_wt_aexp:
     forall tenv (xs : list (ident * (Op.type * clock))) x ck e,
       Is_free_in_aexp x ck e ->
@@ -322,15 +333,15 @@ Module Type CEPROPERTIES
     inv Fx; eauto using Is_free_in_wt_exp, Is_free_in_wt_clock.
   Qed.
 
-  Lemma Is_free_in_wt_caexp:
-    forall tenv (xs : list (ident * (Op.type * clock))) x ck e,
-      Is_free_in_caexp x ck e ->
-      wt_cexp tenv (idty xs) e ->
+  Lemma Is_free_in_wt_arhs:
+    forall tenv texterns (xs : list (ident * (Op.type * clock))) x ck e,
+      Is_free_in_arhs x ck e ->
+      wt_rhs tenv texterns (idty xs) e ->
       wt_clock tenv (idty xs) ck ->
       InMembers x xs.
   Proof.
     intros * Fx WTe WTc.
-    inv Fx; eauto using Is_free_in_wt_cexp, Is_free_in_wt_clock.
+    inv Fx; eauto using Is_free_in_wt_rhs, Is_free_in_wt_clock.
   Qed.
 
 End CEPROPERTIES.

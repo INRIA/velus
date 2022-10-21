@@ -82,17 +82,17 @@ Module Type SCTYPING
         wt_exp G Γ' (subclock_exp bck sub e).
     Proof with auto with ltyping.
       induction e using exp_ind2; intros * Hwt; inv Hwt; simpl in *.
-      3-13:econstructor; simpl in *; eauto using rename_var_wt, subclock_clock_wt.
-      1-42:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
-      1-34:try rewrite subclock_exp_typeof.
-      1-34:try rewrite subclock_exp_typesof.
-      1-34:try (rewrite map_subclock_ann_clock; auto). 1-34:try (rewrite map_subclock_ann_type; auto). 1-30:auto.
+      3-14:econstructor; simpl in *; eauto using rename_var_wt, subclock_clock_wt.
+      all:try solve [rewrite Forall_map, Forall_forall in *; intros; eauto].
+      all:try rewrite subclock_exp_typeof.
+      all:try rewrite subclock_exp_typesof.
+      all:try (rewrite map_subclock_ann_clock; auto). all:try (rewrite map_subclock_ann_type; auto); auto.
       - apply add_whens_wt...
       - apply add_whens_wt...
       - eapply NoLast in H2 as [].
       - eapply NoLast in H2 as [].
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst...
-      - rewrite Forall_map. eapply Forall_impl; [|eauto]; intros ??; subst...
+      - simpl_Forall...
+      - simpl_Forall...
       - erewrite map_map, map_ext; eauto. intros (?&?); auto.
       - contradict H6. apply map_eq_nil in H6; auto.
       - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
@@ -106,9 +106,7 @@ Module Type SCTYPING
       - rewrite Forall_map. rewrite Forall_forall in *; intros (?&?) Hin; simpl. rewrite Forall_map.
         specialize (H _ Hin). specialize (H10 _ Hin).
         rewrite Forall_forall in *; eauto.
-      - rewrite Forall_map. rewrite Forall_forall; intros (?&?) Hin; simpl.
-        rewrite subclock_exp_typesof.
-        eapply Forall_forall in H11; eauto; auto.
+      - simpl_Forall. now rewrite subclock_exp_typesof.
       - erewrite map_map, map_ext; eauto. intros (?&?); auto.
       - erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto. intros (?&?); auto.
       - contradict H10. apply map_eq_nil in H10; auto.

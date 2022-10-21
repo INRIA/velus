@@ -53,6 +53,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 
 %token<LustreAst.astloc> LET TEL NODE FUNCTION RETURNS VAR
 %token<LustreAst.astloc> TYPE
+%token<LustreAst.astloc> EXTERNAL
 %token<LustreAst.astloc> LAST FBY RARROW
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
@@ -81,6 +82,7 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.var_decls> var_decl
 %type<list Common.ident (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
+%type<list LustreAst.type_name> type_names
 %type<LustreAst.preclock> declared_clock
 %type<LustreAst.clock> clock
 %type<LustreAst.local_decls> last_var_decl
@@ -426,6 +428,10 @@ type_name:
 | t=VAR_NAME
     { (LustreAst.Tenum_name (fst t), snd t) }
 
+type_names:
+| typ=type_name { [fst typ] }
+| ty=type_name COMMA tys=type_names { (fst ty)::tys }
+
 declared_clock:
 | /* empty */
     { LustreAst.FULLCK LustreAst.BASE }
@@ -586,6 +592,8 @@ declaration:
         (fst id) (fst is_node) iparams oparams (LustreAst.BLOCAL locals blks loc) (snd is_node) }
 | loc=TYPE id=VAR_NAME EQ optbar cs=constructor_list
     { LustreAst.TYPE (fst id) cs loc }
+| loc=EXTERNAL id=VAR_NAME LPAREN tyins=type_names RPAREN RETURNS tyout=type_name
+    { LustreAst.EXTERNAL (fst id) tyins (fst tyout) loc }
 
 translation_unit:
 | def=declaration

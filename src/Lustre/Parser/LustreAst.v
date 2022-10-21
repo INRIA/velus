@@ -126,12 +126,14 @@ Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
 | NODE : ident -> bool -> var_decls -> var_decls
          -> block -> astloc -> declaration
-| TYPE : ident -> list ident -> astloc -> declaration.
+| TYPE : ident -> list ident -> astloc -> declaration
+| EXTERNAL : ident -> list type_name -> type_name -> astloc -> declaration.
 
 Definition declaration_loc (d: declaration) : astloc :=
   match d with
   | NODE name has_state inputs outputs eqs loc => loc
   | TYPE name constructors loc => loc
+  | EXTERNAL _ _ _ loc => loc
   end.
 
 (** Custom induction schemes *)

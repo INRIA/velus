@@ -79,7 +79,6 @@ Module Type CETYPINGSEMANTICS
         apply Forall_forall; intros; eapply Forall_forall in WT; eauto.
         apply WT, free_in_exp_spec; rewrite <-free_in_exp_spec'; auto.
   Qed.
-
   Global Hint Resolve sem_exp_instant_wt : nltyping stctyping nlsem stcsem.
 
   Corollary sem_aexp_instant_wt:
@@ -126,12 +125,33 @@ Module Type CETYPINGSEMANTICS
   Qed.
   Global Hint Resolve sem_cexp_instant_wt : nltyping stctyping nlsem stcsem.
 
-  Corollary sem_caexp_instant_wt:
-    forall base R e ck v enums Γ,
-      sem_caexp_instant base R ck e v ->
-      wt_cexp enums Γ e ->
-      wt_synchronous_env R (filter (fun xt => PS.mem (fst xt) (free_in_cexp e PS.empty)) Γ) ->
-      wt_svalue v (typeofc e).
+  Lemma sem_rhs_instant_wt:
+    forall base R e v enums externs Γ,
+      sem_rhs_instant base R e v ->
+      wt_rhs enums externs Γ e ->
+      wt_synchronous_env R (filter (fun xt => PS.mem (fst xt) (free_in_rhs e PS.empty)) Γ) ->
+      wt_svalue v (typeofr e).
+  Proof.
+    intros * Sem WT Env; inv Sem; inv WT; simpl; eauto using sem_cexp_instant_wt.
+    constructor.
+    eapply pres_sem_extern; [|eauto].
+    apply Forall2_swap_args in H0. eapply Forall2_trans_ex in H; eauto.
+    simpl_Forall.
+    take (sem_exp_instant _ _ _ _) and eapply sem_exp_instant_wt in it; eauto.
+    2:{ unfold wt_synchronous_env in *. rewrite Forall_filter in *. simpl_Forall.
+        apply Env.
+        apply free_in_fold_left_exp_spec. apply free_in_exp_spec in H10 as [|]; auto.
+        left. solve_Exists. }
+    inv it; congruence.
+  Qed.
+  Global Hint Resolve sem_rhs_instant_wt : nltyping stctyping nlsem stcsem.
+
+  Corollary sem_arhs_instant_wt:
+    forall base R e ck v enums externs Γ,
+      sem_arhs_instant base R ck e v ->
+      wt_rhs enums externs Γ e ->
+      wt_synchronous_env R (filter (fun xt => PS.mem (fst xt) (free_in_rhs e PS.empty)) Γ) ->
+      wt_svalue v (typeofr e).
   Proof.
     inversion_clear 1; intros; eauto with nltyping.
   Qed.

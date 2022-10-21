@@ -74,6 +74,9 @@ Module Type TRNORMALARGS
     - (* fby *)
       monadInv Htoeq.
       constructor.
+    - (* extcall *)
+      destruct_conjs; monadInv Htoeq.
+      constructor.
     - (* cexp *)
       inv H. 3:inv H0.
       1-8:monadInv Htoeq; constructor.
@@ -102,7 +105,7 @@ Module Type TRNORMALARGS
     unfold normal_args_node.
     intros * Htog Hnormed Hton.
     tonodeInv Hton; simpl in *.
-    inversion_clear Hnormed as [???? Hblk _ Hnorm]. rewrite Hblk in Hmmap. monadInv Hmmap.
+    inversion_clear Hnormed as [??? Hblk _ Hnorm]. rewrite Hblk in Hmmap. monadInv Hmmap.
     eapply mmap_inversion in EQ. clear Hblk.
     induction EQ; inv Hnorm; constructor; auto.
     eapply block_to_equation_normal_args; eauto.
@@ -113,14 +116,14 @@ Module Type TRNORMALARGS
       to_global G = OK G' ->
       normal_args G'.
   Proof.
-    intros (?&nds) ? Hnormed Htog. monadInv Htog.
+    intros [] ? Hnormed Htog. monadInv Htog.
     revert dependent x.
-    induction nds; intros * Htog; simpl in *; monadInv Htog; inv Hnormed;
+    induction nodes0; intros * Htog; simpl in *; monadInv Htog; inv Hnormed;
       constructor; simpl; auto.
     - destruct H1.
       eapply to_node_normal_args; eauto.
       unfold to_global; simpl. rewrite EQ1; auto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
 End TRNORMALARGS.

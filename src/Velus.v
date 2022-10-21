@@ -39,6 +39,7 @@ Parameter print_nlustre : NL.Syn.global -> unit.
 Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
+Parameter print_header  : Clight.program -> unit.
 Parameter do_dce        : unit -> bool.
 Parameter do_dupregrem  : unit -> bool.
 Parameter do_fusion     : unit -> bool.
@@ -86,7 +87,7 @@ Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global 
      @@ normalize_global
      @@@ TR.Tr.to_global.
 
-Definition nl_to_cl (main_node: ident) (g: NL.Syn.global) : res Clight.program :=
+Definition nl_to_cl (main_node: option ident) (g: NL.Syn.global) : res Clight.program :=
   OK g
      @@ total_if do_dce NL.DCE.DCE.dce_global
      @@ total_if do_dupregrem NL.DRR.DRR.remove_dup_regs
@@ -108,14 +109,15 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
-Definition nl_to_asm (main_node: ident) (g: NL.Syn.global) : res Asm.program :=
+Definition nl_to_asm (main_node: option ident) (g: NL.Syn.global) : res Asm.program :=
   OK g
      @@@ nl_to_cl main_node
      @@ print print_Clight
+     @@ print print_header
      @@ add_builtins
      @@@ transf_clight2_program.
 
-Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
+Definition compile (D: list LustreAst.declaration) (main_node: option ident) : res Asm.program :=
   elab_declarations D
                     @@ @proj1_sig _ _
                     @@@ l_to_nl

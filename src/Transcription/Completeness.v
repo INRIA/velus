@@ -150,13 +150,15 @@ Module Type COMPLETENESS
       specialize (Henvo x).
       destruct (envo x); simpl...
       exfalso...
+    - inv Hwt. simpl_Forall. inv H4.
+      eapply mmap_to_lexp_complete in H1 as (?&Hes).
+      esplit. rewrite Hes; simpl; eauto.
     - inv Hwt. inv H.
       eapply to_cexp_complete in H1 as (?&He'); eauto.
       inv Hfind. destruct H2 as [cl Hcl].
       eexists; simpl.
       destruct e; try (rewrite Hcl; rewrite He'; simpl; eauto).
-      inv He'.
-      inv He'.
+      all:inv He'.
   Qed.
 
   Fact block_to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo blk xs xr,
@@ -176,8 +178,8 @@ Module Type COMPLETENESS
       eapply IHHnorm; eauto.
   Qed.
 
-  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs caus blks,
-      n_block n = Blocal (Scope locs caus blks) ->
+  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
+      n_block n = Blocal (Scope locs blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       wt_node G n ->
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
@@ -201,10 +203,10 @@ Module Type COMPLETENESS
     }
     destruct Hwtn as (_&_&_&Hwt). rewrite Hblk in Hwt. inv Hwt; inv H1.
     clear Hblk Hperm0.
-    induction Hvars; intros; simpl in *; eauto.
-    inv Hnormed. inv H9. apply Forall_app in Hfind' as (?&?). simpl in *.
+    induction Hvars; intros; simpl in *; eauto. simpl_Forall.
+    apply Forall_app in Hfind' as (?&?). simpl in *.
     eapply block_to_equation_complete in H2 as (?&Heqs1); eauto.
-    eapply IHHvars in H10 as (?&Heqs2); eauto.
+    eapply IHHvars in H8 as (?&Heqs2); eauto.
     erewrite Heqs1, Heqs2; simpl; eauto.
   Qed.
 
@@ -215,7 +217,7 @@ Module Type COMPLETENESS
       normalized_node G n ->
       exists n', to_node n = OK n'.
   Proof.
-    intros * Hwtn Hnorm. inversion_clear Hnorm as [???? Hblk Hnormed].
+    intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk Hnormed].
     unfold to_node.
     edestruct (mmap_block_to_equation_complete G n)
               with (env:=Env.adds' (idty (n_in n)) (Env.from_list (idty (n_out n))))
@@ -246,15 +248,15 @@ Module Type COMPLETENESS
       normalized_global G ->
       exists G', to_global G = OK G'.
   Proof.
-    intros (?&nds) (_&Hwt). revert Hwt.
-    induction nds; intros * Hwt Hnormed;
+    intros [] (_&Hwt). revert Hwt.
+    induction nodes0; intros * Hwt Hnormed;
       inversion_clear Hnormed as [|?? (Hnormed'&_)];
       inversion_clear Hwt as [|?? (?&?)]; simpl in *.
-    - exists (NL.Global types0 nil). reflexivity.
+    - exists (NL.Global types0 externs0 []). reflexivity.
     - unfold to_global; simpl.
       eapply to_node_complete in Hnormed' as (hd'&Hton); auto.
       erewrite Hton; clear Hton; simpl.
-      eapply IHnds in H as (tl'&HtoG); auto.
+      eapply IHnodes0 in H as (tl'&HtoG); auto.
       monadInv HtoG; simpl in *.
       erewrite EQ; simpl; eauto.
   Qed.

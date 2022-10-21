@@ -36,9 +36,9 @@ Module Type NLTYPING
   Inductive wt_equation (G: global) (Γ: list (ident * type)):
     equation -> Prop :=
   | wt_EqDef: forall x ck e,
-      In (x, typeofc e) Γ ->
+      In (x, typeofr e) Γ ->
       wt_clock G.(types) Γ ck ->
-      wt_cexp G.(types) Γ e ->
+      wt_rhs G.(types) G.(externs) Γ e ->
       wt_equation G Γ (EqDef x ck e)
   | wt_EqApp: forall n xs ck f es xrs,
       find_node f G = Some n ->
@@ -116,48 +116,6 @@ Module Type NLTYPING
       eauto.
   Qed.
 
-  Lemma wt_equation_types_cons:
-    forall ns enums e Γ eq,
-      wt_equation (Global enums ns) Γ eq ->
-      wt_equation (Global (e :: enums) ns) Γ eq.
-  Proof.
-    induction 1; eauto using wt_equation, wt_clock_types_cons, wt_cexp_types_cons, wt_exp_types_cons.
-    - econstructor; eauto using wt_clock_types_cons.
-      + now rewrite find_node_types_cons.
-      + eapply Forall_impl; [|eauto]; eauto using wt_exp_types_cons.
-      + eapply Forall_impl; [|eauto]; intros ? (?&?); simpl in *; eauto using wt_exp_types_cons.
-      + eapply Forall_impl; [|eauto]; eauto using wt_clock_types_cons.
-    - econstructor; eauto using wt_clock_types_cons, wt_exp_types_cons.
-      + simpl in *. inv H0; constructor; auto using in_cons.
-      + eapply Forall_impl; [|eauto]; intros ? (?&?); simpl in *; eauto using wt_exp_types_cons.
-      + eapply Forall_impl; [|eauto]; eauto using wt_clock_types_cons.
-  Qed.
-
-  Corollary wt_node_types_cons:
-    forall ns enums e n,
-      wt_node (Global enums ns) n ->
-      wt_node (Global (e :: enums) ns) n.
-  Proof.
-    unfold wt_node; intros * (WT & Enums); split.
-    - apply Forall_forall; intros;
-        take (Forall _ _) and eapply Forall_forall in it; eauto.
-      now apply wt_equation_types_cons.
-    - intros * Hin; apply Enums in Hin; simpl in *; auto.
-      inv Hin; auto using wt_type with datatypes.
-  Qed.
-
-  Corollary wt_global_types_cons:
-    forall enums ns e,
-      wt_global (Global enums ns) ->
-      wt_global (Global (e :: enums) ns).
-  Proof.
-    unfold wt_global, wt_program.
-    induction ns; simpl; intros * WT; inv WT; constructor.
-    - take (_ /\ _) and destruct it as (WT & ?); split; auto.
-      now apply wt_node_types_cons.
-    - apply IHns; auto.
-  Qed.
-
   Section incl.
     Variable (G : global).
     Variable (vars vars' : list (ident * type)).
@@ -194,17 +152,20 @@ Module Type NLTYPING
     Qed.
     Local Hint Resolve wt_cexp_incl : nltyping.
 
+    Lemma wt_rhs_incl : forall e,
+        wt_rhs G.(types) G.(externs) vars e ->
+        wt_rhs G.(types) G.(externs) vars' e.
+    Proof.
+      intros * Wt; inv Wt; econstructor; simpl_Forall; eauto with nltyping.
+    Qed.
+    Local Hint Resolve wt_rhs_incl : nltyping.
+
     Lemma wt_equation_incl : forall equ,
         wt_equation G vars equ ->
         wt_equation G vars' equ.
     Proof with eauto with nltyping.
-      intros [| |] Hwt; inv Hwt; econstructor...
-      - eapply Forall2_impl_In; eauto. intros ? (?&?&?)...
-      - eapply Forall_impl; [|eauto]...
-      - eapply Forall_impl; [|eauto]; intros ? (?&?)...
-      - eapply Forall_impl; [|eauto]...
-      - eapply Forall_impl; [|eauto]; intros ? (?&?)...
-      - eapply Forall_impl; [|eauto]...
+      intros [| |] Hwt; inv Hwt; econstructor; simpl_Forall...
+      simpl_Forall; eauto.
     Qed.
 
   End incl.
@@ -215,7 +176,7 @@ Module Type NLTYPING
       wt_equation G2 vars eq.
   Proof.
     intros * Heq Hwt.
-    destruct Heq as (Henums&Heq).
+    destruct Heq as (Henums&Htypes&Heq).
     inv Hwt; try constructor; eauto; try congruence.
     2:eapply Forall_impl; eauto; intros; congruence.
     specialize (Heq f). rewrite H in Heq. inv Heq.

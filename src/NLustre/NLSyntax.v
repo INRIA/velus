@@ -22,7 +22,7 @@ Module Type NLSYNTAX
   (** ** Equations *)
 
   Inductive equation : Type :=
-  | EqDef : ident -> clock -> cexp -> equation
+  | EqDef : ident -> clock -> rhs -> equation
   | EqApp : list ident -> clock -> ident -> list exp -> list (ident * clock) -> equation
   | EqFby : ident -> clock -> const -> exp -> list (ident * clock) -> equation.
 
@@ -81,12 +81,13 @@ Module Type NLSYNTAX
 
   Record global := Global {
                        types : list type;
+                       externs : list (ident * (list ctype * ctype));
                        nodes : list node
                      }.
 
   Global Program Instance global_program: Program node global :=
     { units := nodes;
-      update := fun g => Global g.(types) }.
+      update := fun g => Global g.(types) g.(externs) }.
 
   Definition find_node (f: ident) (G: global) :=
     option_map fst (find_unit f G).
@@ -94,9 +95,9 @@ Module Type NLSYNTAX
   (** Structural properties *)
 
   Lemma find_node_now:
-    forall f n G enums,
+    forall f n G enums externs,
       n.(n_name) = f ->
-      find_node f (Global enums (n::G)) = Some n.
+      find_node f (Global enums externs (n::G)) = Some n.
   Proof.
     intros * Heq; subst.
     unfold find_node, find_unit; simpl.
@@ -104,12 +105,12 @@ Module Type NLSYNTAX
   Qed.
 
   Lemma find_node_other:
-    forall f node G enums,
+    forall f node G enums externs,
       node.(n_name) <> f ->
-      find_node f (Global enums (node::G)) = find_node f (Global enums G).
+      find_node f (Global enums externs (node::G)) = find_node f (Global enums externs G).
   Proof.
-    unfold find_node, option_map; intros ??? enums Hneq.
-    erewrite find_unit_other with (p' := Global enums G);
+    unfold find_node, option_map; intros ??? enums externs Hneq.
+    erewrite find_unit_other with (p' := Global enums externs G);
       simpl; eauto; try reflexivity.
     unfold equiv_program; reflexivity.
   Qed.
@@ -125,7 +126,8 @@ Module Type NLSYNTAX
   Qed.
 
   Lemma find_node_Exists:
-    forall f enums G, find_node f (Global enums G) <> None <-> List.Exists (fun n=> f = n.(n_name)) G.
+    forall f enums externs G,
+      find_node f (Global enums externs G) <> None <-> List.Exists (fun n=> f = n.(n_name)) G.
   Proof.
     unfold find_node; intros.
     rewrite option_map_None.
@@ -146,25 +148,11 @@ Module Type NLSYNTAX
   Qed.
 
   Lemma Forall_not_find_node_None:
-    forall G f enums,
-      Forall (fun n => ~(f = n.(n_name))) G <-> find_node f (Global enums G) = None.
+    forall G f enums externs,
+      Forall (fun n => ~(f = n.(n_name))) G <-> find_node f (Global enums externs G) = None.
   Proof.
     unfold find_node; intros.
     rewrite option_map_None, find_unit_None; reflexivity.
-  Qed.
-
-  Lemma find_node_types_cons:
-    forall ns types e f,
-      find_node f (Global (e :: types) ns) = find_node f (Global types ns).
-  Proof.
-    unfold find_node; simpl.
-    induction ns; simpl; auto.
-    intros.
-    remember (find_unit f _) as F eqn: E; symmetry in E.
-    remember (find_unit f (Global types0 _)) as F' eqn: E'; symmetry in E'.
-    rewrite find_unit_cons in E; simpl; eauto.
-    rewrite find_unit_cons in E'; simpl; eauto.
-    destruct E as [(?&?)|(?&?)], E' as [(?&?)|(?&?)]; subst; simpl; auto; contradiction.
   Qed.
 
   Lemma is_filtered_eqs:
@@ -363,26 +351,27 @@ Module Type NLSYNTAX
 
     (** Globals are equivalent if they contain equivalent nodes *)
     Definition global_iface_eq (G1 G2 : global) : Prop :=
-      types G1 = types G2 /\
-      forall f, orel2 node_iface_eq (find_node f G1) (find_node f G2).
+      types G1 = types G2
+      /\ externs G1 = externs G2
+      /\ forall f, orel2 node_iface_eq (find_node f G1) (find_node f G2).
 
-    Lemma global_iface_eq_nil : forall enums,
-        global_iface_eq (Global enums []) (Global enums []).
+    Lemma global_iface_eq_nil : forall enums externs,
+        global_iface_eq (Global enums externs []) (Global enums externs []).
     Proof.
       unfold global_iface_eq, find_node.
-      constructor; auto.
+      repeat split; auto.
       intros *; simpl. constructor.
     Qed.
 
-    Lemma global_iface_eq_cons : forall enums nds nds' n n',
-        global_iface_eq (Global enums nds) (Global enums nds') ->
+    Lemma global_iface_eq_cons : forall enums externs nds nds' n n',
+        global_iface_eq (Global enums externs nds) (Global enums externs nds') ->
         n.(n_name) = n'.(n_name) ->
         n.(n_in) = n'.(n_in) ->
         n.(n_out) = n'.(n_out) ->
-        global_iface_eq (Global enums (n::nds)) (Global enums (n'::nds')).
+        global_iface_eq (Global enums externs (n::nds)) (Global enums externs (n'::nds')).
     Proof.
-      intros * (?&Heq) Hname Hin Hout.
-      constructor; auto. intros ?.
+      intros * (?&Heq1&Heq2) Hname Hin Hout.
+      repeat split; auto. intros ?.
       destruct (Pos.eq_dec (n_name n) f); subst.
       - simpl. repeat rewrite find_node_now; auto.
         repeat constructor; auto.
@@ -396,7 +385,7 @@ Module Type NLSYNTAX
         exists n', (find_node f G' = Some n' /\
                node_iface_eq n n').
     Proof.
-      intros G G' f n (_&Hglob) Hfind.
+      intros G G' f n (_&_&Hglob) Hfind.
       specialize (Hglob f).
       inv Hglob; try congruence.
       rewrite Hfind in H. inv H.
@@ -426,29 +415,27 @@ Module Type NLSYNTAX
 
   Global Instance global_eq_refl : Reflexive global_iface_eq.
   Proof.
-    intros G. split; intros; try reflexivity.
+    intros G. repeat split; intros; try reflexivity.
     destruct (find_node f G); constructor.
     apply node_iface_eq_refl.
   Qed.
 
   Global Instance global_iface_eq_sym : Symmetric global_iface_eq.
   Proof.
-    intros ?? H12.
-    inv H12. constructor; auto.
-    intros f. specialize (H0 f).
-    inv H0; constructor; auto.
+    intros ?? (?&?&?).
+    repeat split; auto.
+    intros f. specialize (H1 f).
+    inv H1; constructor; auto.
     apply node_iface_eq_sym; auto.
   Qed.
 
   Fact global_iface_eq_trans : Transitive global_iface_eq.
   Proof.
-    intros n1 n2 n3 H12 H23.
-    destruct H12 as [? H12].
-    destruct H23 as [? H23].
-    split; try congruence.
+    intros n1 n2 n3 (?&?&H12) (?&?&H23).
+    repeat split; try congruence.
     intros f. specialize (H12 f). specialize (H23 f).
     inv H12; inv H23; try congruence; constructor.
-    rewrite <-H2 in H4. inv H4.
+    rewrite <-H4 in H6. inv H6.
     eapply node_iface_eq_trans; eauto.
   Qed.
 

@@ -425,7 +425,7 @@ Module Type DCE
       NoDupMembers (ins ++ filter p vars ++ outs).
   Proof.
     intros * Hnd.
-    repeat apply NoDupMembers_app; eauto using nodupmembers_filter, NoDupMembers_app_l, NoDupMembers_app_r.
+    repeat apply NoDupMembers_app; eauto using NoDupMembers_filter, NoDupMembers_app_l, NoDupMembers_app_r.
     - intros ? Hin1 Hin2. eapply filter_InMembers' in Hin1.
       eapply NoDupMembers_app_r, NoDupMembers_app_InMembers in Hnd; eauto.
     - intros ? Hin1 Hin2.
@@ -444,7 +444,7 @@ Module Type DCE
     apply NoDup_Permutation.
     - apply vars_defined_filter_NoDup. now rewrite Hperm, <-fst_NoDupMembers.
     - apply fst_NoDupMembers.
-      apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, nodupmembers_filter.
+      apply NoDupMembers_app; eauto using NoDupMembers_app_l, NoDupMembers_app_r, NoDupMembers_filter.
       intros ? Hinm1 Hinm2.
       eapply filter_InMembers' in Hinm1. eapply NoDupMembers_app_InMembers in Hnd; eauto.
     - intros ?. rewrite <-Is_defined_in_vars_defined, dce_eqs_defined.
@@ -498,7 +498,7 @@ Module Type DCE
     { transform_unit := dce_node }.
 
   Local Program Instance dce_without_units: TransformProgramWithoutUnits global global :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition dce_global : global -> global := transform_units.
 
@@ -530,7 +530,7 @@ Module Type DCE
   Lemma dce_global_iface_eq : forall G,
       global_iface_eq G (dce_global G).
   Proof.
-    intros. split; intros; auto.
+    intros. repeat split; intros; auto.
     destruct (find_node _ _) eqn:Hfind.
     - erewrite find_node_dce_forward; eauto.
       constructor; simpl.

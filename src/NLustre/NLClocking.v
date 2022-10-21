@@ -39,7 +39,7 @@ Module Type NLCLOCKING
   | CEqDef:
       forall x ck ce,
         In (x, ck) Ω ->
-        wc_cexp Ω ce ck ->
+        wc_rhs Ω ce ck ->
         wc_equation G Ω (EqDef x ck ce)
   | CEqApp:
       forall xs ck f les xrs n sub,
@@ -71,7 +71,7 @@ Module Type NLCLOCKING
            n.(n_eqs).
 
   Definition wc_global (G: global) :=
-    Forall' (fun ns => wc_node (Global G.(types) ns)) G.(nodes).
+    Forall' (fun ns => wc_node (Global G.(types) G.(externs) ns)) G.(nodes).
 
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
@@ -119,21 +119,21 @@ Module Type NLCLOCKING
   Qed.
 
   Lemma wc_global_app_weaken:
-    forall G G' enums,
-      wc_global (Global enums (G' ++ G)) ->
-      wc_global (Global enums G).
+    forall G G' enums externs,
+      wc_global (Global enums externs (G' ++ G)) ->
+      wc_global (Global enums externs G).
   Proof.
     induction G'; auto.
     inversion_clear 1. auto.
   Qed.
 
   Lemma wc_find_node:
-    forall G f node enums,
-      wc_global (Global enums G) ->
-      find_node f (Global enums G) = Some node ->
+    forall G f node enums externs,
+      wc_global (Global enums externs G) ->
+      find_node f (Global enums externs G) = Some node ->
       exists G'' G',
         G = G'' ++ node :: G'
-        /\ wc_node (Global enums G') node.
+        /\ wc_node (Global enums externs G') node.
   Proof.
     intros * WCG Hfind.
     apply find_node_split in Hfind as (G'' & G' & HG); simpl in HG.
@@ -143,10 +143,10 @@ Module Type NLCLOCKING
   Qed.
 
   Lemma wc_equation_global_cons:
-    forall Ω nd G eq types,
-      Ordered_nodes (Global types (nd :: G)) ->
-      wc_equation (Global types G) Ω eq ->
-      wc_equation (Global types (nd :: G)) Ω eq.
+    forall Ω nd G eq types externs,
+      Ordered_nodes (Global types externs (nd :: G)) ->
+      wc_equation (Global types externs G) Ω eq ->
+      wc_equation (Global types externs (nd :: G)) Ω eq.
   Proof.
     intros * OnG WCnG.
     inversion_clear OnG as [|? ? [? HndG] OG].
@@ -154,7 +154,7 @@ Module Type NLCLOCKING
     econstructor; eauto.
     unfold find_node, option_map, find_unit; simpl.
     destruct (ident_eq_dec (n_name nd) f); auto.
-    assert (find_node f (Global types0 G) <> None) as Hfind by congruence.
+    assert (find_node f (Global types0 externs0 G) <> None) as Hfind by congruence.
     apply find_node_Exists in Hfind.
     apply decidable_Exists_not_Forall in Hfind.
     - subst; contradiction.
@@ -162,47 +162,15 @@ Module Type NLCLOCKING
   Qed.
 
   Lemma wc_equation_global_app:
-    forall Ω G' G eq types,
-      Ordered_nodes (Global types (G' ++ G)) ->
-      wc_equation (Global types G) Ω eq ->
-      wc_equation (Global types (G' ++ G)) Ω eq.
+    forall Ω G' G eq types externs,
+      Ordered_nodes (Global types externs (G' ++ G)) ->
+      wc_equation (Global types externs G) Ω eq ->
+      wc_equation (Global types externs (G' ++ G)) Ω eq.
   Proof.
     induction G'; auto.
     simpl. intros * OG WCeq.
     eapply wc_equation_global_cons in OG; eauto.
     inv OG. auto.
-  Qed.
-
-  Lemma wc_equation_types_cons:
-    forall ns types e Ω eq,
-      wc_equation (Global types ns) Ω eq ->
-      wc_equation (Global (e :: types) ns) Ω eq.
-  Proof.
-    induction 1; eauto using wc_equation.
-    econstructor; eauto.
-    now rewrite find_node_types_cons.
-  Qed.
-
-  Corollary wc_node_types_cons:
-    forall ns types e n,
-      wc_node (Global types ns) n ->
-      wc_node (Global (e :: types) ns) n.
-  Proof.
-    unfold wc_node; intuition.
-    apply Forall_forall; intros;
-      take (Forall _ _) and eapply Forall_forall in it; eauto.
-    now apply wc_equation_types_cons.
-  Qed.
-
-  Corollary wc_global_types_cons:
-    forall types ns e,
-      wc_global (Global types ns) ->
-      wc_global (Global (e :: types) ns).
-  Proof.
-    unfold wc_global.
-    induction ns; simpl; intros * WC; inv WC; constructor.
-    - now apply wc_node_types_cons.
-    - apply IHns; auto.
   Qed.
 
   (** Properties *)
@@ -320,7 +288,7 @@ Module Type NLCLOCKING
       wc_equation G2 vars eq.
   Proof.
     intros * Heq Hwc.
-    destruct Heq as (Henums&Heq).
+    destruct Heq as (Henums&Hexterns&Heq).
     inv Hwc; try constructor; eauto; try congruence.
     specialize (Heq f). rewrite H in Heq. inv Heq.
     destruct H5 as (?&?&?).
@@ -363,15 +331,21 @@ Module Type NLCLOCKING
     Qed.
     Local Hint Resolve wc_cexp_incl : nlclocking.
 
+    Lemma wc_rhs_incl : forall e ck,
+        wc_rhs vars e ck ->
+        wc_rhs vars' e ck.
+    Proof.
+      intros * Hwc; inv Hwc; econstructor; simpl_Forall; eauto with nlclocking.
+    Qed.
+    Local Hint Resolve wc_rhs_incl : nlclocking.
+
     Lemma wc_equation_incl : forall equ,
         wc_equation G vars equ ->
         wc_equation G vars' equ.
     Proof.
-      intros [| |] Hwc; inv Hwc; econstructor; eauto with nlclocking.
+      intros [| |] Hwc; inv Hwc; econstructor; simpl_Forall; eauto with nlclocking.
       - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto with nlclocking.
       - eapply Forall2_impl_In; eauto. intros (?&?&?) ? _ _ (?&?&?&?); eauto with nlclocking.
-      - eapply Forall_impl; [|eauto]; eauto.
-      - eapply Forall_impl; [|eauto]; eauto.
     Qed.
 
   End incl.

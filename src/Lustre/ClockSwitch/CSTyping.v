@@ -42,11 +42,11 @@ Module Type CSTYPING
         Forall (wt_equation G (vars++senv_of_tyck xcs)) eqs'.
     Proof.
       intros * Hwt Hck Hcond; destruct e; destruct_conjs; repeat inv_bind.
-      1-12:constructor; auto; rewrite Permutation_app_comm; simpl.
-      1-11:(constructor; [constructor; auto; eapply wt_exp_incl in Hwt; eauto;
+      all:constructor; auto; rewrite Permutation_app_comm; simpl.
+      all:(constructor; [constructor; auto; eapply wt_exp_incl in Hwt; eauto;
                           intros * Hl; inv Hl; econstructor; eauto with datatypes|]).
-      1-11:try take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
-      1-11:constructor; auto; eauto with senv datatypes.
+      all:try take (_ = [_]) and rewrite it; try rewrite app_nil_r; eauto.
+      all:constructor; auto; eauto with senv datatypes.
     Qed.
 
     Lemma cond_eq_wt_clock vars : forall e ty ck x xcs eqs' st st',
@@ -152,7 +152,7 @@ Module Type CSTYPING
         intros ((?&?)&?&?); auto. }
       eapply mmap_values, Forall2_ignore2 in Hni1.
       eapply mmap_values, Forall2_ignore2 in Hni2. simpl_In.
-      apply HasType_app in Hinm as [Hin|Hin]; inv Hin; simpl_Forall; repeat inv_bind.
+      destruct Hinm as [Hin|Hin]; inv Hin; simpl_Forall; repeat inv_bind.
       - solve_In; eauto with datatypes.
         f_equal; auto.
         unfold rename_var. erewrite Env.find_In_from_list; eauto.
@@ -164,7 +164,7 @@ Module Type CSTYPING
     Qed.
 
     Lemma switch_scope_wt {A} P_na P_nd P_wt f_switch :
-      forall locs caus (blk: A) bck sub Γck Γty Γty' s' st st',
+      forall locs (blk: A) bck sub Γck Γty Γty' s' st st',
         (forall x, Env.In x sub -> InMembers x Γck) ->
         (forall x y ty, Env.find x sub = Some y -> HasType Γty x ty -> HasType Γty' y ty)->
         (forall x, ~ IsLast Γty x) ->
@@ -174,10 +174,10 @@ Module Type CSTYPING
         NoDupMembers Γck ->
         Forall (wt_type G.(types)) (map (fun '(_, a) => a.(typ)) Γty) ->
         wt_clock G.(types) Γty' bck ->
-        noauto_scope P_na (Scope locs caus blk) ->
-        NoDupScope P_nd (map fst Γty) (Scope locs caus blk) ->
-        wt_scope P_wt G Γty (Scope locs caus blk) ->
-        switch_scope f_switch Γck bck sub (Scope locs caus blk) st = (s', st') ->
+        noauto_scope P_na (Scope locs blk) ->
+        NoDupScope P_nd (map fst Γty) (Scope locs blk) ->
+        wt_scope P_wt G Γty (Scope locs blk) ->
+        switch_scope f_switch Γck bck sub (Scope locs blk) st = (s', st') ->
         (forall Γty Γck Γty' blk' st st',
             (forall x, Env.In x sub -> InMembers x Γck) ->
             (forall x y ty, Env.find x sub = Some y -> HasType Γty x ty -> HasType Γty' y ty)->
@@ -205,7 +205,7 @@ Module Type CSTYPING
           destruct Hin as [Hin|Hin]; eauto.
           exfalso. simpl_In.
           eapply Env.find_In, Hsubin, fst_InMembers in Hfind. inv Hin; simpl_In.
-          eapply H7; eauto using In_InMembers.
+          eapply H6; eauto using In_InMembers.
           simpl_In. assert (HasType Γck x0 a.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty. solve_In.
         + intros ?? Hfind Hin. rewrite HasType_app in *.
@@ -222,7 +222,7 @@ Module Type CSTYPING
           inv Hin. simpl_In.
           assert (HasType Γck x0 a.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty.
-          eapply H7; eauto using In_InMembers. solve_In.
+          eapply H6; eauto using In_InMembers. solve_In.
         + rewrite NoLast_app. split; auto; intros * Hil.
           inv Hil. simpl_In. simpl_Forall; subst; simpl in *; congruence.
         + intros ?? Hin.
@@ -232,10 +232,10 @@ Module Type CSTYPING
           destruct Hin as [Hin|Hin]; simpl_In; eauto.
         + apply NoDupMembers_app; auto. rewrite NoDupMembers_senv_of_locs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2. rewrite fst_InMembers in Hinm1.
-          eapply H7; eauto.
-        + apply NoDupMembers_app; auto. apply nodupmembers_map; auto. intros; destruct_conjs; auto.
+          eapply H6; eauto.
+        + apply NoDupMembers_app; auto. apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
           intros ? Hinm1 Hinm2. rewrite InMembers_senv_of_locs in Hinm2.
-          eapply H7; eauto.
+          eapply H6; eauto.
           eapply InMembers_In in Hinm1 as (?&Hin1).
           assert (HasType Γck x0 x1.(typ)) as Hty by eauto with senv.
           apply Hincl in Hty. inv Hty; solve_In.
@@ -360,45 +360,44 @@ Module Type CSTYPING
             induction H2 as [|(?&?) (((?&?)&?)&?)]; simpl; auto.
             destruct H as (?&?&?); repeat inv_bind.
             f_equal; auto.
-          * eapply mmap_values, Forall2_ignore1 in H2.
-            rewrite Forall_map. eapply Forall_impl_In; [|eauto]; intros (((?&?)&?)&?) Hin2 ((?&?)&Hin3&?&?&?); repeat inv_bind.
+          * eapply mmap_values, Forall2_ignore1 in H2. simpl_Forall; repeat inv_bind.
             simpl_app. rewrite 2 HasType_app. do 2 right.
-            eapply new_idents_In with (ids1:=filter _ _) in H13; eauto.
+            eapply new_idents_In with (ids1:=filter _ _) in H14; eauto.
             2:{ rewrite HasType_app. right. eauto with senv. } simpl in *.
             simpl_In. econstructor. solve_In. simpl; rewrite map_app; auto. auto.
         + eapply CS.mmap2_values in H8. eapply mmap_values, Forall3_ignore3' with (zs:=x3) in H2.
           2:{ eapply Forall3_length in H8 as (?&?); congruence. }
           2:{ eapply mmap_length in H2; eauto. }
           eapply Forall3_Forall3 in H2; eauto. clear H8.
-          eapply Forall_concat, Forall_forall; intros ? Hinblks.
-          eapply Forall3_ignore12, Forall_forall in H2 as ((?&?)&?&Hin2&Hin3&(?&?&?)&?&?&?); eauto.
-          repeat inv_bind.
+          apply Forall_concat. apply Forall3_ignore12 in H2. simpl_Forall.
+          repeat inv_branch. repeat inv_bind.
 
-          assert (forall x, InMembers x (map (fun '(x, y, _) => (x, y)) (x10 ++ x12)) ->
+          assert (forall x, InMembers x (map (fun '(x, y, _) => (x, y)) (l3 ++ l2)) ->
                        InMembers x (filter (fun '(_, ann) => ann.(clo) ==b ck) l0 ++ l)) as Hinminv.
           { intros ? Hinm. rewrite fst_InMembers in Hinm. rewrite fst_InMembers.
             erewrite map_app, <-2 new_idents_old, <-map_app; eauto.
             erewrite map_map, map_ext in Hinm; eauto. intros ((?&?)&(?&?)); auto.
           }
 
-          constructor.
-          *{ constructor. simpl_Forall.
-             destruct s. eapply switch_scope_wt in H2; eauto.
+          apply in_app_iff in H14 as [Hinblks|Hinblks]; simpl_In; simpl_Forall.
+          *{ eapply mmap_values, Forall2_ignore1 in H12.
+             repeat (Syn.inv_branch || Typ.inv_branch). simpl_Forall.
+             eapply H in H3; eauto.
              - intros ? Hin. erewrite Env.In_from_list in Hin.
                erewrite Permutation_app_comm, fst_InMembers, map_map, map_ext, <-fst_InMembers; auto.
                intros (?&?); auto.
              - intros ??? Hfind Hin.
-               assert (HasType (filter (fun '(_, ann) => ann.(clo) ==b ck) l0 ++ l) x4 ty) as Hin'.
+               assert (HasType (filter (fun '(_, ann) => ann.(clo) ==b ck) l0 ++ l) x14 ty) as Hin'.
                { eapply Env.find_In, Env.In_from_list, Hinminv in Hfind; eauto.
                  eapply InMembers_In in Hfind as (ann'&?).
-                 assert (HasType Γty x4 ann'.(typ)) as Hin'.
+                 assert (HasType Γty x14 ann'.(typ)) as Hin'.
                  { eapply Hincl.
                    apply Partition_Permutation in Hpart. rewrite Hpart.
                    econstructor; eauto. rewrite in_app_iff in *. destruct H12; eauto. right; simpl_In; eauto. }
-                 inv Hin. inv Hin'. eapply NoDupMembers_det in H13; eauto; subst.
+                 inv Hin. inv Hin'. eapply NoDupMembers_det in H16; eauto; subst.
                  econstructor; eauto.
                }
-               eapply new_idents_In with (ids1:=filter _ _) in H11; eauto. clear Hin'.
+               eapply new_idents_In with (ids1:=filter _ _) in H13; eauto. clear Hin'.
                simpl_In.
                simpl_app. repeat rewrite HasType_app. do 2 right. econstructor; solve_In.
                unfold rename_var. destruct (Env.find _ _); try congruence. rewrite Hfind; auto. auto.
@@ -411,27 +410,24 @@ Module Type CSTYPING
                now rewrite Permutation_app_comm.
              - simpl_Forall; auto.
              - constructor; auto.
-               + eapply HasType_incl; [|eauto]. apply incl_appr'.
+               + eapply HasType_incl; [|eapply HasType_app; eauto]. apply incl_appr'.
                  simpl_app. apply incl_appl. intros ??. solve_In.
-               + eapply In_InMembers, fst_InMembers in Hin2.
-                 rewrite H7 in Hin2. apply in_seq in Hin2 as (?&?); auto.
+               + take (In _ branches) and eapply In_InMembers, fst_InMembers in it;
+                   rewrite H7 in it; apply in_seq in it as (?&?); auto.
                + eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app; auto.
-             - intros; simpl in *.
-               eapply mmap_values, Forall2_ignore1 in H24. simpl_Forall.
-               eapply H; eauto. simpl_Forall; auto.
            }
           *{ simpl_Forall.
              eapply when_free_wt; eauto.
              - eapply HasType_app, or_introl, rename_var_wt; eauto.
-               eapply new_idents_In_inv in H8 as (?&Hin'&?); eauto; subst. simpl_In.
+               eapply new_idents_In_inv in H10 as (?&Hin'&?); eauto; subst. simpl_In.
                rewrite equiv_decb_equiv in Hf. inv Hf.
                eapply Hincl.
                apply Partition_Permutation in Hpart. rewrite Hpart, HasType_app; eauto with senv.
              - simpl_app. rewrite 2 HasType_app. do 2 right. econstructor; solve_In; eauto with datatypes. 1,2:auto.
-             - simpl_app. rewrite app_assoc, HasType_app. left. erewrite map_map, map_ext; eauto.
+             - simpl_app. rewrite app_assoc, HasType_app. left. erewrite map_map, map_ext; simpl_In; eauto.
                intros; destruct_conjs; auto.
-             - eapply In_InMembers, fst_InMembers in Hin2.
-               rewrite H7 in Hin2. apply in_seq in Hin2 as (?&?); auto.
+             - take (In _ branches) and eapply In_InMembers, fst_InMembers in it;
+                   rewrite H7 in it; apply in_seq in it as (?&?); auto.
              - eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app; auto.
            }
         + simpl_Forall.
@@ -475,8 +471,8 @@ Module Type CSTYPING
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
     - intros ??? Hfind. rewrite Env.gempty in Hfind. congruence.
     - apply senv_of_inout_NoLast.
-    - rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
-    - rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers. apply n_nodup.
+    - apply NoDupMembers_map, n_nodup; intros; destruct_conjs; auto.
+    - apply NoDupMembers_map, n_nodup; intros; destruct_conjs; auto.
     - simpl_Forall. simpl_In. simpl_Forall. auto.
     - constructor.
     - apply n_syn.
@@ -487,9 +483,9 @@ Module Type CSTYPING
       wt_global G ->
       wt_global (switch_global G).
   Proof.
-    intros (types&nds) (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
+    intros [] (Hbool&Hwt). unfold wt_global, CommonTyping.wt_program in *; simpl.
     constructor; auto.
-    induction nds; simpl; inv Hwt; auto with datatypes.
+    induction nodes0; simpl; inv Hwt; auto with datatypes.
     destruct H1.
     constructor; [constructor|].
     - eapply switch_node_wt; eauto.
@@ -497,7 +493,7 @@ Module Type CSTYPING
       + eapply iface_eq_iface_incl, switch_global_iface_eq.
     - rewrite Forall_map. eapply Forall_impl; [|eapply H0]; intros.
       simpl; eauto.
-    - eapply IHnds; eauto.
+    - eapply IHnodes0; eauto.
   Qed.
 
 End CSTYPING.

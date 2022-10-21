@@ -3590,13 +3590,13 @@ Section InMembers.
       NoDupMembers l ->
       NoDupMembers ((a, b)::l).
 
-  Lemma inmembers_eq:
+  Lemma InMembers_eq:
     forall a b l, InMembers a ((a, b) :: l).
   Proof.
     intros. constructor. reflexivity.
   Qed.
 
-  Lemma inmembers_cons:
+  Lemma InMembers_cons:
     forall a a' l, InMembers a l -> InMembers a (a' :: l).
   Proof.
     intros. destruct a'. simpl. intuition.
@@ -3625,7 +3625,7 @@ Section InMembers.
         exists b'; now right.
   Qed.
 
-  Lemma nodupmembers_cons:
+  Lemma NoDupMembers_cons_inv:
     forall id ty xs,
       NoDupMembers ((id, ty) :: xs) <->
       ~InMembers id xs /\ NoDupMembers xs.
@@ -3742,7 +3742,7 @@ Section InMembers.
     right. destruct 1; auto.
   Qed.
 
-  Lemma inmembers_skipn:
+  Lemma InMembers_skipn:
     forall x (xs: list (A * B)) n,
       InMembers x (skipn n xs) ->
       InMembers x xs.
@@ -3750,11 +3750,11 @@ Section InMembers.
     induction xs as [|(y, yv) xs IH]; intros n Hin.
     now rewrite skipn_nil in Hin; inversion Hin.
     destruct n.
-    now destruct Hin; subst; auto using inmembers_eq, inmembers_cons.
-    apply IH in Hin; auto using inmembers_cons.
+    now destruct Hin; subst; auto using InMembers_eq, InMembers_cons.
+    apply IH in Hin; auto using InMembers_cons.
   Qed.
 
-  Lemma inmembers_firstn:
+  Lemma InMembers_firstn:
     forall x (xs: list (A * B)) n,
       InMembers x (firstn n xs) ->
       InMembers x xs.
@@ -3762,9 +3762,9 @@ Section InMembers.
     induction xs as [|(y, yv) xs IH]; intros n Hin.
     now rewrite firstn_nil in Hin; inversion Hin.
     destruct n.
-    now destruct Hin; subst; auto using inmembers_eq, inmembers_cons.
-    destruct Hin as [|Hin]; subst; auto using inmembers_eq.
-    apply IH in Hin; auto using inmembers_cons.
+    now destruct Hin; subst; auto using InMembers_eq, InMembers_cons.
+    destruct Hin as [|Hin]; subst; auto using InMembers_eq.
+    apply IH in Hin; auto using InMembers_cons.
   Qed.
 
   Lemma InMembers_skipn_firstn:
@@ -3777,11 +3777,11 @@ Section InMembers.
     now rewrite skipn_nil in Hs; inversion Hs.
     destruct n; simpl; auto.
     destruct y as (ya, yb).
-    apply nodupmembers_cons in Hnd.
+    apply NoDupMembers_cons_inv in Hnd.
     destruct Hnd as [Hnin Hnd].
     simpl in *.
     destruct Hf as [Hf|Hf].
-    - subst. eauto using inmembers_skipn.
+    - subst. eauto using InMembers_skipn.
     - apply IH with (1:=Hs) (2:=Hnd) (3:=Hf).
   Qed.
 
@@ -3797,7 +3797,7 @@ Section InMembers.
     simpl in *.
     inversion_clear Hnd as [|? ? ? Hnim Hnd'].
     destruct Him; subst;
-      eauto using inmembers_skipn.
+      eauto using InMembers_skipn.
   Qed.
 
   Lemma NoDupMembers_NoDup:
@@ -3816,36 +3816,29 @@ Section InMembers.
       <-> ~InMembers x (ws ++ xs) /\ NoDupMembers (ws ++ xs).
   Proof.
     induction ws as [|w ws IH]; repeat split.
-    - apply nodupmembers_cons in H. intuition.
-    - apply nodupmembers_cons in H. intuition.
+    - inv H. intuition.
+    - inv H. intuition.
     - destruct 1 as [HH1 HH2].
-      apply nodupmembers_cons. intuition.
+      constructor; auto.
     - destruct w as [w ww].
-      simpl in H. apply nodupmembers_cons in H.
-      destruct H as [H1 H2].
-      apply IH in H2.
-      destruct H2 as [H2 H3].
-      intro HH. destruct HH as [HH|HH].
+      simpl in H. apply NoDupMembers_cons_inv in H as (H1&H2).
+      apply IH in H2 as (H2&H3).
+      intros [HH|HH].
       + subst. apply H1.
         apply InMembers_app. right.
         now constructor.
       + apply H2. assumption.
     - destruct w as [w ww].
-      simpl in *. apply nodupmembers_cons in H.
-      destruct H as [H1 H2].
-      apply IH in H2.
-      apply nodupmembers_cons.
-      destruct H2 as [H2 H3].
-      apply NotInMembers_app in H1.
-      destruct H1 as [H1 H4].
+      simpl in *. apply NoDupMembers_cons_inv in H as (H1&H2).
+      apply IH in H2 as (H2&H3).
+      apply NoDupMembers_cons_inv.
+      apply NotInMembers_app in H1 as (H1&H4).
       apply NotInMembers_cons in H1.
       split; try apply NotInMembers_app; intuition.
     - destruct 1 as [H1 H2].
       destruct w as [w ww].
-      simpl in H2. apply nodupmembers_cons in H2.
-      destruct H2 as [H2 H3].
-      simpl. apply nodupmembers_cons.
-      split.
+      simpl in H2. apply NoDupMembers_cons_inv in H2 as (H2&H3).
+      simpl. constructor.
       + intro HH. apply H2.
         apply InMembers_app.
         apply InMembers_app in HH.
@@ -3875,7 +3868,7 @@ Section InMembers.
     intros xs H.
     apply IH.
     rewrite <-app_comm_cons in H.
-    destruct w; rewrite nodupmembers_cons in H; tauto.
+    destruct w; rewrite NoDupMembers_cons_inv in H; tauto.
   Qed.
 
   Global Instance NoDupMembers_Permutation_Proper:
@@ -3885,7 +3878,7 @@ Section InMembers.
     induction Hperm.
     - now intuition.
     - destruct x as [x y].
-      rewrite 2 nodupmembers_cons, IHHperm, Hperm.
+      rewrite 2 NoDupMembers_cons_inv, IHHperm, Hperm.
       reflexivity.
     - split; intro HH.
       + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
@@ -3968,7 +3961,7 @@ Section InMembers.
         * inversion H1; auto.
         * exfalso. apply H3. eapply In_InMembers; eauto.
       + apply IHxs; auto.
-        destruct a; rewrite nodupmembers_cons in H; tauto.
+        destruct a; rewrite NoDupMembers_cons_inv in H; tauto.
   Qed.
 
   Lemma NoDupMembers_firstn:
@@ -3981,7 +3974,7 @@ Section InMembers.
     destruct n; simpl; auto using NoDupMembers_nil.
     inversion_clear Hndup as [|? ? ? Hni Hnd].
     apply IH with (n:=n) in Hnd.
-    eauto using NoDupMembers, inmembers_firstn.
+    eauto using NoDupMembers, InMembers_firstn.
   Qed.
 
   Lemma InMembers_neq:
@@ -4104,9 +4097,9 @@ Section InMembers.
     induction ws as [|w ws IH]; auto.
     destruct w as (wn & wv).
     inv Hndws.
-    simpl; apply NoDupMembers_cons; auto using inmembers_cons.
+    simpl; apply NoDupMembers_cons; auto using InMembers_cons.
     apply NotInMembers_app.
-    split; auto using Hnin, inmembers_eq.
+    split; auto using Hnin, InMembers_eq.
   Qed.
 
   Lemma NoDup_NoDupA:
@@ -4214,7 +4207,7 @@ Section InMembers.
     eapply In_InMembers; eauto.
   Qed.
 
-  Fact inmembers_flat_map {C} : forall (f : C -> list (A * B)) (l : list C) (y : A),
+  Fact InMembers_flat_map {C} : forall (f : C -> list (A * B)) (l : list C) (y : A),
       InMembers y (flat_map f l) <-> Exists (fun x => InMembers y (f x)) l.
   Proof.
     intros *; split; intros Hin; induction l;
@@ -4235,8 +4228,9 @@ Section InMembers.
 
 End InMembers.
 Global Hint Constructors NoDupMembers : datatypes.
+Global Hint Rewrite -> @fst_InMembers : list.
 
-Lemma nodupmembers_filter {A B} :
+Lemma NoDupMembers_filter {A B} :
   forall f (l: list (A * B)),
     NoDupMembers l -> NoDupMembers (filter f l).
 Proof.
@@ -4976,7 +4970,18 @@ Proof.
   destruct (f (g a)); auto.
 Qed.
 
-Lemma nodupmembers_map {A B C} :
+Lemma InMembers_map {A B C} :
+  forall (f : _ -> (A * C)) x (l: list (A * B)),
+    (forall a b, fst (f (a, b)) = a) ->
+    InMembers x l ->
+    InMembers x (map f l).
+Proof.
+  intros * Hl Hnd.
+  erewrite fst_InMembers, map_map, map_ext, <-fst_InMembers; eauto.
+  intros (?&?); simpl. apply Hl.
+Qed.
+
+Lemma NoDupMembers_map {A B C} :
   forall (f : _ -> (A * C)) (l: list (A * B)),
     (forall a b, fst (f (a, b)) = a) ->
     NoDupMembers l ->
@@ -4987,7 +4992,7 @@ Proof.
   intros (?&?); simpl. apply Hl.
 Qed.
 
-Lemma nodupmembers_map_filter {A B C} :
+Lemma NoDupMembers_map_filter {A B C} :
   forall (f : _ -> option (A * C)) (l: list (A * B)),
     (forall a b, LiftO True (fun '(a', _) => a' = a) (f (a, b))) ->
     NoDupMembers l ->
@@ -5292,7 +5297,7 @@ Proof.
     eapply in_flat_map; eauto.
 Qed.
 
-Fact nodupmembers_app_map_flat_map {A B C D} : forall (f : B -> (C * D)) (g : A -> list B) xs y ys,
+Fact NoDupMembers_app_map_flat_map {A B C D} : forall (f : B -> (C * D)) (g : A -> list B) xs y ys,
     In y ys ->
     NoDupMembers (xs ++ map f (flat_map g ys)) ->
     NoDupMembers (xs ++ map f (g y)).
@@ -5310,6 +5315,7 @@ Local Ltac simpl_map_In H :=
   apply in_map_iff in H as (?&Heq&Hin); destruct_conjs; inv Heq; subst.
 
 Ltac simpl_In :=
+  repeat autorewrite with list in *;
   repeat
     (match goal with
      | H: In _ (map ?f _) |- _ => simpl_map_In H

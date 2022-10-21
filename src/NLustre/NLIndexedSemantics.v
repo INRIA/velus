@@ -324,7 +324,7 @@ Module Type NLINDEXEDSEMANTICS
     | SEqDef:
         forall bk H x xs ck ce,
           sem_var H x xs ->
-          sem_caexp bk H ck ce xs ->
+          sem_arhs bk H ck ce xs ->
           sem_equation bk H (EqDef x ck ce)
     | SEqApp:
         forall bk H x ck f arg xrs ys rs ls xs,
@@ -462,7 +462,7 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqDefCase:
       forall bk H x xs ck ce,
         sem_var H x xs ->
-        sem_caexp bk H ck ce xs ->
+        sem_arhs bk H ck ce xs ->
         P_equation bk H (EqDef x ck ce).
 
     Hypothesis EqAppCase:
@@ -545,13 +545,13 @@ enough: it does not support the internal fixpoint introduced by
   (** ** Properties of the [global] environment *)
 
   Lemma sem_node_cons:
-    forall node G enums f xs ys,
-      Ordered_nodes (Global enums (node::G))
-      -> sem_node (Global enums (node::G)) f xs ys
+    forall node G enums externs f xs ys,
+      Ordered_nodes (Global enums externs (node::G))
+      -> sem_node (Global enums externs (node::G)) f xs ys
       -> node.(n_name) <> f
-      -> sem_node (Global enums G) f xs ys.
+      -> sem_node (Global enums externs G) f xs ys.
   Proof.
-    intros node G enums f xs ys Hord Hsem Hnf.
+    intros node G enums externs f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
@@ -559,7 +559,7 @@ enough: it does not support the internal fixpoint introduced by
                      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation (Global enums G) bk H eq).
+                                      -> sem_equation (Global enums externs G) bk H eq).
     - econstructor; eassumption.
     - intro Hnin.
       eapply SEqApp; eauto.
@@ -576,13 +576,13 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
   Lemma sem_node_cons':
-    forall node G enums f xs ys,
-      Ordered_nodes (Global enums (node::G))
-      -> sem_node (Global enums G) f xs ys
+    forall node G enums externs f xs ys,
+      Ordered_nodes (Global enums externs (node::G))
+      -> sem_node (Global enums externs G) f xs ys
       -> node.(n_name) <> f
-      -> sem_node (Global enums (node::G)) f xs ys.
+      -> sem_node (Global enums externs (node::G)) f xs ys.
   Proof.
-    intros node G enums f xs ys Hord Hsem Hnf.
+    intros node G enums externs f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
@@ -590,7 +590,7 @@ enough: it does not support the internal fixpoint introduced by
                      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation (Global enums (node::G)) bk H eq).
+                                      -> sem_equation (Global enums externs (node::G)) bk H eq).
     - econstructor; eassumption.
     - intro Hnin.
       eapply SEqApp; eauto.
@@ -608,13 +608,13 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
   Lemma sem_equation_global_tl:
-    forall bk nd G H eq enums,
-      Ordered_nodes (Global enums (nd::G)) ->
+    forall bk nd G H eq enums externs,
+      Ordered_nodes (Global enums externs (nd::G)) ->
       ~ Is_node_in_eq nd.(n_name) eq ->
-      sem_equation (Global enums (nd::G)) bk H eq ->
-      sem_equation (Global enums G) bk H eq.
+      sem_equation (Global enums externs (nd::G)) bk H eq ->
+      sem_equation (Global enums externs G) bk H eq.
   Proof.
-    intros bk nd G H eq enums Hord Hnini Hsem.
+    intros * Hord Hnini Hsem.
     destruct eq; inversion Hsem; subst; eauto using sem_equation.
     - econstructor; eauto.
       intro k; eapply sem_node_cons; eauto.
@@ -622,28 +622,26 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
   Lemma Forall_sem_equation_global_tl:
-    forall bk nd G H eqs enums,
-      Ordered_nodes (Global enums (nd::G))
+    forall bk nd G H eqs enums externs,
+      Ordered_nodes (Global enums externs (nd::G))
       -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (Global enums (nd::G)) bk H) eqs
-      -> Forall (sem_equation (Global enums G) bk H) eqs.
+      -> Forall (sem_equation (Global enums externs (nd::G)) bk H) eqs
+      -> Forall (sem_equation (Global enums externs G) bk H) eqs.
   Proof.
-    intros bk nd G H eqs enums Hord Hnini.
-    apply Forall_impl_In.
-    intros eq Hin Hsem.
+    intros * Hord Hnini Hsem.
+    simpl_Forall.
     eapply sem_equation_global_tl; eauto.
-    apply Is_node_in_Forall in Hnini.
-    apply Forall_forall with (1:=Hnini) (2:=Hin).
+    apply Is_node_in_Forall in Hnini. simpl_Forall; eauto.
   Qed.
 
   Lemma sem_equation_global_tl':
-    forall bk nd G H eq enums,
-      Ordered_nodes (Global enums (nd::G)) ->
+    forall bk nd G H eq enums externs,
+      Ordered_nodes (Global enums externs (nd::G)) ->
       ~ Is_node_in_eq nd.(n_name) eq ->
-      sem_equation (Global enums G) bk H eq ->
-      sem_equation (Global enums (nd::G)) bk H eq.
+      sem_equation (Global enums externs G) bk H eq ->
+      sem_equation (Global enums externs (nd::G)) bk H eq.
   Proof.
-    intros bk nd G H eq enums Hord Hnini Hsem.
+    intros * Hord Hnini Hsem.
     destruct eq; inversion Hsem; subst; eauto using sem_equation.
     - econstructor; eauto.
       intro k; eapply sem_node_cons'; eauto.
@@ -651,18 +649,16 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
   Lemma Forall_sem_equation_global_tl':
-    forall bk nd G H eqs enums,
-      Ordered_nodes (Global enums (nd::G))
+    forall bk nd G H eqs enums externs,
+      Ordered_nodes (Global enums externs (nd::G))
       -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (Global enums G) bk H) eqs
-      -> Forall (sem_equation (Global enums (nd::G)) bk H) eqs.
+      -> Forall (sem_equation (Global enums externs G) bk H) eqs
+      -> Forall (sem_equation (Global enums externs (nd::G)) bk H) eqs.
   Proof.
-    intros bk nd G H eqs enums Hord Hnini.
-    apply Forall_impl_In.
-    intros eq Hin Hsem.
+    intros * Hord Hnini Hsem.
+    simpl_Forall.
     eapply sem_equation_global_tl'; eauto.
-    apply Is_node_in_Forall in Hnini.
-    apply Forall_forall with (1:=Hnini) (2:=Hin).
+    apply Is_node_in_Forall in Hnini. simpl_Forall; eauto.
   Qed.
 
   Lemma sem_equations_permutation:

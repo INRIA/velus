@@ -26,6 +26,7 @@ let extern_atom = Camlcoq.extern_atom
 module type SYNTAX =
   sig
     type typ
+    type ctype
     type cconst
     type unop
     type binop
@@ -45,9 +46,10 @@ module type SYNTAX =
     | Elast  of ident * ann
     | Eunop  of unop * exp * ann
     | Ebinop of binop * exp * exp * ann
+    | Eextcall of ident * exp list * (ctype * clock)
     | Efby   of exp list * exp list * ann list
     | Earrow of exp list * exp list * ann list
-    | Ewhen  of exp list * ident * enumtag * lann
+    | Ewhen  of exp list * (ident * typ) * enumtag * lann
     | Emerge of (ident * typ) * (enumtag * exp list) list * lann
     | Ecase  of exp * (enumtag * exp list) list * exp list option * lann
     | Eapp   of ident * exp list * exp list * ann list
@@ -59,13 +61,17 @@ module type SYNTAX =
     type auto_type = Weak | Strong
 
     type 'a scope =
-    | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * (ident * ident) list * 'a
+    | Scope of (ident * (((typ * clock) * ident) * (exp * ident) option)) list * 'a
+
+    type 'a branch =
+    | Branch of (ident * ident) list * 'a
 
     type block =
     | Beq of equation
     | Breset of block list * exp
-    | Bswitch of exp * (enumtag * (block list) scope) list
-    | Bauto of auto_type * clock * ((exp * enumtag) list * enumtag) * (enumtag * (transition list * (block list * transition list) scope)) list
+    | Bswitch of exp * (enumtag * (block list) branch) list
+    | Bauto of auto_type * clock * ((exp * enumtag) list * enumtag) *
+               ((enumtag * ident) * (transition list * (block list * transition list) scope) branch) list
     | Blocal of (block list) scope
 
     type node = {
@@ -78,6 +84,7 @@ module type SYNTAX =
 
     type global = {
       types: typ list;
+      externs: (ident * (ctype list * ctype)) list;
       nodes: node list
     }
 
@@ -87,6 +94,7 @@ module type SYNTAX =
 module PrintFun
     (PrintOps: PRINT_OPS)
     (L: SYNTAX with type typ     = PrintOps.typ
+                and type ctype   = PrintOps.ctype
                 and type cconst  = PrintOps.cconst
                 and type unop    = PrintOps.unop
                 and type binop   = PrintOps.binop
@@ -95,8 +103,8 @@ module PrintFun
     val print_fullclocks : bool ref
     val print_appclocks  : bool ref
 
-    val print_exp        : (ident * L.typ) list -> formatter -> L.exp -> unit
-    val print_equation   : (ident * L.typ) list -> formatter -> L.equation -> unit
+    val print_exp        : formatter -> L.exp -> unit
+    val print_equation   : formatter -> L.equation -> unit
     val print_node       : formatter -> L.node -> unit
     val print_global     : formatter -> L.global -> unit
   end
@@ -112,6 +120,7 @@ module PrintFun
       | L.Elast _  -> (16, NA)
       | L.Eunop  (op, _, _)    -> PrintOps.prec_unop op
       | L.Ebinop (op, _, _, _) -> PrintOps.prec_binop op
+      | L.Eextcall _ -> (4, NA)
       | L.Efby _   -> (14, RtoL) (* higher than * / % *)
       | L.Earrow _ -> (14, RtoL)
       | L.Ewhen _  -> (12, LtoR) (* precedence of + - *)
@@ -145,12 +154,7 @@ module PrintFun
         name
         (print_semicol_list px) xs
 
-    let find_type tenv tx =
-      List.assoc tx tenv
-
-    let rec exp tenv prec p e =
-      let exp = exp tenv and exp_list = exp_list tenv
-      and exp_enclosed_list = exp_enclosed_list tenv and exp_arg_list = exp_arg_list tenv in
+    let rec exp prec p e =
       let (prec', assoc) = precedence e in
       let (prec1, prec2) =
         if assoc = LtoR
@@ -172,15 +176,19 @@ module PrintFun
         PrintOps.print_unop p op ty (exp prec') e
       | L.Ebinop (op, e1, e2, (ty, _)) ->
         PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
+      | L.Eextcall (f, es, _) ->
+        fprintf p "external %a(%a)"
+          print_ident f
+          (exp_list prec2) es
       | L.Efby (e0s, es, _) ->
         fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Earrow (e0s, es, _) ->
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
-      | L.Ewhen (e, x, c, _) ->
+      | L.Ewhen (e, (x, tx), c, _) ->
         fprintf p "%a when (%a=%a)"
           (exp_list prec') e
           print_ident x
-          PrintOps.print_enumtag (c, find_type tenv x)
+          PrintOps.print_enumtag (c, tx)
       | L.Emerge ((id, ty), es, _) ->
         fprintf p "@[<v>merge %a%a@]"
           print_ident id
@@ -215,20 +223,20 @@ module PrintFun
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
-    and exp_list tenv prec p es =
+    and exp_list prec p es =
       match es with
-      | [e] -> exp tenv prec p e
-      | _   -> exp_arg_list tenv p es
+      | [e] -> exp prec p e
+      | _   -> exp_arg_list p es
 
-    and exp_arg_list tenv p es =
+    and exp_arg_list p es =
       fprintf p "(@[<hv 0>%a@])"
-        (print_comma_list (exp tenv 0)) es
+        (print_comma_list (exp 0)) es
 
-    and exp_enclosed_list tenv p es =
+    and exp_enclosed_list p es =
       fprintf p "@[<hv 0>%a@]"
-        (print_comma_list (exp tenv 0)) es
+        (print_comma_list (exp 0)) es
 
-    let print_exp tenv = exp tenv 0
+    let print_exp = exp 0
 
     let print_clock_decl p ck =
       match ck with
@@ -263,88 +271,87 @@ module PrintFun
       | xs  -> fprintf p "(@[<hv 0>%a@])"
                  (print_comma_list print_ident) xs
 
-    let rec print_equation tenv p (xs, es) =
+    let rec print_equation p (xs, es) =
       fprintf p "@[<hov 2>%a = %a@]"
-        print_pattern xs (exp_list tenv 0) es
+        print_pattern xs (exp_list 0) es
 
-    let print_initially tenv p (ini, oth) =
+    let print_state_tag p (c, ty) =
+      print_ident p (List.nth ty (PrintOps.int_of_enumtag c))
+
+    let print_initially ty p (ini, oth) =
       let rec aux p = function
-        | [] -> fprintf p "otherwise %d"
-                  (PrintOps.int_of_enumtag oth)
+        | [] -> fprintf p "otherwise %a"
+                  print_state_tag (oth, ty)
         | (e, t)::inis ->
-          fprintf p "if %a then %d;@;%a"
-            (print_exp tenv) e
-            (PrintOps.int_of_enumtag t)
+          fprintf p "if %a then %a;@;%a"
+            print_exp e
+            print_state_tag (t, ty)
             aux inis
-      in if ini = [] then fprintf p "%d" (PrintOps.int_of_enumtag oth)
+      in if ini = [] then fprintf p "%a" print_state_tag (oth, ty)
       else aux p ini
 
-    let print_transition tenv p (e, (k, r)) =
-      fprintf p "@[<h> %a %s %d@]"
-        (print_exp tenv) e
+    let print_transition ty p (e, (k, r)) =
+      fprintf p "@[<h> %a %s %a@]"
+        print_exp e
         (if r then "then" else "continue")
-        (PrintOps.int_of_enumtag k)
+        print_state_tag (k, ty)
 
     let print_bar_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p "@;|") p
 
-    let print_until_list tenv p xs =
+    let print_until_list ty p xs =
       if xs = [] then () else
         fprintf p "@;@[<h>until@[<v -1>%a@]@]@;"
-          (print_bar_list (print_transition tenv)) xs
+          (print_bar_list (print_transition ty)) xs
 
-    let print_unless_list tenv p xs =
+    let print_unless_list ty p xs =
       if xs = [] then () else
         fprintf p "@;@[<h>unless@[<v -1>%a@]@]@;"
-          (print_bar_list (print_transition tenv)) xs
+          (print_bar_list (print_transition ty)) xs
 
-    let idty_of_locs =
-      List.map (fun (x, (((ty, _), _), _)) -> (x, ty))
-
-    let rec print_block tenv p = function
-      | L.Beq eq -> (print_equation tenv) p eq
+    let rec print_block p = function
+      | L.Beq eq -> print_equation p eq
       | L.Breset (blks, er) ->
         fprintf p "@[<v 2>reset@;%a@;<0 -2>@]every %a"
-          (print_blocks tenv) blks
-          (print_exp tenv) er
+          print_blocks blks
+          print_exp er
       | L.Bswitch (ec, brs) ->
         let ty = List.hd (L.typeof ec) in
         fprintf p "@[<v 0>@[<h 2>switch@ %a@]@ %a@]@ end"
-          (print_exp tenv) ec
-          (pp_print_list (fun p blks -> print_switch_branch tenv p (blks, ty))) brs
+          print_exp ec
+          (pp_print_list (fun p blks -> print_switch_branch p (blks, ty))) brs
       | L.Bauto (_, _, ini, states) ->
+        let ty = List.map (fun ((_, c), _) -> c) states in
         fprintf p "@[<v 2>automaton@;initially %a@;%a@;end@]"
-          (print_initially tenv) ini
-          (pp_print_list (print_state tenv)) states
-      | L.Blocal (Scope (locals, _, blks)) ->
+          (print_initially ty) ini
+          (pp_print_list (print_state ty)) states
+      | L.Blocal (Scope (locals, blks)) ->
         fprintf p "do %a@[<v 2>in@ %a@;<0 -2>@]done"
           (print_semicol_list_as "var" print_local_decl) locals
-          (print_blocks (idty_of_locs locals@tenv)) blks
+          print_blocks blks
 
-    and print_blocks tenv p blks =
-      print_semicol_list (print_block tenv) p blks
+    and print_blocks p blks =
+      print_semicol_list print_block p blks
 
-    and print_switch_branch tenv p ((e, Scope (locs, _, blks)), ty) =
-      fprintf p "@[<v 2>| %a %ado@ %a@]"
+    and print_switch_branch p ((e, Branch (_, blks)), ty) =
+      fprintf p "@[<v 2>| %a do@ %a@]"
         PrintOps.print_enumtag (e, ty)
-        (print_semicol_list_as "var" print_local_decl) locs
-        (print_blocks (idty_of_locs locs@tenv)) blks
+        print_blocks blks
 
-    and print_state tenv p (e, (unl, Scope (locs, _, (blks, unt)))) =
-      let tenv = idty_of_locs locs@tenv in
-      fprintf p "@[<v 2>state %d %ado@ %a%a%a@]"
-        (PrintOps.int_of_enumtag e)
+    and print_state ty p ((_, e), Branch (_, (unl, Scope (locs, (blks, unt))))) =
+      fprintf p "@[<v 2>state %a %ado@ %a%a%a@]"
+        print_ident e
         (print_semicol_list_as "var" print_local_decl) locs
-        (print_semicol_list (print_block tenv)) blks
-        (print_until_list tenv) unt
-        (print_unless_list tenv) unl
+        (print_semicol_list print_block) blks
+        (print_until_list ty) unt
+        (print_unless_list ty) unl
 
-    let print_top_block tenv p = function
-      | L.Blocal (Scope (locals, _, blks)) ->
+    let print_top_block p = function
+      | L.Blocal (Scope (locals, blks)) ->
         fprintf p "%a@[<v 2>let@ %a@;<0 -2>@]tel"
           (print_semicol_list_as "var" print_local_decl) locals
-          (print_blocks (idty_of_locs locals@tenv)) blks
-      | blk -> print_block tenv p blk
+          print_blocks blks
+      | blk -> print_block p blk
 
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;
@@ -361,11 +368,18 @@ module PrintFun
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        (print_top_block (List.map (fun (x, ((ty, _), _)) -> (x, ty)) (inputs@outputs))) blk
+        print_top_block blk
+
+    let print_extern_decl p (f, (tyins, tyout)) =
+      fprintf p "external %a(%a) returns %a"
+        print_ident f
+        (print_comma_list PrintOps.print_ctype) tyins
+        PrintOps.print_ctype tyout
 
     let print_global p prog =
       fprintf p "@[<v 0>";
       List.iter (fprintf p "%a@;@;" PrintOps.print_typ_decl) (List.rev prog.L.types);
+      List.iter (fprintf p "%a@;@;" print_extern_decl) (List.rev prog.L.externs);
       List.iter (fprintf p "%a@;@;" print_node) (List.rev prog.L.nodes);
       fprintf p "@]@."
   end

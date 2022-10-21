@@ -35,7 +35,7 @@ Module Type DRRNORMALARGS
     noops_exp ck e ->
     noops_exp ck (rename_in_exp sub e).
   Proof.
-    induction e; intros * Hnormed; simpl; auto.
+    induction e; destruct_conjs; intros * Hnormed; simpl; auto.
     1-4:destruct ck; simpl in *; auto.
   Qed.
 

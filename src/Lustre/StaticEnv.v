@@ -119,6 +119,15 @@ Module Type STATICENV
     eauto using InMembers_incl with senv.
   Qed.
 
+  Lemma IsVar_incl_fst : forall senv1 senv2,
+      (forall x, IsVar senv1 x -> IsVar senv2 x) ->
+      incl (map fst senv1) (map fst senv2).
+  Proof.
+    intros * Hincl ? Hin. simpl_In.
+    assert (IsVar senv1 a) as Hv by (econstructor; solve_In).
+    apply Hincl in Hv. inv Hv. solve_In.
+  Qed.
+
   Lemma HasType_incl : forall senv1 senv2 x ty,
       incl senv1 senv2 ->
       HasType senv1 x ty ->
@@ -239,6 +248,8 @@ Module Type STATICENV
       1,2:econstructor; try eapply in_app_iff; eauto.
   Qed.
 
+  Global Hint Rewrite IsLast_app HasType_app HasClock_app HasCaus_app HasLastCaus_app : list.
+
   Definition senv_of_tyck (l : list (ident * (type * clock))) : static_env :=
     List.map (fun '(x, (ty, ck)) => (x, Build_annotation ty ck xH None)) l.
 
@@ -271,17 +282,37 @@ Module Type STATICENV
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
+  Global Hint Rewrite -> map_fst_senv_of_tyck.
+  Global Hint Rewrite -> map_fst_senv_of_inout.
+  Global Hint Rewrite -> @map_fst_senv_of_locs.
+
   Lemma InMembers_senv_of_locs {A} : forall x locs,
       InMembers x (@senv_of_locs A locs) <-> InMembers x locs.
   Proof.
     intros *. symmetry.
-    symmetry. now rewrite fst_InMembers, map_fst_senv_of_locs, <-fst_InMembers.
+    symmetry. autorewrite with list. now rewrite map_fst_senv_of_locs.
   Qed.
+
+  Global Hint Rewrite -> @InMembers_senv_of_locs : list.
 
   Lemma NoDupMembers_senv_of_locs {A} : forall locs,
       NoDupMembers (@senv_of_locs A locs) <-> NoDupMembers locs.
   Proof.
     intros *. now rewrite fst_NoDupMembers, map_fst_senv_of_locs, <-fst_NoDupMembers.
+  Qed.
+
+  Lemma IsVar_senv_of_locs {A} : forall x locs,
+      IsVar (@senv_of_locs A locs) x <-> InMembers x locs.
+  Proof.
+    split; intros * Hiv; [inv Hiv|constructor]; autorewrite with list in *; auto.
+  Qed.
+
+  Global Hint Rewrite -> @IsVar_senv_of_locs.
+
+  Lemma IsLast_senv_of_locs {A} : forall x locs,
+      IsLast (@senv_of_locs A locs) x -> InMembers x locs.
+  Proof.
+    intros * Hiv; inv Hiv; solve_In.
   Qed.
 
   Definition idty (env : static_env) : list (ident * type) :=
@@ -380,14 +411,7 @@ Module Type STATICENV
     destruct H as (H1&H2). intros [|]; [eapply H1|eapply H2]; eauto.
   Qed.
 
-  (* Notations *)
-
-  (* Notation "Γ ⊢ x" := (IsVar Γ x) (at level 50). *)
-  (* Notation "Γ ⊢ x : ty" := (HasType Γ x ty) (at level 50). *)
-  (* Notation "Γ ⊢ x : ck" := (HasClock Γ x ck) (at level 50). *)
-  (* Notation "Γ ⊢ x : cx" := (HasCaus Γ x cx) (at level 50). *)
-  (* Notation "Γ ⊢ 'last' x" := (IsLast Γ x) (at level 50). *)
-  (* Notation "Γ ⊢ 'last' x : cx" := (HasLastCaus Γ x cx) (at level 50). *)
+  Global Hint Rewrite map_fst_senv_of_inout : list.
 
 End STATICENV.
 

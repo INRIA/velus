@@ -42,7 +42,7 @@ Module Type STCCLOCKING
   | CTcDef:
       forall x ck e,
         In (x, ck) vars ->
-        wc_cexp vars e ck ->
+        wc_rhs vars e ck ->
         wc_trconstr P vars (TcDef x ck e)
   | CTcReset:
       forall x ck ckr ty c0,
@@ -81,7 +81,7 @@ Module Type STCCLOCKING
            s.(s_tcs).
 
   Definition wc_program (P: program) :=
-    Forall' (fun P' => wc_system (Program P.(types) P')) P.(systems).
+    Forall' (fun P' => wc_system (Program P.(types) P.(externs) P')) P.(systems).
 
   Inductive Has_clock_tc: clock -> trconstr -> Prop :=
   | HcTcDef:
@@ -128,9 +128,9 @@ Module Type STCCLOCKING
   Qed.
 
   Lemma wc_program_app_weaken:
-    forall P P' enums,
-      wc_program (Program enums (P' ++ P)) ->
-      wc_program (Program enums P).
+    forall P P' enums externs,
+      wc_program (Program enums externs (P' ++ P)) ->
+      wc_program (Program enums externs P).
   Proof.
     induction P'; auto.
     inversion_clear 1; auto.
@@ -142,8 +142,10 @@ Module Type STCCLOCKING
       find_system f P = Some (b, P') ->
       wc_system P' b.
   Proof.
-    intros (enumsP &P) * WCG Hfind.
-    assert (enumsP = types P')
+    intros [] * WCG Hfind.
+    assert (types0 = types P')
+      by (apply find_unit_equiv_program in Hfind; specialize (Hfind nil); inv Hfind; auto).
+    assert (externs0 = externs P')
       by (apply find_unit_equiv_program in Hfind; specialize (Hfind nil); inv Hfind; auto).
     apply find_unit_spec in Hfind as (?&?&?&?); simpl in *; subst.
     apply wc_program_app_weaken in WCG.
@@ -151,10 +153,10 @@ Module Type STCCLOCKING
   Qed.
 
   Lemma wc_trconstr_program_cons:
-    forall vars b P tc enums,
-      Ordered_systems (Program enums (b :: P)) ->
-      wc_trconstr (Program enums P) vars tc ->
-      wc_trconstr (Program enums (b :: P)) vars tc.
+    forall vars b P tc enums externs,
+      Ordered_systems (Program enums externs (b :: P)) ->
+      wc_trconstr (Program enums externs P) vars tc ->
+      wc_trconstr (Program enums externs (b :: P)) vars tc.
   Proof.
     intros * OnG WCnG.
     inversion_clear OnG as [|?? []].
@@ -167,10 +169,10 @@ Module Type STCCLOCKING
   Qed.
 
   Lemma wc_trconstr_program_app:
-    forall vars P' P tc enums,
-      Ordered_systems (Program enums (P' ++ P)) ->
-      wc_trconstr (Program enums P) vars tc ->
-      wc_trconstr (Program enums (P' ++ P)) vars tc.
+    forall vars P' P tc enums externs,
+      Ordered_systems (Program enums externs (P' ++ P)) ->
+      wc_trconstr (Program enums externs P) vars tc ->
+      wc_trconstr (Program enums externs (P' ++ P)) vars tc.
   Proof.
     induction P'; auto.
     simpl. intros * OG WCtc.
@@ -185,8 +187,8 @@ Module Type STCCLOCKING
       find_system f P = Some (b, P') ->
       wc_system P b.
   Proof.
-    intros (?& P) * OG WCG Hfind.
-    induction P as [|b' P IH]; try discriminate.
+    intros [] * OG WCG Hfind.
+    induction systems0 as [|b' P IH]; try discriminate.
     eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl; eauto.
     - inv Hfind. inversion WCG as [|?? (WCi & WCo & WCv & WCtcs) WCG']; subst.
       constructor; repeat (try split; auto).

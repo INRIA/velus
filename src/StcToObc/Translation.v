@@ -90,8 +90,10 @@ Module Type TRANSLATION
 
     Definition translate_tc (tc: trconstr) : stmt :=
       match tc with
-      | TcDef x ck ce =>
+      | TcDef x ck (Ecexp ce) =>
         Control ck (translate_cexp x ce)
+      | TcDef x ck (Eextcall f es ty) =>
+        Control ck (ExternCall x f (map translate_exp es) ty)
       | TcReset x ckr _ (Op.Const c0) =>
         Control ckr (AssignSt x (Const c0))
       | TcReset x ckr ty (Op.Enum t) =>
@@ -232,7 +234,7 @@ Module Type TRANSLATION
   Qed.
 
   Global Program Instance program_program_without_units : TransformProgramWithoutUnits SynStc.program program :=
-    { transform_program_without_units := fun p => Program p.(SynStc.types) [] }.
+    { transform_program_without_units := fun p => Program p.(SynStc.types) p.(SynStc.externs) [] }.
 
   Definition translate: SynStc.program -> program := transform_units.
 

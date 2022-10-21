@@ -178,8 +178,8 @@ Module Type NLINDEXEDTOCOIND
       end.
 
     Lemma when_inv:
-      forall H b e x k es,
-        CESem.sem_exp b H (Ewhen e x k) es ->
+      forall H b e x tx k es,
+        CESem.sem_exp b H (Ewhen e (x, tx) k) es ->
         exists ys xs,
           CESem.sem_exp b H e ys
           /\ IStr.sem_var H x xs
@@ -286,7 +286,7 @@ Module Type NLINDEXEDTOCOIND
     Proof.
       intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros * Sem; unfold CESem.sem_exp, lift in Sem.
+      induction e; intros * Sem; destruct_conjs; unfold CESem.sem_exp, lift in Sem.
 
       - constructor.
         apply const_spec; use_spec Sem; inv Sem; auto.
@@ -746,11 +746,88 @@ Module Type NLINDEXEDTOCOIND
     Proof. apply sem_cexp_impl_from. Qed.
     Hint Resolve sem_cexp_impl_from sem_cexp_impl : nlsem.
 
-    (** An inversion principle for annotated [cexp]. *)
-    Lemma sem_caexp_inv:
+      (** ** Semantics of rhss *)
+
+    Lemma extcall_inv:
+      forall H b f es tyout os,
+        CESem.sem_rhs b H (Eextcall f es tyout) os ->
+        exists tyins xss,
+          Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins
+          /\ Forall2 (CESem.sem_exp b H) es xss
+          /\ (forall n, (Forall (fun xs => xs n = absent) xss /\ os n = absent) \/
+                    (exists xs y,
+                        Forall2 (fun xs0 x0 => xs0 n = present (Vscalar x0)) xss xs /\ sem_extern f tyins xs tyout y /\ os n = present (Vscalar y))).
+    Proof.
+      intros * Hrhs.
+      assert (forall n, Forall2 (CESem.sem_exp_instant (b n) (H n))
+                     es (interp_exps b H es n)) as Seml.
+      { intro n; specialize (Hrhs n); inv Hrhs.
+        - assert (Forall2 (CESem.sem_exp_instant (b n) (H n))
+                    es (List.map (fun v => present (Vscalar v)) vs)) by now apply Forall2_map_2.
+          unfold interp_exps, lift_interp.
+          erewrite <-interp_exps_instant_complete; eauto.
+        - take (Forall _ _) and clear - it; induction it; simpl; constructor; auto.
+          erewrite <-interp_exp_instant_complete; eauto.
+      }
+      exists (List.map (fun ty => match ty with Tprimitive cty => cty | _ => tyout end) (List.map typeof es)).
+      exists (interp_exps' b H es).
+      repeat split.
+      - specialize (Hrhs 0). inv Hrhs; simpl_Forall.
+        + take (Forall2 _ es tyins) and apply Forall2_ignore2 in it; simpl_Forall.
+          take (typeof _ = _) and now rewrite it.
+        + take (Forall2 _ es tyins) and apply Forall2_ignore2 in it; simpl_Forall.
+          take (typeof _ = _) and now rewrite it.
+      - eapply interp_exps'_complete. eauto.
+      - intros n. specialize (Hrhs n). specialize (Seml n).
+        inv Hrhs; [right|left].
+        + do 2 esplit. repeat split. instantiate (1:=vs).
+          * unfold interp_exps'. simpl_Forall.
+            symmetry. eapply interp_exp_instant_complete; eauto.
+          * replace (List.map _ _) with tyins; auto.
+            apply Forall2_eq, Forall2_swap_args. simpl_Forall. take (typeof _ = _) and now rewrite it.
+        + split; auto.
+          apply Forall2_ignore2 in Seml.
+          unfold interp_exps' in *; simpl_In; simpl_Forall.
+          symmetry. eapply interp_exp_instant_complete; eauto.
+    Qed.
+
+    (** State the correspondence for [rhs].
+        Goes by induction on [rhs] and uses the previous inversion lemmas. *)
+
+    Lemma sem_rhs_impl_from:
+      forall n H b e es,
+        CESem.sem_rhs b H e es ->
+        CoInd.sem_rhs (tr_history_from n H) (tr_stream_from n b) e
+                       (tr_stream_from n es).
+    Proof.
+      intros * Sem.
+      destruct e; unfold CESem.sem_rhs, IStr.lift in Sem.
+
+      - (* external call *)
+        apply extcall_inv in Sem as (?&ess&Htys&Hsems&Hlift).
+        econstructor; eauto. instantiate (1:=List.map (tr_stream_from n) ess).
+        + simpl_Forall; eauto using sem_exp_impl_from.
+        + apply liftn_spec. intros ?. specialize (Hlift (n0 + n)%nat).
+          destruct Hlift as [(?&?)|(?&?&?&?&?)]; [left|right; do 2 esplit]; repeat split; eauto; simpl_Forall.
+          all:rewrite init_from_nth; auto.
+
+      - (* cexp *)
+        econstructor. apply sem_cexp_impl_from.
+        intros ?. specialize (Sem n0). now inv Sem.
+    Qed.
+
+    Corollary sem_rhs_impl:
+      forall H b e es,
+        CESem.sem_rhs b H e es ->
+        CoInd.sem_rhs (tr_history H) (tr_stream b) e (tr_stream es).
+    Proof. apply sem_rhs_impl_from. Qed.
+    Hint Resolve sem_rhs_impl_from sem_rhs_impl : nlsem.
+
+    (** An inversion principle for annotated [rhs]. *)
+    Lemma sem_arhs_inv:
       forall H b e es ck,
-        CESem.sem_caexp b H ck e es ->
-        CESem.sem_cexp b H e es
+        CESem.sem_arhs b H ck e es ->
+        CESem.sem_rhs b H e es
         /\ exists bs,
             IStr.sem_clock b H ck bs
             /\ (forall n, bs n = match es n with
@@ -766,19 +843,19 @@ Module Type NLINDEXEDTOCOIND
                  end); split; intro n; specialize (Sem n); inv Sem; auto.
     Qed.
 
-    (** We deduce from the previous lemmas the correspondence for annotated
-        [cexp]. *)
-    Corollary sem_caexp_impl_from:
+    (** We deduce from the previous lemmas the correspondence for annotated *)
+  (*       [rhs]. *)
+    Corollary sem_arhs_impl_from:
       forall n H H' b e es ck,
         FEnv.Equiv (@EqSt _) H' (tr_history_from n H) ->
-        CESem.sem_caexp b H ck e es ->
-        CoInd.sem_caexp H' (tr_stream_from n b) ck e
+        CESem.sem_arhs b H ck e es ->
+        CoInd.sem_arhs H' (tr_stream_from n b) ck e
                         (tr_stream_from n es).
     Proof.
       cofix Cofix; intros * Heq Sem.
       pose proof Sem as Sem';
-        apply sem_caexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
-        apply (sem_cexp_impl_from n) in Sem';
+        apply sem_arhs_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
+        apply (sem_rhs_impl_from n) in Sem';
         apply sem_clock_impl_from with (n:=n) in Sem_ck.
       rewrite (init_from_n es) in *.
       rewrite (init_from_n bs), Ebs in Sem_ck.
@@ -789,12 +866,12 @@ Module Type NLINDEXEDTOCOIND
            intros * HE; now rewrite HE).
     Qed.
 
-    Corollary sem_caexp_impl:
+    Corollary sem_arhs_impl:
       forall H b e es ck,
-        CESem.sem_caexp b H ck e es ->
-        CoInd.sem_caexp (tr_history H) (tr_stream b) ck e (tr_stream es).
-    Proof. intros. eapply sem_caexp_impl_from; eauto. reflexivity. Qed.
-    Hint Resolve sem_caexp_impl_from sem_caexp_impl : nlsem.
+        CESem.sem_arhs b H ck e es ->
+        CoInd.sem_arhs (tr_history H) (tr_stream b) ck e (tr_stream es).
+    Proof. intros. eapply sem_arhs_impl_from; eauto. reflexivity. Qed.
+    Hint Resolve sem_arhs_impl_from sem_arhs_impl : nlsem.
 
     (** * RESET CORRESPONDENCE  *)
 
@@ -856,8 +933,8 @@ Module Type NLINDEXEDTOCOIND
           try (rewrite Nat.sub_succ, Nat.sub_0_r); auto.
     Qed.
 
-    (** Generalizing is too intricate: we can use the generalized lemma above to
-        deduce this one which states the correspondence for [mask]. *)
+    (** Generalizing is too intricate: we can use the generalized lemma above to *)
+  (*       deduce this one which states the correspondence for [mask]. *)
     Corollary mask_impl:
       forall k (r: stream bool) xss,
         wf_streams xss ->
@@ -891,8 +968,8 @@ Module Type NLINDEXEDTOCOIND
 
     (** * FINAL LEMMAS *)
 
-    (** Correspondence for [clocks_of], used to give a base clock for node
-        applications. *)
+    (** Correspondence for [clocks_of], used to give a base clock for node *)
+  (*       applications. *)
     Lemma tr_clocks_of_from:
       forall n xss,
         wf_streams xss ->
@@ -1021,8 +1098,8 @@ Module Type NLINDEXEDTOCOIND
     Qed.
     Hint Resolve sem_clocked_vars_impl' : nlsem.
 
-    (** The final theorem stating the correspondence for nodes applications.
-        We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
+    (** The final theorem stating the correspondence for nodes applications. *)
+  (*       We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
     Theorem implies G:
       forall f xss oss,
         Indexed.sem_node G f xss oss ->

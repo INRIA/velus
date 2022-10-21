@@ -25,8 +25,8 @@ Module Type CEISFREE
   | FreeEwhen1: forall e c cv x,
       Is_free_in_exp x e ->
       Is_free_in_exp x (Ewhen e c cv)
-  | FreeEwhen2: forall e c cv,
-      Is_free_in_exp c (Ewhen e c cv)
+  | FreeEwhen2: forall e c tx cv,
+      Is_free_in_exp c (Ewhen e (c, tx) cv)
   | FreeEunop : forall c op e ty,
       Is_free_in_exp c e -> Is_free_in_exp c (Eunop op e ty)
   | FreeEbinop : forall c op e1 e2 ty,
@@ -67,17 +67,25 @@ Module Type CEISFREE
       Is_free_in_exp x e ->
       Is_free_in_cexp x (Eexp e).
 
-  Inductive Is_free_in_caexp : ident -> clock -> cexp -> Prop :=
-  | FreeCAexp1: forall ck ce x,
-      Is_free_in_cexp x ce ->
-      Is_free_in_caexp x ck ce
-  | FreeCAexp2: forall ck ce x,
+  Inductive Is_free_in_rhs : ident -> rhs -> Prop :=
+  | FreeEextcall: forall x f es ty,
+      Exists (Is_free_in_exp x) es ->
+      Is_free_in_rhs x (Eextcall f es ty)
+  | FreeEcexp: forall x e,
+      Is_free_in_cexp x e ->
+      Is_free_in_rhs x (Ecexp e).
+
+  Inductive Is_free_in_arhs : ident -> clock -> rhs -> Prop :=
+  | FreeArhs1 : forall ck ce x,
+      Is_free_in_rhs x ce ->
+      Is_free_in_arhs x ck ce
+  | FreeArhs2 : forall ck ce x,
       Is_free_in_clock x ck ->
-      Is_free_in_caexp x ck ce.
+      Is_free_in_arhs x ck ce.
 
   Global Hint Constructors Is_free_in_clock Is_free_in_exp
        Is_free_in_aexp Is_free_in_aexps Is_free_in_cexp
-       Is_free_in_caexp : nlfree stcfree.
+       Is_free_in_rhs Is_free_in_arhs: nlfree stcfree.
 
   (** * Decision procedure *)
 
@@ -91,8 +99,8 @@ Module Type CEISFREE
   Qed.
 
   Lemma Is_free_in_when_disj:
-    forall y e x c, Is_free_in_exp y (Ewhen e x c)
-                    <-> y = x \/ Is_free_in_exp y e.
+    forall y e x tx c, Is_free_in_exp y (Ewhen e (x, tx) c)
+                  <-> y = x \/ Is_free_in_exp y e.
   Proof.
     intros y e x c; split; intro HH.
     inversion_clear HH; auto.
@@ -131,7 +139,7 @@ Module Type CEISFREE
     | Econst _ => fvs
     | Eenum _ _ => fvs
     | Evar x _ => PS.add x fvs
-    | Ewhen e x _ => free_in_exp e (PS.add x fvs)
+    | Ewhen e (x, _) _ => free_in_exp e (PS.add x fvs)
     | Eunop _ e _ => free_in_exp e fvs
     | Ebinop _ e1 e2 _ => free_in_exp e2 (free_in_exp e1 fvs)
     end.
@@ -150,8 +158,14 @@ Module Type CEISFREE
     | Eexp e            => free_in_exp e fvs
     end.
 
-  Definition free_in_caexp (ck: clock)(ce: cexp) (fvs: PS.t) : PS.t :=
-    free_in_cexp ce (free_in_clock ck fvs).
+  Definition free_in_rhs (e: rhs) (fvs: PS.t) : PS.t :=
+    match e with
+    | Eextcall f es ty => fold_left (fun fvs e => free_in_exp e fvs) es fvs
+    | Ecexp e => free_in_cexp e fvs
+    end.
+
+  Definition free_in_arhs (ck: clock) (e: rhs) (fvs: PS.t) : PS.t :=
+    free_in_rhs e (free_in_clock ck fvs).
 
   (** * Specification lemmas *)
 
@@ -182,7 +196,7 @@ Module Type CEISFREE
     forall x e m, PS.In x (free_in_exp e m)
                   <-> Is_free_in_exp x e \/ PS.In x m.
   Proof.
-    intro x; induction e using exp_ind;
+    intro x; induction e using exp_ind; destruct_conjs;
       try now intro m; (split;
                         [
                           intro H0; try apply IHe in H0
@@ -430,20 +444,27 @@ Module Type CEISFREE
     setoid_rewrite (free_in_cexp_spec _ _ PS.empty); intuition.
   Qed.
 
-  Lemma free_in_caexp_spec:
-    forall x ck e m, PS.In x (free_in_caexp ck e m)
-                     <-> Is_free_in_caexp x ck e \/ PS.In x m.
+  Lemma free_in_rhs_spec:
+    forall e x m, PS.In x (free_in_rhs e m)
+                  <-> Is_free_in_rhs x e \/ PS.In x m.
   Proof.
-    destruct e; split; intros;
-      repeat progress (match goal with
-           | H:_ \/ _ |- _ => destruct H as [H|H]
-           | H:PS.In _ _ |- _ => first [ apply free_in_cexp_spec in H
-                                       | apply free_in_clock_spec in H ]
-           | |- context [free_in_caexp _ _ _] => apply free_in_cexp_spec
-           | H:Is_free_in_caexp _ _ _ |- _ => inversion_clear H
-           | _ => solve [right; apply free_in_clock_spec; auto
-                        | auto with nlfree]
-                       end).
+    intros [] *; simpl.
+    - rewrite free_in_fold_left_exp_spec.
+      split; intros []; auto; left; auto using Is_free_in_rhs.
+      now inv H.
+    - rewrite free_in_cexp_spec.
+      split; intros []; auto; left; auto using Is_free_in_rhs.
+      now inv H.
+  Qed.
+
+  Lemma free_in_arhs_spec:
+    forall x ck e m, PS.In x (free_in_arhs ck e m)
+                     <-> Is_free_in_arhs x ck e \/ PS.In x m.
+  Proof.
+    unfold free_in_arhs.
+    intros *; rewrite free_in_rhs_spec, free_in_clock_spec.
+    split; intros; intuition; auto using Is_free_in_arhs.
+    inv H0; auto.
   Qed.
 
 End CEISFREE.

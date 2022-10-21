@@ -24,33 +24,25 @@ From Velus Require Import Environment.
 Module Type FRESHKERNEL
        (Import Ids : IDS).
 
-  (** The Monad manipulates a state, which exposes a list of the identifiers generated
+  (** The Monad manipulates a state, parameterized by a prefix with which to generate identifiers.
+      The state exposes a list of the identifiers generated
       by the monad, paired with some data *)
   Section st.
-    Parameter fresh_st : Type -> Type.
-    Context {B : Type}.
-    Parameter st_anns : fresh_st B -> list (ident * B).
-    Definition st_ids (st : fresh_st B) := map fst (st_anns st).
+    Parameter fresh_st : ident -> Type -> Type.
+    Context {pref : ident} {B : Type}.
+    Parameter st_anns : fresh_st pref B -> list (ident * B).
+    Definition st_ids (st : fresh_st pref B) := map fst (st_anns st).
   End st.
 
-  Definition Fresh (A B : Type) : Type := fresh_st B -> A * fresh_st B.
+  Definition Fresh pref (A B : Type) : Type := fresh_st pref B -> A * fresh_st pref B.
 
-  (** The state can be deemed as "valid".
-      [st_valid_after st prefix aft] means that the state only contains
-      identifier prefixed by [prefix] and that are distinct from the ones in [aft].
-      This properties also ensures that all ids in the state are distinct *)
+  (** By construction, the state only contains
+      identifier prefixed by [prefix] and that are all distinct *)
   Section validity.
-    Context {B : Type}.
-    Parameter st_valid_after : fresh_st B -> ident -> PS.t -> Prop.
-    Conjecture st_valid_NoDup : forall st prefix aft,
-        st_valid_after st prefix aft ->
-        NoDup (st_ids st++PSP.to_list aft).
-    Conjecture st_valid_PSeq : forall st prefix aft1 aft2,
-        PS.eq aft1 aft2 ->
-        st_valid_after st prefix aft1 ->
-        st_valid_after st prefix aft2.
-    Conjecture st_valid_prefixed : forall st prefix aft,
-        st_valid_after st prefix aft ->
+    Context {prefix : ident} {B : Type}.
+    Conjecture st_valid_NoDup : forall (st : fresh_st prefix B),
+        NoDup (st_ids st).
+    Conjecture st_valid_prefixed : forall (st : fresh_st prefix B),
         Forall (fun x => exists n hint, x = gensym prefix hint n) (st_ids st).
   End validity.
 
@@ -58,8 +50,8 @@ Module Type FRESHKERNEL
       We show below that every primimitive Fresh operation produces a new state
       that follows the previous one *)
   Section follows.
-    Context {B : Type}.
-    Parameter st_follows : fresh_st B -> fresh_st B -> Prop.
+    Context {prefix : ident} {B : Type}.
+    Parameter st_follows : fresh_st prefix B -> fresh_st prefix B -> Prop.
     Conjecture st_follows_refl : Reflexive st_follows.
     Conjecture st_follows_trans : Transitive st_follows.
     Conjecture st_follows_incl : forall st st',
@@ -67,19 +59,11 @@ Module Type FRESHKERNEL
         incl (st_anns st) (st_anns st').
   End follows.
 
-  (** The initial state is empty.
-      An empty state is valid under a few assumption :
-      - the [prefix] used for generating must be different from the ones used previously.
-      - in the case of [st_valid_reuse], the reusable and non-reusable idents must be distinct
-      When initializing *)
+  (** The initial state is empty. *)
   Section init.
-    Context {B : Type}.
-    Parameter init_st : fresh_st B.
+    Context {prefix : ident} {B : Type}.
+    Parameter init_st : fresh_st prefix B.
     Conjecture init_st_anns : st_anns init_st = [].
-    Conjecture init_st_valid : forall prefix aft aftprefs,
-        ~PS.In prefix aftprefs ->
-        PS.For_all (AtomOrGensym aftprefs) aft ->
-        st_valid_after init_st prefix aft.
   End init.
 
   (** The central function for fresh identifier generation,
@@ -88,24 +72,20 @@ Module Type FRESHKERNEL
       If a value is passed for [hint], it will show up in the generated identifier.
       [fresh_ident prefix d] preserves validity as long as [prefix] is the correct one *)
   Section fresh_ident.
-    Context {B : Type}.
-    Parameter fresh_ident : ident -> option ident -> B -> Fresh ident B.
+    Context {prefix : ident} {B : Type}.
+    Parameter fresh_ident : option ident -> B -> Fresh prefix ident B.
 
-    Conjecture fresh_ident_anns : forall pref hint b id st st',
-        fresh_ident pref hint b st = (id, st') ->
+    Conjecture fresh_ident_anns : forall hint b id st st',
+        fresh_ident hint b st = (id, st') ->
         st_anns st' = (id, b)::(st_anns st).
 
-    Conjecture fresh_ident_st_valid : forall pref hint b id st st' aft,
-        fresh_ident pref hint b st = (id, st') ->
-        st_valid_after st pref aft ->
-        st_valid_after st' pref aft.
-    Conjecture fresh_ident_st_follows : forall pref hint b id st st',
-        fresh_ident pref hint b st = (id, st') ->
+    Conjecture fresh_ident_st_follows : forall hint b id st st',
+        fresh_ident hint b st = (id, st') ->
         st_follows st st'.
 
-    Conjecture fresh_ident_prefixed : forall pref hint b id st st',
-        fresh_ident pref hint b st = (id, st') ->
-        exists n hint, id = gensym pref hint n.
+    Conjecture fresh_ident_prefixed : forall hint b id st st',
+        fresh_ident hint b st = (id, st') ->
+        exists n hint, id = gensym prefix hint n.
   End fresh_ident.
 
   (** Generate some fresh identifiers for alpha-renaming purposes.
@@ -114,65 +94,60 @@ Module Type FRESHKERNEL
       Depending on the value of the flag `save`, the generated identifiers can be saved in the state or not
    *)
   Section fresh_idents_rename.
-    Context {B : Type}.
+    Context {prefix : ident} {B : Type}.
 
-    Parameter fresh_idents_rename : ident -> list (ident * B) -> (Env.t ident -> B -> B) -> Fresh (list (ident * B) * Env.t ident) B.
+    Parameter fresh_idents_rename : list (ident * B) -> (Env.t ident -> B -> B) -> Fresh prefix (list (ident * B) * Env.t ident) B.
 
-    Conjecture fresh_idents_rename_ids : forall pref ids frename ids' sub st st',
+    Conjecture fresh_idents_rename_ids : forall ids frename ids' sub st st',
         NoDupMembers ids ->
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         ids' = map (fun '(x, ann) => (or_default x (Env.find x sub), frename sub ann)) ids.
 
-    Conjecture fresh_idents_rename_sub1 : forall pref ids frename ids' sub st st' x,
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Conjecture fresh_idents_rename_sub1 : forall ids frename ids' sub st st' x,
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         Env.In x sub -> InMembers x ids.
 
-    Conjecture fresh_idents_rename_sub2 : forall pref ids frename ids' sub st st' x,
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
-        InMembers x ids <-> exists y n, Env.MapsTo x y sub /\ y = gensym pref (Some x) n.
+    Conjecture fresh_idents_rename_sub2 : forall ids frename ids' sub st st' x,
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
+        InMembers x ids <-> exists y n, Env.MapsTo x y sub /\ y = gensym prefix (Some x) n.
 
-    Conjecture fresh_idents_rename_sub_NoDup : forall pref ids frename ids' sub st st',
+    Conjecture fresh_idents_rename_sub_NoDup : forall ids frename ids' sub st st',
         NoDupMembers ids ->
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         NoDup (map snd (Env.elements sub)).
 
-    Conjecture fresh_idents_rename_sub_nIn : forall prefs aft pref ids frename ids' sub st st' x y,
-        st_valid_after st prefs aft ->
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Conjecture fresh_idents_rename_sub_nIn : forall ids frename ids' sub st st' x y,
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         Env.MapsTo x y sub -> ~In y (st_ids st).
 
-    Conjecture fresh_idents_rename_anns : forall pref ids frename ids' sub st st',
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Conjecture fresh_idents_rename_anns : forall ids frename ids' sub st st',
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         st_anns st' = ids'++st_anns st.
 
-    Conjecture fresh_idents_rename_st_valid : forall pref ids frename ids' sub st st' aft,
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
-        st_valid_after st pref aft ->
-        st_valid_after st' pref aft.
-    Conjecture fresh_idents_rename_st_follows : forall pref ids frename ids' sub st st',
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Conjecture fresh_idents_rename_st_follows : forall ids frename ids' sub st st',
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         st_follows st st'.
   End fresh_idents_rename.
 
   Section ret.
-    Context {A B : Type}.
-    Parameter ret : A -> Fresh A B.
+    Context {pref : ident} {A B : Type}.
+    Parameter ret : A -> Fresh pref A B.
     Conjecture ret_spec : forall a st,
         ret a st = (a, st).
   End ret.
 
   Section bind.
-    Context {A A' B : Type}.
-    Parameter bind : Fresh A B -> (A -> Fresh A' B) -> Fresh A' B.
-    Conjecture bind_spec : forall (x : Fresh A B) (k : A -> Fresh A' B) st a' st'',
+    Context {pref : ident} {A A' B : Type}.
+    Parameter bind : Fresh pref A B -> (A -> Fresh pref A' B) -> Fresh pref A' B.
+    Conjecture bind_spec : forall (x : Fresh pref A B) (k : A -> Fresh pref A' B) st a' st'',
         (bind x k) st = (a', st'') <->
         exists a, exists st', (x st = (a, st') /\ k a st' = (a', st'')).
   End bind.
 
   Section bind2.
-    Context {A1 A2 A' B : Type}.
-    Parameter bind2 : Fresh (A1 * A2) B -> (A1 -> A2 -> Fresh A' B) -> Fresh A' B.
-    Conjecture bind2_spec : forall (x : Fresh (A1 * A2) B) (k : A1 -> A2 -> Fresh A' B) st a' st'',
+    Context {pref : ident} {A1 A2 A' B : Type}.
+    Parameter bind2 : Fresh pref (A1 * A2) B -> (A1 -> A2 -> Fresh pref A' B) -> Fresh pref A' B.
+    Conjecture bind2_spec : forall (x : Fresh pref (A1 * A2) B) (k : A1 -> A2 -> Fresh pref A' B) st a' st'',
         (bind2 x k) st = (a', st'') <->
         exists a1, exists a2, exists st', (x st = ((a1, a2), st') /\ k a1 a2 st' = (a', st'')).
   End bind2.
@@ -180,17 +155,26 @@ End FRESHKERNEL.
 
 Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
   Section st.
-    Definition fresh_st (B : Type) : Type := (ident * list (ident * B)).
-    Context {B : Type}.
-    Definition st_anns (st : fresh_st B) := snd st.
-    Definition st_ids (st : fresh_st B) := map fst (st_anns st).
+    Record fresh_st' (pref : ident) (B : Type) : Type :=
+      { st_next : ident;
+        st_anns : list (ident * B);
+        (* There is no duplicates in generated idents *)
+        st_nodup : NoDupMembers st_anns;
+        (* The next ident is greater than all generated idents *)
+        st_prefs : Forall (fun id => exists x hint, id = gensym pref hint x /\ Pos.lt x st_next) (map fst st_anns)
+      }.
+    Definition fresh_st pref B := fresh_st' pref B.
+    Context {pref : ident} {B : Type}.
+    Definition st_ids (st : fresh_st pref B) := map fst (st_anns _ _ st).
   End st.
 
-  Definition Fresh (A B : Type) : Type := fresh_st B -> A * fresh_st B.
+  Arguments st_anns {_} {_}.
+
+  Definition Fresh pref (A B : Type) : Type := fresh_st pref B -> A * fresh_st pref B.
 
   Section ret.
-    Context {A B : Type}.
-    Definition ret (a : A) : Fresh A B := fun st => (a, st).
+    Context {pref : ident} {A B : Type}.
+    Definition ret (a : A) : Fresh pref A B := fun st => (a, st).
 
     Fact ret_spec : forall a st,
         ret a st = (a, st).
@@ -200,16 +184,7 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
   End ret.
 
   Section validity.
-    Context {B : Type}.
-    (** The state is valid if the next ident is greater than all generated idents,
-        and if there is no duplicates in generated idents *)
-    Definition st_valid_after (st : fresh_st B) (pref : ident) (aft : PS.t) : Prop :=
-      let '(n, l) := st in
-      NoDupMembers l /\
-      Forall (fun id => exists x hint, id = gensym pref hint x /\ Pos.lt x n) (map fst l) /\
-      exists prefs,
-        ~PS.In pref prefs /\
-        PS.For_all (AtomOrGensym prefs) aft.
+    Context {pref : ident} {B : Type}.
 
     Fact AtomOrGensym_gensym_injective : forall prefs pref hint x,
         AtomOrGensym prefs (gensym pref hint x) ->
@@ -220,47 +195,27 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       - eapply gensym_injective in Hgen as (?&?); subst; auto.
     Qed.
 
-    Fact st_valid_NoDup : forall st pref aft,
-        st_valid_after st pref aft ->
-        NoDup (st_ids st++PSP.to_list aft).
+    Fact st_valid_NoDup : forall (st: fresh_st pref B),
+        NoDup (st_ids st).
     Proof.
-      intros [n l] pref aft (Hnd&Hpre&?&Hnpre&Hatg).
-      apply NoDup_app'; simpl.
-      - apply fst_NoDupMembers; auto.
-      - apply PS_elements_NoDup.
-      - eapply Forall_impl; [|eauto].
-        intros ? (?&?&Hgen&_); subst.
-        rewrite In_PS_elements; simpl.
-        intro contra. apply Hatg in contra.
-        eapply AtomOrGensym_gensym_injective in contra.
-        contradiction.
+      intros.
+      apply fst_NoDupMembers, st_nodup.
     Qed.
 
-    Fact st_valid_PSeq : forall st pref aft1 aft2,
-        PS.eq aft1 aft2 ->
-        st_valid_after st pref aft1 ->
-        st_valid_after st pref aft2.
-    Proof.
-      intros [n l] * Heq (?&?&?&?&?).
-      repeat (constructor; auto).
-      exists x. rewrite <- Heq; auto.
-    Qed.
-
-    Fact st_valid_prefixed : forall st pref aft,
-        st_valid_after st pref aft ->
+    Fact st_valid_prefixed : forall (st: fresh_st pref B),
         Forall (fun x => exists n hint, x = gensym pref hint n) (st_ids st).
     Proof.
-      intros (?&?) * (?&?&?); auto.
-      eapply Forall_impl; [|eauto].
-      intros ? (?&?&Hgen&_); subst; eauto.
+      intros. unfold st_ids.
+      pose proof (st_prefs _ _ st) as Hprefs.
+      simpl_Forall; subst; eauto.
     Qed.
   End validity.
 
   Section follows.
-    Context {B : Type}.
+    Context {pref : ident} {B : Type}.
 
-    Definition st_follows (st st' : fresh_st B) :=
-      incl (snd st) (snd st').
+    Definition st_follows (st st' : fresh_st pref B) :=
+      incl (st_anns st) (st_anns st').
 
     Fact st_follows_refl : Reflexive st_follows.
     Proof. intros st. unfold st_follows. reflexivity. Qed.
@@ -279,35 +234,41 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
   End follows.
 
   Section init.
-    Context {B : Type}.
+    Context {pref : ident} {B : Type}.
 
-    Definition init_st : fresh_st B := (xH, []).
+    Program Definition init_st : fresh_st pref B :=
+      {| st_next := xH; st_anns := []; |}.
+    Next Obligation. constructor. Qed.
 
     Fact init_st_anns : st_anns init_st = [].
     Proof. intros. reflexivity.
     Qed.
-
-    Fact init_st_valid : forall pref aft aftprefs,
-        ~PS.In pref aftprefs ->
-        PS.For_all (AtomOrGensym aftprefs) aft ->
-        st_valid_after init_st pref aft.
-    Proof.
-      intros * Hnin Hprefs.
-      unfold init_st.
-      repeat (constructor; simpl; eauto).
-    Qed.
   End init.
 
   Section fresh_ident.
-    Context {B : Type}.
+    Context {pref : ident} {B : Type}.
 
-    Definition fresh_ident pref hint (b : B) : Fresh ident B :=
-      fun '(n, l) =>
-        let id := gensym pref hint n in
-        (id, (Pos.succ n, (id, b)::l)).
+    Program Definition fresh_ident hint (b : B) : Fresh pref ident B :=
+      fun st =>
+        let id := gensym pref hint (st_next _ _ st) in
+        (id, {| st_next := Pos.succ (st_next _ _ st);
+                st_anns := (id, b)::st_anns st |}).
+    Next Obligation.
+      constructor. 2:apply st_nodup.
+      pose proof (st_prefs _ _ st) as Hf.
+      rewrite fst_InMembers. intros Hin. simpl_Forall.
+      apply gensym_injective in H as (_&?); subst.
+      eapply Pos.lt_irrefl; eauto.
+    Qed.
+    Next Obligation.
+      pose proof (st_prefs _ _ st) as Hf.
+      constructor; simpl_Forall; repeat esplit; eauto.
+      - apply Pos.lt_succ_diag_r.
+      - etransitivity; eauto. apply Pos.lt_succ_diag_r.
+    Qed.
 
-    Fact fresh_ident_anns : forall pref hint b id st st',
-        fresh_ident pref hint b st = (id, st') ->
+    Fact fresh_ident_anns : forall hint b id st st',
+        fresh_ident hint b st = (id, st') ->
         st_anns st' = (id, b)::(st_anns st).
     Proof.
       intros.
@@ -315,71 +276,43 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       reflexivity.
     Qed.
 
-    Fact fresh_ident_st_valid :
-      forall pref hint (b : B) id st st' aft,
-        fresh_ident pref hint b st = (id, st') ->
-        st_valid_after st pref aft ->
-        st_valid_after st' pref aft.
-    Proof.
-      intros ???? [n l] [n' l'] aft Hfresh (Hv1&Hv2&aftprefs&Hv3&Hv4).
-      simpl in Hfresh; inv Hfresh.
-      repeat split; simpl; auto. 3:exists aftprefs; split; auto. 1,2:constructor; auto.
-      - rewrite fst_InMembers.
-        intro Hin. eapply Forall_forall in Hv2 as (?&?&Heq&?); eauto.
-        apply gensym_injective in Heq as (_&?); subst.
-        eapply Pos.lt_irrefl; eauto.
-      - repeat esplit; eauto.
-        apply Pos.lt_succ_diag_r.
-      - eapply Forall_impl; [|eauto].
-        intros ? (?&?&?&?); subst.
-        repeat esplit; eauto.
-        etransitivity; eauto. apply Pos.lt_succ_diag_r.
-    Qed.
-
     Fact fresh_ident_st_follows :
-      forall pref hint (b : B) id st st',
-        fresh_ident pref hint b st = (id, st') ->
+      forall hint (b : B) id st st',
+        fresh_ident hint b st = (id, st') ->
         st_follows st st'.
     Proof.
-      intros ???? [n l] [n' l'] Hfresh.
+      intros ??? [] [] Hfresh.
       simpl in *; inv Hfresh; simpl.
       unfold st_follows in *; simpl in *.
       apply incl_tl. reflexivity.
     Qed.
 
-    Fact fresh_ident_prefixed : forall pref hint b id st st',
-        fresh_ident pref hint b st = (id, st') ->
+    Fact fresh_ident_prefixed : forall hint b id st st',
+        fresh_ident hint b st = (id, st') ->
         exists x hint, id = gensym pref hint x.
     Proof.
-      intros ???? (?&?) ? Hfresh. inv Hfresh; eauto.
+      intros ??? [] ? Hfresh. inv Hfresh; eauto.
     Qed.
   End fresh_ident.
 
   Section fresh_idents_rename.
-    Context {B : Type}.
+    Context {pref : ident} {B : Type}.
 
-    Definition fresh_idents_rename pref (ids : list (ident * B)) (frename : _ -> B -> B) st :=
-      let '(n, l) := st in
-      let (iids, n) := List.fold_left (fun '(l, n) '(x, ann) =>
-                                         let id := gensym pref (Some x) n in
-                                         (((x, id), ann)::l, Pos.succ n))
-                                      ids (nil, n) in
-      let sub := Env.from_list (map fst iids) in
-      let ids := map (fun '((_, x), ann) => (x, frename sub ann)) (List.rev iids) in
-      ((ids, sub), (n, ids++l)).
-
-    Fact fi_right_le pref : forall (ids : list (ident * B)) ids' n n',
-        fold_right (fun x y => (let '(l, n) := y in fun '(x0, ann) => ((x0, gensym pref (Some x0) n, ann) :: l, Pos.succ n)) x) ([], n) ids = (ids', n') ->
+    Fact fi_right_le : forall (ids : list (ident * B)) ids' n n',
+        fold_right
+             (fun (x : ident * B) (y : list (ident * ident * B) * ident) =>
+              ((fst x, gensym pref (Some (fst x)) (snd y), snd x) :: fst y, Pos.succ (snd y)))
+             ([], n) ids = (ids', n') ->
         Pos.le n n'.
     Proof.
       induction ids as [|(?&?)]; intros * Hfold; simpl in *.
       - inv Hfold. reflexivity.
-      - cases_eqn Hfold. inv Hfold.
+      - destruct (fold_right _ _) eqn:Hfold0. inv Hfold.
         eapply IHids in Hfold0. lia.
     Qed.
 
-    Fact fi_fold_left_values pref : forall (ids : list (ident * B)) iids n n',
-        fold_left (fun '(l, n) '(x, ann) => ((x, gensym pref (Some x) n, ann) :: l, Pos.succ n)) ids ([], n) = (iids, n') ->
+    Fact fi_fold_left_values : forall (ids : list (ident * B)) iids n n',
+        fold_left (fun ln xann => (((fst xann), gensym pref (Some (fst xann)) (snd ln), snd xann) :: fst ln, Pos.succ (snd ln))) ids ([], n) = (iids, n') ->
         Forall2 (fun '(x, ann) '((x1, x2), ann1) => x1 = x /\ ann1 = ann /\ exists n1, x2 = gensym pref (Some x) n1 /\ Pos.le n n1 /\ Pos.lt n1 n') ids (List.rev iids).
     Proof.
       intros * Hfold.
@@ -389,24 +322,23 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       generalize (rev ids) as ids'. clear ids.
       induction ids'; intros * Hfold; simpl in *.
       - inv Hfold; auto.
-      - cases_eqn Hfold. inv Hfold.
+      - destruct (fold_right _ _) eqn:Hfold0. inv Hfold. destruct_conjs.
         repeat (econstructor; eauto using Pos.lt_succ_diag_r, fi_right_le).
         eapply IHids' in Hfold0.
         eapply Forall2_impl_In; [|eauto]; intros (?&?) ((?&?)&?) _ _ (?&?&?&?&?&?).
         repeat esplit; eauto. lia.
     Qed.
 
-    Fact fi_left_le pref : forall (ids : list (ident * B)) ids0 iids n n',
-        fold_left (fun '(l, n) '(x, ann) => ((x, gensym pref (Some x) n, ann) :: l, Pos.succ n)) ids (ids0, n) = (iids, n') ->
+    Fact fi_left_le : forall (ids : list (ident * B)) ids' n n',
+        fold_left (fun ln xann => (((fst xann), gensym pref (Some (fst xann)) (snd ln), snd xann) :: fst ln, Pos.succ (snd ln))) ids ([], n) = (ids', n') ->
         Pos.le n n'.
     Proof.
-      induction ids as [|(?&?)]; intros * Hfold; simpl in *.
-      - inv Hfold. reflexivity.
-      - eapply IHids in Hfold. lia.
+      intros * Hfold. rewrite <-fold_left_rev_right in Hfold.
+      apply fi_right_le in Hfold. auto.
     Qed.
 
-    Fact fi_NoDup pref : forall (ids : list (ident * B)) ids' n n',
-        fold_left (fun '(l, n) '(x, ann) => ((x, gensym pref (Some x) n, ann) :: l, Pos.succ n)) ids ([], n) = (ids', n') ->
+    Fact fi_NoDup : forall (ids : list (ident * B)) ids' n n',
+        fold_left (fun ln xann => (((fst xann), gensym pref (Some (fst xann)) (snd ln), snd xann) :: fst ln, Pos.succ (snd ln))) ids ([], n) = (ids', n') ->
         NoDup (map (fun '(_, x, _) => x) ids').
     Proof.
       intros (* ids ids' n n' *) * Hfold.
@@ -416,7 +348,7 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       revert ids' n n' Hfold. generalize (rev ids) as ids'; clear ids.
       induction ids'; intros * Hfold; simpl in *.
       - inv Hfold. repeat constructor.
-      - cases_eqn Hfold. inv Hfold.
+      - destruct (fold_right _ _) eqn:Hfold0. inv Hfold.
         specialize (IHids' _ _ _ Hfold0) as (Hnd&Hf).
         repeat constructor; auto.
         + intro contra. eapply in_map_iff in contra as (((?&?)&?)&?&?); subst.
@@ -435,20 +367,50 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       induction Hf as [|(?&?) ((?&?)&?) ?? (?&?&_)]; subst; simpl; auto with datatypes.
     Qed.
 
-    Lemma fresh_idents_rename_ids : forall pref ids frename ids' sub st st',
+    Program Definition fresh_idents_rename (ids : list (ident * B)) (frename : _ -> B -> B) (st: fresh_st pref B) :=
+      let iids := List.fold_left (fun ln xann =>
+                                         let id := gensym pref (Some (fst xann)) (snd ln) in
+                                         (((fst xann, id), snd xann)::(fst ln), Pos.succ (snd ln)))
+                                      ids (nil, (st_next _ _ st)) in
+      let sub := Env.from_list (map fst (fst iids)) in
+      let ids := map (fun 'xann => (snd (fst xann), frename sub (snd xann))) (List.rev (fst iids)) in
+      ((ids, sub), {|
+                     st_next := snd iids;
+                     st_anns := ids++st_anns st;
+                   |}).
+    Next Obligation.
+      destruct fold_left eqn:Hfold. destruct st. simpl in *.
+      apply NoDupMembers_app; auto.
+      - rewrite fst_NoDupMembers, map_map; simpl.
+        eapply fi_NoDup in Hfold; eauto.
+        erewrite <-Permutation_rev, map_ext; eauto. intros ((?&?)&?); auto.
+      - intros ? Hinm1 Hinm2. simpl_In.
+        eapply fi_fold_left_values, Forall2_ignore1 in Hfold. simpl_Forall; subst.
+        eapply gensym_injective in H5 as (?&?); subst. lia.
+    Qed.
+    Next Obligation.
+      rewrite map_app. apply Forall_app; split; auto.
+      - destruct (fold_left _ _) eqn:Hfold. eapply fi_fold_left_values in Hfold. clear - Hfold.
+        apply Forall2_ignore1 in Hfold. simpl_Forall. eauto.
+      - destruct st. destruct (fold_left _ _) eqn:Hfold. simpl_Forall; subst.
+        repeat (esplit; eauto).
+        eapply Pos.lt_le_trans; eauto using fi_left_le.
+    Qed.
+
+    Lemma fresh_idents_rename_ids : forall ids frename ids' sub st st',
         NoDupMembers ids ->
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         ids' = map (fun '(x, ann) => (or_default x (Env.find x sub), frename sub ann)) ids.
     Proof.
       unfold fresh_idents_rename.
-      intros * Hnd Hfresh. destruct st.
-      destruct fold_left eqn:Hfold. inv Hfresh.
+      intros * Hnd Hfresh. destruct st; simpl in *.
+      inv Hfresh. destruct fold_left eqn:Hfold. simpl.
       eapply fi_fold_left_values in Hfold.
-      assert (Forall (fun '(x, x') => Env.find x (Env.from_list (map fst l0)) = Some x') (map fst (rev l0))) as Hfind.
+      assert (Forall (fun '(x, x') => Env.find x (Env.from_list (map fst l)) = Some x') (map fst (rev l))) as Hfind.
       { rewrite <-Permutation_rev.
         eapply Forall_forall; intros (?&?) Hin.
         eapply Env.find_In_from_list; eauto.
-        erewrite fst_NoDupMembers, (Permutation_rev l0), fi_map_fst; eauto.
+        erewrite fst_NoDupMembers, (Permutation_rev l), fi_map_fst; eauto.
         now rewrite <-fst_NoDupMembers.
       }
       clear Hnd.
@@ -457,148 +419,119 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
       rewrite H1; simpl. reflexivity.
     Qed.
 
-    Lemma fresh_idents_rename_sub1 : forall pref ids frename ids' sub st st' x,
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Lemma fresh_idents_rename_sub1 : forall ids frename ids' sub st st' x,
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         Env.In x sub -> InMembers x ids.
     Proof.
       unfold fresh_idents_rename.
       intros * Hfresh Hmap. destruct st.
-      destruct fold_left eqn:Hfold. inv Hfresh.
+      inv Hfresh. destruct fold_left eqn:Hfold. simpl.
       rewrite Permutation_rev.
       rewrite <-(rev_involutive ids), fold_right_rev_left in Hfold.
       destruct (InMembers_dec x (rev ids) ident_eq_dec); eauto.
-      exfalso. eapply n; clear n.
+      exfalso. eapply n; clear n. simpl in *.
       eapply Env.In_from_list in Hmap.
-      clear l. revert l0 i i0 Hfold Hmap. generalize (rev ids) as ids'. clear ids.
+      clear st_nodup0 st_prefs0 st_anns0.
+      revert st_next0 l i Hfold Hmap. generalize (rev ids) as ids'. clear ids.
       induction ids' as [|(?&?)]; intros * Hfold Hmap; simpl in *.
       - inv Hfold. inv Hmap.
-      - cases_eqn Hfold. inv Hfold.
+      - inv Hfold. destruct (fold_right _ _) eqn:Hfold0.
         specialize (IHids' _ _ _ Hfold0).
         inv Hmap; auto.
     Qed.
 
-    Lemma fresh_idents_rename_sub2 : forall pref ids frename ids' sub st st' x,
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Lemma fresh_idents_rename_sub2 : forall ids frename ids' sub st st' x,
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         InMembers x ids <-> exists y n, Env.MapsTo x y sub /\ y = gensym pref (Some x) n.
     Proof.
       unfold fresh_idents_rename.
       intros * Hfresh. destruct st.
-      destruct fold_left eqn:Hfold. inv Hfresh.
+      inv Hfresh. destruct fold_left eqn:Hfold.
       rewrite Permutation_rev.
-      rewrite <-(rev_involutive ids), fold_right_rev_left in Hfold.
-      clear l. revert l0 i i0 Hfold. generalize (rev ids) as ids'. clear ids.
+      rewrite <-(rev_involutive ids), fold_right_rev_left in Hfold. simpl in *.
+      clear st_nodup0 st_prefs0 st_anns0. revert l i Hfold. generalize (rev ids) as ids'. clear ids.
       induction ids'; intros * Hfold; simpl in *.
       - inv Hfold. split; [intros []|intros (?&?&Hemp&_)]; simpl in *.
         unfold Env.from_list in *; simpl in *.
         eapply Env.Props.P.F.empty_mapsto_iff in Hemp; eauto.
-      - cases_eqn Hfold. inv Hfold.
-        specialize (IHids' _ _ _ Hfold0). rewrite IHids'.
+      - inv Hfold. destruct_conjs. destruct fold_right eqn:Hfold.
+        specialize (IHids' _ _ eq_refl). rewrite IHids'.
         split; [intros [|(?&?&Hmap&Hgen)]|intros (?&?&Hmap&Hgen)];
           subst; unfold Env.MapsTo, Env.from_list in *; simpl.
         + destruct (InMembers_dec x ids' ident_eq_dec).
-          * eapply IHids' in i0 as (?&?&?&?); subst.
+          * eapply IHids' in i as (?&?&?&?); subst.
             repeat esplit; eauto using Env.find_gsss'_empty.
           * repeat esplit; eauto.
             setoid_rewrite Env.find_gsss'; eauto.
-            { contradict n. clear - Hfold0 n.
-              revert i i1 l n Hfold0.
+            { contradict n. clear - Hfold n.
+              revert i0 l n Hfold.
               induction ids' as [|(?&?)]; intros * Hin Hfold0; simpl in *.
               - inv Hfold0. inv Hin.
-              - cases_eqn Hfold. inv Hfold0. inv Hin; eauto.
+              - destruct fold_right eqn:Hfold. inv Hfold0. inv Hin; eauto.
             }
         + repeat esplit; eauto.
           eapply Env.find_gsss'_empty; eauto.
-        + destruct (ident_eq_dec i2 x); auto. right.
+        + destruct (ident_eq_dec i x); auto. right.
           setoid_rewrite Env.find_gsso' in Hmap; eauto.
     Qed.
 
-    Lemma fresh_idents_rename_sub_NoDup : forall pref ids frename ids' sub st st',
+    Lemma fresh_idents_rename_sub_NoDup : forall ids frename ids' sub st st',
         NoDupMembers ids ->
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         NoDup (map snd (Env.elements sub)).
     Proof.
       unfold fresh_idents_rename.
       intros * Hnd Hfresh.
       assert (Hfresh':=Hfresh). eapply fresh_idents_rename_ids in Hfresh'; eauto.
-      destruct st, fold_left eqn:Hfold. inv Hfresh.
+      inv Hfresh. destruct st, fold_left eqn:Hfold.
       rewrite Env.elements_from_list.
       - eapply fi_NoDup in Hfold.
         erewrite map_map, map_ext; eauto. intros ((?&?)&?); auto.
       - eapply fi_fold_left_values, fi_map_fst in Hfold.
-        rewrite fst_NoDupMembers, (Permutation_rev l0).
+        rewrite fst_NoDupMembers, (Permutation_rev l).
         setoid_rewrite Hfold. apply fst_NoDupMembers; auto.
     Qed.
 
-    Lemma fresh_idents_rename_sub_nIn prefs aft : forall pref ids frename ids' sub st st' x y,
-        st_valid_after st prefs aft ->
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Lemma fresh_idents_rename_sub_nIn : forall ids frename ids' sub st st' x y,
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         Env.MapsTo x y sub -> ~In y (st_ids st).
     Proof.
       unfold fresh_idents_rename.
-      intros * Hvalid Hfresh Hmaps Hin. destruct st, Hvalid as (_&?&_).
-      destruct fold_left eqn:Hfold. inv Hfresh.
+      intros * Hfresh Hmaps Hin. destruct st.
+      inv Hfresh. destruct fold_left eqn:Hfold.
       eapply Env.from_list_find_In, in_map_iff in Hmaps as ((?&?)&Heq&Hin'); simpl in *; subst.
       eapply fi_fold_left_values, Forall2_ignore1 in Hfold. rewrite <-Permutation_rev in Hfold.
-      eapply Forall_forall in Hfold as ((?&?)&?&Heq); eauto; simpl in *. destruct Heq as (?&?&?&Hgen&Hlt&Hge); subst.
-      eapply Forall_forall in H as (?&?&Hgen&Hlt'); eauto.
-      eapply gensym_injective in Hgen as (?&?); subst. lia.
+      simpl_Forall; subst. unfold st_ids in *. simpl_In. simpl_Forall.
+      take (gensym _ _ _ = gensym _ _ _) and eapply gensym_injective in it as (?&?); subst. lia.
     Qed.
 
-    Lemma fresh_idents_rename_anns : forall pref ids frename ids' sub st st',
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Lemma fresh_idents_rename_anns : forall ids frename ids' sub st st',
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         st_anns st' = ids'++st_anns st.
     Proof.
       unfold fresh_idents_rename.
-      intros * Hfresh. destruct st.
+      intros * Hfresh. destruct st. inv Hfresh. simpl in *.
       cases_eqn Hfold.
     Qed.
 
-    Lemma fresh_idents_rename_st_valid : forall pref ids frename ids' sub st st' aft,
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
-        st_valid_after st pref aft ->
-        st_valid_after st' pref aft.
-    Proof.
-      unfold fresh_idents_rename.
-      intros ????? (?&?) (?&?) ? Hfresh (Hv1&Hv2&Hv3).
-      destruct fold_left eqn:Hfold. inv Hfresh.
-      repeat (split; auto).
-      - apply NoDupMembers_app; auto.
-        + rewrite fst_NoDupMembers, map_map; simpl.
-          eapply fi_NoDup in Hfold; eauto.
-          erewrite <-Permutation_rev, map_ext; eauto. intros ((?&?)&?); auto.
-        + intros ? Hinm1 Hinm2.
-          eapply fst_InMembers in Hinm2. eapply Forall_forall in Hv2 as (?&?&?&Hlt); eauto; subst.
-          rewrite fst_InMembers, map_map in Hinm1. eapply in_map_iff in Hinm1 as (((?&?)&?)&?&?); simpl in *; subst.
-          eapply fi_fold_left_values, Forall2_ignore1, Forall_forall in Hfold as ((?&?)&?&Hfold); eauto; simpl in *.
-          destruct Hfold as (?&?&?&?&?&?); subst.
-          eapply gensym_injective in H3 as (?&?); subst. lia.
-      - rewrite map_app. apply Forall_app; split; auto.
-        + eapply fi_fold_left_values in Hfold. clear - Hfold.
-          induction Hfold as [|(?&?) ((?&?)&?) ?? (?&?&?&?&?&?)];
-            auto; subst; simpl in *; constructor; eauto.
-        + eapply Forall_impl; [|eauto]; intros ? (?&?&?&?).
-          repeat (esplit; eauto).
-          eapply Pos.lt_le_trans; eauto using fi_left_le.
-    Qed.
-
-    Lemma fresh_idents_rename_st_follows : forall pref ids frename ids' sub st st',
-        fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+    Lemma fresh_idents_rename_st_follows : forall ids frename ids' sub st st',
+        fresh_idents_rename ids frename st = ((ids', sub), st') ->
         st_follows st st'.
     Proof.
       unfold fresh_idents_rename, st_follows.
-      intros ????? (?&?) (?&?) Hfresh.
-      cases_eqn Hfold; inv Hfresh.
+      intros ???? [] [] Hfresh.
+      inv Hfresh; simpl in *.
       apply incl_appr, incl_refl.
     Qed.
   End fresh_idents_rename.
 
   Section bind.
-    Context {A A' B : Type}.
+    Context {pref : ident} {A A' B : Type}.
 
-    Definition bind (x : Fresh A B) (k : A -> Fresh A' B) : Fresh A' B :=
+    Definition bind (x : Fresh pref A B) (k : A -> Fresh pref A' B) : Fresh pref A' B :=
       fun st => let '(a, st') := x st in k a st'.
 
-    Lemma bind_spec : forall (x : Fresh A B) (k : A -> Fresh A' B) st a' st'',
+    Lemma bind_spec : forall (x : Fresh pref A B) (k : A -> Fresh pref A' B) st a' st'',
         (bind x k) st = (a', st'') <->
         exists a, exists st', (x st = (a, st') /\ k a st' = (a', st'')).
     Proof.
@@ -612,12 +545,12 @@ Module FreshKernel(Import Ids : IDS) : FRESHKERNEL(Ids).
   End bind.
 
   Section bind2.
-    Context {A1 A2 A' B : Type}.
+    Context {pref : ident} {A1 A2 A' B : Type}.
 
-    Definition bind2 (x: Fresh (A1 * A2) B) (k: A1 -> A2 -> Fresh A' B) : Fresh A' B :=
+    Definition bind2 (x: Fresh pref (A1 * A2) B) (k: A1 -> A2 -> Fresh pref A' B) : Fresh pref A' B :=
       fun n => let '((a1, a2), n') := x n in k a1 a2 n'.
 
-    Lemma bind2_spec : forall (x : Fresh (A1 * A2) B) (k : A1 -> A2 -> Fresh A' B) st a' st'',
+    Lemma bind2_spec : forall (x : Fresh pref (A1 * A2) B) (k : A1 -> A2 -> Fresh pref A' B) st a' st'',
         (bind2 x k) st = (a', st'') <->
         exists a1, exists a2, exists st', (x st = ((a1, a2), st') /\ k a1 a2 st' = (a', st'')).
     Proof.
@@ -636,25 +569,17 @@ Module Fresh(Ids : IDS).
   Include Ker.
 
   Section Instances.
-    Context {B : Type}.
-    Global Instance st_follows_Reflexive : Reflexive (@st_follows B) := st_follows_refl.
-    Global Instance st_follows_Transitive : Transitive (@st_follows B) := st_follows_trans.
-
-    Global Instance st_valid_after_Proper :
-      Proper (@eq (@fresh_st B) ==> @eq ident ==> PS.Equal ==> @Basics.impl)
-             st_valid_after.
-    Proof.
-      intros ? ? ? ? ? ? ? ? Heq Hfresh; subst.
-      eapply st_valid_PSeq; eauto.
-    Qed.
+    Context {prefix : ident} {B : Type}.
+    Global Instance st_follows_Reflexive : Reflexive (@st_follows prefix B) := st_follows_refl.
+    Global Instance st_follows_Transitive : Transitive (@st_follows prefix B) := st_follows_trans.
   End Instances.
 
   Module Facts.
 
     Section st.
-      Context {B : Type}.
+      Context {pref : ident} {B : Type}.
 
-      Fact st_anns_ids_In : forall (st : fresh_st B) id,
+      Fact st_anns_ids_In : forall (st : fresh_st pref B) id,
           (exists b, In (id, b) (st_anns st)) <-> In id (st_ids st).
       Proof.
         intros.
@@ -677,46 +602,33 @@ Module Fresh(Ids : IDS).
       - eapply Ids.gensym_injective in Hgen as (?&?); subst; eauto.
     Qed.
 
-    Section st_valid_after.
-      Context {B : Type}.
+    Section st_valid.
+      Context {pref : ident} {B : Type}.
 
-      Fact st_valid_after_NoDupMembers {C} : forall (st : fresh_st B) pref (vars : list (ident * C)),
-          NoDupMembers vars ->
-          st_valid_after st pref (PSP.of_list (map fst vars)) ->
-          NoDup (map fst vars ++ st_ids st).
-      Proof.
-        intros * Hndup Hvalid.
-        eapply st_valid_NoDup in Hvalid.
-        rewrite ps_of_list_ps_to_list_Perm in Hvalid. 2:rewrite <- fst_NoDupMembers; auto.
-        unfold st_ids in Hvalid.
-        rewrite Permutation_app_comm; auto.
-      Qed.
-
-      Fact st_valid_after_AtomOrGensym_nIn : forall pref prefs aft (st : fresh_st B) x,
+      Fact st_valid_AtomOrGensym_nIn : forall prefs (st : fresh_st pref B) x,
           ~PS.In pref prefs ->
-          st_valid_after st pref aft ->
           Ids.AtomOrGensym prefs x ->
           ~In x (st_ids st).
       Proof.
-        intros * Hnin Hst Hat Hin.
-        eapply st_valid_prefixed, Forall_forall in Hst as (?&?&?); eauto; subst.
+        intros * Hnin Hat Hin.
+        specialize (st_valid_prefixed st) as Hst. simpl_Forall; subst.
         eapply contradict_AtomOrGensym in Hat; eauto.
       Qed.
-    End st_valid_after.
+    End st_valid.
 
     Section fresh_ident.
-      Context {B : Type}.
+      Context {pref : ident} {B : Type}.
 
-      Fact fresh_ident_In : forall pref hint (b : B) id st st',
-          fresh_ident pref hint b st = (id, st') ->
+      Fact fresh_ident_In : forall hint (b : B) id (st st': fresh_st pref B),
+          fresh_ident hint b st = (id, st') ->
           In (id, b) (st_anns st').
       Proof.
         intros. apply fresh_ident_anns in H.
         rewrite H. constructor. reflexivity.
       Qed.
 
-      Corollary fresh_ident_Inids : forall pref hint (b : B) id st st',
-          fresh_ident pref hint b st = (id, st') ->
+      Corollary fresh_ident_Inids : forall hint (b : B) id (st st': fresh_st pref B),
+          fresh_ident hint b st = (id, st') ->
           In id (st_ids st').
       Proof.
         intros * Hfresh.
@@ -725,8 +637,8 @@ Module Fresh(Ids : IDS).
         exists (id, b); auto.
       Qed.
 
-      Fact fresh_ident_vars_perm : forall pref hint (b : B) id st st',
-          fresh_ident pref hint b st = (id, st') ->
+      Fact fresh_ident_vars_perm : forall hint (b : B) id (st st': fresh_st pref B),
+          fresh_ident hint b st = (id, st') ->
           Permutation (id::(st_ids st)) (st_ids st').
       Proof.
         intros. apply fresh_ident_anns in H.
@@ -734,54 +646,36 @@ Module Fresh(Ids : IDS).
         reflexivity.
       Qed.
 
-      Fact fresh_ident_nIn : forall pref hint (b : B) id st st' aft,
-          st_valid_after st pref aft ->
-          fresh_ident pref hint b st = (id, st') ->
+      Fact fresh_ident_nIn : forall hint (b : B) id (st st': fresh_st pref B),
+          fresh_ident hint b st = (id, st') ->
           ~List.In id (st_ids st).
       Proof.
-        intros * Hvalid Hfresh.
-        eapply fresh_ident_st_valid in Hvalid; eauto.
-        apply st_valid_NoDup in Hvalid. apply NoDup_app_weaken in Hvalid.
+        intros * Hfresh.
+        specialize (st_valid_NoDup st') as Hvalid.
         apply fresh_ident_vars_perm in Hfresh.
         unfold st_ids in *.
         rewrite <- Hfresh in Hvalid. inv Hvalid.
         assumption.
       Qed.
 
-      Fact fresh_ident_nIn' : forall pref hint (b : B) id st st' aft,
-          st_valid_after st pref aft ->
-          fresh_ident pref hint b st = (id, st') ->
-          ~PS.In id aft.
+      Fact fresh_ident_nIn' : forall prefs hint (b : B) id (st st': fresh_st pref B) aft,
+          ~PS.In pref prefs ->
+          Forall (Ids.AtomOrGensym prefs) aft ->
+          fresh_ident hint b st = (id, st') ->
+          ~In id aft.
       Proof.
-        intros * Hvalid Hfresh.
-        eapply fresh_ident_st_valid in Hvalid; eauto.
-        apply st_valid_NoDup in Hvalid.
-        apply fresh_ident_vars_perm in Hfresh.
-        unfold st_ids in *.
-        rewrite <- Hfresh in Hvalid. inv Hvalid.
-        intro contra. apply H1, in_or_app, or_intror, In_PS_elements; auto.
-      Qed.
-
-      Fact fresh_ident_nIn'' : forall pref hint (b : B) id st st' aft,
-          st_valid_after st pref (PSP.of_list aft) ->
-          fresh_ident pref hint b st = (id, st') ->
-          ~In id (aft ++ st_ids st).
-      Proof.
-        intros * Hvalid Hfresh.
-        intro contra.
-        apply in_app in contra as [contra|contra].
-        - eapply fresh_ident_nIn' in Hfresh; eauto.
-          rewrite <- ps_from_list_ps_of_list, ps_from_list_In in Hfresh; auto.
-        - eapply fresh_ident_nIn in Hvalid; eauto.
+        intros * Hnin Hat Hfresh Hin.
+        simpl_Forall.
+        eapply st_valid_AtomOrGensym_nIn; eauto using fresh_ident_Inids.
       Qed.
 
     End fresh_ident.
 
     Section fresh_idents_rename.
-      Context {B : Type}.
+      Context {pref : ident} {B : Type}.
 
-      Fact fresh_idents_rename_sub_gensym pref frename : forall (ids: list (ident * B)) st ids' sub st',
-          fresh_idents_rename pref ids frename st = ((ids', sub), st') ->
+      Fact fresh_idents_rename_sub_gensym frename : forall (ids: list (ident * B)) (st: fresh_st pref B) ids' sub st',
+          fresh_idents_rename ids frename st = ((ids', sub), st') ->
           forall x y, Env.MapsTo x y sub -> exists n, y = Ids.gensym pref (Some x) n.
       Proof.
         intros * Hfresh * Hmap.
@@ -830,8 +724,8 @@ Module Fresh(Ids : IDS).
   Section mmap.
     Import Tactics Notations.
     Open Scope fresh_monad_scope.
-    Context {A A1 B : Type}.
-    Variable k : A -> Fresh A1 B.
+    Context {pref: ident} {A A1 B : Type}.
+    Variable k : A -> Fresh pref A1 B.
 
     Fixpoint mmap a :=
       match a with
@@ -849,20 +743,6 @@ Module Fresh(Ids : IDS).
       - constructor.
       - specialize (IHa _ _ _ H0).
         constructor; eauto.
-    Qed.
-
-    Fact mmap_st_valid : forall a a1s st st' pref aft,
-        mmap a st = (a1s, st') ->
-        Forall (fun a => forall a1 st st',
-                    k a st = (a1, st') ->
-                    st_valid_after st pref aft ->
-                    st_valid_after st' pref aft) a ->
-        st_valid_after st pref aft ->
-        st_valid_after st' pref aft.
-    Proof.
-      induction a; intros * Hmap Hforall Hvalid;
-        simpl in *; repeat inv_bind; auto.
-      inv Hforall. eapply IHa; eauto.
     Qed.
 
     Fact mmap_st_follows : forall a a1s st st',
@@ -885,23 +765,20 @@ Module Fresh(Ids : IDS).
       f_equal; eauto.
     Qed.
 
-    Fact mmap_values_valid_follows : forall a st a1s st' pref aft,
-        st_valid_after st pref aft ->
-        (forall a a1 st st', k a st = (a1, st') -> st_valid_after st pref aft -> st_valid_after st' pref aft) ->
+    Fact mmap_values_follows : forall a st a1s st',
         (forall a a1 st st', k a st = (a1, st') -> st_follows st st') ->
         mmap a st = (a1s, st') ->
         Forall2 (fun a a1 =>
                    exists st'' st''',
-                     st_valid_after st'' pref aft
-                     /\ st_follows st st''
+                     st_follows st st''
                      /\ k a st'' = (a1, st''')) a a1s.
     Proof.
-      induction a; intros * Hval1 Hval2 Hfollows Hfold; simpl in *; repeat inv_bind.
+      induction a; intros * Hfollows Hfold; simpl in *; repeat inv_bind.
       - constructor.
       - constructor.
-        + repeat esplit; eauto. reflexivity.
+        + repeat esplit; [|eauto]. reflexivity.
         + eapply IHa in H0; eauto.
-          simpl_Forall. repeat esplit; eauto. etransitivity; eauto.
+          simpl_Forall. repeat esplit; [|eauto]. etransitivity; eauto.
     Qed.
 
   End mmap.
@@ -909,8 +786,8 @@ Module Fresh(Ids : IDS).
   Section mmap2.
     Import Tactics Notations.
     Open Scope fresh_monad_scope.
-    Context {A A1 A2 B : Type}.
-    Variable k : A -> Fresh (A1 * A2) B.
+    Context {pref : ident} {A A1 A2 B : Type}.
+    Variable k : A -> Fresh pref (A1 * A2) B.
 
     Fixpoint mmap2 a :=
       match a with
@@ -930,18 +807,21 @@ Module Fresh(Ids : IDS).
         constructor; eauto.
     Qed.
 
-    Fact mmap2_st_valid : forall a a1s a2s st st' pref aft,
+    Fact mmap2_values_follows : forall a st a1s a2s st',
+        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') ->
         mmap2 a st = (a1s, a2s, st') ->
-        Forall (fun a => forall a1 a2 st st',
-                    k a st = (a1, a2, st') ->
-                    st_valid_after st pref aft ->
-                    st_valid_after st' pref aft) a ->
-        st_valid_after st pref aft ->
-        st_valid_after st' pref aft.
+        Forall3 (fun a a1 a2 =>
+                   exists st'' st''',
+                     st_follows st st''
+                     /\ k a st'' = (a1, a2, st''')) a a1s a2s.
     Proof.
-      induction a; intros * Hmap Hforall Hvalid;
-        simpl in *; repeat inv_bind; auto.
-      inv Hforall. eapply IHa; eauto.
+      induction a; intros * Hfollows Hfold; simpl in *; repeat inv_bind.
+      - constructor.
+      - constructor.
+        + repeat esplit; [|eauto]. reflexivity.
+        + eapply IHa in H0; eauto.
+          eapply Forall3_impl_In; [|eauto]; intros; destruct_conjs.
+          do 3 esplit; [|eauto]. etransitivity; eauto.
     Qed.
 
     Fact mmap2_st_follows : forall a a1s a2s st st',
@@ -956,40 +836,6 @@ Module Fresh(Ids : IDS).
         etransitivity; eauto.
     Qed.
 
-    Fact mmap2_values_valid : forall a st a1s a2s st' pref aft,
-        st_valid_after st pref aft ->
-        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_valid_after st pref aft -> st_valid_after st' pref aft) ->
-        mmap2 a st = (a1s, a2s, st') ->
-        Forall3 (fun a a1 a2 =>
-                   exists st'' st''',
-                     st_valid_after st'' pref aft
-                     /\ k a st'' = (a1, a2, st''')) a a1s a2s.
-    Proof.
-      induction a; intros * Hval1 Hval2 Hfold; simpl in *; repeat inv_bind.
-      - constructor.
-      - constructor; eauto.
-    Qed.
-
-    Fact mmap2_values_valid_follows : forall a st a1s a2s st' pref aft,
-        st_valid_after st pref aft ->
-        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_valid_after st pref aft -> st_valid_after st' pref aft) ->
-        (forall a a1 a2 st st', k a st = (a1, a2, st') -> st_follows st st') ->
-        mmap2 a st = (a1s, a2s, st') ->
-        Forall3 (fun a a1 a2 =>
-                   exists st'' st''',
-                     st_valid_after st'' pref aft
-                     /\ st_follows st st''
-                     /\ k a st'' = (a1, a2, st''')) a a1s a2s.
-    Proof.
-      induction a; intros * Hval1 Hval2 Hfollows Hfold; simpl in *; repeat inv_bind.
-      - constructor.
-      - constructor.
-        + repeat esplit; eauto. reflexivity.
-        + eapply IHa in H0; eauto.
-          eapply Forall3_impl_In; [|eauto]; intros; destruct_conjs.
-          do 2 esplit. repeat (split; eauto). etransitivity; eauto.
-    Qed.
-
     Fact mmap2_length_1 : forall a st a1s a2s st',
         mmap2 a st = (a1s, a2s, st') ->
         length a1s = length a.
@@ -999,9 +845,7 @@ Module Fresh(Ids : IDS).
     Qed.
   End mmap2.
 
-  Global Hint Resolve fresh_ident_st_valid : fresh.
   Global Hint Resolve fresh_ident_st_follows : fresh.
   Global Hint Resolve st_follows_incl : fresh.
-  Global Hint Resolve mmap2_st_valid : fresh.
   Global Hint Resolve mmap2_st_follows : fresh.
 End Fresh.

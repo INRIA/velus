@@ -24,18 +24,15 @@ Module Type DRR
   Definition const_dec : forall (c1 c2 : const),
     { c1 = c2 } + { c1 <> c2 }.
   Proof.
-    decide equality.
-    1-2:auto using cconst_dec, Nat.eq_dec.
+    repeat decide equality.
+    apply cconst_dec.
   Defined.
 
   Definition exp_dec : forall (e1 e2 : exp),
     { e1 = e2 } + { e1 <> e2 }.
   Proof.
-    decide equality.
-    1-11:auto using cconst_dec, Nat.eq_dec, Pos.eq_dec.
-    1-3,5:apply EqDec_instance_5.
-    apply EqDec_instance_3.
-    apply EqDec_instance_4.
+    repeat decide equality.
+    all:auto using ctype_dec, cconst_dec, unop_dec, binop_dec, Nat.eq_dec, Pos.eq_dec.
   Defined.
 
   Global Instance: EqDec const eq := { equiv_dec := const_dec }.
@@ -76,7 +73,7 @@ Module Type DRR
       match e with
       | Econst _ | Eenum _ _ => e
       | Evar x ty => Evar (rename_in_var x) ty
-      | Ewhen e x t => Ewhen (rename_in_exp e) (rename_in_var x) t
+      | Ewhen e (x, tx) t => Ewhen (rename_in_exp e) (rename_in_var x, tx) t
       | Eunop op e1 ty => Eunop op (rename_in_exp e1) ty
       | Ebinop op e1 e2 ty => Ebinop op (rename_in_exp e1) (rename_in_exp e2) ty
       end.
@@ -90,12 +87,18 @@ Module Type DRR
       | Eexp e => Eexp (rename_in_exp e)
       end.
 
+    Definition rename_in_rhs (e : rhs) :=
+      match e with
+      | Eextcall f es ty => Eextcall f (map rename_in_exp es) ty
+      | Ecexp e => Ecexp (rename_in_cexp e)
+      end.
+
     Definition rename_in_reset :=
       map (fun '(xr, ckr) => (rename_in_var xr, rename_in_clock ckr)).
 
     Definition rename_in_equation (equ : equation) :=
       match equ with
-      | EqDef x ck ce => EqDef x (rename_in_clock ck) (rename_in_cexp ce)
+      | EqDef x ck ce => EqDef x (rename_in_clock ck) (rename_in_rhs ce)
       | EqApp xs ck f es xr =>
         EqApp xs (rename_in_clock ck) f (map rename_in_exp es) (rename_in_reset xr)
       | EqFby x ck c0 e xr =>
@@ -134,7 +137,7 @@ Module Type DRR
   Lemma rename_in_exp_typeof : forall sub e,
       typeof (rename_in_exp sub e) = typeof e.
   Proof.
-    induction e; intros; simpl; auto.
+    induction e; destruct_conjs; intros; simpl; auto.
   Qed.
 
   Lemma rename_in_cexp_typeofc : forall sub e,
@@ -142,6 +145,12 @@ Module Type DRR
   Proof.
     induction e; intros; simpl; auto using rename_in_exp_typeof.
     destruct p; auto.
+  Qed.
+
+  Lemma rename_in_rhs_typeofr : forall sub e,
+      typeofr (rename_in_rhs sub e) = typeofr e.
+  Proof.
+    intros ? []; simpl; auto using rename_in_cexp_typeofc.
   Qed.
 
   Lemma subst_and_filter_vars_InMembers : forall x sub vars,
@@ -586,7 +595,7 @@ Module Type DRR
     { transform_unit := remove_dup_regs_node }.
 
   Local Program Instance remove_dup_regs_without_units: TransformProgramWithoutUnits global global :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition remove_dup_regs : global -> global := transform_units.
 
@@ -618,7 +627,7 @@ Module Type DRR
   Lemma remove_dup_regs_iface_eq : forall G,
       global_iface_eq G (remove_dup_regs G).
   Proof.
-    intros. split; intros; auto.
+    intros. repeat split; intros; auto.
     destruct (find_node _ _) eqn:Hfind.
     - erewrite find_node_remove_dup_regs_forward; eauto.
       constructor; simpl.

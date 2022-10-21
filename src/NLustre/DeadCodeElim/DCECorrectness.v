@@ -64,9 +64,9 @@ Module Type DCECORRECTNESS
       sem_node G f ins outs ->
       sem_node (dce_global G) f ins outs.
   Proof.
-    intros (enms&nds).
+    intros [].
     unfold dce_global.
-    induction nds; intros * Hord Hsem; simpl; auto.
+    induction nodes0; intros * Hord Hsem; simpl; auto.
     destruct (ident_eq_dec (n_name a) f).
     - inv Hsem. rewrite find_node_now in H1; inv H1; auto.
       econstructor; simpl; auto. rewrite find_node_now; eauto.

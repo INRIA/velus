@@ -109,7 +109,7 @@ Module Type INLINELOCAL
   Import Fresh Notations Facts Tactics.
   Local Open Scope fresh_monad_scope.
 
-  Definition FreshAnn A := Fresh A (type * clock).
+  Definition FreshAnn A := Fresh local A (type * clock).
 
   Fixpoint inlinelocal_block sub (blk : block) : FreshAnn (list block) :=
     match blk with
@@ -117,9 +117,9 @@ Module Type INLINELOCAL
     | Breset blks er =>
       do blks' <- mmap (inlinelocal_block sub) blks;
       ret [Breset (concat blks') (rename_in_exp sub er)]
-    | Blocal (Scope locs _ blks) =>
+    | Blocal (Scope locs blks) =>
       let locs' := map (fun '(x, (ty, ck, _, _)) => (x, (ty, (rename_in_clock sub ck)))) locs in
-      do (_, sub1) <- fresh_idents_rename local locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
+      do (_, sub1) <- fresh_idents_rename locs' (fun sub '(ty, ck) => (ty, rename_in_clock sub ck));
       let sub' := Env.union sub sub1 in
       do blks' <- mmap (inlinelocal_block sub') blks;
       ret (concat blks')
@@ -128,7 +128,7 @@ Module Type INLINELOCAL
 
   Definition inlinelocal_topblock (blk : block) : FreshAnn (list block * list (ident * _)) :=
     match blk with
-    | Blocal (Scope locs _ blks) =>
+    | Blocal (Scope locs blks) =>
       do blks' <- mmap (inlinelocal_block (@Env.empty _)) blks;
       ret (concat blks', locs)
     | _ =>
@@ -137,39 +137,6 @@ Module Type INLINELOCAL
     end.
 
   (** ** State properties *)
-
-  Definition st_valid_after {B} st aft := @st_valid_after B st local aft.
-
-  Lemma inlinelocal_block_st_valid_after : forall blk sub blks' st st' aft,
-      inlinelocal_block sub blk st = (blks', st') ->
-      st_valid_after st aft ->
-      st_valid_after st' aft.
-  Proof.
-    induction blk using block_ind2; intros * Hdl Hvalid; repeat inv_bind; auto.
-    - (* reset *)
-      eapply mmap_st_valid; eauto.
-      eapply Forall_impl; [|eauto]; intros ? Hdl ?????.
-      eapply Hdl; eauto.
-    - (* local *)
-      eapply fresh_idents_rename_st_valid in H0; eauto.
-      eapply mmap_st_valid in H1; eauto.
-      eapply Forall_impl; [|eauto]; intros ? Hdl ?????.
-      eapply Hdl; eauto.
-  Qed.
-
-  Lemma inlinelocal_topblock_st_valid_after : forall blk res st st' aft,
-      inlinelocal_topblock blk st = (res, st') ->
-      st_valid_after st aft ->
-      st_valid_after st' aft.
-  Proof.
-    Opaque inlinelocal_block.
-    destruct blk; intros * Hdl Hvalid; try destruct s; repeat inv_bind; auto.
-    1-4:eapply inlinelocal_block_st_valid_after; eauto.
-    eapply mmap_st_valid in H; eauto.
-    eapply Forall_forall; intros.
-    eapply inlinelocal_block_st_valid_after; eauto.
-    Transparent inlinelocal_block.
-  Qed.
 
   Lemma inlinelocal_block_st_follows : forall blk sub blks' st st',
       inlinelocal_block sub blk st = (blks', st') ->
@@ -270,15 +237,15 @@ Module Type INLINELOCAL
       rewrite map_app, not_in_union_map_rename2, not_in_union_map_rename1,
         (Permutation_swap (concat ys1)), <-app_assoc in Hperm1.
       2:{ simpl_Forall; subst.
-          intros (?&contra). eapply H13; eauto using In_InMembers.
+          intros (?&contra). eapply H11; eauto using In_InMembers.
           apply in_or_app; left. solve_In.
           2:eapply Env.elements_correct; eauto. reflexivity. }
       2:{ simpl_Forall; subst.
           intro contra. eapply fresh_idents_rename_sub1 in contra; eauto.
           rewrite fst_InMembers in contra; simpl_In.
-          eapply H13; eauto using In_InMembers, in_or_app. }
+          eapply H11; eauto using In_InMembers, in_or_app. }
       eapply Ker.fresh_idents_rename_ids in H0.
-      2:{ apply nodupmembers_map; auto. intros; destruct_conjs; auto. }
+      2:{ apply NoDupMembers_map; auto. intros; destruct_conjs; auto. }
       rewrite H0 in Hperm1. repeat rewrite map_map in Hperm1; simpl in Hperm1.
       rewrite Permutation_swap with (xs:=map _ xs) in Hperm1.
       erewrite map_ext in Hperm1. eapply Permutation_app_inv_l in Hperm1; auto.
@@ -346,6 +313,17 @@ Module Type INLINELOCAL
     Transparent inlinelocal_block.
   Qed.
 
+  Lemma inlinelocal_topblock_AtomOrGensym : forall blk blks' vars st st',
+      GoodLocals switch_prefs blk ->
+      inlinelocal_topblock blk st = (blks', vars, st') ->
+      Forall (AtomOrGensym switch_prefs) (map fst vars).
+  Proof.
+    Opaque inlinelocal_block.
+    destruct blk; intros * Hgood Hil; try destruct s; repeat inv_bind; try constructor.
+    inv Hgood. inv H1; eauto.
+    Transparent inlinelocal_block.
+  Qed.
+
   (** *** NoDupLocals *)
 
   Lemma rename_var_injective : forall sub x y,
@@ -391,18 +369,6 @@ Module Type INLINELOCAL
     eapply mmap_values, Forall2_ignore1 in H. inv Hns.
     eapply Forall_concat. rewrite Forall_forall in *; intros.
     edestruct H as (?&?&?&?&?); eauto using inlinelocal_block_NoDupLocals.
-    Transparent inlinelocal_block.
-  Qed.
-
-  Lemma inlinelocal_topblock_incl : forall blk blks' vars st st',
-      inlinelocal_topblock blk st = (blks', vars, st') ->
-      incl (map fst vars) (map fst (locals blk)).
-  Proof.
-    Opaque inlinelocal_block.
-    destruct blk; intros * Hil; try destruct s; repeat inv_bind.
-    1-4:apply incl_nil'.
-    erewrite map_app, map_map, map_ext.
-    apply incl_appl, incl_refl. intros; destruct_conjs; auto.
     Transparent inlinelocal_block.
   Qed.
 
@@ -498,7 +464,7 @@ Module Type INLINELOCAL
       n_block := Blocal
                    (Scope
                       (snd (fst res)++map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None)))
-                           (st_anns (snd res))) []
+                           (st_anns (snd res)))
                       (fst (fst res)));
       n_ingt0 := (n_ingt0 n);
       n_outgt0 := (n_outgt0 n);
@@ -524,29 +490,23 @@ Module Type INLINELOCAL
     pose proof (n_syn n) as Hsyn.
     repeat rewrite app_nil_r.
     destruct (inlinelocal_topblock _ _) as ((?&?)&st') eqn:Hdl. simpl.
-    assert (st_valid_after st' (PSP.of_list (map fst (n_in n ++ n_out n)))).
-    { eapply inlinelocal_topblock_st_valid_after, init_st_valid; eauto using local_not_in_switch_prefs.
-      rewrite <-ps_from_list_ps_of_list.
-      apply PS_For_all_Forall'. auto.
-    }
     split; eauto. do 2 constructor; eauto.
     - eapply inlinelocal_topblock_NoDupLocals; eauto.
-    - assert (Hvalid:=H). eapply st_valid_NoDup, NoDup_app_l in H.
+    - specialize (st_valid_NoDup st') as Hndup.
       apply NoDupMembers_app.
       + eapply inlinelocal_topblock_NoDupMembers; eauto.
       + rewrite fst_NoDupMembers, map_map; eauto.
       + intros * Hinm1 Hinm2.
         rewrite fst_InMembers in Hinm1, Hinm2. rewrite map_map in Hinm2.
-        eapply st_valid_after_AtomOrGensym_nIn in Hinm2; eauto using local_not_in_switch_prefs.
+        eapply st_valid_AtomOrGensym_nIn in Hinm2; eauto using local_not_in_switch_prefs.
         eapply Forall_forall; [|eapply Hinm1].
-        eapply Forall_incl, inlinelocal_topblock_incl; eauto.
-        eapply GoodLocals_locals; eauto.
-    - intros ? Hinm contra.
-      eapply st_valid_after_NoDupMembers in H; eauto.
-      eapply NoDup_app_In in H; eauto using in_or_app.
-      erewrite InMembers_app, 2 fst_InMembers, map_map, map_ext in Hinm; destruct Hinm as [Hinm|]; eauto.
-      eapply inlinelocal_topblock_nIn; eauto. eapply fst_InMembers; eauto.
-    - constructor.
+        eapply inlinelocal_topblock_AtomOrGensym; eauto.
+    - intros ? Hinm contra. simpl_Forall.
+      apply InMembers_app in Hinm as [Hinm|Hinm].
+      + eapply inlinelocal_topblock_nIn; eauto.
+      + apply fst_InMembers in Hinm.
+        eapply st_valid_AtomOrGensym_nIn; eauto using local_not_in_switch_prefs.
+        unfold st_ids. solve_In.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
@@ -555,11 +515,9 @@ Module Type INLINELOCAL
     pose proof (n_syn n) as Hsyn.
     repeat split; eauto using AtomOrGensym_add.
     do 2 constructor.
-    - assert (Hil:=Hdl). eapply inlinelocal_topblock_st_valid_after, st_valid_prefixed in Hdl.
-      2:{ eapply init_st_valid. eapply local_not_in_switch_prefs. eapply PS_For_all_empty. }
+    - assert (Hil:=Hdl). specialize (st_valid_prefixed f) as Hpref.
       rewrite map_app, map_map, Forall_app; split; simpl.
-        eapply AtomOrGensym_add, Forall_incl, inlinelocal_topblock_incl; eauto.
-        eapply GoodLocals_locals; eauto.
+      + eapply AtomOrGensym_add, inlinelocal_topblock_AtomOrGensym; eauto.
       + eapply Forall_impl; [|eauto]; intros; simpl in *.
         right. do 2 eexists; eauto using PSF.add_1.
     - eapply inlinelocal_topblock_GoodLocals; eauto.
@@ -577,7 +535,7 @@ Module Type INLINELOCAL
     { transform_unit := inlinelocal_node }.
 
   Global Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch_block switch_prefs) (@global nolocal_top_block local_prefs) :=
-    { transform_program_without_units := fun g => Global g.(types) [] }.
+    { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
   Definition inlinelocal_global : @global noswitch_block switch_prefs -> @global nolocal_top_block local_prefs :=
     transform_units.
@@ -587,7 +545,7 @@ Module Type INLINELOCAL
   Lemma inlinelocal_global_iface_eq : forall G,
       global_iface_eq G (inlinelocal_global G).
   Proof.
-    split; auto.
+    repeat split; auto.
     intros f. unfold find_node.
     destruct (find_unit f G) as [(?&?)|] eqn:Hfind; simpl.
     - setoid_rewrite find_unit_transform_units_forward; eauto.

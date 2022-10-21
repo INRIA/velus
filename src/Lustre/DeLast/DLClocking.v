@@ -67,13 +67,13 @@ Module Type DLCLOCKING
           wc_exp G Γ' (rename_in_exp sub e).
       Proof.
         intros * Hwc; induction e using exp_ind2; inv Hwc; simpl.
-        12:remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
+        13:remember (Env.from_list (map_filter (fun '(x, (_, ox)) => option_map (fun xc => (x, xc)) ox)
                                             (combine (map fst (n_in n)) (nclocksof (map (rename_in_exp sub) es))))) as sub2.
-        12:assert (length (n_in n) = length (nclocksof (map (rename_in_exp sub) es))) as Hlen2.
-        12:{ apply Forall2_length in H8. repeat setoid_rewrite map_length in H8. rewrite H8.
+        13:assert (length (n_in n) = length (nclocksof (map (rename_in_exp sub) es))) as Hlen2.
+        13:{ apply Forall2_length in H8. repeat setoid_rewrite map_length in H8. rewrite H8.
              pose proof (rename_in_exp_nclocksof sub es) as Hncks. apply Forall2_length in Hncks; auto. }
-        12:assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (rename_in_exp sub) es))) as Hsub2.
-        12:{ apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
+        13:assert (Forall2 (fun '(x, _) '(ck, ox) => LiftO (Env.find x sub2 = None) (fun x' => Env.MapsTo x x' sub2) ox) (map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof (map (rename_in_exp sub) es))) as Hsub2.
+        13:{ apply Forall2_forall; split. 2:repeat setoid_rewrite map_length; auto.
              intros (?&?) (?&?) Hin'.
              assert (In (k, (c0, o)) (combine (map fst (n_in n)) (nclocksof (map (rename_in_exp sub) es)))) as Hin2.
              { repeat setoid_rewrite combine_map_fst in Hin'.
@@ -99,22 +99,23 @@ Module Type DLCLOCKING
                apply option_map_inv in Hopt as (?&?&Heq); inv Heq.
                eapply NoDupMembers_det in Hin2; eauto. inv Hin2.
         }
-        12:(pose proof (rename_in_exp_nclocksof sub es) as Hncks; eapply Forall2_trans_ex in Hncks; eauto).
+        13:(pose proof (rename_in_exp_nclocksof sub es) as Hncks; eapply Forall2_trans_ex in Hncks; eauto).
 
-        12:eapply wc_Eapp with
+        13:eapply wc_Eapp with
           (bck:=bck)
           (sub:=fun x => match (sub0 x) with
                       | Some y => Some y
                       | _ => Env.find x sub2
                       end).
-        1-11:econstructor.
-        1-40:eauto using in_or_app; simpl_Forall; eauto;
+        1-12:econstructor.
+        all:eauto using in_or_app; simpl_Forall; eauto;
           match goal with
           | |- clockof _ = _ => rewrite rename_in_exp_clockof; auto
           | |- context [clocksof _] => rewrite rename_in_exp_clocksof; auto
           | H: context [clocksof _] |- _ => rewrite rename_in_exp_clocksof in H; auto
           | _ => idtac
           end.
+        - simpl_Forall; auto.
         - simpl_Forall; auto.
         - intros contra. apply map_eq_nil in contra; subst. contradiction.
         - simpl_Forall; auto.
@@ -211,14 +212,14 @@ Module Type DLCLOCKING
   Import Fresh Facts Tactics.
 
   Fact delast_scope_wc {A} P_nd P_wc1 (P_wc2: _ -> _ -> Prop) f_dl f_add {PSyn prefs} (G: @global PSyn prefs) :
-    forall locs caus (blk: A) sub Γ Γty Γ' s' st st',
+    forall locs (blk: A) sub Γ Γty Γ' s' st st',
       (forall x ty, HasClock Γ x ty -> HasClock Γ' x ty) ->
       (forall x ty, HasClock Γ x ty -> IsLast Γ x -> HasClock Γ' (rename_in_var sub x) ty) ->
       incl (map fst Γ) Γty ->
       (forall x, Env.In x sub -> In x Γty) ->
-      NoDupScope P_nd Γty (Scope locs caus blk) ->
-      wc_scope P_wc1 G Γ (Scope locs caus blk) ->
-      delast_scope f_dl f_add sub (Scope locs caus blk) st = (s', st') ->
+      NoDupScope P_nd Γty (Scope locs blk) ->
+      wc_scope P_wc1 G Γ (Scope locs blk) ->
+      delast_scope f_dl f_add sub (Scope locs blk) st = (s', st') ->
       (forall Γ Γty Γ' sub blk' st st',
           (forall x ty, HasClock Γ x ty -> HasClock Γ' x ty) ->
           (forall x ty, HasClock Γ x ty -> IsLast Γ x -> HasClock Γ' (rename_in_var sub x) ty) ->
@@ -264,22 +265,22 @@ Module Type DLCLOCKING
       - left. rewrite not_in_union_rename2; eauto.
         intro contra. apply Hsubin' in contra.
         inv Hl. inv contra. simpl_In.
-        eapply H5; eauto using In_InMembers. eapply Hincl; solve_In.
+        eapply H4; eauto using In_InMembers. eapply Hincl; solve_In.
       - exfalso.
         inv Hty. inv Hl. simpl_In.
-        eapply H5; eauto using In_InMembers. eapply Hincl; solve_In.
+        eapply H4; eauto using In_InMembers. eapply Hincl; solve_In.
       - exfalso.
         inv Hty. inv Hl. simpl_In.
-        eapply H5; eauto using In_InMembers. eapply Hincl; solve_In.
+        eapply H4; eauto using In_InMembers. eapply Hincl; solve_In.
       - right. simpl_app. apply HasClock_app. right.
         inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
         destruct o0 as [(?&?)|]; simpl in *; try congruence.
         eapply fresh_idents_In_rename in H. 3:solve_In; simpl; auto.
-        2:{ apply nodupmembers_map_filter; auto. intros; destruct_conjs; auto.
+        2:{ apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
             destruct o as [(?&?)|]; simpl in *; auto. }
         econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
         intro contra. apply Hsubin in contra.
-        eapply H5; eauto using In_InMembers.
+        eapply H4; eauto using In_InMembers.
     }
     econstructor; eauto. 3:apply Hadd.
     + rewrite map_app. apply Forall_app; split; auto.
@@ -299,12 +300,12 @@ Module Type DLCLOCKING
     + simpl_Forall. repeat constructor; simpl.
       * eapply fresh_idents_In' in H; eauto. simpl_In. simpl_Forall.
         eapply rename_in_exp_wc in H; eauto.
-      * eapply fresh_idents_In' in H; eauto. simpl_In.
-        econstructor. simpl_app. repeat rewrite in_app_iff. right; left; solve_In. auto.
+      * eapply fresh_idents_In' in H; eauto. simpl_app. simpl_In.
+        right; left; econstructor. solve_In. auto.
       * eapply fresh_idents_In' in H; eauto. simpl_In.
         simpl_Forall.
-        rewrite rename_in_exp_clockof, app_nil_r, H3; auto.
-      * econstructor. simpl_app. repeat rewrite in_app_iff. right; right; solve_In. simpl; eauto.
+        rewrite rename_in_exp_clockof, H6; auto.
+      * simpl_app. simpl_In. right; right. econstructor. solve_In. auto.
     + eapply Hind; eauto.
       * rewrite map_app, map_fst_senv_of_locs. apply incl_appl'; auto.
       * intros * Hin. rewrite in_app_iff. apply Env.union_In in Hin as [|Hin]; eauto.
@@ -349,18 +350,17 @@ Module Type DLCLOCKING
         eauto with senv.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
         simpl_Forall; eauto. repeat inv_bind.
-        destruct s0. eapply delast_scope_wc in H9; eauto.
-        * intros * Hck. apply H6 in Hck as (?&?); subst; eauto.
-          eapply Hvar in H10. inv H10. econstructor; solve_In. simpl. rewrite equiv_decb_refl; eauto. auto.
+        take (NoDupBranch _ _) and inv it. take (wc_branch _ _) and inv it. repeat inv_bind.
+        eapply mmap_values, Forall2_ignore1 in H7. simpl_Forall; eauto.
+        constructor. simpl_Forall. eapply H in H11; eauto.
+        * intros * Hck. apply H6 in Hck as (Hck&?); subst; eauto.
+          eapply Hvar in Hck. inv Hck. econstructor; solve_In. simpl. rewrite equiv_decb_refl; eauto. auto.
         * intros * Hck Hl. apply H6 in Hck as (Hck&?); subst.
           eapply H8, Hlast in Hl; eauto.
           inv Hl. econstructor; solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
         * intros ? Hin. simpl_In. assert (HasClock Γ'0 a a0.(clo)) as Hck by eauto with senv.
           apply H6 in Hck as (Hck&?); subst. inv Hck.
           apply Hincl; solve_In.
-        * intros; simpl in *.
-          eapply mmap_values, Forall2_ignore1 in H16. simpl_Forall; eauto.
-        * intros. apply Forall_app; auto.
 
     - (* automaton *)
       assert (forall x ck',
@@ -396,15 +396,17 @@ Module Type DLCLOCKING
       + simpl_Forall. split; eauto using rename_in_exp_wc.
         now rewrite rename_in_exp_clockof.
       + eapply mmap_values, Forall2_ignore1 in H0; eauto.
-        simpl_Forall. repeat inv_bind.
-        destruct s0; destruct_conjs; split.
+        simpl_Forall. destruct b0 as [?(?&[?(?&?)])]. repeat inv_bind.
+        take (NoDupBranch _ _) and inv it. take (wc_branch _ _) and inv it. destruct_conjs.
+        constructor; split.
         2:eapply delast_scope_wc in H3; eauto.
-        * simpl_Forall. rewrite rename_in_exp_clockof; eauto using rename_in_exp_wc.
+        * simpl_Forall. simpl_In. simpl_Forall.
+          rewrite rename_in_exp_clockof; eauto using rename_in_exp_wc.
         * intros ? Hin. simpl_In. assert (HasClock Γ'0 a a0.(clo)) as Hck by eauto with senv.
           apply H8 in Hck as (Hck&?); subst. inv Hck.
           apply Hincl; solve_In.
         * intros; destruct_conjs; repeat inv_bind. split.
-          -- eapply mmap_values, Forall2_ignore1 in H17. simpl_Forall; eauto.
+          -- eapply mmap_values, Forall2_ignore1 in H18. simpl_Forall; eauto.
           -- simpl_Forall; split; eauto using rename_in_exp_wc.
              now rewrite rename_in_exp_clockof.
         * intros; simpl in *. destruct_conjs.

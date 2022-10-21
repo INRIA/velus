@@ -41,7 +41,7 @@ Module Type CEINTERPRETER
         if base then present (Venum x) else absent
       | Evar x _ =>
         interp_var_instant R x
-      | Ewhen e x b =>
+      | Ewhen e (x, _) b =>
         match interp_var_instant R x, interp_exp_instant e with
         | present (Venum b'), present ev =>
           if b ==b b' then present ev else absent

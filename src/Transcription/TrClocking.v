@@ -287,14 +287,14 @@ Module Type TRCLOCKING
       unfold LC.WellInstantiated in Wi. destruct Wi; simpl in *.
       destruct ins as [|(?&?&?)]; simpl in *; inv H0.
       constructor; eauto.
-      2:{ eapply IHes; eauto. now apply nodupmembers_cons in Hdup. }
+      2:{ eapply IHes; eauto. now inv Hdup. }
       split; simpl; eauto.
       2:{ exists (fst nc). split. apply Wce. auto using instck_sub_ext. }
       simpl in *. take (sub _ = _) and rewrite it. destruct nc as (ck & []).
       2:{ simpl.
           assert (assoc_ident i (combine (L.idents (L.n_out n)) xs) = None) as Hassc.
           { apply assoc_ident_false.
-            apply nodupmembers_cons in Hdup as [Hin].
+            apply NoDupMembers_cons_inv in Hdup as [Hin].
             rewrite <- In_InMembers_combine. unfold L.idents. intro Hin'.
             apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
             eapply Hin, In_InMembers.
@@ -323,20 +323,31 @@ Module Type TRCLOCKING
         try (inv Htr; cases; discriminate).
       Opaque to_cexp.
       destruct e; inv Hwt; simpl in *; simpl_Foralls; cases_eqn Eq; try monadInv Htr.
-      1-8,10-15:(inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
-                 assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto;
-                 take (Senv.HasClock _ _ _) and inv it).
+      all: try (inv Hwc; simpl_Foralls; constructor; eauto using envs_eq_in;
+                assert (Hwce:=EQ1); eapply wc_cexp in Hwce as (?&?&?); eauto;
+                econstructor;
+                take (Senv.HasClock _ _ _) and inv it).
       Transparent to_cexp.
-      1-13:try (solve [monadInv EQ1]).
-      1-8:simpl in *.
+      all:try (solve [monadInv EQ1]); simpl in *.
+      all:simpl in *.
       1-5:(eapply envs_eq_find in Henvs; eauto; solve_In;
            pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; congruence).
-      1-3:(cases; monadInv EQ1; simpl in *;
+      3-5:(cases; monadInv EQ1; simpl in *;
            inv H;
            (eapply envs_eq_find in Henvs; eauto; solve_In;
             pose proof (find_clock_det _ _ _ _ EQ Henvs) as ->; congruence)).
-      2:inv Hwc; simpl_Foralls.
-      - inv Hwc. simpl_Foralls.
+      3:inv Hwc; simpl_Foralls.
+      - (* extcall *)
+        inv Hwc. simpl_Forall.
+        take (LC.wc_exp _ _ _) and inv it.
+        repeat constructor.
+        + take (Senv.HasClock _ _ _) and inv it. solve_In.
+        + simpl_Forall.
+          eapply mmap_inversion, Coqlib.list_forall2_in_right in EQ; eauto; destruct_conjs; simpl_Forall.
+          eapply wc_lexp in H1 as (?&?&?); eauto.
+          apply Forall_flat_map in H7. simpl_Forall. rewrite H1 in H7. simpl_Forall; auto.
+      - (* fby *)
+        inv Hwc. simpl_Foralls.
         cases; try monadInv Htr.
         constructor; eauto using envs_eq_in.
         take (LC.wc_exp _ _ _) and inv it. simpl_Foralls.
@@ -401,7 +412,7 @@ Module Type TRCLOCKING
         clear H0 H3.
         rename H4 into Hf2. simpl in Hf2; rewrite app_nil_r in Hf2.
         take (LC.wc_exp _ _ _) and inversion_clear it
-          as [| | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
+          as [| | | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and
@@ -506,9 +517,9 @@ Module Type TRCLOCKING
           erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); try reflexivity.
           1-3:intros; destruct_conjs; auto.
       - eapply mmap_inversion in EQ.
-        induction EQ; inv H1; inv H9; inv H13; constructor; eauto.
-        eapply wc_block_to_equation in H3; eauto.
-        + clear - H3. simpl_app.
+        induction EQ; repeat (take (Forall _ (_::_)) and inv it); constructor; eauto.
+        eapply wc_block_to_equation in H8; eauto.
+        + clear - H8. simpl_app.
           repeat rewrite map_map in *.
           erewrite (Permutation_app_comm (map _ l)), map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _); eauto.
           1-3:intros; destruct_conjs; auto.
@@ -521,7 +532,7 @@ Module Type TRCLOCKING
             unfold Senv.senv_of_inout. erewrite map_map, map_ext. apply incl_appl, incl_refl.
             intros; destruct_conjs; auto.
           * unfold Senv.senv_of_inout, Senv.senv_of_locs.
-            clear - H7. simpl_app. repeat rewrite map_map in *.
+            take (wc_clock _ _) and clear - it. simpl_app. repeat rewrite map_map in *.
             erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); eauto.
     Qed.
 
@@ -534,15 +545,15 @@ Module Type TRCLOCKING
       to_global G = OK P ->
       NLC.wc_global P.
   Proof.
-    intros (?&nds) ? (_&Hwt). revert P Hwt.
-    induction nds as [| n]. inversion 3. constructor.
+    intros [] ? (_&Hwt). revert P Hwt.
+    induction nodes as [| n]. inversion 3. constructor.
     intros * Hwt Hwc Htr. monadInv Htr; simpl in *; monadInv EQ.
     inversion_clear Hwt as [|?? (?&?) Wt ].
     inversion_clear Hwc as [|?? (?&?) Wc ].
     constructor; simpl.
     - eapply wc_node; eauto; simpl; auto.
       unfold to_global; simpl; rewrite EQ; simpl; auto.
-    - eapply IHnds in Wc; eauto.
+    - eapply IHnodes in Wc; eauto.
       2:(unfold to_global; simpl; rewrite EQ; simpl; auto).
       apply Wc.
   Qed.

@@ -274,7 +274,7 @@ Module Type STCSCHEDULE
   Qed.
 
   Definition schedule (P: program) : program :=
-    Program P.(types) (map schedule_system P.(systems)).
+    Program P.(types) P.(externs) (map schedule_system P.(systems)).
 
   Lemma schedule_system_name:
     forall s, (schedule_system s).(s_name) = s.(s_name).
@@ -294,7 +294,7 @@ Module Type STCSCHEDULE
       find_system f P = Some (s, P') ->
       find_system f (schedule P) = Some (schedule_system s, schedule P').
   Proof.
-    intros (?&P); induction P as [|s']; [now inversion 1|].
+    intros []; induction systems0 as [|s']; [now inversion 1|].
     intros * Hfind.
     setoid_rewrite find_unit_cons; simpl; eauto.
     eapply find_unit_cons in Hfind as [[E Hfind]|[E Hfind]]; simpl in *; eauto.
@@ -309,7 +309,7 @@ Module Type STCSCHEDULE
         /\ s = schedule_system s'
         /\ P' = schedule P''.
   Proof.
-    intros (?& P); induction P as [|sys]; [now inversion 1|].
+    intros []; induction systems0 as [|sys]; [now inversion 1|].
     intros * Hfind; unfold find_system, find_unit in *; simpl in *.
     destruct (ident_eq_dec sys.(s_name) f); eauto.
     inv Hfind; eauto.
@@ -320,7 +320,7 @@ Module Type STCSCHEDULE
       wt_trconstr P vars resets tc ->
       wt_trconstr (schedule P) vars resets tc.
   Proof.
-    intros (?& P); induction P as [|b].
+    intros []; induction systems0 as [|b].
     - destruct tc; inversion_clear 1; eauto with stctyping.
     - destruct tc; inversion_clear 1; eauto with stctyping;
         match goal with H:find_system _ _ = _ |- _ =>
@@ -343,13 +343,13 @@ Module Type STCSCHEDULE
       wt_program P ->
       wt_program (schedule P).
   Proof.
-    intros (?&P); induction P as [|s]; inversion_clear 1 as [|?? []];
+    intros []; induction systems0 as [|s]; inversion_clear 1 as [|?? []];
       unfold schedule; simpl; constructor; intuition.
     - simpl in *.
       take (wt_system _ _) and apply scheduler_wt_system in it as WT; auto.
     - change (Forall (fun s' =>
                         (fun x => s_name (schedule_system s) <> x) s'.(s_name))
-                     (map schedule_system P)).
+                     (map schedule_system systems0)).
       rewrite <-Forall_map, schedule_map_name, Forall_map.
       destruct s; auto.
   Qed.
@@ -359,7 +359,7 @@ Module Type STCSCHEDULE
       wc_trconstr P vars tc ->
       wc_trconstr (schedule P) vars tc.
   Proof.
-    intros (?& P); induction P as [|s P IH]; auto.
+    intros []; induction systems0 as [|s P IH]; auto.
     intros vars tc Hwc.
     destruct tc; inv Hwc; eauto using wc_trconstr.
     econstructor; auto.
@@ -386,10 +386,10 @@ Module Type STCSCHEDULE
       wc_program P ->
       wc_program (schedule P).
   Proof.
-    intros (?& P); induction P; intros * WT; inv WT;
+    intros []; induction systems0; intros * WT; inv WT;
       unfold schedule; simpl; constructor; simpl in *; auto.
     - take (wc_system _ _) and apply scheduler_wc_system in it; auto.
-    - apply IHP; auto.
+    - apply IHsystems0; auto.
   Qed.
 
   Lemma scheduler_initial_state:

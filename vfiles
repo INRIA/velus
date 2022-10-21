@@ -158,6 +158,7 @@ src/Obc/Fusion.v
 src/Obc/ObcSwitchesNormalization.v
 src/Obc/Equiv.v
 src/Obc/ObcInvariants.v
+src/Obc/ObcInterpreter.v
 src/Obc/Obc.v
 
 src/Transcription/Tr.v

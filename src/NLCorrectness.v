@@ -274,7 +274,7 @@ Lemma behavior_nl_to_cl:
     wt_ins G main ins ->
     normal_args G ->
     CoindSem.sem_node G main (pStr ins) (pStr outs) ->
-    nl_to_cl main G = OK P ->
+    nl_to_cl (Some main) G = OK P ->
     exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
@@ -584,13 +584,13 @@ Lemma behavior_nl_to_asm:
     wt_ins G main ins ->
     normal_args G ->
     CoindSem.sem_node G main (pStr ins) (pStr outs) ->
-    nl_to_asm main G = OK P ->
+    nl_to_asm (Some main) G = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
   unfold nl_to_asm; simpl.
   intros * ????? Comp.
-  destruct (nl_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
+  destruct (nl_to_cl (Some main) G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
   eapply  behavior_nl_to_cl in Comp' as (T & Beh & Bisim); eauto.
   eapply reacts_trace_preservation in Comp; eauto.
   apply add_builtins_spec; auto.

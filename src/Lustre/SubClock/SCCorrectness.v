@@ -108,6 +108,10 @@ Module Type SCCORRECTNESS
       - (* binop *)
         econstructor; eauto.
         1,2:now rewrite subclock_exp_typeof.
+      - (* extcall *)
+        econstructor; eauto.
+        1,2:simpl_Forall; eauto.
+        now rewrite subclock_exp_typesof.
       - (* fby *)
         econstructor; eauto.
         1,2:simpl_Forall; eauto.

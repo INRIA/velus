@@ -71,15 +71,15 @@ Module Type NLNORMALARGS
     Forall (normal_args_eq G) n.(n_eqs).
 
   Definition normal_args (G: global) :=
-    Forall' (fun ns => normal_args_node (Global G.(types) ns)) G.(nodes).
+    Forall' (fun ns => normal_args_node (Global G.(types) G.(externs) ns)) G.(nodes).
 
   Lemma normal_args_node_cons:
-    forall node G enums,
-      normal_args_node (Global enums (node :: G)) node ->
+    forall node G enums externs,
+      normal_args_node (Global enums externs (node :: G)) node ->
       ~ Is_node_in node.(n_name) node.(n_eqs) ->
-      normal_args_node (Global enums G) node.
+      normal_args_node (Global enums externs G) node.
   Proof.
-    intros node G enums Hnarg Hord.
+    intros node G enums externs Hnarg Hord.
     apply Forall_forall.
     intros eq Hin.
     destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
@@ -92,12 +92,12 @@ Module Type NLNORMALARGS
   Qed.
 
   Lemma normal_args_node_cons':
-    forall node G enums,
-      normal_args_node (Global enums G) node ->
+    forall node G enums externs,
+      normal_args_node (Global enums externs G) node ->
       ~ Is_node_in node.(n_name) node.(n_eqs) ->
-      normal_args_node (Global enums (node :: G)) node.
+      normal_args_node (Global enums externs (node :: G)) node.
   Proof.
-    intros node G enums Hnarg Hord.
+    intros node G enums externs Hnarg Hord.
     apply Forall_forall.
     intros eq Hin.
     destruct eq as [|ys ck f les|]; eauto using normal_args_eq.
@@ -110,13 +110,13 @@ Module Type NLNORMALARGS
   Qed.
 
   Lemma normal_args_node_cons'':
-    forall n G enums,
-      normal_args_node (Global enums G) n ->
-      wt_node (Global enums G) n ->
+    forall n G enums externs,
+      normal_args_node (Global enums externs G) n ->
+      wt_node (Global enums externs G) n ->
       Forall (fun n' => ~(n.(n_name) = n'.(n_name))) G ->
-      normal_args_node (Global enums (n :: G)) n.
+      normal_args_node (Global enums externs (n :: G)) n.
   Proof.
-    intros n G enums Hnarg (WTn&?) FA.
+    intros * Hnarg (WTn&?) FA.
     eapply Forall_not_find_node_None in FA.
     apply normal_args_node_cons'; auto.
     unfold wt_node in WTn.
@@ -129,37 +129,6 @@ Module Type NLNORMALARGS
                       rewrite H1 in H2; clear H1 end; discriminate.
   Qed.
 
-  Lemma normal_args_eq_types_cons:
-    forall ns enums e eq,
-      normal_args_eq (Global enums ns) eq ->
-      normal_args_eq (Global (e :: enums) ns) eq.
-  Proof.
-    induction 1; eauto using normal_args_eq.
-    econstructor; eauto.
-    now rewrite find_node_types_cons.
-  Qed.
-
-  Corollary normal_args_node_types_cons:
-    forall ns enums e n,
-      normal_args_node (Global enums ns) n ->
-      normal_args_node (Global (e :: enums) ns) n.
-  Proof.
-    unfold normal_args_node; intros * NA.
-    apply Forall_forall; intros; eapply Forall_forall in NA; eauto.
-    now apply normal_args_eq_types_cons.
-  Qed.
-
-  Corollary normal_args_types_cons:
-    forall enums ns e,
-      normal_args (Global enums ns) ->
-      normal_args (Global (e :: enums) ns).
-  Proof.
-    unfold normal_args.
-    induction ns; simpl; intros * NA; inv NA; constructor.
-    - now apply normal_args_node_types_cons.
-    - apply IHns; auto.
-  Qed.
-
   Lemma global_iface_eq_normal_args_eq : forall G1 G2 eq,
       global_iface_eq G1 G2 ->
       normal_args_eq G1 eq ->
@@ -167,7 +136,7 @@ Module Type NLNORMALARGS
   Proof.
     intros * Heq Hnormed.
     inv Hnormed; try constructor.
-    destruct Heq as (_&Heq).
+    destruct Heq as (_&_&Heq).
     specialize (Heq f). rewrite H in Heq. inv Heq.
     symmetry in H2. econstructor; eauto.
     destruct H3 as (?&?&?). congruence.

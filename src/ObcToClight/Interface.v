@@ -1091,6 +1091,43 @@ Module Export Op <: OPERATORS.
     | Tfloat Ctypes.F64               => "float64"
     end.
 
+  (* External functions *)
+
+  Definition sem_extern f (tyins : list ctype) xs (tyout : ctype) y :=
+    forall ge mem,
+      Events.external_functions_sem
+        (pos_to_str f)
+        {| AST.sig_args := List.map (fun cty => Ctypes.typ_of_type (cltype cty)) tyins;
+           AST.sig_res := Ctypes.rettype_of_type (cltype tyout);
+           AST.sig_cc := AST.cc_default |}
+        ge xs mem nil y mem
+      /\ wt_cvalue y tyout.
+
+  Lemma sem_extern_det : forall f tyins ins tyout out1 out2,
+      sem_extern f tyins ins tyout out1 ->
+      sem_extern f tyins ins tyout out2 ->
+      out1 = out2.
+  Proof.
+    unfold sem_extern.
+    intros * Hext1 Hext2.
+    specialize (Hext1 (@Globalenvs.Genv.to_senv True True (Globalenvs.Genv.empty_genv _ _ nil)) Memory.Mem.empty).
+    specialize (Hext2 (@Globalenvs.Genv.to_senv True True (Globalenvs.Genv.empty_genv _ _ nil)) Memory.Mem.empty).
+    destruct_conjs.
+    remember (AST.mksignature _ _ _) as sig.
+    specialize (Events.external_functions_properties (pos_to_str f) sig) as [].
+    eapply ec_determ; eauto.
+  Qed.
+
+  Lemma pres_sem_extern:
+    forall f tyins vins tyout vout,
+      List.Forall2 wt_cvalue vins tyins ->
+      sem_extern f tyins vins tyout vout ->
+      wt_cvalue vout tyout.
+  Proof.
+    unfold sem_extern.
+    intros * Hin Hext.
+    specialize (Hext (@Globalenvs.Genv.to_senv True True (Globalenvs.Genv.empty_genv _ _ nil)) Memory.Mem.empty) as (Hext&Hwt); auto.
+  Qed.
 End Op.
 
 Global Hint Resolve cltype_access_by_value cltype_align wt_cvalue_load_result sem_cast_same : core.

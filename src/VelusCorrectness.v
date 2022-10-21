@@ -214,7 +214,7 @@ Theorem behavior_asm:
     wt_ins G main ins ->
     wc_ins G main (pStr ins) ->
     Sem.sem_node G main (pStr ins) (pStr outs) ->
-    compile D main = OK P ->
+    compile D (Some main) = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
@@ -222,7 +222,7 @@ Proof.
   unfold compile, print in Comp.
   rewrite Elab in Comp. simpl in Comp.
   destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
-  destruct (nl_to_asm main G') as [p|] eqn: Comp''; inv Comp.
+  destruct (nl_to_asm (Some main) G') as [p|] eqn: Comp''; inv Comp.
   destruct Gp as (Hwc&Hwt).
   eapply behavior_nl_to_asm with (ins:=ins) (outs:=outs) in Comp'' as (T&Hbeh&Hbisim).
   - exists T. split; auto.

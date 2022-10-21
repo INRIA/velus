@@ -161,7 +161,7 @@ Module Type OBCSWITCHESNORMALIZATION
         destruct (normalize_branches (map (Datatypes.option_map normalize_stmt) ss)).
         destruct Norm; subst.
         Opaque removelast last.
-        split; inversion_clear 1 as [| | | |??????????? Nth|];
+        split; inversion_clear 1 as [| | | | |??????????? Nth|];
           destruct ss; simpl in *; subst; eauto using stmt_eval;
             rewrite <-map_cons, Forall_map in E.
         * destruct (Compare_dec.lt_eq_lt_dec c (length ss)) as [[|]|].
@@ -332,6 +332,7 @@ Module Type OBCSWITCHESNORMALIZATION
       + now apply normalize_switches_find_method.
       + apply Forall_forall; intros * Hin.
         take (Forall _ _) and eapply Forall_forall in it; eauto using wt_exp_normalize_switches.
+    - econstructor; simpl_Forall; eauto using wt_exp_normalize_switches.
   Qed.
 
   Lemma wt_normalize_stmt:

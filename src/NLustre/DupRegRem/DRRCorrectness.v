@@ -193,9 +193,19 @@ Module Type DRRCORRECTNESS
     Qed.
     Local Hint Resolve subst_sem_cexp_instant : nlsem.
 
-    Corollary subst_sem_caexp_instant : forall ck e v,
-        sem_caexp_instant base R ck e v ->
-        sem_caexp_instant base R (rename_in_clock sub ck) (rename_in_cexp sub e) v.
+    Lemma subst_sem_rhs_instant : forall e v,
+        sem_rhs_instant base R e v ->
+        sem_rhs_instant base R (rename_in_rhs sub e) v.
+    Proof.
+      intros * Sem; inv Sem; econstructor; eauto; simpl_Forall; eauto with nlsem.
+      2:instantiate (1:=tyins); simpl_Forall.
+      1,2:now rewrite rename_in_exp_typeof.
+    Qed.
+    Local Hint Resolve subst_sem_rhs_instant : nlsem.
+
+    Corollary subst_sem_arhs_instant : forall ck e v,
+        sem_arhs_instant base R ck e v ->
+        sem_arhs_instant base R (rename_in_clock sub ck) (rename_in_rhs sub e) v.
     Proof.
       intros * Hsem; inv Hsem.
       1,2:constructor; auto with nlsem; rewrite <-subst_sem_clock_instant; auto.
@@ -237,7 +247,7 @@ Module Type DRRCORRECTNESS
       intros * Hsem; inv Hsem; simpl.
       - (* def *)
         econstructor; eauto using subst_sem_var.
-        intros ?; eapply subst_sem_caexp_instant; eauto.
+        intros ?; eapply subst_sem_arhs_instant; eauto.
       - (* app *)
         econstructor; eauto using subst_sem_clock.
         + intros ?; eapply subst_sem_exps_instant; eauto.
@@ -348,9 +358,9 @@ Module Type DRRCORRECTNESS
       sem_node G f ins outs ->
       sem_node (remove_dup_regs G) f ins outs.
   Proof.
-    intros (enms&nds).
+    intros [].
     unfold remove_dup_regs.
-    induction nds; intros * Hord Hsem; simpl; auto.
+    induction nodes0; intros * Hord Hsem; simpl; auto.
     destruct (ident_eq_dec (n_name a) f).
     - inv Hsem. rewrite find_node_now in H1; inv H1; auto.
       econstructor; simpl; auto. rewrite find_node_now; eauto.

@@ -106,6 +106,16 @@ Module FEnv.
       esplit; eauto.
     Qed.
 
+    Lemma refines_None : forall m1 m2 x,
+        refines m1 m2 ->
+        m2 x = None ->
+        m1 x = None.
+    Proof.
+      intros * Href Hm2.
+      rewrite <-not_find_In in *. contradict Hm2.
+      eapply In_refines; eauto.
+    Qed.
+
     Lemma refines_refl `{Reflexive _ R} : reflexive _ refines.
     Proof.
       intros env x v ->; eauto.
@@ -522,11 +532,62 @@ Module FEnv.
       rewrite union_In; auto.
     Qed.
 
+    Lemma union_refines1 R `{Reflexive _ R} : forall m1 m1' m2,
+        refines R m1 m1' ->
+        refines R (union m1 m2) (union m1' m2).
+    Proof.
+      intros * Href ?? Hfind.
+      apply union4' in Hfind as [Hsome|(Hsome&Hnone)].
+      - eauto using union3'.
+      - apply Href in Hsome as (?&Hr&Hsome).
+        eauto using union2.
+    Qed.
+
     Lemma union_refines4' R `{Reflexive _ R} : forall m1 m2,
         refines R m2 (union m1 m2).
     Proof.
       intros * ?? Hfind.
       eapply union3' in Hfind; eauto.
+    Qed.
+
+    Lemma union_refines_inv R `{Reflexive _ R} : forall m1 m2 m',
+        refines R (union m1 m2) m' ->
+        (forall x, In x m1 -> ~In x m2) ->
+        exists m2', Equiv R (union m1 m2') m'
+               /\ refines R m2 m2'
+               /\ (forall x, In x m2' <-> In x m' /\ ~In x m1).
+    Proof.
+      intros * Href Hnd.
+      exists (fun x => match m1 x with Some v => None | None => m' x end).
+      split; [|split].
+      - unfold union. intros ?; simpl.
+        destruct (m1 x) eqn:Hm1; auto.
+        + assert (union m1 m2 x = Some a) as Hunion.
+          { apply union2; auto. apply not_find_In.
+            intro contra. eapply Hnd; eauto. econstructor; eauto. }
+          apply Href in Hunion as (?&HR&Hm').
+          rewrite Hm'. constructor; auto.
+        + destruct (m' x); reflexivity.
+      - intros ?? Hm2.
+        assert (union m1 m2 x = Some v) as Hunion.
+        { unfold union. now rewrite Hm2. }
+        apply Href in Hunion as (?&HR&Hm').
+        do 2 esplit; eauto.
+        replace (m1 x) with (@None A); simpl; auto.
+        symmetry. apply not_find_In. intro contra.
+        eapply Hnd; eauto. econstructor; eauto.
+      - split; [intros (?&Hin)|intros ((?&Hin)&Hnin)]; unfold In in *.
+        + destruct (m1 x); try congruence.
+          split; eauto. intros contra; destruct_conjs; congruence.
+        + destruct (m1 x); [exfalso; eauto|eauto].
+    Qed.
+
+    Lemma union_assoc R `{Reflexive _ R} : forall m1 m2 m3,
+        Equiv R (union m1 (union m2 m3)) (union (union m1 m2) m3).
+    Proof.
+      intros * ?. unfold union.
+      cases_eqn Heq; try congruence; try reflexivity.
+      1,2:inv Heq; reflexivity.
     Qed.
   End union.
 
@@ -593,6 +654,13 @@ Module FEnv.
     Proof.
       unfold restrict, map.
       intros * ?. destruct (mem_ident _ _); simpl; reflexivity.
+    Qed.
+
+    Lemma union_map R `{Reflexive _ R} f : forall env1 env2,
+        Equiv R (map f (union env1 env2)) (union (map f env1) (map f env2)).
+    Proof.
+      unfold union, map.
+      intros * ?. destruct (env2 _); simpl; reflexivity.
     Qed.
   End map.
 

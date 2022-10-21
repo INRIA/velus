@@ -1103,17 +1103,16 @@ Section MatchStates.
                     end).
 
   Lemma outputrep_add_prefix:
-    forall c f ve le outb_co f' x v,
-      atom f' ->
-      outputrep c f ve le outb_co <-*-> outputrep c f ve (PTree.set (prefix_temp f' x) v le) outb_co.
+    forall c f ve le outb_co x v,
+      outputrep c f ve le outb_co <-*-> outputrep c f ve (PTree.set (prefix temp x) v le) outb_co.
   Proof.
-    intros * Hat.
+    intros *.
     unfold outputrep, case_out.
     destruct_list (m_out f) as (?,?) (?,?) ? : Hout; auto.
     - unfold match_var; rewrite PTree.gso; auto.
       intro; subst.
       pose proof (m_good_out f) as Good.
-      assert (In (prefix_temp f' x, t) (m_out f)) as Hin.
+      assert (In (prefix temp x, t) (m_out f)) as Hin.
       { rewrite Hout. left; auto. }
       apply Good, AtomOrGensym_inv in Hin; auto with ident.
     - cases.
@@ -1456,8 +1455,8 @@ Section FunctionEntry.
     - simpl; econstructor; split; auto.
       unfold match_value, Env.adds; simpl.
       induction ys as [|(y, t)]; simpl; auto.
-      assert (y <> s) by (intro; subst; apply Nos'; apply inmembers_eq).
-      assert (y <> o) by (intro; subst; apply Noo'; apply inmembers_eq).
+      assert (y <> s) by (intro; subst; apply Nos'; apply InMembers_eq).
+      assert (y <> o) by (intro; subst; apply Noo'; apply InMembers_eq).
       constructor.
       + rewrite Env.gempty.
         do 2 (rewrite PTree.gso; auto).
@@ -1481,8 +1480,8 @@ Section FunctionEntry.
         as (le' & Bind & ?); eauto.
       + eapply NotInMembers_cons; eauto.
       + eapply NotInMembers_cons; eauto.
-      + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
-        assert (x <> o) by (intro; subst; apply Noo; apply inmembers_eq).
+      + assert (x <> s) by (intro; subst; apply Nos; apply InMembers_eq).
+        assert (x <> o) by (intro; subst; apply Noo; apply InMembers_eq).
         exists (PTree.set x (value_to_cvalue v) le'); split.
         * simpl map; rewrite bind_parameter_temps_comm; auto.
           apply bind_parameter_temps_cons; auto.
@@ -1523,7 +1522,7 @@ Section FunctionEntry.
     - simpl; econstructor; split; auto.
       unfold match_value, Env.adds; simpl.
       induction ys as [|(y, t)]; simpl; auto.
-      assert (y <> s) by (intro; subst; apply Nos'; apply inmembers_eq).
+      assert (y <> s) by (intro; subst; apply Nos'; apply InMembers_eq).
       constructor.
       + rewrite Env.gempty, PTree.gso, PTree.gss; simpl; auto.
       + apply NotInMembers_cons in Nos'; destruct Nos' as [Nos'].
@@ -1542,7 +1541,7 @@ Section FunctionEntry.
       edestruct IHxs with (s:=s) (ts:=ts) (sptr:=sptr)
         as (le' & Bind & ?); eauto.
       + eapply NotInMembers_cons; eauto.
-      + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
+      + assert (x <> s) by (intro; subst; apply Nos; apply InMembers_eq).
         exists (PTree.set x (value_to_cvalue v) le'); split.
         * simpl map; rewrite bind_parameter_temps_comm_noout; auto.
           apply bind_parameter_temps_cons; auto.
@@ -1630,7 +1629,7 @@ Section FunctionEntry.
       rewrite range_wand_equiv in Hrep; eauto.
       + now rewrite sep_assoc in Hrep.
       + eapply Permutation_Forall; eauto.
-      + eapply alloc_nodupmembers; eauto.
+      + eapply alloc_NoDupMembers; eauto.
         * unfold PTree.elements; simpl; constructor.
         * unfold PTree.elements; simpl.
           clear H H0 Nodup Alloc Perm Perm_fst.
@@ -1660,7 +1659,7 @@ Section FunctionEntry.
   Let tge              := Clight.globalenv tprog.
   Let gcenv            := Clight.genv_cenv tge.
 
-  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+  Hypothesis (TRANSL : translate do_sync all_public (Some main_node) prog = Errors.OK tprog)
              (WT     : wt_program prog).
 
   Lemma function_entry_match_states:
@@ -1728,7 +1727,8 @@ Section FunctionEntry.
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
                                            (prefix obc2c self) (type_of_inst_p (c_name c))
                                            (make_out_temps (instance_methods_temp (rev_prog prog) f)
-                                                           ++ map translate_param (m_vars f))
+                                              ++ make_out_temps (extcalls_temp f)
+                                              ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars); eauto with clight.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
         by (eapply bind_parameter_temps_implies in Bind; eauto with clight).
@@ -1743,7 +1743,7 @@ Section FunctionEntry.
         apply sep_pure; split; auto.
         repeat rewrite map_app in *.
         repeat rewrite translate_param_fst in Vars.
-        rewrite 2 Forall_app in Vars; rewrite Forall_app; tauto.
+        rewrite 3 Forall_app in Vars; rewrite Forall_app; tauto.
 
     (* one output *)
     - assert (prefix obc2c self <> a).
@@ -1759,8 +1759,10 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
                                            (prefix obc2c self) (type_of_inst_p (c_name c))
-                                           ((a, translate_type ta) :: make_out_temps (instance_methods_temp (rev_prog prog) f)
-                                                           ++ map translate_param (m_vars f))
+                                           ((a, translate_type ta) ::
+                                              make_out_temps (instance_methods_temp (rev_prog prog) f)
+                                              ++ make_out_temps (extcalls_temp f)
+                                              ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars);
         eauto with clight; try eapply NotInMembers_cons; eauto with clight.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs))
@@ -1773,9 +1775,9 @@ Section FunctionEntry.
       + apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
         erewrite find_class_name, sep_swap, outputrep_singleton, sep_swap, sep_swap23,
         sep_swap34, sep_swap23, sep_swap; eauto.
-        repeat rewrite map_app, map_cons, map_app in *.
+        repeat rewrite map_app, map_cons, 2 map_app in *.
         repeat rewrite translate_param_fst in Vars.
-        rewrite Forall_app, Forall_cons2, Forall_app in Vars.
+        rewrite Forall_app, Forall_cons2, 2 Forall_app in Vars.
         setoid_rewrite sep_pure; split; [split|]; auto; try tauto.
         rewrite map_app, Forall_app; tauto.
 
@@ -1794,7 +1796,8 @@ Section FunctionEntry.
         (bind_parameter_temps_exists (map translate_param f.(m_in)) (prefix obc2c self) (type_of_inst_p (c_name c))
                                      (prefix obc2c out) (type_of_inst_p (prefix_fun (m_name f) (c_name c)))
                                      (make_out_temps (instance_methods_temp (rev_prog prog) f)
-                                                     ++ map translate_param f.(m_vars))
+                                        ++ make_out_temps (extcalls_temp f)
+                                        ++ map translate_param f.(m_vars))
                                      vs (Vptr sb sofs) (var_ptr instb)) as (le_f & Bind & Vars); eauto with clight.
       assert (le_f ! (prefix obc2c self) = Some (Vptr sb sofs) /\ le_f ! (prefix obc2c out) = Some (var_ptr instb)) as (?&?)
           by (eapply bind_parameter_temps_implies_two in Bind; eauto with clight).
@@ -1811,7 +1814,7 @@ Section FunctionEntry.
         setoid_rewrite sep_pure; split.
         * repeat rewrite map_app in *.
           repeat rewrite translate_param_fst in Vars.
-          rewrite 2 Forall_app in Vars.
+          rewrite 3 Forall_app in Vars.
           rewrite Forall_app; tauto.
         * eapply sep_imp; eauto.
           repeat apply sep_imp'; auto.
@@ -1835,7 +1838,7 @@ Section MainProgram.
   Let tge              := Clight.globalenv tprog.
   Let gcenv            := Clight.genv_cenv tge.
 
-  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+  Hypothesis (TRANSL : translate do_sync all_public (Some main_node) prog = Errors.OK tprog)
              (WT     : wt_program prog).
 
   Let out_step   := prefix out step.
@@ -1894,7 +1897,7 @@ Section MainProgram.
       eauto using well_initialized.
 
     pose proof TRANSL as Trans.
-    inv_trans Trans as En Estep Ereset Eenums with structs funs E.
+    inv_trans Trans as Eexterns En Estep Ereset Eenums with structs funs E.
 
     exists m'.
     edestruct find_self as (sb & find_step); eauto.

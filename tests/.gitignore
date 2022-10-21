@@ -6,4 +6,5 @@
 *.n.lus
 *.stc
 *.obc
+*.h
 *.s

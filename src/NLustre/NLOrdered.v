@@ -72,18 +72,18 @@ Module Type NLORDERED
   (** ** Properties of [Ordered_nodes] *)
 
   Lemma Ordered_nodes_append:
-    forall G G' enums,
-      Ordered_nodes (Global enums (G ++ G'))
-      -> Ordered_nodes (Global enums G').
+    forall G G' enums externs,
+      Ordered_nodes (Global enums externs (G ++ G'))
+      -> Ordered_nodes (Global enums externs G').
   Proof.
     intros * Ord.
     eapply Ordered_program_append' in Ord as (?&?); simpl in *; eauto.
   Qed.
 
   Lemma find_node_other_not_Is_node_in:
-    forall f nd G nd' enums,
-      Ordered_nodes (Global enums (nd::G))
-      -> find_node f (Global enums G) = Some nd'
+    forall f nd G nd' enums externs,
+      Ordered_nodes (Global enums externs (nd::G))
+      -> find_node f (Global enums externs G) = Some nd'
       -> ~Is_node_in nd.(n_name) nd'.(n_eqs).
   Proof.
     intros * Ord Find.
@@ -104,10 +104,10 @@ Module Type NLORDERED
   Qed.
 
   Lemma find_node_not_Is_node_in_eq:
-    forall G f g n enums,
-      Ordered_nodes (Global enums G) ->
+    forall G f g n enums externs,
+      Ordered_nodes (Global enums externs G) ->
       Forall (fun n' => ~(g = n'.(n_name))) G ->
-      find_node f (Global enums G) = Some n ->
+      find_node f (Global enums externs G) = Some n ->
       Forall (fun eq => ~ Is_node_in_eq g eq) n.(n_eqs).
   Proof.
     intros * Ord Hnn Find.

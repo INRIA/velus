@@ -1153,7 +1153,7 @@ Section SplitRange.
       specialize HH with 0. rewrite Z.add_0_r in HH.
       apply HH. eexists 0; lia.
     - induction flds as [|[id' ty'] xs IH]; [now constructor|].
-      apply nodupmembers_cons in Hndup as [Hnin Hndup].
+      apply NoDupMembers_cons_inv in Hndup as [Hnin Hndup].
       specialize (IH Hndup).
       intros cur Hdiv.
       Opaque sepconj. simpl.

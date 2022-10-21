@@ -21,6 +21,7 @@ Module Type CETYPING
   Section WellTyped.
 
     Variable types : list type.
+    Variable externs : list (ident * (list ctype * ctype)).
     Variable Γ : list (ident * type).
 
     Inductive wt_clock : clock -> Prop :=
@@ -48,7 +49,7 @@ Module Type CETYPING
         In (Tenum tx tn) types ->
         b < length tn ->
         wt_exp e ->
-        wt_exp (Ewhen e x b)
+        wt_exp (Ewhen e (x, Tenum tx tn) b)
     | wt_Eunop: forall op e ty,
         type_unop op (typeof e) = Some ty ->
         wt_exp e ->
@@ -79,6 +80,16 @@ Module Type CETYPING
     | wt_Eexp: forall e,
         wt_exp e ->
         wt_cexp (Eexp e).
+
+    Inductive wt_rhs : rhs -> Prop :=
+    | wt_Eextcall: forall f es tyout tyins,
+        Forall wt_exp es ->
+        Forall2 (fun e ty => typeof e = Tprimitive ty) es tyins ->
+        In (f, (tyins, tyout)) externs ->
+        wt_rhs (Eextcall f es tyout)
+    | wt_Ecexp: forall e,
+        wt_cexp e ->
+        wt_rhs (Ecexp e).
 
   End WellTyped.
 
@@ -171,43 +182,18 @@ Module Type CETYPING
       apply it; auto.
   Qed.
 
-  Lemma wt_clock_types_cons:
-    forall enums e Γ ck,
-      wt_clock enums Γ ck ->
-      wt_clock (e :: enums) Γ ck.
+  Global Instance wt_rhs_Proper:
+    Proper (@Permutation.Permutation _ ==>
+            @Permutation.Permutation _ ==>
+            @Permutation.Permutation (ident * type) ==>
+            @eq _ ==> iff)
+           wt_rhs.
   Proof.
-    induction 1; eauto using wt_clock.
-    econstructor; eauto.
-    now right.
-  Qed.
-
-  Lemma wt_exp_types_cons:
-    forall enums e Γ ex,
-      wt_exp enums Γ ex ->
-      wt_exp (e :: enums) Γ ex.
-  Proof.
-    induction 1; eauto using wt_exp.
-    - constructor; auto.
-      now right.
-    - econstructor; eauto.
-      now right.
-  Qed.
-
-  Lemma wt_cexp_types_cons:
-    forall enums e Γ ce,
-      wt_cexp enums Γ ce ->
-      wt_cexp (e :: enums) Γ ce.
-  Proof.
-    induction ce using cexp_ind2'; intros * WT; inv WT;
-      eauto using wt_cexp, wt_exp_types_cons.
-    - econstructor; eauto.
-      + now right.
-      + apply Forall_forall; intros.
-        repeat take (Forall _ _) and eapply Forall_forall in it; eauto.
-    - econstructor; eauto using wt_exp_types_cons.
-      + now right.
-      + intros.
-        take (Forall _ _) and eapply Forall_forall in it; eauto; simpl in it; auto.
+    intros types' types Htypes externs' externs Hexterns env' env Henv e' e ?; subst.
+    destruct e; split; intros Hwt; inv Hwt; econstructor; eauto; simpl_Forall.
+    all:try rewrite Htypes, Henv; auto.
+    all:try rewrite <-Htypes, <-Henv; auto.
+    all:try rewrite Hexterns; auto; try rewrite <-Hexterns; auto.
   Qed.
 
 End CETYPING.

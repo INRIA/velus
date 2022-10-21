@@ -47,23 +47,23 @@ Module Type TRORDERED
     destruct n'. simpl in Hord.
     tonodeInv Htr. cases. do 2 constructor. right.
     clear - Hord Hmmap. monadInv Hmmap. rename EQ into Hmmap. revert dependent n_eqs.
-    induction l2; intros. inv Hmmap. inv Hord.
+    induction l1; intros. inv Hmmap. inv Hord.
     apply mmap_cons in Hmmap.
     destruct Hmmap as (eq' & l' & Hneqs & Hteq & Hmmap); subst.
     inversion_clear Hord as [ ? ? Hord' |].
-    - constructor. clear IHl2 Hmmap.
+    - constructor. clear IHl1 Hmmap.
       revert dependent eq'. generalize (@nil (ident * clock)) as xr.
       induction a using L.block_ind2; intros; simpl in *;
         try solve [monadInv Hteq].
       + destruct eq' as [| i ck x le |]; inv Hord'.
         destruct eq as [ xs [|]]. inv Hteq.
-        destruct l1; [ idtac | inv Hteq; cases ].
+        destruct l2; [ idtac | inv Hteq; cases ].
         destruct e; inv Hteq; cases; monadInv H0.
         do 2 econstructor; apply Lord.INEapp2.
       + cases. apply Forall_singl in H.
         eapply H in Hteq; eauto.
         constructor. eauto.
-    - apply Exists_cons_tl. eapply IHl2; eauto.
+    - apply Exists_cons_tl. eapply IHl1; eauto.
   Qed.
 
   Lemma ninin_l_nl :
@@ -80,11 +80,11 @@ Module Type TRORDERED
       to_global G = OK G' ->
       Forall (fun n => (name <> NL.n_name n)%type) G'.(NL.nodes).
   Proof.
-    intros ? (enms&nds) ? Hnames Htog. monadInv Htog.
+    intros ? [] ? Hnames Htog. monadInv Htog.
     revert dependent x.
-    induction nds; intros; simpl in *; monadInv EQ; simpl; inv Hnames; constructor.
+    induction nodes; intros; simpl in *; monadInv EQ; simpl; inv Hnames; constructor.
     - erewrite <-to_node_name; eauto.
-    - eapply IHnds in EQ; eauto.
+    - eapply IHnodes in EQ; eauto.
   Qed.
 
   Lemma ord_l_nl :
@@ -93,7 +93,7 @@ Module Type TRORDERED
       Lord.Ordered_nodes G ->
       Ord.Ordered_nodes P.
   Proof.
-    intros (?&nds) ? Htr Hord. monadInv Htr.
+    intros [] ? Htr Hord. monadInv Htr.
     revert dependent x.
     unfold Lord.Ordered_nodes, CommonProgram.Ordered_program in Hord; simpl in Hord.
     induction Hord as [|?? (?&?)]; intros; simpl in *; monadInv EQ; constructor; eauto.
@@ -103,13 +103,13 @@ Module Type TRORDERED
       { eapply inin_l_nl; eauto. }
       apply H in Hfin as (?&(?&?&?)). split; auto.
       + erewrite <-to_node_name; eauto.
-      + assert (L.find_node f {| L.types := types; L.nodes := l |} = Some x0) as Hfind'.
+      + assert (L.find_node f {| L.types := types; L.externs := externs; L.nodes := l |} = Some x0) as Hfind'.
         { unfold L.find_node. rewrite H2; auto. }
         eapply find_node_global in Hfind' as (?&?&?). 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
         unfold NL.find_node in H3. apply option_map_inv in H3 as ((?&?)&?&?); subst.
         erewrite CommonProgram.find_unit_later; eauto. 1-2:simpl; auto.
         apply CommonProgram.equiv_program_refl.
-    - replace l with {| L.types := types; L.nodes := l |}.(L.nodes) in H0 by eauto.
+    - replace l with {| L.types := types; L.externs := externs; L.nodes := l |}.(L.nodes) in H0 by eauto.
       eapply to_global_names' in H0. 2:(unfold to_global; simpl; rewrite EQ; simpl; eauto).
       simpl in H0. erewrite to_node_name in H0; eauto.
     - eapply IHHord in EQ; eauto.

@@ -2611,6 +2611,8 @@ Module Env.
       contradict Hin. eapply In_Members; eauto.
     Qed.
 
+    Definition unions (envs : list (Env.t A)) :=
+      List.fold_left union envs (Env.empty _).
   End union.
 
   Add Parametric Morphism {A} (R : A -> A -> Prop) : union

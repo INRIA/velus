@@ -53,7 +53,7 @@ Module Type DCENORMALARGS
     normal_args (dce_global G).
   Proof.
     unfold normal_args.
-    intros (?&?) Hnorm; simpl in *.
+    intros [] Hnorm; simpl in *.
     induction Hnorm; simpl; constructor; auto.
     eapply dce_node_normal_args; eauto. apply dce_global_iface_eq.
   Qed.

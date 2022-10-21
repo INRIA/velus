@@ -73,7 +73,7 @@ Module Type NLCOINDTOINDEXED
       induction 1 as [? ? ? ? Hconst
                      |? ? ? ? ? Henum
                      |? ? ? ? ? Hvar
-                     |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
+                     |? ? ? ? ? ? ? ? ? ? ? Hvar Hwhen
                      |? ? ? ? ? ? ? ? ? Hlift1
                      |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - rewrite const_spec in Hconst; rewrite Hconst.
@@ -339,51 +339,70 @@ Module Type NLCOINDTOINDEXED
     Qed.
     Hint Resolve sem_cexp_impl : nlsem.
 
-    (** Give an indexed specification for annotated [cexp], using the previous
-        lemma.  *)
-    Lemma sem_caexp_index:
+    (** ** Semantics of cexps *)
+
+    (** State the correspondence for [cexp].
+        Goes by induction on the coinductive semantics of [cexp]. *)
+    Lemma sem_rhs_impl:
+      forall H b e es,
+        CoInd.sem_rhs H b e es ->
+        CESem.sem_rhs (tr_Stream b) (tr_history H) e (tr_Stream es).
+    Proof.
+      intros * Sem n; inv Sem.
+      - (* extcall *)
+        repeat rewrite tr_Stream_nth.
+        apply liftn_spec with (n:=n) in H3 as [(?&Hes)|(?&?&?&?&Hes)]; rewrite Hes; econstructor; eauto.
+        + eapply Forall2_ignore2 in H2. simpl_Forall; eauto.
+          take (CoInd.sem_exp _ _ _ _) and eapply sem_exp_impl in it. specialize (it n).
+          rewrite 2 tr_Stream_nth in it. now setoid_rewrite H0 in it.
+        + eapply Forall2_trans_ex in H0; [|eauto]. simpl_Forall.
+          take (CoInd.sem_exp _ _ _ _) and eapply sem_exp_impl in it. specialize (it n).
+          rewrite 2 tr_Stream_nth in it. now setoid_rewrite H8 in it.
+      - (* cexp *)
+        constructor. eapply sem_cexp_impl; eauto.
+    Qed.
+
+    Lemma sem_arhs_index:
       forall n H b ck le es,
-        CoInd.sem_caexp H b ck le es ->
+        CoInd.sem_arhs H b ck le es ->
         (sem_clock_instant (tr_Stream b n)
                                    (tr_history H n) ck false
-         /\ CESem.sem_cexp_instant
+         /\ CESem.sem_rhs_instant
              (tr_Stream b n) (tr_history H n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
             sem_clock_instant (tr_Stream b n)
                                       (tr_history H n) ck true
-            /\ CESem.sem_cexp_instant
+            /\ CESem.sem_rhs_instant
                 (tr_Stream b n) (tr_history H n) le (present e)
             /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
                                       |? ? ? ? ? ? Indexed' Hck];
-          apply sem_cexp_impl in Indexed'; specialize (Indexed' 0);
+          apply sem_rhs_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
-              apply sem_clock_impl in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
+              eapply (sem_clock_impl) in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
-          apply sem_cexp_impl in Indexed';
+          apply sem_rhs_impl in Indexed';
           (take (CoInd.sem_annot _ _ _ _ _ _) and eapply IHn in it as [|]; destruct_conjs;
-           [left|right; do 2 esplit]; try rewrite tr_Stream_S; try rewrite tr_history_tl; eauto).
+           [left|right; do 2 esplit]; try rewrite <-tr_Stream_tl; try rewrite tr_history_tl; eauto).
     Qed.
 
-    (** We deduce from the previous lemma the correspondence for annotated
-        [cexp]. *)
-    Corollary sem_caexp_impl:
+    Corollary sem_arhs_impl:
       forall H b e es ck,
-        CoInd.sem_caexp H b ck e es ->
-        CESem.sem_caexp (tr_Stream b) (tr_history H) ck e (tr_Stream es).
+        CoInd.sem_arhs H b ck e es ->
+        CESem.sem_arhs (tr_Stream b) (tr_history H) ck e (tr_Stream es).
     Proof.
       intros * Indexed n.
-      apply (sem_caexp_index n) in Indexed; destruct Indexed
-        as [(? & ? & Hes)|(? & ? & ? & Hes)];
+      apply (sem_arhs_index n) in Indexed;
+        destruct Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
         rewrite Hes; constructor; auto.
     Qed.
-    Hint Resolve sem_caexp_impl : nlsem.
+    Hint Resolve sem_arhs_impl : nlsem.
 
     (** * RESET CORRESPONDENCE  *)
 
@@ -518,7 +537,7 @@ Module Type NLCOINDTOINDEXED
 
     (** Give an indexed specification for Streams synchronization. *)
     Lemma aligned_index:
-      forall xs bs,
+      forall (xs: Stream svalue) bs,
         aligned xs bs ->
         forall n, tr_Stream bs n = true <-> tr_Stream xs n <> absent.
     Proof.

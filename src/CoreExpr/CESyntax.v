@@ -16,7 +16,7 @@ Module Type CESYNTAX
   | Econst : cconst -> exp
   | Eenum  : enumtag -> type -> exp
   | Evar   : ident -> type -> exp
-  | Ewhen  : exp -> ident -> enumtag -> exp
+  | Ewhen  : exp -> (ident * type) -> enumtag -> exp
   | Eunop  : unop -> exp -> type -> exp
   | Ebinop : binop -> exp -> exp -> type -> exp.
 
@@ -26,6 +26,10 @@ Module Type CESYNTAX
   | Emerge : ident * type -> list cexp -> type -> cexp
   | Ecase  : exp -> list (option cexp) -> cexp -> cexp
   | Eexp   : exp -> cexp.
+
+  Inductive rhs : Type :=
+  | Eextcall : ident -> list exp -> ctype -> rhs
+  | Ecexp  : cexp -> rhs.
 
   Section cexp_ind2.
 
@@ -103,6 +107,12 @@ Module Type CESYNTAX
     | Emerge _ _ ty => ty
     | Ecase _ _ e   => typeofc e
     | Eexp e        => typeof e
+    end.
+
+  Definition typeofr (r: rhs): type :=
+    match r with
+    | Eextcall _ _ cty => Tprimitive cty
+    | Ecexp e         => typeofc e
     end.
 
   (** Predicate used in [normal_args] in NLustre and Stc. *)

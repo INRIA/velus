@@ -1,0 +1,6 @@
+external sinf(float) returns float
+external cosf(float) returns float
+
+node main(x : float) returns (y : float)
+let y = cosf(sinf(x));
+tel

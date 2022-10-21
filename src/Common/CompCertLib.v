@@ -48,9 +48,9 @@ Proof.
       subst.
   rewrite <-app_assoc in H.
   apply NoDupMembers_app_r in H.
-  rewrite <-app_comm_cons, nodupmembers_cons in H.
+  rewrite <-app_comm_cons, NoDupMembers_cons_inv in H.
   destruct H as [Notin]; apply Notin.
-  apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
+  apply InMembers_app; right; apply InMembers_app; right; apply InMembers_eq.
 Qed.
 
 Lemma list_drop_skipn:
@@ -444,8 +444,7 @@ Proof.
   intros xs x ty Hndup Hin.
   induction xs as [|x' xs IH]; [now inversion Hin|].
   destruct x' as [x' ty'].
-  apply nodupmembers_cons in Hndup.
-  destruct Hndup as [? Hndup].
+  apply NoDupMembers_cons_inv in Hndup as [? Hndup].
   inversion Hin as [Heq|Heq].
   - injection Heq; intros; subst.
     simpl. rewrite peq_true. reflexivity.
@@ -648,10 +647,10 @@ Proof.
       eapply IHxs; eauto; eapply NotInMembers_cons; eauto.
     + intro Eq.
       apply Notin_o.
-      subst o. apply inmembers_eq.
+      subst o. apply InMembers_eq.
     + intro Eq.
       apply Notin_s.
-      subst s. apply inmembers_eq.
+      subst s. apply InMembers_eq.
 Qed.
 
 Remark bind_parameter_temps_implies:
@@ -676,7 +675,7 @@ Proof.
       eapply IHxs; eauto; eapply NotInMembers_cons; eauto.
     + intro Eq.
       apply Notin_s.
-      subst s. apply inmembers_eq.
+      subst s. apply InMembers_eq.
 Qed.
 
 
@@ -692,7 +691,7 @@ Proof.
   - rewrite <-set_comm in Halloc.
     + eapply IHvars; eauto.
       eapply NotInMembers_cons; eauto.
-    + intro; subst x; apply Notin; apply inmembers_eq.
+    + intro; subst x; apply Notin; apply InMembers_eq.
 Qed.
 
 Definition drop_block '((x, (_, t)): ident * (block * Ctypes.type)) : (ident * Ctypes.type) :=
@@ -874,7 +873,7 @@ Proof.
         apply In_InMembers with (1:=HH).
 Qed.
 
-Lemma set_nodupmembers:
+Lemma set_NoDupMembers:
   forall x (e: Clight.env) b1 t,
     NoDupMembers (map snd (PTree.elements e)) ->
     ~InMembers x (PTree.elements e) ->
@@ -892,7 +891,7 @@ Proof.
   simpl; constructor; auto.
 Qed.
 
-Remark alloc_nodupmembers:
+Remark alloc_NoDupMembers:
   forall tge vars e m e' m',
     alloc_variables tge e m vars e' m' ->
     NoDupMembers vars ->
@@ -906,7 +905,7 @@ Proof.
       inversion Alloc as [|? ? ? ? ? ? ? ? ? Hmem Alloc']; clear Alloc;
         inversion Forall as [|? ? Hnin Hforall]; clear Forall; subst; auto.
   apply IHvars with (e:=PTree.set x (b1, t) e) (m:=m1) (m':=m'); auto.
-  - apply set_nodupmembers; auto.
+  - apply set_NoDupMembers; auto.
     intros Hinb.
     apply Valid in Hinb.
     eapply Mem.valid_not_valid_diff; eauto.

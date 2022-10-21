@@ -108,7 +108,7 @@ Module Type STC2OBCINVARIANTS
     cases; auto using Fusible; apply IH.
     - intros j Hfree Hcw.
       apply Hxni with (x := j); [inversion_clear Hfree; eauto with stcfree|].
-      inversion_clear Hcw as [| | | | |]; auto.
+      inversion_clear Hcw as [| | | | | |]; auto.
       take (Exists _ _) and apply Exists_exists in it as (os & Hin & Cw).
       destruct os; simpl in *; try now inv Cw.
       apply skip_branches_with_In_det in Hin; subst; auto.
@@ -120,7 +120,7 @@ Module Type STC2OBCINVARIANTS
         inv Hfree; auto with stcfree.
     - intros j Hfree Hcw.
       apply Hxni with (x := j); [inversion_clear Hfree; eauto with stcfree|].
-      inversion_clear Hcw as [| | | | |]; auto.
+      inversion_clear Hcw as [| | | | | |]; auto.
       take (Exists _ _) and apply Exists_exists in it as (os & Hin & Cw).
       destruct os; simpl in *; try now inv Cw.
       apply skip_branches_with_In_det in Hin; subst; auto.
@@ -163,7 +163,7 @@ Module Type STC2OBCINVARIANTS
       destruct tc as [y ck e|y ckr c0|y ck|y ck v0|s xs ck ? f es]; simpl.
       + assert (~PS.In y mems) as Hnxm
             by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-        assert (forall i, Is_free_in_caexp i ck e -> y <> i) as Hfni.
+        assert (forall i, Is_free_in_arhs i ck e -> y <> i) as Hfni.
         { intros i Hfree.
           assert (Hfree': Is_free_in_tc i (TcDef y ck e)) by auto with stcfree.
           eapply HH in Hfree'.
@@ -175,7 +175,10 @@ Module Type STC2OBCINVARIANTS
           - eapply Hnin; eauto.
             left; constructor.
         }
-        apply Fusible_Control.
+        destruct e; apply Fusible_Control.
+        * intros * Hfree contra. inv contra.
+          eapply Hfni; eauto using Is_free_in_arhs.
+        * constructor.
         * intros; apply not_Can_write_in_translate_cexp.
           eapply Hfni; auto with stcfree.
         * apply Fusible_translate_cexp.
@@ -242,10 +245,10 @@ Module Type STC2OBCINVARIANTS
       Well_scheduled P ->
       ProgramFusible (translate P).
   Proof.
-    intros (?&P); induction P as [|s]; intros * WC Wsch;
+    intros []; induction systems0 as [|s]; intros * WC Wsch;
       inversion_clear WC as [|?? (?&?&?& WCb)];
       inversion_clear Wsch as [|??? Wsch'];
-      simpl; constructor; auto; try now apply IHP.
+      simpl; constructor; auto; try now apply IHsystems0.
     unfold ClassFusible; simpl.
     repeat constructor; simpl; auto with obcinv.
     assert (NoDup (defined (s_tcs s))) by apply s_nodup_defined.
@@ -374,6 +377,7 @@ Module Type STC2OBCINVARIANTS
       Can_write_in_var x (translate_tc mems clkvars tc) -> Is_variable_in_tc x tc.
   Proof.
     destruct tc; simpl; intros * Cw;
+      try (take rhs and destruct it);
       try destruct c0;
       apply Can_write_in_var_Control in Cw;
       try apply Can_write_in_var_translate_cexp in Cw; inv Cw;
@@ -443,8 +447,9 @@ Module Type STC2OBCINVARIANTS
         apply Hcwd, not_Is_variable_in_cons in Hcw as (? & ?); auto.
       + destruct tc; simpl;
           try destruct v0; inv H1;
-            try (take (wt_const _ _ _) and inv it);
-            try setoid_rewrite No_Overwrites_Control;
+          try (take (wt_rhs _ _ _ _) and inv it);
+          try (take (wt_const _ _ _) and inv it);
+          try setoid_rewrite No_Overwrites_Control;
           eauto using No_Overwrites_translate_cexp with obcinv.
     - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
         apply NoDup_app_weaken in Nodup; auto.
@@ -459,7 +464,7 @@ Module Type STC2OBCINVARIANTS
     revert CWIS; generalize Skip.
     induction subs; simpl; auto.
     intros; apply IHsubs.
-    inversion_clear 1 as [| | | |??? CWI]; try inv CWI; contradiction.
+    inversion_clear 1 as [| | | | |??? CWI]; try inv CWI; contradiction.
   Qed.
 
   Lemma No_Overwrites_reset_inst:
@@ -490,7 +495,7 @@ Module Type STC2OBCINVARIANTS
     - constructor; auto with obcinv.
       + inversion 2; subst; eapply CWIS; eauto.
       + inversion_clear 1; auto.
-    - inversion_clear 2 as [| | | | |??? CWI];
+    - inversion_clear 2 as [| | | | | |??? CWI];
         try inv CWI; subst; auto.
       eapply CWIS; eauto.
   Qed.
@@ -545,6 +550,7 @@ Module Type STC2OBCINVARIANTS
       Is_variable_in_tc x tc \/ (exists ck, Is_reset_in_tc x ck tc) \/ Is_next_in_tc x tc.
   Proof.
     destruct tc; simpl; intros * Cw;
+      try (take rhs and destruct it);
       try destruct c0;
       apply Can_write_in_Control in Cw;
       try apply Can_write_in_translate_cexp in Cw; inv Cw;

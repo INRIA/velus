@@ -19,7 +19,7 @@ Module Type STCSYNTAX
   (** ** Transition constraints *)
 
   Inductive trconstr :=
-  | TcDef       : ident -> clock -> cexp -> trconstr
+  | TcDef       : ident -> clock -> rhs -> trconstr
   | TcReset     : ident -> clock -> type -> const -> trconstr
   | TcNext      : ident -> clock -> list clock -> exp -> trconstr
   | TcInstReset : ident -> clock -> ident -> trconstr
@@ -231,20 +231,21 @@ Module Type STCSYNTAX
 
   Record program := Program {
                         types : list type;
+                        externs : list (ident * (list ctype * ctype));
                         systems : list system
                       }.
 
   Global Program Instance program_program: CommonProgram.Program system program :=
     { units := systems;
-      update := fun p => Program p.(types) }.
+      update := fun p => Program p.(types) p.(externs) }.
 
   Definition find_system : ident -> program -> option (system * program) :=
     find_unit.
 
   Remark find_system_other:
-    forall b P bl types,
+    forall b P bl types externs,
       bl.(s_name) <> b ->
-      find_system b (Program types (bl :: P)) = find_system b (Program types P).
+      find_system b (Program types externs (bl :: P)) = find_system b (Program types externs P).
   Proof.
     intros; eapply find_unit_other; simpl; eauto.
     intro; auto.

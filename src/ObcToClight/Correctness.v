@@ -182,7 +182,7 @@ Section PRESERVATION.
   Let tge              := Clight.globalenv tprog.
   Let gcenv            := Clight.genv_cenv tge.
 
-  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+  Hypothesis (TRANSL : translate do_sync all_public (Some main_node) prog = Errors.OK tprog)
              (WT     : wt_program prog).
 
   Opaque sepconj.
@@ -565,7 +565,7 @@ Section PRESERVATION.
           (* only one output: x is a temporary *)
           + inversion_clear Hin' as [Eq|Eq]; inv Eq.
             exists m1, (PTree.set x (value_to_cvalue v) le1);
-              rewrite PTree.gso; intuition; unfold exec_stmt_fe; eauto using exec_stmt.
+              rewrite PTree.gso; intuition. unfold exec_stmt_fe. eauto using exec_stmt.
             eapply sep_imp; eauto.
             * eapply outputrep_assign_singleton_mem; eauto.
             * rewrite varsrep_add; eauto.
@@ -608,8 +608,10 @@ Section PRESERVATION.
         intros.
         apply match_states_conj in Hmem as (Hmem & ?).
         rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23 in Hmem.
-        edestruct exec_assign as (m' & le' & ?&?&?); eauto.
-        exists m', le'; intuition.
+        edestruct exec_assign
+          (* with (P_stmt := fun m' le' => exec_stmt_fe function_entry2 tge e le m (assign owner caller x (translate_type ty) ae) E0 le' m' Out_normal) *)
+          as (m' & le' & ?&?&?); eauto.
+        exists m', le'; split; auto.
         apply match_states_conj; intuition; eauto using m_nodupvars with obctyping.
         rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23; auto.
       Qed.
@@ -1141,10 +1143,11 @@ Section PRESERVATION.
 
     Opaque match_states sepconj.
     apply stmt_eval_call_ind; [| |
+                               |intros ?????????? Htys ? Hext
                                |intros ?????????? IH1 ? IH2
                                |intros ??????????? Nth IH|
                                |intros * Findcl Findmth ?? IH Hrvos ? * Findcl' Findmth']; intros;
-      try inversion_clear WTs as [| | | |????????? Findcl Findmth|];
+      try inversion_clear WTs as [| | | |????????? Findcl Findmth| |];
       try inv NoNaked; simpl.
 
     (* x = e *)
@@ -1200,6 +1203,78 @@ Section PRESERVATION.
         eapply Forall2_impl_In; eauto; simpl.
         intros; setoid_rewrite type_pres; try congruence.
         eapply Forall_forall; eauto.
+
+    (* x = external f(es) *)
+    - unfold sem_extern in *; simpl in *.
+      specialize (Hext (Genv.globalenv tprog) m) as (Hext&Hwt).
+      edestruct exec_assign_match_states
+        with (x := y) (ty := Tprimitive tyout)
+             (ve := (* Env.add y (Vscalar rvo)  *)ve)
+             (ae := Etempvar (prefix temp y) (cltype tyout))
+             (le := PTree.set (prefix temp y) rvo le)
+        as (m' & le' & ? & Hmem');
+        eauto using wt_value, eval_expr, PTree.gss.
+      1:{ apply match_states_conj in Hmem; destruct_conjs.
+          apply match_states_conj; rewrite PTree.gso.
+          2:{ apply prefix_injective'. left. prove_str_to_pos_neq. }
+          intuition; eauto.
+
+          rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23 in H5.
+          rewrite sep_swap, sep_swap45, sep_swap34, sep_swap23.
+          eapply sep_imp, sep_imp'; eauto.
+          - apply outputrep_add_prefix.
+          - change rvo with (value_to_cvalue (Vscalar rvo)). apply varsrep_add'''.
+            intros Hinm. rewrite InMembers_app, 2 fst_InMembers in Hinm.
+            destruct Hinm as [Hinm|Hinm]; simpl_In.
+            + apply m_good_in in Hin; eauto using AtomOrGensym_inv, temp_not_in_gensym_prefs.
+            + apply m_good_vars in Hin; eauto using AtomOrGensym_inv, temp_not_in_gensym_prefs.
+      }
+
+      exists m', le'. split; [|eauto].
+      replace E0 with (Eapp E0 E0) by apply E0_left. econstructor; eauto.
+      change (PTree.set (prefix temp y) rvo le) with (set_opttemp (Some (prefix temp y)) rvo le).
+      assert (tyins = tyins0); subst.
+      { apply Forall2_eq. apply Forall2_swap_args in Htys. eapply Forall2_trans_ex in H2; eauto.
+        simpl_Forall. congruence. }
+      remember (AST.mksignature _ _ _) as sig.
+      assert ((AST.prog_defmap tprog) ! f =
+                Some (AST.Gfun
+                        (External
+                           (AST.EF_external (pos_to_str f) sig)
+                           (list_type_to_typelist (map Clight.typeof (map (translate_exp owner caller) es)))
+                           (cltype tyout) AST.cc_default))) as ProgFind.
+      { apply AST.prog_defmap_norepet.
+        - eapply prog_defs_norepet; eauto.
+        - erewrite types_pres; eauto.
+          2:instantiate (1:=map Tprimitive tyins0); simpl_Forall; auto.
+          rewrite map_map; simpl.
+          subst. eapply externs_In in TRANSL. erewrite map_map in TRANSL; eauto.
+          clear - Findowner H3.
+          apply find_unit_suffix in Findowner. inv Findowner. specialize (H []). inv H.
+          take (externs _ = _) and rewrite it in *. auto.
+      }
+      apply Genv.find_def_symbol in ProgFind as (?&Find1&Find2).
+      econstructor; simpl; eauto.
+      2:{ eapply exprs_correct; eauto with obctyping.
+          instantiate (1:=map Vscalar vs). simpl_Forall; auto. }
+      4:{ apply eval_funcall_external.
+          instantiate (1:=AST.EF_external (pos_to_str f) _).
+          rewrite map_map, map_id; eauto. }
+      1-3:simpl; eauto.
+      + econstructor; simpl. apply eval_Evar_global; eauto; simpl.
+        * rewrite <-not_Some_is_None.
+          intros (?, ?) Hget.
+          apply match_states_conj in Hmem as (?&?&?&?& He).
+          apply He in Hget; destruct Hget as (? & ? & Eqpref); subst.
+          clear - Findowner TRANSL H3. inv_trans TRANSL.
+          apply find_unit_suffix in Findowner. inv Findowner. specialize (H []). inv H.
+          take (externs _ = _) and rewrite it in *.
+          eapply check_externs_atom in Eexterns; simpl_Forall.
+          eapply prefix_not_atom, Eexterns.
+        * constructor; simpl; auto.
+      + unfold Genv.find_funct, Genv.find_funct_ptr.
+        destruct (Ptrofs.eq_dec _ _); try congruence.
+        setoid_rewrite Find2. auto.
 
     (* s1 ; s2 *)
     - apply occurs_in_comp in Occurs as (?&?).

@@ -67,6 +67,15 @@ Module Type DCECLOCKING
       subst; simpl in *; eauto.
   Qed.
 
+  Lemma wc_rhs_free : forall vars e x ck,
+      wc_rhs vars e ck ->
+      Is_free_in_rhs x e ->
+      InMembers x vars.
+  Proof.
+    intros * Wt Free; inv Wt; inv Free; eauto using wc_cexp_free.
+    simpl_Exists; simpl_Forall; eauto using wc_exp_free.
+  Qed.
+
   Lemma wc_equation_def_free : forall G vars eq x,
       wc_env vars ->
       wc_equation G vars eq ->
@@ -76,8 +85,7 @@ Module Type DCECLOCKING
     induction eq; intros * Hwenv Hwc Hdeff; inv Hwc.
     - destruct Hdeff as [Hdef|Hfree].
       + inv Hdef; eauto using In_InMembers.
-      + inv Hfree. inv H2; eauto using wc_cexp_free.
-        eapply wc_clock_free; [|eauto]. eapply wc_clock_cexp; eauto.
+      + inv Hfree. inv H2; eauto using wc_rhs_free, wc_clock_free, wc_env_var.
     - destruct Hdeff as [Hdef|Hfree].
       + inv Hdef. eapply Forall2_ignore1, Forall_forall in H6; eauto.
         destruct H6 as ((?&?&?)&?&?&?&?&?); simpl; eauto using In_InMembers.
@@ -143,6 +151,18 @@ Module Type DCECLOCKING
         eapply H; eauto. intros. eapply Hincl; eauto.
         eapply FreeEcase_branches. solve_Exists.
     Qed.
+    Local Hint Resolve wc_cexp_restrict : nlclocking.
+
+    Lemma wc_rhs_restrict : forall vars vars' e ck,
+        (forall x ty, In (x, ty) vars -> Is_free_in_rhs x e -> In (x, ty) vars') ->
+        wc_rhs vars e ck ->
+        wc_rhs vars' e ck.
+    Proof with eauto with nlclocking nlfree.
+      intros * Hincl Wt; inv Wt; econstructor; simpl_Forall...
+      - eapply wc_exp_restrict; [|eauto].
+        intros. eapply Hincl; eauto.
+        constructor. solve_Exists.
+    Qed.
 
     Lemma wc_equation_restrict : forall vars vars' eq,
         (forall x ty, In (x, ty) vars -> Is_defined_in_eq x eq \/ Is_free_in_eq x eq -> In (x, ty) vars') ->
@@ -151,21 +171,19 @@ Module Type DCECLOCKING
     Proof with eauto with nlclocking nlfree nldef.
       intros * Hincl Hwc. inv Hwc.
       - econstructor...
-        + eapply wc_cexp_restrict with (vars:=vars)...
-      - destruct HG as (?&Hf). specialize (Hf f). rewrite H in Hf; inv Hf. destruct H6 as (Hname&Hin&Hout).
+        + eapply wc_rhs_restrict with (vars:=vars)...
+      - destruct HG as (?&?&Hf). specialize (Hf f). rewrite H in Hf; inv Hf. destruct H7 as (Hname&Hin&Hout).
         econstructor...
-        + rewrite <-Hin. eapply Forall2_impl_In; [|eauto].
-          intros (?&?&?) ? Hin1 Hin2 (?&?&?&?); simpl in *; repeat esplit; eauto.
+        + rewrite <-Hin. simpl_Forall. repeat esplit; eauto.
           eapply wc_exp_restrict with (vars:=vars); eauto.
           intros. eapply Hincl; eauto. right. constructor; left. econstructor. solve_Exists.
-        + rewrite <-Hout. eapply Forall2_impl_In; [|eauto].
-          intros (?&?&?) ? Hin1 Hin2 (?&?&?&?); simpl in *; repeat esplit...
-        + eapply Forall_impl_In; [|eauto]; intros (?&?) Hin' ?.
+        + rewrite <-Hout. simpl_Forall. repeat esplit...
+        + simpl_Forall.
           eapply Hincl; eauto. right. constructor; right.
           solve_Exists.
       - econstructor...
         + eapply wc_exp_restrict with (vars:=vars); eauto 8 with nlfree.
-        + eapply Forall_impl_In; [|eauto]; intros (?&?) Hin' ?.
+        + simpl_Forall.
           eapply Hincl; eauto. right; constructor.
           right. solve_Exists.
     Qed.
@@ -176,7 +194,7 @@ Module Type DCECLOCKING
         Forall (wc_equation G2 vars') eqs.
     Proof.
       intros * Hincl Hwc.
-      eapply Forall_impl_In; [|eauto]; intros.
+      simpl_Forall.
       eapply wc_equation_restrict; [|eauto].
       intros. eapply Hincl; eauto. solve_Exists.
     Qed.
