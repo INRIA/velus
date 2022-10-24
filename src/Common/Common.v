@@ -879,7 +879,7 @@ Global Program Instance orel_EqDec {A R} `{EqDec A R} : EqDec (option A) (orel R
 Next Obligation. constructor; auto. Qed.
 Next Obligation. constructor; auto. Qed.
 Next Obligation. inv H0; auto. Qed.
-Next Obligation. inv H1; eauto. eapply H0; eauto. Qed.
+Next Obligation. inv H0; eauto. eapply H1; eauto. Qed.
 Next Obligation. split. intros ?? (?&?); congruence. intros (?&?); congruence. Qed.
 Next Obligation. split. intros ?? (?&?); congruence. intros (?&?); congruence. Qed.
 

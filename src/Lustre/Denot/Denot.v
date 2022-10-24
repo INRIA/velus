@@ -674,6 +674,8 @@ Definition denot_exp_ (ins : list ident)
     exact (sunop (fun v => sem_unop u v ty)).
   - (* Ebinop *)
     apply CTE, (DS_const (err error_Ty)).
+  - (* Eextcall *)
+    apply CTE, (DS_const (err error_Ty)).
   - (* Efby *)
     rename l into e0s, l0 into es, l1 into anns.
     clear He.
@@ -707,14 +709,14 @@ Definition denot_exp_ (ins : list ident)
   - (* Ewhen *)
     rename l into es.
     destruct l0 as (tys,ck).
+    destruct p as (i,ty). clear He.
     destruct (Nat.eq_dec
                 (length tys)
                 (list_sum (List.map numstreams es))
              ) as [->|].
     2: apply CTE, (nprod_const (err error_Ty) _).
     assert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
-    { clear He.
-      induction es as [|a].
+    { induction es as [|a].
       + exact (CTE _ _ (DS_const (err error_Ty))).
       + exact ((nprod_app @2_ (denot_exp a)) IHes). }
     exact ((llift _ (swhenv e0) @2_ ss) (denot_var i)).
@@ -817,7 +819,7 @@ Lemma denot_exp_eq :
       (*     lift2 s (@arrow) _ (denot_exp e0 genv env bs) (denot_exp e genv env bs) *)
       (* | Epair _ _ e1 e2 => *)
       (*     PAIR_flat s _ _ (denot_exp e1 genv env bs) (denot_exp e2 genv env bs) *)
-      | Ewhen es x k (tys,_) =>
+      | Ewhen es (x,_) k (tys,_) =>
           let ss := denot_exps ins es envG envI bs env in
           match Nat.eq_dec (length tys) (list_sum (List.map numstreams es)) with
           | left eqn =>
@@ -881,6 +883,7 @@ Proof.
     now destruct E1, E2.
   - (* Ewhen *)
     destruct l0 as (tys,?).
+    destruct p as (i,?).
     unfold denot_exp, denot_exp_, denot_var at 1.
     (* unfold denot_exp, denot_exp_ at 1. *)
     destruct (Nat.eq_dec _ _) as [E|]; auto.

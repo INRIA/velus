@@ -767,7 +767,7 @@ Module Type CORRECTNESS
     rewrite when_spec in Hwhen.
     intros n. specialize (Hvar n). specialize (Hck n). specialize (Hwhen n).
     rewrite LCS.CIStr.CIStr.tr_Stream_ac in *.
-    repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in *. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
+    repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in *.
     destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]];
       rewrite Hv in *; setoid_rewrite Hx; inv Hck; auto;
       try setoid_rewrite Hy in H5; try congruence.
@@ -851,7 +851,7 @@ Module Type CORRECTNESS
     apply NICStr.sem_arhs_impl.
     intros ?. specialize (Hsem n). specialize (Hsck n).
     unfold CES.sem_arhs_instant.
-    repeat rewrite NICStr.CIStr.tr_Stream_nth in *. rewrite NICStr.CIStr.tr_Stream_nth, ac_nth in Hsck.
+    repeat rewrite NICStr.CIStr.tr_Stream_nth, ?ac_nth in *.
     destruct (s # n) eqn:Heq; econstructor; auto.
     1,2:setoid_rewrite Heq in Hsck; auto.
   Qed.

@@ -193,7 +193,7 @@ Module Type COINDTOINDEXED
       - inv Hsemck. apply IHck in H4.
         apply sem_var_impl in H7. specialize (H7 n).
         apply eqst_ntheq with (n:=n) in H9. rewrite ac_nth in H9.
-        repeat rewrite tr_Stream_nth in *. rewrite tr_Stream_nth in H7. rewrite <-H9 in *.
+        repeat rewrite tr_Stream_nth in *. rewrite <-H9 in *.
         apply enums_of_nth with (n:=n) in H10 as [(Hx&Hb)|[(Hx&Hb)|(?&Hx&?&Hb)]];
           rewrite Hx in *; rewrite Hb.
         + setoid_rewrite Hx in H4. constructor; auto.
