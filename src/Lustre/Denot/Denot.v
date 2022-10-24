@@ -1080,6 +1080,7 @@ Qed.
 Fixpoint bss (ins : list ident) : DS_prod SI -C-> DS bool :=
   match ins with
   | [] => CTE _ _ (DS_const false)
+  | [x] => AC @_ PROJ _ x
   | x :: ins => (ZIP orb @2_ (AC @_ PROJ _ x)) (bss ins)
   end.
 
