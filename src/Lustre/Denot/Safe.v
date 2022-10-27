@@ -212,7 +212,7 @@ Section SafeDS.
 End SafeDS.
 
 
-Section exp_safe.
+Section SDfuns_safe.
 
   Variable Γ : static_env.
   Variables
@@ -257,6 +257,7 @@ Section exp_safe.
       implicitly depends on the clock stream, and thus cannot
       exceed it. See [safe_exp] below.
    *)
+  (* c'est exactement le ClockedStreams(T,s) de Marc *)
   Definition cl_DS (ck : clock) (s : DS (sampl value)) :=
     AC s <= denot_clock ck.
 
@@ -823,7 +824,53 @@ Section exp_safe.
   Qed.
 
 (* TODO: renommer la section *)
-End exp_safe.
+End SDfuns_safe.
+
+(* TODO: bouger, renommer ? *)
+Section CONT.
+
+  (* version continue de denot_var *)
+  Definition denot_var_C ins envI x : DS_prod SI -C-> DS (sampl value) :=
+    if mem_ident x ins then CTE _ _ (envI x) else PROJ _ x.
+
+  Fact denot_var_eq :
+    forall ins x envI env,
+      denot_var ins envI env x = denot_var_C ins envI x env.
+  Proof.
+    intros.
+    unfold denot_var, denot_var_C.
+    cases.
+  Qed.
+
+  Fact AC_var_eq :
+    forall ins x envI env,
+      AC (denot_var ins envI env x) = (AC @_ denot_var_C ins envI x) env.
+  Proof.
+    intros.
+    unfold denot_var, denot_var_C.
+    cases.
+  Qed.
+
+  (* version continue de denot_clock *)
+  Fixpoint denot_clock_C ins envI bs ck : DS_prod SI -C-> DS bool :=
+    match ck with
+    | Cbase =>  CTE _ _ bs
+    | Con ck x (_, k) =>
+        let sx := denot_var_C ins envI x in
+        let cks := denot_clock_C ins envI bs ck in
+        (ZIP (sample k) @2_ sx) cks
+    end.
+
+  Fact denot_clock_eq :
+    forall ins envI bs env ck,
+      denot_clock ins envI bs env ck = denot_clock_C ins envI bs ck env.
+  Proof.
+    induction ck; simpl; cases.
+    now rewrite IHck, denot_var_eq.
+  Qed.
+
+End CONT.
+
 
 Section ÀDÉPLACER.
 
@@ -898,7 +945,7 @@ Section ÀDÉPLACER.
     now destruct (NoDup_app_In _ _ _ Hnd Hin).
   Qed.
 
-  Lemma Cl_senv :
+  Lemma HasClock_senv :
     forall (n : node) x ck,
       HasClock (senv_of_inout (n_in n)) x ck ->
       In (x,ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)).
@@ -1045,7 +1092,288 @@ Section ÀDÉPLACER.
       + apply IHl. clear - Hp. firstorder.
   Qed.
 
+  Lemma cons_is_cons :
+    forall D a (x t : DS D),
+      x == cons a t -> is_cons x.
+  Proof.
+    now intros * ->.
+  Qed.
+
+  Lemma Epsdecomp : forall D a (s x:DStr D), decomp a s (Eps x) -> decomp a s x.
+  Proof.
+    destruct 1 as [[|k] Hp].
+    inversion Hp.
+    now exists k.
+  Qed.
+
+  Lemma decomp_decomp :
+    forall A (s : DS A) x x' t t',
+      decomp x t s ->
+      decomp x' t' s ->
+      x = x' /\ t = t'.
+  Proof.
+    clear. intros * [k kth].
+    revert dependent s.
+    induction k; simpl; intros * Hp Hd; subst.
+    - apply decompCon_eq in Hd. now inv Hd.
+    - destruct s; simpl in *.
+      + apply Epsdecomp in Hd. eauto.
+      + apply decompCon_eq in Hd. inv Hd; eauto.
+  Qed.
+
+  Lemma zip_comm :
+    forall A B (f : A -> A -> B) xs ys,
+      (forall x y, f x y = f y x) ->
+      ZIP f xs ys == ZIP f ys xs.
+  Proof.
+    intros * Fcomm.
+    eapply DS_bisimulation_allin1 with
+      (R := fun U V => exists xs ys,
+                U == ZIP f xs ys
+                /\ V == ZIP f ys xs); eauto 4.
+    - intros * (?&?&?&?) Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      setoid_rewrite <- Eq2.
+      eauto.
+    - clear - Fcomm.
+      intros U V Hc (xs & ys & Hu & Hv).
+      assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
+      { rewrite Hu, Hv in Hc.
+        destruct Hc as [Hc|Hc]; apply zip_is_cons in Hc; tauto. }
+      apply is_cons_elim in Hcx as (vx & xs' & Hx).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hx, Hy, zip_eq in *.
+      setoid_rewrite Hu.
+      setoid_rewrite Hv.
+      split.
+      + autorewrite with cpodb; auto.
+      + exists xs',ys'. rewrite 2 rem_cons; auto.
+  Qed.
+
 End ÀDÉPLACER.
+
+
+Section SubClock.
+
+  (** CStr.sub_clock avec une notion de préfixe : le flot de gauche
+      est plus long que celui de droite
+
+    par ex :
+     T T T F T F T T   est sub_clock de
+     F T F F T ⊥
+
+     T T T F T F ⊥   n'est pas sub_clock de
+     F T F F T F T
+   *)
+  CoInductive sub_clock : relation (DS bool) :=
+  | ScEps : forall x y,
+      sub_clock x y -> sub_clock x (Eps y)
+  | ScCon : forall a b s t x,
+      sub_clock s t ->
+      decomp a s x ->
+      Bool.le b a ->
+      sub_clock x (cons b t).
+
+  Lemma le_sub_clock :
+    forall x y,
+      x <= y ->
+      sub_clock y x.
+  Proof.
+    cofix Cof; destruct x; intros * Hle.
+    - constructor. rewrite <- eqEps in Hle. now apply Cof.
+    - apply DSle_uncons in Hle as HH.
+      destruct HH as (t & Ht & Hle').
+      econstructor; eauto. reflexivity.
+  Qed.
+
+  Lemma sub_clock_decomp :
+    forall a s x y,
+      decomp a s x ->
+      sub_clock y x ->
+      exists b t, decomp b t y /\ Bool.le a b /\ sub_clock t s.
+  Proof.
+    clear.
+    intros a s x y Hdx.
+    destruct Hdx as (k & Hk).
+    revert dependent x. induction k; simpl in *; intros * Hk Hsub; subst.
+    - inv Hsub; eauto.
+    - destruct (IHk (pred x)); eauto.
+      destruct x; simpl; auto. now inv Hsub.
+  Qed.
+
+  Lemma sub_clock_trans : forall x y z,
+      sub_clock x y ->
+      sub_clock y z ->
+      sub_clock x z.
+  Proof.
+    clear. cofix Cof; intros * Sub1 Sub2.
+    destruct z; inv Sub2.
+    - constructor. eauto.
+    - eapply sub_clock_decomp in Sub1 as (c & t &?&?&?); eauto.
+      apply ScCon with c t; eauto using BoolOrder.le_trans.
+  Qed.
+
+  Lemma sub_clock_Oeq_compat :
+    forall x y z t,
+      x == y ->
+      z == t ->
+      sub_clock x z ->
+      sub_clock y t.
+  Proof.
+    intros * [Le1 Le2] [Le3 Le4] Hsub.
+    apply le_sub_clock in Le1, Le2, Le3, Le4.
+    eauto using sub_clock_trans.
+  Qed.
+
+  Global Add Parametric Morphism : sub_clock
+      with signature (@Oeq (DS bool)) ==> (@Oeq (DS bool)) ==> iff
+        as sub_clock_morph.
+  Proof.
+    intros * Eq1 ?? Eq2.
+    split; intro Hsub; eauto 2 using sub_clock_Oeq_compat.
+  Qed.
+
+  Lemma sub_clock_refl : forall s, sub_clock s s.
+  Proof.
+    clear. intro s.
+    remember s as t. rewrite Heqt at 1. apply Oeq_refl_eq in Heqt.
+    revert_all.
+    cofix Cof; intros; destruct t.
+    - constructor. apply Cof. now rewrite eqEps.
+    - apply symmetry, decomp_eq in Heqt as (?&?& Ht).
+      econstructor; eauto using BoolOrder.le_refl.
+  Qed.
+
+  Lemma sub_clock_antisym :
+    forall x y,
+      sub_clock x y ->
+      sub_clock y x ->
+      x == y.
+  Proof.
+    intros * Sub1 Sub2.
+    eapply DS_bisimulation_allin1
+      with (R := fun U V => sub_clock U V /\ sub_clock V U); auto.
+    - now intros * [] <- <-.
+    - clear.
+      intros x y Hc [Sub1 Sub2].
+      assert (exists u xs v ys, x == cons u xs /\ y == cons v ys) as HH. {
+        destruct Hc as [Hc|Hc]; apply is_cons_elim in Hc as (?&?& Heq);
+          rewrite Heq in *; [inv Sub2|inv Sub1].
+        all: do 4 esplit; split; eauto 1; apply decomp_eqCon; eauto.
+      }
+      destruct HH as (?&?&?&?& Eq1 & Eq2).
+      rewrite Eq1, Eq2, 2 first_cons, 2 rem_cons in *.
+      inv Sub1. inv Sub2.
+      apply decompCon_eq in H3, H6; inv H3; inv H6.
+      unfold Bool.le in *; cases.
+  Qed.
+
+  Lemma sub_clock_le :
+    forall bs xs ys,
+      xs <= ys ->
+      sub_clock bs ys ->
+      sub_clock bs xs.
+  Proof.
+    clear.
+    cofix Cof; intros * Le Sub.
+    destruct xs.
+    - constructor. rewrite <- eqEps in Le. eauto.
+    - inv Le.
+      apply decomp_eqCon in H1 as Hy.
+      rewrite Hy in Sub. inv Sub.
+      apply ScCon with a s; auto.
+      eapply Cof; eauto.
+  Qed.
+
+  Lemma sub_clock_sample :
+    forall bs cs xs k,
+      sub_clock bs cs ->
+      sub_clock bs (ZIP (sample k) xs cs).
+  Proof.
+    clear. intros * Hsub.
+    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
+    revert_all. cofix Cof; intros.
+    destruct zs.
+    - constructor. rewrite <- eqEps in Hz. eauto.
+    - assert (is_cons xs /\ is_cons cs) as [Hcx Hcc].
+      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
+      apply is_cons_elim in Hcc as (vc & cs' & Hc).
+      apply is_cons_elim in Hcx as (vx & xs' & Hx).
+      rewrite Hc, Hx, zip_eq in Hz.
+      apply Con_eq_simpl in Hz as [? Hz]; subst.
+      rewrite Hc in Hsub. inv Hsub.
+      econstructor; eauto.
+      unfold Bool.le, sample, andb, eqb in *. cases_eqn H.
+  Qed.
+
+  Lemma sub_clock_bs :
+    forall ins envI bs env ck,
+      sub_clock bs (denot_clock ins envI bs env ck).
+  Proof.
+    induction ck as [| ck Hck x (ty & k)]; simpl.
+    - apply sub_clock_refl.
+    - apply sub_clock_sample, Hck.
+  Qed.
+
+  Lemma sub_clock_orb :
+    forall bs xs ys,
+      sub_clock bs xs ->
+      sub_clock bs ys ->
+      sub_clock bs (ZIP orb xs ys).
+  Proof.
+    clear. intros * Sub1 Sub2.
+    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
+    revert_all. cofix Cof; intros.
+    destruct zs.
+    - constructor. rewrite <- eqEps in Hz.
+      apply Cof with xs ys; auto.
+    - assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
+      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
+      apply is_cons_elim in Hcx as (vx & xs' & Hx).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, Hx, zip_eq in Hz.
+      apply Con_eq_simpl in Hz as [? Hz]; subst.
+      rewrite Hx in Sub1. inv Sub1.
+      rewrite Hy in Sub2. inv Sub2.
+      match goal with
+        H1: decomp _ _ _, H2: decomp _ _ _ |- _ =>
+          destruct (decomp_decomp _ _ _ _ _ _ H1 H2); subst
+      end.
+      apply ScCon with a0 s0; auto.
+      + apply Cof with xs' ys'; auto.
+      + unfold Bool.le, orb in *. cases.
+  Qed.
+
+  Lemma orb_sub_clock :
+    forall bs xs ys,
+      sub_clock bs ys ->
+      xs <= bs ->
+      ZIP orb xs ys <= bs.
+  Proof.
+    clear. intros * Sub Le.
+    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
+    revert_all. cofix Cof; intros.
+    destruct zs.
+    - constructor. rewrite <- eqEps in Hz.
+      apply Cof with xs ys; auto.
+    - assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
+      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
+      apply is_cons_elim in Hcx as (vx & xs' & Hx).
+      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      rewrite Hy, Hx, zip_eq in Hz.
+      apply Con_eq_simpl in Hz as [? Hz]; subst.
+      rewrite Hx in Le. inv Le.
+      rewrite Hy in Sub. inv Sub.
+      match goal with
+        H1: decomp _ _ _, H2: decomp _ _ _ |- _ =>
+          destruct (decomp_decomp _ _ _ _ _ _ H1 H2); subst
+      end.
+      apply DSleCon with s.
+      + unfold Bool.le, orb in *. cases.
+      + apply Cof with xs' ys'; auto.
+  Qed.
+
+End SubClock.
 
 
 (* TODO: renommer la section *)
@@ -1082,24 +1410,22 @@ Section Exp_safe.
       bss = T ⊥
      *)
 
+  (* Par définition, l'horloge des flots des entrées d'un nœud peut dépasser
+     le bss des entrés. C'est pourquoi on quantifie sur une complétion bs de
+     bss, qui correspondra en fait à la dénotation de bck (cf. WellInstantiated)
+     dans le nœud appelant.
+   *)
   Hypothesis Hnode :
     forall (f : ident) (envI : DS_prod SI),
       match find_node f G with
       | Some n =>
           let ins := idents n.(n_in) in
           let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
-          (* TODO: c'est une tentative :
-             il existe une horloge de base qui complète bss  *)
           forall bs,
             bss ins envI <= bs ->
             safe_env Γ ins envI bs 0 ->
             safe_env Γ ins envI bs (envG f envI)
       | _ => True
-      end.
-
-  Ltac find_specialize_in H :=
-    repeat multimatch goal with
-      | [ v : _ |- _ ] => specialize (H v)
       end.
 
   Lemma basilus_nclockus :
@@ -1131,6 +1457,31 @@ Section Exp_safe.
     rewrite list_of_nprod_app.
     apply Forall2_app; auto using basilus_nclockus.
   Qed.
+
+
+  (* on peut séparer safe_env en trois propositions pour faciliter
+     le découpage des preuves *)
+  Definition ty_env Γ ins (envI env : DS_prod SI) :=
+    (forall x ty, HasType Γ x ty -> ty_DS ty (denot_var ins envI env x)).
+  Definition cl_env Γ ins envI bs env :=
+    (forall x ck, HasClock Γ x ck -> cl_DS ins envI bs env ck (denot_var ins envI env x)).
+  Definition ef_env Γ ins (envI env : DS_prod SI) :=
+    (forall x ty, HasType Γ x ty -> safe_DS (denot_var ins envI env x)).
+
+  Lemma safe_env_decompose :
+    forall Γ ins envI bs env,
+      (ty_env Γ ins envI env
+       /\ cl_env Γ ins envI bs env
+       /\ ef_env Γ ins envI env)
+      <-> safe_env Γ ins envI bs env.
+  Proof.
+    unfold safe_env, ty_env, cl_env, ef_env. split.
+    - intros * (Ty & Cl&  Ef ) * Hty Hcl. repeat split; eauto.
+    - intro H. repeat split; intros * HH; inv HH.
+      all: edestruct H as (?&?&?); eauto; econstructor; eauto.
+  Qed.
+
+  (** ** Traitement des instanciations de nœuds  *)
 
  (* voici comment utiliser nclocksof_sem *)
   Lemma Wi_match_ss :
@@ -1193,29 +1544,6 @@ Section Exp_safe.
       erewrite IHck, Wi_match_ss; simpl; eauto.
   Qed.
 
-
-  (* on peut séparer safe_env en trois propositions pour faciliter
-     le découpage des preuves *)
-  Definition ty_env Γ ins (envI env : DS_prod SI) :=
-    (forall x ty, HasType Γ x ty -> ty_DS ty (denot_var ins envI env x)).
-  Definition cl_env Γ ins envI bs env :=
-    (forall x ck, HasClock Γ x ck -> cl_DS ins envI bs env ck (denot_var ins envI env x)).
-  Definition ef_env Γ ins (envI env : DS_prod SI) :=
-    (forall x ty, HasType Γ x ty -> safe_DS (denot_var ins envI env x)).
-
-  Lemma safe_env_decompose :
-    forall Γ ins envI bs env,
-      (ty_env Γ ins envI env
-       /\ cl_env Γ ins envI bs env
-       /\ ef_env Γ ins envI env)
-      <-> safe_env Γ ins envI bs env.
-  Proof.
-    unfold safe_env, ty_env, cl_env, ef_env. split.
-    - intros * (Ty & Cl&  Ef ) * Hty Hcl. repeat split; eauto.
-    - intro H. repeat split; intros * HH; inv HH.
-      all: edestruct H as (?&?&?); eauto; econstructor; eauto.
-  Qed.
-
   Lemma cl_env_inst :
     forall ins envI bs env,
     forall bck sub,
@@ -1237,7 +1565,7 @@ Section Exp_safe.
     cases_eqn Hxin. 2: unfold AC; now rewrite MAP_map, map_bot.
     rewrite mem_ident_spec in Hxin.
     apply HasClock_app_1 in Hck; auto.
-    apply Cl_senv in Hck; auto. clear Hxin.
+    apply HasClock_senv in Hck; auto. clear Hxin.
 
     apply Forall2_map_1 with (f := fst) in Hcl as HH.
     apply Forall2_trans_ex with (1 := Hinst) in HH.
@@ -1439,359 +1767,7 @@ Section Exp_safe.
     all: repeat split; eauto using bool_velus_type; exact xH.
   Qed.
 
-
-(* TODO: si ça fonctionne, déplacer *)
-Section SubClock.
-    (* CStr.sub_clock avec une notion de préfixe : le flot de gauche *)
-  (*    est plus long que celui de droite *)
-  (* par ex, *)
-  (*    T T T F T F T T   est sub_clock de *)
-  (*    F T F F T ⊥ *)
-
-  (*    T T T F T F ⊥   n'est pas sub_clock de *)
-  (*    F T F F T F T *)
-  CoInductive sub_clock : relation (DS bool) :=
-  | ScEps : forall x y,
-      sub_clock x y -> sub_clock x (Eps y)
-  | ScCon : forall a b s t x,
-      sub_clock s t ->
-      decomp a s x ->
-      Bool.le b a ->
-      sub_clock x (cons b t).
-
-  Lemma le_sub_clock :
-    forall x y,
-      x <= y ->
-      sub_clock y x.
-  Proof.
-    cofix Cof; destruct x; intros * Hle.
-    - constructor. rewrite <- eqEps in Hle. now apply Cof.
-    - apply DSle_uncons in Hle as HH.
-      destruct HH as (t & Ht & Hle').
-      econstructor; eauto. reflexivity.
-  Qed.
-
-  (* inspiré de DSle_decomp *)
-  Lemma sub_clock_decomp :
-    forall a s x y,
-      decomp a s x -> sub_clock y x -> exists b t, decomp b t y /\ Bool.le a b /\ sub_clock t s.
-  Proof.
-    clear.
-    intros a s x y Hdx.
-    destruct Hdx as (k & Hk).
-    revert dependent x. induction k; simpl in *; intros * Hk Hsub; subst.
-    - inv Hsub; eauto.
-    - destruct (IHk (pred x)); eauto.
-      destruct x; simpl; auto. now inv Hsub.
-  Qed.
-
-  Lemma sub_clock_trans : forall x y z,
-      sub_clock x y ->
-      sub_clock y z ->
-      sub_clock x z.
-  Proof.
-    clear. cofix Cof; intros * Sub1 Sub2.
-    destruct z; inv Sub2.
-    - constructor. eauto.
-    - eapply sub_clock_decomp in Sub1 as (c & t &?&?&?); eauto.
-      apply ScCon with c t; eauto using BoolOrder.le_trans.
-  Qed.
-
-  Lemma sub_clock_Oeq_compat :
-    forall x y z t,
-      x == y ->
-      z == t ->
-      sub_clock x z ->
-      sub_clock y t.
-  Proof.
-    intros * [Le1 Le2] [Le3 Le4] Hsub.
-    apply le_sub_clock in Le1, Le2, Le3, Le4.
-    eauto using sub_clock_trans.
-  Qed.
-
-  Global Add Parametric Morphism : sub_clock
-      with signature (@Oeq (DS bool)) ==> (@Oeq (DS bool)) ==> iff
-        as sub_clock_morph.
-  Proof.
-    intros * Eq1 ?? Eq2.
-    split; intro Hsub; eauto 2 using sub_clock_Oeq_compat.
-  Qed.
-
-  Lemma sub_clock_antisym :
-    forall x y,
-      sub_clock x y ->
-      sub_clock y x ->
-      x == y.
-  Proof.
-    intros * Sub1 Sub2.
-    eapply DS_bisimulation_allin1
-      with (R := fun U V => sub_clock U V /\ sub_clock V U); auto.
-    - now intros * [] <- <-.
-    - clear.
-      intros x y Hc [Sub1 Sub2].
-      assert (exists u xs v ys, x == cons u xs /\ y == cons v ys) as HH. {
-        destruct Hc as [Hc|Hc]; apply is_cons_elim in Hc as (?&?& Heq);
-          rewrite Heq in *; [inv Sub2|inv Sub1].
-        all: do 4 esplit; split; eauto 1; apply decomp_eqCon; eauto.
-      }
-      destruct HH as (?&?&?&?& Eq1 & Eq2).
-      rewrite Eq1, Eq2, 2 first_cons, 2 rem_cons in *.
-      inv Sub1. inv Sub2.
-      apply decompCon_eq in H3, H6; inv H3; inv H6.
-      unfold Bool.le in *; cases.
-  Qed.
-
-  (* (* TODO: trouver une meilleure preuve avec les résultats sur sub_clock *) *)
-  (* (* TODO: inutile? *) *)
-  (* Lemma sub_clock_le : *)
-  (*   forall bs cs bs', *)
-  (*     bs <= bs' -> *)
-  (*     cs <= bs' -> *)
-  (*     sub_clock bs cs -> *)
-  (*     cs <= bs. *)
-  (* Proof. *)
-  (*   cofix Cof; intros * Hb Hc Hsub. *)
-  (*   destruct cs; inv Hc; inv Hsub. *)
-  (*   - constructor. eapply Cof; eauto. *)
-  (*   - assert (a = b); subst. *)
-  (*     { apply decomp_eqCon in H1, H5. *)
-  (*       rewrite H1, H5 in Hb. *)
-  (*       now apply Con_le_simpl in Hb as [? Hb]; subst. } *)
-  (*     econstructor; eauto. *)
-  (*     eapply Cof. 2,3: eauto. *)
-  (*     apply decomp_eqCon in H1, H5. *)
-  (*     rewrite H1, H5 in Hb. *)
-  (*     now apply Con_le_simpl in Hb as [? Hb]; subst. *)
-  (*     (* TODO: refaire preuve plus jolie *) *)
-  (* Qed. *)
-
-  (* TODO: inutile? *)
-  Lemma zip_decomp :
-    forall A B D (f : A -> B -> D) U V s S,
-      ZIP f U V == cons s S ->
-      exists u v U' V',
-        U == cons u U'
-        /\ V == cons v V'
-        /\ f u v = s
-        /\ ZIP f U' V' == S.
-  Proof.
-    intros * Hz.
-    assert (is_cons (ZIP f U V)) as Hc by (rewrite Hz; auto).
-    apply zip_is_cons in Hc as (Cu&Cv).
-    apply is_cons_elim in Cu as (?&?& Hu).
-    apply is_cons_elim in Cv as (?&?& Hv).
-    rewrite Hu, Hv, zip_eq in Hz.
-    apply Con_eq_simpl in Hz as (?&?).
-    eauto 8.
-  Qed.
-
-  (* TODO: inutile? *)
-  Lemma sample_le :
-    forall k x c,
-      Bool.le (sample k x c) c.
-  Proof.
-    unfold sample, Bool.le, andb.
-    intros.
-    cases_eqn HH.
-  Qed.
-
-  Import Cpo_streams_type.
-  Lemma sub_clock_refl : forall s, sub_clock s s.
-  Proof.
-    clear. intro s.
-    remember s as t. rewrite Heqt at 1. apply Oeq_refl_eq in Heqt.
-    revert_all.
-    cofix Cof; intros; destruct t.
-    - constructor. apply Cof. now rewrite eqEps.
-    - apply symmetry, decomp_eq in Heqt as (?&?& Ht).
-      econstructor; eauto using BoolOrder.le_refl.
-  Qed.
-
-  Lemma cons_is_cons :
-    forall D a (x t : DS D),
-      x == cons a t -> is_cons x.
-  Proof.
-    now intros * ->.
-  Qed.
-
-  Lemma sub_clock_sample :
-    forall bs cs xs k,
-      sub_clock bs cs ->
-      sub_clock bs (ZIP (sample k) xs cs).
-  Proof.
-    clear. intros * Hsub.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
-    revert_all. cofix Cof; intros.
-    destruct zs.
-    - constructor. rewrite <- eqEps in Hz. eauto.
-    - assert (is_cons xs /\ is_cons cs) as [Hcx Hcc].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcc as (vc & cs' & Hc).
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      rewrite Hc, Hx, zip_eq in Hz.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      rewrite Hc in Hsub. inv Hsub.
-      econstructor; eauto.
-      unfold Bool.le, sample, andb, eqb in *. cases_eqn H.
-  Qed.
-
-  Lemma sub_clock_bs :
-    forall ins envI bs env ck,
-      sub_clock bs (denot_clock ins envI bs env ck).
-  Proof.
-    induction ck as [| ck Hck x (ty & k)]; simpl.
-    - apply sub_clock_refl.
-    - apply sub_clock_sample, Hck.
-  Qed.
-
-  Lemma Epsdecomp : forall D a (s x:DStr D), decomp a s (Eps x) -> decomp a s x.
-  Proof.
-    destruct 1 as [[|k] Hp].
-    inversion Hp.
-    now exists k.
-  Qed.
-
-  Lemma decomp_decomp :
-    forall A (s : DS A) x x' t t',
-      decomp x t s ->
-      decomp x' t' s ->
-      x = x' /\ t = t'.
-  Proof.
-    clear. intros * [k kth].
-    revert dependent s.
-    induction k; simpl; intros * Hp Hd; subst.
-    - apply decompCon_eq in Hd. now inv Hd.
-    - destruct s; simpl in *.
-      + apply Epsdecomp in Hd. eauto.
-      + apply decompCon_eq in Hd. inv Hd; eauto.
-  Qed.
-
-  Lemma sub_clock_orb :
-    forall bs xs ys,
-      sub_clock bs xs ->
-      sub_clock bs ys ->
-      sub_clock bs (ZIP orb xs ys).
-  Proof.
-    clear. intros * Sub1 Sub2.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
-    revert_all. cofix Cof; intros.
-    destruct zs.
-    - constructor. rewrite <- eqEps in Hz.
-      apply Cof with xs ys; auto.
-    - assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, Hx, zip_eq in Hz.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      rewrite Hx in Sub1. inv Sub1.
-      rewrite Hy in Sub2. inv Sub2.
-      match goal with
-        H1: decomp _ _ _, H2: decomp _ _ _ |- _ =>
-          destruct (decomp_decomp _ _ _ _ _ _ H1 H2); subst
-      end.
-      apply ScCon with a0 s0; auto.
-      + apply Cof with xs' ys'; auto.
-      + unfold Bool.le, orb in *. cases.
-  Qed.
-
-  Lemma zip_comm :
-    forall A B (f : A -> A -> B) xs ys,
-      (forall x y, f x y = f y x) ->
-      ZIP f xs ys == ZIP f ys xs.
-  Proof.
-    intros * Fcomm.
-    eapply DS_bisimulation_allin1 with
-      (R := fun U V => exists xs ys,
-                U == ZIP f xs ys
-                /\ V == ZIP f ys xs); eauto 4.
-    - intros * (?&?&?&?) Eq1 Eq2.
-      setoid_rewrite <- Eq1.
-      setoid_rewrite <- Eq2.
-      eauto.
-    - clear - Fcomm.
-      intros U V Hc (xs & ys & Hu & Hv).
-      assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
-      { rewrite Hu, Hv in Hc.
-        destruct Hc as [Hc|Hc]; apply zip_is_cons in Hc; tauto. }
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hx, Hy, zip_eq in *.
-      setoid_rewrite Hu.
-      setoid_rewrite Hv.
-      split.
-      + autorewrite with cpodb; auto.
-      + exists xs',ys'. rewrite 2 rem_cons; auto.
-  Qed.
-
-  Lemma sub_clock_le :
-    forall bs xs ys,
-      sub_clock bs ys ->
-      xs <= bs ->
-      ZIP orb xs ys <= bs.
-  Proof.
-    clear. intros * Sub Le.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
-    revert_all. cofix Cof; intros.
-    destruct zs.
-    - constructor. rewrite <- eqEps in Hz.
-      apply Cof with xs ys; auto.
-    - assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, Hx, zip_eq in Hz.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      rewrite Hx in Le. inv Le.
-      rewrite Hy in Sub. inv Sub.
-      match goal with
-        H1: decomp _ _ _, H2: decomp _ _ _ |- _ =>
-          destruct (decomp_decomp _ _ _ _ _ _ H1 H2); subst
-      end.
-      apply DSleCon with s.
-      + unfold Bool.le, orb in *. cases.
-      + apply Cof with xs' ys'; auto.
-  Qed.
-
-  (* Lemma TTT2 : *)
-  (*   forall bs xs ys, *)
-  (*     ys <= bs -> *)
-  (*     sub_clock bs xs -> *)
-  (*     ZIP orb xs ys <= bs. *)
-  (*   apply DEBUG. *)
-  (* Qed. *)
-
-
-  (* TODO: virer, c'est pourri *)
-  Lemma sub_clock_orb'' :
-    forall bs cs,
-      sub_clock bs cs ->
-      ZIP orb bs cs <= bs.
-  Proof.
-    clear. intros * Hsub.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
-    revert_all. cofix Cof; intros.
-    destruct zs.
-    - constructor. rewrite <- eqEps in Hz. eapply Cof; eauto.
-    - assert (is_cons bs /\ is_cons cs) as [Hcb Hcc].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcc as (vc & cs' & Hc).
-      apply is_cons_elim in Hcb as (vb & bs' & Hb).
-      rewrite Hc, Hb, zip_eq in Hz.
-      rewrite Hc, Hb in Hsub. inv Hsub.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      apply decomp_eq in Hb as (bs'' & Hdec & Hb').
-      take (decomp _ _ _) and apply decompCon_eq in it; inv it.
-      take (sub_clock _ _) and rewrite Hb' in it.
-      assert (vb = vb || vc) as <- by (unfold orb, Bool.le in *; cases).
-      eapply DSleCon, Cof; eauto.
-  Qed.
-
-End SubClock.
-
-
-  Set Nested Proofs Allowed.
-  Axiom DEBUG: forall A, A.
+  (** ** Traitement de l'horloge de base *)
 
   Lemma bss_cons2 :
     forall x y l env,
@@ -1813,9 +1789,11 @@ End SubClock.
     - rewrite bss_cons2.
       apply sub_clock_orb.
       + apply Hsub. now constructor.
-      + apply IHl. congruence. { intros. apply Hsub. simpl in *. tauto. }
+      + apply IHl. congruence.
+        { intros. apply Hsub. simpl in *. tauto. }
   Qed.
 
+  (* ressemble à LClockedSemantics.sc_parent *)
   Lemma bss_sub :
     forall l env bs,
       (exists x, In x l /\ (AC (env x) <= bs)) ->
@@ -1828,36 +1806,19 @@ End SubClock.
     - destruct Hin as [|HH]; subst; auto; inv HH.
     - rewrite bss_cons2.
       destruct Hin as [|Hin]; subst.
-      + apply sub_clock_le; auto.
+      + apply orb_sub_clock; auto.
         apply sub_clock_bss. congruence.
         { intros. apply Hsub. simpl in *. tauto. }
       + rewrite zip_comm; auto using Bool.orb_comm.
-        apply sub_clock_le.
+        apply orb_sub_clock.
         * apply Hsub. simpl. tauto.
-        * apply IHl; eauto. { intros. apply Hsub. simpl in *. tauto. }
+        * apply IHl; eauto.
+          { intros. apply Hsub. simpl in *. tauto. }
   Qed.
 
-  (* TODO: renommer l'autre *)
-  Lemma sub_clock_le2 :
-    forall bs xs ys,
-      xs <= ys ->
-      sub_clock bs ys ->
-      sub_clock bs xs.
-  Proof.
-    clear.
-    cofix Cof; intros * Le Sub.
-    destruct xs.
-    - constructor. rewrite <- eqEps in Le. eauto.
-    - inv Le.
-      apply decomp_eqCon in H1 as Hy.
-      rewrite Hy in Sub. inv Sub.
-      apply ScCon with a s; auto.
-      eapply Cof; eauto.
-  Qed.
-
-  Lemma bss_le :
+  Lemma bss_le_bs :
     forall (n : node) env bs,
-      let Γ := (senv_of_inout (n_in n ++ n_out n)) in
+      let Γ := senv_of_inout (n_in n ++ n_out n) in
       wc_env (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) ->
       cl_env Γ (idents (n_in n)) env bs 0 ->
       bss (idents (n_in n)) env <= bs.
@@ -1880,10 +1841,15 @@ End SubClock.
       unfold cl_DS, denot_var in Hcl.
       rewrite (proj2 (mem_ident_spec _ _)) in Hcl.
       2: unfold idents; solve_In.
-      eapply sub_clock_le2.
+      eapply sub_clock_le.
       eapply Hcl, senv_HasClock; eauto using in_app_weak.
       apply sub_clock_bs.
   Qed.
+
+  Ltac find_specialize_in H :=
+    repeat multimatch goal with
+      | [ v : _ |- _ ] => specialize (H v)
+      end.
 
   Lemma safe_exp_ :
     forall Γ ins envI bs env,
@@ -2013,29 +1979,26 @@ End SubClock.
       eapply wc_find_node in WCG as (? & WCi & WCio &_); eauto.
       simpl; intros; cases; try congruence.
       2: unfold idents in *;
-         take (length a = _ ) and rewrite it, map_length in *; congruence.
+      take (length a = _ ) and rewrite it, map_length in *; congruence.
       unfold eq_rect_r, eq_rect, eq_sym. cases; simpl.
-      eapply safe_env_decompose in Hnode as (fTy & fCl & fEf).
-      3:{ (* instanciation de Hnode *)
+      (* on choisit bien [[bck]] comme majorant de bss *)
+      specialize (Hnode (denot_clock ins envI bs env bck)).
+      rewrite clocksof_nclocksof in Wc.
+      rewrite map_app in WCio.
+      apply safe_env_decompose in Hnode as (fTy & fCl & fEf).
+      + repeat split.
+        * eapply inst_ty_env; eauto.
+          now rewrite Forall2_map_1.
+        * eapply inst_cl_env; eauto.
+        * eapply inst_ef_env; eauto.
+      + eapply bss_le_bs, cl_env_inst; eauto.
+      + (* instanciation de Hnode *)
         apply safe_env_decompose. repeat split.
-        + eapply ty_env_inst; eauto.
-        + rewrite clocksof_nclocksof in *.
-          eapply cl_env_inst; eauto.
-        + clear - Sf H11.
+        * eapply ty_env_inst; eauto.
+        * eapply cl_env_inst; eauto.
+        * clear - Sf H11.
           revert dependent ss. rewrite H11.
-          apply ef_env_inst; eauto. }
-      2:{ (* on a pris bs := denot_clock bs, en fait ! *)
-        rewrite clocksof_nclocksof in *.
-        eapply bss_le, cl_env_inst; eauto.
-        (* TODO: le faire joliment *)
-        assert False.
-      }
-      repeat split.
-      + eapply inst_ty_env; eauto.
-        now rewrite Forall2_map_1.
-      + rewrite map_app, clocksof_nclocksof in *.
-        eapply inst_cl_env; eauto.
-      + eapply inst_ef_env; eauto.
+          apply ef_env_inst; eauto.
   Qed.
 
   Corollary safe_exp :
@@ -2091,6 +2054,145 @@ End SubClock.
     edestruct safe_exps_ as (?&?&?); eauto.
   Qed.
 
+  (* TODO: move, utiliser peut-être ailleurs *)
+  Lemma denot_clock_ins :
+    forall (ckins : list (ident * (type * clock * ident))) envI bs env1 env2 ck,
+      let ins := List.map fst ckins in
+      wc_clock (List.map (fun '(x, (_, ck, _)) => (x, ck)) ckins) ck ->
+      denot_clock ins envI bs env1 ck = denot_clock ins envI bs env2 ck.
+  Proof.
+    intros * Wck.
+    induction ck as [| ??? []]; simpl; auto.
+    inv Wck.
+    rewrite IHck; auto.
+    unfold denot_var.
+    cases_eqn Hxin.
+    destruct (mem_ident_false _ _ Hxin).
+    subst ins. solve_In.
+  Qed.
+
+  (* TODO: move *)
+  Lemma out_Beq :
+    forall (n : node) xs es x ty,
+      n.(n_block) = Beq (xs, es) ->
+      HasType (senv_of_inout (n_in n ++ n_out n)) x ty ->
+      In x xs \/ InMembers x (n_in n).
+  Proof.
+    intros * Heq Hty.
+    apply HasType_IsVar, IsVar_In in Hty.
+    rewrite map_fst_senv_of_inout, map_app, in_app_iff in Hty.
+    destruct Hty as [Hin | Hout].
+    - apply fst_InMembers in Hin; auto.
+    - destruct (n_defd n) as (?& Hvd & Hperm).
+      rewrite Heq in Hvd. inv Hvd.
+      rewrite Hperm; auto.
+  Qed.
+
+  (* TODO: move *)
+  Lemma mem_nth_error :
+    forall l x k,
+      mem_nth l x = Some k ->
+      nth_error l k = Some x.
+  Proof.
+    induction l; simpl; intros * Hm.
+    congruence.
+    cases.
+    destruct k; simpl; apply option_map_inv_Some in Hm as (?&?& HH); inv HH.
+    auto.
+  Qed.
+
+  (* TODO: move *)
+  Lemma HasType_det :
+    forall Γ x ty1 ty2,
+      NoDupMembers Γ ->
+      HasType Γ x ty1 ->
+      HasType Γ x ty2 ->
+      ty1 = ty2.
+  Proof.
+    intros * ND C1 C2; inv C1; inv C2.
+    eapply NoDupMembers_det with (t := e) in ND; eauto.
+    now subst.
+  Qed.
+
+  (* TODO: move *)
+  Lemma HasClock_det :
+    forall Γ x ck1 ck2,
+      NoDupMembers Γ ->
+      HasClock Γ x ck1 ->
+      HasClock Γ x ck2 ->
+      ck1 = ck2.
+  Proof.
+    intros * ND C1 C2; inv C1; inv C2.
+    eapply NoDupMembers_det with (t := e) in ND; eauto.
+    now subst.
+  Qed.
+
+  Lemma safe_node :
+    forall n envI env,
+      let ins := List.map fst n.(n_in) in
+      let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+      let bs := bss (idents (n_in n)) envI in
+      (* TODO : si on est dans le cadre d'un FIXP, ça devrait tenir : *)
+      env <= denot_node G n envG envI env ->
+      restr_node n ->
+      wc_node G n ->
+      wt_node G n ->
+      safe_env Γ ins envI bs env ->
+      safe_env Γ ins envI bs (denot_node G n envG envI env).
+  Proof.
+    intros * Hle Hr (?&?& Wcb) (?&?&?& Wtb) Hins.
+    rewrite denot_node_eq in *.
+    inversion Hr as [xs es Hrs Heq]; simpl.
+    intros x ty ck Hty Hck.
+    destruct (Hins x ty ck Hty Hck) as (?& Clx &?).
+    unfold denot_var in *.
+    cases_eqn Hxin.
+    - (* x est une entrée *)
+      rewrite mem_ident_spec in Hxin.
+      repeat split; auto.
+      subst ins Γ. unfold cl_DS in *.
+      apply HasClock_app_1, HasClock_senv in Hck; auto.
+      clear Hxin.
+      erewrite denot_clock_ins; eauto.
+      apply wc_env_var with x; auto; solve_In.
+    - (* x est calculé *)
+      rewrite <- Heq in *. inv Wtb. inv Wcb.
+      take (_ /\ _) and destruct it as [Tys Tyxs].
+      assert (length xs = list_sum (List.map numstreams es)) as Hl.
+      { rewrite <- annots_numstreams, <- length_typesof_annots.
+        eauto using Forall2_length. }
+      assert (In x xs) as Hxs.
+      { eapply out_Beq in Hty as [|Hin]; eauto.
+        apply fst_InMembers in Hin.
+        subst ins. exfalso. eapply mem_ident_false; eauto. }
+      apply mem_ident_spec, mem_ident_nth in Hxs as [k kth].
+      rewrite denot_equation_eq, kth.
+      cases_eqn HH; subst ins; unfold idents in *; try congruence.
+      take (wc_equation _ _ _) and inv it.
+      { (* cas de merde *) admit. }
+      eapply safe_exps_ in Hrs as (esTy & esCl & esSf); eauto; try tauto.
+      2: admit. (* TODO *)
+      repeat split.
+      + (* ty_DS *)
+        apply mem_nth_error in kth.
+        eapply nth_error_Forall2 in Tyxs as (?&?& Hty'); eauto.
+        eapply nth_error_Forall2 in esTy as (?& Hn &?); eauto.
+        subst bs; apply list_of_nprod_nth_error in Hn as ->.
+        eapply HasType_det in Hty' as ->; auto using NoDup_senv.
+      + (* cl_DS *)
+        apply mem_nth_error in kth.
+        eapply nth_error_Forall2 in H9 as (?&?& Hcl'); eauto.
+        eapply nth_error_Forall2 in esCl as (?& Hn & Cl); eauto.
+        subst bs; apply list_of_nprod_nth_error in Hn as ->.
+        eapply HasClock_det in Hcl' as ->; auto using NoDup_senv.
+        clear - Cl Hle.
+        unfold cl_DS in *. rewrite denot_clock_eq in *. eauto 3.
+      + (* safe_DS *)
+        apply mem_nth_error in kth.
+        apply forall_nprod_k' with (k := k) in esSf; auto.
+        rewrite <- e. apply nth_error_Some; intro; congruence.
+  Qed.
+
 End Exp_safe.
 
 
@@ -2104,46 +2206,6 @@ Section Admissibility.
       continues de l'environnement : DS_prod SI -C-> DS ...
       TODO: ça va peut-être changer avec l'environnement des entrées ???
    *)
-
-  (* version continue de denot_var *)
-  Definition denot_var_C ins envI x : DS_prod SI -C-> DS (sampl value) :=
-    if mem_ident x ins then CTE _ _ (envI x) else PROJ _ x.
-
-  Fact denot_var_eq :
-    forall ins x envI env,
-      denot_var ins envI env x = denot_var_C ins envI x env.
-  Proof.
-    intros.
-    unfold denot_var, denot_var_C.
-    cases.
-  Qed.
-
-  Fact AC_var_eq :
-    forall ins x envI env,
-      AC (denot_var ins envI env x) = (AC @_ denot_var_C ins envI x) env.
-  Proof.
-    intros.
-    unfold denot_var, denot_var_C.
-    cases.
-  Qed.
-
-  (* version continue de denot_clock *)
-  Fixpoint denot_clock_C ins envI bs ck : DS_prod SI -C-> DS bool :=
-    match ck with
-    | Cbase =>  CTE _ _ bs
-    | Con ck x (_, k) =>
-        let sx := denot_var_C ins envI x in
-        let cks := denot_clock_C ins envI bs ck in
-        (ZIP (sample k) @2_ sx) cks
-    end.
-
-  Fact denot_clock_eq :
-    forall ins envI bs env ck,
-      denot_clock ins envI bs env ck = denot_clock_C ins envI bs ck env.
-  Proof.
-    induction ck; simpl; cases.
-    now rewrite IHck, denot_var_eq.
-  Qed.
 
   (* TODO: move? *)
   Lemma and_impl :
@@ -2298,68 +2360,140 @@ Qed.
 
 (******* TEST *)
 
+(* TODO: move, comprendre pourquoi on ne peut pas faire les deux en un ?????? *)
+Global Add Parametric Morphism ins : (denot_var ins)
+    with signature @Oeq (DS_prod SI) ==> @eq (DS_prod SI) ==> @eq ident ==> @Oeq (DS (sampl value))
+      as denot_var_morph1.
+Proof.
+  unfold denot_var.
+  intros; cases.
+Qed.
+Global Add Parametric Morphism ins : (denot_var ins)
+    with signature @eq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> @eq ident ==> @Oeq (DS (sampl value))
+      as denot_var_morph2.
+Proof.
+  unfold denot_var.
+  intros; cases.
+Qed.
+Global Add Parametric Morphism ins : (denot_clock ins)
+    with signature @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==> @Oeq (DS_prod SI) ==> @eq clock ==> @Oeq (DS bool)
+      as denot_clock_morph.
+Proof.
+  intros * Eq1 * Eq2 * Eq3 ck.
+  induction ck as [|??? []]; simpl; auto.
+  now rewrite IHck, Eq1, Eq3.
+Qed.
+
+Global Add Parametric Morphism Γ ins : (safe_env Γ ins)
+    with signature @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==> @Oeq (DS_prod SI) ==> iff
+      as safe_env_morph.
+Proof.
+  unfold safe_env, ty_DS, cl_DS, DSForall_pres.
+  intros * Eq1 * Eq2 * Eq3.
+  split; intros Hdec * Hty Hck; destruct (Hdec _ _ _ Hty Hck) as (?&?&?).
+  - rewrite <- Eq1, <- Eq3, <- Eq2; auto.
+  - rewrite Eq1, Eq3, Eq2; auto.
+Qed.
+
+  Lemma denot_node_cons :
+    forall n nd nds tys exts,
+      ~ Is_node_in_block nd.(n_name) n.(n_block) ->
+      denot_node (Global tys exts nds) n
+      == denot_node (Global tys exts (nd :: nds)) n.
+  Proof.
+    (* TODO: voir InftyProof *)
+  Admitted.
+  Lemma wt_global_cons :
+    forall tys (nd : node) nds exts,
+      wt_global (Global tys exts (nd :: nds)) ->
+      wt_global (Global tys exts nds).
+  Proof.
+    (* TODO: voir InftyProof *)
+  Admitted.
+  Lemma Ordered_nodes_cons :
+    forall tys (nd : node) nds exts,
+      Ordered_nodes (Global tys exts (nd :: nds)) ->
+      Ordered_nodes (Global tys exts nds).
+  Proof.
+    (* TODO: voir InftyProof *)
+  Admitted.
+  Lemma find_node_uncons :
+    forall f tys (nd ndf : node) nds exts,
+      wt_global (Global tys exts (nd :: nds)) ->
+      find_node f (Global tys exts nds) = Some ndf ->
+      find_node f (Global tys exts (nd :: nds)) = Some ndf.
+  Proof.
+    (* TODO: voir InftyProof *)
+  Admitted.
+  Lemma wc_global_cons :
+    forall tys (nd : node) nds exts,
+      wc_global (Global tys exts (nd :: nds)) ->
+      wc_global (Global tys exts nds).
+  Proof.
+    inversion 1; auto.
+  Qed.
+
 Theorem safe_prog :
   forall (G : global),
     wt_global G ->
     wc_global G ->
     (* TODO: quel op_correct ? *)
-    forall f n envI,
+    forall f n envI bs,
       find_node f G = Some n ->
-      safe_ins n envI ->
-      safe_outs n envI (denot_global G f envI).
+      let ins := List.map fst n.(n_in) in
+      let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+      safe_env Γ ins envI bs 0 ->
+      safe_env Γ ins envI bs (denot_global G f envI).
 Proof.
-  intros * Wtg Wcg * Hfind Hins.
+  intros * Wtg Wcg * Hfind ?? Hins.
   assert (Ordered_nodes G) as Hord.
   now apply wl_global_Ordered_nodes, wt_global_wl_global.
   unfold denot_global.
   rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hfind.
-
-
   remember (FIXP (Dprodi FI) (denot_global_ G)) as envG eqn:HF.
-    (* pour réussir l'induction sur (nodes G), on doit relâcher la
+  (* pour réussir l'induction sur (nodes G), on doit relâcher la
          contrainte sur envG : en gardant la définition HF actuelle, on
          ne peut pas espérer réécrire denot_node2_cons sous le point fixe *)
-    assert (forall f nd envI,
-               find_node f G = Some nd ->
-               envG f envI == FIXP _ (denot_node2 G nd envG envI)) as HenvG.
-    { intros * Hf; subst.
-      now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
-    (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
-    clear HF.
-    (* il faut généraliser à tous les nœuds *)
-    revert Hins HenvG Hfind. revert envI envG n f x nd.
-    destruct G as [tys nds]; simpl in *.
-    induction nds as [|a nds]; simpl; intros. inv Hfind.
-    inv Hcaus.
-    destruct (ident_eq_dec (n_name a) f); subst.
-    + (* cas intéressant, où on utilise denot2_n_all_vars *)
-      rewrite find_node_now in Hfind; inv Hfind; auto.
-      rewrite <- denot_node2_cons;
-        eauto using find_node_not_Is_node_in, find_node_now.
-      apply denot2_n_all_vars; auto using wt_global_uncons.
-      intros m f envI2 Hin HI2 y.
-      apply name_find_node in Hin as (ndf & Hfind).
-      eapply find_node_uncons with (nd := nd) in Hfind as ?; auto.
-        rewrite HenvG, <- denot_node2_cons; eauto using find_node_later_not_Is_node_in.
-        apply IHnds with (f := f); auto.
-        eauto using wt_global_cons.
-        eauto using Ordered_nodes_cons.
-        (* montrons que HenvG tient toujours *)
-        intros f' ndf' envI' Hfind'.
-        eapply find_node_uncons with (nd := nd) in Hfind' as ?; auto.
-        rewrite HenvG, <- denot_node2_cons; eauto using find_node_later_not_Is_node_in.
-      + rewrite find_node_other in Hfind; auto.
-        rewrite <- denot_node2_cons; eauto using find_node_later_not_Is_node_in.
-        apply IHnds with (f := f); auto.
-        eauto using wt_global_cons.
-        eauto using Ordered_nodes_cons.
-        (* montrons que HenvG tient toujours *)
-        intros f' ndf' envI' Hfind'.
-        eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
-        rewrite HenvG, <- denot_node2_cons; eauto using find_node_later_not_Is_node_in.
-    - unfold P_var, env_err_ty.
-      cbn; eauto using is_consn_DS_const.
+  assert (forall f nd envI,
+             find_node f G = Some nd ->
+             envG f envI == FIXP _ (denot_node G nd envG envI)) as HenvG.
+  { intros * Hf; subst.
+    now rewrite <- PROJ_simpl, FIXP_eq, PROJ_simpl, denot_global_eq, Hf at 1. }
+  (* maintenant HenvG contient tout ce qu'on doit savoir sur envG *)
+  clear HF.
+  (* il faut généraliser à tous les nœuds *)
+  revert Γ ins Hins HenvG Hfind. revert envI envG n f.
+  destruct G as [tys exts nds]; simpl in *.
+  induction nds as [|a nds]; simpl; intros. inv Hfind.
+  destruct (ident_eq_dec (n_name a) f); subst.
+  + (* cas intéressant *)
+    rewrite find_node_now in Hfind; inv Hfind; auto.
+    rewrite <- denot_node_cons;
+      eauto using find_node_not_Is_node_in, find_node_now.
+    Check safe_exp.
 
+  (* apply denot_n_all_vars; auto using wt_global_uncons. *)
+    (* intros m f envI2 Hin HI2 y. *)
+    (* apply name_find_node in Hin as (ndf & Hfind). *)
+    (* eapply find_node_uncons with (nd := nd) in Hfind as ?; auto. *)
+    (* rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in. *)
+    (* apply IHnds with (f := f); auto. *)
+    (* eauto using wt_global_cons. *)
+    (* eauto using Ordered_nodes_cons. *)
+    (* (* montrons que HenvG tient toujours *) *)
+    (* intros f' ndf' envI' Hfind'. *)
+    (* eapply find_node_uncons with (nd := nd) in Hfind' as ?; auto. *)
+    (* rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in. *)
+  + rewrite find_node_other in Hfind; auto.
+    rewrite <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+    apply IHnds with (f := f); auto.
+    eauto using wt_global_cons.
+    eauto using wc_global_cons.
+    eauto using Ordered_nodes_cons.
+    (* montrons que HenvG tient toujours *)
+    intros f' ndf' envI' Hfind'.
+    eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
+    rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
 Qed.
 (* ////// TEST  *)
 
