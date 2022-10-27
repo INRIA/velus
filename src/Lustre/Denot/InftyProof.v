@@ -1106,7 +1106,7 @@ Module Type LDENOTINF
       induction nds as [|a nds]; simpl; intros. inv Hfind.
       inv Hcaus.
       destruct (ident_eq_dec (n_name a) f); subst.
-      + (* cas intéressant, où on utilise denot2_n_all_vars *)
+      + (* cas intéressant, où on utilise denot_n_all_vars *)
         rewrite find_node_now in Hfind; inv Hfind; auto.
         rewrite <- denot_node_cons;
           eauto using find_node_not_Is_node_in, find_node_now.
