@@ -142,6 +142,9 @@ module PrintFun
     let print_cks =
       pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_clock
 
+    let print_sep_list print =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p "@ ") print
+
     let print_comma_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p ",@;") p
 
@@ -185,21 +188,19 @@ module PrintFun
       | L.Earrow (e0s, es, _) ->
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Ewhen (e, (x, tx), c, _) ->
-        fprintf p "%a when (%a=%a)"
-          (exp_list prec') e
+        fprintf p "%a when %a(%a)"
           print_ident x
+          (exp_list prec') e
           PrintOps.print_enumtag (c, tx)
       | L.Emerge ((id, ty), es, _) ->
-        fprintf p "@[<v>merge %a%a@]"
+        fprintf p "@[<v>merge %a @[<v>%a@]@]"
           print_ident id
-          (PrintOps.print_branches exp_enclosed_list)
-          (List.map (fun (i, ce) -> ((fun p -> PrintOps.print_enumtag p (i, ty)), Some ce)) es, None)
+          branches (ty, es, None)
       | L.Ecase (e, es, d, _) ->
         let ty = List.hd (L.typeof e) in
-        fprintf p "@[<v>case %a of%a@]"
+        fprintf p "@[<v>case %a of @[<v>%a@]@]"
           (exp 16) e
-          (PrintOps.print_branches exp_enclosed_list)
-          (List.map (fun (i, ce) -> ((fun p -> PrintOps.print_enumtag p (i, ty)), Some ce)) es, d)
+          branches (ty, es, d)
       | L.Eapp (f, es, [], anns) ->
         if !print_appclocks
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
@@ -236,6 +237,17 @@ module PrintFun
       fprintf p "@[<hv 0>%a@]"
         (print_comma_list (exp 0)) es
 
+    and branches p (ty, brs, d) =
+      print_sep_list (fun p (k, es) ->
+          fprintf p "(%a => %a)"
+            PrintOps.print_enumtag (k, ty)
+            exp_enclosed_list es) p brs;
+      match d with
+      | None -> ()
+      | Some es ->
+        fprintf p "@ (_ => %a)"
+          exp_enclosed_list es
+
     let print_exp = exp 0
 
     let print_clock_decl p ck =
@@ -244,9 +256,9 @@ module PrintFun
       | L.Con (ck', x, (ty, c)) ->
         if !print_fullclocks
         then fprintf p " :: @[<hov 3>%a@]" print_clock ck
-        else fprintf p " when (%a=%a)"
-            print_ident x
+        else fprintf p " when %a(%a)"
             PrintOps.print_enumtag (c, ty)
+            print_ident x
 
     let print_decl p (id, ((ty, ck), _)) =
       fprintf p "%a@ : %a%a"

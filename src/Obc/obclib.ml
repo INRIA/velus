@@ -244,8 +244,8 @@ sig
         fprintf p
           "@[<v 2>switch %a {%a@]@;}"
           print_expr e
-          (Ops.print_branches print_stmt)
-          (List.mapi (fun i e -> ((fun p -> print_branch_tag ty i p), e)) ss,
+          print_branches
+          (ty, ss,
            if List.exists Option.is_none ss then Some default else None)
       | Obc.Comp (s1, s2) ->
           fprintf p "%a;@ %a" print_stmt s1 print_stmt s2
@@ -272,6 +272,22 @@ sig
           (print_comma_list print_expr) es
       | Obc.Skip ->
           fprintf p "skip"
+
+    and print_branches p (ty, brs, default) =
+      List.iteri (fun i o ->
+          match o with
+          | Some b ->
+            fprintf p "@;| %t => @[<hv 0>%a@]"
+              (print_branch_tag ty i)
+              print_stmt b
+          | None ->
+            fprintf p "@;| %t => _"
+              (print_branch_tag ty i)
+        ) brs;
+      match default with
+      | Some d ->
+        fprintf p "@;| default => @[<hv 0>%a@]" print_stmt d
+      | _ -> ()
 
     let print_semicol_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p ";@ ") p
