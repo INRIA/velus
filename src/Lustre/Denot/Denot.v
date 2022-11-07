@@ -826,7 +826,7 @@ Lemma denot_exp_eq :
               eq_rect_r nprod (llift _ (swhenv k) ss (denot_var ins envI env x)) eqn
           | _ => nprod_const (err error_Ty) _
           end
-      | Eapp f es er an =>
+      | Eapp f es _ an =>
           let ss := denot_exps ins es envG envI bs env in
           match find_node f G with
           | Some n =>
