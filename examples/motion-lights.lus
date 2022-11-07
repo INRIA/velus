@@ -1,0 +1,37 @@
+(** Motion controlled lights
+
+    From: https://www.embedded.com/programming-embedded-systems-the-easy-way-with-state-machines/
+
+    Assumes that the code is running at 100Hz
+*)
+
+node timer_s(max : int) returns (timeout : bool)
+var i : int;
+let
+    i = 0 fby (i + 1);
+    timeout = (i / 100) > max;
+tel
+
+node lightswitch(button, motion : bool) returns (light : bool)
+let
+    automaton initially Off
+    state Off do
+        light = false
+        unless button then Timer
+    state Timer do
+        light = true
+        unless button then Motion_Automatic
+             | timer_s(30) then Off
+    state Motion_Automatic do
+        automaton initially Motion
+        state Motion do
+            light = true
+            until motion then Motion
+                | timer_s(30) then No_Motion
+        state No_Motion do
+            light = false
+            until motion then Motion
+        end
+        unless button then Timer
+    end
+tel
