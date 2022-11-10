@@ -773,6 +773,25 @@ Proof.
   trivial.
 Qed.
 
+Lemma denot_exps_nil :
+  forall ins envG envI bs env,
+    denot_exps ins [] envG envI bs env = DS_const (err error_Ty).
+Proof.
+  trivial.
+Qed.
+
+Lemma denot_exps_1 :
+  forall ins e envG envI bs env,
+    list_of_nprod (denot_exps ins [e] envG envI bs env)
+    = list_of_nprod (denot_exp ins e envG envI bs env).
+Proof.
+  intros.
+  rewrite denot_exps_eq.
+  setoid_rewrite list_of_nprod_app.
+  simpl.
+  now rewrite app_nil_r.
+Qed.
+
 (* ?????? *)
 Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
   fun n m =>
