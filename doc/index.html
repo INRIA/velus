@@ -1,0 +1,247 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title>PLDI 2023: cross references into the Coq sources</title>
+<meta HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+
+<style type="text/css">
+body {
+  color: black; background: white;
+  margin-left: 5%; margin-right: 5%;
+}
+h2 { margin-left: -5%;}
+h3 { margin-left: -3%; }
+h1,h2,h3 { font-family: sans-serif; }
+hr { margin-left: -5%; margin-right:-5%; }
+a:visited {color : #416DFF; text-decoration : none; font-weight : bold}
+a:link {color : #416DFF; text-decoration : none; font-weight : bold}
+a:hover {color : Red; text-decoration : underline; }
+a:active {color : Red; text-decoration : underline; }
+</style>
+
+</head>
+<body>
+
+<h2>References to the Coq development, by section</h2>
+
+<h3>1 Introduction</h3>
+
+<!-- The example given in the introduction can be found at <code>examples/rer.lus</code>.<br/> -->
+<!-- It can be normalized using <code>./velus -dnlustre rer.lus</code>. -->
+<!-- The normalized code will be written to <code>examples/rer.n.lus</code>. -->
+<!-- TODO -->
+
+<h3>2.1 Abstract Syntax</h3>
+<ul>
+    <li> <a href="html/Velus.Lustre.LSyntax.html">LSyntax</a>: Lustre syntax</li>
+    <li> <a href="html/Velus.Lustre.LSyntax.html#LSYNTAX.exp">exp</a>: expressions</li>
+    <li> <a href="html/Velus.Lustre.LSyntax.html#LSYNTAX.block">block</a>: blocks</li>
+    <li> <a href="html/Velus.Lustre.LSyntax.html#LSYNTAX.node">node</a>: nodes</li>
+    <li> <a href="html/Velus.Lustre.LSyntax.html#LSYNTAX.global">global</a>: programs</li>
+</ul>
+
+<h3>2.2 Synchronous Core</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.LSemantics.html">LSemantics</a>: Lustre semantic rules</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_node">sem_node</a>: Semantics of a Lustre node</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_equation">sem_equation</a>: Semantics of a Lustre equation</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Svar">Svar</a>: Semantics of a Lustre variable</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sconst">Sconst</a>: Semantics of a Lustre constant</li>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.const">const</a>: Sampled constant stream</li>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.when">when</a> coinductive operator</li>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.merge">merge</a> coinductive operator</li>
+  <li> <a href="html/Velus.Lustre.LClocking.html#LCLOCKING.wc_Ewhen">wc_Ewhen</a>: Clock-typing rule for a Lustre when</li>
+  <li> <a href="html/Velus.Lustre.LClocking.html#LCLOCKING.wc_Emerge">wc_Emerge</a>: Clock-typing rule for a Lustre merge</li>
+  <li> <a href="html/Velus.Lustre.ClockSwitch.CSCorrectness.html#CSCORRECTNESS.merge_when">merge_when</a>: correspondence of when and merge</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby">fby</a> coinductive operator</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.fby1">fby1</a> coinductive operator</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sfby">Sfby</a>: Semantics of a Lustre fby</li>
+</ul>
+
+<h3>2.3 Switch Blocks</h3>
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.when_hist">when_hist</a>: when lifted to histories</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sswitch">Sswitch</a>: Semantics of a switch block</li>
+  <li> <a href="html/Velus.Lustre.LClocking.html#LCLOCKING.wc_Bswitch">wc_Bswitch</a>: Clock-typing rule for a switch block</li>
+</ul>
+
+<h3>2.4 Local Scopes and Shared Variables</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sscope">Sscope</a>: Semantics of a local scope</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Slast">Slast</a>: Semantics of a last expression</li>
+  <li> <a href="html/Velus.FunctionalEnvironment.html#FEnv.union">union</a> operator on histories</li>
+</ul>
+
+<h3>2.5 Reset Blocks</h3>
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.mask">mask</a> coinductive operator</li>
+  <!-- <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.mask_hist">mask_hist</a>: mask lifted on histories.</li> -->
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.Sreset">Sreset</a>: Semantics of a reset block</li>
+</ul>
+
+<h3>2.6 State Machines</h3>
+<ul>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.select">select</a> coinductive operator</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.SautoWeak">SautoWeak</a>: Semantics of a state machine with weak transitions</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.SautoStrong">SautoStrong</a>: Semantics of a state machine with strong transitions</li>
+  <li> <a href="html/Velus.Lustre.LSemantics.html#LSEMANTICS.sem_transitions">sem_transitions</a>: Semantics of state machines transitions and initializations</li>
+  <li> <a href="html/Velus.CoindStreams.html#COINDSTREAMS.choose_first">choose_first</a> (first-of) coinductive operator</li>
+</ul>
+
+<h3>3.1 Dependency Analysis and Instrumented Semantic Model</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.LClockedSemantics.html">LClockedSemantics</a>: Instrumented semantic model</li>
+  <li> <a href="html/Velus.Lustre.LClockedSemantics.html#LCLOCKEDSEMANTICS.sc_vars">sc_vars</a>: Clock correctness property</li>
+  <li> <a HREF="html/Velus.Lustre.LCausality.html">LCausality</a>: dependency definitions</li>
+  <li> <a href="html/Velus.Lustre.LClockCorrectness.html">LClockCorrectness</a>: Proof of clock correctness</li>
+</ul>
+
+<h3>3.2 Shared Variables</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.DeLast.DeLast.html#DELAST.delast_scope">delast_scope</a>: compiling last declarations</li>
+  <li> <a href="html/Velus.Lustre.DeLast.DLCorrectness.html#DLCORRECTNESS.delast_block_sem">delast_block_sem</a>: correctness of compilation of last</li>
+</ul>
+
+
+<h3>3.3 State Machines</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.CompAuto.CompAuto.html#COMPAUTO.auto_block">auto_block</a>: compiling state machines</li>
+  <li> <a href="html/Velus.Lustre.CompAuto.CompAuto.html#COMPAUTO.trans_exp">trans_exp</a>: compiling transitions</li>
+  <li> <a href="html/Velus.Lustre.CompAuto.CACorrectness.html#CACORRECTNESS.auto_block_sem">auto_block_sem</a>: correctness of compilation of state machines</li>
+</ul>
+
+<h3>3.4 Switch Blocks</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.ClockSwitch.ClockSwitch.html#CLOCKSWITCH.switch_block">switch_block</a>: compiling switch blocks</li>
+  <li> <a href="html/Velus.Lustre.SubClock.SubClock.html#SUBCLOCK.subclock_exp">subclock_exp</a>: renaming/resampling expressions</li>
+  <li> <a href="html/Velus.Lustre.ClockSwitch.CSCorrectness.html#CSCORRECTNESS.switch_block_sem">switch_block_sem</a>: correctness of compilation of state machines</li>
+</ul>
+
+<h3>3.5 Local Scopes</h3>
+<ul>
+  <li> <a href="html/Velus.Lustre.InlineLocal.InlineLocal.html#INLINELOCAL.inlinelocal_block">inlinelocal_block</a>: inlining of local scopes</li>
+  <li> <a href="html/Velus.Lustre.InlineLocal.ILCorrectness.html#ILCORRECTNESS.inlinelocal_block_sem">inlinelocal_block_sem</a>: correctness of inlining of local scopes</li>
+</ul>
+
+<h3>3.5 Local Scopes</h3>
+<ul>
+  <li> <a href="html/Velus.NLustre.NLCoindSemantics.html#NLCOINDSEMANTICS.reset1">reset1</a> coinductive operator for NLustre</li>
+  <li> <a href="html/Velus.Lustre.Normalization.Unnesting.html#UNNESTING.unnest_block">unnest_block</a>: normalization of reset blocks</li>
+  <li> <a href="html/Velus.Transcription.Tr.html#TR.block_to_equation">block_to_equation</a>: transcription of blocks</li>
+  <li> <a href="html/Velus.Transcription.Tr.html#TR.to_equation">to_equation</a>: transcription of equations</li>
+  <li> <a href="html/Velus.Transcription.Correctness.html#CORRECTNESS.sem_blocktoeq">sem_blocktoeq</a>: correctness of the transcription of blocks</li>
+</ul>
+
+<!-- <h3>3.1 Correctness of the Clock System</h3> -->
+<!-- <UL> -->
+<!--     <li>Correctness <A HREF="html/Velus.Lustre.LClockSemantics.html#LCLOCKSEMANTICS.l_sem_node_clock">theorem</A>.</li> -->
+<!-- </UL> -->
+
+
+<br>
+<h2>Outline of the compiler (figure 14)</h2>
+
+<h3>Lustre</h3>
+<ul>
+    <li><a href="html/Velus.Lustre.LSyntax.html">LSyntax</a>: Syntax of Lustre</li>
+    <li><a href="html/Velus.Lustre.LSemantics.html">LSemantics</a>: Coinductive semantics of Lustre</li>
+    <li><a href="html/Velus.Lustre.LTyping.html">LTyping</a>: Typing rules of Lustre</li>
+    <li><a href="html/Velus.Lustre.LClocking.html">LClocking</a>: Clocking rules of Lustre</li>
+    <li><a href="html/Velus.Lustre.LCausality.html">LCausality</a>: Dependency rules of Lustre</li>
+    <li> <a href="html/Velus.Lustre.LClockedSemantics.html">LClockedSemantics</a>: Instrumented semantic model</li>
+    <li> <a href="html/Velus.Lustre.LClockCorrectness.html">LClockCorrectness</a>: Correctness of the clock type system</li>
+    <li> <a href="html/Velus.Lustre.LSemDeterminism.html">LSemDeterminism</a>: Determinism of the semantic model</li>
+
+    <h4>Shared Variables</h4>
+    <ul>
+        <li><a href="html/Velus.Lustre.DeLast.DeLast.html">DeLast</a>: Compilation of Shared Variables</li>
+        <li><a href="html/Velus.Lustre.DeLast.DLCorrectness.html">DLCorrectness</a>: Correctness of the compilation of Shared Variables</li>
+    </ul>
+    <h4>State Machines</h4>
+    <ul>
+        <li><a href="html/Velus.Lustre.CompAuto.CompAuto.html">CompAuto</a>: Compilation of State Machines</li>
+        <li><a href="html/Velus.Lustre.CompAuto.CACorrectness.html">CACorrectness</a>: Correctness of the compilation of State Machines</li>
+    </ul>
+    <h4>Switch Blocks</h4>
+    <ul>
+        <li><a href="html/Velus.Lustre.ClockSwitch.ClockSwitch.html">ClockSwitch</a>: Compilation of Switch Blocks</li>
+        <li><a href="html/Velus.Lustre.ClockSwitch.CSCorrectness.html">CSCorrectness</a>: Correctness of the compilation of Switch Blocks</li>
+    </ul>
+    <h4>Local Scopes</h4>
+    <ul>
+        <li><a href="html/Velus.Lustre.InlineLocal.InlineLocal.html">InlineLocal</a>: Inlining of Local Scopes</li>
+        <li><a href="html/Velus.Lustre.InlineLocal.ILCorrectness.html">ILCorrectness</a>: Correctness of inlining of Local Scopes</a>
+    </ul>
+    <h4>Normalization</h4>
+    <ul>
+        <li><a href="html/Velus.Lustre.Normalization.Unnesting.html">Unnesting</a> and Distributivity transformation</li>
+        <li><a href="html/Velus.Lustre.Normalization.NormFby.html">Expression Initialization</a> algorithms</li>
+        <li><a href="html/Velus.Lustre.Normalization.Correctness.html">Correctness</a> of the normalization</li>
+    </ul>
+</ul>
+
+<h3>Transcription</h3>
+<ul>
+    <li><a href="html/Velus.Transcription.Tr.html">Transcription</a> algorithm</li>
+    <li><a href="html/Velus.Transcription.Correctness.html">Correctness</a> of the transcription algorithm</li>
+</ul>
+
+<h3>CoreExpr</h3>
+Core expressions, used in NLustre and Stc
+<ul>
+    <li><a href="html/Velus.CoreExpr.CESyntax.html">CESyntax</a>: Syntax of core expressions</li>
+    <li><a href="html/Velus.CoreExpr.CESemantics.html">CESemantics</a>: Semantics of core expressions</li>
+    <li><a href="html/Velus.CoreExpr.CETyping.html">CETyping</a>: Typing rules of core expressions</li>
+    <li><a href="html/Velus.CoreExpr.CEClocking.html">CEClocking</a>: Clocking rules of core expressions</li>
+</ul>
+
+<h3>NLustre</h3>
+<ul>
+    <li><a href="html/Velus.NLustre.NLSyntax.html">NLSyntax</a>: Syntax of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLCoindSemantics.html">NLCoindSemantics</a>: Coinductive semantics of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLIndexedSemantics.html">NLIndexedSemantics</a>: Indexed semantics of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLMemSemantics.html">NLMemSemantics</a>: Indexed semantics of NLustre with explicit memory</li>
+    <li><a href="html/Velus.NLustre.NLTyping.html">NLTyping</a>: Typing rules of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLClocking.html">NLClocking</a>: Clocking rules of NLustre</li>
+    <li><a href="html/Velus.NLustre.NLNormalArgs.html">NLNormalArgs</a>: Normalized arguments in NLustre</li>
+</ul>
+
+<h3>NLustreToStc</h3>
+<ul>
+    <li><a href="html/Velus.NLustreToStc.Translation.html">Translation</a> from NLustre to Stc</li>
+    <li><a href="html/Velus.NLustreToStc.Correctness.html">Correctness</a> of the translation from NLustre to Stc</li>
+</ul>
+
+<h3>Stc</h3>
+<ul>
+    <li><a href="html/Velus.Stc.StcSyntax.html">StcSyntax</a>: Syntax of Stc</li>
+    <li><a href="html/Velus.Stc.StcSemantics.html">StcSemantics</a>: Semantics of Stc</li>
+    <li><a href="html/Velus.Stc.StcTyping.html">StcTyping</a>: Typing rules of Stc</li>
+    <li><a href="html/Velus.Stc.StcClocking.html">StcClocking</a>: Clocking rules of Stc</li>
+    <li><a href="html/Velus.Stc.StcSchedule.html">StcSchedule</a>: Stc scheduler</li>
+</ul>
+
+<h3>StcToObc</h3>
+<ul>
+    <li><a href="html/Velus.StcToObc.Translation.html">Translation</a> from Stc to Obc</li>
+    <li><a href="html/Velus.StcToObc.Correctness.html">Correctness</a> of the translation from Stc to Obc</li>
+</ul>
+
+<h3>Obc</h3>
+<ul>
+    <li><a href="html/Velus.Obc.ObcSyntax.html">ObcSyntax</a>: Syntax of Obc</li>
+    <li><a href="html/Velus.Obc.ObcSemantics.html">ObcSemantics</a>: Semantics of Obc</li>
+    <li><a href="html/Velus.Obc.ObcTyping.html">ObcTyping</a>: Typing rules of Obc</li>
+    <li><a href="html/Velus.Obc.ObcInvariants.html">ObcInvariants</a>: Useful invariants for Obc</li>
+    <li><a href="html/Velus.Obc.ObcAddDefaults.html">ObcAddDefaults</a>: Add default initializations</li>
+    <li><a href="html/Velus.Obc.Fusion.html">Fusion</a>: Fusion optimization</li>
+</ul>
+
+<h3>ObcToClight</h3>
+<ul>
+    <li><a href="html/Velus.ObcToClight.Generation.html">Generation</a> of Clight code</li>
+    <li><a href="html/Velus.ObcToClight.Correctness.html">Correctness</a> of the generation of Clight code</li>
+</ul>
+
+</BODY>
+</HTML>

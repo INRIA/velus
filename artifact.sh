@@ -18,3 +18,4 @@ tar -czf velus.tar.gz \
     extraction/ \
     tests/*.lus \
     examples/ \
+    doc/
