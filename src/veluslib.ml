@@ -15,6 +15,9 @@ let header_destination = ref (None : string option)
 let main_node = ref (None : string option)
 let reaction_counter = Camlcoq.intern_string "$reaction"
 
+let exp_inlining = ref true
+let do_exp_inlining () = !exp_inlining
+
 let dce = ref true
 let do_dce () = !dce
 

@@ -16,6 +16,7 @@ From Velus Require Export NLustre.NLTyping.
 From Velus Require Export NLustre.NLNormalArgs.
 From Velus Require Export NLustre.DeadCodeElim.DeadCodeElim.
 From Velus Require Export NLustre.DupRegRem.DupRegRem.
+From Velus Require Export NLustre.ExprInlining.ExprInlining.
 From Velus Require Export CoindStreams.
 From Velus Require Import CoindToIndexed.
 
@@ -49,6 +50,7 @@ Module Type NLUSTRE
 
   Declare Module Export DCE        : DEADCODEELIM         Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm IsF Mem IsD Clo Sem.
   Declare Module Export DRR        : DUPREGREM            Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
+  Declare Module Export EI         : EXPRINLINING         Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
 End NLUSTRE.
 
 Module NLustreFun
@@ -80,4 +82,5 @@ Module NLustreFun
 
   Module Export DCE        := DeadCodeElimFun         Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm IsF Mem IsD Clo Sem.
   Module Export DRR        := DupRegRemFun            Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
+  Module Export EI         := ExprInliningFun           Ids Op OpAux ComTyp Cks IStr CE Syn Ord Typ Norm Mem IsD Clo Sem.
 End NLustreFun.

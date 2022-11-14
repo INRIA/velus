@@ -157,6 +157,7 @@ Extract Constant Velus.print_stc => "Veluslib.print_stc_if".
 Extract Constant Velus.print_sch => "Veluslib.print_sch_if".
 Extract Constant Velus.print_obc => "Veluslib.print_obc_if".
 Extract Constant Velus.print_header => "Veluslib.print_header_if".
+Extract Constant Velus.do_exp_inlining => "Veluslib.do_exp_inlining".
 Extract Constant Velus.do_dce => "Veluslib.do_dce".
 Extract Constant Velus.do_dupregrem => "Veluslib.do_dupregrem".
 Extract Constant Velus.do_fusion => "Veluslib.do_fusion".

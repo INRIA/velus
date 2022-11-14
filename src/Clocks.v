@@ -52,6 +52,18 @@ Module Type CLOCKS
         Is_free_in_clock x ck'
         -> Is_free_in_clock x (Con ck' y xc).
 
+  Lemma Is_free_in_clock_dec : forall x ck,
+      { Is_free_in_clock x ck } + { ~ Is_free_in_clock x ck }.
+  Proof.
+    induction ck.
+    - right. intro contra. inv contra.
+    - destruct IHck.
+      + left. now apply FreeCon2.
+      + destruct (ident_eq_dec x i); subst.
+        * left. now apply FreeCon1.
+        * right. intro contra. now inv contra.
+  Qed.
+
   Open Scope bool.
 
   Fixpoint clock_eq (ck1 ck2: clock) : bool :=

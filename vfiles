@@ -117,6 +117,13 @@ src/NLustre/DupRegRem/DRRNormalArgs.v
 src/NLustre/DupRegRem/DRRCorrectness.v
 src/NLustre/DupRegRem/DupRegRem.v
 
+src/NLustre/ExprInlining/EI.v
+src/NLustre/ExprInlining/EITyping.v
+src/NLustre/ExprInlining/EIClocking.v
+src/NLustre/ExprInlining/EINormalArgs.v
+src/NLustre/ExprInlining/EICorrectness.v
+src/NLustre/ExprInlining/ExprInlining.v
+
 src/Stc/StcOrdered.v
 src/Stc/StcIsReset.v
 src/Stc/StcIsNext.v
