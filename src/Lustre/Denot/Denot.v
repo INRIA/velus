@@ -1192,6 +1192,9 @@ Inductive restr_block : block -> Prop :=
 Definition restr_node (nd : node) : Prop :=
   restr_block nd.(n_block).
 
+Definition restr_global (g : global) : Prop :=
+  Forall restr_node g.(nodes).
+
 End Temp.
 
 End LDENOT.
