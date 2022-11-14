@@ -139,12 +139,12 @@ struct
     else fprintf p "@[<hov 2>";
     begin match e with
       | CE.Emerge ((id, ty), ces, _) ->
-        fprintf p "@[<v>merge %a @[<v>%a@]@]"
+        fprintf p "@[<v 2>merge %a@ %a@]"
           print_ident id
           branches (ty, List.mapi (fun i e -> (i, e)) ces, None)
       | CE.Ecase (e, ces, d) ->
         let ty = CE.typeof e in
-        fprintf p "@[<v>case %a of @[<v>%a@]@]"
+        fprintf p "@[<v 2>case %a of@ %a@]"
           (exp prec') e
           branches (ty,
                     List.filter_map
@@ -202,7 +202,7 @@ struct
           print_ident x
 
   let print_decl p (id, (ty, ck)) =
-    fprintf p "%a@ : %a%a"
+    fprintf p "@[%a : %a%a@]"
       print_ident id
       PrintOps.print_typ ty
       print_clock_decl ck
@@ -228,8 +228,8 @@ struct
         (print_comma_list px) xs
 
   let print_semicol_list_as name px p xs =
-    if List.length xs > 0 then
-      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
+    if xs <> [] then
+      fprintf p "%s @[<hov 0>%a@];@;"
         name
         (print_semicol_list px) xs
 end
