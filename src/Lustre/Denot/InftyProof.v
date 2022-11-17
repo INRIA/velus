@@ -46,7 +46,7 @@ Module Type LDENOTINF
        (Import Typ   : LTYPING Ids Op OpAux Cks Senv Syn)
        (Import LCA   : LCAUSALITY Ids Op OpAux Cks Senv Syn)
        (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
-       (Import CStr  : COINDSTREAMS Ids Op OpAux Cks)
+       (CStr  : COINDSTREAMS Ids Op OpAux Cks)
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn CStr).
 
   (* section là juste pour supposer HasCausInj, amené à disparaître  *)
@@ -272,8 +272,8 @@ Module Type LDENOTINF
     revert Hwl.
     assert ( (* cas des variables : *)
         forall x cx, HasCaus Γ x cx ->
-                P_var 0 env0 cx ->
-                is_cons (denot_var ins envI env0 x)) as Hvar.
+                P_var 0 env cx ->
+                is_cons (denot_var ins envI env x)) as Hvar.
     { unfold P_vars, P_var in Hins.
       rewrite Forall_forall in Hins.
       intros x cx Hc Hx.
@@ -299,10 +299,10 @@ Module Type LDENOTINF
       rewrite denot_exp_eq.
       cases_eqn HH; subst.
       1,3: inv Hwl; rewrite <- length_typeof_numstreams, HH in *; now simpl in *.
-      assert (is_cons (nrem O (get_nth 0 (denot_exp G ins e1 envG envI bs env0)))) as He.
+      assert (is_cons (nrem O (get_nth 0 (denot_exp G ins e1 envG envI bs env)))) as He.
       { inv Hwl. apply H; auto. }
       revert He.
-      generalize (denot_exp G ins e1 envG envI bs env0).
+      generalize (denot_exp G ins e1 envG envI bs env).
       generalize (numstreams e1).
       simpl. intros; cases.
       2: apply is_consn_DS_const with (n := O). (* pourquoi auto ne fonctionne pas ? *)
@@ -906,8 +906,8 @@ Module Type LDENOTINF
       rewrite IHe; auto.
       intro H; apply Hnin; constructor; auto.
     - (* fby *)
-      assert (denot_exps (Global tys exts nds) ins e0s envG envI bs env0
-              == denot_exps (Global tys exts (nd::nds)) ins e0s envG envI bs env0) as He0s.
+      assert (denot_exps (Global tys exts nds) ins e0s envG envI bs env
+              == denot_exps (Global tys exts (nd::nds)) ins e0s envG envI bs env) as He0s.
       { induction e0s. trivial.
         inv H.
         (* TODO: faire mieux, cette preuve est un enfer *)
@@ -917,8 +917,8 @@ Module Type LDENOTINF
         - apply IHe0s; auto.
           intro HH; inv HH. apply Hnin. constructor.
           destruct H2; eauto using Exists_cons_tl. }
-      assert (denot_exps (Global tys exts nds) ins es envG envI bs env0
-              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env0) as Hes.
+      assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
       { induction es. trivial.
         inv H0.
         (* TODO: faire mieux, cette preuve est un enfer *)
@@ -931,8 +931,8 @@ Module Type LDENOTINF
       revert He0s Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
       gen_denot; cases.
     - (* when *)
-      assert (denot_exps (Global tys exts nds) ins es envG envI bs env0
-              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env0) as Hes.
+      assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
       { induction es. trivial.
         inv H.
         (* TODO: faire mieux, cette preuve est un enfer *)
@@ -950,8 +950,8 @@ Module Type LDENOTINF
       { (* si oui, contradiction *)
         destruct Hnin. apply INEapp2. }
       rewrite (find_node_other _ _ _ _ _ Hf).
-      assert (denot_exps (Global tys exts nds) ins es envG envI bs env0
-              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env0) as Hes.
+      assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
       { induction es. trivial.
         inv H.
         (* TODO: faire mieux, cette preuve est un enfer *)
@@ -1179,7 +1179,7 @@ Lemma infinite_exp :
     forall_nprod (@infinite _) (denot_exp G ins e envG envI bs env).
 Proof.
   intros * HG Hbs Hins Hinf.
-  assert (forall x, infinite (denot_var ins envI env0 x)) as Hvar.
+  assert (forall x, infinite (denot_var ins envI env x)) as Hvar.
   { unfold all_infinite, denot_var in *. intro. cases; eauto. }
   induction e using exp_ind2; intros; simpl; setoid_rewrite denot_exp_eq.
   (* cas restreints : *)
@@ -1187,41 +1187,41 @@ Proof.
   - (* const *)
     apply sconst_inf; auto.
   - (* unop *)
-    assert (forall_nprod (@infinite _) (denot_exp G ins e envG envI bs env0)) as He by eauto.
+    assert (forall_nprod (@infinite _) (denot_exp G ins e envG envI bs env)) as He by eauto.
     revert He.
-    generalize (denot_exp G ins e envG envI bs env0).
+    generalize (denot_exp G ins e envG envI bs env).
     generalize (numstreams e).
     intros.
     cases; simpl; auto using sunop_inf, DS_const_inf.
   - (* fby *)
-    assert (forall_nprod (@infinite _) (denot_exps G ins e0s envG envI bs env0)) as He0s.
+    assert (forall_nprod (@infinite _) (denot_exps G ins e0s envG envI bs env)) as He0s.
     { induction e0s; simpl_Forall; auto.
       setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
-    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env0)) as Hes.
+    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
     { induction es; simpl_Forall; auto.
       setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
     revert He0s Hes.
-    generalize (denot_exps G ins e0s envG envI bs env0).
-    generalize (denot_exps G ins es envG envI bs env0).
+    generalize (denot_exps G ins e0s envG envI bs env).
+    generalize (denot_exps G ins es envG envI bs env).
     generalize (list_sum (List.map numstreams e0s)).
     generalize (list_sum (List.map numstreams es)).
     intros; unfold eq_rect_r, eq_rect, eq_sym.
     cases; subst; auto using forall_nprod_const, DS_const_inf, forall_nprod_lift2, fby_inf.
   - (* when *)
-    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env0)) as Hes.
+    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
     { induction es; simpl_Forall; auto.
       setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
     revert Hes.
-    generalize (denot_exps G ins es envG envI bs env0).
+    generalize (denot_exps G ins es envG envI bs env).
     generalize (list_sum (List.map numstreams es)).
     intros; unfold eq_rect_r, eq_rect, eq_sym.
     cases; subst; eauto using forall_nprod_const, DS_const_inf, forall_nprod_llift, swhen_inf.
   - (* app *)
-    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env0)) as Hes.
+    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
     { induction es; simpl_Forall; auto.
       setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
     revert Hes.
-    generalize (denot_exps G ins es envG envI bs env0).
+    generalize (denot_exps G ins es envG envI bs env).
     generalize (list_sum (List.map numstreams es)).
     intros; unfold eq_rect_r, eq_rect, eq_sym.
     cases; subst; eauto using forall_nprod_const, DS_const_inf.
