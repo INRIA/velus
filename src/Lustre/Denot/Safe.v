@@ -287,6 +287,72 @@ Section SDfuns_safe.
       /\ safe_DS s.
 
 
+  (** Quelques résultats du type : qui peut le plus, peut le moins *)
+
+  Lemma ty_DS_le :
+    forall ty x y,
+      x <= y ->
+      ty_DS ty y ->
+      ty_DS ty x.
+  Proof.
+    intros.
+    now apply DSForall_le with y.
+  Qed.
+
+  Lemma cl_DS_le :
+    forall ck x y,
+      x <= y ->
+      cl_DS ck y ->
+      cl_DS ck x.
+  Proof.
+    unfold cl_DS.
+    intros.
+    apply Ole_trans with (AC y); auto.
+  Qed.
+
+  Lemma safe_DS_le :
+    forall x y,
+      x <= y ->
+      safe_DS y ->
+      safe_DS x.
+  Proof.
+    intros.
+    now apply DSForall_le with y.
+  Qed.
+
+  Lemma Forall2_ty_DS_le :
+    forall n tys (xs ys : nprod n),
+      xs <= ys ->
+      Forall2 ty_DS tys (list_of_nprod ys) ->
+      Forall2 ty_DS tys (list_of_nprod xs).
+  Proof.
+    induction n as [|[]]; intros * Hle Hf; auto.
+    - inv Hf; simpl_Forall; eauto using ty_DS_le.
+    - inv Hf; constructor; eauto using ty_DS_le.
+  Qed.
+
+  Lemma Forall2_cl_DS_le :
+    forall n cks (xs ys : nprod n),
+      xs <= ys ->
+      Forall2 cl_DS cks (list_of_nprod ys) ->
+      Forall2 cl_DS cks (list_of_nprod xs).
+  Proof.
+    induction n as [|[]]; intros * Hle Hf; auto.
+    - inv Hf; simpl_Forall; eauto using cl_DS_le.
+    - inv Hf; constructor; eauto using cl_DS_le.
+  Qed.
+
+  Lemma forall_safe_le :
+    forall n (xs ys : nprod n),
+      xs <= ys ->
+      forall_nprod safe_DS ys ->
+      forall_nprod safe_DS xs.
+  Proof.
+    setoid_rewrite forall_nprod_k_iff.
+    intros * Hle Hf k Hk.
+    eapply safe_DS_le, Hf, Hk; auto.
+  Qed.
+
   (** ** Faits sur sconst  *)
 
   Lemma AC_sconst :
@@ -838,7 +904,6 @@ Section SDfuns_safe.
       apply Forall2_app; auto.
   Qed.
 
-(* TODO: renommer la section *)
 End SDfuns_safe.
 
 (* TODO: bouger, renommer ? *)
@@ -1240,6 +1305,22 @@ Section ÀDÉPLACER.
     eapply NoDupMembers_det with (t := e) in ND; eauto.
     now subst.
   Qed.
+
+  Lemma Ty_senv :
+    forall (n : node) x ty,
+      HasType (senv_of_inout (n_in n)) x ty ->
+      In (x,ty) (List.map (fun '(x, (ty, _, _)) => (x, ty)) (n_in n)).
+  Proof.
+    intros * Hty.
+    pose proof (NoDup_senv n) as ND. rewrite senv_of_inout_app in ND.
+    apply NoDupMembers_app_l in ND.
+    inv Hty; subst.
+    induction (n_in n) as [| (?&((?&?)&?)) nins]. inv H.
+    inv ND. simpl in *; subst; eauto.
+    destruct H as [|Hxin]; subst; eauto.
+    inv H; eauto.
+  Qed.
+
 
 End ÀDÉPLACER.
 
@@ -1688,21 +1769,6 @@ Section Exp_safe.
     rewrite map_length in Hk.
     erewrite env_of_ss_nth; eauto.
     apply forall_nprod_k'; auto.
-  Qed.
-
-  Lemma Ty_senv :
-    forall (n : node) x ty,
-      HasType (senv_of_inout (n_in n)) x ty ->
-      In (x,ty) (List.map (fun '(x, (ty, _, _)) => (x, ty)) (n_in n)).
-  Proof.
-    intros * Hty.
-    pose proof (NoDup_senv n) as ND. rewrite senv_of_inout_app in ND.
-    apply NoDupMembers_app_l in ND.
-    inv Hty; subst.
-    induction (n_in n) as [| (?&((?&?)&?)) nins]. inv H.
-    inv ND. simpl in *; subst; eauto.
-    destruct H as [|Hxin]; subst; eauto.
-    inv H; eauto.
   Qed.
 
   Lemma ty_env_inst :
@@ -2169,74 +2235,6 @@ Section Exp_safe.
     edestruct safe_exps_ as (?&?&?); eauto.
   Qed.
 
-  (* TODO: move *)
-  (** Trois résultats de type : qui peut le plus, peut le moins *)
-  Lemma ty_DS_le :
-    forall ty x y,
-      x <= y ->
-      ty_DS ty y ->
-      ty_DS ty x.
-  Proof.
-    intros.
-    now apply DSForall_le with y.
-  Qed.
-
-  Lemma cl_DS_le :
-    forall ins envI bs env ck x y,
-      x <= y ->
-      cl_DS ins envI bs env ck y ->
-      cl_DS ins envI bs env ck x.
-  Proof.
-    unfold cl_DS.
-    intros.
-    apply Ole_trans with (AC y); auto.
-  Qed.
-
-  Lemma safe_DS_le :
-    forall x y,
-      x <= y ->
-      safe_DS y ->
-      safe_DS x.
-  Proof.
-    intros.
-    now apply DSForall_le with y.
-  Qed.
-
-  (* TODO: généraliser à d'autre propriétés? *)
-  Lemma Forall2_ty_DS_le :
-    forall n tys (xs ys : nprod n),
-      xs <= ys ->
-      Forall2 ty_DS tys (list_of_nprod ys) ->
-      Forall2 ty_DS tys (list_of_nprod xs).
-  Proof.
-    induction n as [|[]]; intros * Hle Hf; auto.
-    - inv Hf; simpl_Forall; eauto using ty_DS_le.
-    - inv Hf; constructor; eauto using ty_DS_le.
-  Qed.
-
-  (* TODO: généraliser à d'autre propriétés? *)
-  Lemma Forall2_cl_DS_le :
-    forall n cks (xs ys : nprod n) ins envI bs env,
-      xs <= ys ->
-      Forall2 (cl_DS ins envI bs env) cks (list_of_nprod ys) ->
-      Forall2 (cl_DS ins envI bs env) cks (list_of_nprod xs).
-  Proof.
-    induction n as [|[]]; intros * Hle Hf; auto.
-    - inv Hf; simpl_Forall; eauto using cl_DS_le.
-    - inv Hf; constructor; eauto using cl_DS_le.
-  Qed.
-
-  (* TODO: généraliser à d'autre propriétés? *)
-  Lemma forall_safe_le :
-    forall n (xs ys : nprod n),
-      xs <= ys ->
-      forall_nprod safe_DS ys ->
-      forall_nprod safe_DS xs.
-  Proof.
-    setoid_rewrite forall_nprod_k_iff.
-    intros * Hle Hf k Hk.
-    eapply safe_DS_le, Hf, Hk; auto.
-  Qed.
 
   (** Terrible cas des appels de nœuds aux sorties dépendantes.
       Il ne rentre pas dans le cadre de [safe_exp] car on n'a pas l'hypothèse
@@ -2330,7 +2328,10 @@ Section Exp_safe.
             (denot_clock ins envI bs env bck)
             (envG f (env_of_ss (idents (n_in n)) ses)) ck
           <= denot_clock ins envI bs env' ck') as Hcks.
-    { induction ck as [|??? []]; intros * Hin Hck.
+    {
+      (* TODO: lemme? Simplifier ? *)
+      clear - Wcio WIin WIout Hle Ncs Wci Cls ND Hsub Hfind Hl Hlout'.
+      induction ck as [|??? []]; intros * Hin Hck.
       - inv Hck.
         simpl (denot_clock _ _ _ _ _).
         rewrite 2 denot_clock_eq; auto.
@@ -2809,7 +2810,7 @@ Proof.
     intros f' ndf' envI' Hfind'.
     eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
     rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
-Qed.
+Admitted.
 
 End LDENOTSAFE.
 
