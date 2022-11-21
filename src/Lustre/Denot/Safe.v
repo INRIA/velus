@@ -277,7 +277,7 @@ Section SDfuns_safe.
     AC s <= denot_clock ck.
 
   (** Global hypothesis on the environment *)
-  Definition safe_env :=
+  Definition env_correct :=
     forall x ty ck,
       HasType Γ x ty ->
       HasClock Γ x ck ->
@@ -1551,7 +1551,7 @@ End SubClock.
 (* TODO: renommer la section *)
 Section Exp_safe.
 
-  (* TODO: gérer différemment les variables de safe_env? *)
+  (* TODO: gérer différemment les variables de env_correct? *)
   Variables
     (* (Γ : static_env) *)
     (G : global)
@@ -1595,8 +1595,8 @@ Section Exp_safe.
           let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
           forall bs,
             bss ins envI <= bs ->
-            safe_env Γ ins envI bs 0 ->
-            safe_env Γ ins envI bs (envG f envI)
+            env_correct Γ ins envI bs 0 ->
+            env_correct Γ ins envI bs (envG f envI)
       | _ => True
       end.
 
@@ -1631,7 +1631,7 @@ Section Exp_safe.
   Qed.
 
 
-  (* on peut séparer safe_env en trois propositions pour faciliter
+  (* on peut séparer env_correct en trois propositions pour faciliter
      le découpage des preuves *)
   Definition ty_env Γ ins (envI env : DS_prod SI) :=
     (forall x ty, HasType Γ x ty -> ty_DS ty (denot_var ins envI env x)).
@@ -1640,14 +1640,14 @@ Section Exp_safe.
   Definition ef_env Γ ins (envI env : DS_prod SI) :=
     (forall x ty, HasType Γ x ty -> safe_DS (denot_var ins envI env x)).
 
-  Lemma safe_env_decompose :
+  Lemma env_correct_decompose :
     forall Γ ins envI bs env,
       (ty_env Γ ins envI env
        /\ cl_env Γ ins envI bs env
        /\ ef_env Γ ins envI env)
-      <-> safe_env Γ ins envI bs env.
+      <-> env_correct Γ ins envI bs env.
   Proof.
-    unfold safe_env, ty_env, cl_env, ef_env. split.
+    unfold env_correct, ty_env, cl_env, ef_env. split.
     - intros * (Ty & Cl&  Ef ) * Hty Hcl. repeat split; eauto.
     - intro H. repeat split; intros * HH; inv HH.
       all: edestruct H as (?&?&?); eauto; econstructor; eauto.
@@ -1941,11 +1941,11 @@ Section Exp_safe.
                | Some x => denot_var ins envI env x = s
                | None => True
                end) (nclocksof es) (list_of_nprod ss) ->
-      safe_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_ss (idents (n_in n)) ss)
+      env_correct (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_ss (idents (n_in n)) ss)
         (denot_clock ins envI bs env bck) 0.
   Proof.
     intros * Hn WTi WIi WCi Wt Wc Sf Ncs; subst.
-    apply safe_env_decompose. repeat split.
+    apply env_correct_decompose. repeat split.
     * eapply ty_env_inst; eauto.
     * eapply cl_env_inst; eauto.
     * apply ef_env_inst; eauto.
@@ -2037,7 +2037,7 @@ Section Exp_safe.
 
   Lemma safe_exp_ :
     forall Γ ins envI bs env,
-    safe_env Γ ins envI bs env ->
+    env_correct Γ ins envI bs env ->
     forall (e : exp),
       restr_exp e ->
       wt_exp G Γ e ->
@@ -2171,7 +2171,7 @@ Section Exp_safe.
       (* on choisit bien [[bck]] comme majorant de bss *)
       specialize (Hnode (denot_clock ins envI bs env bck)).
       rewrite map_app in WCio.
-      apply safe_env_decompose in Hnode as (fTy & fCl & fEf).
+      apply env_correct_decompose in Hnode as (fTy & fCl & fEf).
       + (* on utilise la conclusion de Hnode *)
         repeat split.
         * eapply inst_ty_env; eauto.
@@ -2184,7 +2184,7 @@ Section Exp_safe.
 
   Corollary safe_exp :
     forall Γ ins envI bs env,
-    safe_env Γ ins envI bs env ->
+    env_correct Γ ins envI bs env ->
     forall (e : exp),
       restr_exp e ->
       wt_exp G Γ e ->
@@ -2199,7 +2199,7 @@ Section Exp_safe.
 
   Lemma safe_exps_ :
     forall Γ ins envI bs env,
-    safe_env Γ ins envI bs env ->
+    env_correct Γ ins envI bs env ->
     forall (es : list exp),
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
@@ -2222,7 +2222,7 @@ Section Exp_safe.
 
   Corollary safe_exps :
     forall Γ ins envI bs env,
-    safe_env Γ ins envI bs env ->
+    env_correct Γ ins envI bs env ->
     forall (es : list exp),
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
@@ -2256,7 +2256,7 @@ Section Exp_safe.
   Lemma safe_Eapp_dep :
     forall Γ ins envI bs env,
     forall xs f es er anns n bck sub,
-      safe_env Γ ins envI bs env ->
+      env_correct Γ ins envI bs env ->
       Forall restr_exp es ->
       Forall (wt_exp G Γ) es ->
       Forall (wc_exp G Γ) es ->
@@ -2271,7 +2271,7 @@ Section Exp_safe.
       Forall2 (WellInstantiated bck sub) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_in n)) (nclocksof es) ->
       Forall3 (fun xck ck2 x2 => WellInstantiated bck sub xck (ck2, Some x2)) (List.map (fun '(x, (_, ck, _)) => (x, ck)) n.(n_out)) (List.map snd anns) xs ->
       (* /bazar **************************************************)
-      forall bs', bs' <= bs -> (* on distingue l'horloge de base réelle de celle utilisée dans safe_env *)
+      forall bs', bs' <= bs -> (* on distingue l'horloge de base réelle de celle utilisée dans env_correct *)
       let env' := denot_equation G ins (xs, [Eapp f es er anns]) envG envI bs' env in
       env <= env' -> (* vrai dans notre cas *)
       let ss := denot_exp G ins (Eapp f es er anns) envG envI bs' env in
@@ -2311,7 +2311,7 @@ Section Exp_safe.
     apply Hnode in Hs0.
     2: eapply bss_le_bs, cl_env_inst; eauto.
     (**** fin instanciation de Hnode  *)
-    apply safe_env_decompose in Hs0 as (Ty & Cl & Sf).
+    apply env_correct_decompose in Hs0 as (Ty & Cl & Sf).
     repeat split.
     1: (* ty_DS *)
       eapply inst_ty_env; eauto; now rewrite Forall2_map_1.
@@ -2417,7 +2417,7 @@ Section Exp_safe.
 
 
   (* Ici on distingue bien [bss ...] l'horloge de base réelle calculée
-     dans la dénotation du nœud et [bs], celle utilisée par safe_env,
+     dans la dénotation du nœud et [bs], celle utilisée par env_correct,
      qui peut être plus longue (cf. l'hypothèse [Hnode]). *)
   Lemma safe_node :
     forall n envI env bs,
@@ -2430,8 +2430,8 @@ Section Exp_safe.
       wc_node G n ->
       wt_node G n ->
       op_correct G ins envG envI bs env n ->
-      safe_env Γ ins envI bs env ->
-      safe_env Γ ins envI bs (denot_node G n envG envI env).
+      env_correct Γ ins envI bs env ->
+      env_correct Γ ins envI bs (denot_node G n envG envI env).
   Proof.
     intros * Hbs Hle Hr (?&?& Wcb) (?&?&?& Wtb) Hop Hsafe.
     rewrite denot_node_eq in *.
@@ -2533,13 +2533,13 @@ Section Exp_safe.
 End Exp_safe.
 
 
-(** * Deuxième partie : montrer que safe_env est préservé *)
+(** * Deuxième partie : montrer que env_correct est préservé *)
 
 Section Admissibility.
 
-  (** Pour l'instant, on montre l'admissibilité de [safe_env] en tant que
+  (** Pour l'instant, on montre l'admissibilité de [env_correct] en tant que
       propriété de l'environnement des variables seulement (pas des entrées).
-      Ça nécessite de donner les composants de safe_env sous forme de fonctions
+      Ça nécessite de donner les composants de env_correct sous forme de fonctions
       continues de l'environnement : DS_prod SI -C-> DS ...
       TODO: ça va peut-être changer avec l'environnement des entrées ???
    *)
@@ -2563,12 +2563,12 @@ Section Admissibility.
     firstorder.
   Qed.
 
-  Lemma safe_env_admissible :
+  Lemma env_correct_admissible :
     forall Γ ins envI bs,
-      admissible (safe_env Γ ins envI bs).
+      admissible (env_correct Γ ins envI bs).
   Proof.
     intros.
-    unfold safe_env.
+    unfold env_correct.
     apply admissiblePT.
     do 4 setoid_rewrite and_impl.
     repeat apply admissible_and3; apply admissiblePT.
@@ -2697,11 +2697,11 @@ Proof.
   now rewrite IHck, Eq1, Eq3.
 Qed.
 
-Global Add Parametric Morphism Γ ins : (safe_env Γ ins)
+Global Add Parametric Morphism Γ ins : (env_correct Γ ins)
     with signature @Oeq (DS_prod SI) ==> @Oeq (DS bool) ==> @Oeq (DS_prod SI) ==> iff
-      as safe_env_morph.
+      as env_correct_morph.
 Proof.
-  unfold safe_env, ty_DS, cl_DS, DSForall_pres.
+  unfold env_correct, ty_DS, cl_DS, DSForall_pres.
   intros * Eq1 * Eq2 * Eq3.
   split; intros Hdec * Hty Hck; destruct (Hdec _ _ _ Hty Hck) as (?&?&?).
   - rewrite <- Eq1, <- Eq3, <- Eq2; auto.
@@ -2758,8 +2758,8 @@ Theorem safe_prog :
       let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
       let bs' := bss ins envI in
       forall bs, bs' <= bs ->
-      safe_env Γ ins envI bs 0 ->
-      safe_env Γ ins envI bs (denot_global G f envI).
+      env_correct Γ ins envI bs 0 ->
+      env_correct Γ ins envI bs (denot_global G f envI).
 Proof.
   intros * Wtg Wcg Hr * Hfind ?? ?? Hle Hins.
   assert (Ordered_nodes G) as Hord.
@@ -2783,7 +2783,7 @@ Proof.
     rewrite <- denot_node_cons;
       eauto using find_node_not_Is_node_in, find_node_now.
     rewrite FIXP_fixp.
-    apply fixp_ind_le; auto using safe_env_admissible.
+    apply fixp_ind_le; auto using env_correct_admissible.
     intros env Hsafe Hl.
     apply Ordered_nodes_cons in Hord as Hord'.
     apply wt_global_cons in Wtg as Wtg'.
