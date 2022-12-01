@@ -144,7 +144,7 @@ Module Type CACORRECTNESS
           rewrite enum_nth', <-Hac1; eauto.
         + setoid_rewrite Str_nth_map. rewrite choose_first_nth. setoid_rewrite Str_nth_map.
           rewrite Hb; auto.
-                - do 2 esplit. repeat (split; eauto).
+      - do 2 esplit. repeat (split; eauto).
         + repeat constructor; simpl.
           * rewrite enum_nth', <-Hac1; congruence.
           * setoid_rewrite Str_nth_map. rewrite Hst; congruence.

@@ -287,6 +287,37 @@ Proof.
   apply implies in Hsem.
   rewrite 2 tr_Streams_pStr in Hsem.
 
+  (* expression inlining *)
+  remember (total_if do_exp_inlining exp_inlining G) as G'.
+  assert (wt_global G') as Hwt'.
+  { subst; unfold total_if; destruct (do_exp_inlining tt); auto.
+    apply exp_inlining_wt; auto. }
+  assert (wt_ins G' main ins) as Hwti'.
+  { subst; unfold total_if; destruct (do_exp_inlining tt); auto.
+    clear - Hwti. unfold wt_ins in *; intros n Hnode.
+    eapply find_node_exp_inlining_backward in Hnode as (?&Hfind&Hnode); subst.
+    simpl. eapply Hwti; eauto. }
+  assert (wc_global G') as Hwc'.
+  { subst; unfold total_if; destruct (do_exp_inlining tt); auto.
+    eapply exp_inlining_wc; eauto. }
+  assert (normal_args G') as Hnorm'.
+  { subst; unfold total_if. destruct (do_exp_inlining tt); auto.
+    apply exp_inlining_normal_args; auto. }
+  assert (sem_node G' main (pstr (tr_Streams ins)) (pstr (tr_Streams outs))) as Hsem'.
+  { subst; unfold total_if. destruct (do_exp_inlining tt); auto.
+    apply exp_inlining_sem; auto. }
+  assert (forall T, bisim_IO G main ins outs T <-> bisim_IO G' main ins outs T) as Hbisim.
+  { subst; unfold total_if; destruct (do_exp_inlining tt). 2:reflexivity.
+    clear - G. split; intros * Hbis; inv Hbis.
+    - eapply find_node_exp_inlining_forward in H.
+      econstructor; eauto.
+    - eapply find_node_exp_inlining_backward in H as (?&Hfind&?); subst.
+      econstructor; eauto.
+  }
+  setoid_rewrite Hbisim.
+  clear Hord Hwc Hwt Hwti Hnorm Hsem Hbisim HeqG' G.
+  rename G' into G, Hwti' into Hwti, Hwt' into Hwt, Hwc' into Hwc, Hnorm' into Hnorm, Hsem' into Hsem.
+
   (* dead code elimination optimization *)
   remember (total_if do_dce dce_global G) as G'.
   assert (wt_global G') as Hwt'.
@@ -305,7 +336,7 @@ Proof.
     apply dce_normal_args; auto. }
   assert (sem_node G' main (pstr (tr_Streams ins)) (pstr (tr_Streams outs))) as Hsem'.
   { subst; unfold total_if. destruct (do_dce tt); auto.
-    apply dce_global_sem; auto. }
+    apply dce_global_sem; auto using wt_global_Ordered_nodes. }
   assert (forall T, bisim_IO G main ins outs T <-> bisim_IO G' main ins outs T) as Hbisim.
   { subst; unfold total_if; destruct (do_dce tt). 2:reflexivity.
     clear - G. split; intros * Hbis; inv Hbis.
@@ -315,7 +346,7 @@ Proof.
       econstructor; eauto.
   }
   setoid_rewrite Hbisim.
-  clear Hord Hwc Hwt Hwti Hnorm Hsem Hbisim HeqG' G.
+  clear Hwc Hwt Hwti Hnorm Hsem Hbisim HeqG' G.
   rename G' into G, Hwti' into Hwti, Hwt' into Hwt, Hwc' into Hwc, Hnorm' into Hnorm, Hsem' into Hsem.
 
   (* remove duplicate registers optimization *)

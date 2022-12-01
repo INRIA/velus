@@ -40,6 +40,7 @@ Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_sch     : Stc.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
 Parameter print_header  : Clight.program -> unit.
+Parameter do_exp_inlining : unit -> bool.
 Parameter do_dce        : unit -> bool.
 Parameter do_dupregrem  : unit -> bool.
 Parameter do_fusion     : unit -> bool.
@@ -89,6 +90,7 @@ Definition l_to_nl (G : @global (fun _ => True) elab_prefs) : res NL.Syn.global 
 
 Definition nl_to_cl (main_node: option ident) (g: NL.Syn.global) : res Clight.program :=
   OK g
+     @@ total_if do_exp_inlining NL.EI.EI.exp_inlining
      @@ total_if do_dce NL.DCE.DCE.dce_global
      @@ total_if do_dupregrem NL.DRR.DRR.remove_dup_regs
      @@ print print_nlustre

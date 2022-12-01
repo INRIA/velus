@@ -1,0 +1,76 @@
+-- Counts time elapsed (in microseconds)
+-- Returns true when goal is passed
+node await(goal : int) returns (b : bool)
+var c : int;
+let c = 0 fby (c + 50);
+    b = (c > goal) or (false fby b);
+tel
+
+node pwm(chop : bool) returns (motorENA : bool)
+var motENA : bool;
+let
+    motorENA = (not chop) or motENA;
+    automaton initially Off
+    state Off do
+        motENA = false;
+        unless await(50) then On
+    state On do
+        motENA = true;
+        unless await(50) then Off
+    end
+tel
+
+node drive_sequence(step : bool) returns (motorA, motorB : bool)
+var last motA : bool = true; last motB : bool = false;
+let
+    switch step
+    | true do (motA, motB) = (not (last motB), last motA)
+    | false do (motA, motB) = (last motA, last motB)
+    end;
+    (motorA, motorB) = (motA, motB);
+tel
+
+node count_up(inc : int) returns (o : int)
+let
+    o = 0 fby (o + inc);
+tel
+
+node feed_pause(pause : bool) returns (enable, step : bool)
+var time : int;
+let
+    reset
+        time = count_up(50);
+    every (false fby step);
+
+    automaton initially Feed
+    state Feed do
+        enable = true;
+        automaton initially SpeedUp
+        state SpeedUp do
+            step = true -> false;
+            unless false -> time >= 750 then Constant
+        state Constant do
+            step = true -> false;
+            unless time >= 500 then Constant
+        end;
+    unless pause then Pause
+
+    state Pause do
+        step = false;
+        automaton initially Wait
+        state Wait do
+            enable = true;
+            unless time >= 500 then PWM
+        state PWM do
+            enable = pwm(true);
+        end;
+        unless (not pause) and time >= 750 then Feed
+             | (not pause) continue Feed
+    end
+tel
+
+node motor(pause : bool) returns (enable, motorA, motorB, step : bool)
+let
+    (enable, step) = feed_pause(pause);
+    (motorA, motorB) = drive_sequence(step);
+tel

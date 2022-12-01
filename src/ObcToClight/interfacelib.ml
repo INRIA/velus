@@ -143,7 +143,7 @@ module PrintClightOpsFun (OpNames : sig
     let print_typ_decl p = function
       | Ops.Tprimitive _ -> ()
       | Ops.Tenum (tx, tn) ->
-        fprintf p "enum %a = %a"
+        fprintf p "type %a = %a"
           print_ident tx
           (pp_print_list ~pp_sep:(fun p _ -> fprintf p " | ") print_ident) tn
 
@@ -208,20 +208,6 @@ module PrintClightOpsFun (OpNames : sig
       match c with
       | Ops.Const c -> print_cconst p c
       | Ops.Enum c -> print_enumtag p (c, ty)
-
-    let print_branches pp_br p (brs, default) =
-      List.iter (fun (pp_n, o) ->
-          match o with
-          | Some b ->
-            fprintf p "@;| %t => @[<hv 0>%a@]"
-              pp_n pp_br b
-          | None ->
-            fprintf p "@;| %t => _" pp_n
-        ) brs;
-      match default with
-      | Some d ->
-        fprintf p "@;| default => @[<hv 0>%a@]" pp_br d
-      | _ -> ()
 
   end
 

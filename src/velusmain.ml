@@ -187,6 +187,7 @@ let speclist = [
                                          " Print 'full' clocks in declarations";
   "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
                                    " Show result clocks of nested applications";
+  "-noexpinlining", Arg.Clear Veluslib.exp_inlining, " skip expression inlining";
   "-nodce", Arg.Clear Veluslib.dce, " Skip dead code elimination";
   "-noremovedupregs", Arg.Clear Veluslib.dupregrem, " Skip duplicate register removal";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";

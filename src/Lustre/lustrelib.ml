@@ -142,6 +142,9 @@ module PrintFun
     let print_cks =
       pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_clock
 
+    let print_sep_list print =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p "@ ") print
+
     let print_comma_list p =
       pp_print_list ~pp_sep:(fun p () -> fprintf p ",@;") p
 
@@ -149,10 +152,10 @@ module PrintFun
       pp_print_list ~pp_sep:(fun p () -> fprintf p ";@;") p
 
     let print_semicol_list_as name px p xs =
-    if xs = [] then () else
-      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
-        name
-        (print_semicol_list px) xs
+      if xs <> [] then
+        fprintf p "%s @[<hov 0>%a@];@;"
+          name
+          (print_semicol_list px) xs
 
     let rec exp prec p e =
       let (prec', assoc) = precedence e in
@@ -185,21 +188,19 @@ module PrintFun
       | L.Earrow (e0s, es, _) ->
         fprintf p "%a ->@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Ewhen (e, (x, tx), c, _) ->
-        fprintf p "%a when (%a=%a)"
-          (exp_list prec') e
+        fprintf p "%a when %a(%a)"
           print_ident x
+          (exp_list prec') e
           PrintOps.print_enumtag (c, tx)
       | L.Emerge ((id, ty), es, _) ->
-        fprintf p "@[<v>merge %a%a@]"
+        fprintf p "@[<v 2>merge %a@ %a@]"
           print_ident id
-          (PrintOps.print_branches exp_enclosed_list)
-          (List.map (fun (i, ce) -> ((fun p -> PrintOps.print_enumtag p (i, ty)), Some ce)) es, None)
+          branches (ty, es, None)
       | L.Ecase (e, es, d, _) ->
         let ty = List.hd (L.typeof e) in
-        fprintf p "@[<v>case %a of%a@]"
+        fprintf p "@[<v 2>case %a of@ %a@]"
           (exp 16) e
-          (PrintOps.print_branches exp_enclosed_list)
-          (List.map (fun (i, ce) -> ((fun p -> PrintOps.print_enumtag p (i, ty)), Some ce)) es, d)
+          branches (ty, es, d)
       | L.Eapp (f, es, [], anns) ->
         if !print_appclocks
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
@@ -236,6 +237,17 @@ module PrintFun
       fprintf p "@[<hv 0>%a@]"
         (print_comma_list (exp 0)) es
 
+    and branches p (ty, brs, d) =
+      print_sep_list (fun p (k, es) ->
+          fprintf p "(%a => %a)"
+            PrintOps.print_enumtag (k, ty)
+            exp_enclosed_list es) p brs;
+      match d with
+      | None -> ()
+      | Some es ->
+        fprintf p "@ (_ => %a)"
+          exp_enclosed_list es
+
     let print_exp = exp 0
 
     let print_clock_decl p ck =
@@ -244,12 +256,12 @@ module PrintFun
       | L.Con (ck', x, (ty, c)) ->
         if !print_fullclocks
         then fprintf p " :: @[<hov 3>%a@]" print_clock ck
-        else fprintf p " when (%a=%a)"
-            print_ident x
+        else fprintf p " when %a(%a)"
             PrintOps.print_enumtag (c, ty)
+            print_ident x
 
     let print_decl p (id, ((ty, ck), _)) =
-      fprintf p "%a@ : %a%a"
+      fprintf p "@[<h>%a : %a%a@]"
         print_ident id
         PrintOps.print_typ ty
         print_clock_decl ck
@@ -257,7 +269,7 @@ module PrintFun
     let print_local_decl p (id, (((ty, ck), cx), o)) =
       match o with
       | Some (e, _) ->
-        fprintf p "%a@ : %a%a"
+        fprintf p "@[<h>%a : %a%a@]"
           print_ident id
           PrintOps.print_typ ty
           print_clock_decl ck
@@ -326,7 +338,7 @@ module PrintFun
           (print_initially ty) ini
           (pp_print_list (print_state ty)) states
       | L.Blocal (Scope (locals, blks)) ->
-        fprintf p "do %a@[<v 2>in@ %a@;<0 -2>@]done"
+        fprintf p "%a@[<v 2>let@ %a@;<0 -2>@]tel"
           (print_semicol_list_as "var" print_local_decl) locals
           print_blocks blks
 
@@ -346,13 +358,6 @@ module PrintFun
         (print_until_list ty) unt
         (print_unless_list ty) unl
 
-    let print_top_block p = function
-      | L.Blocal (Scope (locals, blks)) ->
-        fprintf p "%a@[<v 2>let@ %a@;<0 -2>@]tel"
-          (print_semicol_list_as "var" print_local_decl) locals
-          print_blocks blks
-      | blk -> print_block p blk
-
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;
                        L.n_in       = inputs;
@@ -368,7 +373,7 @@ module PrintFun
         print_ident name
         print_decl_list inputs
         print_decl_list outputs
-        print_top_block blk
+        print_block blk
 
     let print_extern_decl p (f, (tyins, tyout)) =
       fprintf p "external %a(%a) returns %a"

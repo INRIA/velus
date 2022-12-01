@@ -96,6 +96,9 @@ struct
 
   let print_ident p i = pp_print_string p (extern_atom i)
 
+  let print_sep_list print =
+    pp_print_list ~pp_sep:(fun p () -> fprintf p "@ ") print
+
   let rec exp prec p e =
     let (prec', assoc) = lprecedence e in
     let (prec1, prec2) =
@@ -113,10 +116,10 @@ struct
       | CE.Evar (id, _) ->
         print_ident p id
       | CE.Ewhen (e, (x, tx), c) ->
-        fprintf p "%a when (%a=%a)"
+        fprintf p "%a when %a(%a)"
           (exp prec') e
-          print_ident x
           PrintOps.print_enumtag (c, tx)
+          print_ident x
       | CE.Eunop  (op, e, ty) ->
         PrintOps.print_unop p op ty (exp prec') e
       | CE.Ebinop (op, e1, e2, ty) ->
@@ -126,7 +129,7 @@ struct
 
   let print_exp = exp 0
 
-  let print_branch_tag ty i p =
+  let print_branch_tag p (ty, i) =
     PrintOps.print_enumtag p (PrintOps.enumtag_of_int i, ty)
 
   let rec cexp prec p e =
@@ -136,21 +139,34 @@ struct
     else fprintf p "@[<hov 2>";
     begin match e with
       | CE.Emerge ((id, ty), ces, _) ->
-        fprintf p "@[<v>merge %a%a@]"
+        fprintf p "@[<v 2>merge %a@ %a@]"
           print_ident id
-          (PrintOps.print_branches (cexp 16))
-          (List.mapi (fun i ce -> (print_branch_tag ty i, Some ce)) ces, None)
+          branches (ty, List.mapi (fun i e -> (i, e)) ces, None)
       | CE.Ecase (e, ces, d) ->
         let ty = CE.typeof e in
-        fprintf p "@[<v>case %a of%a@]"
+        fprintf p "@[<v 2>case %a of@ %a@]"
           (exp prec') e
-          (PrintOps.print_branches (cexp 16))
-          (List.mapi (fun i ce -> (print_branch_tag ty i, ce)) ces,
-           if List.exists Option.is_none ces then Some d else None)
+          branches (ty,
+                    List.filter_map
+                      (fun (i, e) -> match e with None -> None | Some e -> Some (i, e))
+                      (List.mapi (fun i e -> (i, e)) ces),
+                    if List.exists Option.is_none ces then Some d else None)
       | CE.Eexp e ->
         exp (prec' + 1) p e
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
+
+  and branches p (ty, brs, d) =
+    print_sep_list (fun p (k, e) ->
+        fprintf p "(%a => %a)"
+          print_branch_tag (ty, k)
+          (cexp 16) e
+      ) p brs;
+    match d with
+    | None -> ()
+    | Some e ->
+      fprintf p "@ (_ => %a)"
+        (cexp 16) e
 
   let print_cexp = cexp 0
 
@@ -181,12 +197,12 @@ struct
     | CE.Con (ck', x, (ty, c)) ->
       if !print_fullclocks
       then fprintf p " :: @[<hov 3>%a@]" print_clock ck
-      else fprintf p " when (%a=%a)"
-          print_ident x
+      else fprintf p " when %a(%a)"
           PrintOps.print_enumtag (c, ty)
+          print_ident x
 
   let print_decl p (id, (ty, ck)) =
-    fprintf p "%a@ : %a%a"
+    fprintf p "@[%a : %a%a@]"
       print_ident id
       PrintOps.print_typ ty
       print_clock_decl ck
@@ -212,8 +228,8 @@ struct
         (print_comma_list px) xs
 
   let print_semicol_list_as name px p xs =
-    if List.length xs > 0 then
-      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
+    if xs <> [] then
+      fprintf p "%s @[<hov 0>%a@];@;"
         name
         (print_semicol_list px) xs
 end
