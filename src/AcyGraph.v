@@ -472,7 +472,7 @@ Section Dfs.
   Qed.
 
   Definition visited (p : PS.t) (v : PS.t) : Prop :=
-    (forall x, PS.In x p -> ~PS.In x v)
+    (forall x, PS.In x p -> ~PS.In x v) (* The visited variables will not be treated again *)
     /\ exists a, AcyGraph v a
            /\ (forall x, PS.In x v ->
                    exists zs, Env.find x graph = Some zs
@@ -693,6 +693,11 @@ Definition TopoOrder {v a} (g : AcyGraph v a) (xs : list ident) :=
   Forall' (fun xs x => ~In x xs
                     /\ is_vertex g x
                     /\ (forall y, is_trans_arc g y x -> In y xs)) xs.
+
+Definition TopoOrder' {v a} (g : AcyGraph v a) (xs : list ident) :=
+  Forall' (fun xs x => ~In x xs
+                    /\ is_vertex g x
+                    /\ (forall y, is_arc g y x -> In y xs)) xs.
 Global Hint Unfold TopoOrder : acygraph.
 
 Lemma TopoOrder_weaken : forall {v a} (g : AcyGraph v a) xs,
@@ -705,6 +710,22 @@ Proof.
   constructor; intuition.
   eapply Forall_impl; [|eauto].
   intros * ? ? ?. right; auto.
+Qed.
+
+Lemma TopoOrder_equiv {v a} (g : AcyGraph v a) : forall xs,
+    TopoOrder g xs <-> TopoOrder' g xs.
+Proof.
+  split; intros Top.
+  - induction Top; constructor; eauto.
+    destruct_conjs. repeat split; auto.
+    intros * Arc. apply H1. constructor; auto.
+  - induction Top; constructor; eauto.
+    destruct_conjs. repeat split; auto.
+    intros * Trans.
+    inv Trans; eauto.
+    specialize (H1 _ H2).
+    apply TopoOrder_weaken in IHTop.
+    simpl_Forall. eauto.
 Qed.
 
 Lemma TopoOrder_NoDup : forall {v a} (g : AcyGraph v a) xs,
