@@ -261,6 +261,14 @@ Module Type LCLOCKING
     eapply wt_program_find_unit in Hwc as (?&?); eauto.
   Qed.
 
+  Lemma wc_global_cons {PSyn prefs} :
+    forall tys (nd : @node PSyn prefs) nds exts,
+      wc_global (Global tys exts (nd :: nds)) ->
+      wc_global (Global tys exts nds).
+  Proof.
+    inversion 1; auto.
+  Qed.
+
   Global Instance wc_exp_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation _
                 ==> @eq exp ==> iff)

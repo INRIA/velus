@@ -487,6 +487,43 @@ Module Type LSYNTAX
       - rewrite 2 find_node_other; auto.
     Qed.
 
+    Lemma find_node_In :
+      forall G n,
+        NoDup (List.map name (units G)) ->
+        In n (nodes G) ->
+        find_node (n_name n) G = Some n.
+    Proof.
+      unfold find_node.
+      intros * Nd Hin.
+      eapply In_find_unit in Nd as (?&?); eauto.
+      now setoid_rewrite H.
+    Qed.
+
+    Lemma name_find_node :
+      forall f G,
+        In f (map n_name (nodes G)) ->
+        exists nd, find_node f G = Some nd.
+    Proof.
+      intros * Hin.
+      destruct G as [tys exts nds].
+      induction nds as [|nd]; simpl in *. contradiction.
+      destruct (ident_eq_dec (n_name nd) f).
+      - rewrite find_node_now; eauto.
+      - rewrite find_node_other; firstorder; auto.
+    Qed.
+
+    Lemma find_node_name :
+      forall f G n,
+        find_node f G = Some n ->
+        In f (map n_name (nodes G)).
+    Proof.
+      intros * Hf.
+      pose proof (find_node_Exists f G) as Hi.
+      rewrite Exists_exists in Hi.
+      destruct Hi as [[? []] ?]; subst; try congruence.
+      now apply in_map.
+    Qed.
+
   End find_node.
 
   Lemma equiv_program_types {PSyn prefs} : forall (G G' : @global PSyn prefs),
@@ -1586,6 +1623,18 @@ Module Type LSYNTAX
     intros n.
     rewrite <- fst_NoDupMembers.
     apply n_nodup.
+  Qed.
+
+  Lemma not_in_out {PSyn prefs} :
+    forall (n : @node PSyn prefs) x,
+      In x (List.map fst (n_in n)) ->
+      In x (List.map fst (n_out n)) ->
+      False.
+  Proof.
+    intros * Hin Hout.
+    pose proof (node_NoDup n) as ND.
+    rewrite map_app in ND.
+    eapply NoDup_app_In; eauto.
   Qed.
 
   Lemma AtomOrGensym_add : forall pref prefs xs,

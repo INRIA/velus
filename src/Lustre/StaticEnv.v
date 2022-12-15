@@ -119,6 +119,15 @@ Module Type STATICENV
     eauto using InMembers_incl with senv.
   Qed.
 
+  Lemma IsVar_In : forall Γ x,
+      IsVar Γ x ->
+      In x (map fst Γ).
+  Proof.
+    intros * Hv.
+    inv Hv.
+    now apply fst_InMembers.
+  Qed.
+
   Lemma IsVar_incl_fst : forall senv1 senv2,
       (forall x, IsVar senv1 x -> IsVar senv2 x) ->
       incl (map fst senv1) (map fst senv2).
@@ -275,6 +284,13 @@ Module Type STATICENV
     erewrite map_map, map_ext; auto. intros; destruct_conjs; auto.
   Qed.
 
+  Lemma senv_of_inout_app : forall l1 l2,
+      senv_of_inout (l1 ++ l2) = senv_of_inout l1 ++ senv_of_inout l2.
+  Proof.
+    unfold senv_of_inout.
+    apply map_app.
+  Qed.
+
   Lemma map_fst_senv_of_locs {A} : forall l,
       map fst (@senv_of_locs A l) = map fst l.
   Proof.
@@ -409,6 +425,68 @@ Module Type STATICENV
     split; intros. split; intros ? Hl.
     1,2:eapply H; eauto.
     destruct H as (H1&H2). intros [|]; [eapply H1|eapply H2]; eauto.
+  Qed.
+
+  Lemma senv_HasType :
+    forall l x ty ck i,
+      In (x,(ty,ck,i)) l ->
+      HasType (senv_of_inout l) x ty.
+  Proof.
+    intros * Hin.
+    unfold senv_of_inout.
+    econstructor; eauto.
+    apply in_map_iff.
+    exists (x,(ty,ck,i)); auto. auto.
+  Qed.
+
+  Lemma senv_HasClock :
+    forall l x ty ck i,
+      In (x,(ty,ck,i)) l ->
+      HasClock (senv_of_inout l) x ck.
+  Proof.
+    intros * Hin.
+    unfold senv_of_inout.
+    econstructor; eauto.
+    apply in_map_iff.
+    exists (x,(ty,ck,i)); auto. auto.
+  Qed.
+
+  Lemma In_HasType :
+    forall x l, In x (List.map fst l) ->
+           exists ty, HasType (senv_of_inout l) x ty.
+  Proof.
+    unfold senv_of_inout.
+    intros * Hin.
+    apply in_map_iff in Hin as ((?&(ty,?)&?)&?&?); simpl in *; subst.
+    exists ty.
+    econstructor.
+    rewrite in_map_iff.
+    esplit; split; now eauto.
+    reflexivity.
+  Qed.
+
+  Lemma HasType_det :
+    forall Γ x ty1 ty2,
+      NoDupMembers Γ ->
+      HasType Γ x ty1 ->
+      HasType Γ x ty2 ->
+      ty1 = ty2.
+  Proof.
+    intros * ND C1 C2; inv C1; inv C2.
+    eapply NoDupMembers_det with (t := e) in ND; eauto.
+    now subst.
+  Qed.
+
+  Lemma HasClock_det :
+    forall Γ x ck1 ck2,
+      NoDupMembers Γ ->
+      HasClock Γ x ck1 ->
+      HasClock Γ x ck2 ->
+      ck1 = ck2.
+  Proof.
+    intros * ND C1 C2; inv C1; inv C2.
+    eapply NoDupMembers_det with (t := e) in ND; eauto.
+    now subst.
   Qed.
 
   Global Hint Rewrite map_fst_senv_of_inout : list.

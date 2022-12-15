@@ -1,4 +1,5 @@
-From Coq Require Import BinPos.
+From Coq Require Import BinPos List.
+Import List ListNotations.
 From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext.
 
@@ -33,6 +34,66 @@ Local Hint Rewrite
      DScase_cons
      @zip_eq
   : localdb.
+
+
+(** *** abstract_clock as defined in Vélus, considering errors as absences *)
+Section Abstract_clock.
+
+  Context {A : Type}.
+
+  Definition AC : DS (sampl A) -C-> DS bool :=
+    MAP (fun v => match v with pres _ => true | _ => false end).
+
+  Lemma AC_eq :
+    forall u U,
+      AC (cons u U) == match u with
+                       | pres _ => cons true (AC U)
+                       | _ => cons false (AC U)
+                       end.
+  Proof.
+    intros.
+    unfold AC.
+    rewrite MAP_map, map_eq_cons.
+    destruct u; auto.
+  Qed.
+
+  Lemma AC_is_cons :
+    forall U, is_cons (AC U) <-> is_cons U.
+  Proof.
+    split; eauto using map_is_cons, is_cons_map.
+  Qed.
+
+  (** equivalent of [clocks_of] *)
+  Fixpoint bss {I} (ins : list I) : DS_prod (fun _ => sampl A) -C-> DS bool :=
+    match ins with
+    | [] => CTE _ _ (DS_const false)
+    | x :: nil => AC @_ PROJ _ x
+    | x :: ins => (ZIP orb @2_ (AC @_ PROJ _ x)) (bss ins)
+    end.
+
+  Lemma bss_cons2 :
+    forall {I} x y (l : list I) env,
+      bss (x :: y :: l) env = ZIP orb (AC (env x)) (bss (y :: l) env).
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma bss_inf :
+    forall {I} (l : list I) env,
+      all_infinite env ->
+      infinite (bss l env).
+  Proof.
+    induction l as [|?[]]; simpl; intros * Hinf.
+    - apply DS_const_inf.
+    - autorewrite with cpodb.
+      apply infinite_map, Hinf.
+    - autorewrite with cpodb.
+      apply zip_inf; auto.
+      apply infinite_map, Hinf.
+  Qed.
+
+End Abstract_clock.
+
 
 (** *** unop and binop are in a separate section to ease their usage by other
     primitives *)
@@ -115,6 +176,25 @@ Section SStream_functions.
   (** Rythm of constants if given by the base clock as an argument *)
   Definition sconst (v : A) : DS bool -C-> DS (sampl A) :=
     MAP (fun c : bool => if c then pres v else abs).
+
+  Lemma AC_sconst :
+    forall c bs,
+      AC (sconst c bs) == bs.
+  Proof.
+    intros.
+    unfold AC, sconst.
+    rewrite 2 MAP_map, map_comp.
+    eapply DS_bisimulation_allin1
+      with (R := fun U V => U == map _ V).
+    3: eauto.
+    { now intros ????? <- <-. }
+    intros U V Hc Hu. rewrite Hu in *.
+    split.
+    - destruct Hc as [Hc|Hc]. apply map_is_cons in Hc.
+      all: apply is_cons_elim in Hc as (?&?&Hv).
+      all: rewrite Hv, map_eq_cons, 2 first_cons; destruct x; auto.
+    - now rewrite rem_map.
+  Qed.
 
   (** fby1 is defined by means of two mutually recursive functions, see
       [fby1APf_eq] and [fby1f_eq] above for explanation *)

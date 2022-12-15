@@ -1,6 +1,6 @@
 (** * Extension of the Cpo library *)
 
-From Coq Require Import Morphisms.
+From Coq Require Import Morphisms List.
 From Velus Require Import Lustre.Denot.Cpo.
 
 (* simplification by rewriting during proofs, usage:
@@ -282,6 +282,20 @@ Qed.
 
 (** ** Cpo_streams_type.v  *)
 
+Definition all_infinite {I} {SI : I -> Type} (p : DS_prod SI) : Prop :=
+  forall x, infinite (p x).
+
+Lemma all_infinite_Oeq_compat :
+  forall I (SI : I -> Type) (env env' : DS_prod SI),
+    all_infinite env ->
+    env == env' ->
+    all_infinite env'.
+Proof.
+  unfold all_infinite.
+  intros * Hi Heq x.
+  now rewrite <- PROJ_simpl, <- Heq, PROJ_simpl.
+Qed.
+
 Lemma bot_not_cons :
   forall D (x : D) s, 0 == cons x s -> False.
 Proof.
@@ -379,6 +393,36 @@ Proof.
   eapply DScase_bot2_le in Fbot; eauto.
 Qed.
 
+Lemma cons_is_cons :
+  forall D a (x t : DS D),
+    x == cons a t -> is_cons x.
+Proof.
+  now intros * ->.
+Qed.
+
+Lemma Epsdecomp : forall D a (s x:DStr D), decomp a s (Eps x) -> decomp a s x.
+Proof.
+  destruct 1 as [[|k] Hp].
+  inversion Hp.
+  now exists k.
+Qed.
+
+Lemma decomp_decomp :
+  forall A (s : DS A) x x' t t',
+    decomp x t s ->
+    decomp x' t' s ->
+    x = x' /\ t = t'.
+Proof.
+  clear. intros * [k kth].
+  revert dependent s.
+  induction k; simpl; intros * Hp Hd; subst.
+  - apply decompCon_eq in Hd. now inversion Hd.
+  - destruct s; simpl in *.
+    + apply Epsdecomp in Hd. eauto.
+    + apply decompCon_eq in Hd.
+      inversion Hd; subst; eauto.
+Qed.
+
 (** *** DS_bisimulation with two obligations in one *)
 Lemma DS_bisimulation_allin1 : forall D (R: DS D -> DS D -> Prop),
         (forall x1 x2 y1 y2, R x1 y1 -> x1==x2 -> y1==y2 -> R x2 y2)
@@ -459,6 +503,8 @@ Proof.
   - rewrite app_cons, rem_cons in Heqxs; eauto.
 Qed.
 
+
+
 Lemma infinite_rem :
   forall D (s : DS D),
     infinite (rem s) -> infinite s.
@@ -485,6 +531,21 @@ Proof.
   intros * Hc Hi.
   constructor; auto.
   now rewrite rem_app.
+Qed.
+
+Lemma infinite_le_eq : forall D (s t:DS D), s <= t -> infinite s -> s == t.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V => U <= V /\ infinite U); auto.
+  { intros * [] <- <-; auto. }
+  clear.
+  intros s t Hc [Hle Hinf].
+  destruct Hinf as [H Hinf].
+  apply is_cons_elim in H as (?&?& Hs).
+  rewrite Hs in *.
+  apply DSle_cons_elim in Hle as (?& Ht &?).
+  now rewrite Ht, 2 first_cons, 2 rem_cons in *.
 Qed.
 
 Lemma is_cons_rem : forall D (s : DS D),
@@ -937,6 +998,27 @@ Section Zip.
     now apply zipf_is_cons in Hic.
   Qed.
 
+  Lemma zip_inf :
+    forall U V,
+      infinite U ->
+      infinite V ->
+      infinite (ZIP U V).
+  Proof.
+    clear.
+    intros * InfU InfV.
+    remember (ZIP U V) as t eqn:Ht.
+    apply Oeq_refl_eq in Ht.
+    revert InfU InfV Ht. revert t U V.
+    cofix Cof; intros.
+    destruct InfU as [Cu], InfV as [Cv].
+    apply is_cons_elim in Cu as (?& U' & Hu), Cv as (?& V' & Hv).
+    rewrite Hu, Hv, rem_cons, zip_eq in *.
+    constructor.
+    - now rewrite Ht.
+    - eapply Cof with (U := U') (V := V'); auto.
+      now rewrite Ht, rem_cons.
+  Qed.
+
 End Zip.
 
 Global Hint Rewrite @zip_eq @zip_bot1 @zip_bot2 : cpodb.
@@ -1007,6 +1089,34 @@ Proof.
       now autorewrite with cpodb.
 Qed.
 
+Lemma zip_comm :
+  forall A B (f : A -> A -> B) xs ys,
+    (forall x y, f x y = f y x) ->
+    ZIP f xs ys == ZIP f ys xs.
+Proof.
+  intros * Fcomm.
+  eapply DS_bisimulation_allin1 with
+    (R := fun U V => exists xs ys,
+              U == ZIP f xs ys
+              /\ V == ZIP f ys xs); eauto 4.
+  - intros * (?&?&?&?) Eq1 Eq2.
+    setoid_rewrite <- Eq1.
+    setoid_rewrite <- Eq2.
+    eauto.
+  - clear - Fcomm.
+    intros U V Hc (xs & ys & Hu & Hv).
+    assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
+    { rewrite Hu, Hv in Hc.
+      destruct Hc as [Hc|Hc]; apply zip_is_cons in Hc; tauto. }
+    apply is_cons_elim in Hcx as (vx & xs' & Hx).
+    apply is_cons_elim in Hcy as (vy & ys' & Hy).
+    rewrite Hx, Hy, zip_eq in *.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    split.
+    + autorewrite with cpodb; auto.
+    + exists xs',ys'. rewrite 2 rem_cons; auto.
+Qed.
 
 Section Take.
 
@@ -1121,3 +1231,619 @@ Fixpoint take_list {A} (n : nat) (xs : DS A) : list (option A) :=
            | Con x xs => Some x :: take_list n xs
            end
   end.
+
+
+(** ** The cpo of n-uplets. *)
+Section Nprod.
+
+Context { D : cpo }.
+
+Fixpoint nprod (n : nat) : cpo :=
+  match n with
+  | O => D
+  | 1 => D
+  | S n => Dprod D (nprod n)
+  end.
+
+(** nprod concatenation *)
+Definition nprod_app : forall {n p}, nprod n -C-> nprod p -C-> nprod (n + p).
+  induction n as [|[]]; intro p.
+  - exact (CURRY _ _ _ (SND _ _ )).
+  - destruct p.
+    + exact (CTE _ _).
+    + exact (PAIR _ _).
+  - apply curry.
+    exact ((PAIR _ _ @2_ (FST _ _ @_ FST _ _))
+             ((IHn p @2_ (SND _ _ @_ FST _ _)) (SND _ _))).
+Defined.
+Opaque nprod_app.
+
+(** extract the first element if 0 < n, [d] otherwise *)
+Definition nprod_fst d {n} : nprod n -C-> D :=
+  match n with
+  | O => CTE _ _ d
+  | 1 => ID _
+  | (S n) => FST _ _
+  end.
+
+(** throw away the first element *)
+Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
+  match n with
+  | O => 0
+  | (S n) => SND _ _
+  end.
+
+Lemma nprod_fst_app :
+  forall m n (mp : nprod (S m)) (np : nprod n) d,
+    nprod_fst d (nprod_app mp np) = nprod_fst d mp.
+Proof.
+  destruct m, n; auto.
+Qed.
+
+(** extract the k-th element if k < n, [d] otherwise *)
+Fixpoint get_nth (k : nat) (d : D) {n} : nprod n -C-> D :=
+  match k with
+  | O => nprod_fst d
+  | S k => match n return nprod n -C-> _ with
+          | O => CTE _ _ d
+          | S _ => get_nth k d @_ nprod_skip
+          end
+  end.
+
+Lemma get_nth_Oeq_compat :
+  forall n k d (np np' : nprod n),
+    np == np' ->
+    get_nth k d np == get_nth k d np'.
+Proof.
+  induction n; simpl; intros * Heq.
+  - destruct k; auto.
+  - destruct n, k; auto.
+    + unfold get_nth. now rewrite Heq.
+    + simpl. autorewrite with cpodb. auto.
+Qed.
+
+Global Add Parametric Morphism n k d : (get_nth k d)
+       with signature @Oeq (nprod n) ==> @Oeq D as get_nth_compat_morph.
+Proof.
+  exact (get_nth_Oeq_compat n k d).
+Qed.
+
+Lemma get_nth_skip :
+  forall {n} (np : nprod (S n)) k d,
+    get_nth k d (nprod_skip np) = get_nth (S k) d np.
+Proof.
+  induction k; auto.
+Qed.
+
+Lemma nprod_app_nth1 :
+  forall m n (mp : nprod m) (np : nprod n) k d,
+    k < m ->
+    get_nth k d (nprod_app mp np) = get_nth k d mp.
+Proof.
+  induction m; intros * Hk.
+  - inversion Hk.
+  - destruct k; simpl.
+    + now unshelve setoid_rewrite nprod_fst_app.
+    + autorewrite with cpodb.
+      rewrite <- (IHm n _ np); auto with arith.
+      destruct m; simpl; auto; lia.
+Qed.
+
+Lemma nprod_app_nth2 :
+  forall m n (mp : nprod m) (np : nprod n) k d,
+    k >= m ->
+    get_nth k d (nprod_app mp np) = get_nth (k-m) d np.
+Proof.
+  induction m; intros * Hk.
+  - simpl in *. autorewrite with cpodb; repeat f_equal; auto with arith.
+  - destruct k; simpl.
+    + lia.
+    + destruct m, n; auto with arith.
+      * destruct k; simpl; now autorewrite with cpodb.
+      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
+      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
+      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
+Qed.
+
+Lemma nprod_app_Oeq_compat :
+  forall {n p} (p1 p2 : nprod n) (p3 p4 : nprod p),
+    p1 == p2 ->
+    p3 == p4 ->
+    nprod_app p1 p3 == nprod_app p2 p4.
+Proof.
+  induction n; auto.
+Qed.
+
+Fixpoint nprod_const (c : D) n {struct n} : nprod n :=
+  match n with
+  | O => 0
+  | S n =>
+      match n return nprod n -> nprod (S n) with
+      | O => fun _ => c
+      | S m => fun np => (c, np)
+      end (nprod_const c n)
+  end.
+
+Lemma get_nth_const :
+  forall c n k d,
+    k < n ->
+    get_nth k d (nprod_const c n) = c.
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - inversion Hk.
+  - destruct k; auto; lia.
+  - destruct k; auto.
+    rewrite <- get_nth_skip, IHn; auto with arith.
+Qed.
+
+Lemma get_nth_err :
+  forall k d n (np : nprod n),
+    (n <= k)%nat ->
+    get_nth k d np = d.
+Proof.
+  induction k; simpl; intros * Hn.
+  - inversion Hn; subst. now simpl.
+  - destruct n; cbn; auto.
+    setoid_rewrite get_nth_skip.
+    apply IHk; auto with arith.
+Qed.
+
+
+(** A Forall predicate for n-uplets  *)
+Section Forall_Nprod.
+
+Variable P : D -> Prop.
+
+Definition forall_nprod {n} (np : nprod n) : Prop.
+  induction n as [|[]]; simpl in *.
+  - exact True.
+  - exact (P np).
+  - exact (P (fst np) /\ IHn (snd np)).
+Defined.
+
+Lemma forall_nprod_skip :
+  forall {n} (np : nprod (S n)),
+    forall_nprod np ->
+    forall_nprod (nprod_skip np).
+Proof.
+  intros * Hnp.
+  destruct n.
+  - now simpl.
+  - destruct Hnp. auto.
+Qed.
+
+Lemma k_forall_nprod :
+  forall {n} (np : nprod n),
+    (forall k d, k < n -> P (get_nth k d np)) ->
+    forall_nprod np.
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - constructor.
+  - unshelve eapply (Hk O _); auto.
+  - split.
+    + unshelve eapply (Hk O); auto with arith.
+      destruct np; auto.
+    + eapply IHn; intros.
+      change (snd np) with (nprod_skip np).
+      rewrite get_nth_skip; auto with arith.
+Qed.
+
+Lemma k_forall_nprod_def :
+  forall {n} (np : nprod n) d,
+    (forall k, k < n -> P (get_nth k d np)) ->
+    forall_nprod np.
+Proof.
+  induction n as [|[]]; intros *  Hk.
+  - constructor.
+  - unshelve eapply (Hk O _); auto.
+  - split.
+    + unshelve eapply (Hk O); auto with arith.
+    + eapply IHn; intros; eauto.
+      change (snd np) with (nprod_skip np).
+      rewrite get_nth_skip; auto with arith.
+Qed.
+
+Lemma forall_nprod_k :
+  forall {n} (np : nprod n),
+    forall_nprod np ->
+    (forall k d, k < n -> P (get_nth k d np)).
+Proof.
+  induction n as [|[]]; intros * Hk.
+  - lia.
+  - intros.
+    assert (k = O) by lia; subst.
+    now simpl in Hk.
+  - intros.
+    specialize (IHn (nprod_skip np)).
+    setoid_rewrite get_nth_skip in IHn.
+    destruct k. { destruct Hk; auto. }
+    apply IHn; auto using forall_nprod_skip with arith.
+Qed.
+
+Lemma forall_nprod_k_def :
+  forall {n} (np : nprod n) d,
+    P d ->
+    forall_nprod np ->
+    (forall k, P (get_nth k d np)).
+Proof.
+  intros * Hp Hf k.
+  destruct (Nat.lt_ge_cases k n).
+  - apply forall_nprod_k; auto.
+  - rewrite get_nth_err; auto.
+Qed.
+
+Lemma forall_nprod_k_iff :
+  forall {n} (np : nprod n),
+    forall_nprod np <-> (forall k d, k < n -> P (get_nth k d np)).
+Proof.
+  split; auto using forall_nprod_k, k_forall_nprod.
+Qed.
+
+Lemma forall_nprod_app :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    forall_nprod np ->
+    forall_nprod mp ->
+    forall_nprod (nprod_app np mp).
+Proof.
+  intros * Hnp Hmp.
+  eapply k_forall_nprod.
+  intros * Hk.
+  destruct (Nat.lt_ge_cases k n).
+  - rewrite nprod_app_nth1; auto using forall_nprod_k.
+  - rewrite nprod_app_nth2; auto.
+    apply forall_nprod_k; auto; lia.
+Qed.
+
+Lemma app_forall_nprod :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    forall_nprod (nprod_app np mp) ->
+    forall_nprod np
+    /\ forall_nprod mp.
+Proof.
+  setoid_rewrite forall_nprod_k_iff.
+  intros * Hf; split; intros k d Hk.
+  - specialize (Hf k d).
+    rewrite nprod_app_nth1 in Hf; auto with arith.
+  - specialize (Hf (n + k) d).
+    rewrite nprod_app_nth2, Nat.add_comm,
+      Nat.add_sub in Hf; auto with arith.
+    apply Hf; lia.
+Qed.
+
+Lemma forall_nprod_const :
+  forall {n} c,
+    P c ->
+    forall_nprod (nprod_const c n).
+Proof.
+  intros.
+  apply k_forall_nprod; intros.
+  now rewrite get_nth_const.
+Qed.
+
+Global Add Parametric Morphism n
+  (P_compat:  Morphisms.Proper (@Oeq D ==> iff) P)
+  : (forall_nprod)
+    with signature Oeq (O := nprod n) ==> iff
+      as forall_nprod_morph.
+Proof.
+  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
+  intros * Heq.
+  rewrite 2 forall_nprod_k_iff.
+  split; intros.
+  eapply P_compat; rewrite <- ?Heq; auto.
+  eapply P_compat; rewrite ?Heq; auto.
+Qed.
+
+End Forall_Nprod.
+
+Lemma forall_nprod_impl :
+  forall (P Q : D -> Prop),
+    (forall x, P x -> Q x) ->
+    forall {n} (np : nprod n),
+      forall_nprod P np ->
+      forall_nprod Q np.
+Proof.
+  induction n as [|[]]; intros * Hf; auto.
+  - now simpl in *; auto.
+  - destruct Hf.
+    split; auto.
+    now apply IHn.
+Qed.
+
+Lemma forall_nprod_and :
+  forall (P Q : D -> Prop),
+    forall {n} (np : nprod n),
+    forall_nprod P np ->
+    forall_nprod Q np ->
+    forall_nprod (fun x => P x /\ Q x) np.
+Proof.
+  induction n as [|[]]; intros * Hp Hq; auto.
+  - constructor; auto.
+  - inversion Hp. inversion Hq.
+    constructor; auto; now apply IHn.
+Qed.
+
+
+(** From n-uplets, build lists of length n *)
+Section List_of_nprod.
+
+Import ListNotations.
+
+Definition list_of_nprod_ {n} (np : nprod n) : list D.
+  induction n as [|[]].
+  - exact [].
+  - exact [np].
+  - exact (fst np :: IHn (snd np)).
+Defined.
+
+(* FIXME: la version explicite n'est pas vraiment plus lisible... *)
+Fixpoint list_of_nprod {n} (np : nprod n) {struct n} : list D :=
+  match n return nprod n -> list D with
+  | O => fun _ => []
+  | S n => fun np =>
+            let l := list_of_nprod (nprod_skip np) in
+            match n return nprod (S n) -> list D with
+            | O => fun np => np :: l
+            | _ => fun np => fst np :: l
+            end np
+  end np.
+
+Lemma list_of_nprod_length :
+  forall {n} (np : nprod n),
+    length (list_of_nprod np) = n.
+Proof.
+  induction n as [|[]]; auto.
+  intros []; simpl.
+  f_equal. apply IHn.
+Qed.
+
+Lemma list_of_nprod_app :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    list_of_nprod (nprod_app np mp) = list_of_nprod np ++ list_of_nprod mp.
+Proof.
+  induction n as [|[]]; intros; auto.
+  - destruct m; auto.
+  - destruct np as (p,np).
+    specialize (IHn _ np mp).
+    simpl; f_equal; auto.
+Qed.
+
+Lemma list_of_nprod_nth :
+  forall {n} (np : nprod n) k d,
+    nth k (list_of_nprod np) d = get_nth k d np.
+Proof.
+  induction n as [|[]]; intros.
+  - destruct k; auto.
+  - destruct k as [|[]]; auto.
+  - destruct k; auto.
+    apply IHn; auto with arith.
+Qed.
+
+Lemma list_of_nprod_nth_error :
+  forall n (np : nprod n) k d x,
+    nth_error (list_of_nprod np) k = Some x ->
+    get_nth k d np = x.
+Proof.
+  intros * Hn.
+  apply nth_error_nth with (d := d) in Hn as Hnt.
+  now rewrite list_of_nprod_nth in Hnt.
+Qed.
+
+Lemma forall_nprod_Forall :
+  forall P {n} (np : nprod n),
+    forall_nprod P np ->
+    Forall P (list_of_nprod np).
+Proof.
+  induction n as [|[]]; intros * Hf.
+  - constructor.
+  - constructor; auto.
+  - inversion Hf.
+    constructor; auto.
+    now apply IHn.
+Qed.
+
+Lemma Forall_forall_nprod :
+  forall P {n} (np : nprod n),
+    Forall P (list_of_nprod np) ->
+    forall_nprod P np.
+Proof.
+  induction n as [|[]]; intros * Hf.
+  - constructor.
+  - inversion Hf. auto.
+  - inversion Hf.
+    constructor; auto.
+    now apply IHn.
+Qed.
+
+End List_of_nprod.
+
+
+(** Lifting functions over n-uplets *)
+Section Lift_nprod.
+
+Fixpoint lift (F : D -C-> D) {n} : nprod n -C-> nprod n :=
+  match n with
+  | O => ID _
+  | S n =>
+      match n return nprod n -C-> nprod n -> nprod (S n) -C-> nprod (S n) with
+      | O => fun _ => F
+      | S _ => fun fn => PROD_map F fn
+      end (@lift F n)
+  end.
+
+Definition llift {A} (F : D -C-> A -C-> D) {n} :
+  nprod n -C-> A -C-> nprod n.
+  (* match n with *)
+  (* | O => CTE _ _ *)
+  (* | S n => *)
+  (*     match n return nprod n -C-> D -C-> nprod n -> nprod (S n) -C-> D -C-> nprod (S n) with *)
+  (*     | O => fun _ => F *)
+  (*     | S _ => fun fn => curry ((PAIR _ _ @2_ *)
+  (*                              ((F @2_ (FST _ _ @_ FST _ _)) (SND _ _))) *)
+  (*                             ((fn @2_ (SND _ _ @_ FST _ _)) (SND _ _))) *)
+  (*     end (@llift _ F n) *)
+  (*        end. *)
+  induction n as [|[]].
+  - apply CTE.
+  - apply F.
+  - apply curry.
+    apply (fcont_comp2 (PAIR _ _)).
+    exact ((F @2_ (FST _ _ @_ FST _ _)) (SND _ _)).
+    exact ((IHn @2_ (SND _ _ @_ FST _ _)) (SND _ _)).
+Defined.
+
+Lemma llift_simpl :
+  forall A F n d u U,
+    @llift A F (S (S n)) (u, U) d = (F u d, @llift A F (S n) U d).
+Proof.
+  trivial.
+Qed.
+
+Lemma llift_nth :
+  forall A (F : D -C-> A -C-> D) a,
+  forall {n} (np : nprod n) k d,
+    k < n ->
+    get_nth k d (llift F np a) = F (get_nth k d np) a.
+Proof.
+  induction n as [|[]]; intros; auto; try lia.
+  - destruct k; simpl; auto; lia.
+  - destruct np.
+    rewrite llift_simpl.
+    destruct k; auto.
+    rewrite <- get_nth_skip.
+    setoid_rewrite <- IHn; auto with arith.
+Qed.
+
+Definition lift2
+  (F : D -C-> D -C-> D) {n} :
+  nprod n -C-> nprod n -C-> nprod n.
+  induction n as [|[]].
+  - exact 0. (* ? *)
+  - exact F.
+  - apply curry.
+    apply (fcont_comp2 (PAIR _ _)).
+    exact ((F @2_ (FST _ _ @_ FST _ _ )) (FST _ _ @_ SND _ _ )).
+    exact ((IHn @2_ (SND _ _ @_ FST _ _ )) (SND _ _ @_ SND _ _ )).
+Defined.
+
+Lemma lift2_simpl :
+  forall F n u U v V,
+    @lift2 F (S (S n)) (u, U) (v, V) = (F u v, @lift2 F (S n) U V).
+Proof.
+  trivial.
+Qed.
+
+Lemma lift2_nth :
+  forall F {n} (np np' : nprod n) k d,
+    k < n ->
+    get_nth k d (lift2 F np np') = F (get_nth k d np) (get_nth k d np').
+Proof.
+  induction n as [|[]]; intros; auto; try lia.
+  - destruct k; simpl; auto; lia.
+  - destruct np, np'.
+    rewrite lift2_simpl.
+    destruct k; auto.
+    rewrite <- 3 get_nth_skip, <- IHn; auto with arith.
+Qed.
+
+Lemma forall_nprod_lift2 :
+  forall (F : D -C-> D -C-> D),
+  forall (P : D -> Prop),
+    (forall x y, P x -> P y -> P (F x y)) ->
+    forall {n} (np np' : nprod n),
+      forall_nprod P np ->
+      forall_nprod P np' ->
+      forall_nprod P (lift2 F np np').
+Proof.
+  intros f P Hf.
+  induction n as [|[]]; intros * H H'; auto.
+  simpl in *; auto.
+  destruct np,np',H,H'.
+  rewrite lift2_simpl.
+  split; simpl in *; auto .
+  now apply IHn.
+Qed.
+
+Lemma forall_nprod_llift :
+  forall A (F : D -C-> A -C-> D) d,
+  forall (P Q : D -> Prop),
+    (forall x, Q x -> P (F x d)) ->
+    forall {n} (np : nprod n),
+      forall_nprod Q np ->
+      forall_nprod P (llift F np d).
+Proof.
+  intros A F d ?? Hf.
+  induction n as [|[]]; intros * H; auto.
+  simpl in *; auto.
+  destruct np, H.
+  rewrite llift_simpl.
+  split; simpl in *; auto .
+  now apply IHn.
+Qed.
+
+(* pas envie d'importer tout Common pour ça... *)
+Ltac inv H := inversion H; clear H; subst.
+Ltac simpl_Forall :=
+  repeat
+    (match goal with
+     | H: Forall2 _ _ (_ :: _) |- _ => inv H
+     end; subst).
+
+Lemma Forall2_lift2 :
+  forall A (F : D -C-> D -C-> D)
+    (P Q : A -> D -> Prop),
+    (forall a x y, P a x -> P a y -> Q a (F x y)) ->
+    forall {n} (l1 l2 : nprod n) l,
+      Forall2 P l (list_of_nprod l1) ->
+      Forall2 P l (list_of_nprod l2) ->
+      Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
+Proof.
+  intros * PQ.
+  induction n as [|[]]; intros * Hl1 Hl2.
+  - simpl in *. now inversion Hl1.
+  - simpl in *. simpl_Forall; auto.
+  - inv Hl1. inv Hl2.
+    constructor.
+    + simpl; eauto.
+    + apply IHn; auto.
+Qed.
+
+Lemma Forall2_llift :
+  forall A B b (F : D -C-> B -C-> D)
+    (P Q : A -> D -> Prop),
+    (forall a x, P a x -> Q a (F x b)) ->
+    forall {n} (l1 : nprod n) (l : list A),
+      Forall2 P l (list_of_nprod l1) ->
+      Forall2 Q l (list_of_nprod (llift F l1 b)).
+Proof.
+  intros * PQ.
+  induction n as [|[]]; intros * Hl1.
+  - simpl in *. now inversion Hl1.
+  - simpl in *. simpl_Forall; auto.
+  - inv Hl1.
+    constructor.
+    + simpl; eauto.
+    + apply IHn; auto.
+Qed.
+
+Lemma Forall_llift :
+  forall A a (F : D -C-> A -C-> D)
+    (P Q : D -> Prop),
+    (forall x, P x -> Q (F x a)) ->
+    forall {n} (np : nprod n),
+      Forall P (list_of_nprod np) ->
+      Forall Q (list_of_nprod (llift F np a)).
+Proof.
+  intros * PQ.
+  induction n as [|[]]; intros * Hp.
+  - constructor.
+  - inversion_clear Hp.
+    constructor; auto.
+  - inversion_clear Hp; constructor.
+    + apply PQ; auto.
+    + apply IHn; auto.
+Qed.
+
+End Lift_nprod.
+
+End Nprod.

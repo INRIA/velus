@@ -252,6 +252,18 @@ Section Extra.
     induction n, l, l'; simpl; intros * Nth Len; try discriminate; eauto.
   Qed.
 
+  Lemma In_nth_error_len :
+    forall (l : list A) x,
+      In x l ->
+      exists n, n < length l /\ nth_error l n = Some x.
+  Proof.
+    induction l as [|a l IH].
+    - easy.
+    - intros ? [H|[n HH] %IH].
+      + subst. exists O; simpl; auto with arith.
+      + exists (S n). destruct HH. simpl; auto with arith.
+  Qed.
+
   Lemma nth_error_Forall2:
     forall {A B} n (P: A -> B -> Prop) l l' x ,
       nth_error l n = Some x ->
@@ -3116,6 +3128,20 @@ End Forall2.
 Global Hint Resolve -> Forall2_eq : core.
 Global Hint Resolve <- Forall2_eq : core.
 
+Global Add Parametric Morphism
+  A B (P: A -> B -> Prop) eqA eqB
+  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> Basics.impl) P)
+  : (@Forall2 A B P)
+       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> Basics.impl
+         as Forall2_morph.
+Proof.
+  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
+  induction x; intros x' Hx y y' Hy HF2.
+  - inv HF2. inv Hx. inv Hy. constructor.
+  - inv HF2. inv Hx. inv Hy.
+    constructor; eauto.
+Qed.
+
 Lemma length_in_left_combine:
   forall {A B} (l: list A) (l': list B) x,
     length l = length l' ->
@@ -3395,6 +3421,20 @@ Section Forall3.
       repeat split; auto. constructor; auto.
   Qed.
 End Forall3.
+
+Global Add Parametric Morphism
+  A B C (P: A -> B -> C -> Prop) eqA eqB eqC
+  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> eqC ==> Basics.impl) P)
+  : (@Forall3 A B C P)
+       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> (Forall2 eqC) ==> Basics.impl
+         as Forall3_morph.
+Proof.
+  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
+  induction x; intros x' Hx y y' Hy z z' Hz HF3.
+  - inv HF3. inv Hx. inv Hy. inv Hz. constructor.
+  - inv HF3. inv Hx. inv Hy. inv Hz.
+    constructor; eauto.
+Qed.
 
 Section Forall3_map.
   Context {A B C D : Type}.
@@ -4968,6 +5008,12 @@ Lemma map_filter_map {A B C} : forall (f : B -> option C) (g : A -> B) xs,
 Proof.
   induction xs; simpl; auto.
   destruct (f (g a)); auto.
+Qed.
+
+Lemma map_filter_Some : forall {A B} (f : A -> B) l,
+    map_filter (fun x => Some (f x)) l = map f l.
+Proof.
+  induction l; simpl; auto.
 Qed.
 
 Lemma InMembers_map {A B C} :

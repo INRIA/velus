@@ -143,6 +143,47 @@ Module Type LORDERED
       assumption.
     Qed.
 
+    Lemma ordered_nodes_NoDup {PSyn prefs} :
+      forall (G : @global PSyn prefs) ,
+        Ordered_nodes G ->
+        NoDup (List.map n_name (nodes G)).
+    Proof.
+      unfold Ordered_nodes, Ordered_program, units.
+      simpl; intros * Hord.
+      induction (nodes G); simpl; inv Hord; constructor; auto.
+      rewrite in_map_iff.
+      intros (x & Heq & Hin).
+      destruct_conjs.
+      rewrite Forall_forall in *.
+      unfold not in *.
+      eauto.
+    Qed.
+
+    Lemma Ordered_nodes_nin {PSyn prefs} :
+      forall tys exts nds (n nd : @node PSyn prefs),
+        Ordered_nodes (Global tys exts (nd :: nds)) ->
+        In n nds ->
+        ~ Is_node_in_block (n_name nd) (n_block n).
+    Proof.
+      intros * Ord In.
+      apply ordered_nodes_NoDup in Ord as Nd.
+      apply find_node_In with _ n in Nd as Hfind; simpl; auto.
+      setoid_rewrite find_node_other in Hfind.
+      2:{ simpl in Nd. apply in_map with (f := n_name) in In.
+          inv Nd. intro Heq. rewrite Heq in H1. contradiction. }
+      eapply find_node_later_not_Is_node_in; eauto.
+    Qed.
+
+    (* FIXME: Ordered_node is so complicated that it is easier to
+       use this lemma than to apply an [inversion] on the hypothesis *)
+    Lemma Ordered_nodes_cons {PSyn prefs} :
+      forall tys (nd : @node PSyn prefs) nds exts,
+        Ordered_nodes (Global tys exts (nd :: nds)) ->
+        Ordered_nodes (Global tys exts nds).
+    Proof.
+      inversion 1; auto.
+    Qed.
+
   End Ordered_nodes_Properties.
 
   (** Actually, any wt or wc program is also ordered :)

@@ -306,6 +306,23 @@ Module Type LTYPING
     eapply wt_program_NoDup in Wt; eauto.
   Qed.
 
+  Lemma wt_global_cons {PSyn prefs} :
+    forall tys (nd : @node PSyn prefs) nds exts,
+      wt_global (Global tys exts (nd :: nds)) ->
+      wt_global (Global tys exts nds).
+  Proof.
+    inversion 1 as [? Hi]. inv Hi.
+    constructor; auto.
+  Qed.
+
+  Lemma wt_global_uncons {PSyn prefs} :
+    forall tys (nd : @node PSyn prefs) nds exts,
+      wt_global (Global tys exts (nd :: nds)) ->
+      wt_node (Global tys exts nds) nd.
+  Proof.
+    intros * [? Wt]. now inv Wt.
+  Qed.
+
   Lemma wt_find_node {PSyn prefs}:
     forall (G : @global PSyn prefs) f n,
       wt_global G ->
@@ -317,6 +334,21 @@ Module Type LTYPING
     eapply wt_program_find_unit' in Hwt as (?&?&Hequiv); [|eauto].
     eexists; split; eauto.
     apply equiv_program_types in Hequiv; auto.
+  Qed.
+
+  Lemma find_node_uncons {PSyn prefs} :
+    forall f tys (nd ndf : @node PSyn prefs) nds exts,
+      wt_global (Global tys exts (nd :: nds)) ->
+      find_node f (Global tys exts nds) = Some ndf ->
+      find_node f (Global tys exts (nd :: nds)) = Some ndf.
+  Proof.
+    intros * Hwt Hfind.
+    inv Hwt.
+    apply CommonTyping.wt_program_NoDup in H0.
+    inv H0.
+    destruct (ident_eq_dec (n_name nd) f); subst.
+    - apply find_node_name in Hfind. exfalso. auto.
+    - setoid_rewrite find_node_other; auto.
   Qed.
 
   Lemma wt_clock_add:

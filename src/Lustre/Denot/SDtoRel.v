@@ -1,4 +1,4 @@
-From Coq Require Import BinPos List Permutation.
+From Coq Require Import BinPos List Permutation Morphisms.
 
 From Velus Require Import Common Ident Environment Operators Clocks CoindStreams.
 From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LOrdered Lustre.LSemantics Lustre.LTyping Lustre.LClocking Lustre.LCausality.
@@ -7,9 +7,10 @@ From Velus Require Import FunctionalEnvironment.
 From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
-Import ListNotations.
 
-Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof Safe.
+Require Import Cpo_ext CommonDS SDfuns Denot Infty InftyProof Safe CommonList2.
+
+Import List ListNotations.
 
 Module Type SDTOREL
        (Import Ids   : IDS)
@@ -24,21 +25,11 @@ Module Type SDTOREL
        (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Sem   : LSEMANTICS Ids Op OpAux Cks Senv Syn Lord Str)
-       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Str)
-       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Str Den)
-       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Str Den).
+       (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord)
+       (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
+       (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den).
 
-(* TODO: move to Vélus *)
-(* https://stackoverflow.com/questions/73155085/coq-rewriting-under-a-pointwise-relation *)
-Import Morphisms.
-Add Parametric Morphism : sem_var
-    with signature FEnv.Equiv (@EqSt _) ==> pointwise_relation _ (pointwise_relation _ iff)
-      as sem_var_morph_pointwise.
-Proof.
-  split; now rewrite H.
-Qed.
-
-(* TODO: trouver un moyen pour ne pas devoir ajouter ça *)
+  (* TODO: trouver un moyen pour ne pas devoir ajouter ça *)
 Global Add Parametric Morphism k t : (fun s => when k s t)
        with signature (@EqSt _) ==> (@EqSt _) ==> Basics.impl
          as  when_morph2.
@@ -47,44 +38,239 @@ Proof.
   now rewrite <- HH.
 Qed.
 
-(* TODO: move to Vélus *)
-Add Parametric Morphism : (@pair Str.history Str.history) with signature
-        FEnv.Equiv (EqSt (A:=svalue)) ==> FEnv.Equiv (EqSt (A:=svalue)) ==> history_equiv
-          as history_equiv_morph.
+
+(* TODO: à terme, mettre dans LSemantics *)
+Section Sem_absent.
+
+(* TODO: move *)
+Section FromLClockedSemantics.
+Lemma clocks_of_false :
+  forall ss,
+    clocks_of (List.map (fun _ : Stream svalue => Streams.const absent) ss) ≡ Streams.const false.
 Proof.
-  intros ??????.
-  split; auto.
+  intros *.
+  eapply ntheq_eqst. intros n.
+  rewrite clocks_of_nth, const_nth.
+  induction ss; simpl; auto.
+  rewrite const_nth; simpl; auto.
+Qed.
+Lemma clocks_of_false2 :
+  forall n,
+    clocks_of (repeat (Streams.const absent) n) ≡ Streams.const false.
+Proof.
+  intros.
+  eapply ntheq_eqst. intro k.
+  rewrite clocks_of_nth, const_nth.
+  induction n; simpl; auto.
+  rewrite const_nth; simpl; auto.
+Qed.
+Lemma fby_absent {A}:
+  @fby A (Streams.const absent) (Streams.const absent) (Streams.const absent).
+Proof.
+  cofix CoFix.
+  rewrite CommonStreams.const_Cons. constructor; auto.
+Qed.
+(* à adapter de ClockedSem.sem_node_ck_cons' *)
+Corollary sem_node_cons' :
+    forall (nd : node) nds types externs f xs ys,
+      Ordered_nodes (Global types externs (nd::nds))
+      -> sem_node (Global types externs nds) f xs ys
+      -> nd.(n_name) <> f
+      -> sem_node (Global types externs (nd::nds)) f xs ys.
+Proof.
+Admitted.
+
+(* à adapter de ClockedSem.sem_block_ck_cons' *)
+Lemma sem_block_cons' :
+  forall (nd : node) nds types externs bck Hi bk,
+    Ordered_nodes (Global types externs (nd::nds))
+    -> sem_block (Global types externs nds) Hi bk bck
+    -> ~Is_node_in_block nd.(n_name) bck
+    -> sem_block (Global types externs (nd::nds)) Hi bk bck.
+Proof.
+Admitted.
+
+End FromLClockedSemantics.
+
+(* TODO: move? *)
+Global Add Parametric Morphism {A} : (@repeat (Stream A))
+    with signature (@EqSt A) ==> (@eq nat) ==> (@EqSts A)
+      as repeat_morph.
+Proof.
+  intros * Heq n.
+  induction n; simpl; constructor; eauto.
 Qed.
 
-(* TODO: move to Vélus, remplacer Forall3_EqSt *)
-Global Add Parametric Morphism
-  A B C (P: A -> B -> C -> Prop) eqA eqB eqC
-  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> eqC ==> Basics.impl) P)
-  : (@Forall3 A B C P)
-       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> (Forall2 eqC) ==> Basics.impl
-         as Forall3_morph.
+(* Hypothèse d'induction sur les nœuds du programme *)
+Definition sem_global_abs (G : global) :=
+  forall f n,
+    find_node f G = Some n ->
+    let ss := repeat (Streams.const absent) (length (n_in n)) in
+    let os := repeat (Streams.const absent) (length (n_out n)) in
+    sem_node G f ss os.
+
+Lemma sem_exp_absent :
+  forall (G : global) Γ,
+    sem_global_abs G ->
+    forall e,
+    restr_exp e ->
+    wt_exp G Γ e ->
+    let H := (fun _ => Some (Streams.const absent), FEnv.empty (Stream svalue)) in
+    sem_exp G H (Streams.const false) e (repeat (Streams.const absent) (numstreams e)).
 Proof.
-  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
-  induction x; intros x' Hx y y' Hy z z' Hz HF3.
-  - inv HF3. simpl_Forall. constructor.
-  - inv HF3. inv Hx. inv Hy. inv Hz.
-    constructor; eauto.
+  intros * HG.
+  induction e using exp_ind2; intros Hr Hwt ?; inv Hr; inv Hwt.
+  - (* Econst *)
+    constructor.
+    apply ntheq_eqst; intro.
+    now rewrite const_nth', 2 const_nth.
+  - (* Evar *)
+    constructor; econstructor; now eauto.
+  - (* Eunop *)
+    take (typeof e = _) and rewrite <- length_typeof_numstreams, it in IHe.
+    simpl in *; econstructor; eauto using Is_node_in_exp.
+    eapply lift1_spec; intros.
+    left. split; apply const_nth.
+  - (* Efby *)
+    apply Sfby with
+      (s0ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) e0s)
+      (sss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es); simpl.
+    + clear H9 H10 H11.
+      induction e0s; simpl in *; constructor; inv H; inv H4; inv H7; eauto.
+    + clear H9 H10 H11.
+      induction es; simpl in *; inv H0; inv H6; inv H8; constructor; auto.
+    + rewrite <- 2 flat_map_concat_map, 2 flat_map_repeat.
+      rewrite <- 2 annots_numstreams, <- 2 length_typesof_annots.
+      take (typesof es = _) and rewrite it.
+      take (typesof e0s = _) and rewrite it.
+      rewrite map_length.
+      apply Forall3_repeat, fby_absent.
+  - (* Ewhen *)
+    apply Swhen with
+      (s := Streams.const absent)
+      (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es); simpl.
+    + rewrite Forall2_map_2. apply Forall2_same.
+      apply Forall_impl_inside with (P := restr_exp) in H; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
+    + econstructor; now eauto.
+    + rewrite <- flat_map_concat_map, flat_map_repeat.
+      rewrite <- annots_numstreams, <- length_typesof_annots.
+      apply Forall2_repeat.
+      apply when_spec. intros n.
+      left. repeat split; apply const_nth.
+  - (* Eapp *)
+    eapply Sapp with
+      (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es);
+      simpl; eauto using bools_ofs_empty.
+    + rewrite Forall2_map_2. apply Forall2_same.
+      apply Forall_impl_inside with (P := restr_exp) in H; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
+    + intro k.
+      rewrite <- flat_map_concat_map, flat_map_repeat, 2 map_repeat.
+      rewrite <- annots_numstreams, <- length_typesof_annots.
+      eapply sem_node_morph in HG; eauto.
+      (* in *)
+      take (Forall2 _ _ (n_in n)) and apply Forall2_length in it as ->.
+      destruct k;
+        [now setoid_rewrite mask_false_0 | now setoid_rewrite mask_false_S].
+      (* out *)
+      take (Forall2 _ _ (n_out n)) and apply Forall2_length in it.
+      setoid_rewrite it.
+      destruct k;
+        [now setoid_rewrite mask_false_0 | now setoid_rewrite mask_false_S].
 Qed.
 
-(* TODO: move to Vélus, remplacer Forall2_EqSt *)
-Global Add Parametric Morphism
-  A B (P: A -> B -> Prop) eqA eqB
-  (P_compat:  Morphisms.Proper (eqA ==> eqB ==> Basics.impl) P)
-  : (@Forall2 A B P)
-       with signature (Forall2 eqA) ==> (Forall2 eqB) ==> Basics.impl
-         as Forall2_morph.
+(* TODO: comprendre pourquoi on a besoin de ces deux cons-là *)
+Global Instance Forall2_Proper A B :
+  Proper ((eq ==> eq ==> Basics.impl) ==> eq ==> eq ==> Basics.impl)
+    (Forall2(A:=A) (B:=B)).
 Proof.
-  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
-  induction x; intros x' Hx y y' Hy HF2.
-  - inv HF2. simpl_Forall.
-  - inv HF2. inv Hx. inv Hy.
-    constructor; eauto.
+  repeat intro; subst.
+  induction H2; constructor; auto.
+  eapply H; eauto.
 Qed.
+Global Instance sem_exp_Proper (G : global) H :
+  Proper (@EqSt bool ==> (@eq exp  ==> eq ==> Basics.impl))
+    (sem_exp G H).
+Proof.
+  intros ?? Heq  ??? ??? Hsem; subst.
+  now rewrite <- Heq.
+Qed.
+
+(***************************************
+ avec Ordered_nodes ça semble impossible car on ne peut pas avoir
+ wt_node à chaque fois
+Voir avec Basile :
+ pourquoi wt_global -> Ordered_nodes ?
+On voudrait un wt_global plus faible mais plus
+ facile à manipuler (pas de Forall' !!)
+on réserve le Ordered_nodes pour les raisonnements inductifs
+ *)
+Lemma sem_global_absent :
+  forall (G : global),
+    restr_global G ->
+    wt_global G ->
+    sem_global_abs G.
+Proof.
+  intros [tys exts nds] Hr Hwt.
+  induction nds as [| n' nds]; intros f n Hfind ??. inv Hfind.
+  apply wt_global_wl_global in Hwt as Hord.
+  apply wl_global_Ordered_nodes in Hord.
+  destruct (ident_eq_dec f (n_name n')); subst.
+  rewrite find_node_now in Hfind; auto; inv Hfind.
+  { (* TODO: en extraire un lemme, mais comment ? *)
+  subst ss os.
+  eapply Snode with (H := fun _ => Some (Streams.const absent));
+    eauto using find_node_now.
+  + (* ins *)
+    apply Forall2_forall2; unfold idents.
+    rewrite map_length, repeat_length.
+    split; intros; subst; auto.
+    econstructor; eauto.
+    rewrite nth_repeat_in; now auto.
+  + (* outs *)
+    apply Forall2_forall2; unfold idents.
+    rewrite map_length, repeat_length.
+    split; intros; subst; auto.
+    econstructor; eauto.
+    rewrite nth_repeat_in; now auto.
+  + (* équation *)
+    apply sem_block_cons'; eauto using find_node_not_Is_node_in, find_node_now.
+    inv Hr. take (restr_node _) and inv it.
+    apply wt_global_cons in Hwt as Hwt'.
+    apply wt_global_uncons in Hwt as (?&?&?& Hwt).
+    rewrite <- H in Hwt. inv Hwt.
+    take (wt_equation _ _ _) and inv it.
+    constructor.
+    apply Seq with
+      (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es); simpl.
+    (* expressions *)
+    rewrite clocks_of_false2.
+    match goal with H:Forall (wt_exp _ ?Γ) _ |- _=> revert H; generalize Γ end.
+    intros; clear dependent n.
+    induction es; simpl_Forall; constructor; eauto.
+    eapply sem_exp_absent; now eauto.
+    (* variables *)
+    assert (length xs = list_sum (List.map numstreams es)) as Hl.
+    { rewrite <- annots_numstreams, <- length_typesof_annots.
+      eauto using Forall2_length. }
+    clear - Hl. revert dependent xs.
+    induction es; simpl; intros.
+    * destruct xs; simpl in *; auto; congruence.
+    * apply length_app_decomp in Hl as (xs1 & xs2 & ? & Hl1 & Hl2); subst.
+      apply Forall2_app; auto.
+      rewrite <- Hl1; clear.
+      induction xs1; simpl; constructor; auto.
+      now econstructor.
+  }
+  rewrite find_node_other in Hfind; auto.
+  inv Hr; apply wt_global_cons in Hwt.
+  unfold sem_global_abs in IHnds.
+  apply sem_node_cons'; eauto.
+Qed.
+
+End Sem_absent.
+
 
 
 CoFixpoint DS_of_S {A} (s : Stream A) : DS A :=
@@ -103,6 +289,15 @@ Definition sval_of_sampl : sampl value -> svalue :=
 
 Definition S_of_DSv := S_of_DS sval_of_sampl.
 
+(* TODO: move *)
+Lemma S_of_DSv_eq :
+  forall (s : DS (sampl value)) Hs t (Heq : s == t),
+  exists Ht,
+    S_of_DSv s Hs ≡ S_of_DSv t Ht.
+Proof.
+  esplit.
+  apply (__S_of_DS_eq _ _ Hs _ Heq).
+Qed.
 
 (** In the lext lemmas we use the method of coinduction loading from
     "Circular coinduction in Coq using bisimulation-up-to techniques" by
@@ -129,7 +324,7 @@ Proof.
   setoid_rewrite unfold_Stream in Eqy.
   setoid_rewrite DS_inv in Hxs at 2; simpl in *.
   unfold sconst in *.
-  rewrite MAP_map, ?map_eq_cons in Hxs.
+  rewrite MAP_map, Cpo_streams_type.map_eq_cons in Hxs.
   apply Con_eq_simpl in Hxs as [? Heq]; subst; simpl.
   inv Eqy; simpl in *; subst.
   constructor; simpl; cases.
@@ -256,7 +451,7 @@ Proof.
   all: repeat apply DSForall_tl in Sr.
   all: try (rewrite DS_const_eq in Sr; inv Sr; now exfalso).
   2: assert (k = e) by (now apply Nat.eqb_eq); subst.
-  all: econstructor; auto using beq_nat_false.
+  all: econstructor; auto using (proj1 (Nat.eqb_neq _ _)).
   all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.
   all: cases; try easy; inv Sr; eauto.
 Qed.
@@ -311,21 +506,7 @@ Proof.
 Qed.
 
 
-(* TODO: move *)
-Lemma denot_node_input :
-  forall {PSyn prefs} (G : @global PSyn prefs)
-    nd envI bs env x,
-    wt_node G nd ->
-    In x (List.map fst nd.(n_in)) ->
-    denot_node nd envI bs env x = envI x.
-Proof.
-  intros * Hwt Hin.
-  unfold denot_node, denot_block.
-  destruct Hwt as (?&?&?& Hwt).
-  cases. inv Hwt.
-  eapply denot_equation_input; eauto.
-Qed.
-
+(* TODO: move ou delete? *)
 Lemma DS_of_S_of_DSv :
   forall s H,
     s ≡ S_of_DSv (DS_of_S (Streams.map sampl_of_sval s)) H.
@@ -349,48 +530,7 @@ Proof.
     now apply _S_of_DS_eq.
 Qed.
 
-(* TODO: move *)
-Lemma map_filter_Some :
-  forall {A B} (f : A -> B) l,
-    CommonList.map_filter (fun x => Some (f x)) l = List.map f l.
-Proof.
-  induction l; simpl; auto.
-Qed.
-
-(* TODO: move *)
-Lemma map_EqSts_ext_in :
-  forall (A B : Type)(f g:A->Stream B) l, (forall a, In a l -> f a ≡ g a) -> EqSts (List.map f l) (List.map g l).
-Proof.
-  intros A B f g l; induction l as [|? ? IHl]; simpl; constructor; auto.
-  apply IHl; auto.
-Qed.
-
-(* TODO: move *)
-Lemma assoc_ident_cons2 :
-  forall {A} x y a (l : list (ident * A)),
-    x <> y ->
-    assoc_ident x ((y,a) :: l) = assoc_ident x l.
-Proof.
-  intros.
-  unfold assoc_ident.
-  simpl.
-  destruct (ident_eqb y x) eqn:?; auto.
-  rewrite ident_eqb_eq in *.
-  congruence.
-Qed.
-
-(* TODO: move *)
-Lemma assoc_ident_cons1 :
-  forall {A} x a (l : list (ident * A)),
-    assoc_ident x ((x,a) :: l) = Some a.
-Proof.
-  intros.
-  unfold assoc_ident.
-  simpl.
-  now rewrite ident_eqb_refl.
-Qed.
-
-(* TODO: move *)
+(* TODO: move ou delete? *)
 Lemma list_of_hist_of_list :
   forall l ss H,
     NoDup l ->
@@ -416,7 +556,7 @@ Proof.
  Unshelve. all:eauto using env_of_list_inf, DS_of_S_inf.
 Qed.
 
-(* TODO: move *)
+(* TODO: move ou delete? *)
 Lemma env_of_list_ok :
   forall l ss HH,
     NoDup l ->
@@ -433,6 +573,7 @@ Proof.
   eapply Forall2_impl_In; eauto using list_of_hist_ok.
 Qed.
 
+(* TODO: move ou delete? *)
 Lemma _hist_of_env_eq :
   forall env Hinf env' Hinf',
     env == env' ->
@@ -445,19 +586,8 @@ Proof.
   now rewrite <- PROJ_simpl, Heq, PROJ_simpl.
 Qed.
 
-(* TODO: move *)
-Lemma all_infinite_Oeq_compat :
-  forall env env',
-    all_infinite env ->
-    env == env' ->
-    all_infinite env'.
-Proof.
-  unfold all_infinite.
-  intros * Hi Heq x.
-  now rewrite <- PROJ_simpl, <- Heq, PROJ_simpl.
-Qed.
-
 (* utilisation : edestruct (hist_of_env_eq env Hinf) as [Hinf' ->]. *)
+(* TODO: move ou delete? *)
 Lemma hist_of_env_eq :
   forall env Hinf env',
     env == env' ->
@@ -470,37 +600,22 @@ Proof.
   eapply all_infinite_Oeq_compat; eauto.
 Qed.
 
-
-Definition Ss_of_nprod {n} (np : nprod n) (Hinf : forall_nprod (@infinite _) np) : list (Stream svalue).
+Definition Ss_of_nprod {n} (np : @nprod (DS (sampl value)) n)
+  (Hinf : forall_nprod (@infinite _) np) : list (Stream svalue).
   induction n as [|[]].
   - exact [].
   - exact [S_of_DSv np Hinf].
   - exact (S_of_DSv (fst np) (proj1 Hinf) :: IHn (snd np) (proj2 Hinf)).
 Defined.
 
-(* TODO: move *)
-Lemma S_of_DSv_eq :
-  forall (s : DS (sampl value)) Hs t (Heq : s == t),
-  exists Ht,
-    S_of_DSv s Hs ≡ S_of_DSv t Ht.
+Lemma Ss_of_nprod_length :
+  forall n (np : nprod n) infn,
+    length (Ss_of_nprod np infn) = n.
 Proof.
-  esplit.
-  apply (__S_of_DS_eq _ _ Hs _ Heq).
+  clear.
+  induction n as [|[]]; simpl; eauto.
 Qed.
 
-(* TODO: move, ne pas trop utiliser parce que c'est merdique *)
-Lemma Forall_impl_inside :
-  forall {A} (P Q : A -> Prop) xs,
-    (Forall (fun x => P x -> Q x) xs) ->
-    Forall P xs ->
-    Forall Q xs.
-Proof.
-  induction xs; auto.
-  intros FPQ FP. inv FPQ. inv FP.
-  constructor; auto.
-Qed.
-
-(* TODO: variante avec existentielle *)
 Lemma _Ss_of_nprod_eq :
   forall {n} (np np' : nprod n) Hinf Hinf',
     np == np' ->
@@ -558,9 +673,9 @@ Proof.
 Qed.
 
 Lemma Ss_exps :
-  forall ins envI bs env es Hinf Infe,
-    EqSts (Ss_of_nprod (denot_exps ins es envI bs env) Hinf)
-      (flat_map (fun e => Ss_of_nprod (denot_exp ins e envI bs env) (Infe e)) es).
+  forall G ins envG envI bs env es Hinf Infe,
+    EqSts (Ss_of_nprod (denot_exps G ins es envG envI bs env) Hinf)
+      (flat_map (fun e => Ss_of_nprod (denot_exp G ins e envG envI bs env) (Infe e)) es).
 Proof.
   induction es; intros; simpl.
   constructor.
@@ -571,313 +686,291 @@ Proof.
   now apply _Ss_of_nprod_eq.
 Qed.
 
-Lemma ok_sem_exp :
-  forall {PSyn prefs} (G : @global PSyn prefs),
-  forall Γ ins equ envI bs Inf (WT : wt_equation G Γ equ)
-    (InfI : all_infinite envI),
-    (* TODO: pourquoi denot_equation plutôt que node ? *)
-    let env := (FIXP (DS_prod SI) (denot_equation ins equ envI (DS_of_S bs))) in
-    safe_env Γ ins envI (DS_of_S bs) env ->
-    forall (e : exp) (Hwt : wt_exp G Γ e) (Hwc : wc_exp G Γ e) (Hr : restr_exp e),
-      op_correct_exp ins envI (DS_of_S bs) env e ->
-      let ss := denot_exp ins e envI (DS_of_S bs) env in
-      let Infe := infinite_exp _ _ _ _ (DS_of_S_inf _) InfI Inf _ in
-      sem_exp G (hist_of_env env Inf, FEnv.empty _) bs e (Ss_of_nprod ss Infe).
+
+(** Hypothèse sur les entrées du nœud : elles doivent être bien typées
+    et respecter leurs horloges vis-à-vis de leur déclaration *)
+Definition correct_ins (n : node) envI bs :=
+  let ins := List.map fst n.(n_in) in
+  let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+  (* TODO: c'est compliqué à expliquer, (dérouler safe_env, inégalités, etc.)
+     peut-on simplifier l'énoncé ? *)
+  env_correct Γ ins envI bs 0.
+
+Section Ok_exp.
+
+Variables
+  (G : global)
+  (envG : Dprodi FI).
+
+Hypothesis (Wtg : wt_global G).
+Hypothesis (Wcg : wc_global G).
+Hypothesis (Hrg : restr_global G).
+
+Hypothesis InfG :
+  forall envI f, all_infinite envI -> all_infinite (envG f envI).
+
+(* hypothèse nécessaire pour appeler safe_exp...  *)
+Hypothesis CorrectG :
+    forall (f : ident) (envI : DS_prod SI),
+      match find_node f G with
+      | Some n =>
+          let ins := idents n.(n_in) in
+          let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+          forall bs,
+            bss ins envI <= bs ->
+            env_correct Γ ins envI bs 0 ->
+            env_correct Γ ins envI bs (envG f envI)
+      | _ => True
+      end.
+
+(* TODO: à raffiner *)
+Hypothesis Hnode :
+  forall f n (ss : nprod (length (n_in n))),
+    find_node f G = Some n ->
+    let ins := idents (n_in n) in
+    let envI := env_of_ss ins ss in
+    let os := ss_of_env (idents (n_out n)) (envG f envI) in
+    correct_ins n envI (bss ins envI) ->
+    forall infI infO,
+      sem_node G f (Ss_of_nprod ss infI) (Ss_of_nprod os infO).
+
+Definition hist_of_env' ins envI InfI env Inf : Str.history :=
+  fun x => Some (if mem_ident x ins
+              then S_of_DSv (envI x) (InfI x)
+              else S_of_DSv (env x) (Inf x)).
+
+Lemma sem_hist_of_env : forall ins envI InfI env Inf x Infx,
+    sem_var (hist_of_env' ins envI InfI env Inf) x
+      (S_of_DSv (denot_var ins envI env x) Infx).
 Proof.
-  intros * ?? env Hsafe.
-  assert (forall x, denot_var ins envI env x == env x) as Hvar.
-  { intros. unfold denot_var.
-    cases_eqn HH; apply mem_ident_spec in HH.
-    subst env.
-    setoid_rewrite <- PROJ_simpl at 2.
-    rewrite FIXP_eq, PROJ_simpl.
-    erewrite denot_equation_input; eauto. }
-  induction e using exp_ind2; intros * ??? Hoc ??; inv Hr; subst ss; simpl.
-  - (* const *)
+  intros.
+  unfold hist_of_env'.
+  econstructor; eauto.
+  cases_eqn HH; apply _S_of_DS_eq.
+  all: unfold denot_var; cases; congruence.
+Qed.
+
+Lemma denot_var_inf :
+  forall ins envI env x,
+    all_infinite envI ->
+    all_infinite env ->
+    infinite (denot_var ins envI env x).
+Proof.
+  unfold denot_var.
+  intros; cases; eauto.
+Qed.
+
+Lemma env_of_ss_inf :
+  forall l n (np : nprod n),
+    forall_nprod (@infinite _) np ->
+    all_infinite (env_of_ss l np).
+Proof.
+  clear.
+  unfold env_of_ss.
+  intros * ??.
+  setoid_rewrite Dprodi_DISTR_simpl.
+  cases_eqn HH.
+  - apply forall_nprod_k_def; auto. apply DS_const_inf.
+  - apply DS_const_inf.
+Qed.
+
+(** Deux tactiques bien pratiques pour la suite *)
+
+(* C'est souvent une bonne idée de généraliser les termes [infinite_exp]
+   car ça élimine une dépendance sur [denot_exp]. *)
+Ltac gen_infinite_exp :=
+  repeat (
+  simpl; (* important, même si l'action n'est pas visible *)
+  match goal with
+  | |- context [ infinite_exp ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ] =>
+      generalize (infinite_exp H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11)
+  | |- context [ infinite_exps ?H1 ?H2 ?H3 ?H4 ?H5 ?H6 ?H7 ?H8 ?H9 ?H10 ?H11 ] =>
+      generalize (infinite_exps H1 H2 H3 H4 H5 H6 H7 H8 H9 H10 H11)
+  end).
+
+(* Isole un terme [denot_exp ...] dans une égalisé [Hse] afin de pouvoir
+   réécrire [denot_exp_eq] dedans, sans complications liées à S_of_DSv. *)
+Ltac save_denot_exp se Hse :=
+  gen_infinite_exp;
+  match goal with
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      remember (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
+      as se eqn:Hse
+  end.
+
+(* Une fois [denot_exp] appliqué, on voit souvent apparaître [denot_exps]
+   sur les sous-expressions. Si l'hypothèse de récurrence est déjà dégrossie,
+   il peut être utile d'abstraire les sous-flots avec ça : *)
+Ltac gen_sub_exps :=
+  gen_infinite_exp;
+  repeat match goal with
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exps ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_exps e1 e2 e3) e4) e5) e6) e7)
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
+  end.
+
+Lemma ok_sem_exp :
+  forall Γ ins env Inf envI InfI bs,
+    env_correct Γ ins envI (DS_of_S bs) env ->
+    let H := hist_of_env' ins envI InfI env Inf in
+    forall (e : exp) (Hwt : wt_exp G Γ e) (Hwc : wc_exp G Γ e) (Hr : restr_exp e),
+      op_correct_exp G ins envG envI (DS_of_S bs) env e ->
+      let ss := denot_exp G ins e envG envI (DS_of_S bs) env in
+      let Infe := infinite_exp _ _ _ _ _ _ InfG (DS_of_S_inf _) InfI Inf _ in
+      sem_exp G (H, FEnv.empty _) bs e (Ss_of_nprod ss Infe).
+Proof.
+  intros ?? env * Hc H.
+  induction e using exp_ind2; intros * ??? Hoc ss Infe.
+  all: inv Hr; subst ss; simpl.
+  - (* Econst *)
     constructor.
     edestruct (S_of_DSv_eq _ Infe) as [Infe' ->].
     { rewrite denot_exp_eq. reflexivity. }
     apply ok_const.
-  - (* var *)
+  - (* Evar *)
     constructor; simpl.
-    econstructor; unfold hist_of_env; eauto.
-    apply _S_of_DS_eq.
-    now setoid_rewrite denot_exp_eq.
-  - (* unop *)
+    edestruct (S_of_DSv_eq _ Infe) as [Infe' ->].
+    { rewrite denot_exp_eq. reflexivity. }
+    apply sem_hist_of_env.
+  - (* Eunop *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
     edestruct (Ss_of_nprod_eq _ Infe) as [Hinf0 HH].
     { setoid_rewrite denot_exp_eq. reflexivity. }
-    fold env in HH.
     rewrite HH; clear HH.
     rewrite denot_exp_eq in Hs.
-    revert Hinf0 IHe Hs.
-    simpl; fold env.
-    generalize (infinite_exp ins envI (DS_of_S bs) env (DS_of_S_inf bs) InfI Inf e).
-    generalize (denot_exp ins e envI (DS_of_S bs) env).
+    revert Hinf0 IHe Hs; simpl.
+    gen_sub_exps.
     take (numstreams e = 1) and rewrite it.
     take (typeof e = _) and rewrite it.
     econstructor; eauto using ok_unop.
-  - (* fby *)
+  - (* Efby *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
-    apply Forall_impl_inside with (P := wt_exp _ _) in H, H0; auto.
-    apply Forall_impl_inside with (P := wc_exp _ _) in H, H0; auto.
-    apply Forall_impl_inside with (P := restr_exp) in H, H0; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H, H0; auto.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0, H1; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0, H1; auto.
+    apply Forall_impl_inside with (P := restr_exp) in H0, H1; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0, H1; auto.
     econstructor; simpl in *.
-    + erewrite Forall2_map_2, <- Forall2_same. apply H.
     + erewrite Forall2_map_2, <- Forall2_same. apply H0.
+    + erewrite Forall2_map_2, <- Forall2_same. apply H1.
     + rewrite <- 2 flat_map_concat_map.
       unshelve rewrite <- 2 Ss_exps; auto using DS_of_S_inf, infinite_exps.
-      remember (infinite_exps _ _ _ _ _ _ _ e0s) as Infe0s.
-      remember (infinite_exps _ _ _ _ _ _ _ es) as Infes.
-      remember Infe as Ifby.
-      clear - Hs H20 H21. (* pour les longueurs *)
-      revert Ifby Hs. fold env.
-      (* FIXME:
-         remember (denot_exp ins (Efby e0s es a) envI (DS_of_S bs) env)
-         seul ne fonctionne pas, il faut des annotation; pourquoi ? *)
-      remember (((@fconti_fun _ (fcont_cpo _ (fcont_cpo (DS_prod SI) (nprod (length a))))
-                    (denot_exp ins (Efby e0s es a)) envI) (DS_of_S bs)) env)
-        as fs eqn:Hfs.
-      revert Infe0s Infes Hfs.
-      setoid_rewrite denot_exp_eq; simpl.
-      cases; try (rewrite annots_numstreams in *; congruence).
-      generalize (denot_exps ins e0s envI (DS_of_S bs) env) as s0s.
-      generalize (denot_exps ins es envI (DS_of_S bs) env) as ss.
-      unfold eq_rect_r, eq_rect; destruct e, e0.
-      simpl; intros; subst.
+      revert Infe Hs.
+      save_denot_exp se Hse.
+      setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+      gen_sub_exps.
+      rewrite annots_numstreams in *.
+      unfold eq_rect_r, eq_rect, eq_sym.
+      cases; intros; subst; try congruence.
       clear - Hs.
-      induction (length a) as [|[]].
-      * constructor.
-      * constructor; auto using Forall3_nil, ok_fby.
-      * inv Hs. constructor.
-        ** simpl in *. now apply ok_fby.
-        ** now apply IHn.
-  - (* when *)
+      induction (list_sum (map numstreams es)) as [|[]];
+        eauto using Forall3_nil, Forall3_cons, ok_fby.
+      inv Hs.
+      constructor; [ simpl; now apply ok_fby | now apply IHn ].
+  - (* Ewhen *)
+    destruct x as [x ty].
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
     inv Hwt. inv Hwc. inv Hoc. inv Hwl.
-    apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
-    apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
-    apply Forall_impl_inside with (P := restr_exp) in H; auto.
-    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _) in H; auto.
-    edestruct (S_of_DSv_eq (env x) (Inf x)) as [Infx Hx].
-    { rewrite <- Hvar; reflexivity. } (* pratique pour la suite *)
-    econstructor; simpl in *.
-    + erewrite Forall2_map_2, <- Forall2_same. apply H.
-    + econstructor; unfold hist_of_env; eauto; rewrite Hx; reflexivity.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
+    apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
+    econstructor; simpl.
+    + erewrite Forall2_map_2, <- Forall2_same. apply H0.
+    + unshelve apply sem_hist_of_env; auto using denot_var_inf.
     + rewrite <- flat_map_concat_map.
       unshelve rewrite <- Ss_exps; auto using DS_of_S_inf, infinite_exps.
-      remember (infinite_exps _ _ _ _ _ _ _ es) as Infes.
-      remember Infe as Iwhen.
-      clear - Hs H18.
-      revert Iwhen Hs. fold env.
-      (* FIXME:
-         remember (denot_exp ins _ _ _)
-         seul ne fonctionne pas, il faut des annotation. ça doit avoir un rapport
-         avec l'égalité sur les tailles *)
-      remember (((@fconti_fun _ (fcont_cpo _ (fcont_cpo _ (nprod (length (typesof es)))))
-                    (denot_exp ins (Ewhen es x b (_,_))) envI) (DS_of_S bs)) env)
-        as fs eqn:Hfs.
-      revert Infes Hfs.
-      setoid_rewrite denot_exp_eq; simpl.
-      cases; try (rewrite annots_numstreams in *; congruence).
-      generalize (denot_exps ins es envI (DS_of_S bs) env) as ss.
-      unfold eq_rect_r, eq_rect; destruct e.
-      simpl; intros; subst.
+      revert Infe Hs.
+      save_denot_exp se Hse.
+      setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+      gen_sub_exps.
+      rewrite annots_numstreams in *.
+      unfold eq_rect_r, eq_rect, eq_sym.
+      cases; intros; subst; try congruence.
       clear - Hs.
-      induction (length (typesof es)) as [|[]]; eauto using Forall2, ok_when.
-      inv Hs. constructor.
-      now eapply ok_when.
-      now apply IHn.
+      induction (list_sum (map numstreams es)) as [|[]]; eauto using Forall2, ok_when.
+      inv Hs.
+      constructor; [ now apply ok_when | now apply IHn ].
+  - (* Eapp *)
+    eapply safe_exp in Hoc as Hs; eauto using restr_exp.
+    apply wt_exp_wl_exp in Hwt as Hwl.
+    inv Hwt. inv Hwc. inv Hoc. inv Hwl.
+    repeat take (find_node _ _ = _) and rewrite it in *.
+    repeat take (Some _ = Some _) and inv it.
+    apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+    apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
+    apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+    apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
+    econstructor; eauto using Forall2_nil, bools_ofs_empty; simpl in *.
+    { erewrite Forall2_map_2, <- Forall2_same. apply H0. }
+    intros [].
+    + (* k = 0, c'est intéressant *)
+      setoid_rewrite masks_false_0.
+      unshelve rewrite <- flat_map_concat_map, <- Ss_exps; auto using DS_of_S_inf, infinite_exps.
+      revert Infe Hs.
+      save_denot_exp se Hse.
+      setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
+      (* on a besoin d'infos sur les flots des ss pour pouvoir utiliser Hnode *)
+      edestruct safe_exps_ with (es := es) as (sTy & sCl & sEf); eauto.
+      pose proof (nclocksof_sem G envG ins envI (DS_of_S bs) env es) as Ncs.
+      revert sTy sCl sEf Ncs.
+      gen_sub_exps.
+      take (length (annots _) = _) and rewrite <- annots_numstreams, it.
+      repeat take (find_node _ _ = _) and rewrite it.
+      unfold eq_rect_r, eq_rect, eq_sym.
+      cases; intros; subst; try setoid_rewrite map_length in n0; try congruence.
+      apply Hnode; auto; unfold correct_ins.
+      (* on montre que les entrées forment un environnement correct *)
+      rewrite clocksof_nclocksof in sCl.
+      eapply wc_find_node in Wcg as (?& Wcin &?&?); eauto.
+      eapply safe_inst_in in sCl as Hec; eauto.
+      apply env_correct_decompose in Hec as HH.
+      destruct HH as (?&?&?).
+      eapply bss_le_bs in Wcin as Hbs; eauto.
+      (* et comme tout est infini, ça marche : *)
+      apply infinite_le_eq in Hbs as -> ; auto using bss_inf, env_of_ss_inf.
+    + (* k <> 0, on utilise sem_node_absent *)
+      setoid_rewrite masks_false_S.
+      pose proof (sem_global_absent G Hrg Wtg f n) as Hsem.
+      eapply sem_node_morph in Hsem; eauto.
+      * rewrite map_ignore, concat_length_sum, map_map.
+        setoid_rewrite Ss_of_nprod_length.
+        rewrite <- annots_numstreams.
+        take (_ = length (n_in n)) and rewrite it.
+        now apply Forall2_repeat.
+      * rewrite map_ignore, Ss_of_nprod_length.
+        take (_ = length (n_out n)) and rewrite it.
+        now apply Forall2_repeat.
 Qed.
 
-(* TODO: move *)
-(* FAUX *)
-Lemma wc_equation_sub :
-  forall {PSyn prefs} (G : @global PSyn prefs),
-  forall Γ xs es,
-    wc_equation G Γ (xs,es) ->
-    Forall (wc_exp G Γ) es.
-Proof.
-  intros * Wc.
-  inv Wc; auto.
-  constructor; econstructor; eauto.
-  rewrite Forall2_map_2 in H7.
-  rewrite Forall2_map_2, Forall2_map_1.
-  rewrite Forall3_map_1, Forall3_map_2 in H5.
-  clear - H5 H7.
-  induction H5; simpl_Forall; inv H7; constructor; auto.
-  destruct x, y, p as [[]]; simpl in *.
-  inv H; constructor; simpl in *; auto.
-Abort.
+End Ok_exp.
 
-(* TODO: move *)
-Lemma sem_var_env :
-  forall env Inf x xs Infx,
-    xs == env x ->
-    sem_var (hist_of_env env Inf) x (S_of_DSv xs Infx).
-Proof.
-  unfold hist_of_env.
-  econstructor; eauto.
-  now apply _S_of_DS_eq.
-Qed.
 
-(* TODO: move *)
-Lemma nth_Ss_of_nprod :
-  forall {n} (np : nprod n) Infn k Infk a,
-    k < n ->
-    nth k (Ss_of_nprod np Infn) a ≡ S_of_DSv (get_nth k np) Infk.
-Proof.
-  induction n as [|[]]; intros * Hk; auto.
-  - inv Hk.
-  - simpl; cases; simpl; try lia.
-    apply _S_of_DS_eq; auto.
-  - destruct np as (s,np).
-    destruct k.
-    + apply _S_of_DS_eq; auto.
-    + apply IHn; lia.
-Qed.
 
-(* TODO: move *)
-Lemma Ss_of_nprod_length :
-  forall {n} (np : nprod n) Inf,
-    length (Ss_of_nprod np Inf) = n.
-Proof.
-  induction n as [|[]]; simpl; eauto.
-Qed.
-
-(* TODO: move *)
-Lemma nodup_equation :
-  forall {PSyn prefs} (n : @node PSyn prefs),
-    match n_block n with
-    | Beq (xs, _) => NoDup (List.map fst n.(n_in) ++ xs)
-    | _ => True (* TODO *)
-    end.
-Proof.
-  destruct n; simpl in *.
-  destruct n_defd0 as (xs & Vd & Hxs).
-  destruct n_nodup0 as [ND].
-  cases; simpl in *.
-  inversion Vd; subst.
-  now rewrite Hxs, <- map_app, <- fst_NoDupMembers.
-Qed.
-
-Lemma NoDup_senv :
-  forall {PSyn prefs} (nd : @node PSyn prefs),
-    NoDupMembers (senv_of_inout (n_in nd ++ n_out nd)).
-Proof.
-  intros.
-  (* preuve piquée dans LClockCorrectness *)
-  rewrite fst_NoDupMembers, map_fst_senv_of_inout, <-fst_NoDupMembers.
-  apply n_nodup.
-Qed.
-
-Lemma Beq_out :
-  forall {PSyn prefs} (nd : @node PSyn prefs),
-  forall xs es,
-    n_block nd = Beq (xs, es) ->
-    Permutation (List.map fst (senv_of_inout (n_in nd ++ n_out nd))) (List.map fst (n_in nd) ++ xs).
-Proof.
-  intros * Hb.
-  destruct nd.(n_defd) as (?&Vd&?).
-  rewrite Hb in Vd; inv Vd; simpl in *.
-  rewrite map_fst_senv_of_inout.
-  rewrite map_app.
-  now apply Permutation_app_head.
-Qed.
-
-(** Hypothèse sur les entrées du nœud : elles doivent être bien typées
-    et respecter leurs horloges vis-à-vis de leur déclaration *)
-Definition safe_ins {PSyn prefs} (n : @node PSyn prefs) envI bs :=
-  let ins := List.map fst n.(n_in) in
-  let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
-  (* TODO: c'est compliqué à expliquer, (dérouler safe_env, inégalités, etc.)
-     peut-on simplifier l'énoncé ? *)
-  safe_env Γ ins envI bs 0.
-
-(* TODO: énoncer plutôt exist os, .. et faire ça dans la preuve ? *)
-Theorem ok_sem_node :
-  forall {PSyn prefs} (G : @global PSyn prefs),
-  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
-  forall f (nd : node) ss,
-    length nd.(n_in) = length ss ->
-  forall (Hn : find_node f G = Some nd)
-    (Hwt : wt_node G nd)
-    (Hwc : wc_node G nd)
-    (Hnc : node_causal nd)
-    (Hre : restr_node nd)
-  ,
-    let ins  := List.map fst nd.(n_in) in
-    let outs := List.map fst nd.(n_out) in
+Theorem ok_global :
+  forall (G : global)
+    (Wtg : wt_global G)
+    (Wcg : wc_global G)
+    (Hrg : restr_global G)
+    (Hnc : Forall node_causal (nodes G))
+    (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
+  forall f n ss,
+    find_node f G = Some n ->
+    let ins  := List.map fst n.(n_in) in
     let envI := env_of_list ins ss in
-    let infI := env_of_list_inf ins ss in
     let bs   := DS_of_S (clocks_of ss) in
-    let env  := FIXP (DS_prod SI) (denot_node nd envI bs) in
-    let bsi  := DS_of_S_inf (clocks_of ss) in
-    let infO := denot_inf G HasCausInj nd envI bs Hwt Hnc bsi infI in
-    let H    := hist_of_env env infO in
-    let os   := list_of_hist H outs in
-    safe_ins nd envI bs ->
-    (* TODO: safe_ins ≡ wt_ins/wc_ins de VelusC?orrectness ?? *)
-    op_correct ins envI bs env nd ->
-    sem_node G f ss os.
+    correct_ins n envI bs ->
+    (* TODO: op_correct *)
+    exists os, sem_node G f ss os.
 Proof.
-  intros * Hl. intros until os. intros Hins Hop.
-  eapply Snode with (H := H); eauto using list_of_hist_ok.
-  - subst H env0.
-    pose proof nd.(n_nodup) as [ND _].
-    apply fst_NoDupMembers in ND.
-    rewrite map_app in ND.
-    eapply Forall2_impl_In, env_of_list_ok; eauto using NoDup_app_l.
-    2: unfold idents; rewrite map_length; auto.
-    intros x s Hx Hs Hv.
-    inversion_clear Hv as [???? Hh Hu].
-    unfold hist_of_env in *. inv Hh.
-    rewrite Hu.
-    eapply sem_var_intro, _S_of_DS_eq; auto.
-    setoid_rewrite <- PROJ_simpl at 2.
-    erewrite FIXP_eq, PROJ_simpl, denot_node_input; eauto.
-    Unshelve. apply env_of_list_inf.
-  - clear os. subst H.
-    inversion Hwt as (_&_&_& Wtb).
-    destruct Hwc as (_&_& Wcb).
-    unfold op_correct in Hop.
-    pose proof (nodup_equation nd) as NDi.
-    inversion Hre as [?? Hr Hb]; rewrite <- Hb in *.
-    subst env0.
-    edestruct (hist_of_env_eq _ infO) as [Inf2 ->];
-      unfold denot_node, denot_block in *; rewrite <- Hb in *; try reflexivity.
-    inv Wcb. inv Wtb.
-    take (wc_equation _ _ _) and inversion it; subst. {(*FIXME*) inv Hr. inv H9. }
-    take (wt_equation _ _ _) and inversion it.
-    constructor; econstructor.
-    + erewrite Forall2_map_2, <- Forall2_same, Forall_forall.
-      intros.
-      unshelve eapply ok_sem_exp; eauto; try now eapply Forall_In; eauto.
-      eapply safe_equ; eauto using NoDup_senv, Beq_out.
-    + unshelve rewrite <- flat_map_concat_map, <- Ss_exps; simpl;
-        auto using DS_of_S_inf, infinite_exps.
-      edestruct (hist_of_env_eq _ Inf2) as [Inf3 ->].
-      { rewrite FIXP_eq. reflexivity. }
-      assert (length xs = list_sum (List.map numstreams es)). {
-        rewrite <- annots_numstreams, <- length_typesof_annots.
-        eauto using Forall2_length.
-      }
-      apply Forall2_forall2.
-      split. { now rewrite Ss_of_nprod_length. }
-      intros ?? k ?? Hk; intros; subst.
-      rewrite nth_Ss_of_nprod; [|lia].
-      apply sem_var_env.
-      rewrite denot_equation_eq, mem_nth_nth; eauto 2 using NoDup_app_r.
-      cases_eqn HH; try congruence.
-      rewrite mem_ident_spec in *.
-      exfalso; eapply NoDup_app_In; eauto using nth_In.
-      Unshelve. eapply forall_nprod_k'; auto using infinite_exps; lia.
-Qed.
+(*   intros. *)
+(*   Check ok_sem_exp. *)
+(* Qed. *)
+Abort.
 
 End SDTOREL.

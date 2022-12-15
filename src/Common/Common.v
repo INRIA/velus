@@ -122,6 +122,14 @@ Proof.
   - intros. now rewrite ident_eqb_eq.
 Qed.
 
+Lemma mem_ident_false : forall x xs,
+    mem_ident x xs = false <-> ~ In x xs.
+Proof.
+  intros.
+  destruct (mem_ident_spec x xs). unfold not.
+  destruct (mem_ident x xs); firstorder; congruence.
+Qed.
+
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
 
@@ -199,6 +207,29 @@ Proof.
   - inv Hassc.
     apply ident_eqb_eq in Hident; subst; auto.
   - auto.
+Qed.
+
+Lemma assoc_ident_cons1 :
+  forall {A} x a (l : list (ident * A)),
+    assoc_ident x ((x,a) :: l) = Some a.
+Proof.
+  intros.
+  unfold assoc_ident.
+  simpl.
+  now rewrite ident_eqb_refl.
+Qed.
+
+Lemma assoc_ident_cons2 :
+  forall {A} x y a (l : list (ident * A)),
+    x <> y ->
+    assoc_ident x ((y,a) :: l) = assoc_ident x l.
+Proof.
+  intros.
+  unfold assoc_ident.
+  simpl.
+  destruct (ident_eqb y x) eqn:?; auto.
+  rewrite ident_eqb_eq in *.
+  congruence.
 Qed.
 
 Module Type IDS.

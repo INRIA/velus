@@ -303,6 +303,16 @@ Module Type COINDSTREAMS
     - discriminate.
   Qed.
 
+  Lemma map_EqSts_ext_in :
+    forall (A B : Type) (f g : A -> Stream B) l,
+      (forall a, In a l -> f a ≡ g a) ->
+      EqSts (List.map f l) (List.map g l).
+  Proof.
+    intros A B f g l.
+    induction l as [|? ? IHl]; simpl; constructor; auto.
+    apply IHl; auto.
+  Qed.
+
   (* Equivalence of streams "up to" n *)
   Section EqStN.
     Context {A : Type}.
@@ -1532,6 +1542,14 @@ Module Type COINDSTREAMS
     econstructor.
     - symmetry in H4. eapply H4.
     - rewrite <-H5, <-H3, Heq. reflexivity.
+  Qed.
+
+  (* https://stackoverflow.com/questions/73155085/coq-rewriting-under-a-pointwise-relation *)
+  Add Parametric Morphism : sem_var
+      with signature FEnv.Equiv (@EqSt _) ==> pointwise_relation _ (pointwise_relation _ iff)
+        as sem_var_morph_pointwise.
+  Proof.
+    split; now rewrite H.
   Qed.
 
   Lemma sem_var_det : forall H x s1 s2,

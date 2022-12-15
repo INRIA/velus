@@ -1,14 +1,14 @@
 From Coq Require Import BinPos List.
 
 From Velus Require Import Common Ident Operators Clocks CoindStreams.
-From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LSemantics.
+From Velus Require Import Lustre.StaticEnv Lustre.LSyntax Lustre.LSemantics Lustre.LOrdered.
 
 From Velus Require Import Lustre.Denot.Cpo.
 
 Close Scope equiv_scope. (* conflicting notation "==" *)
 Import ListNotations.
 
-Require Import Cpo_ext.
+Require Import Cpo_ext CommonList2.
 Require Import SDfuns.
 
 Module Type LDENOT
@@ -18,7 +18,7 @@ Module Type LDENOT
        (Import Cks   : CLOCKS        Ids Op OpAux)
        (Import Senv  : STATICENV     Ids Op OpAux Cks)
        (Import Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
-       (Import Str   : COINDSTREAMS  Ids Op OpAux Cks).
+       (Import Lord  : LORDERED      Ids Op OpAux Cks Senv Syn).
 
 (* TODO: faire ça partout !! *)
 Context {PSyn : block -> Prop}.
@@ -26,626 +26,116 @@ Context {Prefs : PS.t}.
 Definition node := @node PSyn Prefs.
 Definition global := @global PSyn Prefs.
 
-Section Nprod.
+(** We always use this specialized version of mem_nth *)
+(* TODO: c'est vraiment une bonne idée de redéfinir des trucs, comme ça ? *)
+Definition mem_nth := mem_nth ident ident_eq_dec.
 
-Fixpoint nprod (n : nat) : cpo :=
-  match n with
-  | O => DS (sampl value) (* filled with error_Ty *)
-  | 1 => DS (sampl value)
-  | S n => Dprod (DS (sampl value)) (nprod n)
-  end.
+Definition errTy : DS (sampl value) := DS_const (err error_Ty).
 
-Definition nprod_app : forall {n p}, nprod n -C-> nprod p -C-> nprod (n + p).
-  induction n as [|[]]; intro p.
-  - exact (CURRY _ _ _ (SND _ _ )).
-  - destruct p.
-    + exact (CTE _ _).
-    + exact (PAIR _ _).
-  - apply curry.
-    exact ((PAIR _ _ @2_ (FST _ _ @_ FST _ _))
-             ((IHn p @2_ (SND _ _ @_ FST _ _)) (SND _ _))).
-Defined.
-
-(* obtenir le premier élément *)
-Definition nprod_fst {n} : nprod n -C-> DS (sampl value) :=
-  match n with
-  | O => CTE _ _ (DS_const (err error_Ty))
-  | 1 => ID _
-  | (S n) => FST _ _
-  end.
-
-(* jeter le premier élément *)
-Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
-  match n with
-  | O => CTE _ _ (DS_const (err error_Ty))
-  | (S n) => SND _ _
-  end.
-
-Lemma nprod_fst_app :
-  forall m n (mp : nprod (S m)) (np : nprod n),
-    nprod_fst (nprod_app mp np) = nprod_fst mp.
-Proof.
-  destruct m, n; auto.
-Qed.
-
-(* donne le p-ème flot de np ou DS_const (err error_Ty) *)
-Fixpoint get_nth (p : nat) {n} : nprod n -C-> DS (sampl value) :=
-  match p with
-  | O => nprod_fst
-  | S p => match n return nprod n -C-> _ with
-          | O => CTE _ _ (DS_const (err error_Ty))
-          | S _ => get_nth p @_ nprod_skip
-          end
-  end.
-
-Lemma get_nth_Oeq_compat :
-  forall n k (np np' : nprod n),
-    np == np' ->
-    get_nth k np == get_nth k np'.
-Proof.
-  induction n; simpl; intros * Heq.
-  - destruct k; auto.
-  - destruct n, k; auto.
-    + unfold get_nth. now rewrite Heq.
-    + simpl. autorewrite with cpodb. auto.
-Qed.
-
-Global Add Parametric Morphism n k : (get_nth k)
-       with signature (@Oeq (nprod n)) ==> (@Oeq (DS (sampl value))) as get_nth_compat_morph.
-Proof.
-  exact (get_nth_Oeq_compat n k).
-Qed.
-
-Lemma get_nth_skip :
-  forall {n} (np : nprod (S n)) k,
-    get_nth k (nprod_skip np) = get_nth (S k) np.
-Proof.
-  induction k; auto.
-Qed.
-
-Lemma nprod_app_nth1 :
-  forall m n (mp : nprod m) (np : nprod n) k,
-    k < m ->
-    get_nth k (nprod_app mp np) = get_nth k mp.
-Proof.
-  induction m; intros * Hk.
-  - inversion Hk.
-  - destruct k; simpl.
-    + now setoid_rewrite nprod_fst_app.
-    + autorewrite with cpodb.
-      rewrite <- (IHm n _ np); auto with arith.
-      destruct m; simpl; auto; lia.
-Qed.
-
-Lemma nprod_app_nth2 :
-  forall m n (mp : nprod m) (np : nprod n) k,
-    k >= m ->
-    get_nth k (nprod_app mp np) = get_nth (k-m) np.
-Proof.
-  induction m; intros * Hk.
-  - simpl in *. autorewrite with cpodb; repeat f_equal; auto with arith.
-  - Opaque nprod_app.
-    destruct k; simpl.
-    + lia.
-    + destruct m, n; auto with arith.
-      * destruct k; simpl; now autorewrite with cpodb.
-      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
-      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
-      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
-Qed.
-
-(* TODO: !! simplifier
-   comme nprod ne concerne que les value, le polymorphisme de F est inutile.
-   Donc changer soit le type de F, soit le type de nprod (paramétré par un
-   type de flot ??
- *)
-Fixpoint lift (F : forall D, DS (sampl D) -C-> DS (sampl D)) {n} {struct n} : nprod n -C-> nprod n :=
-  match n with
-  | O => ID _
-  | S n =>
-      match n return nprod n -C-> nprod n -> nprod (S n) -C-> nprod (S n) with
-      | O => fun _ => F _
-      | S _ => fun fn => PROD_map (F _) fn
-      end (@lift F n)
-  end.
-
-(* TODO: comment le définir directement ? *)
-Definition llift D (F : DS (sampl value) -C-> D -C-> DS (sampl value)) {n} :
-  nprod n -C-> D -C-> nprod n.
-  induction n as [|[]].
-  - apply CTE.
-  - apply F.
-  - apply curry.
-    apply (fcont_comp2 (PAIR _ _)).
-    exact ((F @2_ (FST _ _ @_ FST _ _)) (SND _ _)).
-    exact ((IHn @2_ (SND _ _ @_ FST _ _)) (SND _ _)).
-Defined.
-
-Lemma llift_simpl :
-  forall D F n d u U,
-    @llift D F (S (S n)) (u, U) d = (F u d, @llift D F (S n) U d).
-Proof.
-  trivial.
-Qed.
-
-Lemma llift_nth :
-  forall D F d,
-  forall {n} (np : nprod n) k,
-    k < n ->
-    get_nth k (llift D F np d) = F (get_nth k np) d.
-Proof.
-  induction n as [|[]]; intros; auto; try lia.
-  - destruct k; simpl; auto; lia.
-  - destruct np.
-    rewrite llift_simpl.
-    destruct k; auto.
-    rewrite <- get_nth_skip.
-    setoid_rewrite <- IHn; auto with arith.
-Qed.
-
-Definition lift2
-  (F : forall A : Type, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) {n} :
-  nprod n -C-> nprod n -C-> nprod n.
-  induction n as [|[]].
-  - exact 0. (* ? *)
-  - exact (F _).
-  - apply curry.
-    apply (fcont_comp2 (PAIR _ _)).
-    exact ((F _ @2_ (FST _ _ @_ FST _ _ )) (FST _ _ @_ SND _ _ )).
-    exact ((IHn @2_ (SND _ _ @_ FST _ _ )) (SND _ _ @_ SND _ _ )).
-Defined.
-
-Lemma lift2_simpl :
-  forall F n u U v V,
-    @lift2 F (S (S n)) (u, U) (v, V) = (F _ u v, @lift2 F (S n) U V).
-Proof.
-  trivial.
-Qed.
-
-Lemma lift2_nth :
-  forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
-  forall {n} (np np' : nprod n) k,
-    k < n ->
-    get_nth k (lift2 f np np') = f _ (get_nth k np) (get_nth k np').
-Proof.
-  induction n as [|[]]; intros; auto; try lia.
-  - destruct k; simpl; auto; lia.
-  - destruct np, np'.
-    rewrite lift2_simpl.
-    destruct k; auto.
-    rewrite <- 3 get_nth_skip, <- IHn; auto with arith.
-Qed.
-
-Fixpoint nprod_const (c : sampl value) n {struct n} : nprod n :=
-  match n with
-  | O => DS_const (err error_Ty)
-  | S n =>
-      match n return nprod n -> nprod (S n) with
-      | O => fun _ => DS_const c
-      | S m => fun np => (DS_const c, np)
-      end (nprod_const c n)
-  end.
-
-Lemma get_nth_const :
-  forall c n k,
-    k < n ->
-    get_nth k (nprod_const c n) = DS_const c.
-Proof.
-  induction n as [|[]]; intros * Hk.
-  - inversion Hk.
-  - destruct k; auto; lia.
-  - destruct k; auto.
-    rewrite <- get_nth_skip, IHn; auto with arith.
-Qed.
-
-End Nprod.
-
-Section Forall_Nprod.
-
-Variable P : DS (sampl value) -> Prop.
-
-Definition forall_nprod {n} (np : nprod n) : Prop.
-  induction n as [|[]]; simpl in *.
-  - exact True.
-  - exact (P np).
-  - exact (P (fst np) /\ IHn (snd np)).
-Defined.
-
-Lemma forall_nprod_skip :
-  forall {n} (np : nprod (S n)),
-    forall_nprod np ->
-    forall_nprod (nprod_skip np).
-Proof.
-  intros * Hnp.
-  destruct n.
-  - now simpl.
-  - destruct Hnp. auto.
-Qed.
-
-Lemma forall_nprod_k :
-  forall {n} (np : nprod n),
-    (forall k, k < n -> P (get_nth k np)) ->
-    forall_nprod np.
-Proof.
-  induction n as [|[]]; intros * Hk.
-  - constructor.
-  - apply (Hk O); auto.
-  - split.
-    + apply (Hk O); auto with arith.
-    + apply IHn; intros.
-      change (snd np) with (nprod_skip np).
-      rewrite get_nth_skip; auto with arith.
-Qed.
-
-Lemma forall_nprod_k' :
-  forall {n} (np : nprod n),
-    forall_nprod np ->
-    (forall k, k < n -> P (get_nth k np)).
-Proof.
-  induction n as [|[]]; intros * Hk.
-  - lia.
-  - intros.
-    assert (k = O) by lia; subst.
-    now simpl in Hk.
-  - intros.
-    specialize (IHn (nprod_skip np)).
-    setoid_rewrite get_nth_skip in IHn.
-    destruct k. { destruct Hk; auto. }
-    apply IHn; auto using forall_nprod_skip with arith.
-Qed.
-
-Lemma forall_nprod_k_iff :
-  forall {n} (np : nprod n),
-    forall_nprod np <-> (forall k, k < n -> P (get_nth k np)).
-Proof.
-  split; auto using forall_nprod_k, forall_nprod_k'.
-Qed.
-
-Lemma forall_nprod_app :
-  forall {n m} (np : nprod n) (mp : nprod m),
-    forall_nprod np ->
-    forall_nprod mp ->
-    forall_nprod (nprod_app np mp).
-Proof.
-  intros * Hnp Hmp.
-  apply forall_nprod_k.
-  intros * Hk.
-  destruct (Nat.lt_ge_cases k n).
-  - rewrite nprod_app_nth1; auto using forall_nprod_k'.
-  - rewrite nprod_app_nth2; auto.
-    apply forall_nprod_k'; auto; lia.
-Qed.
-
-Lemma app_forall_nprod :
-  forall {n m} (np : nprod n) (mp : nprod m),
-    forall_nprod (nprod_app np mp) ->
-    forall_nprod np
-    /\ forall_nprod mp.
-Proof.
-  setoid_rewrite forall_nprod_k_iff.
-  intros * Hf; split; intros k Hk.
-  - specialize (Hf k).
-    rewrite nprod_app_nth1 in Hf; auto with arith.
-  - specialize (Hf (n + k)).
-    rewrite nprod_app_nth2, minus_plus in Hf; auto with arith.
-Qed.
-
-Lemma forall_nprod_lift2 :
-  forall (f : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)),
-    (forall x y, P x -> P y -> P (f _ x y)) ->
-    forall {n} (np np' : nprod n),
-      forall_nprod np ->
-      forall_nprod np' ->
-      forall_nprod (lift2 f np np').
-Proof.
-  intros f Hf.
-  induction n as [|[]]; intros * H H'; auto.
-  simpl in *; auto.
-  destruct np,np',H,H'.
-  rewrite lift2_simpl.
-  split; simpl in *; auto .
-  now apply IHn.
-Qed.
-
-Lemma forall_nprod_const :
-  forall {n} c,
-    P (DS_const c) ->
-    forall_nprod (nprod_const c n).
-Proof.
-  intros.
-  apply forall_nprod_k; intros.
-  now rewrite get_nth_const.
-Qed.
-
-Global Add Parametric Morphism n
-  (P_compat:  Morphisms.Proper (Oeq (O := DS (sampl value)) ==> iff) P)
-  : (forall_nprod)
-    with signature Oeq (O := nprod n) ==> iff
-      as forall_nprod_morph.
-Proof.
-  unfold Morphisms.Proper, Morphisms.respectful, Basics.impl in *.
-  intros * Heq.
-  rewrite 2 forall_nprod_k_iff.
-  split; intros.
-  eapply P_compat; rewrite <- ?Heq; auto.
-  eapply P_compat; rewrite ?Heq; auto.
-Qed.
-
-End Forall_Nprod.
-
-Lemma forall_nprod_impl :
-  forall (P Q : DS (sampl value) -> Prop),
-    (forall x, P x -> Q x) ->
-    forall {n} (np : nprod n),
-      forall_nprod P np ->
-      forall_nprod Q np.
-Proof.
-  induction n as [|[]]; intros * Hf; auto.
-  - now simpl in *; auto.
-  - destruct Hf.
-    split; auto.
-    now apply IHn.
-Qed.
-
-Lemma forall_nprod_and :
-  forall (P Q : DS (sampl value) -> Prop),
-    forall {n} (np : nprod n),
-    forall_nprod P np ->
-    forall_nprod Q np ->
-    forall_nprod (fun x => P x /\ Q x) np.
-Proof.
-  induction n as [|[]]; intros * Hp Hq; auto.
-  - constructor; auto.
-  - inv Hp. inv Hq.
-    constructor; auto; now apply IHn.
-Qed.
-
-Lemma forall_nprod_llift :
-  forall D (F : DS (sampl value) -C-> D -C-> DS (sampl value)) d,
-  forall (P Q : DS (sampl value) -> Prop),
-    (forall x, Q x -> P (F x d)) ->
-    forall {n} (np : nprod n),
-      forall_nprod Q np ->
-      forall_nprod P (llift _ F np d).
-Proof.
-  intros D F d ?? Hf.
-  induction n as [|[]]; intros * H; auto.
-  simpl in *; auto.
-  destruct np, H.
-  rewrite llift_simpl.
-  split; simpl in *; auto .
-  now apply IHn.
-Qed.
-
-(* TODO: bouger cette section et les précédentes dans un autre fichier *)
-Section List_of_nprod.
-
-Fixpoint list_of_nprod {n} (np : nprod n) : list (DS (sampl value)) :=
-  match n return nprod n -> _ with
-  | O => fun _ => []
-  | S m => fun np => nprod_fst np :: match m with
-                   | O => []
-                   | _ => list_of_nprod (nprod_skip np)
-                   end
-  end np.
-
-Lemma list_of_nprod_app :
-  forall {n m} (np : nprod n) (mp : nprod m),
-    list_of_nprod (nprod_app np mp) = list_of_nprod np ++ list_of_nprod mp.
-Proof.
-  induction n as [|[]]; intros; auto.
-  - destruct m; auto.
-  - destruct np as (p,np).
-    specialize (IHn _ np mp).
-    simpl; f_equal; auto.
-Qed.
-
-Lemma list_of_nprod_nth :
-  forall {n} (np : nprod n) k d,
-    k < n ->
-    nth k (list_of_nprod np) d = get_nth k np.
-Proof.
-  induction n as [|[]]; auto; intros * Hk. inv Hk.
-  - destruct k as [|[]]; now inv Hk.
-  - destruct k; auto.
-    apply IHn; auto with arith.
-Qed.
-
-Lemma forall_nprod_Forall :
-  forall P {n} (np : nprod n),
-    forall_nprod P np ->
-    Forall P (list_of_nprod np).
-Proof.
-  induction n as [|[]]; intros * Hf.
-  - constructor.
-  - constructor; auto.
-  - inversion Hf.
-    constructor; auto.
-    now apply IHn.
-Qed.
-
-Lemma Forall_forall_nprod :
-  forall P {n} (np : nprod n),
-    Forall P (list_of_nprod np) ->
-    forall_nprod P np.
-Proof.
-  induction n as [|[]]; intros * Hf.
-  - constructor.
-  - inv Hf. auto.
-  - inv Hf.
-    constructor; auto.
-    now apply IHn.
-Qed.
-
-Lemma list_of_nprod_length :
-  forall {n} (np : nprod n),
-    length (list_of_nprod np) = n.
-Proof.
-  induction n as [|[]]; auto.
-  intros []; simpl.
-  f_equal. apply IHn.
-Qed.
-
-Lemma Forall2_lift2 :
-  forall {A} (F : forall A, DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A))
-    (P Q : A -> DS (sampl value) -> Prop),
-    (forall a x y, P a x -> P a y -> Q a (F _ x y)) ->
-    forall l {n} (l1 l2 : nprod n),
-      Forall2 P l (list_of_nprod l1) ->
-      Forall2 P l (list_of_nprod l2) ->
-      Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
-Proof.
-  induction l as [|? []]; intros * Hl1 Hl2.
-  - simpl_Forall.
-    destruct n; simpl in *; auto; congruence.
-  - destruct n as [|[]]; simpl in *; simpl_Forall.
-    cbn; auto.
-  - destruct n as [|[]]; auto.
-    inv Hl1; simpl_Forall.
-    inv Hl1; simpl_Forall.
-    destruct l1 as (s1&l1), l2 as (s2&l2).
-    specialize (IHl _ l1 l2).
-    rewrite lift2_simpl.
-    constructor.
-    + inv Hl1. inv Hl2. cbn; auto.
-    + inv Hl1. inv Hl2. auto.
-Qed.
-
-Lemma Forall2_llift :
-  forall {A} D d (F : DS (sampl value) -C-> D -C-> DS (sampl value))
-    (P Q : A -> DS (sampl value) -> Prop),
-    (forall a x, P a x -> Q a (F x d)) ->
-    forall (l : list A) {n} (l1 : nprod n),
-      Forall2 P l (list_of_nprod l1) ->
-      Forall2 Q l (list_of_nprod (llift _ F l1 d)).
-Proof.
-  induction l as [|? []]; intros * Hl1.
-  - simpl_Forall.
-    destruct n; simpl in *; auto; congruence.
-  - destruct n as [|[]]; simpl in *; simpl_Forall.
-    cbn; auto.
-  - destruct n as [|[]]; auto.
-    inv Hl1; simpl_Forall.
-    inv Hl1; simpl_Forall.
-    destruct l1 as (s1&l1).
-    specialize (IHl _ l1).
-    rewrite llift_simpl.
-    constructor.
-    + inv Hl1. cbn; auto.
-    + inv Hl1. auto.
-Qed.
-
-Lemma Forall_llift :
-  forall D d (F : DS (sampl value) -C-> D -C-> DS (sampl value))
-    (P Q : DS (sampl value) -> Prop),
-    (forall x, P x -> Q (F x d)) ->
-    forall {n} (np : nprod n),
-      Forall P (list_of_nprod np) ->
-      Forall Q (list_of_nprod (llift _ F np d)).
-Proof.
-  intros * HPQ.
-  induction n as [|[]]; intros * Hp.
-  - simpl_Forall. easy.
-  - simpl_Forall. destruct H; subst; try tauto; now apply HPQ.
-  - constructor.
-    + apply HPQ. now inv Hp.
-    + apply IHn; inv Hp; auto.
-Qed.
-
-End List_of_nprod.
-
-(* TODO: bouger cette section, mais où ? *)
-Section Mem_nth.
-
-(* retourne l'indice de l'élément dans la liste *)
-Fixpoint mem_nth (l : list ident) (x : ident) : option nat :=
-  match l with
-  | [] => None
-  | y :: l =>
-      if ident_eq_dec x y then Some O
-      else option_map S (mem_nth l x)
-  end.
-
-Lemma mem_nth_nth :
-  forall l k d,
-    NoDup l ->
-    k < length l ->
-    mem_nth l (nth k l d) = Some k.
-Proof.
-  induction l; simpl; intros * Hdup Hk. lia.
-  destruct k.
-  - destruct ident_eq_dec; congruence.
-  - inv Hdup. cases; subst.
-    + exfalso. auto using nth_In with arith.
-    + rewrite IHl; auto with arith.
-Qed.
-
-Lemma mem_nth_In :
-  forall l x n, mem_nth l x = Some n -> In x l.
-Proof.
-  induction l as [|y l]; simpl; intros * Hm; try congruence.
-  destruct (ident_eq_dec x y); subst; auto.
-  apply option_map_inv in Hm as (?&?&?); eauto.
-Qed.
-
-Lemma mem_nth_Some :
-  forall x l k d,
-    mem_nth l x = Some k ->
-    k < length l /\ nth k l d = x.
-Proof.
-  induction l; simpl; intros * Hk; try congruence.
-  destruct ident_eq_dec; subst; inv Hk; auto with arith.
-  apply option_map_inv in H0 as (?& HH &?); subst.
-  edestruct IHl; eauto with arith.
-Qed.
-
-Lemma mem_nth_nin :
-  forall x xs,
-    mem_nth xs x = None ->
-    In x xs ->
-    False.
-Proof.
-  intros * Hf Hin.
-  induction xs; simpl in *; cases.
-  apply option_map_None in Hf.
-  firstorder.
-Qed.
-
-End Mem_nth.
-
-
-Section Denot.
-
-Variable (G : global).
+(** ** Denotational environments (local & program-wide) *)
+Section Denot_env.
 
 Definition SI := fun _ : ident => sampl value.
 Definition FI := fun _ : ident => (DS_prod SI -C-> DS_prod SI).
+
+(** build and environment from a tuple of streams, with names given in [l] *)
+Definition env_of_ss (l : list ident) {n} : nprod n -C-> DS_prod SI :=
+  Dprodi_DISTR _ _ _
+    (fun x => match mem_nth l x with
+           | Some n => get_nth n errTy
+           | None => CTE _ _ errTy
+           end).
+
+(** extract a typle from an environment  *)
+Definition ss_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
+  induction l as [| x []].
+  - apply CTE, errTy.
+  - apply (PROJ _ x).
+  - apply ((PAIR _ _ @2_ PROJ _ x) IHl).
+Defined.
+
+Lemma env_of_ss_nth :
+  forall l n (np : nprod n) k x,
+    mem_nth l x = Some k ->
+    env_of_ss l np x = get_nth k errTy np.
+Proof.
+  unfold env_of_ss.
+  intros.
+  setoid_rewrite Dprodi_DISTR_simpl.
+  cases. now inv H. congruence.
+Qed.
+
+Lemma nth_ss_of_env :
+  forall d d' l env k,
+    k < length l ->
+    get_nth k d' (ss_of_env l env) = env (nth k l d).
+Proof.
+  induction l as [|? []]; intros * Hl.
+  - inv Hl.
+  - destruct k; auto. simpl in *; lia.
+  - destruct k; simpl; auto.
+    setoid_rewrite IHl; now auto with arith.
+Qed.
+
+Lemma forall_env_of_ss :
+  forall (P : DS (sampl value) -> Prop) l {n} (ss : nprod n),
+    P errTy ->
+    forall_nprod P ss ->
+    forall x, P (env_of_ss l ss x).
+Proof.
+  intros.
+  unfold env_of_ss.
+  cbn; cases.
+  destruct (Nat.lt_ge_cases n0 n).
+  - apply forall_nprod_k; auto.
+  - rewrite get_nth_err; auto.
+Qed.
+
+
+Lemma forall_ss_of_env :
+  forall (P : DS (sampl value) -> Prop) l env,
+    (forall x, P (env x)) ->
+    forall_nprod P (ss_of_env l env).
+Proof.
+  induction l as [|? []]; intros * Hp; eauto.
+  - now simpl.
+  - apply Hp.
+  - constructor.
+    + apply Hp.
+    + apply IHl, Hp.
+Qed.
+
+(* version plus forte mais moins pratique à utiliser *)
+Lemma forall_ss_of_env' :
+  forall (P : DS (sampl value) -> Prop) l env,
+    (forall x, In x l -> P (env x)) ->
+    forall_nprod P (ss_of_env l env).
+Proof.
+  induction l as [|? []]; intros * Hp; eauto.
+  - now simpl.
+  - apply Hp; now constructor.
+  - constructor.
+    + apply Hp. now constructor.
+    + apply IHl. clear - Hp. firstorder.
+Qed.
+
+End Denot_env.
+
+
+Section Denot_node.
+
+Variable (G : global).
+
 
 (* l'opérateur swhen spécialisé aux Velus.Op.value *)
 Definition swhenv :=
   let get_tag := fun v => match v with Venum t => Some t | _ => None end in
   @swhen value value enumtag get_tag Nat.eqb.
 
-(* un environment associant les flots aux entrées seulement *)
-(* TODO: doit-on remplacer n par (list ins) ? *)
-Definition env_of_ss (ins : list ident) {n} : nprod n -C-> DS_prod SI :=
-  Dprodi_DISTR _ _ _
-    (fun x => match mem_nth ins x with
-           | Some n => get_nth n
-           | None => CTE _ _ (DS_const (err error_Ty))
-           end).
-(* extraire une liste de flots d'un environment *)
-Definition ss_of_env (outs : list ident) : DS_prod SI -C-> nprod (length outs).
-  induction outs as [| x []].
-  - apply CTE, (DS_const (err error_Ty)).
-  - apply (PROJ _ x).
-  - apply ((PAIR _ _ @2_ PROJ _ x) IHouts).
-Defined.
-
 Definition denot_exp_ (ins : list ident)
   (e : exp) :
   (* (nodes * inputs * base clock * env) -> streams *)
-  Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C-> nprod (numstreams e).
+  Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C-> @nprod (DS (sampl value)) (numstreams e).
   set (ctx := Dprod _ _).
   epose (denot_var :=
        fun x => if mem_ident x ins
@@ -658,24 +148,24 @@ Definition denot_exp_ (ins : list ident)
   - (* Econst *)
     apply (sconst (Vscalar (sem_cconst c)) @_ SND _ _ @_ FST _ _).
   - (* Eenum *)
-    apply CTE, (DS_const (err error_Ty)).
+    apply CTE, errTy.
   - (* Evar *)
     exact (denot_var i).
   - (* Elast *)
-    apply CTE, (DS_const (err error_Ty)).
+    apply CTE, errTy.
   - (* Eunop *)
     eapply fcont_comp. 2: apply (denot_exp e0).
     destruct (numstreams e0) as [|[]].
     (* pas le bon nombre de flots: *)
-    1,3: apply CTE, (DS_const (err error_Ty)).
+    1,3: apply CTE, errTy.
     destruct (typeof e0) as [|ty []].
     (* pas le bon nombre de flots: *)
-    1,3: apply CTE, (DS_const (err error_Ty)).
+    1,3: apply CTE, errTy.
     exact (sunop (fun v => sem_unop u v ty)).
   - (* Ebinop *)
-    apply CTE, (DS_const (err error_Ty)).
+    apply CTE, errTy.
   - (* Eextcall *)
-    apply CTE, (DS_const (err error_Ty)).
+    apply CTE, errTy.
   - (* Efby *)
     rename l into e0s, l0 into es, l1 into anns.
     clear He.
@@ -688,24 +178,24 @@ Definition denot_exp_ (ins : list ident)
                 (list_sum (List.map numstreams e0s))
              ) as [->|].
     (* si les tailles ne correspondent pas : *)
-    2,3: apply CTE, (nprod_const (err error_Ty) _).
+    2,3: apply CTE, (nprod_const errTy).
     (* calculer les flots de e0s *)
-    assert (ctx -C-> nprod (list_sum (List.map numstreams e0s))) as s0s.
+    eassert (ctx -C-> nprod (list_sum (List.map numstreams e0s))) as s0s.
     { clear Heq.
       induction e0s as [|a].
-      + exact (CTE _ _ (DS_const (err error_Ty))).
+      + exact (CTE _ _ errTy).
       + exact ((nprod_app @2_ (denot_exp a)) IHe0s). }
     (* calculer les flots de e0s *)
-    assert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
+    eassert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
     { clear Heq.
       induction es as [|a].
-      + exact (CTE _ _ (DS_const (err error_Ty))).
+      + exact (CTE _ _ errTy).
       + exact ((nprod_app @2_ (denot_exp a)) IHes). }
     (* calculer les flots de es *)
     rewrite <- Heq in ss.
-    exact ((lift2 (@SDfuns.fby) @2_ s0s) ss).
+    exact ((lift2 (SDfuns.fby) @2_ s0s) ss).
   - (* Earrow *)
-    apply CTE, (nprod_const (err error_Ty)).
+    apply CTE, (nprod_const errTy).
   - (* Ewhen *)
     rename l into es.
     destruct l0 as (tys,ck).
@@ -714,28 +204,28 @@ Definition denot_exp_ (ins : list ident)
                 (length tys)
                 (list_sum (List.map numstreams es))
              ) as [->|].
-    2: apply CTE, (nprod_const (err error_Ty) _).
-    assert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
+    2: apply CTE, (nprod_const errTy).
+    eassert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
     { induction es as [|a].
-      + exact (CTE _ _ (DS_const (err error_Ty))).
+      + exact (CTE _ _ errTy).
       + exact ((nprod_app @2_ (denot_exp a)) IHes). }
-    exact ((llift _ (swhenv e0) @2_ ss) (denot_var i)).
+    exact ((llift (swhenv e0) @2_ ss) (denot_var i)).
   - (* Emerge *)
-    apply CTE, (nprod_const (err error_Ty)).
+    apply CTE, (nprod_const errTy).
   - (* Ecase *)
-    apply CTE, (nprod_const (err error_Ty)).
+    apply CTE, (nprod_const errTy).
   - (* Eapp *)
     rename l into es, l0 into er, l1 into anns.
     clear He.
     destruct (find_node i G) as [n|].
     destruct (Nat.eq_dec (length anns) (length (idents n.(n_out)))) as [->|].
-    2,3: apply CTE, (nprod_const (err error_Ty)).
+    2,3: apply CTE, (nprod_const errTy).
     (* dénotation du nœud *)
     pose (f := PROJ _ i @_ FST _ _ @_ FST _ _ @_ FST _ _ : ctx -C-> FI i).
     (* calcul des es *)
-    assert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
+    eassert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
     { induction es as [|a].
-      + exact (CTE _ _ (DS_const (err error_Ty))).
+      + exact (CTE _ _ errTy).
       + exact ((nprod_app @2_ (denot_exp a)) IHes). }
     (* chaînage *)
     exact ((ss_of_env (idents (n_out n))
@@ -747,17 +237,11 @@ Definition denot_exp (ins : list ident) (e : exp) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> nprod (numstreams e) :=
   curry (curry (curry (denot_exp_ ins e))).
 
-Ltac forward_apply A :=
-  match type of A with
-  | ?B -> ?C =>
-      assert C; [ apply A |]
-  end.
-
 Definition denot_exps_ (ins : list ident) (es : list exp) :
   Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
-  nprod (list_sum (List.map numstreams es)).
+  @nprod (DS (sampl value)) (list_sum (List.map numstreams es)).
   induction es as [|a].
-  + exact (CTE _ _ (DS_const (err error_Ty))).
+  + exact (CTE _ _ errTy).
   + exact ((nprod_app @2_ (denot_exp_ ins a)) IHes).
 Defined.
 
@@ -775,7 +259,7 @@ Qed.
 
 Lemma denot_exps_nil :
   forall ins envG envI bs env,
-    denot_exps ins [] envG envI bs env = DS_const (err error_Ty).
+    denot_exps ins [] envG envI bs env = errTy.
 Proof.
   trivial.
 Qed.
@@ -791,16 +275,6 @@ Proof.
   simpl.
   now rewrite app_nil_r.
 Qed.
-
-(* ?????? *)
-Definition nprod_add : forall n m : nat, nprod n -> nprod m -> nprod n :=
-  fun n m =>
-    match Nat.eq_dec n m with
-    | left a =>
-        eq_rect_r (fun n0 : nat => nprod n0 -> nprod m -> nprod n0)
-          (fun mm => lift2 (@fby) mm) a
-    | right b => fun (_ : nprod n) (_ : nprod m) => nprod_const abs n
-    end.
 
 Definition denot_var ins envI env x : DS (sampl value) :=
   if mem_ident x ins then envI x else env x.
@@ -818,9 +292,9 @@ Lemma denot_exp_eq :
           | 1 => fun se =>
               match typeof e with
               | [ty] => sunop (fun v => sem_unop op v ty) se
-              | _ => DS_const (err error_Ty)
+              | _ => errTy
               end
-          | _ => fun _ => DS_const (err error_Ty)
+          | _ => fun _ => errTy
           end se
       (* | Ebinop _ _ _ op e1 e2 => *)
       (*     binop (denot_lbinop op) (denot_exp e1 genv env bs) (denot_exp e2 genv env bs) *)
@@ -831,8 +305,8 @@ Lemma denot_exp_eq :
           let m := (list_sum (List.map numstreams es)) in
           match Nat.eq_dec n m, Nat.eq_dec (length an) n with
           | left eqm, left eqan =>
-              eq_rect_r nprod (lift2 (@SDfuns.fby) s0s (eq_rect_r nprod ss eqm)) eqan
-          | _, _ => nprod_const (err error_Ty) _
+              eq_rect_r nprod (lift2 (SDfuns.fby) s0s (eq_rect_r nprod ss eqm)) eqan
+          | _, _ => nprod_const errTy _
           end
       (* | Earrow _ e0 e => *)
       (*     lift2 s (@arrow) _ (denot_exp e0 genv env bs) (denot_exp e genv env bs) *)
@@ -842,8 +316,8 @@ Lemma denot_exp_eq :
           let ss := denot_exps ins es envG envI bs env in
           match Nat.eq_dec (length tys) (list_sum (List.map numstreams es)) with
           | left eqn =>
-              eq_rect_r nprod (llift _ (swhenv k) ss (denot_var ins envI env x)) eqn
-          | _ => nprod_const (err error_Ty) _
+              eq_rect_r nprod (llift (swhenv k) ss (denot_var ins envI env x)) eqn
+          | _ => nprod_const errTy _
           end
       | Eapp f es _ an =>
           let ss := denot_exps ins es envG envI bs env in
@@ -854,9 +328,9 @@ Lemma denot_exp_eq :
                   eq_rect_r nprod
                     (ss_of_env (idents n.(n_out)) (envG f (env_of_ss (idents n.(n_in)) ss)))
                     eqan
-              | _ => nprod_const (err error_Ty) _
+              | _ => nprod_const errTy _
               end
-          | _ => nprod_const (err error_Ty) _
+          | _ => nprod_const errTy _
           end
       (* | Emerge _ x vd eT eF => *)
       (*     llift2 s _ (@merge) _ (denot_var s thisd x vd env) *)
@@ -867,7 +341,7 @@ Lemma denot_exp_eq :
       (* | Ereset _ _ f fd e er => *)
       (*     reset (denot_app s gd f fd genv) *)
                           (*       (denot_exp er genv env bs) (denot_exp e genv env bs) *)
-      | _ => nprod_const (err error_Ty) _
+      | _ => nprod_const errTy _
       end.
 Proof.
   destruct e; auto; intros envG envI bs env.
@@ -930,8 +404,21 @@ Qed.
 
 Global Opaque denot_exp.
 
-(* End EXP. *)
-
+(* TODO: comprendre pourquoi on ne peut pas faire les deux en un ?????? *)
+Global Add Parametric Morphism ins : (denot_var ins)
+    with signature @Oeq (DS_prod SI) ==> @eq (DS_prod SI) ==> @eq ident ==> @Oeq (DS (sampl value))
+      as denot_var_morph1.
+Proof.
+  unfold denot_var.
+  intros; cases.
+Qed.
+Global Add Parametric Morphism ins : (denot_var ins)
+    with signature @eq (DS_prod SI) ==> @Oeq (DS_prod SI) ==> @eq ident ==> @Oeq (DS (sampl value))
+      as denot_var_morph2.
+Proof.
+  unfold denot_var.
+  intros; cases.
+Qed.
 
 Definition denot_equation (ins : list ident) (e : equation) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
@@ -942,7 +429,7 @@ Definition denot_equation (ins : list ident) (e : equation) :
               (list_sum (List.map numstreams es))
            ) as [Heq|].
   2:{ apply curry, curry, curry, Dprodi_DISTR.
-      exact (fun _ => CTE _ _ (DS_const (err error_Ty))). }
+      exact (fun _ => CTE _ _ errTy). }
   pose proof (ss := denot_exps_ ins es).
   apply curry, curry, curry, Dprodi_DISTR.
   intro x.
@@ -966,9 +453,9 @@ Definition denot_equation (ins : list ident) (e : equation) :
      - si la varible est une sortie : retrouner (env x)
      - sinon, renvoyer error_Ty *)
   induction xs as [| y xs]; intros.
-  - exact (CTE _ _ (DS_const (err error_Ty))).
+  - exact (CTE _ _ errTy).
   - destruct (ident_eq_dec x y).
-    + exact (nprod_fst @_ SND _ _).
+    + exact (nprod_fst errTy @_ SND _ _).
     + eapply fcont_comp.
       * exact (IHxs (length xs) eq_refl).
       * inv Heq.
@@ -985,10 +472,10 @@ Lemma denot_equation_eq :
         if mem_ident x ins then envI x else
          let ss := denot_exps ins es envG envI bs env in
          match mem_nth xs x with
-         | None => DS_const (err error_Ty)
-         | Some n => get_nth n ss
+         | None => errTy
+         | Some n => get_nth n errTy ss
          end
-       else DS_const (err error_Ty).
+       else errTy.
 Proof.
   intros ?????? env ?.
   unfold denot_equation, denot_exps.
@@ -1011,6 +498,21 @@ Qed.
 
 Global Opaque denot_equation.
 
+Lemma denot_equation_input :
+  forall e ins envG envI bs env x,
+    wl_equation G e ->
+    In x ins ->
+    denot_equation ins e envG envI bs env x = envI x.
+Proof.
+  intros * Hwt Hx.
+  apply mem_ident_spec in Hx.
+  destruct e as (xs,es).
+  destruct Hwt as [? Hwt].
+  rewrite annots_numstreams in Hwt.
+  rewrite denot_equation_eq.
+  cases_eqn HH; congruence.
+Qed.
+
 End Equation_spec.
 
 (* (* 1ère version : construction directe de l'environnement en parcourant *)
@@ -1027,7 +529,7 @@ End Equation_spec.
 (*       2:{ (* TODO: plus joli *) *)
 (*         apply curry, Dprodi_DISTR. *)
 (*         intro. apply CTE. unfold type_vars. simpl. *)
-(*         cases. exact (DS_const (err error_Ty)). exact (DS_const tt). } *)
+(*         cases. exact errTy. exact (DS_const tt). } *)
 (*       (* calcul des expressions *) *)
 (*       apply curry. *)
 (*       assert (Dprod (DS_prod type_vars) (DS bool) -C-> nprod (list_sum (List.map numstreams es))) as ss. *)
@@ -1072,37 +574,6 @@ Definition denot_block (ins : list ident) (b : block) :
   | _ => curry (curry (curry (SND _ _ @_ FST _ _ @_ FST _ _))) (* garder les entrées *)
   end.
 
-(** abstract_clock *)
-Definition AC : DS (sampl value) -C-> DS bool :=
-  MAP (fun v => match v with pres _ => true | _ => false end).
-
-Lemma AC_eq :
-  forall u U,
-    AC (cons u U) == match u with
-                     | pres _ => cons true (AC U)
-                     | _ => cons false (AC U)
-                     end.
-Proof.
-  intros.
-  unfold AC.
-  rewrite MAP_map, map_eq_cons; cases.
-Qed.
-
-Lemma AC_is_cons :
-  forall U, is_cons (AC U) <-> is_cons U.
-Proof.
-  split; eauto using map_is_cons, is_cons_map.
-Qed.
-
-(* TODO: move? *)
-(* équivalent de clocks_of *)
-Fixpoint bss (ins : list ident) : DS_prod SI -C-> DS bool :=
-  match ins with
-  | [] => CTE _ _ (DS_const false)
-  | [x] => AC @_ PROJ _ x
-  | x :: ins => (ZIP orb @2_ (AC @_ PROJ _ x)) (bss ins)
-  end.
-
 Definition denot_node (n : node) :
   (* envG -> envI -> env -> env *)
   Dprodi FI -C-> DS_prod SI -C-> DS_prod SI -C-> DS_prod SI.
@@ -1120,12 +591,25 @@ Proof.
   trivial.
 Qed.
 
-End Denot.
+Lemma denot_node_input :
+  forall nd envG envI env x,
+    wl_node G nd ->
+    In x (List.map fst nd.(n_in)) ->
+    denot_node nd envG envI env x = envI x.
+Proof.
+  intros * Hwl Hin.
+  unfold denot_node, denot_block.
+  inv Hwl; auto.
+  autorewrite with cpodb.
+  eapply denot_equation_input; eauto.
+Qed.
+
+End Denot_node.
 
 
 Section Global.
 
-  Definition env_err_ty : DS_prod SI := fun _ => DS_const (err error_Ty).
+  Definition env_err_ty : DS_prod SI := fun _ => errTy.
 
   Definition denot_global_ (G : global) : Dprodi FI -C-> Dprodi FI.
     apply Dprodi_DISTR; intro f.
@@ -1197,6 +681,145 @@ Definition restr_global (g : global) : Prop :=
 
 End Temp.
 
+
+(** Here we show that a node can be removed from the environment if it
+    is not evaluated during the computations. *)
+Section Denot_cons.
+
+Lemma denot_exp_cons :
+  forall nd nds tys exts
+    ins envG envI bs env e,
+    ~ Is_node_in_exp nd.(n_name) e ->
+    denot_exp (Global tys exts nds) ins e envG envI bs env
+    == denot_exp (Global tys exts (nd :: nds)) ins e envG envI bs env.
+Proof.
+  Ltac solve_nin Hnin :=
+    let H := fresh in
+    intro H; apply Hnin; constructor; auto.
+  (* TODO: utiliser ça partout, vraiment ! *)
+  Ltac gen_denot :=
+    repeat match goal with
+      | |- context [ denot_exp ?a ?b ?c ] => generalize (denot_exp a b c)
+      | |- context [ denot_exps ?a ?b ?c ] => generalize (denot_exps a b c)
+      end.
+  induction e using exp_ind2; intro Hnin.
+  all: setoid_rewrite denot_exp_eq; auto.
+  - (* unop *)
+    revert IHe.
+    gen_denot.
+    cases; simpl; intros.
+    rewrite IHe; auto.
+    intro H; apply Hnin; constructor; auto.
+  - (* fby *)
+    assert (denot_exps (Global tys exts nds) ins e0s envG envI bs env
+            == denot_exps (Global tys exts (nd::nds)) ins e0s envG envI bs env) as He0s.
+    { induction e0s. trivial.
+      inv H.
+      (* TODO: faire mieux, cette preuve est un enfer *)
+      rewrite 2 denot_exps_eq.
+      apply nprod_app_Oeq_compat.
+      - apply H3. solve_nin Hnin.
+      - apply IHe0s; auto.
+        intro HH; inv HH. apply Hnin. constructor.
+        destruct H2; eauto using Exists_cons_tl. }
+    assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+            == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
+    { induction es. trivial.
+      inv H0.
+      (* TODO: faire mieux, cette preuve est un enfer *)
+      rewrite 2 denot_exps_eq.
+      apply nprod_app_Oeq_compat.
+      - apply H3. solve_nin Hnin.
+      - apply IHes; auto.
+        intro HH; inv HH. apply Hnin. constructor.
+        destruct H2; eauto using Exists_cons_tl. }
+    revert He0s Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
+    gen_denot; cases.
+  - (* when *)
+    assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+            == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
+    { induction es. trivial.
+      inv H.
+      (* TODO: faire mieux, cette preuve est un enfer *)
+      rewrite 2 denot_exps_eq.
+      apply nprod_app_Oeq_compat.
+      - apply H2. solve_nin Hnin.
+      - apply IHes; auto.
+        intro HH; inv HH. apply Hnin.
+        constructor; eauto using Exists_cons_tl. }
+    revert Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
+    gen_denot; cases.
+  - (* eapp, seul cas intéressant *)
+    simpl.
+    destruct (ident_eq_dec nd.(n_name) f) as [|Hf]; subst.
+    { (* si oui, contradiction *)
+      destruct Hnin. apply INEapp2. }
+    rewrite (find_node_other _ _ _ _ _ Hf).
+    assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+            == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
+    { induction es. trivial.
+      inv H.
+      (* TODO: faire mieux, cette preuve est un enfer *)
+      rewrite 2 denot_exps_eq.
+      apply nprod_app_Oeq_compat.
+      - apply H3. solve_nin Hnin.
+      - apply IHes; auto.
+        intro HH; inv HH; auto.
+        apply Hnin; constructor.
+        destruct H2; eauto using Exists_cons_tl.
+    }
+    revert Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
+    gen_denot; cases.
+    now intros ?? ->.
+Qed.
+
+Lemma denot_node_cons :
+  forall n nd nds tys exts,
+    ~ Is_node_in_block nd.(n_name) n.(n_block) ->
+    denot_node (Global tys exts nds) n
+    == denot_node (Global tys exts (nd :: nds)) n.
+Proof.
+  intros * Hnin.
+  unfold denot_node, denot_block.
+  destruct n.(n_block).
+  2-5: trivial.
+  destruct e as (xs,es).
+  apply fcont_eq_intro; intro envG.
+  apply fcont_eq_intro; intro envI.
+  apply fcont_eq_intro; intro bs.
+  apply Oprodi_eq_intro; intro x.
+  autorewrite with cpodb.
+  setoid_rewrite denot_equation_eq.
+  cases_eqn HH; simpl.
+  apply (get_nth_Oeq_compat _ _ errTy).
+  clear - Hnin.
+  induction es. reflexivity.
+  rewrite 2 denot_exps_eq.
+  apply nprod_app_Oeq_compat.
+  - apply denot_exp_cons. intro.
+    apply Hnin. constructor. now constructor.
+  - apply IHes. intro H. inv H.
+    apply Hnin. constructor.
+    unfold Is_node_in_eq in *; eauto using Exists_cons_tl.
+Qed.
+
+(* Lemma denot_global_cons_ : *)
+(*   forall nd nds tys f envG, *)
+(*     Ordered_nodes (Global tys (nd :: nds)) -> *)
+(*     nd.(n_name) <> f -> *)
+(*     denot_global_ (Global tys (nd::nds)) envG f *)
+(*     == denot_global_ (Global tys nds) envG f. *)
+(* Proof. *)
+(*   intros * Hord Hneq. *)
+(*   apply fcont_eq_intro; intro envI. *)
+(*   rewrite 2 denot_global_eq, (find_node_other _ _ _ _ Hneq). *)
+(*   destruct (find_node _ _) eqn:Hfind. 2: auto. *)
+(*   rewrite <- denot_node2_cons; eauto using find_node_later_not_Is_node_in. *)
+(* Qed. *)
+
+End Denot_cons.
+
+
 End LDENOT.
 
 Module LDenotFun
@@ -1206,7 +829,7 @@ Module LDenotFun
   (Cks   : CLOCKS        Ids Op OpAux)
   (Senv  : STATICENV     Ids Op OpAux Cks)
   (Syn   : LSYNTAX       Ids Op OpAux Cks Senv)
-  (Str   : COINDSTREAMS  Ids Op OpAux Cks)
-<: LDENOT Ids Op OpAux Cks Senv Syn Str.
-  Include LDENOT Ids Op OpAux Cks Senv Syn Str.
+  (Lord  : LORDERED      Ids Op OpAux Cks Senv Syn)
+<: LDENOT Ids Op OpAux Cks Senv Syn Lord.
+  Include LDENOT Ids Op OpAux Cks Senv Syn Lord.
 End LDenotFun.

@@ -1043,6 +1043,14 @@ Module Type LSEMANTICS
   Global Instance history_equiv_refl : Reflexive history_equiv.
   Proof. split; reflexivity. Qed.
 
+  Global Add Parametric Morphism : (@pair Str.history Str.history) with signature
+         FEnv.Equiv (EqSt (A:=svalue)) ==> FEnv.Equiv (EqSt (A:=svalue)) ==> history_equiv
+           as history_equiv_morph.
+  Proof.
+    intros ??????.
+    split; auto.
+  Qed.
+
   Add Parametric Morphism {PSyn prefs} (G : @global PSyn prefs) : (sem_exp G)
       with signature history_equiv ==> @EqSt bool ==> eq ==> @EqSts svalue ==> Basics.impl
         as sem_exp_morph.
