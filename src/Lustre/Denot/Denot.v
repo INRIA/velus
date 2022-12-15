@@ -38,7 +38,7 @@ Section Denot_env.
 Definition SI := fun _ : ident => sampl value.
 Definition FI := fun _ : ident => (DS_prod SI -C-> DS_prod SI).
 
-(** build and environment from a tuple of streams, with names given in [l] *)
+(** build an environment from a tuple of streams, with names given in [l] *)
 Definition env_of_ss (l : list ident) {n} : nprod n -C-> DS_prod SI :=
   Dprodi_DISTR _ _ _
     (fun x => match mem_nth l x with
@@ -46,7 +46,7 @@ Definition env_of_ss (l : list ident) {n} : nprod n -C-> DS_prod SI :=
            | None => CTE _ _ errTy
            end).
 
-(** extract a typle from an environment  *)
+(** extract a tuple from an environment  *)
 Definition ss_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
   induction l as [| x []].
   - apply CTE, errTy.
@@ -91,7 +91,6 @@ Proof.
   - rewrite get_nth_err; auto.
 Qed.
 
-
 Lemma forall_ss_of_env :
   forall (P : DS (sampl value) -> Prop) l env,
     (forall x, P (env x)) ->
@@ -125,7 +124,6 @@ End Denot_env.
 Section Denot_node.
 
 Variable (G : global).
-
 
 (* l'opérateur swhen spécialisé aux Velus.Op.value *)
 Definition swhenv :=
@@ -682,8 +680,8 @@ Definition restr_global (g : global) : Prop :=
 End Temp.
 
 
-(** Here we show that a node can be removed from the environment if it
-    is not evaluated during the computations. *)
+(** *** Here we show that a node can be removed from the environment
+    if it is not evaluated during the computations. *)
 Section Denot_cons.
 
 Lemma denot_exp_cons :
