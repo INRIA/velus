@@ -144,7 +144,7 @@ Module Type CORRECTNESS
   Qed.
 
   Definition sem_trconstrs_n
-             (P: program) (bk: stream bool) (H: history)
+             (P: program) (bk: stream bool) (H: IStr.history)
              (E: stream state) (T: stream state) (E': stream state)
              (tcs: list trconstr) :=
     forall n, Forall (sem_trconstr P (bk n) (H n) (E n) (T n) (E' n)) tcs.
@@ -394,7 +394,7 @@ Module Type CORRECTNESS
 
   Lemma sem_clock_vars_instant_Con:
     forall H b xs ys n,
-      Forall2 (sem_var H) (map fst xs) ys ->
+      Forall2 (IStr.sem_var H) (map fst xs) ys ->
       Forall (fun y => exists r, svalue_to_bool (y n) = Some r) ys ->
       sem_clocked_vars_instant b (H n) xs ->
       Forall (fun ckr => exists r, sem_clock_instant b (H n) ckr r) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
@@ -418,7 +418,7 @@ Module Type CORRECTNESS
 
   Lemma sem_clock_vars_instant_Con_true:
     forall H b xs ys n,
-      Forall2 (sem_var H) (map fst xs) ys ->
+      Forall2 (IStr.sem_var H) (map fst xs) ys ->
       sem_clocked_vars_instant b (H n) xs ->
       Exists (fun y => svalue_to_bool (y n) = Some true) ys <->
       Exists (fun ckr => sem_clock_instant b (H n) ckr true) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).
@@ -441,7 +441,7 @@ Module Type CORRECTNESS
 
   Lemma sem_clock_vars_instant_Con_false:
     forall H b xs ys n,
-      Forall2 (sem_var H) (map fst xs) ys ->
+      Forall2 (IStr.sem_var H) (map fst xs) ys ->
       sem_clocked_vars_instant b (H n) xs ->
       Forall (fun y => svalue_to_bool (y n) = Some false) ys <->
       Forall (fun ckr => sem_clock_instant b (H n) ckr false) (map (fun '(xr, ckr) => Con ckr xr (bool_velus_type, true_tag)) xs).

@@ -13,7 +13,7 @@ From Velus Require Import Clocks.
 (* for Theorem consolidate_mask *)
 From Coq Require Import Logic.IndefiniteDescription.
 
-Infix "⊑" := (FEnv.refines (@EqSt _)) (at level 70, no associativity) : fenv_scope.
+Infix "⊑" := (@FEnv.refines _ _ (@EqSt _)) (at level 70, no associativity) : fenv_scope.
 
 Module Type COINDSTREAMS
        (Import Ids : IDS)
@@ -1392,287 +1392,291 @@ Module Type COINDSTREAMS
 
   (** ** Properties of history *)
 
-  Definition history := FEnv.t (Stream svalue).
-  Definition history_tl (H: history) : history := FEnv.map (@tl svalue) H.
-  Global Hint Unfold history_tl : fenv.
+  Section history.
+    Context {K : Type}.
 
-  Fact history_tl_find_Some : forall (H: history) id vs,
-      H id = Some vs ->
-      (history_tl H) id = Some (tl vs).
-  Proof.
-    intros H id vs Hfind.
-    unfold history_tl, FEnv.map.
-    rewrite Hfind. reflexivity.
-  Qed.
+    Definition history := @FEnv.t K (Stream svalue).
+    Definition history_tl (H: history) : history := FEnv.map (@tl svalue) H.
 
-  Fact history_tl_find_Some' : forall (H: history) id vs,
-      (history_tl H) id = Some vs ->
-      exists v, H id = Some (v ⋅ vs).
-  Proof.
-    intros H id vs Hfind.
-    unfold history_tl, FEnv.map in Hfind.
-    inv_equalities.
-    exists (hd x). now destruct x.
-  Qed.
+    Fact history_tl_find_Some : forall (H: history) id vs,
+        H id = Some vs ->
+        (history_tl H) id = Some (tl vs).
+    Proof.
+      intros H id vs Hfind.
+      unfold history_tl, FEnv.map.
+      rewrite Hfind. reflexivity.
+    Qed.
 
-  Fact history_tl_find_None : forall (H: history) id,
-      H id = None ->
-      (history_tl H) id = None.
-  Proof.
-    intros H id Hfind.
-    unfold history_tl, FEnv.map.
-    now rewrite Hfind.
-  Qed.
+    Fact history_tl_find_Some' : forall (H: history) id vs,
+        (history_tl H) id = Some vs ->
+        exists v, H id = Some (v ⋅ vs).
+    Proof.
+      intros H id vs Hfind.
+      unfold history_tl, FEnv.map in Hfind.
+      inv_equalities.
+      exists (hd x). now destruct x.
+    Qed.
 
-  Fact history_tl_find_None' : forall (H: history) id,
-      (history_tl H) id = None ->
-      H id = None.
-  Proof.
-    intros H id Hfind.
-    unfold history_tl, FEnv.map in Hfind.
-    now inv_equalities.
-  Qed.
+    Fact history_tl_find_None : forall (H: history) id,
+        H id = None ->
+        (history_tl H) id = None.
+    Proof.
+      intros H id Hfind.
+      unfold history_tl, FEnv.map.
+      now rewrite Hfind.
+    Qed.
 
-  Definition env := FEnv.t svalue.
+    Fact history_tl_find_None' : forall (H: history) id,
+        (history_tl H) id = None ->
+        H id = None.
+    Proof.
+      intros H id Hfind.
+      unfold history_tl, FEnv.map in Hfind.
+      now inv_equalities.
+    Qed.
 
-  Definition history_nth (n : nat) (H: history) : env :=
-    FEnv.map (Str_nth n) H.
+    Definition env := @FEnv.t K svalue.
 
-  Fact history_nth_find_None : forall n (H: history) id,
-      H id = None ->
-      (history_nth n H) id = None.
-  Proof.
-    intros * Hfind.
-    unfold history_nth, FEnv.map. now rewrite Hfind.
-  Qed.
+    Definition history_nth (n : nat) (H: history) : env :=
+      FEnv.map (Str_nth n) H.
 
-  Fact history_nth_find_None' : forall n (H: history) id,
-      (history_nth n H) id = None ->
-      H id = None.
-  Proof.
-    intros * Hfind.
-    unfold history_nth, FEnv.map in Hfind.
-    now inv_equalities.
-  Qed.
+    Fact history_nth_find_None : forall n (H: history) id,
+        H id = None ->
+        (history_nth n H) id = None.
+    Proof.
+      intros * Hfind.
+      unfold history_nth, FEnv.map. now rewrite Hfind.
+    Qed.
 
-  Fact history_nth_find_Some : forall n (H: history) id vs,
-      H id = Some vs ->
-      (history_nth n H) id = Some (Str_nth n vs).
-  Proof.
-    intros * Hfind.
-    unfold history_nth, FEnv.map. now rewrite Hfind.
-  Qed.
+    Fact history_nth_find_None' : forall n (H: history) id,
+        (history_nth n H) id = None ->
+        H id = None.
+    Proof.
+      intros * Hfind.
+      unfold history_nth, FEnv.map in Hfind.
+      now inv_equalities.
+    Qed.
 
-  Fact history_nth_find_Some' : forall n (H: history) id v,
-      (history_nth n H) id = Some v ->
-      exists vs, H id = Some vs /\ vs # n = v.
-  Proof.
-    intros * Hfind.
-    unfold history_nth, FEnv.map in Hfind. inv_equalities.
-    eauto.
-  Qed.
+    Fact history_nth_find_Some : forall n (H: history) id vs,
+        H id = Some vs ->
+        (history_nth n H) id = Some (Str_nth n vs).
+    Proof.
+      intros * Hfind.
+      unfold history_nth, FEnv.map. now rewrite Hfind.
+    Qed.
 
-  Fact history_nth_find_Some'' : forall (H: history) vs id,
-      (forall n, (history_nth n H) id = Some (vs # n)) ->
-      exists vs', H id = Some vs' /\ vs' ≡ vs.
-  Proof.
-    intros * Hfind.
-    destruct (H id) as [vs'|] eqn:Hfind'.
-    - exists vs'. split; auto.
-      apply ntheq_eqst. intros n.
-      specialize (Hfind n).
+    Fact history_nth_find_Some' : forall n (H: history) id v,
+        (history_nth n H) id = Some v ->
+        exists vs, H id = Some vs /\ vs # n = v.
+    Proof.
+      intros * Hfind.
       unfold history_nth, FEnv.map in Hfind. inv_equalities.
-      rewrite Hf in Hfind'. inv Hfind'; auto.
-    - specialize (Hfind 0). unfold history_nth, FEnv.map in Hfind. inv_equalities.
-      congruence.
-  Qed.
+      eauto.
+    Qed.
 
-  Open Scope fenv_scope.
+    Fact history_nth_find_Some'' : forall (H: history) vs id,
+        (forall n, (history_nth n H) id = Some (vs # n)) ->
+        exists vs', H id = Some vs' /\ vs' ≡ vs.
+    Proof.
+      intros * Hfind.
+      destruct (H id) as [vs'|] eqn:Hfind'.
+      - exists vs'. split; auto.
+        apply ntheq_eqst. intros n.
+        specialize (Hfind n).
+        unfold history_nth, FEnv.map in Hfind. inv_equalities.
+        rewrite Hf in Hfind'. inv Hfind'; auto.
+      - specialize (Hfind 0). unfold history_nth, FEnv.map in Hfind. inv_equalities.
+        congruence.
+    Qed.
 
-  Fact history_tl_refines : forall H H',
-      H ⊑ H' ->
-      (history_tl H) ⊑ (history_tl H').
-  Proof.
-    intros H H' Href x vs Hfind.
-    eapply history_tl_find_Some' in Hfind as [v' Hfind].
-    eapply Href in Hfind as [vs' [Heq' Hfind']].
-    exists (tl vs').
-    apply history_tl_find_Some in Hfind'.
-    split; auto.
-    destruct vs'; simpl. inv Heq'; auto.
-  Qed.
+    Open Scope fenv_scope.
 
-  Fact history_tl_Equiv : forall H H',
-      FEnv.Equiv (@EqSt _) H H' ->
-      FEnv.Equiv (@EqSt _) (history_tl H) (history_tl H').
-  Proof.
-    unfold history_tl, FEnv.map.
-    intros * Heq x.
-    specialize (Heq x); inv Heq; simpl; constructor.
-    now rewrite H2.
-  Qed.
+    Fact history_tl_refines : forall H H',
+        H ⊑ H' ->
+        (history_tl H) ⊑ (history_tl H').
+    Proof.
+      intros H H' Href x vs Hfind.
+      eapply history_tl_find_Some' in Hfind as [v' Hfind].
+      eapply Href in Hfind as [vs' [Heq' Hfind']].
+      exists (tl vs').
+      apply history_tl_find_Some in Hfind'.
+      split; auto.
+      destruct vs'; simpl. inv Heq'; auto.
+    Qed.
+
+    Fact history_tl_Equiv : forall H H',
+        FEnv.Equiv (@EqSt _) H H' ->
+        FEnv.Equiv (@EqSt _) (history_tl H) (history_tl H').
+    Proof.
+      unfold history_tl, FEnv.map.
+      intros * Heq x.
+      specialize (Heq x); inv Heq; simpl; constructor.
+      now rewrite H2.
+    Qed.
+
+  End history.
+
+  Global Hint Unfold history_tl : fenv.
 
   (** * sem_var
         This is common to Lustre and NLustre Semantics *)
 
-  Inductive sem_var: history -> ident -> Stream svalue -> Prop :=
-    sem_var_intro:
-      forall H x xs xs',
-        H x = Some xs' ->
-        xs ≡ xs' ->
-        sem_var H x xs.
+  Section sem_var.
+    Context {K : Type}.
 
-  Add Parametric Morphism : sem_var
-    with signature FEnv.Equiv (@EqSt _) ==> @eq ident ==> @EqSt svalue ==> Basics.impl
-      as sem_var_morph.
-  Proof.
-    intros H H' ? x xs xs' Heq; subst.
-    intros Hsem; inv Hsem.
-    specialize (H0 x). rewrite H2 in H0. inv H0.
-    econstructor.
-    - symmetry in H4. eapply H4.
-    - rewrite <-H5, <-H3, Heq. reflexivity.
-  Qed.
+    Inductive sem_var: history -> K -> Stream svalue -> Prop :=
+      sem_var_intro:
+        forall H x xs xs',
+          H x = Some xs' ->
+          xs ≡ xs' ->
+          sem_var H x xs.
 
-  Lemma sem_var_det : forall H x s1 s2,
-      sem_var H x s1 ->
-      sem_var H x s2 ->
-      s1 ≡ s2.
-  Proof.
-    intros * Hsem1 Hsem2.
-    inv Hsem1. inv Hsem2.
-    rewrite H2, H4.
-    rewrite H1 in H3. inv H3. reflexivity.
-  Qed.
+    Global Add Parametric Morphism : sem_var
+        with signature FEnv.Equiv (@EqSt _) ==> @eq _ ==> @EqSt svalue ==> Basics.impl
+          as sem_var_morph.
+    Proof.
+      intros H H' ? x xs xs' Heq; subst.
+      intros Hsem; inv Hsem.
+      specialize (H0 x). rewrite H2 in H0. inv H0.
+      econstructor.
+      - symmetry in H4. eapply H4.
+      - rewrite <-H5, <-H3, Heq. reflexivity.
+    Qed.
 
-  Lemma env_maps_tl :
-    forall i v s H,
-      H i = Some (v ⋅ s) -> (history_tl H) i = Some s.
-  Proof.
-    intros * Hmap.
-    unfold history_tl, FEnv.map.
-    rewrite Hmap. reflexivity.
-  Qed.
+    Lemma sem_var_det : forall H x s1 s2,
+        sem_var H x s1 ->
+        sem_var H x s2 ->
+        s1 ≡ s2.
+    Proof.
+      intros * Hsem1 Hsem2.
+      inv Hsem1. inv Hsem2.
+      rewrite H2, H4.
+      rewrite H1 in H3. inv H3. reflexivity.
+    Qed.
 
-  Lemma sem_var_step :
-    forall H x v s,
-      sem_var H x (v ⋅ s) -> sem_var (history_tl H) x s.
-  Proof.
-    intros * Hsem.
-    inv Hsem.
-    destruct xs'.
-    econstructor.
-    eapply env_maps_tl; eauto. now inv H2.
-  Qed.
+    Lemma env_maps_tl :
+      forall i v s H,
+        H i = Some (v ⋅ s) -> (@history_tl K H) i = Some s.
+    Proof.
+      intros * Hmap.
+      unfold history_tl, FEnv.map.
+      rewrite Hmap. reflexivity.
+    Qed.
 
-  Lemma sem_var_step_inv :
-    forall H x s,
-      sem_var (history_tl H) x s ->
-      exists v, sem_var H x (v ⋅ s).
-  Proof.
-    intros * Hsem.
-    inv Hsem. unfold history_tl, FEnv.map in *. inv_equalities.
-    exists (hd x0). econstructor; eauto. constructor; auto.
-  Qed.
+    Lemma sem_var_step :
+      forall H x v s,
+        sem_var H x (v ⋅ s) -> sem_var (history_tl H) x s.
+    Proof.
+      intros * Hsem.
+      inv Hsem.
+      destruct xs'.
+      econstructor.
+      eapply env_maps_tl; eauto. now inv H2.
+    Qed.
 
-  Lemma sem_var_step_nl :
-    forall H x v s,
-      sem_var H x (v ⋅ s) -> sem_var (history_tl H) x s.
-  Proof.
-    intros * Hsem.
-    inv Hsem.
-    destruct xs'.
-    econstructor.
-    eapply env_maps_tl; eauto. now inv H2.
-  Qed.
+    Lemma sem_var_step_inv :
+      forall H x s,
+        sem_var (history_tl H) x s ->
+        exists v, sem_var H x (v ⋅ s).
+    Proof.
+      intros * Hsem.
+      inv Hsem. unfold history_tl, FEnv.map in *. inv_equalities.
+      exists (hd x0). econstructor; eauto. constructor; auto.
+    Qed.
 
-  Lemma sem_var_switch_env:
-    forall H H' x v,
-      orel (@EqSt svalue) (H x) (H' x) ->
-      sem_var H x v <-> sem_var H' x v.
-  Proof.
-    intros * Hfind; split; intro Hsem; inversion_clear Hsem as [???? Hr];
-      rewrite Hr in Hfind; inv Hfind;
-      econstructor; eauto; rewrite H1; auto.
-    now symmetry.
-  Qed.
+    Lemma sem_var_step_nl :
+      forall H x v s,
+        sem_var H x (v ⋅ s) -> sem_var (history_tl H) x s.
+    Proof.
+      intros * Hsem.
+      inv Hsem.
+      destruct xs'.
+      econstructor.
+      eapply env_maps_tl; eauto. now inv H2.
+    Qed.
 
-  Lemma sem_var_env_eq :
-    forall H H' xs ss,
-      Forall2 (sem_var H) xs ss ->
-      Forall2 (sem_var H') xs ss ->
-      Forall (fun x => orel (EqSt (A:=svalue)) (H x) (H' x)) xs.
-  Proof.
-    induction 1; auto. intros Hf. inv Hf. constructor; auto.
-    do 2 take (sem_var _ _ _) and inv it.
-    rewrite H2, H3. constructor. now rewrite <-H4, <-H5.
-  Qed.
+    Lemma sem_var_switch_env:
+      forall H H' x v,
+        orel (@EqSt svalue) (H x) (H' x) ->
+        sem_var H x v <-> sem_var H' x v.
+    Proof.
+      intros * Hfind; split; intro Hsem; inversion_clear Hsem as [???? Hr];
+        rewrite Hr in Hfind; inv Hfind;
+        econstructor; eauto; rewrite H1; auto.
+      now symmetry.
+    Qed.
 
-  Lemma sem_var_union : forall Hi1 Hi2 x vs,
-      sem_var (Hi1 + Hi2) x vs ->
-      sem_var Hi1 x vs \/ sem_var Hi2 x vs.
-  Proof.
-    intros * Hv. inv Hv.
-    eapply FEnv.union4 in H0 as [Hfind|Hfind]; eauto using sem_var.
-  Qed.
+    Open Scope fenv_scope.
 
-  Lemma sem_var_union' : forall Hi1 Hi2 x vs,
-      sem_var (Hi1 + Hi2) x vs ->
-      (~FEnv.In x Hi2 /\ sem_var Hi1 x vs) \/ sem_var Hi2 x vs.
-  Proof.
-    intros * Hv. inv Hv.
-    eapply FEnv.union4' in H0 as [Hfind|(Hnone&Hfind)]; eauto using sem_var.
-    left. split; eauto using sem_var.
-    now apply FEnv.not_find_In.
-  Qed.
+    Lemma sem_var_union : forall Hi1 Hi2 x vs,
+        sem_var (Hi1 + Hi2) x vs ->
+        sem_var Hi1 x vs \/ sem_var Hi2 x vs.
+    Proof.
+      intros * Hv. inv Hv.
+      eapply FEnv.union4 in H0 as [Hfind|Hfind]; eauto using sem_var.
+    Qed.
 
-  Lemma sem_var_disj_union : forall Hi1 Hi2 x vs,
-      (forall x, FEnv.In x Hi1 -> ~FEnv.In x Hi2) ->
-      sem_var (Hi1 + Hi2) x vs <-> sem_var Hi1 x vs \/ sem_var Hi2 x vs.
-  Proof.
-    intros * Hdisj; split.
-    - eapply sem_var_union.
-    - intros [Hv|Hv]; inv Hv; econstructor; eauto.
-      + erewrite FEnv.union2; eauto.
-        destruct (Hi2 x) eqn:Hhi; auto.
-        exfalso. eapply Hdisj; econstructor; eauto.
-      + erewrite FEnv.union3'; eauto.
-  Qed.
+    Lemma sem_var_union' : forall Hi1 Hi2 x vs,
+        sem_var (Hi1 + Hi2) x vs ->
+        (~FEnv.In x Hi2 /\ sem_var Hi1 x vs) \/ sem_var Hi2 x vs.
+    Proof.
+      intros * Hv. inv Hv.
+      eapply FEnv.union4' in H0 as [Hfind|(Hnone&Hfind)]; eauto using sem_var.
+      left. split; eauto using sem_var.
+      now apply FEnv.not_find_In.
+    Qed.
 
-  Lemma sem_var_of_list : forall xs x vs,
-      NoDupMembers xs ->
-      In (x, vs) xs ->
-      sem_var (FEnv.of_list xs) x vs.
-  Proof.
-    intros * Hnd Hin.
-    econstructor; eauto using FEnv.of_list_In_find.
-    reflexivity.
-  Qed.
+    Lemma sem_var_disj_union : forall Hi1 Hi2 x vs,
+        (forall x, FEnv.In x Hi1 -> ~FEnv.In x Hi2) ->
+        sem_var (Hi1 + Hi2) x vs <-> sem_var Hi1 x vs \/ sem_var Hi2 x vs.
+    Proof.
+      intros * Hdisj; split.
+      - eapply sem_var_union.
+      - intros [Hv|Hv]; inv Hv; econstructor; eauto.
+        + erewrite FEnv.union2; eauto.
+          destruct (Hi2 x) eqn:Hhi; auto.
+          exfalso. eapply Hdisj; econstructor; eauto.
+        + erewrite FEnv.union3'; eauto.
+    Qed.
 
-  Lemma sem_var_of_list' : forall xs x vs,
-      sem_var (FEnv.of_list xs) x vs ->
-      exists vs', vs ≡ vs' /\ In (x, vs') xs.
-  Proof.
-    intros * Hvar. inv Hvar; eauto using FEnv.of_list_find_In.
-  Qed.
+    Context `{FEnv.fenv_key K}.
 
-  Lemma sem_var_union2 : forall Hi1 Hi2 x vs,
-      sem_var Hi1 x vs ->
-      ~FEnv.In x Hi2 ->
-      sem_var (Hi1 + Hi2) x vs.
-  Proof.
-    intros * Hvar Hnin. inv Hvar.
-    econstructor; eauto.
-    apply FEnv.union2; eauto. now apply FEnv.not_find_In.
-  Qed.
+    Lemma sem_var_of_list : forall xs x vs,
+        NoDupMembers xs ->
+        In (x, vs) xs ->
+        sem_var (FEnv.of_list xs) x vs.
+    Proof.
+      intros * Hnd Hin.
+      econstructor; eauto using FEnv.of_list_In_find.
+      reflexivity.
+    Qed.
 
-  Lemma sem_var_union3' : forall Hi1 Hi2 x vs,
-      sem_var Hi2 x vs ->
-      sem_var (Hi1 + Hi2) x vs.
-  Proof.
-    intros * Hvar.
-    inv Hvar. econstructor; eauto using FEnv.union3'.
-  Qed.
+    Lemma sem_var_of_list' : forall xs x vs,
+        sem_var (FEnv.of_list xs) x vs ->
+        exists vs', vs ≡ vs' /\ In (x, vs') xs.
+    Proof.
+      intros * Hvar. inv Hvar; eauto using FEnv.of_list_find_In.
+    Qed.
+
+    Lemma sem_var_union2 : forall Hi1 Hi2 x vs,
+        sem_var Hi1 x vs ->
+        ~FEnv.In x Hi2 ->
+        sem_var (Hi1 + Hi2) x vs.
+    Proof.
+      intros * Hvar Hnin. inv Hvar.
+      econstructor; eauto.
+      apply FEnv.union2; eauto. now apply FEnv.not_find_In.
+    Qed.
+
+    Lemma sem_var_union3' : forall Hi1 Hi2 x vs,
+        sem_var Hi2 x vs ->
+        sem_var (Hi1 + Hi2) x vs.
+    Proof.
+      intros * Hvar.
+      inv Hvar. econstructor; eauto using FEnv.union3'.
+    Qed.
+
+  End sem_var.
 
   (** ** clocks_of and its properties *)
 
@@ -2359,7 +2363,7 @@ Module Type COINDSTREAMS
   Definition maskv k rs := @mask svalue absent k rs.
 
   (** Masking an history *)
-  Definition mask_hist k rs := FEnv.map (maskv k rs).
+  Definition mask_hist {K} k rs := @FEnv.map K _ _ (maskv k rs).
   Global Hint Unfold mask_hist : fenv.
 
   (** Boolean mask *)
@@ -2475,16 +2479,16 @@ Module Type COINDSTREAMS
     setoid_rewrite mask_false_S. reflexivity.
   Qed.
 
-  Lemma mask_hist_false_0 : forall H,
-      FEnv.Equiv (@EqSt _) (mask_hist 0 (Streams.const false) H) H.
+  Lemma mask_hist_false_0 {K} : forall H,
+      @FEnv.Equiv K _ (@EqSt _) (mask_hist 0 (Streams.const false) H) H.
   Proof.
     intros * ?. simpl_fenv.
     destruct (H x) eqn:Hfind; simpl; constructor.
     eapply mask_false_0.
   Qed.
 
-  Lemma mask_hist_false_S : forall n H,
-      FEnv.Equiv (@EqSt _) (mask_hist (S n) (Streams.const false) H) (FEnv.map (fun _ => Streams.const absent) H).
+  Lemma mask_hist_false_S {K} : forall n H,
+      @FEnv.Equiv K _ (@EqSt _) (mask_hist (S n) (Streams.const false) H) (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
     intros * ?. simpl_fenv.
     destruct (H x) eqn:Hfind; simpl; constructor.
@@ -2508,9 +2512,9 @@ Module Type COINDSTREAMS
     rewrite init_from_nth, Nat.add_0_r; auto.
   Qed.
 
-  Lemma consolidate_mask_hist : forall P r d,
+  Lemma consolidate_mask_hist {K} : forall P r d,
       (Proper (eq ==> (FEnv.Equiv (@EqSt _)) ==> Basics.impl) P) ->
-      (forall k H, P k H -> FEnv.dom H d) ->
+      (forall k H, P k H -> @FEnv.dom K _ H d) ->
       (forall k, exists H, P k (mask_hist k r H)) ->
       exists H, forall k, P k (mask_hist k r H).
   Proof.
@@ -2556,7 +2560,7 @@ Module Type COINDSTREAMS
     apply mask_morph; auto.
   Qed.
 
-  Add Parametric Morphism k : (mask_hist k)
+  Add Parametric Morphism {K} k : (@mask_hist K k)
       with signature @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _)
         as mask_hist_morph.
   Proof.
@@ -2604,7 +2608,7 @@ Module Type COINDSTREAMS
     destruct (_ =? k); auto.
   Qed.
 
-  Corollary mask_hist_absent: forall k rs (H: FEnv.t (Stream svalue)),
+  Corollary mask_hist_absent {K} : forall k rs (H: @FEnv.t K (Stream svalue)),
       FEnv.Equiv (@EqSt _) (mask_hist k rs (FEnv.map (fun _ => Streams.const absent) H))
                  (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
@@ -2613,7 +2617,7 @@ Module Type COINDSTREAMS
     eapply mask_absent.
   Qed.
 
-  Corollary mask_hist_absent': forall k rs (H: FEnv.t (Stream svalue)),
+  Corollary mask_hist_absent' {K} : forall k rs (H: @FEnv.t K (Stream svalue)),
       FEnv.Equiv (@EqSt _) (FEnv.map (fun _ => Streams.const (@absent value)) (mask_hist k rs H))
                  (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
@@ -2631,7 +2635,9 @@ Module Type COINDSTREAMS
     destruct (_ =? k); auto.
   Qed.
 
-  Lemma refines_mask : forall r H H' k,
+  Open Scope fenv_scope.
+
+  Lemma refines_mask {K} : forall r (H H' : @history K) k,
       H ⊑ H' ->
       (mask_hist k r H) ⊑ (mask_hist k r H').
   Proof.
@@ -2642,7 +2648,7 @@ Module Type COINDSTREAMS
     do 2 esplit; eauto. now rewrite Heq.
   Qed.
 
-  Lemma refines_unmask : forall r H H',
+  Lemma refines_unmask {K} : forall r (H H' : @history K),
       (forall k, (mask_hist k r H) ⊑ (mask_hist k r H')) ->
       H ⊑ H'.
   Proof.
@@ -2729,7 +2735,7 @@ Module Type COINDSTREAMS
     1,2:rewrite H in H1; inv H1.
   Qed.
 
-  Lemma sem_var_mask: forall k r H x v,
+  Lemma sem_var_mask {K}: forall k r (H : @history K) x v,
       sem_var H x v ->
       sem_var (mask_hist k r H) x (maskv k r v).
   Proof.
@@ -2739,7 +2745,7 @@ Module Type COINDSTREAMS
     rewrite H2. reflexivity.
   Qed.
 
-  Lemma sem_var_mask_inv: forall k r H x v,
+  Lemma sem_var_mask_inv {K} : forall k r (H : @history K) x v,
       sem_var (mask_hist k r H) x v ->
       exists v', sem_var H x v' /\ v ≡ (maskv k r v').
   Proof.
@@ -2758,11 +2764,11 @@ Module Type COINDSTREAMS
       slower vs bs ->
       slower (v ⋅ vs) (true ⋅ bs).
 
-  Definition slower_hist (H : history) bs :=
+  Definition slower_hist {K} (H : @history K) bs :=
     forall x vs, H x = Some vs -> slower vs bs.
 
-  Definition slower_subhist (dom : ident -> Prop) (H : history) bs :=
-    forall x vs, dom x -> H x = Some vs -> slower vs bs.
+  (* Definition slower_subhist (dom : ident -> Prop) (H : history) bs := *)
+  (*   forall x vs, dom x -> H x = Some vs -> slower vs bs. *)
 
   Lemma slower_nth {A} : forall bs vs,
       @slower A vs bs <->
@@ -2791,14 +2797,14 @@ Module Type COINDSTREAMS
     rewrite <-Exs; auto. rewrite Ebs; auto.
   Qed.
 
-  Add Parametric Morphism dom : (slower_subhist dom)
-      with signature FEnv.Equiv (@EqSt _) ==> @EqSt _ ==> Basics.impl
-        as slower_subhist_morph.
-  Proof.
-    intros H H' EH bs bs' Ebs Hs ?? Hdom Hmaps.
-    specialize (EH x). rewrite Hmaps in EH. inv EH.
-    rewrite <-Ebs, <-H2. eapply Hs; eauto.
-  Qed.
+  (* Add Parametric Morphism dom : (slower_subhist dom) *)
+  (*     with signature FEnv.Equiv (@EqSt _) ==> @EqSt _ ==> Basics.impl *)
+  (*       as slower_subhist_morph. *)
+  (* Proof. *)
+  (*   intros H H' EH bs bs' Ebs Hs ?? Hdom Hmaps. *)
+  (*   specialize (EH x). rewrite Hmaps in EH. inv EH. *)
+  (*   rewrite <-Ebs, <-H2. eapply Hs; eauto. *)
+  (* Qed. *)
 
   Lemma aligned_slower {A} : forall bs (vs: Stream (synchronous A)),
       aligned vs bs ->
@@ -2837,7 +2843,7 @@ Module Type COINDSTREAMS
     rewrite maskb_nth, Hcount; auto.
   Qed.
 
-  Corollary slower_mask_hist : forall H bs k r,
+  Corollary slower_mask_hist {K} : forall (H : @history K) bs k r,
       slower_hist H (maskb k r bs) ->
       FEnv.Equiv (@EqSt _) H (mask_hist k r H).
   Proof.
@@ -2872,7 +2878,7 @@ Module Type COINDSTREAMS
   (** ** when relation *)
 
   (* Whening of histories *)
-  Definition when_hist (sel : enumtag) (Hi : history) (es : Stream svalue) (Hi' : history) :=
+  Definition when_hist {K} (sel : enumtag) (Hi : @history K) (es : Stream svalue) (Hi' : history) :=
     FEnv.refines (fun vs' vs => when sel vs es vs') Hi' Hi.
 
   Add Parametric Morphism sel : (when sel)
@@ -2888,7 +2894,7 @@ Module Type COINDSTREAMS
     - right; right. esplit. erewrite <-Heq1, <-Heq2, <-Heq3; eauto.
   Qed.
 
-  Add Parametric Morphism sel : (when_hist sel)
+  Add Parametric Morphism {K} sel : (@when_hist K sel)
       with signature FEnv.Equiv (@EqSt _) ==> @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> Basics.impl
         as when_hist_EqSt.
   Proof.
@@ -2904,18 +2910,18 @@ Module Type COINDSTREAMS
   (** when as a function *)
 
   (* does not constrain the input history enough in the case of an absence *)
-  CoFixpoint fwhen {A} (abs : A) (sel : enumtag) (es : Stream svalue) (vs : Stream A) : Stream A :=
-    (if hd es ==b present (Venum sel) then hd vs else abs) ⋅ (fwhen abs sel (tl es) (tl vs)).
+  CoFixpoint fwhen {A} (abs : A) (sel : enumtag) (vs : Stream A) (es : Stream svalue) : Stream A :=
+    (if hd es ==b present (Venum sel) then hd vs else abs) ⋅ (fwhen abs sel (tl vs) (tl es)).
 
-  Definition fwhenv sel es vs := fwhen (@absent value) sel es vs.
-  Definition fwhen_hist sel es := FEnv.map (fwhenv sel es).
+  Definition fwhenv sel vs es := fwhen (@absent value) sel vs es.
+  Definition fwhen_hist {K} sel H es := @FEnv.map K _ _ (fun vs => fwhenv sel vs es) H.
   Definition fwhenb := fwhen false.
 
   Global Hint Unfold fwhen_hist : fenv.
 
   Lemma fwhen_nth {A} (abs : A) :
     forall n sel es xs,
-      (fwhen abs sel es xs) # n = if es # n ==b present (Venum sel) then xs # n else abs.
+      (fwhen abs sel xs es) # n = if es # n ==b present (Venum sel) then xs # n else abs.
   Proof.
     unfold Str_nth.
     induction n; intros; unfold_St es; unfold_St xs; auto.
@@ -2923,22 +2929,22 @@ Module Type COINDSTREAMS
 
   Corollary fwhenv_nth:
     forall n e es xs,
-      (fwhenv e es xs) # n = if es # n ==b present (Venum e) then xs # n else absent.
+      (fwhenv e xs es) # n = if es # n ==b present (Venum e) then xs # n else absent.
   Proof.
     intros. setoid_rewrite fwhen_nth; auto.
   Qed.
 
   Corollary fwhenb_nth:
     forall n e es xs,
-      (fwhenb e es xs) # n = if es # n ==b present (Venum e) then xs # n else false.
+      (fwhenb e xs es) # n = if es # n ==b present (Venum e) then xs # n else false.
   Proof.
     intros. setoid_rewrite fwhen_nth; auto.
   Qed.
 
   Lemma fwhen_Cons {A} (abs : A) :
     forall sel e es x xs,
-      (fwhen abs sel (e ⋅ es) (x ⋅ xs))
-        = (if e ==b present (Venum sel) then x else abs) ⋅ (fwhen abs sel es xs).
+      (fwhen abs sel (x ⋅ xs) (e ⋅ es))
+        = (if e ==b present (Venum sel) then x else abs) ⋅ (fwhen abs sel xs es).
   Proof.
     intros *.
     rewrite (unfold_Stream (fwhen _ _ _ _)); simpl. reflexivity.
@@ -2946,7 +2952,7 @@ Module Type COINDSTREAMS
 
   Lemma when_fwhen sel : forall es vs vs',
       when sel vs es vs' ->
-      vs' ≡ fwhenv sel es vs.
+      vs' ≡ fwhenv sel vs es.
   Proof.
     cofix CoFix.
     intros * Hwhen; inv Hwhen; constructor; simpl; auto.
@@ -2958,7 +2964,7 @@ Module Type COINDSTREAMS
   Lemma fwhenv_whenv sel : forall es vs,
       SForall (fun v => match v with present (Venum _) | absent => True | _ => False end) es ->
       abstract_clock vs ≡ abstract_clock es ->
-      when sel vs es (fwhenv sel es vs).
+      when sel vs es (fwhenv sel vs es).
   Proof.
     cofix CoFix.
     intros ([]&?) ([]&?) Hwt Hac; inv Hwt; inv Hac; simpl in *; try congruence.
@@ -2972,8 +2978,8 @@ Module Type COINDSTREAMS
         intro contra. subst e. rewrite equiv_decb_refl in Heq. congruence.
   Qed.
 
-  Lemma when_hist_fwhen_hist sel es : forall Hi Hi',
-      when_hist sel es Hi Hi' ->
+  Lemma when_hist_fwhen_hist {K} sel es : forall (Hi Hi' : @history K),
+      when_hist sel Hi es Hi' ->
       Hi' ⊑ (fwhen_hist sel Hi es).
   Proof.
     intros * Hwhen.
@@ -2984,10 +2990,10 @@ Module Type COINDSTREAMS
     simpl_fenv. now rewrite Hfind.
   Qed.
 
-  Lemma when_hist_restrict_ac sel es : forall Hi xs,
+  Lemma when_hist_restrict_ac {K} `{FEnv.fenv_key K} sel es : forall (Hi : @history K) xs,
       SForall (fun v => match v with present (Venum _) | absent => True | _ => False end) es ->
       (forall x vs, List.In x xs -> sem_var Hi x vs -> abstract_clock vs ≡ abstract_clock es) ->
-      when_hist sel Hi es (FEnv.restrict (fwhen_hist sel es Hi) xs).
+      when_hist sel Hi es (FEnv.restrict (fwhen_hist sel Hi es) xs).
   Proof.
     intros * Hwt Hac.
     intros ?? Hfind. apply FEnv.restrict_find_inv in Hfind as (Hin&Hfind).
@@ -3015,11 +3021,11 @@ Module Type COINDSTREAMS
     apply fwhen_EqSt; auto.
   Qed.
 
-  Add Parametric Morphism k : (fwhen_hist k)
-      with signature @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _)
+  Add Parametric Morphism {K} k : (@fwhen_hist K k)
+      with signature FEnv.Equiv (@EqSt _) ==> @EqSt _ ==> FEnv.Equiv (@EqSt _)
         as fwhen_hist_EqSt.
   Proof.
-    intros r r' Er H H' EH.
+    intros H H' EH  r r' Er.
     intros x. specialize (EH x). simpl_fenv.
     inv EH; simpl; constructor.
     rewrite H2, Er. reflexivity.
@@ -3034,29 +3040,28 @@ Module Type COINDSTREAMS
   Qed.
 
   Lemma ac_fwhen : forall k sc xs,
-      abstract_clock (fwhenv k sc xs) ≡ fwhenb k sc (abstract_clock xs).
+      abstract_clock (fwhenv k xs sc) ≡ fwhenb k (abstract_clock xs) sc.
   Proof.
     intros. apply ntheq_eqst; intros n.
     rewrite ac_nth. setoid_rewrite fwhen_nth. rewrite ac_nth.
     destruct (_ ==b _); auto.
   Qed.
 
-  Lemma sem_var_fwhen: forall k r H x v,
+  Lemma sem_var_fwhen {K} : forall k r (H: @history K) x v,
       sem_var H x v ->
-      sem_var (fwhen_hist k r H) x (fwhenv k r v).
+      sem_var (fwhen_hist k H r) x (fwhenv k v r).
   Proof.
     intros * Hvar. inv Hvar.
     simpl_fenv. econstructor. now rewrite H1.
     now rewrite H2.
   Qed.
 
-  Lemma sem_var_when x: forall sel sc Hi Hi' vs,
+  Lemma sem_var_when {K} x : forall sel sc (Hi Hi': @history K) vs,
       when_hist sel Hi sc Hi' ->
       sem_var Hi x vs ->
       FEnv.In x Hi' ->
-      when sel vs sc (fwhenv sel sc vs).
+      when sel vs sc (fwhenv sel vs sc).
   Proof.
-
     intros * Hwhen Hvar Hin.
     inv Hin. eapply Hwhen in H as (?&Hf&Hv).
     eapply sem_var_det in Hvar; [|econstructor; eauto; reflexivity].
@@ -3064,7 +3069,7 @@ Module Type COINDSTREAMS
     assert (Hf':=Hf). apply when_fwhen in Hf'. rewrite <-Hf'; auto.
   Qed.
 
-  Lemma sem_var_when_inv: forall k r Hi Hi' x v,
+  Lemma sem_var_when_inv {K} : forall k r (Hi Hi' : @history K) x v,
       when_hist k Hi r Hi' ->
       sem_var Hi' x v ->
       exists v', sem_var Hi x v' /\ when k v' r v.
@@ -3075,9 +3080,9 @@ Module Type COINDSTREAMS
     econstructor; eauto. reflexivity.
   Qed.
 
-  Lemma sem_var_fwhen_inv: forall k r H x v,
-      sem_var (fwhen_hist k r H) x v ->
-      exists v', sem_var H x v' /\ v ≡ (fwhenv k r v').
+  Lemma sem_var_fwhen_inv {K} : forall k sc (H: @history K) x v,
+      sem_var (fwhen_hist k H sc) x v ->
+      exists v', sem_var H x v' /\ v ≡ (fwhenv k v' sc).
   Proof.
     intros * Hvar. inv Hvar.
     simpl_fenv.
@@ -3085,9 +3090,9 @@ Module Type COINDSTREAMS
     econstructor; eauto. reflexivity.
   Qed.
 
-  Lemma refines_fwhen : forall e sc H H',
+  Lemma refines_fwhen {K} : forall e sc (H H': @history K),
       H ⊑ H' ->
-      (fwhen_hist e sc H) ⊑ (fwhen_hist e sc H').
+      (fwhen_hist e H sc) ⊑ (fwhen_hist e H' sc).
   Proof.
     intros * Href ?? Hfind.
     simpl_fenv.
@@ -3104,7 +3109,7 @@ Module Type COINDSTREAMS
     constructor; auto.
   Qed.
 
-  Corollary when_hist_absent e sc : forall Hi Hi',
+  Corollary when_hist_absent {K} e sc : forall (Hi Hi': @history K),
     when_hist e Hi sc Hi' ->
     when_hist e (FEnv.map (fun _ => Streams.const absent) Hi) (Streams.const absent) (FEnv.map (fun _ => Streams.const absent) Hi').
   Proof.
@@ -3116,7 +3121,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Lemma fwhen_absent {A} (absent: A) : forall k sc,
-      fwhen absent k sc (Streams.const absent) ≡ Streams.const absent.
+      fwhen absent k (Streams.const absent) sc ≡ Streams.const absent.
   Proof.
     intros *.
     eapply ntheq_eqst. intros n.
@@ -3124,8 +3129,8 @@ Module Type COINDSTREAMS
     destruct (_ ==b _); auto.
   Qed.
 
-  Corollary fwhen_hist_absent: forall k sc (H: FEnv.t (Stream svalue)),
-      FEnv.Equiv (@EqSt _) (fwhen_hist k sc (FEnv.map (fun _ => Streams.const absent) H))
+  Corollary fwhen_hist_absent {K}: forall k sc (H: @history K),
+      FEnv.Equiv (@EqSt _) (fwhen_hist k (FEnv.map (fun _ => Streams.const absent) H) sc)
                  (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
     intros * x. simpl_fenv.
@@ -3133,8 +3138,8 @@ Module Type COINDSTREAMS
     eapply fwhen_absent.
   Qed.
 
-  Corollary fwhen_hist_absent': forall k sc (H: FEnv.t (Stream svalue)),
-      FEnv.Equiv (@EqSt _) (FEnv.map (fun _ => Streams.const (@absent value)) (fwhen_hist k sc H))
+  Corollary fwhen_hist_absent' {K} : forall k sc (H: @history K),
+      FEnv.Equiv (@EqSt _) (FEnv.map (fun _ => Streams.const (@absent value)) (fwhen_hist k H sc))
                  (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
     intros * x. simpl_fenv.
@@ -3143,7 +3148,7 @@ Module Type COINDSTREAMS
   Qed.
 
   Corollary fwhenb_absent: forall k sc,
-      fwhenb k sc (Streams.const false) ≡ Streams.const false.
+      fwhenb k (Streams.const false) sc ≡ Streams.const false.
   Proof.
     intros *.
     eapply ntheq_eqst. intros n.
@@ -3154,7 +3159,7 @@ Module Type COINDSTREAMS
   Lemma fwhenb_both_slower : forall k sc bs bs',
       slower sc bs ->
       slower sc bs' ->
-      fwhenb k sc bs ≡ fwhenb k sc bs'.
+      fwhenb k bs sc ≡ fwhenb k bs' sc.
   Proof.
     intros * Hslow1 Hslow2.
     apply ntheq_eqst; intros n.
@@ -3191,17 +3196,17 @@ Module Type COINDSTREAMS
       select' sel k k' (present (sel, true) ⋅ stres) (present x ⋅ xs) ((if S k' =? k then present x else absent) ⋅ ys).
   Definition select sel k := select' sel k 0.
 
-  Definition select_hist sel k stres Hi Hi' :=
+  Definition select_hist {K} sel k stres (Hi Hi': @history K) :=
     FEnv.refines (fun vs' vs => select sel k stres vs vs') Hi' Hi.
 
   Definition fselect {A} (absent : A) (e : enumtag) (k : nat) (stres : Stream (synchronous (enumtag * bool))) (xs : Stream A) :=
     mask absent k
-         (fwhenb e (stres_st stres) (stres_res stres))
-         (fwhen absent e (stres_st stres) xs).
+         (fwhenb e (stres_res stres) (stres_st stres))
+         (fwhen absent e xs (stres_st stres)).
 
   Definition fselectb := fselect false.
   Definition fselectv e k stres xs := fselect (@absent value) e k stres xs.
-  Definition fselect_hist e k stres H := FEnv.map (fselectv e k stres) H.
+  Definition fselect_hist {K} e k stres H := @FEnv.map K _ _ (fselectv e k stres) H.
   Global Hint Unfold fselect_hist : fenv.
 
   Add Parametric Morphism : stres_st
@@ -3225,10 +3230,10 @@ Module Type COINDSTREAMS
   Lemma select_mask_when sel k : forall stres xs zs,
       select sel k stres xs zs
       <-> exists ys, when sel xs (stres_st stres) ys
-              /\ zs ≡ maskv k (fwhenb sel (stres_st stres) (stres_res stres)) ys.
+              /\ zs ≡ maskv k (fwhenb sel (stres_res stres) (stres_st stres)) ys.
   Proof.
     intros *. split.
-    - intros * Hsel. exists (fwhenv sel (stres_st stres) xs). split.
+    - intros * Hsel. exists (fwhenv sel xs (stres_st stres)). split.
       + revert Hsel. unfold select. generalize 0 as k'. revert stres xs zs.
         cofix CoFix; intros [] [] [] * Hsel.
         inversion Hsel; clear Hsel; subst k'0 s s0 s1 s2 s3 s4.
@@ -3283,7 +3288,7 @@ Module Type COINDSTREAMS
     - rewrite <-Heq3, <-Heq1; eauto.
   Qed.
 
-  Add Parametric Morphism sel k : (select_hist sel k)
+  Add Parametric Morphism {K} sel k : (@select_hist K sel k)
       with signature @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _) ==> Basics.impl
         as select_hist_EqSt.
   Proof.
@@ -3318,7 +3323,7 @@ Module Type COINDSTREAMS
     intros * ? * ?. apply fselect_EqSt; auto.
   Qed.
 
-  Add Parametric Morphism e k : (fselect_hist e k)
+  Add Parametric Morphism {K} e k : (@fselect_hist K e k)
       with signature @EqSt _ ==> FEnv.Equiv (@EqSt _) ==> FEnv.Equiv (@EqSt _)
         as fselect_hist_EqSt.
   Proof.
@@ -3345,7 +3350,7 @@ Module Type COINDSTREAMS
     rewrite Hmask, Hfil. reflexivity.
   Qed.
 
-  Lemma sem_var_fselect: forall e k r H x v,
+  Lemma sem_var_fselect {K} : forall e k r (H: @history K) x v,
       sem_var H x v ->
       sem_var (fselect_hist e k r H) x (fselectv e k r v).
   Proof.
@@ -3354,7 +3359,7 @@ Module Type COINDSTREAMS
     rewrite H2. reflexivity.
   Qed.
 
-  Lemma sem_var_select x : forall sel k sc Hi Hi' vs,
+  Lemma sem_var_select {K} x : forall sel k sc (Hi Hi': @history K) vs,
       select_hist sel k sc Hi Hi' ->
       sem_var Hi x vs ->
       FEnv.In x Hi' ->
@@ -3367,7 +3372,7 @@ Module Type COINDSTREAMS
     assert (Hf':=Hf). apply select_fselect in Hf'. rewrite <-Hf'; auto.
   Qed.
 
-  Lemma sem_var_select_inv: forall sel k r Hi Hi' x v,
+  Lemma sem_var_select_inv {K} : forall sel k r (Hi Hi': @history K) x v,
       select_hist sel k r Hi Hi' ->
       sem_var Hi' x v ->
       exists v', sem_var Hi x v' /\ select sel k r v' v.
@@ -3378,7 +3383,7 @@ Module Type COINDSTREAMS
     econstructor; eauto. reflexivity.
   Qed.
 
-  Lemma sem_var_fselect_inv: forall sel k r H x v,
+  Lemma sem_var_fselect_inv {K}: forall sel k r (H: @history K) x v,
       sem_var (fselect_hist sel k r H) x v ->
       exists v', sem_var H x v' /\ v ≡ (fselectv sel k r v').
   Proof.
@@ -3400,7 +3405,7 @@ Module Type COINDSTREAMS
     + unfold fselectv, fselect, fwhenv. reflexivity.
   Qed.
 
-  Lemma select_hist_fselect_hist sel k es : forall Hi Hi',
+  Lemma select_hist_fselect_hist {K} sel k es : forall (Hi Hi': @history K),
       select_hist sel k es Hi Hi' ->
       Hi' ⊑ (fselect_hist sel k es Hi).
   Proof.
@@ -3463,7 +3468,7 @@ Module Type COINDSTREAMS
     unfold maskv. rewrite mask_nth, const_nth. destruct (_ =? _); auto.
   Qed.
 
-  Corollary select_hist_absent e k sc : forall Hi Hi',
+  Corollary select_hist_absent {K} e k sc : forall (Hi Hi': @history K),
     select_hist e k sc Hi Hi' ->
     select_hist e k (Streams.const absent)
                 (FEnv.map (fun _ => Streams.const absent) Hi) (FEnv.map (fun _ => Streams.const absent) Hi').
@@ -3484,7 +3489,7 @@ Module Type COINDSTREAMS
     destruct (_ =? _); auto. destruct (_ ==b _); auto.
   Qed.
 
-  Corollary fselect_hist_absent: forall e k sc (H: FEnv.t (Stream svalue)),
+  Corollary fselect_hist_absent {K} : forall e k sc (H: @history K),
       FEnv.Equiv (@EqSt _) (fselect_hist e k sc (FEnv.map (fun _ => Streams.const absent) H))
                 (FEnv.map (fun _ => Streams.const absent) H).
   Proof.
@@ -3493,7 +3498,7 @@ Module Type COINDSTREAMS
     eapply fselect_absent.
   Qed.
 
-  Corollary fselect_hist_absent': forall e k sc (H: FEnv.t (Stream svalue)),
+  Corollary fselect_hist_absent' {K} : forall e k sc (H: @history K),
       FEnv.Equiv (@EqSt _) (FEnv.map (fun _ => Streams.const (@absent value)) (fselect_hist e k sc H))
                 (FEnv.map (fun _ => Streams.const absent) H).
     intros * x. simpl_fenv.

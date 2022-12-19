@@ -4242,18 +4242,6 @@ Proof.
   apply filter_InMembers in H as (?&?&_); eauto using In_InMembers.
 Qed.
 
-Fact find_some' : forall {A} (xs : list (positive * A)) x v ,
-    NoDupMembers xs ->
-    In (x, v) xs ->
-    find (fun xtc => (fst xtc =? x)%positive) xs = Some (x, v).
-Proof.
-  induction xs; intros * Hndup Hin; inv Hin; inv Hndup; simpl.
-  - rewrite Pos.eqb_refl. reflexivity.
-  - destruct (Pos.eq_dec a0 x); subst.
-    + apply In_InMembers in H. contradiction.
-    + eapply Pos.eqb_neq in n. rewrite n; auto.
-Qed.
-
 Section OptionLists.
 
   Context {A : Type}.

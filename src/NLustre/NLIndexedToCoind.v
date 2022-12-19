@@ -300,8 +300,9 @@ Module Type NLINDEXEDTOCOIND
         now inv Sem.
 
       - apply when_inv in Sem as (ys & xs & ? & ? & Spec).
-        econstructor; eauto using sem_var_impl_from.
-        apply when_spec; use_spec Spec.
+        econstructor; eauto.
+        + eapply sem_var_impl_from; eauto.
+        + apply when_spec; use_spec Spec.
 
       - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
@@ -672,6 +673,7 @@ Module Type NLINDEXEDTOCOIND
 
       - destruct x; apply merge_inv in Sem as (xs & ess & ? & Hess & Spec).
         econstructor; eauto with nlsem.
+        + eapply sem_var_impl_from; eauto.
         + instantiate (1 := List.map (tr_stream_from n) ess).
           clear Spec.
           take (Forall _ _) and rename it into IH.
@@ -1113,6 +1115,9 @@ Module Type NLINDEXEDTOCOIND
         eauto with nlsem.
 
       - econstructor; eauto with nlsem.
+        eapply sem_var_impl_from; eauto.
+
+      - econstructor; eauto with nlsem.
         3:eapply bools_ofs_impl; eauto.
         + rewrite tr_clocks_of; eauto with nlsem.
           eapply wf_streams_mask.
@@ -1129,7 +1134,8 @@ Module Type NLINDEXEDTOCOIND
         2:eapply bools_ofs_impl; eauto.
         + rewrite Forall2_map_2. eapply Forall2_impl_In; [|eauto]; intros.
           eapply sem_var_impl; eauto.
-        + rewrite <-reset_fby_impl; eauto with nlsem.
+        + rewrite <-reset_fby_impl.
+          eapply sem_var_impl_from; eauto.
 
       - subst.
         CESem.assert_const_length xss.

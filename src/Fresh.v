@@ -34,6 +34,8 @@ Module Type FRESHKERNEL
     Definition st_ids (st : fresh_st pref B) := map fst (st_anns st).
   End st.
 
+  Global Hint Unfold st_ids : list.
+
   Definition Fresh pref (A B : Type) : Type := fresh_st pref B -> A * fresh_st pref B.
 
   (** By construction, the state only contains

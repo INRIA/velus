@@ -1393,10 +1393,7 @@ Module Type LCLOCKING
         rewrite equiv_decb_equiv in CL; inv CL.
         eapply check_exp_correct in EQ as (Hwt&Hty); eauto.
       - inv Hnd2.
-        eapply Hp; eauto.
-        + apply NoDupMembers_app; auto. now apply NoDupMembers_senv_of_locs.
-          intros * Hin1 Hin2. rewrite fst_InMembers in Hin1. rewrite InMembers_senv_of_locs in Hin2.
-          eapply H4; eauto.
+        eapply Hp; eauto using NoDupScope_NoDupMembers.
         + now rewrite map_app, map_fst_senv_of_locs.
     Qed.
 

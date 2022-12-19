@@ -1362,11 +1362,7 @@ Module Type LCAUSALITY
   Proof.
     intros * Hnd Hca Hincl Hvd Hndloc Hwl Hwx Hdef Hp Hwxincl.
     inv Hvd. inv Hndloc. inv Hwl. inv Hwx.
-    assert (NoDupMembers (Γ ++ senv_of_locs locs)) as Hnd'.
-    { apply NoDupMembers_app; auto.
-      - apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-      - intros * Hin Hinm2. simpl_In.
-        eapply H5; solve_In. }
+    assert (NoDupMembers (Γ ++ senv_of_locs locs)) as Hnd' by (auto using NoDupScope_NoDupMembers).
     simpl. repeat rewrite Env.union_fuse_In.
     destruct Hdef as [Hdef|Hdef]; inv Hdef.
     - eapply Hp in H6; eauto.
@@ -1714,10 +1710,7 @@ Module Type LCAUSALITY
         destruct (Env.find x (Env.from_list _)).
         all:repeat esplit; try reflexivity.
         all:repeat rewrite PSF.union_iff; eauto.
-      + apply NoDupMembers_app; auto.
-        * apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-        * intros * Hin1 Hin2. rewrite InMembers_senv_of_locs in Hin2.
-          eapply H5; eauto using In_InMembers. solve_In.
+      + apply NoDupScope_NoDupMembers; auto.
       + eapply equiv_env_scope; eauto.
       + eapply equiv_env_last_scope; eauto.
       + rewrite 2 Env.elements_union, 2 Env.elements_from_list.

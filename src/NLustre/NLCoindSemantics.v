@@ -35,6 +35,9 @@ Module Type NLCOINDSEMANTICS
        (Import Str   : COINDSTREAMS  Ids Op OpAux Cks)
        (Import Ord   : NLORDERED     Ids Op OpAux Cks CESyn Syn).
 
+  Definition history := @history ident.
+  Definition sem_var := @sem_var ident.
+
   Definition sem_clocked_var (H: history) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
     (forall xs,
         sem_var H x xs ->

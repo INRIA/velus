@@ -36,6 +36,14 @@ Module Type STATICENV
       InMembers x senv ->
       IsVar senv x.
 
+  Lemma IsVar_fst : forall Γ x,
+      IsVar Γ x <-> In x (map fst Γ).
+  Proof.
+    split.
+    - intros []. now rewrite <-fst_InMembers.
+    - intros. constructor. now rewrite fst_InMembers.
+  Qed.
+
   Inductive HasType : static_env -> ident -> type -> Prop :=
   | HasTypeC : forall senv x ty e,
       In (x, e) senv ->
@@ -260,6 +268,12 @@ Module Type STATICENV
     List.map (fun '(x, (ty, ck, cx, o)) => (x, Build_annotation ty ck cx (option_map snd o))) l.
 
   Global Hint Unfold senv_of_inout senv_of_locs : list.
+
+  Lemma senv_of_locs_app {A} : forall xs ys,
+      @senv_of_locs A (xs ++ ys) = senv_of_locs xs ++ senv_of_locs ys.
+  Proof.
+    intros. apply map_app.
+  Qed.
 
   Lemma map_fst_senv_of_tyck : forall l,
       map fst (senv_of_tyck l) = map fst l.

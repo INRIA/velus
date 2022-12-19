@@ -321,8 +321,8 @@ if the clocked stream is [absent] at the corresponding instant. *)
   (** Restrictions of FEnvironments *)
   Section HistoryRestriction.
 
-    Definition env := FEnv.t svalue.
-    Definition history' := FEnv.t (stream svalue).
+    Definition env := @FEnv.t ident svalue.
+    Definition history' := @FEnv.t ident (stream svalue).
 
     Definition restr_hist (H : history') (n: nat): env :=
       FEnv.map (fun xs => xs n) H.

@@ -118,12 +118,12 @@ Module Type LSEMDETERMINISM
     Definition det_var_inv n (H1 H2 : history) : ident -> Prop :=
       fun cx => forall x vs1 vs2,
           (HasCaus Γ x cx ->
-           sem_var (fst H1) x vs1 ->
-           sem_var (fst H2) x vs2 ->
+           sem_var H1 (Var x) vs1 ->
+           sem_var H2 (Var x) vs2 ->
            EqStN n vs1 vs2)
           /\ (HasLastCaus Γ x cx ->
-             sem_var (snd H1) x vs1 ->
-             sem_var (snd H2) x vs2 ->
+             sem_var H1 (Last x) vs1 ->
+             sem_var H2 (Last x) vs2 ->
              EqStN n vs1 vs2).
 
     Definition def_stream := Streams.const (@absent value).
@@ -997,18 +997,19 @@ Module Type LSEMDETERMINISM
 
   End sem_equation_det.
 
-  Lemma sem_clock_detN n Γ : forall ck bs1 bs2 Hi1 Hl1 Hi2 Hl2 bs1' bs2',
+  Lemma sem_clock_detN n Γ : forall ck bs1 bs2 Hi1 Hi2 bs1' bs2',
       EqStN n bs1 bs2 ->
       wx_clock Γ ck ->
-      (forall x cx, Is_free_in_clock x ck -> HasCaus Γ x cx -> det_var_inv Γ n (Hi1, Hl1) (Hi2, Hl2) cx) ->
-      sem_clock Hi1 bs1 ck bs1' ->
-      sem_clock Hi2 bs2 ck bs2' ->
+      (forall x cx, Is_free_in_clock x ck -> HasCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
+      sem_clock (var_history Hi1) bs1 ck bs1' ->
+      sem_clock (var_history Hi2) bs2 ck bs2' ->
       EqStN n bs1' bs2'.
   Proof.
     induction ck; intros * Hbs Hwx Hck Hsem1 Hsem2; inv Hwx; inv Hsem1; inv Hsem2.
     - now rewrite <-H0, <-H1.
     - inv H3. apply fst_InMembers in H; simpl_In.
-      eapply Hck in H8; eauto using Is_free_in_clock with senv.
+      repeat (take (sem_var (var_history _) _ _) and apply sem_var_history in it).
+      eapply Hck in it; eauto using Is_free_in_clock with senv.
       eapply enums_of_detn; eauto.
   Qed.
 
@@ -1040,7 +1041,7 @@ Module Type LSEMDETERMINISM
   Lemma EqStN_fwhen {A} (absent : A) : forall n sc1 sc2 xs1 xs2,
       EqStN n sc1 sc2 ->
       EqStN n xs1 xs2 ->
-      forall c, EqStN n (fwhen absent c sc1 xs1) (fwhen absent c sc2 xs2).
+      forall c, EqStN n (fwhen absent c xs1 sc1) (fwhen absent c xs2 sc2).
   Proof.
     induction n; intros * Heq1 Heq2 k; auto with coindstreams.
     inv Heq1; inv Heq2; repeat rewrite fwhen_Cons.
@@ -1084,7 +1085,7 @@ Module Type LSEMDETERMINISM
            when_hist c Hi2 sc2 Hi2' ->
            det_var_inv Γ n Hi1' Hi2' x.
   Proof.
-    intros * Heq Hdet * (Hf11&Hf12) (Hf21&Hf22).
+    intros * Heq Hdet * Hf1 Hf2.
     split; intros Hin Hv1 Hv2.
     - eapply sem_var_when_inv in Hv1 as (?&Hv1&Heq1); eauto.
       eapply sem_var_when_inv in Hv2 as (?&Hv2&Heq2); eauto.
@@ -1105,7 +1106,7 @@ Module Type LSEMDETERMINISM
       EqStN n sc1 sc2 ->
       (forall c, In c (seq 0 (length tn)) ->
             exists Hi1' Hi2',
-              (forall y, HasCaus Γ y x -> FEnv.In y (fst Hi1') /\ FEnv.In y (fst Hi2'))
+              (forall y, HasCaus Γ y x -> FEnv.In (Var y) Hi1' /\ FEnv.In (Var y) Hi2')
               /\ when_hist c Hi1 sc1 Hi1'
               /\ when_hist c Hi2 sc2 Hi2'
               /\ det_var_inv Γ n Hi1' Hi2' x) ->
@@ -1115,9 +1116,9 @@ Module Type LSEMDETERMINISM
     intros * Hn Hwt1 Hwt2 Heq Hdet Hnin ???.
     split; intros Hin Hv1 Hv2.
     - eapply EqStN_unwhen. 4:eauto. 1-3:eauto.
-      intros k Hin'. edestruct Hdet as (Hi1'&Hi2'&(Hin1&Hin2)&(Hf1&_)&(Hf2&_)&Hdet'); eauto.
-      assert (exists vs1', sem_var (fst Hi1') x0 vs1') as (?&Hvar1) by (inv Hin1; do 2 econstructor; try reflexivity; eauto).
-      assert (exists vs1', sem_var (fst Hi2') x0 vs1') as (?&Hvar2) by (inv Hin2; do 2 econstructor; try reflexivity; eauto).
+      intros k Hin'. edestruct Hdet as (Hi1'&Hi2'&(Hin1&Hin2)&Hf1&Hf2&Hdet'); eauto.
+      assert (exists vs1', sem_var Hi1' (Var x0) vs1') as (?&Hvar1) by (inv Hin1; do 2 econstructor; try reflexivity; eauto).
+      assert (exists vs1', sem_var Hi2' (Var x0) vs1') as (?&Hvar2) by (inv Hin2; do 2 econstructor; try reflexivity; eauto).
       assert (Hvar1':=Hvar1). eapply sem_var_when_inv in Hvar1' as (?&?&Hv1'); eauto.
       assert (Hvar2':=Hvar2). eapply sem_var_when_inv in Hvar2' as (?&?&Hv2'); eauto.
       eapply sem_var_det in Hv1; eauto. eapply sem_var_det in Hv2; eauto.
@@ -1172,7 +1173,7 @@ Module Type LSEMDETERMINISM
       eapply when_spec with (n:=k) in Hfil2 as [|[|]]; destruct_conjs; try congruence.
       all:take ((stres_st _) # _ = _) and setoid_rewrite Str_nth_map in it; setoid_rewrite Heq3 in it; try congruence.
     - assert (In n0 (seq 0 tn)) as Hin by (apply in_seq; lia).
-      specialize (Heq2 _ ((count (fwhenb n0 (stres_st sc1) (stres_res sc1))) # k) Hin) as (?&?&Hf1&Hf2&Heq).
+      specialize (Heq2 _ ((count (fwhenb n0 (stres_res sc1) (stres_st sc1))) # k) Hin) as (?&?&Hf1&Hf2&Heq).
       apply select_mask_when in Hf1 as (?&Hfil1&Hmask1).
       apply select_mask_when in Hf2 as (?&Hfil2&Hmask2).
       eapply when_spec with (n:=k) in Hfil1 as [|[|]]; destruct_conjs.
@@ -1183,8 +1184,8 @@ Module Type LSEMDETERMINISM
       rewrite EqStN_spec in Heq. specialize (Heq _ Hlt).
       apply eqst_ntheq with (n:=k) in Hmask1. rewrite maskv_nth, Nat.eqb_refl in Hmask1.
       apply eqst_ntheq with (n:=k) in Hmask2. erewrite maskv_nth in Hmask2.
-      replace ((count (fwhenb n0 (stres_st sc2) (stres_res sc2))) # k)
-        with ((count (fwhenb n0 (stres_st sc1) (stres_res sc1))) # k) in Hmask2.
+      replace ((count (fwhenb n0 (stres_res sc2) (stres_st sc2))) # k)
+        with ((count (fwhenb n0 (stres_res sc1) (stres_st sc1))) # k) in Hmask2.
       2:{ eapply EqStN_spec; eauto.
           apply count_EqStN, EqStN_fwhen; eauto using map_EqStN. }
       rewrite Nat.eqb_refl in Hmask2.
@@ -1213,11 +1214,11 @@ Module Type LSEMDETERMINISM
       apply slower_nth with (n:=k) in Hslow2. 2:rewrite ac_nth, Heq3; auto.
       congruence.
     - assert (In n0 (seq 0 tn)) as Hin by (apply in_seq; lia).
-      specialize (Heq2 _ ((count (fwhenb n0 (stres_st sc1) (stres_res sc1))) # k) Hin) as Heq.
+      specialize (Heq2 _ ((count (fwhenb n0 (stres_res sc1) (stres_st sc1))) # k) Hin) as Heq.
       rewrite EqStN_spec in Heq. specialize (Heq _ Hlt).
       unfold fselect in Heq. rewrite 2 mask_nth, Nat.eqb_refl in Heq.
-      replace ((count (fwhenb n0 (stres_st sc2) (stres_res sc2))) # k)
-        with ((count (fwhenb n0 (stres_st sc1) (stres_res sc1))) # k) in Heq.
+      replace ((count (fwhenb n0 (stres_res sc2) (stres_st sc2))) # k)
+        with ((count (fwhenb n0 (stres_res sc1) (stres_st sc1))) # k) in Heq.
       2:{ eapply EqStN_spec; eauto.
           apply count_EqStN, EqStN_fwhen; eauto using map_EqStN. }
       rewrite Nat.eqb_refl, 2 fwhen_nth in Heq. repeat setoid_rewrite Str_nth_map in Heq.
@@ -1232,7 +1233,7 @@ Module Type LSEMDETERMINISM
              select_hist c k sc2 Hi2 Hi2' ->
              det_var_inv Γ n Hi1' Hi2' x.
   Proof.
-    intros * Heq Hdet * (Hf11&Hf12) (Hf21&Hf22).
+    intros * Heq Hdet * Hf1 Hf2.
     split; intros Hin Hv1 Hv2.
     - eapply sem_var_select_inv in Hv1 as (?&Hv1&Heq1); eauto.
       eapply sem_var_select_inv in Hv2 as (?&Hv2&Heq2); eauto.
@@ -1255,7 +1256,7 @@ Module Type LSEMDETERMINISM
       SForall (fun v => match v with present (e, _) => e < tn | _ => True end) sc2 ->
       (forall c k, In c (seq 0 tn) ->
               exists Hi1' Hi2',
-                (forall y, HasCaus Γ y x -> FEnv.In y (fst Hi1') /\ FEnv.In y (fst Hi2'))
+                (forall y, HasCaus Γ y x -> FEnv.In (Var y) Hi1' /\ FEnv.In (Var y) Hi2')
                 /\ select_hist c k sc1 Hi1 Hi1'
                 /\ select_hist c k sc2 Hi2 Hi2'
                 /\ det_var_inv Γ n Hi1' Hi2' x) ->
@@ -1265,9 +1266,9 @@ Module Type LSEMDETERMINISM
     intros * Hn Heq Hwt1 Hwt2 Hdet Hnin ???.
     split; intros Hin Hv1 Hv2.
     - eapply EqStN_unselect; eauto.
-      intros * Hin'. edestruct Hdet as (Hi1'&Hi2'&(Hin1&Hin2)&(Hf1&_)&(Hf2&_)&Hdet'); eauto.
-      assert (exists vs1', sem_var (fst Hi1') x0 vs1') as (?&Hvar1) by (inv Hin1; do 2 econstructor; try reflexivity; eauto).
-      assert (exists vs1', sem_var (fst Hi2') x0 vs1') as (?&Hvar2) by (inv Hin2; do 2 econstructor; try reflexivity; eauto).
+      intros * Hin'. edestruct Hdet as (Hi1'&Hi2'&(Hin1&Hin2)&Hf1&Hf2&Hdet'); eauto.
+      assert (exists vs1', sem_var Hi1' (Var x0) vs1') as (?&Hvar1) by (inv Hin1; do 2 econstructor; try reflexivity; eauto).
+      assert (exists vs1', sem_var Hi2' (Var x0) vs1') as (?&Hvar2) by (inv Hin2; do 2 econstructor; try reflexivity; eauto).
       assert (Hvar1':=Hvar1). eapply sem_var_select_inv in Hvar1' as (?&?&Hv1'); eauto.
       assert (Hvar2':=Hvar2). eapply sem_var_select_inv in Hvar2' as (?&?&Hv2'); eauto.
       eapply sem_var_det in Hv1; eauto. eapply sem_var_det in Hv2; eauto.
@@ -1338,18 +1339,16 @@ Module Type LSEMDETERMINISM
   Qed.
 
   Fact det_var_inv_local :
-    forall Γ (locs : list (ident * (type * clock * ident * option (exp * ident)))) Hi1 Hi2 Hl1 Hl2 Hi1' Hi2' Hl1' Hl2' n cx,
+    forall Γ (locs : list (ident * (type * clock * ident * option (exp * ident)))) Hi1 Hi2 Hi1' Hi2' n cx,
       (forall x : ident, InMembers x locs -> ~ In x (map fst Γ)) ->
-      (forall x, FEnv.In x Hi1' <-> IsVar (senv_of_locs locs) x) ->
-      (forall x, FEnv.In x Hi2' <-> IsVar (senv_of_locs locs) x) ->
-      (forall x, FEnv.In x Hl1' <-> IsLast (senv_of_locs locs) x) ->
-      (forall x, FEnv.In x Hl2' <-> IsLast (senv_of_locs locs) x) ->
-      (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n (Hi1, Hl1) (Hi2, Hl2) cx) ->
+      dom Hi1' (senv_of_locs locs) ->
+      dom Hi2' (senv_of_locs locs) ->
+      (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
       (forall x, HasCaus (senv_of_locs locs) x cx \/ HasLastCaus (senv_of_locs locs) x cx ->
-            det_var_inv (senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2') cx) ->
-      det_var_inv (Γ ++ senv_of_locs locs) n (Hi1 + Hi1', Hl1 + Hl1') (Hi2 + Hi2', Hl2 + Hl2') cx.
+            det_var_inv (senv_of_locs locs) n Hi1' Hi2' cx) ->
+      det_var_inv (Γ ++ senv_of_locs locs) n (Hi1 + Hi1') (Hi2 + Hi2') cx.
   Proof.
-    intros * Hnd (* Hdoml1 Hdoml2  *)Hdom1 Hdom2 Hdoml1 Hdoml2 (* Hrefl1 Hrefl2  *)Hsc1 Hsc2 ?.
+    intros * Hnd (* Hdoml1 Hdoml2  *)Hdom1 Hdom2 (* Hrefl1 Hrefl2  *)Hsc1 Hsc2 ?.
     split; intros Hin Hv1 Hv2; inv Hin; rewrite in_app_iff in H; destruct H as [Hin|Hin]; simpl_In.
     - edestruct Hsc1 as (Hinv&_); [|eapply Hinv]; eauto with senv.
       + apply sem_var_union in Hv1 as [Hv1|Hv1]; auto.
@@ -1368,23 +1367,23 @@ Module Type LSEMDETERMINISM
     - edestruct Hsc1 as (_&Hinv); [|eapply Hinv]; eauto with senv.
       + apply sem_var_union in Hv1 as [Hv1|Hv1]; auto.
         exfalso. eapply Hnd. 2:solve_In.
-        apply IsLast_senv_of_locs, Hdoml1; eauto using sem_var_In.
+        apply IsLast_senv_of_locs, Hdom1; eauto using sem_var_In.
       + apply sem_var_union in Hv2 as [Hv2|Hv2]; auto.
         exfalso. eapply Hnd. 2:solve_In.
-        apply IsLast_senv_of_locs, Hdoml2; eauto using sem_var_In.
+        apply IsLast_senv_of_locs, Hdom2; eauto using sem_var_In.
     - edestruct Hsc2 as (_&Hinv); [|eapply Hinv]; eauto.
       right. 1,2:econstructor; solve_In; auto.
       + apply sem_var_union' in Hv1 as [(Hn&Hv1)|Hv1]; auto.
-        exfalso. eapply Hn, Hdoml1. econstructor. solve_In. simpl; congruence.
+        exfalso. eapply Hn, Hdom1. econstructor. solve_In. simpl; congruence.
       + apply sem_var_union' in Hv2 as [(Hn&Hv2)|Hv2]; auto.
-        exfalso. eapply Hn, Hdoml2. econstructor. solve_In. simpl; congruence.
+        exfalso. eapply Hn, Hdom2. econstructor. solve_In. simpl; congruence.
   Qed.
 
   Fact det_var_inv_branch :
-    forall Γ caus Hi1 Hi2 Hl1 Hl2 n cx,
-      (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n (Hi1, Hl1) (Hi2, Hl2) cx) ->
-      (forall x vs1 vs2, In (x, cx) caus -> sem_var Hi1 x vs1 -> sem_var Hi2 x vs2 -> EqStN n vs1 vs2) ->
-      det_var_inv (replace_idcaus caus Γ) n (Hi1, Hl1) (Hi2, Hl2) cx.
+    forall Γ caus Hi1 Hi2 n cx,
+      (forall x, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
+      (forall x vs1 vs2, In (x, cx) caus -> sem_var Hi1 (Var x) vs1 -> sem_var Hi2 (Var x) vs2 -> EqStN n vs1 vs2) ->
+      det_var_inv (replace_idcaus caus Γ) n Hi1 Hi2 cx.
   Proof.
     intros * Hsc1 Hsc2.
     split; intros Hin Hv1 Hv2; inv Hin; simpl_In.
@@ -1408,28 +1407,26 @@ Module Type LSEMDETERMINISM
       Variable sem_block : history -> history -> A -> Prop.
 
       Inductive sem_scope_det (n : nat) (envS : list ident) : history -> history -> Stream bool -> Stream bool -> scope A -> Prop :=
-      | Sscope : forall Hi1 Hi2 Hi1' Hi2' Hl1 Hl2 Hl1' Hl2' bs1 bs2 locs blks,
-          (forall x, FEnv.In x Hi1' <-> IsVar (senv_of_locs locs) x) ->
-          (forall x, FEnv.In x Hi2' <-> IsVar (senv_of_locs locs) x) ->
-          (forall x, FEnv.In x Hl1' <-> IsLast (senv_of_locs locs) x) ->
-          (forall x, FEnv.In x Hl2' <-> IsLast (senv_of_locs locs) x) ->
+      | Sscope : forall Hi1 Hi2 Hi1' Hi2' bs1 bs2 locs blks,
+          dom Hi1' (senv_of_locs locs) ->
+          dom Hi2' (senv_of_locs locs) ->
 
           (forall x ty ck cx e0 clx,
               In (x, (ty, ck, cx, Some (e0, clx))) locs ->
               exists vs0 vs1 vs,
-                sem_exp G (Hi1 + Hi1', Hl1 + Hl1') bs1 e0 [vs0] /\ sem_var Hi1' x vs1 /\ fby vs0 vs1 vs /\ sem_var Hl1' x vs) ->
+                sem_exp G (Hi1 + Hi1') bs1 e0 [vs0] /\ sem_var Hi1' (Var x) vs1 /\ fby vs0 vs1 vs /\ sem_var Hi1' (Last x) vs) ->
           (forall x ty ck cx e0 clx,
               In (x, (ty, ck, cx, Some (e0, clx))) locs ->
               exists vs0 vs1 vs,
-                sem_exp G (Hi2 + Hi2', Hl2 + Hl2') bs2 e0 [vs0] /\ sem_var Hi2' x vs1 /\ fby vs0 vs1 vs /\ sem_var Hl2' x vs) ->
+                sem_exp G (Hi2 + Hi2') bs2 e0 [vs0] /\ sem_var Hi2' (Var x) vs1 /\ fby vs0 vs1 vs /\ sem_var Hi2' (Last x) vs) ->
 
-          sem_block (Hi1 + Hi1', Hl1 + Hl1') (Hi2 + Hi2', Hl2 + Hl2') blks ->
+          sem_block (Hi1 + Hi1') (Hi2 + Hi2') blks ->
 
-          Forall (det_var_inv (senv_of_locs locs) n (Hi1', Hl1') (Hi2', Hl2'))
+          Forall (det_var_inv (senv_of_locs locs) n Hi1' Hi2')
                  (map snd (idcaus_of_senv (senv_of_locs locs))) ->
-          Forall (fun x => In x envS -> det_var_inv (senv_of_locs locs) (S n) (Hi1', Hl1') (Hi2', Hl2') x)
+          Forall (fun x => In x envS -> det_var_inv (senv_of_locs locs) (S n) Hi1' Hi2' x)
                  (map snd (idcaus_of_senv (senv_of_locs locs))) ->
-          sem_scope_det n envS (Hi1, Hl1) (Hi2, Hl2) bs1 bs2 (Scope locs blks).
+          sem_scope_det n envS Hi1 Hi2 bs1 bs2 (Scope locs blks).
     End sem_scope.
 
     Section sem_branch.
@@ -1439,12 +1436,12 @@ Module Type LSEMDETERMINISM
       Variable sem_block : A -> Prop.
 
       Inductive sem_branch_det (n : nat) (envS : list ident) : history -> history -> branch A -> Prop :=
-      | Sbranch : forall Hi1 Hi2 Hl1 Hl2 caus blks,
+      | Sbranch : forall Hi1 Hi2 caus blks,
           sem_block blks ->
 
-          Forall (fun '(x, _) => forall vs1 vs2, sem_var Hi1 x vs1 -> sem_var Hi2 x vs2 -> EqStN n vs1 vs2) caus ->
-          Forall (fun '(x, cx) => In cx envS -> forall vs1 vs2, sem_var Hi1 x vs1 -> sem_var Hi2 x vs2 -> EqStN (S n) vs1 vs2) caus ->
-          sem_branch_det n envS (Hi1, Hl1) (Hi2, Hl2) (Branch caus blks).
+          Forall (fun '(x, _) => forall vs1 vs2, sem_var Hi1 (Var x) vs1 -> sem_var Hi2 (Var x) vs2 -> EqStN n vs1 vs2) caus ->
+          Forall (fun '(x, cx) => In cx envS -> forall vs1 vs2, sem_var Hi1 (Var x) vs1 -> sem_var Hi2 (Var x) vs2 -> EqStN (S n) vs1 vs2) caus ->
+          sem_branch_det n envS Hi1 Hi2 (Branch caus blks).
 
       (* Use for strong transitions *)
       Inductive sem_branch_det' : branch A -> Prop :=
@@ -1475,16 +1472,16 @@ Module Type LSEMDETERMINISM
         Forall (fun blks => exists Hi1' Hi2',
                     when_hist (fst blks) Hi1 sc1 Hi1'
                     /\ when_hist (fst blks) Hi2 sc2 Hi2'
-                    /\ let bi1 := fwhenb (fst blks) sc1 bs1 in
-                      let bi2 := fwhenb (fst blks) sc2 bs2 in
+                    /\ let bi1 := fwhenb (fst blks) bs1 sc1 in
+                      let bi2 := fwhenb (fst blks) bs2 sc2 in
                       sem_branch_det (Forall (sem_block_det n envS Hi1' Hi2' bi1 bi2))
                         n envS Hi1' Hi2' (snd blks)) branches ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bswitch ec branches)
 
     | SdetautoWeak:
       forall Hi1 Hi2 bs1 bs2 ini oth states ck bs'1 bs'2 stres01 stres11 stres1 stres02 stres12 stres2,
-        sem_clock (fst Hi1) bs1 ck bs'1 ->
-        sem_clock (fst Hi2) bs2 ck bs'2 ->
+        sem_clock (var_history Hi1) bs1 ck bs'1 ->
+        sem_clock (var_history Hi2) bs2 ck bs'2 ->
         sem_transitions G Hi1 bs'1 (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres01 ->
         sem_transitions G Hi2 bs'2 (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres02 ->
         fby stres01 stres11 stres1 ->
@@ -1509,8 +1506,8 @@ Module Type LSEMDETERMINISM
 
     | SdetautoStrong:
       forall Hi1 Hi2 bs1 bs2 ini states ck bs'1 bs'2 stres11 stres1 stres12 stres2,
-        sem_clock (fst Hi1) bs1 ck bs'1 ->
-        sem_clock (fst Hi2) bs2 ck bs'2 ->
+        sem_clock (var_history Hi1) bs1 ck bs'1 ->
+        sem_clock (var_history Hi2) bs2 ck bs'2 ->
         fby (const_stres bs'1 (ini, false)) stres11 stres1 ->
         fby (const_stres bs'2 (ini, false)) stres12 stres2 ->
         Forall (fun state =>
@@ -1572,7 +1569,7 @@ Module Type LSEMDETERMINISM
     Proof.
       intros * Hsem1 Hsem2 Hblk.
       inv Hsem1. inv Hsem2.
-      econstructor. 7:eauto. all:simpl_Forall; eauto using EqSt0.
+      econstructor. 5:eauto. all:simpl_Forall; eauto using EqSt0.
       - intros ???. eauto using EqSt0.
       - now exfalso.
     Qed.
@@ -1584,7 +1581,7 @@ Module Type LSEMDETERMINISM
         (P_blk1 blks -> P_blk2 blks -> P_blk3 blks) ->
         sem_branch_det P_blk3 0 [] Hi1 Hi2 (Branch caus blks).
     Proof.
-      intros * Hsem1 Hsem2 Hblk. repeat inv_branch. destruct Hi1, Hi2.
+      intros * Hsem1 Hsem2 Hblk. repeat inv_branch.
       econstructor; eauto. all:simpl_Forall; eauto using EqSt0.
       - intros. now exfalso.
     Qed.
@@ -1652,16 +1649,16 @@ Module Type LSEMDETERMINISM
         sem_scope_det P_blk2 (S n) [] Hi1 Hi2 bs1 bs2 (Scope locs blks).
     Proof.
       intros * Hdet Hndl Hwt Hbs (* Hdoml1 Hdoml2  *)Hsc Hincl Hsem Hind; repeat inv_scope; simpl in *.
-      econstructor. 5,6:eauto. all:eauto.
+      econstructor. 3,4:eauto. all:eauto.
       - eapply Hind; eauto.
         + rewrite map_app, map_fst_senv_of_locs; auto.
-        + intros. eapply det_var_inv_local with (Hl1:=Hl1) (Hi1':=Hi1'); eauto.
+        + intros. eapply det_var_inv_local with (Hi1':=Hi1'); eauto.
           * intros * Hcaus. apply idcaus_of_senv_In in Hcaus. simpl_Forall.
-            eapply H13, Hincl.
+            eapply H11, Hincl.
             repeat rewrite map_app, in_app_iff. left; solve_In.
         + etransitivity. 2:eapply Hincl.
           intros ??. rewrite map_app, in_app_iff; auto.
-      - simpl_Forall. eapply H13, Hincl; eauto.
+      - simpl_Forall. eapply H11, Hincl; eauto.
         repeat rewrite map_app, in_app_iff in *. left; solve_In.
       - simpl_Forall. now exfalso.
     Qed.
@@ -1762,10 +1759,10 @@ Module Type LSEMDETERMINISM
             simpl_Forall. repeat inv_branch. repeat inv_scope.
             specialize (H23 k); destruct_conjs.
             repeat inv_branch. repeat inv_scope.
-            eapply sem_transitions_detn in H25; eauto using det_var_inv_select, det_var_inv_weaken.
+            eapply sem_transitions_detn in H26; eauto using det_var_inv_select, det_var_inv_weaken.
             * simpl_Forall; eauto.
             * intros.
-              eapply det_var_inv_local. 6:intros; eapply det_var_inv_select; eauto. all:eauto.
+              eapply det_var_inv_local. 4:intros; eapply det_var_inv_select; eauto. all:eauto.
               -- intros * Hcaus. apply idcaus_of_senv_In in Hcaus. simpl_Forall.
                  take (In _ envS -> _) and eapply it; eauto. eapply Hincl. solve_In; eauto using in_or_app. auto.
             * apply EqStN_mask. 1,2:apply EqStN_fwhen; eauto using EqStN_weaken.
@@ -1871,7 +1868,7 @@ Module Type LSEMDETERMINISM
         simpl_Forall. specialize (H15 k); destruct_conjs.
         repeat inv_branch. repeat inv_scope.
         esplit. repeat (split; eauto).
-        econstructor. 3:eauto. 1,2:eauto.
+        econstructor. 2:eauto. all:eauto.
         split; simpl_Forall; eauto.
       - (* automaton (strong) *)
         econstructor; eauto.
@@ -1881,11 +1878,11 @@ Module Type LSEMDETERMINISM
         + simpl_Forall. specialize (H14 k); destruct_conjs.
           repeat inv_branch. repeat inv_scope.
           esplit. repeat (split; eauto).
-          econstructor. 3:eauto. 1,2:eauto.
+          econstructor. 2:eauto. all:eauto.
           simpl_Forall; eauto.
       - (* locals *)
         constructor. inv H5.
-        eapply Sem.Sscope with (Hi':=Hi1') (Hl':=Hl1'); eauto. simpl_Forall; eauto.
+        eapply Sem.Sscope with (Hi':=Hi1'); eauto. simpl_Forall; eauto.
     Qed.
 
     Fact sem_block_det_sem_block2 : forall n envS blk Hi1 Hi2 bs1 bs2,
@@ -1908,7 +1905,7 @@ Module Type LSEMDETERMINISM
         simpl_Forall. specialize (H15 k); destruct_conjs.
         repeat inv_branch. repeat inv_scope.
         esplit. repeat (split; eauto).
-        econstructor. 3:eauto. 1,2:eauto.
+        econstructor. 2:eauto. all:eauto.
         split; simpl_Forall; eauto.
       - (* automaton (strong) *)
         econstructor; eauto.
@@ -1917,7 +1914,7 @@ Module Type LSEMDETERMINISM
         + simpl_Forall. specialize (H14 k); destruct_conjs.
           repeat inv_branch. repeat inv_scope.
           esplit. repeat (split; eauto).
-          econstructor. 3:eauto. 1,2:eauto.
+          econstructor. 2:eauto. all:eauto.
           simpl_Forall; eauto.
       - (* locals *)
         constructor. inv H5. econstructor; eauto. simpl_Forall; eauto.
@@ -2019,27 +2016,24 @@ Module Type LSEMDETERMINISM
         inv Hnd2; inv Hvars; inv Hwt; inv Hsem; simpl in *.
       take (forall x, InMembers x locs -> ~ _) and rename it into Hnd2.
       edestruct Hind with (Γ:=Γ ++ senv_of_locs locs) as (Hdet'&Hcons); eauto using in_or_app.
-      1:{ apply NoDupMembers_app; auto.
-          - apply NoDupMembers_senv_of_locs; auto.
-          - intros. rewrite InMembers_senv_of_locs. intros ?.
-            eapply Hnd2; eauto. solve_In. }
+      1:{ apply NoDupScope_NoDupMembers; auto. }
       1:{ rewrite idcaus_of_senv_app, <-app_assoc.
           eapply Permutation_NoDup; [|eauto].
           solve_Permutation_app. }
       1:{ now rewrite map_app, map_fst_senv_of_locs. }
       1:{ rewrite map_app, map_fst_senv_of_locs.
           eapply incl_appl'; auto. }
-      1:{ intros * _. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
-          - intros ? Hin. eapply Forall_forall in H20; eauto.
+      1:{ intros * _. eapply det_var_inv_local; eauto.
+          - intros ? Hin. eapply Forall_forall in H18; eauto.
             apply idcaus_of_senv_In in Hin. solve_In. }
       1:{ intros * [Hdef|Hlast]; eauto with lcaus. }
-      1:{ intros * _ Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
+      1:{ intros * _ Hdep. eapply det_var_inv_local; eauto.
           + intros. eapply HSn; eauto.
             econstructor; eauto.
           + intros * Hin.
             assert (In cx (map snd (idcaus_of_senv (senv_of_locs locs)))) as Hin'.
             { apply idcaus_of_senv_In in Hin. solve_In. }
-            eapply Forall_forall in H21; eauto. eapply H21, HenvS.
+            eapply Forall_forall in H19; eauto. eapply H19, HenvS.
             * rewrite map_app, in_app_iff. auto.
             * econstructor; eauto. }
       1:{ intros * Hin Hdep. apply HenvS.
@@ -2052,8 +2046,8 @@ Module Type LSEMDETERMINISM
           assert (~InMembers y locs) as Hnin.
           { intros ?. eapply Hnd2; eauto. }
           edestruct Hdet' as (Hd1&_); eauto using in_or_app. apply HasCaus_app; auto.
-          eapply Hd1; [eapply HasCaus_app| |]; eauto; simpl in *.
-          1,2:eapply sem_var_union2; eauto; try rewrite H2; try rewrite H8; now rewrite IsVar_senv_of_locs.
+          eapply Hd1; [eapply HasCaus_app| |]; eauto; simpl in *;
+            eapply sem_var_union2; eauto; intros contra; [apply H2, IsVar_senv_of_locs in contra|apply H8, IsVar_senv_of_locs in contra]; eauto.
         + exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
       - econstructor. 5,6:eauto. all:eauto.
         eapply Forall_forall; intros ?? [|HinS]; subst; [|simpl_Forall; auto].
@@ -2069,24 +2063,24 @@ Module Type LSEMDETERMINISM
           1:{ exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
           eapply HasLastCaus_snd_det in Hca; eauto; subst. 2:solve_NoDup_app.
           inv Hca'; simpl_In; simpl_Forall.
-          edestruct H13 as (?&?&?&He1&Hvi1&?&Hvl1); eauto. edestruct H14 as (?&?&?&He2&Hvi2&?&Hvl2); eauto.
+          edestruct H11 as (?&?&?&He1&Hvi1&?&Hvl1); eauto. edestruct H12 as (?&?&?&He2&Hvi2&?&Hvl2); eauto.
           eapply sem_var_det in Hv1; eauto. eapply sem_var_det in Hv2; eauto. rewrite <-Hv1, <-Hv2.
           assert (forall x cx : ident,
                      HasCaus (Γ ++ senv_of_locs locs) x cx \/ HasLastCaus (Γ ++ senv_of_locs locs) x cx ->
-                     det_var_inv (Γ ++ senv_of_locs locs) n (Hi0 + Hi1', Hl1 + Hl1') (Hi3 + Hi2', Hl2 + Hl2') cx) as Hdetl.
-          { intros * _. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
-            intros ??. eapply Forall_forall in H20; eauto. 2:apply idcaus_of_senv_In; eauto. auto.
+                     det_var_inv (Γ ++ senv_of_locs locs) n (Hi1 + Hi1') (Hi2 + Hi2') cx) as Hdetl.
+          { intros * _. eapply det_var_inv_local; eauto.
+            intros ??. eapply Forall_forall in H18; eauto. 2:apply idcaus_of_senv_In; eauto. auto.
           }
           eapply fby_det_Sn; eauto.
           * eapply det_exp_S with (Γ:=Γ++senv_of_locs locs) (k:=0) in He1; eauto with lcaus.
             specialize (He1 He2); simpl in *; auto.
             1:{ rewrite <-length_typeof_numstreams, H0; simpl. lia. }
-            1:{ intros * Hfree Hdep. eapply det_var_inv_local with (Hl1:=Hl1); eauto.
+            1:{ intros * Hfree Hdep. eapply det_var_inv_local; eauto.
                 + intros. eapply HSn; eauto.
                   eapply DepOnScope2; eauto. solve_Exists; auto.
                 + intros * Hin''. apply idcaus_of_senv_In in Hin''; eauto.
-                  eapply Forall_forall in H21; eauto.
-                  eapply H21, HenvS.
+                  eapply Forall_forall in H19; eauto.
+                  eapply H19, HenvS.
                   * rewrite map_app, in_app_iff. left; solve_In.
                   * eapply DepOnScope2; eauto. solve_Exists; auto.
             }
@@ -2136,9 +2130,9 @@ Module Type LSEMDETERMINISM
       1:{ apply NoDupMembers_map; auto. }
       1:{ apply replace_idcaus_NoDup; auto. }
       1:{ now rewrite map_fst_replace_idcaus. }
-      1:{ intros * _. eapply det_var_inv_branch with (Hl1:=Hl1); eauto.
+      1:{ intros * _. eapply det_var_inv_branch; eauto.
           - intros * Hin. simpl_Forall. eauto. }
-      1:{ intros * _ Hdep. eapply det_var_inv_branch with (Hl1:=Hl1); eauto.
+      1:{ intros * _ Hdep. eapply det_var_inv_branch; eauto.
           + intros. eapply HSn; eauto.
             econstructor; eauto.
           + intros * Hin. simpl_Forall. eapply H10, HenvS.
@@ -2270,7 +2264,7 @@ Module Type LSEMDETERMINISM
                             when_hist k Hi1 sc1 Hi1' /\ when_hist k Hi2 sc2 Hi2'
                             /\ (forall y, In y xs -> HasCaus Γ y cy -> det_var_inv Γ (S n) Hi1' Hi2' cy) /\
                               sem_branch_det
-                                (Forall (sem_block_det n (cy::envS) Hi1' Hi2' (fwhenb k sc1 bs1) (fwhenb k sc2 bs2)))
+                                (Forall (sem_block_det n (cy::envS) Hi1' Hi2' (fwhenb k bs1 sc1) (fwhenb k bs2 sc2)))
                                 n (cy :: envS) Hi1' Hi2' s)
                        branches) as Hf.
         { simpl_Forall. destruct b. do 2 esplit; eauto. split; [|split]; eauto.
@@ -2284,8 +2278,8 @@ Module Type LSEMDETERMINISM
             2:constructor; solve_Exists. solve_In.
           - intros; simpl in *. destruct_conjs.
             assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
-                                              det_var_inv Γ0 (S n) (h1, h2) (h, h0) cy)
-                                     /\ sem_block_det n (cy::envS) (h1, h2) (h, h0) (fwhenb e sc1 bs1) (fwhenb e sc2 bs2) blks) l0) as Hf.
+                                              det_var_inv Γ0 (S n) x x0 cy)
+                                     /\ sem_block_det n (cy::envS) x x0 (fwhenb e bs1 sc1) (fwhenb e bs2 sc2) blks) l0) as Hf.
             { simpl_Forall. inv_VarsDefined.
               edestruct H with (Γ:=Γ0). 9:eauto. all:eauto.
               - eapply NoDup_locals_inv; eauto.
@@ -2430,7 +2424,7 @@ Module Type LSEMDETERMINISM
             eapply HasCaus_snd_det in Hca; eauto; subst. 2:simpl_app; eauto using NoDup_app_l.
             destruct x0 as [?(?&[?(?&?)])]. split; eapply sem_branch_defined2; eauto.
             1,2:repeat inv_branch; repeat inv_scope;
-            (do 2 econstructor; [| | |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto).
+            (do 2 econstructor; [| |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto).
           * intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
         + econstructor; eauto.
           simpl_Forall. specialize (Hf k); destruct_conjs. eauto.
@@ -2461,7 +2455,7 @@ Module Type LSEMDETERMINISM
           - intros * Hsel. rewrite <-H10 in Hsel. simpl_In.
             simpl_Forall.
             specialize (H20 k); destruct_conjs. repeat inv_branch.
-            take (sem_transitions _ (t, t0) _ _ _ _) and eapply sem_transitions_detS in it; eauto using det_var_inv_select, det_var_inv_weaken.
+            take (sem_transitions _ x0 _ _ _ _) and eapply sem_transitions_detS in it; eauto using det_var_inv_select, det_var_inv_weaken.
             + simpl_Forall; eauto.
             + intros. eapply det_var_inv_select; eauto. eapply HSn; eauto.
               eapply DepOnAuto4; eauto. repeat solve_Exists.
@@ -2550,7 +2544,7 @@ Module Type LSEMDETERMINISM
             eapply HasCaus_snd_det in Hca; eauto; subst. 2:simpl_app; eauto using NoDup_app_l.
             destruct b as [?(?&[?(?&?)])]. split; eapply sem_branch_defined2; eauto.
             1,2:repeat inv_branch; repeat inv_scope;
-            (do 2 econstructor; [| | |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto).
+            (do 2 econstructor; [| |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto).
           - intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
         }
         split; auto.
@@ -2693,7 +2687,7 @@ Module Type LSEMDETERMINISM
       eapply sem_block_cons1 in Hbcks1; eauto using wl_global_Ordered_nodes with ltyping.
       eapply sem_block_cons1 in Hbcks2; eauto using wl_global_Ordered_nodes with ltyping.
 
-      assert (Forall (det_var_inv (senv_of_inout (n_in n1 ++ n_out n1)) n (H, @FEnv.empty _) (H0, @FEnv.empty _)) (map snd (idcaus (n_in n1)))) as Hins.
+      assert (Forall (det_var_inv (senv_of_inout (n_in n1 ++ n_out n1)) n H H0) (map snd (idcaus (n_in n1)))) as Hins.
       { eapply node_causal_NoDup in H1 as Hnd.
         clear - Heqins Hins1 Hins2 Hnd.
         assert (incl (idcaus (n_in n1)) (idcaus (n_in n1 ++ n_out n1))) as Hincl.

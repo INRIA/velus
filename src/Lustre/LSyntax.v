@@ -343,6 +343,19 @@ Module Type LSYNTAX
       NoDupScope (fun env => Forall (NoDupLocals env)) env scope ->
       NoDupLocals env (Blocal scope).
 
+  Lemma NoDupScope_NoDupMembers : forall Γ locs,
+      NoDupMembers Γ ->
+      NoDupMembers locs ->
+      (forall x, InMembers x locs -> ~In x (map fst Γ)) ->
+      NoDupMembers (Γ ++ @senv_of_locs exp locs).
+  Proof.
+    intros * Nd1 Nd2 Nd3.
+    apply NoDupMembers_app; auto.
+    - now apply NoDupMembers_senv_of_locs.
+    - intros * In1 In2. rewrite fst_InMembers in In1. rewrite InMembers_senv_of_locs in In2.
+      eapply Nd3; eauto.
+  Qed.
+
   (** ** All the locals must be well-formed *)
 
   Inductive GoodLocalsScope {A} (P_good : A -> Prop) (prefs : PS.t) : scope A -> Prop :=
