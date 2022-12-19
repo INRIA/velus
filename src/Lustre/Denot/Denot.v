@@ -46,6 +46,20 @@ Definition env_of_ss (l : list ident) {n} : nprod n -C-> DS_prod SI :=
            | None => CTE _ _ errTy
            end).
 
+Lemma env_of_ss_eq :
+  forall l n (ss : nprod n) x,
+    env_of_ss l ss x =
+      match mem_nth l x with
+      | Some n => get_nth n errTy ss
+      | None => errTy
+      end.
+Proof.
+  unfold env_of_ss.
+  intros.
+  setoid_rewrite Dprodi_DISTR_simpl.
+  cases.
+Qed.
+
 (** extract a tuple from an environment  *)
 Definition ss_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
   induction l as [| x []].
@@ -421,43 +435,14 @@ Qed.
 Definition denot_equation (ins : list ident) (e : equation) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
   destruct e as (xs,es).
-  (* vérification des tailles *)
-  destruct (Nat.eq_dec
-              (length xs)
-              (list_sum (List.map numstreams es))
-           ) as [Heq|].
-  2:{ apply curry, curry, curry, Dprodi_DISTR.
-      exact (fun _ => CTE _ _ errTy). }
   pose proof (ss := denot_exps_ ins es).
   apply curry, curry, curry, Dprodi_DISTR.
   intro x.
   destruct (mem_ident x ins).
   (* si x est une entrée *)
   exact (PROJ (DS_fam SI) x @_ SND _ _ @_ FST _ _ @_ FST _ _).
-  (* x est un indice dans l'environment des sorties. S'il apparaît dans
-     les xs on le met à jour, sinon on regarde dans l'environnement *)
-  revert Heq ss.
-  generalize (list_sum (List.map numstreams es)) as n; intros.
-  (* on ne garde que env et ss (pas les entrées) *)
-  eapply fcont_comp2.
-  2: exact (SND _ _).
-  2: exact ss.
-  clear ss.
-  apply curry.
-  revert dependent n.
-  (* TODO: on considère que toutes les sorties sont définies dans
-     cette équation. L'alternative est de garder la liste des sorties
-     et de faire deux cas lorsque la variable n'appartient pas à xs :
-     - si la varible est une sortie : retrouner (env x)
-     - sinon, renvoyer error_Ty *)
-  induction xs as [| y xs]; intros.
-  - exact (CTE _ _ errTy).
-  - destruct (ident_eq_dec x y).
-    + exact (nprod_fst errTy @_ SND _ _).
-    + eapply fcont_comp.
-      * exact (IHxs (length xs) eq_refl).
-      * inv Heq.
-        exact (PROD_map (ID _) nprod_skip).
+  (* sinon on le prend dans les ss *)
+  exact (PROJ (DS_fam SI) x @_ env_of_ss xs @_ ss).
 Defined.
 
 Section Equation_spec.
@@ -465,33 +450,13 @@ Section Equation_spec.
 Lemma denot_equation_eq :
   forall ins xs es envG envI bs env x,
     denot_equation ins (xs,es) envG envI bs env x
-    = if Nat.eq_dec (length xs) (list_sum (List.map numstreams es))
-      then
-        if mem_ident x ins then envI x else
-         let ss := denot_exps ins es envG envI bs env in
-         match mem_nth xs x with
-         | None => errTy
-         | Some n => get_nth n errTy ss
-         end
-       else errTy.
+    = denot_var ins envI (env_of_ss xs (denot_exps ins es envG envI bs env)) x.
 Proof.
-  intros ?????? env ?.
-  unfold denot_equation, denot_exps.
-  destruct (Nat.eq_dec (length xs) (list_sum (List.map numstreams es))) as [Heq|]; auto.
-  (* FIXME: pourquoi faut-il ajouter ça ? *)
+  intros.
+  unfold denot_equation, denot_var.
   Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb.
   autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  destruct (mem_ident x ins); auto.
-  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  generalize (denot_exps_ ins es).
-  revert Heq.
-  generalize (list_sum (List.map numstreams es)).
-  induction xs; intros; simpl; auto.
-  destruct (ident_eq_dec x a); auto.
-  destruct Heq; simpl.
-  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
-  rewrite IHxs with (t := nprod_skip @_ t).
-  destruct (mem_nth xs x); auto.
+  cases.
 Qed.
 
 Global Opaque denot_equation.
@@ -508,7 +473,8 @@ Proof.
   destruct Hwt as [? Hwt].
   rewrite annots_numstreams in Hwt.
   rewrite denot_equation_eq.
-  cases_eqn HH; congruence.
+  unfold denot_var.
+  cases; congruence.
 Qed.
 
 End Equation_spec.
@@ -771,6 +737,19 @@ Proof.
     now intros ?? ->.
 Qed.
 
+Corollary denot_exps_cons :
+  forall nd nds tys exts
+    ins envG envI bs env es,
+    ~ (List.Exists (Is_node_in_exp nd.(n_name)) es) ->
+    denot_exps (Global tys exts nds) ins es envG envI bs env
+    == denot_exps (Global tys exts (nd :: nds)) ins es envG envI bs env.
+Proof.
+  induction es; intros Hnin.
+  - now rewrite 2 denot_exps_nil.
+  - rewrite 2 denot_exps_eq.
+    apply nprod_app_Oeq_compat; auto using denot_exp_cons.
+Qed.
+
 Lemma denot_node_cons :
   forall n nd nds tys exts,
     ~ Is_node_in_block nd.(n_name) n.(n_block) ->
@@ -784,21 +763,14 @@ Proof.
   destruct e as (xs,es).
   apply fcont_eq_intro; intro envG.
   apply fcont_eq_intro; intro envI.
-  apply fcont_eq_intro; intro bs.
+  apply fcont_eq_intro; intro env.
   apply Oprodi_eq_intro; intro x.
-  autorewrite with cpodb.
-  setoid_rewrite denot_equation_eq.
-  cases_eqn HH; simpl.
-  apply (get_nth_Oeq_compat _ _ errTy).
-  clear - Hnin.
-  induction es. reflexivity.
-  rewrite 2 denot_exps_eq.
-  apply nprod_app_Oeq_compat.
-  - apply denot_exp_cons. intro.
-    apply Hnin. constructor. now constructor.
-  - apply IHes. intro H. inv H.
-    apply Hnin. constructor.
-    unfold Is_node_in_eq in *; eauto using Exists_cons_tl.
+  autorewrite with cpodb; simpl.
+  rewrite 2 denot_equation_eq.
+  unfold denot_var; cases.
+  apply ford_eq_elim.
+  rewrite <- denot_exps_cons; auto.
+  intro; apply Hnin; constructor; auto.
 Qed.
 
 (* Lemma denot_global_cons_ : *)

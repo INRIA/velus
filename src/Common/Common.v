@@ -130,6 +130,14 @@ Proof.
   destruct (mem_ident x xs); firstorder; congruence.
 Qed.
 
+Global Add Parametric Morphism : mem_ident
+    with signature @eq ident ==> @Permutation.Permutation ident ==> eq
+      as mem_ident_Perm_morph.
+Proof.
+  induction 1; simpl; auto; try congruence.
+  repeat (destruct ident_eqb; auto).
+Qed.
+
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
 

@@ -2052,11 +2052,14 @@ Section Node_safe.
         apply nth_error_Forall2 with (1 := kth) in Hsub as (?&?& Sub).
         rewrite Sub in HH0; inv HH0.
         subst env'. unfold denot_var.
-        rewrite denot_equation_eq, denot_exps_eq, denot_exp_eq.
-        rewrite Hfind, Hl, Hi, Hi0, (nth_mem_nth _ ident_eq_dec _ _ k);
-          eauto 2 using NoDup_app_l.
-        cases; try (exfalso; simpl in *; auto; lia).
-        simpl (let _ := _ in _); unfold eq_rect_r, eq_rect, eq_sym; cases.
+        rewrite denot_equation_eq; unfold denot_var.
+        rewrite denot_exps_eq, denot_exps_nil, denot_exp_eq.
+        simpl (env_of_ss _ _).
+        rewrite Hfind, Hi, Hi0.
+        unfold eq_rect_r, eq_rect, eq_sym.
+        cases; try contradiction.
+        rewrite env_of_ss_eq.
+        setoid_rewrite nth_mem_nth; eauto 2 using NoDup_app_l.
         rewrite @nprod_app_nth1, (nth_ss_of_env xH), (nth_error_nth _ _ _ kth); auto.
     }
     set (envN := envG f _) in *.
@@ -2165,8 +2168,9 @@ Section Node_safe.
         subst ins. exfalso. eapply mem_ident_false; eauto. }
       apply mem_ident_spec, mem_ident_nth in Hxs as [k kth].
       rewrite denot_equation_eq.
-      unfold mem_nth, ident; rewrite kth. (* FIXME *)
-      cases_eqn HH; subst ins; unfold idents in *; try congruence || contradiction.
+      unfold denot_var. subst ins. setoid_rewrite Hxin.
+      setoid_rewrite env_of_ss_eq.
+      setoid_rewrite kth.
       simpl (denot_block _ _ _) in Hle.
       (* Il y a deux cas possibles dans wc_equation. Dans les deux cas, on
          montre que les [es] sont bien cadencées *dans env'*, l'environment
@@ -2232,7 +2236,7 @@ Section Node_safe.
         eapply HasClock_det in Hcl' as ->; eauto using NoDup_senv.
       * (* safe_DS *)
         eapply forall_nprod_k with (k := k) in esSf; eauto.
-        rewrite <- e. apply nth_error_Some; intro; congruence.
+        rewrite <- Hl. apply nth_error_Some. now setoid_rewrite kth.
   Qed.
 
 End Node_safe.

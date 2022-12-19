@@ -151,23 +151,6 @@ Module Type LDENOTINF
     eauto using Forall_app_weaken.
   Qed.
 
-  (* TODO: move? *)
-  Lemma denot_equation_input :
-    forall G Γ
-      e ins envI bs env x,
-      wt_equation G Γ e ->
-      In x ins ->
-      denot_equation G ins e envG envI bs env x = envI x.
-  Proof.
-    intros * Hwt Hx.
-    apply mem_ident_spec in Hx.
-    destruct e as (xs,es).
-    destruct Hwt as [? Hwt]. apply Forall2_length in Hwt.
-    rewrite length_typesof_annots, annots_numstreams in Hwt.
-    rewrite denot_equation_eq.
-    cases_eqn HH; congruence.
-  Qed.
-
   Lemma P_exps_k : forall n es ins envI bs env k,
       P_exps (P_exp n ins envI bs env) es k ->
       is_ncons n (get_nth k errTy (denot_exps G ins es envG envI bs env)).
@@ -420,20 +403,20 @@ Module Type LDENOTINF
   Lemma equation_n :
     forall xs es n k ins envI bs,
       let env := FIXP (DS_prod SI) (denot_equation G ins (xs,es) envG envI bs) in
+      (forall x, is_ncons n (envI x)) ->
       NoDup (ins ++ xs) ->
       k < length xs ->
       P_exps (P_exp n ins envI bs env) es k ->
       P_var n env (nth k xs xH).
   Proof.
-    intros ??????? env Hnd Hk Hes.
+    intros ??????? env Hins Hnd Hk Hes.
     subst env.
     unfold P_var.
     rewrite FIXP_eq, PROJ_simpl, denot_equation_eq.
-    rewrite (mem_nth_nth _ ident_eq_dec); eauto using NoDup_app_r.
-    cases_eqn HH; auto using P_exps_k; solve_err.
-    (* cas pénible *)
-    exfalso. rewrite mem_ident_spec in *.
-    eapply NoDup_app_In; eauto using nth_In.
+    unfold denot_var.
+    cases_eqn HH.
+    erewrite env_of_ss_nth; eauto using P_exps_k.
+    apply mem_nth_nth; eauto using NoDup_app_r.
   Qed.
 
   Lemma P_var_input_eq :
@@ -446,7 +429,8 @@ Module Type LDENOTINF
     intros * Hwt Hin Hins.
     unfold P_vars, P_var in *.
     rewrite FIXP_eq, PROJ_simpl.
-    erewrite denot_equation_input, Forall_forall, <- PROJ_simpl in *; eauto.
+    erewrite denot_equation_input, Forall_forall, <- PROJ_simpl in *;
+      eauto using wt_equation_wl_equation.
   Qed.
 
   Lemma P_var_input_node :
@@ -531,7 +515,7 @@ Module Type LDENOTINF
       destruct e as (xs, es); simpl in *.
       rewrite <- Hperm in Hx.
       apply In_nth with (d := xH) in Hx as (k & Hlen & Hnth); subst.
-      autorewrite with cpodb.
+      autorewrite with cpodb; simpl.
       apply equation_n with (n := S n); auto.
       { unfold idents. rewrite Hperm, <- map_app; apply node_NoDup. }
       eapply Pexp_Pexps with
@@ -596,22 +580,24 @@ Module Type LDENOTINF
       forall x, P_var n (FIXP _ (denot_node G nd envG envI)) x.
   Proof.
     intros * Hwt Hins Hn x.
-    destruct (mem_ident x (map fst (n_in nd))) eqn:Hin.
-    { rewrite mem_ident_spec in Hin. eauto using P_var_input_node, P_vars_weaken. }
     destruct (mem_ident x (map fst (n_out nd))) eqn:Hout.
     { rewrite mem_ident_spec in Hout. eapply Forall_In in Hn; eauto. }
-    destruct (n_defd nd) as (ys & Hvd & Hperm).
     rewrite FIXP_eq.
+    destruct (n_defd nd) as (ys & Hvd & Hperm).
+    revert Hvd.
     unfold denot_node, denot_block.
-    destruct nd.(n_block) eqn:Hnd; auto.
-    inv Hvd. destruct e as (xs,es); simpl in *.
-    rewrite <- Bool.not_true_iff_false, mem_ident_spec, <- Hperm in Hout.
+    cases; intros; inv Hvd.
+    destruct e as (xs,es); simpl in *.
     unfold P_var.
     autorewrite with cpodb.
     rewrite denot_equation_eq.
-    cases_eqn HH; try congruence; solve_err.
+    unfold denot_var.
+    cases.
     - apply Hins.
-    - destruct Hout; eauto using mem_nth_In.
+    - rewrite <- Hperm, mem_ident_false in Hout.
+      rewrite env_of_ss_eq.
+      cases_eqn HH; try apply is_ncons_DS_const.
+      apply mem_nth_In in HH; contradiction.
   Qed.
 
   Corollary denot_n_all_vars :
@@ -810,3 +796,4 @@ Module LDenotInfFun
 <: LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Den.
   Include LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Den.
 End LDenotInfFun.
+
