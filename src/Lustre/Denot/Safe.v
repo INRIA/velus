@@ -1276,17 +1276,13 @@ Section Node_safe.
      dans le nœud appelant.
    *)
   Hypothesis Hnode :
-    forall (f : ident) (envI : DS_prod SI),
-      match find_node f G with
-      | Some n =>
-          let ins := idents n.(n_in) in
-          let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
-          forall bs,
-            bss ins envI <= bs ->
-            env_correct Γ ins envI bs 0 ->
-            env_correct Γ ins envI bs (envG f envI)
-      | _ => True
-      end.
+    forall f n envI,
+      find_node f G = Some n ->
+      let ins := List.map fst n.(n_in) in
+      let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+      forall bs, bss ins envI <= bs ->
+      env_correct Γ ins envI bs 0 ->
+      env_correct Γ ins envI bs (envG f envI).
 
   Lemma basilus_nclockus :
     forall ins envI bs env e,
@@ -1847,7 +1843,8 @@ Section Node_safe.
       generalize (denot_exps G ins es envG envI bs env).
       take (list_sum _ = _) and rewrite it.
       intro ss.
-      specialize (Hnode f (env_of_np (idents (n_in n)) ss)).
+      take (find_node f G = _) and
+        specialize (Hnode f _ (env_of_np (idents (n_in n)) ss) it).
       take (find_node f G = _) and rewrite it in *.
       repeat take (Some _ = Some _) and inv it.
       eapply wc_find_node in WCG as (? & WCi & WCio &_); eauto.
@@ -1996,7 +1993,7 @@ Section Node_safe.
         eauto using Forall2_length. }
     specialize (Hnode f).
     rewrite Hfind in Hnode.
-    apply Hnode in Hs0.
+    apply Hnode in Hs0; auto.
     2: eapply bss_le_bs, cl_env_inst; eauto.
     (**** fin instanciation de Hnode  *)
     apply env_correct_decompose in Hs0 as (Ty & Cl & Sf).
