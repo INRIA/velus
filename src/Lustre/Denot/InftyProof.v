@@ -291,9 +291,9 @@ Module Type LDENOTINF
       inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H; auto.
       destruct (find_node f G) eqn:Hfind; cases; solve_err.
       apply forall_nprod_k; auto.
-      apply forall_ss_of_env, (Hnode n); intros; eauto using find_node_name.
+      apply forall_np_of_env, (Hnode n); intros; eauto using find_node_name.
       unfold P_var. rewrite PROJ_simpl.
-      apply forall_env_of_ss; solve_err.
+      apply forall_env_of_np; solve_err.
       apply k_forall_nprod_def with (d := errTy); intros; solve_err.
       now apply P_exps_k, Forall_P_exps.
   Qed.
@@ -392,9 +392,9 @@ Module Type LDENOTINF
       inv Hwl; inv Hwx.
       destruct (find_node f G) eqn:?; cases; solve_err.
       apply forall_nprod_k; auto.
-      apply forall_ss_of_env, (Hnode (S n)); intros; eauto using find_node_name.
+      apply forall_np_of_env, (Hnode (S n)); intros; eauto using find_node_name.
       unfold P_var. rewrite PROJ_simpl.
-      apply forall_env_of_ss; solve_err.
+      apply forall_env_of_np; solve_err.
       apply k_forall_nprod_def with (d := errTy); intros; solve_err.
       rewrite annots_numstreams in *.
       apply P_exps_k; eauto using P_exps_impl.
@@ -415,7 +415,7 @@ Module Type LDENOTINF
     rewrite FIXP_eq, PROJ_simpl, denot_equation_eq.
     unfold denot_var.
     cases_eqn HH.
-    erewrite env_of_ss_nth; eauto using P_exps_k.
+    erewrite env_of_np_nth; eauto using P_exps_k.
     apply mem_nth_nth; eauto using NoDup_app_r.
   Qed.
 
@@ -595,7 +595,7 @@ Module Type LDENOTINF
     cases.
     - apply Hins.
     - rewrite <- Hperm, mem_ident_false in Hout.
-      rewrite env_of_ss_eq.
+      rewrite env_of_np_eq.
       cases_eqn HH; try apply is_ncons_DS_const.
       apply mem_nth_In in HH; contradiction.
   Qed.
@@ -761,8 +761,8 @@ Proof.
     generalize (list_sum (List.map numstreams es)).
     intros; unfold eq_rect_r, eq_rect, eq_sym.
     cases; subst; eauto using forall_nprod_const, DS_const_inf.
-    apply forall_ss_of_env, HG; intro.
-    apply forall_env_of_ss; eauto using DS_const_inf.
+    apply forall_np_of_env, HG; intro.
+    apply forall_env_of_np; eauto using DS_const_inf.
 Qed.
 
 Corollary infinite_exps :

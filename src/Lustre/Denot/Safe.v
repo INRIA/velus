@@ -1362,7 +1362,7 @@ Section Node_safe.
       forall x y ck,
         sub x = Some y ->
         In (x, ck) ckins ->
-        denot_var (idents (n_in n)) (env_of_ss (idents (n_in n)) ss) env' x =
+        denot_var (idents (n_in n)) (env_of_np (idents (n_in n)) ss) env' x =
           denot_var ins envI env y.
   Proof.
     unfold idents.
@@ -1376,7 +1376,7 @@ Section Node_safe.
     eapply In_nth_error in Hin as (k & Kth).
     eapply nth_error_Forall2 in Ncs as (?&?&[]&?&[Sub Inst]&?); eauto.
     simpl in *; subst. cases; inv Hsub.
-    erewrite env_of_ss_nth with (k := k), list_of_nprod_nth_error; eauto.
+    erewrite env_of_np_nth with (k := k), list_of_nprod_nth_error; eauto.
     apply nth_mem_nth; auto.
     apply map_nth_error_inv in Kth as ((?&(?&?)&?)& He & HHH). inv HHH.
     now rewrite nth_error_map, He.
@@ -1397,7 +1397,7 @@ Section Node_safe.
       forall env' ck x ck',
         In (x, ck) ckins ->
         instck bck sub ck = Some ck' ->
-        denot_clock (idents (n_in n)) (env_of_ss (List.map fst (n_in n)) ss)
+        denot_clock (idents (n_in n)) (env_of_np (List.map fst (n_in n)) ss)
           (denot_clock ins envI bs env bck) env' ck
         = denot_clock ins envI bs env ck'.
   Proof.
@@ -1421,7 +1421,7 @@ Section Node_safe.
                         | None => True
                         end) ncks (list_of_nprod ss) ->
       Forall2 (cl_DS ins envI bs env) (List.map fst ncks) (list_of_nprod ss) ->
-      cl_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_ss (idents (n_in n)) ss) (denot_clock ins envI bs env bck) 0.
+      cl_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_np (idents (n_in n)) ss) (denot_clock ins envI bs env bck) 0.
   Proof.
     clear.
     intros * Hwc Hinst Ncs Hcl x ck Hck.
@@ -1438,7 +1438,7 @@ Section Node_safe.
     eapply nth_error_Forall2 with (1 := Kth) in HH.
     destruct HH as (?&?&?&?&[]&?). simpl in *; subst.
     eapply denot_clock_inst_ins in Hck as ->; eauto 1.
-    erewrite env_of_ss_nth, list_of_nprod_nth_error; eauto.
+    erewrite env_of_np_nth, list_of_nprod_nth_error; eauto.
     destruct n.(n_nodup) as (Nd & _).
     rewrite fst_NoDupMembers, map_app in Nd; apply NoDup_app_l in Nd.
     apply nth_mem_nth; auto.
@@ -1450,7 +1450,7 @@ Section Node_safe.
     forall (n : node) (ss : nprod (length (n_in n))),
       forall_nprod safe_DS ss ->
       ef_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n))
-        (env_of_ss (idents (n_in n)) ss) 0.
+        (env_of_np (idents (n_in n)) ss) 0.
   Proof.
     intros * Hs ?? Hty.
     unfold denot_var.
@@ -1460,7 +1460,7 @@ Section Node_safe.
     apply mem_nth_Some in Hl as Hk; eauto.
     unfold idents in Hk.
     rewrite map_length in Hk.
-    erewrite env_of_ss_nth; eauto.
+    erewrite env_of_np_nth; eauto.
     apply forall_nprod_k; auto.
   Qed.
 
@@ -1469,7 +1469,7 @@ Section Node_safe.
       Forall2 (fun (et : type) '(_, (t, _, _)) => et = t) tys (n_in n) ->
       Forall2 ty_DS tys (list_of_nprod ss) ->
       ty_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n))
-        (env_of_ss (idents (n_in n)) ss) 0.
+        (env_of_np (idents (n_in n)) ss) 0.
   Proof.
     intros * Hins Hss ?? Hty.
     destruct n.(n_nodup) as (Nd & _).
@@ -1482,7 +1482,7 @@ Section Node_safe.
     apply mem_ident_spec in Hxin as HH.
     apply HasType_app_1, Ty_senv in Hty; auto; clear HH.
     apply In_nth_error in Hty as (k & Kth).
-    erewrite env_of_ss_nth with (k := k).
+    erewrite env_of_np_nth with (k := k).
     2: {apply nth_mem_nth; auto.
         apply map_nth_error_inv in Kth as ((?&(?&?)&?)& He & HH). inv HH.
         unfold idents. erewrite map_nth_error; now eauto. }
@@ -1496,7 +1496,7 @@ Section Node_safe.
     forall tys (n : node) envI env,
       Forall2 (fun a '(_, (t, _, _)) => a = t) tys (n_out n) ->
       ty_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) envI env ->
-      Forall2 ty_DS tys (list_of_nprod (ss_of_env (idents (n_out n)) env)).
+      Forall2 ty_DS tys (list_of_nprod (np_of_env (idents (n_out n)) env)).
   Proof.
     clear.
     intros * Hty Henv.
@@ -1507,7 +1507,7 @@ Section Node_safe.
     intros d ? k ty ? Hk ??; subst.
     assert (lk : k < Datatypes.length (idents (n_out n))).
     { unfold idents; rewrite map_length; apply Forall2_length in Hty; lia. }
-    rewrite list_of_nprod_nth, (nth_ss_of_env xH); auto.
+    rewrite list_of_nprod_nth, (nth_np_of_env xH); auto.
     specialize (Henv (nth k (idents (n_out n)) xH) (nth k tys d)).
     unfold denot_var in Henv.
     cases_eqn Hxin.
@@ -1532,10 +1532,10 @@ Section Node_safe.
   Lemma inst_ef_env :
     forall (n : node) envI env,
       ef_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) envI env ->
-      forall_nprod safe_DS (ss_of_env (idents (n_out n)) env).
+      forall_nprod safe_DS (np_of_env (idents (n_out n)) env).
   Proof.
     intros * He.
-    apply forall_ss_of_env'.
+    apply forall_np_of_env'.
     intros x Hxin.
     unfold ef_env, idents, denot_var in *.
     assert (exists ty, HasType (senv_of_inout (n_in n ++ n_out n)) x ty) as (ty&Hty).
@@ -1560,13 +1560,13 @@ Section Node_safe.
       wc_env (ckins ++ ckouts) ->
       Forall2 (WellInstantiated bck sub) ckouts (List.map (fun '(_, ck) => (ck, None)) a) ->
       Forall2 (WellInstantiated bck sub) ckins ncks ->
-      cl_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_ss (idents (n_in n)) ss) (denot_clock ins envI bs env bck) env' ->
+      cl_env (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_np (idents (n_in n)) ss) (denot_clock ins envI bs env bck) env' ->
       Forall2 (cl_DS ins envI bs env) (List.map fst ncks) (list_of_nprod ss) ->
       Forall2 (fun nc s => match snd nc with
                         | Some x => denot_var ins envI env x = s
                         | None => True
                         end) ncks (list_of_nprod ss) ->
-      Forall2 (cl_DS ins envI bs env) (List.map snd a) (list_of_nprod (ss_of_env (idents (n_out n)) env')).
+      Forall2 (cl_DS ins envI bs env) (List.map snd a) (list_of_nprod (np_of_env (idents (n_out n)) env')).
   Proof.
     clear. unfold cl_env, cl_DS.
     intros * Wci Wcio Hinsto Hinsti Hclo Hcli Ncs.
@@ -1576,7 +1576,7 @@ Section Node_safe.
       (forall ck x ck',
           In (x, ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_out n)) ->
           instck bck sub ck = Some ck' ->
-          denot_clock (idents (n_in n)) (env_of_ss (idents (n_in n)) ss) (denot_clock ins envI bs env bck) env' ck
+          denot_clock (idents (n_in n)) (env_of_np (idents (n_in n)) ss) (denot_clock ins envI bs env bck) env' ck
           = denot_clock ins envI bs env ck') as Hcks.
     { induction ck; intros * Hin Hck.
       - simpl in *. now inv Hck.
@@ -1597,7 +1597,7 @@ Section Node_safe.
     intros d s k ? ? Hk ??; subst.
     rewrite map_length in Hk.
     rewrite list_of_nprod_nth.
-    erewrite nth_ss_of_env with (d:=xH). 2: rewrite map_length; lia.
+    erewrite nth_np_of_env with (d:=xH). 2: rewrite map_length; lia.
     edestruct (nth k (n_out n)) as (x,((ty,ck),i)) eqn:Kth.
     assert (Hin : In (x, (ty, ck, i)) (n_out n)).
     { rewrite <- Kth. apply nth_In. lia. }
@@ -1634,7 +1634,7 @@ Section Node_safe.
                | Some x => denot_var ins envI env x = s
                | None => True
                end) (nclocksof es) (list_of_nprod ss) ->
-      env_correct (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_ss (idents (n_in n)) ss)
+      env_correct (senv_of_inout (n_in n ++ n_out n)) (idents (n_in n)) (env_of_np (idents (n_in n)) ss)
         (denot_clock ins envI bs env bck) 0.
   Proof.
     intros * Hn WTi WIi WCi Wt Wc Sf Ncs; subst.
@@ -1847,7 +1847,7 @@ Section Node_safe.
       generalize (denot_exps G ins es envG envI bs env).
       take (list_sum _ = _) and rewrite it.
       intro ss.
-      specialize (Hnode f (env_of_ss (idents (n_in n)) ss)).
+      specialize (Hnode f (env_of_np (idents (n_in n)) ss)).
       take (find_node f G = _) and rewrite it in *.
       repeat take (Some _ = Some _) and inv it.
       eapply wc_find_node in WCG as (? & WCi & WCio &_); eauto.
@@ -2012,9 +2012,9 @@ Section Node_safe.
           In (x, ck) (List.map (fun '(x, (_, ck, _)) => (x, ck)) (n_out n)) ->
           instck bck sub ck = Some ck' ->
           denot_clock (idents (n_in n))
-            (env_of_ss (idents (n_in n)) ses)
+            (env_of_np (idents (n_in n)) ses)
             (denot_clock ins envI bs env bck)
-            (envG f (env_of_ss (idents (n_in n)) ses)) ck
+            (envG f (env_of_np (idents (n_in n)) ses)) ck
           <= denot_clock ins envI bs env' ck') as Hcks.
     {
       (* TODO: lemme? Simplifier ? *)
@@ -2035,8 +2035,8 @@ Section Node_safe.
         rewrite 2 denot_var_eq, 2 denot_clock_eq; auto.
         (* cas intéressant : mise à jour d'une variable *)
         eapply IHck in Hino as Hck; eauto 1.
-        assert (denot_var (idents (n_in n)) (env_of_ss (idents (n_in n)) ses)
-                  (envG f (env_of_ss (idents (n_in n)) ses)) i
+        assert (denot_var (idents (n_in n)) (env_of_np (idents (n_in n)) ses)
+                  (envG f (env_of_np (idents (n_in n)) ses)) i
                 <= denot_var ins envI env' i0); auto.
         (* maintenant il faut réduire denot_equation, et c'est long... *)
         assert (In i0 xs) as Hxs.
@@ -2054,13 +2054,13 @@ Section Node_safe.
         subst env'. unfold denot_var.
         rewrite denot_equation_eq; unfold denot_var.
         rewrite denot_exps_eq, denot_exps_nil, denot_exp_eq.
-        simpl (env_of_ss _ _).
+        simpl (env_of_np _ _).
         rewrite Hfind, Hi, Hi0.
         unfold eq_rect_r, eq_rect, eq_sym.
         cases; try contradiction.
-        rewrite env_of_ss_eq.
+        rewrite env_of_np_eq.
         setoid_rewrite nth_mem_nth; eauto 2 using NoDup_app_l.
-        rewrite @nprod_app_nth1, (nth_ss_of_env xH), (nth_error_nth _ _ _ kth); auto.
+        rewrite @nprod_app_nth1, (nth_np_of_env xH), (nth_error_nth _ _ _ kth); auto.
     }
     set (envN := envG f _) in *.
     (* TODO: la suite ressemble méchamment à la fin de inst_cl_env *)
@@ -2071,7 +2071,7 @@ Section Node_safe.
     intros d s k ? ? Hk ??; subst.
     rewrite map_length in Hk.
     rewrite list_of_nprod_nth; try lia.
-    erewrite nth_ss_of_env with (d:=xH); try lia.
+    erewrite nth_np_of_env with (d:=xH); try lia.
     edestruct (nth k (n_out n)) as (x,((ty,ck),i)) eqn:Kth.
     assert (Hin : In (x, (ty, ck, i)) (n_out n)).
     { rewrite <- Kth. apply nth_In. lia. }
@@ -2169,7 +2169,7 @@ Section Node_safe.
       apply mem_ident_spec, mem_ident_nth in Hxs as [k kth].
       rewrite denot_equation_eq.
       unfold denot_var. subst ins. setoid_rewrite Hxin.
-      setoid_rewrite env_of_ss_eq.
+      setoid_rewrite env_of_np_eq.
       setoid_rewrite kth.
       simpl (denot_block _ _ _) in Hle.
       (* Il y a deux cas possibles dans wc_equation. Dans les deux cas, on

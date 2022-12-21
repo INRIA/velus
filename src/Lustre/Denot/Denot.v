@@ -39,50 +39,50 @@ Definition SI := fun _ : ident => sampl value.
 Definition FI := fun _ : ident => (DS_prod SI -C-> DS_prod SI).
 
 (** build an environment from a tuple of streams, with names given in [l] *)
-Definition env_of_ss (l : list ident) {n} : nprod n -C-> DS_prod SI :=
+Definition env_of_np (l : list ident) {n} : nprod n -C-> DS_prod SI :=
   Dprodi_DISTR _ _ _
     (fun x => match mem_nth l x with
            | Some n => get_nth n errTy
            | None => CTE _ _ errTy
            end).
 
-Lemma env_of_ss_eq :
+Lemma env_of_np_eq :
   forall l n (ss : nprod n) x,
-    env_of_ss l ss x =
+    env_of_np l ss x =
       match mem_nth l x with
       | Some n => get_nth n errTy ss
       | None => errTy
       end.
 Proof.
-  unfold env_of_ss.
+  unfold env_of_np.
   intros.
   setoid_rewrite Dprodi_DISTR_simpl.
   cases.
 Qed.
 
 (** extract a tuple from an environment  *)
-Definition ss_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
+Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
   induction l as [| x []].
   - apply CTE, errTy.
   - apply (PROJ _ x).
   - apply ((PAIR _ _ @2_ PROJ _ x) IHl).
 Defined.
 
-Lemma env_of_ss_nth :
+Lemma env_of_np_nth :
   forall l n (np : nprod n) k x,
     mem_nth l x = Some k ->
-    env_of_ss l np x = get_nth k errTy np.
+    env_of_np l np x = get_nth k errTy np.
 Proof.
-  unfold env_of_ss.
+  unfold env_of_np.
   intros.
   setoid_rewrite Dprodi_DISTR_simpl.
   cases. now inv H. congruence.
 Qed.
 
-Lemma nth_ss_of_env :
+Lemma nth_np_of_env :
   forall d d' l env k,
     k < length l ->
-    get_nth k d' (ss_of_env l env) = env (nth k l d).
+    get_nth k d' (np_of_env l env) = env (nth k l d).
 Proof.
   induction l as [|? []]; intros * Hl.
   - inv Hl.
@@ -91,24 +91,24 @@ Proof.
     setoid_rewrite IHl; now auto with arith.
 Qed.
 
-Lemma forall_env_of_ss :
+Lemma forall_env_of_np :
   forall (P : DS (sampl value) -> Prop) l {n} (ss : nprod n),
     P errTy ->
     forall_nprod P ss ->
-    forall x, P (env_of_ss l ss x).
+    forall x, P (env_of_np l ss x).
 Proof.
   intros.
-  unfold env_of_ss.
+  unfold env_of_np.
   cbn; cases.
   destruct (Nat.lt_ge_cases n0 n).
   - apply forall_nprod_k; auto.
   - rewrite get_nth_err; auto.
 Qed.
 
-Lemma forall_ss_of_env :
+Lemma forall_np_of_env :
   forall (P : DS (sampl value) -> Prop) l env,
     (forall x, P (env x)) ->
-    forall_nprod P (ss_of_env l env).
+    forall_nprod P (np_of_env l env).
 Proof.
   induction l as [|? []]; intros * Hp; eauto.
   - now simpl.
@@ -119,10 +119,10 @@ Proof.
 Qed.
 
 (* version plus forte mais moins pratique à utiliser *)
-Lemma forall_ss_of_env' :
+Lemma forall_np_of_env' :
   forall (P : DS (sampl value) -> Prop) l env,
     (forall x, In x l -> P (env x)) ->
-    forall_nprod P (ss_of_env l env).
+    forall_nprod P (np_of_env l env).
 Proof.
   induction l as [|? []]; intros * Hp; eauto.
   - now simpl.
@@ -240,8 +240,8 @@ Definition denot_exp_ (ins : list ident)
       + exact (CTE _ _ errTy).
       + exact ((nprod_app @2_ (denot_exp a)) IHes). }
     (* chaînage *)
-    exact ((ss_of_env (idents (n_out n))
-              @_ (f @2_ ID ctx) (env_of_ss (idents (n_in n)) @_ ss))).
+    exact ((np_of_env (idents (n_out n))
+              @_ (f @2_ ID ctx) (env_of_np (idents (n_in n)) @_ ss))).
 Defined.
 
 Definition denot_exp (ins : list ident) (e : exp) :
@@ -338,7 +338,7 @@ Lemma denot_exp_eq :
               match Nat.eq_dec (length an) (length (idents n.(n_out))) with
               | left eqan =>
                   eq_rect_r nprod
-                    (ss_of_env (idents n.(n_out)) (envG f (env_of_ss (idents n.(n_in)) ss)))
+                    (np_of_env (idents n.(n_out)) (envG f (env_of_np (idents n.(n_in)) ss)))
                     eqan
               | _ => nprod_const errTy _
               end
@@ -410,7 +410,7 @@ Proof.
          change (list_rect A B C D) with (denot_exps_ ins D);
          generalize (denot_exps_ ins D); intro (* pour pouvoir détruire E1 et E2 *)
     end.
-    generalize (ss_of_env (idents (n_out n))).
+    generalize (np_of_env (idents (n_out n))).
     unfold eq_rect_r, eq_rect, eq_sym; cases.
 Qed.
 
@@ -442,7 +442,7 @@ Definition denot_equation (ins : list ident) (e : equation) :
   (* si x est une entrée *)
   exact (PROJ (DS_fam SI) x @_ SND _ _ @_ FST _ _ @_ FST _ _).
   (* sinon on le prend dans les ss *)
-  exact (PROJ (DS_fam SI) x @_ env_of_ss xs @_ ss).
+  exact (PROJ (DS_fam SI) x @_ env_of_np xs @_ ss).
 Defined.
 
 Section Equation_spec.
@@ -450,7 +450,7 @@ Section Equation_spec.
 Lemma denot_equation_eq :
   forall ins xs es envG envI bs env x,
     denot_equation ins (xs,es) envG envI bs env x
-    = denot_var ins envI (env_of_ss xs (denot_exps ins es envG envI bs env)) x.
+    = denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)) x.
 Proof.
   intros.
   unfold denot_equation, denot_var.
