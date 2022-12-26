@@ -269,6 +269,14 @@ Module Type LCLOCKING
     inversion 1; auto.
   Qed.
 
+  Lemma wc_global_uncons {PSyn prefs} :
+    forall tys (nd : @node PSyn prefs) nds exts,
+      wc_global (Global tys exts (nd :: nds)) ->
+      wc_node (Global tys exts nds) nd.
+  Proof.
+    intros * Wc. now inversion Wc.
+  Qed.
+
   Global Instance wc_exp_Proper {PSyn prefs}:
     Proper (@eq (@global PSyn prefs) ==> @Permutation _
                 ==> @eq exp ==> iff)
