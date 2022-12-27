@@ -296,6 +296,13 @@ Proof.
   now rewrite <- PROJ_simpl, <- Heq, PROJ_simpl.
 Qed.
 
+Global Add Parametric Morphism I SI : all_infinite
+    with signature @Oeq (@DS_prod I SI) ==> iff
+      as all_inf_morph.
+Proof.
+  split; intros; eapply all_infinite_Oeq_compat; eauto.
+Qed.
+
 Lemma bot_not_cons :
   forall D (x : D) s, 0 == cons x s -> False.
 Proof.
