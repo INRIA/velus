@@ -106,6 +106,19 @@ Section Stream_DS.
     split; eauto.
   Qed.
 
+  Lemma S_of_DS_cons :
+    forall u U Inf,
+      S_of_DS (Cpo_streams_type.cons u U) Inf
+        ≡ f u ⋅ (S_of_DS U (cons_infinite _ _ _ Inf)).
+  Proof.
+    intros.
+    destruct Inf as [Hc Inf].
+    constructor; simpl; destruct (uncons Hc) as (u' & U' & Hu);
+      apply decompCon_eq in Hu; inv Hu; auto.
+    apply _S_of_DS_eq.
+    now rewrite rem_cons.
+  Qed.
+
   Lemma const_DS_const :
     forall v Hi, const (f v) ≡ S_of_DS (DS_const v) Hi.
   Proof.
@@ -124,7 +137,64 @@ Section Stream_DS.
     now rewrite <- Eqx, (ex_proj2 (S_of_DS_eq _ _ _ (symmetry Heq))).
   Qed.
 
+
+  (** The other way is simpler *)
+
+  CoFixpoint DS_of_S (s : Stream A) : DS A :=
+    match s with
+    | Streams.Cons a s => CONS a (DS_of_S s)
+    end.
+
+  Global Add Parametric Morphism : DS_of_S
+         with signature @EqSt A ==> @Oeq (DS A)
+           as DS_of_S_morph.
+  Proof.
+    clear; intros.
+    apply DS_bisimulation_allin1
+      with (R := fun U V => exists x y, x ≡ y
+                                /\ U == DS_of_S x
+                                /\ V == DS_of_S y).
+    3: eauto 5.
+    { clear.
+      intros * (x & y & Hxy & Hu & Hv) Eq1 Eq2.
+      exists x,y. eauto. }
+    clear.
+    intros U V Hc ([] & [] & Hxy & Hu & Hv).
+    rewrite DS_inv in Hu, Hv; simpl in *.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    inv Hxy; simpl in *; subst.
+    rewrite 2 first_cons, 2 rem_cons.
+    split; auto; eauto.
+  Qed.
+
 End Stream_DS.
+
+Lemma DS_of_S_of_DS :
+  forall A (s : DS A) H,
+    DS_of_S (S_of_DS id s H) == s.
+Proof.
+  clear; intros.
+  apply DS_bisimulation_allin1
+    with (R := fun U V => exists H, U == DS_of_S (S_of_DS id V H)); eauto 2.
+  { intros * [Inf Eq1] Eq2 Eq3.
+    exists (proj1 (infinite_morph Eq3) Inf).
+    rewrite <- Eq2, Eq1.
+    apply DS_of_S_morph, _S_of_DS_eq, Eq3. }
+  clear.
+  intros U V Hc (Inf & Hu).
+  apply infinite_decomp in Inf as HH.
+  destruct HH as (v & V' & Hv & Inf').
+  destruct (S_of_DS_eq id V Inf _ Hv) as [Inf2 Hsv].
+  rewrite Hsv, S_of_DS_cons in Hu.
+  setoid_rewrite Hu.
+  rewrite (DS_inv (DS_of_S _)); simpl.
+  split. { now rewrite Hv, 2 first_cons. }
+  rewrite rem_cons.
+  exists (rem_infinite _ _ Inf).
+  apply DS_of_S_morph, _S_of_DS_eq.
+  now rewrite Hv, rem_cons.
+Qed.
 
 (** ** Expressing safety properties *)
 Section DS_Forall.
