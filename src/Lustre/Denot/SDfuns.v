@@ -71,6 +71,19 @@ Section Abstract_clock.
     | x :: ins => (ZIP orb @2_ (AC @_ PROJ _ x)) (bss ins)
     end.
 
+  Lemma bss_cons :
+    forall {I} x (l : list I) env,
+      bss (x :: l) env == ZIP orb (AC (env x)) (bss l env).
+  Proof.
+    clear.
+    destruct l; simpl; auto.
+    intro env.
+    autorewrite with cpodb.
+    rewrite zip_comm, zip_const; auto using Bool.orb_comm.
+    unfold AC.
+    now rewrite 3 MAP_map, map_comp.
+  Qed.
+
   Lemma bss_cons2 :
     forall {I} x y (l : list I) env,
       bss (x :: y :: l) env = ZIP orb (AC (env x)) (bss (y :: l) env).
