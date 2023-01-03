@@ -663,10 +663,7 @@ Module Type LCLOCKCORRECTNESS
         | Sckscope : forall Γ Hi Hi' bs locs blks,
             dom Hi' (senv_of_locs locs) ->
 
-            (forall x ty ck cx e0 clx,
-                In (x, (ty, ck, cx, Some (e0, clx))) locs ->
-                exists vs0 vs1 vs,
-                  sem_exp G (Hi + Hi') bs e0 [vs0] /\ sem_var Hi' (Var x) vs1 /\ fby vs0 vs1 vs /\ sem_var Hi' (Last x) vs) ->
+            Forall (sem_last_decl (sem_exp G) Hi Hi' bs) locs ->
 
             sem_block (Γ ++ senv_of_locs locs) (Hi + Hi') blks ->
 
@@ -1176,12 +1173,12 @@ Module Type LCLOCKCORRECTNESS
 
         + (* lasts *)
           inv Hca. inv Hck. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv Hin0.
-          simpl_Forall.
-          edestruct H11 as (?&?&?&He&Hv1&Hfby&Hv2); eauto.
-          eapply sem_var_refines, sem_var_det in Hv2; [|apply Hv|apply FEnv.union_refines4']; eauto using EqStrel_Reflexive. rewrite Hv2.
-          { eapply sc_exp' with (Γ:=Γ++senv_of_locs locs) (k:=0) in He; eauto with lclocking; simpl in *.
-            - take (clockof e = _) and setoid_rewrite it in He; simpl in He.
-              apply ac_fby1 in Hfby. now rewrite <-Hfby.
+          simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it.
+          take (sem_var Hi' (Last x) _) and eapply sem_var_refines, sem_var_det in it;
+            [|apply Hv|apply FEnv.union_refines4']; eauto using EqStrel_Reflexive. rewrite it.
+          { take (sem_exp _ _ _ _ _) and eapply sc_exp' with (Γ:=Γ++senv_of_locs locs) (k:=0) in it; eauto with lclocking; simpl in *.
+            - take (clockof e = _) and setoid_rewrite it in it1; simpl in *.
+              take (fby _ _ _) and apply ac_fby1 in it. now rewrite <-it.
             - apply NoDupScope_NoDupMembers; auto.
             - rewrite <-length_clockof_numstreams, H0; auto.
             - intros ? Hfree. edestruct Is_free_left_In_snd; eauto.
@@ -2204,7 +2201,7 @@ Module Type LCLOCKCORRECTNESS
             P_wc Γck blk ->
             P_blk1 Γ' Hi blk ->
             P_blk2 Hi blk) ->
-        sem_scope_ck (fun Hi => sem_exp_ck G Hi bs) P_blk2 Hi bs (Scope locs blk).
+        sem_scope_ck (sem_exp_ck G) P_blk2 Hi bs (Scope locs blk).
     Proof.
       intros * Hnd1 Hnd2 Hnd3 Hnd4 Hincl1 HenvP Hdom Hsc Hwt Hwenv Hwenv' Hwc Hsem Hind;
         inv Hnd4; inv Hwt; inv Hwc; inv Hsem.
@@ -2234,8 +2231,8 @@ Module Type LCLOCKCORRECTNESS
         intros ?; rewrite IsVar_fst; eauto. }
 
       eapply Sscope; eauto.
-      - intros. edestruct H10; destruct_conjs; eauto.
-        do 3 esplit. repeat split; eauto using sem_var_refines. simpl_Forall.
+      - simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
+        simpl in *. destruct_conjs.
         eapply sem_exp_sem_exp_ck with (Γ:=Γck ++ _); eauto.
         clear - Hnd3. rewrite idcaus_of_senv_app. solve_NoDup_app.
       - eapply Hind with (Γ':=Γ'++senv_of_locs locs) (Γty:=Γty++_); eauto.

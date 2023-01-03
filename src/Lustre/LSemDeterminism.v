@@ -1411,14 +1411,8 @@ Module Type LSEMDETERMINISM
           dom Hi1' (senv_of_locs locs) ->
           dom Hi2' (senv_of_locs locs) ->
 
-          (forall x ty ck cx e0 clx,
-              In (x, (ty, ck, cx, Some (e0, clx))) locs ->
-              exists vs0 vs1 vs,
-                sem_exp G (Hi1 + Hi1') bs1 e0 [vs0] /\ sem_var Hi1' (Var x) vs1 /\ fby vs0 vs1 vs /\ sem_var Hi1' (Last x) vs) ->
-          (forall x ty ck cx e0 clx,
-              In (x, (ty, ck, cx, Some (e0, clx))) locs ->
-              exists vs0 vs1 vs,
-                sem_exp G (Hi2 + Hi2') bs2 e0 [vs0] /\ sem_var Hi2' (Var x) vs1 /\ fby vs0 vs1 vs /\ sem_var Hi2' (Last x) vs) ->
+          Forall (sem_last_decl (sem_exp G) Hi1 Hi1' bs1) locs ->
+          Forall (sem_last_decl (sem_exp G) Hi2 Hi2' bs2) locs ->
 
           sem_block (Hi1 + Hi1') (Hi2 + Hi2') blks ->
 
@@ -1562,8 +1556,8 @@ Module Type LSEMDETERMINISM
 
     Lemma sem_scope_det_0 {A} P_blk1 P_blk2 (P_blk3: _ -> _ -> _ -> Prop) :
       forall locs (blks: A) Hi1 Hi2 bs1 bs2,
-        sem_scope (fun Hi1 e => sem_exp G Hi1 bs1 e) P_blk1 Hi1 bs1 (Scope locs blks) ->
-        sem_scope (fun Hi2 e => sem_exp G Hi2 bs2 e) P_blk2 Hi2 bs2 (Scope locs blks) ->
+        sem_scope (sem_exp G) P_blk1 Hi1 bs1 (Scope locs blks) ->
+        sem_scope (sem_exp G) P_blk2 Hi2 bs2 (Scope locs blks) ->
         (forall Hi1 Hi2, P_blk1 Hi1 blks -> P_blk2 Hi2 blks -> P_blk3 Hi1 Hi2 blks) ->
         sem_scope_det P_blk3 0 [] Hi1 Hi2 bs1 bs2 (Scope locs blks).
     Proof.
@@ -2063,8 +2057,9 @@ Module Type LSEMDETERMINISM
           1:{ exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
           eapply HasLastCaus_snd_det in Hca; eauto; subst. 2:solve_NoDup_app.
           inv Hca'; simpl_In; simpl_Forall.
-          edestruct H11 as (?&?&?&He1&Hvi1&?&Hvl1); eauto. edestruct H12 as (?&?&?&He2&Hvi2&?&Hvl2); eauto.
-          eapply sem_var_det in Hv1; eauto. eapply sem_var_det in Hv2; eauto. rewrite <-Hv1, <-Hv2.
+          repeat (take (sem_last_decl _ _ _ _ _) and inv it).
+          take (sem_var Hi1' (Last i) vs1) and eapply sem_var_det in it; eauto. rewrite <-it.
+          take (sem_var Hi2' (Last i) vs2) and eapply sem_var_det in it; eauto. rewrite <-it.
           assert (forall x cx : ident,
                      HasCaus (Γ ++ senv_of_locs locs) x cx \/ HasLastCaus (Γ ++ senv_of_locs locs) x cx ->
                      det_var_inv (Γ ++ senv_of_locs locs) n (Hi1 + Hi1') (Hi2 + Hi2') cx) as Hdetl.
@@ -2072,8 +2067,8 @@ Module Type LSEMDETERMINISM
             intros ??. eapply Forall_forall in H18; eauto. 2:apply idcaus_of_senv_In; eauto. auto.
           }
           eapply fby_det_Sn; eauto.
-          * eapply det_exp_S with (Γ:=Γ++senv_of_locs locs) (k:=0) in He1; eauto with lcaus.
-            specialize (He1 He2); simpl in *; auto.
+          * take (sem_exp _ _ bs1 _ _) and eapply det_exp_S with (Γ:=Γ++senv_of_locs locs) (k:=0) in it; eauto with lcaus.
+            specialize (it H14); simpl in *; auto.
             1:{ rewrite <-length_typeof_numstreams, H0; simpl. lia. }
             1:{ intros * Hfree Hdep. eapply det_var_inv_local; eauto.
                 + intros. eapply HSn; eauto.

@@ -1917,7 +1917,7 @@ Module Type CORRECTNESS
                + exfalso. inv In. simpl_In. simpl_Forall. subst. simpl in *. congruence.
                + inv In. simpl_In. congruence.
            }
-          * intros * Hin. apply in_app_iff in Hin as [|]. simpl_Forall; congruence. simpl_In.
+          * apply Forall_app; split; simpl_Forall; subst; constructor.
           * eapply sc_vars_morph, sc_vars_incl; [reflexivity| |reflexivity| |eauto].
             now symmetry.
             solve_incl_app.
@@ -2623,7 +2623,7 @@ Module Type CORRECTNESS
                + exfalso. inv In. simpl_In. simpl_Forall. subst. simpl in *. congruence.
                + inv In. simpl_In. congruence.
            }
-          * intros * Hin. apply in_app_iff in Hin as [|]. simpl_Forall; congruence. simpl_In.
+          * apply Forall_app; split; simpl_Forall; subst; constructor.
           * eapply sc_vars_morph, sc_vars_incl; [reflexivity| |reflexivity| |eauto].
             symmetry; auto.
             solve_incl_app.

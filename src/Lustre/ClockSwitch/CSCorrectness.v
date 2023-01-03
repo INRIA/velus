@@ -369,7 +369,7 @@ Module Type CSCORRECTNESS
         GoodLocalsScope P_good auto_prefs (Scope locs blk) ->
         wt_scope P_wt G1 Γty (Scope locs blk) ->
         wc_scope P_wc G1 Γck (Scope locs blk) ->
-        sem_scope_ck (fun Hi => sem_exp_ck G1 Hi bs) P_sem1 Hi bs (Scope locs blk) ->
+        sem_scope_ck (sem_exp_ck G1) P_sem1 Hi bs (Scope locs blk) ->
         switch_scope f_switch Γck bck sub (Scope locs blk) st = (s', st') ->
         (forall Γty Γck Hi Hi' blk' st st',
             (forall x, ~IsLast Γty x) ->
@@ -395,7 +395,7 @@ Module Type CSCORRECTNESS
             P_sem1 Hi blk ->
             f_switch Γck blk st = (blk', st') ->
             P_sem2 Hi' blk') ->
-        sem_scope_ck (fun Hi => sem_exp_ck G2 Hi bs') P_sem2 Hi' bs' s'.
+        sem_scope_ck (sem_exp_ck G2) P_sem2 Hi' bs' s'.
     Proof.
       intros * Hnl1 Hnl2 Hsubin Hsubat Hsub Hnsub Hincl Hnd1 Hnd2 Hat Hdomub Hdomlb Hsc Hdomub1 Hbck Hnl3 Hnd3 Hgood Hwt Hwc Hsem Hmmap Hind;
         inv Hnl3; inv Hnd3; inv Hgood; inv Hwt; inv Hwc; inv Hsem; simpl in *; repeat inv_bind.
@@ -436,7 +436,7 @@ Module Type CSCORRECTNESS
       eapply Sscope with (Hi':=Hi'0); eauto.
       - destruct H8 as (D1&D2). split; intros ?; [rewrite D1|rewrite D2].
         1,2:clear - x0; split; intros In; inv In; simpl_In; econstructor; solve_In; simpl; auto.
-      - intros * Hin. simpl_In. simpl_Forall. congruence.
+      - simpl_Forall. subst; constructor.
       - split; intros * Hck. intros Hv.
         2:{ intros Hca. inv Hca. simpl_In. simpl_Forall. subst; simpl in *. congruence. }
         inv Hck; simpl_In. take (sc_vars (senv_of_locs locs) _ _) and destruct it as (Hsc1&_); simpl in *.
@@ -605,7 +605,7 @@ Module Type CSCORRECTNESS
         + intros. rewrite FEnv.union_In, senv_of_locs_app, IsLast_app.
           split; [intros [In|In]|intros [In|In]]. 3,4:clear - In; inv In; simpl_In; congruence.
           1,2:exfalso. eapply Hdoml1; eauto. eapply Hdoml2; eauto.
-        + intros * Hin. apply in_app_iff in Hin as [|]; simpl_In; congruence.
+        + apply Forall_app; split; simpl_Forall. 2:simpl_In. 1,2:constructor.
         + simpl_app. apply sc_vars_app.
           * intros * Hinm1 Hinm2. rewrite fst_InMembers in Hinm1, Hinm2.
             specialize (st_valid_NoDup x2) as Hvalid'.

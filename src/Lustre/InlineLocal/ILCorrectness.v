@@ -694,8 +694,8 @@ Module Type ILCORRECTNESS
                1,2:right; clear - H3; inv H3; econstructor; solve_In; auto.
                clear - H0. split; right; inv H0; econstructor; unfold st_senv, senv_of_tyck; solve_In; auto.
            }
-          * intros * Hin. apply in_app_iff in Hin as [Hin|]; simpl_In.
-            apply inlinelocal_topblock_nolast in Hil; auto. 2:apply n_syn. simpl_Forall; congruence.
+          * apply Forall_app; split; simpl_Forall; simpl_In; [|constructor].
+            apply inlinelocal_topblock_nolast in Hil; auto. 2:apply n_syn. simpl_Forall; subst; constructor.
           * eapply sc_vars_morph. 1,3:reflexivity. eauto.
             eapply sc_vars_incl; [|eauto]. unfold st_senv, senv_of_locs, senv_of_tyck. repeat solve_incl_app.
             erewrite map_map, map_ext; [reflexivity|]. intros; destruct_conjs; auto.

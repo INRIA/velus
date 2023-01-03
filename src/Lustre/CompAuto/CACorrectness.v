@@ -472,8 +472,7 @@ Module Type CACORRECTNESS
           * split; [intros Hin|intros Hlast; inv Hlast]; simpl in *.
             destruct Hin as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq.
             destruct H22 as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq; simpl in *; congruence.
-        + intros * Hin. exfalso. simpl in *.
-          repeat (take (_ \/ _) and destruct it); auto; inv_equalities; simpl in *; congruence.
+        + repeat constructor.
         + split; intros * Hcka.
           2:{ intros Hla. inv Hla; simpl_In.
               take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
@@ -637,7 +636,7 @@ Module Type CACORRECTNESS
                  }
 
                  eapply Sscope with (Hi':=Hi'). 4:constructor. all:eauto.
-                 * intros * Hin. simpl_Forall. congruence.
+                 * simpl_Forall; subst; constructor.
                  * subst; eauto.
                  *{ eapply sem_transitions_refines, sem_transitions_restrict with (Γ:=((x1, default_ann)::(x3, default_ann)::(x5, default_ann)::(x7, default_ann)::Γ' ++ senv_of_locs l)) in H47; eauto.
                     2:{ simpl_Forall. eapply wx_exp_incl. 3:eauto with lclocking.
@@ -733,8 +732,7 @@ Module Type CACORRECTNESS
           * split; [intros Hin|intros Hlast; inv Hlast]; simpl in *.
             destruct Hin as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq.
             destruct H25 as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq; simpl in *; congruence.
-        + intros * Hin. exfalso. simpl in *.
-          repeat (take (_ \/ _) and destruct it); auto; inv_equalities; simpl in *; congruence.
+        + repeat constructor.
         + split; intros * Hcka.
           2:{ intros Hla. inv Hla; simpl_In.
               take (_ \/ _ \/ _) and destruct it as [He|[He|[He|[He|He]]]]; inv He; simpl in *; congruence. }
@@ -971,7 +969,7 @@ Module Type CACORRECTNESS
                  }
 
                  eapply Sscope with (Hi':=Hi'); eauto.
-                 * intros * Hin. simpl_Forall. congruence.
+                 * simpl_Forall; subst; constructor.
                  * subst. eauto.
                  *{ auto_block_simpl_Forall.
                     eapply sem_block_refines, H
@@ -1004,7 +1002,7 @@ Module Type CACORRECTNESS
       - (* local *)
         repeat inv_scope.
         do 2 econstructor; eauto.
-        1:{ intros. simpl_Forall. congruence. }
+        1:simpl_Forall; subst; constructor.
         auto_block_simpl_Forall.
         assert (forall x, ~ IsLast (senv_of_locs locs) x) as Hnl'.
         { intros * Hlast. inv Hlast. simpl_In; simpl_Forall. subst; simpl in *; congruence. }

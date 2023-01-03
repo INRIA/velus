@@ -196,7 +196,7 @@ Module Type DLCORRECTNESS
         dom_ub Hi2 (Γty ++ st_senv st) ->
         wc_scope P_wc G1 Γck (Scope locs blk) ->
         wt_scope P_wt G1 Γty (Scope locs blk) ->
-        sem_scope_ck (fun Hi => sem_exp_ck G1 Hi bs) P_sem1 Hi bs (Scope locs blk) ->
+        sem_scope_ck (sem_exp_ck G1) P_sem1 Hi bs (Scope locs blk) ->
         delast_scope f_dl f_add sub (Scope locs blk) st = (s', st') ->
         (forall sub Γck Γty blk' st st' Hi Hi2,
             (forall x vs, sem_var Hi (Var x) vs -> sem_var Hi2 (Var x) vs) ->
@@ -220,7 +220,7 @@ Module Type DLCORRECTNESS
             Forall (sem_block_ck G2 Hi bs) blks1 ->
             P_sem2 Hi blks2 ->
             P_sem2 Hi (f_add blks1 blks2)) ->
-        sem_scope_ck (fun Hi => sem_exp_ck G2 Hi bs) P_sem2 Hi2 bs s'.
+        sem_scope_ck (sem_exp_ck G2) P_sem2 Hi2 bs s'.
     Proof.
       intros * Hvar Hvarl Hsubin1 Hsubin2 Hsubin3 Hinj Hincl Hnd2 Hat Hgood Hub1 (* Hlb1 *) Hub2 (* Hlb2 *) Hwc Hwt (* Hsc *) Hsem Hdl Hind Hadd;
         inv Hnd2; inv Hgood; inv Hwc; inv Hwt; inv Hsem; repeat inv_bind; simpl.
@@ -335,7 +335,7 @@ Module Type DLCORRECTNESS
         + rewrite FEnv.union_In, FEnv.of_list_In.
           unfold senv_of_locs. repeat rewrite map_app. repeat rewrite IsLast_app.
           split; [intros [Hin|Hin]; [left|right]|intros [Hin|Hin]; [left|right]]; try inv Hin; simpl_In; congruence.
-      - intros * Hin. apply in_app_iff in Hin as [|]; simpl_In.
+      - apply Forall_app; split; simpl_Forall. 1,2:constructor.
       - take (sc_vars (senv_of_locs _) _ _) and destruct it as (Hsc1&Hsc2).
         split; intros * Hck; inv Hck; simpl_In; rewrite in_app_iff in *;
           destruct Hin as [Hin|Hin]; simpl_In;
@@ -366,7 +366,7 @@ Module Type DLCORRECTNESS
         eapply fresh_idents_In'_rename in H as (?&?); subst; [| |eauto]. simpl_In.
         2:{ apply NoDupMembers_map_filter; auto.
             intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
-        edestruct H12 as (vs0&vs1&vs&He&Hv&Hfby&Hvl); eauto.
+        simpl_Forall. inversion_clear H12 as [|????????? He Hv Hfby Hvl].
         eapply Seq with (ss:=[[vs]]); simpl; repeat constructor.
         + eapply Sfby with (s0ss:=[[vs0]]) (sss:=[[vs1]]); simpl.
           1-3:repeat constructor; simpl; eauto.
