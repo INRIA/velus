@@ -485,6 +485,29 @@ Proof.
   now rewrite DS_const_eq, rem_cons at 1.
 Qed.
 
+Global Add Parametric Morphism A B : (@MAP A B)
+    with signature (respectful eq eq) ==> @Oeq (DS A) ==> @Oeq (DS B)
+      as MAP_morph.
+Proof.
+  intros f g Hfg ?? ->.
+  eapply DS_bisimulation_allin1
+    with (R := fun U V => exists xs,
+                   U == MAP f xs
+                   /\ V == MAP g xs).
+  3: eauto.
+  { intros ????(?&?&?&?)??. eauto. }
+  intros U V Hc (xs & Hu & Hv).
+  assert (is_cons xs) as Hcx.
+  { rewrite Hu, Hv in Hc.
+    destruct Hc as [?%map_is_cons|?%map_is_cons]; tauto. }
+  apply is_cons_elim in Hcx as (vx & xs' & Hx).
+  rewrite Hx in Hu, Hv.
+  rewrite MAP_map, map_eq_cons in Hu, Hv.
+  setoid_rewrite Hu.
+  setoid_rewrite Hv.
+  erewrite 2 first_cons, 2 rem_cons, Hfg; eauto.
+Qed.
+
 Lemma DSle_cons :
   forall D x (xs : DS D) y ys,
     cons x xs <= cons y ys -> xs <= ys.
@@ -1024,6 +1047,34 @@ Section Zip.
     - now rewrite Ht.
     - eapply Cof with (U := U') (V := V'); auto.
       now rewrite Ht, rem_cons.
+  Qed.
+
+  Lemma zip_const :
+    forall a V,
+      ZIP (DS_const a) V == MAP (bop a) V.
+  Proof.
+    intros.
+    eapply DS_bisimulation_allin1 with
+      (R := fun U V => exists xs,
+                U == ZIP (DS_const a) xs
+                /\ V == MAP (bop a) xs).
+    3: eauto.
+    - intros ????(?&?&?&?)??. repeat esplit; eauto.
+    - clear. intros U V Hc (xs & Hu & Hv).
+      assert (is_cons xs) as Hcx.
+      { rewrite Hu, Hv in Hc.
+        destruct Hc as [Hc|Hc].
+        + apply zip_is_cons in Hc; tauto.
+        + apply map_is_cons in Hc; tauto. }
+      apply is_cons_elim in Hcx as (vx & xs' & Hx).
+      rewrite Hx in Hu, Hv.
+      rewrite MAP_map, map_eq_cons in Hv.
+      rewrite DS_const_eq, zip_eq in Hu.
+      setoid_rewrite Hu.
+      setoid_rewrite Hv.
+      split.
+      + autorewrite with cpodb; auto.
+      + exists xs'. rewrite 2 rem_cons; auto.
   Qed.
 
 End Zip.
