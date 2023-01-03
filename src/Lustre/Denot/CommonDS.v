@@ -168,6 +168,22 @@ Section Stream_DS.
     split; auto; eauto.
   Qed.
 
+  Lemma DS_of_S_const :
+    forall (c : A),
+      DS_of_S (Streams.const c) == DS_const c.
+  Proof.
+    split; revert_all; cofix H; intros.
+    - rewrite (unfold_Stream (Streams.const c)), (DS_inv (DS_of_S _)); simpl.
+      rewrite DS_const_eq.
+      econstructor; eauto using decompCon.
+      eapply H; eauto.
+    - rewrite (unfold_Stream (Streams.const c)), (DS_inv (DS_of_S _)); simpl.
+      rewrite DS_const_eq.
+      econstructor; eauto using decompCon.
+      eapply H; eauto.
+  Qed.
+
+
 End Stream_DS.
 
 Lemma DS_of_S_of_DS :
