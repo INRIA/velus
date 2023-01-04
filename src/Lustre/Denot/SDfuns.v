@@ -105,6 +105,19 @@ Section Abstract_clock.
       apply infinite_map, Hinf.
   Qed.
 
+  Lemma bss_switch_env :
+    forall {I} (l : list I) env env',
+      (forall x, In x l -> env x == env' x) ->
+      bss l env == bss l env'.
+  Proof.
+    clear.
+    induction l as [|x []]; intros * Heq; auto.
+    - simpl; autorewrite with cpodb.
+      rewrite (Heq x); simpl; auto.
+    - simpl; autorewrite with cpodb.
+      rewrite (Heq x), IHl; simpl in *; eauto.
+  Qed.
+
 End Abstract_clock.
 
 
