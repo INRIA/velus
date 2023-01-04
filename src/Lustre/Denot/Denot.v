@@ -60,6 +60,18 @@ Proof.
   cases.
 Qed.
 
+Lemma env_of_np_skip :
+  forall l n (np : nprod (S n)) x y,
+    x <> y ->
+    env_of_np (y :: l) np x == env_of_np l (nprod_skip np) x.
+Proof.
+  clear.
+  intros.
+  rewrite 2 env_of_np_eq; simpl.
+  destruct (ident_eq_dec x y); try congruence.
+  destruct (mem_nth l x); auto.
+Qed.
+
 (** extract a tuple from an environment  *)
 Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
   induction l as [| x []].
