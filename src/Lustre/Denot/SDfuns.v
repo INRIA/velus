@@ -99,10 +99,10 @@ Section Abstract_clock.
     induction l as [|?[]]; simpl; intros * Hinf.
     - apply DS_const_inf.
     - autorewrite with cpodb.
-      apply infinite_map, Hinf.
+      apply map_inf, Hinf.
     - autorewrite with cpodb.
       apply zip_inf; auto.
-      apply infinite_map, Hinf.
+      apply map_inf, Hinf.
   Qed.
 
   Lemma bss_switch_env :

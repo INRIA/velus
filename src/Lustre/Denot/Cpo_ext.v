@@ -663,7 +663,7 @@ Proof.
     now repeat rewrite ?map_eq_cons, ?rem_cons.
 Qed.
 
-Lemma infinite_map :
+Lemma map_inf :
   forall A B (f : A -> B) xs,
     infinite xs ->
     infinite (map f xs).
