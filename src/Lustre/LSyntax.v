@@ -1625,6 +1625,24 @@ Module Type LSYNTAX
     apply n_nodup.
   Qed.
 
+  Lemma node_NoDup_in {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDup (idents (n_in n)).
+  Proof.
+    intros n.
+    eapply NoDup_app_l.
+    setoid_rewrite <- map_app.
+    apply node_NoDup.
+  Qed.
+
+  Lemma node_NoDup_out {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDup (idents (n_out n)).
+  Proof.
+    intros n.
+    eapply NoDup_app_r.
+    setoid_rewrite <- map_app.
+    apply node_NoDup.
+  Qed.
+
   Lemma not_in_out {PSyn prefs} :
     forall (n : @node PSyn prefs) x,
       In x (List.map fst (n_in n)) ->
