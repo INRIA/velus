@@ -183,6 +183,13 @@ Section Stream_DS.
       eapply H; eauto.
   Qed.
 
+  Lemma DS_of_S_inf : forall s, infinite (DS_of_S s).
+    cofix Cof.
+    destruct s; constructor.
+    - rewrite DS_inv; simpl; auto.
+    - rewrite (DS_inv (DS_of_S (a ⋅ s))); simpl.
+      rewrite rem_cons; apply Cof.
+  Qed.
 
 End Stream_DS.
 
