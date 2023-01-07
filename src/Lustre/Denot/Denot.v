@@ -72,6 +72,20 @@ Proof.
   destruct (mem_nth l x); auto.
 Qed.
 
+Lemma env_of_np_inf :
+  forall l n (np : nprod n),
+    forall_nprod (@infinite _) np ->
+    all_infinite (env_of_np l np).
+Proof.
+  clear.
+  unfold env_of_np.
+  intros * ??.
+  setoid_rewrite Dprodi_DISTR_simpl.
+  cases_eqn HH.
+  - apply forall_nprod_k_def; auto. apply DS_const_inf.
+  - apply DS_const_inf.
+Qed.
+
 (** extract a tuple from an environment  *)
 Definition np_of_env (l : list ident) : DS_prod SI -C-> @nprod (DS (sampl value)) (length l).
   induction l as [| x []].
@@ -444,6 +458,27 @@ Proof.
   intros; cases.
 Qed.
 
+Lemma denot_var_inf :
+  forall ins envI env x,
+    all_infinite envI ->
+    all_infinite env ->
+    infinite (denot_var ins envI env x).
+Proof.
+  unfold denot_var.
+  intros; cases; eauto.
+Qed.
+
+Lemma denot_var_nins :
+  forall ins envI env x,
+    ~ In x ins ->
+    denot_var ins envI env x = env x.
+Proof.
+  unfold denot_var.
+  intros.
+  destruct (mem_ident x ins) eqn:Hmem; auto.
+  now apply mem_ident_spec in Hmem.
+Qed.
+
 Definition denot_equation (ins : list ident) (e : equation) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
   destruct e as (xs,es).
@@ -459,6 +494,20 @@ Defined.
 
 Section Equation_spec.
 
+Lemma denot_equation_Oeq :
+  forall ins xs es envG envI bs env,
+    denot_equation ins (xs,es) envG envI bs env
+    == denot_var ins envI (env_of_np xs (denot_exps ins es envG envI bs env)).
+Proof.
+  intros.
+  apply Oprodi_eq_intro; intro x.
+  unfold denot_equation, denot_var.
+  Local Hint Rewrite (Dprodi_DISTR_simpl _ (DS_fam SI)) : cpodb.
+  autorewrite with cpodb using (simpl (snd _); simpl (fst _)).
+  cases.
+Qed.
+
+(* parfois plut utile car c'est une égalité *)
 Lemma denot_equation_eq :
   forall ins xs es envG envI bs env x,
     denot_equation ins (xs,es) envG envI bs env x
