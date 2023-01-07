@@ -80,6 +80,16 @@ Module Type COINDSTREAMS
     apply eqst_ntheq; auto.
   Qed.
 
+  Add Parametric Morphism A B C (f : A -> B -> C) : (zipWith f)
+      with signature @EqSt A ==> @EqSt B ==> @EqSt C
+        as zipWith_EqSt.
+  Proof.
+    cofix Cof.
+    intros [] [] Eq1 [] [] Eq2.
+    inv Eq1. inv Eq2. simpl in *.
+    constructor; simpl; auto; congruence.
+  Qed.
+
   Section EqSts.
     Context {A: Type}.
 
@@ -253,6 +263,14 @@ Module Type COINDSTREAMS
         as length_EqSt.
   Proof.
     induction x; inversion_clear 1; simpl; auto.
+  Qed.
+
+  Add Parametric Morphism A : (@repeat (Stream A))
+      with signature (@EqSt A) ==> (@eq nat) ==> (@EqSts A)
+        as repeat_EqSt.
+  Proof.
+    intros * Heq n.
+    induction n; simpl; constructor; eauto.
   Qed.
 
   (* TODO: generalize *)
@@ -1534,7 +1552,7 @@ Module Type COINDSTREAMS
 
   Add Parametric Morphism : sem_var
     with signature FEnv.Equiv (@EqSt _) ==> @eq ident ==> @EqSt svalue ==> Basics.impl
-      as sem_var_morph.
+      as sem_var_EqSt.
   Proof.
     intros H H' ? x xs xs' Heq; subst.
     intros Hsem; inv Hsem.
@@ -1739,6 +1757,12 @@ Module Type COINDSTREAMS
       reflexivity.
   Qed.
 
+  Lemma clocks_of_nil : clocks_of [] ≡ Streams.const false.
+  Proof.
+    cofix H.
+    constructor; auto.
+  Qed.
+
   (** ** abstract_clock and some properties *)
 
   CoFixpoint abstract_clock {A} (xs: Stream (synchronous A)) : Stream bool:=
@@ -1777,6 +1801,30 @@ Module Type COINDSTREAMS
     induction n; intros; unfold_Stv xs; rewrite ac_Cons.
     1,2:rewrite Str_nth_0; auto.
     1,2:repeat rewrite Str_nth_S; eauto.
+  Qed.
+
+  Lemma clocks_of_ac :
+    forall s, clocks_of [s] ≡ abstract_clock s.
+  Proof.
+    cofix H.
+    destruct s; constructor; simpl; cases_eqn vélus.
+  Qed.
+
+  Lemma clocks_of_cons :
+    forall s ss,
+      clocks_of (s :: ss) ≡ zipWith orb (abstract_clock s) (clocks_of ss).
+  Proof.
+    intros.
+    remember (clocks_of (s :: ss)) as t eqn:Ht.
+    remember (clocks_of ss) as r eqn:Hr.
+    apply eq_EqSt in Ht, Hr.
+    revert Ht Hr. revert s ss t r.
+    cofix Cof; intros.
+    destruct s as [x s].
+    constructor.
+    - simpl; rewrite Ht, Hr. cases_eqn vélus.
+    - destruct x; eapply Cof;
+        rewrite ?Ht, ?Hr; simpl; reflexivity.
   Qed.
 
   (** ** sem_clock and its properties *)
