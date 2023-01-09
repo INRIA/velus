@@ -255,17 +255,28 @@ Module Type LDENOTINF
       inv Hwx. now apply Hvar.
     - (* unop *)
       assert (k = O) by lia; subst.
+      revert IHe.
       rewrite denot_exp_eq.
-      inv Hwl. inv Hwx.
-      cases_eqn HH; subst.
-      1,3: rewrite <- length_typeof_numstreams, HH in *; now simpl in *.
-      assert (is_ncons n (get_nth O errTy (denot_exp G ins e envG envI bs env))) as He.
-      { eapply IHe; auto; lia. }
-      revert He.
+      unfold P_exp.
       generalize (denot_exp G ins e envG envI bs env).
-      generalize (numstreams e).
-      intros; cases; solve_err.
-      apply is_ncons_sunop; auto.
+      rewrite <- length_typeof_numstreams.
+      inv Hwl. inv Hwx.
+      intros. cases_eqn HH; solve_err.
+      apply is_ncons_sunop.
+      unshelve eapply (IHe _ _ O); auto.
+    - (* binop *)
+      assert (k = O) by lia; subst.
+      revert IHe1 IHe2.
+      rewrite denot_exp_eq.
+      unfold P_exp.
+      generalize (denot_exp G ins e1 envG envI bs env).
+      generalize (denot_exp G ins e2 envG envI bs env).
+      rewrite <- 2 length_typeof_numstreams.
+      inv Hwl. inv Hwx.
+      intros. cases_eqn HH; solve_err.
+      apply is_ncons_sbinop.
+      unshelve eapply (IHe1 _ _ O); auto.
+      unshelve eapply (IHe2 _ _ O); auto.
     - (* Efby *)
       rewrite denot_exp_eq; simpl.
       unfold eq_rect_r, eq_rect.
@@ -357,17 +368,24 @@ Module Type LDENOTINF
       setoid_rewrite denot_exp_eq.
       eapply Hvar; eauto.
     - (* Eunop *)
+      revert H.
       rewrite denot_exp_eq.
-      inv Hwl. inv Hwx.
-      cases_eqn HH; subst.
-      1,3: rewrite <- length_typeof_numstreams, HH in *; now simpl in *.
-      assert (is_ncons (S n) (get_nth O errTy (denot_exp G ins e1 envG envI bs env))) as He.
-      { apply H; auto. }
-      revert He.
+      unfold P_exp.
       generalize (denot_exp G ins e1 envG envI bs env).
-      generalize (numstreams e1).
-      intros; cases; solve_err.
+      rewrite <- length_typeof_numstreams.
+      inv Hwl. inv Hwx.
+      intros. cases_eqn HH; solve_err.
       apply is_ncons_sunop; auto.
+    - (* Ebinop *)
+      revert H H0.
+      rewrite denot_exp_eq.
+      unfold P_exp.
+      generalize (denot_exp G ins e1 envG envI bs env).
+      generalize (denot_exp G ins e2 envG envI bs env).
+      rewrite <- 2 length_typeof_numstreams.
+      inv Hwl. inv Hwx.
+      intros. cases_eqn HH; solve_err.
+      apply is_ncons_sbinop; auto.
     - (* Efby *)
       rewrite denot_exp_eq; simpl.
       unfold eq_rect_r, eq_rect.
@@ -723,12 +741,14 @@ Proof.
   - (* const *)
     apply sconst_inf; auto.
   - (* unop *)
-    assert (forall_nprod (@infinite _) (denot_exp G ins e envG envI bs env)) as He by eauto.
-    revert He.
+    revert IHe.
     generalize (denot_exp G ins e envG envI bs env).
-    generalize (numstreams e).
-    intros.
-    cases; simpl; eauto using sunop_inf, DS_const_inf.
+    intros; cases; simpl; eauto using sunop_inf, DS_const_inf.
+  - (* binop *)
+    revert IHe1 IHe2.
+    generalize (denot_exp G ins e1 envG envI bs env).
+    generalize (denot_exp G ins e2 envG envI bs env).
+    intros; cases; simpl; eauto using sbinop_inf, DS_const_inf.
   - (* fby *)
     assert (forall_nprod (@infinite _) (denot_exps G ins e0s envG envI bs env)) as He0s.
     { induction e0s; simpl_Forall; auto.

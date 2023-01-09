@@ -155,33 +155,6 @@ Module Alt_inf.
 End Alt_inf.
 
 
-(** ** Productivity of stream operators *)
-
-Section Ncons_ops.
-
-Context {A B D : Type}.
-
-Lemma is_ncons_sconst :
-  forall (c : A) bs n,
-    is_ncons n bs ->
-    is_ncons n (sconst c bs).
-Proof.
-  intros.
-  unfold sconst, is_ncons; cases.
-  rewrite MAP_map, nrem_map.
-  now apply is_cons_map.
-Qed.
-
-Lemma sconst_inf :
-  forall (c : A) bs,
-    infinite bs ->
-    infinite (sconst c bs).
-Proof.
-  setoid_rewrite <- nrem_inf_iff.
-  intros.
-  auto using is_ncons_sconst.
-Qed.
-
 Ltac solve_err :=
   try match goal with
     | |- context [ DS_const _ ] =>
@@ -189,18 +162,11 @@ Ltac solve_err :=
         now auto using is_cons_DS_const, is_consn_DS_const, is_ncons_DS_const
     end.
 
-Lemma is_cons_zip :
-  forall (f : A -> B -> D) xs ys,
-    is_cons xs ->
-    is_cons ys ->
-    is_cons (ZIP f xs ys).
-Proof.
-  intros * Cx Cy.
-  apply is_cons_elim in Cx as (?&?&->).
-  apply is_cons_elim in Cy as (?&?&->).
-  rewrite zip_eq.
-  cases; solve_err.
-Qed.
+(** ** Productivity of primitive stream functions  *)
+
+Section Ncons_DS.
+
+Context {A B D : Type}.
 
 Lemma is_ncons_zip :
   forall (f : A -> B -> D) n xs ys,
@@ -217,15 +183,52 @@ Proof.
   apply IHn; auto.
 Qed.
 
+Lemma is_ncons_map :
+  forall A B (f : A -> B) s n,
+    is_ncons n s ->
+    is_ncons n (map f s).
+Proof.
+  unfold is_ncons.
+  intros; cases.
+  rewrite nrem_map.
+  now apply is_cons_map.
+Qed.
+
+End Ncons_DS.
+
+
+(** ** Productivity of Lustre operators *)
+
+Section Ncons_ops.
+
+Context {A B D : Type}.
+
+Lemma is_ncons_sconst :
+  forall (c : A) bs n,
+    is_ncons n bs ->
+    is_ncons n (sconst c bs).
+Proof.
+  intros.
+  now apply is_ncons_map.
+Qed.
+
+Lemma sconst_inf :
+  forall (c : A) bs,
+    infinite bs ->
+    infinite (sconst c bs).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros.
+  auto using is_ncons_sconst.
+Qed.
+
 Lemma is_ncons_sunop :
   forall (f : A -> option B) s n,
     is_ncons n s ->
     is_ncons n (sunop f s).
 Proof.
   intros.
-  unfold sunop, is_ncons; cases.
-  rewrite MAP_map, nrem_map.
-  now apply is_cons_map.
+  now apply is_ncons_map.
 Qed.
 
 Lemma sunop_inf :
@@ -236,6 +239,29 @@ Proof.
   setoid_rewrite <- nrem_inf_iff.
   intros.
   auto using is_ncons_sunop.
+Qed.
+
+Lemma is_ncons_sbinop :
+  forall (f : A -> B -> option D) s1 s2 n,
+    is_ncons n s1 ->
+    is_ncons n s2 ->
+    is_ncons n (sbinop f s1 s2).
+Proof.
+  intros.
+  unfold sbinop.
+  autorewrite with cpodb; simpl.
+  now apply is_ncons_map, is_ncons_zip.
+Qed.
+
+Lemma sbinop_inf :
+  forall (f : A -> B -> option D) s1 s2,
+    infinite s1 ->
+    infinite s2 ->
+    infinite (sbinop f s1 s2).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros.
+  auto using is_ncons_sbinop.
 Qed.
 
 Lemma is_cons_fby :

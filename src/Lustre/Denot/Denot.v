@@ -197,11 +197,18 @@ Definition denot_exp_ (ins : list ident)
     (* pas le bon nombre de flots: *)
     1,3: apply CTE, errTy.
     destruct (typeof e0) as [|ty []].
-    (* pas le bon nombre de flots: *)
     1,3: apply CTE, errTy.
     exact (sunop (fun v => sem_unop u v ty)).
   - (* Ebinop *)
-    apply CTE, errTy.
+    eapply fcont_comp2.
+    3: apply (denot_exp e0_2).
+    2: apply (denot_exp e0_1).
+    destruct (numstreams e0_1) as [|[]], (numstreams e0_2) as [|[]].
+    (* pas le bon nombre de flots: *)
+    1-4,6-9: apply curry, CTE, errTy.
+    destruct (typeof e0_1) as [|ty1 []], (typeof e0_2) as [|ty2 []].
+    1-4,6-9: apply curry, CTE, errTy.
+    exact (sbinop (fun v1 v2 => sem_binop b v1 ty1 v2 ty2)).
   - (* Eextcall *)
     apply CTE, errTy.
   - (* Efby *)
@@ -334,8 +341,18 @@ Lemma denot_exp_eq :
               end
           | _ => fun _ => errTy
           end se
-      (* | Ebinop _ _ _ op e1 e2 => *)
-      (*     binop (denot_lbinop op) (denot_exp e1 genv env bs) (denot_exp e2 genv env bs) *)
+      | Ebinop op e1 e2 an =>
+          let se1 := denot_exp ins e1 envG envI bs env in
+          let se2 := denot_exp ins e2 envG envI bs env in
+          match numstreams e1 as n1, numstreams e2 as n2
+                return nprod n1 -> nprod n2 -> nprod 1 with
+          | 1,1 => fun se1 se2 =>
+               match typeof e1, typeof e2 with
+               | [ty1],[ty2] => sbinop (fun v1 v2 => sem_binop op v1 ty1 v2 ty2) se1 se2
+               | _,_ => errTy
+               end
+          | _,_ => fun _ _ => errTy
+          end se1 se2
       | Efby e0s es an =>
           let s0s := denot_exps ins e0s envG envI bs env in
           let ss := denot_exps ins es envG envI bs env in
@@ -394,6 +411,16 @@ Proof.
     generalize (numstreams e) as ne.
     destruct ne as [|[]]; intros; auto.
     destruct (typeof e) as [|? []]; auto.
+  - (* Ebinop *)
+    unfold denot_exp, denot_exp_ at 1.
+    fold (denot_exp_ ins e1) (denot_exp_ ins e2).
+    autorewrite with cpodb using (simpl (fst _); simpl (snd _)).
+    generalize (denot_exp_ ins e1) as ss1.
+    generalize (denot_exp_ ins e2) as ss2.
+    generalize (numstreams e1) as ne1.
+    generalize (numstreams e2) as ne2.
+    destruct ne1 as [|[]], ne2 as [|[]]; intros; auto.
+    destruct (typeof e1) as [|?[]], (typeof e2) as [|?[]]; auto.
   - (* Efby*)
     rename l into e0s, l0 into es, l1 into a.
     unfold denot_exp, denot_exp_ at 1.
@@ -676,6 +703,11 @@ Inductive restr_exp : exp -> Prop :=
   forall op e ann,
     restr_exp e ->
     restr_exp (Eunop op e ann)
+| restr_Binop :
+  forall op e1 e2 ann,
+    restr_exp e1 ->
+    restr_exp e2 ->
+    restr_exp (Ebinop op e1 e2 ann)
 | restr_Efby :
   forall e0s es anns,
     Forall restr_exp e0s ->
@@ -735,6 +767,12 @@ Proof.
     cases; simpl; intros.
     rewrite IHe; auto.
     intro H; apply Hnin; constructor; auto.
+  - (* unop *)
+    revert IHe1 IHe2.
+    gen_denot.
+    cases; simpl; intros.
+    rewrite IHe1, IHe2; auto.
+    all: intro H; apply Hnin; constructor; auto.
   - (* fby *)
     assert (denot_exps (Global tys exts nds) ins e0s envG envI bs env
             == denot_exps (Global tys exts (nd::nds)) ins e0s envG envI bs env) as He0s.

@@ -192,6 +192,24 @@ Section Sunop_binop.
     destruct u; auto.
   Qed.
 
+  Lemma is_cons_sbinop : forall bop U V,
+      is_cons U /\ is_cons V ->
+      is_cons (sbinop bop U V).
+  Proof.
+    intros * []; unfold sbinop.
+    autorewrite with cpodb.
+    now apply is_cons_map, is_cons_zip.
+  Qed.
+
+  Lemma sbinop_is_cons : forall bop U V,
+      is_cons (sbinop bop U V) ->
+      is_cons U /\ is_cons V.
+  Proof.
+    unfold sbinop; intros *.
+    autorewrite with cpodb; intros.
+    now apply map_is_cons, zip_is_cons in H.
+  Qed.
+
 End Sunop_binop.
 
 

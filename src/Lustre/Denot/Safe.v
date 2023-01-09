@@ -133,6 +133,39 @@ Proof.
   destruct s; intros Hp Himpl; inv Hp; inv Himpl; constructor; cases.
 Qed.
 
+Definition DSForall_2pres {A B} (P : A -> B -> Prop) : DS (sampl A * sampl B) -> Prop :=
+  DSForall (fun v =>
+              match v with
+              | (pres a, pres b) => P a b
+              | _ => True
+              end).
+
+Lemma DSForall_2pres_impl :
+  forall {A B} (P : A -> Prop) (Q : B -> Prop) (R : A -> B -> Prop) s1 s2,
+    DSForall_pres P s1 ->
+    DSForall_pres Q s2 ->
+    DSForall_2pres (fun x y => P x -> Q y -> R x y) (ZIP pair s1 s2) ->
+    DSForall_2pres R (ZIP pair s1 s2).
+Proof.
+  intros *.
+  unfold DSForall_2pres, DSForall_pres.
+  remember_ds (ZIP _ _ _) as t.
+  revert Ht. revert s1 s2 t.
+  cofix Cof; intros * Ht Hps1 Hqs2 Hpq.
+  destruct t as [| []].
+  - constructor. rewrite <- eqEps in *; eauto.
+  - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
+    { eapply zip_is_cons. now rewrite Ht. }
+    apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
+    apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+    rewrite Hs1, Hs2, zip_eq in *.
+    inv Hps1. inv Hqs2. inv Hpq.
+    apply Con_eq_simpl in Ht as [].
+    constructor; eauto 2; clear Cof.
+    cases_eqn HH; inv H; auto.
+Qed.
+
+
 Inductive op_correct_exp : exp -> Prop :=
 | opc_Econst :
   forall c,
@@ -149,6 +182,23 @@ Inductive op_correct_exp : exp -> Prop :=
         forall_nprod (DSForall_pres (fun v => wt_value v ty -> sem_unop op v ty <> None)) (denot_exp G ins e envG envI bs env)
     ) ->
     op_correct_exp (Eunop op e ann)
+| opc_Ebinop :
+  forall op e1 e2 ann,
+    op_correct_exp e1 ->
+    op_correct_exp e2 ->
+    (forall ty1 ty2,
+        typeof e1 = [ty1] ->
+        typeof e2 = [ty2] ->
+        let ss1 := denot_exp G ins e1 envG envI bs env in
+        let ss2 := denot_exp G ins e2 envG envI bs env in
+        DSForall_2pres
+          (fun v1 v2 =>
+             wt_value v1 ty1 ->
+             wt_value v2 ty2 ->
+             sem_binop op v1 ty1 v2 ty2 <> None)
+          (ZIP pair (nprod_fst errTy ss1) (nprod_fst errTy ss2))
+    ) ->
+    op_correct_exp (Ebinop op e1 e2 ann)
 | opc_Efby :
   forall e0s es anns,
     Forall op_correct_exp e0s ->
@@ -186,6 +236,10 @@ Proof.
   - (* Eunop *)
     setoid_rewrite <- denot_exp_cons in H3;
       eauto 6 using op_correct_exp, Is_node_in_exp.
+  - (* Ebinop *)
+    simpl in *.
+    setoid_rewrite <- denot_exp_cons in H5;
+      eauto 12 using op_correct_exp, Is_node_in_exp.
   - (* Efby *)
     constructor.
     + eapply Forall_and, Forall_impl_In in H; eauto.
@@ -241,6 +295,16 @@ Proof.
   - take (op_correct_exp _ _ _ _ _ _ _) and apply IHe in it.
     constructor; intros; eauto.
     rewrite Eq1, Eq2, Eq3, Eq4; auto.
+  - take (op_correct_exp _ _ _ _ _ _ e1) and apply IHe1 in it.
+    take (op_correct_exp _ _ _ _ _ _ e2) and apply IHe2 in it.
+    constructor; intros; eauto.
+    subst ss1 ss2.
+    rewrite <- Eq1, <- Eq2, <- Eq3, <- Eq4; auto.
+  - take (op_correct_exp _ _ _ _ _ _ e1) and apply IHe1 in it.
+    take (op_correct_exp _ _ _ _ _ _ e2) and apply IHe2 in it.
+    constructor; intros; eauto.
+    subst ss1 ss2.
+    rewrite Eq1, Eq2, Eq3, Eq4; auto.
   - setoid_rewrite and_comm in H.
     setoid_rewrite and_comm in H0.
     constructor; eauto using Forall_iff.
@@ -279,7 +343,7 @@ Section Safe_DS.
   Definition safe_op : DS (sampl value) -> Prop :=
     DSForall (fun v => match v with err error_Op => False | _ => True end).
 
-  Lemma safe_DS_def :
+  Lemma safe_DS_compose :
     forall s, safe_ty s ->
          safe_cl s ->
          safe_op s ->
@@ -290,6 +354,17 @@ Section Safe_DS.
     destruct s; intros Hty Hcl Hop; inv Hty; inv Hcl; inv Hop;
       constructor; cases.
   Qed.
+
+  Lemma safe_DS_decompose :
+    forall s, safe_DS s ->
+         safe_ty s /\ safe_cl s /\ safe_op s.
+  Proof.
+    unfold safe_ty, safe_cl, safe_op, safe_DS.
+    intros * Hs.
+    repeat split; revert_all;
+      cofix Cof; destruct s; intros; inv Hs; constructor; cases.
+  Qed.
+
 
 End Safe_DS.
 
@@ -478,11 +553,11 @@ Section SDfuns_safe.
     forall op s ty tye,
       type_unop op tye = Some ty ->
       ty_DS tye s ->
-      safe_DS s ->
+      safe_ty s ->
       safe_ty (sunop (fun v => sem_unop op v tye) s).
   Proof.
     intros * Hop Hwt Hsf.
-    unfold ty_DS, safe_ty, safe_DS, sunop in *.
+    unfold ty_DS, safe_ty, sunop in *.
     apply DSForall_map.
     revert dependent s.
     cofix Cof.
@@ -492,11 +567,11 @@ Section SDfuns_safe.
 
   Lemma safe_cl_sunop :
     forall op s tye,
-      safe_DS s ->
+      safe_cl s ->
       safe_cl (sunop (fun v => sem_unop op v tye) s).
   Proof.
     intros * Hsf.
-    unfold safe_cl, safe_DS, sunop in *.
+    unfold safe_cl, sunop in *.
     apply DSForall_map.
     revert dependent s.
     cofix Cof.
@@ -506,18 +581,25 @@ Section SDfuns_safe.
 
   Lemma safe_op_sunop :
     forall op s tye,
-      safe_DS s ->
+      safe_op s ->
       DSForall_pres (fun v => sem_unop op v tye <> None) s ->
       safe_op (sunop (fun v => sem_unop op v tye) s).
   Proof.
     intros * Hsf Hop.
-    unfold safe_op, safe_DS, sunop in *.
+    unfold safe_op, sunop in *.
     apply DSForall_map.
     revert dependent s.
     cofix Cof.
     destruct s; intro Hs; constructor; inv Hs; inv Hop; auto.
     cases_eqn HH.
   Qed.
+
+  (* TODO: update CommonDS *)
+(* remember with [@Oeq (DS _)] instead of [eq] *)
+Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
+  let Hx := fresh "H"x in
+  remember s as x eqn:Hx;
+  apply Oeq_refl_eq in Hx.
 
   Lemma cl_sunop :
     forall op s ck tye,
@@ -528,7 +610,7 @@ Section SDfuns_safe.
     unfold cl_DS, DSForall_pres.
     intros * Hck Hop.
     revert Hck. generalize (denot_clock ck) as C; intros.
-    remember (AC (sunop _ _)) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (AC (sunop _ s)) as t.
     revert Hop Ht Hck.
     revert t s C.
     cofix Cof; intros.
@@ -552,6 +634,172 @@ Section SDfuns_safe.
         apply Con_le_simpl in Hck as [];
         subst; try congruence.
       all: eapply DSleCon with (t := C'), Cof; eauto.
+  Qed.
+
+  (** ** Faits sur sbinop *)
+
+  Lemma ty_sbinop :
+    forall op s1 s2 ty tye1 tye2,
+      type_binop op tye1 tye2 = Some ty ->
+      ty_DS tye1 s1 ->
+      ty_DS tye2 s2 ->
+      ty_DS ty (sbinop (fun v1 v2 => sem_binop op v1 tye1 v2 tye2) s1 s2).
+  Proof.
+    intros * Hop Hwt1 Hwt2.
+    unfold ty_DS, DSForall_pres, sbinop in *.
+    autorewrite with cpodb; simpl.
+    apply DSForall_map.
+    remember_ds (ZIP pair s1 s2) as t.
+    revert Hwt1 Hwt2 Ht. revert t s1 s2.
+    cofix Cof; intros.
+    destruct t; intros.
+    - constructor. eapply Cof; eauto 1.
+      now rewrite <- eqEps in Ht.
+    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
+      { eapply zip_is_cons; rewrite <- Ht; auto. }
+      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
+      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+      rewrite Hs1, Hs2 in *.
+      inv Hwt1. inv Hwt2.
+      rewrite zip_eq in Ht.
+      apply Con_eq_simpl in Ht as [].
+      constructor; eauto; clear Cof.
+      cases_eqn HH; inv H; inv HH1.
+      eauto using pres_sem_binop.
+  Qed.
+
+  Lemma safe_ty_sbinop :
+    forall op s1 s2 ty tye1 tye2,
+      type_binop op tye1 tye2 = Some ty ->
+      ty_DS tye1 s1 ->
+      ty_DS tye2 s2 ->
+      safe_ty s1 ->
+      safe_ty s2 ->
+      safe_ty (sbinop (fun v1 v2 => sem_binop op v1 tye1 v2 tye2) s1 s2).
+  Proof.
+    intros * Hop Hwt1 Hwt2 Hsf1 Hsf2.
+    unfold ty_DS, safe_ty, safe_DS, sbinop in *.
+    autorewrite with cpodb; simpl.
+    apply DSForall_map.
+    remember_ds (ZIP pair s1 s2) as t.
+    revert Hwt1 Hwt2 Hsf1 Hsf2 Ht.
+    revert s1 s2 t.
+    cofix Cof; intros.
+    destruct t; intros.
+    - constructor. eapply Cof; eauto 1.
+      now rewrite <- eqEps in Ht.
+    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
+      { eapply zip_is_cons; rewrite <- Ht; auto. }
+      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
+      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+      rewrite Hs1, Hs2 in *.
+      inv Hwt1. inv Hwt2. inv Hsf1. inv Hsf2.
+      rewrite zip_eq in Ht.
+      apply Con_eq_simpl in Ht as [].
+      constructor; eauto; clear Cof.
+      cases_eqn HH; inv H; inv HH1.
+  Qed.
+
+  Lemma safe_cl_sbinop :
+    forall op s1 s2 tye1 tye2 ck,
+      safe_cl s1 ->
+      safe_cl s2 ->
+      cl_DS ck s1 ->
+      cl_DS ck s2 ->
+      safe_cl (sbinop (fun v1 v2 => sem_binop op v1 tye1 v2 tye2) s1 s2).
+  Proof.
+    intros * Hsf1 Hsf2 Hcl1 Hcl2.
+    unfold cl_DS, safe_cl, sbinop in *.
+    autorewrite with cpodb; simpl.
+    apply DSForall_map.
+    remember_ds (ZIP pair s1 s2) as t.
+    revert Hsf1 Hsf2 Hcl1 Hcl2 Ht.
+    generalize (denot_clock ck) as C.
+    revert s1 s2 t.
+    cofix Cof; intros.
+    destruct t; intros.
+    - constructor. apply (Cof s1 s2 _ C); auto.
+      now rewrite <- eqEps in Ht.
+    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
+      { eapply zip_is_cons; rewrite <- Ht; auto. }
+      assert (is_cons C) as Hcc.
+      { eapply is_cons_le_compat, AC_is_cons; eauto. }
+      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
+      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+      apply is_cons_elim in Hcc as (vc & C' & Hc).
+      rewrite Hs1, Hs2, Hc, AC_eq in *.
+      inv Hsf1. inv Hsf2.
+      rewrite zip_eq in Ht.
+      apply Con_eq_simpl in Ht as [].
+      destruct v1, v2;
+        apply Con_le_simpl in Hcl1 as [], Hcl2 as [];
+        constructor; eauto 2; clear Cof.
+      all: subst; cases_eqn HH; congruence.
+  Qed.
+
+  Lemma safe_op_sbinop :
+    forall op s1 s2 tye1 tye2,
+      safe_op s1 ->
+      safe_op s2 ->
+      DSForall_2pres
+        (fun v1 v2 => sem_binop op v1 tye1 v2 tye2 <> None) (ZIP pair s1 s2) ->
+      safe_op (sbinop (fun v1 v2 => sem_binop op v1 tye1 v2 tye2) s1 s2).
+  Proof.
+    intros * Hsf1 Hsf2 Hop.
+    unfold safe_op, sbinop in *.
+    autorewrite with cpodb; simpl.
+    apply DSForall_map.
+    remember_ds (ZIP pair s1 s2) as t.
+    revert Hsf1 Hsf2 Hop Ht.
+    revert s1 s2 t.
+    cofix Cof; intros.
+    destruct t; intros.
+    - constructor. apply (Cof s1 s2 t); eauto 1;
+        now rewrite <- eqEps in *.
+    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
+      { eapply zip_is_cons; rewrite <- Ht; auto. }
+      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
+      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+      rewrite Hs1, Hs2, ?zip_eq in *.
+      apply Con_eq_simpl in Ht as [].
+      inv Hsf1. inv Hsf2. inv Hop.
+      constructor; eauto 2; clear Cof.
+      cases_eqn HH.
+  Qed.
+
+  Lemma cl_sbinop :
+    forall op s1 s2 ck tye1 tye2,
+      cl_DS ck s1 ->
+      cl_DS ck s2 ->
+      DSForall_2pres
+        (fun v1 v2 => sem_binop op v1 tye1 v2 tye2 <> None) (ZIP pair s1 s2) ->
+      cl_DS ck (sbinop (fun v1 v2 => sem_binop op v1 tye1 v2 tye2) s1 s2).
+  Proof.
+    intros *.
+    unfold cl_DS.
+    generalize (denot_clock ck) as C.
+    remember_ds (AC (sbinop _ s1 s2)) as t.
+    revert Ht. revert s1 s2 t.
+    cofix Cof; intros * Ht * Hcl1 Hcl2 Hop.
+    destruct t.
+    - constructor. apply (Cof s1 s2 t); auto.
+      now rewrite <- eqEps in Ht.
+    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
+      { eapply sbinop_is_cons, AC_is_cons; now rewrite <- Ht. }
+      assert (is_cons C) as Hcc.
+      { eapply is_cons_le_compat, AC_is_cons; eauto. }
+      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
+      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+      apply uncons in Hcc as (vc & C' & Hdec).
+      apply decomp_eqCon in Hdec as Hc.
+      rewrite Hc, Hs1, Hs2, sbinop_eq, AC_eq, zip_eq in *|-.
+      inv Hop.
+      destruct v1, v2; try destruct (sem_binop op _ _ _ _);
+        apply Con_eq_simpl in Ht as [];
+        apply Con_le_simpl in Hcl1 as [], Hcl2 as [];
+        apply DSleCon with C';
+        try  apply (Cof s1' s2'); eauto 1; clear Cof.
+      all: congruence.
   Qed.
 
   (** ** Faits sur fby1/fby *)
@@ -1756,7 +2004,32 @@ Section Node_safe.
       repeat split. all: simpl_Forall; auto.
       + apply ty_sunop; auto.
       + apply cl_sunop; congruence.
-      + apply safe_DS_def; eauto using safe_ty_sunop, safe_cl_sunop, safe_op_sunop.
+      + apply safe_DS_decompose in Efe as (?&?&?).
+        apply safe_DS_compose; eauto using safe_ty_sunop, safe_cl_sunop, safe_op_sunop.
+    - (* Ebinop *)
+      apply wt_exp_wl_exp in Hwt as Hwl.
+      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
+      find_specialize_in IHe1.
+      find_specialize_in IHe2.
+      specialize (H22 _ _ H11 H12).
+      rewrite denot_exp_eq.
+      revert IHe1 IHe2 H22.
+      generalize (denot_exp G ins e1 envG envI bs env).
+      generalize (denot_exp G ins e2 envG envI bs env).
+      take (typeof e1 = _) and rewrite it.
+      take (typeof e2 = _) and rewrite it.
+      take (numstreams e1 = _) and rewrite it.
+      take (numstreams e2 = _) and rewrite it.
+      simpl; intros s1 s2; autorewrite with cpodb.
+      intros (Wte1 & Wce1 & Efe1) (Wte2 & Wce2 & Efe2) Hop.
+      apply DSForall_2pres_impl in Hop.
+      repeat split. all: simpl_Forall; auto.
+      + apply ty_sbinop; auto.
+      + apply cl_sbinop; try congruence.
+      + apply safe_DS_decompose in Efe1 as (?&?&?).
+        apply safe_DS_decompose in Efe2 as (?&?&?).
+        assert (x = x0) by congruence; subst.
+        apply safe_DS_compose; eauto using safe_ty_sbinop, safe_cl_sbinop, safe_op_sbinop.
     - (* Efby *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
@@ -2364,6 +2637,10 @@ Proof.
     rewrite forall_nprod_k_iff in *.
     intros k d Hk.
     eapply DSForall_le, H3; eauto.
+  - (* binop *)
+    intros ty1 ty2 Hty1 Hty2.
+    eapply DSForall_le in H5. apply H5.
+    all: auto.
 Qed.
 
 Lemma op_correct_le :

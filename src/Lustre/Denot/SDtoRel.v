@@ -114,6 +114,12 @@ Proof.
     simpl in *; econstructor; eauto using Is_node_in_exp.
     eapply lift1_spec; intros.
     left. split; apply const_nth.
+  - (* Ebinop *)
+    take (typeof e1 = _) and rewrite <- length_typeof_numstreams, it in IHe1.
+    take (typeof e2 = _) and rewrite <- length_typeof_numstreams, it in IHe2.
+    simpl in *; econstructor; eauto using Is_node_in_exp.
+    eapply lift2_spec; intros.
+    left. repeat split; apply const_nth.
   - (* Efby *)
     apply Sfby with
       (s0ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) e0s)
@@ -422,6 +428,34 @@ Proof.
   apply S_of_DS_Cons in Eqr as (r & tr & Hrs & Hrvr & itr & Eqr).
   subst rs.
   rewrite Hxs, sunop_eq in Hrs, Sr.
+  cases_eqn HH; simpl; try now inv Sr.
+  all: apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
+  all: constructor; eauto.
+  all: apply DSForall_tl in Sr.
+  all: rewrite (ex_proj2 (S_of_DS_eq _ _ _ _ (symmetry Heq))) in Eqr; eauto.
+Qed.
+
+Lemma ok_binop :
+  forall op ty1 ty2 (xs ys : DS (sampl value)),
+    let rs := sbinop (fun v1 v2 => sem_binop op v1 ty1 v2 ty2) xs ys in
+    forall (xsi : infinite xs)
+      (ysi : infinite ys)
+      (rsi : infinite rs),
+      safe_DS rs ->
+      lift2 op ty1 ty2 (S_of_DSv xs xsi) (S_of_DSv ys ysi) (S_of_DSv rs rsi).
+Proof.
+  intros.
+  remember_st (S_of_DSv xs xsi) as xs'.
+  remember_st (S_of_DSv ys ysi) as ys'.
+  remember_st (S_of_DSv rs rsi) as rs'.
+  revert_all.
+  cofix Cof; intros * Sr ? Eqx ? Eqy ? Eqr.
+  destruct xs' as [vx xs'], ys' as [vy ys'], rs' as [vr rs'].
+  apply S_of_DS_Cons in Eqx as (x & tx & Hxs & Hxvx & itx & Eqx).
+  apply S_of_DS_Cons in Eqy as (y & ty & Hys & Hyvy & ity & Eqy).
+  apply S_of_DS_Cons in Eqr as (r & tr & Hrs & Hrvr & itr & Eqr).
+  subst rs.
+  rewrite Hxs, Hys, sbinop_eq in Hrs, Sr.
   cases_eqn HH; simpl; try now inv Sr.
   all: apply Con_eq_simpl in Hrs as [? Heq]; subst; simpl.
   all: constructor; eauto.
@@ -825,6 +859,21 @@ Proof.
     take (numstreams e = 1) and rewrite it.
     take (typeof e = _) and rewrite it.
     econstructor; eauto using ok_unop.
+  - (* Ebinop *)
+    eapply safe_exp in Hoc as Hs; eauto using restr_exp.
+    apply wt_exp_wl_exp in Hwt as Hwl.
+    inv Hwt. inv Hwc. inv Hoc. inv Hwl.
+    edestruct (Ss_of_nprod_eq _ Infe) as [Hinf0 HH].
+    { setoid_rewrite denot_exp_eq. reflexivity. }
+    rewrite HH; clear HH.
+    rewrite denot_exp_eq in Hs.
+    revert Hinf0 IHe1 IHe2 Hs; simpl.
+    gen_sub_exps.
+    take (numstreams e1 = 1) and rewrite it.
+    take (numstreams e2 = 1) and rewrite it.
+    take (typeof e1 = _) and rewrite it.
+    take (typeof e2 = _) and rewrite it.
+    econstructor; eauto using ok_binop.
   - (* Efby *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
