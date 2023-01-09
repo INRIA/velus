@@ -1028,6 +1028,17 @@ Section Zip.
     now apply zipf_is_cons in Hic.
   Qed.
 
+  Lemma is_cons_zip :
+    forall xs ys,
+      is_cons xs /\ is_cons ys ->
+      is_cons (ZIP xs ys).
+  Proof.
+    intros * [Cx Cy].
+    apply is_cons_elim in Cx as (?&?&->).
+    apply is_cons_elim in Cy as (?&?&->).
+    now rewrite zip_eq.
+  Qed.
+
   Lemma zip_inf :
     forall U V,
       infinite U ->
