@@ -1198,13 +1198,13 @@ Qed.
 End Ok_node.
 
 
-Theorem ok_global :
+Theorem _ok_global :
   forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
   forall G,
     restr_global G ->
     wt_global G ->
     wc_global G ->
-    op_correct_glob G ->
+    op_correct_global G ->
     Forall node_causal (nodes G) ->
     forall f n (ss : nprod (length (n_in n))),
       find_node f G = Some n ->
@@ -1217,7 +1217,7 @@ Theorem ok_global :
         sem_node G f (Ss_of_nprod ss InfSs) (Ss_of_nprod os InfO).
 Proof.
   intros ?? Rg Wtg Wcg Ocg Causg ??? Hfind ???? Hins ??.
-  unfold op_correct_glob in Ocg.
+  unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   { now apply wl_global_Ordered_nodes, wt_global_wl_global. }
   pose proof (SafeG := safe_prog G Rg Wtg Wcg Ocg).
@@ -1288,6 +1288,34 @@ Proof.
     + intros f' ndf' envI' Hfind'.
       eapply find_node_uncons with (nd := a) in Hfind' as ?; auto.
       rewrite HenvG, <- denot_node_cons; eauto using find_node_later_not_Is_node_in.
+Qed.
+
+Definition correct_inputs (n : node) (ss : nprod (length (n_in n))) :=
+  let ins := idents (n_in n) in
+  let envI := env_of_np ins ss in
+  let bs := bss ins envI in
+  let Γ := senv_of_inout (n.(n_in) ++ n.(n_out)) in
+  env_correct Γ ins envI bs 0.
+
+(** Witness of the relational semantics *)
+Theorem ok_global :
+  forall (HasCausInj : forall (Γ : static_env) (x cx : ident), HasCaus Γ x cx -> x = cx),
+  forall G,
+    restr_global G ->
+    wt_global G ->
+    wc_global G ->
+    op_correct_global G ->
+    Forall node_causal (nodes G) ->
+    forall f n, find_node f G = Some n ->
+    forall (xs : nprod (length (n_in n))) InfXs,
+      correct_inputs n xs ->
+      exists (os : nprod ((length (n_out n)))) InfO,
+        sem_node G f (Ss_of_nprod xs InfXs) (Ss_of_nprod os InfO).
+Proof.
+  intros ?? Hr Hwt Hwc Hoc Hcaus Hfind ???? Hins.
+  unshelve eapply _ok_global with (InfSs := InfXs) in Hins; eauto.
+  { apply forall_np_of_env, denot_inf; auto using env_of_np_inf. }
+  rewrite <- (map_length fst (n_out n)); eauto.
 Qed.
 
 End SDTOREL.
