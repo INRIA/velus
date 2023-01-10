@@ -554,7 +554,7 @@ Section SStream_functions.
   Section When.
 
   Variable enumtag : Type.
-  Variable tag_ov_val : B -> option enumtag.
+  Variable tag_of_val : B -> option enumtag.
   Variable tag_eqb : enumtag -> enumtag -> bool.
 
   Definition swhenf (k : enumtag) :
@@ -573,7 +573,7 @@ Section SStream_functions.
     exact match vx, vc with
     | abs, abs => CONS abs @_ (f @2_ ID _) XC
     | pres x, pres c =>
-        match tag_ov_val c with
+        match tag_of_val c with
         | None => CTE _ _ (DS_const (err error_Ty))
         | Some t =>
             if tag_eqb k t
@@ -591,7 +591,7 @@ Section SStream_functions.
       = match x, c with
         | abs, abs => cons abs (f XC)
         | pres x, pres c =>
-            match tag_ov_val c with
+            match tag_of_val c with
             | None => DS_const (err error_Ty)
             | Some t =>
                 if tag_eqb k t
@@ -608,7 +608,7 @@ Section SStream_functions.
     setoid_rewrite DSCASE_simpl.
     setoid_rewrite DScase_cons.
     destruct x, c; simpl; auto.
-    destruct (tag_ov_val _); auto.
+    destruct (tag_of_val _); auto.
     destruct (tag_eqb _ _); auto.
   Qed.
 
@@ -620,7 +620,7 @@ Section SStream_functions.
       == match x, c with
         | abs, abs => cons abs (swhen k X C)
         | pres x, pres c =>
-            match tag_ov_val c with
+            match tag_of_val c with
             | None => DS_const (err error_Ty)
             | Some t =>
                 if tag_eqb k t
