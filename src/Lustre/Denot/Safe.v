@@ -2692,7 +2692,7 @@ End Rev.
  *)
 (* TODO: c'est sans doute beaucoup trop fort, c'est une obligation
    impossible à prouver *)
-Definition op_correct_glob (G : global) : Prop :=
+Definition op_correct_global (G : global) : Prop :=
   let envG := denot_global G in
   Forall (fun n =>
             (* hypothèses de typage/cadencement aussi ? *)
@@ -2709,7 +2709,7 @@ Theorem safe_prog :
     restr_global G ->
     wt_global G ->
     wc_global G ->
-    op_correct_glob G ->
+    op_correct_global G ->
     forall f n envI,
       find_node f G = Some n ->
       let ins := List.map fst n.(n_in) in
@@ -2719,7 +2719,7 @@ Theorem safe_prog :
       env_correct Γ ins envI bs (denot_global G f envI).
 Proof.
   intros * Rg Wtg Wcg Ocg * Hfind ??? Hle Hins.
-  unfold op_correct_glob in Ocg.
+  unfold op_correct_global in Ocg.
   assert (Ordered_nodes G) as Hord.
   now apply wl_global_Ordered_nodes, wt_global_wl_global.
   remember (denot_global G) as envG eqn:HG.
