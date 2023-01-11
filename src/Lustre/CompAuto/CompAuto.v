@@ -431,7 +431,7 @@ Module Type COMPAUTO
     - (* switch *)
       constructor. auto_block_simpl_Forall.
       destruct b0; repeat inv_bind. take (GoodLocalsBranch _ _) and inv it.
-      constructor; eauto using AtomOrGensym_add. auto_block_simpl_Forall.
+      constructor; eauto using Forall_AtomOrGensym_add. auto_block_simpl_Forall.
     - (* automaton (weak) *)
       do 2 constructor; simpl.
       + repeat (take (fresh_ident _ = _) and apply fresh_ident_prefixed in it as (?&?&?)); subst.
@@ -439,7 +439,7 @@ Module Type COMPAUTO
         all:right; do 2 esplit; eauto; now apply PSF.add_1.
       + repeat constructor. auto_block_simpl_Forall.
         destruct b0 as [?(?&[?(?&?)])]; repeat inv_bind. take (GoodLocalsBranch _ _) and inv it. take (GoodLocalsScope _ _ _) and inv it.
-        repeat constructor; eauto using AtomOrGensym_add.
+        repeat constructor; eauto using Forall_AtomOrGensym_add.
         auto_block_simpl_Forall.
     - (* automaton (strong) *)
       do 2 constructor; simpl. 2:do 2 constructor.
@@ -449,10 +449,10 @@ Module Type COMPAUTO
       + constructor. simpl_Forall. destruct b as [?(?&[?(?&?)])]; repeat inv_bind. repeat constructor.
       + repeat constructor. auto_block_simpl_Forall.
         destruct b0 as [?(?&[?(?&?)])]; repeat inv_bind. take (GoodLocalsBranch _ _) and inv it. take (GoodLocalsScope _ _ _) and inv it.
-        repeat constructor; eauto using AtomOrGensym_add.
+        repeat constructor; eauto using Forall_AtomOrGensym_add.
         auto_block_simpl_Forall.
     - (* local *)
-      inv H1. do 2 constructor; eauto using AtomOrGensym_add.
+      inv H1. do 2 constructor; eauto using Forall_AtomOrGensym_add.
       auto_block_simpl_Forall.
   Qed.
 
@@ -514,7 +514,7 @@ Module Type COMPAUTO
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
     pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
-    repeat (split; eauto using AtomOrGensym_add, auto_block_GoodLocals).
+    repeat (split; eauto using Forall_AtomOrGensym_add, auto_block_GoodLocals).
   Qed.
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.

@@ -951,8 +951,8 @@ Module Type CLOCKSWITCH
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     pose proof (n_good n) as (Hgood1&Hgood2&Hgood3).
-    repeat split; eauto using AtomOrGensym_add.
-    eapply switch_block_GoodLocals; eauto using GoodLocals_add, AtomOrGensym_add.
+    repeat split; eauto using Forall_AtomOrGensym_add.
+    eapply switch_block_GoodLocals; eauto using GoodLocals_add, Forall_AtomOrGensym_add.
     intros ?? Hfind. apply Env.Props.P.F.empty_mapsto_iff in Hfind. inv Hfind.
   Qed.
   Next Obligation.

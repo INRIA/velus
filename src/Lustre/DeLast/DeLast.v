@@ -421,7 +421,7 @@ Module Type DELAST
     eapply Hind in H0; eauto.
     econstructor.
     - rewrite map_app. apply Forall_app; split.
-      + erewrite map_map, map_ext; eauto using AtomOrGensym_add.
+      + erewrite map_map, map_ext; eauto using Forall_AtomOrGensym_add.
         intros; destruct_conjs; auto.
       + apply fresh_idents_prefixed in H.
         simpl_Forall; subst.
@@ -736,7 +736,7 @@ Module Type DELAST
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     destruct (delast_block _ _) as (?&?) eqn:Hdl. simpl.
-    repeat split; eauto using AtomOrGensym_add.
+    repeat split; eauto using Forall_AtomOrGensym_add.
     eapply delast_block_GoodLocals; eauto.
   Qed.
   Next Obligation.

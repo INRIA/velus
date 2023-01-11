@@ -755,12 +755,12 @@ Module Type NORMFBY
         unfold st_ids. solve_In.
   Qed.
   Next Obligation.
-    specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using AtomOrGensym_add.
+    specialize (n_good n) as (Hgood1&Hgood2&Hname). repeat split; eauto using Forall_AtomOrGensym_add.
     destruct (n_block n) as [| | | |[locs blks]] eqn:Hblk; eauto using GoodLocals_add.
     destruct (normfby_blocks _ blks init_st) as (blks'&st') eqn:Heqres.
     inv Hgood2. inv H0.
     do 2 constructor.
-    + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using AtomOrGensym_add.
+    + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using Forall_AtomOrGensym_add.
       specialize (st_valid_prefixed st') as Hvalid.
       unfold st_ids in Hvalid. simpl_Forall; subst.
       right. do 2 esplit; eauto. now apply PSF.add_1.

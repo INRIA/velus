@@ -1592,14 +1592,20 @@ Module Type LSYNTAX
     apply n_nodup.
   Qed.
 
-  Lemma AtomOrGensym_add : forall pref prefs xs,
+  Lemma AtomOrGensym_add : forall pref prefs x,
+      AtomOrGensym prefs x ->
+      AtomOrGensym (PS.add pref prefs) x.
+  Proof.
+    intros * [?|(pref'&?&?)]; [left|right]; subst; auto.
+    exists pref'. auto using PSF.add_2.
+  Qed.
+
+  Lemma Forall_AtomOrGensym_add : forall pref prefs xs,
       Forall (AtomOrGensym prefs) xs ->
       Forall (AtomOrGensym (PS.add pref prefs)) xs.
   Proof.
     intros * Hat.
-    eapply Forall_impl; [|eauto].
-    intros ? [?|(pref'&?&?)]; [left|right]; subst; auto.
-    exists pref'. auto using PSF.add_2.
+    simpl_Forall; eauto using AtomOrGensym_add.
   Qed.
 
   Lemma GoodLocals_add : forall p prefs blk,
@@ -1615,17 +1621,17 @@ Module Type LSYNTAX
     - (* switch *)
       constructor; eauto.
       simpl_Forall; eauto.
-      inv H1; econstructor; eauto using AtomOrGensym_add.
+      inv H1; econstructor; eauto using Forall_AtomOrGensym_add.
       simpl_Forall; eauto.
     - (* automaton *)
       constructor; eauto.
       simpl_Forall; eauto.
       inv_branch. inv_scope.
-      repeat econstructor; eauto using AtomOrGensym_add.
+      repeat econstructor; eauto using Forall_AtomOrGensym_add.
       simpl_Forall; eauto.
     - (* locals *)
       constructor.
-      inv_scope; econstructor; eauto using AtomOrGensym_add.
+      inv_scope; econstructor; eauto using Forall_AtomOrGensym_add.
       simpl_Forall; eauto.
   Qed.
 

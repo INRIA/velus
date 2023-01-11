@@ -153,7 +153,7 @@ Local Ltac unfold_l_to_nl Hltonl :=
   repeat rewrite print_identity in Hltonl;
   destruct (is_causal _) eqn:Hcaus; simpl in Hltonl; [|inv Hltonl];
   repeat rewrite print_identity in Hltonl;
-  monadInv Hcaus.
+  Errors.monadInv Hcaus.
 
 (** Correctness from Lustre to NLustre *)
 Lemma behavior_l_to_nl:

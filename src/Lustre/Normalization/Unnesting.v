@@ -2414,10 +2414,10 @@ Module Type UNNESTING
     specialize (n_good n) as (Hgood1&Hgood2&Hname).
     pose proof (n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *. simpl in *.
     destruct (unnest_blocks G blks init_st) as (blks'&st') eqn:Hunn.
-    repeat split; eauto using AtomOrGensym_add.
+    repeat split; eauto using Forall_AtomOrGensym_add.
     inv Hgood2. inv H3.
     constructor. constructor.
-    + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using AtomOrGensym_add.
+    + repeat rewrite map_app. repeat rewrite Forall_app. repeat split; eauto using Forall_AtomOrGensym_add.
       specialize (st_valid_prefixed st') as Hvalid.
       erewrite map_map, map_ext; [eauto|]. eapply Forall_impl; [|eapply Hvalid]; intros ? (?&?&?); simpl in *; subst; eauto.
       right. do 2 esplit; eauto. apply PSF.add_1; auto.
