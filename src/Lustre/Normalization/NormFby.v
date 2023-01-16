@@ -698,7 +698,7 @@ Module Type NORMFBY
 
   (** ** Normalization of a full node *)
 
-  Program Definition normfby_node (n : @node nolocal_top_block norm1_prefs) : @node nolocal_top_block norm2_prefs :=
+  Program Definition normfby_node (n : @node nolocal norm1_prefs) : @node nolocal norm2_prefs :=
     {| n_name := n_name n;
        n_hasstate := n_hasstate n;
        n_in := n_in n;
@@ -768,8 +768,8 @@ Module Type NORMFBY
       simpl_Forall; eauto using GoodLocals_add.
   Qed.
   Next Obligation.
-    pose proof (n_syn n) as Hsyn. inv Hsyn.
-    constructor.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+    repeat constructor; auto.
     - apply Forall_app; split; auto.
       simpl_Forall; auto.
     - eapply normfby_blocks_nolocal; eauto using surjective_pairing.
@@ -778,10 +778,10 @@ Module Type NORMFBY
   Global Program Instance normfby_node_transform_unit: TransformUnit node node :=
     { transform_unit := normfby_node }.
 
-  Global Program Instance normfby_global_without_units : TransformProgramWithoutUnits (@global nolocal_top_block norm1_prefs) (@global nolocal_top_block norm2_prefs) :=
+  Global Program Instance normfby_global_without_units : TransformProgramWithoutUnits (@global nolocal norm1_prefs) (@global nolocal norm2_prefs) :=
     { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
-  Definition normfby_global : @global nolocal_top_block norm1_prefs -> @global nolocal_top_block norm2_prefs := transform_units.
+  Definition normfby_global : @global nolocal norm1_prefs -> @global nolocal norm2_prefs := transform_units.
 
   (** *** normfby_global produces an equivalent global *)
 

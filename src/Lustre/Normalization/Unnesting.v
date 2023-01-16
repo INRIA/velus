@@ -191,6 +191,18 @@ Module Type UNNESTING
   Definition default_ann : ann := (OpAux.bool_velus_type, Cbase).
 
   (** Fresh ident generation keeping type annotations *)
+
+  Definition st_senv {pref} (st: fresh_st pref _) := senv_of_tyck (st_anns st).
+  Global Hint Unfold st_senv senv_of_tyck : list.
+
+  Lemma st_senv_senv_of_decls {pref} : forall (st : fresh_st pref _),
+      st_senv st = @senv_of_decls exp (map (fun xtc => (fst xtc, ((fst (snd xtc)), snd (snd xtc), xH, None))) (st_anns st)).
+  Proof.
+    intros.
+    unfold st_senv, senv_of_decls, senv_of_tyck.
+    repeat rewrite map_map. eapply map_ext. intros; destruct_conjs; auto.
+  Qed.
+
   Definition FreshAnn A := Fresh norm1 A (type * clock).
 
   Definition hd_default (l : list exp) : exp :=
@@ -314,7 +326,7 @@ Module Type UNNESTING
       end
     end.
 
-  Definition find_node_incks (G: @global nolocal_top_block local_prefs) (f : ident) : list clock :=
+  Definition find_node_incks (G: @global nolocal local_prefs) (f : ident) : list clock :=
     match find_node f G with
     | Some n => map (fun '(_, (_, ck, _)) => ck) (n_in n)
     | None => []
@@ -2353,7 +2365,7 @@ Module Type UNNESTING
     intros [contra|[contra|[contra|[contra|contra]]]]; subst; rewrite contra in *; eauto 10 with datatypes.
   Qed.
 
-  Program Definition unnest_node G (n : @node nolocal_top_block local_prefs) : @node nolocal_top_block norm1_prefs :=
+  Program Definition unnest_node G (n : @node nolocal local_prefs) : @node nolocal norm1_prefs :=
     {| n_name := (n_name n);
        n_hasstate := (n_hasstate n);
        n_in := (n_in n);
@@ -2383,7 +2395,7 @@ Module Type UNNESTING
   Next Obligation.
     pose proof (n_good n) as (Hat&Hgood&_).
     pose proof (n_nodup n) as (Hndup&Hndl).
-    pose proof (n_syn n) as Hsyn. inv Hsyn. simpl. rewrite <-H in *.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2. simpl. rewrite <-H in *.
     destruct (unnest_blocks G blks init_st) as (blks'&st') eqn:Hunn.
     repeat erewrite unnest_blocks_no_anon; eauto. repeat rewrite app_nil_r.
     split; eauto using NoDupMembers_app_l.
@@ -2412,7 +2424,7 @@ Module Type UNNESTING
   Next Obligation.
     specialize (n_nodup n) as (Hndup&Hndl).
     specialize (n_good n) as (Hgood1&Hgood2&Hname).
-    pose proof (n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *. simpl in *.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2. simpl. rewrite <-H in *.
     destruct (unnest_blocks G blks init_st) as (blks'&st') eqn:Hunn.
     repeat split; eauto using Forall_AtomOrGensym_add.
     inv Hgood2. inv H3.
@@ -2426,8 +2438,8 @@ Module Type UNNESTING
       rewrite Forall_forall in *; eauto using GoodLocals_add.
   Qed.
   Next Obligation.
-    specialize (n_syn n) as Hsyn. inv Hsyn.
-    constructor.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2. simpl.
+    repeat constructor; auto.
     - apply Forall_app. split; auto.
       simpl_Forall; auto.
     - eapply unnest_blocks_nolocal; eauto using surjective_pairing.
@@ -2480,7 +2492,9 @@ Module Type UNNESTING
     destruct Heq as (_&_&Heq).
     specialize (Heq f).
     rewrite H0 in Heq. inv Heq. destruct H5 as (_&_&?&_).
-    econstructor; eauto. congruence.
+    econstructor; eauto.
+    erewrite map_ext, <-map_map, <-H3. simpl_Forall; eauto.
+    instantiate (1:=fun '(_, (_, ck)) => ck); eauto. intros; destruct_conjs; eauto.
   Qed.
 
   Lemma iface_eq_unnested_block {PSyn1 PSyn2 prefs1 prefs2} : forall (G: @global PSyn1 prefs1) (G': @global PSyn2 prefs2) d,
@@ -2513,16 +2527,16 @@ Module Type UNNESTING
   Proof.
     intros * Hwl Hwx.
     unfold unnest_node; simpl.
-    pose proof (n_syn n) as Hsyn. inv Hsyn.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
     econstructor; simpl. rewrite <-H; eauto.
     - apply Forall_app. split; auto.
       simpl_Forall; auto.
-    - eapply unnest_blocks_unnested_blocks. 4:eauto. 4:eapply surjective_pairing.
-      3:{ unfold wx_node in Hwx. rewrite <-H in Hwx; inv Hwx. inv H4. eauto. }
-      + rewrite NoLast_app; split.
-        * apply senv_of_inout_NoLast.
+    - inv Hwx. inv Hwl. subst Γ. rewrite <-H in *.
+      take (wx_block _ _) and inv it. take (wl_block _ _) and inv it. repeat inv_scope. subst Γ'.
+      eapply unnest_blocks_unnested_blocks; eauto. 2:eapply surjective_pairing.
+      + rewrite 2 NoLast_app; repeat split; auto using senv_of_ins_NoLast.
+        * intros * L. inv L. simpl_In. simpl_Forall. subst; simpl in *; congruence.
         * intros * Hla. inv Hla. simpl_In. simpl_Forall. subst; simpl in *; congruence.
-      + unfold wl_node in Hwl. rewrite <-H in Hwl; inv Hwl; inv H3; auto.
   Qed.
 
   Lemma unnest_global_unnested_global : forall G,

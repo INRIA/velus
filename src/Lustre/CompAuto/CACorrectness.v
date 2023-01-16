@@ -106,8 +106,8 @@ Module Type CACORRECTNESS
   Import Permutation.
 
   Section sem_node.
-    Variable G1 : @global nolast_block last_prefs.
-    Variable G2 : @global noauto_block auto_prefs.
+    Variable G1 : @global nolast last_prefs.
+    Variable G2 : @global noauto auto_prefs.
 
     Hypothesis HwcG : wc_global G1.
     Hypothesis Href : global_sem_refines G1 G2.
@@ -467,7 +467,7 @@ Module Type CACORRECTNESS
 
         constructor. eapply Sscope with (Hi':=Hi').
         + subst. split; intros *; rewrite FEnv.of_list_In.
-          * rewrite IsVar_senv_of_locs, 2 fst_InMembers; simpl.
+          * rewrite IsVar_senv_of_decls, 2 fst_InMembers; simpl.
             split; intros [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq; auto.
           * split; [intros Hin|intros Hlast; inv Hlast]; simpl in *.
             destruct Hin as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq.
@@ -557,10 +557,10 @@ Module Type CACORRECTNESS
                  take (sem_scope_ck _ _ _ _ _) and eapply sem_scope_refines2, sem_scope_restrict2 in it. 3,4:eauto.
                  2:{ apply Forall_forall; intros; simpl_In.
                      edestruct H18 as (?&Hbase); eauto with senv. rewrite Hbase; constructor. }
-                 repeat inv_scope. repeat inv_bind.
+                 repeat inv_scope. repeat inv_bind. subst Γ'0 Γ'1.
                  repeat constructor.
 
-                 assert (forall x, ~ IsLast (senv_of_locs l) x) as Hnolast2.
+                 assert (forall x, ~ IsLast (senv_of_decls l) x) as Hnolast2.
                  { intros * Hlast. inv Hlast. simpl_In. simpl_Forall.
                    subst; simpl in *; congruence. }
 
@@ -592,12 +592,12 @@ Module Type CACORRECTNESS
                        all:take (_ = Some _) and apply FEnv.find_In in it; eauto.
                  }
 
-                 assert (sc_vars (senv_of_locs l) Hi'' bs'') as Hsc1'.
+                 assert (sc_vars (senv_of_decls l) Hi'' bs'') as Hsc1'.
                  { subst. intros. eapply sc_vars_refines; simpl. 1,4:eauto.
-                   - intros * Hinm _. now apply FEnv.union_In, or_intror, H50.
+                   - intros * Hinm _. take (dom Hi' _) and now apply FEnv.union_In, or_intror, it.
                    - intros * Hl. clear - Hl H39. inv Hl. simpl_In. simpl_Forall. subst. simpl in *. congruence. }
 
-                 assert (sc_vars (Γ' ++ senv_of_locs l) (restrict (fselect_hist e k stres Hi) Γ' + Hi') bs'') as Hsc2.
+                 assert (sc_vars (Γ' ++ senv_of_decls l) (restrict (fselect_hist e k stres Hi) Γ' + Hi') bs'') as Hsc2.
                  { eapply local_hist_sc_vars with (Γ:=Γ'); subst; eauto using List.incl_refl, restrict_dom_ub.
                    - intros * Hinm Hin. take (forall x, InMembers x _ -> ~_) and eapply it; eauto.
                      eapply IsVar_incl_fst, IsVar_fst; eauto.
@@ -613,13 +613,13 @@ Module Type CACORRECTNESS
                    destruct Hin1 as [|[|[|[|]]]]; eauto; subst; eapply contradict_AtomOrGensym; eauto using auto_not_in_last_prefs.
                  }
 
-                 assert (sc_vars (Γ' ++ senv_of_locs l) Hi'' bs'') as Hsc2'.
+                 assert (sc_vars (Γ' ++ senv_of_decls l) Hi'' bs'') as Hsc2'.
                  { subst. intros. eapply sc_vars_refines; simpl. 1,4:eauto.
                    - intros * Hinm Hin.
                      assert (~In x12 [x1;x3;x5;x7]) as Hnin.
                      { intros contra. apply IsVar_app in Hinm as [Hinm|Hinm].
                        - destruct contra as [|[|[|[|]]]]; subst; eauto.
-                       - eapply Hdisj, IsVar_senv_of_locs; eauto.
+                       - eapply Hdisj, IsVar_senv_of_decls; eauto.
                      }
                      unfold restrict. rewrite FEnv.union_In, FEnv.restrict_In, vars_of_senv_Var. setoid_rewrite FEnv.map_in_iff.
                      apply FEnv.union_In in Hin as [Hin|]; auto. setoid_rewrite FEnv.map_in_iff in Hin.
@@ -638,17 +638,18 @@ Module Type CACORRECTNESS
                  eapply Sscope with (Hi':=Hi'). 4:constructor. all:eauto.
                  * simpl_Forall; subst; constructor.
                  * subst; eauto.
-                 *{ eapply sem_transitions_refines, sem_transitions_restrict with (Γ:=((x1, default_ann)::(x3, default_ann)::(x5, default_ann)::(x7, default_ann)::Γ' ++ senv_of_locs l)) in H47; eauto.
+                 *{ take (sem_transitions_ck _ _ _ _ _ _) and eapply sem_transitions_refines, sem_transitions_restrict
+                      with (Γ:=((x1, default_ann)::(x3, default_ann)::(x5, default_ann)::(x7, default_ann)::Γ' ++ senv_of_decls l)) in it; eauto.
                     2:{ simpl_Forall. eapply wx_exp_incl. 3:eauto with lclocking.
                         1,2:intros * Hv; inv Hv; econstructor; eauto using InMembers_cons with datatypes. }
-                    eapply trans_exp_sem in H47 as (ss&Htranssem&Hconcat); eauto.
+                    eapply trans_exp_sem in it as (ss&Htranssem&Hconcat); eauto.
                     + repeat constructor. econstructor. 2:rewrite Hconcat; simpl.
                       * eapply Forall2_impl_In; [|eauto]; intros.
                         subst. eapply sem_exp_refines; [|eauto].
                         eapply FEnv.restrict_refines; eauto using EqStrel_Reflexive, EqStrel_Transitive.
                       * assert (forall x, In x [x1;x3;x5;x7] -> ~FEnv.In (Var x) Hi') as Hdisj'.
                         { intros * Hin Hinenv.
-                          eapply Hdisj; eauto. apply IsVar_senv_of_locs, H50; auto. }
+                          eapply Hdisj; eauto. take (dom Hi' _) and apply IsVar_senv_of_decls, it; auto. }
                         repeat constructor; subst; [rewrite stres_proj1_fselect|rewrite stres_proj2_fselect].
                         1,2:(eapply sem_var_union2; eauto with datatypes;
                              eapply sem_var_mask, sem_var_restrict, sem_var_fwhen;
@@ -676,7 +677,7 @@ Module Type CACORRECTNESS
                     - apply NoLast_app; auto.
                     - apply NoLast_app; auto.
                     - intros * Hv. rewrite IsVar_app in *. destruct Hv as [Hv|]; auto.
-                    - now rewrite map_app, map_fst_senv_of_locs.
+                    - now rewrite map_app, map_fst_senv_of_decls.
                     - eapply dom_ub_incl', restrict_dom_ub.
                       + intros *; rewrite 2 IsVar_app; intros [|]; eauto.
                       + intros *; rewrite 2 IsLast_app; intros [|]; eauto.
@@ -727,7 +728,7 @@ Module Type CACORRECTNESS
 
         constructor. eapply Sscope with (Hi':=Hi').
         + subst. split; intros *; rewrite FEnv.of_list_In.
-          * rewrite IsVar_senv_of_locs, 2 fst_InMembers; simpl.
+          * rewrite IsVar_senv_of_decls, 2 fst_InMembers; simpl.
             split; intros [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq; auto.
           * split; [intros Hin|intros Hlast; inv Hlast]; simpl in *.
             destruct Hin as [Eq|[Eq|[Eq|[Eq|Eq]]]]; inv Eq.
@@ -855,7 +856,7 @@ Module Type CACORRECTNESS
                + rewrite <-H10. apply fst_InMembers; auto.
                + simpl_Forall. repeat inv_branch. simpl_Forall; auto.
                + simpl_Forall. repeat inv_branch. intros. specialize (H23 k); destruct_conjs.
-                 repeat inv_branch; repeat inv_scope.
+                 repeat inv_branch; repeat inv_scope. subst Γ'0 Γ'1.
                  esplit; eauto using sem_transitions_ck_sem_transitions.
              - auto_block_simpl_Forall.
                do 2 esplit.
@@ -892,10 +893,10 @@ Module Type CACORRECTNESS
                  take (sem_scope_ck _ _ _ _ _) and eapply sem_scope_refines3, sem_scope_restrict3 in it. 3,4:eauto.
                  2:{ apply Forall_forall; intros; simpl_In.
                      edestruct H17 as (?&Hbase); eauto with senv. rewrite Hbase; constructor. }
-                 repeat inv_scope. repeat inv_bind.
+                 repeat inv_scope. repeat inv_bind. subst Γ'0 Γ'1.
                  repeat constructor.
 
-                 assert (forall x, ~ IsLast (senv_of_locs l0) x) as Hnolast2.
+                 assert (forall x, ~ IsLast (senv_of_decls l0) x) as Hnolast2.
                  { intros * Hlast. inv Hlast. simpl_In. simpl_Forall.
                    subst; simpl in *; congruence. }
 
@@ -925,12 +926,12 @@ Module Type CACORRECTNESS
                        all:take (_ = Some _) and apply FEnv.find_In in it; eauto.
                  }
 
-                 assert (sc_vars (senv_of_locs l0) Hi'' bs'') as Hsc1'.
+                 assert (sc_vars (senv_of_decls l0) Hi'' bs'') as Hsc1'.
                  { subst. intros. eapply sc_vars_refines; simpl. 1,4:eauto.
-                   - intros * Hinm _. now apply FEnv.union_In, or_intror, H48.
+                   - intros * Hinm _. take (dom Hi' _) and now apply FEnv.union_In, or_intror, it.
                    - intros * Hl. clear - Hl H37. inv Hl. simpl_In. simpl_Forall. subst. simpl in *. congruence. }
 
-                 assert (sc_vars (Γ' ++ senv_of_locs l0) (restrict (fselect_hist e k stres1 Hi) Γ' + Hi') bs'') as Hsc2.
+                 assert (sc_vars (Γ' ++ senv_of_decls l0) (restrict (fselect_hist e k stres1 Hi) Γ' + Hi') bs'') as Hsc2.
                  { eapply local_hist_sc_vars with (Γ:=Γ'); subst; eauto using List.incl_refl, restrict_dom_ub.
                    - intros * Hinm Hin. take (forall x, InMembers x _ -> ~_) and eapply it; eauto.
                      eapply IsVar_incl_fst, IsVar_fst; eauto.
@@ -946,13 +947,13 @@ Module Type CACORRECTNESS
                    destruct Hin1 as [|[|[|[|]]]]; eauto; subst; eapply contradict_AtomOrGensym; eauto using auto_not_in_last_prefs.
                  }
 
-                 assert (sc_vars (Γ' ++ senv_of_locs l0) Hi'' bs'') as Hsc2'.
+                 assert (sc_vars (Γ' ++ senv_of_decls l0) Hi'' bs'') as Hsc2'.
                  { subst. intros. eapply sc_vars_refines; simpl. 1,4:eauto.
                    - intros * Hinm Hin.
                      assert (~In x11 [x1;x3;x5;x7]) as Hnin.
                      { intros contra. apply IsVar_app in Hinm as [Hinm|Hinm].
                        - destruct contra as [|[|[|[|]]]]; subst; eauto.
-                       - eapply Hdisj, IsVar_senv_of_locs; eauto.
+                       - eapply Hdisj, IsVar_senv_of_decls; eauto.
                      }
                      unfold restrict. rewrite FEnv.union_In, FEnv.restrict_In, vars_of_senv_Var. setoid_rewrite FEnv.map_in_iff.
                      apply FEnv.union_In in Hin as [Hin|]; auto. setoid_rewrite FEnv.map_in_iff in Hin.
@@ -986,7 +987,7 @@ Module Type CACORRECTNESS
                     - apply NoLast_app; auto.
                     - apply NoLast_app; auto.
                     - intros * Hv. rewrite IsVar_app in *. destruct Hv as [Hv|]; auto.
-                    - now rewrite map_app, map_fst_senv_of_locs.
+                    - now rewrite map_app, map_fst_senv_of_decls.
                     - eapply dom_ub_incl', restrict_dom_ub.
                       + intros *; rewrite 2 IsVar_app; intros [|]; eauto.
                       + intros *; rewrite 2 IsLast_app; intros [|]; eauto.
@@ -1004,15 +1005,15 @@ Module Type CACORRECTNESS
         do 2 econstructor; eauto.
         1:simpl_Forall; subst; constructor.
         auto_block_simpl_Forall.
-        assert (forall x, ~ IsLast (senv_of_locs locs) x) as Hnl'.
+        assert (forall x, ~ IsLast (senv_of_decls locs) x) as Hnl'.
         { intros * Hlast. inv Hlast. simpl_In; simpl_Forall. subst; simpl in *; congruence. }
-        eapply H with (Γty:=Γty++senv_of_locs locs) (Γck:=Γck++senv_of_locs locs); eauto.
+        eapply H with (Γty:=Γty++senv_of_decls locs) (Γck:=Γck++senv_of_decls locs); eauto.
         + intros * Hv. apply IsVar_app in Hv as [Hv|Hv]; auto.
           inv Hv. simpl_In. simpl_Forall; auto.
         + apply NoLast_app; auto.
         + apply NoLast_app; auto.
         + intros * Hv. apply IsVar_app. apply IsVar_app in Hv as [Hv|Hv]; auto.
-        + rewrite map_app, map_fst_senv_of_locs; auto.
+        + rewrite map_app, map_fst_senv_of_decls; auto.
         + eapply local_hist_dom_ub; eauto.
         + eapply local_hist_sc_vars with (Γ:=Γty); eauto using IsVar_incl_fst.
           intros *. rewrite IsVar_fst; eauto.
@@ -1031,40 +1032,41 @@ Module Type CACORRECTNESS
       inv Hsem; rename H0 into Hfind; simpl in Hfind. destruct (ident_eq_dec (n_name n) f).
       - erewrite find_node_now in Hfind; eauto. inv Hfind.
         (*The semantics of equations can be given according to G only *)
-        eapply sem_block_ck_cons in H3; eauto. rename H3 into Hblksem.
-        2:{ inv Hord1. destruct H6 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
+        eapply sem_node_ck_cons1' in H4 as (Hblk'&_); eauto. clear H3.
+        2:{ inv Hord1. destruct H7 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
 
-        replace {| types := types G1; nodes := nodes G1 |} with G1 in Hblksem by (destruct G1; auto).
+        pose proof (n_syn n0) as Hsyn. inv Hsyn.
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
-        inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc.
-        inv Hwt. destruct H4 as (Hwt&_); simpl in Hwt.
+        inv Hwc. destruct H7 as (Hwc&_); simpl in Hwc.
+        inv Hwt. destruct H7 as (Hwt&_); simpl in Hwt.
         destruct H5 as (Hdom1&Hsc1).
-        eapply auto_block_sem in Hblksem; eauto.
-        10:rewrite surjective_pairing with (p:=auto_block _ _), surjective_pairing with (p:=fst _); reflexivity.
-        eapply Snode; eauto.
+        econstructor; eauto.
         + erewrite find_node_now; eauto.
         + eauto.
         + eauto.
-        + apply sem_block_ck_cons'; simpl...
-          2:{ eapply find_node_not_Is_node_in in Hord2.
-            2:erewrite find_node_now; eauto. eauto. }
-          destruct G2; eauto.
-        + simpl. constructor; simpl; auto.
-        + intros * Hv. inv Hv. apply fst_InMembers in H0. simpl_In. simpl_Forall; auto.
-        + apply senv_of_inout_NoLast.
-        + apply senv_of_inout_NoLast.
-        + rewrite map_fst_senv_of_inout. apply n_nodup.
-        + apply n_syn.
-        + destruct Hwt as (_&_&_&Hwt). destruct G1; eauto.
-        + destruct Hwc as (_&_&Hwc). destruct G1; auto.
-        + apply dom_dom_ub; auto.
+        + simpl_Forall. subst. constructor.
+        + eapply sem_block_ck_cons2; eauto.
+          2:{ eapply find_node_not_Is_node_in in Hord2. 2:erewrite find_node_now; eauto.
+              contradict Hord2. right; auto. }
+          simpl. replace (Global (types G1) (externs G1) (nodes G1)) with G1 in Hblk' by (destruct G1; auto).
+          eapply auto_block_sem in Hblk'; eauto using dom_dom_ub, node_NoDupLocals.
+          7:rewrite surjective_pairing with (p:=auto_block _ _), surjective_pairing with (p:=fst _); reflexivity.
+          * destruct G2; eauto.
+          * intros * Hv. inv Hv. rewrite fst_InMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls in H4.
+            now simpl_Forall.
+          * apply NoLast_app; split; auto using senv_of_ins_NoLast.
+            intros ? L; inv L; simpl_In. simpl_Forall. subst; simpl in *; congruence.
+          * apply NoLast_app; split; auto using senv_of_ins_NoLast.
+            intros ? L; inv L; simpl_In. simpl_Forall. subst; simpl in *; congruence.
+          * inv Hwt; subst Γ; destruct G1; auto.
+          * inv Hwc; subst Γ; destruct G1; auto.
+        + constructor; auto.
       - erewrite find_node_other in Hfind; eauto.
-        eapply sem_node_ck_cons'...
+        eapply sem_node_ck_cons2...
         destruct G2; apply Href.
-        econstructor...
-        destruct G1; eapply sem_block_ck_cons...
-        eapply find_node_later_not_Is_node_in in Hord1...
+        eapply sem_node_ck_cons1' in H4 as (?&?)... 2:eapply find_node_later_not_Is_node_in in Hord1...
+        destruct G1; econstructor...
     Qed.
 
   End sem_node.

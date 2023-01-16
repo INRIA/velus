@@ -81,8 +81,9 @@ Module Type LSYNTAX
     - a causality label (added by elaboration) that is used to build the dependency graph of the node
     - if the variable is defined by last, the last expression and a causality label for the last variable
    *)
+  Definition decl : Type := ident * (type * clock * ident * option (exp * ident)).
   Inductive scope A :=
-  | Scope : list (ident * (type * clock * ident * option (exp * ident))) -> A -> scope A.
+  | Scope : list decl -> A -> scope A.
   Arguments Scope {_}.
 
   (* Switch and state machine branches
@@ -347,12 +348,12 @@ Module Type LSYNTAX
       NoDupMembers Γ ->
       NoDupMembers locs ->
       (forall x, InMembers x locs -> ~In x (map fst Γ)) ->
-      NoDupMembers (Γ ++ @senv_of_locs exp locs).
+      NoDupMembers (Γ ++ @senv_of_decls exp locs).
   Proof.
     intros * Nd1 Nd2 Nd3.
     apply NoDupMembers_app; auto.
-    - now apply NoDupMembers_senv_of_locs.
-    - intros * In1 In2. rewrite fst_InMembers in In1. rewrite InMembers_senv_of_locs in In2.
+    - now apply NoDupMembers_senv_of_decls.
+    - intros * In1 In2. rewrite fst_InMembers in In1. rewrite InMembers_senv_of_decls in In2.
       eapply Nd3; eauto.
   Qed.
 
@@ -406,23 +407,23 @@ Module Type LSYNTAX
     - typing and clocking annotations (provided by the programmer)
     - a causality label (added by elaboration) that is used to build the dependency graph of the node
    *)
-  Record node {PSyn : block -> Prop} {prefs : PS.t} : Type :=
+  Record node {PSyn : _ -> _ -> Prop} {prefs : PS.t} : Type :=
     mk_node {
         n_name     : ident;
         n_hasstate : bool;
         n_in       : list (ident * (type * clock * ident));
-        n_out      : list (ident * (type * clock * ident));
+        n_out      : list decl;
         n_block    : block;
 
         n_ingt0    : 0 < length n_in;
         n_outgt0   : 0 < length n_out;
         n_defd     : exists xs, VarsDefined n_block xs /\ Permutation xs (map fst n_out);
-        n_nodup    : NoDupMembers (n_in ++ n_out) /\
-                     NoDupLocals (map fst (n_in ++ n_out)) n_block;
-        n_good     : Forall (AtomOrGensym prefs) (map fst (n_in ++ n_out))
+        n_nodup    : NoDup (map fst n_in ++ map fst n_out) /\
+                     NoDupLocals (map fst n_in ++ map fst n_out) n_block;
+        n_good     : Forall (AtomOrGensym prefs) (map fst n_in ++ map fst n_out)
                      /\ GoodLocals prefs n_block
                      /\ atom n_name;
-        n_syn      : PSyn n_block;
+        n_syn      : PSyn n_out n_block;
       }.
 
   Global Instance node_unit {PSyn prefs} : ProgramUnit (@node PSyn prefs) :=
@@ -443,7 +444,7 @@ Module Type LSYNTAX
       update := fun g => Global g.(types) g.(externs) }.
 
   Section find_node.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
 
     Definition find_node (f: ident) (G: @global PSyn prefs) :=
@@ -855,7 +856,7 @@ Module Type LSYNTAX
   (** Interface equivalence between nodes *)
 
   Section interface_eq.
-    Context {PSyn1 PSyn2 : block -> Prop}.
+    Context {PSyn1 PSyn2 : list decl -> block -> Prop}.
     Context {prefs1 prefs2 : PS.t}.
 
     (** Nodes are equivalent if their interface are equivalent,
@@ -864,8 +865,8 @@ Module Type LSYNTAX
     Definition node_iface_eq (n : @node PSyn1 prefs1) (n' : @node PSyn2 prefs2) : Prop :=
       n.(n_name) = n'.(n_name) /\
       n.(n_hasstate) = n'.(n_hasstate) /\
-      n.(n_in) = n'.(n_in) /\
-      n.(n_out) = n'.(n_out).
+      map (fun '(x, (ty, ck, _)) => (x, (ty, ck))) n.(n_in) = map (fun '(x, (ty, ck, _)) => (x, (ty, ck))) n'.(n_in) /\
+      map (fun '(x, (ty, ck, _, _)) => (x, (ty, ck))) n.(n_out) = map (fun '(x, (ty, ck, _, _)) => (x, (ty, ck))) n'.(n_out).
 
     Definition global_iface_incl (G : @global PSyn1 prefs1) (G' : @global PSyn2 prefs2) : Prop :=
       incl (types G) (types G')
@@ -910,7 +911,7 @@ Module Type LSYNTAX
       repeat split; auto. intros ?.
       destruct (Pos.eq_dec (n_name n) f); subst.
       - simpl. repeat rewrite find_node_now; auto.
-        repeat constructor; auto.
+        repeat constructor; f_equal; auto.
       - repeat rewrite find_node_other; auto.
         congruence.
     Qed.
@@ -1115,8 +1116,11 @@ Module Type LSYNTAX
       wl_scope (Forall (wl_block G)) G scope ->
       wl_block G (Blocal scope).
 
-  Definition wl_node {PSyn prefs} (G : @global PSyn prefs) (n : @node PSyn prefs) :=
-    wl_block G (n_block n).
+  Inductive wl_node {PSyn prefs} (G : @global PSyn prefs) : @node PSyn prefs -> Prop :=
+  | wl_Node : forall n,
+      Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wl_exp G e /\ numstreams e = 1) o) (n_out n) ->
+      wl_block G (n_block n) ->
+      wl_node G n.
 
   Definition wl_global {PSyn prefs} : @global PSyn prefs -> Prop :=
     wt_program wl_node.
@@ -1182,8 +1186,8 @@ Module Type LSYNTAX
     Forall (wx_exp Γ) es /\ Forall (IsVar Γ) xs.
 
   Inductive wx_scope {A} (P_wx : static_env -> A -> Prop) : static_env -> scope A -> Prop :=
-  | wx_Scope : forall Γ Γ' locs blks,
-      Γ' = Γ ++ senv_of_locs locs ->
+  | wx_Scope : forall Γ locs blks,
+      let Γ' := Γ ++ senv_of_decls locs in
       Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wx_exp Γ' e) o) locs ->
       P_wx Γ' blks ->
       wx_scope P_wx Γ (Scope locs blks).
@@ -1222,8 +1226,12 @@ Module Type LSYNTAX
       wx_scope (fun Γ => Forall (wx_block Γ)) Γ scope ->
       wx_block Γ (Blocal scope).
 
-  Definition wx_node {PSyn prefs} (n : @node PSyn prefs) :=
-    wx_block (senv_of_inout (n_in n ++ n_out n)) (n_block n).
+  Inductive wx_node {PSyn prefs} : @node PSyn prefs -> Prop :=
+  | wx_Node : forall n,
+      let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
+      Forall (fun '(_, (_,_,_,o)) => LiftO True (fun '(e, _) => wx_exp Γ e) o) (n_out n) ->
+      wx_block Γ (n_block n) ->
+      wx_node n.
 
   Definition wx_global {PSyn prefs} (G: @global PSyn prefs) : Prop :=
     Forall wx_node (nodes G).
@@ -1277,7 +1285,7 @@ Module Type LSYNTAX
         wx_scope P_wx Γ' (Scope locs blks).
     Proof.
       intros * Hin1 Hin2 Hp Hwx. inv Hwx.
-      econstructor; eauto.
+      econstructor; subst Γ'0; eauto.
       - simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto.
         eapply wx_exp_incl; [| |eauto]; intros ?.
         rewrite 2 IsVar_app. intros [|]; eauto.
@@ -1328,10 +1336,16 @@ Module Type LSYNTAX
       nolocal_block (Breset blks er).
 
   Inductive nolocal_top_block : block -> Prop :=
-  | NLnode : forall locs blks,
+  | NLtop : forall locs blks,
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall nolocal_block blks ->
       nolocal_top_block (Blocal (Scope locs blks)).
+
+  Inductive nolocal : list decl -> block -> Prop :=
+  | NLnode : forall out blk,
+      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
+      nolocal_top_block blk ->
+      nolocal out blk.
 
   (** *** Without switches *)
 
@@ -1344,6 +1358,12 @@ Module Type LSYNTAX
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       Forall noswitch_block blks ->
       noswitch_block (Blocal (Scope locs blks)).
+
+  Inductive noswitch : list decl -> block -> Prop :=
+  | NSnode : forall out blk,
+      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
+      noswitch_block blk ->
+      noswitch out blk.
 
   (** *** Without automaton *)
 
@@ -1369,6 +1389,12 @@ Module Type LSYNTAX
   | NAlocal : forall s,
       noauto_scope (Forall noauto_block) s ->
       noauto_block (Blocal s).
+
+  Inductive noauto : list decl -> block -> Prop :=
+  | NAnode : forall out blk,
+      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
+      noauto_block blk ->
+      noauto out blk.
 
   (** *** Without last *)
 
@@ -1397,6 +1423,12 @@ Module Type LSYNTAX
   | NLalocal : forall scope,
       nolast_scope (Forall nolast_block) scope ->
       nolast_block (Blocal scope).
+
+  Inductive nolast : list decl -> block -> Prop :=
+  | NLanode : forall out blk,
+      Forall (fun '(_, (_, _, _, o)) => o = None) out ->
+      nolast_block blk ->
+      nolast out blk.
 
   (** Inclusion of these properties *)
 
@@ -1514,12 +1546,11 @@ Module Type LSYNTAX
   Qed.
 
   Corollary node_NoDupLocals {PSyn prefs} : forall (n : @node PSyn prefs),
-      NoDupLocals (map fst (n_in n ++ n_out n)) (n_block n).
+      NoDupLocals (map fst (senv_of_ins (n_in n) ++ senv_of_decls (n_out n))) (n_block n).
   Proof.
     intros *.
-    pose proof (n_nodup n) as (_&Hnd).
-    eapply NoDupLocals_incl; eauto.
-    solve_incl_app.
+    rewrite map_app, map_fst_senv_of_ins, map_fst_senv_of_decls.
+    apply n_nodup.
   Qed.
 
   Add Parametric Morphism : NoDupLocals
@@ -1584,11 +1615,11 @@ Module Type LSYNTAX
       intros; simpl_Forall; eauto.
   Qed.
 
-  Lemma node_NoDup {PSyn prefs} : forall (n : @node PSyn prefs),
-      NoDup (map fst (n_in n ++ n_out n)).
+  Lemma node_NoDupMembers {PSyn prefs} : forall (n : @node PSyn prefs),
+      NoDupMembers (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)).
   Proof.
     intros n.
-    rewrite <- fst_NoDupMembers.
+    rewrite fst_NoDupMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls.
     apply n_nodup.
   Qed.
 
@@ -1807,12 +1838,12 @@ Module Type LSYNTAX
       simpl_Exists; simpl_Forall; eauto.
       inv H1. destruct_conjs. inv H0. inv H8. destruct_conjs. inv H3. simpl_Exists; simpl_Forall; eauto.
       eapply H, InMembers_app in H1 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H2, InMembers_senv_of_locs; auto.
+      exfalso. apply H2, InMembers_senv_of_decls; auto.
     - (* local *)
       inv H1. inv H2.
       simpl_Exists; simpl_Forall.
       eapply H, InMembers_app in H4 as [|]. 3:eauto. 1,2:eauto.
-      exfalso. apply H5, InMembers_senv_of_locs; auto.
+      exfalso. apply H5, InMembers_senv_of_decls; auto.
   Qed.
 
   Corollary Exists_Is_defined_in_wx_In : forall blks env x,

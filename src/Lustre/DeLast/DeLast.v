@@ -175,6 +175,21 @@ Module Type DELAST
         ret (Blocal scope')
     end.
 
+  Definition delast_outs_and_block (outs : list decl) blk : FreshAnn block :=
+    let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) outs in
+    do lasts' <- fresh_idents lasts;
+    let sub := Env.from_list (map fst lasts') in
+    do blk' <- delast_block sub blk;
+    let fbyeqs :=
+      map (fun '(x, lx, (ty, ck, e)) =>
+             ([lx], [Efby [rename_in_exp sub e]
+                       [Evar x (ty, ck)] [(ty, ck)]])) lasts' in
+    if is_nil lasts' then
+      ret blk'
+    else
+      ret (Blocal (Scope (map (fun '(_, lx, (ty, ck, _)) => (lx, (ty, ck, xH, None))) lasts')
+                     (map Beq fbyeqs ++ [blk']))).
+
   (** ** Some properties *)
 
   Lemma fresh_idents_In : forall lasts lasts' st st',
@@ -393,6 +408,23 @@ Module Type DELAST
       Transparent delast_scope.
   Qed.
 
+  Lemma delast_outs_and_block_vars_perm : forall outs blk blk' xs st st',
+      VarsDefined blk xs ->
+      delast_outs_and_block outs blk st = (blk', st') ->
+      VarsDefined blk' xs.
+  Proof.
+    unfold delast_outs_and_block.
+    intros * VF DL. repeat inv_bind.
+    cases; repeat inv_bind; eauto using delast_block_vars_perm.
+    do 2 econstructor. do 2 esplit. apply Forall2_app.
+    - instantiate (1:=map (fun '(_, x, _) => [x]) x). simpl_Forall. constructor.
+    - econstructor; eauto using delast_block_vars_perm.
+    - rewrite concat_app; simpl.
+      rewrite app_nil_r, Permutation_app_comm. apply Permutation_app_head.
+      erewrite map_ext, <-map_map, concat_map_singl1, map_map. reflexivity.
+      intros; destruct_conjs; auto.
+  Qed.
+
   (** *** GoodLocals *)
 
   Fact fresh_idents_prefixed : forall lasts lasts' st st',
@@ -465,6 +497,20 @@ Module Type DELAST
         simpl_Forall; eauto.
       + intros. apply Forall_app; auto.
         Transparent delast_scope.
+  Qed.
+
+  Lemma delast_outs_and_block_GoodLocals : forall outs blk blk' st st',
+      GoodLocals elab_prefs blk ->
+      delast_outs_and_block outs blk st = (blk', st') ->
+      GoodLocals last_prefs blk'.
+  Proof.
+    unfold delast_outs_and_block.
+    intros * VF DL. repeat inv_bind.
+    cases; repeat inv_bind; eauto using delast_block_GoodLocals.
+    do 2 constructor. 2:apply Forall_app; split. all:simpl_Forall; eauto using delast_block_GoodLocals.
+    - eapply fresh_idents_prefixed in H. simpl_Forall; subst.
+      right. do 2 esplit; eauto using PSF.add_1.
+    - constructor.
   Qed.
 
   (** *** NoDupLocals *)
@@ -648,6 +694,36 @@ Module Type DELAST
         Transparent delast_scope.
   Qed.
 
+  Lemma delast_outs_and_block_NoDupLocals : forall outs blk xs blk' st st',
+      Forall (fun x => AtomOrGensym elab_prefs x \/ In x (st_ids st)) xs ->
+      GoodLocals elab_prefs blk ->
+      NoDupLocals xs blk ->
+      delast_outs_and_block outs blk st = (blk', st') ->
+      NoDupLocals xs blk'.
+  Proof.
+    unfold delast_outs_and_block.
+    intros * At Good ND DL. repeat inv_bind.
+    assert (Forall (fun x1 : ident => AtomOrGensym elab_prefs x1 \/ In x1 (st_ids x0)) xs) as At2.
+    { simpl_Forall. destruct At as [|In]; eauto.
+      right. eapply incl_map; eauto using st_follows_incl, fresh_idents_st_follows. }
+    cases; repeat inv_bind; eauto using delast_block_NoDupLocals.
+    do 2 constructor. apply Forall_app; split. all:simpl_Forall; eauto using delast_block_GoodLocals.
+    - constructor.
+    - eapply delast_block_NoDupLocals; eauto.
+      + apply Forall_app; split; auto.
+        simpl_Forall. eapply fresh_idents_In_ids in H. simpl_Forall; auto.
+      + eapply NoDupLocals_incl'. 4:eauto. 1-3:eauto using last_not_in_elab_prefs.
+        intros * In. apply in_app_iff in In as [|]; auto.
+        right. simpl_In.
+        eapply fresh_idents_prefixed in H. simpl_Forall; eauto.
+    - eapply fresh_idents_NoDup in H; eauto.
+    - intros * In1 In2. simpl_In. simpl_Forall.
+      destruct At as [At|StIn].
+      + eapply fresh_idents_prefixed in H. simpl_Forall. subst.
+        eapply contradict_AtomOrGensym; eauto using last_not_in_elab_prefs.
+      + eapply fresh_idents_nIn_ids in H. simpl_Forall. contradiction.
+  Qed.
+
   (** *** No last remaining *)
 
   Fact delast_scope_nolast {A} f_dl f_add (P_nl: _ -> Prop) : forall sub locs (blks : A) s' st st',
@@ -702,55 +778,72 @@ Module Type DELAST
         Transparent delast_scope.
   Qed.
 
+  Lemma delast_outs_and_block_nolast : forall blk outs blk' st st',
+      delast_outs_and_block outs blk st = (blk', st') ->
+      nolast_block blk'.
+  Proof.
+    unfold delast_outs_and_block.
+    intros * DL. repeat inv_bind.
+    cases; repeat inv_bind; eauto using delast_block_nolast.
+    do 2 constructor. 2:apply Forall_app; split.
+    all:simpl_Forall; eauto using delast_block_nolast.
+    constructor.
+  Qed.
+
   (** ** Transformation of node and program *)
 
-  Program Definition delast_node (n: @node (fun _ => True) elab_prefs) : @node nolast_block last_prefs :=
-    let res := delast_block (@Env.empty _) (n_block n) init_st in
+  Program Definition delast_node (n: @node (fun _ _ => True) elab_prefs) : @node nolast last_prefs :=
+    let res := delast_outs_and_block (n_out n) (n_block n) init_st in
     {|
       n_name := (n_name n);
       n_hasstate := (n_hasstate n);
       n_in := (n_in n);
-      n_out := (n_out n);
+      n_out := List.map (fun xtc => (fst xtc, (fst (fst (fst (snd xtc))), (snd (fst (fst (snd xtc)))), xH, None))) (n_out n);
       n_block := fst res;
       n_ingt0 := (n_ingt0 n);
       n_outgt0 := (n_outgt0 n);
     |}.
   Next Obligation.
+    now rewrite map_length.
+  Qed.
+  Next Obligation.
     pose proof (n_defd n) as (?&Hvars&Hperm).
     pose proof (n_nodup n) as (_&Hndup).
-    pose proof (n_syn n) as Hns.
-    repeat esplit; eauto.
-    destruct (delast_block _ _) as (?&?) eqn:Hdl.
-    eapply delast_block_vars_perm in Hvars; eauto.
+    repeat esplit.
+    - destruct (delast_outs_and_block _ _ _) as (?&?) eqn:Hdl.
+      eapply delast_outs_and_block_vars_perm in Hvars; eauto.
+    - rewrite Hperm. erewrite map_map; reflexivity.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     pose proof (n_syn n) as Hsyn.
-    repeat split; auto.
-    destruct (delast_block _ _) as (?&st') eqn:Hdl.
-    eapply delast_block_NoDupLocals; eauto.
+    rewrite map_map. repeat split; auto.
+    destruct (delast_outs_and_block _ _ _) as (?&st') eqn:Hdl.
+    eapply delast_outs_and_block_NoDupLocals; eauto.
     simpl_Forall; auto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    destruct (delast_block _ _) as (?&?) eqn:Hdl. simpl.
+    rewrite map_map.
+    destruct (delast_outs_and_block _ _) as (?&?) eqn:Hdl. simpl.
     repeat split; eauto using Forall_AtomOrGensym_add.
-    eapply delast_block_GoodLocals; eauto.
+    eapply delast_outs_and_block_GoodLocals; eauto.
   Qed.
   Next Obligation.
-    destruct (delast_block _ _) as (?&?) eqn:Hdl.
-    eapply delast_block_nolast; eauto.
+    destruct (delast_outs_and_block _ _) as (?&?) eqn:Hdl.
+    constructor; eauto using delast_outs_and_block_nolast.
+    simpl_Forall. auto.
   Qed.
 
-  Global Program Instance delast_node_transform_unit: TransformUnit (@node (fun _ => True) elab_prefs) node :=
+  Global Program Instance delast_node_transform_unit: TransformUnit (@node (fun _ _ => True) elab_prefs) node :=
     { transform_unit := delast_node }.
 
-  Global Program Instance delast_global_without_units : TransformProgramWithoutUnits (@global (fun _ => True) elab_prefs) (@global nolast_block last_prefs) :=
+  Global Program Instance delast_global_without_units : TransformProgramWithoutUnits (@global (fun _ _ => True) elab_prefs) (@global nolast last_prefs) :=
     { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
-  Definition delast_global : @global (fun _ => True) elab_prefs -> @global nolast_block last_prefs :=
+  Definition delast_global : @global (fun _ _ => True) elab_prefs -> @global nolast last_prefs :=
     transform_units.
 
   (** *** Equality of interfaces *)
@@ -763,6 +856,7 @@ Module Type DELAST
     destruct (find_unit f G) as [(?&?)|] eqn:Hfind; simpl.
     - setoid_rewrite find_unit_transform_units_forward; eauto.
       simpl. repeat constructor.
+      simpl. erewrite map_map. apply map_ext. intros; destruct_conjs; auto.
     - destruct (find_unit f (delast_global G)) as [(?&?)|] eqn:Hfind'; simpl; try constructor.
       eapply find_unit_transform_units_backward in Hfind' as (?&?&?&?); congruence.
   Qed.

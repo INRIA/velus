@@ -1459,7 +1459,8 @@ Module Type CORRECTNESS
                              Forall2 (LC.WellInstantiated bck sub) (map (fun '(x, (_, ck, _)) => (x, ck)) (L.n_in n)) (L.nclocksof l)) as (n&bck&?&Hfind&WIi).
         { inv Hwc; eauto. simpl_Foralls. inv H4; eauto. }
         take (L.find_node _ _ = Some n) and
-             pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?)).
+             pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& Wc).
+        inversion_clear Wc as [?? Wcin _ _ _].
         assert (find_base_clock (L.clocksof l) = bck) as ->.
         {
           apply find_base_clock_bck.
@@ -1620,7 +1621,7 @@ Module Type CORRECTNESS
   Lemma inputs_clocked_vars {PSyn prefs} :
     forall (n: @L.node PSyn prefs) H ins,
       Forall2 (fun x => sem_var H (LS.Var x)) (L.idents (L.n_in n)) ins ->
-      LCS.sc_vars (senv_of_inout (L.n_in n ++ L.n_out n)) H (clocks_of ins) ->
+      LCS.sc_vars (senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n)) H (clocks_of ins) ->
       NLSC.sem_clocked_vars (LS.var_history H) (clocks_of ins) (Common.idck (Common.idty (L.n_in n))).
   Proof.
     intros * Hvs (Hsc&_).
@@ -1630,6 +1631,7 @@ Module Type CORRECTNESS
     2:intros; setoid_rewrite LS.sem_var_history; eauto.
     intros * Hvar.
     eapply LS.sem_var_history, Hsc in Hvar; [|econstructor; solve_In; eauto with datatypes; auto].
+    2:apply in_app_iff, or_introl; solve_In.
     do 2 esplit; eauto. apply ac_aligned.
   Qed.
 
@@ -1650,69 +1652,71 @@ Module Type CORRECTNESS
     intros * Hnormed Hord Hwt Hwc Htr Hsem.
     destruct Hwt as (Hbool&Hwt).
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Hblocks Hbk (Hdom&Hsc)].
+    inversion_clear Hsem' as [? ? ? ? ? Hfind Hins Houts ? Slast Sblk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
+    pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2].
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
     - rewrite L.find_node_now in Hfind; eauto. inv Hfind.
       assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnnblocks Hnn].
-      eapply LCS.sem_block_ck_cons in Hblocks; eauto.
+      eapply LCS.sem_node_ck_cons1' in Sblk as (Sblk'&_); eauto.
       assert (Htr':=Htr). monadInv Htr'; simpl in *; monadInv EQ.
       assert (forall f ins outs,
                  LCS.sem_node_ck (L.Global types externs nodes) f ins outs ->
                  NLSC.sem_node (NL.Global types externs x3) f ins outs) as IHnds'.
       { intros. eapply IHnodes; eauto. constructor; auto.
         unfold to_global; simpl. rewrite EQ; auto. }
-      take (LT.wt_node _ _) and inversion it as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
-      take (LC.wc_node _ _) and inversion it as (Hwc1 & Hwc2 & Hwc3).
+      take (LT.wt_node _ _) and inversion_clear it as [?? Hwt1 Hwt2 Hwt3 _ Hwt4]; subst Γ.
+      take (LC.wc_node _ _) and inversion_clear it as [?? Hwc1 Hwc2 _ Hwc3]; subst Γ.
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      rewrite Hblk in *. inv Hnd2. inv H8. inv Hblocks. inv H10.
+      rewrite Hblk in *. inv Hnd2. inv H8. inv Sblk'. inv H10.
       assert (H ⊑ H + Hi') as Href.
       { eapply LCS.local_hist_dom_refines. 3:eauto. 1,2:eauto.
-        intros. rewrite IsVar_fst, map_fst_senv_of_inout; eauto. }
-      assert (sc_vars (senv_of_inout (L.n_in n ++ L.n_out n)) (H + Hi') (clocks_of ins)) as Hsc'.
+        intros. rewrite IsVar_fst, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls; eauto. }
+      assert (sc_vars (senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n)) (H + Hi') (clocks_of ins)) as Hsc'.
       { destruct Hsc as (Hsc1&_). split.
         - intros * Hck Hv.
           eapply LS.sem_clock_refines, Hsc1; eauto using LS.var_history_refines.
           inv Hck; simpl_In.
           apply sem_var_union in Hv as [Hv|Hv]; auto.
-          exfalso. apply LS.sem_var_In, H8, IsVar_senv_of_locs in Hv.
-          eapply H12; eauto; solve_In.
+          exfalso. apply LS.sem_var_In, H8, IsVar_senv_of_decls in Hv.
+          eapply H12; eauto. rewrite <-map_fst_senv_of_ins, <-map_fst_senv_of_decls, <-map_app. solve_In.
         - intros * _ Hl. exfalso.
-          eapply senv_of_inout_NoLast; eauto.
+          eapply NoLast_app; [|eauto]; split; eauto using senv_of_ins_NoLast.
+          clear - Hsyn1. intros * L. inv L. simpl_In. simpl_Forall. subst; simpl in *; congruence.
       }
       eapply NLSC.SNode with (H:=LS.var_history (H + Hi')); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
       + erewrite <- to_node_in, map_fst_idty; eauto.
         eapply Forall2_impl_In; [|eauto]; intros.
         eapply LS.sem_var_refines, LS.sem_var_history; eauto using LS.var_history_refines.
-      + erewrite <- to_node_out, map_fst_idty; eauto.
+      + erewrite <- to_node_out, 2 map_fst_idty; eauto.
         eapply Forall2_impl_In; [|eauto]; intros.
         eapply LS.sem_var_refines, LS.sem_var_history; eauto using LS.var_history_refines.
       + erewrite <- to_node_in; eauto.
         eapply inputs_clocked_vars; eauto.
-        simpl_Forall; eauto using LS.sem_var_refines.
+        unfold L.idents. simpl_Forall; eauto using LS.sem_var_refines.
       + apply NLSC.sem_equation_cons2; eauto using ord_l_nl.
         2:{ assert (Htrn' := EQ0).
             apply to_node_name in EQ0. rewrite <- EQ0.
-            eapply ninin_l_nl; eauto. congruence. }
+            eapply ninin_l_nl; eauto. contradict Hnini. right; auto. }
         tonodeInv EQ0; simpl in *.
-        eapply sem_blockstoeqs with (cenv:=senv_of_inout (L.n_in n ++ L.n_out n) ++ _). 1-9:eauto.
+        eapply sem_blockstoeqs with (cenv:=senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n) ++ _). 1-9:eauto.
         5:{ clear Htr. rewrite Hblk in Hmmap. monadInv Hmmap; eauto. }
-        * inv Hwt4. inv H10. eauto.
-        * inv Hwc3. inv H10. eauto.
+        * inv Hwt4. inv H10. subst Γ'. simpl_app. eauto.
+        * inv Hwc3. inv H10. subst Γ'. simpl_app. eauto.
         * apply envs_eq_node in Hblk. clear - Hblk.
           intros ??. specialize (Hblk x ck). rewrite <-Hblk.
-          rewrite (Permutation_app_comm (Common.idty locs)).
+          rewrite (Permutation_app_comm (Common.idty (Common.idty locs))).
           simpl_app. repeat rewrite in_app_iff.
-          split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
-        * apply sc_vars_app; eauto.
-          intros *. rewrite InMembers_senv_of_locs, fst_InMembers, map_fst_senv_of_inout.
-          intros Hin1 Hin2. eapply H12; eauto.
-    - eapply LCS.sem_node_ck_cons in Hsem; auto.
+          clear - n. split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
+        * rewrite app_assoc. apply sc_vars_app; eauto.
+          intros *. rewrite fst_InMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls.
+          intros Hin1 Hin2. eapply H12; eauto. clear - Hin2. solve_In.
+    - eapply LCS.sem_node_ck_cons1 in Hsem; auto.
       assert (Htr' := Htr).
       monadInv Htr. simpl in *. monadInv EQ.
       rewrite cons_is_app in Hord.

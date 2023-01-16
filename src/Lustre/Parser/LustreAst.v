@@ -108,8 +108,8 @@ Definition expression_loc (e: expression) : astloc :=
   | MERGE _ _ l => l
   end.
 
-Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
-Definition local_decls : Type := list (ident * (type_name * preclock * list expression * astloc)).
+Definition input_decls : Type := list (ident * (type_name * preclock * astloc)).
+Definition var_decls : Type := list (ident * (type_name * preclock * list expression * astloc)).
 
 Definition equation : Type := (list ident * list expression * astloc)%type.
 
@@ -119,12 +119,12 @@ Inductive block :=
 | BEQ      : equation -> block
 | BRESET   : list block -> list expression -> astloc -> block
 | BSWITCH  : list expression -> list (ident * list block) -> astloc -> block
-| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (local_decls * list block * list transition * list transition)) -> astloc -> block
-| BLOCAL   : local_decls -> list block -> astloc -> block.
+| BAUTO    : list (list expression * ident * astloc) * ident -> list (ident * (var_decls * list block * list transition * list transition)) -> astloc -> block
+| BLOCAL   : var_decls -> list block -> astloc -> block.
 
 Inductive declaration :=
       (*  name  has_state  inputs       outputs      locals   *)
-| NODE : ident -> bool -> var_decls -> var_decls
+| NODE : ident -> bool -> input_decls -> var_decls
          -> block -> astloc -> declaration
 | TYPE : ident -> list ident -> astloc -> declaration
 | EXTERNAL : ident -> list type_name -> type_name -> astloc -> declaration.
@@ -268,8 +268,8 @@ Section block_ind2.
       induction l0; auto.
     - apply AUTOCase.
       induction l as [|]; destruct_conjs; constructor; eauto; simpl.
-      induction l3; auto.
+      induction l2; auto.
     - apply LOCALCase.
-      induction l0; auto.
+      induction l; auto.
   Qed.
 End block_ind2.

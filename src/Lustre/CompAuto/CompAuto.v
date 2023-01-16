@@ -488,7 +488,7 @@ Module Type COMPAUTO
       inv H1. repeat constructor; auto. auto_block_simpl_Forall.
   Qed.
 
-  Program Definition auto_node (n: @node nolast_block last_prefs) : @node noauto_block auto_prefs * list type :=
+  Program Definition auto_node (n: @node nolast last_prefs) : @node noauto auto_prefs * list type :=
     let res := auto_block (n_block n) init_st in
     ({| n_name := n_name n;
         n_hasstate := n_hasstate n;
@@ -518,11 +518,11 @@ Module Type COMPAUTO
   Qed.
   Next Obligation.
     destruct (auto_block _ _) as ((?&?)&?) eqn:Hauto; simpl.
-    pose proof (n_syn n) as Hsyn.
-    eapply auto_block_noauto; eauto.
+    pose proof (n_syn n) as Hsyn. inv Hsyn.
+    constructor; eauto using auto_block_noauto.
   Qed.
 
-  Definition auto_global (G : @global nolast_block last_prefs) : @global noauto_block auto_prefs :=
+  Definition auto_global (G : @global nolast last_prefs) : @global noauto auto_prefs :=
     let ndstys := map auto_node G.(nodes) in
     Global (G.(types)++flat_map snd ndstys) G.(externs) (map fst ndstys).
 

@@ -79,17 +79,17 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<LustreAst.constant * LustreAst.astloc> constant
 %type<list LustreAst.expression> expression_list
 %type<LustreAst.unary_operator * LustreAst.astloc> unary_operator
-%type<LustreAst.var_decls> var_decl
+%type<LustreAst.input_decls> input_decl
 %type<list Common.ident (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
 %type<list LustreAst.type_name> type_names
 %type<LustreAst.preclock> declared_clock
 %type<LustreAst.clock> clock
-%type<LustreAst.local_decls> last_var_decl
-%type<LustreAst.local_decls> var_decl_list
-%type<LustreAst.local_decls> local_decl
-%type<LustreAst.local_decls> local_decl_list
-%type<LustreAst.var_decls (* Reverse order *)> parameter_list oparameter_list
+%type<LustreAst.var_decls> var_decl
+%type<LustreAst.var_decls> var_decl_list
+%type<LustreAst.var_decls> local_decl
+%type<LustreAst.var_decls> local_decl_list oparameter_list
+%type<LustreAst.input_decls> parameter_list
 %type<list Common.ident> pattern
 %type<LustreAst.equation> equation
 %type<LustreAst.block> block
@@ -100,8 +100,8 @@ Definition false_id := Ident.str_to_pos "False"%string.
 %type<list LustreAst.transition> transitions
 %type<list LustreAst.transition> untils
 %type<list LustreAst.transition> unless
-%type<Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition * list LustreAst.transition)> auto_state
-%type<list (Common.ident * (LustreAst.local_decls * list LustreAst.block * list LustreAst.transition * list LustreAst.transition))> auto_state_list
+%type<Common.ident * (LustreAst.var_decls * list LustreAst.block * list LustreAst.transition * list LustreAst.transition)> auto_state
+%type<list (Common.ident * (LustreAst.var_decls * list LustreAst.block * list LustreAst.transition * list LustreAst.transition))> auto_state_list
 %type<unit> optsemicolon optbar
 %type<bool * LustreAst.astloc> node_or_function
 %type<LustreAst.declaration> declaration
@@ -372,32 +372,6 @@ expression:
 | loc=MERGE id=VAR_NAME bs=branch_list
     { [LustreAst.MERGE (fst id) bs loc] }
 
-(* Declarations are much simpler than in C. We do not have arrays,
-   structs/unions, or pointers. We do not have storage-class specifiers,
-   type-qualifiers, or alignment specifiers. Nor are our type-specifiers lists
-   (e.g., "unsigned short int"), since we use the type names from
-   stdint.h/Scade (e.g., "uint_16"). *)
-
-var_decl:
-| ids=identifier_list loc=COLON ty=type_name clk=declared_clock
-    { map (fun id => (id, (fst ty, clk, loc))) (rev ids) }
-
-last_var_decl:
-| vars=var_decl
-   { map (fun '(id, (ty, ck, loc)) => (id, (ty, ck, [], loc))) vars }
-| LAST id=VAR_NAME loc=COLON ty=type_name clk=declared_clock EQ e=expression
-   { [(fst id, (fst ty, clk, e, loc))] }
-
-var_decl_list:
-| vars=last_var_decl SEMICOLON
-    { vars }
-| vars=last_var_decl SEMICOLON vars_list=var_decl_list
-    { vars ++ vars_list }
-
-local_decl:
-| loc=VAR vars_list=var_decl_list
-    { vars_list }
-
 identifier_list:
 | id=VAR_NAME
     { [fst id] }
@@ -456,6 +430,32 @@ clock:
 | clk=clock ONOT id=VAR_NAME
     { LustreAst.ON clk (fst id) false_id }
 
+(* Declarations are much simpler than in C. We do not have arrays,
+   structs/unions, or pointers. We do not have storage-class specifiers,
+   type-qualifiers, or alignment specifiers. Nor are our type-specifiers lists
+   (e.g., "unsigned short int"), since we use the type names from
+   stdint.h/Scade (e.g., "uint_16"). *)
+
+input_decl:
+| ids=identifier_list loc=COLON ty=type_name clk=declared_clock
+    { map (fun id => (id, (fst ty, clk, loc))) (rev ids) }
+
+var_decl:
+| vars=input_decl
+   { map (fun '(id, (ty, ck, loc)) => (id, (ty, ck, [], loc))) vars }
+| LAST id=VAR_NAME loc=COLON ty=type_name clk=declared_clock EQ e=expression
+   { [(fst id, (fst ty, clk, e, loc))] }
+
+var_decl_list:
+| vars=var_decl SEMICOLON
+    { vars }
+| vars=var_decl SEMICOLON vars_list=var_decl_list
+    { vars ++ vars_list }
+
+local_decl:
+| loc=VAR vars_list=var_decl_list
+    { vars_list }
+
 local_decl_list:
 | /* empty */
     { [] }
@@ -463,16 +463,16 @@ local_decl_list:
     { d ++ dl }
 
 parameter_list:
-| vars=var_decl
+| vars=input_decl
     { vars }
-| vars_list=parameter_list SEMICOLON vars=var_decl
+| vars_list=parameter_list SEMICOLON vars=input_decl
     { vars_list ++ vars }
 
 oparameter_list:
-| /* empty */
-    { [] }
-| vars_list=parameter_list
-    { vars_list }
+| vars=var_decl
+    { vars }
+| vars_list=oparameter_list SEMICOLON vars=var_decl
+    { vars_list ++ vars }
 
 (* Semantic value is in reverse order. *)
 pattern:
@@ -585,7 +585,7 @@ optbar:
 
 declaration:
 | is_node=node_or_function id=VAR_NAME
-  LPAREN iparams=oparameter_list RPAREN optsemicolon
+  LPAREN iparams=parameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=oparameter_list RPAREN optsemicolon
   locals=local_decl_list loc=LET blks=blocks TEL optsemicolon
     { LustreAst.NODE

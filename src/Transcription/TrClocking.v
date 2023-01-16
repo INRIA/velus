@@ -71,7 +71,7 @@ Module Type TRCLOCKING
   Qed.
 
   Section wc_node.
-    Variable (G : @L.global L.nolocal_top_block norm2_prefs).
+    Variable (G : @L.global L.nolocal norm2_prefs).
     Hypothesis HwcG : LC.wc_global G.
 
     Lemma wc_lexp :
@@ -252,14 +252,14 @@ Module Type TRCLOCKING
     (* We can't use [sub] directly because some variables
        in the left side of the equation may have no image bu [sub].
        -> see LClocking.wc_equation *)
-    Lemma wc_equation_app_inputs (n : @L.node L.nolocal_top_block norm2_prefs) : forall vars n' bck sub xs es es',
+    Lemma wc_equation_app_inputs (n : @L.node L.nolocal norm2_prefs) : forall vars n' bck sub xs es es',
         length (L.n_out n) = length xs ->
         Forall (LC.wc_exp G vars) es ->
         Forall2 (LC.WellInstantiated bck sub) (idck (idty (L.n_in n))) (L.nclocksof es) ->
         to_node n = OK n' ->
         mmap to_lexp es = OK es' ->
         let sub' := fun x => match sub x with
-                          | None => assoc_ident x (combine (L.idents (L.n_out n)) xs)
+                          | None => assoc_ident x (combine (map fst (L.n_out n)) xs)
                           | s => s
                           end in
         Forall2 (fun '(x0, (_, xck)) le => SameVar (sub' x0) le /\ (exists lck, wc_exp (Senv.idck vars) le lck /\ instck bck sub' xck = Some lck)) (NL.n_in n') es'.
@@ -292,14 +292,11 @@ Module Type TRCLOCKING
       2:{ exists (fst nc). split. apply Wce. auto using instck_sub_ext. }
       simpl in *. take (sub _ = _) and rewrite it. destruct nc as (ck & []).
       2:{ simpl.
-          assert (assoc_ident i (combine (L.idents (L.n_out n)) xs) = None) as Hassc.
+          assert (assoc_ident i (combine (map fst (L.n_out n)) xs) = None) as Hassc.
           { apply assoc_ident_false.
-            apply NoDupMembers_cons_inv in Hdup as [Hin].
-            rewrite <- In_InMembers_combine. unfold L.idents. intro Hin'.
-            apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
-            eapply Hin, In_InMembers.
-            repeat rewrite in_app_iff; eauto.
-            setoid_rewrite map_length; auto. }
+            inv Hdup. contradict H5.
+            apply InMembers_In_combine in H5.
+            apply in_app_iff, or_intror; auto. }
           rewrite Hassc. constructor.
       }
       simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
@@ -363,77 +360,59 @@ Module Type TRCLOCKING
         rename Eq into Vars. eapply vars_of_spec in Vars.
         clear H0 H3.
         rename H9 into WIi. rename H10 into WIo. rename H12 into Hf2.
-        eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
-          assert (find_base_clock (L.clocksof l) = bck) as ->
-            by (take (L.find_node _ _ = Some n) and
-                     pose proof (LC.wc_find_node _ _ n HwcG it) as (?& (Wcin &?));
-                apply find_base_clock_bck;
-                [rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto;
-                 rewrite map_length; exact (L.n_ingt0 n)
-                | apply LC.WellInstantiated_parent in WIi;
-                  rewrite L.clocksof_nclocksof, Forall_map;
-                  eapply Forall_impl; eauto; now simpl]).
+        eapply find_node_global in Hg as (n' & Hfind & Hton); eauto.
+        assert (find_base_clock (L.clocksof l) = bck) as ->.
+        { take (L.find_node _ _ = Some n) and apply LC.wc_find_node in it as (?&Wcn); eauto.
+          inversion_clear Wcn as [?? Wcin _ _ _]; subst Γ.
+          apply find_base_clock_bck.
+          - rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto.
+            rewrite map_length; exact (L.n_ingt0 n).
+          - apply LC.WellInstantiated_parent in WIi.
+            rewrite L.clocksof_nclocksof. simpl_Forall; eauto. }
         eapply NLC.CEqApp; eauto; try discriminate.
         + eapply wc_equation_app_inputs with (es:=l) (xs:=xs); eauto.
           apply Forall2_length in Hf2. apply Forall3_length in WIo as (WIo&?).
-          unfold idty, idck in *. repeat rewrite map_length in *. congruence.
+          unfold idty, idck in *. repeat rewrite map_length in *. setoid_rewrite WIo; auto.
           unfold idck, idty. simpl_Forall. eauto.
         + (* outputs *)
           unfold idck in *.
           erewrite <- (to_node_out n n'); eauto.
-          clear - Hf2 WIo.
-          replace (map _ (L.n_out n)) with (idck (idty (L.n_out n))) in WIo.
-          2:{ unfold idty, idck. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
-          apply Forall2_forall. split.
-          2:{ apply Forall2_length in Hf2. apply Forall3_length in WIo as (?&?).
-              unfold idty, idck in *. repeat rewrite map_length in *. congruence. }
-          intros (?&(?&?)) ? Hin. split.
-          * destruct (sub i) eqn:Hsub.
-            eapply Forall3_ignore2, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto; simpl in *. destruct WIo as (?&Hsub'&?); simpl in *.
-            rewrite Hsub in Hsub'; auto.
-            unfold L.idents. apply assoc_ident_true.
-            2:{ rewrite <-map_fst_idty, combine_map_fst, in_map_iff.
-                esplit; split; eauto. now simpl. }
-            apply NoDup_NoDupMembers_combine.
-            pose proof (L.n_nodup n) as (Hdup&_).
-            rewrite fst_NoDupMembers, map_app in Hdup.
-            eauto using NoDup_app_l, NoDup_app_r.
-          * eapply Forall2_swap_args, Forall3_ignore1' in Hf2. 2:eapply Forall3_length in WIo as (?&?); eauto.
-            eapply Forall3_Forall3 in WIo; eauto. clear Hf2.
-            eapply Forall3_ignore2, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto.
-            destruct WIo as (?&?&?&?); simpl in *.
-            esplit; split; eauto using instck_sub_ext. inv H; solve_In.
+          unfold idty in *. simpl_Forall. rewrite Forall3_map_1, Forall3_map_2 in WIo.
+          eapply Forall2_swap_args, Forall3_ignore1', Forall3_Forall3 in Hf2. 2:eapply WIo.
+          2:apply Forall3_length in WIo as (?&?); auto.
+          eapply Forall3_ignore2 in Hf2. simpl_Forall.
+          inversion_clear H1 as [Sub Inst]. simpl in *. rewrite Sub. split; auto.
+          inv H2. do 2 esplit. solve_In.
+          erewrite instck_sub_ext; eauto.
         + eapply Forall_app; split; eauto.
           eapply Forall2_ignore1 in Vars.
-          eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?); subst.
-          eapply Forall_forall in H7; eauto. inv H7; inv H1; solve_In.
+          simpl_Forall. subst. inv H7. inv H3. solve_In.
       - (* app (exp) *)
         rename Eq into Vars. eapply vars_of_spec in Vars.
         clear H0 H3.
         rename H4 into Hf2. simpl in Hf2; rewrite app_nil_r in Hf2.
         take (LC.wc_exp _ _ _) and inversion_clear it
           as [| | | | | | | | | | | |????? bck sub Wce Wcer ? WIi WIo Ckr].
-        eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
-          assert (find_base_clock (L.clocksof l) = bck) as ->
-            by (take (L.find_node _ _ = Some n) and
-                     pose proof (LC.wc_find_node _ _ n HwcG it) as (?& (Wcin &?));
-                apply find_base_clock_bck;
-                [rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto;
-                 rewrite map_length; exact (L.n_ingt0 n)
-                | apply LC.WellInstantiated_parent in WIi;
-                  rewrite L.clocksof_nclocksof, Forall_map;
-                  eapply Forall_impl; eauto; now simpl]).
+        eapply find_node_global in Hg as (n' & Hfind & Hton); eauto.
+        assert (find_base_clock (L.clocksof l) = bck) as ->.
+        { take (L.find_node _ _ = Some n) and apply LC.wc_find_node in it as (?&Wcn); eauto.
+          inversion_clear Wcn as [?? Wcin _ _ _]; subst Γ.
+          apply find_base_clock_bck.
+          - rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto.
+            rewrite map_length; exact (L.n_ingt0 n).
+          - apply LC.WellInstantiated_parent in WIi.
+            rewrite L.clocksof_nclocksof. simpl_Forall; eauto. }
         eapply NLC.CEqApp; eauto; try discriminate.
         + eapply wc_equation_app_inputs with (es:=l) (xs:=xs); eauto.
           apply Forall2_length in Hf2. apply Forall2_length in WIo.
-          1,2:unfold idty, idck in *. repeat rewrite map_length in *. congruence.
+          1,2:unfold idty, idck in *. repeat rewrite map_length in *. setoid_rewrite WIo; auto.
           simpl_Forall. eauto.
         + (* outputs *)
           unfold idck in *.
           erewrite <- (to_node_out n n'); eauto.
           clear - Hf2 WIo.
-          replace (map _ (L.n_out n)) with (idck (idty (L.n_out n))) in WIo.
-          2:{ unfold idty, idck. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto. }
+          replace (map _ (L.n_out n)) with (idck (idty (idty (L.n_out n)))) in WIo.
+          2:{ unfold idty, idck. erewrite 2 map_map, map_ext; eauto. intros; destruct_conjs; auto. }
           rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
           eapply Forall3_ignore1' in Hf2. eapply Forall3_ignore2' in WIo. eapply Forall3_Forall3 in WIo; eauto. clear Hf2.
           2:{ apply Forall3_length in Hf2 as (?&?). repeat rewrite map_length in *; auto. }
@@ -446,19 +425,16 @@ Module Type TRCLOCKING
             -- eapply Forall3_ignore3, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto; simpl in *. destruct WIo as ((?&?)&?&Hsub'&?); simpl in *.
                rewrite Hsub in Hsub'; auto. inv Hsub'.
             -- unfold L.idents. apply assoc_ident_true.
-               2:{ rewrite <-map_fst_idty, combine_map_fst, in_map_iff.
+               2:{ rewrite <-2 map_fst_idty, combine_map_fst, in_map_iff.
                    esplit; split; eauto. now simpl. }
                apply NoDup_NoDupMembers_combine.
-               pose proof (L.n_nodup n) as (Hdup&_).
-               rewrite fst_NoDupMembers, map_app in Hdup.
-               eauto using NoDup_app_l, NoDup_app_r.
+               pose proof (L.n_nodup n) as (Hdup&_); eauto using NoDup_app_r.
           * eapply Forall3_ignore3, Forall2_map_1, Forall2_combine, Forall_forall in WIo; eauto.
             destruct WIo as ((?&?)&?&?&?); simpl in *.
             esplit; split; eauto using instck_sub_ext. inv H; solve_In.
         + eapply Forall_app; split; eauto.
           eapply Forall2_ignore1 in Vars.
-          eapply Forall_impl; [|eauto]. intros (?&?) (?&?&?&?); subst.
-          eapply Forall_forall in Wcer; eauto. inv Wcer; inv H2; solve_In.
+          simpl_Forall. subst. inv Wcer; inv H4; solve_In.
     Qed.
 
     Lemma wc_block_to_equation :
@@ -502,38 +478,43 @@ Module Type TRCLOCKING
     Proof.
       intros * Htn Htg Hwt Hwc.
       tonodeInv Htn. unfold NLC.wc_node. simpl.
-      inversion Hwc as (WCi&WCo&WCeq). rewrite map_app in WCo.
-      inversion_clear Hwt as (_&_&_&WT).
-      pose proof (L.n_syn n) as Hsyn. inv Hsyn. rewrite <-H in *; symmetry in H; rename H into Hblk.
+      inversion_clear Hwc as [?? WCi WCo _ WCeq]; subst Γ.
+      inversion_clear Hwt as [?????? WT]; subst Γ.
+      pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+      rewrite <-H3 in *; symmetry in H3; rename H3 into Hblk.
       eapply envs_eq_node in Hblk.
-      monadInv Hmmap. inv WCeq; inv H3. inv WT; inv H3.
-      repeat rewrite <-idty_app. repeat rewrite idck_idty.
-      repeat split; (try now simpl_app).
-      - rewrite (Permutation_app_comm (idty l)), app_assoc, map_app. apply Forall_app; split; auto.
-        1,2:(unfold wc_env in *; rewrite <-map_app in WCo; simpl_Forall).
-        + eapply wc_clock_incl; [|eauto]. solve_incl_app.
-        + simpl_In. simpl_Forall. eapply wc_clock_incl; [|eauto].
+      monadInv Hmmap. inv WCeq; inv H7. inv WT; inv H7. subst Γ' Γ'0.
+      repeat split.
+      - unfold idck, idty. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+      - unfold idck, idty. erewrite map_app, 3 map_map, map_ext, map_ext with (l:=L.n_out _); eauto. 1,2:unfold L.decl; intros; destruct_conjs; auto.
+      - rewrite (Permutation_app_comm (idty (idty l))), app_assoc. rewrite idck_app. apply Forall_app; split; auto.
+        + unfold idck, idty. erewrite map_app, 3 map_map, map_ext, map_ext with (l:=L.n_out _); eauto.
+          simpl_Forall. eapply Forall_forall in WCo; [|eauto]. eapply wc_clock_incl; [|eauto]. apply incl_appl, incl_refl.
+          1,2:unfold L.decl; intros; destruct_conjs; auto.
+        + unfold idck, idty. simpl_Forall. eapply wc_clock_incl; [|eauto].
           simpl_app. repeat rewrite map_map.
           erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); try reflexivity.
-          1-3:intros; destruct_conjs; auto.
+          1-3:unfold L.decl; intros; destruct_conjs; auto.
       - eapply mmap_inversion in EQ.
         induction EQ; repeat (take (Forall _ (_::_)) and inv it); constructor; eauto.
-        eapply wc_block_to_equation in H8; eauto.
-        + clear - H8. simpl_app.
+        eapply wc_block_to_equation in H11; eauto.
+        + clear - H11. simpl_app.
           repeat rewrite map_map in *.
           erewrite (Permutation_app_comm (map _ l)), map_ext, map_ext with (l:=l), map_ext with (l:=L.n_out _); eauto.
-          1-3:intros; destruct_conjs; auto.
+          1-3:unfold L.decl; intros; destruct_conjs; auto.
         + intros ??. specialize (Hblk x ck). rewrite <-Hblk.
-          rewrite (Permutation_app_comm (idty l)). simpl_app. repeat rewrite in_app_iff.
+          rewrite (Permutation_app_comm (idty (idty l))). simpl_app. repeat rewrite in_app_iff. clear - n.
           split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
-        + unfold wc_env in *. unfold Senv.idck. rewrite map_app. rewrite <-map_app in WCo.
+        + clear - WCo H8. repeat simpl_app. repeat erewrite map_map in *.
+          erewrite map_ext, map_ext with (l:=L.n_out n), app_assoc.
           apply Forall_app; split; simpl_Forall; simpl_In; simpl_Forall.
+          * eapply Forall_forall in WCo; [|eauto].
+            eapply wc_clock_incl; [|eauto]. apply incl_appl, incl_refl.
           * eapply wc_clock_incl; [|eauto].
-            unfold Senv.senv_of_inout. erewrite map_map, map_ext. apply incl_appl, incl_refl.
-            intros; destruct_conjs; auto.
-          * unfold Senv.senv_of_inout, Senv.senv_of_locs.
-            take (wc_clock _ _) and clear - it. simpl_app. repeat rewrite map_map in *.
-            erewrite map_ext, map_ext with (l:=L.n_out _), map_ext with (l:=l); eauto.
+            simpl_app. erewrite map_ext, map_ext with (l:=L.n_out n). reflexivity.
+            1,2:unfold L.decl; intros; destruct_conjs; auto.
+          * unfold L.decl; intros; destruct_conjs; auto.
+          * unfold L.decl; intros; destruct_conjs; auto.
     Qed.
 
   End wc_node.

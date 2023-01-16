@@ -100,8 +100,12 @@ Module Type LORDERED
       Is_node_in_scope (Exists (Is_node_in_block f)) f scope ->
       Is_node_in_block f (Blocal scope).
 
+  Definition Is_node_in {PSyn prefs} (f: ident) (nd : @node PSyn prefs) :=
+      Exists (fun '(_, (_, _, _, o)) => LiftO False (fun '(e, _) => Is_node_in_exp f e) o) nd.(n_out)
+      \/ Is_node_in_block f nd.(n_block).
+
   Definition Ordered_nodes {PSyn prefs} : @global PSyn prefs -> Prop :=
-    Ordered_program (fun f nd => Is_node_in_block f nd.(n_block)).
+    Ordered_program Is_node_in.
 
   (** ** Properties of [Ordered_nodes] *)
 
@@ -122,25 +126,24 @@ Module Type LORDERED
       forall f types externs (nd: @node PSyn prefs) nds nd',
         Ordered_nodes (Global types externs (nd::nds))
         -> find_node f (Global types externs nds) = Some nd'
-        -> ~Is_node_in_block nd.(n_name) nd'.(n_block).
+        -> ~Is_node_in nd.(n_name) nd'.
     Proof.
       intros * Hord Hfind Hini.
       eapply option_map_inv in Hfind as ((?&?)&(Hfind&?)); subst.
       eapply find_unit_later_not_Is_called_in with (us:=[nd]) in Hfind; eauto.
-      apply Forall_singl in Hfind; auto.
+      apply Forall_singl in Hfind. apply Hfind; auto.
     Qed.
 
     Lemma find_node_not_Is_node_in {PSyn prefs}:
       forall f (nd: @node PSyn prefs) G,
         Ordered_nodes G
         -> find_node f G = Some nd
-        -> ~Is_node_in_block nd.(n_name) nd.(n_block).
+        -> ~Is_node_in nd.(n_name) nd.
     Proof.
       intros f nd G Hord Hfind.
       apply option_map_inv in Hfind as ((?&?)&(?&?)); subst.
       assert (name n = f) by (eapply find_unit_In; eauto); subst.
       eapply not_Is_called_in_self in H; simpl; eauto.
-      assumption.
     Qed.
 
   End Ordered_nodes_Properties.
@@ -199,12 +202,14 @@ Module Type LORDERED
 
   Lemma wl_node_Is_node_in {PSyn prefs} : forall (G: @global PSyn prefs) n f,
       wl_node G n ->
-      Is_node_in_block f (n_block n) ->
+      Is_node_in f n ->
       In f (map n_name (nodes G)).
   Proof.
-    intros * Hwl Hisin.
-    unfold wl_node in Hwl.
-    eapply wl_block_Is_node_in_block; eauto.
+    intros * Hwl Hisin. inv Hwl. destruct Hisin.
+    - simpl_Exists. simpl_Forall.
+      destruct o as [(?&?)|]; simpl in *; destruct_conjs; try now exfalso.
+      eapply wl_exp_Is_node_in_exp; eauto.
+    - eapply wl_block_Is_node_in_block; eauto.
   Qed.
 
   Lemma wl_global_Ordered_nodes {PSyn prefs} : forall (G: @global PSyn prefs),
@@ -244,7 +249,7 @@ Module Type LORDERED
 
     Hypothesis Hnode : forall f n,
         find_node f G = Some n ->
-        (forall f', Is_node_in_block f' (n_block n) -> P_node f') ->
+        (forall f', Is_node_in f' n -> P_node f') ->
         P_node f.
 
     Lemma ordered_nodes_ind :

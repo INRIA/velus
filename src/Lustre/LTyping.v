@@ -54,7 +54,7 @@ Module Type LTYPING
 
   (** ** Expressions and equations *)
   Section WellTyped.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
 
     Variable G     : @global PSyn prefs.
@@ -171,7 +171,7 @@ Module Type LTYPING
         Forall wt_exp er ->
         find_node f G = Some n ->
         Forall2 (fun et '(_, (t, _, _)) => et = t) (typesof es) n.(n_in) ->
-        Forall2 (fun a '(_, (t, _, _)) => fst a = t) anns n.(n_out) ->
+        Forall2 (fun a '(_, (t, _, _, _)) => fst a = t) anns n.(n_out) ->
         Forall (fun e => typeof e = [bool_velus_type]) er ->
         Forall (fun a => wt_clock G.(types) Γ (snd a)) anns ->
         wt_exp (Eapp f es er anns).
@@ -183,17 +183,16 @@ Module Type LTYPING
 
   End WellTyped.
 
-  Definition wt_clocks types (Γ : static_env) : list (ident * (type * clock * ident)) -> Prop :=
-    Forall (fun '(_, (_, ck, _)) => wt_clock types Γ ck).
+  Definition wt_clocks types Γ : static_env -> Prop :=
+    Forall (fun '(_, ann) => wt_clock types Γ ann.(clo)).
 
   Inductive wt_scope {A} (P_wt : static_env -> A -> Prop) {PSyn prefs} (G: @global PSyn prefs) :
     static_env -> scope A -> Prop :=
-  | wt_Scope : forall Γ Γ' locs blks,
-      Γ' = Γ ++ senv_of_locs locs ->
-      wt_clocks G.(types) Γ' (Common.idty locs) ->
+  | wt_Scope : forall Γ locs blks,
+      let Γ' := Γ ++ senv_of_decls locs in
+      wt_clocks G.(types) Γ' (senv_of_decls locs) ->
       Forall (wt_type G.(types)) (map (fun '(_, (ty, _, _, _)) => ty) locs) ->
-      Forall (fun '(_, (ty, _, _, o)) =>
-                LiftO True (fun '(e, _) => wt_exp G Γ' e /\ typeof e = [ty]) o) locs ->
+      Forall (fun '(_, (ty, _, _, o)) => LiftO True (fun '(e, _) => wt_exp G Γ' e /\ typeof e = [ty]) o) locs ->
       P_wt Γ' blks ->
       wt_scope P_wt G Γ (Scope locs blks).
 
@@ -262,17 +261,21 @@ Module Type LTYPING
       wt_scope (fun Γ' => Forall (wt_block G Γ')) G Γ scope ->
       wt_block G Γ (Blocal scope).
 
-  Definition wt_node {PSyn prefs} (G: @global PSyn prefs) (n: @node PSyn prefs) : Prop
-    :=   wt_clocks G.(types) (senv_of_inout n.(n_in)) n.(n_in)
-       /\ wt_clocks G.(types) (senv_of_inout (n.(n_in) ++ n.(n_out))) n.(n_out)
-       /\ Forall (wt_type G.(types)) (map (fun '(_, (ty, _, _)) => ty) (n.(n_in) ++ n.(n_out)))
-       /\ wt_block G (senv_of_inout (n.(n_in) ++ n.(n_out))) n.(n_block).
+  Inductive wt_node {PSyn prefs} (G: @global PSyn prefs) : @node PSyn prefs -> Prop :=
+  | wt_Node : forall n,
+      let Γ := senv_of_ins n.(n_in) ++ senv_of_decls n.(n_out) in
+      wt_clocks G.(types) (senv_of_ins n.(n_in)) (senv_of_ins n.(n_in)) ->
+      wt_clocks G.(types) Γ (senv_of_decls n.(n_out)) ->
+      Forall (fun '(_, ann) => wt_type G.(types) ann.(typ)) Γ ->
+      Forall (fun '(_, (ty, _, _, o)) => LiftO True (fun '(e, _) => wt_exp G Γ e /\ typeof e = [ty]) o) n.(n_out) ->
+      wt_block G Γ n.(n_block) ->
+      wt_node G n.
 
   Definition wt_global {PSyn prefs} (G: @global PSyn prefs) : Prop :=
     wt_type G.(types) bool_velus_type /\
     wt_program wt_node G.
 
-  Global Hint Constructors wt_type wt_clock wt_exp wt_block : ltyping.
+  Global Hint Constructors wt_type wt_clock wt_exp wt_block wt_node : ltyping.
   Global Hint Unfold wt_equation : ltyping.
 
   Ltac inv_exp :=
@@ -457,9 +460,9 @@ Module Type LTYPING
         wt_scope P_wt G Γ' (Scope locs blks).
     Proof.
       intros * Hty Hl Hp Hwt.
-      assert (forall x ty, HasType (Γ ++ senv_of_locs locs) x ty -> HasType (Γ' ++ senv_of_locs locs) x ty) as Hty'.
+      assert (forall x ty, HasType (Γ ++ senv_of_decls locs) x ty -> HasType (Γ' ++ senv_of_decls locs) x ty) as Hty'.
       { intros *. rewrite 2 HasType_app. intros [|]; auto. }
-      assert (forall x, IsLast (Γ ++ senv_of_locs locs) x -> IsLast (Γ' ++ senv_of_locs locs) x) as Hl'.
+      assert (forall x, IsLast (Γ ++ senv_of_decls locs) x -> IsLast (Γ' ++ senv_of_decls locs) x) as Hl'.
       { intros *. rewrite 2 IsLast_app. intros [|]; auto. }
       inv Hwt. econstructor; eauto.
       - unfold wt_clocks in *; simpl_Forall; eauto using wt_clock_incl.
@@ -531,7 +534,7 @@ Module Type LTYPING
   (** ** Validation *)
   Section ValidateExpression.
 
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
 
     Variable G : @global PSyn prefs.
@@ -784,7 +787,7 @@ Module Type LTYPING
         do ts <- oconcat (map check_exp es);
         do tr <- omap check_exp er;
         if (forall2b (fun et '(_, (t, _, _)) => et ==b t) ts n.(n_in))
-             && (forall2b (fun '(ot, oc) '(_, (t, _, _)) =>
+             && (forall2b (fun '(ot, oc) '(_, (t, _, _, _)) =>
                              check_clock oc
                              && (ot ==b t)) anns n.(n_out))
              && check_reset tr
@@ -1071,16 +1074,16 @@ Module Type LTYPING
                and apply Forall2_impl_In with (2:=it).
           intros ? (? & ((?&?)&?)) ? ? EQ.
           now rewrite equiv_decb_equiv in EQ. }
-        assert (Forall2 (fun ann '(_, (t, _, _)) => fst ann = t) a n.(n_out)).
+        assert (Forall2 (fun ann '(_, (t, _, _, _)) => fst ann = t) a n.(n_out)).
         { take (Forall2 _ _ n.(n_out)) and apply Forall2_impl_In with (2:=it).
-          intros (? & ?) (? & ((?&?)&?)) ? ? EQ.
+          intros * In1 In2 EQ; destruct_conjs.
           apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
           now rewrite equiv_decb_equiv in EQ2. }
         assert (Forall (fun ann => wt_clock G.(types) env (snd ann)) a).
         { repeat take (Forall2 _ _ n.(n_out)) and apply Forall2_ignore2 in it.
           apply Forall_impl_In with (2:=it).
-          intros (? & ?) ? ((? & ((?&?)&?)) & (? & EQ)); simpl.
-          apply Bool.andb_true_iff in EQ as (EQ1 & EQ2).
+          intros; destruct_conjs.
+          take (_ = true) and apply Bool.andb_true_iff in it as (EQ1 & EQ2).
           eapply check_clock_correct in EQ1; eauto.
         }
         econstructor; eauto; simpl in *;
@@ -1088,7 +1091,7 @@ Module Type LTYPING
         eapply check_reset_correct in H2.
         eapply Forall2_ignore1' in H2. 2:symmetry; eapply Forall2_length; eauto.
         eapply Forall2_Forall2, Forall2_ignore2 in H5; eauto.
-        eapply Forall_impl; [|eauto]. intros ? (?&?&?&?); congruence.
+        simpl_Forall. congruence.
     Qed.
 
     Corollary oconcat_map_check_exp:
@@ -1131,7 +1134,7 @@ Module Type LTYPING
   End ValidateExpression.
 
   Section ValidateBlock.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
     Variable (G : @global PSyn prefs).
 
@@ -1172,6 +1175,16 @@ Module Type LTYPING
       auto.
     Qed.
 
+    Definition check_last_decl venv venvl (d : decl) :=
+      let '(_, (ty, _, _, o)) := d in
+      match o with
+      | None => true
+      | Some (e, _) => match check_exp G tenv extenv venv venvl e with
+                      | Some [ty'] => ty' ==b ty
+                      | _ => false
+                      end
+      end.
+
     Definition check_scope {A} (f_check : Env.t type -> Env.t type -> A -> bool)
                (venv venvl : Env.t type) (s : scope A) : bool :=
       let 'Scope locs blks := s in
@@ -1179,13 +1192,7 @@ Module Type LTYPING
       let venvl' := Env.union venvl (Env.from_list (map_filter (fun '(x, (ty, _, _, o)) => option_map (fun _ => (x, ty)) o) locs)) in
       forallb (check_clock tenv venv') (map (fun '(_, (_, ck, _, _)) => ck) locs)
       && forallb (check_type_in tenv) (map (fun '(x, (ty, _, _, _)) => ty) locs)
-      && forallb (fun '(_, (ty, _, _, o)) => match o with
-                                          | None => true
-                                          | Some (e, _) => match check_exp G tenv extenv venv' venvl' e with
-                                                          | Some [ty'] => ty' ==b ty
-                                                          | _ => false
-                                                          end
-                                          end) locs
+      && forallb (check_last_decl venv' venvl') locs
       && f_check venv' venvl' blks.
 
     Fixpoint check_block (venv venvl : Env.t type) (d : block) : bool :=
@@ -1236,11 +1243,15 @@ Module Type LTYPING
 
     Definition check_node (n : @node PSyn prefs) :=
       let ins := List.map (fun '(x, (ty, _, _)) => (x, ty)) (n_in n) in
-      let insouts := List.map (fun '(x, (ty, _, _)) => (x, ty)) (n_in n ++ n_out n) in
-      forallb (check_clock tenv (Env.from_list ins)) (List.map (fun '(_, (_, ck, _)) => ck) (n_in n)) &&
-      forallb (check_clock tenv (Env.from_list insouts)) (List.map (fun '(_, (_, ck, _)) => ck) (n_out n)) &&
-      forallb (check_type_in tenv) (map snd insouts) &&
-      check_block (Env.from_list insouts) (@Env.empty _) (n_block n).
+      let outs := List.map (fun '(x, (ty, _, _, _)) => (x, ty)) (n_out n) in
+      let insouts := ins++outs in
+      let venv := Env.from_list (ins++outs) in
+      let venvl := Env.from_list (map_filter (fun '(x, (ty, _, _, o)) => option_map (fun _ => (x, ty)) o) (n_out n)) in
+      forallb (check_clock tenv (Env.from_list ins)) (List.map (fun '(_, (_, ck, _)) => ck) (n_in n))
+      && forallb (check_clock tenv venv) (List.map (fun '(_, (_, ck, _, _)) => ck) (n_out n))
+      && forallb (check_type_in tenv) (map snd insouts)
+      && forallb (check_last_decl venv venvl) (n_out n)
+      && check_block venv venvl (n_block n).
 
     Hint Constructors wt_block : ltyping.
     Import Permutation.
@@ -1260,7 +1271,7 @@ Module Type LTYPING
     Proof.
       intros * Henv Henvl Hp Hc.
       assert (forall x ty, Env.find x (Env.union venv (Env.from_list (map (fun '(x0, (ty0, _, _, _)) => (x0, ty0)) locs))) = Some ty ->
-                        HasType (env ++ senv_of_locs locs) x ty) as Henv'.
+                        HasType (env ++ senv_of_decls locs) x ty) as Henv'.
         { intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
           - apply Henv in Hfind. inv Hfind. eauto with senv datatypes.
           - apply Env.from_list_find_In in Hfind. simpl_In.
@@ -1269,7 +1280,7 @@ Module Type LTYPING
         }
         assert (forall x ty,
                    Env.find x (Env.union venvl (Env.from_list (map_filter (fun '(x0, (ty0, _, _, o)) => option_map (fun _ : exp * ident => (x0, ty0)) o) locs))) = Some ty ->
-                   HasType (env ++ senv_of_locs locs) x ty /\ IsLast (env ++ senv_of_locs locs) x) as Henvl'.
+                   HasType (env ++ senv_of_decls locs) x ty /\ IsLast (env ++ senv_of_decls locs) x) as Henvl'.
         { intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
           - apply Henvl in Hfind as (Hhas&His). inv Hhas. inv His.
             constructor; eauto with senv datatypes.
@@ -1280,7 +1291,7 @@ Module Type LTYPING
       repeat rewrite Bool.andb_true_iff in Hc. destruct Hc as (((CC&CE)&CL)&CB).
       apply forallb_Forall in CC. apply forallb_Forall in CE. apply forallb_Forall in CL.
       econstructor; eauto.
-      - unfold Common.idty, wt_clocks. simpl_Forall.
+      - unfold wt_clocks, senv_of_decls. simpl_Forall.
         eapply check_clock_correct in CC; eauto.
       - simpl_Forall. eapply check_type_in_correct; eauto.
       - simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto.
@@ -1368,21 +1379,29 @@ Module Type LTYPING
       intros * Hcheck.
       specialize (n_nodup n) as (Hdndup1&_).
       unfold check_node in Hcheck.
-      repeat rewrite Bool.andb_true_iff in Hcheck. destruct Hcheck as [[[Hc1 Hc2] Hc3] Hc4].
-      apply forallb_Forall in Hc1, Hc2, Hc3.
-      assert (forall x ty, Env.find x (Env.from_list (map (fun '(x0, (ty0, _, _)) => (x0, ty0)) (n_in n ++ n_out n))) = Some ty ->
-                      HasType (senv_of_inout (n_in n ++ n_out n)) x ty) as Henv.
-      { intros * Hfind. apply Env.from_list_find_In in Hfind. simpl_In.
-        econstructor. solve_In. reflexivity. }
-      split; [|split; [|split]].
+      repeat rewrite Bool.andb_true_iff in Hcheck. destruct Hcheck as [[[[Hc1 Hc2] Hc3] Hc4] Hc5].
+      apply forallb_Forall in Hc1, Hc2, Hc3, Hc4.
+      assert (forall x ty, Env.find x (Env.from_list (map (fun '(x, (ty, _, _)) => (x, ty)) (n_in n) ++ map (fun '(x, (ty, _, _, _)) => (x, ty)) (n_out n))) = Some ty ->
+                      HasType (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) x ty) as Henv.
+      { intros * Hfind. clear - Hfind. apply Env.from_list_find_In in Hfind. rewrite HasType_app.
+        apply in_app_iff in Hfind as [Hfind|Hfind]; [left|right]; simpl_In; econstructor; solve_In; reflexivity. }
+      assert (forall (x : Env.key) (ty : type),
+                 Env.find x (Env.from_list (map_filter (fun '(x0, (ty0, _, _, o)) => option_map (fun _ : exp * ident => (x0, ty0)) o) (n_out n))) = Some ty ->
+                 HasType (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) x ty /\ IsLast (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) x) as Henvl.
+      { intros * Hfind. clear - Hfind. apply Env.from_list_find_In in Hfind. simpl_In.
+        split; right; econstructor; solve_In; simpl; congruence. }
+      econstructor; autounfold with list in *.
       1-2:(unfold wt_clocks; simpl_Forall;
            take (check_clock _ _ _ = _) and eapply check_clock_correct in it; eauto;
            try rewrite Hincl in it; eauto).
-      1:{ intros * Hfind. apply Env.from_list_find_In in Hfind. simpl_In.
-          econstructor. solve_In. reflexivity. }
-      - simpl_Forall. eapply check_type_in_correct; eauto.
-      - eapply check_block_correct in Hc4; eauto.
-        intros * Hfind. exfalso. rewrite Env.gempty in Hfind. congruence.
+      - intros * Hfind. apply Env.from_list_find_In in Hfind. simpl_In.
+        econstructor. solve_In. reflexivity.
+      - rewrite map_app, Forall_app in Hc3. destruct Hc3.
+        apply Forall_app; split; simpl_Forall; eauto using check_type_in_correct.
+      - simpl_Forall. cases_eqn EQ; subst; simpl; auto.
+        rewrite equiv_decb_equiv in Hc4; inv Hc4.
+        eapply check_exp_correct in EQ1 as (Hwt&Hty); eauto.
+      - eapply check_block_correct in Hc5; eauto.
     Qed.
 
   End ValidateBlock.
@@ -1460,7 +1479,7 @@ Module Type LTYPING
   End ValidateGlobal.
 
   Section interface_incl.
-    Context {PSyn1 PSyn2 : block -> Prop}.
+    Context {PSyn1 PSyn2 : list decl -> block -> Prop}.
     Context {prefs1 prefs2 : PS.t}.
     Variable G1 : @global PSyn1 prefs1.
     Variable G2 : @global PSyn2 prefs2.
@@ -1494,7 +1513,10 @@ Module Type LTYPING
       all:try apply Heq; auto.
       - eapply Heq in H7 as (?&Hfind'&(?&?&?&?)).
         econstructor; simpl_Forall; eauto with ltyping.
-        1,2:congruence.
+        + eapply Forall2_eq in H3. simpl_Forall. eapply Forall2_trans_ex in H3; [|eauto].
+          simpl_Forall. inv_equalities. auto.
+        + eapply Forall2_eq in H4. simpl_Forall. eapply Forall2_trans_ex in H4; [|eauto].
+          simpl_Forall. inv_equalities. auto.
     Qed.
 
     Fact iface_incl_wt_equation : forall Γ equ,
@@ -1556,11 +1578,11 @@ Module Type LTYPING
       wt_node G1 n ->
       wt_node G2 n.
   Proof.
-    intros * Hincl Hwt.
-    destruct Hwt as (Hwt1&Hwt2&Hwt3&Hwt4).
+    intros * Hincl Hwt. inv Hwt.
     repeat split.
     1-3:unfold wt_clocks in *; simpl_Forall; eauto using iface_incl_wt_clock, iface_incl_wt_type.
-    eauto using iface_incl_wt_block.
+    - simpl_Forall. destruct o as [(?&?)|]; simpl in *; destruct_conjs; eauto using iface_incl_wt_exp.
+    - eauto using iface_incl_wt_block.
   Qed.
 
   Global Hint Resolve iface_incl_wt_type iface_incl_wt_clock
@@ -1617,11 +1639,11 @@ Module Type LTYPING
       wt_scope P_wt G Γ (Scope locs blks) ->
       wl_scope P_wl G (Scope locs blks).
   Proof.
-    intros * Hp Hwt. inv Hwt.
+    intros * Hp Hwt. inv Hwt; subst Γ'.
     constructor; eauto.
     simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto; destruct_conjs.
     split; eauto with ltyping.
-    rewrite <-length_typeof_numstreams, H1; auto.
+    rewrite <-length_typeof_numstreams, H3; auto.
   Qed.
 
   Fact wt_block_wl_block {PSyn prefs} : forall (G: @global PSyn prefs) d Γ,
@@ -1658,8 +1680,11 @@ Module Type LTYPING
       wt_node G n ->
       wl_node G n.
   Proof with eauto with ltyping.
-    intros G n [_ [_ [_ Hwt]]].
-    unfold wl_node...
+    intros G n Wt. inv Wt.
+    econstructor...
+    simpl_Forall. destruct o as [(?&?)|]; simpl in *; auto; destruct_conjs.
+    split; eauto with ltyping.
+    rewrite <-length_typeof_numstreams, H5; auto.
   Qed.
   Global Hint Resolve wt_node_wl_node : ltyping.
 
@@ -1676,7 +1701,7 @@ Module Type LTYPING
 
   (** *** If an expression is well-typed, all the types appearing inside are well-typed *)
   Section wt_type.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
@@ -1729,11 +1754,9 @@ Module Type LTYPING
         eapply Forall_impl_In; [|eapply H0]; intros.
         eapply H2; eauto. rewrite Forall_forall in *; eauto.
       - (* app *)
-        eapply wt_find_node in H7 as (?&Hwtn&Heq); eauto.
-        destruct Hwtn as (_&_&Htypes&_).
-        unfold idty in Htypes. repeat rewrite Forall_map in Htypes.
-        repeat rewrite Forall_app in Htypes. destruct Htypes as (_&Htypes).
-        eapply Forall2_ignore2 in H9. simpl_Forall. subst.
+        eapply wt_find_node in H7 as (?&Hwtn&Heq); eauto. inv Hwtn; subst Γ0.
+        take (Forall _ (_ ++ _)) and apply Forall_app in it as (?&?).
+        eapply Forall2_ignore2 in H9. autounfold with list in *. simpl_Forall. subst.
         rewrite <-Heq; auto.
     Qed.
 
@@ -1829,9 +1852,9 @@ Module Type LTYPING
       wt_node G n ->
       wx_node n.
   Proof.
-    intros G n (_&_&_&Hwt).
-    unfold wx_node.
-    eapply wt_block_wx_block in Hwt; auto.
+    intros G n Wt. inv Wt; subst Γ.
+    econstructor; eauto with ltyping.
+    simpl_Forall. destruct o as [(?&?)|]; simpl in *; destruct_conjs; eauto with ltyping.
   Qed.
   Global Hint Resolve wt_node_wx_node : ltyping.
 

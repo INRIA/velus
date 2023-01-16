@@ -65,7 +65,6 @@ Module Type ILTYPING
                   NoDupLocals (map fst Γ++map fst Γ'++map fst Γ'') blk ->
                   GoodLocals switch_prefs blk ->
                   wt_block G (Γ++Γ') blk ->
-                  (* Forall (fun '(_, a) => wt_clock G.(types) (Γ++Γ'') a.(clo)) Γ'' -> *)
                   inlinelocal_block sub blk st = (locs', blks', st') ->
                   Forall (wt_block G (Γ ++ Γ''++senv_of_anns locs')) blks' /\
                   Forall (fun '(_, (_, ck)) => wt_clock G.(types) (Γ++Γ''++senv_of_anns locs') ck) locs') blks ->
@@ -78,7 +77,6 @@ Module Type ILTYPING
       Forall (NoDupLocals (map fst Γ++map fst Γ'++map fst Γ'')) blks ->
       Forall (GoodLocals switch_prefs) blks ->
       Forall (wt_block G (Γ++Γ')) blks ->
-      (* Forall (fun '(_, a) => wt_clock G.(types) (Γ++Γ'') a.(clo)) Γ'' -> *)
       mmap2 (inlinelocal_block sub) blks st = (locs', blks', st') ->
       Forall (wt_block G (Γ ++ Γ''++senv_of_anns (concat locs'))) (concat blks') /\
       Forall (fun '(_, (_, ck)) => wt_clock G.(types) (Γ++Γ''++senv_of_anns (concat locs') )ck) (concat locs').
@@ -107,7 +105,6 @@ Module Type ILTYPING
       NoDupLocals (map fst Γ++map fst Γ'++map fst Γ'') blk ->
       GoodLocals switch_prefs blk ->
       wt_block G (Γ++Γ') blk ->
-      (* Forall (fun '(_, a) => wt_clock G.(types) (Γ++Γ'') a.(clo)) Γ'' -> *)
       inlinelocal_block sub blk st = (locs', blks', st') ->
       Forall (wt_block G (Γ++Γ''++senv_of_anns locs')) blks' /\
       Forall (fun '(_, (_, ck)) => wt_clock G.(types) (Γ++Γ''++senv_of_anns locs') ck) locs'.
@@ -129,7 +126,7 @@ Module Type ILTYPING
       + now setoid_rewrite subclock_exp_typeof.
 
     - (* local *)
-      repeat inv_scope.
+      repeat inv_scope. subst Γ'0.
 
       assert (forall y, Env.In y (Env.from_list (combine (map fst locs) x)) <-> InMembers y locs) as Hsubin'.
       { intros.
@@ -150,9 +147,9 @@ Module Type ILTYPING
 
       rewrite senv_of_anns_app, 2 app_assoc, <-app_assoc with (m:=Γ''). rewrite Forall_app.
 
-      eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_locs locs) in H as (Wt&Wtc). 11:eauto. all:eauto.
+      eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_decls locs) in H as (Wt&Wtc). 11:eauto. all:eauto.
       + rewrite app_assoc in Wt, Wtc. repeat split; eauto.
-        unfold wt_clocks, Common.idty in *. simpl_Forall.
+        unfold wt_clocks, Common.idty, senv_of_decls in *. simpl_Forall.
         erewrite <-disjoint_union_rename_in_clock; eauto.
         eapply subclock_clock_wt, subclock_clock_wt
           with (Γ':=(Γ++Γ'')++senv_of_anns (map (fun '(x, (ty, ck, _, _)) => (x, (ty, rename_in_clock sub ck))) locs)).
@@ -189,14 +186,14 @@ Module Type ILTYPING
         }
       + rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
-      + intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_locs.
+      + intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_decls.
         split; auto. intro contra.
         eapply Hnd'; eauto.
         apply in_or_app, or_introl, fst_InMembers; auto.
       + intros. rewrite Env.union_In, InMembers_app, Hsubin.
         apply or_iff_compat_l.
-        now rewrite InMembers_senv_of_locs.
-      + intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_locs.
+        now rewrite InMembers_senv_of_decls.
+      + intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_decls.
          eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eauto.
          * eapply Hsubgen in Hfind as [|]; eauto.
          * eapply Env.from_list_find_In, in_combine_r in Hfind.
@@ -225,30 +222,10 @@ Module Type ILTYPING
           unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
           eapply reuse_ident_gensym in Reu as [|]; subst; eauto.
           left. right. right. right. solve_In.
-      + rewrite <-app_assoc in H17; auto.
+      + rewrite <-app_assoc in H16; auto.
   Qed.
 
   (** Used enum types are correct *)
-
-  (* Fact mmap_inlinelocal_block_wt_type {PSyn prefs} (G: @global PSyn prefs) : forall blks sub xs Γ blks' st st', *)
-  (*     Forall *)
-  (*       (fun blk => forall sub xs Γ blks' st st', *)
-  (*            noswitch_block blk -> *)
-  (*            NoDupLocals xs blk -> *)
-  (*            wt_block G Γ blk -> *)
-  (*            Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st)) -> *)
-  (*            inlinelocal_block sub blk st = (blks', st') -> *)
-  (*            Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st'))) blks -> *)
-  (*     Forall noswitch_block blks -> *)
-  (*     Forall (NoDupLocals xs) blks -> *)
-  (*     Forall (wt_block G Γ) blks -> *)
-  (*     Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st)) -> *)
-  (*     mmap (inlinelocal_block sub) blks st = (blks', st') -> *)
-  (*     Forall (wt_type G.(types)) (map (fun '(_, (ty, _)) => ty) (st_anns st')). *)
-  (* Proof. *)
-  (*   induction blks; intros * Hnd Hf Hns Hwt Htypes Hmap; *)
-  (*     inv Hnd; inv Hf; inv Hns; inv Hwt; repeat inv_bind; eauto. *)
-  (* Qed. *)
 
   Lemma inlinelocal_block_wt_type {PSyn prefs} (G: @global PSyn prefs) : forall blk sub Γ locs' blks' st st',
       noswitch_block blk ->
@@ -275,10 +252,10 @@ Module Type ILTYPING
 
   (** Typing of the node *)
 
-  Fact senv_of_locs_senv_of_anns {A} : forall locs,
-      senv_of_locs (map (fun xtc => (fst xtc, (fst (snd xtc), snd (snd xtc), xH, @None (A * _)))) locs) = senv_of_anns locs.
+  Fact senv_of_decls_senv_of_anns {A} : forall locs,
+      senv_of_decls (map (fun xtc => (fst xtc, (fst (snd xtc), snd (snd xtc), xH, @None (A * _)))) locs) = senv_of_anns locs.
   Proof.
-    intros. unfold senv_of_locs, senv_of_anns.
+    intros. unfold senv_of_decls, senv_of_anns.
     erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
   Qed.
 
@@ -287,26 +264,26 @@ Module Type ILTYPING
       wt_node G1 n ->
       wt_node G2 (inlinelocal_node n).
   Proof.
-    intros * Hiface (Hwt1&Hwt2&Hwt3&Hwt4).
+    intros * Hiface Hwt. inversion_clear Hwt as [?? Wt1 Wt2 Wt3 Wt4 Wt5]; subst Γ.
     pose proof (n_nodup n) as (_&Hnd2).
     pose proof (n_good n) as (_&Hgood&_).
-    pose proof (n_syn n) as Hsyn.
-    repeat split; simpl; eauto.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2].
+    econstructor.
     1-2:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
-    simpl_Forall; eauto using iface_incl_wt_type.
-    destruct (inlinelocal_block _ _ _) as ((?&?)&?) eqn:Il. assert (Il':=Il).
-    eapply inlinelocal_block_wt with (Γ':=[]) (Γ'':=[]) in Il' as (Wt&Wtc); repeat rewrite app_nil_r; eauto.
-    2:apply senv_of_inout_NoLast.
+    1,2:simpl_Forall; subst; eauto using iface_incl_wt_type.
+    simpl. destruct (inlinelocal_block _ _ _) as ((?&?)&?) eqn:Il. assert (Il':=Il).
+    eapply inlinelocal_block_wt with (Γ':=[]) (Γ'':=[]) in Il' as (Wt&Wtc); repeat rewrite app_nil_r; eauto using node_NoDupLocals.
+    2:(apply NoLast_app; split; eauto using senv_of_ins_NoLast;
+       intros ? L; inv L; simpl_In; simpl_Forall; subst; simpl in *; congruence).
     2:intros; rewrite Env.Props.P.F.empty_in_iff; split; intros [].
     2,3:intros * Find; rewrite Env.gempty in Find; inv Find.
-    2:now rewrite map_fst_senv_of_inout.
     simpl. repeat econstructor; eauto.
     - (* clocks *)
-      unfold wt_clocks, Common.idty. simpl_Forall.
-      rewrite senv_of_locs_senv_of_anns; eauto with ltyping.
+      unfold wt_clocks, Common.idty. simpl_Forall. simpl_In. simpl_Forall.
+      rewrite senv_of_decls_senv_of_anns; eauto with ltyping.
     - eapply inlinelocal_block_wt_type in Il; eauto. simpl_Forall. eauto with ltyping.
     - now simpl_Forall.
-    - simpl_Forall. rewrite senv_of_locs_senv_of_anns. eauto with ltyping.
+    - simpl_Forall. rewrite senv_of_decls_senv_of_anns. eauto with ltyping.
   Qed.
 
   Theorem inlinelocal_global_wt : forall G,

@@ -84,7 +84,7 @@ Module Type LSEMANTICS
     fun x => H (Var x).
 
   Section NodeSemantics.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
     Variable G : @global PSyn prefs.
 
@@ -141,7 +141,7 @@ Module Type LSEMANTICS
       Inductive sem_scope : history -> Stream bool -> (scope A) -> Prop :=
       | Sscope : forall Hi Hi' bs locs blks,
           (* Domain of the internal history *)
-          dom Hi' (senv_of_locs locs) ->
+          dom Hi' (senv_of_decls locs) ->
 
           (* Last declarations *)
           Forall (sem_last_decl Hi Hi' bs) locs ->
@@ -376,12 +376,13 @@ Module Type LSEMANTICS
 
     with sem_node: ident -> list (Stream svalue) -> list (Stream svalue) -> Prop :=
     | Snode:
-      forall f ss os n H b,
+      forall f ss os n H,
           find_node f G = Some n ->
-          Forall2 (fun x => sem_var H (Var x)) (idents n.(n_in)) ss ->
-          Forall2 (fun x => sem_var H (Var x)) (idents n.(n_out)) os ->
-          sem_block H b n.(n_block) ->
-          b = clocks_of ss ->
+          Forall2 (fun x => sem_var H (Var x)) (List.map fst n.(n_in)) ss ->
+          Forall2 (fun x => sem_var H (Var x)) (List.map fst n.(n_out)) os ->
+          let bs := clocks_of ss in
+          Forall (sem_last_decl sem_exp (FEnv.empty _) H bs) n.(n_out) ->
+          sem_block H bs n.(n_block) ->
           sem_node f ss os.
 
   End NodeSemantics.
@@ -733,10 +734,32 @@ Module Type LSEMANTICS
     intros * Hfind' Hind Hnf * Hsem.
     inv Hsem. take (find_node _ _ = Some n0) and rewrite Hfind' in it; inv it. econstructor; eauto.
     - rewrite find_node_other in Hfind'; auto.
-    - eapply sem_block_cons1'; intros; eauto.
-      eapply Hind; eauto. intro contra; subst.
-      1,2:(rewrite find_node_other with (1:=Hnf) in Hfind';
+    - simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
+      eapply sem_exp_cons1'; intros; eauto.
+      eapply Hind; eauto.
+      2,3:(intro contra; subst;
+           rewrite find_node_other with (1:=Hnf) in Hfind';
            eapply find_node_later_not_Is_node_in; eauto).
+      1-3:left; solve_Exists.
+    - eapply sem_block_cons1'; intros; eauto.
+      eapply Hind; eauto.
+      2,3:(intro contra; subst;
+           rewrite find_node_other with (1:=Hnf) in Hfind';
+           eapply find_node_later_not_Is_node_in; eauto).
+      1-3:right; auto.
+  Qed.
+
+  Lemma sem_exp_cons1 {PSyn prefs} :
+    forall (nd: @node PSyn prefs) nds typs exts H bk e vs,
+      Ordered_nodes (Global typs exts (nd::nds)) ->
+      sem_exp (Global typs exts (nd::nds)) H bk e vs ->
+      ~Is_node_in_exp nd.(n_name) e ->
+      sem_exp (Global typs exts nds) H bk e vs.
+  Proof.
+    intros * Hord Hsem Hnin.
+    eapply sem_exp_cons1'; eauto.
+    intros. eapply sem_node_cons1; eauto.
+    destruct (ident_eq_dec (n_name nd) f); subst; congruence.
   Qed.
 
   Corollary sem_block_cons1 {PSyn prefs} :
@@ -750,6 +773,23 @@ Module Type LSEMANTICS
     eapply sem_block_cons1'; eauto.
     intros. eapply sem_node_cons1; eauto.
     destruct (ident_eq_dec (n_name nd) f); subst; congruence.
+  Qed.
+
+  Lemma sem_node_cons1' {PSyn prefs} : forall typs exts (n nd: @node PSyn prefs) nds Hi bs,
+      Ordered_nodes (Global typs exts (nd::nds)) ->
+      ~Is_node_in nd.(n_name) n ->
+      sem_block (Global typs exts (nd::nds)) Hi bs (n_block n) ->
+      Forall (sem_last_decl (sem_exp (Global typs exts (nd::nds))) (FEnv.empty (Stream svalue)) Hi bs) (n_out n) ->
+      sem_block (Global typs exts nds) Hi bs (n_block n)
+      /\ Forall (sem_last_decl (sem_exp (Global typs exts nds)) (FEnv.empty (Stream svalue)) Hi bs) (n_out n).
+  Proof.
+    intros * Hord Hnin Hsem1 Hsem2.
+    split.
+    - eapply sem_block_cons1; eauto.
+      contradict Hnin. now right.
+    - simpl_Forall. inv Hsem2; econstructor; eauto.
+      eapply sem_exp_cons1; eauto.
+      contradict Hnin. left; solve_Exists.
   Qed.
 
   Add Parametric Morphism {A} (v : A) : (fby1 v)
@@ -1014,6 +1054,8 @@ Module Type LSEMANTICS
       simpl_Forall. take (_ ≡ _) and now rewrite <-it.
     + eapply Forall2_trans_ex in Eyss; [|eauto].
       simpl_Forall. take (_ ≡ _) and now rewrite <-it.
+    + simpl_Forall. take (sem_last_decl _ _ _ _ _) and inv it; econstructor; eauto.
+      subst bs. now rewrite <-Exss.
     + now rewrite <-Exss.
   Qed.
 
@@ -1368,7 +1410,7 @@ Module Type LSEMANTICS
   Qed.
 
   Section props.
-    Context {PSyn : block -> Prop}.
+    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
     Variable (G : @global PSyn prefs).
 
@@ -1423,7 +1465,7 @@ Module Type LSEMANTICS
         specialize (H13 0). inv H13.
         simpl_Forall. take (Forall2 _ _ v) and (apply Forall2_length in it).
         rewrite H3 in H14; inv H14.
-        repeat rewrite map_length in *. setoid_rewrite map_length in it. congruence.
+        repeat rewrite map_length in *. setoid_rewrite H16. auto.
     Qed.
 
     Corollary sem_exps_numstreams : forall H b es vs,
@@ -1607,16 +1649,16 @@ Module Type LSEMANTICS
   Qed.
 
   Definition vars_of_locs (locs : list (ident * (type * clock * ident * option (exp * ident)))) :=
-    vars_of_senv (senv_of_locs locs).
+    vars_of_senv (senv_of_decls locs).
 
   Fact vars_of_locs_Var : forall locs x,
-      In (Var x) (vars_of_locs locs) <-> IsVar (senv_of_locs locs) x.
+      In (Var x) (vars_of_locs locs) <-> IsVar (senv_of_decls locs) x.
   Proof.
     intros. apply vars_of_senv_Var.
   Qed.
 
   Fact vars_of_locs_Last : forall locs x,
-      In (Last x) (vars_of_locs locs) <-> IsLast (senv_of_locs locs) x.
+      In (Last x) (vars_of_locs locs) <-> IsLast (senv_of_decls locs) x.
   Proof.
     intros. apply vars_of_senv_Last.
   Qed.
@@ -1633,7 +1675,7 @@ Module Type LSEMANTICS
       sem_scope (sem_exp G) sem_block (restrict Hi Γ) bs (Scope locs blks).
   Proof.
     intros * Hp Hwx Hsem; inv Hwx; inv Hsem.
-    assert (FEnv.Equiv (@EqSt _) (restrict (Hi + Hi') (Γ ++ senv_of_locs locs))
+    assert (FEnv.Equiv (@EqSt _) (restrict (Hi + Hi') (Γ ++ senv_of_decls locs))
               (restrict Hi Γ + Hi')) as Heq.
     { simpl. symmetry.
       intros ?. unfold FEnv.union, restrict, FEnv.restrict, vars_of_senv.

@@ -115,7 +115,7 @@ Module Type CLOCKSWITCH
     Definition switch_scope (env : static_env) bck sub scop : FreshAnn (scope A) :=
       let 'Scope locs blks := scop in
       let locs' := map (fun '(x, (ty, ck, cx, o)) => (x, (ty, subclock_clock bck sub ck, cx, o))) locs in
-      let env := env++senv_of_locs locs in
+      let env := env++senv_of_decls locs in
       do blks' <- f_s env blks;
       ret (Scope locs' blks').
 
@@ -329,18 +329,18 @@ Module Type CLOCKSWITCH
       rewrite map_map, map_ext with (g:=fst). 2:intros; destruct_conjs; auto.
       rewrite map_app, rename_vars_idem with (xs:=map fst locs) in H; auto.
       intros * Hsub' Hnin. eapply Hnd'; apply fst_InMembers; eauto.
-    - rewrite map_app, map_fst_senv_of_locs.
+    - rewrite map_app, map_fst_senv_of_decls.
       eapply incl_appl'; eauto.
     - intros. rewrite InMembers_app; auto.
     - apply NoDupMembers_app; auto.
-      + now apply NoDupMembers_senv_of_locs.
+      + now apply NoDupMembers_senv_of_decls.
       + intros * Hinm1 Hinm2.
-        eapply Hnd', fst_InMembers; eauto. apply InMembers_senv_of_locs; auto.
+        eapply Hnd', fst_InMembers; eauto. apply InMembers_senv_of_decls; auto.
     - apply NoDup_app'; auto.
       + now apply fst_NoDupMembers.
       + simpl_Forall. eapply Hincl in H0. intros ?.
         eapply Hnd'; eauto. now apply fst_InMembers.
-    - now rewrite map_app, map_fst_senv_of_locs.
+    - now rewrite map_app, map_fst_senv_of_decls.
   Qed.
 
   Lemma switch_block_VarsDefined : forall blk xs bck sub env blk' st st',
@@ -914,8 +914,8 @@ Module Type CLOCKSWITCH
 
   (** ** Transformation of a node and program *)
 
-  Program Definition switch_node (n: @node noauto_block auto_prefs) : @node noswitch_block switch_prefs :=
-    let res := switch_block (senv_of_inout (n_in n ++ n_out n)) Cbase (@Env.empty _) (n_block n) init_st in
+  Program Definition switch_node (n: @node noauto auto_prefs) : @node noswitch switch_prefs :=
+    let res := switch_block (senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) Cbase (@Env.empty _) (n_block n) init_st in
     {| n_name := n_name n;
        n_hasstate := n_hasstate n;
        n_in := n_in n;
@@ -928,15 +928,13 @@ Module Type CLOCKSWITCH
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
     pose proof (n_defd n) as (xs&Hperm&Hvars).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    eapply switch_block_VarsDefined with (xs:=xs) in Hsw; eauto.
+    eapply switch_block_VarsDefined with (xs:=xs) in Hsw; eauto using node_NoDupMembers, node_NoDupLocals.
     do 2 esplit; eauto.
     - now rewrite rename_vars_empty.
-    - rewrite Hvars, map_fst_senv_of_inout. solve_incl_app.
+    - rewrite Hvars, map_app, map_fst_senv_of_decls. solve_incl_app.
     - intros ? Hin. apply Env.Props.P.F.empty_in_iff in Hin. inv Hin.
-    - apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-    - rewrite Hvars. apply fst_NoDupMembers; eauto using NoDupMembers_app_r.
-    - apply n_syn.
-    - eapply NoDupLocals_incl; [|eauto]. rewrite map_fst_senv_of_inout. solve_incl_app.
+    - rewrite Hvars. eauto using NoDup_app_r.
+    - pose proof (n_syn n) as Hsyn. now inv Hsyn.
   Qed.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw; simpl in *.
@@ -944,7 +942,6 @@ Module Type CLOCKSWITCH
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     split; auto.
     eapply switch_block_NoDupLocals; eauto.
-    + apply fst_NoDupMembers; auto.
     + eapply Forall_impl; eauto.
   Qed.
   Next Obligation.
@@ -957,17 +954,17 @@ Module Type CLOCKSWITCH
   Qed.
   Next Obligation.
     destruct (switch_block _ _ _ _) eqn:Hsw.
-    pose proof (n_syn n) as Hsyn.
-    eapply switch_noswitch; eauto.
+    pose proof (n_syn n) as Hsyn. inv Hsyn.
+    econstructor; eauto using switch_noswitch.
   Qed.
 
   Global Program Instance switch_node_transform_unit: TransformUnit node node :=
     { transform_unit := switch_node }.
 
-  Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global noauto_block auto_prefs) (@global noswitch_block switch_prefs) :=
+  Global Program Instance switch_global_without_units : TransformProgramWithoutUnits (@global noauto auto_prefs) (@global noswitch switch_prefs) :=
     { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
-  Definition switch_global : @global noauto_block auto_prefs -> @global noswitch_block switch_prefs :=
+  Definition switch_global : @global noauto auto_prefs -> @global noswitch switch_prefs :=
     transform_units.
 
   (** *** Equality of interfaces *)

@@ -154,7 +154,7 @@ Module Type ILCLOCKING
       + setoid_rewrite subclock_exp_clockof. rewrite H8; simpl; eauto.
 
     - (* local *)
-      repeat inv_scope.
+      repeat inv_scope. subst Γ'0.
 
       assert (forall y, Env.In y (Env.from_list (combine (map fst locs) x)) <-> InMembers y locs) as Hsubin'.
       { intros.
@@ -239,16 +239,16 @@ Module Type ILCLOCKING
               eapply In_InMembers, Hsubin' in Hin0 as (?&?). congruence.
         }
       }
-      eapply mmap_inlinelocal_block_wc with (Γ':=Γ'++senv_of_locs locs) (Γ'':=Γ''++_) in H4 as (Wc&Wcc); eauto.
+      eapply mmap_inlinelocal_block_wc with (Γ':=Γ'++senv_of_decls locs) (Γ'':=Γ''++_) in H4 as (Wc&Wcc); eauto.
       1:rewrite app_assoc in Wc, Wcc; repeat split; eauto.
       * simpl_Forall. eapply wc_clock_incl; eauto. solve_incl_app.
       * rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
-      * intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_locs.
+      * intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_decls.
         split; auto. intro contra.
         eapply H12; eauto with datatypes.
-      * intros. rewrite Env.union_In, InMembers_app, InMembers_senv_of_locs, Hsubin, Hsubin'. reflexivity.
-      *{ intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_locs.
+      * intros. rewrite Env.union_In, InMembers_app, InMembers_senv_of_decls, Hsubin, Hsubin'. reflexivity.
+      *{ intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_decls.
          eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eauto.
          - eapply Hsubgen in Hfind as [|]; eauto.
          - eapply Env.from_list_find_In, in_combine_r in Hfind.
@@ -302,33 +302,39 @@ Module Type ILCLOCKING
       wc_node G1 n ->
       wc_node G2 (inlinelocal_node n).
   Proof.
-    unfold inlinelocal_node, wc_node; simpl.
-    intros * Hiface (Hwc1&Hwc2&Hwc3).
+    unfold inlinelocal_node; simpl.
+    intros * Hiface Hwc. inversion_clear Hwc as [?? Wc1 Wc2 Wc3 Wc4]; subst Γ.
     pose proof (n_nodup n) as (_&Hnd2).
     pose proof (n_good n) as (_&Hgood&_).
-    pose proof (n_syn n) as Hsyn.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2].
+    econstructor; simpl; eauto.
+    1:{ simpl_Forall. subst. auto. }
     destruct (inlinelocal_block _ _ _) as ((?&?)&?) eqn:Hdl.
     repeat split; auto.
     assert (Hinl:=Hdl). eapply inlinelocal_block_wc
-                          with (Γ:=senv_of_inout (n_in n ++ n_out n)) in Hdl as (?&?); try rewrite app_nil_r in *; eauto.
+                          with (Γ:=senv_of_ins (n_in n) ++ senv_of_decls (n_out n)) in Hdl as (?&?); try rewrite app_nil_r in *; eauto.
     - repeat econstructor; simpl; eauto.
       + simpl_Forall. simpl_app. repeat rewrite map_map in *.
         erewrite map_ext with (l:=l); eauto. intros; destruct_conjs; auto.
       + simpl_Forall. auto.
       + simpl_Forall. simpl_app. repeat rewrite map_map in *.
         erewrite map_ext with (l:=l); eauto using iface_incl_wc_block. intros; destruct_conjs; auto.
-    - apply senv_of_inout_NoLast.
+    - apply NoLast_app; split; auto using senv_of_ins_NoLast.
+      intros * L. inv L. simpl_In. simpl_Forall. subst; simpl in *; congruence.
     - intros. rewrite Env.Props.P.F.empty_in_iff.
       split; intros [].
     - intros * EQ. rewrite Env.gempty in EQ. congruence.
     - intros * EQ. rewrite Env.gempty in EQ. congruence.
-    - now rewrite app_nil_r, map_fst_senv_of_inout.
-    - unfold idck, senv_of_inout. erewrite map_map, map_ext; eauto.
-      intros; destruct_conjs; auto.
-    - unfold idck, senv_of_inout. erewrite map_map, map_ext; eauto.
-      intros; destruct_conjs; auto.
-    - unfold idck, senv_of_inout. erewrite map_map, map_ext; eauto.
-      intros; destruct_conjs; auto.
+    - rewrite app_nil_r. apply node_NoDupLocals.
+    - unfold idck, senv_of_ins, senv_of_decls.
+      erewrite map_app, 2 map_map, map_ext, map_ext with (l:=n_out _); eauto.
+      1,2:unfold decl; intros; destruct_conjs; auto.
+    - unfold idck, senv_of_ins, senv_of_decls.
+      erewrite map_app, 2 map_map, map_ext, map_ext with (l:=n_out _); eauto.
+      1,2:unfold decl; intros; destruct_conjs; auto.
+    - unfold idck, senv_of_ins, senv_of_decls.
+      erewrite map_app, 2 map_map, map_ext, map_ext with (l:=n_out _); eauto.
+      1,2:unfold decl; intros; destruct_conjs; auto.
   Qed.
 
   Theorem inlinelocal_global_wc : forall G,

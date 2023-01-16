@@ -52,7 +52,7 @@ Module Type SCCORRECTNESS
   Qed.
 
   Section subclock.
-    Context {PSyn1 PSyn2 : block -> Prop} {prefs1 prefs2 : PS.t}.
+    Context {PSyn1 PSyn2 : list decl -> block -> Prop} {prefs1 prefs2 : PS.t}.
     Variable G1 : @global PSyn1 prefs1.
     Variable G2 : @global PSyn2 prefs2.
 

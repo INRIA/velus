@@ -589,6 +589,13 @@ Module FEnv.
         cases_eqn Heq; try congruence; try reflexivity.
         1,2:inv Heq; reflexivity.
       Qed.
+
+      Fact union_empty R `{Reflexive _ R} : forall m,
+          Equiv R (union (empty _) m) m.
+      Proof.
+        unfold union, empty.
+        intros * ?. destruct (m x); reflexivity.
+      Qed.
     End union.
 
     (** Mapping on an environment *)

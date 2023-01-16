@@ -485,7 +485,7 @@ Module Type INLINELOCAL
       rewrite Hperm, map_app in Hperm1.
       do 2 esplit; eauto. rewrite Hperm1, map_app, 2 map_map, <-app_assoc.
       erewrite not_in_union_map_rename2, map_ext with (l:=locs). reflexivity.
-      + intros; destruct_conjs. reflexivity.
+      + unfold decl. intros; destruct_conjs. reflexivity.
       + simpl_Forall. intros In.
         eapply Env.In_from_list, InMembers_In_combine, fst_InMembers in In.
         eapply H12; eauto with datatypes.
@@ -960,10 +960,10 @@ Module Type INLINELOCAL
 
   (** ** Transformation of node and program *)
 
-  Program Definition inlinelocal_node (n: @node noswitch_block switch_prefs) : @node nolocal_top_block local_prefs :=
+  Program Definition inlinelocal_node (n: @node noswitch switch_prefs) : @node nolocal local_prefs :=
     let res := inlinelocal_block (Env.empty _)
                  (n_block n)
-                 {| fresh_st := init_st; used := PSP.of_list (map fst (n_in n ++ n_out n)) |} in
+                 {| fresh_st := init_st; used := PSP.of_list (map fst (n_in n) ++ map fst (n_out n)) |} in
     {|
       n_name := (n_name n);
       n_hasstate := (n_hasstate n);
@@ -980,12 +980,12 @@ Module Type INLINELOCAL
   Next Obligation.
     pose proof (n_defd n) as (?&Hvars&Hperm).
     pose proof (n_nodup n) as (_&Hndup).
-    pose proof (n_syn n) as Hns.
+    pose proof (n_syn n) as Hns. inversion_clear Hns as [?? Hns1 Hns2].
     repeat esplit; eauto.
     destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl.
     eapply inlinelocal_block_vars_perm in Hvars as (?&?&Hperm'); eauto.
     rewrite rename_vars_empty in Hperm'.
-    2:{ rewrite Hperm.
+    2:{ rewrite Env.Props.P.elements_empty, Hperm. simpl.
         eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
     do 2 econstructor; eauto using incl_nil'. do 2 esplit; eauto.
     erewrite map_map, map_ext; eauto.
@@ -993,7 +993,7 @@ Module Type INLINELOCAL
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    pose proof (n_syn n) as Hsyn.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2].
     repeat rewrite app_nil_r.
     destruct (inlinelocal_block _ _) as ((?&?)&st') eqn:Hdl. simpl.
     split; auto. do 2 constructor; eauto.
@@ -1003,16 +1003,15 @@ Module Type INLINELOCAL
       apply NoDupMembers_map; auto.
     - intros * In1 In2.
       eapply inlinelocal_block_nIn in Hdl. 3-5:eauto.
-      2:{ simpl_Forall. apply In_of_list. solve_In. }
+      2:{ simpl_Forall. apply In_of_list. auto. }
       2:{ intros ? In. apply In_of_list in In. now simpl_Forall. }
-      simpl_In. simpl_Forall.
-      eapply Hdl. solve_In.
+      simpl_In. simpl_Forall. eauto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
     destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl. simpl.
-    pose proof (n_syn n) as Hsyn.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2].
     repeat split; eauto using Forall_AtomOrGensym_add.
     do 2 constructor.
     - eapply inlinelocal_block_AtomOrGensym in Hdl; eauto.
@@ -1020,20 +1019,21 @@ Module Type INLINELOCAL
     - eapply inlinelocal_block_GoodLocals; eauto.
   Qed.
   Next Obligation.
-    pose proof (n_syn n) as Hsyn.
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2].
     destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl.
-    constructor.
+    repeat constructor.
+    - simpl_Forall. auto.
     - simpl_Forall. auto.
     - eapply inlinelocal_block_nolocal; eauto.
   Qed.
 
-  Global Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch_block switch_prefs) node :=
+  Global Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch switch_prefs) node :=
     { transform_unit := inlinelocal_node }.
 
-  Global Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch_block switch_prefs) (@global nolocal_top_block local_prefs) :=
+  Global Program Instance inlinelocal_global_without_units : TransformProgramWithoutUnits (@global noswitch switch_prefs) (@global nolocal local_prefs) :=
     { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
-  Definition inlinelocal_global : @global noswitch_block switch_prefs -> @global nolocal_top_block local_prefs :=
+  Definition inlinelocal_global : @global noswitch switch_prefs -> @global nolocal local_prefs :=
     transform_units.
 
   (** *** Equality of interfaces *)

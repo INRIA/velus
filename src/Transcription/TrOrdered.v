@@ -99,8 +99,8 @@ Module Type TRORDERED
     induction Hord as [|?? (?&?)]; intros; simpl in *; monadInv EQ; constructor; eauto.
     constructor.
     - intros f Hin.
-      assert (Lord.Is_node_in_block f (L.n_block x)) as Hfin.
-      { eapply inin_l_nl; eauto. }
+      assert (Lord.Is_node_in f x) as Hfin.
+      { right. eapply inin_l_nl; eauto. }
       apply H in Hfin as (?&(?&?&?)). split; auto.
       + erewrite <-to_node_name; eauto.
       + assert (L.find_node f {| L.types := types; L.externs := externs; L.nodes := l |} = Some x0) as Hfind'.

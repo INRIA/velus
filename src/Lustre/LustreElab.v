@@ -58,7 +58,7 @@ From compcert Require Import common.Errors.
 (*   is then used as an environment for checking and annotating equations and *)
 (*   expressions. *)
 
-(*   The elaboration of variable declarations is performed by [elab_var_decls]. *)
+(*   The elaboration of variable declarations is performed by [elab_input_decls]. *)
 (*   Multiple passes may be required for a list of declarations because clocks *)
 (*   may be dependent on other declared variables. For example, *)
 (* << *)
@@ -82,7 +82,7 @@ From compcert Require Import common.Errors.
 (*   declarations), and the typical case (declarations in order of their *)
 (*   dependencies) is linear. *)
 
-(*   The [elab_var_decls] function builds the map in three cumulative steps: *)
+(*   The [elab_input_decls] function builds the map in three cumulative steps: *)
 (*   first inputs, then outputs, then locals. This is done to ensure that input *)
 (*   clocks are only dependent on other inputs and that output clocks are only *)
 (*   dependent on inputs or other outputs. *)
@@ -1298,7 +1298,7 @@ Section ElabVarDecls.
     | _, _ => err_incoherent_clock loc x
     end.
 
-  Fixpoint elab_var_decls_pass
+  Fixpoint elab_input_decls_pass
            (acc: Env.t (type * clock * bool)
                  * list (ident * (type_name * preclock * list expression * astloc)))
            (vds: list (ident * (type_name * preclock * list expression * astloc)))
@@ -1314,11 +1314,11 @@ Section ElabVarDecls.
           then err_loc loc (CTX x :: msg " is declared more than once")
           else
             do ty <- elab_type tenv loc sty;
-            elab_var_decls_pass (Env.add x (ty, Cbase, negb (is_nil e)) env, notdone) vds
+            elab_input_decls_pass (Env.add x (ty, Cbase, negb (is_nil e)) env, notdone) vds
 
         | FULLCK (ON cy' y c) =>
           match Env.find y env with
-          | None => elab_var_decls_pass (env, vd :: notdone) vds
+          | None => elab_input_decls_pass (env, vd :: notdone) vds
           | Some (yt, cy, _) =>
             if Env.mem x env
             then err_loc loc (CTX x :: msg " is declared more than once")
@@ -1327,12 +1327,12 @@ Section ElabVarDecls.
                  do (c', tn') <- elab_enum tenv loc c;
                  do _ <- assert_id_type loc y yt (Tenum (fst tn') (snd tn'));
                  do ty <- elab_type tenv loc sty;
-                 elab_var_decls_pass (Env.add x (ty, Con cy y (yt, c'), negb (is_nil e)) env, notdone) vds
+                 elab_input_decls_pass (Env.add x (ty, Con cy y (yt, c'), negb (is_nil e)) env, notdone) vds
           end
 
         | WHENCK y c =>
           match Env.find y env with
-          | None => elab_var_decls_pass (env, vd :: notdone) vds
+          | None => elab_input_decls_pass (env, vd :: notdone) vds
           | Some (yt, cy, _) =>
             if Env.mem x env
             then err_loc loc (CTX x :: msg " is declared more than once")
@@ -1340,13 +1340,13 @@ Section ElabVarDecls.
                  do (c', tn') <- elab_enum tenv loc c;
                  do _ <- assert_id_type loc y yt (Tenum (fst tn') (snd tn'));
                  do ty <- elab_type tenv loc sty;
-                 elab_var_decls_pass
+                 elab_input_decls_pass
                    (Env.add x (ty, Con cy y (yt, c'), negb (is_nil e)) env, notdone) vds
           end
         end
     end.
 
-  Fixpoint elab_var_decls' {A: Type}
+  Fixpoint elab_input_decls' {A: Type}
            (loc : astloc)
            (fuel: list A)
            (env : Env.t (type * clock * bool))
@@ -1359,17 +1359,17 @@ Section ElabVarDecls.
         | [] => err_loc loc (MSG "incoherent or cyclic clocks: "
                                 :: msg_ident_list (map fst vds))
         | _ :: fuel' =>
-          do (env', notdone) <- elab_var_decls_pass (env, []) vds;
-          elab_var_decls' loc fuel' env' notdone
+          do (env', notdone) <- elab_input_decls_pass (env, []) vds;
+          elab_input_decls' loc fuel' env' notdone
         end
       end.
 
-  Definition elab_var_decls
+  Definition elab_input_decls
              (loc: astloc)
              (env: Env.t (type * clock * bool))
-             (vds: list (ident * (type_name * preclock * list expression * astloc)))
+             (vds: var_decls)
     : Elab (Env.t (type * clock * bool)) :=
-    elab_var_decls' loc vds env vds.
+    elab_input_decls' loc vds env vds.
 
   Definition annotate nenv (env: Env.t (type * clock * bool))
              (vd: ident * (type_name * preclock * list expression * astloc)) :
@@ -1509,7 +1509,7 @@ Section ElabBlock.
                                              do (t, _) <- elab_enum tenv' loc t;
                                              do e <- elab_transition_cond env nenv e loc;
                                              ret (e, (t, b))) unl;
-                            do env <- elab_var_decls tenv loc env locs;
+                            do env <- elab_input_decls tenv loc env locs;
                             do locs <- mmap (annotate tenv extenv nenv env) locs;
                             do _ <- mmap (check_atom loc) (map fst locs);
                             do blks <- mmap (elab_block env) ablks;
@@ -1527,7 +1527,7 @@ Section ElabBlock.
         ret (Bauto type ck (ini, oth) states)
     | BSWITCH _ _ loc => err_not_singleton loc
     | BLOCAL locs ablks loc =>
-        do env <- elab_var_decls tenv loc env locs;
+        do env <- elab_input_decls tenv loc env locs;
         do locs <- mmap (annotate tenv extenv nenv env) locs;
         do _ <- mmap (check_atom loc) (map fst locs);
         do blks <- mmap (elab_block env) ablks;
@@ -1968,16 +1968,15 @@ Section ElabDeclaration.
                 | H:ret _ _ = OK _ |- _ => unfold ret in H; inv H
               end).
 
-  Definition add_no_last (xs : var_decls) : local_decls :=
+  Definition add_no_last (xs : input_decls) : var_decls :=
     List.map (fun '(x, (ty, ck, loc)) => (x, (ty, ck, [], loc))) xs.
 
   Program Definition elab_declaration_node
-          (name: ident) (has_state: bool) (inputs outputs : var_decls)
-          (blk: LustreAst.block) (loc: astloc) : res (@node (fun _ => True) elab_prefs) :=
+          (name: ident) (has_state: bool) (inputs : input_decls) (outputs : var_decls)
+          (blk: LustreAst.block) (loc: astloc) : res (@node (fun _ _ => True) elab_prefs) :=
     let inputs := add_no_last inputs in
-    let outputs := add_no_last outputs in
-    match (do env_in  <- elab_var_decls tenv loc (Env.empty _) inputs;
-           do env <- elab_var_decls tenv loc env_in outputs;
+    match (do env_in  <- elab_input_decls tenv loc (Env.empty _) inputs;
+           do env <- elab_input_decls tenv loc env_in outputs;
            do xin     <- mmap (annotate tenv extenv nenv env) inputs;
            do xout    <- mmap (annotate tenv extenv nenv env) outputs;
            do blk     <- elab_block tenv extenv nenv env blk;
@@ -1997,7 +1996,7 @@ Section ElabDeclaration.
       OK {| n_name     := name;
             n_hasstate := has_state;
             n_in       := idty xin;
-            n_out      := idty xout;
+            n_out      := xout;
             n_block    := blk |}
     end.
   Next Obligation.
@@ -2011,7 +2010,6 @@ Section ElabDeclaration.
     (* 0 < length xout *)
     rewrite Bool.orb_false_iff in Hb; destruct Hb as (Hin & Hout).
     apply not_equiv_decb_equiv in Hout.
-    setoid_rewrite map_length.
     now apply Nat.neq_0_lt_0 in Hout.
   Qed.
   Next Obligation.
@@ -2019,19 +2017,18 @@ Section ElabDeclaration.
     2:{ eapply check_noduplocals_spec in Hbind5; eauto.
         instantiate (1:=[]). intros ? Hin. inv Hin. }
     eapply check_defined_vars_spec in Hbind8; eauto using check_nodup_spec.
-    rewrite map_fst_idty; eauto.
   Qed.
   Next Obligation.
     split.
     - apply check_nodup_spec in Hbind4; auto.
-      rewrite <-idty_app, NoDupMembers_idty, fst_NoDupMembers; auto.
+      now rewrite map_app, <-map_fst_idty in Hbind4.
     - eapply check_noduplocals_spec in Hbind5; eauto.
-      intros ??. rewrite map_app, in_app_iff in H.
+      intros ??. rewrite in_app_iff, map_fst_idty in H.
       repeat rewrite nameset_spec.
-      destruct H as [Hin|Hin]; rewrite map_fst_idty in Hin; auto.
+      destruct H as [Hin|Hin]; auto.
   Qed.
   Next Obligation.
-    rewrite <-idty_app, map_fst_idty.
+    rewrite map_fst_idty, <-map_app.
     repeat split.
     - eapply mmap_check_atom_AtomOrGensym; eauto.
     - eapply elab_block_GoodLocals; eauto.
@@ -2078,7 +2075,7 @@ Section ElabDeclarations.
     if Env.mem (n_name n) nenv
     then Error (err_loc' loc (MSG "deplicate definition for " :: CTX name :: nil))
     else elab_declarations' (Global G.(types) G.(externs) (n :: G.(nodes)))
-                          tenv eenv (Env.add n.(n_name) (idty n.(n_in), idty n.(n_out)) nenv) ds
+                          tenv eenv (Env.add n.(n_name) (idty n.(n_in), idty (idty n.(n_out))) nenv) ds
   | TYPE name constructors loc :: ds =>
     do t <- elab_declaration_type name constructors loc;
     if Env.mem name tenv
