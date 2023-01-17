@@ -206,33 +206,6 @@ Module Type LSEMDETERMINISM
       eapply Hk. congruence.
     Qed.
 
-    Lemma EqSts_mask : forall k r ss1 ss2,
-        EqSts ss1 ss2 ->
-        EqSts (map (maskv k r) ss1) (map (maskv k r) ss2).
-    Proof.
-      unfold EqSts.
-      intros * Heq.
-      rewrite Forall2_map_1, Forall2_map_2.
-      eapply Forall2_impl_In; [|eauto]; intros ?? _ _ Hab.
-      now rewrite Hab.
-    Qed.
-
-    Lemma EqSts_unmask : forall r ss1 ss2,
-        (forall k, EqSts (map (maskv k r) ss1) (map (maskv k r) ss2)) ->
-        EqSts ss1 ss2.
-    Proof.
-      intros * Heq.
-      assert (length ss1 = length ss2) as Hlen.
-      { specialize (Heq 0). eapply Forall2_length in Heq.
-        now repeat rewrite map_length in Heq. }
-      eapply Forall2_forall2. split; auto; intros ????? Hl ??; subst.
-      eapply EqSt_unmask. intros.
-      specialize (Heq k). eapply Forall2_forall2 in Heq as (_&Heq).
-      eapply Heq; eauto.
-      rewrite map_length; eauto.
-      1,2:rewrite map_nth; reflexivity.
-    Qed.
-
     (** We first establish the determinism of all the coinductive operators,
         as well as the expression semantics.
         We show that they are deterministic "up-to-n" : that is they preserve
@@ -434,9 +407,8 @@ Module Type LSEMDETERMINISM
         + eapply IHn. 6,7:eauto. 1-5:intros; eauto.
           erewrite 2 map_map, map_ext with (l:=xss1), map_ext with (l:=xss2); eauto; intros (?&?); auto.
           erewrite fst_NoDupMembers, map_map, map_ext, <-fst_NoDupMembers; eauto; intros (?&?); auto.
-          (rewrite Forall2_map_1, Forall2_map_2; eapply Forall2_impl_In; [|eauto];
-           intros (?&?) (?&?) _ _ Heq; inv Heq; simpl in *; subst; auto).
-          inv H. inv H0.
+          simpl_Forall. take (EqStN (S n) _ _) and inv it; auto.
+          repeat (take (Some _ = Some _) and inv it).
           specialize (Heq3 _ _ eq_refl eq_refl). inv Heq3; eauto.
     Qed.
 

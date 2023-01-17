@@ -3503,6 +3503,16 @@ Proof.
   induction Hf1; inv Hf2; constructor; auto.
 Qed.
 
+Lemma Forall3_combine1 {A B C} : forall (P : A -> B -> C -> Prop) xs ys zs,
+    length xs = length ys ->
+    Forall2 (fun '(x, y) z => P x y z) (combine xs ys) zs ->
+    Forall3 P xs ys zs.
+Proof.
+  induction xs; intros * Hlen Hf;
+    destruct ys; simpl in *; try congruence;
+      inv Hf; constructor; auto.
+Qed.
+
 Lemma Forall3_combine2 {A B C} : forall (P : A -> B -> C -> Prop) ys xs zs,
     length ys = length zs ->
     Forall2 (fun x '(y, z) => P x y z) xs (combine ys zs) ->
@@ -3554,6 +3564,31 @@ Lemma Forall3_ignore3' {A B C} : forall P (xs : list A) (ys : list B) (zs : list
 Proof.
   intros * Hlen Hf. revert zs Hlen.
   induction Hf; intros; destruct zs; simpl in *; try congruence; constructor; auto.
+Qed.
+
+Lemma Forall3_ignore2'' {A B C} : forall (P : _ -> _ -> _ -> Prop) (xs : list A) (ys : list B) (zs : list C),
+    length ys = length xs ->
+    Forall2 (fun x z => forall y, P x y z) xs zs ->
+    Forall3 P xs ys zs.
+Proof.
+  induction xs; intros * L F2; destruct ys; simpl in *; try congruence.
+  1,2:inv F2; constructor; eauto.
+Qed.
+
+Lemma Forall3_trans_ex1 {A B C D} : forall Q P (xs : list A) (ys : list B) (zs : list C) (ts : list D),
+    Forall3 P xs ys zs ->
+    Forall2 Q xs ts ->
+    Forall3 (fun t y z => exists x, P x y z /\ Q x t) ts ys zs.
+Proof.
+  induction xs; intros * F3 F2; inv F3; inv F2; constructor; eauto.
+Qed.
+
+Lemma Forall3_trans_ex2 {A B C D} : forall Q P (xs : list A) (ys : list B) (zs : list C) (ts : list D),
+    Forall3 P xs ys zs ->
+    Forall2 Q ys ts ->
+    Forall3 (fun x t z => exists y, P x y z /\ Q y t) xs ts zs.
+Proof.
+  induction xs; intros * F3 F2; inv F3; inv F2; constructor; eauto.
 Qed.
 
 Global Instance Forall3_Proper' {A B C}:

@@ -599,9 +599,6 @@ Module Type LTYPING
       econstructor; eauto.
     Qed.
 
-    Ltac solve_ndup :=
-      unfold idty in *; simpl in *; solve_NoDupMembers_app.
-
     Scheme Equality for list.
 
     (** Check that `xs` is a permutation of [0;n[ *)
@@ -898,7 +895,7 @@ Module Type LTYPING
         omap (fun es => oconcat (map f (snd es))) ess = Some tys ->
         Forall (fun es => Forall (wt_exp G env) (snd es)) ess
         /\ Forall2 (fun es tys => typesof (snd es) = tys) ess tys.
-    Proof with try solve_ndup.
+    Proof.
       induction ess as [|es ess IH]; intros tys WTf CE. now inv CE; auto.
       simpl in CE. destruct (oconcat (map f (snd es))) eqn:Ce; [|now omonadInv CE].
       eapply oconcat_map_check_exp' in Ce as (?&?); eauto with datatypes...
@@ -929,13 +926,13 @@ Module Type LTYPING
         omap f es = Some tys ->
         Forall (wt_exp G env) es
         /\ Forall2 (fun e ty => typeof e = ty) es tys.
-    Proof with try solve_ndup.
+    Proof.
       induction es as [|e es IH]; intros tys WTf CE. now inv CE; auto.
       simpl in CE. destruct (f e) eqn:Ce; [|now omonadInv CE].
       destruct (omap f es) as [tes|]; [|now omonadInv CE].
       omonadInv CE. simpl.
-      apply WTf in Ce as (Ce1 & ?); auto with datatypes...
-      destruct (IH tes) as (? & ?); auto with datatypes...
+      apply WTf in Ce as (Ce1 & ?); auto with datatypes.
+      destruct (IH tes) as (? & ?); auto with datatypes.
     Qed.
 
     Import Permutation.

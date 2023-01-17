@@ -332,7 +332,7 @@ Module Type CORRECTNESS
           exists H'. repeat (split; eauto).
         - specialize (Hun _ _ _ eq_refl) as (H'&Href&Histst1&Hsem1&Hsem2).
           assert (Href':=Hfresh); eapply fresh_ident_refines1 in Href'; eauto.
-          2:(destruct Histst1 as (Hdom1&_); ndup_simpl; eauto).
+          2:(destruct Histst1 as (Hdom1&_); eauto).
           exists (FEnv.add (Var x1) v H'). split;[|split;[|split]]; eauto with fresh norm.
           + etransitivity; eauto.
           + eapply fresh_ident_hist_st1 in Hfresh; eauto.
@@ -405,11 +405,11 @@ Module Type CORRECTNESS
       Proof with eauto with datatypes.
         intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
         unfold unnest_arrow.
-        rewrite_Forall_forall. solve_length.
-        repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
-        destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
+        rewrite Forall2_swap_args in Hsem1, Hsem2.
+        eapply Forall3_trans_ex1 in Hfby; eauto. eapply Forall3_trans_ex2 in Hfby; eauto.
+        simpl_Forall. apply Forall3_combine'1, Forall3_ignore2'', Forall3_combine'1. solve_length.
+        eapply Forall3_impl_In; [|eauto]. intros; destruct_conjs.
         econstructor... econstructor...
-        Unshelve. 1-2:exact default_stream.
       Qed.
 
       Fact unnest_fby_sem : forall H bs e0s es anns s0s ss os,
@@ -422,11 +422,11 @@ Module Type CORRECTNESS
       Proof with eauto with datatypes.
         intros * Hlen1 Hlen2 Hsem1 Hsem2 Hfby.
         unfold unnest_fby.
-        rewrite_Forall_forall. 1:solve_length.
-        repeat simpl_length. repeat simpl_nth. Unshelve. 2:exact ((hd_default [], hd_default []), default_ann).
-        destruct (nth n (combine _ _)) as [[e0 e] ?] eqn:Hnth. repeat simpl_nth.
+        rewrite Forall2_swap_args in Hsem1, Hsem2.
+        eapply Forall3_trans_ex1 in Hfby; eauto. eapply Forall3_trans_ex2 in Hfby; eauto.
+        simpl_Forall. apply Forall3_combine'1, Forall3_ignore2'', Forall3_combine'1. solve_length.
+        eapply Forall3_impl_In; [|eauto]. intros; destruct_conjs.
         econstructor... econstructor...
-        Unshelve. 1-2:exact default_stream.
       Qed.
 
       Fact unnest_when_sem : forall H bs es tys ckid tx b ck s ss os,
@@ -437,11 +437,11 @@ Module Type CORRECTNESS
           Forall2 (fun e s => sem_exp_ck G2 H bs e [s]) (unnest_when (ckid, tx) b es tys ck) os.
       Proof with eauto.
         intros * Hlen Hsem Hvar Hwhen.
-        unfold unnest_when. simpl_forall.
-        rewrite_Forall_forall. 1:congruence.
-        eapply Swhen with (ss:=[[nth n ss default_stream]])...
-        - repeat constructor...
-          eapply H1... congruence.
+        unfold unnest_when. simpl_Forall.
+        eapply Forall3_combine'1, Forall3_ignore2''; auto.
+        eapply Forall2_trans_ex in Hwhen; eauto. simpl_Forall.
+        eapply Swhen with (ss:=[[_]])...
+        simpl. repeat constructor. auto.
       Qed.
 
       Lemma Forall2Brs_hd_inv (P : _ -> _ -> Prop) : forall es v vs,
@@ -592,7 +592,7 @@ Module Type CORRECTNESS
           Forall2 (sem_var (H + FEnv.of_list (combine xs vs))) xs vs.
       Proof.
         intros * Hlen Hndup.
-        rewrite_Forall_forall.
+        eapply Forall2_forall2; split; auto; intros; subst.
         apply sem_var_union3', sem_var_of_list; eauto using NoDup_NoDupMembers_combine.
         rewrite <-combine_nth; auto. apply nth_In.
         now rewrite combine_length, <-Hlen, Nat.min_id.
@@ -862,7 +862,7 @@ Module Type CORRECTNESS
 
           assert (FEnv.refines (@EqSt _) H'' H'''') as Href4.
           { subst. eapply idents_for_anns_refines in H4...
-            destruct Histst2 as (Hdom2&_). ndup_simpl... }
+            destruct Histst2 as (Hdom2&_)... }
           clear Hlength'''.
 
           assert (Forall2 (fun e v => sem_exp_ck G2 H'''' b e [v]) (unnest_fby (concat x2) (concat x6) a) vs) as Hsemf.
@@ -892,14 +892,11 @@ Module Type CORRECTNESS
             2-3:(simpl_Forall; repeat (eapply sem_equation_refines; eauto)).
             clear - Hsemvars Hsemf.
             remember (unnest_fby _ _ _) as fby. clear Heqfby.
-            simpl_forall.
-            rewrite_Forall_forall. congruence.
-            destruct (nth _ x5 _) eqn:Hnth1.
+            simpl_Forall. eapply Forall2_swap_args, Forall2_trans_ex in Hsemf; eauto.
+            simpl_Forall.
             econstructor.
-            -- repeat constructor.
-               eapply H0... congruence.
-            -- repeat constructor.
-               eapply H2 with (x1:=(i, a1))...
+            -- repeat constructor; eauto.
+            -- simpl. repeat constructor; eauto.
 
         - (* arrow *)
           inversion_clear Hwc as [| | | | | | | |??? Hwc1 Hwc2 Hl1 Hl2| | | |].
@@ -913,7 +910,7 @@ Module Type CORRECTNESS
           assert (H2':=H2). eapply mmap2_sem in H2... clear H.
           destruct H2 as [H' [Href1 [Histst1 [Hsem1' Hsem1'']]]]. apply Forall2_concat in Hsem1'.
 
-          assert (Forall2 (sem_exp_ck G1 H' b) es sss) as Hsem' by (rewrite_Forall_forall; eapply sem_exp_refines; eauto).
+          assert (Forall2 (sem_exp_ck G1 H' b) es sss) as Hsem' by (simpl_Forall; eapply sem_exp_refines; eauto).
           assert (length sss = length es) as Hlen2 by (eapply Forall2_length in Hsem2; eauto).
           assert (H3':=H3). eapply mmap2_sem in H3... clear H0.
           2:simpl_Forall; repeat solve_incl.
@@ -936,7 +933,7 @@ Module Type CORRECTNESS
 
           assert (FEnv.refines (@EqSt _) H'' H'''') as Href4.
           { subst. eapply idents_for_anns_refines in H4...
-            destruct Histst2 as (Hdom2&_). ndup_simpl... }
+            destruct Histst2 as (Hdom2&_)... }
           clear Hlength'''.
 
           assert (Forall2 (fun e v => sem_exp_ck G2 H'''' b e [v]) (unnest_arrow (concat x2) (concat x6) a) vs) as Hsemf.
@@ -964,14 +961,11 @@ Module Type CORRECTNESS
             2-3:(simpl_Forall; eauto using sem_equation_refines).
             clear - Hsemvars Hsemf.
             remember (unnest_arrow _ _ _) as arrow. clear Heqarrow.
-            simpl_forall.
-            rewrite_Forall_forall. congruence.
-            destruct (nth _ x5 _) eqn:Hnth1.
+            simpl_Forall. eapply Forall2_swap_args, Forall2_trans_ex in Hsemf; eauto.
+            simpl_Forall.
             econstructor.
-            -- repeat constructor.
-               eapply H0... congruence.
-            -- repeat constructor.
-               eapply H2 with (x1:=(i, a1))...
+            -- repeat constructor; eauto.
+            -- simpl. repeat constructor; eauto.
 
         - (* when *)
           inv Hwc. inv Hsem. repeat inv_bind.
@@ -1013,7 +1007,7 @@ Module Type CORRECTNESS
               eapply Forall2_length in H16. solve_length. }
             assert (FEnv.refines (@EqSt _) Hi1 Hi2) as Href3.
             { subst. eapply idents_for_anns_refines...
-              destruct Histst1 as (Hdom1&_). ndup_simpl... }
+              destruct Histst1 as (Hdom1&_)... }
             assert (Forall2 (sem_var Hi2) (map (fun '(x, _) => Var x) x3) vs) as Hvars.
             { rewrite HeqHi2. eapply sem_new_vars... 1:rewrite map_length...
               eapply idents_for_anns_NoDup... }
@@ -1040,8 +1034,7 @@ Module Type CORRECTNESS
                  { eapply idents_for_anns_length in H.
                    subst. rewrite unnest_merge_length. solve_length. }
                  clear - Hvars Hsem' Href3 Hlength''. apply mk_equations_Forall. simpl_forall.
-                 rewrite Forall2_swap_args in Hsem'.
-                 eapply Forall2_trans_ex in Hsem'; [|eauto].
+                 eapply Forall2_swap_args, Forall2_trans_ex in Hsem'; [|eauto].
                  simpl_Forall.
                  apply Seq with (ss:=[[x]]); simpl.
                  1,2:repeat constructor... eapply sem_exp_refines...
@@ -1055,8 +1048,7 @@ Module Type CORRECTNESS
           eapply Forall2_singl in Hsem1.
 
           assert (Forall (fun es => Forall (wc_exp G1 (vars ++ st_senv x1)) (snd es)) es) as Hwces.
-          { do 2 (eapply Forall_forall; intros).
-            do 2 (eapply Forall_forall in H9; eauto). repeat solve_incl. }
+          { simpl_Forall. repeat solve_incl. }
           assert (Forall2Brs (sem_exp_ck G1 Hi1 b) es vs0) as Hses.
           { eapply Forall2Brs_impl_In; [|eauto]; intros ?? _ Hse.
             eapply sem_exp_refines... }
@@ -1090,7 +1082,7 @@ Module Type CORRECTNESS
               eapply Forall3_length in H22 as (?&?). solve_length. }
             assert (FEnv.refines (@EqSt _) Hi2 Hi3) as Href3.
             { subst. eapply idents_for_anns_refines...
-              destruct Histst2 as (Hdom1&_). ndup_simpl... }
+              destruct Histst2 as (Hdom1&_)... }
             assert (Forall2 (sem_var Hi3) (map (fun '(x, _) => Var x) x) vs) as Hvars.
             { rewrite HeqHi3. eapply sem_new_vars... 1:rewrite map_length...
               eapply idents_for_anns_NoDup; eauto. }
@@ -1179,7 +1171,7 @@ Module Type CORRECTNESS
               eapply Forall3_length in H23 as (?&?). solve_length. }
             assert (FEnv.refines (@EqSt _) Hi3 Hi4) as Href4.
             { subst. eapply idents_for_anns_refines...
-              destruct Histst3 as (Hdom1&_). ndup_simpl... }
+              destruct Histst3 as (Hdom1&_)... }
             assert (Forall2 (sem_var Hi4) (map (fun '(x, _) => Var x) x) vs) as Hvars.
             { rewrite HeqHi4. eapply sem_new_vars... 1:rewrite map_length...
               eapply idents_for_anns_NoDup; eauto. }
@@ -1213,9 +1205,8 @@ Module Type CORRECTNESS
               assert (length merge = length x) as Hlength''.
               { eapply idents_for_anns_length in H.
                 subst. rewrite unnest_case_length. solve_length. }
-              clear - Hvars Hsem' Href4 Hlength''. apply mk_equations_Forall. simpl_forall.
-              rewrite Forall2_swap_args in Hsem'.
-              eapply Forall2_trans_ex in Hsem'; [|eauto]. simpl_Forall.
+              clear - Hvars Hsem' Href4 Hlength''. apply mk_equations_Forall. simpl_Forall.
+              eapply Forall2_swap_args, Forall2_trans_ex in Hsem'; [|eauto]. simpl_Forall.
               apply Seq with (ss:=[[x0]]); simpl.
               1,2:repeat constructor... eapply sem_exp_refines...
 
@@ -1287,7 +1278,6 @@ Module Type CORRECTNESS
             * repeat constructor...
               eapply sem_exp_refines...
             * simpl. rewrite app_nil_r; simpl_Forall; auto.
-              Unshelve. 1,2:exact default_stream.
       Qed.
 
       Corollary unnest_exps_sem : forall b es H vs es' eqs' st st',
@@ -1643,7 +1633,7 @@ Module Type CORRECTNESS
           { rewrite Hannots, <-Hlen1.
             rewrite_Forall_forall. simpl_length. congruence. }
           rewrite_Forall_forall.
-          destruct x1. simpl_In. assert (HIn:=Hin).
+          simpl_In. assert (HIn:=Hin).
           eapply In_nth with (d:=(hd_default [], [])) in Hin. destruct Hin as [n [Hn Hnth]].
           rewrite combine_for_numstreams_length in Hn; auto.
           rewrite <- (combine_for_numstreams_length _ (concat ss)) in Hn; try congruence.

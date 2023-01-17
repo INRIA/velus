@@ -93,16 +93,13 @@ Module Type UNNESTING
       end.
 
   (** Simplify an expression with maps and other stuff... *)
+  Global Hint Unfold typesof annots clocksof : list.
+
   Ltac simpl_list :=
     simpl in *;
+    autounfold with list in *;
     match goal with
     (* annots, clocksof and typesof are just plurals *)
-    | H : context c [annots ?es] |- _ => unfold annots in H
-    | |- context c [annots ?es] => unfold annots
-    | H : context c [typesof ?es] |- _ => unfold typesof in H
-    | |- context c [typesof ?es] => unfold typesof
-    | H : context c [clocksof ?es] |- _ => unfold clocksof in H
-    | |- context c [clocksof ?es] => unfold clocksof
     (* flat_map, map_map, map_app, concat_app *)
     | H: context c [flat_map ?f ?l] |- _ => rewrite flat_map_concat_map in H
     | |- context c [flat_map ?f ?l] => rewrite flat_map_concat_map
@@ -167,26 +164,6 @@ Module Type UNNESTING
 
   Ltac solve_length :=
     repeat simpl_length; auto; try congruence.
-
-  Ltac simpl_nth :=
-    match goal with
-    | H : In ?x _ |- _ =>
-      apply In_nth with (d:=x) in H; destruct H as [? [? ?]]
-    | H : context c [nth _ (combine _ _) (?x1, ?x2)] |- _ =>
-      rewrite (combine_nth _ _ _ x1 x2) in H; [inv H|clear H;try solve_length]
-    | H : context c [nth _ (map _ _) _] |- _ =>
-      erewrite map_nth' in H; [|clear H; try solve_length]
-    | |- context c [nth _ (map _ _) _] =>
-      erewrite map_nth'; [| try solve_length]
-    end.
-
-  Ltac ndup_simpl :=
-    repeat progress
-           (try rewrite map_app in *; try rewrite idck_app in *;
-            try rewrite <-app_assoc in *;
-            try rewrite map_fst_idck in * ).
-  Ltac solve_ndup :=
-    ndup_simpl; solve_NoDup_app.
 
   Definition default_ann : ann := (OpAux.bool_velus_type, Cbase).
 
@@ -807,8 +784,7 @@ Module Type UNNESTING
   Proof.
     intros * Hwl Hmap.
     eapply mmap2_values in Hmap. eapply Forall3_ignore3 in Hmap.
-    eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&?) Hin _ (?&?&?&?); repeat inv_bind.
-    eapply Forall_forall in Hwl; eauto; simpl in *; eauto with norm datatypes.
+    simpl_Forall. repeat inv_bind. eauto with norm datatypes.
   Qed.
 
   Corollary unnest_exps_length : forall G es es' eqs' st st',
@@ -1041,15 +1017,12 @@ Module Type UNNESTING
     { eapply mmap2_unnest_exp_numstreams in Hmap; eauto. }
     eapply mmap2_unnest_exp_annots' in Hmap; eauto.
     unfold annots; rewrite flat_map_concat_map.
-    apply Forall2_concat. rewrite Forall2_map_2.
-    eapply Forall2_impl_In; eauto. clear Hmap. intros; simpl in *.
+    apply Forall2_concat. simpl_Forall.
     rewrite <- H1, <- (concat_map_singl1 a) at 1.
     unfold annots; rewrite flat_map_concat_map.
-    apply Forall2_concat. rewrite Forall2_map_1, Forall2_map_2.
-    apply Forall2_same, Forall_forall. intros.
-    assert (In x (concat es')) as HIn by eauto using in_concat'.
-    eapply Forall_forall in HIn; eauto; simpl in HIn.
-    rewrite <- length_annot_numstreams in HIn. singleton_length.
+    apply Forall2_concat. simpl_Forall.
+    assert (In x (concat es')) as HIn by eauto using in_concat'. simpl_Forall.
+    rewrite <- length_annot_numstreams in Hnumstreams. singleton_length.
     repeat constructor; auto.
   Qed.
 
@@ -1074,8 +1047,7 @@ Module Type UNNESTING
   Proof.
     intros * Hf Hmap.
     eapply mmap2_values, Forall3_ignore3 in Hmap.
-    eapply Forall2_impl_In; [|eauto]; intros (?&?) (?&?) Hin _ (?&?&?&?). repeat inv_bind.
-    eapply Forall_forall in Hf; eauto.
+    simpl_Forall. repeat inv_bind.
     eapply mmap2_unnest_exp_annots; eauto.
   Qed.
 
@@ -1434,11 +1406,10 @@ Module Type UNNESTING
     - eapply unnest_reset_vars_perm in H1; eauto using unnest_exp_vars_perm.
       eapply mmap_vars_perm in H0 as (ys1&Hvars1&Hperm1); eauto.
       exists (ys1++map fst x2). split.
-      + apply Forall2_app; rewrite Forall2_map_1; try (rewrite Forall2_map_2; eapply Forall2_same).
-        * eapply Forall2_impl_In; [|eauto]; intros.
-          replace b with (concat [b]) by (simpl; now rewrite app_nil_r).
+      + apply Forall2_app; simpl_Forall.
+        * replace b with (concat [b]) by (simpl; now rewrite app_nil_r).
           repeat constructor; auto.
-        * eapply Forall_forall; intros. constructor.
+        * constructor.
       + rewrite <-H1, Permutation_swap, <-Hperm1, Permutation_swap.
         now rewrite concat_app, <-app_assoc, flat_map_concat_map.
     - exists [xs]. split; try constructor; auto.
@@ -1956,7 +1927,7 @@ Module Type UNNESTING
     - (* extcall *)
       destruct_conjs; repeat inv_bind.
       repeat constructor...
-      eapply mmap2_unnested_eq; eauto; solve_forall.
+      eapply mmap2_unnested_eq; eauto. solve_forall.
     - (* fby *)
       repeat rewrite Forall_app; repeat split.
       2:eapply mmap2_unnested_eq in H1; eauto; solve_forall.

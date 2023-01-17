@@ -1325,9 +1325,6 @@ Module Type LCLOCKING
           check_scope (fun venv' venvl' => forallb (check_block venv' venvl')) venv venvl s
       end.
 
-    Ltac solve_ndup :=
-      unfold idck in *; simpl in *; solve_NoDupMembers_app.
-
     Lemma check_scope_correct {A} f_check (P_nd : _ -> _ -> Prop) (P_wc : _ -> _ -> Prop) :
       forall venv venvl env locs (blks: A),
         (forall x ty, Env.find x venv = Some ty -> HasClock env x ty) ->
