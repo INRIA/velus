@@ -1783,6 +1783,17 @@ Proof.
     setoid_rewrite <- IHn; auto with arith.
 Qed.
 
+Definition llift_env {A I} (F : A -C-> Dprodi (fun _ : I => D) -C-> D) {n} :
+  A -C-> Dprodi (fun _ : I => nprod n) -C-> nprod n.
+  induction n as [|[]].
+  - apply F.
+  - apply F.
+  - apply curry.
+    apply (fcont_comp2 (PAIR _ _)).
+    + exact ((F @2_ FST _ _) (DMAPi (fun _ => FST _ _) @_ SND _ _)).
+    + exact ((IHn @2_ FST _ _) (DMAPi (fun _ => SND _ _) @_ SND _ _)).
+Defined.
+
 Definition lift2
   (F : D -C-> D -C-> D) {n} :
   nprod n -C-> nprod n -C-> nprod n.
