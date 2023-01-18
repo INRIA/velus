@@ -551,7 +551,7 @@ Section SStream_functions.
   Qed.
 
 
-  Section When.
+  Section When_Case.
 
   Variable enumtag : Type.
   Variable tag_of_val : B -> option enumtag.
@@ -651,8 +651,86 @@ Section SStream_functions.
     eapply zip_is_cons; eauto.
   Qed.
 
-  (* TODO: merge, renommer la section *)
-  End When.
+
+  (** We use the same function to denote the merge and case operators.
+      Notably, we do not try to detect all errors (wrong clocks,
+      error in sub-expressions, etc.) and we will see if it works in proofs.
+   *)
+
+  (* a [case] operator for exactly one stream per tag *)
+  Definition scase1f :
+    (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)) -C->
+    (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)).
+    apply curry, curry.
+    eapply (fcont_comp2 (DSCASE _ _)).
+    2: exact (SND _ _ @_ FST _ _).
+    apply ford_fcont_shift; intro b.
+    apply curry.
+    match goal with
+    | |- _ (_ (Dprod ?pl ?pr) _) =>
+        pose (f := (FST _ _ @_ FST _ _ @_ (FST pl pr)))
+        ; pose (XB := SND pl pr)
+        ; pose (ENV := SND _ _ @_ FST pl pr)
+    end.
+    refine match b with
+    | abs => CONS abs @_ (f @3_ ID _) XB (DMAPi (fun _ => @REM (sampl A)) @_ ENV)
+    | pres vb =>
+        match tag_of_val vb with
+        | None => CTE _ _ (DS_const (err error_Ty))
+        | Some t => (APP _ @2_ PROJ _ t @_ ENV) ((f @3_ ID _) XB (DMAPi (fun _ => @REM (sampl A)) @_ ENV))
+        end
+    | err e => CTE _ _ (DS_const (err e))
+      end.
+  Defined.
+
+  Lemma scase1f_eq : forall f c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
+      scase1f f (cons c C) env
+      = match c with
+        | abs => cons abs (f C (DMAPi (fun _ => @REM (sampl A)) env))
+        | pres b =>
+            match tag_of_val b with
+            | None => DS_const (err error_Ty)
+            | Some t => app (env t) (f C (DMAPi (fun _ => @REM (sampl A)) env))
+            end
+        | err e => DS_const (err e)
+        end.
+  Proof.
+    intros.
+    unfold scase1f.
+    autorewrite with localdb using (simpl (snd _); simpl (fst _)).
+    destruct c; auto.
+    destruct (tag_of_val a); auto.
+  Qed.
+
+  Definition scase1 : DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A) :=
+    FIXP _ scase1f.
+
+  Lemma scase1_eq : forall c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
+      scase1 (cons c C) env
+      == match c with
+        | abs => cons abs (scase1 C (DMAPi (fun _ => @REM (sampl A)) env))
+        | pres b =>
+            match tag_of_val b with
+            | None => DS_const (err error_Ty)
+            | Some t => app (env t) (scase1 C (DMAPi (fun _ => @REM (sampl A)) env))
+            end
+        | err e => DS_const (err e)
+        end.
+  Proof.
+    intros.
+    unfold scase1.
+    assert (Heq:=FIXP_eq scase1f).
+    pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) env) as HH.
+    now rewrite <- scase1f_eq.
+  Qed.
+
+  (* now we lift it to exactly [n] streams per tag *)
+  Definition scase {n} :
+    DS (sampl B) -C-> Dprodi (fun _ => @nprod (DS (sampl A)) n)
+                 -C-> @nprod (DS (sampl A)) n :=
+    curry ((llift_env scase1 @2_ FST _ _) (SND _ _)).
+
+  End When_Case.
 
   (* Definition smergef : *)
   (*   (DS (sampl bool * sampl A * sampl A) -C-> DS (sampl A)) *)
