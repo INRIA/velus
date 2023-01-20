@@ -241,7 +241,10 @@ Section SStream_functions.
   Qed.
 
   (** fby1 is defined by means of two mutually recursive functions, see
-      [fby1APf_eq] and [fby1f_eq] above for explanation *)
+      [fby1APf_eq] and [fby1f_eq] above for explanation
+      That is why we keep an option in fby1, even if it is always called
+      with (Some _).
+   *)
   Definition fby1sf :
     (bool -O-> option A -O-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)) -C->
     (bool -O-> option A -O-> DS (sampl A) -C-> DS (sampl A) -C-> DS (sampl A)).
