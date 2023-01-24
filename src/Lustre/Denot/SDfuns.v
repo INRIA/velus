@@ -654,11 +654,198 @@ Section SStream_functions.
     eapply zip_is_cons; eauto.
   Qed.
 
+  (* TODO: rename Types, move  *)
+  (* TODO: bss comme instance de ça ? *)
+  Definition nprod_foldi {I} {D DD : cpo}
+     (l : list I) (d : DD) (f : I -> DD -C-> D -C-> DD) : @nprod D (length l) -C-> DD.
+    induction l as [| i [| j]].
+    - exact (CTE _ _ d).
+    - exact (f i d).
+    - exact ((f i @2_ (IHl @_ SND _ _)) (FST _ _)).
+  Defined.
 
-  (** We use the same function to denote the merge and case operators.
-      Notably, we do not try to detect all errors (wrong clocks,
-      error in sub-expressions, etc.) and we will see if it works in proofs.
-   *)
+  (* TODO: rename Types, move  *)
+  Definition nprod_map {D1 D2} (F : D1 -C-> D2) {n} : @nprod D1 n -C-> @nprod D2 n.
+    induction n as [|[]].
+    - apply F.
+    - apply F.
+    - apply ((PAIR _ _ @2_ (F @_ FST _ _)) (IHn @_ SND _ _)).
+  Defined.
+
+  (* TODO: rename Types, move  *)
+  (* [nprod n] of [nprod m] *)
+  Definition llift_nprod {D1 D2} {n} (F : D2 -C-> @nprod D1 n -C-> D1) {m} :
+    D2 -C-> @nprod (@nprod D1 m) n -C-> @nprod D1 m.
+    induction m as [|[|m]].
+    - apply F.
+    - apply F.
+    - apply curry.
+      apply (fcont_comp2 (PAIR _ _)).
+      + apply ((F @2_ FST _ _) (nprod_map (FST _ _) @_ SND _ _)).
+      + apply ((IHm @2_ FST _ _) (nprod_map (SND _ _) @_ SND _ _)).
+  Defined.
+
+  Section Sfold.
+
+    (** On mutualise autant que possible les définitions des fonctions
+        [smerge] et [scase], qui opèrent sur
+        - un flot de type [DS (sampl B)] (la condition) et
+        - une liste de flots de type [(nprod (length l)] (les branches).
+        Dans tous les cas, si la condition est [abs], les branches doivent
+        être aussi [abs] : on utilise [fabs].
+        Si la condition est [pres i] où [i] est un tag valide, il faut
+        chercher la valeur de la branche [i] et, selon la situation, vérifier
+        que les autres branches sont absentes (merge) ou présentes (scase).
+        Ce comportement est paramétré par la fonction [fpres].
+     *)
+
+    (* vérifie que toutes les branches sont bien [abs] *)
+    Definition fabs (l : list enumtag) : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
+      nprod_foldi l (DS_const abs)
+        (fun _ =>  ZIP (fun va vb => match va, vb with
+                               | abs, abs => abs
+                               | _,_ => err error_Cl
+                               end)).
+
+    Variable fpres : forall (l : list enumtag) (i : enumtag),
+        @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
+
+    Definition sfoldf (l : list enumtag) :
+      (DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A)) -C->
+      (DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A)).
+      apply curry, curry.
+      eapply (fcont_comp2 (DSCASE _ _)).
+      2: exact (SND _ _ @_ FST _ _).
+      apply ford_fcont_shift; intro b.
+      apply curry.
+      match goal with
+      | |- _ (_ (Dprod ?pl ?pr) _) =>
+          pose (f := (FST _ _ @_ FST _ _ @_ (FST pl pr)))
+          ; pose (XB := SND pl pr)
+          ; pose (Ss := SND _ _ @_ FST pl pr)
+      end.
+      refine
+        match b with
+        | abs => (APP _ @2_ (fabs l @_ Ss)) (((f @3_ ID _) XB) (lift (@REM _) @_ Ss))
+        | pres v => match tag_of_val v with
+                   | Some t => (APP _ @2_ (fpres l t @_ Ss)) (((f @3_ ID _) XB) (lift (@REM _) @_ Ss))
+                   | None => CTE _ _ (DS_const (err error_Ty))
+                   end
+        | err e => CTE _ _ (DS_const (err e))
+        end.
+    Defined.
+
+    (** Synchronous fold  *)
+    Definition sfold l : DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
+      FIXP _ (sfoldf l).
+
+    Lemma sfoldf_eq :
+      forall l f c C np,
+        sfoldf l f (cons c C) np
+        = match c with
+          | abs => app (fabs l np) (f C (lift (@REM _) np))
+          | pres v =>
+              match tag_of_val v with
+              | Some i => app (fpres l i np) (f C (lift (@REM _) np))
+              | None => DS_const (err error_Ty)
+              end
+          | err e => DS_const (err e)
+          end.
+    Proof.
+      intros.
+      unfold sfoldf.
+      autorewrite with localdb using (simpl (snd _); simpl (fst _)).
+      destruct c; auto.
+      destruct (tag_of_val a); auto.
+    Qed.
+
+    Lemma sfold_eq :
+      forall l c C np,
+        sfold l (cons c C) np
+        == match c with
+          | abs => app (fabs l np) (sfold l C (lift (@REM _) np))
+          | pres v =>
+              match tag_of_val v with
+              | Some i => app (fpres l i np) (sfold l C (lift (@REM _) np))
+              | None => DS_const (err error_Ty)
+              end
+          | err e => DS_const (err e)
+          end.
+    Proof.
+      intros.
+      unfold sfold.
+      assert (Heq:=FIXP_eq (sfoldf l)).
+      pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) np) as HH.
+      now rewrite <- sfoldf_eq.
+    Qed.
+
+  End Sfold.
+
+  (** Définitions de fpres pour merge et case *)
+
+  (* vérifie que chaque flot est [abs] sauf [i] et retourne sa valeur *)
+  Definition fpres_merge (l : list enumtag) (i : enumtag)
+    : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
+    (* s'il n'y a que des abs, c'est une erreur d'horloge *)
+    MAP (fun v => match v with
+               | abs => err error_Cl
+               | _ => v
+               end)
+    @_ nprod_foldi _ (DS_const abs)
+       (fun j => ZIP (fun va vb =>
+       (* va: accumulateur, vb : flot courant *)
+          match va, vb, tag_eqb i j with
+          | abs, abs, false => abs
+          | abs, pres v, true => pres v
+          | pres v, abs, false => pres v
+          (* TODO: est-ce vraiment utile de différencier les erreurs ici ? *)
+          | pres v, _, true => err error_Ty (* tag apparaît deux fois *)
+          | err e, _, _ => err e
+          | _, err e, _ => err e
+          | _, _, _ => err error_Cl
+          end)).
+
+  (* vérifie que chaque flot est [pres] et retourne la valeur de [i] *)
+  Definition fpres_case (l : list enumtag) (i : enumtag)
+    : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
+    (* si on obtient abs, c'est que le tag n'a pas été rencontré *)
+    MAP (fun v => match v with
+               | abs => err error_Ty
+               | _ => v
+               end)
+    @_ nprod_foldi _ (DS_const abs)
+       (fun j => ZIP (fun va vb =>
+          match va, vb, tag_eqb i j with
+          | abs, pres v, true => pres v
+          | abs, pres _, false => abs
+          | pres v, pres _, false => pres v
+          | pres v, abs, _ => err error_Cl
+          | pres _, pres _, true => err error_Ty (* tag apparaît deux fois *)
+          | err e, _, _ => err e
+          | _, err e, _ => err e
+          | _, _, _ => err error_Cl
+          end)).
+
+  Definition smerge1 := sfold fpres_merge.
+  Definition scase1 := sfold fpres_case.
+
+  (* extension à n flots par branche *)
+  Definition smerge (l : list enumtag) {n} :
+    DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n :=
+    curry ((llift_nprod (smerge1 l) @2_ FST _ _) (SND _ _)).
+
+  Definition scase (l : list enumtag) {n} :
+    DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n :=
+    curry ((llift_nprod (scase1 l) @2_ FST _ _) (SND _ _)).
+
+
+
+  (** In this section we use the same function to denote the merge and
+      case operators. Notably, we do not try to detect all errors (wrong clocks,
+      error in sub-expressions, etc.).
+      It gives a nice definition with functional environments but is is very
+      unlikely to work well in proofs of SDtoRel. *)
+  Section Case_Noerr.
 
   (* a [case] operator for exactly one stream per tag *)
   Definition scase1f :
@@ -705,17 +892,17 @@ Section SStream_functions.
     destruct (tag_of_val a); auto.
   Qed.
 
-  Definition scase1 : DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A) :=
+  Definition scase1_noerr : DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A) :=
     FIXP _ scase1f.
 
   Lemma scase1_eq : forall c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
-      scase1 (cons c C) env
+      scase1_noerr (cons c C) env
       == match c with
-        | abs => cons abs (scase1 C (DMAPi (fun _ => @REM (sampl A)) env))
+        | abs => cons abs (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env))
         | pres b =>
             match tag_of_val b with
             | None => DS_const (err error_Ty)
-            | Some t => app (env t) (scase1 C (DMAPi (fun _ => @REM (sampl A)) env))
+            | Some t => app (env t) (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env))
             end
         | err e => DS_const (err e)
         end.
@@ -728,10 +915,12 @@ Section SStream_functions.
   Qed.
 
   (* now we lift it to exactly [n] streams per tag *)
-  Definition scase {n} :
+  Definition scase_noerr {n} :
     DS (sampl B) -C-> Dprodi (fun _ => @nprod (DS (sampl A)) n)
                  -C-> @nprod (DS (sampl A)) n :=
-    curry ((llift_env scase1 @2_ FST _ _) (SND _ _)).
+    curry ((llift_env scase1_noerr @2_ FST _ _) (SND _ _)).
+
+  End Case_Noerr.
 
   End When_Case.
 
