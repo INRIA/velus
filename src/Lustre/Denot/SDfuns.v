@@ -844,7 +844,16 @@ Section SStream_functions.
       case operators. Notably, we do not try to detect all errors (wrong clocks,
       error in sub-expressions, etc.).
       It gives a nice definition with functional environments but is is very
-      unlikely to work well in proofs of SDtoRel. *)
+      unlikely to work well in proofs of SDtoRel.
+
+      TODO question légitime : pourquoi on ne ferait pas comme ça ?
+      c'est pénible pour les raisonnements plus tard (pas d'inversion possible)
+      mais c'est plus simple à exprimer ici, et le résultat final devrait être
+      le même : si bien cadencé, alors on a la sémantique relationnelle.
+      Le fait que sbinop/swhen produise des erreurs parce qu'il n'y a pas le
+      choix justifie-t-il la production d'erreurs dans le merge/case ?
+      -> "pour faire pareil" n'est sans doute pas un bon argument
+   *)
   Section Case_Noerr.
 
   (* a [case] operator for exactly one stream per tag *)
