@@ -170,17 +170,64 @@ Definition swhenv :=
   let get_tag := fun v => match v with Venum t => Some t | _ => None end in
   @swhen value value enumtag get_tag Nat.eqb.
 
+(* idem pour smerge *)
+Definition smergev :=
+  let get_tag := fun v => match v with Venum t => Some t | _ => None end in
+  fun l {n} => @smerge value value enumtag get_tag Nat.eqb l n.
+
+(* et pour scase *)
+Definition scasev :=
+  let get_tag := fun v => match v with Venum t => Some t | _ => None end in
+  fun l {n} => @scase value value enumtag get_tag Nat.eqb l n.
+
+
+(** On définit tout de suite [denot_exps_] en fonction de [denot_exp_]
+    pour simplifier le raisonnement dans denot_exp_eq *)
+Section Denot_exps.
+
+  Hypothesis denot_exp_ :
+    forall e : exp,
+      Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
+      @nprod (DS (sampl value)) (numstreams e).
+
+  Definition denot_exps_ (es : list exp) :
+    Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
+    @nprod (DS (sampl value)) (list_sum (List.map numstreams es)).
+    induction es as [|a].
+    + exact (CTE _ _ errTy).
+    + exact ((nprod_app @2_ (denot_exp_ a)) IHes).
+  Defined.
+
+  (* TEST *)
+  (* vérifie que chaque sous-liste d'expressions calcule exactement n flots et
+   retourne un produit d'éléments de type (nprod n) *)
+  (* FIXME: ess n'a pas le type list(list exp) car ça empêche la décroissance
+   syntaxique lors de son appel dans denot_exp_ *)
+  Definition denot_expss_ {A} (ess : list (A * list exp)) (n : nat) :
+    Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
+    @nprod (@nprod (DS (sampl value)) n) (length ess).
+    induction ess as [|[? es]].
+    + exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
+    + destruct (Nat.eq_dec n (list_sum (List.map numstreams es))) as [->|].
+      * exact ((@nprod_app _ 1 _ @2_ (denot_exps_ es)) IHess).
+      * exact (CTE _ _ (nprod_const (nprod_const errTy _) _)).
+  Defined.
+
+End Denot_exps.
+
 Definition denot_exp_ (ins : list ident)
   (e : exp) :
   (* (nodes * inputs * base clock * env) -> streams *)
-  Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C-> @nprod (DS (sampl value)) (numstreams e).
+  Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
+  @nprod (DS (sampl value)) (numstreams e).
+
   set (ctx := Dprod _ _).
   epose (denot_var :=
        fun x => if mem_ident x ins
              then PROJ (DS_fam SI) x @_ SND _ _ @_ FST _ _ @_ FST _ _
              else PROJ (DS_fam SI) x @_ SND _ _).
   revert e.
-  fix denot_exp 1.
+  fix denot_exp_ 1.
   intro e.
   destruct e eqn:He; simpl (nprod _).
   - (* Econst *)
@@ -192,7 +239,7 @@ Definition denot_exp_ (ins : list ident)
   - (* Elast *)
     apply CTE, errTy.
   - (* Eunop *)
-    eapply fcont_comp. 2: apply (denot_exp e0).
+    eapply fcont_comp. 2: apply (denot_exp_ e0).
     destruct (numstreams e0) as [|[]].
     (* pas le bon nombre de flots: *)
     1,3: apply CTE, errTy.
@@ -201,8 +248,8 @@ Definition denot_exp_ (ins : list ident)
     exact (sunop (fun v => sem_unop u v ty)).
   - (* Ebinop *)
     eapply fcont_comp2.
-    3: apply (denot_exp e0_2).
-    2: apply (denot_exp e0_1).
+    3: apply (denot_exp_ e0_2).
+    2: apply (denot_exp_ e0_1).
     destruct (numstreams e0_1) as [|[]], (numstreams e0_2) as [|[]].
     (* pas le bon nombre de flots: *)
     1-4,6-9: apply curry, CTE, errTy.
@@ -224,19 +271,8 @@ Definition denot_exp_ (ins : list ident)
              ) as [->|].
     (* si les tailles ne correspondent pas : *)
     2,3: apply CTE, (nprod_const errTy).
-    (* calculer les flots de e0s *)
-    eassert (ctx -C-> nprod (list_sum (List.map numstreams e0s))) as s0s.
-    { clear Heq.
-      induction e0s as [|a].
-      + exact (CTE _ _ errTy).
-      + exact ((nprod_app @2_ (denot_exp a)) IHe0s). }
-    (* calculer les flots de e0s *)
-    eassert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
-    { clear Heq.
-      induction es as [|a].
-      + exact (CTE _ _ errTy).
-      + exact ((nprod_app @2_ (denot_exp a)) IHes). }
-    (* calculer les flots de es *)
+    pose (s0s := denot_exps_ denot_exp_ e0s).
+    pose (ss := denot_exps_ denot_exp_ es).
     rewrite <- Heq in ss.
     exact ((lift2 (SDfuns.fby) @2_ s0s) ss).
   - (* Earrow *)
@@ -250,13 +286,16 @@ Definition denot_exp_ (ins : list ident)
                 (list_sum (List.map numstreams es))
              ) as [->|].
     2: apply CTE, (nprod_const errTy).
-    eassert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
-    { induction es as [|a].
-      + exact (CTE _ _ errTy).
-      + exact ((nprod_app @2_ (denot_exp a)) IHes). }
+    pose (ss := denot_exps_ denot_exp_ es).
     exact ((llift (swhenv e0) @2_ ss) (denot_var i)).
   - (* Emerge *)
-    apply CTE, (nprod_const errTy).
+    rename l into ies.
+    destruct l0 as (tys,ck).
+    destruct p as [i ty].
+    (* on calcule (length tys) flots pour chaque liste de sous-expressions *)
+    pose (ses := denot_expss_ denot_exp_ ies (length tys)).
+    rewrite <- (map_length fst) in ses.
+    apply ((smergev (List.map fst ies) @2_ denot_var i) ses).
   - (* Ecase *)
     apply CTE, (nprod_const errTy).
   - (* Eapp *)
@@ -267,11 +306,7 @@ Definition denot_exp_ (ins : list ident)
     2,3: apply CTE, (nprod_const errTy).
     (* dénotation du nœud *)
     pose (f := PROJ _ i @_ FST _ _ @_ FST _ _ @_ FST _ _ : ctx -C-> FI i).
-    (* calcul des es *)
-    eassert (ctx -C-> nprod (list_sum (List.map numstreams es))) as ss.
-    { induction es as [|a].
-      + exact (CTE _ _ errTy).
-      + exact ((nprod_app @2_ (denot_exp a)) IHes). }
+    pose (ss := denot_exps_ denot_exp_ es).
     (* chaînage *)
     exact ((np_of_env (idents (n_out n))
               @_ (f @2_ ID ctx) (env_of_np (idents (n_in n)) @_ ss))).
@@ -282,17 +317,9 @@ Definition denot_exp (ins : list ident) (e : exp) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> nprod (numstreams e) :=
   curry (curry (curry (denot_exp_ ins e))).
 
-Definition denot_exps_ (ins : list ident) (es : list exp) :
-  Dprod (Dprod (Dprod (Dprodi FI) (DS_prod SI)) (DS bool)) (DS_prod SI) -C->
-  @nprod (DS (sampl value)) (list_sum (List.map numstreams es)).
-  induction es as [|a].
-  + exact (CTE _ _ errTy).
-  + exact ((nprod_app @2_ (denot_exp_ ins a)) IHes).
-Defined.
-
 Definition denot_exps (ins : list ident) (es : list exp) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> nprod (list_sum (List.map numstreams es)) :=
-  curry (curry (curry (denot_exps_ ins es))).
+  curry (curry (curry (denot_exps_ (denot_exp_ ins) es))).
 
 Lemma denot_exps_eq :
   forall ins e es envG envI bs env,
@@ -300,6 +327,30 @@ Lemma denot_exps_eq :
     = nprod_app (denot_exp ins e envG envI bs env) (denot_exps ins es envG envI bs env).
 Proof.
   trivial.
+Qed.
+
+Definition denot_expss {A} (ins : list ident) (ess : list (A * list exp)) (n : nat) :
+  Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C->
+  @nprod (@nprod (DS (sampl value)) n) (length ess) :=
+  curry (curry (curry (denot_expss_ (denot_exp_ ins) ess n))).
+
+Lemma denot_expss_eq :
+  forall A ins (x:A) es ess envG envI bs env n,
+    denot_expss ins ((x,es) :: ess) n envG envI bs env
+    = match Nat.eq_dec n (list_sum (List.map numstreams es)) with
+      | left eqn =>
+          @nprod_app _ 1 _
+            (eq_rect_r nprod (denot_exps ins es envG envI bs env) eqn)
+            (denot_expss ins ess n envG envI bs env)
+      | _ => nprod_const (nprod_const errTy _) _
+      end.
+Proof.
+  intros.
+  unfold denot_expss, denot_expss_, denot_exps at 1.
+  simpl (list_rect _ _ _ _).
+  generalize (denot_exps_ (denot_exp_ ins) es); intro.
+  cases; auto.
+  destruct e; cases.
 Qed.
 
 Lemma denot_exps_nil :
@@ -374,6 +425,10 @@ Lemma denot_exp_eq :
               eq_rect_r nprod (llift (swhenv k) ss (denot_var ins envI env x)) eqn
           | _ => nprod_const errTy _
           end
+      | Emerge (x,_) ies (tys,_) =>
+          let ss := denot_expss ins ies (length tys) envG envI bs env in
+          let ss := eq_rect_r nprod ss (map_length _ _) in
+          smergev (List.map fst ies) (denot_var ins envI env x) ss
       | Eapp f es _ an =>
           let ss := denot_exps ins es envG envI bs env in
           match find_node f G with
@@ -399,6 +454,30 @@ Lemma denot_exp_eq :
       | _ => nprod_const errTy _
       end.
 Proof.
+  (* Le système se sent obligé de dérouler deux fois [denot_exp_] lors
+     d'un appel à [unfold] et c'est très pénible.
+     Cette tactique permet de le renrouler. *)
+  Ltac fold_denot_exps_ ins :=
+    repeat
+      match goal with
+      | |- context [ denot_exps_ ?A ] =>
+          change A with (denot_exp_ ins)
+      | |- context [ denot_expss_ ?A ] =>
+          change A with (denot_exp_ ins)
+      end.
+
+  (* On doit souvent abstraire la définition des sous-flots
+     pour pouvoir détruire les prédicats d'égalité sous les [eq_rect] etc.
+     Cette tactique le fait automatiquement. *)
+  Ltac gen_denot_sub_exps :=
+    repeat
+      match goal with
+      | |- context [ denot_exps_ ?A ?B ] =>
+          generalize (denot_exps_ A B); intro
+      | |- context [ denot_expss_ ?A ?B ] =>
+          generalize (denot_expss_ A B); intro
+      end.
+
   destruct e; auto; intros envG envI bs env.
   - (* Evar *)
     unfold denot_exp, denot_exp_, denot_var at 1.
@@ -422,47 +501,33 @@ Proof.
     destruct ne1 as [|[]], ne2 as [|[]]; intros; auto.
     destruct (typeof e1) as [|?[]], (typeof e2) as [|?[]]; auto.
   - (* Efby*)
-    rename l into e0s, l0 into es, l1 into a.
-    unfold denot_exp, denot_exp_ at 1.
-    destruct
-      (Nat.eq_dec (list_sum (List.map numstreams e0s)) (list_sum (List.map numstreams es))) as [E1|],
-        (Nat.eq_dec (length a) (list_sum (List.map numstreams e0s))) as [E2|]; auto.
-    unfold denot_exps.
-    (* FIXME: (denot_exps_ e0s) et (denot_exps_ es) apparaissent sous forme déroulée
-       à gauche de l'égalité car [denot_exps] n'existait pas encore lors de la définition
-       de [denot_exp_]. Coq n'arrive pas à les enrouler avec [fold (denot_exps_ e0s)] et
-       [fold (denot_exps_ es)]. On doit l'aider avec la tactique suivante.
-     *)
-    do 2 match goal with
-     | |- context [  (list_rect ?A ?B ?C ?D) ] =>
-         change (list_rect A B C D) with (denot_exps_ ins D);
-         generalize (denot_exps_ ins D); intro (* pour pouvoir détruire E1 et E2 *)
-      end.
-    now destruct E1, E2.
+    unfold denot_exp, denot_exps, denot_exp_ at 1.
+    fold_denot_exps_ ins.
+    gen_denot_sub_exps.
+    unfold eq_rect_r, eq_rect, eq_sym.
+    cases.
   - (* Ewhen *)
     destruct l0 as (tys,?).
     destruct p as (i,?).
-    unfold denot_exp, denot_exp_, denot_var at 1.
-    (* unfold denot_exp, denot_exp_ at 1. *)
-    destruct (Nat.eq_dec _ _) as [E|]; auto.
-    unfold denot_exps.
-    match goal with
-     | |- context [  (list_rect ?A ?B ?C ?D) ] =>
-         change (list_rect A B C D) with (denot_exps_ ins D);
-         generalize (denot_exps_ ins D); intro (* pour pouvoir détruire E1 et E2 *)
-    end.
-    unfold eq_rect_r, eq_rect, eq_sym; cases.
+    unfold denot_exp, denot_exps, denot_exp_ at 1.
+    fold_denot_exps_ ins.
+    gen_denot_sub_exps.
+    unfold denot_var, eq_rect_r, eq_rect, eq_sym.
+    cases.
+  - (* Emerge *)
+    destruct l0 as (tys,?).
+    destruct p as (i,ty).
+    unfold denot_exp, denot_exp_, denot_exps, denot_expss at 1.
+    fold_denot_exps_ ins.
+    gen_denot_sub_exps.
+    unfold denot_var, eq_rect_r, eq_rect, eq_sym.
+    cases.
   - (* Eapp *)
     rename l into es, l0 into er, l1 into anns, i into f.
-    unfold denot_exp, denot_exp_ at 1.
-    destruct (find_node f G) as [n|]; auto.
-    destruct (Nat.eq_dec _ _); auto.
-    unfold denot_exps.
-    match goal with
-     | |- context [  (list_rect ?A ?B ?C ?D) ] =>
-         change (list_rect A B C D) with (denot_exps_ ins D);
-         generalize (denot_exps_ ins D); intro (* pour pouvoir détruire E1 et E2 *)
-    end.
+    unfold denot_exp, denot_exps, denot_exp_ at 1.
+    fold_denot_exps_ ins.
+    gen_denot_sub_exps.
+    cases.
     generalize (np_of_env (idents (n_out n))).
     unfold eq_rect_r, eq_rect, eq_sym; cases.
 Qed.
@@ -509,7 +574,7 @@ Qed.
 Definition denot_equation (ins : list ident) (e : equation) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C-> DS_prod SI.
   destruct e as (xs,es).
-  pose proof (ss := denot_exps_ ins es).
+  pose proof (ss := denot_exps_ (denot_exp_ ins) es).
   apply curry, curry, curry, Dprodi_DISTR.
   intro x.
   destruct (mem_ident x ins).
@@ -743,6 +808,19 @@ End Temp.
     if it is not evaluated during the computations. *)
 Section Denot_cons.
 
+Lemma denot_exps_hyp :
+  forall G G' ins es envG envI bs env,
+    Forall (fun e => denot_exp G ins e envG envI bs env ==
+                    denot_exp G' ins e envG envI bs env) es ->
+    denot_exps G ins es envG envI bs env ==
+      denot_exps G' ins es envG envI bs env.
+Proof.
+  induction es; intros * Heq. trivial.
+  inversion Heq.
+  rewrite 2 denot_exps_eq.
+  apply nprod_app_Oeq_compat; auto.
+Qed.
+
 Lemma denot_exp_cons :
   forall nd nds tys exts
     ins envG envI bs env e,
@@ -750,24 +828,21 @@ Lemma denot_exp_cons :
     denot_exp (Global tys exts nds) ins e envG envI bs env
     == denot_exp (Global tys exts (nd :: nds)) ins e envG envI bs env.
 Proof.
-  Ltac solve_nin Hnin :=
-    let H := fresh in
-    intro H; apply Hnin; constructor; auto.
-  (* TODO: utiliser ça partout, vraiment ! *)
   Ltac gen_denot :=
     repeat match goal with
       | |- context [ denot_exp ?a ?b ?c ] => generalize (denot_exp a b c)
       | |- context [ denot_exps ?a ?b ?c ] => generalize (denot_exps a b c)
+      | |- context [ denot_expss ?a ?b ?c ?d ] => generalize (denot_expss a b c d)
       end.
   induction e using exp_ind2; intro Hnin.
-  all: setoid_rewrite denot_exp_eq; auto.
+  all: setoid_rewrite denot_exp_eq; auto 1.
   - (* unop *)
     revert IHe.
     gen_denot.
     cases; simpl; intros.
     rewrite IHe; auto.
     intro H; apply Hnin; constructor; auto.
-  - (* unop *)
+  - (* binop *)
     revert IHe1 IHe2.
     gen_denot.
     cases; simpl; intros.
@@ -776,61 +851,59 @@ Proof.
   - (* fby *)
     assert (denot_exps (Global tys exts nds) ins e0s envG envI bs env
             == denot_exps (Global tys exts (nd::nds)) ins e0s envG envI bs env) as He0s.
-    { induction e0s. trivial.
-      inv H.
-      (* TODO: faire mieux, cette preuve est un enfer *)
-      rewrite 2 denot_exps_eq.
-      apply nprod_app_Oeq_compat.
-      - apply H3. solve_nin Hnin.
-      - apply IHe0s; auto.
-        intro HH; inv HH. apply Hnin. constructor.
-        destruct H2; eauto using Exists_cons_tl. }
+    { apply denot_exps_hyp.
+      simpl_Forall.
+      apply H; contradict Hnin.
+      constructor; left; solve_Exists. }
     assert (denot_exps (Global tys exts nds) ins es envG envI bs env
             == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
-    { induction es. trivial.
-      inv H0.
-      (* TODO: faire mieux, cette preuve est un enfer *)
-      rewrite 2 denot_exps_eq.
-      apply nprod_app_Oeq_compat.
-      - apply H3. solve_nin Hnin.
-      - apply IHes; auto.
-        intro HH; inv HH. apply Hnin. constructor.
-        destruct H2; eauto using Exists_cons_tl. }
+    { apply denot_exps_hyp.
+      simpl_Forall.
+      apply H0; contradict Hnin.
+      constructor; right; solve_Exists. }
     revert He0s Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
     gen_denot; cases.
   - (* when *)
     assert (denot_exps (Global tys exts nds) ins es envG envI bs env
             == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
-    { induction es. trivial.
-      inv H.
-      (* TODO: faire mieux, cette preuve est un enfer *)
-      rewrite 2 denot_exps_eq.
-      apply nprod_app_Oeq_compat.
-      - apply H2. solve_nin Hnin.
-      - apply IHes; auto.
-        intro HH; inv HH. apply Hnin.
-        constructor; eauto using Exists_cons_tl. }
+    { apply denot_exps_hyp.
+      simpl_Forall.
+      apply H; contradict Hnin.
+      constructor; solve_Exists. }
     revert Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
+    gen_denot; cases.
+  - (* merge *)
+    destruct a as [tyss c].
+    assert (denot_expss (Global tys exts nds) ins es (length tyss) envG envI bs env
+            == denot_expss (Global tys exts (nd::nds)) ins es (length tyss) envG envI bs env) as Hess.
+    { induction es as [| [i es] ies]. trivial.
+      inv H.
+      assert (denot_exps (Global tys exts nds) ins es envG envI bs env
+              == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
+      { apply denot_exps_hyp.
+        simpl_Forall.
+        apply H2; contradict Hnin.
+        constructor; solve_Exists. }
+      rewrite 2 denot_expss_eq.
+      revert Hes; unfold eq_rect_r, eq_rect, eq_sym.
+      destruct (Nat.eq_dec _ _); try trivial.
+      rewrite IHies; cases; auto.
+      contradict Hnin; inv Hnin.
+      constructor; now right. }
+    revert Hess; simpl; unfold eq_rect_r, eq_rect, eq_sym.
     gen_denot; cases.
   - (* eapp, seul cas intéressant *)
     simpl.
     destruct (ident_eq_dec nd.(n_name) f) as [|Hf]; subst.
     { (* si oui, contradiction *)
-      destruct Hnin. apply INEapp2. }
+      contradict Hnin. apply INEapp2. }
     rewrite (find_node_other _ _ _ _ _ Hf).
     assert (denot_exps (Global tys exts nds) ins es envG envI bs env
             == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
-    { induction es. trivial.
-      inv H.
-      (* TODO: faire mieux, cette preuve est un enfer *)
-      rewrite 2 denot_exps_eq.
-      apply nprod_app_Oeq_compat.
-      - apply H3. solve_nin Hnin.
-      - apply IHes; auto.
-        intro HH; inv HH; auto.
-        apply Hnin; constructor.
-        destruct H2; eauto using Exists_cons_tl.
-    }
+    { apply denot_exps_hyp.
+      simpl_Forall.
+      apply H; contradict Hnin.
+      constructor; left; solve_Exists. }
     revert Hes; simpl; unfold eq_rect_r, eq_rect, eq_sym.
     gen_denot; cases.
     now intros ?? ->.
