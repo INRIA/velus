@@ -801,7 +801,7 @@ Proof.
     gen_sub_exps.
     rewrite Hfind, Hli.
     rewrite <- (map_length fst) in Hlo.
-    unfold idents, eq_rect_r, eq_rect, eq_sym.
+    unfold idents, eq_rect.
     cases; intros; subst; try congruence; eauto.
   - (* k <> 0, on utilise sem_global_absent *)
     setoid_rewrite masks_false_S.
@@ -892,7 +892,7 @@ Proof.
       setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
       gen_sub_exps.
       rewrite annots_numstreams in *.
-      unfold eq_rect_r, eq_rect, eq_sym.
+      unfold eq_rect.
       cases; intros; subst; try congruence.
       clear - Hs.
       induction (list_sum (map numstreams es)) as [|[]];
@@ -918,7 +918,7 @@ Proof.
       setoid_rewrite denot_exp_eq in Hse; revert Hse; simpl.
       gen_sub_exps.
       rewrite annots_numstreams in *.
-      unfold eq_rect_r, eq_rect, eq_sym.
+      unfold eq_rect.
       cases; intros; subst; try congruence.
       clear - Hs.
       induction (list_sum (map numstreams es)) as [|[]]; eauto using Forall2, ok_when.

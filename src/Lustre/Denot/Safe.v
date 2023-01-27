@@ -2047,8 +2047,7 @@ Section Node_safe.
       generalize (denot_exps G ins e0s envG envI bs env).
       generalize (denot_exps G ins es envG envI bs env).
       rewrite annots_numstreams in *.
-      simpl; intros; cases; try congruence.
-      unfold eq_rect_r, eq_rect; destruct e, e0; simpl.
+      simpl; intros; unfold eq_rect; cases; try congruence.
       take (typesof es = _) and rewrite it in *.
       take (typesof e0s = _) and rewrite it in *.
       take (Forall2 eq _ _) and apply Forall2_eq in it; rewrite <- it in *.
@@ -2057,15 +2056,10 @@ Section Node_safe.
       repeat split.
       + eapply Forall2_lift2; eauto using ty_fby.
       + eapply Forall2_lift2. apply cl_fby.
-        all: apply Forall2_Forall2; auto.
-        all: apply Forall2_ignore1'; auto.
-        all: now rewrite list_of_nprod_length, map_length.
-      + eapply Forall_forall_nprod, Forall2_ignore1''.
-        now rewrite list_of_nprod_length, map_length.
+        all: simpl_Forall; auto.
+      + apply Forall_forall_nprod, Forall2_ignore1'' with (xs := List.map snd a).
         eapply Forall2_lift2. apply safe_fby.
-        all: apply Forall2_Forall2; eauto.
-        all: apply Forall2_ignore1'; auto.
-        all: now rewrite list_of_nprod_length, map_length.
+        all: simpl_Forall; eauto.
     - (* Ewhen *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
@@ -2082,18 +2076,15 @@ Section Node_safe.
       revert Wt Wc Sf.
       generalize (denot_exps G ins es envG envI bs env).
       rewrite annots_numstreams in *.
-      simpl; intros; cases; try congruence.
-      unfold eq_rect_r, eq_rect; destruct e; simpl.
+      simpl; intros; unfold eq_rect; cases; try congruence.
       eapply Forall2_Forall_eq in Wc; eauto.
       edestruct Safe as (?&?&?); eauto.
       change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
       repeat split.
       + eapply Forall2_llift; eauto using ty_swhenv.
-      + eapply Forall2_map_1.
-        apply Forall2_ignore1'; rewrite ?list_of_nprod_length; auto.
-        eapply Forall_llift with (P := fun s => cl_DS _ _ _ _ _ s /\ safe_DS s).
-        { intros ? []. eapply cl_swhenv; eauto. }
-        apply Forall_Forall; auto.
+      + eapply Forall2_map_1, Forall2_llift.
+        { intros * HH. eapply cl_swhenv, HH. }
+        simpl_Forall; eauto.
       + eapply forall_nprod_llift with (Q := fun s => cl_DS _ _ _ _ ck s /\ safe_DS s).
         { intros ? []. eapply safe_swhenv. eauto. }
         apply forall_nprod_and; auto using Forall_forall_nprod.
@@ -2125,7 +2116,7 @@ Section Node_safe.
       rewrite clocksof_nclocksof in Wc.
       2: unfold idents in *;
       take (length a = _ ) and rewrite it, map_length in *; congruence.
-      unfold eq_rect_r, eq_rect, eq_sym. cases; simpl.
+      unfold eq_rect. cases; simpl.
       (* on choisit bien [[bck]] comme majorant de bss *)
       specialize (Hnode (denot_clock ins envI bs env bck)).
       rewrite map_app in WCio.
@@ -2240,7 +2231,7 @@ Section Node_safe.
     intros * Hsafe Hr Hwt Hwc Hop Hfind ND Wci Wcio Wtin Wtout WIin WIout ? Hbs ? Hle.
     assert (length anns = length (n_out n)) as Hlout.
     { apply Forall3_length in WIout. now rewrite 2 map_length in WIout. }
-    assert (length anns = length (idents (n_out n))) as Hlout'. (* pas une blague *)
+    assert (length (idents (n_out n)) = length anns) as Hlout'. (* pas une blague *)
     { unfold idents. now rewrite map_length. }
     assert (length xs = length anns) as Hl.
     { apply Forall3_length in WIout. now rewrite 2 map_length in WIout. }
@@ -2253,7 +2244,7 @@ Section Node_safe.
     (* on réduit un peu ss *)
     rewrite denot_exp_eq, Hfind.
     set (ses := denot_exps G ins es envG envI bs' env) in *.
-    unfold eq_rect_r, eq_rect, eq_sym.
+    unfold eq_rect.
     simpl; cases; try contradiction.
     (**** début instanciation de Hnode  *)
     apply safe_exps_ with (es := es) in Hsafe as (Tys & Cls & Sfs); auto.
@@ -2326,7 +2317,7 @@ Section Node_safe.
         rewrite denot_exps_eq, denot_exps_nil, denot_exp_eq.
         simpl (env_of_np _ _).
         rewrite Hfind, Hi, Hi0.
-        unfold eq_rect_r, eq_rect, eq_sym.
+        unfold eq_rect.
         cases; try contradiction.
         rewrite env_of_np_eq.
         setoid_rewrite nth_mem_nth; eauto 2 using NoDup_app_l.

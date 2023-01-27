@@ -279,7 +279,7 @@ Module Type LDENOTINF
       unshelve eapply (IHe2 _ _ O); auto.
     - (* Efby *)
       rewrite denot_exp_eq; simpl.
-      unfold eq_rect_r, eq_rect.
+      unfold eq_rect.
       cases; solve_err.
       rewrite lift2_nth; cases.
       inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H0,H; auto.
@@ -288,7 +288,7 @@ Module Type LDENOTINF
       apply is_ncons_fby; apply P_exps_k, Forall_P_exps; auto; congruence.
     - (* Ewhen *)
       rewrite denot_exp_eq; simpl.
-      unfold eq_rect_r, eq_rect.
+      unfold eq_rect.
       cases; solve_err.
       rewrite llift_nth; cases.
       inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H; auto.
@@ -297,7 +297,7 @@ Module Type LDENOTINF
       now apply P_exps_k, Forall_P_exps.
     - (* Eapp *)
       rewrite denot_exp_eq; simpl.
-      unfold eq_rect_r, eq_rect.
+      unfold eq_rect.
       inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H; auto.
       inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H; auto.
       destruct (find_node f G) eqn:Hfind; cases; solve_err.
@@ -388,7 +388,7 @@ Module Type LDENOTINF
       apply is_ncons_sbinop; auto.
     - (* Efby *)
       rewrite denot_exp_eq; simpl.
-      unfold eq_rect_r, eq_rect.
+      unfold eq_rect.
       cases; solve_err.
       rewrite lift2_nth; cases.
       inv Hwl. apply P_exps_impl in H0; auto.
@@ -397,7 +397,7 @@ Module Type LDENOTINF
       eapply exps_n; eauto using is_ncons_S, P_vars_S.
     - (* Ewhen *)
       rewrite denot_exp_eq; simpl.
-      unfold eq_rect_r, eq_rect.
+      unfold eq_rect.
       cases; simpl in H; solve_err.
       inv Hwl. apply P_exps_impl in H0; auto.
       inv Hwx. apply P_exps_impl in H0; auto.
@@ -406,7 +406,7 @@ Module Type LDENOTINF
       eapply is_ncons_swhen with (n := S n); eauto using P_exps_k.
     - (* Eapp *)
       rewrite denot_exp_eq; simpl in *.
-      unfold eq_rect_r, eq_rect.
+      unfold eq_rect.
       inv Hwl; inv Hwx.
       destruct (find_node f G) eqn:?; cases; solve_err.
       apply forall_nprod_k; auto.
@@ -761,7 +761,7 @@ Proof.
     generalize (denot_exps G ins es envG envI bs env).
     generalize (list_sum (List.map numstreams e0s)).
     generalize (list_sum (List.map numstreams es)).
-    intros; unfold eq_rect_r, eq_rect, eq_sym.
+    intros; unfold eq_rect.
     cases; subst; eauto using forall_nprod_const, DS_const_inf, forall_nprod_lift2, fby_inf.
   - (* when *)
     assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
@@ -770,7 +770,7 @@ Proof.
     revert Hes.
     generalize (denot_exps G ins es envG envI bs env).
     generalize (list_sum (List.map numstreams es)).
-    intros; unfold eq_rect_r, eq_rect, eq_sym.
+    intros; unfold eq_rect.
     cases; subst; eauto using forall_nprod_const, DS_const_inf, forall_nprod_llift, swhen_inf.
   - (* app *)
     assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
@@ -779,7 +779,7 @@ Proof.
     revert Hes.
     generalize (denot_exps G ins es envG envI bs env).
     generalize (list_sum (List.map numstreams es)).
-    intros; unfold eq_rect_r, eq_rect, eq_sym.
+    intros; unfold eq_rect.
     cases; subst; eauto using forall_nprod_const, DS_const_inf.
     apply forall_np_of_env, HG; intro.
     apply forall_env_of_np; eauto using DS_const_inf.
