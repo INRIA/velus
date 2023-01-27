@@ -126,12 +126,11 @@ Qed.
 
 (* TODO: rename ? *)
 Lemma Forall2_ignore1'': forall {A B} (P : B -> Prop) (xs : list A) ys,
-    length ys = length xs ->
     Forall2 (fun _ y => P y) xs ys ->
     Forall P ys.
 Proof.
   intros ?? P xs ys; revert xs.
-  induction ys; intros * Hlen Hf; inversion Hf; subst; eauto.
+  induction ys; intros * Hf; inversion Hf; subst; eauto.
 Qed.
 
 Lemma concat_length_sum :
