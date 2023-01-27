@@ -782,6 +782,10 @@ Inductive restr_exp : exp -> Prop :=
   forall es x k anns,
     Forall restr_exp es ->
     restr_exp (Ewhen es x k anns)
+| restr_Emerge :
+  forall x es a,
+    Forall (Forall restr_exp) (List.map snd es) ->
+    restr_exp (Emerge x es a)
 | restr_Eapp :
   forall f es anns,
     (* TODO: reset *)
