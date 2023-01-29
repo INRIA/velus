@@ -1740,6 +1740,20 @@ Fixpoint lift (F : D -C-> D) {n} : nprod n -C-> nprod n :=
       end (@lift F n)
   end.
 
+Lemma forall_nprod_lift :
+  forall (F : D -C-> D),
+  forall (P : D -> Prop),
+  forall {n} (np : nprod n),
+    forall_nprod (fun x => P (F x)) np ->
+    forall_nprod P (lift F np).
+Proof.
+  intros * Hf.
+  induction n as [|[]]; auto.
+  inversion Hf.
+  constructor; auto.
+  now apply IHn.
+Qed.
+
 Definition llift {A} (F : D -C-> A -C-> D) {n} :
   nprod n -C-> A -C-> nprod n.
   (* match n with *)
