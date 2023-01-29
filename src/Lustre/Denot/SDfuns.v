@@ -685,6 +685,64 @@ Section SStream_functions.
       + apply ((IHm @2_ FST _ _) (nprod_map (SND _ _) @_ SND _ _)).
   Defined.
 
+
+  (* TODO: move *)
+  Lemma forall_nprod_foldi :
+    forall {I} {D DD : cpo}
+      (P : DD -> Prop)
+      (Q : D -> Prop)
+      (l : list I) (d : DD) (f : I -> DD -C-> D -C-> DD) np,
+      (forall i d1 d2, P d1 -> Q d2 -> P (f i d1 d2)) ->
+      P d ->
+      forall_nprod Q np ->
+      P (nprod_foldi l d f np).
+  Proof.
+    induction l as [|?[]]; intros * PQ pd Fn; auto.
+    - apply PQ; auto.
+    - inversion Fn.
+      apply PQ; auto.
+      apply IHl; auto.
+  Qed.
+
+  (* TODO: move *)
+  Lemma forall_nprod_map :
+    forall D1 D2 P (f : D1 -C-> D2) n (np : nprod n),
+      forall_nprod (fun x => P (f x)) np
+      <-> forall_nprod P (nprod_map f np).
+  Proof.
+    induction n as [|[]]; intros.
+    - split; auto.
+    - split; auto.
+    - destruct np.
+      split; intro HH; inversion HH;
+        constructor; auto; now apply IHn.
+  Qed.
+
+  (* TODO: move *)
+  Lemma forall_nprod_llift_nprod :
+    forall D1 D2 n
+      (F : D2 -C-> @nprod D1 n -C-> D1),
+    forall (Q : D1 -> Prop)
+      (P : D1 -> Prop)
+      d,
+      (forall x, forall_nprod Q x -> P (F d x)) ->
+      forall m np,
+        forall_nprod (forall_nprod Q) np ->
+        @forall_nprod _ P m (llift_nprod F d np).
+  Proof.
+    intros * QP.
+    induction m as [|[|m]]; auto; intros * Hq.
+    now simpl.
+    constructor.
+    - apply QP; simpl.
+      eapply forall_nprod_map, forall_nprod_impl; eauto.
+      intros [] H; inversion H; auto.
+    - apply IHm.
+      eapply forall_nprod_map, forall_nprod_impl; eauto.
+      intros [] H; inversion H; auto.
+  Qed.
+
+
   Section Sfold.
 
     (** On mutualise autant que possible les définitions des fonctions
@@ -697,6 +755,10 @@ Section SStream_functions.
         chercher la valeur de la branche [i] et, selon la situation, vérifier
         que les autres branches sont absentes (merge) ou présentes (scase).
         Ce comportement est paramétré par la fonction [fpres].
+
+        TODO:
+        idée de Tim: un zip nprod qui donne une liste de valeurs, puis
+        des opérations normales sur les listes (check-abs/i) puis gettag(i)
      *)
 
     (* vérifie que toutes les branches sont bien [abs] *)
@@ -838,6 +900,42 @@ Section SStream_functions.
     DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n :=
     curry ((llift_nprod (scase1 l) @2_ FST _ _) (SND _ _)).
 
+
+  Lemma smerge1_eq :
+    forall l c C (np : nprod (length l)),
+      smerge1 l (cons c C) np
+      == match c with
+         | abs => app (fabs l np) (smerge1 l C (lift (@REM _) np))
+         | pres v =>
+             match tag_of_val v with
+             | Some i => app (fpres_merge l i np) (smerge1 l C (lift (@REM _) np))
+             | None => DS_const (err error_Ty)
+             end
+         | err e => DS_const (err e)
+         end.
+  Proof.
+    intros.
+    unfold smerge1.
+    rewrite sfold_eq; auto.
+  Qed.
+
+  Lemma scase1_eq :
+    forall l c C (np : nprod (length l)),
+      scase1 l (cons c C) np
+      == match c with
+         | abs => app (fabs l np) (scase1 l C (lift (@REM _) np))
+         | pres v =>
+             match tag_of_val v with
+             | Some i => app (fpres_case l i np) (scase1 l C (lift (@REM _) np))
+             | None => DS_const (err error_Ty)
+             end
+         | err e => DS_const (err e)
+         end.
+  Proof.
+    intros.
+    unfold scase1.
+    rewrite sfold_eq; auto.
+  Qed.
 
 
   (** In this section we use the same function to denote the merge and
