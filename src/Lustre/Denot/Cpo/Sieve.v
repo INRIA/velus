@@ -21,10 +21,10 @@ Qed.
 Lemma div0bis : forall q q' n r, q * n = q' * n + r -> r < n -> r = O.
 intros; assert (r= (q-q')*n).
 assert (0<n).
-apply le_lt_trans with r; auto with arith.
+apply Nat.le_lt_trans with r; auto with arith.
 assert (~q * n < q' * n).
 red; intro; try lia.
-rewrite mult_minus_distr_r.
+rewrite Nat.mul_sub_distr_r.
 rewrite H; lia.
 apply div0 with (q-q') n; auto.
 Qed.

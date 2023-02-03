@@ -441,7 +441,7 @@ Lemma chain_uncons :
       {hd:D & {ctl : natO -m> DS_ord D | forall n, c n == Con hd (ctl n)}}.
 intros D c H; case (uncons H); intros hd (tl,H1); exists hd; exists (chain_tl c H); intros.
 unfold chain_tl; simpl.
-case (uncons (isCon_le H (fmon_le_compat c (le_O_n n)))); intros.
+case (uncons (isCon_le H (fmon_le_compat c (Nat.le_0_l n)))); intros.
 case s; clear s; intros t H2; auto.
 apply Oeq_trans with (Con x t); auto.
 assert ((Con hd tl : DS_ord D) <= Con x t).

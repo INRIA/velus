@@ -410,8 +410,8 @@ Lemma TUlub_least : forall (T : natO-m>TU_ord) (T':TU_ord),
 intros; intro n; rewrite TUlub_simpl.
 case (H n (lub_index T n n)); intros m (H1,H2).
 exists m; split; auto.
-apply le_lt_trans with (lub_index T n n); auto.
-apply le_trans with (n+n); auto with arith.
+apply Nat.le_lt_trans with (lub_index T n n); auto.
+apply Nat.le_trans with (n+n); auto with arith.
 Qed.
 
 (** *** Declaration of the cpo structure *)
@@ -437,14 +437,14 @@ induction k; simpl; intros.
 absurd (p < 0); auto with arith.
 assert (p < k \/ p = k); intuition (try lia); subst;
 case (le_lt_dec (maxk f k def) (f k)); intros; auto with arith.
-apply le_trans with (maxk f k def); auto.
+apply Nat.le_trans with (maxk f k def); auto.
 Qed.
 
 Lemma maxk_le_def : forall (f:nat -> nat) (k:nat) (def:nat), 
      (def<= maxk f k def)%nat.
 intros; induction k; simpl; intros; auto.
 case (le_lt_dec (maxk f k def) (f k)); intros; auto with arith.
-apply le_trans with (maxk f k def); auto.
+apply Nat.le_trans with (maxk f k def); auto.
 Qed.
 
 
@@ -471,7 +471,7 @@ exists (S n); split; auto with arith; intros; absurd (p < 0); auto with arith.
 case (IHn0 x y).
 intros p Hp; apply (H p); auto with arith.
 intros m (Hm1,Hm2).
-case (H n0 (lt_n_Sn n0) n); intros m' (Hm'1,Hm'2).
+case (H n0 (Nat.lt_succ_diag_r n0) n); intros m' (Hm'1,Hm'2).
 exists (m+m'); split; auto with arith; intros.
 assert (p < n0 \/ p = n0); try lia.
 case H1; intros.

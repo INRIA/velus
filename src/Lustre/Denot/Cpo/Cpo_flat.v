@@ -268,7 +268,7 @@ Lemma chain_Val_eq : forall (c:natO-m> DF_ord) (n n':nat) d d',
     (Val d : DF_ord) <= c n -> (Val d' : DF_ord) <= c n'  -> d=d'.
 intros; assert (c n <= c n' \/ c n' <= c n).
 assert (n <= n'\/ n' < n)%nat.
-apply le_or_lt.
+apply Nat.le_gt_cases.
 intuition.
 case H1; intro.
 assert ((Val d : DF_ord) <= Val d'); auto.
