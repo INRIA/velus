@@ -40,6 +40,7 @@ extraction/extracted
 automake
 Makefile.auto
 Makefile.config
+CoqMakefile.conf
 tools/automake.ml
 _CoqProject
 

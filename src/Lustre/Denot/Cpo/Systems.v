@@ -7,7 +7,7 @@ Require Export Cpo_streams_type.
 (** Definition of a multiple node :
     - index for inputs with associated types
     - index for outputs with associated types
-    - continuous function on corresponding streams 
+    - continuous function on corresponding streams
 *)
 
 Definition DS_fam (I:Type)(SI:I -> Type) (i:I) := DS (SI i).
@@ -16,7 +16,7 @@ Definition DS_prod (I:Type)(SI:I -> Type) := Dprodi (DS_fam SI).
 
 (** - A node is a continuous function from inputs to outputs *)
 
-Definition node_fun (I O : Type) (SI : I -> Type) (SO : O -> Type) :cpo 
+Definition node_fun (I O : Type) (SI : I -> Type) (SO : O -> Type) :cpo
               := DS_prod SI -C-> DS_prod SO.
 
 (** - node with a single output *)
@@ -25,7 +25,7 @@ Definition snode_fun (I : Type) (SI : I -> Type) (SO : Type) : cpo := DS_prod SI
 
 (** ** Definition of a system *)
 
-(** - Each link is either an input link or is associated to the output of a simple node, 
+(** - Each link is either an input link or is associated to the output of a simple node,
        each input of that node is associated to a link with the apropriate type *)
 
 Definition inlSL  (LI LO:Type) (SL:(LI+LO)->Type) (i:LI) := SL (inl LO i).
@@ -33,7 +33,7 @@ Definition inrSL  (LI LO:Type) (SL:(LI+LO)->Type) (o:LO) := SL (inr LI o).
 
 (** A system associates a continuous functions to a set of typed output links *)
 
-Definition system (LI LO:Type) (SL:LI+LO->Type) 
+Definition system (LI LO:Type) (SL:LI+LO->Type)
     := Dprodi (fun (o:LO) => DS_prod SL -C-> DS (inrSL SL o)).
 
 (** ** Semantics of a system *)
@@ -45,10 +45,10 @@ Definition system (LI LO:Type) (SL:LI+LO->Type)
 Definition eqn_of_system :  forall (LI LO:Type) (SL:LI+LO->Type),
      system SL -> DS_prod (inlSL SL) ->  DS_prod SL -m> DS_prod SL.
 intros LI LO SL s init.
-exists (fun X : DS_prod SL => fun l : LI+LO => 
-                       match l return (DS (SL l))  with 
+exists (fun X : DS_prod SL => fun l : LI+LO =>
+                       match l return (DS (SL l))  with
                             inl i => init i
-                          | inr o => s o X 
+                          | inr o => s o X
                       end).
 red;intros X Y Hle; intro l.
 case l; auto.
@@ -56,9 +56,9 @@ Defined.
 
 Lemma eqn_of_system_simpl : forall (LI LO:Type) (SL:LI+LO->Type)(s:system SL)
                (init : DS_prod (inlSL SL)) (X:DS_prod SL),
-               eqn_of_system s init X = 
-                 fun l : LI+LO => 
-                 match l return (DS (SL l)) with 
+               eqn_of_system s init X =
+                 fun l : LI+LO =>
+                 match l return (DS (SL l)) with
                      inl i => init i
                    | inr o => s o X
                 end.
@@ -73,7 +73,7 @@ rewrite fmon_comp_simpl.
 setoid_rewrite (Proj_simpl (O:=DS_fam SL)).
 rewrite (eqn_of_system_simpl (SL:=SL)).
 case i; intros; auto.
-apply (le_lub (c:=DS (SL (inl LO l)))) with 
+apply (le_lub (c:=DS (SL (inl LO l)))) with
     (f:=(Proj (DS_fam SL) (inl LO l) @ eqn_of_system s init) @ h)
     (n:=O).
 rewrite (fcont_continuous (s l)).
@@ -88,7 +88,7 @@ intros LI LO SL s init; exists (eqn_of_system s init); auto.
 Defined.
 
 Lemma EQN_of_system_simpl :  forall (LI LO:Type) (SL:LI+LO->Type)(s:system SL)
-               (init : DS_prod (inlSL SL)) (X:DS_prod SL), 
+               (init : DS_prod (inlSL SL)) (X:DS_prod SL),
                EQN_of_system s init X = eqn_of_system s init X.
 trivial.
 Qed.
@@ -117,7 +117,7 @@ Qed.
 
 (** The equations are continuous with respect to the inputs *)
 
-Lemma Eqn_of_system_cont : forall (LI LO:Type) (SL:LI+LO->Type), 
+Lemma Eqn_of_system_cont : forall (LI LO:Type) (SL:LI+LO->Type),
             continuous2 (Eqn_of_system SL).
 red; intros.
 rewrite (Eqn_of_system_simpl (SL:=SL)).
@@ -154,10 +154,10 @@ Definition  EQN_of_SYSTEM  (LI LO:Type) (SL:LI+LO->Type)
 (** The solution is defined as the smallest fixpoint of the equations
            it is a monotonic function of the  inputs *)
 
-Definition sol_of_system  (LI LO:Type) (SL:LI+LO->Type) 
+Definition sol_of_system  (LI LO:Type) (SL:LI+LO->Type)
     : system SL -c> DS_prod (inlSL SL) -C-> DS_prod SL := FIXP (DS_prod SL) @@_ EQN_of_SYSTEM SL.
 
-Lemma sol_of_system_simpl : 
+Lemma sol_of_system_simpl :
     forall (LI LO:Type) (SL:LI+LO->Type) (s:system SL) (init:DS_prod (inlSL SL)),
     sol_of_system SL s init = FIXP (DS_prod SL) (EQN_of_system s init).
 trivial.
@@ -174,5 +174,3 @@ Qed.
 Definition node_of_system (O:Type)(LI LO:Type) (SL:LI+LO->Type)(indO : O -> LO) :
           system SL -C-> node_fun (fun i : LI => SL (inl LO i)) (fun o : O => SL (inr LI (indO o)))
 := DLIFTi (DS_fam SL) (fun o => inr LI (indO o)) @@_ (sol_of_system SL).
-
-

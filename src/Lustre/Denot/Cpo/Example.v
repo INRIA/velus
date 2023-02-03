@@ -11,9 +11,9 @@ Definition D := nat.
 Definition Funf : (DS D -C-> DS D -C-> DS D) -c> (DS D) -C-> (DS D) -C-> DS D.
 apply curry.
 apply curry.
-pose (F:=FST (DS D -C-> DS D -C-> DS D) (DS D) @_ 
+pose (F:=FST (DS D -C-> DS D -C-> DS D) (DS D) @_
              (FST (Dprod ((DS D) -C->(DS D) -C-> DS D) (DS D)) (DS D))).
-pose (U:=SND ((DS D) -C-> (DS D) -C-> DS D) (DS D) @_ 
+pose (U:=SND ((DS D) -C-> (DS D) -C-> DS D) (DS D) @_
              (FST (Dprod ((DS D) -C->(DS D) -C-> DS D) (DS D)) (DS D))).
 pose (V:=SND (Dprod ((DS D) -C->(DS D) -C-> DS D) (DS D)) (DS D)).
 apply (fcont_comp2 (D1:=Dprod (Dprod ((DS D) -C-> (DS D) -C-> DS D) (DS D)) (DS D)) (APP D)).
@@ -209,14 +209,14 @@ Inductive LO : Type := X | Y | Z | T1 | T2.
 
 Definition SL : LI+LO -> Type := fun x => D.
 
-(** - X = f Y Z;   Y = h 0 T1;  Z = h 1 T2;  T1 = g1 X;  T2 = g2 X *)  
-Definition sys : system SL := 
-    fun x : LO => match x with  
+(** - X = f Y Z;   Y = h 0 T1;  Z = h 1 T2;  T1 = g1 X;  T2 = g2 X *)
+Definition sys : system SL :=
+    fun x : LO => match x with
                 X   => (f @2_ (PROJ (DS_fam SL) (inr LI Y))) (PROJ (DS_fam SL) (inr LI Z))
              |  Y   =>  h O @_ PROJ (DS_fam SL) (inr LI T1)
-             |  Z  =>  h 1 @_ PROJ (DS_fam SL) (inr LI T2) 
-             |  T1 => g1 @_ PROJ (DS_fam SL) (inr LI X) 
-             |  T2 => g2 @_ PROJ (DS_fam SL) (inr LI X) 
+             |  Z  =>  h 1 @_ PROJ (DS_fam SL) (inr LI T2)
+             |  T1 => g1 @_ PROJ (DS_fam SL) (inr LI X)
+             |  T2 => g2 @_ PROJ (DS_fam SL) (inr LI X)
                            end.
 
 (** - The system has no inputs  *)
@@ -225,7 +225,7 @@ Definition init : Dprodi (DS_fam (inlSL SL)) := fun i : LI => match i with end.
 
 (** - Equation associated to the system *)
 
-Definition EQN_sys : Dprodi (DS_fam SL) -c> Dprodi (DS_fam SL) 
+Definition EQN_sys : Dprodi (DS_fam SL) -c> Dprodi (DS_fam SL)
                := EQN_of_system sys init.
 
 (** - The result is given on the X node *)
@@ -242,7 +242,7 @@ Lemma FunX_simpl : forall (s:DS D), FunX s = f (h O (g1 s)) (h 1 (g2 s)).
 trivial.
 Qed.
 
-Lemma eqn_sys_FunX : 
+Lemma eqn_sys_FunX :
      forall p : Dprodi (DS_fam SL),
      fcont_compn EQN_sys 2 p (inr LI X) == FunX (p (inr LI X)).
 intros; simpl.
@@ -285,7 +285,7 @@ assert (is_cons (g1 s)); auto.
 apply is_cons_f; auto.
 Qed.
 
-Lemma R_is_cons_rem : forall s t, t == f (g1 s) (g2 s) 
+Lemma R_is_cons_rem : forall s t, t == f (g1 s) (g2 s)
             -> is_cons (rem s) -> is_cons (rem t).
 intros; apply is_cons_eq_compat with (rem (f (g1 s) (g2 s))); auto.
 apply is_cons_rem_f.
@@ -301,7 +301,7 @@ apply f_is_cons with (g2 s); auto.
 apply g1_is_cons; trivial.
 Qed.
 
-Lemma R_is_cons_rem_inv : forall s t, t == f (g1 s) (g2 s) 
+Lemma R_is_cons_rem_inv : forall s t, t == f (g1 s) (g2 s)
             -> is_cons (rem t) -> is_cons (rem s).
 intros; assert (is_cons (rem (f (g1 s) (g2 s)))).
 apply is_cons_eq_compat with (rem t); auto.
@@ -374,7 +374,7 @@ Eval lazy beta delta iota zeta in pred_nth result 3.
 (** ** Test by extraction *)
 
 
-Extraction NoInline DS_bot. 
+Extraction NoInline DS_bot.
 Extraction "example" DS_to_list result.
 
 Extraction Language Haskell.

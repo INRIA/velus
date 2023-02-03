@@ -10,7 +10,7 @@ Variable D : Type.
 
 (** ** Definition *)
 
-CoInductive Dflat : Type := Eps : Dflat -> Dflat | Val : D -> Dflat. 
+CoInductive Dflat : Type := Eps : Dflat -> Dflat | Val : D -> Dflat.
 
 Lemma DF_inv : forall d, d = match d with Eps x => Eps x | Val d => Val d end.
 destruct d; auto.
@@ -21,7 +21,7 @@ Hint Resolve DF_inv : core.
 
 Definition pred d : Dflat := match d with Eps x => x | Val _ => d end.
 
-Fixpoint pred_nth (d:Dflat) (n:nat) {struct n} : Dflat := 
+Fixpoint pred_nth (d:Dflat) (n:nat) {struct n} : Dflat :=
     match n with 0 => d
               |S m => match d with Eps x => pred_nth x m
                                  | Val _ => d
@@ -45,7 +45,7 @@ rewrite pred_nth_val; rewrite pred_nth_val; simpl; trivial.
 Qed.
 
 (** ** Order *)
-CoInductive DFle : Dflat -> Dflat -> Prop := 
+CoInductive DFle : Dflat -> Dflat -> Prop :=
                    DFleEps : forall x y,  DFle x y -> DFle (Eps x) (Eps y)
                 |  DFleEpsVal : forall x d,  DFle x (Val d) -> DFle (Eps x) (Val d)
                 |  DFleVal : forall d n y, pred_nth y n = Val d -> DFle (Val d) y.
@@ -193,19 +193,19 @@ intros; apply Ole_antisym; auto.
 apply DFleVal_sym; trivial.
 Qed.
 
-Lemma DFle_Val_exists_pred : 
+Lemma DFle_Val_exists_pred :
       forall (x:DF_ord) d, (Val d:DF_ord) <= x -> exists k, pred_nth x k = Val d.
 intros x d H; inversion H; eauto.
 Qed.
 
-Lemma Val_exists_pred_le : 
+Lemma Val_exists_pred_le :
       forall (x:DF_ord) d, (exists k, pred_nth x k = Val d) -> (Val d:DF_ord) <= x.
 destruct 1; intros.
 apply DFleVal with x0; trivial.
 Qed.
 Hint Immediate DFle_Val_exists_pred Val_exists_pred_le : core.
 
-Lemma Val_exists_pred_eq : 
+Lemma Val_exists_pred_eq :
       forall (x:DF_ord) d, (exists k, pred_nth x k = Val d) -> (Val d:DF_ord) == x.
 intros; apply DFle_eq; auto.
 Qed.
@@ -228,7 +228,7 @@ destruct x; auto.
 left; exists d; auto.
 Defined.
 
-Lemma fVal : forall (c:natO -m> DF_ord) (n:nat), 
+Lemma fVal : forall (c:natO -m> DF_ord) (n:nat),
         {d:D | exists k, k<n /\ c k = Val d} + {forall k, k<n -> isEps (c k)}.
 induction n.
 right; intros; absurd (k<0); lia.
@@ -250,19 +250,19 @@ intros x y H; apply DFle_pred.
 apply (fmonotonic c); auto.
 Defined.
 
-CoFixpoint DF_lubn (c:natO-m> DF_ord) (n:nat) : DF_ord := 
+CoFixpoint DF_lubn (c:natO-m> DF_ord) (n:nat) : DF_ord :=
     match fVal c n with inleft (@exist _ _ d _) => Val d
                                 |  inright _  => Eps (DF_lubn (cpred c) (S n))
     end.
 
-Lemma DF_lubn_inv : forall (c:natO-m> DF_ord) (n:nat), DF_lubn c n = 
+Lemma DF_lubn_inv : forall (c:natO-m> DF_ord) (n:nat), DF_lubn c n =
      match fVal c n with inleft (@exist _ _ d _) => Val d
                                 |  inright _  => Eps (DF_lubn (cpred c) (S n))
     end.
 intros; rewrite (DF_inv (DF_lubn c n)).
-simpl; case (fVal c n); trivial. 
-intro s; case s; trivial. 
-Qed.  
+simpl; case (fVal c n); trivial.
+intro s; case s; trivial.
+Qed.
 
 Lemma chain_Val_eq : forall (c:natO-m> DF_ord) (n n':nat) d d',
     (Val d : DF_ord) <= c n -> (Val d' : DF_ord) <= c n'  -> d=d'.
@@ -309,7 +309,7 @@ rewrite <- H0; rewrite pred_nth_Sn_acc; trivial.
 Qed.
 
 Lemma pred_lubn_Val_inv  : forall (d:D)(k p:nat) (c:natO-m> DF_ord),
-             pred_nth (DF_lubn c p) k = Val d 
+             pred_nth (DF_lubn c p) k = Val d
          -> exists n, (n <k+p)%nat /\ pred_nth (c n) k = Val d.
 induction k; intros p c;rewrite (DF_lubn_inv c p).
 simpl; intro H.
@@ -346,7 +346,7 @@ exists n; apply DFleVal with k; trivial.
 Qed.
 
 Lemma DF_lub_upper : forall c:natO-m> DF_ord, forall n, c n <= DF_lub c.
-intros; apply DFle_rec 
+intros; apply DFle_rec
   with (R:= fun x y:DF_ord=>x==c n /\ y==DF_lub c); intuition.
 apply Oeq_trans with (Eps x); auto.
 apply Oeq_trans with (Eps y); auto.
@@ -356,9 +356,9 @@ apply Ole_trans with (DF_lub c); auto.
 apply pred_lub_Val with n; auto.
 Qed.
 
-Lemma DF_lub_least : forall (c:natO-m> DF_ord) a, 
+Lemma DF_lub_least : forall (c:natO-m> DF_ord) a,
                       (forall n, c n <= a) -> DF_lub c <= a.
-intros; apply DFle_rec 
+intros; apply DFle_rec
   with (R:= fun x y:DF_ord=>x==DF_lub c /\ y == a); intuition.
 apply Oeq_trans with (Eps x); auto.
 apply Oeq_trans with (Eps y); auto.

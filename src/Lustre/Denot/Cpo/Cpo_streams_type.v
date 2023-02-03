@@ -5,10 +5,10 @@ Set Implicit Arguments.
 
 (** * Cpo_streams_type.v: Domain of possibly infinite streams on a type *)
 
-CoInductive DStr (D:Type) : Type 
+CoInductive DStr (D:Type) : Type
     := Eps : DStr D -> DStr D | Con : D -> DStr D -> DStr D.
 
-Lemma DS_inv  : forall (D:Type) (d:DStr D), 
+Lemma DS_inv  : forall (D:Type) (d:DStr D),
    d = match d with Eps x => Eps x | Con a s => Con a s end.
 destruct d; auto.
 Qed.
@@ -16,8 +16,8 @@ Global Hint Resolve DS_inv : core.
 
 (** - Extraction of a finite list from the n first constructors of a stream *)
 
-Fixpoint DS_to_list (D:Type)(d:DStr D) (n : nat) {struct n}: List.list D := 
- match n with O => List.nil 
+Fixpoint DS_to_list (D:Type)(d:DStr D) (n : nat) {struct n}: List.list D :=
+ match n with O => List.nil
                  | S p => match d with Eps d' => DS_to_list d' p
                                                  |  Con a d' => List.cons a (DS_to_list d' p)
                                end
@@ -26,7 +26,7 @@ Fixpoint DS_to_list (D:Type)(d:DStr D) (n : nat) {struct n}: List.list D :=
 (** ** Removing Eps steps *)
 Definition pred (D:Type) d : DStr D := match d with Eps x => x | Con _ _ => d end.
 
-Inductive isCon (D:Type) : DStr D -> Prop := 
+Inductive isCon (D:Type) : DStr D -> Prop :=
             isConEps : forall x, isCon x -> isCon (Eps x)
           | isConCon : forall a s, isCon (Con a s).
 Global Hint Constructors isCon : core.
@@ -38,7 +38,7 @@ Global Hint Resolve isCon_pred : core.
 
 Definition isEps (D:Type) (x:DStr D) := match x with Eps _ => True | _ => False end.
 
-(** Less general than isCon_pred but the result is a subterm of 
+(** Less general than isCon_pred but the result is a subterm of
       the argument (isCon x), used in uncons *)
 Lemma isConEps_inv : forall D (x:DStr D), isCon x -> isEps x -> isCon (pred x).
 destruct 1; simpl; intros.
@@ -51,7 +51,7 @@ destruct x; auto.
 Qed.
 Global Hint Resolve isCon_intro : core.
 
-Fixpoint pred_nth D (x:DStr D) (n:nat) {struct n} : DStr D := 
+Fixpoint pred_nth D (x:DStr D) (n:nat) {struct n} : DStr D :=
              match n with 0 => x
                               | S m => pred_nth (pred x) m
              end.
@@ -84,7 +84,7 @@ exists (0%nat); auto.
 Qed.
 Global Hint Resolve decompCon : core.
 
-Lemma decompCon_eq : 
+Lemma decompCon_eq :
     forall D a b (s t:DStr D), decomp a s (Con b t) -> Con a s = Con b t.
 destruct 1.
 transitivity (pred_nth (Con b t) x); auto.
@@ -138,10 +138,10 @@ exists a; exists s; auto.
 Defined.
 
 (** ** Definition of the order *)
-CoInductive DSle (D:Type) : DStr D -> DStr D -> Prop := 
+CoInductive DSle (D:Type) : DStr D -> DStr D -> Prop :=
                    DSleEps : forall x y,  DSle x y -> DSle (Eps x) y
                 |  DSleCon : forall a s t y, decomp a t y -> DSle s t -> DSle (Con a s) y.
- 
+
 Global Hint Constructors DSle : core.
 
 (** ** Properties of the order *)
@@ -189,7 +189,7 @@ destruct 1; simpl; intros; trivial.
 apply DSleCon with t; auto.
 Qed.
 Global Hint Resolve DSle_pred_left DSle_pred_right : core.
- 
+
 Lemma DSle_pred : forall D (x y:DStr D),  DSle x y -> DSle (pred x) (pred y).
 auto.
 Qed.
@@ -200,13 +200,13 @@ intro D; cofix DSle_pred_left_elim; destruct x; simpl; intros; try assumption.
 apply DSleEps; trivial.
 Qed.
 
-Lemma DSle_decomp : forall D a (s x y:DStr D), 
+Lemma DSle_decomp : forall D a (s x y:DStr D),
    decomp a s x -> DSle x y -> exists t, decomp a t y /\ DSle s t.
 intros D a s x y Hdx; case Hdx; intros k; generalize x; induction k; simpl; intros; auto.
 simpl in H; rewrite H in H0; inversion H0.
 exists t; auto.
 case (IHk (pred x0)); auto.
-intros t (Hd,Hle). 
+intros t (Hd,Hle).
 exists t; auto.
 Qed.
 
@@ -246,21 +246,21 @@ apply Oeq_trans with (pred x); auto.
 Qed.
 Global Hint Resolve pred_nth_eq : core.
 
-Lemma DSleCon0 : 
+Lemma DSleCon0 :
      forall D a (s t:DS_ord D),  s <= t ->  (Con a s:DS_ord D) <= Con a t.
 intros.
 apply (DSleCon (a:=a) (s:=s) (t:=t) (y:=Con a t)); auto.
 Qed.
 Global Hint Resolve DSleCon0 : core.
 
-Lemma Con_compat : 
+Lemma Con_compat :
  forall D a (s t:DS_ord D), s == t ->  (Con a s:DS_ord D) == Con a t.
 intros; apply Ole_antisym; auto.
 Qed.
 Global Hint Resolve Con_compat : core.
 
 
-Lemma DSleCon_hd : forall (D:Type) a b (s t:DS_ord D), 
+Lemma DSleCon_hd : forall (D:Type) a b (s t:DS_ord D),
      (Con a s:DS_ord D) <= Con b t-> a = b.
 intros D a b s t H; inversion H.
 assert (Con a t0=Con b t); auto.
@@ -298,20 +298,20 @@ Lemma decomp_DSleCon : forall D a s (x:DS_ord D), decomp a s x -> x <= Con a s.
 intros; case (decomp_eqCon H); auto.
 Qed.
 
-Lemma decomp_DSleCon_sym : 
+Lemma decomp_DSleCon_sym :
    forall D a s (x:DS_ord D), decomp a s x -> (Con a s:DS_ord D)<=x.
 intros; case (decomp_eqCon H); auto.
 Qed.
 Global Hint Immediate decomp_DSleCon decomp_DSleCon_sym : core.
 
-Lemma DSleCon_exists_decomp : 
-      forall D (x:DS_ord D) a (s:DS_ord D), (Con a s:DS_ord D) <= x 
+Lemma DSleCon_exists_decomp :
+      forall D (x:DS_ord D) a (s:DS_ord D), (Con a s:DS_ord D) <= x
                    -> exists b, exists t, decomp b t x /\ a = b /\ s <= t.
 intros D x a s H; inversion H; eauto.
 Qed.
 
-Lemma Con_exists_decompDSle : 
-      forall D (x:DS_ord D) a (s:DS_ord D), 
+Lemma Con_exists_decompDSle :
+      forall D (x:DS_ord D) a (s:DS_ord D),
       (exists t, decomp a t x /\ s <= t) -> (Con a s:DS_ord D) <= x.
 intros D x a s (t,(H,H1)).
 simpl; apply DSleCon with t; auto.
@@ -323,8 +323,8 @@ intros D a s x H; case (DSleCon_exists_decomp H); intros b (t,(H1,(H2,H3))); aut
 apply (decomp_isCon H1).
 Qed.
 
-Lemma DSle_uncons : 
-   forall D (x:DS_ord D) a (s:DS_ord D), (Con a s:DS_ord D) <= x 
+Lemma DSle_uncons :
+   forall D (x:DS_ord D) a (s:DS_ord D), (Con a s:DS_ord D) <= x
                    -> { t : DS_ord D | decomp a t x /\ s <= t}.
 intros; case (@uncons D x); auto.
 apply (DSle_isCon H).
@@ -428,7 +428,7 @@ intros D c H.
 assert (H':forall n, isCon (c n)).
 intros; apply isCon_le with (c O); auto with arith.
 exists (fun n => let (b,r) := uncons (H' n) in let (t,_) := r in t).
-intros n m H1; case (uncons (H' n)); intros b (t,hn); 
+intros n m H1; case (uncons (H' n)); intros b (t,hn);
 case (uncons (H' m)); intros d (u,hm).
 assert ((Con b t : DS_ord D)<=Con d u).
 apply Ole_trans with (c n); auto.
@@ -436,8 +436,8 @@ apply Ole_trans with (c m); auto.
 apply (DSleCon_tl H0).
 Defined.
 
-Lemma chain_uncons : 
-   forall D (c:natO -m> DS_ord D), isCon (c O) -> 
+Lemma chain_uncons :
+   forall D (c:natO -m> DS_ord D), isCon (c O) ->
       {hd:D & {ctl : natO -m> DS_ord D | forall n, c n == Con hd (ctl n)}}.
 intros D c H; case (uncons H); intros hd (tl,H1); exists hd; exists (chain_tl c H); intros.
 unfold chain_tl; simpl.
@@ -452,8 +452,8 @@ apply DSleCon_hd with tl t; trivial.
 rewrite H3; apply Con_compat; auto.
 Defined.
 
-Lemma fCon : forall D (c:natO -m> DS_ord D) (n:nat), 
-            {hd: D & 
+Lemma fCon : forall D (c:natO -m> DS_ord D) (n:nat),
+            {hd: D &
             {tlc:natO -m> DS_ord D|
                  exists m, m < n /\ forall k, c (k+m) == Con hd (tlc k)}}
             + {forall k, k<n -> isEps (c k)}.
@@ -484,8 +484,8 @@ intros n m H; simpl; apply DSle_pred; auto.
 apply (fmonotonic c H).
 Defined.
 
-CoFixpoint DS_lubn D (c:natO -m> DS_ord D) (n:nat) : DS_ord D := 
-    match fCon c n with 
+CoFixpoint DS_lubn D (c:natO -m> DS_ord D) (n:nat) : DS_ord D :=
+    match fCon c n with
       inleft (existT _ hd (exist _ tlc _)) => Con hd (DS_lubn tlc 2)
    |  inright _  => Eps (DS_lubn (cpred c) (S n))
     end.
@@ -494,20 +494,20 @@ CoFixpoint DS_lubn D (c:natO -m> DS_ord D) (n:nat) : DS_ord D :=
   less Eps elements when c O == DS_bot *)
 Definition DS_lub (D:Type) (c:natO -m> DS_ord D) := DS_lubn c 2.
 
-Lemma DS_lubn_inv : forall D (c:natO -m> DS_ord D) (n:nat), DS_lubn c n = 
-     match fCon c n with 
+Lemma DS_lubn_inv : forall D (c:natO -m> DS_ord D) (n:nat), DS_lubn c n =
+     match fCon c n with
         inleft (existT _ hd (exist _ tlc _)) => Con hd (DS_lub tlc)
      |  inright _  => Eps (DS_lubn (cpred c) (S n))
     end.
 intros; rewrite (DS_inv (DS_lubn c n)).
-simpl; case (fCon c n); trivial. 
+simpl; case (fCon c n); trivial.
 destruct s; simpl.
-destruct s; trivial. 
-Qed.  
+destruct s; trivial.
+Qed.
 
 Lemma DS_lubn_pred_nth : forall D a (s:DS_ord D)  n k p (c:natO -m> DS_ord D),
-   (n<k+p)%nat -> pred_nth (c n) k = Con a s -> 
-   exists d:natO -m> DS_ord D, 
+   (n<k+p)%nat -> pred_nth (c n) k = Con a s ->
+   exists d:natO -m> DS_ord D,
                  DS_lubn c p == Con a (DS_lub d) /\ (s:DS_ord D) <= d n.
 intros D a s n k; pattern k; apply Wf_nat.lt_wf_ind; intros.
 rewrite (DS_lubn_inv c p).
@@ -552,7 +552,7 @@ Qed.
 
 Lemma DS_lubCon_inv : forall D a (s:DS_ord D) (c:natO -m> DS_ord D),
    (DS_lub c == Con a s) ->
-   exists tlc :natO -m> DS_ord D, 
+   exists tlc :natO -m> DS_ord D,
            s==DS_lub tlc  /\ exists m, forall l, c (l+m) == Con a (tlc l).
 intros; case (decomp_eq H); intros t (H1,H2).
 case H1; intros k H4.
@@ -564,8 +564,8 @@ Qed.
 
 
 Lemma DS_lubCon : forall D a s n (c:natO -m> DS_ord D),
-   (Con a s :DS_ord D) <= c n -> 
-   exists d:natO -m> DS_ord D, 
+   (Con a s :DS_ord D) <= c n ->
+   exists d:natO -m> DS_ord D,
              DS_lub c == Con a (DS_lub d)  /\ (s:DS_ord D) <= d n.
 intros D a s n c H; inversion_clear H.
 case H0; intros k H3.
@@ -592,7 +592,7 @@ exists d; auto.
 exists c; auto.
 Qed.
 
-Lemma DS_lub_least : forall D (c:natO -m> DS_ord D) x, 
+Lemma DS_lub_least : forall D (c:natO -m> DS_ord D) x,
                       (forall n, c n <= x) -> DS_lub c <= x.
 intros; apply DSle_rec_eq
   with (R:= fun x y: DS_ord D=>exists c, x==DS_lub c /\ forall n, c n <= y); intros.
@@ -621,7 +621,7 @@ exact (DS_lub_upper (D:=D)).
 exact (DS_lub_least (D:=D)).
 Defined.
 
-Lemma DS_lub_inv : forall D (c:natO -m> DS D), lub c = 
+Lemma DS_lub_inv : forall D (c:natO -m> DS D), lub c =
      match fCon c 2 with
         inleft (existT _ hd (exist _ tlc _)) => Con hd (lub (c:=DS D) tlc)
      |  inright _  => Eps (DS_lubn (cpred c) 3)
@@ -631,13 +631,13 @@ Qed.
 
 Definition cons D (a : D) (s: DS D) : DS D := Con a s.
 
-Lemma cons_le_compat : 
+Lemma cons_le_compat :
      forall D a b (s t:DS D), a = b -> s <= t ->  cons a s <= cons b t.
 intros; simpl; unfold cons; rewrite H; apply DSleCon0; auto.
 Qed.
 Global Hint Resolve cons_le_compat : core.
 
-Lemma cons_eq_compat : 
+Lemma cons_eq_compat :
  forall D a b (s t:DS D), a = b -> s == t ->  cons a s == cons b t.
 intros; apply Ole_antisym; auto.
 Qed.
@@ -660,9 +660,9 @@ Qed.
 Global Hint Resolve not_le_consBot : core.
 
 
-Lemma DSle_intro_cons : 
+Lemma DSle_intro_cons :
        forall D (x y:DS D), (forall a s, x==cons a s -> cons a s <= y) -> x <= y.
-intros; simpl; apply DSle_rec_eq with 
+intros; simpl; apply DSle_rec_eq with
     (R:= fun (x y :DS D) => forall a s, x==cons a s -> cons a s <= y); auto; intros.
 apply Ole_trans with y1; auto.
 apply (H0 a s); auto.
@@ -707,7 +707,7 @@ apply Ole_trans with x; auto.
 apply H; apply is_cons_eq_compat with (cons a s); auto.
 Qed.
 
-Lemma DSeq_intro_is_cons : forall D (x y:DS D), 
+Lemma DSeq_intro_is_cons : forall D (x y:DS D),
              (is_cons x -> x <= y) -> (is_cons y -> y <= x) -> x == y.
 intros; apply Ole_antisym; apply DSle_intro_is_cons; auto.
 Qed.
@@ -728,17 +728,17 @@ Global Hint Resolve cons_le_morph : core.
 
 (** ** Basic functions *)
 
-Section Simple_functions. 
+Section Simple_functions.
 
 (** *** Build a function F such that F (Con a s) = f a s and F (Eps x) = Eps (F x) *)
 
 Variable D D': Type.
 Variable f : D -> DS D -m> DS D'.
 
-CoFixpoint DScase  (s:DS D) : DS D':= 
+CoFixpoint DScase  (s:DS D) : DS D':=
     match s with Eps x => Eps (DScase x) | Con a l => f a l end.
 
-Lemma DScase_inv : 
+Lemma DScase_inv :
    forall (s:DS D), DScase s = match s with Eps l => Eps (DScase l)  | Con a l =>  f a l end.
 intros; rewrite (DS_inv (DScase s)); simpl; auto.
 Qed.
@@ -894,9 +894,9 @@ Qed.
 Lemma DSCASE_mon_cont : forall D D', continuous (DSCASE_mon D D').
 red; intros; intro s; rewrite (DSCASE_mon_simpl (D:=D) (D':=D')).
 apply DSle_intro_cons; intros.
-case (DScase_eq_cons_elim  (lub h) (a:=a) (s:=s0) s); 
+case (DScase_eq_cons_elim  (lub h) (a:=a) (s:=s0) s);
          auto; intros b (t,(Hs,Hf)).
-rewrite fmon_lub_simpl. 
+rewrite fmon_lub_simpl.
 apply Ole_trans with (lub ((h <o> b) <_> t)); auto.
 apply (lub_le_compat (D:=DS D')); intro n.
 repeat (rewrite fmon_app_simpl); rewrite fmon_comp_simpl.
@@ -929,7 +929,7 @@ change (DSCASE_cont D D' (lub h) s <= lub (DSCASE_cont D D' @ h) s).
 rewrite DSCASE_cont_simpl.
 apply DSle_intro_cons; intros.
 case (DScase_eq_cons_elim  (fun a : D => fcontit ((lub h) a)) (a:=a) (s:=s0) s); auto; intros b (t,(Hs,Hf)).
-rewrite fcont_lub_simpl. 
+rewrite fcont_lub_simpl.
 apply Ole_trans with (lub ((h <o> b) <__> t)); auto.
 apply (lub_le_compat (D:=DS D')); intro n.
 repeat (rewrite fcont_app_simpl).
@@ -942,7 +942,7 @@ Lemma DSCASE_simpl : forall D D' f s, DSCASE D D' f s = DScase (fun a => fcontit
 trivial.
 Qed.
 
-(** ** Basic functions on streams *) 
+(** ** Basic functions on streams *)
 
 (** - Cons is continuous *)
 
@@ -980,7 +980,7 @@ Lemma CONS_simpl : forall D (a : D) (s : DS D), CONS a s = cons a s.
 trivial.
 Qed.
 
-(** - first takes a stream and return the stream with only the first element 
+(** - first takes a stream and return the stream with only the first element
         f a s = cons a nil
 *)
 
@@ -1025,7 +1025,7 @@ Lemma first_bot : forall D, first (D:=D) 0 <= 0.
 intros; rewrite first_simpl; auto.
 Qed.
 
-Lemma first_cons_elim : forall D a (s t:DS D), 
+Lemma first_cons_elim : forall D a (s t:DS D),
     first t == cons a s -> exists u, t == cons a u /\ s==(0:DS D).
 intros D a s t; rewrite first_simpl; intros.
 case (DScase_eq_cons_elim (firstf (D:=D)) t H).
@@ -1212,7 +1212,7 @@ Lemma app_mon_left : forall D (s t u : DS D), s <= t -> app s u <= app t u.
 intros; repeat (rewrite app_simpl); auto.
 Qed.
 
-Lemma app_cons_elim : forall D a (s t u:DS D), app t u == cons a s -> 
+Lemma app_cons_elim : forall D a (s t u:DS D), app t u == cons a s ->
              exists t', t == cons a t' /\ s == u.
 intros D a s t u; rewrite app_simpl; intros.
 case (DScase_eq_cons_elim (appf u) t H).
@@ -1230,7 +1230,7 @@ Lemma app_mon_right : forall D (s t u : DS D), t <= u -> app s t <= app s u.
 intros; apply (fmonotonic (App D s) H); auto.
 Qed.
 
-Global Hint Resolve first_cons first_bot app_cons app_bot 
+Global Hint Resolve first_cons first_bot app_cons app_bot
                     app_mon_left app_mon_right rem_cons rem_bot : core.
 
 Lemma app_le_compat : forall D (s t u v:DS D), s <= t -> u <= v -> app s u <= app t v.
@@ -1445,10 +1445,10 @@ Lemma DS_bisimulation2 : forall D (R: DS D -> DS D -> Prop),
    -> (forall (x y:DS D), (is_cons (rem x) \/ is_cons (rem y)) -> R x y -> first (rem x) == first (rem y))
    -> (forall (x y:DS D), (is_cons (rem x) \/ is_cons (rem y)) -> R x y -> R (rem (rem x)) (rem (rem y)))
    -> forall x y, R x y -> x == y.
-intros; 
-apply DS_bisimulation 
+intros;
+apply DS_bisimulation
    with (R:= fun x y => R x y \/ ((is_cons x \/ is_cons y)
-                                                 -> (first x == first y /\  
+                                                 -> (first x == first y /\
                                                       R (rem x) (rem y)))); intros.
 case H4; clear H4; intros.
 left; apply H with x1 y1; trivial.
@@ -1470,7 +1470,7 @@ Qed.
 
 (** ** Finiteness of streams *)
 
-CoInductive infinite (D:Type) (s: DS D) : Prop := 
+CoInductive infinite (D:Type) (s: DS D) : Prop :=
       inf_intro : is_cons s -> infinite (rem s) -> infinite s.
 
 Lemma infinite_le_compat :  forall D (s t:DS D), s <= t -> infinite s -> infinite t.
@@ -1495,7 +1495,7 @@ Qed.
 Global Hint Resolve not_infiniteBot : core.
 
 
-Inductive finite  (D:Type) (s:DS D) : Prop := 
+Inductive finite  (D:Type) (s:DS D) : Prop :=
       fin_bot : s <= 0 -> finite s | fin_cons : finite (rem s) -> finite s.
 
 Lemma finite_mon : forall D (s t:DS D), s <= t -> finite t -> finite s.

@@ -4,7 +4,7 @@ Set Implicit Arguments.
 (** * Cpo_nat.v: Domains of natural numbers *)
 
 (** ** Definition *)
-(** - Natural numbers are a particular case of streams over the trivial type unit *) 
+(** - Natural numbers are a particular case of streams over the trivial type unit *)
 
 Lemma unit_eq : forall x : unit, x = tt.
 destruct x; trivial.
@@ -95,7 +95,7 @@ Lemma DNeq_rec : forall R : DN -> DN -> Prop,
    (forall s (y:DN), R (DNS s) y -> exists t, y==DNS t /\  R s t)->
    (forall s (x:DN), R x (DNS s) -> exists t, x==DNS t /\ R t s)
   -> forall x y : DN , R x y -> x == y.
-intros R Req RCons1 RCons2 x y Rxy; 
+intros R Req RCons1 RCons2 x y Rxy;
       apply DSeq_rec with (D:=unit) (R:=R); auto.
 intro a; rewrite (unit_eq a); intros s y0 H2.
 case (RCons1 s y0 H2); intros t (H3,H4); exists t; auto.
@@ -143,12 +143,12 @@ apply (rem_le_compat (D:=unit)); auto.
 Qed.
 
 (** ** Addition *)
-CoFixpoint add (n m : DN) : DN := 
+CoFixpoint add (n m : DN) : DN :=
      match n with (Eps n')   => Eps (add m n')
                        |  (Con _ n')   => DNS (add m n')
      end.
 
-Lemma add_inv : forall (n m : DN), 
+Lemma add_inv : forall (n m : DN),
    add n m = match n with (Eps n')   => Eps (add m n')
                                      |  (Con _ n')   => DNS (add m n')
    end.
@@ -156,10 +156,10 @@ intros; rewrite (DS_inv (add n m)); simpl.
 destruct n; trivial.
 Qed.
 
-Lemma add_decomp_elim : forall a (s x y:DN), decomp a s (add x y) -> 
+Lemma add_decomp_elim : forall a (s x y:DN), decomp a s (add x y) ->
             exists t, exists u, s = add t u /\
                 (x==DNS u /\ y==t \/ x==t /\ y == DNS u).
-intros a s x y H; case H; clear H; intro k; generalize x y; clear x y; 
+intros a s x y H; case H; clear H; intro k; generalize x y; clear x y;
 pattern k; apply Wf_nat.lt_wf_ind; intros.
 rewrite add_inv in H0; destruct x.
 destruct n; simpl in H0.
@@ -171,7 +171,7 @@ rewrite (pred_nthCon (D:=unit) tt (add y x)) in H0.
 injection H0; auto.
 Qed.
 
-Lemma add_eqCons : forall (s x y:DN), add x y == DNS s -> 
+Lemma add_eqCons : forall (s x y:DN), add x y == DNS s ->
             exists t, exists u, s == add t u /\
                 (x==DNS u /\ y==t  \/  x == t /\ y == DNS u).
 intros s x y H; case (decomp_eq (D:=unit) H); intros v (H1,H2).
@@ -181,18 +181,18 @@ apply Oeq_trans with v; auto.
 apply Oeq_trans with v; auto.
 Qed.
 
-Lemma addS : 
-     forall x' x, DNS x' <= x 
+Lemma addS :
+     forall x' x, DNS x' <= x
    -> forall y, (exists s, add x y == DNS s) /\ (exists s, add y x == DNS s).
 intros x' x H; inversion_clear H.
-case H0; clear H0; intro k; generalize x; clear x; 
+case H0; clear H0; intro k; generalize x; clear x;
 pattern k; apply Wf_nat.lt_wf_ind; intros.
 rewrite (add_inv x y); destruct x.
 destruct n; simpl in H0.
 discriminate H0.
-assert 
+assert
  (forall y : DN,
-    (exists s : DN, add x y == DNS s) /\ 
+    (exists s : DN, add x y == DNS s) /\
     (exists s : DN, add y x == DNS s)).
 intro; apply (H n) with (2:=H0); auto; intros.
 split.
@@ -210,7 +210,7 @@ exists (add d x); auto.
 exists (add (Con u x) d); auto.
 Qed.
 
-Lemma addS_sym : 
+Lemma addS_sym :
    forall x y v:DN, add x y == DNS v -> exists t', add y x == DNS t'.
 intros x y v H; case (add_eqCons x y H); intros t (u,(Heq,[(H1,H2)|(H1,H2)])).
 case (addS (x':=u) (x:=x)) with (y:=y); auto.
@@ -219,7 +219,7 @@ Qed.
 
 (** DNSn x n = S^n x *)
 
-Fixpoint DNSn (x:DN) (n:nat) {struct n} :DN := 
+Fixpoint DNSn (x:DN) (n:nat) {struct n} :DN :=
    match n with 0 => x | S p => DNSn (DNS x) p end.
 
 Lemma DNSnS : forall n x, DNSn (DNS x) n = DNS (DNSn x n).
@@ -243,9 +243,9 @@ Global Hint Resolve DNSn_eq_compat : core.
 (** Condition S^l x <= z & y <= S^l t ensuring x+y <= z+t *)
 Definition compat (x y z t:DN) := exists l:nat, (DNSn x l <= z /\ y <= DNSn t l).
 
-Lemma compatS : 
+Lemma compatS :
    forall x y z t x' y' z' t',
-   compat x y z t -> 
+   compat x y z t ->
       (x==DNS y' /\ y==x' \/ x==x' /\ y==DNS y')
   -> (z==DNS t' /\ t==z' \/ z==z' /\ t==DNS t')
   -> (compat x' y' z' t' \/ compat x' y' t' z' \/ compat y' x' z' t' \/ compat y' x' t' z').
@@ -288,7 +288,7 @@ apply Ole_trans with (DNSn t l); auto.
 apply Ole_trans with (DNSn (DNS t') l); auto.
 Qed.
 
-Lemma compat_addS : forall n m p q v:DN, 
+Lemma compat_addS : forall n m p q v:DN,
     (compat n m p q) -> add n m == DNS v -> exists t, add p q == DNS t.
 intros n m p q v (l,(H,H0)) H1.
 case (add_eqCons n m H1); intros n' (m',(H2,[(H3,H4)|(H3,H4)])).
@@ -306,13 +306,13 @@ case (addS H5) with (y:=q); auto.
 Qed.
 
 
-Lemma add_compat : 
-  forall n m p q, 
-    (compat n m p q \/ compat n m q p \/ compat m n p q \/ compat m n q p) 
+Lemma add_compat :
+  forall n m p q,
+    (compat n m p q \/ compat n m q p \/ compat m n p q \/ compat m n q p)
     -> add n m <= add p q.
-intros; apply DNle_rec with 
-     (R:= fun x y => exists n, exists m, exists p, exists q, 
-             x ==  add n m /\ y == add p q /\  
+intros; apply DNle_rec with
+     (R:= fun x y => exists n, exists m, exists p, exists q,
+             x ==  add n m /\ y == add p q /\
              (compat n m p q \/ compat n m q p \/ compat m n p q \/ compat m n q p)).
 (* Compatibility with equality *)
 clear H n m p q; intros x1 x2 y1 y2 (n,(m,(p,(q,(H1,(H2,H3)))))).
@@ -426,7 +426,7 @@ absurd (DNS y <= DN0); auto.
 *)
 
 Lemma add_n_0 : forall n, add 0 n == n.
-intros; apply DNeq_rec with 
+intros; apply DNeq_rec with
           (R:= fun x y => exists n, x ==  add 0 n /\ y == n).
 (* compatibility with equality *)
 intros x1 x2 y1 y2 (n0,(H1,H2)) H3 H4.
@@ -476,7 +476,7 @@ apply lub_eq_compat; apply fmon_eq_intro; simpl; intros.
 apply Oeq_trans with (add (DNS v) (c n)).
 apply add_eq_compat; auto.
 apply (addS_simpl v (c n)).
-apply Oeq_sym; apply (lub_comp_eq (D1:=DN) (D2:=DN) (f:=Cons tt)) with 
+apply Oeq_sym; apply (lub_comp_eq (D1:=DN) (D2:=DN) (f:=Cons tt)) with
         (h:=Add v @ c).
 exact (Cons_cont tt).
 
@@ -498,7 +498,7 @@ exact (Hl3 n).
 apply Oeq_trans with (add (DNS b) (tlc n)).
 apply Oeq_sym; exact (addS_shift b (tlc n)).
 exact (addS_simpl b (tlc n)).
-apply Oeq_sym; 
+apply Oeq_sym;
 apply (lub_comp_eq (D1:=DN) (D2:=DN) (f:=Cons tt)) with (h:=(Add b @ tlc)).
 exact (Cons_cont tt).
 
@@ -541,7 +541,7 @@ intro D; exact (map_bot (fun _ : D => tt)).
 Qed.
 
 Global Hint Resolve  length_eq_cons length_nil : core.
-   
+
 Lemma length_le_compat : forall D (s t : DS D), s <= t -> length s <= length t.
 intro D; exact (fcont_monotonic (LENGTH D)).
 Qed.

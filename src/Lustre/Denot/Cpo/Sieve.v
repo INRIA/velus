@@ -73,19 +73,19 @@ Qed.
 (** *** Definition of the system parameterized by sift *)
 
 Definition Funsift : (DS D -C-> DS D) -m> system SL.
-exists (fun fs (x:LO) => match x with X => fdiv @_ PROJ (DS_fam SL) (inl LO i) 
-                                                            |  Y => fs @_ PROJ (DS_fam SL) (inr LI X) 
+exists (fun fs (x:LO) => match x with X => fdiv @_ PROJ (DS_fam SL) (inl LO i)
+                                                            |  Y => fs @_ PROJ (DS_fam SL) (inr LI X)
                                                             |  o => (APP D @2_ PROJ (DS_fam SL) (inl LO i))
                                                                                        (PROJ (DS_fam SL) (inr LI Y))
               end).
 red; intros f g Hfg; intro x.
 case x; auto.
-apply (fcont_le_intro (D1:=Dprodi (DS_fam SL)) (D2:=DS D)); intro P; 
+apply (fcont_le_intro (D1:=Dprodi (DS_fam SL)) (D2:=DS D)); intro P;
 repeat rewrite fcont_comp_simpl; auto.
 Defined.
 
-Lemma Funsift_simpl : forall fs x, Funsift fs x = match x with X => fdiv @_ PROJ (DS_fam SL) (inl LO i) 
-                                                            |  Y => fs @_ PROJ (DS_fam SL) (inr LI X) 
+Lemma Funsift_simpl : forall fs x, Funsift fs x = match x with X => fdiv @_ PROJ (DS_fam SL) (inl LO i)
+                                                            |  Y => fs @_ PROJ (DS_fam SL) (inr LI X)
                                                             |  o => (APP D @2_ PROJ (DS_fam SL) (inl LO i))
                                                                                        (PROJ (DS_fam SL) (inr LI Y))
               end.
@@ -108,8 +108,8 @@ apply Ole_trans with (y:= (Proj (fun x0 : LO => DS_prod SL -C-> DS (inrSL SL x0)
    p) O); trivial.
 Defined.
 
-Lemma FunSift_simpl : forall fs x, FunSift fs x = match x with X => fdiv @_ PROJ (DS_fam SL) (inl LO i) 
-                                                            |  Y => fs @_ PROJ (DS_fam SL) (inr LI X) 
+Lemma FunSift_simpl : forall fs x, FunSift fs x = match x with X => fdiv @_ PROJ (DS_fam SL) (inl LO i)
+                                                            |  Y => fs @_ PROJ (DS_fam SL) (inr LI X)
                                                             |  o => (APP D @2_ PROJ (DS_fam SL) (inl LO i))
                                                                                        (PROJ (DS_fam SL) (inr LI Y))
               end.
@@ -117,16 +117,16 @@ trivial.
 Qed.
 
 (** - [focus] restrict to the input and output observed *)
-Definition focus : (DS_prod (inlSL SL) -C-> DS_prod SL) -c> DS D -C-> DS D := 
+Definition focus : (DS_prod (inlSL SL) -C-> DS_prod SL) -c> DS D -C-> DS D :=
      PROJ (DS_fam SL) (inr LI o) @@_ fcont_SEQ (DS D) (DS_prod (inlSL SL)) (DS_prod SL) (PAIR1 (DS D)).
 
-Lemma focus_simpl : forall (f : DS_prod (inlSL SL) -C-> DS_prod SL) (s:DS D), 
+Lemma focus_simpl : forall (f : DS_prod (inlSL SL) -C-> DS_prod SL) (s:DS D),
     focus f s = f (pair1 s) (inr LI o).
 trivial.
 Qed.
 
 (** *** Definition and properties of [sift] *)
-Definition sift : DS D -C-> DS D := 
+Definition sift : DS D -C-> DS D :=
                FIXP (DS D -C->DS D) (focus @_ (sol_of_system SL @_ FunSift)).
 
 Lemma sift_eq : sift == focus (sol_of_system SL (FunSift sift)).
@@ -148,7 +148,7 @@ Lemma sol_of_system_i : forall s : DS D, sol_of_system SL (FunSift sift) (pair1 
 intro s; exact (Oprodi_eq_elim (sol_of_system_eq (FunSift sift) (pair1 s)) (inl LO i)).
 Qed.
 
-Lemma sol_of_system_X : forall s : DS D, 
+Lemma sol_of_system_X : forall s : DS D,
             sol_of_system SL (FunSift sift) (pair1 s) (inr LI X) == fdiv s.
 intro s; apply Oeq_trans with  (1:= Oprodi_eq_elim (sol_of_system_eq (FunSift sift) (pair1 s)) (inr LI X)).
 simpl.
@@ -158,7 +158,7 @@ apply (fcont_stable fdiv).
 exact (sol_of_system_i s).
 Qed.
 
-Lemma sol_of_system_Y : forall s : DS D, 
+Lemma sol_of_system_Y : forall s : DS D,
             sol_of_system SL (FunSift sift) (pair1 s) (inr LI Y) == sift (fdiv s).
 intro s; apply Oeq_trans with  (1:=Oprodi_eq_elim (sol_of_system_eq (FunSift sift) (pair1 s)) (inr LI Y)).
 simpl.
@@ -168,7 +168,7 @@ apply (fcont_stable sift).
 exact (sol_of_system_X s).
 Qed.
 
-Lemma sol_of_system_o : forall s : DS D, 
+Lemma sol_of_system_o : forall s : DS D,
             sol_of_system SL (FunSift sift) (pair1 s) (inr LI o) == app s (sift (fdiv s)).
 intro s; apply Oeq_trans with  (1:=Oprodi_eq_elim (sol_of_system_eq (FunSift sift) (pair1 s)) (inr LI o)).
 simpl.

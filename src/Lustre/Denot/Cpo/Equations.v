@@ -18,8 +18,8 @@ Defined.
 
 Definition ord (P Q:Dec) := forall n, Q n -> exists m, m < n /\ P m.
 
-Lemma ord_eq_compat : forall (P1 P2 Q1 Q2:Dec), 
-        (forall n, P1 n -> P2 n) -> (forall n, Q2 n -> Q1 n) 
+Lemma ord_eq_compat : forall (P1 P2 Q1 Q2:Dec),
+        (forall n, P1 n -> P2 n) -> (forall n, Q2 n -> Q1 n)
      -> ord P1 Q1 -> ord P2 Q2.
 red; intros.
 case (H1 n); auto.
@@ -114,7 +114,7 @@ auto.
 apply Acc_ord_PS; auto.
 Qed.
 
-Fixpoint min_acc (P:Dec) (a:Acc ord P) {struct a} : nat := 
+Fixpoint min_acc (P:Dec) (a:Acc ord P) {struct a} : nat :=
              match is_dec P 0 with
                  left _ => 0 | right H => S (min_acc (Acc_inv a (PS P) (ord_PS P H))) end.
 
@@ -165,10 +165,10 @@ Inductive term : Type := X | Ap : F -> (nat -> term) -> term.
 
 (* Implicit Arguments Ap []. *)
 
-Inductive le_term : term -> term -> Prop := 
+Inductive le_term : term -> term -> Prop :=
                le_X : forall t : term, le_term X t
-           |   le_Ap : forall (f:F) (st1 st2: nat -> term), 
-                          (forall (i:nat), (i < Ar f) -> le_term (st1 i) (st2 i)) 
+           |   le_Ap : forall (f:F) (st1 st2: nat -> term),
+                          (forall (i:nat), (i < Ar f) -> le_term (st1 i) (st2 i))
                          -> le_term (Ap f st1) (Ap f st2).
 Hint Constructors le_term : core.
 
@@ -191,7 +191,7 @@ red; intros; inversion H0; auto.
 Qed.
 Hint Resolve not_le_term_Ap_diff : core.
 
-Lemma not_le_term_Ap_st : forall f st1 st2 (n:nat), 
+Lemma not_le_term_Ap_st : forall f st1 st2 (n:nat),
      n < Ar f -> ~ le_term (st1 n) (st2 n) -> ~ le_term (Ap f st1) (Ap f st2).
 red; intros; inversion H1; auto.
 Qed.
@@ -224,7 +224,7 @@ exact le_term_refl.
 exact le_term_trans.
 Defined.
 
-Fixpoint substX (t u:term_ord) {struct t} : term_ord := 
+Fixpoint substX (t u:term_ord) {struct t} : term_ord :=
       match t with X => u | Ap f st => Ap f (fun i => substX (st i) u) end.
 
 Lemma substX_le : forall (t u:term_ord), t <= substX t u.
@@ -239,9 +239,9 @@ Variable D : cpo.
 
 Variable Finterp : forall f:F, (Ar f --> D) -c> D.
 
-Fixpoint interp_term (t:term) : D -c> D := 
+Fixpoint interp_term (t:term) : D -c> D :=
         match t with X => ID D
-                        | Ap f st => Finterp f @_ 
+                        | Ap f st => Finterp f @_
                                             natk_shift_cont (fun i => interp_term (st i))
         end.
 
@@ -250,7 +250,7 @@ trivial.
 Qed.
 
 
-Lemma interp_term_Ap : forall (f:F) (st : nat -> term) (x:D), 
+Lemma interp_term_Ap : forall (f:F) (st : nat -> term) (x:D),
             interp_term (Ap f st) x = Finterp f (fun i => interp_term (st i) x).
 trivial.
 Qed.
@@ -334,15 +334,15 @@ Qed.
 
 (** *** Definition of lubs in the universal domain *)
 (**
-     - lub T 0 = T 0 0,   
-     - lub T i = T i j with T k l <= lub T i for k <= i, l <= i, 
+     - lub T 0 = T 0 0,
+     - lub T i = T i j with T k l <= lub T i for k <= i, l <= i,
      - i <= j, lub T i <= lub T (i+1)
 *)
 
 (** - find the apropriate index in T n starting from T 0 k *)
-Fixpoint lub_index (T : natO-m>TU_ord) (k:nat) (n:nat) {struct n} : nat := 
+Fixpoint lub_index (T : natO-m>TU_ord) (k:nat) (n:nat) {struct n} : nat :=
              match n with O => k
-               | S p => TUle_next (lub_index T k p) (fnatO_elim T p) 
+               | S p => TUle_next (lub_index T k p) (fnatO_elim T p)
              end.
 
 Lemma lub_index_S : forall (T : natO-m>TU_ord) (k:nat) (n:nat),
@@ -405,7 +405,7 @@ intro m.
 exists (S (n+m)); auto with arith.
 Qed.
 
-Lemma TUlub_least : forall (T : natO-m>TU_ord) (T':TU_ord), 
+Lemma TUlub_least : forall (T : natO-m>TU_ord) (T':TU_ord),
                (forall n, T n <= T') -> TUlub T <= T'.
 intros; intro n; rewrite TUlub_simpl.
 case (H n (lub_index T n n)); intros m (H1,H2).
@@ -425,13 +425,13 @@ Defined.
 
 (** ** Interpretation of terms in the universal domain *)
 
-Fixpoint maxk (f:nat -> nat) (k:nat) (def:nat) {struct k}: nat := 
-       match k with O => def | S p => let m:=maxk f p def in 
+Fixpoint maxk (f:nat -> nat) (k:nat) (def:nat) {struct k}: nat :=
+       match k with O => def | S p => let m:=maxk f p def in
                                                       let a:= f p in
                                                       if le_lt_dec m a then a else m
        end.
 
-Lemma maxk_le : forall (f:nat -> nat) (k:nat) (def:nat), 
+Lemma maxk_le : forall (f:nat -> nat) (k:nat) (def:nat),
       forall p, p < k -> (f p <= maxk f k def)%nat.
 induction k; simpl; intros.
 absurd (p < 0); auto with arith.
@@ -440,7 +440,7 @@ case (le_lt_dec (maxk f k def) (f k)); intros; auto with arith.
 apply Nat.le_trans with (maxk f k def); auto.
 Qed.
 
-Lemma maxk_le_def : forall (f:nat -> nat) (k:nat) (def:nat), 
+Lemma maxk_le_def : forall (f:nat -> nat) (k:nat) (def:nat),
      (def<= maxk f k def)%nat.
 intros; induction k; simpl; intros; auto.
 case (le_lt_dec (maxk f k def) (f k)); intros; auto with arith.
@@ -457,7 +457,7 @@ apply le_Ap; intros.
 apply (fmonotonic (ST i) H).
 Defined.
 
-Lemma DTUAp_simpl 
+Lemma DTUAp_simpl
    : forall (f:F) (ST: Ar f --> DTU)(n:nat), DTUAp ST n = Ap f (fun i => ST i n).
 trivial.
 Qed.
@@ -480,7 +480,7 @@ subst p; apply Ole_trans with (y n0 m'); auto with arith.
 case H0; intros m (H1,H2); exists m; auto.
 Defined.
 
-Lemma DTUAp_mon_simpl : 
+Lemma DTUAp_mon_simpl :
      forall (f:F) (ST: Ar f --> DTU)(n:nat), DTUAp_mon f ST n = Ap f (fun i => ST i n).
 trivial.
 Qed.
@@ -489,10 +489,10 @@ Definition TUAp : forall (f:F), (Ar f --> DTU) -c> DTU.
 intro f; exists (DTUAp_mon f).
 red; intros.
 intro n; rewrite DTUAp_mon_simpl.
-change 
+change
 (exists m : nat,
   n < m /\
-  le_term 
+  le_term
   (Ap f (fun i : nat => norm 0 (h n) i (lub_index (natk_mon_shift 0 h i) n n)))
   (lub (c:=DTU) (DTUAp_mon f @ h) m)).
 pose (m:= maxk (fun i => lub_index (natk_mon_shift 0 h i) n n) (Ar f) (S n)).
@@ -508,7 +508,7 @@ unfold m; apply (maxk_le (fun i : nat => lub_index (natk_mon_shift 0 h i) n n) (
 apply (TUlub_le_term (DTUAp_mon f @ h) (k:=n) (l:=m) (n:=m)); auto with arith.
 Qed.
 
-Fixpoint DTUfix (T:term) (n:nat) {struct n}: term_ord 
+Fixpoint DTUfix (T:term) (n:nat) {struct n}: term_ord
       := match n with O => X | S p => substX (DTUfix T p) T end.
 
 Definition TUfix (T:term) : DTU.
@@ -525,7 +525,7 @@ trivial.
 Qed.
 
 (*
-Lemma TUfix_equa 
+Lemma TUfix_equa
     : forall (T:term), (interp_equation TUAp T : natO-m> term_ord) == TUfix T.
 intro; apply fmon_eq_intro.
 induction n; intros; auto.
