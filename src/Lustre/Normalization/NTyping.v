@@ -1740,7 +1740,7 @@ Module Type NTYPING
     Proof.
       intros * Wt. inversion_clear Wt as [??? Hclin Hclout Hvars Heq].
       unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2.
       destruct Hiface as (Htypes&_).
       econstructor; simpl; eauto.
       1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.
@@ -2225,7 +2225,7 @@ Module Type NTYPING
     Proof.
       intros * Hwc. inversion_clear Hwc as [??? Hclin Hclout Hvars Heq]; subst Γ.
       unfold normfby_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2.
       destruct Hiface as (Htypes&_).
       econstructor; simpl; eauto.
       1-3:unfold wt_clocks in *; simpl_Forall; eauto with ltyping.

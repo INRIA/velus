@@ -2582,6 +2582,35 @@ Module Type LCLOCKING
     split; eauto using instck_refines; simpl.
   Qed.
 
+  (** Additional helper lemmas *)
+
+  Lemma map_filter_clo_HasClock1 : forall Γ Γ' ck,
+    (forall x ck', HasClock Γ' x ck' -> HasClock Γ x ck /\ ck' = Cbase) ->
+    forall x ck',
+      HasClock Γ' x ck' ->
+      HasClock
+        (map_filter (fun '(x2, ann0) => if clo ann0 ==b ck then Some (x2, ann_with_clock ann0 Cbase) else None) Γ)
+        x ck'.
+  Proof.
+    intros * Cks * Ck.
+    edestruct Cks as (Ck'&?); eauto; subst.
+    inv Ck'. econstructor. solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
+  Qed.
+
+  Lemma map_filter_clo_IsLast1 : forall Γ Γ' ck,
+      NoDupMembers Γ ->
+      (forall x ck', HasClock Γ' x ck' -> HasClock Γ x ck /\ ck' = Cbase) ->
+      (forall x, IsLast Γ' x -> IsLast Γ x) ->
+      forall x, IsLast Γ' x ->
+           IsLast (map_filter (fun '(x2, ann0) => if clo ann0 ==b ck then Some (x2, ann_with_clock ann0 Cbase) else None) Γ) x.
+  Proof.
+    intros * ND Cks Ls * L.
+    specialize (Ls _ L). inv L.
+    edestruct Cks as (Ck'&?); eauto with senv; subst.
+    inv Ls. inv Ck'. eapply NoDupMembers_det in H2; eauto. subst.
+    econstructor. solve_In. simpl. rewrite equiv_decb_refl. eauto. auto.
+  Qed.
+
 End LCLOCKING.
 
 Module LClockingFun

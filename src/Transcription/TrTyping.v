@@ -406,7 +406,7 @@ Module Type TRTYPING
         Forall (fun xr0 => Senv.HasType vars xr0 bool_velus_type) (map fst xr) ->
         Forall (LT.wt_clock (L.types G) vars) (map snd xr) ->
         Forall (wt_type (L.types G)) (map (fun '(_, a) => a.(Senv.typ)) vars) ->
-        L.VarsDefined d xs ->
+        L.VarsDefinedComp d xs ->
         NoDup xs ->
         LT.wt_block G vars d ->
         NLT.wt_equation P (Senv.idty vars) e'.
@@ -439,9 +439,10 @@ Module Type TRTYPING
     Proof.
       intros * Htr Hg Wtn. inversion_clear Wtn as [?? Wti Wto Wte _ Hwt]; subst Γ.
       tonodeInv Htr. unfold NLT.wt_node. simpl.
-      pose proof (L.n_defd n) as (?&Hvars&Hperm). pose proof (L.n_nodup n) as (Hnd1&Hnd2).
-      pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2. rename H into Hblk. rewrite <-Hblk in *. symmetry in Hblk.
-      assert (Forall (fun blk => exists xs, L.VarsDefined blk xs /\ NoDup xs) blks) as Hvars'. 2:clear Hnd1 Hnd2 Hvars Hperm.
+      pose proof (L.n_nodup n) as (Hnd1&Hnd2).
+      pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 (?&Hvars&Hperm)]. inv Hsyn2.
+      rename H into Hblk. rewrite <-Hblk in *. symmetry in Hblk.
+      assert (Forall (fun blk => exists xs, L.VarsDefinedComp blk xs /\ NoDup xs) blks) as Hvars'. 2:clear Hnd1 Hnd2 Hvars Hperm.
       { clear - Hnd1 Hnd2 Hvars Hperm.
         inv Hvars; inv H0; L.inv_VarsDefined.
         inv Hnd2; inv H1. apply Forall2_ignore2 in Hvars. simpl_Forall.

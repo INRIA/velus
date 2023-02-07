@@ -1,0 +1,7 @@
+node f(b : bool) returns (last x : int = 0)
+let
+    switch b
+    | true do x = last x + 1
+    | false do
+    end
+tel

@@ -137,7 +137,7 @@ Module Type LCLOCKCORRECTNESS
   Section sc_inv.
     Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
-    Variable (G : @global PSyn prefs).
+    Variable (G : @global complete prefs).
 
     Hypothesis Hnode : forall f ins outs,
         sem_node G f ins outs ->
@@ -492,8 +492,8 @@ Module Type LCLOCKCORRECTNESS
 
       (* Returning aligned values *)
       assert (Hvars:=H11).
-      eapply sem_exps_sem_var, sc_outside_mask with (ncks:=map (fun '(_, ck) => (ck, None)) ann0) in Hvars; eauto.
-      - eapply Forall2_forall2 in Hvars as [? Hck].
+      eapply Sem.sem_exps_sem_var, sc_outside_mask with (ncks:=map (fun '(_, ck) => (ck, None)) ann0) in H20; eauto with lclocking.
+      - eapply Forall2_forall2 in H20 as [? Hck].
         repeat rewrite map_length in *.
         specialize (Hck Cbase (abstract_clock (def_stream b)) _ _ _ Hlen eq_refl eq_refl).
         rewrite map_nth, map_map in Hck; eauto.
@@ -588,8 +588,8 @@ Module Type LCLOCKCORRECTNESS
         (* Returning aligned values *)
         simpl in *. rewrite app_nil_r in *.
         assert (Hvars:=H24).
-        eapply sem_exps_sem_var, sc_outside_mask with (ncks:=map (fun '(ck, x) => (ck, Some x)) (combine (map snd anns) xs)) in Hvars; eauto.
-        + eapply Forall2_forall2 in Hvars as [? Hck].
+        eapply Sem.sem_exps_sem_var, sc_outside_mask with (ncks:=map (fun '(ck, x) => (ck, Some x)) (combine (map snd anns) xs)) in H24; eauto with lclocking.
+        + eapply Forall2_forall2 in H24 as [? Hck].
           repeat rewrite map_length in *.
           assert (k < length (combine (map snd anns) xs)) as Hlen2.
           { apply Forall2_length in H2. rewrite combine_length, H2, 2 map_length, Nat.min_id.
@@ -676,9 +676,14 @@ Module Type LCLOCKCORRECTNESS
 
         Variable sem_block : static_env -> A -> Prop.
 
+        Variable must_def : ident -> Prop.
+        Variable is_def : ident -> A -> Prop.
+
         Inductive sem_branch_ck' (envS : list ident) : static_env -> Sem.history -> Stream bool -> (branch A) -> Prop :=
         | Sckbranch : forall Γ Hi bs caus blks,
             sem_block (replace_idcaus caus Γ) blks ->
+            (forall x, must_def x -> ~is_def x blks -> exists vs, sem_var Hi (Last x) vs /\ sem_var Hi (Var x) vs) ->
+
             Forall (fun cx => forall x ck vs, In (x, cx) caus -> HasClock Γ x ck -> sem_var Hi (Var x) vs -> sem_clock (var_history Hi) bs ck (abstract_clock vs)) envS ->
             sem_branch_ck' envS Γ Hi bs (Branch caus blks).
       End sem_scope.
@@ -699,8 +704,11 @@ Module Type LCLOCKCORRECTNESS
           Forall (fun blks =>
                     exists Hi', when_hist (fst blks) Hi sc Hi'
                            /\ let bi := fwhenb (fst blks) b sc in
-                             sem_branch_ck' (fun Γ => Forall (sem_block_ck' envP Γ Hi' bi))
-                                           envP (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' bi (snd blks)) branches ->
+                             sem_branch_ck'
+                               (fun Γ => Forall (sem_block_ck' envP Γ Hi' bi))
+                               (fun x => Syn.Is_defined_in x (Bswitch ec branches))
+                               (fun x => List.Exists (Syn.Is_defined_in x))
+                               envP (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' bi (snd blks)) branches ->
           sem_block_ck' envP Γ Hi b (Bswitch ec branches)
       | SckautoWeak:
         forall Γ H bs ini oth states ck bs' stres0 stres1 stres,
@@ -717,6 +725,8 @@ Module Type LCLOCKCORRECTNESS
                                                         Forall (sem_block_ck' envP Γ Hi' bik) (fst blks)
                                                         /\ sem_transitions G Hi' bik (snd blks) (tag, false) (fselect absent (tag) k stres stres1)
                                          ) envP Γ Hik bik (snd scope))
+                                    (fun x => Syn.Is_defined_in x (Bauto Weak ck (ini, oth) states))
+                                    (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                                     envP (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hik bik (snd state)) states ->
           sem_block_ck' envP Γ H bs (Bauto Weak ck (ini, oth) states)
       | SckautoStrong:
@@ -727,8 +737,11 @@ Module Type LCLOCKCORRECTNESS
                     let tag := fst (fst state) in
                     forall k, exists Hik, select_hist tag k stres H Hik
                                 /\ let bik := fselectb tag k stres bs in
-                                  sem_branch (fun scope => sem_transitions G Hik bik (fst scope) (tag, false) (fselect absent (tag) k stres stres1))
-                                             (snd state)
+                                  sem_branch
+                                    (fun scope => sem_transitions G Hik bik (fst scope) (tag, false) (fselect absent (tag) k stres stres1))
+                                    (fun x => Syn.Is_defined_in x (Bauto Strong ck ([], ini) states))
+                                    (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
+                                    Hik (snd state)
                  ) states ->
           Forall (fun state =>
                     let tag := fst (fst state) in
@@ -738,6 +751,8 @@ Module Type LCLOCKCORRECTNESS
                                     (fun Γ scope =>
                                        sem_scope_ck' (fun Γ Hi' blks => Forall (sem_block_ck' envP Γ Hi' bik) (fst blks)
                                          ) envP Γ Hik bik (snd scope))
+                                    (fun x => Syn.Is_defined_in x (Bauto Strong ck ([], ini) states))
+                                    (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                                     envP (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hik bik (snd state)
                  ) states ->
           sem_block_ck' envP Γ H bs (Bauto Strong ck ([], ini) states)
@@ -750,8 +765,8 @@ Module Type LCLOCKCORRECTNESS
 
     Ltac inv_branch :=
       match goal with
-      | H:sem_branch_ck' _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
-      | _ => (Syn.inv_branch || Typ.inv_branch || Clo.inv_branch || Sem.inv_branch)
+      | H:sem_branch_ck' _ _ _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
+      | _ => (Syn.inv_branch || Typ.inv_branch || Clo.inv_branch || Sem.inv_branch || CkSem.inv_branch)
       end.
 
     Ltac inv_scope :=
@@ -785,14 +800,14 @@ Module Type LCLOCKCORRECTNESS
         econstructor; eauto.
         simpl_Forall. specialize (H10 k); destruct_conjs.
         do 2 esplit; eauto.
-        repeat inv_branch. repeat inv_scope.
-        do 2 econstructor; eauto. destruct_conjs; split; simpl_Forall; eauto.
+        repeat inv_branch. econstructor; eauto.
+        repeat inv_scope. econstructor; eauto. destruct_conjs; split; simpl_Forall; eauto.
       - (* automaton (strong) *)
         econstructor; eauto.
         simpl_Forall. specialize (H10 k); destruct_conjs.
         do 2 esplit; eauto.
-        repeat inv_branch. repeat inv_scope.
-        do 2 econstructor; eauto. simpl_Forall; eauto.
+        repeat inv_branch. econstructor; eauto.
+        repeat inv_scope. econstructor; eauto. simpl_Forall; eauto.
       - (* locals *)
         constructor.
         repeat inv_scope; econstructor; eauto.
@@ -818,14 +833,14 @@ Module Type LCLOCKCORRECTNESS
         econstructor; eauto.
         simpl_Forall. specialize (H11 k); destruct_conjs.
         do 2 esplit; eauto.
-        repeat inv_branch. repeat inv_scope.
-        do 2 econstructor; eauto. destruct_conjs; split; simpl_Forall; eauto.
+        repeat inv_branch. econstructor; eauto.
+        repeat inv_scope. econstructor; eauto. destruct_conjs; split; simpl_Forall; eauto.
       - (* automaton (strong) *)
         econstructor; eauto.
         simpl_Forall. specialize (H11 k); destruct_conjs.
         do 2 esplit; eauto.
-        repeat inv_branch. repeat inv_scope.
-        do 2 econstructor; eauto. simpl_Forall; eauto.
+        repeat inv_branch. econstructor; eauto.
+        repeat inv_scope. econstructor; eauto. simpl_Forall; eauto.
       - (* locals *)
         constructor.
         repeat inv_scope. econstructor; eauto.
@@ -854,13 +869,13 @@ Module Type LCLOCKCORRECTNESS
       - (* automaton (weak) *)
         econstructor; eauto.
         simpl_Forall. specialize (H11 k); destruct_conjs.
-        do 2 esplit; eauto. repeat inv_branch; repeat inv_scope. econstructor; [econstructor|]; eauto.
+        do 2 esplit; eauto. repeat inv_branch; repeat inv_scope. econstructor; eauto; [econstructor|]; eauto.
         split; simpl_Forall; eauto.
         1,2:setoid_rewrite <-Hperm; auto.
       - (* automaton (strong) *)
         econstructor; eauto.
         simpl_Forall. specialize (H11 k); destruct_conjs.
-        do 2 esplit; eauto. repeat inv_branch; repeat inv_scope. econstructor; [econstructor|]; eauto.
+        do 2 esplit; eauto. repeat inv_branch; repeat inv_scope. econstructor; eauto; [econstructor|]; eauto.
         simpl_Forall; eauto.
         1,2:setoid_rewrite <-Hperm; auto.
       - (* local *)
@@ -1070,7 +1085,7 @@ Module Type LCLOCKCORRECTNESS
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_scope f_idcaus (Scope locs blks))) ->
         NoDupMembers Γ ->
         NoDupScope P_nd (map fst Γ) (Scope locs blks) ->
-        VarsDefinedScope P_vd (Scope locs blks) xs ->
+        VarsDefinedCompScope P_vd (Scope locs blks) xs ->
         incl xs (map fst Γ) ->
         wt_scope P_wt G Γty (Scope locs blks) ->
         wc_env (idck Γ) ->
@@ -1186,18 +1201,18 @@ Module Type LCLOCKCORRECTNESS
           }
     Qed.
 
-    Lemma sc_branch {A} f_idcaus P_nd P_vd P_wt P_wc (P_blk1 P_blk2 : _ -> _ -> Prop) P_dep :
+    Lemma sc_branch {A} f_idcaus P_nd P_vd P_wt P_wc (P_blk1 P_blk2 : _ -> _ -> Prop) P_dep must_def is_def :
       forall envS caus (blks: A) Γ xs Hi bs cy,
         wc_global G ->
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_branch f_idcaus (Branch caus blks))) ->
         NoDupMembers Γ ->
         NoDupBranch P_nd (Branch caus blks) ->
-        VarsDefinedBranch P_vd (Branch caus blks) xs ->
+        VarsDefinedCompBranch P_vd (Branch caus blks) xs ->
         incl xs (map fst Γ) ->
         wt_branch P_wt (Branch caus blks) ->
         wc_env (idck Γ) ->
         wc_branch P_wc (Branch caus blks) ->
-        sem_branch_ck' P_blk1 envS Γ Hi bs (Branch caus blks) ->
+        sem_branch_ck' P_blk1 must_def is_def envS Γ Hi bs (Branch caus blks) ->
         dom_ub Hi Γ ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
                  depends_on_branch P_dep Γ cy cx (Branch caus blks) -> sc_var_inv Γ Hi bs cx) ->
@@ -1221,7 +1236,7 @@ Module Type LCLOCKCORRECTNESS
          (forall y, In y xs -> HasCaus Γ y cy -> sc_var_inv Γ Hi bs cy)
          /\ P_blk2 Γ blks) ->
         (forall y, In y xs -> HasCaus Γ y cy -> sc_var_inv Γ Hi bs cy)
-        /\ sem_branch_ck' P_blk2 (cy::envS) Γ Hi bs (Branch caus blks).
+        /\ sem_branch_ck' P_blk2 must_def is_def (cy::envS) Γ Hi bs (Branch caus blks).
     Proof.
       intros * HwcG Hnd1 Hnd2 Hnd4 Hvars Hincl Hwt Henv Hwc Hsem Hdom Hsc HenvP Hind;
         inv Hnd4; inv Hvars; inv Hwt; inv Hwc; inv Hsem; simpl in *.
@@ -1237,7 +1252,7 @@ Module Type LCLOCKCORRECTNESS
           apply Hdom. }
       1:{ intros * Hin Hdep. eapply sc_var_inv_branch; eauto.
           - intros. eapply Hsc; eauto. econstructor; solve_Exists.
-          - intros. eapply Forall_forall in H11; eauto.
+          - intros. eapply Forall_forall in H12; eauto.
             eapply HenvP; eauto. rewrite map_app, in_app_iff. left; solve_In.
             econstructor; solve_Exists. }
       1:{ intros * Hin Hdep. eapply HenvP; eauto.
@@ -1250,7 +1265,7 @@ Module Type LCLOCKCORRECTNESS
         + eapply HasCaus_snd_det in Hca; eauto; subst. 2:solve_NoDup_app.
           destruct (InMembers_dec y caus ident_eq_dec).
           * apply fst_InMembers in i; simpl_In.
-            eapply Forall_forall in H11; eauto. eapply HenvP; eauto using DepOnBranch2.
+            eapply Forall_forall in H12; eauto. eapply HenvP; eauto using DepOnBranch2.
             repeat rewrite map_app, in_app_iff. left; solve_In.
           * edestruct Hsc' as (Hsc1&_); eauto using replace_idcaus_HasCaus2.
             eapply Hsc1; eauto using replace_idcaus_HasCaus2.
@@ -1271,7 +1286,7 @@ Module Type LCLOCKCORRECTNESS
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_locals blk)) ->
         NoDupMembers Γ ->
         NoDupLocals (map fst Γ) blk ->
-        VarsDefined blk xs ->
+        VarsDefinedComp blk xs ->
         incl xs (map fst Γ) ->
         wt_block G Γty blk ->
         wc_env (idck Γ) ->
@@ -1299,7 +1314,7 @@ Module Type LCLOCKCORRECTNESS
         eapply nth_error_nth'; eauto.
 
       - (* reset *)
-        assert (forall k, Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ y cy ->
+        assert (forall k, Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ y cy ->
                                                sc_var_inv Γ (mask_hist k r Hi) (maskb k r bs) cy)
                                       /\ sem_block_ck' (cy::envP) Γ (mask_hist k r Hi) (maskb k r bs) blks) blocks) as Hf.
         { intros *. specialize (H15 k). simpl_Forall. inv_VarsDefined.
@@ -1313,7 +1328,7 @@ Module Type LCLOCKCORRECTNESS
             constructor; solve_Exists.
           - split; eauto.
             intros * HDef' Hin' Hca. eapply H1; eauto.
-            eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+            eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
         }
         split.
         + intros * Hinxs Hca.
@@ -1341,6 +1356,8 @@ Module Type LCLOCKCORRECTNESS
                             /\ (forall y, In y xs -> HasCaus (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) y cy -> sc_var_inv (map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ) Hi' (fwhenb k bs sc) cy) /\
                               sem_branch_ck'
                                 (fun Γ => Forall (sem_block_ck' (cy::envP) Γ Hi' (fwhenb k bs sc)))
+                                (fun x => Syn.Is_defined_in x (Bswitch ec branches))
+                                (fun x => List.Exists (Syn.Is_defined_in x))
                                 (cy :: envP) (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' (fwhenb k bs sc) s)
                        branches) as Hf.
         { simpl_Forall. do 2 esplit; eauto.
@@ -1385,7 +1402,7 @@ Module Type LCLOCKCORRECTNESS
             eapply depends_on_incl. 3:econstructor; solve_Exists.
             1,2:intros * Has; inv Has; simpl_In; eauto with senv.
           - intros; simpl in *; simpl_Forall.
-            assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+            assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy ->
                                               sc_var_inv Γ0 x (fwhenb e bs sc) cy)
                                      /\ sem_block_ck' (cy::envP) Γ0 x (fwhenb e bs sc) blks) l0) as Hf.
             { simpl_Forall. inv_VarsDefined.
@@ -1407,7 +1424,7 @@ Module Type LCLOCKCORRECTNESS
                 2:solve_Exists. solve_In.
               - split; eauto.
                 intros * Hdef' Hin' Hca. eapply H23; eauto.
-                eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
             } clear H.
             split.
             + intros * Hinxs Hca. inv_VarsDefined.
@@ -1418,7 +1435,7 @@ Module Type LCLOCKCORRECTNESS
         split.
         + intros * Hinxs Hca1.
           assert (Syn.Is_defined_in y (Bswitch ec branches)) as Hdef.
-          { eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+          { eapply VarsDefinedComp_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. auto. }
           assert (Is_defined_in Γ cy (Bswitch ec branches)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
           eapply sc_var_inv_unwhen with (tn:=tn) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
@@ -1460,15 +1477,7 @@ Module Type LCLOCKCORRECTNESS
           - apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           - split; auto.
-            eapply wc_exp_incl; [| |eauto].
-            + intros * Has. eapply H18 in Has as (Has&?).
-              inv Has. econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
-              auto.
-            + intros * His. eapply H19 in His as His'.
-              inv His; inv His'. edestruct H18 as (Has&?); eauto with senv.
-              inv Has. eapply NoDupMembers_det in H22; eauto; subst.
-              econstructor. solve_In; simpl. rewrite equiv_decb_refl; eauto.
-              simpl; auto.
+            eapply wc_exp_incl; [| |eauto]; eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
           - intros * Hex. simpl_Exists.
             assert (forall x cx, HasCaus (map_filter (fun '(x0, e1) => if clo e1 ==b ck then Some (x0, ann_with_clock e1 Cbase) else None) Γ) x cx -> HasCaus Γ x cx) as Hca.
             { intros * Hca; inv Hca; simpl_In.
@@ -1496,6 +1505,8 @@ Module Type LCLOCKCORRECTNESS
                                            (fun Γ Hi blks => Forall (sem_block_ck' (cy::envP) Γ Hi (fselectb e k stres bs)) (fst blks)
                                                           /\ sem_transitions G Hi (fselectb e k stres bs) (snd blks) (e, false) (fselect absent e k stres stres1))
                                            (cy :: envP) Γ Hi' (fselectb e k stres bs) (snd s))
+                                (fun x => Syn.Is_defined_in x (Bauto Weak ck (ini0, oth) states))
+                                (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                                 (cy :: envP) (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' (fselectb e k stres bs) br)
                        states) as Hf.
         { simpl_Forall. intros. take (forall (k: nat), _) and specialize (it k); destruct_conjs. destruct b as [?(?&[?(?&?)])]; destruct_conjs.
@@ -1559,7 +1570,7 @@ Module Type LCLOCKCORRECTNESS
              - intros. eauto.
              - intros; simpl in *. destruct_conjs.
                rewrite <-and_assoc. split; [|auto].
-               assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+               assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy ->
                                                  sc_var_inv Γ0 Hi0 (fselectb e k stres bs) cy)
                                         /\ sem_block_ck' (cy::envP) Γ0 Hi0 (fselectb e k stres bs) blks) l2) as Hf.
                { simpl_Forall. inv_VarsDefined.
@@ -1572,7 +1583,7 @@ Module Type LCLOCKCORRECTNESS
                    2:solve_Exists. solve_In.
                  - split; eauto.
                    intros * Hdef' Hin' Hca. take (forall (y : ident), In _ _ -> _) and eapply it; eauto.
-                   eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                   eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
                } clear H.
                split.
                + intros * Hinxs Hca. inv_VarsDefined.
@@ -1583,7 +1594,7 @@ Module Type LCLOCKCORRECTNESS
         split.
         + intros * Hinxs Hca1.
           assert (Syn.Is_defined_in y (Bauto Weak ck (ini0, oth) states)) as Hdef.
-          { eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+          { eapply VarsDefinedComp_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. auto. }
           assert (Is_defined_in Γ cy (Bauto Weak ck (ini0, oth) states)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
           eapply sc_var_inv_unselect with (tn:=List.length states) (sc:=stres) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
@@ -1619,7 +1630,7 @@ Module Type LCLOCKCORRECTNESS
           esplit; split; [|split]; eauto.
           1:{ intros ? Hca.
               eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
-              repeat inv_branch. destruct s. take (VarsDefinedScope _ _ _) and eapply sem_scope_defined2 in it; eauto.
+              repeat inv_branch. destruct s. take (VarsDefinedCompScope _ _ _) and eapply sem_scope_defined2 in it; eauto.
               take (sem_scope_ck' _ _ _ _ _ _) and inv it; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
           }
           take (forall (y : ident), _ -> _ -> _) and eapply it; eauto. inv Hca1; econstructor; solve_In. auto.
@@ -1644,6 +1655,8 @@ Module Type LCLOCKCORRECTNESS
                                 (fun Γ s => sem_scope_ck'
                                            (fun Γ Hi blks => Forall (sem_block_ck' (cy::envP) Γ Hi (fselectb e k stres1 bs)) (fst blks))
                                            (cy :: envP) Γ Hi' (fselectb e k stres1 bs) (snd s))
+                                (fun x => Syn.Is_defined_in x (Bauto Strong ck ([], oth) states))
+                                (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                                 (cy :: envP) (map (fun '(x, a) => (x, ann_with_clock a Cbase)) Γ) Hi' (fselectb e k stres1 bs) br)
                        states) as Hf.
         { simpl_Forall. intros. specialize (H25 k); destruct_conjs. destruct b as [?(?&[?(?&?)])]; destruct_conjs.
@@ -1706,7 +1719,7 @@ Module Type LCLOCKCORRECTNESS
                  destruct_conjs; split; eauto; simpl_Forall; eauto using wc_block_incl, wc_exp_incl.
              - intros. eauto.
              - intros; simpl in *. destruct_conjs.
-               assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+               assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy ->
                                                  sc_var_inv Γ0 Hi0 (fselectb e k stres1 bs) cy)
                                         /\ sem_block_ck' (cy::envP) Γ0 Hi0 (fselectb e k stres1 bs) blks) l2) as Hf.
                { simpl_Forall. inv_VarsDefined.
@@ -1719,7 +1732,7 @@ Module Type LCLOCKCORRECTNESS
                    2:solve_Exists. solve_In.
                  - split; eauto.
                    intros * Hdef' Hin' Hca. take (forall (y : ident), In _ _ -> _) and eapply it; eauto.
-                   eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                   eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
                } clear H.
                split.
                + intros * Hinxs Hca. inv_VarsDefined.
@@ -1730,7 +1743,7 @@ Module Type LCLOCKCORRECTNESS
         split.
         + intros * Hinxs Hca1.
           assert (Syn.Is_defined_in y (Bauto Strong ck ([], oth) states)) as Hdef.
-          { eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+          { eapply VarsDefinedComp_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. auto. }
           assert (Is_defined_in Γ cy (Bauto Strong ck ([], oth) states)) as Hdef' by (eauto using Is_defined_in_Is_defined_in).
           eapply sc_var_inv_unselect with (tn:=List.length states) (sc:=stres1) (Γ':=map (fun '(x, e) => (x, ann_with_clock e Cbase)) Γ); eauto.
@@ -1765,7 +1778,7 @@ Module Type LCLOCKCORRECTNESS
           esplit; split; [|split]; eauto.
           1:{ intros ? Hca.
               eapply HasCaus_snd_det in Hca1; eauto; [|simpl_app; eauto using NoDup_app_l]; subst.
-              repeat inv_branch. destruct s. take (VarsDefinedScope _ _ _) and eapply sem_scope_defined2 in it; eauto.
+              repeat inv_branch. destruct s. take (VarsDefinedCompScope _ _ _) and eapply sem_scope_defined2 in it; eauto.
               take (sem_scope_ck' _ _ _ _ _ _) and inv it; econstructor; eauto; simpl_Forall; eauto using sem_block_ck'_sem_block.
           }
           eapply H0; eauto. inv Hca1; econstructor; solve_In. auto.
@@ -1776,7 +1789,7 @@ Module Type LCLOCKCORRECTNESS
         eapply sc_scope in H8 as (?&?); eauto with lcaus.
         + split; eauto. constructor; eauto.
         + intros.
-          assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy -> sc_var_inv Γ0 Hi0 bs cy)
+          assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy -> sc_var_inv Γ0 Hi0 bs cy)
                                      /\ sem_block_ck' (cy::envP) Γ0 Hi0 bs blks) blocks) as Hf.
             { simpl_Forall. inv_VarsDefined.
               edestruct H with (xs:=xs1). 10:eauto. all:eauto.
@@ -1788,7 +1801,7 @@ Module Type LCLOCKCORRECTNESS
                 2:solve_Exists. solve_In.
               - split; eauto.
                 intros * Hdef' Hin' Hca. eapply H7; eauto.
-                eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
             }
             split; simpl_Forall; eauto.
             intros * Hin Hca. destruct_conjs. rewrite <-H17 in Hin. apply in_concat in Hin as (?&?&?).
@@ -1824,7 +1837,7 @@ Module Type LCLOCKCORRECTNESS
         eapply sem_block_ck'_Perm; eauto.
       - split; auto. apply sem_block_sem_block_ck'; auto.
       - intros ?? Hin (Hvars&Hlocs) Hdep.
-        pose proof (n_defd n) as (?&Hdef&Hperm).
+        pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hdef Hperm].
         pose proof (n_nodup n) as (Hnd1&Hnd2).
         destruct Hcau as (Hnd&_).
         eapply sc_block in Hlocs as (Hsc&?); eauto using node_NoDupMembers, node_NoDupLocals, dom_dom_ub.
@@ -1871,7 +1884,7 @@ Module Type LCLOCKCORRECTNESS
           * apply in_app_iff in H1 as [In|In]; [simpl_In; congruence|right; right; solve_In; auto].
     Qed.
 
-    Lemma sem_node_restrict {prefs2} : forall (n : @node PSyn prefs2) H b xs ys,
+    Lemma sem_node_restrict {prefs2} : forall (n : @node complete prefs2) H b xs ys,
         let Γ := senv_of_ins (n_in n) ++ senv_of_decls (n_out n) in
         Forall (fun '(_, (_, ck, _, o)) => LiftO True (fun '(e, _) => wc_exp G Γ e /\ clockof e = [ck]) o) (n_out n) ->
         wc_block G Γ (n_block n) ->
@@ -1887,6 +1900,8 @@ Module Type LCLOCKCORRECTNESS
         Sem.sem_block G H' b (n_block n).
     Proof with eauto.
       intros * WcL WcBlk Hins Houts Last Blk ?; subst Γ.
+      pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Vars Perm].
+      pose proof (n_nodup n) as (_&Nd2).
       split; [|repeat split].
       - subst H'. unfold restrict, dom.
         split; intros; rewrite FEnv.restrict_In; [rewrite vars_of_senv_Var|rewrite vars_of_senv_Last];
@@ -1911,6 +1926,7 @@ Module Type LCLOCKCORRECTNESS
         + eapply sem_var_restrict; eauto.
           apply vars_of_senv_Last, IsLast_app. right. econstructor. solve_In. simpl. congruence.
       - subst. unfold idents. eapply Sem.sem_block_restrict in Blk; eauto with lclocking.
+        eapply NoDupLocals_incl; [|eauto]. rewrite Perm. solve_incl_app.
     Qed.
 
     Lemma sc_var_inv_intro {prefs2} : forall (n : @node PSyn prefs2) H xs,
@@ -2070,7 +2086,7 @@ Module Type LCLOCKCORRECTNESS
   Section sem_ck.
     Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
-    Variable (G : @global PSyn prefs).
+    Variable (G : @global complete prefs).
 
     Hypothesis HwcG : wc_global G.
 
@@ -2111,7 +2127,7 @@ Module Type LCLOCKCORRECTNESS
         specialize (H26 k). inv H26. rewrite H15 in H3; inv H3.
         repeat (esplit; eauto).
         eapply sc_inside_mask with (es:=es); eauto.
-        + eapply sem_exps_sem_var; eauto.
+        + eapply Sem.sem_exps_sem_var; eauto with lclocking.
         + eapply wc_find_node in HwcG as (?&Hwcn); eauto. now inv Hwcn.
         + eapply sc_exps'' with (Γ:=Γ); eauto.
     Qed.
@@ -2139,7 +2155,7 @@ Module Type LCLOCKCORRECTNESS
           specialize (H28 k). inv H28. rewrite H1 in H17; inv H17. rewrite H1 in H8; inv H8.
           repeat (esplit; eauto).
           eapply sc_inside_mask with (es:=es0); eauto.
-          * eapply sem_exps_sem_var; eauto.
+          * eapply Sem.sem_exps_sem_var; eauto with lclocking.
           * eapply wc_find_node in HwcG as (?&Hwcn); eauto. now inv Hwcn.
           * eapply sc_exps'' with (Γ:=Γ); eauto.
       - (* general case *)
@@ -2272,7 +2288,7 @@ Module Type LCLOCKCORRECTNESS
           eapply wc_clock_incl; [|eauto]. solve_incl_app.
     Qed.
 
-    Lemma sem_branch_sem_branch_ck {A} f_idcaus P_nd P_wt P_wc P_blk1 (P_blk2: _ -> Prop) :
+    Lemma sem_branch_sem_branch_ck {A} f_idcaus P_nd P_wt P_wc P_blk1 (P_blk2: _ -> Prop) must_def is_def :
       forall envP caus (blk: A) Γty Γck Γ' Hi bs,
         NoDupMembers Γty ->
         NoDupMembers Γck ->
@@ -2286,7 +2302,7 @@ Module Type LCLOCKCORRECTNESS
         wc_env (idck Γck) ->
         Forall (fun '(_, a) => wc_clock (idck Γck) (clo a)) Γ' ->
         wc_branch P_wc (Branch caus blk) ->
-        sem_branch_ck' P_blk1 envP Γ' Hi bs (Branch caus blk) ->
+        sem_branch_ck' P_blk1 must_def is_def envP Γ' Hi bs (Branch caus blk) ->
         (forall Γ',
             NoDup (map snd (idcaus_of_senv Γck ++ f_idcaus blk)) ->
             P_nd blk ->
@@ -2299,7 +2315,7 @@ Module Type LCLOCKCORRECTNESS
             P_wc blk ->
             P_blk1 Γ' blk ->
             P_blk2 blk) ->
-        sem_branch P_blk2 (Branch caus blk).
+        sem_branch_ck P_blk2 (Branch caus blk).
     Proof.
       intros * Hnd1 Hnd2 Hnd3 Hnd4 Hincl1 HenvP Hdom Hsc Hwt Hwenv Hwenv' Hwc Hsem Hind;
         inv Hnd4; inv Hwt; inv Hwc; inv Hsem.
@@ -2315,34 +2331,6 @@ Module Type LCLOCKCORRECTNESS
     Local Ltac simpl_ndup Hnd :=
       simpl in *;
       try rewrite app_nil_r in Hnd; repeat rewrite map_app.
-
-    Fact map_filter_HasClock : forall Γ Γ' ck,
-        (forall x ck', HasClock Γ' x ck' -> HasClock Γ x ck /\ ck' = Cbase) ->
-        forall x ck',
-          HasClock Γ' x ck' ->
-          HasClock (map_filter (fun '(x0, e0) => if clo e0 ==b ck then Some (x0, ann_with_clock e0 Cbase) else None) Γ) x ck'.
-    Proof.
-      intros * Hclocks * Hck.
-      eapply Hclocks in Hck as (Hck&?); subst.
-      inv Hck. econstructor. solve_In; simpl. rewrite equiv_decb_refl. eauto.
-      auto.
-    Qed.
-
-    Fact map_filter_IsLast : forall Γ Γ' ck,
-        NoDupMembers Γ ->
-        (forall x ck', HasClock Γ' x ck' -> HasClock Γ x ck /\ ck' = Cbase) ->
-        (forall x, IsLast Γ' x -> IsLast Γ x) ->
-        forall x,
-          IsLast Γ' x ->
-          IsLast (map_filter (fun '(x0, e0) => if clo e0 ==b ck then Some (x0, ann_with_clock e0 Cbase) else None) Γ) x.
-    Proof.
-      intros * Hnd Hclocks Hlasts * Hl.
-      specialize (Hlasts _ Hl). inv Hlasts. inv Hl.
-      edestruct Hclocks as (Hck&?); eauto with senv. inv Hck.
-      econstructor. solve_In; simpl. rewrite equiv_decb_refl. eauto.
-      eapply NoDupMembers_det in H; eauto; subst.
-      unfold ann_with_clock; simpl. auto.
-    Qed.
 
     Lemma sem_block_sem_block_ck : forall envP blk Γty Γck Γ' Hi bs,
         NoDupMembers Γty ->
@@ -2433,7 +2421,7 @@ Module Type LCLOCKCORRECTNESS
             - apply NoDupMembers_map_filter; auto. intros; cases; simpl; auto.
             - etransitivity; eauto. rewrite 2 map_app. apply incl_appr'. intros ??; solve_In.
             - split; intros ? In; eapply FEnv.In_refines, Hdom in In; eauto.
-            - eapply wc_block_incl. 3:eauto. 1,2:eauto using map_filter_HasClock, map_filter_IsLast.
+            - eapply wc_block_incl. 3:eauto. 1,2:eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
           }
 
       - (* automaton (weak) *)
@@ -2453,7 +2441,7 @@ Module Type LCLOCKCORRECTNESS
           - apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           - split; auto.
-            eapply wc_exp_incl; [| |eauto]; eauto using map_filter_HasClock, map_filter_IsLast.
+            eapply wc_exp_incl; [| |eauto]; eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
         }
         assert (incl (map fst Γck) (map fst Γty)) as Hincl'.
         { intros ? Hv. simpl_In. assert (HasType Γck a a0.(typ)) as Hty by eauto with senv.
@@ -2464,7 +2452,7 @@ Module Type LCLOCKCORRECTNESS
           * apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
           * rewrite map_app in Hnd5. apply idcaus_of_senv_when_NoDup; eauto using NoDup_app_l.
-          * eapply wc_exp_incl; [| |eauto]; eauto using map_filter_HasClock, map_filter_IsLast.
+          * eapply wc_exp_incl; [| |eauto]; eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
         + simpl_Forall. take (forall k, _) and specialize (it k); destruct_conjs.
           do 2 esplit; eauto. destruct b as [?(?&[?(?&?)])].
           eapply sem_branch_sem_branch_ck
@@ -2511,7 +2499,7 @@ Module Type LCLOCKCORRECTNESS
              - split; intros ? In; eapply FEnv.In_refines, Hdom in In; eauto.
              - eapply wc_scope_incl. 3:eauto.
                3:intros; destruct_conjs; split; simpl_Forall; eauto using wc_exp_incl, wc_block_incl.
-               1,2:eauto using map_filter_HasClock, map_filter_IsLast.
+               1,2:eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
              - intros; simpl in *; destruct_conjs; split.
                + simpl_Forall. inv_VarsDefined.
                  eapply H with (Γty:=Γty0); eauto using NoDup_locals_inv.
@@ -2544,7 +2532,7 @@ Module Type LCLOCKCORRECTNESS
         econstructor; eauto.
         + simpl_Forall. specialize (H22 k); destruct_conjs.
           do 2 esplit; eauto.
-          repeat (Syn.inv_branch || Clo.inv_branch || Typ.inv_branch || inv_branch).
+          repeat (Syn.inv_branch || Clo.inv_branch || Typ.inv_branch || Sem.inv_branch || inv_branch).
           econstructor. eapply sem_transitions_sem_transitions_ck with (Γ:=map_filter (fun '(x, e) => if e.(clo) ==b ck then Some (x, ann_with_clock e Cbase) else None) Γck); eauto.
           * apply NoDupMembers_map_filter; auto.
             intros; destruct (_ ==b _); simpl; auto.
@@ -2558,7 +2546,7 @@ Module Type LCLOCKCORRECTNESS
                eauto with senv.
           * simpl_Forall; eauto.
           * simpl_Forall. eapply wc_exp_incl. 3:eauto.
-            1,2:eauto using map_filter_HasClock, map_filter_IsLast.
+            1,2:eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
         + simpl_Forall. specialize (H23 k); destruct_conjs.
           do 2 esplit; eauto. destruct b as [?(?&[?(?&?)])].
           eapply sem_branch_sem_branch_ck
@@ -2605,7 +2593,7 @@ Module Type LCLOCKCORRECTNESS
              - split; intros ? In; eapply FEnv.In_refines, Hdom in In; eauto.
              - eapply wc_scope_incl. 3:eauto.
                3:intros; destruct_conjs; split; simpl_Forall; eauto using wc_exp_incl, wc_block_incl.
-               1,2:eauto using map_filter_HasClock, map_filter_IsLast.
+               1,2:eauto using map_filter_clo_HasClock1, map_filter_clo_IsLast1.
              - intros; simpl in *.
                simpl_Forall. inv_VarsDefined.
                eapply H with (Γty:=Γty0); eauto using NoDup_locals_inv.
@@ -2625,8 +2613,8 @@ Module Type LCLOCKCORRECTNESS
 
   End sem_ck.
 
-  Theorem sem_node_sem_node_ck {PSyn prefs} :
-    forall (G : @global PSyn prefs),
+  Theorem sem_node_sem_node_ck {prefs} :
+    forall (G : @global complete prefs),
       wt_global G ->
       wc_global G ->
       Forall node_causal (nodes G) ->

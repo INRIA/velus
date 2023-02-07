@@ -1368,9 +1368,8 @@ Module Type LSEMDETERMINISM
   Qed.
 
   Section sem_block_det.
-    Context {PSyn : list decl -> block -> Prop}.
     Context {prefs : PS.t}.
-    Variable (G: @global PSyn prefs).
+    Variable (G: @global complete prefs).
 
     Section sem_scope.
 
@@ -1401,19 +1400,26 @@ Module Type LSEMDETERMINISM
 
       Variable sem_block : A -> Prop.
 
+      Variable must_def : ident -> Prop.
+      Variable is_def : ident -> A -> Prop.
+
       Inductive sem_branch_det (n : nat) (envS : list ident) : history -> history -> branch A -> Prop :=
       | Sbranch : forall Hi1 Hi2 caus blks,
           sem_block blks ->
+          (forall x, must_def x -> ~is_def x blks -> exists vs, sem_var Hi1 (Last x) vs /\ sem_var Hi1 (Var x) vs) ->
+          (forall x, must_def x -> ~is_def x blks -> exists vs, sem_var Hi2 (Last x) vs /\ sem_var Hi2 (Var x) vs) ->
 
           Forall (fun '(x, _) => forall vs1 vs2, sem_var Hi1 (Var x) vs1 -> sem_var Hi2 (Var x) vs2 -> EqStN n vs1 vs2) caus ->
           Forall (fun '(x, cx) => In cx envS -> forall vs1 vs2, sem_var Hi1 (Var x) vs1 -> sem_var Hi2 (Var x) vs2 -> EqStN (S n) vs1 vs2) caus ->
           sem_branch_det n envS Hi1 Hi2 (Branch caus blks).
 
       (* Use for strong transitions *)
-      Inductive sem_branch_det' : branch A -> Prop :=
-      | Sbranch' : forall caus blks,
+      Inductive sem_branch_det' : history -> history -> branch A -> Prop :=
+      | Sbranch' : forall Hi1 Hi2 caus blks,
           sem_block blks ->
-          sem_branch_det' (Branch caus blks).
+          (forall x, must_def x -> ~is_def x blks -> exists vs, sem_var Hi1 (Last x) vs /\ sem_var Hi1 (Var x) vs) ->
+          (forall x, must_def x -> ~is_def x blks -> exists vs, sem_var Hi2 (Last x) vs /\ sem_var Hi2 (Var x) vs) ->
+          sem_branch_det' Hi1 Hi2 (Branch caus blks).
     End sem_branch.
 
     Inductive sem_block_det (n : nat) (envS : list ident) : history -> history -> Stream bool -> Stream bool -> block -> Prop :=
@@ -1441,6 +1447,8 @@ Module Type LSEMDETERMINISM
                     /\ let bi1 := fwhenb (fst blks) bs1 sc1 in
                       let bi2 := fwhenb (fst blks) bs2 sc2 in
                       sem_branch_det (Forall (sem_block_det n envS Hi1' Hi2' bi1 bi2))
+                        (fun x => Syn.Is_defined_in x (Bswitch ec branches))
+                        (fun x => List.Exists (Syn.Is_defined_in x))
                         n envS Hi1' Hi2' (snd blks)) branches ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bswitch ec branches)
 
@@ -1467,6 +1475,8 @@ Module Type LSEMDETERMINISM
                                             /\ sem_transitions G Hi1 bik1 (snd blks) (tag, false) (fselect absent tag k stres1 stres11)
                                             /\ sem_transitions G Hi2 bik2 (snd blks) (tag, false) (fselect absent tag k stres2 stres12))
                              n envS Hik1 Hik2 bik1 bik2 (snd blks))
+                        (fun x => Syn.Is_defined_in x (Bauto Weak ck (ini, oth) states))
+                        (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                         n envS Hik1 Hik2 (snd state)) states ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bauto Weak ck (ini, oth) states)
 
@@ -1486,8 +1496,10 @@ Module Type LSEMDETERMINISM
                       sem_branch_det'
                         (fun blks =>
                            sem_transitions G Hik1 bik1 (fst blks) (tag, false) (fselect absent (tag) k stres1 stres11)
-                           /\ sem_transitions G Hik2 bik2 (fst blks) (tag, false) (fselect absent (tag) k stres2 stres12)
-                        ) (snd state)) states ->
+                           /\ sem_transitions G Hik2 bik2 (fst blks) (tag, false) (fselect absent (tag) k stres2 stres12))
+                        (fun x => Syn.Is_defined_in x (Bauto Strong ck ([], ini) states))
+                        (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
+                        Hik1 Hik2 (snd state)) states ->
         EqStN n stres11 stres12 ->
         Forall (fun state =>
                   let tag := fst (fst state) in
@@ -1500,6 +1512,8 @@ Module Type LSEMDETERMINISM
                         (fun blks =>
                            sem_scope_det (fun Hi1 Hi2 blks => Forall (sem_block_det n envS Hi1 Hi2 bik1 bik2) (fst blks))
                              n envS Hik1 Hik2 bik1 bik2 (snd blks))
+                        (fun x => Syn.Is_defined_in x (Bauto Strong ck ([], ini) states))
+                        (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                         n envS Hik1 Hik2 (snd state)) states ->
         sem_block_det n envS Hi1 Hi2 bs1 bs2 (Bauto Strong ck ([], ini) states)
 
@@ -1509,8 +1523,8 @@ Module Type LSEMDETERMINISM
 
     Ltac inv_branch :=
       match goal with
-      | H:sem_branch_det _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
-      | H:sem_branch_det' _ _ |- _ => inv H; destruct_conjs; subst
+      | H:sem_branch_det _ _ _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
+      | H:sem_branch_det' _ _ _ _ _ _ |- _ => inv H; destruct_conjs; subst
       | _ => (Syn.inv_branch || Typ.inv_branch || Sem.inv_branch)
       end.
 
@@ -1540,12 +1554,12 @@ Module Type LSEMDETERMINISM
       - now exfalso.
     Qed.
 
-    Lemma sem_branch_det_0 {A} P_blk1 P_blk2 (P_blk3: _ -> Prop) :
+    Lemma sem_branch_det_0 {A} must_def is_def P_blk1 P_blk2 (P_blk3: _ -> Prop) :
       forall caus (blks: A) Hi1 Hi2,
-        sem_branch P_blk1 (Branch caus blks) ->
-        sem_branch P_blk2 (Branch caus blks) ->
+        sem_branch P_blk1 must_def is_def Hi1 (Branch caus blks) ->
+        sem_branch P_blk2 must_def is_def Hi2 (Branch caus blks) ->
         (P_blk1 blks -> P_blk2 blks -> P_blk3 blks) ->
-        sem_branch_det P_blk3 0 [] Hi1 Hi2 (Branch caus blks).
+        sem_branch_det P_blk3 must_def is_def 0 [] Hi1 Hi2 (Branch caus blks).
     Proof.
       intros * Hsem1 Hsem2 Hblk. repeat inv_branch.
       econstructor; eauto. all:simpl_Forall; eauto using EqSt0.
@@ -1569,13 +1583,13 @@ Module Type LSEMDETERMINISM
       - (* switch *)
         econstructor; eauto. simpl_Forall. destruct b.
         do 2 esplit. split; [|split]; eauto.
-        eapply sem_branch_det_0; [apply H4|apply H7|].
+        eapply sem_branch_det_0; eauto.
         intros; simpl_Forall; eauto.
       - (* automaton (weak) *)
         econstructor; eauto. apply EqSt0.
         simpl_Forall. specialize (H10 k). specialize (H14 k). destruct b; destruct_conjs.
         do 2 esplit. split; [|split]; eauto.
-        eapply sem_branch_det_0; [apply H4|apply H3|]; intros; destruct s; destruct_conjs.
+        eapply sem_branch_det_0; eauto; intros; destruct s; destruct_conjs.
         eapply sem_scope_det_0; eauto.
         intros; destruct_conjs. split; [|split]; eauto.
         simpl_Forall; eauto.
@@ -1586,7 +1600,7 @@ Module Type LSEMDETERMINISM
           repeat inv_branch. econstructor; eauto.
         + specialize (H13 k). specialize (H10 k). destruct b; destruct_conjs.
           do 2 esplit. split; [|split]; eauto.
-          eapply sem_branch_det_0; [apply H5|apply H3|]. intros; destruct_conjs.
+          eapply sem_branch_det_0; eauto. intros; destruct_conjs.
           destruct s; destruct_conjs. eapply sem_scope_det_0; eauto.
           intros; simpl_Forall; eauto.
       - (* locals *)
@@ -1629,28 +1643,28 @@ Module Type LSEMDETERMINISM
       - simpl_Forall. now exfalso.
     Qed.
 
-    Lemma det_branch_S {A} P_nd P_wt f_idcaus P_blk1 (P_blk2: _ -> Prop) :
+    Lemma det_branch_S {A} P_nd P_wt f_idcaus P_blk1 (P_blk2: _ -> Prop) must_def is_def :
       forall Γ n envS locs (blks: A) Hi1 Hi2,
         det_nodes G ->
         NoDupBranch P_nd (Branch locs blks) ->
         wt_branch P_wt (Branch locs blks) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         incl (map snd (idcaus_of_branch f_idcaus (Branch locs blks))) envS ->
-        sem_branch_det P_blk1 n envS Hi1 Hi2 (Branch locs blks) ->
+        sem_branch_det P_blk1 must_def is_def n envS Hi1 Hi2 (Branch locs blks) ->
         (P_nd blks ->
          P_wt blks ->
          (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
          incl (map snd (f_idcaus blks)) envS ->
          P_blk1 blks ->
          P_blk2 blks) ->
-        sem_branch_det P_blk2 (S n) [] Hi1 Hi2 (Branch locs blks).
+        sem_branch_det P_blk2 must_def is_def (S n) [] Hi1 Hi2 (Branch locs blks).
     Proof.
       intros * Hdet Hndl Hwt (* Hdoml1 Hdoml2  *)Hsc Hincl Hsem Hind; repeat inv_branch; simpl in *.
-      econstructor.
+      econstructor; eauto.
       - eapply Hind; eauto.
         + etransitivity. 2:eapply Hincl.
           intros ??. rewrite map_app, in_app_iff; auto.
-      - simpl_Forall. eapply H5, Hincl; eauto.
+      - simpl_Forall. eapply H7, Hincl; eauto.
         repeat rewrite map_app, in_app_iff in *. left; solve_In.
       - simpl_Forall. intros. now exfalso.
     Qed.
@@ -1886,7 +1900,7 @@ Module Type LSEMDETERMINISM
         constructor. inv H5. econstructor; eauto. simpl_Forall; eauto.
     Qed.
 
-    Hint Resolve sem_block_det_sem_block1 sem_block_det_sem_block2 : ldet.
+    (* Hint Resolve sem_block_det_sem_block1 sem_block_det_sem_block2 : ldet. *)
 
     Lemma det_var_inv_incl : forall Γ Γ' n Hi1 Hi2 x,
         incl Γ Γ' ->
@@ -1915,14 +1929,14 @@ Module Type LSEMDETERMINISM
       - (* switch *)
         econstructor; eauto. simpl_Forall.
         do 2 esplit. split; [|split]; eauto.
-        repeat inv_branch. econstructor.
-        1-3:simpl_Forall; eauto.
+        repeat inv_branch. econstructor; eauto.
+        1-2:simpl_Forall; eauto.
         + rewrite <-Hperm; auto.
       - (* automaton (weak) *)
         econstructor; eauto. simpl_Forall. specialize (H15 k); destruct_conjs.
         do 2 esplit. repeat (split; eauto).
-        repeat inv_branch. repeat inv_scope. econstructor; [econstructor| |].
-        5,6:eauto. all:simpl_Forall; eauto.
+        repeat inv_branch. repeat inv_scope. econstructor. econstructor. 5,6:eauto.
+        all:simpl_Forall; eauto.
         + repeat split; simpl_Forall; eauto.
         + take (In _ ys) and rewrite <-Hperm in it; auto.
         + rewrite <-Hperm; auto.
@@ -1930,8 +1944,8 @@ Module Type LSEMDETERMINISM
         econstructor; eauto.
         + simpl_Forall. specialize (H14 k); destruct_conjs.
           do 2 esplit. repeat (split; eauto).
-          repeat inv_branch. repeat inv_scope. econstructor; [econstructor| |].
-          5,6:eauto. all:simpl_Forall; eauto.
+          repeat inv_branch. repeat inv_scope. constructor. econstructor. 5,6:eauto.
+          all:simpl_Forall; eauto.
           * take (In _ ys) and rewrite <-Hperm in it; auto.
           * rewrite <-Hperm; auto.
       - (* local *)
@@ -1947,7 +1961,7 @@ Module Type LSEMDETERMINISM
         NoDupMembers Γ ->
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_scope f_idcaus (Scope locs blks))) ->
         NoDupScope P_nd (map fst Γ) (Scope locs blks) ->
-        VarsDefinedScope P_vd (Scope locs blks) xs ->
+        VarsDefinedCompScope P_vd (Scope locs blks) xs ->
         incl xs (map fst Γ) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
         wt_scope P_wt G Γ (Scope locs blks) ->
@@ -2058,17 +2072,17 @@ Module Type LSEMDETERMINISM
             rewrite HasCaus_app. right. econstructor; solve_In. simpl; eauto.
     Qed.
 
-    Lemma det_branch_cons {A} f_idcaus P_nd P_vd P_wt (P_blk1 P_blk2 : _ -> Prop) P_dep :
+    Lemma det_branch_cons {A} f_idcaus P_nd P_vd P_wt (P_blk1 P_blk2 : _ -> Prop) P_dep must_def is_def :
       forall n envS caus (blks: A) Γ xs Hi1 Hi2 cy,
         det_nodes G ->
         NoDupMembers Γ ->
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_branch f_idcaus (Branch caus blks))) ->
         NoDupBranch P_nd (Branch caus blks) ->
-        VarsDefinedBranch P_vd (Branch caus blks) xs ->
+        VarsDefinedCompBranch P_vd (Branch caus blks) xs ->
         incl xs (map fst Γ) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
         wt_branch P_wt (Branch caus blks) ->
-        sem_branch_det P_blk1 n envS Hi1 Hi2 (Branch caus blks) ->
+        sem_branch_det P_blk1 must_def is_def n envS Hi1 Hi2 (Branch caus blks) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
                  depends_on_branch P_dep Γ cy cx (Branch caus blks) -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
         (forall cx, In cx (map snd (idcaus_of_branch f_idcaus (Branch caus blks))) ->
@@ -2089,7 +2103,7 @@ Module Type LSEMDETERMINISM
          (forall y, In y xs -> HasCaus Γ y cy -> det_var_inv Γ (S n) Hi1 Hi2 cy)
          /\ P_blk2 blks) ->
         (forall y, In y xs -> HasCaus Γ y cy -> det_var_inv Γ (S n) Hi1 Hi2 cy)
-        /\ sem_branch_det P_blk2 n (cy::envS) Hi1 Hi2 (Branch caus blks).
+        /\ sem_branch_det P_blk2 must_def is_def n (cy::envS) Hi1 Hi2 (Branch caus blks).
     Proof.
       intros * HdetG Hnd1 Hnd Hnd2 Hvars Hincl Hn Hwt Hsem HSn HenvS Hind;
         inv Hnd2; inv Hvars; inv Hwt; inv Hsem; simpl in *.
@@ -2102,7 +2116,7 @@ Module Type LSEMDETERMINISM
       1:{ intros * _ Hdep. eapply det_var_inv_branch; eauto.
           + intros. eapply HSn; eauto.
             econstructor; eauto.
-          + intros * Hin. simpl_Forall. eapply H10, HenvS.
+          + intros * Hin. simpl_Forall. eapply H12, HenvS.
             * rewrite map_app, in_app_iff. left. solve_In.
             * econstructor; eauto. }
       1:{ intros * Hin Hdep. apply HenvS.
@@ -2114,7 +2128,7 @@ Module Type LSEMDETERMINISM
         + split.
           2:{ intros; exfalso. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app. }
           intros * Hcaus Hv1 Hv2. simpl_Forall. eapply HasCaus_snd_det in Hinenv; eauto; subst. 2:solve_NoDup_app.
-          eapply H10; eauto. apply HenvS; eauto with lcaus.
+          eapply H12; eauto. apply HenvS; eauto with lcaus.
           repeat rewrite map_app, in_app_iff. left; solve_In.
         + split; intros Hin3 Hv1 Hv2.
           * eapply HasCaus_snd_det in Hinenv; eauto; subst. 2:solve_NoDup_app.
@@ -2136,7 +2150,7 @@ Module Type LSEMDETERMINISM
         NoDupMembers Γ ->
         NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_locals blk)) ->
         NoDupLocals (map fst Γ) blk ->
-        VarsDefined blk xs ->
+        VarsDefinedComp blk xs ->
         incl xs (map fst Γ) ->
         (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
         wt_block G Γ blk ->
@@ -2184,7 +2198,7 @@ Module Type LSEMDETERMINISM
           - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
             eapply HSn, DepOnReset2; eauto.
         }
-        assert (forall k, Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ y cy ->
+        assert (forall k, Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ y cy ->
                                                det_var_inv Γ (S n) (mask_hist k r1 Hi1) (mask_hist k r2 Hi2) cy)
                                       /\ sem_block_det n (cy::envS) (mask_hist k r1 Hi1) (mask_hist k r2 Hi2) (maskb k r1 bs1) (maskb k r2 bs2) blks) blocks) as Hf.
         { intros *. specialize (H15 k). simpl_Forall. inv_VarsDefined.
@@ -2203,14 +2217,14 @@ Module Type LSEMDETERMINISM
             2:constructor; solve_Exists. solve_In.
           - split; eauto.
             intros * Hdef' Hin' Hca. eapply H1; eauto.
-            eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+            eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
         } clear H.
         split.
         + intros * Hinxs Hca.
           apply in_concat in Hinxs as (?&Hin1&Hin2). inv_VarsDefined. simpl_Forall.
           eapply det_var_inv_unmask; intros.
           * eapply HSr; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
-            constructor; solve_Exists. eapply VarsDefined_Is_defined; eauto.
+            constructor; solve_Exists. eapply VarsDefinedComp_Is_defined; eauto.
             eapply NoDupLocals_incl; [|eauto]. etransitivity; eauto using incl_concat.
           * specialize (Hf k). simpl_Forall; eauto.
         + econstructor; eauto.
@@ -2232,6 +2246,8 @@ Module Type LSEMDETERMINISM
                             /\ (forall y, In y xs -> HasCaus Γ y cy -> det_var_inv Γ (S n) Hi1' Hi2' cy) /\
                               sem_branch_det
                                 (Forall (sem_block_det n (cy::envS) Hi1' Hi2' (fwhenb k bs1 sc1) (fwhenb k bs2 sc2)))
+                                (fun x : ident => Syn.Is_defined_in x (Bswitch ec branches))
+                                (fun x : ident => Exists (Syn.Is_defined_in x))
                                 n (cy :: envS) Hi1' Hi2' s)
                        branches) as Hf.
         { simpl_Forall. destruct b. do 2 esplit; eauto. split; [|split]; eauto.
@@ -2244,7 +2260,7 @@ Module Type LSEMDETERMINISM
           - intros * Hin' Hdep. eapply HenvS; eauto.
             2:constructor; solve_Exists. solve_In.
           - intros; simpl in *. destruct_conjs.
-            assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+            assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy ->
                                               det_var_inv Γ0 (S n) x x0 cy)
                                      /\ sem_block_det n (cy::envS) x x0 (fwhenb e bs1 sc1) (fwhenb e bs2 sc2) blks) l0) as Hf.
             { simpl_Forall. inv_VarsDefined.
@@ -2262,7 +2278,7 @@ Module Type LSEMDETERMINISM
                 2:solve_Exists. solve_In.
               - split; eauto.
                 intros * Hdef' Hin' Hca. eapply H20; eauto.
-                eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
             }
             split; simpl_Forall; eauto.
             intros * Hin Hca. rewrite <-H27 in Hin. apply in_concat in Hin as (?&?&?).
@@ -2275,7 +2291,7 @@ Module Type LSEMDETERMINISM
           * destruct tn; simpl in *; try lia.
             apply Permutation_sym, Permutation_nil, map_eq_nil in H8; congruence.
           * eapply HSsc; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
-            eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+            eapply VarsDefinedComp_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. eauto.
           * intros * Hseq.
             assert (exists blks, In (c, blks) branches) as (blks&Hinbrs).
@@ -2315,6 +2331,8 @@ Module Type LSEMDETERMINISM
                                                        /\ sem_transitions G Hi1 (fselectb e k stres1 bs1) (snd blks) (e, false) (fselect absent e k stres1 stres11)
                                                        /\ sem_transitions G Hi2 (fselectb e k stres2 bs2) (snd blks) (e, false) (fselect absent e k stres2 stres12))
                                      n (cy :: envS) Hi1' Hi2' (fselectb e k stres1 bs1) (fselectb e k stres2 bs2) (snd s))
+                                (fun x => Syn.Is_defined_in x (Bauto Weak ck (ini0, oth) states))
+                                (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                                 n (cy :: envS) Hi1' Hi2' br)
                        states) as Hf.
         { simpl_Forall. intros. take (forall (k : nat), _) and specialize (it k); destruct_conjs. destruct b as [?(?&[?(?&?)])].
@@ -2343,7 +2361,7 @@ Module Type LSEMDETERMINISM
               2:eauto with datatypes. auto.
             + intros; simpl in *. destruct_conjs.
               rewrite <-and_assoc. split; [|split]; auto.
-              assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+              assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy ->
                                                 det_var_inv Γ0 (S n) Hi0 Hi3 cy)
                                        /\ sem_block_det n (cy::envS) Hi0 Hi3 (fselectb e k stres1 bs1) (fselectb e k stres2 bs2) blks) l2) as Hf.
               { simpl_Forall. inv_VarsDefined.
@@ -2359,7 +2377,7 @@ Module Type LSEMDETERMINISM
                   2:solve_Exists. solve_In.
                 - split; eauto.
                   intros * Hdef' Hin' Hca. eapply H35; eauto.
-                  eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                  eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
               }
               split; simpl_Forall; eauto.
               intros * Hin Hca. take (Permutation _ xs0) and rewrite <-it in Hin. apply in_concat in Hin as (?&?&?).
@@ -2370,7 +2388,7 @@ Module Type LSEMDETERMINISM
           eapply det_var_inv_unselect with (tn:=length states) (sc1:=stres1); eauto.
           * destruct states; simpl in *; try congruence. lia.
           * eapply HSstres; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
-            eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+            eapply VarsDefinedComp_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. eauto.
           * take (sem_transitions _ Hi1 _ _ _ _) and eapply sem_automaton_wt_state1 in it; eauto. 1,3:simpl_Forall; eauto.
             -- repeat inv_branch. repeat inv_scope. simpl_Forall; auto.
@@ -2389,9 +2407,10 @@ Module Type LSEMDETERMINISM
             do 2 esplit. split; [|split; [|split]]; eauto.
             intros ? Hcaus.
             eapply HasCaus_snd_det in Hca; eauto; subst. 2:simpl_app; eauto using NoDup_app_l.
-            destruct x0 as [?(?&[?(?&?)])]. split; eapply sem_branch_defined2; eauto.
-            1,2:repeat inv_branch; repeat inv_scope;
-            (do 2 econstructor; [| |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto).
+            destruct x0 as [?(?&[?(?&?)])].
+            split; eapply sem_branch_defined2 with (must_def:=fun x => Syn.Is_defined_in x _) (is_def:=fun x _ => Syn.Is_defined_in_scope _ x _); eauto.
+            1,2:repeat inv_branch; repeat inv_scope; econstructor; eauto.
+            1,2:econstructor; [| |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto.
           * intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
         + econstructor; eauto.
           simpl_Forall. specialize (Hf k); destruct_conjs. eauto.
@@ -2438,6 +2457,8 @@ Module Type LSEMDETERMINISM
                                    sem_scope_det
                                      (fun Hi1 Hi2 blks => Forall (sem_block_det n (cy::envS) Hi1 Hi2 (fselectb e k stres11 bs1) (fselectb e k stres12 bs2)) (fst blks))
                                      n (cy :: envS) Hi1' Hi2' (fselectb e k stres11 bs1) (fselectb e k stres12 bs2) (snd s))
+                                (fun x => Syn.Is_defined_in x (Bauto Strong ck ([], oth) states))
+                                (fun x '(_, s) => Syn.Is_defined_in_scope (fun '(blks, _) => List.Exists (Syn.Is_defined_in x) blks) x s)
                                 n (cy :: envS) Hi1' Hi2' br)
                        states) as Hf.
         { simpl_Forall. intros. specialize (H22 k); destruct_conjs. destruct b as [?(?&[?(?&?)])].
@@ -2465,7 +2486,7 @@ Module Type LSEMDETERMINISM
               2:constructor; solve_Exists; econstructor; eauto. solve_In.
               2:eauto with datatypes. auto.
             + intros; simpl in *; destruct_conjs.
-              assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy ->
+              assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy ->
                                                 det_var_inv Γ0 (S n) Hi0 Hi3 cy)
                                        /\ sem_block_det n (cy::envS) Hi0 Hi3 (fselectb e k stres11 bs1) (fselectb e k stres12 bs2) blks) l2) as Hf.
               { simpl_Forall. inv_VarsDefined.
@@ -2481,7 +2502,7 @@ Module Type LSEMDETERMINISM
                   2:solve_Exists. solve_In.
                 - split; eauto.
                   intros * Hdef' Hin' Hca. eapply H33; eauto.
-                  eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                  eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
               }
               split; simpl_Forall; eauto.
               intros * Hin Hca. take (Permutation _ xs0) and rewrite <-it in Hin. apply in_concat in Hin as (?&?&?).
@@ -2492,7 +2513,7 @@ Module Type LSEMDETERMINISM
           eapply det_var_inv_unselect with (tn:=length states) (sc1:=stres11); eauto.
           - destruct states; simpl in *; try congruence. lia.
           - eapply HSstres1; eauto. left. eapply Is_defined_in_Is_defined_in; eauto.
-            eapply VarsDefined_Is_defined; eauto. econstructor; eauto.
+            eapply VarsDefinedComp_Is_defined; eauto. econstructor; eauto.
             eapply NoDupLocals_incl; [|econstructor; eauto]. eauto.
           - take (fby _ _ stres1) and eapply sem_automaton_wt_state3 in it; eauto. 2,3:simpl_Forall; eauto.
             + now take (Permutation _ _) and rewrite <-it, <-fst_InMembers.
@@ -2509,9 +2530,10 @@ Module Type LSEMDETERMINISM
             do 2 esplit. split; [|split; [|split]]; eauto.
             intros ? Hcaus.
             eapply HasCaus_snd_det in Hca; eauto; subst. 2:simpl_app; eauto using NoDup_app_l.
-            destruct b as [?(?&[?(?&?)])]. split; eapply sem_branch_defined2; eauto.
-            1,2:repeat inv_branch; repeat inv_scope;
-            (do 2 econstructor; [| |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto).
+            destruct b as [?(?&[?(?&?)])].
+            split; eapply sem_branch_defined2 with (must_def:=fun x => Syn.Is_defined_in x _) (is_def:=fun x _ => Syn.Is_defined_in_scope _ x _); eauto.
+            1,2:repeat inv_branch; repeat inv_scope; econstructor; eauto.
+            1,2:econstructor; [| |simpl_Forall; eauto using sem_block_det_sem_block1, sem_block_det_sem_block2]; eauto.
           - intros * Hnin. eapply NoDup_HasCaus_HasLastCaus; eauto. solve_NoDup_app.
         }
         split; auto.
@@ -2525,7 +2547,7 @@ Module Type LSEMDETERMINISM
         + intros. eapply HSn; eauto. econstructor; eauto.
         + intros. eapply HenvS; eauto. econstructor; eauto.
         + intros; simpl in *.
-          assert (Forall (fun blks => (forall y xs, VarsDefined blks xs -> In y xs -> HasCaus Γ0 y cy -> det_var_inv Γ0 (S n) Hi0 Hi3 cy)
+          assert (Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ0 y cy -> det_var_inv Γ0 (S n) Hi0 Hi3 cy)
                                      /\ sem_block_det n (cy::envS) Hi0 Hi3 bs1 bs2 blks) blocks) as Hf.
             { simpl_Forall. inv_VarsDefined.
               edestruct H with (xs:=xs1). 11:eauto. all:eauto.
@@ -2539,7 +2561,7 @@ Module Type LSEMDETERMINISM
                 2:solve_Exists. solve_In.
               - split; eauto.
                 intros * Hdef' Hin' Hca. eapply H6; eauto.
-                eapply VarsDefined_det in Hdef; eauto. now rewrite <-Hdef.
+                eapply VarsDefinedComp_det in Hdef; eauto. now rewrite <-Hdef.
             }
             split; simpl_Forall; eauto.
             intros * Hin Hca. destruct_conjs. take (Permutation _ _) and rewrite <-it in Hin. apply in_concat in Hin as (?&?&?).
@@ -2568,7 +2590,7 @@ Module Type LSEMDETERMINISM
         + rewrite <-Hperm; auto.
         + eapply sem_block_det_Perm; eauto.
       - intros * Hin (HSn&Hblk') Hdep.
-        pose proof (n_defd nd) as (?&Hdef&Hperm).
+        pose proof (n_syn nd) as Syn. inversion_clear Syn as [??? Hdef Hperm].
         destruct Hcaus as (Hnd&_).
         eapply det_block_cons in Hblk' as (Hdet&?);
           eauto using EqStN_weaken, node_NoDupLocals, node_NoDupMembers.
@@ -2666,7 +2688,7 @@ Module Type LSEMDETERMINISM
   End sem_block_det.
 
 
-  Lemma det_global_n {PSyn prefs} : forall (G : @global PSyn prefs),
+  Lemma det_global_n {prefs} : forall (G : @global complete prefs),
       wt_global G ->
       Forall node_causal (nodes G) ->
       det_nodes G.
@@ -2701,7 +2723,7 @@ Module Type LSEMDETERMINISM
         eapply Forall2_ignore2 in Heqins. simpl_Forall.
         eapply sem_var_det in Hv1; [|eauto]. eapply sem_var_det in Hv2; [|eauto]. now rewrite <-Hv1, <-Hv2.
       }
-      eapply det_vars in Hins; eauto. (* Hum, le cons uncons est encore plus penible... En discuter avec Tim *)
+      eapply det_vars in Hins; eauto.
       + eapply Forall2_trans_ex in Houts2; [|eapply Forall2_swap_args, Houts1].
         eapply Forall2_impl_In; [|eauto]; intros ?? _ _ (?&Hin&Hv1&Hv2). simpl_In.
         unfold idcaus in Hins. simpl_Forall. repeat apply Forall_app in Hins as (?&Hins).
@@ -2718,7 +2740,7 @@ Module Type LSEMDETERMINISM
       1,2:econstructor; eauto.
   Qed.
 
-  Theorem det_global {PSyn prefs} : forall (G: @global PSyn prefs) f ins outs1 outs2,
+  Theorem det_global {prefs} : forall (G: @global complete prefs) f ins outs1 outs2,
       wt_global G ->
       Forall node_causal (nodes G) ->
       sem_node G f ins outs1 ->

@@ -31,6 +31,7 @@ Open Scope stream_scope.
 
 Parameter schedule      : ident -> list trconstr -> list positive.
 Parameter print_lustre  : @global (fun _ _ => True) elab_prefs -> unit.
+Parameter print_complete: @global complete elab_prefs -> unit.
 Parameter print_nolast  : @global nolast last_prefs -> unit.
 Parameter print_noauto  : @global noauto auto_prefs -> unit.
 Parameter print_noswitch : @global noswitch switch_prefs -> unit.
@@ -48,7 +49,7 @@ Parameter do_norm_switches : unit -> bool.
 Parameter do_sync       : unit -> bool.
 Parameter do_expose     : unit -> bool.
 
-Definition is_causal (G: @global (fun _ _ => True) elab_prefs) : res (@global _ elab_prefs) :=
+Definition is_causal (G: @global complete elab_prefs) : res (@global _ elab_prefs) :=
   do _ <- check_causality G;
   OK G.
 
@@ -76,6 +77,8 @@ Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
 Definition l_to_nl (G : @global (fun _ _ => True) elab_prefs) : res NL.Syn.global :=
   OK G
      @@ print print_lustre
+     @@ complete_global
+     @@ print print_complete
      @@@ is_causal
      @@ delast_global
      @@ print print_nolast

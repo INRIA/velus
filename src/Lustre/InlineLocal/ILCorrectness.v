@@ -572,7 +572,7 @@ Module Type ILCORRECTNESS
         replace {| types := types G1; nodes := nodes G1 |} with G1 in Blk by (destruct G1; auto).
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
-        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2].
+        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _].
         destruct H5 as (Hdom1&Hsc1).
         destruct (inlinelocal_block
                     (Env.empty _) (n_block n0)

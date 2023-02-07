@@ -2,6 +2,7 @@
 (* Functions called from within the proof, e.g., VelusCorrectness *)
 
 let lustre_destination = ref (None : string option)
+let complete_destination = ref (None : string option)
 let nolast_destination = ref (None : string option)
 let noauto_destination = ref (None : string option)
 let noswitch_destination = ref (None : string option)
@@ -65,6 +66,9 @@ let print_if flag print prog =
 
 let print_lustre_if =
   print_if lustre_destination Interfacelib.PrintLustre.print_global
+
+let print_complete_if =
+  print_if complete_destination Interfacelib.PrintLustre.print_global
 
 let print_nolast_if =
   print_if nolast_destination Interfacelib.PrintLustre.print_global

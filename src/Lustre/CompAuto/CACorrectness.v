@@ -359,7 +359,7 @@ Module Type CACORRECTNESS
     Definition default_ann : annotation :=
       Build_annotation OpAux.bool_velus_type Cbase xH None.
 
-    Ltac inv_branch := (Syn.inv_branch || Ty.inv_branch || Cl.inv_branch || Sem.inv_branch).
+    Ltac inv_branch := (Syn.inv_branch || Ty.inv_branch || Cl.inv_branch || Sem.inv_branch || LCS.inv_branch).
     Ltac inv_scope := (Syn.inv_scope || Ty.inv_scope || Cl.inv_scope || Sem.inv_scope || LCS.inv_scope).
 
     Local Ltac sem_new_vars :=
@@ -385,6 +385,173 @@ Module Type CACORRECTNESS
         edestruct Hcks as (?&?); eauto; subst.
         eapply Hsc2 in Hv as Hsck; eauto. eapply sem_clock_det in Hsck; [|eapply Hsemck]. rewrite <-Hsck.
         eapply sem_clock_select; eauto.
+    Qed.
+
+    Lemma sem_transitions_wt_state {PSyn prefs A} (G : @global PSyn prefs) (states : list ((enumtag * ident) * A)) :
+      forall Hi bs trans default stres,
+        Permutation.Permutation (List.map fst (List.map fst states)) (seq 0 (Datatypes.length states)) ->
+        Forall (fun '(_, (t, _)) => InMembers t (List.map fst states)) trans ->
+        In (fst default) (seq 0 (Datatypes.length states)) ->
+        sem_transitions_ck G Hi bs trans default stres ->
+        SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres.
+    Proof.
+      induction trans; intros * Hperm Hwt1 Hwt2 Hsem; inv Hwt1; inv Hsem.
+      - apply SForall_forall; intros.
+        apply eqst_ntheq with (n:=n) in H0. setoid_rewrite Str_nth_map in H0.
+        eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
+        2:symmetry; apply H0. destruct (bs # n); simpl; auto.
+        destruct default0. apply in_seq in Hwt2; simpl in *. lia.
+      - apply IHtrans in H8; auto.
+        apply SForall_forall; intros.
+        apply eqst_ntheq with (n:=n) in H11. rewrite choose_first_nth in H11. setoid_rewrite Str_nth_map in H11.
+        apply SForall_forall with (n:=n) in H8.
+        eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
+        2:symmetry; apply H11. destruct (bs' # n); simpl; auto.
+        rewrite fst_InMembers, Hperm in H1. apply in_seq in H1. lia.
+    Qed.
+
+    Corollary sem_automaton_wt_state1 {PSyn prefs A} (G : @global PSyn prefs) (states : list ((enumtag * ident) * branch (list transition * scope (A * list transition)))) :
+      forall Hi bs bs' ini oth stres0 stres1 stres,
+        Permutation.Permutation (List.map fst (List.map fst states)) (seq 0 (Datatypes.length states)) ->
+        Forall (fun '(_, t) => InMembers t (List.map fst states)) ini ->
+        In oth (seq 0 (Datatypes.length states)) ->
+        Forall (fun '(_, Branch _ (_, Scope _ (_, trans))) =>
+                  Forall (fun '(e, (t, _)) => InMembers t (List.map fst states)) trans) states ->
+        sem_transitions_ck G Hi bs' (List.map (fun '(e, t) => (e, (t, false))) ini) (oth, false) stres0 ->
+        fby stres0 stres1 stres ->
+        Forall (fun '((sel, _), Branch _ (_, Scope _ (_, trans))) =>
+                  forall k, exists Hik,
+                    (let bik := fselectb sel k stres bs in
+                     sem_transitions_ck G Hik bik trans
+                       (sel, false) (fselect absent sel k stres stres1))) states ->
+        SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres.
+    Proof.
+      intros * Hperm Hwtini Hwtoth Hwtst Hsemini Hfby Hsemst.
+      eapply sem_transitions_wt_state in Hsemini as Hwt0; eauto.
+      2:simpl_Forall; auto.
+      assert (Forall (fun state => forall k, SForall (fun v => match v with present (e, _) => e < length states | _ => True end)
+                                       (fselect absent (fst (fst state)) k stres stres1)) states) as Hwt1.
+      { simpl_Forall. destruct b as [?(?&[?(?&?)])]. specialize (Hsemst k); destruct_conjs.
+        eapply sem_transitions_wt_state in H0; eauto.
+        rewrite <-Hperm; auto. solve_In. }
+      clear - Hperm Hwt0 Hwt1 Hfby.
+      apply SForall_forall; intros n.
+      induction n using Wf_nat.lt_wf_ind.
+      apply Wf_nat.lt_wf_ind with (n:=n).
+      intros n' Hrec.
+      eapply fby_SForall; eauto.
+      intros * Hlt. specialize (Hrec _ Hlt).
+      destruct (stres # m) as [|(?&?)] eqn:Hres.
+      - apply ac_fby2, eqst_ntheq with (n:=m) in Hfby.
+        rewrite 2 ac_nth in Hfby. rewrite Hres in Hfby.
+        destruct (stres1 # m) eqn:Hres1; try congruence.
+        eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end).
+        2:symmetry; apply Hres1. simpl; auto.
+      - eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end) in Hrec; [|eauto].
+        simpl in *.
+        assert (In e (List.map fst (List.map fst states))) as Hin.
+        { rewrite Hperm. apply in_seq. lia. }
+        simpl_In. simpl_Forall.
+        specialize (Hwt1 ((count (fwhenb e (stres_res stres) (stres_st stres))) # m)).
+        apply SForall_forall with (n:=m) in Hwt1.
+        unfold fselect in Hwt1. rewrite mask_nth, Nat.eqb_refl, fwhen_nth in Hwt1.
+        unfold stres_st in Hwt1. rewrite Str_nth_map, Hres, equiv_decb_refl in Hwt1.
+        auto.
+    Qed.
+
+    Corollary sem_automaton_wt_state2 {PSyn prefs A} (G : @global PSyn prefs) (states : list ((enumtag * ident) * branch (list transition * scope (A * list transition)))) :
+      forall bs bs' ini stres1 stres,
+        Permutation.Permutation (List.map fst (List.map fst states)) (seq 0 (Datatypes.length states)) ->
+        In ini (seq 0 (Datatypes.length states)) ->
+        Forall (fun '(_, Branch _ (trans, _)) =>
+                  Forall (fun '(e, (t, _)) => InMembers t (List.map fst states)) trans) states ->
+        fby (const_stres bs' (ini, false)) stres1 stres ->
+        Forall (fun '((sel, _), Branch _ (trans, _)) =>
+                  forall k, exists Hik,
+                    (let bik := fselectb sel k stres bs in
+                     sem_transitions_ck G Hik bik trans
+                       (sel, false) (fselect absent sel k stres stres1))) states ->
+        SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres.
+    Proof.
+      intros * Hperm Hwtoth Hwtst Hfby Hsemst.
+      assert (SForall (fun s : synchronous (nat * bool) => match s with
+                                                   | absent => True
+                                                   | present (e, _) => e < length states
+                                                   end) (const_stres bs' (ini, false))) as Hwt0.
+      { apply SForall_forall. intros.
+        unfold const_stres.
+        rewrite Str_nth_map. destruct (bs' # n); simpl; auto.
+        apply in_seq in Hwtoth. lia. }
+      assert (Forall (fun state => forall k, SForall (fun v => match v with present (e, _) => e < length states | _ => True end)
+                                       (fselect absent (fst (fst state)) k stres stres1)) states) as Hwt1.
+      { simpl_Forall. destruct b as [?(?&[?(?&?)])]. specialize (Hsemst k); destruct_conjs.
+        eapply sem_transitions_wt_state in H0; eauto.
+        rewrite <-Hperm; auto. solve_In. }
+      clear - Hperm Hwt0 Hwt1 Hfby.
+      apply SForall_forall; intros n.
+      induction n using Wf_nat.lt_wf_ind.
+      apply Wf_nat.lt_wf_ind with (n:=n).
+      intros n' Hrec.
+      eapply fby_SForall; eauto.
+      intros * Hlt. specialize (Hrec _ Hlt).
+      destruct (stres # m) as [|(?&?)] eqn:Hres.
+      - apply ac_fby2, eqst_ntheq with (n:=m) in Hfby.
+        rewrite 2 ac_nth in Hfby. rewrite Hres in Hfby.
+        destruct (stres1 # m) eqn:Hres1; try congruence.
+      - assert (In n0 (List.map fst (List.map fst states))) as Hin.
+        { rewrite Hperm. apply in_seq. lia. }
+        simpl_In. simpl_Forall.
+        specialize (Hwt1 ((count (fwhenb n0 (stres_res stres) (stres_st stres))) # m)).
+        apply SForall_forall with (n:=m) in Hwt1.
+        unfold fselect in Hwt1. rewrite mask_nth, Nat.eqb_refl, fwhen_nth in Hwt1.
+        eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end) in Hwt1.
+        2:{ unfold stres_st. rewrite Str_nth_map. setoid_rewrite Hres. rewrite equiv_decb_refl. reflexivity. }
+        assumption.
+    Qed.
+
+    Corollary sem_automaton_wt_state3 {PSyn prefs A} (G : @global PSyn prefs) (states : list ((enumtag * ident) * branch (list transition * scope (A * list transition)))) :
+      forall bs bs' ini stres1 stres,
+        Permutation.Permutation (List.map fst (List.map fst states)) (seq 0 (Datatypes.length states)) ->
+        In ini (seq 0 (Datatypes.length states)) ->
+        Forall (fun '(_, Branch _ (trans, _)) =>
+                  Forall (fun '(e, (t, _)) => InMembers t (List.map fst states)) trans) states ->
+        fby (const_stres bs' (ini, false)) stres1 stres ->
+        Forall (fun '((sel, _), Branch _ (trans, _)) =>
+                  forall k, exists Hik,
+                    (let bik := fselectb sel k stres bs in
+                     sem_transitions_ck G Hik bik trans
+                       (sel, false) (fselect absent sel k stres stres1))) states ->
+        SForall (fun v => match v with present (e, _) => e < length states | _ => True end) stres1.
+    Proof.
+      intros * Hperm Hwtoth Hwtst Hfby Hsemst.
+      assert (SForall (fun s : synchronous (nat * bool) => match s with
+                                                   | absent => True
+                                                   | present (e, _) => e < length states
+                                                   end) (const_stres bs' (ini, false))) as Hwt0.
+      { apply SForall_forall. intros.
+        unfold const_stres.
+        rewrite Str_nth_map. destruct (bs' # n); simpl; auto.
+        apply in_seq in Hwtoth. lia. }
+      assert (Forall (fun state => forall k, SForall (fun v => match v with present (e, _) => e < length states | _ => True end)
+                                       (fselect absent (fst (fst state)) k stres stres1)) states) as Hwt1.
+      { simpl_Forall. destruct b as [?(?&[?(?&?)])]; destruct_conjs. specialize (Hsemst k); destruct_conjs.
+        eapply sem_transitions_wt_state in H0; eauto.
+        rewrite <-Hperm; auto. solve_In. }
+      eapply sem_automaton_wt_state2 in Hfby as Hwt2; eauto.
+      apply SForall_forall; intros n. eapply SForall_forall with (n:=n) in Hwt2.
+      apply ac_fby2, eqst_ntheq with (n:=n) in Hfby. rewrite 2 ac_nth in Hfby.
+      destruct (stres1 # n) eqn:Hstres1, (stres # n) eqn:Hstres; auto; try congruence.
+      destruct v0, v.
+      assert (In n0 (List.map fst (List.map fst states))) as Hin.
+      { rewrite Hperm. apply in_seq. lia. }
+      simpl_In. simpl_Forall.
+      specialize (Hwt1 ((count (fwhenb n0 (stres_res stres) (stres_st stres))) # n)).
+      apply SForall_forall with (n:=n) in Hwt1.
+      unfold fselect in Hwt1. rewrite mask_nth, Nat.eqb_refl, fwhen_nth in Hwt1.
+      eapply eq_ind with (P:=fun x => match x with absent => True | present (e0, _) => _ end) in Hwt1.
+      2:{ unfold stres_st. rewrite Str_nth_map. setoid_rewrite Hstres. rewrite equiv_decb_refl. reflexivity. }
+      rewrite Hstres1 in Hwt1.
+      assumption.
     Qed.
 
     Lemma auto_block_sem : forall blk Γty Γck Hi bs blk' tys st st',
@@ -508,7 +675,7 @@ Module Type CACORRECTNESS
           *{ econstructor; simpl.
              - repeat constructor. sem_new_vars.
              - repeat constructor.
-               take (sem_transitions_ck _ _ _ _ _ _) and eapply sem_transitions_ck_sem_transitions, sem_automaton_wt_state1 in it; eauto.
+               take (sem_transitions_ck _ _ _ _ _ _) and eapply sem_automaton_wt_state1 in it; eauto.
                + apply SForall_forall; intros n. apply SForall_forall with (n:=n) in it.
                  setoid_rewrite Str_nth_map. destruct (stres # n) as [|(?&?)] eqn:Hst; simpl in *; auto.
                  constructor; simpl.
@@ -519,7 +686,7 @@ Module Type CACORRECTNESS
                + simpl_Forall. repeat inv_branch. repeat inv_scope. simpl_Forall; eauto.
                + simpl_Forall. repeat inv_branch. repeat inv_scope. intros. specialize (H26 k); destruct_conjs.
                  repeat inv_branch. repeat inv_scope.
-                 esplit; eauto using sem_transitions_ck_sem_transitions.
+                 esplit; eauto.
              - auto_block_simpl_Forall.
                do 2 esplit.
                1:{ simpl. apply when_hist_restrict_ac with (xs:=Var x1::Var x3::Var x5::Var x7::List.map (fun '(x, _) => Var x) Γ').
@@ -777,7 +944,7 @@ Module Type CACORRECTNESS
                + simpl_Forall; repeat inv_branch. simpl_Forall; auto.
                + simpl_Forall; repeat inv_branch. intros. specialize (H23 k); destruct_conjs.
                  repeat inv_branch.
-                 esplit; eauto using sem_transitions_ck_sem_transitions.
+                 esplit; eauto.
              - simpl_Forall.
                do 2 esplit.
                1:{ simpl. apply when_hist_restrict_ac with (xs:=Var x1::Var x3::Var x5::Var x7::List.map (fun '(x, _) => Var x) Γ').
@@ -857,7 +1024,7 @@ Module Type CACORRECTNESS
                + simpl_Forall. repeat inv_branch. simpl_Forall; auto.
                + simpl_Forall. repeat inv_branch. intros. specialize (H23 k); destruct_conjs.
                  repeat inv_branch; repeat inv_scope. subst Γ'0 Γ'1.
-                 esplit; eauto using sem_transitions_ck_sem_transitions.
+                 esplit; eauto.
              - auto_block_simpl_Forall.
                do 2 esplit.
                1:{ simpl. apply when_hist_restrict_ac with (xs:=Var x1::Var x3::Var x5::Var x7::List.map (fun '(x, _) => Var x) Γ').
@@ -1035,11 +1202,11 @@ Module Type CACORRECTNESS
         eapply sem_node_ck_cons1' in H4 as (Hblk'&_); eauto. clear H3.
         2:{ inv Hord1. destruct H7 as (Hisin&_). intro contra. eapply Hisin in contra as [? _]; auto. }
 
-        pose proof (n_syn n0) as Hsyn. inv Hsyn.
+        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 _].
         pose proof (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
-        inv Hwc. destruct H7 as (Hwc&_); simpl in Hwc.
-        inv Hwt. destruct H7 as (Hwt&_); simpl in Hwt.
+        inv Hwc. destruct H4 as (Hwc&_); simpl in Hwc.
+        inv Hwt. destruct H4 as (Hwt&_); simpl in Hwt.
         destruct H5 as (Hdom1&Hsc1).
         econstructor; eauto.
         + erewrite find_node_now; eauto.
@@ -1053,7 +1220,7 @@ Module Type CACORRECTNESS
           eapply auto_block_sem in Hblk'; eauto using dom_dom_ub, node_NoDupLocals.
           7:rewrite surjective_pairing with (p:=auto_block _ _), surjective_pairing with (p:=fst _); reflexivity.
           * destruct G2; eauto.
-          * intros * Hv. inv Hv. rewrite fst_InMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls in H4.
+          * intros * Hv. inv Hv. rewrite fst_InMembers, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls in H0.
             now simpl_Forall.
           * apply NoLast_app; split; auto using senv_of_ins_NoLast.
             intros ? L; inv L; simpl_In. simpl_Forall. subst; simpl in *; congruence.

@@ -164,7 +164,7 @@ Module Type COMPLETENESS
   Fact block_to_equation_complete {PSyn prefs} (G: @global PSyn prefs) vars : forall out env envo blk xs xr,
       wt_block G vars blk ->
       normalized_block G out blk ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       Forall (fun x => exists cl, find_clock env x = OK cl) xs ->
       (forall x e, envo x = Error e -> PS.In x out) ->
       exists eq', block_to_equation env envo xr blk = OK eq'.
@@ -178,7 +178,7 @@ Module Type COMPLETENESS
       eapply IHHnorm; eauto.
   Qed.
 
-  Corollary mmap_block_to_equation_complete {PSyn prefs} : forall (G: @global PSyn prefs) (n: @node PSyn prefs) env envo locs blks,
+  Corollary mmap_block_to_equation_complete {prefs} : forall (G: @global nolocal prefs) (n: @node nolocal prefs) env envo locs blks,
       n_block n = Blocal (Scope locs blks) ->
       Forall (fun '(_, (_, _, _, o)) => o = None) locs ->
       wt_node G n ->
@@ -188,7 +188,8 @@ Module Type COMPLETENESS
       exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo nil) blks = OK eqs'.
   Proof.
     intros * Hblk Hlocs Hwtn Hnormed Hfind Henvo.
-    pose proof (n_defd n) as (?&Hvars&Hperm). rewrite Hblk in Hvars. inv Hvars; inv H0; inv_VarsDefined.
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [?? _ _ (?&Hvars&Hperm)].
+    rewrite Hblk in Hvars. inv Hvars; inv H0; inv_VarsDefined.
     assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty (idty locs)) env) x = OK cl) (concat x0)) as Hfind'.
     { rewrite Hperm0.
       apply Forall_app; split; simpl_Forall; subst.

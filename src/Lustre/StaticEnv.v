@@ -211,6 +211,26 @@ Module Type STATICENV
       1,2:constructor; apply InMembers_app; auto.
   Qed.
 
+  Fact IsVar_concat : forall env1 env2 x,
+      In env1 env2 ->
+      IsVar env1 x ->
+      IsVar (concat env2) x.
+  Proof.
+    intros * Hin Hv. inv Hv.
+    eapply InMembers_In in H as (?&?).
+    econstructor. eapply In_InMembers; eauto using in_concat'.
+  Qed.
+  Global Hint Resolve IsVar_concat : senv.
+
+  Fact IsVar_concat' : forall env2 x,
+      IsVar (concat env2) x ->
+      exists env1, In env1 env2 /\ IsVar env1 x.
+  Proof.
+    intros * Hv. inv Hv.
+    eapply InMembers_In in H as (?&In). apply in_concat in In as (?&?&?).
+    do 2 esplit; eauto. econstructor; eauto using In_InMembers.
+  Qed.
+
   Fact IsLast_app : forall env1 env2 x,
       IsLast (env1 ++ env2) x <-> IsLast env1 x \/ IsLast env2 x.
   Proof.

@@ -677,6 +677,17 @@ Section Extra.
     - apply incl_app; eauto using incl_appl, incl_appr.
   Qed.
 
+  Fact map_eq_concat {B} (f : A -> B) : forall (xs: list (list B)) (ys: list A),
+      concat xs = map f ys ->
+      exists ys', ys = concat ys' /\ xs = map (map f) ys'.
+  Proof.
+    induction xs; intros * Eq; simpl in *.
+    - symmetry in Eq. apply map_eq_nil in Eq; subst.
+      exists []; auto.
+    - symmetry in Eq. apply map_eq_app in Eq as (ys1&ys2&?&?&Eq); subst.
+      edestruct IHxs as (ys'&?&?); eauto; subst.
+      exists (ys1::ys'). auto.
+  Qed.
 End Extra.
 
 Section is_nil.
@@ -4259,6 +4270,25 @@ Section InMembers.
   Proof.
     induction l; intros * Hnd; simpl in *;
       constructor; eauto using NoDupMembers_app_l, NoDupMembers_app_r.
+  Qed.
+
+  Lemma InMembers_concat: forall (ls : list (list (A * B))) x,
+      InMembers x (concat ls) <-> (exists l, InMembers x l /\ In l ls).
+  Proof.
+    induction ls; simpl.
+    - split; intros; destruct_conjs; take False and inv it.
+    - intros ?. rewrite InMembers_app, IHls.
+      split; intros; destruct_conjs; take (_ \/ _) and destruct it; subst; destruct_conjs; eauto.
+  Qed.
+
+  Lemma NoDupMembers_concat : forall xss xs,
+      In xs xss ->
+      NoDupMembers (concat xss) ->
+      NoDupMembers xs.
+  Proof.
+    induction xss; intros * Hin Hnd; simpl in *; inv Hin.
+    - apply NoDupMembers_app_l in Hnd; auto.
+    - apply NoDupMembers_app_r in Hnd; eauto.
   Qed.
 
 End InMembers.

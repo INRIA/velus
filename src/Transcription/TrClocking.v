@@ -480,7 +480,7 @@ Module Type TRCLOCKING
       tonodeInv Htn. unfold NLC.wc_node. simpl.
       inversion_clear Hwc as [?? WCi WCo _ WCeq]; subst Γ.
       inversion_clear Hwt as [?????? WT]; subst Γ.
-      pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+      pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2.
       rewrite <-H3 in *; symmetry in H3; rename H3 into Hblk.
       eapply envs_eq_node in Hblk.
       monadInv Hmmap. inv WCeq; inv H7. inv WT; inv H7. subst Γ' Γ'0.

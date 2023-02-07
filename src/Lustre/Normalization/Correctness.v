@@ -484,23 +484,20 @@ Module Type CORRECTNESS
       Proof with eauto.
         induction tys; intros * Hnnil Hwc Hlen Hnum Hvar Hsem Hmerge; simpl in *; auto.
         - eapply Forall2Brs_length1 in Hsem.
-          2:{ do 2 (eapply Forall_forall; intros). eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto.
-              do 2 (eapply Forall_forall in Hwc; eauto with lclocking).
-          }
+          2:{ simpl_Forall. eapply sem_exp_ck_numstreams; eauto with lclocking. }
           inv Hsem; try congruence. inv Hlen.
           rewrite H0 in H4. destruct vs; simpl in *; try congruence.
           inv Hmerge; auto.
         - assert (length vs = S (length tys)) as Hlen'.
           { eapply Forall2Brs_length1 in Hsem.
-            2:{ do 2 (eapply Forall_forall; intros). eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto.
-                do 2 (eapply Forall_forall in Hwc; eauto with lclocking). }
+            2:{ simpl_Forall. eapply sem_exp_ck_numstreams; eauto with lclocking. }
             inv Hsem; try congruence. inv Hlen.
             congruence. }
           destruct vs; simpl in *; inv Hlen'.
           assert (forall x v, Exists (fun es0 => In x (snd es0)) es -> sem_exp_ck G2 H bs x v -> length v = 1) as Hlv.
           { intros ?? Hex Hse. eapply Exists_exists in Hex as (?&Hin1&Hin2).
             do 2 (eapply Forall_forall in Hwc; eauto). do 2 (eapply Forall_forall in Hnum; eauto).
-            eapply sem_exp_ck_sem_exp, sem_exp_numstreams in Hse; eauto with lclocking.
+            eapply sem_exp_ck_numstreams in Hse; eauto with lclocking.
             congruence.
           }
           inv Hmerge; simpl. constructor; eauto.
@@ -536,23 +533,20 @@ Module Type CORRECTNESS
       Proof with eauto.
         induction tys; intros * Hnnil Hwc Hlen Hnum Hec Hwt Hsem Hsd Hmerge; simpl in *; auto.
         - eapply Forall2Brs_length1 in Hsem.
-          2:{ do 2 (eapply Forall_forall; intros). eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto.
-              do 2 (eapply Forall_forall in Hwc; eauto with lclocking).
-          }
+          2:{ simpl_Forall. eapply sem_exp_ck_numstreams; eauto with lclocking. }
           inv Hsem; try congruence. inv Hlen.
           rewrite H0 in H4. destruct vs; simpl in *; try congruence.
           inv Hmerge; auto.
         - assert (length vs = S (length tys)) as Hlen'.
           { eapply Forall2Brs_length1 in Hsem.
-            2:{ do 2 (eapply Forall_forall; intros). eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto.
-                do 2 (eapply Forall_forall in Hwc; eauto with lclocking). }
+            2:{ simpl_Forall. eapply sem_exp_ck_numstreams; eauto with lclocking. }
             inv Hsem; try congruence. inv Hlen.
             congruence. }
           destruct vs; simpl in *; inv Hlen'.
           assert (forall x v, Exists (fun es0 => In x (snd es0)) es -> sem_exp_ck G2 H bs x v -> length v = 1) as Hlv.
           { intros ?? Hex Hse. eapply Exists_exists in Hex as (?&Hin1&Hin2).
-            do 2 (eapply Forall_forall in Hwc; eauto). do 2 (eapply Forall_forall in Hnum; eauto).
-            eapply sem_exp_ck_sem_exp, sem_exp_numstreams in Hse; eauto with lclocking.
+            simpl_Forall.
+            eapply sem_exp_ck_numstreams in Hse; eauto with lclocking.
             congruence.
           }
           inv Hmerge; simpl. constructor; eauto.
@@ -633,7 +627,7 @@ Module Type CORRECTNESS
           + etransitivity...
           + constructor; eauto. subst.
             assert (length x = numstreams a) as Hlength1 by (eapply unnest_exp_length; eauto with lclocking).
-            assert (length y = numstreams a) as Hlength2 by (eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto with lclocking).
+            assert (length y = numstreams a) as Hlength2 by (eapply sem_exp_ck_numstreams; eauto with lclocking).
             simpl_Forall; eauto using sem_exp_refines.
           + apply Forall_app. split...
             simpl_Forall; eauto using sem_equation_refines...
@@ -1002,7 +996,7 @@ Module Type CORRECTNESS
             assert (length vs = length x3) as Hlength'.
             { eapply idents_for_anns_length in H. repeat simpl_length.
               apply Forall2Brs_length1 in H15.
-              2:{ simpl_Forall. eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto with lclocking. }
+              2:{ simpl_Forall. eapply sem_exp_ck_numstreams; eauto with lclocking. }
               inv H15; try congruence. inv H8; auto.
               eapply Forall2_length in H16. solve_length. }
             assert (FEnv.refines (@EqSt _) Hi1 Hi2) as Href3.
@@ -1077,7 +1071,7 @@ Module Type CORRECTNESS
             assert (length vs = length x) as Hlength'.
             { eapply idents_for_anns_length in H. repeat simpl_length.
               apply Forall2Brs_length1 in H21.
-              2:{ simpl_Forall; eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto with lclocking. }
+              2:{ simpl_Forall; eapply sem_exp_ck_numstreams; eauto with lclocking. }
               inv H21; try congruence. inv H11; auto.
               eapply Forall3_length in H22 as (?&?). solve_length. }
             assert (FEnv.refines (@EqSt _) Hi2 Hi3) as Href3.
@@ -1166,7 +1160,7 @@ Module Type CORRECTNESS
             assert (length vs = length x) as Hlength'.
             { eapply idents_for_anns_length in H. repeat simpl_length.
               apply Forall2Brs_length1 in H21.
-              2:{ simpl_Forall; eapply sem_exp_numstreams, sem_exp_ck_sem_exp; eauto with lclocking. }
+              2:{ simpl_Forall; eapply sem_exp_ck_numstreams; eauto with lclocking. }
               inv H21; try congruence. inv H11; auto.
               eapply Forall3_length in H23 as (?&?). solve_length. }
             assert (FEnv.refines (@EqSt _) Hi3 Hi4) as Href4.
@@ -1479,14 +1473,14 @@ Module Type CORRECTNESS
         - induction H0; simpl in *...
           inv Hwt'.
           assert (numstreams x = 1) as Hnumstreams.
-          { eapply sem_exp_ck_sem_exp, sem_exp_numstreams in H0... }
+          { eapply sem_exp_ck_numstreams in H0... }
           constructor.
           + rewrite Hnumstreams; simpl...
           + rewrite Hnumstreams; simpl...
         - destruct H0 as [? [? H0]]; subst; simpl in *.
           inv Hwt'.
           assert (numstreams x1 = length y) as Hnumstreams.
-          { eapply sem_exp_ck_sem_exp, sem_exp_numstreams in H0... }
+          { eapply sem_exp_ck_numstreams in H0... }
           constructor.
           + rewrite firstn_app, Hnumstreams, firstn_all, Nat.sub_diag, firstn_O, app_nil_r...
           + rewrite CommonList.skipn_app...
@@ -1628,7 +1622,7 @@ Module Type CORRECTNESS
           apply Forall_app. split...
           clear Hsem1'.
           assert (length (concat ss) = length (annots es)) as Hlen1.
-          { eapply sem_exps_ck_sem_exps, sem_exps_numstreams in H7; eauto with lclocking. }
+          { eapply sem_exps_ck_numstreams in H7; eauto with lclocking. }
           assert (length xs = length (annots x)) as Hlen2.
           { rewrite Hannots, <-Hlen1.
             rewrite_Forall_forall. simpl_length. congruence. }
@@ -1839,7 +1833,7 @@ Module Type CORRECTNESS
         unfold unnest_node in Heqn'; inv Heqn'.
         specialize (n_nodup n0) as (Hnd1&Hnd2).
         pose proof (n_good n0) as (Hgood1&Hgood2&_).
-        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2.
         rewrite <-H0 in *. inv Blk'. inv_scope.
         simpl in *. repeat rewrite app_nil_r in *.
         inversion_clear Hwc as [??? _ _ Hwc']. rewrite <-H0 in Hwc'. inv Hwc'.
@@ -2553,7 +2547,7 @@ Module Type CORRECTNESS
         unfold normfby_node in Heqn'; inv Heqn'.
         specialize (n_nodup n0) as (Hnd1&Hnd2).
         specialize (n_good n0) as (Hgood1&Hgood2&_).
-        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2.
+        pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2.
         inversion_clear Hunt as [|?? [[??? Hblk ?] _] Hunt'].
         rewrite Hblk in *. symmetry in H4; inv H4. inv Blk'. inv_scope.
         simpl in *. repeat rewrite app_nil_r in *.

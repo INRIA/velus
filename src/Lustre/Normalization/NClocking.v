@@ -1835,7 +1835,7 @@ Module Type NCLOCKING
     Proof with eauto.
       intros * Wc. inversion_clear Wc as [??? Hin Hout Hblk]; subst Γ.
       unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2. rewrite <-H0 in *. inv Hblk.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H0 in *. inv Hblk.
       repeat constructor; simpl; auto.
       1:{ simpl_Forall. subst. auto. }
       assert (forall x, ~ IsLast (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) x) as Hnl.
@@ -2156,7 +2156,7 @@ Module Type NCLOCKING
     Proof.
       intros * Hun Wc. inversion_clear Wc as [??? Hin Hout Hblk]; subst Γ.
       unfold unnest_node.
-      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2]. inv Hsyn2. rewrite <-H0 in *. inv Hblk.
+      pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _]. inv Hsyn2. rewrite <-H0 in *. inv Hblk.
       repeat constructor; simpl; auto.
       1:{ simpl_Forall. subst. auto. }
       (* assert (forall x, ~ IsLast (senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) x) as Hnl. *)

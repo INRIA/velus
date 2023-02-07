@@ -1355,7 +1355,7 @@ Module Type LCAUSALITY
       NoDupMembers Γ ->
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       incl xs (map fst Γ) ->
-      VarsDefinedScope P_vd (Scope locs blks) xs ->
+      VarsDefinedCompScope P_vd (Scope locs blks) xs ->
       NoDupScope P_nd (map fst Γ) (Scope locs blks) ->
       wl_scope P_wl G (Scope locs blks) ->
       wx_scope P_wx Γ (Scope locs blks) ->
@@ -1415,7 +1415,7 @@ Module Type LCAUSALITY
       NoDupMembers Γ ->
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       incl xs (map fst Γ) ->
-      VarsDefinedBranch P_vd (Branch caus blks) xs ->
+      VarsDefinedCompBranch P_vd (Branch caus blks) xs ->
       NoDupBranch P_nd (Branch caus blks) ->
       wl_branch P_wl (Branch caus blks) ->
       wx_branch P_wx (Branch caus blks) ->
@@ -1458,7 +1458,7 @@ Module Type LCAUSALITY
   Lemma collect_depends_on_dom {PSyn prefs} (G: @global PSyn prefs) : forall blk xs Γ cenv' cenvl' cx,
       NoDupMembers Γ ->
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       incl xs (map fst Γ) ->
       NoDupLocals (map fst Γ) blk ->
       wl_block G blk ->
@@ -1717,7 +1717,7 @@ Module Type LCAUSALITY
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       (forall x cx, Env.find x cenvl' = Some cx <-> HasLastCaus Γ x cx) ->
       NoDup (map snd (Env.elements cenv' ++ Env.elements cenvl' ++ idcaus_of_scope f_idcaus (Scope locs blks))) ->
-      VarsDefinedScope P_vd (Scope locs blks) xs ->
+      VarsDefinedCompScope P_vd (Scope locs blks) xs ->
       NoDup xs ->
       Forall (fun x => Env.In x cenv') xs ->
       NoDupScope P_nd (map fst Γ) (Scope locs blks) ->
@@ -1801,7 +1801,7 @@ Module Type LCAUSALITY
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       (forall x cx, Env.find x cenvl' = Some cx <-> HasLastCaus Γ x cx) ->
       NoDup (map snd (Env.elements cenv' ++ Env.elements cenvl' ++ idcaus_of_branch f_idcaus (Branch caus blks))) ->
-      VarsDefinedBranch P_vd (Branch caus blks) xs ->
+      VarsDefinedCompBranch P_vd (Branch caus blks) xs ->
       NoDup xs ->
       Forall (fun x => Env.In x cenv') xs ->
       NoDupBranch P_nd (Branch caus blks) ->
@@ -1885,7 +1885,7 @@ Module Type LCAUSALITY
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
       (forall x cx, Env.find x cenvl' = Some cx <-> HasLastCaus Γ x cx) ->
       NoDup (map snd (Env.elements cenv' ++ Env.elements cenvl' ++ idcaus_of_locals blk)) ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       NoDup xs ->
       Forall (fun x => Env.In x cenv') xs ->
       NoDupLocals (map fst Γ) blk ->
@@ -2095,7 +2095,7 @@ Module Type LCAUSALITY
       NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_scope f_idcaus (Scope locs blks))) ->
       incl xs (map fst Γ') ->
       HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
-      VarsDefinedScope P_vd (Scope locs blks) xs ->
+      VarsDefinedCompScope P_vd (Scope locs blks) xs ->
       NoDupScope P_nd (map fst Γ) (Scope locs blks) ->
       wx_scope P_wx Γ' (Scope locs blks) ->
       depends_on_scope P_dep Γ cy cx (Scope locs blks) ->
@@ -2150,7 +2150,7 @@ Module Type LCAUSALITY
       NoDup (map snd (idcaus_of_senv Γ1 ++ idcaus_of_branch f_idcaus (Branch caus blks))) ->
       incl xs (map fst Γ2) ->
       HasCaus Γ1 x cx \/ HasLastCaus Γ1 x cx ->
-      VarsDefinedBranch P_vd (Branch caus blks) xs ->
+      VarsDefinedCompBranch P_vd (Branch caus blks) xs ->
       NoDupBranch P_nd (Branch caus blks) ->
       wx_branch P_wx (Branch caus blks) ->
       depends_on_branch P_dep Γ1 cy cx (Branch caus blks) ->
@@ -2191,7 +2191,7 @@ Module Type LCAUSALITY
       NoDup (map snd (idcaus_of_senv Γ ++ idcaus_of_locals blk)) ->
       incl xs (map fst Γ') ->
       HasCaus Γ x cx \/ HasLastCaus Γ x cx ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       NoDupLocals (map fst Γ) blk ->
       wx_block Γ' blk ->
       depends_on Γ cy cx blk ->
@@ -2325,7 +2325,7 @@ Module Type LCAUSALITY
         edestruct H; eauto; [left|right]; solve_Exists.
   Qed.
 
-  Lemma build_graph_find {PSyn prefs} : forall (G: @global PSyn prefs) n x y,
+  Lemma build_graph_find {prefs} : forall (G: @global complete prefs) n x y,
       wl_node G n ->
       wx_node n ->
       NoDup (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n) ++ idcaus_of_locals (n_block n))) ->
@@ -2334,7 +2334,7 @@ Module Type LCAUSALITY
   Proof.
     intros * Hwl Hwx Hndcaus Hdep. inv Hwl. inv Hwx. subst Γ.
     pose proof (node_NoDupMembers n) as Hnd.
-    pose proof (n_defd n) as (?&Hdef&Hperm).
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hdef Hperm].
     unfold build_graph.
     assert (NoDupMembers (idcaus (n_in n) ++ map (fun '(x2, (_, _, cx, _)) => (x2, cx)) (n_out n))) as Hnd1.
     { unfold senv_of_ins, senv_of_decls in Hnd. rewrite fst_NoDupMembers, map_app, 2 map_map in Hnd.
@@ -2392,7 +2392,7 @@ Module Type LCAUSALITY
       the node is indeed causal.
       This is a simple consequence of [build_graph_find] and [build_acyclic_graph_spec].
    *)
-  Lemma check_node_causality_correct {PSyn prefs} : forall (G: @global PSyn prefs) n,
+  Lemma check_node_causality_correct {prefs} : forall (G: @global complete prefs) n,
       wl_node G n ->
       wx_node n ->
       check_node_causality n = OK tt ->
@@ -2419,7 +2419,7 @@ Module Type LCAUSALITY
       apply In_PS_elements; auto.
   Qed.
 
-  Corollary check_causality_correct {PSyn prefs} : forall (G: @global PSyn prefs) tts,
+  Corollary check_causality_correct {prefs} : forall (G: @global complete prefs) tts,
       wl_global G ->
       wx_global G ->
       check_causality G = OK tts ->

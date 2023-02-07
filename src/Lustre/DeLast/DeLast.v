@@ -323,36 +323,36 @@ Module Type DELAST
 
   (** ** Wellformedness properties *)
 
-  (** *** VarsDefined *)
+  (** *** VarsDefinedComp *)
 
   Import Permutation.
 
   Fact mmap_vars_perm : forall (f : (Env.t ident) -> block -> FreshAnn block) blks sub blks' xs st st',
       Forall
         (fun blk => forall sub blk' xs st st',
-             VarsDefined blk xs ->
+             VarsDefinedComp blk xs ->
              f sub blk st = (blk', st') ->
-             VarsDefined blk' xs) blks ->
-      Forall2 VarsDefined blks xs ->
+             VarsDefinedComp blk' xs) blks ->
+      Forall2 VarsDefinedComp blks xs ->
       mmap (f sub) blks st = (blks', st') ->
-      Forall2 VarsDefined blks' xs.
+      Forall2 VarsDefinedComp blks' xs.
   Proof.
     induction blks; intros * Hf (* Hns *) Hvars (* Hnd *) Hnorm;
       inv Hf; inv Hvars; repeat inv_bind; simpl; constructor; eauto.
   Qed.
 
   Lemma delast_scope_vars_perm {A} P_vd f_dl f_add : forall locs (blks: A) sub s' xs st st',
-      VarsDefinedScope P_vd (Scope locs blks) xs ->
+      VarsDefinedCompScope P_vd (Scope locs blks) xs ->
       delast_scope f_dl f_add sub (Scope locs blks) st = (s', st') ->
       (forall xs sub blks' st st',
           P_vd blks xs ->
           f_dl sub blks st = (blks', st') ->
           P_vd blks' xs) ->
       (forall xs1 xs2 blks1 blks2,
-          Forall2 VarsDefined blks1 xs2 ->
+          Forall2 VarsDefinedComp blks1 xs2 ->
           P_vd blks2 xs1 ->
           P_vd (f_add blks1 blks2) (xs1 ++ concat xs2)) ->
-      VarsDefinedScope P_vd s' xs.
+      VarsDefinedCompScope P_vd s' xs.
   Proof.
     intros * Hvd Hdl Hind Hadd; inv Hvd. repeat inv_bind.
     eapply Hind in H0; eauto.
@@ -365,9 +365,9 @@ Module Type DELAST
   Qed.
 
   Lemma delast_block_vars_perm : forall blk sub blk' xs st st',
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       delast_block sub blk st = (blk', st') ->
-      VarsDefined blk' xs.
+      VarsDefinedComp blk' xs.
   Proof.
     Opaque delast_scope.
     induction blk using block_ind2; intros * Hvars Hdl;
@@ -381,7 +381,7 @@ Module Type DELAST
       constructor.
       + apply mmap_values in H0. inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
-        destruct b0. repeat inv_bind. take (VarsDefinedBranch _ _ _) and inv it. inv_VarsDefined.
+        destruct b0. repeat inv_bind. take (VarsDefinedCompBranch _ _ _) and inv it. inv_VarsDefined.
         constructor; simpl; auto using incl_nil'.
         eapply mmap_vars_perm in H3; eauto.
     - (* automaton *)
@@ -390,7 +390,7 @@ Module Type DELAST
       + apply mmap_values in H0. inv H0; congruence.
       + eapply mmap_values, Forall2_ignore1 in H0. simpl_Forall; repeat inv_bind.
         destruct b0 as [?(?&[?(?&?)])]. repeat inv_bind.
-        take (VarsDefinedBranch _ _ _) and inv it. inv_VarsDefined.
+        take (VarsDefinedCompBranch _ _ _) and inv it. inv_VarsDefined.
         econstructor; simpl; auto using incl_nil'.
         eapply delast_scope_vars_perm; eauto.
         * intros; repeat inv_bind; destruct_conjs. do 2 esplit; [|eauto].
@@ -409,9 +409,9 @@ Module Type DELAST
   Qed.
 
   Lemma delast_outs_and_block_vars_perm : forall outs blk blk' xs st st',
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       delast_outs_and_block outs blk st = (blk', st') ->
-      VarsDefined blk' xs.
+      VarsDefinedComp blk' xs.
   Proof.
     unfold delast_outs_and_block.
     intros * VF DL. repeat inv_bind.
@@ -792,7 +792,7 @@ Module Type DELAST
 
   (** ** Transformation of node and program *)
 
-  Program Definition delast_node (n: @node (fun _ _ => True) elab_prefs) : @node nolast last_prefs :=
+  Program Definition delast_node (n: @node complete elab_prefs) : @node nolast last_prefs :=
     let res := delast_outs_and_block (n_out n) (n_block n) init_st in
     {|
       n_name := (n_name n);
@@ -807,17 +807,22 @@ Module Type DELAST
     now rewrite map_length.
   Qed.
   Next Obligation.
-    pose proof (n_defd n) as (?&Hvars&Hperm).
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hvars Hperm].
     pose proof (n_nodup n) as (_&Hndup).
+    pose proof (n_good n) as (Hgood1&Hgood2&Hatom).
+    apply Permutation_map_inv in Hperm as (?&?&Hperm); subst.
     repeat esplit.
-    - destruct (delast_outs_and_block _ _ _) as (?&?) eqn:Hdl.
-      eapply delast_outs_and_block_vars_perm in Hvars; eauto.
-    - rewrite Hperm. erewrite map_map; reflexivity.
+    2:{ unfold senv_of_decls. rewrite Hperm. erewrite map_map. reflexivity. }
+    destruct (delast_outs_and_block _ _ _) as (?&?) eqn:Hdl.
+    eapply VarsDefinedComp_VarsDefined. 1,2:erewrite map_map; simpl.
+    - rewrite <-Hperm. eapply NoDupLocals_incl, delast_outs_and_block_NoDupLocals. 3-5:eauto.
+      2:simpl_Forall; auto.
+      solve_incl_app; reflexivity.
+    - eapply delast_outs_and_block_vars_perm; eauto.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    pose proof (n_syn n) as Hsyn.
     rewrite map_map. repeat split; auto.
     destruct (delast_outs_and_block _ _ _) as (?&st') eqn:Hdl.
     eapply delast_outs_and_block_NoDupLocals; eauto.
@@ -832,18 +837,21 @@ Module Type DELAST
     eapply delast_outs_and_block_GoodLocals; eauto.
   Qed.
   Next Obligation.
+    pose proof (n_syn n) as Syn. inversion_clear Syn as [??? Hvars Hperm].
     destruct (delast_outs_and_block _ _) as (?&?) eqn:Hdl.
     constructor; eauto using delast_outs_and_block_nolast.
-    simpl_Forall. auto.
+    - simpl_Forall; auto.
+    - do 2 esplit. 2:erewrite map_map; eauto.
+      eapply delast_outs_and_block_vars_perm; eauto.
   Qed.
 
-  Global Program Instance delast_node_transform_unit: TransformUnit (@node (fun _ _ => True) elab_prefs) node :=
+  Global Program Instance delast_node_transform_unit: TransformUnit (@node complete elab_prefs) node :=
     { transform_unit := delast_node }.
 
-  Global Program Instance delast_global_without_units : TransformProgramWithoutUnits (@global (fun _ _ => True) elab_prefs) (@global nolast last_prefs) :=
+  Global Program Instance delast_global_without_units : TransformProgramWithoutUnits (@global complete elab_prefs) (@global nolast last_prefs) :=
     { transform_program_without_units := fun g => Global g.(types) g.(externs) [] }.
 
-  Definition delast_global : @global (fun _ _ => True) elab_prefs -> @global nolast last_prefs :=
+  Definition delast_global : @global complete elab_prefs -> @global nolast last_prefs :=
     transform_units.
 
   (** *** Equality of interfaces *)

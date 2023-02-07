@@ -470,7 +470,7 @@ Module Type CSCORRECTNESS
 
     Ltac inv_branch :=
       match goal with
-      | _ => (Syn.inv_branch || Ty.inv_branch || Cl.inv_branch || Sem.inv_branch)
+      | _ => (Syn.inv_branch || Ty.inv_branch || Cl.inv_branch || Sem.inv_branch || LCS.inv_branch)
       end.
 
     Lemma change_last : forall Γ Hi Hi',
@@ -797,7 +797,7 @@ Module Type CSCORRECTNESS
       replace {| types := types G1; nodes := nodes G1 |} with G1 in Blk by (destruct G1; auto).
       pose proof (n_nodup n0) as (Hnd1&Hnd2).
       pose proof (n_good n0) as (Hgood1&Hgood2&_).
-      pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2].
+      pose proof (n_syn n0) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _].
       inv Hwc. destruct H6 as (Hwc&_); simpl in Hwc.
       destruct H5 as (Hdom1&Hsc1).
       inv Hwt. destruct H5 as (Hwt&_); simpl in Hwt.

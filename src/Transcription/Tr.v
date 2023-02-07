@@ -384,25 +384,24 @@ Module Type TR
   Next Obligation.
     clear H0. rename l into vars. rename l0 into neqs.
     pose proof (L.n_nodup n) as (_&Hnd).
-    pose proof (L.n_defd n) as (vd&Hvars&Hperm).
-    pose proof (L.n_syn n) as Hsyn.
-    cases. rename l0 into blks. inv Hsyn.
-    monadInv1 P. inv Hvars. inv H2. destruct H5 as (xs0&Hvd&Hperm'). inv H0.
+    pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 (vd&Hvars&Hperm)].
+    cases. rename l0 into blks.
+    monadInv1 P. inv Hvars. inv H0. destruct H3 as (xs0&Hvd&Hperm'). inv Syn2.
     assert (NL.vars_defined neqs = concat xs0).
-    { revert neqs EQ. clear - H4 Hvd. induction Hvd; inv H4; simpl.
+    { revert neqs EQ. clear - H2 Hvd. induction Hvd; inv H2; simpl.
       - intros neqs Htr. inv Htr. auto.
       - intros neqs Htoeq. monadInv Htoeq.
         apply IHHvd in EQ1; auto. simpl.
         f_equal; auto.
-        clear - H H2 EQ.
+        clear - H H3 EQ.
         revert EQ y H. generalize (@nil (ident * clock)) as xr.
-        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H2; inv Hvd; try congruence.
+        induction x using L.block_ind2; intros * EQ ? Hvd; simpl in *; inv H3; inv Hvd; try congruence.
         + apply ok_fst_defined in EQ; auto.
         + cases; simpl.
           simpl_Forall. rewrite app_nil_r.
           eapply H2; eauto.
     }
-    simpl. rewrite H0.
+    simpl. rewrite H.
     erewrite Hperm', map_app, Hperm, Permutation_app_comm, 4 map_fst_idty. reflexivity.
   Qed.
 

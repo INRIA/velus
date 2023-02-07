@@ -138,6 +138,20 @@ Proof.
   apply ident_eqb_refl.
 Qed.
 
+Corollary mem_assoc_ident_false_iff:
+  forall {A} x (xs: list (ident * A)),
+    mem_assoc_ident x xs = false <->
+    ~ InMembers x xs.
+Proof.
+  intros. split; intros NIn.
+  - intros contra. simpl_In.
+    eapply mem_assoc_ident_false in NIn; eauto.
+  - apply existsb_Forall, forallb_Forall.
+    simpl_Forall.
+    apply negb_true_iff, ident_eqb_neq.
+    contradict NIn; subst. eauto using In_InMembers.
+Qed.
+
 Lemma mem_assoc_ident_true:
   forall {A} x xs,
     mem_assoc_ident x xs = true ->

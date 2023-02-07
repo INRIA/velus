@@ -127,7 +127,7 @@ Module Type DLCORRECTNESS
   Import List.
 
   Section delast_node_sem.
-    Variable G1 : @global (fun _ _ => True) elab_prefs.
+    Variable G1 : @global complete elab_prefs.
     Variable G2 : @global nolast last_prefs.
 
     Hypothesis HGref : global_sem_refines G1 G2.
@@ -459,7 +459,7 @@ Module Type DLCORRECTNESS
          }
     Qed.
 
-    Ltac inv_branch := (Syn.inv_branch || Ty.inv_branch || Cl.inv_branch || Sem.inv_branch).
+    Ltac inv_branch := (Syn.inv_branch || Ty.inv_branch || Cl.inv_branch || Sem.inv_branch || LCS.inv_branch).
 
     Fact find_rename_var1 (Γ: static_env) sub : forall x y a,
       find (fun '(y, ann) => isSome ann.(causl_last) && (x ==b rename_in_var sub y)) Γ = Some (y, a) ->

@@ -68,8 +68,8 @@ Module Type CORRECTNESS
   Lemma sem_lexp_step {PSyn prefs} :
     forall (G: @L.global PSyn prefs) H b e e' s,
       to_lexp e = OK e' ->
-      LS.sem_exp G H b e s ->
-      LS.sem_exp G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
+      LCS.sem_exp_ck G H b e s ->
+      LCS.sem_exp_ck G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem; inv Htr.
     - inv Hsem; inv H4.
@@ -103,8 +103,8 @@ Module Type CORRECTNESS
   Lemma sem_cexp_step {PSyn prefs} :
     forall (G: @L.global PSyn prefs) H b e e' s,
       to_cexp e = OK e' ->
-      LS.sem_exp G H b e s ->
-      LS.sem_exp G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
+      LCS.sem_exp_ck G H b e s ->
+      LCS.sem_exp_ck G (history_tl H) (Streams.tl b) e (map (@Streams.tl _) s).
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem;
       (now inv Htr) || (unfold to_cexp in Htr;
@@ -112,7 +112,7 @@ Module Type CORRECTNESS
     - (* merge *)
       destruct a as ([|? [|]]&?); monadInv Htr; fold to_cexp in *.
       inv Hsem. destruct s0.
-      eapply LS.Smerge with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs); eauto.
+      eapply LCS.Smerge with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs); eauto.
       + eapply sem_var_step; eauto.
       + clear - EQ H0 H9. eapply LS.Forall2Brs_map_2.
         eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
@@ -126,7 +126,7 @@ Module Type CORRECTNESS
     - (* case *)
       destruct a as ([|? [|]]&?); cases; monadInv Htr; fold to_cexp in *.
       + inv Hsem. destruct s0.
-        eapply LS.ScaseDefault with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs)
+        eapply LCS.ScaseDefault with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs)
                                     (vd:=(map (map (fun x => Streams.tl x)) vd)).
         * eapply sem_lexp_step in H7; eauto.
         * simpl. inv H10; inv H6.
@@ -144,7 +144,7 @@ Module Type CORRECTNESS
           eapply Forall3_impl_In; [|eauto]; intros ??? _ _ _ Hcase.
           inv Hcase; auto.
       + inv Hsem. destruct s0.
-        eapply LS.ScaseTotal with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs).
+        eapply LCS.ScaseTotal with (vs:=map (map (fun '(i, vs) => (i, Streams.tl vs))) vs).
         * eapply sem_lexp_step in H10; eauto.
         * eapply LS.Forall2Brs_map_2.
           eapply LS.Forall2Brs_impl_In; [|eauto]; intros ?? Hin Hse.
@@ -179,7 +179,7 @@ Module Type CORRECTNESS
     forall (G : @L.global PSyn prefs) env H b e e' s,
       LT.wt_exp G env e ->
       to_lexp e = OK e' ->
-      LS.sem_exp G H b e [s] ->
+      LCS.sem_exp_ck G H b e [s] ->
       NLSC.sem_exp (LS.var_history H) b e' s.
   Proof.
     induction e using L.exp_ind2; intros * Hwt Htr Hsem; inv Htr.
@@ -200,7 +200,7 @@ Module Type CORRECTNESS
   Lemma sem_lexp_single {PSyn prefs} :
     forall e e' G H b ss,
       to_lexp e = OK e' ->
-      LS.sem_exp (G: @L.global PSyn prefs) H b e ss ->
+      LCS.sem_exp_ck (G: @L.global PSyn prefs) H b e ss ->
       exists s, ss = [s].
   Proof.
     induction e using L.exp_ind2; intros * Htr Hsem; inv Htr;
@@ -214,7 +214,7 @@ Module Type CORRECTNESS
     forall (G: @L.global PSyn prefs) H b tenv es les ss,
       mmap to_lexp es = OK les ->
       Forall (LT.wt_exp G tenv) es ->
-      Forall2 (LS.sem_exp G H b) es ss ->
+      Forall2 (LCS.sem_exp_ck G H b) es ss ->
       Forall2 (NLSC.sem_exp (LS.var_history H) b) les (concat ss).
   Proof.
     intros * Hmmap Hwt Hsem. revert dependent les.
@@ -232,11 +232,11 @@ Module Type CORRECTNESS
               Forall (fun e => forall e' s,
                           LT.wt_exp G env0 e ->
                           to_cexp e = OK e' ->
-                          LS.sem_exp G H b e [s] ->
+                          LCS.sem_exp_ck G H b e [s] ->
                           NLSC.sem_cexp (LS.var_history H) b e' s)
                      (snd es)) es ->
     Forall (fun es => Forall (LT.wt_exp G env0) (snd es)) es ->
-    LS.Forall2Brs (LS.sem_exp G H b) es [vs] ->
+    LS.Forall2Brs (LCS.sem_exp_ck G H b) es [vs] ->
     mmap
       (fun pat =>
          match pat with
@@ -494,7 +494,7 @@ Module Type CORRECTNESS
     forall (G: @L.global PSyn prefs) env H b e e' s,
       LT.wt_exp G env e ->
       to_cexp e = OK e' ->
-      LS.sem_exp G H b e [s] ->
+      LCS.sem_exp_ck G H b e [s] ->
       NLSC.sem_cexp (LS.var_history H) b e' s.
   Proof.
     induction e using L.exp_ind2; intros * Hwt Htr Hsem;
@@ -805,7 +805,7 @@ Module Type CORRECTNESS
       L.clockof e = [ck] ->
       LC.wc_exp G cenv e ->
       to_constant e = OK c ->
-      LS.sem_exp G H b e [cs] ->
+      LCS.sem_exp_ck G H b e [cs] ->
       sem_clock (LS.var_history H) b ck b' ->
       cs ≡ (NCor.const_val b' (sem_const c)).
   Proof.
@@ -863,7 +863,7 @@ Module Type CORRECTNESS
     forall (G: @L.global PSyn prefs) H b env e e' s ck,
       LT.wt_exp G env e ->
       to_cexp e = OK e' ->
-      LS.sem_exp G H b e [s] ->
+      LCS.sem_exp_ck G H b e [s] ->
       sem_clock (LS.var_history H) b ck (abstract_clock s) ->
       NLSC.sem_arhs (LS.var_history H) b ck (Ecexp e') s.
   Proof.
@@ -982,7 +982,7 @@ Module Type CORRECTNESS
     eapply sem_var_mask_inv in H3 as (?&Hvar'&Heq).
     eapply sem_var_det in Hvar; eauto. rewrite Heq, Hvar in H6.
     rewrite <-LS.var_history_mask.
-    eapply sem_exp_arhs; eauto using LCS.sem_exp_ck_sem_exp.
+    eapply sem_exp_arhs; eauto.
     eapply sc_exp in H6; eauto.
     2:eapply LCS.sc_vars_mask; eauto.
     rewrite Hck in H6. simpl in H6. inv H6; auto.
@@ -1030,7 +1030,7 @@ Module Type CORRECTNESS
 
   Lemma sem_normalized_lexp_mask_inv {PSyn prefs}: forall (G: @L.global PSyn prefs) r k H b e v,
       LN.Unnesting.normalized_lexp e ->
-      LS.sem_exp G (mask_hist k r H) (maskb k r b) e v ->
+      LCS.sem_exp_ck G (mask_hist k r H) (maskb k r b) e v ->
       exists v', EqSts v [maskv k r v'].
   Proof.
     intros * Hnormed. revert v.
@@ -1087,8 +1087,8 @@ Module Type CORRECTNESS
 
   Lemma sem_normalized_lexp_det {PSyn prefs} : forall (G: @L.global PSyn prefs) H b e vs1 vs2,
       LN.Unnesting.normalized_lexp e ->
-      LS.sem_exp G H b e vs1 ->
-      LS.sem_exp G H b e vs2 ->
+      LCS.sem_exp_ck G H b e vs1 ->
+      LCS.sem_exp_ck G H b e vs2 ->
       EqSts vs1 vs2.
   Proof.
     intros * Hun. revert vs1 vs2.
@@ -1333,7 +1333,7 @@ Module Type CORRECTNESS
         revert tyins0 H15. induction EQ; simpl in *; intros * Htys; inv H8. inv Htys; auto.
         eapply ty_lexp in H; [|eauto]. rewrite H in *.
         inv Htys. constructor; eauto.
-      + eapply sem_exps_ck_sem_exps, sem_exps_lexps in H18; eauto.
+      + eapply sem_exps_lexps in H18; eauto.
 
     - (* EFby *)
       inv Hwc; simpl_Foralls. rename H2 into Hwt. rename H4 into Hwc. rename H3 into Hf2.
@@ -1356,7 +1356,7 @@ Module Type CORRECTNESS
         take (sem_exp_ck _ _ _ _ _) and inv it; simpl_Foralls.
         simpl in *; repeat rewrite app_nil_r in *. subst.
         inv H24; inv H21.
-        eapply sem_exp_lexp in EQ2; eauto using LCS.sem_exp_ck_sem_exp.
+        eapply sem_exp_lexp in EQ2; eauto.
         assert (y2 = ck); subst.
         { erewrite envs_eq_find in EQ0; eauto. inv EQ0; eauto.
           inv H16; solve_In; congruence. }
@@ -1365,8 +1365,8 @@ Module Type CORRECTNESS
           eapply sc_exp in H6; eauto using LCS.sc_vars_mask.
           simpl in *. simpl_Foralls. congruence.
         }
-        eapply sem_lexp_laexp in EQ2; eauto using LCS.sem_exp_ck_sem_exp.
-        eapply to_constant_sem in EQ1; eauto using LCS.sem_exp_ck_sem_exp.
+        eapply sem_lexp_laexp in EQ2; eauto.
+        eapply to_constant_sem in EQ1; eauto.
         2:{ eapply Forall2_eq in H7. congruence. }
         rewrite EQ1 in *.
         assert (Hmask:=EQ2). eapply sem_laexp_mask_inv in Hmask as (?&Hmask).
@@ -1410,7 +1410,7 @@ Module Type CORRECTNESS
         intros k. specialize (Hsem k). inv Hsem. simpl_Foralls.
         inv H4.
         eapply Forall2_ignore2 in H11. simpl_Forall.
-        eapply sem_normalized_lexp_mask_inv in Hnormed' as (?&Heq); eauto using LCS.sem_exp_ck_sem_exp.
+        eapply sem_normalized_lexp_mask_inv in Hnormed' as (?&Heq); eauto.
         rewrite Heq in H2; eauto.
         exists (List.map (fun x => [x]) ess).
         intros k. specialize (Hse k). simpl_Forall; auto.
@@ -1448,7 +1448,7 @@ Module Type CORRECTNESS
       econstructor. instantiate (1:=(concat ess)). 6:eauto.
       + eapply sem_lexps_mask. intros k.
         specialize (Hse k).
-        eapply LCS.sem_exps_ck_sem_exps, sem_exps_lexps in Hse; eauto.
+        eapply sem_exps_lexps in Hse; eauto.
         rewrite <-concat_map, Forall2_map_2 in Hse; eauto.
         simpl_Foralls. inv H2; eauto.
       + eapply LCS.sem_clock_unmask with (r:=r). intros k.
@@ -1511,7 +1511,7 @@ Module Type CORRECTNESS
             eapply Forall2_concat, Forall2_impl_In; [|eauto]. intros ?? _ _ (?&Hin&?&?).
             rewrite <-Forall2_map_2.
             eapply Forall_forall in Hnormed'; eauto.
-            eapply LCS.sem_exp_ck_sem_exp, sem_normalized_lexp_det in H1; eauto using LCS.sem_exp_ck_sem_exp.
+            eapply sem_normalized_lexp_det in H1; eauto.
           }
           clear - Hmask Heq Hbs Hdisj. unfold EqSts in *.
           rewrite Forall2_map_2 in *. rewrite Forall2_map_1.
@@ -1655,7 +1655,7 @@ Module Type CORRECTNESS
     inversion_clear Hsem' as [? ? ? ? ? Hfind Hins Houts ? Slast Sblk (Hdom&Hsc)].
     pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     inv Hnormed. destruct H2. inversion_clear H0 as [??? Hblk Hlocs Hblks].
-    pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2].
+    pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hsyn1 Hsyn2 _].
     inversion_clear Hwt as [|?? (?&?)].
     inversion_clear Hwc as [|?? (?&?)].
     simpl in Hfind. destruct (ident_eq_dec (L.n_name nd) f); subst.
@@ -1674,7 +1674,7 @@ Module Type CORRECTNESS
       pose proof (L.n_nodup n) as (Hnd1&Hnd2).
       rewrite Hblk in *. inv Hnd2. inv H8. inv Sblk'. inv H10.
       assert (H ⊑ H + Hi') as Href.
-      { eapply LCS.local_hist_dom_refines. 3:eauto. 1,2:eauto.
+      { eapply LS.local_hist_dom_refines. 3:eauto. 1,2:eauto.
         intros. rewrite IsVar_fst, map_app, map_fst_senv_of_ins, map_fst_senv_of_decls; eauto. }
       assert (sc_vars (senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n)) (H + Hi') (clocks_of ins)) as Hsc'.
       { destruct Hsc as (Hsc1&_). split.

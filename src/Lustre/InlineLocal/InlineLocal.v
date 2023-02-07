@@ -423,7 +423,7 @@ Module Type INLINELOCAL
 
   (** ** Wellformedness properties *)
 
-  (** *** VarsDefined *)
+  (** *** VarsDefinedComp *)
 
   Import Permutation.
 
@@ -431,15 +431,15 @@ Module Type INLINELOCAL
       Forall
         (fun blk => forall sub locs' blks' xs st st',
              noswitch_block blk ->
-             VarsDefined blk xs ->
+             VarsDefinedComp blk xs ->
              NoDupLocals (map fst (Env.elements sub) ++ xs) blk ->
              f sub blk st = (locs', blks', st') ->
-             exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys) (map (rename_var sub) xs ++ map fst locs')) blks ->
+             exists ys, Forall2 VarsDefinedComp blks' ys /\ Permutation (concat ys) (map (rename_var sub) xs ++ map fst locs')) blks ->
       Forall noswitch_block blks ->
-      Forall2 VarsDefined blks xs ->
+      Forall2 VarsDefinedComp blks xs ->
       Forall (NoDupLocals (map fst (Env.elements sub) ++ concat xs)) blks ->
       mmap2 (f sub) blks st = (locs', blks', st') ->
-      exists ys, Forall2 VarsDefined (concat blks') ys /\ Permutation (concat ys) (map (rename_var sub) (concat xs) ++ map fst (concat locs')).
+      exists ys, Forall2 VarsDefinedComp (concat blks') ys /\ Permutation (concat ys) (map (rename_var sub) (concat xs) ++ map fst (concat locs')).
   Proof.
     induction blks; intros * Hf Hns Hvars Hnd Hnorm; inv Hf; inv Hns; inv Hvars; inv Hnd; repeat monadInv; simpl.
     - exists []. split; auto.
@@ -454,19 +454,19 @@ Module Type INLINELOCAL
 
   Lemma inlinelocal_block_vars_perm : forall blk sub locs' blks' xs st st',
       noswitch_block blk ->
-      VarsDefined blk xs ->
+      VarsDefinedComp blk xs ->
       NoDupLocals (map fst (Env.elements sub) ++ xs) blk ->
       inlinelocal_block sub blk st = (locs', blks', st') ->
-      exists ys, Forall2 VarsDefined blks' ys /\ Permutation (concat ys) (map (rename_var sub) xs ++ map fst locs').
+      exists ys, Forall2 VarsDefinedComp blks' ys /\ Permutation (concat ys) (map (rename_var sub) xs ++ map fst locs').
   Proof.
     induction blk using block_ind2; intros * Hns Hvars Hnd Hdl;
       inv Hns; inv Hvars; inv Hnd; repeat monadInv.
     - (* equation *)
       destruct eq.
-      repeat esplit; simpl; eauto using VarsDefined with datatypes.
+      repeat esplit; simpl; eauto using VarsDefinedComp with datatypes.
     - (* reset *)
       eapply mmap_vars_perm in H0 as (ys1&Hvars1&Hperm1); eauto.
-      do 2 esplit; eauto using VarsDefined.
+      do 2 esplit; eauto using VarsDefinedComp.
       simpl. now rewrite app_nil_r.
     - (* local *)
       repeat inv_scope. take (Permutation _ _) and rename it into Hperm.
@@ -978,22 +978,28 @@ Module Type INLINELOCAL
       n_outgt0 := (n_outgt0 n);
     |}.
   Next Obligation.
-    pose proof (n_defd n) as (?&Hvars&Hperm).
+    pose proof (n_syn n) as Hns. inversion_clear Hns as [?? Hns1 Hns2 (?&Hvars&Hperm)].
     pose proof (n_nodup n) as (_&Hndup).
-    pose proof (n_syn n) as Hns. inversion_clear Hns as [?? Hns1 Hns2].
+    apply Permutation_map_inv in Hperm as (?&?&Hperm); subst.
     repeat esplit; eauto.
     destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl.
     eapply inlinelocal_block_vars_perm in Hvars as (?&?&Hperm'); eauto.
     rewrite rename_vars_empty in Hperm'.
-    2:{ rewrite Env.Props.P.elements_empty, Hperm. simpl.
+    2:{ rewrite Env.Props.P.elements_empty, <-Hperm. simpl.
         eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
-    do 2 econstructor; eauto using incl_nil'. do 2 esplit; eauto.
-    erewrite map_map, map_ext; eauto.
+    apply noswitch_VarsDefinedComp_VarsDefined.
+    1:{ constructor. simpl_Forall; auto.
+        eapply inlinelocal_block_nolocal in Hdl; eauto.
+        simpl_Forall; eauto using nolocal_noswitch. }
+    rewrite map_fst_senv_of_decls.
+    do 4 econstructor; eauto.
+    rewrite Hperm', <-Hperm. apply Permutation_app_head.
+    now rewrite map_map.
   Qed.
   Next Obligation.
     pose proof (n_good n) as (Hgood1&Hgood2&_).
     pose proof (n_nodup n) as (Hnd1&Hnd2).
-    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2].
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2 _].
     repeat rewrite app_nil_r.
     destruct (inlinelocal_block _ _) as ((?&?)&st') eqn:Hdl. simpl.
     split; auto. do 2 constructor; eauto.
@@ -1019,12 +1025,21 @@ Module Type INLINELOCAL
     - eapply inlinelocal_block_GoodLocals; eauto.
   Qed.
   Next Obligation.
-    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2].
+    pose proof (n_syn n) as Hsyn. inversion_clear Hsyn as [?? Hns1 Hns2 (?&Hvars&Hperm)].
+    pose proof (n_nodup n) as (_&Hndup).
     destruct (inlinelocal_block _ _) as ((?&?)&?) eqn:Hdl.
     repeat constructor.
     - simpl_Forall. auto.
     - simpl_Forall. auto.
     - eapply inlinelocal_block_nolocal; eauto.
+    - eapply inlinelocal_block_vars_perm in Hvars as (?&?&Hperm'); eauto.
+      rewrite rename_vars_empty in Hperm'.
+      2:{ rewrite Env.Props.P.elements_empty, Hperm. simpl.
+          eapply NoDupLocals_incl; [|eauto]. solve_incl_app. }
+      do 2 econstructor; [|eauto].
+      do 4 econstructor; eauto.
+      rewrite Hperm'. apply Permutation_app_head.
+      now rewrite map_map.
   Qed.
 
   Global Program Instance inlinelocal_node_transform_unit: TransformUnit (@node noswitch switch_prefs) node :=
