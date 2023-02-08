@@ -135,13 +135,13 @@ Module Type ILTYPING
 
       take (forall x, InMembers x locs -> ~_) and rename it into Hnd'; eauto.
 
-      assert (forall y, Env.In y sub -> ~Env.In y (Env.from_list (combine (map fst locs) x))) as Hsub1.
-      { intros ?. rewrite Hsubin, Hsubin'. intros In1 In2.
+      assert (forall y, Env.In y sub -> ~In y (map fst locs)) as Hsub1.
+      { intros ?. rewrite Hsubin. intros In1 In2.
         eapply Hnd'; eauto with datatypes. rewrite 2 in_app_iff; eauto with datatypes. }
-      assert (forall x1 x2, Env.MapsTo x1 x2 sub -> ~ Env.In x2 (Env.from_list (combine (map fst locs) x))) as Hsub2.
-      { intros ??. rewrite Hsubin'. intros Hin1 Hin2.
+      assert (forall x1 x2, Env.MapsTo x1 x2 sub -> ~In x2 (map fst locs)) as Hsub2.
+      { intros ?? Hin1 Hin2.
         eapply Hsubgen in Hin1 as [Hin|(?&?&Hgen)]; subst.
-        - eapply Hnd'; eauto. rewrite 2 in_app_iff; eauto with datatypes.
+        - simpl_In. eapply Hnd'; eauto using In_InMembers. rewrite 2 in_app_iff; eauto with datatypes.
         - simpl_In. simpl_Forall.
           eapply Fresh.Facts.contradict_AtomOrGensym; eauto using local_not_in_switch_prefs. }
 
@@ -175,14 +175,16 @@ Module Type ILTYPING
               clear - In. inv In. repeat rewrite in_app_iff. right. right. solve_In.
             - left. right. right.
               inv In. simpl_In. eapply reuse_idents_find in H0 as (?&?&?&Reu&Find'); eauto using In_InMembers.
-              rewrite Find' in Find. inv Find.
-              econstructor. solve_In. unfold rename_var. erewrite Env.union_find3'; simpl; eauto.
-              auto.
+              unfold Env.adds, Env.from_list in *. rewrite Find' in Find. inv Find.
+              econstructor. solve_In. unfold rename_var. erewrite Env.find_gsss'_irrelevant; simpl; eauto. 2:auto.
+              apply Env.find_adds'_In in Find' as [|Find]; eauto using In_InMembers.
+              rewrite Env.gempty in Find. congruence.
         }
         1:{ intros * Find In.
             repeat rewrite HasType_app in *. destruct In as [[In|In]|In]; eauto.
             - exfalso. inv In. simpl_In.
-              eapply In_InMembers, Hsubin' in Hin0 as (?&?). congruence.
+              eapply In_InMembers, Hsubin' in Hin0 as (?&Find'). unfold Env.MapsTo in *.
+              setoid_rewrite Find in Find'. inv Find'.
         }
       + rewrite app_assoc, NoLast_app. split; auto.
         intros * Hl. inv Hl; simpl_In. simpl_Forall. subst; simpl in *; congruence.
@@ -190,14 +192,13 @@ Module Type ILTYPING
         split; auto. intro contra.
         eapply Hnd'; eauto.
         apply in_or_app, or_introl, fst_InMembers; auto.
-      + intros. rewrite Env.union_In, InMembers_app, Hsubin.
-        apply or_iff_compat_l.
-        now rewrite InMembers_senv_of_decls.
+      + intros. rewrite Env.In_adds_spec, InMembers_app, Hsubin, InMembers_senv_of_decls, <-fst_InMembers; eauto using mmap_values, Forall2_length.
+        apply or_comm.
       + intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_decls.
-         eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eauto.
-         * eapply Hsubgen in Hfind as [|]; eauto.
-         * eapply Env.from_list_find_In, in_combine_r in Hfind.
+         eapply Env.find_adds'_In in Hfind as [Hfind|Hfind]; eauto.
+         * eapply in_combine_r in Hfind.
            eapply reuse_idents_gensym in H0. simpl_Forall. destruct H0; eauto.
+         * eapply Hsubgen in Hfind as [|]; eauto.
       + intros * Hfind Hin. apply HasType_app.
         eapply HasType_app in Hin as [Hin|Hin].
         * assert (Env.find x3 (Env.from_list (combine (map fst locs) x)) = None) as Hnone.
@@ -205,13 +206,12 @@ Module Type ILTYPING
             destruct (Env.find x3 (Env.from_list (combine (map fst locs) x))) eqn:Hfind'; eauto.
             exfalso. apply Env.from_list_find_In, in_combine_l in Hfind'.
             eapply Hnd'; eauto with datatypes. rewrite 2 in_app_iff; eauto with datatypes. }
-          eapply Env.union_find4 in Hfind as [Hfind|Hfind]; try congruence.
-          eauto.
+          apply Env.adds_from_list in Hfind as [Hfind|Hfind]; eauto.
+          setoid_rewrite Hfind in Hnone. congruence.
         * right. inv Hin. simpl_In. eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-          erewrite Env.union_find3' in Hfind; [|eauto]. inv Hfind.
+          rewrite Hfind in Find. inv Find.
           econstructor. unfold senv_of_anns. solve_In.
-          unfold rename_var. erewrite Env.union_find3'; [|eauto]. simpl; eauto.
-          reflexivity.
+          unfold rename_var. rewrite Hfind. simpl. eauto. reflexivity.
       + simpl_app. simpl_Forall.
         eapply NoDupLocals_incl'. 4:eauto. all:eauto using local_not_in_switch_prefs.
         intros *. repeat rewrite in_app_iff.
@@ -219,7 +219,7 @@ Module Type ILTYPING
         * clear - In. simpl_In. left. right. right. right. solve_In.
         * clear - H0 H11 In. simpl_In.
           eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-          unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+          unfold rename_var. rewrite Find.
           eapply reuse_ident_gensym in Reu as [|]; subst; eauto.
           left. right. right. right. solve_In.
       + rewrite <-app_assoc in H16; auto.

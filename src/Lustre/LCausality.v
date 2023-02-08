@@ -839,9 +839,8 @@ Module Type LCAUSALITY
 
   Definition collect_depends_scope {A} (f_coll : _ -> _ -> A -> Env.t PS.t) (cenv cenvl : Env.t ident) (s : scope A) :=
     let 'Scope locs blks := s in
-    let cenv' := Env.union cenv
-                   (Env.from_list (map (fun '(x, (_, _, cx, _)) => (x, cx)) locs)) in
-    let cenvl' := Env.union cenvl (Env.from_list (map_filter (fun '(x, (_, _, _, o)) => option_map (fun '(_, cx) => (x, cx)) o) locs)) in
+    let cenv' := Env.adds' (map (fun '(x, (_, _, cx, _)) => (x, cx)) locs) cenv in
+    let cenvl' := Env.adds' (map_filter (fun '(x, (_, _, _, o)) => option_map (fun '(_, cx) => (x, cx)) o) locs) cenvl in
     let deps1 := f_coll cenv' cenvl' blks in
     let deps2 := collect_depends_last_decls cenv' cenvl' locs in
     Env.union_fuse PS.union deps1 deps2.
@@ -924,20 +923,16 @@ Module Type LCAUSALITY
           let ty := List.hd bool_velus_type (typeof e) in
           Env.unions (map (fun '(k, Branch caus blks) =>
                              let tag := enum_nth_constructor ty k in
-                             Env.union
-                               (Env.from_list (map (msg_of_caus tag) caus))
+                             Env.adds' (map (msg_of_caus tag) caus)
                                (Env.unions (map msgs_of_local_labels blks))) brs)
       | Bauto _ _ _ states =>
           Env.unions (map (fun '((_, tag), Branch caus (_, Scope locs (blks, _))) =>
-                             Env.union
-                               (Env.union
-                                  (Env.from_list (map (msg_of_caus tag) caus))
-                                  (Env.from_list (flat_map msgs_of_decl locs)))
-                               (Env.unions (map msgs_of_local_labels blks))
+                             Env.adds'
+                                  (map (msg_of_caus tag) caus++flat_map msgs_of_decl locs)
+                                  (Env.unions (map msgs_of_local_labels blks))
                         ) states)
       | Blocal (Scope locs blks) =>
-          Env.union
-            (Env.from_list (flat_map msgs_of_decl locs))
+          Env.adds' (flat_map msgs_of_decl locs)
             (Env.unions (map msgs_of_local_labels blks))
       end.
 
@@ -946,7 +941,7 @@ Module Type LCAUSALITY
       (cx, [CTX x]).
 
     Definition msgs_of_labels {PSyn prefs} (n : @node PSyn prefs) : Env.t errmsg :=
-      Env.union (Env.from_list (map msgs_of_ins (n_in n) ++ flat_map msgs_of_decl (n_out n)))
+      Env.adds' (map msgs_of_ins (n_in n) ++ flat_map msgs_of_decl (n_out n))
         (msgs_of_local_labels (n_block n)).
 
   End msgs_of_labels.
@@ -1330,23 +1325,19 @@ Module Type LCAUSALITY
       NoDupMembers locs ->
       (forall x, InMembers x locs -> ~In x (map fst Γ)) ->
       (forall x cx, Env.find x cenv' = Some cx <-> HasCaus Γ x cx) ->
-      (forall x cx, Env.find x (Env.union cenv'
-                                     (Env.from_list (map (fun '(x1, (_, _, cx1, _)) => (x1, cx1)) locs))) = Some cx
+      (forall x cx, Env.find x (Env.adds' (map (fun '(x1, (_, _, cx1, _)) => (x1, cx1)) locs) cenv') = Some cx
                <-> HasCaus (Γ ++ @senv_of_decls A locs) x cx).
   Proof.
     intros * Hnd1 Hnd2 Heq *. rewrite HasCaus_app. split; intros Hin.
-    - apply Env.union_find4 in Hin as [|Hin].
+    - apply Env.find_adds'_In in Hin as [Hin|Hin].
+      + simpl_In. right. econstructor. solve_In. eauto.
       + left. now apply Heq.
-      + apply Env.from_list_find_In in Hin. simpl_In.
-        right. econstructor. solve_In. eauto.
     - destruct Hin as [Hin|Hin].
-      + apply Env.union_find2.
-        * now apply Heq.
-        * rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list.
-          intros Hinm. apply InMembers_In in Hinm as (?&?); simpl_In.
-          eapply Hnd2; eauto using In_InMembers. inv Hin; solve_In.
-      + apply Env.union_find3'. inv Hin. simpl_In.
-        apply Env.find_In_from_list. solve_In. apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
+      + rewrite Env.gsso', Heq; auto.
+        intros Hinm. simpl_In.
+        eapply Hnd2; eauto using In_InMembers. inv Hin; solve_In.
+      + apply Env.In_find_adds'. 2:(inv Hin; solve_In).
+        apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
   Qed.
 
   Lemma collect_depends_scope_dom {A} P_vd P_nd (P_wl: A -> _) P_wx f_coll P_def P_last
@@ -1612,21 +1603,19 @@ Module Type LCAUSALITY
       NoDupMembers locs ->
       (forall x, InMembers x locs -> ~In x (map fst Γ)) ->
       (forall x cx, Env.find x cenv' = Some cx <-> HasLastCaus Γ x cx) ->
-      (forall x cx, Env.find x (Env.union cenv' (Env.from_list (map_filter (fun '(x2, (_, _, _, o)) => option_map (fun '(_, cx0) => (x2, cx0)) o) locs))) = Some cx
+      (forall x cx, Env.find x (Env.adds' (map_filter (fun '(x2, (_, _, _, o)) => option_map (fun '(_, cx0) => (x2, cx0)) o) locs) cenv') = Some cx
                <-> HasLastCaus (Γ ++ @senv_of_decls A locs) x cx).
   Proof.
     intros * Hnd1 Hnd2 Heq *. rewrite HasLastCaus_app. split; intros Hin.
-    - apply Env.union_find4 in Hin as [|Hin].
+    - apply Env.find_adds'_In in Hin as [Hin|Hin].
+      + simpl_In. right. econstructor. solve_In. simpl. eauto.
       + left. eapply Heq; eauto.
-      + apply Env.from_list_find_In in Hin. simpl_In.
-        right. econstructor. solve_In. simpl. eauto.
     - destruct Hin as [Hin|Hin].
-      + apply Env.union_find2. apply Heq; auto.
-        rewrite <-Env.Props.P.F.not_find_in_iff, Env.In_from_list.
+      + rewrite Env.gsso', Heq; auto.
         intros Hinm. simpl_In.
         eapply Hnd2; eauto using In_InMembers. inv Hin; solve_In.
-      + apply Env.union_find3'. inv Hin. simpl_In. subst.
-        apply Env.find_In_from_list. solve_In. apply NoDupMembers_map_filter; auto.
+      + apply Env.In_find_adds'. 2:(inv Hin; solve_In).
+        apply NoDupMembers_map_filter; auto.
         intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
   Qed.
 
@@ -1753,38 +1742,32 @@ Module Type LCAUSALITY
       + apply NoDupScope_NoDupMembers; auto.
       + eapply equiv_env_scope; eauto.
       + eapply equiv_env_last_scope; eauto.
-      + rewrite 2 Env.elements_union, 2 Env.elements_from_list.
-        simpl_app. apply NoDup_app'; eauto using NoDup_app_l.
-        * clear - Hnd4.
-          eapply NoDup_app_r in Hnd4. rewrite app_assoc in Hnd4.
-          eapply Permutation_NoDup in Hnd4; eauto. simpl_app.
-          symmetry. rewrite Permutation_swap. apply Permutation_app_head. rewrite app_assoc. apply Permutation_app_tail.
-          unfold idcaus_of_senv. erewrite map_app, 3 map_map, map_ext, map_filter_map, map_filter_ext. reflexivity.
+      + rewrite 2 Env.elements_adds. simpl_app.
+        2,3:apply NoDupMembers_app; eauto using Env.NoDupMembers_elements.
+        * eapply Permutation_NoDup, Hnd4. unfold idcaus_of_senv. simpl_app. symmetry.
+          apply Permutation_app_head. rewrite Permutation_swap. apply Permutation_app_head.
+          erewrite 3 map_map, map_ext, map_filter_map, map_filter_ext. reflexivity.
           1,2:intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
-        * simpl_Forall.
-          eapply NoDup_app_In in Hnd4; [|solve_In]. contradict Hnd4.
-          unfold idcaus_of_senv. simpl_app.
-          repeat rewrite in_app_iff in *. destruct Hnd4 as [|[|[|]]]; auto.
-          right; left. solve_In.
-          right; right; left. solve_In. auto.
         * apply NoDupMembers_map_filter; auto.
           intros; destruct_conjs. destruct o as [(?&?)|]; simpl; auto.
-        * apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
-        * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2. inv Hin1. apply Henvl in H; inv H.
-          simpl_In.
+        * intros * Hin1 Hin2. simpl_In.
+          apply Env.elements_In in Hin0 as (?&Find).
+          apply Henvl in Find; inv Find.
           eapply H5; solve_In.
-        * intros * Hin1 Hin2. rewrite Env.In_from_list in Hin2. simpl_In.
-          inv Hin1. apply Henv in H; inv H.
+        * apply NoDupMembers_map; auto. intros; destruct_conjs; auto.
+        * intros * Hin1 Hin2. simpl_In.
+          apply Env.elements_In in Hin as (?&Find).
+          apply Henv in Find; inv Find.
           eapply H5; solve_In.
       + apply NoDup_app'; auto.
         * now eapply fst_NoDupMembers.
         * simpl_Forall. intros Hin2. inv Hvarsenv. eapply Henv in H0. inv H0.
           eapply H5. apply fst_InMembers; eauto. solve_In.
       + simpl_Forall.
-        rewrite Env.union_In.
-        apply in_app_or in H as [Hin'|Hin']; [|right]; eauto.
+        apply Env.In_adds_spec'.
+        apply in_app_or in H as [Hin'|Hin']; [right|left].
         * simpl_Forall; eauto.
-        * apply Env.In_from_list, fst_InMembers. erewrite map_map, map_ext; eauto. intros; destruct_conjs; auto.
+        * solve_In.
       + rewrite map_app, map_fst_senv_of_decls; auto.
 
     - (* last *)

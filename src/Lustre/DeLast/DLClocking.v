@@ -234,8 +234,8 @@ Module Type DLCLOCKING
       wc_scope P_wc2 G Γ' s'.
   Proof.
     intros * Hvar Hlast Hincl Hsubin Hnd Hwt Hdl Hind Hadd; inv Hnd; inv Hwt; repeat inv_bind.
-    assert (forall y, Env.In y (Env.from_list (map fst x)) -> IsLast (senv_of_decls locs) y) as Hsubin'.
-    { intros *. rewrite Env.In_from_list.
+    assert (forall y, InMembers y (map fst x) -> IsLast (senv_of_decls locs) y) as Hsubin'.
+    { intros *.
       eapply fresh_idents_InMembers in H. erewrite <-H, fst_InMembers.
       intros; simpl_In. econstructor; solve_In. simpl. congruence. }
     assert (forall x2 ty,
@@ -257,7 +257,7 @@ Module Type DLCLOCKING
                      @senv_of_decls exp
                      (map (fun '(x3, (ty0, ck, cx, _)) => (x3, (ty0, ck, cx, None))) locs ++
                           map (fun '(_, lx, (ty0, ck, _)) => (lx, (ty0, ck, 1%positive, None))) x))
-                 (rename_in_var (Env.union sub (Env.from_list (map fst x))) x2) ty) as Hlast'.
+                 (rename_in_var (Env.adds' (map fst x) sub) x2) ty) as Hlast'.
     { intros *. rewrite 2 HasClock_app, IsLast_app.
       intros [Hty|Hty] [Hl|Hl]; eauto.
       - left. rewrite not_in_union_rename2; eauto.
@@ -273,12 +273,10 @@ Module Type DLCLOCKING
       - right. simpl_app. apply HasClock_app. right.
         inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
         destruct o0 as [(?&?)|]; simpl in *; try congruence.
-        eapply fresh_idents_In_rename in H. 3:solve_In; simpl; auto.
+        eapply fresh_idents_In_rename in H as Ren. 3:solve_In; simpl; auto.
         2:{ apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
             destruct o as [(?&?)|]; simpl in *; auto. }
-        econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
-        intro contra. apply Hsubin in contra.
-        eapply H4; eauto using In_InMembers.
+        econstructor. solve_In. auto.
     }
     econstructor; eauto. 3:apply Hadd.
     + rewrite map_app. apply Forall_app; split; auto.
@@ -306,7 +304,7 @@ Module Type DLCLOCKING
       * simpl_app. simpl_In. right; right. econstructor. solve_In. auto.
     + eapply Hind; eauto.
       * rewrite map_app, map_fst_senv_of_decls. apply incl_appl'; auto.
-      * intros * Hin. rewrite in_app_iff. apply Env.union_In in Hin as [|Hin]; eauto.
+      * intros * Hin. rewrite in_app_iff. apply Env.In_adds_spec' in Hin as [Hin|Hin]; eauto.
         right.
         apply Hsubin' in Hin. inv Hin. solve_In.
   Qed.
@@ -447,7 +445,7 @@ Module Type DLCLOCKING
       eapply fresh_idents_In_rename in H. 3:solve_In; simpl; eauto.
       2:{ apply NoDupMembers_map_filter. intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
           eapply NoDupMembers_senv_of_decls; eauto using NoDupMembers_app_r. }
-      econstructor. solve_In. auto. }
+      econstructor. solve_In. reflexivity. auto. }
 
     cases_eqn Eq; repeat inv_bind.
     - apply is_nil_spec in Eq; subst. simpl in *.

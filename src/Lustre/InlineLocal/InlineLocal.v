@@ -32,71 +32,59 @@ Module Type INLINELOCAL
 
   (** ** More properties *)
 
-  Fact not_in_union_rename1 : forall x sub sub',
-      ~Env.In x sub ->
-      rename_var (Env.union sub sub') x = rename_var sub' x.
+  Fact not_in_union_rename2 : forall x sub ys zs,
+      ~In x ys ->
+      rename_var (Env.adds ys zs sub) x = rename_var sub x.
   Proof.
     unfold rename_var.
     intros * Hnin.
-    eapply Env.Props.P.F.not_find_in_iff in Hnin.
-    destruct (Env.find x (Env.union sub sub')) eqn:Hfind.
-    - eapply Env.union_find4 in Hfind as [Hfind|Hfind]; congruence.
-    - eapply Env.union_find_None in Hfind as (Hfind1&Hfind2).
-      now rewrite Hfind2.
-  Qed.
-
-  Corollary not_in_union_map_rename1 : forall xs sub sub',
-      Forall (fun x => ~Env.In x sub) xs ->
-      map (rename_var (Env.union sub sub')) xs = map (rename_var sub') xs.
-  Proof.
-    induction xs; intros * Hf; inv Hf; simpl; f_equal; auto using not_in_union_rename1.
-  Qed.
-
-  Fact not_in_union_rename2 : forall x sub sub',
-      ~Env.In x sub' ->
-      rename_var (Env.union sub sub') x = rename_var sub x.
-  Proof.
-    unfold rename_var.
-    intros * Hnin.
-    destruct (Env.find x (Env.union sub sub')) eqn:Hfind.
-    - eapply Env.union_find4 in Hfind as [Hfind|Hfind].
+    destruct (Env.find x (Env.adds _ _ sub)) eqn:Hfind.
+    - apply Env.find_adds'_In in Hfind as [Hfind|Hfind].
+      + apply in_combine_l in Hfind. contradiction.
       + now rewrite Hfind.
-      + exfalso.
-        eapply Env.Props.P.F.not_find_in_iff in Hnin. congruence.
-    - eapply Env.union_find_None in Hfind as (Hfind1&Hfind2).
+    - apply Env.find_adds'_nIn in Hfind as (?&Hfind1).
       now rewrite Hfind1.
   Qed.
 
-  Corollary not_in_union_map_rename2 : forall xs sub sub',
-      Forall (fun x => ~Env.In x sub') xs ->
-      map (rename_var (Env.union sub sub')) xs = map (rename_var sub) xs.
+  Corollary not_in_union_map_rename2 : forall xs sub ys zs,
+      Forall (fun x => ~In x ys) xs ->
+      map (rename_var (Env.adds ys zs sub)) xs = map (rename_var sub) xs.
   Proof.
     induction xs; intros * Hf; inv Hf; simpl; f_equal; auto using not_in_union_rename2.
   Qed.
 
-  Lemma disjoint_union_rename_var : forall (sub1 sub2: Env.t ident) x,
-      (forall x, Env.In x sub1 -> ~Env.In x sub2) ->
-      (forall x y, Env.MapsTo x y sub1 -> ~Env.In y sub2) ->
-      rename_var sub2 (rename_var sub1 x) = rename_var (Env.union sub1 sub2) x.
+  Lemma disjoint_union_rename_var : forall (sub1: Env.t ident) xs ys x,
+      (forall x, Env.In x sub1 -> ~In x xs) ->
+      (forall x y, Env.MapsTo x y sub1 -> ~In y xs) ->
+      rename_var (Env.from_list (combine xs ys)) (rename_var sub1 x) = rename_var (Env.adds xs ys sub1) x.
   Proof.
     unfold rename_var.
     intros * Hnin1 Hnin2.
-    destruct (Env.find x (Env.union _ _)) eqn:Hfind; simpl.
+    destruct (Env.find x (Env.adds _ _ _)) eqn:Hfind; simpl.
     - destruct (Env.find x sub1) eqn:Hfind1; simpl.
-      + specialize (Hnin2 _ _ Hfind1). eapply Env.Props.P.F.not_find_in_iff in Hnin2.
-        rewrite Hnin2; simpl.
-        erewrite Env.union_find2 in Hfind; eauto. now inv Hfind.
-        eapply Env.Props.P.F.not_find_in_iff, Hnin1. econstructor; eauto.
-      + eapply Env.union_find4 in Hfind as [Hfind|Hfind]; try congruence.
-        rewrite Hfind; auto.
-    - eapply Env.union_find_None in Hfind as (Hfind1&Hfind2).
-      rewrite Hfind1; simpl. now rewrite Hfind2.
+      + specialize (Hnin2 _ _ Hfind1).
+        replace (Env.find i0 _) with (@None ident).
+        2:{ symmetry. apply Env.find_adds'_nIn.
+            rewrite Env.gempty. split; auto.
+            contradict Hnin2. eauto using InMembers_In_combine. }
+        simpl.
+        setoid_rewrite Env.gsso' in Hfind. congruence.
+        intros ?. eapply Hnin1; eauto using InMembers_In_combine. econstructor; eauto.
+      + unfold Env.from_list.
+        erewrite Env.find_gsss'_irrelevant; eauto. auto.
+        apply Env.find_adds'_In in Hfind as [Hfind|Hfind]; try congruence.
+        eauto using In_InMembers.
+    - eapply Env.find_adds'_nIn in Hfind as (Hfind1&Hfind2).
+      rewrite Hfind2; simpl.
+      replace (Env.find x _) with (@None ident); auto.
+      symmetry. apply Env.find_adds'_nIn.
+      rewrite Env.gempty. auto.
   Qed.
 
-  Corollary disjoint_union_rename_in_clock : forall (sub1 sub2: Env.t ident) ck,
-      (forall x, Env.In x sub1 -> ~Env.In x sub2) ->
-      (forall x y, Env.MapsTo x y sub1 -> ~Env.In y sub2) ->
-      rename_in_clock sub2 (rename_in_clock sub1 ck) = rename_in_clock (Env.union sub1 sub2) ck.
+  Corollary disjoint_union_rename_in_clock : forall (sub1: Env.t ident) xs ys ck,
+      (forall x, Env.In x sub1 -> ~In x xs) ->
+      (forall x y, Env.MapsTo x y sub1 -> ~In y xs) ->
+      rename_in_clock (Env.from_list (combine xs ys)) (rename_in_clock sub1 ck) = rename_in_clock (Env.adds xs ys sub1) ck.
   Proof.
     intros * Hsub1 Hsub2.
     induction ck; simpl; auto.
@@ -394,32 +382,12 @@ Module Type INLINELOCAL
     | Blocal (Scope locs blks) =>
         let xs := map fst locs in
         do newlocs <- mmap reuse_ident xs;
-        let sub1 := Env.from_list (combine xs newlocs) in
-        let sub' := Env.union sub sub1 in
+        let sub' := Env.adds xs newlocs sub in
         let locs' := map (fun '(x, (ty, ck, _, _)) => (rename_var sub' x, (ty, (rename_in_clock sub' ck)))) locs in
         do (locs1, blks') <- mmap2 (inlinelocal_block sub') blks;
         ret (locs'++concat locs1, concat blks')
     | _ => (* Should not happen *) ret ([], [blk])
     end.
-
-  (** ** State properties *)
-
-  (* Lemma inlinelocal_block_st_follows : forall blk sub blks' st st', *)
-  (*     inlinelocal_block sub blk st = (blks', st') -> *)
-  (*     st_follows st st'. *)
-  (* Proof. *)
-  (*   induction blk using block_ind2; intros * Hdl; repeat inv_bind; try reflexivity. *)
-  (*   - (* reset *) *)
-  (*     eapply mmap_st_follows in H0; eauto. *)
-  (*     rewrite Forall_forall in *; eauto. *)
-  (*   - (* local *) *)
-  (*     eapply fresh_idents_rename_st_follows in H0; eauto. *)
-  (*     etransitivity; eauto. *)
-  (*     eapply mmap_st_follows in H1; eauto. *)
-  (*     rewrite Forall_forall in *; eauto. *)
-  (* Qed. *)
-
-  (* Global Hint Resolve inlinelocal_block_st_follows : fresh. *)
 
   (** ** Wellformedness properties *)
 
@@ -476,18 +444,17 @@ Module Type INLINELOCAL
           rewrite <-app_assoc, Hperm.
           apply incl_app; try solve [solve_incl_app].
           intros ? Hin. simpl_In.
-          eapply Env.elements_complete, Env.union_find4 in Hin0 as [Hfind|Hfind].
+          eapply Env.elements_complete, Env.find_adds'_In in Hin0 as [Hfind|Hfind].
+          - eapply in_combine_l in Hfind.
+            rewrite 2 in_app_iff. auto.
           - eapply Env.elements_correct in Hfind.
             apply in_or_app, or_introl; solve_In.
-          - eapply Env.from_list_find_In, in_combine_l in Hfind.
-            rewrite 2 in_app_iff. auto.
       }
       rewrite Hperm, map_app in Hperm1.
       do 2 esplit; eauto. rewrite Hperm1, map_app, 2 map_map, <-app_assoc.
       erewrite not_in_union_map_rename2, map_ext with (l:=locs). reflexivity.
       + unfold decl. intros; destruct_conjs. reflexivity.
-      + simpl_Forall. intros In.
-        eapply Env.In_from_list, InMembers_In_combine, fst_InMembers in In.
+      + simpl_Forall. intros In. apply fst_InMembers in In.
         eapply H12; eauto with datatypes.
   Qed.
 
@@ -577,26 +544,26 @@ Module Type INLINELOCAL
       eapply H in H6; eauto. simpl_Forall; auto.
   Qed.
 
-  Lemma reuse_idents_find {A} : forall (locs: list (ident * A)) locs' st st' x,
+  Lemma reuse_idents_find {A} : forall (locs: list (ident * A)) locs' st st' sub x,
       NoDupMembers locs ->
       mmap reuse_ident (map fst locs) st = (locs', st') ->
       InMembers x locs ->
       exists st st' y,
         reuse_ident x st = (y, st')
-        /\ Env.find x (Env.from_list (combine (map fst locs) locs')) = Some y.
+        /\ Env.find x (Env.adds (map fst locs) locs' sub) = Some y.
   Proof.
     intros * ND Reuse In. apply fst_InMembers in In.
     eapply mmap_values, Forall2_forall2 in Reuse as (Len&Nth).
     eapply In_nth with (d:=xH) in In as (?&N&NthLocs); subst.
-    setoid_rewrite Env.find_In_from_list.
-    3:now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
+    setoid_rewrite Env.In_find_adds.
+    2:now apply fst_NoDupMembers.
     2:{ erewrite <-combine_nth; [|eauto].
         eapply nth_In with (d:=(xH, xH)). now rewrite combine_length, <-Len, Nat.min_id. }
     specialize (Nth xH xH _ _ _ N eq_refl eq_refl) as (?&?&?).
     do 2 esplit; eauto.
   Qed.
 
-  Lemma reuse_idents_find_follows {A} : forall (locs: list (ident * A)) locs' st st' x,
+  Lemma reuse_idents_find_follows {A} : forall (locs: list (ident * A)) locs' st st' x sub,
       NoDupMembers locs ->
       mmap reuse_ident (map fst locs) st = (locs', st') ->
       InMembers x locs ->
@@ -604,20 +571,20 @@ Module Type INLINELOCAL
         st_follows st st1
         /\ st_follows st1' st'
         /\ reuse_ident x st1 = (y, st1')
-        /\ Env.find x (Env.from_list (combine (map fst locs) locs')) = Some y.
+        /\ Env.find x (Env.adds (map fst locs) locs' sub) = Some y.
   Proof.
     intros * ND Reuse In. apply fst_InMembers in In.
     eapply mmap_values_follows, Forall2_forall2 in Reuse as (Len&Nth); eauto using reuse_ident_st_follows.
     eapply In_nth with (d:=xH) in In as (?&N&NthLocs); subst.
-    setoid_rewrite Env.find_In_from_list.
-    3:now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
+    setoid_rewrite Env.In_find_adds.
+    2:now apply fst_NoDupMembers.
     2:{ erewrite <-combine_nth; [|eauto].
         eapply nth_In with (d:=(xH, xH)). now rewrite combine_length, <-Len, Nat.min_id. }
     specialize (Nth xH xH _ _ _ N eq_refl eq_refl) as (?&?&?&?&?).
     do 2 esplit; eauto.
   Qed.
 
-  Lemma reuse_idents_find' {A} : forall (locs: list (ident * A)) locs' st st' x,
+  Lemma reuse_idents_find' {A} : forall (locs: list (ident * A)) locs' st st' x sub,
       NoDupMembers locs ->
       Forall (AtomOrGensym switch_prefs) (map fst locs) ->
       mmap reuse_ident (map fst locs) st = (locs', st') ->
@@ -628,14 +595,14 @@ Module Type INLINELOCAL
         /\ st_follows st st1
         /\ st_follows st1' st'
         /\ reuse_ident x st1 = (y, st1')
-        /\ Env.find x (Env.from_list (combine (map fst locs) locs')) = Some y.
+        /\ Env.find x (Env.adds (map fst locs) locs' sub) = Some y.
   Proof.
     intros * ND At Reuse V In. apply fst_InMembers in In.
     eapply mmap_values', Forall2_forall2 in Reuse as (Len&Nth); eauto using reuse_ident_st_follows.
     2:{ clear In. simpl_Forall; eauto using reuse_ident_st_valid. }
     eapply In_nth with (d:=xH) in In as (?&N&NthLocs); subst.
-    setoid_rewrite Env.find_In_from_list.
-    3:now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
+    setoid_rewrite Env.In_find_adds.
+    2:now apply fst_NoDupMembers.
     2:{ erewrite <-combine_nth; [|eauto].
         eapply nth_In with (d:=(xH, xH)). now rewrite combine_length, <-Len, Nat.min_id. }
     specialize (Nth xH xH _ _ _ N eq_refl eq_refl) as (?&?&?&?&?&?).
@@ -657,7 +624,7 @@ Module Type INLINELOCAL
       repeat inv_scope.
       apply Forall_app; split.
       + simpl_Forall. eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-        unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+        unfold rename_var. erewrite Find. simpl.
         unfold reuse_ident in Reu. cases_eqn EQ; inv_equalities.
         * eapply fresh_ident_prefixed in EQ0 as (?&?&?); subst.
           right. do 2 esplit; eauto using PSF.add_1.
@@ -763,7 +730,7 @@ Module Type INLINELOCAL
       apply Forall_app; split.
       + simpl_Forall.
         eapply reuse_idents_find_follows in H0 as (?&?&?&F1&F2&Reu&Find); eauto using In_InMembers.
-        unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+        unfold rename_var. erewrite Find; eauto. simpl.
         eapply reuse_ident_st_In in Reu. eapply st_follows_In; [|eauto].
         etransitivity; eauto. eapply mmap2_st_follows; eauto. simpl_Forall; eauto using inlinelocal_block_st_follows.
       + eapply mmap2_values_follows, Forall3_ignore13 in H1; eauto using inlinelocal_block_st_follows.
@@ -819,7 +786,7 @@ Module Type INLINELOCAL
       apply Forall_app; split.
       + eapply Forall_forall. intros. simpl_In.
         eapply reuse_idents_find' in H0 as (?&?&?&V1&F1&F2&Reu&Find); eauto using In_InMembers.
-        unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+        unfold rename_var. erewrite Find. simpl.
         simpl_Forall. eapply reuse_ident_st_nIn in Reu; eauto.
         contradict Reu; eauto using st_follows_In.
       + eapply mmap2_values', Forall3_ignore13 in H3; eauto using inlinelocal_block_st_follows, reuse_idents_st_valid.
@@ -885,17 +852,17 @@ Module Type INLINELOCAL
   Lemma reuse_idents_rename {A} sub : forall (locs : list (ident * A)) locs' st st',
       NoDupMembers locs ->
       mmap reuse_ident (map fst locs) st = (locs', st') ->
-      map (rename_var (Env.union sub (Env.from_list (combine (map fst locs) locs')))) (map fst locs) = locs'.
+      map (rename_var (Env.adds (map fst locs) locs' sub)) (map fst locs) = locs'.
   Proof.
     intros * ND Map. eapply Forall2_eq, Forall2_forall2.
     assert (Map':=Map). eapply mmap_values, Forall2_forall2 in Map as (Len&F2).
     rewrite map_length. split; auto.
     intros * N Nth1 Nth2; subst.
     erewrite map_nth' with (d':=xH); eauto.
-    unfold rename_var. erewrite Env.union_find3'; eauto. simpl; eauto.
-    apply Env.find_In_from_list. 2:now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
-    erewrite <-combine_nth; eauto. eapply nth_In.
-    now rewrite combine_length, <-Len, Nat.min_id.
+    unfold rename_var. setoid_rewrite Env.In_find_adds'. simpl; eauto.
+    - now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
+    - erewrite <-combine_nth; eauto. eapply nth_In.
+      now rewrite combine_length, <-Len, Nat.min_id.
   Qed.
 
   Lemma reuse_idents_NoDup {A} : forall (locs : list (ident * A)) locs' st st',

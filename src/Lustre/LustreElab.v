@@ -1771,7 +1771,7 @@ Section ElabDeclaration.
 
   Definition check_defined_scope {A} f_nd loc (Γ : Env.t bool) (s : scope A) : Elab (list ident) :=
     let 'Scope locs blk := s in
-    do xs <- f_nd (Env.union Γ (Env.from_list (map (fun '(x, (_, _, _, o)) => (x, isSome o)) locs))) blk;
+    do xs <- f_nd (Env.adds' (map (fun '(x, (_, _, _, o)) => (x, isSome o)) locs) Γ) blk;
     do xs <- check_defined_local loc (map fst locs) xs;
     ret xs.
 
@@ -1907,17 +1907,17 @@ Section ElabDeclaration.
     - eapply Perm1; [|eapply H1]. now rewrite <-Perm, map_app, map_fst_senv_of_decls, Permutation_app_comm.
     - eapply Perm1; [|eapply H2].
       intros ? In. apply in_app_iff.
-      simpl_In. apply Env.elements_In, Env.union_In in Hin as [In|In]; clear - In.
+      simpl_In. apply Env.elements_In, Env.In_adds_spec' in Hin as [In|In]; clear - In.
+      + right. solve_In.
       + apply Env.In_Members, fst_InMembers in In; auto.
-      + right. apply Env.In_from_list in In. solve_In.
     - intros * Find V. rewrite <-Perm, IsVar_app in V. rewrite <-Perm, IsLast_app.
-      apply Env.union_find4 in Find as [Find|Find].
+      apply Env.find_adds'_In in Find as [Find|Find].
+      + simpl_In. destruct o; simpl in *; try congruence.
+        left. econstructor. solve_In. simpl. congruence.
       + destruct V; auto. exfalso.
         apply IsVar_senv_of_decls in H.
         eapply Env.elements_correct in Find.
         eapply H7; eauto. solve_In.
-      + apply Env.from_list_find_In in Find. simpl_In. destruct o; simpl in *; try congruence.
-        left. econstructor. solve_In. simpl. congruence.
   Qed.
 
   Lemma check_defined_branches_nnil {E A} : forall f_ch loc env brs xs st st',

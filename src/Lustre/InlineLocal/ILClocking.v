@@ -161,13 +161,13 @@ Module Type ILCLOCKING
         rewrite Env.In_from_list, <-In_InMembers_combine, fst_InMembers; try reflexivity.
         now apply mmap_values, Forall2_length in H0. }
 
-      assert (forall y, Env.In y sub -> ~Env.In y (Env.from_list (combine (map fst locs) x))) as Hsub1.
-      { intros ?. rewrite Hsubin, Hsubin'. intros Hin1 Hin2.
+      assert (forall y, Env.In y sub -> ~In y (map fst locs)) as Hsub1.
+      { intros ?. rewrite Hsubin. intros Hin1 Hin2.
         eapply H12; eauto with datatypes. rewrite 2 in_app_iff; eauto with datatypes. }
-      assert (forall x1 x2, Env.MapsTo x1 x2 sub -> ~ Env.In x2 (Env.from_list (combine (map fst locs) x))) as Hsub2.
-      { intros ??. rewrite Hsubin'. intros Hin1 Hin2.
+     assert (forall x1 x2, Env.MapsTo x1 x2 sub -> ~In x2 (map fst locs)) as Hsub2.
+      { intros ??. intros Hin1 Hin2.
         eapply Hsubgen in Hin1 as [Hin|(?&?&Hgen)]; subst.
-        - eapply H12; eauto. rewrite 2 in_app_iff; eauto with datatypes.
+        - simpl_In. eapply H12; eauto using In_InMembers. rewrite 2 in_app_iff; eauto with datatypes.
         - simpl_In. simpl_Forall.
           eapply Fresh.Facts.contradict_AtomOrGensym; eauto using local_not_in_switch_prefs. }
 
@@ -181,12 +181,12 @@ Module Type ILCLOCKING
                             senv_of_anns
                             (map
                                (fun '(x3, (ty, ck0, _, _)) =>
-                                  (rename_var (Env.union sub (Env.from_list (combine (map fst locs) x))) x3,
-                                    (ty, rename_in_clock (Env.union sub (Env.from_list (combine (map fst locs) x))) ck0))) locs)))) ck)
+                                  (rename_var (Env.adds (map fst locs) x sub) x3,
+                                    (ty, rename_in_clock (Env.adds (map fst locs) x sub) ck0))) locs)))) ck)
                 (map
                    (fun '(x3, (ty, ck, _, _)) =>
-                      (rename_var (Env.union sub (Env.from_list (combine (map fst locs) x))) x3,
-                        (ty, rename_in_clock (Env.union sub (Env.from_list (combine (map fst locs) x))) ck))) locs)) as Cks.
+                      (rename_var (Env.adds (map fst locs) x sub) x3,
+                        (ty, rename_in_clock (Env.adds (map fst locs) x sub) ck))) locs)) as Cks.
       { simpl_Forall.
         erewrite <-disjoint_union_rename_in_clock; eauto.
         eapply subclock_clock_wc, subclock_clock_wc
@@ -217,9 +217,11 @@ Module Type ILCLOCKING
               clear - In. inv In. repeat rewrite in_app_iff. right. right. solve_In.
             - right. right.
               inv In. simpl_In. eapply reuse_idents_find in H0 as (?&?&?&Reu&Find'); eauto using In_InMembers.
-              rewrite Find' in Find. inv Find.
-              econstructor. solve_In. unfold rename_var. erewrite Env.union_find3'; simpl; eauto.
               erewrite disjoint_union_rename_in_clock; eauto.
+              unfold Env.adds, Env.from_list in *. rewrite Find' in Find. inv Find.
+              econstructor. solve_In. unfold rename_var. erewrite Env.find_gsss'_irrelevant; simpl; eauto. 2:auto.
+              apply Env.find_adds'_In in Find' as [|Find]; eauto using In_InMembers.
+              rewrite Env.gempty in Find. congruence.
         }
         1:{ intros * Find In.
             repeat rewrite HasClock_app in *. destruct In as [[In|In]|In]; eauto.
@@ -236,7 +238,8 @@ Module Type ILCLOCKING
               clear - Inm. repeat rewrite in_app_iff.
               apply InMembers_app in Inm as [|]; [left|right; right]; solve_In.
             - exfalso. inv In. simpl_In.
-              eapply In_InMembers, Hsubin' in Hin0 as (?&?). congruence.
+              eapply In_InMembers, Hsubin' in Hin0 as (?&Find'). unfold Env.MapsTo in *.
+              setoid_rewrite Find in Find'. congruence.
         }
       }
       eapply mmap_inlinelocal_block_wc with (Γ':=Γ'++senv_of_decls locs) (Γ'':=Γ''++_) in H4 as (Wc&Wcc); eauto.
@@ -247,12 +250,13 @@ Module Type ILCLOCKING
       * intros ? Hin. rewrite InMembers_app, not_or', InMembers_senv_of_decls.
         split; auto. intro contra.
         eapply H12; eauto with datatypes.
-      * intros. rewrite Env.union_In, InMembers_app, InMembers_senv_of_decls, Hsubin, Hsubin'. reflexivity.
+      * intros. rewrite Env.In_adds_spec, InMembers_app, InMembers_senv_of_decls, Hsubin, <-fst_InMembers; eauto using mmap_values, Forall2_length.
+        apply or_comm.
       *{ intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_decls.
-         eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eauto.
-         - eapply Hsubgen in Hfind as [|]; eauto.
-         - eapply Env.from_list_find_In, in_combine_r in Hfind.
-           eapply reuse_idents_gensym in H0. simpl_Forall. destruct H0; eauto. }
+         eapply Env.find_adds'_In in Hfind as [Hfind|Hfind]; eauto.
+         - eapply in_combine_r in Hfind.
+           eapply reuse_idents_gensym in H0. simpl_Forall. destruct H0; eauto.
+         - eapply Hsubgen in Hfind as [|]; eauto. }
       *{ intros * Hfind Hin. apply HasClock_app.
          eapply HasClock_app in Hin as [Hin|Hin]; [left|right].
          - assert (Env.find x3 (Env.from_list (combine (map fst locs) x)) = None) as Hnone.
@@ -260,7 +264,8 @@ Module Type ILCLOCKING
              destruct (Env.find x3 (Env.from_list (combine (map fst locs) x))) eqn:Hfind'; eauto.
              exfalso. apply Env.from_list_find_In, in_combine_l in Hfind'.
              eapply H12; eauto with datatypes. rewrite 2 in_app_iff; eauto with datatypes. }
-           eapply Env.union_find4 in Hfind as [Hfind|Hfind]; try congruence.
+           apply Env.adds_from_list in Hfind as [Hfind|Hfind]; eauto.
+           1:{ setoid_rewrite Hfind in Hnone. inv Hnone. }
            erewrite <-disjoint_union_rename_in_clock, rename_in_clock_idem; eauto.
            2:eapply subclock_clock_wc with (Γ:=Γ++Γ'), wc_env_var; eauto with lclocking; eauto with datatypes.
            4:{ inv Hin. simpl_app. apply in_app_iff, or_intror. solve_In. }
@@ -270,10 +275,9 @@ Module Type ILCLOCKING
                clear - In1. apply InMembers_app in In1 as [In1|In1]; [left|right;right]; solve_In.
            }
          - inv Hin. simpl_In. eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-           erewrite Env.union_find3' in Hfind; [|eauto]. inv Hfind.
+           rewrite Hfind in Find. inv Find.
            econstructor. unfold senv_of_anns. solve_In.
-           unfold rename_var. erewrite Env.union_find3'; [|eauto]. simpl; eauto.
-           reflexivity.
+           unfold rename_var. rewrite Hfind. eauto. reflexivity.
        }
       *{ simpl_app. simpl_Forall.
          eapply NoDupLocals_incl'. 4:eauto. all:eauto using local_not_in_switch_prefs.
@@ -282,7 +286,7 @@ Module Type ILCLOCKING
          * clear - In. simpl_In. left. right. right. right. solve_In.
          * clear - H0 H11 In. simpl_In.
            eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-           unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+           unfold rename_var. rewrite Find.
            eapply reuse_ident_gensym in Reu as [|]; subst; eauto.
            left. right. right. right. solve_In.
        }

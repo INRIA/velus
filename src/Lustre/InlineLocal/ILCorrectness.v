@@ -385,13 +385,13 @@ Module Type ILCORRECTNESS
           apply find_some in F1 as (In&Eq). rewrite equiv_decb_equiv in Eq; inv Eq.
           eapply Hdisj2; eauto using in_combine_r. }
 
-        assert (forall y, Env.In y sub -> ~Env.In y (Env.from_list (combine (map fst locs) x))) as Hsub1.
-        { intros ?. rewrite Hsubin, Hsubin'. intros In1 In2.
-          eapply Hnd'; eauto. clear - In1. rewrite 2 in_app_iff. right; left. inv In1. solve_In. }
-        assert (forall x1 x2, Env.MapsTo x1 x2 sub -> ~ Env.In x2 (Env.from_list (combine (map fst locs) x))) as Hsub2.
-        { intros ??. rewrite Hsubin'. intros Hin1 Hin2.
+        assert (forall y, Env.In y sub -> ~In y (map fst locs)) as Hsub1.
+        { intros ?. rewrite Hsubin. intros Hin1 Hin2. inv Hin1.
+          eapply Hnd'; eauto with datatypes. rewrite 2 in_app_iff; eauto with datatypes. }
+        assert (forall x1 x2, Env.MapsTo x1 x2 sub -> ~In x2 (map fst locs)) as Hsub2.
+        { intros ??. intros Hin1 Hin2.
           eapply Hsubgen in Hin1 as [Hin|(?&?&Hgen)]; subst.
-          - eapply Hnd'; eauto. rewrite 2 in_app_iff; eauto with datatypes.
+          - simpl_In. eapply Hnd'; eauto using In_InMembers. rewrite 2 in_app_iff; eauto with datatypes.
           - simpl_In. simpl_Forall.
             eapply Fresh.Facts.contradict_AtomOrGensym; eauto using local_not_in_switch_prefs. }
 
@@ -400,7 +400,9 @@ Module Type ILCORRECTNESS
           apply FEnv.union2; auto.
           eapply FEnv.not_find_In, Hdisj2'. econstructor; eauto. }
 
-        assert (dom Hi2' (senv_of_anns (map (fun '(x3, (ty, ck, _, _)) => (rename_var (Env.union sub (Env.from_list (combine (map fst locs) x))) x3, (ty, rename_in_clock (Env.union sub (Env.from_list (combine (map fst locs) x))) ck))) locs))) as Hdom'.
+        assert (dom Hi2' (senv_of_anns (map (fun '(x3, (ty, ck, _, _)) =>
+                                               (rename_var (Env.adds (map fst locs) x sub) x3,
+                                                 (ty, rename_in_clock (Env.adds (map fst locs) x sub) ck))) locs))) as Hdom'.
         { subst; split.
           - intros ?. unfold senv_of_anns. erewrite IsVar_fst, 2 map_map.
             split; intros In.
@@ -408,8 +410,8 @@ Module Type ILCORRECTNESS
               apply find_some in Find as (In&Eq).
               rewrite equiv_decb_equiv in Eq. inv Eq.
               eapply in_combine_l in In as InL. solve_In.
-              unfold rename_var. erewrite Env.union_find3'; [|eapply Env.find_In_from_list]; eauto. auto.
-              now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
+              unfold rename_var. erewrite Env.In_find_adds; simpl; eauto.
+              now apply fst_NoDupMembers.
             + simpl_In.
               assert (FEnv.In (Var i) Hi') as [? Find] by (eapply H6; econstructor; solve_In).
               econstructor. erewrite find_snd_spec; simpl; eauto using reuse_idents_NoDup.
@@ -418,8 +420,8 @@ Module Type ILCORRECTNESS
               { eapply in_map with (f:=fst), In_nth with (d:=xH) in Hin as (?&Len&Nth). simpl in *.
                 esplit. erewrite <-Nth, <-combine_nth with (y:=xH); eauto. eapply nth_In.
                 rewrite combine_length, <-EqLen, Nat.min_id; auto. }
-              unfold rename_var. erewrite Env.union_find3'; [|eapply Env.find_In_from_list]; eauto. auto.
-              now apply NoDup_NoDupMembers_combine, fst_NoDupMembers.
+              unfold rename_var. erewrite Env.In_find_adds; simpl; eauto.
+              now apply fst_NoDupMembers.
           - split; intros In; exfalso; [|inv In; simpl_In; congruence].
             inv In. apply obind_inversion in H1 as ((?&?)&Find&_).
             apply find_some in Find as (_&Eq).
@@ -440,27 +442,28 @@ Module Type ILCORRECTNESS
           * eapply Hdisj; eauto.
           * apply IsVar_senv_of_decls in Hinm2. eapply Hnd'; eauto.
             rewrite 2 in_app_iff, <-IsVar_fst; auto.
-        + intros ?. rewrite Env.union_In, Hsubin, Hsubin', IsVar_app, IsVar_senv_of_decls.
-          reflexivity.
+        + intros ?. rewrite Env.In_adds_spec, Hsubin, IsVar_app, IsVar_senv_of_decls, <-fst_InMembers;
+            eauto using mmap_values, Forall2_length.
+          apply or_comm.
         + intros ?? Hfind. rewrite InMembers_app, InMembers_senv_of_decls.
-         eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eauto.
-         * eapply Hsubgen in Hfind as [|]; eauto.
-         * eapply Env.from_list_find_In, in_combine_r in Hfind.
+         eapply Env.find_adds'_In in Hfind as [Hfind|Hfind]; eauto.
+         * eapply in_combine_r in Hfind.
            eapply reuse_idents_gensym in H0. simpl_Forall. destruct H0; eauto.
+         * eapply Hsubgen in Hfind as [|]; eauto.
         + intros ??? Hfind Hv.
           erewrite sem_var_disj_union; eauto.
-          eapply Env.union_find4 in Hfind as [Hfind|Hfind]; eapply sem_var_union in Hv as [Hv|Hv]; eauto.
+          eapply Env.find_adds'_In in Hfind as [Hfind|Hfind]; eapply sem_var_union in Hv as [Hv|Hv]; eauto.
+          * exfalso.
+            apply sem_var_In, Hub in Hv.
+            take (forall x, InMembers x locs -> ~_) and eapply it; eauto.
+            eapply fst_InMembers, InMembers_In_combine; eauto using In_InMembers.
+            rewrite app_assoc, in_app_iff. left. rewrite <-map_app, <-IsVar_fst; auto.
+          * right. inv Hv. econstructor; eauto.
+            erewrite find_snd_spec; eauto using reuse_idents_NoDup.
           * exfalso. apply Env.find_In, Hsubin in Hfind.
             apply sem_var_In, H6, IsVar_senv_of_decls in Hv.
             take (forall x, InMembers x locs -> ~_) and eapply it...
             rewrite 2 in_app_iff, <-2 IsVar_fst; auto.
-          * exfalso. apply Env.find_In, Hsubin' in Hfind.
-            apply sem_var_In, Hub in Hv.
-            take (forall x, InMembers x locs -> ~_) and eapply it...
-            rewrite app_assoc, in_app_iff. left. rewrite <-map_app, <-IsVar_fst; auto.
-          * right. inv Hv. econstructor; eauto.
-            apply Env.from_list_find_In in Hfind.
-            erewrite find_snd_spec; eauto using reuse_idents_NoDup.
         + intros ?? Hfind Hv.
           erewrite sem_var_disj_union; eauto.
           eapply sem_var_union in Hv as [Hv|Hv]; eauto.
@@ -477,7 +480,7 @@ Module Type ILCORRECTNESS
           * clear - In. simpl_In. left. right. right. right. solve_In.
           * clear - H0 H11 In. simpl_In.
             eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-            unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+            unfold rename_var. rewrite Find.
             eapply reuse_ident_gensym in Reu as [|]; subst; eauto.
             left. right. right. right. solve_In.
         + rewrite app_assoc. eapply local_hist_dom_ub; eauto.
@@ -487,7 +490,7 @@ Module Type ILCORRECTNESS
           eapply local_hist_sc_vars; eauto using dom_dom_ub. reflexivity.
           *{ intros * In1 In2. apply IsVar_fst in In2. simpl_In.
              eapply reuse_idents_find' in H0 as (?&?&?&V1&Fol1&Fol2&Reu&Find); eauto using In_InMembers.
-             unfold rename_var in Hin. erewrite Env.union_find3' in Hin; [|eauto]. simpl in *. simpl_Forall.
+             unfold rename_var in Hin. erewrite Find in Hin. simpl in *. simpl_Forall.
              eapply reuse_ident_st_nIn in Reu as Nin; eauto.
              eapply Nin; eauto using st_follows_In. }
           * now rewrite Typing.senv_of_decls_senv_of_anns.
@@ -535,15 +538,17 @@ Module Type ILCORRECTNESS
                * eapply sem_var_disj_union; eauto.
              + eapply Hsc2; eauto. econstructor; solve_In. auto.
                assert (Reus:=H0). eapply reuse_idents_find in H0 as (?&?&?&Reu&Find); eauto using In_InMembers.
-               unfold rename_var in Var.
-               erewrite Env.union_find3' in Var; eauto. simpl in *.
+               apply Env.find_adds'_In in Find as [Find|Find]. 2:rewrite Env.gempty in Find; inv Find.
                apply sem_var_union in Var as [Var|Var].
                * exfalso. eapply sem_var_In, Hdisj2 in Var.
-                 eapply Var; eauto using in_combine_r, Env.from_list_find_In.
+                 eapply Var; eauto. unfold rename_var.
+                 erewrite Env.In_find_adds; eauto using in_combine_r.
+                 now apply fst_NoDupMembers.
                * eapply sem_var_union3'. inv Var.
                  apply obind_inversion in H0 as ((?&?)&Find'&?).
-                 erewrite find_snd_spec in Find'; eauto using reuse_idents_NoDup, Env.from_list_find_In. inv Find'.
-                 econstructor; eauto.
+                 erewrite find_snd_spec in Find'; eauto using reuse_idents_NoDup, Env.from_list_find_In.
+                 2:{ unfold rename_var. erewrite Env.In_find_adds; eauto. now apply fst_NoDupMembers. }
+                 inv Find'. econstructor; eauto.
            }
         + eauto using reuse_idents_st_valid.
         + rewrite app_assoc, map_app, Forall_app. split.
@@ -551,7 +556,7 @@ Module Type ILCORRECTNESS
             simpl_Forall; eauto using reuse_ident_st_follows.
           * simpl_Forall. simpl_In.
             eapply reuse_idents_find_follows in H0 as (?&?&?&Fol1&Fol2&Reu&Find); eauto using In_InMembers.
-            unfold rename_var. erewrite Env.union_find3'; eauto. simpl.
+            unfold rename_var. rewrite Find.
             eapply reuse_ident_st_In in Reu; eauto using st_follows_In.
     Qed.
 

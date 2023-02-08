@@ -68,51 +68,28 @@ Module Type DELAST
 
   End rename_empty.
 
-  Fact not_in_union_rename1 : forall x sub sub',
-      ~Env.In x sub ->
-      rename_in_var (Env.union sub sub') x = rename_in_var sub' x.
+  Fact not_in_union_rename1 : forall x y sub xs,
+      NoDupMembers xs ->
+      In (x, y) xs ->
+      rename_in_var (Env.adds' xs sub) x = y.
   Proof.
     unfold rename_in_var.
-    intros * Hnin.
-    eapply Env.Props.P.F.not_find_in_iff in Hnin.
-    destruct (Env.find x (Env.union sub sub')) eqn:Hfind.
-    - eapply Env.union_find4 in Hfind as [Hfind|Hfind]; congruence.
-    - eapply Env.union_find_None in Hfind as (Hfind1&Hfind2).
-      now rewrite Hfind2.
+    intros * ND In.
+    erewrite Env.In_find_adds'; simpl; eauto.
   Qed.
 
-  Fact not_in_union_rename2 : forall x sub sub',
-      ~Env.In x sub' ->
-      rename_in_var (Env.union sub sub') x = rename_in_var sub x.
+  Fact not_in_union_rename2 : forall x sub xs,
+      ~InMembers x xs ->
+      rename_in_var (Env.adds' xs sub) x = rename_in_var sub x.
   Proof.
     unfold rename_in_var.
     intros * Hnin.
-    destruct (Env.find x (Env.union sub sub')) eqn:Hfind.
-    - eapply Env.union_find4 in Hfind as [Hfind|Hfind].
+    destruct (Env.find x _) eqn:Hfind.
+    - eapply Env.find_adds'_In in Hfind as [Hfind|Hfind].
+      + exfalso. eapply Hnin; eauto using In_InMembers.
       + now rewrite Hfind.
-      + exfalso.
-        eapply Env.Props.P.F.not_find_in_iff in Hnin. congruence.
-    - eapply Env.union_find_None in Hfind as (Hfind1&Hfind2).
-      now rewrite Hfind1.
-  Qed.
-
-  Lemma disjoint_union_rename_in_var : forall (sub1 sub2: Env.t ident) x,
-      (forall x, Env.In x sub1 -> ~Env.In x sub2) ->
-      (forall x y, Env.MapsTo x y sub1 -> ~Env.In y sub2) ->
-      rename_in_var sub2 (rename_in_var sub1 x) = rename_in_var (Env.union sub1 sub2) x.
-  Proof.
-    unfold rename_in_var.
-    intros * Hnin1 Hnin2.
-    destruct (Env.find x (Env.union _ _)) eqn:Hfind; simpl.
-    - destruct (Env.find x sub1) eqn:Hfind1; simpl.
-      + specialize (Hnin2 _ _ Hfind1). eapply Env.Props.P.F.not_find_in_iff in Hnin2.
-        rewrite Hnin2; simpl.
-        erewrite Env.union_find2 in Hfind; eauto. now inv Hfind.
-        eapply Env.Props.P.F.not_find_in_iff, Hnin1. econstructor; eauto.
-      + eapply Env.union_find4 in Hfind as [Hfind|Hfind]; try congruence.
-        rewrite Hfind; auto.
-    - eapply Env.union_find_None in Hfind as (Hfind1&Hfind2).
-      rewrite Hfind1; simpl. now rewrite Hfind2.
+    - apply Env.find_adds'_nIn in Hfind as (Hfind1&Hfind2).
+      simpl. destruct (Env.find x sub); simpl in *; auto. congruence.
   Qed.
 
   (** ** Inlining of local blocks *)
@@ -136,8 +113,7 @@ Module Type DELAST
       let 'Scope locs blks := s in
       let lasts := map_filter (fun '(x, (ty, ck, _, o)) => option_map (fun '(e, _) => (x, (ty, ck, e))) o) locs in
       do lasts' <- fresh_idents lasts;
-      let sub1 := Env.from_list (map fst lasts') in
-      let sub' := Env.union sub sub1 in
+      let sub' := Env.adds' (map fst lasts') sub in
       do blks' <- f_delast sub' blks;
       let fbyeqs :=
         map (fun '(x, lx, (ty, ck, e)) =>
@@ -235,40 +211,29 @@ Module Type DELAST
     erewrite <-fresh_idents_InMembers; eauto.
   Qed.
 
-  Lemma fresh_idents_In_rename : forall lasts lasts' st st',
+  Lemma fresh_idents_In_rename sub : forall lasts lasts' st st',
       NoDupMembers lasts ->
       fresh_idents lasts st = (lasts', st') ->
       forall x ty ck e, In (x, (ty, ck, e)) lasts ->
-                   In (x, (rename_in_var (Env.from_list (map fst lasts')) x), (ty, ck, e)) lasts'.
+                   In (x, (rename_in_var (Env.adds' (map fst lasts') sub) x), (ty, ck, e)) lasts'.
   Proof.
     intros * Hnd Hfresh * Hin.
     assert (Hf:=Hfresh). apply mmap_values, Forall2_ignore2 in Hf. simpl_Forall.
-    repeat inv_bind. unfold rename_in_var. erewrite Env.find_In_from_list.
-    2:solve_In. simpl; auto. eapply fresh_idents_NoDupMembers; eauto.
+    repeat inv_bind. unfold rename_in_var. erewrite Env.In_find_adds'. 1,3:simpl; solve_In; auto.
+    eapply fresh_idents_NoDupMembers; eauto.
   Qed.
 
-  Lemma fresh_idents_In'_rename : forall lasts lasts' st st',
+  Lemma fresh_idents_In'_rename sub : forall lasts lasts' st st',
       NoDupMembers lasts ->
       fresh_idents lasts st = (lasts', st') ->
       forall x lx ty ck e, In (x, lx, (ty, ck, e)) lasts' ->
-                      In (x, (ty, ck, e)) lasts /\ lx = rename_in_var (Env.from_list (map fst lasts')) x.
+                      In (x, (ty, ck, e)) lasts /\ lx = rename_in_var (Env.adds' (map fst lasts') sub) x.
   Proof.
     intros * Hnd Hfresh * Hin.
     assert (Hf:=Hfresh). apply mmap_values, Forall2_ignore1 in Hf. simpl_Forall.
     repeat inv_bind. split; eauto.
-    unfold rename_in_var. erewrite Env.find_In_from_list. 2:solve_In. auto.
+    unfold rename_in_var. erewrite Env.In_find_adds'. 1,3:simpl; eauto; solve_In.
     eapply fresh_idents_NoDupMembers; eauto.
-  Qed.
-
-  Lemma fresh_idents_sub : forall lasts lasts' st st',
-      NoDupMembers lasts ->
-      fresh_idents lasts st = (lasts', st') ->
-      forall x lx, In (x, lx) (map fst lasts') ->
-              Env.find x (Env.from_list (map fst lasts')) = Some lx.
-  Proof.
-    intros * Hnd Hfresh * Hin.
-    apply Env.find_In_from_list; auto.
-    eapply fresh_idents_NoDupMembers in Hfresh; eauto.
   Qed.
 
   (** ** State properties *)

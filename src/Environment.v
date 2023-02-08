@@ -931,6 +931,16 @@ Module Env.
       + rewrite Env.gso in Hfind; intuition.
     Qed.
 
+    Lemma adds_from_list : forall xs ys (env : t A) x y,
+        find x (adds xs ys env) = Some y ->
+        find x (from_list (combine xs ys)) = Some y \/ find x env = Some y.
+    Proof.
+      intros * Find.
+      unfold from_list, adds in *.
+      apply find_adds'_In in Find as Find'. destruct Find' as [In|]; auto.
+      left. erewrite find_gsss'_irrelevant; eauto using In_InMembers.
+    Qed.
+
   End Extra.
 
   (** Equivalence of Environments *)

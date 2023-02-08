@@ -106,8 +106,8 @@ Module Type DLTYPING
       wt_scope P_wt2 G Γ' s'.
   Proof.
     intros * Hvar Hlast Hsubin Hnd Hwt Hdl Hind Hadd; inv Hnd; inv Hwt; repeat inv_bind. subst Γ'0.
-    assert (forall y, Env.In y (Env.from_list (map fst x)) -> IsLast (senv_of_decls locs) y) as Hsubin'.
-    { intros *. rewrite Env.In_from_list.
+    assert (forall y, InMembers y (map fst x) -> IsLast (senv_of_decls locs) y) as Hsubin'.
+    { intros *.
       eapply fresh_idents_InMembers in H. erewrite <-H, fst_InMembers.
       intros; simpl_In. econstructor; solve_In. simpl. congruence. }
     assert (forall x2 ty,
@@ -129,7 +129,7 @@ Module Type DLTYPING
                      @senv_of_decls exp
                      (map (fun '(x3, (ty0, ck, cx, _)) => (x3, (ty0, ck, cx, None))) locs ++
                           map (fun '(_, lx, (ty0, ck, _)) => (lx, (ty0, ck, 1%positive, None))) x))
-                 (rename_in_var (Env.union sub (Env.from_list (map fst x))) x2) ty) as Hlast'.
+                 (rename_in_var (Env.adds' (map fst x) sub) x2) ty) as Hlast'.
     { intros *. rewrite 2 HasType_app, IsLast_app.
       intros [Hty|Hty] [Hl|Hl]; eauto.
       - left. rewrite not_in_union_rename2; eauto.
@@ -145,12 +145,10 @@ Module Type DLTYPING
       - right. simpl_app. apply HasType_app. right.
         inv Hty. inv Hl. simpl_In. eapply NoDupMembers_det in Hin0; eauto; inv_equalities.
         destruct o0 as [(?&?)|]; simpl in *; try congruence.
-        eapply fresh_idents_In_rename in H. 3:solve_In; simpl; auto.
+        eapply fresh_idents_In_rename in H as Hren. 3:solve_In; simpl; auto.
         2:{ apply NoDupMembers_map_filter; auto. intros; destruct_conjs; auto.
             destruct o as [(?&?)|]; simpl in *; auto. }
-        econstructor. solve_In. rewrite not_in_union_rename1; eauto. 2:reflexivity.
-        intro contra. apply Hsubin in contra.
-        inv contra. eapply H4; eauto using In_InMembers. solve_In.
+        econstructor. solve_In. auto.
     }
     econstructor; eauto. 4:apply Hadd.
     - simpl_app. unfold wt_clocks in *. apply Forall_app; split; auto.
@@ -179,7 +177,7 @@ Module Type DLTYPING
         eapply wt_clock_incl; eauto.
       + simpl_app. repeat rewrite HasType_app. right; right. econstructor; solve_In. auto.
     - eapply Hind; eauto.
-      + intros * Hin. rewrite IsLast_app. apply Env.union_In in Hin as [|]; eauto.
+      + intros * Hin. rewrite IsLast_app. apply Env.In_adds_spec' in Hin as [|]; eauto.
       + rewrite map_app, map_fst_senv_of_decls; auto.
   Qed.
 
@@ -310,7 +308,7 @@ Module Type DLTYPING
       eapply fresh_idents_In_rename in H. 3:solve_In; simpl; eauto.
       2:{ apply NoDupMembers_map_filter. intros; destruct_conjs; auto. destruct o as [(?&?)|]; simpl; auto.
           eapply NoDupMembers_senv_of_decls; eauto using NoDupMembers_app_r. }
-      econstructor. solve_In. auto. }
+      econstructor. unfold Env.from_list. solve_In. auto. }
 
     cases_eqn Eq; repeat inv_bind.
     - apply is_nil_spec in Eq; subst. simpl in *.

@@ -1185,8 +1185,8 @@ Module Type LTYPING
     Definition check_scope {A} (f_check : Env.t type -> Env.t type -> A -> bool)
                (venv venvl : Env.t type) (s : scope A) : bool :=
       let 'Scope locs blks := s in
-      let venv' := Env.union venv (Env.from_list (map (fun '(x, (ty, _, _, _)) => (x, ty)) locs)) in
-      let venvl' := Env.union venvl (Env.from_list (map_filter (fun '(x, (ty, _, _, o)) => option_map (fun _ => (x, ty)) o) locs)) in
+      let venv' := Env.adds' (map (fun '(x, (ty, _, _, _)) => (x, ty)) locs) venv in
+      let venvl' := Env.adds' (map_filter (fun '(x, (ty, _, _, o)) => option_map (fun _ => (x, ty)) o) locs) venvl in
       forallb (check_clock tenv venv') (map (fun '(_, (_, ck, _, _)) => ck) locs)
       && forallb (check_type_in tenv) (map (fun '(x, (ty, _, _, _)) => ty) locs)
       && forallb (check_last_decl venv' venvl') locs
@@ -1267,22 +1267,20 @@ Module Type LTYPING
         wt_scope P_wt G env (Scope locs blks).
     Proof.
       intros * Henv Henvl Hp Hc.
-      assert (forall x ty, Env.find x (Env.union venv (Env.from_list (map (fun '(x0, (ty0, _, _, _)) => (x0, ty0)) locs))) = Some ty ->
+      assert (forall x ty, Env.find x (Env.adds' (map (fun '(x, (ty, _, _, _)) => (x, ty)) locs) venv) = Some ty ->
                         HasType (env ++ senv_of_decls locs) x ty) as Henv'.
-        { intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
+        { intros * Hfind. apply Env.find_adds'_In in Hfind as [Hfind|Hfind].
+          - simpl_In. right. econstructor. solve_In. reflexivity.
           - apply Henv in Hfind. inv Hfind. eauto with senv datatypes.
-          - apply Env.from_list_find_In in Hfind. simpl_In.
-            right. econstructor. solve_In.
-            reflexivity.
         }
         assert (forall x ty,
-                   Env.find x (Env.union venvl (Env.from_list (map_filter (fun '(x0, (ty0, _, _, o)) => option_map (fun _ : exp * ident => (x0, ty0)) o) locs))) = Some ty ->
+                   Env.find x (Env.adds' (map_filter (fun '(x, (ty, _, _, o)) => option_map (fun _ => (x, ty)) o) locs) venvl) = Some ty ->
                    HasType (env ++ senv_of_decls locs) x ty /\ IsLast (env ++ senv_of_decls locs) x) as Henvl'.
-        { intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
+        { intros * Hfind. apply Env.find_adds'_In in Hfind as [Hfind|Hfind].
+          - simpl_In.
+            split; right; econstructor. 1,3:solve_In. reflexivity. simpl. congruence.
           - apply Henvl in Hfind as (Hhas&His). inv Hhas. inv His.
             constructor; eauto with senv datatypes.
-          - apply Env.from_list_find_In in Hfind. simpl_In.
-            split; right; econstructor. 1,3:solve_In. reflexivity. simpl. congruence.
         }
         simpl in *.
       repeat rewrite Bool.andb_true_iff in Hc. destruct Hc as (((CC&CE)&CL)&CB).

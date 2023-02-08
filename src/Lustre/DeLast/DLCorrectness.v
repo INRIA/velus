@@ -237,14 +237,18 @@ Module Type DLCORRECTNESS
     Proof.
       intros * Hvar Hvarl Hsubin1 Hsubin2 Hsubin3 Hinj Hincl Hnd2 Hat Hgood Hub1 (* Hlb1 *) Hub2 (* Hlb2 *) Hwc Hwt (* Hsc *) Hsem Hdl Hind Hadd;
         inv Hnd2; inv Hgood; inv Hwc; inv Hwt; inv Hsem; repeat inv_bind; simpl. subst Γ' Γ'0.
-      assert (forall y, Env.In y (Env.from_list (map fst x)) <-> IsLast (senv_of_decls locs) y) as Hsubin4.
-      { intros *. rewrite Env.In_from_list.
+      assert (forall y, InMembers y (map fst x) <-> IsLast (senv_of_decls locs) y) as Hsubin4.
+      { intros *.
         eapply fresh_idents_InMembers in H. erewrite <-H, fst_InMembers.
         split; intros * Hin.
         - simpl_In. econstructor; solve_In. simpl. congruence.
         - inv Hin. simpl_In. destruct o as [(?&?)|]; simpl in *; try congruence.
           solve_In. auto. }
 
+      assert (NoDupMembers (map_filter (fun '(x2, (ty, ck, _, o)) => option_map (fun '(e, _) => (x2, (ty, ck, e))) o) locs)) as NDlocs.
+      { apply NoDupMembers_map_filter; auto.
+        intros; destruct_conjs. destruct o as [(?&?)|]; simpl in *; auto. }
+      assert (NoDupMembers (map fst x)) as NDx by (eapply fresh_idents_NoDupMembers; eauto).
       assert (NoDupMembers (map (fun '(x, lx, _) => (Var lx, or_default (Streams.const absent) (Hi' (Last x)))) x)) as Hndl1.
       { eapply fresh_idents_NoDup in H; eauto.
         rewrite fst_NoDupMembers, map_map in H. erewrite fst_NoDupMembers, map_map, map_ext, <-map_map.
@@ -298,7 +302,7 @@ Module Type DLCORRECTNESS
       assert (forall y vs,
                  IsLast (Γck ++ senv_of_decls locs) y ->
                  sem_var (Hi + Hi') (Last y) vs ->
-                 sem_var (Hi2 + Hi2') (Var (rename_in_var (Env.union sub (Env.from_list (map fst x))) y)) vs) as Hvarl'.
+                 sem_var (Hi2 + Hi2') (Var (rename_in_var (Env.adds' (map fst x) sub) y)) vs) as Hvarl'.
       { intros * Hin Hv. subst Hi2'.
         rewrite sem_var_disj_union, sem_var_disj_union; eauto.
         apply IsLast_app in Hin as [Hin|Hin]; simpl_In; subst.
@@ -306,7 +310,7 @@ Module Type DLCORRECTNESS
           2:{ exfalso. eapply sem_var_In, H11, IsLast_senv_of_decls in Hv. inv Hin.
               eapply H4; eauto. apply Hincl; solve_In. }
           left. rewrite not_in_union_rename2.
-          2:{ intros contra. rewrite Env.In_from_list, fst_InMembers in contra. simpl_In.
+          2:{ intros contra. rewrite fst_InMembers in contra. simpl_In.
               eapply fresh_idents_In' in H; eauto. simpl_In.
               inv Hin. eapply H4; eauto using In_InMembers. eapply Hincl; solve_In. }
           eapply Hvarl; eauto.
@@ -315,12 +319,11 @@ Module Type DLCORRECTNESS
           1:{ exfalso. eapply sem_var_In, Hub1 in Hv. inv Hv.
               eapply H4; eauto using In_InMembers. solve_In. }
           right; right.
-          eapply fresh_idents_In_rename in H. 3:solve_In; simpl; eauto.
+          eapply fresh_idents_In_rename with (sub:=Env.empty _) in H as Ren. 3:solve_In; simpl; eauto.
           2:{ apply NoDupMembers_map_filter; auto.
               intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
-          erewrite not_in_union_rename1.
-          2:{ intro contra. apply Hsubin1 in contra. inv contra.
-              eapply H4; eauto using In_InMembers, in_or_app. solve_In. }
+          erewrite not_in_union_rename1; eauto.
+          2:solve_In.
           inv Hv. econstructor; [|eauto].
           apply FEnv.of_list_In_find; auto. solve_In.
           take (Hi' (Last _) = _) and rewrite it; reflexivity.
@@ -359,9 +362,7 @@ Module Type DLCORRECTNESS
           * econstructor. clear - Hin0; solve_In. eauto.
           * eapply sem_var_history, sem_var_refines', sem_var_history; eauto.
             apply FEnv.union_In, or_intror, H11. econstructor; clear - Hin0; solve_In.
-        + eapply fresh_idents_In'_rename in H as (?&?); eauto.
-          2:{ apply NoDupMembers_map_filter; auto.
-              intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
+        + eapply fresh_idents_In'_rename with (sub:=Env.empty _) in H as Ren; eauto. destruct Ren as (?&?); subst.
           simpl_In.
           intros Hv. eapply sem_clock_refines, Hsc2; eauto.
           1,2:econstructor; clear - Hin; solve_In; simpl; eauto. congruence.
@@ -370,15 +371,12 @@ Module Type DLCORRECTNESS
             apply FEnv.union_In, or_intror, H11.
             clear - Hin; econstructor; solve_In. simpl. congruence.
           }
-          assert (Hv'':=Hv'). eapply Hvarl' in Hv''. rewrite not_in_union_rename1 in Hv''; eauto.
+          assert (Hv'':=Hv'). eapply Hvarl' in Hv''. setoid_rewrite not_in_union_rename1 in Hv''; eauto.
           -- eapply sem_var_det in Hv''; [|eapply Hv]. now rewrite Hv''.
-          -- intro contra. apply Hsubin1 in contra. inv contra.
-             eapply H4; eauto using In_InMembers, in_or_app. solve_In.
+          -- solve_In.
           -- apply IsLast_app; right. econstructor. solve_In. simpl; congruence.
       - simpl_Forall. constructor.
-        eapply fresh_idents_In'_rename in H as (?&?); subst; [| |eauto]. simpl_In.
-        2:{ apply NoDupMembers_map_filter; auto.
-            intros; destruct_conjs; destruct o as [(?&?)|]; simpl; auto. }
+        eapply fresh_idents_In'_rename in H as Ren; eauto. destruct Ren as (?&?); subst. simpl_In.
         simpl_Forall. inversion_clear H14 as [|????????? He Hv Hfby Hvl].
         eapply Seq with (ss:=[[vs]]); simpl; repeat constructor.
         + eapply Sfby with (s0ss:=[[vs0]]) (sss:=[[vs1]]); simpl.
@@ -387,26 +385,25 @@ Module Type DLCORRECTNESS
             simpl_Forall; eauto with lclocking.
           * eapply Hvar', sem_var_refines; [|eauto].
             apply FEnv.union_refines4', EqStrel_Reflexive.
-        + erewrite <-not_in_union_rename1 with (sub:=sub).
-          2:{ intro contra. apply Hsubin1 in contra. inv contra.
-              eapply H4; eauto using In_InMembers, in_or_app. solve_In. }
+        + unfold Env.from_list. unfold rename_in_var. rewrite H19.
           eapply Hvarl'; eauto.
           * apply IsLast_app, or_intror. econstructor; solve_In. simpl; congruence.
           * eapply sem_var_refines; eauto.
             apply FEnv.union_refines4', EqStrel_Reflexive.
+
       - eapply Hind with (st:=x0) (Γck:=Γck++senv_of_decls _) (Γty:=Γty++senv_of_decls _); eauto.
-        + intros * Hin. rewrite IsLast_app. apply Env.union_In in Hin as [|Hin]; eauto.
+        + intros * Hin. rewrite IsLast_app. apply Env.In_adds_spec' in Hin as [Hin|Hin]; eauto.
           right. apply Hsubin4; auto.
-        + intros * Hin. apply Env.union_In. apply IsLast_app in Hin as [|]; eauto.
-          right. apply Hsubin4; auto.
-        + intros * Hfind. apply Env.union_find4 in Hfind as [Hfind|Hfind].
-          * eapply incl_map; eauto using st_follows_incl, fresh_idents_st_follows.
-          * apply Env.from_list_find_In in Hfind. simpl_In.
+        + intros * Hin. apply Env.In_adds_spec'. apply IsLast_app in Hin as [|]; eauto.
+          left. apply Hsubin4; auto.
+        + intros * Hfind. apply Env.find_adds'_In in Hfind as [Hfind|Hfind].
+          * simpl_In.
             apply fresh_idents_In_ids in H. simpl_Forall. simpl_In. do 2 esplit; eauto. auto.
+          * eapply incl_map; eauto using st_follows_incl, fresh_idents_st_follows.
         + intros * Hl1 Hl2 Hrename.
-          assert (forall y, IsLast Γck y -> ~Env.In y (Env.from_list (map fst x))) as Hdisj1.
+          assert (forall y, IsLast Γck y -> ~InMembers y (map fst x)) as Hdisj1.
           { intros * Hlast Hin2. inv Hlast.
-            eapply Env.In_from_list, fresh_idents_InMembers in Hin2; eauto.
+            eapply fresh_idents_InMembers in Hin2; eauto.
             simpl_In. take (forall x, InMembers x locs -> ~_) and eapply it; eauto using In_InMembers. apply Hincl. solve_In.
           }
           assert (forall y, IsLast (senv_of_decls locs) y -> ~ Env.In y sub) as Hdisj2.
@@ -418,23 +415,24 @@ Module Type DLCORRECTNESS
           { intros * Hlast. apply Hsubin2 in Hlast as (?&Hfind).
             unfold rename_in_var. rewrite Hfind; eauto. }
           assert (forall y, IsLast (senv_of_decls locs) y -> ~In (rename_in_var (Env.from_list (map fst x)) y) (st_ids st)) as Hst2.
-          { intros * Hlast. apply Hsubin4 in Hlast as (?&Hfind).
-            unfold rename_in_var. rewrite Hfind; simpl.
-            apply Env.from_list_find_In in Hfind. simpl_In.
+          { intros * Hlast. apply Hsubin4 in Hlast as Hfind. simpl_In.
+            unfold rename_in_var. erewrite Env.find_In_from_list; simpl; eauto. 2:solve_In.
             eapply fresh_idents_nIn_ids in H. simpl_Forall. auto. }
           apply IsLast_app in Hl1 as [Hl1|Hl1]; apply IsLast_app in Hl2 as [Hl2|Hl2].
           * rewrite 2 not_in_union_rename2 in Hrename; auto.
-          * rewrite not_in_union_rename2, not_in_union_rename1 in Hrename; auto. exfalso.
-            eapply Hst2; eauto. rewrite <-Hrename; auto.
-          * rewrite not_in_union_rename1, not_in_union_rename2 in Hrename; auto. exfalso.
-            eapply Hst2; eauto. rewrite Hrename; auto.
-          * rewrite 2 not_in_union_rename1 in Hrename; auto.
-            apply rename_in_var_of_list_inj in Hrename; auto.
-            2-3:eapply fresh_idents_InMembers; eauto.
-            -- clear - H. eapply fresh_idents_NoDup, fst_NoDupMembers in H.
-               rewrite map_map in *. erewrite map_ext; eauto. intros; destruct_conjs; auto.
-            -- clear - Hl1. inv Hl1. simpl_In. destruct o as [(?&?)|]; simpl in *; try congruence. solve_In. auto.
-            -- clear - Hl2. inv Hl2. simpl_In. destruct o as [(?&?)|]; simpl in *; try congruence. solve_In. auto.
+          * apply Hsubin4 in Hl2 as Hl2'. simpl_In.
+            erewrite not_in_union_rename2, not_in_union_rename1 in Hrename; auto. 2:solve_In. subst.
+            exfalso. eapply Hst2; eauto.
+            unfold Env.from_list, rename_in_var. erewrite Env.In_find_adds'; eauto. solve_In.
+          * apply Hsubin4 in Hl1 as Hl1'. simpl_In.
+            erewrite not_in_union_rename1, not_in_union_rename2 in Hrename; auto. 2:solve_In. subst.
+            exfalso. eapply Hst2; eauto.
+            unfold Env.from_list, rename_in_var. erewrite Env.In_find_adds'; eauto. solve_In.
+          * apply Hsubin4 in Hl1 as Hl1'. apply Hsubin4 in Hl2 as Hl2'. simpl_In.
+            erewrite 2 not_in_union_rename1 in Hrename; auto. 2:solve_In. 2:clear Hin0; solve_In. subst.
+            eapply NoDup_snd_det with (xs:=map fst x). 2:clear Hin0; solve_In. 2:solve_In.
+            eapply fresh_idents_NoDup, fst_NoDupMembers in H.
+            rewrite map_map in *. erewrite map_ext; eauto. intros; destruct_conjs; auto.
         + rewrite 2 map_app. apply incl_appl'; auto.
         + rewrite map_app, map_fst_senv_of_decls; auto.
         + rewrite map_app, map_fst_senv_of_decls. apply Forall_app; split; simpl_Forall; auto.
