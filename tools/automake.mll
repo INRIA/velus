@@ -93,7 +93,7 @@ rule scan = parse
                                   "$(COQDEP) $(COQLIBS) $^ > .depend"];
       ["check-admitted"], ["$(VFILES)"], ["@grep -w 'Admitted' $^ ||\
                                            echo \"Nothing admitted.\""];
-      ["src/%.vo"; "$(DOCDIR)/%.glob"], ["src/%.v"],
+      ["src/%.vo"], ["src/%.v"],
       ["@echo \"COQC src/$*.v\"";
        "$(COQC) -dump-glob $(DOCDIR)/$(subst /,.,$*).glob $(COQFLAGS) src/$*.v"];
       ["documentation"], ["$(GLOBFILES)"],
