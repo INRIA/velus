@@ -1726,13 +1726,16 @@ Qed.
 
 End List_of_nprod.
 
+End Nprod.
 
 (** Lifting functions over n-uplets *)
 Section Lift_nprod.
 
-Fixpoint lift (F : D -C-> D) {n} : nprod n -C-> nprod n :=
+Context {D1 D2 D3 : cpo}.
+
+Fixpoint lift (F : D1 -C-> D2) {n} : @nprod D1 n -C-> @nprod D2 n :=
   match n with
-  | O => ID _
+  | O => AP _ _ F
   | S n =>
       match n return nprod n -C-> nprod n -> nprod (S n) -C-> nprod (S n) with
       | O => fun _ => F
@@ -1741,8 +1744,8 @@ Fixpoint lift (F : D -C-> D) {n} : nprod n -C-> nprod n :=
   end.
 
 Lemma forall_nprod_lift :
-  forall (F : D -C-> D),
-  forall (P : D -> Prop),
+  forall (F : D1 -C-> D2),
+  forall (P : D2 -> Prop),
   forall {n} (np : nprod n),
     forall_nprod (fun x => P (F x)) np ->
     forall_nprod P (lift F np).
@@ -1754,8 +1757,8 @@ Proof.
   now apply IHn.
 Qed.
 
-Definition llift {A} (F : D -C-> A -C-> D) {n} :
-  nprod n -C-> A -C-> nprod n.
+Definition llift {A} (F : D1 -C-> A -C-> D2) {n} :
+  @nprod D1 n -C-> A -C-> @nprod D2 n.
   (* match n with *)
   (* | O => CTE _ _ *)
   (* | S n => *)
@@ -1767,7 +1770,7 @@ Definition llift {A} (F : D -C-> A -C-> D) {n} :
   (*     end (@llift _ F n) *)
   (*        end. *)
   induction n as [|[]].
-  - apply CTE.
+  - apply F.
   - apply F.
   - apply curry.
     apply (fcont_comp2 (PAIR _ _)).
@@ -1783,10 +1786,10 @@ Proof.
 Qed.
 
 Lemma llift_nth :
-  forall A (F : D -C-> A -C-> D) a,
-  forall {n} (np : nprod n) k d,
+  forall A (F : D1 -C-> A -C-> D2) a,
+  forall {n} (np : nprod n) k d1 d2,
     k < n ->
-    get_nth k d (llift F np a) = F (get_nth k d np) a.
+    get_nth k d2 (llift F np a) = F (get_nth k d1 np) a.
 Proof.
   induction n as [|[]]; intros; auto; try lia.
   - destruct k; simpl; auto; lia.
@@ -1797,8 +1800,8 @@ Proof.
     setoid_rewrite <- IHn; auto with arith.
 Qed.
 
-Definition llift_env {A I} (F : A -C-> Dprodi (fun _ : I => D) -C-> D) {n} :
-  A -C-> Dprodi (fun _ : I => nprod n) -C-> nprod n.
+Definition llift_env {A I} (F : A -C-> Dprodi (fun _ : I => D1) -C-> D2) {n} :
+  A -C-> Dprodi (fun _ : I => @nprod D1 n) -C-> @nprod D2 n.
   induction n as [|[]].
   - apply F.
   - apply F.
@@ -1809,8 +1812,8 @@ Definition llift_env {A I} (F : A -C-> Dprodi (fun _ : I => D) -C-> D) {n} :
 Defined.
 
 Definition lift2
-  (F : D -C-> D -C-> D) {n} :
-  nprod n -C-> nprod n -C-> nprod n.
+  (F : D1 -C-> D2 -C-> D3) {n} :
+  @nprod D1 n -C-> @nprod D2 n -C-> @nprod D3 n.
   induction n as [|[]].
   - exact 0. (* ? *)
   - exact F.
@@ -1828,28 +1831,30 @@ Proof.
 Qed.
 
 Lemma lift2_nth :
-  forall F {n} (np np' : nprod n) k d,
+  forall (F : D1 -C-> D2 -C-> D3) {n} (np np' : nprod n) k d1 d2 d3,
     k < n ->
-    get_nth k d (lift2 F np np') = F (get_nth k d np) (get_nth k d np').
+    get_nth k d3 (lift2 F np np') = F (get_nth k d1 np) (get_nth k d2 np').
 Proof.
   induction n as [|[]]; intros; auto; try lia.
   - destruct k; simpl; auto; lia.
   - destruct np, np'.
     rewrite lift2_simpl.
     destruct k; auto.
-    rewrite <- 3 get_nth_skip, <- IHn; auto with arith.
+    erewrite <- 3 get_nth_skip, <- IHn; auto with arith.
 Qed.
 
 Lemma forall_nprod_lift2 :
-  forall (F : D -C-> D -C-> D),
-  forall (P : D -> Prop),
-    (forall x y, P x -> P y -> P (F x y)) ->
+  forall (F : D1 -C-> D2 -C-> D3),
+  forall (P1 : D1 -> Prop)
+    (P2 : D2 -> Prop)
+    (P3 : D3 -> Prop),
+    (forall x y, P1 x -> P2 y -> P3 (F x y)) ->
     forall {n} (np np' : nprod n),
-      forall_nprod P np ->
-      forall_nprod P np' ->
-      forall_nprod P (lift2 F np np').
+      forall_nprod P1 np ->
+      forall_nprod P2 np' ->
+      forall_nprod P3 (lift2 F np np').
 Proof.
-  intros f P Hf.
+  intros f P1 P2 P3 Hf.
   induction n as [|[]]; intros * H H'; auto.
   simpl in *; auto.
   destruct np,np',H,H'.
@@ -1859,8 +1864,9 @@ Proof.
 Qed.
 
 Lemma forall_nprod_llift :
-  forall A (F : D -C-> A -C-> D) d,
-  forall (P Q : D -> Prop),
+  forall A (F : D1 -C-> A -C-> D2) d,
+  forall (P : D2 -> Prop)
+    (Q : D1 -> Prop),
     (forall x, Q x -> P (F x d)) ->
     forall {n} (np : nprod n),
       forall_nprod Q np ->
@@ -1884,15 +1890,17 @@ Ltac simpl_Forall :=
      end; subst).
 
 Lemma Forall2_lift2 :
-  forall A (F : D -C-> D -C-> D)
-    (P Q : A -> D -> Prop),
-    (forall a x y, P a x -> P a y -> Q a (F x y)) ->
+  forall A (F : D1 -C-> D2 -C-> D3)
+    (P : A -> D1 -> Prop)
+    (Q : A -> D2 -> Prop)
+    (R : A -> D3 -> Prop),
+    (forall a x y, P a x -> Q a y -> R a (F x y)) ->
     forall {n} (l1 l2 : nprod n) l,
       Forall2 P l (list_of_nprod l1) ->
-      Forall2 P l (list_of_nprod l2) ->
-      Forall2 Q l (list_of_nprod (lift2 F l1 l2)).
+      Forall2 Q l (list_of_nprod l2) ->
+      Forall2 R l (list_of_nprod (lift2 F l1 l2)).
 Proof.
-  intros * PQ.
+  intros * PQR.
   induction n as [|[]]; intros * Hl1 Hl2.
   - simpl in *. now inversion Hl1.
   - simpl in *. simpl_Forall; auto.
@@ -1903,8 +1911,9 @@ Proof.
 Qed.
 
 Lemma Forall2_llift :
-  forall A B b (F : D -C-> B -C-> D)
-    (P Q : A -> D -> Prop),
+  forall A B b (F : D1 -C-> B -C-> D2)
+    (P : A -> D1 -> Prop)
+    (Q : A -> D2 -> Prop),
     (forall a x, P a x -> Q a (F x b)) ->
     forall {n} (l1 : nprod n) (l : list A),
       Forall2 P l (list_of_nprod l1) ->
@@ -1921,8 +1930,9 @@ Proof.
 Qed.
 
 Lemma Forall_llift :
-  forall A a (F : D -C-> A -C-> D)
-    (P Q : D -> Prop),
+  forall A a (F : D1 -C-> A -C-> D2)
+    (P : D1 -> Prop)
+    (Q : D2 -> Prop),
     (forall x, P x -> Q (F x a)) ->
     forall {n} (np : nprod n),
       Forall P (list_of_nprod np) ->
@@ -1940,4 +1950,20 @@ Qed.
 
 End Lift_nprod.
 
-End Nprod.
+Lemma lift_ID :
+  forall D n (np : nprod n),
+    lift (ID D) np = np.
+Proof.
+  induction n as [|[]]; intros; simpl; auto.
+  rewrite PROD_map_simpl.
+  destruct np; f_equal; auto.
+Qed.
+
+Lemma lift_lift :
+  forall D1 D2 D3 (F : D1 -C-> D2) (G : D2 -C-> D3) n (np : nprod n),
+    lift G (lift F np) = lift (G @_ F) np.
+Proof.
+  induction n as [|[]]; intros; simpl; auto.
+  rewrite 3 PROD_map_simpl.
+  simpl; f_equal; auto.
+Qed.
