@@ -654,37 +654,28 @@ Section SStream_functions.
     eapply zip_is_cons; eauto.
   Qed.
 
+  (* TODO: si ça s'avère intéressant, déplacer dans Cpo_ext.v *)
+  Section MOVE_ME.
+
   (* TODO: rename Types, move  *)
   (* TODO: bss comme instance de ça ? *)
-  Definition nprod_foldi {I} {D DD : cpo}
-     (l : list I) (d : DD) (f : I -> DD -C-> D -C-> DD) : @nprod D (length l) -C-> DD.
-    induction l as [| i [| j]].
-    - exact (CTE _ _ d).
-    - exact (f i d).
-    - exact ((f i @2_ (IHl @_ SND _ _)) (FST _ _)).
-  Defined.
+  Fixpoint nprod_foldi {I} {D DD : cpo}
+    (f : I -> DD -C-> D -C-> DD) (d : DD) (l : list I) : @nprod D (length l) -C-> DD :=
+    match l with
+      | [] => CTE _ _ d
+    | i :: l => (f i @2_ (nprod_foldi f d l @_ nprod_skip)) (nprod_fst)
+    end.
 
-  (* TODO: rename Types, move  *)
-  Definition nprod_map {D1 D2} (F : D1 -C-> D2) {n} : @nprod D1 n -C-> @nprod D2 n.
-    induction n as [|[]].
-    - apply F.
-    - apply F.
-    - apply ((PAIR _ _ @2_ (F @_ FST _ _)) (IHn @_ SND _ _)).
-  Defined.
-
-  (* TODO: rename Types, move  *)
-  (* [nprod n] of [nprod m] *)
-  Definition llift_nprod {D1 D2} {n} (F : D2 -C-> @nprod D1 n -C-> D1) {m} :
-    D2 -C-> @nprod (@nprod D1 m) n -C-> @nprod D1 m.
-    induction m as [|[|m]].
-    - apply F.
-    - apply F.
-    - apply curry.
-      apply (fcont_comp2 (PAIR _ _)).
-      + apply ((F @2_ FST _ _) (nprod_map (FST _ _) @_ SND _ _)).
-      + apply ((IHm @2_ FST _ _) (nprod_map (SND _ _) @_ SND _ _)).
-  Defined.
-
+  (* TODO: move *)
+  Lemma forall_nprod_fst :
+    forall (D:cpo) (P : D -> Prop) n (np : nprod (S n)),
+      forall_nprod P np ->
+      P (nprod_fst np).
+  Proof.
+    intros.
+    destruct n; auto.
+    now inversion H.
+  Qed.
 
   (* TODO: move *)
   Lemma forall_nprod_foldi :
@@ -695,28 +686,26 @@ Section SStream_functions.
       (forall i d1 d2, P d1 -> Q d2 -> P (f i d1 d2)) ->
       P d ->
       forall_nprod Q np ->
-      P (nprod_foldi l d f np).
+      P (nprod_foldi f d l np).
   Proof.
-    induction l as [|?[]]; intros * PQ pd Fn; auto.
-    - apply PQ; auto.
-    - inversion Fn.
-      apply PQ; auto.
-      apply IHl; auto.
+    induction l; intros * PQ pd Fn; simpl; auto.
+    apply PQ.
+    - apply IHl; eauto using forall_nprod_skip.
+    - now apply forall_nprod_fst in Fn.
   Qed.
 
-  (* TODO: move *)
-  Lemma forall_nprod_map :
-    forall D1 D2 P (f : D1 -C-> D2) n (np : nprod n),
-      forall_nprod (fun x => P (f x)) np
-      <-> forall_nprod P (nprod_map f np).
-  Proof.
-    induction n as [|[]]; intros.
-    - split; auto.
-    - split; auto.
-    - destruct np.
-      split; intro HH; inversion HH;
-        constructor; auto; now apply IHn.
-  Qed.
+  (* TODO: rename Types, move  *)
+  (** [nprod n] of [nprod m] *)
+  Definition llift_nprod {D1 D2} {n} (F : D2 -C-> @nprod D1 n -C-> D1) {m} :
+    D2 -C-> @nprod (@nprod D1 m) n -C-> @nprod D1 m.
+    induction m as [|[|m]].
+    - apply F.
+    - apply F.
+    - apply curry.
+      apply (fcont_comp2 (PAIR _ _)).
+      + apply ((F @2_ FST _ _) (lift (FST _ _) @_ SND _ _)).
+      + apply ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
+  Defined.
 
   (* TODO: move *)
   Lemma forall_nprod_llift_nprod :
@@ -735,13 +724,30 @@ Section SStream_functions.
     now simpl.
     constructor.
     - apply QP; simpl.
-      eapply forall_nprod_map, forall_nprod_impl; eauto.
+      eapply forall_nprod_lift, forall_nprod_impl; eauto.
       intros [] H; inversion H; auto.
     - apply IHm.
-      eapply forall_nprod_map, forall_nprod_impl; eauto.
+      eapply forall_nprod_lift, forall_nprod_impl; eauto.
       intros [] H; inversion H; auto.
   Qed.
 
+  (* TODO: move *)
+  Lemma llift_nprod_nth :
+    forall {D1 D2} {n} (F : D2 -C-> @nprod D1 n -C-> D1) m,
+    forall a d k (np : @nprod (@nprod D1 m) n),
+      k < m ->
+      get_nth k d (@llift_nprod D1 D2 n F m a np) = F a (lift (get_nth k d) np).
+  Proof.
+    induction m as [|[|m]]; intros * Hk; try lia.
+    - destruct k; simpl; try lia.
+      rewrite lift_ID; auto.
+    - destruct k; auto.
+      simpl; autorewrite with cpodb; simpl.
+      rewrite IHm; try lia.
+      now rewrite lift_lift.
+  Qed.
+
+  End MOVE_ME.
 
   Section Sfold.
 
@@ -763,11 +769,12 @@ Section SStream_functions.
 
     (* vérifie que toutes les branches sont bien [abs] *)
     Definition fabs (l : list enumtag) : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
-      nprod_foldi l (DS_const abs)
+      nprod_foldi
         (fun _ =>  ZIP (fun va vb => match va, vb with
                                | abs, abs => abs
                                | _,_ => err error_Cl
-                               end)).
+                               end))
+        (DS_const abs) l.
 
     Variable fpres : forall (l : list enumtag) (i : enumtag),
         @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
@@ -841,6 +848,18 @@ Section SStream_functions.
       now rewrite <- sfoldf_eq.
     Qed.
 
+    Lemma sfold_cons :
+      forall l cs np,
+        is_cons (sfold l cs np) ->
+        is_cons cs.
+    Proof.
+      intros *.
+      unfold sfold.
+      rewrite FIXP_eq.
+      intros Hc. apply DScase_is_cons in Hc.
+      now setoid_rewrite SND_PAIR_simpl in Hc.
+    Qed.
+
   End Sfold.
 
   (** Définitions de fpres pour merge et case *)
@@ -853,7 +872,7 @@ Section SStream_functions.
                | abs => err error_Cl
                | _ => v
                end)
-    @_ nprod_foldi _ (DS_const abs)
+    @_ nprod_foldi
        (fun j => ZIP (fun va vb =>
        (* va: accumulateur, vb : flot courant *)
           match va, vb, tag_eqb i j with
@@ -865,7 +884,7 @@ Section SStream_functions.
           | err e, _, _ => err e
           | _, err e, _ => err e
           | _, _, _ => err error_Cl
-          end)).
+          end)) (DS_const abs) _.
 
   (* vérifie que chaque flot est [pres] et retourne la valeur de [i] *)
   Definition fpres_case (l : list enumtag) (i : enumtag)
@@ -875,7 +894,7 @@ Section SStream_functions.
                | abs => err error_Ty
                | _ => v
                end)
-    @_ nprod_foldi _ (DS_const abs)
+    @_ nprod_foldi
        (fun j => ZIP (fun va vb =>
           match va, vb, tag_eqb i j with
           | abs, pres v, true => pres v
@@ -886,7 +905,7 @@ Section SStream_functions.
           | err e, _, _ => err e
           | _, err e, _ => err e
           | _, _, _ => err error_Cl
-          end)).
+          end)) (DS_const abs) _.
 
   Definition smerge1 := sfold fpres_merge.
   Definition scase1 := sfold fpres_case.
@@ -919,6 +938,13 @@ Section SStream_functions.
     rewrite sfold_eq; auto.
   Qed.
 
+  Lemma smerge_eq :
+    forall l n C (np : nprod (length l)),
+      @smerge l n C np =  llift_nprod (smerge1 l) C np.
+  Proof.
+    trivial.
+  Qed.
+
   Lemma scase1_eq :
     forall l c C (np : nprod (length l)),
       scase1 l (cons c C) np
@@ -935,6 +961,13 @@ Section SStream_functions.
     intros.
     unfold scase1.
     rewrite sfold_eq; auto.
+  Qed.
+
+  Lemma scase_eq :
+    forall l n C (np : nprod (length l)),
+      @scase l n C np =  llift_nprod (scase1 l) C np.
+  Proof.
+    trivial.
   Qed.
 
 
@@ -955,7 +988,7 @@ Section SStream_functions.
   Section Case_Noerr.
 
   (* a [case] operator for exactly one stream per tag *)
-  Definition scase1f :
+  Definition scase1_noerrf :
     (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)) -C->
     (DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A)).
     apply curry, curry.
@@ -980,8 +1013,8 @@ Section SStream_functions.
       end.
   Defined.
 
-  Lemma scase1f_eq : forall f c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
-      scase1f f (cons c C) env
+  Lemma scase1_noerrf_eq : forall f c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
+      scase1_noerrf f (cons c C) env
       = match c with
         | abs => cons abs (f C (DMAPi (fun _ => @REM (sampl A)) env))
         | pres b =>
@@ -993,16 +1026,16 @@ Section SStream_functions.
         end.
   Proof.
     intros.
-    unfold scase1f.
+    unfold scase1_noerrf.
     autorewrite with localdb using (simpl (snd _); simpl (fst _)).
     destruct c; auto.
     destruct (tag_of_val a); auto.
   Qed.
 
   Definition scase1_noerr : DS (sampl B) -C-> Dprodi (fun _ : enumtag => DS (sampl A)) -C-> DS (sampl A) :=
-    FIXP _ scase1f.
+    FIXP _ scase1_noerrf.
 
-  Lemma scase1_eq : forall c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
+  Lemma scase1_noerr_eq : forall c C (env : Dprodi (fun _ : enumtag => DS (sampl A))),
       scase1_noerr (cons c C) env
       == match c with
         | abs => cons abs (scase1_noerr C (DMAPi (fun _ => @REM (sampl A)) env))
@@ -1016,9 +1049,9 @@ Section SStream_functions.
   Proof.
     intros.
     unfold scase1.
-    assert (Heq:=FIXP_eq scase1f).
+    assert (Heq:=FIXP_eq scase1_noerrf).
     pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) env) as HH.
-    now rewrite <- scase1f_eq.
+    now rewrite <- scase1_noerrf_eq.
   Qed.
 
   (* now we lift it to exactly [n] streams per tag *)
