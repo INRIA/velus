@@ -331,13 +331,23 @@ Proof.
   trivial.
 Qed.
 
+Lemma forall_denot_exps :
+  forall ins es envG envI bs env (P : DS (sampl value) -> Prop),
+    Forall (fun e => forall_nprod P (denot_exp ins e envG envI bs env)) es ->
+    forall_nprod P (denot_exps ins es envG envI bs env).
+Proof.
+  induction es; intros * Hf; simpl_Forall; auto.
+  setoid_rewrite denot_exps_eq.
+  auto using forall_nprod_app.
+Qed.
+
 Definition denot_expss {A} (ins : list ident) (ess : list (A * list exp)) (n : nat) :
   Dprodi FI -C-> DS_prod SI -C-> DS bool -C-> DS_prod SI -C->
   @nprod (@nprod (DS (sampl value)) n) (length ess) :=
   curry (curry (curry (denot_expss_ (denot_exp_ ins) ess n))).
 
 Lemma denot_expss_eq :
-  forall A ins (x:A) es ess envG envI bs env n,
+  forall A ins (x : A) es ess envG envI bs env n,
     denot_expss ins ((x,es) :: ess) n envG envI bs env
     = match Nat.eq_dec (list_sum (List.map numstreams es)) n with
       | left eqn =>
@@ -353,6 +363,24 @@ Proof.
   generalize (denot_exps_ (denot_exp_ ins) es); intro.
   cases; auto.
   destruct e; cases.
+Qed.
+
+Lemma forall_denot_expss :
+  forall A ins (ess : list (A * list exp)) n envG envI bs env (P : nprod n -> Prop),
+    Forall (fun es =>
+              match Nat.eq_dec (list_sum (List.map numstreams es)) n with
+              | left eqn =>
+                  P (eq_rect _ nprod (denot_exps ins es envG envI bs env) n eqn)
+              | _ => P (nprod_const errTy n)
+              end) (List.map snd ess) ->
+    forall_nprod P (denot_expss ins ess n envG envI bs env).
+Proof.
+  induction ess as [|[]]; intros * Hf; inv Hf.
+  - simpl; auto.
+  - rewrite denot_expss_eq.
+    unfold eq_rect in *.
+    cases; auto using forall_nprod_const.
+    apply forall_nprod_app with (n := 1); auto.
 Qed.
 
 Lemma denot_exps_nil :
