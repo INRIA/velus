@@ -1327,11 +1327,10 @@ Definition nprod_app : forall {n p}, nprod n -C-> nprod p -C-> nprod (n + p).
 Defined.
 Opaque nprod_app.
 
-(** extract the first element if 0 < n, [d] otherwise *)
-Definition nprod_fst d {n} : nprod n -C-> D :=
+(** extract the first element *)
+Definition nprod_fst {n} : nprod (S n) -C-> D :=
   match n with
-  | O => CTE _ _ d
-  | 1 => ID _
+  | O => ID _
   | (S n) => FST _ _
   end.
 
@@ -1343,20 +1342,20 @@ Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
   end.
 
 Lemma nprod_fst_app :
-  forall m n (mp : nprod (S m)) (np : nprod n) d,
-    nprod_fst d (nprod_app mp np) = nprod_fst d mp.
+  forall m n (mp : nprod (S m)) (np : nprod n),
+    nprod_fst (nprod_app mp np) = nprod_fst mp.
 Proof.
   destruct m, n; auto.
 Qed.
 
 (** extract the k-th element if k < n, [d] otherwise *)
 Fixpoint get_nth (k : nat) (d : D) {n} : nprod n -C-> D :=
-  match k with
-  | O => nprod_fst d
-  | S k => match n return nprod n -C-> _ with
-          | O => CTE _ _ d
-          | S _ => get_nth k d @_ nprod_skip
-          end
+  match n with
+  | O => CTE _ _ d
+  | _ => match k with
+        | O => nprod_fst
+        | S k => get_nth k d @_ nprod_skip
+        end
   end.
 
 Lemma get_nth_Oeq_compat :
