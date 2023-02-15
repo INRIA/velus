@@ -281,7 +281,7 @@ Module Type LDENOTINF
       rewrite denot_exp_eq; simpl.
       unfold eq_rect.
       cases; solve_err.
-      rewrite lift2_nth; cases.
+      erewrite lift2_nth; cases.
       inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H0,H; auto.
       inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H0,H; auto.
       rewrite annots_numstreams in *.
@@ -290,10 +290,30 @@ Module Type LDENOTINF
       rewrite denot_exp_eq; simpl.
       unfold eq_rect.
       cases; solve_err.
-      rewrite llift_nth; cases.
+      erewrite llift_nth; cases.
       inv Hwl. apply Forall_impl_inside with (P := wl_exp _) in H; auto.
       inv Hwx. apply Forall_impl_inside with (P := wx_exp _) in H; auto.
       apply is_ncons_swhen; auto.
+      now apply P_exps_k, Forall_P_exps.
+    - (* Emerge *)
+      destruct x, a.
+      rewrite denot_exp_eq; simpl.
+      unfold smergev.
+      rewrite smerge_eq.
+      rewrite llift_nprod_nth; auto.
+      inv Hwl.
+      inv Hwx.
+      rewrite <- Forall_map in *.
+      rewrite <- Forall_concat in *.
+      apply Forall_impl_inside with (P := wl_exp _) in H; auto.
+      apply Forall_impl_inside with (P := wx_exp _) in H; auto.
+      rewrite Forall_concat in H.
+      apply is_ncons_smerge1; auto.
+      apply forall_nprod_lift.
+      unfold eq_rect_r, eq_rect, eq_sym; cases.
+      apply forall_denot_expss.
+      unfold eq_rect.
+      simpl_Forall; cases; solve_err.
       now apply P_exps_k, Forall_P_exps.
     - (* Eapp *)
       rewrite denot_exp_eq; simpl.
@@ -390,7 +410,7 @@ Module Type LDENOTINF
       rewrite denot_exp_eq; simpl.
       unfold eq_rect.
       cases; solve_err.
-      rewrite lift2_nth; cases.
+      erewrite lift2_nth; cases.
       inv Hwl. apply P_exps_impl in H0; auto.
       inv Hwx. apply P_exps_impl in H0; auto.
       apply is_ncons_S_fby; apply P_exps_k; auto.
@@ -402,8 +422,23 @@ Module Type LDENOTINF
       inv Hwl. apply P_exps_impl in H0; auto.
       inv Hwx. apply P_exps_impl in H0; auto.
       rewrite annots_numstreams in *.
-      rewrite llift_nth; try congruence.
+      erewrite llift_nth; try congruence.
       eapply is_ncons_swhen with (n := S n); eauto using P_exps_k.
+    - (* Emerge *)
+      destruct ann0.
+      rewrite denot_exp_eq; simpl.
+      unfold smergev.
+      rewrite smerge_eq.
+      rewrite llift_nprod_nth; auto.
+      eapply is_ncons_smerge1 with (n := S n); eauto using P_exps_k.
+      apply forall_nprod_lift.
+      unfold eq_rect_r, eq_rect, eq_sym; cases.
+      apply forall_denot_expss.
+      unfold eq_rect.
+      inv Hwl. inv Hwx.
+      simpl_Forall; cases; solve_err.
+      apply P_exps_k with (n := S n).
+      apply P_exps_impl, P_exps_impl in H2; auto.
     - (* Eapp *)
       rewrite denot_exp_eq; simpl in *.
       unfold eq_rect.
@@ -738,49 +773,39 @@ Proof.
   induction e using exp_ind2; intros; simpl; setoid_rewrite denot_exp_eq.
   (* cas restreints : *)
   all: try (simpl; now eauto using forall_nprod_const, DS_const_inf).
-  - (* const *)
+  - (* Econst *)
     apply sconst_inf; auto.
-  - (* unop *)
+  - (* Eunop *)
     revert IHe.
     generalize (denot_exp G ins e envG envI bs env).
     intros; cases; simpl; eauto using sunop_inf, DS_const_inf.
-  - (* binop *)
+  - (* Ebinop *)
     revert IHe1 IHe2.
     generalize (denot_exp G ins e1 envG envI bs env).
     generalize (denot_exp G ins e2 envG envI bs env).
     intros; cases; simpl; eauto using sbinop_inf, DS_const_inf.
-  - (* fby *)
-    assert (forall_nprod (@infinite _) (denot_exps G ins e0s envG envI bs env)) as He0s.
-    { induction e0s; simpl_Forall; auto.
-      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
-    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
-    { induction es; simpl_Forall; auto.
-      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
-    revert He0s Hes.
-    generalize (denot_exps G ins e0s envG envI bs env).
-    generalize (denot_exps G ins es envG envI bs env).
-    generalize (list_sum (List.map numstreams e0s)).
-    generalize (list_sum (List.map numstreams es)).
-    intros; unfold eq_rect.
-    cases; subst; eauto using forall_nprod_const, DS_const_inf, forall_nprod_lift2, fby_inf.
-  - (* when *)
-    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
-    { induction es; simpl_Forall; auto.
-      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
-    revert Hes.
-    generalize (denot_exps G ins es envG envI bs env).
-    generalize (list_sum (List.map numstreams es)).
-    intros; unfold eq_rect.
-    cases; subst; eauto using forall_nprod_const, DS_const_inf, forall_nprod_llift, swhen_inf.
-  - (* app *)
-    assert (forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env)) as Hes.
-    { induction es; simpl_Forall; auto.
-      setoid_rewrite denot_exps_eq; auto using forall_nprod_app. }
-    revert Hes.
-    generalize (denot_exps G ins es envG envI bs env).
-    generalize (list_sum (List.map numstreams es)).
-    intros; unfold eq_rect.
-    cases; subst; eauto using forall_nprod_const, DS_const_inf.
+  - (* Efby *)
+    apply forall_denot_exps in H, H0.
+    unfold eq_rect.
+    cases; eauto using forall_nprod_const, DS_const_inf.
+    eapply forall_nprod_lift2; eauto using fby_inf; cases.
+  - (* Ewhen *)
+    apply forall_denot_exps in H.
+    unfold eq_rect.
+    cases; eauto using forall_nprod_const, DS_const_inf.
+    eapply forall_nprod_llift; eauto using swhen_inf; cases.
+  - (* Emerge *)
+    destruct x, a.
+    apply smerge_inf; auto.
+    unfold eq_rect_r, eq_rect, eq_sym; cases.
+    apply forall_denot_expss.
+    unfold eq_rect.
+    simpl_Forall.
+    cases; eauto using forall_nprod_const, DS_const_inf, forall_denot_exps.
+  - (* Eapp *)
+    apply forall_denot_exps in H.
+    unfold eq_rect.
+    cases; eauto using forall_nprod_const, DS_const_inf.
     apply forall_np_of_env, HG; intro.
     apply forall_env_of_np; eauto using DS_const_inf.
 Qed.
