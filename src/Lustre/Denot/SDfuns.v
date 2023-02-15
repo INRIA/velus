@@ -662,15 +662,15 @@ Section SStream_functions.
   Fixpoint nprod_foldi {I} {D DD : cpo}
     (f : I -> DD -C-> D -C-> DD) (d : DD) (l : list I) : @nprod D (length l) -C-> DD :=
     match l with
-      | [] => CTE _ _ d
-    | i :: l => (f i @2_ (nprod_foldi f d l @_ nprod_skip)) (nprod_fst)
+    | [] => CTE _ _ d
+    | i :: l => (f i @2_ (nprod_foldi f d l @_ nprod_tl)) (nprod_hd)
     end.
 
   (* TODO: move *)
-  Lemma forall_nprod_fst :
+  Lemma forall_nprod_hd :
     forall (D:cpo) (P : D -> Prop) n (np : nprod (S n)),
       forall_nprod P np ->
-      P (nprod_fst np).
+      P (nprod_hd np).
   Proof.
     intros.
     destruct n; auto.
@@ -690,8 +690,8 @@ Section SStream_functions.
   Proof.
     induction l; intros * PQ pd Fn; simpl; auto.
     apply PQ.
-    - apply IHl; eauto using forall_nprod_skip.
-    - now apply forall_nprod_fst in Fn.
+    - apply IHl; eauto using forall_nprod_tl.
+    - now apply forall_nprod_hd in Fn.
   Qed.
 
   (* TODO: rename Types, move  *)

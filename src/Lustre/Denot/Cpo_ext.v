@@ -1347,29 +1347,29 @@ Defined.
 Opaque nprod_app.
 
 (** extract the first element *)
-Definition nprod_fst {n} : nprod (S n) -C-> D :=
+Definition nprod_hd {n} : nprod (S n) -C-> D :=
   match n with
   | O => ID _
   | (S n) => FST _ _
   end.
 
 (** same with default value if n = 0 *)
-Definition nprod_fst_def d {n} : nprod n -C-> D :=
+Definition nprod_hd_def d {n} : nprod n -C-> D :=
   match n with
   | O => CTE _ _ d
-  | (S n) => nprod_fst
+  | (S n) => nprod_hd
   end.
 
 (** throw away the first element *)
-Definition nprod_skip {n} : nprod (S n) -C-> nprod n :=
+Definition nprod_tl {n} : nprod (S n) -C-> nprod n :=
   match n with
   | O => 0
   | (S n) => SND _ _
   end.
 
-Lemma nprod_fst_app :
+Lemma nprod_hd_app :
   forall m n (mp : nprod (S m)) (np : nprod n),
-    nprod_fst (nprod_app mp np) = nprod_fst mp.
+    nprod_hd (nprod_app mp np) = nprod_hd mp.
 Proof.
   destruct m, n; auto.
 Qed.
@@ -1379,8 +1379,8 @@ Fixpoint get_nth (k : nat) (d : D) {n} : nprod n -C-> D :=
   match n with
   | O => CTE _ _ d
   | _ => match k with
-        | O => nprod_fst
-        | S k => get_nth k d @_ nprod_skip
+        | O => nprod_hd
+        | S k => get_nth k d @_ nprod_tl
         end
   end.
 
@@ -1402,9 +1402,9 @@ Proof.
   exact (get_nth_Oeq_compat n k d).
 Qed.
 
-Lemma get_nth_skip :
+Lemma get_nth_tl :
   forall {n} (np : nprod (S n)) k d,
-    get_nth k d (nprod_skip np) = get_nth (S k) d np.
+    get_nth k d (nprod_tl np) = get_nth (S k) d np.
 Proof.
   induction k; auto.
 Qed.
@@ -1417,7 +1417,7 @@ Proof.
   induction m; intros * Hk.
   - inversion Hk.
   - destruct k; simpl.
-    + now unshelve setoid_rewrite nprod_fst_app.
+    + now unshelve setoid_rewrite nprod_hd_app.
     + autorewrite with cpodb.
       rewrite <- (IHm n _ np); auto with arith.
       destruct m; simpl; auto; lia.
@@ -1434,9 +1434,9 @@ Proof.
     + lia.
     + destruct m, n; auto with arith.
       * destruct k; simpl; now autorewrite with cpodb.
-      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
-      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
-      * rewrite <- (IHm _ (nprod_skip mp)); auto with arith.
+      * rewrite <- (IHm _ (nprod_tl mp)); auto with arith.
+      * rewrite <- (IHm _ (nprod_tl mp)); auto with arith.
+      * rewrite <- (IHm _ (nprod_tl mp)); auto with arith.
 Qed.
 
 Lemma nprod_app_Oeq_compat :
@@ -1467,7 +1467,7 @@ Proof.
   - inversion Hk.
   - destruct k; auto; lia.
   - destruct k; auto.
-    rewrite <- get_nth_skip, IHn; auto with arith.
+    rewrite <- get_nth_tl, IHn; auto with arith.
 Qed.
 
 Lemma get_nth_err :
@@ -1478,7 +1478,7 @@ Proof.
   induction k; simpl; intros * Hn.
   - inversion Hn; subst. now simpl.
   - destruct n; cbn; auto.
-    setoid_rewrite get_nth_skip.
+    setoid_rewrite get_nth_tl.
     apply IHk; auto with arith.
 Qed.
 
@@ -1495,10 +1495,10 @@ Definition forall_nprod {n} (np : nprod n) : Prop.
   - exact (P (fst np) /\ IHn (snd np)).
 Defined.
 
-Lemma forall_nprod_skip :
+Lemma forall_nprod_tl :
   forall {n} (np : nprod (S n)),
     forall_nprod np ->
-    forall_nprod (nprod_skip np).
+    forall_nprod (nprod_tl np).
 Proof.
   intros * Hnp.
   destruct n.
@@ -1518,8 +1518,8 @@ Proof.
     + unshelve eapply (Hk O); auto with arith.
       destruct np; auto.
     + eapply IHn; intros.
-      change (snd np) with (nprod_skip np).
-      rewrite get_nth_skip; auto with arith.
+      change (snd np) with (nprod_tl np).
+      rewrite get_nth_tl; auto with arith.
 Qed.
 
 Lemma k_forall_nprod_def :
@@ -1533,8 +1533,8 @@ Proof.
   - split.
     + unshelve eapply (Hk O); auto with arith.
     + eapply IHn; intros; eauto.
-      change (snd np) with (nprod_skip np).
-      rewrite get_nth_skip; auto with arith.
+      change (snd np) with (nprod_tl np).
+      rewrite get_nth_tl; auto with arith.
 Qed.
 
 Lemma forall_nprod_k :
@@ -1548,10 +1548,10 @@ Proof.
     assert (k = O) by lia; subst.
     now simpl in Hk.
   - intros.
-    specialize (IHn (nprod_skip np)).
-    setoid_rewrite get_nth_skip in IHn.
+    specialize (IHn (nprod_tl np)).
+    setoid_rewrite get_nth_tl in IHn.
     destruct k. { destruct Hk; auto. }
-    apply IHn; auto using forall_nprod_skip with arith.
+    apply IHn; auto using forall_nprod_tl with arith.
 Qed.
 
 Lemma forall_nprod_k_def :
@@ -1675,7 +1675,7 @@ Fixpoint list_of_nprod {n} (np : nprod n) {struct n} : list D :=
   match n return nprod n -> list D with
   | O => fun _ => []
   | S n => fun np =>
-            let l := list_of_nprod (nprod_skip np) in
+            let l := list_of_nprod (nprod_tl np) in
             match n return nprod (S n) -> list D with
             | O => fun np => np :: l
             | _ => fun np => fst np :: l
@@ -1821,7 +1821,7 @@ Proof.
   - destruct np.
     rewrite llift_simpl.
     destruct k; auto.
-    rewrite <- get_nth_skip.
+    rewrite <- get_nth_tl.
     setoid_rewrite <- IHn; auto with arith.
 Qed.
 
@@ -1865,7 +1865,7 @@ Proof.
   - destruct np, np'.
     rewrite lift2_simpl.
     destruct k; auto.
-    erewrite <- 3 get_nth_skip, <- IHn; auto with arith.
+    erewrite <- 3 get_nth_tl, <- IHn; auto with arith.
 Qed.
 
 Lemma forall_nprod_lift2 :

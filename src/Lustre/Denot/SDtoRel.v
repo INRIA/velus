@@ -1085,7 +1085,7 @@ Proof.
     rewrite env_of_np_eq; simpl (mem_nth _ _).
     destruct (ident_eq_dec _ _); try congruence.
     setoid_rewrite bss_switch_env at 2; auto.
-    intros; apply env_of_np_skip; intro; congruence.
+    intros; apply env_of_np_tl; intro; congruence.
 Qed.
 
 Corollary clocks_of_bss :

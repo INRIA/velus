@@ -60,10 +60,10 @@ Proof.
   cases.
 Qed.
 
-Lemma env_of_np_skip :
+Lemma env_of_np_tl :
   forall l n (np : nprod (S n)) x y,
     x <> y ->
-    env_of_np (y :: l) np x == env_of_np l (nprod_skip np) x.
+    env_of_np (y :: l) np x == env_of_np l (nprod_tl np) x.
 Proof.
   clear.
   intros.
