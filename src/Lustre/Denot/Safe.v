@@ -154,15 +154,10 @@ Proof.
   cofix Cof; intros * Ht Hps1 Hqs2 Hpq.
   destruct t as [| []].
   - constructor. rewrite <- eqEps in *; eauto.
-  - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
-    { eapply zip_is_cons. now rewrite Ht. }
-    apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
-    apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
-    rewrite Hs1, Hs2, zip_eq in *.
-    inv Hps1. inv Hqs2. inv Hpq.
-    apply Con_eq_simpl in Ht as [].
-    constructor; eauto 2; clear Cof.
-    cases_eqn HH; inv H; auto.
+  - apply zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
+    rewrite Hs1, Hs2 in *.
+    inv Hps1. inv Hqs2. inv Hpq. inv Hp.
+    constructor; eauto; cases.
 Qed.
 
 
@@ -196,7 +191,7 @@ Inductive op_correct_exp : exp -> Prop :=
              wt_value v1 ty1 ->
              wt_value v2 ty2 ->
              sem_binop op v1 ty1 v2 ty2 <> None)
-          (ZIP pair (nprod_fst errTy ss1) (nprod_fst errTy ss2))
+          (ZIP pair (nprod_fst_def errTy ss1) (nprod_fst_def errTy ss2))
     ) ->
     op_correct_exp (Ebinop op e1 e2 ann)
 | opc_Efby :
@@ -208,6 +203,10 @@ Inductive op_correct_exp : exp -> Prop :=
   forall es x k anns,
     Forall op_correct_exp es ->
     op_correct_exp (Ewhen es x k anns)
+| opc_Merge :
+  forall ess x anns,
+    Forall (fun es => Forall op_correct_exp (snd es)) ess ->
+    op_correct_exp (Emerge x ess anns)
 | opc_Eapp :
   forall f es anns,
     Forall op_correct_exp es ->
@@ -241,27 +240,26 @@ Proof.
     setoid_rewrite <- denot_exp_cons in H5;
       eauto 12 using op_correct_exp, Is_node_in_exp.
   - (* Efby *)
-    constructor.
-    + eapply Forall_and, Forall_impl_In in H; eauto.
-      intros e Hin [Hop HH].
-      eapply HH; eauto. intro Hn. apply Hnin.
-      constructor; left; solve_Exists.
-    + eapply Forall_and, Forall_impl_In in H0; eauto.
-      intros e Hin [Hop HH].
-      eapply HH; eauto. intro Hn. apply Hnin.
-      constructor; right; solve_Exists.
+    constructor; simpl_Forall.
+    + eapply H; eauto.
+      contradict Hnin; constructor; left; solve_Exists.
+    + eapply H0; eauto.
+      contradict Hnin; constructor; right; solve_Exists.
   - (* Ewhen *)
     constructor.
-    eapply Forall_and, Forall_impl_In in H; eauto.
-    intros e Hin [Hop HH].
-    eapply HH; eauto. intro Hn. apply Hnin.
-    constructor; solve_Exists.
+    simpl_Forall.
+    eapply H; eauto.
+    contradict Hnin; constructor; solve_Exists.
+  - (* Emerge *)
+    constructor.
+    simpl_Forall.
+    eapply H; eauto.
+    contradict Hnin; constructor; solve_Exists.
   - (* Eapp *)
     constructor.
-    eapply Forall_and, Forall_impl_In in H; eauto.
-    intros e Hin [Hop HH].
-    eapply HH; eauto. intro Hn. apply Hnin.
-    constructor; left; solve_Exists.
+    simpl_Forall.
+    eapply H; eauto.
+    contradict Hnin; constructor; left; solve_Exists.
 Qed.
 
 Lemma op_correct_cons :
@@ -289,28 +287,43 @@ Proof.
   intros * Eq1 * Eq2 * Eq3 * Eq4 e.
   induction e using exp_ind2; split; intro Hoc; inv Hoc.
   all: try now (constructor; eauto using Forall_iff).
-  - take (op_correct_exp _ _ _ _ _ _ _) and apply IHe in it.
+  - (* Eunop *)
+    take (op_correct_exp _ _ _ _ _ _ _) and apply IHe in it.
     constructor; intros; eauto.
     rewrite <- Eq1, <- Eq2, <- Eq3, <- Eq4; auto.
-  - take (op_correct_exp _ _ _ _ _ _ _) and apply IHe in it.
+  - (* Eunop *)
+    take (op_correct_exp _ _ _ _ _ _ _) and apply IHe in it.
     constructor; intros; eauto.
     rewrite Eq1, Eq2, Eq3, Eq4; auto.
-  - take (op_correct_exp _ _ _ _ _ _ e1) and apply IHe1 in it.
+  - (* Ebinop *)
+    take (op_correct_exp _ _ _ _ _ _ e1) and apply IHe1 in it.
     take (op_correct_exp _ _ _ _ _ _ e2) and apply IHe2 in it.
     constructor; intros; eauto.
     subst ss1 ss2.
     rewrite <- Eq1, <- Eq2, <- Eq3, <- Eq4; auto.
-  - take (op_correct_exp _ _ _ _ _ _ e1) and apply IHe1 in it.
+  - (* Ebinop *)
+    take (op_correct_exp _ _ _ _ _ _ e1) and apply IHe1 in it.
     take (op_correct_exp _ _ _ _ _ _ e2) and apply IHe2 in it.
     constructor; intros; eauto.
     subst ss1 ss2.
     rewrite Eq1, Eq2, Eq3, Eq4; auto.
-  - setoid_rewrite and_comm in H.
+  - (* Efby *)
+    setoid_rewrite and_comm in H.
     setoid_rewrite and_comm in H0.
     constructor; eauto using Forall_iff.
-  - setoid_rewrite and_comm in H.
+  - (* Ewhen *)
+    setoid_rewrite and_comm in H.
     constructor; eauto using Forall_iff.
-  - setoid_rewrite and_comm in H.
+  - (* Emerge *)
+    constructor.
+    simpl_Forall.
+    now apply H.
+  - (* Emerge *)
+    constructor.
+    simpl_Forall.
+    now apply H.
+  - (* Eapp *)
+    setoid_rewrite and_comm in H.
     constructor; eauto using Forall_iff.
 Qed.
 
@@ -655,16 +668,11 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     destruct t; intros.
     - constructor. eapply Cof; eauto 1.
       now rewrite <- eqEps in Ht.
-    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
-      { eapply zip_is_cons; rewrite <- Ht; auto. }
-      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
-      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+    - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
       rewrite Hs1, Hs2 in *.
       inv Hwt1. inv Hwt2.
-      rewrite zip_eq in Ht.
-      apply Con_eq_simpl in Ht as [].
       constructor; eauto; clear Cof.
-      cases_eqn HH; inv H; inv HH1.
+      cases_eqn HH; inv HH1.
       eauto using pres_sem_binop.
   Qed.
 
@@ -688,16 +696,10 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     destruct t; intros.
     - constructor. eapply Cof; eauto 1.
       now rewrite <- eqEps in Ht.
-    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
-      { eapply zip_is_cons; rewrite <- Ht; auto. }
-      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
-      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
+    - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
       rewrite Hs1, Hs2 in *.
       inv Hwt1. inv Hwt2. inv Hsf1. inv Hsf2.
-      rewrite zip_eq in Ht.
-      apply Con_eq_simpl in Ht as [].
-      constructor; eauto; clear Cof.
-      cases_eqn HH; inv H; inv HH1.
+      constructor; eauto; cases_eqn HH.
   Qed.
 
   Lemma safe_cl_sbinop :
@@ -720,21 +722,16 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     destruct t; intros.
     - constructor. apply (Cof s1 s2 _ C); auto.
       now rewrite <- eqEps in Ht.
-    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
-      { eapply zip_is_cons; rewrite <- Ht; auto. }
+    - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 & Ht & Hp).
+      rewrite Hs1, Hs2 in *.
+      inv Hsf1. inv Hsf2.
       assert (is_cons C) as Hcc.
       { eapply is_cons_le_compat, AC_is_cons; eauto. }
-      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
-      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
       apply is_cons_elim in Hcc as (vc & C' & Hc).
-      rewrite Hs1, Hs2, Hc, AC_eq in *.
-      inv Hsf1. inv Hsf2.
-      rewrite zip_eq in Ht.
-      apply Con_eq_simpl in Ht as [].
-      destruct v1, v2;
-        apply Con_le_simpl in Hcl1 as [], Hcl2 as [];
-        constructor; eauto 2; clear Cof.
-      all: subst; cases_eqn HH; congruence.
+      rewrite Hc, AC_eq in *.
+      cases_eqn HH; apply Con_le_simpl in Hcl1 as [], Hcl2 as [].
+      all: constructor; [| eapply Cof in Ht; now eauto]; try congruence.
+      cases_eqn HH.
   Qed.
 
   Lemma safe_op_sbinop :
@@ -756,15 +753,10 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     destruct t; intros.
     - constructor. apply (Cof s1 s2 t); eauto 1;
         now rewrite <- eqEps in *.
-    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
-      { eapply zip_is_cons; rewrite <- Ht; auto. }
-      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
-      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
-      rewrite Hs1, Hs2, ?zip_eq in *.
-      apply Con_eq_simpl in Ht as [].
+    - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
+      rewrite Hs1, Hs2 in *.
       inv Hsf1. inv Hsf2. inv Hop.
-      constructor; eauto 2; clear Cof.
-      cases_eqn HH.
+      constructor; eauto 2; cases_eqn HH.
   Qed.
 
   Lemma cl_sbinop :
@@ -1158,6 +1150,41 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     all: eapply Cof with k tx tn (rem cks) xs' cs'; auto.
   Qed.
 
+  (** ** Faits sur smergev *)
+
+  Lemma ty_smergev :
+    forall ty xs tx tn k cs,
+      k < length tn ->
+      ty_DS ty xs ->
+      ty_DS (Tenum tx tn) cs ->
+      ty_DS ty (swhenv k xs cs).
+  Proof.
+    (* TODO: update lemma *)
+  Abort.
+
+  Lemma cl_smergev :
+    forall tx tn xs ck x ty k,
+      let cs := denot_var ins envI env x in
+      ty_DS (Tenum tx tn) cs
+      /\ safe_DS xs /\ cl_DS ck xs
+      /\ safe_DS cs /\ cl_DS ck cs ->
+      cl_DS (Con ck x (ty, k)) (swhenv k xs cs).
+  Proof.
+    (* TODO: update lemma *)
+  Abort.
+
+  Lemma safe_smergev :
+    forall k tx tn ck xs cs,
+      ty_DS (Tenum tx tn) cs
+      /\ safe_DS xs /\ cl_DS ck xs
+      /\ safe_DS cs /\ cl_DS ck cs ->
+      safe_DS (swhenv k xs cs).
+  Proof.
+    (* TODO: update lemma *)
+  Abort.
+
+  (** ** Résultats généraux sur les expressions *)
+
   Lemma Forall_denot_exps :
     forall P ins es envI bs env,
       forall_nprod P (denot_exps G ins es envG envI bs env)
@@ -1410,15 +1437,10 @@ Section SubClock.
     revert_all. cofix Cof; intros.
     destruct zs.
     - constructor. rewrite <- eqEps in Hz. eauto.
-    - assert (is_cons xs /\ is_cons cs) as [Hcx Hcc].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcc as (vc & cs' & Hc).
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      rewrite Hc, Hx, zip_eq in Hz.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      rewrite Hc in Hsub. inv Hsub.
+    - apply symmetry, zip_uncons in Hz as (?&?&?&?& Hs1 & Hs2 &?& Hp).
+      rewrite Hs2 in Hsub; inv Hsub.
       econstructor; eauto.
-      unfold Bool.le, sample, andb, eqb in *. cases_eqn H.
+      unfold Bool.le, sample, andb, eqb in *; cases_eqn H.
   Qed.
 
   Lemma sub_clock_bs :
@@ -1442,14 +1464,9 @@ Section SubClock.
     destruct zs.
     - constructor. rewrite <- eqEps in Hz.
       apply Cof with xs ys; auto.
-    - assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, Hx, zip_eq in Hz.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      rewrite Hx in Sub1. inv Sub1.
-      rewrite Hy in Sub2. inv Sub2.
+    - apply symmetry, zip_uncons in Hz as (?& xs' &?& ys' & Hs1 & Hs2 &?& Hp).
+      rewrite Hs1, Hs2 in *.
+      inv Sub1. inv Sub2.
       match goal with
         H1: decomp _ _ _, H2: decomp _ _ _ |- _ =>
           destruct (decomp_decomp _ _ _ _ _ _ H1 H2); subst
@@ -1471,19 +1488,14 @@ Section SubClock.
     destruct zs.
     - constructor. rewrite <- eqEps in Hz.
       apply Cof with xs ys; auto.
-    - assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
-      now apply symmetry, cons_is_cons, zip_is_cons in Hz.
-      apply is_cons_elim in Hcx as (vx & xs' & Hx).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, Hx, zip_eq in Hz.
-      apply Con_eq_simpl in Hz as [? Hz]; subst.
-      rewrite Hx in Le. inv Le.
-      rewrite Hy in Sub. inv Sub.
+    - apply symmetry, zip_uncons in Hz as (?& xs' &?& ys' & Hs1 & Hs2 &?& Hp).
+      rewrite Hs1, Hs2 in *.
+      inv Sub. inv Le.
       match goal with
         H1: decomp _ _ _, H2: decomp _ _ _ |- _ =>
           destruct (decomp_decomp _ _ _ _ _ _ H1 H2); subst
       end.
-      apply DSleCon with s.
+      apply DSleCon with t.
       + unfold Bool.le, orb in *. cases.
       + apply Cof with xs' ys'; auto.
   Qed.
@@ -2088,6 +2100,8 @@ Section Node_safe.
       + eapply forall_nprod_llift with (Q := fun s => cl_DS _ _ _ _ ck s /\ safe_DS s).
         { intros ? []. eapply safe_swhenv. eauto. }
         apply forall_nprod_and; auto using Forall_forall_nprod.
+    - (* Emerge *)
+      admit.
     - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
