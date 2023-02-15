@@ -1039,6 +1039,25 @@ Section Zip.
     now rewrite zip_eq.
   Qed.
 
+  Lemma zip_uncons :
+    forall xs ys r rs,
+      ZIP xs ys == cons r rs ->
+      exists x xs' y ys',
+        xs == cons x xs'
+        /\ ys == cons y ys'
+        /\ rs == ZIP xs' ys'
+        /\ r = bop x y.
+  Proof.
+    intros * HZ.
+    assert (is_cons xs /\ is_cons ys) as [Hcx Hcy].
+    { eapply zip_is_cons; rewrite HZ; auto. }
+    apply is_cons_elim in Hcx as (x & xs' & Hx).
+    apply is_cons_elim in Hcy as (y & ys' & Hy).
+    rewrite Hx, Hy, zip_eq in HZ.
+    apply Con_eq_simpl in HZ as [].
+    now exists x,xs',y,ys'.
+  Qed.
+
   Lemma zip_inf :
     forall U V,
       infinite U ->
@@ -1332,6 +1351,13 @@ Definition nprod_fst {n} : nprod (S n) -C-> D :=
   match n with
   | O => ID _
   | (S n) => FST _ _
+  end.
+
+(** same with default value if n = 0 *)
+Definition nprod_fst_def d {n} : nprod n -C-> D :=
+  match n with
+  | O => CTE _ _ d
+  | (S n) => nprod_fst
   end.
 
 (** throw away the first element *)
