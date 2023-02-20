@@ -192,6 +192,8 @@ Lemma fcont_app2_simpl : forall (D1 D2 D3:cpo) (f: D1-c> D2 -C-> D3) (x:D1)(y:D2
 trivial.
 Qed.
 
+Global Hint Rewrite fcont_app2_simpl : cpodb.
+
 (** *** weaker version of Dmapi *)
 Definition wDmapi : forall (I:Type)(Di Dj:I->cpo)(f:forall i, Dprodi Di -m> Dj i),
     Dprodi Di -m> Dprodi Dj.
