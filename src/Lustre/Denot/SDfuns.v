@@ -657,9 +657,9 @@ Section SStream_functions.
   (* TODO: si ça s'avère intéressant, déplacer dans Cpo_ext.v *)
   Section MOVE_ME.
 
-    (* TODO: renommer les types *)
-    Context {I : Type}.
-    Context {AA BB : cpo}.
+  (* TODO: renommer les types *)
+  Context {I : Type}.
+  Context {AA BB : cpo}.
 
   (* TODO: bss comme instance de ça ? *)
   Definition nprod_Foldi : forall  (l : list I),
@@ -692,7 +692,7 @@ Section SStream_functions.
   Qed.
 
   (* TODO: move *)
-  Lemma forall_nprod_foldi :
+  Lemma forall_nprod_Foldi :
     forall (P : AA -> Prop)
       (Q : BB -> Prop)
       (l : list I) (d : AA) (f : I -O-> AA -C-> BB -C-> AA) np,
@@ -857,227 +857,81 @@ Section SStream_functions.
     trivial.
   Qed.
 
-  Section Sfold.
-
-    (** On mutualise autant que possible les définitions des fonctions
-        [smerge] et [scase], qui opèrent sur
-        - un flot de type [DS (sampl B)] (la condition) et
-        - une liste de flots de type [(nprod (length l)] (les branches).
-        Dans tous les cas, si la condition est [abs], les branches doivent
-        être aussi [abs] : on utilise [fabs].
-        Si la condition est [pres i] où [i] est un tag valide, il faut
-        chercher la valeur de la branche [i] et, selon la situation, vérifier
-        que les autres branches sont absentes (merge) ou présentes (scase).
-        Ce comportement est paramétré par la fonction [fpres].
-
-        TODO:
-        idée de Tim: un zip nprod qui donne une liste de valeurs, puis
-        des opérations normales sur les listes (check-abs/i) puis gettag(i)
-     *)
-
-    (* vérifie que toutes les branches sont bien [abs] *)
-    Definition fabs (l : list enumtag) : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
-      nprod_foldi
-        (fun _ =>  ZIP (fun va vb => match va, vb with
-                               | abs, abs => abs
-                               | _,_ => err error_Cl
-                               end))
-        (DS_const abs) l.
-
-    Variable fpres : forall (l : list enumtag) (i : enumtag),
-        @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
-
-    Definition sfoldf (l : list enumtag) :
-      (DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A)) -C->
-      (DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A)).
-      apply curry, curry.
-      eapply (fcont_comp2 (DSCASE _ _)).
-      2: exact (SND _ _ @_ FST _ _).
-      apply ford_fcont_shift; intro b.
-      apply curry.
-      match goal with
-      | |- _ (_ (Dprod ?pl ?pr) _) =>
-          pose (f := (FST _ _ @_ FST _ _ @_ (FST pl pr)))
-          ; pose (XB := SND pl pr)
-          ; pose (Ss := SND _ _ @_ FST pl pr)
-      end.
-      refine
-        match b with
-        | abs => (APP _ @2_ (fabs l @_ Ss)) (((f @3_ ID _) XB) (lift (@REM _) @_ Ss))
-        | pres v => match tag_of_val v with
-                   | Some t => (APP _ @2_ (fpres l t @_ Ss)) (((f @3_ ID _) XB) (lift (@REM _) @_ Ss))
-                   | None => CTE _ _ (DS_const (err error_Ty))
-                   end
-        | err e => CTE _ _ (DS_const (err e))
-        end.
-    Defined.
-
-    (** Synchronous fold  *)
-    Definition sfold l : DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
-      FIXP _ (sfoldf l).
-
-    Lemma sfoldf_eq :
-      forall l f c C np,
-        sfoldf l f (cons c C) np
-        = match c with
-          | abs => app (fabs l np) (f C (lift (@REM _) np))
-          | pres v =>
-              match tag_of_val v with
-              | Some i => app (fpres l i np) (f C (lift (@REM _) np))
-              | None => DS_const (err error_Ty)
-              end
-          | err e => DS_const (err e)
-          end.
-    Proof.
-      intros.
-      unfold sfoldf.
-      autorewrite with localdb using (simpl (snd _); simpl (fst _)).
-      destruct c; auto.
-      destruct (tag_of_val a); auto.
-    Qed.
-
-    Lemma sfold_eq :
-      forall l c C np,
-        sfold l (cons c C) np
-        == match c with
-          | abs => app (fabs l np) (sfold l C (lift (@REM _) np))
-          | pres v =>
-              match tag_of_val v with
-              | Some i => app (fpres l i np) (sfold l C (lift (@REM _) np))
-              | None => DS_const (err error_Ty)
-              end
-          | err e => DS_const (err e)
-          end.
-    Proof.
-      intros.
-      unfold sfold.
-      assert (Heq:=FIXP_eq (sfoldf l)).
-      pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) np) as HH.
-      now rewrite <- sfoldf_eq.
-    Qed.
-
-    Lemma sfold_cons :
-      forall l cs np,
-        is_cons (sfold l cs np) ->
-        is_cons cs.
-    Proof.
-      intros *.
-      unfold sfold.
-      rewrite FIXP_eq.
-      intros Hc. apply DScase_is_cons in Hc.
-      now setoid_rewrite SND_PAIR_simpl in Hc.
-    Qed.
-
-  End Sfold.
-
-  (** Définitions de fpres pour merge et case *)
-
-  (* vérifie que chaque flot est [abs] sauf [i] et retourne sa valeur *)
-  Definition fpres_merge (l : list enumtag) (i : enumtag)
-    : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
-    (* s'il n'y a que des abs, c'est une erreur d'horloge *)
-    MAP (fun v => match v with
-               | abs => err error_Cl
-               | _ => v
-               end)
-    @_ nprod_foldi
-       (fun j => ZIP (fun va vb =>
-       (* va: accumulateur, vb : flot courant *)
-          match va, vb, tag_eqb i j with
-          | abs, abs, false => abs
-          | abs, pres v, true => pres v
-          | pres v, abs, false => pres v
-          (* TODO: est-ce vraiment utile de différencier les erreurs ici ? *)
-          | pres v, _, true => err error_Ty (* tag apparaît deux fois *)
-          | err e, _, _ => err e
-          | _, err e, _ => err e
-          | _, _, _ => err error_Cl
-          end)) (DS_const abs) _.
-
-  (* vérifie que chaque flot est [pres] et retourne la valeur de [i] *)
-  Definition fpres_case (l : list enumtag) (i : enumtag)
-    : @nprod (DS (sampl A)) (length l) -C-> DS (sampl A) :=
-    (* si on obtient abs, c'est que le tag n'a pas été rencontré *)
-    MAP (fun v => match v with
-               | abs => err error_Ty
-               | _ => v
-               end)
-    @_ nprod_foldi
-       (fun j => ZIP (fun va vb =>
-          match va, vb, tag_eqb i j with
-          | abs, pres v, true => pres v
-          | abs, pres _, false => abs
-          | pres v, pres _, false => pres v
-          | pres v, abs, _ => err error_Cl
-          | pres _, pres _, true => err error_Ty (* tag apparaît deux fois *)
-          | err e, _, _ => err e
-          | _, err e, _ => err e
-          | _, _, _ => err error_Cl
-          end)) (DS_const abs) _.
-
-  Definition smerge1 := sfold fpres_merge.
-  Definition scase1 := sfold fpres_case.
-
-  (* (* extension à n flots par branche *) *)
-  (* Definition smerge (l : list enumtag) {n} : *)
-  (*   DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n := *)
-  (*   curry ((llift_nprod (smerge1 l) @2_ FST _ _) (SND _ _)). *)
-
-  (* Definition scase (l : list enumtag) {n} : *)
-  (*   DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n := *)
-  (*   curry ((llift_nprod (scase1 l) @2_ FST _ _) (SND _ _)). *)
-
-
-  Lemma smerge1_eq :
-    forall l c C (np : nprod (length l)),
-      smerge1 l (cons c C) np
-      == match c with
-         | abs => app (fabs l np) (smerge1 l C (lift (@REM _) np))
-         | pres v =>
-             match tag_of_val v with
-             | Some i => app (fpres_merge l i np) (smerge1 l C (lift (@REM _) np))
-             | None => DS_const (err error_Ty)
-             end
-         | err e => DS_const (err e)
-         end.
-  Proof.
-    intros.
-    unfold smerge1.
-    rewrite sfold_eq; auto.
-  Qed.
-
-  (* Lemma smerge_eq : *)
-  (*   forall l n C (np : nprod (length l)), *)
-  (*     @smerge l n C np =  llift_nprod (smerge1 l) C np. *)
+  (* Lemma foldi_llift : *)
+  (*   forall {I AA BB D1 D2}, *)
+  (*   forall f a l np (g : D1 -C-> D2 -C-> BB) d2, *)
+  (*     @nprod_foldi I AA BB f a l (llift g np d2) *)
+  (*     = nprod_foldi (fun i => curry (uncurry (f i) @_ PROD_map (ID _) (g <___> d2))) a l np. *)
   (* Proof. *)
-  (*   trivial. *)
+  (*   induction l as [|i [| j l]]; auto. *)
+  (*   intros. *)
+  (*   destruct np as [x np]. *)
+  (*   rewrite (llift_simpl _ g _ _ x np). *)
+  (*   rewrite (foldi_simpl f). *)
+  (*   rewrite (foldi_simpl _ a i j l x np). *)
+  (*   autorewrite with cpodb. *)
+  (*   repeat f_equal; eauto. *)
   (* Qed. *)
 
-  Lemma scase1_eq :
-    forall l c C (np : nprod (length l)),
-      scase1 l (cons c C) np
-      == match c with
-         | abs => app (fabs l np) (scase1 l C (lift (@REM _) np))
-         | pres v =>
-             match tag_of_val v with
-             | Some i => app (fpres_case l i np) (scase1 l C (lift (@REM _) np))
-             | None => DS_const (err error_Ty)
-             end
-         | err e => DS_const (err e)
-         end.
-  Proof.
-    intros.
-    unfold scase1.
-    rewrite sfold_eq; auto.
-  Qed.
-
-  (* Lemma scase_eq : *)
-  (*   forall l n C (np : nprod (length l)), *)
-  (*     @scase l n C np =  llift_nprod (scase1 l) C np. *)
+  (* Lemma zip_zip : *)
+  (*   forall D1 D2 D3 D4 D5, *)
+  (*   forall (f:D1->D4->D5) (g:D2->D3->D4) U V W, *)
+  (*     ZIP f U (ZIP g V W) == ZIP (fun h w => h w) (ZIP (fun x y => fun z => (f x (g y z))) U V) W. *)
   (* Proof. *)
-  (*   trivial. *)
+  (*   clear. *)
+  (*   intros. *)
+  (*   apply DS_bisimulation_allin1 with *)
+  (*     (R := fun R L => exists U V W, *)
+  (*               R == ZIP f U (ZIP g V W) *)
+  (*               /\ L ==  ZIP (fun h w => h w) (ZIP (fun x y z => f x (g y z)) U V) W). *)
+  (*   3: eauto. *)
+  (*   - intros ????(?&?&?&?) E1 E2. *)
+  (*     setoid_rewrite <- E1. *)
+  (*     setoid_rewrite <- E2. *)
+  (*     eauto. *)
+  (*   - clear. *)
+  (*     intros R L Hc (U & V & W & Hr & Hl). *)
+  (*     destruct Hc as [Hc | Hc]. *)
+  (*     + apply is_cons_elim in Hc as (r & rs & Hrs). *)
+  (*       rewrite Hrs in *. *)
+  (*       apply symmetry, zip_uncons in Hr as (?&?&?&?& Hu & Hz &?&?). *)
+  (*       apply zip_uncons in Hz as (?&?&?&?& Hv & Hw &?&?). *)
+  (*       rewrite Hu, Hv, Hw, 2 zip_eq in *; subst. *)
+  (*       setoid_rewrite Hl. *)
+  (*       setoid_rewrite Hrs. *)
+  (*       setoid_rewrite rem_cons. *)
+  (*       split. *)
+  (*       autorewrite with cpodb; auto. *)
+  (*       eauto 7. *)
+  (*     + apply is_cons_elim in Hc as (l & ls & Hls). *)
+  (*       rewrite Hls in *. *)
+  (*       apply symmetry, zip_uncons in Hl as (?&?&?&?& Hz & Hw &?&?). *)
+  (*       apply zip_uncons in Hz as (?&?&?&?& Hu & Hv &?&?). *)
+  (*       rewrite Hu, Hv, Hw, 2 zip_eq in *; subst. *)
+  (*       setoid_rewrite Hls. *)
+  (*       setoid_rewrite Hr. *)
+  (*       setoid_rewrite rem_cons. *)
+  (*       split. *)
+  (*       autorewrite with cpodb; auto. *)
+  (*       eauto 7. *)
   (* Qed. *)
 
+  (* Definition ZIP3' {A1 B1 C1 D1} (op : A1 -> B1 -> C1 -> D1) : *)
+  (*   DS A1 -C-> DS B1 -C-> DS C1 -C-> DS D1. *)
+  (*   (* curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))). *) *)
+  (* (* autre définition : *) *)
+  (* intros. apply curry, curry. *)
+  (* refine ((ZIP (fun '(x,y) z => op x y z) @2_ _) (SND _ _)). *)
+  (* exact ((ZIP pair @2_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _)). *)
+  (* Defined. *)
+
+  (* Lemma ZIP3'_eq : *)
+  (*   forall {A B C D} (op : A -> B -> C -> D), *)
+  (*     forall U V W, *)
+  (*       (* ZIP3' op U V W = ZIP (fun '(x, y) (z : C) => op x y z) (ZIP pair U V) W. *) *)
+  (*       ZIP3' op U V W = ZIP (fun x '(y,z) => op x y z) U (ZIP pair V W). *)
+  (* Proof. *)
+  (* Admitted. *)
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,
