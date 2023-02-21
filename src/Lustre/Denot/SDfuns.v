@@ -1010,7 +1010,6 @@ Section SStream_functions.
         end.
   Proof.
     intros.
-    unfold scase1.
     assert (Heq:=FIXP_eq scase1_noerrf).
     pose proof (ford_eq_elim (ford_eq_elim Heq (cons c C)) env) as HH.
     now rewrite <- scase1_noerrf_eq.
