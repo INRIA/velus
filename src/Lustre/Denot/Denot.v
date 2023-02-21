@@ -173,12 +173,7 @@ Definition swhenv :=
 (* idem pour smerge *)
 Definition smergev :=
   let get_tag := fun v => match v with Venum t => Some t | _ => None end in
-  fun l {n} => @smerge value value enumtag get_tag Nat.eqb l n.
-
-(* et pour scase *)
-Definition scasev :=
-  let get_tag := fun v => match v with Venum t => Some t | _ => None end in
-  fun l {n} => @scase value value enumtag get_tag Nat.eqb l n.
+  @smerge value value enumtag get_tag Nat.eqb.
 
 
 (** On définit tout de suite [denot_exps_] en fonction de [denot_exp_]
@@ -297,7 +292,7 @@ Definition denot_exp_ (ins : list ident)
     (* on calcule (length tys) flots pour chaque liste de sous-expressions *)
     pose (ses := denot_expss_ denot_exp_ ies (length tys)).
     rewrite <- (map_length fst) in ses.
-    apply ((smergev (List.map fst ies) @2_ denot_var i) ses).
+    exact ((llift_nprod (smergev (List.map fst ies)) @2_ denot_var i) ses).
   - (* Ecase *)
     apply CTE, (nprod_const errTy).
   - (* Eapp *)
@@ -458,7 +453,7 @@ Lemma denot_exp_eq :
       | Emerge (x,_) ies (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI bs env in
           let ss := eq_rect_r nprod ss (map_length _ _) in
-          smergev (List.map fst ies) (denot_var ins envI env x) ss
+          llift_nprod (smergev (List.map fst ies)) (denot_var ins envI env x) ss
       | Eapp f es _ an =>
           let ss := denot_exps ins es envG envI bs env in
           match find_node f G with

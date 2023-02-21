@@ -657,14 +657,28 @@ Section SStream_functions.
   (* TODO: si ça s'avère intéressant, déplacer dans Cpo_ext.v *)
   Section MOVE_ME.
 
-  (* TODO: rename Types, move  *)
+    (* TODO: renommer les types *)
+    Context {I : Type}.
+    Context {AA BB : cpo}.
+
   (* TODO: bss comme instance de ça ? *)
-  Fixpoint nprod_foldi {I} {D DD : cpo}
-    (f : I -> DD -C-> D -C-> DD) (d : DD) (l : list I) : @nprod D (length l) -C-> DD :=
-    match l with
-    | [] => CTE _ _ d
-    | i :: l => (f i @2_ (nprod_foldi f d l @_ nprod_tl)) (nprod_hd)
-    end.
+  Definition nprod_Foldi : forall  (l : list I),
+      (I -O-> AA -C-> BB -C-> AA) -C-> AA -C-> @nprod BB (length l) -C-> AA.
+    induction l as [| i l].
+    - apply CTE, CTE.
+    - apply curry, curry.
+      refine ((ID _ @3_ _) _ _).
+      + exact (fcont_ford_shift _ _ _ (ID _) i @_ (FST _ _ @_ FST _ _)).
+      + exact ((IHl @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
+      + exact (nprod_hd @_ SND _ _).
+  Defined.
+
+  Lemma Foldi_simpl : forall i l f a np,
+      nprod_Foldi (i :: l) f a np
+      = f i (nprod_Foldi l f a (nprod_tl np)) (nprod_hd np).
+  Proof.
+    trivial.
+  Qed.
 
   (* TODO: move *)
   Lemma forall_nprod_hd :
@@ -679,16 +693,16 @@ Section SStream_functions.
 
   (* TODO: move *)
   Lemma forall_nprod_foldi :
-    forall {I} {D DD : cpo}
-      (P : DD -> Prop)
-      (Q : D -> Prop)
-      (l : list I) (d : DD) (f : I -> DD -C-> D -C-> DD) np,
+    forall (P : AA -> Prop)
+      (Q : BB -> Prop)
+      (l : list I) (d : AA) (f : I -O-> AA -C-> BB -C-> AA) np,
       (forall i d1 d2, P d1 -> Q d2 -> P (f i d1 d2)) ->
       P d ->
       forall_nprod Q np ->
-      P (nprod_foldi f d l np).
+      P (nprod_Foldi l f d np).
   Proof.
-    induction l; intros * PQ pd Fn; simpl; auto.
+    induction l; intros * PQ pd Fn; auto.
+    rewrite Foldi_simpl.
     apply PQ.
     - apply IHl; eauto using forall_nprod_tl.
     - now apply forall_nprod_hd in Fn.
@@ -748,6 +762,100 @@ Section SStream_functions.
   Qed.
 
   End MOVE_ME.
+
+  (* TODO: move, déjà présent dans Vélus... *)
+  Definition or_default {A} (d: A) (o: option A) : A :=
+    match o with Some a => a | None => d end.
+
+  (** Définition du merge *)
+
+  Definition is_tag (i : enumtag) (x : sampl B) : sampl bool :=
+    match x with
+    | pres v => or_default (err error_Ty)
+                 (option_map (fun j => pres (tag_eqb i j)) (tag_of_val v))
+    (* TODO: comment faire ces deux cas en un seul ? *)
+    | abs => abs
+    | err e => err e
+    end.
+
+  (* première version, sans ZIP3 mais avec un llift *)
+  Definition smerge_ (l : list enumtag) :
+    (* @nprod (DS (sampl A)) (length l) -C-> DS (sampl B) -C-> DS (sampl A). *)
+    DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
+    (* permutation des arguments pour l'utilisation de llift *)
+    refine (curry ((_ @2_ SND _ _) (FST _ _))).
+    refine (curry (_ @_ uncurry (llift (ZIP pair)))).
+    exact (nprod_Foldi l
+              (fun j => ZIP (fun a '(x,c) =>
+                            match is_tag j c, a, x with
+                             | abs, abs, abs => abs
+                             | pres true, abs, pres v => pres v
+                             | pres false, a, abs => a
+                             | _,_,_ => err error_Cl
+                             end)) (DS_const abs)).
+  Defined.
+
+  Lemma smerge__eq :
+    forall l C np,
+      smerge_ l C np =
+        nprod_Foldi l (fun j =>
+                       ZIP (fun a '(x,c) =>
+                              match is_tag j c, a, x with
+                              | abs, abs, abs => abs
+                              | pres true, abs, pres v => pres v
+                              | pres false, a, abs => a
+                              | _,_,_ => err error_Cl
+                              end))
+          (DS_const abs) (llift (ZIP pair) np C).
+  Proof.
+    trivial.
+  Qed.
+
+  Definition ZIP3 {A B C D} (op : A -> B -> C -> D) :
+    DS A -C-> DS B -C-> DS C -C-> DS D :=
+    (* curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))). *)
+    curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))).
+  (* autre définition : *)
+  (* intros. apply curry, curry. *)
+  (* refine ((ZIP (fun '(x,y) z => op x y z) @2_ _) (SND _ _)). *)
+  (* exact ((ZIP pair @2_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _)). *)
+
+  Lemma ZIP3_eq :
+    forall {A B C D} (op : A -> B -> C -> D),
+    forall U V W,
+      ZIP3 op U V W = ZIP (fun f x => f x) (ZIP (fun x y => op x y) U V) W.
+  Proof.
+    trivial.
+  Qed.
+
+  Definition smerge (l : list enumtag) :
+    DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
+    eapply fcont_comp2.
+    apply nprod_Foldi.
+    2: apply CTE, (DS_const abs).
+    apply ford_fcont_shift; intro j.
+    apply (ZIP3 (fun c a x =>
+                   match is_tag j c, a, x with
+                   | abs, abs, abs => abs
+                   | pres true, abs, pres v => pres v
+                   | pres false, a, abs => a
+                   | _,_,_ => err error_Cl
+                   end)).
+  Defined.
+
+  Lemma smerge_eq :
+    forall l C np,
+      smerge l C np ==
+        nprod_Foldi l (fun j => ZIP3 (fun c a x =>
+                                     match is_tag j c, a, x with
+                                     | abs, abs, abs => abs
+                                     | pres true, abs, pres v => pres v
+                                     | pres false, a, abs => a
+                                     | _,_,_ => err error_Cl
+                                     end) C) (DS_const abs) np.
+  Proof.
+    trivial.
+  Qed.
 
   Section Sfold.
 
@@ -910,14 +1018,14 @@ Section SStream_functions.
   Definition smerge1 := sfold fpres_merge.
   Definition scase1 := sfold fpres_case.
 
-  (* extension à n flots par branche *)
-  Definition smerge (l : list enumtag) {n} :
-    DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n :=
-    curry ((llift_nprod (smerge1 l) @2_ FST _ _) (SND _ _)).
+  (* (* extension à n flots par branche *) *)
+  (* Definition smerge (l : list enumtag) {n} : *)
+  (*   DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n := *)
+  (*   curry ((llift_nprod (smerge1 l) @2_ FST _ _) (SND _ _)). *)
 
-  Definition scase (l : list enumtag) {n} :
-    DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n :=
-    curry ((llift_nprod (scase1 l) @2_ FST _ _) (SND _ _)).
+  (* Definition scase (l : list enumtag) {n} : *)
+  (*   DS (sampl B) -C-> @nprod (@nprod (DS (sampl A)) n) (length l) -C-> @nprod (DS (sampl A)) n := *)
+  (*   curry ((llift_nprod (scase1 l) @2_ FST _ _) (SND _ _)). *)
 
 
   Lemma smerge1_eq :
@@ -938,12 +1046,12 @@ Section SStream_functions.
     rewrite sfold_eq; auto.
   Qed.
 
-  Lemma smerge_eq :
-    forall l n C (np : nprod (length l)),
-      @smerge l n C np =  llift_nprod (smerge1 l) C np.
-  Proof.
-    trivial.
-  Qed.
+  (* Lemma smerge_eq : *)
+  (*   forall l n C (np : nprod (length l)), *)
+  (*     @smerge l n C np =  llift_nprod (smerge1 l) C np. *)
+  (* Proof. *)
+  (*   trivial. *)
+  (* Qed. *)
 
   Lemma scase1_eq :
     forall l c C (np : nprod (length l)),
@@ -963,12 +1071,12 @@ Section SStream_functions.
     rewrite sfold_eq; auto.
   Qed.
 
-  Lemma scase_eq :
-    forall l n C (np : nprod (length l)),
-      @scase l n C np =  llift_nprod (scase1 l) C np.
-  Proof.
-    trivial.
-  Qed.
+  (* Lemma scase_eq : *)
+  (*   forall l n C (np : nprod (length l)), *)
+  (*     @scase l n C np =  llift_nprod (scase1 l) C np. *)
+  (* Proof. *)
+  (*   trivial. *)
+  (* Qed. *)
 
 
   (** In this section we use the same function to denote the merge and
