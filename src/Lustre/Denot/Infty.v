@@ -408,191 +408,55 @@ Proof.
   eauto using is_ncons_swhen.
 Qed.
 
-
-Lemma is_cons_fabs :
-  forall T l xs,
-    forall_nprod (@is_cons _) xs ->
-    is_cons (@fabs A T l xs).
+Lemma is_ncons_zip3 :
+  forall A B C D (op : A -> B -> C -> D),
+  forall xs ys zs n,
+    is_ncons n xs /\ is_ncons n ys /\ is_ncons n zs ->
+    is_ncons n (ZIP3 op xs ys zs).
 Proof.
-  intros * Hxs.
-  unfold fabs.
-  eapply forall_nprod_foldi; eauto using is_cons_DS_const.
-  intros.
-  apply is_cons_zip; auto.
-Qed.
-
-Lemma is_cons_fpres_merge :
-  forall T TB l t xs,
-    forall_nprod (@is_cons _) xs ->
-    is_cons (@fpres_merge A T TB l t xs).
-Proof.
-  intros * Hxs.
-  unfold fpres_merge.
-  apply is_cons_map.
-  eapply forall_nprod_foldi in Hxs; eauto using is_cons_DS_const.
-  intros; simpl.
-  apply is_cons_zip; auto.
-Qed.
-
-Lemma is_cons_smerge1 :
-  forall T OT TB,
-  forall l cs xs,
-    is_cons cs ->
-    forall_nprod (@is_cons _) xs ->
-    is_cons (@smerge1 A B T OT TB l cs xs).
-Proof.
-  intros * Hc Hx.
-  apply is_cons_elim in Hc as (?&?&->).
-  rewrite smerge1_eq.
-  cases; solve_err.
-  - now apply is_cons_app, is_cons_fabs.
-  - now apply is_cons_app, is_cons_fpres_merge.
-Qed.
-
-Lemma is_ncons_smerge1 :
-  forall T OT TB,
-  forall l n xs cs,
-    is_ncons n cs ->
-    forall_nprod (@is_ncons _ n) xs ->
-    is_ncons n (@smerge1 A B T OT TB l cs xs).
-Proof.
-  induction n as [|[]]; simpl; intros * Hc Hx; auto.
-  - apply is_cons_smerge1; auto.
-  - unfold is_ncons in *.
-    apply is_ncons_is_cons in Hc as Hc'.
-    apply is_cons_rem in Hc' as (?&?&?& Hc').
-    rewrite Hc', rem_cons, smerge1_eq in *.
-    cases; solve_err; rewrite rem_app; auto using forall_nprod_lift.
-    + apply is_cons_fabs.
-      eapply forall_nprod_impl in Hx; eauto using is_ncons_is_cons.
-    + apply is_cons_fpres_merge.
-      eapply forall_nprod_impl in Hx; eauto using is_ncons_is_cons.
-Qed.
-
-Lemma smerge1_inf :
-  forall T OT TB,
-  forall l xs cs,
-    infinite cs ->
-    forall_nprod (@infinite _) xs ->
-    infinite (@smerge1 A B T OT TB l cs xs).
-Proof.
-  setoid_rewrite <- nrem_inf_iff.
-  intros * Inf Hf n.
-  apply is_ncons_smerge1; eauto using inf_nrem, forall_nprod_impl.
+  intros * (Cx & Cy & Cz).
+  rewrite zip3_eq.
+  auto using is_ncons_zip.
 Qed.
 
 Lemma is_cons_smerge :
   forall T OT TB,
-  forall l k cs xs,
-    is_cons cs ->
-    forall_nprod (forall_nprod (@is_cons _)) xs ->
-    forall_nprod (@is_cons _) (@smerge A B T OT TB l k cs xs).
-Proof.
-  intros.
-  unfold smerge.
-  autorewrite with cpodb; simpl.
-  eapply forall_nprod_llift_nprod; eauto using is_cons_smerge1.
-Qed.
-
-Lemma smerge_inf :
-  forall T OT TB,
-  forall l k cs xs,
-    infinite cs ->
-    forall_nprod (forall_nprod (@infinite _)) xs ->
-    forall_nprod (@infinite _) (@smerge A B T OT TB l k cs xs).
-Proof.
-  intros.
-  unfold smerge.
-  autorewrite with cpodb; simpl.
-  eapply forall_nprod_llift_nprod; eauto using smerge1_inf.
-Qed.
-
-
-Lemma is_cons_fpres_case :
-  forall T TB l t xs,
-    forall_nprod (@is_cons _) xs ->
-    is_cons (@fpres_case A T TB l t xs).
-Proof.
-  intros * Hxs.
-  unfold fpres_case.
-  apply is_cons_map.
-  eapply forall_nprod_foldi in Hxs; eauto using is_cons_DS_const.
-  intros; simpl.
-  apply is_cons_zip; auto.
-Qed.
-
-Lemma is_cons_scase1 :
-  forall T OT TB,
   forall l cs xs,
     is_cons cs ->
     forall_nprod (@is_cons _) xs ->
-    is_cons (@scase1 A B T OT TB l cs xs).
+    is_cons (@smerge A B T OT TB l cs xs).
 Proof.
   intros * Hc Hx.
-  apply is_cons_elim in Hc as (?&?&->).
-  unfold scase1.
-  rewrite sfold_eq.
-  cases; solve_err.
-  - now apply is_cons_app, is_cons_fabs.
-  - now apply is_cons_app, is_cons_fpres_case.
+  rewrite smerge_eq.
+  eapply forall_nprod_Foldi in Hx; eauto using is_cons_DS_const.
+  simpl; intros.
+  now apply is_cons_zip3.
 Qed.
 
-Lemma is_cons_scase :
-  forall T OT TB,
-  forall l k cs xs,
-    is_cons cs ->
-    forall_nprod (forall_nprod (@is_cons _)) xs ->
-    forall_nprod (@is_cons _) (@scase A B T OT TB l k cs xs).
-Proof.
-  intros.
-  unfold smerge.
-  autorewrite with cpodb; simpl.
-  eapply forall_nprod_llift_nprod; eauto using is_cons_scase1.
-Qed.
-
-Lemma is_ncons_scase1 :
+Lemma is_ncons_smerge :
   forall T OT TB,
   forall l n xs cs,
     is_ncons n cs ->
     forall_nprod (@is_ncons _ n) xs ->
-    is_ncons n (@scase1 A B T OT TB l cs xs).
+    is_ncons n (@smerge A B T OT TB l cs xs).
 Proof.
-  induction n as [|[]]; simpl; intros * Hc Hx; auto.
-  - apply is_cons_scase1; auto.
-  - unfold is_ncons in *.
-    apply is_ncons_is_cons in Hc as Hc'.
-    apply is_cons_rem in Hc' as (?&?&?& Hc').
-    rewrite Hc', rem_cons, scase1_eq in *.
-    cases; solve_err; rewrite rem_app; auto using forall_nprod_lift.
-    + apply is_cons_fabs.
-      eapply forall_nprod_impl in Hx; eauto using is_ncons_is_cons.
-    + apply is_cons_fpres_case.
-      eapply forall_nprod_impl in Hx; eauto using is_ncons_is_cons.
+  intros * Hc Hx.
+  rewrite smerge_eq.
+  eapply forall_nprod_Foldi in Hx; eauto using is_ncons_DS_const.
+  simpl; intros.
+  now apply is_ncons_zip3.
 Qed.
 
-Lemma scase1_inf :
+Lemma smerge_inf :
   forall T OT TB,
   forall l xs cs,
     infinite cs ->
     forall_nprod (@infinite _) xs ->
-    infinite (@scase1 A B T OT TB l cs xs).
+    infinite (@smerge A B T OT TB l cs xs).
 Proof.
   setoid_rewrite <- nrem_inf_iff.
   intros * Inf Hf n.
-  apply is_ncons_scase1; eauto using inf_nrem, forall_nprod_impl.
-Qed.
-
-Lemma scase_inf :
-  forall T OT TB,
-  forall l k cs xs,
-    infinite cs ->
-    forall_nprod (forall_nprod (@infinite _)) xs ->
-    forall_nprod (@infinite _) (@scase A B T OT TB l k cs xs).
-Proof.
-  intros.
-  unfold scase.
-  autorewrite with cpodb; simpl.
-  eapply forall_nprod_llift_nprod; eauto using scase1_inf.
+  apply is_ncons_smerge; eauto using inf_nrem, forall_nprod_impl.
 Qed.
 
 End Ncons_ops.
