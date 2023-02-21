@@ -845,7 +845,7 @@ Section SStream_functions.
 
   Lemma smerge_eq :
     forall l C np,
-      smerge l C np ==
+      smerge l C np =
         nprod_Foldi l (fun j => ZIP3 (fun c a x =>
                                      match is_tag j c, a, x with
                                      | abs, abs, abs => abs
