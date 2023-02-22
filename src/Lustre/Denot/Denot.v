@@ -292,7 +292,7 @@ Definition denot_exp_ (ins : list ident)
     (* on calcule (length tys) flots pour chaque liste de sous-expressions *)
     pose (ses := denot_expss_ denot_exp_ ies (length tys)).
     rewrite <- (map_length fst) in ses.
-    exact ((llift_nprod (smergev (List.map fst ies)) @2_ denot_var i) ses).
+    exact ((lift_nprod @_ (smergev (List.map fst ies)) @2_ denot_var i) ses).
   - (* Ecase *)
     apply CTE, (nprod_const errTy).
   - (* Eapp *)
@@ -453,7 +453,7 @@ Lemma denot_exp_eq :
       | Emerge (x,_) ies (tys,_) =>
           let ss := denot_expss ins ies (length tys) envG envI bs env in
           let ss := eq_rect_r nprod ss (map_length _ _) in
-          llift_nprod (smergev (List.map fst ies)) (denot_var ins envI env x) ss
+          lift_nprod (smergev (List.map fst ies) (denot_var ins envI env x)) ss
       | Eapp f es _ an =>
           let ss := denot_exps ins es envG envI bs env in
           match find_node f G with
