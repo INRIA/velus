@@ -710,8 +710,8 @@ Section SStream_functions.
 
   (* TODO: move  *)
   (** [nprod n] of [nprod m] *)
-  Definition lift_nprod {D} {n m} :
-    (@nprod D n -C-> D) -C-> @nprod (@nprod D m) n -C-> @nprod D m.
+  Definition lift_nprod {D1 D2} {n m} :
+    (@nprod D1 n -C-> D2) -C-> @nprod (@nprod D1 m) n -C-> @nprod D2 m.
     induction m as [|[]].
     - apply ID.
     - apply ID.
@@ -722,8 +722,8 @@ Section SStream_functions.
   Defined.
 
   Lemma forall_lift_nprod :
-    forall D n (F : @nprod D n -C-> D),
-    forall (P Q : D -> Prop),
+    forall D1 D2 n (F : @nprod D1 n -C-> D2),
+    forall (P : D2 -> Prop) (Q : D1 -> Prop),
       (forall x, forall_nprod Q x -> P (F x)) ->
       forall m np,
         forall_nprod (forall_nprod Q) np ->
@@ -742,17 +742,17 @@ Section SStream_functions.
   Qed.
 
   Lemma lift_nprod_nth :
-    forall D n m (F : @nprod D n -C-> D),
-    forall d k (np : @nprod (@nprod D m) n),
+    forall D1 D2 n m (F : @nprod D1 n -C-> D2),
+    forall d1 d2 k (np : @nprod (@nprod D1 m) n),
       k < m ->
-      get_nth k d (@lift_nprod D n m F np) = F (lift (get_nth k d) np).
+      get_nth k d2 (@lift_nprod D1 D2 n m F np) = F (lift (get_nth k d1) np).
   Proof.
     induction m as [|[|m]]; intros * Hk; try lia.
     - destruct k; simpl; try lia.
       rewrite lift_ID; auto.
     - destruct k; auto.
       simpl; autorewrite with cpodb; simpl.
-      rewrite IHm; try lia.
+      erewrite IHm; try lia.
       now rewrite lift_lift.
   Qed.
 
