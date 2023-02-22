@@ -708,30 +708,26 @@ Section SStream_functions.
     - now apply forall_nprod_hd in Fn.
   Qed.
 
-  (* TODO: rename Types, move  *)
+  (* TODO: move  *)
   (** [nprod n] of [nprod m] *)
-  Definition llift_nprod {D1 D2} {n} (F : D2 -C-> @nprod D1 n -C-> D1) {m} :
-    D2 -C-> @nprod (@nprod D1 m) n -C-> @nprod D1 m.
-    induction m as [|[|m]].
-    - apply F.
-    - apply F.
+  Definition lift_nprod {D} {n m} :
+    (@nprod D n -C-> D) -C-> @nprod (@nprod D m) n -C-> @nprod D m.
+    induction m as [|[]].
+    - apply ID.
+    - apply ID.
     - apply curry.
-      apply (fcont_comp2 (PAIR _ _)).
-      + apply ((F @2_ FST _ _) (lift (FST _ _) @_ SND _ _)).
-      + apply ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
+      refine ((PAIR _ _ @2_ _) _).
+      + exact ((AP _ _ @2_ FST _ _) (lift (FST _ _) @_ SND _ _)).
+      + exact ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
   Defined.
 
-  (* TODO: move *)
-  Lemma forall_llift_nprod :
-    forall D1 D2 n
-      (F : D2 -C-> @nprod D1 n -C-> D1),
-    forall (Q : D1 -> Prop)
-      (P : D1 -> Prop)
-      d,
-      (forall x, forall_nprod Q x -> P (F d x)) ->
+  Lemma forall_lift_nprod :
+    forall D n (F : @nprod D n -C-> D),
+    forall (P Q : D -> Prop),
+      (forall x, forall_nprod Q x -> P (F x)) ->
       forall m np,
         forall_nprod (forall_nprod Q) np ->
-        @forall_nprod _ P m (llift_nprod F d np).
+        @forall_nprod _ P m (lift_nprod F np).
   Proof.
     intros * QP.
     induction m as [|[|m]]; auto; intros * Hq.
@@ -745,12 +741,11 @@ Section SStream_functions.
       intros [] H; inversion H; auto.
   Qed.
 
-  (* TODO: move *)
-  Lemma llift_nprod_nth :
-    forall {D1 D2} {n} (F : D2 -C-> @nprod D1 n -C-> D1) m,
-    forall a d k (np : @nprod (@nprod D1 m) n),
+  Lemma lift_nprod_nth :
+    forall D n m (F : @nprod D n -C-> D),
+    forall d k (np : @nprod (@nprod D m) n),
       k < m ->
-      get_nth k d (@llift_nprod D1 D2 n F m a np) = F a (lift (get_nth k d) np).
+      get_nth k d (@lift_nprod D n m F np) = F (lift (get_nth k d) np).
   Proof.
     induction m as [|[|m]]; intros * Hk; try lia.
     - destruct k; simpl; try lia.
