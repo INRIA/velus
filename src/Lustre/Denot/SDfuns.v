@@ -722,7 +722,7 @@ Section SStream_functions.
   Defined.
 
   (* TODO: move *)
-  Lemma forall_nprod_llift_nprod :
+  Lemma forall_llift_nprod :
     forall D1 D2 n
       (F : D2 -C-> @nprod D1 n -C-> D1),
     forall (Q : D1 -> Prop)
