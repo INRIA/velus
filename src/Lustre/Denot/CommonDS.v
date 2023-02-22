@@ -450,3 +450,24 @@ Proof.
   apply DSForall_admissible; intro.
   apply Hf.
 Qed.
+
+Lemma DSForall_zip :
+  forall {A B C},
+  forall (P : A -> Prop) (Q : B -> Prop) (R : C -> Prop),
+  forall op xs ys,
+    (forall x y, P x -> Q y -> R (op x y)) ->
+    DSForall P xs ->
+    DSForall Q ys ->
+    DSForall R (ZIP op xs ys).
+Proof.
+  intros * PQ Hp Hq.
+  remember (ZIP _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+  revert Hp Hq Ht.
+  revert xs ys t.
+  cofix Cof; intros.
+  destruct t.
+  - constructor; rewrite <- eqEps in Ht; eauto.
+  - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hx & Hy & Ht &?).
+    rewrite Hx, Hy in *; inv Hp; inv Hq.
+    constructor; eauto.
+Qed.
