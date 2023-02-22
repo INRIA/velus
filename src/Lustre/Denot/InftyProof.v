@@ -298,8 +298,6 @@ Module Type LDENOTINF
     - (* Emerge *)
       destruct x, a.
       rewrite denot_exp_eq; simpl.
-      unfold smergev.
-      rewrite smerge_eq.
       rewrite llift_nprod_nth; auto.
       inv Hwl.
       inv Hwx.
@@ -308,7 +306,7 @@ Module Type LDENOTINF
       apply Forall_impl_inside with (P := wl_exp _) in H; auto.
       apply Forall_impl_inside with (P := wx_exp _) in H; auto.
       rewrite Forall_concat in H.
-      apply is_ncons_smerge1; auto.
+      apply is_ncons_smerge; auto.
       apply forall_nprod_lift.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
       apply forall_denot_expss.
@@ -427,10 +425,8 @@ Module Type LDENOTINF
     - (* Emerge *)
       destruct ann0.
       rewrite denot_exp_eq; simpl.
-      unfold smergev.
-      rewrite smerge_eq.
       rewrite llift_nprod_nth; auto.
-      eapply is_ncons_smerge1 with (n := S n); eauto using P_exps_k.
+      eapply is_ncons_smerge with (n := S n); eauto using P_exps_k.
       apply forall_nprod_lift.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
       apply forall_denot_expss.
@@ -796,7 +792,7 @@ Proof.
     eapply forall_nprod_llift; eauto using swhen_inf; cases.
   - (* Emerge *)
     destruct x, a.
-    apply smerge_inf; auto.
+    eapply forall_llift_nprod; eauto using smerge_inf.
     unfold eq_rect_r, eq_rect, eq_sym; cases.
     apply forall_denot_expss.
     unfold eq_rect.
@@ -841,4 +837,3 @@ Module LDenotInfFun
 <: LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Den.
   Include LDENOTINF Ids Op OpAux Cks Senv Syn Typ LCA Lord Den.
 End LDenotInfFun.
-
