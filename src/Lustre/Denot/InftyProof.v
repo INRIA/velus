@@ -298,7 +298,7 @@ Module Type LDENOTINF
     - (* Emerge *)
       destruct x, a.
       rewrite denot_exp_eq; simpl.
-      rewrite llift_nprod_nth; auto.
+      rewrite lift_nprod_nth; auto.
       inv Hwl.
       inv Hwx.
       rewrite <- Forall_map in *.
@@ -425,7 +425,7 @@ Module Type LDENOTINF
     - (* Emerge *)
       destruct ann0.
       rewrite denot_exp_eq; simpl.
-      rewrite llift_nprod_nth; auto.
+      rewrite lift_nprod_nth; auto.
       eapply is_ncons_smerge with (n := S n); eauto using P_exps_k.
       apply forall_nprod_lift.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
@@ -792,7 +792,7 @@ Proof.
     eapply forall_nprod_llift; eauto using swhen_inf; cases.
   - (* Emerge *)
     destruct x, a.
-    eapply forall_llift_nprod; eauto using smerge_inf.
+    eapply forall_lift_nprod; eauto using smerge_inf.
     unfold eq_rect_r, eq_rect, eq_sym; cases.
     apply forall_denot_expss.
     unfold eq_rect.
