@@ -64,6 +64,13 @@ $(TOOLSDIR)/$(AUTOMAKE).ml: $(TOOLSDIR)/$(AUTOMAKE).mll
 	@echo "${bold}Building automake tool...${normal}"
 	ocamllex $<
 
+velustotex: extraction tools/velustotex.ml
+	@echo "${bold}Building velustotex...${normal}"
+	ocamlbuild $(FLAGS) -I tools $@.$(TARGET)
+	mv $@.$(TARGET) $@
+	cp $(COMPCERTDIR)/compcert.ini $(BUILDDIR)/tools/compcert.ini
+	@echo "${bold}Done.${normal}"
+
 # EXAMPLES
 $(EXAMPLESDIR): $(VELUS)
 	$(MAKE) $(EXAMPLESFLAGS)
