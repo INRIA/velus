@@ -1365,7 +1365,7 @@ Definition nprod_hd_def d {n} : nprod n -C-> D :=
 (** throw away the first element *)
 Definition nprod_tl {n} : nprod (S n) -C-> nprod n :=
   match n with
-  | O => 0
+  | O => ID _
   | (S n) => SND _ _
   end.
 
@@ -1395,6 +1395,7 @@ Proof.
   - destruct k; auto.
   - destruct n, k; auto.
     + unfold get_nth. now rewrite Heq.
+    + simpl. autorewrite with cpodb. auto.
     + simpl. autorewrite with cpodb. auto.
 Qed.
 
