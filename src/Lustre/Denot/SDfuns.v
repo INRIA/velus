@@ -46,10 +46,10 @@ Section Abstract_clock.
 
   Lemma AC_eq :
     forall u U,
-      AC (cons u U) == match u with
-                       | pres _ => cons true (AC U)
-                       | _ => cons false (AC U)
-                       end.
+      AC (cons u U) == cons match u with
+                         | pres _ => true
+                         | _ => false
+                         end (AC U).
   Proof.
     intros.
     unfold AC.
