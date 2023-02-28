@@ -98,10 +98,11 @@ let def_start =
   | "CoFixpoint" | "Function"
   | ("Program" space+)? ("Definition" | "Fixpoint")
   | "Theorem" | "Lemma" | "Fact" | "Remark" | "Goal" | "Corollary"
+  | "Module" (space+ "Type")?
 let inductive_start =
   "Inductive" | "CoInductive"
 let admin_start =
-  "From" | "Require" | "Import" | "Module" | "Open" | "End"
+  "From" | "Require" | "Import" | "Open" | "End"
   | ("Global" space+)? "Existing" space+ "Instance"
 let proof_start_anon =
   "Obligation" space+ (['0' - '9'])+ | "Next" space+ "Obligation"
