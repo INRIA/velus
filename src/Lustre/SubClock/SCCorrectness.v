@@ -4,7 +4,7 @@ Open Scope list_scope.
 From Coq Require Import Setoid Morphisms.
 
 From Velus Require Import Common.
-From Velus Require Import Operators Environment.
+From Velus Require Import Operators Environment FunctionalEnvironment.
 From Velus Require Import Clocks.
 From Velus Require Import CoindStreams IndexedStreams.
 From Velus Require Import CoindIndexed.

@@ -775,3 +775,15 @@ Ltac simpl_fenv :=
 Declare Scope fenv_scope.
 Infix "+" := FEnv.union (left associativity, at level 50) : fenv_scope.
 Delimit Scope fenv_scope with fenv.
+
+Inductive var_last : Type := Var (x : ident) | Last (x : ident).
+
+Global Program Instance var_eq_dec : EqDec var_last eq.
+Next Obligation.
+  destruct x, y.
+  2,3:right; intros Eq; inv Eq.
+  1,2:(destruct (ident_eq_dec x x0); subst;
+       [left;reflexivity|right; intros Eq; inv Eq; congruence]).
+Qed.
+
+Global Program Instance var_fenv_key : FEnv.fenv_key var_last.

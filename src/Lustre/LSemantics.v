@@ -67,19 +67,7 @@ Module Type LSEMANTICS
       arrow1 xs ys rs ->
       arrow (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
-  Inductive lustre_var := Var (x : ident) | Last (x : ident).
-
-  Global Program Instance var_eq_dec : EqDec lustre_var eq.
-  Next Obligation.
-    destruct x, y.
-    2,3:right; intros Eq; inv Eq.
-    1,2:(destruct (ident_eq_dec x x0); subst;
-         [left;reflexivity|right; intros Eq; inv Eq; congruence]).
-  Qed.
-
-  Global Program Instance var_fenv_key : FEnv.fenv_key lustre_var.
-
-  Definition history : Type := @history lustre_var.
+  Definition history : Type := @history var_last.
   Definition var_history (H : history) : @Str.history ident :=
     fun x => H (Var x).
 
@@ -724,7 +712,7 @@ Module Type LSEMANTICS
       constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
 
-  Add Parametric Morphism : (@sem_var lustre_var)
+  Add Parametric Morphism : (@sem_var var_last)
       with signature FEnv.Equiv (@EqSt _) ==> eq ==> @EqSt svalue ==> Basics.impl
         as sem_var_EqSt.
   Proof.

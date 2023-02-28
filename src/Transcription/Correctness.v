@@ -971,7 +971,7 @@ Module Type CORRECTNESS
       NLSC.sem_equation P (LS.var_history H) b (NL.EqDef x ck (Ecexp e')).
   Proof.
     intros * HwcG Hinv Hnormed Hwt Hwc Hck Hto Hsem.
-    assert (exists v, sem_var H (LS.Var x) v) as (v&Hvar).
+    assert (exists v, sem_var H (Var x) v) as (v&Hvar).
     { specialize (Hsem 0). inv Hsem. simpl_Foralls.
       simpl in *; rewrite app_nil_r in *; subst.
       eapply sem_var_mask_inv in H3 as (?&Hv&?); eauto. }
@@ -1296,7 +1296,7 @@ Module Type CORRECTNESS
       LCS.sc_vars cenv H b ->
       Forall (fun xr => In xr (idck cenv)) xr ->
       to_equation env envo xr eq = OK eq' ->
-      Forall2 (sem_var H) (map (fun '(x, _) => LS.Var x) xr) rs ->
+      Forall2 (sem_var H) (map (fun '(x, _) => Var x) xr) rs ->
       bools_ofs rs r ->
       (forall k, LCS.sem_equation_ck G (mask_hist k r H) (maskb k r b) eq) ->
       NLSC.sem_equation P (LS.var_history H) b eq'.
@@ -1314,7 +1314,7 @@ Module Type CORRECTNESS
     - (* extcall *)
       simpl_Forall. inv Hwc; simpl_Forall.
       monadInv Htoeq.
-      assert (exists v, sem_var H (LS.Var x) v) as (v&Hvar').
+      assert (exists v, sem_var H (Var x) v) as (v&Hvar').
       { specialize (Hsem 0). inv Hsem. simpl_Forall.
         simpl in *; rewrite app_nil_r in *; subst.
         eapply sem_var_mask_inv in H5 as (?&?&?); eauto. }
@@ -1339,7 +1339,7 @@ Module Type CORRECTNESS
       inv Hwc; simpl_Foralls. rename H2 into Hwt. rename H4 into Hwc. rename H3 into Hf2.
       inversion Htoeq as [Heq'].
       cases; monadInv Heq'. rename x1 into ck.
-      assert (exists y, sem_var H (LS.Var i) y) as (y&Hv).
+      assert (exists y, sem_var H (Var i) y) as (y&Hv).
       { assert (Hsem':=Hsem). specialize (Hsem' 0). inv Hsem'. inv H6; inv H4.
         eapply sem_var_mask_inv in H3 as (?&?&?); eauto. }
       assert (exists v, forall k, NLSC.sem_aexp (LS.var_history (mask_hist k r H)) (maskb k r b) ck x2 (maskv k r v)
@@ -1393,9 +1393,9 @@ Module Type CORRECTNESS
       simpl in Htoeq.
       destruct (vars_of l0) eqn:Vars. eapply vars_of_spec in Vars.
       1,2:cases; monadInv Htoeq.
-      assert (exists ys, Forall2 (sem_var H) (map LS.Var xs) ys) as (ys&Hv).
+      assert (exists ys, Forall2 (sem_var H) (map Var xs) ys) as (ys&Hv).
       { assert (Hsem':=Hsem). specialize (Hsem' 0). inv Hsem'.
-        edestruct (@LS.sem_vars_mask_inv LS.lustre_var) as (?&?&?); [|eauto]. rewrite Forall2_map_1; eauto. }
+        edestruct (@LS.sem_vars_mask_inv var_last) as (?&?&?); [|eauto]. rewrite Forall2_map_1; eauto. }
       assert (exists vs, forall k, Forall2 (LCS.sem_exp_ck G (mask_hist k r H) (maskb k r b)) l (map (map (maskv k r)) vs))
              as (ess&Hse).
       { assert (exists vs, forall k, Forall2 (fun e v => LCS.sem_exp_ck G (mask_hist k r H) (maskb k r b) e [v]) l (map (maskv k r) vs))
@@ -1415,7 +1415,7 @@ Module Type CORRECTNESS
         exists (List.map (fun x => [x]) ess).
         intros k. specialize (Hse k). simpl_Forall; auto.
       }
-      assert (exists vr', Forall2 (sem_var H) (map (fun '(x, _) => LS.Var x) l2) vr') as (vr'&Hvr).
+      assert (exists vr', Forall2 (sem_var H) (map (fun '(x, _) => Var x) l2) vr') as (vr'&Hvr).
       { clear - Vars Hsem.
         eapply Forall_Forall2; rewrite Forall_map; eapply Forall_forall; intros (?&?) Hin.
         specialize (Hsem 0). inv Hsem. simpl_Foralls.
@@ -1543,7 +1543,7 @@ Module Type CORRECTNESS
       LCS.sc_vars cenv H b ->
       Forall (fun xr0 => In xr0 (idck cenv)) xr ->
       block_to_equation env envo xr bck = OK eqs' ->
-      Forall2 (sem_var H) (map (fun '(x, _) => LS.Var x) xr) rs ->
+      Forall2 (sem_var H) (map (fun '(x, _) => Var x) xr) rs ->
       bools_ofs rs r ->
       (forall k, LCS.sem_block_ck G (mask_hist k r H) (maskb k r b) bck) ->
       NLSC.sem_equation P (LS.var_history H) b eqs'.
@@ -1556,7 +1556,7 @@ Module Type CORRECTNESS
       intros k. specialize (Hsem k). inv Hsem; eauto.
     - (* reset *)
       simpl_Foralls.
-      assert (exists vr, sem_var H (LS.Var x) vr) as (vr&Hx).
+      assert (exists vr, sem_var H (Var x) vr) as (vr&Hx).
       { assert (Hsem0 := Hsem 0). inv Hsem0. inv H11.
         eapply sem_var_mask_inv in H13 as (?&?&?); eauto. }
       assert (exists sr, bools_of vr sr) as (?&Hbool).
@@ -1576,7 +1576,7 @@ Module Type CORRECTNESS
       + econstructor.
         constructor; eauto. reflexivity.
       + intros k.
-        specialize (@mask_disj' LS.lustre_var k x0 (disj_str x1)) as (k1&k2&Hxs&Hbs&HH).
+        specialize (@mask_disj' var_last k x0 (disj_str x1)) as (k1&k2&Hxs&Hbs&HH).
         eapply sem_block_ck_morph; simpl. 3:auto.
         2:rewrite disj_str_cons; symmetry; eauto.
         rewrite disj_str_cons; symmetry; apply HH.
@@ -1620,7 +1620,7 @@ Module Type CORRECTNESS
 
   Lemma inputs_clocked_vars {PSyn prefs} :
     forall (n: @L.node PSyn prefs) H ins,
-      Forall2 (fun x => sem_var H (LS.Var x)) (L.idents (L.n_in n)) ins ->
+      Forall2 (fun x => sem_var H (Var x)) (L.idents (L.n_in n)) ins ->
       LCS.sc_vars (senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n)) H (clocks_of ins) ->
       NLSC.sem_clocked_vars (LS.var_history H) (clocks_of ins) (Common.idck (Common.idty (L.n_in n))).
   Proof.

@@ -596,7 +596,7 @@ Module Type ILCORRECTNESS
             2:erewrite find_node_now; eauto. right. eauto. }
           assert (FEnv.Equiv (@EqSt _) Hf (H + restrict Hf (senv_of_anns locs'))) as Heq.
           { intros ?. destruct (Hf x) eqn:Hfind.
-            - unfold restrict, FEnv.restrict. destruct (existsb (fun y : lustre_var => y ==b x) (vars_of_senv (senv_of_anns locs'))) eqn:Ex.
+            - unfold restrict, FEnv.restrict. destruct (existsb (fun y : var_last => y ==b x) (vars_of_senv (senv_of_anns locs'))) eqn:Ex.
               + erewrite FEnv.union3'; eauto using FEnv.restrict_find. 2:setoid_rewrite Ex; eauto.
                 reflexivity.
               + assert (FEnv.In x H) as (?&Hfind').
