@@ -2512,14 +2512,6 @@ Qed.
 Set Nested Proofs Allowed.
 Axiom DEBUG: forall A, A.
 
-(* filtrer les éléments du flots selon leur appartenance à la liste *)
-Definition restr_val (l : list enumtag) :=
-  MAP (fun v =>
-         match v with
-         | pres (Venum e) => if existsb (fun x => x =? e) l then v else abs
-         | _ => v
-         end).
-
 (* Si chaque sous-flot est bien cadencé selon son tag, le merge est
    bien cadencé aussi *)
 Definition value_belongs (l : list enumtag) (v : sampl value) :=
@@ -2529,41 +2521,15 @@ Definition value_belongs (l : list enumtag) (v : sampl value) :=
   | _ => False
   end.
 
-Lemma restr_id l :
-  forall s,
-    DSForall (value_belongs l) s ->
-    restr_val l s == s.
-Proof.
-  clear.
-  intros * Hf.
-  apply DS_bisimulation_allin1 with (R := fun U V => DSForall (value_belongs l) V /\ U == restr_val l V); auto.
-  { now intros * ? <- <-. }
-  clear; intros U V Hc (Hf & Hu).
-  rewrite Hu in *; clear Hu.
-  assert (is_cons V) as Hv. { destruct Hc; eauto 2 using map_is_cons. }
-  apply is_cons_elim in Hv as (v & V' & Hv).
-  rewrite Hv in *; clear Hv.
-  unfold restr_val; inv Hf.
-  autorewrite with cpodb.
-  cases_eqn HH; subst; split; auto.
-  contradict H1; simpl.
-  apply existsb_Forall, forallb_Forall in HH1.
-  intro; simpl_Forall.
-  now rewrite Nat.eqb_refl in HH1.
-Qed.
-
-
 Lemma cl_smergev :
   forall ins envI bs env,
   forall x,
-  forall tx ttx tn,
+  forall ttx,
   forall l np,
   forall ck,
     let cs := denot_var ins envI env x in
     NoDup l ->
     l <> [] ->
-    (* TODO: sans doute inutile : *)
-    ty_DS (Tenum tx tn) cs ->
     (* TODO: voir le chevauchement avec ty_DS et safe_DS : *)
     safe_DS cs ->
     DSForall (value_belongs l) cs ->
@@ -2574,14 +2540,14 @@ Lemma cl_smergev :
     cl_DS ins envI bs env ck (smergev l cs np).
 Proof.
   clear.
-  intros * Nd Nnil Tyc Sfc Hv Sfx Clc Clx.
-  revert Clx Clc Tyc Sfc Hv.
+  intros * Nd Nnil Sfc Hv Sfx Clc Clx.
+  revert Clx Clc Sfc Hv.
   unfold cl_DS.
   simpl (denot_clock _ _ _ _ (Con _ _ _)).
   fold cs.
   generalize dependent cs.
   generalize (denot_clock ins envI bs env ck) as bck; intros.
-  clear Tyc ck x tx ttx tn ins envI bs env.
+  clear ck x ttx ins envI bs env.
   assert (AC (smergev l cs np) <= AC cs); eauto 2.
   apply Forall2_impl_In with (Q := fun i s => AC s <= ZIP (sample i) cs (AC cs)) in Clx;
     intros; eauto 3 using zip_ac_le.
