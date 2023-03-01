@@ -10,7 +10,7 @@ From Velus Require Import CoindStreams.
 From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
-From Velus Require Import Interface.
+From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Instantiator.
 From Velus Require Import Lustre.LustreElab.
 Import NL.

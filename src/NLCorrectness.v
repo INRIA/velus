@@ -16,7 +16,7 @@ From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Interface.
+From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Instantiator.
 From Velus Require Import Velus.
 Import Stc.Syn.
