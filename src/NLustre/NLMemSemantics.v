@@ -145,7 +145,7 @@ Module Type NLMEMSEMANTICS
                find_node f G = Some n ->
                sem_vars H (map fst n.(n_in)) xss ->
                sem_vars H (map fst n.(n_out)) yss ->
-               sem_clocked_vars bk H (idck n.(n_in)) ->
+               sem_clocked_vars bk H (idsnd n.(n_in)) ->
                Forall (msem_equation bk H M) n.(n_eqs) ->
                memory_closed_n M n.(n_eqs) ->
                msem_node f xss M yss.
@@ -204,7 +204,7 @@ Module Type NLMEMSEMANTICS
         find_node f G = Some n ->
         sem_vars H (map fst n.(n_in)) xss ->
         sem_vars H (map fst n.(n_out)) yss ->
-        sem_clocked_vars bk H (idck n.(n_in)) ->
+        sem_clocked_vars bk H (idsnd n.(n_in)) ->
         Forall (msem_equation G bk H M) n.(n_eqs) ->
         memory_closed_n M n.(n_eqs) ->
         Forall (P_equation bk H M) n.(n_eqs) ->

@@ -55,7 +55,7 @@ Module Type CSCLOCKING
     Lemma cond_eq_wc_clock Γ : forall e ty ck x xcs eqs' st st',
         wc_clock Γ ck ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wc_clock Γ) (map snd (Common.idck xcs)).
+        Forall (wc_clock Γ) (map snd (idsnd xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -257,7 +257,7 @@ Module Type CSCLOCKING
         { rewrite Permutation_app_comm.
           eapply switch_block_NoDupMembers_env; eauto. }
 
-        do 2 econstructor; eauto; repeat rewrite idty_app; repeat rewrite idck_app; repeat rewrite map_app; repeat rewrite Forall_app; repeat split.
+        do 2 econstructor; eauto; repeat rewrite idfst_app; repeat rewrite idsnd_app; repeat rewrite map_app; repeat rewrite Forall_app; repeat split.
         + eapply cond_eq_wc_clock in H0; eauto.
           unfold idty, idck. simpl_Forall.
           eapply Forall_forall in H0; [|solve_In].

@@ -119,7 +119,7 @@ Module Type EICLOCKING
     intros * (Wc1&Wc2&Wc3&Wc4).
     repeat (split; auto). simpl.
     unfold inline_all_possible.
-    eapply inlinable_wc with (vars:=idck (n_vars n)) in Wc4 as Wc5; [|apply NoDupMembers_idck, n_nodup].
+    eapply inlinable_wc with (vars:=idsnd (n_vars n)) in Wc4 as Wc5; [|apply NoDupMembers_idsnd, n_nodup].
     rewrite Forall_rev in Wc5. rewrite <-fold_left_rev_right.
     induction Wc5 as [|(?&?)]; simpl.
     - simpl_Forall; eauto using global_iface_eq_wc_eq, exp_inlining_iface_eq.

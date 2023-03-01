@@ -54,12 +54,12 @@ Section WtStream.
   Definition wt_ins :=
     forall node,
       find_node main G = Some node ->
-      NLCorrectness.wt_streams ins (idty (idty node.(n_in))).
+      NLCorrectness.wt_streams ins (idfst (idfst node.(n_in))).
 
   Definition wt_outs :=
     forall node,
       find_node main G = Some node ->
-      NLCorrectness.wt_streams outs (idty (idty (idty node.(n_out)))).
+      NLCorrectness.wt_streams outs (idfst (idfst (idfst node.(n_out)))).
 
 End WtStream.
 
@@ -77,7 +77,7 @@ Section LTrace.
 
   Program Definition trace_node (n: nat): traceinf :=
     mk_trace (tr_Streams ins) (tr_Streams outs)
-             (idty (idty node.(n_in))) (idty (idty (idty node.(n_out))))
+             (idfst (idfst node.(n_in))) (idfst (idfst (idfst node.(n_out))))
              _ _ _ n.
   Next Obligation.
     destruct Spec_in_out.
@@ -85,17 +85,17 @@ Section LTrace.
     - right; intro E; apply map_eq_nil, map_eq_nil, map_eq_nil in E; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 3 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 3 map_length; auto.
   Qed.
   Next Obligation.
-    unfold tr_Streams, idty; rewrite 4 map_length; auto.
+    unfold tr_Streams, idfst; rewrite 4 map_length; auto.
   Qed.
 
   (** Simply link the trace of a Lustre node with the trace of an NLustre node with the same parameters *)
   Lemma trace_inf_sim_node:
     forall n n' Spec_in_out_n' Len_ins_n' Len_outs_n',
-      idty (NL.Syn.n_in n') = idty (idty (n_in node)) ->
-      idty (NL.Syn.n_out n') = idty (idty (idty (n_out node))) ->
+      idfst (NL.Syn.n_in n') = idfst (idfst (n_in node)) ->
+      idfst (NL.Syn.n_out n') = idfst (idfst (idfst (n_out node))) ->
       traceinf_sim (NLCorrectness.trace_node n' ins outs Spec_in_out_n' Len_ins_n' Len_outs_n' n)
                    (trace_node n).
   Proof.
@@ -103,18 +103,18 @@ Section LTrace.
     apply traceinf_sim'_sim.
     revert n; cofix COFIX; intro.
     rewrite unfold_mk_trace.
-    rewrite unfold_mk_trace with (xs := idty (idty (n_in node))).
+    rewrite unfold_mk_trace with (xs := idfst (idfst (n_in node))).
     simpl.
-    replace (load_events (tr_Streams ins n) (idty (idty (n_in node))) ** store_events (tr_Streams outs n) (idty (idty (idty (n_out node)))))
-      with (load_events (tr_Streams ins n) (idty (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idty (NL.Syn.n_out n')));
+    replace (load_events (tr_Streams ins n) (idfst (idfst (n_in node))) ** store_events (tr_Streams outs n) (idfst (idfst (idfst (n_out node)))))
+      with (load_events (tr_Streams ins n) (idfst (NL.Syn.n_in n')) ** store_events (tr_Streams outs n) (idfst (NL.Syn.n_out n')));
       try congruence.
     constructor.
     - intro E; eapply Eapp_E0_inv in E.
-      assert (forall n, length (tr_Streams ins n) = length (idty (NL.Syn.n_in n'))) as Len_ins_2.
-      { intros. unfold tr_Streams. rewrite map_length, length_idty; auto. }
-      assert (forall n, length (tr_Streams outs n) = length (idty (NL.Syn.n_out n'))) as Len_outs_2.
-      { intros. unfold tr_Streams. rewrite map_length, length_idty; auto. }
-      assert (idty (NL.Syn.n_in n') <> [] \/ idty (NL.Syn.n_out n') <> []) as Spec_in_out_2.
+      assert (forall n, length (tr_Streams ins n) = length (idfst (NL.Syn.n_in n'))) as Len_ins_2.
+      { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+      assert (forall n, length (tr_Streams outs n) = length (idfst (NL.Syn.n_out n'))) as Len_outs_2.
+      { intros. unfold tr_Streams. rewrite map_length, length_idfst; auto. }
+      assert (idfst (NL.Syn.n_in n') <> [] \/ idfst (NL.Syn.n_out n') <> []) as Spec_in_out_2.
       { clear - Spec_in_out_n'.
         destruct Spec_in_out_n'; [left|right].
         1,2:intro contra; eapply H, map_eq_nil; eauto. }
@@ -185,7 +185,7 @@ Fact l_to_nl_find_node' : forall G G' f n',
     NL.Syn.find_node f G' = Some n' ->
     l_to_nl G = OK G' ->
     exists n, find_node f G = Some n /\
-         NL.Syn.n_in n' = idty (n_in n) /\ NL.Syn.n_out n' = idty (idty (n_out n)).
+         NL.Syn.n_in n' = idfst (n_in n) /\ NL.Syn.n_out n' = idfst (idfst (n_out n)).
 Proof.
   intros G * Hfind Hltonl.
   unfold_l_to_nl Hltonl.
@@ -202,10 +202,10 @@ Proof.
       apply complete_global_iface_eq. }
   do 2 esplit; eauto; split.
   - eapply TR.Tr.to_node_in in Htonode; eauto.
-    unfold idty. erewrite map_ext, <-Hin'', <-Hin', <-Hin, map_ext. symmetry; apply Htonode.
+    unfold idfst. erewrite map_ext, <-Hin'', <-Hin', <-Hin, map_ext. symmetry; apply Htonode.
     1,2:intros; destruct_conjs; auto.
   - eapply TR.Tr.to_node_out in Htonode; eauto.
-    unfold idty. erewrite map_map, map_ext, <-Hout'', <-Hout', <-Hout, map_ext, <-map_map. symmetry; apply Htonode.
+    unfold idfst. erewrite map_map, map_ext, <-Hout'', <-Hout', <-Hout, map_ext, <-map_map. symmetry; apply Htonode.
     1,2:intros; destruct_conjs; auto.
 Qed.
 
@@ -243,9 +243,9 @@ Proof.
     { specialize (n_ingt0 x) as Hlt.
       intro contra. rewrite contra in Hlt; simpl in Hlt. lia. }
     assert (Datatypes.length ins = Datatypes.length (n_in x)) as Hlenin
-        by (rewrite <-length_idty; congruence).
+        by (rewrite <-length_idfst; congruence).
     assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout
-        by (now rewrite Len_outs, Hout, 2 length_idty).
+        by (now rewrite Len_outs, Hout, 2 length_idfst).
     eapply IOStep with (Spec_in_out:=or_introl Hnnul)
                        (Len_ins:=Hlenin) (Len_outs:=Hlenout); eauto.
     eapply traceinf_sim_trans; eauto.

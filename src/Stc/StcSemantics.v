@@ -119,7 +119,7 @@ Module Type STCSEMANTICS
                find_system f P = Some (s, P') ->
                sem_vars_instant R (map fst s.(s_in)) xs ->
                sem_vars_instant R (map fst s.(s_out)) ys ->
-               sem_clocked_vars_instant (clock_of_instant xs) R (idck s.(s_in)) ->
+               sem_clocked_vars_instant (clock_of_instant xs) R (idsnd s.(s_in)) ->
                Forall (sem_trconstr (clock_of_instant xs) R S I S') s.(s_tcs) ->
                state_closed P f S ->
                state_closed P f I ->
@@ -180,7 +180,7 @@ Module Type STCSEMANTICS
         find_system f P = Some (s, P') ->
         sem_vars_instant R (map fst s.(s_in)) xs ->
         sem_vars_instant R (map fst s.(s_out)) ys ->
-        sem_clocked_vars_instant (clock_of_instant xs) R (idck s.(s_in)) ->
+        sem_clocked_vars_instant (clock_of_instant xs) R (idsnd s.(s_in)) ->
         Forall (sem_trconstr P (clock_of_instant xs) R S I S') s.(s_tcs) ->
         state_closed P f S ->
         state_closed P f I ->

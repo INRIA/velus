@@ -59,10 +59,10 @@ Module Type NLTYPING
       wt_equation G Γ (EqFby x ck c0 e xrs).
 
   Definition wt_node (G: global) (n: node) : Prop
-    := Forall (wt_equation G (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
+    := Forall (wt_equation G (idfst (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
               n.(n_eqs)
        /\ forall x ty,
-          In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) -> wt_type G.(types) ty.
+          In (x, ty) (idfst (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) -> wt_type G.(types) ty.
 
   (* TODO: replace Welldef_global; except for the Is_well_sch component.
            Notably, typing arguments replace the ~Is_node_in and

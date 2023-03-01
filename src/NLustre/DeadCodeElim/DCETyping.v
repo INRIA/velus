@@ -249,9 +249,9 @@ Module Type DCETYPING
           symmetry. apply Is_defined_in_vars_defined.
         + eapply wt_equations_has_def; eauto.
         + intros ? Hdef. simpl_Exists; simpl_Forall.
-          eapply InMembers_idty, wt_equation_def_free; eauto.
+          eapply InMembers_idfst, wt_equation_def_free; eauto.
       - intros x tn Hin. specialize (Hwt2 x tn).
-        repeat rewrite idty_app, in_app_iff in Hin, Hwt2.
+        repeat rewrite idfst_app, in_app_iff in Hin, Hwt2.
         destruct HG as (Htypes&_). rewrite <-Htypes.
         destruct Hin as [|[Hin|]]; auto.
         apply Hwt2; right; left.

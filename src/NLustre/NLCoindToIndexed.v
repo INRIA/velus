@@ -631,7 +631,7 @@ Module Type NLCOINDTOINDEXED
       - econstructor; eauto with indexedstreams.
         + intro; rewrite tr_clocks_of; auto.
           eapply sem_clocked_vars_impl; auto.
-          rewrite map_fst_idck; eauto.
+          rewrite map_fst_idsnd; eauto.
         + apply Forall_forall; intros * Hin.
           rewrite tr_clocks_of.
           eapply Forall_forall in IH; eauto; eapply Forall_forall in Heqs; eauto.

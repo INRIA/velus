@@ -204,7 +204,7 @@ Module Type EICORRECTNESS
       destruct H1 as (Wt&_). inv Wt. simpl in *.
       eapply inline_all_possible_sem; eauto.
       2:{ simpl_Forall. eapply global_iface_eq_wt_eq; [|eauto]. apply exp_inlining_iface_eq. }
-      1:{ apply NoDupMembers_idty. apply n_nodup. }
+      1:{ apply NoDupMembers_idfst. apply n_nodup. }
       simpl_Forall. take (sem_equation _ _ _ _) and inv it; eauto with nlsem.
       econstructor; eauto.
       intros. take (forall k, _) and specialize (it k).

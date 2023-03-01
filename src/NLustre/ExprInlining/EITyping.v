@@ -164,7 +164,7 @@ Module Type EITYPING
     intros * (Wt1&Wt2).
     split; auto. simpl.
     unfold inline_all_possible.
-    eapply inlinable_wt with (vars:=idck (n_vars n)) in Wt1 as Wt3; [|apply NoDupMembers_idty, n_nodup].
+    eapply inlinable_wt with (vars:=idsnd (n_vars n)) in Wt1 as Wt3; [|apply NoDupMembers_idfst, n_nodup].
     rewrite Forall_rev in Wt3. rewrite <-fold_left_rev_right.
     induction Wt3 as [|(?&?)]; simpl.
     - simpl_Forall; eauto using global_iface_eq_wt_eq, exp_inlining_iface_eq.

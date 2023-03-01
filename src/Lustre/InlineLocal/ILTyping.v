@@ -149,7 +149,7 @@ Module Type ILTYPING
 
       eapply mmap_inlinelocal_block_wt with (Γ':=Γ'++senv_of_decls locs) in H as (Wt&Wtc). 11:eauto. all:eauto.
       + rewrite app_assoc in Wt, Wtc. repeat split; eauto.
-        unfold wt_clocks, Common.idty, senv_of_decls in *. simpl_Forall.
+        unfold wt_clocks, idfst, senv_of_decls in *. simpl_Forall.
         erewrite <-disjoint_union_rename_in_clock; eauto.
         eapply subclock_clock_wt, subclock_clock_wt
           with (Γ':=(Γ++Γ'')++senv_of_anns (map (fun '(x, (ty, ck, _, _)) => (x, (ty, rename_in_clock sub ck))) locs)).
@@ -279,7 +279,7 @@ Module Type ILTYPING
     2,3:intros * Find; rewrite Env.gempty in Find; inv Find.
     simpl. repeat econstructor; eauto.
     - (* clocks *)
-      unfold wt_clocks, Common.idty. simpl_Forall. simpl_In. simpl_Forall.
+      unfold wt_clocks, idfst. simpl_Forall. simpl_In. simpl_Forall.
       rewrite senv_of_decls_senv_of_anns; eauto with ltyping.
     - eapply inlinelocal_block_wt_type in Il; eauto. simpl_Forall. eauto with ltyping.
     - now simpl_Forall.

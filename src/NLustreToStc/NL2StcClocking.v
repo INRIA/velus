@@ -58,9 +58,9 @@ Module Type NL2STCCLOCKING
 
   Lemma gather_eqs_n_vars_wc:
     forall n G,
-      Forall (NL.Clo.wc_equation G (idck (n_in n ++ n_vars n ++ n_out n))) (n_eqs n) ->
-      Permutation (idck (fst (gather_eqs (n_eqs n))))
-                  (idck
+      Forall (NL.Clo.wc_equation G (idsnd (n_in n ++ n_vars n ++ n_out n))) (n_eqs n) ->
+      Permutation (idsnd (fst (gather_eqs (n_eqs n))))
+                  (idsnd
                      (fst
                         (partition
                            (fun x : ident * (type * clock) =>
@@ -70,7 +70,7 @@ Module Type NL2STCCLOCKING
     intros * WC.
     rewrite fst_partition_filter.
     apply NoDup_Permutation.
-    - apply NoDupMembers_NoDup, NoDupMembers_idck, fst_NoDupMembers.
+    - apply NoDupMembers_NoDup, NoDupMembers_idsnd, fst_NoDupMembers.
       rewrite fst_fst_gather_eqs_var_defined.
       pose proof (NoDup_var_defined_n_eqs n) as Hnodup;
         rewrite <-is_filtered_vars_defined in Hnodup.
@@ -78,7 +78,7 @@ Module Type NL2STCCLOCKING
       rewrite Permutation_app_comm in Hnodup; apply NoDup_app_weaken in Hnodup.
       auto.
     - apply NoDupMembers_NoDup, fst_NoDupMembers.
-      rewrite map_fst_idck, filter_mem_fst.
+      rewrite map_fst_idsnd, filter_mem_fst.
       apply nodup_filter.
       pose proof (n.(n_nodup)) as Hnodup.
       apply NoDupMembers_app_r, NoDupMembers_app_l in Hnodup.
@@ -89,7 +89,7 @@ Module Type NL2STCCLOCKING
                    InMembers x (n_vars n)) as Spec
           by (intro; rewrite <-fst_partition_memories_var_defined, fst_partition_filter,
                      filter_mem_fst, filter_In, fst_InMembers; intuition).
-      pose proof (filter_fst_idck (n_vars n)
+      pose proof (filter_fst_idsnd (n_vars n)
                                   (fun x => PS.mem x (Mem.memories (n_eqs n)))) as E;
         setoid_rewrite E; clear E.
       setoid_rewrite filter_In.
@@ -104,7 +104,7 @@ Module Type NL2STCCLOCKING
         rewrite In_fold_left_memory_eq, PSE.MP.Dec.F.add_iff, PSE.MP.Dec.F.empty_iff.
         split.
         *{ intros * Hin.
-           unfold idck in Hin.
+           unfold idsnd in Hin.
            apply in_map_iff in Hin as ((x', (c', ck')) & E & Hin); simpl in *; inv E.
            apply In_fst_fold_left_gather_eq in Hin as [Hin|Hin].
            - inversion_clear Hin as [E|]; try contradiction; inv E.
@@ -113,27 +113,27 @@ Module Type NL2STCCLOCKING
              pose proof (n_nodup n) as Hnodup.
              rewrite fst_NoDupMembers, 2 map_app, NoDup_swap, <- 2 map_app, <-fst_NoDupMembers in Hnodup.
              eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (? & ?); eauto.
-             rewrite 2 idck_app, 2 in_app in Hinc; destruct Hinc as [Hinc|[|Hinc]]; auto;
-               apply In_InMembers in Hinc; rewrite InMembers_idck in Hinc; contradiction.
-           - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1)))))
+             rewrite 2 idsnd_app, 2 in_app in Hinc; destruct Hinc as [Hinc|[|Hinc]]; auto;
+               apply In_InMembers in Hinc; rewrite InMembers_idsnd in Hinc; contradiction.
+           - assert (In (x, ck) (idsnd (fst (fold_left gather_eq l0 ([], l1)))))
                as Hin' by (apply in_map_iff; eexists; intuition; eauto; simpl; auto).
              apply IHl in Hin'; intuition.
          }
          *{ intros * (Hin & [Mem|Mem]).
-            - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1))))) as Hin'
+            - assert (In (x, ck) (idsnd (fst (fold_left gather_eq l0 ([], l1))))) as Hin'
                   by (apply IHl; auto; intros * Hin';
                       apply Spec; simpl; auto).
-              unfold idck in Hin'; apply in_map_iff in Hin' as ((x', (c', ck')) & E & Hin'); simpl in *; inv E.
+              unfold idsnd in Hin'; apply in_map_iff in Hin' as ((x', (c', ck')) & E & Hin'); simpl in *; inv E.
               apply in_map_iff; exists (x, (c', ck)); simpl.
               rewrite In_fst_fold_left_gather_eq; intuition.
             - destruct Mem as [E|]; try contradiction; inv E.
               apply in_map_iff; exists (x, (c0, typeof e, c)); simpl.
               rewrite In_fst_fold_left_gather_eq; intuition.
               f_equal.
-              assert (In (x, ck) (idck (n_in n ++ n_vars n ++ n_out n)))
-                by (rewrite 2 idck_app, 2 in_app; auto).
+              assert (In (x, ck) (idsnd (n_in n ++ n_vars n ++ n_out n)))
+                by (rewrite 2 idsnd_app, 2 in_app; auto).
               eapply NoDupMembers_det; eauto.
-              apply NoDupMembers_idck, n_nodup.
+              apply NoDupMembers_idsnd, n_nodup.
           }
   Qed.
 
@@ -155,17 +155,17 @@ Module Type NL2STCCLOCKING
   Proof.
     inversion_clear 1 as [? (?& Env & Heqs)].
     constructor; simpl; auto.
-    assert (Permutation (idck
+    assert (Permutation (idsnd
                            (n_in n ++
                                  snd
                                  (partition
                                     (fun x : ident * (type * clock) =>
                                        PS.mem (fst x) (ps_from_list (map fst (fst (gather_eqs (n_eqs n))))))
-                                    (n_vars n)) ++ n_out n) ++ idck (fst (gather_eqs (n_eqs n))))
-                        (idck (n_in n ++ n_vars n ++ n_out n))) as E.
-    { repeat rewrite idck_app.
+                                    (n_vars n)) ++ n_out n) ++ idsnd (fst (gather_eqs (n_eqs n))))
+                        (idsnd (n_in n ++ n_vars n ++ n_out n))) as E.
+    { repeat rewrite idsnd_app.
       rewrite Permutation_app_comm, Permutation_swap, gather_eqs_n_vars_wc,
-      <-2 idck_app, app_assoc, <-permutation_partition, idck_app; eauto.
+      <-2 idsnd_app, app_assoc, <-permutation_partition, idsnd_app; eauto.
     }
     intuition.
     - now rewrite E.

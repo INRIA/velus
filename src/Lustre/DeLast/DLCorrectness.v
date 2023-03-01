@@ -149,8 +149,8 @@ Module Type DLCORRECTNESS
     Import Permutation.
 
     Local Hint Resolve InMembers_incl : datatypes.
-    Local Hint Resolve <- fst_InMembers InMembers_idck InMembers_idty : datatypes.
-    Local Hint Resolve -> fst_InMembers InMembers_idck InMembers_idty : datatypes.
+    Local Hint Resolve <- fst_InMembers InMembers_idsnd InMembers_idfst : datatypes.
+    Local Hint Resolve -> fst_InMembers InMembers_idsnd InMembers_idfst : datatypes.
 
     Fact rename_in_var_of_list_inj : forall xs x1 x2,
         NoDup (map snd xs) ->

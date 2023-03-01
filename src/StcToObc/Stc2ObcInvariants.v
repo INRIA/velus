@@ -253,7 +253,7 @@ Module Type STC2OBCINVARIANTS
     repeat constructor; simpl; auto with obcinv.
     assert (NoDup (defined (s_tcs s))) by apply s_nodup_defined.
     eapply translate_tcs_Fusible; eauto with obcinv.
-    - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
+    - rewrite fst_NoDupMembers, map_app, 2 map_fst_idsnd.
       rewrite 2 map_app, <-2 app_assoc.
       apply s_nodup.
     - apply s_nodup_variables.
@@ -515,7 +515,7 @@ Module Type STC2OBCINVARIANTS
   Lemma translate_system_No_Overwrites:
     forall s m P,
       Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_nexts s))) (s_tcs s) ->
-      Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
+      Forall (wt_trconstr P (idfst (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
                           (mems_of_nexts s.(s_nexts)))
              s.(s_tcs) ->
       In m (translate_system s).(c_methods) ->
@@ -584,7 +584,7 @@ Module Type STC2OBCINVARIANTS
     destruct Hin as [|[|]]; simpl in *; subst; simpl;
       auto; try contradiction.
     apply Forall_forall; intros x Hin.
-    apply fst_InMembers, InMembers_idty in Hin. intro contra.
+    apply fst_InMembers, InMembers_idfst in Hin. intro contra.
     apply Can_write_in_translate_tcs_Is_variable_in in contra as [H|[(?&H)|H]].
     - eapply s_ins_not_var in H; eauto.
     - eapply s_ins_not_reset in H; eauto.

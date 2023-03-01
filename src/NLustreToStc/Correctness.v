@@ -823,15 +823,15 @@ Module Type CORRECTNESS
           eapply state_closed_insts_find_system_other, state_closed_insts_cons; eauto.
           simpl; rewrite gather_eqs_snd_spec; auto.
         * unfold next; eapply msem_node_state_closed; eauto.
-      + rewrite idck_app.
+      + rewrite idsnd_app.
         intro k; specialize (Ck k); setoid_rewrite Forall_app; split; auto.
         apply Forall_forall; intros (x, ck) ?.
-        rewrite idck_app in WCeqs.
+        rewrite idsnd_app in WCeqs.
         eapply sem_clocked_var_eqs with (5 := WCeqs); eauto.
-        * rewrite <-idck_app, NoDupMembers_idck.
+        * rewrite <-idsnd_app, NoDupMembers_idsnd.
           apply n_nodup.
         * eapply msem_sem_equations; eauto.
-        * rewrite map_fst_idck.
+        * rewrite map_fst_idsnd.
           apply n_defd.
     - eapply msem_node_cons, IH in Hsem; eauto.
       apply sem_system_cons2; eauto.

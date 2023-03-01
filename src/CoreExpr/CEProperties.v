@@ -265,28 +265,28 @@ Module Type CEPROPERTIES
   Lemma Is_free_in_wt_exp:
     forall tenv (xs : list (ident * (Op.type * clock))) x e,
       Is_free_in_exp x e ->
-      wt_exp tenv (idty xs) e ->
+      wt_exp tenv (idfst xs) e ->
       InMembers x xs.
   Proof.
-    induction e; inversion_clear 1; inversion_clear 1; eauto using idty_InMembers;
+    induction e; inversion_clear 1; inversion_clear 1; eauto using idfst_InMembers;
       take (_ \/ _) and destruct it; auto.
   Qed.
 
   Lemma Is_free_in_wt_clock:
     forall tenv (xs : list (ident * (Op.type * clock))) x ck,
       Is_free_in_clock x ck ->
-      wt_clock tenv (idty xs) ck ->
+      wt_clock tenv (idfst xs) ck ->
       InMembers x xs.
   Proof.
     induction ck; inversion_clear 1; inversion_clear 1;
-      eauto using idty_InMembers.
+      eauto using idfst_InMembers.
   Qed.
 
   Lemma Is_free_in_wt_aexps:
     forall tenv (xs : list (ident * (Op.type * clock))) x ck es,
       Is_free_in_aexps x ck es ->
-      Forall (wt_exp tenv (idty xs)) es ->
-      wt_clock tenv (idty xs) ck ->
+      Forall (wt_exp tenv (idfst xs)) es ->
+      wt_clock tenv (idfst xs) ck ->
       InMembers x xs.
   Proof.
     intros * Fs WT WC.
@@ -299,11 +299,11 @@ Module Type CEPROPERTIES
   Lemma Is_free_in_wt_cexp:
     forall tenv (xs : list (ident * (Op.type * clock))) x e,
       Is_free_in_cexp x e ->
-      wt_cexp tenv (idty xs) e ->
+      wt_cexp tenv (idfst xs) e ->
       InMembers x xs.
   Proof.
     induction e using cexp_ind2'; inversion_clear 1; inversion_clear 1; auto;
-      eauto using Is_free_in_wt_exp, idty_InMembers.
+      eauto using Is_free_in_wt_exp, idfst_InMembers.
     - take (Exists _ _) and apply Exists_exists in it as (ce & Hin & Free).
       repeat (take (Forall _ _) and eapply Forall_forall in it; eauto).
     - take (Exists _ _) and apply Exists_exists in it as (ce & Hin & Free).
@@ -315,7 +315,7 @@ Module Type CEPROPERTIES
   Lemma Is_free_in_wt_rhs:
     forall tenv texterns (xs : list (ident * (Op.type * clock))) x e,
       Is_free_in_rhs x e ->
-      wt_rhs tenv texterns (idty xs) e ->
+      wt_rhs tenv texterns (idfst xs) e ->
       InMembers x xs.
   Proof.
     intros * Hf Hwt; inv Hf; inv Hwt; eauto using Is_free_in_wt_cexp.
@@ -325,8 +325,8 @@ Module Type CEPROPERTIES
   Lemma Is_free_in_wt_aexp:
     forall tenv (xs : list (ident * (Op.type * clock))) x ck e,
       Is_free_in_aexp x ck e ->
-      wt_exp tenv (idty xs) e ->
-      wt_clock tenv (idty xs) ck ->
+      wt_exp tenv (idfst xs) e ->
+      wt_clock tenv (idfst xs) ck ->
       InMembers x xs.
   Proof.
     intros * Fx WTe WTc.
@@ -336,8 +336,8 @@ Module Type CEPROPERTIES
   Lemma Is_free_in_wt_arhs:
     forall tenv texterns (xs : list (ident * (Op.type * clock))) x ck e,
       Is_free_in_arhs x ck e ->
-      wt_rhs tenv texterns (idty xs) e ->
-      wt_clock tenv (idty xs) ck ->
+      wt_rhs tenv texterns (idfst xs) e ->
+      wt_clock tenv (idfst xs) ck ->
       InMembers x xs.
   Proof.
     intros * Fx WTe WTc.

@@ -365,7 +365,7 @@ Module Type TRTYPING
         eapply vars_of_spec in Eq.
         apply mmap_inversion in EQ.
         econstructor; simpl; eauto; try erewrite to_global_types; eauto.
-        + erewrite <- (to_node_out n); eauto. unfold idty in *. simpl_Forall.
+        + erewrite <- (to_node_out n); eauto. unfold idfst in *. simpl_Forall.
           eapply Forall2_trans_ex in H7; eauto. simpl_Forall. subst.
           inv H11. solve_In.
         + erewrite <- (to_node_in n); eauto.
@@ -467,7 +467,7 @@ Module Type TRTYPING
         + intros ?? Hfind.
           eapply envs_eq_find' in Hfind; eauto.
           erewrite to_global_types; eauto.
-          clear - Wti Wto H4 Hfind. unfold Senv.senv_of_ins, Senv.senv_of_decls, LT.wt_clocks, idty in *.
+          clear - Wti Wto H4 Hfind. unfold Senv.senv_of_ins, Senv.senv_of_decls, LT.wt_clocks, idfst in *.
           simpl_In. repeat rewrite in_app_iff in Hin. destruct Hin as [|[|]]; simpl_In; simpl_Forall; eauto.
           1,2:eapply LT.wt_clock_incl; [|eauto].
           1,2:intros; simpl_app; repeat rewrite Senv.HasType_app in *; intuition.

@@ -185,12 +185,12 @@ Module Type COMPLETENESS
       Forall (normalized_block G (ps_from_list (map fst (n_out n)))) blks ->
       Forall (fun x => exists cl, find_clock env x = OK cl) (map fst (n_out n)) ->
       (forall x e, envo x = Error e -> PS.In x (ps_from_list (map fst (n_out n)))) ->
-      exists eqs', Errors.mmap (block_to_equation (Env.adds' (idty (idty locs)) env) envo nil) blks = OK eqs'.
+      exists eqs', Errors.mmap (block_to_equation (Env.adds' (idfst (idfst locs)) env) envo nil) blks = OK eqs'.
   Proof.
     intros * Hblk Hlocs Hwtn Hnormed Hfind Henvo.
     pose proof (n_syn n) as Syn. inversion_clear Syn as [?? _ _ (?&Hvars&Hperm)].
     rewrite Hblk in Hvars. inv Hvars; inv H0; inv_VarsDefined.
-    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idty (idty locs)) env) x = OK cl) (concat x0)) as Hfind'.
+    assert (Forall (fun x => exists cl, find_clock (Env.adds' (idfst (idfst locs)) env) x = OK cl) (concat x0)) as Hfind'.
     { rewrite Hperm0.
       apply Forall_app; split; simpl_Forall; subst.
       - rewrite Hperm in H; simpl_In; simpl_Forall.
@@ -200,7 +200,7 @@ Module Type COMPLETENESS
       - apply In_InMembers in H.
         unfold find_clock. cases_eqn Hfind; eauto.
         eapply Env.find_adds'_nIn in Hfind0 as (Hinm&_).
-        rewrite 2 InMembers_idty in Hinm. congruence.
+        rewrite 2 InMembers_idfst in Hinm. congruence.
     }
     inversion_clear Hwtn as [?? _ _ _ _ Hwt]. rewrite Hblk in Hwt. inv Hwt; inv H1. subst Γ Γ'.
     clear Hblk Hperm0.
@@ -221,8 +221,8 @@ Module Type COMPLETENESS
     intros * Hwtn Hnorm. inversion_clear Hnorm as [??? Hblk ? Hnormed].
     unfold to_node.
     edestruct (mmap_block_to_equation_complete G n)
-              with (env:=Env.adds' (idty (n_in n)) (Env.from_list (idty (idty (n_out n)))))
-                   (envo := fun x => if Env.mem x (Env.from_list (idty (idty (n_out n))))
+              with (env:=Env.adds' (idfst (n_in n)) (Env.from_list (idfst (idfst (n_out n)))))
+                   (envo := fun x => if Env.mem x (Env.from_list (idfst (idfst (n_out n))))
                                   then Error (msg "output variable defined as a fby")
                                   else OK tt)
       as [? ?]; eauto.
@@ -231,12 +231,12 @@ Module Type COMPLETENESS
         cases_eqn Hmap; eauto. congruence. }
     - simpl_Forall. simpl_In.
       exists c; simpl. eapply envs_eq_find. eapply env_eq_env_adds', env_eq_env_from_list.
-      1,2:rewrite fst_NoDupMembers. rewrite map_app. 1,2:repeat rewrite map_fst_idty.
+      1,2:rewrite fst_NoDupMembers. rewrite map_app. 1,2:repeat rewrite map_fst_idfst.
       + eapply n_nodup.
       + eapply NoDup_app_r, n_nodup.
-      + rewrite idck_app. apply in_app_iff, or_intror. solve_In.
+      + rewrite idsnd_app. apply in_app_iff, or_intror. solve_In.
     - intros x e Hmem; simpl in Hmem.
-      rewrite <-2 map_fst_idty, ps_from_list_In.
+      rewrite <-2 map_fst_idfst, ps_from_list_In.
       rewrite <- fst_InMembers. rewrite <- Env.In_from_list.
       apply Env.mem_2.
       cases_eqn Hmem.

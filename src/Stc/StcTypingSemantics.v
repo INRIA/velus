@@ -584,32 +584,32 @@ Module Type STCTYPINGSEMANTICS
         apply incl_map, s_ireset_incl.
       }
       take (wt_memory _ _ _ _) and eapply wt_memory_other in it; simpl in *; eauto.
-      assert (NoDupMembers (idty (s_in s' ++ s_vars s' ++ s_out s') ++ mems_of_nexts (s_nexts s'))) as Ndp.
+      assert (NoDupMembers (idfst (s_in s' ++ s_vars s' ++ s_out s') ++ mems_of_nexts (s_nexts s'))) as Ndp.
       { pose proof (s_nodup s') as Ndp.
-        rewrite ? idty_app, <- ? app_assoc.
+        rewrite ? idfst_app, <- ? app_assoc.
         apply fst_NoDupMembers.
-        rewrite ? map_app, ? map_fst_idty.
+        rewrite ? map_app, ? map_fst_idfst.
         replace (map fst (mems_of_nexts (s_nexts s'))) with (map fst (s_nexts s')); auto.
         clear; induction (s_nexts s'); simpl; auto; f_equal; auto.
       }
       inv WTp'.
-      edestruct trconstrs_wt with (7 := Semtcs) (vars := idty (s_vars s' ++ s_out s')) as (WTR & M' & Corres & WTM');
+      edestruct trconstrs_wt with (7 := Semtcs) (vars := idfst (s_vars s' ++ s_out s')) as (WTR & M' & Corres & WTM');
         eauto using s_nodup_variables, s_reset_consistency, s_ireset_consistency,
         s_nodup_subs, s_nexts_of_mems_of_nexts, s_insts_of_subs; auto.
       + rewrite fst_NoDupMembers, <-s_nexts_in_tcs_fst, <-fst_NoDupMembers. apply s_nodup_nexts.
       + rewrite <-s_subs_steps_of. apply s_nodup_subs.
-      + rewrite ? idty_app; apply incl_appr, incl_refl.
-      + intro; rewrite <- s_vars_out_in_tcs, fst_InMembers, idty_app, map_app, ? map_fst_idty; reflexivity.
+      + rewrite ? idfst_app; apply incl_appr, incl_refl.
+      + intro; rewrite <- s_vars_out_in_tcs, fst_InMembers, idfst_app, map_app, ? map_fst_idfst; reflexivity.
       + intro; setoid_rewrite ps_from_list_In.
         rewrite <- s_nexts_in_tcs.
         clear; induction (s_nexts s'); simpl; intuition auto.
       + intros y t Hin Hin'.
         assert (exists ck, In (y, (t, ck)) (s_in s')) as (?&?).
-        { apply fst_InMembers, InMembers_idty in Hin.
-          rewrite ? idty_app, <- ? app_assoc in Ndp, Hin'.
+        { apply fst_InMembers, InMembers_idfst in Hin.
+          rewrite ? idfst_app, <- ? app_assoc in Ndp, Hin'.
           eapply NoDupMembers_app_InMembers in Ndp; eauto.
           apply in_app in Hin' as [Hin'|Hin'].
-          - now apply In_idty_exists.
+          - now apply In_idfst_exists.
           - apply In_InMembers in Hin'; contradiction.
         }
         take (sem_vars_instant _ _ xs) and rename it into Semins.
@@ -629,7 +629,7 @@ Module Type STCTYPINGSEMANTICS
           -- now rewrite fst_InMembers, s_subs_steps_of, steps_of_In.
           -- eapply steps_of_In, incl_map. eapply s_ireset_incl.
              eapply iresets_of_In; eauto.
-        * rewrite ? idty_app, <- ? app_assoc in WTR.
+        * rewrite ? idfst_app, <- ? app_assoc in WTR.
           repeat setoid_rewrite Forall_app in WTR.
           destruct WTR as (?& WTouts &?).
           take (sem_vars_instant _ _ ys) and rename it into Semouts.

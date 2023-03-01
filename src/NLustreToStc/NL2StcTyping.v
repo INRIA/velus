@@ -103,9 +103,9 @@ Module Type NL2STCTYPING
         apply SpecVars'; auto.
         right; auto.
   Qed.
-  Lemma filter_fst_idty:
+  Lemma filter_fst_idfst:
     forall A B (xs: list (ident * (A * B))) P,
-      idty (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idty xs).
+      idfst (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idfst xs).
   Proof.
     induction xs; simpl; intros; auto.
     cases; simpl; now rewrite IHxs.
@@ -115,7 +115,7 @@ Module Type NL2STCTYPING
     forall G n,
       wt_node G n ->
       Permutation
-        (idty (fst (partition
+        (idfst (fst (partition
                       (fun x => PS.mem (fst x) (NL.Mem.memories n.(n_eqs)))
                       n.(n_vars))))
         (gather_mems n.(n_eqs)).
@@ -124,7 +124,7 @@ Module Type NL2STCTYPING
     rewrite fst_partition_filter.
     apply NoDup_Permutation.
     - apply NoDupMembers_NoDup, fst_NoDupMembers.
-      rewrite map_fst_idty, filter_mem_fst.
+      rewrite map_fst_idfst, filter_mem_fst.
       apply nodup_filter.
       pose proof (n.(n_nodup)) as Hnodup.
       apply NoDupMembers_app_r, NoDupMembers_app_l in Hnodup.
@@ -134,7 +134,7 @@ Module Type NL2STCTYPING
                    InMembers x (n_vars n)) as Spec
           by (intro; rewrite <-fst_partition_memories_var_defined, fst_partition_filter,
                      filter_mem_fst, filter_In, fst_InMembers; intuition).
-      pose proof (filter_fst_idty _ _(n_vars n)
+      pose proof (filter_fst_idfst _ _(n_vars n)
                                   (fun x => PS.mem x (Mem.memories (n_eqs n)))) as E;
         setoid_rewrite E; clear E.
       setoid_rewrite filter_In.
@@ -151,19 +151,19 @@ Module Type NL2STCTYPING
           intuition try congruence.
           -- subst.
              left.
-             assert (In (x, t) (idty (n_in n ++ n_vars n ++ n_out n))) as Hin'
-                 by (rewrite 2 idty_app, 2 in_app; auto).
+             assert (In (x, t) (idfst (n_in n ++ n_vars n ++ n_out n))) as Hin'
+                 by (rewrite 2 idfst_app, 2 in_app; auto).
              f_equal.
              eapply NoDupMembers_det; eauto.
-             apply NoDupMembers_idty, n_nodup.
+             apply NoDupMembers_idfst, n_nodup.
           -- take ((_,_) = _) and inv it.
              simpl in Spec.
              assert (InMembers x (n_vars n)) as Hin by auto.
              pose proof (n_nodup n) as Hnodup.
              rewrite fst_NoDupMembers, 2 map_app, NoDup_swap, <- 2 map_app, <-fst_NoDupMembers in Hnodup.
              eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (? & ?); eauto.
-             rewrite 2 idty_app, 2 in_app in Hint; destruct Hint as [Hint|[Hint|Hint]]; auto;
-               apply In_InMembers in Hint; rewrite InMembers_idty in Hint; contradiction.
+             rewrite 2 idfst_app, 2 in_app in Hint; destruct Hint as [Hint|[Hint|Hint]]; auto;
+               apply In_InMembers in Hint; rewrite InMembers_idfst in Hint; contradiction.
   Qed.
 
   Lemma translate_node_wt_inits:
@@ -193,25 +193,25 @@ Module Type NL2STCTYPING
       pose proof WTn as (WT & Henums).
     - eapply translate_eqns_wt; eauto.
       + simpl.
-        repeat rewrite idty_app.
+        repeat rewrite idfst_app.
         rewrite <-app_assoc.
         apply Permutation_app_head.
         rewrite Permutation_app_comm, app_assoc.
         apply Permutation_app_tail.
         setoid_rewrite gather_eqs_fst_spec; rewrite <-fst_partition_memories_gather_mems; eauto.
         setoid_rewrite ps_from_list_gather_eqs_memories.
-        rewrite <-idty_app.
+        rewrite <-idfst_app.
         apply Permutation_map.
         rewrite <-permutation_partition; auto.
       + setoid_rewrite gather_eqs_fst_spec; auto.
       + simpl.
         intros * Hin IsV.
-        rewrite 2 idty_app, 2 in_app.
-        rewrite 2 idty_app, 2 in_app in Hin; destruct Hin as [|[|]]; auto.
+        rewrite 2 idfst_app, 2 in_app.
+        rewrite 2 idfst_app, 2 in_app in Hin; destruct Hin as [|[|]]; auto.
         right; left.
         setoid_rewrite ps_from_list_gather_eqs_memories.
         rewrite snd_partition_filter.
-        pose proof (filter_fst_idty _ _(n_vars n)
+        pose proof (filter_fst_idfst _ _(n_vars n)
                                     (fun x => negb (PS.mem x (Mem.memories (n_eqs n))))) as E;
           setoid_rewrite E; clear E.
         rewrite filter_In, Bool.negb_true_iff, <-PSE.MP.Dec.F.not_mem_iff.
@@ -219,18 +219,18 @@ Module Type NL2STCTYPING
         eapply not_Is_variable_in_memories; eauto.
         apply NoDup_defs_node.
     - simpl.
-      repeat rewrite idty_app.
+      repeat rewrite idfst_app.
       setoid_rewrite ps_from_list_gather_eqs_memories.
       setoid_rewrite snd_partition_filter.
       intros * Hin.
       eapply Henums with (x := x).
-      repeat rewrite idty_app.
+      repeat rewrite idfst_app.
       repeat rewrite in_app in *.
       destruct Hin as [|[Hin|]]; auto.
       change (filter (fun x => negb (PS.mem (fst x) (Mem.memories (n_eqs n))))) with
           (filter (fun x : positive * (type * clock) => (fun y => negb (PS.mem y (Mem.memories (n_eqs n)))) (fst x)))
         in Hin.
-      rewrite filter_fst_idty in Hin.
+      rewrite filter_fst_idfst in Hin.
       apply in_filter in Hin; auto.
   Qed.
 

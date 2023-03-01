@@ -1142,7 +1142,7 @@ Module Type NLINDEXEDTOCOIND
         econstructor; eauto with nlsem.
         + rewrite tr_clocks_of; eauto.
           eapply sem_clocked_vars_impl; eauto.
-          rewrite map_fst_idck; eauto.
+          rewrite map_fst_idsnd; eauto.
         + apply Forall_forall; intros * Hin.
           rewrite tr_clocks_of; auto.
           eapply Forall_forall in Heqs; eapply Forall_forall in IH; eauto.

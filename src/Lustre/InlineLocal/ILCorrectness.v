@@ -122,8 +122,8 @@ Module Type ILCORRECTNESS
     Import Permutation.
 
     Local Hint Resolve InMembers_incl : datatypes.
-    Local Hint Resolve <- fst_InMembers InMembers_idck InMembers_idty : datatypes.
-    Local Hint Resolve -> fst_InMembers InMembers_idck InMembers_idty : datatypes.
+    Local Hint Resolve <- fst_InMembers InMembers_idsnd InMembers_idfst : datatypes.
+    Local Hint Resolve -> fst_InMembers InMembers_idsnd InMembers_idfst : datatypes.
 
     Fact mmap_inlinelocal_block_sem : forall Γ blks sub Γ' Γ'' locs' blks' st st' bs Hi1 Hi2,
         Forall

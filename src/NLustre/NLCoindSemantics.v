@@ -301,7 +301,7 @@ Module Type NLCOINDSEMANTICS
           find_node f G = Some n ->
           Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
           Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
-          sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
+          sem_clocked_vars H (clocks_of xss) (idsnd n.(n_in)) ->
           Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
           sem_node f xss oss.
 
@@ -348,7 +348,7 @@ Module Type NLCOINDSEMANTICS
         find_node f G = Some n ->
         Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
         Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
-        sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
+        sem_clocked_vars H (clocks_of xss) (idsnd n.(n_in)) ->
         Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
         Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
         P_node f xss oss.

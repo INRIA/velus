@@ -2132,7 +2132,7 @@ Section ElabDeclaration.
     | OK ((xin, xout, blk), ((nfui, _), _)) =>
       OK {| n_name     := name;
             n_hasstate := has_state;
-            n_in       := Common.idty xin;
+            n_in       := idfst xin;
             n_out      := xout;
             n_block    := blk |}
     end.
@@ -2171,14 +2171,14 @@ Section ElabDeclaration.
   Next Obligation.
     split.
     - apply check_nodup_spec in Hbind4; auto.
-      now rewrite map_app, <-map_fst_idty in Hbind4.
+      now rewrite map_app, <-map_fst_idfst in Hbind4.
     - eapply check_noduplocals_spec in Hbind5; eauto.
-      intros ??. rewrite in_app_iff, map_fst_idty in H.
+      intros ??. rewrite in_app_iff, map_fst_idfst in H.
       repeat rewrite nameset_spec.
       destruct H as [Hin|Hin]; auto.
   Qed.
   Next Obligation.
-    rewrite map_fst_idty, <-map_app.
+    rewrite map_fst_idfst, <-map_app.
     repeat split.
     - eapply mmap_check_atom_AtomOrGensym; eauto.
     - eapply elab_block_GoodLocals; eauto.
@@ -2225,7 +2225,7 @@ Section ElabDeclarations.
     if Env.mem (n_name n) nenv
     then Error (err_loc' loc (MSG "deplicate definition for " :: CTX name :: nil))
     else elab_declarations' (Global G.(types) G.(externs) (n :: G.(nodes)))
-                          tenv eenv (Env.add n.(n_name) (Common.idty n.(n_in), Common.idty (Common.idty n.(n_out))) nenv) ds
+                          tenv eenv (Env.add n.(n_name) (idfst n.(n_in), idfst (idfst n.(n_out))) nenv) ds
   | TYPE name constructors loc :: ds =>
     do t <- elab_declaration_type name constructors loc;
     if Env.mem name tenv

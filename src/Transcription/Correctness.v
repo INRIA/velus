@@ -1622,7 +1622,7 @@ Module Type CORRECTNESS
     forall (n: @L.node PSyn prefs) H ins,
       Forall2 (fun x => sem_var H (Var x)) (L.idents (L.n_in n)) ins ->
       LCS.sc_vars (senv_of_ins (L.n_in n) ++ senv_of_decls (L.n_out n)) H (clocks_of ins) ->
-      NLSC.sem_clocked_vars (LS.var_history H) (clocks_of ins) (Common.idck (Common.idty (L.n_in n))).
+      NLSC.sem_clocked_vars (LS.var_history H) (clocks_of ins) (Common.idsnd (Common.idfst (L.n_in n))).
   Proof.
     intros * Hvs (Hsc&_).
     unfold NLSC.sem_clocked_vars. simpl_Forall. simpl_In.
@@ -1690,10 +1690,10 @@ Module Type CORRECTNESS
       }
       eapply NLSC.SNode with (H:=LS.var_history (H + Hi')); simpl.
       + erewrite NL.find_node_now; eauto. erewrite <- to_node_name; eauto.
-      + erewrite <- to_node_in, map_fst_idty; eauto.
+      + erewrite <- to_node_in, map_fst_idfst; eauto.
         eapply Forall2_impl_In; [|eauto]; intros.
         eapply LS.sem_var_refines, LS.sem_var_history; eauto using LS.var_history_refines.
-      + erewrite <- to_node_out, 2 map_fst_idty; eauto.
+      + erewrite <- to_node_out, 2 map_fst_idfst; eauto.
         eapply Forall2_impl_In; [|eauto]; intros.
         eapply LS.sem_var_refines, LS.sem_var_history; eauto using LS.var_history_refines.
       + erewrite <- to_node_in; eauto.
@@ -1710,7 +1710,7 @@ Module Type CORRECTNESS
         * inv Hwc3. inv H10. subst Γ'. simpl_app. eauto.
         * apply envs_eq_node in Hblk. clear - Hblk.
           intros ??. specialize (Hblk x ck). rewrite <-Hblk.
-          rewrite (Permutation_app_comm (Common.idty (Common.idty locs))).
+          rewrite (Permutation_app_comm (Common.idfst (Common.idfst locs))).
           simpl_app. repeat rewrite in_app_iff.
           clear - n. split; (intros [|[|]]; [left|right;left|right;right]; solve_In).
         * rewrite app_assoc. apply sc_vars_app; eauto.

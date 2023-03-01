@@ -126,18 +126,18 @@ Module Type TRANSLATION
                                                                 (Env.from_list_with snd s.(s_in)))
     in
     {| m_name := step;
-       m_in   := idty s.(s_in);
-       m_vars := idty s.(s_vars);
-       m_out  := idty s.(s_out);
+       m_in   := idfst s.(s_in);
+       m_vars := idfst s.(s_vars);
+       m_out  := idfst s.(s_out);
        m_body := translate_tcs mems clkvars s.(s_tcs)
     |}.
   Next Obligation.
-    rewrite <-2 idty_app;
-      apply NoDupMembers_idty, s_nodup_vars.
+    rewrite <-2 idfst_app;
+      apply NoDupMembers_idfst, s_nodup_vars.
   Qed.
   Next Obligation.
     split; auto.
-    - rewrite <-2 idty_app, map_fst_idty. apply s_good.
+    - rewrite <-2 idfst_app, map_fst_idfst. apply s_good.
     - apply step_atom.
   Qed.
 
@@ -216,7 +216,7 @@ Module Type TRANSLATION
   Lemma find_method_stepm_out:
     forall s stepm,
       find_method step (translate_system s).(c_methods) = Some stepm ->
-      stepm.(m_out) = idty s.(s_out).
+      stepm.(m_out) = idfst s.(s_out).
   Proof.
     intros ??; simpl.
     rewrite ident_eqb_refl.
@@ -226,7 +226,7 @@ Module Type TRANSLATION
   Lemma find_method_stepm_in:
     forall s stepm,
       find_method step (translate_system s).(c_methods) = Some stepm ->
-      stepm.(m_in) = idty s.(s_in).
+      stepm.(m_in) = idfst s.(s_in).
   Proof.
     intros ??; simpl.
     rewrite ident_eqb_refl.

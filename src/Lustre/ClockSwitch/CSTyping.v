@@ -52,7 +52,7 @@ Module Type CSTYPING
     Lemma cond_eq_wt_clock vars : forall e ty ck x xcs eqs' st st',
         wt_clock G.(types) vars ck ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wt_clock G.(types) vars) (map snd (Common.idck xcs)).
+        Forall (wt_clock G.(types) vars) (map snd (idsnd xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -61,7 +61,7 @@ Module Type CSTYPING
     Lemma cond_eq_wt_type : forall e ty ck x xcs eqs' st st',
         wt_type G.(types) ty ->
         cond_eq e ty ck st = (x, xcs, eqs', st') ->
-        Forall (wt_type G.(types)) (map snd (Common.idty xcs)).
+        Forall (wt_type G.(types)) (map snd (idfst xcs)).
     Proof.
       intros * Hck Hcond; destruct e; repeat inv_bind; simpl; auto.
       destruct a; repeat inv_bind; simpl; auto.
@@ -198,7 +198,7 @@ Module Type CSTYPING
       intros * Hsubin Hsub Hnsub Hnl1 Hincl Hnd1 Hnd2 Hwenv Hbck Hnl2 Hnd3 Hwt Hswitch Hind;
         inv Hnl2; inv Hnd3; inv Hwt; repeat inv_bind; subst Γ'; simpl in *.
       econstructor; eauto.
-      - unfold wt_clocks, Common.idty, senv_of_decls in *.
+      - unfold wt_clocks, idfst, senv_of_decls in *.
         simpl_Forall. subst.
         eapply subclock_clock_wt with (Γ:=Γty++_); eauto.
         + intros * Hfind Hin. rewrite HasType_app in *.
@@ -296,10 +296,10 @@ Module Type CSTYPING
         { rewrite Permutation_app_comm.
           eapply switch_block_NoDupMembers_env; eauto. }
 
-        do 2 econstructor; eauto; unfold wt_clocks, senv_of_decls; repeat rewrite idty_app; repeat rewrite idck_app;
+        do 2 econstructor; eauto; unfold wt_clocks, senv_of_decls; repeat rewrite idfst_app; repeat rewrite idsnd_app;
         repeat rewrite map_app; repeat rewrite Forall_app; repeat split.
         + eapply cond_eq_wt_clock in H0; eauto.
-          unfold Common.idty, Common.idck in *. simpl_Forall.
+          unfold idfst, idsnd in *. simpl_Forall.
           eapply wt_clock_incl; [|eauto]. intros *. rewrite HasType_app; auto.
         + assert (Forall (fun k => k < length tn) (map fst branches)) as Hlt.
           { rewrite H7. apply Forall_forall; intros ? Hin.
@@ -319,7 +319,7 @@ Module Type CSTYPING
           2:{ apply wt_exp_wt_type in H4; auto.
               take (typeof ec = _) and rewrite it in H4. now inv H4. }
           clear - H0.
-          unfold Common.idty in *. simpl_Forall; auto.
+          unfold idfst in *. simpl_Forall; auto.
         + assert (Forall (wt_type G.(types)) (map (fun '(_, ann) => ann.(typ)) Γck)) as Hwenv2.
           { simpl_Forall.
             assert (HasType Γck k a.(typ)) as Hty by eauto with senv.

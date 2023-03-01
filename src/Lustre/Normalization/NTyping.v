@@ -1763,7 +1763,7 @@ Module Type NTYPING
       - destruct (unnest_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
         eapply unnest_blocks_wt_type with (vars:=senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) in Heqres; eauto.
         + rewrite 2 map_app, 2 Forall_app in Heqres. destruct Heqres as ((?&?)&?).
-          unfold st_senv, Common.idty in *. simpl_app.
+          unfold st_senv, idfst in *. simpl_app.
           apply Forall_app; auto; split; simpl_Forall; eauto with ltyping.
         + unfold st_senv. rewrite init_st_anns, app_nil_r. simpl_app; auto.
         + unfold st_senv. rewrite init_st_anns, app_nil_r.
@@ -2244,7 +2244,7 @@ Module Type NTYPING
       - destruct (normfby_blocks _ _ _) as (blocks'&st') eqn:Heqres; simpl.
         eapply normfby_blocks_wt_type with (vars:=senv_of_ins (n_in n) ++ senv_of_decls (n_out n) ++ senv_of_decls locs) in Heqres; eauto.
         + rewrite 2 map_app, 2 Forall_app in Heqres. destruct Heqres as ((?&?)&?).
-          unfold st_senv, Common.idty in *. simpl_app.
+          unfold st_senv, idfst in *. simpl_app.
           apply Forall_app; auto; split; simpl_Forall; eauto with ltyping.
         + unfold st_senv. rewrite init_st_anns, app_nil_r. simpl_app; auto.
         + unfold st_senv. rewrite init_st_anns, app_nil_r.
