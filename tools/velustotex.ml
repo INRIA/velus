@@ -222,7 +222,7 @@ let print_line fmt ((x, ty), values) =
 
 let main filename =
   let p = compile_to_obc filename in
-  let cls = List.hd (List.rev p.classes) in
+  let cls = List.hd p.classes in
   let clsname = str_of_ident cls.c_name in
   let stepme = Option.get (Obc.Syn.find_method Ident.Ids.step cls.c_methods) in
   let intys = List.map snd stepme.m_in in
