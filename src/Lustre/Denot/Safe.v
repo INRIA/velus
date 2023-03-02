@@ -1948,9 +1948,11 @@ Section Node_safe.
       apply sub_clock_bs.
   Qed.
 
+  (* FIXME *)
+  Notation "nprod( A [ n ])" := (@nprod A n) (only printing, format "nprod( A [ n ])").
 
 Section MOVE_ME.
-  Lemma Forall_lift_nprod :
+  Lemma Forall2_lift_nprod :
         forall D1 D2 n  (F : @nprod D1 n -C-> D2),
         forall A (P : A -> D1 -> Prop) (Q : A -> D2 -> Prop),
           (forall a x, forall_nprod (P a) x -> Q a (F x)) ->
@@ -1997,8 +1999,6 @@ Section MOVE_ME.
       Qed.
 
 
-      (* FIXME *)
-      Notation "nprod( A [ n ])" := (@nprod A n) (only printing).
       (* FIXME in cpo_ext ? : *)
       Global Opaque nprod_app.
       Lemma list_of_nprod_const :
@@ -2521,37 +2521,34 @@ Definition value_belongs (l : list enumtag) (v : sampl value) :=
   | _ => False
   end.
 
+(* TODO: simplifier le raisonnement *)
+(* TODO: ty_DS plutôt *)
 Lemma cl_smergev :
   forall ins envI bs env,
-  forall x,
-  forall ttx,
-  forall l np,
-  forall ck,
+  forall x tx ck l np,
     let cs := denot_var ins envI env x in
     NoDup l ->
     l <> [] ->
-    (* TODO: voir le chevauchement avec ty_DS et safe_DS : *)
-    safe_DS cs ->
-    DSForall (value_belongs l) cs ->
+    DSForall (value_belongs l) cs -> (* implique safe_DS cs... *)
     forall_nprod safe_DS np ->
     cl_DS ins envI bs env ck cs ->
-    (* forall_nprod (ty_DS ty) np -> *)
-    Forall2 (fun i s => cl_DS ins envI bs env (Con ck x (ttx,i)) s) l (list_of_nprod np) ->
+    Forall2 (fun i s => cl_DS ins envI bs env (Con ck x (tx,i)) s) l (list_of_nprod np) ->
     cl_DS ins envI bs env ck (smergev l cs np).
 Proof.
   clear.
-  intros * Nd Nnil Sfc Hv Sfx Clc Clx.
-  revert Clx Clc Sfc Hv.
+  intros * Nd Nnil Hv Sfx Clc Clx.
+  revert Clx Clc Hv.
   unfold cl_DS.
   simpl (denot_clock _ _ _ _ (Con _ _ _)).
   fold cs.
   generalize dependent cs.
   generalize (denot_clock ins envI bs env ck) as bck; intros.
-  clear ck x ttx ins envI bs env.
+  clear ck x tx ins envI bs env.
   assert (AC (smergev l cs np) <= AC cs); eauto 2.
   apply Forall2_impl_In with (Q := fun i s => AC s <= ZIP (sample i) cs (AC cs)) in Clx;
     intros; eauto 3 using zip_ac_le.
   clear Clc bck.
+  (* fin de la préparation, début du raisonnement *)
   remember_ds (AC (smergev l cs np)) as t.
   remember_ds (AC cs) as ccs.
   revert_all; cofix Cof; intros.
@@ -2567,7 +2564,7 @@ Proof.
   setoid_rewrite Hc in Clx; clear Hc.
   setoid_rewrite <- Hccs in Clx.
   setoid_rewrite (zip_eq (sample _) c cs' _ _) in Clx.
-  inv Sfc. inv Hv.
+  inv Hv.
   apply symmetry, decomp_eq in Hccs as (ccs' & Hd & Hcc).
   apply DSleCon with ccs'.
   - clear Cof.
@@ -2598,7 +2595,7 @@ Proof.
       rewrite zip3_simpl, zip3_bot1.
       inv Sc. simpl in *; cases; congruence.
     + (* c = pres j *)
-      clear - Nd Sfx Clx Ht Cx H3.
+      take (value_belongs _ _) and clear - Nd Sfx Clx Ht Cx it.
       unfold value_belongs in *.
       enough ((In j l ->
                exists v,
@@ -2612,7 +2609,7 @@ Proof.
         destruct HH as [? ->]; auto.
         rewrite AC_eq; now intros ? % Con_eq_simpl. }
       clear dependent b.
-      clear H3 t.
+      clear it t.
       revert_all; induction l as [| i l]; intros.
       { split; intros; [simpl in *; tauto|].
         unfold smergev.
@@ -2806,9 +2803,9 @@ Qed.
       apply Forall_and_inv in H as [Wt H'].
       apply Forall_and_inv in H' as [Wc Sf].
       rewrite <- Forall_concat in *.
-      apply Forall_ty_expss with (n := length tys) in Wt.
-      apply Forall_cl_expss with (n := length tys) in Wc.
-      apply Forall_denot_expss with (n := length tys) in Sf.
+      apply Forall_ty_expss with (n := length tys) in Wt; auto.
+      apply Forall_cl_expss with (n := length tys) in Wc; auto.
+      apply Forall_denot_expss with (n := length tys) in Sf; auto.
       rewrite denot_exp_eq.
       simpl (typeof _); simpl (clockof _).
       revert Wt Wc Sf.
@@ -2820,13 +2817,9 @@ Qed.
       + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
           by (simpl_Forall; auto).
         eapply Forall2_Forall_eq in Wt; eauto.
-        eapply Forall_lift_nprod; eauto using ty_smergev.
-
-
-      (* XXXXXXX *)
-      + eapply Forall2_map_1, Forall2_llift.
-        { intros * HH. eapply cl_swhenv, HH. }
-        simpl_Forall; eauto.
+        eapply Forall2_lift_nprod; eauto using ty_smergev.
+      + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
+      (* XXXXXXXXXXXXXX *)
       + eapply forall_nprod_llift with (Q := fun s => cl_DS _ _ _ _ ck s /\ safe_DS s).
         { intros ? []. eapply safe_swhenv. eauto. }
         apply forall_nprod_and; auto using Forall_forall_nprod.
