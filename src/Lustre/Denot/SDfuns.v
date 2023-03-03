@@ -680,18 +680,7 @@ Section SStream_functions.
     trivial.
   Qed.
 
-  (* TODO: move *)
-  Lemma forall_nprod_hd :
-    forall (D:cpo) (P : D -> Prop) n (np : nprod (S n)),
-      forall_nprod P np ->
-      P (nprod_hd np).
-  Proof.
-    intros.
-    destruct n; auto.
-    now inversion H.
-  Qed.
-
-  (* TODO: move *)
+  (* TODO: move  *)
   Lemma forall_nprod_Foldi :
     forall (P : AA -> Prop)
       (Q : BB -> Prop)
@@ -708,7 +697,7 @@ Section SStream_functions.
     - now apply forall_nprod_hd in Fn.
   Qed.
 
-  (* TODO: move  *)
+  (* TODO: move *)
   (** [nprod n] of [nprod m] *)
   Definition lift_nprod {D1 D2} {n m} :
     (@nprod D1 n -C-> D2) -C-> @nprod (@nprod D1 m) n -C-> @nprod D2 m.
@@ -721,6 +710,16 @@ Section SStream_functions.
       + exact ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
   Defined.
 
+  (* TODO: pour juste (S m), il faudrait avoir un nprod_cons,
+     ce qui pose d'autre problèmes... *)
+  Lemma lift_nprod_simpl :
+    forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
+      forall (np : @nprod (@nprod D1 (S (S m))) n),
+        lift_nprod F np = (F (lift nprod_hd np), lift_nprod F (lift nprod_tl np)).
+  Proof.
+    trivial.
+  Qed.
+
   Lemma forall_lift_nprod :
     forall D1 D2 n (F : @nprod D1 n -C-> D2),
     forall (P : D2 -> Prop) (Q : D1 -> Prop),
@@ -730,15 +729,15 @@ Section SStream_functions.
         @forall_nprod _ P m (lift_nprod F np).
   Proof.
     intros * QP.
-    induction m as [|[|m]]; auto; intros * Hq.
-    now simpl.
-    constructor.
-    - apply QP; simpl.
-      eapply forall_nprod_lift, forall_nprod_impl; eauto.
-      intros [] H; inversion H; auto.
-    - apply IHm.
-      eapply forall_nprod_lift, forall_nprod_impl; eauto.
-      intros [] H; inversion H; auto.
+    induction m as [|[|m]]; intros * Hq.
+    - now simpl.
+    - apply QP, Hq.
+    - rewrite lift_nprod_simpl.
+      constructor.
+      + eapply QP, forall_nprod_lift, forall_nprod_impl; eauto.
+        now apply forall_nprod_hd.
+      + eapply IHm, forall_nprod_lift, forall_nprod_impl; eauto.
+        now apply forall_nprod_tl.
   Qed.
 
   Lemma lift_nprod_nth :

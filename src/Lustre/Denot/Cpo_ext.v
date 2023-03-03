@@ -1491,18 +1491,41 @@ Section Forall_Nprod.
 
 Variable P : D -> Prop.
 
-Fixpoint forall_nprod {n} : nprod n -> Prop :=
-  match n with
-  | 0 => fun _ => True
-  | S n => fun np => P (nprod_hd np) /\ forall_nprod (nprod_tl np)
-  end.
+Definition forall_nprod {n} (np : nprod n) : Prop.
+  induction n as [|[]]; simpl in *.
+  - exact True.
+  - exact (P np).
+  - exact (P (fst np) /\ IHn (snd np)).
+Defined.
+
+Lemma forall_nprod_hd :
+  forall {n} (np : nprod (S n)),
+    forall_nprod np ->
+    P (nprod_hd np).
+Proof.
+  intros * Hf.
+  destruct n; auto.
+  now inversion Hf.
+Qed.
 
 Lemma forall_nprod_tl :
   forall {n} (np : nprod (S n)),
     forall_nprod np ->
     forall_nprod (nprod_tl np).
 Proof.
-  inversion 1; auto.
+  intros * Hf.
+  destruct n.
+  - now simpl.
+  - now inversion Hf.
+Qed.
+
+Lemma hd_tl_forall :
+  forall {n} (np : nprod (S n)),
+    P (nprod_hd np) ->
+    forall_nprod (nprod_tl np) ->
+    forall_nprod np.
+Proof.
+  destruct n as [|[]]; intros * Hh Ht; now simpl in *.
 Qed.
 
 Lemma k_forall_nprod :
@@ -1510,7 +1533,8 @@ Lemma k_forall_nprod :
     (forall k d, k < n -> P (get_nth k d np)) ->
     forall_nprod np.
 Proof.
-  induction n; simpl; intros * Hk; split.
+  induction n; intros * Hk; auto; try now simpl.
+  apply hd_tl_forall.
   - unshelve eapply (Hk O); auto with arith.
     destruct n; [| destruct np]; auto.
   - apply IHn; intros.
@@ -1522,7 +1546,8 @@ Lemma k_forall_nprod_def :
     (forall k, k < n -> P (get_nth k d np)) ->
     forall_nprod np.
 Proof.
-  induction n; simpl; intros * Hk; split.
+  induction n; intros * Hk; try now simpl.
+  apply hd_tl_forall.
   - apply (Hk O); auto with arith.
   - apply (IHn _ d); intros.
     apply (Hk (S k)); auto with arith.
@@ -1535,7 +1560,9 @@ Lemma forall_nprod_k :
 Proof.
   induction n; intros * Hf * Hk.
   inversion Hk.
-  destruct Hf, k; auto.
+  apply forall_nprod_hd in Hf as ?.
+  apply forall_nprod_tl in Hf as ?.
+  destruct k; auto.
   apply IHn; auto with arith.
 Qed.
 
@@ -1622,8 +1649,11 @@ Lemma forall_nprod_impl :
       forall_nprod P np ->
       forall_nprod Q np.
 Proof.
-  induction n; intros * Hf; auto.
-  destruct Hf; constructor; auto.
+  intros * PQ * Hf.
+  induction n; auto.
+  apply forall_nprod_hd in Hf as ?.
+  apply forall_nprod_tl in Hf as ?.
+  apply hd_tl_forall; auto.
 Qed.
 
 Lemma forall_nprod_and :
@@ -1634,7 +1664,9 @@ Lemma forall_nprod_and :
     forall_nprod (fun x => P x /\ Q x) np.
 Proof.
   induction n; intros * Hp Hq; auto.
-  destruct Hp, Hq; constructor; auto.
+  apply forall_nprod_hd in Hp as ?, Hq as ?.
+  apply forall_nprod_tl in Hp as ?, Hq as ?.
+  apply hd_tl_forall; auto.
 Qed.
 
 
@@ -1691,7 +1723,9 @@ Lemma forall_nprod_Forall :
     Forall P (list_of_nprod np).
 Proof.
   induction n; intros * Hf; simpl; auto.
-  destruct Hf; constructor; auto.
+  apply forall_nprod_hd in Hf as ?.
+  apply forall_nprod_tl in Hf as ?.
+  constructor; auto.
 Qed.
 
 Lemma Forall_forall_nprod :
@@ -1699,13 +1733,16 @@ Lemma Forall_forall_nprod :
     Forall P (list_of_nprod np) ->
     forall_nprod P np.
 Proof.
-  induction n; intros * Hf; simpl; auto.
-  inversion_clear Hf; auto.
+  induction n; intros * Hf; try now simpl.
+  inversion_clear Hf.
+  apply hd_tl_forall; auto.
 Qed.
 
 End List_of_nprod.
 
 End Nprod.
+
+Notation "A [ n ]" := (@nprod A n) (at level 100, only printing, format "A [ n ]").
 
 (** Lifting functions over n-uplets *)
 Section Lift_nprod.
@@ -1886,7 +1923,9 @@ Proof.
   - cbn in *; intuition.
   - destruct np, H.
     rewrite llift_simpl.
-    cbn in *; auto.
+    constructor.
+    + simpl in *; auto.
+    + apply IHn; auto.
 Qed.
 
 (* pas envie d'importer tout Common pour ça... *)
