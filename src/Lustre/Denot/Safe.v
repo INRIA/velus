@@ -3696,6 +3696,8 @@ Proof.
     intros ty1 ty2 Hty1 Hty2.
     eapply DSForall_le in H5. apply H5.
     all: auto.
+  - (* merge *)
+    simpl_Forall; auto.
 Qed.
 
 Lemma op_correct_le :
