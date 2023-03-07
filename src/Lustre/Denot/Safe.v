@@ -154,7 +154,7 @@ Proof.
   cofix Cof; intros * Ht Hps1 Hqs2 Hpq.
   destruct t as [| []].
   - constructor. rewrite <- eqEps in *; eauto.
-  - apply zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
+  - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 &?& Hp).
     rewrite Hs1, Hs2 in *.
     inv Hps1. inv Hqs2. inv Hpq. inv Hp.
     constructor; eauto; cases.
@@ -607,13 +607,6 @@ Section SDfuns_safe.
     cases_eqn HH.
   Qed.
 
-  (* TODO: update CommonDS *)
-(* remember with [@Oeq (DS _)] instead of [eq] *)
-Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
-  let Hx := fresh "H"x in
-  remember s as x eqn:Hx;
-  apply Oeq_refl_eq in Hx.
-
   Lemma cl_sunop :
     forall op s ck tye,
       cl_DS ck s ->
@@ -781,7 +774,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
   Proof.
     intros * Wtv Wt0 Wt.
     unfold ty_DS, DSForall_pres in *.
-    remember (fby1s _ _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (fby1s _ _ _ _) as t.
     revert dependent ys.
     revert dependent xs.
     revert dependent ov.
@@ -824,7 +817,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     intros * Wt0 Wt.
     unfold ty_DS, DSForall_pres, fby in *.
     generalize false as b; intro.
-    remember (fbys _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (fbys _ _ _) as t.
     revert dependent ys.
     revert dependent xs.
     revert t b.
@@ -866,7 +859,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
       AC (fby1 (Some v) xs ys) <= cs.
   Proof.
     clear; intros.
-    remember (AC (fby1 _ _ _)) as ts eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (AC (fby1 _ _ _)) as t.
     revert_all.
     cofix Cof; intros * Sx Cx Sy Cy [| b t] Ht.
     { constructor. rewrite <- eqEps in Ht. eapply Cof with _ xs ys; eauto. }
@@ -908,7 +901,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     unfold cl_DS; intro ck.
     generalize (denot_clock ck); clear ck.
     clear; intros cs ??  [Sx Cx][Sy Cy].
-    remember (AC (fby _ _)) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (AC (fby _ _)) as t.
     revert_all.
     cofix Cof; intros * Sx Cx Sy Cy [| b t] Ht.
     { constructor. rewrite <- eqEps in Ht. eapply Cof with xs ys; eauto. }
@@ -951,7 +944,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
       safe_DS (fby1 (Some v) xs ys).
   Proof.
     clear; intros * Sx Cx Sy Cy.
-    remember (fby1 _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (fby1 _ _ _) as t.
     revert_all; cofix Cof; intros.
     destruct t as [| b t].
     { constructor. rewrite <- eqEps in Ht. apply Cof with v cs xs ys; auto. }
@@ -993,7 +986,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     unfold cl_DS; intro ck.
     generalize (denot_clock ck); clear ck.
     clear; intros cs * [Sx Cx] [Sy Cy].
-    remember (fby _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (fby _ _) as t.
     revert_all; cofix Cof; intros.
     destruct t as [| b t].
     { constructor. rewrite <- eqEps in Ht. apply Cof with cs xs ys; auto. }
@@ -1038,7 +1031,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
   Proof.
     intros * Hk Wtx Wtc.
     unfold ty_DS, DSForall_pres, swhenv in *.
-    remember (swhen _ _ _ _ _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (swhen _ _ _ _ _ _) as t.
     revert dependent cs.
     revert dependent xs.
     revert t.
@@ -1110,7 +1103,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     intros ????.
     generalize (denot_clock ck); clear ck.
     clear; intros cks * (Tx & Sx & Cx & Sc & Cc).
-    remember (swhen _ _ _ k _ _) as t eqn:Ht. apply Oeq_refl_eq in Ht.
+    remember_ds (swhen _ _ _ k _ _) as t.
     revert_all; cofix Cof; intros.
     destruct t as [| b t].
     { constructor. rewrite <- eqEps in Ht. apply Cof with k tx tn cks xs cs; auto. }
@@ -1354,11 +1347,11 @@ Section SubClock.
   Lemma sub_clock_refl : forall s, sub_clock s s.
   Proof.
     clear. intro s.
-    remember s as t. rewrite Heqt at 1. apply Oeq_refl_eq in Heqt.
+    remember_ds s as t. rewrite Ht at 1.
     revert_all.
     cofix Cof; intros; destruct t.
     - constructor. apply Cof. now rewrite eqEps.
-    - apply symmetry, decomp_eq in Heqt as (?&?& Ht).
+    - apply symmetry, decomp_eq in Ht as (?&?& Ht).
       econstructor; eauto using BoolOrder.le_refl.
   Qed.
 
@@ -1409,11 +1402,11 @@ Section SubClock.
       sub_clock bs (ZIP (sample k) xs cs).
   Proof.
     clear. intros * Hsub.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
+    remember_ds (ZIP _ _ _) as zs.
     revert_all. cofix Cof; intros.
     destruct zs.
-    - constructor. rewrite <- eqEps in Hz. eauto.
-    - apply symmetry, zip_uncons in Hz as (?&?&?&?& Hs1 & Hs2 &?& Hp).
+    - constructor. rewrite <- eqEps in Hzs. eauto.
+    - apply symmetry, zip_uncons in Hzs as (?&?&?&?& Hs1 & Hs2 &?& Hp).
       rewrite Hs2 in Hsub; inv Hsub.
       econstructor; eauto.
       unfold Bool.le, sample, andb, eqb in *; cases_eqn H.
@@ -1435,12 +1428,12 @@ Section SubClock.
       sub_clock bs (ZIP orb xs ys).
   Proof.
     clear. intros * Sub1 Sub2.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
+    remember_ds (ZIP _ _ _) as zs.
     revert_all. cofix Cof; intros.
     destruct zs.
-    - constructor. rewrite <- eqEps in Hz.
+    - constructor. rewrite <- eqEps in Hzs.
       apply Cof with xs ys; auto.
-    - apply symmetry, zip_uncons in Hz as (?& xs' &?& ys' & Hs1 & Hs2 &?& Hp).
+    - apply symmetry, zip_uncons in Hzs as (?& xs' &?& ys' & Hs1 & Hs2 &?& Hp).
       rewrite Hs1, Hs2 in *.
       inv Sub1. inv Sub2.
       match goal with
@@ -1459,12 +1452,12 @@ Section SubClock.
       ZIP orb xs ys <= bs.
   Proof.
     clear. intros * Sub Le.
-    remember (ZIP _ _ _) as zs eqn:Hz. apply Oeq_refl_eq in Hz.
+    remember_ds (ZIP _ _ _) as zs.
     revert_all. cofix Cof; intros.
     destruct zs.
-    - constructor. rewrite <- eqEps in Hz.
+    - constructor. rewrite <- eqEps in Hzs.
       apply Cof with xs ys; auto.
-    - apply symmetry, zip_uncons in Hz as (?& xs' &?& ys' & Hs1 & Hs2 &?& Hp).
+    - apply symmetry, zip_uncons in Hzs as (?& xs' &?& ys' & Hs1 & Hs2 &?& Hp).
       rewrite Hs1, Hs2 in *.
       inv Sub. inv Le.
       match goal with

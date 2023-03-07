@@ -24,7 +24,7 @@ Tactic Notation "remember_st" constr(s) "as" ident(x) :=
 Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
   let Hx := fresh "H"x in
   remember s as x eqn:Hx;
-  apply symmetry, Oeq_refl_eq in Hx.
+  apply Oeq_refl_eq in Hx.
 
 Ltac revert_all :=
   repeat match goal with
