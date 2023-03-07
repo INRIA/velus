@@ -1,5 +1,5 @@
 From Coq Require Import String Morphisms Permutation.
-From Coq Require Import List.
+From Coq Require Import Datatypes List.
 Import List.ListNotations.
 Open Scope list_scope.
 
@@ -1128,7 +1128,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
 
   (** ** Faits sur smergev *)
 
-  Lemma ty_smergev :
+  Lemma ty_smergev_TTT :
     forall ty xs tx tn k cs,
       k < length tn ->
       ty_DS ty xs ->
@@ -1138,7 +1138,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     (* TODO: update lemma *)
   Abort.
 
-  Lemma cl_smergev :
+  Lemma cl_smergev_TTT :
     forall tx tn xs ck x ty k,
       let cs := denot_var ins envI env x in
       ty_DS (Tenum tx tn) cs
@@ -1149,7 +1149,7 @@ Tactic Notation "remember_ds" uconstr(s) "as" ident(x) :=
     (* TODO: update lemma *)
   Abort.
 
-  Lemma safe_smergev :
+  Lemma safe_smergev_TTT :
     forall k tx tn ck xs cs,
       ty_DS (Tenum tx tn) cs
       /\ safe_DS xs /\ cl_DS ck xs
@@ -1948,8 +1948,6 @@ Section Node_safe.
       apply sub_clock_bs.
   Qed.
 
-  (* FIXME *)
-  Notation "nprod( A [ n ])" := (@nprod A n) (only printing, format "nprod( A [ n ])").
 
 Section MOVE_ME.
   Lemma Forall2_lift_nprod :
@@ -1997,10 +1995,6 @@ Section MOVE_ME.
           + eapply (IHl (length (a0 :: l))), forall_nprod_Forall, forall_nprod_lift, forall_nprod_impl; eauto.
             intros [] **; simpl; inv H; auto.
       Qed.
-
-
-      (* FIXME in cpo_ext ? : *)
-      Global Opaque nprod_app.
       Lemma list_of_nprod_const :
         forall (D : cpo) (c : D) n,
           list_of_nprod (nprod_const c n) = repeat c n.
@@ -2022,7 +2016,8 @@ Section MOVE_ME.
           rewrite denot_expss_eq.
           unfold eq_rect; cases.
           + rewrite (@list_of_nprod_app _ 1 (length es)).
-            simpl; constructor; auto using Forall_ty_exp.
+            constructor; auto.
+            now apply Forall_ty_exp.
           + now rewrite annots_numstreams in n.
       Qed.
       Lemma Forall_cl_expss :
@@ -2040,7 +2035,8 @@ Section MOVE_ME.
           rewrite denot_expss_eq.
           unfold eq_rect; cases.
           + rewrite (@list_of_nprod_app _ 1 (length es)).
-            simpl; constructor; auto using Forall_cl_exp.
+            constructor; auto.
+            now apply Forall_cl_exp.
           + now rewrite annots_numstreams in n.
       Qed.
       (* TODO: move, virer l'autre ? *)
@@ -2523,20 +2519,48 @@ Definition value_belongs (l : list enumtag) (v : sampl value) :=
 
 (* TODO: simplifier le raisonnement *)
 (* TODO: ty_DS plutôt *)
+      (* hypothèses :
+         ty_DS (Tenum tx tn) (denot_var ins envI env x0)
+         HasType Γ x0 (Tenum tx tn)
+       *)
+Lemma ty_belongs :
+  forall tid tn xs,
+    safe_DS xs ->
+    ty_DS (Tenum tid tn) xs ->
+    DSForall (value_belongs (seq 0 (length tn))) xs.
+Proof.
+  clear.
+  unfold safe_DS, ty_DS, DSForall_pres.
+  intros ??.
+  cofix Cof; intros * Hs Ht.
+  destruct xs.
+  - constructor.
+    rewrite <- eqEps in *; auto.
+  - inv Hs.
+    inv Ht.
+    constructor; auto.
+    cases; simpl in *; auto.
+    take (wt_value _ _) and inv it.
+    apply in_seq; lia.
+Qed.
+
 Lemma cl_smergev :
   forall ins envI bs env,
-  forall x tx ck l np,
+  forall x tx
+    (* tid tn *) ck l np,
     let cs := denot_var ins envI env x in
     NoDup l ->
     l <> [] ->
     DSForall (value_belongs l) cs -> (* implique safe_DS cs... *)
+    (* ty_DS (Tenum tid tn) cs -> *)
+    (* safe_DS cs -> *)
     forall_nprod safe_DS np ->
     cl_DS ins envI bs env ck cs ->
     Forall2 (fun i s => cl_DS ins envI bs env (Con ck x (tx,i)) s) l (list_of_nprod np) ->
     cl_DS ins envI bs env ck (smergev l cs np).
 Proof.
   clear.
-  intros * Nd Nnil Hv Sfx Clc Clx.
+  intros * Nd Nnil Hv (* Hty *) Sfx Clc Clx.
   revert Clx Clc Hv.
   unfold cl_DS.
   simpl (denot_clock _ _ _ _ (Con _ _ _)).
@@ -2663,6 +2687,54 @@ Proof.
       unfold smergev.
       now rewrite rem_cons, rem_AC, rem_smerge, rem_cons.
 Qed.
+
+        Lemma hd_lift_nprod :
+          forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
+          forall (np : @nprod (@nprod D1 (S m)) n),
+            nprod_hd (lift_nprod F np) = F (lift nprod_hd np).
+        Proof.
+          intros.
+          destruct m; auto.
+          cbn.
+          now rewrite lift_ID.
+        Qed.
+        Lemma tl_lift_nprod :
+          forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
+          forall (np : @nprod (@nprod D1 (S m)) n),
+            nprod_tl (lift_nprod F np) = lift_nprod F (lift nprod_tl np).
+        Proof.
+          intros.
+          destruct m; auto.
+          cbn.
+          now rewrite lift_ID.
+        Qed.
+        (* TODO: rename, virer l'autre ? *)
+        Lemma Forall2_lift_nprod' :
+        forall D1 D2 n (F : @nprod D1 n -C-> D2),
+        forall A (P : D2 -> Prop) (Q : A -> D1 -> Prop),
+          (forall l np, Forall2 Q l (list_of_nprod np) -> P (F np)) ->
+          forall (l : list A) m (np : @nprod (@nprod D1 m) n),
+            Forall2 (fun e ss => forall_nprod (Q e) ss) l (list_of_nprod np) ->
+            Forall P (list_of_nprod (lift_nprod F np)).
+        Proof.
+          clear.
+          intros * QP.
+          induction m; intros * Hf.
+          now constructor.
+          apply forall_nprod_Forall, hd_tl_forall.
+          - rewrite hd_lift_nprod.
+            apply QP with l.
+            rewrite list_of_nprod_lift.
+            apply Forall2_map_2.
+            eapply Forall2_impl_In in Hf; eauto.
+            now intros * _ _ HH%forall_nprod_hd.
+          - rewrite tl_lift_nprod.
+            apply Forall_forall_nprod, IHm.
+            rewrite list_of_nprod_lift.
+            apply Forall2_map_2.
+            eapply Forall2_impl_In in Hf; eauto.
+            now intros * _ _ HH%forall_nprod_tl.
+        Qed.
 
   Ltac find_specialize_in H :=
     repeat multimatch goal with
@@ -2819,6 +2891,7 @@ Qed.
         eapply Forall2_Forall_eq in Wt; eauto.
         eapply Forall2_lift_nprod; eauto using ty_smergev.
       + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
+        eapply Forall2_lift_nprod'.
       (* XXXXXXXXXXXXXX *)
       + eapply forall_nprod_llift with (Q := fun s => cl_DS _ _ _ _ ck s /\ safe_DS s).
         { intros ? []. eapply safe_swhenv. eauto. }
