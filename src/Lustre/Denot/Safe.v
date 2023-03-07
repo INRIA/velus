@@ -2518,33 +2518,7 @@ Definition value_belongs (l : list enumtag) (v : sampl value) :=
   end.
 
 (* TODO: simplifier le raisonnement *)
-(* TODO: ty_DS plutôt *)
-      (* hypothèses :
-         ty_DS (Tenum tx tn) (denot_var ins envI env x0)
-         HasType Γ x0 (Tenum tx tn)
-       *)
-Lemma ty_belongs :
-  forall tid tn xs,
-    safe_DS xs ->
-    ty_DS (Tenum tid tn) xs ->
-    DSForall (value_belongs (seq 0 (length tn))) xs.
-Proof.
-  clear.
-  unfold safe_DS, ty_DS, DSForall_pres.
-  intros ??.
-  cofix Cof; intros * Hs Ht.
-  destruct xs.
-  - constructor.
-    rewrite <- eqEps in *; auto.
-  - inv Hs.
-    inv Ht.
-    constructor; auto.
-    cases; simpl in *; auto.
-    take (wt_value _ _) and inv it.
-    apply in_seq; lia.
-Qed.
-
-Lemma cl_smergev :
+Lemma cl_smergev_ :
   forall ins envI bs env,
   forall x tx
     (* tid tn *) ck l np,
@@ -2688,6 +2662,97 @@ Proof.
       now rewrite rem_cons, rem_AC, rem_smerge, rem_cons.
 Qed.
 
+(* TODO: ty_DS plutôt *)
+Lemma ty_belongs :
+  forall tid tn xs,
+    safe_DS xs ->
+    ty_DS (Tenum tid tn) xs ->
+    DSForall (value_belongs (seq 0 (length tn))) xs.
+Proof.
+  clear.
+  unfold safe_DS, ty_DS, DSForall_pres.
+  intros ??.
+  cofix Cof; intros * Hs Ht.
+  destruct xs.
+  - constructor.
+    rewrite <- eqEps in *; auto.
+  - inv Hs.
+    inv Ht.
+    constructor; auto.
+    cases; simpl in *; auto.
+    take (wt_value _ _) and inv it.
+    apply in_seq; lia.
+Qed.
+
+Lemma Permutation_belongs :
+  forall l l',
+    Permutation l l' ->
+    forall v,
+    (value_belongs l v <-> value_belongs l' v).
+Proof.
+  intros * Hp.
+  destruct v as [|[]|]; simpl; try tauto.
+  now rewrite Hp.
+Qed.
+(* TODO: DSForall immpl + morphisme *)
+
+Lemma DSForall_impl' :
+  forall {A} (P Q : A -> Prop) (s : DS A),
+    (forall x : A, P x -> Q x) ->
+    DSForall P s ->
+    DSForall Q s.
+Proof.
+  intros ???.
+  cofix Cof.
+  destruct s; intros Pq Hf; inv Hf; constructor; cases.
+Qed.
+
+(* Global Add Parametric Morphism {A} : (@DSForall A) *)
+(*        with signature (respectful eq Basics.impl) ==> (@Oeq (DS A)) ==> Basics.impl *)
+(*          as DSForall_morph. *)
+(* Proof. *)
+(*   intros ?? Impl ?? Heq Hf. *)
+(*   rewrite Heq in Hf. *)
+(*   eapply DSForall_impl' in Hf; eauto. *)
+(*   intros; eapply Impl; eauto. *)
+(* Qed. *)
+
+(* Global Add Parametric Morphism {A} : (@DSForall A) *)
+(*        with signature (respectful eq iff) ==> (@Oeq (DS A)) ==> iff *)
+(*          as DSForall_morph2. *)
+(* Proof. *)
+(*   intros ?? Heq ?? He; split; intro Hf. *)
+(*   - now rewrite Heq, He in Hf. *)
+(*   - rewrite He. *)
+(*     eapply DSForall_impl' in Hf; eauto. *)
+(*     intros; edestruct Heq; eauto. *)
+(* Qed. *)
+
+(* wrapper pour [cl_smergev_], qui passe mieux dans [safe_exp_] *)
+Lemma cl_smergev :
+  forall ins envI bs env, (* TODO: section variables *)
+  forall x tid tn ck l np,
+    let cs := denot_var ins envI env x in
+    l <> [] ->
+    Permutation l (seq 0 (length tn)) ->
+    safe_DS cs ->
+    ty_DS (Tenum tid tn) cs ->
+    cl_DS ins envI bs env ck cs ->
+    Forall2 (fun i s => safe_DS s /\ cl_DS ins envI bs env (Con ck x (Tenum tid tn,i)) s) l (list_of_nprod np) ->
+    cl_DS ins envI bs env ck (smergev l cs np).
+Proof.
+  intros * Nnil Hperm Sc Tc Cc Hf.
+  apply ty_belongs in Tc; auto.
+  apply cl_smergev_ with (tx := Tenum tid tn); auto.
+  - rewrite Hperm; apply seq_NoDup.
+  - eapply DSForall_impl' in Tc; eauto.
+    now setoid_rewrite (Permutation_belongs _ _ Hperm).
+  - apply Forall_forall_nprod, Forall_forall; intros.
+    eapply Forall2_in_right in Hf as (?&?&?&?); eauto.
+  - eapply Forall2_impl_In in Hf; eauto.
+    now intros * ?? [].
+Qed.
+
         Lemma hd_lift_nprod :
           forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
           forall (np : @nprod (@nprod D1 (S m)) n),
@@ -2710,12 +2775,14 @@ Qed.
         Qed.
         (* TODO: rename, virer l'autre ? *)
         Lemma Forall2_lift_nprod' :
-        forall D1 D2 n (F : @nprod D1 n -C-> D2),
-        forall A (P : D2 -> Prop) (Q : A -> D1 -> Prop),
-          (forall l np, Forall2 Q l (list_of_nprod np) -> P (F np)) ->
-          forall (l : list A) m (np : @nprod (@nprod D1 m) n),
-            Forall2 (fun e ss => forall_nprod (Q e) ss) l (list_of_nprod np) ->
-            Forall P (list_of_nprod (lift_nprod F np)).
+          forall A (l : list A),
+          forall D1 D2 (F : @nprod D1 (length l) -C-> D2),
+          forall (P : D2 -> Prop) (Q : A -> D1 -> Prop),
+            (forall (np : nprod (length l)),
+                Forall2 Q l (list_of_nprod np) -> P (F np)) ->
+            forall m (np : @nprod (@nprod D1 m) (length l)),
+              Forall2 (fun e ss => forall_nprod (Q e) ss) l (list_of_nprod np) ->
+              Forall P (list_of_nprod (lift_nprod F np)).
         Proof.
           clear.
           intros * QP.
@@ -2723,7 +2790,7 @@ Qed.
           now constructor.
           apply forall_nprod_Forall, hd_tl_forall.
           - rewrite hd_lift_nprod.
-            apply QP with l.
+            apply QP.
             rewrite list_of_nprod_lift.
             apply Forall2_map_2.
             eapply Forall2_impl_In in Hf; eauto.
@@ -2735,6 +2802,191 @@ Qed.
             eapply Forall2_impl_In in Hf; eauto.
             now intros * _ _ HH%forall_nprod_tl.
         Qed.
+        Lemma map_eq_nnil : forall {A B} (f : A -> B) l, l <> [] -> List.map f l <> [].
+        Proof.
+          intros.
+          intro Hf; destruct l; [contradiction|].
+          discriminate Hf.
+        Qed.
+
+(* TODO: move *)
+Lemma nprod_forall_Forall :
+  forall (D:cpo) (P:D -> Prop) {n} (np : nprod n),
+    forall_nprod P np <->
+    Forall P (list_of_nprod np).
+Proof.
+  split; eauto using forall_nprod_Forall, Forall_forall_nprod.
+Qed.
+
+
+(* TODO: beaucoup de raisonnement en commun avec cl_smerge_ *)
+Lemma safe_smergev_ :
+  forall ins envI bs env,
+  forall x tx
+    (* tid tn *) ck l np,
+    let cs := denot_var ins envI env x in
+    NoDup l ->
+    l <> [] ->
+    DSForall (value_belongs l) cs -> (* implique safe_DS cs... *)
+    (* ty_DS (Tenum tid tn) cs -> *)
+    (* safe_DS cs -> *)
+    forall_nprod safe_DS np ->
+    cl_DS ins envI bs env ck cs ->
+    Forall2 (fun i s => cl_DS ins envI bs env (Con ck x (tx,i)) s) l (list_of_nprod np) ->
+    safe_DS (smergev l cs np).
+Proof.
+  clear.
+  intros * Nd Nnil Hv (* Hty *) Sfx Clc Clx.
+  revert Clx Clc Hv.
+  unfold cl_DS.
+  simpl (denot_clock _ _ _ _ (Con _ _ _)).
+  fold cs.
+  generalize dependent cs.
+  generalize (denot_clock ins envI bs env ck) as bck; intros.
+  clear ck x tx ins envI bs env.
+  apply Forall2_impl_In with (Q := fun i s => AC s <= ZIP (sample i) cs (AC cs)) in Clx;
+    intros; eauto 3 using zip_ac_le.
+  clear Clc bck.
+  (* fin de la préparation, début du raisonnement *)
+  remember_ds (smergev l cs np) as t.
+  revert_all; cofix Cof; intros.
+  destruct t as [| b t].
+  { (* Eps *)
+    constructor.
+    rewrite <- eqEps in Ht.
+    eapply Cof; eauto. }
+  apply symmetry, symmetry in Ht as HH.
+  apply cons_is_cons, smerge_is_cons in HH as [Cc Cx]; auto.
+  apply is_cons_elim in Cc as (c & cs' & Hc).
+  rewrite Hc in *.
+  setoid_rewrite Hc in Clx; clear Hc.
+  setoid_rewrite (AC_eq c cs') in Clx.
+  setoid_rewrite (zip_eq (sample _) c cs' _ _) in Clx.
+  inv Hv.
+  (* apply symmetry, decomp_eq in Hccs as (ccs' & Hd & Hcc). *)
+  (* apply DSleCon with ccs'. *)
+  constructor.
+  - clear Cof.
+    (* erewrite f_equal with (x := b); [eassumption|]. *)
+    destruct c as [|[|j]|]; try contradiction.
+    + (* c = absent *)
+      clear - Clx Ht Cx Sfx.
+      enough (first (smergev l (cons abs cs') np) == cons abs 0) as HH.
+      { apply first_eq_compat in Ht.
+        revert Ht.
+        rewrite first_cons, HH.
+        now intros ? % Con_eq_simpl; cases. }
+      clear dependent b.
+      revert_all; induction l as [| i l]; intros.
+      { unfold smergev.
+        now rewrite smerge_eq, Foldi_nil, DS_const_eq, first_cons. }
+      unfold smergev.
+      rewrite smerge_eq, Foldi_simpl, <- smerge_eq, first_zip3, first_cons.
+      fold smergev.
+      (* destruction des hypothèses *)
+      apply Forall2_list_of_nprod_inv in Clx as [Hc Clx].
+      apply forall_nprod_inv in Cx as [Cc Cx].
+      apply forall_nprod_inv in Sfx as [Sc Sfx].
+      apply is_cons_elim in Cc as (x & xs & Hx).
+      rewrite Hx, first_cons, AC_eq in *; clear Hx.
+      apply Con_le_simpl in Hc as [Hx _].
+      eapply IHl in Clx as ->; auto; clear IHl.
+      rewrite zip3_simpl, zip3_bot1.
+      inv Sc. simpl in *; cases; congruence.
+    + (* c = pres j *)
+      take (value_belongs _ _) and clear - Nd Sfx Clx Ht Cx it.
+      unfold value_belongs in *.
+      enough ((In j l ->
+               exists v,
+                 first (smergev l (cons (pres (Venum j)) cs') np) == cons (pres v) 0)
+              /\ (~ In j l ->
+                 first (smergev l (cons (pres (Venum j)) cs') np) == cons abs 0)
+             ) as [HH].
+      { apply first_eq_compat in Ht.
+        revert Ht.
+        rewrite first_cons.
+        destruct HH as [? ->]; auto.
+        now intros ? % Con_eq_simpl; cases. }
+      clear dependent b.
+      clear it t.
+      revert_all; induction l as [| i l]; intros.
+      { split; intros; [simpl in *; tauto|].
+        unfold smergev.
+        now rewrite smerge_eq, Foldi_nil, DS_const_eq, first_cons. }
+      remember_ds (first (smergev (i :: l) _ _)) as rs; revert Hrs.
+      unfold smergev.
+      rewrite smerge_eq, Foldi_simpl, <- smerge_eq, first_zip3, first_cons.
+      fold smergev; intros.
+      (* destruction des hypothèses *)
+      apply Forall2_list_of_nprod_inv in Clx as [Hc Clx].
+      apply forall_nprod_inv in Cx as [Cc Cx].
+      apply forall_nprod_inv in Sfx as [Sc Sfx].
+      apply is_cons_elim in Cc as (x & xs & Hx).
+      rewrite Hx, first_cons, AC_eq in *; clear Hx.
+      apply Con_le_simpl in Hc as [Hx _].
+      inv Sc. inv Nd.
+      apply IHl with (cs':=cs') in Clx as [IHin IHnin]; auto; clear IHl.
+      destruct (Nat.eq_dec i j) as [|Neq].
+      * (* i = j *)
+        subst.
+        split; simpl; intros; [|tauto].
+        revert Hrs Hx.
+        rewrite IHnin, zip3_simpl, zip3_bot1; auto.
+        clear; simpl.
+        rewrite Nat.eqb_refl; simpl.
+        cases; intros; try congruence; eauto.
+      * (* i <> j *)
+        revert Hx; simpl.
+        apply Nat.eqb_neq in Neq as Hn; rewrite Hn ; simpl.
+        cases; intros; [| congruence].
+        split; simpl; intros HH.
+        { (* j ∈ l *)
+          destruct HH as [| Hin]; try contradiction.
+          revert Hrs.
+          destruct (IHin Hin) as (v & ->); auto.
+          rewrite zip3_simpl, zip3_bot1; auto.
+          simpl; rewrite Hn; eauto. }
+        { (* j ∉ l *)
+          revert Hrs.
+          rewrite IHnin, zip3_simpl, zip3_bot1; auto.
+        simpl; rewrite Hn; eauto. }
+  - unshelve eapply (Cof l (lift (REM _) np) Nd Nnil _ cs'); auto.
+    * eapply forall_nprod_lift, forall_nprod_impl, Sfx.
+      apply DSForall_rem.
+    * rewrite list_of_nprod_lift.
+      eapply Forall2_map_2, Forall2_impl_In. 2: eassumption.
+      cbv beta; intros * ?? Hle % rem_le_compat.
+      now rewrite rem_cons, rem_AC in Hle.
+    * apply rem_eq_compat in Ht.
+      revert Ht.
+      unfold smergev.
+      now rewrite rem_cons, rem_smerge, rem_cons.
+Qed.
+
+(* wrapper pour [safe_smergev_], qui passe mieux dans [safe_exp_] *)
+Lemma safe_smergev :
+  forall ins envI bs env, (* TODO: section variables *)
+  forall x tid tn ck l np,
+    let cs := denot_var ins envI env x in
+    l <> [] ->
+    Permutation l (seq 0 (length tn)) ->
+    safe_DS cs ->
+    ty_DS (Tenum tid tn) cs ->
+    cl_DS ins envI bs env ck cs ->
+    Forall2 (fun i s => safe_DS s /\ cl_DS ins envI bs env (Con ck x (Tenum tid tn,i)) s) l (list_of_nprod np) ->
+    safe_DS (smergev l cs np).
+Proof.
+  intros * Nnil Hperm Sc Tc Cc Hf.
+  apply ty_belongs in Tc; auto.
+  eapply safe_smergev_ with (tx := Tenum tid tn); eauto.
+  - rewrite Hperm; apply seq_NoDup.
+  - eapply DSForall_impl' in Tc; eauto.
+    now setoid_rewrite (Permutation_belongs _ _ Hperm).
+  - apply Forall_forall_nprod, Forall_forall; intros.
+    eapply Forall2_in_right in Hf as (?&?&?&?); eauto.
+  - eapply Forall2_impl_In in Hf; eauto.
+    now intros * ?? [].
+Qed.
 
   Ltac find_specialize_in H :=
     repeat multimatch goal with
@@ -2891,11 +3143,15 @@ Qed.
         eapply Forall2_Forall_eq in Wt; eauto.
         eapply Forall2_lift_nprod; eauto using ty_smergev.
       + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
-        eapply Forall2_lift_nprod'.
-      (* XXXXXXXXXXXXXX *)
-      + eapply forall_nprod_llift with (Q := fun s => cl_DS _ _ _ _ ck s /\ safe_DS s).
-        { intros ? []. eapply safe_swhenv. eauto. }
-        apply forall_nprod_and; auto using Forall_forall_nprod.
+        eapply Forall2_lift_nprod'; eauto using cl_smergev, map_eq_nnil.
+        repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
+        take (Forall (eq _) _) and
+          eapply Forall2_Forall_eq in it; eauto; now simpl_Forall.
+      + apply Forall_forall_nprod.
+        eapply Forall2_lift_nprod'; eauto using safe_smergev, map_eq_nnil.
+        repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
+        take (Forall (eq _) _) and
+          eapply Forall2_Forall_eq in it; eauto; now simpl_Forall.
     - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
