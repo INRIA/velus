@@ -44,7 +44,7 @@ Section Abstract_clock.
   Definition AC : DS (sampl A) -C-> DS bool :=
     MAP (fun v => match v with pres _ => true | _ => false end).
 
-  Lemma AC_eq :
+  Lemma AC_cons :
     forall u U,
       AC (cons u U) == cons match u with
                          | pres _ => true
@@ -61,6 +61,18 @@ Section Abstract_clock.
     forall U, is_cons (AC U) <-> is_cons U.
   Proof.
     split; eauto using map_is_cons, is_cons_map.
+  Qed.
+
+  Lemma first_AC :
+    forall s, first (AC s) == AC (first s).
+  Proof.
+    intros; apply first_map.
+  Qed.
+
+  Lemma rem_AC :
+    forall s, rem (AC s) == AC (rem s).
+  Proof.
+    intros; apply rem_map.
   Qed.
 
   (** equivalent of [clocks_of] *)
@@ -654,109 +666,6 @@ Section SStream_functions.
     eapply zip_is_cons; eauto.
   Qed.
 
-  (* TODO: si ça s'avère intéressant, déplacer dans Cpo_ext.v *)
-  Section MOVE_ME.
-
-  (* TODO: renommer les types *)
-  Context {I : Type}.
-  Context {AA BB : cpo}.
-
-  (* TODO: bss comme instance de ça ? *)
-  Definition nprod_Foldi : forall  (l : list I),
-      (I -O-> AA -C-> BB -C-> AA) -C-> AA -C-> @nprod BB (length l) -C-> AA.
-    induction l as [| i l].
-    - apply CTE, CTE.
-    - apply curry, curry.
-      refine ((ID _ @3_ _) _ _).
-      + exact (fcont_ford_shift _ _ _ (ID _) i @_ (FST _ _ @_ FST _ _)).
-      + exact ((IHl @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
-      + exact (nprod_hd @_ SND _ _).
-  Defined.
-
-  Lemma Foldi_simpl : forall i l f a np,
-      nprod_Foldi (i :: l) f a np
-      = f i (nprod_Foldi l f a (nprod_tl np)) (nprod_hd np).
-  Proof.
-    trivial.
-  Qed.
-
-  (* TODO: move  *)
-  Lemma forall_nprod_Foldi :
-    forall (P : AA -> Prop)
-      (Q : BB -> Prop)
-      (l : list I) (d : AA) (f : I -O-> AA -C-> BB -C-> AA) np,
-      (forall i d1 d2, P d1 -> Q d2 -> P (f i d1 d2)) ->
-      P d ->
-      forall_nprod Q np ->
-      P (nprod_Foldi l f d np).
-  Proof.
-    induction l; intros * PQ pd Fn; auto.
-    rewrite Foldi_simpl.
-    apply PQ.
-    - apply IHl; eauto using forall_nprod_tl.
-    - now apply forall_nprod_hd in Fn.
-  Qed.
-
-  (* TODO: move *)
-  (** [nprod n] of [nprod m] *)
-  Definition lift_nprod {D1 D2} {n m} :
-    (@nprod D1 n -C-> D2) -C-> @nprod (@nprod D1 m) n -C-> @nprod D2 m.
-    induction m as [|[]].
-    - apply ID.
-    - apply ID.
-    - apply curry.
-      refine ((PAIR _ _ @2_ _) _).
-      + exact ((AP _ _ @2_ FST _ _) (lift (FST _ _) @_ SND _ _)).
-      + exact ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
-  Defined.
-
-  (* TODO: pour juste (S m), il faudrait avoir un nprod_cons,
-     ce qui pose d'autre problèmes... *)
-  Lemma lift_nprod_simpl :
-    forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
-      forall (np : @nprod (@nprod D1 (S (S m))) n),
-        lift_nprod F np = (F (lift nprod_hd np), lift_nprod F (lift nprod_tl np)).
-  Proof.
-    trivial.
-  Qed.
-
-  Lemma forall_lift_nprod :
-    forall D1 D2 n (F : @nprod D1 n -C-> D2),
-    forall (P : D2 -> Prop) (Q : D1 -> Prop),
-      (forall x, forall_nprod Q x -> P (F x)) ->
-      forall m np,
-        forall_nprod (forall_nprod Q) np ->
-        @forall_nprod _ P m (lift_nprod F np).
-  Proof.
-    intros * QP.
-    induction m as [|[|m]]; intros * Hq.
-    - now simpl.
-    - apply QP, Hq.
-    - rewrite lift_nprod_simpl.
-      constructor.
-      + eapply QP, forall_nprod_lift, forall_nprod_impl; eauto.
-        now apply forall_nprod_hd.
-      + eapply IHm, forall_nprod_lift, forall_nprod_impl; eauto.
-        now apply forall_nprod_tl.
-  Qed.
-
-  Lemma lift_nprod_nth :
-    forall D1 D2 n m (F : @nprod D1 n -C-> D2),
-    forall d1 d2 k (np : @nprod (@nprod D1 m) n),
-      k < m ->
-      get_nth k d2 (@lift_nprod D1 D2 n m F np) = F (lift (get_nth k d1) np).
-  Proof.
-    induction m as [|[|m]]; intros * Hk; try lia.
-    - destruct k; simpl; try lia.
-      rewrite lift_ID; auto.
-    - destruct k; auto.
-      simpl; autorewrite with cpodb; simpl.
-      erewrite IHm; try lia.
-      now rewrite lift_lift.
-  Qed.
-
-  End MOVE_ME.
-
   (* TODO: move, déjà présent dans Vélus... *)
   Definition or_default {A} (d: A) (o: option A) : A :=
     match o with Some a => a | None => d end.
@@ -774,7 +683,6 @@ Section SStream_functions.
 
   (* première version, sans ZIP3 mais avec un llift *)
   Definition smerge_ (l : list enumtag) :
-    (* @nprod (DS (sampl A)) (length l) -C-> DS (sampl B) -C-> DS (sampl A). *)
     DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
     (* permutation des arguments pour l'utilisation de llift *)
     refine (curry ((_ @2_ SND _ _) (FST _ _))).
@@ -834,81 +742,37 @@ Section SStream_functions.
     trivial.
   Qed.
 
-  (* Lemma foldi_llift : *)
-  (*   forall {I AA BB D1 D2}, *)
-  (*   forall f a l np (g : D1 -C-> D2 -C-> BB) d2, *)
-  (*     @nprod_foldi I AA BB f a l (llift g np d2) *)
-  (*     = nprod_foldi (fun i => curry (uncurry (f i) @_ PROD_map (ID _) (g <___> d2))) a l np. *)
-  (* Proof. *)
-  (*   induction l as [|i [| j l]]; auto. *)
-  (*   intros. *)
-  (*   destruct np as [x np]. *)
-  (*   rewrite (llift_simpl _ g _ _ x np). *)
-  (*   rewrite (foldi_simpl f). *)
-  (*   rewrite (foldi_simpl _ a i j l x np). *)
-  (*   autorewrite with cpodb. *)
-  (*   repeat f_equal; eauto. *)
-  (* Qed. *)
+  Lemma smerge_is_cons :
+    forall l C np,
+      l <> [] ->
+      is_cons (smerge l C np) ->
+      is_cons C /\ forall_nprod (@is_cons _) np.
+  Proof.
+    induction l as [|? []].
+    - congruence.
+    - intros * _.
+      rewrite smerge_eq, Foldi_cons.
+      intros (?& Hc &?) % zip3_is_cons.
+      split; auto.
+    - intros * _.
+      rewrite smerge_eq, Foldi_cons.
+      intros (?& Hc &?) % zip3_is_cons.
+      apply (IHl C (nprod_tl np)) in Hc as []; try congruence.
+      do 2 (split; auto).
+  Qed.
 
-  (* Lemma zip_zip : *)
-  (*   forall D1 D2 D3 D4 D5, *)
-  (*   forall (f:D1->D4->D5) (g:D2->D3->D4) U V W, *)
-  (*     ZIP f U (ZIP g V W) == ZIP (fun h w => h w) (ZIP (fun x y => fun z => (f x (g y z))) U V) W. *)
-  (* Proof. *)
-  (*   clear. *)
-  (*   intros. *)
-  (*   apply DS_bisimulation_allin1 with *)
-  (*     (R := fun R L => exists U V W, *)
-  (*               R == ZIP f U (ZIP g V W) *)
-  (*               /\ L ==  ZIP (fun h w => h w) (ZIP (fun x y z => f x (g y z)) U V) W). *)
-  (*   3: eauto. *)
-  (*   - intros ????(?&?&?&?) E1 E2. *)
-  (*     setoid_rewrite <- E1. *)
-  (*     setoid_rewrite <- E2. *)
-  (*     eauto. *)
-  (*   - clear. *)
-  (*     intros R L Hc (U & V & W & Hr & Hl). *)
-  (*     destruct Hc as [Hc | Hc]. *)
-  (*     + apply is_cons_elim in Hc as (r & rs & Hrs). *)
-  (*       rewrite Hrs in *. *)
-  (*       apply symmetry, zip_uncons in Hr as (?&?&?&?& Hu & Hz &?&?). *)
-  (*       apply zip_uncons in Hz as (?&?&?&?& Hv & Hw &?&?). *)
-  (*       rewrite Hu, Hv, Hw, 2 zip_cons in *; subst. *)
-  (*       setoid_rewrite Hl. *)
-  (*       setoid_rewrite Hrs. *)
-  (*       setoid_rewrite rem_cons. *)
-  (*       split. *)
-  (*       autorewrite with cpodb; auto. *)
-  (*       eauto 7. *)
-  (*     + apply is_cons_elim in Hc as (l & ls & Hls). *)
-  (*       rewrite Hls in *. *)
-  (*       apply symmetry, zip_uncons in Hl as (?&?&?&?& Hz & Hw &?&?). *)
-  (*       apply zip_uncons in Hz as (?&?&?&?& Hu & Hv &?&?). *)
-  (*       rewrite Hu, Hv, Hw, 2 zip_cons in *; subst. *)
-  (*       setoid_rewrite Hls. *)
-  (*       setoid_rewrite Hr. *)
-  (*       setoid_rewrite rem_cons. *)
-  (*       split. *)
-  (*       autorewrite with cpodb; auto. *)
-  (*       eauto 7. *)
-  (* Qed. *)
+  Lemma rem_smerge :
+    forall l C np,
+      rem (smerge l C np)
+      == smerge l (rem C) (lift (REM _) np).
+  Proof.
+    induction l; intros.
+    - rewrite 2 smerge_eq, 2 Foldi_nil.
+      now rewrite DS_const_eq, rem_cons at 1.
+    - rewrite 2 smerge_eq, 2 Foldi_cons, <- 2 smerge_eq.
+      now rewrite rem_zip3, lift_hd, lift_tl, IHl.
+  Qed.
 
-  (* Definition ZIP3' {A1 B1 C1 D1} (op : A1 -> B1 -> C1 -> D1) : *)
-  (*   DS A1 -C-> DS B1 -C-> DS C1 -C-> DS D1. *)
-  (*   (* curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))). *) *)
-  (* (* autre définition : *) *)
-  (* intros. apply curry, curry. *)
-  (* refine ((ZIP (fun '(x,y) z => op x y z) @2_ _) (SND _ _)). *)
-  (* exact ((ZIP pair @2_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _)). *)
-  (* Defined. *)
-
-  (* Lemma ZIP3'_eq : *)
-  (*   forall {A B C D} (op : A -> B -> C -> D), *)
-  (*     forall U V W, *)
-  (*       (* ZIP3' op U V W = ZIP (fun '(x, y) (z : C) => op x y z) (ZIP pair U V) W. *) *)
-  (*       ZIP3' op U V W = ZIP (fun x '(y,z) => op x y z) U (ZIP pair V W). *)
-  (* Proof. *)
-  (* Admitted. *)
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,

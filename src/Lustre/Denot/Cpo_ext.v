@@ -2,6 +2,9 @@
 
 From Coq Require Import Morphisms List.
 From Velus Require Import Lustre.Denot.Cpo.
+(* FIXME: c'est juste pour Forall_lift_nprod : *)
+From Velus Require Import CommonList.
+
 
 (* simplification by rewriting during proofs, usage:
    [autorewrite with cpodb] *)
@@ -23,7 +26,7 @@ Global Hint Rewrite
      REM_simpl rem_cons
      app_cons
      filter_eq_cons map_eq_cons
-     rem_bot map_bot filter_bot
+     rem_bot map_bot filter_bot first_eq_bot
      PROJ_simpl
      PROD_map_simpl
   : cpodb.
@@ -443,6 +446,22 @@ Proof.
     auto; intros ?? Hic ?; now apply Hfr in Hic.
 Qed.
 
+(** *** Simpler principle than DSle_rec_eq  *)
+Lemma DSle_rec_eq2 : forall D (R : DStr D -> DStr D -> Prop),
+    (forall x1 x2 y1 y2:DS_ord D, R x1 y1 -> x1==x2 -> y1==y2 -> R x2 y2) ->
+    (forall x y, is_cons x -> R x y -> first x == first y /\ R (rem x) (rem y))
+    -> forall x y : DS_ord D, R x y -> x <= y.
+Proof.
+  intros * R1 R2 x y Hr.
+  apply DSle_rec_eq with R; auto.
+  intros ?? y' Hr'.
+  eapply R2 in Hr' as (?&?); auto.
+  autorewrite with cpodb in *.
+  exists (rem y'); split; auto.
+  apply symmetry, first_cons_elim in H as (?& -> &?).
+  now autorewrite with cpodb.
+Qed.
+
 (** *** The constant stream *)
 CoFixpoint DS_const {A} (a : A) : DS A := Con a (DS_const a).
 
@@ -658,11 +677,32 @@ Proof.
       rewrite HH in *; eauto.
     - now apply map_is_cons, is_cons_rem in Hc.
   }
-  rewrite Hx in Hu, Hv.
-  (* repeat rewrite rem_cons, map_eq_cons in *. *)
-  split; [| exists (cons b xs)];
-    rewrite Hu, Hv;
-    now repeat rewrite ?map_eq_cons, ?rem_cons.
+  setoid_rewrite Hu.
+  setoid_rewrite Hv.
+  setoid_rewrite Hx.
+  split; [| exists (cons b xs)]; now autorewrite with cpodb.
+Qed.
+
+Lemma first_map :
+  forall A B (f : A -> B) s,
+    first (map f s) == map f (first s).
+Proof.
+  intros.
+  eapply DS_bisimulation_allin1
+    with (R := fun U V => exists s, U == first (map f s) /\ V == map f (first s)).
+  3: eauto.
+  { intros * (?&?&?) ??. esplit; eauto. }
+  clear.
+  intros U V Hc (?& Hu & Hv).
+  assert (is_cons x) as Hx.
+  { rewrite Hu, Hv in *.
+    destruct Hc as
+      [Hc % first_is_cons % map_is_cons | Hc % map_is_cons]; auto. }
+  apply is_cons_elim in Hx as (vx & xs & Hx).
+  setoid_rewrite Hu.
+  setoid_rewrite Hv.
+  setoid_rewrite Hx.
+  split; [| exists 0]; now autorewrite with cpodb.
 Qed.
 
 Lemma map_inf :
@@ -1041,6 +1081,74 @@ Section Zip.
     now rewrite zip_cons.
   Qed.
 
+  Lemma rem_zip :
+    forall xs ys,
+      rem (ZIP xs ys) == ZIP (rem xs) (rem ys).
+  Proof.
+    intros.
+    apply DS_bisimulation_allin1 with
+      (R := fun U V => exists xs ys,
+                U == rem (ZIP xs ys)
+                /\ V == ZIP (rem xs) (rem ys)); eauto 4.
+    - intros * (?&?&?&?) Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      setoid_rewrite <- Eq2.
+      eauto.
+    - clear.
+      intros U V Hc (xs & ys & Hu & Hv).
+      assert (is_cons xs /\ is_cons ys) as [Cx Cy].
+      { destruct Hc as [Hc|Hc].
+        + rewrite Hu in Hc.
+          now apply rem_is_cons, zip_is_cons in Hc.
+        + rewrite Hv in Hc.
+          apply zip_is_cons in Hc as []; auto using rem_is_cons. }
+      apply is_cons_elim in Cx as (?& xs' & Hx), Cy as (?& ys' & Hy).
+      rewrite Hx, Hy in *; clear Hx Hy.
+      assert (is_cons xs' /\ is_cons ys') as [Cx Cy].
+      { destruct Hc as [Hc|Hc].
+        + rewrite Hu in Hc.
+          rewrite zip_cons, rem_cons in Hc.
+          now apply zip_is_cons in Hc.
+        + rewrite Hv in Hc.
+          rewrite 2 rem_cons in Hc.
+          now apply zip_is_cons in Hc. }
+      apply is_cons_elim in Cx as (?& xs'' & Hx), Cy as (?& ys'' & Hy).
+      rewrite Hx, Hy, Hu, Hv in *.
+      split; autorewrite with cpodb; auto.
+      exists xs', ys'.
+      rewrite Hu, Hv, Hx, Hy; now autorewrite with cpodb.
+  Qed.
+
+  Lemma first_zip :
+    forall xs ys,
+      first (ZIP xs ys)
+      == ZIP (first xs) (first ys).
+  Proof.
+    intros.
+    apply DS_bisimulation_allin1 with
+      (R := fun U V => exists xs ys,
+                U == first (ZIP xs ys)
+                /\ V == ZIP (first xs) (first ys)); eauto 4.
+    - intros * (?&?&?&?) Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      setoid_rewrite <- Eq2.
+      eauto.
+    - clear.
+      intros U V Hc (xs & ys & Hu & Hv).
+      assert (is_cons xs /\ is_cons ys) as [Cx Cy].
+      { destruct Hc as [Hc|Hc].
+        + rewrite Hu in Hc.
+          now apply first_is_cons, zip_is_cons in Hc.
+        + rewrite Hv in Hc.
+          apply zip_is_cons in Hc as []; auto. }
+      apply is_cons_elim in Cx as (?& xs' & Hx), Cy as (?& ys' & Hy).
+      rewrite Hx, Hy in *; clear Hx Hy.
+      repeat rewrite first_cons, zip_cons, ?zip_bot1 in *.
+      split; autorewrite with cpodb; eauto.
+      exists 0,0.
+      rewrite Hu, Hv, 2 first_eq_bot, rem_cons, zip_bot1; auto.
+  Qed.
+
   Lemma zip_uncons :
     forall xs ys r rs,
       ZIP xs ys == cons r rs ->
@@ -1208,6 +1316,47 @@ Proof.
     + exists xs',ys'. rewrite 2 rem_cons; auto.
 Qed.
 
+Lemma zip_zip :
+  forall D1 D2 D3 D4 D5,
+  forall (f:D1->D4->D5) (g:D2->D3->D4) U V W,
+    ZIP f U (ZIP g V W) == ZIP (fun h w => h w) (ZIP (fun x y => fun z => (f x (g y z))) U V) W.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun R L => exists U V W,
+              R == ZIP f U (ZIP g V W)
+              /\ L ==  ZIP (fun h w => h w) (ZIP (fun x y z => f x (g y z)) U V) W).
+  3: eauto.
+  - intros ????(?&?&?&?) E1 E2.
+    setoid_rewrite <- E1.
+    setoid_rewrite <- E2.
+    eauto.
+  - clear.
+    intros R L Hc (U & V & W & Hr & Hl).
+    destruct Hc as [Hc | Hc].
+    + apply is_cons_elim in Hc as (r & rs & Hrs).
+      rewrite Hrs in *.
+      apply symmetry, zip_uncons in Hr as (?&?&?&?& Hu & Hz &?&?).
+      apply zip_uncons in Hz as (?&?&?&?& Hv & Hw &?&?).
+      rewrite Hu, Hv, Hw, 2 zip_cons in *; subst.
+      setoid_rewrite Hl.
+      setoid_rewrite Hrs.
+      setoid_rewrite rem_cons.
+      split.
+      autorewrite with cpodb; auto.
+      eauto 7.
+    + apply is_cons_elim in Hc as (l & ls & Hls).
+      rewrite Hls in *.
+      apply symmetry, zip_uncons in Hl as (?&?&?&?& Hz & Hw &?&?).
+      apply zip_uncons in Hz as (?&?&?&?& Hu & Hv &?&?).
+      rewrite Hu, Hv, Hw, 2 zip_cons in *; subst.
+      setoid_rewrite Hls.
+      setoid_rewrite Hr.
+      setoid_rewrite rem_cons.
+      split.
+      autorewrite with cpodb; auto.
+      eauto 7.
+Qed.
 
 (** ** ZIP3 synchronizes three streams *)
 Section Zip3.
@@ -1224,10 +1373,47 @@ Section Zip3.
   (* exact ((ZIP pair @2_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _)). *)
 
   Lemma zip3_eq :
-    forall U V W,
-      ZIP3 U V W = ZIP (fun f x => f x) (ZIP (fun x y => op x y) U V) W.
+    forall xs ys zs,
+      ZIP3 xs ys zs = ZIP (fun f x => f x) (ZIP (fun x y => op x y) xs ys) zs.
   Proof.
     trivial.
+  Qed.
+
+  Lemma zip3_cons :
+    forall u U v V w W,
+      ZIP3 (cons u U) (cons v V) (cons w W)
+      == cons (op u v w) (ZIP3 U V W).
+  Proof.
+    intros.
+    now rewrite 2 zip3_eq, 2 zip_cons.
+  Qed.
+
+  Lemma rem_zip3 :
+    forall xs ys zs,
+      rem (ZIP3 xs ys zs) == ZIP3 (rem xs) (rem ys) (rem zs).
+  Proof.
+    clear.
+    intros.
+    now rewrite 2 zip3_eq, 2 rem_zip.
+  Qed.
+
+  Lemma first_zip3 :
+    forall xs ys zs,
+      first (ZIP3 xs ys zs)
+      == ZIP3 (first xs) (first ys) (first zs).
+  Proof.
+    intros.
+    now rewrite 2 zip3_eq, 2 first_zip.
+  Qed.
+
+  Lemma zip3_is_cons :
+    forall xs ys zs,
+      is_cons (ZIP3 xs ys zs) ->
+      is_cons xs /\ is_cons ys /\ is_cons zs.
+  Proof.
+    intros *.
+    rewrite zip3_eq.
+    now intros [Hc % zip_is_cons] % zip_is_cons.
   Qed.
 
   Lemma is_cons_zip3 :
@@ -1238,6 +1424,14 @@ Section Zip3.
     intros * (Cx & Cy & Cz).
     rewrite zip3_eq.
     auto using is_cons_zip.
+  Qed.
+
+  Lemma zip3_bot1 :
+    forall ys zs,
+      ZIP3 0 ys zs == 0.
+  Proof.
+    intros.
+    now rewrite zip3_eq, 2 zip_bot1.
   Qed.
 
 End Zip3.
@@ -1442,7 +1636,7 @@ Qed.
 
 Lemma get_nth_tl :
   forall {n} (np : nprod (S n)) k d,
-    get_nth k d (nprod_tl np) = get_nth (S k) d np.
+    get_nth (S k) d np = get_nth k d (nprod_tl np).
 Proof.
   induction k; auto.
 Qed.
@@ -1505,7 +1699,7 @@ Proof.
   - inversion Hk.
   - destruct k; auto; lia.
   - destruct k; auto.
-    rewrite <- get_nth_tl, IHn; auto with arith.
+    rewrite get_nth_tl, IHn; auto with arith.
 Qed.
 
 Lemma get_nth_err :
@@ -1516,7 +1710,7 @@ Proof.
   induction k; simpl; intros * Hn.
   - inversion Hn; subst. now simpl.
   - destruct n; cbn; auto.
-    setoid_rewrite get_nth_tl.
+    setoid_rewrite <- get_nth_tl.
     apply IHk; auto with arith.
 Qed.
 
@@ -1552,6 +1746,14 @@ Proof.
   destruct n.
   - now simpl.
   - now inversion Hf.
+Qed.
+
+Lemma forall_nprod_inv :
+  forall n (np : nprod (S n)),
+    forall_nprod np ->
+    P (nprod_hd np) /\ forall_nprod (nprod_tl np).
+Proof.
+  intros [|[]] ?; simpl; auto.
 Qed.
 
 Lemma hd_tl_forall :
@@ -1649,6 +1851,16 @@ Proof.
     rewrite nprod_app_nth2, Nat.add_comm,
       Nat.add_sub in Hf; auto with arith.
     apply Hf; lia.
+Qed.
+
+Lemma forall_app_nprod :
+  forall {n m} (np : nprod n) (mp : nprod m),
+    forall_nprod (nprod_app np mp) <->
+      forall_nprod np
+      /\ forall_nprod mp.
+Proof.
+  split; auto using app_forall_nprod.
+  intros []; auto using forall_nprod_app.
 Qed.
 
 Lemma forall_nprod_const :
@@ -1773,14 +1985,31 @@ Proof.
   apply hd_tl_forall; auto.
 Qed.
 
+Lemma nprod_forall_Forall :
+  forall P {n} (np : nprod n),
+    forall_nprod P np <-> Forall P (list_of_nprod np).
+Proof.
+  split; eauto using forall_nprod_Forall, Forall_forall_nprod.
+Qed.
+
+Lemma Forall2_list_of_nprod_inv :
+  forall T (P : T -> D -> Prop) n (np : nprod (S n)) x l,
+    Forall2 P (x :: l) (list_of_nprod np) <->
+      P x (nprod_hd np) /\ Forall2 P l (list_of_nprod (nprod_tl np)).
+Proof.
+  destruct n; split; intros * Hf;
+    inversion_clear Hf; constructor; auto.
+Qed.
+
 End List_of_nprod.
 
 End Nprod.
 
 Notation "A [ n ]" := (@nprod A n) (at level 100, only printing, format "A [ n ]").
 
-(** Lifting functions over n-uplets *)
-Section Lift_nprod.
+
+(** ** Lifting functions over n-uplets *)
+Section Lifting.
 
 Context {D1 D2 D3 : cpo}.
 
@@ -1794,6 +2023,20 @@ Fixpoint lift (F : D1 -C-> D2) {n} : @nprod D1 n -C-> @nprod D2 n :=
       end (@lift F n)
   end.
 Opaque lift.
+
+Lemma lift_hd :
+  forall f n (np : nprod (S n)),
+    nprod_hd (lift f np) = f (nprod_hd np).
+Proof.
+  destruct n; auto.
+Qed.
+
+Lemma lift_tl :
+  forall f n (np : nprod (S n)),
+    nprod_tl (lift f np) = lift f (nprod_tl np).
+Proof.
+  destruct n; auto.
+Qed.
 
 Lemma forall_nprod_lift :
   forall (F : D1 -C-> D2),
@@ -1890,15 +2133,15 @@ Definition lift2
 Defined.
 
 Lemma lift2_hd :
-  forall F n U V,
-    nprod_hd (@lift2 F (S n) U V) = F (nprod_hd U) (nprod_hd V).
+  forall F n (U V : nprod (S n)),
+    nprod_hd (lift2 F U V) = F (nprod_hd U) (nprod_hd V).
 Proof.
   destruct n; auto.
 Qed.
 
 Lemma lift2_tl :
-  forall F n U V,
-    nprod_tl (@lift2 F (S n) U V) = lift2 F (nprod_tl U) (nprod_tl V).
+  forall F n (U V : nprod (S n)),
+    nprod_tl (lift2 F U V) = lift2 F (nprod_tl U) (nprod_tl V).
 Proof.
   destruct n; auto.
 Qed.
@@ -1920,7 +2163,7 @@ Proof.
   - destruct np, np'.
     rewrite lift2_simpl.
     destruct k; auto.
-    erewrite <- 3 get_nth_tl, <- IHn; auto with arith.
+    erewrite 3 get_nth_tl, <- IHn; auto with arith.
 Qed.
 
 Lemma forall_nprod_lift2 :
@@ -2024,7 +2267,16 @@ Proof.
   - rewrite llift_tl; auto.
 Qed.
 
-End Lift_nprod.
+Lemma lift_map :
+  forall F n (np : nprod n),
+    list_of_nprod (lift F np) = List.map F (list_of_nprod np).
+Proof.
+  induction n as [|[]]; intros; auto.
+  simpl.
+  now setoid_rewrite IHn.
+Qed.
+
+End Lifting.
 
 Lemma lift_ID :
   forall D n (np : nprod n),
@@ -2043,3 +2295,217 @@ Proof.
   rewrite 3 PROD_map_simpl.
   simpl; f_equal; auto.
 Qed.
+
+
+(** ** A kind of List.fold_right for nprod *)
+Section Nprod_Foldi.
+
+  Context {I : Type}.
+  Context {A B : cpo}.
+
+  Definition nprod_Foldi : forall (l : list I),
+      (I -O-> A -C-> B -C-> A) -C-> A -C-> @nprod B (length l) -C-> A.
+    induction l as [| i l].
+    - apply CTE, CTE.
+    - apply curry, curry.
+      refine ((ID _ @3_ _) _ _).
+      + exact (fcont_ford_shift _ _ _ (ID _) i @_ (FST _ _ @_ FST _ _)).
+      + exact ((IHl @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
+      + exact (nprod_hd @_ SND _ _).
+  Defined.
+
+  Lemma Foldi_nil :
+    forall F a np, nprod_Foldi nil F a np = a.
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma Foldi_cons : forall i l f a np,
+      nprod_Foldi (i :: l) f a np
+      = f i (nprod_Foldi l f a (nprod_tl np)) (nprod_hd np).
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma forall_nprod_Foldi :
+    forall (P : A -> Prop)
+      (Q : B -> Prop)
+      (l : list I) (d : A) (f : I -O-> A -C-> B -C-> A) np,
+      (forall i d1 d2, P d1 -> Q d2 -> P (f i d1 d2)) ->
+      P d ->
+      forall_nprod Q np ->
+      P (nprod_Foldi l f d np).
+  Proof.
+    induction l; intros * PQ pd Fn; auto.
+    rewrite Foldi_cons.
+    apply PQ.
+    - apply IHl; eauto using forall_nprod_tl.
+    - now apply forall_nprod_hd in Fn.
+  Qed.
+
+  (** A weak induction principle for nprod_Foldi *)
+  Lemma Foldi_rec :
+    forall (P : A -> Prop) (F : I -O-> A -C-> B -C-> A) d,
+      P d ->
+      (forall i d dd, P dd -> P (F i dd d)) ->
+      forall l np,
+        P (nprod_Foldi l F d np).
+  Proof.
+    clear.
+    intros * Hd HF.
+    induction l; intro np; auto.
+    rewrite Foldi_cons.
+    apply HF, IHl.
+  Qed.
+
+End Nprod_Foldi.
+
+
+(** ** Matrix operations *)
+Section Lift_nprod.
+
+Context {D1 D2 : cpo}.
+
+(** [lift_nprod F np] applies F to each row of the matrix to
+   produce a vector of size m.
+
+   F( x11  x12 ... x1n ) → F1
+   F( x21  x22 ... x2n ) → F2
+   F(  .
+   F(  .
+   F( xm1  xm2 ... xmn ) → Fm
+*)
+Definition lift_nprod {n m} :
+  (@nprod D1 n -C-> D2) -C-> @nprod (@nprod D1 m) n -C-> @nprod D2 m.
+  induction m as [|[]].
+  - apply ID.
+  - apply ID.
+  - apply curry.
+    refine ((PAIR _ _ @2_ _) _).
+    + exact ((AP _ _ @2_ FST _ _) (lift (FST _ _) @_ SND _ _)).
+    + exact ((IHm @2_ FST _ _) (lift (SND _ _) @_ SND _ _)).
+Defined.
+
+(* FIXME: hard to formulate for (S m) *)
+Lemma lift_nprod_simpl :
+  forall n m F (np : @nprod (@nprod D1 (S (S m))) n),
+    lift_nprod F np = (F (lift nprod_hd np), lift_nprod F (lift nprod_tl np)).
+Proof.
+  trivial.
+Qed.
+
+Lemma hd_lift_nprod :
+  forall n m F (np : @nprod (@nprod D1 (S m)) n),
+    nprod_hd (lift_nprod F np) = F (lift nprod_hd np).
+Proof.
+  intros.
+  destruct m; auto.
+  cbn.
+  now rewrite lift_ID.
+Qed.
+
+Lemma tl_lift_nprod :
+  forall n m F (np : @nprod (@nprod D1 (S m)) n),
+    nprod_tl (lift_nprod F np) = lift_nprod F (lift nprod_tl np).
+Proof.
+  intros.
+  destruct m; auto.
+  cbn.
+  now rewrite lift_ID.
+Qed.
+
+Lemma lift_nprod_nth :
+  forall d1 d2 n F m k (np : @nprod (@nprod D1 m) n),
+    k < m ->
+    get_nth k d2 (lift_nprod F np) = F (lift (get_nth k d1) np).
+Proof.
+  induction m as [|[|m]]; intros * Hk; try lia.
+  - destruct k; simpl; try lia.
+    rewrite lift_ID; auto.
+  - destruct k; auto.
+    setoid_rewrite (IHm k (lift nprod_tl np)); try lia.
+    now rewrite lift_lift.
+Qed.
+
+(** If ∀ i, (Q xi1 ∧ Q xi2 ∧ ... ∧ Q xin) implies P (F (xi1, ... xin))
+    and Q indeed holds for every element of the matrix, then P holds
+    for the result of [lift_nprod] *)
+Lemma forall_lift_nprod :
+  forall n (F : @nprod D1 n -C-> D2),
+  forall (P : D2 -> Prop) (Q : D1 -> Prop),
+    (forall x, forall_nprod Q x -> P (F x)) ->
+    forall m np,
+      forall_nprod (forall_nprod Q) np ->
+      @forall_nprod _ P m (lift_nprod F np).
+Proof.
+  intros * QP.
+  induction m as [|[|m]]; intros * Hq.
+  - now simpl.
+  - apply QP, Hq.
+  - rewrite lift_nprod_simpl.
+    constructor.
+    + eapply QP, forall_nprod_lift, forall_nprod_impl; eauto.
+      now apply forall_nprod_hd.
+    + eapply IHm, forall_nprod_lift, forall_nprod_impl; eauto.
+      now apply forall_nprod_tl.
+Qed.
+
+(** If every column of the matrix satisfy the property (Forall2 P l)
+    then for all entries of l, P holds with every element in the corresponding
+    row of the matrix. Typically, l is a list of type annotations. *)
+Lemma Forall2_lift_nprod :
+  forall n (F : @nprod D1 n -C-> D2),
+  forall A (P : A -> D1 -> Prop) (Q : A -> D2 -> Prop),
+    (forall a x, forall_nprod (P a) x -> Q a (F x)) ->
+    forall (l : list A) (np : @nprod (@nprod D1 (length l)) n),
+      Forall (fun ss => Forall2 P l (list_of_nprod ss)) (list_of_nprod np) ->
+      Forall2 Q l (list_of_nprod (lift_nprod F np)).
+Proof.
+  intros * PQ.
+  induction l; intros * Hf; constructor.
+  - rewrite hd_lift_nprod.
+    apply PQ, forall_nprod_lift, Forall_forall_nprod.
+    eapply Forall_impl in Hf; eauto.
+    intros * HH.
+    now inversion_clear HH.
+  - rewrite tl_lift_nprod.
+    apply IHl.
+    rewrite lift_map.
+    eapply Forall_map, Forall_impl; eauto.
+    intros * HH.
+    now inversion_clear HH.
+Qed.
+
+(** If (Forall2 Q l) holds for every row of the matrix
+    and implies P (F row) then P holds for the resulting vector. *)
+Lemma Forall_lift_nprod :
+  forall A (l : list A),
+  forall (F : @nprod D1 (length l) -C-> D2),
+  forall (P : D2 -> Prop) (Q : A -> D1 -> Prop),
+    (forall (np : nprod (length l)),
+        Forall2 Q l (list_of_nprod np) -> P (F np)) ->
+    forall m (np : @nprod (@nprod D1 m) (length l)),
+      Forall2 (fun e ss => forall_nprod (Q e) ss) l (list_of_nprod np) ->
+      Forall P (list_of_nprod (lift_nprod F np)).
+Proof.
+  intros * QP.
+  induction m; intros * Hf.
+  now constructor.
+  apply forall_nprod_Forall, hd_tl_forall.
+  - rewrite hd_lift_nprod.
+    apply QP.
+    rewrite lift_map.
+    apply Forall2_map_2.
+    eapply Forall2_impl_In in Hf; eauto.
+    now intros * _ _ HH%forall_nprod_hd.
+  - rewrite tl_lift_nprod.
+    apply Forall_forall_nprod, IHm.
+    rewrite lift_map.
+    apply Forall2_map_2.
+    eapply Forall2_impl_In in Hf; eauto.
+    now intros * _ _ HH%forall_nprod_tl.
+Qed.
+
+End Lift_nprod.
+
+

@@ -32,534 +32,6 @@ Module Type LDENOTSAFE
        (Import Den   : LDENOT        Ids Op OpAux Cks Senv Syn Lord).
 
 
-  Section MOVE_ME.
-  Lemma Forall2_lift_nprod :
-        forall D1 D2 n  (F : @nprod D1 n -C-> D2),
-        forall A (P : A -> D1 -> Prop) (Q : A -> D2 -> Prop),
-          (forall a x, forall_nprod (P a) x -> Q a (F x)) ->
-          forall (l : list A) (np : @nprod (@nprod D1 (length l)) n),
-            Forall (fun ss => Forall2 P l (list_of_nprod ss)) (list_of_nprod np) ->
-            Forall2 Q l (list_of_nprod (lift_nprod F np)).
-      Proof.
-        clear.
-        intros * PQ.
-        induction l as [|? []]; intros * Hf.
-        - constructor; auto.
-        - constructor; auto.
-          apply PQ, Forall_forall_nprod; simpl_Forall; auto.
-        - apply Forall_forall_nprod in Hf.
-          constructor.
-          + eapply PQ, forall_nprod_lift, forall_nprod_impl; eauto.
-            intros [] **; simpl; inv H; auto.
-          + eapply IHl, forall_nprod_Forall, forall_nprod_lift, forall_nprod_impl; eauto.
-            intros [] **; simpl; inv H; auto.
-      Qed.
-
-      (* à virer si on ne s'en sert pas *)
-      Lemma Forall_lift_nprod2 :
-        forall D1 D2 n  (F : @nprod D1 n -C-> D2),
-        forall A (P : A -> D1 -> Prop) (Q : A -> D2 -> Prop),
-          (forall a x, forall_nprod (P a) x -> Q a (F x)) ->
-          forall (l : list A) m (np : @nprod (@nprod D1 m) n),
-            m = length l ->
-            Forall (fun ss => Forall2 P l (list_of_nprod ss)) (list_of_nprod np) ->
-            Forall2 Q l (list_of_nprod (lift_nprod F np)).
-      Proof.
-        clear.
-        intros * PQ.
-        induction l as [|? []]; intros * Hl Hf; subst.
-        - constructor; auto.
-        - constructor; auto.
-          apply PQ, Forall_forall_nprod; simpl_Forall; auto.
-        - apply Forall_forall_nprod in Hf.
-          constructor.
-          + eapply PQ, forall_nprod_lift, forall_nprod_impl; eauto.
-            intros [] **; simpl; inv H; auto.
-          + eapply (IHl (length (a0 :: l))), forall_nprod_Forall, forall_nprod_lift, forall_nprod_impl; eauto.
-            intros [] **; simpl; inv H; auto.
-      Qed.
-      Lemma list_of_nprod_const :
-        forall (D : cpo) (c : D) n,
-          list_of_nprod (nprod_const c n) = repeat c n.
-      Proof.
-        induction n as [|[]]; simpl; auto.
-      Qed.
-      (* TODO: move, virer l'autre ? *)
-Lemma app_forall_nprod :
-  forall D P {n m} (np : @nprod D n) (mp : @nprod D m),
-    forall_nprod P (nprod_app np mp) <->
-    forall_nprod P np
-    /\ forall_nprod P mp.
-Proof.
-  split; auto using app_forall_nprod.
-  intros []; auto using forall_nprod_app.
-Qed.
-(** weak induction principle for nprod_foldi *)
-Lemma Foldi_rec :
-  forall I (D DD : cpo) d (F : I -O-> DD -C-> D -C-> DD) (P : DD -> Prop),
-    P d ->
-    (forall i d dd, P dd -> P (F i dd d)) ->
-    forall l np,
-    P (@nprod_Foldi I DD D l F d np).
-Proof.
-  clear.
-  intros * Hd HF.
-  induction l; intro np; auto.
-  rewrite Foldi_simpl.
-  apply HF, IHl.
-Qed.
-
-Lemma DSForall_zip3 :
-  forall {A B C D},
-  forall (P : A -> Prop) (Q : B -> Prop) (R : C -> Prop) (S : D -> Prop),
-  forall op xs ys zs,
-    (forall x y z, P x -> Q y -> R z -> S (op x y z)) ->
-    DSForall P xs ->
-    DSForall Q ys ->
-    DSForall R zs ->
-    DSForall S (ZIP3 op xs ys zs).
-Proof.
-  intros.
-  rewrite zip3_eq.
-  eapply DSForall_zip with (P := fun f => forall x, R x -> S (f x)); eauto.
-  eapply DSForall_zip; eauto.
-Qed.
-
-Lemma Foldi_nil {I AA BB} :
-  forall F a np,
-    @nprod_Foldi I AA BB [] F a np = a.
-Proof.
-  trivial.
-Qed.
-
-Lemma first_map :
-  forall A B (f : A -> B) s,
-    first (map f s) == map f (first s).
-Proof.
-  intros.
-  eapply DS_bisimulation_allin1
-    with (R := fun U V => exists s, U == first (map f s) /\ V == map f (first s)).
-  3: eauto.
-  { intros * (?&?&?) ??. esplit; eauto. }
-  clear.
-  intros U V Hc (?& Hu & Hv).
-  assert (is_cons x) as Hx.
-  { rewrite Hu, Hv in *.
-    destruct Hc as
-      [Hc % first_is_cons % map_is_cons | Hc % map_is_cons]; auto. }
-  apply is_cons_elim in Hx as (vx & xs & Hx).
-  setoid_rewrite Hu.
-  setoid_rewrite Hv.
-  setoid_rewrite Hx.
-  split.
-  - autorewrite with cpodb; auto.
-  - exists 0.
-    now repeat rewrite ?map_bot, ?first_cons,
-      ?map_eq_cons, ?first_cons, ?rem_cons, ?rem_map, ?first_eq_bot.
-Qed.
-
-Lemma first_AC :
-  forall A (s : DS (sampl A)),
-    first (AC s) == AC (first s).
-Proof.
-  intros.
-  apply first_map.
-Qed.
-
-Lemma rem_AC :
-  forall A (s : DS (sampl A)),
-    rem (AC s) == AC (rem s).
-Proof.
-  intros.
-  apply rem_map.
-Qed.
-
-(* Import Cpo_streams_type. *)
-Lemma DSle_rec_eq2 : forall D (R : DStr D -> DStr D -> Prop),
-    (forall x1 x2 y1 y2:DS_ord D, R x1 y1 -> x1==x2 -> y1==y2 -> R x2 y2) ->
-    (forall x y, is_cons x -> R x y -> first x == first y /\ R (rem x) (rem y))
-   (* (forall a s (y:DS_ord D), R (Con a s) y -> exists t, y==Con a t /\ R s t) *)
-    -> forall x y : DS_ord D, R x y -> x <= y.
-Proof.
-  intros D R Req RCon; cofix DSle_rec_eq; destruct x; intros * Hr1.
-  - simpl; apply DSleEps; apply DSle_rec_eq.
-    apply Req with (Eps x) y; auto.
-  - case (RCon (cons d x) y).
-    auto. auto.
-    rewrite first_cons, rem_cons; intros Hc Hr2.
-    apply symmetry, first_cons_elim in Hc as (t & Hy &?).
-    apply decomp_eq in Hy as (t' & Hd & Ht').
-    apply DSleCon with t'; auto.
-    apply DSle_rec_eq.
-    apply Req with x (rem y); auto.
-    apply decomp_eqCon in Hd as ->.
-    now rewrite rem_cons, <- Ht'.
-Qed.
-
-Lemma Forall2_list_of_nprod_inv :
-  forall T (D : cpo) n (P : T -> D -> Prop) x l (np : @nprod D (S n)),
-    Forall2 P (x :: l) (list_of_nprod np) <->
-    P x (nprod_hd np) /\ Forall2 P l (list_of_nprod (nprod_tl np)).
-Proof.
-  destruct n; split; intros * Hf; inv Hf; constructor; auto.
-Qed.
-
-   Lemma zip_zip :
-    forall D1 D2 D3 D4 D5,
-    forall (f:D1->D4->D5) (g:D2->D3->D4) U V W,
-      ZIP f U (ZIP g V W) == ZIP (fun h w => h w) (ZIP (fun x y => fun z => (f x (g y z))) U V) W.
-  Proof.
-    clear.
-    intros.
-    apply DS_bisimulation_allin1 with
-      (R := fun R L => exists U V W,
-                R == ZIP f U (ZIP g V W)
-                /\ L ==  ZIP (fun h w => h w) (ZIP (fun x y z => f x (g y z)) U V) W).
-    3: eauto.
-    - intros ????(?&?&?&?) E1 E2.
-      setoid_rewrite <- E1.
-      setoid_rewrite <- E2.
-      eauto.
-    - clear.
-      intros R L Hc (U & V & W & Hr & Hl).
-      destruct Hc as [Hc | Hc].
-      + apply is_cons_elim in Hc as (r & rs & Hrs).
-        rewrite Hrs in *.
-        apply symmetry, zip_uncons in Hr as (?&?&?&?& Hu & Hz &?&?).
-        apply zip_uncons in Hz as (?&?&?&?& Hv & Hw &?&?).
-        rewrite Hu, Hv, Hw, 2 zip_cons in *; subst.
-        setoid_rewrite Hl.
-        setoid_rewrite Hrs.
-        setoid_rewrite rem_cons.
-        split.
-        autorewrite with cpodb; auto.
-        eauto 7.
-      + apply is_cons_elim in Hc as (l & ls & Hls).
-        rewrite Hls in *.
-        apply symmetry, zip_uncons in Hl as (?&?&?&?& Hz & Hw &?&?).
-        apply zip_uncons in Hz as (?&?&?&?& Hu & Hv &?&?).
-        rewrite Hu, Hv, Hw, 2 zip_cons in *; subst.
-        setoid_rewrite Hls.
-        setoid_rewrite Hr.
-        setoid_rewrite rem_cons.
-        split.
-        autorewrite with cpodb; auto.
-        eauto 7.
-  Qed.
-
-Lemma zip_ac_le :
-  forall A B (f : sampl A -> bool -> B) (X : DS (sampl A)) Y,
-    AC X <= Y ->
-    ZIP f X Y <= ZIP f X (AC X).
-Proof.
-  clear; intros * Hle.
-  apply DSle_rec_eq2 with
-    (R := fun U V => exists X Y,
-              AC X <= Y
-              /\ U == ZIP f X Y
-              /\ V == ZIP f X (AC X)).
-  3: eauto.
-  { intros * (?&?&?&?&?) Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto. }
-  clear; intros U V Hc (X& Y & Le & Hu & Hv).
-  rewrite Hu, Hv in *.
-  apply zip_is_cons in Hc as [Cx Cy].
-  apply is_cons_elim in Cx as (x & X' & Hx).
-  apply is_cons_elim in Cy as (y & Y' & Hy).
-  rewrite Hx, Hy in *.
-  setoid_rewrite Hu.
-  setoid_rewrite Hv.
-  repeat rewrite ?zip_cons, ?AC_eq, ?first_cons in *.
-  apply Con_le_simpl in Le as [? Le]; subst; split; auto.
-  exists X', Y'; split; auto.
-  cases; repeat rewrite ?zip_cons, ?rem_cons, ?AC_eq; auto.
-Qed.
-
-Lemma zip3_is_cons :
-  forall A B C D (op : A -> B -> C -> D),
-  forall xs ys zs,
-    is_cons (ZIP3 op xs ys zs) ->
-    is_cons xs /\ is_cons ys /\ is_cons zs.
-Proof.
-  intros *.
-  rewrite zip3_eq.
-  now intros [Hc % zip_is_cons] % zip_is_cons.
-Qed.
-
-Lemma smerge_is_cons :
-  forall {A B T OT TB},
-  forall l C np,
-    l <> [] ->
-    is_cons (@smerge A B T OT TB l C np) ->
-    is_cons C /\ forall_nprod (@is_cons _) np.
-Proof.
-  clear.
-  induction l as [|? []].
-  - congruence.
-  - intros * _.
-    rewrite smerge_eq, Foldi_simpl.
-    intros (?& Hc &?) % zip3_is_cons.
-    split; auto.
-  - intros * _.
-    rewrite smerge_eq, Foldi_simpl.
-    intros (?& Hc &?) % zip3_is_cons.
-    apply (IHl C (nprod_tl np)) in Hc as []; try congruence.
-    do 2 (split; auto).
-Qed.
-
-Lemma rem_zip :
-  forall {A B C},
-  forall (op : A -> B -> C) xs ys,
-    rem (ZIP op xs ys) == ZIP op (rem xs) (rem ys).
-Proof.
-  clear.
-  intros.
-  apply DS_bisimulation_allin1 with
-    (R := fun U V => exists xs ys,
-              U == rem (ZIP op xs ys)
-              /\ V == ZIP op (rem xs) (rem ys)); eauto 4.
-  - intros * (?&?&?&?) Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto.
-  - clear.
-    intros U V Hc (xs & ys & Hu & Hv).
-    assert (is_cons xs /\ is_cons ys) as [Cx Cy].
-    { destruct Hc as [Hc|Hc].
-      + rewrite Hu in Hc.
-        now apply rem_is_cons, zip_is_cons in Hc.
-      + rewrite Hv in Hc.
-        apply zip_is_cons in Hc as []; auto using rem_is_cons. }
-    apply is_cons_elim in Cx as (?& xs' & Hx), Cy as (?& ys' & Hy).
-    rewrite Hx, Hy in *; clear Hx Hy.
-    assert (is_cons xs' /\ is_cons ys') as [Cx Cy].
-    { destruct Hc as [Hc|Hc].
-      + rewrite Hu in Hc.
-        rewrite zip_cons, rem_cons in Hc.
-        now apply zip_is_cons in Hc.
-      + rewrite Hv in Hc.
-        rewrite 2 rem_cons in Hc.
-        now apply zip_is_cons in Hc. }
-    apply is_cons_elim in Cx as (?& xs'' & Hx), Cy as (?& ys'' & Hy).
-    rewrite Hx, Hy, Hu, Hv in *.
-    split; autorewrite with cpodb; auto.
-    exists xs', ys'.
-    rewrite Hu, Hv, Hx, Hy; now autorewrite with cpodb.
-Qed.
-
-Lemma rem_zip3 :
-  forall {A B C D},
-  forall (op : A -> B -> C -> D) xs ys zs,
-    rem (ZIP3 op xs ys zs) == ZIP3 op (rem xs) (rem ys) (rem zs).
-Proof.
-  clear.
-  intros.
-  now rewrite 2 zip3_eq, 2 rem_zip.
-Qed.
-
-Lemma lift_nprod_hd :
-  forall D1 D2 (f : D1 -C-> D2),
-  forall n (np : nprod (S n)),
-    nprod_hd (lift f np) = f (nprod_hd np).
-Proof.
-  clear.
-  simpl; intros; cases.
-Qed.
-
-Lemma lift_nprod_tl :
-  forall D1 D2 (f : D1 -C-> D2),
-  forall n (np : nprod (S n)),
-    nprod_tl (lift f np) = lift f (nprod_tl np).
-Proof.
-  clear.
-  simpl; intros; cases.
-Qed.
-
-Lemma rem_smerge :
-  forall {A B T OT TB},
-  forall l C np,
-    rem (@smerge A B T OT TB l C np)
-    == @smerge A B T OT TB l (rem C) (lift (REM _) np).
-Proof.
-  clear.
-  induction l; intros.
-  - rewrite 2 smerge_eq, 2 Foldi_nil.
-    now rewrite DS_const_eq, rem_cons at 1.
-  - rewrite 2 smerge_eq, 2 Foldi_simpl, <- 2 smerge_eq.
-    now rewrite rem_zip3, lift_nprod_hd, lift_nprod_tl, IHl.
-Qed.
-Lemma zip3_simpl :
-  forall {A B C D}
-    (op : A -> B -> C -> D)
-    u U v V w W,
-    ZIP3 op (cons u U) (cons v V) (cons w W)
-    == cons (op u v w) (ZIP3 op U V W).
-Proof.
-  intros.
-  now rewrite 2 zip3_eq, 2 zip_cons.
-Qed.
-
-Lemma AC_eq_compat :
-  forall A (s t : DS (sampl A)),
-    s == t ->
-    AC s == AC t.
-Proof.
-  intros.
-  now apply map_eq_compat.
-Qed.
-Lemma forall_nprod_inv :
-  forall (D : cpo) (P : D -> Prop) n (np : nprod (S n)),
-    forall_nprod P np ->
-    P (nprod_hd np) /\ forall_nprod P (nprod_tl np).
-Proof.
-  intros ?? [] ? Hf; simpl; auto.
-Qed.
-
-Lemma zip3_bot1 :
-  forall {A B C D}
-    (op : A -> B -> C -> D)
-    V W,
-    ZIP3 op 0 V W == 0.
-Proof.
-  intros.
-  now rewrite zip3_eq, 2 zip_bot1.
-Qed.
-
-Lemma first_zip :
-  forall {A B C}
-    (op : A -> B -> C)
-    U V,
-    first (ZIP op U V)
-    == ZIP op (first U) (first V).
-Proof.
-  intros.
-  apply DS_bisimulation_allin1 with
-    (R := fun U V => exists xs ys,
-              U == first (ZIP op xs ys)
-              /\ V == ZIP op (first xs) (first ys)); eauto 4.
-  - intros * (?&?&?&?) Eq1 Eq2.
-    setoid_rewrite <- Eq1.
-    setoid_rewrite <- Eq2.
-    eauto.
-  - clear.
-    intros U V Hc (xs & ys & Hu & Hv).
-    assert (is_cons xs /\ is_cons ys) as [Cx Cy].
-    { destruct Hc as [Hc|Hc].
-      + rewrite Hu in Hc.
-        now apply first_is_cons, zip_is_cons in Hc.
-      + rewrite Hv in Hc.
-        apply zip_is_cons in Hc as []; auto. }
-    apply is_cons_elim in Cx as (?& xs' & Hx), Cy as (?& ys' & Hy).
-    rewrite Hx, Hy in *; clear Hx Hy.
-    repeat rewrite first_cons, zip_cons, ?zip_bot1 in *.
-    split; autorewrite with cpodb; eauto.
-    exists 0,0.
-    rewrite Hu, Hv, 2 first_eq_bot, rem_cons, zip_bot1; auto.
-Qed.
-
-Lemma first_zip3 :
-  forall {A B C D}
-    (op : A -> B -> C -> D)
-    U V W,
-    first (ZIP3 op U V W)
-    == ZIP3 op (first U) (first V) (first W).
-Proof.
-  intros.
-  now rewrite 2 zip3_eq, 2 first_zip.
-Qed.
-Lemma list_of_nprod_lift :
-  forall D1 D2 (F : D1 -C-> D2) n (np : nprod n),
-    list_of_nprod (lift F np) = List.map F (list_of_nprod np).
-Proof.
-  clear.
-  induction n as [|[]]; intros; auto.
-  simpl.
-  now setoid_rewrite IHn.
-Qed.
-
-Lemma DSForall_impl' :
-  forall {A} (P Q : A -> Prop) (s : DS A),
-    (forall x : A, P x -> Q x) ->
-    DSForall P s ->
-    DSForall Q s.
-Proof.
-  intros ???.
-  cofix Cof.
-  destruct s; intros Pq Hf; inv Hf; constructor; cases.
-Qed.
-
-        Lemma hd_lift_nprod :
-          forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
-          forall (np : @nprod (@nprod D1 (S m)) n),
-            nprod_hd (lift_nprod F np) = F (lift nprod_hd np).
-        Proof.
-          intros.
-          destruct m; auto.
-          cbn.
-          now rewrite lift_ID.
-        Qed.
-        Lemma tl_lift_nprod :
-          forall {D1 D2} {n m} (F : @nprod D1 n -C-> D2),
-          forall (np : @nprod (@nprod D1 (S m)) n),
-            nprod_tl (lift_nprod F np) = lift_nprod F (lift nprod_tl np).
-        Proof.
-          intros.
-          destruct m; auto.
-          cbn.
-          now rewrite lift_ID.
-        Qed.
-        (* TODO: rename, virer l'autre ? *)
-        Lemma Forall2_lift_nprod' :
-          forall A (l : list A),
-          forall D1 D2 (F : @nprod D1 (length l) -C-> D2),
-          forall (P : D2 -> Prop) (Q : A -> D1 -> Prop),
-            (forall (np : nprod (length l)),
-                Forall2 Q l (list_of_nprod np) -> P (F np)) ->
-            forall m (np : @nprod (@nprod D1 m) (length l)),
-              Forall2 (fun e ss => forall_nprod (Q e) ss) l (list_of_nprod np) ->
-              Forall P (list_of_nprod (lift_nprod F np)).
-        Proof.
-          clear.
-          intros * QP.
-          induction m; intros * Hf.
-          now constructor.
-          apply forall_nprod_Forall, hd_tl_forall.
-          - rewrite hd_lift_nprod.
-            apply QP.
-            rewrite list_of_nprod_lift.
-            apply Forall2_map_2.
-            eapply Forall2_impl_In in Hf; eauto.
-            now intros * _ _ HH%forall_nprod_hd.
-          - rewrite tl_lift_nprod.
-            apply Forall_forall_nprod, IHm.
-            rewrite list_of_nprod_lift.
-            apply Forall2_map_2.
-            eapply Forall2_impl_In in Hf; eauto.
-            now intros * _ _ HH%forall_nprod_tl.
-        Qed.
-        Lemma map_eq_nnil : forall {A B} (f : A -> B) l, l <> [] -> List.map f l <> [].
-        Proof.
-          intros.
-          intro Hf; destruct l; [contradiction|].
-          discriminate Hf.
-        Qed.
-
-(* TODO: move *)
-Lemma nprod_forall_Forall :
-  forall (D:cpo) (P:D -> Prop) {n} (np : nprod n),
-    forall_nprod P np <->
-    Forall P (list_of_nprod np).
-Proof.
-  split; eauto using forall_nprod_Forall, Forall_forall_nprod.
-Qed.
-
-
-End MOVE_ME.
-
-
-
 Section Static_env_node.
 
   Lemma NoDup_senv :
@@ -1160,8 +632,8 @@ Section SDfuns_safe.
       apply is_cons_elim in Hcs as (vs & S & Hs).
       apply decomp_eqCon in Hc as Heqc.
       rewrite Hs, Heqc in * |-.
-      rewrite sunop_eq, AC_eq in Ht.
-      rewrite AC_eq in Hck.
+      rewrite sunop_eq, AC_cons in Ht.
+      rewrite AC_cons in Hck.
       apply Con_eq_simpl in Ht as []; inv Hop.
       apply Con_le_simpl in Hck as []; subst.
       cases_eqn HH; try congruence.
@@ -1225,7 +697,7 @@ Section SDfuns_safe.
       assert (is_cons C) as Hcc.
       { eapply is_cons_le_compat, AC_is_cons; eauto. }
       apply is_cons_elim in Hcc as (vc & C' & Hc).
-      rewrite Hc, AC_eq in *.
+      rewrite Hc, AC_cons in *.
       apply Con_le_simpl in Hcl1 as [], Hcl2 as []; subst.
       constructor.
       + cases_eqn HH.
@@ -1282,7 +754,7 @@ Section SDfuns_safe.
       apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
       apply uncons in Hcc as (vc & C' & Hdec).
       apply decomp_eqCon in Hdec as Hc.
-      rewrite Hc, Hs1, Hs2, sbinop_eq, AC_eq, zip_cons in *|-.
+      rewrite Hc, Hs1, Hs2, sbinop_eq, AC_cons, zip_cons in *|-.
       apply Con_eq_simpl in Ht as [].
       apply Con_le_simpl in Hcl1 as [], Hcl2 as [].
       inv Hop.
@@ -1396,16 +868,16 @@ Section SDfuns_safe.
     apply uncons in Hcc as (vc & cs' & Hdec).
     apply decomp_eqCon in Hdec as Hc.
     apply is_cons_elim in Hcx as (vx & xs' & Hx).
-    rewrite Hx, Hc, AC_eq in * |-; clear Hc Hx; clear xs.
+    rewrite Hx, Hc, AC_cons in * |-; clear Hc Hx; clear xs.
     rewrite fby1_eq in Ht.
-    cases; inv Sx; try tauto; rewrite AC_eq in *;
+    cases; inv Sx; try tauto; rewrite AC_cons in *;
       apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as []; subst.
     all: econstructor; eauto; clear Hdec cs.
     - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with _ ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with _ xs' ys'; eauto.
@@ -1413,7 +885,7 @@ Section SDfuns_safe.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with _ xs' ys'; eauto.
@@ -1438,16 +910,16 @@ Section SDfuns_safe.
     apply uncons in Hcc as (vc & cs' & Hdec).
     apply decomp_eqCon in Hdec as Hc.
     apply is_cons_elim in Hcx as (vx & xs' & Hx).
-    rewrite Hx, Hc, AC_eq in * |-; clear Hc Hx; clear xs.
+    rewrite Hx, Hc, AC_cons in * |-; clear Hc Hx; clear xs.
     rewrite fby_eq in Ht.
-    cases; inv Sx; try tauto; rewrite AC_eq in *;
+    cases; inv Sx; try tauto; rewrite AC_cons in *;
       apply Con_le_simpl in Cx as []; apply Con_eq_simpl in Ht as [? Ht]; subst.
     all: econstructor; eauto; clear Hdec cs.
     - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
       assert (is_cons ys) as Hcy by (eapply fbyA_cons, AC_is_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fbyA_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with xs' ys'; eauto.
@@ -1456,7 +928,7 @@ Section SDfuns_safe.
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
       apply uncons in Hcy as (vy & ys' & Hdec).
       apply decomp_eqCon in Hdec as Hy.
-      rewrite Hy, AC_eq in *.
+      rewrite Hy, AC_cons in *.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       change (cons b d <= cs'). (* sinon rewrite Ht ne marche pas *)
@@ -1478,7 +950,7 @@ Section SDfuns_safe.
     { constructor. rewrite <- eqEps in Ht. apply Cof with v cs xs ys; auto. }
     assert (is_cons xs) as Hcx by (eapply fby1_cons; now rewrite <- Ht).
     apply is_cons_elim in Hcx as (vx & xs' & Hx).
-    rewrite Hx, AC_eq in *; clear Hx xs.
+    rewrite Hx, AC_cons in *; clear Hx xs.
     rewrite fby1_eq in Ht.
     cases; inv Sx; try tauto;
       apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
@@ -1486,7 +958,7 @@ Section SDfuns_safe.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with v cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; try tauto.
       2: now eapply Con_le_le in Cx'; eauto 1.
@@ -1497,7 +969,7 @@ Section SDfuns_safe.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; try tauto. now eapply Con_le_le in Cx'; eauto 1.
       apply rem_le_compat in Cx', Cy.
@@ -1520,7 +992,7 @@ Section SDfuns_safe.
     { constructor. rewrite <- eqEps in Ht. apply Cof with cs xs ys; auto. }
     assert (is_cons xs) as Hcx by (eapply fby_cons; now rewrite <- Ht).
     apply is_cons_elim in Hcx as (vx & xs' & Hx).
-    rewrite Hx, AC_eq in *; clear Hx xs.
+    rewrite Hx, AC_cons in *; clear Hx xs.
     rewrite fby_eq in Ht.
     cases; inv Sx; try tauto;
       apply Con_eq_simpl in Ht as [? Ht]; subst; constructor; auto.
@@ -1528,7 +1000,7 @@ Section SDfuns_safe.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fbyA_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fbyA_eq in Ht.
       cases; inv Sy; try tauto.
       2: now eapply Con_le_le in Cx'; eauto 1.
@@ -1539,7 +1011,7 @@ Section SDfuns_safe.
       { constructor. rewrite <- eqEps in Ht. apply Cof' with cs ys xs'; auto. }
       assert (is_cons ys) as Hcy by (eapply fby1AP_cons; now rewrite <- Ht).
       apply is_cons_elim in Hcy as (vy & ys' & Hy).
-      rewrite Hy, AC_eq in *; clear Hy ys.
+      rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; try tauto. now eapply Con_le_le in Cx'; eauto 1.
       apply rem_le_compat in Cx', Cy.
@@ -1608,10 +1080,10 @@ Section SDfuns_safe.
     apply is_cons_elim in Hcc as (?&?&Hc), Hcx as (?&?&Hx).
     rewrite Hc, Hx in *. inv Sx. inv Sc. inv Tc.
     rewrite swhen_eq in HU.
-    rewrite AC_eq in *.
+    rewrite AC_cons in *.
     cases_eqn HH; try take (Some _ = Some _) and inv it.
     all: pose proof (Con_le_le _ _ _ _ _ _ Cx Cc); try easy.
-    all: try rewrite DS_const_eq in HU; rewrite AC_eq in HU.
+    all: try rewrite DS_const_eq in HU; rewrite AC_cons in HU.
     all: apply Con_eq_simpl in HU as (?& Hu); subst.
     all: apply DSle_cons_elim in Cx as (? & Hcx &?).
     all: rewrite Hcx in *; rewrite zip_cons in HV; simpl in *.
@@ -1638,7 +1110,7 @@ Section SDfuns_safe.
     assert (is_cons xs) as Hcx by (eapply proj1, swhen_cons; now rewrite <- Ht).
     assert (is_cons cs) as Hcc by (eapply proj2, swhen_cons; now rewrite <- Ht).
     apply is_cons_elim in Hcx as (vx & xs' & Hx), Hcc as (vc & cs' & Hc).
-    rewrite Hx, Hc, AC_eq in *; clear Hx xs Hc cs.
+    rewrite Hx, Hc, AC_cons in *; clear Hx xs Hc cs.
     unfold swhenv in Ht; rewrite swhen_eq in Ht.
     cases_eqn HH; inv Sx; inv Sc; inv Tx; try tauto.
     all: pose proof (Con_le_le _ _ _ _ _ _ Cx Cc); try easy.
@@ -1648,6 +1120,36 @@ Section SDfuns_safe.
   Qed.
 
   (** ** Faits sur smergev *)
+
+  Lemma zip_ac_le :
+    forall A B (f : sampl A -> bool -> B) (X : DS (sampl A)) Y,
+      AC X <= Y ->
+      ZIP f X Y <= ZIP f X (AC X).
+  Proof.
+    clear; intros * Hle.
+    apply DSle_rec_eq2 with
+      (R := fun U V => exists X Y,
+                AC X <= Y
+                /\ U == ZIP f X Y
+                /\ V == ZIP f X (AC X)).
+    3: eauto.
+    { intros * (?&?&?&?&?) Eq1 Eq2.
+      setoid_rewrite <- Eq1.
+      setoid_rewrite <- Eq2.
+      eauto. }
+    clear; intros U V Hc (X& Y & Le & Hu & Hv).
+    rewrite Hu, Hv in *.
+    apply zip_is_cons in Hc as [Cx Cy].
+    apply is_cons_elim in Cx as (x & X' & Hx).
+    apply is_cons_elim in Cy as (y & Y' & Hy).
+    rewrite Hx, Hy in *.
+    setoid_rewrite Hu.
+    setoid_rewrite Hv.
+    repeat rewrite ?zip_cons, ?AC_cons, ?first_cons in *.
+    apply Con_le_simpl in Le as [? Le]; subst; split; auto.
+    exists X', Y'; split; auto.
+    cases; repeat rewrite ?zip_cons, ?rem_cons, ?AC_cons; auto.
+  Qed.
 
   Lemma ty_smergev :
     forall ty tx tn l cs np,
@@ -1662,7 +1164,7 @@ Section SDfuns_safe.
     revert np.
     induction l; intros.
     - now apply DSForall_const.
-    - rewrite Foldi_simpl.
+    - rewrite Foldi_cons.
       apply forall_nprod_hd in Wtnp as ?.
       eapply DSForall_zip3; eauto using forall_nprod_tl.
       intros; cases_eqn HH.
@@ -1714,7 +1216,7 @@ Section SDfuns_safe.
     apply symmetry in Ht as HH.
     apply cons_is_cons, AC_is_cons, smerge_is_cons in HH as [Cc Cx]; auto.
     apply is_cons_elim in Cc as (c & cs' & Hc).
-    rewrite Hc, AC_eq in *.
+    rewrite Hc, AC_cons in *.
     setoid_rewrite Hc in Clx; clear Hc.
     setoid_rewrite Hccs in Clx.
     setoid_rewrite (zip_cons (sample _) c cs' _ _) in Clx.
@@ -1730,23 +1232,23 @@ Section SDfuns_safe.
         { apply first_eq_compat in Ht.
           revert Ht.
           rewrite first_cons, first_AC, HH.
-          rewrite AC_eq; now intros ? % Con_eq_simpl. }
+          rewrite AC_cons; now intros ? % Con_eq_simpl. }
         clear dependent b.
         revert_all; induction l as [| i l]; intros.
         { unfold smergev.
           now rewrite smerge_eq, Foldi_nil, DS_const_eq, first_cons. }
         unfold smergev.
-        rewrite smerge_eq, Foldi_simpl, <- smerge_eq, first_zip3, first_cons.
+        rewrite smerge_eq, Foldi_cons, <- smerge_eq, first_zip3, first_cons.
         fold smergev.
         (* destruction des hypothèses *)
         apply Forall2_list_of_nprod_inv in Clx as [Hc Clx].
         apply forall_nprod_inv in Cx as [Cc Cx].
         apply forall_nprod_inv in Sfx as [Sc Sfx].
         apply is_cons_elim in Cc as (x & xs & Hx).
-        rewrite Hx, first_cons, AC_eq in *; clear Hx.
+        rewrite Hx, first_cons, AC_cons in *; clear Hx.
         apply Con_le_simpl in Hc as [Hx _].
         eapply IHl in Clx as ->; auto; clear IHl.
-        rewrite zip3_simpl, zip3_bot1.
+        rewrite zip3_cons, zip3_bot1.
         inv Sc. simpl in *; cases; congruence.
       + (* c = pres j *)
         take (value_belongs _ _) and clear - Nd Sfx Clx Ht Cx it.
@@ -1761,7 +1263,7 @@ Section SDfuns_safe.
           revert Ht.
           rewrite first_cons, first_AC.
           destruct HH as [? ->]; auto.
-          rewrite AC_eq; now intros ? % Con_eq_simpl. }
+          rewrite AC_cons; now intros ? % Con_eq_simpl. }
         clear dependent b.
         clear it t.
         revert_all; induction l as [| i l]; intros.
@@ -1770,14 +1272,14 @@ Section SDfuns_safe.
           now rewrite smerge_eq, Foldi_nil, DS_const_eq, first_cons. }
         remember_ds (first (smergev (i :: l) _ _)) as rs; revert Hrs.
         unfold smergev.
-        rewrite smerge_eq, Foldi_simpl, <- smerge_eq, first_zip3, first_cons.
+        rewrite smerge_eq, Foldi_cons, <- smerge_eq, first_zip3, first_cons.
         fold smergev; intros.
         (* destruction des hypothèses *)
         apply Forall2_list_of_nprod_inv in Clx as [Hc Clx].
         apply forall_nprod_inv in Cx as [Cc Cx].
         apply forall_nprod_inv in Sfx as [Sc Sfx].
         apply is_cons_elim in Cc as (x & xs & Hx).
-        rewrite Hx, first_cons, AC_eq in *; clear Hx.
+        rewrite Hx, first_cons, AC_cons in *; clear Hx.
         apply Con_le_simpl in Hc as [Hx _].
         inv Sc. inv Nd.
         apply IHl with (cs':=cs') in Clx as [IHin IHnin]; auto; clear IHl.
@@ -1786,7 +1288,7 @@ Section SDfuns_safe.
           subst.
           split; simpl; intros; [|tauto].
           revert Hrs Hx.
-          rewrite IHnin, zip3_simpl, zip3_bot1; auto.
+          rewrite IHnin, zip3_cons, zip3_bot1; auto.
           clear; simpl.
           rewrite Nat.eqb_refl; simpl.
           cases; intros; try congruence; eauto.
@@ -1799,16 +1301,16 @@ Section SDfuns_safe.
             destruct HH as [| Hin]; try contradiction.
             revert Hrs.
             destruct (IHin Hin) as (v & ->); auto.
-            rewrite zip3_simpl, zip3_bot1; auto.
+            rewrite zip3_cons, zip3_bot1; auto.
             simpl; rewrite Hn; eauto. }
           { (* j ∉ l *)
             revert Hrs.
-            rewrite IHnin, zip3_simpl, zip3_bot1; auto.
+            rewrite IHnin, zip3_cons, zip3_bot1; auto.
             simpl; rewrite Hn; eauto. }
     - unshelve eapply (Cof l (lift (REM _) np) Nd Nnil _ cs'); auto.
       * eapply forall_nprod_lift, forall_nprod_impl, Sfx.
         apply DSForall_rem.
-      * rewrite list_of_nprod_lift.
+      * rewrite lift_map.
         eapply Forall2_map_2, Forall2_impl_In. 2: eassumption.
         cbv beta; intros * ?? Hle % rem_le_compat.
         now rewrite rem_cons, rem_AC, Hcc in Hle.
@@ -1866,7 +1368,7 @@ Section SDfuns_safe.
     apply ty_belongs in Tc; auto.
     apply cl_smergev_ with (tx := Tenum tid tn); auto.
     - rewrite Hperm; apply seq_NoDup.
-    - eapply DSForall_impl' in Tc; eauto.
+    - eapply DSForall_impl in Tc; eauto.
       now setoid_rewrite (Permutation_belongs _ _ Hperm).
     - apply Forall_forall_nprod, Forall_forall; intros.
       eapply Forall2_in_right in Hf as (?&?&?&?); eauto.
@@ -1913,7 +1415,7 @@ Section SDfuns_safe.
     apply is_cons_elim in Cc as (c & cs' & Hc).
     rewrite Hc in *.
     setoid_rewrite Hc in Clx; clear Hc.
-    setoid_rewrite (AC_eq c cs') in Clx.
+    setoid_rewrite (AC_cons c cs') in Clx.
     setoid_rewrite (zip_cons (sample _) c cs' _ _) in Clx.
     inv Hv.
     (* apply symmetry, decomp_eq in Hccs as (ccs' & Hd & Hcc). *)
@@ -1934,17 +1436,17 @@ Section SDfuns_safe.
         { unfold smergev.
           now rewrite smerge_eq, Foldi_nil, DS_const_eq, first_cons. }
         unfold smergev.
-        rewrite smerge_eq, Foldi_simpl, <- smerge_eq, first_zip3, first_cons.
+        rewrite smerge_eq, Foldi_cons, <- smerge_eq, first_zip3, first_cons.
         fold smergev.
         (* destruction des hypothèses *)
         apply Forall2_list_of_nprod_inv in Clx as [Hc Clx].
         apply forall_nprod_inv in Cx as [Cc Cx].
         apply forall_nprod_inv in Sfx as [Sc Sfx].
         apply is_cons_elim in Cc as (x & xs & Hx).
-        rewrite Hx, first_cons, AC_eq in *; clear Hx.
+        rewrite Hx, first_cons, AC_cons in *; clear Hx.
         apply Con_le_simpl in Hc as [Hx _].
         eapply IHl in Clx as ->; auto; clear IHl.
-        rewrite zip3_simpl, zip3_bot1.
+        rewrite zip3_cons, zip3_bot1.
         inv Sc. simpl in *; cases; congruence.
       + (* c = pres j *)
         take (value_belongs _ _) and clear - Nd Sfx Clx Ht Cx it.
@@ -1968,14 +1470,14 @@ Section SDfuns_safe.
           now rewrite smerge_eq, Foldi_nil, DS_const_eq, first_cons. }
         remember_ds (first (smergev (i :: l) _ _)) as rs; revert Hrs.
         unfold smergev.
-        rewrite smerge_eq, Foldi_simpl, <- smerge_eq, first_zip3, first_cons.
+        rewrite smerge_eq, Foldi_cons, <- smerge_eq, first_zip3, first_cons.
         fold smergev; intros.
         (* destruction des hypothèses *)
         apply Forall2_list_of_nprod_inv in Clx as [Hc Clx].
         apply forall_nprod_inv in Cx as [Cc Cx].
         apply forall_nprod_inv in Sfx as [Sc Sfx].
         apply is_cons_elim in Cc as (x & xs & Hx).
-        rewrite Hx, first_cons, AC_eq in *; clear Hx.
+        rewrite Hx, first_cons, AC_cons in *; clear Hx.
         apply Con_le_simpl in Hc as [Hx _].
         inv Sc. inv Nd.
         apply IHl with (cs':=cs') in Clx as [IHin IHnin]; auto; clear IHl.
@@ -1984,7 +1486,7 @@ Section SDfuns_safe.
           subst.
           split; simpl; intros; [|tauto].
           revert Hrs Hx.
-          rewrite IHnin, zip3_simpl, zip3_bot1; auto.
+          rewrite IHnin, zip3_cons, zip3_bot1; auto.
           clear; simpl.
           rewrite Nat.eqb_refl; simpl.
           cases; intros; try congruence; eauto.
@@ -1997,16 +1499,16 @@ Section SDfuns_safe.
             destruct HH as [| Hin]; try contradiction.
             revert Hrs.
             destruct (IHin Hin) as (v & ->); auto.
-            rewrite zip3_simpl, zip3_bot1; auto.
+            rewrite zip3_cons, zip3_bot1; auto.
             simpl; rewrite Hn; eauto. }
           { (* j ∉ l *)
             revert Hrs.
-            rewrite IHnin, zip3_simpl, zip3_bot1; auto.
+            rewrite IHnin, zip3_cons, zip3_bot1; auto.
             simpl; rewrite Hn; eauto. }
     - unshelve eapply (Cof l (lift (REM _) np) Nd Nnil _ cs'); auto.
       * eapply forall_nprod_lift, forall_nprod_impl, Sfx.
         apply DSForall_rem.
-      * rewrite list_of_nprod_lift.
+      * rewrite lift_map.
         eapply Forall2_map_2, Forall2_impl_In. 2: eassumption.
         cbv beta; intros * ?? Hle % rem_le_compat.
         now rewrite rem_cons, rem_AC in Hle.
@@ -2032,7 +1534,7 @@ Section SDfuns_safe.
     apply ty_belongs in Tc; auto.
     eapply safe_smergev_ with (tx := Tenum tid tn); eauto.
     - rewrite Hperm; apply seq_NoDup.
-    - eapply DSForall_impl' in Tc; eauto.
+    - eapply DSForall_impl in Tc; eauto.
       now setoid_rewrite (Permutation_belongs _ _ Hperm).
     - apply Forall_forall_nprod, Forall_forall; intros.
       eapply Forall2_in_right in Hf as (?&?&?&?); eauto.
@@ -2139,7 +1641,7 @@ Section SDfuns_safe.
         simpl (Forall _ _).
         rewrite Forall_cons2.
         rewrite <- (IHess (list_sum (List.map numstreams es))); auto.
-        rewrite (@app_forall_nprod _ _ 1 (length ess)).
+        rewrite (@forall_app_nprod _ _ 1 (length ess)).
         now rewrite <- Forall_denot_exps.
       + now rewrite annots_numstreams in n.
   Qed.
@@ -3046,12 +2548,12 @@ Section Node_safe.
         eapply Forall2_Forall_eq in Wt; eauto.
         eapply Forall2_lift_nprod; eauto using ty_smergev.
       + apply Forall2_map_1, Forall2_ignore1'; auto using list_of_nprod_length.
-        eapply Forall2_lift_nprod'; eauto using cl_smergev, map_eq_nnil.
+        eapply Forall_lift_nprod; eauto using cl_smergev, map_eq_nnil.
         repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
         take (Forall (eq _) _) and
           eapply Forall2_Forall_eq in it; eauto; now simpl_Forall.
       + apply Forall_forall_nprod.
-        eapply Forall2_lift_nprod'; eauto using safe_smergev, map_eq_nnil.
+        eapply Forall_lift_nprod; eauto using safe_smergev, map_eq_nnil.
         repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
         take (Forall (eq _) _) and
           eapply Forall2_Forall_eq in it; eauto; now simpl_Forall.

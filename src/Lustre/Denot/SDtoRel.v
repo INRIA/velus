@@ -1025,7 +1025,7 @@ Proof.
   destruct (S_of_DSv_eq _ Inf _ Hs) as [Inf3 HH].
   rewrite HH in Ht; clear HH.
   setoid_rewrite S_of_DS_cons in Ht.
-  edestruct (S_of_DS_eq id (AC s)) as [Inf4 HH]. { now rewrite Hs, AC_eq. }
+  edestruct (S_of_DS_eq id (AC s)) as [Inf4 HH]. { now rewrite Hs, AC_cons. }
   rewrite HH in Hu; clear HH.
   cases; rewrite S_of_DS_cons in Hu; inv Hu; inv Ht; simpl in *; subst.
   all: constructor; simpl; auto.

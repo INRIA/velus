@@ -416,14 +416,14 @@ Proof.
 Qed.
 
 Lemma DSForall_impl :
-  forall {A} (P Q : A -> Prop) (s : DS A),
+  forall A (P Q : A -> Prop) (s : DS A),
+    (forall x : A, P x -> Q x) ->
     DSForall P s ->
-    DSForall (fun x => P x -> Q x) s ->
     DSForall Q s.
 Proof.
   intros ???.
   cofix Cof.
-  destruct s; intros Hp Himpl; inv Hp; inv Himpl; constructor; cases.
+  destruct s; intros Pq Hf; inv Hf; constructor; cases.
 Qed.
 
 Lemma DSForall_forall :
@@ -470,4 +470,20 @@ Proof.
   - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hx & Hy & Ht &?).
     rewrite Hx, Hy in *; inv Hp; inv Hq.
     constructor; eauto.
+Qed.
+
+Lemma DSForall_zip3 :
+  forall {A B C D},
+  forall (P : A -> Prop) (Q : B -> Prop) (R : C -> Prop) (S : D -> Prop),
+  forall op xs ys zs,
+    (forall x y z, P x -> Q y -> R z -> S (op x y z)) ->
+    DSForall P xs ->
+    DSForall Q ys ->
+    DSForall R zs ->
+    DSForall S (ZIP3 op xs ys zs).
+Proof.
+  intros.
+  rewrite zip3_eq.
+  eapply DSForall_zip with (P := fun f => forall x, R x -> S (f x)); eauto.
+  eapply DSForall_zip; eauto.
 Qed.

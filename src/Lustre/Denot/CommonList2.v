@@ -15,6 +15,13 @@ Proof.
   firstorder.
 Qed.
 
+Lemma map_eq_nnil : forall A B (f : A -> B) l, l <> [] -> List.map f l <> [].
+Proof.
+  intros.
+  intro Hf; destruct l; [contradiction|].
+  discriminate Hf.
+Qed.
+
 Lemma map_ignore :
   forall A B (b : B) (l : list A),
     map (fun _ => b) l = repeat b (length l).
