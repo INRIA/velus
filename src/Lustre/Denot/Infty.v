@@ -179,7 +179,7 @@ Proof.
   apply is_cons_rem in Hx as (?&?&?& Hx); rewrite Hx in *.
   apply is_ncons_is_cons in Cy as Hy.
   apply is_cons_rem in Hy as (?&?&?& Hy); rewrite Hy in *.
-  rewrite zip_eq, rem_cons in *.
+  rewrite zip_cons, rem_cons in *.
   apply IHn; auto.
 Qed.
 

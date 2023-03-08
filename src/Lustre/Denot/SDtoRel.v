@@ -1047,7 +1047,7 @@ Proof.
   apply S_of_DS_Cons in Hxs as (vx' & xs' & Hx & Hvx & Infx' & Hxs).
   apply S_of_DS_Cons in Hys as (vy' & ys' & Hy & Hvy & Infy' & Hys).
   apply S_of_DS_Cons in Hrs as (vr' & rs' & Hr & Hvr & Infr' & Hrs).
-  rewrite Hx, Hy, zip_eq in Hr.
+  rewrite Hx, Hy, zip_cons in Hr.
   apply Con_eq_simpl in Hr as [].
   constructor; simpl.
   - subst; auto.

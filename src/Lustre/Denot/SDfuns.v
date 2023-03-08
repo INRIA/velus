@@ -32,7 +32,7 @@ Local Hint Rewrite
      FST_simpl Fst_simpl
      DSCASE_simpl
      DScase_cons
-     @zip_eq
+     @zip_cons
   : localdb.
 
 
@@ -873,7 +873,7 @@ Section SStream_functions.
   (*       rewrite Hrs in *. *)
   (*       apply symmetry, zip_uncons in Hr as (?&?&?&?& Hu & Hz &?&?). *)
   (*       apply zip_uncons in Hz as (?&?&?&?& Hv & Hw &?&?). *)
-  (*       rewrite Hu, Hv, Hw, 2 zip_eq in *; subst. *)
+  (*       rewrite Hu, Hv, Hw, 2 zip_cons in *; subst. *)
   (*       setoid_rewrite Hl. *)
   (*       setoid_rewrite Hrs. *)
   (*       setoid_rewrite rem_cons. *)
@@ -884,7 +884,7 @@ Section SStream_functions.
   (*       rewrite Hls in *. *)
   (*       apply symmetry, zip_uncons in Hl as (?&?&?&?& Hz & Hw &?&?). *)
   (*       apply zip_uncons in Hz as (?&?&?&?& Hu & Hv &?&?). *)
-  (*       rewrite Hu, Hv, Hw, 2 zip_eq in *; subst. *)
+  (*       rewrite Hu, Hv, Hw, 2 zip_cons in *; subst. *)
   (*       setoid_rewrite Hls. *)
   (*       setoid_rewrite Hr. *)
   (*       setoid_rewrite rem_cons. *)

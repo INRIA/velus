@@ -227,7 +227,7 @@ Qed.
         rewrite Hrs in *.
         apply symmetry, zip_uncons in Hr as (?&?&?&?& Hu & Hz &?&?).
         apply zip_uncons in Hz as (?&?&?&?& Hv & Hw &?&?).
-        rewrite Hu, Hv, Hw, 2 zip_eq in *; subst.
+        rewrite Hu, Hv, Hw, 2 zip_cons in *; subst.
         setoid_rewrite Hl.
         setoid_rewrite Hrs.
         setoid_rewrite rem_cons.
@@ -238,7 +238,7 @@ Qed.
         rewrite Hls in *.
         apply symmetry, zip_uncons in Hl as (?&?&?&?& Hz & Hw &?&?).
         apply zip_uncons in Hz as (?&?&?&?& Hu & Hv &?&?).
-        rewrite Hu, Hv, Hw, 2 zip_eq in *; subst.
+        rewrite Hu, Hv, Hw, 2 zip_cons in *; subst.
         setoid_rewrite Hls.
         setoid_rewrite Hr.
         setoid_rewrite rem_cons.
@@ -271,10 +271,10 @@ Proof.
   rewrite Hx, Hy in *.
   setoid_rewrite Hu.
   setoid_rewrite Hv.
-  repeat rewrite ?zip_eq, ?AC_eq, ?first_cons in *.
+  repeat rewrite ?zip_cons, ?AC_eq, ?first_cons in *.
   apply Con_le_simpl in Le as [? Le]; subst; split; auto.
   exists X', Y'; split; auto.
-  cases; repeat rewrite ?zip_eq, ?rem_cons, ?AC_eq; auto.
+  cases; repeat rewrite ?zip_cons, ?rem_cons, ?AC_eq; auto.
 Qed.
 
 Lemma zip3_is_cons :
@@ -337,7 +337,7 @@ Proof.
     assert (is_cons xs' /\ is_cons ys') as [Cx Cy].
     { destruct Hc as [Hc|Hc].
       + rewrite Hu in Hc.
-        rewrite zip_eq, rem_cons in Hc.
+        rewrite zip_cons, rem_cons in Hc.
         now apply zip_is_cons in Hc.
       + rewrite Hv in Hc.
         rewrite 2 rem_cons in Hc.
@@ -398,7 +398,7 @@ Lemma zip3_simpl :
     == cons (op u v w) (ZIP3 op U V W).
 Proof.
   intros.
-  now rewrite 2 zip3_eq, 2 zip_eq.
+  now rewrite 2 zip3_eq, 2 zip_cons.
 Qed.
 
 Lemma AC_eq_compat :
@@ -453,7 +453,7 @@ Proof.
         apply zip_is_cons in Hc as []; auto. }
     apply is_cons_elim in Cx as (?& xs' & Hx), Cy as (?& ys' & Hy).
     rewrite Hx, Hy in *; clear Hx Hy.
-    repeat rewrite first_cons, zip_eq, ?zip_bot1 in *.
+    repeat rewrite first_cons, zip_cons, ?zip_bot1 in *.
     split; autorewrite with cpodb; eauto.
     exists 0,0.
     rewrite Hu, Hv, 2 first_eq_bot, rem_cons, zip_bot1; auto.
@@ -1282,7 +1282,7 @@ Section SDfuns_safe.
       apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
       apply uncons in Hcc as (vc & C' & Hdec).
       apply decomp_eqCon in Hdec as Hc.
-      rewrite Hc, Hs1, Hs2, sbinop_eq, AC_eq, zip_eq in *|-.
+      rewrite Hc, Hs1, Hs2, sbinop_eq, AC_eq, zip_cons in *|-.
       apply Con_eq_simpl in Ht as [].
       apply Con_le_simpl in Hcl1 as [], Hcl2 as [].
       inv Hop.
@@ -1614,7 +1614,7 @@ Section SDfuns_safe.
     all: try rewrite DS_const_eq in HU; rewrite AC_eq in HU.
     all: apply Con_eq_simpl in HU as (?& Hu); subst.
     all: apply DSle_cons_elim in Cx as (? & Hcx &?).
-    all: rewrite Hcx in *; rewrite zip_eq in HV; simpl in *.
+    all: rewrite Hcx in *; rewrite zip_cons in HV; simpl in *.
     all: apply Con_le_simpl in Cc as []; cases_eqn HH.
     all: try rewrite HH2 in *; simpl in *.
     all: do 2 esplit; eauto 10.
@@ -1717,7 +1717,7 @@ Section SDfuns_safe.
     rewrite Hc, AC_eq in *.
     setoid_rewrite Hc in Clx; clear Hc.
     setoid_rewrite Hccs in Clx.
-    setoid_rewrite (zip_eq (sample _) c cs' _ _) in Clx.
+    setoid_rewrite (zip_cons (sample _) c cs' _ _) in Clx.
     inv Hv.
     apply decomp_eq in Hccs as (ccs' & Hd & Hcc).
     apply DSleCon with ccs'.
@@ -1914,7 +1914,7 @@ Section SDfuns_safe.
     rewrite Hc in *.
     setoid_rewrite Hc in Clx; clear Hc.
     setoid_rewrite (AC_eq c cs') in Clx.
-    setoid_rewrite (zip_eq (sample _) c cs' _ _) in Clx.
+    setoid_rewrite (zip_cons (sample _) c cs' _ _) in Clx.
     inv Hv.
     (* apply symmetry, decomp_eq in Hccs as (ccs' & Hd & Hcc). *)
     (* apply DSleCon with ccs'. *)

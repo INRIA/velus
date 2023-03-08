@@ -955,7 +955,7 @@ Section Zip.
 
   Definition ZIP : (DS A -C-> DS B -C-> DS D) := FIXP _ zipf.
 
-  Lemma zip_eq : forall u U v V,
+  Lemma zip_cons : forall u U v V,
       ZIP (cons u U) (cons v V) == cons (bop u v) (ZIP U V).
   Proof.
     intros.
@@ -964,7 +964,7 @@ Section Zip.
     now rewrite zipf_eq.
   Qed.
 
-  Hint Rewrite zip_eq : cpodb. (* !! local à la section *)
+  Hint Rewrite zip_cons : cpodb. (* !! local à la section *)
 
   (*  (* XXX notations de debug *) *)
   (* Notation "⋅FST" := (FST _ _) (at level 80, right associativity). *)
@@ -1038,7 +1038,7 @@ Section Zip.
     intros * [Cx Cy].
     apply is_cons_elim in Cx as (?&?&->).
     apply is_cons_elim in Cy as (?&?&->).
-    now rewrite zip_eq.
+    now rewrite zip_cons.
   Qed.
 
   Lemma zip_uncons :
@@ -1055,7 +1055,7 @@ Section Zip.
     { eapply zip_is_cons; rewrite HZ; auto. }
     apply is_cons_elim in Hcx as (x & xs' & Hx).
     apply is_cons_elim in Hcy as (y & ys' & Hy).
-    rewrite Hx, Hy, zip_eq in HZ.
+    rewrite Hx, Hy, zip_cons in HZ.
     apply Con_eq_simpl in HZ as [].
     now exists x,xs',y,ys'.
   Qed.
@@ -1074,7 +1074,7 @@ Section Zip.
     cofix Cof; intros.
     destruct InfU as [Cu], InfV as [Cv].
     apply is_cons_elim in Cu as (?& U' & Hu), Cv as (?& V' & Hv).
-    rewrite Hu, Hv, rem_cons, zip_eq in *.
+    rewrite Hu, Hv, rem_cons, zip_cons in *.
     constructor.
     - now rewrite Ht.
     - eapply Cof with (U := U') (V := V'); auto.
@@ -1101,7 +1101,7 @@ Section Zip.
       apply is_cons_elim in Hcx as (vx & xs' & Hx).
       rewrite Hx in Hu, Hv.
       rewrite MAP_map, map_eq_cons in Hv.
-      rewrite DS_const_eq, zip_eq in Hu.
+      rewrite DS_const_eq, zip_cons in Hu.
       setoid_rewrite Hu.
       setoid_rewrite Hv.
       split.
@@ -1111,7 +1111,7 @@ Section Zip.
 
 End Zip.
 
-Global Hint Rewrite @zip_eq @zip_bot1 @zip_bot2 : cpodb.
+Global Hint Rewrite @zip_cons @zip_bot1 @zip_bot2 : cpodb.
 
 
 (** ** Facts about zip, map  *)
@@ -1200,7 +1200,7 @@ Proof.
       destruct Hc as [Hc|Hc]; apply zip_is_cons in Hc; tauto. }
     apply is_cons_elim in Hcx as (vx & xs' & Hx).
     apply is_cons_elim in Hcy as (vy & ys' & Hy).
-    rewrite Hx, Hy, zip_eq in *.
+    rewrite Hx, Hy, zip_cons in *.
     setoid_rewrite Hu.
     setoid_rewrite Hv.
     split.
