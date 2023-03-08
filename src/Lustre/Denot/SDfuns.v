@@ -805,34 +805,6 @@ Section SStream_functions.
     trivial.
   Qed.
 
-  Definition ZIP3 {A B C D} (op : A -> B -> C -> D) :
-    DS A -C-> DS B -C-> DS C -C-> DS D :=
-    (* curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))). *)
-    curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))).
-  (* autre définition : *)
-  (* intros. apply curry, curry. *)
-  (* refine ((ZIP (fun '(x,y) z => op x y z) @2_ _) (SND _ _)). *)
-  (* exact ((ZIP pair @2_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _)). *)
-
-  Lemma zip3_eq :
-    forall {A B C D} (op : A -> B -> C -> D),
-    forall U V W,
-      ZIP3 op U V W = ZIP (fun f x => f x) (ZIP (fun x y => op x y) U V) W.
-  Proof.
-    trivial.
-  Qed.
-
-  Lemma is_cons_zip3 :
-    forall A B C D (op : A -> B -> C -> D),
-    forall xs ys zs,
-      is_cons xs /\ is_cons ys /\ is_cons zs ->
-      is_cons (ZIP3 op xs ys zs).
-  Proof.
-    intros * (Cx & Cy & Cz).
-    rewrite zip3_eq.
-    auto using is_cons_zip.
-  Qed.
-
   Definition smerge (l : list enumtag) :
     DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
     eapply fcont_comp2.

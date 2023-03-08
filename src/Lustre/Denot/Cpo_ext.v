@@ -1208,6 +1208,41 @@ Proof.
     + exists xs',ys'. rewrite 2 rem_cons; auto.
 Qed.
 
+
+(** ** ZIP3 synchronizes three streams *)
+Section Zip3.
+
+  Context {A B C D : Type}.
+  Variable op : A -> B -> C -> D.
+
+  Definition ZIP3 : DS A -C-> DS B -C-> DS C -C-> DS D :=
+    curry (ZIP (fun f x => f x) @_ uncurry (ZIP (fun x y => op x y))).
+
+  (* another possible definition of ZIP3: *)
+  (* intros. apply curry, curry. *)
+  (* refine ((ZIP (fun '(x,y) z => op x y z) @2_ _) (SND _ _)). *)
+  (* exact ((ZIP pair @2_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _)). *)
+
+  Lemma zip3_eq :
+    forall U V W,
+      ZIP3 U V W = ZIP (fun f x => f x) (ZIP (fun x y => op x y) U V) W.
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma is_cons_zip3 :
+    forall xs ys zs,
+      is_cons xs /\ is_cons ys /\ is_cons zs ->
+      is_cons (ZIP3 xs ys zs).
+  Proof.
+    intros * (Cx & Cy & Cz).
+    rewrite zip3_eq.
+    auto using is_cons_zip.
+  Qed.
+
+End Zip3.
+
+
 Section Take.
 
 Context {A : Type}.
