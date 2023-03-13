@@ -31,7 +31,8 @@ Module Type SDTOREL
 
 (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  *)
 
-Section test.
+(* TODO: inutile finalement ? *)
+Section Forallt.
 
   (* forall sur les lignes d'une matrice donnée en colonnes *)
   Context {A : Type}.
@@ -47,24 +48,22 @@ Section test.
       Forallt (List.map (@tl A) l) ->
       Forallt l.
 
-End test.
+End Forallt.
 
-Section test.
 
-  Context {A B : Type}.
-  Variable (d : A). (* paramètre par défaut *)
+  Lemma tl_length :
+    forall A (l : list A),
+      length (tl l) = Nat.pred (length l).
+  Proof.
+    now destruct l.
+  Qed.
 
-  Variable (P : list A -> B -> Prop).
-
-  (* avec une colonne supplémentaire de type B *)
-  Inductive Forall2t : list (list A) -> list B -> Prop :=
-  | f2tnil : forall l,
-      Forall (eq []) l ->
-      Forall2t l []
-  | f2tcons : forall (l : list (list A)) (h : B) (t : list B),
-      P (List.map (hd d) l) h ->
-      Forall2t (List.map (@tl A) l) t ->
-      Forall2t l (h :: t).
+  Lemma nth_nil :
+    forall A n (d : A),
+      nth n [] d = d.
+  Proof.
+    destruct n; auto.
+  Qed.
 
   Lemma hd_nth :
     forall A (l : list A) (d : A),
@@ -81,24 +80,86 @@ Section test.
   Qed.
 
   Lemma map_hd_nth :
-    forall (l : list (list A)) d,
+    forall A (l : list (list A)) d,
       map (hd d) l = map (fun l0 => nth 0 l0 d) l.
   Proof.
     induction l; simpl; f_equal; auto using hd_nth.
   Qed.
 
   Lemma map_tl_nth :
-    forall (l : list (list A)) n d,
+    forall A (l : list (list A)) n d,
       map (fun l0 => nth (S n) l0 d) l = map (fun l0 => nth n (tl l0) d) l.
   Proof.
     induction l; simpl; f_equal; auto using tl_nth.
   Qed.
 
+  Lemma list_eq_ext :
+    forall A (l1 l2 : list A) d,
+      length l1 = length l2 ->
+      (forall n, n < length l1 -> nth n l1 d = nth n l2 d) ->
+      l1 = l2.
+  Proof.
+    clear.
+    induction l1; simpl; intros * Hl Hn.
+    - destruct l2; simpl in *; congruence.
+    - destruct l2; try (simpl in *; congruence).
+      f_equal.
+      + apply (Hn O); auto with arith.
+      + eapply IHl1 with d; intros; auto.
+        rewrite (Hn (S n)); auto with arith.
+  Qed.
+
+  Lemma list_eq_ext2 :
+    forall A (l1 l2 : list A),
+      (forall n, nth_error l1 n = nth_error l2 n) ->
+      l1 = l2.
+  Proof.
+    clear.
+    induction l1; intros * Hn.
+    - destruct l2; simpl in *; auto.
+      specialize (Hn O); inv Hn.
+    - destruct l2.
+      specialize (Hn O); inv Hn.
+      f_equal.
+      + now injection (Hn O).
+      + eapply IHl1; intros; auto.
+        apply (Hn (S n)).
+  Qed.
+
+  Lemma Forall3_same_2_3:
+    forall A B P (xs: list A) (ys : list B),
+      Forall3 P xs ys ys <-> Forall2 (fun x y => P x y y) xs ys.
+  Proof.
+    induction xs as [|x xs IH]; split; intros * H; inv H; constructor; auto.
+    rewrite <- IH; auto.
+    rewrite IH; auto.
+  Qed.
+
+
+(** ** Forall2 sur les lignes d'une matrice *)
+Section Forall2t.
+
+  Context {A B : Type}.
+  Variable (d : A). (* paramètre par défaut *)
+
+  Variable (P : list A -> B -> Prop).
+
+  (* On considère une matrice de A et une colonne supplémentaire
+     de B. Le prédicat P doit être vrai sur chaque ligne. *)
+  Inductive Forall2t : list (list A) -> list B -> Prop :=
+  | f2tnil : forall l,
+      Forall (eq []) l ->
+      Forall2t l []
+  | f2tcons : forall (l : list (list A)) (h : B) (t : list B),
+      P (List.map (hd d) l) h ->
+      Forall2t (List.map (@tl A) l) t ->
+      Forall2t l (h :: t).
+
   Lemma Forall2t_forall2 :
-    forall ll l,
+    forall ll l (b : B),
       Forall (fun xl => length xl = length l) ll ->
       Forall2t ll l
-      <-> forall n (b : B),
+      <-> forall n,
           n < length l ->
           P (map (fun l => nth n l d) ll) (nth n l b).
   Proof.
@@ -119,36 +180,18 @@ Section test.
       { constructor; simpl_Forall; now apply symmetry, length_zero_iff_nil. }
       constructor.
       + rewrite map_hd_nth.
-        apply (Nth O x); simpl; auto with arith.
+        apply (Nth O); simpl; auto with arith.
       + eapply IHl.
         { eapply Forall_map, Forall_impl; eauto.
           intros [] **; simpl in *; lia. }
         intros.
         rewrite map_map, <- map_tl_nth.
-        apply (Nth (S n) b); simpl; auto with arith.
+        apply (Nth (S n)); simpl; auto with arith.
   Qed.
 
-  Lemma tl_length :
-    forall A (l : list A),
-      length (tl l) = Nat.pred (length l).
-  Proof.
-    now destruct l.
-  Qed.
-  Lemma nth_nil :
-    forall A n (d : A),
-      nth n [] d = d.
-  Proof.
-    destruct n; auto.
-  Qed.
-  (* Fixpoint transp (l : list (list A)) *)
-  (*   (* {measure (length (concat l))} *) *)
-  (*   : list (list A) := *)
-  (*   match l with *)
-  (*   | [] => [] *)
-  (*   | [] :: xss => transp xss *)
-  (*   | (x :: xs) :: xss => (x :: List.map (hd d) xss) *)
-  (*                        :: (* combine xs *) (transp (List.map (@tl _) xss)) *)
-  (* end. *)
+  (** Calcul de la transposée d'une matrice. On donne sa spécification
+      dans son type car raisonner sur la fonction direcement est rendu
+      très pénible par la preuve de terminaison. *)
   Program Fixpoint transp (l : list (list A)) (k : { k | Forall (fun l => length l = k) l })
     {measure (length (concat l))}
     : { l' : list (list A)
@@ -158,9 +201,8 @@ Section test.
     | [] => []
     | [] :: _ => []
     | rows => List.map (hd d) rows :: transp (List.map (@tl _) rows) (exist _ (Nat.pred k) _)
- (* | [] :: xss => transp xss *)
- (* | (x :: xs) :: xss => (x :: List.map (hd d) xss) :: transp (xs :: List.map (@tl _) xss) *)
     end.
+
   Next Obligation.
     simpl; split; intros; cases; congruence.
   Qed.
@@ -178,6 +220,7 @@ Section test.
       + rewrite H3; auto.
       + do 2 (rewrite nth_overflow; simpl; auto with arith).
   Qed.
+
   Next Obligation.
     rewrite Forall_map.
     setoid_rewrite tl_length.
@@ -195,6 +238,7 @@ Section test.
     rewrite 2 app_length.
     destruct a; simpl; auto with arith.
   Qed.
+
   Next Obligation.
     rename n into Hl'.
     destruct transp as [? [Heq Ht]]; simpl.
@@ -221,42 +265,13 @@ Section test.
     erewrite map_nth', hd_nth; eauto.
     erewrite Ht, map_nth', tl_nth; eauto.
   Qed.
+
   Next Obligation.
     split; intros; congruence.
   Qed.
 
-  Lemma list_eq_ext :
-    forall A (l1 l2 : list A) d,
-      length l1 = length l2 ->
-      (forall n, n < length l1 -> nth n l1 d = nth n l2 d) ->
-      l1 = l2.
-  Proof.
-    clear.
-    induction l1; simpl; intros * Hl Hn.
-    - destruct l2; simpl in *; congruence.
-    - destruct l2; try (simpl in *; congruence).
-      f_equal.
-      + apply (Hn O); auto with arith.
-      + eapply IHl1 with d; intros; auto.
-        rewrite (Hn (S n)); auto with arith.
-  Qed.
-  Lemma list_eq_ext2 :
-    forall A (l1 l2 : list A),
-      (forall n, nth_error l1 n = nth_error l2 n) ->
-      l1 = l2.
-  Proof.
-    clear.
-    induction l1; intros * Hn.
-    - destruct l2; simpl in *; auto.
-      specialize (Hn O); inv Hn.
-    - destruct l2.
-      specialize (Hn O); inv Hn.
-      f_equal.
-      + now injection (Hn O).
-      + eapply IHl1; intros; auto.
-        apply (Hn (S n)).
-  Qed.
-
+  (* Forall2t est bien l'analogue de Forall2 sur la matrice
+     tansposée. *)
   Lemma Forall2t_Forall2 :
     forall ll l (Hl : Forall (fun l' => length l' = length l) ll),
       ll <> [] ->
@@ -264,13 +279,13 @@ Section test.
       Forall2 P (proj1_sig (transp ll (exist _ _ Hl))) l.
   Proof.
     intros * Nnil Hft.
-    rewrite Forall2t_forall2 in Hft; auto.
     apply Forall2_forall2.
     destruct transp as [ll' [Hlt Ht]]; simpl in *.
     destruct Hlt as [Hlt Hf]; auto.
     split; auto.
     intros * Hn ??; subst.
     rewrite (nth_indep _ _ [] Hn).
+    rewrite (Forall2t_forall2 _ _ b) in Hft; auto.
     assert ((nth n ll' []) =  (map (fun l => nth n l d) ll)) as ->.
     2: apply Hft; congruence.
     eapply list_eq_ext with d.
@@ -282,47 +297,90 @@ Section test.
       now rewrite Hf in Hm.
   Qed.
 
-End test.
+End Forall2t.
 
-(* TODO: sans doute un peu de boulot avec Forall2Brs avant que ça passe *)
-Lemma TEST :
-  forall (G : global) H b,
-  forall ess vss d Hk,
-    vss <> [] ->
-    Forall2
-      (fun '(t, es) (vs : list (enumtag * Stream svalue)) =>
-         exists xss : list (list (Stream svalue)),
-           Forall2 (sem_exp G H b) es xss /\ vs = map (pair t) (concat xss)) ess vss ->
-    Forall2Brs (sem_exp G H b) ess (proj1_sig (transp d vss Hk)).
-Proof.
-  intros * Nnil Hf.
-  destruct (transp d vss Hk) as (vsst & HH & Hnm).
-  destruct HH as [Hlt Hllt]; auto; simpl in *; clear HH.
-Admitted.
 
-(* Definition d := (32 : enumtag, Streams.const absent : Stream svalue). *)
-Lemma Smerge_alt :
-  forall (G : global) H b x tx ess lann os,
-  forall d (xs : Stream svalue) (vss : list (list (enumtag * Stream svalue))),
-    vss <> [] ->
-    Forall (fun l => length l = length os) vss ->
-    Forall2 (fun '(t,es) vs =>
-               exists xss, Forall2 (sem_exp G H b) es xss
-                      /\ vs = map (pair t) (concat xss)) ess vss  ->
-    sem_var (fst H) x xs ->
-    Forall2t d (merge xs) vss os ->
-    sem_exp G H b (Emerge (x, tx) ess lann) os.
-Proof.
-  intros * Nnil Hk Hf Hx Ht.
-  unshelve eapply Forall2t_Forall2 in Ht; auto.
-  unshelve eapply TEST in Hf; eauto.
-  revert Ht Hf.
-  destruct (transp d vss _) as (vsst & HH); intros; simpl in *.
-  destruct HH as ([Hlt Hllt] & Hnm); auto.
-  apply Smerge with xs vsst; auto.
-Qed.
 
-(* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  *)
+(** Dans cette section on donne une définition alternative à la sémantique
+    du merge (LSemantics.Smerge), qui ne manipule pas de Forall2Brs.
+    Il est probable que ça passe mieux avec les définitions de Denot.v. *)
+Section Smerge_alt.
+
+  Lemma Forall2Brs_transp :
+    forall (G : global) H b,
+    forall ess vss d Hk,
+      vss <> [] ->
+      Forall2
+        (fun '(t, es) (vs : list (enumtag * Stream svalue)) =>
+           exists xss : list (list (Stream svalue)),
+             Forall2 (sem_exp G H b) es xss /\ vs = map (pair t) (concat xss)) ess vss ->
+      Forall2Brs (sem_exp G H b) ess (proj1_sig (transp d vss Hk)).
+  Proof.
+    intros * Nnil Hf.
+    destruct (transp d vss Hk) as (vsst & HH & Hnm).
+    destruct HH as [Hlt Hllt]; auto; simpl in *; clear HH.
+    destruct Hk as (k & Hk); simpl in *; subst.
+    clear Nnil.
+    revert dependent vsst.
+    induction Hf; intros.
+    - constructor.
+      simpl_Forall. destruct x; simpl in *; congruence.
+    - destruct x as (t, es).
+      destruct H0 as (xss & Hsem & ?); subst.
+      inv Hk.
+      econstructor; eauto.
+      + eapply (IHHf (map (@tl _) vsst)).
+        * simpl_Forall. now rewrite map_length.
+        * intros; destruct (Nat.le_gt_cases (length vsst) m).
+          2: erewrite map_nth', <- tl_nth, Hnm; auto.
+          setoid_rewrite nth_overflow at 2.
+          2: rewrite map_length; auto.
+          rewrite nth_nil, nth_overflow; auto.
+          destruct (nth_in_or_default n l' []) as [| ->]; simpl in *; try lia.
+          simpl_Forall; lia.
+        * simpl_Forall. rewrite tl_length; lia.
+      + rewrite Forall3_map_2, Forall3_same_2_3.
+        clear IHHf.
+        rewrite map_length in *.
+        apply Forall2_forall2; split; intros; subst; auto.
+        rewrite nth_indep with (d' := []); try lia.
+        assert (In (nth n vsst []) vsst) as Hin.
+        { apply nth_In; congruence. }
+        simpl_Forall.
+        destruct (nth n vsst []) eqn:GG; simpl in *; try lia.
+        f_equal.
+        specialize (Hnm O n).
+        rewrite GG in Hnm; simpl in Hnm; subst.
+        erewrite map_nth'; eauto.
+  Qed.
+
+  (** Cette définition semble plus naturelle : vss correspond exactement
+      à la matrice de concaténation de [sem_exp] sur ess, l'opérateur
+      merge relationnel est appliqué sur les lignes de la matrice
+      grâce à Forall2t. *)
+  Lemma Smerge_alt :
+    forall (G : global) H b x tx ess lann os,
+    forall d (xs : Stream svalue) (vss : list (list (enumtag * Stream svalue))),
+      sem_var (fst H) x xs ->
+      vss <> [] ->
+      Forall (fun l => length l = length os) vss ->
+      Forall2 (fun '(t,es) vs =>
+                 exists xss, Forall2 (sem_exp G H b) es xss
+                        /\ vs = map (pair t) (concat xss)) ess vss  ->
+      Forall2t d (merge xs) vss os ->
+      sem_exp G H b (Emerge (x, tx) ess lann) os.
+  Proof.
+    intros * Hx Nnil Hl Hf Ht.
+    unshelve eapply Forall2t_Forall2 in Ht; auto.
+    unshelve eapply Forall2Brs_transp in Hf; eauto.
+    revert Ht Hf.
+    destruct (transp d vss _) as (vsst & HH); intros; simpl in *.
+    destruct HH as ([Hlt Hllt] & Hnm); auto.
+    apply Smerge with xs vsst; auto.
+  Qed.
+
+End Smerge_alt.
+
 
 (* TODO: à terme, mettre cette section dans LSemantics *)
 Section Sem_absent.
@@ -441,6 +499,31 @@ Proof.
       apply Forall2_repeat.
       apply when_spec. intros n.
       left. repeat split; apply const_nth.
+  - (* Emerge *)
+    simpl.
+    pose (vss := map (fun '(t,es) => repeat (t, @Streams.const svalue absent)
+                                    (list_sum (map numstreams es))) es).
+    assert (Hl : Forall (fun l => length l = length tys) vss).
+    { subst vss.
+      simpl_Forall; subst.
+      now rewrite repeat_length, length_typesof_annots, annots_numstreams. }
+    eapply Smerge_alt with (d := (46, Streams.const absent)) (vss := vss);
+      subst vss; rewrite ?repeat_length; auto using map_eq_nnil.
+    + econstructor; now eauto.
+    + subst H0.
+      simpl_Forall.
+      exists (map (fun e => repeat (Streams.const absent) (numstreams e)) l).
+      split; simpl_Forall; eauto.
+      rewrite concat_map, map_map, <- flat_map_repeat, flat_map_concat_map.
+      f_equal; auto using map_ext, map_repeat.
+    + eapply Forall2t_forall2 with (b := Streams.const absent);
+        rewrite ?repeat_length; intros; auto.
+      rewrite nth_repeat, map_map; simpl.
+      apply merge_spec; intros.
+      left; repeat split; auto using const_nth.
+      simpl_Forall; subst.
+      rewrite nth_repeat_in; simpl; auto using const_nth.
+      now rewrite <- annots_numstreams, <- length_typesof_annots.
   - (* Eapp *)
     eapply Sapp with
       (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es);
