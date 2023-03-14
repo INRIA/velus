@@ -446,6 +446,20 @@ Proof.
     auto; intros ?? Hic ?; now apply Hfr in Hic.
 Qed.
 
+Lemma first_rem_eq :
+  forall D (xs ys : DS D),
+    first xs == first ys ->
+    rem xs == rem ys ->
+    xs == ys.
+Proof.
+  intros.
+  apply DS_bisimulation_allin1 with
+    (R := fun U V => first U == first V
+                  /\ rem U == rem V); auto.
+  now intros * [] <- <-.
+  clear; intros xs ys Hc [Hf Hr]; auto.
+Qed.
+
 (** *** Simpler principle than DSle_rec_eq  *)
 Lemma DSle_rec_eq2 : forall D (R : DStr D -> DStr D -> Prop),
     (forall x1 x2 y1 y2:DS_ord D, R x1 y1 -> x1==x2 -> y1==y2 -> R x2 y2) ->
@@ -2325,6 +2339,14 @@ Section Nprod_Foldi.
       = f i (nprod_Foldi l f a (nprod_tl np)) (nprod_hd np).
   Proof.
     trivial.
+  Qed.
+
+  Lemma Foldi_fold_right : forall l f a np,
+      nprod_Foldi l f a np = fold_right (fun '(i, x) a => f i a x) a (combine l (list_of_nprod np)).
+  Proof.
+    induction l; intros; auto.
+    rewrite Foldi_cons; simpl.
+    do 2 f_equal; eauto.
   Qed.
 
   Lemma forall_nprod_Foldi :
