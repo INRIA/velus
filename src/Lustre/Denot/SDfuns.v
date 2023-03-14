@@ -572,6 +572,8 @@ Section SStream_functions.
   Variable tag_of_val : B -> option enumtag.
   Variable tag_eqb : enumtag -> enumtag -> bool.
 
+  Hypothesis tag_eqb_eq : forall t1 t2, tag_eqb t1 t2 = true -> t1 = t2.
+
   Definition swhenf (k : enumtag) :
     (DS (sampl A * sampl B) -C-> DS (sampl A)) -C->
     (DS (sampl A * sampl B) -C-> DS (sampl A)).
@@ -666,11 +668,15 @@ Section SStream_functions.
     eapply zip_is_cons; eauto.
   Qed.
 
+  (** Le cas du merge est plus délicat car il opère sur une liste
+      (nprod) de flots. On utilise pour ça [nprod_Foldi], qui effectue
+      un fold_right sur la liste combinée des flots et des informations
+      de tag. (quel flot correspond à quel tag ?).
+   *)
+
   (* TODO: move, déjà présent dans Vélus... *)
   Definition or_default {A} (d: A) (o: option A) : A :=
     match o with Some a => a | None => d end.
-
-  (** Définition du merge *)
 
   Definition is_tag (i : enumtag) (x : sampl B) : sampl bool :=
     match x with
@@ -681,66 +687,58 @@ Section SStream_functions.
     | err e => err e
     end.
 
-  (* première version, sans ZIP3 mais avec un llift *)
-  Definition smerge_ (l : list enumtag) :
-    DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
-    (* permutation des arguments pour l'utilisation de llift *)
-    refine (curry ((_ @2_ SND _ _) (FST _ _))).
-    refine (curry (_ @_ uncurry (llift (ZIP pair)))).
-    exact (nprod_Foldi l
-              (fun j => ZIP (fun a '(x,c) =>
-                            match is_tag j c, a, x with
-                             | abs, abs, abs => abs
-                             | pres true, abs, pres v => pres v
-                             | pres false, a, abs => a
-                             | _,_,_ => err error_Cl
-                             end)) (DS_const abs)).
-  Defined.
+  (* Selon le statut de la condition, on initialise l'accumulateur du
+     fold_right avec [abs] ou [error_Ty].  *)
+  Definition defcon (c : sampl B) : sampl A :=
+    match c with
+    | abs => abs
+    | pres _ => err error_Ty
+    | err e => err e
+    end.
 
-  Lemma smerge__eq :
-    forall l C np,
-      smerge_ l C np =
-        nprod_Foldi l (fun j =>
-                       ZIP (fun a '(x,c) =>
-                              match is_tag j c, a, x with
-                              | abs, abs, abs => abs
-                              | pres true, abs, pres v => pres v
-                              | pres false, a, abs => a
-                              | _,_,_ => err error_Cl
-                              end))
-          (DS_const abs) (llift (ZIP pair) np C).
-  Proof.
-    trivial.
-  Qed.
+  (* La fonction qu'on va passer à fold_right pour calculer le merge :
+     - si la condition est [pres i], on part de [error_Ty] et on
+       espère que le flot de tag i soit présent et les autre absents;
+     - si la condition est [abs], on part de [abs] et on vérifie que
+       tous les flots sont absents. *)
+  (* j/x : tag/flot examinés dans la liste, c : condition, a : accumulateur *)
+  Definition fmerge (j : enumtag) (c : sampl B) (x a : sampl A) :=
+    match is_tag j c, a, x with
+    | abs, abs, abs => abs
+    | pres true, err error_Ty, pres v => pres v
+    | pres false, a, abs => a
+    | _,_,_ => err error_Cl
+    end.
 
   Definition smerge (l : list enumtag) :
     DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
     eapply fcont_comp2.
     apply nprod_Foldi.
-    2: apply CTE, (DS_const abs).
+    2: apply (MAP defcon).
     apply ford_fcont_shift; intro j.
-    apply (ZIP3 (fun c a x =>
-                   match is_tag j c, a, x with
-                   | abs, abs, abs => abs
-                   | pres true, abs, pres v => pres v
-                   | pres false, a, abs => a
-                   | _,_,_ => err error_Cl
-                   end)).
+    apply (ZIP3 (fmerge j)).
   Defined.
 
   Lemma smerge_eq :
     forall l C np,
-      smerge l C np =
-        nprod_Foldi l (fun j => ZIP3 (fun c a x =>
-                                     match is_tag j c, a, x with
-                                     | abs, abs, abs => abs
-                                     | pres true, abs, pres v => pres v
-                                     | pres false, a, abs => a
-                                     | _,_,_ => err error_Cl
-                                     end) C) (DS_const abs) np.
+      smerge l C np = nprod_Foldi l (fun j => ZIP3 (fmerge j) C) (map defcon C) np.
   Proof.
     trivial.
   Qed.
+
+  (* Une définition alternative du merge est la suivante, avec
+     accumulateur initial [abs]. Elle est plus simple mais ne permet pas
+     d'exclure le cas où une branche est manquante (c = pres j mais j∉l).
+
+   Definition fmerge (c : sampl B) :=
+    fun '(j, x) (a : sampl A) =>
+      match is_tag j c, a, x with
+      | abs, abs, abs => abs
+      | pres true, abs, pres v => pres v
+      | pres false, a, abs => a
+      | _,_,_ => err error_Cl
+      end.
+   *)
 
   Lemma smerge_is_cons :
     forall l C np,
@@ -756,7 +754,7 @@ Section SStream_functions.
       split; auto.
     - intros * _.
       rewrite smerge_eq, Foldi_cons.
-      intros (?& Hc &?) % zip3_is_cons.
+      intros (?&? & Hc) % zip3_is_cons.
       apply (IHl C (nprod_tl np)) in Hc as []; try congruence.
       do 2 (split; auto).
   Qed.
@@ -780,8 +778,7 @@ Section SStream_functions.
       == smerge l (rem C) (lift (REM _) np).
   Proof.
     induction l; intros.
-    - rewrite 2 smerge_eq, 2 Foldi_nil.
-      now rewrite DS_const_eq, rem_cons at 1.
+    - now rewrite 2 smerge_eq, 2 Foldi_nil, rem_map.
     - rewrite 2 smerge_eq, 2 Foldi_cons, <- 2 smerge_eq.
       now rewrite rem_zip3, lift_hd, lift_tl, IHl.
   Qed.
@@ -804,14 +801,8 @@ Section SStream_functions.
     forall l c cs np,
     forall (Hc : forall_nprod (@is_cons _) np),
       smerge l (cons c cs) np
-      == cons (fold_right (fun '(j, x) a =>
-                             match is_tag j c, a, x with
-                             | abs, abs, abs => abs
-                             | pres true, abs, pres v => pres v
-                             | pres false, a, abs => a
-                             | _,_,_ => err error_Cl
-                             end)
-                 abs (combine l (nprod_hds np Hc)))
+      == cons (fold_right (fun '(j,x) => fmerge j c x) (defcon c)
+                 (combine l (nprod_hds np Hc)))
            (smerge l cs (lift (REM _) np)).
   Proof.
     intros.
@@ -819,7 +810,7 @@ Section SStream_functions.
     - rewrite first_cons, smerge_eq, Foldi_fold_right.
       revert dependent np; clear.
       induction l; intros.
-      + simpl. now rewrite DS_const_eq, first_cons.
+      + simpl. now rewrite first_map, first_cons, map_eq_cons, map_bot.
       + simpl.
         rewrite first_zip3, first_cons, (IHl _ (forall_nprod_tl _ _ Hc)).
         clear IHl.
@@ -830,10 +821,76 @@ Section SStream_functions.
         { destruct (uncons _) as (?&?& Hd); simpl.
           apply decomp_eqCon in Hd; rewrite Hd in Heq.
           now apply Con_eq_simpl in Heq. }
-        rewrite Heq, first_cons, zip3_cons, zip3_bot1; auto.
+        rewrite Heq, first_cons, zip3_cons, zip3_bot1 at 1; auto.
     - now rewrite rem_smerge, 2 rem_cons.
   Qed.
-   (* XXXXXXXXXXXXXXXXXXXXX *)
+
+  (** Caractérisation de fmerge itéré *)
+
+  Lemma fmerge_abs :
+    forall (l : list (enumtag * sampl A)) c,
+      fold_right (fun '(j,x) => fmerge j c x) (defcon c) l = abs ->
+      c = abs /\ Forall (fun '(j, x) => x = abs) l.
+  Proof.
+    induction l as [|[]]; simpl; intros c Hf.
+    { destruct c; simpl in Hf; auto; congruence. }
+    unfold fmerge at 1 in Hf.
+    destruct c as [|k|]; simpl in Hf; try congruence.
+    - split; auto.
+      destruct (fold_right _ _ _) eqn:HH, s; try congruence.
+      apply IHl in HH as []; auto.
+    - unfold or_default, option_map in Hf.
+      destruct (tag_of_val _); try congruence.
+      destruct (tag_eqb _ _), (fold_right _ _ _) as [| |[]] eqn:HH, s; try congruence.
+      apply IHl in HH as []; auto.
+  Qed.
+
+  (* en cours de calcul, ça vaut error_Ty si la bonne branche n'est
+     pas encore atteinte *)
+  Lemma fmerge_pres_abs :
+    forall (l : list (enumtag * sampl A)) i,
+      let c := pres i in
+      fold_right (fun '(j, x) => fmerge j c x) (defcon c) l = err error_Ty ->
+      Forall (fun '(j, x) => x = abs) l.
+  Proof.
+    induction l as [|[]]; simpl; intros i Hf; auto.
+    unfold fmerge in Hf at 1.
+    destruct (is_tag e _) as [|[]|]; try congruence.
+    all: destruct (fold_right _ _ _) as [| |[]] eqn:HH, s; try congruence.
+    all: constructor; eauto.
+  Qed.
+
+  Lemma fmerge_pres :
+    forall (l : list (enumtag * sampl A)) c v,
+      fold_right (fun '(j, x) => fmerge j c x) (defcon c) l = pres v ->
+      exists i,
+        c = pres i
+        /\ Exists (fun '(j, x) => tag_of_val i = Some j /\ x = pres v) l
+        /\ Forall (fun '(j, x) => tag_of_val i <> Some j -> x = abs) l.
+  Proof.
+    induction l as [|[i s]]; simpl; intros * Hf.
+    { destruct c; simpl in Hf; congruence. }
+    unfold fmerge at 1 in Hf.
+    destruct c as [|k|]; simpl in Hf; try congruence.
+    { destruct (fold_right _ _ _) eqn:HH, s; congruence. }
+    exists k; split; auto.
+    unfold or_default, option_map in Hf.
+    destruct (tag_of_val k) as [t|] eqn:Hk; try congruence.
+    destruct (tag_eqb _ _) eqn:Ht.
+    - (* on y est *)
+      apply tag_eqb_eq in Ht; subst.
+      destruct (fold_right _ _ _) as [| |[]] eqn:HH, s; inversion Hf; subst.
+      split; constructor; auto; try congruence.
+      eapply fmerge_pres_abs, Forall_impl in HH; eauto.
+      intros []; congruence.
+    - (* c'est pour plus tard *)
+      destruct s; try congruence.
+      apply IHl in Hf as (k' & Hk' &?&?); inversion Hk'; subst.
+      rewrite Hk in *; split; auto.
+  Qed.
+
+
+  (* XXXXXXXXXXXXXXXXXXXXX *)
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,
