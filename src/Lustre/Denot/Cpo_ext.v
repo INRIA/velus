@@ -2318,14 +2318,14 @@ Section Nprod_Foldi.
   Context {A B : cpo}.
 
   Definition nprod_Foldi : forall (l : list I),
-      (I -O-> A -C-> B -C-> A) -C-> A -C-> @nprod B (length l) -C-> A.
+      (I -O-> B -C-> A -C-> A) -C-> A -C-> @nprod B (length l) -C-> A.
     induction l as [| i l].
     - apply CTE, CTE.
     - apply curry, curry.
       refine ((ID _ @3_ _) _ _).
       + exact (fcont_ford_shift _ _ _ (ID _) i @_ (FST _ _ @_ FST _ _)).
-      + exact ((IHl @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
       + exact (nprod_hd @_ SND _ _).
+      + exact ((IHl @3_ FST _ _ @_ FST _ _) (SND _ _ @_ FST _ _) (nprod_tl @_ SND _ _)).
   Defined.
 
   Lemma Foldi_nil :
@@ -2336,13 +2336,13 @@ Section Nprod_Foldi.
 
   Lemma Foldi_cons : forall i l f a np,
       nprod_Foldi (i :: l) f a np
-      = f i (nprod_Foldi l f a (nprod_tl np)) (nprod_hd np).
+      = f i (nprod_hd np) (nprod_Foldi l f a (nprod_tl np)).
   Proof.
     trivial.
   Qed.
 
   Lemma Foldi_fold_right : forall l f a np,
-      nprod_Foldi l f a np = fold_right (fun '(i, x) a => f i a x) a (combine l (list_of_nprod np)).
+      nprod_Foldi l f a np = fold_right (fun '(i, x) a => f i x a) a (combine l (list_of_nprod np)).
   Proof.
     induction l; intros; auto.
     rewrite Foldi_cons; simpl.
@@ -2352,8 +2352,8 @@ Section Nprod_Foldi.
   Lemma forall_nprod_Foldi :
     forall (P : A -> Prop)
       (Q : B -> Prop)
-      (l : list I) (d : A) (f : I -O-> A -C-> B -C-> A) np,
-      (forall i d1 d2, P d1 -> Q d2 -> P (f i d1 d2)) ->
+      (l : list I) (d : A) (f : I -O-> B -C-> A -C-> A) np,
+      (forall i d1 d2, P d1 -> Q d2 -> P (f i d2 d1)) ->
       P d ->
       forall_nprod Q np ->
       P (nprod_Foldi l f d np).
@@ -2367,9 +2367,9 @@ Section Nprod_Foldi.
 
   (** A weak induction principle for nprod_Foldi *)
   Lemma Foldi_rec :
-    forall (P : A -> Prop) (F : I -O-> A -C-> B -C-> A) d,
+    forall (P : A -> Prop) (F : I -O-> B -C-> A -C-> A) d,
       P d ->
-      (forall i d dd, P dd -> P (F i dd d)) ->
+      (forall i d dd, P dd -> P (F i d dd)) ->
       forall l np,
         P (nprod_Foldi l F d np).
   Proof.
