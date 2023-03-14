@@ -428,7 +428,7 @@ Lemma is_ncons_smerge :
 Proof.
   intros * Hc Hx.
   rewrite smerge_eq.
-  eapply forall_nprod_Foldi in Hx; eauto using is_ncons_DS_const.
+  eapply forall_nprod_Foldi in Hx; eauto using is_ncons_map.
   simpl; intros.
   now apply is_ncons_zip3.
 Qed.
