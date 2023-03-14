@@ -761,6 +761,19 @@ Section SStream_functions.
       do 2 (split; auto).
   Qed.
 
+  Lemma is_cons_smerge :
+    forall l cs xs,
+      is_cons cs ->
+      forall_nprod (@is_cons _) xs ->
+      is_cons (smerge l cs xs).
+  Proof.
+    intros * Hc Hx.
+    rewrite smerge_eq.
+    eapply forall_nprod_Foldi in Hx; eauto using is_cons_DS_const.
+    simpl; intros.
+    now apply is_cons_zip3.
+  Qed.
+
   Lemma rem_smerge :
     forall l C np,
       rem (smerge l C np)
@@ -773,6 +786,54 @@ Section SStream_functions.
       now rewrite rem_zip3, lift_hd, lift_tl, IHl.
   Qed.
 
+  (* XXXXXXXXXXXXXXXXXXXXX *)
+
+  (* TODO: expliquer, simplifier ? *)
+  Definition nprod_hds : forall {D n} (np : @nprod (DS D) n),
+      forall_nprod (@is_cons _) np -> list D.
+    induction n; intros * Hf.
+    - exact [].
+    - exact (projT1 (uncons (forall_nprod_hd _ _ Hf)) :: IHn _ (forall_nprod_tl _ _ Hf)).
+  Defined.
+
+  (* TODO !!!!: utiliser
+     destruct (@is_cons_elim _ (smerge l (cons c cs) (nprod_tl np))) as (?&?& Heq1).
+     partout au lieu d'avoir un assert merdique
+   *)
+  Lemma smerge_cons :
+    forall l c cs np,
+    forall (Hc : forall_nprod (@is_cons _) np),
+      smerge l (cons c cs) np
+      == cons (fold_right (fun '(j, x) a =>
+                             match is_tag j c, a, x with
+                             | abs, abs, abs => abs
+                             | pres true, abs, pres v => pres v
+                             | pres false, a, abs => a
+                             | _,_,_ => err error_Cl
+                             end)
+                 abs (combine l (nprod_hds np Hc)))
+           (smerge l cs (lift (REM _) np)).
+  Proof.
+    intros.
+    apply first_rem_eq.
+    - rewrite first_cons, smerge_eq, Foldi_fold_right.
+      revert dependent np; clear.
+      induction l; intros.
+      + simpl. now rewrite DS_const_eq, first_cons.
+      + simpl.
+        rewrite first_zip3, first_cons, (IHl _ (forall_nprod_tl _ _ Hc)).
+        clear IHl.
+        destruct (@is_cons_elim _ (nprod_hd np)) as (x &?& Heq).
+        { now apply forall_nprod_hd in Hc. }
+        remember (projT1 _) as y eqn:Hy.
+        assert (x = y); subst.
+        { destruct (uncons _) as (?&?& Hd); simpl.
+          apply decomp_eqCon in Hd; rewrite Hd in Heq.
+          now apply Con_eq_simpl in Heq. }
+        rewrite Heq, first_cons, zip3_cons, zip3_bot1; auto.
+    - now rewrite rem_smerge, 2 rem_cons.
+  Qed.
+   (* XXXXXXXXXXXXXXXXXXXXX *)
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,

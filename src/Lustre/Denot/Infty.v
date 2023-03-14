@@ -419,20 +419,6 @@ Proof.
   auto using is_ncons_zip.
 Qed.
 
-Lemma is_cons_smerge :
-  forall T OT TB,
-  forall l cs xs,
-    is_cons cs ->
-    forall_nprod (@is_cons _) xs ->
-    is_cons (@smerge A B T OT TB l cs xs).
-Proof.
-  intros * Hc Hx.
-  rewrite smerge_eq.
-  eapply forall_nprod_Foldi in Hx; eauto using is_cons_DS_const.
-  simpl; intros.
-  now apply is_cons_zip3.
-Qed.
-
 Lemma is_ncons_smerge :
   forall T OT TB,
   forall l n xs cs,
