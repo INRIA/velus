@@ -900,7 +900,19 @@ Section SStream_functions.
       rewrite Hk in *; split; auto.
   Qed.
 
-  (* si l'horloge des ss respectent leur tag, le résultat est correct *)
+  Lemma fmerge_abs_ok :
+    forall (l : list enumtag) (ss : list (sampl A)),
+      let c := abs in
+      Forall (eq abs) ss ->
+      fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = abs.
+  Proof.
+    induction l; intros * Heq; auto.
+    destruct ss; auto.
+    inversion_clear Heq; subst; simpl.
+    rewrite IHl; auto.
+  Qed.
+
+  (* si les horloges des ss respectent leur tag, le résultat est correct *)
   Lemma fmerge_pres_ok :
     forall (l : list enumtag) (ss : list (sampl A)) vt i,
       let c := pres vt in
@@ -911,11 +923,20 @@ Section SStream_functions.
                        | abs => j <> i
                        | err _ => False
                        end) l ss ->
-      (In i l -> exists v, fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = pres v)
-      /\ (~ In i l -> fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = err error_Ty)
-.
+      In i l ->
+      exists v, fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = pres v.
   Proof.
-    induction l; simpl; intros * Hv Nd Hf; try tauto.
+    intros * Hv Nd Hf.
+    (* il faut renforcer un peu l'invariant : *)
+    enough ((In i l ->
+             exists v, fold_right (fun '(j, x) => fmerge j c x)
+                    (defcon c) (combine l ss) = pres v)
+            /\ (~ In i l ->
+               fold_right (fun '(j, x) => fmerge j c x)
+                 (defcon c) (combine l ss) = err error_Ty)); [ tauto|].
+    revert dependent ss.
+    subst c; simpl.
+    induction l; simpl; intros; try tauto.
     destruct ss as [| s ss]; inversion_clear Hf.
     inversion_clear Nd.
     edestruct IHl as [Hin Hnin]; eauto; clear IHl.
