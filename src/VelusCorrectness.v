@@ -224,20 +224,18 @@ Qed.
 Theorem behavior_asm:
   forall D G Gp P main ins outs,
     elab_declarations D = OK (exist _ G Gp) ->
+    lustre_to_asm (Some main) G = OK P ->
     wt_ins G main ins ->
     wc_ins G main (pStr ins) ->
     Sem.sem_node G main (pStr ins) (pStr outs) ->
-    compile D (Some main) = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
-  intros * Elab Hwti Hwci Hsem Comp.
-  unfold compile, print in Comp.
-  rewrite Elab in Comp. simpl in Comp.
+  intros * Elab Comp Hwti Hwci Hsem.
+  unfold lustre_to_asm, print in Comp. simpl in Comp.
   destruct (l_to_nl G) as [G'|] eqn: Comp'; simpl in Comp; try discriminate.
-  destruct (nl_to_asm (Some main) G') as [p|] eqn: Comp''; inv Comp.
   destruct Gp as (Hwc&Hwt).
-  eapply behavior_nl_to_asm with (ins:=ins) (outs:=outs) in Comp'' as (T&Hbeh&Hbisim).
+  eapply behavior_nl_to_asm with (ins:=ins) (outs:=outs) in Comp as (T&Hbeh&Hbisim).
   - exists T. split; auto.
     inv Hbisim.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&Hout); eauto.

@@ -122,8 +122,12 @@ Definition nl_to_asm (main_node: option ident) (g: NL.Syn.global) : res Asm.prog
      @@ add_builtins
      @@@ transf_clight2_program.
 
+Definition lustre_to_asm (main_node: option ident) G : res Asm.program :=
+  OK G
+    @@@ l_to_nl
+    @@@ nl_to_asm main_node.
+
 Definition compile (D: list LustreAst.declaration) (main_node: option ident) : res Asm.program :=
   elab_declarations D
                     @@ @proj1_sig _ _
-                    @@@ l_to_nl
-                    @@@ nl_to_asm main_node.
+                    @@@ lustre_to_asm main_node.
