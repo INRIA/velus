@@ -804,6 +804,21 @@ Section SStream_functions.
     - exact (projT1 (uncons (forall_nprod_hd _ _ Hf)) :: IHn _ (forall_nprod_tl _ _ Hf)).
   Defined.
 
+  Lemma Forall2_hds :
+    forall I D (P : I -> D -> Prop) (Q : I -> DS D -> Prop),
+      (forall i x u U, x == cons u U -> Q i x -> P i u) ->
+      forall (l : list I) (np : @nprod (DS D) (length l)) Icn,
+      Forall2 Q l (list_of_nprod np) ->
+      Forall2 P l (nprod_hds np Icn).
+  Proof.
+    clear.
+    intros * QP.
+    induction l; intros * Hf; inv Hf; constructor; auto.
+    destruct (uncons _) as (?&?& Hd); simpl.
+    apply decomp_eqCon in Hd.
+    eapply QP; eauto.
+  Qed.
+
   (* TODO !!!!: utiliser
      destruct (@is_cons_elim _ (smerge l (cons c cs) (nprod_tl np))) as (?&?& Heq1).
      partout au lieu d'avoir un assert merdique
