@@ -813,7 +813,7 @@ Section SStream_functions.
   Proof.
     clear.
     intros * QP.
-    induction l; intros * Hf; inv Hf; constructor; auto.
+    induction l; intros * Hf; inversion_clear Hf; constructor; auto.
     destruct (uncons _) as (?&?& Hd); simpl.
     apply decomp_eqCon in Hd.
     eapply QP; eauto.
