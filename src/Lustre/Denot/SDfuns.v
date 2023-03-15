@@ -572,7 +572,18 @@ Section SStream_functions.
   Variable tag_of_val : B -> option enumtag.
   Variable tag_eqb : enumtag -> enumtag -> bool.
 
-  Hypothesis tag_eqb_eq : forall t1 t2, tag_eqb t1 t2 = true -> t1 = t2.
+  Hypothesis tag_eqb_eq : forall t1 t2, tag_eqb t1 t2 = true <-> t1 = t2.
+
+  Lemma tag_eqb_refl : forall t, tag_eqb t t = true.
+  Proof. intro; now apply tag_eqb_eq. Qed.
+
+  Lemma tag_eqb_neq : forall t1 t2, tag_eqb t1 t2 = false <-> t1 <> t2.
+  Proof.
+    intros.
+    destruct (tag_eqb _ _) eqn:HH.
+    - firstorder; congruence.
+    - firstorder; intros HHH%tag_eqb_eq; congruence.
+  Qed.
 
   Definition swhenf (k : enumtag) :
     (DS (sampl A * sampl B) -C-> DS (sampl A)) -C->
@@ -889,6 +900,39 @@ Section SStream_functions.
       rewrite Hk in *; split; auto.
   Qed.
 
+  (* si l'horloge des ss respectent leur tag, le résultat est correct *)
+  Lemma fmerge_pres_ok :
+    forall (l : list enumtag) (ss : list (sampl A)) vt i,
+      let c := pres vt in
+      tag_of_val vt = Some i ->
+      NoDup l ->
+      Forall2 (fun j x => match x with
+                       | pres _ => j = i
+                       | abs => j <> i
+                       | err _ => False
+                       end) l ss ->
+      (In i l -> exists v, fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = pres v)
+      /\ (~ In i l -> fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = err error_Ty)
+.
+  Proof.
+    induction l; simpl; intros * Hv Nd Hf; try tauto.
+    destruct ss as [| s ss]; inversion_clear Hf.
+    inversion_clear Nd.
+    edestruct IHl as [Hin Hnin]; eauto; clear IHl.
+    simpl; unfold fmerge at 1 3; simpl.
+    unfold or_default, option_map.
+    rewrite Hv.
+    split.
+    - intros [| Ini]; subst.
+      + destruct s; try tauto.
+        rewrite tag_eqb_refl.
+        setoid_rewrite Hnin; eauto.
+      + destruct s; subst; try tauto.
+        rewrite (proj2 (tag_eqb_neq a i)); eauto.
+    - intro Nin.
+      rewrite (proj2 (tag_eqb_neq a i)); auto.
+      destruct s; subst; tauto.
+  Qed.
 
   (* XXXXXXXXXXXXXXXXXXXXX *)
 
