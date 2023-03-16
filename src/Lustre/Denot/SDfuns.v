@@ -804,6 +804,13 @@ Section SStream_functions.
     - exact (projT1 (uncons (forall_nprod_hd _ _ Hf)) :: IHn _ (forall_nprod_tl _ _ Hf)).
   Defined.
 
+  Lemma hds_length :
+    forall D n (np : @nprod (DS D) n) npc,
+      length (nprod_hds np npc) = n.
+  Proof.
+    induction n; simpl; auto.
+  Qed.
+
   Lemma Forall2_hds :
     forall I D (P : I -> D -> Prop) (Q : I -> DS D -> Prop),
       (forall i x u U, x == cons u U -> Q i x -> P i u) ->
