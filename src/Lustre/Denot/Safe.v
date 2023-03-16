@@ -1236,7 +1236,7 @@ Section SDfuns_safe.
       apply cons_eq_compat; auto.
       cases_eqn HH; subst.
       apply fmerge_abs in HH as []; congruence.
-      1,2: apply fmerge_pres in HH as (?&?&?); try congruence; apply Nat.eqb_eq.
+      1,2: apply fmerge_pres in HH as (?&?&?&?&?); try congruence; apply Nat.eqb_eq.
       (* montrons qu'il ne peut pas y avoir d'erreur dans ce cas *)
       exfalso.
       destruct a as [|j]; take (value_belongs _ _) and simpl in it; try tauto.
