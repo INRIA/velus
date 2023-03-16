@@ -892,8 +892,8 @@ Section SStream_functions.
       exists vc i,
         c = pres vc
         /\ tag_of_val vc = Some i
-        /\ Exists (fun '(j, x) => i = j /\ x = pres v) l
-        /\ Forall (fun '(j, x) => i <> j -> x = abs) l.
+        /\ Exists (fun '(j, x) => j = i /\ x = pres v) l
+        /\ Forall (fun '(j, x) => j <> i -> x = abs) l.
   Proof.
     induction l as [|[i s]]; simpl; intros * Hf.
     { destruct c; simpl in Hf; congruence. }
