@@ -2056,14 +2056,20 @@ Lemma forall_nprod_lift :
   forall (F : D1 -C-> D2),
   forall (P : D2 -> Prop),
   forall {n} (np : nprod n),
-    forall_nprod (fun x => P (F x)) np ->
-    forall_nprod P (lift F np).
+    forall_nprod (fun x => P (F x)) np <->
+      forall_nprod P (lift F np).
 Proof.
-  intros * Hf.
-  induction n as [|[]]; auto.
-  inversion Hf.
-  constructor; auto.
-  now apply IHn.
+  split.
+  - intros * Hf.
+    induction n as [|[]]; auto.
+    inversion Hf.
+    constructor; auto.
+    now apply IHn.
+  - intros * Hf.
+    induction n as [|[]]; auto.
+    inversion Hf.
+    constructor; auto.
+    now apply IHn.
 Qed.
 
 Definition llift {A} (F : D1 -C-> A -C-> D2) {n} :
