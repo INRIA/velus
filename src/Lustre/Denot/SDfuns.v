@@ -889,19 +889,20 @@ Section SStream_functions.
   Lemma fmerge_pres :
     forall (l : list (enumtag * sampl A)) c v,
       fold_right (fun '(j, x) => fmerge j c x) (defcon c) l = pres v ->
-      exists i,
-        c = pres i
-        /\ Exists (fun '(j, x) => tag_of_val i = Some j /\ x = pres v) l
-        /\ Forall (fun '(j, x) => tag_of_val i <> Some j -> x = abs) l.
+      exists vc i,
+        c = pres vc
+        /\ tag_of_val vc = Some i
+        /\ Exists (fun '(j, x) => i = j /\ x = pres v) l
+        /\ Forall (fun '(j, x) => i <> j -> x = abs) l.
   Proof.
     induction l as [|[i s]]; simpl; intros * Hf.
     { destruct c; simpl in Hf; congruence. }
     unfold fmerge at 1 in Hf.
     destruct c as [|k|]; simpl in Hf; try congruence.
     { destruct (fold_right _ _ _) eqn:HH, s; congruence. }
-    exists k; split; auto.
     unfold or_default, option_map in Hf.
     destruct (tag_of_val k) as [t|] eqn:Hk; try congruence.
+    exists k, t; do 2 split; auto.
     destruct (tag_eqb _ _) eqn:Ht.
     - (* on y est *)
       apply tag_eqb_eq in Ht; subst.
@@ -911,8 +912,9 @@ Section SStream_functions.
       intros []; congruence.
     - (* c'est pour plus tard *)
       destruct s; try congruence.
-      apply IHl in Hf as (k' & Hk' &?&?); inversion Hk'; subst.
-      rewrite Hk in *; split; auto.
+      apply IHl in Hf as (vc & k' & Hk' & Ht' &?&?).
+      inversion Hk'; subst.
+      rewrite Hk in *; inversion Ht'; split; auto.
   Qed.
 
   Lemma fmerge_abs_ok :
