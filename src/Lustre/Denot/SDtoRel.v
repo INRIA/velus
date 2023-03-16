@@ -29,6 +29,39 @@ Module Type SDTOREL
        (Import Inf   : LDENOTINF  Ids Op OpAux Cks Senv Syn Typ Caus Lord Den)
        (Import Safe  : LDENOTSAFE Ids Op OpAux Cks Senv Syn Typ Cl Lord Den).
 
+
+(* TODO: move, where ? *)
+Global Add Parametric Morphism A B f (Hf : Proper (@EqSt A ==> @EqSt B) f) : (map f)
+    with signature (@EqSts A) ==> (@EqSts B)
+      as map_eqsts_morph.
+Proof.
+  induction 1; constructor; auto.
+Qed.
+
+(* TODO: move, where ? *)
+Global Add Parametric Morphism A B (f : A -> B) eqA (Hf : Proper (eqA ==> @eq B) f)
+  : (map f)
+    with signature Forall2 eqA ==> eq
+      as map_morph.
+Proof.
+  induction 1; simpl; auto.
+Qed.
+
+  (* TODO: c'est déjà dans Vélus ou pas ? *)
+Lemma eq_EqSts:
+  forall {A}, inclusion (list (Stream A)) eq (@EqSts A).
+Proof.
+  intros ? xs xs' E.
+  now rewrite E.
+Qed.
+
+(* remember with [Streams.EqSts] instead of [eq] *)
+Tactic Notation "remember_sts" constr(s) "as" ident(x) :=
+  let Hx := fresh "H"x in
+  remember s as x eqn:Hx;
+  apply symmetry, eq_EqSts in Hx.
+
+
 (* XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  *)
 
 (* TODO: inutile finalement ? *)
@@ -661,18 +694,17 @@ Qed.
 (** lift S_of_DSv on lists of streams  *)
 Definition Ss_of_nprod {n} (np : @nprod (DS (sampl value)) n)
   (Hinf : forall_nprod (@infinite _) np) : list (Stream svalue).
-  induction n as [|[]].
+  induction n.
   - exact [].
-  - exact [S_of_DSv np Hinf].
-  - exact (S_of_DSv (fst np) (proj1 Hinf) :: IHn (snd np) (proj2 Hinf)).
+  - exact (S_of_DSv (nprod_hd np) (forall_nprod_hd _ _ Hinf)
+             :: IHn (nprod_tl np) (forall_nprod_tl _ _ Hinf)).
 Defined.
 
 Lemma Ss_of_nprod_length :
   forall n (np : nprod n) infn,
     length (Ss_of_nprod np infn) = n.
 Proof.
-  clear.
-  induction n as [|[]]; simpl; eauto.
+  induction n; simpl; eauto.
 Qed.
 
 Lemma _Ss_of_nprod_eq :
@@ -680,15 +712,11 @@ Lemma _Ss_of_nprod_eq :
     np == np' ->
     EqSts (Ss_of_nprod np Hinf) (Ss_of_nprod np' Hinf').
 Proof.
-  induction n as [|[]]; intros * Heq.
+  induction n; intros * Heq.
   - constructor.
-  - constructor; auto.
-    now apply _S_of_DS_eq.
-  - apply Dprod_eq_elim_fst in Heq as ?.
-    apply Dprod_eq_elim_snd in Heq as ?.
-    constructor; simpl; eauto.
-    apply _S_of_DS_eq. auto.
-    apply IHn. auto.
+  - constructor.
+    + now apply _S_of_DS_eq; rewrite Heq.
+    + now apply IHn; rewrite Heq.
 Qed.
 
 (* utilisation : edestruct (Ss_of_nprod_eq _ Hinf) as [Inf' ->] *)
@@ -713,13 +741,11 @@ Proof.
   intros * Hk.
   exists (forall_nprod_k _ _ Inf k d Hk).
   revert_all.
-  induction n as [|[]]; intros.
+  induction n; intros.
   - inv Hk.
-  - assert (k = O) by lia; subst; simpl.
-    now apply _S_of_DS_eq.
-  - destruct k.
+  - destruct k; simpl.
     + now apply _S_of_DS_eq.
-    + unshelve rewrite (IHn (snd np) (proj2 Inf) k d s); auto with arith.
+    + unshelve erewrite IHn; auto with arith.
       now apply _S_of_DS_eq.
 Qed.
 
@@ -750,6 +776,59 @@ Proof.
   destruct (app_forall_nprod _ _ _ Hnm) as [Hn Hm].
   exists Hn,Hm.
   apply _Ss_app.
+Qed.
+
+Lemma Ss_map :
+  forall f (g : DS (sampl value) -C-> DS (sampl value)),
+    (forall x Inf Inf', f (S_of_DSv x Inf) ≡ S_of_DSv (g x) Inf') ->
+    forall n (np : nprod n) Inf Inf',
+      EqSts (map f (Ss_of_nprod np Inf)) (Ss_of_nprod (lift g np) Inf').
+Proof.
+  intros * Hfg.
+  induction n; constructor.
+  - rewrite Hfg.
+    apply _S_of_DS_eq.
+    now rewrite lift_hd.
+  - erewrite IHn.
+    erewrite _Ss_of_nprod_eq.
+    2:{ rewrite <- lift_tl; reflexivity. }
+    reflexivity.
+    Unshelve.
+    * apply forall_nprod_hd in Inf'; now rewrite lift_hd in Inf'.
+    * apply forall_nprod_lift in Inf'.
+      now apply forall_nprod_lift, forall_nprod_tl.
+Qed.
+
+Lemma tl_rem :
+  forall s Inf Inf',
+    Streams.tl (S_of_DSv s Inf) ≡ S_of_DSv (REM _ s) Inf'.
+Proof.
+  intros.
+  apply infinite_decomp in Inf as HH.
+  destruct HH as (h & t & Hs & Inf3).
+  edestruct (S_of_DSv_eq) as [? ->]; [ apply Hs |].
+  edestruct (S_of_DSv_eq) as [? Eq2].
+  2: setoid_rewrite Eq2 at 2.
+  rewrite Hs, REM_simpl, rem_cons; reflexivity.
+  unfold S_of_DSv.
+  rewrite S_of_DS_cons; simpl.
+  now apply _S_of_DS_eq.
+Qed.
+
+Lemma Ss_of_nprod_hds :
+  forall n (np : @nprod (DS (sampl value)) n) npc npi,
+    map sval_of_sampl (nprod_hds np npc) = map (@Streams.hd _) (Ss_of_nprod np npi).
+Proof.
+  induction n; intros; auto.
+  simpl (nprod_hds _ _).
+  simpl (Ss_of_nprod _ _).
+  destruct (uncons _) as (?&?& Hd).
+  simpl (map sval_of_sampl _).
+  apply decomp_eqCon in Hd.
+  edestruct (S_of_DSv_eq) as [Inf ->]; [apply Hd|].
+  unfold S_of_DSv.
+  rewrite S_of_DS_cons.
+  simpl; f_equal; auto.
 Qed.
 
 
@@ -940,6 +1019,92 @@ Proof.
   all: cases; try easy; inv Sr; eauto.
 Qed.
 
+Lemma ok_merge :
+  forall l (cs : DS (sampl value)) (np : nprod (length l)),
+    let rs := smergev l cs np in
+    forall (npi : forall_nprod (@infinite _) np)
+      (csi : infinite cs)
+      (rsi : infinite rs),
+      safe_DS rs ->
+      merge (S_of_DSv cs csi) (combine l (Ss_of_nprod np npi)) (S_of_DSv rs rsi).
+Proof.
+  intros.
+  remember_st (S_of_DSv cs csi) as cs'.
+  remember_st (S_of_DSv rs rsi) as rs'.
+  remember_sts (Ss_of_nprod np npi) as np'.
+  revert_all; intro l.
+  cofix Cof; intros * Sr ? Eqc ? Eqr ? Eqnp. (* ? Eqx. *)
+  destruct cs' as [vc cs'], rs' as [vr rs'].
+  apply S_of_DS_Cons in Eqc as (c & tc & Hcs & Hcvc & itc & Eqc).
+  apply S_of_DS_Cons in Eqr as (r & tr & Hrs & Hrvr & itr & Eqr).
+  (* on fait tout de suite le cas de récurrence *)
+  assert (merge cs' (map (fun '(i, es) => (i, Streams.tl es)) (combine l np')) rs').
+  { replace (map  _ (combine l np')) with (combine l (map (@Streams.tl _) np')).
+    2: rewrite combine_map_snd; apply map_ext; now intros [].
+    apply forall_nprod_impl with (Q := fun x => infinite (REM _ x))
+      in npi as np'i; [|apply rem_infinite].
+    apply forall_nprod_lift in np'i.
+    apply DSForall_rem in Sr.
+    apply rem_eq_compat in Hcs, Hrs.
+    unfold smergev in rs; subst rs.
+    rewrite rem_smerge, rem_cons in *.
+    unshelve eapply Cof with (cs := rem cs) (np := lift _ _);
+      eauto using rem_infinite, smerge_inf.
+    - rewrite <- Eqc; eauto using _S_of_DS_eq.
+    - rewrite <- Eqr; eauto using _S_of_DS_eq.
+    - rewrite <- Eqnp.
+      rewrite Ss_map; auto using tl_rem; reflexivity. }
+  rewrite Hrs in *; inv Sr.
+  subst rs.
+  unfold smergev in Hrs.
+  assert (forall_nprod (@is_cons _) np) as npc.
+  { clear - npi. eapply forall_nprod_impl in npi; eauto. now inversion 1. }
+  rewrite Hcs, (smerge_cons _ _ _ _ _ _ _ npc) in Hrs.
+  apply Con_eq_simpl in Hrs as [Hr Heq].
+  destruct r; simpl in *; subst; try tauto.
+  - (* absent *)
+    apply fmerge_abs in Hr as [? Hf]; subst.
+    constructor; auto.
+    apply Forall2_combine'' in Hf; auto using hds_length.
+    apply Forall2_combine'; simpl.
+    apply (Forall2_map_2 (fun _ x => x = absent) (@Streams.hd _)).
+    rewrite <- Eqnp, <- (Ss_of_nprod_hds _ _ npc).
+    simpl_Forall; subst; auto.
+  - (* present *)
+    apply fmerge_pres in Hr as ([] &?&? & Hx & Hex & Hf); subst;
+      auto using Nat.eqb_eq; try congruence.
+    inversion Hx; subst.
+    constructor; auto.
+    + (* Exists *)
+      clear - Eqnp Hex.
+      apply Forall2_length in Eqnp as Lnp'.
+      apply Exists_nth in Hex as (k & [dt dv] & Hk & Hd).
+      rewrite combine_length in Hk.
+      apply Nat.min_glb_lt_iff in Hk as [Hk _].
+      destruct (nth k (combine l (nprod_hds np npc)) (dt, dv)) as [t v] eqn:Hn.
+      destruct Hd; subst.
+      eapply Exists_nth.
+      eexists k, (dt, Streams.const absent); split.
+      { rewrite combine_length, <- Lnp', Ss_of_nprod_length; lia. }
+      destruct (nth k (combine l np')) eqn:Hn'.
+      unfold EqSts in *.
+      erewrite combine_nth in Hn'.
+      2:{ rewrite Ss_of_nprod_length in *; auto. }
+      rewrite combine_nth in Hn; auto using hds_length.
+      inv Hn. inv Hn'. split; auto.
+      eapply Forall2_nth with (n := k) (a := Streams.const absent) in Eqnp.
+      2:{ rewrite Ss_of_nprod_length; lia. }
+      rewrite <- Eqnp, <- map_nth, <- (Ss_of_nprod_hds _ _ npc).
+      erewrite nth_indep, map_nth, H1; auto.
+      now rewrite map_length, hds_length.
+    + (* Forall *)
+      apply Forall2_combine'' in Hf; auto using hds_length.
+      apply Forall2_combine'; simpl.
+      apply (Forall2_map_2 (fun _ x => _ -> x = absent) (@Streams.hd _)).
+      rewrite <- Eqnp, <- (Ss_of_nprod_hds _ _ npc).
+      simpl_Forall; unfold sval_of_sampl; cases.
+      clear - H4 H5; firstorder congruence.
+Qed.
 
 (** ** Fonctions pour passer d'un [DS_prod SI] à un Str.history *)
 
