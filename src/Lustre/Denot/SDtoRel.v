@@ -1378,15 +1378,15 @@ Proof.
   all: inv Hr; subst ss; simpl.
   - (* Econst *)
     constructor.
-    edestruct (S_of_DSv_eq _ Infe) as [Infe' ->].
-    { rewrite denot_exp_eq. reflexivity. }
+    edestruct S_of_DSv_eq as [Infe' ->].
+    { setoid_rewrite denot_exp_eq. reflexivity. }
     unshelve rewrite <- ok_const; auto using sconst_inf, DS_of_S_inf.
     apply _S_of_DS_eq.
     now rewrite DS_of_S_of_DS.
   - (* Evar *)
-    constructor; simpl.
-    edestruct (S_of_DSv_eq _ Infe) as [Infe' ->].
-    { rewrite denot_exp_eq. reflexivity. }
+    constructor.
+    edestruct S_of_DSv_eq as [Infe' ->].
+    { setoid_rewrite denot_exp_eq. reflexivity. }
     apply sem_hist_of_envs.
   - (* Eunop *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
@@ -1400,7 +1400,8 @@ Proof.
     gen_sub_exps.
     take (numstreams e = 1) and rewrite it.
     take (typeof e = _) and rewrite it.
-    econstructor; eauto using ok_unop.
+    econstructor; eauto.
+    apply ok_unop; auto.
   - (* Ebinop *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
@@ -1415,7 +1416,8 @@ Proof.
     take (numstreams e2 = 1) and rewrite it.
     take (typeof e1 = _) and rewrite it.
     take (typeof e2 = _) and rewrite it.
-    econstructor; eauto using ok_binop.
+    econstructor; eauto.
+    apply ok_binop; auto.
   - (* Efby *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
@@ -1437,10 +1439,17 @@ Proof.
       unfold eq_rect.
       cases; intros; subst; try congruence.
       clear - Hs.
-      induction (list_sum (map numstreams es)) as [|[]];
-        eauto using Forall3_nil, Forall3_cons, ok_fby.
-      inv Hs.
-      constructor; [ simpl; now apply ok_fby | now apply IHn ].
+      induction (list_sum (map numstreams es)); constructor.
+      * edestruct (S_of_DSv_eq) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
+        { rewrite lift2_hd. reflexivity. }
+        apply forall_nprod_hd in Hs.
+        rewrite lift2_hd in Hs.
+        apply ok_fby; auto.
+      * edestruct (@Ss_of_nprod_eq n) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
+        { rewrite lift2_tl. reflexivity. }
+        apply forall_nprod_tl in Hs.
+        rewrite lift2_tl in Hs.
+        eapply IHn; eauto.
   - (* Ewhen *)
     destruct x as [x ty].
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
@@ -1463,9 +1472,17 @@ Proof.
       unfold eq_rect.
       cases; intros; subst; try congruence.
       clear - Hs.
-      induction (list_sum (map numstreams es)) as [|[]]; eauto using Forall2, ok_when.
-      inv Hs.
-      constructor; [ now apply ok_when | now apply IHn ].
+      induction (list_sum (map numstreams es)); constructor.
+      * edestruct (S_of_DSv_eq) as [Inf3 HH]. 2: setoid_rewrite HH at 3.
+        { rewrite llift_hd. reflexivity. }
+        apply forall_nprod_hd in Hs.
+        rewrite llift_hd in Hs.
+        apply ok_when; auto.
+      * edestruct (@Ss_of_nprod_eq n) as [Inf3 HH]. 2: setoid_rewrite HH at 2.
+        { rewrite llift_tl. reflexivity. }
+        apply forall_nprod_tl in Hs.
+        rewrite llift_tl in Hs.
+        eapply IHn; eauto.
   - (* Eapp *)
     eapply safe_exp in Hoc as Hs; eauto using restr_exp.
     apply wt_exp_wl_exp in Hwt as Hwl.
