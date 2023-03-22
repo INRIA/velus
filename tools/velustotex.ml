@@ -249,7 +249,8 @@ let main filename =
   let nb_output = List.length stepme.m_out in
   let fmt = Format.str_formatter in
   Format.fprintf fmt "\\newcommand{\\%schrono}[%d]{\n"
-    clsname nb_output;
+    (String.map (fun c -> if c = '_' then 'X' else c) clsname)
+    nb_output;
   Format.fprintf fmt "\\begin{tabular}{l|%a}\n"
     (repeat_print (nb_column + 1)) "c";
   print_sep_list "\\\\\n" print_line fmt
