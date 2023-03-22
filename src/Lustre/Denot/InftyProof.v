@@ -816,9 +816,24 @@ Corollary infinite_exps :
     forall_nprod (@infinite _) (denot_exps G ins es envG envI bs env).
 Proof.
   induction es; simpl; auto.
-  intros; simpl_Forall.
   setoid_rewrite denot_exps_eq.
   auto using forall_nprod_app, infinite_exp.
+Qed.
+
+Corollary infinite_expss :
+  forall G ins (envG : Dprodi FI) envI bs env,
+    (forall envI f, all_infinite envI -> all_infinite (envG f envI)) ->
+    infinite bs ->
+    all_infinite envI ->
+    all_infinite env ->
+    forall I (ess : list (I * list exp)) n,
+      forall_nprod (forall_nprod (@infinite _)) (denot_expss G ins ess n envG envI bs env).
+Proof.
+  induction ess as [| (i,es) ess]; intros.  { now simpl. }
+  setoid_rewrite denot_expss_eq.
+  unfold eq_rect.
+  cases; eauto using forall_nprod_const, DS_const_inf.
+  eapply (@forall_nprod_app _ _ 1); eauto using infinite_exps.
 Qed.
 
 End LDENOTINF.
