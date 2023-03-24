@@ -1,5 +1,4 @@
-From Coq Require Import Lia.
-From Coq Require Import List.
+From Coq Require Import Lia List Setoid Morphisms.
 Import ListNotations.
 
 From Velus Require Import Common CommonList.
@@ -27,6 +26,96 @@ Lemma map_ignore :
     map (fun _ => b) l = repeat b (length l).
 Proof.
   induction l; simpl; auto.
+Qed.
+
+Lemma tl_length :
+  forall A (l : list A),
+    length (tl l) = Nat.pred (length l).
+Proof.
+  now destruct l.
+Qed.
+
+Lemma nth_nil :
+  forall A n (d : A),
+    nth n [] d = d.
+Proof.
+  destruct n; auto.
+Qed.
+
+Lemma hd_nth :
+  forall A (l : list A) (d : A),
+    nth O l d = hd d l.
+Proof.
+  destruct l; auto.
+Qed.
+
+Lemma tl_nth :
+  forall A (l : list A) (d : A) n,
+    nth (S n) l d = nth n (tl l) d.
+Proof.
+  destruct l, n; auto.
+Qed.
+
+Lemma map_hd_nth :
+  forall A (l : list (list A)) d,
+    map (hd d) l = map (fun l0 => nth 0 l0 d) l.
+Proof.
+  induction l; simpl; f_equal; auto using hd_nth.
+Qed.
+
+Lemma map_tl_nth :
+  forall A (l : list (list A)) n d,
+    map (fun l0 => nth (S n) l0 d) l = map (fun l0 => nth n (tl l0) d) l.
+Proof.
+  induction l; simpl; f_equal; auto using tl_nth.
+Qed.
+
+Lemma list_eq_ext :
+  forall A (l1 l2 : list A) d,
+    length l1 = length l2 ->
+    (forall n, n < length l1 -> nth n l1 d = nth n l2 d) ->
+    l1 = l2.
+Proof.
+  induction l1; simpl; intros * Hl Hn.
+  - destruct l2; simpl in *; congruence.
+  - destruct l2; try (simpl in *; congruence).
+    f_equal.
+    + apply (Hn O); auto with arith.
+    + eapply IHl1 with d; intros; auto.
+      rewrite (Hn (S n)); auto with arith.
+Qed.
+
+Lemma list_eq_ext2 :
+  forall A (l1 l2 : list A),
+    (forall n, nth_error l1 n = nth_error l2 n) ->
+    l1 = l2.
+Proof.
+  induction l1; intros * Hn.
+  - destruct l2; simpl in *; auto.
+    specialize (Hn O); inv Hn.
+  - destruct l2.
+    specialize (Hn O); inv Hn.
+    f_equal.
+    + now injection (Hn O).
+    + eapply IHl1; intros; auto.
+      apply (Hn (S n)).
+Qed.
+
+Lemma Forall3_same_2_3:
+  forall A B P (xs: list A) (ys : list B),
+    Forall3 P xs ys ys <-> Forall2 (fun x y => P x y y) xs ys.
+Proof.
+  induction xs as [|x xs IH]; split; intros * H; inv H; constructor; auto.
+  rewrite <- IH; auto.
+  rewrite IH; auto.
+Qed.
+
+Lemma combine_map_2 :
+  forall A B C D (f : A -> C -> D) (g : B -> C) xs ys,
+    map (fun '(x,y) => f x (g y)) (combine xs ys)
+    = map (fun '(x,z) => f x z) (combine xs (map g ys)).
+Proof.
+  induction xs, ys; simpl; auto.
 Qed.
 
 Lemma In_list_pair_l :
@@ -311,4 +400,304 @@ Proof.
   apply Bool.orb_prop in Hm as [Hm|Hm].
   apply ident_eqb_eq in Hm; congruence.
   destruct IHl as [? ->]; simpl; eauto with arith.
+Qed.
+
+
+(** ** Lifting of a relation over a list of elements *)
+(* TODO: EqSts comme instance de ça dans Vélus ? *)
+Section Forall2_relation.
+
+  Variables (A B : Type).
+  Variables (RA : relation A) (RB : relation B).
+
+  Global Add Parametric Morphism (a : A) `(Reflexive _ RA) : (hd a)
+         with signature Forall2 RA ==> RA
+           as hd_morph.
+  Proof.
+    induction 1; simpl; auto.
+  Qed.
+
+  Global Add Parametric Morphism : (@tl A)
+         with signature Forall2 RA ==> Forall2 RA
+           as tl_morph.
+  Proof.
+    induction 1; simpl; auto.
+  Qed.
+
+  Global Instance F2_refl : Reflexive RA -> Reflexive (Forall2 RA).
+  Proof.
+    intros Hr l; induction l; auto.
+  Qed.
+
+  Global Instance F2_sym : Symmetric RA -> Symmetric (Forall2 RA).
+  Proof.
+    intros Hs xs ys.
+    induction 1; auto.
+  Qed.
+
+  Global Instance F2_trans : Transitive RA -> Transitive (Forall2 RA).
+  Proof.
+    intros Ht xs ys zs Hf.
+    revert zs.
+    induction Hf; intros * Hf'; inv Hf'; constructor; eauto.
+  Qed.
+
+  Global Instance F2_equiv : Equivalence RA -> Equivalence (Forall2 RA).
+  Proof.
+    intros [].
+    constructor; auto using F2_refl, F2_sym, F2_trans.
+  Qed.
+
+  Global Add Parametric Morphism (f : A -> B) (Hf : Proper (RA ==> RB) f) : (map f)
+         with signature Forall2 RA ==> Forall2 RB
+           as map_morph2.
+  Proof.
+    induction 1; simpl; auto.
+  Qed.
+
+End Forall2_relation.
+
+Global Instance : forall A, subrelation (Forall2 (@eq A)) (@eq (list A)).
+Proof.
+  intros A xs ys.
+  induction 1; auto.
+Qed.
+
+Global Add Parametric Morphism A B : (@Forall2 A B)
+    with signature (@eq A ==> @eq B ==> iff) ==> @eq (list A) ==> @eq (list B) ==> iff
+      as F2_morph2.
+Proof.
+  intros P Q PQ xs ys.
+  split; induction 1; constructor; auto.
+  all: destruct (PQ x x eq_refl y y eq_refl); auto.
+Qed.
+
+
+(** ** Application d'un prédicat sur les lignes d'une matrice *)
+(* La matrice est donnée colonne par colonne, on souhaite montrer
+ * qu'un prédicat (P : list A -> Prop) est vérifié sur chaque ligne
+ * de la matrice.
+ *)
+Section Forall2t.
+
+  Context {A B : Type}.
+  Variable (d : A). (* paramètre par défaut pour hd *)
+
+  Variable (P : list A -> B -> Prop).
+
+  (** On considère une matrice de A avec une colonne supplémentaire de B.
+      Le prédicat P doit être vrai sur chaque ligne. *)
+  Inductive Forall2t : list (list A) -> list B -> Prop :=
+  | f2tnil : forall l,
+      Forall (eq []) l ->
+      Forall2t l []
+  | f2tcons : forall (l : list (list A)) (h : B) (t : list B),
+      P (List.map (hd d) l) h ->
+      Forall2t (List.map (@tl A) l) t ->
+      Forall2t l (h :: t).
+
+  Lemma Forall2t_forall2 :
+    forall ll l (b : B),
+      Forall (fun xl => length xl = length l) ll ->
+      Forall2t ll l
+      <-> forall n,
+          n < length l ->
+          P (map (fun l => nth n l d) ll) (nth n l b).
+  Proof.
+    intros * Hl; split.
+    - intros Ht.
+      induction Ht; intros * Le.
+      { now inv Le. }
+      destruct n; simpl.
+      + rewrite <- map_hd_nth; auto.
+      + setoid_rewrite map_map in IHHt.
+        rewrite map_tl_nth.
+        apply IHHt; auto with arith.
+        eapply Forall_map, Forall_impl; eauto.
+        intros [] **; simpl in *; lia.
+    - intro Nth.
+      revert dependent ll.
+      induction l as [| x l]; intros.
+      { constructor; simpl_Forall; now apply symmetry, length_zero_iff_nil. }
+      constructor.
+      + rewrite map_hd_nth.
+        apply (Nth O); simpl; auto with arith.
+      + eapply IHl.
+        { eapply Forall_map, Forall_impl; eauto.
+          intros [] **; simpl in *; lia. }
+        intros.
+        rewrite map_map, <- map_tl_nth.
+        apply (Nth (S n)); simpl; auto with arith.
+  Qed.
+
+  (** Calcul de la transposée d'une matrice. On donne sa spécification
+      dans son type car raisonner sur la fonction direcement est rendu
+      très pénible par la preuve de terminaison. *)
+  Program Fixpoint transp (l : list (list A)) (k : { k | Forall (fun l => length l = k) l })
+    {measure (length (concat l))}
+    : { l' : list (list A)
+      | (l <> [] -> length l' = k /\ Forall (fun ll => length ll = length l) l')
+        /\ forall n m, nth n (nth m l' []) d = nth m (nth n l []) d } :=
+    match l with
+    | [] => []
+    | [] :: _ => []
+    | rows => List.map (hd d) rows :: transp (List.map (@tl _) rows) (exist _ (Nat.pred k) _)
+    end.
+
+  Next Obligation.
+    simpl; split; intros; cases; congruence.
+  Qed.
+
+  Next Obligation.
+    inv H.
+    simpl; split; intros; auto.
+    setoid_rewrite length_zero_iff_nil in H3.
+    rewrite Forall_nth in H3.
+    cases; simpl in *.
+    - destruct (Nat.lt_ge_cases n (length wildcard')).
+      + rewrite H3; auto.
+      + do 2 (rewrite nth_overflow; auto).
+    - destruct (Nat.lt_ge_cases n (length wildcard')).
+      + rewrite H3; auto.
+      + do 2 (rewrite nth_overflow; simpl; auto with arith).
+  Qed.
+
+  Next Obligation.
+    rewrite Forall_map.
+    setoid_rewrite tl_length.
+    simpl_Forall; auto.
+  Qed.
+
+  Next Obligation.
+    destruct l as [|[] l].
+    1,2: contradict H; eauto.
+    simpl.
+    rewrite 2 app_length.
+    assert (le (length (concat (map (tl (A:=A)) l))) (length (concat l))); auto with arith.
+    clear.
+    induction l; simpl; auto.
+    rewrite 2 app_length.
+    destruct a; simpl; auto with arith.
+  Qed.
+
+  Next Obligation.
+    rename n into Hl'.
+    destruct transp as [? [Heq Ht]]; simpl.
+    destruct Heq as [Heq Hf]; auto using map_eq_nnil.
+    split; intros.
+    { rewrite Heq; simpl.
+      split.
+      - destruct k; auto.
+        destruct l as [|[]]; simpl in *; try congruence.
+        inv H; simpl in *; congruence.
+      - constructor; auto using map_length.
+        eapply Forall_impl in Hf; eauto.
+        simpl; intros * HH.
+        now rewrite map_length in HH.
+    }
+    destruct (Nat.lt_ge_cases n (length l)) as [Lt|Le].
+    2:{ rewrite (nth_overflow _ _ Le), nth_nil.
+        cases. rewrite nth_overflow; auto; now rewrite map_length.
+        rewrite Ht, nth_overflow; auto.
+        rewrite nth_overflow; simpl; auto with arith.
+        now rewrite map_length.
+    }
+    cases; simpl.
+    erewrite map_nth', hd_nth; eauto.
+    erewrite Ht, map_nth', tl_nth; eauto.
+  Qed.
+
+  Next Obligation.
+    split; intros; congruence.
+  Qed.
+
+  (** Forall2t est bien l'analogue de Forall2 sur la matrice tansposée. *)
+  Lemma Forall2t_Forall2 :
+    forall ll l (Hl : Forall (fun l' => length l' = length l) ll),
+      ll <> [] ->
+      Forall2t ll l ->
+      Forall2 P (proj1_sig (transp ll (exist _ _ Hl))) l.
+  Proof.
+    intros * Nnil Hft.
+    apply Forall2_forall2.
+    destruct transp as [ll' [Hlt Ht]]; simpl in *.
+    destruct Hlt as [Hlt Hf]; auto.
+    split; auto.
+    intros * Hn ??; subst.
+    rewrite (nth_indep _ _ [] Hn).
+    rewrite (Forall2t_forall2 _ _ b) in Hft; auto.
+    assert ((nth n ll' []) =  (map (fun l => nth n l d) ll)) as ->.
+    2: apply Hft; congruence.
+    eapply list_eq_ext with d.
+    - eapply Forall_nth in Hf as ->; auto using map_length.
+    - intros m Hm.
+      (* TODO: il y a sans doute plus propre à faire... *)
+      erewrite Ht, map_nth'; auto.
+      eapply Forall_nth in Hf; eauto.
+      now rewrite Hf in Hm.
+  Qed.
+
+  Global Add Parametric Morphism
+    (eqA : relation A) (eqB : relation B)
+    (EqA : Equivalence eqA)
+    (reB : Reflexive eqB)
+    (P_compat : Proper (Forall2 eqA ==> eqB ==> iff) P)
+    : Forall2t
+         with signature (Forall2 (Forall2 eqA)) ==> Forall2 eqB ==> iff
+           as F2t_morph.
+  Proof.
+    intros xss xss' Hxy ys ys' Heq.
+    revert Hxy. revert xss xss'.
+    induction Heq; split; intro Hf; inv Hf.
+    - constructor.
+      clear - Hxy H.
+      induction Hxy; auto; inv H; inv H0; auto.
+    - constructor.
+      clear - Hxy H.
+      induction Hxy; auto; inv H; inv H0; auto.
+    - constructor.
+      + now rewrite <- Hxy, <- H.
+      + eapply IHHeq; eauto.
+        now rewrite <- Hxy.
+    - constructor.
+      + now rewrite  H, Hxy.
+      + eapply IHHeq; eauto.
+        now rewrite Hxy.
+  Qed.
+
+End Forall2t.
+
+(** Lorsque l'on combine chaque ligne de la matrice [ll] avec une même
+    liste [la], typiquement une liste d'enumtag. *)
+Lemma Forall2t_combine :
+  forall A B C d1 d2 (P : list (A * B) -> C -> Prop) (ll : list (list B)) la lc,
+    Forall (fun xl => length xl = length lc) ll ->
+    Forall2t d1 (fun l c => P (combine la l) c) ll lc ->
+    Forall2t d2 P (map (fun '(a,l) => map (pair a) l) (combine la ll)) lc.
+Proof.
+  intros * Hl.
+  destruct lc as [|c lc].
+  { (* si lc est vide *)
+    intro Hd; inv Hd.
+    constructor.
+    simpl_Forall.
+    apply in_combine_r in H0.
+    simpl_Forall; subst; auto. }
+  unshelve rewrite 2 Forall2t_forall2; auto.
+  2:{ simpl_Forall; rewrite map_length.
+      apply in_combine_r in H.
+      eapply Forall_forall in Hl; eauto. }
+  intros Hp k Hk.
+  specialize (Hp k Hk).
+  rewrite combine_map_snd in Hp.
+  rewrite map_map.
+  match goal with
+  | _: P ?l1 _ |- P ?l2 _ => assert (l2 = l1) as ->; [clear Hp | eassumption]
+  end.
+  apply map_ext_in_iff.
+  intros [] Hin; simpl.
+  apply in_combine_r in Hin as Hr.
+  eapply Forall_forall in Hl; eauto.
+  erewrite nth_indep, map_nth; eauto.
+  rewrite map_length; lia.
 Qed.
