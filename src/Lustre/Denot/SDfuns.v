@@ -679,7 +679,7 @@ Section SStream_functions.
     eapply zip_is_cons; eauto.
   Qed.
 
-  (** Le cas du merge est plus délicat car il opère sur une liste
+  (** Le cas du merge/case est plus délicat car il opère sur une liste
       (nprod) de flots. On utilise pour ça [nprod_Foldi], qui effectue
       un fold_right sur la liste combinée des flots et des informations
       de tag. (quel flot correspond à quel tag ?).
@@ -794,38 +794,6 @@ Section SStream_functions.
       now rewrite rem_zip3, lift_hd, lift_tl, IHl.
   Qed.
 
-  (* XXXXXXXXXXXXXXXXXXXXX *)
-
-  (* TODO: expliquer, simplifier ? *)
-  Definition nprod_hds : forall {D n} (np : @nprod (DS D) n),
-      forall_nprod (@is_cons _) np -> list D.
-    induction n; intros * Hf.
-    - exact [].
-    - exact (projT1 (uncons (forall_nprod_hd _ _ Hf)) :: IHn _ (forall_nprod_tl _ _ Hf)).
-  Defined.
-
-  Lemma hds_length :
-    forall D n (np : @nprod (DS D) n) npc,
-      length (nprod_hds np npc) = n.
-  Proof.
-    induction n; simpl; auto.
-  Qed.
-
-  Lemma Forall2_hds :
-    forall I D (P : I -> D -> Prop) (Q : I -> DS D -> Prop),
-      (forall i x u U, x == cons u U -> Q i x -> P i u) ->
-      forall (l : list I) (np : @nprod (DS D) (length l)) Icn,
-      Forall2 Q l (list_of_nprod np) ->
-      Forall2 P l (nprod_hds np Icn).
-  Proof.
-    clear.
-    intros * QP.
-    induction l; intros * Hf; inversion_clear Hf; constructor; auto.
-    destruct (uncons _) as (?&?& Hd); simpl.
-    apply decomp_eqCon in Hd.
-    eapply QP; eauto.
-  Qed.
-
   (* TODO !!!!: utiliser
      destruct (@is_cons_elim _ (smerge l (cons c cs) (nprod_tl np))) as (?&?& Heq1).
      partout au lieu d'avoir un assert merdique
@@ -858,7 +826,8 @@ Section SStream_functions.
     - now rewrite rem_smerge, 2 rem_cons.
   Qed.
 
-  (** Caractérisation de fmerge itéré *)
+  (** Caractérisation de [fmerge] itéré sur la têtes des flots *)
+  Section fmerge_spec.
 
   Lemma fmerge_abs :
     forall (l : list (enumtag * sampl A)) c,
@@ -979,7 +948,7 @@ Section SStream_functions.
       destruct s; subst; tauto.
   Qed.
 
-  (* XXXXXXXXXXXXXXXXXXXXX *)
+  End fmerge_spec.
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,

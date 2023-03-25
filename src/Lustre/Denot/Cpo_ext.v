@@ -5,6 +5,7 @@ From Velus Require Import Lustre.Denot.Cpo.
 (* FIXME: c'est juste pour Forall_lift_nprod : *)
 From Velus Require Import CommonList.
 
+Import ListNotations.
 
 (* simplification by rewriting during proofs, usage:
    [autorewrite with cpodb] *)
@@ -1558,7 +1559,7 @@ End Take.
 (** *** Extract the [n] first elements (Con/Eps) of a stream *)
 Fixpoint take_list {A} (n : nat) (xs : DS A) : list (option A) :=
   match n with
-  | O => nil
+  | O => []
   | S n =>  match xs with
            | Eps xs => None :: take_list n xs
            | Con x xs => Some x :: take_list n xs
@@ -2335,7 +2336,7 @@ Section Nprod_Foldi.
   Defined.
 
   Lemma Foldi_nil :
-    forall F a np, nprod_Foldi nil F a np = a.
+    forall F a np, nprod_Foldi [] F a np = a.
   Proof.
     trivial.
   Qed.
@@ -2387,6 +2388,47 @@ Section Nprod_Foldi.
   Qed.
 
 End Nprod_Foldi.
+
+
+(** To characterize stream functions defined with [nprod_Foldi], it may be
+    useful to speak independently about heads and tails of streams.
+    Tails can be easily accessed with [lift (@REM _) np] while heads needs
+    a [is_cons] predicate to be extracted. This is the purpose of [nprod_hds].
+ *)
+Section Nprod_hds.
+
+  Context {A : Type}.
+
+  Fixpoint nprod_hds {n} : forall (np : @nprod (DS A) n),
+      forall_nprod (@is_cons _) np -> list A :=
+    match n with
+    | O => fun _ _ => []
+    | S n => fun _ Inf => projT1 (uncons (forall_nprod_hd _ _ Inf))
+                        :: nprod_hds _ (forall_nprod_tl _ _ Inf)
+    end.
+
+  Lemma hds_length :
+    forall n (np : nprod n) npc,
+      length (nprod_hds np npc) = n.
+  Proof.
+    induction n; simpl; auto.
+  Qed.
+
+  Lemma Forall2_hds :
+    forall I (P : I -> A -> Prop) (Q : I -> DS A -> Prop),
+      (forall i x u U, x == cons u U -> Q i x -> P i u) ->
+      forall (l : list I) (np : nprod (length l)) Icn,
+      Forall2 Q l (list_of_nprod np) ->
+      Forall2 P l (nprod_hds np Icn).
+  Proof.
+    intros * QP.
+    induction l; intros * Hf; inversion_clear Hf; constructor; auto.
+    destruct (uncons _) as (?&?& Hd); simpl.
+    apply decomp_eqCon in Hd.
+    eapply QP; eauto.
+  Qed.
+
+End Nprod_hds.
 
 
 (** ** Matrix operations *)
