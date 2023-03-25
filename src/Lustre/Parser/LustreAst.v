@@ -12,6 +12,7 @@
 (* *********************************************************************)
 
 (* From Coq Require Numbers.BinNums. *)
+From compcert Require cparser.Cabs.
 From Velus Require Import Common.
 
 (* Definition ident := Coq.Numbers.BinNums.positive. *)
@@ -66,7 +67,7 @@ Inductive constant :=
 | CONST_ENUM  : ident -> constant
 | CONST_INT   : string -> constant
 | CONST_FLOAT : floatInfo -> constant
-| CONST_CHAR  : bool -> list char_code -> constant.
+| CONST_CHAR  : Cabs.encoding -> list char_code -> constant.
 
 Inductive clock :=
 | BASE  : clock

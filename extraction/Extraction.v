@@ -171,24 +171,26 @@ Extract Constant Velus.schedule  => "Interfacelib.Scheduler.schedule".
 Extract Constant Velus.add_builtins => "Veluslib.add_builtins".
 
 Separate Extraction
-         ZArith.BinIntDef
-	 Floats.Float.of_bits Floats.Float.to_bits
-	 Floats.Float32.of_bits Floats.Float32.to_bits
-	 Floats.Float32.from_parsed Floats.Float.from_parsed
-	 FMapPositive.PositiveMap.add FMapPositive.PositiveMap.empty
-	 FMapPositive.PositiveMap.find
-         Compiler.transf_clight_program Cabs
-         AST.signature_main
-         Velus.compile elab_declarations translation_unit_file
-         Initializers.transl_init
-         Ctyping.eselection
-         Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
-         Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg
-	 Machregs.destroyed_at_indirect_call
-	 Conventions1.is_float_reg Conventions1.callee_save_type
-         Conventions1.dummy_int_reg Conventions1.dummy_float_reg
-         Conventions1.int_callee_save_regs Conventions1.int_caller_save_regs
-         Conventions1.float_callee_save_regs Conventions1.float_caller_save_regs
-	 Clight.type_of_function.
+  ZArith.BinIntDef
+  Floats.Float.of_bits Floats.Float.to_bits
+  Floats.Float32.of_bits Floats.Float32.to_bits
+  Floats.Float32.from_parsed Floats.Float.from_parsed
+  FMapPositive.PositiveMap.add FMapPositive.PositiveMap.empty
+  FMapPositive.PositiveMap.find
+  Compiler.transf_clight_program Cabs
+  AST.signature_main
+  Velus.compile elab_declarations translation_unit_file
+  Initializers.transl_init
+  Ctypes.layout_struct
+  Ctyping.eselection
+  Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
+  Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg
+  Machregs.destroyed_at_indirect_call
+  Conventions1.is_float_reg Conventions1.callee_save_type
+  Conventions1.dummy_int_reg Conventions1.dummy_float_reg
+  Conventions1.int_callee_save_regs Conventions1.int_caller_save_regs
+  Conventions1.float_callee_save_regs Conventions1.float_caller_save_regs
+  Conventions1.allocatable_registers
+  Clight.type_of_function.
 
 Extraction Library Ordered.

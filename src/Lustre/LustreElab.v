@@ -90,7 +90,7 @@ From compcert Require Import common.Errors.
 
 Parameter elab_const_int : Cabs.loc -> string -> constant.
 Parameter elab_const_float : Cabs.floatInfo -> constant.
-Parameter elab_const_char : Cabs.loc -> bool -> list char_code -> constant.
+Parameter elab_const_char : Cabs.loc -> Cabs.encoding -> list char_code -> constant.
 
 (* CompCert: lib/Camlcoq.ml: camlstring_of_coqstring and coqstring_of_camlstring *)
 (*    using Require ExtrOCamlString in the extraction file to extract Coq *)
@@ -675,7 +675,7 @@ Section ElabExpressions.
       ret (EnumA c tn)
     | CONST_INT s       => ret (ConstA (elab_const_int (cabsloc_of_astloc loc) s))
     | CONST_FLOAT fi    => ret (ConstA (elab_const_float (cabs_floatinfo fi)))
-    | CONST_CHAR wide l => ret (ConstA (elab_const_char (cabsloc_of_astloc loc) wide l))
+    | CONST_CHAR enc l => ret (ConstA (elab_const_char (cabsloc_of_astloc loc) enc l))
     end.
 
   Definition elab_unop (op: unary_operator) : unop :=
