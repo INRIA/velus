@@ -794,10 +794,6 @@ Section SStream_functions.
       now rewrite rem_zip3, lift_hd, lift_tl, IHl.
   Qed.
 
-  (* TODO !!!!: utiliser
-     destruct (@is_cons_elim _ (smerge l (cons c cs) (nprod_tl np))) as (?&?& Heq1).
-     partout au lieu d'avoir un assert merdique
-   *)
   Lemma smerge_cons :
     forall l c cs np,
     forall (Hc : forall_nprod (@is_cons _) np),

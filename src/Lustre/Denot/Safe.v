@@ -624,12 +624,10 @@ Section SDfuns_safe.
     - constructor.
       rewrite <- eqEps in Ht.
       eapply Cof; eauto.
-    - assert (is_cons s) as Hcs
-          by (eapply map_is_cons, map_is_cons, is_cons_eq_compat; eauto).
-      assert (is_cons C) as Hcc
-          by (eapply is_cons_le_compat, AC_is_cons; eauto).
-      apply uncons in Hcc as (vc & C' & Hc).
-      apply is_cons_elim in Hcs as (vs & S & Hs).
+    - destruct (@is_cons_elim _ s) as (vs & S & Hs).
+      { eapply map_is_cons, map_is_cons, is_cons_eq_compat; eauto. }
+      destruct (@uncons _ C) as (vc & C' & Hc).
+      { eapply is_cons_le_compat, AC_is_cons; eauto; now rewrite Hs. }
       apply decomp_eqCon in Hc as Heqc.
       rewrite Hs, Heqc in * |-.
       rewrite sunop_eq, AC_cons in Ht.
@@ -694,9 +692,8 @@ Section SDfuns_safe.
     - apply symmetry, zip_uncons in Ht as (?&?&?&?& Hs1 & Hs2 & Ht & Hp).
       rewrite Hs1, Hs2 in *.
       inv Hsf1. inv Hsf2.
-      assert (is_cons C) as Hcc.
+      destruct (@is_cons_elim _ C) as (vc & C' & Hc).
       { eapply is_cons_le_compat, AC_is_cons; eauto. }
-      apply is_cons_elim in Hcc as (vc & C' & Hc).
       rewrite Hc, AC_cons in *.
       apply Con_le_simpl in Hcl1 as [], Hcl2 as []; subst.
       constructor.
@@ -746,13 +743,12 @@ Section SDfuns_safe.
     destruct t.
     - constructor. apply (Cof s1 s2 t); auto.
       now rewrite <- eqEps in Ht.
-    - assert (is_cons s1 /\ is_cons s2) as [Hc1 Hc2].
-      { eapply sbinop_is_cons, AC_is_cons; now rewrite <- Ht. }
-      assert (is_cons C) as Hcc.
-      { eapply is_cons_le_compat, AC_is_cons; eauto. }
-      apply is_cons_elim in Hc1 as (v1 & s1' & Hs1).
-      apply is_cons_elim in Hc2 as (v2 & s2' & Hs2).
-      apply uncons in Hcc as (vc & C' & Hdec).
+    - destruct (@is_cons_elim _ s1) as (v1 & s1' & Hs1).
+      { eapply proj1, sbinop_is_cons, AC_is_cons; now rewrite <- Ht. }
+      destruct (@is_cons_elim _ s2) as (v2 & s2' & Hs2).
+      { eapply proj2, sbinop_is_cons, AC_is_cons; now rewrite <- Ht. }
+      destruct (@uncons _ C) as (vc & C' & Hdec).
+      { eapply is_cons_le_compat, AC_is_cons; eauto; now rewrite Hs2. }
       apply decomp_eqCon in Hdec as Hc.
       rewrite Hc, Hs1, Hs2, sbinop_eq, AC_cons, zip_cons in *|-.
       apply Con_eq_simpl in Ht as [].
@@ -875,16 +871,16 @@ Section SDfuns_safe.
     all: econstructor; eauto; clear Hdec cs.
     - revert_all; intro Cof; cofix Cof'; intros * Sy [] ? Ht ??? Cx' ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with _ ys xs'; eauto. }
-      assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      destruct (@is_cons_elim _ ys) as (vy & ys' & Hy).
+      { eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht. }
       rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
       eapply Cof with _ xs' ys'; eauto.
     - revert_all; intro Cof; cofix Cof'; intros * v ys Sy [] ?? Ht ??? Cx' ?.
       { constructor. rewrite <- eqEps in *. eapply Cof' with ys xs'; eauto. }
-      assert (is_cons ys) as Hcy by (eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht).
-      apply is_cons_elim in Hcy as (vy & ys' & Hy).
+      destruct (@is_cons_elim _ ys) as (vy & ys' & Hy).
+      { eapply fby1AP_cons, AC_is_cons; now rewrite <- Ht. }
       rewrite Hy, AC_cons in *; clear Hy ys.
       rewrite fby1AP_eq in Ht.
       cases; inv Sy; apply Con_le_simpl in Cy as []; try tauto || congruence.
@@ -1073,11 +1069,10 @@ Section SDfuns_safe.
     { intros * ? J K. setoid_rewrite <- J. setoid_rewrite <- K. eauto. }
     clear.
     intros u U V (xs & cs & cks & Tc & Sc & Sx & Cc & Cx & HU & HV).
-    assert (is_cons xs) as Hcx.
+    destruct (@is_cons_elim _ xs) as (?&?&Hx).
     { eapply proj1, swhen_cons, AC_is_cons; now rewrite <- HU. }
-    assert (is_cons cs) as Hcc.
+    destruct (@is_cons_elim _ cs) as (?&?&Hc).
     { eapply proj2, swhen_cons, AC_is_cons; now rewrite <- HU. }
-    apply is_cons_elim in Hcc as (?&?&Hc), Hcx as (?&?&Hx).
     rewrite Hc, Hx in *. inv Sx. inv Sc. inv Tc.
     rewrite swhen_eq in HU.
     rewrite AC_cons in *.
