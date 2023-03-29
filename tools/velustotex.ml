@@ -85,7 +85,7 @@ let parse_input typ s =
          | Op.Tenum (_, constrs) ->
            Op.Venum (Camlcoq.Nat.of_int (find_constr_num (ident_of_str s) constrs))
          | Op.Tprimitive (Tint _) ->
-           Op.Vscalar (Values.Vint (Camlcoq.Z.of_sint @@ int_of_string @@ s))
+           Op.Vscalar (Values.Vint (Camlcoq.coqint_of_camlint @@ Int32.of_string @@ s))
          | Op.Tprimitive (Op.Tlong _) ->
            Op.Vscalar (Vlong (Camlcoq.coqint_of_camlint64 @@ Int64.of_string @@ s))
          | Op.Tprimitive (Op.Tfloat _) ->
@@ -107,7 +107,7 @@ let string_of_value typ v =
   match typ, v with
   | _, Op.Vscalar v -> string_of_val v
   | Op.Tenum (tx, _), Op.Venum e when tx = Ident.Ids.bool_id ->
-    let n = Camlcoq.Nat.to_int e in if n = 1 then "T" else "F"
+    let n = Camlcoq.Nat.to_int e in if n = 1 then "\\true{}" else "\\false{}"
   | Op.Tenum (tx, tconstrs), Op.Venum e ->
     let n = Camlcoq.Nat.to_int e in str_of_ident (List.nth tconstrs n)
   | _, Op.Venum e -> invalid_arg "string_of_value"
@@ -254,7 +254,8 @@ let main filename =
   Format.fprintf fmt "\\begin{tabular}{l|%a}\n"
     (repeat_print (nb_column + 1)) "c";
   print_sep_list "\\\\\n" print_line fmt
-    (List.map2 (fun (x, ty) values -> ((str_of_ident x, ty), values)) stepme.m_in ins);
+    (List.map2 (fun (x, ty) values -> ((Printf.sprintf "\\lus{%s}" (str_of_ident x), ty), values))
+       stepme.m_in ins);
   Format.fprintf fmt "\\\\\n\\hline\n";
   print_sep_list "\\\\\n" print_line fmt
     (List.combine (List.mapi (fun i (_, ty) -> (Printf.sprintf "#%d" (i + 1), ty)) stepme.m_out) outs);
