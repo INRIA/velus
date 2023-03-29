@@ -11,7 +11,7 @@ build-job:
     - echo "Hello"
     - ./configure ia32-linux
     - make -C CompCert -j
-    - make -j
+    - make -j 4
   artifacts:
     paths:
       - ./_build/
