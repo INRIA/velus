@@ -699,7 +699,7 @@ Section SStream_functions.
     end.
 
   (* Selon le statut de la condition, on initialise l'accumulateur du
-     fold_right avec [abs] ou [error_Ty].  *)
+     fold_right avec [abs] ou [error_Ty]. *)
   Definition defcon (c : sampl B) : sampl A :=
     match c with
     | abs => abs
@@ -945,6 +945,266 @@ Section SStream_functions.
   Qed.
 
   End fmerge_spec.
+
+  (** Le scase ressemble au smerge mais vérifie que tous les flots sont
+      sur la même horloge que la condition cf. fcase.
+      On peut gérer le cas par défaut (lorsqu'une branche est volontairement
+      omise) en modifiant la valeur initiale de l'accumulateur du foldi :
+      sans branche par défaut, on initialise à [abs/error_Ty] comme dans smerge,
+      et sinon on part de la valeur par défaut, après l'avoir synchronisée
+      avec la condition cf. [defcon2].
+   *)
+
+  (* remarque : on ne détecte pas la redondance de tag *)
+  Definition fcase (j : enumtag) (c : sampl B) (x a : sampl A) :=
+    match is_tag j c, a, x with
+    | abs, abs, abs => abs
+    | pres true, err error_Ty, pres v => pres v (* trouvé *)
+    | pres true, pres _, pres v => pres v (* écrase la branche par défaut *)
+    | pres false, a, pres _ => a (* holroge du case *)
+    | _,_,_ => err error_Cl
+    end.
+
+  (* sans branche par défaut, on initialise l'accumulateur avec [defcon] *)
+  Definition scase (l : list enumtag) :
+    DS (sampl B) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
+    eapply fcont_comp2.
+    apply nprod_Foldi.
+    2: apply (MAP defcon).
+    apply ford_fcont_shift; intro j.
+    apply (ZIP3 (fcase j)).
+  Defined.
+
+  Lemma scase_eq :
+    forall l C np,
+      scase l C np = nprod_Foldi l (fun j => ZIP3 (fcase j) C) (map defcon C) np.
+  Proof.
+    trivial.
+  Qed.
+
+  (* on vérifie que la valeur par défaut [v] est bien synchronisée avec
+     la condition avant d'en faire la valeur initiale de l'accumulateur *)
+  Definition defcon2 (c : sampl B) (v : sampl A) : sampl A :=
+    match c, v with
+    | abs, abs => abs
+    | pres _, pres x => pres x
+    | _, _ => err error_Cl
+    end.
+
+  (* avec une branche par défaut, on initialise avec [defcon2] *)
+  Definition scase_def (l : list enumtag) :
+    (* flot de condition -> flot par defaut -> flots des branches -> résultat *)
+    DS (sampl B) -C-> DS (sampl A) -C-> @nprod (DS (sampl A)) (length l) -C-> DS (sampl A).
+    apply curry.
+    eapply fcont_comp2.
+    eapply nprod_Foldi.
+    2: apply (uncurry (ZIP defcon2)).
+    apply ford_fcont_shift; intro j.
+    apply (ZIP3 (fcase j) @_ FST _ _).
+  Defined.
+
+  Lemma scase_def_eq :
+    forall l cs ds np,
+      scase_def l cs ds np = nprod_Foldi l (fun j => ZIP3 (fcase j) cs) (ZIP defcon2 cs ds) np.
+  Proof.
+    trivial.
+  Qed.
+
+  Lemma scase_is_cons :
+    forall l C np,
+      l <> [] ->
+      is_cons (scase l C np) ->
+      is_cons C /\ forall_nprod (@is_cons _) np.
+  Proof.
+    induction l as [|? []].
+    - congruence.
+    - intros * _.
+      rewrite scase_eq, Foldi_cons.
+      intros (?& Hc &?) % zip3_is_cons.
+      split; auto.
+    - intros * _.
+      rewrite scase_eq, Foldi_cons.
+      intros (?&? & Hc) % zip3_is_cons.
+      apply (IHl C (nprod_tl np)) in Hc as []; try congruence.
+      do 2 (split; auto).
+  Qed.
+
+  Lemma is_cons_scase :
+    forall l cs xs,
+      is_cons cs ->
+      forall_nprod (@is_cons _) xs ->
+      is_cons (scase l cs xs).
+  Proof.
+    intros * Hc Hx.
+    rewrite scase_eq.
+    eapply forall_nprod_Foldi in Hx; eauto using is_cons_DS_const.
+    simpl; intros.
+    now apply is_cons_zip3.
+  Qed.
+
+  Lemma rem_scase :
+    forall l C np,
+      rem (scase l C np)
+      == scase l (rem C) (lift (REM _) np).
+  Proof.
+    induction l; intros.
+    - now rewrite 2 scase_eq, 2 Foldi_nil, rem_map.
+    - rewrite 2 scase_eq, 2 Foldi_cons, <- 2 scase_eq.
+      now rewrite rem_zip3, lift_hd, lift_tl, IHl.
+  Qed.
+
+  Lemma scase_cons :
+    forall l c cs np,
+    forall (Hc : forall_nprod (@is_cons _) np),
+      scase l (cons c cs) np
+      == cons (fold_right (fun '(j,x) => fcase j c x) (defcon c)
+                 (combine l (nprod_hds np Hc)))
+           (scase l cs (lift (REM _) np)).
+  Proof.
+    intros.
+    apply first_rem_eq.
+    - rewrite first_cons, scase_eq, Foldi_fold_right.
+      revert dependent np; clear.
+      induction l; intros.
+      + simpl. now rewrite first_map, first_cons, map_eq_cons, map_bot.
+      + simpl.
+        rewrite first_zip3, first_cons, (IHl _ (forall_nprod_tl _ _ Hc)).
+        clear IHl.
+        destruct (@is_cons_elim _ (nprod_hd np)) as (x &?& Heq).
+        { now apply forall_nprod_hd in Hc. }
+        remember (projT1 _) as y eqn:Hy.
+        assert (x = y); subst.
+        { destruct (uncons _) as (?&?& Hd); simpl.
+          apply decomp_eqCon in Hd; rewrite Hd in Heq.
+          now apply Con_eq_simpl in Heq. }
+        rewrite Heq, first_cons, zip3_cons, zip3_bot1 at 1; auto.
+    - now rewrite rem_scase, 2 rem_cons.
+  Qed.
+
+  (** Caractérisation de [fcase] itéré sur la têtes des flots *)
+  Section fcase_spec.
+
+  Lemma fcase_abs :
+    forall (l : list (enumtag * sampl A)) c,
+      fold_right (fun '(j,x) => fcase j c x) (defcon c) l = abs ->
+      c = abs /\ Forall (fun '(j, x) => x = abs) l.
+  Proof.
+    induction l as [|[]]; simpl; intros c Hf.
+    { destruct c; simpl in Hf; auto; congruence. }
+    unfold fcase at 1 in Hf.
+    destruct c as [|k|]; simpl in Hf; try congruence.
+    - split; auto.
+      destruct (fold_right _ _ _) eqn:HH, s; try congruence.
+      apply IHl in HH as []; auto.
+    - unfold or_default, option_map in Hf.
+      destruct (tag_of_val _); try congruence.
+      destruct (tag_eqb _ _), (fold_right _ _ _) as [| |[]] eqn:HH, s; try congruence.
+      apply IHl in HH as []; auto; congruence.
+  Qed.
+
+  (* (* en cours de calcul, ça vaut error_Ty si la bonne branche n'est *)
+  (*    pas encore atteinte *) *)
+  (* Lemma fcase_pres_abs : *)
+  (*   forall (l : list (enumtag * sampl A)) i, *)
+  (*     let c := pres i in *)
+  (*     fold_right (fun '(j, x) => fcase j c x) (defcon c) l = err error_Ty -> *)
+  (*     Forall (fun '(j, x) => exists v, x = pres v) l. *)
+  (* Proof. *)
+  (*   induction l as [|[]]; simpl; intros i Hf; auto. *)
+  (*   unfold fcase in Hf at 1. *)
+  (*   destruct (is_tag e _) as [|[]|]; try congruence. *)
+  (*   all: destruct (fold_right _ _ _) as [| |[]] eqn:HH, s; try congruence. *)
+  (*   all: constructor; eauto. *)
+  (* Qed. *)
+
+  (* Lemma fcase_pres : *)
+  (*   forall (l : list (enumtag * sampl A)) c v, *)
+  (*     fold_right (fun '(j, x) => fcase j c x) (defcon c) l = pres v -> *)
+  (*     exists vc i, *)
+  (*       c = pres vc *)
+  (*       /\ tag_of_val vc = Some i *)
+  (*       /\ Exists (fun '(j, x) => j = i /\ x = pres v) l *)
+  (*       /\ Forall (fun '(j, x) => j <> i -> x = abs) l. *)
+  (* Proof. *)
+  (*   induction l as [|[i s]]; simpl; intros * Hf. *)
+  (*   { destruct c; simpl in Hf; congruence. } *)
+  (*   unfold fcase at 1 in Hf. *)
+  (*   destruct c as [|k|]; simpl in Hf; try congruence. *)
+  (*   { destruct (fold_right _ _ _) eqn:HH, s; congruence. } *)
+  (*   unfold or_default, option_map in Hf. *)
+  (*   destruct (tag_of_val k) as [t|] eqn:Hk; try congruence. *)
+  (*   exists k, t; do 2 split; auto. *)
+  (*   destruct (tag_eqb _ _) eqn:Ht. *)
+  (*   - (* on y est *) *)
+  (*     apply tag_eqb_eq in Ht; subst. *)
+  (*     destruct (fold_right _ _ _) as [| |[]] eqn:HH, s; inversion Hf; subst. *)
+  (*     split; constructor; auto; try congruence. *)
+  (*     eapply fcase_pres_abs, Forall_impl in HH; eauto. *)
+  (*     intros []; congruence. *)
+  (*   - (* c'est pour plus tard *) *)
+  (*     destruct s; try congruence. *)
+  (*     apply IHl in Hf as (vc & k' & Hk' & Ht' &?&?). *)
+  (*     inversion Hk'; subst. *)
+  (*     rewrite Hk in *; inversion Ht'; split; auto. *)
+  (* Qed. *)
+
+  (* Lemma fmerge_abs_ok : *)
+  (*   forall (l : list enumtag) (ss : list (sampl A)), *)
+  (*     let c := abs in *)
+  (*     Forall (eq abs) ss -> *)
+  (*     fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = abs. *)
+  (* Proof. *)
+  (*   induction l; intros * Heq; auto. *)
+  (*   destruct ss; auto. *)
+  (*   inversion_clear Heq; subst; simpl. *)
+  (*   rewrite IHl; auto. *)
+  (* Qed. *)
+
+  (* (* si les horloges des ss respectent leur tag, le résultat est correct *) *)
+  (* Lemma fmerge_pres_ok : *)
+  (*   forall (l : list enumtag) (ss : list (sampl A)) vt i, *)
+  (*     let c := pres vt in *)
+  (*     tag_of_val vt = Some i -> *)
+  (*     NoDup l -> *)
+  (*     Forall2 (fun j x => match x with *)
+  (*                      | pres _ => j = i *)
+  (*                      | abs => j <> i *)
+  (*                      | err _ => False *)
+  (*                      end) l ss -> *)
+  (*     In i l -> *)
+  (*     exists v, fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = pres v. *)
+  (* Proof. *)
+  (*   intros * Hv Nd Hf. *)
+  (*   (* il faut renforcer un peu l'invariant : *) *)
+  (*   enough ((In i l -> *)
+  (*            exists v, fold_right (fun '(j, x) => fmerge j c x) *)
+  (*                   (defcon c) (combine l ss) = pres v) *)
+  (*           /\ (~ In i l -> *)
+  (*              fold_right (fun '(j, x) => fmerge j c x) *)
+  (*                (defcon c) (combine l ss) = err error_Ty)); [ tauto|]. *)
+  (*   revert dependent ss. *)
+  (*   subst c; simpl. *)
+  (*   induction l; simpl; intros; try tauto. *)
+  (*   destruct ss as [| s ss]; inversion_clear Hf. *)
+  (*   inversion_clear Nd. *)
+  (*   edestruct IHl as [Hin Hnin]; eauto; clear IHl. *)
+  (*   simpl; unfold fmerge at 1 3; simpl. *)
+  (*   unfold or_default, option_map. *)
+  (*   rewrite Hv. *)
+  (*   split. *)
+  (*   - intros [| Ini]; subst. *)
+  (*     + destruct s; try tauto. *)
+  (*       rewrite tag_eqb_refl. *)
+  (*       setoid_rewrite Hnin; eauto. *)
+  (*     + destruct s; subst; try tauto. *)
+  (*       rewrite (proj2 (tag_eqb_neq a i)); eauto. *)
+  (*   - intro Nin. *)
+  (*     rewrite (proj2 (tag_eqb_neq a i)); auto. *)
+  (*     destruct s; subst; tauto. *)
+  (* Qed. *)
+
+  End fcase_spec.
+
 
   (** In this section we use the same function to denote the merge and
       case operators. Notably, we do not try to detect all errors (wrong clocks,
