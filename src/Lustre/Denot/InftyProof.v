@@ -28,18 +28,6 @@ Module Type LDENOTINF
        (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord).
 
-  (* TODO: move?? *)
-  Ltac gen_sub_exps :=
-  (* simpl; (* important, même si l'action n'est pas visible *) *)
-  repeat match goal with
-  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_expss ?e1 ?e2 ?e3 ?e4) ?e5) ?e6) ?e7) ?e8 ] =>
-      generalize (f1 (f2 (f3 (f4 (denot_expss e1 e2 e3 e4) e5) e6) e7) e8)
-  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exps ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
-      generalize (f1 (f2 (f3 (f4 (denot_exps e1 e2 e3) e4) e5) e6) e7)
-  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
-      generalize (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
-    end.
-
   (* section là juste pour supposer HasCausInj, amené à disparaître  *)
   Section Top.
 

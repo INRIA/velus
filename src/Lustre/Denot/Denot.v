@@ -848,6 +848,24 @@ Qed.
 
 End Denot_node.
 
+(** After rewriting [denot_exp_eq] we often need to destruct [numstreams _]
+    or [Nat.eq_dec _ _]. It does not work directly in general because
+    the type of the denotation of subterms depends on these values.
+    One way solve the problem is to revert the hypotheses and
+    generalize the results of [denot_exp, denot_exps, denot_expss] on subterms
+    with the following tactic.
+ *)
+Ltac gen_sub_exps :=
+  simpl; (* important, même si l'action n'est pas visible *)
+  repeat match goal with
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_expss ?e1 ?e2 ?e3 ?e4) ?e5) ?e6) ?e7) ?e8 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_expss e1 e2 e3 e4) e5) e6) e7) e8)
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exps ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_exps e1 e2 e3) e4) e5) e6) e7)
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
+    end.
+
 
 Section Global.
 
@@ -957,23 +975,17 @@ Lemma denot_exp_cons :
     denot_exp (Global tys exts nds) ins e envG envI bs env
     == denot_exp (Global tys exts (nd :: nds)) ins e envG envI bs env.
 Proof.
-  Ltac gen_denot :=
-    repeat match goal with
-      | |- context [ denot_exp ?a ?b ?c ] => generalize (denot_exp a b c)
-      | |- context [ denot_exps ?a ?b ?c ] => generalize (denot_exps a b c)
-      | |- context [ denot_expss ?a ?b ?c ?d ] => generalize (denot_expss a b c d)
-      end.
   induction e using exp_ind2; intro Hnin.
   all: setoid_rewrite denot_exp_eq; auto 1.
   - (* unop *)
     revert IHe.
-    gen_denot.
+    gen_sub_exps.
     cases; simpl; intros.
     rewrite IHe; auto.
     intro H; apply Hnin; constructor; auto.
   - (* binop *)
     revert IHe1 IHe2.
-    gen_denot.
+    gen_sub_exps.
     cases; simpl; intros.
     rewrite IHe1, IHe2; auto.
     all: intro H; apply Hnin; constructor; auto.
@@ -991,7 +1003,7 @@ Proof.
       apply H0; contradict Hnin.
       constructor; right; solve_Exists. }
     revert He0s Hes; simpl; unfold eq_rect.
-    gen_denot; cases.
+    gen_sub_exps; cases.
   - (* when *)
     assert (denot_exps (Global tys exts nds) ins es envG envI bs env
             == denot_exps (Global tys exts (nd::nds)) ins es envG envI bs env) as Hes.
@@ -1000,7 +1012,7 @@ Proof.
       apply H; contradict Hnin.
       constructor; solve_Exists. }
     revert Hes; simpl; unfold eq_rect.
-    gen_denot; cases.
+    gen_sub_exps; cases.
   - (* merge *)
     destruct a as [tyss c].
     assert (denot_expss (Global tys exts nds) ins es (length tyss) envG envI bs env
@@ -1020,7 +1032,7 @@ Proof.
       contradict Hnin; inv Hnin.
       constructor; now right. }
     revert Hess; simpl; unfold eq_rect_r, eq_rect, eq_sym.
-    gen_denot; cases.
+    gen_sub_exps; cases.
   - (* case *)
     destruct a as [tyss c].
     assert (denot_expss (Global tys exts nds) ins es (length tyss) envG envI bs env
@@ -1041,7 +1053,7 @@ Proof.
       destruct H2 as [|[]]; constructor; auto. }
     revert Hess; simpl; unfold eq_rect_r, eq_rect, eq_sym.
     revert IHe.
-    gen_denot.
+    gen_sub_exps.
     intros; destruct d as [esd|]; cases.
     + (* défaut *)
       assert (denot_exps (Global tys exts nds) ins esd envG envI bs env
@@ -1070,7 +1082,7 @@ Proof.
       apply H; contradict Hnin.
       constructor; left; solve_Exists. }
     revert Hes; simpl; unfold eq_rect.
-    gen_denot; cases.
+    gen_sub_exps; cases.
     now intros ?? ->.
 Qed.
 
