@@ -234,6 +234,22 @@ Set Nested Proofs Allowed.
         apply curry.
         exact ((FST _ _ @3_ ID _) (nprod_hd @_ SND _ _) (nprod_tl @_ SND _ _)).
       Defined.
+      (* TODO: move *)
+      Lemma curry_nprod_simpl :
+        forall (D D2 : cpo) n (F : @nprod D (S n) -C-> D2) (d : D) (np : @nprod D n),
+          curry_nprod F d np = F (@nprod_app _ 1 n d np).
+      Proof.
+        trivial.
+      Qed.
+      (* TODO: move *)
+      Lemma uncurry_nprod_simpl :
+        forall (D D2 : cpo) n (F : D -C-> @nprod D n -C-> D2) (np : @nprod D (S n)),
+          uncurry_nprod F np = F (nprod_hd np) (nprod_tl np).
+      Proof.
+        trivial.
+      Qed.
+
+
 
 Definition denot_exp_ (ins : list ident)
   (e : exp) :
