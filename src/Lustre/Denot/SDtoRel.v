@@ -140,6 +140,8 @@ Section Smerge_alt.
     apply Smerge with xs vsst; auto.
   Qed.
 
+  (* TODO: dans l'autre sens !! *)
+
 End Smerge_alt.
 
 
