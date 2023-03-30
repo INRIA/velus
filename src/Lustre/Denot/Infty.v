@@ -445,4 +445,58 @@ Proof.
   apply is_ncons_smerge; eauto using inf_nrem, forall_nprod_impl.
 Qed.
 
+Lemma is_ncons_scase :
+  forall T OT TB,
+  forall l n xs cs,
+    is_ncons n cs ->
+    forall_nprod (@is_ncons _ n) xs ->
+    is_ncons n (@scase A B T OT TB l cs xs).
+Proof.
+  intros * Hc Hx.
+  rewrite scase_eq.
+  eapply forall_nprod_Foldi in Hx; eauto using is_ncons_map.
+  simpl; intros.
+  now apply is_ncons_zip3.
+Qed.
+
+Lemma scase_inf :
+  forall T OT TB,
+  forall l xs cs,
+    infinite cs ->
+    forall_nprod (@infinite _) xs ->
+    infinite (@scase A B T OT TB l cs xs).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros * Inf Hf n.
+  apply is_ncons_scase; eauto using inf_nrem, forall_nprod_impl.
+Qed.
+
+Lemma is_ncons_scase_def :
+  forall T OT TB,
+  forall l n xs cs ds,
+    is_ncons n cs ->
+    is_ncons n ds ->
+    forall_nprod (@is_ncons _ n) xs ->
+    is_ncons n (@scase_def A B T OT TB l cs ds xs).
+Proof.
+  intros * Hc Hd Hx.
+  rewrite scase_def_eq.
+  eapply forall_nprod_Foldi in Hx; eauto 2 using is_ncons_zip.
+  simpl; intros.
+  now apply is_ncons_zip3.
+Qed.
+
+Lemma scase_def_inf :
+  forall T OT TB,
+  forall l xs cs ds,
+    infinite cs ->
+    infinite ds ->
+    forall_nprod (@infinite _) xs ->
+    infinite (@scase_def A B T OT TB l cs ds xs).
+Proof.
+  setoid_rewrite <- nrem_inf_iff.
+  intros * Infc Infd Hf n.
+  apply is_ncons_scase_def; eauto using inf_nrem, forall_nprod_impl.
+Qed.
+
 End Ncons_ops.

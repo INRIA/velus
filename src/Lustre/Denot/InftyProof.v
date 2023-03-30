@@ -28,6 +28,18 @@ Module Type LDENOTINF
        (Import Lord  : LORDERED Ids Op OpAux Cks Senv Syn)
        (Import Den   : LDENOT     Ids Op OpAux Cks Senv Syn Lord).
 
+  (* TODO: move?? *)
+  Ltac gen_sub_exps :=
+  (* simpl; (* important, même si l'action n'est pas visible *) *)
+  repeat match goal with
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_expss ?e1 ?e2 ?e3 ?e4) ?e5) ?e6) ?e7) ?e8 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_expss e1 e2 e3 e4) e5) e6) e7) e8)
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exps ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_exps e1 e2 e3) e4) e5) e6) e7)
+  | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_exp ?e1 ?e2 ?e3) ?e4) ?e5) ?e6) ?e7 ] =>
+      generalize (f1 (f2 (f3 (f4 (denot_exp e1 e2 e3) e4) e5) e6) e7)
+    end.
+
   (* section là juste pour supposer HasCausInj, amené à disparaître  *)
   Section Top.
 
@@ -162,6 +174,24 @@ Module Type LDENOTINF
       setoid_rewrite nprod_app_nth2; eauto using Is_free_left_list.
   Qed.
 
+  Lemma P_expss_k : forall n (ess : list (enumtag * list exp)) ins envI bs env k m,
+      Forall (fun es => length (annots (snd es)) = m) ess ->
+      Forall (fun es => P_exps (P_exp n ins envI bs env) es k) (map snd ess) ->
+      forall_nprod (fun np => is_ncons n (get_nth k errTy np))
+        (denot_expss G ins ess m envG envI bs env).
+  Proof.
+    intros * Hl Hp.
+    induction ess as [|[j es] ess]. now simpl.
+    rewrite denot_expss_eq.
+    inv Hl. inv Hp.
+    simpl (snd _) in *.
+    rewrite annots_numstreams in *.
+    unfold eq_rect; cases; try congruence.
+    apply (@forall_nprod_app _ _ 1).
+    - apply P_exps_k; auto.
+    - apply IHess; auto.
+  Qed.
+
   (* TODO: inutile? *)
   Lemma P_exps_impl' :
     forall (Q_exp P_exp : exp -> nat -> Prop) es k,
@@ -211,6 +241,21 @@ Module Type LDENOTINF
     apply IHes; auto; lia.
   Qed.
 
+  Lemma Forall_P_expss :
+    forall (P_exp : exp -> nat -> Prop) (ess : list (enumtag * list exp)) k m,
+      (* hyothèse de récurrence typique avec exp_ind2 *)
+      Forall (Forall (fun e => forall k, k < numstreams e -> P_exp e k)) (map snd ess) ->
+      Forall (fun es => length (annots (snd es)) = m) ess ->
+      k < m ->
+      Forall (fun es => P_exps P_exp es k) (map snd ess).
+  Proof.
+    intros.
+    simpl_Forall; subst.
+    apply Forall_P_exps; auto.
+    now rewrite <- annots_numstreams.
+  Qed.
+
+
   Ltac solve_err :=
     try (
         repeat (rewrite get_nth_const; [|simpl; cases]);
@@ -253,24 +298,23 @@ Module Type LDENOTINF
       assert (k = O) by lia; subst.
       rewrite denot_exp_eq.
       inv Hwx. now apply Hvar.
-    - (* unop *)
+    - (* Eunop *)
       assert (k = O) by lia; subst.
       revert IHe.
       rewrite denot_exp_eq.
       unfold P_exp.
-      generalize (denot_exp G ins e envG envI bs env).
+      gen_sub_exps.
       rewrite <- length_typeof_numstreams.
       inv Hwl. inv Hwx.
       intros. cases_eqn HH; solve_err.
       apply is_ncons_sunop.
       unshelve eapply (IHe _ _ O); auto.
-    - (* binop *)
+    - (* Ebinop *)
       assert (k = O) by lia; subst.
       revert IHe1 IHe2.
       rewrite denot_exp_eq.
       unfold P_exp.
-      generalize (denot_exp G ins e1 envG envI bs env).
-      generalize (denot_exp G ins e2 envG envI bs env).
+      gen_sub_exps.
       rewrite <- 2 length_typeof_numstreams.
       inv Hwl. inv Hwx.
       intros. cases_eqn HH; solve_err.
@@ -297,8 +341,6 @@ Module Type LDENOTINF
       now apply P_exps_k, Forall_P_exps.
     - (* Emerge *)
       destruct x, a.
-      rewrite denot_exp_eq; simpl.
-      erewrite lift_nprod_nth; auto.
       inv Hwl.
       inv Hwx.
       rewrite <- Forall_map in *.
@@ -306,13 +348,52 @@ Module Type LDENOTINF
       apply Forall_impl_inside with (P := wl_exp _) in H; auto.
       apply Forall_impl_inside with (P := wx_exp _) in H; auto.
       rewrite Forall_concat in H.
+      eapply Forall_P_expss, P_expss_k in H; eauto.
+      rewrite denot_exp_eq; simpl.
+      erewrite lift_nprod_nth; auto.
       apply is_ncons_smerge; auto.
-      apply forall_nprod_lift.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
-      apply forall_denot_expss.
-      unfold eq_rect.
-      simpl_Forall; cases; solve_err.
-      now apply P_exps_k, Forall_P_exps.
+      apply forall_nprod_lift; eauto.
+    - (* Ecase *)
+      destruct a.
+      inv Hwl.
+      inv Hwx.
+      rewrite <- Forall_map in *.
+      rewrite <- Forall_concat in *.
+      apply Forall_impl_inside with (P := wl_exp _) in H; auto.
+      apply Forall_impl_inside with (P := wx_exp _) in H; auto.
+      rewrite Forall_concat in H.
+      eapply Forall_P_expss, P_expss_k in H; eauto.
+      take (wl_exp G e) and apply IHe with (k := O) in it as Hc; auto; try lia.
+      destruct d; rewrite denot_exp_eq; simpl.
+      + (* défaut *)
+        apply Forall_impl_inside with (P := wl_exp _) in H0; auto.
+        apply Forall_impl_inside with (P := wx_exp _) in H0; auto.
+        eapply Forall_P_exps with (k := k), P_exps_k in H0; auto.
+        2:{ rewrite <- annots_numstreams, H13; auto. }
+        revert H0 H Hc.
+        unfold P_exp.
+        gen_sub_exps.
+        cases; try congruence; intros; solve_err.
+        rewrite curry_nprod_simpl.
+        setoid_rewrite lift_nprod_nth; auto.
+        rewrite uncurry_nprod_simpl.
+        apply is_ncons_scase_def; auto.
+        * rewrite lift_hd, (nprod_hd_app O).
+          unfold eq_rect; cases; eauto.
+        * rewrite lift_tl.
+          apply forall_nprod_lift.
+          unfold eq_rect_r, eq_rect, eq_sym; cases.
+          apply forall_nprod_tl, (@forall_nprod_app _ _ 1); auto.
+      + (* total *)
+        revert Hc H.
+        unfold P_exp.
+        gen_sub_exps.
+        cases; try congruence; intros; solve_err.
+        erewrite lift_nprod_nth; auto.
+        apply is_ncons_scase; auto.
+        unfold eq_rect_r, eq_rect, eq_sym; cases.
+        apply forall_nprod_lift; eauto.
     - (* Eapp *)
       rewrite denot_exp_eq; simpl.
       unfold eq_rect.
@@ -389,7 +470,7 @@ Module Type LDENOTINF
       revert H.
       rewrite denot_exp_eq.
       unfold P_exp.
-      generalize (denot_exp G ins e1 envG envI bs env).
+      gen_sub_exps.
       rewrite <- length_typeof_numstreams.
       inv Hwl. inv Hwx.
       intros. cases_eqn HH; solve_err.
@@ -398,8 +479,7 @@ Module Type LDENOTINF
       revert H H0.
       rewrite denot_exp_eq.
       unfold P_exp.
-      generalize (denot_exp G ins e1 envG envI bs env).
-      generalize (denot_exp G ins e2 envG envI bs env).
+      gen_sub_exps.
       rewrite <- 2 length_typeof_numstreams.
       inv Hwl. inv Hwx.
       intros. cases_eqn HH; solve_err.
@@ -426,7 +506,7 @@ Module Type LDENOTINF
       destruct ann0.
       rewrite denot_exp_eq; simpl.
       erewrite lift_nprod_nth; auto.
-      eapply is_ncons_smerge with (n := S n); eauto using P_exps_k.
+      eapply is_ncons_smerge with (n := S n); eauto.
       apply forall_nprod_lift.
       unfold eq_rect_r, eq_rect, eq_sym; cases.
       apply forall_denot_expss.
@@ -435,6 +515,40 @@ Module Type LDENOTINF
       simpl_Forall; cases; solve_err.
       apply P_exps_k with (n := S n).
       apply P_exps_impl, P_exps_impl in H2; auto.
+    - (* Ecase *)
+      destruct ann0.
+      inv Hwl. inv Hwx.
+      take (Forall (fun _ => length _ = _) es) and
+        eapply P_expss_k with (n := S n) in it as Hess; eauto.
+      2:{ simpl_Forall.
+          eapply P_exps_impl in H1; eauto.
+          eapply P_exps_impl in H1; eauto. }
+      destruct d; rewrite denot_exp_eq; simpl.
+      + (* défaut *)
+        apply P_exps_impl, P_exps_impl, P_exps_k in H2; auto.
+        revert H0 H2 Hess.
+        unfold P_exp.
+        gen_sub_exps.
+        cases; intros; solve_err.
+        rewrite curry_nprod_simpl.
+        setoid_rewrite lift_nprod_nth; auto.
+        rewrite uncurry_nprod_simpl.
+        apply is_ncons_scase_def with (n := S n); auto.
+        * rewrite lift_hd, (nprod_hd_app O).
+          unfold eq_rect; cases; eauto.
+        * rewrite lift_tl.
+          apply forall_nprod_lift.
+          unfold eq_rect_r, eq_rect, eq_sym; cases.
+          apply forall_nprod_tl, (@forall_nprod_app _ _ 1); auto.
+      + (* total *)
+        revert H0 Hess.
+        unfold P_exp.
+        gen_sub_exps.
+        cases; intros; solve_err.
+        erewrite lift_nprod_nth; auto.
+        eapply is_ncons_scase with (n := S n); auto.
+        apply forall_nprod_lift.
+        unfold eq_rect_r, eq_rect, eq_sym; cases; eauto.
     - (* Eapp *)
       rewrite denot_exp_eq; simpl in *.
       unfold eq_rect.
@@ -773,12 +887,11 @@ Proof.
     apply sconst_inf; auto.
   - (* Eunop *)
     revert IHe.
-    generalize (denot_exp G ins e envG envI bs env).
+    gen_sub_exps.
     intros; cases; simpl; eauto using sunop_inf, DS_const_inf.
   - (* Ebinop *)
     revert IHe1 IHe2.
-    generalize (denot_exp G ins e1 envG envI bs env).
-    generalize (denot_exp G ins e2 envG envI bs env).
+    gen_sub_exps.
     intros; cases; simpl; eauto using sbinop_inf, DS_const_inf.
   - (* Efby *)
     apply forall_denot_exps in H, H0.
@@ -798,6 +911,31 @@ Proof.
     unfold eq_rect.
     simpl_Forall.
     cases; eauto using forall_nprod_const, DS_const_inf, forall_denot_exps.
+  - (* Ecase *)
+    destruct a as [tys].
+    eapply Forall_impl in H.
+    2:{ intros ? HH. apply forall_denot_exps, HH. }
+    eapply forall_forall_denot_expss with (n := length tys) in H as Hess;
+      eauto using DS_const_inf.
+    destruct d.
+    + (* défaut *)
+      apply forall_denot_exps in H0 as Hd.
+      revert Hess IHe Hd.
+      gen_sub_exps.
+      unfold eq_rect_r, eq_rect, eq_sym; cases; intros;
+        eauto using forall_nprod_const, DS_const_inf.
+      rewrite curry_nprod_simpl.
+      eapply forall_lift_nprod.
+      { intros; rewrite uncurry_nprod_simpl.
+        apply scase_def_inf; eauto using forall_nprod_tl.
+        now apply forall_nprod_hd. }
+      apply forall_nprod_app with (n := 1); auto.
+    + (* total *)
+      revert Hess IHe.
+      gen_sub_exps.
+      unfold eq_rect_r; cases; intros; eauto using forall_nprod_const, DS_const_inf.
+      eapply forall_lift_nprod; eauto using scase_inf.
+      unfold eq_rect, eq_sym; cases.
   - (* Eapp *)
     apply forall_denot_exps in H.
     unfold eq_rect.
