@@ -441,6 +441,20 @@ Proof.
     apply forall_nprod_app with (n := 1); auto.
 Qed.
 
+Lemma forall_forall_denot_expss :
+  forall A ins (ess : list (A * list exp)) n envG envI bs env (P : DS (sampl value) -> Prop),
+    P errTy ->
+    Forall (fun es => forall_nprod P (denot_exps ins (snd es) envG envI bs env)) ess ->
+    forall_nprod (forall_nprod P) (denot_expss ins ess n envG envI bs env).
+Proof.
+  induction ess as [|[]]; intros * Herr Hf; inv Hf.
+  - simpl; auto.
+  - rewrite denot_expss_eq.
+    unfold eq_rect in *.
+    cases; auto using forall_nprod_const.
+    apply forall_nprod_app with (n := 1); auto.
+Qed.
+
 Lemma denot_exps_nil :
   forall ins envG envI bs env,
     denot_exps ins [] envG envI bs env = errTy.
@@ -855,8 +869,9 @@ End Denot_node.
     generalize the results of [denot_exp, denot_exps, denot_expss] on subterms
     with the following tactic.
  *)
+(* remarque : un [simpl] avant [gen_sub_exps] peur être nécessaire, même si
+   l'effet n'est pas visible *)
 Ltac gen_sub_exps :=
-  simpl; (* important, même si l'action n'est pas visible *)
   repeat match goal with
   | |- context [ ?f1 (?f2 (?f3 (?f4 (denot_expss ?e1 ?e2 ?e3 ?e4) ?e5) ?e6) ?e7) ?e8 ] =>
       generalize (f1 (f2 (f3 (f4 (denot_expss e1 e2 e3 e4) e5) e6) e7) e8)
