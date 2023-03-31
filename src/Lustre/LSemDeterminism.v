@@ -751,7 +751,7 @@ Module Type LSEMDETERMINISM
         wt_exp G Γ e ->
         k < numstreams e ->
         EqStN (S n) bs1 bs2 ->
-        (forall x, Is_free_left Γ x k e -> det_var_inv (S n) Hi1 Hi2 x) ->
+        (forall x, Is_used_inst Γ x k e -> det_var_inv (S n) Hi1 Hi2 x) ->
         det_exp_inv (S n) Hi1 Hi2 bs1 bs2 e k.
     Proof.
       intros * Hn Hwt Hnum Hbs HSn.
@@ -1294,7 +1294,7 @@ Module Type LSEMDETERMINISM
       det_nodes G ->
       Forall (fun '(e, (t, _)) => wt_exp G Γ e /\ typeof e = [bool_velus_type]) trans ->
       (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> det_var_inv Γ n Hi1 Hi2 cx) ->
-      (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> Exists (fun '(e, _) => Is_free_left Γ cx 0 e) trans -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
+      (forall x cx, HasCaus Γ x cx \/ HasLastCaus Γ x cx -> Exists (fun '(e, _) => Is_used_inst Γ cx 0 e) trans -> det_var_inv Γ (S n) Hi1 Hi2 cx) ->
       EqStN (S n) bs1 bs2 ->
       sem_transitions G Hi1 bs1 trans def stres1 ->
       sem_transitions G Hi2 bs2 trans def stres2 ->
@@ -2178,7 +2178,7 @@ Module Type LSEMDETERMINISM
           * simpl_Forall.
             eapply det_exp_S; eauto.
             eapply HSbs; left. econstructor; eauto. rewrite <-Hnth. now apply nth_In.
-          * intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_list_In_snd in IsF as (?&?).
+          * intros ? IsF. assert (IsF':=IsF). eapply Is_used_inst_list_In_snd in IsF as (?&?).
             eapply HSn; eauto.
             rewrite <-Hnth in *. econstructor; eauto using nth_error_nth'.
           * destruct H1 as (_&Hf2). apply Forall2_length in Hf2.
@@ -2195,7 +2195,7 @@ Module Type LSEMDETERMINISM
           eapply det_exp_S with (k:=0) (n:=n) in H5; eauto.
           - eapply H5 in H8; simpl in H8; eauto.
           - rewrite <-length_typeof_numstreams, H7; simpl. lia.
-          - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
+          - intros ? IsF. assert (IsF':=IsF). eapply Is_used_inst_In_snd in IsF as (?&?).
             eapply HSn, DepOnReset2; eauto.
         }
         assert (forall k, Forall (fun blks => (forall y xs, VarsDefinedComp blks xs -> In y xs -> HasCaus Γ y cy ->
@@ -2238,7 +2238,7 @@ Module Type LSEMDETERMINISM
           eapply det_exp_S with (k:=0) (n:=n) in H9; eauto.
           - eapply H9 in H12; simpl in H12; eauto.
           - rewrite <-length_typeof_numstreams, H6; simpl. lia.
-          - intros ? IsF. assert (IsF':=IsF). eapply Is_free_left_In_snd in IsF as (?&?).
+          - intros ? IsF. assert (IsF':=IsF). eapply Is_used_inst_In_snd in IsF as (?&?).
             eapply HSn, DepOnSwitch2; eauto.
         }
         assert (Forall (fun '(k, s) => exists Hi1' Hi2',
@@ -2626,7 +2626,7 @@ Module Type LSEMDETERMINISM
             -- rewrite <-length_typeof_numstreams, H5. simpl. lia.
             -- intros * Free.
                eapply Forall_forall in HSn. eapply HSn.
-               1:{ eapply Is_free_left_In_snd in Free as (?&In).
+               1:{ eapply Is_used_inst_In_snd in Free as (?&In).
                    rewrite idcaus_of_senv_In, idcaus_of_senv_app, idcaus_of_senv_ins in In. solve_In. }
                eapply Hdep. right. solve_Exists. constructor; auto.
           * eapply Forall_forall in Hn. 2:apply in_or_app, or_intror, in_or_app, or_introl; solve_In.

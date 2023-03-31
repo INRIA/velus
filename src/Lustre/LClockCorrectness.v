@@ -513,7 +513,7 @@ Module Type LCLOCKCORRECTNESS
         wt_exp G Γty e ->
         wc_exp G Γ e ->
         k < numstreams e ->
-        (forall cx, Is_free_left Γ cx k e -> sc_var_inv Γ H b cx) ->
+        (forall cx, Is_used_inst Γ cx k e -> sc_var_inv Γ H b cx) ->
         sc_exp_inv Γ Γty H b e k.
     Proof.
       intros * Hnd1 Hsc Hwt Hwc Hnum Hfree.
@@ -541,7 +541,7 @@ Module Type LCLOCKCORRECTNESS
         wt_equation G Γty (xs, es) ->
         wc_equation G Γ (xs, es) ->
         Sem.sem_equation G H b (xs, es) ->
-        (forall cx, Is_free_left_list Γ cx k es -> sc_var_inv Γ H b cx) ->
+        (forall cx, Is_used_inst_list Γ cx k es -> sc_var_inv Γ H b cx) ->
         HasCaus Γ (nth k xs xH) cx ->
         sc_var_inv Γ H b cx.
     Proof.
@@ -582,7 +582,7 @@ Module Type LCLOCKCORRECTNESS
               left; simpl. 2:constructor.
               1,2:(apply Forall2_length in H13; setoid_rewrite <-H13; auto).
               left.
-              eapply Is_free_left_list_Exists; eauto.
+              eapply Is_used_inst_list_Exists; eauto.
         }
 
         (* Returning aligned values *)
@@ -1041,7 +1041,7 @@ Module Type LCLOCKCORRECTNESS
         NoDupMembers Γ ->
         Forall (fun '(e, _) => wt_exp G Γty e) trans ->
         Forall (fun '(e, _) => wc_exp G Γ e /\ clockof e = [Cbase]) trans ->
-        (forall cx, Exists (fun '(e, _) => Is_free_left Γ cx 0 e) trans -> sc_var_inv Γ Hi bs' cx) ->
+        (forall cx, Exists (fun '(e, _) => Is_used_inst Γ cx 0 e) trans -> sc_var_inv Γ Hi bs' cx) ->
         sem_transitions G Hi bs' trans def stres ->
         abstract_clock stres ≡ bs'.
     Proof.
@@ -1195,7 +1195,7 @@ Module Type LCLOCKCORRECTNESS
               take (fby _ _ _) and apply ac_fby1 in it. now rewrite <-it.
             - apply NoDupScope_NoDupMembers; auto.
             - rewrite <-length_clockof_numstreams, H0; auto.
-            - intros ? Hfree. edestruct Is_free_left_In_snd; eauto.
+            - intros ? Hfree. edestruct Is_used_inst_In_snd; eauto.
               eapply Hscloc; eauto.
               eapply DepOnScope2; eauto. solve_Exists. now constructor.
           }
@@ -1308,7 +1308,7 @@ Module Type LCLOCKCORRECTNESS
         eapply In_nth with (d:=xH) in Hinxs as (?&Hlen&Hnth); subst.
         eapply sc_exp_equation in H5; rewrite app_nil_r in *; eauto.
         intros * Hfree.
-        assert (Hfree':=Hfree). eapply Is_free_left_list_In_snd in Hfree as (?&?); eauto.
+        assert (Hfree':=Hfree). eapply Is_used_inst_list_In_snd in Hfree as (?&?); eauto.
         eapply Hsc; eauto.
         econstructor; eauto.
         eapply nth_error_nth'; eauto.
@@ -1344,7 +1344,7 @@ Module Type LCLOCKCORRECTNESS
         { intros.
           assert (Hsem:=H15). eapply sc_exp' with (Γ:=Γ) (k:=0) in Hsem; eauto.
           2:{ rewrite <-length_clockof_numstreams, H12; auto. }
-          2:{ intros ? Hfree. assert (Hfree':=Hfree). apply Is_free_left_In_snd in Hfree' as (?&?).
+          2:{ intros ? Hfree. assert (Hfree':=Hfree). apply Is_used_inst_In_snd in Hfree' as (?&?).
               eapply Hsc; eauto.
               eapply DepOnSwitch2; eauto.
           }
@@ -1491,10 +1491,10 @@ Module Type LCLOCKCORRECTNESS
             + intros * Hck; inv Hck; simpl_In.
               destruct (_ ==b _) eqn:Hck; inv Hf. rewrite equiv_decb_equiv in Hck; inv Hck.
               eauto with senv.
-            + eapply Is_free_left_In_snd in Hex as Hca'. destruct Hca' as (?&Hca').
+            + eapply Is_used_inst_In_snd in Hex as Hca'. destruct Hca' as (?&Hca').
               eapply Hsc; eauto. destruct Hca'; eauto.
               eapply DepOnAuto3; eauto.
-              solve_Exists. eapply Is_free_left_incl in Hex; eauto.
+              solve_Exists. eapply Is_used_inst_incl in Hex; eauto.
         }
         assert (Forall (fun '((e, _), br) => forall k, exists Hi',
                             select_hist e k stres Hi Hi'
@@ -1953,15 +1953,15 @@ Module Type LCLOCKCORRECTNESS
         rewrite 2 map_app, 2 in_app_iff. left; right. solve_In. auto.
     Qed.
 
-    Fact wc_exp_Is_free_left : forall Γ e x k,
+    Fact wc_exp_Is_used_inst : forall Γ e x k,
         wc_exp G Γ e ->
-        Is_free_left Γ x k e ->
+        Is_used_inst Γ x k e ->
         In x (map snd (idcaus_of_senv Γ)).
     Proof.
       Local Ltac solve_forall_exists :=
         match goal with
-        | H: Is_free_left_list _ _ _ _ |- _ =>
-            eapply Is_free_left_list_Exists in H as (?&?)
+        | H: Is_used_inst_list _ _ _ _ |- _ =>
+            eapply Is_used_inst_list_Exists in H as (?&?)
         end; simpl_Exists; simpl_Forall; eauto.
       induction e using exp_ind2; intros * Hwc Hfree;
         inv Hwc; inv Hfree; eauto.
@@ -2023,7 +2023,7 @@ Module Type LCLOCKCORRECTNESS
       - apply sc_exp_case; auto.
       - eapply sc_exp_app; eauto.
       - eapply Forall_forall in Hinv; eauto.
-        eapply wc_exp_Is_free_left; eauto.
+        eapply wc_exp_Is_used_inst; eauto.
       - assert (length vs = numstreams e) as Hlen'.
         { eapply sem_exp_numstreams in Hsem; eauto with lclocking. }
         eapply Forall2_forall2; split.
