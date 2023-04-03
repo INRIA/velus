@@ -295,8 +295,7 @@ Module Type CORRECTNESS
         destruct Rst as (?& Node & Mask).
       apply IH in Node.
       rewrite Mask; auto.
-      cases_eqn Hr; apply count_true_ge_1 in Hr.
-      erewrite <-Lt.S_pred; eauto.
+      cases_eqn Hr; apply count_true_ge_1 in Hr. lia.
   Qed.
 
   Lemma msem_node_memory_closed_rec_n:

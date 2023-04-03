@@ -770,7 +770,7 @@ Module Type CORRECTNESS
     rewrite when_spec in Hwhen.
     intros n. specialize (Hvar n). specialize (Hck n). specialize (Hwhen n).
     rewrite LCS.CIStr.CIStr.tr_Stream_ac in *.
-    repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in *. rewrite LCS.CIStr.CIStr.tr_Stream_nth in Hvar.
+    repeat rewrite LCS.CIStr.CIStr.tr_Stream_nth in *.
     destruct Hwhen as [(Hx&Hv&Hy)|[(?&?&Hx&Hv&?&Hy)|(?&Hx&Hv&Hy)]];
       rewrite Hv in *; setoid_rewrite Hx; inv Hck; auto;
       try setoid_rewrite Hy in H5; try congruence.
@@ -854,7 +854,7 @@ Module Type CORRECTNESS
     apply NICStr.sem_arhs_impl.
     intros ?. specialize (Hsem n). specialize (Hsck n).
     unfold CES.sem_arhs_instant.
-    repeat rewrite NICStr.CIStr.tr_Stream_nth in *. rewrite NICStr.CIStr.tr_Stream_nth, ac_nth in Hsck.
+    repeat rewrite NICStr.CIStr.tr_Stream_nth, ?ac_nth in *.
     destruct (s # n) eqn:Heq; econstructor; auto.
     1,2:setoid_rewrite Heq in Hsck; auto.
   Qed.
@@ -1182,7 +1182,7 @@ Module Type CORRECTNESS
       + specialize (Hcount 0).
         unfold_Stv r; rewrite Str_nth_0_hd in *; simpl in *; lia.
       + unfold_Stv r; rewrite Str_nth_S_tl; simpl.
-        * rewrite count_S_nth'. eapply Lt.lt_n_S.
+        * rewrite count_S_nth', <-Nat.succ_lt_mono.
           destruct k'; simpl in *.
           -- exfalso. apply (Hcount 0); auto.
           -- eapply IHn; eauto; intros.
@@ -1199,7 +1199,7 @@ Module Type CORRECTNESS
     intros.
     destruct (count_ex_dec (disj_str [r1;r2]) k) as [(n&Heq)|].
     - exists ((count (maskb ((count r2) # n) r2 r1)) # n), ((count r2) # n); intros; subst.
-      destruct (Compare_dec.le_gt_dec n n0) as [Hle|Hgt]. apply Lt.le_lt_or_eq in Hle as [Hlt|Heq]; subst; auto.
+      destruct (Compare_dec.le_gt_dec n n0) as [Hle|Hgt]. apply Nat.lt_eq_cases in Hle as [Hlt|Heq]; subst; auto.
       + split; [intros|intros (Hr1&Hr2)].
         * symmetry in H.
           split; symmetry.
@@ -1221,7 +1221,7 @@ Module Type CORRECTNESS
           rewrite <-Hr2k, maskb_nth, Nat.eqb_refl in Hr1.
           rewrite disj_str_spec; simpl. rewrite Hr1, Hr2; auto.
       + split; auto.
-      + apply Gt.gt_not_le, Nat.nle_gt in Hgt.
+      + apply Nat.lt_nge, Nat.nle_gt in Hgt.
         split; [intros|intros (Hr1&Hr2)].
         * split.
           -- rewrite count_eq_false in *; auto.

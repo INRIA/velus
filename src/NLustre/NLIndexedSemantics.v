@@ -89,8 +89,7 @@ Module Type NLINDEXEDSEMANTICS
       n < S m ->
       (n < m \/ n = m).
   Proof.
-    intros * Hlt.
-    apply Lt.le_lt_or_eq, Lt.lt_n_Sm_le; auto.
+    intros * Hlt. lia.
   Qed.
 
   Lemma doreset_spec : forall xs rs n,
@@ -109,7 +108,7 @@ Module Type NLINDEXEDSEMANTICS
       + exists n. repeat split; auto.
         intros ? Hle Hlt.
         apply lt_S_inv in Hlt as [?|?]; subst; auto.
-        exfalso. eapply Lt.lt_irrefl, Lt.lt_le_trans; eauto.
+        exfalso. eapply Nat.lt_irrefl, Nat.lt_le_trans; eauto.
       + exists x. repeat split; auto.
         intros ? Hle Hlt.
         apply lt_S_inv in Hlt as [?|?]; subst; auto.
@@ -120,7 +119,7 @@ Module Type NLINDEXEDSEMANTICS
         apply lt_S_inv in Hmn as [?|?]; subst; auto.
         right. exists x. repeat (split; auto).
       + exfalso. rewrite Hk in Hxs; auto. inv Hxs.
-        apply Lt.lt_n_Sm_le; auto.
+        apply Nat.lt_succ_r; auto.
   Qed.
 
   Fact doreset_shift : forall xs rs xs' rs' ,

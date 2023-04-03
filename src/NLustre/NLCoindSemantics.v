@@ -221,8 +221,7 @@ Module Type NLCOINDSEMANTICS
       n < S m ->
       (n < m \/ n = m).
   Proof.
-    intros * Hlt.
-    apply Lt.le_lt_or_eq, Lt.lt_n_Sm_le; auto.
+    intros * Hlt. lia.
   Qed.
 
   Lemma reset1_present1 : forall n k v0 xs rs x,
@@ -257,10 +256,10 @@ Module Type NLCOINDSEMANTICS
        simpl in *; try congruence; auto).
     - eapply IHn; eauto.
       intros ? Hkn. specialize (Hk (S k)).
-      rewrite Str_nth_S in Hk. apply Hk, Lt.lt_n_S; auto.
+      rewrite Str_nth_S in Hk. apply Hk. lia.
     - eapply IHn; eauto.
       intros ? Hkn. specialize (Hk (S k)).
-      rewrite Str_nth_S in Hk. apply Hk, Lt.lt_n_S; auto.
+      rewrite Str_nth_S in Hk. apply Hk. lia.
     - specialize (Hk 0 (Nat.lt_0_succ _)).
       rewrite Str_nth_0 in Hk. inv Hk.
     - specialize (Hk 0 (Nat.lt_0_succ _)).

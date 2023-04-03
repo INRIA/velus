@@ -582,8 +582,7 @@ Module Type FUSION
       assert (length ss = length l) as E' by congruence.
       rewrite map2_combine.
       econstructor; eauto with obctyping.
-      - rewrite map_length, combine_length.
-        rewrite E', Min.min_idempotent; auto.
+      - rewrite map_length, combine_length. lia.
       - intros * Hin; apply in_map_iff in Hin as ((os1, os2) & Eq & Hin).
         pose proof Hin as Hin'; apply in_combine_l in Hin; apply in_combine_r in Hin'.
         take (Forall _ ss) and apply Forall_forall with (2 := Hin) in it; eauto.

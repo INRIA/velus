@@ -192,7 +192,7 @@ Module Type NLCOINDTOINDEXED
         + destruct (xs # (S n)) eqn:Hx.
           * left. intros ? Hmn. inv Hmn; auto.
           * do 2 right. split; eauto.
-            intros ? Hlt. apply H; auto. apply Lt.lt_n_Sm_le; auto.
+            intros ? Hlt. apply H; auto. lia.
         + right; left. exists x. exists x0. auto.
         + right; left. exists n. exists x. auto.
     Qed.
@@ -228,7 +228,7 @@ Module Type NLCOINDTOINDEXED
           rewrite Indexed.doreset_spec.
           right. exists 0. repeat split; auto. apply Nat.lt_0_succ.
           intros ? Hk Hl. rewrite tr_Stream_nth. destruct k; auto.
-          apply Hm, Lt.lt_S_n; auto.
+          apply Hm. lia.
     Qed.
 
     Corollary reset_fby_impl:
@@ -474,8 +474,8 @@ Module Type NLCOINDTOINDEXED
         rewrite tr_Stream_S.
         destruct (tr_Stream r n) eqn: E';
           destruct (tr_Stream r (S n)); rewrite IHn; try lia.
-        + apply Minus.minus_Sn_m, count_true_ge_1; auto.
-        + rewrite Minus.minus_Sn_m; try lia.
+        + rewrite Nat.sub_succ_l; auto. apply count_true_ge_1; auto.
+        + rewrite <-Nat.sub_succ_l; try lia.
           apply count_true_ge_1; auto.
     Qed.
 
@@ -498,7 +498,7 @@ Module Type NLCOINDTOINDEXED
         + rewrite IHn.
           destruct r; simpl in *; rewrite R, count_false_shift, tr_Stream_S.
           destruct (tr_Stream r n) eqn: R'; auto.
-          apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; lia.
+          apply count_true_ge_1 in R'. lia.
     Qed.
 
     (** State the correspondence for [mask]. *)

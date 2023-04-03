@@ -929,9 +929,9 @@ Module Type NLINDEXEDTOCOIND
       intros; apply ntheq_eqst; intro m.
       unfold Str_nth; revert n; induction m; intro; simpl.
       - destruct (r n) eqn: R; auto.
-        apply count_true_ge_1 in R; rewrite Minus.minus_Sn_m; lia.
+        apply count_true_ge_1 in R; lia.
       - rewrite <-IHm; simpl; destruct (r n) eqn: R; destruct (r (S n));
-          try (apply count_true_ge_1 in R; rewrite Minus.minus_Sn_m; auto);
+          try (apply count_true_ge_1 in R; rewrite <-Nat.sub_succ_l; auto);
           try (rewrite Nat.sub_succ, Nat.sub_0_r); auto.
     Qed.
 

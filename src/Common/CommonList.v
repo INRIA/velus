@@ -2295,7 +2295,7 @@ Section SkipnDropn.
     - destruct n; simpl.
       + now rewrite <-plus_n_O.
       + destruct n'; simpl; rewrite IHxs; auto.
-        now rewrite Plus.plus_Snm_nSm.
+        now rewrite Nat.add_succ_r.
   Qed.
 
   Lemma nth_firstn_1: forall (xs: list A) n' n x_d,
@@ -2574,9 +2574,9 @@ Section AppLength.
     rewrite app_length in H.
     exists (firstn (length l1) l),(skipn (length l1) l). split; [|split].
     - symmetry. apply firstn_skipn.
-    - rewrite firstn_length. apply Min.min_l. lia.
+    - rewrite firstn_length. lia.
     - apply app_length_impl with (l'1 := firstn (length l1) l) (l'2 := l1).
-      rewrite firstn_length. apply Min.min_l. lia.
+      rewrite firstn_length. lia.
       rewrite firstn_skipn. now rewrite app_length.
   Qed.
 
@@ -2968,7 +2968,7 @@ Section Forall2.
       apply Hin.
       subst x' y'. rewrite <-combine_nth with (1:=Hlen).
       apply nth_In.
-      now rewrite combine_length, <-Hlen, Min.min_idempotent.
+      now rewrite combine_length, <-Hlen, Nat.min_id.
     - intros H; split.
       + intros * Hin.
         apply Forall2_combine in H.
@@ -4644,7 +4644,7 @@ Section LL.
     revert Hlen. generalize (length ls) at 2.
     intro len; revert ls.
     unfold ll. induction len; intros ls Hlen; constructor;
-                 try apply Le.le_n_0_eq in Hlen; intuition.
+                 try apply Nat.le_0_r in Hlen; intuition.
     - lia.
     - eapply IHlen; lia.
   Defined.

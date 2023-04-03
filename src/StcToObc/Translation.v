@@ -283,7 +283,7 @@ Module Type TRANSLATION
       + apply nth_error_None.
         now rewrite skip_branches_with_length.
       + rewrite skip_branches_with_S.
-        apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in LT as [|].
+        rewrite Nat.lt_succ_r in LT. apply Nat.lt_eq_cases in LT as [|].
         * rewrite nth_error_app1.
           -- rewrite IHn.
              destruct (Compare_dec.le_lt_dec n j); auto; lia.
@@ -302,7 +302,7 @@ Module Type TRANSLATION
   Proof.
     induction n; intros * Lt; try lia.
     rewrite skip_branches_with_S.
-    apply Lt.lt_n_Sm_le, Compare_dec.le_lt_eq_dec in Lt as [|].
+    rewrite Nat.lt_succ_r in Lt. apply Compare_dec.le_lt_eq_dec in Lt as [|].
     - apply in_app; auto.
     - subst; apply in_app; rewrite equiv_decb_refl; right; constructor; auto.
   Qed.

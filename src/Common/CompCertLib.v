@@ -246,7 +246,7 @@ Proof.
   induction xs as [|x xs IH]; intros m1 m2 n Hm; simpl in *; monadInv Hm.
   now subst; rewrite OK_OK; lia.
   rewrite EQ. simpl.
-  rewrite Plus.plus_comm, Plus.plus_assoc, (Plus.plus_comm x0 m1) in EQ0.
+  rewrite Nat.add_comm, Nat.add_assoc, (Nat.add_comm x0 m1) in EQ0.
   apply IH in EQ0. auto.
 Qed.
 

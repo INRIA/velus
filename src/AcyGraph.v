@@ -433,7 +433,7 @@ Section Dfs.
     revert Hag Hnds Hndg.
     generalize (map fst (Env.elements graph)) as g.
     generalize (PS.elements p) as n.
-    induction n as [|x n IH]; auto using le_0_n.
+    induction n as [|x n IH]; auto using Nat.le_0_l.
     intros g Hin NDn NDg. simpl.
     inversion_clear NDn as [|?? Hnx NDn'].
     assert (In x g) as Hxg by auto.

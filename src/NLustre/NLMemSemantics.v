@@ -918,8 +918,7 @@ dataflow memory for which the non-standard semantics holds true.
           eapply not_subrate_clock_impl; eauto.
         * simpl; cases.
         * destruct (rs n) eqn: Hr; auto.
-          apply count_true_ge_1 in Hr.
-          erewrite <-Lt.S_pred; eauto.
+          apply count_true_ge_1 in Hr. lia.
   Qed.
 
   Theorem msem_node_absent_until:

@@ -1138,7 +1138,7 @@ Module Type LCAUSALITY
       - exfalso. eapply not_In_empty. destruct k; eauto.
       - destruct k; eauto.
         + apply PeanoNat.Nat.lt_0_succ.
-        + apply Lt.lt_n_S; auto.
+        + rewrite <-Nat.succ_lt_mono; auto.
     Qed.
 
     Lemma Exists_Exists_Is_free {PSyn prefs} : forall (G: @global PSyn prefs) es x k,

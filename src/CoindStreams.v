@@ -2327,7 +2327,7 @@ Module Type COINDSTREAMS
       erewrite count_shift with (n2:=n2) in Hcount; eauto.
       destruct ((count (Str_nth_tl _ _)) # _) eqn:Hcount'. 2:lia.
       clear Hcount.
-      eapply Lt.lt_le_S, Nat.le_exists_sub in Hl1 as (k'&?&Hl1); subst.
+      eapply Nat.le_succ_l, Nat.le_exists_sub in Hl1 as (k'&?&Hl1); subst.
       eapply (count_0 _ _) with (m:=k') in Hcount'. 2:lia.
       rewrite Str_nth_plus in Hcount'; auto.
     - intros * Hcount.

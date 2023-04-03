@@ -919,7 +919,7 @@ Proof.
   unfold make_labeled_statements_aux', make_labeled_statements_aux.
   induction ss as [|os]; intros; simpl; auto.
   - now rewrite <-plus_n_O.
-  - rewrite <-plus_Snm_nSm, IHss.
+  - rewrite Nat.add_succ_r, <-Nat.add_succ_l, IHss.
     replace (Z.pred (Z.of_nat (S n))) with (Z.of_nat n); auto.
     lia.
 Qed.
@@ -957,7 +957,7 @@ Proof.
     + inv Nth; simpl.
       apply select_switch_case_make_labeled_statements_aux'_Lt; try lia.
       intros; apply Hls; lia.
-    + destruct os; simpl; rewrite <-plus_Snm_nSm.
+    + destruct os; simpl; rewrite Nat.add_succ_r, <-Nat.add_succ_l.
       * rewrite zeq_false; try lia.
         apply IHss; auto.
         intros; apply Hls; lia.
@@ -978,7 +978,7 @@ Proof.
     destruct n; simpl in *.
     + inv Nth; simpl.
       rewrite <-plus_n_O, zeq_true; eauto.
-    + destruct os; simpl; rewrite <-plus_Snm_nSm; auto.
+    + destruct os; simpl; rewrite Nat.add_succ_r, <-Nat.add_succ_l; auto.
       rewrite zeq_false; try lia; auto.
 Qed.
 
@@ -1657,8 +1657,7 @@ Section TranslateOk.
               - apply in_map; auto.
               - unfold translate_out.
                 destruct_list caller.(m_out); simpl; auto; try contradict Length; simpl.
-                + apply lt_n_0.
-                + apply lt_irrefl.
+                1,2:lia.
             }
             unfold translate_out at 1 in Hin'; setoid_rewrite Eq in Hin';
               erewrite find_method_name in Hin'; eauto.

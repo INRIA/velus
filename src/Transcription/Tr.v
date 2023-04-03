@@ -382,7 +382,8 @@ Module Type TR
   Next Obligation. now rewrite 2 length_idty. Qed.
   (* NL.n_defd obligation *)
   Next Obligation.
-    clear H0. rename l into vars. rename l0 into neqs.
+    rewrite <-idty_app, map_fst_idty.
+    clear H. rename l into vars. rename l0 into neqs.
     pose proof (L.n_nodup n) as (_&Hnd).
     pose proof (L.n_syn n) as Hsyn. inversion_clear Hsyn as [?? Syn1 Syn2 (vd&Hvars&Hperm)].
     cases. rename l0 into blks.
@@ -402,12 +403,12 @@ Module Type TR
           eapply H2; eauto.
     }
     simpl. rewrite H.
-    erewrite Hperm', map_app, Hperm, Permutation_app_comm, 4 map_fst_idty. reflexivity.
+    erewrite Hperm', map_app, Hperm, Permutation_app_comm, 2 map_fst_idty. reflexivity.
   Qed.
 
   (* NL.n_vout obligation *)
   Next Obligation.
-    clear H1. rename H0 into Hin. rename l into vars. rename l0 into neqs.
+    clear H0. rename H into Hin. rename l into vars. rename l0 into neqs.
     cases. rename l0 into blks.
     monadInv P.
     eapply mmap_inversion in EQ.
@@ -434,7 +435,7 @@ Module Type TR
   Qed.
 
   Next Obligation.
-    clear H0. rename l into vars.
+    clear H. rename l into vars.
     pose proof (L.n_nodup n) as (Hndup1&Hndup2).
     cases. rename l3 into blks. monadInv P.
     inv Hndup2. repeat L.inv_scope.
@@ -449,7 +450,7 @@ Module Type TR
 
   (* NL.n_good obligation *)
   Next Obligation.
-    clear H0. rename l into vars.
+    clear H. rename l into vars.
     pose proof (L.n_good n) as (Hgood1&Hgood2&Hat).
     split; auto.
     cases. monadInv P.

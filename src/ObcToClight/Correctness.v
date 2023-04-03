@@ -163,8 +163,7 @@ Proof.
     eapply occurs_in_wt in Hs2; eauto.
     inv Hs2; assumption.
   - destruct ys0 as [|? [|]].
-    + contradict Length; apply lt_n_0.
-    + contradict Length; simpl; apply lt_irrefl.
+    1,2:contradict Length; simpl; lia.
     + apply M.add_1; auto.
 Qed.
 

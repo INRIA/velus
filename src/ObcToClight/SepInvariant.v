@@ -1152,10 +1152,7 @@ Section MatchStates.
   Proof.
     intros * Length.
     unfold outputrep, case_out; split; intros * H;
-      destruct_list f.(m_out) as (?, ?) ? ?;
-                                        ((now contradict Length; simpl; apply lt_irrefl)
-                                         || (now contradict Length; simpl; apply lt_n_0)
-                                         || idtac).
+      destruct_list f.(m_out) as (?, ?) ? ?; try (now contradict Length; simpl; lia).
     - destruct outb_co as [(?, ?)|].
       + repeat rewrite sep_assoc in H; repeat rewrite sep_pure in H.
         do 3 econstructor; tauto.

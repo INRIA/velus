@@ -241,8 +241,7 @@ Proof.
     eapply l_to_nl_find_node' in Comp' as (?&Hfind'&Hin&Hout); eauto.
     assert (n_in x <> []) as Hnnul.
     { specialize (n_ingt0 x) as Hlt.
-      intro contra. rewrite contra in Hlt; simpl in Hlt.
-      eapply Lt.lt_irrefl; eauto. }
+      intro contra. rewrite contra in Hlt; simpl in Hlt. lia. }
     assert (Datatypes.length ins = Datatypes.length (n_in x)) as Hlenin
         by (rewrite <-length_idty; congruence).
     assert (Datatypes.length outs = Datatypes.length (n_out x)) as Hlenout
