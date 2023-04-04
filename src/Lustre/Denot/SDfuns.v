@@ -1274,9 +1274,8 @@ Section SStream_functions.
 
   Lemma fcase_abs_ok :
     forall (l : list enumtag) (ss : list (sampl A)),
-      let c := abs in
       Forall (eq abs) ss ->
-      fold_right (fun '(j, x) => fcase j c x) (defcon c) (combine l ss) = abs.
+      fold_right (fun '(j, x) => fcase j abs x) abs (combine l ss) = abs.
   Proof.
     induction l; intros * Heq; auto.
     destruct ss; auto.
