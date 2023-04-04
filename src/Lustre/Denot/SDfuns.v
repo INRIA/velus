@@ -1,5 +1,6 @@
 From Coq Require Import BinPos List.
 Import List ListNotations.
+From Velus Require Import CommonTactics.
 From Velus Require Import Lustre.Denot.Cpo.
 Require Import Cpo_ext.
 
@@ -959,9 +960,10 @@ Section SStream_functions.
   Definition fcase (j : enumtag) (c : sampl B) (x a : sampl A) :=
     match is_tag j c, a, x with
     | abs, abs, abs => abs
+    | _, abs, _ => err error_Cl
     | pres true, err error_Ty, pres v => pres v (* trouvé *)
     | pres true, pres _, pres v => pres v (* écrase la branche par défaut *)
-    | pres false, a, pres _ => a (* holroge du case *)
+    | pres false, a, pres _ => a (* horloge du case *)
     | _,_,_ => err error_Cl
     end.
 
@@ -1037,7 +1039,7 @@ Section SStream_functions.
   Proof.
     intros * Hc Hx.
     rewrite scase_eq.
-    eapply forall_nprod_Foldi in Hx; eauto using is_cons_DS_const.
+    eapply forall_nprod_Foldi in Hx; eauto.
     simpl; intros.
     now apply is_cons_zip3.
   Qed.
@@ -1081,127 +1083,206 @@ Section SStream_functions.
     - now rewrite rem_scase, 2 rem_cons.
   Qed.
 
+  Lemma scase_def_is_cons :
+    forall l cs ds np,
+      l <> [] ->
+      is_cons (scase_def l cs ds np) ->
+      is_cons cs /\ is_cons ds /\ forall_nprod (@is_cons _) np.
+  Proof.
+    induction l as [|? []].
+    - congruence.
+    - intros * _.
+      rewrite scase_def_eq, Foldi_cons.
+      intros (?& Hc & HH) % zip3_is_cons.
+      rewrite Foldi_nil in HH.
+      apply zip_is_cons in HH.
+      tauto.
+    - intros * _.
+      rewrite scase_def_eq, Foldi_cons.
+      intros (?&? & Hc) % zip3_is_cons.
+      apply (IHl cs ds (nprod_tl np)) in Hc as (?&?&?); try congruence.
+      do 2 (split; eauto using hd_tl_forall).
+  Qed.
+
+  Lemma is_cons_scase_def :
+    forall l cs ds xs,
+      is_cons cs ->
+      is_cons ds ->
+      forall_nprod (@is_cons _) xs ->
+      is_cons (scase_def l cs ds xs).
+  Proof.
+    intros * Hc Hd Hx.
+    rewrite scase_def_eq.
+    eapply forall_nprod_Foldi in Hx; eauto using is_cons_zip.
+    simpl; intros.
+    now apply is_cons_zip3.
+  Qed.
+
+  Lemma rem_scase_def :
+    forall l cs ds np,
+      rem (scase_def l cs ds np)
+      == scase_def l (rem cs) (rem ds) (lift (REM _) np).
+  Proof.
+    induction l; intros.
+    - now rewrite 2 scase_def_eq, 2 Foldi_nil, rem_zip.
+    - rewrite 2 scase_def_eq, 2 Foldi_cons, <- 2 scase_def_eq.
+      now rewrite rem_zip3, lift_hd, lift_tl, IHl.
+  Qed.
+
+  Lemma scase_def_cons :
+    forall l c cs d ds np,
+    forall (Hc : forall_nprod (@is_cons _) np),
+      scase_def l (cons c cs) (cons d ds) np
+      == cons (fold_right (fun '(j,x) => fcase j c x) (defcon2 c d)
+                 (combine l (nprod_hds np Hc)))
+           (scase_def l cs ds (lift (REM _) np)).
+  Proof.
+    intros.
+    apply first_rem_eq.
+    - rewrite first_cons, scase_def_eq, Foldi_fold_right.
+      revert dependent np; clear.
+      induction l; intros.
+      + simpl. now rewrite first_zip, 2 first_cons, zip_cons, zip_bot1.
+      + simpl.
+        rewrite first_zip3, first_cons, (IHl _ (forall_nprod_tl _ _ Hc)).
+        clear IHl.
+        destruct (@is_cons_elim _ (nprod_hd np)) as (x &?& Heq).
+        { now apply forall_nprod_hd in Hc. }
+        remember (projT1 _) as y eqn:Hy.
+        assert (x = y); subst.
+        { destruct (uncons _) as (?&?& Hd); simpl.
+          apply decomp_eqCon in Hd; rewrite Hd in Heq.
+          now apply Con_eq_simpl in Heq. }
+        rewrite Heq, first_cons, zip3_cons, zip3_bot1 at 1; auto.
+    - now rewrite rem_scase_def, 3 rem_cons.
+  Qed.
+
   (** Caractérisation de [fcase] itéré sur la têtes des flots *)
   Section fcase_spec.
 
   Lemma fcase_abs :
-    forall (l : list (enumtag * sampl A)) c,
-      fold_right (fun '(j,x) => fcase j c x) (defcon c) l = abs ->
+    forall (l : list (enumtag * sampl A)) c a,
+      l <> [] ->
+      fold_right (fun '(j,x) => fcase j c x) a l = abs ->
       c = abs /\ Forall (fun '(j, x) => x = abs) l.
   Proof.
-    induction l as [|[]]; simpl; intros c Hf.
-    { destruct c; simpl in Hf; auto; congruence. }
-    unfold fcase at 1 in Hf.
-    destruct c as [|k|]; simpl in Hf; try congruence.
-    - split; auto.
-      destruct (fold_right _ _ _) eqn:HH, s; try congruence.
-      apply IHl in HH as []; auto.
-    - unfold or_default, option_map in Hf.
-      destruct (tag_of_val _); try congruence.
-      destruct (tag_eqb _ _), (fold_right _ _ _) as [| |[]] eqn:HH, s; try congruence.
-      apply IHl in HH as []; auto; congruence.
+    induction l as [|[][|l]]; simpl; intros c a Hnil Hf; try congruence.
+    - unfold fcase at 1, is_tag, or_default, option_map in Hf.
+      cases_eqn HH; subst; congruence.
+    - unfold fcase at 1, is_tag, or_default, option_map in Hf.
+      cases_eqn HH; subst; try congruence.
+      edestruct IHl; now eauto.
   Qed.
 
-  (* (* en cours de calcul, ça vaut error_Ty si la bonne branche n'est *)
-  (*    pas encore atteinte *) *)
-  (* Lemma fcase_pres_abs : *)
-  (*   forall (l : list (enumtag * sampl A)) i, *)
-  (*     let c := pres i in *)
-  (*     fold_right (fun '(j, x) => fcase j c x) (defcon c) l = err error_Ty -> *)
-  (*     Forall (fun '(j, x) => exists v, x = pres v) l. *)
-  (* Proof. *)
-  (*   induction l as [|[]]; simpl; intros i Hf; auto. *)
-  (*   unfold fcase in Hf at 1. *)
-  (*   destruct (is_tag e _) as [|[]|]; try congruence. *)
-  (*   all: destruct (fold_right _ _ _) as [| |[]] eqn:HH, s; try congruence. *)
-  (*   all: constructor; eauto. *)
-  (* Qed. *)
+  (* en cours de calcul, ça vaut error_Ty si la bonne branche n'est *)
+  (* pas encore atteinte *)
+  Lemma fcase_pres_abs :
+    forall (l : list (enumtag * sampl A)) i,
+      let c := pres i in
+      fold_right (fun '(j, x) => fcase j c x) (defcon c) l = err error_Ty ->
+      Forall (fun '(j, x) => is_tag j c = pres false /\ exists v, x = pres v) l.
+  Proof.
+    induction l as [|[]]; simpl; intros i Hf; auto.
+    unfold fcase in Hf at 1.
+    unfold is_tag, or_default, option_map in *.
+    cases_eqn HH; subst.
+    take (Some _ = Some _) and inv it.
+    take (err _ = err _) and inv it.
+    constructor; eauto.
+    eapply IHl, Forall_impl in HH1; eauto.
+    intros []; cases; congruence.
+  Qed.
 
-  (* Lemma fcase_pres : *)
-  (*   forall (l : list (enumtag * sampl A)) c v, *)
-  (*     fold_right (fun '(j, x) => fcase j c x) (defcon c) l = pres v -> *)
-  (*     exists vc i, *)
-  (*       c = pres vc *)
-  (*       /\ tag_of_val vc = Some i *)
-  (*       /\ Exists (fun '(j, x) => j = i /\ x = pres v) l *)
-  (*       /\ Forall (fun '(j, x) => j <> i -> x = abs) l. *)
-  (* Proof. *)
-  (*   induction l as [|[i s]]; simpl; intros * Hf. *)
-  (*   { destruct c; simpl in Hf; congruence. } *)
-  (*   unfold fcase at 1 in Hf. *)
-  (*   destruct c as [|k|]; simpl in Hf; try congruence. *)
-  (*   { destruct (fold_right _ _ _) eqn:HH, s; congruence. } *)
-  (*   unfold or_default, option_map in Hf. *)
-  (*   destruct (tag_of_val k) as [t|] eqn:Hk; try congruence. *)
-  (*   exists k, t; do 2 split; auto. *)
-  (*   destruct (tag_eqb _ _) eqn:Ht. *)
-  (*   - (* on y est *) *)
-  (*     apply tag_eqb_eq in Ht; subst. *)
-  (*     destruct (fold_right _ _ _) as [| |[]] eqn:HH, s; inversion Hf; subst. *)
-  (*     split; constructor; auto; try congruence. *)
-  (*     eapply fcase_pres_abs, Forall_impl in HH; eauto. *)
-  (*     intros []; congruence. *)
-  (*   - (* c'est pour plus tard *) *)
-  (*     destruct s; try congruence. *)
-  (*     apply IHl in Hf as (vc & k' & Hk' & Ht' &?&?). *)
-  (*     inversion Hk'; subst. *)
-  (*     rewrite Hk in *; inversion Ht'; split; auto. *)
-  (* Qed. *)
+  Lemma fcase_pres :
+    forall (l : list (enumtag * sampl A)) c v,
+      fold_right (fun '(j, x) => fcase j c x) (defcon c) l = pres v ->
+      exists vc i,
+        c = pres vc
+        /\ tag_of_val vc = Some i
+        /\ List.Exists (fun '(j, x) => j = i /\ x = pres v) l
+        /\ List.Forall (fun '(j, x) => exists v, x = pres v) l.
+  Proof.
+    induction l as [|[i s]]; simpl; intros * Hf.
+    { destruct c; simpl in Hf; congruence. }
+    unfold fcase at 1 in Hf.
+    unfold is_tag, or_default, option_map in Hf.
+    cases_eqn HH; subst.
+    all: repeat take (pres _ = pres _) and inv it.
+    all: repeat take (Some _ = Some _) and inv it.
+    all: try take (tag_eqb _ _ = true) and apply tag_eqb_eq in it; subst.
+    - eapply IHl in HH1 as (?&?& Hinv & Hv &?&?); inv Hinv.
+      rewrite Hv in *; take (Some _ = Some _) and inv it.
+      do 2 esplit; repeat split; eauto.
+    - apply fcase_pres_abs in HH1.
+      do 2 esplit; repeat split; eauto.
+      constructor; eauto.
+      eapply Forall_impl; eauto; now intros [].
+    - eapply IHl in HH1 as (?&?& Hinv &?&?&?); inv Hinv.
+      do 2 esplit; repeat split; eauto.
+  Qed.
 
-  (* Lemma fmerge_abs_ok : *)
-  (*   forall (l : list enumtag) (ss : list (sampl A)), *)
-  (*     let c := abs in *)
-  (*     Forall (eq abs) ss -> *)
-  (*     fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = abs. *)
-  (* Proof. *)
-  (*   induction l; intros * Heq; auto. *)
-  (*   destruct ss; auto. *)
-  (*   inversion_clear Heq; subst; simpl. *)
-  (*   rewrite IHl; auto. *)
-  (* Qed. *)
+  Lemma fcase_pres_ok :
+    forall (l : list enumtag) (ss : list (sampl A)) vt i,
+      tag_of_val vt = Some i ->
+      Forall (fun x => match x with
+                    | pres _ => True
+                    | _ => False
+                    end) ss ->
+      length l = length ss ->
+      In i l ->
+      exists v, fold_right (fun '(j, x) => fcase j (pres vt) x) (err error_Ty) (combine l ss) = pres v.
+  Proof.
+    intros * Hv Hf Hl.
+    enough ((In i l ->
+             exists v, fold_right (fun '(j, x) => fcase  j (pres vt) x)
+                    (err error_Ty) (combine l ss) = pres v)
+            /\ ((exists v, fold_right (fun '(j, x) => fcase j (pres vt) x)
+                       (err error_Ty) (combine l ss) = pres v)
+               \/ (fold_right (fun '(j, x) => fcase j (pres vt) x)
+                    (err error_Ty) (combine l ss) = err error_Ty))); [ tauto|].
+    revert dependent ss.
+    induction l as [|j l]; simpl; intros * Hf Hl.
+    { split; eauto; tauto. }
+    destruct ss as [|[] ss]; simpl in *; inv Hf; try lia.
+    destruct (IHl ss) as [Hfin Hfnin]; auto.
+    split.
+    - unfold fcase at 1; simpl.
+      rewrite Hv; simpl.
+      intros [|Hin]; subst.
+      + rewrite tag_eqb_refl.
+        destruct Hfnin as [[]|]; cases; try congruence; eauto.
+      + destruct Hfin as (?& ->); cases; eauto.
+    - unfold fcase at 1 3, is_tag, or_default, option_map.
+      destruct Hfnin as [[? ->]| ->]; cases_eqn HH; subst; eauto; congruence.
+  Qed.
 
-  (* (* si les horloges des ss respectent leur tag, le résultat est correct *) *)
-  (* Lemma fmerge_pres_ok : *)
-  (*   forall (l : list enumtag) (ss : list (sampl A)) vt i, *)
-  (*     let c := pres vt in *)
-  (*     tag_of_val vt = Some i -> *)
-  (*     NoDup l -> *)
-  (*     Forall2 (fun j x => match x with *)
-  (*                      | pres _ => j = i *)
-  (*                      | abs => j <> i *)
-  (*                      | err _ => False *)
-  (*                      end) l ss -> *)
-  (*     In i l -> *)
-  (*     exists v, fold_right (fun '(j, x) => fmerge j c x) (defcon c) (combine l ss) = pres v. *)
-  (* Proof. *)
-  (*   intros * Hv Nd Hf. *)
-  (*   (* il faut renforcer un peu l'invariant : *) *)
-  (*   enough ((In i l -> *)
-  (*            exists v, fold_right (fun '(j, x) => fmerge j c x) *)
-  (*                   (defcon c) (combine l ss) = pres v) *)
-  (*           /\ (~ In i l -> *)
-  (*              fold_right (fun '(j, x) => fmerge j c x) *)
-  (*                (defcon c) (combine l ss) = err error_Ty)); [ tauto|]. *)
-  (*   revert dependent ss. *)
-  (*   subst c; simpl. *)
-  (*   induction l; simpl; intros; try tauto. *)
-  (*   destruct ss as [| s ss]; inversion_clear Hf. *)
-  (*   inversion_clear Nd. *)
-  (*   edestruct IHl as [Hin Hnin]; eauto; clear IHl. *)
-  (*   simpl; unfold fmerge at 1 3; simpl. *)
-  (*   unfold or_default, option_map. *)
-  (*   rewrite Hv. *)
-  (*   split. *)
-  (*   - intros [| Ini]; subst. *)
-  (*     + destruct s; try tauto. *)
-  (*       rewrite tag_eqb_refl. *)
-  (*       setoid_rewrite Hnin; eauto. *)
-  (*     + destruct s; subst; try tauto. *)
-  (*       rewrite (proj2 (tag_eqb_neq a i)); eauto. *)
-  (*   - intro Nin. *)
-  (*     rewrite (proj2 (tag_eqb_neq a i)); auto. *)
-  (*     destruct s; subst; tauto. *)
-  (* Qed. *)
+  Lemma fcase_def_pres_ok :
+    forall (l : list enumtag) (ss : list (sampl A)) vt vd i,
+      tag_of_val vt = Some i ->
+      Forall (fun x => match x with
+                    | pres _ => True
+                    | _ => False
+                    end) ss ->
+      exists v, fold_right (fun '(j, x) => fcase j (pres vt) x) (pres vd) (combine l ss) = pres v.
+  Proof.
+    induction l; simpl; intros * Ht Hf; eauto.
+    destruct ss as [|[] ss]; inv Hf; try tauto; simpl; eauto.
+    unfold fcase at 1; simpl.
+    rewrite Ht; simpl.
+    edestruct IHl as (?& ->); cases; eauto.
+  Qed.
+
+  Lemma fcase_abs_ok :
+    forall (l : list enumtag) (ss : list (sampl A)),
+      let c := abs in
+      Forall (eq abs) ss ->
+      fold_right (fun '(j, x) => fcase j c x) (defcon c) (combine l ss) = abs.
+  Proof.
+    induction l; intros * Heq; auto.
+    destruct ss; auto.
+    inversion_clear Heq; subst; simpl.
+    rewrite IHl; auto.
+  Qed.
 
   End fcase_spec.
 
