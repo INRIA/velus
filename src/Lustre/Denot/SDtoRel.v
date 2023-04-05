@@ -59,11 +59,11 @@ Tactic Notation "remember_sts" constr(s) "as" ident(x) :=
   apply symmetry, eq_EqSts in Hx.
 
 
-(** Dans cette section on donne une définition alternative à la règle
-    du merge (LSemantics.Smerge), qui ne manipule plus de Forall2Brs mais
-    plutôt du Forall2t.
+(** Dans cette section on donne une définition alternative aux règles
+    du merge/case (LSemantics.Smerge/ScaseTotal/Scasedefault),
+    qui ne manipule plus de Forall2Brs mais plutôt du Forall2t.
     Ça correspond mieux aux définitions de Denot.v, notamment [denot_expss]. *)
-Section Smerge_alt.
+Section Sem_alt.
 
   (** Comment obtenir le prédicat Forall2Brs de LSemantics.Smerge sans
       avoir à manipuler de Forall3... *)
@@ -142,7 +142,62 @@ Section Smerge_alt.
 
   (* TODO: dans l'autre sens !! *)
 
-End Smerge_alt.
+  Lemma ScaseTotal_alt :
+    forall (G : global) H b e ess tys ck os,
+    forall d (s : Stream svalue) (vss : list (list (enumtag * Stream svalue))),
+      vss <> [] ->
+      (* Basile est d'accord pour virer la dépendance sur tys dans ScaseTotal,
+         donc cette hypothèse va disparaitre : *)
+      length tys = length os ->
+      sem_exp G H b e [s] ->
+      Forall (fun l => length l = length os) vss ->
+      Forall2 (fun '(t,es) vs =>
+                 exists xss, Forall2 (sem_exp G H b) es xss
+                        /\ vs = map (pair t) (concat xss)) ess vss  ->
+      Forall2t d (fun l => case s l None) vss os ->
+      sem_exp G H b (Ecase e ess None (tys, ck)) os.
+  Proof.
+    intros * He Nnil Hl Hl2 Hf Ht.
+    unshelve eapply Forall2t_Forall2 in Ht; auto.
+    unshelve eapply Forall2Brs_transp in Hf; eauto.
+    revert Ht Hf.
+    destruct (transp d vss _) as (vsst & HH); intros; simpl in *.
+    destruct HH as ([Hlt Hllt] & Hnm); auto.
+    apply ScaseTotal with s vsst; auto.
+    apply Forall3_map_2, Forall3_ignore2'; auto; congruence.
+  Qed.
+
+  (* Dans l'idéal il faudrait un Forall3t pour gérer aussi les flots
+     de la branche par défaut. Pour l'instant on utilise simplement
+     Forall2t en combinant les flots par défaut et ceux de sortie. *)
+  Lemma ScaseDefault_alt :
+    forall (G : global) H b e ess eds tys ck,
+    forall d (s : Stream svalue) (sds : list (list (Stream svalue))) (vss : list (list (enumtag * Stream svalue))) os,
+      vss <> [] ->
+      sem_exp G H b e [s] ->
+      wt_streams [s] (typeof e) ->
+      Forall2 (sem_exp G H b) eds sds ->
+      length (concat sds) = length os ->
+      Forall (fun l => length l = length os) vss ->
+      Forall2 (fun '(t,es) vs =>
+                 exists xss, Forall2 (sem_exp G H b) es xss
+                        /\ vs = map (pair t) (concat xss)) ess vss  ->
+      Forall2t d (fun l '(ds,os) => case s l (Some ds) os) (vss) (combine (concat sds) os) ->
+      sem_exp G H b (Ecase e ess (Some eds) (tys, ck)) os.
+  Proof.
+    intros * Nnil He Hwt Heds Hld Hl Hf Ht.
+    assert (Forall (fun l => length l = length (combine (concat sds) os)) vss).
+    { rewrite combine_length', Hld; auto. }
+    unshelve eapply Forall2t_Forall2 in Ht; auto.
+    unshelve eapply Forall2Brs_transp in Hf; eauto.
+    revert Hf Ht.
+    destruct (transp _ vss _) as (vsst & HH); intros; simpl in *.
+    destruct HH as ([Hlt Hllt] & Hnm); auto.
+    apply ScaseDefault with s vsst sds; auto.
+    apply Forall3_map_2, Forall3_combine2; auto.
+  Qed.
+
+End Sem_alt.
 
 
 (* TODO: faire disparaître tout ça *)
