@@ -617,7 +617,7 @@ Module Type LCAUSALITY
   Definition graph_of_node {PSyn prefs v a} (n : @node PSyn prefs) (g : AcyGraph v a) : Prop :=
     PS.Equal (vertices g)
              (PSP.of_list (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n) ++ idcaus_of_locals (n_block n))))
-    /\ (forall cx cy, depends_on_node cx cy n -> is_arc g cy cx).
+    /\ (forall cx cy, depends_on_node cx cy n -> is_edge g cy cx).
 
   Definition node_causal {PSyn prefs} (n : @node PSyn prefs) :=
     NoDup (map snd (idcaus (n_in n) ++ idcaus_of_decls (n_out n) ++ idcaus_of_locals (n_block n))) /\
