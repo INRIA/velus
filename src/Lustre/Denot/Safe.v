@@ -2935,7 +2935,8 @@ Section Node_safe.
       + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
           by (simpl_Forall; auto).
         eapply Forall2_Forall_eq in Wt; eauto.
-        eapply Forall2_lift_nprod; eauto using ty_scase_defv.
+
+        eapply @Forall2_lift_nprod; eauto using ty_scase_defv.
         rewrite (@list_of_nprod_app _ 1), Forall_app; simpl; auto.
       + apply Forall2_map_1, Forall2_ignore1'.
         { rewrite list_of_nprod_length; auto. }
@@ -3503,6 +3504,10 @@ Proof.
     eapply DSForall_le in H5. apply H5.
     all: auto.
   - (* merge *)
+    simpl_Forall; auto.
+  - (* case *)
+    simpl_Forall; auto.
+  - (* case défaut *)
     simpl_Forall; auto.
 Qed.
 
