@@ -118,6 +118,17 @@ Proof.
   induction xs, ys; simpl; auto.
 Qed.
 
+Lemma combine_length' :
+  forall A B,
+  forall (l : list A) (l' : list B),
+    length l = length l' ->
+    length (combine l l') = length l.
+Proof.
+  intros.
+  rewrite combine_length.
+  lia.
+Qed.
+
 Lemma In_list_pair_l :
   forall {A B} (l : list (A*B)) x y,
     In (x,y) l -> In x (map fst l).
