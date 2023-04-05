@@ -239,7 +239,7 @@ Module Type CACORRECTNESS
           destruct (bs # n); auto.
       - assert (Htrans:=H11). eapply IHtrans in H11 as (?&Hsem&Hconcat); eauto.
         do 2 esplit. constructor; auto.
-        econstructor; eauto using sem_ref_sem_exp.
+        econstructor. 1:eauto using sem_ref_sem_exp.
         3:simpl; rewrite app_nil_r; reflexivity.
         + econstructor. 1,2:econstructor; eauto. 2:econstructor; eauto.
           1,2:constructor; reflexivity.

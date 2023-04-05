@@ -152,10 +152,8 @@ Module Type CORRECTNESS
           eapply mmap_inversion, Coqlib.list_forall2_in_left in EQ1 as ((?&?)&?&Htr); eauto.
           cases. monadInv Htr. simpl in *. destruct Hin2 as [|[]]; subst.
           eapply Forall_forall in H0; eauto; simpl in *. inv H0; eauto.
-        * rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3.
-          rewrite Forall3_map_2 in H12.
-          eapply Forall3_impl_In; [|eauto]; intros ??? _ _ _ Hcase.
-          inv Hcase; auto.
+        * simpl_Forall.
+          take (case _ _ _ _) and inv it; auto.
   Qed.
 
   Lemma ty_lexp {PSyn prefs} :
@@ -558,7 +556,7 @@ Module Type CORRECTNESS
           rewrite combine_length, map_length, complete_sem_length, seq_length, Nat.min_id; eauto. rewrite in_seq.
           split; intros [|(Hlt&?&?)]; subst; auto. 1,2:right; repeat split; auto. 1,2:lia.
     - (* case (total) *)
-      inv Hsem; simpl in *. inv H12; inv H8.
+      inv Hsem; simpl in *. simpl_Forall.
       inv Hwt.
       eapply sem_exp_lexp in H10; eauto.
       eapply sem_exp_controls in H0; eauto. eapply to_controls_fst in EQ1.

@@ -450,9 +450,9 @@ Module Type LCLOCKCORRECTNESS
           inv H26; simpl in *.
           inv H10. rewrite length_typesof_annots; auto.
         }
-        eapply Forall3_forall3 in H27 as (?&?&Hcase).
+        eapply Forall2_forall2 in H27 as (?&Hcase).
         eapply ac_case in Hcase. rewrite <-Hcase.
-        3:instantiate (2:=[]). 4:instantiate (2:=None). 3-5:reflexivity. 2:rewrite Hlen1; auto.
+        3:instantiate (2:=[]). all:eauto. 2:rewrite Hlen1; auto.
         eapply He in H25; eauto.
         rewrite H14 in H25; simpl in H25.
         erewrite map_nth' with (d':=bool_velus_type); eauto.

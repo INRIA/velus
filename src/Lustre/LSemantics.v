@@ -223,7 +223,7 @@ Module Type LSEMANTICS
       forall H b e s es tys ck vs os,
         sem_exp H b e [s] ->
         Forall2Brs (sem_exp H b) es vs ->
-        Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
+        Forall2 (fun vs => case s vs None) vs os ->
         sem_exp H b (Ecase e es None (tys, ck)) os
 
     (** In the default case, we need to ensure that the values taken by the condition stream
@@ -768,7 +768,7 @@ Module Type LSEMANTICS
       + eapply IHe; eauto. reflexivity.
       + eapply Forall2Brs_impl_In; [|eauto]; intros.
         simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
-      + eapply Forall3_EqSt_Proper; eauto. solve_proper.
+      + eapply Forall2_EqSt_Proper; eauto. solve_proper.
     - eapply ScaseDefault with (vd:=vd); eauto.
       + eapply IHe; eauto. reflexivity.
       + eapply Forall2Brs_impl_In; [|eauto]; intros.
@@ -992,7 +992,7 @@ Module Type LSEMANTICS
         P_exp H b e [s] ->
         Forall2Brs (sem_exp G H b) es vs ->
         Forall2Brs (P_exp H b) es vs ->
-        Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
+        Forall2 (fun vs => case s vs None) vs os ->
         P_exp H b (Ecase e es None (tys, ck)) os.
 
     Hypothesis CaseDefaultCase:

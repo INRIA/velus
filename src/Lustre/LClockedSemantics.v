@@ -189,7 +189,7 @@ Module Type LCLOCKEDSEMANTICS
         forall H b e s es tys ck vs os,
           sem_exp_ck H b e [s] ->
           Forall2Brs (sem_exp_ck H b) es vs ->
-          Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
+          Forall2 (fun vs => case s vs None) vs os ->
           sem_exp_ck H b (Ecase e es None (tys, ck)) os
 
     | ScaseDefault:
@@ -440,7 +440,7 @@ Module Type LCLOCKEDSEMANTICS
         P_exp H b e [s] ->
         Forall2Brs (sem_exp_ck G H b) es vs ->
         Forall2Brs (P_exp H b) es vs ->
-        Forall3 (case s) vs (List.map (fun _ => None) tys) os ->
+        Forall2 (fun vs => case s vs None) vs os ->
         P_exp H b (Ecase e es None (tys, ck)) os.
 
     Hypothesis CaseDefaultCase:
@@ -1004,7 +1004,7 @@ Module Type LCLOCKEDSEMANTICS
       + eapply IHe; eauto. reflexivity.
       + eapply Forall2Brs_impl_In; [|eauto]; intros.
         simpl_Exists. simpl_Forall. eapply H0; eauto. reflexivity.
-      + eapply Forall3_EqSt_Proper; eauto. solve_proper.
+      + eapply Forall2_EqSt_Proper; eauto. solve_proper.
     - eapply ScaseDefault with (vd:=vd); eauto.
       + eapply IHe; eauto. reflexivity.
       + eapply Forall2Brs_impl_In; [|eauto]; intros.
@@ -2282,11 +2282,11 @@ Module Type LCLOCKEDSEMANTICS
         inv H11. rewrite H15, length_clocksof_annots; auto.
       }
       rewrite Forall2_map_1, Forall2_map_2.
-      eapply Forall3_forall3 in H22 as (?&?&Hcase).
+      eapply Forall2_forall2 in H22 as (?&Hcase).
       eapply Forall2_forall2; split; intros.
-      setoid_rewrite <-H3; congruence.
+      setoid_rewrite <-H2; congruence.
       eapply ac_case in Hcase. rewrite <-Hcase.
-      3:instantiate (2:=[]). 4:instantiate (2:=None). 3-5:eauto; reflexivity. 2:rewrite Hlen1; auto.
+      3:instantiate (2:=[]). all:eauto. 2:rewrite Hlen1; auto.
       eapply IHe in H20; eauto.
       rewrite H7 in H20; simpl in H20. inv H20; auto.
     - (* case *)
@@ -2762,11 +2762,10 @@ Module Type LCLOCKEDSEMANTICS
         econstructor...
         + clear H3.
           eapply Forall2Brs_map_2, Forall2Brs_impl_In; [|eauto]; intros; simpl in *; eauto.
-        + rewrite Forall3_map_1, Forall3_map_2, Forall3_map_3. rewrite Forall3_map_2 in H5.
-          eapply Forall3_impl_In; [|eauto]; intros.
+        + simpl_Forall.
           eapply case_spec. intros n. left.
           repeat split.
-          2:rewrite Forall_map; apply Forall_forall; intros (?&?) Hin.
+          2:simpl_Forall.
           1-3:apply const_nth.
       - (* case (default) *)
         econstructor...

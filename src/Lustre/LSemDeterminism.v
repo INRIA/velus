@@ -635,14 +635,13 @@ Module Type LSEMDETERMINISM
             inv Hse1; inv Hse2; try congruence. exfalso; auto.
         }
         eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-        rewrite Forall3_map_2 in Hcase1. rewrite Forall3_map_2 in Hcase2.
         clear - Hcase1 Hcase2 Hsv2 H H8 Hse1 Hse2. revert vs0 ss2 Hsv2 Hcase2 H Hse1 Hse2.
         induction Hcase1; intros * Hsv2 Hcase2 Heq Hse1 Hse2;
           inv Heq; inv Hcase2; inv Hse1; inv Hse2;
             constructor; eauto.
         eapply case_detn. 6,7:eauto. 1-5:eauto.
         congruence.
-        rewrite fst_NoDupMembers, H3, H8. apply seq_NoDup.
+        rewrite fst_NoDupMembers, H5, H8. apply seq_NoDup.
         intros. congruence.
       - (* case (default) *)
         inversion_clear Hs1 as [| | | | | | | | | | | |?????????? Hsv1 _ Hse1 Hd1 Hcase1|].
@@ -888,18 +887,17 @@ Module Type LSEMDETERMINISM
           inversion_clear Hs2 as [| | | | | | | | | | |????????? Hsv2 Hse2 Hcase2| |].
           eapply Hse in Hsv1; eauto using In_InMembers. specialize (Hsv1 Hsv2). simpl in Hsv1.
           assert (Forall2 (fun xs1 xs2 => EqStN (S n) (snd xs1) (snd xs2)) (nth k0 vs []) (nth k0 vs0 [])) as Heq.
-          { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall3_length in Hcase1 as (?&?). congruence. }
+          { eapply Forall2Brs_det_exp_inv; eauto. eapply Forall2_length in Hcase1 as ?. congruence. }
           eapply Forall2Brs_fst in Hse1. eapply Forall2Brs_fst in Hse2.
-          eapply Forall3_forall3 in Hcase1 as (?&?&Hcase1).
-          eapply Forall3_forall3 in Hcase2 as (?&?&Hcase2).
+          eapply Forall2_forall2 in Hcase1 as (?&Hcase1).
+          eapply Forall2_forall2 in Hcase2 as (?&Hcase2).
           eapply case_detn. 6:eapply Hcase1; eauto. 7:eapply Hcase2; eauto. 1-5:eauto.
           4,5:congruence.
           * eapply Forall_forall in Hse1; [|eapply nth_In]. eapply Forall_forall in Hse2; [|eapply nth_In].
             rewrite Hse1, Hse2; auto. 1,2:congruence.
           * eapply Forall_forall in Hse1; [|eapply nth_In].
             rewrite fst_NoDupMembers, Hse1, H6. apply seq_NoDup. congruence.
-          * intros ??. instantiate (1:=None). instantiate (1:=None). intros Hnth1 Hnth2.
-            erewrite map_nth with (d:=bool_velus_type) in Hnth1. inv Hnth1.
+          * intros. congruence.
         + (* default *)
           assert (length ss1 = length (typesof d0)) as Hlen1.
           { eapply sem_exp_numstreams in Hs1; eauto with ltyping. }

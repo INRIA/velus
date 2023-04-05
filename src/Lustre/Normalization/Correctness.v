@@ -1059,7 +1059,19 @@ Module Type CORRECTNESS
               rewrite H3, H11, length_clocksof_annots; eauto.
             - eapply mmap2_mmap2_unnest_exp_numstreams; eauto.
             - eapply sem_exp_refines...
-            - simpl. reflexivity. }
+            - simpl. reflexivity.
+            - eapply Forall2_forall2 in H22 as (Len&Case).
+              assert (length vs0 = length tys) as Len1.
+              { apply Forall2Brs_length1 in H21.
+                2:simpl_Forall; eapply sem_exp_ck_numstreams; eauto with lclocking.
+                inv H21; try congruence. simpl_Forall.
+                solve_length. }
+              eapply Forall3_forall3. repeat split; auto.
+              + now rewrite map_length.
+              + intros * N Nth1 Nth2 Nth3.
+                erewrite map_nth' with (d':=OpAux.bool_velus_type) in Nth2; [|congruence]; subst.
+                eapply Case; eauto.
+          }
           destruct is_control; repeat inv_bind.
           + (* control *)
             exists Hi2. repeat (split; simpl; eauto).
@@ -1073,7 +1085,7 @@ Module Type CORRECTNESS
               apply Forall2Brs_length1 in H21.
               2:{ simpl_Forall; eapply sem_exp_ck_numstreams; eauto with lclocking. }
               inv H21; try congruence. inv H11; auto.
-              eapply Forall3_length in H22 as (?&?). solve_length. }
+              eapply Forall2_length in H22 as ?. solve_length. }
             assert (FEnv.refines (@EqSt _) Hi2 Hi3) as Href3.
             { subst. eapply idents_for_anns_refines...
               destruct Histst2 as (Hdom1&_)... }
