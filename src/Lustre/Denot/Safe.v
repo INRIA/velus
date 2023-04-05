@@ -1436,7 +1436,7 @@ Section SDfuns_safe.
       forall_nprod (ty_DS ty) np ->
       ty_DS ty (scasev l cs np).
   Proof.
-    intros * Wtx Wtnp.
+    intros * Wtc Wtnp.
     unfold ty_DS, DSForall_pres, scasev in *.
     rewrite scase_eq.
     revert Wtnp.
@@ -1450,86 +1450,6 @@ Section SDfuns_safe.
       eapply DSForall_zip3; eauto using forall_nprod_tl.
       unfold fcase.
       intros; cases_eqn HH.
-  Qed.
-
-  (* (* From Coq Require Import Vector. *) *)
-  (* Check (respectful_hetero nat nat nprod nprod _ _). *)
-  (* Definition test : forall D, relation (forall n:nat, @nprod D n -> Prop). *)
-  (*   clear. *)
-  (*   intro D. *)
-  (*   refine (respectful_hetero nat nat (fun n => @nprod D n -> Prop) (fun n => @nprod D n -> Prop) eq _). *)
-  (*   intros n m. *)
-  (*   destruct (Nat.eq_dec n m); subst. *)
-  (*   - refine (respectful (@Oeq _) iff). *)
-  (*   - refine (fun _ _ => False). *)
-  (* Defined. *)
-
-  (* Definition test2 : forall D, relation (forall n:nat, @nprod D n). *)
-  (*   clear. *)
-  (* Admitted. *)
-
-
-      Set Nested Proofs Allowed.
-      Lemma fcase_pres :
-        forall A OT TB,
-        forall (l : list (enumtag * sampl A)) c v,
-          fold_right (fun '(j, x) => fcase _ OT TB j c x) (@defcon A A c) l = pres v ->
-          exists vc i,
-            c = pres vc
-            /\ OT vc = Some i
-            /\ List.Exists (fun '(j, x) => j = i /\ x = pres v) l
-            /\ List.Forall (fun '(j, x) => j <> i -> exists v, x = pres v) l.
-      Proof.
-        clear.
-      Admitted.
-
-      Lemma fcase_pres_ok :
-        forall A (OT:A->option enumtag) TB,
-    forall (l : list enumtag) (ss : list (sampl A)) vt i,
-      let c := pres vt in
-      OT vt = Some i ->
-      (* NoDup l -> *)
-      Forall (fun x => match x with
-                    | pres _ => True
-                    | _ => False
-                    end) ss ->
-      (* Forall (fun j x => match x with *)
-      (*                  | pres _ => j = i *)
-      (*                  | abs => j <> i *)
-      (*                  | err _ => False *)
-      (*                  end) l ss -> *)
-      In i l ->
-      exists v, fold_right (fun '(j, x) => fcase _ OT TB j c x) (defcon c) (combine l ss) = pres v.
-  Proof.
-    clear.
-  Admitted.
-
-  Lemma fcase_abs_ok :
-        forall A (OT:A->option enumtag) TB,
-    forall (l : list enumtag) (ss : list (sampl A)),
-      let c := abs in
-      Forall (eq abs) ss ->
-      fold_right (fun '(j, x) => fcase _ OT TB j c x) (defcon c) (combine l ss) = abs.
-  Proof.
-    induction l; intros * Heq; auto.
-    destruct ss; auto.
-    inversion_clear Heq; subst; simpl.
-    rewrite IHl; auto.
-  Qed.
-
-  Lemma Forall_hds :
-    forall A,
-    forall (P : A -> Prop) (Q : DS A -> Prop),
-      (forall x u U, x == cons u U -> Q x -> P u) ->
-      forall n (np : nprod n) Icn,
-      Forall Q (list_of_nprod np) ->
-      Forall P (nprod_hds np Icn).
-  Proof.
-    intros * QP.
-    induction n; intros * Hf; inversion_clear Hf; constructor; auto.
-    destruct (uncons _) as (?&?& Hd); simpl.
-    apply decomp_eqCon in Hd.
-    eapply QP; eauto.
   Qed.
 
   Lemma cl_scasev_ :
@@ -1572,13 +1492,15 @@ Section SDfuns_safe.
       rewrite 2 first_cons.
       apply cons_eq_compat; auto.
       cases_eqn HH; subst.
-      2: apply fcase_abs in HH0 as []; congruence.
-      1,3: apply fcase_pres in HH0 as (?&?&?&?&?); try congruence; apply Nat.eqb_eq.
+      1,4: apply fcase_pres in HH0 as (?&?&?&?&?); try congruence; apply Nat.eqb_eq.
+      { apply fcase_abs in HH0 as []; try congruence.
+        destruct l; simpl; congruence. }
       (* montrons qu'il ne peut pas y avoir d'erreur dans ce cas *)
       exfalso.
       destruct a as [|j]; take (value_belongs _ _) and simpl in it; try tauto.
       revert HH0.
-      edestruct (@fcase_pres_ok value) as [? ->]; try congruence; eauto using Nat.eqb_eq.
+      edestruct (@fcase_pres_ok value) as [? ->]; try congruence;
+        auto using Nat.eqb_eq, hds_length.
       eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
       intros ??? ->.
       rewrite Hck, AC_cons.
@@ -1625,7 +1547,7 @@ Section SDfuns_safe.
   Proof.
     clear.
     intros * Nnil Tc Cc Sn Cn.
-    revert Cn Cc Tc.
+    revert Cn Cc.
     unfold cl_DS.
     generalize (denot_clock ck) as cks; intros.
     clear ck ins envI bs env.
@@ -1649,6 +1571,7 @@ Section SDfuns_safe.
       (* comme dans [cl_scasev_], montrons qu'il y a contradiction *)
       destruct c as [|[] |]; take (value_belongs _ _) and simpl in it; try tauto.
       + (* c = abs *)
+        simpl in Hb.
         rewrite fcase_abs_ok in Hb; [ congruence |].
         apply forall_nprod_and with (2 := Sn) in Cn.
         eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
@@ -1657,7 +1580,8 @@ Section SDfuns_safe.
         intros [[HH]%Con_le_simpl Hs]; inv Hs; cases; congruence.
       + (* c = pres _ *)
         revert Hb.
-        edestruct (@fcase_pres_ok value) as [? ->]; try congruence; eauto using Nat.eqb_eq.
+        edestruct (@fcase_pres_ok value) as [? ->]; try congruence;
+          auto using hds_length, Nat.eqb_eq.
         eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
         intros ??? ->.
         rewrite Hck, AC_cons.
@@ -1692,6 +1616,222 @@ Section SDfuns_safe.
       now setoid_rewrite (Permutation_belongs _ _ Hperm).
     - eapply forall_nprod_impl in SCn; eauto; now intros ? [].
     - eapply forall_nprod_impl in SCn; eauto; now intros ? [].
+  Qed.
+
+
+  (** ** Faits sur scase_defv *)
+
+  Lemma ty_scase_defv_ :
+    forall ty tx tn l cs ds np,
+      ty_DS (Tenum tx tn) cs ->
+      ty_DS ty ds ->
+      forall_nprod (ty_DS ty) np ->
+      ty_DS ty (scase_defv l cs ds np).
+  Proof.
+    intros * Wtc Wtd Wtnp.
+    unfold ty_DS, DSForall_pres, scase_defv in *.
+    rewrite scase_def_eq.
+    revert Wtnp.
+    revert np.
+    induction l; intros.
+    - rewrite Foldi_nil.
+      eapply DSForall_zip; eauto; simpl.
+      intros; cases.
+    - rewrite Foldi_cons.
+      apply forall_nprod_hd in Wtnp as ?.
+      eapply DSForall_zip3; eauto using forall_nprod_tl.
+      unfold fcase.
+      intros; cases_eqn HH.
+  Qed.
+
+  (* wrapper *)
+  Corollary ty_scase_defv :
+    forall ty tx tn l cs np,
+      ty_DS (Tenum tx tn) cs ->
+      forall_nprod (ty_DS ty) np ->
+      ty_DS ty (uncurry_nprod (scase_defv l cs) np).
+  Proof.
+    intros * ? [?] % forall_nprod_inv.
+    rewrite uncurry_nprod_simpl.
+    eapply ty_scase_defv_; eauto.
+  Qed.
+
+  Lemma cl_scase_defv_ :
+    forall tx tn ck l cs ds np,
+      l <> [] ->
+      ty_DS (Tenum tx tn) cs ->
+      safe_DS cs ->
+      cl_DS ck cs ->
+      safe_DS ds ->
+      cl_DS ck ds ->
+      forall_nprod safe_DS np ->
+      forall_nprod (cl_DS ck) np ->
+      cl_DS ck (scase_defv l cs ds np).
+  Proof.
+    unfold cl_DS, scase_defv.
+    intros *.
+    generalize (denot_clock ck) as cks; clear ck.
+    intros cks Nnil Tc Sc Cc Sd Cd Sn Cn.
+    eapply DSle_rec_eq2 with
+      (R := fun U V => exists np cs ds cks,
+                ty_DS (Tenum tx tn) cs
+                /\ safe_DS cs
+                /\ AC cs <= cks
+                /\ safe_DS ds
+                /\ AC ds <= cks
+                /\ forall_nprod safe_DS np
+                /\ forall_nprod (fun s => AC s <= cks) np
+                /\ U == AC (scase_def _ _ _ l cs ds np)
+                /\ V == cks).
+    3: exists np, cs, ds, cks; do 4 (split; auto).
+    { intros * ? J K. setoid_rewrite <- J. setoid_rewrite <- K. eauto. }
+    clear - Nnil.
+    intros U V Hc (np & cs & ds & cks & Tc & Sc & Cc & Sd & Cd & Sn & Cn & Hu & Hv).
+    rewrite Hu in Hc.
+    apply AC_is_cons, scase_def_is_cons in Hc as (Hcc & Hcd & Hcn); auto.
+    apply is_cons_elim in Hcc as (vc & cs' & Hc); rewrite Hc in *.
+    apply is_cons_elim in Hcd as (vd & ds' & Hd); rewrite Hd in *.
+    rewrite AC_cons in Cc, Cd.
+    apply DSle_cons_elim in Cc as (cks' & Hck & Cc); rewrite Hck in *.
+    apply Con_le_simpl in Cd as (Heq & Cd).
+    (* setoid_rewrite Hck in Cn. (* un jour, peut-être ! *) *)
+    rewrite scase_def_cons with (Hc := Hcn), AC_cons in Hu.
+    setoid_rewrite Hu; clear Hu U.
+    setoid_rewrite Hv; clear Hv V.
+    inv Tc. inv Sc. inv Sd.
+    split.
+    - (* first *)
+      rewrite 2 first_cons.
+      apply cons_eq_compat; auto.
+      cases_eqn HH; subst.
+      { apply fcase_pres with (c := abs) in HH1 as (?&?&?&?); try congruence;
+          auto using Nat.eqb_eq. }
+      { apply fcase_abs in HH1 as []; try congruence.
+        destruct l; simpl; congruence. }
+      (* montrons qu'il ne peut pas y avoir d'erreur dans ce cas *)
+      exfalso.
+      take (wt_value _ _) and inv it.
+      revert HH1; simpl.
+      edestruct (@fcase_def_pres_ok value) as [? ->]; try congruence; eauto.
+      eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
+      intros ??? ->.
+      rewrite Hck, AC_cons.
+      intros [HH]%Con_le_simpl; cases.
+    - (* rem *)
+      exists (lift (REM _) np), cs', ds', cks'.
+      repeat split; auto; apply forall_nprod_lift.
+      + eapply forall_nprod_impl in Sn; eauto.
+        now apply DSForall_rem.
+      + eapply forall_nprod_impl in Cn; eauto.
+        setoid_rewrite Hck.
+        intros ? Hl%rem_le_compat.
+        now rewrite rem_AC, rem_cons in Hl.
+  Qed.
+
+  (* wrapper pour [cl_scasev_], qui passe mieux dans [safe_exp_] *)
+  Lemma cl_scase_defv :
+    forall tid tn ck l cs np,
+      l <> [] ->
+      ty_DS (Tenum tid tn) cs ->
+      safe_DS cs ->
+      cl_DS ck cs ->
+      forall_nprod (fun s => safe_DS s /\ cl_DS ck s) np ->
+      cl_DS ck (uncurry_nprod (scase_defv l cs) np).
+  Proof.
+    intros * Nnil Tc Sc Cc SCn.
+    apply and_forall_nprod in SCn as [[Sn] % forall_nprod_inv
+                                      [Cn] % forall_nprod_inv].
+    rewrite uncurry_nprod_simpl.
+    eapply cl_scase_defv_; eauto.
+  Qed.
+
+  Lemma safe_scase_defv_ :
+    forall tx tn ck l cs ds np,
+      l <> [] ->
+      ty_DS (Tenum tx tn) cs ->
+      safe_DS cs ->
+      cl_DS ck cs ->
+      safe_DS ds ->
+      cl_DS ck ds ->
+      forall_nprod safe_DS np ->
+      forall_nprod (cl_DS ck) np ->
+      safe_DS (scase_defv l cs ds np).
+  Proof.
+    clear.
+    intros * Nnil Tc Sc Cc Sd Cd Sn Cn.
+    revert Cn Cc Cd.
+    unfold cl_DS.
+    generalize (denot_clock ck) as cks; intros.
+    clear ck ins envI bs env.
+    unfold safe_DS.
+    remember_ds (scase_defv l cs ds np) as t.
+    revert_all; cofix Cof; intros.
+    destruct t as [| b t].
+    { constructor; rewrite <- eqEps in Ht; eauto. }
+    unfold scase_defv in *.
+    constructor.
+    - clear Cof.
+      apply symmetry, cons_is_cons in Ht as Hc.
+      apply scase_def_is_cons in Hc as (Icc & Icd & Icn); auto.
+      destruct (@is_cons_elim _ cs) as (c & cs' & Heqc); auto.
+      destruct (@is_cons_elim _ ds) as (d & ds' & Heqd); auto.
+      rewrite Heqc in *; clear Heqc cs Icc.
+      rewrite Heqd in *; clear Heqd ds Icd.
+      unshelve rewrite scase_def_cons in Ht; auto.
+      apply Con_eq_simpl in Ht as [Hb _]; cases.
+      rewrite AC_cons in Cc, Cd.
+      apply DSle_cons_elim in Cc as (cks' & Hck & Cc).
+      rewrite Hck in Cd.
+      apply Con_le_simpl in Cd as (Heq & Cd).
+      inv Tc. inv Sd. inv Sc.
+      cases; try congruence.
+      (* comme dans [cl_scase_defv_], montrons qu'il y a contradiction *)
+      + (* c = abs *)
+        simpl in Hb.
+        rewrite fcase_abs_ok in Hb; [ congruence |].
+        apply forall_nprod_and with (2 := Sn) in Cn.
+        eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
+        intros * ->.
+        rewrite Hck, AC_cons.
+        intros [[HH]%Con_le_simpl Hs]; inv Hs; cases; congruence.
+      + (* c = pres _ *)
+        revert Hb; simpl.
+        take (wt_value _ _) and inv it.
+        edestruct (@fcase_def_pres_ok value) as [? ->]; try congruence; auto.
+        eapply forall_nprod_Forall, Forall_hds in Cn; eauto.
+        intros ??? ->.
+        rewrite Hck, AC_cons.
+        intros [HH]%Con_le_simpl; cases.
+    - apply rem_eq_compat in Ht.
+      rewrite rem_cons, rem_scase_def in Ht.
+      apply rem_le_compat in Cc, Cd.
+      rewrite rem_AC in Cc, Cd.
+      eapply Cof with (cks := rem cks) in Ht; auto using DSForall_rem.
+      + apply DSForall_rem, Tc.
+      + apply DSForall_rem, Sc.
+      + apply DSForall_rem, Sd.
+      + eapply forall_nprod_impl, forall_nprod_lift in Sn; eauto.
+        apply DSForall_rem.
+      + eapply forall_nprod_impl, forall_nprod_lift in Cn; eauto.
+        intros ? Hc%rem_le_compat.
+        now rewrite rem_AC in Hc.
+  Qed.
+
+  (* wrapper pour [safe_scase_defv_], qui passe mieux dans [safe_exp_] *)
+  Lemma safe_scase_defv :
+    forall tid tn ck l cs np,
+      l <> [] ->
+      safe_DS cs ->
+      ty_DS (Tenum tid tn) cs ->
+      cl_DS ck cs ->
+      forall_nprod (fun s => safe_DS s /\ cl_DS ck s) np ->
+      safe_DS (uncurry_nprod (scase_defv l cs) np).
+  Proof.
+    intros * Nnil Sc Tc Cc SCn.
+    apply and_forall_nprod in SCn as [[Sn] % forall_nprod_inv
+                                      [Cn] % forall_nprod_inv].
+    rewrite uncurry_nprod_simpl.
+    eapply safe_scase_defv_; eauto.
   Qed.
 
 
@@ -2752,8 +2892,73 @@ Section Node_safe.
         eapply Forall2_in_right in Hcl as (?&?&?); eauto.
         simpl_Forall; subst; auto.
     - (* Ecase défaut *)
-      admit.
-    - (* Eapp *)
+      destruct a as [tys nck].
+      apply wt_exp_wl_exp in Hwt as Hwl.
+      inv Hwl. inv Hwt. inv Hwc. inv Hoc.
+      set (typesof des) as tys.
+      find_specialize_in IHe.
+      (* pour les expressions par défaut *)
+      apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+      apply Forall_impl_inside with (P := wc_exp _ _) in H0; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H0; auto.
+      apply Forall_and_inv in H0 as [Wtd % Forall_ty_exp H'].
+      apply Forall_and_inv in H' as [Wcd % Forall_cl_exp
+                                     Sfd % Forall_denot_exps (* % forall_nprod_Forall *)].
+      (* pour les es *)
+      rewrite <- Forall_map with (f := snd), Forall_concat in *.
+      apply Forall_impl_inside with (P := restr_exp) in H; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H; auto.
+      apply Forall_impl_inside with (P := wc_exp _ _) in H; auto.
+      apply Forall_impl_inside with (P := op_correct_exp _ _ _ _ _ _) in H; auto.
+      apply Forall_and_inv in H as [Wt H'].
+      apply Forall_and_inv in H' as [Wc Sf].
+      rewrite <- Forall_concat in *.
+      apply Forall_ty_expss with (n := length tys) in Wt; auto.
+      apply Forall_cl_expss with (n := length tys) in Wc; auto.
+      apply Forall_denot_expss with (n := length tys) in Sf; auto.
+      rewrite denot_exp_eq.
+      simpl (typeof _); simpl (clockof _).
+      revert IHe Wtd Wcd Sfd Wt Wc Sf.
+      gen_sub_exps.
+      simpl; intros; unfold eq_rect_r, eq_rect, eq_sym; cases; try congruence.
+      2:{ contradict n; subst tys.
+          now rewrite length_typesof_annots, annots_numstreams. }
+      destruct IHe as (Tye & Cle & Sfe).
+      take (typeof e = _) and rewrite it in Tye; inv Tye.
+      take (clockof e = _) and rewrite it in Cle; inv Cle.
+      change (DStr (sampl value)) with (tord (tcpo (DS (sampl value)))). (* FIXME: voir plus haut *)
+      assert (list_sum (List.map numstreams des) = length tys) as Hl
+          by (subst tys; now rewrite length_typesof_annots, annots_numstreams).
+      rewrite curry_nprod_simpl.
+      repeat split.
+      + assert (Forall (eq tys) (List.map typesof (List.map snd es)))
+          by (simpl_Forall; auto).
+        eapply Forall2_Forall_eq in Wt; eauto.
+        eapply Forall2_lift_nprod; eauto using ty_scase_defv.
+        rewrite (@list_of_nprod_app _ 1), Forall_app; simpl; auto.
+      + apply Forall2_map_1, Forall2_ignore1'.
+        { rewrite list_of_nprod_length; auto. }
+        apply forall_nprod_Forall.
+        eapply @forall_lift_nprod; eauto using cl_scase_defv, map_eq_nnil.
+        apply (@forall_nprod_app _  _ 1); simpl.
+        * apply forall_nprod_and; auto.
+          apply Forall_forall_nprod; eauto using Forall2_Forall_eq.
+        * repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
+          eapply Forall2_in_right in Wc as (?&?&?& Hcl); eauto.
+          eapply Forall2_in_right in Hcl as (?&?&?); eauto.
+          simpl_Forall; subst; auto.
+      + apply Forall_forall_nprod.
+        apply forall_nprod_Forall.
+        eapply @forall_lift_nprod; eauto using safe_scase_defv, map_eq_nnil.
+        apply (@forall_nprod_app _  _ 1); simpl.
+        * apply forall_nprod_and; auto.
+          apply Forall_forall_nprod; eauto using Forall2_Forall_eq.
+        * repeat (rewrite nprod_forall_Forall in *; simpl_Forall).
+          eapply Forall2_in_right in Wc as (?&?&?& Hcl); eauto.
+          eapply Forall2_in_right in Hcl as (?&?&?); eauto.
+          simpl_Forall; subst; auto.
+     - (* Eapp *)
       apply wt_exp_wl_exp in Hwt as Hwl.
       inv Hwl. inv Hwt. inv Hwc. inv Hoc.
       apply Forall_impl_inside with (P := restr_exp) in H; auto.
