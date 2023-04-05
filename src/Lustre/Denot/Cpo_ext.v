@@ -1931,6 +1931,18 @@ Proof.
   apply hd_tl_forall; auto.
 Qed.
 
+Lemma and_forall_nprod :
+  forall (P Q : D -> Prop),
+  forall {n} (np : nprod n),
+    forall_nprod (fun x => P x /\ Q x) np ->
+    forall_nprod P np /\ forall_nprod Q np.
+Proof.
+  induction n; intros * Hpq; auto.
+  apply forall_nprod_inv in Hpq as [[] Ht].
+  destruct (IHn _ Ht).
+  split; apply hd_tl_forall; eauto.
+Qed.
+
 
 (** From n-uplets, build lists of length n *)
 Section List_of_nprod.
