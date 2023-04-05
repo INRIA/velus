@@ -2414,6 +2414,20 @@ Section Nprod_hds.
     induction n; simpl; auto.
   Qed.
 
+  Lemma Forall_hds :
+    forall (P : A -> Prop) (Q : DS A -> Prop),
+      (forall x u U, x == cons u U -> Q x -> P u) ->
+      forall n (np : nprod n) Icn,
+        Forall Q (list_of_nprod np) ->
+        Forall P (nprod_hds np Icn).
+  Proof.
+    intros * QP.
+    induction n; intros * Hf; inversion_clear Hf; constructor; auto.
+    destruct (uncons _) as (?&?& Hd); simpl.
+    apply decomp_eqCon in Hd.
+    eapply QP; eauto.
+  Qed.
+
   Lemma Forall2_hds :
     forall I (P : I -> A -> Prop) (Q : I -> DS A -> Prop),
       (forall i x u U, x == cons u U -> Q i x -> P i u) ->
@@ -2527,19 +2541,20 @@ Lemma Forall2_lift_nprod :
   forall n (F : @nprod D1 n -C-> D2),
   forall A (P : A -> D1 -> Prop) (Q : A -> D2 -> Prop),
     (forall a x, forall_nprod (P a) x -> Q a (F x)) ->
-    forall (l : list A) (np : @nprod (@nprod D1 (length l)) n),
+    forall (l : list A) m (np : @nprod (@nprod D1 m) n),
+      m = length l ->
       Forall (fun ss => Forall2 P l (list_of_nprod ss)) (list_of_nprod np) ->
       Forall2 Q l (list_of_nprod (lift_nprod F np)).
 Proof.
   intros * PQ.
-  induction l; intros * Hf; constructor.
+  induction l; intros * ? Hf; subst; constructor.
   - rewrite hd_lift_nprod.
     apply PQ, forall_nprod_lift, Forall_forall_nprod.
     eapply Forall_impl in Hf; eauto.
     intros * HH.
     now inversion_clear HH.
   - rewrite tl_lift_nprod.
-    apply IHl.
+    apply IHl; auto.
     rewrite lift_map.
     eapply Forall_map, Forall_impl; eauto.
     intros * HH.
