@@ -1069,27 +1069,18 @@ Proof.
     inversion Hx; subst.
     constructor; auto.
     + (* Exists *)
-      clear - Eqnp Hex.
-      apply Forall2_length in Eqnp as Lnp'.
-      apply Exists_nth in Hex as (k & [dt dv] & Hk & Hd).
-      rewrite combine_length in Hk.
-      apply Nat.min_glb_lt_iff in Hk as [Hk _].
-      destruct (nth k (combine l (nprod_hds np npc)) (dt, dv)) as [t v] eqn:Hn.
-      destruct Hd; subst.
-      eapply Exists_nth.
-      eexists k, (dt, Streams.const absent); split.
-      { rewrite combine_length, <- Lnp', Ss_of_nprod_length; lia. }
-      destruct (nth k (combine l np')) eqn:Hn'.
-      unfold EqSts in *.
-      erewrite combine_nth in Hn'.
-      2:{ rewrite Ss_of_nprod_length in *; auto. }
-      rewrite combine_nth in Hn; auto using hds_length.
-      inv Hn. inv Hn'. split; auto.
-      eapply Forall2_nth with (n := k) (a := Streams.const absent) in Eqnp.
-      2:{ rewrite Ss_of_nprod_length; lia. }
-      rewrite <- Eqnp, <- map_nth, <- (Ss_of_nprod_hds _ _ npc).
-      erewrite nth_indep, map_nth, H1; auto.
-      now rewrite map_length, hds_length.
+      clear - Eqnp Hex npc.
+      eapply Exists_impl,
+        (Exists_map (fun '(t,s) => (t, @Streams.hd _ s)) (fun '(i,es) => i = x /\ es = present a)).
+      intros []; auto.
+      rewrite map_ext with (g := fun c => (fst c, Streams.hd (snd c))), <- combine_map_snd.
+      2: intros []; auto.
+      pose proof (Ss_of_nprod_hds _ _ npc npi) as HH.
+      rewrite Eqnp in HH.
+      setoid_rewrite <- HH.
+      rewrite combine_map_snd, Exists_map.
+      eapply Exists_impl; eauto.
+      unfold sval_of_sampl; now intros [] []; subst.
     + (* Forall *)
       apply Forall2_combine'' in Hf; auto using hds_length.
       apply Forall2_combine'; simpl.
@@ -1097,6 +1088,96 @@ Proof.
       rewrite <- Eqnp, <- (Ss_of_nprod_hds _ _ npc).
       simpl_Forall; unfold sval_of_sampl; cases.
       clear - H4 H5; firstorder congruence.
+Qed.
+
+(* TODO: move to CommonList2 *)
+Global Add Parametric Morphism A (R : relation A) : (@Forall A)
+    with signature (R ==> iff) ==> Forall2 R ==> iff
+      as F_morph2.
+Proof.
+  intros P Q PQ xs ys.
+  induction 1; split; intro Hf; inv Hf; constructor; firstorder.
+Qed.
+
+Lemma ok_case :
+  forall l, l <> [] ->
+  forall (cs : DS (sampl value)) (np : nprod (length l)),
+    let rs := scasev l cs np in
+    forall (npi : forall_nprod (@infinite _) np)
+      (csi : infinite cs)
+      (rsi : infinite rs),
+      safe_DS rs ->
+      case (S_of_DSv cs csi) (combine l (Ss_of_nprod np npi)) None (S_of_DSv rs rsi).
+Proof.
+  intros.
+  remember_st (S_of_DSv cs csi) as cs'.
+  remember_st (S_of_DSv rs rsi) as rs'.
+  remember_sts (Ss_of_nprod np npi) as np'.
+  revert_all; intros l Nnil.
+  cofix Cof; intros * Sr ? Eqc ? Eqr ? Eqnp. (* ? Eqx. *)
+  destruct cs' as [vc cs'], rs' as [vr rs'].
+  apply S_of_DS_Cons in Eqc as (c & tc & Hcs & Hcvc & itc & Eqc).
+  apply S_of_DS_Cons in Eqr as (r & tr & Hrs & Hrvr & itr & Eqr).
+  (* on fait tout de suite le cas de récurrence *)
+  assert (case cs' (map (fun '(i, es) => (i, Streams.tl es)) (combine l np')) None rs').
+  { replace (map  _ (combine l np')) with (combine l (map (@Streams.tl _) np')).
+    2: rewrite combine_map_snd; apply map_ext; now intros [].
+    apply forall_nprod_impl with (Q := fun x => infinite (REM _ x))
+      in npi as np'i; [|apply rem_infinite].
+    apply forall_nprod_lift in np'i.
+    apply DSForall_rem in Sr.
+    apply rem_eq_compat in Hcs, Hrs.
+    unfold scasev in rs; subst rs.
+    rewrite rem_scase, rem_cons in *.
+    unshelve eapply Cof with (cs := rem cs) (np := lift _ _);
+      eauto using rem_infinite, scase_inf.
+    - rewrite <- Eqc; eauto using _S_of_DS_eq.
+    - rewrite <- Eqr; eauto using _S_of_DS_eq.
+    - rewrite <- Eqnp.
+      rewrite Ss_map; auto using tl_rem; reflexivity. }
+  rewrite Hrs in *; inv Sr.
+  subst rs.
+  unfold scasev in Hrs.
+  assert (forall_nprod (@is_cons _) np) as npc.
+  { clear - npi. eapply forall_nprod_impl in npi; eauto. now inversion 1. }
+  rewrite Hcs, (scase_cons _ _ _ _ _ _ _ npc) in Hrs.
+  apply Con_eq_simpl in Hrs as [Hr Heq].
+  destruct r; simpl in *; subst; try tauto.
+  - (* absent *)
+    apply fcase_abs in Hr as [? Hf]; subst.
+    2: clear Cof H; destruct l; simpl in *; congruence.
+    constructor; auto.
+    apply Forall2_combine'' in Hf; auto using hds_length.
+    apply Forall2_combine'; simpl.
+    apply (Forall2_map_2 (fun _ x => x = absent) (@Streams.hd _)).
+    rewrite <- Eqnp, <- (Ss_of_nprod_hds _ _ npc).
+    simpl_Forall; subst; auto.
+  - (* present *)
+    apply fcase_pres in Hr as ([] &?&? & Hx & Hex & Hf); subst;
+      auto using Nat.eqb_eq; try congruence.
+    inversion Hx; subst.
+    constructor; auto.
+    + (* Forall *)
+      apply Forall2_combine'', Forall2_ignore1'' in Hf; auto using hds_length.
+      apply Forall2_combine'; simpl.
+      apply Forall2_ignore1'.
+      { now rewrite <- Eqnp, Ss_of_nprod_length. }
+      eapply (Forall_map _ (fun x => x <> absent)).
+      rewrite <- Eqnp, <- (Ss_of_nprod_hds _ _ npc).
+      simpl_Forall; unfold sval_of_sampl; cases; congruence.
+    + (* Exists *)
+      clear - Eqnp Hex npc.
+      eapply Exists_impl,
+        (Exists_map (fun '(t,s) => (t, @Streams.hd _ s)) (fun '(i,es) => i = x /\ es = present a)).
+      intros []; auto.
+      rewrite map_ext with (g := fun c => (fst c, Streams.hd (snd c))), <- combine_map_snd.
+      2: intros []; auto.
+      pose proof (Ss_of_nprod_hds _ _ npc npi) as HH.
+      rewrite Eqnp in HH.
+      setoid_rewrite <- HH.
+      rewrite combine_map_snd, Exists_map.
+      eapply Exists_impl; eauto.
+      unfold sval_of_sampl; now intros [] []; subst.
 Qed.
 
 (** ** Fonctions pour passer d'un [DS_prod SI] à un Str.history *)
