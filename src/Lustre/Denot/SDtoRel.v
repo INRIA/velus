@@ -182,7 +182,7 @@ Section Sem_alt.
       Forall2 (fun '(t,es) vs =>
                  exists xss, Forall2 (sem_exp G H b) es xss
                         /\ vs = map (pair t) (concat xss)) ess vss  ->
-      Forall2t d (fun l '(ds,os) => case s l (Some ds) os) (vss) (combine (concat sds) os) ->
+      Forall2t d (fun l dos => case s l (Some (fst dos)) (snd dos)) (vss) (combine (concat sds) os) ->
       sem_exp G H b (Ecase e ess (Some eds) (tys, ck)) os.
   Proof.
     intros * Nnil He Hwt Heds Hld Hl Hf Ht.
@@ -195,6 +195,7 @@ Section Sem_alt.
     destruct HH as ([Hlt Hllt] & Hnm); auto.
     apply ScaseDefault with s vsst sds; auto.
     apply Forall3_map_2, Forall3_combine2; auto.
+    simpl_Forall; auto.
   Qed.
 
 End Sem_alt.
@@ -252,6 +253,12 @@ End FromLClockedSemantics.
 
 (* TODO: à terme, mettre cette section dans LSemantics *)
 Section Sem_absent.
+
+Lemma wt_absent : forall ty, wt_stream (Streams.const absent) ty.
+Proof.
+  intro; cofix Cof.
+  rewrite (unfold_Stream (Streams.const _)); constructor; cbn; auto.
+Qed.
 
 (* Hypothèse d'induction sur les nœuds du programme *)
 Definition sem_global_abs (G : global) :=
@@ -341,6 +348,88 @@ Proof.
       simpl_Forall; subst.
       rewrite nth_repeat_in; simpl; auto using const_nth.
       now rewrite <- annots_numstreams, <- length_typesof_annots.
+  - (* Ecase total *)
+    simpl.
+    take (typeof e = _) and rewrite <- length_typeof_numstreams, it in IHe.
+    pose (vss := map (fun '(t,es) => repeat (t, @Streams.const svalue absent)
+                                    (list_sum (map numstreams es))) es).
+    assert (Hl : Forall (fun l => length l = length tys) vss).
+    { subst vss.
+      simpl_Forall; subst.
+      now rewrite repeat_length, length_typesof_annots, annots_numstreams. }
+    eapply ScaseTotal_alt
+      with (d := (46, Streams.const absent)) (vss := vss) (s := Streams.const absent);
+      subst vss; rewrite ?repeat_length; auto using map_eq_nnil.
+    + subst H1.
+      simpl_Forall.
+      exists (map (fun e => repeat (Streams.const absent) (numstreams e)) l).
+      split; simpl_Forall; eauto.
+      rewrite concat_map, map_map, <- flat_map_repeat, flat_map_concat_map.
+      f_equal; auto using map_ext, map_repeat.
+    + eapply Forall2t_forall2 with (b := Streams.const absent);
+        rewrite ?repeat_length; intros; auto.
+      rewrite nth_repeat, map_map; simpl.
+      apply case_spec; intros.
+      left; repeat split; auto using const_nth.
+      simpl_Forall; subst.
+      rewrite nth_repeat_in; simpl; auto using const_nth.
+      now rewrite <- annots_numstreams, <- length_typesof_annots.
+  - (* Ecase défaut *)
+    take (typeof e = _) and rewrite <- length_typeof_numstreams, it in IHe.
+    pose (vss := map (fun '(t,es) => repeat (t, @Streams.const svalue absent)
+                                    (list_sum (map numstreams es))) es).
+    assert (Hl : (* utile dans la suite *)
+     length (concat (map (fun e => repeat (@Streams.const svalue absent)
+                                  (numstreams e)) des)) =
+       length (repeat (@Streams.const svalue absent) (length (typesof des)))).
+    { rewrite concat_length_sum, map_map, length_typesof_annots, annots_numstreams.
+      now setoid_rewrite repeat_length. }
+    eapply ScaseDefault_alt with
+      (d := (46, Streams.const absent))
+      (s := Streams.const absent)
+      (sds := List.map (fun e => repeat (Streams.const absent) (numstreams e)) des)
+      (vss := vss);
+      subst vss; auto using map_eq_nnil.
+    + (* wt_streams *)
+      take (typeof e = _) and rewrite it.
+      constructor; auto using wt_absent.
+    + (* sds *)
+      rewrite Forall2_map_2; apply Forall2_same.
+      apply Forall_impl_inside with (P := restr_exp) in H0; auto.
+      apply Forall_impl_inside with (P := wt_exp _ _) in H0; auto.
+    + (* length *)
+      simpl.
+      simpl_Forall.
+      rewrite 2 repeat_length.
+      take (typesof _ = _) and rewrite <- it.
+      now rewrite length_typesof_annots, annots_numstreams.
+    + (* vss *)
+      subst H1.
+      simpl_Forall.
+      exists (map (fun e => repeat (Streams.const absent) (numstreams e)) l).
+      split; simpl_Forall; eauto.
+      rewrite concat_map, map_map, <- flat_map_repeat, flat_map_concat_map.
+      f_equal; auto using map_ext, map_repeat.
+    + (* Forall2t *)
+      eapply Forall2t_forall2; simpl.
+      * simpl_Forall.
+        rewrite combine_length'; auto.
+        rewrite repeat_length in *.
+        take (typesof _ = _) and rewrite <- it in *.
+        rewrite <- annots_numstreams, <- length_typesof_annots; auto.
+      * intros n Hn.
+        rewrite <- flat_map_concat_map, flat_map_repeat.
+        rewrite combine_nth, 2 nth_repeat; simpl.
+        2: now rewrite 2 repeat_length, length_typesof_annots, annots_numstreams.
+        apply case_spec; intros.
+        left; repeat split; simpl; auto using const_nth.
+        simpl_Forall; subst.
+        rewrite nth_repeat_in; simpl; auto using const_nth.
+        rewrite combine_length', concat_length_sum, map_map in Hn; auto.
+        setoid_rewrite repeat_length in Hn.
+        rewrite <- annots_numstreams, <- length_typesof_annots.
+        take (typesof _ = _) and rewrite it.
+        now rewrite length_typesof_annots, annots_numstreams.
   - (* Eapp *)
     eapply Sapp with
       (ss := List.map (fun e => repeat (Streams.const absent) (numstreams e)) es);
