@@ -1164,14 +1164,14 @@ Section SStream_functions.
     forall (l : list (enumtag * sampl A)) c a,
       l <> [] ->
       fold_right (fun '(j,x) => fcase j c x) a l = abs ->
-      c = abs /\ Forall (fun '(j, x) => x = abs) l.
+      c = abs /\ a = abs /\ Forall (fun '(j, x) => x = abs) l.
   Proof.
     induction l as [|[][|l]]; simpl; intros c a Hnil Hf; try congruence.
     - unfold fcase at 1, is_tag, or_default, option_map in Hf.
       cases_eqn HH; subst; congruence.
     - unfold fcase at 1, is_tag, or_default, option_map in Hf.
       cases_eqn HH; subst; try congruence.
-      edestruct IHl; now eauto.
+      edestruct IHl as (?&?&?); now eauto.
   Qed.
 
   (* en cours de calcul, ça vaut error_Ty si la bonne branche n'est *)
@@ -1219,6 +1219,51 @@ Section SStream_functions.
       eapply Forall_impl; eauto; now intros [].
     - eapply IHl in HH1 as (?&?& Hinv &?&?&?); inv Hinv.
       do 2 esplit; repeat split; eauto.
+  Qed.
+
+  Lemma fcase_pres2 :
+    forall (l : list (enumtag * sampl A)) c d v,
+      l <> [] ->
+      fold_right (fun '(j, x) => fcase j c x) (defcon2 c d) l = pres v ->
+      exists vc vd i,
+        c = pres vc
+        /\ tag_of_val vc = Some i
+        /\ d = pres vd
+        /\ List.Forall (fun '(j, x) => exists v, x = pres v) l
+        /\ (* cas 1 : i trouvé dans la liste *)
+          (List.Exists (fun '(j, x) => j = i /\ x = pres v) l
+           \/ (* cas 2 : on utilise la valeur par défaut *)
+             (List.Forall (fun '(j, x) => j <> i) l /\ vd = v)).
+  Proof.
+    induction l as [|[i s1][|[j s2]]]; simpl; intros * Nnil Hf. congruence.
+    - clear IHl.
+      unfold fcase, is_tag, or_default, option_map in Hf.
+      cases_eqn HH; subst; inv Hf; simpl in *; cases.
+      all: repeat take (Some _ = Some _) and inv it.
+      all: repeat take (pres _ = pres _) and inv it.
+      + apply tag_eqb_eq in H0; subst; eauto 13.
+      + apply tag_eqb_neq in H0; subst; eauto 13.
+    - simpl in IHl.
+      unfold fcase at 1, is_tag, or_default, option_map in Hf.
+      cases_eqn HH; subst; try congruence; inv Hf.
+      all: repeat take (Some _ = Some _) and inv it.
+      + (* écrasé *)
+        apply tag_eqb_eq in H0; subst.
+        eapply IHl in HH1 as (?&?&?&?&?&?&?&?); subst; try congruence; eauto 13.
+      + (* error_Ty, impossible *)
+        clear - HH1; exfalso.
+        unfold fcase at 1 in HH1.
+        cases_eqn HH; subst; inv HH1.
+        simpl in *; cases; clear HH.
+        all: induction l; simpl in *; cases; try congruence.
+        all: unfold fcase at 1, is_tag, or_default, option_map in HH2; cases.
+      + (* plus tard *)
+        apply tag_eqb_neq in H0.
+        eapply IHl in HH1 as (?&?&?&?&?&?&?& FE); subst; try congruence.
+        repeat take (pres _ = pres _) and inv it.
+        destruct FE as [|[]]; subst; eauto 12.
+        repeat esplit; eauto; right; split; auto.
+        constructor; congruence.
   Qed.
 
   Lemma fcase_pres_ok :
